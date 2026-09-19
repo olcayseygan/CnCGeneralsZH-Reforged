@@ -4539,6 +4539,15 @@ void AIFollowWaypointPathState::loadPostProcess( void )
 }  // end loadPostProcess
 
 //----------------------------------------------------------------------------------------------------------
+/** Pick the waypoint a unit joining a group should start from.  A freshly joined unit has no
+	waypoint of its own, while the rest of its team may already be part-way along the path. */
+const Waypoint *AIFollowWaypointPath_groupInitialWaypoint( const Waypoint *goalWaypoint,
+															 const Waypoint *teamWaypoint )
+{
+	return goalWaypoint ? goalWaypoint : teamWaypoint;
+}
+
+//----------------------------------------------------------------------------------------------------------
 StateReturnType AIFollowWaypointPathState::onEnter()
 {
 	m_appendGoalPosition = false; // not moving off the map at this point.
@@ -4547,8 +4556,6 @@ StateReturnType AIFollowWaypointPathState::onEnter()
 	AIUpdateInterface *ai = getMachineOwner()->getAI();
 
 	if (m_currentWaypoint == NULL && !m_moveAsGroup)		return STATE_FAILURE;
-
-	getMachine()->setGoalPosition(m_currentWaypoint->getLocation());
 
 	m_framesSleeping = 0;
 	m_groupOffset.x = m_groupOffset.y = 0;
@@ -4588,9 +4595,15 @@ StateReturnType AIFollowWaypointPathState::onEnter()
 			m_groupOffset.y = obj->getPosition()->y - center.y;
 		}
 	}
-	if (m_currentWaypoint==NULL && m_moveAsGroup) {
-		m_currentWaypoint = obj->getTeam()->getCurrentWaypoint();
+	if (m_moveAsGroup) {
+		m_currentWaypoint = AIFollowWaypointPath_groupInitialWaypoint(
+			m_currentWaypoint, obj->getTeam()->getCurrentWaypoint());
 	}
+	if (m_currentWaypoint == NULL)
+		return STATE_FAILURE;
+
+	getMachine()->setGoalPosition(m_currentWaypoint->getLocation());
+
 	// set initial movement goal
 	computeGoal(m_moveAsGroup);
 	StateReturnType ret = AIInternalMoveToState::onEnter();

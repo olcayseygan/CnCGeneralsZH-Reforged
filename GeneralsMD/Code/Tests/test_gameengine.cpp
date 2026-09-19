@@ -1384,6 +1384,27 @@ TEST(attack_move_turns_on_whoever_is_shooting_it)
 	CHECK( !AIAttackMove_shouldRetaliate( 0xffffffff, 0xfffffff0, WINDOW, false, true ) );
 }
 
+/* AIStates.cpp: joinTeam clears a reinforcement's own waypoint before copying the state of a unit
+	already in its team.  If that state follows a waypoint path as a group, the reinforcement has to
+	pick up the team's current waypoint before the state reads its location. */
+extern const Waypoint *AIFollowWaypointPath_groupInitialWaypoint( const Waypoint *goalWaypoint,
+																								 const Waypoint *teamWaypoint );
+
+TEST(a_reinforcement_joins_the_waypoint_path_its_team_is_following)
+{
+	const Waypoint *ownWaypoint = (const Waypoint *)0x100;
+	const Waypoint *teamWaypoint = (const Waypoint *)0x200;
+
+	/* An explicit order stays authoritative; joining must not rewind the unit to the team's point. */
+	CHECK_EQ( AIFollowWaypointPath_groupInitialWaypoint( ownWaypoint, teamWaypoint ), ownWaypoint );
+
+	/* This is the crash case: joinTeam left no local goal, but the active team has one. */
+	CHECK_EQ( AIFollowWaypointPath_groupInitialWaypoint( NULL, teamWaypoint ), teamWaypoint );
+
+	/* A team whose path has ended has nothing safe to dereference; the state must fail instead. */
+	CHECK( AIFollowWaypointPath_groupInitialWaypoint( NULL, NULL ) == NULL );
+}
+
 /* BitFlags used to be templated on the bit count alone, and its name table is a static
    member of the instantiation - so two flag sets with the same count were the SAME type
    and shared one s_bitNameList.  The linker folded the two definitions and kept whichever

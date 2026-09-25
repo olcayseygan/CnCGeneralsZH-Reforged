@@ -1091,7 +1091,7 @@ Bool RecorderClass::testVersionPlayback(AsciiString filename)
  * Start playback of the file. Return true or false depending on if the file is
  * a valid replay file or not.
  */
-Bool RecorderClass::playbackFile(AsciiString filename) 
+Bool RecorderClass::playbackFile(AsciiString filename)
 {
 	if (!m_doingAnalysis)
 	{
@@ -1101,6 +1101,69 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 		}
 	}
 
+	Int difficulty = 0;
+	Int rankPoints = 0;
+	Int maxFPS = 0;
+	if (!openPlayback(filename, difficulty, rankPoints, maxFPS))
+		return FALSE;
+
+	if (replayIsMissingFirstCRC( m_originalGameMode ))
+	{
+		m_crcInfo->skipFirstCRC();
+	}
+
+	readNextFrame();
+
+	// send a message to the logic for a new game
+	if (!m_doingAnalysis)
+	{
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
+		msg->appendIntegerArgument(GAME_REPLAY);
+		msg->appendIntegerArgument(difficulty);
+		msg->appendIntegerArgument(rankPoints);
+		if( maxFPS != 0 )
+			msg->appendIntegerArgument(maxFPS);
+		InitRandom( m_gameInfo.getSeed() );
+	}
+
+	return TRUE;
+}
+
+RecorderClass::PlaybackCursor RecorderClass::getPlaybackCursor( void )
+{
+	PlaybackCursor cursor;
+	cursor.filePosition = ftell(m_file);
+	cursor.nextFrame = m_nextFrame;
+	cursor.crcInfo = *m_crcInfo;
+	return cursor;
+}
+
+/**
+ * Pick a replay up again where getPlaybackCursor left it, once an engine reset has closed it.  The
+ * header is read the same way playbackFile reads it, for the players the new game is built from.
+ */
+void RecorderClass::resumePlayback(AsciiString filename, const PlaybackCursor &cursor)
+{
+	Int difficulty = 0;
+	Int rankPoints = 0;
+	Int maxFPS = 0;
+	openPlayback(filename, difficulty, rankPoints, maxFPS);
+	// the checkpoint names its own map, and no new game will come along to use this one up
+	TheWritableGlobalData->m_pendingFile.clear();
+	// the load starts a game, and a replay's random sides and start positions are drawn off this
+	// seed: drawn off any other, the sides come out different and the checkpoint's teams do not fit
+	InitRandom( m_gameInfo.getSeed() );
+	fseek(m_file, cursor.filePosition, SEEK_SET);
+	m_nextFrame = cursor.nextFrame;
+	*m_crcInfo = cursor.crcInfo;
+}
+
+/**
+ * Open a replay and read everything in front of its first command: the header, the difficulty, the
+ * original game mode, the rank points and the frame rate the game was played at.
+ */
+Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &rankPoints, Int &maxFPS)
+{
 	m_mode = RECORDERMODETYPE_PLAYBACK;
 
 	ReplayHeader header;
@@ -1172,38 +1235,16 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 	REPLAY_CRC_INTERVAL = m_gameInfo.getCRCInterval();
 	DEBUG_LOG(("Player index is %d, replay CRC interval is %d\n", m_crcInfo->getLocalPlayer(), REPLAY_CRC_INTERVAL));
 
-	Int difficulty = 0;
 	fread(&difficulty, sizeof(difficulty), 1, m_file);
 
 	fread(&m_originalGameMode, sizeof(m_originalGameMode), 1, m_file);
 
-	Int rankPoints = 0;
 	fread(&rankPoints, sizeof(rankPoints), 1, m_file);
-	
-	Int maxFPS = 0;
+
 	fread(&maxFPS, sizeof(maxFPS), 1, m_file);
 	m_playbackFramesPerSecond = maxFPS;
 
 	DEBUG_LOG(("RecorderClass::playbackFile() - original game was mode %d\n", m_originalGameMode));
-
-	if (replayIsMissingFirstCRC( m_originalGameMode ))
-	{
-		m_crcInfo->skipFirstCRC();
-	}
-
-	readNextFrame();
-
-	// send a message to the logic for a new game
-	if (!m_doingAnalysis)
-	{
-		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
-		msg->appendIntegerArgument(GAME_REPLAY);
-		msg->appendIntegerArgument(difficulty);
-		msg->appendIntegerArgument(rankPoints);
-		if( maxFPS != 0 )
-			msg->appendIntegerArgument(maxFPS);
-		InitRandom( m_gameInfo.getSeed() );
-	}
 
 	m_currentReplayFilename = filename;
 	return TRUE;

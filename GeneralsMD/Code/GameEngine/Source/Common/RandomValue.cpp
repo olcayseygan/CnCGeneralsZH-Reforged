@@ -153,6 +153,23 @@ UnsignedInt GetGameLogicRandomSeedCRC( void )
 	return c.get();
 }
 
+/* The logic stream exactly as it stands, for a replay's rewind checkpoint.  A save game never wrote
+	 it down - a loaded game only has to go on playing, not play the same game it would have - but a
+	 rewound replay has to draw the same numbers the recording drew. */
+GameLogicRandomState GetGameLogicRandomState( void )
+{
+	GameLogicRandomState state;
+	memcpy( state.seed, theGameLogicSeed, sizeof( state.seed ) );
+	state.baseSeed = theGameLogicBaseSeed;
+	return state;
+}
+
+void SetGameLogicRandomState( const GameLogicRandomState &state )
+{
+	memcpy( theGameLogicSeed, state.seed, sizeof( theGameLogicSeed ) );
+	theGameLogicBaseSeed = state.baseSeed;
+}
+
 void InitRandom( void )
 {
 #ifdef DETERMINISTIC

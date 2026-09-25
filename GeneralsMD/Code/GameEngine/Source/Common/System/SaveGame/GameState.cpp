@@ -652,6 +652,48 @@ SaveCode GameState::missionSave( void )
 }  // end missionSave
 
 // ------------------------------------------------------------------------------------------------
+/** A replay's rewind checkpoint.  saveGame without the save list: any path, no description, and
+	* nothing told to the player, since one is taken every half minute of the replay. */
+// ------------------------------------------------------------------------------------------------
+void GameState::saveCheckpoint( AsciiString filepath )
+{
+	getSaveGameInfo()->saveFileType = SAVE_FILE_TYPE_NORMAL;
+	getSaveGameInfo()->missionMapName.clear();
+
+	XferSave xferSave;
+	xferSave.open( filepath );
+	xferSaveData( &xferSave, SNAPSHOT_SAVELOAD );
+	xferSave.close();
+}
+
+// ------------------------------------------------------------------------------------------------
+/** loadGame for a checkpoint, with the recorder's turn between the reset and the load: the reset
+	* closes the replay, and the load's new game reads the players out of it. */
+// ------------------------------------------------------------------------------------------------
+void GameState::loadCheckpoint( AsciiString filepath, const std::function< void( void ) > &afterReset )
+{
+	TheGameStateMap->clearScratchPadMaps();
+
+	XferLoad xferLoad;
+	xferLoad.open( filepath );
+
+	TheGameEngine->reset();
+	afterReset();
+
+	TheGhostObjectManager->saveLockGhostObjects( TRUE );
+	TheGameLogic->setLoadingWithoutScreen( TRUE );
+	{
+		LatchRestore<Bool> inLoadGame( m_isInLoadGame, TRUE );
+		xferSaveData( &xferLoad, SNAPSHOT_SAVELOAD );
+	}
+	TheGameLogic->setLoadingWithoutScreen( FALSE );
+	xferLoad.close();
+	TheGhostObjectManager->saveLockGhostObjects( FALSE );
+
+	gameStatePostProcessLoad();
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Load the save game pointed to by filename */
 // ------------------------------------------------------------------------------------------------
 SaveCode GameState::loadGame( AvailableGameInfo gameInfo )
@@ -1456,6 +1498,9 @@ void GameState::xferSaveData( Xfer *xfer, SnapshotType which )
 
 				}  // end if
 
+				// DEBUG_CRASH below is compiled out of a release build, so this is the only word of which
+				// block a load died in
+				DEBUG_LOG(("Loading block '%s'\n", token.str()));
 				try
 				{
 

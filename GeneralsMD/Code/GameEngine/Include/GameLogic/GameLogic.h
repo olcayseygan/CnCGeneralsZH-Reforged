@@ -181,6 +181,7 @@ public:
 	//void setGameLoading( Bool loading ) { m_loadingScene = loading; }
 	void setLoadingMap( Bool loading ) { m_loadingMap = loading; }
 	void setLoadingSave( Bool loading ) { m_loadingSave = loading; }
+	void setLoadingWithoutScreen( Bool without ) { m_loadingWithoutScreen = without; }	///< a replay's rewind: the picture holds instead
 	void setClearingGameData( Bool clearing ) { m_clearingGameData = clearing; }
 	
 	void setGameMode( Int mode );
@@ -346,6 +347,7 @@ private:
 	//Bool m_loadingScene;
 	Bool m_loadingMap;
 	Bool m_loadingSave;
+	Bool m_loadingWithoutScreen;
 	Bool m_clearingGameData;
 
 	Bool m_isInUpdate;

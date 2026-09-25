@@ -146,9 +146,17 @@ void XferSave::close( void )
 
 	}  // end if
 
-	// close the file
+	// write the file and close it
+	const size_t size = m_data.size();
+	const Bool written = size == 0 || fwrite( &m_data[ 0 ], size, 1, m_fileFP ) == 1;
 	fclose( m_fileFP );
 	m_fileFP = NULL;
+	m_data.clear();
+	if( !written )
+	{
+		DEBUG_LOG(( "XferSave - Error writing %u bytes to file '%s'\n", (UnsignedInt)size, m_identifier.str() ));
+		throw XFER_WRITE_ERROR;
+	}
 
 	// erase the filename
 	m_identifier.clear();
@@ -170,18 +178,11 @@ Int XferSave::beginBlock( void )
 										 m_identifier.str()) );
 
 	// get the current file position so we can back up here for the next end block call
-	XferFilePos filePos = ftell( m_fileFP );
+	XferFilePos filePos = (XferFilePos)m_data.size();
 
 	// write a placeholder
 	XferBlockSize blockSize = 0;
-	if( fwrite( &blockSize, sizeof( XferBlockSize ), 1, m_fileFP ) != 1 )
-	{
-		
-		DEBUG_CRASH(( "XferSave::beginBlock - Error writing block size in '%s'\n",
-									m_identifier.str() ));
-		return XFER_WRITE_ERROR;
-
-	}  // end if
+	xferImplementation( &blockSize, sizeof( XferBlockSize ) );
 
 	// save this block position on the top of the "stack"
 	XferBlockData *top = newInstance(XferBlockData);
@@ -224,27 +225,16 @@ void XferSave::endBlock( void )
 	}  // end if
 
 	// save our current file position
-	XferFilePos currentFilePos = ftell( m_fileFP );
+	XferFilePos currentFilePos = (XferFilePos)m_data.size();
 
 	// pop the block descriptor off the top of the block stack
 	XferBlockData *top = m_blockStack;
 	m_blockStack = m_blockStack->next;
 
-	// rewind the file to the block position
-	fseek( m_fileFP, top->filePos, SEEK_SET );
-
 	// write the size in bytes between the block position and what is our current file position
+	// over the placeholder
 	XferBlockSize blockSize = currentFilePos - top->filePos - sizeof( XferBlockSize );
-	if( fwrite( &blockSize, sizeof( XferBlockSize ), 1, m_fileFP ) != 1 )
-	{
-
-		DEBUG_CRASH(( "Error writing block size to file '%s'\n", m_identifier.str() ));
-		throw XFER_WRITE_ERROR;
-
-	}  // end if
-
-	// place the file pointer back to the current position
-	fseek( m_fileFP, currentFilePos, SEEK_SET );
+	memcpy( &m_data[ top->filePos ], &blockSize, sizeof( XferBlockSize ) );
 
 	// delete the block data as it's all used up now
 	top->deleteInstance();
@@ -262,8 +252,8 @@ void XferSave::skip( Int dataSize )
 										 m_identifier.str()) );
 
 
-	// skip forward dataSize bytes
-	fseek( m_fileFP, dataSize, SEEK_CUR );
+	// skip forward dataSize bytes, which a file sought past its end fills with zeros
+	m_data.resize( m_data.size() + dataSize, 0 );
 
 }  // end skip
 
@@ -346,13 +336,8 @@ void XferSave::xferImplementation( void *data, Int dataSize )
 	DEBUG_ASSERTCRASH( m_fileFP != NULL, ("XferSave - file pointer for '%s' is NULL\n",
 										 m_identifier.str()) );
 
-	// write data to file
-	if( fwrite( data, dataSize, 1, m_fileFP ) != 1 )
-	{
+	// the file is written out on close
+	const char *bytes = (const char *)data;
+	m_data.insert( m_data.end(), bytes, bytes + dataSize );
 
-		DEBUG_CRASH(( "XferSave - Error writing to file '%s'\n", m_identifier.str() ));
-		throw XFER_WRITE_ERROR;
-
-	}  // end if
-	
 }  // end xferImplementation

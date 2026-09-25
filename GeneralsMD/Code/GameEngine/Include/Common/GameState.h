@@ -39,6 +39,8 @@
 #include "Common/UnicodeString.h"
 #include "GameNetwork/NetworkDefs.h"
 
+#include <functional>
+
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class GameWindow;
 class WindowLayout;
@@ -169,6 +171,11 @@ public:
 										 SnapshotType which = SNAPSHOT_SAVELOAD  );  ///< save a game
 	SaveCode missionSave( void );																	 ///< do a in between mission save
 	SaveCode loadGame( AvailableGameInfo gameInfo );							 ///< load a save file
+	/// A replay's rewind checkpoint: the whole world into a file at this path, and back out of it.
+	/// Nothing on screen says so, and the load calls afterReset once the engine is empty and before
+	/// the world goes back in, which is where the recorder picks its file up again.
+	void saveCheckpoint( AsciiString filepath );
+	void loadCheckpoint( AsciiString filepath, const std::function< void( void ) > &afterReset );
 	SaveGameInfo *getSaveGameInfo( void ) { return &m_gameInfo; }
 
 	// snapshot interaction

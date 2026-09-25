@@ -35,6 +35,8 @@
 #include "Common/DrawnPath.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
+#include "Common/GameState.h"
+#include "Common/RandomValue.h"
 #include "Common/GameType.h"
 #include "Common/MessageStream.h"
 #include "Common/PerfTimer.h"
@@ -2207,12 +2209,14 @@ static void fillSpectatorCameraValues( std::vector< HtmlValues > &follows, HtmlV
 // The replay strip, on the spectator's page where a player's command grid stands: the timeline and
 // the playback speed.  data-click="replay:seek" on #track jumps to the frame under the pointer,
 // "replay:pause" pauses and resumes, and "replay:speed:N" plays at N percent of the logic rate the
-// game was played at.  A seek forward fast-forwards, one
-// picture in thirty drawn, until the frame is reached; a seek back has nothing to rewind to and
-// starts the replay over, then runs forward the same way.
+// game was played at.  A seek forward fast-forwards, one picture in thirty drawn, until the frame
+// is reached.  A seek back loads the last checkpoint in front of the frame and runs forward from
+// there: the simulation keeps no history to step back through, so the replay saves the whole world
+// every half minute of it as it plays.  The load puts no loading screen up; the picture holds.
 //-------------------------------------------------------------------------------------------------
 static const std::string REPLAY_ACTION = "replay:";
 static const std::string REPLAY_SEEK = REPLAY_ACTION + "seek";
+static const std::string REPLAY_SEEK_TO = REPLAY_SEEK + ":";
 static const std::string REPLAY_PAUSE = REPLAY_ACTION + "pause";
 static const std::string REPLAY_SPEED = REPLAY_ACTION + "speed:";
 static const char *const REPLAY_TRACK = "#track";
@@ -2254,28 +2258,170 @@ static void fillReplayValues( HtmlValues &values )
 		values[ REPLAY_SPEED + std::to_string( REPLAY_SPEEDS[ each ] ) ] = speed == REPLAY_SPEEDS[ each ] ? "on" : "";
 }
 
+/** A rewind checkpoint: the world saved between two logic frames, where playback stood in the
+	* replay, and the CRCs the last logic frame posted that the next one has yet to compare.  Those
+	* are messages on their way, and the load's reset empties the stream they are in. */
+struct ReplayCheckpoint
+{
+	AsciiString path;
+	RecorderClass::PlaybackCursor cursor;
+	GameLogicRandomState random;			///< a save game does not carry the logic's random stream
+	std::vector< std::pair< Int, Bool > > postedCRCs;
+};
+
+static const UnsignedInt REPLAY_CHECKPOINT_FRAMES = LOGICFRAMES_PER_SECOND * 30;
+static const char *const REPLAY_CHECKPOINT_FOLDER = "ReplayRewind";
+
+/** The checkpoints of the replay TheReplayCheckpointsOf names, by frame.  Not members, for the same
+	* reason as the seek frame: loading one resets the interface. */
+static std::map< UnsignedInt, ReplayCheckpoint > TheReplayCheckpoints;
+static AsciiString TheReplayCheckpointsOf;
+
+/** A seek back is carried out on the next client pass rather than in the click: the load resets the
+	* message stream, and the click is a message the stream is in the middle of handing round. */
+static Bool TheReplayRewindWaiting = FALSE;
+
 static void seekReplay( UnsignedInt target )
 {
 	TheGameLogic->setGamePaused( FALSE );
-	if( target <= TheGameLogic->getFrame() )
-	{
-		// the way the quit menu restarts one: no score screen between the two
-		const AsciiString replayFile = TheRecorder->getCurrentReplayFilename();
-		TheGameLogic->clearGameData( FALSE );
-		TheGameEngine->setQuitting( FALSE );
-		TheRecorder->playbackFile( replayFile );
-	}
+	// the first checkpoint is taken on the first frame, so only frame 0 has none behind it
+	TheReplayRewindWaiting = target <= TheGameLogic->getFrame() && !TheReplayCheckpoints.empty();
 	TheReplaySeekFrame = target;
 }
 
-/** Every client pass, so a seek stops on its frame and not on the next picture drawn.  The new game
-	* a seek back starts turns fast-forward off while it loads; this turns it on again. */
+/** A folder of this process's own: two copies of the game watching replays at once each keep their
+	* checkpoints apart, and a copy that died leaves nothing another will take for its own. */
+static AsciiString replayCheckpointFolder( void )
+{
+	AsciiString leaf;
+	leaf.format( "%s\\%u", REPLAY_CHECKPOINT_FOLDER, (UnsignedInt)GetCurrentProcessId() );
+	return TheGameState->getFilePathInSaveDirectory( leaf );
+}
+
+/** Every checkpoint file in the folder, not only the ones in the map, so nothing outlives the replay. */
+static void forgetReplayCheckpoints( void )
+{
+	const AsciiString folder = replayCheckpointFolder();
+	AsciiString pattern;
+	pattern.format( "%s\\*.sav", folder.str() );
+	WIN32_FIND_DATAA found;
+	HANDLE search = FindFirstFileA( pattern.str(), &found );
+	if( search != INVALID_HANDLE_VALUE )
+	{
+		do
+		{
+			AsciiString path;
+			path.format( "%s\\%s", folder.str(), found.cFileName );
+			DeleteFileA( path.str() );
+		} while( FindNextFileA( search, &found ) );
+		FindClose( search );
+	}
+	TheReplayCheckpoints.clear();
+}
+
+static void collectPostedCRCs( GameMessageList *list, std::vector< std::pair< Int, Bool > > &crcs )
+{
+	for( GameMessage *message = list->getFirstMessage(); message; message = message->next() )
+		if( message->getType() == GameMessage::MSG_LOGIC_CRC )
+			crcs.push_back( std::make_pair( message->getArgument( 0 )->integer, message->getArgument( 1 )->boolean ) );
+}
+
+static void takeReplayCheckpoint( UnsignedInt frame )
+{
+	const DWORD startMs = timeGetTime();
+	CreateDirectoryA( TheGameState->getSaveDirectory().str(), NULL );
+	CreateDirectoryA( TheGameState->getFilePathInSaveDirectory( REPLAY_CHECKPOINT_FOLDER ).str(), NULL );
+	const AsciiString folder = replayCheckpointFolder();
+	CreateDirectoryA( folder.str(), NULL );
+
+	ReplayCheckpoint &checkpoint = TheReplayCheckpoints[ frame ];
+	checkpoint.path.format( "%s\\%u.sav", folder.str(), frame );
+	checkpoint.cursor = TheRecorder->getPlaybackCursor();
+	checkpoint.random = GetGameLogicRandomState();
+	// the command list first: what it holds reaches the logic ahead of what the stream still holds
+	collectPostedCRCs( TheCommandList, checkpoint.postedCRCs );
+	collectPostedCRCs( TheMessageStream, checkpoint.postedCRCs );
+	TheGameState->saveCheckpoint( checkpoint.path );
+	DEBUG_LOG(( "REPLAY CHECKPOINT frame %u in %u ms\n", frame, (UnsignedInt)( timeGetTime() - startMs ) ));
+}
+
+/** Load the last checkpoint at or before the frame, or the first one if the frame is before it.  The
+	* camera, the speed and the observer's view stay as they were: the checkpoint carries the camera it
+	* was taken with, which is not where the person watching is looking now. */
+static void rewindReplay( UnsignedInt target )
+{
+	std::map< UnsignedInt, ReplayCheckpoint >::const_iterator at = TheReplayCheckpoints.upper_bound( target );
+	if( at != TheReplayCheckpoints.begin() )
+		--at;
+	const ReplayCheckpoint &checkpoint = at->second;
+
+	const AsciiString replayFile = TheRecorder->getCurrentReplayFilename();
+	Coord3D lookingAt;
+	TheTacticalView->getPosition( &lookingAt );
+	const Real angle = TheTacticalView->getAngle();
+	const Real pitch = TheTacticalView->getPitch();
+	const Real zoom = TheTacticalView->getZoom();
+	const Int framesPerSecond = TheGameEngine->getFramesPerSecondLimit();
+	const DWORD startMs = timeGetTime();
+
+	TheGameState->loadCheckpoint( checkpoint.path,
+		[ & ]() { TheRecorder->resumePlayback( replayFile, checkpoint.cursor ); } );
+	SetGameLogicRandomState( checkpoint.random );
+
+	for( size_t each = 0; each < checkpoint.postedCRCs.size(); each++ )
+	{
+		GameMessage *crc = TheMessageStream->appendMessage( GameMessage::MSG_LOGIC_CRC );
+		crc->appendIntegerArgument( checkpoint.postedCRCs[ each ].first );
+		crc->appendBooleanArgument( checkpoint.postedCRCs[ each ].second );
+	}
+
+	TheTacticalView->lookAt( &lookingAt );
+	TheTacticalView->setAngle( angle );
+	TheTacticalView->setPitch( pitch );
+	TheTacticalView->setZoom( zoom );
+	TheGameEngine->setFramesPerSecondLimit( framesPerSecond );
+	DEBUG_LOG(( "REPLAY REWIND to frame %u from the checkpoint at %u, loaded in %u ms\n",
+		target, at->first, (UnsignedInt)( timeGetTime() - startMs ) ));
+}
+
+/** Every client pass, between two logic frames: the checkpoints are taken here, a seek back is carried
+	* out here, and a seek stops on its frame rather than on the next picture drawn. */
 static void updateReplaySeek( void )
 {
-	if( TheReplaySeekFrame == 0 || !TheGameLogic->isInGame() || TheGameLogic->isLoadingMap() )
+	if( !TheGameLogic->isInGame() || TheGameLogic->isLoadingMap() )
 		return;
+	if( !TheGameLogic->isInReplayGame() )
+	{
+		TheReplaySeekFrame = 0;
+		TheReplayRewindWaiting = FALSE;
+		if( TheReplayCheckpointsOf.isNotEmpty() )
+		{
+			forgetReplayCheckpoints();
+			TheReplayCheckpointsOf.clear();
+		}
+		return;
+	}
 
-	const Bool seeking = TheGameLogic->isInReplayGame() && TheGameLogic->getFrame() < TheReplaySeekFrame;
+	if( TheReplayCheckpointsOf != TheRecorder->getCurrentReplayFilename() )
+	{
+		forgetReplayCheckpoints();
+		TheReplayCheckpointsOf = TheRecorder->getCurrentReplayFilename();
+	}
+
+	if( TheReplayRewindWaiting )
+	{
+		TheReplayRewindWaiting = FALSE;
+		rewindReplay( TheReplaySeekFrame );
+	}
+
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( TheRecorder->hasPlaybackLeft() && frame > 0
+			&& ( TheReplayCheckpoints.empty() || frame >= TheReplayCheckpoints.rbegin()->first + REPLAY_CHECKPOINT_FRAMES ) )
+		takeReplayCheckpoint( frame );
+
+	if( TheReplaySeekFrame == 0 )
+		return;
+	const Bool seeking = frame < TheReplaySeekFrame;
 	TheWritableGlobalData->m_TiVOFastMode = seeking;
 	if( !seeking )
 		TheReplaySeekFrame = 0;
@@ -2480,6 +2626,9 @@ void InGameUI::runSpectatorAction( const std::string &action )
 	// the pause key's own message, so the key and the button are one path
 	else if( action == REPLAY_PAUSE && TheGameLogic->isInReplayGame() )
 		TheMessageStream->appendMessage( GameMessage::MSG_META_TOGGLE_PAUSE );
+	// replay:seek:N, a frame to jump to, for a script that has no pointer to put on the timeline
+	else if( action.compare( 0, REPLAY_SEEK_TO.size(), REPLAY_SEEK_TO ) == 0 && TheGameLogic->isInReplayGame() )
+		seekReplay( (UnsignedInt)atoi( action.substr( REPLAY_SEEK_TO.size() ).c_str() ) );
 	else if( action.compare( 0, REPLAY_SPEED.size(), REPLAY_SPEED ) == 0 && TheGameLogic->isInReplayGame() )
 		TheGameEngine->setFramesPerSecondLimit( atoi( action.substr( REPLAY_SPEED.size() ).c_str() ) * replayNormalFramesPerSecond() / PERCENT );
 }

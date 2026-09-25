@@ -251,6 +251,7 @@ GameLogic::GameLogic( void )
 
 	m_loadingMap = FALSE;
 	m_loadingSave = FALSE;
+	m_loadingWithoutScreen = FALSE;
 	m_clearingGameData = FALSE;
 }
 
@@ -617,7 +618,10 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 // ------------------------------------------------------------------------------------------------
 LoadScreen *GameLogic::getLoadScreen( Bool loadingSaveGame )
 {
-	switch (m_gameMode) 
+	if( m_loadingWithoutScreen )
+		return NULL;
+
+	switch (m_gameMode)
 	{
 	case GAME_SHELL:
 		return NEW ShellGameLoadScreen;
@@ -1073,7 +1077,7 @@ static void populateRandomStartPosition( GameInfo *game )
 // ------------------------------------------------------------------------------------------------
 void GameLogic::updateLoadProgress( Int progress )
 {
-	
+
 	if( m_loadScreen )
 		m_loadScreen->update( progress );
 
@@ -1583,7 +1587,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	// update the player list to match the new map.
 	TheTeamFactory->reset();
 	ThePlayerList->newGame();
-	
+
 	// update the loadscreen 
 	updateLoadProgress(LOAD_PROGRESS_POST_PLAYER_LIST_RESET);
 
@@ -2111,9 +2115,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	// a unit's models on whichever logic frame the first one of its kind appeared: 18ms of a 33ms
 	// frame for the first Ranger out of a barracks, and the opening of a match is nothing but
 	// first appearances.  It is not a flag any more.  The shell map is the one exception - it
-	// builds none of this and would only pay the loading second for nothing.
+	// builds none of this and would only pay the loading second for nothing.  Nor does a replay's
+	// rewind, which reloads the map it was just drawing: the models are all still in memory, and
+	// the walk over them held the picture for three quarters of a second.
 	//
-	if( !isInShellGame() )
+	if( !isInShellGame() && !m_loadingWithoutScreen )
 	{
 		if (TheGlobalData->m_preloadEverything)
 		{

@@ -38,6 +38,15 @@ extern void InitRandom( UnsignedInt seed );
 extern UnsignedInt GetGameLogicRandomSeed( void );   ///< Get the seed (used for replays)
 extern UnsignedInt GetGameLogicRandomSeedCRC( void );///< Get the seed (used for CRCs)
 
+/// the whole logic stream, for a replay's rewind checkpoint
+struct GameLogicRandomState
+{
+	UnsignedInt seed[ 6 ];
+	UnsignedInt baseSeed;
+};
+extern GameLogicRandomState GetGameLogicRandomState( void );
+extern void SetGameLogicRandomState( const GameLogicRandomState &state );
+
 //--------------------------------------------------------------------------------------------------------------
 
 #endif // _RANDOM_VALUE_H_

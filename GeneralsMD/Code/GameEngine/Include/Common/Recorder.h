@@ -110,6 +110,18 @@ public:
 	Bool testVersionPlayback(AsciiString filename);   ///< Returns if the playback is a valid playback file for this version or not.
 	AsciiString getCurrentReplayFilename( void );			///< valid during playback only
 	UnsignedInt getPlaybackFrameDuration( void );			///< the replay's length in logic frames, from its header; 0 when not playing back
+
+	/// Where playback stands between two logic frames: enough to pick the replay up again there after
+	/// the engine has been reset under it, for a rewind to a checkpoint.
+	struct PlaybackCursor
+	{
+		Int filePosition;
+		UnsignedInt nextFrame;
+		CRCInfo crcInfo;
+	};
+	PlaybackCursor getPlaybackCursor( void );
+	Bool hasPlaybackLeft( void ) { return m_mode == RECORDERMODETYPE_PLAYBACK && m_file != NULL; }	///< FALSE once the last command is read
+	void resumePlayback( AsciiString filename, const PlaybackCursor &cursor );
 	Int getPlaybackFramesPerSecond( void );						///< the logic rate the game was played at, 0 when it was not recorded
 	void stopPlayback();															///< Stops playback.  Its fine to call this even if not playing back a file.
 #if defined _DEBUG || defined _INTERNAL
@@ -175,6 +187,7 @@ protected:
 
 	AsciiString readAsciiString();										///< Read the next string from m_file using ascii characters.
 	UnicodeString readUnicodeString();								///< Read the next string from m_file using unicode characters.
+	Bool openPlayback(AsciiString filename, Int &difficulty, Int &rankPoints, Int &maxFPS);	///< Open a replay and read up to its first command.
 	void readNextFrame();															///< Read the next frame number to execute a command on.
 	void appendNextCommand();													///< Read the next GameMessage and append it to TheCommandList.
 	void writeArgument(GameMessageArgumentDataType type, const GameMessageArgumentType arg);

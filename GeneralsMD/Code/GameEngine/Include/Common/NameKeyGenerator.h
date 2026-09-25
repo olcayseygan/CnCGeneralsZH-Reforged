@@ -38,6 +38,8 @@
 #include "Common/GameMemory.h"
 #include "Common/AsciiString.h"
 
+#include <vector>
+
 //------------------------------------------------------------------------------------------------- 
 /**
 	Note that NameKeyType isn't a "real" enum, but an enum type used to enforce the
@@ -102,11 +104,9 @@ public:
 	NameKeyType nameToKey(const char* name);
 	NameKeyType nameToLowercaseKey(const char *name);
 
-	/** 
+	/**
 		given a key, return the name. this is almost never needed,
-		except for a few rare cases like object serialization. also
-		note that it's not particularly fast; it does a dumb linear
-		search for the key.
+		except for a few rare cases like object serialization.
 	*/
 	AsciiString keyToName(NameKeyType key);
 
@@ -125,6 +125,9 @@ private:
 
 	Bucket*				m_sockets[SOCKET_COUNT];			///< Catalog of all Buckets already generated
 	UnsignedInt		m_nextID;											///< Next available ID
+	/// Every bucket again, at its key less one.  keyToName used to walk all 45007 sockets for each
+	/// call, and a player's AI scripts ask it thousands of times: a fifth of a replay rewind.
+	std::vector<Bucket*> m_bucketsByKey;
 
 };  // end class NameKeyGenerator
 

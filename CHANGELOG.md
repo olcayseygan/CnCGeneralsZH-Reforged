@@ -314,7 +314,7 @@ found and fixed â€” EA's own, not port damage.**
 
 ## Every replay, not just the last one
 
-- A replay is watched the way an observer watches a match. The empty command grid and portrait plate are gone from the bottom of the screen, and in their place is a timeline with the time reached and the whole length. Click anywhere on it to jump there: forward, the replay races ahead to that moment; back, it starts over and races to it. Beside it are pause and five speeds, from half to eight times the speed the game was played at.
+- A replay is watched the way an observer watches a match. The empty command grid and portrait plate are gone from the bottom of the screen, and in their place is a timeline with the time reached and the whole length. Click anywhere on it to jump there: forward, the replay races ahead to that moment; back, the picture stops for about a second and the replay carries on from the moment you clicked. There is no loading screen and no start over from the beginning: the replay keeps its place every half minute as it plays, and a jump back picks up from the last of those. Beside it are pause and five speeds, from half to eight times the speed the game was played at.
 - Replays stopped crashing when an order took every unit out of the selection it was given to. The game throws an empty selection away at once, and with the recorded camera switched on the replay went on to read the one it had just thrown away.
 - Replay archiving saves each match under its own date-and-time name.
 - Long lists scroll the whole way, past two thousand rows.

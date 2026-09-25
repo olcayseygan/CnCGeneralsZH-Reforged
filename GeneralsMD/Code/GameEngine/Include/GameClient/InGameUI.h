@@ -730,11 +730,48 @@ public:  // ********************************************************************
 	enum { PENDING_PLACEMENT_FRAMES = 60 };			///< logic frames one is remembered for - two seconds,
 																							///  comfortably longer than any network delay
 
+	/// the ground a structure stands on: its box with the bib, turned to its heading
+	struct PlacementBox
+	{
+		Real x, y;							///< centre
+		Real c, s;							///< cos and sin of the heading
+		Real halfMajor;					///< half-length along the heading, bib included
+		Real halfMinor;					///< half-width across it, bib included
+	};
+
 	/// the ground a structure of this template put down here would stand on
 	static void placementFootprint( const ThingTemplate *what, const Coord3D *world, Real angle,
-																	Region2D *footprint );
-	/// do two of those share any ground?  edge to edge is not sharing - structures are built flush
-	static Bool footprintsOverlap( const Region2D *a, const Region2D *b );
+																	PlacementBox *footprint );
+
+	/** Do two of those share any ground?  The same turned boxes the logic's own clearance check
+		* compares, so a structure the logic would take next to one still on its way is not refused
+		* here: a box around a turned box is far bigger than the box, and two diagonal buildings
+		* clicked side by side used to find their neighbour in the way and slide off it.  Edge to edge
+		* is not sharing - structures are built flush.  Separating axes, the four sides of the two. */
+	static Bool footprintsOverlap( const PlacementBox *a, const PlacementBox *b )
+	{
+		const Real slack = 0.01f;		// edges this close are touching, not crossing
+		const Real dx = b->x - a->x;
+		const Real dy = b->y - a->y;
+		const PlacementBox *boxes[ 2 ] = { a, b };
+
+		for( Int k = 0; k < 2; k++ )
+		{
+			const Real axes[ 2 ][ 2 ] = { { boxes[ k ]->c, boxes[ k ]->s }, { -boxes[ k ]->s, boxes[ k ]->c } };
+			for( Int i = 0; i < 2; i++ )
+			{
+				const Real ax = axes[ i ][ 0 ];
+				const Real ay = axes[ i ][ 1 ];
+				const Real reachA = a->halfMajor * (Real)fabs( ax * a->c + ay * a->s ) +
+														a->halfMinor * (Real)fabs( ay * a->c - ax * a->s );
+				const Real reachB = b->halfMajor * (Real)fabs( ax * b->c + ay * b->s ) +
+														b->halfMinor * (Real)fabs( ay * b->c - ax * b->s );
+				if( (Real)fabs( ax * dx + ay * dy ) >= reachA + reachB - slack )
+					return FALSE;
+			}
+		}
+		return TRUE;
+	}
 
 	/// remember a structure just ordered here, so the next click can see it
 	void recordPendingPlacement( const ThingTemplate *what, const Coord3D *world, Real angle );
@@ -1223,8 +1260,8 @@ protected:
 	/// a structure ordered here, and the logic frame it was ordered on - see recordPendingPlacement
 	struct PendingPlacement
 	{
-		Region2D		footprint;
-		UnsignedInt	frame;				///< 0 for a slot nothing has been written to yet
+		PlacementBox	footprint;
+		UnsignedInt		frame;				///< 0 for a slot nothing has been written to yet
 	};
 	PendingPlacement						m_pendingPlacement[ PENDING_PLACEMENTS ];
 	Int													m_pendingPlacementAt;										///< where the next order is written, round the ring

@@ -11122,35 +11122,63 @@ TEST(the_health_bar_grows_with_the_unit_under_it_and_not_with_the_screens_width)
 	 spent, so a shift-held run of clicks does not put two structures on the same square.  What it
 	 remembers is the footprint, and two footprints that merely touch are two structures built flush
 	 against each other, which is most of a base wall. */
+static InGameUI::PlacementBox placementBox( Real x, Real y, Real c, Real s, Real halfMajor, Real halfMinor )
+{
+	InGameUI::PlacementBox box = { x, y, c, s, halfMajor, halfMinor };
+	return box;
+}
+
 TEST(two_structures_ordered_onto_the_same_ground_are_one_too_many)
 {
-	Region2D a, b;
-
-	a.lo.x = 0.0f;   a.lo.y = 0.0f;   a.hi.x = 40.0f;  a.hi.y = 40.0f;
+	const Real half = 0.70710678f;	/* cos and sin of an eighth of a turn */
+	InGameUI::PlacementBox a = placementBox( 20.0f, 20.0f, 1.0f, 0.0f, 20.0f, 20.0f );
+	InGameUI::PlacementBox b;
 
 	// itself, obviously
 	CHECK( InGameUI::footprintsOverlap( &a, &a ) );
 
 	// a corner inside it counts, from either side
-	b.lo.x = 39.0f;  b.lo.y = 39.0f;  b.hi.x = 79.0f;  b.hi.y = 79.0f;
+	b = placementBox( 59.0f, 59.0f, 1.0f, 0.0f, 20.0f, 20.0f );
 	CHECK( InGameUI::footprintsOverlap( &a, &b ) );
 	CHECK( InGameUI::footprintsOverlap( &b, &a ) );
 
 	// flush against it does not - a row of buildings on the build grid is not an overlap
-	b.lo.x = 40.0f;  b.lo.y = 0.0f;   b.hi.x = 80.0f;  b.hi.y = 40.0f;
+	b = placementBox( 60.0f, 20.0f, 1.0f, 0.0f, 20.0f, 20.0f );
 	CHECK( !InGameUI::footprintsOverlap( &a, &b ) );
 	CHECK( !InGameUI::footprintsOverlap( &b, &a ) );
 
 	// nor does clear of it, on either axis alone
-	b.lo.x = 10.0f;  b.lo.y = 41.0f;  b.hi.x = 30.0f;  b.hi.y = 60.0f;
+	b = placementBox( 20.0f, 50.5f, 1.0f, 0.0f, 10.0f, 9.5f );
 	CHECK( !InGameUI::footprintsOverlap( &a, &b ) );
-	b.lo.x = 41.0f;  b.lo.y = 10.0f;  b.hi.x = 60.0f;  b.hi.y = 30.0f;
+	b = placementBox( 50.5f, 20.0f, 1.0f, 0.0f, 9.5f, 10.0f );
 	CHECK( !InGameUI::footprintsOverlap( &a, &b ) );
 
 	// one wholly inside another - a small structure ordered into a big one's middle
-	b.lo.x = 10.0f;  b.lo.y = 10.0f;  b.hi.x = 20.0f;  b.hi.y = 20.0f;
+	b = placementBox( 15.0f, 15.0f, 1.0f, 0.0f, 5.0f, 5.0f );
 	CHECK( InGameUI::footprintsOverlap( &a, &b ) );
 	CHECK( InGameUI::footprintsOverlap( &b, &a ) );
+
+	//
+	// Two structures turned an eighth, side by side along their own faces.  The squares around
+	// them overlap by half their width; the structures themselves only touch, and the logic builds
+	// both - so the second click is not refused and the ghost does not slide off to leave a gap.
+	//
+	a = placementBox( 0.0f, 0.0f, half, half, 20.0f, 15.0f );
+	b = placementBox( 40.0f * half, 40.0f * half, half, half, 20.0f, 15.0f );
+	CHECK( !InGameUI::footprintsOverlap( &a, &b ) );
+	CHECK( !InGameUI::footprintsOverlap( &b, &a ) );
+	b = placementBox( -30.0f * half, 30.0f * half, half, half, 20.0f, 15.0f );
+	CHECK( !InGameUI::footprintsOverlap( &a, &b ) );
+
+	// a step shorter and they do share ground
+	b = placementBox( 38.0f * half, 38.0f * half, half, half, 20.0f, 15.0f );
+	CHECK( InGameUI::footprintsOverlap( &a, &b ) );
+
+	// and one turned against the other is judged on the other's sides too
+	b = placementBox( 34.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( InGameUI::footprintsOverlap( &a, &b ) );
+	b = placementBox( 45.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( !InGameUI::footprintsOverlap( &a, &b ) );
 
 	//
 	// and the window it is remembered for has to outlast a bad link: a network game runs the order

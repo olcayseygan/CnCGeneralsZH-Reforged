@@ -7007,27 +7007,18 @@ UnsignedInt InGameUI::placementCheckOptions( void )
 }  // end placementCheckOptions
 
 //-------------------------------------------------------------------------------------------------
-/** The ground a structure of this template would stand on, put down here at this heading.  The
-	* geometry's own bounds, which for a box at any angle is the rectangle around the turned box:
-	* two of those sharing ground is close enough to "on top of each other" for the client to refuse
-	* a second click, and the logic side asks the real question afterwards anyway. */
+/** The ground a structure of this template would stand on, put down here at this heading: the box
+	* isLocationClearOfObjects compares, bib and all. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::placementFootprint( const ThingTemplate *what, const Coord3D *world, Real angle,
-																	 Region2D *footprint )
+																	 PlacementBox *footprint )
 {
-	what->getTemplateGeometryInfo().get2DBounds( *world, angle, *footprint );
+	placementHalfSizes( what, &footprint->halfMajor, &footprint->halfMinor );
+	footprint->x = world->x;
+	footprint->y = world->y;
+	footprint->c = (Real)Cos( angle );
+	footprint->s = (Real)Sin( angle );
 }
-
-//-------------------------------------------------------------------------------------------------
-/** Do two footprints share any ground?  Touching edge to edge does not count: structures are built
-	* flush against each other on the build grid all game, and a row of them is not an overlap. */
-//-------------------------------------------------------------------------------------------------
-Bool InGameUI::footprintsOverlap( const Region2D *a, const Region2D *b )
-{
-	return a->lo.x < b->hi.x && b->lo.x < a->hi.x &&
-				 a->lo.y < b->hi.y && b->lo.y < a->hi.y;
-
-}  // end footprintsOverlap
 
 //-------------------------------------------------------------------------------------------------
 /** Remember a structure just ordered, so the click after it knows the ground is spoken for.  Round
@@ -7066,7 +7057,7 @@ Bool InGameUI::overlapsPendingPlacement( const Coord3D *world, const ThingTempla
 	if( what == NULL || world == NULL || TheGameLogic == NULL )
 		return FALSE;
 
-	Region2D mine;
+	PlacementBox mine;
 	placementFootprint( what, world, angle, &mine );
 
 	const UnsignedInt now = TheGameLogic->getFrame();

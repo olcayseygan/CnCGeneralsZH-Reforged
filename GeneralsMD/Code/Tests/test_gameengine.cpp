@@ -13903,7 +13903,7 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 	// the players are on the Tab scoreboard, not in a strip across the top
 	CHECK( page.find( "data-each=\"seats\"" ) == std::string::npos );
 	// a replay's timeline: InGameUI reads the pointer's place along the element with id track
-	CHECK( page.find( "id=\"track\" data-click=\"replay:seek\"" ) != std::string::npos );
+	CHECK( page.find( "id=\"track\" class=\"sunk\" data-click=\"replay:seek\"" ) != std::string::npos );
 	CHECK( page.find( "data-click=\"replay:pause\"" ) != std::string::npos );
 	CHECK( page.find( "data-click=\"replay:speed:100\"" ) != std::string::npos );
 }

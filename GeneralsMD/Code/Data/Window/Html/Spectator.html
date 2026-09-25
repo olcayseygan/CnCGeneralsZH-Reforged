@@ -141,22 +141,39 @@
   .army .cell.head img { left: 0; top: 0; width: 30px; height: 18px; }
   .count { position: absolute; right: 2px; bottom: 0; font-size: 8px; font-weight: bold; color: #ffffff; }
 
-  /* ---- the replay strip, on the screen's bottom edge where the command grid stands in a match ---- */
-  #replay { display: none; position: absolute; left: 240px; top: 551px; width: 320px; padding: 3px 0 4px 0; }
+  /* ---- the replay strip, on the screen's bottom edge where the command grid stands in a match ----
+     ControlBar.html's own bezel: a steel plate lit from above, a light line along its top and down
+     its left, a dark one down its right, the readout and the timeline sunk in two pixel wells, and
+     the keys the bar's steel caps, pressed in while they are the one in force */
+  #replay { display: none; position: absolute; left: 240px; top: 551px; width: 306px; height: 38px; padding: 5px 7px 6px 7px;
+            background: linear-gradient(to bottom, #9aa3ad, #5a626c 30%, #353c45);
+            border-top: 1px solid #dde4ea; border-left: 1px solid #b3bbc4; border-right: 1px solid #0c1114; }
+  .china #replay { background: linear-gradient(to bottom, #c06a52, #7a3120 30%, #3f160f); border-top-color: #f0b8a4; border-left-color: #d58a70; }
+  .gla #replay { background: linear-gradient(to bottom, #b8ab6e, #766a3a 30%, #3c3519); border-top-color: #ebe2b4; border-left-color: #cabe86; }
   #replay.on { display: block; }
-  .clockline { position: relative; height: 11px; margin: 0 6px; }
-  .clock { position: absolute; left: 0; top: 0; font-weight: bold; color: #e8d27a; }
+  .sunk { border: 2px solid #06090b; border-bottom-color: #b4bec8; border-right-color: #b4bec8; background-color: #020405; }
+  .china .sunk { border-bottom-color: #d98a72; border-right-color: #d98a72; }
+  .gla .sunk { border-bottom-color: #cbbf82; border-right-color: #cbbf82; }
+  .controls { position: relative; height: 15px; }
+  .readout { position: absolute; left: 0; top: 0; width: 76px; height: 11px; line-height: 11px; text-align: center; font-size: 8px; }
+  .clock { font-weight: bold; color: #e8d27a; }
   .seeking .clock { color: #b8f08a; }
-  .length { position: absolute; right: 0; top: 0; color: #8a949f; }
-  #track { height: 7px; margin: 2px 6px 4px 6px; background-color: #030709; border: 1px solid #0c1114; border-bottom-color: #778391; }
-  #track:hover { border-color: #aab4bf; }
-  #track .fill { height: 7px; background-image: url(PowerBarGreen); }
-  .speeds { text-align: center; }
-  .speed { display: inline-block; width: 36px; height: 11px; line-height: 11px; margin: 0 1px; text-align: center; font-size: 8px; color: #c9d2d9; }
-  .speed.on { color: #b8f08a; }
+  .length { color: #8a949f; }
+  .keys { position: absolute; right: 0; top: 0; }
+  .speed { display: inline-block; width: 30px; height: 12px; line-height: 12px; margin-left: 2px; text-align: center;
+           font-size: 8px; font-weight: bold; color: #e8eef2;
+           background: linear-gradient(to bottom, #7d8691, #3f4650); border: 1px solid #0c1114; border-top-color: #c3ccd3; border-left-color: #aab4bf; }
+  .china .speed { background: linear-gradient(to bottom, #a44734, #4c1b13); border-top-color: #e8a28a; border-left-color: #d98a72; }
+  .gla .speed { background: linear-gradient(to bottom, #978a50, #48401e); border-top-color: #ddd29a; border-left-color: #cbbf82; }
+  .speed:hover { color: #ffffff; border-color: #e8d27a; }
+  .speed.on, .china .speed.on, .gla .speed.on { color: #e8d27a; background: linear-gradient(to bottom, #2a3036, #4b535e); border-top-color: #0c1114; border-left-color: #0c1114; }
   .speed .play { display: none; }
   .paused .speed .play { display: inline; }
   .paused .speed .hold { display: none; }
+  /* the timeline is the power bar's groove, lit green up to the frame reached */
+  #track { height: 8px; margin-top: 6px; }
+  #track:hover { border-top-color: #e8d27a; border-left-color: #e8d27a; }
+  #track .fill { height: 8px; background-image: url(PowerBarGreen); }
 </style>
 </head>
 <body>
@@ -231,17 +248,19 @@
 </div>
 </div>
 
-<div id="replay" class="well {{replay}} {{replaypaused}} {{replayseeking}}">
-  <div class="clockline"><span class="clock">{{replaytime}}</span><span class="length">{{replaylength}}</span></div>
-  <div id="track" data-click="replay:seek"><div class="fill" style="width: {{replayshare}}%"></div></div>
-  <div class="speeds">
-    <span class="speed plate" data-click="replay:pause"><span class="hold">II</span><span class="play">&#9658;</span></span>
-    <span class="speed plate {{replay:speed:50}}" data-click="replay:speed:50">&#189;x</span>
-    <span class="speed plate {{replay:speed:100}}" data-click="replay:speed:100">1x</span>
-    <span class="speed plate {{replay:speed:200}}" data-click="replay:speed:200">2x</span>
-    <span class="speed plate {{replay:speed:400}}" data-click="replay:speed:400">4x</span>
-    <span class="speed plate {{replay:speed:800}}" data-click="replay:speed:800">8x</span>
+<div id="replay" class="{{replay}} {{replaypaused}} {{replayseeking}}">
+  <div class="controls">
+    <div class="readout sunk"><span class="clock">{{replaytime}}</span> <span class="length">/ {{replaylength}}</span></div>
+    <div class="keys">
+      <span class="speed" data-click="replay:pause"><span class="hold">II</span><span class="play">&#9658;</span></span>
+      <span class="speed {{replay:speed:50}}" data-click="replay:speed:50">&#189;x</span>
+      <span class="speed {{replay:speed:100}}" data-click="replay:speed:100">1x</span>
+      <span class="speed {{replay:speed:200}}" data-click="replay:speed:200">2x</span>
+      <span class="speed {{replay:speed:400}}" data-click="replay:speed:400">4x</span>
+      <span class="speed {{replay:speed:800}}" data-click="replay:speed:800">8x</span>
+    </div>
   </div>
+  <div id="track" class="sunk" data-click="replay:seek"><div class="fill" style="width: {{replayshare}}%"></div></div>
 </div>
 
 </div>

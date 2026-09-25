@@ -9127,7 +9127,9 @@ void InGameUI::drawHudOverlay( void )
 	const UnsignedInt clientFrame = m_hudDrawCount;
 	const UnsignedInt logicFrame = TheGameLogic->getFrame();
 	UnsignedInt nowMs = timeGetTime();
-	if( m_hudLastSampleFrame == 0 )
+	// a replay wound back runs the frame number backwards, and the unsigned difference read as tens
+	// of millions of logic frames a second; the reading starts over from there instead
+	if( m_hudLastSampleFrame == 0 || logicFrame < m_hudLastSampleLogicFrame )
 	{
 		m_hudLastSampleMs = nowMs;
 		m_hudLastSampleFrame = clientFrame;

@@ -209,6 +209,15 @@ Bool TunnelTracker::isInContainer( Object *obj )
 }
 
 // ------------------------------------------------------------------------
+// A tunnel joins the network the frame its foundation is laid, and one coming back up out of a GLA
+// hole is a foundation too, so a ghost nobody has built yet, or one being sold, is on the list; a
+// unit sent there walked into the scaffolding.
+static Bool isFinishedTunnel( const Object *tunnel )
+{
+	return !tunnel->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) && !tunnel->testStatus( OBJECT_STATUS_SOLD );
+}
+
+// ------------------------------------------------------------------------
 void TunnelTracker::onTunnelCreated( const Object *newTunnel )
 {
 	m_tunnelCount++;
@@ -236,11 +245,23 @@ void TunnelTracker::onTunnelDestroyed( const Object *deadTunnel )
 	}
 	else
 	{
-		// front() on an empty list reads whatever the list's head happens to point at.  The loop
-		// below already copes with a null tunnel, so ask for one only when there is one.
-		Object *validTunnel = m_tunnelIDs.empty()
-													? NULL
-													: TheGameLogic->findObjectByID( m_tunnelIDs.front() );
+		// The mouth named here is the one a trip with nowhere quiet to surface comes out of, so a
+		// finished one wins over a foundation or a rebuild out of a hole; with nothing but building
+		// sites left, the first of them.  The loop below copes with a null tunnel.
+		Object *validTunnel = NULL;
+		for( std::list<ObjectID>::const_iterator it = m_tunnelIDs.begin(); it != m_tunnelIDs.end(); ++it )
+		{
+			Object *tunnel = TheGameLogic->findObjectByID( *it );
+			if( tunnel == NULL )
+				continue;
+			if( validTunnel == NULL )
+				validTunnel = tunnel;
+			if( isFinishedTunnel( tunnel ) )
+			{
+				validTunnel = tunnel;
+				break;
+			}
+		}
 		// Otherwise, make sure nobody inside remembers the dead tunnel as the one they entered 
 		// (scripts need to use so there must be something valid here)
 		for(ContainedItemsList::iterator it = m_containList.begin(); it != m_containList.end(); )
@@ -269,9 +290,7 @@ Object *TunnelTracker::findQuietTunnelNear( const Coord3D *pos ) const
 		if( tunnel == NULL || tunnel->isEffectivelyDead() )
 			continue;
 
-		// a tunnel joins the network the frame its foundation is laid, so a ghost nobody has built
-		// yet, or one being sold, is on the list too; a unit sent there walked into the scaffolding
-		if( tunnel->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || tunnel->testStatus( OBJECT_STATUS_SOLD ) )
+		if( !isFinishedTunnel( tunnel ) )
 			continue;
 
 		// the stamp starts at 0xffffffff, which the sum wraps to just under the window

@@ -1465,8 +1465,9 @@ void W3DInGameUI::drawPlaceAngle( View *view )
 	Bool anchorInScene = m_buildingPlacementAnchor->Peek_Scene() != NULL;
 	Bool arrowInScene	 = m_buildingPlacementArrow->Peek_Scene() != NULL;
 
-	// get out of here if this display isn't up anyway
-	if( isPlacementAnchored() == FALSE )
+	// get out of here if this display isn't up anyway, and with shift held it is not: that drag
+	// lays a row and turns nothing, so an anchor and an arrow would promise a turn it will not make
+	if( isPlacementAnchored() == FALSE || placesRow() )
 	{
 		if( anchorInScene )
 		{

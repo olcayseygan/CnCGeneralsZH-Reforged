@@ -194,8 +194,9 @@ static Real tryToOrientInThisDirection3D(Object* obj, Real maxTurnRate, const Ve
 //-------------------------------------------------------------------------------------------------
 // The turn this frame that keeps a projectile on the circle tangent to its nose through the goal. That
 // circle turns through twice the angle between nose and goal over its length, so a step of `step`
-// units turns 2*step*sin(angle)/dist, the same every frame for a goal that stands still. Past a right
-// angle no such circle reaches the goal, and a loop of diameter dist brings the nose round instead.
+// units turns 2*step*sin(angle)/dist, the same every frame for a goal that stands still. A goal behind
+// the nose is chased straight (Locomotor_projectileChasesStraight), so past a right angle is only a
+// moving victim's meeting point, and a loop of diameter dist brings the nose round to it.
 // The step that arrives points straight at the goal.
 static Real calcArcTurnToGoal(const Vector3& nose, const Vector3& toGoal, Real step)
 {
@@ -250,10 +251,16 @@ Coord3D Locomotor_interceptOffset(const Coord3D& toVictim, const Coord3D& victim
 // within 11 of a helicopter, flew past it and climbed away with its nose 110 degrees off. Rockets at
 // helicopters and jets over 1800 frames stayed locked p95 20 frames on the straight chase and never drew
 // away; the arc took 26 and drew away 5 times, the arc onto the meeting point 35 and 17.
-static Bool Locomotor_projectileChasesStraight(Object* obj)
+// A goal behind the nose takes the straight chase too. The arc to it bulges past the goal on the far
+// side, and when the goal is on the ground below that is underground: a Comanche hovering over a
+// supply truck put 4 of 4 missiles into the dirt 23 to 47 away, where from 250 out all 4 hit.
+static Bool Locomotor_projectileChasesStraight(Object* obj, const Vector3& toGoal)
 {
 	Object *victim = obj->getAI()->getGoalObject();
-	return victim && victim->isAboveTerrain();
+	if (victim && victim->isAboveTerrain())
+		return TRUE;
+
+	return Vector3::Dot_Product(obj->getTransformMatrix()->Get_X_Vector(), toGoal) <= 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1196,7 +1203,7 @@ void Locomotor::locoUpdate_moveTowardsPosition(Object* obj, const Coord3D& goalP
 		{
 			// Projectiles never stop braking once they start.  jba.
 			obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_BRAKING ) );
-			// Projectiles cheat in 3 dimensions. Chasing an aircraft that is straight at it; otherwise along
+			// Projectiles cheat in 3 dimensions. Chasing an aircraft, or a goal behind the nose, that is straight at it; otherwise along
 			// the nose, so a missile flies the arc moveTowardsPositionThrust turns it onto instead of
 			// kinking at the lock.
 			dist = sqrt(dx*dx+dy*dy+dz*dz);
@@ -1205,7 +1212,7 @@ void Locomotor::locoUpdate_moveTowardsPosition(Object* obj, const Coord3D& goalP
 				vel = MIN_VEL;
 			if (vel > dist)
 				vel = dist;	// do not overcompensate!
-			if (dist > 0.001f && Locomotor_projectileChasesStraight(obj))
+			if (dist > 0.001f && Locomotor_projectileChasesStraight(obj, Vector3(dx, dy, dz)))
 			{
 				pos.x += dx / dist * vel;
 				pos.y += dy / dist * vel;
@@ -2092,7 +2099,7 @@ void Locomotor::moveTowardsPositionThrust(Object* obj, PhysicsBehavior *physics,
 				// we are at target.
 				adjust = false;
 			}
-			else if (obj->isKindOf(KINDOF_PROJECTILE) && !Locomotor_projectileChasesStraight(obj))
+			else if (obj->isKindOf(KINDOF_PROJECTILE) && !Locomotor_projectileChasesStraight(obj, vel))
 			{
 				// the projectile cheat moves along the nose, so this turn is the path it flies. It bends
 				// towards where a moving victim will be when the missile gets there rather than where the

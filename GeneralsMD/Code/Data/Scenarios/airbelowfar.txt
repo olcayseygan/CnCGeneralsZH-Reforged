@@ -1,0 +1,23 @@
+# airbelow.txt with each aircraft spawned 250 short of its target, the comparison for it.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1500
+#     -scenario airbelowfar -logPrefix airbelowfar_
+
+30    spawn      1  ChinaVehicleSupplyTruck    1   start0:0:900
+30    spawn      0  AmericaVehicleComanche     1   start0:0:650
+30    spawn      1  ChinaVehicleTroopCrawler   1   start0:700:900
+30    spawn      0  ChinaJetMIG                1   start0:700:650
+60    attack     0  AmericaVehicleComanche     1  ChinaVehicleSupplyTruck
+60    attack     0  ChinaJetMIG                1  ChinaVehicleTroopCrawler
+150   tally      1  ChinaVehicleSupplyTruck
+150   tally      1  ChinaVehicleTroopCrawler
+300   tally      1  ChinaVehicleSupplyTruck
+300   tally      1  ChinaVehicleTroopCrawler
+450   tally      1  ChinaVehicleSupplyTruck
+450   tally      1  ChinaVehicleTroopCrawler
+900   tally      1  ChinaVehicleSupplyTruck
+900   tally      1  ChinaVehicleTroopCrawler
+1450  tally      1  ChinaVehicleSupplyTruck
+1450  tally      1  ChinaVehicleTroopCrawler

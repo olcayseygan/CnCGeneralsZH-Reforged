@@ -1,0 +1,33 @@
+# An aircraft right over a target that cannot shoot back: a Comanche spawned on top of a supply truck
+# and a MiG on top of a troop crawler, tallied through the run. airbelowfar.txt is the same pair
+# spawned 250 short of their targets.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1500
+#     -scenario airbelow -logPrefix airbelow_
+#
+# Player report 2026-09-25: aircraft sometimes cannot hit an enemy right beneath them. Measured with
+# a temporary log of every missile's distance from its victim when it went off. Before the fix the
+# Comanche over the truck put 4 of 4 anti-tank missiles into the ground 23 to 47 away and the truck
+# had 136 of 300 health at frame 150; from 250 away all 4 hit within 6. A goal behind the missile's
+# nose now takes the straight chase: 3 of 4 hit, the fourth is the shot fired on the spawn frame, and
+# the truck has 16 health at frame 150. The MiG's napalm missiles hit in both builds; inside 80 flat
+# it does not fire at all, which is EA's minimum range, and it circles out and comes back.
+
+30    spawn      1  ChinaVehicleSupplyTruck    1   start0:0:900
+30    spawn      0  AmericaVehicleComanche     1   start0:0:900
+30    spawn      1  ChinaVehicleTroopCrawler   1   start0:700:900
+30    spawn      0  ChinaJetMIG                1   start0:700:900
+60    attack     0  AmericaVehicleComanche     1  ChinaVehicleSupplyTruck
+60    attack     0  ChinaJetMIG                1  ChinaVehicleTroopCrawler
+150   tally      1  ChinaVehicleSupplyTruck
+150   tally      1  ChinaVehicleTroopCrawler
+300   tally      1  ChinaVehicleSupplyTruck
+300   tally      1  ChinaVehicleTroopCrawler
+450   tally      1  ChinaVehicleSupplyTruck
+450   tally      1  ChinaVehicleTroopCrawler
+900   tally      1  ChinaVehicleSupplyTruck
+900   tally      1  ChinaVehicleTroopCrawler
+1450  tally      1  ChinaVehicleSupplyTruck
+1450  tally      1  ChinaVehicleTroopCrawler

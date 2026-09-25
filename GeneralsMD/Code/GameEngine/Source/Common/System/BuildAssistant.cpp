@@ -682,8 +682,15 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 																											 UnsignedInt options,
 																											 Player *thePlayer)
 {
-	ObjectIterator *iter = 
-			ThePartitionManager->iteratePotentialCollisions( worldPos,
+	/* A building stands on the ground, and the collision test below is three dimensional, so it is asked
+		 at the ground under worldPos whatever height the caller passed. The computer's placement searches
+		 kept the height of the spot they started from, or passed 0, and a probe that floated above a
+		 building's roof found it clear: a Hard USA put three pairs of supply drop zones exactly on top of
+		 each other in one match. */
+	Coord3D groundPos = *worldPos;
+	groundPos.z = TheTerrainLogic->getGroundHeight( groundPos.x, groundPos.y );
+	ObjectIterator *iter =
+			ThePartitionManager->iteratePotentialCollisions( &groundPos,
 																											 build->getTemplateGeometryInfo(),
 																											 angle );
 	Object *them;

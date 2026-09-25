@@ -6893,21 +6893,27 @@ Real InGameUI::computePlacementAngle( const ICoord2D *start, const ICoord2D *end
 	* box is major along its facing and minor across it, and anything round is its bounding circle.
 	* At 45 degrees the axis-aligned extents grow, which is right - that is the ground it covers. */
 //-------------------------------------------------------------------------------------------------
-static void placementHalfExtents( const ThingTemplate *what, Real angle, Real *halfX, Real *halfY )
+static void placementHalfSizes( const ThingTemplate *what, Real *major, Real *minor )
 {
 	const GeometryInfo &geom = what->getTemplateGeometryInfo();
-	Real major = geom.getMajorRadius();
-	Real minor = geom.getMinorRadius();
+	*major = geom.getMajorRadius();
+	*minor = geom.getMinorRadius();
 	if( geom.getGeomType() != GEOMETRY_BOX )
-		major = minor = geom.getBoundingCircleRadius();
+		*major = *minor = geom.getBoundingCircleRadius();
 
 	// The ground a structure really takes is not its collision box: BuildAssistant's own clearance
 	// check grows both radii by the factory bib (isLocationClearOfObjects' myBounds), and the bib is
 	// the concrete apron you can see under it.  Snapping the bare box left that apron hanging off
 	// the grid by the bib's width, which is what makes a placed building look like it did not
 	// quite sit down on its squares.
-	major += what->getFactoryExtraBibWidth();
-	minor += what->getFactoryExtraBibWidth();
+	*major += what->getFactoryExtraBibWidth();
+	*minor += what->getFactoryExtraBibWidth();
+}
+
+static void placementHalfExtents( const ThingTemplate *what, Real angle, Real *halfX, Real *halfY )
+{
+	Real major, minor;
+	placementHalfSizes( what, &major, &minor );
 
 	const Real c = (Real)fabs( Cos( angle ) );
 	const Real sn = (Real)fabs( Sin( angle ) );
@@ -6947,8 +6953,14 @@ Bool InGameUI::placesRow( void )
 void InGameUI::computePlacementRow( const ThingTemplate *what, Real angle, const Coord3D *start,
 																		const Coord3D *end, std::vector<Coord3D> *positions ) const
 {
-	Real halfX, halfY;
-	placementHalfExtents( what, angle, &halfX, &halfY );
+	//
+	// A factory's door needs its lane clear of the next structure (isLocationClearOfObjects' exit
+	// check), so a row running out of the door or into it leaves the lane between each pair.
+	// Half the lane on each half-length: the pair's shared box grows by the whole of it.
+	//
+	Real major, minor;
+	placementHalfSizes( what, &major, &minor );
+	const Real halfFacing = major + what->getFactoryExitWidth() * 0.5f;
 
 	Int most = TheGlobalData->m_maxLineBuildObjects;
 	Player *player = ThePlayerList->getLocalPlayer();
@@ -6961,7 +6973,8 @@ void InGameUI::computePlacementRow( const ThingTemplate *what, Real angle, const
 	}
 
 	Coord2D step;
-	const Int count = placementRow( end->x - start->x, end->y - start->y, 2.0f * halfX, 2.0f * halfY,
+	const Int count = placementRow( end->x - start->x, end->y - start->y, (Real)Cos( angle ),
+																	(Real)Sin( angle ), halfFacing, minor,
 																	TheGlobalData->m_gridBuildPlacement, most, &step );
 
 	positions->clear();

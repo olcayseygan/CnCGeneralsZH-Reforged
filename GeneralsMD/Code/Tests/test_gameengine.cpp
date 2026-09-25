@@ -2265,43 +2265,63 @@ TEST(placement_grid_snap_puts_footprint_edges_on_cell_lines)
 	CHECK_NEAR(InGameUI::snapPlacementAxis(13.0f, 0.0f), 14.5f, 0.0001f);
 }
 
-TEST(placement_row_steps_flush_along_the_nearest_eighth)
+TEST(placement_row_packs_the_footprint_along_the_nearest_eighth)
 {
 	Coord2D step;
+	const Real half = 0.70710678f;	/* cos and sin of an eighth of a turn */
 
-	/* straight along x, a 40 by 30 footprint: one piece per 40 dragged, the first free */
-	CHECK_EQ(InGameUI::placementRow(119.0f, 0.0f, 40.0f, 30.0f, TRUE, 50, &step), 3);
+	/* facing along x, a 40 by 30 footprint: one piece per 40 dragged, the first free */
+	CHECK_EQ(InGameUI::placementRow(119.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 3);
 	CHECK_NEAR(step.x, 40.0f, 0.0001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
-	CHECK_EQ(InGameUI::placementRow(120.0f, 0.0f, 40.0f, 30.0f, TRUE, 50, &step), 4);
+	CHECK_EQ(InGameUI::placementRow(120.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 4);
 
 	/* a hand-drawn line 20 degrees off still runs straight, and backwards runs backwards */
-	CHECK_EQ(InGameUI::placementRow(-100.0f, 36.0f, 40.0f, 30.0f, TRUE, 50, &step), 3);
+	CHECK_EQ(InGameUI::placementRow(-100.0f, 36.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 3);
 	CHECK_NEAR(step.x, -40.0f, 0.0001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
 
 	/* along y the step is the footprint's other side */
-	InGameUI::placementRow(0.0f, -90.0f, 40.0f, 30.0f, TRUE, 50, &step);
+	InGameUI::placementRow(0.0f, -90.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step);
 	CHECK_NEAR(step.x, 0.0f, 0.0001f);
 	CHECK_NEAR(step.y, -30.0f, 0.0001f);
 
-	/* a diagonal steps corner to corner */
-	CHECK_EQ(InGameUI::placementRow(80.0f, 60.0f, 40.0f, 30.0f, TRUE, 50, &step), 3);
-	CHECK_NEAR(step.x, 40.0f, 0.0001f);
+	/* a diagonal slides each piece along the last one's long side instead of meeting it corner
+	 * to corner: 30 on each axis, where 40 by 30 left a triangle of ground between them */
+	CHECK_EQ(InGameUI::placementRow(80.0f, 60.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 3);
+	CHECK_NEAR(step.x, 30.0f, 0.0001f);
 	CHECK_NEAR(step.y, 30.0f, 0.0001f);
 
-	/* on the grid a size goes up to whole cells, a turned footprint's float dust does not */
-	InGameUI::placementRow(100.0f, 0.0f, 42.0f, 30.0f, TRUE, 50, &step);
+	/* turned a quarter, the footprint's sides swap axes; Cos's float dust stays off the grid */
+	InGameUI::placementRow(100.0f, 0.0f, -0.00000004f, 1.0f, 20.0f, 15.0f, TRUE, 50, &step);
+	CHECK_NEAR(step.x, 30.0f, 0.0001f);
+
+	/* turned an eighth, a row along the structure's own line stands face to face with the
+	 * next: a step 40 long, less the hair left off the grid */
+	InGameUI::placementRow(100.0f, 100.0f, half, half, 20.0f, 15.0f, TRUE, 50, &step);
+	CHECK_NEAR(step.x * step.x + step.y * step.y, 40.0f * 40.0f, 60.0f);
+	CHECK(step.x * step.x + step.y * step.y > 40.0f * 40.0f);
+	InGameUI::placementRow(-100.0f, 100.0f, half, half, 20.0f, 15.0f, TRUE, 50, &step);
+	CHECK_NEAR(step.x * step.x + step.y * step.y, 30.0f * 30.0f, 60.0f);
+
+	/* and across the structure's line the row can do no better than corner to corner: the
+	 * shorter half-side's diagonal, 30 / cos 45 */
+	InGameUI::placementRow(100.0f, 0.0f, half, half, 20.0f, 15.0f, TRUE, 50, &step);
+	CHECK_NEAR(step.x, 30.0f / half + 0.5f, 0.001f);
+	CHECK_NEAR(step.y, 0.0f, 0.0001f);
+
+	/* on the grid a size goes up to whole cells; off it the size stands, plus the hair */
+	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 21.0f, 15.0f, TRUE, 50, &step);
 	CHECK_NEAR(step.x, 50.0f, 0.0001f);
-	InGameUI::placementRow(100.0f, 0.0f, 40.00002f, 30.0f, TRUE, 50, &step);
+	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 20.00001f, 15.0f, TRUE, 50, &step);
 	CHECK_NEAR(step.x, 40.0f, 0.0001f);
-	InGameUI::placementRow(100.0f, 0.0f, 42.0f, 30.0f, FALSE, 50, &step);
-	CHECK_NEAR(step.x, 42.0f, 0.0001f);
+	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 21.0f, 15.0f, FALSE, 50, &step);
+	CHECK_NEAR(step.x, 42.5f, 0.0001f);
 
 	/* never more than the cap, never fewer than one, and no drag is one piece */
-	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 40.0f, 30.0f, TRUE, 5, &step), 5);
-	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 40.0f, 30.0f, TRUE, 0, &step), 1);
-	CHECK_EQ(InGameUI::placementRow(0.0f, 0.0f, 40.0f, 30.0f, TRUE, 50, &step), 1);
+	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 5, &step), 5);
+	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 0, &step), 1);
+	CHECK_EQ(InGameUI::placementRow(0.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 1);
 }
 
 

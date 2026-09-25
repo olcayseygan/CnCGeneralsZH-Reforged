@@ -644,26 +644,48 @@ public:  // ********************************************************************
 
 	/** A shift-dragged row: the step from one structure to the next, and how many fit between the
 		* anchor and a cursor 'dx'/'dy' away.  The row runs along the nearest eighth of a turn - a
-		* component counts once it is more than tan 22.5 degrees of the other - and a step is the
-		* footprint's whole size, 'sizeX'/'sizeY' with the bib, along each axis it moves on, so
-		* neighbours stand flush.  On the build grid that size goes up to whole cells, which keeps every
-		* piece on the grid the first one was snapped to.  Never fewer than one, never more than
+		* component counts once it is more than tan 22.5 degrees of the other - and packs as tight as
+		* the footprint allows along it: the footprint is the box 'halfFacing' by 'halfSide' turned to
+		* the heading, and the step is where the row leaves the box two of them would share.  So a
+		* structure turned onto the row's own line stands face to face with the next, and one turned
+		* across it corner to corner, which is the closest a straight row of those can get.  With
+		* the heading on the grid's axes and the build grid on, the step goes up to whole cells and
+		* every piece stays on the grid the first one was snapped to; anywhere else nothing lines two
+		* edges up exactly, so a hair is left between them.  Never fewer than one, never more than
 		* 'most'.  Inline and static so a test can reach it without linking the whole in-game UI. */
-	static Int placementRow( Real dx, Real dy, Real sizeX, Real sizeY, Bool grid, Int most,
-													 Coord2D *step )
+	static Int placementRow( Real dx, Real dy, Real headingCos, Real headingSin, Real halfFacing,
+													 Real halfSide, Bool grid, Int most, Coord2D *step )
 	{
 		const Real slope = 0.41421356f;		// tan 22.5 degrees
+		const Real diagonal = 0.70710678f;	// each component of a unit step on a diagonal
 		const Real cell = (Real)PLACEMENT_CELL;
 		const Real slack = 0.01f;					// Cos of a quarter turn is a hair off zero, not a cell's worth
+		const Real parallel = 0.0001f;		// a projection this small is a face the row runs along, not into
+		const Real clearance = 0.5f;			// world units left between two pieces off the grid
 
-		if( grid )
-		{
-			sizeX = (Real)REAL_TO_INT_CEIL( sizeX / cell - slack ) * cell;
-			sizeY = (Real)REAL_TO_INT_CEIL( sizeY / cell - slack ) * cell;
-		}
+		const Real signX = fabs( dx ) > fabs( dy ) * slope ? ( dx < 0.0f ? -1.0f : 1.0f ) : 0.0f;
+		const Real signY = fabs( dy ) > fabs( dx ) * slope ? ( dy < 0.0f ? -1.0f : 1.0f ) : 0.0f;
+		const Real along = ( signX != 0.0f && signY != 0.0f ) ? diagonal : 1.0f;
+		const Real ux = signX * along;
+		const Real uy = signY * along;
 
-		step->x = fabs( dx ) > fabs( dy ) * slope ? ( dx < 0.0f ? -sizeX : sizeX ) : 0.0f;
-		step->y = fabs( dy ) > fabs( dx ) * slope ? ( dy < 0.0f ? -sizeY : sizeY ) : 0.0f;
+		const Real intoFacing = (Real)fabs( ux * headingCos + uy * headingSin );
+		const Real intoSide = (Real)fabs( uy * headingCos - ux * headingSin );
+		Real reach = 0.0f;
+		if( intoFacing > parallel )
+			reach = 2.0f * halfFacing / intoFacing;
+		if( intoSide > parallel && ( reach == 0.0f || 2.0f * halfSide / intoSide < reach ) )
+			reach = 2.0f * halfSide / intoSide;
+
+		Real component = reach * along;
+		const Bool onGridAxes = fabs( headingSin * headingCos ) < parallel;
+		if( grid && onGridAxes )
+			component = (Real)REAL_TO_INT_CEIL( component / cell - slack ) * cell;
+		else
+			component += clearance;
+
+		step->x = signX * component;
+		step->y = signY * component;
 
 		Int count = 1;
 		const Real stepSqr = step->x * step->x + step->y * step->y;

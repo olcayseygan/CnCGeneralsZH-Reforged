@@ -305,8 +305,10 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 				// translate the screen position of start to world target location
 				TheTacticalView->screenToTerrain( &anchorStart, &world );
 
-				// and put it on the build grid, exactly as the ghost the player was looking at
+				// and put it on the build grid and against its neighbour, exactly as the ghost the
+				// player was looking at
 				TheInGameUI->snapPlacementToGrid( &world, build, angle );
+				TheInGameUI->snapPlacementToNeighbour( &world, build, angle );
 
 				// get the source object ID of the thing that is "building" the object 
 				ObjectID builderID = INVALID_ID;

@@ -3426,6 +3426,7 @@ void InGameUI::handleBuildPlacements( void )
 		if( !TheTacticalView->screenToTerrain( &loc, &world ) )
 			world = *m_placeIcon[ 0 ]->getPosition();
 		snapPlacementToGrid( &world, m_pendingPlaceType, angle );
+		snapPlacementToNeighbour( &world, m_pendingPlaceType, angle );
 
 		//
 		// NudgeBuildPlacement: the ghost sits where the last legality check found room, which is
@@ -3558,9 +3559,11 @@ void InGameUI::handleBuildPlacements( void )
 					!TheTacticalView->screenToTerrain( &screenEnd, &worldEnd ) )
 				return;
 
-			// both ends, so a wall lands on the grid and tiles from a grid square
+			// both ends, so a wall lands on the grid and tiles from a grid square; a row starts where
+			// the ghost did, against its neighbour
 			snapPlacementToGrid( &worldStart, m_pendingPlaceType, angle );
 			snapPlacementToGrid( &worldEnd, m_pendingPlaceType, angle );
+			snapPlacementToNeighbour( &worldStart, m_pendingPlaceType, angle );
 
 			// get the builder object that will be constructing things
 			Object *builderObject = TheGameLogic->findObjectByID( TheInGameUI->getPendingPlaceSourceObjectID() );
@@ -6974,8 +6977,7 @@ void InGameUI::computePlacementRow( const ThingTemplate *what, Real angle, const
 
 	Coord2D step;
 	const Int count = placementRow( end->x - start->x, end->y - start->y, (Real)Cos( angle ),
-																	(Real)Sin( angle ), halfFacing, minor,
-																	TheGlobalData->m_gridBuildPlacement, most, &step );
+																	(Real)Sin( angle ), halfFacing, minor, most, &step );
 
 	positions->clear();
 	for( Int i = 0; i < count; i++ )
@@ -7077,6 +7079,77 @@ Bool InGameUI::overlapsPendingPlacement( const Coord3D *world, const ThingTempla
 	return FALSE;
 
 }  // end overlapsPendingPlacement
+
+//-------------------------------------------------------------------------------------------------
+/** Of every structure it could be pulled against, the one that moves it least wins - the one the
+	* click was plainly meant for.  Standing structures come off the partition manager, ordered ones
+	* off the pending ring, and one that has since gone up is in both, the same box twice. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::snapPlacementToNeighbour( Coord3D *world, const ThingTemplate *what, Real angle ) const
+{
+	if( TheBuildAssistant->isLineBuildTemplate( what ) )
+		return;
+
+	const Real largestFootprint = 150.0f;		// half-diagonal of the biggest structure it may lean on
+
+	PlacementBox mine;
+	placementFootprint( what, world, angle, &mine );
+
+	Coord2D best;
+	best.x = world->x;
+	best.y = world->y;
+	Real bestMoveSqr = -1.0f;
+
+	std::vector<PlacementBox> neighbours;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	for( Int i = 0; i < PENDING_PLACEMENTS; i++ )
+	{
+		const PendingPlacement *pending = &m_pendingPlacement[ i ];
+		if( pending->frame != 0 && now >= pending->frame && now - pending->frame <= PENDING_PLACEMENT_FRAMES )
+			neighbours.push_back( pending->footprint );
+	}
+
+	const Real searchRadius = (Real)sqrt( mine.halfMajor * mine.halfMajor + mine.halfMinor * mine.halfMinor ) +
+														(Real)PLACEMENT_FLUSH_REACH + largestFootprint;
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( world, searchRadius, FROM_CENTER_2D, NULL );
+	MemoryPoolObjectHolder holder( iter );
+	for( Object *obj = iter->first(); obj; obj = iter->next() )
+	{
+		if( !obj->isKindOf( KINDOF_STRUCTURE ) || obj->isEffectivelyDead() )
+			continue;
+
+		PlacementBox standing;
+		placementFootprint( obj->getTemplate(), obj->getPosition(), obj->getOrientation(), &standing );
+		neighbours.push_back( standing );
+	}
+
+	for( size_t i = 0; i < neighbours.size(); i++ )
+	{
+		PlacementBox moved = mine;
+		if( !flushAgainst( &neighbours[ i ], &moved ) )
+			continue;
+
+		// flush against this one and into the next is no help: the nudge would throw it off again
+		Bool blocked = FALSE;
+		for( size_t j = 0; j < neighbours.size() && !blocked; j++ )
+			blocked = j != i && footprintsOverlap( &moved, &neighbours[ j ] );
+		if( blocked )
+			continue;
+
+		const Real moveSqr = ( moved.x - mine.x ) * ( moved.x - mine.x ) + ( moved.y - mine.y ) * ( moved.y - mine.y );
+		if( bestMoveSqr < 0.0f || moveSqr < bestMoveSqr )
+		{
+			bestMoveSqr = moveSqr;
+			best.x = moved.x;
+			best.y = moved.y;
+		}
+	}
+
+	world->x = best.x;
+	world->y = best.y;
+	world->z = TheTerrainLogic->getGroundHeight( best.x, best.y );
+
+}  // end snapPlacementToNeighbour
 
 //-------------------------------------------------------------------------------------------------
 void InGameUI::forgetPendingPlacements( void )

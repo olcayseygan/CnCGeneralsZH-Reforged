@@ -2270,58 +2270,54 @@ TEST(placement_row_packs_the_footprint_along_the_nearest_eighth)
 	Coord2D step;
 	const Real half = 0.70710678f;	/* cos and sin of an eighth of a turn */
 
-	/* facing along x, a 40 by 30 footprint: one piece per 40 dragged, the first free */
-	CHECK_EQ(InGameUI::placementRow(119.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 3);
-	CHECK_NEAR(step.x, 40.0f, 0.0001f);
+	/* facing along x, a 40 by 30 footprint: one piece per 40 dragged and the hair the logic's
+	 * clearance test needs between them, the first free */
+	CHECK_EQ(InGameUI::placementRow(119.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
+	CHECK_NEAR(step.x, 40.5f, 0.0001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
-	CHECK_EQ(InGameUI::placementRow(120.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 4);
+	CHECK_EQ(InGameUI::placementRow(122.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 4);
 
 	/* a hand-drawn line 20 degrees off still runs straight, and backwards runs backwards */
-	CHECK_EQ(InGameUI::placementRow(-100.0f, 36.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 3);
-	CHECK_NEAR(step.x, -40.0f, 0.0001f);
+	CHECK_EQ(InGameUI::placementRow(-100.0f, 36.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
+	CHECK_NEAR(step.x, -40.5f, 0.0001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
 
 	/* along y the step is the footprint's other side */
-	InGameUI::placementRow(0.0f, -90.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step);
+	InGameUI::placementRow(0.0f, -90.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step);
 	CHECK_NEAR(step.x, 0.0f, 0.0001f);
-	CHECK_NEAR(step.y, -30.0f, 0.0001f);
+	CHECK_NEAR(step.y, -30.5f, 0.0001f);
 
 	/* a diagonal slides each piece along the last one's long side instead of meeting it corner
-	 * to corner: 30 on each axis, where 40 by 30 left a triangle of ground between them */
-	CHECK_EQ(InGameUI::placementRow(80.0f, 60.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 3);
-	CHECK_NEAR(step.x, 30.0f, 0.0001f);
-	CHECK_NEAR(step.y, 30.0f, 0.0001f);
+	 * to corner: 30 on each axis and the hair, where 40 by 30 left a triangle of ground */
+	CHECK_EQ(InGameUI::placementRow(80.0f, 60.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
+	CHECK_NEAR(step.x, 30.0f + 0.5f * half, 0.001f);
+	CHECK_NEAR(step.y, 30.0f + 0.5f * half, 0.001f);
 
-	/* turned a quarter, the footprint's sides swap axes; Cos's float dust stays off the grid */
-	InGameUI::placementRow(100.0f, 0.0f, -0.00000004f, 1.0f, 20.0f, 15.0f, TRUE, 50, &step);
-	CHECK_NEAR(step.x, 30.0f, 0.0001f);
+	/* turned a quarter, the footprint's sides swap axes, Cos's float dust and all */
+	InGameUI::placementRow(100.0f, 0.0f, -0.00000004f, 1.0f, 20.0f, 15.0f, 50, &step);
+	CHECK_NEAR(step.x, 30.5f, 0.0001f);
 
 	/* turned an eighth, a row along the structure's own line stands face to face with the
-	 * next: a step 40 long, less the hair left off the grid */
-	InGameUI::placementRow(100.0f, 100.0f, half, half, 20.0f, 15.0f, TRUE, 50, &step);
-	CHECK_NEAR(step.x * step.x + step.y * step.y, 40.0f * 40.0f, 60.0f);
-	CHECK(step.x * step.x + step.y * step.y > 40.0f * 40.0f);
-	InGameUI::placementRow(-100.0f, 100.0f, half, half, 20.0f, 15.0f, TRUE, 50, &step);
-	CHECK_NEAR(step.x * step.x + step.y * step.y, 30.0f * 30.0f, 60.0f);
+	 * next: a step 40 long, and the hair */
+	InGameUI::placementRow(100.0f, 100.0f, half, half, 20.0f, 15.0f, 50, &step);
+	CHECK_NEAR(step.x * step.x + step.y * step.y, 40.5f * 40.5f, 0.01f);
+	InGameUI::placementRow(-100.0f, 100.0f, half, half, 20.0f, 15.0f, 50, &step);
+	CHECK_NEAR(step.x * step.x + step.y * step.y, 30.5f * 30.5f, 0.01f);
 
 	/* and across the structure's line the row can do no better than corner to corner: the
 	 * shorter half-side's diagonal, 30 / cos 45 */
-	InGameUI::placementRow(100.0f, 0.0f, half, half, 20.0f, 15.0f, TRUE, 50, &step);
+	InGameUI::placementRow(100.0f, 0.0f, half, half, 20.0f, 15.0f, 50, &step);
 	CHECK_NEAR(step.x, 30.0f / half + 0.5f, 0.001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
 
-	/* on the grid a size goes up to whole cells; off it the size stands, plus the hair */
-	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 21.0f, 15.0f, TRUE, 50, &step);
-	CHECK_NEAR(step.x, 50.0f, 0.0001f);
-	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 20.00001f, 15.0f, TRUE, 50, &step);
-	CHECK_NEAR(step.x, 40.0f, 0.0001f);
-	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 21.0f, 15.0f, FALSE, 50, &step);
-	CHECK_NEAR(step.x, 42.5f, 0.0001f);
+	/* the step is the footprint, not the build grid's next whole cell */
+	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 22.0f, 30.0f, 50, &step);
+	CHECK_NEAR(step.x, 44.5f, 0.0001f);
 
 	/* never more than the cap, never fewer than one, and no drag is one piece */
-	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 5, &step), 5);
-	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 0, &step), 1);
-	CHECK_EQ(InGameUI::placementRow(0.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, TRUE, 50, &step), 1);
+	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 5, &step), 5);
+	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 0, &step), 1);
+	CHECK_EQ(InGameUI::placementRow(0.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 1);
 }
 
 
@@ -11186,6 +11182,75 @@ TEST(two_structures_ordered_onto_the_same_ground_are_one_too_many)
 	//
 	CHECK( (Int)InGameUI::PENDING_PLACEMENT_FRAMES >= 30 );
 	CHECK( (Int)InGameUI::PENDING_PLACEMENTS >= 2 );
+}
+
+/* A structure clicked out beside another by eye lands flush against it: a player's step is never
+	 the building's width to the unit, and the build grid alone cannot close the difference for a
+	 structure standing diagonal to it. */
+TEST(a_structure_clicked_beside_another_is_pulled_flush)
+{
+	const Real half = 0.70710678f;	/* cos and sin of an eighth of a turn */
+	const InGameUI::PlacementBox standing = placementBox( 0.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	InGameUI::PlacementBox mine;
+
+	/* short of touching by a little: pulled across to touching and the logic's hair, and put on
+	 * the line it was nearly on */
+	mine = placementBox( 45.0f, 3.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( InGameUI::flushAgainst( &standing, &mine ) );
+	CHECK_NEAR( mine.x, 40.5f, 0.0001f );
+	CHECK_NEAR( mine.y, 0.0f, 0.0001f );
+
+	/* sunk into it by less than half: pushed back out */
+	mine = placementBox( 32.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( InGameUI::flushAgainst( &standing, &mine ) );
+	CHECK_NEAR( mine.x, 40.5f, 0.0001f );
+
+	/* the other side of it works the same way */
+	mine = placementBox( 2.0f, -33.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( InGameUI::flushAgainst( &standing, &mine ) );
+	CHECK_NEAR( mine.x, 0.0f, 0.0001f );
+	CHECK_NEAR( mine.y, -30.5f, 0.0001f );
+
+	/* a step off on the diagonal keeps to the diagonal, sliding along the long side */
+	mine = placementBox( 45.0f, 35.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( InGameUI::flushAgainst( &standing, &mine ) );
+	CHECK_NEAR( mine.x, mine.y, 0.001f );
+	CHECK_NEAR( mine.y, 30.0f + 0.5f * half, 0.001f );
+
+	/* a gap of a cell and a half is a gap somebody meant */
+	mine = placementBox( 56.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( !InGameUI::flushAgainst( &standing, &mine ) );
+	CHECK_NEAR( mine.x, 56.0f, 0.0001f );
+
+	/* sunk in past half is a click on the structure itself, not beside it */
+	mine = placementBox( 15.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f );
+	CHECK( !InGameUI::flushAgainst( &standing, &mine ) );
+
+	/* both turned an eighth: a step along their own faces goes face to face */
+	const InGameUI::PlacementBox diagonal = placementBox( 0.0f, 0.0f, half, half, 20.0f, 15.0f );
+	mine = placementBox( 45.0f * half - 4.0f * half, 45.0f * half + 4.0f * half, half, half, 20.0f, 15.0f );
+	CHECK( InGameUI::flushAgainst( &diagonal, &mine ) );
+	CHECK_NEAR( mine.x, 40.5f * half, 0.001f );
+	CHECK_NEAR( mine.y, 40.5f * half, 0.001f );
+
+	/* and a step sideways on the map, past structures standing diagonal to it, stays on the line
+	 * and nests corner into corner - a Power Plant at its own heading, 44 by 60, a player's step
+	 * 70 along and 3 off */
+	const InGameUI::PlacementBox plant = placementBox( 0.0f, 0.0f, half, -half, 22.0f, 30.0f );
+	mine = placementBox( 70.0f, 3.0f, half, -half, 22.0f, 30.0f );
+	CHECK( InGameUI::flushAgainst( &plant, &mine ) );
+	CHECK_NEAR( mine.x, 44.0f / half + 0.5f, 0.001f );
+	CHECK_NEAR( mine.y, 0.0f, 0.001f );
+	CHECK( !InGameUI::footprintsOverlap( &plant, &mine ) );
+
+	/* a quarter turn off still squares up, with its sides swapped */
+	mine = placementBox( 38.0f, 0.0f, 0.0f, 1.0f, 20.0f, 15.0f );
+	CHECK( InGameUI::flushAgainst( &standing, &mine ) );
+	CHECK_NEAR( mine.x, 35.5f, 0.0001f );
+
+	/* and one at some other angle is left where it was put */
+	mine = placementBox( 45.0f, 0.0f, 0.8660254f, 0.5f, 20.0f, 15.0f );
+	CHECK( !InGameUI::flushAgainst( &standing, &mine ) );
 }
 
 TEST(option_catalog_rows_are_well_formed)

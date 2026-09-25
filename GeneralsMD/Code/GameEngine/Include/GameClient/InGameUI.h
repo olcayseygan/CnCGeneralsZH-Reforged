@@ -642,50 +642,52 @@ public:  // ********************************************************************
 		return ((Real)REAL_TO_INT_FLOOR( (v - offset) / cell + 0.5f )) * cell + offset;
 	}
 
+	/** How far apart the centres of two boxes squared up with each other stand when one is moved off
+		* the other along the unit direction 'ux'/'uy' until they no longer share ground.  'c'/'s' is
+		* one box's heading; 'touchAlong' and 'touchAcross' are the two boxes' half-sizes added along
+		* that heading and across it.  The row leaves the box the pair would share through whichever
+		* face it meets first.  Plus a hair: the logic's clearance test counts a corner lying exactly on
+		* the other box's edge as inside it (testRotatedPointsAgainstRect's <=), so two boxes that
+		* touch to the unit are refused and the nudge throws the second a cell further off. */
+	static Real placementTouchDistance( Real ux, Real uy, Real c, Real s, Real touchAlong,
+																			Real touchAcross )
+	{
+		const Real parallel = 0.0001f;		// a projection this small is a face the move runs along, not into
+		const Real clearance = 0.5f;			// world units left between two structures that touch
+
+		const Real intoAlong = (Real)fabs( ux * c + uy * s );
+		const Real intoAcross = (Real)fabs( uy * c - ux * s );
+		Real touch = 0.0f;
+		if( intoAlong > parallel )
+			touch = touchAlong / intoAlong;
+		if( intoAcross > parallel && ( touch == 0.0f || touchAcross / intoAcross < touch ) )
+			touch = touchAcross / intoAcross;
+		return touch + clearance;
+	}
+
 	/** A shift-dragged row: the step from one structure to the next, and how many fit between the
 		* anchor and a cursor 'dx'/'dy' away.  The row runs along the nearest eighth of a turn - a
 		* component counts once it is more than tan 22.5 degrees of the other - and packs as tight as
 		* the footprint allows along it: the footprint is the box 'halfFacing' by 'halfSide' turned to
-		* the heading, and the step is where the row leaves the box two of them would share.  So a
-		* structure turned onto the row's own line stands face to face with the next, and one turned
-		* across it corner to corner, which is the closest a straight row of those can get.  With
-		* the heading on the grid's axes and the build grid on, the step goes up to whole cells and
-		* every piece stays on the grid the first one was snapped to; anywhere else nothing lines two
-		* edges up exactly, so a hair is left between them.  Never fewer than one, never more than
-		* 'most'.  Inline and static so a test can reach it without linking the whole in-game UI. */
+		* the heading.  So a structure turned onto the row's own line stands face to face with the
+		* next, and one turned across it corner to corner, which is the closest a straight row of those
+		* can get.  The step is not rounded to the build grid: a Power Plant is 44 across and the grid
+		* is 10, and rounding it up left 6 of dirt at every joint.  Never fewer than one, never more
+		* than 'most'.  Inline and static so a test can reach it without linking the whole in-game UI. */
 	static Int placementRow( Real dx, Real dy, Real headingCos, Real headingSin, Real halfFacing,
-													 Real halfSide, Bool grid, Int most, Coord2D *step )
+													 Real halfSide, Int most, Coord2D *step )
 	{
 		const Real slope = 0.41421356f;		// tan 22.5 degrees
 		const Real diagonal = 0.70710678f;	// each component of a unit step on a diagonal
-		const Real cell = (Real)PLACEMENT_CELL;
-		const Real slack = 0.01f;					// Cos of a quarter turn is a hair off zero, not a cell's worth
-		const Real parallel = 0.0001f;		// a projection this small is a face the row runs along, not into
-		const Real clearance = 0.5f;			// world units left between two pieces off the grid
 
 		const Real signX = fabs( dx ) > fabs( dy ) * slope ? ( dx < 0.0f ? -1.0f : 1.0f ) : 0.0f;
 		const Real signY = fabs( dy ) > fabs( dx ) * slope ? ( dy < 0.0f ? -1.0f : 1.0f ) : 0.0f;
 		const Real along = ( signX != 0.0f && signY != 0.0f ) ? diagonal : 1.0f;
-		const Real ux = signX * along;
-		const Real uy = signY * along;
 
-		const Real intoFacing = (Real)fabs( ux * headingCos + uy * headingSin );
-		const Real intoSide = (Real)fabs( uy * headingCos - ux * headingSin );
-		Real reach = 0.0f;
-		if( intoFacing > parallel )
-			reach = 2.0f * halfFacing / intoFacing;
-		if( intoSide > parallel && ( reach == 0.0f || 2.0f * halfSide / intoSide < reach ) )
-			reach = 2.0f * halfSide / intoSide;
-
-		Real component = reach * along;
-		const Bool onGridAxes = fabs( headingSin * headingCos ) < parallel;
-		if( grid && onGridAxes )
-			component = (Real)REAL_TO_INT_CEIL( component / cell - slack ) * cell;
-		else
-			component += clearance;
-
-		step->x = signX * component;
-		step->y = signY * component;
+		const Real touch = placementTouchDistance( signX * along, signY * along, headingCos, headingSin,
+																							 2.0f * halfFacing, 2.0f * halfSide );
+		step->x = signX * along * touch;
+		step->y = signY * along * touch;
 
 		Int count = 1;
 		const Real stepSqr = step->x * step->x + step->y * step->y;
@@ -772,6 +774,83 @@ public:  // ********************************************************************
 		}
 		return TRUE;
 	}
+
+	enum { PLACEMENT_FLUSH_REACH = 15 };	///< world units of gap a structure is pulled across onto its neighbour - a cell and a half
+
+	/** Put 'mine' flush against 'neighbour' when that is plainly what the click meant: squared up
+		* with it (the same heading, or a quarter or half turn off), and either sinking into it by less
+		* than half the touching distance or short of touching by less than PLACEMENT_FLUSH_REACH.  It
+		* slides along the line from the neighbour's centre to its own, keeping the direction the player
+		* stepped in, until the two stand touching: a row clicked out sideways past diagonal buildings
+		* nests them corner into corner and stays a line, where pushing each one off the face it met
+		* sent every other building up or down.  A step within 15 degrees of an eighth of a turn, on
+		* the map or on the neighbour's own heading, is put on that eighth, so the row comes out
+		* straight.  This is the gap the build grid cannot close by itself: a structure standing
+		* diagonal to the grid touches its neighbour at a spot that is no cell's centre.  Returns
+		* whether it moved.  Inline and static so a test can reach it without linking the whole
+		* in-game UI. */
+	static Bool flushAgainst( const PlacementBox *neighbour, PlacementBox *mine )
+	{
+		const Real squared = 0.01f;				// how far off a quarter turn two headings may be and still line up
+		const Real diagonal = 0.70710678f;
+		const Real lineUp = 0.96592583f;		// cos 15 degrees
+		const Real reach = (Real)PLACEMENT_FLUSH_REACH;
+		const Real eighths[ 8 ][ 2 ] = { { 1.0f, 0.0f }, { diagonal, diagonal }, { 0.0f, 1.0f },
+																		 { -diagonal, diagonal }, { -1.0f, 0.0f }, { -diagonal, -diagonal },
+																		 { 0.0f, -1.0f }, { diagonal, -diagonal } };
+
+		const Real turnCos = mine->c * neighbour->c + mine->s * neighbour->s;
+		const Real turnSin = mine->s * neighbour->c - mine->c * neighbour->s;
+		if( fabs( turnSin * turnCos ) > squared )
+			return FALSE;
+
+		const Real dx = mine->x - neighbour->x;
+		const Real dy = mine->y - neighbour->y;
+		const Real length = (Real)sqrt( dx * dx + dy * dy );
+		if( length < 1.0f )
+			return FALSE;
+
+		Real ux = dx / length;
+		Real uy = dy / length;
+		Real closest = lineUp;
+		for( Int k = 0; k < 8; k++ )
+		{
+			const Real onMap[ 2 ] = { eighths[ k ][ 0 ], eighths[ k ][ 1 ] };
+			const Real onNeighbour[ 2 ] = { eighths[ k ][ 0 ] * neighbour->c - eighths[ k ][ 1 ] * neighbour->s,
+																			eighths[ k ][ 0 ] * neighbour->s + eighths[ k ][ 1 ] * neighbour->c };
+			const Real *candidates[ 2 ] = { onMap, onNeighbour };
+			for( Int i = 0; i < 2; i++ )
+			{
+				const Real cosine = ( candidates[ i ][ 0 ] * dx + candidates[ i ][ 1 ] * dy ) / length;
+				if( cosine > closest )
+				{
+					closest = cosine;
+					ux = candidates[ i ][ 0 ];
+					uy = candidates[ i ][ 1 ];
+				}
+			}
+		}
+
+		// mine's half-sizes along the neighbour's own two axes
+		const Real mineAlong = (Real)fabs( turnCos ) * mine->halfMajor + (Real)fabs( turnSin ) * mine->halfMinor;
+		const Real mineAcross = (Real)fabs( turnSin ) * mine->halfMajor + (Real)fabs( turnCos ) * mine->halfMinor;
+		const Real touch = placementTouchDistance( ux, uy, neighbour->c, neighbour->s,
+																							 neighbour->halfMajor + mineAlong,
+																							 neighbour->halfMinor + mineAcross );
+
+		const Real gap = dx * ux + dy * uy - touch;
+		if( gap >= reach || gap <= -0.5f * touch )
+			return FALSE;
+
+		mine->x = neighbour->x + ux * touch;
+		mine->y = neighbour->y + uy * touch;
+		return TRUE;
+	}
+
+	/** Pull the structure being placed flush against the nearest structure beside it, standing or
+		* ordered and still on its way (see flushAgainst).  Walls tile from their own line and are
+		* left alone. */
+	void snapPlacementToNeighbour( Coord3D *world, const ThingTemplate *what, Real angle ) const;
 
 	/// remember a structure just ordered here, so the next click can see it
 	void recordPendingPlacement( const ThingTemplate *what, const Coord3D *world, Real angle );

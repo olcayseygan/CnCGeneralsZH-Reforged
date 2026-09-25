@@ -36,6 +36,12 @@
       follows nobody and {{follownobody}} is "on" then; each folds up flip:follow.  {{follow}}
       {{followcolor}} are the followed player's name and colour, or the nobody label and no colour
     {{fog}} "on" while the fog is drawn for the followed player, flipped with data-click="fog"
+    In a replay only, the strip standing where a player's command grid is:
+    {{replay}} "on", {{replaytime}} {{replaylength}} the time reached and the whole replay's,
+      {{replayshare}} how far along it is in percent, {{replaypaused}} "paused",
+      {{replayseeking}} "seeking" while a jump runs forward to its frame, and
+      {{replay:speed:N}} "on" while it plays at N percent.  data-click="replay:seek" on #track jumps
+      to the frame under the pointer, replay:pause pauses and resumes, replay:speed:N sets the speed
 
   The stats: networth, cash, income, army, kills, rank, power.  A data-click of flip:name flips the
   name for the rest of the match; pick:group:choice picks and folds up flip:group.
@@ -134,6 +140,23 @@
   .army .cell.head { clear: left; width: 30px; height: 18px; margin-right: 1px; }
   .army .cell.head img { left: 0; top: 0; width: 30px; height: 18px; }
   .count { position: absolute; right: 2px; bottom: 0; font-size: 8px; font-weight: bold; color: #ffffff; }
+
+  /* ---- the replay strip, on the screen's bottom edge where the command grid stands in a match ---- */
+  #replay { display: none; position: absolute; left: 240px; top: 551px; width: 320px; padding: 3px 0 4px 0; }
+  #replay.on { display: block; }
+  .clockline { position: relative; height: 11px; margin: 0 6px; }
+  .clock { position: absolute; left: 0; top: 0; font-weight: bold; color: #e8d27a; }
+  .seeking .clock { color: #b8f08a; }
+  .length { position: absolute; right: 0; top: 0; color: #8a949f; }
+  #track { height: 7px; margin: 2px 6px 4px 6px; background-color: #030709; border: 1px solid #0c1114; border-bottom-color: #778391; }
+  #track:hover { border-color: #aab4bf; }
+  #track .fill { height: 7px; background-image: url(PowerBarGreen); }
+  .speeds { text-align: center; }
+  .speed { display: inline-block; width: 36px; height: 11px; line-height: 11px; margin: 0 1px; text-align: center; font-size: 8px; color: #c9d2d9; }
+  .speed.on { color: #b8f08a; }
+  .speed .play { display: none; }
+  .paused .speed .play { display: inline; }
+  .paused .speed .hold { display: none; }
 </style>
 </head>
 <body>
@@ -206,6 +229,19 @@
     </div>
   </div>
 </div>
+</div>
+
+<div id="replay" class="well {{replay}} {{replaypaused}} {{replayseeking}}">
+  <div class="clockline"><span class="clock">{{replaytime}}</span><span class="length">{{replaylength}}</span></div>
+  <div id="track" data-click="replay:seek"><div class="fill" style="width: {{replayshare}}%"></div></div>
+  <div class="speeds">
+    <span class="speed plate" data-click="replay:pause"><span class="hold">II</span><span class="play">&#9658;</span></span>
+    <span class="speed plate {{replay:speed:50}}" data-click="replay:speed:50">&#189;x</span>
+    <span class="speed plate {{replay:speed:100}}" data-click="replay:speed:100">1x</span>
+    <span class="speed plate {{replay:speed:200}}" data-click="replay:speed:200">2x</span>
+    <span class="speed plate {{replay:speed:400}}" data-click="replay:speed:400">4x</span>
+    <span class="speed plate {{replay:speed:800}}" data-click="replay:speed:800">8x</span>
+  </div>
 </div>
 
 </div>

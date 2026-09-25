@@ -551,6 +551,12 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			&& thisPlayer->getOrderQueue()->takeMessage( msg, currentlySelectedGroup, thisPlayer ) )
 		return;		// the queue destroyed the group
 
+	// An order can take every unit out of the group - a sale, a unit boarding, a unit dying - and
+	// AIGroup::remove destroys a group the moment it is empty.  After the switch the pointer is only
+	// good while the AI still has a group by this id; the replay's selection copy below read a freed
+	// one and crashed playback.
+	const UnsignedInt selectedGroupID = currentlySelectedGroup ? currentlySelectedGroup->getID() : 0;
+
 	switch( msgType )
 	{
 		//---------------------------------------------------------------------------------------------
@@ -2543,6 +2549,9 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		}  // end pick specialized science
 
 	}  // end switch
+
+	if( currentlySelectedGroup && TheAI->findGroup( selectedGroupID ) == NULL )
+		currentlySelectedGroup = NULL;
 
 	/**/ /// @todo: multiplayer semantics
 	if (currentlySelectedGroup && orderedGroup == NULL && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK && TheGlobalData->m_useCameraInReplay && TheControlBar->getObserverLookAtPlayer() == thisPlayer /*&& !TheRecorder->isMultiplayer()*/)

@@ -3558,6 +3558,10 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			{
 				Bool paused = !TheGameLogic->isGamePaused();
 				TheGameLogic->setGamePaused( paused );
+				// a paused replay is still watched: the camera moves and the strip's play button takes
+				// its click, and a replay has no orders for the input lock to hold back
+				if( paused && TheGameLogic->isInReplayGame() )
+					TheInGameUI->setInputEnabled( TRUE );
 				TheInGameUI->message( paused ? "GUI:GamePaused" : "GUI:GameResumed" );
 			}
 			disp = DESTROY_MESSAGE;

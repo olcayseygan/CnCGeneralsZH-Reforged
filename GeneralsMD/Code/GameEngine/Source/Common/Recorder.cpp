@@ -361,9 +361,11 @@ RecorderClass *TheRecorder = NULL;
 /**
  * Constructor
  */
-RecorderClass::RecorderClass() 
+RecorderClass::RecorderClass()
 {
 	m_originalGameMode = GAME_NONE;
+	m_playbackFrameDuration = 0;
+	m_playbackFramesPerSecond = 0;
 	m_mode = RECORDERMODETYPE_RECORD;
 	m_file = NULL;
 	m_fileName.clear();
@@ -400,6 +402,8 @@ RecorderClass::~RecorderClass() {
  */
 void RecorderClass::init() {
 	m_originalGameMode = GAME_NONE;
+	m_playbackFrameDuration = 0;
+	m_playbackFramesPerSecond = 0;
 	m_mode = RECORDERMODETYPE_NONE;
 	m_file = NULL;
 	m_fileName.clear();
@@ -958,6 +962,16 @@ AsciiString RecorderClass::getCurrentReplayFilename( void )
 	return AsciiString::TheEmptyString;
 }
 
+UnsignedInt RecorderClass::getPlaybackFrameDuration( void )
+{
+	return m_mode == RECORDERMODETYPE_PLAYBACK ? m_playbackFrameDuration : 0;
+}
+
+Int RecorderClass::getPlaybackFramesPerSecond( void )
+{
+	return m_mode == RECORDERMODETYPE_PLAYBACK ? m_playbackFramesPerSecond : 0;
+}
+
 CRCInfo::CRCInfo()
 {
 	m_localPlayer = ~0;
@@ -1097,6 +1111,7 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 	{
 		return FALSE;
 	}
+	m_playbackFrameDuration = header.frameDuration;
 #ifdef DEBUG_LOGGING
 
 	Bool versionStringDiff = header.versionString != TheVersion->getUnicodeVersion();
@@ -1167,6 +1182,7 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 	
 	Int maxFPS = 0;
 	fread(&maxFPS, sizeof(maxFPS), 1, m_file);
+	m_playbackFramesPerSecond = maxFPS;
 
 	DEBUG_LOG(("RecorderClass::playbackFile() - original game was mode %d\n", m_originalGameMode));
 

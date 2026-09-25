@@ -314,6 +314,8 @@ found and fixed â€” EA's own, not port damage.**
 
 ## Every replay, not just the last one
 
+- A replay is watched the way an observer watches a match. The empty command grid and portrait plate are gone from the bottom of the screen, and in their place is a timeline with the time reached and the whole length. Click anywhere on it to jump there: forward, the replay races ahead to that moment; back, it starts over and races to it. Beside it are pause and five speeds, from half to eight times the speed the game was played at.
+- Replays stopped crashing when an order took every unit out of the selection it was given to. The game throws an empty selection away at once, and with the recorded camera switched on the replay went on to read the one it had just thrown away.
 - Replay archiving saves each match under its own date-and-time name.
 - Long lists scroll the whole way, past two thousand rows.
 - Map, skirmish and replay menus read the catalogue once instead of rebuilding it.

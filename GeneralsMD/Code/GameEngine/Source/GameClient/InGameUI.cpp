@@ -2204,6 +2204,84 @@ static void fillSpectatorCameraValues( std::vector< HtmlValues > &follows, HtmlV
 }
 
 //-------------------------------------------------------------------------------------------------
+// The replay strip, on the spectator's page where a player's command grid stands: the timeline and
+// the playback speed.  data-click="replay:seek" on #track jumps to the frame under the pointer,
+// "replay:pause" pauses and resumes, and "replay:speed:N" plays at N percent of the logic rate the
+// game was played at.  A seek forward fast-forwards, one
+// picture in thirty drawn, until the frame is reached; a seek back has nothing to rewind to and
+// starts the replay over, then runs forward the same way.
+//-------------------------------------------------------------------------------------------------
+static const std::string REPLAY_ACTION = "replay:";
+static const std::string REPLAY_SEEK = REPLAY_ACTION + "seek";
+static const std::string REPLAY_PAUSE = REPLAY_ACTION + "pause";
+static const std::string REPLAY_SPEED = REPLAY_ACTION + "speed:";
+static const char *const REPLAY_TRACK = "#track";
+static const Int REPLAY_SPEEDS[] = { 50, 100, 200, 400, 800 };
+
+/** The frame a seek runs to, 0 for none.  Not a member: a seek back resets the whole interface when
+	* it starts the replay over, and the frame has to outlive that. */
+static UnsignedInt TheReplaySeekFrame = 0;
+
+/** 1x: the rate the game was played at.  A skirmish on its fast setting recorded 60. */
+static Int replayNormalFramesPerSecond( void )
+{
+	const Int recorded = TheRecorder->getPlaybackFramesPerSecond();
+	return recorded > 0 ? recorded : LOGICFRAMES_PER_SECOND;
+}
+
+/** The replay's length, or the frame reached if the header never had it written. */
+static UnsignedInt replayLength( void )
+{
+	return max( TheRecorder->getPlaybackFrameDuration(), TheGameLogic->getFrame() );
+}
+
+static void fillReplayValues( HtmlValues &values )
+{
+	if( !TheGameLogic->isInReplayGame() )
+		return;
+
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	const UnsignedInt length = replayLength();
+	values[ "replay" ] = "on";
+	values[ "replaypaused" ] = TheGameLogic->isGamePaused() ? "paused" : "";
+	values[ "replayseeking" ] = TheReplaySeekFrame > 0 ? "seeking" : "";
+	values[ "replaytime" ] = spectatorClock( frame );
+	values[ "replaylength" ] = spectatorClock( length );
+	values[ "replayshare" ] = std::to_string( length > 0 ? frame * PERCENT / length : 0 );
+
+	const Int speed = TheGameEngine->getFramesPerSecondLimit() * PERCENT / replayNormalFramesPerSecond();
+	for( Int each = 0; each < (Int)ARRAY_SIZE( REPLAY_SPEEDS ); each++ )
+		values[ REPLAY_SPEED + std::to_string( REPLAY_SPEEDS[ each ] ) ] = speed == REPLAY_SPEEDS[ each ] ? "on" : "";
+}
+
+static void seekReplay( UnsignedInt target )
+{
+	TheGameLogic->setGamePaused( FALSE );
+	if( target <= TheGameLogic->getFrame() )
+	{
+		// the way the quit menu restarts one: no score screen between the two
+		const AsciiString replayFile = TheRecorder->getCurrentReplayFilename();
+		TheGameLogic->clearGameData( FALSE );
+		TheGameEngine->setQuitting( FALSE );
+		TheRecorder->playbackFile( replayFile );
+	}
+	TheReplaySeekFrame = target;
+}
+
+/** Every client pass, so a seek stops on its frame and not on the next picture drawn.  The new game
+	* a seek back starts turns fast-forward off while it loads; this turns it on again. */
+static void updateReplaySeek( void )
+{
+	if( TheReplaySeekFrame == 0 || !TheGameLogic->isInGame() || TheGameLogic->isLoadingMap() )
+		return;
+
+	const Bool seeking = TheGameLogic->isInReplayGame() && TheGameLogic->getFrame() < TheReplaySeekFrame;
+	TheWritableGlobalData->m_TiVOFastMode = seeking;
+	if( !seeking )
+		TheReplaySeekFrame = 0;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The key a command bar slot is bound to right now, "Q" for KEY_Q, so the page names the key the
 	* player really has: the WASD camera moves the whole top row along by one.  Empty when unbound. */
 //-------------------------------------------------------------------------------------------------
@@ -2289,6 +2367,7 @@ void InGameUI::drawSpectatorPage( void )
 
 	HtmlValues values = m_spectatorTotals;
 	fillSpectatorCameraValues( m_spectatorLists[ "follows" ], values );
+	fillReplayValues( values );
 	for( std::map< std::string, std::string >::const_iterator pick = m_spectatorPicked.begin(); pick != m_spectatorPicked.end(); ++pick )
 	{
 		values[ PICK_ACTION + pick->first ] = pick->second;
@@ -2314,7 +2393,18 @@ Bool InGameUI::handleSpectatorPageClick( const ICoord2D *mouse, Bool act )
 	if( !act )
 		return TRUE;
 
-	runSpectatorAction( m_spectatorOverlay->click( *mouse ) );
+	const std::string action = m_spectatorOverlay->click( *mouse );
+	if( action == REPLAY_SEEK && TheGameLogic->isInReplayGame() )
+	{
+		std::vector< IRegion2D > tracks;
+		m_spectatorOverlay->rectsOf( REPLAY_TRACK, tracks );
+		const IRegion2D &track = tracks.front();
+		const Real share = clamp( 0.0f, (Real)( mouse->x - track.lo.x ) / (Real)( track.hi.x - track.lo.x ), 1.0f );
+		seekReplay( REAL_TO_UNSIGNEDINT( share * replayLength() ) );
+		return TRUE;
+	}
+
+	runSpectatorAction( action );
 	return TRUE;
 }
 
@@ -2387,6 +2477,11 @@ void InGameUI::runSpectatorAction( const std::string &action )
 	}
 	else if( action == FOG_ACTION )
 		TheObserverCamera.setFog( !TheObserverCamera.isFogOn() );
+	// the pause key's own message, so the key and the button are one path
+	else if( action == REPLAY_PAUSE && TheGameLogic->isInReplayGame() )
+		TheMessageStream->appendMessage( GameMessage::MSG_META_TOGGLE_PAUSE );
+	else if( action.compare( 0, REPLAY_SPEED.size(), REPLAY_SPEED ) == 0 && TheGameLogic->isInReplayGame() )
+		TheGameEngine->setFramesPerSecondLimit( atoi( action.substr( REPLAY_SPEED.size() ).c_str() ) * replayNormalFramesPerSecond() / PERCENT );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3405,6 +3500,8 @@ DECLARE_PERF_TIMER(InGameUI_update)
 void InGameUI::update( void )
 {
 	USE_PERF_TIMER(InGameUI_update)
+
+	updateReplaySeek();
 
 	/// @todo make sure this code gets called even when the UI is not being drawn
 	if ( m_videoStream && m_videoBuffer )

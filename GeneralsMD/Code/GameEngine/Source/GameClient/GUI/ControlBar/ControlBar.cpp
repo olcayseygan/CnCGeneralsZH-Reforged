@@ -5845,8 +5845,9 @@ void ControlBar::switchControlBarStage( ControlBarStages stage )
 {
 	if(stage < CONTROL_BAR_STAGE_DEFAULT || stage >= MAX_CONTROL_BAR_STAGES)
 		return;
-	if (TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK)
-		return;
+	// Retail returned here during playback, so a replay never laid its observer bar out: the command
+	// grid and the portrait plate stayed up, empty, over the battlefield.  A replay is watched like
+	// any observer seat, and the spectator page's replay strip stands where the grid was.
 	switch (stage) {
 	case CONTROL_BAR_STAGE_DEFAULT:
 		setDefaultControlBarConfig();

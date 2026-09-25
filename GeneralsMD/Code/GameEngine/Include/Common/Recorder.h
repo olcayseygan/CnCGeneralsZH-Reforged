@@ -109,6 +109,8 @@ public:
 	Bool playbackFile(AsciiString filename);					///< Starts playback of the specified file.
 	Bool testVersionPlayback(AsciiString filename);   ///< Returns if the playback is a valid playback file for this version or not.
 	AsciiString getCurrentReplayFilename( void );			///< valid during playback only
+	UnsignedInt getPlaybackFrameDuration( void );			///< the replay's length in logic frames, from its header; 0 when not playing back
+	Int getPlaybackFramesPerSecond( void );						///< the logic rate the game was played at, 0 when it was not recorded
 	void stopPlayback();															///< Stops playback.  Its fine to call this even if not playing back a file.
 #if defined _DEBUG || defined _INTERNAL
 	Bool analyzeReplay( AsciiString filename );
@@ -185,6 +187,8 @@ protected:
 	Int m_currentFilePosition;
 	RecorderModeType m_mode;
 	AsciiString m_currentReplayFilename;							///< valid during playback only
+	UnsignedInt m_playbackFrameDuration;							///< valid during playback only
+	Int m_playbackFramesPerSecond;										///< valid during playback only
 
 	ReplayGameInfo m_gameInfo;
 	Bool m_wasDesync;

@@ -68,8 +68,7 @@
 //-------------------------------------------------------------------------------------------------
 /** Which builder takes a structure job: the free one nearest the site, or failing that the
 	* nearest one at all.  Free = no build/repair task and not hauling supplies; a builder that
-	* is merely walking somewhere counts.  Fed from the selection, or from every builder of the
-	* player when nothing is selected (the control bar's stand-in builder context). */
+	* is merely walking somewhere counts.  Fed from the selection. */
 //-------------------------------------------------------------------------------------------------
 struct BuilderPick
 {
@@ -106,11 +105,6 @@ static void considerBuilder( Object *candidate, BuilderPick *pick )
 		pick->idle = candidate;
 		pick->idleDistSqr = distSqr;
 	}
-}
-
-static void considerBuilderProc( Object *obj, void *userData )
-{
-	considerBuilder( obj, (BuilderPick *)userData );
 }
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/OpenContain.h"
@@ -1620,10 +1614,7 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			// bar now sends one message per building it wants it on, so the group-wide path must
 			// not fire for those either - it would queue N messages on N buildings each.
 			// The named object is authorized by the ownership check below and the revalidation
-			// after it, not by being in the selection: the bar also sends this from the stand-in
-			// builder's bar, where nothing is selected at all - which is where the GLA worker's
-			// fake-buildings toggle lives, so requiring a selection left the worker stuck on
-			// whichever page it was last put on.
+			// after it, not by being in the selection.
 			//
 			Object *producer = TheGameLogic->findObjectByID( msg->getArgument( 0 )->objectID );
 
@@ -1773,34 +1764,26 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			Real angle;
 
 			// get player, what to place, and location
-			Object *constructorObject = getSingleObjectFromSelection(currentlySelectedGroup);
 			place = TheThingFactory->findByTemplateID( msg->getArgument( 0 )->integer );
 			loc = msg->getArgument( 1 )->location;
 			angle = msg->getArgument( 2 )->real;
 
 			//
-			// the job goes to the idle builder nearest the site - among the selected builders,
-			// or, with nothing selected (stand-in builder command bar), among all the player's
-			// builders.  A builder already on a job is only taken when no idle one exists.
+			// the job goes to the idle selected builder nearest the site.  A builder already on a
+			// job is only taken when no idle one is selected, and with no builder selected at all
+			// nothing is built.
 			//
+			BuilderPick pick;
+			pick.loc = loc;
+			pick.idle = pick.any = NULL;
+			pick.idleDistSqr = pick.anyDistSqr = 1e30f;
+			if( currentlySelectedGroup )
 			{
-				BuilderPick pick;
-				pick.loc = loc;
-				pick.idle = pick.any = NULL;
-				pick.idleDistSqr = pick.anyDistSqr = 1e30f;
-				if( currentlySelectedGroup )
-				{
-					const VecObjectID& ids = currentlySelectedGroup->getAllIDs();
-					for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
-						considerBuilder( TheGameLogic->findObjectByID( *it ), &pick );
-				}
-				if( pick.any == NULL && thisPlayer )
-					thisPlayer->iterateObjects( considerBuilderProc, &pick );
-
-				Object *chosen = pick.idle ? pick.idle : pick.any;
-				if( chosen )
-					constructorObject = chosen;
+				const VecObjectID& ids = currentlySelectedGroup->getAllIDs();
+				for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
+					considerBuilder( TheGameLogic->findObjectByID( *it ), &pick );
 			}
+			Object *constructorObject = pick.idle ? pick.idle : pick.any;
 
 			if( place == NULL || constructorObject == NULL )
 				break;  //These are not crashes, as the object may have died before this message came in

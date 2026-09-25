@@ -555,7 +555,8 @@ found and fixed â€” EA's own, not port damage.**
 - Unbuildable ground is a soft red wash, crossed out square by square.
 - Running out of money no longer strands the ghost on the map.
 - Holding shift and clicking out a row of buildings no longer stops halfway and selects one.
-- That row keeps going with no worker selected, too, instead of ending after the first building.
+- Hold shift and drag, and the row is one stroke. Press where the first building goes, drag the way the row runs, and a ghost appears for every building that fits end to end along the line, all facing the way the first one was turned. The row goes straight or on the diagonal, flush on the build grid, and stops at the last building your bank can pay for. A ghost that lands on a rock or someone's tank turns red and is left out when you let go; the rest go up. With two or three workers selected the buildings are shared out to the nearest free one, and the ones nobody is free for wait as plans until a worker comes off its job. A plain drag still turns the building, and walls still tile the way they always did.
+- Buildings need a worker selected. With nothing selected the command bar used to borrow one of your dozers and offer its buildings anyway. It stays empty now until you pick a worker, and a replay recorded with a building placed that way plays back without it.
 - Turning a building no longer turns everything you build afterwards. A wheeled heading still carries from one wall to the next, but the next supply centre comes out facing the way it was designed to.
 - A building you point at blocked ground slides to the nearest spot it fits, and lands there.
 - The pointer keeps its build cursor while you place, even passing over your own buildings.

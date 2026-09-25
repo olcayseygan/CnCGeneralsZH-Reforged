@@ -641,6 +641,48 @@ public:  // ********************************************************************
 
 		return ((Real)REAL_TO_INT_FLOOR( (v - offset) / cell + 0.5f )) * cell + offset;
 	}
+
+	/** A shift-dragged row: the step from one structure to the next, and how many fit between the
+		* anchor and a cursor 'dx'/'dy' away.  The row runs along the nearest eighth of a turn - a
+		* component counts once it is more than tan 22.5 degrees of the other - and a step is the
+		* footprint's whole size, 'sizeX'/'sizeY' with the bib, along each axis it moves on, so
+		* neighbours stand flush.  On the build grid that size goes up to whole cells, which keeps every
+		* piece on the grid the first one was snapped to.  Never fewer than one, never more than
+		* 'most'.  Inline and static so a test can reach it without linking the whole in-game UI. */
+	static Int placementRow( Real dx, Real dy, Real sizeX, Real sizeY, Bool grid, Int most,
+													 Coord2D *step )
+	{
+		const Real slope = 0.41421356f;		// tan 22.5 degrees
+		const Real cell = (Real)PLACEMENT_CELL;
+		const Real slack = 0.01f;					// Cos of a quarter turn is a hair off zero, not a cell's worth
+
+		if( grid )
+		{
+			sizeX = (Real)REAL_TO_INT_CEIL( sizeX / cell - slack ) * cell;
+			sizeY = (Real)REAL_TO_INT_CEIL( sizeY / cell - slack ) * cell;
+		}
+
+		step->x = fabs( dx ) > fabs( dy ) * slope ? ( dx < 0.0f ? -sizeX : sizeX ) : 0.0f;
+		step->y = fabs( dy ) > fabs( dx ) * slope ? ( dy < 0.0f ? -sizeY : sizeY ) : 0.0f;
+
+		Int count = 1;
+		const Real stepSqr = step->x * step->x + step->y * step->y;
+		if( stepSqr > 0.0f )
+			count += REAL_TO_INT_FLOOR( ( dx * step->x + dy * step->y ) / stepSqr );
+
+		if( count > most )
+			count = most;
+		if( count < 1 )
+			count = 1;
+		return count;
+	}
+
+	/// would dragging the anchor lay a row of the pending structure, rather than aim one?
+	Bool placesRow( void );
+	/// the centres of that row from 'start' toward 'end', as many as MaxLineBuildObjects and the money allow
+	void computePlacementRow( const ThingTemplate *what, Real angle, const Coord3D *start,
+														const Coord3D *end, std::vector<Coord3D> *positions ) const;
+
 	/** NudgeBuildPlacement: when the spot under the cursor is blocked, slide the structure to the
 		* nearest one it does fit and show it there, so the ghost answers "here, then" instead of just
 		* going red.  Moves 'world' and returns TRUE if it found somewhere; leaves it alone otherwise. */
@@ -662,7 +704,7 @@ public:  // ********************************************************************
 	// It is a client-side courtesy, not the rule: the rule is re-asked on the logic side, where the
 	// first structure really does exist by the time the second order arrives.
 	//
-	enum { PENDING_PLACEMENTS = 8 };						///< orders in flight at once; the oldest is overwritten
+	enum { PENDING_PLACEMENTS = 64 };						///< orders in flight at once, a whole shift-dragged row among them; the oldest is overwritten
 	enum { PENDING_PLACEMENT_FRAMES = 60 };			///< logic frames one is remembered for - two seconds,
 																							///  comfortably longer than any network delay
 

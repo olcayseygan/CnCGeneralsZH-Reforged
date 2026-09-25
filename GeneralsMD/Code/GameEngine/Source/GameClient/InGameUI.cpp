@@ -3390,18 +3390,22 @@ void InGameUI::handleBuildPlacements( void )
 
 		// update the angle of the icon to match any placement angle and pick the
 		// location the icon will be at (anchored is the start, otherwise it's the mouse)
+		Bool row = FALSE;
 		if( isPlacementAnchored() )
 		{
 			ICoord2D start, end;
-								
-			// get the placement arrow points	
+
+			// get the placement arrow points
 			getPlacementPoints( &start, &end );
 
 			// set icon to anchor point
 			loc = start;
 
-			// only adjust angle if we've actually moved the mouse
-			if( start.x != end.x || start.y != end.y )
+			// only adjust angle if we've actually moved the mouse, and not into a row: that drag
+			// lays structures, the heading stays the one they had
+			const Bool dragged = start.x != end.x || start.y != end.y;
+			row = dragged && placesRow();
+			if( dragged && !row )
 				angle = computePlacementAngle( &start, &end );
 
 		}  // end if
@@ -3430,6 +3434,11 @@ void InGameUI::handleBuildPlacements( void )
 		// walk away from the mouse; the ghost is at most one frame behind it.
 		//
 		const Coord3D cursorWorld = world;
+
+		// a row starts where it was anchored; each piece is judged where it stands, not nudged
+		if( row )
+			m_placementNudge.zero();
+
 		if( m_placementNudge.x != 0.0f || m_placementNudge.y != 0.0f )
 		{
 			world.x += m_placementNudge.x;
@@ -3449,7 +3458,7 @@ void InGameUI::handleBuildPlacements( void )
 		// delay time between checks or we need to come up with a way of recording what is
 		// valid and what isn't or "fudge" the results to feel "ok"
 		//
-		if( TheGameClient->getFrame() & 0x1 )
+		if( ( TheGameClient->getFrame() & 0x1 ) && !row )
 		{
 			TheTerrainVisual->removeAllBibs();
 
@@ -3526,10 +3535,13 @@ void InGameUI::handleBuildPlacements( void )
 
 		//
 		// we have additional place icons when we're placing down a line of walls or other
-		// similarly placed object ... for those we will have them be oriented the same way
-		// as the first one, but we'll set their positions so that they "tile" end to end
+		// similarly placed object, or a shift-dragged row of structures ... for those we will
+		// have them be oriented the same way as the first one, but we'll set their positions so
+		// that they "tile" end to end
 		//
-		if( isPlacementAnchored() && TheBuildAssistant->isLineBuildTemplate( m_pendingPlaceType ) )
+		const Bool lineBuild = isPlacementAnchored() && TheBuildAssistant->isLineBuildTemplate( m_pendingPlaceType );
+		Int iconsUsed = 1;
+		if( lineBuild || row )
 		{
 			Int i;
 
@@ -3550,29 +3562,40 @@ void InGameUI::handleBuildPlacements( void )
 			snapPlacementToGrid( &worldStart, m_pendingPlaceType, angle );
 			snapPlacementToGrid( &worldEnd, m_pendingPlaceType, angle );
 
-			// how big are each of our objects
-			Real objectSize = m_pendingPlaceType->getTemplateGeometryInfo().getMajorRadius() * 2.0f;
-			
-			// what is our max tiling length we can make
-			Int maxObjects = TheGlobalData->m_maxLineBuildObjects;
-
 			// get the builder object that will be constructing things
 			Object *builderObject = TheGameLogic->findObjectByID( TheInGameUI->getPendingPlaceSourceObjectID() );
 
-			//
-			// given the start/end points in the world and the the angle of the wall, fill
-			// out an array of positions that "tile" this wall across the landscape
-			//
-			BuildAssistant::TileBuildInfo *tileBuildInfo;
-			tileBuildInfo = TheBuildAssistant->buildTiledLocations( m_pendingPlaceType, angle,
-																															&worldStart, &worldEnd,
-																															objectSize, maxObjects,
-																															builderObject );	
+			const Coord3D *positions;
+			std::vector<Coord3D> rowPositions;
+			if( lineBuild )
+			{
+				// how big are each of our objects
+				Real objectSize = m_pendingPlaceType->getTemplateGeometryInfo().getMajorRadius() * 2.0f;
+
+				//
+				// given the start/end points in the world and the the angle of the wall, fill
+				// out an array of positions that "tile" this wall across the landscape
+				//
+				BuildAssistant::TileBuildInfo *tileBuildInfo;
+				tileBuildInfo = TheBuildAssistant->buildTiledLocations( m_pendingPlaceType, angle,
+																																&worldStart, &worldEnd,
+																																objectSize,
+																																TheGlobalData->m_maxLineBuildObjects,
+																																builderObject );
+				positions = tileBuildInfo->positions;
+				iconsUsed = tileBuildInfo->tilesUsed;
+			}
+			else
+			{
+				computePlacementRow( m_pendingPlaceType, angle, &worldStart, &worldEnd, &rowPositions );
+				positions = &rowPositions[ 0 ];
+				iconsUsed = (Int)rowPositions.size();
+			}
 
 			// create any necessary drawables we need to "fill out" the line
-			for( i = 0; i < tileBuildInfo->tilesUsed; i++ )
+			for( i = 0; i < iconsUsed; i++ )
 			{
-			
+
 				if( m_placeIcon[ i ] == NULL )
 					m_placeIcon[ i ] = TheThingFactory->newDrawable( m_pendingPlaceType,
 																													 DRAWABLE_STATUS_NO_STATE_PARTICLES );
@@ -3580,27 +3603,25 @@ void InGameUI::handleBuildPlacements( void )
 			}  // end for i
 
 			//
-			// destroy any drawables that we're not using anymore because a previous
-			// line length was longer
+			// A row is judged piece by piece, on the frames the single ghost would have been: red
+			// where the click will leave a gap, and the cursor says yes while any piece can go up.
 			//
-			for( i = tileBuildInfo->tilesUsed; i < maxObjects; i++ )
+			const Bool judgeRow = row && ( TheGameClient->getFrame() & 0x1 );
+			if( judgeRow )
 			{
-
-				if( m_placeIcon[ i ] != NULL )
-					TheGameClient->destroyDrawable( m_placeIcon[ i ] );
-				m_placeIcon[ i ] = NULL;
-
-			}  // end for i
+				TheTerrainVisual->removeAllBibs();
+				m_placementLegal = FALSE;
+			}
 
 			//
 			// march down each drawable and set the position based on its position in the
 			// line and set their angles all the same
 			//
-			for( i = 0; i < tileBuildInfo->tilesUsed; i++ )
+			for( i = 0; i < iconsUsed; i++ )
 			{
 
 				// set the drawble position
-				m_placeIcon[ i ]->setPosition( &tileBuildInfo->positions[ i ] );
+				m_placeIcon[ i ]->setPosition( &positions[ i ] );
 
 				// set opacity and shadowing for the drawble
 				dressPlacementPreview( m_placeIcon[ i ] );
@@ -3608,9 +3629,34 @@ void InGameUI::handleBuildPlacements( void )
 				// set the drawable angle
 				m_placeIcon[ i ]->setOrientation( angle );
 
+				if( judgeRow )
+				{
+					const Bool legal =
+						TheBuildAssistant->isLocationLegalToBuild( &positions[ i ], m_pendingPlaceType, angle,
+																											 placementCheckOptions(), builderObject,
+																											 NULL ) == LBC_OK &&
+						!overlapsPendingPlacement( &positions[ i ], m_pendingPlaceType, angle );
+					m_placeIcon[ i ]->colorTint( legal ? NULL : &illegalBuildColor );
+					if( legal )
+						m_placementLegal = TRUE;
+				}
+
 			}  // end for i
 
 		}  // end if
+
+		//
+		// destroy any drawables that we're not using anymore because a previous line length was
+		// longer, or the row was let go of
+		//
+		for( Int i = iconsUsed; i < TheGlobalData->m_maxLineBuildObjects; i++ )
+		{
+
+			if( m_placeIcon[ i ] != NULL )
+				TheGameClient->destroyDrawable( m_placeIcon[ i ] );
+			m_placeIcon[ i ] = NULL;
+
+		}  // end for i
 
 	}  // end if
 
@@ -6847,11 +6893,8 @@ Real InGameUI::computePlacementAngle( const ICoord2D *start, const ICoord2D *end
 	* box is major along its facing and minor across it, and anything round is its bounding circle.
 	* At 45 degrees the axis-aligned extents grow, which is right - that is the ground it covers. */
 //-------------------------------------------------------------------------------------------------
-void InGameUI::snapPlacementToGrid( Coord3D *world, const ThingTemplate *what, Real angle ) const
+static void placementHalfExtents( const ThingTemplate *what, Real angle, Real *halfX, Real *halfY )
 {
-	if( world == NULL || what == NULL || TheGlobalData->m_gridBuildPlacement == FALSE )
-		return;
-
 	const GeometryInfo &geom = what->getTemplateGeometryInfo();
 	Real major = geom.getMajorRadius();
 	Real minor = geom.getMinorRadius();
@@ -6869,10 +6912,69 @@ void InGameUI::snapPlacementToGrid( Coord3D *world, const ThingTemplate *what, R
 	const Real c = (Real)fabs( Cos( angle ) );
 	const Real sn = (Real)fabs( Sin( angle ) );
 
-	world->x = snapPlacementAxis( world->x, major * c + minor * sn );
-	world->y = snapPlacementAxis( world->y, major * sn + minor * c );
+	*halfX = major * c + minor * sn;
+	*halfY = major * sn + minor * c;
+}
+
+void InGameUI::snapPlacementToGrid( Coord3D *world, const ThingTemplate *what, Real angle ) const
+{
+	if( world == NULL || what == NULL || TheGlobalData->m_gridBuildPlacement == FALSE )
+		return;
+
+	Real halfX, halfY;
+	placementHalfExtents( what, angle, &halfX, &halfY );
+
+	world->x = snapPlacementAxis( world->x, halfX );
+	world->y = snapPlacementAxis( world->y, halfY );
 
 }  // end snapPlacementToGrid
+
+//-------------------------------------------------------------------------------------------------
+/** Shift held on the drag: a wall already tiles from any drag, so it is left to do that. */
+//-------------------------------------------------------------------------------------------------
+Bool InGameUI::placesRow( void )
+{
+	return m_pendingPlaceType != NULL && TheKeyboard && TheKeyboard->isShift() &&
+				 !TheBuildAssistant->isLineBuildTemplate( m_pendingPlaceType );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Every piece faces 'angle', the heading on the ghost before the drag began: the drag is spent on
+	* the row, so it cannot aim as well.  The row stops where the money does, which is what the logic
+	* would do to the orders past it anyway (canMakeUnit per MSG_DOZER_CONSTRUCT); the player sees the
+	* row that will go up.  Legality is not asked here - the ghost and the click each ask it per piece. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::computePlacementRow( const ThingTemplate *what, Real angle, const Coord3D *start,
+																		const Coord3D *end, std::vector<Coord3D> *positions ) const
+{
+	Real halfX, halfY;
+	placementHalfExtents( what, angle, &halfX, &halfY );
+
+	Int most = TheGlobalData->m_maxLineBuildObjects;
+	Player *player = ThePlayerList->getLocalPlayer();
+	const Int cost = what->calcCostToBuild( player );
+	if( cost > 0 )
+	{
+		const Int affordable = (Int)( player->getMoney()->countMoney() / cost );
+		if( affordable < most )
+			most = affordable;
+	}
+
+	Coord2D step;
+	const Int count = placementRow( end->x - start->x, end->y - start->y, 2.0f * halfX, 2.0f * halfY,
+																	TheGlobalData->m_gridBuildPlacement, most, &step );
+
+	positions->clear();
+	for( Int i = 0; i < count; i++ )
+	{
+		Coord3D pos;
+		pos.x = start->x + step.x * i;
+		pos.y = start->y + step.y * i;
+		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		positions->push_back( pos );
+	}
+
+}  // end computePlacementRow
 
 //-------------------------------------------------------------------------------------------------
 /** The legality question asked of the spot under the ghost, in one place - the nudge search asks it
@@ -6916,7 +7018,7 @@ Bool InGameUI::footprintsOverlap( const Region2D *a, const Region2D *b )
 
 //-------------------------------------------------------------------------------------------------
 /** Remember a structure just ordered, so the click after it knows the ground is spoken for.  Round
-	* a ring: the oldest of the eight goes, which is the one most likely to be standing by now. */
+	* a ring: the oldest goes, which is the one most likely to be standing by now. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::recordPendingPlacement( const ThingTemplate *what, const Coord3D *world, Real angle )
 {

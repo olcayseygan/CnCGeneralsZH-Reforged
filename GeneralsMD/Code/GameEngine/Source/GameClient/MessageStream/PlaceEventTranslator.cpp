@@ -89,12 +89,7 @@ static Bool getPlacementDrag( ICoord2D *start, ICoord2D *end )
 }  // end getPlacementDrag
 
 //-------------------------------------------------------------------------------------------------
-/** The object that is to do the building.  Normally the one the placement was started from, but
-	* with nothing selected the command bar is being driven by a stand-in builder that is not part of
-	* any selection - and that one is free to die, finish its job or be replaced between two clicks of
-	* a shift-held run of structures.  When it is gone, ask the command bar for the current stand-in
-	* rather than dropping out of placement mode: the logic picks the idle builder nearest the site
-	* anyway (MSG_DOZER_CONSTRUCT), so any builder will do to keep the ghost on the cursor. */
+/** The object that is to do the building: the one the placement was started from, while it lives. */
 //-------------------------------------------------------------------------------------------------
 static Object *resolvePlacementBuilder( void )
 {
@@ -102,8 +97,7 @@ static Object *resolvePlacementBuilder( void )
 	if( builder != NULL && !builder->isEffectivelyDead() )
 		return builder;
 
-	Drawable *standIn = TheControlBar ? TheControlBar->findStandInBuilder( FALSE ) : NULL;
-	return standIn ? standIn->getObject() : NULL;
+	return NULL;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -294,10 +288,13 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 				// the message stream is propagated and off an anchor end that is itself a frame
 				// behind, so a quick drag-and-release used to build the structure facing two frames
 				// of mouse travel back.  A press that never left the anchor is not aiming at
-				// anything, so that one keeps the heading already on the ghost.
+				// anything, so that one keeps the heading already on the ghost, and neither does a
+				// shift-drag, which lays a row (see InGameUI::placesRow).
 				//
 				angle = TheInGameUI->getPlacementAngle();
-				if( getPlacementDrag( &anchorStart, &anchorEnd ) )
+				const Bool dragged = getPlacementDrag( &anchorStart, &anchorEnd );
+				const Bool row = dragged && TheInGameUI->placesRow();
+				if( dragged && !row )
 				{
 					angle = TheInGameUI->computePlacementAngle( &anchorStart, &anchorEnd );
 
@@ -369,25 +366,64 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 				const UnsignedInt placeOptions = InGameUI::placementCheckOptions() |
 																				 BuildAssistant::FAIL_STEALTHED_WITHOUT_FEEDBACK;
 				LegalBuildCode lbc;
-				lbc = TheBuildAssistant->isLocationLegalToBuild( &world, build, angle, placeOptions,
-																												 builderObj, NULL );
+				std::vector<Coord3D> placements;
+				if( row )
+				{
+					//
+					// A shift-dragged row is one order per structure, each asked on its own: a piece
+					// that lands on a rock is left out and the rest still go up.  The logic hands each
+					// order to the idle selected builder nearest it, and once they are all busy the rest
+					// stand at 0% for whichever comes free first (BuildAssistant::buildObjectNow).
+					//
+					Coord3D worldEnd;
+					TheTacticalView->screenToTerrain( &anchorEnd, &worldEnd );
+					TheInGameUI->snapPlacementToGrid( &worldEnd, build, angle );
 
-				// plus the ground your own last click already spent - see recordPendingPlacement
-				if( lbc == LBC_OK && TheInGameUI->overlapsPendingPlacement( &world, build, angle ) )
-					lbc = LBC_OBJECTS_IN_THE_WAY;
+					std::vector<Coord3D> pieces;
+					TheInGameUI->computePlacementRow( build, angle, &world, &worldEnd, &pieces );
 
-				//
-				// NudgeBuildPlacement: blocked where they clicked, so build at the nearest spot that
-				// is not - the same search the ghost was already showing them (InGameUI::update ->
-				// handleBuildPlacements), so the structure goes down where they were looking.  The
-				// verdict is taken again at the new spot rather than assumed: this check is the
-				// stricter one, it fails on a stealthed unit the ghost is told to ignore.
-				//
-				if( lbc != LBC_OK && lbc != LBC_SHROUD &&
-						TheInGameUI->nudgePlacementToLegal( &world, build, angle, builderObj ) )
+					lbc = LBC_OK;
+					for( size_t i = 0; i < pieces.size(); i++ )
+					{
+						LegalBuildCode piece = TheBuildAssistant->isLocationLegalToBuild( &pieces[ i ], build, angle,
+																																						 placeOptions, builderObj,
+																																						 NULL );
+						if( piece == LBC_OK && TheInGameUI->overlapsPendingPlacement( &pieces[ i ], build, angle ) )
+							piece = LBC_OBJECTS_IN_THE_WAY;
+
+						if( piece == LBC_OK )
+							placements.push_back( pieces[ i ] );
+						else
+							lbc = piece;
+					}
+
+					// the row goes ahead on any piece that can; the reason is only for a row with none
+					if( !placements.empty() )
+						lbc = LBC_OK;
+				}
+				else
 				{
 					lbc = TheBuildAssistant->isLocationLegalToBuild( &world, build, angle, placeOptions,
 																													 builderObj, NULL );
+
+					// plus the ground your own last click already spent - see recordPendingPlacement
+					if( lbc == LBC_OK && TheInGameUI->overlapsPendingPlacement( &world, build, angle ) )
+						lbc = LBC_OBJECTS_IN_THE_WAY;
+
+					//
+					// NudgeBuildPlacement: blocked where they clicked, so build at the nearest spot that
+					// is not - the same search the ghost was already showing them (InGameUI::update ->
+					// handleBuildPlacements), so the structure goes down where they were looking.  The
+					// verdict is taken again at the new spot rather than assumed: this check is the
+					// stricter one, it fails on a stealthed unit the ghost is told to ignore.
+					//
+					if( lbc != LBC_OK && lbc != LBC_SHROUD &&
+							TheInGameUI->nudgePlacementToLegal( &world, build, angle, builderObj ) )
+					{
+						lbc = TheBuildAssistant->isLocationLegalToBuild( &world, build, angle, placeOptions,
+																														 builderObj, NULL );
+					}
+					placements.push_back( world );
 				}
 				if( lbc == LBC_OK )
 				{
@@ -422,45 +458,43 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 						}
 					}
 
-					// create the right kind of message
-					if( isLineBuild )
-						placeMsg = TheMessageStream->appendMessage( GameMessage::MSG_DOZER_CONSTRUCT_LINE );
-					else
-						placeMsg = TheMessageStream->appendMessage( GameMessage::MSG_DOZER_CONSTRUCT );
-
-					placeMsg->appendIntegerArgument(build->getTemplateID());
-					placeMsg->appendLocationArgument(world);
-					placeMsg->appendRealArgument(angle);
-					if( isLineBuild )
+					for( size_t i = 0; i < placements.size(); i++ )
 					{
-						Coord3D worldEnd;
+						// create the right kind of message
+						if( isLineBuild )
+							placeMsg = TheMessageStream->appendMessage( GameMessage::MSG_DOZER_CONSTRUCT_LINE );
+						else
+							placeMsg = TheMessageStream->appendMessage( GameMessage::MSG_DOZER_CONSTRUCT );
 
-						TheTacticalView->screenToTerrain( &anchorEnd, &worldEnd );
-						TheInGameUI->snapPlacementToGrid( &worldEnd, build, angle );
-						placeMsg->appendLocationArgument( worldEnd );
+						placeMsg->appendIntegerArgument(build->getTemplateID());
+						placeMsg->appendLocationArgument(placements[ i ]);
+						placeMsg->appendRealArgument(angle);
+						if( isLineBuild )
+						{
+							Coord3D worldEnd;
 
-					}  // end if
+							TheTacticalView->screenToTerrain( &anchorEnd, &worldEnd );
+							TheInGameUI->snapPlacementToGrid( &worldEnd, build, angle );
+							placeMsg->appendLocationArgument( worldEnd );
 
-					//
-					// The order is on its way; the structure will not be on the ground for another
-					// few frames, and on a network game that is however long the link takes.  Hold on
-					// to the spot so the next click in a shift-held run does not put a second
-					// structure on top of this one.
-					//
-					TheInGameUI->recordPendingPlacement( build, &world, angle );
+						}  // end if
+
+						//
+						// The order is on its way; the structure will not be on the ground for another
+						// few frames, and on a network game that is however long the link takes.  Hold on
+						// to the spot so the next click in a shift-held run does not put a second
+						// structure on top of this one.
+						//
+						TheInGameUI->recordPendingPlacement( build, &placements[ i ], angle );
+					}
 
 					pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), placeMsg->getType() );
 
 					//
 					// get out of pending placement mode, this will also clear the arrow anchor status -
 					// unless shift is held, which keeps placing the same structure until released.
-					// The builder it re-arms on is whatever resolvePlacementBuilder found, so a run of
-					// structures placed with nothing selected carries on across the stand-in builder
-					// going off to build the one just ordered.
 					//
 					Drawable *nextBuilder = builderObj ? builderObj->getDrawable() : NULL;
-					if( TheKeyboard && TheKeyboard->isShift() && nextBuilder == NULL && TheControlBar )
-						nextBuilder = TheControlBar->findStandInBuilder( FALSE );
 					if( TheKeyboard && TheKeyboard->isShift() && nextBuilder )
 						TheInGameUI->placeBuildAvailable( build, nextBuilder );
 					else

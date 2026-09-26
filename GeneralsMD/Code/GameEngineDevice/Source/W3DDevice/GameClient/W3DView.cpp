@@ -703,6 +703,163 @@ static Vector3 groundUnderRay( const Vector3& eye, const Vector3& direction )
 }
 
 //-------------------------------------------------------------------------------------------------
+// The isometric camera's frame, fitted to what the perspective camera sees.  The perspective
+// frame's four corners, the middles of its four edges and its centre are cast onto the terrain,
+// and the isometric frame is the one that puts those nine points closest to the same places on
+// its own screen, measured in world units.  An orthographic frame is a rectangle on the view plane
+// and the perspective one lands on the ground as a trapezoid, so the corners cannot all meet: the
+// fit leaves the perspective frame a little more at the far corners and the isometric one the
+// same amount more at the near corners, and neither camera reaches further than the other.  The
+// heading is the player's; the fit picks the look-at point, the width and the elevation.
+class IsometricFrameFit
+{
+public:
+	enum { POINT_COUNT = 9 };
+
+	IsometricFrameFit( const Matrix3D& perspective, Real tanHalfWidth, Real heightOverWidth )
+		: m_heightOverWidth( heightOverWidth )
+	{
+		// a corner ray at the horizon would reach no ground at all
+		const Real shallowestRay = DEG_TO_RADF( 5.0f );
+
+		const Vector3 eye = perspective.Get_Translation();
+		const Vector3 forward = -perspective.Get_Z_Vector();	// a W3D camera looks down its -Z
+		const Vector3 up = perspective.Get_Y_Vector();
+		const Vector3 right = perspective.Get_X_Vector();
+		m_right = Vector3( right.X, right.Y, 0.0f );
+		m_right.Normalize();
+		m_ahead = Vector3( forward.X, forward.Y, 0.0f );
+		m_ahead.Normalize();
+
+		Int point = 0;
+		for( Int row = -1; row <= 1; ++row )
+		{
+			for( Int column = -1; column <= 1; ++column )
+			{
+				Vector3 direction = forward + right * ( column * tanHalfWidth )
+					+ up * ( row * tanHalfWidth * heightOverWidth );
+				direction.Normalize();
+				if( direction.Z > -sin( shallowestRay ) )
+				{
+					Vector3 flat( direction.X, direction.Y, 0.0f );
+					flat.Normalize();
+					direction = flat * cos( shallowestRay ) + Vector3( 0.0f, 0.0f, -sin( shallowestRay ) );
+				}
+				const Vector3 ground = groundUnderRay( eye, direction );
+				m_screenX[ point ] = (Real)column;
+				m_screenY[ point ] = (Real)row;
+				m_acrossScreen[ point ] = Vector3::Dot_Product( ground, m_right );
+				m_along[ point ] = Vector3::Dot_Product( ground, m_ahead );
+				m_height[ point ] = ground.Z;
+				m_ground[ point ] = ground;
+				++point;
+			}
+		}
+
+		const Real goldenSection = 0.618034f;
+		const Int searchSteps = 40;
+		Real low = DEG_TO_RADF( 15.0f );
+		Real high = DEG_TO_RADF( 75.0f );
+		for( Int step = 0; step < searchSteps; ++step )
+		{
+			const Real lower = high - ( high - low ) * goldenSection;
+			const Real upper = low + ( high - low ) * goldenSection;
+			if( errorAt( lower ) < errorAt( upper ) )
+				high = upper;
+			else
+				low = lower;
+		}
+		m_elevation = ( low + high ) * 0.5f;
+		errorAt( m_elevation );
+	}
+
+	Real getHalfWidth( void ) const { return m_halfWidth; }
+
+	/// the line of sight, pointing into the screen
+	Vector3 getSight( void ) const { return m_ahead * cos( m_elevation ) + Vector3( 0.0f, 0.0f, -sin( m_elevation ) ); }
+
+	/// the middle of the fitted frame, halfway through the fitted points along the line of sight
+	Vector3 getTarget( void ) const
+	{
+		const Vector3 sight = getSight();
+		Real alongSight = 0.0f;
+		for( Int point = 0; point < POINT_COUNT; ++point )
+			alongSight += Vector3::Dot_Product( m_ground[ point ], sight );
+		alongSight /= POINT_COUNT;
+		return m_right * m_acrossCentre + screenUp() * m_upCentre + sight * alongSight;
+	}
+
+	/// how far the fitted points lie in front of and behind the target along the line of sight
+	Real getDepthSpread( void ) const
+	{
+		const Vector3 sight = getSight();
+		const Real centre = Vector3::Dot_Product( getTarget(), sight );
+		Real spread = 0.0f;
+		for( Int point = 0; point < POINT_COUNT; ++point )
+			spread = max( spread, (Real)fabs( Vector3::Dot_Product( m_ground[ point ], sight ) - centre ) );
+		return spread;
+	}
+
+private:
+	Vector3 screenUp( void ) const { return m_ahead * sin( m_elevation ) + Vector3( 0.0f, 0.0f, cos( m_elevation ) ); }
+
+	/** The summed squared distance, in world units on the view plane, between where the nine
+		* points land and where they belong at this elevation, with the look-at point and the width
+		* that are best for it.  Both of those have a closed form once the elevation is fixed,
+		* because the screen positions are symmetric about the middle. */
+	Real errorAt( Real elevation )
+	{
+		const Real sinElevation = sin( elevation );
+		const Real cosElevation = cos( elevation );
+		Real upOnViewPlane[ POINT_COUNT ];
+		m_acrossCentre = 0.0f;
+		m_upCentre = 0.0f;
+		for( Int point = 0; point < POINT_COUNT; ++point )
+		{
+			upOnViewPlane[ point ] = m_along[ point ] * sinElevation + m_height[ point ] * cosElevation;
+			m_acrossCentre += m_acrossScreen[ point ];
+			m_upCentre += upOnViewPlane[ point ];
+		}
+		m_acrossCentre /= POINT_COUNT;
+		m_upCentre /= POINT_COUNT;
+
+		Real numerator = 0.0f;
+		Real denominator = 0.0f;
+		for( Int point = 0; point < POINT_COUNT; ++point )
+		{
+			const Real screenUpInWidths = m_screenY[ point ] * m_heightOverWidth;
+			numerator += m_screenX[ point ] * ( m_acrossScreen[ point ] - m_acrossCentre )
+				+ screenUpInWidths * ( upOnViewPlane[ point ] - m_upCentre );
+			denominator += m_screenX[ point ] * m_screenX[ point ] + screenUpInWidths * screenUpInWidths;
+		}
+		m_halfWidth = numerator / denominator;
+
+		Real error = 0.0f;
+		for( Int point = 0; point < POINT_COUNT; ++point )
+		{
+			const Real acrossMiss = m_acrossScreen[ point ] - m_acrossCentre - m_screenX[ point ] * m_halfWidth;
+			const Real upMiss = upOnViewPlane[ point ] - m_upCentre - m_screenY[ point ] * m_heightOverWidth * m_halfWidth;
+			error += acrossMiss * acrossMiss + upMiss * upMiss;
+		}
+		return error;
+	}
+
+	Real m_heightOverWidth;
+	Vector3 m_right;
+	Vector3 m_ahead;
+	Vector3 m_ground[ POINT_COUNT ];
+	Real m_screenX[ POINT_COUNT ];
+	Real m_screenY[ POINT_COUNT ];
+	Real m_acrossScreen[ POINT_COUNT ];
+	Real m_along[ POINT_COUNT ];
+	Real m_height[ POINT_COUNT ];
+	Real m_elevation;
+	Real m_halfWidth;
+	Real m_acrossCentre;
+	Real m_upCentre;
+};
+
+//-------------------------------------------------------------------------------------------------
 void W3DView::setCameraTransform( void )
 {
 	m_cameraHasMovedSinceRequest = true;
@@ -766,59 +923,26 @@ void W3DView::setCameraTransform( void )
 	// The isometric camera: a 4 degree cone from far away is near enough orthographic that a tank
 	// is drawn the same size at the top of the screen as at the bottom.  It is not a real
 	// orthographic projection because CameraClass::Update_Frustum always builds a perspective
-	// culling frustum.  It keeps the player's heading and sees what the perspective camera would:
-	// the rays through the middle of the bottom and top screen edges are cast onto the terrain, and
-	// the isometric frame's bottom and top edges are put through those same two points, so neither
-	// camera sees further than the other.  Its width is the perspective frame's width averaged over
-	// those two points.  The elevation is whatever makes that fit, about 37 degrees at the default
-	// pitch on flat ground.  Rotating and zooming work as they always did.
+	// culling frustum.  IsometricFrameFit decides where it looks from, so that it sees the ground
+	// the perspective camera would, on any screen shape.  Rotating and zooming work as they always
+	// did, because the perspective camera they move is still built first.
 	const Bool wasIsometric = m_isometricApplied;
 	m_isometricApplied = TheGlobalData->m_isometricCamera;
 	const Real perspectiveFov = perspectiveHorizontalFov(getWidth());
 	if (m_isometricApplied)
 	{
 		const Real isometricFov = DEG_TO_RADF(4.0f);
-		// a far edge at the horizon would reach no ground at all
-		const Real shallowestFarEdge = DEG_TO_RADF(5.0f);
-		const Real lowestElevation = DEG_TO_RADF(15.0f);
-		const Real highestElevation = DEG_TO_RADF(75.0f);
 		// the tallest thing standing on the frame's ground, above and below the depth it spans
 		const Real depthMargin = 1000.0f;
 
-		const Real tanHalfWidth = tan(perspectiveFov * 0.5f);
-		const Real halfHeightAngle = atan(tanHalfWidth * (Real)getHeight() / (Real)getWidth());
-		const Vector3 eye = cameraTransform.Get_Translation();
-		const Vector3 forward = -cameraTransform.Get_Z_Vector();	// a W3D camera looks down its -Z
-		const Real behind = atan2(-forward.Y, -forward.X);
-		const Vector3 ahead(-cos(behind), -sin(behind), 0.0f);
-		const Real centreDepression = asin(-forward.Z);
-		const Real nearDepression = centreDepression + halfHeightAngle;
-		const Real farDepression = max(centreDepression - halfHeightAngle, shallowestFarEdge);
-
-		const Vector3 nearRay = ahead * cos(nearDepression) + Vector3(0.0f, 0.0f, -sin(nearDepression));
-		const Vector3 farRay = ahead * cos(farDepression) + Vector3(0.0f, 0.0f, -sin(farDepression));
-		const Vector3 nearGround = groundUnderRay(eye, nearRay);
-		const Vector3 farGround = groundUnderRay(eye, farRay);
-
-		const Real groundWidth = tanHalfWidth * (Vector3::Dot_Product(nearGround - eye, forward)
-			+ Vector3::Dot_Product(farGround - eye, forward));
-		const Real screenHeightInWorld = groundWidth * (Real)getHeight() / (Real)getWidth();
-		const Real groundDepth = Vector3::Dot_Product(farGround - nearGround, ahead);
-		const Real rise = farGround.Z - nearGround.Z;
-		const Real span = sqrt(groundDepth * groundDepth + rise * rise);
-		const Real elevation = WWMath::Clamp(
-			(Real)(asin(min(1.0f, screenHeightInWorld / span)) - atan2(rise, groundDepth)),
-			lowestElevation, highestElevation);
-
-		const Vector3 target = (nearGround + farGround) * 0.5f;
-		const Real distance = groundWidth * 0.5f / tan(isometricFov * 0.5f);
-		const Vector3 isometricEye(target.X + distance * cos(elevation) * cos(behind),
-			target.Y + distance * cos(elevation) * sin(behind),
-			target.Z + distance * sin(elevation));
+		const IsometricFrameFit fit(cameraTransform, tan(perspectiveFov * 0.5f), (Real)getHeight() / (Real)getWidth());
+		const Vector3 target = fit.getTarget();
+		const Real distance = fit.getHalfWidth() / tan(isometricFov * 0.5f);
+		const Real depthSpread = fit.getDepthSpread();
 		cameraTransform.Make_Identity();
-		cameraTransform.Look_At(isometricEye, target, 0);
+		cameraTransform.Look_At(target - fit.getSight() * distance, target, 0);
 		m_3DCamera->Set_View_Plane(isometricFov, -1);
-		m_3DCamera->Set_Clip_Planes(distance - span - depthMargin, distance + span + depthMargin);
+		m_3DCamera->Set_Clip_Planes(distance - depthSpread - depthMargin, distance + depthSpread + depthMargin);
 	}
 	else if (wasIsometric)
 	{

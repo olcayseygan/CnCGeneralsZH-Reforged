@@ -232,6 +232,31 @@ void W3DView::setHeight(Int height)
 }
 
 //-------------------------------------------------------------------------------------------------
+// The horizontal field of view the perspective camera has at this view width; see setWidth.
+static Real perspectiveHorizontalFov( Int viewWidth )
+{
+	return (Real)viewWidth / (Real)TheDisplay->getWidth()
+		* ViewHorizontalFovForScreen( TheDisplay->getWidth(), TheDisplay->getHeight() );
+}
+
+//-------------------------------------------------------------------------------------------------
+// The world direction through a point of the camera's screen, -1 to 1 on both axes.  Un_Project
+// hands back the camera position plus this, and taking the position off again is what every
+// caller did.  15000 units out, where the isometric camera stands, a float keeps two decimals of
+// that position, and a direction one pixel wide came back rounded to ten pixels.
+static Vector3 viewDirectionThrough( const CameraClass& camera, Real logicalX, Real logicalY )
+{
+	Vector2 planeMin, planeMax;
+	camera.Get_View_Plane( planeMin, planeMax );
+	const Vector3 onViewPlane( planeMin.X + ( planeMax.X - planeMin.X ) * ( logicalX + 1.0f ) * 0.5f,
+		planeMin.Y + ( planeMax.Y - planeMin.Y ) * ( logicalY + 1.0f ) * 0.5f, -1.0f );
+	Vector3 direction;
+	Matrix3D::Rotate_Vector( camera.Get_Transform(), onViewPlane, &direction );
+	direction.Normalize();
+	return direction;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Sets the width of the viewport, while maintaining original camera perspective. */
 //-------------------------------------------------------------------------------------------------
 void W3DView::setWidth(Int width)
@@ -259,8 +284,7 @@ void W3DView::setWidth(Int width)
 	//edges; 16:9 is the shape the game is played at, so nothing below it moves,
 	//and the terrain is drawn whole - what the wider view reaches is the map
 	//boundary, not black.
-	m_3DCamera->Set_View_Plane((Real)width/(Real)TheDisplay->getWidth()
-		* ViewHorizontalFovForScreen(TheDisplay->getWidth(), TheDisplay->getHeight()),-1);
+	m_3DCamera->Set_View_Plane(perspectiveHorizontalFov(width),-1);
 	// the isometric camera narrows the cone again in setCameraTransform
 	m_recalcCamera = true;
 }
@@ -619,9 +643,7 @@ void W3DView::getPickRay(const ICoord2D *screen, Vector3 *rayStart, Vector3 *ray
 	PixelScreenToW3DLogicalScreen(screen->x - m_originX,screen->y - m_originY, &logX, &logY,getWidth(),getHeight());
 
 	*rayStart = m_3DCamera->Get_Position();	//get camera location
-	m_3DCamera->Un_Project(*rayEnd,Vector2(logX,logY));	//get world space point
-	*rayEnd -= *rayStart;	//vector camera to world space point
-	rayEnd->Normalize();	//make unit vector
+	*rayEnd = viewDirectionThrough(*m_3DCamera, logX, logY);
 	*rayEnd *= m_3DCamera->Get_Depth();	//adjust length to reach far clip plane
 	*rayEnd += *rayStart;	//get point on far clip plane along ray from camera.
 }
@@ -752,8 +774,7 @@ void W3DView::setCameraTransform( void )
 	// pitch on flat ground.  Rotating and zooming work as they always did.
 	const Bool wasIsometric = m_isometricApplied;
 	m_isometricApplied = TheGlobalData->m_isometricCamera;
-	const Real perspectiveFov = (Real)getWidth() / (Real)TheDisplay->getWidth()
-		* ViewHorizontalFovForScreen(TheDisplay->getWidth(), TheDisplay->getHeight());
+	const Real perspectiveFov = perspectiveHorizontalFov(getWidth());
 	if (m_isometricApplied)
 	{
 		const Real isometricFov = DEG_TO_RADF(4.0f);
@@ -2255,6 +2276,15 @@ void W3DView::scrollBy( Coord2D *delta )
 		world.Y = (worldEnd.Y - worldStart.Y) * scrollDtFactor;
 		world.Z = (worldEnd.Z - worldStart.Z) * scrollDtFactor;
 
+		// the step is measured on the view plane, which a 4 degree cone makes 13 times smaller
+		if (m_isometricApplied)
+		{
+			const Real coneScale = tan(perspectiveHorizontalFov(getWidth()) * 0.5f)
+				/ tan(m_3DCamera->Get_Horizontal_FOV() * 0.5f);
+			world.X *= coneScale;
+			world.Y *= coneScale;
+		}
+
 		// scroll by delta
 		Coord3D pos = *getPosition();
 		pos.x += world.X;
@@ -2795,10 +2825,7 @@ void W3DView::lookAt( const Coord3D *o )
 		CastResultStruct result;
 		Vector3 intersection(0,0,0);
 
-		rayStart = m_3DCamera->Get_Position();	//get camera location
-		m_3DCamera->Un_Project(rayEnd,Vector2(0.0f,0.0f));	//get world space point
-		rayEnd -= rayStart;	//vector camera to world space point
-		rayEnd.Normalize();	//make unit vector
+		rayEnd = viewDirectionThrough(*m_3DCamera, 0.0f, 0.0f);
 		rayEnd *= m_3DCamera->Get_Depth();	//adjust length to reach far clip plane
 		rayStart.Set(pos.x, pos.y, pos.z);
 		rayEnd += rayStart;	//get point on far clip plane along ray from camera.

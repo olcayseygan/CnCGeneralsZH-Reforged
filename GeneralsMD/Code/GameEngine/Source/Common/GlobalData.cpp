@@ -203,6 +203,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "BuildPlacementOpacity",		INI::parseReal,				NULL,			offsetof( GlobalData, m_buildPlacementOpacity ) },
 	{ "BuildPlacementShadows",		INI::parseBool,				NULL,			offsetof( GlobalData, m_buildPlacementShadows ) },
 	{ "ZoomToCursor",							INI::parseBool,				NULL,			offsetof( GlobalData, m_zoomToCursor ) },
+	{ "IsometricCamera",					INI::parseBool,				NULL,			offsetof( GlobalData, m_isometricCamera ) },
 	{ "FormationDrag",						INI::parseBool,				NULL,			offsetof( GlobalData, m_formationDrag ) },
 	{ "ShowAllyCursors",					INI::parseBool,				NULL,			offsetof( GlobalData, m_showAllyCursors ) },
 	{ "ChromaLighting",						INI::parseBool,				NULL,			offsetof( GlobalData, m_chromaLighting ) },
@@ -1132,6 +1133,7 @@ GlobalData::GlobalData()
 	m_edgeScrollInWindowedMode = TRUE;
 	m_snapCameraRotateTo45 = TRUE;
 	m_zoomToCursor = TRUE;
+	m_isometricCamera = FALSE;
 	// the right button no longer scrolls, so a right-drag is free to mean something
 	m_formationDrag = TRUE;
 	m_showAllyCursors = TRUE;

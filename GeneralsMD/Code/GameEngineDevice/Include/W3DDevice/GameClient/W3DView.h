@@ -287,6 +287,7 @@ private:
 	Region2D m_cameraConstraint;										///< m_pos should be constrained to be within this area
 	Bool m_cameraConstraintValid;										///< if f, recalc cam constraints
 	Bool m_recalcCamera;														///< if t, rebuild the camera transform in the next render update
+	Bool m_isometricApplied;												///< the camera was last built isometric; the option differing rebuilds it
 
 	Bool m_zoomAnchorValid;													///< a wheel zoom is holding the ground under the cursor
 	ICoord2D m_zoomAnchorPixel;											///< the pixel the wheel was spun over

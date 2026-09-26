@@ -153,6 +153,7 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxLanguage",       None),
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
     (CHECK,  "CheckZoomToCursor",      "GUI:ZoomToCursor"),
+    (CHECK,  "CheckIsometricCamera",   "GUI:IsometricCamera"),
     (CHECK,  "CheckTreeSway",          "GUI:TreeSway"),
     (CHECK,  "CheckInfantryShadows",   "GUI:InfantryShadows"),
     (CHECK,  "CheckProjectileShadows", "GUI:ProjectileShadows"),
@@ -261,7 +262,8 @@ GROUP_LAYOUT = [
 
     ("PageControls", 0, "GUI:OptionsGroupScrolling", [
         setting("ScrollSpeedLabel", "SliderScrollSpeed", "ValueScrollSpeed"),
-        ("check", "CheckZoomToCursor")]),
+        ("check", "CheckZoomToCursor"),
+        ("check", "CheckIsometricCamera")]),
     ("PageControls", 1, "GUI:OptionsGroupOrders", [
         ("check", "Retaliation"),
         ("check", "CheckDoubleClickAttackMove")]),

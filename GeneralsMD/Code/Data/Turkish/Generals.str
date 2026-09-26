@@ -15261,6 +15261,14 @@ TOOLTIP:ZoomToCursor
 "Tekerlek, ekranın ortası yerine imlecin üzerinde durduğu yere doğru yakınlaştırır. Yalnızca Modern kontrollerde."
 END
 
+GUI:IsometricCamera
+"İzometrik Kamera"
+END
+
+TOOLTIP:IsometricCamera
+"Savaş alanı uzaktan görünür, bir birlik ekranın üstünde de altında da aynı boyda çizilir. Kamerayı yine sen döndürür ve yakınlaştırırsın."
+END
+
 GUI:EdgeScrollWindowed
 "Pencerede Kenardan Kaydır"
 END

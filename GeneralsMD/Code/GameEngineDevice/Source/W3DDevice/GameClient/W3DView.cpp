@@ -196,6 +196,7 @@ W3DView::W3DView()
 	m_shakerAngles.Z =0.0f;
 
 	m_recalcCamera = false;
+	m_isometricApplied = false;
 	m_zoomAnchorValid = false;
 	m_zoomAnchorTerrainHeight = 0.0f;
 	m_scrollWheelHeight = 0.0f;
@@ -260,6 +261,8 @@ void W3DView::setWidth(Int width)
 	//boundary, not black.
 	m_3DCamera->Set_View_Plane((Real)width/(Real)TheDisplay->getWidth()
 		* ViewHorizontalFovForScreen(TheDisplay->getWidth(), TheDisplay->getHeight()),-1);
+	// the isometric camera narrows the cone again in setCameraTransform
+	m_recalcCamera = true;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -647,6 +650,37 @@ void W3DView::stopDoingScriptedCamera( void )
 }
 
 //-------------------------------------------------------------------------------------------------
+// Where a descending ray from the eye first meets the terrain, walked a cell at a time and then
+// halved down to a tenth of a unit.  Terrain never goes below zero, so a ray that gets there
+// without meeting it stops there.  The terrain's own Cast_Ray tests every triangle under the
+// ray's bounding rectangle, which for a shallow ray across the screen is thousands of them.
+static Vector3 groundUnderRay( const Vector3& eye, const Vector3& direction )
+{
+	const Real step = MAP_XY_FACTOR;
+	const Int halvings = 7;
+	Real below = 0.0f;
+	Real above = 0.0f;
+	for( ;; )
+	{
+		const Vector3 point = eye + direction * below;
+		if( point.Z <= 0.0f || point.Z <= TheTerrainLogic->getGroundHeight( point.X, point.Y ) )
+			break;
+		above = below;
+		below += step;
+	}
+	for( Int halving = 0; halving < halvings; ++halving )
+	{
+		const Real middle = ( above + below ) * 0.5f;
+		const Vector3 point = eye + direction * middle;
+		if( point.Z <= TheTerrainLogic->getGroundHeight( point.X, point.Y ) )
+			below = middle;
+		else
+			above = middle;
+	}
+	return eye + direction * below;
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DView::setCameraTransform( void )
 {
 	m_cameraHasMovedSinceRequest = true;
@@ -706,6 +740,70 @@ void W3DView::setCameraTransform( void )
 
 	// rebuild it (even if we just did it due to camera constraints)
 	buildCameraTransform( &cameraTransform );
+
+	// The isometric camera: a 4 degree cone from far away is near enough orthographic that a tank
+	// is drawn the same size at the top of the screen as at the bottom.  It is not a real
+	// orthographic projection because CameraClass::Update_Frustum always builds a perspective
+	// culling frustum.  It keeps the player's heading and sees what the perspective camera would:
+	// the rays through the middle of the bottom and top screen edges are cast onto the terrain, and
+	// the isometric frame's bottom and top edges are put through those same two points, so neither
+	// camera sees further than the other.  Its width is the perspective frame's width averaged over
+	// those two points.  The elevation is whatever makes that fit, about 37 degrees at the default
+	// pitch on flat ground.  Rotating and zooming work as they always did.
+	const Bool wasIsometric = m_isometricApplied;
+	m_isometricApplied = TheGlobalData->m_isometricCamera;
+	const Real perspectiveFov = (Real)getWidth() / (Real)TheDisplay->getWidth()
+		* ViewHorizontalFovForScreen(TheDisplay->getWidth(), TheDisplay->getHeight());
+	if (m_isometricApplied)
+	{
+		const Real isometricFov = DEG_TO_RADF(4.0f);
+		// a far edge at the horizon would reach no ground at all
+		const Real shallowestFarEdge = DEG_TO_RADF(5.0f);
+		const Real lowestElevation = DEG_TO_RADF(15.0f);
+		const Real highestElevation = DEG_TO_RADF(75.0f);
+		// the tallest thing standing on the frame's ground, above and below the depth it spans
+		const Real depthMargin = 1000.0f;
+
+		const Real tanHalfWidth = tan(perspectiveFov * 0.5f);
+		const Real halfHeightAngle = atan(tanHalfWidth * (Real)getHeight() / (Real)getWidth());
+		const Vector3 eye = cameraTransform.Get_Translation();
+		const Vector3 forward = -cameraTransform.Get_Z_Vector();	// a W3D camera looks down its -Z
+		const Real behind = atan2(-forward.Y, -forward.X);
+		const Vector3 ahead(-cos(behind), -sin(behind), 0.0f);
+		const Real centreDepression = asin(-forward.Z);
+		const Real nearDepression = centreDepression + halfHeightAngle;
+		const Real farDepression = max(centreDepression - halfHeightAngle, shallowestFarEdge);
+
+		const Vector3 nearRay = ahead * cos(nearDepression) + Vector3(0.0f, 0.0f, -sin(nearDepression));
+		const Vector3 farRay = ahead * cos(farDepression) + Vector3(0.0f, 0.0f, -sin(farDepression));
+		const Vector3 nearGround = groundUnderRay(eye, nearRay);
+		const Vector3 farGround = groundUnderRay(eye, farRay);
+
+		const Real groundWidth = tanHalfWidth * (Vector3::Dot_Product(nearGround - eye, forward)
+			+ Vector3::Dot_Product(farGround - eye, forward));
+		const Real screenHeightInWorld = groundWidth * (Real)getHeight() / (Real)getWidth();
+		const Real groundDepth = Vector3::Dot_Product(farGround - nearGround, ahead);
+		const Real rise = farGround.Z - nearGround.Z;
+		const Real span = sqrt(groundDepth * groundDepth + rise * rise);
+		const Real elevation = WWMath::Clamp(
+			(Real)(asin(min(1.0f, screenHeightInWorld / span)) - atan2(rise, groundDepth)),
+			lowestElevation, highestElevation);
+
+		const Vector3 target = (nearGround + farGround) * 0.5f;
+		const Real distance = groundWidth * 0.5f / tan(isometricFov * 0.5f);
+		const Vector3 isometricEye(target.X + distance * cos(elevation) * cos(behind),
+			target.Y + distance * cos(elevation) * sin(behind),
+			target.Z + distance * sin(elevation));
+		cameraTransform.Make_Identity();
+		cameraTransform.Look_At(isometricEye, target, 0);
+		m_3DCamera->Set_View_Plane(isometricFov, -1);
+		m_3DCamera->Set_Clip_Planes(distance - span - depthMargin, distance + span + depthMargin);
+	}
+	else if (wasIsometric)
+	{
+		m_3DCamera->Set_View_Plane(perspectiveFov, -1);
+	}
+
 	m_3DCamera->Set_Transform( cameraTransform );
 
 	if (TheTerrainRenderObject)
@@ -1571,7 +1669,7 @@ void W3DView::update(void)
 	}
 	
 	// (gth) C&C3 if m_isCameraSlaved then force the camera to update each frame
-	if ((recalcCamera) || (m_isCameraSlaved)) {
+	if ((recalcCamera) || (m_isCameraSlaved) || TheGlobalData->m_isometricCamera != m_isometricApplied) {
 		setCameraTransform();
 	}
 	m_recalcCamera = false;

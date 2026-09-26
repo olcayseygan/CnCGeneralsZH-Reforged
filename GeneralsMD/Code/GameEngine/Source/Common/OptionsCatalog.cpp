@@ -57,6 +57,7 @@ static void set_m_cameraBoundaryMargin( Int value )
 OPTION_BOOL_ACCESSORS( m_edgeScrollInWindowedMode )
 OPTION_BOOL_ACCESSORS( m_snapCameraRotateTo45 )
 OPTION_BOOL_ACCESSORS( m_zoomToCursor )
+OPTION_BOOL_ACCESSORS( m_isometricCamera )
 OPTION_BOOL_ACCESSORS( m_formationDrag )
 OPTION_BOOL_ACCESSORS( m_showAllyCursors )
 OPTION_BOOL_ACCESSORS( m_chromaLighting )
@@ -227,6 +228,12 @@ const OptionDef TheOptionCatalog[] =
 	{ "ZoomToCursor",							OPT_WND( "CheckZoomToCursor" ), "GUI:ZoomToCursor",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_zoomToCursor, set_m_zoomToCursor },
+
+	// The battlefield from far off down a narrow cone, so a unit is the same size wherever it
+	// stands on the screen.  The heading stays the player's.  On Options > Controls.
+	{ "IsometricCamera",					OPT_WND( "CheckIsometricCamera" ), "GUI:IsometricCamera",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_isometricCamera, set_m_isometricCamera },
 
 	// A right drag over the ground spreads the selection along the line drawn instead of sending
 	// everyone to one point.  On by default - the right button stopped scrolling, so the drag was

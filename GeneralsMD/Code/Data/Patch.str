@@ -702,6 +702,14 @@ TOOLTIP:ZoomToCursor
 "The wheel zooms towards whatever the cursor is over instead of the middle of the screen. Modern controls only."
 END
 
+GUI:IsometricCamera
+"Isometric Camera"
+END
+
+TOOLTIP:IsometricCamera
+"The battlefield seen from far off, so a unit is the same size at the top of the screen as at the bottom. You still turn and zoom the camera."
+END
+
 GUI:EdgeScrollWindowed
 "Edge Scroll In A Window"
 END

@@ -150,6 +150,7 @@ static Fix parseFixField( void (*parse)( INI *, void *, void *, const void * ), 
 TEST(fix_ini_parsers_scale_before_they_round)
 {
 	CHECK_EQ( parseFixField( INI::parseFix, "2.5" ).raw(), 163840 );
+	CHECK_EQ( parseFixField( INI::parsePositiveNonZeroFix, "0.25" ).raw(), 16384 );
 	CHECK_EQ( parseFixField( INI::parsePercentToFix, "50%" ).raw(), 32768 );
 	CHECK_EQ( parseFixField( INI::parsePercentToFix, "95.4%" ).raw(), 62521 );		// 62521.34
 	CHECK_EQ( parseFixField( INI::parseDurationFix, "1000" ).raw(), 30 * 65536 );

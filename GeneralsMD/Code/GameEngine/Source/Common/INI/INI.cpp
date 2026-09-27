@@ -1941,6 +1941,17 @@ void INI::parseFix( INI *ini, void * /*instance*/, void *store, const void* /*us
 	*(Fix *)store = scanFix( ini->getNextToken() );
 }
 
+void INI::parsePositiveNonZeroFix( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	const Fix value = scanFix( ini->getNextToken() );
+	if( value <= Fix( 0 ) )
+	{
+		DEBUG_CRASH(("invalid Fix value -- expected > 0\n"));
+		throw INI_INVALID_DATA;
+	}
+	*(Fix *)store = value;
+}
+
 // "23%" or "95.4%" as 0.23 or 0.954
 void INI::parsePercentToFix( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {

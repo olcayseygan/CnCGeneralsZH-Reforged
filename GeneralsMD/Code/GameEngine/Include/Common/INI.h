@@ -335,6 +335,7 @@ public:
 	// the Fix twins of the Real parsers above, each scale applied to the exact decimal before the
 	// one rounding (see scanFix)
 	static void parseFix( INI *ini, void *instance, void *store, const void* userData );
+	static void parsePositiveNonZeroFix( INI *ini, void *instance, void *store, const void* userData );
 	static void parsePercentToFix( INI *ini, void *instance, void *store, const void* userData );
 	static void parseDurationFix( INI *ini, void *instance, void *store, const void* userData );
 	static void parseVelocityFix( INI *ini, void *instance, void *store, const void* userData );

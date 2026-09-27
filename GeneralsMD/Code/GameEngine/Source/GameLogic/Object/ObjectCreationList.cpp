@@ -103,7 +103,7 @@ static void adjustVector(Coord3D *vec, const Matrix3D* mtx)
 }
 
 //-------------------------------------------------------------------------------------------------
-// P3: an OCL's positions are float by its interface and its INI offsets; they cross into the
+// P8: an OCL's positions are float by its interface and its INI offsets; they cross into the
 // object's fixed transform here, and nowhere else in this file
 //-------------------------------------------------------------------------------------------------
 static void oclSetTransform( Object *obj, const Matrix3D *mtx )
@@ -125,7 +125,7 @@ static Int oclTruncToInt( Fix f )
 //-------------------------------------------------------------------------------------------------
 Object* ObjectCreationNugget::create( const Object* primary, const Object* secondary, UnsignedInt lifetimeFrames ) const
 {
-	// P3: the OCL interface takes float positions
+	// P8: the OCL interface takes float positions
 	Coord3D primaryPos, secondaryPos;
 	if( primary )
 		primaryPos = primary->getPositionFix()->toCoord3D();
@@ -250,7 +250,7 @@ public:
 			{ "NumberOfShots",	INI::parseInt,				NULL, offsetof( AttackNugget, m_numberOfShots ) },
 			{ "WeaponSlot",			INI::parseLookupList,	TheWeaponSlotTypeNamesLookupList, offsetof( AttackNugget, m_weaponSlot ) },
 			{ "DeliveryDecal",				RadiusDecalTemplate::parseRadiusDecalTemplate,	NULL, offsetof( AttackNugget, m_deliveryDecalTemplate ) },
-			{ "DeliveryDecalRadius",	INI::parseReal, NULL, offsetof(AttackNugget, m_deliveryDecalRadius) },
+			{ "DeliveryDecalRadius",	INI::parseReal, NULL, REAL_OFFSET(AttackNugget, m_deliveryDecalRadius) },	// a client decal
 			{ 0, 0, 0, 0 }
 		};
 
@@ -278,10 +278,10 @@ public:
 		m_startAtPreferredHeight(true),
 		m_startAtMaxSpeed(false),
 		m_formationSize(1),
-		m_formationSpacing(25.0f),
-		m_errorRadius(0.0f),
+		m_formationSpacing(25),
+		m_errorRadius(0),
 		m_delayDeliveryFramesMax(0),
-		m_convergenceFactor( 0.0f )
+		m_convergenceFactor(0)
 	{
 		//Note: m_data is constructed with default values.
 		
@@ -350,7 +350,7 @@ public:
 			Coord3D offset;
 			offset.zero();
 
-			Int offsetMultiplier = ( formationIndex + 1 ) / 2 * m_formationSpacing;
+			Int offsetMultiplier = oclTruncToInt( Fix( ( formationIndex + 1 ) / 2 ) * m_formationSpacing );
 
 			if( formationIndex % 2 )
 			{
@@ -377,14 +377,15 @@ public:
 			//Our target position only applies when using fireweapon and when we have multiple planes, 
 			//as is the case with the napalm strike. The target position either be somewhere between the 
 			//moveToPos of the lead plane and that of the relative offset -- determined by the convergenceFactor.
-			targetPos.x += offset.x * (1.0f - m_convergenceFactor);
-			targetPos.y += offset.y * (1.0f - m_convergenceFactor);
+			const Real divergence = fixToReal( Fix( 1 ) - m_convergenceFactor );	// P8: the OCL's positions are float
+			targetPos.x += offset.x * divergence;
+			targetPos.y += offset.y * divergence;
 
 
 			// first guy in each formation is always spot-on (to keep targeting cursor well-matched)
-			if ( m_errorRadius > 1.0f && formationIndex > 0 )
+			if ( m_errorRadius > Fix( 1 ) && formationIndex > 0 )
 			{
-				Real randomRadius = GameLogicRandomValueReal(0, m_errorRadius );
+				Real randomRadius = fixToReal( GameLogicRandomValueFix( Fix( 0 ), m_errorRadius ) );	// P8
 				Real randomAngle = GameLogicRandomValueReal(0, PI*2 );
 				targetPos.x += randomRadius * Cos( randomAngle );
 				targetPos.y += randomRadius * Sin( randomAngle );
@@ -569,9 +570,9 @@ public:
 
 			//For multiple transports, this defines the formation (and convergence if all weapons will hit same target)
 			{ "FormationSize",						INI::parseUnsignedInt,					NULL, offsetof( DeliverPayloadNugget, m_formationSize) },
-			{ "FormationSpacing",					INI::parseReal,									NULL, offsetof( DeliverPayloadNugget, m_formationSpacing) },
-			{ "WeaponConvergenceFactor",	INI::parseReal,									NULL, offsetof( DeliverPayloadNugget, m_convergenceFactor ) },
-			{ "WeaponErrorRadius",				INI::parseReal,									NULL, offsetof( DeliverPayloadNugget, m_errorRadius ) },
+			{ "FormationSpacing",					INI::parseFix,									NULL, FIX_OFFSET( DeliverPayloadNugget, m_formationSpacing) },
+			{ "WeaponConvergenceFactor",	INI::parseFix,									NULL, FIX_OFFSET( DeliverPayloadNugget, m_convergenceFactor ) },
+			{ "WeaponErrorRadius",				INI::parseFix,									NULL, FIX_OFFSET( DeliverPayloadNugget, m_errorRadius ) },
 			{ "DelayDeliveryMax",					INI::parseDurationUnsignedInt,	NULL, offsetof( DeliverPayloadNugget, m_delayDeliveryFramesMax ) },
 
 			//Payload information (it's all created now and stored inside)
@@ -607,9 +608,9 @@ private:
   AsciiString           m_transportName;
 	AsciiString						m_putInContainerName;
 	std::vector<Payload>	m_payload;
-	Real									m_formationSpacing;
-	Real									m_convergenceFactor;
-	Real									m_errorRadius;
+	Fix										m_formationSpacing;
+	Fix										m_convergenceFactor;
+	Fix										m_errorRadius;
 	UnsignedInt						m_delayDeliveryFramesMax;
 	UnsignedInt						m_formationSize;
 	Bool									m_startAtPreferredHeight;
@@ -621,11 +622,12 @@ private:
 EMPTY_DTOR(DeliverPayloadNugget)
 
 //-------------------------------------------------------------------------------------------------
-static void calcRandomForce(Real minMag, Real maxMag, Real minPitch, Real maxPitch, Coord3D* force)
+static void calcRandomForce(Fix minMag, Fix maxMag, Fix minPitch, Fix maxPitch, Coord3D* force)
 {
 	Real angle = GameLogicRandomValueReal(0, 2*PI);
-	Real pitch = GameLogicRandomValueReal(minPitch, maxPitch);
-	Real mag = GameLogicRandomValueReal(minMag, maxMag);
+	// P4: the force is float
+	Real pitch = fixToReal(GameLogicRandomValueFix(minPitch, maxPitch));
+	Real mag = fixToReal(GameLogicRandomValueFix(minMag, maxMag));
 
 	Matrix3D mtx(1);
 	mtx.Scale(mag);
@@ -646,12 +648,12 @@ class ApplyRandomForceNugget : public ObjectCreationNugget
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(ApplyRandomForceNugget, "ApplyRandomForceNugget")		
 public:
 
-	ApplyRandomForceNugget() : 
-		m_spinRate(0.0f),
-		m_minMag(0.0f),
-		m_maxMag(0.0f),
-		m_minPitch(0.0f),
-		m_maxPitch(0.0f)
+	ApplyRandomForceNugget() :
+		m_spinRate(0),
+		m_minMag(0),
+		m_maxMag(0),
+		m_minPitch(0),
+		m_maxPitch(0)
 	{
 	}
 
@@ -667,9 +669,10 @@ public:
 				calcRandomForce(m_minMag, m_maxMag, m_minPitch, m_maxPitch, &force);
 				p->applyForce(&force);
 
-			  Real yaw = GameLogicRandomValueReal( -m_spinRate, m_spinRate );
-			  Real roll = GameLogicRandomValueReal( -m_spinRate, m_spinRate );
-			  Real pitch = GameLogicRandomValueReal( -m_spinRate, m_spinRate );
+			  // P4: the physics rates are float
+			  Real yaw = fixToReal( GameLogicRandomValueFix( -m_spinRate, m_spinRate ) );
+			  Real roll = fixToReal( GameLogicRandomValueFix( -m_spinRate, m_spinRate ) );
+			  Real pitch = fixToReal( GameLogicRandomValueFix( -m_spinRate, m_spinRate ) );
 			  p->setYawRate(yaw);
 			  p->setRollRate(roll);
 			  p->setPitchRate(pitch);
@@ -696,11 +699,11 @@ public:
 	{
 		static const FieldParse myFieldParse[] = 
 		{
-			{ "SpinRate",					INI::parseAngularVelocityReal,	NULL, offsetof(ApplyRandomForceNugget, m_spinRate) },
-			{ "MinForceMagnitude",	INI::parseReal,	NULL, offsetof(ApplyRandomForceNugget, m_minMag) },
-			{ "MaxForceMagnitude",	INI::parseReal,	NULL, offsetof(ApplyRandomForceNugget, m_maxMag) },
-			{ "MinForcePitch",	INI::parseAngleReal,	NULL, offsetof(ApplyRandomForceNugget, m_minPitch) },
-			{ "MaxForcePitch",	INI::parseAngleReal,	NULL, offsetof(ApplyRandomForceNugget, m_maxPitch) },
+			{ "SpinRate",					INI::parseAngularVelocityFix,	NULL, FIX_OFFSET(ApplyRandomForceNugget, m_spinRate) },
+			{ "MinForceMagnitude",	INI::parseFix,	NULL, FIX_OFFSET(ApplyRandomForceNugget, m_minMag) },
+			{ "MaxForceMagnitude",	INI::parseFix,	NULL, FIX_OFFSET(ApplyRandomForceNugget, m_maxMag) },
+			{ "MinForcePitch",	INI::parseAngleFix,	NULL, FIX_OFFSET(ApplyRandomForceNugget, m_minPitch) },
+			{ "MaxForcePitch",	INI::parseAngleFix,	NULL, FIX_OFFSET(ApplyRandomForceNugget, m_maxPitch) },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -712,10 +715,10 @@ public:
 protected:
 
 private:
-	Real											m_spinRate;
-	Real											m_minMag, m_maxMag;
-	Real											m_minPitch, m_maxPitch;
-};  
+	Fix												m_spinRate;
+	Fix												m_minMag, m_maxMag;
+	Fix												m_minPitch, m_maxPitch;
+};
 EMPTY_DTOR(ApplyRandomForceNugget)
 
 //-------------------------------------------------------------------------------------------------
@@ -748,15 +751,6 @@ static const char* DebrisDispositionNames[] =
 std::vector<AsciiString>	debrisModelNamesGlobalHack;
 
 //-------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------
-static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	Real fricPerSec = INI::scanReal(ini->getNextToken());
-	Real fricPerFrame = fricPerSec * SECONDS_PER_LOGICFRAME_REAL;
-	*(Real *)store = fricPerFrame;
-} 
-
-//-------------------------------------------------------------------------------------------------
 class GenericObjectCreationNugget : public ObjectCreationNugget
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(GenericObjectCreationNugget, "GenericObjectCreationNugget")		
@@ -765,15 +759,15 @@ public:
 	GenericObjectCreationNugget() : 
 		m_requiresLivePlayer(FALSE),
 		m_debrisToGenerate(1), 
-		m_mass(0), 
+		m_mass(0),
 		m_extraBounciness(0),
 		m_extraFriction(0),
 		m_disposition(ON_GROUND_ALIGNED),
-		m_dispositionIntensity(0.0f),
-		m_spinRate(-1.0f),
-		m_yawRate(-1.0f),
-		m_rollRate(-1.0f),
-		m_pitchRate(-1.0f),
+		m_dispositionIntensity(0),
+		m_spinRate(-1),
+		m_yawRate(-1),
+		m_rollRate(-1),
+		m_pitchRate(-1),
 		m_nameAreObjects(true),
 		m_okToChangeModelColor(false),
 		m_minLODRequired(STATIC_GAME_LOD_LOW),
@@ -783,23 +777,23 @@ public:
 		m_skipIfSignificantlyAirborne(false),
 		m_invulnerableTime(0),
 		m_containInsideSourceObject(FALSE),
-    m_minHealth(1.0f),
-		m_maxHealth(1.0f),
+    m_minHealth(1),
+		m_maxHealth(1),
 		m_orientInForceDirection(false),
 		m_spreadFormation(false),
-		m_minDistanceAFormation(0.0f),
-		m_minDistanceBFormation(0.0f),
-		m_maxDistanceFormation(0.0f),
+		m_minDistanceAFormation(0),
+		m_minDistanceBFormation(0),
+		m_maxDistanceFormation(0),
 		m_fadeIn(false),
 		m_fadeOut(false),
 		m_fadeFrames(0),
 		m_fadeSoundName(AsciiString::TheEmptyString), // Added By Sadullah Nader
 		m_particleSysName(AsciiString::TheEmptyString), // Added By Sadullah Nader
 		m_putInContainer(AsciiString::TheEmptyString), // Added By Sadullah Nader
-		m_minMag(0.0f),
-		m_maxMag(0.0f),
-		m_minPitch(0.0f),
-		m_maxPitch(0.0f),
+		m_minMag(0),
+		m_maxMag(0),
+		m_minPitch(0),
+		m_maxPitch(0),
 		m_minFrames(0),
 		m_maxFrames(0),
 		m_shadowType(SHADOW_NONE),
@@ -819,7 +813,7 @@ public:
 			if (m_skipIfSignificantlyAirborne && primary->isSignificantlyAboveTerrain())
 				return NULL;
 
-			// P3: reallyCreate works on the OCL's float offsets, so the source's transform goes over in float
+			// P8: reallyCreate works on the OCL's float offsets, so the source's transform goes over in float
 			Coord3D primaryPos = primary->getPositionFix()->toCoord3D();
 			Matrix3D primaryMtx;
 			primary->getTransformMatrixFix()->toMatrix3D( &primaryMtx );
@@ -860,25 +854,25 @@ public:
 			{ "Count",						INI::parseInt,						NULL, offsetof( GenericObjectCreationNugget, m_debrisToGenerate ) },
 			{ "IgnorePrimaryObstacle", INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_ignorePrimaryObstacle) },
 			{ "OrientInForceDirection", INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_orientInForceDirection) },
-			{ "ExtraBounciness",				INI::parseReal,						NULL, offsetof( GenericObjectCreationNugget, m_extraBounciness ) },
-			{ "ExtraFriction",				parseFrictionPerSec,						NULL, offsetof( GenericObjectCreationNugget, m_extraFriction ) },
+			{ "ExtraBounciness",				INI::parseFix,						NULL, FIX_OFFSET( GenericObjectCreationNugget, m_extraBounciness ) },
+			{ "ExtraFriction",				INI::parseVelocityFix,				NULL, FIX_OFFSET( GenericObjectCreationNugget, m_extraFriction ) },	// per second to per frame
 			{ "Offset",						INI::parseCoord3D,				NULL, offsetof( GenericObjectCreationNugget, m_offset ) },
 			{ "Disposition",			INI::parseBitString32,			DebrisDispositionNames, offsetof( GenericObjectCreationNugget, m_disposition ) },
-			{ "DispositionIntensity",	INI::parseReal,						NULL,	offsetof( GenericObjectCreationNugget, m_dispositionIntensity ) },
-			{ "SpinRate",					INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_spinRate) },
-			{ "YawRate",					INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_yawRate) },
-			{ "RollRate",					INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_rollRate) },
-			{ "PitchRate",				INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_pitchRate) },
-			{ "MinForceMagnitude",	INI::parseReal,	NULL, offsetof(GenericObjectCreationNugget, m_minMag) },
-			{ "MaxForceMagnitude",	INI::parseReal,	NULL, offsetof(GenericObjectCreationNugget, m_maxMag) },
-			{ "MinForcePitch",	INI::parseAngleReal,	NULL, offsetof(GenericObjectCreationNugget, m_minPitch) },
-			{ "MaxForcePitch",	INI::parseAngleReal,	NULL, offsetof(GenericObjectCreationNugget, m_maxPitch) },
+			{ "DispositionIntensity",	INI::parseFix,						NULL,	FIX_OFFSET( GenericObjectCreationNugget, m_dispositionIntensity ) },
+			{ "SpinRate",					INI::parseAngularVelocityFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_spinRate) },
+			{ "YawRate",					INI::parseAngularVelocityFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_yawRate) },
+			{ "RollRate",					INI::parseAngularVelocityFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_rollRate) },
+			{ "PitchRate",				INI::parseAngularVelocityFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_pitchRate) },
+			{ "MinForceMagnitude",	INI::parseFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_minMag) },
+			{ "MaxForceMagnitude",	INI::parseFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_maxMag) },
+			{ "MinForcePitch",	INI::parseAngleFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_minPitch) },
+			{ "MaxForcePitch",	INI::parseAngleFix,	NULL, FIX_OFFSET(GenericObjectCreationNugget, m_maxPitch) },
 			{ "MinLifetime",					INI::parseDurationUnsignedInt,		NULL, offsetof( GenericObjectCreationNugget, m_minFrames ) },
 			{ "MaxLifetime",					INI::parseDurationUnsignedInt,		NULL, offsetof( GenericObjectCreationNugget, m_maxFrames ) },
 			{ "SpreadFormation",			INI::parseBool,	NULL, offsetof(GenericObjectCreationNugget, m_spreadFormation) },
-			{ "MinDistanceAFormation",	INI::parseReal, NULL, offsetof(GenericObjectCreationNugget, m_minDistanceAFormation) },
-			{ "MinDistanceBFormation",	INI::parseReal, NULL, offsetof(GenericObjectCreationNugget, m_minDistanceBFormation) },
-			{ "MaxDistanceFormation",	INI::parseReal, NULL, offsetof(GenericObjectCreationNugget, m_maxDistanceFormation) },
+			{ "MinDistanceAFormation",	INI::parseFix, NULL, FIX_OFFSET(GenericObjectCreationNugget, m_minDistanceAFormation) },
+			{ "MinDistanceBFormation",	INI::parseFix, NULL, FIX_OFFSET(GenericObjectCreationNugget, m_minDistanceBFormation) },
+			{ "MaxDistanceFormation",	INI::parseFix, NULL, FIX_OFFSET(GenericObjectCreationNugget, m_maxDistanceFormation) },
 			{ "FadeIn",			INI::parseBool,	NULL, offsetof(GenericObjectCreationNugget, m_fadeIn) },
 			{ "FadeOut",			INI::parseBool,	NULL, offsetof(GenericObjectCreationNugget, m_fadeOut) },
 			{ "FadeTime",	INI::parseDurationUnsignedInt,	NULL, offsetof(GenericObjectCreationNugget, m_fadeFrames) },
@@ -900,8 +894,8 @@ public:
 			{ "InheritsVeterancy",	INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_inheritsVeterancy) },
 			{ "SkipIfSignificantlyAirborne", INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_skipIfSignificantlyAirborne) },
 			{ "InvulnerableTime",		INI::parseDurationUnsignedInt, NULL, offsetof(GenericObjectCreationNugget, m_invulnerableTime) },
-			{ "MinHealth",					INI::parsePercentToReal, NULL, offsetof(GenericObjectCreationNugget, m_minHealth) },
-			{ "MaxHealth",					INI::parsePercentToReal, NULL, offsetof(GenericObjectCreationNugget, m_maxHealth) },
+			{ "MinHealth",					INI::parsePercentToFix, NULL, FIX_OFFSET(GenericObjectCreationNugget, m_minHealth) },
+			{ "MaxHealth",					INI::parsePercentToFix, NULL, FIX_OFFSET(GenericObjectCreationNugget, m_maxHealth) },
 			{ "RequiresLivePlayer",	INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_requiresLivePlayer) },
 			{ 0, 0, 0, 0 }
 		};
@@ -923,7 +917,7 @@ public:
 		static const FieldParse myFieldParse[] = 
 		{
 			{ "ModelNames",							parseDebrisObjectNames,							NULL,					0 },
-			{ "Mass",										INI::parsePositiveNonZeroReal,			NULL,					offsetof( GenericObjectCreationNugget, m_mass ) },
+			{ "Mass",										INI::parsePositiveNonZeroFix,				NULL,					FIX_OFFSET( GenericObjectCreationNugget, m_mass ) },
 			{ "AnimationSet",						parseAnimSet,												NULL,					offsetof( GenericObjectCreationNugget, m_animSets) },
 			{ "FXFinal",								INI::parseFXList,										NULL,					offsetof( GenericObjectCreationNugget, m_fxFinal) },
 			{ "OkToChangeModelColor",		INI::parseBool,											NULL,					offsetof(GenericObjectCreationNugget, m_okToChangeModelColor) },
@@ -942,7 +936,7 @@ public:
 
 		ini->initFromINIMulti(nugget, p);
 
-		DEBUG_ASSERTCRASH(nugget->m_mass > 0.0f, ("Zero masses are not allowed for debris!\n"));
+		DEBUG_ASSERTCRASH(nugget->m_mass > Fix(0), ("Zero masses are not allowed for debris!\n"));
 		((ObjectCreationList*)instance)->addObjectCreationNugget(nugget);
 	}
 
@@ -1030,9 +1024,9 @@ protected:
 
 		// set its beginning health
 		BodyModuleInterface *body = obj->getBodyModule();
-		Real healthPercent = GameLogicRandomValueReal( m_minHealth, m_maxHealth );
+		Fix healthPercent = GameLogicRandomValueFix( m_minHealth, m_maxHealth );
 		if (body)
-			body->setInitialHealth(healthPercent * 100.0f);
+			body->setInitialHealth(fixToReal(healthPercent * Fix(100)));	// P6: the body is float
 
 		// If they have a SlavedUpdate, then I have to tell them who their daddy is from now on.
 		for (BehaviorModule** update = obj->getBehaviorModules(); *update; ++update)
@@ -1136,15 +1130,16 @@ protected:
 			if (objUp)
 			{
 
+				// P4: PhysicsBehavior and its forces are float
 				if (!m_nameAreObjects)
-					objUp->setMass( m_mass );
+					objUp->setMass( fixToReal( m_mass ) );
 
-				objUp->setExtraFriction(m_extraFriction);
+				objUp->setExtraFriction( fixToReal( m_extraFriction ) );
 
 				Coord3D force;
-				Real horizForce = 4.0f * m_dispositionIntensity;		// 2
-				force.x = GameLogicRandomValueReal( -horizForce, horizForce );
-				force.y = GameLogicRandomValueReal( -horizForce, horizForce );
+				Fix horizForce = Fix( 4 ) * m_dispositionIntensity;		// 2
+				force.x = fixToReal( GameLogicRandomValueFix( -horizForce, horizForce ) );
+				force.y = fixToReal( GameLogicRandomValueFix( -horizForce, horizForce ) );
 				force.z = 0;
 
 				objUp->applyForce(&force);
@@ -1166,36 +1161,37 @@ protected:
 			if (objUp)
 			{
 
+				// P4: PhysicsBehavior, its forces and its rates are float
 				if (!m_nameAreObjects)
 				{
-					DUMPREAL(m_mass);
-					objUp->setMass( m_mass );
+					DUMPREAL(fixToReal(m_mass));
+					objUp->setMass( fixToReal( m_mass ) );
 				}
 				DEBUG_ASSERTCRASH(objUp->getMass() > 0.0f, ("Zero masses are not allowed for obj!\n"));
 
-				objUp->setExtraBounciness(m_extraBounciness);
-				objUp->setExtraFriction(m_extraFriction);
+				objUp->setExtraBounciness( fixToReal( m_extraBounciness ) );
+				objUp->setExtraFriction( fixToReal( m_extraFriction ) );
 				objUp->setAllowBouncing(true);
 				objUp->setBounceSound(&m_bounceSound);
-				DUMPREAL(m_extraBounciness);
-				DUMPREAL(m_extraFriction);
-				
+				DUMPREAL(fixToReal(m_extraBounciness));
+				DUMPREAL(fixToReal(m_extraFriction));
+
 				// if omitted from INI, calc it based on intensity.
-				Real spinRate		= m_spinRate >= 0.0f ? m_spinRate : (PI/32.0f) * m_dispositionIntensity;
+				Fix spinRate		= m_spinRate >= Fix(0) ? m_spinRate : (FIX_PI / Fix(32)) * m_dispositionIntensity;
 
 				// Treat these as overrides.
-				Real yawRate		= m_yawRate		>= 0.0f ? m_yawRate		: spinRate;
-				Real rollRate		= m_rollRate	>= 0.0f ? m_rollRate	: spinRate;
-				Real pitchRate	= m_pitchRate >= 0.0f ? m_pitchRate : spinRate;
+				Fix yawRate		= m_yawRate		>= Fix(0) ? m_yawRate		: spinRate;
+				Fix rollRate		= m_rollRate	>= Fix(0) ? m_rollRate	: spinRate;
+				Fix pitchRate	= m_pitchRate >= Fix(0) ? m_pitchRate : spinRate;
 
-				DUMPREAL(spinRate);
-				DUMPREAL(yawRate);
-				DUMPREAL(rollRate);
-				DUMPREAL(pitchRate);
-				
-				Real yaw = GameLogicRandomValueReal( -yawRate, yawRate );
-				Real roll = GameLogicRandomValueReal( -rollRate, rollRate );
-				Real pitch = GameLogicRandomValueReal( -pitchRate, pitchRate );
+				DUMPREAL(fixToReal(spinRate));
+				DUMPREAL(fixToReal(yawRate));
+				DUMPREAL(fixToReal(rollRate));
+				DUMPREAL(fixToReal(pitchRate));
+
+				Real yaw = fixToReal( GameLogicRandomValueFix( -yawRate, yawRate ) );
+				Real roll = fixToReal( GameLogicRandomValueFix( -rollRate, rollRate ) );
+				Real pitch = fixToReal( GameLogicRandomValueFix( -pitchRate, pitchRate ) );
 				DUMPREAL(yaw);
 				DUMPREAL(roll);
 				DUMPREAL(pitch);
@@ -1203,34 +1199,34 @@ protected:
 				Coord3D force;
 				if( BitTest( m_disposition, SEND_IT_FLYING ) )
 				{
-					Real horizForce = 4.0f * m_dispositionIntensity;		// 2
-					Real vertForce = 3.0f * m_dispositionIntensity;		// 3
-					force.x = GameLogicRandomValueReal( -horizForce, horizForce );
-					force.y = GameLogicRandomValueReal( -horizForce, horizForce );
-					force.z = GameLogicRandomValueReal( vertForce * 0.33f, vertForce );
-					DUMPREAL(horizForce);
-					DUMPREAL(vertForce);
+					Fix horizForce = Fix( 4 ) * m_dispositionIntensity;		// 2
+					Fix vertForce = Fix( 3 ) * m_dispositionIntensity;		// 3
+					force.x = fixToReal( GameLogicRandomValueFix( -horizForce, horizForce ) );
+					force.y = fixToReal( GameLogicRandomValueFix( -horizForce, horizForce ) );
+					force.z = fixToReal( GameLogicRandomValueFix( vertForce * 0.33_fx, vertForce ) );
+					DUMPREAL(fixToReal(horizForce));
+					DUMPREAL(fixToReal(vertForce));
 					DUMPCOORD3D(&force);
 				}
 				else if (BitTest(m_disposition, SEND_IT_UP) )
 				{
-					Real horizForce = 2.0f * m_dispositionIntensity;
-					Real vertForce = 4.0f * m_dispositionIntensity;	
-					
-					force.x = GameLogicRandomValueReal( -horizForce, horizForce );
-					force.y = GameLogicRandomValueReal( -horizForce, horizForce );
-					force.z = GameLogicRandomValueReal( vertForce * 0.75f, vertForce );
-					DUMPREAL(horizForce);
-					DUMPREAL(vertForce);
+					Fix horizForce = Fix( 2 ) * m_dispositionIntensity;
+					Fix vertForce = Fix( 4 ) * m_dispositionIntensity;
+
+					force.x = fixToReal( GameLogicRandomValueFix( -horizForce, horizForce ) );
+					force.y = fixToReal( GameLogicRandomValueFix( -horizForce, horizForce ) );
+					force.z = fixToReal( GameLogicRandomValueFix( vertForce * 0.75_fx, vertForce ) );
+					DUMPREAL(fixToReal(horizForce));
+					DUMPREAL(fixToReal(vertForce));
 					DUMPCOORD3D(&force);
 				}
-				else 
+				else
 				{
 					calcRandomForce(m_minMag, m_maxMag, m_minPitch, m_maxPitch, &force);
-					DUMPREAL(m_minMag);
-					DUMPREAL(m_maxMag);
-					DUMPREAL(m_minPitch);
-					DUMPREAL(m_maxPitch);
+					DUMPREAL(fixToReal(m_minMag));
+					DUMPREAL(fixToReal(m_maxMag));
+					DUMPREAL(fixToReal(m_minPitch));
+					DUMPREAL(fixToReal(m_maxPitch));
 					DUMPCOORD3D(&force);
 				}
 				objUp->applyForce(&force);
@@ -1253,9 +1249,10 @@ protected:
 			PhysicsBehavior* objUp = obj->getPhysics();
 			if (objUp)
 			{
-				Real yaw = GameLogicRandomValueReal( -m_dispositionIntensity, m_dispositionIntensity );
-				Real roll = GameLogicRandomValueReal( -m_dispositionIntensity, m_dispositionIntensity );
-				Real pitch = GameLogicRandomValueReal( -m_dispositionIntensity, m_dispositionIntensity );
+				// P4: the physics rates are float
+				Real yaw = fixToReal( GameLogicRandomValueFix( -m_dispositionIntensity, m_dispositionIntensity ) );
+				Real roll = fixToReal( GameLogicRandomValueFix( -m_dispositionIntensity, m_dispositionIntensity ) );
+				Real pitch = fixToReal( GameLogicRandomValueFix( -m_dispositionIntensity, m_dispositionIntensity ) );
 
 				objUp->setYawRate(yaw);
 				objUp->setRollRate(roll);
@@ -1428,8 +1425,8 @@ protected:
 				// uninitialised stack Coord3D: the debris then appeared at whatever was on the stack.
 				Coord3D resultPos = *pos;
 				FindPositionOptions fpOptions;
-				fpOptions.minRadius = GameLogicRandomValueFix(fixFromReal(m_minDistanceAFormation), fixFromReal(m_minDistanceBFormation));	// P3
-				fpOptions.maxRadius = fixFromReal(m_maxDistanceFormation);	// P3
+				fpOptions.minRadius = GameLogicRandomValueFix(m_minDistanceAFormation, m_minDistanceBFormation);
+				fpOptions.maxRadius = m_maxDistanceFormation;
 				fpOptions.flags = FPF_USE_HIGHEST_LAYER;
 				// DiesOnBadLand kills on the pathfind cell's type, and the search's own cliff and water
 				// tests read the terrain, which disagree at a shoreline: take only cells it accepts
@@ -1495,29 +1492,29 @@ private:
 	const FXList*							m_fxFinal;
 	AsciiString								m_particleSysName;
 	Int												m_debrisToGenerate;
-	Real											m_mass;
-	Real											m_extraBounciness;
-	Real											m_extraFriction;
+	Fix												m_mass;
+	Fix												m_extraBounciness;
+	Fix												m_extraFriction;
 	Coord3D										m_offset;
 	DebrisDisposition					m_disposition;
-	Real											m_dispositionIntensity;
-	Real											m_spinRate;
-	Real											m_yawRate;
-	Real											m_rollRate;
-	Real											m_pitchRate;
-	Real											m_minMag, m_maxMag;
-	Real											m_minPitch, m_maxPitch;
+	Fix												m_dispositionIntensity;
+	Fix												m_spinRate;
+	Fix												m_yawRate;
+	Fix												m_rollRate;
+	Fix												m_pitchRate;
+	Fix												m_minMag, m_maxMag;
+	Fix												m_minPitch, m_maxPitch;
 	UnsignedInt								m_minFrames, m_maxFrames;
 	ShadowType								m_shadowType;
 	StaticGameLODLevel				m_minLODRequired;
 	UnsignedInt								m_invulnerableTime;
-	Real											m_minHealth;
-	Real											m_maxHealth;
+	Fix												m_minHealth;
+	Fix												m_maxHealth;
 	UnsignedInt								m_fadeFrames;
 	AsciiString								m_fadeSoundName;
-	Real											m_minDistanceAFormation;
-	Real											m_minDistanceBFormation;
-	Real											m_maxDistanceFormation;
+	Fix												m_minDistanceAFormation;
+	Fix												m_minDistanceBFormation;
+	Fix												m_maxDistanceFormation;
 	Int												m_objectCount; // how many objects will there be?
 	AudioEventRTS							m_bounceSound;
 	Bool											m_requiresLivePlayer;

@@ -52,10 +52,10 @@ public:
 	/**
 		These four data define a Bezier curve.  The first and last control points are the firer and victim.
 	*/
-	Real m_firstHeight;					///< The first airborne control point will be this high above the highest intervening terrain
-	Real m_secondHeight;				///< And the second, this.
-	Real m_firstPercentIndent;	///< The first point will be this percent along the target line
-	Real m_secondPercentIndent;	///< And the second, this.
+	Fix m_firstHeight;					///< The first airborne control point will be this high above the highest intervening terrain
+	Fix m_secondHeight;				///< And the second, this.
+	Fix m_firstPercentIndent;	///< The first point will be this percent along the target line
+	Fix m_secondPercentIndent;	///< And the second, this.
 	UnsignedInt m_maxLifespan;
 	Bool m_tumbleRandomly;
 	Bool m_orientToFlightPath;
@@ -64,7 +64,7 @@ public:
 	KindOfMaskType	m_garrisonHitKillKindof;			///< the kind(s) of units that can be collided with
 	KindOfMaskType	m_garrisonHitKillKindofNot;		///< the kind(s) of units that CANNOT be collided with
 	const FXList*		m_garrisonHitKillFX;
-	Real m_flightPathAdjustDistPerFrame;
+	Fix m_flightPathAdjustDistPerFrame;
 
 
 	DumbProjectileBehaviorModuleData();

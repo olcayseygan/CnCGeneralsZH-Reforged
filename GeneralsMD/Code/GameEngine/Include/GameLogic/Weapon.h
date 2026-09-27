@@ -404,31 +404,31 @@ public:
 	Int getPreAttackDelay(const WeaponBonus& bonus) const;
 	Bool isContactWeapon() const;
 
-	inline Real getShockWaveAmount() const { return m_shockWaveAmount; }
-	inline Real getShockWaveRadius() const { return m_shockWaveRadius; }
-	inline Real getShockWaveTaperOff() const { return m_shockWaveTaperOff; }
+	// the INI data is Fix; these float getters are the P6 edge and live in Weapon.cpp, which crosses it
+	Real getShockWaveAmount() const;
+	Real getShockWaveRadius() const;
+	Real getShockWaveTaperOff() const;
 
-	inline Real getRequestAssistRange() const {return m_requestAssistRange;}
+	Real getRequestAssistRange() const;
 	inline AsciiString getName() const { return m_name; }
 	inline AsciiString getProjectileStreamName() const { return m_projectileStreamName; }
 	inline AsciiString getLaserName() const { return m_laserName; }
 	inline const AsciiString& getLaserBoneName() const { return m_laserBoneName; }
 	inline NameKeyType getNameKey() const { return m_nameKey; }
-	inline Real getWeaponSpeed() const { return m_weaponSpeed; }
-	inline Real getMinWeaponSpeed() const { return m_minWeaponSpeed; }
+	Real getWeaponSpeed() const;
+	Real getMinWeaponSpeed() const;
 	inline Bool isScaleWeaponSpeed() const { return m_isScaleWeaponSpeed; }
-	inline Real getWeaponRecoilAmount() const { return m_weaponRecoil; }
-	inline Real getMinTargetPitch() const { return m_minTargetPitch; }
-	inline Real getMaxTargetPitch() const { return m_maxTargetPitch; }
-	inline Real getRadiusDamageAngle() const { return m_radiusDamageAngle; }
+	Real getWeaponRecoilAmount() const;
+	inline Fix getMinTargetPitchFix() const { return m_minTargetPitch; }
+	inline Fix getMaxTargetPitchFix() const { return m_maxTargetPitch; }
 	inline DamageType getDamageType() const { return m_damageType; }
 	inline ObjectStatusTypes getDamageStatusType() const { return m_damageStatusType; }
 	inline DeathType getDeathType() const { return m_deathType; }
-	inline Real getContinueAttackRange() const { return m_continueAttackRange; }
-	inline Real getInfantryInaccuracyDist() const { return m_infantryInaccuracyDist; }
-	inline Real getAimDelta() const { return m_aimDelta; }
-	inline Real getScatterRadius() const { return m_scatterRadius; }
-	inline Real getScatterTargetScalar() const { return m_scatterTargetScalar; }
+	Real getContinueAttackRange() const;
+	Real getInfantryInaccuracyDist() const;
+	Real getAimDelta() const;
+	Real getScatterRadius() const;
+	Real getScatterTargetScalar() const;
 	inline const ThingTemplate* getProjectileTemplate() const { return m_projectileTmpl; }
 	inline Bool getDamageDealtAtSelfPosition() const { return m_damageDealtAtSelfPosition; }
 	inline Int getAffectsMask() const { return m_affectsMask; }
@@ -496,29 +496,29 @@ private:
 	AsciiString m_projectileStreamName;			///< Name of object that tracks are stream, if we have one
 	AsciiString m_laserName;								///< Name of the laser object that persists.
 	AsciiString m_laserBoneName;						///< Where to put the laser object
-	Real m_primaryDamage;										///< primary damage amount
-	Real m_primaryDamageRadius;							///< primary damage radius range
-	Real m_secondaryDamage;									///< secondary damage amount
-	Real m_secondaryDamageRadius;						///< secondary damage radius range	
-	Real m_shockWaveAmount;									///( How much shockwave generated 
-	Real m_shockWaveRadius;									///( How far shockwave effect affects objects
-	Real m_shockWaveTaperOff;								///( How much shockwave is left at the tip of the shockwave radius
-	Real m_attackRange;											///< max distance the weapon can deal damage
-	Real m_minimumAttackRange;							///< Min distance the weapon should be fired from
-	Real m_requestAssistRange;							///< My object will look this far around to get people to join in the attack.
-	Real m_aimDelta;												///< when aiming, consider yourself "aimed" if you are within +/- this much of an angle
-	Real m_scatterRadius;										///< Radius of area actual fire point will be in, default is zero for no deviation
-	Real m_scatterTargetScalar;							///< Radius of area covered by the coordinates in the scatterTarget table
+	Fix m_primaryDamage;										///< primary damage amount
+	Fix m_primaryDamageRadius;							///< primary damage radius range
+	Fix m_secondaryDamage;									///< secondary damage amount
+	Fix m_secondaryDamageRadius;						///< secondary damage radius range
+	Fix m_shockWaveAmount;									///( How much shockwave generated
+	Fix m_shockWaveRadius;									///( How far shockwave effect affects objects
+	Fix m_shockWaveTaperOff;								///( How much shockwave is left at the tip of the shockwave radius
+	Fix m_attackRange;											///< max distance the weapon can deal damage
+	Fix m_minimumAttackRange;							///< Min distance the weapon should be fired from
+	Fix m_requestAssistRange;							///< My object will look this far around to get people to join in the attack.
+	Fix m_aimDelta;												///< when aiming, consider yourself "aimed" if you are within +/- this much of an angle
+	Fix m_scatterRadius;										///< Radius of area actual fire point will be in, default is zero for no deviation
+	Fix m_scatterTargetScalar;							///< Radius of area covered by the coordinates in the scatterTarget table
 	std::vector<Coord2D> m_scatterTargets;	///< instead of pure randomness, this is the list of places I will randomly choose from to attack
 	DamageType m_damageType;								///< damage type enum
 	DeathType m_deathType;									///< death type enum
-	Real m_weaponSpeed;											///< speed of damage travel, in dist/frame
-	Real m_minWeaponSpeed;									///< speed of damage travel, in dist/frame
+	Fix m_weaponSpeed;											///< speed of damage travel, in dist/frame
+	Fix m_minWeaponSpeed;									///< speed of damage travel, in dist/frame
 	Bool m_isScaleWeaponSpeed;							///< Scale from min to normal based on range (for lobbers)
-	Real m_weaponRecoil;										///< amt of recoil caused to firer, in rads
-	Real m_minTargetPitch;									///< min pitch from source->victim allowable in order to target
-	Real m_maxTargetPitch;									///< max pitch from source->victim allowable in order to target
-	Real m_radiusDamageAngle;								///< Damage is directional, so max defelection of straight at target (cone) you do damage
+	Fix m_weaponRecoil;										///< amt of recoil caused to firer, in rads
+	Fix m_minTargetPitch;									///< min pitch from source->victim allowable in order to target
+	Fix m_maxTargetPitch;									///< max pitch from source->victim allowable in order to target
+	Fix m_radiusDamageAngle;							///< Damage is directional, so max defelection of straight at target (cone) you do damage
 	AsciiString m_projectileName;																			///< if projectile, object name to "fire"
 	const ThingTemplate* m_projectileTmpl;														///< direct access to projectile object type to "fire"
 	AsciiString m_fireOCLNames[LEVEL_COUNT];														///< Name of OCL to create at firing
@@ -547,7 +547,7 @@ private:
 	WeaponReloadType m_reloadType;					///< does the weapon auto-reload a clip when empty?
 	WeaponPrefireType m_prefireType;				///< The way this weapon handles its prefire delay
 	UnsignedInt m_historicBonusTime;				///< if 'count' instances of this weapon do damage within 'time' and 'radius' from each other, fire the historic bonus weapon
-	Real m_historicBonusRadius;							///< see above
+	Fix m_historicBonusRadius;							///< see above
 	Int m_historicBonusCount;								///< see above
 	const WeaponTemplate* m_historicBonusWeapon;	///< see above
 	Bool m_leechRangeWeapon;								///< once the weapon has fired once at the proper range, the weapon gains unlimited range for the remainder of the attack cycle
@@ -556,8 +556,8 @@ private:
 	Bool m_allowAttackGarrisonedBldgs;			///< allow attacks on garrisoned bldgs, even if estimated damage would be zero
 	Bool m_playFXWhenStealthed;					///< Ignores rule about not playing FX when stealthed
 	Int m_preAttackDelay;										///< doesn't attack until preAttack delay is finish (triggering detonation, aiming a snipe shot, etc.)
-	Real m_continueAttackRange;							///< if nonzero: when you destroy something, look for a similar obj controlled by same player to attack (used mainly for mine-clearing)
-	Real m_infantryInaccuracyDist;					///< When this weapon is used against infantry, it can randomly miss by as much as this distance.
+	Fix m_continueAttackRange;							///< if nonzero: when you destroy something, look for a similar obj controlled by same player to attack (used mainly for mine-clearing)
+	Fix m_infantryInaccuracyDist;				///< When this weapon is used against infantry, it can randomly miss by as much as this distance.
 	ObjectStatusTypes m_damageStatusType;		///< If our damage is Status damage, the status we apply
 	UnsignedInt m_suspendFXDelay;						///< The fx can be suspended for any delay, in frames, then they will execute as normal
 	Bool m_dieOnDetonate;

@@ -91,13 +91,13 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_detonateCallsKill(FALSE),
 	m_orientToFlightPath(TRUE),
 	m_tumbleRandomly(FALSE),
-	m_firstHeight(0.0f),
-	m_secondHeight(0.0f),
-	m_firstPercentIndent(0.0f),
-	m_secondPercentIndent(0.0f),	
+	m_firstHeight(0),
+	m_secondHeight(0),
+	m_firstPercentIndent(0),
+	m_secondPercentIndent(0),
 	m_garrisonHitKillCount(0),
 	m_garrisonHitKillFX(NULL),
-	m_flightPathAdjustDistPerFrame(0.0f)
+	m_flightPathAdjustDistPerFrame(0)
 {
 }
 
@@ -113,17 +113,17 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "DetonateCallsKill", INI::parseBool, NULL, offsetof( DumbProjectileBehaviorModuleData, m_detonateCallsKill ) },
 		{ "OrientToFlightPath", INI::parseBool, NULL, offsetof( DumbProjectileBehaviorModuleData, m_orientToFlightPath ) },
 
-		{ "FirstHeight",					INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_firstHeight ) },
-		{ "SecondHeight",					INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_secondHeight ) },
-		{ "FirstPercentIndent",		INI::parsePercentToReal,	NULL, offsetof( DumbProjectileBehaviorModuleData, m_firstPercentIndent ) },
-		{ "SecondPercentIndent",	INI::parsePercentToReal,	NULL, offsetof( DumbProjectileBehaviorModuleData, m_secondPercentIndent ) },
+		{ "FirstHeight",					INI::parseFix,						NULL, FIX_OFFSET( DumbProjectileBehaviorModuleData, m_firstHeight ) },
+		{ "SecondHeight",					INI::parseFix,						NULL, FIX_OFFSET( DumbProjectileBehaviorModuleData, m_secondHeight ) },
+		{ "FirstPercentIndent",		INI::parsePercentToFix,		NULL, FIX_OFFSET( DumbProjectileBehaviorModuleData, m_firstPercentIndent ) },
+		{ "SecondPercentIndent",	INI::parsePercentToFix,		NULL, FIX_OFFSET( DumbProjectileBehaviorModuleData, m_secondPercentIndent ) },
 
 		{ "GarrisonHitKillRequiredKindOf", KindOfMaskType::parseFromINI, NULL, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillKindof ) },
 		{ "GarrisonHitKillForbiddenKindOf", KindOfMaskType::parseFromINI, NULL, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillKindofNot ) },
 		{ "GarrisonHitKillCount", INI::parseUnsignedInt, NULL, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillCount ) },
 		{ "GarrisonHitKillFX", INI::parseFXList, NULL, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillFX ) },
 
-		{ "FlightPathAdjustDistPerSecond", INI::parseVelocityReal, NULL, offsetof( DumbProjectileBehaviorModuleData, m_flightPathAdjustDistPerFrame ) },
+		{ "FlightPathAdjustDistPerSecond", INI::parseVelocityFix, NULL, FIX_OFFSET( DumbProjectileBehaviorModuleData, m_flightPathAdjustDistPerFrame ) },
 
 
 		{ 0, 0, 0, 0 }
@@ -461,8 +461,9 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 
 	Real targetDistance = targetVector.Length();
 	targetVector.Normalize();
-	Vector3 firstPointAlongLine = targetVector * (targetDistance * d->m_firstPercentIndent );
-	Vector3 secondPointAlongLine = targetVector * (targetDistance * d->m_secondPercentIndent );
+	// P6: the flight curve is float
+	Vector3 firstPointAlongLine = targetVector * (targetDistance * fixToReal( d->m_firstPercentIndent ) );
+	Vector3 secondPointAlongLine = targetVector * (targetDistance * fixToReal( d->m_secondPercentIndent ) );
 
 	controlPoints[1].x = firstPointAlongLine.X + controlPoints[0].x;// add world start to offset along the origin based vector
 	controlPoints[1].y = firstPointAlongLine.Y + controlPoints[0].y;
@@ -472,8 +473,8 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 	// Z's are determined using the highest intervening height so they won't hit hills, low end bounded by current Zs
 	highestInterveningTerrain = max( highestInterveningTerrain, controlPoints[0].z );
 	highestInterveningTerrain = max( highestInterveningTerrain, controlPoints[3].z );
-	controlPoints[1].z = highestInterveningTerrain + d->m_firstHeight;
-	controlPoints[2].z = highestInterveningTerrain + d->m_secondHeight;
+	controlPoints[1].z = highestInterveningTerrain + fixToReal( d->m_firstHeight );	// P6
+	controlPoints[2].z = highestInterveningTerrain + fixToReal( d->m_secondHeight );	// P6
 
 	// With four control points, we have a curve.  We will decide how many frames we want to take to get to the target,
 	// and fill our vector with those curve points.
@@ -631,7 +632,7 @@ UpdateSleepTime DumbProjectileBehavior::update()
 		return UPDATE_SLEEP_NONE;
 	}
 
-	if (m_victimID != INVALID_ID && d->m_flightPathAdjustDistPerFrame > 0.0f)
+	if (m_victimID != INVALID_ID && d->m_flightPathAdjustDistPerFrame > Fix(0))
 	{
 		Object* victim = TheGameLogic->findObjectByID(m_victimID);
 		if (victim)
@@ -646,8 +647,9 @@ UpdateSleepTime DumbProjectileBehavior::update()
 			if (distVictimMovedSqr > 0.1f)
 			{
 				Real distVictimMoved = sqrtf(distVictimMovedSqr);
-				if (distVictimMoved > d->m_flightPathAdjustDistPerFrame)
-					distVictimMoved = d->m_flightPathAdjustDistPerFrame;
+				const Real maxAdjust = fixToReal( d->m_flightPathAdjustDistPerFrame );	// P6: the flight path is float
+				if (distVictimMoved > maxAdjust)
+					distVictimMoved = maxAdjust;
 				delta.normalize();
 				m_flightPathEnd.x += distVictimMoved * delta.x;
 				m_flightPathEnd.y += distVictimMoved * delta.y;

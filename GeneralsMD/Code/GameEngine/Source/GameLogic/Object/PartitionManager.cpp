@@ -2629,12 +2629,12 @@ static void calcHeights(const FCoord2D& worldLo, Fix cellSize, Int x, Int y, Fix
 //-----------------------------------------------------------------------------
 void PartitionManager::init()
 {
-	m_cellSize = TheGlobalData->m_partitionCellSize;
-	if (m_cellSize < 1.0)
-		m_cellSize = 1.0;
+	m_cellSizeFix = TheGlobalData->m_partitionCellSize;
+	if (m_cellSizeFix < Fix(1))
+		m_cellSizeFix = Fix(1);
 
+	m_cellSize = fixToReal(m_cellSizeFix);
 	m_cellSizeInv = (Real)(1.0 / m_cellSize);
-	m_cellSizeFix = fixFromReal(m_cellSize);
 	m_worldLoFix.zero();
 
 	DEBUG_ASSERTCRASH(m_cells == NULL, ("double init"));
@@ -2820,13 +2820,13 @@ void PartitionManager::update()
 			for (int i = 0; i < cellCount; ++i) 
 			{
 				UnsignedInt threat = m_cells[i].getThreatValue(ThePlayerList->getLocalPlayer()->getPlayerIndex());
-				if (threat > 0) 
+				if (threat > 0)
 				{
 					Real threatMul = INT_TO_REAL(threat) / TheGlobalData->m_maxDebugThreat;
 					if (threatMul > 1.0f)
 						threatMul = 1.0f;
 
-					Real size = TheGlobalData->m_partitionCellSize;
+					Real size = fixToReal(TheGlobalData->m_partitionCellSize);	// a debug icon, drawn
 					Coord3D pos = { m_cells[i].getCellX() * size, 
 													m_cells[i].getCellY() * size, 
 													0 };
@@ -2856,7 +2856,7 @@ void PartitionManager::update()
 					if (valueMul > 1.0f)
 						valueMul = 1.0f;
 
-					Real size = TheGlobalData->m_partitionCellSize;
+					Real size = fixToReal(TheGlobalData->m_partitionCellSize);	// a debug icon, drawn
 					Coord3D pos = { m_cells[i].getCellX() * size, 
 													m_cells[i].getCellY() * size, 
 													0 };
@@ -5149,8 +5149,8 @@ Bool PartitionManager::getMostValuableVisibleLocation( Int playerIndex, Unsigned
 
 		// ... and only if this player has seen the ground it is standing on
 		Coord3D where;
-		where.set(m_cells[i].getCellX() * TheGlobalData->m_partitionCellSize,
-							m_cells[i].getCellY() * TheGlobalData->m_partitionCellSize, 0);
+		where.set(m_cells[i].getCellX() * fixToReal(TheGlobalData->m_partitionCellSize),	// P7
+							m_cells[i].getCellY() * fixToReal(TheGlobalData->m_partitionCellSize), 0);
 		if (getPropShroudStatusForPlayer(playerIndex, &where) == OBJECTSHROUD_SHROUDED)
 			continue;
 

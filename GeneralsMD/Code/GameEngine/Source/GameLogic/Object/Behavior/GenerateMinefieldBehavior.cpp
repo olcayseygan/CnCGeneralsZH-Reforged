@@ -69,8 +69,8 @@ GenerateMinefieldBehaviorModuleData::GenerateMinefieldBehaviorModuleData()
 	m_mineUpgradeTrigger.clear();
 
 	m_genFX = NULL;
-	m_distanceAroundObject = fixFromReal( TheGlobalData->m_standardMinefieldDistance );	// P3, GlobalData's field
-	m_minesPerSquareFoot = fixFromReal( TheGlobalData->m_standardMinefieldDensity );	// P3, GlobalData's field
+	m_distanceAroundObject = TheGlobalData->m_standardMinefieldDistance;
+	m_minesPerSquareFoot = TheGlobalData->m_standardMinefieldDensity;
 	m_onDeath = false;
 	m_borderOnly = true;
 	m_alwaysCircular = false;

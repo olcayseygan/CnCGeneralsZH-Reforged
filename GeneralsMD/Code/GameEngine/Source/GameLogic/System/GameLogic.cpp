@@ -4076,9 +4076,9 @@ static void peaceTimeTick( void )
 	if( now % LOGICFRAMES_PER_SECOND != 0 )
 		return;
 
-	const Real radius = TheGlobalData->m_peaceTimeBaseRadius;
-	const Real damage = TheGlobalData->m_peaceTimeBaseDamage;
-	if( radius <= 0.0f || damage <= 0.0f )
+	const Fix radius = TheGlobalData->m_peaceTimeBaseRadius;
+	const Fix damage = TheGlobalData->m_peaceTimeBaseDamage;
+	if( radius <= Fix(0) || damage <= Fix(0) )
 		return;
 
 	for( Object *base = TheGameLogic->getFirstObject(); base != NULL; base = base->getNextObject() )
@@ -4090,7 +4090,7 @@ static void peaceTimeTick( void )
 		PartitionFilterAlive alive;
 		PartitionFilter *filters[] = { &relationship, &alive, NULL };
 
-		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( base, fixFromReal( radius ),	// P3
+		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( base, radius,
 																						FROM_CENTER_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
 		for( Object *them = iter->first(); them != NULL; them = iter->next() )
@@ -4099,7 +4099,7 @@ static void peaceTimeTick( void )
 				continue;
 
 			DamageInfo damageInfo;
-			damageInfo.in.m_amount = damage;
+			damageInfo.in.m_amount = fixToReal( damage );	// P6
 			damageInfo.in.m_sourceID = base->getID();
 			damageInfo.in.m_damageType = DAMAGE_PENALTY;	// the one type peace time lets through
 			damageInfo.in.m_deathType = DEATH_BURNED;

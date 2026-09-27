@@ -70,6 +70,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/Powers.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
 
 #include "Common/UnitTimings.h" //Contains the DO_UNIT_TIMINGS define jba.	
 
@@ -1624,12 +1625,12 @@ Int ThingTemplate::calcTimeToBuild( const Player* player) const
 	if (EnergyPercent > 1.0f)
 		EnergyPercent = 1.0f;	// getEnergySupplyRatio() returns a true ratio, but we don't care about excess.
 	Real EnergyShort = 1.0f - EnergyPercent;					//so I am 20% short
-	EnergyShort *= TheGlobalData->m_LowEnergyPenaltyModifier;	//which is a 40% penalty, or a 10% penalty
+	EnergyShort *= fixToReal(TheGlobalData->m_LowEnergyPenaltyModifier);	//which is a 40% penalty, or a 10% penalty	// P8
 	Real penaltyRate = 1.0f - EnergyShort;
-	penaltyRate = max(penaltyRate, TheGlobalData->m_MinLowEnergyProductionSpeed);	//bind so 0% does not dead stop you
+	penaltyRate = max(penaltyRate, fixToReal(TheGlobalData->m_MinLowEnergyProductionSpeed));	//bind so 0% does not dead stop you	// P8
 
 	if( EnergyPercent < 1.0f )	//and make 99% look like 80% (eg) since most of the time you are down only a little
-		penaltyRate = min(penaltyRate, TheGlobalData->m_MaxLowEnergyProductionSpeed);
+		penaltyRate = min(penaltyRate, fixToReal(TheGlobalData->m_MaxLowEnergyProductionSpeed));	// P8
 
 	if (penaltyRate <= 0.0f)
 		penaltyRate = 0.01f;	// Design won't make the minimum 0, they promise
@@ -1645,7 +1646,7 @@ Int ThingTemplate::calcTimeToBuild( const Player* player) const
 		if (tmpl)
 		{
 			player->countObjectsByThingTemplate(1, &tmpl, false, &count);
-			Real factoryMult = TheGlobalData->m_MultipleFactory;
+			Real factoryMult = fixToReal(TheGlobalData->m_MultipleFactory);	// P8
 			if (factoryMult > 0.0f)
 			{
 				for(int i=0; i < count - 1; i++)

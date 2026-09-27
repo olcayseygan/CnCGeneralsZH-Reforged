@@ -101,7 +101,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "RightMouseAlwaysScrolls",		INI::parseBool,				NULL,			offsetof( GlobalData, m_rightMouseAlwaysScrolls ) },
 	{ "UseWaterPlane",							INI::parseBool,				NULL,			offsetof( GlobalData, m_useWaterPlane ) },
 	{ "UseCloudPlane",							INI::parseBool,				NULL,			offsetof( GlobalData, m_useCloudPlane ) },
-	{ "DownwindAngle",							INI::parseReal,				NULL,			offsetof( GlobalData, m_downwindAngle ) },
+	{ "DownwindAngle",							INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_downwindAngle ) },
 	{ "UseShadowVolumes",						INI::parseBool,				NULL,			offsetof( GlobalData, m_useShadowVolumes ) },
 	{ "UseShadowVolumesForSkins",		INI::parseBool,				NULL,			offsetof( GlobalData, m_useShadowVolumesForSkins ) },
 	{ "UseShadowDecals",						INI::parseBool,				NULL,			offsetof( GlobalData, m_useShadowDecals ) },
@@ -112,11 +112,11 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "ShadowsForParticles",						INI::parseBool,				NULL,			offsetof( GlobalData, m_shadowsForParticles ) },
 	{ "TextureReductionFactor",			INI::parseInt,				NULL,			offsetof( GlobalData, m_textureReductionFactor ) },
 	{ "UseBehindBuildingMarker",		INI::parseBool,				NULL,			offsetof( GlobalData, m_enableBehindBuildingMarkers ) },
-	{ "WaterPositionX",							INI::parseReal,				NULL,			offsetof( GlobalData, m_waterPositionX ) },
-	{ "WaterPositionY",							INI::parseReal,				NULL,			offsetof( GlobalData, m_waterPositionY ) },
-	{ "WaterPositionZ",							INI::parseReal,				NULL,			offsetof( GlobalData, m_waterPositionZ ) },
-	{ "WaterExtentX",								INI::parseReal,				NULL,			offsetof( GlobalData, m_waterExtentX ) },
-	{ "WaterExtentY",								INI::parseReal,				NULL,			offsetof( GlobalData, m_waterExtentY ) },
+	{ "WaterPositionX",							INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_waterPositionX ) },
+	{ "WaterPositionY",							INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_waterPositionY ) },
+	{ "WaterPositionZ",							INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_waterPositionZ ) },
+	{ "WaterExtentX",								INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_waterExtentX ) },
+	{ "WaterExtentY",								INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_waterExtentY ) },
 	{ "WaterType",									INI::parseInt,				NULL,			offsetof( GlobalData, m_waterType ) },
 	{ "FeatherWater",						  	INI::parseInt,				NULL,			offsetof( GlobalData, m_featherWater ) },
 	{ "ShowSoftWaterEdge",					INI::parseBool,				NULL,			offsetof( GlobalData, m_showSoftWaterEdge ) },
@@ -185,13 +185,13 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "VertexWaterAttenuationC4",			INI::parseReal,					NULL,		offsetof( GlobalData, m_vertexWaterAttenuationC[ 3 ] ) },
 	{ "VertexWaterAttenuationRange4",	INI::parseReal,					NULL,		offsetof( GlobalData, m_vertexWaterAttenuationRange[ 3 ] ) },
 
-	{ "SkyBoxPositionZ",				INI::parseReal,				NULL,			offsetof( GlobalData, m_skyBoxPositionZ ) },
-	{ "SkyBoxScale",				INI::parseReal,				NULL,			offsetof( GlobalData, m_skyBoxScale ) },
+	{ "SkyBoxPositionZ",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_skyBoxPositionZ ) },
+	{ "SkyBoxScale",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_skyBoxScale ) },
 	{ "DrawSkyBox",				INI::parseBool,				NULL,			offsetof( GlobalData, m_drawSkyBox ) },
-	{ "CameraPitch",								INI::parseReal,				NULL,			offsetof( GlobalData, m_cameraPitch ) },
-	{ "CameraYaw",									INI::parseReal,				NULL,			offsetof( GlobalData, m_cameraYaw ) },
-	{ "CameraHeight",								INI::parseReal,				NULL,			offsetof( GlobalData, m_cameraHeight ) },
-	{ "MaxCameraHeight",						INI::parseReal,				NULL,			offsetof( GlobalData, m_maxCameraHeight ) },
+	{ "CameraPitch",								INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_cameraPitch ) },
+	{ "CameraYaw",									INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_cameraYaw ) },
+	{ "CameraHeight",								INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_cameraHeight ) },
+	{ "MaxCameraHeight",						INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_maxCameraHeight ) },
 	{ "UseCameraConstraints",				INI::parseBool,				NULL,			offsetof( GlobalData, m_useCameraConstraints ) },
 	{ "CameraBoundaryMargin",				INI::parseInt,				NULL,			offsetof( GlobalData, m_cameraBoundaryMargin ) },
 	{ "EdgeScrollInWindowedMode",	INI::parseBool,				NULL,			offsetof( GlobalData, m_edgeScrollInWindowedMode ) },
@@ -200,7 +200,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "GridBuildPlacement",				INI::parseBool,				NULL,			offsetof( GlobalData, m_gridBuildPlacement ) },
 	{ "NudgeBuildPlacement",			INI::parseBool,				NULL,			offsetof( GlobalData, m_nudgeBuildPlacement ) },
 	{ "MoneyPerMinute",						INI::parseInt,				NULL,			offsetof( GlobalData, m_moneyPerMinute ) },
-	{ "BuildPlacementOpacity",		INI::parseReal,				NULL,			offsetof( GlobalData, m_buildPlacementOpacity ) },
+	{ "BuildPlacementOpacity",		INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_buildPlacementOpacity ) },
 	{ "BuildPlacementShadows",		INI::parseBool,				NULL,			offsetof( GlobalData, m_buildPlacementShadows ) },
 	{ "ZoomToCursor",							INI::parseBool,				NULL,			offsetof( GlobalData, m_zoomToCursor ) },
 	{ "IsometricCamera",					INI::parseBool,				NULL,			offsetof( GlobalData, m_isometricCamera ) },
@@ -214,20 +214,21 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "ArchiveReplays",						INI::parseBool,				NULL,			offsetof( GlobalData, m_archiveReplays ) },
 	{ "Bloom",										INI::parseInt,				NULL,			offsetof( GlobalData, m_bloomIntensity ) },
 	{ "BloomThreshold",						INI::parseInt,				NULL,			offsetof( GlobalData, m_bloomThreshold ) },
-	{ "MinCameraHeight",						INI::parseReal,				NULL,			offsetof( GlobalData, m_minCameraHeight ) },
-	{ "TerrainHeightAtEdgeOfMap",					INI::parseReal,				NULL,			offsetof( GlobalData, m_terrainHeightAtEdgeOfMap ) },
-	{ "UnitDamagedThreshold",				INI::parseReal,				NULL,			offsetof( GlobalData, m_unitDamagedThresh ) },
-	{ "UnitReallyDamagedThreshold",	INI::parseReal,				NULL,			offsetof( GlobalData, m_unitReallyDamagedThresh ) },
-	{ "GroundStiffness",					INI::parseReal,				NULL,				offsetof( GlobalData, m_groundStiffness ) },
-	{ "StructureStiffness",					INI::parseReal,				NULL,				offsetof( GlobalData, m_structureStiffness ) },
-	{ "Gravity",									INI::parseAccelerationReal,				NULL,				offsetof( GlobalData, m_gravity ) },
-	{ "StealthFriendlyOpacity",		INI::parsePercentToReal,				NULL,				offsetof( GlobalData, m_stealthFriendlyOpacity ) },
+	{ "MinCameraHeight",						INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_minCameraHeight ) },
+	{ "TerrainHeightAtEdgeOfMap",					INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_terrainHeightAtEdgeOfMap ) },
+	{ "UnitDamagedThreshold",				INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_unitDamagedThresh ) },
+	{ "UnitReallyDamagedThreshold",	INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_unitReallyDamagedThresh ) },
+	{ "GroundStiffness",					INI::parseFix,				NULL,				FIX_OFFSET( GlobalData, m_groundStiffness ) },
+	{ "StructureStiffness",					INI::parseFix,				NULL,				FIX_OFFSET( GlobalData, m_structureStiffness ) },
+	// logic reads gravity everywhere, but Object.cpp still takes it as a Real; it moves with P4
+	{ "Gravity",									INI::parseAccelerationReal,				NULL,				REAL_OFFSET( GlobalData, m_gravity ) },
+	{ "StealthFriendlyOpacity",		INI::parsePercentToReal,				NULL,				REAL_OFFSET( GlobalData, m_stealthFriendlyOpacity ) },
 	{ "DefaultOcclusionDelay",				INI::parseDurationUnsignedInt,				NULL,			offsetof( GlobalData, m_defaultOcclusionDelay ) },
 	
-	{ "PartitionCellSize",				INI::parseReal,				NULL,			offsetof( GlobalData, m_partitionCellSize ) },
+	{ "PartitionCellSize",				INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_partitionCellSize ) },
 
-	{ "AmmoPipScaleFactor",				INI::parseReal,				NULL,			offsetof( GlobalData, m_ammoPipScaleFactor ) },
-	{ "ContainerPipScaleFactor",	INI::parseReal,				NULL,			offsetof( GlobalData, m_containerPipScaleFactor ) },
+	{ "AmmoPipScaleFactor",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_ammoPipScaleFactor ) },
+	{ "ContainerPipScaleFactor",	INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_containerPipScaleFactor ) },
 	{ "AmmoPipWorldOffset",						INI::parseCoord3D,				NULL,			offsetof( GlobalData, m_ammoPipWorldOffset ) },
 	{ "ContainerPipWorldOffset",				INI::parseCoord3D,				NULL,			offsetof( GlobalData, m_containerPipWorldOffset ) },
 	{ "AmmoPipScreenOffset",						INI::parseCoord2D,				NULL,			offsetof( GlobalData, m_ammoPipScreenOffset ) },
@@ -244,12 +245,12 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "ForceModelsToFollowWeather",						INI::parseBool,				NULL,			offsetof( GlobalData, m_forceModelsToFollowWeather ) },
 
 	{ "LevelGainAnimationName",		INI::parseAsciiString,	NULL,	offsetof( GlobalData, m_levelGainAnimationName ) },
-	{ "LevelGainAnimationTime",		INI::parseReal,					NULL, offsetof( GlobalData, m_levelGainAnimationDisplayTimeInSeconds ) },
-	{ "LevelGainAnimationZRise",	INI::parseReal,					NULL, offsetof( GlobalData, m_levelGainAnimationZRisePerSecond ) },
+	{ "LevelGainAnimationTime",		INI::parseReal,					NULL, REAL_OFFSET( GlobalData, m_levelGainAnimationDisplayTimeInSeconds ) },
+	{ "LevelGainAnimationZRise",	INI::parseReal,					NULL, REAL_OFFSET( GlobalData, m_levelGainAnimationZRisePerSecond ) },
 
 	{ "GetHealedAnimationName",		INI::parseAsciiString,	NULL,	offsetof( GlobalData, m_getHealedAnimationName ) },
-	{ "GetHealedAnimationTime",		INI::parseReal,					NULL, offsetof( GlobalData, m_getHealedAnimationDisplayTimeInSeconds ) },
-	{ "GetHealedAnimationZRise",	INI::parseReal,					NULL, offsetof( GlobalData, m_getHealedAnimationZRisePerSecond ) },
+	{ "GetHealedAnimationTime",		INI::parseReal,					NULL, REAL_OFFSET( GlobalData, m_getHealedAnimationDisplayTimeInSeconds ) },
+	{ "GetHealedAnimationZRise",	INI::parseReal,					NULL, REAL_OFFSET( GlobalData, m_getHealedAnimationZRisePerSecond ) },
 
 	{ "TerrainLightingMorningAmbient",			INI::parseRGBColor,			NULL,			offsetof( GlobalData, m_terrainLighting[ TIME_OF_DAY_MORNING ][0].ambient ) },
 	{ "TerrainLightingMorningDiffuse",			INI::parseRGBColor,			NULL,			offsetof( GlobalData, m_terrainLighting[ TIME_OF_DAY_MORNING ][0].diffuse ) },
@@ -339,7 +340,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "InfantryLightNightScale",				INI::parseReal,			NULL,			offsetof( GlobalData, m_infantryLightScale[TIME_OF_DAY_NIGHT] ) },
 
 	{ "MaxTranslucentObjects",						INI::parseInt,				NULL,			offsetof( GlobalData, m_maxVisibleTranslucentObjects) },
-	{ "OccludedColorLuminanceScale",				INI::parseReal,				NULL,			offsetof( GlobalData, m_occludedLuminanceScale) },
+	{ "OccludedColorLuminanceScale",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_occludedLuminanceScale) },
 
 /* These are internal use only, they do not need file definitons 
 	{ "TerrainAmbientRGB",				INI::parseRGBColor,		NULL,			offsetof( GlobalData, m_terrainAmbient ) },
@@ -374,7 +375,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "HealthBars",									INI::parseInt,				NULL,			offsetof( GlobalData, m_healthBarMode ) },
 	{ "PlayerColors",								INI::parseInt,				NULL,			offsetof( GlobalData, m_playerColorScheme ) },
 
-	{ "ParticleScale",										INI::parseReal,					NULL,	 offsetof( GlobalData, m_particleScale ) },
+	{ "ParticleScale",										INI::parseReal,					NULL,	 REAL_OFFSET( GlobalData, m_particleScale ) },
 	{ "AutoFireParticleSmallPrefix",			INI::parseAsciiString,  NULL,  offsetof( GlobalData, m_autoFireParticleSmallPrefix ) },
 	{ "AutoFireParticleSmallSystem",			INI::parseAsciiString,  NULL,  offsetof( GlobalData, m_autoFireParticleSmallSystem ) },
 	{ "AutoFireParticleSmallMax",					INI::parseInt,					NULL,	 offsetof( GlobalData, m_autoFireParticleSmallMax ) },
@@ -406,53 +407,54 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "LatencyNoise",								INI::parseInt,				NULL,			offsetof( GlobalData, m_latencyNoise ) },
 	{ "PacketLoss",									INI::parseInt,				NULL,			offsetof( GlobalData, m_packetLoss ) },
 
-	{ "BuildSpeed",									INI::parseReal,				NULL,			offsetof( GlobalData, m_BuildSpeed ) },
-	{ "MinDistFromEdgeOfMapForBuild",	 INI::parseReal,				NULL,			offsetof( GlobalData, m_MinDistFromEdgeOfMapForBuild ) },
-	{ "SupplyBuildBorder",	 INI::parseReal,				NULL,			offsetof( GlobalData, m_SupplyBuildBorder ) },
-	{ "AllowedHeightVariationForBuilding", INI::parseReal,NULL,			offsetof( GlobalData, m_allowedHeightVariationForBuilding ) },
-	{ "MinLowEnergyProductionSpeed",INI::parseReal,				NULL,			offsetof( GlobalData, m_MinLowEnergyProductionSpeed ) },
-	{ "MaxLowEnergyProductionSpeed",INI::parseReal,				NULL,			offsetof( GlobalData, m_MaxLowEnergyProductionSpeed ) },
-	{ "LowEnergyPenaltyModifier",		INI::parseReal,				NULL,			offsetof( GlobalData, m_LowEnergyPenaltyModifier ) },
-	{ "MultipleFactory",						INI::parseReal,				NULL,			offsetof( GlobalData, m_MultipleFactory ) },
-	{ "RefundPercent",							INI::parsePercentToReal,			NULL,			offsetof( GlobalData, m_RefundPercent ) },
+	{ "BuildSpeed",									INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_BuildSpeed ) },
+	{ "MinDistFromEdgeOfMapForBuild",	 INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_MinDistFromEdgeOfMapForBuild ) },
+	{ "SupplyBuildBorder",	 INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_SupplyBuildBorder ) },
+	{ "AllowedHeightVariationForBuilding", INI::parseFix,NULL,			FIX_OFFSET( GlobalData, m_allowedHeightVariationForBuilding ) },
+	{ "MinLowEnergyProductionSpeed",INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_MinLowEnergyProductionSpeed ) },
+	{ "MaxLowEnergyProductionSpeed",INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_MaxLowEnergyProductionSpeed ) },
+	{ "LowEnergyPenaltyModifier",		INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_LowEnergyPenaltyModifier ) },
+	{ "MultipleFactory",						INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_MultipleFactory ) },
+	{ "RefundPercent",							INI::parsePercentToFix,			NULL,			FIX_OFFSET( GlobalData, m_RefundPercent ) },
 
-	{ "CommandCenterHealRange",			INI::parseReal,				NULL,			offsetof( GlobalData, m_commandCenterHealRange ) },
-	{ "CommandCenterHealAmount",		INI::parseReal,				NULL,			offsetof( GlobalData, m_commandCenterHealAmount ) },
+	{ "CommandCenterHealRange",			INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_commandCenterHealRange ) },
+	{ "CommandCenterHealAmount",		INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_commandCenterHealAmount ) },
 
-	{ "StandardMinefieldDensity",		INI::parseReal,				NULL,			offsetof( GlobalData, m_standardMinefieldDensity ) },
-	{ "StandardMinefieldDistance",		INI::parseReal,				NULL,			offsetof( GlobalData, m_standardMinefieldDistance ) },
+	{ "StandardMinefieldDensity",		INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_standardMinefieldDensity ) },
+	{ "StandardMinefieldDistance",		INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_standardMinefieldDistance ) },
 
 	{ "MaxLineBuildObjects",				INI::parseInt,				NULL,			offsetof( GlobalData, m_maxLineBuildObjects ) },
 	{ "MaxTunnelCapacity",					INI::parseInt,				NULL,			offsetof( GlobalData, m_maxTunnelCapacity ) },
 
 	{ "MaxParticleCount",						INI::parseInt,				NULL,			offsetof( GlobalData, m_maxParticleCount ) },
 	{ "MaxFieldParticleCount",						INI::parseInt,				NULL,			offsetof( GlobalData, m_maxFieldParticleCount ) },
-	{ "HorizontalScrollSpeedFactor",INI::parseReal,				NULL,			offsetof( GlobalData, m_horizontalScrollSpeedFactor ) },
-	{ "VerticalScrollSpeedFactor",	INI::parseReal,				NULL,			offsetof( GlobalData, m_verticalScrollSpeedFactor ) },
-	{ "ScrollAmountCutoff",					INI::parseReal,				NULL,			offsetof( GlobalData, m_scrollAmountCutoff ) },
-	{ "CameraAdjustSpeed",					INI::parseReal,				NULL,			offsetof( GlobalData, m_cameraAdjustSpeed ) },
+	{ "HorizontalScrollSpeedFactor",INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_horizontalScrollSpeedFactor ) },
+	{ "VerticalScrollSpeedFactor",	INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_verticalScrollSpeedFactor ) },
+	{ "ScrollAmountCutoff",					INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_scrollAmountCutoff ) },
+	{ "CameraAdjustSpeed",					INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_cameraAdjustSpeed ) },
 	{ "EnforceMaxCameraHeight",			INI::parseBool,				NULL,			offsetof( GlobalData, m_enforceMaxCameraHeight ) },
-	{ "KeyboardScrollSpeedFactor",	INI::parseReal,				NULL,			offsetof( GlobalData, m_keyboardScrollFactor ) },
-	{ "KeyboardDefaultScrollSpeedFactor",	INI::parseReal,				NULL,			offsetof( GlobalData, m_keyboardDefaultScrollFactor ) },
+	{ "KeyboardScrollSpeedFactor",	INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_keyboardScrollFactor ) },
+	{ "KeyboardDefaultScrollSpeedFactor",	INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_keyboardDefaultScrollFactor ) },
 	{ "MovementPenaltyDamageState",	INI::parseIndexList,	TheBodyDamageTypeNames,	 offsetof( GlobalData, m_movementPenaltyDamageState ) },
 
 // you cannot set this; it always has a value of 100%.
-//{ "HealthBonus_Regular",				INI::parsePercentToReal, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_REGULAR]) },
-	{ "HealthBonus_Veteran",				INI::parsePercentToReal, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_VETERAN]) },
-	{ "HealthBonus_Elite",					INI::parsePercentToReal, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_ELITE]) },
-	{ "HealthBonus_Heroic",					INI::parsePercentToReal, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_HEROIC]) },
+//{ "HealthBonus_Regular",				INI::parsePercentToFix, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_REGULAR]) },
+	// FIX_OFFSET cannot name an array element (decltype of m[i] is a reference), so the arrays keep offsetof
+	{ "HealthBonus_Veteran",				INI::parsePercentToFix, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_VETERAN]) },
+	{ "HealthBonus_Elite",					INI::parsePercentToFix, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_ELITE]) },
+	{ "HealthBonus_Heroic",					INI::parsePercentToFix, NULL,	offsetof( GlobalData, m_healthBonus[LEVEL_HEROIC]) },
 
-	{ "HumanSoloPlayerHealthBonus_Easy",					INI::parsePercentToReal,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_HUMAN][DIFFICULTY_EASY] ) },
-	{ "HumanSoloPlayerHealthBonus_Normal",				INI::parsePercentToReal,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_HUMAN][DIFFICULTY_NORMAL] ) },
-	{ "HumanSoloPlayerHealthBonus_Hard",				INI::parsePercentToReal,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_HUMAN][DIFFICULTY_HARD] ) },
+	{ "HumanSoloPlayerHealthBonus_Easy",					INI::parsePercentToFix,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_HUMAN][DIFFICULTY_EASY] ) },
+	{ "HumanSoloPlayerHealthBonus_Normal",				INI::parsePercentToFix,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_HUMAN][DIFFICULTY_NORMAL] ) },
+	{ "HumanSoloPlayerHealthBonus_Hard",				INI::parsePercentToFix,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_HUMAN][DIFFICULTY_HARD] ) },
 
-	{ "AISoloPlayerHealthBonus_Easy",					INI::parsePercentToReal,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_COMPUTER][DIFFICULTY_EASY] ) },
-	{ "AISoloPlayerHealthBonus_Normal",				INI::parsePercentToReal,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_COMPUTER][DIFFICULTY_NORMAL] ) },
-	{ "AISoloPlayerHealthBonus_Hard",				INI::parsePercentToReal,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_COMPUTER][DIFFICULTY_HARD] ) },
+	{ "AISoloPlayerHealthBonus_Easy",					INI::parsePercentToFix,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_COMPUTER][DIFFICULTY_EASY] ) },
+	{ "AISoloPlayerHealthBonus_Normal",				INI::parsePercentToFix,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_COMPUTER][DIFFICULTY_NORMAL] ) },
+	{ "AISoloPlayerHealthBonus_Hard",				INI::parsePercentToFix,			NULL,			offsetof( GlobalData, m_soloPlayerHealthBonusForDifficulty[PLAYER_COMPUTER][DIFFICULTY_HARD] ) },
 
 	{ "WeaponBonus",								WeaponBonusSet::parseWeaponBonusSetPtr,	NULL,	offsetof( GlobalData, m_weaponBonusSet ) },
 
-	{ "DefaultStructureRubbleHeight",	INI::parseReal,			NULL,			offsetof( GlobalData, m_defaultStructureRubbleHeight ) },
+	{ "DefaultStructureRubbleHeight",	INI::parseFix,			NULL,			FIX_OFFSET( GlobalData, m_defaultStructureRubbleHeight ) },
 
 	{ "FixedSeed",									INI::parseInt,				NULL,			offsetof( GlobalData, m_fixedSeed ) },
 
@@ -465,29 +467,29 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{	"FirewallPortAllocationDelta",INI::parseInt,				NULL,			offsetof( GlobalData, m_firewallPortAllocationDelta) },
 
 	{	"GroupSelectMinSelectSize",		INI::parseInt,				NULL,			offsetof( GlobalData, m_groupSelectMinSelectSize ) },
-	{	"GroupSelectVolumeBase",			INI::parseReal,				NULL,			offsetof( GlobalData, m_groupSelectVolumeBase ) },
-	{	"GroupSelectVolumeIncrement",	INI::parseReal,				NULL,			offsetof( GlobalData, m_groupSelectVolumeIncrement ) },
+	{	"GroupSelectVolumeBase",			INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_groupSelectVolumeBase ) },
+	{	"GroupSelectVolumeIncrement",	INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_groupSelectVolumeIncrement ) },
 	{	"MaxUnitSelectSounds",				INI::parseInt,				NULL,			offsetof( GlobalData, m_maxUnitSelectSounds ) },
 
-	{	"SelectionFlashSaturationFactor",	INI::parseReal,		NULL,			offsetof( GlobalData, m_selectionFlashSaturationFactor ) },
+	{	"SelectionFlashSaturationFactor",	INI::parseReal,		NULL,			REAL_OFFSET( GlobalData, m_selectionFlashSaturationFactor ) },
 	{	"SelectionFlashHouseColor",	      INI::parseBool,		NULL,			offsetof( GlobalData, m_selectionFlashHouseColor ) },
 
-	{	"CameraAudibleRadius",				INI::parseReal,				NULL,			offsetof( GlobalData, m_cameraAudibleRadius ) },
-	{ "GroupMoveClickToGatherAreaFactor", INI::parseReal,	NULL,			offsetof( GlobalData, m_groupMoveClickToGatherFactor ) },
-	{ "ShakeSubtleIntensity",				INI::parseReal,				NULL,			offsetof( GlobalData, m_shakeSubtleIntensity ) },
-	{ "ShakeNormalIntensity",				INI::parseReal,				NULL,			offsetof( GlobalData, m_shakeNormalIntensity ) },
-	{ "ShakeStrongIntensity",				INI::parseReal,				NULL,			offsetof( GlobalData, m_shakeStrongIntensity ) },
-	{ "ShakeSevereIntensity",				INI::parseReal,				NULL,			offsetof( GlobalData, m_shakeSevereIntensity ) },
-	{ "ShakeCineExtremeIntensity",	INI::parseReal,				NULL,			offsetof( GlobalData, m_shakeCineExtremeIntensity ) },
-	{ "ShakeCineInsaneIntensity",		INI::parseReal,				NULL,			offsetof( GlobalData, m_shakeCineInsaneIntensity ) },
-	{ "MaxShakeIntensity",					INI::parseReal,				NULL,			offsetof( GlobalData, m_maxShakeIntensity ) },
-	{ "MaxShakeRange",							INI::parseReal,				NULL,			offsetof( GlobalData, m_maxShakeRange) },
-	{ "SellPercentage",							INI::parsePercentToReal,	NULL,			offsetof( GlobalData, m_sellPercentage ) },
-	{ "BaseRegenHealthPercentPerSecond", INI::parsePercentToReal, NULL,	offsetof( GlobalData, m_baseRegenHealthPercentPerSecond ) },
+	{	"CameraAudibleRadius",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_cameraAudibleRadius ) },
+	{ "GroupMoveClickToGatherAreaFactor", INI::parseFix,	NULL,			FIX_OFFSET( GlobalData, m_groupMoveClickToGatherFactor ) },
+	{ "ShakeSubtleIntensity",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_shakeSubtleIntensity ) },
+	{ "ShakeNormalIntensity",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_shakeNormalIntensity ) },
+	{ "ShakeStrongIntensity",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_shakeStrongIntensity ) },
+	{ "ShakeSevereIntensity",				INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_shakeSevereIntensity ) },
+	{ "ShakeCineExtremeIntensity",	INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_shakeCineExtremeIntensity ) },
+	{ "ShakeCineInsaneIntensity",		INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_shakeCineInsaneIntensity ) },
+	{ "MaxShakeIntensity",					INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_maxShakeIntensity ) },
+	{ "MaxShakeRange",							INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_maxShakeRange) },
+	{ "SellPercentage",							INI::parsePercentToFix,	NULL,			FIX_OFFSET( GlobalData, m_sellPercentage ) },
+	{ "BaseRegenHealthPercentPerSecond", INI::parsePercentToFix, NULL,	FIX_OFFSET( GlobalData, m_baseRegenHealthPercentPerSecond ) },
 	{ "BaseRegenDelay",							INI::parseDurationUnsignedInt, NULL,offsetof( GlobalData, m_baseRegenDelay ) },
 
 #ifdef ALLOW_SURRENDER
-	{ "PrisonBountyMultiplier",			INI::parseReal,				NULL,			offsetof( GlobalData, m_prisonBountyMultiplier ) },
+	{ "PrisonBountyMultiplier",			INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_prisonBountyMultiplier ) },
 	{ "PrisonBountyTextColor",			INI::parseColorInt,		NULL,			offsetof( GlobalData, m_prisonBountyTextColor ) },
 #endif
 
@@ -496,8 +498,8 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "StandardPublicBone", INI::parseAsciiStringVectorAppend, NULL, offsetof(GlobalData, m_standardPublicBones) },
 	{ "ShowMetrics",								INI::parseBool,				   NULL,		offsetof( GlobalData, m_showMetrics ) },
   { "DefaultStartingCash",				Money::parseMoneyAmount, NULL,		offsetof( GlobalData, m_defaultStartingCash ) },
-	{ "PeaceTimeBaseRadius",				INI::parseReal, NULL,							offsetof( GlobalData, m_peaceTimeBaseRadius ) },
-	{ "PeaceTimeBaseDamage",				INI::parseReal, NULL,							offsetof( GlobalData, m_peaceTimeBaseDamage ) },
+	{ "PeaceTimeBaseRadius",				INI::parseFix, NULL,							FIX_OFFSET( GlobalData, m_peaceTimeBaseRadius ) },
+	{ "PeaceTimeBaseDamage",				INI::parseFix, NULL,							FIX_OFFSET( GlobalData, m_peaceTimeBaseDamage ) },
 
 // NOTE: m_doubleClickTimeMS is still in use, but we disallow setting it from the GameData.ini file. It is now set in the constructor according to the windows parameter.
 //	{ "DoubleClickTimeMS",									INI::parseUnsignedInt,			NULL, offsetof( GlobalData, m_doubleClickTimeMS ) },
@@ -510,7 +512,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "HotKeyTextColor",										INI::parseColorInt,					NULL,	offsetof( GlobalData, m_hotKeyTextColor ) },
 
 	{ "PowerBarBase",												INI::parseInt,							NULL,	offsetof( GlobalData, m_powerBarBase) },
-	{ "PowerBarIntervals",									INI::parseReal,							NULL,	offsetof( GlobalData, m_powerBarIntervals) },
+	{ "PowerBarIntervals",									INI::parseReal,							NULL,	REAL_OFFSET( GlobalData, m_powerBarIntervals) },
 	{ "PowerBarYellowRange",								INI::parseInt,							NULL,	offsetof( GlobalData, m_powerBarYellowRange) },
 	{ "UnlookPersistDuration",							INI::parseDurationUnsignedInt, NULL, offsetof( GlobalData, m_unlookPersistDuration) },
 
@@ -526,7 +528,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "NetworkPlayerTimeoutTime", INI::parseInt, NULL, offsetof(GlobalData, m_networkPlayerTimeoutTime) },
 	{ "NetworkDisconnectScreenNotifyTime", INI::parseInt, NULL, offsetof(GlobalData, m_networkDisconnectScreenNotifyTime) },
 	
-	{ "KeyboardCameraRotateSpeed", INI::parseReal, NULL, offsetof( GlobalData, m_keyboardCameraRotateSpeed ) },
+	{ "KeyboardCameraRotateSpeed", INI::parseReal, NULL, REAL_OFFSET( GlobalData, m_keyboardCameraRotateSpeed ) },
 	{ "PlayStats",									INI::parseInt,				NULL,			offsetof( GlobalData, m_playStats ) },
 
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -541,11 +543,11 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "FogOfWarOn",										INI::parseBool,				NULL,			offsetof( GlobalData, m_fogOfWarOn ) },
 	{ "ShowCollisionExtents",				INI::parseBool,				NULL,			offsetof( GlobalData, m_showCollisionExtents ) },
   { "ShowAudioLocations",  				INI::parseBool,				NULL,			offsetof( GlobalData, m_showAudioLocations ) },
-	{ "DebugProjectileTileWidth",		INI::parseReal,				NULL,			offsetof( GlobalData, m_debugProjectileTileWidth) },
+	{ "DebugProjectileTileWidth",		INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_debugProjectileTileWidth) },
 	{ "DebugProjectileTileDuration",INI::parseInt,				NULL,			offsetof( GlobalData, m_debugProjectileTileDuration) },
 	{ "DebugProjectileTileColor",		INI::parseRGBColor,		NULL,			offsetof( GlobalData, m_debugProjectileTileColor) },
 	{ "DebugVisibilityTileCount",		INI::parseInt,				NULL,			offsetof( GlobalData, m_debugVisibilityTileCount) },
-	{ "DebugVisibilityTileWidth",		INI::parseReal,				NULL,			offsetof( GlobalData, m_debugVisibilityTileWidth) },
+	{ "DebugVisibilityTileWidth",		INI::parseReal,				NULL,			REAL_OFFSET( GlobalData, m_debugVisibilityTileWidth) },
 	{ "DebugVisibilityTileDuration",INI::parseInt,				NULL,			offsetof( GlobalData, m_debugVisibilityTileDuration) },
 	{ "DebugVisibilityTileTargettableColor",INI::parseRGBColor, NULL,	offsetof( GlobalData, m_debugVisibilityTargettableColor) },
 	{ "DebugVisibilityTileDeshroudColor",		INI::parseRGBColor,	NULL,	offsetof( GlobalData, m_debugVisibilityDeshroudColor) },
@@ -767,8 +769,8 @@ GlobalData::GlobalData()
 	m_showMetrics = false;
 
 	// peace time's no-go ring around a command center; GameData.ini can move both
-	m_peaceTimeBaseRadius = 250.0f;
-	m_peaceTimeBaseDamage = 250.0f;
+	m_peaceTimeBaseRadius = Fix( 250 );
+	m_peaceTimeBaseDamage = Fix( 250 );
 
 	for( i = 0; i < MAX_WATER_GRID_SETTINGS; i++ )
 	{
@@ -815,7 +817,7 @@ GlobalData::GlobalData()
 	m_forceModelsToFollowTimeOfDay = true;
 	m_forceModelsToFollowWeather = true;
 
-	m_partitionCellSize = 0.0f;
+	m_partitionCellSize = Fix( 0 );
 	m_ammoPipScaleFactor = 1.0f;
 	m_containerPipScaleFactor = 1.0f;
 	m_ammoPipWorldOffset.zero();
@@ -955,12 +957,12 @@ GlobalData::GlobalData()
 	m_cameraHeight = 0.0f;
 	m_minCameraHeight = 100.0f;
 	m_maxCameraHeight = 300.0f;
-	m_terrainHeightAtEdgeOfMap = 0.0f;
+	m_terrainHeightAtEdgeOfMap = Fix( 0 );
 
-	m_unitDamagedThresh = 0.5f;
-	m_unitReallyDamagedThresh = 0.1f;
-	m_groundStiffness = 0.5f;
-	m_structureStiffness = 0.5f;
+	m_unitDamagedThresh = 0.5_fx;
+	m_unitReallyDamagedThresh = 0.1_fx;
+	m_groundStiffness = 0.5_fx;
+	m_structureStiffness = 0.5_fx;
 	m_gravity = -1.0f;
 	m_stealthFriendlyOpacity = 0.5f;
 	m_defaultOcclusionDelay = LOGICFRAMES_PER_SECOND * 3;	//default to 3 seconds
@@ -972,23 +974,23 @@ GlobalData::GlobalData()
 
 	m_defaultIP = 0;
 
-	m_BuildSpeed = 0.0f;
-	m_MinDistFromEdgeOfMapForBuild = 0.0f;
-	m_SupplyBuildBorder = 0.0f;
-	m_allowedHeightVariationForBuilding = 0.0f;
-	m_MinLowEnergyProductionSpeed = 0.0f;
-	m_MaxLowEnergyProductionSpeed = 0.0f;
-	m_LowEnergyPenaltyModifier = 0.0f;
-	m_MultipleFactory = 0.0f;
-	m_RefundPercent = 0.0f;
+	m_BuildSpeed = Fix( 0 );
+	m_MinDistFromEdgeOfMapForBuild = Fix( 0 );
+	m_SupplyBuildBorder = Fix( 0 );
+	m_allowedHeightVariationForBuilding = Fix( 0 );
+	m_MinLowEnergyProductionSpeed = Fix( 0 );
+	m_MaxLowEnergyProductionSpeed = Fix( 0 );
+	m_LowEnergyPenaltyModifier = Fix( 0 );
+	m_MultipleFactory = Fix( 0 );
+	m_RefundPercent = Fix( 0 );
 
-	m_commandCenterHealRange = 0.0f;
-	m_commandCenterHealAmount = 0.0f;
+	m_commandCenterHealRange = Fix( 0 );
+	m_commandCenterHealAmount = Fix( 0 );
 	m_maxTunnelCapacity = 0;
 	m_maxLineBuildObjects = 0;
 
-	m_standardMinefieldDensity = 0.01f;
-	m_standardMinefieldDistance = 40.0f;
+	m_standardMinefieldDensity = 0.01_fx;
+	m_standardMinefieldDistance = Fix( 40 );
 	
 	m_groupSelectMinSelectSize = 5;
 	m_groupSelectVolumeBase = 0.5f;
@@ -999,7 +1001,7 @@ GlobalData::GlobalData()
 	m_selectionFlashHouseColor = FALSE;  /// skip the house color and just use white.
 
 	m_cameraAudibleRadius = 500.0;
-	m_groupMoveClickToGatherFactor = 1.0f;
+	m_groupMoveClickToGatherFactor = Fix( 1 );
 
 	m_shakeSubtleIntensity = 0.5f;
 	m_shakeNormalIntensity = 1.0f;
@@ -1010,12 +1012,12 @@ GlobalData::GlobalData()
 	m_maxShakeIntensity = 10.0f;
 	m_maxShakeRange = 150.f;
 
-	m_sellPercentage = 1.0f;
-	m_baseRegenHealthPercentPerSecond = 0.0f;
+	m_sellPercentage = Fix( 1 );
+	m_baseRegenHealthPercentPerSecond = Fix( 0 );
 	m_baseRegenDelay = 0;
 
 #ifdef ALLOW_SURRENDER
-	m_prisonBountyMultiplier = 1.0f;
+	m_prisonBountyMultiplier = Fix( 1 );
 	m_prisonBountyTextColor = GameMakeColor( 255, 255, 255, 255 );
 #endif
 
@@ -1088,17 +1090,17 @@ GlobalData::GlobalData()
 	m_pendingFile.clear();
 
 	for (i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
-		m_healthBonus[i] = 1.0f;
+		m_healthBonus[i] = Fix( 1 );
 
 	for (i = 0; i < PLAYERTYPE_COUNT; ++i)
 	{
 		for (j = 0; j < DIFFICULTY_COUNT; ++j)
 		{
-			m_soloPlayerHealthBonusForDifficulty[i][j] = 1.0f;
+			m_soloPlayerHealthBonusForDifficulty[i][j] = Fix( 1 );
 		}
 	}
 
-	m_defaultStructureRubbleHeight = 1.0f;
+	m_defaultStructureRubbleHeight = Fix( 1 );
 	m_weaponBonusSet = newInstance(WeaponBonusSet);
 
 	m_shellMapName.set("Maps\\ShellMap1\\ShellMap1.map");

@@ -42,6 +42,7 @@
 #include "Common/GameCommon.h"
 #include "Common/Money.h"
 #include "Common/WindowMode.h"
+#include "Lib/Fix.h"
 
 // FORWARD DECLARATIONS ///////////////////////////////////////////////////////////////////////////
 struct FieldParse;
@@ -229,11 +230,11 @@ public:
 	Real m_cameraHeight;
 	Real m_maxCameraHeight;
 	Real m_minCameraHeight;
-	Real m_terrainHeightAtEdgeOfMap;
-	Real m_unitDamagedThresh;
-	Real m_unitReallyDamagedThresh;
-	Real m_groundStiffness;
-	Real m_structureStiffness;
+	Fix m_terrainHeightAtEdgeOfMap;
+	Fix m_unitDamagedThresh;
+	Fix m_unitReallyDamagedThresh;
+	Fix m_groundStiffness;
+	Fix m_structureStiffness;
 	Real m_gravity;	// acceleration due to gravity, in dist/frame^2
 	Real m_stealthFriendlyOpacity;
 	UnsignedInt m_defaultOcclusionDelay;	///<time to delay building occlusion after object is created.
@@ -241,7 +242,7 @@ public:
 	Bool m_preloadEverything;			///< Preload everything, everywhere (for debugging only)
 	Bool m_preloadReport;					///< dump a log of all W3D assets that are being preloaded.
 
-	Real m_partitionCellSize;
+	Fix m_partitionCellSize;
 
 	Coord3D m_ammoPipWorldOffset;
 	Coord3D m_containerPipWorldOffset;
@@ -284,7 +285,7 @@ public:
 	Real m_infantryLightScale[TIME_OF_DAY_COUNT];
 	Real m_scriptOverrideInfantryLightScale;
 
-	Real m_soloPlayerHealthBonusForDifficulty[PLAYERTYPE_COUNT][DIFFICULTY_COUNT];
+	Fix m_soloPlayerHealthBonusForDifficulty[PLAYERTYPE_COUNT][DIFFICULTY_COUNT];
 
 	Int m_maxVisibleTranslucentObjects;
 	Int m_maxVisibleOccluderObjects;
@@ -374,18 +375,18 @@ public:
 	Short m_firewallPortAllocationDelta; ///< the port allocation delta last detected.
 
 	Int m_baseValuePerSupplyBox;
-	Real m_BuildSpeed;
-	Real m_MinDistFromEdgeOfMapForBuild;
-	Real m_SupplyBuildBorder;
-	Real m_allowedHeightVariationForBuilding;  ///< how "flat" is still flat enough to build on
-	Real m_MinLowEnergyProductionSpeed;
-	Real m_MaxLowEnergyProductionSpeed;
-	Real m_LowEnergyPenaltyModifier;
-	Real m_MultipleFactory;
-	Real m_RefundPercent;
+	Fix m_BuildSpeed;
+	Fix m_MinDistFromEdgeOfMapForBuild;
+	Fix m_SupplyBuildBorder;
+	Fix m_allowedHeightVariationForBuilding;  ///< how "flat" is still flat enough to build on
+	Fix m_MinLowEnergyProductionSpeed;
+	Fix m_MaxLowEnergyProductionSpeed;
+	Fix m_LowEnergyPenaltyModifier;
+	Fix m_MultipleFactory;
+	Fix m_RefundPercent;
 
-	Real m_commandCenterHealRange;		///< radius in which close by ally things are healed
-	Real m_commandCenterHealAmount;   ///< health per logic frame close by things are healed
+	Fix m_commandCenterHealRange;		///< radius in which close by ally things are healed
+	Fix m_commandCenterHealAmount;   ///< health per logic frame close by things are healed
 	Int m_maxLineBuildObjects;				///< line style builds can be no longer than this
 	Int m_maxTunnelCapacity;					///< Max people in Player's tunnel network
 	Real m_horizontalScrollSpeedFactor;	///< Factor applied to the game screen scrolling speed.
@@ -475,8 +476,8 @@ public:
 	Int m_maxParticleCount;						///< maximum number of particles that can exist
 	Int m_maxFieldParticleCount;			///< maximum number of field-type particles that can exist (roughly)
 	WeaponBonusSet* m_weaponBonusSet;
-	Real m_healthBonus[LEVEL_COUNT];			///< global bonuses to health for veterancy.
-	Real m_defaultStructureRubbleHeight;	///< for rubbled structures, compress height to this if none specified
+	Fix m_healthBonus[LEVEL_COUNT];			///< global bonuses to health for veterancy.
+	Fix m_defaultStructureRubbleHeight;	///< for rubbled structures, compress height to this if none specified
 
 	AsciiString m_shellMapName;				///< Holds the shell map name
 	Bool m_shellMapOn;								///< User can set the shell map not to load
@@ -513,7 +514,7 @@ public:
 	Bool m_selectionFlashHouseColor ;  /// skip the house color and just use white.
 
 	Real m_cameraAudibleRadius;				///< If the camera is being used as the position of audio, then how far can we hear?
-	Real m_groupMoveClickToGatherFactor; /** if you take all the selected units and calculate the smallest possible rectangle 
+	Fix m_groupMoveClickToGatherFactor; /** if you take all the selected units and calculate the smallest possible rectangle 
 																			 that contains them all, and click within that, all the selected units will break 
 																			 formation and gather at the point the user clicked (if the value is 1.0). If it's 0.0,
 																			 units will always keep their formation. If it's <1.0, then the user must click a 
@@ -536,12 +537,12 @@ public:
 	Real m_maxShakeIntensity;					///< The maximum shake intensity we can have
 	Real m_maxShakeRange;							///< The maximum shake range we can have
 
-	Real m_sellPercentage;						///< when objects are sold, you get this much of the cost it would take to build it back
-	Real m_baseRegenHealthPercentPerSecond;	///< auto healing for bases
+	Fix m_sellPercentage;						///< when objects are sold, you get this much of the cost it would take to build it back
+	Fix m_baseRegenHealthPercentPerSecond;	///< auto healing for bases
 	UnsignedInt m_baseRegenDelay;			///< delay in frames we must be damage free before we can auto heal
 
 #ifdef ALLOW_SURRENDER
-	Real m_prisonBountyMultiplier;		///< the cost of the unit is multiplied by this and given to the player when prisoners are returned to the a prison with KINDOF_COLLECTS_PRISON_BOUNTY
+	Fix m_prisonBountyMultiplier;		///< the cost of the unit is multiplied by this and given to the player when prisoners are returned to the a prison with KINDOF_COLLECTS_PRISON_BOUNTY
 	Color m_prisonBountyTextColor;		///< color of the text that displays the money acquired at the prison
 #endif
 
@@ -554,8 +555,8 @@ public:
 
 	std::vector<AsciiString> m_standardPublicBones;
 
-	Real m_standardMinefieldDensity;
-	Real m_standardMinefieldDistance;
+	Fix m_standardMinefieldDensity;
+	Fix m_standardMinefieldDistance;
 
 	
 	Bool  m_showMetrics;								///< whether or not to show the metrics.
@@ -565,8 +566,8 @@ public:
 		 damage is dealt once a second to every enemy unit inside it, so 250 kills a Crusader in about
 		 four seconds - long enough to reverse out of, short enough that scouting a base under the
 		 truce costs the scout. */
-	Real m_peaceTimeBaseRadius;					///< how far an enemy command center's ground burns during peace time
-	Real m_peaceTimeBaseDamage;					///< damage per second dealt inside that radius
+	Fix m_peaceTimeBaseRadius;					///< how far an enemy command center's ground burns during peace time
+	Fix m_peaceTimeBaseDamage;					///< damage per second dealt inside that radius
 
 
 	Bool m_debugShowGraphicalFramerate;		///< Whether or not to show the graphical framerate bar.

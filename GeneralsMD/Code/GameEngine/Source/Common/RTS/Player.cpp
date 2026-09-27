@@ -3852,7 +3852,7 @@ void Player::friend_applyDifficultyBonusesForObject(Object* obj, Bool apply) con
 {
 	if (TheGameLogic->isInSinglePlayerGame())
 	{
-		Real healthFactor = TheGlobalData->m_soloPlayerHealthBonusForDifficulty[getPlayerType()][getPlayerDifficulty()];
+		Real healthFactor = fixToReal(TheGlobalData->m_soloPlayerHealthBonusForDifficulty[getPlayerType()][getPlayerDifficulty()]);	// P6
 		if (healthFactor != 1.0f)
 		{
 			BodyModuleInterface* body = obj->getBodyModule();

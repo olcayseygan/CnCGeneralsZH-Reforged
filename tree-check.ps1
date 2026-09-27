@@ -3,14 +3,21 @@
 # It exists because a tree can go missing without anything in the engine looking wrong: the buffer
 # fills, the draw call is made, and the trees are simply not on the screen.  Nothing but the picture
 # catches that.  Run it with a reference build in Run\generals_base.exe - build one from a checkout
-# without the change under test - and every view should come back within a percent or two, all of it
-# the tree shadows.  A stand of missing trees moves several percent and looks like nothing else.
+# without the change under test - and every view should come back under its own limit, all of the
+# difference the tree shadows.  A stand of missing trees moves several percent and looks like nothing else.
 #
-#   .\tree-check.ps1                 # eight views over five maps
-#   .\tree-check.ps1 -Limit 2.5      # a tree-dense map with long shadows legitimately reaches ~3.7%
+#   .\tree-check.ps1                 # eight views over five maps, each against its own limit
+#   .\tree-check.ps1 -Limit 4        # one limit for every view; a tree-dense map with long shadows reached ~3.7%
+#
+# Each view carries its own limit (lim in $cases) because the noise is not the same everywhere.  An
+# identical build against itself on 2026-09-27 read 0.35% on ForgottenForestZH and 1.93% on Alpine
+# Assault, and a harmless commit repeated every view within 0.03 points.  A single limit loose enough
+# for Alpine Assault would let four times its noise through on the forest.  So each limit is that
+# view's measured noise plus about 0.75 of a point, rounded up: a real drawing change still trips it,
+# the run-to-run shimmer does not.  Re-measure and move them if the reference machine changes.
 #
 # Exit code is the number of views over the limit.
-param([double]$Limit = 1.5)
+param([double]$Limit = 0)
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"
@@ -27,14 +34,14 @@ if (Select-String -Path $baseExe -Pattern '-turbo' -SimpleMatch -Quiet) { $pace 
 else { "generals_base.exe predates -turbo: both builds run paced, about 90 seconds a view" }
 
 $cases = @(
-  @{map='Flash Effect';       x='1200'; y='945';  f=400},
-  @{map='Flash Effect';       x='1816'; y='1861'; f=1200},
-  @{map='Flash Effect';       x='1378'; y='1384'; f=2400},
-  @{map='ForgottenForestZH';  x='1620'; y='1470'; f=600},
-  @{map='ForgottenForestZH';  x='1543'; y='1636'; f=1800},
-  @{map='Golden Oasis';       x='2643'; y='3580'; f=900},
-  @{map='Alpine Assault';     x='760';  y='920';  f=700},
-  @{map='Killing Fields';     x='1024'; y='1024'; f=1500}
+  @{map='Flash Effect';       x='1200'; y='945';  f=400;  lim=1.6},   # noise 0.77
+  @{map='Flash Effect';       x='1816'; y='1861'; f=1200; lim=2.3},   # noise 1.54
+  @{map='Flash Effect';       x='1378'; y='1384'; f=2400; lim=2.0},   # noise 1.21
+  @{map='ForgottenForestZH';  x='1620'; y='1470'; f=600;  lim=1.2},   # noise 0.37
+  @{map='ForgottenForestZH';  x='1543'; y='1636'; f=1800; lim=1.1},   # noise 0.35
+  @{map='Golden Oasis';       x='2643'; y='3580'; f=900;  lim=2.4},   # noise 1.64
+  @{map='Alpine Assault';     x='760';  y='920';  f=700;  lim=2.7},   # noise 1.93
+  @{map='Killing Fields';     x='1024'; y='1024'; f=1500; lim=1.7}    # noise 0.94
 )
 
 # -msaa 0 is not a preference, it is what makes the picture a picture of the game.  The screenshot
@@ -96,11 +103,12 @@ foreach ($c in $cases) {
   $a = Shoot 'generals_base.exe' $c "base_$tag"
   $b = Shoot 'generals.exe'      $c "new_$tag"
   $d = DiffPct $a $b
-  $verdict = if ($d -le $Limit) { 'ok' } else { 'DIFFERENT'; }
-  if ($d -gt $Limit) { $fail++ }
-  "{0,-20} cam {1,5},{2,-5} frame {3,-5} diff {4,5}%  {5}" -f $c.map, $c.x, $c.y, $c.f, $d, $verdict
+  $lim = if ($Limit -gt 0) { $Limit } else { $c.lim }
+  $verdict = if ($d -le $lim) { 'ok' } else { 'DIFFERENT'; }
+  if ($d -gt $lim) { $fail++ }
+  "{0,-20} cam {1,5},{2,-5} frame {3,-5} diff {4,5}% / {5}%  {6}" -f $c.map, $c.x, $c.y, $c.f, $d, $lim, $verdict
 }
 "---"
-if ($fail -eq 0) { "all $($cases.Count) views match the reference build within $Limit%" }
-else { "$fail of $($cases.Count) views differ by more than $Limit%" }
+if ($fail -eq 0) { "all $($cases.Count) views match the reference build within their limits" }
+else { "$fail of $($cases.Count) views differ by more than their limits" }
 exit $fail

@@ -54,12 +54,12 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse &p );
 
-	Real m_scanRadius;													///< radius of our scan
+	Fix m_scanRadius;										///< radius of our scan
 	UnsignedInt m_scanDelayInFrames;						///< how frequently we do an update scan
-	Real m_autoHealPercentPerSecond;						///< how much % of max health we heal per second
+	Fix m_autoHealPercentPerSecond;				///< how much % of max health we heal per second
 	const FXList *m_pulseFX;										///< FXList to play when scan is updated
 	AsciiString m_upgradeRequired;							///< Upgrade required to use the upgraded pulse FX
-	Real m_upgradedAutoHealPercentPerSecond;		///< Different percent to use for healing if upgraded too
+	Fix m_upgradedAutoHealPercentPerSecond;		///< Different percent to use for healing if upgraded too
 	const FXList *m_upgradedPulseFX;						///< FXList to play for pulse when upgraded
 	Bool m_affectsSelf;													///< Allow effect to affect ourselves
 

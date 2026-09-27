@@ -40,13 +40,13 @@
 class NeutronBlastBehaviorModuleData : public UpdateModuleData
 {
 public:
-	Real m_blastRadius; 
+	Fix m_blastRadius;
 	Bool m_isAffectAirborne;
 	Bool m_affectAllies;
 
 	NeutronBlastBehaviorModuleData()
 	{
-		m_blastRadius = 10.0f;
+		m_blastRadius = Fix( 10 );
 		m_isAffectAirborne = TRUE;
 		m_affectAllies = TRUE;
 	}
@@ -57,7 +57,7 @@ public:
     
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "BlastRadius",		INI::parseReal, NULL, offsetof( NeutronBlastBehaviorModuleData, m_blastRadius ) },
+			{ "BlastRadius",		INI::parseFix, NULL, FIX_OFFSET( NeutronBlastBehaviorModuleData, m_blastRadius ) },
 			{ "AffectAirborne", INI::parseBool, NULL, offsetof( NeutronBlastBehaviorModuleData, m_isAffectAirborne ) },
 			{ "AffectAllies",		INI::parseBool, NULL, offsetof( NeutronBlastBehaviorModuleData, m_affectAllies ) },
 			{ 0, 0, 0, 0 }

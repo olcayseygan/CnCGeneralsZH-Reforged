@@ -69,16 +69,16 @@ GenerateMinefieldBehaviorModuleData::GenerateMinefieldBehaviorModuleData()
 	m_mineUpgradeTrigger.clear();
 
 	m_genFX = NULL;
-	m_distanceAroundObject = TheGlobalData->m_standardMinefieldDistance;
-	m_minesPerSquareFoot = TheGlobalData->m_standardMinefieldDensity;
+	m_distanceAroundObject = fixFromReal( TheGlobalData->m_standardMinefieldDistance );	// P3, GlobalData's field
+	m_minesPerSquareFoot = fixFromReal( TheGlobalData->m_standardMinefieldDensity );	// P3, GlobalData's field
 	m_onDeath = false;
 	m_borderOnly = true;
 	m_alwaysCircular = false;
 	m_upgradable = false;
 	m_smartBorder = false;
 	m_smartBorderSkipInterior = true;
-	m_randomJitter = 0.0f;
-	m_skipIfThisMuchUnderStructure = 0.33f;
+	m_randomJitter = Fix( 0 );
+	m_skipIfThisMuchUnderStructure = 0.33_fx;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -91,16 +91,16 @@ GenerateMinefieldBehaviorModuleData::GenerateMinefieldBehaviorModuleData()
 		{ "UpgradedMineName", INI::parseAsciiString,	NULL, offsetof( GenerateMinefieldBehaviorModuleData, m_mineNameUpgraded ) },
 		{ "UpgradedTriggeredBy", INI::parseAsciiString,	NULL, offsetof( GenerateMinefieldBehaviorModuleData, m_mineUpgradeTrigger ) },
 		{ "GenerationFX", INI::parseFXList,	NULL, offsetof( GenerateMinefieldBehaviorModuleData, m_genFX ) },
-		{ "DistanceAroundObject", INI::parseReal, NULL, offsetof( GenerateMinefieldBehaviorModuleData, m_distanceAroundObject ) },
-		{ "MinesPerSquareFoot", INI::parseReal, NULL, offsetof( GenerateMinefieldBehaviorModuleData, m_minesPerSquareFoot ) },
+		{ "DistanceAroundObject", INI::parseFix, NULL, FIX_OFFSET( GenerateMinefieldBehaviorModuleData, m_distanceAroundObject ) },
+		{ "MinesPerSquareFoot", INI::parseFix, NULL, FIX_OFFSET( GenerateMinefieldBehaviorModuleData, m_minesPerSquareFoot ) },
 		{ "GenerateOnlyOnDeath", INI::parseBool, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_onDeath) },
 		{ "BorderOnly", INI::parseBool, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_borderOnly) },
 		{ "SmartBorder", INI::parseBool, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_smartBorder) },
 		{ "SmartBorderSkipInterior", INI::parseBool, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_smartBorderSkipInterior) },
 		{ "AlwaysCircular", INI::parseBool, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_alwaysCircular) },
 		{ "Upgradable", INI::parseBool, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_upgradable) },
-		{ "RandomJitter", INI::parsePercentToReal, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_randomJitter) },
-		{ "SkipIfThisMuchUnderStructure", INI::parsePercentToReal, NULL, offsetof(GenerateMinefieldBehaviorModuleData, m_skipIfThisMuchUnderStructure) },
+		{ "RandomJitter", INI::parsePercentToFix, NULL, FIX_OFFSET(GenerateMinefieldBehaviorModuleData, m_randomJitter) },
+		{ "SkipIfThisMuchUnderStructure", INI::parsePercentToFix, NULL, FIX_OFFSET(GenerateMinefieldBehaviorModuleData, m_skipIfThisMuchUnderStructure) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -164,7 +164,7 @@ void GenerateMinefieldBehavior::setMinefieldTarget(const Coord3D* pos)
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-// the mine layout is float until the geometry footprint helpers move (P3)
+// the mine layout is float until the geometry footprint helpers move (P8)
 Coord3D GenerateMinefieldBehavior::getMinefieldTarget() const
 {
 	return m_hasTarget ? m_target : getObject()->getPositionFix()->toCoord3D();
@@ -216,8 +216,8 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 	// for now, "mostly" means "central third of radius would overlap"
 	const GenerateMinefieldBehaviorModuleData* d = getGenerateMinefieldBehaviorModuleData();
 	GeometryInfo geom = mineTemplate->getTemplateGeometryInfo();
-	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P3: footprint is float
-	geom.expandFootprint(mineRadius * -(1.0f - d->m_skipIfThisMuchUnderStructure));
+	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P8: footprint is float
+	geom.expandFootprint(mineRadius * -fixToReal(Fix(1) - d->m_skipIfThisMuchUnderStructure));	// P8
 	ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( &fxPt, geom, orient );
 	MemoryPoolObjectHolder hold(iter);
 	for (Object* them = iter->first(); them; them = iter->next())
@@ -236,7 +236,7 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 		LandMineInterface* lmi = (*bmi)->getLandMineInterface();
 		if (lmi)
 		{
-			lmi->setScootParms(producer->getPositionFix()->toCoord3D(), pt);	// P3: the minefield's scoot is float
+			lmi->setScootParms(producer->getPositionFix()->toCoord3D(), pt);	// P8: the minefield's scoot is float
 			break;
 		}
 	}
@@ -263,7 +263,7 @@ void GenerateMinefieldBehavior::placeMinesAlongLine(const Coord3D& posStart, con
 	Real len = sqrt(sqr(dx) + sqr(dy));
 	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());
 	Real mineDiameter = mineRadius * 2.0f;
-	Real mineJitter = mineRadius*d->m_randomJitter;
+	Real mineJitter = mineRadius*fixToReal(d->m_randomJitter);	// P8
 	Int numMines = REAL_TO_INT_CEIL(len / mineDiameter);
 	if (numMines < 1)
 		numMines = 1;
@@ -318,7 +318,7 @@ void GenerateMinefieldBehavior::placeMinesAroundCircle(const Coord3D& pos, Real 
 	Real circum = 2.0f * PI * radius;
 	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());
 	Real mineDiameter = mineRadius * 2.0f;
-	Real mineJitter = mineRadius*d->m_randomJitter;
+	Real mineJitter = mineRadius*fixToReal(d->m_randomJitter);	// P8
 	Int numMines = REAL_TO_INT_CEIL(circum / mineDiameter);
 	if (numMines < 1)
 		numMines = 1;
@@ -344,7 +344,7 @@ void GenerateMinefieldBehavior::placeMinesInFootprint(const GeometryInfo& geom, 
 	Team* team = obj->getControllingPlayer()->getDefaultTeam();
 
 	Real area = geom.getFootprintArea();
-	Int numMines = REAL_TO_INT_CEIL(d->m_minesPerSquareFoot * area);
+	Int numMines = REAL_TO_INT_CEIL(fixToReal(d->m_minesPerSquareFoot) * area);	// P8, the footprint area is float
 	if (numMines < 1)
 		numMines = 1;
 
@@ -413,9 +413,9 @@ void GenerateMinefieldBehavior::placeMines()
 		if (d->m_alwaysCircular)
 			geom.setFix(GEOMETRY_CYLINDER, false, Fix(1), geom.getBoundingCircleRadiusFix(), geom.getBoundingCircleRadiusFix());
 
-		Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P3: footprint is float
+		Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P8: footprint is float
 		Real mineDiameter = mineRadius * 2.0f;
-		const Fix distanceAroundObject = fixFromReal(d->m_distanceAroundObject);	// P3
+		const Fix distanceAroundObject = d->m_distanceAroundObject;
 		geom.expandFootprint(mineRadius);
 		do
 		{
@@ -433,7 +433,7 @@ void GenerateMinefieldBehavior::placeMines()
 	else if (d->m_borderOnly)
 	{
 		GeometryInfo geom = obj->getGeometryInfo();
-		geom.expandFootprint(d->m_distanceAroundObject);
+		geom.expandFootprint(fixToReal(d->m_distanceAroundObject));	// P8, the footprint helpers are float
 
 		if (geom.getGeomType() == GEOMETRY_BOX && !d->m_alwaysCircular)
 		{
@@ -447,7 +447,7 @@ void GenerateMinefieldBehavior::placeMines()
 	else
 	{
 		GeometryInfo geom = obj->getGeometryInfo();
-		geom.expandFootprint(d->m_distanceAroundObject);
+		geom.expandFootprint(fixToReal(d->m_distanceAroundObject));	// P8, the footprint helpers are float
 
 		if (d->m_alwaysCircular)
 			geom.setFix(GEOMETRY_CYLINDER, false, Fix(1), geom.getBoundingCircleRadiusFix(), geom.getBoundingCircleRadiusFix());

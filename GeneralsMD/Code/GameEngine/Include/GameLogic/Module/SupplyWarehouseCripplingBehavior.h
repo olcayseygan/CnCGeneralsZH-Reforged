@@ -44,7 +44,7 @@ class SupplyWarehouseCripplingBehaviorModuleData : public UpdateModuleData
 public:
 	UnsignedInt m_selfHealSupression; ///< Time since last damage until I can start to heal
 	UnsignedInt m_selfHealDelay;			///< Once I am okay to heal, how often to do so
-	Real m_selfHealAmount;							///< And how much
+	Fix m_selfHealAmount;						///< And how much
 
 	SupplyWarehouseCripplingBehaviorModuleData();
 

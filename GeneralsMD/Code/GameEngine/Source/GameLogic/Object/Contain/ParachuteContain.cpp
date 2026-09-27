@@ -73,10 +73,10 @@ static Coord3D boneOffsetInWorld( const Object *obj, const Coord3D &bone )
 ParachuteContainModuleData::ParachuteContainModuleData() : 
 	m_pitchRateMax(0),
 	m_rollRateMax(0),
-	m_lowAltitudeDamping(0.2f),
-	m_paraOpenDist(0.0f),
-	m_freeFallDamagePercent(0.5f),
-	m_killWhenLandingInWaterSlop(10.0f)
+	m_lowAltitudeDamping(0.2_fx),
+	m_paraOpenDist(0),
+	m_freeFallDamagePercent(0.5_fx),
+	m_killWhenLandingInWaterSlop(10)
 {
 }
 
@@ -87,12 +87,12 @@ void ParachuteContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "PitchRateMax",	INI::parseAngularVelocityReal,		NULL, offsetof( ParachuteContainModuleData, m_pitchRateMax ) },
-		{ "RollRateMax",	INI::parseAngularVelocityReal,		NULL, offsetof( ParachuteContainModuleData, m_rollRateMax ) },
-		{ "LowAltitudeDamping",	INI::parseReal,		NULL, offsetof( ParachuteContainModuleData, m_lowAltitudeDamping ) },
-		{ "ParachuteOpenDist",	INI::parseReal,		NULL, offsetof( ParachuteContainModuleData, m_paraOpenDist ) },
-		{ "KillWhenLandingInWaterSlop",	INI::parseReal,		NULL, offsetof( ParachuteContainModuleData, m_killWhenLandingInWaterSlop ) },
-		{ "FreeFallDamagePercent",	INI::parsePercentToReal,		NULL, offsetof( ParachuteContainModuleData, m_freeFallDamagePercent ) },
+		{ "PitchRateMax",	INI::parseAngularVelocityFix,		NULL, FIX_OFFSET( ParachuteContainModuleData, m_pitchRateMax ) },
+		{ "RollRateMax",	INI::parseAngularVelocityFix,		NULL, FIX_OFFSET( ParachuteContainModuleData, m_rollRateMax ) },
+		{ "LowAltitudeDamping",	INI::parseFix,		NULL, FIX_OFFSET( ParachuteContainModuleData, m_lowAltitudeDamping ) },
+		{ "ParachuteOpenDist",	INI::parseFix,		NULL, FIX_OFFSET( ParachuteContainModuleData, m_paraOpenDist ) },
+		{ "KillWhenLandingInWaterSlop",	INI::parseFix,		NULL, FIX_OFFSET( ParachuteContainModuleData, m_killWhenLandingInWaterSlop ) },
+		{ "FreeFallDamagePercent",	INI::parsePercentToFix,		NULL, FIX_OFFSET( ParachuteContainModuleData, m_freeFallDamagePercent ) },
 		{ "ParachuteOpenSound", INI::parseAudioEventRTS, NULL, offsetof( ParachuteContainModuleData, m_parachuteOpenSound ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -131,8 +131,8 @@ ParachuteContain::ParachuteContain( Thing *thing, const ModuleData *moduleData )
 	const ParachuteContainModuleData* d = getParachuteContainModuleData();
 	if (d)
 	{
-		m_pitchRate = GameLogicRandomValueReal(-d->m_pitchRateMax, d->m_pitchRateMax);
-		m_rollRate = GameLogicRandomValueReal(-d->m_rollRateMax, d->m_rollRateMax);
+		m_pitchRate = fixToReal( GameLogicRandomValueFix(-d->m_pitchRateMax, d->m_pitchRateMax) );	// P8, the sway is xfer'd float
+		m_rollRate = fixToReal( GameLogicRandomValueFix(-d->m_rollRateMax, d->m_rollRateMax) );	// P8
 	}
 
 	getObject()->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_PARACHUTING ) );
@@ -294,8 +294,8 @@ UpdateSleepTime ParachuteContain::update( void )
 	const ParachuteContainModuleData* d = getParachuteContainModuleData();
 	Object* rider = (getContainCount() > 0) ? getContainList().front() : NULL;
 
-	// m_startZ stays float because it is saved; the open distance is INI data  // P3
-	Fix paraOpenDist = fixFromReal(d->m_paraOpenDist);
+	// m_startZ stays float because it is saved (P8)
+	Fix paraOpenDist = d->m_paraOpenDist;
 	if (m_startZ == NO_START_Z)	{
 		const FCoord3D *startPos = parachute->getPositionFix();
 		Fix startZ = startPos->z;
@@ -390,7 +390,7 @@ UpdateSleepTime ParachuteContain::update( void )
 				Object* rider = getContainList().front();
 				const Fix ALTITUDE_DAMP_START = Fix( 20 );
 				if (rider->getHeightAboveTerrainFix() <= ALTITUDE_DAMP_START)
-					altitudeDamping = d->m_lowAltitudeDamping;
+					altitudeDamping = fixToReal( d->m_lowAltitudeDamping ); // P4, the locomotor's damping is float
 			}
 
 			if (m_opened)
@@ -444,7 +444,7 @@ UpdateSleepTime ParachuteContain::update( void )
 	if (!getObject()->isEffectivelyDead()
 			&& getObject()->getLayer() == LAYER_GROUND
 			&& TheTerrainLogic->isUnderwaterFix(paraPos->x, paraPos->y, &waterZ)
-			&& (paraPos->z - waterZ) < fixFromReal(d->m_killWhenLandingInWaterSlop))	// P3
+			&& (paraPos->z - waterZ) < d->m_killWhenLandingInWaterSlop)
 	{
 		getObject()->kill();
 	}
@@ -553,7 +553,7 @@ void ParachuteContain::onRemoving( Object *rider )
 	const FCoord3D* riderPos = rider->getPositionFix();
 	Fix waterZ, terrainZ;
 	if (TheTerrainLogic->isUnderwaterFix(riderPos->x, riderPos->y, &waterZ, &terrainZ)
-			&& riderPos->z <= waterZ + fixFromReal(d->m_killWhenLandingInWaterSlop)	// P3
+			&& riderPos->z <= waterZ + d->m_killWhenLandingInWaterSlop
 			&& rider->getLayer() == LAYER_GROUND)
 	{
 		// don't call kill(); do it manually, so we can specify DEATH_FLOODED
@@ -660,7 +660,7 @@ void ParachuteContain::onDie( const DamageInfo * damageInfo )
 		{
 			removeAllContained();
 			const ParachuteContainModuleData* d = getParachuteContainModuleData();
-			if (d->m_freeFallDamagePercent > 0.0f)
+			if (d->m_freeFallDamagePercent > Fix( 0 ))
 			{
 				// do some damage just for losing your parachute.
 				// not very realistic, but practical to help ensure that
@@ -669,7 +669,7 @@ void ParachuteContain::onDie( const DamageInfo * damageInfo )
 				extraDamageInfo.in.m_damageType = DAMAGE_FALLING;
 				extraDamageInfo.in.m_deathType = DEATH_SPLATTED;
 				extraDamageInfo.in.m_sourceID = damageInfo->in.m_sourceID;
-				extraDamageInfo.in.m_amount = rider->getBodyModule()->getMaxHealth() * d->m_freeFallDamagePercent;
+				extraDamageInfo.in.m_amount = rider->getBodyModule()->getMaxHealth() * fixToReal( d->m_freeFallDamagePercent ); // P6
 				rider->attemptDamage(&extraDamageInfo);
 			}
 			PhysicsBehavior* physics = rider->getPhysics();

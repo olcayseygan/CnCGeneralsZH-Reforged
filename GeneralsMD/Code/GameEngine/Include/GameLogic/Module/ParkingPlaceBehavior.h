@@ -36,18 +36,19 @@
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/DieModule.h"
 #include "GameLogic/Module/UpdateModule.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 class ParkingPlaceBehaviorModuleData : public UpdateModuleData
 {
 public:
 	//UnsignedInt		m_framesForFullHeal;
-	Real					m_healAmount;
+	Fix						m_healAmount;
 //	Real					m_extraHealAmount4Helicopters;
 	Int						m_numRows;
 	Int						m_numCols;
-	Real					m_approachHeight;
-	Real					m_landingDeckHeightOffset;
+	Fix						m_approachHeight;
+	Fix						m_landingDeckHeightOffset;
 	Bool					m_hasRunways;			// if true, each col has a runway in front of it
 	Bool					m_parkInHangars;	// if true, park at the hangar production spot, not the "real" parking place
 
@@ -58,8 +59,8 @@ public:
 //    m_extraHealAmount4Helicopters = 0;
 		m_numRows = 0;
 		m_numCols = 0;
-		m_approachHeight = 0.0f;
-		m_landingDeckHeightOffset = 0.0f;
+		m_approachHeight = Fix( 0 );
+		m_landingDeckHeightOffset = Fix( 0 );
 		m_hasRunways = false;
 		m_parkInHangars = false;
 	}
@@ -72,11 +73,11 @@ public:
 		{
 			{ "NumRows",						     INI::parseInt,	 NULL, offsetof( ParkingPlaceBehaviorModuleData, m_numRows ) },
 			{ "NumCols",						     INI::parseInt,	 NULL, offsetof( ParkingPlaceBehaviorModuleData, m_numCols ) },
-			{ "ApproachHeight",			     INI::parseReal, NULL, offsetof( ParkingPlaceBehaviorModuleData, m_approachHeight ) },
-			{ "LandingDeckHeightOffset", INI::parseReal, NULL, offsetof( ParkingPlaceBehaviorModuleData, m_landingDeckHeightOffset ) },
+			{ "ApproachHeight",			     INI::parseFix, NULL, FIX_OFFSET( ParkingPlaceBehaviorModuleData, m_approachHeight ) },
+			{ "LandingDeckHeightOffset", INI::parseFix, NULL, FIX_OFFSET( ParkingPlaceBehaviorModuleData, m_landingDeckHeightOffset ) },
 			{ "HasRunways",					     INI::parseBool, NULL, offsetof( ParkingPlaceBehaviorModuleData, m_hasRunways ) },
 			{ "ParkInHangars",			     INI::parseBool, NULL, offsetof( ParkingPlaceBehaviorModuleData, m_parkInHangars ) },
-			{ "HealAmountPerSecond",     INI::parseReal, NULL, offsetof( ParkingPlaceBehaviorModuleData, m_healAmount ) },
+			{ "HealAmountPerSecond",     INI::parseFix, NULL, FIX_OFFSET( ParkingPlaceBehaviorModuleData, m_healAmount ) },
 //			{ "ExtraHealAmount4Helicopters",  INI::parseReal, NULL, offsetof( ParkingPlaceBehaviorModuleData, m_extraHealAmount4Helicopters ) },
 
 
@@ -146,8 +147,9 @@ public:
 	virtual Int getRunwayCount() const { return m_runways.size(); }
 	virtual ObjectID getRunwayReservation( Int r, RunwayReservationType type );
 	virtual void transferRunwayReservationToNextInLineForTakeoff(ObjectID id);
-	virtual Real getApproachHeight() const { return getParkingPlaceBehaviorModuleData()->m_approachHeight; }
-	virtual Real getLandingDeckHeightOffset() const { return getParkingPlaceBehaviorModuleData()->m_landingDeckHeightOffset; }
+	virtual Real getApproachHeight() const { return fixToReal( getParkingPlaceBehaviorModuleData()->m_approachHeight ); } // P7, JetAIUpdate
+	virtual Real getLandingDeckHeightOffset() const { return fixToReal( getParkingPlaceBehaviorModuleData()->m_landingDeckHeightOffset ); } // P7, JetAIUpdate and Object::getCarrierDeckHeight
+	virtual Fix getLandingDeckHeightOffsetFix() const { return getParkingPlaceBehaviorModuleData()->m_landingDeckHeightOffset; }
 	virtual void setHealee(Object* healee, Bool add);
 	virtual void killAllParkedUnits();
 	virtual void defectAllParkedUnits(Team* newTeam, UnsignedInt detectionTime);

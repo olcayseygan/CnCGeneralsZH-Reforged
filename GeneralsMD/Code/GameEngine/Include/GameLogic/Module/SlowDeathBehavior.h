@@ -74,21 +74,21 @@ class SlowDeathBehaviorModuleData : public UpdateModuleData
 {
 public:
 	DieMuxData				m_dieMuxData;
-	Real							m_sinkRate;
+	Fix								m_sinkRate;
 	Int								m_probabilityModifier;
-	Real							m_modifierBonusPerOverkillPercent;
+	Fix								m_modifierBonusPerOverkillPercent;
 	UnsignedInt				m_sinkDelay;
 	UnsignedInt				m_sinkDelayVariance;
-	Real							m_destructionAltitude;
+	Fix								m_destructionAltitude;
 	UnsignedInt				m_destructionDelay;
 	UnsignedInt				m_destructionDelayVariance;
 	FXListVec					m_fx[SD_PHASE_COUNT];
 	OCLVec						m_ocls[SD_PHASE_COUNT];
 	WeaponTemplateVec	m_weapons[SD_PHASE_COUNT];
-	Real							m_flingForce;
-	Real							m_flingForceVariance;
-	Real							m_flingPitch;
-	Real							m_flingPitchVariance;
+	Fix								m_flingForce;
+	Fix								m_flingForceVariance;
+	Fix								m_flingPitch;
+	Fix								m_flingPitchVariance;
 
 	enum 
 	{

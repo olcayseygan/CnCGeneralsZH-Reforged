@@ -50,8 +50,8 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse &p );
 
-	Real m_healthPercentToDrainPerSecond;			///< when active, this much health is drained
-	Real m_notAllowedWhenHealthBelowPercent;	///< you cannot overcharge when object is below this health %
+	Fix m_healthPercentToDrainPerSecond;			///< when active, this much health is drained
+	Fix m_notAllowedWhenHealthBelowPercent;	///< you cannot overcharge when object is below this health %
 
 };
 

@@ -59,8 +59,8 @@ public:
 	UnsignedInt						m_creatorDeathCheckRate;					///< if above is true, how often to check
 	UnsignedInt						m_scootFromStartingPointTime;			///< if nonzero, gradually scoot to dest pt
 	UnsignedInt						m_numVirtualMines;								///< num of "virtual" mines we have
-	Real									m_repeatDetonateMoveThresh;
-	Real									m_healthPercentToDrainPerSecond;
+	Fix										m_repeatDetonateMoveThresh;
+	Fix										m_healthPercentToDrainPerSecond;
 	const ObjectCreationList* m_ocl; ///< object creaton list to make
 
 };

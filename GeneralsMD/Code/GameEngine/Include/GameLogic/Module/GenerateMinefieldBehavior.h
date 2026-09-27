@@ -48,10 +48,10 @@ public:
 	AsciiString						m_mineNameUpgraded;
 	AsciiString						m_mineUpgradeTrigger;
 	const FXList*					m_genFX;
-	Real									m_distanceAroundObject;
-	Real									m_minesPerSquareFoot;
-	Real									m_randomJitter;
-	Real									m_skipIfThisMuchUnderStructure;
+	Fix										m_distanceAroundObject;
+	Fix										m_minesPerSquareFoot;
+	Fix										m_randomJitter;
+	Fix										m_skipIfThisMuchUnderStructure;
 	Bool									m_onDeath;
 	Bool									m_borderOnly;
 	Bool									m_alwaysCircular;

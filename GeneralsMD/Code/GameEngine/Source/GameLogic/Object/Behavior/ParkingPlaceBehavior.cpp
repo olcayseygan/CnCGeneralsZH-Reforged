@@ -352,7 +352,7 @@ Bool ParkingPlaceBehavior::reserveSpace(ObjectID id, Real parkingOffset, Parking
 	ppi->m_objectInSpace = id;
 	ppi->m_reservedForExit = false;
 	
-	if( d->m_landingDeckHeightOffset )
+	if( d->m_landingDeckHeightOffset != Fix( 0 ) )
 	{
 		Object *obj = TheGameLogic->findObjectByID( id );
 		if( obj )
@@ -403,7 +403,7 @@ void ParkingPlaceBehavior::calcPPInfo( ObjectID id, PPInfo *info )
 		const Real APPROACH_DIST = 0.75f;
 		info->runwayApproach.x += (rr.m_end.x - rr.m_start.x) * APPROACH_DIST;
 		info->runwayApproach.y += (rr.m_end.y - rr.m_start.y) * APPROACH_DIST;
-		info->runwayApproach.z = rr.m_end.z + d->m_approachHeight + d->m_landingDeckHeightOffset;
+		info->runwayApproach.z = rr.m_end.z + fixToReal( d->m_approachHeight ) + fixToReal( d->m_landingDeckHeightOffset ); // P8, the runway layout is float
 		info->runwayExit = info->runwayApproach;
 		info->hangarInternal = ppi->m_hangarStart;
 		info->hangarInternalOrient = ppi->m_hangarStartOrient;
@@ -724,7 +724,7 @@ UpdateSleepTime ParkingPlaceBehavior::update()
 					healInfo.in.m_damageType = DAMAGE_HEALING;
 					healInfo.in.m_deathType = DEATH_NONE;
 					healInfo.in.m_sourceID = getObject()->getID();
-  				healInfo.in.m_amount = HEAL_RATE_FRAMES * d->m_healAmount * SECONDS_PER_LOGICFRAME_REAL;
+  				healInfo.in.m_amount = HEAL_RATE_FRAMES * fixToReal( d->m_healAmount ) * SECONDS_PER_LOGICFRAME_REAL; // P6
 
 //          if ( objToHeal->isKindOf( KINDOF_PRODUCED_AT_HELIPAD ) )
 //            healInfo.in.m_amount += HEAL_RATE_FRAMES * d->m_extraHealAmount4Helicopters * SECONDS_PER_LOGICFRAME_REAL;

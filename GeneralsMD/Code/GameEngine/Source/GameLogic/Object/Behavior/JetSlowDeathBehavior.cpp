@@ -43,6 +43,7 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -76,10 +77,10 @@ JetSlowDeathBehaviorModuleData::JetSlowDeathBehaviorModuleData( void )
 	m_fxFinalBlowUp = NULL;
 	m_oclFinalBlowUp = NULL;
 
-	m_rollRate = 0.0f;
-	m_rollRateDelta = 1.0f;
-	m_pitchRate = 0.0f;
-	m_fallHowFast = 0.0f;
+	m_rollRate = Fix( 0 );
+	m_rollRateDelta = Fix( 1 );
+	m_pitchRate = Fix( 0 );
+	m_fallHowFast = Fix( 0 );
 
 }  // end JetSlowDeathBehaviorModuleData
 
@@ -112,10 +113,10 @@ JetSlowDeathBehaviorModuleData::JetSlowDeathBehaviorModuleData( void )
 		{ "DeathLoopSound", INI::parseAudioEventRTS, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_deathLoopSound ) },
 
 // @todo srj -- RollRate and RollRateDelta and PitchRate should use parseAngularVelocityReal
-		{ "RollRate",	INI::parseReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_rollRate ) },
-		{ "RollRateDelta", INI::parsePercentToReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_rollRateDelta ) },
-		{ "PitchRate", INI::parseReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_pitchRate ) },
-		{ "FallHowFast", INI::parsePercentToReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_fallHowFast ) },
+		{ "RollRate",	INI::parseFix, NULL, FIX_OFFSET( JetSlowDeathBehaviorModuleData, m_rollRate ) },
+		{ "RollRateDelta", INI::parsePercentToFix, NULL, FIX_OFFSET( JetSlowDeathBehaviorModuleData, m_rollRateDelta ) },
+		{ "PitchRate", INI::parseFix, NULL, FIX_OFFSET( JetSlowDeathBehaviorModuleData, m_pitchRate ) },
+		{ "FallHowFast", INI::parsePercentToFix, NULL, FIX_OFFSET( JetSlowDeathBehaviorModuleData, m_fallHowFast ) },
 
 		{ 0, 0, 0, 0 }
 
@@ -216,7 +217,7 @@ void JetSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 	}  // end if
 
 	// initialize our roll rate to that defined as the initial value in the module data
-	m_rollRate = modData->m_rollRate;
+	m_rollRate = fixToReal( modData->m_rollRate ); // P4, the roll rate is xfer'd float
 
 	/* A wing does not stop working the moment the engine behind it stops. The lift used to drop
 		 straight to the module's FallHowFast on the frame of the kill, so a plane doing two hundred
@@ -255,7 +256,7 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 		physics->setRollRate( m_rollRate );
 
 	// adjust the roll rate over time
-	m_rollRate *= modData->m_rollRateDelta;
+	m_rollRate *= fixToReal( modData->m_rollRateDelta ); // P4
 
 	// do effects for death while in the air
 	if( m_timerOnGroundFrame == 0 )
@@ -275,7 +276,7 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 		{
 			const Real LIFT_BLEED_PER_FRAME = 0.1f;
 			const Real MIN_FALL_FRACTION = 0.5f;
-			const Real fallFraction = max( MIN_FALL_FRACTION, modData->m_fallHowFast );
+			const Real fallFraction = max( MIN_FALL_FRACTION, fixToReal( modData->m_fallHowFast ) ); // P4, the locomotor's lift is float
 			const Real fallingLift = -TheGlobalData->m_gravity * (1.0f - fallFraction);
 			const Real currentLift = locomotor->getMaxLift( us->getBodyModule()->getDamageState() );
 			locomotor->setMaxLift( currentLift + (fallingLift - currentLift) * LIFT_BLEED_PER_FRAME );
@@ -351,7 +352,7 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 
 			// start us rolling on another axis too
 			if( physics )
-				physics->setPitchRate( modData->m_pitchRate );
+				physics->setPitchRate( fixToReal( modData->m_pitchRate ) ); // P4
 
 		}  // end if
 

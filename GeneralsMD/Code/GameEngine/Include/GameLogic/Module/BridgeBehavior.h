@@ -102,8 +102,8 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse &p );
 
-	Real m_lateralScaffoldSpeed;
-	Real m_verticalScaffoldSpeed;
+	Fix m_lateralScaffoldSpeed;
+	Fix m_verticalScaffoldSpeed;
 	BridgeFXList m_fx;							///< list of FX lists to execute
 	BridgeOCLList m_ocl;						///< list of OCL to execute
 

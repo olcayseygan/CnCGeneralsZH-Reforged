@@ -66,9 +66,9 @@ MinefieldBehaviorModuleData::MinefieldBehaviorModuleData()
 	m_workersDetonate = false;
 	m_creatorDeathCheckRate = LOGICFRAMES_PER_SECOND;
 	m_scootFromStartingPointTime = 0;
-	m_repeatDetonateMoveThresh = 1.0f;
+	m_repeatDetonateMoveThresh = Fix( 1 );
 	m_numVirtualMines = 1;
-	m_healthPercentToDrainPerSecond = 0.0f;
+	m_healthPercentToDrainPerSecond = Fix( 0 );
 	m_ocl = 0;
 }
 
@@ -89,8 +89,8 @@ MinefieldBehaviorModuleData::MinefieldBehaviorModuleData()
 		{ "CreatorDeathCheckRate", INI::parseDurationUnsignedInt, NULL, offsetof( MinefieldBehaviorModuleData, m_creatorDeathCheckRate ) },
 		{ "ScootFromStartingPointTime", INI::parseDurationUnsignedInt, NULL, offsetof( MinefieldBehaviorModuleData, m_scootFromStartingPointTime ) },
 		{ "NumVirtualMines", INI::parseUnsignedInt, NULL, offsetof( MinefieldBehaviorModuleData, m_numVirtualMines ) },
-		{ "RepeatDetonateMoveThresh", INI::parseReal, NULL, offsetof( MinefieldBehaviorModuleData, m_repeatDetonateMoveThresh ) },
-		{ "DegenPercentPerSecondAfterCreatorDies", INI::parsePercentToReal,	NULL, offsetof( MinefieldBehaviorModuleData, m_healthPercentToDrainPerSecond ) },
+		{ "RepeatDetonateMoveThresh", INI::parseFix, NULL, FIX_OFFSET( MinefieldBehaviorModuleData, m_repeatDetonateMoveThresh ) },
+		{ "DegenPercentPerSecondAfterCreatorDies", INI::parsePercentToFix,	NULL, FIX_OFFSET( MinefieldBehaviorModuleData, m_healthPercentToDrainPerSecond ) },
 		{ "CreationList",	INI::parseObjectCreationList,	NULL,	offsetof( MinefieldBehaviorModuleData, m_ocl ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -262,7 +262,7 @@ UpdateSleepTime MinefieldBehavior::update()
 	if (m_draining)
 	{
 		DamageInfo damageInfo;
-		damageInfo.in.m_amount = (obj->getBodyModule()->getMaxHealth() * d->m_healthPercentToDrainPerSecond) / LOGICFRAMES_PER_SECOND;
+		damageInfo.in.m_amount = (obj->getBodyModule()->getMaxHealth() * fixToReal( d->m_healthPercentToDrainPerSecond )) / LOGICFRAMES_PER_SECOND; // P6
 		damageInfo.in.m_sourceID = obj->getID();
 		damageInfo.in.m_damageType = DAMAGE_UNRESISTABLE;
 		damageInfo.in.m_deathType = DEATH_NORMAL;
@@ -425,7 +425,7 @@ void MinefieldBehavior::onCollide( Object *other, const Coord3D *loc, const Coor
 		{
 			found = TRUE;
 			Fix distSqr = calcDistSquared(*other->getPositionFix(), it->where);
-			Fix thresh = fixFromReal( d->m_repeatDetonateMoveThresh ); // P3
+			Fix thresh = d->m_repeatDetonateMoveThresh;
 			if (distSqr <= thresh * thresh)
 			{
 				// too close. punt for now.

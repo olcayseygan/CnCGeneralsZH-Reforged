@@ -54,9 +54,9 @@ MobNexusContainModuleData::MobNexusContainModuleData()
 	m_scatterNearbyOnExit = true;
 	m_orientLikeContainerOnExit = false;
 	m_keepContainerVelocityOnExit = false;
-	m_exitPitchRate = 0.0f;
+	m_exitPitchRate = Fix( 0 );
 	m_initialPayload.count = 0;
-	m_healthRegen = 0.0f;
+	m_healthRegen = Fix( 0 );
 
 	//
 	// by default we say that MobNexae can have infantry inside them, this will be totally
@@ -92,9 +92,9 @@ void MobNexusContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "OrientLikeContainerOnExit",	INI::parseBool,		NULL, offsetof( MobNexusContainModuleData, m_orientLikeContainerOnExit ) },
 		{ "KeepContainerVelocityOnExit",	INI::parseBool,		NULL, offsetof( MobNexusContainModuleData, m_keepContainerVelocityOnExit ) },
 		{ "ExitBone",	INI::parseAsciiString,		NULL, offsetof( MobNexusContainModuleData, m_exitBone ) },
-		{ "ExitPitchRate",	INI::parseAngularVelocityReal,		NULL, offsetof( MobNexusContainModuleData, m_exitPitchRate ) },
+		{ "ExitPitchRate",	INI::parseAngularVelocityFix,		NULL, FIX_OFFSET( MobNexusContainModuleData, m_exitPitchRate ) },
 		{ "InitialPayload", parseInitialPayload, NULL, 0 },
-		{ "HealthRegen%PerSec", INI::parseReal, NULL, offsetof( MobNexusContainModuleData, m_healthRegen ) },
+		{ "HealthRegen%PerSec", INI::parseFix, NULL, FIX_OFFSET( MobNexusContainModuleData, m_healthRegen ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -269,7 +269,7 @@ void MobNexusContain::onRemoving( Object *rider )
 			startingForce.z *= mass;
 			child->applyMotiveForce( &startingForce );
 
-			Real pitchRate = child->getCenterOfMassOffset() * d->m_exitPitchRate;
+			Real pitchRate = child->getCenterOfMassOffset() * fixToReal( d->m_exitPitchRate ); // P4
 			child->setPitchRate( pitchRate );
 		}
 	}
@@ -337,7 +337,7 @@ UpdateSleepTime MobNexusContain::update()
 {
 	MobNexusContainModuleData *moduleData = (MobNexusContainModuleData*)getModuleData();
 
-	if( moduleData && moduleData->m_healthRegen )
+	if( moduleData && moduleData->m_healthRegen != Fix( 0 ) )
 	{
 		ContainModuleInterface *contain = getObject()->getContain();
 		if( contain )
@@ -361,7 +361,7 @@ UpdateSleepTime MobNexusContain::update()
 					if( body->getHealth() < body->getMaxHealth() )
 					{
 						//Calculate the health to be regenerated on each unit.
-						Real regen = body->getMaxHealth() * moduleData->m_healthRegen / 100.0f * SECONDS_PER_LOGICFRAME_REAL;
+						Real regen = body->getMaxHealth() * fixToReal( moduleData->m_healthRegen ) / 100.0f * SECONDS_PER_LOGICFRAME_REAL; // P6
 
 						//Perform the actual healing for this frame.
 //						DamageInfo damageInfo;

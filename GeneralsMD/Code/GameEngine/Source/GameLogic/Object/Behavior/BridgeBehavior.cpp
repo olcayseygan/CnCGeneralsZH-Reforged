@@ -65,8 +65,8 @@ static Bridge *findBridgeUnder( const Object *obj )
 BridgeBehaviorModuleData::BridgeBehaviorModuleData( void )
 {
 
-	m_lateralScaffoldSpeed = 1.0f;
-	m_verticalScaffoldSpeed = 1.0f;
+	m_lateralScaffoldSpeed = Fix( 1 );
+	m_verticalScaffoldSpeed = Fix( 1 );
 
 }  // end BridgeBehaviorModuleData
 
@@ -91,8 +91,8 @@ BridgeBehaviorModuleData::~BridgeBehaviorModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "LateralScaffoldSpeed",			INI::parseVelocityReal, NULL, offsetof( BridgeBehaviorModuleData, m_lateralScaffoldSpeed ) },
-		{ "VerticalScaffoldSpeed",		INI::parseVelocityReal, NULL, offsetof( BridgeBehaviorModuleData, m_verticalScaffoldSpeed ) },
+		{ "LateralScaffoldSpeed",			INI::parseVelocityFix, NULL, FIX_OFFSET( BridgeBehaviorModuleData, m_lateralScaffoldSpeed ) },
+		{ "VerticalScaffoldSpeed",		INI::parseVelocityFix, NULL, FIX_OFFSET( BridgeBehaviorModuleData, m_verticalScaffoldSpeed ) },
 		{ "BridgeDieFX",		parseFX,		NULL,			offsetof( BridgeBehaviorModuleData, m_fx ) },
 		{ "BridgeDieOCL",		parseOCL,		NULL,			offsetof( BridgeBehaviorModuleData, m_ocl ) },
 		{ 0, 0, 0, 0 }
@@ -1006,7 +1006,7 @@ void BridgeBehavior::setScaffoldData( Object *obj,
 	// all the scaffold objects have to traverse in order to meet up and be complete in
 	// the center of the bridge in an interesting way
 	//
-	Real lateralSpeed = modData->m_lateralScaffoldSpeed;
+	Real lateralSpeed = fixToReal( modData->m_lateralScaffoldSpeed ); // P8, the scaffold moves in float
 	Coord3D buildUpPosToBridgeCenter, riseToPosToBridgeCenter;
 	buildUpPosToBridgeCenter.x = buildPos->x - riseToPos->x;
 	buildUpPosToBridgeCenter.y = buildPos->y - riseToPos->y;
@@ -1019,7 +1019,7 @@ void BridgeBehavior::setScaffoldData( Object *obj,
 	scaffoldBehavior->setLateralSpeed( lateralSpeed * (distBuildUpPosToBridgeCenter / distRiseToPosToBridgeCenter) );
 
 	// rising speed is always the same for all objects
-	Real verticalSpeed = modData->m_verticalScaffoldSpeed;
+	Real verticalSpeed = fixToReal( modData->m_verticalScaffoldSpeed ); // P8
 	scaffoldBehavior->setVerticalSpeed( verticalSpeed );
 
 }  // end setScaffoldData

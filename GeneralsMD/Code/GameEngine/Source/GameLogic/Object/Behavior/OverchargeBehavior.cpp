@@ -41,6 +41,7 @@
 #include "GameLogic/Module/OverchargeBehavior.h"
 #include "GameLogic/Module/PowerPlantUpdate.h"
 #include "GameClient/InGameUI.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -54,8 +55,8 @@
 OverchargeBehaviorModuleData::OverchargeBehaviorModuleData( void )
 {
 
-	m_healthPercentToDrainPerSecond = 0.0f;
-	m_notAllowedWhenHealthBelowPercent = 0.0f;
+	m_healthPercentToDrainPerSecond = Fix( 0 );
+	m_notAllowedWhenHealthBelowPercent = Fix( 0 );
 
 }  // end OverchargeBehaviorModuleData
 
@@ -68,8 +69,8 @@ OverchargeBehaviorModuleData::OverchargeBehaviorModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "HealthPercentToDrainPerSecond", INI::parsePercentToReal,	NULL, offsetof( OverchargeBehaviorModuleData, m_healthPercentToDrainPerSecond ) },
-		{ "NotAllowedWhenHealthBelowPercent", INI::parsePercentToReal, NULL, offsetof( OverchargeBehaviorModuleData, m_notAllowedWhenHealthBelowPercent ) },
+		{ "HealthPercentToDrainPerSecond", INI::parsePercentToFix,	NULL, FIX_OFFSET( OverchargeBehaviorModuleData, m_healthPercentToDrainPerSecond ) },
+		{ "NotAllowedWhenHealthBelowPercent", INI::parsePercentToFix, NULL, FIX_OFFSET( OverchargeBehaviorModuleData, m_notAllowedWhenHealthBelowPercent ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -117,14 +118,14 @@ UpdateSleepTime OverchargeBehavior::update( void )
 		// do some damage
 		BodyModuleInterface *body = us->getBodyModule();
 		DamageInfo damageInfo;
-		damageInfo.in.m_amount = (body->getMaxHealth() * modData->m_healthPercentToDrainPerSecond) / LOGICFRAMES_PER_SECOND;
+		damageInfo.in.m_amount = (body->getMaxHealth() * fixToReal( modData->m_healthPercentToDrainPerSecond )) / LOGICFRAMES_PER_SECOND; // P6
 		damageInfo.in.m_sourceID = us->getID();
 		damageInfo.in.m_damageType = DAMAGE_PENALTY;
 		damageInfo.in.m_deathType = DEATH_NORMAL;
 		us->attemptDamage( &damageInfo );
 
 		// see if our health is below the allowable threshold
-		if( body->getHealth() < body->getMaxHealth() * modData->m_notAllowedWhenHealthBelowPercent )
+		if( body->getHealth() < body->getMaxHealth() * fixToReal( modData->m_notAllowedWhenHealthBelowPercent ) ) // P6
 		{
 
 			// turn off the overcharge

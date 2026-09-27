@@ -39,12 +39,12 @@
 class ParachuteContainModuleData : public OpenContainModuleData
 {
 public:
-	Real m_pitchRateMax;
-	Real m_rollRateMax;
-	Real m_lowAltitudeDamping;
-	Real m_paraOpenDist;		///< deploy the parachute when we have traveled this far
-	Real m_freeFallDamagePercent;
-	Real m_killWhenLandingInWaterSlop;
+	Fix m_pitchRateMax;
+	Fix m_rollRateMax;
+	Fix m_lowAltitudeDamping;
+	Fix m_paraOpenDist;		///< deploy the parachute when we have traveled this far
+	Fix m_freeFallDamagePercent;
+	Fix m_killWhenLandingInWaterSlop;
 	AudioEventRTS m_parachuteOpenSound;
 
 	ParachuteContainModuleData();

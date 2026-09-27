@@ -83,10 +83,10 @@ ObjectTracker::~ObjectTracker( void ) { }
 PropagandaTowerBehaviorModuleData::PropagandaTowerBehaviorModuleData( void )
 {
 
-	m_scanRadius = 1.0f;
+	m_scanRadius = Fix( 1 );
 	m_scanDelayInFrames = 100;
-	m_autoHealPercentPerSecond = 0.01f;
-	m_upgradedAutoHealPercentPerSecond = 0.02f;
+	m_autoHealPercentPerSecond = 0.01_fx;
+	m_upgradedAutoHealPercentPerSecond = 0.02_fx;
 	m_pulseFX = NULL;
 	m_upgradeRequired = NULL;
 	m_upgradedPulseFX = NULL;
@@ -102,10 +102,10 @@ PropagandaTowerBehaviorModuleData::PropagandaTowerBehaviorModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "Radius",									INI::parseReal,									NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_scanRadius ) },
+		{ "Radius",									INI::parseFix,									NULL,	FIX_OFFSET( PropagandaTowerBehaviorModuleData, m_scanRadius ) },
 		{ "DelayBetweenUpdates",		INI::parseDurationUnsignedInt,	NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_scanDelayInFrames ) },
-		{ "HealPercentEachSecond",	INI::parsePercentToReal,				NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_autoHealPercentPerSecond ) },
-		{ "UpgradedHealPercentEachSecond",	INI::parsePercentToReal,NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_upgradedAutoHealPercentPerSecond ) },
+		{ "HealPercentEachSecond",	INI::parsePercentToFix,				NULL,	FIX_OFFSET( PropagandaTowerBehaviorModuleData, m_autoHealPercentPerSecond ) },
+		{ "UpgradedHealPercentEachSecond",	INI::parsePercentToFix,NULL,	FIX_OFFSET( PropagandaTowerBehaviorModuleData, m_upgradedAutoHealPercentPerSecond ) },
 		{ "PulseFX",								INI::parseFXList,								NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_pulseFX ) },
 		{ "UpgradeRequired",				INI::parseAsciiString,					NULL, offsetof( PropagandaTowerBehaviorModuleData, m_upgradeRequired ) },
 		{ "UpgradedPulseFX",				INI::parseFXList,								NULL, offsetof( PropagandaTowerBehaviorModuleData, m_upgradedPulseFX ) },
@@ -327,9 +327,9 @@ void PropagandaTowerBehavior::effectLogic( Object *obj, Bool giving,
 		{
 			Real healthPercent;
 			if(effectUpgraded)
-				healthPercent = modData->m_upgradedAutoHealPercentPerSecond;
+				healthPercent = fixToReal( modData->m_upgradedAutoHealPercentPerSecond ); // P6, healing is float
 			else
-				healthPercent = modData->m_autoHealPercentPerSecond;
+				healthPercent = fixToReal( modData->m_autoHealPercentPerSecond ); // P6
 
 			Real amount = healthPercent / LOGICFRAMES_PER_SECOND * body->getMaxHealth();
 
@@ -499,7 +499,7 @@ void PropagandaTowerBehavior::doScan( void )
 
 	// scan objects in our region
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( us->getPositionFix(),
-																																		 fixFromReal( modData->m_scanRadius ), // P3
+																																		 modData->m_scanRadius,
 																																		 FROM_CENTER_2D, 
 																																		 filters );
 	MemoryPoolObjectHolder hold( iter );

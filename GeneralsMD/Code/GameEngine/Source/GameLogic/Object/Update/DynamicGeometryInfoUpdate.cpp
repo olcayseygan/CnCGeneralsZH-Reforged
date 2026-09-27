@@ -42,13 +42,13 @@ DynamicGeometryInfoUpdateModuleData::DynamicGeometryInfoUpdateModuleData()
 
 	m_initialDelay = 0;
 
-	m_initialHeight = 0;
-	m_initialMajorRadius = 0;
-	m_initialMinorRadius = 0;
+	m_initialHeight = Fix( 0 );
+	m_initialMajorRadius = Fix( 0 );
+	m_initialMinorRadius = Fix( 0 );
 
-	m_finalHeight = 0;
-	m_finalMajorRadius = 0;
-	m_finalMinorRadius = 0;
+	m_finalHeight = Fix( 0 );
+	m_finalMajorRadius = Fix( 0 );
+	m_finalMinorRadius = Fix( 0 );
 
 	m_transitionTime = 1;
 	m_reverseAtTransitionTime = FALSE;
@@ -65,13 +65,13 @@ DynamicGeometryInfoUpdateModuleData::DynamicGeometryInfoUpdateModuleData()
 
 		{ "InitialDelay",					INI::parseDurationUnsignedInt,		NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_initialDelay) },
 
-		{ "InitialHeight",				INI::parseReal,										NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_initialHeight) },
-		{ "InitialMajorRadius",		INI::parseReal,										NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_initialMajorRadius) },
-		{ "InitialMinorRadius",		INI::parseReal,										NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_initialMinorRadius) },
+		{ "InitialHeight",				INI::parseFix,										NULL, FIX_OFFSET(DynamicGeometryInfoUpdateModuleData, m_initialHeight) },
+		{ "InitialMajorRadius",		INI::parseFix,										NULL, FIX_OFFSET(DynamicGeometryInfoUpdateModuleData, m_initialMajorRadius) },
+		{ "InitialMinorRadius",		INI::parseFix,										NULL, FIX_OFFSET(DynamicGeometryInfoUpdateModuleData, m_initialMinorRadius) },
 
-		{ "FinalHeight",					INI::parseReal, NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_finalHeight) },
-		{ "FinalMajorRadius",			INI::parseReal, NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_finalMajorRadius) },
-		{ "FinalMinorRadius",			INI::parseReal, NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_finalMinorRadius) },
+		{ "FinalHeight",					INI::parseFix, NULL, FIX_OFFSET(DynamicGeometryInfoUpdateModuleData, m_finalHeight) },
+		{ "FinalMajorRadius",			INI::parseFix, NULL, FIX_OFFSET(DynamicGeometryInfoUpdateModuleData, m_finalMajorRadius) },
+		{ "FinalMinorRadius",			INI::parseFix, NULL, FIX_OFFSET(DynamicGeometryInfoUpdateModuleData, m_finalMinorRadius) },
 
 		{ "TransitionTime",				INI::parseDurationUnsignedInt,		NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_transitionTime) },
 		{ "ReverseAtTransitionTime", INI::parseBool,	 NULL, offsetof( DynamicGeometryInfoUpdateModuleData, m_reverseAtTransitionTime ) },
@@ -97,12 +97,13 @@ DynamicGeometryInfoUpdate::DynamicGeometryInfoUpdate( Thing *thing, const Module
 	m_switchedDirections = FALSE;
 	
 	// record in our instance what initial and final height are
-	m_initialHeight = modData->m_initialHeight;
-	m_initialMajorRadius = modData->m_initialMajorRadius;
-	m_initialMinorRadius = modData->m_initialMinorRadius;
-	m_finalHeight = modData->m_finalHeight;
-	m_finalMajorRadius = modData->m_finalMajorRadius;
-	m_finalMinorRadius = modData->m_finalMinorRadius;
+	// P8: the instance copies are xfer'd Reals
+	m_initialHeight = fixToReal( modData->m_initialHeight );
+	m_initialMajorRadius = fixToReal( modData->m_initialMajorRadius );
+	m_initialMinorRadius = fixToReal( modData->m_initialMinorRadius );
+	m_finalHeight = fixToReal( modData->m_finalHeight );
+	m_finalMajorRadius = fixToReal( modData->m_finalMajorRadius );
+	m_finalMinorRadius = fixToReal( modData->m_finalMinorRadius );
 
 } 
 
@@ -144,7 +145,7 @@ UpdateSleepTime DynamicGeometryInfoUpdate::update( void )
 	newMinor = m_initialMinorRadius + (ratio * (m_finalMinorRadius - m_initialMinorRadius));
 
 	// make a new geometry info with the new values
-	// P3: the extents are interpolated between INI Reals; the geometry itself is fixed
+	// P8: the extents are interpolated between the xfer'd Real copies; the geometry itself is fixed
 	GeometryInfo newGeom = me->getGeometryInfo();
 	newGeom.setFix( newGeom.getGeomType(), newGeom.getIsSmall(), fixFromReal( newHeight ), fixFromReal( newMajor ), fixFromReal( newMinor ) );
 	me->setGeometryInfo( newGeom );
@@ -166,12 +167,13 @@ UpdateSleepTime DynamicGeometryInfoUpdate::update( void )
 			m_reverseAtTransitionTime = FALSE;
 
 			// swap the initial and final values
-			m_initialHeight = data->m_finalHeight;
-			m_initialMajorRadius = data->m_finalMajorRadius;
-			m_initialMinorRadius = data->m_finalMinorRadius;
-			m_finalHeight = data->m_initialHeight;
-			m_finalMajorRadius = data->m_initialMajorRadius;
-			m_finalMinorRadius = data->m_initialMinorRadius;
+			// P8: the instance copies are xfer'd Reals
+			m_initialHeight = fixToReal( data->m_finalHeight );
+			m_initialMajorRadius = fixToReal( data->m_finalMajorRadius );
+			m_initialMinorRadius = fixToReal( data->m_finalMinorRadius );
+			m_finalHeight = fixToReal( data->m_initialHeight );
+			m_finalMajorRadius = fixToReal( data->m_initialMajorRadius );
+			m_finalMinorRadius = fixToReal( data->m_initialMinorRadius );
 
 		}  // end if
 		else

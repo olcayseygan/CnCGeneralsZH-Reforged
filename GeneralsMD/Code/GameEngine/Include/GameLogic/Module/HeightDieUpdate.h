@@ -46,10 +46,10 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	Real m_targetHeightAboveTerrain;				///< die at this height above terrain
+	Fix m_targetHeightAboveTerrain;			///< die at this height above terrain
 	Bool m_targetHeightIncludesStructures;	///< target height considers terrain AND structure height underneath us
 	Bool m_onlyWhenMovingDown;							///< don't detonate unless moving in downward z dir
-	Real m_destroyAttachedParticlesAtHeight;  ///< HACK, destroy any attached particle system of object when below this height
+	Fix m_destroyAttachedParticlesAtHeight;  ///< HACK, destroy any attached particle system of object when below this height
 	Bool m_snapToGroundOnDeath;							///< snap to the ground when killed
 	UnsignedInt m_initialDelay;							///< Don't explode before this time
 

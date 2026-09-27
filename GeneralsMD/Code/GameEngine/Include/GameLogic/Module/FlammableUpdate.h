@@ -60,7 +60,7 @@ public:
 	UnsignedInt		m_aflameDamageDelay;	///< While ::Aflame, I take damage this often.  If 0, never.
 	Int						m_aflameDamageAmount;	///< And this is how much I take.
 	AsciiString		m_burningSoundName;			///< Sound to loop-play while burning (Not an AudioEventRTS here, since that belongs to the module)
-	Real					m_flameDamageLimitData;
+	Fix						m_flameDamageLimitData;
 	UnsignedInt		m_flameDamageExpirationDelay;
 
 	FlammableUpdateModuleData();

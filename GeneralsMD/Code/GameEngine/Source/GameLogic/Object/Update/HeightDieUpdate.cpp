@@ -54,10 +54,10 @@
 HeightDieUpdateModuleData::HeightDieUpdateModuleData( void )
 {
 
-	m_targetHeightAboveTerrain = 0.0f;
+	m_targetHeightAboveTerrain = Fix( 0 );
 	m_targetHeightIncludesStructures = FALSE;
 	m_onlyWhenMovingDown = FALSE;
-	m_destroyAttachedParticlesAtHeight = -1.0f;
+	m_destroyAttachedParticlesAtHeight = Fix( -1 );
 	m_snapToGroundOnDeath = FALSE;
 	m_initialDelay = 0;
 
@@ -72,10 +72,10 @@ void HeightDieUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "TargetHeight", INI::parseReal, NULL, offsetof( HeightDieUpdateModuleData, m_targetHeightAboveTerrain ) },
+		{ "TargetHeight", INI::parseFix, NULL, FIX_OFFSET( HeightDieUpdateModuleData, m_targetHeightAboveTerrain ) },
 		{ "TargetHeightIncludesStructures", INI::parseBool, NULL, offsetof( HeightDieUpdateModuleData, m_targetHeightIncludesStructures ) },
 		{ "OnlyWhenMovingDown", INI::parseBool, NULL, offsetof( HeightDieUpdateModuleData, m_onlyWhenMovingDown ) },
-		{ "DestroyAttachedParticlesAtHeight", INI::parseReal, NULL, offsetof( HeightDieUpdateModuleData, m_destroyAttachedParticlesAtHeight ) },
+		{ "DestroyAttachedParticlesAtHeight", INI::parseFix, NULL, FIX_OFFSET( HeightDieUpdateModuleData, m_destroyAttachedParticlesAtHeight ) },
 		{ "SnapToGroundOnDeath", INI::parseBool, NULL, offsetof( HeightDieUpdateModuleData, m_snapToGroundOnDeath ) },
 		{ "InitialDelay", INI::parseDurationUnsignedInt, NULL, offsetof( HeightDieUpdateModuleData, m_initialDelay ) },
 		{ 0, 0, 0, 0 }
@@ -140,8 +140,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 	// get our current position
 	const FCoord3D pos = *getObject()->getPositionFix();
 
-	// P3: the INI heights are still Reals
-	const Fix targetHeightAboveTerrain = fixFromReal( modData->m_targetHeightAboveTerrain );
+	const Fix targetHeightAboveTerrain = modData->m_targetHeightAboveTerrain;
 
 	Bool directionOK = TRUE;
 	if( m_hasDied == FALSE )
@@ -250,7 +249,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 	// if our height is below the destroy attached particles height above the terrain, clean
 	// them up from the particle system
 	//
-	if( m_particlesDestroyed == FALSE && pos.z < fixFromReal( modData->m_destroyAttachedParticlesAtHeight ) && (m_hasDied || directionOK) )
+	if( m_particlesDestroyed == FALSE && pos.z < modData->m_destroyAttachedParticlesAtHeight && (m_hasDied || directionOK) )
 	{
 
 		// destroy them

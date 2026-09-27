@@ -33,6 +33,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/DynamicShroudClearingRangeUpdate.h"
+#include "Lib/FixBoundary.h"
 
 
 
@@ -51,7 +52,7 @@ DynamicShroudClearingRangeUpdateModuleData::DynamicShroudClearingRangeUpdateModu
 	m_growDelay = 0;
 	m_growTime = 0;
 
-	m_finalVision = 0.0f;
+	m_finalVision = Fix( 0 );
 	m_changeInterval = 0;
 	m_growInterval = 0;
 	m_doSpySatFX = FALSE;
@@ -70,7 +71,7 @@ DynamicShroudClearingRangeUpdateModuleData::DynamicShroudClearingRangeUpdateModu
 		{ "ShrinkTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_shrinkTime ) },
 		{ "GrowDelay",					INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_growDelay ) },
 		{ "GrowTime",						INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_growTime ) },
-		{ "FinalVision",				INI::parseReal,									NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_finalVision ) },
+		{ "FinalVision",				INI::parseFix,									NULL, FIX_OFFSET( DynamicShroudClearingRangeUpdateModuleData, m_finalVision ) },
 		{ "GridDecalTemplate", RadiusDecalTemplate::parseRadiusDecalTemplate, NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_gridDecalTemplate ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -257,13 +258,13 @@ UpdateSleepTime DynamicShroudClearingRangeUpdate::update( void )
 		}
 		case DSCRU_SHRINKING :
 		{
-			m_currentClearingRange -= (m_nativeClearingRange-md->m_finalVision) / max(1.0f, (Real)md->m_shrinkTime);
+			m_currentClearingRange -= (m_nativeClearingRange-fixToReal( md->m_finalVision )) / max(1.0f, (Real)md->m_shrinkTime);	// P8: the clearing range is float
 			break;
 		}
 		case DSCRU_DONE_FOREVER :
 		{
 			killGridDecals();
-			m_currentClearingRange = md->m_finalVision;
+			m_currentClearingRange = fixToReal( md->m_finalVision );	// P8: the clearing range is float
 			break;
 		}
 

@@ -50,16 +50,16 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse &p );
 
-	Real m_spiralOrbitTurnRate;						///< (rads per frame) rate at which we do big circles down toward the ground
-	Real m_spiralOrbitForwardSpeed;				///< (dist per frame) speed at which we move "forward" in the downward spiral
-	Real m_spiralOrbitForwardSpeedDamping;///< every frame our forward speed in the orbit is adjusted by this amount
-	Real m_minSelfSpin;										///< (rads per frame) min turning rate at which we spin around our center of gravity
-	Real m_maxSelfSpin;										///< (rads per frame) max turning rate at which we spin around our center of gravity
-	Real m_selfSpinUpdateDelay;						///< (frames) every this many frames we will update the self spin angle, but we'll keep it inbetween the min and max self spin
-	Real m_selfSpinUpdateAmount;					///< (radian) when we update the self spin every SelfSpinUpdateDelay frames, we change it this much, but keep it between min and max self spin
-	Real m_fallHowFast;										///< a fraction of gravity we use to modify the helicopert locmotor lift
-	Real m_minBladeFlyOffDelay;						///< (frames) min frame that the blade will fly off at
-	Real m_maxBladeFlyOffDelay;						///< (frames) max frame that the blade will fly off at
+	Fix m_spiralOrbitTurnRate;						///< (rads per frame) rate at which we do big circles down toward the ground
+	Fix m_spiralOrbitForwardSpeed;				///< (dist per frame) speed at which we move "forward" in the downward spiral
+	Fix m_spiralOrbitForwardSpeedDamping;///< every frame our forward speed in the orbit is adjusted by this amount
+	Fix m_minSelfSpin;										///< (rads per frame) min turning rate at which we spin around our center of gravity
+	Fix m_maxSelfSpin;										///< (rads per frame) max turning rate at which we spin around our center of gravity
+	Fix m_selfSpinUpdateDelay;						///< (frames) every this many frames we will update the self spin angle, but we'll keep it inbetween the min and max self spin
+	Fix m_selfSpinUpdateAmount;					///< (radian) when we update the self spin every SelfSpinUpdateDelay frames, we change it this much, but keep it between min and max self spin
+	Fix m_fallHowFast;										///< a fraction of gravity we use to modify the helicopert locmotor lift
+	Fix m_minBladeFlyOffDelay;						///< (frames) min frame that the blade will fly off at
+	Fix m_maxBladeFlyOffDelay;						///< (frames) max frame that the blade will fly off at
 	const ParticleSystemTemplate *m_attachParticleSystem;		///< particle system to attach
 	AsciiString m_attachParticleBone;			///< bone to attach particle system to
 	Coord3D m_attachParticleLoc;					///< loc attach particle system to if bone not present
@@ -72,9 +72,9 @@ public:
 	const ObjectCreationList *m_oclHitGround;  ///< OCL at hit ground event
 	const FXList *m_fxFinalBlowUp;				///< the final blow up
 	const ObjectCreationList *m_oclFinalBlowUp;///< OCL at final blow up event
-	Real m_delayFromGroundToFinalDeath;		///< (frames) delay from when we hit the ground to final BOOM!
+	Fix m_delayFromGroundToFinalDeath;		///< (frames) delay from when we hit the ground to final BOOM!
 	AsciiString m_finalRubbleObject;			///< final rubble object to create after it's ALL over
-	Real m_maxBraking;										///< max braking we may use during death spiral
+	Fix m_maxBraking;										///< max braking we may use during death spiral
 
 	// @todo propagate this up to SlowDeathBehaviorModuleData. I don't wanna do it today, cause its 4/3. jkmcd
 	AudioEventRTS m_deathSound;						///< Sound played during death sequence.

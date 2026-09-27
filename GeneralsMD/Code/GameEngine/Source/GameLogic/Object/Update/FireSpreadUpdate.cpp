@@ -81,7 +81,7 @@ FireSpreadUpdateModuleData::FireSpreadUpdateModuleData()
 	m_minSpreadTryDelayData = 0;
 	m_maxSpreadTryDelayData = 0;
 	m_oclEmbers = NULL;
-	m_spreadTryRange = 0;
+	m_spreadTryRange = Fix( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -94,7 +94,7 @@ FireSpreadUpdateModuleData::FireSpreadUpdateModuleData()
 		{ "OCLEmbers",				INI::parseObjectCreationList,		NULL, offsetof( FireSpreadUpdateModuleData, m_oclEmbers ) },
 		{ "MinSpreadDelay",		INI::parseDurationUnsignedInt,	NULL, offsetof( FireSpreadUpdateModuleData, m_minSpreadTryDelayData ) },
 		{ "MaxSpreadDelay",		INI::parseDurationUnsignedInt,	NULL, offsetof( FireSpreadUpdateModuleData, m_maxSpreadTryDelayData ) },
-		{ "SpreadTryRange",		INI::parseReal,									NULL, offsetof( FireSpreadUpdateModuleData, m_spreadTryRange ) },
+		{ "SpreadTryRange",		INI::parseFix,									NULL, FIX_OFFSET( FireSpreadUpdateModuleData, m_spreadTryRange ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -125,7 +125,7 @@ UpdateSleepTime FireSpreadUpdate::update( void )
 	{
 		ObjectCreationList::create( d->m_oclEmbers, getObject(), NULL );
 
-		if( d->m_spreadTryRange != 0 )
+		if( d->m_spreadTryRange != Fix( 0 ) )
 		{
 			// This will spread fire explicitly
 			PartitionFilterFlammable fFilter;
@@ -145,8 +145,7 @@ UpdateSleepTime FireSpreadUpdate::update( void )
 // just ask for that; the above has to find ALL objects in range, but we ignore all 
 // but the first (closest).
 //
-			// P3: SpreadTryRange is still a Real from the INI
-			Object* objectToLight = ThePartitionManager->getClosestObjectFix(getObject(), fixFromReal(d->m_spreadTryRange), FROM_CENTER_3D, filters);
+			Object* objectToLight = ThePartitionManager->getClosestObjectFix(getObject(), d->m_spreadTryRange, FROM_CENTER_3D, filters);
 			if( objectToLight )
 			{
 				static NameKeyType key_FlammableUpdate = NAMEKEY("FlammableUpdate");

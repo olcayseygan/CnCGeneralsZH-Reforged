@@ -91,16 +91,16 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 	m_finalRubbleObject.clear();
 	//
 
-	m_spiralOrbitTurnRate = 0.0f;
-	m_spiralOrbitForwardSpeed = 0.0f;
-	m_spiralOrbitForwardSpeedDamping = 1.0f;  // no damping
-	m_minSelfSpin = 0.0f;
-	m_maxSelfSpin = 0.0f;
-	m_selfSpinUpdateDelay = 0.0f;
-	m_selfSpinUpdateAmount = 0.0f;
-	m_fallHowFast = 0.0f;
-	m_minBladeFlyOffDelay = 0.0;
-	m_maxBladeFlyOffDelay = 0.0;
+	m_spiralOrbitTurnRate = Fix( 0 );
+	m_spiralOrbitForwardSpeed = Fix( 0 );
+	m_spiralOrbitForwardSpeedDamping = Fix( 1 );  // no damping
+	m_minSelfSpin = Fix( 0 );
+	m_maxSelfSpin = Fix( 0 );
+	m_selfSpinUpdateDelay = Fix( 0 );
+	m_selfSpinUpdateAmount = Fix( 0 );
+	m_fallHowFast = Fix( 0 );
+	m_minBladeFlyOffDelay = Fix( 0 );
+	m_maxBladeFlyOffDelay = Fix( 0 );
 
 	m_attachParticleSystem = NULL;
 	m_attachParticleLoc.x = 0.0f;
@@ -113,8 +113,8 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 	m_oclHitGround = NULL;
 	m_fxFinalBlowUp = NULL;
 	m_oclFinalBlowUp = NULL;
-	m_delayFromGroundToFinalDeath = 0;
-	m_maxBraking = 99999.0f;
+	m_delayFromGroundToFinalDeath = Fix( 0 );
+	m_maxBraking = Fix( 99999 );
 
 }  // end HelicopterSlowDeathBehaviorModuleData
 
@@ -126,16 +126,16 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "SpiralOrbitTurnRate",	INI::parseAngularVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitTurnRate ) },
-		{ "SpiralOrbitForwardSpeed", INI::parseVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeed ) },
-		{ "SpiralOrbitForwardSpeedDamping", INI::parseReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeedDamping ) },
-		{ "MinSelfSpin", INI::parseAngularVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_minSelfSpin ) },
-		{ "MaxSelfSpin", INI::parseAngularVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_maxSelfSpin ) },
-		{ "SelfSpinUpdateDelay", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_selfSpinUpdateDelay ) },
-		{ "SelfSpinUpdateAmount", INI::parseAngleReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_selfSpinUpdateAmount ) },
-		{ "FallHowFast", INI::parsePercentToReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_fallHowFast ) },
-		{ "MinBladeFlyOffDelay", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_minBladeFlyOffDelay ) },
-		{ "MaxBladeFlyOffDelay", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_maxBladeFlyOffDelay ) },
+		{ "SpiralOrbitTurnRate",	INI::parseAngularVelocityFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitTurnRate ) },
+		{ "SpiralOrbitForwardSpeed", INI::parseVelocityFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeed ) },
+		{ "SpiralOrbitForwardSpeedDamping", INI::parseFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeedDamping ) },
+		{ "MinSelfSpin", INI::parseAngularVelocityFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_minSelfSpin ) },
+		{ "MaxSelfSpin", INI::parseAngularVelocityFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_maxSelfSpin ) },
+		{ "SelfSpinUpdateDelay", INI::parseDurationFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_selfSpinUpdateDelay ) },
+		{ "SelfSpinUpdateAmount", INI::parseAngleFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_selfSpinUpdateAmount ) },
+		{ "FallHowFast", INI::parsePercentToFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_fallHowFast ) },
+		{ "MinBladeFlyOffDelay", INI::parseDurationFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_minBladeFlyOffDelay ) },
+		{ "MaxBladeFlyOffDelay", INI::parseDurationFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_maxBladeFlyOffDelay ) },
 		{ "AttachParticle", INI::parseParticleSystemTemplate, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_attachParticleSystem ) },
 		{ "AttachParticleBone", INI::parseAsciiString, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_attachParticleBone ) },
 		{ "AttachParticleLoc", INI::parseCoord3D, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_attachParticleLoc ) },
@@ -148,10 +148,10 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 		{ "OCLHitGround", INI::parseObjectCreationList, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_oclHitGround ) },
 		{ "FXFinalBlowUp", INI::parseFXList, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_fxFinalBlowUp ) },
 		{ "OCLFinalBlowUp", INI::parseObjectCreationList, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_oclFinalBlowUp ) },
-		{ "DelayFromGroundToFinalDeath", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_delayFromGroundToFinalDeath ) },
+		{ "DelayFromGroundToFinalDeath", INI::parseDurationFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_delayFromGroundToFinalDeath ) },
 		{ "FinalRubbleObject", INI::parseAsciiString, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_finalRubbleObject ) },
 		{ "SoundDeathLoop", INI::parseAudioEventRTS, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_deathSound) },
-		{ "MaxBraking", INI::parseAccelerationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_maxBraking) },
+		{ "MaxBraking", INI::parseAccelerationFix, NULL, FIX_OFFSET( HelicopterSlowDeathBehaviorModuleData, m_maxBraking) },
 
 		{ 0, 0, 0, 0 }
 
@@ -223,8 +223,9 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 
 
 	// pick a frame we will fly the blade off at
-	m_bladeFlyOffFrame = GameLogicRandomValueReal( modData->m_minBladeFlyOffDelay,
-																								 modData->m_maxBladeFlyOffDelay );
+	const Fix bladeFlyOffDelay = GameLogicRandomValueFix( modData->m_minBladeFlyOffDelay,
+																												modData->m_maxBladeFlyOffDelay );
+	m_bladeFlyOffFrame = (UnsignedInt)( bladeFlyOffDelay.raw() >> Fix::FRAC_BITS );
 
 	// for now, make it always fall to the left
 	m_orbitDirection = ORBIT_DIRECTION_LEFT;
@@ -236,10 +237,10 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 	m_forwardAngle = fixToReal( getObject()->getOrientationFix() );	// P4: it steers a physics force
 
 	// set or forward speed in the spiral orbit speed to that specified
-	m_forwardSpeed = modData->m_spiralOrbitForwardSpeed;
+	m_forwardSpeed = fixToReal( modData->m_spiralOrbitForwardSpeed );	// P4: the spiral state is xfer'd float
 
 	// start our self spinning at the min self spin rate
-	m_selfSpin = modData->m_minSelfSpin;
+	m_selfSpin = fixToReal( modData->m_minSelfSpin );	// P4: the spiral state is xfer'd float
 	
 	// we will start off changing the self spin towards the MaxSelfSpin
 	m_selfSpinTowardsMax = TRUE;
@@ -250,8 +251,8 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 		return;
 	}
 	Locomotor *locomotor = getObject()->getAIUpdateInterface()->getCurLocomotor();
-	locomotor->setMaxLift( -TheGlobalData->m_gravity * (1.0f - modData->m_fallHowFast) );
-	locomotor->setMaxBraking( modData->m_maxBraking );
+	locomotor->setMaxLift( -TheGlobalData->m_gravity * fixToReal( Fix( 1 ) - modData->m_fallHowFast ) );	// P4: locomotor
+	locomotor->setMaxBraking( fixToReal( modData->m_maxBraking ) );	// P4: locomotor
 
 	// attach particle system to bone if present
 	if( modData->m_attachParticleSystem )
@@ -327,27 +328,31 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 		//copter->setOrientation( copter->getOrientation() + m_selfSpin * m_orbitDirection );
 
 		FixMatrix3D xfrm = *copter->getTransformMatrixFix();
-		preRotateZ( xfrm, fixFromReal( m_selfSpin * m_orbitDirection ) );	// P3: the spin rates are INI data
+		preRotateZ( xfrm, fixFromReal( m_selfSpin * m_orbitDirection ) );	// P4: the spin is xfer'd float state
 		copter->setTransformMatrixFix( &xfrm );
 
 		//
 		// over time we change the rate at which we self spin around our center of gravity ... we
 		// will ping pong back and forth between the MinSelfSpin and MaxSelfSpin defined in INI
 		//
-		if( modData->m_selfSpinUpdateDelay &&
-				TheGameLogic->getFrame() - m_lastSelfSpinUpdateFrame > modData->m_selfSpinUpdateDelay )
+		if( modData->m_selfSpinUpdateDelay != Fix( 0 ) &&
+				Fix( (Int)( TheGameLogic->getFrame() - m_lastSelfSpinUpdateFrame ) ) > modData->m_selfSpinUpdateDelay )
 		{
+			// P4: the spin is xfer'd float state
+			const Real spinStep = fixToReal( modData->m_selfSpinUpdateAmount ) / LOGICFRAMES_PER_SECOND;
+			const Real maxSelfSpin = fixToReal( modData->m_maxSelfSpin );
+			const Real minSelfSpin = fixToReal( modData->m_minSelfSpin );
 
 			// update the self spin
 			if( m_selfSpinTowardsMax == TRUE )
 			{
 
-				// we're going towards the max self spin, increase it		
-				m_selfSpin += modData->m_selfSpinUpdateAmount / LOGICFRAMES_PER_SECOND;
-				if( m_selfSpin > modData->m_maxSelfSpin )
+				// we're going towards the max self spin, increase it
+				m_selfSpin += spinStep;
+				if( m_selfSpin > maxSelfSpin )
 				{
 
-					m_selfSpin = modData->m_maxSelfSpin;  // cap at max
+					m_selfSpin = maxSelfSpin;  // cap at max
 					m_selfSpinTowardsMax = FALSE;					// now start changing spin towards min again
 
 				}  // end if
@@ -357,11 +362,11 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 			{
 			
 				// we're going towards the min self spin, decrease it
-				m_selfSpin -= modData->m_selfSpinUpdateAmount / LOGICFRAMES_PER_SECOND;
-				if( m_selfSpin < modData->m_minSelfSpin )
+				m_selfSpin -= spinStep;
+				if( m_selfSpin < minSelfSpin )
 				{
 
-					m_selfSpin = modData->m_minSelfSpin;  // cap at min
+					m_selfSpin = minSelfSpin;  // cap at min
 					m_selfSpinTowardsMax = TRUE;					// now start chaning spin towards max again
 
 				}  // end if
@@ -390,10 +395,10 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 		physics->applyMotiveForce( &force );
 
 		// update our forward angle for travelling along the large spiral downward circle
-		m_forwardAngle += (modData->m_spiralOrbitTurnRate * m_orbitDirection);
+		m_forwardAngle += (fixToReal( modData->m_spiralOrbitTurnRate ) * m_orbitDirection);	// P4: the spiral state is xfer'd float
 
 		// adjust our forward spiral orbit by the damping factor specified
-		m_forwardSpeed *= modData->m_spiralOrbitForwardSpeedDamping;
+		m_forwardSpeed *= fixToReal( modData->m_spiralOrbitForwardSpeedDamping );	// P4: the spiral state is xfer'd float
 
 		// is it time to have the blade fly off
 		if( m_bladeFlyOffFrame > 0 )
@@ -502,7 +507,7 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 
 	// if we're on the ground, see if it's time for our final boom
 	if( m_hitGroundFrame && 
-			TheGameLogic->getFrame() - m_hitGroundFrame > modData->m_delayFromGroundToFinalDeath )
+			Fix( (Int)( TheGameLogic->getFrame() - m_hitGroundFrame ) ) > modData->m_delayFromGroundToFinalDeath )
 	{
 
 		// make effect

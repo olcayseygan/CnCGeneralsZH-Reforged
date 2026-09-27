@@ -39,6 +39,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/FlammableUpdate.h"
 #include "GameLogic/Module/FireSpreadUpdate.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 FlammableUpdateModuleData::FlammableUpdateModuleData()
@@ -51,7 +52,7 @@ FlammableUpdateModuleData::FlammableUpdateModuleData()
 	// Initialization needed
 	m_burningSoundName.clear();
 	//
-	m_flameDamageLimitData = 20.0f;
+	m_flameDamageLimitData = Fix( 20 );
 	m_flameDamageExpirationDelay = LOGICFRAMES_PER_SECOND * 2;
 }
 
@@ -67,7 +68,7 @@ FlammableUpdateModuleData::FlammableUpdateModuleData()
 		{ "AflameDamageDelay",			INI::parseDurationUnsignedInt,	NULL, offsetof( FlammableUpdateModuleData, m_aflameDamageDelay ) },
 		{ "AflameDamageAmount",			INI::parseInt,									NULL, offsetof( FlammableUpdateModuleData, m_aflameDamageAmount ) },
 		{ "BurningSoundName",				INI::parseAsciiString,					NULL,	offsetof( FlammableUpdateModuleData, m_burningSoundName) },
-		{ "FlameDamageLimit",				INI::parseReal,									NULL,	offsetof( FlammableUpdateModuleData, m_flameDamageLimitData ) },
+		{ "FlameDamageLimit",				INI::parseFix,									NULL,	FIX_OFFSET( FlammableUpdateModuleData, m_flameDamageLimitData ) },
 		{ "FlameDamageExpiration",	INI::parseDurationUnsignedInt,	NULL,	offsetof( FlammableUpdateModuleData, m_flameDamageExpirationDelay ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -83,7 +84,7 @@ FlammableUpdate::FlammableUpdate( Thing *thing, const ModuleData* moduleData ) :
 	m_burnedEndFrame = 0;
 	m_damageEndFrame = 0;
 	m_audioHandle = NULL;
-	m_flameDamageLimit = getFlammableUpdateModuleData()->m_flameDamageLimitData;
+	m_flameDamageLimit = fixToReal( getFlammableUpdateModuleData()->m_flameDamageLimitData );	// P6: the limit counts float damage and is xfer'd
 	m_lastFlameDamageDealt = 0;
 
 	setWakeFrame(getObject(), UPDATE_SLEEP_FOREVER);
@@ -107,7 +108,7 @@ void FlammableUpdate::onDamage( DamageInfo *damageInfo )
 		if( now - getFlammableUpdateModuleData()->m_flameDamageExpirationDelay > m_lastFlameDamageDealt )
 		{
 			// If it has been a long time since our last flame damage, reset the threshold
-			m_flameDamageLimit = getFlammableUpdateModuleData()->m_flameDamageLimitData;
+			m_flameDamageLimit = fixToReal( getFlammableUpdateModuleData()->m_flameDamageLimitData );	// P6: the limit counts float damage and is xfer'd
 		}
 		m_lastFlameDamageDealt = now;
 		

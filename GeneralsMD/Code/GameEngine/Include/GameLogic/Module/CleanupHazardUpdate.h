@@ -48,7 +48,7 @@ class CleanupHazardUpdateModuleData : public ModuleData
 public:
 	WeaponSlotType	m_weaponSlot;
 	UnsignedInt			m_scanFrames;
-	Real						m_scanRange;
+	Fix							m_scanRange;
 
 	CleanupHazardUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

@@ -44,7 +44,7 @@ public:
 	const ObjectCreationList *m_oclEmbers;
 	UnsignedInt m_minSpreadTryDelayData;
 	UnsignedInt m_maxSpreadTryDelayData;
-	Real m_spreadTryRange;
+	Fix m_spreadTryRange;
 
 	FireSpreadUpdateModuleData();
 

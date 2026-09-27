@@ -56,9 +56,9 @@
 AutoFindHealingUpdateModuleData::AutoFindHealingUpdateModuleData()
 {
 	m_scanFrames				= 0;
-	m_scanRange					= 0.0f;
-	m_neverHeal					= 0.95f;
-	m_alwaysHeal				= 0.25f;
+	m_scanRange					= Fix( 0 );
+	m_neverHeal					= 0.95_fx;
+	m_alwaysHeal				= 0.25_fx;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -69,9 +69,9 @@ AutoFindHealingUpdateModuleData::AutoFindHealingUpdateModuleData()
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( AutoFindHealingUpdateModuleData, m_scanFrames ) },
-		{ "ScanRange",						INI::parseReal,									NULL, offsetof( AutoFindHealingUpdateModuleData, m_scanRange ) },
-		{ "NeverHeal",						INI::parseReal,									NULL, offsetof( AutoFindHealingUpdateModuleData, m_neverHeal ) },
-		{ "AlwaysHeal",						INI::parseReal,									NULL, offsetof( AutoFindHealingUpdateModuleData, m_alwaysHeal ) },
+		{ "ScanRange",						INI::parseFix,									NULL, FIX_OFFSET( AutoFindHealingUpdateModuleData, m_scanRange ) },
+		{ "NeverHeal",						INI::parseFix,									NULL, FIX_OFFSET( AutoFindHealingUpdateModuleData, m_neverHeal ) },
+		{ "AlwaysHeal",						INI::parseFix,									NULL, FIX_OFFSET( AutoFindHealingUpdateModuleData, m_alwaysHeal ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -124,7 +124,7 @@ UpdateSleepTime AutoFindHealingUpdate::update()
 	BodyModuleInterface *body = obj->getBodyModule();
 	if (!body) return UPDATE_SLEEP_NONE;
 	//	If we're real healthy, don't bother looking for healing.
-	if (body->getHealth() > body->getMaxHealth()*data->m_neverHeal) {
+	if (body->getHealth() > body->getMaxHealth()*fixToReal( data->m_neverHeal )) {	// P6: health is float
 		return UPDATE_SLEEP_NONE;
 	}
 
@@ -133,7 +133,7 @@ UpdateSleepTime AutoFindHealingUpdate::update()
 		// For now, only heal if idle.  jba.
 		return UPDATE_SLEEP_NONE;
 		//	If we're > min health, and busy, keep at it.
-		if (body->getHealth() > body->getMaxHealth()*data->m_alwaysHeal) {
+		if (body->getHealth() > body->getMaxHealth()*fixToReal( data->m_alwaysHeal )) {	// P6: health is float
 			return UPDATE_SLEEP_NONE;
 		}
 	}
@@ -156,8 +156,7 @@ Object* AutoFindHealingUpdate::scanClosestTarget()
 	Object *bestTarget = NULL;
 	Fix closestDistSqr = Fix( 0 );
 
-	// P3: ScanRange is still a Real from the INI
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), fixFromReal( data->m_scanRange ), FROM_CENTER_2D );
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), data->m_scanRange, FROM_CENTER_2D );
 	MemoryPoolObjectHolder hold(iter);
 
 	for( Object *other = iter->first(); other; other = iter->next() )

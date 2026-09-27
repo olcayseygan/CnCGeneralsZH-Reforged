@@ -126,8 +126,8 @@ const Int DEFAULT_UPDATE_RATE = LOGICFRAMES_PER_SECOND;
 HordeUpdateModuleData::HordeUpdateModuleData() :
 	m_updateRate(DEFAULT_UPDATE_RATE),
   m_minCount(0),
-  m_minDist(0.0f),
-	m_rubOffRadius(20.0f),
+  m_minDist(0),
+	m_rubOffRadius(20),
 	m_alliesOnly(true),
 	m_exactMatch(false),
 	m_allowedNationalism(TRUE),
@@ -145,8 +145,8 @@ HordeUpdateModuleData::HordeUpdateModuleData() :
 		{ "UpdateRate", INI::parseDurationUnsignedInt, NULL, offsetof(HordeUpdateModuleData, m_updateRate) },
 		{ "KindOf", KindOfMaskType::parseFromINI, NULL, offsetof(HordeUpdateModuleData, m_kindof) },
 		{ "Count", INI::parseInt, NULL, offsetof(HordeUpdateModuleData, m_minCount) },
-		{ "Radius", INI::parseReal, NULL, offsetof(HordeUpdateModuleData, m_minDist) },
-		{ "RubOffRadius", INI::parseReal, NULL, offsetof(HordeUpdateModuleData, m_rubOffRadius) },
+		{ "Radius", INI::parseFix, NULL, FIX_OFFSET(HordeUpdateModuleData, m_minDist) },
+		{ "RubOffRadius", INI::parseFix, NULL, FIX_OFFSET(HordeUpdateModuleData, m_rubOffRadius) },
 		{ "AlliesOnly", INI::parseBool, NULL, offsetof(HordeUpdateModuleData, m_alliesOnly) },
 		{ "ExactMatch", INI::parseBool, NULL, offsetof(HordeUpdateModuleData, m_exactMatch) },
 		{ "Action", INI::parseIndexList, TheHordeActionTypeNames, offsetof(HordeUpdateModuleData, m_action) },
@@ -273,9 +273,8 @@ UpdateSleepTime HordeUpdate::update( void )
 		// RubOffRadius reaches further than Radius (150 against 75 on the Battlemaster), but the
 		// honorary-member test below only ever saw the units inside Radius, so a tank that close to a
 		// true member never got the horde. Walk the larger of the two, count only inside Radius.
-		// P3: Radius and RubOffRadius are still Reals from the INI
-		const Fix minDist = fixFromReal( md->m_minDist );
-		const Fix rubOffRadius = fixFromReal( md->m_rubOffRadius );
+		const Fix minDist = md->m_minDist;
+		const Fix rubOffRadius = md->m_rubOffRadius;
 		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(getObject(), fixMax( minDist, rubOffRadius ), FROM_BOUNDINGSPHERE_3D, filters);
 		MemoryPoolObjectHolder hold(iter);
 

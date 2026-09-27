@@ -47,9 +47,9 @@ class AutoFindHealingUpdateModuleData : public ModuleData
 {
 public:
 	UnsignedInt			m_scanFrames;
-	Real						m_scanRange;
-	Real						m_neverHeal;
-	Real						m_alwaysHeal;
+	Fix							m_scanRange;
+	Fix							m_neverHeal;
+	Fix							m_alwaysHeal;
 
 	AutoFindHealingUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

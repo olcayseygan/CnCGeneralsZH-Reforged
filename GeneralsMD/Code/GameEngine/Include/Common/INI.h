@@ -46,10 +46,10 @@
 	* parsers, REAL_OFFSET with the Real ones. */
 //-------------------------------------------------------------------------------------------------
 template <typename Member, typename Expected>
-constexpr size_t checkedFieldOffset( size_t offset )
+constexpr Int checkedFieldOffset( size_t offset )
 {
 	static_assert( std::is_same<Member, Expected>::value, "field table entry names a member of the wrong type" );
-	return offset;
+	return (Int)offset;
 }
 #define FIX_OFFSET( C, m )	checkedFieldOffset<decltype( C::m ), Fix>( offsetof( C, m ) )
 #define REAL_OFFSET( C, m )	checkedFieldOffset<decltype( C::m ), Real>( offsetof( C, m ) )

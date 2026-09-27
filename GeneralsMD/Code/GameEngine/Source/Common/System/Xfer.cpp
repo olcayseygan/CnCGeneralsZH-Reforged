@@ -866,4 +866,36 @@ void Xfer::xferMatrix3D( Matrix3D* mtx )
 	xferReal(&tmp2.W);
 }
 
+// ------------------------------------------------------------------------------------------------
+// A Fix goes to disk as its raw 64 bit integer, so a save holds exactly the simulation's value.
+// ------------------------------------------------------------------------------------------------
+void Xfer::xferFix( Fix *fixData )
+{
+	Int64 raw = fixData->raw();
+	xferInt64( &raw );
+	*fixData = Fix::fromRaw( raw );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void Xfer::xferFCoord3D( FCoord3D *coord )
+{
+	xferFix( &coord->x );
+	xferFix( &coord->y );
+	xferFix( &coord->z );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void Xfer::xferFixMatrix3D( FixMatrix3D *mtx )
+{
+	const XferVersion currentVersion = 1;
+	XferVersion version = currentVersion;
+	xferVersion( &version, currentVersion );
+
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			xferFix( &mtx->m[ i ][ j ] );
+}
+
 

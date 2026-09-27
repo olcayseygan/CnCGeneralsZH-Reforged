@@ -14105,3 +14105,4 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 #include "test_selection_priority.inc"
 #include "test_supply_center_save.inc"
 #include "test_cinema.inc"
+#include "test_fix.inc"

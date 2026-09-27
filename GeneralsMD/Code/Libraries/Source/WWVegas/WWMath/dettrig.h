@@ -63,6 +63,13 @@ namespace DetTrig
 	float ACos( float x );							///< clamps its argument to [-1, 1]
 	float ASin( float x );							///< clamps its argument to [-1, 1]
 
+	// The same tables with no float on either side, for the fixed point simulation (Lib/Fix.h).  An
+	// angle is a fraction of a turn over the whole unsigned int, 2^32 to the turn; a sine or cosine
+	// comes back scaled by 2^24.
+	int SinTurn( unsigned int turn );
+	int CosTurn( unsigned int turn );
+	long long ATan2Turn( long long y, long long x );	///< in turns, in [-2^31, 2^31]; (0, 0) gives 0
+
 }	// namespace DetTrig
 
 #endif // DETTRIG_H

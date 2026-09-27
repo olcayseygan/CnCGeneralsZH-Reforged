@@ -39,6 +39,7 @@
 #include "Common/ModelState.h"
 #include "Common/Science.h"
 #include "Common/Upgrade.h"
+#include "Lib/Fix.h"
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class Snapshot;
@@ -174,6 +175,11 @@ public:
 	virtual void xferUser( void *data, Int dataSize );
 	virtual void xferMatrix3D( Matrix3D* mtx );
 	virtual void xferMapName( AsciiString *mapNameData );
+
+	// not virtual: each is built from xferInt64, which the subclasses already see
+	void xferFix( Fix *fixData );
+	void xferFCoord3D( FCoord3D *coord );
+	void xferFixMatrix3D( FixMatrix3D *mtx );
 
 protected:
 

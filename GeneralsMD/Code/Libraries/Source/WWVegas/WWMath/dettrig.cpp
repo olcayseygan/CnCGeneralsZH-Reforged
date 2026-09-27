@@ -47,6 +47,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <intrin.h>
 
 // ----------------------------------------------------------------------------
 // Fixed point layout.
@@ -159,11 +160,8 @@ static int fixedSin( unsigned int angle )
 // ----------------------------------------------------------------------------
 // atan of a ratio in [0, 1], the answer in turns, so at most an eighth of one.
 // ----------------------------------------------------------------------------
-static int arcTanUnit( float ratio )
+static int arcTanFixed( DetInt64 fixed )
 {
-	// a ratio of exactly one scales to 2^32, so this is measured in 64 bits all
-	// the way down
-	DetInt64 fixed = (DetInt64)((double)ratio * TURN_SCALE);
 	DetInt64 index = fixed >> ATAN_INDEX_SHIFT;
 
 	if( index >= ATAN_ENTRIES )
@@ -173,6 +171,15 @@ static int arcTanUnit( float ratio )
 	int step = theArcTanTable[ (int)index + 1 ] - base;
 
 	return base + (int)(((DetInt64)step * (fixed & ATAN_FRAC_MASK)) >> ATAN_INDEX_SHIFT);
+}
+
+// ----------------------------------------------------------------------------
+// the ratio scaled by 2^32; a ratio of exactly one scales to 2^32, so this is
+// measured in 64 bits all the way down
+// ----------------------------------------------------------------------------
+static int arcTanUnit( float ratio )
+{
+	return arcTanFixed( (DetInt64)((double)ratio * TURN_SCALE) );
 }
 
 // ----------------------------------------------------------------------------
@@ -300,4 +307,48 @@ float DetTrig::ASin( float x )
 		return turnsToRadians( fixedACos( -x ) - (DetInt64)ANGLE_QUARTER );
 
 	return turnsToRadians( fixedATan2( x, (float)sqrt( 1.0f - x * x ) ) );
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+int DetTrig::SinTurn( unsigned int turn )
+{
+	return fixedSin( turn );
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+int DetTrig::CosTurn( unsigned int turn )
+{
+	return fixedSin( turn + ANGLE_QUARTER );
+}
+
+// ----------------------------------------------------------------------------
+/* fixedATan2 with the ratio taken exactly instead of through a float divide:
+	 the smaller magnitude over the larger, scaled by 2^32 and truncated, in one
+	 128 bit division.  The quotient is at most 2^32 because the smaller is on
+	 top, and the high half of the dividend is below the divisor for the same
+	 reason, which is what _udiv128 needs. */
+// ----------------------------------------------------------------------------
+long long DetTrig::ATan2Turn( long long y, long long x )
+{
+	unsigned long long ax = x < 0 ? 0ull - (unsigned long long)x : (unsigned long long)x;
+	unsigned long long ay = y < 0 ? 0ull - (unsigned long long)y : (unsigned long long)y;
+
+	if( ax == 0 && ay == 0 )
+		return 0;
+
+	unsigned long long lesser = ay <= ax ? ay : ax;
+	unsigned long long greater = ay <= ax ? ax : ay;
+	unsigned long long remainder;
+	DetInt64 ratio = (DetInt64)_udiv128( lesser >> 32, lesser << 32, greater, &remainder );
+
+	DetInt64 fromAxis = (ay <= ax)
+			? (DetInt64)arcTanFixed( ratio )
+			: (DetInt64)ANGLE_QUARTER - arcTanFixed( ratio );
+
+	if( x >= 0 )
+		return (y >= 0) ? fromAxis : -fromAxis;
+
+	return (y >= 0) ? ((DetInt64)ANGLE_HALF - fromAxis) : (fromAxis - (DetInt64)ANGLE_HALF);
 }

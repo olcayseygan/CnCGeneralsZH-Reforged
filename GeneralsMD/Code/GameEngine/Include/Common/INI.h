@@ -37,6 +37,22 @@
 #include "Common/STLTypedefs.h"
 #include "Common/AsciiString.h"
 #include "Common/GameCommon.h"
+#include "Lib/Fix.h"
+#include <type_traits>
+
+//-------------------------------------------------------------------------------------------------
+/** offsetof for a field table entry that also checks the member's type, so a field moved from
+	* Real to Fix cannot keep a parser that writes the other one: FIX_OFFSET goes with the parse*Fix
+	* parsers, REAL_OFFSET with the Real ones. */
+//-------------------------------------------------------------------------------------------------
+template <typename Member, typename Expected>
+constexpr size_t checkedFieldOffset( size_t offset )
+{
+	static_assert( std::is_same<Member, Expected>::value, "field table entry names a member of the wrong type" );
+	return offset;
+}
+#define FIX_OFFSET( C, m )	checkedFieldOffset<decltype( C::m ), Fix>( offsetof( C, m ) )
+#define REAL_OFFSET( C, m )	checkedFieldOffset<decltype( C::m ), Real>( offsetof( C, m ) )
 
 //-------------------------------------------------------------------------------------------------
 class INI;
@@ -316,6 +332,15 @@ public:
 	static void parseAngleReal( INI *ini, void *instance, void *store, const void *userData );
 	// note that this parses in degrees/sec, and converts to rads/frame!
 	static void parseAngularVelocityReal( INI *ini, void *instance, void *store, const void *userData );
+	// the Fix twins of the Real parsers above, each scale applied to the exact decimal before the
+	// one rounding (see scanFix)
+	static void parseFix( INI *ini, void *instance, void *store, const void* userData );
+	static void parsePercentToFix( INI *ini, void *instance, void *store, const void* userData );
+	static void parseDurationFix( INI *ini, void *instance, void *store, const void* userData );
+	static void parseVelocityFix( INI *ini, void *instance, void *store, const void* userData );
+	static void parseAccelerationFix( INI *ini, void *instance, void *store, const void* userData );
+	static void parseAngleFix( INI *ini, void *instance, void *store, const void *userData );
+	static void parseAngularVelocityFix( INI *ini, void *instance, void *store, const void *userData );
 	static void parseDamageTypeFlags(INI* ini, void* instance, void* store, const void* userData);
 	static void parseDeathTypeFlags(INI* ini, void* instance, void* store, const void* userData);
 	static void parseVeterancyLevelFlags(INI* ini, void* instance, void* store, const void* userData);
@@ -380,6 +405,13 @@ public:
 	*/
 	static Real scanReal(const char* token);
 	static Real scanPercentToReal(const char* token);
+
+	/**
+		the same text sscanf("%f") accepts - sign, digits, a point, an exponent - read as an exact
+		decimal and rounded once to the nearest Fix step, halves away from zero; no float anywhere.
+		Throws INI_INVALID_DATA when there is no number or it does not fit.
+	*/
+	static Fix scanFix(const char* token);
 
 	static Int scanIndexList(const char* token, ConstCharPtrArray nameList);
 	static Int scanLookupList(const char* token, ConstLookupListRecArray lookupList);

@@ -34,6 +34,7 @@
 #include "Common/CRC.h"
 #include "Common/Debug.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LogicRandomValue.h"
 
 //#define DETERMINISTIC				// to allow repetition for debugging
 
@@ -347,6 +348,30 @@ Real GetGameLogicRandomValueReal( Real lo, Real hi, char *file, int line )
 #ifdef DEBUG_RANDOM_LOGIC
 DEBUG_LOG(( "%d: GetGameLogicRandomValueReal = %f, %s line %d\n",
 					TheGameLogic->getFrame(), rval, file, line ));
+#endif
+/**/
+
+	return rval;
+}
+
+//
+// Fix valued random value, drawn on the raw values: one draw from the logic stream, scaled onto
+// [lo, hi] inclusive by the top half of a 128 bit product, so there is no float and no division.
+//
+Fix GetGameLogicRandomValueFix( Fix lo, Fix hi, char *file, int line )
+{
+	if (hi <= lo)
+		return hi;
+
+	UnsignedInt64 span = (UnsignedInt64)(hi.raw() - lo.raw()) + 1;
+	UnsignedInt64 top;
+	UnsignedInt64 bottom = _umul128( (UnsignedInt64)randomValue(theGameLogicSeed), span, &top );
+	Fix rval = Fix::fromRaw( lo.raw() + (Int64)__shiftright128( bottom, top, 32 ) );
+
+/**/
+#ifdef DEBUG_RANDOM_LOGIC
+DEBUG_LOG(( "%d: GetGameLogicRandomValueFix = %I64d, %s line %d\n",
+					TheGameLogic->getFrame(), rval.raw(), file, line ));
 #endif
 /**/
 

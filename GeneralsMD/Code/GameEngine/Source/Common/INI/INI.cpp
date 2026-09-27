@@ -1631,6 +1631,161 @@ void INI::initFromINIMulti( void *what, const MultiIniFieldParse& parseTableList
 }
 
 //-------------------------------------------------------------------------------------------------
+/* The decimal reader behind scanFix and the parse*Fix parsers.
+
+	 A token is read into an integer mantissa of at most 19 significant digits and a power of ten;
+	 digits past the nineteenth are dropped, which only matters for a value that sits within 1e-19
+	 of halfway between two steps.  The Fix is then
+
+			 mantissa * 10^exponent * scale * 2^16,    scale = numerator / (divisor1 * divisor2)
+
+	 worked out in a 320 bit integer, doubled once more so that the lowest bit of the truncated
+	 result is the half step: an odd result means at or above halfway, which rounds up.  Truncation
+	 composes (floor(floor(a/b)/c) = floor(a/(bc))), so dividing by each factor in turn is exact
+	 until the one rounding at the end. */
+//-------------------------------------------------------------------------------------------------
+namespace
+{
+	enum { DECIMAL_WORDS = 5 };
+
+	struct DecimalToken
+	{
+		Bool negative;
+		UnsignedInt64 mantissa;
+		Int exponent;
+	};
+
+	void readDecimal( const char *token, DecimalToken *out )
+	{
+		const char *p = token;
+		while( *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' )
+			++p;
+
+		out->negative = false;
+		if( *p == '-' || *p == '+' )
+			out->negative = (*p++ == '-');
+
+		UnsignedInt64 mantissa = 0;
+		Int kept = 0, exponent = 0;
+		Bool anyDigit = false, afterPoint = false;
+		for( ;; ++p )
+		{
+			if( *p == '.' && !afterPoint )
+			{
+				afterPoint = true;
+				continue;
+			}
+			if( *p < '0' || *p > '9' )
+				break;
+
+			anyDigit = true;
+			if( mantissa == 0 && *p == '0' )
+			{
+				if( afterPoint ) --exponent;				// a leading zero after the point only moves it
+				continue;
+			}
+			if( kept < 19 )
+			{
+				mantissa = mantissa * 10 + (UnsignedInt64)(*p - '0');
+				++kept;
+				if( afterPoint ) --exponent;
+			}
+			else if( !afterPoint )
+			{
+				++exponent;													// a dropped whole digit still counts
+			}
+		}
+		if( !anyDigit )
+			throw INI_INVALID_DATA;
+
+		// like sscanf, an 'e' with no digits after it is not part of the number
+		if( (*p == 'e' || *p == 'E') )
+		{
+			const char *q = p + 1;
+			Bool negativeExponent = false;
+			if( *q == '-' || *q == '+' )
+				negativeExponent = (*q++ == '-');
+			if( *q >= '0' && *q <= '9' )
+			{
+				Int value = 0;
+				for( ; *q >= '0' && *q <= '9'; ++q )
+					if( value < 100000 )
+						value = value * 10 + (*q - '0');
+				exponent += negativeExponent ? -value : value;
+			}
+		}
+
+		out->mantissa = mantissa;
+		out->exponent = exponent;
+	}
+
+	void multiplyWords( UnsignedInt64 *w, UnsignedInt64 factor )
+	{
+		UnsignedInt64 carry = 0;
+		for( Int i = 0; i < DECIMAL_WORDS; ++i )
+		{
+			UnsignedInt64 hi;
+			UnsignedInt64 lo = _umul128( w[ i ], factor, &hi );
+			w[ i ] = lo + carry;
+			carry = hi + (w[ i ] < lo ? 1 : 0);
+		}
+		if( carry )
+			throw INI_INVALID_DATA;
+	}
+
+	void divideWords( UnsignedInt64 *w, UnsignedInt64 divisor )
+	{
+		UnsignedInt64 remainder = 0;
+		for( Int i = DECIMAL_WORDS - 1; i >= 0; --i )
+			w[ i ] = _udiv128( remainder, w[ i ], divisor, &remainder );
+	}
+
+	Fix decimalToFix( const char *token, UnsignedInt64 numerator, UnsignedInt64 divisor1, UnsignedInt64 divisor2 )
+	{
+		DecimalToken d;
+		readDecimal( token, &d );
+		if( d.mantissa == 0 )
+			return Fix( 0 );
+
+		// anything this far up is already out of range; anything this far down is already zero
+		if( d.exponent > 40 )
+			throw INI_INVALID_DATA;
+		if( d.exponent < -60 )
+			return Fix( 0 );
+
+		UnsignedInt64 w[ DECIMAL_WORDS ] = { d.mantissa };
+		multiplyWords( w, numerator );
+		multiplyWords( w, (UnsignedInt64)2 << Fix::FRAC_BITS );
+		for( Int e = d.exponent; e > 0; --e )
+			multiplyWords( w, 10 );
+		for( Int e = d.exponent; e < 0; ++e )
+			divideWords( w, 10 );
+		divideWords( w, divisor1 );
+		divideWords( w, divisor2 );
+
+		for( Int i = 1; i < DECIMAL_WORDS; ++i )
+			if( w[ i ] )
+				throw INI_INVALID_DATA;
+
+		UnsignedInt64 magnitude = (w[ 0 ] >> 1) + (w[ 0 ] & 1);
+		if( magnitude > 0x7FFFFFFFFFFFFFFFull )
+			throw INI_INVALID_DATA;
+
+		return Fix::fromRaw( d.negative ? -(Int64)magnitude : (Int64)magnitude );
+	}
+
+	// PI * 2^62 to the nearest integer, for the degree scales
+	const UnsignedInt64 PI_Q62 = 0xC90FDAA22168C235ull;
+	const UnsignedInt64 TWO_62 = (UnsignedInt64)1 << 62;
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ Fix INI::scanFix(const char* token)
+{
+	return decimalToFix( token, 1, 1, 1 );
+}
+
+//-------------------------------------------------------------------------------------------------
 /*static*/ Real INI::scanPercentToReal(const char* token)
 {
 	Real value;
@@ -1768,6 +1923,52 @@ void INI::parseAccelerationReal( INI *ini, void * /*instance*/, void *store, con
 	const char *token = ini->getNextToken();
 	Real val = scanReal(token);
 	*(Real *)store = ConvertAccelerationInSecsToFrames(val);
+}
+
+//-------------------------------------------------------------------------------------------------
+// The Fix parsers.  Each is its Real twin with the conversion folded into the one rounding, so
+// "30" degrees per second is PI/180/30 radians per frame to the nearest step rather than a
+// rounded degree times a rounded factor.
+//-------------------------------------------------------------------------------------------------
+void INI::parseFix( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	*(Fix *)store = scanFix( ini->getNextToken() );
+}
+
+// "23%" or "95.4%" as 0.23 or 0.954
+void INI::parsePercentToFix( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	*(Fix *)store = decimalToFix( ini->getNextToken( ini->getSepsPercent() ), 1, 100, 1 );
+}
+
+// msec to frames: * 30 / 1000
+void INI::parseDurationFix( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	*(Fix *)store = decimalToFix( ini->getNextToken(), LOGICFRAMES_PER_SECOND, MSEC_PER_SECOND, 1 );
+}
+
+// dist/sec to dist/frame
+void INI::parseVelocityFix( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	*(Fix *)store = decimalToFix( ini->getNextToken(), 1, LOGICFRAMES_PER_SECOND, 1 );
+}
+
+// dist/sec^2 to dist/frame^2
+void INI::parseAccelerationFix( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	*(Fix *)store = decimalToFix( ini->getNextToken(), 1, LOGICFRAMES_PER_SECOND * LOGICFRAMES_PER_SECOND, 1 );
+}
+
+// degrees to radians
+void INI::parseAngleFix( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
+{
+	*(Fix *)store = decimalToFix( ini->getNextToken(), PI_Q62, 180, TWO_62 );
+}
+
+// degrees/sec to radians/frame
+void INI::parseAngularVelocityFix( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
+{
+	*(Fix *)store = decimalToFix( ini->getNextToken(), PI_Q62, 180 * LOGICFRAMES_PER_SECOND, TWO_62 );
 }
 
 //-------------------------------------------------------------------------------------------------

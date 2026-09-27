@@ -44,6 +44,7 @@
 #include "Common/FileSystem.h"
 #include "Common/GameAudio.h"
 #include "Common/INI.h"
+#include "Lib/FixBoundary.h"
 #include "Common/Monitors.h"
 #include "Common/OptionsCatalog.h"
 #include "Common/registry.h"
@@ -220,8 +221,7 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 	{ "UnitReallyDamagedThreshold",	INI::parseFix,				NULL,			FIX_OFFSET( GlobalData, m_unitReallyDamagedThresh ) },
 	{ "GroundStiffness",					INI::parseFix,				NULL,				FIX_OFFSET( GlobalData, m_groundStiffness ) },
 	{ "StructureStiffness",					INI::parseFix,				NULL,				FIX_OFFSET( GlobalData, m_structureStiffness ) },
-	// logic reads gravity everywhere, but Object.cpp still takes it as a Real; it moves with P4
-	{ "Gravity",									INI::parseAccelerationReal,				NULL,				REAL_OFFSET( GlobalData, m_gravity ) },
+	{ "Gravity",									INI::parseAccelerationFix,				NULL,				FIX_OFFSET( GlobalData, m_gravity ) },
 	{ "StealthFriendlyOpacity",		INI::parsePercentToReal,				NULL,				REAL_OFFSET( GlobalData, m_stealthFriendlyOpacity ) },
 	{ "DefaultOcclusionDelay",				INI::parseDurationUnsignedInt,				NULL,			offsetof( GlobalData, m_defaultOcclusionDelay ) },
 	
@@ -963,7 +963,7 @@ GlobalData::GlobalData()
 	m_unitReallyDamagedThresh = 0.1_fx;
 	m_groundStiffness = 0.5_fx;
 	m_structureStiffness = 0.5_fx;
-	m_gravity = -1.0f;
+	m_gravity = Fix( -1 );
 	m_stealthFriendlyOpacity = 0.5f;
 	m_defaultOcclusionDelay = LOGICFRAMES_PER_SECOND * 3;	//default to 3 seconds
 
@@ -1282,6 +1282,12 @@ GlobalData::~GlobalData( void )
 }  // end ~GlobalData
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+Real GlobalData::getGravityReal() const
+{
+	return fixToReal( m_gravity );
+}
+
 //-------------------------------------------------------------------------------------------------
 Bool GlobalData::setTimeOfDay( TimeOfDay tod )
 {

@@ -212,7 +212,7 @@ UpdateSleepTime StructureCollapseUpdate::update( void )
 		Object *building = getObject();
 		UnsignedInt now = TheGameLogic->getFrame();
 		m_currentHeight -= m_collapseVelocity;
-		m_collapseVelocity -= TheGlobalData->m_gravity * (1.0 - fixToReal( d->m_collapseDamping ));	// P8
+		m_collapseVelocity -= TheGlobalData->getGravityReal() * (1.0 - fixToReal( d->m_collapseDamping ));	// P8
 
 		const FCoord3D *currentPosition = building->getPositionFix();
 		Vector3 shudder;

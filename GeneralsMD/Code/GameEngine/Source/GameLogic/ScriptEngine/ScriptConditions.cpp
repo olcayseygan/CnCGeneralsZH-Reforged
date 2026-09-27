@@ -1094,7 +1094,7 @@ Bool ScriptConditions::evaluateEnemySighted(Parameter *pItemParm, Parameter *pAl
 
 	PartitionFilter *filters[] = { &filterTeam, &filterAlive, &filterStealth, &filterMapStatus, NULL };
 
-	const Fix visionRange = fixFromReal( theObj->getVisionRange() );	// P3 vision range is float
+	const Fix visionRange = fixFromReal( theObj->getVisionRange() );	// P9: the vision range is float
 
 	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(
 								theObj, visionRange, FROM_CENTER_2D, filters);
@@ -1139,7 +1139,7 @@ Bool ScriptConditions::evaluateTypeSighted(Parameter *pItemParm, Parameter *pTyp
 
 	PartitionFilter *filters[] = { &filterAlive, &filterStealth, &filterMapStatus, NULL };
 
-	const Fix visionRange = fixFromReal( theObj->getVisionRange() );	// P3 vision range is float
+	const Fix visionRange = fixFromReal( theObj->getVisionRange() );	// P9: the vision range is float
 
 	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(
 								theObj, visionRange, FROM_CENTER_2D, filters);

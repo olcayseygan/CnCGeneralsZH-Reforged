@@ -582,7 +582,7 @@ void MinefieldBehavior::setScootParms(const Coord3D& start, const Coord3D& end)
 	if (fStart.z > endOnGround.z)
 	{
 		// figure out how long it will take to fall, and replace scoot time with that
-		Fix gravity = fixAbs( fixFromReal( TheGlobalData->m_gravity ) ); // P4
+		Fix gravity = fixAbs( TheGlobalData->m_gravity );
 		Fix fall = fixSqrt( Fix( 2 ) * (fStart.z - endOnGround.z) / gravity ).ceil();
 		UnsignedInt fallingTime = (UnsignedInt)(fall.raw() >> Fix::FRAC_BITS);
 		// we can scoot after we land, but don't want to stop scooting before we land
@@ -620,7 +620,7 @@ void MinefieldBehavior::setScootParms(const Coord3D& start, const Coord3D& end)
 			m_scootVel.y = fixToReal( dyNorm * scootFromStartingPointSpeed );
 			m_scootAccel.x = fixToReal( -dxNorm * accelMag );
 			m_scootAccel.y = fixToReal( -dyNorm * accelMag );
-			m_scootAccel.z = TheGlobalData->m_gravity;
+			m_scootAccel.z = TheGlobalData->getGravityReal();	// P8
 			obj->setPositionFix(&fStart);
 			m_scootFramesLeft = scootFromStartingPointTime;
 

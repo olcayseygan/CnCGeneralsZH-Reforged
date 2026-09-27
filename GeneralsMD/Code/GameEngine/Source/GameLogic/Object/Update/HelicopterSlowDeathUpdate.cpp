@@ -251,7 +251,7 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 		return;
 	}
 	Locomotor *locomotor = getObject()->getAIUpdateInterface()->getCurLocomotor();
-	locomotor->setMaxLift( -TheGlobalData->m_gravity * fixToReal( Fix( 1 ) - modData->m_fallHowFast ) );	// P4: locomotor
+	locomotor->setMaxLift( -TheGlobalData->getGravityReal() * fixToReal( Fix( 1 ) - modData->m_fallHowFast ) );	// P4: locomotor
 	locomotor->setMaxBraking( fixToReal( modData->m_maxBraking ) );	// P4: locomotor
 
 	// attach particle system to bone if present

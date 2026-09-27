@@ -973,7 +973,7 @@ Object *AI::findClosestRepulsor( const Object *me, Real range)
 
 Fix AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToConsider)
 {
-	Fix originalRange = fixFromReal( object->getVisionRange() );	// P3 vision range is float
+	Fix originalRange = fixFromReal( object->getVisionRange() );	// P9: the vision range is float
 	const AIUpdateInterface *ai = object->getAI();
 	const TAiData *aiData = TheAI->getAiData();
 

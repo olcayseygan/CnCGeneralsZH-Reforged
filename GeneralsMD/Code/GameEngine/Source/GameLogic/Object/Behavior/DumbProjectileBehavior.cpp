@@ -211,7 +211,7 @@ static Bool calcTrajectory(
 
 	// calc the two possible pitches that will cover the given horizontal range.
 	// (this is actually only true if dz==0, but is a good first guess)
-	Real gravity = fabs(TheGlobalData->m_gravity);
+	Real gravity = fabs(TheGlobalData->getGravityReal());	// P6
 	Real gravityTwoDZ = gravity * 2.0f * dz;
 
 	// let's start by aiming directly for it. we know this isn't right (unless gravity

@@ -235,7 +235,8 @@ public:
 	Fix m_unitReallyDamagedThresh;
 	Fix m_groundStiffness;
 	Fix m_structureStiffness;
-	Real m_gravity;	// acceleration due to gravity, in dist/frame^2
+	Fix m_gravity;	// acceleration due to gravity, in dist/frame^2
+	Real getGravityReal() const;	///< for the float movement code, P4 to P8
 	Real m_stealthFriendlyOpacity;
 	UnsignedInt m_defaultOcclusionDelay;	///<time to delay building occlusion after object is created.
 

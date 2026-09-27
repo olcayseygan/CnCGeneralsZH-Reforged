@@ -382,7 +382,7 @@ void TransitionDamageFX::onBodyDamageStateChange( const DamageInfo* damageInfo,
 					pos = getObject()->convertBonePosToWorldPosFix( pos ).toCoord3D();	// the OCL is float
 					Coord3D sourcePos;
 					if( damageSource )
-						sourcePos = damageSource->getPositionFix()->toCoord3D();	// P3: the OCL is float
+						sourcePos = damageSource->getPositionFix()->toCoord3D();	// P8: the OCL is float
 					ObjectCreationList::create( modData->m_OCL[ newState ][ i ].ocl,
 																			getObject(), &pos, damageSource ? &sourcePos : NULL, INVALID_ANGLE );	// the attacker can be dead already
 

@@ -719,7 +719,7 @@ Bool ActionManager::canEnterObject( const Object *obj, const Object *objectToEnt
 	// Special case for aircraft.
 	if( obj->isKindOf( KINDOF_AIRCRAFT ) && objectToEnter->isKindOf( KINDOF_FS_AIRFIELD ) )
 	{
-		if( obj->getStatusBits().test( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) && fixFromReal( obj->getCarrierDeckHeight() ) >= obj->getPositionFix()->z )	// P3: the deck height is float
+		if( obj->getStatusBits().test( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) && fixFromReal( obj->getCarrierDeckHeight() ) >= obj->getPositionFix()->z )	// P9: Object's deck height is float
 		{
 			return FALSE;
 		}

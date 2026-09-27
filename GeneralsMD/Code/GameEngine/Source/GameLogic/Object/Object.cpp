@@ -1980,8 +1980,7 @@ Bool Object::isSignificantlyAboveTerrain() const
 {
 	// If it's high enough that it will take more than 3 frames to return to the ground,
 	// then it's significantly airborne.  jba
-	// ponytail: gravity is still a GlobalData Real until the INI layer moves (P3)
-	return getHeightAboveTerrainFix() > fixFromReal( -(3*3)*TheGlobalData->m_gravity );
+	return getHeightAboveTerrainFix() > -Fix( 3*3 ) * TheGlobalData->m_gravity;
 }
 
 //-------------------------------------------------------------------------------------------------

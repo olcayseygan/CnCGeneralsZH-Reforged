@@ -1451,9 +1451,9 @@ void WaterRenderObjClass::update( void )
 
 						// if the height here is below our preferred height, we want to add upward force to counteract it
 						if( pData->height < pData->preferredHeight )
-							pData->velocity -= TheGlobalData->m_gravity * 3.0f;
-						else				
-							pData->velocity += TheGlobalData->m_gravity * 3.0f;
+							pData->velocity -= TheGlobalData->getGravityReal() * 3.0f;
+						else
+							pData->velocity += TheGlobalData->getGravityReal() * 3.0f;
 
 						// adjust the height at this grid location according to the current velocity		
 						pData->height = pData->height + pData->velocity;

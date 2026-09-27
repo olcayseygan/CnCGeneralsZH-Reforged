@@ -593,7 +593,7 @@ public:
 		{
 			if (it->ropeLen < it->ropeLenMax)
 			{
-				it->ropeSpeed += fabs(TheGlobalData->m_gravity);
+				it->ropeSpeed += fabs(TheGlobalData->getGravityReal());	// P4
 				if (it->ropeSpeed > fixToReal(d->m_ropeDropSpeed))	// P7: the rope's speed is xfer'd float
 					it->ropeSpeed = fixToReal(d->m_ropeDropSpeed);
 				it->ropeLen += it->ropeSpeed;
@@ -685,8 +685,8 @@ public:
 			if (m_ropes[i].ropeDrawable)
 			{
 				const UnsignedInt ROPE_EXPIRATION_TIME = LOGICFRAMES_PER_SECOND * 5;
-				const Real initialSpeed = TheGlobalData->m_gravity * 30;	// give it a little kick
-				setRopeSpeed(m_ropes[i].ropeDrawable, initialSpeed, fixToReal(d->m_ropeDropSpeed), TheGlobalData->m_gravity);
+				const Real initialSpeed = TheGlobalData->getGravityReal() * 30;	// give it a little kick; P4
+				setRopeSpeed(m_ropes[i].ropeDrawable, initialSpeed, fixToReal(d->m_ropeDropSpeed), TheGlobalData->getGravityReal());
 				m_ropes[i].ropeDrawable->setExpirationDate(now + ROPE_EXPIRATION_TIME);
 				m_ropes[i].ropeDrawable = NULL; // we're done with it, so null it so we won't save it
 			}
@@ -905,7 +905,7 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 	m_minDropHeight = Fix( 30 );
 	m_ropeFinalHeight = Fix( 0 );
 	m_ropeDropSpeed = 1e10_fx;		// um, fast.
-	m_rappelSpeed = fixFromReal( fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_SECOND * 0.5f );	// P4: gravity is GlobalData float
+	m_rappelSpeed = fixAbs( TheGlobalData->m_gravity ) * Fix( LOGICFRAMES_PER_SECOND ) / Fix( 2 );
 	m_ropeWobbleLen = 10.0f;
 	m_ropeWobbleAmp = 1.0f;
 	m_ropeWobbleRate = 0.1f;

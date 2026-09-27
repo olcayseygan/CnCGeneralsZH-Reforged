@@ -111,7 +111,7 @@ static Fix heightToSpeed(Fix height)
 {
 	// don't bother trying to remember how far we've fallen; instead,
 	// back-calc it from our speed & gravity... v = sqrt(2*g*h)
-	return fixSqrt(fixAbs(Fix(2) * fixFromReal(TheGlobalData->m_gravity) * height));	// P4: gravity is float
+	return fixSqrt(fixAbs(Fix(2) * TheGlobalData->m_gravity * height));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -451,7 +451,7 @@ void PhysicsBehavior::resetDynamicPhysics()
 //-------------------------------------------------------------------------------------------------
 void PhysicsBehavior::applyGravitationalForces()
 {
-	m_accel.z += TheGlobalData->m_gravity;
+	m_accel.z += TheGlobalData->getGravityReal();	// P4
 }
 
 //-------------------------------------------------------------------------------------------------

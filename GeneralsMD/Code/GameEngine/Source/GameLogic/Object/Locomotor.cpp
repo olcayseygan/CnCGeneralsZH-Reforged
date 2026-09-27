@@ -307,7 +307,7 @@ static void calcDirectionToApplyThrust(
 	Vector3 curVel(physics->getVelocity()->x, physics->getVelocity()->y, physics->getVelocity()->z);
 
 	// add gravity to our vel so that we account for it in our calcs
-	curVel.Z += TheGlobalData->m_gravity;
+	curVel.Z += TheGlobalData->getGravityReal();	// P4
 
 	Bool foundSolution = false;
 	Real distToGoalSqr = vecToGoal.Length2();
@@ -1116,7 +1116,7 @@ void Locomotor::locoUpdate_moveTowardsPosition(Object* obj, const Coord3D& goalP
 		heightAboveSurface -= obj->getCarrierDeckHeight();
 	}
 
-	if (heightAboveSurface > -(3*3)*TheGlobalData->m_gravity) 
+	if (heightAboveSurface > -(3*3)*TheGlobalData->getGravityReal())	// P4
 	{
 		// If we get high enough to stay up for 3 frames, then we left the ground.
 		treatAsAirborne = true;
@@ -2199,7 +2199,8 @@ Real Locomotor::calcLiftToUseAtPt(Object* obj, PhysicsBehavior *physics, Real cu
 	*/
 	BodyDamageType bdt = obj->getBodyModule()->getDamageState();
 	Real maxGrossLift = getMaxLift(bdt);
-	Real maxNetLift = maxGrossLift + TheGlobalData->m_gravity;	// note that gravity is always negative.
+	const Real gravity = TheGlobalData->getGravityReal();	// P4
+	Real maxNetLift = maxGrossLift + gravity;	// note that gravity is always negative.
 	if (maxNetLift < 0)
 		maxNetLift = 0;
 	Real curVelZ = physics->getVelocity()->z;
@@ -2208,7 +2209,7 @@ Real Locomotor::calcLiftToUseAtPt(Object* obj, PhysicsBehavior *physics, Real cu
 	if (getFlag(ULTRA_ACCURATE))
 		maxAccel = (curVelZ < 0) ? 2*maxNetLift : -2*maxNetLift;
 	else
-		maxAccel = (curVelZ < 0) ? maxNetLift : TheGlobalData->m_gravity;
+		maxAccel = (curVelZ < 0) ? maxNetLift : gravity;
 	// see how far we need to slow to dead stop, given max braking
 	Real desiredAccel;
 	const Real TINY_ACCEL = 0.001f;
@@ -2252,7 +2253,7 @@ Real Locomotor::calcLiftToUseAtPt(Object* obj, PhysicsBehavior *physics, Real cu
 	{
 		desiredAccel = 0.0f;
 	}
-	Real liftToUse = desiredAccel - TheGlobalData->m_gravity;
+	Real liftToUse = desiredAccel - gravity;
 	if (getFlag(ULTRA_ACCURATE))
 	{
 		// in ultra-accurate mode, we allow cheating.

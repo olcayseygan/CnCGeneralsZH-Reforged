@@ -5075,7 +5075,7 @@ Real Drawable::getHeightAboveTerrainOrWater() const
 Bool Drawable::isSignificantlyAboveTerrain() const
 {
 	// higher than three frames of falling takes to come down
-	return (getHeightAboveTerrain() > -(3*3)*TheGlobalData->m_gravity);
+	return (getHeightAboveTerrain() > -(3*3)*TheGlobalData->getGravityReal());
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -9,6 +9,7 @@
 #include "WWMath/matrix3d.h"
 #include "Common/Geometry.h"
 #include "GameLogic/ObjectIter.h"
+#include "GameLogic/Weapon.h"
 #include <type_traits>
 
 // Fix * float has to be a compile error, not a silent conversion.
@@ -163,6 +164,38 @@ TEST(fix_ini_parsers_scale_before_they_round)
 	CHECK_EQ( parseFixField( INI::parseAngleFix, "90" ).raw(), 102944 );				// 102943.71
 	CHECK_EQ( parseFixField( INI::parseAngleFix, "-45" ).raw(), -51472 );				// -51471.85
 	CHECK_EQ( parseFixField( INI::parseAngularVelocityFix, "180" ).raw(), 6863 );		// PI/30: 6862.91
+}
+
+// A converted field goes through its own table entry: the parser the table names, into the Fix at
+// the offset FIX_OFFSET checked.  Only the table is used, so a buffer stands in for the template.
+static Fix parseWeaponField( const char *field, const char *value )
+{
+	alignas( 16 ) static char buffer[ sizeof( WeaponTemplate ) ];
+	const FieldParse *table = reinterpret_cast<const WeaponTemplate *>( buffer )->getFieldParse();
+	for( ; table->token; ++table )
+	{
+		if( strcmp( table->token, field ) != 0 )
+			continue;
+		static char line[ 128 ];
+		sprintf( line, "%s = %s", field, value );
+		strtok( line, " \n\r\t=" );
+		INI ini;
+		Fix *out = (Fix *)( buffer + table->offset );
+		*out = Fix( -12345 );
+		table->parse( &ini, buffer, out, table->userData );
+		return *out;
+	}
+	printf( "  no weapon field %s\n", field );
+	return Fix( -12345 );
+}
+
+TEST(fix_converted_weapon_fields_load_their_q16_value)
+{
+	CHECK_EQ( parseWeaponField( "PrimaryDamage", "0.00001" ).raw(), 1 );			// the four ZH bogus weapons
+	CHECK_EQ( parseWeaponField( "PrimaryDamage", "40.0" ).raw(), 40 * 65536 );
+	CHECK_EQ( parseWeaponField( "AttackRange", "175.5" ).raw(), 11501568 );		// 175.5 * 65536
+	CHECK_EQ( parseWeaponField( "WeaponSpeed", "600" ).raw(), 20 * 65536 );		// per second to per frame
+	CHECK_EQ( parseWeaponField( "WeaponSpeed", "999" ).raw(), 2182349 );			// 33.3 per frame: 2182348.8
 }
 
 static Fix fixFromBits( UnsignedInt bits ) { return fixFromFloatBits( bits ); }

@@ -225,7 +225,7 @@ void JetSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 		 which is the one thing a plane cannot do. It keeps its lift here and gives it up over the
 		 next couple of seconds in update(), so it carries on forward first and noses over after. */
 	Locomotor *locomotor = us->getAIUpdateInterface()->getCurLocomotor();
-	locomotor->setMaxLift( -TheGlobalData->m_gravity );
+	locomotor->setMaxLift( -TheGlobalData->getGravityReal() );	// P4
 
 	// do not allow the jet to turn anymore
 	locomotor->setMaxTurnRate( 0.0f );
@@ -277,7 +277,7 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 			const Real LIFT_BLEED_PER_FRAME = 0.1f;
 			const Real MIN_FALL_FRACTION = 0.5f;
 			const Real fallFraction = max( MIN_FALL_FRACTION, fixToReal( modData->m_fallHowFast ) ); // P4, the locomotor's lift is float
-			const Real fallingLift = -TheGlobalData->m_gravity * (1.0f - fallFraction);
+			const Real fallingLift = -TheGlobalData->getGravityReal() * (1.0f - fallFraction);	// P4
 			const Real currentLift = locomotor->getMaxLift( us->getBodyModule()->getDamageState() );
 			locomotor->setMaxLift( currentLift + (fallingLift - currentLift) * LIFT_BLEED_PER_FRAME );
 

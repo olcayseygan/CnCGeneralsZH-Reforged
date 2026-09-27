@@ -49,6 +49,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/SlavedUpdate.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -56,9 +57,16 @@
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
 
-#define STRAY_MULTIPLIER 2.0f // Multiplier from stating diestance from tunnel, to max distance from
-const Real CLOSE_ENOUGH = 15;				// Our moveTo commands and pathfinding can't handle people in the way, so quit trying to hump someone on your spot
-const Real CLOSE_ENOUGH_SQR = (CLOSE_ENOUGH * CLOSE_ENOUGH);
+const Fix STRAY_MULTIPLIER = Fix( 2 ); // Multiplier from stating diestance from tunnel, to max distance from
+const Fix CLOSE_ENOUGH_SQR = Fix( 15 * 15 );				// Our moveTo commands and pathfinding can't handle people in the way, so quit trying to hump someone on your spot
+
+// P4 and P8: the AI's move goals and the saved guard offset are float
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 //-------------------------------------------------------------------------------------------------
 SlavedUpdate::SlavedUpdate( Thing *thing, const ModuleData* moduleData ) : UpdateModule( thing, moduleData )
@@ -235,16 +243,17 @@ UpdateSleepTime SlavedUpdate::update( void )
 		//allows).
 		if( masterAI->getPath() )
 		{
-			const Coord3D *masterDest = masterAI->getPath()->getLastNode()->getPosition();
+			const FCoord3D masterDest = toFix( *masterAI->getPath()->getLastNode()->getPosition() );	// P5
 
 			//Check to see if master is close to the goal position.
-			Real distSqr = ThePartitionManager->getDistanceSquared( master, masterDest, FROM_BOUNDINGSPHERE_2D );
-			if( distSqr > (data->m_guardMaxRange * 0.5f) * (data->m_guardMaxRange * 0.5f) )
+			Fix distSqr = ThePartitionManager->getDistanceSquaredFix( master, &masterDest, FROM_BOUNDINGSPHERE_2D );
+			Fix halfGuardRange = fixFromReal( data->m_guardMaxRange ) * 0.5_fx;	// P3
+			if( distSqr > halfGuardRange * halfGuardRange )
 			{
 				//If the master's distance to destination is more than half of the guarding range of the slave,
 				//then order the slave to scout it.
 				endRepair();
-				doScoutLogic( masterDest );
+				doScoutLogic( &masterDest );
 				return UPDATE_SLEEP_NONE;
 			}
 		}
@@ -260,21 +269,22 @@ UpdateSleepTime SlavedUpdate::update( void )
 	}
 
 	// update our "pinned" location based on where our master is
-	Coord3D pinnedPosition = *master->getPosition();
-	pinnedPosition.x += m_guardPointOffset.x;
-	pinnedPosition.y += m_guardPointOffset.y;
-	m_guardPointOffset.z = TheTerrainLogic->getGroundHeight( pinnedPosition.x, pinnedPosition.y );
+	FCoord3D pinnedPosition = *master->getPositionFix();
+	pinnedPosition.x += fixFromReal( m_guardPointOffset.x );	// P8
+	pinnedPosition.y += fixFromReal( m_guardPointOffset.y );
+	m_guardPointOffset.z = fixToReal( TheTerrainLogic->getGroundHeightFix( pinnedPosition.x, pinnedPosition.y ) );
 
 	if( data->m_guardMaxRange )
 	{
 		//3RD PRIORITY: Guard the master's area.
-		if( myAI->isIdle() && ThePartitionManager->getDistanceSquared(me, &pinnedPosition, FROM_CENTER_3D) > CLOSE_ENOUGH_SQR )
+		Fix strayRange = STRAY_MULTIPLIER * fixFromReal( data->m_guardMaxRange );	// P3
+		if( myAI->isIdle() && ThePartitionManager->getDistanceSquaredFix(me, &pinnedPosition, FROM_CENTER_3D) > CLOSE_ENOUGH_SQR )
 		{
 			//I'm idle and too far away.
 			endRepair();
 			doGuardLogic( &pinnedPosition );
 		}
-		else if( ThePartitionManager->getDistanceSquared( me, master, FROM_CENTER_3D ) > sqr(STRAY_MULTIPLIER * data->m_guardMaxRange ) )
+		else if( ThePartitionManager->getDistanceSquaredFix( me, master, FROM_CENTER_3D ) > strayRange * strayRange )
 		{
 			//I'm too far away, no matter what I'm doing.
 			endRepair();
@@ -292,31 +302,32 @@ void SlavedUpdate::doAttackLogic( const Object *target )
 	const SlavedUpdateModuleData* data = getSlavedUpdateModuleData();
 	Object *me = getObject();
 	Object *master = TheGameLogic->findObjectByID( m_slaver );
-	Coord3D attackPosition;
+	FCoord3D attackPosition;
 
-	//First, determine the attack position. If the target is too far away, then we'll 
+	//First, determine the attack position. If the target is too far away, then we'll
 	//calculate the closest allowable position.
-	const Coord3D *targetPos = target->getPosition();
-	Real dist = ThePartitionManager->getDistanceSquared( me, targetPos, FROM_BOUNDINGSPHERE_2D );
+	const FCoord3D *targetPos = target->getPositionFix();
+	Fix dist = ThePartitionManager->getDistanceSquaredFix( me, targetPos, FROM_BOUNDINGSPHERE_2D );
+	Fix attackRange = fixFromReal( data->m_attackRange );	// P3
 	// the leash is measured from the master, the same point the clamp below is taken from; measured
 	// from the drone it sent a drone far from a near target to a spot past that target
-	if( ThePartitionManager->getDistanceSquared( master, targetPos, FROM_BOUNDINGSPHERE_2D ) > sqr( data->m_attackRange ) )
+	if( ThePartitionManager->getDistanceSquaredFix( master, targetPos, FROM_BOUNDINGSPHERE_2D ) > attackRange * attackRange )
 	{
 		//The distance is too far, so calculate the best allowable position.
-		Coord3D vector;
-		vector.set( targetPos );
-		vector.sub( master->getPosition() );
-		vector.normalize();
-		vector.scale( data->m_attackRange );
+		FCoord3D vector = *targetPos;
+		vector.sub( *master->getPositionFix() );
+		Fix len = vector.length();
+		if( len > Fix( 0 ) )
+			vector.set( vector.x / len * attackRange, vector.y / len * attackRange, vector.z / len * attackRange );
 
 		//Now that we have calculated the vector relative to me, add it to my position to get my goal.
-		attackPosition.set( master->getPosition() );
-		attackPosition.add( &vector );
+		attackPosition = *master->getPositionFix();
+		attackPosition.add( vector );
 	}
 	else
 	{
 		//We are close enough, so use the target position -- easy!
-		attackPosition.set( targetPos );
+		attackPosition = *targetPos;
 	}
 
 	//Finally, if we have a wander distance, then randomly select a point within
@@ -330,19 +341,21 @@ void SlavedUpdate::doAttackLogic( const Object *target )
 		m_guardPointOffset.y += data->m_attackWanderRange * Sin( randomDirection );
 
 		//Offset our pinned position by our random offset.
-		attackPosition.x += m_guardPointOffset.x;
-		attackPosition.y += m_guardPointOffset.y;
-		m_guardPointOffset.z = TheTerrainLogic->getGroundHeight( attackPosition.x, attackPosition.y );
+		attackPosition.x += fixFromReal( m_guardPointOffset.x );	// P8
+		attackPosition.y += fixFromReal( m_guardPointOffset.y );
+		m_guardPointOffset.z = fixToReal( TheTerrainLogic->getGroundHeightFix( attackPosition.x, attackPosition.y ) );
 	}
 
 	//Move to the updated position!
 	AIUpdateInterface *ai = me->getAIUpdateInterface();
 	if( ai )
 	{
-		ai->aiMoveToPosition( &attackPosition, CMD_FROM_AI );
+		const Coord3D goal = attackPosition.toCoord3D();	// P4
+		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 	}
 
-	if( dist < sqr( data->m_distToTargetToGrantRangeBonus ) )
+	Fix bonusDist = fixFromReal( data->m_distToTargetToGrantRangeBonus );	// P3
+	if( dist < bonusDist * bonusDist )
 	{
 		//Finally, seeing we are close enough to the target, grant our 
 		//master extended weapon range!
@@ -353,34 +366,35 @@ void SlavedUpdate::doAttackLogic( const Object *target )
 //-------------------------------------------------------------------------------------------------
 // We are ordered to attempt to get as close as possible to my master's movement destination point.
 //-------------------------------------------------------------------------------------------------
-void SlavedUpdate::doScoutLogic( const Coord3D *mastersDestination )
+void SlavedUpdate::doScoutLogic( const FCoord3D *mastersDestination )
 {
 	const SlavedUpdateModuleData* data = getSlavedUpdateModuleData();
 	Object *me = getObject();
 	Object *master = TheGameLogic->findObjectByID( m_slaver );
-	Coord3D scoutPosition;
+	FCoord3D scoutPosition;
 
-	//First, determine the scout position. If our master's destination is too far away, then we'll 
+	//First, determine the scout position. If our master's destination is too far away, then we'll
 	//calculate the closest allowable position.
 	// from the master, like the clamp below
-	Real dist = ThePartitionManager->getDistanceSquared( master, mastersDestination, FROM_BOUNDINGSPHERE_2D );
-	if( dist > sqr( data->m_scoutRange ) )
+	Fix dist = ThePartitionManager->getDistanceSquaredFix( master, mastersDestination, FROM_BOUNDINGSPHERE_2D );
+	Fix scoutRange = fixFromReal( data->m_scoutRange );	// P3
+	if( dist > scoutRange * scoutRange )
 	{
 		//The distance is too far, so calculate the best allowable position.
-		Coord3D vector;
-		vector.set( mastersDestination );
-		vector.sub( master->getPosition() );
-		vector.normalize();
-		vector.scale( data->m_scoutRange );
+		FCoord3D vector = *mastersDestination;
+		vector.sub( *master->getPositionFix() );
+		Fix len = vector.length();
+		if( len > Fix( 0 ) )
+			vector.set( vector.x / len * scoutRange, vector.y / len * scoutRange, vector.z / len * scoutRange );
 
 		//Now that we have calculated the vector relative to me, add it to my position to get my goal.
-		scoutPosition.set( master->getPosition() );
-		scoutPosition.add( &vector );
+		scoutPosition = *master->getPositionFix();
+		scoutPosition.add( vector );
 	}
 	else
 	{
 		//We are close enough, so use the target position -- easy!
-		scoutPosition.set( mastersDestination );
+		scoutPosition = *mastersDestination;
 	}
 
 	//Finally, if we have a wander distance, then randomly select a point within
@@ -394,23 +408,24 @@ void SlavedUpdate::doScoutLogic( const Coord3D *mastersDestination )
 		m_guardPointOffset.y += data->m_scoutWanderRange * Sin( randomDirection );
 
 		//Offset our pinned position by our random offset.
-		scoutPosition.x += m_guardPointOffset.x;
-		scoutPosition.y += m_guardPointOffset.y;
-		m_guardPointOffset.z = TheTerrainLogic->getGroundHeight( scoutPosition.x, scoutPosition.y );
+		scoutPosition.x += fixFromReal( m_guardPointOffset.x );	// P8
+		scoutPosition.y += fixFromReal( m_guardPointOffset.y );
+		m_guardPointOffset.z = fixToReal( TheTerrainLogic->getGroundHeightFix( scoutPosition.x, scoutPosition.y ) );
 	}
 
 	//Move to the updated position!
 	AIUpdateInterface *ai = me->getAIUpdateInterface();
 	if( ai )
 	{
-		ai->aiMoveToPosition( &scoutPosition, CMD_FROM_AI );
+		const Coord3D goal = scoutPosition.toCoord3D();	// P4
+		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
 // We are ordered to attempt to get as close as possible to my master's position.
 //-------------------------------------------------------------------------------------------------
-void SlavedUpdate::doGuardLogic( Coord3D *pinnedPosition )
+void SlavedUpdate::doGuardLogic( FCoord3D *pinnedPosition )
 {
 	const SlavedUpdateModuleData* data = getSlavedUpdateModuleData();
 	Object *me = getObject();
@@ -423,14 +438,15 @@ void SlavedUpdate::doGuardLogic( Coord3D *pinnedPosition )
 		m_guardPointOffset.x += data->m_guardMaxRange * Cos( randomDirection );
 		m_guardPointOffset.y += data->m_guardMaxRange * Sin( randomDirection );
 
-		pinnedPosition->x += m_guardPointOffset.x;
-		pinnedPosition->y += m_guardPointOffset.y;
-		m_guardPointOffset.z = TheTerrainLogic->getGroundHeight( pinnedPosition->x, pinnedPosition->y );
+		pinnedPosition->x += fixFromReal( m_guardPointOffset.x );	// P8
+		pinnedPosition->y += fixFromReal( m_guardPointOffset.y );
+		m_guardPointOffset.z = fixToReal( TheTerrainLogic->getGroundHeightFix( pinnedPosition->x, pinnedPosition->y ) );
 	}
 	AIUpdateInterface *ai = me->getAIUpdateInterface();
 	if( ai )
 	{
-		ai->aiMoveToPosition( pinnedPosition, CMD_FROM_AI );
+		const Coord3D goal = pinnedPosition->toCoord3D();	// P4
+		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 	}
 }
 
@@ -449,8 +465,8 @@ void SlavedUpdate::doRepairLogic()
 	}
 
 	//There are two major things... either move closer or repair.
-	Real distSqr = ThePartitionManager->getDistanceSquared( me, master, FROM_BOUNDINGSPHERE_2D );
-	Bool closeEnough = distSqr < 12.0f * 12.0f;
+	Fix distSqr = ThePartitionManager->getDistanceSquaredFix( me, master, FROM_BOUNDINGSPHERE_2D );
+	Bool closeEnough = distSqr < Fix( 12 * 12 );
 
 	//We're going to do different things based on the repair state.
 	if( closeEnough )
@@ -482,7 +498,8 @@ void SlavedUpdate::doRepairLogic()
 	{
 		m_repairing = false;
 
-		Bool closeEnoughForZPrecision = distSqr < sqr(master->getGeometryInfo().getBoundingSphereRadius() * 2);
+		Fix zPrecisionDist = master->getGeometryInfo().getBoundingSphereRadiusFix() * Fix( 2 );
+		Bool closeEnoughForZPrecision = distSqr < zPrecisionDist * zPrecisionDist;
 
 		//We're too far away to repair, so get closer.
 		Locomotor *locomotor = ai->getCurLocomotor();
@@ -490,11 +507,11 @@ void SlavedUpdate::doRepairLogic()
 		{
 			locomotor->setUsePreciseZPos( closeEnoughForZPrecision );
 		}
-		Coord3D pos;
-		pos.set( master->getPosition() );
+		FCoord3D pos = *master->getPositionFix();
 		Real altitude = GameLogicRandomValueReal( data->m_repairMinAltitude, data->m_repairMaxAltitude );
-		pos.z += altitude;
-		ai->aiMoveToPosition( &pos, CMD_FROM_AI );
+		pos.z += fixFromReal( altitude );	// P3
+		const Coord3D goal = pos.toCoord3D();	// P4
+		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 
 		//Also speed things up by retracting the repair arm (so viewers
 		//will see it's intentions)
@@ -635,14 +652,15 @@ void SlavedUpdate::setRepairState( RepairStates repairState )
 						if( weldingSys )
 						{
 							Coord3D pos;
+							const Coord3D objPos = obj->getPositionFix()->toCoord3D();	// client
 							//Get the bone position
 							if( draw->getPristineBonePositions( data->m_weldingFXBone.str(), 0, &pos, NULL, 1 ) )
 							{
-								pos.add( obj->getPosition() );
+								pos.add( &objPos );
 							}
 							else
 							{
-								pos.set( obj->getPosition() );
+								pos.set( &objPos );
 							}
 
 							weldingSys->setPosition( &pos );
@@ -686,10 +704,10 @@ void SlavedUpdate::moveToNewRepairSpot()
 	{
 		//Allow me to wander away from the pinnedPosition.
 		Real randomDirection = GameLogicRandomValue( 0, 2*PI );
-		m_guardPointOffset.set( master->getPosition() );
+		m_guardPointOffset = master->getPositionFix()->toCoord3D();	// P8: saved in float, and the move goal is P4
 		m_guardPointOffset.x += data->m_repairRange * Cos( randomDirection );
 		m_guardPointOffset.y += data->m_repairRange * Sin( randomDirection );
-		m_guardPointOffset.z = TheTerrainLogic->getGroundHeight( m_guardPointOffset.x, m_guardPointOffset.y );
+		m_guardPointOffset.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( m_guardPointOffset.x ), fixFromReal( m_guardPointOffset.y ) ) );
 		Real altitude = GameLogicRandomValueReal( data->m_repairMinAltitude, data->m_repairMaxAltitude );
 		m_guardPointOffset.z += altitude;
 

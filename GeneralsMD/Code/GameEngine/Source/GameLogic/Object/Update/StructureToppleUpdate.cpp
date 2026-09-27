@@ -46,6 +46,7 @@
 #include "GameLogic/Weapon.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -55,6 +56,30 @@
 #endif
 
 const Int MAX_IDX = 32;
+
+/* P8: the fall is still worked in float - its angle, its direction and the crushing weapons' line are
+	 saved float state - so the building's fixed transform goes out to be pre-rotated and comes back in. */
+static void preRotateTransform( Object *building, Real aroundX, Real aroundY, Real aroundZ )
+{
+	Matrix3D xfrm;
+	building->getTransformMatrixFix()->toMatrix3D( &xfrm );
+	if( aroundX != 0.0f )
+		xfrm.In_Place_Pre_Rotate_X( aroundX );
+	if( aroundY != 0.0f )
+		xfrm.In_Place_Pre_Rotate_Y( aroundY );
+	if( aroundZ != 0.0f )
+		xfrm.In_Place_Pre_Rotate_Z( aroundZ );
+	FixMatrix3D fix;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			fix.m[ i ][ j ] = fixFromReal( xfrm[ i ][ j ] );
+	building->setTransformMatrixFix( &fix );
+}
+
+static Real groundHeightAt( Real x, Real y )
+{
+	return fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( x ), fixFromReal( y ) ) );
+}
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -156,12 +181,12 @@ void StructureToppleUpdate::beginStructureTopple(const DamageInfo *damageInfo)
 		if (attacker == NULL) {
 			toppleAngle = GameLogicRandomValueReal(0.0, 2*PI);
 		} else {
-			const Coord3D *attackerPos = attacker->getPosition();
-			const Coord3D *buildingPos = building->getPosition();
+			const FCoord3D *attackerPos = attacker->getPositionFix();
+			const FCoord3D *buildingPos = building->getPositionFix();
 
 			// Calculate the topple direction to be the opposite of the direction fired from.
-			m_toppleDirection.x = buildingPos->x - attackerPos->x;
-			m_toppleDirection.y = buildingPos->y - attackerPos->y;
+			m_toppleDirection.x = fixToReal( buildingPos->x - attackerPos->x );	// P8: saved in float
+			m_toppleDirection.y = fixToReal( buildingPos->y - attackerPos->y );
 
 			// Give it a little randomness...
 			toppleAngle = m_toppleDirection.toAngle();
@@ -171,12 +196,15 @@ void StructureToppleUpdate::beginStructureTopple(const DamageInfo *damageInfo)
 		m_toppleDirection.y = Sin(toppleAngle);
 		TheScriptEngine->adjustToppleDirection(getObject(), &m_toppleDirection);
 
-		Real averageRadius = (building->getGeometryInfo().getMajorRadius() + building->getGeometryInfo().getMinorRadius()) / 2;
-		Real explosionRadius = averageRadius * 0.90;
+		Fix averageRadius = (building->getGeometryInfo().getMajorRadiusFix() + building->getGeometryInfo().getMinorRadiusFix()) / Fix(2);
+		Fix explosionRadius = averageRadius * 0.9_fx;
+		Fix burstAngle = fixFromReal( toppleAngle );
 
-		m_delayBurstLocation.x = building->getPosition()->x + explosionRadius * Cos(toppleAngle);
-		m_delayBurstLocation.y = building->getPosition()->y + explosionRadius * Sin(toppleAngle);
-		m_delayBurstLocation.z = TheTerrainLogic->getGroundHeight(m_delayBurstLocation.x, m_delayBurstLocation.y);
+		FCoord3D burst = *building->getPositionFix();
+		burst.x += explosionRadius * fixCos( burstAngle );
+		burst.y += explosionRadius * fixSin( burstAngle );
+		burst.z = TheTerrainLogic->getGroundHeightFix( burst.x, burst.y );
+		m_delayBurstLocation = burst.toCoord3D();	// P8: saved in float
 
 		doToppleStartFX(building, damageInfo);
 		// logic random: each burst runs doPhaseStuff(STPHASE_DELAY), which creates OCL objects
@@ -267,7 +295,8 @@ UpdateSleepTime StructureToppleUpdate::update( void )
 			m_toppleState = TOPPLESTATE_WAITINGFORDONE;
 
 			applyCrushingDamage(0.0f);
-			doPhaseStuff(STPHASE_FINAL, getObject()->getPosition());
+			const Coord3D finalPos = getObject()->getPositionFix()->toCoord3D();	// P8
+			doPhaseStuff(STPHASE_FINAL, &finalPos);
 
 			if( lastDamageInfo == NULL || getDamageTypeFlag( d->m_damageFXTypes, lastDamageInfo->in.m_damageType ) )
 				FXList::doFXObj(d->m_toppleDoneFXList, getObject());
@@ -281,11 +310,7 @@ UpdateSleepTime StructureToppleUpdate::update( void )
 			m_nextBurstFrame = now + GameLogicRandomValue(d->m_minToppleBurstDelay, d->m_maxToppleBurstDelay);
 		}
 
-		Object *building = getObject();
-		Matrix3D xfrm = *building->getTransformMatrix();
-		xfrm.In_Place_Pre_Rotate_X(-m_toppleVelocity * m_toppleDirection.y);
-		xfrm.In_Place_Pre_Rotate_Y(m_toppleVelocity * m_toppleDirection.x);
-		building->setTransformMatrix(&xfrm);
+		preRotateTransform( getObject(), -m_toppleVelocity * m_toppleDirection.y, m_toppleVelocity * m_toppleDirection.x, 0.0f );
 	}
 
 	// The building is now flat on the ground and done with all the crushing and all that.
@@ -326,14 +351,12 @@ void StructureToppleUpdate::doToppleDoneStuff()
 
 	Object *building = getObject();
 
-	Real origAngle = building->getOrientation();
-	building->setOrientation(origAngle);
+	Fix origAngle = building->getOrientationFix();
+	building->setOrientationFix(origAngle);
 
 	Real toppleAngle = m_toppleDirection.toAngle();
 
-	Matrix3D xfrm = *building->getTransformMatrix();
-	xfrm.In_Place_Pre_Rotate_Z(toppleAngle-origAngle);
-	building->setTransformMatrix(&xfrm);
+	preRotateTransform( building, 0.0f, 0.0f, toppleAngle - fixToReal( origAngle ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -371,22 +394,17 @@ void StructureToppleUpdate::applyCrushingDamage(Real theta)
 	}
 
 	Object *building = getObject();
-	Real orientationAngle = building->getOrientation();
 	Real toppleAngle = m_toppleDirection.toAngle();
 
 	// Figure out the width of the projection of the boundary of the building along the topple direction.
 	// Do this because the amount of ground that is affected will be different if the building falls
 	// in different orientations.
-	Real angle = orientationAngle - toppleAngle;
-	Real minorComponent = building->getGeometryInfo().getMinorRadius() * Cos(angle);
-	Real majorComponent = building->getGeometryInfo().getMajorRadius() * Sin(angle);
+	Fix angle = building->getOrientationFix() - fixFromReal( toppleAngle );
+	FCoord2D components;
+	components.set( building->getGeometryInfo().getMajorRadiusFix() * fixSin( angle ),
+		building->getGeometryInfo().getMinorRadiusFix() * fixCos( angle ) );
 
-	Coord3D temp3D;
-	temp3D.x = majorComponent;
-	temp3D.y = minorComponent;
-	temp3D.z = 0.0f;
-	
-	Real facingWidth = temp3D.length() / 2;
+	Real facingWidth = fixToReal( components.length() / Fix(2) );	// P8: the crushing line is float
 
 	// Get the crushing weapon.
 	const WeaponTemplate* wt = TheWeaponStore->findWeaponTemplate(d->m_crushingWeaponName);
@@ -432,13 +450,14 @@ void StructureToppleUpdate::doDamageLine(Object *building, const WeaponTemplate*
 	const StructureToppleUpdateModuleData *d = getStructureToppleUpdateModuleData();
 
 	Coord3D target;
+	const Coord3D buildingPos = building->getPositionFix()->toCoord3D();	// P6: the crushing weapons fire at float spots
 
-	for (Real i = -facingWidth; i < facingWidth; i += WEAPON_SPACING_PARALLEL) 
+	for (Real i = -facingWidth; i < facingWidth; i += WEAPON_SPACING_PARALLEL)
 	{
 		// across the fall line: (-sin, cos) is perpendicular to (cos, sin), (sin, cos) only at 0 and 90 degrees
-		target.x = building->getPosition()->x + jcos - (i * Sin(toppleAngle));
-		target.y = building->getPosition()->y + jsin + (i * Cos(toppleAngle));
-		target.z = TheTerrainLogic->getGroundHeight(target.x, target.y);
+		target.x = buildingPos.x + jcos - (i * Sin(toppleAngle));
+		target.y = buildingPos.y + jsin + (i * Cos(toppleAngle));
+		target.z = groundHeightAt(target.x, target.y);
 
 	  TheWeaponStore->createAndFireTempWeapon(wt, building, &target);
 
@@ -448,9 +467,9 @@ void StructureToppleUpdate::doDamageLine(Object *building, const WeaponTemplate*
 	}
 
 	// Make sure there are weapons fired and FX done on the edge of the building.
-	target.x = building->getPosition()->x + jcos - (facingWidth * Sin(toppleAngle));
-	target.y = building->getPosition()->y + jsin + (facingWidth * Cos(toppleAngle));
-	target.z = TheTerrainLogic->getGroundHeight(target.x, target.y);
+	target.x = buildingPos.x + jcos - (facingWidth * Sin(toppleAngle));
+	target.y = buildingPos.y + jsin + (facingWidth * Cos(toppleAngle));
+	target.z = groundHeightAt(target.x, target.y);
 
   TheWeaponStore->createAndFireTempWeapon(wt, building, &target);
 
@@ -459,9 +478,9 @@ void StructureToppleUpdate::doDamageLine(Object *building, const WeaponTemplate*
 		FXList::doFXPos(d->m_crushingFXList, &target);
 
 	// Do the flying debris for this line.
-	target.x = building->getPosition()->x + jcos;
-	target.y = building->getPosition()->y + jsin;
-	target.z = TheTerrainLogic->getGroundHeight(target.x, target.y);
+	target.x = buildingPos.x + jcos;
+	target.y = buildingPos.y + jsin;
+	target.z = groundHeightAt(target.x, target.y);
 
 	doPhaseStuff(STPHASE_FINAL, &target);
 }
@@ -473,10 +492,11 @@ void StructureToppleUpdate::doToppleStartFX(Object *building, const DamageInfo *
 	const StructureToppleUpdateModuleData *d = getStructureToppleUpdateModuleData();
 	const DamageInfo *lastDamageInfo = getObject()->getBodyModule()->getLastDamageInfo();
 
-	if( lastDamageInfo == NULL || getDamageTypeFlag( d->m_damageFXTypes, lastDamageInfo->in.m_damageType ) )	
-		FXList::doFXPos(d->m_toppleStartFXList, building->getPosition());
+	const Coord3D buildingPos = building->getPositionFix()->toCoord3D();	// client and P8
+	if( lastDamageInfo == NULL || getDamageTypeFlag( d->m_damageFXTypes, lastDamageInfo->in.m_damageType ) )
+		FXList::doFXPos(d->m_toppleStartFXList, &buildingPos);
 
-	doPhaseStuff(STPHASE_INITIAL, building->getPosition());
+	doPhaseStuff(STPHASE_INITIAL, &buildingPos);
 }
 
 //-------------------------------------------------------------------------------------------------

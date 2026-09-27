@@ -130,7 +130,7 @@ protected:
 	void doCollapseDelayBurstFX();
 	void doCollapseDoneStuff();
 
-	void doPhaseStuff(StructureCollapsePhaseType scphase, const Coord3D *target);
+	void doPhaseStuff(StructureCollapsePhaseType scphase, const FCoord3D *target);
 
 	enum StructureCollapseStateType 
 	{

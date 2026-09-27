@@ -64,6 +64,15 @@
 #include "GameLogic/Module/StickyBombUpdate.h"
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
+#include "Lib/FixBoundary.h"
+
+// m_targetPos is saved in float
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -683,7 +692,7 @@ Bool SpecialAbilityUpdate::handlePackingProcessing()
       {
         if( data->m_flipObjectAfterUnpacking )
         {
-          getObject()->setOrientation( getObject()->getOrientation() + PI );
+          getObject()->setOrientationFix( getObject()->getOrientationFix() + FIX_PI );
         }
         m_packingState = STATE_UNPACKED;
       }
@@ -691,7 +700,7 @@ Bool SpecialAbilityUpdate::handlePackingProcessing()
       {
         if( data->m_flipObjectAfterPacking )
         {
-          getObject()->setOrientation( getObject()->getOrientation() + PI );
+          getObject()->setOrientationFix( getObject()->getOrientationFix() + FIX_PI );
         }
         //We just finished packing up, therefore
         //we have completed our special ability.
@@ -864,19 +873,20 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
     return true;
   }
 
-  Real fDistSquared = 0.0f;
+  Fix fDistSquared = Fix( 0 );
   Object *target = NULL;
   if( m_targetID != INVALID_ID )
   {
     target = TheGameLogic->findObjectByID( m_targetID );
     if( target )
     {
-      fDistSquared = ThePartitionManager->getDistanceSquared( self, target, FROM_BOUNDINGSPHERE_2D );
+      fDistSquared = ThePartitionManager->getDistanceSquaredFix( self, target, FROM_BOUNDINGSPHERE_2D );
     }
   }
   else if( m_targetPos.x || m_targetPos.y || m_targetPos.z ) //It's zero if not used...
   {
-    fDistSquared = ThePartitionManager->getDistanceSquared( self, &m_targetPos, FROM_BOUNDINGSPHERE_2D );
+    const FCoord3D targetPos = toFix( m_targetPos );
+    fDistSquared = ThePartitionManager->getDistanceSquaredFix( self, &targetPos, FROM_BOUNDINGSPHERE_2D );
   }
   else
   {
@@ -885,13 +895,14 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
   }
 
   //Check to see how far we are from the target!
-  Real fStartRangeSquared = data->m_startAbilityRange * data->m_startAbilityRange;
-  if( fDistSquared <= fStartRangeSquared )
+  const Fix fStartRange = fixFromReal( data->m_startAbilityRange );	// P3
+  if( fDistSquared <= fStartRange * fStartRange )
   {
     if( range == 0.0f && m_targetID != INVALID_ID )
     {
       //We want to ensure we collided with our target first!
-      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( self->getPosition(), self->getGeometryInfo(), 0.0f );
+      const Coord3D selfPos = self->getPositionFix()->toCoord3D();	// P2: iteratePotentialCollisions has no Fix twin
+      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( &selfPos, self->getGeometryInfo(), 0.0f );
       MemoryPoolObjectHolder hold(iter);
       for( Object *them = iter->first(); them; them = iter->next() )
       {
@@ -908,7 +919,7 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
       //Make sure we can see the target!
       PartitionFilterLineOfSight  filterLOS( self );
       PartitionFilter *filters[] = { &filterLOS, NULL };
-      ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( self, range, FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+      ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( self, fixFromReal( range ), FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR );	// P3
       MemoryPoolObjectHolder hold( iter );
       for( Object *theTarget = iter->first(); theTarget; theTarget = iter->next() ) 
       {
@@ -939,19 +950,20 @@ Bool SpecialAbilityUpdate::isWithinAbilityAbortRange() const
   const Real UNDERSIZE = PATHFIND_CELL_SIZE_F * 0.25f;
   range = __max( 0.0f, range - UNDERSIZE );
 
-  Real fDistSquared = 0.0f;
+  Fix fDistSquared = Fix( 0 );
   Object *target = NULL;
   if( m_targetID != INVALID_ID )
   {
     target = TheGameLogic->findObjectByID( m_targetID );
     if( target )
     {
-      fDistSquared = ThePartitionManager->getDistanceSquared( self, target, FROM_BOUNDINGSPHERE_2D );
+      fDistSquared = ThePartitionManager->getDistanceSquaredFix( self, target, FROM_BOUNDINGSPHERE_2D );
     }
   }
   else if( m_targetPos.x || m_targetPos.y || m_targetPos.z ) //It's zero if not used...
   {
-    fDistSquared = ThePartitionManager->getDistanceSquared( self, &m_targetPos, FROM_BOUNDINGSPHERE_2D );
+    const FCoord3D targetPos = toFix( m_targetPos );
+    fDistSquared = ThePartitionManager->getDistanceSquaredFix( self, &targetPos, FROM_BOUNDINGSPHERE_2D );
   }
   else
   {
@@ -960,13 +972,14 @@ Bool SpecialAbilityUpdate::isWithinAbilityAbortRange() const
   }
 
   //Check to see how far we are from the target!
-  Real fStartRangeSquared = data->m_abilityAbortRange * data->m_abilityAbortRange;
-  if( fDistSquared <= fStartRangeSquared )
+  const Fix fAbortRange = fixFromReal( data->m_abilityAbortRange );	// P3
+  if( fDistSquared <= fAbortRange * fAbortRange )
   {
     if( range == 0.0f && m_targetID != INVALID_ID )
     {
       //We want to ensure we collided with our target first!
-      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( self->getPosition(), self->getGeometryInfo(), 0.0f );
+      const Coord3D selfPos = self->getPositionFix()->toCoord3D();	// P2: iteratePotentialCollisions has no Fix twin
+      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( &selfPos, self->getGeometryInfo(), 0.0f );
       MemoryPoolObjectHolder hold(iter);
       for( Object *them = iter->first(); them; them = iter->next() )
       {
@@ -1164,13 +1177,15 @@ Bool SpecialAbilityUpdate::initLaser(Object* specialObject, Object* target )
   if( !getObject()->getSingleLogicalBonePosition( data->m_specialObjectAttachToBoneName.str(), &startPos, NULL ) )
   {
     //If we can't find the bone, then set it to our current position.
-    startPos.set( getObject()->getPosition() );
+    startPos = getObject()->getPositionFix()->toCoord3D();	// client
   }
-  
+
   Coord3D endPos;
   if (target)
   {
-    target->getGeometryInfo().getCenterPosition( *target->getPosition(), endPos );
+    FCoord3D center = *target->getPositionFix();
+    center.z += target->getGeometryInfo().getZDeltaToCenterPositionFix();
+    endPos = center.toCoord3D();	// client
   }
   else
   {
@@ -1550,14 +1565,13 @@ void SpecialAbilityUpdate::triggerAbilityEffect()
           //Display cash income floating over the blacklotus
           UnicodeString moneyString;
           moneyString.format( TheGameText->fetch( "GUI:AddCash" ), cash );
-          Coord3D pos;
-          pos.set( object->getPosition() );
+          Coord3D pos = object->getPositionFix()->toCoord3D();	// client
           pos.z += 20.0f; //add a little z to make it show up above the unit.
           TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 0, 255, 0, 255 ) );
         
           //Display cash lost floating over the target
           moneyString.format( TheGameText->fetch( "GUI:LoseCash" ), cash );
-          pos.set( target->getPosition() );
+          pos = target->getPositionFix()->toCoord3D();	// client
           pos.z += 30.0f; //add a little z to make it show up above the unit.
           TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 255, 0, 0, 255 ) );
         }
@@ -1691,9 +1705,9 @@ Object* SpecialAbilityUpdate::createSpecialObject()
     {
       m_specialObjectIDList.push_back( specialObject->getID() );
       m_specialObjectEntries++;
-      specialObject->setPosition( getObject()->getPosition() );
+      specialObject->setPositionFix( getObject()->getPositionFix() );
 
-      specialObject->setOrientation( getObject()->getOrientation() );
+      specialObject->setOrientationFix( getObject()->getOrientationFix() );
       
       //So we can get experience from it when it blows up (if applicable)
       //specialObject->setProducer( getObject() ); --This causes it to be an enemy which is naughty.
@@ -1806,23 +1820,22 @@ void SpecialAbilityUpdate::finishAbility()
   Bool validTarget = m_targetPos.x || m_targetPos.y || m_targetPos.z || m_targetID != INVALID_ID;
   if( data->m_fleeRangeAfterCompletion && validTarget )
   {
-    Coord3D pos;
-    pos.set( getObject()->getPosition() );
+    FCoord3D pos = *getObject()->getPositionFix();
 
     AIUpdateInterface *ai = getObject()->getAIUpdateInterface();
     if( ai )
     {
-      Coord3D dir;
-      dir.set( getObject()->getUnitDirectionVector2D() );
-			dir.scale( data->m_fleeRangeAfterCompletion );
+      const Fix fleeRange = fixFromReal( data->m_fleeRangeAfterCompletion );	// P3
+      FCoord3D dir = *getObject()->getUnitDirectionVector2DFix();
+			dir.scale( fleeRange );
 
 			if( data->m_flipObjectAfterUnpacking || data->m_flipObjectAfterPacking )
 			{
-				pos.add( &dir );
+				pos.add( dir );
 			}
 			else
 			{
-				pos.sub( &dir );
+				pos.sub( dir );
 			}
 			// Now check for mines.  Normally we are fleeing from a bomb we just planted.
 			// It is not good to run back towards the previous mine we just planted about
@@ -1834,13 +1847,18 @@ void SpecialAbilityUpdate::finishAbility()
 					PartitionFilterSamePlayer filterPlayer( contPlayer );	// Look for our own mines.
 					PartitionFilterAcceptByKindOf filterKind(MAKE_KINDOF_MASK(KINDOF_MINE), KINDOFMASK_NONE);
 					PartitionFilter *filters[] = { &filterKind, &filterPlayer, NULL };
-					Object *mine = ThePartitionManager->getClosestObject( &pos, data->m_fleeRangeAfterCompletion, FROM_CENTER_2D, filters );// could be null. this is ok.
+					Object *mine = ThePartitionManager->getClosestObjectFix( &pos, fleeRange, FROM_CENTER_2D, filters );// could be null. this is ok.
 					if (mine) {
-						dir.set(pos.x-mine->getPosition()->x, pos.y-mine->getPosition()->y, 0);
-						dir.normalize();
-						dir.scale(data->m_fleeRangeAfterCompletion);
-						pos = *mine->getPosition();
-						pos.add(&dir);
+						const FCoord3D *minePos = mine->getPositionFix();
+						dir.set(pos.x-minePos->x, pos.y-minePos->y, Fix(0));
+						const Fix len = dir.length();
+						if (len != Fix(0)) {
+							dir.x /= len;
+							dir.y /= len;
+						}
+						dir.scale(fleeRange);
+						pos = *minePos;
+						pos.add(dir);
 					}
 				}
 			}
@@ -1856,7 +1874,8 @@ void SpecialAbilityUpdate::finishAbility()
 				bogusForce.zero();
 				phys->applyMotiveForce(&bogusForce);
 			}
-			ai->aiMoveToPosition( &pos, CMD_FROM_AI );
+			const Coord3D fleePos = pos.toCoord3D();	// P4
+			ai->aiMoveToPosition( &fleePos, CMD_FROM_AI );
 			Object *target = TheGameLogic->findObjectByID( m_targetID );
 			if( target )
 			{

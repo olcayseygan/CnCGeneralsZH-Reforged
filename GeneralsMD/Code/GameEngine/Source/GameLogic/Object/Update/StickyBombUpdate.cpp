@@ -46,6 +46,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/GameLogic.h"
+#include "Lib/FixBoundary.h"
 
 // PRIVATE ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -129,25 +130,26 @@ void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, con
 	if( target )
 	{
 		const StickyBombUpdateModuleData* d = getStickyBombUpdateModuleData();
-		Coord3D pos = *target->getPosition();
+		FCoord3D pos = *target->getPositionFix();
 
 		if( specificPos )
 		{
-			pos = *specificPos;
-			pos.z = TheTerrainLogic->getGroundHeight(pos.x, pos.y);
+			pos.x = fixFromReal( specificPos->x );	// P8: the caller hands a float position over
+			pos.y = fixFromReal( specificPos->y );
+			pos.z = TheTerrainLogic->getGroundHeightFix(pos.x, pos.y);
 		}
 		else if(target->isKindOf( KINDOF_IMMOBILE ) && bomber )
 		{
 			// make this exception, if bomber has placed bomb on a structure
 			// let the bomb just stay where it was first put, so a mine clearing unit can get to it later
-			pos = *bomber->getPosition();
-			pos.z = TheTerrainLogic->getGroundHeight(pos.x, pos.y);
+			pos = *bomber->getPositionFix();
+			pos.z = TheTerrainLogic->getGroundHeightFix(pos.x, pos.y);
 			//keep it at ground height for mine clearing units to reach
 		}
 		else
-			pos.z += d->m_offsetZ; // ride on the roof of the truck/tank
+			pos.z += fixFromReal( d->m_offsetZ ); // ride on the roof of the truck/tank	// P3
 
-		getObject()->setPosition( &pos );
+		getObject()->setPositionFix( &pos );
 
 		if( getObject()->isKindOf(KINDOF_BOOBY_TRAP) )
 		{
@@ -156,7 +158,8 @@ void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, con
 		}
 
 		AudioEventRTS soundCreateBomb = *(getObject()->getTemplate()->getPerUnitSound("StickyBombCreated"));
-		soundCreateBomb.setPosition( getObject()->getPosition() );
+		const Coord3D soundPos = getObject()->getPositionFix()->toCoord3D();	// client
+		soundCreateBomb.setPosition( &soundPos );
 		TheAudio->addAudioEvent(&soundCreateBomb);
 		
 	}	
@@ -179,25 +182,19 @@ UpdateSleepTime StickyBombUpdate::update( void )
 
 		if ( target->isKindOf( KINDOF_IMMOBILE) )
 		{
-			const Coord3D *pos = self->getPosition();
-			Coord3D newPos;
-			newPos.x = pos->x;
-			newPos.y = pos->y;
-			newPos.z = TheTerrainLogic->getGroundHeight(newPos.x, newPos.y);
+			FCoord3D newPos = *self->getPositionFix();
+			newPos.z = TheTerrainLogic->getGroundHeightFix(newPos.x, newPos.y);
 			//keep it at ground height for mine clearing units to reach
 
-			self->setPosition( &newPos );
+			self->setPositionFix( &newPos );
 		}
 		else // make the bomb follow the target around
 		{
 			const StickyBombUpdateModuleData* d = getStickyBombUpdateModuleData();
-			const Coord3D *pos = target->getPosition();
-			Coord3D newPos;
-			newPos.x = pos->x;
-			newPos.y = pos->y;
-			newPos.z = pos->z + d->m_offsetZ;
+			FCoord3D newPos = *target->getPositionFix();
+			newPos.z += fixFromReal( d->m_offsetZ );	// P3
 
-			self->setPosition( &newPos );
+			self->setPositionFix( &newPos );
 		}
 	}
 
@@ -240,21 +237,22 @@ void StickyBombUpdate::detonate()
 		if( boobyTrappedObject )
 		{
 			WeaponBonus nullBonus;
-			Real boundingCircle = boobyTrappedObject->getGeometryInfo().getBoundingCircleRadius();
+			Fix boundingCircle = boobyTrappedObject->getGeometryInfo().getBoundingCircleRadiusFix();
 			Real primaryDamage = data->m_geometryBasedDamageWeaponTemplate->getPrimaryDamage(nullBonus);
 			Real secondaryDamage = data->m_geometryBasedDamageWeaponTemplate->getSecondaryDamage(nullBonus);
-			Real primaryDamageRange = data->m_geometryBasedDamageWeaponTemplate->getPrimaryDamageRadius(nullBonus);
-			Real secondaryDamageRange = data->m_geometryBasedDamageWeaponTemplate->getSecondaryDamageRadius(nullBonus);
+			// P6: the weapon's radii are float
+			Fix primaryDamageRange = fixFromReal( data->m_geometryBasedDamageWeaponTemplate->getPrimaryDamageRadius(nullBonus) );
+			Fix secondaryDamageRange = fixFromReal( data->m_geometryBasedDamageWeaponTemplate->getSecondaryDamageRadius(nullBonus) );
 			primaryDamageRange += boundingCircle;
 			secondaryDamageRange += boundingCircle;
-			Real primaryDamageRangeSqr = sqr(primaryDamageRange);
-			Real radius = max(primaryDamageRange, secondaryDamageRange);
+			Fix primaryDamageRangeSqr = primaryDamageRange * primaryDamageRange;
+			Fix radius = fixMax(primaryDamageRange, secondaryDamageRange);
 
 			SimpleObjectIterator *iter;
-			iter = ThePartitionManager->iterateObjectsInRange(boobyTrappedObject->getPosition(), radius, FROM_BOUNDINGSPHERE_3D);
+			iter = ThePartitionManager->iterateObjectsInRangeFix(boobyTrappedObject->getPositionFix(), radius, FROM_BOUNDINGSPHERE_3D);
 			MemoryPoolObjectHolder hold(iter);
-			Real curVictimDistSqr;
-			Object *curVictim = iter->firstWithNumeric(&curVictimDistSqr);
+			Fix curVictimDistSqr;
+			Object *curVictim = iter->firstWithNumericFix(&curVictimDistSqr);
 			DamageInfo damageInfo;
 			damageInfo.in.m_damageType = data->m_geometryBasedDamageWeaponTemplate->getDamageType();
 			damageInfo.in.m_deathType = data->m_geometryBasedDamageWeaponTemplate->getDeathType();
@@ -262,7 +260,7 @@ void StickyBombUpdate::detonate()
 			damageInfo.in.m_sourcePlayerMask = getObject()->getControllingPlayer()->getPlayerMask();
 			damageInfo.in.m_damageStatusType = data->m_geometryBasedDamageWeaponTemplate->getDamageStatusType();
 			
-			for (; curVictim != NULL; curVictim = iter ? iter->nextWithNumeric(&curVictimDistSqr) : NULL)
+			for (; curVictim != NULL; curVictim = iter ? iter->nextWithNumericFix(&curVictimDistSqr) : NULL)
 			{
 				damageInfo.in.m_amount = (curVictimDistSqr <= primaryDamageRangeSqr) ? primaryDamage : secondaryDamage;
 				curVictim->attemptDamage(&damageInfo);
@@ -271,7 +269,8 @@ void StickyBombUpdate::detonate()
 			if( data->m_geometryBasedDamageFX )
 			{
 				// And we make FX based on that size too.
-				FXList::doFXPos(data->m_geometryBasedDamageFX, boobyTrappedObject->getPosition(), NULL, 0, NULL, secondaryDamageRange);
+				const Coord3D fxPos = boobyTrappedObject->getPositionFix()->toCoord3D();	// client
+				FXList::doFXPos(data->m_geometryBasedDamageFX, &fxPos, NULL, 0, NULL, fixToReal( secondaryDamageRange ));
 			}
 		}
 	}

@@ -44,6 +44,7 @@
 #include "GameLogic\Module\PointDefenseLaserUpdate.h"
 #include "GameLogic\Module\PhysicsUpdate.h"
 #include "GameLogic\Weapon.h"
+#include "Lib/FixBoundary.h"
 
 
 
@@ -165,9 +166,9 @@ void PointDefenseLaserUpdate::fireWhenReady()
 	{
 		WeaponBonus bonus;
 		bonus.clear();
-		Real fireRange = data->m_weaponTemplate->getAttackRange( bonus );
+		Fix fireRange = fixFromReal( data->m_weaponTemplate->getAttackRange( bonus ) );	// P6
 		Object *me = getObject();
-		Real fDist = sqrt( ThePartitionManager->getDistanceSquared( me, target, FROM_CENTER_2D ) );
+		Fix fDist = fixSqrt( ThePartitionManager->getDistanceSquaredFix( me, target, FROM_CENTER_2D ) );
 		if( fDist < fireRange )
 		{
 			//We are currently in range!
@@ -245,14 +246,14 @@ Object* PointDefenseLaserUpdate::scanClosestTarget()
 	Object *me = getObject();
 	Object *bestTargetOutOfRange[2] = { NULL, NULL };
 	Object *bestTargetInRange[2] = { NULL, NULL };
-	Real closestDist[2];
-	Real closestOutsideRange[2];
+	Fix closestDist[2];
+	Fix closestOutsideRange[2];
 	Int index;
 	WeaponBonus bonus;
 	bonus.clear();
-	Real fireRange = data->m_weaponTemplate->getAttackRange( bonus );
+	Fix fireRange = fixFromReal( data->m_weaponTemplate->getAttackRange( bonus ) );	// P6
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me->getPosition(), data->m_scanRange, FROM_CENTER_2D );
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), fixFromReal( data->m_scanRange ), FROM_CENTER_2D );	// P3
 	MemoryPoolObjectHolder hold(iter);
 
 	for( Object *other = iter->first(); other; other = iter->next() )
@@ -291,7 +292,7 @@ Object* PointDefenseLaserUpdate::scanClosestTarget()
 			continue;
 		}
 
-		Real fDist = sqrt( ThePartitionManager->getDistanceSquared( me, other, FROM_CENTER_2D ) );
+		Fix fDist = fixSqrt( ThePartitionManager->getDistanceSquaredFix( me, other, FROM_CENTER_2D ) );
 
 		if( fDist <= fireRange )
 		{
@@ -309,16 +310,18 @@ Object* PointDefenseLaserUpdate::scanClosestTarget()
 			//Determine where the target will be based on current velocity using (m_velocityFactor * frames)
 			if( data->m_velocityFactor != 0.0f && !other->isKindOf( KINDOF_IMMOBILE ) )
 			{
-				Coord3D pos;
 				PhysicsBehavior *physics = other->getPhysics();
 				if( physics )
 				{
-					pos.set( physics->getVelocity() );
-					pos.scale( data->m_velocityFactor );
-					pos.add( other->getPosition() );
-					
+					// P4: the velocity is float
+					const Coord3D *vel = physics->getVelocity();
+					FCoord3D pos;
+					pos.set( fixFromReal( vel->x ), fixFromReal( vel->y ), fixFromReal( vel->z ) );
+					pos.scale( fixFromReal( data->m_velocityFactor ) );	// P3
+					pos.add( *other->getPositionFix() );
+
 					//Recalculate the distance.
-					fDist = sqrt( ThePartitionManager->getDistanceSquared( me, &pos, FROM_CENTER_2D ) );
+					fDist = fixSqrt( ThePartitionManager->getDistanceSquaredFix( me, &pos, FROM_CENTER_2D ) );
 				}
 			}
 

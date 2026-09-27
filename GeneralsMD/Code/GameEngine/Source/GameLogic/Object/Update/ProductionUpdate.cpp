@@ -1036,7 +1036,8 @@ UpdateSleepTime ProductionUpdate::update( void )
 				TheInGameUI->message( msg );
 
 				// upgrades are a more rare event, play a nifty radar event thingie
-				TheRadar->createEvent( us->getPosition(), RADAR_EVENT_UPGRADE );
+				const Coord3D radarPos = us->getPositionFix()->toCoord3D();	// client
+				TheRadar->createEvent( &radarPos, RADAR_EVENT_UPGRADE );
 				
 				//Play the sound for the upgrade, because we just built it!
 				AudioEventRTS sound = *upgrade->getResearchCompleteSound();

@@ -41,6 +41,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/OCLUpdate.h"
 #include "GameLogic/TerrainLogic.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 void parseFactionObjectCreationList( INI *ini, void *instance, void *store, const void *userData )
@@ -182,11 +183,13 @@ UpdateSleepTime OCLUpdate::update( void )
 
 		setNextCreationFrame();
 
+		// P8: the edge search and the creation lists are still float
+		const Coord3D objPos = getObject()->getPositionFix()->toCoord3D();
 		Coord3D creationCoord;
 		if( getOCLUpdateModuleData()->m_isCreateAtEdge )
-			creationCoord = TheTerrainLogic->findClosestEdgePoint( getObject()->getPosition() );
+			creationCoord = TheTerrainLogic->findClosestEdgePoint( &objPos );
 		else
-			creationCoord = *getObject()->getPosition();
+			creationCoord = objPos;
 
 		// If this is faction triggered, search through the faction specific OCLs to find the match
 		if (data->m_isFactionTriggered)
@@ -208,7 +211,7 @@ UpdateSleepTime OCLUpdate::update( void )
 				OCLUpdateModuleData::FactionOCLInfo info = *it;
 				if (playerFactionName == info.m_factionName)
 				{
-					ObjectCreationList::create( info.m_ocl, getObject(), &creationCoord, getObject()->getPosition(), getObject()->getOrientation() );
+					ObjectCreationList::create( info.m_ocl, getObject(), &creationCoord, &objPos, fixToReal( getObject()->getOrientationFix() ) );
 					break;
 				}
 			}
@@ -216,7 +219,7 @@ UpdateSleepTime OCLUpdate::update( void )
 		// Use the non faction OCL information
 		else
 		{
-			ObjectCreationList::create( data->m_ocl, getObject(), &creationCoord, getObject()->getPosition(), getObject()->getOrientation() );
+			ObjectCreationList::create( data->m_ocl, getObject(), &creationCoord, &objPos, fixToReal( getObject()->getOrientationFix() ) );
 		}
 	}
 	return UPDATE_SLEEP_NONE;

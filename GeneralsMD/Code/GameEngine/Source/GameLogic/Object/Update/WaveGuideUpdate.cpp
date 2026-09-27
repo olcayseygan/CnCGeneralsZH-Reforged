@@ -46,9 +46,18 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/WaveGuideUpdate.h"
 #include "GameLogic/Module/ToppleUpdate.h"
+#include "Lib/FixBoundary.h"
 
 // DEFINES ////////////////////////////////////////////////////////////////////////////////////////
 #define PATH_EXTRA_DISTANCE (10 * PATHFIND_CELL_SIZE_F)
+
+// the shape points, the destination and the waypoints are float: members that are saved, and map data
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -204,15 +213,11 @@ Bool WaveGuideUpdate::startMoving( void )
 		}  // end if
 				
 		// get vector from next waypoint to first waypoint
-		Coord2D v;
-		v.x = next->getLocation()->x - waypoint->getLocation()->x;
-		v.y = next->getLocation()->y - waypoint->getLocation()->y;
-
-		// turn vector into angle
-		Real angle = v.toAngle();
+		const FCoord3D start = toFix( *waypoint->getLocation() );	// P5
+		const FCoord3D nextPos = toFix( *next->getLocation() );	// P5
 
 		// orient the waveguide the same direction
-		waveGuide->setOrientation( angle );
+		waveGuide->setOrientationFix( fixAtan2( nextPos.y - start.y, nextPos.x - start.x ) );
 
 		// get the ai update interface for the waveguide
 		AIUpdateInterface *ai = waveGuide->getAIUpdateInterface();
@@ -220,11 +225,9 @@ Bool WaveGuideUpdate::startMoving( void )
 		{
 
 			// instantly move to waypoint location on the terrain
-			Coord3D pos;
-			pos.x = waypoint->getLocation()->x;
-			pos.y = waypoint->getLocation()->y;
-			pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
-			waveGuide->setPosition( &pos );
+			FCoord3D pos = start;
+			pos.z = TheTerrainLogic->getGroundHeightFix( pos.x, pos.y );
+			waveGuide->setPositionFix( &pos );
 
 			// follow the waypoint path here
  			ai->aiFollowWaypointPath( waypoint, CMD_FROM_AI );
@@ -354,17 +357,17 @@ void WaveGuideUpdate::computeWaveShapePoints( void )
 void WaveGuideUpdate::transformWaveShape( void )
 {
 	Int i;
-	Object *waveGuide = getObject();
+	const FixMatrix3D *transform = getObject()->getTransformMatrixFix();
 
 	for( i = 0; i < m_shapePointCount; i++ )
 	{
 
 		// transform the point
-		waveGuide->transformPoint( &m_shapePoints[ i ], &m_transformedShapePoints[ i ] );
+		FCoord3D point = transform->transformPoint( toFix( m_shapePoints[ i ] ) );
 
 		// the Z of the transformed point will be on the terrain
-		m_transformedShapePoints[ i ].z = TheTerrainLogic->getGroundHeight( m_transformedShapePoints[ i ].x,
-																																	m_transformedShapePoints[ i ].y );
+		point.z = TheTerrainLogic->getGroundHeightFix( point.x, point.y );
+		m_transformedShapePoints[ i ] = point.toCoord3D();	// saved in float
 
 	}  // end for i
 
@@ -455,27 +458,28 @@ void WaveGuideUpdate::doShoreEffects( void )
 	if( TheGameLogic->getFrame() & 0x1 )
 		return;
 
-	Object *waveGuide = getObject();
+	const FixMatrix3D *transform = getObject()->getTransformMatrixFix();
 	Int i;
 
 	// get module data
 	const WaveGuideUpdateModuleData *modData = getWaveGuideUpdateModuleData();
+	const Fix shorelineEffectDistance = fixFromReal( modData->m_shorelineEffectDistance );	// P3
+	const Fix preferredHeight = fixFromReal( modData->m_preferredHeight );	// P3
 
 	//
 	// setup an array of points just behind the front of the wave where the first wave
 	// "crest" is rising up ... we will use these points to make collide with shore effects
 	//
-	Coord3D effectPoints[ MAX_WAVEGUIDE_SHAPE_POINTS ];
+	FCoord3D effectPoints[ MAX_WAVEGUIDE_SHAPE_POINTS ];
 	for( i = 0; i < m_shapePointCount; i++ )
 	{
 
 		// setup point to be a distance "behind" the wave shape points
-		effectPoints[ i ].x = m_shapePoints[ i ].x - modData->m_shorelineEffectDistance;
-		effectPoints[ i ].y = m_shapePoints[ i ].y;
-		effectPoints[ i ].z = m_shapePoints[ i ].z;
+		FCoord3D point = toFix( m_shapePoints[ i ] );
+		point.x -= shorelineEffectDistance;
 
 		// transform the point
-		waveGuide->transformPoint( &effectPoints[ i ], &effectPoints[ i ] );
+		effectPoints[ i ] = transform->transformPoint( point );
 
 	}  // end for i
 
@@ -486,9 +490,9 @@ void WaveGuideUpdate::doShoreEffects( void )
 	static const ParticleSystemTemplate *left = TheParticleSystemManager->findTemplate( "WaveSplashLeft01" );
 	static const ParticleSystemTemplate *right = TheParticleSystemManager->findTemplate( "WaveSplashRight01" );
 	ParticleSystem *particleSystem;
-	Real terrainZ;
+	Fix terrainZ;
 	Bool underWater = TRUE;
-	Coord3D *point;
+	FCoord3D *point;
 	for( i = 0; i < m_shapePointCount; i++ )
 	{
 
@@ -496,10 +500,10 @@ void WaveGuideUpdate::doShoreEffects( void )
 		point = &effectPoints[ i ];
 
 		// get terrain height at this point
-		terrainZ = TheTerrainLogic->getGroundHeight( point->x, point->y );
+		terrainZ = TheTerrainLogic->getGroundHeightFix( point->x, point->y );
 
 		// is the terrain at this point below or above the preferred water height
-		if( terrainZ > modData->m_preferredHeight )
+		if( terrainZ > preferredHeight )
 		{
 
 			//
@@ -508,11 +512,11 @@ void WaveGuideUpdate::doShoreEffects( void )
 			//
 			if( underWater == TRUE && i != 0 )
 			{
-				Coord3D *prevPoint = &effectPoints[ i - 1 ];  // the prev point is actuall on the water so we'll use it
-						
+				const Coord3D prevPoint = effectPoints[ i - 1 ].toCoord3D();  // client: the prev point is actuall on the water so we'll use it
+
 				particleSystem = TheParticleSystemManager->createParticleSystem( right );
 				if( particleSystem )
-					particleSystem->setPosition( prevPoint );
+					particleSystem->setPosition( &prevPoint );
 
 			}  // end if
 
@@ -532,7 +536,10 @@ void WaveGuideUpdate::doShoreEffects( void )
 
 				particleSystem = TheParticleSystemManager->createParticleSystem( left );
 				if( particleSystem )
-					particleSystem->setPosition( point );
+				{
+					const Coord3D splashPos = point->toCoord3D();	// client
+					particleSystem->setPosition( &splashPos );
+				}
 
 			}  // end if
 
@@ -554,22 +561,25 @@ void WaveGuideUpdate::doDamage( void )
 	const WaveGuideUpdateModuleData *modData = getWaveGuideUpdateModuleData();
 
 	// get our position forward unit direction vector
-	const Coord3D *unitForward = waveGuide->getUnitDirectionVector2D();
+	const FCoord3D *unitForward = waveGuide->getUnitDirectionVector2DFix();
+	const Fix damageRadius = fixFromReal( modData->m_damageRadius );	// P3
+	const Fix preferredHeight = fixFromReal( modData->m_preferredHeight );	// P3
 
 	// iterate over all our sample points and kill stuff around us
 	for( Int i = 0; i < m_shapePointCount; i++ )
 	{
 
 		// scan objects around us and do damage to objects we have "passed over" and are behind us
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &m_transformedShapePoints[ i ],
-																																			 modData->m_damageRadius, 
-																																			 FROM_CENTER_2D, 
+		const FCoord3D shapePoint = toFix( m_transformedShapePoints[ i ] );
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &shapePoint,
+																																			 damageRadius,
+																																			 FROM_CENTER_2D,
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );
 		Object *obj;
-		const Coord3D *objPos;
-		Coord3D v;
-		Real angle;
+		const FCoord3D *objPos;
+		FCoord3D v;
+		Fix angle;
 		for( obj = iter->first(); obj; obj = iter->next() )
 		{
 
@@ -585,22 +595,23 @@ void WaveGuideUpdate::doDamage( void )
 				continue;
 
 			// get other object position
-			objPos = obj->getPosition();
+			objPos = obj->getPositionFix();
 
 			//
 			// only damage objects that are below the preferred height of the wave doing the damage,
 			// bridges are an exception as their object is raised above the ground, but we'll
-			// say the water is destroying the foundation of it 
+			// say the water is destroying the foundation of it
 			//
-			if( objPos->z > modData->m_preferredHeight && obj->isKindOf( KINDOF_BRIDGE ) == FALSE )
+			if( objPos->z > preferredHeight && obj->isKindOf( KINDOF_BRIDGE ) == FALSE )
 				continue;
 
 			// get the vector from us to the object
-			v.x = objPos->x - m_transformedShapePoints[ i ].x;
-			v.y = objPos->y - m_transformedShapePoints[ i ].y;
-			v.z = 0.0f;		// forget Z, this is really a top down 2D calculation
-			v.normalize();
-			
+			v.x = objPos->x - shapePoint.x;
+			v.y = objPos->y - shapePoint.y;
+			v.z = Fix( 0 );		// forget Z, this is really a top down 2D calculation
+			// not normalized: only the sign of the dot product below is read, and a positive length
+			// does not change it
+
 			//
 			// get the cosine of the angle between the our forward direction and the vector to the obj
 			// otherwise known as a dot product
@@ -614,7 +625,7 @@ void WaveGuideUpdate::doDamage( void )
 			// the 180 degrees mark behind us which we figure out by seeing if the cosine of
 			// the angle between us (dot product) is less than zero
 			//
-			if( angle < 0 )
+			if( angle < Fix( 0 ) )
 			{
 
 				// if object was not wet before we kill it and play effects
@@ -635,7 +646,7 @@ void WaveGuideUpdate::doDamage( void )
 						//
 						pos.x = m_shapePoints[ i ].x;
 						pos.y = m_shapePoints[ i ].y;
-						pos.z = obj->getPosition()->z;
+						pos.z = fixToReal( objPos->z );	// client
 						particleSystem->setPosition( &pos );
 						particleSystem->attachToObject( waveGuide );
 
@@ -645,10 +656,7 @@ void WaveGuideUpdate::doDamage( void )
 					obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_WET ) );
 
 					// some things can be toppled ... ooo, xtra special of us!
-					Coord3D toppleVector;
-					toppleVector.x = obj->getPosition()->x - m_transformedShapePoints[ i ].x;
-					toppleVector.y = obj->getPosition()->y - m_transformedShapePoints[ i ].y;
-					toppleVector.z = 0;
+					const Coord3D toppleVector = v.toCoord3D();	// P8
 					obj->topple( &toppleVector, modData->m_toppleForce, TOPPLE_OPTIONS_NO_BOUNCE | 
 																															TOPPLE_OPTIONS_NO_FX );
 
@@ -685,9 +693,10 @@ void WaveGuideUpdate::doDamage( void )
 						if( newBridge )
 						{
 							Real angle = 0.0f;
+							const Coord3D bridgePos = objPos->toCoord3D();	// P8: bridges and the particle below are float
 
 							// get the bridge represented by the object we're killing
-							Bridge *oldBridge = TheTerrainLogic->findBridgeAt( obj->getPosition() );
+							Bridge *oldBridge = TheTerrainLogic->findBridgeAt( &bridgePos );
 							if( oldBridge )
 							{
 								BridgeInfo bridgeInfo;
@@ -704,8 +713,8 @@ void WaveGuideUpdate::doDamage( void )
 							}  // end if
 
 							// put new bridge looking object in the world
-							newBridge->setPosition( obj->getPosition() );
-							newBridge->setOrientation( angle );
+							newBridge->setPositionFix( objPos );
+							newBridge->setOrientationFix( fixFromReal( angle ) );	// P8
 
 							// create and attach a wave hit bridge particle system to the new object
 							ParticleSystem *particleSystem = TheParticleSystemManager->createParticleSystem( modData->m_bridgeParticle );
@@ -729,9 +738,9 @@ void WaveGuideUpdate::doDamage( void )
 								y.crossProduct( &z, &u, &y );
 								x.crossProduct( &y, &z, &x );
 
-								transform.Set(  x.x, y.x, z.x, obj->getPosition()->x,
-																x.y, y.y, z.y, obj->getPosition()->y,
-																x.z, y.z, z.z, obj->getPosition()->z );
+								transform.Set(  x.x, y.x, z.x, bridgePos.x,
+																x.y, y.y, z.y, bridgePos.y,
+																x.z, y.z, z.z, bridgePos.z );
 
 								particleSystem->setLocalTransform( &transform );
 
@@ -828,12 +837,13 @@ UpdateSleepTime WaveGuideUpdate::update( void )
 	transformWaveShape();
 
 	// see if we are close enough to the end of our journey on the waypoint path
-	const Coord3D *currentPos = waveGuide->getPosition();
-	Real distSquared = PATH_EXTRA_DISTANCE * PATH_EXTRA_DISTANCE;
-	Coord2D v;
-	v.x = m_finalDestination.x - currentPos->x;
-	v.y = m_finalDestination.y - currentPos->y;
-	if( v.x * v.x + v.y * v.y <= distSquared )
+	const FCoord3D *currentPos = waveGuide->getPositionFix();
+	const FCoord3D finalDestination = toFix( m_finalDestination );
+	const Fix pathExtraDistance = Fix( 10 * PATHFIND_CELL_SIZE );
+	FCoord2D v;
+	v.x = finalDestination.x - currentPos->x;
+	v.y = finalDestination.y - currentPos->y;
+	if( v.lengthSqr() <= pathExtraDistance * pathExtraDistance )
 	{
 		static const ParticleSystemTemplate *waveSplash = TheParticleSystemManager->findTemplate( "WaveSplash01" );
 		ParticleSystem *particleSys;
@@ -841,7 +851,11 @@ UpdateSleepTime WaveGuideUpdate::update( void )
 		// create spash effect
 		particleSys = TheParticleSystemManager->createParticleSystem( waveSplash );
 		if( particleSys )
-			particleSys->setLocalTransform( waveGuide->getTransformMatrix() );
+		{
+			Matrix3D transform;
+			waveGuide->getTransformMatrixFix()->toMatrix3D( &transform );	// client
+			particleSys->setLocalTransform( &transform );
+		}
 
 		// destroy object
 		TheGameLogic->destroyObject( waveGuide );

@@ -156,9 +156,9 @@ public:
 	virtual Bool isSelfTasking() const { return FALSE; };
 
 
-	void doScoutLogic( const Coord3D *mastersDestination );
+	void doScoutLogic( const FCoord3D *mastersDestination );
 	void doAttackLogic( const Object *target );
-	void doGuardLogic( Coord3D *pinnedPosition );
+	void doGuardLogic( FCoord3D *pinnedPosition );
 	void doRepairLogic();
 	void endRepair();
 	void setRepairState( RepairStates repairState );

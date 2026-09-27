@@ -62,6 +62,15 @@
 #include "GameLogic\Module\ActiveBody.h"
 #include "GameLogic\Module\AIUpdate.h"
 #include "GameLogic\Module\ContainModule.h"
+#include "Lib/FixBoundary.h"
+
+// P8: the gunship's targets are saved in float
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 
 #ifdef _INTERNAL
@@ -182,7 +191,7 @@ void SpectreGunshipUpdate::onObjectCreated()
 	}
 
 	m_specialPowerModule = obj->getSpecialPowerModule( data->m_specialPowerTemplate );
-  m_satellitePosition.set( obj->getPosition() );
+  m_satellitePosition = obj->getPositionFix()->toCoord3D();	// P8: saved in float
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -266,12 +275,13 @@ Bool SpectreGunshipUpdate::initiateIntentToDoSpecialPower(const SpecialPowerTemp
   }
 
 
-	data->m_attackAreaDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_attackAreaRadius, getObject()->getControllingPlayer(), m_attackAreaDecal);
-	data->m_targetingReticleDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_targetingReticleRadius, getObject()->getControllingPlayer(), m_targetingReticleDecal);
+	const Coord3D decalPos = getObject()->getPositionFix()->toCoord3D();	// client
+	data->m_attackAreaDecalTemplate.createRadiusDecal( decalPos, data->m_attackAreaRadius, getObject()->getControllingPlayer(), m_attackAreaDecal);
+	data->m_targetingReticleDecalTemplate.createRadiusDecal( decalPos, data->m_targetingReticleRadius, getObject()->getControllingPlayer(), m_targetingReticleDecal);
 
 
 #if defined TRACKERS
-	data->m_targetingReticleDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_targetingReticleRadius, getObject()->getControllingPlayer(), m_howitzerTrackerDecal);
+	data->m_targetingReticleDecalTemplate.createRadiusDecal( decalPos, data->m_targetingReticleRadius, getObject()->getControllingPlayer(), m_howitzerTrackerDecal);
 #endif
 
 
@@ -415,7 +425,8 @@ UpdateSleepTime SpectreGunshipUpdate::update()
   //          * gunship->getPosition()                                             
 
         //perigee is the point in the orbital arc nearest the satellite being captured
-        Coord3D perigee = *gunship->getPosition();
+        // P8: the orbit is worked out against the saved float target and satellite positions
+        Coord3D perigee = gunship->getPositionFix()->toCoord3D();
         perigee.sub( &m_initialTargetPosition );
         perigee.z = zero;
         Real distanceToTarget = perigee.length();
@@ -539,8 +550,9 @@ UpdateSleepTime SpectreGunshipUpdate::update()
 
 
             // THIS WILL FIND A VALID TARGET WITHIN THE TARGETING RETICLE
-	          ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(&m_overrideTargetDestination, 
-              data->m_targetingReticleRadius,
+	          const FCoord3D reticleCenter = toFix( m_overrideTargetDestination );	// P8
+	          ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(&reticleCenter,
+              fixFromReal( data->m_targetingReticleRadius ),	// P3
               FROM_BOUNDINGSPHERE_2D, 
               filters, 
               ITER_SORTED_NEAR_TO_FAR);
@@ -564,8 +576,9 @@ UpdateSleepTime SpectreGunshipUpdate::update()
               {
                 // set a flag to start the targeting decal fading, since there is nothing to kill there
                 // THIS WILL FIND A VALID TARGET ANYWHERE INSIDE THE TARGETING AREA (THE BIG CIRCLE)
-	              ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(&m_initialTargetPosition, 
-                  data->m_attackAreaRadius, 
+	              const FCoord3D areaCenter = toFix( m_initialTargetPosition );	// P8
+	              ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(&areaCenter,
+                  fixFromReal( data->m_attackAreaRadius ),	// P3
                   FROM_BOUNDINGSPHERE_2D, 
                   filters, 
                   ITER_SORTED_NEAR_TO_FAR);
@@ -576,7 +589,7 @@ UpdateSleepTime SpectreGunshipUpdate::update()
                   {
                     // WE GOT A HIT!!!! SHOOT HIM!
                     validTargetObject = theEnemy;
-                    m_positionToShootAt = *validTargetObject->getPosition();
+                    m_positionToShootAt = validTargetObject->getPositionFix()->toCoord3D();	// P8
 
                     break;
                   }
@@ -666,7 +679,7 @@ UpdateSleepTime SpectreGunshipUpdate::update()
 				  Coord3D impactPosition;
 				  impactPosition.x = m_gattlingTargetPosition.x + GameClientRandomValueReal( -5.0f, 5.0f );
 				  impactPosition.y = m_gattlingTargetPosition.y + GameClientRandomValueReal( -5.0f, 5.0f );
-				  impactPosition.z = TheTerrainLogic->getGroundHeight( impactPosition.x, impactPosition.y );
+				  impactPosition.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( impactPosition.x ), fixFromReal( impactPosition.y ) ) );	// client
 							  sys->setPosition( &impactPosition );
 
 				}
@@ -679,7 +692,7 @@ UpdateSleepTime SpectreGunshipUpdate::update()
       }//not orbiting
       else if ( m_status == GUNSHIP_STATUS_DEPARTING )
       {
-        if ( isPointOffMap( *gunship->getPosition() ) )
+        if ( isPointOffMap( gunship->getPositionFix()->toCoord3D() ) )	// P8
         {
           
           TheGameLogic->destroyObject( gunship );
@@ -750,15 +763,13 @@ Bool SpectreGunshipUpdate::isFairDistanceFromShip( Object *target )
   if ( ! target )
     return FALSE;
 
-  const Coord3D *targetPosition = target->getPosition();
-  const Coord3D *gunshipPosition = gunship->getPosition();
+  const FCoord3D *targetPosition = target->getPositionFix();
+  const FCoord3D *gunshipPosition = gunship->getPositionFix();
 
-  Coord3D shipToTargetDelta;
-  shipToTargetDelta.x = gunshipPosition->x - targetPosition->x;
-  shipToTargetDelta.y = gunshipPosition->y - targetPosition->y;
-  shipToTargetDelta.z = 0.0f;
+  FCoord2D shipToTargetDelta;
+  shipToTargetDelta.set( gunshipPosition->x - targetPosition->x, gunshipPosition->y - targetPosition->y );
 
-  return (shipToTargetDelta.length() > getSpectreGunshipUpdateModuleData()->m_gunshipOrbitRadius * 0.75f );
+  return (shipToTargetDelta.length() > fixFromReal( getSpectreGunshipUpdateModuleData()->m_gunshipOrbitRadius ) * 0.75_fx );	// P3
 
 }
 
@@ -799,14 +810,20 @@ void SpectreGunshipUpdate::disengageAndDepartAO( Object *gunship )
 
   if ( shipAI)
   {
-    Coord3D exitPoint;// head off the map in the direction you are facing
-    gunship->getUnitDirectionVector3D( exitPoint );
-    Real mapSize = 99999.0f;
+    // head off the map in the direction you are facing: the unit x axis of the transform
+    const FixMatrix3D *mtx = gunship->getTransformMatrixFix();
+    FCoord3D exitPoint;
+    exitPoint.set( mtx->m[ 0 ][ 0 ], mtx->m[ 1 ][ 0 ], mtx->m[ 2 ][ 0 ] );
+    Fix len = exitPoint.length();
+    if( len > Fix( 0 ) )
+      exitPoint.set( exitPoint.x / len, exitPoint.y / len, exitPoint.z / len );
+    const Fix mapSize = Fix( 99999 );
     exitPoint.x *= mapSize;
     exitPoint.y *= mapSize;
-    exitPoint.add( gunship->getPosition() );
+    exitPoint.add( *gunship->getPositionFix() );
 
-    shipAI->aiMoveToPosition( &exitPoint, CMD_FROM_AI );
+    const Coord3D goal = exitPoint.toCoord3D();	// P4
+    shipAI->aiMoveToPosition( &goal, CMD_FROM_AI );
     
 
 

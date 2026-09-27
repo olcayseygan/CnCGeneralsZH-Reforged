@@ -59,6 +59,7 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/SpawnBehavior.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -719,8 +720,9 @@ UpdateSleepTime StealthUpdate::update( void )
 			Object *target = ai->getCurrentVictim();
 			if( target )
 			{
-				Real distSqrd = ThePartitionManager->getDistanceSquared( self, target, FROM_CENTER_2D );
-				if( distSqrd <= revealDistance * revealDistance )
+				Fix distSqrd = ThePartitionManager->getDistanceSquaredFix( self, target, FROM_CENTER_2D );
+				Fix reveal = fixFromReal( revealDistance );	// P3
+				if( distSqrd <= reveal * reveal )
 				{
 					//We're close enough to reveal ourselves
 					markAsDetected();
@@ -863,12 +865,10 @@ void setWakeupIfInRange( Object *obj, void *userData)
 		return;
 	}
 
-	Real vision = obj->getVisionRange();
+	Fix vision = fixFromReal( obj->getVisionRange() );	// P3
 
-	Coord3D srcpos = *obj->getPosition();
-	Coord3D dstpos = *victim->getPosition();
-
-	srcpos.sub(&dstpos);
+	FCoord3D srcpos = *obj->getPositionFix();
+	srcpos.sub( *victim->getPositionFix() );
 	if (srcpos.length() > vision)
 		return;
 
@@ -1030,8 +1030,9 @@ void StealthUpdate::changeVisualDisguise()
 		if( draw )
 		{
 			TheGameLogic->bindObjectAndDrawable(self, draw);
-			draw->setPosition( self->getPosition() );
-			draw->setOrientation( self->getOrientation() );
+			const Coord3D selfPos = self->getPositionFix()->toCoord3D();	// client
+			draw->setPosition( &selfPos );
+			draw->setOrientation( fixToReal( self->getOrientationFix() ) );
 			draw->setModelConditionFlags( flags );
 			draw->updateDrawable();
 			self->getPhysics()->resetDynamicPhysics();
@@ -1063,7 +1064,8 @@ void StealthUpdate::changeVisualDisguise()
 		sound.setObjectID( self->getID() );
 		TheAudio->addAudioEvent( &sound );
 
-		FXList::doFXPos( data->m_disguiseFX, self->getPosition() );
+		const Coord3D fxPos = self->getPositionFix()->toCoord3D();	// client
+		FXList::doFXPos( data->m_disguiseFX, &fxPos );
 
 		m_disguised = true;
 		self->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_DISGUISED ) );
@@ -1086,8 +1088,9 @@ void StealthUpdate::changeVisualDisguise()
 		if( draw )
 		{
 			TheGameLogic->bindObjectAndDrawable(self, draw);
-			draw->setPosition( self->getPosition() );
-			draw->setOrientation( self->getOrientation() );
+			const Coord3D selfPos = self->getPositionFix()->toCoord3D();	// client
+			draw->setPosition( &selfPos );
+			draw->setOrientation( fixToReal( self->getOrientationFix() ) );
 			draw->setModelConditionFlags( flags );
 			draw->updateDrawable();
 			self->getPhysics()->resetDynamicPhysics();
@@ -1132,7 +1135,8 @@ void StealthUpdate::changeVisualDisguise()
 		sound.setObjectID( self->getID() );
 		TheAudio->addAudioEvent( &sound );
 
-		FXList::doFXPos( data->m_disguiseRevealFX, self->getPosition() );
+		const Coord3D fxPos = self->getPositionFix()->toCoord3D();	// client
+		FXList::doFXPos( data->m_disguiseRevealFX, &fxPos );
 		m_disguised = false;
 		self->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_DISGUISED ) );
 		self->clearModelConditionState( MODELCONDITION_DISGUISED );

@@ -34,6 +34,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/SmartBombTargetHomingUpdate.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -91,20 +92,16 @@ UpdateSleepTime SmartBombTargetHomingUpdate::update( void )
   if ( ! self->isSignificantlyAboveTerrain() )
     return UPDATE_SLEEP_NONE;
 
-  const Coord3D *currentPos = self->getPosition();
+  FCoord3D pos = *self->getPositionFix();
 
-  Coord3D pos;
-  pos.zero();
+  Fix statusCoeff = fixMax( Fix( 0 ), fixMin( Fix( 1 ), fixFromReal( d->m_courseCorrectionScalar ) ) );	// P3
+  Fix targetCoeff = Fix( 1 ) - statusCoeff;
 
-  Real statusCoeff = MAX( 0.0f, MIN( 1.0f, d->m_courseCorrectionScalar));
-  Real targetCoeff = 1.0f - statusCoeff;
+  // P8: the target is saved in float
+  pos.x = fixFromReal( m_target.x ) * targetCoeff + pos.x * statusCoeff;
+  pos.y = fixFromReal( m_target.y ) * targetCoeff + pos.y * statusCoeff;
 
-
-  pos.x = m_target.x * targetCoeff + currentPos->x * statusCoeff;
-  pos.y = m_target.y * targetCoeff + currentPos->y * statusCoeff;
-  pos.z = currentPos->z;
-
-  self->setPosition( &pos );
+  self->setPositionFix( &pos );
 
   return UPDATE_SLEEP_NONE;
 

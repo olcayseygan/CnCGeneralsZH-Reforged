@@ -35,6 +35,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/ProjectileStreamUpdate.h"
 #include "WWMath/Vector3.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -171,23 +172,22 @@ void ProjectileStreamUpdate::getAllPoints( Vector3 *points, Int *count )
 
 		if( projectile )
 		{
-			Coord3D thisPoint = *projectile->getPosition();
-			points[pointCount].X = thisPoint.x;
-			points[pointCount].Y = thisPoint.y;
-			points[pointCount].Z = thisPoint.z;
-			
+			FCoord3D thisPoint = *projectile->getPositionFix();
 
 			if ( obj && obj->isKindOf( KINDOF_VEHICLE ) )				// this makes the stream skim along my roof, if I have a roof
 			{
-				const Coord3D *pos = obj->getPosition();
-				Real myTop = obj->getGeometryInfo().getMaxHeightAbovePosition() + pos->z + 0.5f;
-				Coord3D delta;
-				delta.x = pos->x - points[pointCount].X;
-				delta.y = pos->y - points[pointCount].Y;
-				delta.z = 0.0f;
-				if( delta.length() <= obj->getGeometryInfo().getMajorRadius() * 1.5f )
-					points[pointCount].Z = MAX( points[pointCount].Z, myTop );
+				const FCoord3D *pos = obj->getPositionFix();
+				Fix myTop = obj->getGeometryInfo().getMaxHeightAbovePositionFix() + pos->z + 0.5_fx;
+				FCoord2D delta;
+				delta.set( pos->x - thisPoint.x, pos->y - thisPoint.y );
+				if( delta.length() <= obj->getGeometryInfo().getMajorRadiusFix() * 1.5_fx )
+					thisPoint.z = fixMax( thisPoint.z, myTop );
 			}
+
+			const Coord3D drawPoint = thisPoint.toCoord3D();	// client: the stream is drawn from these
+			points[pointCount].X = drawPoint.x;
+			points[pointCount].Y = drawPoint.y;
+			points[pointCount].Z = drawPoint.z;
 
 
 
@@ -209,8 +209,10 @@ void ProjectileStreamUpdate::getAllPoints( Vector3 *points, Int *count )
 
 void ProjectileStreamUpdate::setPosition( const Coord3D *newPosition )
 {
-	Object *me = getObject();
-	me->setPosition( newPosition );
+	// P6: the weapon hands the position over in float
+	FCoord3D pos;
+	pos.set( fixFromReal( newPosition->x ), fixFromReal( newPosition->y ), fixFromReal( newPosition->z ) );
+	getObject()->setPositionFix( &pos );
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -52,7 +52,8 @@
 #include "GameClient/InGameUI.h"// selection logic
 #include "GameClient/Drawable.h"
 #include "Common/ThingFactory.h"
-#include "Common/ThingTemplate.h" 
+#include "Common/ThingTemplate.h"
+#include "Lib/FixBoundary.h"
 
 
 
@@ -71,8 +72,8 @@
 	 every member pathed to the one point the nexus was headed for, arrived on top of its
 	 neighbours, and spent the rest of the trip being shoved around by the pathfinder. */
 const Int MOB_FORMATION_SLOT_COUNT = 12;
-const Real MOB_FORMATION_GOLDEN_ANGLE = 2.39996f;
-const Real MOB_FORMATION_SPACING_IN_RADII = 2.2f;	// just over two bodies apart, so neighbours do not shove
+const Fix MOB_FORMATION_GOLDEN_ANGLE = 2.39996_fx;
+const Fix MOB_FORMATION_SPACING_IN_RADII = 2.2_fx;	// just over two bodies apart, so neighbours do not shove
 
 /* The disc is squashed along the nexus' own facing and stretched across it, because depth costs
 	 the mob its fight.  A round formation thirty units deep puts its near slots in weapon range two
@@ -80,11 +81,11 @@ const Real MOB_FORMATION_SPACING_IN_RADII = 2.2f;	// just over two bodies apart,
 	 round version killed 8 of 50 Rangers over five seeds where the same build with no formation at
 	 all killed 17.  Width across the line of march costs nothing, since every slot on it is the
 	 same distance from what the mob is walking at. */
-const Real MOB_FORMATION_DEPTH_SCALE = 0.35f;
-const Real MOB_FORMATION_WIDTH_SCALE = 1.25f;
+const Fix MOB_FORMATION_DEPTH_SCALE = 0.35_fx;
+const Fix MOB_FORMATION_WIDTH_SCALE = 1.25_fx;
 
 // Close enough to my slot to stop steering towards it and start looking for someone to hit.
-const Real MOB_FORMATION_ARRIVED_DISTANCE = PATHFIND_CELL_SIZE_F * 1.2f;
+const Fix MOB_FORMATION_ARRIVED_DISTANCE = 12_fx;	// 1.2 pathfind cells
 
 // How far my slot has to have moved before it is worth spending another path on it.
 const Real MOB_FORMATION_REPATH_DISTANCE = PATHFIND_CELL_SIZE_F * 5.0f;
@@ -93,7 +94,7 @@ const Real MOB_FORMATION_REPATH_DISTANCE = PATHFIND_CELL_SIZE_F * 5.0f;
 const Real MOB_FORMATION_LEAD_ALLOWANCE = 25.0f;
 
 // Beyond this multiple of the catch-up radius I have lost the mob and stop being subtle about it.
-const Real MOB_CATCH_UP_CRISIS_MULTIPLIER = 3.0f;
+const Fix MOB_CATCH_UP_CRISIS_MULTIPLIER = Fix( 3 );
 
 // The fraction of CatchUpCrisisBailTime after which I give up on my slot and walk at the nexus.
 const UnsignedInt MOB_CATCH_UP_CRISIS_DIVISOR = 3;
@@ -262,12 +263,14 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 	Coord3D slotPosition;
 	computeSlotPosition( master, &slotPosition );
 
-	Coord3D slotDelta = slotPosition;
-	slotDelta.sub( me->getPosition() );
-	const Real distanceToSlot = slotDelta.length();
+	FCoord3D slotDelta;
+	slotDelta.set( fixFromReal( slotPosition.x ), fixFromReal( slotPosition.y ), fixFromReal( slotPosition.z ) );	// P5
+	slotDelta.sub( *me->getPositionFix() );
+	const Fix distanceToSlot = slotDelta.length();
 
-	const Real distanceToMaster = sqrtf( ThePartitionManager->getDistanceSquared( me, master, FROM_CENTER_3D ) );
-	const Bool lostTheMob = distanceToMaster > data->m_mustCatchUpRadius;
+	const Fix distanceToMaster = fixSqrt( ThePartitionManager->getDistanceSquaredFix( me, master, FROM_CENTER_3D ) );
+	const Fix mustCatchUpRadius = fixFromReal( data->m_mustCatchUpRadius );	// P3
+	const Bool lostTheMob = distanceToMaster > mustCatchUpRadius;
 
 	/* One body, one speed.  A member further from the nexus than it is allowed to be runs; a member
 		 that is closer to the shared destination than the nexus is eases off rather than arriving
@@ -299,7 +302,7 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 		}
 	}
 
-	if ( distanceToMaster > data->m_mustCatchUpRadius * MOB_CATCH_UP_CRISIS_MULTIPLIER )// critically far, now!
+	if ( distanceToMaster > mustCatchUpRadius * MOB_CATCH_UP_CRISIS_MULTIPLIER )// critically far, now!
 	{
 		++ m_catchUpCrisisTimer; // I'm way too far from the nexus this frame
 
@@ -309,7 +312,8 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 			 CatchUpCrisisBailTime says it does in the first place. */
 		if ( m_catchUpCrisisTimer > data->m_catchUpCrisisBailTime / MOB_CATCH_UP_CRISIS_DIVISOR )
 		{
-			myAI->aiMoveToPosition( master->getPosition(), CMD_FROM_AI );
+			const Coord3D masterPos = master->getPositionFix()->toCoord3D();	// P4
+			myAI->aiMoveToPosition( &masterPos, CMD_FROM_AI );
 		}
 	}
 	else
@@ -379,28 +383,31 @@ void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *positi
 	AIUpdateInterface *myAI = me->getAIUpdateInterface();
 	AIUpdateInterface *masterAI = master->getAIUpdateInterface();
 
-	*position = masterAI->isMoving() ? *masterAI->getGoalPosition() : *master->getPosition();
-
-	if ( position->length() < 1.0f ) // a nasty error has sent the nexus to map origin
+	FCoord3D pos = *master->getPositionFix();
+	if ( masterAI->isMoving() )
 	{
-		*position = *master->getPosition();
+		const Coord3D *goal = masterAI->getGoalPosition();	// P4
+		pos.set( fixFromReal( goal->x ), fixFromReal( goal->y ), fixFromReal( goal->z ) );
+		if ( pos.length() < Fix( 1 ) ) // a nasty error has sent the nexus to map origin
+			pos = *master->getPositionFix();
 	}
 
 	const Int slot = ((Int)me->getID()) % MOB_FORMATION_SLOT_COUNT;
-	const Real spacing = me->getGeometryInfo().getBoundingCircleRadius() * MOB_FORMATION_SPACING_IN_RADII;
-	const Real angle = slot * MOB_FORMATION_GOLDEN_ANGLE;
-	const Real radius = spacing * sqrtf( slot + 0.5f );
+	const Fix spacing = me->getGeometryInfo().getBoundingCircleRadiusFix() * MOB_FORMATION_SPACING_IN_RADII;
+	const Fix angle = Fix( slot ) * MOB_FORMATION_GOLDEN_ANGLE;
+	const Fix radius = spacing * fixSqrt( Fix( slot ) + 0.5_fx );
 
-	const Real alongTravel = radius * Cos( angle ) * MOB_FORMATION_DEPTH_SCALE;
-	const Real acrossTravel = radius * Sin( angle ) * MOB_FORMATION_WIDTH_SCALE;
+	const Fix alongTravel = radius * fixCos( angle ) * MOB_FORMATION_DEPTH_SCALE;
+	const Fix acrossTravel = radius * fixSin( angle ) * MOB_FORMATION_WIDTH_SCALE;
 
-	const Real facing = master->getOrientation();
-	const Real forwardX = Cos( facing );
-	const Real forwardY = Sin( facing );
+	const Fix facing = master->getOrientationFix();
+	const Fix forwardX = fixCos( facing );
+	const Fix forwardY = fixSin( facing );
 
-	position->x += alongTravel * forwardX - acrossTravel * forwardY;
-	position->y += alongTravel * forwardY + acrossTravel * forwardX;
-	position->z = TheTerrainLogic->getGroundHeight( position->x, position->y );
+	pos.x += alongTravel * forwardX - acrossTravel * forwardY;
+	pos.y += alongTravel * forwardY + acrossTravel * forwardX;
+	pos.z = TheTerrainLogic->getGroundHeightFix( pos.x, pos.y );
+	*position = pos.toCoord3D();	// P5: the pathfinder adjusts it in float
 
 	// A slot that lands in a cliff or a building is a member walking into a wall until the mob dies.
 	TheAI->pathfinder()->adjustToPossibleDestination( me, myAI->getLocomotorSet(), position );

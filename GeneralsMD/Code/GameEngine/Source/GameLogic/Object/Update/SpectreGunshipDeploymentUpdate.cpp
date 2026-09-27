@@ -61,6 +61,7 @@
 #include "GameLogic\Module\ActiveBody.h"
 #include "GameLogic\Module\AIUpdate.h"
 #include "GameLogic\Module\ContainModule.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -188,14 +189,15 @@ Bool SpectreGunshipDeploymentUpdate::initiateIntentToDoSpecialPower(const Specia
     newGunship->setProducer( getObject() );
 
     //POSITION
+    const Coord3D myPos = getObject()->getPositionFix()->toCoord3D();	// P8: the edge search is float
     Coord3D creationCoord;
 	  switch (data->m_createLoc)
 	  {
 		  case CREATE_GUNSHIP_AT_EDGE_NEAR_SOURCE:
-			  creationCoord = TheTerrainLogic->findClosestEdgePoint( getObject()->getPosition() );
+			  creationCoord = TheTerrainLogic->findClosestEdgePoint( &myPos );
 			  break;
 		  case CREATE_GUNSHIP_AT_EDGE_FARTHEST_FROM_SOURCE:
-			  creationCoord = TheTerrainLogic->findFarthestEdgePoint( getObject()->getPosition() );
+			  creationCoord = TheTerrainLogic->findFarthestEdgePoint( &myPos );
 			  break;
 		  case CREATE_GUNSHIP_AT_EDGE_NEAR_TARGET:
 			  creationCoord = TheTerrainLogic->findClosestEdgePoint(targetPos);
@@ -210,22 +212,26 @@ Bool SpectreGunshipDeploymentUpdate::initiateIntentToDoSpecialPower(const Specia
     
 
       // HERE WE NEED TO CREATE THE POINT FURTHER OFF THE MAP SO WE CANT SEE THE LAME HOVER AND ACCELLERATE BEHAVIOR
-    Coord3D deltaToCreationPoint = m_initialTargetPosition;
-    deltaToCreationPoint.sub( &creationCoord );
-    Real distanceFromTarget = deltaToCreationPoint.length();
-    deltaToCreationPoint.normalize();
-    deltaToCreationPoint.x *= ( distanceFromTarget + data->m_gunshipOrbitRadius );
-    deltaToCreationPoint.y *= ( distanceFromTarget + data->m_gunshipOrbitRadius );
-    creationCoord.x = m_initialTargetPosition.x - deltaToCreationPoint.x;
-    creationCoord.y = m_initialTargetPosition.y - deltaToCreationPoint.y;
+    // P8: the target is saved in float, and the edge point comes back in float
+    FCoord3D target;
+    target.set( fixFromReal( m_initialTargetPosition.x ), fixFromReal( m_initialTargetPosition.y ), fixFromReal( m_initialTargetPosition.z ) );
+    FCoord3D creation;
+    creation.set( fixFromReal( creationCoord.x ), fixFromReal( creationCoord.y ), fixFromReal( creationCoord.z ) );
+    FCoord3D deltaToCreationPoint = target;
+    deltaToCreationPoint.sub( creation );
+    Fix distanceFromTarget = deltaToCreationPoint.length();
+    if( distanceFromTarget > Fix( 0 ) )
+    {
+      Fix reach = distanceFromTarget + fixFromReal( data->m_gunshipOrbitRadius );	// P3
+      creation.x = target.x - deltaToCreationPoint.x / distanceFromTarget * reach;
+      creation.y = target.y - deltaToCreationPoint.y / distanceFromTarget * reach;
+    }
 
-    Real preferredElevation = newGunship->getAI()->getCurLocomotor()->getPreferredHeight();
-    creationCoord.z = preferredElevation;
-    newGunship->setPosition( &creationCoord );
+    creation.z = fixFromReal( newGunship->getAI()->getCurLocomotor()->getPreferredHeight() );	// P4
+    newGunship->setPositionFix( &creation );
 
     //ORIENTATION
-		Real orient = ATan2( m_initialTargetPosition.y - creationCoord.y, m_initialTargetPosition.x - creationCoord.x);
-    newGunship->setOrientation( orient );
+    newGunship->setOrientationFix( fixAtan2( target.y - creation.y, target.x - creation.x ) );
     
     // ID
     m_gunshipID = newGunship->getID();

@@ -45,6 +45,7 @@
 
 #include "GameClient/TerrainVisual.h"
 #include "GameClient/Drawable.h"
+#include "Lib/FixBoundary.h"
 
 
 
@@ -178,17 +179,17 @@ void TensileFormationUpdate::initLinks( void )
 	PartitionFilterTensileFormationMember tfmFilter( getObject() );
 	PartitionFilter *filters[] = { &tfmFilter, NULL };
 	SimpleObjectIterator *iter = NULL;
-	iter = ThePartitionManager->iterateObjectsInRange(getObject(), 1000.0f, FROM_BOUNDINGSPHERE_3D, filters);
+	iter = ThePartitionManager->iterateObjectsInRangeFix(getObject(), Fix(1000), FROM_BOUNDINGSPHERE_3D, filters);
 	MemoryPoolObjectHolder hold(iter);
 
-	Real closestDistance = 99999.9f;
-	Real thisDistance    = 99999.9f;
-	const Coord3D *myPos = obj->getPosition();
+	Fix closestDistance = 99999.9_fx;
+	Fix thisDistance    = 99999.9_fx;
+	const FCoord3D *myPos = obj->getPositionFix();
 
 	for (Object* other = iter->first(); other; other = iter->next())
 	{
-		const Coord3D *theirPos = other->getPosition();
-		Coord3D delta = { theirPos->x - myPos->x, theirPos->y - myPos->y, theirPos->z - myPos->z };
+		FCoord3D delta = *other->getPositionFix();
+		delta.sub( *myPos );
 
 		thisDistance = delta.length();
 		if ( closestDistance > thisDistance )
@@ -200,7 +201,7 @@ void TensileFormationUpdate::initLinks( void )
 				m_links[ t ] = m_links[ t-1 ];
 
 			m_links[ 0 ].id = other->getID();
-			m_links[ 0 ].tensor = delta;
+			m_links[ 0 ].tensor = delta.toCoord3D();	// P4: the tensor is saved in float
 		}
 	}
 
@@ -209,7 +210,7 @@ void TensileFormationUpdate::initLinks( void )
 	//gridPos.y = REAL_TO_INT_FLOOR(getObject()->getPosition()->y/MAP_XY_FACTOR);
 	//TheTerrainVisual->setRawMapHeight(&gridPos, 500);
 
-	getObject()->setOrientation(GameLogicRandomValueReal(-PI,PI));
+	getObject()->setOrientationFix(fixFromReal(GameLogicRandomValueReal(-PI,PI)));	// P8: the logic random stream is float
 
 }
 
@@ -278,10 +279,10 @@ UpdateSleepTime TensileFormationUpdate::update( void )
 
 
 	//APPLY PHYSICS===========================
-	const Coord3D *pos = getObject()->getPosition();
+	const FCoord3D *pos = getObject()->getPositionFix();
 
 	Coord3D normal = { 0.0f, 0.0f, 1.0f };
-	TheTerrainLogic->getGroundHeight(pos->x, pos->y, &normal); // which way does the ground slope?
+	TheTerrainLogic->getGroundHeight(fixToReal(pos->x), fixToReal(pos->y), &normal); // which way does the ground slope?	P4: the normal has no Fix twin, and the inertia is saved in float
 
 	Coord3D slope = { normal.x, normal.y, 0.0f};
 	Real steepness = 1.0f - normal.z;
@@ -294,50 +295,43 @@ UpdateSleepTime TensileFormationUpdate::update( void )
 
 
 
-	Coord3D newPos;
-	newPos.x = pos->x + m_inertia.x;//flow down the slope
-	newPos.y = pos->y + m_inertia.y;
-	newPos.z = TheTerrainLogic->getGroundHeight(newPos.x, newPos.y);//rest on surface here
+	FCoord3D newPos;
+	newPos.x = pos->x + fixFromReal(m_inertia.x);//flow down the slope	P4
+	newPos.y = pos->y + fixFromReal(m_inertia.y);	// P4
+	newPos.z = TheTerrainLogic->getGroundHeightFix(newPos.x, newPos.y);//rest on surface here
 
 
 
-	Object *tree = ThePartitionManager->getClosestObject( &newPos, getObject()->getGeometryInfo().getMajorRadius(), FROM_CENTER_2D );
+	Object *tree = ThePartitionManager->getClosestObjectFix( &newPos, getObject()->getGeometryInfo().getMajorRadiusFix(), FROM_CENTER_2D );
 	if (tree && tree != getObject() && tree->isKindOf( KINDOF_SHRUBBERY ))	// nothing in reach comes back NULL
 		tree->topple( &m_inertia, m_inertia.length(), 1 );//No Bounce
 
 
 
 	//APPLY TENSORS===========================
-	Coord3D tensorSum = { 0, 0, 0 };
 	for ( int t = 0; t < 4; ++t )
 	{
 		Object *other = TheGameLogic->findObjectByID( m_links[ t ].id );
 
 		if ( other )
 		{
-			Coord3D desiredPos = *other->getPosition();
+			FCoord3D desiredPos = *other->getPositionFix();
 
-			Coord3D tensor = m_links[ t ].tensor;
+			const Coord3D &tensor = m_links[ t ].tensor;	// P4: saved in float
+			FCoord3D fixTensor;
+			fixTensor.set( fixFromReal( tensor.x ), fixFromReal( tensor.y ), fixFromReal( tensor.z ) );
 
-			desiredPos.sub( &tensor );
+			desiredPos.sub( fixTensor );
 
 			//Coord3D desiredPos = { theirPos->x - m_links[ t ].tensor.x, theirPos->y - m_links[ t ].tensor.y, theirPos->z - m_links[ t ].tensor.z };
-			
-			newPos.x = newPos.x*0.93f + desiredPos.x*0.07f;
-			newPos.y = newPos.y*0.93f + desiredPos.y*0.07f; 
-			newPos.z = MIN( m_lowestSlideElevation, TheTerrainLogic->getGroundHeight(newPos.x, newPos.y) );//rest on surface here
 
-			tensor.normalize();
-			tensorSum.add( &tensor );
+			newPos.x = newPos.x*0.93_fx + desiredPos.x*0.07_fx;
+			newPos.y = newPos.y*0.93_fx + desiredPos.y*0.07_fx;
+			newPos.z = fixMin( fixFromReal( m_lowestSlideElevation ), TheTerrainLogic->getGroundHeightFix(newPos.x, newPos.y) );//rest on surface here	P4: saved in float
 
 		}
 
 	}
-
-	tensorSum.normalize();
-
-	Coord3D inertiaNormal = m_inertia;
-	inertiaNormal.normalize();
 
 
 
@@ -354,7 +348,7 @@ UpdateSleepTime TensileFormationUpdate::update( void )
 	else
 		draw->clearModelConditionFlags(MAKE_MODELCONDITION_MASK(MODELCONDITION_MOVING));
 
-	if ( fabs( pos->z - newPos.z ) > 0.2f && m_life < 100)
+	if ( fixAbs( pos->z - newPos.z ) > 0.2_fx && m_life < 100)
 		draw->setModelConditionFlags(MAKE_MODELCONDITION_MASK(MODELCONDITION_FREEFALL));
 	else
 		draw->clearModelConditionFlags(MAKE_MODELCONDITION_MASK(MODELCONDITION_FREEFALL));
@@ -374,8 +368,8 @@ UpdateSleepTime TensileFormationUpdate::update( void )
 	//	newPos.z = 80 + ( ( newPos.z - 80 ) * 2);
 
 
-	m_lowestSlideElevation = newPos.z;
-	getObject()->setPosition( &newPos );
+	m_lowestSlideElevation = fixToReal( newPos.z );	// P4: saved in float
+	getObject()->setPositionFix( &newPos );
 
 
 
@@ -394,7 +388,7 @@ void TensileFormationUpdate::propagateDislodgement ( Bool enabled )
 	PartitionFilterTensileFormationMember tfmFilter( getObject() );
 	PartitionFilter *filters[] = { &tfmFilter, NULL };
 	SimpleObjectIterator *iter = NULL;
-	iter = ThePartitionManager->iterateObjectsInRange(getObject(), 100.0f, FROM_BOUNDINGSPHERE_3D, filters);
+	iter = ThePartitionManager->iterateObjectsInRangeFix(getObject(), Fix(100), FROM_BOUNDINGSPHERE_3D, filters);
 	MemoryPoolObjectHolder hold(iter);
 	for (Object* other = iter->first(); other; other = iter->next())
 	{

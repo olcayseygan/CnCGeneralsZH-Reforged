@@ -174,17 +174,17 @@ Bool WorkerAIUpdate::isAvailableForSupplying() const
 }
 
 // ------------------------------------------------------------------------------------------------
-Real WorkerAIUpdate::getRepairHealthPerSecond( void ) const
+Fix WorkerAIUpdate::getRepairHealthPerSecond( void ) const
 {
 	return getWorkerAIUpdateModuleData()->m_repairHealthPercentPerSecond;
 }
 // ------------------------------------------------------------------------------------------------
-Real WorkerAIUpdate::getBoredTime( void ) const
+Fix WorkerAIUpdate::getBoredTime( void ) const
 {
 	return getWorkerAIUpdateModuleData()->m_boredTime;
 }
 // ------------------------------------------------------------------------------------------------
-Real WorkerAIUpdate::getBoredRange( void ) const
+Fix WorkerAIUpdate::getBoredRange( void ) const
 {
 	return getWorkerAIUpdateModuleData()->m_boredRange;
 }
@@ -263,11 +263,11 @@ Real WorkerAIUpdate::getDockActionProgress() const
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-Real WorkerAIUpdate::getWarehouseScanDistance() const
+Fix WorkerAIUpdate::getWarehouseScanDistance() const
 {
 	// The computer's reach, for everybody: at the INI's own figure a human's workers went home
 	// from any pile they could see but not reach in 700 feet. INI files are in the checksum.
-	return 2 * getWorkerAIUpdateModuleData()->m_warehouseScanDistance;
+	return Fix( 2 ) * getWorkerAIUpdateModuleData()->m_warehouseScanDistance;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1166,7 +1166,7 @@ Bool WorkerAIUpdate::gainOneBox( Int remainingStock )
 			//figure out whether the best one is considerably far from the previous one (current position)
 			FCoord3D delta = *getObject()->getPositionFix();
 			delta.sub( *bestWarehouse->getPositionFix() );
-			if ( delta.length() > fixFromReal( getWarehouseScanDistance() ) / Fix( 4 ) ) // P3
+			if ( delta.length() > getWarehouseScanDistance() / Fix( 4 ) )
 			playDepleted = TRUE;
 		}
 		else

@@ -57,7 +57,7 @@ POWTruckAIUpdateModuleData::POWTruckAIUpdateModuleData( void )
 {
 
 	m_boredTimeInFrames = 0;
-	m_hangAroundPrisonDistance = 0;
+	m_hangAroundPrisonDistance = Fix( 0 );
 
 }  // end POWTruckAIUpdateModuleData
 
@@ -69,7 +69,7 @@ void POWTruckAIUpdateModuleData::buildFieldParse( MultiIniFieldParse &p )
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "BoredTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( POWTruckAIUpdateModuleData, m_boredTimeInFrames ) },
-		{ "AtPrisonDistance",		INI::parseReal,		NULL,		offsetof( POWTruckAIUpdateModuleData, m_hangAroundPrisonDistance ) },
+		{ "AtPrisonDistance",		INI::parseFix,		NULL,		FIX_OFFSET( POWTruckAIUpdateModuleData, m_hangAroundPrisonDistance ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -618,7 +618,7 @@ void POWTruckAIUpdate::doReturnToPrison( Object *prison )
 	const POWTruckAIUpdateModuleData *modData = getPOWTruckAIUpdateModuleData();
 
 	// if we're close enough to it then just stay here
-	Fix hangAround = fixFromReal( modData->m_hangAroundPrisonDistance ); // P3
+	Fix hangAround = modData->m_hangAroundPrisonDistance;
 	if( ThePartitionManager->getDistanceSquaredFix( us, prison, FROM_CENTER_2D ) <= hangAround * hangAround )
 		return;
 

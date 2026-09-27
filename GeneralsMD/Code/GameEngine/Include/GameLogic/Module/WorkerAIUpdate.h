@@ -70,24 +70,24 @@ public:
 	// !!! NOTE: If you edit module data you must do it in both the Dozer *AND* the Worker !!!
 	// !!!
 	Int m_maxBoxesData;
-	Real m_repairHealthPercentPerSecond;	///< how many health points per second the dozer repairs at
-	Real m_boredTime;											///< after this many frames, a dozer will try to find something to do on its own
-	Real m_boredRange;										///< range the dozers try to auto repair when they're bored
+	Fix m_repairHealthPercentPerSecond;	///< how many health points per second the dozer repairs at
+	Fix m_boredTime;											///< after this many frames, a dozer will try to find something to do on its own
+	Fix m_boredRange;										///< range the dozers try to auto repair when they're bored
 	UnsignedInt m_centerDelay;
 	UnsignedInt m_warehouseDelay;
-	Real m_warehouseScanDistance;
+	Fix m_warehouseScanDistance;
  	AudioEventRTS m_suppliesDepletedVoice;						///< Sound played when I take the last box.
 	Int m_upgradedSupplyBoost;
 
 	WorkerAIUpdateModuleData()
 	{
 		m_maxBoxesData = 0;
-		m_repairHealthPercentPerSecond = 0.0f;
-		m_boredTime = 0.0f;
-		m_boredRange = 0.0f;
+		m_repairHealthPercentPerSecond = Fix( 0 );
+		m_boredTime = Fix( 0 );
+		m_boredRange = Fix( 0 );
 		m_centerDelay = 0;
 		m_warehouseDelay = 0;
-		m_warehouseScanDistance = 100;
+		m_warehouseScanDistance = Fix( 100 );
 		m_upgradedSupplyBoost = 0;
 	}
 
@@ -98,12 +98,12 @@ public:
 		static const FieldParse dataFieldParse[] = 
 		{
 			{ "MaxBoxes",					INI::parseInt,		NULL, offsetof( WorkerAIUpdateModuleData, m_maxBoxesData ) },
-			{ "RepairHealthPercentPerSecond",	INI::parsePercentToReal,	NULL, offsetof( WorkerAIUpdateModuleData, m_repairHealthPercentPerSecond ) },
-			{ "BoredTime",										INI::parseDurationReal,		NULL, offsetof( WorkerAIUpdateModuleData, m_boredTime ) },
-			{ "BoredRange",										INI::parseReal,						NULL, offsetof( WorkerAIUpdateModuleData, m_boredRange ) },
+			{ "RepairHealthPercentPerSecond",	INI::parsePercentToFix,	NULL, FIX_OFFSET( WorkerAIUpdateModuleData, m_repairHealthPercentPerSecond ) },
+			{ "BoredTime",										INI::parseDurationFix,		NULL, FIX_OFFSET( WorkerAIUpdateModuleData, m_boredTime ) },
+			{ "BoredRange",										INI::parseFix,						NULL, FIX_OFFSET( WorkerAIUpdateModuleData, m_boredRange ) },
 			{ "SupplyCenterActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( WorkerAIUpdateModuleData, m_centerDelay ) },
 			{ "SupplyWarehouseActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( WorkerAIUpdateModuleData, m_warehouseDelay ) },
-			{ "SupplyWarehouseScanDistance", INI::parseReal, NULL, offsetof( WorkerAIUpdateModuleData, m_warehouseScanDistance ) },
+			{ "SupplyWarehouseScanDistance", INI::parseFix, NULL, FIX_OFFSET( WorkerAIUpdateModuleData, m_warehouseScanDistance ) },
  			{ "SuppliesDepletedVoice", INI::parseAudioEventRTS, NULL, offsetof( WorkerAIUpdateModuleData, m_suppliesDepletedVoice) },
  			{ "UpgradedSupplyBoost", INI::parseInt, NULL, offsetof( WorkerAIUpdateModuleData, m_upgradedSupplyBoost) },
 			{ 0, 0, 0, 0 }
@@ -139,9 +139,9 @@ public:
 	// Dozer side
 	virtual void onDelete( void );
 
-	virtual Real getRepairHealthPerSecond( void ) const;	///< get health to repair per second
-	virtual Real getBoredTime( void ) const;							///< how long till we're bored
-	virtual Real getBoredRange( void ) const;							///< when we're bored, we look this far away to do things
+	virtual Fix getRepairHealthPerSecond( void ) const;	///< get health to repair per second
+	virtual Fix getBoredTime( void ) const;							///< how long till we're bored
+	virtual Fix getBoredRange( void ) const;						///< when we're bored, we look this far away to do things
 
 	virtual Object *construct( const ThingTemplate *what, 
 														 const Coord3D *pos, Real angle, 
@@ -186,7 +186,7 @@ public:
 
 	virtual Bool isAvailableForSupplying() const;
 	virtual Bool isCurrentlyFerryingSupplies() const;
-	virtual Real getWarehouseScanDistance() const; ///< How far can I look for a warehouse?
+	virtual Fix getWarehouseScanDistance() const; ///< How far can I look for a warehouse?
 
 	virtual void setForceBusyState(Bool v) { m_forcedBusyPending = v; } 
 	virtual Bool isForcedIntoBusyState() const { return m_forcedBusyPending; }

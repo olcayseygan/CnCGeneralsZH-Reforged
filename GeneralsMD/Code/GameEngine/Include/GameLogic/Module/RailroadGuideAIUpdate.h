@@ -62,16 +62,16 @@ public:
 			{ "BigMetalBounceSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_bigMetalImpactDefaultSound) },
 			{ "SmallMetalBounceSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_smallMetalImpactDefaultSound) },
 			{ "MeatyBounceSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_meatyImpactDefaultSound) },
-			{ "RunningGarrisonSpeedMax",			INI::parseReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_runningGarrisonSpeedMax) },
-			{ "KillSpeedMin",			INI::parseReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_killSpeedMin) },
-			{ "SpeedMax",			INI::parseReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_speedMax) },
-			{ "Acceleration",			INI::parseReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_acceleration) },
-			{ "Braking",			INI::parseReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_braking) },
+			{ "RunningGarrisonSpeedMax",			INI::parseFix,	NULL,	FIX_OFFSET( RailroadBehaviorModuleData, m_runningGarrisonSpeedMax) },
+			{ "KillSpeedMin",			INI::parseFix,	NULL,	FIX_OFFSET( RailroadBehaviorModuleData, m_killSpeedMin) },
+			{ "SpeedMax",			INI::parseFix,	NULL,	FIX_OFFSET( RailroadBehaviorModuleData, m_speedMax) },
+			{ "Acceleration",			INI::parseFix,	NULL,	FIX_OFFSET( RailroadBehaviorModuleData, m_acceleration) },
+			{ "Braking",			INI::parseFix,	NULL,	FIX_OFFSET( RailroadBehaviorModuleData, m_braking) },
 			{ "WaitAtStationTime",			INI::parseDurationUnsignedInt,	NULL,	offsetof( RailroadBehaviorModuleData, m_waitAtStationTime) },
 			{ "RunningSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_runningSound) },
 			{ "ClicketyClackSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_clicketyClackSound) },
 			{ "WhistleSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_whistleSound) },
-			{ "Friction",			INI::parseReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_friction) },
+			{ "Friction",			INI::parseFix,	NULL,	FIX_OFFSET( RailroadBehaviorModuleData, m_friction) },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -84,12 +84,12 @@ public:
 	AsciiString m_CrashFXTemplateName;
 
 	Bool m_isLocomotive;
-	Real m_runningGarrisonSpeedMax;
-	Real m_killSpeedMin;
-	Real m_speedMax;
-	Real m_acceleration;
-	Real m_braking;
-	Real m_friction;
+	Fix m_runningGarrisonSpeedMax;
+	Fix m_killSpeedMin;
+	Fix m_speedMax;
+	Fix m_acceleration;
+	Fix m_braking;
+	Fix m_friction;
 	UnsignedInt m_waitAtStationTime;
 	AudioEventRTS			m_runningSound;
 	AudioEventRTS			m_clicketyClackSound;

@@ -485,7 +485,7 @@ static Bool areaClearAround( const Object *around, const Object *transport, Real
 	PartitionFilterSameMapStatus	filterMapStatus( transport );
 	PartitionFilter *filters[] = { &filterRelationship, &filterAlive, &filterMapStatus, NULL };
 
-	// P3/P6: the INI range and the weapon range are still float
+	// P6: the weapon range is still float
 	return ThePartitionManager->getClosestObjectFix( around, fixFromReal( AssaultTransport_clearScanRange( range, around->getLargestWeaponRange() ) ), FROM_CENTER_2D, filters ) == NULL;
 }
 
@@ -499,7 +499,7 @@ Bool AssaultTransportAIUpdate::isAssaultAreaClear() const
 {
 	const AssaultTransportAIUpdateModuleData *data = getAssaultTransportAIUpdateModuleData();
 	const Object *transport = getObject();
-	Real range = data->m_clearRangeRequiredToContinueAttackMove;
+	Real range = fixToReal( data->m_clearRangeRequiredToContinueAttackMove );	// P6: it is maxed against the float weapon range
 
 	if( !areaClearAround( transport, transport, range ) )
 	{

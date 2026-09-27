@@ -554,9 +554,9 @@ public:
 				const Bool onlyHealthyBridges = true;	// ignore dead bridges.
 				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestinationFix(&ropeTop, onlyHealthyBridges);
 
-				// ropeLenMax is xfer'd and the rope's height is INI data (P3)
+				// ropeLenMax is xfer'd float state (P7)
 				info.ropeLenMax = fixToReal( ropeTop.z - TheTerrainLogic->getLayerHeightFix(ropeTop.x, ropeTop.y, layerAtDest)
-					- fixFromReal( d->m_ropeFinalHeight ) );
+					- d->m_ropeFinalHeight );
 
 				initRopeParms(info.ropeDrawable, info.ropeLenMax, d->m_ropeWidth, d->m_ropeColor, d->m_ropeWobbleLen, d->m_ropeWobbleAmp, d->m_ropeWobbleRate);
 			}
@@ -594,8 +594,8 @@ public:
 			if (it->ropeLen < it->ropeLenMax)
 			{
 				it->ropeSpeed += fabs(TheGlobalData->m_gravity);
-				if (it->ropeSpeed > d->m_ropeDropSpeed)
-					it->ropeSpeed = d->m_ropeDropSpeed;
+				if (it->ropeSpeed > fixToReal(d->m_ropeDropSpeed))	// P7: the rope's speed is xfer'd float
+					it->ropeSpeed = fixToReal(d->m_ropeDropSpeed);
 				it->ropeLen += it->ropeSpeed;
 				setRopeCurLen(it->ropeDrawable, it->ropeLen);
 				if (d->m_waitForRopesToDrop)
@@ -627,7 +627,7 @@ public:
 					AIUpdateInterface* rappellerAI = rappeller ? rappeller->getAIUpdateInterface() : NULL;
 					if (rappellerAI)
 					{
-						rappellerAI->setDesiredSpeed(d->m_rappelSpeed);
+						rappellerAI->setDesiredSpeed(fixToReal(d->m_rappelSpeed));	// P4
 						rappellerAI->aiRappelInto(getMachineGoalObject(), *getMachineGoalPosition(), CMD_FROM_AI);
 					}
 
@@ -686,7 +686,7 @@ public:
 			{
 				const UnsignedInt ROPE_EXPIRATION_TIME = LOGICFRAMES_PER_SECOND * 5;
 				const Real initialSpeed = TheGlobalData->m_gravity * 30;	// give it a little kick
-				setRopeSpeed(m_ropes[i].ropeDrawable, initialSpeed, d->m_ropeDropSpeed, TheGlobalData->m_gravity);
+				setRopeSpeed(m_ropes[i].ropeDrawable, initialSpeed, fixToReal(d->m_ropeDropSpeed), TheGlobalData->m_gravity);
 				m_ropes[i].ropeDrawable->setExpirationDate(now + ROPE_EXPIRATION_TIME);
 				m_ropes[i].ropeDrawable = NULL; // we're done with it, so null it so we won't save it
 			}
@@ -751,7 +751,7 @@ public:
 		if (bldg != NULL && !bldg->isEffectivelyDead() && bldg->isKindOf(KINDOF_STRUCTURE))
 		{
 			destPos = *bldg->getPositionFix();
-			m_newPreferredHeight = bldg->getGeometryInfo().getMaxHeightAbovePosition() + d->m_minDropHeight;
+			m_newPreferredHeight = bldg->getGeometryInfo().getMaxHeightAbovePosition() + fixToReal(d->m_minDropHeight);	// P4: the preferred height is the locomotor's
 			if (m_newPreferredHeight < m_oldPreferredHeight)
 				m_newPreferredHeight = m_oldPreferredHeight;
 		}
@@ -902,10 +902,10 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 	m_perRopeDelayMax = 0x7fffffff;
 	m_ropeName = "GenericRope";
 	m_waitForRopesToDrop = true;
-	m_minDropHeight = 30.0f;
-	m_ropeFinalHeight = 0.0f;
-	m_ropeDropSpeed = 1e10f;		// um, fast.
-	m_rappelSpeed = fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_SECOND * 0.5f;
+	m_minDropHeight = Fix( 30 );
+	m_ropeFinalHeight = Fix( 0 );
+	m_ropeDropSpeed = 1e10_fx;		// um, fast.
+	m_rappelSpeed = fixFromReal( fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_SECOND * 0.5f );	// P4: gravity is GlobalData float
 	m_ropeWobbleLen = 10.0f;
 	m_ropeWobbleAmp = 1.0f;
 	m_ropeWobbleRate = 0.1f;
@@ -920,19 +920,19 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "RappelSpeed", INI::parseVelocityReal, 0, offsetof(ChinookAIUpdateModuleData, m_rappelSpeed) },
-		{ "RopeDropSpeed", INI::parseVelocityReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeDropSpeed) },
+		{ "RappelSpeed", INI::parseVelocityFix, 0, FIX_OFFSET(ChinookAIUpdateModuleData, m_rappelSpeed) },
+		{ "RopeDropSpeed", INI::parseVelocityFix, 0, FIX_OFFSET(ChinookAIUpdateModuleData, m_ropeDropSpeed) },
 		{ "RopeName", INI::parseAsciiString, 0, offsetof(ChinookAIUpdateModuleData, m_ropeName) },
-		{ "RopeFinalHeight", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeFinalHeight) },
-		{ "RopeWidth", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWidth) },
-		{ "RopeWobbleLen", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWobbleLen) },
-		{ "RopeWobbleAmplitude", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWobbleAmp) },
-		{ "RopeWobbleRate", INI::parseAngularVelocityReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWobbleRate) },
+		{ "RopeFinalHeight", INI::parseFix, 0, FIX_OFFSET(ChinookAIUpdateModuleData, m_ropeFinalHeight) },
+		{ "RopeWidth", INI::parseReal, 0, REAL_OFFSET(ChinookAIUpdateModuleData, m_ropeWidth) },
+		{ "RopeWobbleLen", INI::parseReal, 0, REAL_OFFSET(ChinookAIUpdateModuleData, m_ropeWobbleLen) },
+		{ "RopeWobbleAmplitude", INI::parseReal, 0, REAL_OFFSET(ChinookAIUpdateModuleData, m_ropeWobbleAmp) },
+		{ "RopeWobbleRate", INI::parseAngularVelocityReal, 0, REAL_OFFSET(ChinookAIUpdateModuleData, m_ropeWobbleRate) },
 		{ "RopeColor", INI::parseRGBColor, 0, offsetof(ChinookAIUpdateModuleData, m_ropeColor) },
 		{ "NumRopes", INI::parseUnsignedInt, 0, offsetof(ChinookAIUpdateModuleData, m_numRopes) },
 		{ "PerRopeDelayMin", INI::parseDurationUnsignedInt, 0, offsetof(ChinookAIUpdateModuleData, m_perRopeDelayMin) },
 		{ "PerRopeDelayMax", INI::parseDurationUnsignedInt, 0, offsetof(ChinookAIUpdateModuleData, m_perRopeDelayMax) },
-		{ "MinDropHeight", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_minDropHeight) },
+		{ "MinDropHeight", INI::parseFix, 0, FIX_OFFSET(ChinookAIUpdateModuleData, m_minDropHeight) },
 		{ "WaitForRopesToDrop", INI::parseBool, 0, offsetof(ChinookAIUpdateModuleData, m_waitForRopesToDrop) },
 		{ "RotorWashParticleSystem", INI::parseAsciiString,	NULL, offsetof( ChinookAIUpdateModuleData, m_rotorWashParticleSystem ) },
 		{ "UpgradedSupplyBoost", INI::parseInt, NULL, offsetof( ChinookAIUpdateModuleData, m_upgradedSupplyBoost) },

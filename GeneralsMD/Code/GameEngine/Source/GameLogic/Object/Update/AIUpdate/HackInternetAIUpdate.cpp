@@ -311,7 +311,7 @@ StateReturnType UnpackingState::onEnter()
 	sound.setObjectID( owner->getID() );
 	TheAudio->addAudioEvent( &sound );
 	
-	Real variationFactor = ai->getPackUnpackVariationFactor();
+	Real variationFactor = fixToReal( ai->getPackUnpackVariationFactor() );	// P7: the draw and the frame count are float
 	Real variation = GameLogicRandomValueReal( 1.0f - variationFactor, 1.0f + variationFactor );
 	m_framesRemaining = ai->getUnpackTime() * variation; //In frames
 	owner->getDrawable()->setAnimationLoopDuration( m_framesRemaining );
@@ -399,7 +399,7 @@ StateReturnType PackingState::onEnter()
 	sound.setObjectID( owner->getID() );
 	TheAudio->addAudioEvent( &sound );
 	
-	Real variationFactor = ai->getPackUnpackVariationFactor();
+	Real variationFactor = fixToReal( ai->getPackUnpackVariationFactor() );	// P7: the draw and the frame count are float
 	Real variation = GameLogicRandomValueReal( 1.0f - variationFactor, 1.0f + variationFactor );
 	m_framesRemaining = ai->getPackTime() * variation; //In frames
 	owner->getDrawable()->setAnimationLoopDuration( m_framesRemaining );

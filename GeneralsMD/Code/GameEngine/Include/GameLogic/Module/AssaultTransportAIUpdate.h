@@ -49,13 +49,13 @@ enum AssaultStateTypes
 class AssaultTransportAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
-	Real m_membersGetHealedAtLifeRatio;		// parsed for the shipped INI's sake; nobody rides back in to heal any more
-	Real m_clearRangeRequiredToContinueAttackMove;
+	Fix m_membersGetHealedAtLifeRatio;		// parsed for the shipped INI's sake; nobody rides back in to heal any more
+	Fix m_clearRangeRequiredToContinueAttackMove;
 
 	AssaultTransportAIUpdateModuleData()
 	{
-		m_membersGetHealedAtLifeRatio = 0.0f;
-		m_clearRangeRequiredToContinueAttackMove = 50.0f;
+		m_membersGetHealedAtLifeRatio = Fix( 0 );
+		m_clearRangeRequiredToContinueAttackMove = Fix( 50 );
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -64,8 +64,8 @@ public:
 
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "MembersGetHealedAtLifeRatio",						INI::parseReal,	NULL, offsetof( AssaultTransportAIUpdateModuleData, m_membersGetHealedAtLifeRatio ) },
-			{ "ClearRangeRequiredToContinueAttackMove", INI::parseReal, NULL, offsetof( AssaultTransportAIUpdateModuleData, m_clearRangeRequiredToContinueAttackMove ) },
+			{ "MembersGetHealedAtLifeRatio",						INI::parseFix,	NULL, FIX_OFFSET( AssaultTransportAIUpdateModuleData, m_membersGetHealedAtLifeRatio ) },
+			{ "ClearRangeRequiredToContinueAttackMove", INI::parseFix, NULL, FIX_OFFSET( AssaultTransportAIUpdateModuleData, m_clearRangeRequiredToContinueAttackMove ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);

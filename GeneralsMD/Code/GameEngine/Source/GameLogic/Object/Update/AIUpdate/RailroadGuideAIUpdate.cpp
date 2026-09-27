@@ -99,12 +99,12 @@ RailroadBehaviorModuleData::RailroadBehaviorModuleData( void )
 	m_CrashFXTemplateName.clear();
 	
 	m_isLocomotive = FALSE;
-	m_runningGarrisonSpeedMax = 1.0f;
-	m_killSpeedMin = 1.0f;
-	m_speedMax = 4;
-	m_acceleration = 1.01f;
-	m_braking = 0.99f;
-	m_friction = 0.97f;
+	m_runningGarrisonSpeedMax = Fix( 1 );
+	m_killSpeedMin = Fix( 1 );
+	m_speedMax = Fix( 4 );
+	m_acceleration = 1.01_fx;
+	m_braking = 0.99_fx;
+	m_friction = 0.97_fx;
 	m_waitAtStationTime = 150;
 }  // end RailroadBehaviorModuleData
 
@@ -304,7 +304,7 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 
 	// maybe we don't want to trample this unit?
 	const RailroadBehaviorModuleData *modData = getRailroadBehaviorModuleData();
-	if ( m_conductorState == WAIT_AT_STATION && (m_pullInfo.speed < modData->m_runningGarrisonSpeedMax) ) // they can grab on safely
+	if ( m_conductorState == WAIT_AT_STATION && (m_pullInfo.speed < fixToReal( modData->m_runningGarrisonSpeedMax )) ) // they can grab on safely; P4: the pull speed is float
 	{
 		AIUpdateInterface *ai = other->getAI();
 		if (ai && ai->getEnterTarget() == obj) // other intends to garrison me. 
@@ -354,7 +354,7 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 	  other->setPositionFix( &newPos );
 	}
 
-  if ( m_conductorState == WAIT_AT_STATION || (m_conductorState == COAST && m_pullInfo.speed < modData->m_runningGarrisonSpeedMax) || !m_isLocomotive )
+  if ( m_conductorState == WAIT_AT_STATION || (m_conductorState == COAST && m_pullInfo.speed < fixToReal( modData->m_runningGarrisonSpeedMax )) || !m_isLocomotive ) // P4
 	{
 //  AIUpdateInterface *ai = other->getAI();
 //	  if ( ai )
@@ -384,7 +384,7 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 		delta.scale( MIN(1.4f,m_pullInfo.speed  * 0.66f) );// the faster I go, the harder I slam!
 
 		//Absolute death to be hit by a train, no survival
-		if ( m_pullInfo.speed >= modData->m_killSpeedMin ) // they can grab on safely
+		if ( m_pullInfo.speed >= fixToReal( modData->m_killSpeedMin ) ) // they can grab on safely; P4
 		{
 			other->kill();
 			theirPhys->setPitchRate(GameLogicRandomValueReal(-0.03f, 0.03f));
@@ -725,7 +725,7 @@ UpdateSleepTime RailroadBehavior::update( void )
 
 		if ( m_conductorState == APPLY_BRAKES )
 		{
-			conductorPullInfo.speed *= modData->m_braking;
+			conductorPullInfo.speed *= fixToReal( modData->m_braking );	// P4: the pull speed is float
 			if (fabs(conductorPullInfo.speed) < 0.1f)
 			{
 				conductorPullInfo.speed = 0;
@@ -768,14 +768,16 @@ UpdateSleepTime RailroadBehavior::update( void )
 		else if ( m_conductorState == ACCELERATE )
 		{
 			conductorPullInfo.speed += 0.02f * conductorPullInfo.m_direction; // push start multiplier
-			conductorPullInfo.speed *= modData->m_acceleration;
-			if ( conductorPullInfo.speed > modData->m_speedMax)
+			// P4: the pull speed is float
+			conductorPullInfo.speed *= fixToReal( modData->m_acceleration );
+			const Real speedMax = fixToReal( modData->m_speedMax );
+			if ( conductorPullInfo.speed > speedMax)
 			{
-				conductorPullInfo.speed = modData->m_speedMax;
+				conductorPullInfo.speed = speedMax;
 			}
-			else if ( conductorPullInfo.speed < -modData->m_speedMax)
+			else if ( conductorPullInfo.speed < -speedMax)
 			{
-				conductorPullInfo.speed = -modData->m_speedMax;
+				conductorPullInfo.speed = -speedMax;
 			}
 
 			
@@ -805,7 +807,7 @@ UpdateSleepTime RailroadBehavior::update( void )
 	
 		if ( m_conductorState == COAST )
 		{
-			conductorPullInfo.speed *= modData->m_friction;
+			conductorPullInfo.speed *= fixToReal( modData->m_friction );	// P4
 			TheAudio->removeAudioEvent( m_runningSound.getPlayingHandle() );
 		}
 		

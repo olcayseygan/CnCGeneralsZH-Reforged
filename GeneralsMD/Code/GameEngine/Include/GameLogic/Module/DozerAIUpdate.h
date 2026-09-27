@@ -114,9 +114,9 @@ public:
 
 	virtual void onDelete( void ) = 0;
 
-	virtual Real getRepairHealthPerSecond( void ) const = 0;	///< get health to repair per second
-	virtual Real getBoredTime( void ) const = 0;							///< how long till we're bored
-	virtual Real getBoredRange( void ) const = 0;							///< when we're bored, we look this far away to do things
+	virtual Fix getRepairHealthPerSecond( void ) const = 0;	///< get health to repair per second
+	virtual Fix getBoredTime( void ) const = 0;							///< how long till we're bored
+	virtual Fix getBoredRange( void ) const = 0;						///< when we're bored, we look this far away to do things
 
 	// methods to override for the dozer behaviors
 	virtual Object *construct( const ThingTemplate *what, 
@@ -178,9 +178,9 @@ public:
 	// !!! NOTE: If you edit module data you must do it in both the Dozer *AND* the Worker !!!
 	// !!!
 
-	Real m_repairHealthPercentPerSecond;	///< how many health points per second the dozer repairs at
-	Real m_boredTime;											///< after this many frames, a dozer will try to find something to do on its own
-	Real m_boredRange;										///< range the dozers try to auto repair when they're bored
+	Fix m_repairHealthPercentPerSecond;	///< how many health points per second the dozer repairs at
+	Fix m_boredTime;											///< after this many frames, a dozer will try to find something to do on its own
+	Fix m_boredRange;									///< range the dozers try to auto repair when they're bored
 
 	static void buildFieldParse( MultiIniFieldParse &p );
 
@@ -216,9 +216,9 @@ public:
 	// data and code, ick!
 	// NOTE: If you edit module data you must do it in both the Dozer *AND* the Worker
 	//
-	virtual Real getRepairHealthPerSecond( void ) const;	///< get health to repair per second
-	virtual Real getBoredTime( void ) const;							///< how long till we're bored
-	virtual Real getBoredRange( void ) const;							///< when we're bored, we look this far away to do things
+	virtual Fix getRepairHealthPerSecond( void ) const;	///< get health to repair per second
+	virtual Fix getBoredTime( void ) const;							///< how long till we're bored
+	virtual Fix getBoredRange( void ) const;						///< when we're bored, we look this far away to do things
 
 	// methods to override for the dozer behaviors
 	virtual Object* construct( const ThingTemplate *what, 

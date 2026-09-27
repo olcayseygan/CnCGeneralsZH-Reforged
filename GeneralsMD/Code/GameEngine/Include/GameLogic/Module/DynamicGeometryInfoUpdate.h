@@ -43,13 +43,13 @@ public:
 
 	UnsignedInt m_initialDelay;
 
-	Real m_initialHeight;
-	Real m_initialMajorRadius;
-	Real m_initialMinorRadius;
+	Fix m_initialHeight;
+	Fix m_initialMajorRadius;
+	Fix m_initialMinorRadius;
 
-	Real m_finalHeight;
-	Real m_finalMajorRadius;
-	Real m_finalMinorRadius;
+	Fix m_finalHeight;
+	Fix m_finalMajorRadius;
+	Fix m_finalMinorRadius;
 
 	UnsignedInt m_transitionTime;
 

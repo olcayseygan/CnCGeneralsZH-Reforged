@@ -55,7 +55,7 @@ DemoTrapUpdateModuleData::DemoTrapUpdateModuleData()
 	m_manualModeWeaponSlot					= PRIMARY_WEAPON;
 	m_detonationWeaponSlot					= PRIMARY_WEAPON;
 	m_proximityModeWeaponSlot				= PRIMARY_WEAPON;
-	m_triggerDetonationRange				= 0.0f;
+	m_triggerDetonationRange				= Fix( 0 );
 	m_scanFrames										= 0;
 	m_detonationWeaponTemplate			= NULL;
 	m_detonateWhenKilled						= false;
@@ -72,7 +72,7 @@ DemoTrapUpdateModuleData::DemoTrapUpdateModuleData()
     { "DetonationWeaponSlot",      INI::parseLookupList,					TheWeaponSlotTypeNamesLookupList, offsetof( DemoTrapUpdateModuleData, m_detonationWeaponSlot ) },
     { "ProximityModeWeaponSlot",   INI::parseLookupList,					TheWeaponSlotTypeNamesLookupList, offsetof( DemoTrapUpdateModuleData, m_proximityModeWeaponSlot ) },
     { "ManualModeWeaponSlot",      INI::parseLookupList,					TheWeaponSlotTypeNamesLookupList, offsetof( DemoTrapUpdateModuleData, m_manualModeWeaponSlot ) },
-    { "TriggerDetonationRange",    INI::parseReal,								NULL, offsetof( DemoTrapUpdateModuleData, m_triggerDetonationRange ) },
+    { "TriggerDetonationRange",    INI::parseFix,								NULL, FIX_OFFSET( DemoTrapUpdateModuleData, m_triggerDetonationRange ) },
     { "IgnoreTargetTypes",         KindOfMaskType::parseFromINI,							NULL, offsetof( DemoTrapUpdateModuleData, m_ignoreKindOf ) },
 		{ "ScanRate",									 INI::parseDurationUnsignedInt,	NULL, offsetof( DemoTrapUpdateModuleData, m_scanFrames ) },
 		{ "AutoDetonationWithFriendsInvolved", INI::parseBool,				NULL, offsetof( DemoTrapUpdateModuleData, m_friendlyDetonation ) },
@@ -185,7 +185,7 @@ UpdateSleepTime DemoTrapUpdate::update()
 
 	//Scan for a valid enemy in proximity range.
 
-	const Fix triggerRange = fixFromReal( data->m_triggerDetonationRange );	// P3: INI data
+	const Fix triggerRange = data->m_triggerDetonationRange;
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), triggerRange, FROM_CENTER_2D );
 	MemoryPoolObjectHolder hold(iter);
 

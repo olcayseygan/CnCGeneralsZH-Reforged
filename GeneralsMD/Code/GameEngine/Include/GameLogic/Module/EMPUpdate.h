@@ -53,7 +53,7 @@ public:
 	RGBColor		m_endColor;
 	const ParticleSystemTemplate *m_disableFXParticleSystem;
 	Real				m_sparksPerCubicFoot; //<just like it sounds
-	Real				m_effectRadius;
+	Fix					m_effectRadius;
 	Int         m_rejectMask;
 
   KindOfMaskType m_victimKindOf;
@@ -73,7 +73,7 @@ public:
 		m_disabledDuration = 0;
 		m_disableFXParticleSystem = NULL;
 		m_sparksPerCubicFoot = 0.001f;
-		m_effectRadius = 200;
+		m_effectRadius = Fix( 200 );
 		m_rejectMask = 0;
 		m_doesNotAffectMyOwnBuildings = FALSE;
 
@@ -88,16 +88,16 @@ public:
 		{
 			{ "Lifetime",	INI::parseDurationUnsignedInt,		NULL, offsetof( EMPUpdateModuleData, m_lifeFrames ) },
 			{ "StartFadeTime",	INI::parseDurationUnsignedInt,		NULL, offsetof( EMPUpdateModuleData, m_startFadeFrame ) },
-			{ "StartScale",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_startScale ) },
+			{ "StartScale",	INI::parseReal,										NULL, REAL_OFFSET( EMPUpdateModuleData, m_startScale ) },
 			{ "DisabledDuration",	INI::parseDurationUnsignedInt,	NULL, offsetof( EMPUpdateModuleData, m_disabledDuration ) },
 			//{ "SpinRateMax",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_spinRateMax ) },
-			{ "TargetScaleMax",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_targetScaleMax ) },
-			{ "TargetScaleMin",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_targetScaleMin ) },
+			{ "TargetScaleMax",	INI::parseReal,										NULL, REAL_OFFSET( EMPUpdateModuleData, m_targetScaleMax ) },
+			{ "TargetScaleMin",	INI::parseReal,										NULL, REAL_OFFSET( EMPUpdateModuleData, m_targetScaleMin ) },
 			{ "StartColor",	INI::parseRGBColor,			NULL, offsetof( EMPUpdateModuleData, m_startColor ) },
 			{ "EndColor",	INI::parseRGBColor,				NULL, offsetof( EMPUpdateModuleData, m_endColor ) },
 			{ "DisableFXParticleSystem",		INI::parseParticleSystemTemplate, NULL, offsetof( EMPUpdateModuleData, m_disableFXParticleSystem ) },
-			{ "SparksPerCubicFoot",		INI::parseReal, NULL, offsetof( EMPUpdateModuleData, m_sparksPerCubicFoot ) },
-			{ "EffectRadius",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_effectRadius ) },
+			{ "SparksPerCubicFoot",		INI::parseReal, NULL, REAL_OFFSET( EMPUpdateModuleData, m_sparksPerCubicFoot ) },
+			{ "EffectRadius",	INI::parseFix,										NULL, FIX_OFFSET( EMPUpdateModuleData, m_effectRadius ) },
 			{ "DoesNotAffect", INI::parseBitString32,	TheWeaponAffectsMaskNames, offsetof(EMPUpdateModuleData, m_rejectMask) },
 			{ "DoesNotAffectMyOwnBuildings", INI::parseBool, NULL, offsetof( EMPUpdateModuleData, m_doesNotAffectMyOwnBuildings ) },
 
@@ -160,7 +160,7 @@ class LeafletDropBehaviorModuleData : public UpdateModuleData
 public:
 	UnsignedInt m_delayFrames;	
 	UnsignedInt m_disabledDuration;
-  Real m_radius;
+  Fix m_radius;
 	const ParticleSystemTemplate *m_leafletFXParticleSystem;
 
 
@@ -168,7 +168,7 @@ public:
 	{
 		m_delayFrames = 1;
 		m_disabledDuration = 0;
-    m_radius = 60.0f;
+    m_radius = Fix( 60 );
     m_leafletFXParticleSystem = NULL;
 	}
 
@@ -179,7 +179,7 @@ public:
 		{
 			{ "Delay",	        INI::parseDurationUnsignedInt,	NULL, offsetof( LeafletDropBehaviorModuleData, m_delayFrames ) },
 			{ "DisabledDuration",	INI::parseDurationUnsignedInt,	NULL, offsetof( LeafletDropBehaviorModuleData, m_disabledDuration ) },
-      { "AffectRadius",     INI::parseReal,                 NULL, offsetof( LeafletDropBehaviorModuleData, m_radius ) },
+      { "AffectRadius",     INI::parseFix,                  NULL, FIX_OFFSET( LeafletDropBehaviorModuleData, m_radius ) },
       { "LeafletFXParticleSystem", INI::parseParticleSystemTemplate,  NULL, offsetof( LeafletDropBehaviorModuleData, m_leafletFXParticleSystem ) },
 
 

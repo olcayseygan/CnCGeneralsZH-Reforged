@@ -53,9 +53,9 @@ public:
 	const ParticleSystemTemplate *m_particleSystem[ MAX_FIRESTORM_SYSTEMS ];
 	Real m_particleOffsetZ;
 	Real m_scorchSize;
-	Real m_delayBetweenDamageFrames;
-	Real m_damageAmount;
-	Real m_maxHeightForDamage;	// things higher than this above us take no damage
+	Fix m_delayBetweenDamageFrames;
+	Fix m_damageAmount;
+	Fix m_maxHeightForDamage;	// things higher than this above us take no damage
 
 };
 

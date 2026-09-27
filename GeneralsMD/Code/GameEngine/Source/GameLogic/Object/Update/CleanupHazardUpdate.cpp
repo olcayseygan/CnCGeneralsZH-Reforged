@@ -49,7 +49,7 @@
 
 //-------------------------------------------------------------------------------------------------
 // the cleanup area and its range arrive from an AI command and go back to aiMoveToPosition, so they
-// stay float (P4/P7) and only the range queries run fixed.  ScanRange is INI data (P3).
+// stay float (P4/P7) and only the range queries run fixed.
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -63,7 +63,7 @@ CleanupHazardUpdateModuleData::CleanupHazardUpdateModuleData()
 {
 	m_weaponSlot				= PRIMARY_WEAPON;
 	m_scanFrames				= 0;
-	m_scanRange					= 0.0f;
+	m_scanRange					= Fix( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ CleanupHazardUpdateModuleData::CleanupHazardUpdateModuleData()
 	{
 		{ "WeaponSlot",						INI::parseLookupList,						TheWeaponSlotTypeNamesLookupList, offsetof( CleanupHazardUpdateModuleData, m_weaponSlot ) },
 		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( CleanupHazardUpdateModuleData, m_scanFrames ) },
-		{ "ScanRange",						INI::parseReal,									NULL, offsetof( CleanupHazardUpdateModuleData, m_scanRange ) },
+		{ "ScanRange",						INI::parseFix,									NULL, FIX_OFFSET( CleanupHazardUpdateModuleData, m_scanRange ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -123,10 +123,11 @@ void CleanupHazardUpdate::onObjectCreated()
 	WeaponBonus bonus;
 	bonus.clear();
 	Real attackRange = m_weaponTemplate->getAttackRange( bonus );
-	if( data->m_scanRange <= attackRange )
+	const Real scanRange = fixToReal( data->m_scanRange );	// P6: weapon range is float
+	if( scanRange <= attackRange )
 	{
 		DEBUG_CRASH( ("CleanupHazardUpdate for %s requires the scan range (%.1f) being larger than the firing range (%.1f)",
-			getObject()->getTemplate()->getName().str(), data->m_scanRange, attackRange ) );
+			getObject()->getTemplate()->getName().str(), scanRange, attackRange ) );
 	}
 }
 
@@ -283,12 +284,12 @@ Object* CleanupHazardUpdate::scanClosestTarget()
 		//Look for targets around the target position only (but add scan range and move range).
 		//This case only happens when we are performing a cleanup area command.
 		FCoord3D pos = fcoordFromCoord3D( m_pos );
-		bestTargetInRange = ThePartitionManager->getClosestObjectFix( &pos, fixFromReal( data->m_scanRange ) + fixFromReal( m_moveRange ), FROM_CENTER_2D, filters );
+		bestTargetInRange = ThePartitionManager->getClosestObjectFix( &pos, data->m_scanRange + fixFromReal( m_moveRange ), FROM_CENTER_2D, filters );
 	}
 	else
 	{
 		//Look for targets near me -- passive default.
-		bestTargetInRange = ThePartitionManager->getClosestObjectFix( me->getPositionFix(), fixFromReal( data->m_scanRange ), FROM_CENTER_2D, filters );
+		bestTargetInRange = ThePartitionManager->getClosestObjectFix( me->getPositionFix(), data->m_scanRange, FROM_CENTER_2D, filters );
 	}
 
 	if( bestTargetInRange ) 

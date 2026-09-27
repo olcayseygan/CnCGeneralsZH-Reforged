@@ -47,7 +47,7 @@ class CommandButtonHuntUpdateModuleData : public ModuleData
 {
 public:
 	UnsignedInt			m_scanFrames;
-	Real						m_scanRange;
+	Fix							m_scanRange;
 
 	CommandButtonHuntUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

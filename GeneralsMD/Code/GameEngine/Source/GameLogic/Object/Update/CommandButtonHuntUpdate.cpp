@@ -64,7 +64,7 @@
 CommandButtonHuntUpdateModuleData::CommandButtonHuntUpdateModuleData()
 {
 	m_scanFrames				= LOGICFRAMES_PER_SECOND;
-	m_scanRange					= 9999.0f;
+	m_scanRange					= Fix( 9999 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ CommandButtonHuntUpdateModuleData::CommandButtonHuntUpdateModuleData()
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( CommandButtonHuntUpdateModuleData, m_scanFrames ) },
-		{ "ScanRange",						INI::parseReal,									NULL, offsetof( CommandButtonHuntUpdateModuleData, m_scanRange ) },
+		{ "ScanRange",						INI::parseFix,									NULL, FIX_OFFSET( CommandButtonHuntUpdateModuleData, m_scanRange ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -302,7 +302,7 @@ Object* CommandButtonHuntUpdate::scanClosestTarget(void)
 			isPlaceExplosive = true;
 	}
 
-	const Fix scanRange = fixFromReal( data->m_scanRange );	// P3: INI data
+	const Fix scanRange = data->m_scanRange;
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), scanRange,
 		FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
 	MemoryPoolObjectHolder hold(iter);

@@ -56,9 +56,9 @@ FirestormDynamicGeometryInfoUpdateModuleData::FirestormDynamicGeometryInfoUpdate
 	m_fxList = NULL;
 	m_particleOffsetZ = 0.0f;
 	m_scorchSize = 0.0f;
-	m_delayBetweenDamageFrames = 0.0f;
-	m_damageAmount = 0.0f;
-	m_maxHeightForDamage = 20.0f;
+	m_delayBetweenDamageFrames = Fix( 0 );
+	m_damageAmount = Fix( 0 );
+	m_maxHeightForDamage = Fix( 20 );
 
 }
 
@@ -69,9 +69,9 @@ FirestormDynamicGeometryInfoUpdateModuleData::FirestormDynamicGeometryInfoUpdate
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "DelayBetweenDamageFrames", INI::parseDurationReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_delayBetweenDamageFrames ) },
-		{ "DamageAmount", INI::parseReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_damageAmount ) },
-		{ "MaxHeightForDamage", INI::parseReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_maxHeightForDamage ) },
+		{ "DelayBetweenDamageFrames", INI::parseDurationFix, NULL, FIX_OFFSET( FirestormDynamicGeometryInfoUpdateModuleData, m_delayBetweenDamageFrames ) },
+		{ "DamageAmount", INI::parseFix, NULL, FIX_OFFSET( FirestormDynamicGeometryInfoUpdateModuleData, m_damageAmount ) },
+		{ "MaxHeightForDamage", INI::parseFix, NULL, FIX_OFFSET( FirestormDynamicGeometryInfoUpdateModuleData, m_maxHeightForDamage ) },
 		{ "ParticleSystem1", INI::parseParticleSystemTemplate, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_particleSystem[ 0 ] ) },
 		{ "ParticleSystem2", INI::parseParticleSystemTemplate, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_particleSystem[ 1 ] ) },
 		{ "ParticleSystem3", INI::parseParticleSystemTemplate, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_particleSystem[ 2 ] ) },
@@ -89,8 +89,8 @@ FirestormDynamicGeometryInfoUpdateModuleData::FirestormDynamicGeometryInfoUpdate
 		{ "ParticleSystem15", INI::parseParticleSystemTemplate, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_particleSystem[ 14 ] ) },
 		{ "ParticleSystem16", INI::parseParticleSystemTemplate, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_particleSystem[ 15 ] ) },
 		{ "FXList",		INI::parseFXList, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_fxList ) },
-		{ "ParticleOffsetZ", INI::parseReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_particleOffsetZ ) },
-		{ "ScorchSize", INI::parseReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_scorchSize ) },
+		{ "ParticleOffsetZ", INI::parseReal, NULL, REAL_OFFSET( FirestormDynamicGeometryInfoUpdateModuleData, m_particleOffsetZ ) },
+		{ "ScorchSize", INI::parseReal, NULL, REAL_OFFSET( FirestormDynamicGeometryInfoUpdateModuleData, m_scorchSize ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -140,7 +140,7 @@ UpdateSleepTime FirestormDynamicGeometryInfoUpdate::update( void )
 		// note that we add a small amount to it to avoid particles from the system (especially
 		// flat XY particles) from popping up through the terrain
 		//
-		// P3: the offset is INI data; the particle systems are client, in float
+		// the offset is client data, like the particle systems it places, and stays a Real
 		FCoord3D fpos = *getObject()->getPositionFix();
 		fpos.z = fixFromReal( modData->m_particleOffsetZ ) + TheTerrainLogic->getGroundHeightFix( fpos.x, fpos.y );
 		const Coord3D pos = fpos.toCoord3D();
@@ -215,7 +215,7 @@ UpdateSleepTime FirestormDynamicGeometryInfoUpdate::update( void )
 	}  // end if
 
 	// scan and do some damage every once in a while
-	if( TheGameLogic->getFrame() - m_lastDamageFrame >= modData->m_delayBetweenDamageFrames )
+	if( Fix( (Int)( TheGameLogic->getFrame() - m_lastDamageFrame ) ) >= modData->m_delayBetweenDamageFrames )
 	{
 
 		doDamageScan();
@@ -243,7 +243,7 @@ void FirestormDynamicGeometryInfoUpdate::doDamageScan( void )
 	damageInfo.in.m_damageType = DAMAGE_FLAME;
 	damageInfo.in.m_deathType = DEATH_BURNED;
 	damageInfo.in.m_sourceID = firestorm->getID();
-	damageInfo.in.m_amount = modData->m_damageAmount;
+	damageInfo.in.m_amount = fixToReal( modData->m_damageAmount );	// P6: damage is float
 
 	// get the current bounding circle size for the firestorm
 	Fix boundingCircle = firestorm->getGeometryInfo().getBoundingCircleRadiusFix();
@@ -256,7 +256,7 @@ void FirestormDynamicGeometryInfoUpdate::doDamageScan( void )
 																																			 FROM_BOUNDINGSPHERE_2D,
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );
-		const Fix maxZ = firestormPos->z + fixFromReal( modData->m_maxHeightForDamage );	// P3: INI data
+		const Fix maxZ = firestormPos->z + modData->m_maxHeightForDamage;
 		Object *other;
 		for( other = iter->first(); other; other = iter->next() )
 		{

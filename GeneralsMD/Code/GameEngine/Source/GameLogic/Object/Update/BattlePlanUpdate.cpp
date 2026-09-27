@@ -79,11 +79,11 @@ BattlePlanUpdateModuleData::BattlePlanUpdateModuleData()
 	m_battlePlanParalyzeFrames						= 0;
 
 	
-	m_holdTheLineArmorDamageScalar				= 1.0f;
-	m_searchAndDestroySightRangeScalar		= 1.0f;
-	m_strategyCenterSearchAndDestroySightRangeScalar = 1.0f;
+	m_holdTheLineArmorDamageScalar				= Fix( 1 );
+	m_searchAndDestroySightRangeScalar		= Fix( 1 );
+	m_strategyCenterSearchAndDestroySightRangeScalar = Fix( 1 );
 	m_strategyCenterSearchAndDestroyDetectsStealth = true;
-	m_strategyCenterHoldTheLineMaxHealthScalar = 1.0f;
+	m_strategyCenterHoldTheLineMaxHealthScalar = Fix( 1 );
 	m_strategyCenterHoldTheLineMaxHealthChangeType = PRESERVE_RATIO;
 
 }
@@ -119,12 +119,12 @@ BattlePlanUpdateModuleData::BattlePlanUpdateModuleData()
 		{ "ValidMemberKindOf",										KindOfMaskType::parseFromINI,								NULL, offsetof( BattlePlanUpdateModuleData, m_validMemberKindOf ) },
 		{ "InvalidMemberKindOf",									KindOfMaskType::parseFromINI,								NULL, offsetof( BattlePlanUpdateModuleData, m_invalidMemberKindOf ) },
 		{ "BattlePlanChangeParalyzeTime",					INI::parseDurationUnsignedInt,  NULL, offsetof( BattlePlanUpdateModuleData, m_battlePlanParalyzeFrames ) },
-		{ "HoldTheLinePlanArmorDamageScalar",			INI::parseReal,									NULL, offsetof( BattlePlanUpdateModuleData, m_holdTheLineArmorDamageScalar ) },
-		{ "SearchAndDestroyPlanSightRangeScalar",	INI::parseReal,									NULL, offsetof( BattlePlanUpdateModuleData, m_searchAndDestroySightRangeScalar ) },
+		{ "HoldTheLinePlanArmorDamageScalar",			INI::parseFix,									NULL, FIX_OFFSET( BattlePlanUpdateModuleData, m_holdTheLineArmorDamageScalar ) },
+		{ "SearchAndDestroyPlanSightRangeScalar",	INI::parseFix,									NULL, FIX_OFFSET( BattlePlanUpdateModuleData, m_searchAndDestroySightRangeScalar ) },
 
-		{ "StrategyCenterSearchAndDestroySightRangeScalar", INI::parseReal,				NULL, offsetof( BattlePlanUpdateModuleData, m_strategyCenterSearchAndDestroySightRangeScalar ) },
+		{ "StrategyCenterSearchAndDestroySightRangeScalar", INI::parseFix,				NULL, FIX_OFFSET( BattlePlanUpdateModuleData, m_strategyCenterSearchAndDestroySightRangeScalar ) },
 		{ "StrategyCenterSearchAndDestroyDetectsStealth",   INI::parseBool,				NULL, offsetof( BattlePlanUpdateModuleData, m_strategyCenterSearchAndDestroyDetectsStealth ) },
-		{ "StrategyCenterHoldTheLineMaxHealthScalar",				INI::parseReal,				NULL, offsetof( BattlePlanUpdateModuleData, m_strategyCenterHoldTheLineMaxHealthScalar ) },
+		{ "StrategyCenterHoldTheLineMaxHealthScalar",				INI::parseFix,				NULL, FIX_OFFSET( BattlePlanUpdateModuleData, m_strategyCenterHoldTheLineMaxHealthScalar ) },
     { "StrategyCenterHoldTheLineMaxHealthChangeType",		INI::parseIndexList,  TheMaxHealthChangeTypeNames, offsetof( BattlePlanUpdateModuleData, m_strategyCenterHoldTheLineMaxHealthChangeType ) }, 
 
 		{ "VisionObjectName",											INI::parseAsciiString,					NULL, offsetof( BattlePlanUpdateModuleData, m_visionObjectName ) },
@@ -783,10 +783,10 @@ void BattlePlanUpdate::setBattlePlan( BattlePlanStatus plan )
 				player->changeBattlePlan( PLANSTATUS_HOLDTHELINE, -1, m_bonuses );
 
 				//Remove building health bonuses
-				if( data->m_strategyCenterHoldTheLineMaxHealthScalar != 1.0f )
+				if( data->m_strategyCenterHoldTheLineMaxHealthScalar != Fix( 1 ) )
 				{
 					BodyModuleInterface *body = obj->getBodyModule();
-					body->setMaxHealth( body->getMaxHealth() * 1.0f / data->m_strategyCenterHoldTheLineMaxHealthScalar, data->m_strategyCenterHoldTheLineMaxHealthChangeType );
+					body->setMaxHealth( body->getMaxHealth() * 1.0f / fixToReal( data->m_strategyCenterHoldTheLineMaxHealthScalar ), data->m_strategyCenterHoldTheLineMaxHealthChangeType );	// P6: health is float
 				}
 				break;
 			}
@@ -796,10 +796,11 @@ void BattlePlanUpdate::setBattlePlan( BattlePlanStatus plan )
 				player->changeBattlePlan( PLANSTATUS_SEARCHANDDESTROY, -1, m_bonuses );
 
 				//Remove sight range bonus
-				if( data->m_strategyCenterSearchAndDestroySightRangeScalar != 1.0f )
+				if( data->m_strategyCenterSearchAndDestroySightRangeScalar != Fix( 1 ) )
 				{
-					obj->setVisionRange( obj->getVisionRange() * 1.0f / data->m_strategyCenterSearchAndDestroySightRangeScalar );
-					obj->setShroudClearingRange( obj->getShroudClearingRange() * 1.0f / data->m_strategyCenterSearchAndDestroySightRangeScalar );
+					const Real scalar = fixToReal( data->m_strategyCenterSearchAndDestroySightRangeScalar );	// P8: vision range is float
+					obj->setVisionRange( obj->getVisionRange() * 1.0f / scalar );
+					obj->setShroudClearingRange( obj->getShroudClearingRange() * 1.0f / scalar );
 				}
 
 				//Remove stealth detection
@@ -842,14 +843,14 @@ void BattlePlanUpdate::setBattlePlan( BattlePlanStatus plan )
 
 			case PLANSTATUS_HOLDTHELINE:
 				//Add building health bonuses
-				if( data->m_strategyCenterHoldTheLineMaxHealthScalar )
+				if( data->m_strategyCenterHoldTheLineMaxHealthScalar != Fix( 0 ) )
 				{
 					BodyModuleInterface *body = obj->getBodyModule();
-					body->setMaxHealth( body->getMaxHealth() * data->m_strategyCenterHoldTheLineMaxHealthScalar, data->m_strategyCenterHoldTheLineMaxHealthChangeType );
+					body->setMaxHealth( body->getMaxHealth() * fixToReal( data->m_strategyCenterHoldTheLineMaxHealthScalar ), data->m_strategyCenterHoldTheLineMaxHealthChangeType );	// P6: health is float
 				}
 
 				//Set the hold-the-line bonuses
-				m_bonuses->m_armorScalar = data->m_holdTheLineArmorDamageScalar;
+				m_bonuses->m_armorScalar = fixToReal( data->m_holdTheLineArmorDamageScalar );	// P6: the bonuses are float state
 				m_bonuses->m_holdTheLine	= 1; //for weapon bonuses
 
 				//Add the new plan!
@@ -857,10 +858,11 @@ void BattlePlanUpdate::setBattlePlan( BattlePlanStatus plan )
 				break;
 			case PLANSTATUS_SEARCHANDDESTROY:
 				//Add sight range bonus
-				if( data->m_strategyCenterSearchAndDestroySightRangeScalar != 1.0f )
+				if( data->m_strategyCenterSearchAndDestroySightRangeScalar != Fix( 1 ) )
 				{
-					obj->setVisionRange( obj->getVisionRange() * data->m_strategyCenterSearchAndDestroySightRangeScalar );
-					obj->setShroudClearingRange( obj->getShroudClearingRange() * data->m_strategyCenterSearchAndDestroySightRangeScalar );
+					const Real scalar = fixToReal( data->m_strategyCenterSearchAndDestroySightRangeScalar );	// P8: vision range is float
+					obj->setVisionRange( obj->getVisionRange() * scalar );
+					obj->setShroudClearingRange( obj->getShroudClearingRange() * scalar );
 				}
 
 				//Enable stealth detection
@@ -876,7 +878,7 @@ void BattlePlanUpdate::setBattlePlan( BattlePlanStatus plan )
 
 				//Set the search-and-destroy bonuses
 				m_bonuses->m_searchAndDestroy	= 1; //for weapon bonuses
-				m_bonuses->m_sightRangeScalar	= data->m_searchAndDestroySightRangeScalar;
+				m_bonuses->m_sightRangeScalar	= fixToReal( data->m_searchAndDestroySightRangeScalar );	// P8: the bonuses are float state
 
 				//Add the new plan!
 				player->changeBattlePlan( PLANSTATUS_SEARCHANDDESTROY, 1, m_bonuses );

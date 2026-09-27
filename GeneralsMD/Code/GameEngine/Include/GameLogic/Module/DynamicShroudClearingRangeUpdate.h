@@ -48,7 +48,7 @@ public:
 	UnsignedInt m_growDelay;    ///< wait until
 	UnsignedInt m_growTime;     ///< then grow this fast
 
-	Real m_finalVision;										///< Then change to this
+	Fix m_finalVision;									///< Then change to this
 	UnsignedInt m_changeInterval;			///< And update my Object every this long
 	UnsignedInt m_growInterval;				///< Update evey this long while growing
 	Bool m_doSpySatFX;										///< Do I do the pseudo-wireframe decal and blip effects?

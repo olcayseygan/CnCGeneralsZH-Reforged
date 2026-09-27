@@ -181,7 +181,7 @@ void EMPUpdate::doDisableAttack( void )
 	if( !object || !data )
 		return; //sanity
 
-	const Fix radius = fixFromReal( data->m_effectRadius );	// P3: INI data
+	const Fix radius = data->m_effectRadius;
 	Fix curVictimDistSqr;
 	const FCoord3D *pos = object->getPositionFix();
 
@@ -513,7 +513,7 @@ void LeafletDropBehavior::doDisableAttack( void )
 	if( !object || !data )
 		return; //sanity
 
-	const Fix radius = fixFromReal( data->m_radius );	// P3: INI data
+	const Fix radius = data->m_radius;
 	Fix curVictimDistSqr;
 	const FCoord3D *pos = object->getPositionFix();
 

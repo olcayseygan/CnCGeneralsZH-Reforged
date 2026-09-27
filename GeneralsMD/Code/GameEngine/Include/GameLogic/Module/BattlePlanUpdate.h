@@ -74,11 +74,11 @@ public:
 	KindOfMaskType m_validMemberKindOf;
 	KindOfMaskType m_invalidMemberKindOf;
 
-	Real m_holdTheLineArmorDamageScalar;
-	Real m_searchAndDestroySightRangeScalar;
-	Real m_strategyCenterSearchAndDestroySightRangeScalar;
+	Fix m_holdTheLineArmorDamageScalar;
+	Fix m_searchAndDestroySightRangeScalar;
+	Fix m_strategyCenterSearchAndDestroySightRangeScalar;
 	Bool m_strategyCenterSearchAndDestroyDetectsStealth;
-	Real m_strategyCenterHoldTheLineMaxHealthScalar;
+	Fix m_strategyCenterHoldTheLineMaxHealthScalar;
 	MaxHealthChangeType m_strategyCenterHoldTheLineMaxHealthChangeType;
 
 	AsciiString m_visionObjectName;		///< name of object to create to reveal shroud to all players

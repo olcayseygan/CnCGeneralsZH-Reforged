@@ -739,7 +739,7 @@ void AISkirmishPlayer::buildAIBaseDefenseStructure(const AsciiString &thingName,
 		offset.y = goalPos.y-m_baseCenter.y;
 		offset.normalize();
 		Real defenseDistance = m_baseRadius;
-		defenseDistance += TheAI->getAiData()->m_skirmishBaseDefenseExtraDistance;
+		defenseDistance += fixToReal( TheAI->getAiData()->m_skirmishBaseDefenseExtraDistance );	// P7
 		offset.x *= defenseDistance;
 		offset.y *= defenseDistance;
 

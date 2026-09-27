@@ -53,6 +53,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/Scripts.h"
 #include "GameLogic/SidesList.h"
+#include "Lib/FixBoundary.h"
 
 static const Int K_SIDES_DATA_VERSION_1 = 1;
 static const Int K_SIDES_DATA_VERSION_2 = 2;	// includes Team list.
@@ -947,6 +948,10 @@ m_buildingName(AsciiString::TheEmptyString)
 /**
  BuildListInfo - Destructor - note - if linked, deletes linked items.
 */
+// P7: the map file, the build assistant and the skirmish base rotation still speak float
+void BuildListInfo::setAngle(Real angle) { m_angle = fixFromReal( angle ); }
+Real BuildListInfo::getAngle(void) const { return fixToReal( m_angle ); }
+
 BuildListInfo::~BuildListInfo(void)
 {
 	if (m_nextBuildList) {
@@ -971,7 +976,7 @@ void BuildListInfo::parseStructure(INI *ini, void *instance, void* /*store*/, co
 			{ "Name",				INI::parseAsciiString,		NULL, offsetof( BuildListInfo, m_buildingName	 ) },
 			{ "Location",		INI::parseCoord2D,				NULL, offsetof( BuildListInfo, m_location ) },
       { "Rebuilds",		INI::parseInt,						NULL, offsetof( BuildListInfo, m_numRebuilds ) },
-      { "Angle",			INI::parseAngleReal,			NULL, offsetof( BuildListInfo, m_angle ) },
+      { "Angle",			INI::parseAngleFix,				NULL, FIX_OFFSET( BuildListInfo, m_angle ) },
       { "InitiallyBuilt",			INI::parseBool,		NULL, offsetof( BuildListInfo, m_isInitiallyBuilt ) },
       { "RallyPointOffset",			INI::parseCoord2D,		NULL, offsetof( BuildListInfo, m_rallyPointOffset ) },
       { "AutomaticallyBuild",			INI::parseBool,	NULL, offsetof( BuildListInfo, m_automaticallyBuild ) },
@@ -1031,7 +1036,9 @@ void BuildListInfo::xfer( Xfer *xfer )
 	xfer->xferAsciiString( &m_templateName );
 	xfer->xferCoord3D( &m_location );
 	xfer->xferCoord2D( &m_rallyPointOffset );
-	xfer->xferReal( &m_angle );
+	Real angle = fixToReal( m_angle );		// the save keeps the float it always had; an angle survives the round trip exactly
+	xfer->xferReal( &angle );
+	m_angle = fixFromReal( angle );
 	xfer->xferBool( &m_isInitiallyBuilt );
 	xfer->xferUnsignedInt( &m_numRebuilds );
 	xfer->xferAsciiString( &m_script );

@@ -762,7 +762,7 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			PartitionFilter *filters[] = { &f1, &filterMapStatus, 0 };
 
 			
-			Fix distance = fixFromReal( TheAI->getAiData()->m_retaliateFriendsRadius ) + obj->getGeometryInfo().getBoundingCircleRadiusFix();	// P7: AI data is float
+			Fix distance = TheAI->getAiData()->m_retaliateFriendsRadius + obj->getGeometryInfo().getBoundingCircleRadiusFix();
 			SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( obj->getPositionFix(), distance, FROM_CENTER_2D, filters, ITER_FASTEST );
 			MemoryPoolObjectHolder hold( iter );
 			for( Object *them = iter->first(); them; them = iter->next() ) 
@@ -810,7 +810,7 @@ Bool ActiveBody::shouldRetaliateAgainstAggressor(Object *obj, Object *damager)
 		return false; // only retaliate against enemies.
 	}
 	Fix distSqr = ThePartitionManager->getDistanceSquaredFix(obj, damager, FROM_BOUNDINGSPHERE_2D);
-	Fix maxDist = fixFromReal( TheAI->getAiData()->m_maxRetaliateDistance );	// P7: AI data is float
+	Fix maxDist = TheAI->getAiData()->m_maxRetaliateDistance;
 	if (distSqr > maxDist * maxDist) {
 		return false;
 	}

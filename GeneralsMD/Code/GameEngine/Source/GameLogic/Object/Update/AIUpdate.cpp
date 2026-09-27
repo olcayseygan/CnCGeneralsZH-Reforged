@@ -553,7 +553,7 @@ void AIUpdateInterface::doPathfind( PathfindServicesInterface *pathfinder )
 		m_path = pathfinder->findSafePath(getObject(), m_locomotorSet,
 			&myPos,
 			&pos1, 	&pos2, 
-			getObject()->getVisionRange() + TheAI->getAiData()->m_repulsedDistance);
+			getObject()->getVisionRange() + fixToReal( TheAI->getAiData()->m_repulsedDistance ));	// P7
 		m_pathfindFoundNothing = (m_path == NULL);
 		return;
 	}
@@ -6625,7 +6625,7 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	}
 
 	// Use Guard Outer, which typically corresponds to the total range
-	Real rangeToFindWithin = TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD);
+	Real rangeToFindWithin = fixToReal( TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD) );	// P7
 
 	//
 	// A caller that closes with what it finds (attack move) measures the search against its own

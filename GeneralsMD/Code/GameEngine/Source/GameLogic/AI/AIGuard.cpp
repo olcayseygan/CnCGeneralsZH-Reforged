@@ -204,9 +204,9 @@ AIGuardMachine::~AIGuardMachine()
 }
 
 //--------------------------------------------------------------------------------------
-/*static*/ Real AIGuardMachine::getStdGuardRange(const Object* obj)
+/*static*/ Fix AIGuardMachine::getStdGuardRange(const Object* obj)
 {
-	Real visionRange = TheAI->getAdjustedVisionRangeForObject(obj, 
+	Fix visionRange = TheAI->getAdjustedVisionRangeForObject(obj, 
 		AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD | AI_VISIONFACTOR_GUARDINNER);
 
 	return visionRange;
@@ -278,7 +278,7 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 	// (getNextMoodTarget's UNFOGGED). It picks from what its player can see now.
 	filters[count++] = &filterFogged;
 
-	Fix visionRange = fixFromReal( AIGuardMachine::getStdGuardRange(owner) );	// P3
+	Fix visionRange = AIGuardMachine::getStdGuardRange(owner);
 
 	if (area)
 	{
@@ -427,8 +427,8 @@ StateReturnType AIGuardInnerState::onEnter( void )
 			return STATE_SUCCESS;
 		}
 		m_exitConditions.m_center = pos;
-		m_exitConditions.m_radiusSqr = sqr(AIGuardMachine::getStdGuardRange(getMachineOwner()));
-		m_exitConditions.m_conditionsToConsider = (ExitConditions::ATTACK_ExitIfOutsideRadius | 
+		m_exitConditions.m_radiusSqr = sqr(fixToReal( AIGuardMachine::getStdGuardRange(getMachineOwner()) ));	// P7
+		m_exitConditions.m_conditionsToConsider = (ExitConditions::ATTACK_ExitIfOutsideRadius |
 																								ExitConditions::ATTACK_ExitIfNoUnitFound);
 
 		m_attackState = newInstance(AIAttackState)(getMachine(), false, true, false, &m_exitConditions);
@@ -541,7 +541,7 @@ StateReturnType AIGuardOuterState::onEnter( void )
 	}
 	Object *obj = getMachineOwner();
 
-	Real range = TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD);
+	Real range = fixToReal( TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD) );	// P7
 
 	const PolygonTrigger *area = getGuardMachine()->getAreaToGuard();
 	if (area) 
@@ -589,7 +589,7 @@ StateReturnType AIGuardOuterState::update( void )
 		deltaAggr.x = fixFromReal( m_exitConditions.m_center.x ) - goalPos->x;	// P7: m_center is float
 		deltaAggr.y = fixFromReal( m_exitConditions.m_center.y ) - goalPos->y;
 		deltaAggr.z = fixFromReal( m_exitConditions.m_center.z ) - goalPos->z;
-		const Fix vision = fixFromReal( AIGuardMachine::getStdGuardRange(getMachineOwner()) );	// P3
+		const Fix vision = AIGuardMachine::getStdGuardRange(getMachineOwner());
 		if (deltaAggr.lengthSqr() <= vision * vision)
 		{
 			// reset the counter
@@ -849,7 +849,7 @@ StateReturnType AIGuardAttackAggressorState::onEnter( void )
 	Coord3D pos = targetToGuard ? targetToGuard->getPositionFix()->toCoord3D() : *getGuardMachine()->getPositionToGuard();	// P7: exit conditions are float
 	//Don't allow guarding units to leave their guard radius!
 	m_exitConditions.m_center = pos;
-	m_exitConditions.m_radiusSqr = sqr(AIGuardMachine::getStdGuardRange(getMachineOwner()));
+	m_exitConditions.m_radiusSqr = sqr(fixToReal( AIGuardMachine::getStdGuardRange(getMachineOwner()) ));	// P7
 	m_exitConditions.m_attackGiveUpFrame = TheGameLogic->getFrame() + TheAI->getAiData()->m_guardChaseUnitFrames;
 	m_exitConditions.m_conditionsToConsider = (ExitConditions::ATTACK_ExitIfExpiredDuration | 
 																						 ExitConditions::ATTACK_ExitIfNoUnitFound |

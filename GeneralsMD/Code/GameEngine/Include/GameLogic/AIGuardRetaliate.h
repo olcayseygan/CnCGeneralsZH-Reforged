@@ -121,7 +121,7 @@ public:
 
 	Bool lookForInnerTarget(void);
 
-	static Real getStdGuardRange(const Object* obj);
+	static Fix getStdGuardRange(const Object* obj);
 
 	///< a unit that must see what it shoots retaliates only against what it sees from where it stands
 	static Bool canRetaliateFromHere(const Object* retaliator, Object* target);

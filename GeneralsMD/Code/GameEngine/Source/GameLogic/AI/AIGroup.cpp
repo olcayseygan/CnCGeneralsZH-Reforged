@@ -564,7 +564,7 @@ Bool AIGroup::friend_computeGroundPath( const Coord3D *pos, CommandSourceType cm
 
 	Bool closeEnough = false;
 	getMinMaxAndCenter( &min, &max, &center );
-	Real distSqr = 4*sqr(TheAI->getAiData()->m_distanceRequiresGroup);
+	Real distSqr = 4*sqr(fixToReal(TheAI->getAiData()->m_distanceRequiresGroup));	// P7
 
 	Int numInfantry = 0;
 	Int numVehicles = 0; 
@@ -628,13 +628,13 @@ Bool AIGroup::friend_computeGroundPath( const Coord3D *pos, CommandSourceType cm
 
 	dx = max.x - min.x;
 	dy = max.y - min.y;
-	if (dx*dx + dy*dy > sqr(TheAI->getAiData()->m_distanceRequiresGroup)) {
+	if (dx*dx + dy*dy > sqr(fixToReal(TheAI->getAiData()->m_distanceRequiresGroup))) {	// P7
 		distSqr = dx*dx+dy*dy;
 	}
-	if (distSqr < sqr(TheAI->getAiData()->m_minDistanceForGroup)) {
+	if (distSqr < sqr(fixToReal(TheAI->getAiData()->m_minDistanceForGroup))) {	// P7
 		return false;
 	}
-	if (distSqr>sqr(TheAI->getAiData()->m_distanceRequiresGroup)) {
+	if (distSqr>sqr(fixToReal(TheAI->getAiData()->m_distanceRequiresGroup))) {	// P7
 		closeEnough = true;
 	}
 	if (numInfantry>6) {

@@ -38,6 +38,7 @@
 #include "Common/Snapshot.h"
 #include "Common/GameMemory.h"
 #include "Common/STLTypedefs.h"
+#include "Lib/Fix.h"
 
 class DataChunkInput;
 struct DataChunkInfo;
@@ -280,7 +281,7 @@ protected:
 	AsciiString			m_templateName;			///< The thing template name for this model's info.
 	Coord3D					m_location;					///< The location of the object.
 	Coord2D					m_rallyPointOffset; ///< Offset to the natural rally point.
-	Real						m_angle;						///< Initial orientation of the building.
+	Fix							m_angle;						///< Initial orientation of the building.
 	Bool						m_isInitiallyBuilt; ///< Whether the building is built at the start of the game.
 	UnsignedInt			m_numRebuilds;			///< Number of rebuilds allowed.
 	BuildListInfo*	m_nextBuildList;		///< linked list.
@@ -312,7 +313,7 @@ public:
 	void setNumRebuilds(UnsignedInt numRebuilds) {m_numRebuilds = numRebuilds;}
 	void setNextBuildList(BuildListInfo *pNext) {m_nextBuildList = pNext;}
 	void setLocation(Coord3D loc) {m_location = loc;}
-	void setAngle(Real angle) {m_angle = angle;}
+	void setAngle(Real angle);	///< the map file and the build list code are float (P7)
 	void setInitiallyBuilt(Bool built) {m_isInitiallyBuilt = built;}
 	void setBuildingName(AsciiString name) {m_buildingName = name;}
 	void setScript(AsciiString script) {m_script = script;}
@@ -331,7 +332,7 @@ public:
 	void incrementNumRebuilds(void);
 	const Coord3D *getLocation(void) const {return &m_location;}
 	const Coord2D *getRallyOffset(void) const {return &m_rallyPointOffset;}
-	Real getAngle(void) const {return m_angle;}
+	Real getAngle(void) const;
 	Bool isInitiallyBuilt(void) {return m_isInitiallyBuilt;}
 	AsciiString getScript(void) {return m_script;}
 	Int getHealth(void) {return m_health;}

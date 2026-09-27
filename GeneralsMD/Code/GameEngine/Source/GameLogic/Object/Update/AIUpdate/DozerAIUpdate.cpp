@@ -2497,7 +2497,7 @@ Real DozerAIUpdate::getBoredRange( void ) const
 {
 	if (getObject()->getControllingPlayer() &&
 		getObject()->getControllingPlayer()->getPlayerType() == PLAYER_COMPUTER) {
-		return TheAI->getAiData()->m_aiDozerBoredRadiusModifier*getDozerAIUpdateModuleData()->m_boredRange;
+		return fixToReal( TheAI->getAiData()->m_aiDozerBoredRadiusModifier )*getDozerAIUpdateModuleData()->m_boredRange;	// P7
 	}
 	return getDozerAIUpdateModuleData()->m_boredRange;
 }

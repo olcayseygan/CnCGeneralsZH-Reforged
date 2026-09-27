@@ -63,6 +63,7 @@
 
 #include "Common/Xfer.h"
 #include "Common/XferCRC.h"
+#include "Lib/FixBoundary.h"		// the wall height copied out of the AI data
 
 //------------------------------------------------------------------------------ Performance Timers 
 #include "Common/PerfMetrics.h"
@@ -5280,7 +5281,7 @@ void Pathfinder::reset( void )
 	}
 
 	if (TheAI && TheAI->getAiData()) {
-		m_wallHeight = TheAI->getAiData()->m_wallHeight;
+		m_wallHeight = fixToReal( TheAI->getAiData()->m_wallHeight );	// P5
 	}
 	else
 	{
@@ -5936,7 +5937,7 @@ void Pathfinder::classifyMapCell( Int i, Int j , PathfindCell *cell)
  */
 void Pathfinder::newMap( void )
 {
-	m_wallHeight = TheAI->getAiData()->m_wallHeight; // may be updated by map.ini.
+	m_wallHeight = fixToReal( TheAI->getAiData()->m_wallHeight );	// P5; may be updated by map.ini.
 	Region3D terrainExtent;
 	TheTerrainLogic->getMaximumPathfindExtent( &terrainExtent );
 	IRegion2D bounds;

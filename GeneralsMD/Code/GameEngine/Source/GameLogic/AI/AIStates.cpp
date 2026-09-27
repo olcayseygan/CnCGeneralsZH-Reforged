@@ -4763,7 +4763,7 @@ StateReturnType AIFollowWaypointPathState::update()
 			pos.z = 0;
 
 			Int numInGroup = group->getCount();
-			if (pos.length() <= (numInGroup * TheAI->getAiData()->m_skirmishGroupFudgeValue)) {
+			if (pos.length() <= (numInGroup * fixToReal( TheAI->getAiData()->m_skirmishGroupFudgeValue ))) {	// P7
 				// Consider ourselves close enough.
 				status = STATE_SUCCESS;
 			}

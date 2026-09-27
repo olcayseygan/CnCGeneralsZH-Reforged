@@ -120,6 +120,7 @@
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/MobMemberSlavedUpdate.h"//ML
 #include "GameLogic/Module/SpawnBehavior.h"
+#include "Lib/FixBoundary.h"
 
 #include "Common/UnitTimings.h" //Contains the DO_UNIT_TIMINGS define jba.		 
 
@@ -1556,7 +1557,7 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 			radius = w ? w->getContinueAttackRange() : 0.0f;
 			break;
 		case RADIUSCURSOR_GUARD_AREA:
-			radius = AIGuardMachine::getStdGuardRange(obj);
+			radius = fixToReal( AIGuardMachine::getStdGuardRange(obj) );
 			break;
 		case RADIUSCURSOR_FRIENDLY_SPECIALPOWER:
 		case RADIUSCURSOR_OFFENSIVE_SPECIALPOWER:

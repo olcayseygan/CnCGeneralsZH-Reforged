@@ -32,6 +32,7 @@
 #include "Common/RandomMapGenerator.h"
 #include "Common/StackDump.h"
 #include "Lib/Trig.h"
+#include "Lib/FixBoundary.h"
 #include "GameNetwork/Connection.h"
 #include "GameLogic/CRCSnapshotRing.h"
 #include "GameNetwork/GameDataMatch.h"
@@ -9261,13 +9262,13 @@ TEST(the_difficulty_ladder_climbs_in_every_direction_it_should)
 
 	// the ends of the ladder are what they say they are: Easy ignores what it is facing and Brutal
 	// is the baseline, which means it counters fully
-	CHECK_EQ( 0.0f, data.m_skill[ AISKILL_EASY ].m_counterCompositionWeight );
-	CHECK_EQ( 1.0f, data.m_skill[ AISKILL_BRUTAL ].m_counterCompositionWeight );
+	CHECK( data.m_skill[ AISKILL_EASY ].m_counterCompositionWeight == Fix( 0 ) );
+	CHECK( data.m_skill[ AISKILL_BRUTAL ].m_counterCompositionWeight == Fix( 1 ) );
 
 	// every rung scouts. An AI that never looks reads as broken, not as easy.
 	for( Int i = 0; i < AISKILL_COUNT; ++i )
 	{
-		CHECK( data.m_skill[ i ].m_scoutIntervalSeconds > 0.0f );
+		CHECK( data.m_skill[ i ].m_scoutIntervalSeconds > Fix( 0 ) );
 		CHECK( data.m_skill[ i ].m_maxScouts >= 1 );
 	}
 }
@@ -9468,14 +9469,14 @@ TEST(retreat_ratio_measures_the_exchange_not_the_health_bar)
 	// off at every rung that retreats at all; one at parity never does.
 	//
 	TAiData data;
-	const Real brutal = data.m_skill[ AISKILL_BRUTAL ].m_retreatTtkRatio;
+	const Real brutal = fixToReal( data.m_skill[ AISKILL_BRUTAL ].m_retreatTtkRatio );
 	CHECK( aiRetreatRatio( 30.0f, 10.0f, 100.0f, 10.0f ) < brutal );
 	CHECK( aiRetreatRatio( 100.0f, 10.0f, 100.0f, 10.0f ) >= brutal );
 	CHECK( aiRetreatRatio( 75.0f, 10.0f, 100.0f, 10.0f ) >= brutal );		// three quarters is not lost
 	CHECK( brutal < 0.6f );		// anything above this is quitting fights it can win
 
 	// the bottom rung has no threshold at all: it never quits, which is what makes it Easy
-	CHECK_EQ( 0.0f, data.m_skill[ AISKILL_EASY ].m_retreatTtkRatio );
+	CHECK( data.m_skill[ AISKILL_EASY ].m_retreatTtkRatio == Fix( 0 ) );
 }
 
 

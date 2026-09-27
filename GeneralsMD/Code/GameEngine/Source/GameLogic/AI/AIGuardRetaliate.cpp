@@ -158,7 +158,7 @@ Bool GuardRetaliateExitConditions::shouldExit(const StateMachine* machine) const
 													// then it would look for a new target, get the same one, and proceed in an infinite recursive
 													// loop that eventually blew the stack.
 	
-		const Fix guardRange = fixFromReal( AIGuardRetaliateMachine::getStdGuardRange( machine->getOwner() ) );	// P3
+		const Fix guardRange = AIGuardRetaliateMachine::getStdGuardRange( machine->getOwner() );
 		const Fix guardRangeSqr = guardRange * guardRange;
 		myRange.x = myPos->x - centerX;
 		myRange.y = myPos->y - centerY;
@@ -220,9 +220,9 @@ Bool AIGuardRetaliateMachine::isIdle() const
 }
 
 //--------------------------------------------------------------------------------------
-/*static*/ Real AIGuardRetaliateMachine::getStdGuardRange(const Object* obj)
+/*static*/ Fix AIGuardRetaliateMachine::getStdGuardRange(const Object* obj)
 {
-	Real visionRange = TheAI->getAdjustedVisionRangeForObject(obj, 
+	Fix visionRange = TheAI->getAdjustedVisionRangeForObject(obj, 
 		AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD | AI_VISIONFACTOR_GUARDINNER);
 
 	return visionRange;
@@ -311,7 +311,7 @@ Bool AIGuardRetaliateMachine::lookForInnerTarget(void)
 
 	filters[count++] = &filterMapStatus;
 
-	const Fix visionRange = fixFromReal( AIGuardRetaliateMachine::getStdGuardRange(owner) );	// P3
+	const Fix visionRange = AIGuardRetaliateMachine::getStdGuardRange(owner);
 
 	filters[count++] = NULL;
 
@@ -431,7 +431,7 @@ StateReturnType AIGuardRetaliateInnerState::onEnter( void )
 			return STATE_SUCCESS;
 		}
 		m_exitConditions.m_center = pos;
-		m_exitConditions.m_radiusSqr = sqr( 1.5f * AIGuardRetaliateMachine::getStdGuardRange( getMachineOwner() ) );
+		m_exitConditions.m_radiusSqr = sqr( 1.5f * fixToReal( AIGuardRetaliateMachine::getStdGuardRange( getMachineOwner() ) ) );	// P7
 		m_exitConditions.m_conditionsToConsider = (GuardRetaliateExitConditions::ATTACK_ExitIfOutsideRadius | 
 																								GuardRetaliateExitConditions::ATTACK_ExitIfNoUnitFound);
 
@@ -534,10 +534,10 @@ StateReturnType AIGuardRetaliateOuterState::onEnter( void )
 	}
 	Object *obj = getMachineOwner();
 
-	Real range = TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD);
+	Real range = fixToReal( TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD) );	// P7
 
 	m_exitConditions.m_center = pos;
-	m_exitConditions.m_radiusSqr = sqr( 0.67f * (range + AIGuardRetaliateMachine::getStdGuardRange( getMachineOwner() )) );
+	m_exitConditions.m_radiusSqr = sqr( 0.67f * (range + fixToReal( AIGuardRetaliateMachine::getStdGuardRange( getMachineOwner() ) )) );	// P7
 	m_exitConditions.m_attackGiveUpFrame = TheGameLogic->getFrame() + TheAI->getAiData()->m_guardChaseUnitFrames;
 	m_exitConditions.m_conditionsToConsider = (GuardRetaliateExitConditions::ATTACK_ExitIfExpiredDuration | 
 																								GuardRetaliateExitConditions::ATTACK_ExitIfOutsideRadius | 
@@ -568,7 +568,7 @@ StateReturnType AIGuardRetaliateOuterState::update( void )
 		deltaAggr.x = fixFromReal( m_exitConditions.m_center.x ) - goalPos->x;	// P7: m_center is float
 		deltaAggr.y = fixFromReal( m_exitConditions.m_center.y ) - goalPos->y;
 		deltaAggr.z = fixFromReal( m_exitConditions.m_center.z ) - goalPos->z;
-		const Fix vision = fixFromReal( AIGuardRetaliateMachine::getStdGuardRange(getMachineOwner()) );	// P3
+		const Fix vision = AIGuardRetaliateMachine::getStdGuardRange(getMachineOwner());
 		if (deltaAggr.lengthSqr() <= vision * vision)
 		{
 			// reset the counter
@@ -826,11 +826,11 @@ StateReturnType AIGuardRetaliateAttackAggressorState::onEnter( void )
 
 	Coord3D pos = *getGuardMachine()->getPositionToGuard();
 
-	Real range = TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD);
+	Real range = fixToReal( TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD) );	// P7
 
 	m_exitConditions.m_center = pos;
 	m_exitConditions.m_attackGiveUpFrame = TheGameLogic->getFrame() + TheAI->getAiData()->m_guardChaseUnitFrames;
-	m_exitConditions.m_radiusSqr = sqr( range + AIGuardRetaliateMachine::getStdGuardRange( obj ) );
+	m_exitConditions.m_radiusSqr = sqr( range + fixToReal( AIGuardRetaliateMachine::getStdGuardRange( obj ) ) );	// P7
 	m_exitConditions.m_conditionsToConsider = ( GuardRetaliateExitConditions::ATTACK_ExitIfExpiredDuration | 
 																						  GuardRetaliateExitConditions::ATTACK_ExitIfOutsideRadius |
 																						  GuardRetaliateExitConditions::ATTACK_ExitIfNoUnitFound );

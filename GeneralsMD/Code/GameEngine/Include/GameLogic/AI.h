@@ -37,6 +37,7 @@
 #include "Common/GameType.h"
 #include "GameLogic/Damage.h"
 #include "Common/STLTypedefs.h"
+#include "Lib/Fix.h"
 
 class AIGroup;
 class AttackPriorityInfo;
@@ -183,15 +184,15 @@ Real aiRoleMassFraction( AIRole role );
 struct AIDifficultyProfile
 {
 	// Perception. Never fog: only how diligently it looks and how fast it acts on what it saw.
-	Real	m_scoutIntervalSeconds;					///< how often the scout is re-tasked; every rung scouts
+	Fix		m_scoutIntervalSeconds;					///< how often the scout is re-tasked; every rung scouts
 	Int		m_maxScouts;
-	Real	m_decisionIntervalSeconds;			///< how often it re-evaluates - the AI's APM, and so how late it answers
+	Fix		m_decisionIntervalSeconds;			///< how often it re-evaluates - the AI's APM, and so how late it answers
 																				///< what it saw: a separate reaction delay stood here, read by nothing
 
 	// Decision quality
-	Real	m_counterCompositionWeight;			///< 0 = ignore what the enemy fields (EA's behaviour)
+	Fix		m_counterCompositionWeight;			///< 0 = ignore what the enemy fields (EA's behaviour)
 	Bool	m_massBeforeAttacking;
-	Real	m_retreatTtkRatio;							///< allied time-to-kill / enemy TTK below which it pulls back
+	Fix		m_retreatTtkRatio;							///< allied time-to-kill / enemy TTK below which it pulls back
 	Bool	m_retreatIndividualUnits;				///< pull a losing unit out of a fight the team is winning
 	Bool	m_retreatTeams;									///< ... and break off the whole team when the fight is lost
 	Bool	m_useInfluenceMapForAttackLane;
@@ -400,30 +401,30 @@ public:
 	void xfer( Xfer *xfer );
 	void loadPostProcess( void );
 
-	Real m_structureSeconds;		// Try to build a structure every N seconds.
-	Real m_teamSeconds;					// Try to build a team every N seconds.
+	Fix m_structureSeconds;		// Try to build a structure every N seconds.
+	Fix m_teamSeconds;					// Try to build a team every N seconds.
 	Int m_resourcesWealthy;		// How many resources to be wealthy.
 	Int m_resourcesPoor;			// How few resources to be poor.
 	UnsignedInt m_forceIdleFramesCount;	// How many frames does a unit need to be Idle before it can begin looking for enemies?
-	Real m_structuresWealthyMod; // Factor to multiply m_structurFrames by if we are wealthy.
-	Real m_teamWealthyMod;		// Factor to multiply m_teamFrames by if we are wealthy.
-	Real m_structuresPoorMod; // Factor to multiply m_structureFrames by if we are poor.
-	Real m_teamPoorMod;				// Factor to multiply m_teamFrames if we are poor.
-	Real m_teamResourcesToBuild; // Amount of the resources needed to build a team required before we start.
-	Real m_guardInnerModifierAI;	// Multiply the AI unit's vision by this much == guard inner circle.
-	Real m_guardOuterModifierAI;	// Multiply the AI unit's vision by this much == guard outer circle.
-	Real m_guardInnerModifierHuman;	// Multiply the human unit's vision by this much == guard inner circle
-	Real m_guardOuterModifierHuman;	// Multiply the human unit's vision by this much == guard outer circle
+	Fix m_structuresWealthyMod; // Factor to multiply m_structurFrames by if we are wealthy.
+	Fix m_teamWealthyMod;		// Factor to multiply m_teamFrames by if we are wealthy.
+	Fix m_structuresPoorMod; // Factor to multiply m_structureFrames by if we are poor.
+	Fix m_teamPoorMod;				// Factor to multiply m_teamFrames if we are poor.
+	Fix m_teamResourcesToBuild; // Amount of the resources needed to build a team required before we start.
+	Fix m_guardInnerModifierAI;	// Multiply the AI unit's vision by this much == guard inner circle.
+	Fix m_guardOuterModifierAI;	// Multiply the AI unit's vision by this much == guard outer circle.
+	Fix m_guardInnerModifierHuman;	// Multiply the human unit's vision by this much == guard inner circle
+	Fix m_guardOuterModifierHuman;	// Multiply the human unit's vision by this much == guard outer circle
 	UnsignedInt m_guardChaseUnitFrames;		// Number of frames for which a unit should 
 	UnsignedInt m_guardEnemyScanRate;		// rate to scan for enemies while guarding
 	UnsignedInt m_guardEnemyReturnScanRate;		// rate to scan for enemies while guarding but returning
 
-	Real m_wallHeight;				// Height of special wall units can walk on top of.
+	Fix m_wallHeight;				// Height of special wall units can walk on top of.
 
 	AIDifficultyProfile m_skill[AISKILL_COUNT];	///< the ladder; defaults in TAiData(), overridable from INI
-	
-	Real m_alertRangeModifier;			// When a unit is alert, its range will be modified by this value
-	Real m_aggressiveRangeModifier;	// When a unit is aggressive, its range will be modified by this value
+
+	Fix m_alertRangeModifier;			// When a unit is alert, its range will be modified by this value
+	Fix m_aggressiveRangeModifier;	// When a unit is aggressive, its range will be modified by this value
 
 	/* The attack priority distance modifier changes relative values.  The relative priority
 	   is reduced by the distance away, divided by the modifier.
@@ -432,7 +433,7 @@ public:
 		 100 feet, the effective priority for tank is 9 (10-(100/100), and the
 		 effective priority for powerplant is 8 (15 -(700/100).  So the tanks
 		 would be attacked first because their distance weighted priority is greater. */
-	Real m_attackPriorityDistanceModifier; // Distance to reduce a relative AttackPriority by 1.
+	Fix m_attackPriorityDistanceModifier; // Distance to reduce a relative AttackPriority by 1.
 	
 	
 	/* 
@@ -445,11 +446,11 @@ public:
 		to say they were close enough. A group of 10 units would consider themselves close enough 
 		if they were within 50 feet of the waypoint.
 	*/
-	Real m_skirmishGroupFudgeValue;	
+	Fix m_skirmishGroupFudgeValue;
 
-	Real m_maxRecruitDistance; // Maximum distance away that units can be recruited.
-	Real m_skirmishBaseDefenseExtraDistance; ///< instead of building base defenses right on the template bounding circle, push them out this much.
-	Real m_repulsedDistance; // How far a repulsed unit will run past vision range before stopping.
+	Fix m_maxRecruitDistance; // Maximum distance away that units can be recruited.
+	Fix m_skirmishBaseDefenseExtraDistance; ///< instead of building base defenses right on the template bounding circle, push them out this much.
+	Fix m_repulsedDistance; // How far a repulsed unit will run past vision range before stopping.
 	Bool m_enableRepulsors; // Is repulsion enabled?
 
 	Bool m_forceSkirmishAI; // If true, forces skirmish ai instead of solo ai for development until the skirmish ui is done.  jba.
@@ -462,23 +463,23 @@ public:
 	// Group pathfind info.
 	Int	 m_minInfantryForGroup;		// We need at least this many to do it.
 	Int	 m_minVehiclesForGroup;		// We need at least this many vehicles to do it.
-	Real m_minDistanceForGroup;		// We need to move at least this far to do it.
-	Real m_distanceRequiresGroup; // If we are moving this far or farther, force group moving.
-	Real m_minClumpDensity;				// What density constitues a clump.  .5 means units occupying 1/2 of their bounding area.
+	Fix m_minDistanceForGroup;		// We need to move at least this far to do it.
+	Fix m_distanceRequiresGroup; // If we are moving this far or farther, force group moving.
+	Fix m_minClumpDensity;			// What density constitues a clump.  .5 means units occupying 1/2 of their bounding area.
 
 	Int	 m_infantryPathfindDiameter; // Diameter of path in cells for infantry.
 	Int  m_vehiclePathfindDiameter;  // Diameter of path in cells for vehicles.
 
 	Int  m_rebuildDelaySeconds;  // Seconds to delay rebuilding after a base building is destroyed or captured.
 
-	Real  m_supplyCenterSafeRadius;  // Radius to scan for enemies to determine safety.
+	Fix  m_supplyCenterSafeRadius;  // Radius to scan for enemies to determine safety.
 
-	Real  m_aiDozerBoredRadiusModifier;  // Modifies ai dozers scan range so the move out farther than human ones.
+	Fix  m_aiDozerBoredRadiusModifier;  // Modifies ai dozers scan range so the move out farther than human ones.
 	Bool	m_aiCrushesInfantry; // If true, AI vehicles will attempt to crush infantry.
 
 	// Retaliate params. [8/25/2003]
-	Real	m_maxRetaliateDistance; // If attacker is > this distance, don't retaliate. [8/25/2003]
-	Real	m_retaliateFriendsRadius; // If we have friends within this radius, get them to help retaliate. [8/25/2003]
+	Fix	m_maxRetaliateDistance; // If attacker is > this distance, don't retaliate. [8/25/2003]
+	Fix	m_retaliateFriendsRadius; // If we have friends within this radius, get them to help retaliate. [8/25/2003]
 
 
 	AISideInfo *m_sideInfo;
@@ -563,7 +564,7 @@ public:
 	static void parseSkillLevel(INI *ini, void *instance, void *store, const void *userData);
 
 	// Note: Does not work for things that do not have AI. (This is in AI.h, after all)
-	static Real getAdjustedVisionRangeForObject(const Object *object, Int factorsToConsider);
+	static Fix getAdjustedVisionRangeForObject(const Object *object, Int factorsToConsider);
 
 	static void parseSideInfo( INI* ini, void *instance, void *store, const void *userData );					///< Parse the image part of the INI file
 	static void parseSkirmishBuildList( INI* ini, void *instance, void *store, const void *userData );					///< Parse the image part of the INI file

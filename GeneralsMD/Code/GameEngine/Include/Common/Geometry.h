@@ -35,6 +35,7 @@
 #include "Lib/BaseType.h"
 #include "Common/AsciiString.h"
 #include "Common/Snapshot.h"
+#include "Lib/Fix.h"
 
 class INI;
 
@@ -85,14 +86,15 @@ static const Real EXTENT_BIG_CHANGE = 10.0f;
 class GeometryInfo : public Snapshot
 {
 private:
+	// the extents are fixed point, read from the INI straight into Fix; the Real getters below are P2 shims
 	GeometryType m_type;
 	Bool m_isSmall;						///< if true, geometry is assumed to fit in a single partition cell
-	Real m_height;
-	Real m_majorRadius;
-	Real m_minorRadius;
-	
-	Real m_boundingCircleRadius;	///< not in INI file -- size of bounding circle (2d)
-	Real m_boundingSphereRadius;	///< not in INI -- size of bounding sphere (3d)
+	Fix m_height;
+	Fix m_majorRadius;
+	Fix m_minorRadius;
+
+	Fix m_boundingCircleRadius;	///< not in INI file -- size of bounding circle (2d)
+	Fix m_boundingSphereRadius;	///< not in INI -- size of bounding sphere (3d)
 
 	void calcBoundingStuff();
 
@@ -115,40 +117,38 @@ public:
 	{
 		// Added by Sadullah Nader
 		// Initializations missing and needed
-		m_boundingCircleRadius = 0.0f;
-		m_boundingSphereRadius = 0.0f;
+		m_boundingCircleRadius = Fix( 0 );
+		m_boundingSphereRadius = Fix( 0 );
 		//
 
 		set(type, isSmall, height, majorRadius, minorRadius);
 	}
 
-	void set(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius);
+	void setFix(GeometryType type, Bool isSmall, Fix height, Fix majorRadius, Fix minorRadius);
 
-	// bleah, icky but needed for legacy code
-	inline void setMajorRadius(Real majorRadius)
-	{
-		m_majorRadius = majorRadius;
-		calcBoundingStuff();
-	}
-
-	// bleah, icky but needed for legacy code
-	inline void setMinorRadius(Real minorRadius)
-	{
-		m_minorRadius = minorRadius;
-		calcBoundingStuff();
-	}
+	inline void setMajorRadiusFix(Fix majorRadius) { m_majorRadius = majorRadius; calcBoundingStuff(); }
+	inline void setMinorRadiusFix(Fix minorRadius) { m_minorRadius = minorRadius; calcBoundingStuff(); }
 
 	inline GeometryType getGeomType() const { return m_type; }
 	inline Bool getIsSmall() const { return m_isSmall; }
-	inline Real getMajorRadius() const { return m_majorRadius; }	// x-axis
-	inline Real getMinorRadius() const { return m_minorRadius; }	// y-axis
-	
-	// this has been removed and should never need to be called... 
-	// you should generally call getMaxHeightAbovePosition() instead. (srj)
-	//inline Real getGeomHeight() const { return m_height; }				// z-axis
+	inline Fix getMajorRadiusFix() const { return m_majorRadius; }	// x-axis
+	inline Fix getMinorRadiusFix() const { return m_minorRadius; }	// y-axis
+	inline Fix getBoundingCircleRadiusFix() const { return m_boundingCircleRadius; }
+	inline Fix getBoundingSphereRadiusFix() const { return m_boundingSphereRadius; }
+	Fix getMaxHeightAbovePositionFix() const;
+	Fix getMaxHeightBelowPositionFix() const;
+	Fix getZDeltaToCenterPositionFix() const;
+	void setMaxHeightAbovePositionFix(Fix z);
 
-	inline Real getBoundingCircleRadius() const { return m_boundingCircleRadius; }
-	inline Real getBoundingSphereRadius() const { return m_boundingSphereRadius; }
+	// P2 SHIMS: the float face of the extents, converted on the way in and out.  P9 deletes them.
+	void set(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius);
+	void setMajorRadius(Real majorRadius);
+	void setMinorRadius(Real minorRadius);
+	Real getMajorRadius() const;
+	Real getMinorRadius() const;
+	Real getBoundingCircleRadius() const;
+	Real getBoundingSphereRadius() const;
+	// END P2 SHIMS
 
 	Bool isIntersectedByLineSegment(const Coord3D& loc, const Coord3D& from, const Coord3D& to) const;
 

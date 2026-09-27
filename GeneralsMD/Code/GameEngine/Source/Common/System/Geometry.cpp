@@ -24,7 +24,7 @@
 
 // FILE: Geometry.cpp /////////////////////////////////////////////////////////////////////////////
 // Author: Steven Johnson, Aug 2002
-// Desc:   
+// Desc:
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
@@ -36,6 +36,7 @@
 #include "Common/RandomValue.h"
 #include "GameClient/ClientRandomValue.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -64,26 +65,26 @@
 //=============================================================================
 /*static*/ void GeometryInfo::parseGeometryHeight( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
-	((GeometryInfo*)store)->m_height = INI::scanReal(ini->getNextToken());
+	((GeometryInfo*)store)->m_height = INI::scanFix(ini->getNextToken());
 	((GeometryInfo*)store)->calcBoundingStuff();
 }
 
 //=============================================================================
 /*static*/ void GeometryInfo::parseGeometryMajorRadius( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
-	((GeometryInfo*)store)->m_majorRadius = INI::scanReal(ini->getNextToken());
+	((GeometryInfo*)store)->m_majorRadius = INI::scanFix(ini->getNextToken());
 	((GeometryInfo*)store)->calcBoundingStuff();
 }
 
 //=============================================================================
 /*static*/ void GeometryInfo::parseGeometryMinorRadius( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
-	((GeometryInfo*)store)->m_minorRadius = INI::scanReal(ini->getNextToken());
+	((GeometryInfo*)store)->m_minorRadius = INI::scanFix(ini->getNextToken());
 	((GeometryInfo*)store)->calcBoundingStuff();
 }
 
 //-----------------------------------------------------------------------------
-void GeometryInfo::set(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius)
+void GeometryInfo::setFix(GeometryType type, Bool isSmall, Fix height, Fix majorRadius, Fix minorRadius)
 {
 	m_type = type;
 	m_isSmall = isSmall;
@@ -109,6 +110,30 @@ void GeometryInfo::set(GeometryType type, Bool isSmall, Real height, Real majorR
 			break;
 	};
 
+	calcBoundingStuff();
+}
+
+//-----------------------------------------------------------------------------
+// P2 shims
+//-----------------------------------------------------------------------------
+void GeometryInfo::set(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius)
+{
+	setFix(type, isSmall, fixFromReal(height), fixFromReal(majorRadius), fixFromReal(minorRadius));
+}
+void GeometryInfo::setMajorRadius(Real majorRadius) { setMajorRadiusFix(fixFromReal(majorRadius)); }
+void GeometryInfo::setMinorRadius(Real minorRadius) { setMinorRadiusFix(fixFromReal(minorRadius)); }
+Real GeometryInfo::getMajorRadius() const { return fixToReal(m_majorRadius); }
+Real GeometryInfo::getMinorRadius() const { return fixToReal(m_minorRadius); }
+Real GeometryInfo::getBoundingCircleRadius() const { return fixToReal(m_boundingCircleRadius); }
+Real GeometryInfo::getBoundingSphereRadius() const { return fixToReal(m_boundingSphereRadius); }
+Real GeometryInfo::getMaxHeightAbovePosition() const { return fixToReal(getMaxHeightAbovePositionFix()); }
+Real GeometryInfo::getMaxHeightBelowPosition() const { return fixToReal(getMaxHeightBelowPositionFix()); }
+Real GeometryInfo::getZDeltaToCenterPosition() const { return fixToReal(getZDeltaToCenterPositionFix()); }
+void GeometryInfo::setMaxHeightAbovePosition(Real z) { setMaxHeightAbovePositionFix(fixFromReal(z)); }
+void GeometryInfo::expandFootprint(Real radius)
+{
+	m_majorRadius += fixFromReal(radius);
+	m_minorRadius += fixFromReal(radius);
 	calcBoundingStuff();
 }
 
@@ -152,7 +177,7 @@ static Real calcPointToLineDistSquared(const Coord3D& pt, const Coord3D& lineSta
 	}
 
   Real tmp = dot / lineLenSqr;
-	
+
 	closest.x = lineStart.x + tmp * line.x;
 	closest.y = lineStart.y + tmp * line.y;
 	closest.z = lineStart.z + tmp * line.z;
@@ -182,7 +207,7 @@ void GeometryInfo::calcPitches(const Coord3D& thisPos, const GeometryInfo& that,
 	Real dxy = sqrt(sqr(thatPos.x - thisCenter.x) + sqr(thatPos.y - thisCenter.y));
 
 	Real dz;
-	
+
 	/** @todo srj -- this could be better, by calcing it for all the corners, not just top-center
 		and bottom-center... oh well */
 	dz = (thatPos.z + that.getMaxHeightAbovePosition()) - thisCenter.z;
@@ -194,7 +219,7 @@ void GeometryInfo::calcPitches(const Coord3D& thisPos, const GeometryInfo& that,
 
 //=============================================================================
 // given an object with this geom, SET how far above the object's canonical position its max z should extend.
-void GeometryInfo::setMaxHeightAbovePosition(Real z)
+void GeometryInfo::setMaxHeightAbovePositionFix(Fix z)
 {
 	switch(m_type)
 	{
@@ -213,7 +238,7 @@ void GeometryInfo::setMaxHeightAbovePosition(Real z)
 
 //=============================================================================
 // given an object with this geom, how far above the object's canonical position does its max z extend?
-Real GeometryInfo::getMaxHeightAbovePosition() const
+Fix GeometryInfo::getMaxHeightAbovePositionFix() const
 {
 	switch(m_type)
 	{
@@ -225,31 +250,21 @@ Real GeometryInfo::getMaxHeightAbovePosition() const
 			return m_height;
 	};
 
-	return 0.0f;
+	return Fix(0);
 }
 
 //=============================================================================
 // given an object with this geom, how far below the object's canonical position does its max z extend?
-Real GeometryInfo::getMaxHeightBelowPosition() const
+Fix GeometryInfo::getMaxHeightBelowPositionFix() const
 {
-	switch(m_type)
-	{
-		case GEOMETRY_SPHERE:
-			return m_majorRadius;
-
-		case GEOMETRY_BOX:
-		case GEOMETRY_CYLINDER:
-			return 0.0f;
-	};
-
-	return 0.0f;
+	return (m_type == GEOMETRY_SPHERE) ? m_majorRadius : Fix(0);
 }
 
 //=============================================================================
 // given an object with this geom, located at 'pos', where is the "center" of the geometry?
-Real GeometryInfo::getZDeltaToCenterPosition() const
+Fix GeometryInfo::getZDeltaToCenterPositionFix() const
 {
-	return (m_type == GEOMETRY_SPHERE) ? 0.0f : (m_height * 0.5f);
+	return (m_type == GEOMETRY_SPHERE) ? Fix(0) : (m_height * 0.5_fx);
 }
 
 //=============================================================================
@@ -261,25 +276,19 @@ void GeometryInfo::getCenterPosition(const Coord3D& pos, Coord3D& center) const
 }
 
 //=============================================================================
-void GeometryInfo::expandFootprint(Real radius)
-{
-	m_majorRadius += radius;
-	m_minorRadius += radius;
-	calcBoundingStuff();
-}
-
-//=============================================================================
 void GeometryInfo::get2DBounds(const Coord3D& geomCenter, Real angle, Region2D& bounds) const
 {
+	const Real majorRadius = getMajorRadius();
+	const Real minorRadius = getMinorRadius();
 	switch(m_type)
 	{
 		case GEOMETRY_SPHERE:
 		case GEOMETRY_CYLINDER:
 		{
-			bounds.lo.x = geomCenter.x - m_majorRadius;
-			bounds.lo.y = geomCenter.y - m_majorRadius;
-			bounds.hi.x = geomCenter.x + m_majorRadius;
-			bounds.hi.y = geomCenter.y + m_majorRadius;
+			bounds.lo.x = geomCenter.x - majorRadius;
+			bounds.lo.y = geomCenter.y - majorRadius;
+			bounds.hi.x = geomCenter.x + majorRadius;
+			bounds.hi.y = geomCenter.y + majorRadius;
 			break;
 		}
 
@@ -287,10 +296,10 @@ void GeometryInfo::get2DBounds(const Coord3D& geomCenter, Real angle, Region2D& 
 		{
 			Real c = (Real)Cos(angle);
 			Real s = (Real)Sin(angle);
-			Real exc = m_majorRadius*c;
-			Real eyc = m_minorRadius*c;
-			Real exs = m_majorRadius*s;
-			Real eys = m_minorRadius*s;
+			Real exc = majorRadius*c;
+			Real eyc = minorRadius*c;
+			Real exs = majorRadius*s;
+			Real eys = minorRadius*s;
 			Real x,y;
 			x = geomCenter.x - exc - eys;
 			y = geomCenter.y + eyc - exs;
@@ -298,7 +307,7 @@ void GeometryInfo::get2DBounds(const Coord3D& geomCenter, Real angle, Region2D& 
 			bounds.lo.y = y;
 			bounds.hi.x = x;
 			bounds.hi.y = y;
-			
+
 			x = geomCenter.x + exc - eys;
 			y = geomCenter.y + eyc + exs;
 			if (bounds.lo.x > x) bounds.lo.x = x;
@@ -328,6 +337,8 @@ void GeometryInfo::get2DBounds(const Coord3D& geomCenter, Real angle, Region2D& 
 //=============================================================================
 void GeometryInfo::clipPointToFootprint(const Coord3D& geomCenter, Coord3D& ptToClip) const
 {
+	const Real majorRadius = getMajorRadius();
+	const Real minorRadius = getMinorRadius();
 	switch(m_type)
 	{
 		case GEOMETRY_SPHERE:
@@ -336,9 +347,9 @@ void GeometryInfo::clipPointToFootprint(const Coord3D& geomCenter, Coord3D& ptTo
 			Real dx = ptToClip.x - geomCenter.x;
 			Real dy = ptToClip.y - geomCenter.y;
 			Real radius = sqrt(sqr(dx) + sqr(dy));
-			if (radius > m_majorRadius)
+			if (radius > majorRadius)
 			{
-				Real ratio = m_majorRadius / radius;
+				Real ratio = majorRadius / radius;
 				ptToClip.x = geomCenter.x + dx * ratio;
 				ptToClip.y = geomCenter.y + dy * ratio;
 			}
@@ -347,8 +358,8 @@ void GeometryInfo::clipPointToFootprint(const Coord3D& geomCenter, Coord3D& ptTo
 
 		case GEOMETRY_BOX:
 		{
-			ptToClip.x = clamp(geomCenter.x - m_majorRadius, ptToClip.x, geomCenter.x + m_majorRadius);
-			ptToClip.y = clamp(geomCenter.y - m_minorRadius, ptToClip.y, geomCenter.y + m_minorRadius);
+			ptToClip.x = clamp(geomCenter.x - majorRadius, ptToClip.x, geomCenter.x + majorRadius);
+			ptToClip.y = clamp(geomCenter.y - minorRadius, ptToClip.y, geomCenter.y + minorRadius);
 			break;
 		}
 	};
@@ -360,6 +371,8 @@ inline Bool isWithin(Real a, Real b, Real c) { return a<=b && b<=c; }
 //=============================================================================
 Bool GeometryInfo::isPointInFootprint(const Coord3D& geomCenter, const Coord3D& pt) const
 {
+	const Real majorRadius = getMajorRadius();
+	const Real minorRadius = getMinorRadius();
 	switch(m_type)
 	{
 		case GEOMETRY_SPHERE:
@@ -368,14 +381,14 @@ Bool GeometryInfo::isPointInFootprint(const Coord3D& geomCenter, const Coord3D& 
 			Real dx = pt.x - geomCenter.x;
 			Real dy = pt.y - geomCenter.y;
 			Real radius = sqrt(sqr(dx) + sqr(dy));
-			return (radius <= m_majorRadius);
+			return (radius <= majorRadius);
 			break;
 		}
 
 		case GEOMETRY_BOX:
 		{
-			return isWithin(geomCenter.x - m_majorRadius, pt.x, geomCenter.x + m_majorRadius) &&
-							isWithin(geomCenter.y - m_minorRadius, pt.y, geomCenter.y + m_minorRadius);
+			return isWithin(geomCenter.x - majorRadius, pt.x, geomCenter.x + majorRadius) &&
+							isWithin(geomCenter.y - minorRadius, pt.y, geomCenter.y + minorRadius);
 		}
 	};
 	return false;
@@ -390,37 +403,31 @@ static Real footprintRandom(Real lo, Real hi, Bool useClientRandom)
 //=============================================================================
 void GeometryInfo::makeRandomOffsetWithinFootprint(Coord3D& pt, Bool useClientRandom) const
 {
+	const Real majorRadius = getMajorRadius();
+	const Real minorRadius = getMinorRadius();
 	switch(m_type)
 	{
 		case GEOMETRY_SPHERE:
 		case GEOMETRY_CYLINDER:
 		{
-#if 1
 			// this is a better technique than the more obvious radius-and-angle
-			// one, below, because the latter tends to clump more towards the center.
-			Real maxDistSqr = sqr(m_majorRadius);
+			// one, because the latter tends to clump more towards the center.
+			Real maxDistSqr = sqr(majorRadius);
 			Real distSqr;
 			do
 			{
-				pt.x = footprintRandom(-m_majorRadius, m_majorRadius, useClientRandom);
-				pt.y = footprintRandom(-m_majorRadius, m_majorRadius, useClientRandom);
+				pt.x = footprintRandom(-majorRadius, majorRadius, useClientRandom);
+				pt.y = footprintRandom(-majorRadius, majorRadius, useClientRandom);
 				pt.z = 0.0f;
 				distSqr = sqr(pt.x) + sqr(pt.y);
 			} while (distSqr > maxDistSqr);
-#else
-			Real radius = GameLogicRandomValueReal(0.0f, m_boundingCircleRadius);
-			Real angle = GameLogicRandomValueReal(-PI, PI);
-			pt.x = radius * Cos(angle);
-			pt.y = radius * Sin(angle);
-			pt.z = 0.0f;
-#endif
 			break;
 		}
 
 		case GEOMETRY_BOX:
 		{
-			pt.x = footprintRandom(-m_majorRadius, m_majorRadius, useClientRandom);
-			pt.y = footprintRandom(-m_minorRadius, m_minorRadius, useClientRandom);
+			pt.x = footprintRandom(-majorRadius, majorRadius, useClientRandom);
+			pt.y = footprintRandom(-minorRadius, minorRadius, useClientRandom);
 			pt.z = 0.0f;
 			break;
 		}
@@ -430,6 +437,8 @@ void GeometryInfo::makeRandomOffsetWithinFootprint(Coord3D& pt, Bool useClientRa
 //=============================================================================
 void GeometryInfo::makeRandomOffsetOnPerimeter(Coord3D& pt) const
 {
+	const Real majorRadius = getMajorRadius();
+	const Real minorRadius = getMinorRadius();
 	switch(m_type)
 	{
 		case GEOMETRY_SPHERE:
@@ -449,24 +458,24 @@ void GeometryInfo::makeRandomOffsetOnPerimeter(Coord3D& pt) const
 			if( GameLogicRandomValueReal( 0.0f, 1.0f ) < 0.5f )
 			{
 				//Pick random point on x axis.
-				pt.x = GameLogicRandomValueReal(-m_majorRadius, m_majorRadius);
+				pt.x = GameLogicRandomValueReal(-majorRadius, majorRadius);
 
 				//Min or max the y axis value
 				if( GameLogicRandomValueReal( 0.0f, 1.0f ) < 0.5f )
-					pt.y = -m_minorRadius;
+					pt.y = -minorRadius;
 				else
-					pt.y = m_minorRadius;
+					pt.y = minorRadius;
 			}
 			else
 			{
 				//Pick random point on y axis.
-				pt.y = GameLogicRandomValueReal(-m_minorRadius, m_minorRadius);
+				pt.y = GameLogicRandomValueReal(-minorRadius, minorRadius);
 
 				//Min or max the x axis value
 				if( GameLogicRandomValueReal( 0.0f, 1.0f ) < 0.5f )
-					pt.x = -m_majorRadius;
+					pt.x = -majorRadius;
 				else
-					pt.x = m_majorRadius;
+					pt.x = majorRadius;
 			}
 			pt.z = 0.0f;
 			break;
@@ -482,12 +491,12 @@ Real GeometryInfo::getFootprintArea() const
 		case GEOMETRY_SPHERE:
 		case GEOMETRY_CYLINDER:
 		{
-			return PI * sqr(m_boundingCircleRadius);
+			return PI * sqr(getBoundingCircleRadius());
 		}
 
 		case GEOMETRY_BOX:
 		{
-			return 4.0f * m_majorRadius * m_minorRadius;
+			return 4.0f * getMajorRadius() * getMinorRadius();
 		}
 	};
 
@@ -509,17 +518,15 @@ void GeometryInfo::calcBoundingStuff()
 		case GEOMETRY_CYLINDER:
 		{
 			m_boundingCircleRadius = m_majorRadius;
-
-			m_boundingSphereRadius = m_height*0.5;
-			if (m_boundingSphereRadius < m_majorRadius)
-				m_boundingSphereRadius = m_majorRadius;
+			m_boundingSphereRadius = fixMax(m_height * 0.5_fx, m_majorRadius);
 			break;
 		}
 
 		case GEOMETRY_BOX:
 		{
-			m_boundingCircleRadius = sqrt(sqr(m_majorRadius) + sqr(m_minorRadius));
-			m_boundingSphereRadius = sqrt(sqr(m_majorRadius) + sqr(m_minorRadius) + sqr(m_height*0.5));
+			const Fix halfHeight = m_height * 0.5_fx;
+			m_boundingCircleRadius = fixSqrt(m_majorRadius * m_majorRadius + m_minorRadius * m_minorRadius);
+			m_boundingSphereRadius = fixSqrt(m_majorRadius * m_majorRadius + m_minorRadius * m_minorRadius + halfHeight * halfHeight);
 			break;
 		}
 	};
@@ -532,13 +539,13 @@ void GeometryInfo::tweakExtents(ExtentModType extentModType, Real extentModAmoun
 	switch(extentModType)
 	{
 		case EXTENTMOD_HEIGHT:
-			m_height += extentModAmount;
+			m_height += fixFromReal(extentModAmount);
 			break;
 		case EXTENTMOD_MAJOR:
-			m_majorRadius += extentModAmount;
+			m_majorRadius += fixFromReal(extentModAmount);
 			break;
 		case EXTENTMOD_MINOR:
-			m_minorRadius += extentModAmount;
+			m_minorRadius += fixFromReal(extentModAmount);
 			break;
 		case EXTENTMOD_TYPE:
 			m_type = (GeometryType)((m_type + ((extentModType == EXTENTMOD_TYPE)?1:0)) % GEOMETRY_NUM_TYPES);
@@ -554,7 +561,7 @@ void GeometryInfo::tweakExtents(ExtentModType extentModType, Real extentModAmoun
 AsciiString GeometryInfo::getDescriptiveString() const
 {
 	AsciiString msg;
-	msg.format("%d/%d(%g %g %g)", (Int)m_type, (Int)m_isSmall, m_majorRadius, m_minorRadius, m_height);
+	msg.format("%d/%d(%g %g %g)", (Int)m_type, (Int)m_isSmall, getMajorRadius(), getMinorRadius(), fixToReal(m_height));
 	return msg;
 }
 #endif
@@ -570,13 +577,14 @@ void GeometryInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: the extents in fixed point */
 // ------------------------------------------------------------------------------------------------
 void GeometryInfo::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -586,20 +594,18 @@ void GeometryInfo::xfer( Xfer *xfer )
 	// is small
 	xfer->xferBool( &m_isSmall );
 
-	// height
-	xfer->xferReal( &m_height );
-
-	// major radius
-	xfer->xferReal( &m_majorRadius );
-
-	// minor radius
-	xfer->xferReal( &m_minorRadius );
-
-	// bouncing circle radius
-	xfer->xferReal( &m_boundingCircleRadius );
-
-	// bounding sphere radius
-	xfer->xferReal( &m_boundingSphereRadius );
+	Fix *extents[] = { &m_height, &m_majorRadius, &m_minorRadius, &m_boundingCircleRadius, &m_boundingSphereRadius };
+	for( Int i = 0; i < 5; ++i )
+	{
+		if( version >= 2 )
+			xfer->xferFix( extents[ i ] );
+		else
+		{
+			Real r = fixToReal( *extents[ i ] );
+			xfer->xferReal( &r );
+			*extents[ i ] = fixFromReal( r );
+		}
+	}
 
 }  // end xfer
 

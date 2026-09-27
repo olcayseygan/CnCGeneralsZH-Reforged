@@ -466,6 +466,13 @@ Real Drawable::getEffectiveOpacity() const
 Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBits ) 
 				: Thing( thingTemplate )
 {
+	m_transform.Make_Identity();
+	m_cachedPos.zero();
+	m_cachedAngle = 0.0f;
+	m_cachedDirVector.zero();
+	m_cachedAltitudeAboveTerrain = 0;
+	m_cachedAltitudeAboveTerrainOrWater = 0;
+	m_cacheFlags = 0;
 
 	// assign status bits before anything else can be done
 	m_status = statusBits;
@@ -4893,11 +4900,210 @@ void Drawable::changedTeam()
 }
 
 //-------------------------------------------------------------------------------------------------
-void Drawable::setPosition(const Coord3D *pos) 
+const Coord3D* Drawable::getUnitDirectionVector2D() const
 {
-	// extend
-	Thing::setPosition(pos);
+	if (!(m_cacheFlags & VALID_DIRVECTOR))
+	{
+		Real angle = getOrientation();
+		m_cachedDirVector.x = Cos( angle );
+		m_cachedDirVector.y = Sin( angle );
+		m_cachedDirVector.z = 0;
+		m_cacheFlags |= VALID_DIRVECTOR;
+	}
 
+	return &m_cachedDirVector;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::getUnitDirectionVector2D(Coord3D& dir) const
+{
+	dir = *getUnitDirectionVector2D();
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::getUnitDirectionVector3D(Coord3D& dir) const
+{
+	Vector3 vdir = m_transform.Get_X_Vector();
+	vdir.Normalize();
+	dir.x = vdir.X;
+	dir.y = vdir.Y;
+	dir.z = vdir.Z;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::setPositionZ( Real z )
+{
+	if( !isKindOf( KINDOF_STICK_TO_TERRAIN_SLOPE) )
+	{
+		Real oldAngle = m_cachedAngle;
+		Coord3D oldPos = m_cachedPos;
+		Matrix3D oldMtx = m_transform;
+
+		m_transform.Set_Z_Translation( z );
+		m_cachedPos.z = z;
+
+		if (m_cacheFlags & VALID_ALTITUDE_TERRAIN)
+			m_cachedAltitudeAboveTerrain += (z - oldPos.z);
+		if (m_cacheFlags & VALID_ALTITUDE_SEALEVEL)
+			m_cachedAltitudeAboveTerrainOrWater += (z - oldPos.z);
+
+		reactToTransformChange(&oldMtx, &oldPos, oldAngle);
+	}
+	else
+	{
+		Matrix3D mtx;
+		const Bool stickToGround = true;	// yes, set the "z" pos
+		Coord3D pos = m_cachedPos;
+		pos.z = z;
+		TheTerrainLogic->alignOnTerrain(getOrientation(), pos, stickToGround, mtx );
+		setTransformMatrix(&mtx);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::setPosition(const Coord3D *pos)
+{
+	if( !isKindOf( KINDOF_STICK_TO_TERRAIN_SLOPE) )
+	{
+		Real oldAngle = m_cachedAngle;
+		Coord3D oldPos = m_cachedPos;
+		Matrix3D oldMtx = m_transform;
+
+		m_transform.Set_X_Translation( pos->x );
+		m_transform.Set_Y_Translation( pos->y );
+		m_transform.Set_Z_Translation( pos->z );
+		m_cachedPos = *pos;
+		m_cacheFlags &= ~(VALID_ALTITUDE_TERRAIN | VALID_ALTITUDE_SEALEVEL);	// but don't clear the dir flags.
+
+		reactToTransformChange(&oldMtx, &oldPos, oldAngle);
+	}
+	else
+	{
+		Matrix3D mtx;
+		const Bool stickToGround = true;	// yes, set the "z" pos
+		TheTerrainLogic->alignOnTerrain(getOrientation(), *pos, stickToGround, mtx );
+		setTransformMatrix(&mtx);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::setOrientation( Real angle )
+{
+	Coord3D u, x, y, z, pos;
+
+	Real oldAngle = m_cachedAngle;
+	Coord3D oldPos = m_cachedPos;
+	Matrix3D oldMtx = m_transform;
+
+	pos.x = m_transform.Get_X_Translation();
+	pos.y = m_transform.Get_Y_Translation();
+	pos.z = m_transform.Get_Z_Translation();
+	if( isKindOf( KINDOF_STICK_TO_TERRAIN_SLOPE) )
+	{
+		const Bool stickToGround = true;	// yes, set the "z" pos
+		TheTerrainLogic->alignOnTerrain(angle, pos, stickToGround, m_transform );
+	}
+	else
+	{
+		z.x = 0.0f;
+		z.y = 0.0f;
+		z.z = 1.0f;
+
+		u.x = Cos(angle);
+		u.y = Sin(angle);
+		u.z = 0.0f;
+
+		y.crossProduct( &z, &u, &y );
+		x.crossProduct( &y, &z, &x );
+
+		m_transform.Set(  x.x, y.x, z.x, pos.x,
+											x.y, y.y, z.y, pos.y,
+											x.z, y.z, z.z, pos.z );
+	}
+
+	m_cachedAngle = normalizeAngle(angle);
+	m_cachedPos = pos;
+	m_cacheFlags &= ~VALID_DIRVECTOR;	// but don't clear the altitude flags.
+
+	reactToTransformChange(&oldMtx, &oldPos, oldAngle);
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::setTransformMatrix( const Matrix3D *mx )
+{
+	Real oldAngle = m_cachedAngle;
+	Coord3D oldPos = m_cachedPos;
+	Matrix3D oldMtx = m_transform;
+
+	m_transform = *mx;
+	m_cachedPos.x = m_transform.Get_X_Translation();
+	m_cachedPos.y = m_transform.Get_Y_Translation();
+	m_cachedPos.z = m_transform.Get_Z_Translation();
+	m_cachedAngle = m_transform.Get_Z_Rotation();
+	m_cacheFlags = 0;
+
+	reactToTransformChange(&oldMtx, &oldPos, oldAngle);
+}
+
+//-------------------------------------------------------------------------------------------------
+Real Drawable::getHeightAboveTerrain() const
+{
+	if (!(m_cacheFlags & VALID_ALTITUDE_TERRAIN))
+	{
+		m_cachedAltitudeAboveTerrain = m_cachedPos.z - TheTerrainLogic->getGroundHeight( m_cachedPos.x, m_cachedPos.y );
+		m_cacheFlags |= VALID_ALTITUDE_TERRAIN;
+	}
+	return m_cachedAltitudeAboveTerrain;
+}
+
+//-------------------------------------------------------------------------------------------------
+Real Drawable::getHeightAboveTerrainOrWater() const
+{
+	if (!(m_cacheFlags & VALID_ALTITUDE_SEALEVEL))
+	{
+		Real waterZ;
+		if (TheTerrainLogic->isUnderwater(m_cachedPos.x, m_cachedPos.y, &waterZ))
+			m_cachedAltitudeAboveTerrainOrWater = m_cachedPos.z - waterZ;
+		else
+			m_cachedAltitudeAboveTerrainOrWater = getHeightAboveTerrain();
+		m_cacheFlags |= VALID_ALTITUDE_SEALEVEL;
+	}
+	return m_cachedAltitudeAboveTerrainOrWater;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool Drawable::isSignificantlyAboveTerrain() const
+{
+	// higher than three frames of falling takes to come down
+	return (getHeightAboveTerrain() > -(3*3)*TheGlobalData->m_gravity);
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::convertBonePosToWorldPos(const Coord3D* bonePos, const Matrix3D* boneTransform, Coord3D* worldPos, Matrix3D* worldTransform) const
+{
+	if (worldTransform)
+		worldTransform->mul(m_transform, *boneTransform);
+	if (worldPos)
+	{
+		Vector3 vector( bonePos->x, bonePos->y, bonePos->z );
+		m_transform.Transform_Vector(m_transform, vector, &vector);
+		worldPos->x = vector.X;
+		worldPos->y = vector.Y;
+		worldPos->z = vector.Z;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::transformPoint( const Coord3D *in, Coord3D *out )
+{
+	if( in == NULL || out == NULL )
+		return;
+	Vector3 vectorIn( in->x, in->y, in->z );
+	Vector3 vectorOut;
+	m_transform.Transform_Vector( m_transform, vectorIn, &vectorOut );
+	out->x = vectorOut.X;
+	out->y = vectorOut.Y;
+	out->z = vectorOut.Z;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4988,7 +5194,7 @@ const Matrix3D *Drawable::getTransformMatrix( void ) const
 	if (obj)
 		return obj->getTransformMatrix();
 	else
-		return Thing::getTransformMatrix();
+		return &m_transform;
 }
 
 //-------------------------------------------------------------------------------------------------

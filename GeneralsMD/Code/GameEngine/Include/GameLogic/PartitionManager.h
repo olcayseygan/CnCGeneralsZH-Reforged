@@ -1289,15 +1289,15 @@ protected:
 		This is an internal function that is used to implement the public 
 		getClosestObject and iterateObjects calls. 
 	*/
-	Object *PartitionManager::getClosestObjects(
-		const Object *obj, 
-		const Coord3D *pos, 
-		Real maxDist, 
-		DistanceCalculationType dc, 
-		PartitionFilter **filters, 
+	Object *getClosestObjectsFix(
+		const Object *obj,
+		const FCoord3D *pos,
+		Fix maxDist,
+		DistanceCalculationType dc,
+		PartitionFilter **filters,
 		SimpleObjectIterator *iter,	// if nonnull, append ALL satisfactory objects to the iterator (not just the single closest)
-		Real *closestDistArg,
-		Coord3D *closestVecArg
+		Fix *closestDistArg,
+		FCoord3D *closestVecArg
 	);
 
 	void shutdown( void );
@@ -1412,11 +1412,28 @@ public:
 	// given a distance in world coords, return the number of cells needed to cover that distance (rounding up)
 	Int worldToCellDist(Real w);
 
+	/* Distance and range queries.  The Fix ones are the real ones: every distance, square and radius
+		 in them is fixed point, and a maxDist past HUGE_DIST is taken as HUGE_DIST so its square fits.
+		 The Real ones after them are P2 shims that convert and call these. */
+	Object *getClosestObjectFix( const Object *obj, Fix maxDist, DistanceCalculationType dc,
+		PartitionFilter **filters = NULL, Fix *closestDist = NULL, FCoord3D *closestDistVec = NULL );
+	Object *getClosestObjectFix( const FCoord3D *pos, Fix maxDist, DistanceCalculationType dc,
+		PartitionFilter **filters = NULL, Fix *closestDist = NULL, FCoord3D *closestDistVec = NULL );
+	Fix getDistanceSquaredFix( const Object *obj, const Object *otherObj, DistanceCalculationType dc, FCoord3D *vec = NULL );
+	Fix getDistanceSquaredFix( const Object *obj, const FCoord3D *pos, DistanceCalculationType dc, FCoord3D *vec = NULL );
+	Fix getGoalDistanceSquaredFix( const Object *obj, const FCoord3D *goalPos, const Object *otherObj, DistanceCalculationType dc, FCoord3D *vec = NULL );
+	Fix getGoalDistanceSquaredFix( const Object *obj, const FCoord3D *goalPos, const FCoord3D *otherPos, DistanceCalculationType dc, FCoord3D *vec = NULL );
+	SimpleObjectIterator *iterateObjectsInRangeFix( const Object *obj, Fix maxDist, DistanceCalculationType dc,
+		PartitionFilter **filters = NULL, IterOrderType order = ITER_FASTEST );
+	SimpleObjectIterator *iterateObjectsInRangeFix( const FCoord3D *pos, Fix maxDist, DistanceCalculationType dc,
+		PartitionFilter **filters = NULL, IterOrderType order = ITER_FASTEST );
+
+	// P2 SHIMS from here to END P2 SHIMS
 	Object *getClosestObject(
-		const Object *obj, 
-		Real maxDist, 
-		DistanceCalculationType dc, 
-		PartitionFilter **filters = NULL, 
+		const Object *obj,
+		Real maxDist,
+		DistanceCalculationType dc,
+		PartitionFilter **filters = NULL,
 		Real *closestDist = NULL,
 		Coord3D *closestDistVec = NULL
 	);
@@ -1442,6 +1459,7 @@ public:
 	// just like 'getDistanceSquared', but return the dist-sqr where the obj is at goalPos.
 	Real getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Object *otherObj, DistanceCalculationType dc, Coord3D *vec = NULL);
 	Real getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Coord3D *otherPos, DistanceCalculationType dc, Coord3D *vec = NULL);
+	// END P2 SHIMS
 
 #ifdef PM_CACHE_TERRAIN_HEIGHT
 	// note that the 2d positions aren't guaranteed to be the actual spot within the cell where the terrain
@@ -1454,8 +1472,9 @@ public:
 	void getPMStats(double& gcoTimeThisFrameTotal, double& gcoTimeThisFrameAvg);
 #endif
 
+	// P2 SHIMS over iterateObjectsInRangeFix
 	SimpleObjectIterator *iterateObjectsInRange(
-		const Object *obj, 
+		const Object *obj,
 		Real maxDist, 
 		DistanceCalculationType dc, 
 		PartitionFilter **filters = NULL, 

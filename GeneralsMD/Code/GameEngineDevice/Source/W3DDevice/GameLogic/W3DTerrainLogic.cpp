@@ -35,6 +35,7 @@
 #include "Common/MapReaderWriterInfo.h"
 #include "Common/GlobalData.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 #include "GameClient/GameClient.h"
 
 #include "GameClient/MapUtil.h"
@@ -277,14 +278,26 @@ Bool W3DTerrainLogic::isClearLineOfSight(const Coord3D& pos, const Coord3D& posO
 //-------------------------------------------------------------------------------------------------
 /** W3D specific get height function for logical terrain */
 //-------------------------------------------------------------------------------------------------
+Fix W3DTerrainLogic::getGroundHeightFix( Fix x, Fix y ) const
+{
+	return TheTerrainRenderObject ? TheTerrainRenderObject->getHeightMapHeightFix( x, y ) : Fix( 0 );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** P2 shim: the height is the fixed point one, so an object put on the ground by a float caller
+		stands at exactly zero above it for the fixed ones.  The normal still comes from the float
+		triangle. */
+//-------------------------------------------------------------------------------------------------
 Real W3DTerrainLogic::getGroundHeight( Real x, Real y, Coord3D* normal ) const
 {
 #define USE_THE_TERRAIN_OBJECT
 #ifdef USE_THE_TERRAIN_OBJECT
-	if (TheTerrainRenderObject) 
+	if (TheTerrainRenderObject)
 	{
-		return TheTerrainRenderObject->getHeightMapHeight(x,y,normal);
-	}	
+		if (normal)
+			TheTerrainRenderObject->getHeightMapHeight(x,y,normal);
+		return fixToReal( TheTerrainRenderObject->getHeightMapHeightFix( fixFromReal( x ), fixFromReal( y ) ) );
+	}
 	else 
 	{
 		if (normal)
@@ -318,7 +331,7 @@ Real W3DTerrainLogic::getLayerHeight( Real x, Real y, PathfindLayerEnum layer, C
 		return 0;
 	}
 
-	Real height = TheTerrainRenderObject->getHeightMapHeight(x,y,normal);
+	Real height = getGroundHeight(x,y,normal);
 
 	if (layer != LAYER_GROUND) 
 	{

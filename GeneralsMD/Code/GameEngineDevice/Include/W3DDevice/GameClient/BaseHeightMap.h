@@ -37,6 +37,7 @@
 #include "shader.h"
 #include "vertmaterial.h"
 #include "Lib/BaseType.h"
+#include "Lib/Fix.h"
 #include "common/GameType.h"
 #include "WorldHeightMap.h"
 
@@ -226,6 +227,7 @@ public:
 	void setShoreLineDetail(void);	///<update shoreline tiles in case the feature was toggled by user.
 	Bool getMaximumVisibleBox(const FrustumClass &frustum,  AABoxClass *box, Bool ignoreMaxHeight);	///<3d extent of visible terrain.
 	Real getHeightMapHeight(Real x, Real y, Coord3D* normal) const;	///<return height and normal at given point
+	Fix getHeightMapHeightFix(Fix x, Fix y) const;	///< the same triangle, interpolated in fixed point, for the logic
 	Bool isCliffCell(Real x, Real y);	///<return height and normal at given point
 	Real getMinHeight(void) const {return m_minHeight;}	///<return minimum height of entire terrain
 	Real getMaxHeight(void) const {return m_maxHeight;}	///<return maximum height of entire terrain

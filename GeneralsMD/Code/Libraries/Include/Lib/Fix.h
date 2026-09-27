@@ -175,6 +175,20 @@ Fix fixCos( Fix radians );
 Fix fixAtan2( Fix y, Fix x );			///< the angle of (x, y), in (-PI, PI]; atan2(0, 0) is 0
 UnsignedInt fixRadiansToTurn( Fix radians );	///< a whole turn is 2^32, so the result wraps for free
 
+/* The largest Fix, for "farther than anything" sentinels that used to be 1e15f or 1e30f.  It is only
+	 good for comparing against: squared, doubled or added to, it wraps. */
+constexpr Fix FIX_MAX = Fix::fromRaw( 0x7FFFFFFFFFFFFFFFLL );
+constexpr Fix FIX_PI = 3.14159265358979_fx;
+constexpr Fix FIX_TWO_PI = 6.28318530717959_fx;
+
+/// into (-PI, PI], the way normalizeAngle does it for a Real
+inline Fix fixNormalizeAngle( Fix a )
+{
+	while( a > FIX_PI ) a -= FIX_TWO_PI;
+	while( a <= -FIX_PI ) a += FIX_TWO_PI;
+	return a;
+}
+
 inline Fix fixAbs( Fix x ) { return x < Fix( 0 ) ? -x : x; }
 inline Fix fixMin( Fix a, Fix b ) { return a < b ? a : b; }
 inline Fix fixMax( Fix a, Fix b ) { return a > b ? a : b; }

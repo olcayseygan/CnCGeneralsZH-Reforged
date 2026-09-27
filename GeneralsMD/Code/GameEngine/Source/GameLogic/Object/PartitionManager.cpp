@@ -92,6 +92,7 @@
 
 #ifdef PM_CACHE_TERRAIN_HEIGHT
 #include "common/mapobject.h"
+#include "Lib/FixBoundary.h"
 #endif
 
 /* Range queries this logic frame, and objects looked at inside them. Zeroed by
@@ -122,7 +123,9 @@ void PartitionManager::resetQueryCounts( void ) { thePartitionQueries = 0; thePa
 
 extern void addIcon(const Coord3D *pos, Real width, Int numFramesDuration, RGBColor color);
 
-const Real HUGE_DIST_SQR = (HUGE_DIST*HUGE_DIST);
+// HUGE_DIST in fixed point, and its square, which Q47.16 holds with a factor of 140 to spare
+static constexpr Fix HUGE_DIST_FIX = Fix( 1000000 );
+static constexpr Fix HUGE_DIST_SQR_FIX = Fix::fromRaw( (Int64)1000000 * 1000000 * Fix::ONE_RAW );
 
 #define DISABLE_INVALID_PREVENTION	//Steven, I had to turn this off because it was causing problem with map border resizing (USA04). -MW
 
@@ -188,14 +191,14 @@ typedef Bool (*CollideTestProc)(const CollideInfo *a, const CollideInfo *b, Coll
 // if the dist is greater than maxDist, return false, and the output stuff is undefined.
 typedef Bool (*DistCalcProc)
 (
-	const Coord3D *posA, 
-	const Object *objA, 
-	const Coord3D *posB, 
-	const Object *objB, 
-	Real& abDistSqr, 
-	Coord3D& abVec,
-	Real maxDistSqr
-); 
+	const FCoord3D *posA,
+	const Object *objA,
+	const FCoord3D *posB,
+	const Object *objB,
+	Fix& abDistSqr,
+	FCoord3D& abVec,
+	Fix maxDistSqr
+);
 
 //-----------------------------------------------------------------------------
 //         Inline Functions                                                      
@@ -385,10 +388,6 @@ static Bool collideTest_Box_Sphere(const CollideInfo *a, const CollideInfo *b, C
 static Bool collideTest_Box_Cylinder(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
 static Bool collideTest_Box_Box(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
 
-static Bool distCalcProc_CenterAndCenter_2D(const Coord3D *posA, const Object *objA, const Coord3D *posB, const Object *objB, Real& abDistSqr, Coord3D& abVec, Real maxDistSqr); 
-static Bool distCalcProc_BoundaryAndBoundary_2D(const Coord3D *posA, const Object *objA, const Coord3D *posB, const Object *objB, Real& abDistSqr, Coord3D& abVec, Real maxDistSqr); 
-static Bool distCalcProc_CenterAndCenter_3D(const Coord3D *posA, const Object *objA, const Coord3D *posB, const Object *objB, Real& abDistSqr, Coord3D& abVec, Real maxDistSqr); 
-static Bool distCalcProc_BoundaryAndBoundary_3D(const Coord3D *posA, const Object *objA, const Coord3D *posB, const Object *objB, Real& abDistSqr, Coord3D& abVec, Real maxDistSqr); 
 
 //-----------------------------------------------------------------------------
 inline void projectCoord3D(Coord3D *coord, const Coord3D *unitDir, Real dist)
@@ -785,129 +784,86 @@ static Bool collideTest_Box_Box(const CollideInfo *a, const CollideInfo *b, Coll
 }
 
 //-----------------------------------------------------------------------------
+/* The four distance measures, all in fixed point.  A boundary measure takes the two bounding radii
+	 off the centre distance and shrinks the vector to match; a distance can't go below zero. */
+static void shrinkByRadius(FCoord3D& diff, Fix actualDistSqr, Fix totalRad, Fix& abDistSqr)
+{
+	abDistSqr = actualDistSqr;
+	if (totalRad <= Fix(0))
+		return;
+
+	Fix actualDist = fixSqrt(actualDistSqr);
+	Fix shrunkenDist = actualDist - totalRad;
+	if (shrunkenDist <= Fix(0))
+	{
+		abDistSqr = Fix(0);
+		diff.zero();
+		return;
+	}
+	Fix shrinkFactor = shrunkenDist / actualDist;
+	abDistSqr = shrunkenDist * shrunkenDist;
+	diff.scale(shrinkFactor);
+}
+
+//-----------------------------------------------------------------------------
 static Bool distCalcProc_CenterAndCenter_2D(
-	const Coord3D *posA, 
-	const Object *objA, 
-	const Coord3D *posB, 
-	const Object *objB, 
-	Real& abDistSqr, 
-	Coord3D& abVec,
-	Real maxDistSqr
+	const FCoord3D *posA,
+	const Object *objA,
+	const FCoord3D *posB,
+	const Object *objB,
+	Fix& abDistSqr,
+	FCoord3D& abVec,
+	Fix maxDistSqr
 )
 {
-	// note that object positions are defined as the bottom center of the geometry,
-	// thus we must add the radius to the z coord to get the proper center of the bounding sphere.
-	Coord3D diff;
-	diff.x = posB->x - posA->x;
-	diff.y = posB->y - posA->y;
-	diff.z = 0.0f;
-	
-	//if (abDistSqr)
-	{
-		abDistSqr = sqr(diff.x) + sqr(diff.y);
-	}
-
-	//if (abVec)
-	{
-		abVec = diff;
-	}
-
+	abVec.set(posB->x - posA->x, posB->y - posA->y, Fix(0));
+	abDistSqr = abVec.x * abVec.x + abVec.y * abVec.y;
 	return abDistSqr < maxDistSqr;
 }
 
 //-----------------------------------------------------------------------------
 static Bool distCalcProc_BoundaryAndBoundary_2D(
-	const Coord3D *posA, 
-	const Object *objA, 
-	const Coord3D *posB, 
-	const Object *objB, 
-	Real& abDistSqr, 
-	Coord3D& abVec,
-	Real maxDistSqr
+	const FCoord3D *posA,
+	const Object *objA,
+	const FCoord3D *posB,
+	const Object *objB,
+	Fix& abDistSqr,
+	FCoord3D& abVec,
+	Fix maxDistSqr
 )
 {
-	Coord3D diff;
-	diff.x = posB->x - posA->x;
-	diff.y = posB->y - posA->y;
-	diff.z = 0.0f;
-	
-	Real actualDistSqr = sqr(diff.x) + sqr(diff.y);
-
-	Real shrinkFactor = 1.0f;
-	Real shrunkenDistSqr = actualDistSqr;
-	Real totalRad = (objA ? objA->getGeometryInfo().getBoundingCircleRadius() : 0.0f) + 
-							(objB ? objB->getGeometryInfo().getBoundingCircleRadius() : 0.0f);
-
-	if (totalRad > 0.0f)
-	{
-		Real actualDist = sqrtf(actualDistSqr);
-		Real shrunkenDist = actualDist - totalRad;
-		if (shrunkenDist <= 0.0f) 
-		{
-			shrinkFactor = 0.0f;
-			shrunkenDistSqr = 0.0f;	// sorry, distances can't be negative
-		}
-		else 
-		{
-			shrinkFactor = shrunkenDist / actualDist;
-			shrunkenDistSqr = sqr(shrunkenDist);
-		}
-	}
-
-	//if (abDistSqr)
-	{
-		abDistSqr = shrunkenDistSqr;
-	}
-
-	//if (abVec)
-	{
-		DEBUG_ASSERTCRASH(shrinkFactor >= 0.0f && shrinkFactor <= 1.0f, ("Hmm, this should not be possible."));
-		diff.x *= shrinkFactor;
-		diff.y *= shrinkFactor;
-		abVec = diff;
-	}
+	abVec.set(posB->x - posA->x, posB->y - posA->y, Fix(0));
+	Fix totalRad = (objA ? objA->getGeometryInfo().getBoundingCircleRadiusFix() : Fix(0)) +
+							(objB ? objB->getGeometryInfo().getBoundingCircleRadiusFix() : Fix(0));
+	shrinkByRadius(abVec, abVec.x * abVec.x + abVec.y * abVec.y, totalRad, abDistSqr);
 	return abDistSqr < maxDistSqr;
 }
 
 //-----------------------------------------------------------------------------
 static Bool distCalcProc_CenterAndCenter_3D(
-	const Coord3D *posA, 
-	const Object *objA, 
-	const Coord3D *posB, 
-	const Object *objB, 
-	Real& abDistSqr, 
-	Coord3D& abVec,
-	Real maxDistSqr
+	const FCoord3D *posA,
+	const Object *objA,
+	const FCoord3D *posB,
+	const Object *objB,
+	Fix& abDistSqr,
+	FCoord3D& abVec,
+	Fix maxDistSqr
 )
 {
-	// note that object positions are defined as the bottom center of the geometry,
-	// thus we must add the radius to the z coord to get the proper center of the bounding sphere.
-	Coord3D diff;
-	diff.x = posB->x - posA->x;
-	diff.y = posB->y - posA->y;
-	diff.z = posB->z - posA->z;
-	
-	//if (abDistSqr)
-	{
-		abDistSqr = sqr(diff.x) + sqr(diff.y) + sqr(diff.z);
-	}
-
-	//if (abVec)
-	{
-		abVec = diff;
-	}
+	abVec.set(posB->x - posA->x, posB->y - posA->y, posB->z - posA->z);
+	abDistSqr = abVec.lengthSqr();
 	return abDistSqr < maxDistSqr;
 }
 
 //-----------------------------------------------------------------------------
 static Bool distCalcProc_BoundaryAndBoundary_3D(
-	const Coord3D *posA, 
-	const Object *objA, 
-	const Coord3D *posB, 
-	const Object *objB, 
-	Real& abDistSqr, 
-	Coord3D& abVec,
-	Real maxDistSqr
+	const FCoord3D *posA,
+	const Object *objA,
+	const FCoord3D *posB,
+	const Object *objB,
+	Fix& abDistSqr,
+	FCoord3D& abVec,
+	Fix maxDistSqr
 )
 {
 	const GeometryInfo* geomA = objA ? &objA->getGeometryInfo() : NULL;
@@ -915,46 +871,11 @@ static Bool distCalcProc_BoundaryAndBoundary_3D(
 
 	// note that object positions are defined as the bottom center of the geometry,
 	// thus we must add the radius to the z coord to get the proper center of the bounding sphere.
-	Coord3D diff;
-	diff.x = posB->x - posA->x;
-	diff.y = posB->y - posA->y;
-	diff.z = ((posB->z + (geomB ? geomB->getZDeltaToCenterPosition() : 0.0f)) 
-						- (posA->z + (geomA ? geomA->getZDeltaToCenterPosition() : 0.0f)));
-	
-	Real actualDistSqr = sqr(diff.x) + sqr(diff.y) + sqr(diff.z);
-
-	Real shrinkFactor = 1.0f;
-	Real shrunkenDistSqr = actualDistSqr;
-	Real totalRad = (geomA?geomA->getBoundingSphereRadius():0) + (geomB?geomB->getBoundingSphereRadius():0);
-	if (totalRad > 0.0f)
-	{
-		Real actualDist = sqrtf(actualDistSqr);
-		Real shrunkenDist = actualDist - totalRad;
-		if (shrunkenDist <= 0.0f) 
-		{
-			shrinkFactor = 0.0f;
-			shrunkenDistSqr = 0.0f;	// sorry, distances can't be negative
-		}
-		else 
-		{
-			shrinkFactor = shrunkenDist / actualDist;
-			shrunkenDistSqr = sqr(shrunkenDist);
-		}
-	}
-
-	//if (abDistSqr)
-	{
-		abDistSqr = shrunkenDistSqr;
-	}
-
-	//if (abVec)
-	{
-		DEBUG_ASSERTCRASH(shrinkFactor >= 0.0f && shrinkFactor <= 1.0f, ("Hmm, this should not be possible."));
-		diff.x *= shrinkFactor;
-		diff.y *= shrinkFactor;
-		diff.z *= shrinkFactor;
-		abVec = diff;
-	}
+	abVec.set(posB->x - posA->x, posB->y - posA->y,
+		(posB->z + (geomB ? geomB->getZDeltaToCenterPositionFix() : Fix(0)))
+			- (posA->z + (geomA ? geomA->getZDeltaToCenterPositionFix() : Fix(0))));
+	Fix totalRad = (geomA ? geomA->getBoundingSphereRadiusFix() : Fix(0)) + (geomB ? geomB->getBoundingSphereRadiusFix() : Fix(0));
+	shrinkByRadius(abVec, abVec.lengthSqr(), totalRad, abDistSqr);
 	return abDistSqr < maxDistSqr;
 }
 
@@ -3319,17 +3240,21 @@ void PartitionManager::calcRadiusVec()
 
 //-----------------------------------------------------------------------------
 //DECLARE_PERF_TIMER(getClosestObjects)
-Object *PartitionManager::getClosestObjects(
-	const Object *obj, 
-	const Coord3D *pos, 
-	Real maxDist, 
-	DistanceCalculationType dc, 
-	PartitionFilter **filters, 
+Object *PartitionManager::getClosestObjectsFix(
+	const Object *obj,
+	const FCoord3D *pos,
+	Fix maxDist,
+	DistanceCalculationType dc,
+	PartitionFilter **filters,
 	SimpleObjectIterator *iterArg,	// if nonnull, append ALL satisfactory objects to the iterator (not just the single closest)
-	Real *closestDistArg,
-	Coord3D *closestVecArg
+	Fix *closestDistArg,
+	FCoord3D *closestVecArg
 )
 {
+	// a sentinel past HUGE_DIST means "anywhere", and HUGE_DIST's square is the largest that fits
+	if (maxDist > HUGE_DIST_FIX)
+		maxDist = HUGE_DIST_FIX;
+
 	//USE_PERF_TIMER(getClosestObjects)
 
 #ifdef DUMP_PERF_STATS
@@ -3356,16 +3281,16 @@ Object *PartitionManager::getClosestObjects(
 
 	DistCalcProc distProc = theDistCalcProcs[dc];
 
-	const Coord3D *objPos;
+	const FCoord3D *objPos;
 	const Object *objToUse;
-	if (pos) 
+	if (pos)
 	{
 		objPos = pos;
 		objToUse = NULL;
 	}
 	else
 	{
-		objPos = obj->getPosition();
+		objPos = obj->getPositionFix();
 		objToUse = obj;
 	}
 	/* This is the single most expensive function in an eight-player match - 9.6% of the whole game
@@ -3378,19 +3303,21 @@ Object *PartitionManager::getClosestObjects(
 		++thePartitionGathers;
 
 	Int cellCenterX, cellCenterY;
-	worldToCell(objPos->x, objPos->y, &cellCenterX, &cellCenterY);
+	// ponytail: the cell grid is still float; P5 gives world-to-cell its own fixed floor
+	worldToCell(fixToReal(objPos->x), fixToReal(objPos->y), &cellCenterX, &cellCenterY);
 
 	Object* closestObj = NULL;
-	Real closestDistSqr = maxDist * maxDist;	// if it's not closer than this, we shouldn't consider it anyway...
-	Coord3D closestVec;
+	Fix closestDistSqr = maxDist * maxDist;	// if it's not closer than this, we shouldn't consider it anyway...
+	FCoord3D closestVec;
+	closestVec.zero();
 
 #ifdef FASTER_GCO
 
 	Int maxRadius = m_maxGcoRadius;
-	if (maxDist < HUGE_DIST)
+	if (maxDist < HUGE_DIST_FIX)
 	{
 		// don't go outwards any farther than necessary.
-		maxRadius = minInt(m_maxGcoRadius, worldToCellDist(maxDist));
+		maxRadius = minInt(m_maxGcoRadius, worldToCellDist(fixToReal(maxDist)));
 	}
 #if defined(INTENSE_DEBUG)
 	/*
@@ -3425,15 +3352,15 @@ Object *PartitionManager::getClosestObjects(
 			if (thisObj == obj || thisObj == NULL)
 				continue;
 
-			Real thisDistSqr;
-			Coord3D distVec;
-			if (!(*distProc)(objPos, objToUse, thisObj->getPosition(), thisObj, thisDistSqr, distVec, closestDistSqr))
+			Fix thisDistSqr;
+			FCoord3D distVec;
+			if (!(*distProc)(objPos, objToUse, thisObj->getPositionFix(), thisObj, thisDistSqr, distVec, closestDistSqr))
 				continue;
 
 			if (!filtersAllow(filters, thisObj))
 				continue;
 
-			iterArg->insert(thisObj, thisDistSqr);
+			iterArg->insertFix(thisObj, thisDistSqr);
 		}
 		maxRadiusLimit = -1;	// nothing left for the ring walk to find
 	}
@@ -3469,9 +3396,9 @@ Object *PartitionManager::getClosestObjects(
 					continue;
 				thisMod->friend_setDoneFlag(theIterFlag);
 			
-				Real thisDistSqr;
-				Coord3D distVec;
-				if (!(*distProc)(objPos, objToUse, thisObj->getPosition(), thisObj, thisDistSqr, distVec, closestDistSqr))
+				Fix thisDistSqr;
+				FCoord3D distVec;
+				if (!(*distProc)(objPos, objToUse, thisObj->getPositionFix(), thisObj, thisDistSqr, distVec, closestDistSqr))
 					continue;
 
 				if (!filtersAllow(filters, thisObj))
@@ -3481,7 +3408,7 @@ Object *PartitionManager::getClosestObjects(
 				// add it to the iter, if we have one....
 				if (iterArg)
 				{
-					iterArg->insert(thisObj, thisDistSqr);
+					iterArg->insertFix(thisObj, thisDistSqr);
 				}
 				else
 				{
@@ -3505,79 +3432,7 @@ Object *PartitionManager::getClosestObjects(
   } // next radius
 
 #else // not FASTER_GCO
-
-	CellOutwardIterator iter(this, cellCenterX, cellCenterY);
-	if (maxDist < HUGE_DIST)
-	{
-		// don't go outwards any farther than necessary.
-		Int max = worldToCellDist(maxDist) + 1;
-		// default value for "max" is largest possible, based on map size, so we should
-		// never make it any larger than that
-		if (max < iter.getMaxRadius())
-			iter.setMaxRadius(max);
-	}
-
-	Bool foundAny = false;
-
-	static Int theIterFlag = 1;	// nonzero, thanks
-	++theIterFlag;
-
-	PartitionCell *thisCell;
-	while ((thisCell = iter.nextNonEmpty()) != NULL)
-	{
-		CellAndObjectIntersection *nextCoi;
-		for (CellAndObjectIntersection *thisCoi = thisCell->getFirstCoiInCell(); thisCoi; thisCoi = nextCoi)
-		{
-			nextCoi = thisCoi->getNextCoi();
-		
-			PartitionData *thisMod = thisCoi->getModule();
-
-			Object *thisObj = thisMod->getObject();
-
-			// never compare against ourself.
-			if (thisObj == obj) 
-				continue;
-
-			if (thisMod->friend_getDoneFlag() == theIterFlag)
-				continue;
-
-			thisMod->friend_setDoneFlag(theIterFlag);
-		
-			// hmm, ok, calc the distance.
-			Real thisDistSqr;
-			Coord3D distVec;
-			if (!(*distProc)(objPos, objToUse, thisObj->getPosition(), thisObj, &thisDistSqr, &distVec, closestDistSqr))
-				continue;
-
-			// check the filters now
-			if (!filtersAllow(filters, thisObj))
-				continue;
-
-			// ok, guess this is a winner!
-			if (iterArg)
-			{
-				iterArg->insert(thisObj, thisDistSqr);
-			}
-			else
-			{
-				closestObj = thisObj;
-				closestDistSqr = thisDistSqr;
-				closestVec = distVec;
-
-				if (!foundAny)
-				{
-					// if not adding to iterArg, we want to stop once we have the closest object. 
-					// since all objects in this radius (and the next radius, due to slop) might
-					// be slightly closer, we still have to check all of them. so set the termination
-					// radius to be our-current-radius-plus-1. (if we ARE adding to the iterArg, we skip
-					// this, cuz we want to go all the way out to the original max we specified as an arg.)
-					iter.setMaxRadius(iter.getCurCellRadius() + 2);
-				}
-				foundAny = true;
-			}
-		}
-	}
-	
+#error the ring walk without FASTER_GCO was never moved to fixed point; FASTER_GCO is always on
 #endif  // not FASTER_GCO
 
 	if (closestVecArg)
@@ -3586,7 +3441,7 @@ Object *PartitionManager::getClosestObjects(
 	}
 	if (closestDistArg)
 	{
-		*closestDistArg = (Real)sqrtf(closestDistSqr);
+		*closestDistArg = fixSqrt(closestDistSqr);
 	}
 
 #ifdef _DEBUG
@@ -3605,95 +3460,190 @@ Object *PartitionManager::getClosestObjects(
 
 
 //-----------------------------------------------------------------------------
-Object *PartitionManager::getClosestObject(
-	const Object *obj, 
-	Real maxDist, 
-	DistanceCalculationType dc, 
-	PartitionFilter **filters, 
-	Real *closestDist,
-	Coord3D *closestDistVec
-)
+Object *PartitionManager::getClosestObjectFix(const Object *obj, Fix maxDist, DistanceCalculationType dc,
+	PartitionFilter **filters, Fix *closestDist, FCoord3D *closestDistVec)
 {
-	return getClosestObjects(obj, NULL, maxDist, dc, filters, NULL, closestDist, closestDistVec);
+	return getClosestObjectsFix(obj, NULL, maxDist, dc, filters, NULL, closestDist, closestDistVec);
+}
+
+//-----------------------------------------------------------------------------
+Object *PartitionManager::getClosestObjectFix(const FCoord3D *pos, Fix maxDist, DistanceCalculationType dc,
+	PartitionFilter **filters, Fix *closestDist, FCoord3D *closestDistVec)
+{
+	return getClosestObjectsFix(NULL, pos, maxDist, dc, filters, NULL, closestDist, closestDistVec);
+}
+
+//-----------------------------------------------------------------------------
+Fix PartitionManager::getDistanceSquaredFix(const Object *obj, const Object *otherObj, DistanceCalculationType dc, FCoord3D *vec)
+{
+	return getGoalDistanceSquaredFix(obj, obj->getPositionFix(), otherObj, dc, vec);
+}
+
+//-----------------------------------------------------------------------------
+Fix PartitionManager::getDistanceSquaredFix(const Object *obj, const FCoord3D *pos, DistanceCalculationType dc, FCoord3D *vec)
+{
+	return getGoalDistanceSquaredFix(obj, obj->getPositionFix(), pos, dc, vec);
+}
+
+//-----------------------------------------------------------------------------
+// Gets the distance if obj were at goalPos.  Used to calculate attack position paths.
+Fix PartitionManager::getGoalDistanceSquaredFix(const Object *obj, const FCoord3D *goalPos, const Object *otherObj, DistanceCalculationType dc, FCoord3D *vec)
+{
+	Fix thisDistSqr;
+	FCoord3D thisVec;
+	(*theDistCalcProcs[dc])(goalPos, obj, otherObj->getPositionFix(), otherObj, thisDistSqr, thisVec, HUGE_DIST_SQR_FIX);
+	if (vec)
+		*vec = thisVec;
+	return thisDistSqr;
+}
+
+//-----------------------------------------------------------------------------
+Fix PartitionManager::getGoalDistanceSquaredFix(const Object *obj, const FCoord3D *goalPos, const FCoord3D *otherPos, DistanceCalculationType dc, FCoord3D *vec)
+{
+	Fix thisDistSqr;
+	FCoord3D thisVec;
+	(*theDistCalcProcs[dc])(goalPos, obj, otherPos, NULL, thisDistSqr, thisVec, HUGE_DIST_SQR_FIX);
+	if (vec)
+		*vec = thisVec;
+	return thisDistSqr;
+}
+
+//-----------------------------------------------------------------------------
+SimpleObjectIterator *PartitionManager::iterateObjectsInRangeFix(const Object *obj, Fix maxDist, DistanceCalculationType dc,
+	PartitionFilter **filters, IterOrderType order)
+{
+	MemoryPoolObjectHolder iterHolder;
+	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
+	iterHolder.hold(iter);
+
+	getClosestObjectsFix(obj, NULL, maxDist, dc, filters, iter, NULL, NULL);
+
+	iter->sort(order);
+	iterHolder.release();
+	return iter;
+}
+
+//-----------------------------------------------------------------------------
+SimpleObjectIterator *PartitionManager::iterateObjectsInRangeFix(const FCoord3D *pos, Fix maxDist, DistanceCalculationType dc,
+	PartitionFilter **filters, IterOrderType order)
+{
+	MemoryPoolObjectHolder iterHolder;
+	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
+	iterHolder.hold(iter);
+
+	getClosestObjectsFix(NULL, pos, maxDist, dc, filters, iter, NULL, NULL);
+
+	iter->sort(order);
+	iterHolder.release();
+	return iter;
+}
+
+//-----------------------------------------------------------------------------
+// P2 shims over the Fix queries above
+//-----------------------------------------------------------------------------
+static FCoord3D toFCoord3D(const Coord3D *c)
+{
+	FCoord3D f;
+	f.set(fixFromReal(c->x), fixFromReal(c->y), fixFromReal(c->z));
+	return f;
+}
+
+static void fromFCoord3D(const FCoord3D &f, Coord3D *c)
+{
+	if (c)
+		*c = f.toCoord3D();
 }
 
 //-----------------------------------------------------------------------------
 Object *PartitionManager::getClosestObject(
-	const Coord3D *pos, 
-	Real maxDist, 
-	DistanceCalculationType dc, 
-	PartitionFilter **filters, 
+	const Object *obj,
+	Real maxDist,
+	DistanceCalculationType dc,
+	PartitionFilter **filters,
 	Real *closestDist,
 	Coord3D *closestDistVec
 )
 {
-	return getClosestObjects(NULL, pos, maxDist, dc, filters, NULL, closestDist, closestDistVec);
+	Fix dist;
+	FCoord3D vec;
+	Object *found = getClosestObjectsFix(obj, NULL, fixFromReal(maxDist), dc, filters, NULL, &dist, &vec);
+	if (closestDist)
+		*closestDist = fixToReal(dist);
+	fromFCoord3D(vec, closestDistVec);
+	return found;
+}
+
+//-----------------------------------------------------------------------------
+Object *PartitionManager::getClosestObject(
+	const Coord3D *pos,
+	Real maxDist,
+	DistanceCalculationType dc,
+	PartitionFilter **filters,
+	Real *closestDist,
+	Coord3D *closestDistVec
+)
+{
+	Fix dist;
+	FCoord3D vec;
+	FCoord3D fpos = toFCoord3D(pos);
+	Object *found = getClosestObjectsFix(NULL, &fpos, fixFromReal(maxDist), dc, filters, NULL, &dist, &vec);
+	if (closestDist)
+		*closestDist = fixToReal(dist);
+	fromFCoord3D(vec, closestDistVec);
+	return found;
 }
 
 //-----------------------------------------------------------------------------
 void PartitionManager::getVectorTo(const Object *obj, const Object *otherObj, DistanceCalculationType dc, Coord3D& vec)
 {
-	DistCalcProc distProc = theDistCalcProcs[dc];
-	Real distSqr;
-	(*distProc)(obj->getPosition(), obj, otherObj->getPosition(), otherObj, distSqr, vec, HUGE_DIST_SQR);
+	getDistanceSquared(obj, otherObj, dc, &vec);
 }
 
 //-----------------------------------------------------------------------------
 void PartitionManager::getVectorTo(const Object *obj, const Coord3D *pos, DistanceCalculationType dc, Coord3D& vec)
 {
-	DistCalcProc distProc = theDistCalcProcs[dc];
-	Real distSqr;
-	(*distProc)(obj->getPosition(), obj, pos, NULL, distSqr, vec, HUGE_DIST_SQR);
+	getDistanceSquared(obj, pos, dc, &vec);
 }
 
 //-----------------------------------------------------------------------------
 Real PartitionManager::getDistanceSquared(const Object *obj, const Object *otherObj, DistanceCalculationType dc, Coord3D *vec)
 {
-	DistCalcProc distProc = theDistCalcProcs[dc];
-	Real thisDistSqr;
-	Coord3D thisVec;
-	(*distProc)(obj->getPosition(), obj, otherObj->getPosition(), otherObj, thisDistSqr, thisVec, HUGE_DIST_SQR);
-	if (vec)
-		*vec = thisVec;
-	return thisDistSqr;
+	FCoord3D fvec;
+	Fix d = getDistanceSquaredFix(obj, otherObj, dc, &fvec);
+	fromFCoord3D(fvec, vec);
+	return fixToReal(d);
 }
 
 //-----------------------------------------------------------------------------
 Real PartitionManager::getDistanceSquared(const Object *obj, const Coord3D *pos, DistanceCalculationType dc, Coord3D *vec)
 {
-	DistCalcProc distProc = theDistCalcProcs[dc];
-	Real thisDistSqr;
-	Coord3D thisVec;
-	(*distProc)(obj->getPosition(), obj, pos, NULL, thisDistSqr, thisVec, HUGE_DIST_SQR);
-	if (vec)
-		*vec = thisVec;
-	return thisDistSqr;
+	FCoord3D fvec;
+	FCoord3D fpos = toFCoord3D(pos);
+	Fix d = getDistanceSquaredFix(obj, &fpos, dc, &fvec);
+	fromFCoord3D(fvec, vec);
+	return fixToReal(d);
 }
 
 //-----------------------------------------------------------------------------
-// Gets the distance if obj were at goalPos.  Used to calculate attack position paths.
 Real PartitionManager::getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Object *otherObj, DistanceCalculationType dc, Coord3D *vec)
 {
-	DistCalcProc distProc = theDistCalcProcs[dc];
-	Real thisDistSqr;
-	Coord3D thisVec;
-	(*distProc)(goalPos, obj, otherObj->getPosition(), otherObj, thisDistSqr, thisVec, HUGE_DIST_SQR);
-	if (vec)
-		*vec = thisVec;
-	return thisDistSqr;
+	FCoord3D fvec;
+	FCoord3D fgoal = toFCoord3D(goalPos);
+	Fix d = getGoalDistanceSquaredFix(obj, &fgoal, otherObj, dc, &fvec);
+	fromFCoord3D(fvec, vec);
+	return fixToReal(d);
 }
 
 //-----------------------------------------------------------------------------
 // Gets the distance if obj were at goalPos.  Used to calculate attack position paths.
 Real PartitionManager::getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Coord3D *otherPos, DistanceCalculationType dc, Coord3D *vec)
 {
-	DistCalcProc distProc = theDistCalcProcs[dc];
-	Real thisDistSqr;
-	Coord3D thisVec;
-	(*distProc)(goalPos, obj, otherPos, NULL, thisDistSqr, thisVec, HUGE_DIST_SQR);
-	if (vec)
-		*vec = thisVec;
-	return thisDistSqr;
+	FCoord3D fvec;
+	FCoord3D fgoal = toFCoord3D(goalPos);
+	FCoord3D fother = toFCoord3D(otherPos);
+	Fix d = getGoalDistanceSquaredFix(obj, &fgoal, &fother, dc, &fvec);
+	fromFCoord3D(fvec, vec);
+	return fixToReal(d);
 }
 
 //-----------------------------------------------------------------------------
@@ -3753,42 +3703,27 @@ Real PartitionManager::getRelativeAngle2D( const Object *obj, const Coord3D *pos
 
 //-----------------------------------------------------------------------------
 SimpleObjectIterator *PartitionManager::iterateObjectsInRange(
-	const Object *obj, 
-	Real maxDist, 
-	DistanceCalculationType dc, 
-	PartitionFilter **filters, 
+	const Object *obj,
+	Real maxDist,
+	DistanceCalculationType dc,
+	PartitionFilter **filters,
 	IterOrderType order
 )
 {
-	MemoryPoolObjectHolder iterHolder;
-	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
-	iterHolder.hold(iter);
-
-	getClosestObjects(obj, NULL, maxDist, dc, filters, iter, NULL, NULL);
-
-	iter->sort(order);
-	iterHolder.release();
-	return iter;
+	return iterateObjectsInRangeFix(obj, fixFromReal(maxDist), dc, filters, order);
 }
 
 //-----------------------------------------------------------------------------
 SimpleObjectIterator *PartitionManager::iterateObjectsInRange(
-	const Coord3D *pos, 
-	Real maxDist, 
-	DistanceCalculationType dc, 
-	PartitionFilter **filters, 
+	const Coord3D *pos,
+	Real maxDist,
+	DistanceCalculationType dc,
+	PartitionFilter **filters,
 	IterOrderType order
 )
 {
-	MemoryPoolObjectHolder iterHolder;
-	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
-	iterHolder.hold(iter);
-
-	getClosestObjects(NULL, pos, maxDist, dc, filters, iter, NULL, NULL);
-
-	iter->sort(order);
-	iterHolder.release();
-	return iter;
+	FCoord3D fpos = toFCoord3D(pos);
+	return iterateObjectsInRangeFix(&fpos, fixFromReal(maxDist), dc, filters, order);
 }
 
 //-----------------------------------------------------------------------------
@@ -3799,8 +3734,7 @@ SimpleObjectIterator* PartitionManager::iteratePotentialCollisions(
 	Bool use2D
 )
 {	
-	Real maxDist = geom.getBoundingSphereRadius();
-	maxDist *= 1.1f;	// just a little slop
+	Fix maxDist = geom.getBoundingSphereRadiusFix() * 1.1_fx;	// just a little slop
 
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
@@ -3809,7 +3743,8 @@ SimpleObjectIterator* PartitionManager::iteratePotentialCollisions(
 	PartitionFilterWouldCollide filter(*pos, geom, angle, true);
 	PartitionFilter *filters[] = { &filter, NULL };
 
-	getClosestObjects(NULL, pos, maxDist, use2D ? FROM_BOUNDINGSPHERE_2D : FROM_BOUNDINGSPHERE_3D, filters, iter, NULL, NULL);
+	FCoord3D fpos = toFCoord3D(pos);
+	getClosestObjectsFix(NULL, &fpos, maxDist, use2D ? FROM_BOUNDINGSPHERE_2D : FROM_BOUNDINGSPHERE_3D, filters, iter, NULL, NULL);
 
 	iterHolder.release();
 	return iter;

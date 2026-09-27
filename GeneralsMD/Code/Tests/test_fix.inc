@@ -7,6 +7,8 @@
 #include "Common/XferLoad.h"
 #include "Common/XferSave.h"
 #include "WWMath/matrix3d.h"
+#include "Common/Geometry.h"
+#include "GameLogic/ObjectIter.h"
 #include <type_traits>
 
 // Fix * float has to be a compile error, not a silent conversion.
@@ -379,4 +381,76 @@ TEST(fix_logic_random_value_stays_in_range_and_repeats)
 	CHECK( sawLo && sawHi );
 	CHECK( GameLogicRandomValueFix( Fix( 3 ), Fix( 3 ) ) == Fix( 3 ) );
 	CHECK( GameLogicRandomValueFix( Fix( 3 ), Fix( 1 ) ) == Fix( 1 ) );
+}
+
+// P2: the angle folds into (-PI, PI] the way normalizeAngle does, and PI itself stays put.
+TEST(fix_normalize_angle_folds_into_one_turn)
+{
+	CHECK( fixNormalizeAngle( FIX_PI ) == FIX_PI );
+	CHECK( fixNormalizeAngle( -FIX_PI ) == -FIX_PI + FIX_TWO_PI );		// -PI is not in the range; it comes round
+	CHECK( fixNormalizeAngle( 7.0_fx ) == 7.0_fx - FIX_TWO_PI );
+	CHECK( fixNormalizeAngle( -7.0_fx ) == -7.0_fx + FIX_TWO_PI );
+	CHECK( fixNormalizeAngle( 0.5_fx ) == 0.5_fx );
+}
+
+// P2: GeometryInfo holds its extents in Fix, works its bounding radii out in Fix, and saves them as
+// Fix.  A 3 by 4 box has a bounding circle of exactly 5.
+TEST(fix_geometry_extents_are_fixed_and_save_as_fix)
+{
+	bootOnce();
+	GeometryInfo box( GEOMETRY_BOX, FALSE, 10, 3, 4 );
+	CHECK( box.getBoundingCircleRadiusFix() == Fix( 5 ) );
+	CHECK( box.getBoundingSphereRadiusFix() == fixSqrt( Fix( 50 ) ) );
+	CHECK( box.getZDeltaToCenterPositionFix() == Fix( 5 ) );
+	CHECK( box.getMajorRadius() == 3.0f );		// the P2 shim reads the same value back
+
+	GeometryInfo cyl( GEOMETRY_CYLINDER, FALSE, 30, 5, 0 );
+	CHECK( cyl.getBoundingSphereRadiusFix() == Fix( 15 ) );	// half the height beats the radius
+}
+
+TEST(fix_geometry_saves_as_fix)
+{
+	bootOnce();
+	GeometryInfo box( GEOMETRY_BOX, FALSE, 10, 3, 4 );
+	const char *path = "test_fix_geometry_tmp.bin";
+	box.setMajorRadiusFix( 1.25_fx );
+	XferSave write;
+	write.open( AsciiString( path ) );
+	write.xferSnapshot( &box );
+	write.close();
+
+	GeometryInfo back( GEOMETRY_SPHERE, FALSE, 1, 1, 1 );
+	XferLoad read;
+	read.setOptions( XO_NO_POST_PROCESSING );		// there is no game state to hand it to
+	read.open( AsciiString( path ) );
+	read.xferSnapshot( &back );
+	read.close();
+	remove( path );
+
+	CHECK( back.getGeomType() == GEOMETRY_BOX );
+	CHECK( back.getMajorRadiusFix() == 1.25_fx );
+	CHECK( back.getBoundingCircleRadiusFix() == box.getBoundingCircleRadiusFix() );
+}
+
+// P2: the range query's iterator sorts on a Fix; equal distances keep the order they came in.
+TEST(fix_object_iterator_sorts_on_fix_and_keeps_ties_in_order)
+{
+	bootOnce();
+	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
+	Object *a = (Object *)0x10, *b = (Object *)0x20, *c = (Object *)0x30, *d = (Object *)0x40;
+	iter->insertFix( a, Fix( 3 ) );		// insert puts each at the head: the list reads d c b a
+	iter->insertFix( b, Fix( 1 ) );
+	iter->insertFix( c, Fix( 2 ) );
+	iter->insertFix( d, Fix( 1 ) );
+	iter->sort( ITER_SORTED_NEAR_TO_FAR );
+	Fix n;
+	CHECK( iter->firstWithNumericFix( &n ) == d );
+	CHECK( n == Fix( 1 ) );
+	CHECK( iter->nextWithNumericFix( &n ) == b );
+	CHECK( iter->nextWithNumericFix( &n ) == c );
+	CHECK( iter->nextWithNumericFix( &n ) == a );
+	CHECK( n == Fix( 3 ) );
+	iter->sort( ITER_SORTED_FAR_TO_NEAR );
+	CHECK( iter->first() == a );
+	iter->deleteInstance();
 }

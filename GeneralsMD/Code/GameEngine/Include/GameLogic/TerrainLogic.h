@@ -36,6 +36,7 @@
 #include "Common/Snapshot.h"
 #include "Common/STLTypedefs.h"
 #include "GameClient/TerrainRoads.h"
+#include "Lib/Fix.h"
 
 typedef std::vector<ICoord2D> VecICoord2D;
 
@@ -229,6 +230,15 @@ public:
 
 	virtual Bool loadMap( AsciiString filename, Bool query );
 	virtual void newMap( Bool saveGame );	///< Initialize the logic for new map.
+
+	/* The ground's height in fixed point, interpolated on the height map in integers.  The float
+		 getGroundHeight on the logic side is a P2 shim over this one, so a unit placed with either reads
+		 zero height above the ground with the other. */
+	virtual Fix getGroundHeightFix( Fix x, Fix y ) const;
+	/// the ground, or a bridge or wall on that layer when one is there and above the ground
+	Fix getLayerHeightFix( Fix x, Fix y, PathfindLayerEnum layer, Bool clip = true ) const;
+	/// the water's own height is map data in float; the ground under it is getGroundHeightFix
+	Bool isUnderwaterFix( Fix x, Fix y, Fix *waterZ = NULL, Fix *terrainZ = NULL );
 
 	virtual Real getGroundHeight( Real x, Real y, Coord3D* normal = NULL )  const;
 	virtual Real getLayerHeight(Real x, Real y, PathfindLayerEnum layer, Coord3D* normal = NULL, Bool clip = true) const;

@@ -72,11 +72,11 @@
 //-------------------------------------------------------------------------------------------------
 struct BuilderPick
 {
-	Coord3D loc;
+	FCoord3D loc;
 	Object *idle;
-	Real idleDistSqr;
+	Fix idleDistSqr;
 	Object *any;
-	Real anyDistSqr;
+	Fix anyDistSqr;
 };
 
 static void considerBuilder( Object *candidate, BuilderPick *pick )
@@ -90,9 +90,9 @@ static void considerBuilder( Object *candidate, BuilderPick *pick )
 	if( dozer == NULL )
 		return;
 
-	Real dx = candidate->getPosition()->x - pick->loc.x;
-	Real dy = candidate->getPosition()->y - pick->loc.y;
-	Real distSqr = dx*dx + dy*dy;
+	Fix dx = candidate->getPositionFix()->x - pick->loc.x;
+	Fix dy = candidate->getPositionFix()->y - pick->loc.y;
+	Fix distSqr = dx*dx + dy*dy;
 	if( distSqr < pick->anyDistSqr )
 	{
 		pick->any = candidate;
@@ -134,6 +134,7 @@ static void considerBuilder( Object *candidate, BuilderPick *pick )
 #include "GameClient/LookAtXlat.h"
 
 #include "GameNetwork/NetworkInterface.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -1774,9 +1775,9 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			// nothing is built.
 			//
 			BuilderPick pick;
-			pick.loc = loc;
+			pick.loc.set( fixFromReal( loc.x ), fixFromReal( loc.y ), fixFromReal( loc.z ) );
 			pick.idle = pick.any = NULL;
-			pick.idleDistSqr = pick.anyDistSqr = 1e30f;
+			pick.idleDistSqr = pick.anyDistSqr = FIX_MAX;
 			if( currentlySelectedGroup )
 			{
 				const VecObjectID& ids = currentlySelectedGroup->getAllIDs();

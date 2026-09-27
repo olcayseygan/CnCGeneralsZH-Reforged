@@ -56,6 +56,7 @@ public:
 	virtual Bool loadMap( AsciiString filename , Bool query );
 	virtual void newMap( Bool saveGame );	///< Initialize the logic for new map.
 
+	virtual Fix getGroundHeightFix( Fix x, Fix y ) const;
 	virtual Real getGroundHeight( Real x, Real y, Coord3D* normal = NULL ) const;
 
 	virtual Bool isCliffCell( Real x, Real y) const;			///< is point cliff cell.

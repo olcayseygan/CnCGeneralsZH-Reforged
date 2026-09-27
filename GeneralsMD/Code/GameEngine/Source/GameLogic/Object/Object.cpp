@@ -48,6 +48,8 @@
 #include "Common/Xfer.h"
 #include "Common/XferCRC.h"
 #include "Common/PerfTimer.h"
+#include "Lib/FixBoundary.h"
+#include "GameLogic/TerrainLogic.h"
 
 #include "GameClient/Anim2D.h"
 #include "GameClient/ControlBar.h"
@@ -225,6 +227,18 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_visionSpiedMask (PLAYERMASK_NONE),
 	m_numTriggerAreasActive(0)
 {
+	m_fxTransform.makeIdentity();
+	m_fxPos.zero();
+	m_fxAngle = Fix( 0 );
+	m_fxDirVector.zero();
+	m_fxAltitudeAboveTerrain = Fix( 0 );
+	m_fxAltitudeAboveTerrainOrWater = Fix( 0 );
+	m_fxCacheFlags = 0;
+	m_shimTransform.Make_Identity();
+	m_shimPos.zero();
+	m_shimAngle = 0;
+	m_shimDirVector.zero();
+
 #if defined(_DEBUG) || defined(_INTERNAL)
 	m_hasDiedAlready = false;
 #endif
@@ -1788,40 +1802,265 @@ Bool Object::isNeutralControlled() const
 }
 
 //-------------------------------------------------------------------------------------------------
-inline Bool isPosDifferent(const Coord3D* a, const Coord3D* b)
+inline Bool isPosDifferent(const FCoord3D& a, const FCoord3D& b)
 {
-	// this is necessary because PhysicsBehavior may generate tiny changes even when 
+	// this is necessary because PhysicsBehavior may generate tiny changes even when
 	// "standing still", due to roundoff errors. It's important that we only invalidate
 	// the PartitionManager stuff when the pos/orientation really changes (for efficiency purposes)
 	// so we must put in some cleverness...
-	const Real THRESH = 0.01f;
+	const Fix THRESH = 0.01_fx;
 
-	if (fabs(a->x - b->x) > THRESH)
-		return true;
-
-	if (fabs(a->y - b->y) > THRESH)
-		return true;
-
-	if (fabs(a->z - b->z) > THRESH)
-		return true;
-
-	return false;
+	return fixAbs(a.x - b.x) > THRESH || fixAbs(a.y - b.y) > THRESH || fixAbs(a.z - b.z) > THRESH;
 }
 
 //-------------------------------------------------------------------------------------------------
-inline Bool isAngleDifferent(Real a, Real b)
+inline Bool isAngleDifferent(Fix a, Fix b)
 {
-	// this is necessary because PhysicsBehavior may generate tiny changes even when 
-	// "standing still", due to roundoff errors. It's important that we only invalidate
-	// the PartitionManager stuff when the pos/orientation really changes (for efficiency purposes)
-	// so we must put in some cleverness...
+	const Fix THRESH = 0.01_fx;	// in radians, this is approx 1/2 degree.
+	return fixAbs(a - b) > THRESH;
+}
 
-	const Real THRESH = 0.01f;	// in radians, this is approx 1/2 degree.
+//-------------------------------------------------------------------------------------------------
+// P2 shim conversions, float in and out of the fixed transform
+//-------------------------------------------------------------------------------------------------
+static FCoord3D fcoordFromCoord3D( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
-	if (fabs(a - b) > THRESH)
-		return true;
+static void fixMatrixFromMatrix3D( const Matrix3D &in, FixMatrix3D &out )
+{
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
+}
 
-	return false;
+// ponytail: alignOnTerrain works in float on the terrain normal; its matrix is converted once here.
+// A fixed version waits for the height map's normal in fixed point.
+static void alignOnTerrainFix( Fix angle, const FCoord3D &pos, FixMatrix3D &out )
+{
+	Matrix3D mtx;
+	const Bool stickToGround = true;	// yes, set the "z" pos
+	TheTerrainLogic->alignOnTerrain( fixToReal( angle ), pos.toCoord3D(), stickToGround, mtx );
+	fixMatrixFromMatrix3D( mtx, out );
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::setPositionFix( const FCoord3D *pos )
+{
+	if( isKindOf( KINDOF_STICK_TO_TERRAIN_SLOPE ) )
+	{
+		FixMatrix3D mtx;
+		alignOnTerrainFix( m_fxAngle, *pos, mtx );
+		setTransformMatrixFix( &mtx );
+		return;
+	}
+
+	FCoord3D oldPos = m_fxPos;
+	m_fxTransform.setTranslation( *pos );
+	m_fxPos = *pos;
+	m_fxCacheFlags &= ~(VALID_ALTITUDE_TERRAIN | VALID_ALTITUDE_SEALEVEL);	// but don't clear the dir flags.
+	reactToTransformChange( oldPos, m_fxAngle );
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::setPositionZFix( Fix z )
+{
+	if( isKindOf( KINDOF_STICK_TO_TERRAIN_SLOPE ) )
+	{
+		FCoord3D pos = m_fxPos;
+		pos.z = z;
+		FixMatrix3D mtx;
+		alignOnTerrainFix( m_fxAngle, pos, mtx );
+		setTransformMatrixFix( &mtx );
+		return;
+	}
+
+	FCoord3D oldPos = m_fxPos;
+	m_fxTransform.m[ 2 ][ 3 ] = z;
+	m_fxPos.z = z;
+	if( m_fxCacheFlags & VALID_ALTITUDE_TERRAIN )
+		m_fxAltitudeAboveTerrain += z - oldPos.z;
+	if( m_fxCacheFlags & VALID_ALTITUDE_SEALEVEL )
+		m_fxAltitudeAboveTerrainOrWater += z - oldPos.z;
+	reactToTransformChange( oldPos, m_fxAngle );
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::setOrientationFix( Fix angle )
+{
+	FCoord3D oldPos = m_fxPos;
+	Fix oldAngle = m_fxAngle;
+
+	if( isKindOf( KINDOF_STICK_TO_TERRAIN_SLOPE ) )
+	{
+		alignOnTerrainFix( angle, m_fxPos, m_fxTransform );
+		m_fxPos = m_fxTransform.getTranslation();
+		m_fxCacheFlags &= ~(VALID_ALTITUDE_TERRAIN | VALID_ALTITUDE_SEALEVEL);
+	}
+	else
+	{
+		// upright: x along the heading, z straight up
+		const Fix c = fixCos( angle );
+		const Fix s = fixSin( angle );
+		FixMatrix3D &m = m_fxTransform;
+		m.m[ 0 ][ 0 ] = c;				m.m[ 0 ][ 1 ] = -s;				m.m[ 0 ][ 2 ] = Fix( 0 );
+		m.m[ 1 ][ 0 ] = s;				m.m[ 1 ][ 1 ] = c;				m.m[ 1 ][ 2 ] = Fix( 0 );
+		m.m[ 2 ][ 0 ] = Fix( 0 );	m.m[ 2 ][ 1 ] = Fix( 0 );	m.m[ 2 ][ 2 ] = Fix( 1 );
+	}
+
+	m_fxAngle = fixNormalizeAngle( angle );
+	m_fxCacheFlags &= ~(VALID_DIRVECTOR | VALID_SHIM_DIRVECTOR);	// but don't clear the altitude flags.
+	reactToTransformChange( oldPos, oldAngle );
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::setTransformMatrixFix( const FixMatrix3D *mx )
+{
+	FCoord3D oldPos = m_fxPos;
+	Fix oldAngle = m_fxAngle;
+
+	m_fxTransform = *mx;
+	m_fxPos = m_fxTransform.getTranslation();
+	m_fxAngle = fixAtan2( m_fxTransform.m[ 1 ][ 0 ], m_fxTransform.m[ 0 ][ 0 ] );
+	m_fxCacheFlags = 0;
+	reactToTransformChange( oldPos, oldAngle );
+}
+
+//-------------------------------------------------------------------------------------------------
+const FCoord3D *Object::getUnitDirectionVector2DFix() const
+{
+	if( !(m_fxCacheFlags & VALID_DIRVECTOR) )
+	{
+		m_fxDirVector.set( fixCos( m_fxAngle ), fixSin( m_fxAngle ), Fix( 0 ) );
+		m_fxCacheFlags |= VALID_DIRVECTOR;
+	}
+	return &m_fxDirVector;
+}
+
+//-------------------------------------------------------------------------------------------------
+Fix Object::calculateHeightAboveTerrainFix() const
+{
+	return m_fxPos.z - TheTerrainLogic->getLayerHeightFix( m_fxPos.x, m_fxPos.y, m_layer );
+}
+
+//-------------------------------------------------------------------------------------------------
+Fix Object::getHeightAboveTerrainFix() const
+{
+	if( !(m_fxCacheFlags & VALID_ALTITUDE_TERRAIN) )
+	{
+		m_fxAltitudeAboveTerrain = calculateHeightAboveTerrainFix();
+		m_fxCacheFlags |= VALID_ALTITUDE_TERRAIN;
+	}
+	return m_fxAltitudeAboveTerrain;
+}
+
+//-------------------------------------------------------------------------------------------------
+Fix Object::getHeightAboveTerrainOrWaterFix() const
+{
+	if( !(m_fxCacheFlags & VALID_ALTITUDE_SEALEVEL) )
+	{
+		Fix waterZ;
+		if( TheTerrainLogic->isUnderwaterFix( m_fxPos.x, m_fxPos.y, &waterZ ) )
+			m_fxAltitudeAboveTerrainOrWater = m_fxPos.z - waterZ;
+		else
+			m_fxAltitudeAboveTerrainOrWater = getHeightAboveTerrainFix();
+		m_fxCacheFlags |= VALID_ALTITUDE_SEALEVEL;
+	}
+	return m_fxAltitudeAboveTerrainOrWater;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool Object::isSignificantlyAboveTerrain() const
+{
+	// If it's high enough that it will take more than 3 frames to return to the ground,
+	// then it's significantly airborne.  jba
+	// ponytail: gravity is still a GlobalData Real until the INI layer moves (P3)
+	return getHeightAboveTerrainFix() > fixFromReal( -(3*3)*TheGlobalData->m_gravity );
+}
+
+//-------------------------------------------------------------------------------------------------
+// P2 shims
+//-------------------------------------------------------------------------------------------------
+void Object::setPosition( const Coord3D *pos )
+{
+	FCoord3D f = fcoordFromCoord3D( *pos );
+	setPositionFix( &f );
+}
+
+void Object::setPositionZ( Real z )
+{
+	setPositionZFix( fixFromReal( z ) );
+}
+
+void Object::setOrientation( Real angle )
+{
+	setOrientationFix( fixFromReal( angle ) );
+}
+
+void Object::setTransformMatrix( const Matrix3D *mx )
+{
+	FixMatrix3D f;
+	fixMatrixFromMatrix3D( *mx, f );
+	setTransformMatrixFix( &f );
+}
+
+const Coord3D *Object::getUnitDirectionVector2D() const
+{
+	if( !(m_fxCacheFlags & VALID_SHIM_DIRVECTOR) )
+	{
+		m_shimDirVector = getUnitDirectionVector2DFix()->toCoord3D();
+		m_fxCacheFlags |= VALID_SHIM_DIRVECTOR;
+	}
+	return &m_shimDirVector;
+}
+
+void Object::getUnitDirectionVector3D( Coord3D &dir ) const
+{
+	FCoord3D v;
+	v.set( m_fxTransform.m[ 0 ][ 0 ], m_fxTransform.m[ 1 ][ 0 ], m_fxTransform.m[ 2 ][ 0 ] );
+	Fix len = v.length();
+	if( len > Fix( 0 ) )
+		v.set( v.x / len, v.y / len, v.z / len );
+	dir = v.toCoord3D();
+}
+
+Real Object::getHeightAboveTerrain() const
+{
+	return fixToReal( getHeightAboveTerrainFix() );
+}
+
+Real Object::getHeightAboveTerrainOrWater() const
+{
+	return fixToReal( getHeightAboveTerrainOrWaterFix() );
+}
+
+void Object::convertBonePosToWorldPos( const Coord3D *bonePos, const Matrix3D *boneTransform, Coord3D *worldPos, Matrix3D *worldTransform ) const
+{
+	if( worldTransform )
+		worldTransform->mul( m_shimTransform, *boneTransform );
+	if( worldPos )
+	{
+		Vector3 vector( bonePos->x, bonePos->y, bonePos->z );
+		m_shimTransform.Transform_Vector( m_shimTransform, vector, &vector );
+		worldPos->x = vector.X;
+		worldPos->y = vector.Y;
+		worldPos->z = vector.Z;
+	}
+}
+
+void Object::transformPoint( const Coord3D *in, Coord3D *out )
+{
+	if( in == NULL || out == NULL )
+		return;
+	Vector3 vectorIn( in->x, in->y, in->z );
+	Vector3 vectorOut;
+	m_shimTransform.Transform_Vector( m_shimTransform, vectorIn, &vectorOut );
+	out->x = vectorOut.X;
+	out->y = vectorOut.Y;
+	out->z = vectorOut.Z;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1845,20 +2084,21 @@ void Object::reactToTurretChange( WhichTurretType turret, Real oldRotation, Real
 
 //-------------------------------------------------------------------------------------------------
 //DECLARE_PERF_TIMER(Object_reactToTransformChange)
-void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle)
+void Object::reactToTransformChange( const FCoord3D &oldPos, Fix oldAngle )
 {
 	//USE_PERF_TIMER(Object_reactToTransformChange)
-	if(_isnan(getPosition()->x) || _isnan(getPosition()->y) || _isnan(getPosition()->z)) {
-		DEBUG_CRASH(("Object pos is nan."));
-		TheGameLogic->destroyObject(this);
-	}
+
+	// the P2 float mirrors, and the one place the transform crosses to the client
+	m_fxTransform.toMatrix3D( &m_shimTransform );
+	m_shimPos = m_fxPos.toCoord3D();
+	m_shimAngle = fixToReal( m_fxAngle );
 	if (m_drawable)
 	{
-  	m_drawable->setTransformMatrix( this->getTransformMatrix() );
+  	m_drawable->setTransformMatrix( &m_shimTransform );
 	}
 
-	Bool posDiff = isPosDifferent(oldPos, getPosition());
-	Bool angDiff = isAngleDifferent(oldAngle, getOrientation());
+	Bool posDiff = isPosDifferent(oldPos, m_fxPos);
+	Bool angDiff = isAngleDifferent(oldAngle, m_fxAngle);
 
 	if (posDiff || angDiff)
 	{
@@ -2949,15 +3189,6 @@ void Object::setID( ObjectID id )
 }  // end setID
 
 // ------------------------------------------------------------------------------------------------
-Real Object::calculateHeightAboveTerrain(void) const 
-{
-	const Coord3D* pos = getPosition();
-	Real terrainZ = TheTerrainLogic->getLayerHeight( pos->x, pos->y, m_layer );
-	Real myZ = pos->z;
-	return myZ - terrainZ;
-}
-
-//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 void Object::removeFromList(Object **pListHead)
 {
@@ -4197,13 +4428,13 @@ void Object::crc( Xfer *xfer )
 	}
 #endif // DEBUG_CRC
 
-	xfer->xferUser((Matrix3D *)getTransformMatrix(),	sizeof(Matrix3D));
+	xfer->xferUser(&m_fxTransform,	sizeof(FixMatrix3D));
 #ifdef DEBUG_CRC
 	if (doLogging)
 	{
 		XferCRC tmpXfer;
 		tmpXfer.open("tmp");
-		tmpXfer.xferUser((Matrix3D *)getTransformMatrix(),	sizeof(Matrix3D));
+		tmpXfer.xferUser(&m_fxTransform,	sizeof(FixMatrix3D));
 		tmp.format("getTransformMatrix(): %8.8X, ", tmpXfer.getCRC());
 		tmpXfer.close();
 		logString.concat(tmp);
@@ -4315,13 +4546,14 @@ void Object::crc( Xfer *xfer )
 	* 8: Kris: Conversion of object status bits from UnsignedInt to BitFlags<>
 	* 9: Extra sighting for reveal to all with different range units
 	* 10: each player's memory of it while it is out of their sight
+	* 11: the transform in fixed point, and its angle
 	*/
 //-------------------------------------------------------------------------------------------------
 void Object::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 10;
+	const XferVersion currentVersion = 11;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4332,7 +4564,20 @@ void Object::xfer( Xfer *xfer )
 
 	DEBUG_LOG(("Xfer Object %s id=%d\n",getTemplate()->getName().str(),id));
 
-	if (version >= 7)
+	if (version >= 11)
+	{
+		// the fixed transform, and the angle beside it: an upright object's angle is the one it was
+		// given, which an atan2 of its rounded matrix does not always give back
+		FixMatrix3D mtx = m_fxTransform;
+		Fix angle = m_fxAngle;
+		xfer->xferFixMatrix3D(&mtx);
+		xfer->xferFix(&angle);
+		setTransformMatrixFix(&mtx);
+		m_fxAngle = angle;
+		m_shimAngle = fixToReal(angle);
+		m_fxCacheFlags = 0;
+	}
+	else if (version >= 7)
 	{
 		Matrix3D mtx = *getTransformMatrix();
 		xfer->xferMatrix3D(&mtx);

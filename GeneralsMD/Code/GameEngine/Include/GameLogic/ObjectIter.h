@@ -33,6 +33,7 @@
 
 #include "Common/GameType.h"
 #include "Common/GameMemory.h"
+#include "Lib/Fix.h"
 
 // forward declaration
 class Object;
@@ -100,19 +101,19 @@ private:
 
 		Clump			*m_nextClump;
 		Object		*m_obj;
-		Real			m_numeric;	// typically, dist-squared
+		Fix				m_numeric;	// typically, dist-squared
 
 		Clump();
 	//~Clump();
 	};
 
-	typedef Real (*ClumpCompareProc)(Clump *a, Clump *b);
+	typedef Int (*ClumpCompareProc)(Clump *a, Clump *b);	///< negative, zero or positive
 	static ClumpCompareProc theClumpCompareProcs[];
 
-	static Real sortNearToFar(Clump *a, Clump *b);
-	static Real sortFarToNear(Clump *a, Clump *b);
-	static Real sortCheapToExpensive(Clump *a, Clump *b);
-	static Real sortExpensiveToCheap(Clump *a, Clump *b);
+	static Int sortNearToFar(Clump *a, Clump *b);
+	static Int sortFarToNear(Clump *a, Clump *b);
+	static Int sortCheapToExpensive(Clump *a, Clump *b);
+	static Int sortExpensiveToCheap(Clump *a, Clump *b);
 
 
 	Clump				*m_firstClump;
@@ -127,6 +128,11 @@ public:
 	Object *first() { return firstWithNumeric(NULL); }
 	Object *next() { return nextWithNumeric(NULL); }
 
+	Object *firstWithNumericFix(Fix *num) { reset(); return nextWithNumericFix(num); }
+	Object *nextWithNumericFix(Fix *num);
+	void insertFix(Object *obj, Fix numeric);
+
+	// P2 SHIMS: the numeric as a float, converted on the way in and out
 	Object *firstWithNumeric(Real *num = NULL) { reset(); return nextWithNumeric(num); }
 	Object *nextWithNumeric(Real *num = NULL);
 
@@ -142,7 +148,7 @@ public:
 		(typically, dist-squared) is used only for subsequent sort() calls;
 		if you aren't going to sort, pass 0.0f.
 	*/
-	void insert(Object *obj, Real numeric = 0.0f);
+	void insert(Object *obj, Real numeric = 0.0f);	///< P2 SHIM over insertFix
 
 	/**
 		sort the iterator based on the numeric values for objects and the

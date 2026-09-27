@@ -161,7 +161,7 @@ ObjectID CountermeasuresBehavior::calculateCountermeasureToDivertTo( const Objec
 	//stop iterating after we've reached size of a single volley.
 	Int iteratorMax = MAX( data->m_volleySize, 1 );
 
-	Real closestDist = 1e15f;
+	Fix closestDist = FIX_MAX;
 	Object *closestFlare = NULL;
 
 	//Start at the end of the list and go towards the beginning.
@@ -179,7 +179,7 @@ ObjectID CountermeasuresBehavior::calculateCountermeasureToDivertTo( const Objec
 			Object *obj = TheGameLogic->findObjectByID( *it );
 			if( obj )
 			{
-				Real dist = ThePartitionManager->getDistanceSquared( obj, getObject(), FROM_CENTER_2D );
+				Fix dist = ThePartitionManager->getDistanceSquaredFix( obj, getObject(), FROM_CENTER_2D );
 				if( dist < closestDist )
 				{
 					closestDist = dist;

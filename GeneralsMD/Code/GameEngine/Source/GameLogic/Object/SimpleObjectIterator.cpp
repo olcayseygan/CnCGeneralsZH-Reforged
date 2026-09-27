@@ -31,6 +31,7 @@
 
 #include "Common/ThingTemplate.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
 
 
 /// @todo Doxygenize this file
@@ -82,6 +83,11 @@ SimpleObjectIterator::~SimpleObjectIterator()
 	 fortnight on the allocator. */
 void SimpleObjectIterator::insert(Object *obj, Real numeric)
 {
+	insertFix(obj, fixFromReal(numeric));
+}
+
+void SimpleObjectIterator::insertFix(Object *obj, Fix numeric)
+{
 	DEBUG_ASSERTCRASH(obj, ("sorry, no nulls allowed here"));
 
 	Clump *clump = newInstance(Clump)();
@@ -96,11 +102,11 @@ void SimpleObjectIterator::insert(Object *obj, Real numeric)
 }
 
 //=============================================================================
-Object *SimpleObjectIterator::nextWithNumeric(Real *num)
+Object *SimpleObjectIterator::nextWithNumericFix(Fix *num)
 {
 	Object *obj = NULL;
 	if (num)
-		*num = 0.0f;
+		*num = Fix(0);
 
 	if (m_curClump)
 	{
@@ -109,7 +115,17 @@ Object *SimpleObjectIterator::nextWithNumeric(Real *num)
 			*num = m_curClump->m_numeric;
 		m_curClump = m_curClump->m_nextClump;
 	}
-		
+
+	return obj;
+}
+
+//=============================================================================
+Object *SimpleObjectIterator::nextWithNumeric(Real *num)
+{
+	Fix f;
+	Object *obj = nextWithNumericFix(num ? &f : NULL);
+	if (num)
+		*num = fixToReal(f);
 	return obj;
 }
 
@@ -208,7 +224,7 @@ void SimpleObjectIterator::sort(IterOrderType order)
 					sub = sub->m_nextClump; 
 					--subCount;
 				} 
-				else if ((*cmpProc)(to_do, sub) <= 0.0f) 
+				else if ((*cmpProc)(to_do, sub) <= 0)
 				{
 					DEBUG_ASSERTCRASH(to_do_count > 0, ("hmm, expected nonzero to_do_count"));
 					tmp = to_do; 
@@ -256,26 +272,26 @@ void SimpleObjectIterator::sort(IterOrderType order)
 }
 
 //-----------------------------------------------------------------------------
-Real SimpleObjectIterator::sortNearToFar(Clump *a, Clump *b)
+Int SimpleObjectIterator::sortNearToFar(Clump *a, Clump *b)
 {
-	return a->m_numeric - b->m_numeric;
+	return a->m_numeric < b->m_numeric ? -1 : (a->m_numeric > b->m_numeric ? 1 : 0);
 }
 
 //-----------------------------------------------------------------------------
-Real SimpleObjectIterator::sortFarToNear(Clump *a, Clump *b)
+Int SimpleObjectIterator::sortFarToNear(Clump *a, Clump *b)
 {
-	return b->m_numeric - a->m_numeric;
+	return sortNearToFar(b, a);
 }
 
 //-----------------------------------------------------------------------------
-Real SimpleObjectIterator::sortCheapToExpensive(Clump *a, Clump *b)
+Int SimpleObjectIterator::sortCheapToExpensive(Clump *a, Clump *b)
 {
 	return a->m_obj->getTemplate()->friend_getBuildCost() -
 				 b->m_obj->getTemplate()->friend_getBuildCost();
 }
 
 //-----------------------------------------------------------------------------
-Real SimpleObjectIterator::sortExpensiveToCheap(Clump *a, Clump *b)
+Int SimpleObjectIterator::sortExpensiveToCheap(Clump *a, Clump *b)
 {
 	return b->m_obj->getTemplate()->friend_getBuildCost() -
 				 a->m_obj->getTemplate()->friend_getBuildCost();

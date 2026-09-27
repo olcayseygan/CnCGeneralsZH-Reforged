@@ -31,6 +31,7 @@
 #define _OBJECT_H_
 
 #include "Lib/BaseType.h"
+#include "Lib/Fix.h"
 
 #include "Common/Geometry.h"
 #include "Common/Snapshot.h"
@@ -230,6 +231,43 @@ public:
 	void friend_setPrevObject( Object *obj ) { m_prev = obj; }
 
 	void updateObjValuesFromMapProperties(Dict* properties);			///< Brings in properties set in the editor.
+
+	/* Where the object is.  The fixed point transform is the truth; position, angle, direction and
+		 altitude are caches of it.  setOrientationFix always stands the object upright, or aligns it with
+		 the terrain for STICK_TO_TERRAIN_SLOPE; setTransformMatrixFix is the way to tilt it. */
+	void setPositionFix( const FCoord3D *pos );
+	void setPositionZFix( Fix z );			///< keeps the cached altitudes, adjusted, instead of dropping them
+	void setOrientationFix( Fix angle );
+	void setTransformMatrixFix( const FixMatrix3D *mx );
+	const FCoord3D *getPositionFix() const { return &m_fxPos; }
+	Fix getOrientationFix() const { return m_fxAngle; }
+	const FixMatrix3D *getTransformMatrixFix() const { return &m_fxTransform; }
+	const FCoord3D *getUnitDirectionVector2DFix() const;
+	Fix getHeightAboveTerrainFix() const;
+	Fix getHeightAboveTerrainOrWaterFix() const;
+	Bool isAboveTerrain() const { return getHeightAboveTerrainFix() > Fix( 0 ); }
+	Bool isAboveTerrainOrWater() const { return getHeightAboveTerrainOrWaterFix() > Fix( 0 ); }
+	/// high enough that coming back down takes more than three frames of gravity, so it may fly
+	Bool isSignificantlyAboveTerrain() const;
+
+	/* P2 SHIMS.  Float views of the fixed transform above, for the callers not converted yet: every
+		 getter reads a float mirror that reactToTransformChange refreshes, every setter converts once and
+		 goes through its Fix twin.  A converted caller uses the Fix API instead; P9 deletes these. */
+	void setPosition( const Coord3D *pos );
+	void setPositionZ( Real z );
+	void setOrientation( Real angle );
+	void setTransformMatrix( const Matrix3D *mx );
+	const Coord3D *getPosition() const { return &m_shimPos; }
+	Real getOrientation() const { return m_shimAngle; }
+	const Matrix3D *getTransformMatrix() const { return &m_shimTransform; }
+	const Coord3D *getUnitDirectionVector2D() const;
+	void getUnitDirectionVector2D( Coord3D &dir ) const { dir = *getUnitDirectionVector2D(); }
+	void getUnitDirectionVector3D( Coord3D &dir ) const;
+	Real getHeightAboveTerrain() const;
+	Real getHeightAboveTerrainOrWater() const;
+	void convertBonePosToWorldPos( const Coord3D *bonePos, const Matrix3D *boneTransform, Coord3D *worldPos, Matrix3D *worldTransform ) const;
+	void transformPoint( const Coord3D *in, Coord3D *out );
+	// END P2 SHIMS
 
 	// ids and binding
 	ObjectID getID() const { return m_id; }												///< this object's unique ID
@@ -724,7 +762,7 @@ protected:
 	virtual Object *asObjectMeth() { return this; }
 	virtual const Object *asObjectMeth() const { return this; }
 
-	virtual Real calculateHeightAboveTerrain(void) const;		// Calculates the actual height above terrain.  Doesn't use cache.
+	Fix calculateHeightAboveTerrainFix(void) const;		///< on the object's own layer, so a bridge counts; no cache
 
 	void updateTriggerAreaFlags(void);
 	void setTriggerAreaFlagsForChangeInPosition(void);
@@ -742,9 +780,25 @@ protected:
 	void addThreat();
 	void removeThreat();
 
-	virtual void reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle);
+	void reactToTransformChange( const FCoord3D &oldPos, Fix oldAngle );
 
 private:
+
+	FixMatrix3D					m_fxTransform;				///< the object's place and orientation; the rest are caches
+	FCoord3D						m_fxPos;
+	Fix									m_fxAngle;
+	mutable FCoord3D		m_fxDirVector;
+	mutable Fix					m_fxAltitudeAboveTerrain;
+	mutable Fix					m_fxAltitudeAboveTerrainOrWater;
+	mutable Int					m_fxCacheFlags;
+	enum { VALID_DIRVECTOR = 0x01, VALID_ALTITUDE_TERRAIN = 0x02, VALID_ALTITUDE_SEALEVEL = 0x04, VALID_SHIM_DIRVECTOR = 0x08 };
+
+	// P2 shim mirrors, float copies of the above that the float getters hand out
+	Matrix3D						m_shimTransform;
+	Coord3D							m_shimPos;
+	Real								m_shimAngle;
+	mutable Coord3D			m_shimDirVector;
+
 
 	// yes, private. No, really. Private. Don't expose.
 	enum ObjectPrivateStatusBits

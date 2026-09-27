@@ -364,8 +364,26 @@ public:
 	
 	void notifyDrawableDependencyCleared();///< If any of your draw modules were waiting for something, it's ready now.
 
-	// Override.
+	// Where the drawable is: a float transform, and the float caches beside it.  A drawable bound to
+	// an Object gets its transform pushed from Object::reactToTransformChange; an unbound one (a
+	// ghost, a hint, a scorch) is placed through these directly.
 	void setPosition( const Coord3D *pos );
+	void setPositionZ( Real z );	///< doesn't have to recalc the cached terrain stuff
+	void setOrientation( Real angle );	///< always upright, or aligned with the terrain for STICK_TO_TERRAIN_SLOPE
+	void setTransformMatrix( const Matrix3D *mx );
+	inline const Coord3D *getPosition() const { return &m_cachedPos; }
+	inline Real getOrientation() const { return m_cachedAngle; }
+	const Coord3D *getUnitDirectionVector2D() const;
+	void getUnitDirectionVector2D(Coord3D& dir) const;
+	void getUnitDirectionVector3D(Coord3D& dir) const;
+	Real getHeightAboveTerrain() const;
+	Real getHeightAboveTerrainOrWater() const;
+	Bool isAboveTerrain() const { return getHeightAboveTerrain() > 0.0f; }
+	Bool isAboveTerrainOrWater() const { return getHeightAboveTerrainOrWater() > 0.0f; }
+	Bool isSignificantlyAboveTerrain() const;
+	void convertBonePosToWorldPos(const Coord3D* bonePos, const Matrix3D* boneTransform, Coord3D* worldPos, Matrix3D* worldTransform) const;
+	void transformPoint( const Coord3D *in, Coord3D *out );
+
 	void reactToGeometryChange();
 
 	const GeometryInfo& getDrawableGeometryInfo() const;
@@ -658,10 +676,28 @@ protected:
 	void validatePos() const;
 #endif
 
-	virtual void reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle);
+	void reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle);
 	void updateHiddenStatus();
 
 private:
+
+	/* m_transform is the true description of location; the fields after it are caches, and
+		 changing one directly changes nothing. */
+	Matrix3D m_transform;
+
+	enum
+	{
+		VALID_DIRVECTOR = 0x01,
+		VALID_ALTITUDE_TERRAIN = 0x02,
+		VALID_ALTITUDE_SEALEVEL = 0x04
+	};
+
+	mutable Coord3D		m_cachedPos;
+	mutable Real			m_cachedAngle;
+	mutable Coord3D		m_cachedDirVector;
+	mutable Real			m_cachedAltitudeAboveTerrain;
+	mutable Real			m_cachedAltitudeAboveTerrainOrWater;
+	mutable Int				m_cacheFlags;
 
 	// note, these are lazily allocated!
 	TintEnvelope*		m_selectionFlashEnvelope;	///< used for selection flash, works WITH m_colorTintEnvelope

@@ -907,6 +907,58 @@ bool BaseHeightMapRenderObjClass::Cast_Ray(RayCollisionTestClass & raytest)
 }
 
 //=============================================================================
+// BaseHeightMapRenderObjClass::getHeightMapHeightFix
+//=============================================================================
+/** The same triangle and the same logic height map as getHeightMapHeight, in integers.  The cell
+		and the fraction across it come straight from the raw value: a cell is MAP_XY_FACTOR, 10, wide,
+		the fraction is truncated to a step, and a height sample is a byte times MAP_HEIGHT_SCALE, 5/8. */
+//=============================================================================
+static Int64 floorDivide( Int64 a, Int64 b )
+{
+	Int64 q = a / b;
+	return (a % b != 0 && a < 0) ? q - 1 : q;
+}
+
+Fix BaseHeightMapRenderObjClass::getHeightMapHeightFix(Fix x, Fix y) const
+{
+	WorldHeightMap *logicHeightMap = TheTerrainVisual?TheTerrainVisual->getLogicHeightMap():m_map;
+	if ( !logicHeightMap )
+		return Fix( 0 );
+
+	const Int64 CELL_RAW = 10 * Fix::ONE_RAW;
+	const Fix HEIGHT_SCALE = 0.625_fx;
+	const Int64 FAR_CELL = 1 << 20;		// anything past this is off every map; keeps the Int cast sane
+
+	Int64 cx = floorDivide( x.raw(), CELL_RAW );
+	Int64 cy = floorDivide( y.raw(), CELL_RAW );
+	Fix fx = Fix::fromRaw( (x.raw() - cx * CELL_RAW) / 10 );
+	Fix fy = Fix::fromRaw( (y.raw() - cy * CELL_RAW) / 10 );
+	if( cx > FAR_CELL ) cx = FAR_CELL; else if( cx < -FAR_CELL ) cx = -FAR_CELL;
+	if( cy > FAR_CELL ) cy = FAR_CELL; else if( cy < -FAR_CELL ) cy = -FAR_CELL;
+
+	Int ix = (Int)cx + logicHeightMap->getBorderSizeInline();
+	Int iy = (Int)cy + logicHeightMap->getBorderSizeInline();
+	Int xExtent = logicHeightMap->getXExtent();
+
+	// extent-3, as the float version has it
+	if (ix > (xExtent-3) || iy > (logicHeightMap->getYExtent()-3) || iy < 1 || ix < 1)
+		return Fix( getClipHeight(ix, iy) ) * HEIGHT_SCALE;
+
+	const UnsignedByte* data = logicHeightMap->getDataPtr();
+	Int idx = ix + iy*xExtent;
+	Fix p0 = Fix( data[idx] );
+	Fix p2 = Fix( data[idx + xExtent + 1] );
+	const Fix one = Fix( 1 );
+	if (fy > fx) // upper triangle
+	{
+		Fix p3 = Fix( data[idx + xExtent] );
+		return (p3 + (one-fy)*(p0-p3) + fx*(p2-p3)) * HEIGHT_SCALE;
+	}
+	Fix p1 = Fix( data[idx + 1] );
+	return (p1 + fy*(p2-p1) + (one-fx)*(p0-p1)) * HEIGHT_SCALE;
+}
+
+//=============================================================================
 // BaseHeightMapRenderObjClass::getHeightMapHeight
 //=============================================================================
 /** return the height and normal of the triangle plane containing given location within heightmap. */

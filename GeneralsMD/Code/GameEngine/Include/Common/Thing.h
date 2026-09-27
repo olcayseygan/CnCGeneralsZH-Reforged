@@ -108,52 +108,17 @@ public:
 	Bool isKindOfMulti(const KindOfMaskType& mustBeSet, const KindOfMaskType& mustBeClear) const;
 	Bool isAnyKindOf(const KindOfMaskType& anyKindOf) const;
 
-	// physical properties
-	void setPosition( const Coord3D *pos );
-
-	/// the nice thing about this is that we don't have to recalc out cached terrain stuff.
-	void setPositionZ( Real z );
-
-	// note that calling this always orients the object straight up on the Z-axis,
-	// or aligned with the terrain if we have the magic flag set.
-	// don't want this behavior? then call setTransformMatrix instead.
-	void setOrientation( Real angle );
-
-	inline const Coord3D *getPosition() const { return &m_cachedPos; }
-	inline Real getOrientation() const { return m_cachedAngle; }
-	const Coord3D *getUnitDirectionVector2D() const;
-	void getUnitDirectionVector2D(Coord3D& dir) const;
-	void getUnitDirectionVector3D(Coord3D& dir) const;
-
-	Real getHeightAboveTerrain() const;
-	Real getHeightAboveTerrainOrWater() const;
-
-	Bool isAboveTerrain() const { return getHeightAboveTerrain() > 0.0f; }
-	Bool isAboveTerrainOrWater() const { return getHeightAboveTerrainOrWater() > 0.0f; }
-
- 	/** Ground vehicles moving down a slope will get slightly above the terrain.
-	If we treat this as airborne, then they slide down slopes.  This checks whether
-	they are high enough that we should let them act like they're flying. jba. */
-	Bool isSignificantlyAboveTerrain() const ;
-
-	void convertBonePosToWorldPos(const Coord3D* bonePos, const Matrix3D* boneTransform, Coord3D* worldPos, Matrix3D* worldTransform) const;
-
-	void setTransformMatrix( const Matrix3D *mx );												///< set the world transformation matrix
-	const Matrix3D* getTransformMatrix() const { return &m_transform; }		///< return the world transformation matrix
-
-	void transformPoint( const Coord3D *in, Coord3D *out );								///< transform this point using the m_transform matrix of this thing
+	/* Where a Thing is lives in the subclasses, not here.  An Object holds a fixed point transform,
+		 which is what the simulation runs on (GameLogic/Object.h); a Drawable holds a float Matrix3D,
+		 which is what the renderer wants (GameClient/Drawable.h).  The Object pushes its transform to
+		 its Drawable every time it changes, and nothing goes the other way. */
 
 protected:
-
-	// Virtual method since objects can be on bridges and need to calculate heigh above terrain differently.
-	virtual Real calculateHeightAboveTerrain(void) const;		// Calculates the actual height above terrain.  Doesn't use cache.
 
 	virtual Object *asObjectMeth() { return NULL; }
 	virtual Drawable *asDrawableMeth() { return NULL; }
 	virtual const Object *asObjectMeth() const { return NULL; }
 	virtual const Drawable *asDrawableMeth() const { return NULL; }
-
-	virtual void reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle) = 0;
 
 private:
 
@@ -164,31 +129,8 @@ private:
 #if defined(_DEBUG) || defined(_INTERNAL)
 	AsciiString m_templateName;
 #endif
-	/*
-		yes, private; it's important that some of these only be modified
-		by going thru the right methods, thus we make 'em private to enforce this.
 
-		note that "m_transform" is the true description of location; the other fields
-		(pos, angle, etc) are all simply cached values used for efficiency and convenience.
-		you should NEVER modify them directly, because that won't change anything!
-	*/
-	Matrix3D m_transform;									///< the 3D orientation and position of this Thing
-
-	enum
-	{
-		VALID_DIRVECTOR = 0x01,
-		VALID_ALTITUDE_TERRAIN = 0x02,
-		VALID_ALTITUDE_SEALEVEL = 0x04
-	};
-
-	mutable Coord3D		m_cachedPos;												///< position of thing
-	mutable Real			m_cachedAngle;											///< orientation of thing
-	mutable Coord3D		m_cachedDirVector;									///< unit direction vector
-	mutable Real			m_cachedAltitudeAboveTerrain;
-	mutable Real			m_cachedAltitudeAboveTerrainOrWater;
-	mutable Int				m_cacheFlags;
-
-}; 
+};
 
 
 //-----------------------------------------------------------------------------

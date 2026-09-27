@@ -1622,13 +1622,16 @@ void GameState::gameStatePostProcessLoad( void )
 /** Xfer method for the game state itself 
 	* Version Info:
 	* 1: Initial version 
-	* 2: Added save file type and mission map name (regular save vs automatic mission save) */
+	* 2: Added save file type and mission map name (regular save vs automatic mission save)
+	* 3: the game speed
+	* 4: nothing new in this block; marks the fixed point object transform and extents (Object 11,
+	*    GeometryInfo 2).  Those blocks still read their float versions, converted. */
 // ------------------------------------------------------------------------------------------------
 void GameState::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 3;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 

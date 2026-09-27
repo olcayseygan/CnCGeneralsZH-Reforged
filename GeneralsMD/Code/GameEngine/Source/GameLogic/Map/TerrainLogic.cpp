@@ -38,6 +38,7 @@
 #include "Common/ThingTemplate.h"
 #include "Common/WellKnownKeys.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameClient/TerrainVisual.h"
 
@@ -1480,6 +1481,37 @@ Bool TerrainLogic::isClearLineOfSight(const Coord3D& pos, const Coord3D& posOthe
 
 //-------------------------------------------------------------------------------------------------
 /** default get height for terrain logic */
+//-------------------------------------------------------------------------------------------------
+Fix TerrainLogic::getGroundHeightFix( Fix x, Fix y ) const
+{
+	return Fix( 0 );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The layer's height through the float getLayerHeight, which only adds the bridge or wall to the
+		ground; the ground it starts from is the shim over getGroundHeightFix, and a height under 256
+		makes the round trip through a float exactly. */
+//-------------------------------------------------------------------------------------------------
+Fix TerrainLogic::getLayerHeightFix( Fix x, Fix y, PathfindLayerEnum layer, Bool clip ) const
+{
+	if( layer == LAYER_GROUND )
+		return getGroundHeightFix( x, y );
+	// ponytail: bridges and walls stay float until the pathfinder's layers move (P5)
+	return fixFromReal( getLayerHeight( fixToReal( x ), fixToReal( y ), layer, NULL, clip ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool TerrainLogic::isUnderwaterFix( Fix x, Fix y, Fix *waterZ, Fix *terrainZ )
+{
+	Real wZ = 0, tZ = 0;
+	Bool under = isUnderwater( fixToReal( x ), fixToReal( y ), &wZ, &tZ );
+	if( waterZ )
+		*waterZ = fixFromReal( wZ );
+	if( terrainZ )
+		*terrainZ = getGroundHeightFix( x, y );
+	return under;
+}
+
 //-------------------------------------------------------------------------------------------------
 Real TerrainLogic::getGroundHeight( Real x, Real y, Coord3D* normal ) const
 {

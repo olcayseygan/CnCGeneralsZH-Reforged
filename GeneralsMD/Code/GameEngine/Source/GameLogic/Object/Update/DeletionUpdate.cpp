@@ -96,8 +96,8 @@ UpdateSleepTime DeletionUpdate::update( void )
 	if (obj)
 	{
 		GeometryInfo geom =	geom=obj->getGeometryInfo();
-		geom.setMajorRadius(obj->getGeometryInfo().getMinorRadius());// CRIS
-		geom.setMinorRadius(obj->getGeometryInfo().getMajorRadius());// CROSS
+		geom.setMajorRadiusFix(obj->getGeometryInfo().getMinorRadiusFix());// CRIS
+		geom.setMinorRadiusFix(obj->getGeometryInfo().getMajorRadiusFix());// CROSS
 		obj->setGeometryInfo(geom);
 	}
 

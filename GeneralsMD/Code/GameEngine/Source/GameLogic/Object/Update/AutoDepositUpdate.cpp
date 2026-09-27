@@ -67,6 +67,7 @@
 #include "GameClient/Color.h"
 #include "GameClient/GameText.h"
 #include "GameClient/Drawable.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 void parseUpgradePair( INI *ini, void *instance, void *store, const void *userData )
@@ -132,8 +133,7 @@ void AutoDepositUpdate::awardInitialCaptureBonus( Player *player )
 	{
 		UnicodeString moneyString;
 		moneyString.format( TheGameText->fetch( "GUI:AddCash" ), getAutoDepositUpdateModuleData()->m_initialCaptureBonus );
-		Coord3D pos;
-		pos.set( getObject()->getPosition() );
+		Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// the floating text is client, in float
 		pos.z += 10.0f; //add a little z to make it show up above the unit.
 		Color color = player->getPlayerColor() | GameMakeColor( 0, 0, 0, 230 );
 		TheInGameUI->addFloatingText( moneyString, &pos, color );
@@ -223,14 +223,13 @@ UpdateSleepTime AutoDepositUpdate::update( void )
 			  // OY LOOK!  I AM USING LOCAL PLAYER.  Do not put anything other than TheInGameUI->addFloatingText in the block this controls!!!
 			  UnicodeString moneyString;
 			  moneyString.format( TheGameText->fetch( "GUI:AddCash" ), moneyAmount );
-			  Coord3D pos;
-			  pos.set( getObject()->getPosition() );
+			  Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// the floating text is client, in float
 			  pos.z += 10.0f; //add a little z to make it show up above the unit.
-		  
+
         if ( owner->isKindOf( KINDOF_STRUCTURE ) )
         {
-          Real width = owner->getGeometryInfo().getMajorRadius() * 0.3f;
-          Real depth = owner->getGeometryInfo().getMinorRadius() * 0.3f;
+          Real width = fixToReal( owner->getGeometryInfo().getMajorRadiusFix() ) * 0.3f;
+          Real depth = fixToReal( owner->getGeometryInfo().getMinorRadiusFix() ) * 0.3f;
           pos.x += GameClientRandomValue(-width,width);
           pos.y += GameClientRandomValue(-depth,depth);
         }

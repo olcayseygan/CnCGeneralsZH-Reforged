@@ -48,6 +48,7 @@
 #include "GameClient/Drawable.h"
 #include "Common/KindOf.h"
 #include "GameClient/ParticleSys.h"
+#include "Lib/FixBoundary.h"
 
 
 
@@ -107,7 +108,8 @@ EMPUpdate::EMPUpdate( Thing *thing, const ModuleData* moduleData ) : UpdateModul
 		//	m_spinRate *= -1.0f;
 		//}
 
-		getObject()->setOrientation(GameLogicRandomValueReal(-PI,PI));
+		// the logic stream still rolls Reals
+		getObject()->setOrientationFix(fixFromReal(GameLogicRandomValueReal(-PI,PI)));
 
 		DEBUG_ASSERTCRASH( m_tintEnvPlayFrame < m_dieFrame, ("EMPUpdate::EMPUpdate - you cant play fade after death\n" ) );
 		
@@ -180,9 +182,9 @@ void EMPUpdate::doDisableAttack( void )
 	if( !object || !data )
 		return; //sanity
 
-	Real radius = data->m_effectRadius;
-	Real curVictimDistSqr;
-	const Coord3D *pos = object->getPosition();
+	const Fix radius = fixFromReal( data->m_effectRadius );	// P3: INI data
+	Fix curVictimDistSqr;
+	const FCoord3D *pos = object->getPositionFix();
 
 	//Kris -- October 28, 2003 -- Patch 1.01
 	//If the EMP hits an airborne target, then don't allow the EMP
@@ -203,17 +205,17 @@ void EMPUpdate::doDisableAttack( void )
 	SimpleObjectIterator *iter = NULL;
 	Object *curVictim = NULL;
 
-	if (radius > 0.0f)
+	if (radius > Fix( 0 ))
 	{
-		iter = ThePartitionManager->iterateObjectsInRange(pos, 
+		iter = ThePartitionManager->iterateObjectsInRangeFix(pos,
 			radius, FROM_BOUNDINGSPHERE_3D);
 
-		curVictim = iter->firstWithNumeric(&curVictimDistSqr);
-	} 
+		curVictim = iter->firstWithNumericFix(&curVictimDistSqr);
+	}
 
 	MemoryPoolObjectHolder hold(iter);
 
-	for ( ; curVictim != NULL; curVictim = iter ? iter->nextWithNumeric(&curVictimDistSqr) : NULL)
+	for ( ; curVictim != NULL; curVictim = iter ? iter->nextWithNumericFix(&curVictimDistSqr) : NULL)
 	{
 		if ( curVictim != object)
 		{
@@ -356,13 +358,12 @@ void EMPUpdate::doDisableAttack( void )
     if( !intendedVictim->isKindOf( KINDOF_EMP_HARDENED ) )
 		{
 			//Victim position
-			Coord3D coord;
-			coord.set( intendedVictim->getPosition() );
+			FCoord3D coord = *intendedVictim->getPositionFix();
 			//Subtract this object (distance from missile to victim's previous position)
-			coord.sub( pos );
+			coord.sub( *pos );
 
-			Real lengthSqr = coord.lengthSqr();
-			if( lengthSqr <= radius * 2.0f || lengthSqr <= 40.0f * 40.0f )
+			Fix lengthSqr = coord.lengthSqr();
+			if( lengthSqr <= radius * Fix( 2 ) || lengthSqr <= Fix( 40 * 40 ) )
 			{
 				//Disable the target for a specified amount of time.
 				intendedVictim->setDisabledUntil( DISABLED_EMP, TheGameLogic->getFrame() + data->m_disabledDuration );
@@ -513,24 +514,24 @@ void LeafletDropBehavior::doDisableAttack( void )
 	if( !object || !data )
 		return; //sanity
 
-	Real radius = data->m_radius;
-	Real curVictimDistSqr;
-	const Coord3D *pos = object->getPosition();
+	const Fix radius = fixFromReal( data->m_radius );	// P3: INI data
+	Fix curVictimDistSqr;
+	const FCoord3D *pos = object->getPositionFix();
 
 	SimpleObjectIterator *iter = NULL;
 	Object *curVictim = NULL;
 
-	if (radius > 0.0f)
+	if (radius > Fix( 0 ))
 	{
-		iter = ThePartitionManager->iterateObjectsInRange(pos, 
+		iter = ThePartitionManager->iterateObjectsInRangeFix(pos,
 			radius, FROM_BOUNDINGSPHERE_3D);
 
-		curVictim = iter->firstWithNumeric(&curVictimDistSqr);
-	} 
+		curVictim = iter->firstWithNumericFix(&curVictimDistSqr);
+	}
 
 	MemoryPoolObjectHolder hold(iter);
 
-	for ( ; curVictim != NULL; curVictim = iter ? iter->nextWithNumeric(&curVictimDistSqr) : NULL)
+	for ( ; curVictim != NULL; curVictim = iter ? iter->nextWithNumericFix(&curVictimDistSqr) : NULL)
 	{
 		if ( curVictim != object)
 		{

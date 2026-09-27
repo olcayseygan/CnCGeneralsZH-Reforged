@@ -41,6 +41,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/HordeUpdate.h"
 #include "GameClient/Drawable.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -272,15 +273,17 @@ UpdateSleepTime HordeUpdate::update( void )
 		// RubOffRadius reaches further than Radius (150 against 75 on the Battlemaster), but the
 		// honorary-member test below only ever saw the units inside Radius, so a tank that close to a
 		// true member never got the horde. Walk the larger of the two, count only inside Radius.
-		const Real scanRadius = max( md->m_minDist, md->m_rubOffRadius );
-		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(getObject(), scanRadius, FROM_BOUNDINGSPHERE_3D, filters);
+		// P3: Radius and RubOffRadius are still Reals from the INI
+		const Fix minDist = fixFromReal( md->m_minDist );
+		const Fix rubOffRadius = fixFromReal( md->m_rubOffRadius );
+		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(getObject(), fixMax( minDist, rubOffRadius ), FROM_BOUNDINGSPHERE_3D, filters);
 		MemoryPoolObjectHolder hold(iter);
 
-		const Real minDistSq = sqr( md->m_minDist );
+		const Fix minDistSq = minDist * minDist;
 		Int nearby = 0;
 		for (Object* other = iter->first(); other; other = iter->next())
 		{
-			if (ThePartitionManager->getDistanceSquared(getObject(), other, FROM_BOUNDINGSPHERE_3D) <= minDistSq)
+			if (ThePartitionManager->getDistanceSquaredFix(getObject(), other, FROM_BOUNDINGSPHERE_3D) <= minDistSq)
 				++nearby;
 		}
 
@@ -294,15 +297,13 @@ UpdateSleepTime HordeUpdate::update( void )
 			m_inHorde = FALSE;
 			m_trueHordeMember = FALSE;/// unless...
 
-			Real rubOffRadiusSq = sqr(md->m_rubOffRadius);
+			const Fix rubOffRadiusSq = rubOffRadius * rubOffRadius;
 			for (Object* other = iter->first(); other; other = iter->next())
 			{
 				HordeUpdateInterface* hui = getHUI(other);
 				if ( hui != NULL && hui->isTrueHordeMember() )
 				{
-					Real dist = ThePartitionManager->getDistanceSquared(getObject(), other, FROM_CENTER_2D);
-
-					if (dist <= rubOffRadiusSq )
+					if (ThePartitionManager->getDistanceSquaredFix(getObject(), other, FROM_CENTER_2D) <= rubOffRadiusSq )
 					{
 						m_inHorde = TRUE;
 						break;
@@ -358,7 +359,7 @@ UpdateSleepTime HordeUpdate::update( void )
 				}
 				else
 				{
-					Real size = 3.5f * obj->getGeometryInfo().getMajorRadius();
+					Real size = 3.5f * fixToReal( obj->getGeometryInfo().getMajorRadiusFix() );	// the decal is client
 					draw->setTerrainDecalSize( size, size );
 
 					if( obj->testWeaponBonusCondition( WEAPONBONUSCONDITION_NATIONALISM ) == TRUE )

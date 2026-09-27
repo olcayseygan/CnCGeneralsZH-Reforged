@@ -33,6 +33,7 @@
 #include "Common/Xfer.h"
 #include "GameLogic/Module/DynamicGeometryInfoUpdate.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -143,8 +144,9 @@ UpdateSleepTime DynamicGeometryInfoUpdate::update( void )
 	newMinor = m_initialMinorRadius + (ratio * (m_finalMinorRadius - m_initialMinorRadius));
 
 	// make a new geometry info with the new values
-	const GeometryInfo oldGeom = me->getGeometryInfo();
-	GeometryInfo newGeom( oldGeom.getGeomType(), oldGeom.getIsSmall(), newHeight, newMajor, newMinor );
+	// P3: the extents are interpolated between INI Reals; the geometry itself is fixed
+	GeometryInfo newGeom = me->getGeometryInfo();
+	newGeom.setFix( newGeom.getGeomType(), newGeom.getIsSmall(), fixFromReal( newHeight ), fixFromReal( newMajor ), fixFromReal( newMinor ) );
 	me->setGeometryInfo( newGeom );
 
 	// we've not been active another frame .. increment out counter

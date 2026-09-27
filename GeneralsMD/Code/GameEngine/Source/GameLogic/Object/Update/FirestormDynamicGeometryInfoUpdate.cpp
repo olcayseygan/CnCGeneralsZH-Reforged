@@ -44,6 +44,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/FirestormDynamicGeometryInfoUpdate.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -139,10 +140,10 @@ UpdateSleepTime FirestormDynamicGeometryInfoUpdate::update( void )
 		// note that we add a small amount to it to avoid particles from the system (especially
 		// flat XY particles) from popping up through the terrain
 		//
-		Coord3D pos;
-		pos.x = getObject()->getPosition()->x;
-		pos.y = getObject()->getPosition()->y;
-		pos.z = modData->m_particleOffsetZ + TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		// P3: the offset is INI data; the particle systems are client, in float
+		FCoord3D fpos = *getObject()->getPositionFix();
+		fpos.z = fixFromReal( modData->m_particleOffsetZ ) + TheTerrainLogic->getGroundHeightFix( fpos.x, fpos.y );
+		const Coord3D pos = fpos.toCoord3D();
 
 		// do the particle systems
 		for( Int i = 0; i < MAX_FIRESTORM_SYSTEMS; i++ )
@@ -183,11 +184,12 @@ UpdateSleepTime FirestormDynamicGeometryInfoUpdate::update( void )
 			if( sys )
 			{
 				ParticleSystemInfo::EmissionVolumeType type = sys->getEmisionVolumeType();
+				const Real radius = fixToReal( getObject()->getGeometryInfo().getMajorRadiusFix() );	// client
 
 				if( type == ParticleSystemInfo::EmissionVolumeType::SPHERE )
-					sys->setEmissionVolumeSphereRadius( getObject()->getGeometryInfo().getMajorRadius() );
+					sys->setEmissionVolumeSphereRadius( radius );
 				else if( type == ParticleSystemInfo::EmissionVolumeType::CYLINDER )
-					sys->setEmissionVolumeCylinderRadius( getObject()->getGeometryInfo().getMajorRadius() );
+					sys->setEmissionVolumeCylinderRadius( radius );
 
 			}  // end if
 			else
@@ -206,7 +208,8 @@ UpdateSleepTime FirestormDynamicGeometryInfoUpdate::update( void )
 	if( m_switchedDirections == TRUE && m_scorchPlaced == FALSE )
 	{
 
-		TheGameClient->addScorch( getObject()->getPosition(), modData->m_scorchSize, SCORCH_1 );
+		const Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// the scorch is client
+		TheGameClient->addScorch( &pos, modData->m_scorchSize, SCORCH_1 );
 		m_scorchPlaced = TRUE;
 
 	}  // end if
@@ -233,7 +236,7 @@ void FirestormDynamicGeometryInfoUpdate::doDamageScan( void )
 
 	// get the object and position
 	Object *firestorm = getObject();
-	const Coord3D *firestormPos = firestorm->getPosition();
+	const FCoord3D *firestormPos = firestorm->getPositionFix();
 
 	// setup a damage info structure to do some damage
 	DamageInfo damageInfo;
@@ -243,21 +246,22 @@ void FirestormDynamicGeometryInfoUpdate::doDamageScan( void )
 	damageInfo.in.m_amount = modData->m_damageAmount;
 
 	// get the current bounding circle size for the firestorm
-	Real boundingCircle = firestorm->getGeometryInfo().getBoundingCircleRadius();
+	Fix boundingCircle = firestorm->getGeometryInfo().getBoundingCircleRadiusFix();
 
 	// scan objects around us and do damage to objects we have "passed over"
-	if( boundingCircle )
+	if( boundingCircle != Fix( 0 ) )
 	{
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( firestormPos,
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( firestormPos,
 																																			 boundingCircle,
-																																			 FROM_BOUNDINGSPHERE_2D, 
+																																			 FROM_BOUNDINGSPHERE_2D,
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );
+		const Fix maxZ = firestormPos->z + fixFromReal( modData->m_maxHeightForDamage );	// P3: INI data
 		Object *other;
 		for( other = iter->first(); other; other = iter->next() )
 		{
 			// it's too high above us. skip it.
-			if (other->getPosition()->z > firestorm->getPosition()->z + modData->m_maxHeightForDamage)
+			if (other->getPositionFix()->z > maxZ)
 				continue;
 
 			// do damage

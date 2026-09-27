@@ -302,7 +302,7 @@ void LaserUpdate::initLaser( const Object *parent, const Object *target, const C
 		if( target->getDrawable() )
 			m_targetID = target->getDrawable()->getID();
 
-		m_endPos = *target->getPosition();
+		m_endPos = target->getPositionFix()->toCoord3D();	// a client update draws in float
 	}
 	else if( endPos )
 	{
@@ -389,7 +389,7 @@ void LaserUpdate::initLaser( const Object *parent, const Object *target, const C
 	}
 	else
 	{
-		posToUse = *parent->getPosition();
+		posToUse = parent->getPositionFix()->toCoord3D();
 	}
 
 	Drawable *draw = getDrawable();

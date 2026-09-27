@@ -47,6 +47,7 @@
 #include "GameLogic/Module/EjectPilotDie.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/ExperienceTracker.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -87,9 +88,9 @@ UpdateSleepTime HijackerUpdate::update( void )
 		if( target )
 		{
 			// @todo I think we should test for ! IsEffectivelyDead() as well, here
-			obj->setPosition( target->getPosition() );
+			obj->setPositionFix( target->getPositionFix() );
 			m_wasTargetAirborne = target->isSignificantlyAboveTerrain();
-			m_ejectPos = *target->getPosition();
+			m_ejectPos = *target->getPositionFix();
 			
 			// So, if while I am driving this American war vehicle, I gain skill points, I get to keep them when I wreck the vehicle
 			ExperienceTracker *targetExp = target->getExperienceTracker();
@@ -132,7 +133,7 @@ UpdateSleepTime HijackerUpdate::update( void )
 					if (putInContainerTmpl)
 					{
 						Object* container = TheThingFactory->newObject( putInContainerTmpl, obj->getTeam() );
-						container->setPosition(&m_ejectPos);
+						container->setPositionFix(&m_ejectPos);
 						if (container->getContain()->isValidContainerFor(obj, true))
 						{
 							container->getContain()->addToContain(obj);
@@ -215,13 +216,14 @@ void HijackerUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: the eject position in fixed point */
 // ------------------------------------------------------------------------------------------------
 void HijackerUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -232,7 +234,14 @@ void HijackerUpdate::xfer( Xfer *xfer )
 	xfer->xferObjectID( &m_targetID );
 
 	// eject pos
-	xfer->xferCoord3D( &m_ejectPos );
+	if( version >= 2 )
+		xfer->xferFCoord3D( &m_ejectPos );
+	else
+	{
+		Coord3D old;
+		xfer->xferCoord3D( &old );
+		m_ejectPos.set( fixFromReal( old.x ), fixFromReal( old.y ), fixFromReal( old.z ) );
+	}
 
 	// udpate
 	xfer->xferBool( &m_update );

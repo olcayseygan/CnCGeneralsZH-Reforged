@@ -104,7 +104,8 @@ UpdateSleepTime FireWeaponUpdate::update( void )
 	// If my weapon is ready, shoot it.
 	if( isOkayToFire() )
 	{
-		m_weapon->forceFireWeapon( getObject(), getObject()->getPosition() );
+		Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// P6: weapons take a float position
+		m_weapon->forceFireWeapon( getObject(), &pos );
 	}
 	return UPDATE_SLEEP_NONE;
 }

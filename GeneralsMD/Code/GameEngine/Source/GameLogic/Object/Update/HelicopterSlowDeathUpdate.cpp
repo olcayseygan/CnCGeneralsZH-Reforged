@@ -49,6 +49,23 @@
 #include "GameLogic/Module/EjectPilotDie.h"
 #include "GameLogic/Module/HelicopterSlowDeathUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+#include "Lib/FixBoundary.h"
+
+//-------------------------------------------------------------------------------------------------
+// Matrix3D::In_Place_Pre_Rotate_Z in fixed point: the rotation part turns about the world's z, the
+// translation stays where it is
+static void preRotateZ( FixMatrix3D &m, Fix theta )
+{
+	const Fix c = fixCos( theta );
+	const Fix s = fixSin( theta );
+	for( Int col = 0; col < 3; ++col )
+	{
+		const Fix a = m.m[ 0 ][ col ];
+		const Fix b = m.m[ 1 ][ col ];
+		m.m[ 0 ][ col ] = c * a - s * b;
+		m.m[ 1 ][ col ] = s * a + c * b;
+	}
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Helicopter slow death update module data ///////////////////////////////////////////////////////
@@ -216,7 +233,7 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 	// record the current forward angle of the object to be the start angle of our downward
 	// spin circle angle
 	//
-	m_forwardAngle = getObject()->getOrientation();
+	m_forwardAngle = fixToReal( getObject()->getOrientationFix() );	// P4: it steers a physics force
 
 	// set or forward speed in the spiral orbit speed to that specified
 	m_forwardSpeed = modData->m_spiralOrbitForwardSpeed;
@@ -309,9 +326,9 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 
 		//copter->setOrientation( copter->getOrientation() + m_selfSpin * m_orbitDirection );
 
-		Matrix3D xfrm = *copter->getTransformMatrix();
-		xfrm.In_Place_Pre_Rotate_Z(m_selfSpin * m_orbitDirection);
-		copter->setTransformMatrix( &xfrm );
+		FixMatrix3D xfrm = *copter->getTransformMatrixFix();
+		preRotateZ( xfrm, fixFromReal( m_selfSpin * m_orbitDirection ) );	// P3: the spin rates are INI data
+		copter->setTransformMatrixFix( &xfrm );
 
 		//
 		// over time we change the rate at which we self spin around our center of gravity ... we
@@ -385,7 +402,8 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 			m_bladeFlyOffFrame--;
 			if( m_bladeFlyOffFrame <= 0 )
 			{
-				Coord3D bladePos = *copter->getPosition();
+				// the bone is the client's and the FX and OCL take a float position
+				Coord3D bladePos = copter->getPositionFix()->toCoord3D();
 
 				// get the blade position from the bone in the model
 				Drawable *draw = copter->getDrawable();
@@ -438,18 +456,19 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 
 
 	// when we hit the ground
-	const Coord3D *pos = copter->getPosition();
+	const FCoord3D *pos = copter->getPositionFix();
 	if (m_hitGroundFrame == 0)
 	{
 		// srj sez: if we haven't yet hit the ground, adjust our layer properly so we crash on bridges
-		Coord3D tmpPt = *pos;
+		// P5: the layer lookup is still float
+		Coord3D tmpPt = pos->toCoord3D();
 		tmpPt.z = 99999.0f;
 		PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&tmpPt);
 		copter->setLayer(newLayer);
 
-		Real ground = TheTerrainLogic->getLayerHeight( tmpPt.x, tmpPt.y, newLayer );
+		Fix ground = TheTerrainLogic->getLayerHeightFix( pos->x, pos->y, newLayer );
 
-		if (pos->z <= ground + 1.0f || hitATree )
+		if (pos->z <= ground + Fix( 1 ) || hitATree )
 		{
 			
 			// mark the frame we hit the ground on
@@ -497,7 +516,7 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 		if( rubble )
 		{
 
-			rubble->setTransformMatrix( copter->getTransformMatrix() );
+			rubble->setTransformMatrixFix( copter->getTransformMatrixFix() );
 
 		}  // end if
 

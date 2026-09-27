@@ -35,6 +35,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/FloatUpdate.h"
 #include "GameLogic/GameLogic.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameClient/Drawable.h"
 
@@ -103,19 +104,12 @@ UpdateSleepTime FloatUpdate::update( void )
 	// if we're not enabled, do nothing
 	if( m_enabled == TRUE )
 	{
-		// get object position
-		const Coord3D *pos = getObject()->getPosition();
-		
-		// get the height of the water here
-		Real waterZ = pos->z;	// isUnderwater leaves it alone where there is no water
-		TheTerrainLogic->isUnderwater( pos->x, pos->y, &waterZ );
-
-		// snap to the water surface
-		Coord3D newPos;
-		newPos.x = pos->x;
-		newPos.y = pos->y;
-		newPos.z = waterZ;
-		getObject()->setPosition( &newPos );
+		// snap to the water surface; where there is no water the object keeps its own height.  The
+		// water map is float map data, so the handle lookup crosses over.
+		FCoord3D newPos = *getObject()->getPositionFix();
+		if( TheTerrainLogic->getWaterHandle( fixToReal( newPos.x ), fixToReal( newPos.y ) ) )
+			TheTerrainLogic->isUnderwaterFix( newPos.x, newPos.y, &newPos.z );
+		getObject()->setPositionFix( &newPos );
 
 	}
 

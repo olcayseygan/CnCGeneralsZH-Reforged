@@ -41,6 +41,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/HeightDieUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -96,9 +97,7 @@ HeightDieUpdate::HeightDieUpdate( Thing *thing, const ModuleData* moduleData )
 {
 	m_hasDied = FALSE;
 	m_particlesDestroyed = FALSE;
-	m_lastPosition.x = -1.0f;
-	m_lastPosition.y = -1.0f;
-	m_lastPosition.z = -1.0f;
+	m_lastPosition.set( Fix( -1 ), Fix( -1 ), Fix( -1 ) );
 	m_earliestDeathFrame = UINT_MAX;
 	// m_lastPosition = *thing->getPosition();
 
@@ -128,7 +127,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 	{
 
 		// keep track of our last position even though we're not doing anything yet
-		m_lastPosition = *getObject()->getPosition();
+		m_lastPosition = *getObject()->getPositionFix();
 
 		// get outta here
 		return UPDATE_SLEEP_NONE;
@@ -139,7 +138,10 @@ UpdateSleepTime HeightDieUpdate::update( void )
 	const HeightDieUpdateModuleData *modData = getHeightDieUpdateModuleData();
 
 	// get our current position
-	const Coord3D *pos = getObject()->getPosition();
+	const FCoord3D pos = *getObject()->getPositionFix();
+
+	// P3: the INI heights are still Reals
+	const Fix targetHeightAboveTerrain = fixFromReal( modData->m_targetHeightAboveTerrain );
 
 	Bool directionOK = TRUE;
 	if( m_hasDied == FALSE )
@@ -148,21 +150,23 @@ UpdateSleepTime HeightDieUpdate::update( void )
 		if( modData->m_onlyWhenMovingDown )
 		{
 
-			if( pos->z >= m_lastPosition.z )
+			if( pos.z >= m_lastPosition.z )
 				directionOK = FALSE;
 
 		}  // end fi
 
 		// get the terrain height
-		Real terrainHeightAtPos = TheTerrainLogic->getGroundHeight( pos->x, pos->y );
-		
+		Fix terrainHeightAtPos = TheTerrainLogic->getGroundHeightFix( pos.x, pos.y );
+
 		// if including structures, check for bridges
 		if (modData->m_targetHeightIncludesStructures)
 		{
-			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(pos);
+			// P5: the layer lookup is still float
+			const Coord3D posF = pos.toCoord3D();
+			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(&posF);
 			if (layer != LAYER_GROUND)
 			{
-				Real layerHeight = TheTerrainLogic->getLayerHeight(pos->x, pos->y, layer);
+				Fix layerHeight = TheTerrainLogic->getLayerHeightFix(pos.x, pos.y, layer);
 				if (layerHeight > terrainHeightAtPos)
 					terrainHeightAtPos = layerHeight;
 			}
@@ -173,7 +177,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 		// the terrain ... we may change our target height if we care about dying above
 		// objects under us (see below)
 		//
-		Real targetHeight = terrainHeightAtPos + modData->m_targetHeightAboveTerrain;
+		Fix targetHeight = terrainHeightAtPos + targetHeightAboveTerrain;
 
 		//
 		// if we consider objects under us ... we will die when we are the specified distance above
@@ -185,16 +189,16 @@ UpdateSleepTime HeightDieUpdate::update( void )
 			// scan all objects in the radius of our extent and find the tallest height among them
 			PartitionFilterAcceptByKindOf filter1( MAKE_KINDOF_MASK( KINDOF_STRUCTURE ),KINDOFMASK_NONE );
 			PartitionFilter *filters[] = { &filter1, NULL };
-			Real range = getObject()->getGeometryInfo().getBoundingCircleRadius();
-			ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( getObject(),
-																																				 range, 
-																																				 FROM_BOUNDINGSPHERE_3D, 
+			Fix range = getObject()->getGeometryInfo().getBoundingCircleRadiusFix();
+			ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( getObject(),
+																																				 range,
+																																				 FROM_BOUNDINGSPHERE_3D,
 																																				 filters );
 			MemoryPoolObjectHolder hold( iter );
 			Object *obj;
 
-			Real tallestHeight = 0.0f;
-			Real thisHeight;
+			Fix tallestHeight = Fix( 0 );
+			Fix thisHeight;
 			for( obj = iter->first(); obj; obj = iter->next() )
 			{
 
@@ -203,7 +207,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 					continue;
 
 				// store the height of the tallest object under us
-				thisHeight = obj->getGeometryInfo().getMaxHeightAbovePosition();
+				thisHeight = obj->getGeometryInfo().getMaxHeightAbovePositionFix();
 
 				if( thisHeight > tallestHeight )
 					tallestHeight = thisHeight;
@@ -215,25 +219,22 @@ UpdateSleepTime HeightDieUpdate::update( void )
 			// entry for the object that has this update ... or it is the building height of the
 			// tallest thing under us
 			//
-			if( tallestHeight > modData->m_targetHeightAboveTerrain )
+			if( tallestHeight > targetHeightAboveTerrain )
 				targetHeight = tallestHeight + terrainHeightAtPos;
 
 		}  // end if
 
 		// if we are below the target height ... DIE!
-		if( pos->z < targetHeight && directionOK )
+		if( pos.z < targetHeight && directionOK )
 		{
 
 			// if we're supposed to snap us to the ground on death do so
-			// AND: even if we're not snapping to ground, be sure we don't go BELOW ground 
-			if( modData->m_snapToGroundOnDeath || pos->z < terrainHeightAtPos )
+			// AND: even if we're not snapping to ground, be sure we don't go BELOW ground
+			if( modData->m_snapToGroundOnDeath || pos.z < terrainHeightAtPos )
 			{
-				Coord3D ground;
-
-				ground.x = pos->x;
-				ground.y = pos->y;
+				FCoord3D ground = pos;
 				ground.z = terrainHeightAtPos;
-				getObject()->setPosition( &ground );
+				getObject()->setPositionFix( &ground );
 
 			}
 
@@ -251,7 +252,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 	// if our height is below the destroy attached particles height above the terrain, clean
 	// them up from the particle system
 	//
-	if( m_particlesDestroyed == FALSE && pos->z < modData->m_destroyAttachedParticlesAtHeight && (m_hasDied || directionOK) )
+	if( m_particlesDestroyed == FALSE && pos.z < fixFromReal( modData->m_destroyAttachedParticlesAtHeight ) && (m_hasDied || directionOK) )
 	{
 
 		// destroy them
@@ -263,7 +264,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 	}  // end if
 
 	// save our current position as the last position we monitored
-	m_lastPosition = *pos;
+	m_lastPosition = pos;
 
 	return UPDATE_SLEEP_NONE;
 
@@ -285,13 +286,14 @@ void HeightDieUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version 
 	* 2: m_earliestDeathFrame
+	* 3: the last position in fixed point
 */
 // ------------------------------------------------------------------------------------------------
 void HeightDieUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -305,7 +307,14 @@ void HeightDieUpdate::xfer( Xfer *xfer )
 	xfer->xferBool( &m_particlesDestroyed );
 
 	// last position
-	xfer->xferCoord3D( &m_lastPosition );
+	if( version >= 3 )
+		xfer->xferFCoord3D( &m_lastPosition );
+	else
+	{
+		Coord3D old;
+		xfer->xferCoord3D( &old );
+		m_lastPosition.set( fixFromReal( old.x ), fixFromReal( old.y ), fixFromReal( old.z ) );
+	}
 
 	if( version >= 2 )
 		xfer->xferUnsignedInt( &m_earliestDeathFrame );

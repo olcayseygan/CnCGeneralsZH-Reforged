@@ -73,8 +73,45 @@
 #include "GameLogic/TurretAI.h"
 #include "GameLogic/Weapon.h"
 #include "Common/Radar.h"									// For TheRadar
+#include "Lib/FixBoundary.h"
 
 #define SLEEPY_AI
+
+//-------------------------------------------------------------------------------------------------
+// The object's place is fixed point; the pathfinder (P5), the locomotor and physics (P4), the
+// weapons (P6) and the debug log still take float, and these are where it crosses over.
+static inline Coord3D floatPosOf( const Object *obj ) { return obj->getPositionFix()->toCoord3D(); }
+/// the footprint for the crowd model (P4), which steers in float
+static inline Real floatRadiusOf( const Object *obj ) { return fixToReal( obj->getGeometryInfo().getBoundingCircleRadiusFix() ); }
+static inline FCoord3D fixPosOf( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+// the ground under a goal or a path point that is still float (P4/P5), read from the fixed height map
+static inline Real groundHeightAt( Real x, Real y )
+{
+	return fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( x ), fixFromReal( y ) ) );
+}
+static inline Real layerHeightAt( Real x, Real y, PathfindLayerEnum layer )
+{
+	return fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( x ), fixFromReal( y ), layer ) );
+}
+
+// PartitionManager::getRelativeAngle2D in fixed point: the signed angle from the object's heading to
+// pos, in (-PI, PI], and zero when pos is where the object stands.  The atan2 of the cross and dot
+// products is the float version's acos of the dot with the cross product's sign.
+static Fix relativeAngle2DFix( const Object *obj, const FCoord3D &pos )
+{
+	const FCoord3D *objPos = obj->getPositionFix();
+	const Fix vx = pos.x - objPos->x;
+	const Fix vy = pos.y - objPos->y;
+	if( vx == Fix( 0 ) && vy == Fix( 0 ) )
+		return Fix( 0 );
+	const FCoord3D *dir = obj->getUnitDirectionVector2DFix();
+	return fixAtan2( dir->x * vy - dir->y * vx, dir->x * vx + dir->y * vy );
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -176,11 +213,11 @@ static void AIUpdate_traceMove( const Object *obj, Bool blocked, Int blockedFram
 		}
 	}
 
-	const Coord3D *pos = obj->getPosition();
+	const Coord3D pos = floatPosOf( obj );
 	const PhysicsBehavior *physics = obj->getPhysics();
 	const Real actualSpeed = physics ? physics->getVelocityMagnitude() : 0.0f;
 	DEBUG_LOG(("MOVETRACE %d,%d,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%d,%d\n",
-		TheGameLogic->getFrame(), (Int)obj->getID(), pos->x, pos->y,
+		TheGameLogic->getFrame(), (Int)obj->getID(), pos.x, pos.y,
 		actualSpeed, desiredSpeed, maxSpeed, maxBlockedSpeed, bumpSpeedLimit,
 		blocked ? 1 : 0, blockedFrames, waitingForPath ? 1 : 0,
 		hasPath ? 1 : 0));
@@ -525,15 +562,16 @@ void AIUpdateInterface::doPathfind( PathfindServicesInterface *pathfinder )
 		pos1.set(-1000,-1000,0);
 		Object *repulsor = TheGameLogic->findObjectByID(m_repulsor1);
 		if (repulsor) {
-			pos1 = *repulsor->getPosition();
+			pos1 = floatPosOf(repulsor);
 		}
 		pos2 = pos1;
 		repulsor = TheGameLogic->findObjectByID(m_repulsor2);
 		if (repulsor) {
-			pos2 = *repulsor->getPosition();
+			pos2 = floatPosOf(repulsor);
 		}
-		m_path = pathfinder->findSafePath(getObject(), m_locomotorSet, 
-			getObject()->getPosition(), 
+		const Coord3D myPos = floatPosOf(getObject());
+		m_path = pathfinder->findSafePath(getObject(), m_locomotorSet,
+			&myPos,
 			&pos1, 	&pos2, 
 			getObject()->getVisionRange() + TheAI->getAiData()->m_repulsedDistance);
 		m_pathfindFoundNothing = (m_path == NULL);
@@ -544,7 +582,8 @@ void AIUpdateInterface::doPathfind( PathfindServicesInterface *pathfinder )
 	}
 	if (m_isApproachPath) {
 		destroyPath();
-		m_path = pathfinder->findClosestPath(getObject(), m_locomotorSet, getObject()->getPosition(), 
+		const Coord3D myPos = floatPosOf(getObject());
+		m_path = pathfinder->findClosestPath(getObject(), m_locomotorSet, &myPos,
 			&m_requestedDestination, m_isBlockedAndStuck, 0.2f, FALSE );
 		m_pathfindFoundNothing = (m_path == NULL);
 		if (isDoingGroundMovement() && getPath()) {
@@ -572,7 +611,7 @@ void AIUpdateInterface::doPathfind( PathfindServicesInterface *pathfinder )
 		//CRCDEBUG_LOG(("AIUpdateInterface::doPathfind() - m_isAttackPath = FALSE after computeAttackPath()\n"));
 		m_isAttackPath = FALSE;
 		if (victim) {
-			m_requestedDestination = *victim->getPosition();
+			m_requestedDestination = floatPosOf(victim);
 			/* find a pathable destination near the victim.*/
 			TheAI->pathfinder()->adjustToPossibleDestination(getObject(), getLocomotorSet(), &m_requestedDestination);
 			ignoreObstacle(victim); 
@@ -714,7 +753,7 @@ void AIUpdateInterface::setPathFromWaypoint(const Waypoint *way, const Coord2D *
 {
 	destroyPath();
 	m_path = newInstance(Path);
-	Coord3D pos = *getObject()->getPosition();
+	Coord3D pos = floatPosOf(getObject());	// P5: path nodes are float
 	m_path->prependNode( &pos, LAYER_GROUND );
 	m_path->markOptimized();
 	int count = 0;
@@ -993,7 +1032,8 @@ void AIUpdateInterface::chooseGoodLocomotorFromCurrentSet( void )
 {
 	Locomotor* prevLoco = m_curLocomotor;
 
-	Locomotor* newLoco = TheAI->pathfinder()->chooseBestLocomotorForPosition(getObject()->getLayer(), &m_locomotorSet, getObject()->getPosition());
+	const Coord3D myPos = floatPosOf(getObject());	// P5
+	Locomotor* newLoco = TheAI->pathfinder()->chooseBestLocomotorForPosition(getObject()->getLayer(), &m_locomotorSet, &myPos);
 
 	if (newLoco == NULL)
 	{
@@ -1196,9 +1236,11 @@ UpdateSleepTime AIUpdateInterface::update( void )
 		const Bool fights = getObject()->isAbleToAttack() && hasFightingWeapon(getObject());
 
 		// a rally point across the map is reached through the tunnels when they are shorter
-		const Real walkX = rallyPoint.x - getObject()->getPosition()->x;
-		const Real walkY = rallyPoint.y - getObject()->getPosition()->y;
-		Object *entrance = getObject()->getControllingPlayer()->getTunnelSystem()->findTunnelShortcut( getObject()->getPosition(),
+		// the rally point and the tunnel tracker are float
+		const Coord3D myPos = floatPosOf( getObject() );
+		const Real walkX = rallyPoint.x - myPos.x;
+		const Real walkY = rallyPoint.y - myPos.y;
+		Object *entrance = getObject()->getControllingPlayer()->getTunnelSystem()->findTunnelShortcut( &myPos,
 			&rallyPoint, (Real)sqrt( walkX * walkX + walkY * walkY ) );
 		const Bool tunnelled = entrance != NULL
 			&& takeTunnelTrip( entrance, &rallyPoint, fights ? TUNNEL_TRIP_ATTACK_MOVE : TUNNEL_TRIP_MOVE, CMD_FROM_AI );
@@ -1286,12 +1328,14 @@ UpdateSleepTime AIUpdateInterface::update( void )
 		if (TheAI->pathfinder()->goalPosition(getObject(), &goalPos)) 
 		{
 			// Pop to goal - This shouldn't happen (often), but make sure we got to where we're going.
-			Real dx = goalPos.x-getObject()->getPosition()->x;
-			Real dy = goalPos.y-getObject()->getPosition()->y;
-			if (dx*dx+dy*dy>=PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F) 
+			// P5: the pathfinder's goal is float
+			const Coord3D myPos = floatPosOf(getObject());
+			Real dx = goalPos.x-myPos.x;
+			Real dy = goalPos.y-myPos.y;
+			if (dx*dx+dy*dy>=PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F)
 			{
 				// Too far, so just grid current pos.
-				goalPos = *getObject()->getPosition();
+				goalPos = myPos;
 				TheAI->pathfinder()->snapPosition(getObject(), &goalPos);
 			}
 			setFinalPosition(&goalPos);
@@ -1466,21 +1510,20 @@ Bool AIUpdateInterface::hasHigherPathPriority(AIUpdateInterface *otherAI) const
 	}
 
 	// The paths aren't of the same group, so see which unit is in front.
-	Coord3D ourDir = *getObject()->getUnitDirectionVector2D();
-	Coord3D otherDir = *other->getUnitDirectionVector2D();
-	if (ourDir.x*otherDir.x + ourDir.y*otherDir.y <= 0) {
+	const FCoord3D ourDir = *getObject()->getUnitDirectionVector2DFix();
+	const FCoord3D otherDir = *other->getUnitDirectionVector2DFix();
+	if (ourDir.x*otherDir.x + ourDir.y*otherDir.y <= Fix(0)) {
 		return getObject()->getID() < other->getID();
 	}
-	Coord2D	combinedDir; 
-	combinedDir.x = ourDir.x + otherDir.x;
-	combinedDir.y = ourDir.y + otherDir.y;
-	Coord2D vectorToOther;
-	vectorToOther.x = other->getPosition()->x - getObject()->getPosition()->x;
-	vectorToOther.y = other->getPosition()->y - getObject()->getPosition()->y;
+	FCoord2D combinedDir;
+	combinedDir.set(ourDir.x + otherDir.x, ourDir.y + otherDir.y);
+	FCoord2D vectorToOther;
+	vectorToOther.set(other->getPositionFix()->x - getObject()->getPositionFix()->x,
+		other->getPositionFix()->y - getObject()->getPositionFix()->y);
 	// Dot product is our directions projected onto each other.
-	Real dotProduct = combinedDir.x*vectorToOther.x	+ combinedDir.y*vectorToOther.y;
-	if (dotProduct>0) return FALSE;  // other is ahead of us along our directional vector.
-	if (dotProduct<0) return TRUE; // We are ahead of other.
+	Fix dotProduct = combinedDir.x*vectorToOther.x	+ combinedDir.y*vectorToOther.y;
+	if (dotProduct>Fix(0)) return FALSE;  // other is ahead of us along our directional vector.
+	if (dotProduct<Fix(0)) return TRUE; // We are ahead of other.
 	// Exactly equal.  Use object id's to break the tie.  
 	return getObject()->getID() < other->getID();
 }
@@ -1490,33 +1533,36 @@ Bool AIUpdateInterface::hasHigherPathPriority(AIUpdateInterface *otherAI) const
 */
 Real AIUpdateInterface::calculateMaxBlockedSpeed(Object *other) const
 {
-	Coord3D ourDir = *getObject()->getUnitDirectionVector2D();
-	Coord3D otherDir = *other->getUnitDirectionVector2D();
+	const FCoord3D ourDir = *getObject()->getUnitDirectionVector2DFix();
+	const FCoord3D otherDir = *other->getUnitDirectionVector2DFix();
 	// Dot product is our directions projected onto each other.
-	Coord2D vectorToOther;
-	vectorToOther.x = other->getPosition()->x - getObject()->getPosition()->x;
-	vectorToOther.y = other->getPosition()->y - getObject()->getPosition()->y;
-	vectorToOther.normalize();
-	Real dotProduct = vectorToOther.x*otherDir.x	+ vectorToOther.y*otherDir.y;
-	if (dotProduct<0) return 0; // They are running into us.
+	FCoord2D vectorToOther;
+	vectorToOther.set(other->getPositionFix()->x - getObject()->getPositionFix()->x,
+		other->getPositionFix()->y - getObject()->getPositionFix()->y);
+	const Fix len = vectorToOther.length();
+	if (len > Fix(0))
+		vectorToOther.set(vectorToOther.x / len, vectorToOther.y / len);
+	Fix dotProduct = vectorToOther.x*otherDir.x	+ vectorToOther.y*otherDir.y;
+	if (dotProduct<Fix(0)) return 0; // They are running into us.
 
-	Real speedFactor = dotProduct;
+	// P4: velocities and speeds are the physics' and the locomotor's, still float
+	Real speedFactor = fixToReal(dotProduct);
 	PhysicsBehavior *otherPhysics = other->getPhysics();
 	if (!otherPhysics) {
 		return m_curMaxBlockedSpeed;
-	}	
+	}
 	Coord3D otherVel = *otherPhysics->getVelocity();
 	otherVel.z = 0;
 	// Calculate how fast other is moving away from us...
-	Real awaySpeed = otherVel.length() * speedFactor;				 
+	Real awaySpeed = otherVel.length() * speedFactor;
 
 	// Now calculate the amount we are moving relative to towards them...
 	dotProduct = vectorToOther.x*ourDir.x	+ vectorToOther.y*ourDir.y;
-	if (dotProduct<=0) {
+	if (dotProduct<=Fix(0)) {
 		// Unexpected - we are moving away.  Shouldn't be blocked...
 		return m_curMaxBlockedSpeed;
 	}
-	Real maxSpeed = awaySpeed / dotProduct;
+	Real maxSpeed = awaySpeed / fixToReal(dotProduct);
 	if (other->getFormationID()!=NO_FORMATION_ID && getObject()->getFormationID()==other->getFormationID()) {
 		maxSpeed *= 0.55f; // don't let formations crowd each other.
 	}
@@ -1526,22 +1572,22 @@ Real AIUpdateInterface::calculateMaxBlockedSpeed(Object *other) const
 
 
 //-------------------------------------------------------------------------------------------------
-static const Real HEAD_ON_DOT = -0.5f;					///< facing more than 120 degrees apart is driving at each other
+static const Fix HEAD_ON_DOT = -0.5_fx;				///< facing more than 120 degrees apart is driving at each other
 static const Int  HEAD_ON_PASS_FRAMES = 8;			///< held up head-on this long: pass through
 
 Bool AIUpdateInterface::blockedBy(Object *other)
 /* Returns TRUE if we are blocked from moving by the other object.*/
 {
-	Coord3D goalPos = *getStateMachine()->getGoalPosition();
 	Object *obj = getObject();
-	Coord3D pos = *obj->getPosition();
+	const FCoord3D pos = *obj->getPositionFix();
 	ICoord2D goalCell = *getPathfindGoalCell();
 
 	// If we are near our final goal, don't get stuck.
 	if (goalCell.x>0 && goalCell.y>0) {
-		Real dx = fabs(goalPos.x-pos.x);
-		Real dy = fabs(goalPos.y-pos.y);
-		if (dx<PATHFIND_CELL_SIZE_F && dy<PATHFIND_CELL_SIZE_F) {
+		// P4: the state machine's goal is float
+		const FCoord3D goalPos = fixPosOf(*getStateMachine()->getGoalPosition());
+		const Fix cell = Fix(PATHFIND_CELL_SIZE);
+		if (fixAbs(goalPos.x-pos.x)<cell && fixAbs(goalPos.y-pos.y)<cell) {
 			return FALSE; // If we're approaching our goal, ignore obstacles.
 		}
 	}
@@ -1560,10 +1606,14 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 		return false; // don't collide.
 	}
 	Bool otherMoving = ( aiOther->m_locomotorGoalType != NONE );
-	Coord3D otherPos = *other->getPosition();
-	Real dx = pos.x-otherPos.x;
-	Real dy = pos.y-otherPos.y;
-	Real curDSqr = dx*dx+dy*dy;
+	const FCoord3D otherPos = *other->getPositionFix();
+	Fix dx = pos.x-otherPos.x;
+	Fix dy = pos.y-otherPos.y;
+	Fix curDSqr = dx*dx+dy*dy;
+	const FCoord3D ourDir = *obj->getUnitDirectionVector2DFix();
+	const FCoord3D theirDir = *other->getUnitDirectionVector2DFix();
+	// Dot product is our directions projected onto each other.
+	const Fix dotProduct = ourDir.x*theirDir.x	+ ourDir.y*theirDir.y;
 
 	/* A foot soldier marching our way is not in our way. A vehicle blocked by an ally on foot tells him
 		 to step aside, and a soldier who steps aside loses his own route and stands for a second before
@@ -1572,9 +1622,7 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 		 instead, the way infantry already walks through infantry. One standing still, or crossing, is
 		 still asked to move. */
 	if (!obj->isKindOf(KINDOF_INFANTRY) && other->isKindOf(KINDOF_INFANTRY) && otherMoving) {
-		const Coord3D *ourDir = obj->getUnitDirectionVector2D();
-		const Coord3D *theirDir = other->getUnitDirectionVector2D();
-		if (ourDir->x*theirDir->x + ourDir->y*theirDir->y > 0.5f)
+		if (dotProduct > 0.5_fx)
 			return FALSE;
 	}
 
@@ -1587,27 +1635,19 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 		return FALSE; 
 #else
 		// If we are crossing, just pass through.
-		Coord3D ourDir = *obj->getUnitDirectionVector2D();
-		Coord3D theirDir = *other->getUnitDirectionVector2D();
-		// Dot product is our directions projected onto each other.
-		Real dotProduct = ourDir.x*theirDir.x	+ ourDir.y*theirDir.y;
-		if (dotProduct<=0.25) return FALSE;  // we are not moving in the same direction.
+		if (dotProduct<=0.25_fx) return FALSE;  // we are not moving in the same direction.
 #endif
 	}
 
-	if (curDSqr < PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F*0.0001f) {
+	if (curDSqr < 0.01_fx) {	// a tenth of a unit apart: a cell's square times 0.0001
 		// Somehow 2 units ended up on the same grid.
 		// Lowest path priority wins.
 		return (hasHigherPathPriority(aiOther));
 	}
 
 	// we've been blocked for a while.  If we're crossing, just move through.
-	Coord3D ourDir = *obj->getUnitDirectionVector2D();
-	Coord3D theirDir = *other->getUnitDirectionVector2D();
-	// Dot product is our directions projected onto each other.
-	Real dotProduct = ourDir.x*theirDir.x	+ ourDir.y*theirDir.y;
 	if (getNumFramesBlocked()>LOGICFRAMES_PER_SECOND) {
-		if (dotProduct<=0.0f) return FALSE;  // we are not moving in the same direction.
+		if (dotProduct<=Fix(0)) return FALSE;  // we are not moving in the same direction.
 	}
 	/* The rule above is EA's way out of a head-on meeting and it never fires: doLocomotor puts
 		 m_blockedFrames back to 1 on every frame the locomotor reports itself unblocked, which a tank
@@ -1622,20 +1662,19 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 			return FALSE;
 	}
 
-	Real collisionAngle = ThePartitionManager->getRelativeAngle2D( obj, &otherPos );
-	Real otherAngle = ThePartitionManager->getRelativeAngle2D( other, &pos );
+	Fix collisionAngle = relativeAngle2DFix( obj, otherPos );
+	Fix otherAngle = relativeAngle2DFix( other, pos );
 	//DEBUG_LOG(("Collision angle %.2f, %.2f, %s, %x %s\n", collisionAngle*180/PI, otherAngle*180/PI, obj->getTemplate()->getName().str(), obj, other->getTemplate()->getName().str()));
-	Real angleLimit = PI/4; // 45 degrees.
-	if (collisionAngle>PI/2 || collisionAngle<-PI/2) {
+	Fix angleLimit = FIX_PI/Fix(4); // 45 degrees.
+	const Fix halfPi = FIX_PI/Fix(2);
+	if (collisionAngle>halfPi || collisionAngle<-halfPi) {
 		return FALSE; // we're moving away.
 	}
-	if (!otherMoving) angleLimit *= 0.75f;
+	if (!otherMoving) angleLimit *= 0.75_fx;
 	if (collisionAngle>angleLimit || collisionAngle<-angleLimit) {
-		if (dotProduct<=0.0f) return FALSE;  // we are not moving in the same direction.
+		if (dotProduct<=Fix(0)) return FALSE;  // we are not moving in the same direction.
 		if (otherMoving && (otherAngle>angleLimit || otherAngle<-angleLimit) ) {
 			// See if we're running into each other.
-			Coord3D ourDir = *obj->getUnitDirectionVector2D();
-			Coord3D theirDir = *other->getUnitDirectionVector2D();
 			dx += ourDir.x - theirDir.x;
 			dy += ourDir.y - theirDir.y;
 			if (curDSqr>dx*dx+dy*dy) {
@@ -1671,16 +1710,17 @@ Bool AIUpdateInterface::needToRotate(void)
 	if (this->getCurLocomotor() && this->getCurLocomotor()->getWanderWidthFactor()>0.0f) 
 		return FALSE; // wanderers don't need to rotate.
 
-	Real deltaAngle = 0;
+	Fix deltaAngle = Fix(0);
 	if (getPath())
 	{
 		ClosestPointOnPathInfo info;
 		CRCDEBUG_LOG(("AIUpdateInterface::needToRotate() - calling computePointOnPath() for object %d\n", getObject()->getID()));
-		getPath()->computePointOnPath(getObject(), m_locomotorSet, *getObject()->getPosition(), info);
-		deltaAngle = ThePartitionManager->getRelativeAngle2D( getObject(), &info.posOnPath );
-	}	
+		// P5: the path is float
+		getPath()->computePointOnPath(getObject(), m_locomotorSet, floatPosOf(getObject()), info);
+		deltaAngle = relativeAngle2DFix( getObject(), fixPosOf(info.posOnPath) );
+	}
 
-	if (fabs(deltaAngle)>PI/30) 
+	if (fixAbs(deltaAngle)>FIX_PI/Fix(30))
 	{
 		return TRUE;
 	}
@@ -1773,12 +1813,14 @@ Bool AIUpdateInterface::processCollision(PhysicsBehavior *physics, Object *other
 			// so a jam can be walked back to the pair at its front one unit at a time
 			if (TheGlobalData->m_traceMoveID > 0 && getObject()->getID() == (ObjectID)TheGlobalData->m_traceMoveID)
 			{
-				const Coord3D *od = other->getUnitDirectionVector2D();
-				const Coord3D *md = getObject()->getUnitDirectionVector2D();
+				// the log line is float
+				const FCoord3D *od = other->getUnitDirectionVector2DFix();
+				const FCoord3D *md = getObject()->getUnitDirectionVector2DFix();
+				const Coord3D otherPos = floatPosOf(other);
 				DEBUG_LOG(("MOVEBLOCK %d by %d %s at %.0f,%.0f facing %.2f moving %d waiting %d allowed %.3f bearing %.1f\n", TheGameLogic->getFrame(),
-					other->getID(), other->getTemplate()->getName().str(), other->getPosition()->x, other->getPosition()->y,
-					md->x * od->x + md->y * od->y, otherMoving, aiOther->isWaitingForPath(), maxSpeed,
-					ThePartitionManager->getRelativeAngle2D( getObject(), other->getPosition() ) * 180.0f / PI));
+					other->getID(), other->getTemplate()->getName().str(), otherPos.x, otherPos.y,
+					fixToReal(md->x * od->x + md->y * od->y), otherMoving, aiOther->isWaitingForPath(), maxSpeed,
+					fixToReal(relativeAngle2DFix( getObject(), *other->getPositionFix() )) * 180.0f / PI));
 			}
 			if (maxSpeed < m_curMaxBlockedSpeed)
 			{
@@ -1891,14 +1933,17 @@ Bool AIUpdateInterface::processCollision(PhysicsBehavior *physics, Object *other
 			}
 		}
 
-		Coord3D otherPos = *other->getPosition();
-		Real dx = getObject()->getPosition()->x - otherPos.x;
-		Real dy = getObject()->getPosition()->y - otherPos.y;
-		Real curDSqr = dx*dx+dy*dy;
+		const FCoord3D *myFix = getObject()->getPositionFix();
+		const FCoord3D *otherFix = other->getPositionFix();
+		Fix dx = myFix->x - otherFix->x;
+		Fix dy = myFix->y - otherFix->y;
+		Fix curDSqr = dx*dx+dy*dy;
 		// (a footprint-scaled threshold was tried here and reverted: tanks parked closer than
 		// it by the group's own formation kept being pulled apart and never came to rest)
-		if (!otherMoving && curDSqr < PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F*0.25f)
+		if (!otherMoving && curDSqr < Fix(PATHFIND_CELL_SIZE*PATHFIND_CELL_SIZE/4))
 		{
+			// P5: the pathfinder and the move order take float positions
+			Coord3D otherPos = floatPosOf(other);
 			if (this->getCurrentStateID() == AI_BUSY) {
 				return false;
 			}
@@ -1908,7 +1953,7 @@ Bool AIUpdateInterface::processCollision(PhysicsBehavior *physics, Object *other
 			// jba intense debug
 			//DEBUG_LOG(("*****Units ended up on top of each other.  Shouldn't happen.\n"));
 			if (isIdle()) {
-				Coord3D safePosition = *getObject()->getPosition();
+				Coord3D safePosition = floatPosOf(getObject());
 				
 				TheAI->pathfinder()->adjustToPossibleDestination(getObject(), getLocomotorSet(), &safePosition);
 				aiMoveToPosition( &safePosition, CMD_FROM_AI ); 
@@ -1983,7 +2028,7 @@ Bool AIUpdateInterface::computeQuickPath( const Coord3D *destination )
 	} else {
 		m_path = newInstance(Path);
 		m_path->prependNode( destination, LAYER_GROUND );
-		Coord3D pos = *getObject()->getPosition();
+		Coord3D pos = floatPosOf(getObject());	// P5: path nodes are float
 		pos.z = destination->z;
 		m_path->prependNode( &pos, getObject()->getLayer() );
 		m_path->getFirstNode()->setNextOptimized(m_path->getFirstNode()->getNext());
@@ -2023,11 +2068,13 @@ Bool AIUpdateInterface::computePath( PathfindServicesInterface *pathServices, Co
 		return computeQuickPath(destination);
 	}
 	m_retryPath = false;
+	// P5: the pathfinder, its extent and the destination are float
+	const Coord3D myPos = floatPosOf(getObject());
 	Region3D extent;
 	TheTerrainLogic->getMaximumPathfindExtent(&extent);
 	if (!extent.isInRegionNoZ(destination)) {
 		// We're going off the map.
-		Coord3D pos = *getObject()->getPosition();
+		Coord3D pos = myPos;
 		if (!extent.isInRegionNoZ(&pos))	{
 			// We're starting off the map.  Since we're off the map, we can't pathfind so just build a path.
 			return computeQuickPath(destination);
@@ -2054,7 +2101,7 @@ Bool AIUpdateInterface::computePath( PathfindServicesInterface *pathServices, Co
 
 	LocomotorSurfaceTypeMask surfaces = m_locomotorSet.getValidSurfaces();
 	if (!m_isFinalGoal && TheAI->pathfinder()->isLinePassable( getObject(), surfaces,
-			getObject()->getLayer(), *getObject()->getPosition(), originalDestination, false, true)) {
+			getObject()->getLayer(), myPos, originalDestination, false, true)) {
 		// this way out skips the reset at the bottom, and a flag left on would answer for whoever
 		// asks the pathfinder next
 		TheAI->pathfinder()->setIgnoreUnderConstruction( FALSE );
@@ -2081,13 +2128,13 @@ Bool AIUpdateInterface::computePath( PathfindServicesInterface *pathServices, Co
 			theNewPath = pathServices->patchPath( getObject(), m_locomotorSet, 
 				getPath(), m_isBlockedAndStuck);
 		}	else {
-			theNewPath = pathServices->findPath( getObject(), m_locomotorSet, getObject()->getPosition(), 
+			theNewPath = pathServices->findPath( getObject(), m_locomotorSet, &myPos,
 				destination);
 		}
 	}
 	if (theNewPath==NULL && m_path==NULL) {
-		Real pathCostFactor = 0.0f;	
-		theNewPath = pathServices->findClosestPath( getObject(), m_locomotorSet, getObject()->getPosition(), 
+		Real pathCostFactor = 0.0f;
+		theNewPath = pathServices->findClosestPath( getObject(), m_locomotorSet, &myPos,
 			destination, m_isBlockedAndStuck, pathCostFactor, FALSE );
 		m_retryPath = true;
 	}
@@ -2119,7 +2166,7 @@ Bool AIUpdateInterface::computePath( PathfindServicesInterface *pathServices, Co
 			setQueueForPathTime(LOGICFRAMES_PER_SECOND);
 			Coord3D goalPos;
 			Object *obj = getObject();
-			goalPos = *obj->getPosition();
+			goalPos = floatPosOf(obj);
 			TheAI->pathfinder()->snapPosition(obj, &goalPos);
 			setFinalPosition(&goalPos);
 			setLocomotorGoalNone();
@@ -2157,7 +2204,8 @@ Path *AIUpdateInterface::crowdPlannedPath( const CrowdRoute& planned, const Coor
 	if (endDx * endDx + endDy * endDy > CROWD_PLAN_END_SLACK * CROWD_PLAN_END_SLACK)
 		return NULL;					// a different order from the one this was planned for
 
-	const Coord3D *myPos = self->getPosition();
+	const Coord3D myPosF = floatPosOf( self );	// P5: path nodes are float
+	const Coord3D *myPos = &myPosF;
 	if (!TheAI->pathfinder()->isLinePassable( self, m_locomotorSet.getValidSurfaces(), self->getLayer(),
 				*myPos, planned.front().pos, false, true ))
 		return NULL;
@@ -2228,7 +2276,7 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 			Bool viewBlocked = FALSE;
 			if (isDoingGroundMovement() && !victim->isSignificantlyAboveTerrain()) 
 			{
-				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, *source->getPosition(), victim, *victim->getPosition());
+				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, floatPosOf(source), victim, floatPosOf(victim));	// P5
 			}
 			if (!viewBlocked) 
 			{
@@ -2246,7 +2294,7 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 			Bool viewBlocked = FALSE;
 			if (isDoingGroundMovement()) 
 			{
-				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, *source->getPosition(), NULL, *victimPos);
+				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, floatPosOf(source), NULL, *victimPos);	// P5
 			}
 			if (!viewBlocked) {
 				destroyPath();
@@ -2278,8 +2326,9 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 				m_path->updateLastNode(victimPos); // jam in the coordinates of the target.
 			}
 		}
-		dx = source->getPosition()->x - m_path->getLastNode()->getPosition()->x;
-		dy = source->getPosition()->y - m_path->getLastNode()->getPosition()->y;
+		const Coord3D sourcePos = floatPosOf(source);	// P5: against a path node
+		dx = sourcePos.x - m_path->getLastNode()->getPosition()->x;
+		dy = sourcePos.y - m_path->getLastNode()->getPosition()->y;
 		if (sqr(dx)+sqr(dy) < sqr(PATHFIND_CELL_SIZE_F)) {
 			// Very short path - we can't get to the goal.
 			destroyPath();
@@ -2297,8 +2346,11 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 		{
 			TBridgeAttackInfo info;
 			TheTerrainLogic->getBridgeAttackPoints(victim, &info);
-			Real distSqr1 = ThePartitionManager->getDistanceSquared( source, &info.attackPoint1, FROM_BOUNDINGSPHERE_3D );
-			Real distSqr2 = ThePartitionManager->getDistanceSquared( source, &info.attackPoint2, FROM_BOUNDINGSPHERE_3D );
+			// the bridge's attack points are map data, in float
+			const FCoord3D point1 = fixPosOf(info.attackPoint1);
+			const FCoord3D point2 = fixPosOf(info.attackPoint2);
+			Fix distSqr1 = ThePartitionManager->getDistanceSquaredFix( source, &point1, FROM_BOUNDINGSPHERE_3D );
+			Fix distSqr2 = ThePartitionManager->getDistanceSquaredFix( source, &point2, FROM_BOUNDINGSPHERE_3D );
 			if (distSqr2<distSqr1) {
  				localVictimPos = info.attackPoint2;
 			} else {
@@ -2307,7 +2359,7 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 		}
 		else
 		{
-			localVictimPos = *victim->getPosition();
+			localVictimPos = floatPosOf(victim);	// P5/P6: the attack path and the weapon are float
 		}
 	}
 	else
@@ -2315,7 +2367,7 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 		localVictimPos = *victimPos;
 	}
 
-	localVictimPos.z = TheTerrainLogic->getLayerHeight( localVictimPos.x, localVictimPos.y, victimLayer );
+	localVictimPos.z = layerHeightAt( localVictimPos.x, localVictimPos.y, victimLayer );
 
 	if (getObject()->isAboveTerrain() && !landBound)
 	{
@@ -2347,7 +2399,7 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 		destroyPath();
 		m_path = newInstance(Path);
 		m_path->prependNode( &localVictimPos, LAYER_GROUND );
-		Coord3D pos = *getObject()->getPosition();
+		Coord3D pos = floatPosOf(getObject());
 		pos.z = localVictimPos.z;
 		m_path->prependNode( &pos, LAYER_GROUND );
 		m_path->getFirstNode()->setNextOptimized(m_path->getFirstNode()->getNext());
@@ -2364,7 +2416,8 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 		TheAI->pathfinder()->setIgnoreObstacleID( getIgnoredObstacleID() );
 
 		// compute a ground-based path
-		m_path = pathServices->findAttackPath( getObject(), m_locomotorSet, getObject()->getPosition(), 
+		const Coord3D myPos = floatPosOf(getObject());	// P5
+		m_path = pathServices->findAttackPath( getObject(), m_locomotorSet, &myPos,
 			victim, &localVictimPos, weapon);
 		if (m_path) {
 			Coord3D goal = *m_path->getLastNode()->getPosition();
@@ -2372,12 +2425,12 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 				// We didn't actually find a path we can attack from. [8/14/2003]
 				// If the move is a short distance, just do a find closest path to our current
 				// position.  This will unstack us if we are on top of another unit. jba.
-				Coord3D objPos = *getObject()->getPosition();
+				Coord3D objPos = myPos;
 				goal.sub(&objPos);
 				if (goal.length()<3*PATHFIND_CELL_SIZE_F) {
 					destroyPath();
 					TheAI->pathfinder()->adjustDestination(getObject(), m_locomotorSet, &objPos);
-					m_path = pathServices->findClosestPath(getObject(), m_locomotorSet, getObject()->getPosition(), 
+					m_path = pathServices->findClosestPath(getObject(), m_locomotorSet, &myPos,
 								&objPos, false, 0.2f, true );
 				}
 				if (m_path==NULL) {
@@ -2565,8 +2618,10 @@ Bool AIUpdateInterface::crowdOutranksMe( Object *other ) const
 static Bool crowdFindEscape( Object *self, const LocomotorSet& locoSet, const Coord2D& tan,
 														 Int firstSide, Bool backFirst, Coord3D *out )
 {
-	const Coord3D *pos = self->getPosition();
-	const Real myR = self->getGeometryInfo().getBoundingCircleRadius();
+	// P4/P5: the crowd tangent and the pathfinder's test are float
+	const Coord3D posF = floatPosOf( self );
+	const Coord3D *pos = &posF;
+	const Real myR = floatRadiusOf( self );
 	const Real across = myR * 2.0f + PATHFIND_CELL_SIZE_F;
 	const Real behind = myR + PATHFIND_CELL_SIZE_F * 0.5f;
 	const Bool crusher = self->getCrusherLevel() > 0;
@@ -2585,7 +2640,7 @@ static Bool crowdFindEscape( Object *self, const LocomotorSet& locoSet, const Co
 		Coord3D p;
 		p.x = pos->x + sx * lat * side - tan.x * back;
 		p.y = pos->y + sy * lat * side - tan.y * back;
-		p.z = TheTerrainLogic->getGroundHeight( p.x, p.y );
+		p.z = groundHeightAt( p.x, p.y );
 		if (TheAI->pathfinder()->validMovementPosition( crusher, layer, locoSet, &p ))
 		{
 			*out = p;
@@ -2612,8 +2667,10 @@ static Bool crowdFindEscape( Object *self, const LocomotorSet& locoSet, const Co
 void AIUpdateInterface::updateProgress( void )
 {
 	Object *self = getObject();
-	const Coord3D *myPos = self->getPosition();
-	const Real facing = self->getOrientation();
+	// P4: progress is measured against locomotor speeds and turn rates, still float
+	const Coord3D myPosF = floatPosOf( self );
+	const Coord3D *myPos = &myPosF;
+	const Real facing = fixToReal( self->getOrientationFix() );
 
 	const Real dx = myPos->x - m_lastProgressPos.x;
 	const Real dy = myPos->y - m_lastProgressPos.y;
@@ -2663,12 +2720,12 @@ void AIUpdateInterface::updateProgress( void )
 	if (turned >= turnBar)
 	{
 		// which way the hull is pointing against where the locomotor is being sent
-		const Coord3D *myDir = self->getUnitDirectionVector2D();
+		const Coord3D myDir = self->getUnitDirectionVector2DFix()->toCoord3D();
 		const Real gx = m_locomotorGoalData.x - myPos->x;
 		const Real gy = m_locomotorGoalData.y - myPos->y;
 		const Real gl = (Real)sqrt( gx * gx + gy * gy );
 		if (gl > 0.01f)
-			comingAbout = ((myDir->x * gx + myDir->y * gy) / gl) < 0.87f;		// more than thirty degrees off
+			comingAbout = ((myDir.x * gx + myDir.y * gy) / gl) < 0.87f;		// more than thirty degrees off
 		else
 			comingAbout = TRUE;
 	}
@@ -2715,7 +2772,7 @@ void AIUpdateInterface::updateProgress( void )
 		const Real ddx = myPos->x - m_ditherFrom.x;
 		const Real ddy = myPos->y - m_ditherFrom.y;
 		const Real net = (Real)sqrt( ddx * ddx + ddy * ddy );
-		const Real body = self->getGeometryInfo().getBoundingCircleRadius() * 2.0f;
+		const Real body = fixToReal( self->getGeometryInfo().getBoundingCircleRadiusFix() ) * 2.0f;
 
 		/* This counts and does nothing else, on purpose, and the three things it used to do are
 			 worth writing down because each of them sounded right.
@@ -2840,14 +2897,13 @@ void AIUpdateInterface::stuckRescue( void )
 			 instead of bouncing off the edge of it.  This is the engine's own pair of tools, used here
 			 in the one place that knows the unit has got nowhere for three seconds. */
 		m_rescueStage = 2;
-		const Real myR = self->getGeometryInfo().getBoundingCircleRadius();
-		const Real range = myR * 3.0f + PATHFIND_CELL_SIZE_F;
+		const Fix range = self->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 3 ) + Fix( PATHFIND_CELL_SIZE );
 
 		PartitionFilterRelationship		fRel( self, PartitionFilterRelationship::ALLOW_ALLIES );
 		PartitionFilterAlive					fAlive;
 		PartitionFilterSameMapStatus	fMap( self );
 		PartitionFilter *filters[] = { &fRel, &fAlive, &fMap, NULL };
-		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( self, range, FROM_CENTER_2D, filters );
+		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( self, range, FROM_CENTER_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
 
 		for (Object *o = iter->first(); o; o = iter->next())
@@ -2872,14 +2928,16 @@ void AIUpdateInterface::stuckRescue( void )
 		 being sent in, which is the route when there is one and the goal when there is not. */
 	m_rescueStage = 3;
 
+	// P4: the locomotor goal and the crowd tangent are float
+	const Coord3D myPos = floatPosOf( self );
 	Coord2D tan;
-	tan.x = m_locomotorGoalData.x - self->getPosition()->x;
-	tan.y = m_locomotorGoalData.y - self->getPosition()->y;
+	tan.x = m_locomotorGoalData.x - myPos.x;
+	tan.y = m_locomotorGoalData.y - myPos.y;
 	if (tan.length() < 0.01f)
 	{
-		const Coord3D *myDir = self->getUnitDirectionVector2D();
-		tan.x = myDir->x;
-		tan.y = myDir->y;
+		const Coord3D myDir = self->getUnitDirectionVector2DFix()->toCoord3D();
+		tan.x = myDir.x;
+		tan.y = myDir.y;
 	}
 	tan.normalize();
 
@@ -2907,10 +2965,11 @@ Bool AIUpdateInterface::rescueSteer( Coord3D& goalPos )
 		return FALSE;
 
 	Object *self = getObject();
-	const Coord3D *myPos = self->getPosition();
-	const Real dx = m_rescueTo.x - myPos->x;
-	const Real dy = m_rescueTo.y - myPos->y;
-	const Real myR = self->getGeometryInfo().getBoundingCircleRadius();
+	// P4: the rescue point is a float steering goal
+	const Coord3D myPos = floatPosOf( self );
+	const Real dx = m_rescueTo.x - myPos.x;
+	const Real dy = m_rescueTo.y - myPos.y;
+	const Real myR = floatRadiusOf( self );
 	const Bool arrived = (Real)sqrt( dx * dx + dy * dy ) < myR + 2.0f;
 
 	if (arrived || TheGameLogic->getFrame() >= m_rescueUntil)
@@ -2927,7 +2986,7 @@ Bool AIUpdateInterface::rescueSteer( Coord3D& goalPos )
 	}
 
 	goalPos = m_rescueTo;
-	goalPos.z = TheTerrainLogic->getGroundHeight( goalPos.x, goalPos.y );
+	goalPos.z = groundHeightAt( goalPos.x, goalPos.y );
 	return TRUE;
 }
 
@@ -2972,17 +3031,17 @@ void AIUpdateInterface::crowdRepath( void )
 void AIUpdateInterface::crowdAskBehindToBackOff( const Coord2D& tan )
 {
 	Object *self = getObject();
-	const Real myR = self->getGeometryInfo().getBoundingCircleRadius();
-	const Real range = myR * 4.0f + PATHFIND_CELL_SIZE_F;
+	const Fix myRFix = self->getGeometryInfo().getBoundingCircleRadiusFix();
+	const Real myR = fixToReal( myRFix );		// P4: the tangent is the crowd model's, in float
 
 	PartitionFilterRelationship		fRel( self, PartitionFilterRelationship::ALLOW_ALLIES );
 	PartitionFilterAlive					fAlive;
 	PartitionFilterSameMapStatus	fMap( self );
 	PartitionFilter *filters[] = { &fRel, &fAlive, &fMap, NULL };
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( self, range, FROM_CENTER_2D, filters );
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( self, myRFix * Fix( 4 ) + Fix( PATHFIND_CELL_SIZE ), FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 
-	const Coord3D *myPos = self->getPosition();
+	const FCoord3D *myPos = self->getPositionFix();
 	for (Object *o = iter->first(); o; o = iter->next())
 	{
 		if (o == self)
@@ -2993,14 +3052,14 @@ void AIUpdateInterface::crowdAskBehindToBackOff( const Coord2D& tan )
 		if (o->testStatus( OBJECT_STATUS_IS_USING_ABILITY ))
 			continue;
 
-		const Coord3D *hp = o->getPosition();
-		const Real dx = hp->x - myPos->x;
-		const Real dy = hp->y - myPos->y;
+		const FCoord3D *hp = o->getPositionFix();
+		const Real dx = fixToReal( hp->x - myPos->x );
+		const Real dy = fixToReal( hp->y - myPos->y );
 		const Real fwd = dx * tan.x + dy * tan.y;
 		if (fwd > -myR)
 			continue;					// beside us or in front: not what is boxing us in
 		const Real side = -dx * tan.y + dy * tan.x;
-		const Real hisR = o->getGeometryInfo().getBoundingCircleRadius();
+		const Real hisR = floatRadiusOf( o );
 		if (fabs( side ) > myR + hisR)
 			continue;					// in the next lane, not behind us
 
@@ -3059,12 +3118,14 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 		// reloaded mid-drive has to come back in the lane it was saved in rather than at the centre
 	}
 
-	const Coord3D *myPos = self->getPosition();
+	// P4: the crowd model steers in float, the corridor and the lanes with it
+	const Coord3D myPosF = floatPosOf( self );
+	const Coord3D *myPos = &myPosF;
 	const Int i = m_corridor->nearest( *myPos, m_crowdSample );
 	m_crowdSample = i;
 
 	const CrowdCorridor::Sample& here = m_corridor->at( i );
-	const Real myR = self->getGeometryInfo().getBoundingCircleRadius();
+	const Real myR = floatRadiusOf( self );
 
 	/* The last cell of the route is arrival, and arrival is not a formation problem.  Only the last
 		 cell: standing the rules down over the last four instead - on the theory that a short hop
@@ -3106,7 +3167,7 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 	PartitionFilter *filters[] = { &fRel, &fAlive, &fMap, NULL };
 	// a foot soldier reads nobody: he has no lane to hold and nothing on the road is his traffic
 	SimpleObjectIterator *iter = foot ? NULL
-		: ThePartitionManager->iterateObjectsInRange( self, scanRange, FROM_CENTER_2D, filters );
+		: ThePartitionManager->iterateObjectsInRangeFix( self, fixFromReal( scanRange ), FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 
 	Real sep = 0.0f;					// how far sideways the crowd is pushing us
@@ -3155,12 +3216,13 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 		if (o->isKindOf( KINDOF_INFANTRY ))
 			continue;
 
-		const Coord3D *hp = o->getPosition();
+		const Coord3D hpF = floatPosOf( o );
+		const Coord3D *hp = &hpF;
 		const Real dx = hp->x - myPos->x;
 		const Real dy = hp->y - myPos->y;
 		const Real fwd = dx * here.tan.x + dy * here.tan.y;			// along our route
 		const Real side = -dx * here.tan.y + dy * here.tan.x;		// across it, left positive
-		const Real hisR = o->getGeometryInfo().getBoundingCircleRadius();
+		const Real hisR = floatRadiusOf( o );
 		const Real gap = (Real)sqrt( dx * dx + dy * dy ) - myR - hisR;
 		const Real comfort = myR + hisR + CROWD_AIR;
 
@@ -3406,8 +3468,8 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 		}
 		else
 		{
-			const Real hisR = blocker->getGeometryInfo().getBoundingCircleRadius();
-			const Real hisLat = m_corridor->latOf( i, *blocker->getPosition() );
+			const Real hisR = floatRadiusOf( blocker );
+			const Real hisLat = m_corridor->latOf( i, floatPosOf( blocker ) );
 
 			/* Pass on the outside of a bend.  The inside is where the road runs out, and a unit that
 				 dives up the inside of a turn to get past somebody arrives at the apex with a wall on
@@ -3689,14 +3751,15 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 			 unit was a moment ago.  The sliding point cured the shake on its own. */
 		m_crowdAim = normalizeAngle( m_crowdAim + err * (urgent ? CROWD_AIM_URGENT : CROWD_AIM_CRUISE) );
 
-		if (!urgent && fabs( normalizeAngle( m_crowdAim - self->getOrientation() ) ) < CROWD_AIM_DEAD)
-			m_crowdAim = self->getOrientation();		// two degrees is not worth a steering input
+		const Real facing = fixToReal( self->getOrientationFix() );
+		if (!urgent && fabs( normalizeAngle( m_crowdAim - facing ) ) < CROWD_AIM_DEAD)
+			m_crowdAim = facing;		// two degrees is not worth a steering input
 
 		goalPos.x = myPos->x + Cos( m_crowdAim ) * aimDist;
 		goalPos.y = myPos->y + Sin( m_crowdAim ) * aimDist;
 	}
 
-	goalPos.z = TheTerrainLogic->getGroundHeight( goalPos.x, goalPos.y );
+	goalPos.z = groundHeightAt( goalPos.x, goalPos.y );
 
 	/* Brake now, come off the brake slowly.  Everything above decides the cap from one frame's worth
 		 of neighbours, and that answer is not steady: the blocker slips out of the lookahead cone for
@@ -3785,9 +3848,9 @@ Bool AIUpdateInterface::isPathAvailable( const Coord3D *destination ) const
 	if( destination == NULL )
 		return FALSE;
 
-	const Coord3D *myPos = getObject()->getPosition();
+	const Coord3D myPos = floatPosOf( getObject() );	// P5
 
-	return TheAI->pathfinder()->clientSafeQuickDoesPathExist( m_locomotorSet, myPos, destination );
+	return TheAI->pathfinder()->clientSafeQuickDoesPathExist( m_locomotorSet, &myPos, destination );
 
 }  // end isPathAvailable
 
@@ -3802,9 +3865,9 @@ Bool AIUpdateInterface::isQuickPathAvailable( const Coord3D *destination ) const
 	if( destination == NULL )
 		return FALSE;
 
-	const Coord3D *myPos = getObject()->getPosition();
+	const Coord3D myPos = floatPosOf( getObject() );	// P5
 
-	return TheAI->pathfinder()->clientSafeQuickDoesPathExistForUI( m_locomotorSet, myPos, destination );
+	return TheAI->pathfinder()->clientSafeQuickDoesPathExistForUI( m_locomotorSet, &myPos, destination );
 
 }  // end isQuickPathAvailable
 
@@ -3852,7 +3915,8 @@ UpdateSleepTime AIUpdateInterface::doLocomotor( void )
 		Int trafficRadius = 0;
 		Bool trafficCenter = true;
 		TheAI->pathfinder()->getRadiusAndCenter(getObject(), trafficRadius, trafficCenter);
-		TheAI->pathfinder()->noteTraffic(getObject()->getPosition(), trafficRadius);
+		const Coord3D myPos = floatPosOf(getObject());	// P5
+		TheAI->pathfinder()->noteTraffic(&myPos, trafficRadius);
 	}
 	else
 	{
@@ -3937,19 +4001,20 @@ UpdateSleepTime AIUpdateInterface::doLocomotor( void )
 						}
 						Coord3D goalPos;
 						Real onPathDistToGoal;
+						const Coord3D myPos = floatPosOf(getObject());	// P5: the path is float
 						if (!isDoingGroundMovement())
 						{
 							// airborne locomotor.  Get the goal and distance direct to the goal, don't consider obstacles.
-							onPathDistToGoal = getPath()->computeFlightDistToGoal(getObject()->getPosition(), goalPos);
-						} 
-						else 
+							onPathDistToGoal = getPath()->computeFlightDistToGoal(&myPos, goalPos);
+						}
+						else
 						{
 							// Compute the actual goal position along the path to move towards.  Consider
 							// obstacles, and follow the intermediate path points.
 							ClosestPointOnPathInfo info;
 							CRCDEBUG_LOG(("AIUpdateInterface::doLocomotor() - calling computePointOnPath() for %s\n",
 								DescribeObject(getObject()).str()));
-							getPath()->computePointOnPath(getObject(), m_locomotorSet, *getObject()->getPosition(), info);
+							getPath()->computePointOnPath(getObject(), m_locomotorSet, myPos, info);
 							onPathDistToGoal = info.distAlongPath;
 							goalPos = info.posOnPath;
 							// layer is a possible bridge in the path.  Check & set the layer if applicable.
@@ -4034,30 +4099,34 @@ UpdateSleepTime AIUpdateInterface::doLocomotor( void )
 					{
 						if (m_doFinalPosition) 
 						{
-							Coord3D pos = *getObject()->getPosition();
+							FCoord3D pos = *getObject()->getPositionFix();
 							Bool onGround = !getObject()->isAboveTerrain() && getObject()->getLayer() == LAYER_GROUND;
-							Real dx = m_finalPosition.x - pos.x;
-							Real dy = m_finalPosition.y - pos.y;
-							Real dSqr = dx*dx+dy*dy;
-							const Real DARN_CLOSE = 0.25f;
-							if (dSqr < DARN_CLOSE) 
+							// P4: the final position is a float move goal
+							FCoord3D finalPos = fixPosOf(m_finalPosition);
+							Fix dx = finalPos.x - pos.x;
+							Fix dy = finalPos.y - pos.y;
+							Fix dSqr = dx*dx+dy*dy;
+							const Fix DARN_CLOSE = 0.25_fx;
+							if (dSqr < DARN_CLOSE)
 							{
-								m_doFinalPosition = FALSE; 
+								m_doFinalPosition = FALSE;
 								if (onGround)
-									m_finalPosition.z = TheTerrainLogic->getGroundHeight( m_finalPosition.x, m_finalPosition.y );
+									finalPos.z = TheTerrainLogic->getGroundHeightFix( finalPos.x, finalPos.y );
 								else
-									m_finalPosition.z = pos.z;
-								getObject()->setPosition(&m_finalPosition);
-							} 
-							else 
+									finalPos.z = pos.z;
+								m_finalPosition.z = fixToReal(finalPos.z);
+								getObject()->setPositionFix(&finalPos);
+							}
+							else
 							{
-								Real dist = sqrtf(dSqr);
-								if (dist<1) dist = 1;
-								pos.x += 2*PATHFIND_CELL_SIZE_F*dx/(dist*LOGICFRAMES_PER_SECOND);
-								pos.y += 2*PATHFIND_CELL_SIZE_F*dy/(dist*LOGICFRAMES_PER_SECOND);
+								Fix dist = fixSqrt(dSqr);
+								if (dist<Fix(1)) dist = Fix(1);
+								const Fix step = Fix(2*PATHFIND_CELL_SIZE) / (dist*Fix(LOGICFRAMES_PER_SECOND));
+								pos.x += dx*step;
+								pos.y += dy*step;
 								if (onGround)
-									pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
-								getObject()->setPosition(&pos);
+									pos.z = TheTerrainLogic->getGroundHeightFix( pos.x, pos.y );
+								getObject()->setPositionFix(&pos);
 							}
 						}
 						requiresConstantCalling = m_curLocomotor->locoUpdate_maintainCurrentPosition(getObject());
@@ -4075,7 +4144,8 @@ UpdateSleepTime AIUpdateInterface::doLocomotor( void )
 		m_repathAsked = FALSE;
 
 		// After our movement for the frame, update our AirborneTarget flag.
-		if(getObject()->getHeightAboveTerrain() > m_curLocomotor->getAirborneTargetingHeight() )
+		// P4: the locomotor's targeting height is still a Real
+		if(getObject()->getHeightAboveTerrainFix() > fixFromReal( m_curLocomotor->getAirborneTargetingHeight() ) )
 			getObject()->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_AIRBORNE_TARGET ) );
 		else
 			getObject()->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_AIRBORNE_TARGET ) );
@@ -4261,33 +4331,36 @@ Real AIUpdateInterface::getLocomotorDistanceToGoal()
 				if (m_path->getLastNode()) {
 					dest = m_path->getLastNode()->getPosition();
 				}
-				Real distance = ThePartitionManager->getDistanceSquared( me, dest, FROM_CENTER_3D );
-				return sqrt( distance );// Other paths return dots of normalized vectors, so one sqrt ain't so bad
+				// P4/P5: the goal is a float path point and the answer goes to the locomotor
+				const FCoord3D destFix = fixPosOf( *dest );
+				Fix distance = ThePartitionManager->getDistanceSquaredFix( me, &destFix, FROM_CENTER_3D );
+				return fixToReal( fixSqrt( distance ) );// Other paths return dots of normalized vectors, so one sqrt ain't so bad
 			}
 			else 
 			{
 				Coord3D goalPos;
 				Bool treatAsAircraft = getTreatAsAircraftForLocoDistToGoal();
 				Real dist;
-				if (treatAsAircraft) 
+				const Coord3D myPos = floatPosOf( getObject() );	// P4/P5: path distances for the locomotor
+				if (treatAsAircraft)
 				{
 					// airborne locomotor.  Get the goal and distance direct to the goal, don't consider obstacles.
-					dist =  getPath()->computeFlightDistToGoal(getObject()->getPosition(), goalPos);
+					dist =  getPath()->computeFlightDistToGoal(&myPos, goalPos);
 				}	else {
 					// Ground based locomotor.
 					ClosestPointOnPathInfo info;
 					CRCDEBUG_LOG(("AIUpdateInterface::getLocomotorDistanceToGoal() - calling computePointOnPath() for object %d\n", getObject()->getID()));
-					getPath()->computePointOnPath(getObject(), m_locomotorSet, *getObject()->getPosition(), info);
-					goalPos = info.posOnPath;	 
+					getPath()->computePointOnPath(getObject(), m_locomotorSet, myPos, info);
+					goalPos = info.posOnPath;
 					dist = info.distAlongPath;
 				}
 				if (m_path->getLastNode()) {
 					goalPos = *m_path->getLastNode()->getPosition();
 				}
-				// We are trying to get to goal.  So, 
+				// We are trying to get to goal.  So,
 				// If the actual distance is farther, then use the actual distance so we get there.
-				Real dx = goalPos.x - getObject()->getPosition()->x;
-				Real dy = goalPos.y - getObject()->getPosition()->y;
+				Real dx = goalPos.x - myPos.x;
+				Real dy = goalPos.y - myPos.y;
 				Real distSqr = dx*dx + dy*dy;
 				
 				if (treatAsAircraft) 
@@ -4361,7 +4434,8 @@ void AIUpdateInterface::joinTeam( void )
 	if (other) {
 		AIUpdateInterface* ai = other->getAI();
 		if (ai->isIdle()) {
-			aiMoveToPosition(other->getPosition(), CMD_FROM_AI);
+			const Coord3D otherPos = floatPosOf(other);	// P4: move orders take float
+			aiMoveToPosition(&otherPos, CMD_FROM_AI);
 			return;
 		}
 		if (ai->getGoalObject()) {
@@ -5399,7 +5473,9 @@ void AIUpdateInterface::privateAttackPosition( const Coord3D *pos, Int maxShotsT
 		PartitionFilterPossibleToAttack filterAttack(ATTACK_NEW_TARGET, getObject(), cmdSource);
 		PartitionFilterSameMapStatus filterMapStatus(getObject());
 		PartitionFilter *filters[] = { &filterAttack, &filterMapStatus, NULL };
-		Object* victim = ThePartitionManager->getClosestObject(&localPos, continueRange, FROM_CENTER_2D, filters);
+		// P4/P6: the ordered spot and the weapon's continue range are float
+		const FCoord3D spot = fixPosOf(localPos);
+		Object* victim = ThePartitionManager->getClosestObjectFix(&spot, fixFromReal(continueRange), FROM_CENTER_2D, filters);
 		getObject()->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_IGNORING_STEALTH ) );
 
 		if (victim)
@@ -6396,7 +6472,7 @@ static const Real ATTACK_MOVE_SEARCH_SCALE = 1.5f;
 /** Cosine of half the forward arc an aircraft on attack move will turn for.  0.5 is sixty degrees
 	* either side of the nose; written as the cosine because the test below is done squared, which is
 	* what keeps a trig call out of the simulation - see Lib/Trig.h. */
-static const Real AIRCRAFT_FORWARD_ARC_COS = 0.5f;
+static const Fix AIRCRAFT_FORWARD_ARC_COS = 0.5_fx;
 
 //-------------------------------------------------------------------------------------------------
 /** An aircraft looks where it is going.
@@ -6411,11 +6487,12 @@ class PartitionFilterForwardArc : public PartitionFilter
 {
 private:
 	const Object *m_self;
-	Real m_sideRangeSqr;			///< how far it will look outside the arc
+	Fix m_sideRangeSqr;			///< how far it will look outside the arc
 
 public:
+	// P6: the weapon range arrives as a Real
 	PartitionFilterForwardArc( const Object *self, Real sideRange )
-		: m_self( self ), m_sideRangeSqr( sideRange * sideRange )
+		: m_self( self ), m_sideRangeSqr( fixFromReal( sideRange ) * fixFromReal( sideRange ) )
 	{ }
 
 	virtual Bool allow( Object *other )
@@ -6423,16 +6500,16 @@ public:
 		if( other == NULL || m_self == NULL )
 			return FALSE;
 
-		const Coord3D *myPos = m_self->getPosition();
-		const Coord3D *hisPos = other->getPosition();
-		const Real dx = hisPos->x - myPos->x;
-		const Real dy = hisPos->y - myPos->y;
-		const Real distSqr = dx * dx + dy * dy;
+		const FCoord3D *myPos = m_self->getPositionFix();
+		const FCoord3D *hisPos = other->getPositionFix();
+		const Fix dx = hisPos->x - myPos->x;
+		const Fix dy = hisPos->y - myPos->y;
+		const Fix distSqr = dx * dx + dy * dy;
 
 		// close enough to shoot without turning at all: take it wherever it is
 		if( distSqr <= m_sideRangeSqr )
 			return TRUE;
-		if( distSqr < 0.01f )
+		if( distSqr < 0.01_fx )
 			return TRUE;
 
 		//
@@ -6440,9 +6517,9 @@ public:
 		// here at all: the simulation has to give the same answer on every machine in the game, and
 		// the runtime's own maths does not (Lib/Trig.h).  The sign test is what squaring costs.
 		//
-		const Coord3D *myDir = m_self->getUnitDirectionVector2D();
-		const Real dot = myDir->x * dx + myDir->y * dy;
-		if( dot <= 0.0f )
+		const FCoord3D *myDir = m_self->getUnitDirectionVector2DFix();
+		const Fix dot = myDir->x * dx + myDir->y * dy;
+		if( dot <= Fix( 0 ) )
 			return FALSE;			// behind us
 
 		return ( dot * dot ) >= ( AIRCRAFT_FORWARD_ARC_COS * AIRCRAFT_FORWARD_ARC_COS * distSqr );
@@ -6470,8 +6547,9 @@ public:
 
 	virtual Bool allow( Object *other )
 	{
-		const Real reach = Weapon_elevatedRange( m_self, m_range, other->getPosition()->z );
-		return ThePartitionManager->getDistanceSquared( m_self, other, FROM_BOUNDINGSPHERE_2D ) <= reach * reach;
+		// P6: the weapon's elevated reach is float
+		const Fix reach = fixFromReal( Weapon_elevatedRange( m_self, m_range, fixToReal( other->getPositionFix()->z ) ) );
+		return ThePartitionManager->getDistanceSquaredFix( m_self, other, FROM_BOUNDINGSPHERE_2D ) <= reach * reach;
 	}
 
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -6592,7 +6670,7 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	const Object *container = obj->getContainedBy();
 	if( container )
 	{
-		rangeToFindWithin += container->getGeometryInfo().getBoundingCircleRadius();
+		rangeToFindWithin += floatRadiusOf( container );	// P7: the AI's search ranges are float
 	}
 
 	UnsignedInt moodMatrixVal = getMoodMatrixValue();
@@ -7028,7 +7106,7 @@ void AIUpdateInterface::privateCommandButtonObject( const CommandButton *command
 						case GUI_COMMAND_COMBATDROP:
 							if( ai )
 							{
-								ai->aiCombatDrop( obj, *(obj->getPosition()), cmdSource );
+								ai->aiCombatDrop( obj, floatPosOf( obj ), cmdSource );	// P4: orders take float
 							}
 							break;
 						default:
@@ -7453,10 +7531,11 @@ void AIUpdateInterface::loadPostProcess( void )
 	if (!isMoving()) {
 		m_pathfindGoalCell.x = -1;
 		m_pathfindGoalCell.y = -1;
-		TheAI->pathfinder()->updateGoal(getObject(), getObject()->getPosition(), getObject()->getLayer());
+		const Coord3D myPos = floatPosOf(getObject());	// P5
+		TheAI->pathfinder()->updateGoal(getObject(), &myPos, getObject()->getLayer());
 		m_pathfindCurCell.x = -1;
 		m_pathfindCurCell.y = -1;
-		TheAI->pathfinder()->updatePos(getObject(), getObject()->getPosition());
+		TheAI->pathfinder()->updatePos(getObject(), &myPos);
 	}	else {
 		if (m_pathfindGoalCell.x >= 0 && m_pathfindGoalCell.y >= 0) {
 			Coord3D goalPos;

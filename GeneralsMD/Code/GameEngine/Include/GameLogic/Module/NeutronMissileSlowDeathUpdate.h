@@ -59,14 +59,14 @@ enum NeutronBlast
 struct BlastInfo
 {
   Bool enabled;					///< this blast is enabled
-	Real delay;						///< delay after death to start the regular blast
-	Real scorchDelay;			///< delay after death to start a scorch blast 
-	Real innerRadius;			///< inner radius of damage
-	Real outerRadius;			///< outer radius of damage
-	Real maxDamage;				///< max amount
-	Real minDamage;				///< any object in the outerradius will always have at least this much damage done
-	Real toppleSpeed;			///< speed to topple things at
-	Real pushForceMag;		///< magnitude of the physics force to push objects
+	Fix delay;						///< delay after death to start the regular blast
+	Fix scorchDelay;			///< delay after death to start a scorch blast
+	Fix innerRadius;			///< inner radius of damage
+	Fix outerRadius;			///< outer radius of damage
+	Fix maxDamage;				///< max amount
+	Fix minDamage;				///< any object in the outerradius will always have at least this much damage done
+	Fix toppleSpeed;			///< speed to topple things at
+	Fix pushForceMag;		///< magnitude of the physics force to push objects
 };
 
 // ------------------------------------------------------------------------------------------------

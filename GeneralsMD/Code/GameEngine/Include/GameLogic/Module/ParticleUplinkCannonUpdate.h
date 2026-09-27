@@ -81,17 +81,17 @@ public:
 	FXList					*m_groundHitFX;
 	FXList					*m_beamLaunchFX;
 
-	Real						m_swathOfDeathDistance;
-	Real						m_swathOfDeathAmplitude;
+	Fix							m_swathOfDeathDistance;
+	Fix							m_swathOfDeathAmplitude;
 	UnsignedInt			m_totalScorchMarks;
 	Real						m_scorchMarkScalar;
 
 	UnsignedInt			m_totalDamagePulses;
-	Real						m_damagePerSecond;
+	Fix							m_damagePerSecond;
 	DamageType			m_damageType;
 	DeathType				m_deathType;
-	Real						m_damageRadiusScalar;
-	Real						m_revealRange;
+	Fix							m_damageRadiusScalar;
+	Fix							m_revealRange;
 
 	SpecialPowerTemplate *m_specialPowerTemplate;
 
@@ -102,8 +102,8 @@ public:
 	AsciiString		m_annihilationSoundName;
 	AsciiString		m_damagePulseRemnantObjectName;
 
-  Real					m_manualDrivingSpeed;
-  Real					m_manualFastDrivingSpeed;
+  Fix						m_manualDrivingSpeed;
+  Fix						m_manualFastDrivingSpeed;
   UnsignedInt		m_doubleClickToFastDriveDelay;
 
 	ParticleUplinkCannonUpdateModuleData();

@@ -58,17 +58,17 @@ static const Real STRAIGHT_DOWN_SLOW_FACTOR = 0.5f;
 //-----------------------------------------------------------------------------
 NeutronMissileUpdateModuleData::NeutronMissileUpdateModuleData()
 {
-	m_initialDist = 0.0f;
-	m_maxTurnRate = 999.0f;
-	m_forwardDamping = 0;
-	m_relativeSpeed = 1.0f;
-	m_targetFromDirectlyAbove = 0.0f;
+	m_initialDist = Fix( 0 );
+	m_maxTurnRate = Fix( 999 );
+	m_forwardDamping = Fix( 0 );
+	m_relativeSpeed = Fix( 1 );
+	m_targetFromDirectlyAbove = Fix( 0 );
 	m_ignitionFX = NULL;
 	m_launchFX = NULL;
-	m_specialAccelFactor = 1.0f;
+	m_specialAccelFactor = Fix( 1 );
 	m_specialSpeedTime = 0;
-	m_specialSpeedHeight = 0.0f;
-	m_specialJitterDistance = 0.0f;
+	m_specialSpeedHeight = Fix( 0 );
+	m_specialJitterDistance = Fix( 0 );
 	m_deliveryDecalRadius = 0;
 }
 
@@ -79,19 +79,19 @@ void NeutronMissileUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "DistanceToTravelBeforeTurning",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_initialDist ) },
-		{ "MaxTurnRate",			INI::parseAngularVelocityReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_maxTurnRate ) },
-		{ "ForwardDamping",		INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_forwardDamping ) },
-		{ "RelativeSpeed",		INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_relativeSpeed ) },
-		{ "TargetFromDirectlyAbove",		INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_targetFromDirectlyAbove ) },
+		{ "DistanceToTravelBeforeTurning",	INI::parseFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_initialDist ) },
+		{ "MaxTurnRate",			INI::parseAngularVelocityFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_maxTurnRate ) },
+		{ "ForwardDamping",		INI::parseFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_forwardDamping ) },
+		{ "RelativeSpeed",		INI::parseFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_relativeSpeed ) },
+		{ "TargetFromDirectlyAbove",		INI::parseFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_targetFromDirectlyAbove ) },
 		{ "LaunchFX",					INI::parseFXList,		NULL, offsetof( NeutronMissileUpdateModuleData, m_launchFX ) },
 		{ "SpecialSpeedTime",	INI::parseDurationUnsignedInt,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialSpeedTime ) },
-		{ "SpecialSpeedHeight",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialSpeedHeight ) },
-		{ "SpecialAccelFactor",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialAccelFactor ) },
-		{ "SpecialJitterDistance",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialJitterDistance ) },
+		{ "SpecialSpeedHeight",	INI::parseFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_specialSpeedHeight ) },
+		{ "SpecialAccelFactor",	INI::parseFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_specialAccelFactor ) },
+		{ "SpecialJitterDistance",	INI::parseFix,		NULL, FIX_OFFSET( NeutronMissileUpdateModuleData, m_specialJitterDistance ) },
 		{ "IgnitionFX",				INI::parseFXList,		NULL, offsetof( NeutronMissileUpdateModuleData, m_ignitionFX ) },
 		{ "DeliveryDecal",						RadiusDecalTemplate::parseRadiusDecalTemplate,	NULL, offsetof( NeutronMissileUpdateModuleData, m_deliveryDecalTemplate ) },
-		{ "DeliveryDecalRadius",			INI::parseReal,									NULL,	offsetof( NeutronMissileUpdateModuleData, m_deliveryDecalRadius ) },
+		{ "DeliveryDecalRadius",			INI::parseReal,									NULL,	REAL_OFFSET( NeutronMissileUpdateModuleData, m_deliveryDecalRadius ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -107,7 +107,7 @@ NeutronMissileUpdate::NeutronMissileUpdate( Thing *thing, const ModuleData* modu
 {
 	const NeutronMissileUpdateModuleData* d = getNeutronMissileUpdateModuleData();
 
-	m_noTurnDistLeft = d->m_initialDist;
+	m_noTurnDistLeft = fixToReal( d->m_initialDist );	// P6: saved in float
 	m_reachedIntermediatePos = true;
 
 	m_targetPos.zero();
@@ -178,14 +178,14 @@ void NeutronMissileUpdate::projectileFireAtObjectOrPosition( const Object *victi
 		// and need to stay aiming at the ground.
 		m_targetPos = victim->getPositionFix()->toCoord3D();	// P6
 		m_intermedPos = m_targetPos;
-		m_intermedPos.z += getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove;
+		m_intermedPos.z += fixToReal( getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove );	// P6
 	}
 	else
 	{
 		// Otherwise, we are just a Coord shot.
 		m_targetPos = *victimPos;
 		m_intermedPos = m_targetPos;
-		m_intermedPos.z += getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove;
+		m_intermedPos.z += fixToReal( getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove );	// P6
 	}
 
 	m_deliveryDecal.clear();
@@ -244,7 +244,7 @@ void NeutronMissileUpdate::doLaunch( void )
 
 		m_isLaunched = true;
 
-		if (getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove)
+		if (getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove != Fix( 0 ))
 			m_reachedIntermediatePos = false;
 
 		FXList::doFXObj(getNeutronMissileUpdateModuleData()->m_launchFX, getObject());
@@ -333,9 +333,9 @@ static Real calcTransform(const Object* obj, const Coord3D *pos, Real maxTurnRat
 void NeutronMissileUpdate::doAttack( void )
 {
 	Matrix3D mx;
-	Real speed = getNeutronMissileUpdateModuleData()->m_relativeSpeed;
+	Real speed = fixToReal( getNeutronMissileUpdateModuleData()->m_relativeSpeed );	// P6
 
-	if (getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove && m_reachedIntermediatePos)
+	if (getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove != Fix( 0 ) && m_reachedIntermediatePos)
 		speed *= STRAIGHT_DOWN_SLOW_FACTOR;
 	
 	// if we're still in the no-turning-time, OR if we're out of fuel
@@ -349,7 +349,7 @@ void NeutronMissileUpdate::doAttack( void )
 			//
 			// Orient toward destination
 			//
-			Real relAngle = calcTransform(getObject(), m_reachedIntermediatePos ? &m_targetPos : &m_intermedPos, getNeutronMissileUpdateModuleData()->m_maxTurnRate, &mx);
+			Real relAngle = calcTransform(getObject(), m_reachedIntermediatePos ? &m_targetPos : &m_intermedPos, fixToReal( getNeutronMissileUpdateModuleData()->m_maxTurnRate ), &mx);	// P6
 
 			//
 			// Modulate speed according to turning. The more we have to turn, the slower we go
@@ -367,7 +367,7 @@ void NeutronMissileUpdate::doAttack( void )
 	// 
 	// Move forward along forward direction
 	//
-	Real damping = getNeutronMissileUpdateModuleData()->m_forwardDamping;
+	Real damping = fixToReal( getNeutronMissileUpdateModuleData()->m_forwardDamping );	// P6
 	m_accel.x = speed * trueDir.X - damping * m_vel.x;
 	m_accel.y = speed * trueDir.Y - damping * m_vel.y;
 	m_accel.z = speed * trueDir.Z - damping * m_vel.z;
@@ -387,18 +387,18 @@ void NeutronMissileUpdate::doAttack( void )
 		if (elapsed < d->m_specialSpeedTime)
 		{
 			Real timeFrac = (Real)elapsed / (Real)d->m_specialSpeedTime;
-			Real accelFactor = d->m_specialAccelFactor;
+			Real accelFactor = fixToReal( d->m_specialAccelFactor );	// P6
 			if (accelFactor < 0.01f) accelFactor = 0.01f;
 			Coord3D newPos = pos;
-			newPos.z = m_heightAtLaunch + (sqr(accelFactor * timeFrac) / accelFactor) * d->m_specialSpeedHeight;
+			newPos.z = m_heightAtLaunch + (sqr(accelFactor * timeFrac) / accelFactor) * fixToReal( d->m_specialSpeedHeight );	// P6
 
 			m_vel.x = newPos.x - pos.x;
 			m_vel.y = newPos.y - pos.y;
 			m_vel.z = newPos.z - pos.z;
 
-			if (d->m_specialJitterDistance > 0.0f)
+			if (d->m_specialJitterDistance > Fix( 0 ))
 			{
-				Real amplitude = (1.0f - timeFrac) * d->m_specialJitterDistance;
+				Real amplitude = (1.0f - timeFrac) * fixToReal( d->m_specialJitterDistance );	// P6
 				Vector3 vectmp;
 				vectmp.X = 0;
 				// MDC: moving to GameLogicRandomValue.  This does not need to be synced, but having it so makes searches *so* much nicer.

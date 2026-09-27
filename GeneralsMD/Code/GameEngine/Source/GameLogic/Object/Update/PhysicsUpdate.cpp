@@ -51,16 +51,16 @@
 #include "GameClient/Statistics.h"		// MuLaw/NormalizeToRange, for the bounce sound volume
 #include "Lib/FixBoundary.h"
 
-const Real DEFAULT_MASS = 1.0f;
+const Fix DEFAULT_MASS = 1.0_fx;
 
-const Real DEFAULT_SHOCK_YAW = 0.05f;
-const Real DEFAULT_SHOCK_PITCH = 0.025f;
-const Real DEFAULT_SHOCK_ROLL = 0.025f;
+const Fix DEFAULT_SHOCK_YAW = 0.05_fx;
+const Fix DEFAULT_SHOCK_PITCH = 0.025_fx;
+const Fix DEFAULT_SHOCK_ROLL = 0.025_fx;
 
-const Real DEFAULT_FORWARD_FRICTION = 0.15f;
-const Real DEFAULT_LATERAL_FRICTION = 0.15f;
-const Real DEFAULT_Z_FRICTION = 0.8f;
-const Real DEFAULT_AERO_FRICTION = 0.0f;
+const Fix DEFAULT_FORWARD_FRICTION = 0.15_fx;
+const Fix DEFAULT_LATERAL_FRICTION = 0.15_fx;
+const Fix DEFAULT_Z_FRICTION = 0.8_fx;
+const Fix DEFAULT_AERO_FRICTION = 0.0_fx;
 
 // Air friction used to be completely separate and unclamped, so this constant must be split.
 // The fact it defaults to 0 shows it.
@@ -107,18 +107,18 @@ static Real angleBetweenVectors(const Coord3D& inCurDir, const Coord3D& inGoalDi
 }
 
 //-------------------------------------------------------------------------------------------------
-static Real heightToSpeed(Real height)
+static Fix heightToSpeed(Fix height)
 {
 	// don't bother trying to remember how far we've fallen; instead,
 	// back-calc it from our speed & gravity... v = sqrt(2*g*h)
-	return sqrt(fabs(2.0f * TheGlobalData->m_gravity * height));
-} 
+	return fixSqrt(fixAbs(Fix(2) * fixFromReal(TheGlobalData->m_gravity) * height));	// P4: gravity is float
+}
 
 //-------------------------------------------------------------------------------------------------
 PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 {
 	m_mass = DEFAULT_MASS;
-	m_shockResistance = 0.0f;
+	m_shockResistance = Fix(0);
 	m_shockMaxYaw = DEFAULT_SHOCK_YAW;
 	m_shockMaxPitch = DEFAULT_SHOCK_PITCH;
 	m_shockMaxRoll = DEFAULT_SHOCK_ROLL;
@@ -127,12 +127,12 @@ PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 	m_lateralFriction = DEFAULT_LATERAL_FRICTION;
 	m_ZFriction = DEFAULT_Z_FRICTION;
 	m_aerodynamicFriction = DEFAULT_AERO_FRICTION;
-	m_centerOfMassOffset = 0.0f;
+	m_centerOfMassOffset = Fix(0);
 	m_allowBouncing = false;
 	m_allowCollideForce = true;
 	m_killWhenRestingOnGround = false;
-	m_minFallSpeedForDamage = heightToSpeed(40.0f);
-	m_fallHeightDamageFactor = 1.0f;	// was 10. now is 1.
+	m_minFallSpeedForDamage = heightToSpeed(Fix(40));
+	m_fallHeightDamageFactor = Fix(1);	// was 10. now is 1.
 	/*
 		thru some bizarre editing mishap, we have been double-apply pitch/roll/yaw rates
 		to objects for, well, a long time, it looks like. I have corrected that problem
@@ -142,7 +142,7 @@ PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 		I have put this factor into INI in the unlikely event we ever need to change it,
 		but defaulting it to 2 is, in fact, the right thing for now... (srj)
 	*/
-	m_pitchRollYawFactor = 2.0f;
+	m_pitchRollYawFactor = Fix(2);
 	m_vehicleCrashesIntoBuildingWeaponTemplate = TheWeaponStore->findWeaponTemplate("VehicleCrashesIntoBuildingWeapon");
 	m_vehicleCrashesIntoNonBuildingWeaponTemplate = TheWeaponStore->findWeaponTemplate("VehicleCrashesIntoNonBuildingWeapon");
 
@@ -153,17 +153,17 @@ static void parseHeightToSpeed( INI* ini, void * /*instance*/, void *store, cons
 {
 	// don't bother trying to remember how far we've fallen; instead,
 	// back-calc it from our speed & gravity... v = sqrt(2*g*h)
-	Real height = INI::scanReal(ini->getNextToken());
-	*(Real *)store = heightToSpeed(height);
-} 
+	Fix height = INI::scanFix(ini->getNextToken());
+	*(Fix *)store = heightToSpeed(height);
+}
 
 //-------------------------------------------------------------------------------------------------
 static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
-	Real fricPerSec = INI::scanReal(ini->getNextToken());
-	Real fricPerFrame = fricPerSec * SECONDS_PER_LOGICFRAME_REAL;
-	*(Real *)store = fricPerFrame;
-} 
+	Fix fricPerSec = INI::scanFix(ini->getNextToken());
+	Fix fricPerFrame = fricPerSec / Fix(LOGICFRAMES_PER_SECOND);
+	*(Fix *)store = fricPerFrame;
+}
 
 //-------------------------------------------------------------------------------------------------
 /*static*/ void PhysicsBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p) 
@@ -172,26 +172,26 @@ static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, con
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "Mass",								INI::parsePositiveNonZeroReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_mass ) },
+		{ "Mass",								INI::parsePositiveNonZeroFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_mass ) },
 
-		{ "ShockResistance",		INI::parsePositiveNonZeroReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockResistance ) },
-		{ "ShockMaxYaw",				INI::parsePositiveNonZeroReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockMaxYaw ) },
-		{ "ShockMaxPitch",			INI::parsePositiveNonZeroReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockMaxPitch ) },
-		{ "ShockMaxRoll",				INI::parsePositiveNonZeroReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockMaxRoll ) },
+		{ "ShockResistance",		INI::parsePositiveNonZeroFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_shockResistance ) },
+		{ "ShockMaxYaw",				INI::parsePositiveNonZeroFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_shockMaxYaw ) },
+		{ "ShockMaxPitch",			INI::parsePositiveNonZeroFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_shockMaxPitch ) },
+		{ "ShockMaxRoll",				INI::parsePositiveNonZeroFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_shockMaxRoll ) },
 
-		{ "ForwardFriction",			parseFrictionPerSec,		NULL, offsetof( PhysicsBehaviorModuleData, m_forwardFriction ) },
-		{ "LateralFriction",			parseFrictionPerSec,		NULL, offsetof( PhysicsBehaviorModuleData, m_lateralFriction ) },
-		{ "ZFriction",						parseFrictionPerSec,		NULL, offsetof( PhysicsBehaviorModuleData, m_ZFriction ) },
-		{ "AerodynamicFriction",	parseFrictionPerSec,		NULL, offsetof( PhysicsBehaviorModuleData, m_aerodynamicFriction ) },
+		{ "ForwardFriction",			parseFrictionPerSec,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_forwardFriction ) },
+		{ "LateralFriction",			parseFrictionPerSec,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_lateralFriction ) },
+		{ "ZFriction",						parseFrictionPerSec,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_ZFriction ) },
+		{ "AerodynamicFriction",	parseFrictionPerSec,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_aerodynamicFriction ) },
 
-		{ "CenterOfMassOffset",	INI::parseReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_centerOfMassOffset ) },
+		{ "CenterOfMassOffset",	INI::parseFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_centerOfMassOffset ) },
 		{ "AllowBouncing",			INI::parseBool,		NULL, offsetof( PhysicsBehaviorModuleData, m_allowBouncing ) },
 		{ "AllowCollideForce",	INI::parseBool,		NULL, offsetof( PhysicsBehaviorModuleData, m_allowCollideForce ) },
 		{ "KillWhenRestingOnGround", INI::parseBool, NULL, offsetof( PhysicsBehaviorModuleData, m_killWhenRestingOnGround) },
 
-		{ "MinFallHeightForDamage",			parseHeightToSpeed,		NULL, offsetof( PhysicsBehaviorModuleData, m_minFallSpeedForDamage) },
-		{ "FallHeightDamageFactor",			INI::parseReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_fallHeightDamageFactor) },
-		{ "PitchRollYawFactor",			INI::parseReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_pitchRollYawFactor) },
+		{ "MinFallHeightForDamage",			parseHeightToSpeed,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_minFallSpeedForDamage) },
+		{ "FallHeightDamageFactor",			INI::parseFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_fallHeightDamageFactor) },
+		{ "PitchRollYawFactor",			INI::parseFix,		NULL, FIX_OFFSET( PhysicsBehaviorModuleData, m_pitchRollYawFactor) },
 
 		{ "VehicleCrashesIntoBuildingWeaponTemplate", INI::parseWeaponTemplate, NULL, offsetof(PhysicsBehaviorModuleData, m_vehicleCrashesIntoBuildingWeaponTemplate) },
 		{ "VehicleCrashesIntoNonBuildingWeaponTemplate", INI::parseWeaponTemplate, NULL, offsetof(PhysicsBehaviorModuleData, m_vehicleCrashesIntoNonBuildingWeaponTemplate) },
@@ -217,7 +217,7 @@ PhysicsBehavior::PhysicsBehavior( Thing *thing, const ModuleData* moduleData ) :
 	m_yawRate = 0.0f;
 	m_rollRate = 0.0f;
 	m_pitchRate = 0.0f;
-	m_mass = getPhysicsBehaviorModuleData()->m_mass;
+	m_mass = fixToReal( getPhysicsBehaviorModuleData()->m_mass );	// P4: saved in float
 	m_motiveForceExpires = 0;
 
 	m_flags = 0;
@@ -289,7 +289,7 @@ Bool PhysicsBehavior::isIgnoringCollisionsWith(ObjectID id) const
 //-------------------------------------------------------------------------------------------------
 Real PhysicsBehavior::getAerodynamicFriction() const
 {
-	Real f = getPhysicsBehaviorModuleData()->m_aerodynamicFriction + m_extraFriction;
+	Real f = fixToReal( getPhysicsBehaviorModuleData()->m_aerodynamicFriction ) + m_extraFriction;	// P4
 	if (f < MIN_AERO_FRICTION) f = MIN_AERO_FRICTION;
 	if (f > MAX_FRICTION) f = MAX_FRICTION;
 	return f;
@@ -298,7 +298,7 @@ Real PhysicsBehavior::getAerodynamicFriction() const
 //-------------------------------------------------------------------------------------------------
 Real PhysicsBehavior::getForwardFriction() const
 {
-	Real f = getPhysicsBehaviorModuleData()->m_forwardFriction + m_extraFriction;
+	Real f = fixToReal( getPhysicsBehaviorModuleData()->m_forwardFriction ) + m_extraFriction;	// P4
 	if (f < MIN_NON_AERO_FRICTION) f = MIN_NON_AERO_FRICTION;
 	if (f > MAX_FRICTION) f = MAX_FRICTION;
 	return f;
@@ -307,7 +307,7 @@ Real PhysicsBehavior::getForwardFriction() const
 //-------------------------------------------------------------------------------------------------
 Real PhysicsBehavior::getLateralFriction() const
 {
-	Real f = getPhysicsBehaviorModuleData()->m_lateralFriction + m_extraFriction;
+	Real f = fixToReal( getPhysicsBehaviorModuleData()->m_lateralFriction ) + m_extraFriction;	// P4
 	if (f < MIN_NON_AERO_FRICTION) f = MIN_NON_AERO_FRICTION;
 	if (f > MAX_FRICTION) f = MAX_FRICTION;
 	return f;
@@ -316,7 +316,7 @@ Real PhysicsBehavior::getLateralFriction() const
 //-------------------------------------------------------------------------------------------------
 Real PhysicsBehavior::getZFriction() const
 {
-	Real f = getPhysicsBehaviorModuleData()->m_ZFriction + m_extraFriction;
+	Real f = fixToReal( getPhysicsBehaviorModuleData()->m_ZFriction ) + m_extraFriction;	// P4
 	if (f < MIN_NON_AERO_FRICTION) f = MIN_NON_AERO_FRICTION;
 	if (f > MAX_FRICTION) f = MAX_FRICTION;
 	return f;
@@ -373,7 +373,7 @@ void PhysicsBehavior::applyForce( const Coord3D *force )
 void PhysicsBehavior::applyShock( const Coord3D *force )
 {
 	Coord3D resistedForce = *force;
-	resistedForce.scale( 1.0f - min( 1.0f, max( 0.0f, getPhysicsBehaviorModuleData()->m_shockResistance ) ) );
+	resistedForce.scale( 1.0f - min( 1.0f, max( 0.0f, fixToReal( getPhysicsBehaviorModuleData()->m_shockResistance ) ) ) );	// P4
 
 	// Apply the processed shock force to the object
 	applyForce(&resistedForce);
@@ -394,13 +394,13 @@ void PhysicsBehavior::applyRandomRotation()
 	Real randomModifier;
 
 	randomModifier = GameLogicRandomValue(-1.0f, 1.0f);
-	m_yawRate += getPhysicsBehaviorModuleData()->m_shockMaxYaw * randomModifier;
+	m_yawRate += fixToReal( getPhysicsBehaviorModuleData()->m_shockMaxYaw ) * randomModifier;	// P4
 
 	randomModifier = GameLogicRandomValue(-1.0f, 1.0f);
-	m_pitchRate += getPhysicsBehaviorModuleData()->m_shockMaxPitch * randomModifier;
+	m_pitchRate += fixToReal( getPhysicsBehaviorModuleData()->m_shockMaxPitch ) * randomModifier;	// P4
 
 	randomModifier = GameLogicRandomValue(-1.0f, 1.0f);
-	m_rollRate += getPhysicsBehaviorModuleData()->m_shockMaxRoll * randomModifier;
+	m_rollRate += fixToReal( getPhysicsBehaviorModuleData()->m_shockMaxRoll ) * randomModifier;	// P4
 
 #ifdef SLEEPY_PHYSICS
 	if (getFlag(IS_IN_UPDATE))
@@ -464,7 +464,7 @@ void PhysicsBehavior::applyFrictionalForces()
 
 	if (getFlag(APPLY_FRICTION2D_WHEN_AIRBORNE) || !getObject()->isSignificantlyAboveTerrain() || deckTaxiing ) 
 	{
-		applyYPRDamping(1.0f - DEFAULT_LATERAL_FRICTION);
+		applyYPRDamping(fixToReal(Fix(1) - DEFAULT_LATERAL_FRICTION));	// P4
 
 		if (m_vel.x || m_vel.y)
 		{
@@ -750,9 +750,10 @@ UpdateSleepTime PhysicsBehavior::update()
 			
 			// only update the position if we are not HELD
 			// (otherwise, slowdeath sinking into ground won't work)
-			Real yawRateToUse = m_yawRate * d->m_pitchRollYawFactor;
-			Real pitchRateToUse = m_pitchRate * d->m_pitchRollYawFactor;
-			Real rollRateToUse = m_rollRate * d->m_pitchRollYawFactor;
+			const Real pitchRollYawFactor = fixToReal( d->m_pitchRollYawFactor );	// P4
+			Real yawRateToUse = m_yawRate * pitchRollYawFactor;
+			Real pitchRateToUse = m_pitchRate * pitchRollYawFactor;
+			Real rollRateToUse = m_rollRate * pitchRollYawFactor;
 
 			// With a center of mass listing, pitchRate needs to dampen towards straight down/straight up
 			Real offset = getCenterOfMassOffset();
@@ -885,7 +886,7 @@ UpdateSleepTime PhysicsBehavior::update()
 		// also note: since projectiles are immune to falling damage, don't
 		// even bother doing this check here.
 		//
-		Real netSpeed = -activeVelZ - d->m_minFallSpeedForDamage;
+		Real netSpeed = -activeVelZ - fixToReal( d->m_minFallSpeedForDamage );	// P4
 		
 		if (netSpeed > 0.0f && m_pui == NULL)
 		{
@@ -896,7 +897,7 @@ UpdateSleepTime PhysicsBehavior::update()
 			if ((fabs(m_vel.x) <= TINY_DELTA || fabs(activeVelZ / m_vel.x) >= MIN_ANGLE_TAN) && 
 				(fabs(m_vel.y) <= TINY_DELTA || fabs(activeVelZ / m_vel.y) >= MIN_ANGLE_TAN))
 			{
-				Real damageAmt = netSpeed * getMass() * d->m_fallHeightDamageFactor;
+				Real damageAmt = netSpeed * getMass() * fixToReal( d->m_fallHeightDamageFactor );	// P4
 
 				DamageInfo damageInfo;
 				damageInfo.in.m_damageType = DAMAGE_FALLING;
@@ -1117,7 +1118,13 @@ void PhysicsBehavior::setAngles( Real yaw, Real pitch, Real roll )
 }
 
 //-------------------------------------------------------------------------------------------------
-Real PhysicsBehavior::getMass() const 
+Real PhysicsBehavior::getCenterOfMassOffset() const
+{
+	return fixToReal( getPhysicsBehaviorModuleData()->m_centerOfMassOffset );	// P4: the pitch rates are float
+}
+
+//-------------------------------------------------------------------------------------------------
+Real PhysicsBehavior::getMass() const
 {
 	Real mass = m_mass;
 	ContainModuleInterface* contain = getObject()->getContain();

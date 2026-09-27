@@ -46,15 +46,15 @@ class FXList;
 class NeutronMissileUpdateModuleData : public UpdateModuleData
 {
 public:
-	Real					m_initialDist;
-	Real					m_maxTurnRate;		
-	Real					m_forwardDamping;
-	Real					m_relativeSpeed;
-	Real					m_targetFromDirectlyAbove;	///< aim first for dest+offset, then dest
-	Real					m_specialAccelFactor;
+	Fix						m_initialDist;
+	Fix						m_maxTurnRate;
+	Fix						m_forwardDamping;
+	Fix						m_relativeSpeed;
+	Fix						m_targetFromDirectlyAbove;	///< aim first for dest+offset, then dest
+	Fix						m_specialAccelFactor;
 	UnsignedInt		m_specialSpeedTime;
-	Real					m_specialSpeedHeight;
-	Real					m_specialJitterDistance;
+	Fix						m_specialSpeedHeight;
+	Fix						m_specialJitterDistance;
 	const FXList*	m_launchFX;			///< FXList to do when missile 'launches'
 	const FXList*	m_ignitionFX;			///< FXList to do when missile 'ignites'
 	RadiusDecalTemplate	m_deliveryDecalTemplate;

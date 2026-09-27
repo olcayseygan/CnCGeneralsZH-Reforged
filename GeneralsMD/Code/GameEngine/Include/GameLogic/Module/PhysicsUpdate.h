@@ -50,22 +50,22 @@ enum PhysicsTurningType
 class PhysicsBehaviorModuleData : public UpdateModuleData
 {
 public:
-	Real	m_mass;
-	Real	m_shockResistance;
-	Real	m_shockMaxYaw;
-	Real	m_shockMaxPitch;
-	Real	m_shockMaxRoll;
-	Real	m_forwardFriction;
-	Real	m_lateralFriction;
-	Real	m_ZFriction;
-	Real	m_aerodynamicFriction;	// The percent of the wind resistance effect you suffer from
-	Real	m_centerOfMassOffset;	// Distance the center of mass is from the center of geometry, to control pitch rate
+	Fix		m_mass;
+	Fix		m_shockResistance;
+	Fix		m_shockMaxYaw;
+	Fix		m_shockMaxPitch;
+	Fix		m_shockMaxRoll;
+	Fix		m_forwardFriction;
+	Fix		m_lateralFriction;
+	Fix		m_ZFriction;
+	Fix		m_aerodynamicFriction;	// The percent of the wind resistance effect you suffer from
+	Fix		m_centerOfMassOffset;	// Distance the center of mass is from the center of geometry, to control pitch rate
 	Bool	m_killWhenRestingOnGround;	// when airborne==false and vel==0, kill it.
 	Bool	m_allowBouncing;
 	Bool	m_allowCollideForce;
-	Real	m_minFallSpeedForDamage;
-	Real	m_fallHeightDamageFactor;
-	Real	m_pitchRollYawFactor;
+	Fix		m_minFallSpeedForDamage;
+	Fix		m_fallHeightDamageFactor;
+	Fix		m_pitchRollYawFactor;
   
 	const WeaponTemplate* m_vehicleCrashesIntoBuildingWeaponTemplate;
 	const WeaponTemplate* m_vehicleCrashesIntoNonBuildingWeaponTemplate;
@@ -136,7 +136,7 @@ public:
 	void setAngles( Real yaw, Real pitch, Real roll );
 	Real getMass() const;
 	void setMass( Real mass ) { m_mass = mass; }
-	Real getCenterOfMassOffset() const { return getPhysicsBehaviorModuleData()->m_centerOfMassOffset; }
+	Real getCenterOfMassOffset() const;
 
 	const Coord3D *getAcceleration() const { return &m_prevAccel; }		///< get last frame's acceleration
 	const Coord3D *getVelocity() const { return &m_vel; }			///< get current velocity

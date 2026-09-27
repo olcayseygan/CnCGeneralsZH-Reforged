@@ -57,6 +57,7 @@
 #include "GameLogic\Module\PhysicsUpdate.h"
 #include "GameLogic\Module\LaserUpdate.h"
 #include "GameLogic\Module\ActiveBody.h"
+#include "Lib/FixBoundary.h"
 
 // TheSuperHackers @fix Raised from 500.0f so that enormous camera heights
 // cannot see over the top of the beam where it leaves the sky.
@@ -65,6 +66,17 @@ static const Real ORBITAL_BEAM_Z_OFFSET = 3500.0f;
 // The annihilation sound hangs off the beam drawable, so raising the beam's sky end took the
 // emitter up with it and the sound went faint.  The audio keeps the height it always had.
 static const Real ORBITAL_BEAM_AUDIO_Z_OFFSET = 500.0f;
+
+// client: the bone positions only place the particle systems and laser beams, so this stays float
+static void boneToWorld( const Object *obj, const Coord3D *bonePos, const Matrix3D *boneTransform, Coord3D *worldPos, Matrix3D *worldTransform )
+{
+	Matrix3D xf;
+	obj->getTransformMatrixFix()->toMatrix3D( &xf );
+	worldTransform->mul( xf, *boneTransform );
+	Vector3 v( bonePos->x, bonePos->y, bonePos->z );
+	xf.Transform_Vector( xf, v, &v );
+	worldPos->set( v.X, v.Y, v.Z );
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -264,8 +276,8 @@ void ParticleUplinkCannonUpdate::onObjectCreated()
 	}
 
 	m_specialPowerModule = obj->getSpecialPowerModule( data->m_specialPowerTemplate );
-	m_connectorNodePosition.set( obj->getPosition() );
-	m_laserOriginPosition.set( obj->getPosition() );
+	m_connectorNodePosition = obj->getPositionFix()->toCoord3D();	// client
+	m_laserOriginPosition = m_connectorNodePosition;	// client
 
 	//Create instances of the sounds required.
 	m_powerupSound.setEventName( data->m_powerupSoundName );
@@ -314,7 +326,7 @@ Bool ParticleUplinkCannonUpdate::initiateIntentToDoSpecialPower(const SpecialPow
 		}
 		else if( targetObj )
 		{
-			pos.set( targetObj->getPosition() );
+			pos = targetObj->getPositionFix()->toCoord3D();	// P6: the beam's target is saved in float
 		}
    	m_startAttackFrame = max( now, (UnsignedInt)1 );
 		m_manualTargetMode = FALSE;
@@ -348,7 +360,7 @@ Bool ParticleUplinkCannonUpdate::initiateIntentToDoSpecialPower(const SpecialPow
 		}
 		else if( targetObj )
 		{
-			pos.set( targetObj->getPosition() );
+			pos = targetObj->getPositionFix()->toCoord3D();	// P6: the beam's target is saved in float
 		}
 		else
 		{
@@ -545,9 +557,10 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 				Real height = Sin( radians );
 				Real cxHeight = height * data->m_swathOfDeathAmplitude;
 
+				const Coord3D myPos = me->getPositionFix()->toCoord3D();	// P6: the swath is computed in float on saved float targets
 				Coord3D buildingToInitialTargetVector;
 				buildingToInitialTargetVector.set( &m_initialTargetPosition );
-				buildingToInitialTargetVector.sub( me->getPosition() );
+				buildingToInitialTargetVector.sub( &myPos );
 				Real targetDistance = buildingToInitialTargetVector.length();
 
 				//Calculate the point position assuming the target position is on the x axis relative to the building.
@@ -558,7 +571,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 
 				//Now that we have our cartesian offset relative to the target coordinate, we need to rotate that offset
 				//so it's aligned to along the building -> target vector.
-				Vector2 buildingToTargetVector( m_initialTargetPosition.x - me->getPosition()->x, m_initialTargetPosition.y - me->getPosition()->y );
+				Vector2 buildingToTargetVector( m_initialTargetPosition.x - myPos.x, m_initialTargetPosition.y - myPos.y );
 				buildingToTargetVector.Normalize();
 				Vector2 cartesianTargetVector( m_currentTargetPosition.x, m_currentTargetPosition.y );
 				cartesianTargetVector.Normalize();
@@ -578,8 +591,8 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 
 				Vector3 v = mtx.Get_X_Vector();
 
-				m_currentTargetPosition.x = me->getPosition()->x + v.X;
-				m_currentTargetPosition.y = me->getPosition()->y + v.Y;
+				m_currentTargetPosition.x = myPos.x + v.X;
+				m_currentTargetPosition.y = myPos.y + v.Y;
 			}
 			else
 			{
@@ -632,7 +645,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 			}
 
 			//Regardless of which method we used to set the target position, make sure the z position is at the terrain.
-			m_currentTargetPosition.z = TheTerrainLogic->getGroundHeight( m_currentTargetPosition.x, m_currentTargetPosition.y );
+			m_currentTargetPosition.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( m_currentTargetPosition.x ), fixFromReal( m_currentTargetPosition.y ) ) );	// P6
 
 			Coord3D orbitPosition;
 			orbitPosition.set( &m_currentTargetPosition );
@@ -700,7 +713,9 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 				PartitionFilterAlive filterAlive;
 				PartitionFilter *filters[] = { &filterAlive, NULL };
 
-				ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &m_currentTargetPosition, damageRadius, FROM_CENTER_2D, filters );
+				FCoord3D targetPos;
+				targetPos.set( fixFromReal( m_currentTargetPosition.x ), fixFromReal( m_currentTargetPosition.y ), fixFromReal( m_currentTargetPosition.z ) );	// P6
+				ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &targetPos, fixFromReal( damageRadius ), FROM_CENTER_2D, filters );	// P6
 				MemoryPoolObjectHolder hold( iter );
 				for( Object *obj = iter->first(); obj; obj = iter->next() )
 				{
@@ -721,7 +736,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 						Object *remnant = TheThingFactory->newObject( thing, me->getTeam() );
 						if( remnant )
 						{
-							remnant->setPosition( &m_currentTargetPosition );
+							remnant->setPositionFix( &targetPos );
 						}
 					}
 				}
@@ -1170,8 +1185,7 @@ Bool ParticleUplinkCannonUpdate::calculateDefaultInformation()
 		m_outerSystemIDs[ i ] = INVALID_PARTICLE_SYSTEM_ID;
 
 		//Convert the local bone position into world space.
-		Matrix3D nodeMatrix;
-		getObject()->convertBonePosToWorldPos( &bonePositions[i], &boneMatrices[i], &m_outerNodePositions[ i ], &m_outerNodeOrientations[ i ] );
+		boneToWorld( obj, &bonePositions[i], &boneMatrices[i], &m_outerNodePositions[ i ], &m_outerNodeOrientations[ i ] );
 	}
 
 	return TRUE;
@@ -1191,11 +1205,11 @@ Bool ParticleUplinkCannonUpdate::calculateUpBonePositions()
 	{
 		if( data->m_connectorBoneName.isNotEmpty() && draw->getCurrentClientBonePositions( data->m_connectorBoneName.str(), 0, &pos, &mtx, 1 ) )
 		{
-			obj->convertBonePosToWorldPos( &pos, &mtx, &m_connectorNodePosition, &mtx );
+			boneToWorld( obj, &pos, &mtx, &m_connectorNodePosition, &mtx );
 		}
 		if( data->m_fireBoneName.isNotEmpty() && draw->getCurrentClientBonePositions( data->m_fireBoneName.str(), 0, &pos, &mtx, 1 ) )
 		{
-			obj->convertBonePosToWorldPos( &pos, &mtx, &m_laserOriginPosition, &mtx );
+			boneToWorld( obj, &pos, &mtx, &m_laserOriginPosition, &mtx );
 		}
 	}
 	return TRUE;

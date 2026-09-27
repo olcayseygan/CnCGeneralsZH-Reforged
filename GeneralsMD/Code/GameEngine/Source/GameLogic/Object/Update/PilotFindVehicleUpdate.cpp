@@ -47,6 +47,7 @@
 #include "GameLogic\Module\PilotFindVehicleUpdate.h"
 #include "GameLogic\Module\AIUpdate.h"
 #include "GameLogic\Module\CollideModule.h"
+#include "Lib/FixBoundary.h"
 
 
 
@@ -151,7 +152,7 @@ Object* PilotFindVehicleUpdate::scanClosestTarget()
 	filters[3] = &filterMapStatus;
 	filters[4] = NULL;
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me->getPosition(), data->m_scanRange, 
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), fixFromReal( data->m_scanRange ),	// P3
 		FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
 	MemoryPoolObjectHolder hold(iter);
 

@@ -44,6 +44,7 @@
 #include "GameLogic/Module/NeutronMissileSlowDeathUpdate.h"
 #include "GameLogic/Module/ToppleUpdate.h"
 #include "GameLogic/TerrainLogic.h"
+#include "Lib/FixBoundary.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -233,18 +234,15 @@ UpdateSleepTime NeutronMissileSlowDeathBehavior::update( void )
 	// when we become activated we want to do a few things
 	if( m_activationFrame == 0 )
 	{
-		Coord3D pos;
-		const Coord3D *missilePos = getObject()->getPosition();
-
 		// get the position to play the effect at on the ground
-		pos.x = missilePos->x;
-		pos.y = missilePos->y;
-		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		FCoord3D pos = *getObject()->getPositionFix();
+		pos.z = TheTerrainLogic->getGroundHeightFix( pos.x, pos.y );
 
 		// record the frame
 		m_activationFrame = currFrame;
 
-		FXList::doFXPos( modData->m_fxList, &pos );
+		const Coord3D fxPos = pos.toCoord3D();	// client
+		FXList::doFXPos( modData->m_fxList, &fxPos );
 	}  // end if
 
 	// see if it's time for any explosions
@@ -302,7 +300,7 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 
 	// get the object and position
 	Object *missile = getObject();
-	const Coord3D *missilePos = missile->getPosition();
+	const FCoord3D *missilePos = missile->getPositionFix();
 
 	// setup a damage info structure to do some damage
 	DamageInfo damageInfo;
@@ -314,21 +312,21 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 	// scan objects around us and do damage to objects we have "passed over" and are behind us
 	if( blastInfo->outerRadius )
 	{
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( missilePos,
-																																			 blastInfo->outerRadius,
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( missilePos,
+																																			 fixFromReal( blastInfo->outerRadius ),	// P3
 																																			 FROM_BOUNDINGSPHERE_3D,
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );
 		Object *other;
-		const Coord3D *otherPos;
-		Coord3D forceVector;
-		Coord3D edgeToMissile;
+		const FCoord3D *otherPos;
+		FCoord3D forceVector;
+		FCoord3D edgeToMissile;
 		Real dist;
 		for( other = iter->first(); other; other = iter->next() )
 		{
 
 			// get other position
-			otherPos = other->getPosition();
+			otherPos = other->getPositionFix();
 
 			//
 			// Measured to the centre, a building as big as an airfield whose middle sat outside the
@@ -336,13 +334,14 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 			// anything the radius touches, and the distance is taken halfway between the object's
 			// nearest edge and its centre, so a big structure in the fall-off gets a fair share.
 			//
-			ThePartitionManager->getVectorTo( other, missilePos, FROM_BOUNDINGSPHERE_3D, edgeToMissile );
-			forceVector.x = ( (otherPos->x - missilePos->x) - edgeToMissile.x ) * 0.5f;
-			forceVector.y = ( (otherPos->y - missilePos->y) - edgeToMissile.y ) * 0.5f;
-			forceVector.z = ( (otherPos->z - missilePos->z) - edgeToMissile.z ) * 0.5f;
+			ThePartitionManager->getDistanceSquaredFix( other, missilePos, FROM_BOUNDINGSPHERE_3D, &edgeToMissile );
+			forceVector.x = ( (otherPos->x - missilePos->x) - edgeToMissile.x ) * 0.5_fx;
+			forceVector.y = ( (otherPos->y - missilePos->y) - edgeToMissile.y ) * 0.5_fx;
+			forceVector.z = ( (otherPos->z - missilePos->z) - edgeToMissile.z ) * 0.5_fx;
 
 			// try to topple other object
-			other->topple( &forceVector, blastInfo->toppleSpeed, TOPPLE_OPTIONS_NO_BOUNCE | 
+			const Coord3D toppleVector = forceVector.toCoord3D();	// P8: topple is still float
+			other->topple( &toppleVector, blastInfo->toppleSpeed, TOPPLE_OPTIONS_NO_BOUNCE |
 																													 TOPPLE_OPTIONS_NO_FX );
 
 			//
@@ -351,7 +350,7 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 			// we do a percentage based on how far away from the inner radius it is, but we
 			// will always do at least blastInfo->minDamage amount of damage
 			//
-			dist = forceVector.length();
+			dist = fixToReal( forceVector.length() );	// P6: the damage falloff is float
 			if( dist <= blastInfo->innerRadius )
 				damageInfo.in.m_amount = blastInfo->maxDamage;
 			else
@@ -376,7 +375,8 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 				if( m_scorchPlaced == FALSE )
 				{
 
-					TheGameClient->addScorch( missilePos, modData->m_scorchSize, SCORCH_1 );
+					const Coord3D scorchPos = missilePos->toCoord3D();	// client
+					TheGameClient->addScorch( &scorchPos, modData->m_scorchSize, SCORCH_1 );
 					m_scorchPlaced = TRUE;
 
 				}  // end if
@@ -428,13 +428,13 @@ void NeutronMissileSlowDeathBehavior::doScorchBlast( const BlastInfo *blastInfo 
 
 	// get the object and position
 	Object *missile = getObject();
-	const Coord3D *missilePos = missile->getPosition();
+	const FCoord3D *missilePos = missile->getPositionFix();
 
 	// scan objects around us and do damage to objects we have "passed over" and are behind us
 	if( blastInfo->outerRadius )
 	{
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( missilePos,
-																																			 blastInfo->outerRadius,
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( missilePos,
+																																			 fixFromReal( blastInfo->outerRadius ),	// P3
 																																			 FROM_CENTER_2D, 
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );

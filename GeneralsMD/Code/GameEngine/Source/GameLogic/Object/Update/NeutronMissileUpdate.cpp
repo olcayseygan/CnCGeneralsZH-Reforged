@@ -47,8 +47,27 @@
 #include "GameClient/FXList.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/ParticleSys.h"
+#include "Lib/FixBoundary.h"
 
 static const Real STRAIGHT_DOWN_SLOW_FACTOR = 0.5f;
+
+// P6: the missile's flight model (its velocity, targets and steering matrix) is still float, and
+// crosses into the object's fixed transform through these two.
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
+static FixMatrix3D toFix( const Matrix3D &in )
+{
+	FixMatrix3D out;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
+	return out;
+}
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -175,7 +194,7 @@ void NeutronMissileUpdate::projectileFireAtObjectOrPosition( const Object *victi
 	{
 		// CalcTarget will add half the target's height.  But in this case, we are aiming at the ground
 		// and need to stay aiming at the ground.
-		m_targetPos = *victim->getPosition();
+		m_targetPos = victim->getPositionFix()->toCoord3D();	// P6
 		m_intermedPos = m_targetPos;
 		m_intermedPos.z += getNeutronMissileUpdateModuleData()->m_targetFromDirectlyAbove;
 	}
@@ -219,14 +238,11 @@ void NeutronMissileUpdate::doLaunch( void )
 			attachTransform.Make_Identity();
 		}
 
+		// the launch bone is a drawable matrix, so the launcher's place goes out to meet it
+		Matrix3D launcherTransform;
+		launcher->getTransformMatrixFix()->toMatrix3D( &launcherTransform );
 		Matrix3D worldTransform;
-		launcher->convertBonePosToWorldPos(NULL, &attachTransform, NULL, &worldTransform);
-
-		Vector3 tmp = worldTransform.Get_Translation();
-		Coord3D worldPos;
-		worldPos.x = tmp.X;
-		worldPos.y = tmp.Y;
-		worldPos.z = tmp.Z;
+		worldTransform.mul( launcherTransform, attachTransform );
 
 		//
 		// the missile on the raising up launch platform is actually 45 degrees from the missile
@@ -237,8 +253,10 @@ void NeutronMissileUpdate::doLaunch( void )
 		worldTransform.Rotate_X( (PI / 2.0f) );
 
 		getObject()->getDrawable()->setDrawableHidden(false);
-		getObject()->setTransformMatrix(&worldTransform);
-		getObject()->setPosition(&worldPos);
+		const FixMatrix3D worldFix = toFix( worldTransform );
+		const FCoord3D worldPos = worldFix.getTranslation();
+		getObject()->setTransformMatrixFix(&worldFix);
+		getObject()->setPositionFix(&worldPos);
 
 		getObject()->getExperienceTracker()->setExperienceSink( m_launcherID );
 
@@ -248,19 +266,15 @@ void NeutronMissileUpdate::doLaunch( void )
 			m_reachedIntermediatePos = false;
 
 		FXList::doFXObj(getNeutronMissileUpdateModuleData()->m_launchFX, getObject());
-		m_heightAtLaunch = getObject()->getPosition()->z;
+		m_heightAtLaunch = fixToReal( getObject()->getPositionFix()->z );	// P6
 		m_frameAtLaunch = TheGameLogic->getFrame();
 
 	}
 
 	// fall
-	Coord3D pos = *getObject()->getPosition();
-
-	pos.x += m_vel.x;
-	pos.y += m_vel.y;
-	pos.z += m_vel.z;
-
-	getObject()->setPosition( &pos );
+	FCoord3D pos = *getObject()->getPositionFix();
+	pos.add( toFix( m_vel ) );
+	getObject()->setPositionFix( &pos );
 
 	FXList::doFXObj(getNeutronMissileUpdateModuleData()->m_ignitionFX, getObject());
 	
@@ -278,11 +292,14 @@ void NeutronMissileUpdate::doLaunch( void )
 // return the angle (in 3-space) we actually turned.
 static Real calcTransform(const Object* obj, const Coord3D *pos, Real maxTurnRate, Matrix3D* newTransform )
 {
-	// convert to Vector3, to use all its handy stuff
-	Vector3 objPos(obj->getPosition()->x, obj->getPosition()->y, obj->getPosition()->z);
+	// convert to Vector3, to use all its handy stuff (P6: the steering is float)
+	const FCoord3D *fixPos = obj->getPositionFix();
+	Vector3 objPos(fixToReal(fixPos->x), fixToReal(fixPos->y), fixToReal(fixPos->z));
 	Vector3 otherPos(pos->x, pos->y, pos->z);
 
-	Vector3 objDir = obj->getTransformMatrix()->Rotate_Vector(Vector3(1.0f, 0.0f, 0.0f));
+	// the object's x axis, which is what rotating (1, 0, 0) by its transform gives
+	const FixMatrix3D *fixMtx = obj->getTransformMatrixFix();
+	Vector3 objDir(fixToReal(fixMtx->m[0][0]), fixToReal(fixMtx->m[1][0]), fixToReal(fixMtx->m[2][0]));
 	Vector3 otherDir = otherPos - objPos;
 	otherDir.Normalize();
 
@@ -342,7 +359,7 @@ void NeutronMissileUpdate::doAttack( void )
 	// if we're still in the no-turning-time, OR if we're out of fuel
 	if (m_noTurnDistLeft > 0.0f)
 	{
-		mx = *getObject()->getTransformMatrix();
+		getObject()->getTransformMatrixFix()->toMatrix3D( &mx );	// P6
 	}
 	else
 	{
@@ -377,7 +394,7 @@ void NeutronMissileUpdate::doAttack( void )
 	m_vel.y += m_accel.y;
 	m_vel.z += m_accel.z;
 
-	Coord3D pos = *getObject()->getPosition();
+	Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// P6
 
 	const NeutronMissileUpdateModuleData* d = getNeutronMissileUpdateModuleData();
 	UnsignedInt now = TheGameLogic->getFrame();
@@ -420,8 +437,10 @@ void NeutronMissileUpdate::doAttack( void )
 //DEBUG_LOG(("vel %f accel %f z %f\n",m_vel.length(),m_accel.length(), pos.z));
 //Real vm = sqrt(m_vel.x*m_vel.x+m_vel.y*m_vel.y+m_vel.z*m_vel.z);
 //DEBUG_LOG(("vel is %f %f %f (%f)\n",m_vel.x,m_vel.y,m_vel.z,vm));
-	getObject()->setTransformMatrix( &mx );
-	getObject()->setPosition( &pos );
+	const FixMatrix3D fixMx = toFix( mx );
+	const FCoord3D fixPos = toFix( pos );
+	getObject()->setTransformMatrixFix( &fixMx );
+	getObject()->setPositionFix( &fixPos );
 
 }
 
@@ -475,12 +494,13 @@ UpdateSleepTime NeutronMissileUpdate::update( void )
 
 	if (!m_reachedIntermediatePos)
 	{
-		Real distSqr = ThePartitionManager->getDistanceSquared(getObject(), &m_intermedPos, FROM_CENTER_3D);
-		Real boundSqr = sqr(getObject()->getGeometryInfo().getBoundingSphereRadius());
-		if (distSqr <= boundSqr)
+		const FCoord3D intermedPos = toFix( m_intermedPos );
+		Fix distSqr = ThePartitionManager->getDistanceSquaredFix(getObject(), &intermedPos, FROM_CENTER_3D);
+		Fix bound = getObject()->getGeometryInfo().getBoundingSphereRadiusFix();
+		if (distSqr <= bound * bound)
 		{
 			m_reachedIntermediatePos = true;
-			getObject()->setPosition(&m_intermedPos);
+			getObject()->setPositionFix(&intermedPos);
 			Real vel = m_vel.length();
 			m_vel.x = 0;
 			m_vel.y = 0;
@@ -489,7 +509,7 @@ UpdateSleepTime NeutronMissileUpdate::update( void )
 		}
 	}
 
-	Coord3D oldPos = *getObject()->getPosition();
+	const FCoord3D oldPos = *getObject()->getPositionFix();
 	Bool oldPosValid = (m_state == ATTACK);	// not valid till *after* we've launched
 	switch( m_state )
 	{
@@ -511,10 +531,10 @@ UpdateSleepTime NeutronMissileUpdate::update( void )
 	}
 	if (m_noTurnDistLeft > 0.0f && oldPosValid)
 	{
-		Coord3D newPos = *getObject()->getPosition();
-		Real distThisTurn = sqrt(sqr(newPos.x-oldPos.x) + sqr(newPos.y-oldPos.y) + sqr(newPos.z-oldPos.z));
+		FCoord3D delta = *getObject()->getPositionFix();
+		delta.sub( oldPos );
 		//DEBUG_LOG(("noTurnDist goes from %f to %f\n",m_noTurnDistLeft,m_noTurnDistLeft-distThisTurn));
-		m_noTurnDistLeft -= distThisTurn;
+		m_noTurnDistLeft -= fixToReal( delta.length() );	// P6: saved in float
 	}
 
 	if (m_state != PRELAUNCH && m_state != DEAD && !getObject()->isAboveTerrain())
@@ -524,7 +544,8 @@ UpdateSleepTime NeutronMissileUpdate::update( void )
 		Coord3D normal;
 		normal.x = normal.y = 0.0f;
 		normal.z = -1.0f;
-		getObject()->onCollide(NULL, getObject()->getPosition(), &normal);
+		const Coord3D collidePos = getObject()->getPositionFix()->toCoord3D();	// P6
+		getObject()->onCollide(NULL, &collidePos, &normal);
 	}
 	return UPDATE_SLEEP_NONE;
 }

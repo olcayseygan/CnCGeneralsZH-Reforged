@@ -45,6 +45,7 @@
 #include "GameLogic/ObjectCreationList.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
+#include "Lib/FixBoundary.h"
 
 const Int MAX_IDX = 32;
 
@@ -139,7 +140,7 @@ void StructureCollapseUpdate::beginStructureCollapse(const DamageInfo *damageInf
 	// This has to use a game logic random value since the bursts can spawn debris, and debris is sync'd.
 	m_collapseFrame = now + GameLogicRandomValue(d->m_minCollapseDelay, d->m_maxCollapseDelay);
 
-	doPhaseStuff(SCPHASE_INITIAL, building->getPosition());
+	doPhaseStuff(SCPHASE_INITIAL, building->getPositionFix());
 
 	m_collapseState = COLLAPSESTATE_WAITINGFORCOLLAPSESTART;
 	m_currentHeight = 0.0f;
@@ -185,7 +186,7 @@ UpdateSleepTime StructureCollapseUpdate::update( void )
 		UnsignedInt now = TheGameLogic->getFrame();
 		Object *building = getObject();
 
-		const Coord3D *currentPosition = building->getPosition();
+		const FCoord3D *currentPosition = building->getPositionFix();
 		Vector3 shudder;
 		shudder.Set(GameClientRandomValueReal(-(d->m_maxShudder), d->m_maxShudder), GameClientRandomValueReal(-(d->m_maxShudder), d->m_maxShudder), 0);
 
@@ -213,7 +214,7 @@ UpdateSleepTime StructureCollapseUpdate::update( void )
 		m_currentHeight -= m_collapseVelocity;
 		m_collapseVelocity -= TheGlobalData->m_gravity * (1.0 - d->m_collapseDamping);
 
-		const Coord3D *currentPosition = building->getPosition();
+		const FCoord3D *currentPosition = building->getPositionFix();
 		Vector3 shudder;
 		shudder.Set(GameClientRandomValueReal(-(d->m_maxShudder), d->m_maxShudder), GameClientRandomValueReal(-(d->m_maxShudder), d->m_maxShudder), m_currentHeight);
 		const Matrix3D *instMatrix = building->getDrawable()->getInstanceMatrix();
@@ -241,14 +242,14 @@ UpdateSleepTime StructureCollapseUpdate::update( void )
 		if ((m_currentHeight + building->getTemplate()->getTemplateGeometryInfo().getMaxHeightAbovePosition()) <= 0)
 		{
 			m_collapseState = COLLAPSESTATE_DONE;
-			doPhaseStuff(SCPHASE_FINAL, building->getPosition());
+			doPhaseStuff(SCPHASE_FINAL, building->getPositionFix());
 			Drawable *drawable = building->getDrawable();
 
 			doCollapseDoneStuff();
 
 			drawable->clearModelConditionState(MODELCONDITION_RUBBLE);
 			drawable->setModelConditionState(MODELCONDITION_POST_COLLAPSE);
-			building->setOrientation(building->getOrientation());
+			building->setOrientationFix(building->getOrientationFix());
 
 			
 			// Need to update body particle systems, now
@@ -301,9 +302,13 @@ static void buildNonDupRandomIndexList(Int range, Int count, Int idxList[])
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-void StructureCollapseUpdate::doPhaseStuff(StructureCollapsePhaseType scphase, const Coord3D *target)
+void StructureCollapseUpdate::doPhaseStuff(StructureCollapsePhaseType scphase, const FCoord3D *fixTarget)
 {
 	DEBUG_LOG(("Firing phase %d on frame %d\n", scphase, TheGameLogic->getFrame()));
+
+	// P8: the effects and the creation lists are still float
+	const Coord3D targetPos = fixTarget->toCoord3D();
+	const Coord3D *target = &targetPos;
 
 	const StructureCollapseUpdateModuleData* d = getStructureCollapseUpdateModuleData();
 	Int i, idx, count, listSize;
@@ -335,7 +340,7 @@ void StructureCollapseUpdate::doPhaseStuff(StructureCollapsePhaseType scphase, c
 			const OCLVec& v = d->m_ocls[scphase];
 			DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
 			const ObjectCreationList* ocl = v[idx];
-			ObjectCreationList::create(ocl, getObject(), target, NULL, getObject()->getOrientation() );
+			ObjectCreationList::create(ocl, getObject(), target, NULL, fixToReal( getObject()->getOrientationFix() ) );
 		}
 	}
 }

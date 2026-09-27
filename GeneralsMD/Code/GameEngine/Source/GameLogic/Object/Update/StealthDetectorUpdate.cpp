@@ -50,6 +50,7 @@
 #include "Common/BitFlagsIO.h"
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -204,8 +205,8 @@ UpdateSleepTime StealthDetectorUpdate::update( void )
 	}
 	Bool foundSomeone = FALSE;
 
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(
-								self, visionRange, FROM_CENTER_2D, filters); 
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(
+								self, fixFromReal( visionRange ), FROM_CENTER_2D, filters);	// P3
 	MemoryPoolObjectHolder hold(iter);
 	for (Object *them = iter->first(); them; them = iter->next())
 	{
@@ -245,7 +246,8 @@ UpdateSleepTime StealthDetectorUpdate::update( void )
 					//stealth units. It's possible to get spammed hundreds of times in a row in MD_GLA02 because
 					//we're blindly creating radar events for each detection (unless they are mines). The best thing
 					//to do is tryEvent for everything...
-					doFeedback = TheRadar->tryEvent( RADAR_EVENT_STEALTH_DISCOVERED, them->getPosition() );
+					const Coord3D themPos = them->getPositionFix()->toCoord3D();	// client
+					doFeedback = TheRadar->tryEvent( RADAR_EVENT_STEALTH_DISCOVERED, &themPos );
 					//OLD CODE:
 					/*
 					// do a radar event, for mines we only make events if there weren't other
@@ -287,10 +289,11 @@ UpdateSleepTime StealthDetectorUpdate::update( void )
 					// do a radar event, for mines we only make events if there weren't other
 					// mine events within close proximity and time to other mines
 					//
+					const Coord3D themPos = them->getPositionFix()->toCoord3D();	// client
 					if( them->isKindOf( KINDOF_MINE ) || them->isKindOf( KINDOF_BOOBY_TRAP ) || them->isKindOf( KINDOF_DEMOTRAP ) )
-						doFeedback = TheRadar->tryEvent( RADAR_EVENT_STEALTH_NEUTRALIZED, them->getPosition() );
+						doFeedback = TheRadar->tryEvent( RADAR_EVENT_STEALTH_NEUTRALIZED, &themPos );
 					else
- 						TheRadar->createEvent( them->getPosition(), RADAR_EVENT_STEALTH_NEUTRALIZED );
+ 						TheRadar->createEvent( &themPos, RADAR_EVENT_STEALTH_NEUTRALIZED );
 					
 					// do audio and UI message if we need to do feedback
 					if( doFeedback )
@@ -334,8 +337,8 @@ UpdateSleepTime StealthDetectorUpdate::update( void )
 					ParticleSystem *sys = TheParticleSystemManager->createParticleSystem( gridTemplate );//GRID
 					if (sys)
 					{
-						Coord3D gridPosition = *them->getPosition();
-						gridPosition.z = self->getPosition()->z + 17;
+						Coord3D gridPosition = them->getPositionFix()->toCoord3D();	// client
+						gridPosition.z = fixToReal( self->getPositionFix()->z ) + 17;
 						gridPosition.x -= ((Int)gridPosition.x)%12;
 						gridPosition.y -= ((Int)gridPosition.y)%12;
 

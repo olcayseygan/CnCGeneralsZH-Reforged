@@ -49,6 +49,18 @@
 #include "GameLogic/LogicRandomValue.h"
 #include "GameClient/FXList.h"
 #include "GameClient/Statistics.h"		// MuLaw/NormalizeToRange, for the bounce sound volume
+#include "Lib/FixBoundary.h"
+
+// P4: the body's integration (velocity, forces, the working matrix) is still float, and crosses
+// into the object's fixed transform through this.
+static FixMatrix3D toFix( const Matrix3D &in )
+{
+	FixMatrix3D out;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
+	return out;
+}
 
 const Real DEFAULT_MASS = 1.0f;
 
@@ -336,11 +348,11 @@ void PhysicsBehavior::applyForce( const Coord3D *force )
 	Coord3D modForce = *force;
 	if (isMotive()) 
 	{
-		const Coord3D *dir = getObject()->getUnitDirectionVector2D();
+		const Coord3D dir = getObject()->getUnitDirectionVector2DFix()->toCoord3D();	// P4
 		// Only accept the lateral acceleration.
-		Real lateralDot = force->x * (-dir->y) + force->y * dir->x;
-		modForce.x = lateralDot * -dir->y;
-		modForce.y = lateralDot * dir->x;
+		Real lateralDot = force->x * (-dir.y) + force->y * dir.x;
+		modForce.x = lateralDot * -dir.y;
+		modForce.y = lateralDot * dir.x;
 	}
 
 	Real massInv = 1.0f / mass;
@@ -467,12 +479,12 @@ void PhysicsBehavior::applyFrictionalForces()
 
 		if (m_vel.x || m_vel.y)
 		{
-			const Coord3D *dir = getObject()->getUnitDirectionVector2D();
+			const Coord3D dir = getObject()->getUnitDirectionVector2DFix()->toCoord3D();	// P4
 			Real mass = getMass();
 
-			Real lateralDot = m_vel.x * (-dir->y) + m_vel.y * dir->x;
-			Real lateralVel_x = lateralDot * -dir->y;
-			Real lateralVel_y = lateralDot * dir->x;
+			Real lateralDot = m_vel.x * (-dir.y) + m_vel.y * dir.x;
+			Real lateralVel_x = lateralDot * -dir.y;
+			Real lateralVel_y = lateralDot * dir.x;
 
 			Real lf = mass * getLateralFriction();
 
@@ -483,9 +495,9 @@ void PhysicsBehavior::applyFrictionalForces()
 
 			if (!isMotive())
 			{
-				Real forwardDot = m_vel.x * dir->x + m_vel.y * dir->y;
-				Real forwardVel_x = forwardDot * dir->x;
-				Real forwardVel_y = forwardDot * dir->y;
+				Real forwardDot = m_vel.x * dir.x + m_vel.y * dir.y;
+				Real forwardVel_x = forwardDot * dir.x;
+				Real forwardVel_y = forwardDot * dir.y;
 				Real ff = mass * getForwardFriction();
 				accel.x += -(ff * forwardVel_x);
 				accel.y += -(ff * forwardVel_y);
@@ -536,11 +548,11 @@ Bool PhysicsBehavior::handleBounce(Real oldZ, Real newZ, Real groundZ, Coord3D* 
 
 		if (vz < 0.0f)
 		{
-			Vector3 zvec = getObject()->getTransformMatrix()->Get_Z_Vector();
-			const Real rollAngle = (zvec.Z > 0) ? 0 : PI;
+			const FixMatrix3D *fixMtx = getObject()->getTransformMatrixFix();
+			const Real rollAngle = (fixMtx->m[2][2] > Fix(0)) ? 0 : PI;
 			// don't flip both pitch and roll... we'll "flip" twice.
 			const Real pitchAngle = 0;
-			Real yawAngle = getObject()->getTransformMatrix()->Get_Z_Rotation();
+			Real yawAngle = fixToReal(fixAtan2(fixMtx->m[1][0], fixMtx->m[0][0]));	// P4
 			setAngles(yawAngle, pitchAngle, rollAngle);
 		}
 
@@ -652,12 +664,13 @@ UpdateSleepTime PhysicsBehavior::update()
 		setFlag(WAS_AIRBORNE_LAST_FRAME, airborneAtStart);
 	}
 
-	Coord3D prevPos = *obj->getPosition();
+	Coord3D prevPos = obj->getPositionFix()->toCoord3D();	// P4
 	m_prevAccel = m_accel;
 
 	if (!obj->isDisabledByType(DISABLED_HELD))
 	{
-		Matrix3D mtx = *obj->getTransformMatrix();
+		Matrix3D mtx;
+		obj->getTransformMatrixFix()->toMatrix3D(&mtx);	// P4
 
 		applyGravitationalForces();
 		applyFrictionalForces();
@@ -776,7 +789,7 @@ UpdateSleepTime PhysicsBehavior::update()
 		}
 
 		// do not allow object to pass through the ground
-		Real groundZ = TheTerrainLogic->getLayerHeight(mtx.Get_X_Translation(), mtx.Get_Y_Translation(), obj->getLayer());
+		Real groundZ = fixToReal(TheTerrainLogic->getLayerHeightFix(fixFromReal(mtx.Get_X_Translation()), fixFromReal(mtx.Get_Y_Translation()), obj->getLayer()));	// P4
 		if( obj->getStatusBits().test( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) )
 		{
 			groundZ += obj->getCarrierDeckHeight(); 
@@ -825,19 +838,23 @@ UpdateSleepTime PhysicsBehavior::update()
 		if (gotBounceForce)
 		{
 			// Right the object after the bounce since the pitch and roll may have been affected
-			Real yawAngle = getObject()->getTransformMatrix()->Get_Z_Rotation();
+			const FixMatrix3D *fixMtx = getObject()->getTransformMatrixFix();
+			Real yawAngle = fixToReal(fixAtan2(fixMtx->m[1][0], fixMtx->m[0][0]));	// P4
 			setAngles(yawAngle, 0.0f, 0.0f);
 
 			// Set the translation of the after bounce matrix to the one calculated above
-			Matrix3D afterBounceMatrix = *getObject()->getTransformMatrix();
-			afterBounceMatrix.Set_Translation(mtx.Get_Translation());
+			FixMatrix3D afterBounceMatrix = *getObject()->getTransformMatrixFix();
+			FCoord3D afterBouncePos;
+			afterBouncePos.set(fixFromReal(mtx.Get_X_Translation()), fixFromReal(mtx.Get_Y_Translation()), fixFromReal(mtx.Get_Z_Translation()));	// P4
+			afterBounceMatrix.setTranslation(afterBouncePos);
 
 			// Set the result of the after bounce matrix as the object's final matrix
-			obj->setTransformMatrix(&afterBounceMatrix);
+			obj->setTransformMatrixFix(&afterBounceMatrix);
 		}
-		else 
+		else
 		{
-			obj->setTransformMatrix(&mtx);
+			const FixMatrix3D fixMtx = toFix(mtx);	// P4
+			obj->setTransformMatrixFix(&fixMtx);
 		}
 	} // if not held
 
@@ -868,7 +885,8 @@ UpdateSleepTime PhysicsBehavior::update()
 		Coord3D normal;
 		normal.x = normal.y = 0.0f;
 		normal.z = -1.0f;
-		obj->onCollide(NULL, obj->getPosition(), &normal);
+		const Coord3D collidePos = obj->getPositionFix()->toCoord3D();	// P8
+		obj->onCollide(NULL, &collidePos, &normal);
 
 		//
 		// don't bother trying to remember how far we've fallen; instead,
@@ -978,8 +996,6 @@ Real PhysicsBehavior::getVelocityMagnitude() const
  */
 Real PhysicsBehavior::getForwardSpeed2D() const
 {
-	const Coord3D *dir = getObject()->getUnitDirectionVector2D();
-
 	//
 	// The forward speed is the projection of the velocity onto the facing, i.e. the dot product.
 	// This used to return sqrt((vx*dx)^2 + (vy*dy)^2) instead, which is exact on the axes but
@@ -991,7 +1007,7 @@ Real PhysicsBehavior::getForwardSpeed2D() const
 	//
 	Coord3D vel2D = m_vel;
 	vel2D.z = 0.0f;
-	Coord3D dir2D = *dir;
+	Coord3D dir2D = getObject()->getUnitDirectionVector2DFix()->toCoord3D();	// P4
 	dir2D.z = 0.0f;
 
 	return calcForwardSpeed( vel2D, dir2D );
@@ -1004,13 +1020,13 @@ Real PhysicsBehavior::getForwardSpeed2D() const
  */
 Real PhysicsBehavior::getForwardSpeed3D() const
 {
-	Vector3 dir = getObject()->getTransformMatrix()->Get_X_Vector();
+	const FixMatrix3D *fixMtx = getObject()->getTransformMatrixFix();
 
 	// same wrong-norm bug as getForwardSpeed2D above - see the comment there.
-	Coord3D dir3D;
-	dir3D.x = dir.X;
-	dir3D.y = dir.Y;
-	dir3D.z = dir.Z;
+	Coord3D dir3D;	// the x axis, P4
+	dir3D.x = fixToReal(fixMtx->m[0][0]);
+	dir3D.y = fixToReal(fixMtx->m[1][0]);
+	dir3D.z = fixToReal(fixMtx->m[2][0]);
 
 	return calcForwardSpeed( m_vel, dir3D );
 }
@@ -1099,16 +1115,16 @@ void PhysicsBehavior::addVelocityTo( const Coord3D *vel)
 //-------------------------------------------------------------------------------------------------
 void PhysicsBehavior::setAngles( Real yaw, Real pitch, Real roll )
 {
-	const Coord3D* pos = getObject()->getPosition();
-
 	Matrix3D xfrm;
 	xfrm.Make_Identity();
-	xfrm.Translate( pos->x, pos->y, pos->z );
 	// here we DO want to use in-place-etc, cuz we're not adding to any existing rot/etc
 	xfrm.In_Place_Pre_Rotate_X( -roll );
 	xfrm.In_Place_Pre_Rotate_Y( pitch );
 	xfrm.In_Place_Pre_Rotate_Z( yaw );
-	getObject()->setTransformMatrix( &xfrm );
+	// the rotation is P4 float; the position never leaves fixed point
+	FixMatrix3D fixXfrm = toFix( xfrm );
+	fixXfrm.setTranslation( *getObject()->getPositionFix() );
+	getObject()->setTransformMatrixFix( &fixXfrm );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1141,7 +1157,7 @@ void PhysicsBehavior::doBounceSound(const Coord3D& prevPos)
 
 //Real vel = fabs(getVelocity()->z);
 // can't use velocity, because it's already been updated this frame, and will be zero... (srj)
-	Real vel = fabs(prevPos.z - getObject()->getPosition()->z);
+	Real vel = fabs(prevPos.z - fixToReal(getObject()->getPositionFix()->z));	// client
 
 	Real mass = fabs(getMass());
 	if (vel > NORMAL_VEL_Z) {
@@ -1314,8 +1330,8 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 	}
 
 	Coord3D usCenter, themCenter;
-	obj->getGeometryInfo().getCenterPosition(*obj->getPosition(), usCenter);
-	other->getGeometryInfo().getCenterPosition(*other->getPosition(), themCenter);
+	obj->getGeometryInfo().getCenterPosition(obj->getPositionFix()->toCoord3D(), usCenter);	// P4
+	other->getGeometryInfo().getCenterPosition(other->getPositionFix()->toCoord3D(), themCenter);	// P4
 
 	Coord3D delta;
 	delta.x = themCenter.x - usCenter.x;
@@ -1326,15 +1342,15 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 	if (obj->isAboveTerrain())
 	{
 		// do 3d testing.
-		usRadius = obj->getGeometryInfo().getBoundingSphereRadius();
-		themRadius = other->getGeometryInfo().getBoundingSphereRadius();
+		usRadius = fixToReal(obj->getGeometryInfo().getBoundingSphereRadiusFix());	// P4
+		themRadius = fixToReal(other->getGeometryInfo().getBoundingSphereRadiusFix());	// P4
 		distSqr = sqr(delta.x) + sqr(delta.y) + sqr(delta.z);
 	}
 	else
 	{
 		// do 2d testing.
-		usRadius = obj->getGeometryInfo().getBoundingCircleRadius();
-		themRadius = other->getGeometryInfo().getBoundingCircleRadius();
+		usRadius = fixToReal(obj->getGeometryInfo().getBoundingCircleRadiusFix());	// P4
+		themRadius = fixToReal(other->getGeometryInfo().getBoundingCircleRadiusFix());	// P4
 		distSqr = sqr(delta.x) + sqr(delta.y);
 		delta.z = 0;
 	}
@@ -1371,10 +1387,10 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 					objToBounce = objToBounce->getContainedBy();
 				
 				Real bounceOutDist = usRadius * 0.1f;
-				Coord3D tmp = *objToBounce->getPosition();
-				tmp.x -= bounceOutDist * delta.x / dist;
-				tmp.y -= bounceOutDist * delta.y / dist;
-				objToBounce->setPosition(&tmp);
+				FCoord3D tmp = *objToBounce->getPositionFix();
+				tmp.x -= fixFromReal(bounceOutDist * delta.x / dist);	// P4
+				tmp.y -= fixFromReal(bounceOutDist * delta.y / dist);	// P4
+				objToBounce->setPositionFix(&tmp);
 
 				objToBounce->getPhysics()->scrubVelocity2D(0);
 				return;
@@ -1399,7 +1415,7 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 			
 			// if we are moving down, we may want to blow ourselves into smithereens....
 			if (delta.z < 0.0f && 
-					obj->getPosition()->z >= TheGlobalData->m_defaultStructureRubbleHeight)
+					fixToReal(obj->getPositionFix()->z) >= TheGlobalData->m_defaultStructureRubbleHeight)	// P3
 			{
 				if (other->isKindOf(KINDOF_STRUCTURE))
 				{
@@ -1560,8 +1576,8 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 		crusheeOther->attemptDamage( &damageInfo );
 	}
 
-  const Coord3D *crusheePos = crusheeOther->getPosition();
-  const Coord3D *crusherPos = crusherMe->getPosition();
+  const Coord3D crusheePos = crusheeOther->getPositionFix()->toCoord3D();	// P4
+  const Coord3D crusherPos = crusherMe->getPositionFix()->toCoord3D();	// P4
 
 	BodyModuleInterface* crusheeBody = crusheeOther->getBodyModule();
 	Bool frontCrushed = crusheeBody->getFrontCrushed();
@@ -1570,13 +1586,13 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 	{
 		Bool crushIt = FALSE;
 
-		const Coord3D *dir = crusherMe->getUnitDirectionVector2D();
-		const Coord3D *crusheeDir = crusheeOther->getUnitDirectionVector2D();
-		Real crushPointOffsetDistance = crusheeOther->getGeometryInfo().getMajorRadius() / 2;
+		const Coord3D dir = crusherMe->getUnitDirectionVector2DFix()->toCoord3D();	// P4
+		const Coord3D crusheeDir = crusheeOther->getUnitDirectionVector2DFix()->toCoord3D();	// P4
+		Real crushPointOffsetDistance = fixToReal( crusheeOther->getGeometryInfo().getMajorRadiusFix() / Fix( 2 ) );	// P4
 
 		Coord3D crushPointOffset;
-		crushPointOffset.x = crusheeDir->x * crushPointOffsetDistance;
-		crushPointOffset.y = crusheeDir->y * crushPointOffsetDistance;
+		crushPointOffset.x = crusheeDir.x * crushPointOffsetDistance;
+		crushPointOffset.y = crusheeDir.y * crushPointOffsetDistance;
 		crushPointOffset.z = 0;
 
 		Coord3D comparisonCoord;
@@ -1600,18 +1616,18 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 			Real frontPerpLength, backPerpLength, centerPerpLength;
 			Coord3D frontVector, backVector, centerVector;
 			{
-				comparisonCoord = *crusheePos;
+				comparisonCoord = crusheePos;
 				comparisonCoord.x += crushPointOffset.x;
 				comparisonCoord.y += crushPointOffset.y;
 				frontVector = comparisonCoord;
-				frontVector.x -= crusherPos->x;
-				frontVector.y -= crusherPos->y; //vector from me to the front crush point
+				frontVector.x -= crusherPos.x;
+				frontVector.y -= crusherPos.y; //vector from me to the front crush point
 				frontVector.z = 0;
 
-				Real rayLength = frontVector.x * dir->x + frontVector.y * dir->y;
+				Real rayLength = frontVector.x * dir.x + frontVector.y * dir.y;
 				Coord3D dirVector;
-				dirVector.x = rayLength * dir->x;
-				dirVector.y = rayLength * dir->y; //vector from me to point of perp along direction ray
+				dirVector.x = rayLength * dir.x;
+				dirVector.y = rayLength * dir.y; //vector from me to point of perp along direction ray
 				dirVector.z = 0;
 
 				Coord3D perpVector;
@@ -1622,18 +1638,18 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 				frontPerpLength = perpVector.length();
 			}
 			{
-				comparisonCoord = *crusheePos;
+				comparisonCoord = crusheePos;
 				comparisonCoord.x -= crushPointOffset.x;
 				comparisonCoord.y -= crushPointOffset.y;
 				backVector = comparisonCoord;
-				backVector.x -= crusherPos->x;
-				backVector.y -= crusherPos->y; //vector from me to the front crush point
+				backVector.x -= crusherPos.x;
+				backVector.y -= crusherPos.y; //vector from me to the front crush point
 				backVector.z = 0;
 
-				Real rayLength = backVector.x * dir->x + backVector.y * dir->y;
+				Real rayLength = backVector.x * dir.x + backVector.y * dir.y;
 				Coord3D dirVector;
-				dirVector.x = rayLength * dir->x;
-				dirVector.y = rayLength * dir->y; //vector from me to point of perp along direction ray
+				dirVector.x = rayLength * dir.x;
+				dirVector.y = rayLength * dir.y; //vector from me to point of perp along direction ray
 				dirVector.z = 0;
 
 				Coord3D perpVector;
@@ -1644,16 +1660,16 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 				backPerpLength = perpVector.length();
 			}
 			{
-				comparisonCoord = *crusheePos;
+				comparisonCoord = crusheePos;
 				centerVector = comparisonCoord;
-				centerVector.x -= crusherPos->x;
-				centerVector.y -= crusherPos->y; //vector from me to the front crush point
+				centerVector.x -= crusherPos.x;
+				centerVector.y -= crusherPos.y; //vector from me to the front crush point
 				centerVector.z = 0;
 
-				Real rayLength = centerVector.x * dir->x + centerVector.y * dir->y;
+				Real rayLength = centerVector.x * dir.x + centerVector.y * dir.y;
 				Coord3D dirVector;
-				dirVector.x = rayLength * dir->x;
-				dirVector.y = rayLength * dir->y; //vector from me to point of perp along direction ray
+				dirVector.x = rayLength * dir.x;
+				dirVector.y = rayLength * dir.y; //vector from me to point of perp along direction ray
 				dirVector.z = 0;
 
 				Coord3D perpVector;
@@ -1763,12 +1779,12 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 		if( crushTarget == TOTAL_CRUSH )
 		{
 			// Check the middle crush point
-			comparisonCoord = *crusheePos; //copy so can move to each crush point
+			comparisonCoord = crusheePos; //copy so can move to each crush point
 
-			dx = comparisonCoord.x - crusherPos->x;
-			dy = comparisonCoord.y - crusherPos->y;
+			dx = comparisonCoord.x - crusherPos.x;
+			dy = comparisonCoord.y - crusherPos.y;
 
-			Real dot = dir->x * dx + dir->y * dy;
+			Real dot = dir.x * dx + dir.y * dy;
 			Real distanceSquared = (dx * dx) + (dy * dy);
 
 			if( (dot < 0)  &&  (distanceSquared < distanceTooFarSquared) )
@@ -1780,14 +1796,14 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 		else if( crushTarget == FRONT_END_CRUSH )
 		{
 			// Check the front point.  
-			comparisonCoord = *crusheePos;
+			comparisonCoord = crusheePos;
 			comparisonCoord.x += crushPointOffset.x;
 			comparisonCoord.y += crushPointOffset.y;
 
-			dx = comparisonCoord.x - crusherPos->x;
-			dy = comparisonCoord.y - crusherPos->y;
+			dx = comparisonCoord.x - crusherPos.x;
+			dy = comparisonCoord.y - crusherPos.y;
 
-			Real dot = dir->x * dx + dir->y * dy;
+			Real dot = dir.x * dx + dir.y * dy;
 			Real distanceSquared = (dx * dx) + (dy * dy);
 
 			if( (dot < 0)  &&  (distanceSquared < distanceTooFarSquared) )
@@ -1799,14 +1815,14 @@ Bool PhysicsBehavior::checkForOverlapCollision(Object *other)
 		else if( crushTarget == BACK_END_CRUSH )
 		{
 			// Check back point
-			comparisonCoord = *crusheePos;
+			comparisonCoord = crusheePos;
 			comparisonCoord.x -= crushPointOffset.x;
 			comparisonCoord.y -= crushPointOffset.y;
 
-			dx = comparisonCoord.x - crusherPos->x;
-			dy = comparisonCoord.y - crusherPos->y;
+			dx = comparisonCoord.x - crusherPos.x;
+			dy = comparisonCoord.y - crusherPos.y;
 
-			Real dot = dir->x * dx + dir->y * dy;
+			Real dot = dir.x * dx + dir.y * dy;
 			Real distanceSquared = (dx * dx) + (dy * dy);
 
 			if( (dot < 0)  &&  (distanceSquared < distanceTooFarSquared) )
@@ -1843,10 +1859,10 @@ void PhysicsBehavior::testStunnedUnitForDestruction(void)
 
 	// Grab the object
 	Object *obj = getObject();
-	const Coord3D *pos = obj->getPosition();
+	const FCoord3D *pos = obj->getPositionFix();
 
 	// If a stunned object is upside down when it hits the ground, kill it
-	if(obj->getTransformMatrix()->Get_Z_Vector().Z < 0.0f)
+	if(obj->getTransformMatrixFix()->m[2][2] < Fix(0))
 	{
 		obj->kill();
 		return;
@@ -1864,14 +1880,14 @@ void PhysicsBehavior::testStunnedUnitForDestruction(void)
 	if (!aiInt) return;
 
 	// Check for object being stuck on cliffs. If so kill it
-	if (TheTerrainLogic->isCliffCell(pos->x, pos->y) && !aiInt->hasLocomotorForSurface(LOCOMOTORSURFACE_CLIFF))
+	if (TheTerrainLogic->isCliffCell(fixToReal(pos->x), fixToReal(pos->y)) && !aiInt->hasLocomotorForSurface(LOCOMOTORSURFACE_CLIFF))	// P5
 	{
 		obj->kill();
 		return;
 	} 
 
 	// Check for object being stuck on water. If so kill it
-	if (TheTerrainLogic->isUnderwater(pos->x, pos->y) && !aiInt->hasLocomotorForSurface(LOCOMOTORSURFACE_WATER))
+	if (TheTerrainLogic->isUnderwaterFix(pos->x, pos->y) && !aiInt->hasLocomotorForSurface(LOCOMOTORSURFACE_WATER))
 	{	
 		obj->kill();
 		return;

@@ -61,6 +61,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
 
 //-----------------------------------------------------------------------------
 WeaponBonusUpdateModuleData::WeaponBonusUpdateModuleData()
@@ -138,8 +139,8 @@ UpdateSleepTime WeaponBonusUpdate::update( void )
 	PartitionFilter *filters[] = { &relationship, &filterAlive, &filterMapStatus, NULL };
 
 	// scan objects in our region
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me->getPosition(), 
-																																			data->m_bonusRange, 
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(),
+																																			fixFromReal( data->m_bonusRange ),	// P3
 																																			FROM_CENTER_2D, 
 																																			filters );
 	MemoryPoolObjectHolder hold( iter );

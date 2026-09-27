@@ -89,8 +89,8 @@ void MissileLauncherBuildingUpdate::switchToState(DoorStateType dst)
 			m_timeoutState = DOOR_CLOSED;
 			if (d->m_closedFX)
 			{
-				const Coord3D *pos = getObject()->getPosition();
-				FXList::doFXPos(d->m_closedFX, pos);
+				const Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// client
+				FXList::doFXPos(d->m_closedFX, &pos);
 			}
 			if (m_openIdleAudio.isCurrentlyPlaying()) 
 			{
@@ -111,8 +111,8 @@ void MissileLauncherBuildingUpdate::switchToState(DoorStateType dst)
 			m_timeoutState = DOOR_OPEN;
 			if (d->m_openingFX)
 			{
-				const Coord3D *pos = getObject()->getPosition();
-				FXList::doFXPos(d->m_openingFX, pos);
+				const Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// client
+				FXList::doFXPos(d->m_openingFX, &pos);
 			}
 			if (m_openIdleAudio.isCurrentlyPlaying()) 
 			{
@@ -131,8 +131,8 @@ void MissileLauncherBuildingUpdate::switchToState(DoorStateType dst)
 			m_timeoutState = DOOR_OPEN;
 			if (d->m_openFX)
 			{
-				const Coord3D *pos = getObject()->getPosition();
-				FXList::doFXPos(d->m_openFX, pos);
+				const Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// client
+				FXList::doFXPos(d->m_openFX, &pos);
 			}
 			if (!m_openIdleAudio.isCurrentlyPlaying())
 			{
@@ -151,8 +151,8 @@ void MissileLauncherBuildingUpdate::switchToState(DoorStateType dst)
 			m_timeoutState = DOOR_CLOSING;
 			if (d->m_waitingToCloseFX)
 			{
-				const Coord3D *pos = getObject()->getPosition();
-				FXList::doFXPos(d->m_waitingToCloseFX, pos);
+				const Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// client
+				FXList::doFXPos(d->m_waitingToCloseFX, &pos);
 			}
 			if (m_openIdleAudio.isCurrentlyPlaying()) 
 			{
@@ -178,8 +178,8 @@ void MissileLauncherBuildingUpdate::switchToState(DoorStateType dst)
 			m_timeoutState = DOOR_CLOSED;
 			if (d->m_closingFX)
 			{
-				const Coord3D *pos = getObject()->getPosition();
-				FXList::doFXPos(d->m_closingFX, pos);
+				const Coord3D pos = getObject()->getPositionFix()->toCoord3D();	// client
+				FXList::doFXPos(d->m_closingFX, &pos);
 			}
 			if (m_openIdleAudio.isCurrentlyPlaying()) 
 			{

@@ -47,10 +47,30 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Damage.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 // this is our "bounce" limit -- slightly less that 90 degrees, to account for slop.
-static const Real ANGULAR_LIMIT = PI/2 - PI/64;		
+static const Real ANGULAR_LIMIT = PI/2 - PI/64;
+
+/* P8: the fall is still worked in float - its angles and its direction are saved float state - so
+	 the object's fixed transform goes out to be pre-rotated and comes back in. */
+static void preRotateTransform( Object *obj, Real aroundX, Real aroundY, Real aroundZ )
+{
+	Matrix3D xfrm;
+	obj->getTransformMatrixFix()->toMatrix3D( &xfrm );
+	if( aroundX != 0.0f )
+		xfrm.In_Place_Pre_Rotate_X( aroundX );
+	if( aroundY != 0.0f )
+		xfrm.In_Place_Pre_Rotate_Y( aroundY );
+	if( aroundZ != 0.0f )
+		xfrm.In_Place_Pre_Rotate_Z( aroundZ );
+	FixMatrix3D fix;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			fix.m[ i ][ j ] = fixFromReal( xfrm[ i ][ j ] );
+	obj->setTransformMatrixFix( &fix );
+}
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -195,7 +215,7 @@ void ToppleUpdate::applyTopplingForce( const Coord3D* toppleDirection, Real topp
 	// fall parallel to the ground, so that they don't up sticking thru the ground.
 	// yeah, it assumes the models are constructed appropriately, but is a cheap way
 	// of minimizing the problem. (srj)
-	Real curAngleX = normalizeAngle(getObject()->getOrientation());
+	Real curAngleX = normalizeAngle(fixToReal(getObject()->getOrientationFix()));	// P8: the fall is worked in float
 	Real toppleAngle = normalizeAngle(ATan2(m_toppleDirection.y, m_toppleDirection.x));
 	if (d->m_toppleLeftOrRightOnly)
 	{
@@ -227,8 +247,8 @@ void ToppleUpdate::applyTopplingForce( const Coord3D* toppleDirection, Real topp
 		Object *stump = TheThingFactory->newObject( ttn, NULL );
 		if (stump)
 		{
-			stump->setPosition( getObject()->getPosition() );
-			stump->setOrientation( getObject()->getOrientation() );
+			stump->setPositionFix( getObject()->getPositionFix() );
+			stump->setOrientationFix( getObject()->getOrientationFix() );
 			m_stumpID = stump->getID();
 
 			// if we are "burned", then we will burn our stump
@@ -287,9 +307,7 @@ UpdateSleepTime ToppleUpdate::update()
 	Object* obj = getObject();
 	if (m_numAngleDeltaX)
 	{
-		Matrix3D xfrm = *obj->getTransformMatrix();
-		xfrm.In_Place_Pre_Rotate_Z(m_angleDeltaX);
-		obj->setTransformMatrix(&xfrm);
+		preRotateTransform(obj, 0.0f, 0.0f, m_angleDeltaX);
 		--m_numAngleDeltaX;
 	}
 
@@ -297,10 +315,7 @@ UpdateSleepTime ToppleUpdate::update()
 	if (m_angularAccumulation + curVelToUse > ANGULAR_LIMIT)
 		curVelToUse = ANGULAR_LIMIT - m_angularAccumulation;
 
-	Matrix3D xfrm = *obj->getTransformMatrix();
-	xfrm.In_Place_Pre_Rotate_X(-curVelToUse * m_toppleDirection.y);
-	xfrm.In_Place_Pre_Rotate_Y(curVelToUse * m_toppleDirection.x);
-	obj->setTransformMatrix(&xfrm);
+	preRotateTransform(obj, -curVelToUse * m_toppleDirection.y, curVelToUse * m_toppleDirection.x, 0.0f);
 
 	m_angularAccumulation += curVelToUse;
 	if ((m_angularAccumulation >= ANGULAR_LIMIT) && (m_angularVelocity > 0))
@@ -322,20 +337,13 @@ UpdateSleepTime ToppleUpdate::update()
 				{
 					// we have a separate rubble state that needs to be upright, and centered
 					// on the new "center" pos...
-					Vector3 pos;
-					pos.X = 0;
-					pos.Y = 0;
-					pos.Z = obj->getGeometryInfo().getMaxHeightAbovePosition();
-					Matrix3D::Transform_Vector(*obj->getTransformMatrix(), pos, &pos);
-
-					Coord3D tmp;
-					tmp.x = pos.X;
-					tmp.y = pos.Y;
-					tmp.z = pos.Z;
-					obj->setPosition(&tmp);
+					FCoord3D top;
+					top.set( Fix(0), Fix(0), obj->getGeometryInfo().getMaxHeightAbovePositionFix() );
+					FCoord3D tmp = obj->getTransformMatrixFix()->transformPoint( top );
+					obj->setPositionFix(&tmp);
 
 					// this relies on the fact that setOrientation always forces us straight up in the Z axis!
-					obj->setOrientation(obj->getOrientation());
+					obj->setOrientationFix(obj->getOrientationFix());
 
 				}
 			} // if kill when toppled
@@ -385,11 +393,12 @@ void ToppleUpdate::onCollide( Object *other, const Coord3D *loc, const Coord3D *
 	{
 
 		// Give a vector with direction to thing and my speed.
-		Coord3D toppleVector = *getObject()->getPosition();
-		toppleVector.x -= other->getPosition()->x;
-		toppleVector.y -= other->getPosition()->y;
-		toppleVector.z = 0;
-		
+		FCoord3D toppleFix = *getObject()->getPositionFix();
+		toppleFix.x -= other->getPositionFix()->x;
+		toppleFix.y -= other->getPositionFix()->y;
+		toppleFix.z = Fix(0);
+		const Coord3D toppleVector = toppleFix.toCoord3D();	// P8: topple is float
+
 		Coord3D vel;
 		PhysicsBehavior* phys = other->getPhysics();
 		if (phys)

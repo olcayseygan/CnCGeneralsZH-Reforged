@@ -85,6 +85,7 @@
 #include "GameLogic/Weapon.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameLogic/AIPathfind.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -122,8 +123,16 @@ static void updateTeamAndPlayerStuff( Object *obj, void *userData )
 
 // STATICS ////////////////////////////////////////////////////////////////////////////////////////
 
+// waypoints, polygon triggers and script parameters are map data in float; this is their way in
+static FCoord3D fixCoordFromReal( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
 // DEFINES ////////////////////////////////////////////////////////////////////////////////////////
-#define REALLY_FAR	(100000 * MAP_XY_FACTOR)
+#define REALLY_FAR	Fix( 100000 * 10 )		// 100000 * MAP_XY_FACTOR
 
 // GLOBALS ////////////////////////////////////////////////////////////////////////////////////////
 ScriptActionsInterface *TheScriptActions = NULL;
@@ -521,11 +530,12 @@ void ScriptActions::doCreateReinforcements(const AsciiString& team, const AsciiS
 		return;
 	}
 	const TeamTemplateInfo *pInfo = theTeamProto->getTemplateInfo();
-	Coord3D origin = destination;
+	const FCoord3D fDestination = fixCoordFromReal( destination );
+	FCoord3D origin = fDestination;
 	way = TheTerrainLogic->getWaypointByName(pInfo->m_startReinforceWaypoint);
 	if (way) {
-		origin = *way->getLocation();
-		if (origin.x != destination.x || origin.y != destination.y) {
+		origin = fixCoordFromReal( *way->getLocation() );
+		if (origin.x != fDestination.x || origin.y != fDestination.y) {
 			needToMoveToDestination = true;
 		}
 	}
@@ -546,9 +556,9 @@ void ScriptActions::doCreateReinforcements(const AsciiString& team, const AsciiS
 	if( transportTemplate ) 
 	{
 		transport = TheThingFactory->newObject( transportTemplate, theTeam );
-		transport->setPosition( &origin );
-		transport->setOrientation( 0.0f );
-		if( transport ) 
+		transport->setPositionFix( &origin );
+		transport->setOrientationFix( Fix( 0 ) );
+		if( transport )
 		{
 			contain = transport->getContain();
 		}
@@ -579,30 +589,30 @@ void ScriptActions::doCreateReinforcements(const AsciiString& team, const AsciiS
 	{
 		// get thing template based from map object name
 		unitTemplate = TheThingFactory->findTemplate(pInfo->m_unitsInfo[i].unitThingName);
-		Coord3D pos = origin;
-		if (unitTemplate && theTeam) 
+		FCoord3D pos = origin;
+		if (unitTemplate && theTeam)
 		{
 			Object *obj = NULL;
-			for (j=0; j<pInfo->m_unitsInfo[i].maxUnits; j++) 
+			for (j=0; j<pInfo->m_unitsInfo[i].maxUnits; j++)
 			{
 				// create new object in the world
 				obj = TheThingFactory->newObject( unitTemplate, theTeam );
 				if( obj )
 				{
 					/// @todo - have better positioning for reinforcement units.
-					pos.x = origin.x + 2.25*(j)*obj->getGeometryInfo().getMajorRadius();
-					pos.z = TheTerrainLogic->getGroundHeight(pos.x, pos.y);
-					obj->setPosition( &pos );
-					obj->setOrientation(0.0f);
-          
+					pos.x = origin.x + 2.25_fx*Fix(j)*obj->getGeometryInfo().getMajorRadiusFix();
+					pos.z = TheTerrainLogic->getGroundHeightFix(pos.x, pos.y);
+					obj->setPositionFix( &pos );
+					obj->setOrientationFix( Fix( 0 ) );
+
 
 				}  // end if
 			}
-			if (obj) pos.y += 2*obj->getGeometryInfo().getMajorRadius();
+			if (obj) pos.y += Fix(2)*obj->getGeometryInfo().getMajorRadiusFix();
 		}
 		origin.y = pos.y;
 	}
-	origin = destination;
+	origin = fDestination;
 	if (pInfo->m_teamStartsFull) 
 	{
 		// Have them load into transports in the team.
@@ -682,9 +692,9 @@ void ScriptActions::doCreateReinforcements(const AsciiString& team, const AsciiS
 			}
 			//Check to see if it's a valid transport for this unit, even if it's full.
 
-			Coord3D pos = origin;
-			pos.x += transportCount*transport->getGeometryInfo().getMajorRadius();
-			pos.z = TheTerrainLogic->getGroundHeight(pos.x, pos.y);
+			FCoord3D pos = origin;
+			pos.x += Fix(transportCount)*transport->getGeometryInfo().getMajorRadiusFix();
+			pos.z = TheTerrainLogic->getGroundHeightFix(pos.x, pos.y);
 			
 			if (contain && contain->isValidContainerFor(obj, false)) 
 			{
@@ -694,9 +704,9 @@ void ScriptActions::doCreateReinforcements(const AsciiString& team, const AsciiS
 				{
 					// full, try building another.
 					transport = TheThingFactory->newObject( transportTemplate, theTeam );
-					transport->setPosition( &pos );
+					transport->setPositionFix( &pos );
 					transportCount++;
-					transport->setOrientation(0.0f);
+					transport->setOrientationFix( Fix( 0 ) );
 					if (transport) 
 					{
 						contain = transport->getContain();
@@ -707,7 +717,7 @@ void ScriptActions::doCreateReinforcements(const AsciiString& team, const AsciiS
 				if( putInContainerTemplate )
 				{
 					Object* container = TheThingFactory->newObject( putInContainerTemplate, theTeam );
-					container->setPosition( &pos );
+					container->setPositionFix( &pos );
 
 					//Make sure this is valid.
 					if( container->getContain() && container->getContain()->isValidContainerFor( obj, true ) )
@@ -1015,9 +1025,10 @@ void ScriptActions::doCreateObject(const AsciiString& objectName, const AsciiStr
 				}
 			}
 
-			obj->setOrientation(angle);
-			obj->setPosition( pos );
-      
+			obj->setOrientationFix( fixFromReal( angle ) );
+			const FCoord3D fpos = fixCoordFromReal( *pos );
+			obj->setPositionFix( &fpos );
+
       if ( obj->isKindOf( KINDOF_BLAST_CRATER ) ) // since these footprints are permanent
       {
         TheTerrainLogic->createCraterInTerrain( obj );
@@ -1205,8 +1216,8 @@ void ScriptActions::createUnitOnTeamAt(const AsciiString& unitName, const AsciiS
 			Waypoint *way = TheTerrainLogic->getWaypointByName( waypoint );
 			if (way)
 			{
-				Coord3D destination = *way->getLocation();
-				obj->setPosition(&destination);
+				const FCoord3D destination = fixCoordFromReal( *way->getLocation() );
+				obj->setPositionFix(&destination);
 			}
 		}  // end if
 	} else {
@@ -1624,7 +1635,7 @@ void ScriptActions::doNamedFollowWaypoints(const AsciiString& unitName, const As
 	if (!theUnit) {
 		return;
 	}
-	Coord3D pos = *theUnit->getPosition();
+	Coord3D pos = theUnit->getPositionFix()->toCoord3D();	// P7 waypoints are float
 	AIUpdateInterface* aiUpdate = theUnit->getAIUpdateInterface();
 	if (!aiUpdate) {
 		return;
@@ -1636,7 +1647,7 @@ void ScriptActions::doNamedFollowWaypoints(const AsciiString& unitName, const As
 	}
 
 	DEBUG_ASSERTLOG(TheTerrainLogic->isPurposeOfPath(way, waypointPathLabel), ("***Wrong waypoint purpose. Make jba fix this.\n"));
-	
+
 	theUnit->leaveGroup();
 	aiUpdate->chooseLocomotorSet(LOCOMOTORSET_NORMAL);
 	aiUpdate->aiFollowWaypointPath(way, CMD_FROM_SCRIPT);
@@ -1651,7 +1662,7 @@ void ScriptActions::doNamedFollowWaypointsExact(const AsciiString& unitName, con
 	if (!theUnit) {
 		return;
 	}
-	Coord3D pos = *theUnit->getPosition();
+	Coord3D pos = theUnit->getPositionFix()->toCoord3D();	// P7 waypoints are float
 	AIUpdateInterface* aiUpdate = theUnit->getAIUpdateInterface();
 	if (!aiUpdate) {
 		return;
@@ -1663,7 +1674,7 @@ void ScriptActions::doNamedFollowWaypointsExact(const AsciiString& unitName, con
 	}
 
 	DEBUG_ASSERTLOG(TheTerrainLogic->isPurposeOfPath(way, waypointPathLabel), ("***Wrong waypoint purpose. Make jba fix this.\n"));
-	
+
 	theUnit->leaveGroup();
 	aiUpdate->chooseLocomotorSet(LOCOMOTORSET_NORMAL);
 	aiUpdate->aiFollowWaypointPathExact(way, CMD_FROM_SCRIPT);
@@ -1685,27 +1696,25 @@ void ScriptActions::doTeamFollowSkirmishApproachPath(const AsciiString& teamName
 	}
 	theTeam->getTeamAsAIGroup(theGroup);
 	Int count = 0;
-	Coord3D pos;
-	pos.x=pos.y=pos.z=0;
+	FCoord3D sum;
+	sum.zero();
 
 	Object *firstUnit=NULL;
 	// Get the center point for the team
 	for (DLINK_ITERATOR<Object> iter = theTeam->iterate_TeamMemberList(); !iter.done(); iter.advance())
 	{
 		Object *obj = iter.cur();
-		Coord3D objPos = *obj->getPosition();
-		pos.x += objPos.x;
-		pos.y += objPos.y;
-		pos.z += objPos.z; // Not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
+		sum.add( *obj->getPositionFix() ); // z is not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
 		count++;
 		if (firstUnit==NULL) {
 			firstUnit = obj;
 		}
 	}
 	if (count==0) return; // empty team.
-	pos.x /= count;
-	pos.y /= count;
-	pos.z /= count;
+	sum.x /= Fix(count);
+	sum.y /= Fix(count);
+	sum.z /= Fix(count);
+	Coord3D pos = sum.toCoord3D();	// P7 waypoints are float
 
 	Player *enemyPlayer = TheScriptEngine->getSkirmishEnemyPlayer();
 	if (enemyPlayer==NULL) return;
@@ -1756,23 +1765,21 @@ void ScriptActions::doTeamMoveToSkirmishApproachPath(const AsciiString& teamName
 	}
 	theTeam->getTeamAsAIGroup(theGroup);
 	Int count = 0;
-	Coord3D pos;
-	pos.x=pos.y=pos.z=0;
+	FCoord3D sum;
+	sum.zero();
 
 	// Get the center point for the team
 	for (DLINK_ITERATOR<Object> iter = theTeam->iterate_TeamMemberList(); !iter.done(); iter.advance())
 	{
 		Object *obj = iter.cur();
-		Coord3D objPos = *obj->getPosition();
-		pos.x += objPos.x;
-		pos.y += objPos.y;
-		pos.z += objPos.z; // Not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
+		sum.add( *obj->getPositionFix() ); // z is not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
 		count++;
 	}
 	if (count==0) return; // empty team.
-	pos.x /= count;
-	pos.y /= count;
-	pos.z /= count;
+	sum.x /= Fix(count);
+	sum.y /= Fix(count);
+	sum.z /= Fix(count);
+	Coord3D pos = sum.toCoord3D();	// P7 waypoints are float
 
 	Player *enemyPlayer = TheScriptEngine->getSkirmishEnemyPlayer();
 	if (enemyPlayer==NULL) return;
@@ -1830,23 +1837,21 @@ void ScriptActions::doTeamFollowWaypoints(const AsciiString& teamName, const Asc
 	}
 	theTeam->getTeamAsAIGroup(theGroup);
 	Int count = 0;
-	Coord3D pos;
-	pos.x=pos.y=pos.z=0;
+	FCoord3D sum;
+	sum.zero();
 
 	// Get the center point for the team
 	for (DLINK_ITERATOR<Object> iter = theTeam->iterate_TeamMemberList(); !iter.done(); iter.advance())
 	{
 		Object *obj = iter.cur();
-		Coord3D objPos = *obj->getPosition();
-		pos.x += objPos.x;
-		pos.y += objPos.y;
-		pos.z += objPos.z; // Not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
+		sum.add( *obj->getPositionFix() ); // z is not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
 		count++;
 	}
 	if (count==0) return; // empty team.
-	pos.x /= count;
-	pos.y /= count;
-	pos.z /= count;
+	sum.x /= Fix(count);
+	sum.y /= Fix(count);
+	sum.z /= Fix(count);
+	Coord3D pos = sum.toCoord3D();	// P7 waypoints are float
 
 	Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &pos, waypointPathLabel );
 	if (!way) {
@@ -1877,23 +1882,21 @@ void ScriptActions::doTeamFollowWaypointsExact(const AsciiString& teamName, cons
 	}
 	theTeam->getTeamAsAIGroup(theGroup);
 	Int count = 0;
-	Coord3D pos;
-	pos.x=pos.y=pos.z=0;
+	FCoord3D sum;
+	sum.zero();
 
 	// Get the center point for the team
 	for (DLINK_ITERATOR<Object> iter = theTeam->iterate_TeamMemberList(); !iter.done(); iter.advance())
 	{
 		Object *obj = iter.cur();
-		Coord3D objPos = *obj->getPosition();
-		pos.x += objPos.x;
-		pos.y += objPos.y;
-		pos.z += objPos.z; // Not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
+		sum.add( *obj->getPositionFix() ); // z is not actually used by getClosestWaypointOnPath, but hey, might as well be correct.
 		count++;
 	}
 	if (count==0) return; // empty team.
-	pos.x /= count;
-	pos.y /= count;
-	pos.z /= count;
+	sum.x /= Fix(count);
+	sum.y /= Fix(count);
+	sum.z /= Fix(count);
+	Coord3D pos = sum.toCoord3D();	// P7 waypoints are float
 
 	Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &pos, waypointPathLabel );
 	if (!way) {
@@ -1924,7 +1927,7 @@ void ScriptActions::doNamedGuard(const AsciiString& unitName)
 	}
 	
 	theUnit->leaveGroup();
-	Coord3D position = *theUnit->getPosition();
+	Coord3D position = theUnit->getPositionFix()->toCoord3D();	// P4 AI orders are float
 	aiUpdate->chooseLocomotorSet(LOCOMOTORSET_NORMAL);
 	aiUpdate->aiGuardPosition(&position, GUARDMODE_NORMAL, CMD_FROM_SCRIPT);
 }
@@ -1947,7 +1950,7 @@ void ScriptActions::doTeamGuard(const AsciiString& teamName)
 		if (!ai) {
 			continue;
 		}
-		Coord3D pos = *obj->getPosition();
+		Coord3D pos = obj->getPositionFix()->toCoord3D();	// P4 AI orders are float
 		ai->aiGuardPosition(&pos, GUARDMODE_NORMAL, CMD_FROM_SCRIPT);
 	}
 }
@@ -2423,7 +2426,7 @@ void ScriptActions::doTeamWander(const AsciiString& teamName, const AsciiString&
 		if (!ai) {
 			continue;
 		}
-		Coord3D pos = *obj->getPosition();
+		Coord3D pos = obj->getPositionFix()->toCoord3D();	// P7 waypoints are float
 		Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &pos, waypointPathLabel );
 		if (!way) {
 			return;
@@ -2520,7 +2523,7 @@ void ScriptActions::doTeamPanic(const AsciiString& teamName, const AsciiString& 
 		if (!ai) {
 			continue;
 		}
-		Coord3D pos = *obj->getPosition();
+		Coord3D pos = obj->getPositionFix()->toCoord3D();	// P7 waypoints are float
 		Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &pos, waypointPathLabel );
 		if (!way) {
 			return;
@@ -3445,7 +3448,7 @@ void ScriptActions::doTeamGarrisonNearestBuilding(const AsciiString& teamName)
 
 	filters[count++] = NULL;
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(leader, REALLY_FAR, FROM_CENTER_3D, filters, ITER_SORTED_NEAR_TO_FAR);
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(leader, REALLY_FAR, FROM_CENTER_3D, filters, ITER_SORTED_NEAR_TO_FAR);
 	MemoryPoolObjectHolder hold(iter);
 
 	
@@ -3579,7 +3582,7 @@ void ScriptActions::doUnitGarrisonNearestBuilding(const AsciiString& unitName)
 
 	filters[count++] = NULL;
 	
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(theUnit, REALLY_FAR, FROM_CENTER_3D, filters, ITER_SORTED_NEAR_TO_FAR);
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(theUnit, REALLY_FAR, FROM_CENTER_3D, filters, ITER_SORTED_NEAR_TO_FAR);
 	MemoryPoolObjectHolder hold(iter);
 
 	for (Object *theBuilding = iter->first(); theBuilding; theBuilding = iter->next()) 
@@ -3700,9 +3703,8 @@ void ScriptActions::doNamedSetBoobytrapped( const AsciiString& thingTemplateName
 					obj->getGeometryInfo().makeRandomOffsetOnPerimeter( pos );
 
 					//Get the angle and transform matrix from the obj... then transform the calculated
-					//position 
-					const Matrix3D *transform = obj->getTransformMatrix();
-					transform->Transform_Vector( *transform, *(Vector3*)(&pos), (Vector3*)(&pos) );
+					//position
+					pos = obj->getTransformMatrixFix()->transformPoint( fixCoordFromReal( pos ) ).toCoord3D();	// P6 sticky bomb takes float
 
 					update->initStickyBomb( obj, NULL, &pos );
 				}
@@ -3739,9 +3741,8 @@ void ScriptActions::doTeamSetBoobytrapped( const AsciiString& thingTemplateName,
 					obj->getGeometryInfo().makeRandomOffsetOnPerimeter( pos );
 
 					//Get the angle and transform matrix from the obj... then transform the calculated
-					//position 
-					const Matrix3D *transform = obj->getTransformMatrix();
-					transform->Transform_Vector( *transform, *(Vector3*)(&pos), (Vector3*)(&pos) );
+					//position
+					pos = obj->getTransformMatrixFix()->transformPoint( fixCoordFromReal( pos ) ).toCoord3D();	// P6 sticky bomb takes float
 
 					update->initStickyBomb( obj, NULL, &pos );
 				}
@@ -4393,7 +4394,8 @@ void ScriptActions::doNamedUseCommandButtonAbilityUsingWaypointPath( const Ascii
 		return;
 	}
 
-	Waypoint *pWaypoint = TheTerrainLogic->getClosestWaypointOnPath( theObj->getPosition(), waypointPath );
+	const Coord3D objPos = theObj->getPositionFix()->toCoord3D();	// P7 waypoints are float
+	Waypoint *pWaypoint = TheTerrainLogic->getClosestWaypointOnPath( &objPos, waypointPath );
 	
 	//Sanity check
 	if( !pWaypoint )
@@ -4759,7 +4761,7 @@ void ScriptActions::doNamedFireWeaponFollowingWaypointPath( const AsciiString& u
 		return;
 	}
 	
-	Coord3D pos = *theUnit->getPosition();
+	Coord3D pos = theUnit->getPositionFix()->toCoord3D();	// P7 waypoints and P6 weapons are float
 
 
 	//Find the closest waypoint on the path.
@@ -4856,7 +4858,7 @@ void ScriptActions::doUnitGuardForFramecount(const AsciiString& unitName, Int fr
 		return;
 	}
 
-	Coord3D pos = *obj->getPosition();
+	Coord3D pos = obj->getPositionFix()->toCoord3D();	// P4 AI orders are float
 	ai->chooseLocomotorSet(LOCOMOTORSET_NORMAL);
 	ai->aiGuardPosition(&pos, GUARDMODE_NORMAL, CMD_FROM_SCRIPT);
 	TheScriptEngine->setSequentialTimer(obj, framecount);
@@ -4899,7 +4901,7 @@ void ScriptActions::doTeamGuardForFramecount(const AsciiString& teamName, Int fr
 		if (!ai) {
 			continue;
 		}
-		Coord3D pos = *obj->getPosition();
+		Coord3D pos = obj->getPositionFix()->toCoord3D();	// P4 AI orders are float
 		ai->aiGuardPosition(&pos, GUARDMODE_NORMAL, CMD_FROM_SCRIPT);
 	}
 	TheScriptEngine->setSequentialTimer(theTeam, framecount);
@@ -5218,7 +5220,7 @@ void ScriptActions::doMoveUnitTowardsNearest( const AsciiString& unitName, const
 
 		PartitionFilter *filters[] = { &thingsToAccept, &acceptWithin, &filterMapStatus, NULL };
 
-		bestObj = ThePartitionManager->getClosestObject( obj->getPosition(), REALLY_FAR, FROM_CENTER_2D, filters );
+		bestObj = ThePartitionManager->getClosestObjectFix( obj->getPositionFix(), REALLY_FAR, FROM_CENTER_2D, filters );
 		if( !bestObj ) 
 		{
 			return;
@@ -5232,9 +5234,9 @@ void ScriptActions::doMoveUnitTowardsNearest( const AsciiString& unitName, const
 			PartitionFilterPolygonTrigger acceptWithin( trig );
 			PartitionFilterSameMapStatus filterMapStatus( obj );
 
-			Coord3D pos = *obj->getPosition();
-			Real closestDist;
-			Real dist;
+			FCoord3D pos = *obj->getPositionFix();
+			Fix closestDist;
+			Fix dist;
 
 			for( Int typeIndex = 0; typeIndex < objectTypes->getListSize(); typeIndex++ )
 			{
@@ -5245,7 +5247,7 @@ void ScriptActions::doMoveUnitTowardsNearest( const AsciiString& unitName, const
 					PartitionFilterThing f2( thisType, true );
 					PartitionFilter *filters[] = { &f2, &acceptWithin, &filterMapStatus, 0 };
 
-					Object *obj = ThePartitionManager->getClosestObject( &pos, REALLY_FAR, FROM_CENTER_2D, filters, &dist );
+					Object *obj = ThePartitionManager->getClosestObjectFix( &pos, REALLY_FAR, FROM_CENTER_2D, filters, &dist );
 					if( obj )
 					{
 						if( !bestObj || dist < closestDist )
@@ -5299,7 +5301,7 @@ void ScriptActions::doMoveTeamTowardsNearest( const AsciiString& teamName, const
 		return;
 	}
 
-	Coord3D teamPos = *team->getEstimateTeamPosition();
+	const FCoord3D teamPos = fixCoordFromReal( *team->getEstimateTeamPosition() );	// P7 the team estimate is float
 	PartitionFilterSameMapStatus filterMapStatus( teamObj );
 	PartitionFilterPolygonTrigger acceptWithin( trig );
 	Object *bestObj = NULL;
@@ -5310,7 +5312,7 @@ void ScriptActions::doMoveTeamTowardsNearest( const AsciiString& teamName, const
 		//Find the closest specified template.
 		PartitionFilterThing thingsToAccept( templ, true );
 		PartitionFilter *filters[] = { &thingsToAccept, &acceptWithin, &filterMapStatus, NULL };
-		bestObj = ThePartitionManager->getClosestObject( &teamPos, REALLY_FAR, FROM_CENTER_2D, filters );
+		bestObj = ThePartitionManager->getClosestObjectFix( &teamPos, REALLY_FAR, FROM_CENTER_2D, filters );
 		if (!bestObj) 
 		{
 			return;
@@ -5322,8 +5324,8 @@ void ScriptActions::doMoveTeamTowardsNearest( const AsciiString& teamName, const
 		ObjectTypes *objectTypes = TheScriptEngine->getObjectTypes( objectType );
 		if( objectTypes )
 		{
-			Real closestDist;
-			Real dist;
+			Fix closestDist;
+			Fix dist;
 			for( Int typeIndex = 0; typeIndex < objectTypes->getListSize(); typeIndex++ )
 			{
 				AsciiString thisTypeName = objectTypes->getNthInList( typeIndex );
@@ -5333,7 +5335,7 @@ void ScriptActions::doMoveTeamTowardsNearest( const AsciiString& teamName, const
 					PartitionFilterThing thingToAccept( thisType, true );
 					PartitionFilter *filters[] = { &thingToAccept, &acceptWithin, &filterMapStatus, NULL };
 						
-					Object *obj = ThePartitionManager->getClosestObject( &teamPos, REALLY_FAR, FROM_CENTER_2D, filters, &dist );
+					Object *obj = ThePartitionManager->getClosestObjectFix( &teamPos, REALLY_FAR, FROM_CENTER_2D, filters, &dist );
 					if( obj )
 					{
 						if( !bestObj || dist < closestDist )
@@ -5456,7 +5458,8 @@ void ScriptActions::doSkirmishCommandButtonOnMostValuable( const AsciiString& te
 
 	PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
 	// @todo: Should we add the group's radius to the range? Seems like a possibility.
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(&pos, range, FROM_CENTER_2D, filters, ITER_SORTED_EXPENSIVE_TO_CHEAP);
+	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(&center, fixFromReal( range ), FROM_CENTER_2D, filters, ITER_SORTED_EXPENSIVE_TO_CHEAP);
 	MemoryPoolObjectHolder hold(iter);
 
 	if (iter && iter->first()) {
@@ -5553,7 +5556,8 @@ void ScriptActions::doTeamUseCommandButtonOnNearestEnemy( const AsciiString& tea
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
-	Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters);
+	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
 	}
@@ -5603,7 +5607,8 @@ void ScriptActions::doTeamUseCommandButtonOnNearestGarrisonedBuilding( const Asc
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &notOwn, &f2, &f3, &f4, &filterMapStatus, 0 };
-	Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters);
+	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
 	}
@@ -5650,7 +5655,8 @@ void ScriptActions::doTeamUseCommandButtonOnNearestKindof( const AsciiString& te
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &f3, &filterMapStatus, 0 };
-	Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters);
+	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
 	}
@@ -5697,7 +5703,8 @@ void ScriptActions::doTeamUseCommandButtonOnNearestBuilding( const AsciiString& 
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &f3, &filterMapStatus, 0 };
-	Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters);
+	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
 	}
@@ -5745,7 +5752,8 @@ void ScriptActions::doTeamUseCommandButtonOnNearestBuildingClass( const AsciiStr
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &f3, &f4, &filterMapStatus, 0 };
-	Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters);
+	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
 	}
@@ -5798,7 +5806,8 @@ void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString
 		Coord3D pos;
 		theGroup->getCenter(&pos);
 
-		bestObj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters);
+		const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+		bestObj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 		if( !bestObj ) 
 		{
 			return;
@@ -5813,10 +5822,11 @@ void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString
 			PartitionFilterValidCommandButtonTarget f3(srcObj, commandButton, true, CMD_FROM_SCRIPT);
 			PartitionFilterSameMapStatus f4(srcObj);
 
-			Coord3D pos;
-			theGroup->getCenter(&pos);
-			Real closestDist;
-			Real dist;
+			Coord3D groupCenter;
+			theGroup->getCenter(&groupCenter);
+			const FCoord3D pos = fixCoordFromReal( groupCenter );	// P4 the group center is float
+			Fix closestDist;
+			Fix dist;
 
 			for( Int typeIndex = 0; typeIndex < objectTypes->getListSize(); typeIndex++ )
 			{
@@ -5827,7 +5837,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString
 					PartitionFilterThing f2( thisType, true );
 					PartitionFilter *filters[] = { &f1, &f2, &f3, &f4, 0 };
 
-					Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters, &dist );
+					Object *obj = ThePartitionManager->getClosestObjectFix(&pos, REALLY_FAR, FROM_CENTER_2D, filters, &dist );
 					if( obj )
 					{
 						if( !bestObj || dist < closestDist )
@@ -5905,7 +5915,8 @@ void ScriptActions::doTeamCaptureNearestUnownedFactionUnit( const AsciiString& t
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
-	Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters);
+	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
 	}

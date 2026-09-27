@@ -55,22 +55,22 @@ static CrushEnum crushLocationCheck( Object* crusherObject, Object* victimObject
 	Bool backCrushed = victimObject->getBodyModule()->getBackCrushed();
 
 //	const Coord3D *dir = crusherObject->getUnitDirectionVector2D();
-	const Coord3D *otherDir = victimObject->getUnitDirectionVector2D();
-	const Coord3D *pos = crusherObject->getPosition();
-	const Coord3D *otherPos = victimObject->getPosition();
+	const FCoord3D *otherDir = victimObject->getUnitDirectionVector2DFix();
+	const FCoord3D *pos = crusherObject->getPositionFix();
+	const FCoord3D *otherPos = victimObject->getPositionFix();
 
-	Real crushPointOffsetDistance = victimObject->getGeometryInfo().getMajorRadius() * 0.5;
+	Fix crushPointOffsetDistance = victimObject->getGeometryInfo().getMajorRadiusFix() * 0.5_fx;
 
-	Coord3D crushPointOffset;
+	FCoord3D crushPointOffset;
 	crushPointOffset.x = otherDir->x * crushPointOffsetDistance;
 	crushPointOffset.y = otherDir->y * crushPointOffsetDistance;
-	crushPointOffset.z = 0;
+	crushPointOffset.z = Fix( 0 );
 
-	Coord3D comparisonCoord;
-	Real dx, dy;
+	FCoord3D comparisonCoord;
+	Fix dx, dy;
 
 	CrushEnum retval = NO_CRUSH;
-	Real bestDist = 99999;
+	Fix bestDist = Fix( 99999 );
 
 	// PhysicsCollide has already done the logic of which point to smoosh and waited until we crossed that point
 	// so at this point we just need to know which crush point is closest.
@@ -82,7 +82,7 @@ static CrushEnum crushLocationCheck( Object* crusherObject, Object* victimObject
 
 		dx = comparisonCoord.x - pos->x;
 		dy = comparisonCoord.y - pos->y;
-		Real dist = (Real)( dx*dx + dy*dy );
+		Fix dist = dx*dx + dy*dy;
 
 		//otherwise we want to make sure we get the closest valid crush point
 		retval = TOTAL_CRUSH;
@@ -98,7 +98,7 @@ static CrushEnum crushLocationCheck( Object* crusherObject, Object* victimObject
 
 		dx = comparisonCoord.x - pos->x;
 		dy = comparisonCoord.y - pos->y;
-		Real dist = (Real)( dx*dx + dy*dy );
+		Fix dist = dx*dx + dy*dy;
 
 		if( dist < bestDist )//closer
 		{
@@ -124,7 +124,7 @@ static CrushEnum crushLocationCheck( Object* crusherObject, Object* victimObject
 
 		dx = comparisonCoord.x - pos->x;
 		dy = comparisonCoord.y - pos->y;
-		Real dist = (Real)( dx*dx + dy*dy );
+		Fix dist = dx*dx + dy*dy;
 
 		if( dist < bestDist )//closer
 		{

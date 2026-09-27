@@ -60,6 +60,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/DamageModule.h"
 #include "GameLogic/Module/DieModule.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -761,8 +762,8 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			PartitionFilter *filters[] = { &f1, &filterMapStatus, 0 };
 
 			
-			Real distance = TheAI->getAiData()->m_retaliateFriendsRadius + obj->getGeometryInfo().getBoundingCircleRadius();
-			SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( obj->getPosition(), distance, FROM_CENTER_2D, filters, ITER_FASTEST );
+			Fix distance = fixFromReal( TheAI->getAiData()->m_retaliateFriendsRadius ) + obj->getGeometryInfo().getBoundingCircleRadiusFix();	// P7: AI data is float
+			SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( obj->getPositionFix(), distance, FROM_CENTER_2D, filters, ITER_FASTEST );
 			MemoryPoolObjectHolder hold( iter );
 			for( Object *them = iter->first(); them; them = iter->next() ) 
 			{
@@ -783,7 +784,8 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 					CanAttackResult result = them->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, damager, CMD_FROM_AI );
 					if( result == ATTACKRESULT_POSSIBLE_AFTER_MOVING || result == ATTACKRESULT_POSSIBLE )
 					{
-						ai->aiGuardRetaliate( damager, them->getPosition(), NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+						Coord3D guardPos = them->getPositionFix()->toCoord3D();	// P7: AI orders are float
+						ai->aiGuardRetaliate( damager, &guardPos, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
 					}
 				}
 			}
@@ -807,8 +809,9 @@ Bool ActiveBody::shouldRetaliateAgainstAggressor(Object *obj, Object *damager)
 	if (damager->getRelationship( obj ) != ENEMIES) {
 		return false; // only retaliate against enemies.
 	}
-	Real distSqr = ThePartitionManager->getDistanceSquared(obj, damager, FROM_BOUNDINGSPHERE_2D);
-	if (distSqr > sqr(TheAI->getAiData()->m_maxRetaliateDistance)) {
+	Fix distSqr = ThePartitionManager->getDistanceSquaredFix(obj, damager, FROM_BOUNDINGSPHERE_2D);
+	Fix maxDist = fixFromReal( TheAI->getAiData()->m_maxRetaliateDistance );	// P7: AI data is float
+	if (distSqr > maxDist * maxDist) {
 		return false;
 	}
 	// Only human players retaliate. [8/25/2003] ... and supportive AIs; see doDamage above.

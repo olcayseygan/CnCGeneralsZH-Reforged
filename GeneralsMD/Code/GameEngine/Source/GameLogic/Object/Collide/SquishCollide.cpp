@@ -40,6 +40,7 @@
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -102,24 +103,24 @@ void SquishCollide::onCollide( Object *other, const Coord3D *loc, const Coord3D 
 
 		// use a 1.0 crush radius so the tank has to actually hit the infantry.
  		GeometryInfo myGeom = self->getGeometryInfo();
-		myGeom.setMajorRadius(1.0f);
-		myGeom.setMinorRadius(1.0f);
-		if (!ThePartitionManager->geomCollidesWithGeom(other->getPosition(), other->getGeometryInfo(), other->getOrientation(), 
-			self->getPosition(), myGeom, self->getOrientation())) {
+		myGeom.setMajorRadiusFix(Fix(1));
+		myGeom.setMinorRadiusFix(Fix(1));
+		const FCoord3D *pos = other->getPositionFix();
+		const FCoord3D *myPos = self->getPositionFix();
+		// P5: geomCollidesWithGeom is float
+		Coord3D otherPosF = pos->toCoord3D();
+		Coord3D myPosF = myPos->toCoord3D();
+		if (!ThePartitionManager->geomCollidesWithGeom(&otherPosF, other->getGeometryInfo(), fixToReal(other->getOrientationFix()),
+			&myPosF, myGeom, fixToReal(self->getOrientationFix()))) {
 			return;
 		}
 
 		// only squish if tank is moving toward victim
 		const Coord3D *vel = otherPhysics->getVelocity();
-		const Coord3D *pos = other->getPosition();
-		const Coord3D *myPos = getObject()->getPosition();
-		Coord3D to;
+		Fix toX = myPos->x - pos->x;
+		Fix toY = myPos->y - pos->y;
 
-		to.x = myPos->x - pos->x;
-		to.y = myPos->y - pos->y;
-		to.z = myPos->z - pos->z;
-
-		if (to.x * vel->x + to.y * vel->y > 0.0f)
+		if (toX * fixFromReal(vel->x) + toY * fixFromReal(vel->y) > Fix(0))	// P4: the velocity is float
 		{
 			DamageInfo damageInfo;
 			damageInfo.in.m_damageType = DAMAGE_CRUSH;

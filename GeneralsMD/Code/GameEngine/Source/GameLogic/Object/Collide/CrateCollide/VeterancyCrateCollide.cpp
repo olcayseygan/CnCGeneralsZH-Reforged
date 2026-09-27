@@ -37,6 +37,7 @@
 #include "GameLogic/Module/VeterancyCrateCollide.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -135,8 +136,8 @@ Bool VeterancyCrateCollide::executeCrateBehavior( Object *other )
  	}
 
 	Int levelsToGain = getLevelsToGain();
-	Real range = md->m_rangeOfEffect;
-	if (range == 0)
+	Fix range = fixFromReal( md->m_rangeOfEffect );	// P3
+	if (range == Fix( 0 ))
 	{
 		// do just the collider
 		if (other != NULL)
@@ -149,7 +150,7 @@ Bool VeterancyCrateCollide::executeCrateBehavior( Object *other )
 		PartitionFilterSamePlayer othersPlayerFilter( other->getControllingPlayer() );
 		PartitionFilterSameMapStatus filterMapStatus(other);
 		PartitionFilter *filters[] = { &othersPlayerFilter, &filterMapStatus, NULL };
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( other, range, FROM_CENTER_2D, filters, ITER_FASTEST );
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( other, range, FROM_CENTER_2D, filters, ITER_FASTEST );
 		MemoryPoolObjectHolder hold(iter);
 
 		for( Object *potentialObject = iter->first(); potentialObject; potentialObject = iter->next() )

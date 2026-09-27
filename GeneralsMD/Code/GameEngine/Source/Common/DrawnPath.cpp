@@ -22,6 +22,7 @@
 
 #include "Common/DrawnPath.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 void buildPathArcLengths( const std::vector<Coord3D>& path, std::vector<Real>& arc )
@@ -103,9 +104,9 @@ void orderAlongPath( std::vector<Object *>& movers, const std::vector<Coord3D>& 
 	std::vector<Real> keys;
 	keys.reserve( count );
 	for (Int i = 0; i < count; i++)
-		keys.push_back( distanceAlongPath( path, arc,
-																			 movers[ i ]->getPosition()->x,
-																			 movers[ i ]->getPosition()->y ) );
+		keys.push_back( distanceAlongPath( path, arc,	// P7: the drawn path is float
+																			 fixToReal( movers[ i ]->getPositionFix()->x ),
+																			 fixToReal( movers[ i ]->getPositionFix()->y ) ) );
 
 	// Insertion sort, keys and units together: the selection is a few dozen objects at most, and
 	// the comparator is a total order, so the answer does not depend on the order they came in.

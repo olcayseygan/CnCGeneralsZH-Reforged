@@ -169,7 +169,8 @@ Bool ConvertToHijackedVehicleCrateCollide::executeCrateBehavior( Object *other )
 	other->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_HIJACKED ) );// I claim this car in the name of the GLA
 
 	AIUpdateInterface* targetAI = other->getAIUpdateInterface();
-	targetAI->aiMoveToPosition( other->getPosition(), CMD_FROM_AI );
+	Coord3D stayPut = other->getPositionFix()->toCoord3D();	// P7: the AI takes a float goal
+	targetAI->aiMoveToPosition( &stayPut, CMD_FROM_AI );
 	targetAI->aiIdle( CMD_FROM_AI );
 
 

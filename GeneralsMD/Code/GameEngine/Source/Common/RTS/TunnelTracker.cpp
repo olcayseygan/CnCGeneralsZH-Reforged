@@ -46,6 +46,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/TunnelContain.h"
+#include "Lib/FixBoundary.h"
 
 
 // ------------------------------------------------------------------------
@@ -279,11 +280,20 @@ void TunnelTracker::onTunnelDestroyed( const Object *deadTunnel )
 // into whatever is shooting at it.
 static const UnsignedInt TUNNEL_UNDER_FIRE_FRAMES = 2 * LOGICFRAMES_PER_SECOND;
 
+// P4/P7: the points come from the AI and the move orders in float
+static FCoord3D toFix( const Coord3D *pos )
+{
+	FCoord3D f;
+	f.set( fixFromReal( pos->x ), fixFromReal( pos->y ), fixFromReal( pos->z ) );
+	return f;
+}
+
 Object *TunnelTracker::findQuietTunnelNear( const Coord3D *pos ) const
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
+	const FCoord3D posFx = toFix( pos );
 	Object *nearest = NULL;
-	Real nearestSqr = 0.0f;
+	Fix nearestSqr = Fix( 0 );
 	for( std::list<ObjectID>::const_iterator it = m_tunnelIDs.begin(); it != m_tunnelIDs.end(); ++it )
 	{
 		Object *tunnel = TheGameLogic->findObjectByID( *it );
@@ -297,7 +307,7 @@ Object *TunnelTracker::findQuietTunnelNear( const Coord3D *pos ) const
 		if( tunnel->getBodyModule()->getLastDamageTimestamp() + TUNNEL_UNDER_FIRE_FRAMES > now )
 			continue;
 
-		const Real distSqr = ThePartitionManager->getDistanceSquared( tunnel, pos, FROM_CENTER_2D );
+		const Fix distSqr = ThePartitionManager->getDistanceSquaredFix( tunnel, &posFx, FROM_CENTER_2D );
 		if( nearest == NULL || distSqr < nearestSqr )
 		{
 			nearest = tunnel;
@@ -356,9 +366,11 @@ Object *TunnelTracker::findTunnelShortcut( const Coord3D *from, const Coord3D *t
 	if( entrance == NULL || exit == entrance )
 		return NULL;
 
-	const Real toEntrance = (Real)sqrt( ThePartitionManager->getDistanceSquared( entrance, from, FROM_CENTER_2D ) );
-	const Real fromExit = (Real)sqrt( ThePartitionManager->getDistanceSquared( exit, to, FROM_CENTER_2D ) );
-	if( toEntrance + fromExit >= walk )
+	const FCoord3D fromFx = toFix( from );
+	const FCoord3D toFx = toFix( to );
+	const Fix toEntrance = fixSqrt( ThePartitionManager->getDistanceSquaredFix( entrance, &fromFx, FROM_CENTER_2D ) );
+	const Fix fromExit = fixSqrt( ThePartitionManager->getDistanceSquaredFix( exit, &toFx, FROM_CENTER_2D ) );
+	if( toEntrance + fromExit >= fixFromReal( walk ) )	// P7
 		return NULL;
 
 	return entrance;

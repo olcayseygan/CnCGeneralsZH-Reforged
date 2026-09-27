@@ -34,6 +34,7 @@
 #include "Common/Xfer.h"
 #include "GameLogic/PolygonTrigger.h"
 #include "GameLogic/TerrainLogic.h"
+#include "Lib/FixBoundary.h"
 
 /* ********* PolygonTrigger class ****************************/
 PolygonTrigger *PolygonTrigger::ThePolygonTriggerListPtr = NULL;
@@ -435,7 +436,8 @@ void PolygonTrigger::getCenterPoint(Coord3D* pOutCoord)	const
 	(*pOutCoord).x = (m_bounds.lo.x + m_bounds.hi.x) / 2.0f;
 	(*pOutCoord).y = (m_bounds.lo.y + m_bounds.hi.y) / 2.0f;
 
-	(*pOutCoord).z = TheTerrainLogic->getGroundHeight(pOutCoord->x, pOutCoord->y);
+	// P7 the trigger's center is float map data
+	(*pOutCoord).z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( pOutCoord->x ), fixFromReal( pOutCoord->y ) ) );
 }
 
 Real PolygonTrigger::getRadius(void)	const

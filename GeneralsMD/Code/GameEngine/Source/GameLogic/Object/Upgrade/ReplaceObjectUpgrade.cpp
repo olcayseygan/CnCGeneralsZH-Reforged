@@ -73,7 +73,7 @@ void ReplaceObjectUpgrade::upgradeImplementation( )
 
 	Object *me = getObject();	
 
-	Matrix3D myMatrix = *me->getTransformMatrix();
+	FixMatrix3D myMatrix = *me->getTransformMatrixFix();
 	Team *myTeam = me->getTeam();// Team implies player.  It is a subset.
 
 	const ThingTemplate *replacementTemplate = TheThingFactory->findTemplate(data->m_replaceObjectName);
@@ -89,7 +89,7 @@ void ReplaceObjectUpgrade::upgradeImplementation( )
 	TheGameLogic->destroyObject(me);
 
 	Object *replacementObject = TheThingFactory->newObject(replacementTemplate, myTeam);
-	replacementObject->setTransformMatrix(&myMatrix);
+	replacementObject->setTransformMatrixFix(&myMatrix);
 	TheAI->pathfinder()->addObjectToPathfindMap( replacementObject );
 
 	// Now onCreates were called at the constructor.  This magically created

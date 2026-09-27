@@ -50,6 +50,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScriptActions.h"
+#include "Lib/FixBoundary.h"
 #include "GameLogic/ScriptEngine.h"
 
 #ifdef _INTERNAL
@@ -1881,7 +1882,7 @@ void Team::updateState(void)
 			PartitionFilter *filters[] = { &filterTeam, &filterAlive, &filterMapStatus, &filterSeenKind, &filterStealth, NULL };
 			Real visionRange = iter.cur()->getVisionRange();
 			anyAliveInTeam = true;
-			Object *pObj = ThePartitionManager->getClosestObject( iter.cur(), visionRange, 
+			Object *pObj = ThePartitionManager->getClosestObjectFix( iter.cur(), fixFromReal( visionRange ),	// P3
 				FROM_CENTER_2D, filters );
 			if (pObj) {
 				m_seeEnemy = true;
@@ -2365,7 +2366,11 @@ Object *Team::tryToRecruit(const ThingTemplate *tTemplate, const Coord3D *teamHo
 {
 	Player *myPlayer = getControllingPlayer();
 	Object *obj=NULL;
-	Real distSqr = maxDist*maxDist;
+	// P7: the home and the radius come from the AI in float; a radius whose square would not fit is no limit
+	FCoord3D home;
+	home.set( fixFromReal( teamHome->x ), fixFromReal( teamHome->y ), fixFromReal( teamHome->z ) );
+	const Fix maxDistFx = fixFromReal( maxDist );
+	Fix distSqr = maxDistFx > Fix( 1 << 20 ) ? FIX_MAX : maxDistFx * maxDistFx;
 	Object *recruit = NULL;
 	for( obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
@@ -2408,9 +2413,9 @@ Object *Team::tryToRecruit(const ThingTemplate *tTemplate, const Coord3D *teamHo
 		{
 			continue; // Don't recruit held units.
 		}
-		Real dx, dy;
-		dx = teamHome->x - obj->getPosition()->x;
-		dy = teamHome->y - obj->getPosition()->y;
+		Fix dx, dy;
+		dx = home.x - obj->getPositionFix()->x;
+		dy = home.y - obj->getPositionFix()->y;
 
 		if (isDefaultTeam && recruit == NULL) {
 			recruit = obj;

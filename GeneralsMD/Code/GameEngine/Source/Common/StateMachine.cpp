@@ -794,7 +794,8 @@ void StateMachine::internalSetGoalObject( const Object *obj )
 { 
 	if (obj) {
 		m_goalObjectID = obj->getID(); 
-		internalSetGoalPosition(obj->getPosition());
+		Coord3D goal = obj->getPositionFix()->toCoord3D();	// P7: the machine's goal position is float
+		internalSetGoalPosition(&goal);
 	}
 	else {
 		m_goalObjectID = INVALID_ID;

@@ -205,7 +205,8 @@ static void doSetRallyPoint( Object *obj, const Coord3D& pos )
 	NameKeyType key = NAMEKEY( "BasicHumanLocomotor" );
 	LocomotorSet locomotorSet;
 	locomotorSet.addLocomotor( TheLocomotorStore->findLocomotorTemplate( key ) );
-	if( TheAI->pathfinder()->clientSafeQuickDoesPathExist( locomotorSet, obj->getPosition(), &pos ) == FALSE )
+	const Coord3D from = obj->getPositionFix()->toCoord3D();	// P5
+	if( TheAI->pathfinder()->clientSafeQuickDoesPathExist( locomotorSet, &from, &pos ) == FALSE )
 	{
 
 		// user feedback
@@ -697,8 +698,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 
 			// issue command for either single object or for selected group
 			if( currentlySelectedGroup )
-				currentlySelectedGroup->groupCombatDrop( targetObject, 
-																								 *targetObject->getPosition(), 
+				currentlySelectedGroup->groupCombatDrop( targetObject,
+																								 targetObject->getPositionFix()->toCoord3D(),	// P7
 																								 CMD_FROM_PLAYER );
 
 /*
@@ -1048,7 +1049,10 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 
 					AIUpdateInterface *ai = obj->getAIUpdateInterface();
 					if (ai)
-						ai->aiGuardPosition( obj->getPosition(), gm, CMD_FROM_PLAYER );
+					{
+						const Coord3D here = obj->getPositionFix()->toCoord3D();	// P4
+						ai->aiGuardPosition( &here, gm, CMD_FROM_PLAYER );
+					}
 				}
 			}
 
@@ -1121,7 +1125,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 
 				Coord3D station;
 				pointAlongPath( path, arc, span * t, &station );
-				station.z = TheTerrainLogic->getGroundHeight( station.x, station.y );
+				// the path is off the message and the orders below are float (P4)
+				station.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( station.x ), fixFromReal( station.y ) ) );
 
 				if (guardAlong)
 					movers[ i ]->getAIUpdateInterface()->aiGuardPosition( &station, GUARDMODE_GUARD_WITHOUT_PURSUIT, CMD_FROM_PLAYER );
@@ -2053,7 +2058,9 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 					break;
 				}
 				Object *object = TheThingFactory->newObject( thing, thisPlayer->getDefaultTeam() );
-				object->setPosition( &pos );
+				FCoord3D fxPos;
+				fxPos.set( fixFromReal( pos.x ), fixFromReal( pos.y ), fixFromReal( pos.z ) );	// off the message
+				object->setPositionFix( &fxPos );
 				object->setProducer(NULL);
 
 				if (thisPlayer->getRelationship( ThePlayerList->getLocalPlayer()->getDefaultTeam() ) == ALLIES || ThePlayerList->getLocalPlayer()->isPlayerObserver())

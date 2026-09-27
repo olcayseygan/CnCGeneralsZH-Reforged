@@ -383,7 +383,7 @@ public:
 		// just stay where we are.
 		jetAI->setLocomotorGoalNone();
 		
-		Real damageRate = jetAI->friend_getOutOfAmmoDamagePerSecond();
+		Real damageRate = fixToReal( jetAI->friend_getOutOfAmmoDamagePerSecond() );	// P6: damage is float
 		if (damageRate > 0)
 		{
 			// convert to damage/sec to damage/frame
@@ -1663,13 +1663,13 @@ HeliAIStateMachine::~HeliAIStateMachine()
 //-------------------------------------------------------------------------------------------------
 JetAIUpdateModuleData::JetAIUpdateModuleData()
 {
-	m_outOfAmmoDamagePerSecond = 0;
+	m_outOfAmmoDamagePerSecond = Fix( 0 );
 	m_needsRunway = true;
 	m_keepsParkingSpaceWhenAirborne = true;
-	m_takeoffDistForMaxLift = 0.0f;
+	m_takeoffDistForMaxLift = Fix( 0 );
 	m_minHeight = 0.0f;
-	m_parkingOffset = 0.0f;
-	m_sneakyOffsetWhenAttacking = 0.0f;
+	m_parkingOffset = Fix( 0 );
+	m_sneakyOffsetWhenAttacking = Fix( 0 );
 	m_takeoffPause = 0;
 	m_attackingLoco = LOCOMOTORSET_NORMAL;
 	m_returningLoco = LOCOMOTORSET_NORMAL;
@@ -1690,23 +1690,23 @@ JetAIUpdateModuleData::JetAIUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "OutOfAmmoDamagePerSecond",			INI::parsePercentToReal, NULL, offsetof( JetAIUpdateModuleData, m_outOfAmmoDamagePerSecond ) },
+		{ "OutOfAmmoDamagePerSecond",			INI::parsePercentToFix, NULL, FIX_OFFSET( JetAIUpdateModuleData, m_outOfAmmoDamagePerSecond ) },
 		{ "NeedsRunway",									INI::parseBool, NULL, offsetof( JetAIUpdateModuleData, m_needsRunway ) },
 		{ "KeepsParkingSpaceWhenAirborne",INI::parseBool, NULL, offsetof( JetAIUpdateModuleData, m_keepsParkingSpaceWhenAirborne ) },
-		{ "TakeoffDistForMaxLift",				INI::parsePercentToReal, NULL, offsetof( JetAIUpdateModuleData, m_takeoffDistForMaxLift ) },
+		{ "TakeoffDistForMaxLift",				INI::parsePercentToFix, NULL, FIX_OFFSET( JetAIUpdateModuleData, m_takeoffDistForMaxLift ) },
 		{ "TakeoffPause",									INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_takeoffPause ) },
-		{ "MinHeight",										INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_minHeight ) },
-		{ "ParkingOffset",								INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_parkingOffset ) },
-		{ "SneakyOffsetWhenAttacking",		INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_sneakyOffsetWhenAttacking ) },
+		{ "MinHeight",										INI::parseReal, NULL, REAL_OFFSET( JetAIUpdateModuleData, m_minHeight ) },
+		{ "ParkingOffset",								INI::parseFix, NULL, FIX_OFFSET( JetAIUpdateModuleData, m_parkingOffset ) },
+		{ "SneakyOffsetWhenAttacking",		INI::parseFix, NULL, FIX_OFFSET( JetAIUpdateModuleData, m_sneakyOffsetWhenAttacking ) },
 		{ "AttackLocomotorType",					INI::parseIndexList, TheLocomotorSetNames, offsetof( JetAIUpdateModuleData, m_attackingLoco ) },
 		{ "AttackLocomotorPersistTime",		INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_attackLocoPersistTime ) },
 		{ "AttackersMissPersistTime",			INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_attackersMissPersistTime ) },
 		{ "ReturnForAmmoLocomotorType",		INI::parseIndexList, TheLocomotorSetNames, offsetof( JetAIUpdateModuleData, m_returningLoco ) },
 		{ "LockonTime",										INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_lockonTime ) },
 		{ "LockonCursor",									INI::parseAsciiString, NULL, offsetof( JetAIUpdateModuleData, m_lockonCursor ) },
-		{ "LockonInitialDist",						INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_lockonInitialDist ) },
-		{ "LockonFreq",										INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_lockonFreq ) },
-		{ "LockonAngleSpin",							INI::parseAngleReal, NULL, offsetof( JetAIUpdateModuleData, m_lockonAngleSpin ) },
+		{ "LockonInitialDist",						INI::parseReal, NULL, REAL_OFFSET( JetAIUpdateModuleData, m_lockonInitialDist ) },
+		{ "LockonFreq",										INI::parseReal, NULL, REAL_OFFSET( JetAIUpdateModuleData, m_lockonFreq ) },
+		{ "LockonAngleSpin",							INI::parseAngleReal, NULL, REAL_OFFSET( JetAIUpdateModuleData, m_lockonAngleSpin ) },
 		{ "LockonBlinky",									INI::parseBool, NULL, offsetof( JetAIUpdateModuleData, m_lockonBlinky ) },
 		{ "ReturnToBaseIdleTime",					INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_returnToBaseIdleTime ) },
 		{ 0, 0, 0, 0 }
@@ -2118,9 +2118,9 @@ Bool JetAIUpdate::getSneakyTargetingOffset(Coord3D* offset) const
 		{
 			const JetAIUpdateModuleData* d = getJetAIUpdateModuleData();
 			const Object* jet = getObject();
-			// the offset is INI data (P3) and goes to the attacker's float aim (P6)
+			// the offset goes to the attacker's float aim (P6)
 			const FCoord3D* dir = jet->getUnitDirectionVector2DFix();
-			Fix sneaky = fixFromReal( d->m_sneakyOffsetWhenAttacking );
+			Fix sneaky = d->m_sneakyOffsetWhenAttacking;
 			FCoord3D off;
 			off.set( dir->x * sneaky, dir->y * sneaky, Fix( 0 ) );
 			*offset = off.toCoord3D();

@@ -47,10 +47,10 @@ class ChinookAIUpdateModuleData : public SupplyTruckAIUpdateModuleData
 public:
 	AsciiString		m_ropeName;
   AsciiString   m_rotorWashParticleSystem;
-  Real					m_rappelSpeed;
-	Real					m_ropeDropSpeed;
-	Real					m_ropeWidth;
-	Real					m_ropeFinalHeight;
+  Fix						m_rappelSpeed;
+	Fix						m_ropeDropSpeed;
+	Real					m_ropeWidth;							///< drawing only
+	Fix						m_ropeFinalHeight;
 	Real					m_ropeWobbleLen;
 	Real					m_ropeWobbleAmp;
 	Real					m_ropeWobbleRate;
@@ -58,7 +58,7 @@ public:
 	UnsignedInt		m_numRopes;
 	UnsignedInt		m_perRopeDelayMin;
 	UnsignedInt		m_perRopeDelayMax;
-	Real					m_minDropHeight;
+	Fix						m_minDropHeight;
 	Bool					m_waitForRopesToDrop;
 	Int						m_upgradedSupplyBoost;
 

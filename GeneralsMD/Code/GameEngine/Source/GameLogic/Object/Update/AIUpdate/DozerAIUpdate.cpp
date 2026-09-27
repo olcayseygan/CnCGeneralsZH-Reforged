@@ -739,7 +739,7 @@ StateReturnType DozerActionDoActionState::update( void )
 				{
 
 					// figure out how much health we will restore this frame
-					Real health = body->getMaxHealth() * dozerAI->getRepairHealthPerSecond() /
+					Real health = body->getMaxHealth() * fixToReal( dozerAI->getRepairHealthPerSecond() ) /	// P6: health is float
 												LOGICFRAMES_PER_SECOND;
 
 					// try to give it a little bit-o-health
@@ -912,7 +912,7 @@ static Object *findObjectToRepair( Object *dozer )
 	PartitionFilterSameMapStatus filterMapStatus(dozer);
 	PartitionFilter *filters[] = { &filter1, &filter2, &filterMapStatus, NULL };
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( dozer->getPositionFix(),
-																																		 fixFromReal( dozerAI->getBoredRange() ), // P3
+																																		 dozerAI->getBoredRange(),
 																																		 FROM_CENTER_2D,
 																																		 filters );
 
@@ -976,7 +976,7 @@ static Object *findMine( Object *dozer )
 	PartitionFilterPossibleToAttack filterAttack(ATTACK_NEW_TARGET, dozer, CMD_FROM_DOZER);
 	PartitionFilterSameMapStatus filterMapStatus(dozer);
 	PartitionFilter *filters[] = { &filterTeam, &filterAttack, &filterMapStatus, NULL };
-	Object* mine = ThePartitionManager->getClosestObjectFix(dozer, fixFromReal( dozerAI->getBoredRange() ), FROM_CENTER_2D, filters); // P3
+	Object* mine = ThePartitionManager->getClosestObjectFix(dozer, dozerAI->getBoredRange(), FROM_CENTER_2D, filters);
 
 	return mine;
 }  // end findMine
@@ -1011,7 +1011,7 @@ static Object *findUnfinishedStructureToContinue( Object *dozer )
 	PartitionFilter *filters[] = { &filter1, &filter2, &filterMapStatus, NULL };
 	// "nearby" is the whole base, not the 15-cell bored range the repair scan uses
 	const Fix UNFINISHED_SCAN_RANGE = 1500_fx;
-	Fix range = fixMax( fixFromReal( dozerAI->getBoredRange() ), UNFINISHED_SCAN_RANGE ); // P3
+	Fix range = fixMax( dozerAI->getBoredRange(), UNFINISHED_SCAN_RANGE );
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( dozer->getPositionFix(),
 																																		 range, FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
@@ -1240,7 +1240,7 @@ StateReturnType DozerPrimaryIdleState::update( void )
 	// if we're just sitting here in idle, and there is no task pending ... after so long we'll
 	// try to go to the nearest command center
 	//
-	if( TheGameLogic->getFrame() - m_idleTooLongTimestamp > dozerAI->getBoredTime() &&
+	if( Fix( (Int)(TheGameLogic->getFrame() - m_idleTooLongTimestamp) ) > dozerAI->getBoredTime() &&
 			dozerAI->isAnyTaskPending() == FALSE )
 	{
 
@@ -1549,9 +1549,9 @@ Bool DozerPrimaryStateMachine::isFortifyMostImportant( State *thisState, void* u
 DozerAIUpdateModuleData::DozerAIUpdateModuleData( void )
 {
 
-	m_repairHealthPercentPerSecond = 0.0f;
-	m_boredTime = 0.0f;
-	m_boredRange = 0.0f;
+	m_repairHealthPercentPerSecond = Fix( 0 );
+	m_boredTime = Fix( 0 );
+	m_boredRange = Fix( 0 );
 
 }  // end DozerAIUpdateModuleData
 
@@ -1562,9 +1562,9 @@ void DozerAIUpdateModuleData::buildFieldParse( MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "RepairHealthPercentPerSecond",	INI::parsePercentToReal,	NULL, offsetof( DozerAIUpdateModuleData, m_repairHealthPercentPerSecond ) },
-		{ "BoredTime",										INI::parseDurationReal,		NULL, offsetof( DozerAIUpdateModuleData, m_boredTime ) },
-		{ "BoredRange",										INI::parseReal,						NULL, offsetof( DozerAIUpdateModuleData, m_boredRange ) },
+		{ "RepairHealthPercentPerSecond",	INI::parsePercentToFix,	NULL, FIX_OFFSET( DozerAIUpdateModuleData, m_repairHealthPercentPerSecond ) },
+		{ "BoredTime",										INI::parseDurationFix,		NULL, FIX_OFFSET( DozerAIUpdateModuleData, m_boredTime ) },
+		{ "BoredRange",										INI::parseFix,						NULL, FIX_OFFSET( DozerAIUpdateModuleData, m_boredRange ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -2483,21 +2483,21 @@ const Coord3D* DozerAIUpdate::getDockPoint( DozerTask task, DozerDockPoint point
 }  // end getDockPoint
 
 // ------------------------------------------------------------------------------------------------
-Real DozerAIUpdate::getRepairHealthPerSecond( void ) const
+Fix DozerAIUpdate::getRepairHealthPerSecond( void ) const
 {
 	return getDozerAIUpdateModuleData()->m_repairHealthPercentPerSecond;
 }
 // ------------------------------------------------------------------------------------------------
-Real DozerAIUpdate::getBoredTime( void ) const
+Fix DozerAIUpdate::getBoredTime( void ) const
 {
 	return getDozerAIUpdateModuleData()->m_boredTime;
 }
 // ------------------------------------------------------------------------------------------------
-Real DozerAIUpdate::getBoredRange( void ) const
+Fix DozerAIUpdate::getBoredRange( void ) const
 {
 	if (getObject()->getControllingPlayer() &&
 		getObject()->getControllingPlayer()->getPlayerType() == PLAYER_COMPUTER) {
-		return TheAI->getAiData()->m_aiDozerBoredRadiusModifier*getDozerAIUpdateModuleData()->m_boredRange;
+		return fixFromReal( TheAI->getAiData()->m_aiDozerBoredRadiusModifier ) * getDozerAIUpdateModuleData()->m_boredRange; // P3: TAiData is the AI group's
 	}
 	return getDozerAIUpdateModuleData()->m_boredRange;
 }

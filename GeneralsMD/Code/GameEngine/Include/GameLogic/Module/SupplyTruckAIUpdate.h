@@ -192,7 +192,7 @@ public:
 	Int m_maxBoxesData;
 	UnsignedInt m_centerDelay;
 	UnsignedInt m_warehouseDelay;
-	Real m_warehouseScanDistance;
+	Fix m_warehouseScanDistance;
  	AudioEventRTS m_suppliesDepletedVoice;						///< Sound played when I take the last box.
 
 	SupplyTruckAIUpdateModuleData()
@@ -200,7 +200,7 @@ public:
 		m_maxBoxesData = 0;
 		m_centerDelay = 0;
 		m_warehouseDelay = 0;
-		m_warehouseScanDistance = 100;
+		m_warehouseScanDistance = Fix( 100 );
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -212,7 +212,7 @@ public:
 			{ "MaxBoxes",					INI::parseInt,		NULL, offsetof( SupplyTruckAIUpdateModuleData, m_maxBoxesData ) },
 			{ "SupplyCenterActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_centerDelay ) },
 			{ "SupplyWarehouseActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_warehouseDelay ) },
-			{ "SupplyWarehouseScanDistance", INI::parseReal, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_warehouseScanDistance ) },
+			{ "SupplyWarehouseScanDistance", INI::parseFix, NULL, FIX_OFFSET( SupplyTruckAIUpdateModuleData, m_warehouseScanDistance ) },
  			{ "SuppliesDepletedVoice", INI::parseAudioEventRTS, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_suppliesDepletedVoice) },
 			{ 0, 0, 0, 0 }
 		};
@@ -236,7 +236,7 @@ public:
 	// if the AI is idle, but subclasses might add further restrictions.
 	virtual Bool isAvailableForSupplying() const = 0;
 	virtual Bool isCurrentlyFerryingSupplies() const = 0;
-	virtual Real getWarehouseScanDistance() const = 0; ///< How far can I look for a warehouse?
+	virtual Fix getWarehouseScanDistance() const = 0; ///< How far can I look for a warehouse?
 
 	virtual void setForceWantingState(Bool v) = 0;
 	virtual Bool isForcedIntoWantingState() const = 0;
@@ -278,7 +278,7 @@ public:
 	// prevent supply-ferry behavior in some cases (eg, when toting passengers)
 	virtual Bool isAvailableForSupplying() const;
 	virtual Bool isCurrentlyFerryingSupplies() const;
-	virtual Real getWarehouseScanDistance() const; ///< How far can I look for a warehouse?
+	virtual Fix getWarehouseScanDistance() const; ///< How far can I look for a warehouse?
 
 	virtual void setForceWantingState(Bool v) { m_forcePending = v; } // When a Supply Center creates us (or maybe other sources later), we need to hop into autopilot mode.
 	virtual Bool isForcedIntoWantingState() const { return m_forcePending; }

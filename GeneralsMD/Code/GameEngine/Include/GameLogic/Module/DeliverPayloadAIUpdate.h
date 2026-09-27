@@ -198,7 +198,7 @@ class DeliverPayloadAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
 	UnsignedInt		m_doorDelay;
-	Real					m_maxDistanceToTarget;				///< How far away from target I can unload, plus how far after target I need to turn around at
+	Fix						m_maxDistanceToTarget;				///< How far away from target I can unload, plus how far after target I need to turn around at
 	Int						m_maxNumberAttempts;					///< How many times I can re-approach
 	UnsignedInt		m_dropDelay;									///< How long to wait after entering Deliver state (to allow for doors opening)
 	Coord3D				m_dropOffset;									///< where to disgorge the guys, relative to me
@@ -210,7 +210,7 @@ public:
 	DeliverPayloadAIUpdateModuleData()
 	{
 		m_doorDelay = 0;
-		m_maxDistanceToTarget = 0.0f;
+		m_maxDistanceToTarget = Fix( 0 );
 		m_maxNumberAttempts = 0;
 		m_dropDelay = 0;
 		m_dropOffset.zero();
@@ -236,13 +236,13 @@ public:
 			//***********************************************************************************
 			{ "DoorDelay",								INI::parseDurationUnsignedInt,	NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_doorDelay ) },
 			{ "PutInContainer",						INI::parseAsciiString,					NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_putInContainerName ) },
-			{ "DeliveryDistance",					INI::parseReal,									NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_maxDistanceToTarget ) },
+			{ "DeliveryDistance",					INI::parseFix,									NULL, FIX_OFFSET( DeliverPayloadAIUpdateModuleData, m_maxDistanceToTarget ) },
 			{ "MaxAttempts",							INI::parseInt,									NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_maxNumberAttempts ) },
 			{ "DropDelay",								INI::parseDurationUnsignedInt,	NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_dropDelay ) },
 			{ "DropOffset",								INI::parseCoord3D,							NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_dropOffset ) },
 			{ "DropVariance",							INI::parseCoord3D,							NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_dropVariance ) },
 			{ "DeliveryDecal",						RadiusDecalTemplate::parseRadiusDecalTemplate,	NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_deliveryDecalTemplate ) },
-			{ "DeliveryDecalRadius",			INI::parseReal,									NULL,	offsetof( DeliverPayloadAIUpdateModuleData, m_deliveryDecalRadius ) },
+			{ "DeliveryDecalRadius",			INI::parseReal,									NULL,	REAL_OFFSET( DeliverPayloadAIUpdateModuleData, m_deliveryDecalRadius ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);

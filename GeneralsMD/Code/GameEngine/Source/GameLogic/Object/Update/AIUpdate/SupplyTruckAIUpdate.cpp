@@ -176,7 +176,7 @@ Bool SupplyTruckAIUpdate::gainOneBox( Int remainingStock )
 			//figure out whether the best one is considerably far from the previous one (current position)
 			FCoord3D delta = *getObject()->getPositionFix();
 			delta.sub( *bestWarehouse->getPositionFix() );
-			if ( delta.length() > fixFromReal( getWarehouseScanDistance() ) / Fix( 4 ) ) // P3
+			if ( delta.length() > getWarehouseScanDistance() / Fix( 4 ) )
 			playDepleted = TRUE;
 		}
 		else
@@ -266,10 +266,10 @@ Real SupplyTruckAIUpdate::getDockActionProgress() const
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-Real SupplyTruckAIUpdate::getWarehouseScanDistance() const
+Fix SupplyTruckAIUpdate::getWarehouseScanDistance() const
 {
 	// The computer's reach, for everybody, as in WorkerAIUpdate::getWarehouseScanDistance.
-	return 2 * getSupplyTruckAIUpdateModuleData()->m_warehouseScanDistance;
+	return Fix( 2 ) * getSupplyTruckAIUpdateModuleData()->m_warehouseScanDistance;
 }
 
 //-------------------------------------------------------------------------------------------------

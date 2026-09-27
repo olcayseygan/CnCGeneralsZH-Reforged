@@ -69,16 +69,16 @@ MissileAIUpdateModuleData::MissileAIUpdateModuleData()
 	m_tryToFollowTarget = true;
 	m_fuelLifetime = 0;
 	m_ignitionDelay = 0;
-	m_initialVel = 0;
-	m_initialDist = 0.0f;
-	m_diveDistance = 0.0f;
+	m_initialVel = Fix( 0 );
+	m_initialDist = Fix( 0 );
+	m_diveDistance = Fix( 0 );
 	m_ignitionFX = NULL;
 	m_useWeaponSpeed = false;
 	m_detonateOnNoFuel = FALSE;
 	m_garrisonHitKillCount = 0;
 	m_garrisonHitKillFX = NULL;
-	m_lockDistance = 75.0f;	
-	m_distanceScatterWhenJammed = 75.0f;
+	m_lockDistance = Fix( 75 );
+	m_distanceScatterWhenJammed = Fix( 75 );
     m_detonateCallsKill = FALSE;
     m_killSelfDelay   = 3; // just long enough for the contrail to catch up to me
 }
@@ -93,14 +93,14 @@ void MissileAIUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "TryToFollowTarget",			INI::parseBool,		NULL, offsetof( MissileAIUpdateModuleData, m_tryToFollowTarget ) },
 		{ "FuelLifetime",						INI::parseDurationUnsignedInt,		NULL, offsetof( MissileAIUpdateModuleData, m_fuelLifetime ) },
 		{ "IgnitionDelay",					INI::parseDurationUnsignedInt,		NULL, offsetof( MissileAIUpdateModuleData, m_ignitionDelay ) },
-		{ "InitialVelocity",				INI::parseVelocityReal,		NULL, offsetof( MissileAIUpdateModuleData, m_initialVel) },
-		{ "DistanceToTravelBeforeTurning",	INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_initialDist ) },
-		{ "DistanceToTargetBeforeDiving",		INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_diveDistance ) },
-		{ "DistanceToTargetForLock",INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_lockDistance ) },
+		{ "InitialVelocity",				INI::parseVelocityFix,		NULL, FIX_OFFSET( MissileAIUpdateModuleData, m_initialVel) },
+		{ "DistanceToTravelBeforeTurning",	INI::parseFix,		NULL, FIX_OFFSET( MissileAIUpdateModuleData, m_initialDist ) },
+		{ "DistanceToTargetBeforeDiving",		INI::parseFix,		NULL, FIX_OFFSET( MissileAIUpdateModuleData, m_diveDistance ) },
+		{ "DistanceToTargetForLock",INI::parseFix,		NULL, FIX_OFFSET( MissileAIUpdateModuleData, m_lockDistance ) },
 		{ "IgnitionFX",							INI::parseFXList,		NULL, offsetof( MissileAIUpdateModuleData, m_ignitionFX ) },
 		{ "UseWeaponSpeed",				  INI::parseBool,			NULL, offsetof( MissileAIUpdateModuleData, m_useWeaponSpeed ) },
 		{ "DetonateOnNoFuel",			  INI::parseBool,			NULL, offsetof( MissileAIUpdateModuleData, m_detonateOnNoFuel ) },
-		{ "DistanceScatterWhenJammed",INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_distanceScatterWhenJammed ) },
+		{ "DistanceScatterWhenJammed",INI::parseFix,		NULL, FIX_OFFSET( MissileAIUpdateModuleData, m_distanceScatterWhenJammed ) },
 
 		{ "GarrisonHitKillRequiredKindOf", KindOfMaskType::parseFromINI, NULL, offsetof( MissileAIUpdateModuleData, m_garrisonHitKillKindof ) },
 		{ "GarrisonHitKillForbiddenKindOf", KindOfMaskType::parseFromINI, NULL, offsetof( MissileAIUpdateModuleData, m_garrisonHitKillKindofNot ) },
@@ -130,7 +130,7 @@ MissileAIUpdate::MissileAIUpdate( Thing *thing, const ModuleData* moduleData ) :
 	m_victimID = INVALID_ID;
 	m_isArmed = false;
 	m_fuelExpirationDate = 0;
-	m_noTurnDistLeft = d->m_initialDist;
+	m_noTurnDistLeft = fixToReal( d->m_initialDist );	// P6: xfer'd float state
 	m_prevPos = getObject()->getPositionFix()->toCoord3D();
 	m_maxAccel = BIGNUM;
 	m_detonationWeaponTmpl = NULL;
@@ -220,7 +220,7 @@ void MissileAIUpdate::projectileFireAtObjectOrPosition( const Object *victim, co
 
 	m_exhaustSysTmpl = exhaustSysOverride;
 	m_detonationWeaponTmpl = detWeap;
-	Real initialVelToUse = d->m_initialVel;
+	Real initialVelToUse = fixToReal( d->m_initialVel );	// P6
 	if (d->m_useWeaponSpeed)
 	{
 		Real weaponSpeed = detWeap->getWeaponSpeed();
@@ -300,7 +300,7 @@ void MissileAIUpdate::projectileFireAtObjectOrPosition( const Object *victim, co
 		// Otherwise, we are just a Coord shot.
 		Coord3D initialPos = *victimPos;
 		m_originalTargetPos = *victimPos;
-		if (d->m_lockDistance>0.0f) {
+		if (d->m_lockDistance > Fix( 0 )) {
 			initialPos.z += APPROACH_HEIGHT;
 		}
 		aiMoveToPosition(&initialPos, CMD_FROM_AI );
@@ -548,9 +548,9 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 		}
 	}
 
-	if (d->m_lockDistance > 0)
+	if (d->m_lockDistance > Fix( 0 ))
 	{
-		Fix lockDistanceSquared = fixFromReal( d->m_lockDistance ); // P3
+		Fix lockDistanceSquared = d->m_lockDistance;
 		Fix distanceToTargetSquared;
 		if (m_isTrackingTarget && (getGoalObject() != NULL)) {
 			distanceToTargetSquared = ThePartitionManager->getDistanceSquaredFix( getObject(), getGoalObject(), FROM_CENTER_2D);
@@ -577,7 +577,7 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 
 	// a missile with a cruise height leaves it this far from the goal along a quarter sine
 	if (curLoco)
-		curLoco->setSineDescentDistance(d->m_diveDistance);
+		curLoco->setSineDescentDistance(fixToReal(d->m_diveDistance));	// P4
 
 	if (m_noTurnDistLeft <= 0.0f)
 	{
@@ -828,7 +828,7 @@ void MissileAIUpdate::projectileNowJammed()
 	else
 		targetPosition = *getGoalPosition();
 
-	Real scatter = data->m_distanceScatterWhenJammed;
+	Real scatter = fixToReal( data->m_distanceScatterWhenJammed );	// P6: the scatter goes to a float goal
 	targetPosition.x += GameLogicRandomValue(-scatter, scatter);
 	targetPosition.y += GameLogicRandomValue(-scatter, scatter);
 	FCoord3D fxTarget = fcoordFromCoord3D( &targetPosition );

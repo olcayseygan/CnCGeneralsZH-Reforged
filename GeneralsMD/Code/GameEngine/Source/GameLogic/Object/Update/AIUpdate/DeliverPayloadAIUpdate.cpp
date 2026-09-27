@@ -63,8 +63,9 @@ const FieldParse* DeliverPayloadData::getFieldParse()
 	static const FieldParse dataFieldParse[] = 
 	{
 
-		{ "DeliveryDistance",								INI::parseReal,								NULL, offsetof( DeliverPayloadData, m_distToTarget) },
-		{ "PreOpenDistance",								INI::parseReal,								NULL, offsetof( DeliverPayloadData, m_preOpenDistance) },
+		// DeliverPayloadData is copied into the module and xfer'd as float, so its fields stay Real (P7)
+		{ "DeliveryDistance",								INI::parseReal,								NULL, REAL_OFFSET( DeliverPayloadData, m_distToTarget) },
+		{ "PreOpenDistance",								INI::parseReal,								NULL, REAL_OFFSET( DeliverPayloadData, m_preOpenDistance) },
 		{ "MaxAttempts",										INI::parseInt,								NULL, offsetof( DeliverPayloadData, m_maxAttempts) },
 
 		//Drop information
@@ -72,7 +73,7 @@ const FieldParse* DeliverPayloadData::getFieldParse()
 		{ "DropOffset",											INI::parseCoord3D,						NULL, offsetof( DeliverPayloadData, m_dropOffset ) },
 		{ "DropVariance",										INI::parseCoord3D,						NULL, offsetof( DeliverPayloadData, m_dropVariance ) },
 		{ "InheritTransportVelocity",				INI::parseBool,								NULL, offsetof( DeliverPayloadData, m_inheritTransportVelocity ) },
-		{ "ExitPitchRate",									INI::parseAngularVelocityReal,NULL, offsetof( DeliverPayloadData, m_exitPitchRate ) },
+		{ "ExitPitchRate",									INI::parseAngularVelocityReal,NULL, REAL_OFFSET( DeliverPayloadData, m_exitPitchRate ) },
 		{ "ParachuteDirectly",							INI::parseBool,								NULL, offsetof( DeliverPayloadData, m_isParachuteDirectly) },
 
 		//Visible payload information (payload assumed to be show visibly and it's created only when dropped)
@@ -88,14 +89,14 @@ const FieldParse* DeliverPayloadData::getFieldParse()
 		{ "FireWeapon",											INI::parseBool,								NULL, offsetof( DeliverPayloadData, m_fireWeapon ) },
 		
 		//Specify an additional weaponslot to be fired while strafing
-		{ "DiveStartDistance",							INI::parseReal,								NULL, offsetof( DeliverPayloadData, m_diveStartDistance ) },
-		{ "DiveEndDistance",								INI::parseReal,								NULL, offsetof( DeliverPayloadData, m_diveEndDistance ) },
+		{ "DiveStartDistance",							INI::parseReal,								NULL, REAL_OFFSET( DeliverPayloadData, m_diveStartDistance ) },
+		{ "DiveEndDistance",								INI::parseReal,								NULL, REAL_OFFSET( DeliverPayloadData, m_diveEndDistance ) },
 		{ "StrafingWeaponSlot",							INI::parseLookupList,					TheWeaponSlotTypeNamesLookupList, offsetof( DeliverPayloadData, m_strafingWeaponSlot ) },
 		{ "StrafeWeaponFX",									INI::parseFXList,							NULL, offsetof( DeliverPayloadData, m_strafeFX ) },
-		{ "StrafeLength",										INI::parseReal,								NULL, offsetof( DeliverPayloadData, m_strafeLength ) },
+		{ "StrafeLength",										INI::parseReal,								NULL, REAL_OFFSET( DeliverPayloadData, m_strafeLength ) },
 
 		{ "DeliveryDecal",									RadiusDecalTemplate::parseRadiusDecalTemplate,	NULL, offsetof( DeliverPayloadData, m_deliveryDecalTemplate ) },
-		{ "DeliveryDecalRadius",						INI::parseReal, NULL, offsetof(DeliverPayloadData, m_deliveryDecalRadius) },
+		{ "DeliveryDecalRadius",						INI::parseReal, NULL, REAL_OFFSET(DeliverPayloadData, m_deliveryDecalRadius) },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -183,7 +184,7 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 		if( m_diveState == DIVESTATE_PREDIVE )
 		{
 			//Check to see if we are close enough to start diving.
-			Fix startDiveDistanceSquared = sqr( fixFromReal( getData()->m_diveStartDistance ) ); // P3
+			Fix startDiveDistanceSquared = sqr( fixFromReal( getData()->m_diveStartDistance ) ); // P7: DeliverPayloadData is xfer'd float
 			FCoord3D target = fcoordFromCoord3D( getTargetPos() );
 			Fix currentDistanceSquared  = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_2D );
 			if( currentDistanceSquared <= startDiveDistanceSquared )
@@ -203,7 +204,7 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 		else 
 		{
 			//Check to see when we shall end diving
-			Fix endDiveDistance = fixFromReal( getData()->m_diveEndDistance ); // P3
+			Fix endDiveDistance = fixFromReal( getData()->m_diveEndDistance ); // P7: DeliverPayloadData is xfer'd float
 			FCoord3D target = fcoordFromCoord3D( getTargetPos() );
 			Fix currentDistanceSquared  = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_3D );
 			if( currentDistanceSquared <= sqr( endDiveDistance ) )
@@ -326,7 +327,7 @@ void DeliverPayloadAIUpdate::deliverPayloadViaModuleData( const Coord3D *moveToP
 	DeliverPayloadData dpData;
 	dpData.m_dropOffset.set( &data->m_dropOffset );
 	dpData.m_dropVariance.set( &data->m_dropVariance );
-	dpData.m_distToTarget						= data->m_maxDistanceToTarget;
+	dpData.m_distToTarget						= fixToReal( data->m_maxDistanceToTarget );	// P7: DeliverPayloadData is xfer'd float
 	dpData.m_maxAttempts						= data->m_maxNumberAttempts;
 	dpData.m_dropDelay							= data->m_dropDelay;
 	dpData.m_deliveryDecalTemplate	= data->m_deliveryDecalTemplate;
@@ -378,7 +379,7 @@ Bool DeliverPayloadAIUpdate::isCloseEnoughToTarget()
 ////The new getPreOpenDistance() allows the deliver state to fire early, but only if inbound, 
 ////so the doors can open and payload can get ready...
 
-	Fix allowedDistanceSqr = sqr( fixFromReal( getAllowedDistanceToTarget() ) ); // P3
+	Fix allowedDistanceSqr = sqr( fixFromReal( getAllowedDistanceToTarget() ) ); // P7: DeliverPayloadData is xfer'd float
 	FCoord3D target = fcoordFromCoord3D( getTargetPos() );
 	Fix currentDistanceSqr = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_2D );
 	// m_previousDistanceSqr is xfer'd and stays float: compare and store on that side
@@ -386,7 +387,7 @@ Bool DeliverPayloadAIUpdate::isCloseEnoughToTarget()
 	m_previousDistanceSqr = fixToReal( currentDistanceSqr );// for the next test
 
 	if ( inBound )
-		allowedDistanceSqr = sqr( fixFromReal( getAllowedDistanceToTarget() + getPreOpenDistance() ) ); // P3
+		allowedDistanceSqr = sqr( fixFromReal( getAllowedDistanceToTarget() + getPreOpenDistance() ) ); // P7
 
 	//DEBUG_LOG(("Dist to target is %f (allowed %f)\n",sqrt(currentDistanceSqr),sqrt(allowedDistanceSqr)));
 
@@ -748,7 +749,7 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 			}
 			FCoord3D pos = *item->getPositionFix();
 
-			// variance and offset are INI data (P3)
+			// variance and offset are Coord3D in the xfer'd DeliverPayloadData (P7)
 			FCoord3D variance = fcoordFromCoord3D( &ai->getDropVariance() );
 			if (variance.x > Fix( 0 ))
 				pos.x += GameLogicRandomValueFix( -variance.x, variance.x );

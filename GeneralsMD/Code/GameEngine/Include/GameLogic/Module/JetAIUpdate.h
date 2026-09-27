@@ -34,6 +34,7 @@
 #include "Common/GameMemory.h"
 #include "GameLogic/AIStateMachine.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -50,12 +51,12 @@
 class JetAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
-	Real										m_outOfAmmoDamagePerSecond;				/**< amount of damage to take per SEC (not per frame) when out of ammo
+	Fix											m_outOfAmmoDamagePerSecond;				/**< amount of damage to take per SEC (not per frame) when out of ammo
 																																	note that it's expressed as a percent of max health, not an absolute */
-	Real										m_takeoffDistForMaxLift;					///< percent of distance from start (100%) to end (0%) that gives us max lift. Higher value lifts off sooner.
-	Real										m_minHeight;											///< how far off the ground to lift the drawable when taxiing
-	Real										m_parkingOffset;									///< tweaking the park loc
-	Real										m_sneakyOffsetWhenAttacking;			///< our sneaky offset when attacking (or zero)
+	Fix											m_takeoffDistForMaxLift;					///< percent of distance from start (100%) to end (0%) that gives us max lift. Higher value lifts off sooner.
+	Real										m_minHeight;											///< how far off the ground to lift the drawable when taxiing (drawing only)
+	Fix											m_parkingOffset;									///< tweaking the park loc
+	Fix											m_sneakyOffsetWhenAttacking;			///< our sneaky offset when attacking (or zero)
 	Bool										m_keepsParkingSpaceWhenAirborne;	///< if t, keeps its parking space reservation even when airborne
 	Bool										m_needsRunway;										///< if t, needs runways to takeoff/land
 	UnsignedInt							m_takeoffPause;										///< pre-takeoff pause
@@ -111,12 +112,12 @@ public:
 	virtual Bool isOutOfSpecialReloadAmmo() const;
 
 	const Coord3D* friend_getProducerLocation() const { return &m_producerLocation; }
-	Real friend_getOutOfAmmoDamagePerSecond() const { return getJetAIUpdateModuleData()->m_outOfAmmoDamagePerSecond; }
+	Fix friend_getOutOfAmmoDamagePerSecond() const { return getJetAIUpdateModuleData()->m_outOfAmmoDamagePerSecond; }
 	Bool friend_keepsParkingSpaceWhenAirborne() const { return getJetAIUpdateModuleData()->m_keepsParkingSpaceWhenAirborne; }
 	Bool friend_needsRunway() const { return getJetAIUpdateModuleData()->m_needsRunway; }
-	Real friend_getTakeoffDistForMaxLift() const { return getJetAIUpdateModuleData()->m_takeoffDistForMaxLift; }
+	Fix friend_getTakeoffDistForMaxLift() const { return getJetAIUpdateModuleData()->m_takeoffDistForMaxLift; }
 	Real friend_getMinHeight() const { return getJetAIUpdateModuleData()->m_minHeight; }
-	Real friend_getParkingOffset() const { return getJetAIUpdateModuleData()->m_parkingOffset; }
+	Real friend_getParkingOffset() const { return fixToReal( getJetAIUpdateModuleData()->m_parkingOffset ); }	// P8: reserveSpace takes a float
 	UnsignedInt friend_getTakeoffPause() const { return getJetAIUpdateModuleData()->m_takeoffPause; }
 	void friend_setGoalPath( std::vector<Coord3D>* path ) { getStateMachine()->setGoalPath(path); }
 	void friend_setTakeoffInProgress(Bool v) { setFlag(TAKEOFF_IN_PROGRESS, v); }

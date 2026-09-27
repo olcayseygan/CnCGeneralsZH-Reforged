@@ -140,7 +140,7 @@ public:
 	UnsignedInt		m_eliteCashAmount;
 	UnsignedInt		m_heroicCashAmount;
 	UnsignedInt		m_xpPerCashUpdate;
-	Real					m_packUnpackVariationFactor;
+	Fix						m_packUnpackVariationFactor;
 
 	HackInternetAIUpdateModuleData()
 	{
@@ -153,7 +153,7 @@ public:
 		m_eliteCashAmount = 0;
 		m_heroicCashAmount = 0;
 		m_xpPerCashUpdate = 0;
-		m_packUnpackVariationFactor = 0.0f;
+		m_packUnpackVariationFactor = Fix( 0 );
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -164,7 +164,7 @@ public:
 		{
 			{ "UnpackTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_unpackTime ) },
 			{ "PackTime",						INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_packTime ) },
-			{ "PackUnpackVariationFactor", INI::parseReal,					NULL, offsetof( HackInternetAIUpdateModuleData, m_packUnpackVariationFactor ) },
+			{ "PackUnpackVariationFactor", INI::parseFix,					NULL, FIX_OFFSET( HackInternetAIUpdateModuleData, m_packUnpackVariationFactor ) },
 			{ "CashUpdateDelay",		INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_cashUpdateDelay ) },
 			{ "CashUpdateDelayFast",INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_cashUpdateDelayFast ) },
 			{ "RegularCashAmount",	INI::parseUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_regularCashAmount ) },
@@ -205,7 +205,7 @@ public:
 
  	virtual void aiDoCommand(const AICommandParms* parms);
 
-	Real getPackUnpackVariationFactor() const { return getHackInternetAIUpdateModuleData()->m_packUnpackVariationFactor; }
+	Fix getPackUnpackVariationFactor() const { return getHackInternetAIUpdateModuleData()->m_packUnpackVariationFactor; }
 	UnsignedInt getUnpackTime()					const;
 	UnsignedInt getPackTime()						const;
 	UnsignedInt getCashUpdateDelay()		const;

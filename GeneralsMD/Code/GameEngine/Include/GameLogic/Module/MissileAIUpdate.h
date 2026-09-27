@@ -49,9 +49,9 @@ public:
 	Bool						m_tryToFollowTarget;	///< if true, attack object, not pos
 	UnsignedInt			m_fuelLifetime;				///< num frames till missile runs out of motive power (0 == inf)
 	UnsignedInt			m_ignitionDelay;			///< delay in frames from when missile is 'fired', to when it starts moving		15
-	Real						m_initialVel;			
-	Real						m_initialDist;
-	Real						m_diveDistance;				///< If I get this close to my target, start ignoring my preferred height
+	Fix							m_initialVel;
+	Fix							m_initialDist;
+	Fix							m_diveDistance;				///< If I get this close to my target, start ignoring my preferred height
 	const FXList*		m_ignitionFX;					///< FXList to do when missile 'ignites'
 	Bool						m_useWeaponSpeed;			///< if true, limit speed of projectile to the Weapon's info
 	Bool						m_detonateOnNoFuel;		///< If true, don't just stop thrusting, blow up when out of gas
@@ -59,9 +59,9 @@ public:
 	KindOfMaskType	m_garrisonHitKillKindof;			///< the kind(s) of units that can be collided with
 	KindOfMaskType	m_garrisonHitKillKindofNot;		///< the kind(s) of units that CANNOT be collided with
 	const FXList*		m_garrisonHitKillFX;
-	Real						m_distanceScatterWhenJammed;	///< How far I scatter when Jammed
+	Fix							m_distanceScatterWhenJammed;	///< How far I scatter when Jammed
 
-	Real						m_lockDistance;				///< If I get this close to my target, guaranteed hit.
+	Fix							m_lockDistance;				///< If I get this close to my target, guaranteed hit.
 	Bool						m_detonateCallsKill;			///< if true, kill() will be called, instead of KILL_SELF state, which calls destroy.
   Int             m_killSelfDelay;      ///< If I have detonated and entered the KILL-SELF state, how ling do I wait before I Kill/destroy self?
 	MissileAIUpdateModuleData();

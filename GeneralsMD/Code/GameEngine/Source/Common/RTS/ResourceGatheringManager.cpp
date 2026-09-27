@@ -175,8 +175,8 @@ Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 
 		// Design wants a harvester to give up and return to base if it is "too far" to the warehouse.
 		// Note, the "PreferedDock" will override this, and there is no distance max on Centers.
-		// P3: the scan distance is module data in float; one whose square would not fit is no limit
-		const Fix scan = fixFromReal( supplyTruckAI->getWarehouseScanDistance() );
+		// a scan distance whose square would not fit is no limit
+		const Fix scan = supplyTruckAI->getWarehouseScanDistance();
 		maxDistanceSquared = scan > Fix( 1 << 20 ) ? FIX_MAX : scan * scan;
 	}
 

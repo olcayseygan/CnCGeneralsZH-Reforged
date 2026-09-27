@@ -755,7 +755,7 @@ static void putPrisonersInPrison( Object *obj, void *userData )
 
 	// add up bounty for this prisoner
 	Player *prisonerOwningPlayer = obj->getControllingPlayer();
-	prisonUnloadData->bounty += TheGlobalData->m_prisonBountyMultiplier * 
+	prisonUnloadData->bounty += fixToReal(TheGlobalData->m_prisonBountyMultiplier) *	// P7
 															obj->getTemplate()->calcCostToBuild( prisonerOwningPlayer );
 
 }  // end putPrisonersInPrison

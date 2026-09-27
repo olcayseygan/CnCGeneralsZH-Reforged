@@ -491,7 +491,7 @@ void AIUpdateInterface::setGoalPositionClipped(const Coord3D* in, CommandSourceT
 		Coord3D tmp  = *in;
 		if (cmdSource == CMD_FROM_PLAYER)
 		{
-			Real fudge = TheGlobalData->m_partitionCellSize * 0.5f;
+			Real fudge = fixToReal(TheGlobalData->m_partitionCellSize) * 0.5f;	// P7
 			if (getObject()->isKindOf(KINDOF_AIRCRAFT) && getObject()->isSignificantlyAboveTerrain() && m_curLocomotor != NULL)
 			{
 				// aircraft must stay further away from the map edges, to prevent getting "lost"

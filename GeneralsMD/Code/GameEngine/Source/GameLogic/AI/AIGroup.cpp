@@ -2058,9 +2058,9 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 		recompute();
 
 	std::list<Object *>::iterator i;
-	if( !isFormation && !gatherOnPoint && cmdSource == CMD_FROM_PLAYER && TheGlobalData->m_groupMoveClickToGatherFactor > 0.0f )
+	if( !isFormation && !gatherOnPoint && cmdSource == CMD_FROM_PLAYER && TheGlobalData->m_groupMoveClickToGatherFactor > Fix(0) )
 	{
-		ScaleRect2D( &min, &max, TheGlobalData->m_groupMoveClickToGatherFactor );
+		ScaleRect2D( &min, &max, fixToReal(TheGlobalData->m_groupMoveClickToGatherFactor) );	// P7
 
 		if( Coord3DInsideRect2D( pos, &min, &max ) )
 		{
@@ -2612,7 +2612,7 @@ void AIGroup::groupTightenToPosition( const Coord3D *pos, Bool addWaypoint, Comm
 	Coord3D center;
 	Coord2D min;
 	Coord2D max;
-	if( cmdSource == CMD_FROM_PLAYER && TheGlobalData->m_groupMoveClickToGatherFactor > 0.0f )
+	if( cmdSource == CMD_FROM_PLAYER && TheGlobalData->m_groupMoveClickToGatherFactor > Fix(0) )
 	{
 		getMinMaxAndCenter( &min, &max, &center );
 		//Kris: Disabled (because its not used to make a logical difference)

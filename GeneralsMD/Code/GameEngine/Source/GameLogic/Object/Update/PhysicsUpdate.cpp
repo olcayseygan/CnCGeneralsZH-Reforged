@@ -517,7 +517,7 @@ Bool PhysicsBehavior::handleBounce(Real oldZ, Real newZ, Real groundZ, Coord3D* 
 		const Real MAX_STIFF = 0.99f;
 		// ExtraBounciness (OCL debris, a flung SlowDeath body) was stored and saved but never read
 		// here, so the -1.0 that fifteen INI entries use to mean "do not bounce" bounced at 0.8
-		Real stiffness = TheGlobalData->m_groundStiffness + m_extraBounciness;
+		Real stiffness = fixToReal(TheGlobalData->m_groundStiffness) + m_extraBounciness;	// P4
 		if (stiffness < MIN_STIFF) stiffness = MIN_STIFF;
 		if (stiffness > MAX_STIFF) stiffness = MAX_STIFF;
 
@@ -1391,7 +1391,7 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 
 			const Real MIN_STIFF = 0.01f;
 			const Real MAX_STIFF = 0.99f;
-			Real stiffness = TheGlobalData->m_structureStiffness;
+			Real stiffness = fixToReal(TheGlobalData->m_structureStiffness);	// P4
 			if (stiffness < MIN_STIFF) stiffness = MIN_STIFF;
 			if (stiffness > MAX_STIFF) stiffness = MAX_STIFF;
 			// huh huh, he said "stiff"
@@ -1404,7 +1404,7 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 			
 			// if we are moving down, we may want to blow ourselves into smithereens....
 			if (delta.z < 0.0f && 
-					fixToReal(obj->getPositionFix()->z) >= TheGlobalData->m_defaultStructureRubbleHeight)	// P3
+					obj->getPositionFix()->z >= TheGlobalData->m_defaultStructureRubbleHeight)
 			{
 				if (other->isKindOf(KINDOF_STRUCTURE))
 				{

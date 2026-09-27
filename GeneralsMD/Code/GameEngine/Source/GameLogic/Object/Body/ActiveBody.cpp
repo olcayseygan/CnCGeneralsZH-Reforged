@@ -111,11 +111,11 @@ static BodyDamageType calcDamageState(Real health, Real maxHealth)
 
 	Real ratio = health / maxHealth;
 
-	if (ratio > TheGlobalData->m_unitDamagedThresh)
+	if (ratio > fixToReal(TheGlobalData->m_unitDamagedThresh))	// P6
 	{
 		return BODY_PRISTINE;
 	}
-	else if (ratio > TheGlobalData->m_unitReallyDamagedThresh)
+	else if (ratio > fixToReal(TheGlobalData->m_unitReallyDamagedThresh))	// P6
 	{
 		return BODY_DAMAGED;
 	}
@@ -217,7 +217,7 @@ void ActiveBody::setCorrectDamageState()
 		Real rubbleHeight = getObject()->getTemplate()->getStructureRubbleHeight();
 
 		if (rubbleHeight <= 0.0f)
-			rubbleHeight = TheGlobalData->m_defaultStructureRubbleHeight;
+			rubbleHeight = fixToReal(TheGlobalData->m_defaultStructureRubbleHeight);	// P6
 
 		/** @todo I had to change this to a Z only version to keep it from disappearing from the
 			PartitionManager for a frame.  That didn't used to happen.		 
@@ -248,11 +248,11 @@ void ActiveBody::setDamageState( BodyDamageType newState )
 	}
 	else if( newState == BODY_DAMAGED )
 	{
-		ratio = TheGlobalData->m_unitDamagedThresh;
+		ratio = fixToReal(TheGlobalData->m_unitDamagedThresh);	// P6
 	}
 	else if( newState == BODY_REALLYDAMAGED )
 	{
-		ratio = TheGlobalData->m_unitReallyDamagedThresh;
+		ratio = fixToReal(TheGlobalData->m_unitReallyDamagedThresh);	// P6
 	}
 	else if( newState == BODY_RUBBLE )
 	{
@@ -1562,8 +1562,8 @@ void ActiveBody::onVeterancyLevelChanged( VeterancyLevel oldLevel, VeterancyLeve
 		}
 	}
 
-	Real oldBonus = TheGlobalData->m_healthBonus[oldLevel];
-	Real newBonus = TheGlobalData->m_healthBonus[newLevel];
+	Real oldBonus = fixToReal(TheGlobalData->m_healthBonus[oldLevel]);	// P6
+	Real newBonus = fixToReal(TheGlobalData->m_healthBonus[newLevel]);	// P6
 	Real mult = newBonus / oldBonus;
 
 	// get this before calling setMaxHealth, since it can clip curHealth

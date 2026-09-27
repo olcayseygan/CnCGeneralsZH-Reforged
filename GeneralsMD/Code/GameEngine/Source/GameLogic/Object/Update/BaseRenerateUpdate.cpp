@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/GlobalData.h"
+#include "Lib/FixBoundary.h"
 #include "Common/Xfer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/BaseRegenerateUpdate.h"
@@ -73,7 +74,7 @@ BaseRegenerateUpdate::BaseRegenerateUpdate( Thing *thing, const ModuleData* modu
 										: UpdateModule( thing, moduleData )
 {
 
-	if( TheGlobalData->m_baseRegenHealthPercentPerSecond == 0.0f )
+	if( TheGlobalData->m_baseRegenHealthPercentPerSecond == Fix(0) )
 	{
 		setWakeFrame(getObject(), UPDATE_SLEEP_FOREVER);
 	}
@@ -94,7 +95,7 @@ BaseRegenerateUpdate::~BaseRegenerateUpdate( void )
 //-------------------------------------------------------------------------------------------------
 void BaseRegenerateUpdate::onDamage( DamageInfo *damageInfo )
 {
-	if (TheGlobalData->m_baseRegenHealthPercentPerSecond > 0.0 &&
+	if (TheGlobalData->m_baseRegenHealthPercentPerSecond > Fix(0) &&
 			damageInfo->in.m_damageType != DAMAGE_HEALING)
 	{
 		setWakeFrame(getObject(), UPDATE_SLEEP(TheGlobalData->m_baseRegenDelay));
@@ -137,7 +138,7 @@ UpdateSleepTime BaseRegenerateUpdate::update( void )
 		const Int HEAL_RATE = 3;
 
 		// do some healing
-		Real amount = HEAL_RATE * (body->getMaxHealth() * TheGlobalData->m_baseRegenHealthPercentPerSecond) / 
+		Real amount = HEAL_RATE * (body->getMaxHealth() * fixToReal(TheGlobalData->m_baseRegenHealthPercentPerSecond)) /	// P8
 														 LOGICFRAMES_PER_SECOND;
 		me->attemptHealing(amount, me);
 

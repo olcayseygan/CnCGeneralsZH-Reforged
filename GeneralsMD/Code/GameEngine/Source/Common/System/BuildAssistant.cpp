@@ -262,7 +262,7 @@ void BuildAssistant::update( void )
 					sellValue = obj->getTemplate()->getRefundValue();
 				else
 					sellValue = REAL_TO_UNSIGNEDINT( obj->getTemplate()->calcCostToBuild( player ) * 
-																										 TheGlobalData->m_sellPercentage );
+																										 fixToReal(TheGlobalData->m_sellPercentage) );	// P7
 
 				player->getMoney()->deposit( sellValue );
 				// this money shouldn't be scored since it wasn't really "earned."
@@ -544,12 +544,13 @@ static void checkSampleBuildLocation( const Coord3D *samplePoint, void *userData
 		sampleData->hiZ = samplePoint->z;
 
 	// too close to edge of map?
-	if (TheGlobalData->m_MinDistFromEdgeOfMapForBuild > 0.0f)
+	if (TheGlobalData->m_MinDistFromEdgeOfMapForBuild > Fix(0))
 	{
-		if (samplePoint->x < sampleData->mapRegion.lo.x + TheGlobalData->m_MinDistFromEdgeOfMapForBuild
-				|| samplePoint->x > sampleData->mapRegion.hi.x - TheGlobalData->m_MinDistFromEdgeOfMapForBuild
-				|| samplePoint->y < sampleData->mapRegion.lo.y + TheGlobalData->m_MinDistFromEdgeOfMapForBuild
-				|| samplePoint->y > sampleData->mapRegion.hi.y - TheGlobalData->m_MinDistFromEdgeOfMapForBuild)
+		const Real minDist = fixToReal(TheGlobalData->m_MinDistFromEdgeOfMapForBuild);	// P7
+		if (samplePoint->x < sampleData->mapRegion.lo.x + minDist
+				|| samplePoint->x > sampleData->mapRegion.hi.x - minDist
+				|| samplePoint->y < sampleData->mapRegion.lo.y + minDist
+				|| samplePoint->y > sampleData->mapRegion.hi.y - minDist)
 		{
 			sampleData->terrainRestricted = TRUE;
 		}
@@ -1063,14 +1064,14 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		}
 	}  // end if
 
-	if (build->isKindOf(KINDOF_CANNOT_BUILD_NEAR_SUPPLIES) && TheGlobalData->m_SupplyBuildBorder > 0)
+	if (build->isKindOf(KINDOF_CANNOT_BUILD_NEAR_SUPPLIES) && TheGlobalData->m_SupplyBuildBorder > Fix(0))
 	{
 		// special case for supply centers: can't build too close to supply sources 
 		PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_SUPPLY_SOURCE), KINDOFMASK_NONE);
 		PartitionFilter *filters[] = { &f1, NULL };
 		
 		// see if there are any reasonably close by
-		const Fix border = fixFromReal(TheGlobalData->m_SupplyBuildBorder);	// P3
+		const Fix border = TheGlobalData->m_SupplyBuildBorder;
 		Fix range = build->getTemplateGeometryInfo().getBoundingCircleRadiusFix() + border*Fix(2);
 		const FCoord3D worldFx = fcoordFromCoord3D(worldPos);
 		Object* tooClose = ThePartitionManager->getClosestObjectFix(&worldFx, range, FROM_BOUNDINGSPHERE_2D, filters);
@@ -1078,7 +1079,7 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		{
 			// yep, see if we would collide with an expanded version
 			GeometryInfo tooCloseGeom = tooClose->getGeometryInfo();
-			tooCloseGeom.expandFootprint(TheGlobalData->m_SupplyBuildBorder);
+			tooCloseGeom.expandFootprint(fixToReal(border));	// P7
 			if (ThePartitionManager->geomCollidesWithGeomFix(
 						&worldFx,
 						build->getTemplateGeometryInfo(),
@@ -1087,7 +1088,7 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 						tooCloseGeom,
 						tooClose->getOrientationFix()))
 			{
-				TheTerrainVisual->addFactionBib(tooClose, true, TheGlobalData->m_SupplyBuildBorder);
+				TheTerrainVisual->addFactionBib(tooClose, true, fixToReal(border));
 				return LBC_TOO_CLOSE_TO_SUPPLIES;
 			}
 		}
@@ -1148,7 +1149,7 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		if( sampleData.terrainRestricted == TRUE )
 			return LBC_RESTRICTED_TERRAIN;
 		// check if the height across the whole footprint area is too varied (not flat enough)
-		if( sampleData.hiZ - sampleData.loZ > TheGlobalData->m_allowedHeightVariationForBuilding )
+		if( sampleData.hiZ - sampleData.loZ > fixToReal(TheGlobalData->m_allowedHeightVariationForBuilding) )	// P7
 			return LBC_NOT_FLAT_ENOUGH;
 
 		// careful check at full res.
@@ -1157,7 +1158,7 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		if( sampleData.terrainRestricted == TRUE )
 			return LBC_RESTRICTED_TERRAIN;
 		// check if the height across the whole footprint area is too varied (not flat enough)
-		if( sampleData.hiZ - sampleData.loZ > TheGlobalData->m_allowedHeightVariationForBuilding )
+		if( sampleData.hiZ - sampleData.loZ > fixToReal(TheGlobalData->m_allowedHeightVariationForBuilding) )	// P7
 			return LBC_NOT_FLAT_ENOUGH;
 
 	}  // end if

@@ -1864,7 +1864,7 @@ Int BaseHeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pM
 	REF_PTR_SET(m_map, pMap);	//update our heightmap pointer in case it changed since last call.
 
 	if (m_shroud)
-		m_shroud->init(m_map,TheGlobalData->m_partitionCellSize,TheGlobalData->m_partitionCellSize);
+		m_shroud->init(m_map,fixToReal(TheGlobalData->m_partitionCellSize),fixToReal(TheGlobalData->m_partitionCellSize));
 #ifdef DO_ROADS
 	m_roadBuffer->setMap(m_map);
 #endif

@@ -95,6 +95,7 @@
 #include "WW3D2/PredLod.h"
 #include "WW3D2/WW3D.h"
 #include "WW3D2/dx11runtime.h"
+#include "Lib/FixBoundary.h"
 
 #include "W3DDevice/GameClient/camerashakesystem.h"
 
@@ -1574,7 +1575,7 @@ void W3DView::update(void)
 			{	Coord3D objpos = *cameraLockObj->getPosition();
 				Coord3D curpos = *getPosition();
 				// don't "snap" directly to the pos, but move there smoothly.
-				Real snapThreshSqr = sqr(TheGlobalData->m_partitionCellSize);
+				Real snapThreshSqr = sqr(fixToReal(TheGlobalData->m_partitionCellSize));
 				Real curDistSqr = sqr(curpos.x - objpos.x) + sqr(curpos.y - objpos.y);
 				if ( m_snapImmediate)
 				{

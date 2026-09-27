@@ -36,6 +36,7 @@
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Module/MaxHealthUpgrade.h"
 #include "GameLogic/Module/BodyModule.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -89,7 +90,7 @@ void MaxHealthUpgrade::upgradeImplementation( )
 		// Veterancy multiplies max health when it arrives, so an addition made after a promotion has
 		// to carry the promotion's bonus too. Without it an Elite Paladin that researched Composite
 		// Armor ended on 750 where one armored first and promoted later ended on 780.
-		Real add = data->m_addMaxHealth * TheGlobalData->m_healthBonus[ obj->getVeterancyLevel() ];
+		Real add = data->m_addMaxHealth * fixToReal( TheGlobalData->m_healthBonus[ obj->getVeterancyLevel() ] );	// P8
 		body->setMaxHealth( body->getMaxHealth() + add, data->m_maxHealthChangeType );
 	}
 }

@@ -46,6 +46,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -302,52 +303,54 @@ void CountermeasuresBehavior::launchVolley()
 	const CountermeasuresBehaviorModuleData *data = getCountermeasuresBehaviorModuleData();
 	Object *obj = getObject();
 
-	Real volleySize = (Real)data->m_volleySize;
+	Fix volleySize = Fix( (Int)data->m_volleySize );
 	for( int i = 0; i < data->m_volleySize; i++ )
 	{
-		//Each flare in a volley will calculate a different vector to fly out. We have a +/- angle to 
+		//Each flare in a volley will calculate a different vector to fly out. We have a +/- angle to
 		//spread out equally. With only one flare, it'll come straight out the back. Two flares will
 		//launch at the extreme positive and negative angle. Three flares will launch at extreme angles
 		//plus straight back. Four or more will divy it up equally.
-		Real currentVolley = (Real)i;
-		Real ratio = 0.0f;
-		if( volleySize != 1.0f )
+		Fix ratio = Fix( 0 );
+		if( volleySize != Fix( 1 ) )
 		{
-			//ratio between -1.0 and +1.0f
-			ratio = currentVolley / (volleySize - 1.0f) * 2.0f - 1.0f;
+			//ratio between -1 and +1
+			ratio = Fix( i ) / (volleySize - Fix( 1 )) * Fix( 2 ) - Fix( 1 );
 		}
 		//Now calculate the angle. Simply multiply it by the ratio!
-		Real angle = ratio * data->m_volleyArcAngle;
+		Fix angle = ratio * fixFromReal( data->m_volleyArcAngle ); // P3
 
-		Coord3D vel;
 		PhysicsBehavior *physics = obj->getPhysics();
 
-		//Calculate the angle to fire the flare by taking the facing angle and rotating it
-		//and then scaling it by it's velocity (if it's moving).
-		obj->getUnitDirectionVector3D( vel );
-		Vector2 flareVector;
-		flareVector.X = vel.x;
-		flareVector.Y = vel.y;
-		flareVector.Normalize();
-		flareVector.Rotate( angle );
-		//Give it back to the Coord3D
-		vel.x = flareVector.X;
-		vel.y = flareVector.Y;
-		vel.z = 0.0f;
-
-		Real velocity = physics->getVelocityMagnitude();
-		if( velocity < 1.0f )
+		//Calculate the angle to fire the flare by taking the facing angle in the ground plane,
+		//rotating it and then scaling it by it's velocity (if it's moving).
+		const FixMatrix3D *mtx = obj->getTransformMatrixFix();
+		Fix dirX = mtx->m[ 0 ][ 0 ];
+		Fix dirY = mtx->m[ 1 ][ 0 ];
+		Fix len = fixSqrt( dirX * dirX + dirY * dirY );
+		if( len > Fix( 0 ) )
 		{
-			velocity = -10.0f;
+			dirX = dirX / len;
+			dirY = dirY / len;
 		}
-		vel.scale( velocity * data->m_volleyVelocityFactor );
+		Fix s = fixSin( angle );
+		Fix c = fixCos( angle );
+		FCoord3D flareVector;
+		flareVector.set( dirX * c - dirY * s, dirX * s + dirY * c, Fix( 0 ) );
+
+		Fix velocity = fixFromReal( physics->getVelocityMagnitude() ); // P4
+		if( velocity < Fix( 1 ) )
+		{
+			velocity = Fix( -10 );
+		}
+		flareVector.scale( velocity * fixFromReal( data->m_volleyVelocityFactor ) ); // P3
+		Coord3D vel = flareVector.toCoord3D(); // P4
 
 		const ThingTemplate *thing = TheThingFactory->findTemplate( data->m_flareTemplateName );
 		if( thing )
 		{
 			Object *flare = TheThingFactory->newObject( thing, obj->getControllingPlayer()->getDefaultTeam() );
-			flare->setPosition( obj->getPosition() );
-			flare->setOrientation( obj->getOrientation() );
+			flare->setPositionFix( obj->getPositionFix() );
+			flare->setOrientationFix( obj->getOrientationFix() );
 			physics->transferVelocityTo( flare->getPhysics() );
 			flare->getPhysics()->applyMotiveForce( &vel );
 			m_activeCountermeasures++;

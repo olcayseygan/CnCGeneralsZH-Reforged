@@ -60,6 +60,7 @@
 #include "GameLogic/Module/SupplyCenterDockUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/WorkerAIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -451,14 +452,16 @@ Object *WorkerAIUpdate::construct( const ThingTemplate *what,
 	obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
 
 	// initialize object
-	obj->setPosition( pos );
-	obj->setOrientation( angle );
+	// P5: the placement comes in as float
+	FCoord3D adjustedPos;
+	adjustedPos.set( fixFromReal( pos->x ), fixFromReal( pos->y ), fixFromReal( pos->z ) );
+	obj->setPositionFix( &adjustedPos );
+	obj->setOrientationFix( fixFromReal( angle ) );
 
 	// Flatten the terrain underneath the object, then adjust to the flattened height. jba.
 	TheTerrainLogic->flattenTerrain(obj);
-	Coord3D adjustedPos = *pos;
-	adjustedPos.z = TheTerrainLogic->getGroundHeight(pos->x, pos->y);
-	obj->setPosition(&adjustedPos);
+	adjustedPos.z = TheTerrainLogic->getGroundHeightFix( adjustedPos.x, adjustedPos.y );
+	obj->setPositionFix( &adjustedPos );
 
 	//
 	// The footprint is not an obstacle yet: this is a plan standing at zero percent, and until the
@@ -847,7 +850,8 @@ void WorkerAIUpdate::internalCancelTask( DozerTask task )
 		return;
 	}
 	/// @todo we really need a stop command instead of making it move to it's current location
-	ai->aiMoveToPosition( getObject()->getPosition(), CMD_FROM_AI );
+	Coord3D here = getObject()->getPositionFix()->toCoord3D(); // P4: move orders are float
+	ai->aiMoveToPosition( &here, CMD_FROM_AI );
 
 	// see DozerAIUpdate::internalCancelTask: the building stays an obstacle once the walk to it is off
 	if( ai->getIgnoredObstacleID() == cancelledTargetID )
@@ -1160,9 +1164,9 @@ Bool WorkerAIUpdate::gainOneBox( Int remainingStock )
 		if ( bestWarehouse )
 		{
 			//figure out whether the best one is considerably far from the previous one (current position)
-			Coord3D delta = *getObject()->getPosition();
-			delta.sub( bestWarehouse->getPosition() ); 
-			if ( delta.length() > getWarehouseScanDistance()/4)
+			FCoord3D delta = *getObject()->getPositionFix();
+			delta.sub( *bestWarehouse->getPositionFix() );
+			if ( delta.length() > fixFromReal( getWarehouseScanDistance() ) / Fix( 4 ) ) // P3
 			playDepleted = TRUE;
 		}
 		else

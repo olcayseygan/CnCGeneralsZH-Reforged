@@ -44,6 +44,7 @@
 #include "GameLogic/Module/MinefieldBehavior.h"
 #include "GameLogic/Module/AutoHealBehavior.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -183,35 +184,37 @@ UpdateSleepTime MinefieldBehavior::update()
 
 	if (m_scootFramesLeft > 0)
 	{
-		Coord3D pt = *obj->getPosition();
+		FCoord3D pt = *obj->getPositionFix();
 
+		// the scoot velocity and acceleration are xfer'd, so they stay float
 		m_scootVel.x += m_scootAccel.x;
 		m_scootVel.y += m_scootAccel.y;
 		m_scootVel.z += m_scootAccel.z;
 
-		pt.x += m_scootVel.x;
-		pt.y += m_scootVel.y;
-		pt.z += m_scootVel.z;
+		pt.x += fixFromReal( m_scootVel.x );
+		pt.y += fixFromReal( m_scootVel.y );
+		pt.z += fixFromReal( m_scootVel.z );
 
 		// srj sez: scooting mines always go on the highest layer.
-		Coord3D tmp = pt;
-		tmp.z = 99999.0f;
-		PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
+		FCoord3D tmp = pt;
+		tmp.z = Fix( 99999 );
+		Coord3D probe = tmp.toCoord3D(); // P5
+		PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&probe);
 		obj->setLayer(newLayer);
 
-		Real ground = TheTerrainLogic->getLayerHeight( pt.x, pt.y, newLayer );
+		Fix ground = TheTerrainLogic->getLayerHeightFix( pt.x, pt.y, newLayer );
 
 		if (newLayer != LAYER_GROUND)
 		{
 			// ensure we are slightly above the bridge, to account for fudge & sloppy art
-			const Real FUDGE = 1.0f;
+			const Fix FUDGE = Fix( 1 );
 			ground += FUDGE;
 		}
 
 		if (pt.z < ground || m_scootFramesLeft <= 1)
 			pt.z = ground;
 
-		obj->setPosition(&pt);
+		obj->setPositionFix(&pt);
 
 		--m_scootFramesLeft;
 	}
@@ -335,9 +338,19 @@ void MinefieldBehavior::detonateOnce(const Coord3D& position)
 }
 
 //-----------------------------------------------------------------------------
-static Real calcDistSquared(const Coord3D& a, const Coord3D& b)
+static FCoord3D toFCoord3D(const Coord3D& c)
 {
-	return sqr(a.x - b.x) + sqr(a.y - b.y) + sqr(a.z - b.z);
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
+//-----------------------------------------------------------------------------
+static Fix calcDistSquared(const FCoord3D& a, const Coord3D& b)
+{
+	FCoord3D delta = a;
+	delta.sub( toFCoord3D( b ) );
+	return delta.lengthSqr();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -420,8 +433,9 @@ void MinefieldBehavior::onCollide( Object *other, const Coord3D *loc, const Coor
 		if (other->getID() == it->id)
 		{
 			found = TRUE;
-			Real distSqr = calcDistSquared(*other->getPosition(), it->where);
-			if (distSqr <= sqr(d->m_repeatDetonateMoveThresh))
+			Fix distSqr = calcDistSquared(*other->getPositionFix(), it->where);
+			Fix thresh = fixFromReal( d->m_repeatDetonateMoveThresh ); // P3
+			if (distSqr <= thresh * thresh)
 			{
 				// too close. punt for now.
 				return;
@@ -429,7 +443,7 @@ void MinefieldBehavior::onCollide( Object *other, const Coord3D *loc, const Coor
 			else
 			{
 				// far enough. update the loc, then break out and blow up.
-				it->where = *other->getPosition();
+				it->where = other->getPositionFix()->toCoord3D(); // xfer'd, stays float
 				break;
 			}
 		}
@@ -439,12 +453,13 @@ void MinefieldBehavior::onCollide( Object *other, const Coord3D *loc, const Coor
 		// add him to the list.
 		DetonatorInfo detInfo;
 		detInfo.id = other->getID();
-		detInfo.where = *other->getPosition();
+		detInfo.where = other->getPositionFix()->toCoord3D(); // xfer'd, stays float
 		m_detonators.push_back(detInfo);
 	}
 
-	Coord3D detPt = *other->getPosition();
-	obj->getGeometryInfo().clipPointToFootprint(*obj->getPosition(), detPt);
+	// the footprint clip and the detonation weapon are float
+	Coord3D detPt = other->getPositionFix()->toCoord3D(); // P6
+	obj->getGeometryInfo().clipPointToFootprint(obj->getPositionFix()->toCoord3D(), detPt);
 	detonateOnce(detPt);
 }
 
@@ -484,7 +499,7 @@ void MinefieldBehavior::onDamage( DamageInfo *damageInfo )
 			}
 			else
 			{
-				detonateOnce(*getObject()->getPosition());
+				detonateOnce(getObject()->getPositionFix()->toCoord3D()); // P6
 			}
 		}
 		else
@@ -570,12 +585,15 @@ void MinefieldBehavior::setScootParms(const Coord3D& start, const Coord3D& end)
 	const MinefieldBehaviorModuleData* d = getMinefieldBehaviorModuleData();
 	UnsignedInt scootFromStartingPointTime = d->m_scootFromStartingPointTime;
 
-	Coord3D endOnGround = end;
-	endOnGround.z = TheTerrainLogic->getGroundHeight( endOnGround.x, endOnGround.y );
-	if (start.z > endOnGround.z)
+	FCoord3D fStart = toFCoord3D( start );
+	FCoord3D endOnGround = toFCoord3D( end );
+	endOnGround.z = TheTerrainLogic->getGroundHeightFix( endOnGround.x, endOnGround.y );
+	if (fStart.z > endOnGround.z)
 	{
 		// figure out how long it will take to fall, and replace scoot time with that
-		UnsignedInt fallingTime = REAL_TO_INT_CEIL(sqrtf(2.0f * (start.z - endOnGround.z) / fabs(TheGlobalData->m_gravity)));
+		Fix gravity = fixAbs( fixFromReal( TheGlobalData->m_gravity ) ); // P4
+		Fix fall = fixSqrt( Fix( 2 ) * (fStart.z - endOnGround.z) / gravity ).ceil();
+		UnsignedInt fallingTime = (UnsignedInt)(fall.raw() >> Fix::FRAC_BITS);
 		// we can scoot after we land, but don't want to stop scooting before we land
 		if (scootFromStartingPointTime < fallingTime)
 			scootFromStartingPointTime = fallingTime;
@@ -583,35 +601,36 @@ void MinefieldBehavior::setScootParms(const Coord3D& start, const Coord3D& end)
 
 	if (scootFromStartingPointTime == 0)
 	{
-		obj->setPosition(&endOnGround);
+		obj->setPositionFix(&endOnGround);
 		m_scootFramesLeft = 0;
 	}
 	else
 	{
 		// x = x0 + vt + 0.5at^2
 		// thus 2(dx - vt)/t^2 = a
-		Real dx = endOnGround.x - start.x;
-		Real dy = endOnGround.y - start.y;
-		Real dz = endOnGround.z - start.z;
-		Real dist = sqrt(sqr(dx) + sqr(dy));
-		if (dist <= 0.1f && fabs(dz) <= 0.1f)
+		Fix dx = endOnGround.x - fStart.x;
+		Fix dy = endOnGround.y - fStart.y;
+		Fix dz = endOnGround.z - fStart.z;
+		Fix dist = fixSqrt(dx * dx + dy * dy);
+		if (dist <= 0.1_fx && fixAbs(dz) <= 0.1_fx)
 		{
-			obj->setPosition(&endOnGround);
+			obj->setPositionFix(&endOnGround);
 			m_scootFramesLeft = 0;
 		}
 		else
 		{
-			Real t = (Real)scootFromStartingPointTime;
-			Real scootFromStartingPointSpeed = dist / t;
-			Real accelMag = fabs(2.0f * (dist - scootFromStartingPointSpeed*t)/sqr(t));
-			Real dxNorm = (dist <= 0.1f) ? 0.0f : (dx / dist);
-			Real dyNorm = (dist <= 0.1f) ? 0.0f : (dy / dist);
-			m_scootVel.x = dxNorm * scootFromStartingPointSpeed;
-			m_scootVel.y = dyNorm * scootFromStartingPointSpeed;
-			m_scootAccel.x = -dxNorm * accelMag;
-			m_scootAccel.y = -dyNorm * accelMag;
+			Fix t = Fix( (Int)scootFromStartingPointTime );
+			Fix scootFromStartingPointSpeed = dist / t;
+			Fix accelMag = fixAbs(Fix( 2 ) * (dist - scootFromStartingPointSpeed * t) / (t * t));
+			Fix dxNorm = (dist <= 0.1_fx) ? Fix( 0 ) : (dx / dist);
+			Fix dyNorm = (dist <= 0.1_fx) ? Fix( 0 ) : (dy / dist);
+			// xfer'd, so they stay float
+			m_scootVel.x = fixToReal( dxNorm * scootFromStartingPointSpeed );
+			m_scootVel.y = fixToReal( dyNorm * scootFromStartingPointSpeed );
+			m_scootAccel.x = fixToReal( -dxNorm * accelMag );
+			m_scootAccel.y = fixToReal( -dyNorm * accelMag );
 			m_scootAccel.z = TheGlobalData->m_gravity;
-			obj->setPosition(&start);
+			obj->setPositionFix(&fStart);
 			m_scootFramesLeft = scootFromStartingPointTime;
 
 			// we need to wake ourselves up because we could be lying here sleeping forever

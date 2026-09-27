@@ -37,6 +37,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameClient/Drawable.h"
 
@@ -71,7 +72,7 @@ void NeutronBlastBehavior::onDie( const DamageInfo *damageInfo )
 		return;
 
 	const NeutronBlastBehaviorModuleData *data = getNeutronBlastBehaviorModuleData();
-	Real blastRadius = data->m_blastRadius;
+	Fix blastRadius = fixFromReal( data->m_blastRadius ); // P3
 	Bool hitAir = data->m_isAffectAirborne;
 
 	// setup scan filters
@@ -80,7 +81,7 @@ void NeutronBlastBehavior::onDie( const DamageInfo *damageInfo )
 	PartitionFilter *filters[] = { &filterAlive, &filterMapStatus, NULL };
 
 	// scan objects in our region
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( self->getPosition(), blastRadius, FROM_CENTER_2D, filters );
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( self->getPositionFix(), blastRadius, FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 	
 	// Apply neutron blast to object

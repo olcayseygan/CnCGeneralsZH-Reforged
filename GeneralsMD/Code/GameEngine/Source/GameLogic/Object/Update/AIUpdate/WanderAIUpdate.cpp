@@ -56,7 +56,7 @@ UpdateSleepTime WanderAIUpdate::update( void )
 	if (isIdle())
 	{
 		// 5 to 50 either way on each axis; the retail 5..50 only ever walked north east
-		Coord3D dest = *(getObject()->getPosition());
+		Coord3D dest = getObject()->getPositionFix()->toCoord3D(); // P4: move orders are float
 		const Int stepX = GameLogicRandomValue( -45, 45 );
 		const Int stepY = GameLogicRandomValue( -45, 45 );
 		dest.x += stepX < 0 ? stepX - 5 : stepX + 5;

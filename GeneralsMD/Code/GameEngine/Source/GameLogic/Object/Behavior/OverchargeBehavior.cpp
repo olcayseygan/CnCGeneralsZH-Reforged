@@ -138,7 +138,8 @@ UpdateSleepTime OverchargeBehavior::update( void )
 				TheInGameUI->message( "GUI:OverchargeExhausted" );
 
 				// do radar event
-				TheRadar->createEvent( us->getPosition(), RADAR_EVENT_INFORMATION );
+				Coord3D pos = us->getPositionFix()->toCoord3D(); // the radar is client
+				TheRadar->createEvent( &pos, RADAR_EVENT_INFORMATION );
 
 			}  // end of
 

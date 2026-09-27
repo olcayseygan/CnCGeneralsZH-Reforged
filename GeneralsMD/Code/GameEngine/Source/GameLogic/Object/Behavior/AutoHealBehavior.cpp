@@ -43,6 +43,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -109,7 +110,8 @@ AutoHealBehavior::AutoHealBehavior( Thing *thing, const ModuleData* moduleData )
 			particleSystem = TheParticleSystemManager->createParticleSystem( d->m_radiusParticleSystemTmpl );
 			if( particleSystem )
 			{
-				particleSystem->setPosition( obj->getPosition() );
+				Coord3D pos = obj->getPositionFix()->toCoord3D(); // particles are client
+				particleSystem->setPosition( &pos );
 				m_radiusParticleSystemID = particleSystem->getSystemID();
 			}
 		}
@@ -253,7 +255,7 @@ UpdateSleepTime AutoHealBehavior::update( void )
 		PartitionFilter *filters[] = { &relationship, &filterAlive, &filterMapStatus, NULL };
 
 		// scan objects in our region
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( obj->getPosition(), d->m_radius, FROM_CENTER_2D, filters );
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( obj->getPositionFix(), fixFromReal( d->m_radius ), FROM_CENTER_2D, filters ); // P3
 		MemoryPoolObjectHolder hold( iter );
 		for( obj = iter->first(); obj; obj = iter->next() )
 		{
@@ -275,10 +277,9 @@ UpdateSleepTime AutoHealBehavior::update( void )
 
 								if ( animTemplate )
 								{
-									Coord3D iconPosition;
-									iconPosition.set(obj->getPosition()->x, 
-																	 obj->getPosition()->y, 
-																	 obj->getPosition()->z + obj->getGeometryInfo().getMaxHeightAbovePosition() );
+									FCoord3D iconFix = *obj->getPositionFix();
+									iconFix.z += obj->getGeometryInfo().getMaxHeightAbovePositionFix();
+									Coord3D iconPosition = iconFix.toCoord3D(); // the UI is client
 									TheInGameUI->addWorldAnimation( animTemplate,	&iconPosition, WORLD_ANIM_FADE_ON_EXPIRE,
 																									TheGlobalData->m_getHealedAnimationDisplayTimeInSeconds,
 																									TheGlobalData->m_getHealedAnimationZRisePerSecond);
@@ -318,7 +319,8 @@ void AutoHealBehavior::pulseHealObject( Object *obj )
 		ParticleSystem *system = TheParticleSystemManager->createParticleSystem( data->m_unitHealPulseParticleSystemTmpl );
 		if( system )
 		{
-			system->setPosition( obj->getPosition() );
+			Coord3D pos = obj->getPositionFix()->toCoord3D(); // particles are client
+			system->setPosition( &pos );
 		}
 	}
 	

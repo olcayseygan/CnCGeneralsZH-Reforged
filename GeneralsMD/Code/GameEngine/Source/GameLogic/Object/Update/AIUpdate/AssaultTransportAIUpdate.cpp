@@ -42,6 +42,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -294,7 +295,7 @@ UpdateSleepTime AssaultTransportAIUpdate::update( void )
 	}
 
 	//Keep track of the average position of all combat units assigned to me.
-	Coord3D fighterCentroidPos;
+	FCoord3D fighterCentroidPos;
 	UnsignedInt fightingMembers = 0;
 	fighterCentroidPos.zero();
 
@@ -324,7 +325,7 @@ UpdateSleepTime AssaultTransportAIUpdate::update( void )
 				else
 				{
 					//Increment the number of fighters and their position.
-					fighterCentroidPos.add( member->getPosition() );
+					fighterCentroidPos.add( *member->getPositionFix() );
 					fightingMembers++;
 
 					if( !ai->isMoving() )
@@ -484,7 +485,8 @@ static Bool areaClearAround( const Object *around, const Object *transport, Real
 	PartitionFilterSameMapStatus	filterMapStatus( transport );
 	PartitionFilter *filters[] = { &filterRelationship, &filterAlive, &filterMapStatus, NULL };
 
-	return ThePartitionManager->getClosestObject( around, AssaultTransport_clearScanRange( range, around->getLargestWeaponRange() ), FROM_CENTER_2D, filters ) == NULL;
+	// P3/P6: the INI range and the weapon range are still float
+	return ThePartitionManager->getClosestObjectFix( around, fixFromReal( AssaultTransport_clearScanRange( range, around->getLargestWeaponRange() ) ), FROM_CENTER_2D, filters ) == NULL;
 }
 
 //-------------------------------------------------------------------------------------------------

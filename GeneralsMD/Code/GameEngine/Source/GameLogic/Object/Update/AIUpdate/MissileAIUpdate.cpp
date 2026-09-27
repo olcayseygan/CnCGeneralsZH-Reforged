@@ -49,8 +49,17 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/FXList.h"
 #include "GameClient/ParticleSys.h"
+#include "Lib/FixBoundary.h"
 
 const Real BIGNUM = 99999.0f;
+
+// goal and target positions are still float (P5); this is where they come in
+static FCoord3D toFCoord3D( const Coord3D *c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
+	return f;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -130,7 +139,7 @@ MissileAIUpdate::MissileAIUpdate( Thing *thing, const ModuleData* moduleData ) :
 	m_isArmed = false;
 	m_fuelExpirationDate = 0;
 	m_noTurnDistLeft = d->m_initialDist;
-	m_prevPos = *getObject()->getPosition();
+	m_prevPos = getObject()->getPositionFix()->toCoord3D();
 	m_maxAccel = BIGNUM;
 	m_detonationWeaponTmpl = NULL;
 	m_exhaustSysTmpl = NULL;
@@ -234,18 +243,17 @@ void MissileAIUpdate::projectileFireAtObjectOrPosition( const Object *victim, co
 		}
 	}
 
-	Real deltaZ = victimPos->z - obj->getPosition()->z;
-	Real dx = victimPos->x - obj->getPosition()->x;
-	Real dy = victimPos->y - obj->getPosition()->y;
-	Real xyDist = sqrt(sqr(dx)+sqr(dy));
-	if (xyDist<1) xyDist = 1;
+	FCoord3D toVictim = toFCoord3D( victimPos );
+	toVictim.sub( *obj->getPositionFix() );
+	Fix xyDist = fixMax( fixSqrt( toVictim.x * toVictim.x + toVictim.y * toVictim.y ), Fix( 1 ) );
 	Real zFactor = 0;
-	if (deltaZ>0) {
-		zFactor = deltaZ/xyDist;
+	if (toVictim.z > Fix( 0 )) {
+		zFactor = fixToReal( toVictim.z / xyDist );	// P4: the launch steering below is float
 	}
 
 
-	Vector3 dir = getObject()->getTransformMatrix()->Get_X_Vector();
+	const FixMatrix3D *xform = getObject()->getTransformMatrixFix();
+	Vector3 dir( fixToReal( xform->m[ 0 ][ 0 ] ), fixToReal( xform->m[ 1 ][ 0 ] ), fixToReal( xform->m[ 2 ][ 0 ] ) );
 	dir.Normalize();
 	// A target above us gets a loft of twice its slope. The launch direction already carries a
 	// pitched turret's aim, though, and the loft went on top of it: a Dragon Tank flaming a bunker
@@ -270,11 +278,16 @@ void MissileAIUpdate::projectileFireAtObjectOrPosition( const Object *victim, co
 		physics->applyMotiveForce( &force );
 	}
 
-	Vector3 objPos(obj->getPosition()->x, obj->getPosition()->y, obj->getPosition()->z);
-
+	// P4: the launch rotation is built in float and enters the fixed transform here; the
+	// position does not leave fixed point at all
 	Matrix3D newXform;
-	newXform.buildTransformMatrix( objPos, dir );
-	obj->setTransformMatrix( &newXform );
+	newXform.buildTransformMatrix( Vector3( 0, 0, 0 ), dir );
+	FixMatrix3D fxXform;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 3; ++j )
+			fxXform.m[ i ][ j ] = fixFromReal( newXform[ i ][ j ] );
+	fxXform.setTranslation( *obj->getPositionFix() );
+	obj->setTransformMatrixFix( &fxXform );
 
 	switchToState(LAUNCH);
 	m_isTrackingTarget = false;
@@ -282,11 +295,11 @@ void MissileAIUpdate::projectileFireAtObjectOrPosition( const Object *victim, co
 	// instead of Attacking the target.
 	if (victim && d->m_tryToFollowTarget)
 	{
-		getStateMachine()->setGoalPosition(victim->getPosition());
+		m_originalTargetPos = victim->getPositionFix()->toCoord3D(); // P5: goals are float
+		getStateMachine()->setGoalPosition(&m_originalTargetPos);
 		// ick. const-cast is evil. fix. (srj)
  		aiMoveToObject(const_cast<Object*>(victim), CMD_FROM_AI );
-		m_originalTargetPos = *victim->getPosition();
-		m_isTrackingTarget = TRUE;// Remember that I was originally shot at a moving object, so if the 
+		m_isTrackingTarget = TRUE;// Remember that I was originally shot at a moving object, so if the
 		// target dies I can do something cool.
 		m_victimID = victim->getID();
 	}
@@ -303,7 +316,7 @@ void MissileAIUpdate::projectileFireAtObjectOrPosition( const Object *victim, co
 	}
 
   setCurrentVictim( victim );/// extending access to the victim via the parent class
-	m_prevPos = *getObject()->getPosition();
+	m_prevPos = getObject()->getPositionFix()->toCoord3D();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -320,7 +333,7 @@ Bool MissileAIUpdate::projectileHandleCollision( Object *other )
 	if (other==NULL) {
 		// we hit the ground.  Check to see if we hit something unexpected.
 		Coord3D goal = *getGoalPosition();
-		Coord3D pos = *obj->getPosition();
+		Coord3D pos = obj->getPositionFix()->toCoord3D(); // P5: the goal is float
 		Coord3D delta;
 		delta.x = pos.x-goal.x;
 		delta.y = pos.y-goal.y;
@@ -405,7 +418,8 @@ void MissileAIUpdate::detonate()
 	if (m_detonationWeaponTmpl)
 	{
 		
-		TheWeaponStore->handleProjectileDetonation(m_detonationWeaponTmpl, obj, obj->getPosition(), m_extraBonusFlags, !m_noDamage );
+		Coord3D detonationPos = obj->getPositionFix()->toCoord3D(); // P6
+		TheWeaponStore->handleProjectileDetonation(m_detonationWeaponTmpl, obj, &detonationPos, m_extraBonusFlags, !m_noDamage );
 	
 		if( m_detonationWeaponTmpl->getDieOnDetonate() )
 		{
@@ -544,17 +558,18 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 
 	if (d->m_lockDistance > 0)
 	{
-		Real lockDistanceSquared = d->m_lockDistance;
-		Real distanceToTargetSquared;
+		Fix lockDistanceSquared = fixFromReal( d->m_lockDistance ); // P3
+		Fix distanceToTargetSquared;
 		if (m_isTrackingTarget && (getGoalObject() != NULL)) {
-			distanceToTargetSquared = ThePartitionManager->getDistanceSquared( getObject(), getGoalObject(), FROM_CENTER_2D);
+			distanceToTargetSquared = ThePartitionManager->getDistanceSquaredFix( getObject(), getGoalObject(), FROM_CENTER_2D);
 		}	else {
-			distanceToTargetSquared = ThePartitionManager->getDistanceSquared( getObject(), getGoalPosition(), FROM_CENTER_2D );
+			FCoord3D goalPos = toFCoord3D( getGoalPosition() );
+			distanceToTargetSquared = ThePartitionManager->getDistanceSquaredFix( getObject(), &goalPos, FROM_CENTER_2D );
 		}
-		if (lockDistanceSquared>0) {
+		if (lockDistanceSquared > Fix( 0 )) {
 			if (!m_isTrackingTarget) {
 				// Immobile or ground target.  Halve the lock distance.
-				lockDistanceSquared *= 0.5f;
+				lockDistanceSquared /= Fix( 2 );
 			}
 			lockDistanceSquared *= lockDistanceSquared;
 			if (distanceToTargetSquared < lockDistanceSquared) {
@@ -616,16 +631,15 @@ void MissileAIUpdate::doKillState(void)
 		// we finished the move
 		if (getGoalObject()!=NULL) {
 			Locomotor* curLoco = getCurLocomotor();
-			Real closeEnough = 1.0f;
+			Fix closeEnough = Fix( 1 );
 			if (curLoco)
 			{
-				closeEnough = curLoco->getMaxSpeedForCondition(BODY_PRISTINE);
+				closeEnough = fixFromReal( curLoco->getMaxSpeedForCondition(BODY_PRISTINE) ); // P4
 			}
-			Real distanceToTargetSq = ThePartitionManager->getDistanceSquared( getObject(), getGoalObject(), FROM_BOUNDINGSPHERE_3D);
-			//DEBUG_LOG(("Distance to target %f, closeEnough %f\n", sqrt(distanceToTargetSq), closeEnough));
+			Fix distanceToTargetSq = ThePartitionManager->getDistanceSquaredFix( getObject(), getGoalObject(), FROM_BOUNDINGSPHERE_3D);
 			if (distanceToTargetSq < closeEnough*closeEnough) {
-				Coord3D pos = *getGoalObject()->getPosition();
-				getObject()->setPosition(&pos);
+				FCoord3D pos = *getGoalObject()->getPositionFix();
+				getObject()->setPositionFix(&pos);
 				detonate();
 			}	else{
 				aiMoveToObject(getGoalObject(), CMD_FROM_AI );
@@ -657,12 +671,14 @@ void MissileAIUpdate::doDeadState()
  */
 UpdateSleepTime MissileAIUpdate::update()
 {
-	Coord3D newPos = *getObject()->getPosition();
+	FCoord3D newPos = *getObject()->getPositionFix();
 	if (m_noTurnDistLeft > 0.0f && m_state >= IGNITION)
 	{
-		Real distThisTurn = sqrtf(sqr(newPos.x-m_prevPos.x) + sqr(newPos.y-m_prevPos.y) + sqr(newPos.z-m_prevPos.z));
-		m_noTurnDistLeft -= distThisTurn;
-		m_prevPos = newPos;
+		// m_prevPos and m_noTurnDistLeft are saved as float
+		FCoord3D moved = newPos;
+		moved.sub( toFCoord3D( &m_prevPos ) );
+		m_noTurnDistLeft -= fixToReal( moved.length() );
+		m_prevPos = newPos.toCoord3D();
 	}
 
 	//If this missile has been marked to divert to countermeasures, check when
@@ -679,10 +695,10 @@ UpdateSleepTime MissileAIUpdate::update()
 			if( targetID != INVALID_ID )
 			{
 				victim = TheGameLogic->findObjectByID( targetID );
-				getStateMachine()->setGoalPosition(victim->getPosition());
+				m_originalTargetPos = victim->getPositionFix()->toCoord3D(); // P5: goals are float
+				getStateMachine()->setGoalPosition(&m_originalTargetPos);
 				// ick. const-cast is evil. fix. (srj)
  				aiMoveToObject(const_cast<Object*>(victim), CMD_FROM_AI );
-				m_originalTargetPos = *victim->getPosition();
 				m_isTrackingTarget = TRUE;// Remember that I was originally shot at a moving object, so if the 
 				// target dies I can do something cool.
 				m_victimID = victim->getID();
@@ -690,7 +706,7 @@ UpdateSleepTime MissileAIUpdate::update()
 		}
 	}
 
-	if (newPos.z < 0) 
+	if (newPos.z < Fix( 0 ))
 	{	 
 		// we ended up under the world.  go away.
 		TheGameLogic->destroyObject(getObject());
@@ -748,21 +764,22 @@ UpdateSleepTime MissileAIUpdate::update()
 	// note that we want to use getHighestLayerForDestination() here, so that anything even slightly
 	// below the bridge translates into GROUND. (getLayerForDestination just does a "closest" check)
 	PathfindLayerEnum oldLayer = getObject()->getLayer();
-	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(getObject()->getPosition());
+	FCoord3D here = *getObject()->getPositionFix();
+	Coord3D tmp = here.toCoord3D(); // P5: the layer queries are float
+	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
 	getObject()->setLayer(newLayer);
 
 	if (projectileIsArmed() && oldLayer != LAYER_GROUND && newLayer == LAYER_GROUND)
 	{
 		// see if we' still in the bridge's xy area
-		Coord3D tmp = *getObject()->getPosition();
 		tmp.z = 9999.0f;
 		PathfindLayerEnum testLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
 		if (testLayer == oldLayer)
 		{
 			// ensure we are slightly above the bridge, to account for fudge & sloppy art
-			const Real FUDGE = 2.0f;
-			tmp.z = TheTerrainLogic->getLayerHeight(tmp.x, tmp.y, testLayer) + FUDGE;
-			getObject()->setPosition(&tmp);
+			const Fix FUDGE = 2_fx;
+			here.z = TheTerrainLogic->getLayerHeightFix(here.x, here.y, testLayer) + FUDGE;
+			getObject()->setPositionFix(&here);
 			// blow'd up!
 			detonate();
 			return UPDATE_SLEEP_NONE;
@@ -815,16 +832,16 @@ void MissileAIUpdate::projectileNowJammed()
 
 	Coord3D targetPosition;
 	if( m_isTrackingTarget && getGoalObject() )
-		targetPosition = *getGoalObject()->getPosition();
+		targetPosition = getGoalObject()->getPositionFix()->toCoord3D(); // P5: goals are float
 	else
 		targetPosition = *getGoalPosition();
 
 	Real scatter = data->m_distanceScatterWhenJammed;
 	targetPosition.x += GameLogicRandomValue(-scatter, scatter);
 	targetPosition.y += GameLogicRandomValue(-scatter, scatter);
-	targetPosition.z = TheTerrainLogic->getLayerHeight(	targetPosition.x, 
-																											targetPosition.y, 
-																											TheTerrainLogic->getHighestLayerForDestination(&targetPosition) );
+	PathfindLayerEnum targetLayer = TheTerrainLogic->getHighestLayerForDestination(&targetPosition);
+	FCoord3D fxTarget = toFCoord3D( &targetPosition );
+	targetPosition.z = fixToReal( TheTerrainLogic->getLayerHeightFix( fxTarget.x, fxTarget.y, targetLayer ) );
 
 	getStateMachine()->setGoalObject(NULL);
 	// Projectiles are expressly forbidden from getting AIIdle.  Who am I to argue.

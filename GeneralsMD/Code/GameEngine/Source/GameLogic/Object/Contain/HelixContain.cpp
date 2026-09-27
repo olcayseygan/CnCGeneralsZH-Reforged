@@ -126,8 +126,8 @@ UpdateSleepTime HelixContain::update()
   Object *portable = getPortableStructure();
   if ( portable )
   {
-    portable->setPosition( getObject()->getPosition());
-    portable->setOrientation( getObject()->getOrientation());
+    portable->setPositionFix( getObject()->getPositionFix());
+    portable->setOrientationFix( getObject()->getOrientationFix());
   }
 
   return TransportContain::update(); // extend base
@@ -136,15 +136,15 @@ UpdateSleepTime HelixContain::update()
 
 void HelixContain::redeployOccupants( void )
 {
-  Coord3D firePos = *getObject()->getPosition();
-  firePos.z += 8;
-  
+  FCoord3D firePos = *getObject()->getPositionFix();
+  firePos.z += Fix( 8 );
+
 
 	for (ContainedItemsList::iterator it = m_containList.begin(); it != m_containList.end(); ++it)
   {
     Object* rider = *it;
     if (rider)
-      rider->setPosition( &firePos );
+      rider->setPositionFix( &firePos );
   }
 }
 

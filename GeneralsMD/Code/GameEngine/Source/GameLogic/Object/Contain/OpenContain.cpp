@@ -41,6 +41,7 @@
 #include "Common/RandomValue.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
@@ -62,6 +63,14 @@
 //#pragma optimize("", off)
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
+
+// the exit bones and the shared float signatures enter the fixed point transform here
+static FCoord3D fcoordFromCoord3D( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
@@ -619,7 +628,8 @@ void OpenContain::iterateContained( ContainIterateFunc func, void *userData, Boo
 Object* OpenContain::getClosestRider( const Coord3D *pos )
 {
 	Object *closest = NULL;
-	Real closestDistance = 0.0f;
+	Fix closestDistance = Fix( 0 );
+	FCoord3D fxPos = fcoordFromCoord3D( *pos );
 
 	for(ContainedItemsList::const_iterator it = m_containList.begin(); it != m_containList.end(); ++it)
 	{
@@ -627,7 +637,7 @@ Object* OpenContain::getClosestRider( const Coord3D *pos )
 
     if (rider)
     {
-      Real distance = ThePartitionManager->getDistanceSquared( rider, pos, FROM_CENTER_2D );
+      Fix distance = ThePartitionManager->getDistanceSquaredFix( rider, &fxPos, FROM_CENTER_2D );
 	    if( !closest || closestDistance > distance ) 
 	    {
 		    closest = rider;
@@ -702,7 +712,7 @@ void OpenContain::removeFromContainViaIterator( ContainedItemsList::iterator it,
 	if (isEnclosingContainerFor( rider ))
 	{
 		addOrRemoveObjFromWorld(rider, true);
-  	rider->setPosition( getObject()->getPosition() );
+  	rider->setPositionFix( getObject()->getPositionFix() );
         // if we are not enclosed, then just walk away from where we "are."
 
 	}
@@ -741,40 +751,42 @@ void OpenContain::scatterToNearbyPosition(Object* rider)
 	// NOPE, can't do that ... all players screen angles will be different, unless
 	// we maintain the angle of each players screen in the player structure or something
 	//
-	Real angle = GameLogicRandomValueReal( 0.0f, 2.0f * PI );
+	// the random draws stay float, there is no fixed point random yet  // P8
+	Fix angle = fixFromReal( GameLogicRandomValueReal( 0.0f, 2.0f * PI ) );
 //	angle = TheTacticalView->getAngle();
 //	angle -= GameLogicRandomValueReal( PI / 3.0f, 2.0f * (PI / 3.0F) );
 
-	Real minRadius = theContainer->getGeometryInfo().getBoundingCircleRadius();
+	Real minRadius = fixToReal( theContainer->getGeometryInfo().getBoundingCircleRadiusFix() );
 	Real maxRadius = minRadius + minRadius / 2.0f;
-	const Coord3D *containerPos = theContainer->getPosition();
-	Real dist = GameLogicRandomValueReal( minRadius, maxRadius );
+	const FCoord3D *containerPos = theContainer->getPositionFix();
+	Fix dist = fixFromReal( GameLogicRandomValueReal( minRadius, maxRadius ) );
 
-	Coord3D pos;
-	pos.x = dist * Cos( angle ) + containerPos->x;
-	pos.y = dist * Sin( angle ) + containerPos->y;
-	pos.z = TheTerrainLogic->getLayerHeight( pos.x, pos.y, theContainer->getLayer() );
+	FCoord3D pos;
+	pos.x = dist * fixCos( angle ) + containerPos->x;
+	pos.y = dist * fixSin( angle ) + containerPos->y;
+	pos.z = TheTerrainLogic->getLayerHeightFix( pos.x, pos.y, theContainer->getLayer() );
 
 	// set orientation
-	rider->setOrientation( angle );
+	rider->setOrientationFix( angle );
 
 	AIUpdateInterface *ai = rider->getAI();
 	if( ai )
 	{
 		// set position of the object at center of building and move them toward pos
-		rider->setPosition( theContainer->getPosition() );
+		rider->setPositionFix( containerPos );
 		ai->ignoreObstacle(theContainer);
 		// TheSuperHackers @bugfix Drop the goal object first. An attacker scattering out of a
 		// garrison kept the victim as its goal and pathed straight back toward it.
 		ai->friend_setGoalObject( NULL );
-		ai->aiMoveToPosition( &pos, CMD_FROM_AI );
+		Coord3D goal = pos.toCoord3D();	// P4: the AI move calls are float
+		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 
 	}  // end if
 	else
 	{
 
 		// no ai, just set position at the target pos
-		rider->setPosition( &pos );
+		rider->setPositionFix( &pos );
 
 	}  // end else
 }
@@ -1042,7 +1054,7 @@ void OpenContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor )
 		me->getSingleLogicalBonePosition( endBone.str(), &endPosition, NULL );
 
 		//startPosition.x = startPosition.y = 0;
-		Real exitAngle = me->getOrientation();
+		Fix exitAngle = me->getOrientationFix();
 		PhysicsBehavior *physics = exitObj->getPhysics();
 		// Can fall problem - When units exit from planes, they are airborne for a while as they drop.
 		// Airborne units dont' do pathfinding, and this is fine.
@@ -1057,8 +1069,9 @@ void OpenContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor )
 		{
 			canFall = physics->getAllowToFall();
 		}
-		exitObj->setPosition( &startPosition );
-		exitObj->setOrientation( exitAngle );
+		FCoord3D fxStart = fcoordFromCoord3D( startPosition );
+		exitObj->setPositionFix( &fxStart );
+		exitObj->setOrientationFix( exitAngle );
 		
 		// Per JohnA: We need to set our layer to match our transports layer, or we'll try to pick a spot
 		// on the ground.
@@ -1072,8 +1085,9 @@ void OpenContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor )
 		{
 			if (myAi && myAi->isIdle() && me->isKindOf(KINDOF_VEHICLE)) {
 				TheAI->pathfinder()->removeUnitFromPathfindMap(me);
-				TheAI->pathfinder()->updatePos(me, me->getPosition());
-				TheAI->pathfinder()->updateGoal(me, me->getPosition(), TheTerrainLogic->getLayerForDestination(me->getPosition()));
+				Coord3D myPos = me->getPositionFix()->toCoord3D();	// P5: the pathfinder is float
+				TheAI->pathfinder()->updatePos(me, &myPos);
+				TheAI->pathfinder()->updateGoal(me, &myPos, TheTerrainLogic->getLayerForDestination(&myPos));
 			}
 			ai->ignoreObstacle(NULL);
 			// The units often come out at the same position, and need to ignore collisions briefly
@@ -1161,9 +1175,10 @@ void OpenContain::exitObjectInAHurry( Object *exitObj )
 		me->getSingleLogicalBonePosition( endBone.str(), &endPosition, NULL );
 
 		//startPosition.x = startPosition.y = 0;
-		Real exitAngle = me->getOrientation();
-		exitObj->setPosition( &startPosition );
-		exitObj->setOrientation( exitAngle );
+		Fix exitAngle = me->getOrientationFix();
+		FCoord3D fxStart = fcoordFromCoord3D( startPosition );
+		exitObj->setPositionFix( &fxStart );
+		exitObj->setOrientationFix( exitAngle );
 		
 		// Per JohnA: We need to set our layer to match our transports layer, or we'll try to pick a spot
 		// on the ground.
@@ -1177,8 +1192,9 @@ void OpenContain::exitObjectInAHurry( Object *exitObj )
 		{
 			if (myAi && myAi->isIdle() && me->isKindOf(KINDOF_VEHICLE)) {
 				TheAI->pathfinder()->removeUnitFromPathfindMap(me);
-				TheAI->pathfinder()->updatePos(me, me->getPosition());
-				TheAI->pathfinder()->updateGoal(me, me->getPosition(), TheTerrainLogic->getLayerForDestination(me->getPosition()));
+				Coord3D myPos = me->getPositionFix()->toCoord3D();	// P5: the pathfinder is float
+				TheAI->pathfinder()->updatePos(me, &myPos);
+				TheAI->pathfinder()->updateGoal(me, &myPos, TheTerrainLogic->getLayerForDestination(&myPos));
 			}
 			ai->ignoreObstacle(NULL);
 			// The units often come out at the same position, and need to ignore collisions briefly
@@ -1317,9 +1333,7 @@ void OpenContain::putObjAtNextFirePoint( Object *obj )
 	//
 	if( m_noFirePointsInArt == TRUE )
 	{
-		const Coord3D *pos = getObject()->getPosition();
-
-		obj->setPosition( pos );
+		obj->setPositionFix( getObject()->getPositionFix() );
 		return;
 
 	}  // end if
@@ -1345,15 +1359,20 @@ void OpenContain::putObjAtNextFirePoint( Object *obj )
 		matrix = m_firePoints[ m_firePointNext ];
 	}
 
-	Vector3 vectorPos = matrix.Get_Translation();
-	Coord3D pos;
-	pos.set( vectorPos.X, vectorPos.Y, vectorPos.Z );
+	// the fire points are bone transforms, float, and enter logic here
+	FixMatrix3D fxMatrix;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			fxMatrix.m[ i ][ j ] = fixFromReal( matrix[ i ][ j ] );
 
 	// set the object position
 	if( isEnclosingContainerFor( obj ) )
-		obj->setPosition( &pos );
+	{
+		FCoord3D pos = fxMatrix.getTranslation();
+		obj->setPositionFix( &pos );
+	}
 	else
-		obj->setTransformMatrix( &matrix );//Only do everything if it matters
+		obj->setTransformMatrixFix( &fxMatrix );//Only do everything if it matters
 
 	// increment the next firepoint to use ... make sure to wrap if we need to
 	m_firePointNext++;
@@ -1637,7 +1656,7 @@ Bool OpenContain::getNaturalRallyPoint( Coord3D& rallyPoint, Bool offset )  cons
 	}
 	else
 	{
-		rallyPoint = *getObject()->getPosition();
+		rallyPoint = getObject()->getPositionFix()->toCoord3D();
 	}
 	return TRUE;
 }

@@ -49,6 +49,27 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/WeaponSet.h"
+#include "Lib/FixBoundary.h"
+
+// the target and the xfer'd direction stay float until their owners move; they enter here
+static FCoord3D toFCoord3D( const Coord3D *c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
+	return f;
+}
+
+// the object's forward axis, normalized, as Object::getUnitDirectionVector3D computes it
+static FCoord3D unitDirection3D( const Object *obj )
+{
+	const FixMatrix3D *mx = obj->getTransformMatrixFix();
+	FCoord3D v;
+	v.set( mx->m[ 0 ][ 0 ], mx->m[ 1 ][ 0 ], mx->m[ 2 ][ 0 ] );
+	Fix len = v.length();
+	if( len > Fix( 0 ) )
+		v.set( v.x / len, v.y / len, v.z / len );
+	return v;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -182,8 +203,9 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 		if( m_diveState == DIVESTATE_PREDIVE )
 		{
 			//Check to see if we are close enough to start diving.
-			Real startDiveDistanceSquared = sqr( getData()->m_diveStartDistance );
-			Real currentDistanceSquared  = ThePartitionManager->getDistanceSquared( getObject(), getTargetPos(), FROM_CENTER_2D );
+			Fix startDiveDistanceSquared = sqr( fixFromReal( getData()->m_diveStartDistance ) ); // P3
+			FCoord3D target = toFCoord3D( getTargetPos() );
+			Fix currentDistanceSquared  = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_2D );
 			if( currentDistanceSquared <= startDiveDistanceSquared )
 			{
 				m_diveState = DIVESTATE_DIVING;
@@ -192,7 +214,8 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 				AudioEventRTS soundDive = *(getObject()->getTemplate()->getPerUnitSound("StartDive"));
 				if( soundDive.getEventName().isNotEmpty() ) 
 				{
-					soundDive.setPosition( getObject()->getPosition() );
+					Coord3D pos = getObject()->getPositionFix()->toCoord3D(); // audio is client
+					soundDive.setPosition( &pos );
 					TheAudio->addAudioEvent( &soundDive );
 				}
 			}
@@ -200,9 +223,10 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 		else 
 		{
 			//Check to see when we shall end diving
-			Real endDiveDistanceSquared = sqr( getData()->m_diveEndDistance );
-			Real currentDistanceSquared  = ThePartitionManager->getDistanceSquared( getObject(), getTargetPos(), FROM_CENTER_3D );
-			if( currentDistanceSquared <= endDiveDistanceSquared )
+			Fix endDiveDistance = fixFromReal( getData()->m_diveEndDistance ); // P3
+			FCoord3D target = toFCoord3D( getTargetPos() );
+			Fix currentDistanceSquared  = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_3D );
+			if( currentDistanceSquared <= sqr( endDiveDistance ) )
 			{
 				m_diveState = DIVESTATE_POSTDIVE;
 				getObject()->getAIUpdateInterface()->getCurLocomotor()->setUsePreciseZPos( false );
@@ -215,11 +239,10 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 				if( velocity->z < 5.0f )
 				{
 					//Calc strafe ratio
+					// the ratio scales a float velocity for the weapon (P6), so it stays float
 					Real startDiveDistance = getData()->m_diveStartDistance;
-					Real endDiveDistance = sqrt( endDiveDistanceSquared );
-					Real currentDistance = sqrt( currentDistanceSquared );
-
-					Real diveRatio = (startDiveDistance - currentDistance) / (startDiveDistance - endDiveDistance);
+					Real diveRatio = (startDiveDistance - fixToReal( fixSqrt( currentDistanceSquared ) ))
+						/ (startDiveDistance - fixToReal( endDiveDistance ));
 					
 					Coord3D velocity = *getObject()->getPhysics()->getVelocity();
 					velocity.z = 0.0f;
@@ -233,7 +256,7 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 					strafePoint.sub( &backwards );
 
 					strafePoint.add( &velocity );
-					strafePoint.z = TheTerrainLogic->getGroundHeight( strafePoint.x, strafePoint.y );
+					strafePoint.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( strafePoint.x ), fixFromReal( strafePoint.y ) ) ); // P6
 
 					// lock it just till the weapon is empty or the attack is "done"
 					getObject()->setWeaponLock( m_data.m_strafingWeaponSlot, LOCKED_TEMPORARILY );
@@ -375,13 +398,15 @@ Bool DeliverPayloadAIUpdate::isCloseEnoughToTarget()
 ////The new getPreOpenDistance() allows the deliver state to fire early, but only if inbound, 
 ////so the doors can open and payload can get ready...
 
-	Real allowedDistanceSqr = sqr( getAllowedDistanceToTarget() );
-	Real currentDistanceSqr = ThePartitionManager->getDistanceSquared( getObject(), getTargetPos(), FROM_CENTER_2D );
-	Bool inBound = m_previousDistanceSqr > currentDistanceSqr;
-	m_previousDistanceSqr = currentDistanceSqr;// for the next test
+	Fix allowedDistanceSqr = sqr( fixFromReal( getAllowedDistanceToTarget() ) ); // P3
+	FCoord3D target = toFCoord3D( getTargetPos() );
+	Fix currentDistanceSqr = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_2D );
+	// m_previousDistanceSqr is xfer'd and stays float: compare and store on that side
+	Bool inBound = m_previousDistanceSqr > fixToReal( currentDistanceSqr );
+	m_previousDistanceSqr = fixToReal( currentDistanceSqr );// for the next test
 
 	if ( inBound )
-		allowedDistanceSqr = sqr(getAllowedDistanceToTarget() + getPreOpenDistance());
+		allowedDistanceSqr = sqr( fixFromReal( getAllowedDistanceToTarget() + getPreOpenDistance() ) ); // P3
 
 	//DEBUG_LOG(("Dist to target is %f (allowed %f)\n",sqrt(currentDistanceSqr),sqrt(allowedDistanceSqr)));
 
@@ -399,7 +424,8 @@ Bool DeliverPayloadAIUpdate::isOffMap() const
 	Region3D mapRegion;
 	TheTerrainLogic->getExtentIncludingBorder( &mapRegion );
 
-	if (!mapRegion.isInRegionNoZ( getObject()->getPosition() ))
+	Coord3D pos = getObject()->getPositionFix()->toCoord3D(); // the map extent is float
+	if (!mapRegion.isInRegionNoZ( &pos ))
 		return true;
 
 	return false;
@@ -740,19 +766,18 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 			{
 				itemAI->aiExit(NULL, CMD_FROM_AI);
 			}
-			Coord3D pos = *item->getPosition();
+			FCoord3D pos = *item->getPositionFix();
 
+			// variance and offset are INI data (P3)
 			if (ai->getDropVariance().x > 0)
-				pos.x += GameLogicRandomValueReal(-ai->getDropVariance().x, ai->getDropVariance().x);
+				pos.x += fixFromReal( GameLogicRandomValueReal(-ai->getDropVariance().x, ai->getDropVariance().x) );
 			if (ai->getDropVariance().y > 0)
-				pos.y += GameLogicRandomValueReal(-ai->getDropVariance().y, ai->getDropVariance().y);
+				pos.y += fixFromReal( GameLogicRandomValueReal(-ai->getDropVariance().y, ai->getDropVariance().y) );
 			if (ai->getDropVariance().z > 0)
-				pos.z += GameLogicRandomValueReal(-ai->getDropVariance().z, ai->getDropVariance().z);
+				pos.z += fixFromReal( GameLogicRandomValueReal(-ai->getDropVariance().z, ai->getDropVariance().z) );
 
-			pos.x += ai->getDropOffset().x;
-			pos.y += ai->getDropOffset().y;
-			pos.z += ai->getDropOffset().z;
-			item->setPosition(&pos);
+			pos.add( toFCoord3D( &ai->getDropOffset() ) );
+			item->setPositionFix(&pos);
 
 			ContainModuleInterface *contain = item->getContain();
 			if( ai->getData()->m_isParachuteDirectly  &&  contain )
@@ -829,18 +854,19 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 							if( draw->getPristineBonePositions( ai->getData()->m_visibleDropBoneName.str(), ai->getVisibleItemsDelivered() + 1, &pos, NULL, 1 ) > 0 )
 							{
 								draw->convertBonePosToWorldPos( &pos, NULL, &pos, NULL );
-								payload->setPosition( &pos );
+								FCoord3D fpos = toFCoord3D( &pos ); // bone data is float
+								payload->setPositionFix( &fpos );
 							}
 							else
 							{
-								payload->setPosition( owner->getPosition() );
+								payload->setPositionFix( owner->getPositionFix() );
 							}
 						}
 						else
 						{
-							payload->setPosition( owner->getPosition() );
+							payload->setPositionFix( owner->getPositionFix() );
 						}
-						payload->setOrientation( owner->getOrientation() );
+						payload->setOrientationFix( owner->getOrientationFix() );
 
 						//If we want the payload to inherit the transport's velocity, do so now.
 						if( ai->getData()->m_inheritTransportVelocity )
@@ -849,10 +875,9 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 							startingForce.scale( payload->getPhysics()->getMass() );
 							payload->getPhysics()->applyMotiveForce( &startingForce );
 
-							Coord3D backPosition = *owner->getPhysics()->getVelocity();
-							backPosition.scale( -1.0f );
-							backPosition.add( payload->getPosition() );
-							payload->setPosition( &backPosition );
+							FCoord3D backPosition = *payload->getPositionFix();
+							backPosition.sub( toFCoord3D( owner->getPhysics()->getVelocity() ) ); // P4
+							payload->setPositionFix( &backPosition );
 						}
 
 						//Are we firing a missile?
@@ -991,13 +1016,15 @@ StateReturnType ConsiderNewApproachState::onEnter() // Increment local counter o
 	const Real DIST_FUDGE = 2.2f;
 	Real minReApproachDist = minTurnRadius * DIST_FUDGE;
 
-	const Coord3D* dir = owner->getUnitDirectionVector2D();
+	const FCoord3D* dir = owner->getUnitDirectionVector2DFix();
+	const FCoord3D* pos = owner->getPositionFix();
+	Fix reApproachDist = fixFromReal( minReApproachDist ); // P4
 
-	Coord3D reApproachPoint;
-	reApproachPoint.x = owner->getPosition()->x + dir->x * minReApproachDist;
-	reApproachPoint.y = owner->getPosition()->y + dir->y * minReApproachDist;
-	reApproachPoint.z = 0.0f;	// yeah, yeah, should be terrainpos, but doesn't really matter here...
+	FCoord3D reApproachFix;
+	// z: yeah, yeah, should be terrainpos, but doesn't really matter here...
+	reApproachFix.set( pos->x + dir->x * reApproachDist, pos->y + dir->y * reApproachDist, Fix( 0 ) );
 
+	Coord3D reApproachPoint = reApproachFix.toCoord3D(); // P4
 	ai->aiMoveToPosition( &reApproachPoint, CMD_FROM_AI );
 
 	// we allow these guys to go to invalid (ie, off-map) positions
@@ -1082,7 +1109,8 @@ StateReturnType RecoverFromOffMapState::onEnter() // Increment local counter o' 
 	}
 
   // have him hold in place, if possible.
-	ai->aiMoveToPosition( owner->getPosition(), CMD_FROM_AI );
+	Coord3D holdPos = owner->getPositionFix()->toCoord3D(); // P4
+	ai->aiMoveToPosition( &holdPos, CMD_FROM_AI );
 
   // a little cheesy... make a delay based on turn-radius time to simulate offscreen
   // maneuvering.
@@ -1118,13 +1146,15 @@ StateReturnType RecoverFromOffMapState::update() // Success if we should try aga
 	if( owner->getDrawable() )
 		owner->getDrawable()->setDrawableHidden( false );
 
-	Coord3D enterCoord = TheTerrainLogic->findClosestEdgePoint( owner->getPosition() );
+	Coord3D edge = owner->getPositionFix()->toCoord3D(); // the edge query is float
+	edge = TheTerrainLogic->findClosestEdgePoint( &edge );
+	FCoord3D enterCoord = toFCoord3D( &edge );
 	if (owner->isAboveTerrain())
-		enterCoord.z = owner->getPosition()->z;
-	owner->setPosition(&enterCoord);
+		enterCoord.z = owner->getPositionFix()->z;
+	owner->setPositionFix(&enterCoord);
 
-	Real enterAngle = ATan2(ai->getMoveToPos()->y - enterCoord.y, ai->getMoveToPos()->x - enterCoord.x);
-	owner->setOrientation(enterAngle);
+	FCoord3D moveTo = toFCoord3D( ai->getMoveToPos() );
+	owner->setOrientationFix( fixAtan2( moveTo.y - enterCoord.y, moveTo.x - enterCoord.x ) );
 
 	PhysicsBehavior* physics = owner->getPhysics();
 	physics->resetDynamicPhysics();
@@ -1157,19 +1187,22 @@ StateReturnType HeadOffMapState::onEnter() // Give move order out of town
 	//Coord3D exitCoord = TheTerrainLogic->findClosestEdgePoint( owner->getPosition() );
 
 	// just keep moving straight ahead till we exit the map.
-	Coord3D exitCoord = *owner->getPosition();
-	const Coord3D* dir = owner->getUnitDirectionVector2D();
+	FCoord3D exitFix = *owner->getPositionFix();
+	const FCoord3D* dir = owner->getUnitDirectionVector2DFix();
 
 	Region3D terrainExtent;
 	TheTerrainLogic->getExtent( &terrainExtent );
-	const Real FUDGE = 1.2f;
-	Real HUGE_DIST = FUDGE * sqrt(sqr(terrainExtent.hi.x - terrainExtent.lo.x) + sqr(terrainExtent.hi.y - terrainExtent.lo.y));
+	const Fix FUDGE = 1.2_fx;
+	Fix width = fixFromReal( terrainExtent.hi.x - terrainExtent.lo.x );	// the extent is float
+	Fix height = fixFromReal( terrainExtent.hi.y - terrainExtent.lo.y );
+	Fix HUGE_DIST = FUDGE * fixSqrt( sqr( width ) + sqr( height ) );
 
-	exitCoord.x += dir->x * HUGE_DIST;
-	exitCoord.y += dir->y * HUGE_DIST;
+	exitFix.x += dir->x * HUGE_DIST;
+	exitFix.y += dir->y * HUGE_DIST;
 
 	ai->getCurLocomotor()->setAllowInvalidPosition(true);
 	ai->getCurLocomotor()->setUltraAccurate(true);	// set ultra-accurate just so AI won't try to adjust our dest
+	Coord3D exitCoord = exitFix.toCoord3D(); // P4
 	ai->aiMoveToPosition( &exitCoord, CMD_FROM_AI );
 
 		// once we get into head-off-map state, we're done... don't respond to anything else.
@@ -1183,7 +1216,7 @@ StateReturnType HeadOffMapState::onEnter() // Give move order out of town
 	ai->friend_setAcceptingCommands(false);
 
 
-  owner->getUnitDirectionVector3D( facingDirectionUponDelivery );
+  facingDirectionUponDelivery = unitDirection3D( owner ).toCoord3D();	// xfer'd, stays float
 
 	return STATE_CONTINUE;
 }
@@ -1205,13 +1238,13 @@ StateReturnType HeadOffMapState::update()
   //I blow up, rather than face eternally spinning on the point of a mineret or derrick or something awful.
   if ( owner->getPhysics()->getTurning() != 0 )
   {
-    Coord3D currentDirection;
-    owner->getUnitDirectionVector3D( currentDirection );
-  	Real dot = facingDirectionUponDelivery.x * currentDirection.x 
-             + facingDirectionUponDelivery.y * currentDirection.y 
-             + facingDirectionUponDelivery.z * currentDirection.z;
+    FCoord3D currentDirection = unitDirection3D( owner );
+    FCoord3D facing = toFCoord3D( &facingDirectionUponDelivery );
+  	Fix dot = facing.x * currentDirection.x
+            + facing.y * currentDirection.y
+            + facing.z * currentDirection.z;
 
-    if ( dot < 0.3f )
+    if ( dot < 0.3_fx )
       owner->kill();
   }
 

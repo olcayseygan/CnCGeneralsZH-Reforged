@@ -54,6 +54,7 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameClient/InGameUI.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -65,7 +66,15 @@
 class DozerPrimaryStateMachine;
 class DozerActionStateMachine;
 
-static const Real MIN_ACTION_TOLERANCE = 70.0f;
+static const Fix MIN_ACTION_TOLERANCE = 70_fx;
+
+// dock points and pathfinder results are still float (P5); this is where they come in
+static FCoord3D toFCoord3D( const Coord3D *c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
+	return f;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Is the builder near enough to a dock point to work from where it stands?  One place, because the
@@ -78,12 +87,13 @@ static Bool dozerHasArrivedAt( const Object *dozer, const Coord3D *goalPos )
 	if( dozer == NULL || goalPos == NULL )
 		return FALSE;
 
-	const Real SLOP = 15.0f;
-	Real distSqr = ThePartitionManager->getDistanceSquared( dozer, goalPos, FROM_BOUNDINGSPHERE_2D );
-	Real allowableDistanceSqr = sqr(max( MIN_ACTION_TOLERANCE,
-																			 dozer->getGeometryInfo().getBoundingSphereRadius() + SLOP ));
+	const Fix SLOP = 15_fx;
+	FCoord3D goal = toFCoord3D( goalPos );
+	Fix distSqr = ThePartitionManager->getDistanceSquaredFix( dozer, &goal, FROM_BOUNDINGSPHERE_2D );
+	Fix allowableDistance = fixMax( MIN_ACTION_TOLERANCE,
+																	dozer->getGeometryInfo().getBoundingSphereRadiusFix() + SLOP );
 
-	return distSqr <= allowableDistanceSqr;
+	return distSqr <= allowableDistance * allowableDistance;
 
 }  // end dozerHasArrivedAt
 
@@ -220,23 +230,27 @@ StateReturnType DozerActionPickActionPosState::update( void )
 		// find the vector from goal object to us ... we will start our search on this angle so
 		// that we "approach" a closer point rather than a point on a random side
 		//
+		FCoord3D delta = *dozer->getPositionFix();
+		delta.sub( *goalObject->getPositionFix() );
 		Coord2D v;
-		v.x = dozer->getPosition()->x - goalObject->getPosition()->x;
-		v.y = dozer->getPosition()->y - goalObject->getPosition()->y;
-	
-		Real radius = goalObject->getGeometryInfo().getBoundingSphereRadius();
+		v.x = fixToReal( delta.x );
+		v.y = fixToReal( delta.y );
+
+		// P5: FindPositionOptions and findPositionAround are float
+		Real radius = fixToReal( goalObject->getGeometryInfo().getBoundingSphereRadiusFix() );
 		FindPositionOptions fpOptions;
 		fpOptions.minRadius = radius;
 		fpOptions.maxRadius = radius;
 		fpOptions.startAngle = v.toAngle();
-		if( ThePartitionManager->findPositionAround( goalObject->getPosition(),
+		Coord3D goalObjectPos = goalObject->getPositionFix()->toCoord3D();
+		if( ThePartitionManager->findPositionAround( &goalObjectPos,
 																								 &fpOptions,
 																								 &goalPos ) == FALSE )
 		{
 
 			// return STATE_FAILURE; no, we don't ever want dozers to fail, particularly
 			// if ai.
-			goalPos = *goalObject->getPosition();
+			goalPos = goalObjectPos;
 
 		}  // end if	
 
@@ -659,7 +673,8 @@ StateReturnType DozerActionDoActionState::update( void )
 						TheAudio->addAudioEvent(&audio);
 
 						/// make radar neat-o attention grabber event at build location
-						TheRadar->createEvent( goalObject->getPosition(), RADAR_EVENT_CONSTRUCTION );
+						Coord3D radarPos = goalObject->getPositionFix()->toCoord3D();
+						TheRadar->createEvent( &radarPos, RADAR_EVENT_CONSTRUCTION );
 
 					}  // end if
 
@@ -668,7 +683,7 @@ StateReturnType DozerActionDoActionState::update( void )
 	
 					// move off to the end dock position if present
 					const Coord3D *endPos = dozerAI->getDockPoint( m_task, DOZER_DOCK_POINT_END );
-					Coord3D pos = *dozer->getPosition();
+					Coord3D pos = dozer->getPositionFix()->toCoord3D(); // P4
 					if( endPos ) {
 						pos = *endPos;
 					}
@@ -907,15 +922,15 @@ static Object *findObjectToRepair( Object *dozer )
 																				 KINDOFMASK_NONE );
 	PartitionFilterSameMapStatus filterMapStatus(dozer);
 	PartitionFilter *filters[] = { &filter1, &filter2, &filterMapStatus, NULL };
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( dozer->getPosition(),
-																																		 dozerAI->getBoredRange(),
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( dozer->getPositionFix(),
+																																		 fixFromReal( dozerAI->getBoredRange() ), // P3
 																																		 FROM_CENTER_2D,
 																																		 filters );
 
 	MemoryPoolObjectHolder hold( iter );
 	Object *obj;
 	Object *closestRepairTarget = NULL;
-	Real closestRepairTargetDistSqr = 0.0f;
+	Fix closestRepairTargetDistSqr = Fix( 0 );
 	for( obj = iter->first(); obj; obj = iter->next() )
 	{
 
@@ -928,14 +943,14 @@ static Object *findObjectToRepair( Object *dozer )
 		{
 
 			closestRepairTarget = obj;
-			closestRepairTargetDistSqr = ThePartitionManager->getDistanceSquared( dozer, obj, FROM_CENTER_2D );
+			closestRepairTargetDistSqr = ThePartitionManager->getDistanceSquaredFix( dozer, obj, FROM_CENTER_2D );
 
 		}  // end if
 		else
 		{
 
 			// only use this command center if it's closer than the last one we found
-			Real distSqr = ThePartitionManager->getDistanceSquared( dozer, obj, FROM_CENTER_2D );
+			Fix distSqr = ThePartitionManager->getDistanceSquaredFix( dozer, obj, FROM_CENTER_2D );
 			if( distSqr < closestRepairTargetDistSqr )
 			{
 				
@@ -972,7 +987,7 @@ static Object *findMine( Object *dozer )
 	PartitionFilterPossibleToAttack filterAttack(ATTACK_NEW_TARGET, dozer, CMD_FROM_DOZER);
 	PartitionFilterSameMapStatus filterMapStatus(dozer);
 	PartitionFilter *filters[] = { &filterTeam, &filterAttack, &filterMapStatus, NULL };
-	Object* mine = ThePartitionManager->getClosestObject(dozer, dozerAI->getBoredRange(), FROM_CENTER_2D, filters);
+	Object* mine = ThePartitionManager->getClosestObjectFix(dozer, fixFromReal( dozerAI->getBoredRange() ), FROM_CENTER_2D, filters); // P3
 
 	return mine;
 }  // end findMine
@@ -1006,11 +1021,9 @@ static Object *findUnfinishedStructureToContinue( Object *dozer )
 	PartitionFilterSameMapStatus filterMapStatus( dozer );
 	PartitionFilter *filters[] = { &filter1, &filter2, &filterMapStatus, NULL };
 	// "nearby" is the whole base, not the 15-cell bored range the repair scan uses
-	const Real UNFINISHED_SCAN_RANGE = 1500.0f;
-	Real range = dozerAI->getBoredRange();
-	if( range < UNFINISHED_SCAN_RANGE )
-		range = UNFINISHED_SCAN_RANGE;
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( dozer->getPosition(),
+	const Fix UNFINISHED_SCAN_RANGE = 1500_fx;
+	Fix range = fixMax( fixFromReal( dozerAI->getBoredRange() ), UNFINISHED_SCAN_RANGE ); // P3
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( dozer->getPositionFix(),
 																																		 range, FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 
@@ -1023,7 +1036,7 @@ static Object *findUnfinishedStructureToContinue( Object *dozer )
 	//
 	Object *queued = NULL;
 	Object *best = NULL;
-	Real bestDistSqr = 0.0f;
+	Fix bestDistSqr = Fix( 0 );
 	for( Object *obj = iter->first(); obj; obj = iter->next() )
 	{
 		if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) ||
@@ -1047,7 +1060,7 @@ static Object *findUnfinishedStructureToContinue( Object *dozer )
 				continue;
 		}
 
-		Real distSqr = ThePartitionManager->getDistanceSquared( dozer, obj, FROM_CENTER_2D );
+		Fix distSqr = ThePartitionManager->getDistanceSquaredFix( dozer, obj, FROM_CENTER_2D );
 		if( best == NULL || distSqr < bestDistSqr )
 		{
 			best = obj;
@@ -1845,14 +1858,15 @@ Object *DozerAIUpdate::construct( const ThingTemplate *what,
 	}  // end if	
 
 	// initialize object
-	obj->setPosition( pos );
-	obj->setOrientation( angle );
+	// P5: the placement comes in as float
+	FCoord3D adjustedPos = toFCoord3D( pos );
+	obj->setPositionFix( &adjustedPos );
+	obj->setOrientationFix( fixFromReal( angle ) );
 
 	// Flatten the terrain underneath the object, then adjust to the flattened height. jba.
 	TheTerrainLogic->flattenTerrain(obj);
-	Coord3D adjustedPos = *pos;
-	adjustedPos.z = TheTerrainLogic->getGroundHeight(pos->x, pos->y);
-	obj->setPosition(&adjustedPos);
+	adjustedPos.z = TheTerrainLogic->getGroundHeightFix( adjustedPos.x, adjustedPos.y );
+	obj->setPositionFix( &adjustedPos );
 	
 	//
 	// The footprint is not an obstacle yet: this is a plan standing at zero percent, and until the
@@ -2028,22 +2042,23 @@ void DozerAIUpdate::privateResumeConstruction( Object *obj, CommandSourceType cm
 /*static*/ Bool DozerAIUpdate::findGoodBuildOrRepairPosition(const Object* me, const Object* target, Coord3D& positionOut)
 {
 	// The place we go to build or repair is the closest spot from us to them
-	Coord3D ourPosition = *me->getPosition();
-	Coord3D theirPosition = *target->getPosition();
-	
-	Coord3D bestPosition = theirPosition;// This answer is the best, as it includes findPositionAround
-	Coord3D workingPosition = theirPosition;// But if findPositionAround fails, we need to say something.
-	
-	Vector3 offset( ourPosition.x - theirPosition.x, 
-									ourPosition.y - theirPosition.y, 
-									ourPosition.z - theirPosition.z );
-	offset.Normalize();
-	// This scaler makes FindPositionAround bias towards our side
-	offset = offset * (target->getGeometryInfo().getMajorRadius() / 2);
+	const FCoord3D *theirPosition = target->getPositionFix();
 
-	workingPosition.x += offset.X;
-	workingPosition.y += offset.Y;
-	workingPosition.z += offset.Z;
+	FCoord3D offset = *me->getPositionFix();
+	offset.sub( *theirPosition );
+	Fix length = offset.length();
+	if( length > Fix( 0 ) )
+	{
+		// This scaler makes FindPositionAround bias towards our side
+		Fix bias = target->getGeometryInfo().getMajorRadiusFix() / Fix( 2 );
+		offset.set( offset.x * bias / length, offset.y * bias / length, offset.z * bias / length );
+	}
+	FCoord3D working = *theirPosition;
+	working.add( offset );
+
+	// P5: findPositionAround is float
+	Coord3D bestPosition = theirPosition->toCoord3D();// This answer is the best, as it includes findPositionAround
+	Coord3D workingPosition = working.toCoord3D();// But if findPositionAround fails, we need to say something.
 
 	// this is a little cheesy... the idea is that we can only choose a location that is pretty close
 	// in z to the desired one. this prevents us from choosing a space at the bottom of a cliff when
@@ -2080,7 +2095,7 @@ void DozerAIUpdate::privateResumeConstruction( Object *obj, CommandSourceType cm
 			AIUpdateInterface* ai = me->getAI();
 
 			// have to repair at a tower.
-			Real bestDistSqr = 1e10f;
+			Fix bestDistSqr = FIX_MAX;
 			Object* bestTower = NULL;
 			for (Int i = 0; i < BRIDGE_MAX_TOWERS; ++i)
 			{
@@ -2093,7 +2108,9 @@ void DozerAIUpdate::privateResumeConstruction( Object *obj, CommandSourceType cm
 					// since towers are often in cliff cells.
 					if (found && ai->isPathAvailable(&tmp))
 					{
-						Real thisDistSqr = sqr(me->getPosition()->x - tmp.x) + sqr(me->getPosition()->y - tmp.y);
+						FCoord3D d = toFCoord3D( &tmp );
+						d.sub( *me->getPositionFix() );
+						Fix thisDistSqr = d.x * d.x + d.y * d.y;
 						if (thisDistSqr < bestDistSqr)
 						{
 							positionOut = tmp;
@@ -2163,7 +2180,8 @@ void DozerAIUpdate::newTask( DozerTask task, Object *target )
 		m_dockPoint[ task ][ DOZER_DOCK_POINT_ACTION ].valid		= TRUE;
 		m_dockPoint[ task ][ DOZER_DOCK_POINT_ACTION ].location = position;
 		Coord3D offset;
-		offset.set(position.x-target->getPosition()->x, position.y-target->getPosition()->y, 0);
+		Coord3D targetPos = target->getPositionFix()->toCoord3D(); // P5: dock points are float
+		offset.set(position.x-targetPos.x, position.y-targetPos.y, 0);
 		offset.normalize();
 		offset.scale(5*PATHFIND_CELL_SIZE_F);
 		position.add(&offset); // move away from the dock point at the end of build.

@@ -41,6 +41,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -242,7 +243,7 @@ UpdateSleepTime RebuildHoleBehavior::update( void )
 			{
 
 				// set the position of the worker to that of the hole
-				worker->setPosition( hole->getPosition() );
+				worker->setPositionFix( hole->getPositionFix() );
 
 				// save the ID of the worker spawned
 				m_workerID = worker->getID();
@@ -256,11 +257,14 @@ UpdateSleepTime RebuildHoleBehavior::update( void )
 				{
 
 					if( reconstructing == NULL )
-						reconstructing = ai->construct( m_rebuildTemplate, 
-																						hole->getPosition(), 
-																						hole->getOrientation(), 
+					{
+						Coord3D holePos = hole->getPositionFix()->toCoord3D(); // the AI takes float
+						reconstructing = ai->construct( m_rebuildTemplate,
+																						&holePos,
+																						fixToReal( hole->getOrientationFix() ),
 																						hole->getControllingPlayer(),
 																						TRUE );
+					}
 					else
 						ai->aiResumeConstruction( reconstructing, CMD_FROM_AI );
 					

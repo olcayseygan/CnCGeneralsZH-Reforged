@@ -45,6 +45,40 @@
 #include "GameLogic/Module/MissileAIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
+
+// the flight path is float until projectile flight moves (P6)
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
+/* Matrix3D::buildTransformMatrix in fixed point: the x axis along from->to, placed at pos, no roll.
+	 Yaw about z, then pitch about y, as the float one does it. */
+static void buildFlightMatrix( const FCoord3D &pos, const FCoord3D &from, const FCoord3D &to, FixMatrix3D &mtx )
+{
+	FCoord3D dir = to;
+	dir.sub( from );
+	Fix len = dir.length();
+	if( len != Fix( 0 ) )
+		dir.set( dir.x / len, dir.y / len, dir.z / len );
+
+	Fix cosp = fixSqrt( dir.x * dir.x + dir.y * dir.y );
+	Fix sinp = dir.z;
+	Fix siny = Fix( 0 ), cosy = Fix( 1 );
+	if( cosp != Fix( 0 ) )
+	{
+		siny = dir.y / cosp;
+		cosy = dir.x / cosp;
+	}
+
+	mtx.m[ 0 ][ 0 ] = cosy * cosp;	mtx.m[ 0 ][ 1 ] = -siny;		mtx.m[ 0 ][ 2 ] = -sinp * cosy;
+	mtx.m[ 1 ][ 0 ] = siny * cosp;	mtx.m[ 1 ][ 1 ] = cosy;			mtx.m[ 1 ][ 2 ] = -sinp * siny;
+	mtx.m[ 2 ][ 0 ] = sinp;					mtx.m[ 2 ][ 1 ] = Fix( 0 );	mtx.m[ 2 ][ 2 ] = cosp;
+	mtx.setTranslation( pos );
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -365,7 +399,7 @@ void DumbProjectileBehavior::projectileFireAtObjectOrPosition( const Object *vic
 	// if an object, aim at the center, not the ground part
 	Coord3D victimPosToUse;
 	if (victim)
-		victim->getGeometryInfo().getCenterPosition(*victim->getPosition(), victimPosToUse);
+		victim->getGeometryInfo().getCenterPosition(victim->getPositionFix()->toCoord3D(), victimPosToUse);
 	else
 		victimPosToUse = *victimPos;
 
@@ -374,7 +408,8 @@ void DumbProjectileBehavior::projectileFireAtObjectOrPosition( const Object *vic
 		// Some weapons want to scale their start speed to the range
 		Real minRange = detWeap->getMinimumAttackRange();
 		Real maxRange = detWeap->getUnmodifiedAttackRange();
-		Real range = sqrt(ThePartitionManager->getDistanceSquared( projectile, &victimPosToUse, FROM_CENTER_2D ) );
+		const FCoord3D fxVictimPos = toFix( victimPosToUse );
+		Real range = fixToReal( fixSqrt( ThePartitionManager->getDistanceSquaredFix( projectile, &fxVictimPos, FROM_CENTER_2D ) ) );	// P6
 		// guard the degenerate min==max range and clamp: a shot inside the minimum range gave a
 		// negative ratio and a speed below MinWeaponSpeed (possibly <= 0, which then made
 		// ceil(dist/speed) a negative or infinite segment count below).
@@ -396,7 +431,7 @@ void DumbProjectileBehavior::projectileFireAtObjectOrPosition( const Object *vic
 		physics->setRollRate( GameLogicRandomValueReal( -1.0f/PI, 1.0f/PI ) );
 	}
 
-	m_flightPathStart = *getObject()->getPosition();
+	m_flightPathStart = getObject()->getPositionFix()->toCoord3D();
 	m_flightPathEnd = victimPosToUse;
 	if (!calcFlightPath(true))
 	{
@@ -543,7 +578,8 @@ void DumbProjectileBehavior::detonate()
 	Object* obj = getObject();
 	if (m_detonationWeaponTmpl)
 	{
-		TheWeaponStore->handleProjectileDetonation(m_detonationWeaponTmpl, obj, obj->getPosition(), m_extraBonusFlags);
+		const Coord3D pos = obj->getPositionFix()->toCoord3D();	// P6: weapons are float
+		TheWeaponStore->handleProjectileDetonation(m_detonationWeaponTmpl, obj, &pos, m_extraBonusFlags);
 
 		if ( getDumbProjectileBehaviorModuleData()->m_detonateCallsKill )
 		{
@@ -609,7 +645,7 @@ UpdateSleepTime DumbProjectileBehavior::update()
 		if (victim)
 		{
 			Coord3D newVictimPos;
-			victim->getGeometryInfo().getCenterPosition(*victim->getPosition(), newVictimPos);
+			victim->getGeometryInfo().getCenterPosition(victim->getPositionFix()->toCoord3D(), newVictimPos);
 			Coord3D delta;
 			delta.x = newVictimPos.x - m_flightPathEnd.x;
 			delta.y = newVictimPos.y - m_flightPathEnd.y;
@@ -635,64 +671,54 @@ UpdateSleepTime DumbProjectileBehavior::update()
 	}
 
 	//Otherwise, continue to force the flight path
-	Coord3D flightStep = m_flightPath[m_currentFlightPathStep];
+	FCoord3D flightStep = toFix( m_flightPath[m_currentFlightPathStep] );
 
 	if (d->m_orientToFlightPath && (!d->m_tumbleRandomly) )
   {
     if ( m_currentFlightPathStep > 0)
 	  {
-	  // this seems reasonable; however, if this object has a PhysicsBehavior on it, this calc will be wrong, 
+	  // this seems reasonable; however, if this object has a PhysicsBehavior on it, this calc will be wrong,
 	  // since Physics is applying gravity, which we duly ignore, but the prevPos won't be what we expect.
 	  // get it from the flight path instead. (srj)
-	  //Coord3D prevPos = *getObject()->getPosition();
-
-		  Coord3D prevPos = m_flightPath[m_currentFlightPathStep - 1];
-
-		  Vector3 curDir(flightStep.x - prevPos.x, flightStep.y - prevPos.y, flightStep.z - prevPos.z);
-		  curDir.Normalize();	// buildTransformMatrix wants it this way
-      Matrix3D orientMtx;
-		  orientMtx.buildTransformMatrix(Vector3(flightStep.x, flightStep.y, flightStep.z), curDir);
-		  getObject()->setTransformMatrix(&orientMtx);
+      FixMatrix3D orientMtx;
+		  buildFlightMatrix( flightStep, toFix( m_flightPath[m_currentFlightPathStep - 1] ), flightStep, orientMtx );
+		  getObject()->setTransformMatrixFix(&orientMtx);
     }
     else if ( m_flightPath.size() >= 2 ) // oops! how do we orient the projectile on the zeroeth frame? This didn't matter until we started using the
       //long, blurry projectile graphics which look badly oriented on step 0 of the flight path
       // so lets orient it the same as if it were on frame 1!
       // (a point blank shot has a single path point, and this used to read m_flightPath[1] anyway)
     {
-		  Coord3D prevPos = m_flightPath[0];
-		  Coord3D curPos = m_flightPath[1];
-
-		  Vector3 curDir(curPos.x - prevPos.x, curPos.y - prevPos.y, curPos.z - prevPos.z);
-		  curDir.Normalize();	// buildTransformMatrix wants it this way
-      Matrix3D orientMtx;
-		  orientMtx.buildTransformMatrix(Vector3(flightStep.x, flightStep.y, flightStep.z), curDir);
-		  getObject()->setTransformMatrix(&orientMtx);
+      FixMatrix3D orientMtx;
+		  buildFlightMatrix( flightStep, toFix( m_flightPath[0] ), toFix( m_flightPath[1] ), orientMtx );
+		  getObject()->setTransformMatrixFix(&orientMtx);
     }
 
 	}
 	else
 	{
-		getObject()->setPosition(&flightStep);
+		getObject()->setPositionFix(&flightStep);
 	}
 
 	// note that we want to use getHighestLayerForDestination() here, so that anything even slightly
 	// below the bridge translates into GROUND. (getLayerForDestination just does a "closest" check)
+	// the layer lookups are still float (P5)
 	PathfindLayerEnum oldLayer = getObject()->getLayer();
-	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(getObject()->getPosition());
+	Coord3D tmp = getObject()->getPositionFix()->toCoord3D();
+	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
 	getObject()->setLayer(newLayer);
 
 	if (oldLayer != LAYER_GROUND && newLayer == LAYER_GROUND)
 	{
 		// see if we' still in the bridge's xy area
-		Coord3D tmp = *getObject()->getPosition();
 		tmp.z = 9999.0f;
 		PathfindLayerEnum testLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
 		if (testLayer == oldLayer)
 		{
 			// ensure we are slightly above the bridge, to account for fudge & sloppy art
-			const Real FUDGE = 2.0f;
-			tmp.z = TheTerrainLogic->getLayerHeight(tmp.x, tmp.y, testLayer) + FUDGE;
-			getObject()->setPosition(&tmp);
+			FCoord3D fxTmp = *getObject()->getPositionFix();
+			fxTmp.z = TheTerrainLogic->getLayerHeightFix(fxTmp.x, fxTmp.y, testLayer) + Fix( 2 );
+			getObject()->setPositionFix(&fxTmp);
 			// blow'd up!
 			detonate();
 			return UPDATE_SLEEP_NONE;

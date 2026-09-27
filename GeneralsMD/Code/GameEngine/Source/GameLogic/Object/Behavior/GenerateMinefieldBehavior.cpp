@@ -53,6 +53,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
 #include "GameClient/Drawable.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -163,20 +164,24 @@ void GenerateMinefieldBehavior::setMinefieldTarget(const Coord3D* pos)
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-const Coord3D* GenerateMinefieldBehavior::getMinefieldTarget() const
+// the mine layout is float until the geometry footprint helpers move (P3)
+Coord3D GenerateMinefieldBehavior::getMinefieldTarget() const
 {
-	return m_hasTarget ? &m_target : getObject()->getPosition();
+	return m_hasTarget ? m_target : getObject()->getPositionFix()->toCoord3D();
 }
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-static Bool isAnythingTooClose2D(const std::vector<Object*>& v, const Coord3D& pos, Real minDistSqr)
+static Bool isAnythingTooClose2D(const std::vector<Object*>& v, const Coord3D& pos, Fix minDistSqr)
 {
+	const Fix x = fixFromReal(pos.x);
+	const Fix y = fixFromReal(pos.y);
 	for (std::vector<Object*>::const_iterator it = v.begin(); it != v.end(); ++it)
 	{
-		const Coord3D* p = (*it)->getPosition();
-		Real distSqr = sqr(p->x - pos.x) + sqr(p->y - pos.y);
-		if (distSqr < minDistSqr)
+		const FCoord3D* p = (*it)->getPositionFix();
+		FCoord2D d;
+		d.set(p->x - x, p->y - y);
+		if (d.lengthSqr() < minDistSqr)
 			return true;
 	}
 	return false;
@@ -198,7 +203,8 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 	tmp.z = 99999.0f;
 	PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
 
-	if (layer == LAYER_GROUND && TheTerrainLogic->isUnderwater(pt.x, pt.y))
+	const FCoord3D fxPt = { fixFromReal(pt.x), fixFromReal(pt.y), fixFromReal(pt.z) };
+	if (layer == LAYER_GROUND && TheTerrainLogic->isUnderwaterFix(fxPt.x, fxPt.y))
 		return NULL;
 
 	if (layer == LAYER_GROUND && TheTerrainLogic->isCliffCell(pt.x, pt.y))
@@ -210,7 +216,7 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 	// for now, "mostly" means "central third of radius would overlap"
 	const GenerateMinefieldBehaviorModuleData* d = getGenerateMinefieldBehaviorModuleData();
 	GeometryInfo geom = mineTemplate->getTemplateGeometryInfo();
-	Real mineRadius = mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadius();
+	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P3: footprint is float
 	geom.expandFootprint(mineRadius * -(1.0f - d->m_skipIfThisMuchUnderStructure));
 	ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( &pt, geom, orient );
 	MemoryPoolObjectHolder hold(iter);
@@ -221,8 +227,8 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 	}
 
 	Object* mine = TheThingFactory->newObject(mineTemplate, team);
-	mine->setPosition(&pt);
-	mine->setOrientation(orient);
+	mine->setPositionFix(&fxPt);
+	mine->setOrientationFix(fixFromReal(orient));
 	mine->setProducer(producer);
 
 	for (BehaviorModule** bmi = mine->getBehaviorModules(); *bmi; ++bmi)
@@ -230,7 +236,7 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 		LandMineInterface* lmi = (*bmi)->getLandMineInterface();
 		if (lmi)
 		{
-			lmi->setScootParms(*producer->getPosition(), pt);
+			lmi->setScootParms(producer->getPositionFix()->toCoord3D(), pt);	// P3: the minefield's scoot is float
 			break;
 		}
 	}
@@ -255,7 +261,7 @@ void GenerateMinefieldBehavior::placeMinesAlongLine(const Coord3D& posStart, con
 	Real dx = posEnd.x - posStart.x;
 	Real dy = posEnd.y - posStart.y;
 	Real len = sqrt(sqr(dx) + sqr(dy));
-	Real mineRadius = mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadius();
+	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());
 	Real mineDiameter = mineRadius * 2.0f;
 	Real mineJitter = mineRadius*d->m_randomJitter;
 	Int numMines = REAL_TO_INT_CEIL(len / mineDiameter);
@@ -267,7 +273,7 @@ void GenerateMinefieldBehavior::placeMinesAlongLine(const Coord3D& posStart, con
 		Coord3D pt;
 		pt.x = posStart.x + place * dx / len;
 		pt.y = posStart.y + place * dy / len;
-		pt.z = TheTerrainLogic->getGroundHeight( pt.x, pt.y );
+		pt.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( pt.x ), fixFromReal( pt.y ) ) );
 		offsetBySmallRandomAmount(pt, mineJitter);
 		placeMineAt(pt, mineTemplate, team, obj);
 	} 
@@ -275,30 +281,25 @@ void GenerateMinefieldBehavior::placeMinesAlongLine(const Coord3D& posStart, con
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-static void makeCorner(const Coord3D& pos, Real majorRadius, Real minorRadius, const Matrix3D& mtx, Coord3D& corner)
+static void makeCorner(Fix majorRadius, Fix minorRadius, const FixMatrix3D& mtx, Coord3D& corner)
 {
-	Vector3 tmp;
-	tmp.X = majorRadius;
-	tmp.Y = minorRadius;
-	tmp.Z = 0;
-	Matrix3D::Transform_Vector(mtx, tmp, &tmp);
-	corner.x = tmp.X;
-	corner.y = tmp.Y;
-	corner.z = tmp.Z;
+	FCoord3D tmp;
+	tmp.set(majorRadius, minorRadius, Fix(0));
+	corner = mtx.transformPoint(tmp).toCoord3D();
 }
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-void GenerateMinefieldBehavior::placeMinesAroundRect(const Coord3D& pos, Real majorRadius, Real minorRadius, const ThingTemplate* mineTemplate)
+void GenerateMinefieldBehavior::placeMinesAroundRect(Fix majorRadius, Fix minorRadius, const ThingTemplate* mineTemplate)
 {
 	const Object* obj = getObject();
-	const Matrix3D* mtx = obj->getTransformMatrix();
+	const FixMatrix3D* mtx = obj->getTransformMatrixFix();
 
 	Coord3D pt[4];
-	makeCorner(pos,  majorRadius,  minorRadius, *mtx, pt[0]);
-	makeCorner(pos, -majorRadius,  minorRadius, *mtx, pt[1]);
-	makeCorner(pos, -majorRadius, -minorRadius, *mtx, pt[2]);
-	makeCorner(pos,  majorRadius, -minorRadius, *mtx, pt[3]);
+	makeCorner( majorRadius,  minorRadius, *mtx, pt[0]);
+	makeCorner(-majorRadius,  minorRadius, *mtx, pt[1]);
+	makeCorner(-majorRadius, -minorRadius, *mtx, pt[2]);
+	makeCorner( majorRadius, -minorRadius, *mtx, pt[3]);
 
 	placeMinesAlongLine(pt[0], pt[1], mineTemplate, true);
 	placeMinesAlongLine(pt[1], pt[2], mineTemplate, true);
@@ -315,7 +316,7 @@ void GenerateMinefieldBehavior::placeMinesAroundCircle(const Coord3D& pos, Real 
 	Team* team = obj->getControllingPlayer()->getDefaultTeam();
 
 	Real circum = 2.0f * PI * radius;
-	Real mineRadius = mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadius();
+	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());
 	Real mineDiameter = mineRadius * 2.0f;
 	Real mineJitter = mineRadius*d->m_randomJitter;
 	Int numMines = REAL_TO_INT_CEIL(circum / mineDiameter);
@@ -328,7 +329,7 @@ void GenerateMinefieldBehavior::placeMinesAroundCircle(const Coord3D& pos, Real 
 		Coord3D pt;
 		pt.x = pos.x + radius * Cos(angle);
 		pt.y = pos.y + radius * Sin(angle);
-		pt.z = TheTerrainLogic->getGroundHeight( pt.x, pt.y );
+		pt.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( pt.x ), fixFromReal( pt.y ) ) );
 		offsetBySmallRandomAmount(pt, mineJitter);
 		placeMineAt(pt, mineTemplate, team, obj);
 	} 
@@ -347,9 +348,10 @@ void GenerateMinefieldBehavior::placeMinesInFootprint(const GeometryInfo& geom, 
 	if (numMines < 1)
 		numMines = 1;
 
-	const Coord3D* target = getMinefieldTarget();
+	const Coord3D target = getMinefieldTarget();
 	std::vector<Object*> minesCreatedSoFar;
-	Real minDistSqr = sqr(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadius() * 2.0f);
+	const Fix minDist = mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix() * Fix(2);
+	const Fix minDistSqr = minDist * minDist;
 	for (int i = 0; i < numMines; ++i)
 	{
 		Coord3D pt;
@@ -357,14 +359,14 @@ void GenerateMinefieldBehavior::placeMinesInFootprint(const GeometryInfo& geom, 
 		do 
 		{
 			geom.makeRandomOffsetWithinFootprint(pt);
-			pt.x += target->x;
-			pt.y += target->y;
-			pt.z += target->z;
+			pt.x += target.x;
+			pt.y += target.y;
+			pt.z += target.z;
 			--maxRetry;
 		} while (isAnythingTooClose2D(minesCreatedSoFar, pt, minDistSqr) && maxRetry > 0);
-		DEBUG_ASSERTCRASH(maxRetry>0,("ran out of retries %f",minDistSqr));
+		DEBUG_ASSERTCRASH(maxRetry>0,("ran out of retries %f",fixToReal(minDistSqr)));
 
-		if (getObject()->getGeometryInfo().isPointInFootprint(*target, pt))
+		if (getObject()->getGeometryInfo().isPointInFootprint(target, pt))
 			continue;
 
 		Object* mine = placeMineAt(pt, mineTemplate, team, obj);	// can return null.
@@ -397,7 +399,7 @@ void GenerateMinefieldBehavior::placeMines()
 		return;
 	}
 
-	const Coord3D* target = getMinefieldTarget();
+	const Coord3D target = getMinefieldTarget();
 	if (d->m_smartBorder)
 	{
 		GeometryInfo geom = obj->getGeometryInfo();
@@ -405,27 +407,28 @@ void GenerateMinefieldBehavior::placeMines()
 		if (!d->m_smartBorderSkipInterior)
 		{
 			geom = mineTemplate->getTemplateGeometryInfo();
-			placeMineAt(*target, mineTemplate, obj->getControllingPlayer()->getDefaultTeam(), obj);
+			placeMineAt(target, mineTemplate, obj->getControllingPlayer()->getDefaultTeam(), obj);
 		}
 
 		if (d->m_alwaysCircular)
-			geom.set(GEOMETRY_CYLINDER, false, 1, geom.getBoundingCircleRadius(), geom.getBoundingCircleRadius());
+			geom.setFix(GEOMETRY_CYLINDER, false, Fix(1), geom.getBoundingCircleRadiusFix(), geom.getBoundingCircleRadiusFix());
 
-		Real mineRadius = mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadius();
+		Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P3: footprint is float
 		Real mineDiameter = mineRadius * 2.0f;
+		const Fix distanceAroundObject = fixFromReal(d->m_distanceAroundObject);	// P3
 		geom.expandFootprint(mineRadius);
 		do
 		{
 			if (geom.getGeomType() == GEOMETRY_BOX && !d->m_alwaysCircular)
 			{
-				placeMinesAroundRect(*target, geom.getMajorRadius(), geom.getMinorRadius(), mineTemplate);
+				placeMinesAroundRect(geom.getMajorRadiusFix(), geom.getMinorRadiusFix(), mineTemplate);
 			}
 			else
 			{
-				placeMinesAroundCircle(*target, geom.getMajorRadius(), mineTemplate);
+				placeMinesAroundCircle(target, fixToReal(geom.getMajorRadiusFix()), mineTemplate);
 			}
 			geom.expandFootprint(mineDiameter);
-		} while (geom.getBoundingCircleRadius() < d->m_distanceAroundObject);
+		} while (geom.getBoundingCircleRadiusFix() < distanceAroundObject);
 	}
 	else if (d->m_borderOnly)
 	{
@@ -434,11 +437,11 @@ void GenerateMinefieldBehavior::placeMines()
 
 		if (geom.getGeomType() == GEOMETRY_BOX && !d->m_alwaysCircular)
 		{
-			placeMinesAroundRect(*target, geom.getMajorRadius(), geom.getMinorRadius(), mineTemplate);
+			placeMinesAroundRect(geom.getMajorRadiusFix(), geom.getMinorRadiusFix(), mineTemplate);
 		}
 		else
 		{
-			placeMinesAroundCircle(*target, geom.getMajorRadius(), mineTemplate);
+			placeMinesAroundCircle(target, fixToReal(geom.getMajorRadiusFix()), mineTemplate);
 		}
 	}
 	else
@@ -447,7 +450,7 @@ void GenerateMinefieldBehavior::placeMines()
 		geom.expandFootprint(d->m_distanceAroundObject);
 
 		if (d->m_alwaysCircular)
-			geom.set(GEOMETRY_CYLINDER, false, 1, geom.getBoundingCircleRadius(), geom.getBoundingCircleRadius());
+			geom.setFix(GEOMETRY_CYLINDER, false, Fix(1), geom.getBoundingCircleRadiusFix(), geom.getBoundingCircleRadiusFix());
 
 		placeMinesInFootprint(geom, mineTemplate);
 	}

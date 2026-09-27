@@ -49,10 +49,18 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
+#include "Lib/FixBoundary.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// the terrain's bridge lookup is still float (P5)
+static Bridge *findBridgeUnder( const Object *obj )
+{
+	Coord3D pos = obj->getPositionFix()->toCoord3D();
+	return TheTerrainLogic->findBridgeAt( &pos );
+}
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -325,7 +333,7 @@ void BridgeBehavior::onDelete( void )
 void BridgeBehavior::resolveFX( void )
 {
 	Object *us = getObject();
-	Bridge *bridge = TheTerrainLogic->findBridgeAt( us->getPosition() );
+	Bridge *bridge = findBridgeUnder( us );
 
 	// sanity
 	if( bridge == NULL )
@@ -632,7 +640,7 @@ void BridgeBehavior::onBodyDamageStateChange( const DamageInfo* damageInfo,
 	DEBUG_ASSERTCRASH( oldState != newState, ("BridgeBehavior::onBodyDamageStateChange - oldState and newState should be different if this is getting called\n") );
 
 	Object *us = getObject();
-	Bridge *bridge = TheTerrainLogic->findBridgeAt( us->getPosition() );
+	Bridge *bridge = findBridgeUnder( us );
 
 	// sanity
 	if( bridge == NULL )
@@ -718,7 +726,7 @@ UpdateSleepTime BridgeBehavior::update( void )
 		const BridgeBehaviorModuleData *modData = getBridgeBehaviorModuleData();
 
 		// get bridge information
-		Bridge *bridge = TheTerrainLogic->findBridgeAt( us->getPosition() );
+		Bridge *bridge = findBridgeUnder( us );
 		const BridgeInfo *bridgeInfo = NULL;
 		TerrainRoadType *bridgeTemplate = NULL;
 		if ( bridge )
@@ -760,8 +768,8 @@ UpdateSleepTime BridgeBehavior::update( void )
 				else if ( bridge && bridgeTemplate && bridgeInfo)//we have valid Terrain data for the bridge
 					getRandomSurfacePosition( bridgeTemplate, bridgeInfo, &pos );
 				else
-					pos.set( getObject()->getPosition() );
-					
+					pos = getObject()->getPositionFix()->toCoord3D();
+
 
 				// launch the fx list
 				FXList::doFXPos( (*fxIt).fx, &pos );
@@ -824,7 +832,7 @@ UpdateSleepTime BridgeBehavior::update( void )
 					if ( bridge && bridgeTemplate && bridgeInfo )//we have valid Terrain data for the bridge
 						getRandomSurfacePosition( bridgeTemplate, bridgeInfo, &pos );
 					else
-						pos.set( getObject()->getPosition() );
+						pos = getObject()->getPositionFix()->toCoord3D();
 
 					// launch the fx list
 					ObjectCreationList::create( (*oclIt).ocl, us, &pos, NULL, INVALID_ANGLE );
@@ -870,9 +878,9 @@ void BridgeBehavior::onDie( const DamageInfo *damageInfo )
 void BridgeBehavior::handleObjectsOnBridgeOnDie( void )
 {
 	const Object *bridge = getObject();
-	const Coord3D *bridgePos = bridge->getPosition();
+	const FCoord3D *bridgePos = bridge->getPositionFix();
 
-	Bridge *terrainBridge = TheTerrainLogic->findBridgeAt( getObject()->getPosition() );
+	Bridge *terrainBridge = findBridgeUnder( getObject() );
 	if( terrainBridge )
 	{
 		PathfindLayerEnum bridgeLayer = terrainBridge->getLayer();
@@ -893,23 +901,23 @@ void BridgeBehavior::handleObjectsOnBridgeOnDie( void )
 		// find the lowest Z point of the bridge area ... we will use this to figure out of
 		// objects in the bridge area are "on top" of the bridge
 		//
-		Real lowBridgeZ = bridgePolygon[ 0 ].z;
+		// the bridge info is terrain data, still float (P5)
+		Fix lowBridgeZ = fixFromReal( bridgePolygon[ 0 ].z );
 		for( Int i = 0; i < 4; ++i )
-			if( bridgePolygon[ i ].z < lowBridgeZ )
-				lowBridgeZ = bridgePolygon[ i ].z;
-		
+			lowBridgeZ = fixMin( lowBridgeZ, fixFromReal( bridgePolygon[ i ].z ) );
+
 		//
 		// given the polygon area, how big is the radius that we need to scan in the world
 		// to cover from the center of the bridge (the bridge object position) to the edge
 		// of the bridge
 		//
-		Coord2D v;
-		v.x = bridgeInfo.toLeft.x - bridgePos->x;
-		v.y = bridgeInfo.toLeft.y - bridgePos->y;
-		Real radius = v.length();
+		FCoord2D v;
+		v.x = fixFromReal( bridgeInfo.toLeft.x ) - bridgePos->x;
+		v.y = fixFromReal( bridgeInfo.toLeft.y ) - bridgePos->y;
+		Fix radius = v.length();
 
 		// scan the objects in the radius
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( bridgePos, 
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( bridgePos,
 																																			 radius, 
 																																			 FROM_CENTER_2D );
 		MemoryPoolObjectHolder hold( iter );
@@ -926,11 +934,12 @@ void BridgeBehavior::handleObjectsOnBridgeOnDie( void )
 				continue;
 
 			// ignore objects that were not actually on the bridge
-			if( other->getPosition()->z < lowBridgeZ )
+			if( other->getPositionFix()->z < lowBridgeZ )
 				continue;
 
-			// ignore objects that are not inside the bridge polygon
-			if( PointInsideArea2D( other->getPosition(), bridgePolygon, 4 ) == FALSE )
+			// ignore objects that are not inside the bridge polygon (the polygon test is float)
+			Coord3D otherPos = other->getPositionFix()->toCoord3D();
+			if( PointInsideArea2D( &otherPos, bridgePolygon, 4 ) == FALSE )
 				continue;
 
 			// if object not on same layer as bridge do nothing
@@ -980,8 +989,10 @@ void BridgeBehavior::setScaffoldData( Object *obj,
 	Coord3D sunkenPos = *riseToPos;
 	sunkenPos.z = sunkenPos.z - *sunkenHeight - fudge;
 
-	// set object initial position
-	obj->setPosition( &sunkenPos );
+	// set object initial position; the scaffold positions are float (BridgeScaffoldBehavior)
+	FCoord3D fxSunkenPos;
+	fxSunkenPos.set( fixFromReal( sunkenPos.x ), fixFromReal( sunkenPos.y ), fixFromReal( sunkenPos.z ) );
+	obj->setPositionFix( &fxSunkenPos );
 
 	// set all the destination points for all scaffold motion
 	scaffoldBehavior->setPositions( &sunkenPos, riseToPos, buildPos );
@@ -990,7 +1001,7 @@ void BridgeBehavior::setScaffoldData( Object *obj,
 	scaffoldBehavior->setMotion( STM_RISE );
 
 	// set object angle
-	obj->setOrientation( *angle );
+	obj->setOrientationFix( fixFromReal( *angle ) );
 
 	//
 	// set the speed of the scaffold "animation" which is based on how big of a distance
@@ -1028,10 +1039,12 @@ void BridgeBehavior::createScaffolding( void )
 
 	// get the bridge world object
 	Object *us = getObject();
-	const Coord3D *center = us->getPosition();
+	// the scaffold layout below is float: the bridge info is terrain data (P5)
+	const Coord3D centerPos = us->getPositionFix()->toCoord3D();
+	const Coord3D *center = &centerPos;
 
 	// get our bridge object
-	Bridge *bridge = TheTerrainLogic->findBridgeAt( us->getPosition() );
+	Bridge *bridge = findBridgeUnder( us );
 
 	// get the bridge template
 	AsciiString bridgeTemplateName = bridge->getBridgeTemplateName();
@@ -1061,7 +1074,7 @@ void BridgeBehavior::createScaffolding( void )
 	}  // end if
 
 	// how much space is going to be between each of the scaffold objects at their final positions
-	Real spacing = scaffoldTemplate->getTemplateGeometryInfo().getMajorRadius() * 2.0f;
+	Real spacing = fixToReal( scaffoldTemplate->getTemplateGeometryInfo().getMajorRadiusFix() * Fix( 2 ) );
 
 	// how tall are the scaffold objects
 	Real scaffoldHeight = scaffoldTemplate->getTemplateGeometryInfo().getMaxHeightAbovePosition() +
@@ -1323,7 +1336,7 @@ void BridgeBehavior::removeScaffolding( void )
 
 	if( body->getDamageState() != BODY_RUBBLE )
 	{
-		Bridge *bridge = TheTerrainLogic->findBridgeAt( us->getPosition() );
+		Bridge *bridge = findBridgeUnder( us );
 
 		if( bridge )
 			TheAI->pathfinder()->changeBridgeState( bridge->getLayer(), TRUE );
@@ -1396,7 +1409,7 @@ void BridgeBehavior::xfer( Xfer *xfer )
 	// set us as the bridge object in the bridge info
 	if( xfer->getXferMode() == XFER_LOAD )
 	{
-		Bridge *bridge = TheTerrainLogic->findBridgeAt( us->getPosition() );
+		Bridge *bridge = findBridgeUnder( us );
 
 		// sanity
 		DEBUG_ASSERTCRASH( bridge, ("BridgeBehavior::xfer - Unable to find bridge\n" ));
@@ -1414,7 +1427,7 @@ void BridgeBehavior::xfer( Xfer *xfer )
 	if( xfer->getXferMode() == XFER_LOAD )
 	{
 		Object *us = getObject();
-		Bridge *bridge = TheTerrainLogic->findBridgeAt( us->getPosition() );
+		Bridge *bridge = findBridgeUnder( us );
 
 		// sanity
 		DEBUG_ASSERTCRASH( bridge, ("BridgeBehavior::xfer - Unable to find bridge\n" ));

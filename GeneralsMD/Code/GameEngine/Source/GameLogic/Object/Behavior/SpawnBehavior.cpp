@@ -37,6 +37,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/SpawnBehavior.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -321,13 +322,15 @@ Bool SpawnBehavior::maySpawnSelfTaskAI( Real maxSelfTaskersRatio )
 Object* SpawnBehavior::getClosestSlave( const Coord3D *pos )
 {
 	Object *closest = NULL;
-	Real closestDistance;
+	Fix closestDistance;
+	FCoord3D fpos;	// the interface takes float, its callers are not converted yet
+	fpos.set( fixFromReal( pos->x ), fixFromReal( pos->y ), fixFromReal( pos->z ) );
 	for( objectIDListIterator it = m_spawnIDs.begin(); it != m_spawnIDs.end(); ++it )
 	{
 		Object *obj = TheGameLogic->findObjectByID( *it );
 		if( obj )
 		{
-			Real distance = ThePartitionManager->getDistanceSquared( obj, pos, FROM_CENTER_2D );
+			Fix distance = ThePartitionManager->getDistanceSquaredFix( obj, &fpos, FROM_CENTER_2D );
 			
 			if( !closest || closestDistance > distance ) 
 			{
@@ -540,11 +543,11 @@ public:
 	const ThingTemplate *m_matchTemplate;
 	Object *m_source;
 	Object *m_closest;
-	Real m_closestDistSq;
+	Fix m_closestDistSq;
 
 };
 
-#define BIG_DISTANCE 99999999.9f
+#define BIG_DISTANCE 99999999.9_fx
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 OrphanData::OrphanData( void )
@@ -571,7 +574,7 @@ static void findClosestOrphan( Object *obj, void *userData )
 		return;
 
 	// is this the closest one so far
-	Real distSq = ThePartitionManager->getDistanceSquared( orphanData->m_source, obj, FROM_CENTER_2D );
+	Fix distSq = ThePartitionManager->getDistanceSquaredFix( orphanData->m_source, obj, FROM_CENTER_2D );
 	if( distSq < orphanData->m_closestDistSq )
 	{
 	
@@ -717,8 +720,8 @@ Bool SpawnBehavior::createSpawn()
 				//there is probably a more elegant way to choose the budHost, but oh well
 				Object *budHost = NULL;
 				Object *curSpawn = NULL;
-				Real tapeMeasure = 99999;
-				Real closest = 999999.9f; // 1000 * 1000
+				Fix tapeMeasure = Fix( 99999 );
+				Fix closest = 999999.9_fx; // 1000 * 1000
 				objectIDListIterator iter;
 				for( iter = m_spawnIDs.begin(); iter != m_spawnIDs.end(); iter++)
 				{
@@ -728,7 +731,7 @@ Bool SpawnBehavior::createSpawn()
 						if (curSpawn == newSpawn )
 							continue;
 
-						tapeMeasure = ThePartitionManager->getDistanceSquared( curSpawn, parent, FROM_CENTER_2D );
+						tapeMeasure = ThePartitionManager->getDistanceSquaredFix( curSpawn, parent, FROM_CENTER_2D );
 						if ( tapeMeasure < closest )
 						{
 							closest = tapeMeasure;
@@ -891,9 +894,9 @@ void SpawnBehavior::computeAggregateStates(void)
 
 	Int spawnCount = 0;
 	Int spawnCountMax = md->m_spawnNumberData;
-	Coord3D avgSpawnPos; 
+	FCoord3D avgSpawnPos;
 
-	avgSpawnPos.set(0,0,0);
+	avgSpawnPos.zero();
 	Real acrHealth = 0.0f;
 	Real avgHealthMax = 0.0f;
 
@@ -943,7 +946,7 @@ void SpawnBehavior::computeAggregateStates(void)
 
 			spawnWeaponBonus = currentSpawn->getWeaponBonusCondition();
 
-			avgSpawnPos.add(currentSpawn->getPosition());
+			avgSpawnPos.add(*currentSpawn->getPositionFix());
 
 			BodyModuleInterface *body = currentSpawn->getBodyModule();
 			acrHealth    += body->getHealth();
@@ -1016,9 +1019,9 @@ void SpawnBehavior::computeAggregateStates(void)
 	// pick a centered, average spot to draw the health box 
 	if ( spawnCount )	// no living members: 1/0 made the offset NaN
 	{
-		avgSpawnPos.scale(1.0f / spawnCount);
-		avgSpawnPos.sub(obj->getPosition());
-		obj->setHealthBoxOffset(avgSpawnPos);
+		avgSpawnPos.scale(Fix( 1 ) / Fix( spawnCount ));
+		avgSpawnPos.sub(*obj->getPositionFix());
+		obj->setHealthBoxOffset(avgSpawnPos.toCoord3D()); // the health box is drawn, client
 	}
 
 

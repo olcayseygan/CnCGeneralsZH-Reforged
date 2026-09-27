@@ -36,6 +36,7 @@
 #include "Common/ThingTemplate.h"
 #include "Common/TunnelTracker.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 #include "GameClient/Drawable.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/OpenContain.h"
@@ -253,7 +254,7 @@ void TunnelContain::onRemoving( Object *obj )
 		 flame on a flame trooper, a rider's own drawable - stayed hidden, so a unit that came out of a
 		 tunnel inside the fog carried invisible attachments around with it.  addOrRemoveObjFromWorld
 		 is the one that puts every piece of an object back. */
-	obj->setPosition( getObject()->getPosition() );
+	obj->setPositionFix( getObject()->getPositionFix() );
 	obj->setSafeOcclusionFrame( TheGameLogic->getFrame() + obj->getTemplate()->getOcclusionDelay() );
 	addOrRemoveObjFromWorld( obj, TRUE );
 
@@ -373,37 +374,39 @@ void TunnelContain::scatterToNearbyPosition(Object* obj)
 	// NOPE, can't do that ... all players screen angles will be different, unless
 	// we maintain the angle of each players screen in the player structure or something
 	//
-	Real angle = GameLogicRandomValueReal( 0.0f, 2.0f * PI );
+	// the random draws stay float, there is no fixed point random yet  // P8
+	Fix angle = fixFromReal( GameLogicRandomValueReal( 0.0f, 2.0f * PI ) );
 //	angle = TheTacticalView->getAngle();
 //	angle -= GameLogicRandomValueReal( PI / 3.0f, 2.0f * (PI / 3.0F) );
 
-	Real minRadius = theContainer->getGeometryInfo().getBoundingCircleRadius();
+	Real minRadius = fixToReal( theContainer->getGeometryInfo().getBoundingCircleRadiusFix() );
 	Real maxRadius = minRadius + minRadius / 2.0f;
-	const Coord3D *containerPos = theContainer->getPosition();
-	Real dist = GameLogicRandomValueReal( minRadius, maxRadius );
+	const FCoord3D *containerPos = theContainer->getPositionFix();
+	Fix dist = fixFromReal( GameLogicRandomValueReal( minRadius, maxRadius ) );
 
-	Coord3D pos;
-	pos.x = dist * Cos( angle ) + containerPos->x;
-	pos.y = dist * Sin( angle ) + containerPos->y;
-	pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+	FCoord3D pos;
+	pos.x = dist * fixCos( angle ) + containerPos->x;
+	pos.y = dist * fixSin( angle ) + containerPos->y;
+	pos.z = TheTerrainLogic->getGroundHeightFix( pos.x, pos.y );
 
 	// set orientation
-	obj->setOrientation( angle );
+	obj->setOrientationFix( angle );
 
 	AIUpdateInterface *ai = obj->getAIUpdateInterface();
 	if( ai )
 	{
 		// set position of the object at center of building and move them toward pos
-		obj->setPosition( theContainer->getPosition() );
+		obj->setPositionFix( containerPos );
 		ai->ignoreObstacle(theContainer);
- 		ai->aiMoveToPosition( &pos, CMD_FROM_AI );
+		Coord3D goal = pos.toCoord3D();	// P4: the AI move calls are float
+ 		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 
 	}  // end if
 	else
 	{
 
 		// no ai, just set position at the target pos
-		obj->setPosition( &pos );
+		obj->setPositionFix( &pos );
 
 	}  // end else
 }

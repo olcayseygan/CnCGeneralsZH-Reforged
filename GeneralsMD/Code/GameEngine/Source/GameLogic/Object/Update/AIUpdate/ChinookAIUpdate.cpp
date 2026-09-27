@@ -48,8 +48,23 @@
 #include "GameLogic/Module/ChinookAIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 
 const Real BIGNUM = 99999.0f;
+
+// destinations and bone data stay float until their owners move; they enter here
+static FCoord3D toFCoord3D( const Coord3D *c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
+	return f;
+}
+
+// the ground or bridge under a float point, for a float destination the pathfinder still owns (P5)
+static Real layerHeightAt( const Coord3D &p, PathfindLayerEnum layer )
+{
+	return fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( p.x ), fixFromReal( p.y ), layer ) );
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -89,9 +104,11 @@ enum ChinookAIStateType
 //-------------------------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------------------------
-static Real calcDistSqr(const Coord3D& a, const Coord3D& b)
+static Fix calcDistSqr(const FCoord3D& a, const Coord3D& b)
 {
-	return sqr(a.x-b.x) + sqr(a.y-b.y) + sqr(a.z-b.z);
+	FCoord3D d = a;
+	d.sub( toFCoord3D( &b ) );
+	return d.lengthSqr();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -173,7 +190,8 @@ public:
 
 		Region3D mapRegion;
 		TheTerrainLogic->getExtentIncludingBorder( &mapRegion );
-		if( !mapRegion.isInRegionNoZ( owner->getPosition() ) )
+		Coord3D ownerPos = owner->getPositionFix()->toCoord3D(); // the map extent is float
+		if( !mapRegion.isInRegionNoZ( &ownerPos ) )
 		{
 			TheGameLogic->destroyObject(owner);
 			return STATE_SUCCESS;
@@ -249,15 +267,15 @@ public:
 		loco->setUsePreciseZPos(true);
 		loco->setUltraAccurate(true);
 
-		m_destLoc = *obj->getPosition();
+		m_destLoc = obj->getPositionFix()->toCoord3D(); // xfer'd, and the pathfinder's (P5)
 		const Bool onlyHealthyBridges = true;	// ignore dead bridges.
 		PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination(&m_destLoc, onlyHealthyBridges);
-		m_destLoc.z = TheTerrainLogic->getLayerHeight(m_destLoc.x, m_destLoc.y, layerAtDest);
+		m_destLoc.z = layerHeightAt(m_destLoc, layerAtDest);
 		if (m_landing)
 		{
 			Coord3D tmp;
 			FindPositionOptions options;
-			options.maxRadius = obj->getGeometryInfo().getBoundingCircleRadius() * 100.0f;
+			options.maxRadius = fixToReal( obj->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 ) ); // P5
 			if (ThePartitionManager->findPositionAround(&m_destLoc, &options, &tmp)) 
 			{
 				m_destLoc = tmp;
@@ -271,9 +289,9 @@ public:
 			// ground proper and the bridge itself.) also note: don't call objectInteractsWithBridgeLayer(),
 			// since it assumes that things that aren't close in z shouldn't interact.
 			tmp = m_destLoc;
-			tmp.z = obj->getPosition()->z;
+			tmp.z = fixToReal( obj->getPositionFix()->z );
 			layerAtDest = TheTerrainLogic->getHighestLayerForDestination(&tmp, onlyHealthyBridges);
-			m_destLoc.z = TheTerrainLogic->getLayerHeight(m_destLoc.x, m_destLoc.y, layerAtDest);
+			m_destLoc.z = layerHeightAt(m_destLoc, layerAtDest);
 			obj->setLayer(layerAtDest);
 		}
 		else
@@ -295,9 +313,9 @@ public:
 
 		ai->setLocomotorGoalPositionExplicit(m_destLoc);
 
-		const Real THRESH = 3.0f;
-		const Real THRESH_SQR = THRESH*THRESH;
-		if (calcDistSqr(*obj->getPosition(), m_destLoc) <= THRESH_SQR)
+		const Fix THRESH = Fix( 3 );
+		const Fix THRESH_SQR = THRESH*THRESH;
+		if (calcDistSqr(*obj->getPositionFix(), m_destLoc) <= THRESH_SQR)
 			return STATE_SUCCESS;
 
 		return STATE_CONTINUE;
@@ -525,12 +543,16 @@ public:
 			info.ropeLen = 0.0f;
 			info.ropeLenMax = 0.0f;
 
-			obj->convertBonePosToWorldPos( NULL, &dropMtx[i], NULL, &info.dropStartMtx );
-			
+			// the bone matrix and the xfer'd drop matrix are float: multiply on that side
+			Matrix3D objMtx;
+			obj->getTransformMatrixFix()->toMatrix3D( &objMtx );
+			info.dropStartMtx.mul( objMtx, dropMtx[i] );
+
 			info.ropeDrawable = ropeTmpl ? TheThingFactory->newDrawable(ropeTmpl) : NULL;
 			if (info.ropeDrawable)
 			{
-				obj->convertBonePosToWorldPos( &ropePos[i], NULL, &ropePos[i], NULL );
+				FCoord3D ropeTop = obj->getTransformMatrixFix()->transformPoint( toFCoord3D( &ropePos[i] ) );
+				ropePos[i] = ropeTop.toCoord3D();
 				info.ropeDrawable->setPosition(&ropePos[i]);
 				info.ropeSpeed = 0.0f;
 				info.ropeLen = 1.0f;
@@ -538,7 +560,9 @@ public:
 				const Bool onlyHealthyBridges = true;	// ignore dead bridges.
 				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination(&ropePos[i], onlyHealthyBridges);
 
-				info.ropeLenMax = ropePos[i].z - TheTerrainLogic->getLayerHeight(ropePos[i].x, ropePos[i].y, layerAtDest) - d->m_ropeFinalHeight;
+				// ropeLenMax is xfer'd and the rope's height is INI data (P3)
+				info.ropeLenMax = fixToReal( ropeTop.z - TheTerrainLogic->getLayerHeightFix(ropeTop.x, ropeTop.y, layerAtDest)
+					- fixFromReal( d->m_ropeFinalHeight ) );
 
 				initRopeParms(info.ropeDrawable, info.ropeLenMax, d->m_ropeWidth, d->m_ropeColor, d->m_ropeWobbleLen, d->m_ropeWobbleAmp, d->m_ropeWobbleRate);
 			}
@@ -602,7 +626,12 @@ public:
 						exitInterface->exitObjectViaDoor(rappeller, DOOR_1);
 					}
 
-					rappeller->setTransformMatrix(&it->dropStartMtx);
+					// the drop matrix is xfer'd float; it enters the fixed transform here
+					FixMatrix3D dropStart;
+					for (Int r = 0; r < 3; ++r)
+						for (Int c = 0; c < 4; ++c)
+							dropStart.m[r][c] = fixFromReal(it->dropStartMtx[r][c]);
+					rappeller->setTransformMatrixFix(&dropStart);
 
 					AIUpdateInterface* rappellerAI = rappeller ? rappeller->getAIUpdateInterface() : NULL;
 					if (rappellerAI)
@@ -726,23 +755,24 @@ public:
 		m_oldPreferredHeight = loco->getPreferredHeight();
 		m_newPreferredHeight = m_oldPreferredHeight;
 
-		const Coord3D* destPos;
+		FCoord3D destPos;
 		Object* bldg = getMachineGoalObject();
 		if (bldg != NULL && !bldg->isEffectivelyDead() && bldg->isKindOf(KINDOF_STRUCTURE))
 		{
-			destPos = bldg->getPosition();
+			destPos = *bldg->getPositionFix();
 			m_newPreferredHeight = bldg->getGeometryInfo().getMaxHeightAbovePosition() + d->m_minDropHeight;
 			if (m_newPreferredHeight < m_oldPreferredHeight)
 				m_newPreferredHeight = m_oldPreferredHeight;
 		}
 		else
 		{
-			destPos = getMachineGoalPosition();
+			destPos = toFCoord3D( getMachineGoalPosition() );
 		}
 
 		loco->setPreferredHeight(m_newPreferredHeight);
 
-		m_destZ = TheTerrainLogic->getGroundHeight(destPos->x, destPos->y) + m_newPreferredHeight;
+		// both heights are xfer'd floats (the preferred one is the locomotor's, P4)
+		m_destZ = fixToReal( TheTerrainLogic->getGroundHeightFix(destPos.x, destPos.y) + fixFromReal( m_newPreferredHeight ) );
 
 		return AIMoveToState::onEnter();
 	}
@@ -754,8 +784,8 @@ public:
 		// the normal moveto state will bail when 2d pos matches; we need z, too
 		StateReturnType status = AIMoveToState::update();
 
-		const Real THRESH = 3.0f;
-		if (status != STATE_CONTINUE && fabs(obj->getPosition()->z - m_destZ) > THRESH)
+		const Fix THRESH = Fix( 3 );
+		if (status != STATE_CONTINUE && fixAbs(obj->getPositionFix()->z - fixFromReal( m_destZ )) > THRESH)
 			status = STATE_CONTINUE;
 
 		return status;
@@ -810,7 +840,7 @@ public:
 		ChinookAIUpdate* ai = (ChinookAIUpdate*)obj->getAIUpdateInterface();
 		if( ai )
 		{
-			ai->recordOriginalPosition( *obj->getPosition() );
+			ai->recordOriginalPosition( obj->getPositionFix()->toCoord3D() );	// xfer'd, stays float
 		}
 		return STATE_SUCCESS;
 	}
@@ -1190,10 +1220,11 @@ UpdateSleepTime ChinookAIUpdate::update()
   {
     if ( m_flightStatus == CHINOOK_LANDING || m_flightStatus == CHINOOK_TAKING_OFF || m_flightStatus == CHINOOK_LANDED )
     {
-      Coord3D pos = *getObject()->getPosition();
-      Real chopperElevation = pos.z;
-      pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y ) + 3.0f;
-      chopperElevation -= pos.z;
+      FCoord3D washPos = *getObject()->getPositionFix();
+      Fix washZ = TheTerrainLogic->getGroundHeightFix( washPos.x, washPos.y ) + Fix( 3 );
+      Real chopperElevation = fixToReal( washPos.z - washZ );	// the client's random stream is float
+      washPos.z = washZ;
+      Coord3D pos = washPos.toCoord3D();
 
       if ( GameClientRandomValueReal( 0.0f, chopperElevation ) < 5.0f )
       {
@@ -1244,10 +1275,10 @@ void ChinookAIUpdate::privateGetRepaired( Object *repairDepot, CommandSourceType
 
 	setAirfieldForHealing(repairDepot->getID());
 
-	Coord3D pos = *repairDepot->getPosition();
+	Coord3D pos = repairDepot->getPositionFix()->toCoord3D(); // P5
 	Coord3D tmp;
 	FindPositionOptions options;
-	options.maxRadius = repairDepot->getGeometryInfo().getBoundingCircleRadius() * 100.0f;
+	options.maxRadius = fixToReal( repairDepot->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 ) ); // P5
 	if (ThePartitionManager->findPositionAround(&pos, &options, &tmp))
 		pos = tmp;
 
@@ -1275,7 +1306,7 @@ void ChinookAIUpdate::privateCombatDrop( Object* target, const Coord3D& pos, Com
 		// if you combat-drop into a spot in the fog-of-war.
 		Coord3D tmp;
 		FindPositionOptions options;
-		options.maxRadius = getObject()->getGeometryInfo().getBoundingCircleRadius() * 100.0f;
+		options.maxRadius = fixToReal( getObject()->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 ) ); // P5
 		if (ThePartitionManager->findPositionAround(&localPos, &options, &tmp))
 		{
 			localPos = tmp;
@@ -1341,8 +1372,8 @@ void ChinookAIUpdate::aiDoCommand(const AICommandParms* parms)
 		case AICMD_MOVE_TO_POSITION_AND_EVACUATE:
 		case AICMD_MOVE_TO_POSITION_AND_EVACUATE_AND_EXIT:
 		{
-			const Real THRESH = 3.0f;
-			const Real THRESH_SQR = THRESH*THRESH;
+			const Fix THRESH = Fix( 3 );
+			const Fix THRESH_SQR = THRESH*THRESH;
 
 			// the evac state below unloads the whole hold in one frame.  Only take it when the
 			// container has somebody queued to get in or out; otherwise let the standard move
@@ -1353,7 +1384,7 @@ void ChinookAIUpdate::aiDoCommand(const AICommandParms* parms)
 			const Bool allowExit = parms->m_cmd == AICMD_MOVE_TO_POSITION_AND_EVACUATE_AND_EXIT ||
 				(contain && contain->hasObjectsWantingToEnterOrExit());
 
-			if (calcDistSqr(*getObject()->getPosition(), parms->m_pos) > THRESH_SQR && 
+			if (calcDistSqr(*getObject()->getPositionFix(), parms->m_pos) > THRESH_SQR && 
 					m_flightStatus == CHINOOK_LANDED)
 			{
 				// gotta take off first!

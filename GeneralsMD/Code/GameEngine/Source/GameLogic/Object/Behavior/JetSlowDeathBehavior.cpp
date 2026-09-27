@@ -297,22 +297,24 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 		if( now < m_fallDeadlineFrame && now + 1 >= getDestructionFrame() )
 			setDestructionFrame( now + 2 );
 
-		PathfindLayerEnum layer = TheTerrainLogic->getLayerForDestination(us->getPosition());
+		const FCoord3D *usPos = us->getPositionFix();
+		Coord3D layerPos = usPos->toCoord3D(); // P5
+		PathfindLayerEnum layer = TheTerrainLogic->getLayerForDestination(&layerPos);
 		us->setLayer(layer);
-		Real height;
+		Fix height;
 		if (layer == LAYER_GROUND)
 		{
 			// (this is more efficient than getGroundHeight because the info is cached)
-			height = us->getHeightAboveTerrain();
+			height = us->getHeightAboveTerrainFix();
 		}
 		else
 		{
-			Real layerHeight = TheTerrainLogic->getLayerHeight( us->getPosition()->x, us->getPosition()->y, layer );
-			height = us->getPosition()->z - layerHeight;
+			Fix layerHeight = TheTerrainLogic->getLayerHeightFix( usPos->x, usPos->y, layer );
+			height = usPos->z - layerHeight;
 			// slop a little bit for bridges, since we tend to end up fractionally
 			// above 'em, and it's easier to just slop it here
-			if (height >= 0.0f && height <= 1.0f)
-				height = 0.0f;
+			if (height >= Fix( 0 ) && height <= Fix( 1 ))
+				height = Fix( 0 );
 		}
 
 		
@@ -334,7 +336,7 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 
 
 		// when we've hit the ground, we're totally done
-		if( height <= 0.0f || hitATree )
+		if( height <= Fix( 0 ) || hitATree )
 		{
 
 			// stop the death looping sound at the right time

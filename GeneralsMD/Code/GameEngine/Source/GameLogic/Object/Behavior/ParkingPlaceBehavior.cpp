@@ -42,7 +42,8 @@
 #include "GameLogic/Module/JetAIUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/TerrainLogic.h"
-#include "Common/Team.h" 
+#include "Common/Team.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -795,8 +796,16 @@ void ParkingPlaceBehavior::exitObjectViaDoor( Object *newObj, ExitDoorType exitD
 	Bool producedAtHelipad = newObj->isKindOf(KINDOF_PRODUCED_AT_HELIPAD);
 
 	PPInfo ppinfo;
-	DUMPMATRIX3D(getObject()->getTransformMatrix());
-	DUMPCOORD3D(getObject()->getPosition());
+#ifdef DEBUG_CRC
+	{
+		// the CRC dump prints float
+		Matrix3D dumpMtx;
+		getObject()->getTransformMatrixFix()->toMatrix3D( &dumpMtx );
+		DUMPMATRIX3D(&dumpMtx);
+		Coord3D dumpPos = getObject()->getPositionFix()->toCoord3D();
+		DUMPCOORD3D(&dumpPos);
+	}
+#endif
 	if (producedAtHelipad)
 	{
 		CRCDEBUG_LOG(("Produced at helipad (door = %d)\n", exitDoor));
@@ -819,8 +828,9 @@ void ParkingPlaceBehavior::exitObjectViaDoor( Object *newObj, ExitDoorType exitD
 		if (!reserveSpace(newObj->getID(), parkingOffset, &ppinfo)) //&loc, &orient, NULL, NULL, NULL, NULL, &hangarInternal, &hangOrient))
 		{
 			DEBUG_CRASH(("no spaces available, how did we get here?"));
-			ppinfo.parkingSpace = *getObject()->getPosition();
-			ppinfo.parkingOrientation = getObject()->getOrientation();
+			// PPInfo is float, like the bone data it is usually filled from
+			ppinfo.parkingSpace = getObject()->getPositionFix()->toCoord3D();
+			ppinfo.parkingOrientation = fixToReal( getObject()->getOrientationFix() );
 		}
 	}
 	DUMPCOORD3D(&ppinfo.hangarInternal);
@@ -828,8 +838,10 @@ void ParkingPlaceBehavior::exitObjectViaDoor( Object *newObj, ExitDoorType exitD
 	DUMPCOORD3D(&ppinfo.parkingSpace);
 	DUMPREAL(ppinfo.parkingOrientation);
 
-	newObj->setPosition( &ppinfo.hangarInternal );
-	newObj->setOrientation( ppinfo.hangarInternalOrient );
+	FCoord3D hangarInternal;
+	hangarInternal.set( fixFromReal( ppinfo.hangarInternal.x ), fixFromReal( ppinfo.hangarInternal.y ), fixFromReal( ppinfo.hangarInternal.z ) );
+	newObj->setPositionFix( &hangarInternal );
+	newObj->setOrientationFix( fixFromReal( ppinfo.hangarInternalOrient ) );
 	TheAI->pathfinder()->addObjectToPathfindMap( newObj );
 
 	AIUpdateInterface  *ai = newObj->getAIUpdateInterface();

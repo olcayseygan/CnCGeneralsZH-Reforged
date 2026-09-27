@@ -162,7 +162,8 @@ void InstantDeathBehavior::onDie( const DamageInfo *damageInfo )
 		const WeaponTemplate* wt = v[idx];
 		if (wt)
 		{
-			TheWeaponStore->createAndFireTempWeapon(wt, getObject(), getObject()->getPosition());
+			Coord3D pos = getObject()->getPositionFix()->toCoord3D(); // P6
+			TheWeaponStore->createAndFireTempWeapon(wt, getObject(), &pos);
 		}
 	}
 

@@ -218,7 +218,7 @@ void PrisonBehavior::pickVisualLocation( Coord3D *pos )
 		return;
 
 	// initialize the picked location to that of the prison center
-	Coord3D pickedLocation = *us->getPosition();
+	Coord3D pickedLocation = us->getPositionFix()->toCoord3D(); // the yard is only drawn, client
 
 	// get the positions of the bones that make up the prison yard area
 	const Int MAX_YARD_BONES = 16;

@@ -44,6 +44,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 
 
 #ifdef _INTERNAL
@@ -112,7 +113,8 @@ GrantStealthBehavior::GrantStealthBehavior( Thing *thing, const ModuleData* modu
 			particleSystem = TheParticleSystemManager->createParticleSystem( d->m_radiusParticleSystemTmpl );
 			if( particleSystem )
 			{
-				particleSystem->setPosition( obj->getPosition() );
+				Coord3D pos = obj->getPositionFix()->toCoord3D(); // particles are client
+				particleSystem->setPosition( &pos );
 				m_radiusParticleSystemID = particleSystem->getSystemID();
 			}
 		}
@@ -162,7 +164,7 @@ UpdateSleepTime GrantStealthBehavior::update( void )
   }
 
 	// scan objects in our region
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( self->getPosition(), m_currentScanRadius, FROM_CENTER_2D, filters );
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( self->getPositionFix(), fixFromReal( m_currentScanRadius ), FROM_CENTER_2D, filters ); // xfer'd, stays float
 	MemoryPoolObjectHolder hold( iter );
 	// GRANT STEALTH TO FRIENDLIES IN RADIUS 
 	for( Object *obj = iter->first(); obj; obj = iter->next() )

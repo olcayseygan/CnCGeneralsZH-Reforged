@@ -235,11 +235,13 @@ void BunkerBusterBehavior::bustTheBunker( void )
   if ( detonationFX )
   	FXList::doFXObj( detonationFX, objectForFX );//DetonationFX done on the building
 
+	Coord3D fxPos = objectForFX->getPositionFix()->toCoord3D(); // P6, and the seismic sim is client
+
 #ifdef DO_SEISMIC_SIMULATIONS
   // Okay, the right proper way to do this is to add SeismicSim support to FXList...
   // But until that day, I'm just gonna do it here,  sorry, M Lorenzen 6/26/03
   SeismicSimulationNode sim( 
-    objectForFX->getPosition(), 
+    &fxPos,
     modData->m_seismicEffectRadius, 
     modData->m_seismicEffectMagnitude, 
     &bunkerBusterHeavingEarthSeismicFilter );
@@ -248,7 +250,7 @@ void BunkerBusterBehavior::bustTheBunker( void )
 #endif
 
   if ( modData->m_shockwaveWeaponTemplate )
-		TheWeaponStore->createAndFireTempWeapon(modData->m_shockwaveWeaponTemplate, objectForFX, objectForFX->getPosition());
+		TheWeaponStore->createAndFireTempWeapon(modData->m_shockwaveWeaponTemplate, objectForFX, &fxPos);
 
 
 }  // end onDie

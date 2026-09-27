@@ -51,7 +51,7 @@ public:
 	static void buildFieldParse( MultiIniFieldParse &p );
 
 	AsciiString m_holeName;			///< name of hole object to create
-	Real m_holeMaxHealth;				///< max health of hole to create
+	Fix m_holeMaxHealth;				///< max health of hole to create
 	Bool m_transferAttackers;		///< if true, people attacking us should switch attacks to the hole when we die
 
 };

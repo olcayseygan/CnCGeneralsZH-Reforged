@@ -50,7 +50,7 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	Real								m_addMaxHealth;
+	Fix									m_addMaxHealth;
 	MaxHealthChangeType m_maxHealthChangeType;
 
 };

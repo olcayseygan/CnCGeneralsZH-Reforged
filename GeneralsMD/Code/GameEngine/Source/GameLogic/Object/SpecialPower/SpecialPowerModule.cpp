@@ -522,10 +522,10 @@ void SpecialPowerModule::createViewObject( const Coord3D *location )
 	if( modData == NULL  ||  powerTemplate == NULL )
 		return;
 
-	Real visionRange = powerTemplate->getViewObjectRange();
+	const Fix visionRange = powerTemplate->getViewObjectRangeFix();
 	UnsignedInt visionDuration = powerTemplate->getViewObjectDuration();
 
-	if( visionRange == 0 || visionDuration == 0 )
+	if( visionRange == Fix( 0 ) || visionDuration == 0 )
 		return; // We don't want a view object at all.
 
 	AsciiString objectName = TheGlobalData->m_specialPowerViewObjectName;
@@ -544,7 +544,7 @@ void SpecialPowerModule::createViewObject( const Coord3D *location )
 	FCoord3D at;
 	at.set( fixFromReal( location->x ), fixFromReal( location->y ), fixFromReal( location->z ) );	// P7: the location arrives in float
 	viewObject->setPositionFix( &at );
-	viewObject->setShroudClearingRange( visionRange );
+	viewObject->setShroudClearingRange( fixToReal( visionRange ) );	// P9: Object's shroud clearing range is float
 
 	static NameKeyType key_DeletionUpdate = NAMEKEY("DeletionUpdate");
 	DeletionUpdate* dup = (DeletionUpdate*)viewObject->findUpdateModule(key_DeletionUpdate);

@@ -45,6 +45,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameClient/SelectionXlat.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -57,7 +58,7 @@
 RebuildHoleExposeDieModuleData::RebuildHoleExposeDieModuleData()
 {
 
-	m_holeMaxHealth = 0.0f;
+	m_holeMaxHealth = Fix( 0 );
 	m_transferAttackers = true;
 }
 
@@ -70,7 +71,7 @@ RebuildHoleExposeDieModuleData::RebuildHoleExposeDieModuleData()
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "HoleName", INI::parseAsciiString, NULL, offsetof( RebuildHoleExposeDieModuleData, m_holeName ) },
-		{ "HoleMaxHealth", INI::parseReal, NULL, offsetof( RebuildHoleExposeDieModuleData, m_holeMaxHealth ) },
+		{ "HoleMaxHealth", INI::parseFix, NULL, FIX_OFFSET( RebuildHoleExposeDieModuleData, m_holeMaxHealth ) },
 		{ "TransferAttackers", INI::parseBool, NULL, offsetof( RebuildHoleExposeDieModuleData, m_transferAttackers ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -162,7 +163,7 @@ void RebuildHoleExposeDie::onDie( const DamageInfo *damageInfo )
 
 		// set the health of the hole to that defined by our data
 		BodyModuleInterface *body = hole->getBodyModule();
-		body->setMaxHealth( modData->m_holeMaxHealth );
+		body->setMaxHealth( fixToReal( modData->m_holeMaxHealth ) );	// P6: body health is float
 
 		// set the information in the hole about what to build
 		RebuildHoleBehaviorInterface *rhbi = RebuildHoleBehavior::getRebuildHoleBehaviorInterfaceFromObject( hole );

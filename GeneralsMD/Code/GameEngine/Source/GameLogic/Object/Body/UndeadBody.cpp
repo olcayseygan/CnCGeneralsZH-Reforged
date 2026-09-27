@@ -34,6 +34,7 @@
 
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/SlowDeathBehavior.h"
+#include "Lib/FixBoundary.h"
 
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 
@@ -43,7 +44,7 @@ void UndeadBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
   ActiveBodyModuleData::buildFieldParse(p);
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "SecondLifeMaxHealth",			INI::parseReal,	NULL,		offsetof( UndeadBodyModuleData, m_secondLifeMaxHealth ) },
+		{ "SecondLifeMaxHealth",			INI::parseFix,	NULL,		FIX_OFFSET( UndeadBodyModuleData, m_secondLifeMaxHealth ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -53,7 +54,7 @@ void UndeadBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
 //-------------------------------------------------------------------------------------------------
 UndeadBodyModuleData::UndeadBodyModuleData()
 {
-	m_secondLifeMaxHealth = 1;
+	m_secondLifeMaxHealth = Fix( 1 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -137,7 +138,7 @@ void UndeadBody::startSecondLife(DamageInfo *damageInfo)
 	m_isSecondLife = TRUE;
 
 	// Modify ActiveBody's max health and initial health
-	setMaxHealth(data->m_secondLifeMaxHealth, FULLY_HEAL);
+	setMaxHealth(fixToReal(data->m_secondLifeMaxHealth), FULLY_HEAL);	// P6: body health is float
 
 	// Set Armor set flag to use second life armor
 	setArmorSetFlag(ARMORSET_SECOND_LIFE);

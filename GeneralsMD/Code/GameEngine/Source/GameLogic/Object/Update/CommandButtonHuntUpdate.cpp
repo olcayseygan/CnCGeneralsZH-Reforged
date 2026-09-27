@@ -335,7 +335,7 @@ Object* CommandButtonHuntUpdate::scanClosestTarget(void)
 			if( TheActionManager->canDoSpecialPowerAtObject( me, other, CMD_FROM_AI, spTemplate, 0 ) )
 			{
 				if (isPlaceExplosive) {
-					Fix range = fixFromReal( spTemplate->getViewObjectRange() );	// P3: template data
+					Fix range = spTemplate->getViewObjectRangeFix();
 					// Don't target things near explosives... It's just not a good idea.
 					PartitionFilterSamePlayer filterPlayer( me->getControllingPlayer() );	// Look for our own mines.
 					PartitionFilterAcceptByKindOf filterKind(MAKE_KINDOF_MASK(KINDOF_MINE), KINDOFMASK_NONE);

@@ -58,7 +58,7 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse& p );
 
-	Real m_fatCursorRadius;					///< the distance around the target we will reveal
+	Fix m_fatCursorRadius;					///< the distance around the target we will reveal
 
 };
 

@@ -117,7 +117,7 @@ const FieldParse UpgradeTemplate::m_upgradeFieldParseTable[] =
 
 	{ "DisplayName",				INI::parseAsciiString,		NULL, offsetof( UpgradeTemplate, m_displayNameLabel ) },
 	{ "Type",								INI::parseIndexList,			TheUpgradeTypeNames, offsetof( UpgradeTemplate, m_type ) },
-	{ "BuildTime",					INI::parseReal,						NULL, offsetof( UpgradeTemplate, m_buildTime ) },
+	{ "BuildTime",					INI::parseFix,						NULL, FIX_OFFSET( UpgradeTemplate, m_buildTime ) },
 	{ "BuildCost",					INI::parseInt,						NULL, offsetof( UpgradeTemplate, m_cost ) },
 	{ "ButtonImage",				INI::parseAsciiString,		NULL, offsetof( UpgradeTemplate, m_buttonImageName ) },
 	{ "ResearchSound",			INI::parseAudioEventRTS,	NULL, offsetof( UpgradeTemplate, m_researchSound ) }, 
@@ -137,7 +137,7 @@ UpgradeTemplate::UpgradeTemplate( void )
 	//
 	m_type = UPGRADE_TYPE_PLAYER;
 	m_nameKey = NAMEKEY_INVALID;
-	m_buildTime = 0.0f;
+	m_buildTime = Fix( 0 );
 	m_next = NULL;
 	m_prev = NULL;
 	m_buttonImage = NULL;
@@ -163,7 +163,7 @@ Int UpgradeTemplate::calcTimeToBuild( Player *player ) const
 	}
 
 	///@todo modify this by power state of player
-	return m_buildTime * LOGICFRAMES_PER_SECOND;
+	return (Int)( ( m_buildTime * Fix( LOGICFRAMES_PER_SECOND ) ).raw() / Fix::ONE_RAW );
 
 }  // end calcTimeToBuild
 
@@ -196,7 +196,7 @@ void UpgradeTemplate::friend_makeVeterancyUpgrade(VeterancyLevel v)
 	m_name = getVetUpgradeName(v);
 	m_nameKey = TheNameKeyGenerator->nameToKey( m_name );
 	m_displayNameLabel.clear();	// should never be displayed
-	m_buildTime = 0.0f;
+	m_buildTime = Fix( 0 );
 	m_cost = 0.0f;
 	// leave this alone.
 	//m_upgradeMask = ???;

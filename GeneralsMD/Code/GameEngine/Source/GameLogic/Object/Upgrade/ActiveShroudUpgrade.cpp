@@ -33,13 +33,14 @@
 #include "Common/Xfer.h"
 #include "GameLogic/Module/ActiveShroudUpgrade.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 ActiveShroudUpgradeModuleData::ActiveShroudUpgradeModuleData( void )
 {
 
-	m_newShroudRange = 0.0f;
+	m_newShroudRange = Fix( 0 );
 
 }  // end SpecialPowerModuleData
 
@@ -51,7 +52,7 @@ ActiveShroudUpgradeModuleData::ActiveShroudUpgradeModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "NewShroudRange", INI::parseReal, NULL, offsetof( ActiveShroudUpgradeModuleData, m_newShroudRange ) },
+		{ "NewShroudRange", INI::parseFix, NULL, FIX_OFFSET( ActiveShroudUpgradeModuleData, m_newShroudRange ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -84,7 +85,7 @@ void ActiveShroudUpgrade::upgradeImplementation( void )
 	// Set my object's ability to actively shroud.
 	if( getActiveShroudUpgradeModuleData() )
 	{
-		getObject()->setShroudRange( getActiveShroudUpgradeModuleData()->m_newShroudRange );
+		getObject()->setShroudRange( fixToReal( getActiveShroudUpgradeModuleData()->m_newShroudRange ) );	// P9: Object's shroud range is float
 		getObject()->handlePartitionCellMaintenance();// To shroud where I am without waiting.
 	}
 }  // end upgradeImplementation

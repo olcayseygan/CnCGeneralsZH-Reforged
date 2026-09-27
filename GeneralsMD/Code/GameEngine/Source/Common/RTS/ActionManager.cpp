@@ -1721,7 +1721,7 @@ Bool ActionManager::canDoSpecialPowerAtLocation( const Object *obj, const Coord3
 					return FALSE;
 
 				return TheBuildAssistant->isLocationLegalToBuild(
-					loc, referenceThing, referenceThing->getPlacementViewAngle(),
+					loc, referenceThing, referenceThing->getPlacementViewAngle(),	// P7: the build check takes a float angle
 					BuildAssistant::USE_QUICK_PATHFIND |
 					BuildAssistant::TERRAIN_RESTRICTIONS |
 					BuildAssistant::CLEAR_PATH |

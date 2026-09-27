@@ -2833,7 +2833,7 @@ void AIPlayer::buildBySupplies(Int minimumCash, const AsciiString& thingName)
 		}
 		location.x -= offset.x*radius;
 		location.y -= offset.y*radius;
-		Real angle = tTemplate->getPlacementViewAngle();
+		Real angle = tTemplate->getPlacementViewAngle();	// P7
 
  		// validate the the position to build at is valid
 		Bool valid=false;
@@ -2937,7 +2937,7 @@ Bool AIPlayer::calcClosestConstructionZoneLocation( const ThingTemplate *constru
 	offset.y = location->y - m_baseCenter.y;
 	offset.normalize();
 
-	Real angle = constructTemplate->getPlacementViewAngle();
+	Real angle = constructTemplate->getPlacementViewAngle();	// P7
 
  	// validate the the position to build at is valid
 	Bool valid=false;
@@ -3051,7 +3051,7 @@ void AIPlayer::buildSpecificBuildingNearestTeam( const AsciiString &thingName, c
 	offset.y = location->y - m_baseCenter.y;
 	offset.normalize();
 
-	Real angle = tTemplate->getPlacementViewAngle();
+	Real angle = tTemplate->getPlacementViewAngle();	// P7
 
  	// validate the the position to build at is valid
 	Bool valid=false;
@@ -5355,7 +5355,7 @@ void AIPlayer::buyMoneyUnits( void )
 Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius )
 {
 	const Fix structureRadius = tmpl->getTemplateGeometryInfo().getBoundingCircleRadiusFix();
-	const Real placeAngle = tmpl->getPlacementViewAngle();
+	const Real placeAngle = tmpl->getPlacementViewAngle();	// P7
 	const FCoord3D fxCenter = fcoordFromCoord3D(*center );	// P7: the spot and the build calls are float
 	const Fix fxInner = fixFromReal( innerRadius );
 
@@ -7199,7 +7199,7 @@ void AIPlayer::updateStartIntel( void )
 			continue;
 
 		const FCoord3D *at = scout->getPositionFix();
-		const Fix see = fixMax( fixFromReal( scout->getVisionRange() ), Fix(1) );	// P3
+		const Fix see = fixMax( fixFromReal( scout->getVisionRange() ), Fix(1) );	// P9: Object's vision range is float
 
 		for( Int startNdx = 0; startNdx < MAX_PLAYER_COUNT; ++startNdx )
 		{

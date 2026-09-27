@@ -55,7 +55,7 @@ class CleanupAreaPowerModuleData : public SpecialPowerModuleData
 
 public:
 
-	Real m_cleanupMoveRange;
+	Fix m_cleanupMoveRange;
 
 	CleanupAreaPowerModuleData( void );
 	static void buildFieldParse(MultiIniFieldParse& p);

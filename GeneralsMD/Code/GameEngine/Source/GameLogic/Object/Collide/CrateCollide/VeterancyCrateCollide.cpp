@@ -136,7 +136,7 @@ Bool VeterancyCrateCollide::executeCrateBehavior( Object *other )
  	}
 
 	Int levelsToGain = getLevelsToGain();
-	Fix range = fixFromReal( md->m_rangeOfEffect );	// P3
+	Fix range = Fix( (Int)md->m_rangeOfEffect );
 	if (range == Fix( 0 ))
 	{
 		// do just the collider

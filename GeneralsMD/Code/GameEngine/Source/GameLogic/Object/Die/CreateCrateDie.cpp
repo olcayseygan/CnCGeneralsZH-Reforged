@@ -129,8 +129,8 @@ void CreateCrateDie::onDie( const DamageInfo * damageInfo )
 
 Bool CreateCrateDie::testCreationChance( CrateTemplate const *currentCrateData )
 {
-	Real testAgainst = currentCrateData->m_creationChance;
-	Real testWith = GameLogicRandomValueReal( 0, 1 );
+	Fix testAgainst = currentCrateData->m_creationChance;
+	Fix testWith = GameLogicRandomValueFix( Fix( 0 ), Fix( 1 ) );
 
 	return testWith < testAgainst;
 }
@@ -178,8 +178,8 @@ Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 	PathfindLayerEnum layer = getObject()->getLayer();
 
 	// CreationChance is used for the success of this block, but this block can have any number of potential actual crates
-	Real multipleCratePick = GameLogicRandomValueReal( 0, 1 );
-	Real multipleCrateRunningTotal = 0;
+	Fix multipleCratePick = GameLogicRandomValueFix( Fix( 0 ), Fix( 1 ) );
+	Fix multipleCrateRunningTotal = Fix( 0 );
 	AsciiString crateName = "";
 
 	for( crateCreationEntryConstIterator iter = currentCrateData->m_possibleCrates.begin();

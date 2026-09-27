@@ -823,8 +823,8 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 	ObjectIterator *iter2 = ThePartitionManager->iterateObjectsInRangeFix(&worldFx, range, FROM_BOUNDINGSPHERE_2D, filters);
 	MemoryPoolObjectHolder hold2(iter2);
 
-	Fix myFactoryExitWidth = fixFromReal(build->getFactoryExitWidth());	// P3
-	Fix myExtraWidth = fixFromReal(build->getFactoryExtraBibWidth());		// P3
+	Fix myFactoryExitWidth = build->getFactoryExitWidthFix();
+	Fix myExtraWidth = build->getFactoryExtraBibWidthFix();
 
 	if (thePlayer && thePlayer->isSkirmishAIPlayer()) {
 		// Skirmish ai adds a little extra around the edges so it doesn't build itself into a corner.
@@ -879,8 +879,8 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		if( isRemovableForConstruction( them ) == TRUE )
 			continue;
 
-		Fix themFactoryExitWidth = fixFromReal(them->getTemplate()->getFactoryExitWidth());	// P3
-		Fix hisExtraWidth = fixFromReal(them->getTemplate()->getFactoryExtraBibWidth());		// P3
+		Fix themFactoryExitWidth = them->getTemplate()->getFactoryExitWidthFix();
+		Fix hisExtraWidth = them->getTemplate()->getFactoryExtraBibWidthFix();
 
 		const FCoord3D *themPos = them->getPositionFix();
 		const Fix themAngle = them->getOrientationFix();

@@ -38,6 +38,7 @@
 #include "Common/GameMemory.h"
 #include "Common/SubsystemInterface.h"
 #include "Lib/BaseType.h"
+#include "Lib/FixBoundary.h"
 #include "Common/BitFlags.h"
 #include "Common/Overridable.h"
 #include "Common/Override.h"
@@ -122,8 +123,8 @@ public:
 	Bool isSharedNSync( void ) const { return getFO()->m_sharedNSync; }
 	UnsignedInt getDetectionTime( void ) const { return getFO()->m_detectionTime; }
 	UnsignedInt getViewObjectDuration( void ) const { return getFO()->m_viewObjectDuration; }
-	Real getViewObjectRange( void ) const { return getFO()->m_viewObjectRange; }
-	Real getRadiusCursorRadius() const { return getFO()->m_radiusCursorRadius; }
+	Fix getViewObjectRangeFix( void ) const { return getFO()->m_viewObjectRange; }
+	Real getRadiusCursorRadius() const { return fixToReal( getFO()->m_radiusCursorRadius ); }	///< the float edge, for the cursor and the script AI
 	Bool isShortcutPower() const { return getFO()->m_shortcutPower; }
 	AcademyClassificationType getAcademyClassificationType() const { return m_academyClassificationType; }
 
@@ -142,8 +143,8 @@ private:
 	UnsignedInt				m_detectionTime;			///< (frames) after using infiltration power (defection, etc.), 
 																					///< how long it takes for ex comrades to realize it on their own
 	UnsignedInt				m_viewObjectDuration;	///< Lifetime of a looking object we slap down so you can watch the effect
-	Real							m_viewObjectRange;		///< And how far that object can see.
-	Real							m_radiusCursorRadius;	///< size of radius cursor, if any
+	Fix								m_viewObjectRange;		///< And how far that object can see.
+	Fix								m_radiusCursorRadius;	///< size of radius cursor, if any
 	Bool							m_publicTimer;				///< display a countdown timer for this special power for all to see
 	Bool							m_sharedNSync;				///< If true, this is a special that is shared between all of a player's command centers
 	Bool							m_shortcutPower;		///< Is this shortcut power capable of being fired by the side panel?

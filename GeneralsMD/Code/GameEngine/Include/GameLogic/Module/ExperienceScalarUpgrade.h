@@ -49,7 +49,7 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	Real m_addXPScalar;
+	Fix m_addXPScalar;
 
 };
 

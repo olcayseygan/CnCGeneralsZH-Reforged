@@ -96,7 +96,7 @@ public:
 
 	std::vector<Upgrades>			m_upgrades;
 #endif
-	Real											m_defaultBounty;
+	Fix												m_defaultBounty;
 
 	CashBountyPowerModuleData( void );
 	static void buildFieldParse(MultiIniFieldParse& p);

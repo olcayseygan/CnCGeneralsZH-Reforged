@@ -54,7 +54,7 @@
 //-------------------------------------------------------------------------------------------------
 CleanupAreaPowerModuleData::CleanupAreaPowerModuleData()
 {
-	m_cleanupMoveRange = 0.0;
+	m_cleanupMoveRange = Fix( 0 );
 } 
 
 //-------------------------------------------------------------------------------------------------
@@ -64,7 +64,7 @@ void CleanupAreaPowerModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "MaxMoveDistanceFromLocation",			INI::parseReal, NULL, offsetof( CleanupAreaPowerModuleData, m_cleanupMoveRange ) },
+		{ "MaxMoveDistanceFromLocation",			INI::parseFix, NULL, FIX_OFFSET( CleanupAreaPowerModuleData, m_cleanupMoveRange ) },
 		{ 0, 0, 0, 0 } 
 	};
 	p.add(dataFieldParse);
@@ -96,7 +96,7 @@ void CleanupAreaPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle,
 	CleanupHazardUpdate *update = (CleanupHazardUpdate*)obj->findUpdateModule( key_CleanupHazardUpdate );
 	if( update )
 	{
-		update->setCleanupAreaParameters( loc, data->m_cleanupMoveRange );
+		update->setCleanupAreaParameters( loc, fixToReal( data->m_cleanupMoveRange ) );	// P8: the cleanup update keeps the range as saved float
 	}
 	else
 	{

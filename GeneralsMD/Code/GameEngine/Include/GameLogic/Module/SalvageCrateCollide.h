@@ -45,17 +45,17 @@ class Thing;
 class SalvageCrateCollideModuleData : public CrateCollideModuleData
 {
 public:
-	Real m_weaponChance;	///< Chance to get a weapon upgrade, if possible
-	Real m_levelChance;		///< Chance to get a level, if weaponChance fails
-	Real m_moneyChance;		///< Chance to get money, if weaponChance fails
+	Fix m_weaponChance;	///< Chance to get a weapon upgrade, if possible
+	Fix m_levelChance;		///< Chance to get a level, if weaponChance fails
+	Fix m_moneyChance;		///< Chance to get money, if weaponChance fails
 	Int m_minimumMoney;		///< How much, if we get money
 	Int m_maximumMoney;		///< How much, if we get money
 
 	SalvageCrateCollideModuleData()
 	{
-		m_weaponChance = 1.0f;
-		m_levelChance = .25f;
-		m_moneyChance = .75f;
+		m_weaponChance = Fix( 1 );
+		m_levelChance = 0.25_fx;
+		m_moneyChance = 0.75_fx;
 		m_minimumMoney = 25;
 		m_maximumMoney = 75;
 	}
@@ -66,9 +66,9 @@ public:
 
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "WeaponChance",	INI::parsePercentToReal,	NULL, offsetof( SalvageCrateCollideModuleData, m_weaponChance ) },
-			{ "LevelChance",	INI::parsePercentToReal,	NULL, offsetof( SalvageCrateCollideModuleData, m_levelChance ) },
-			{ "MoneyChance",	INI::parsePercentToReal,	NULL, offsetof( SalvageCrateCollideModuleData, m_moneyChance ) },
+			{ "WeaponChance",	INI::parsePercentToFix,	NULL, FIX_OFFSET( SalvageCrateCollideModuleData, m_weaponChance ) },
+			{ "LevelChance",	INI::parsePercentToFix,	NULL, FIX_OFFSET( SalvageCrateCollideModuleData, m_levelChance ) },
+			{ "MoneyChance",	INI::parsePercentToFix,	NULL, FIX_OFFSET( SalvageCrateCollideModuleData, m_moneyChance ) },
 			{ "MinMoney",			INI::parseInt,						NULL, offsetof( SalvageCrateCollideModuleData, m_minimumMoney ) },
 			{ "MaxMoney",			INI::parseInt,						NULL, offsetof( SalvageCrateCollideModuleData, m_maximumMoney ) },
 			{ 0, 0, 0, 0 }

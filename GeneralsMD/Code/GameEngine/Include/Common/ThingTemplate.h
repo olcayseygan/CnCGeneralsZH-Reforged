@@ -34,6 +34,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "Lib/BaseType.h"
+#include "Lib/FixBoundary.h"
  
 #include "Common/AudioEventRTS.h"
 #include "Common/FileSystem.h"
@@ -419,18 +420,24 @@ public:
 	// note, you should not call this directly; rather, call Object::getTransportSlotCount().
 	Int getRawTransportSlotCount() const { return m_transportSlotCount; }
 
-	Real getFenceWidth() const { return m_fenceWidth; }  // return fence width
+	// The Real getters beside the Fix ones are the float edge, for the client, the tools and the
+	// logic that is still float (each such caller carries the phase that takes it).
+	Fix getFenceWidthFix() const { return m_fenceWidth; }
+	Real getFenceWidth() const { return fixToReal( m_fenceWidth ); }  // return fence width
 
-	Real getFenceXOffset() const { return m_fenceXOffset; }  // return fence offset
+	Fix getFenceXOffsetFix() const { return m_fenceXOffset; }
+	Real getFenceXOffset() const { return fixToReal( m_fenceXOffset ); }  // return fence offset
 
 	Bool isBridge() const { return m_isBridge; }  // return fence offset
 
 	// Only Object can ask this.  Everyone else should ask the Object.  In fact, you really should ask the Object everything.
-	Real friend_calcVisionRange() const { return m_visionRange; }  ///< get vision range
-	Real friend_calcShroudClearingRange() const { return m_shroudClearingRange; }  ///< get vision range for Shroud ONLY (Design requested split)
-	
+	Fix friend_calcVisionRangeFix() const { return m_visionRange; }
+	Real friend_calcVisionRange() const { return fixToReal( m_visionRange ); }  ///< get vision range
+	Real friend_calcShroudClearingRange() const { return fixToReal( m_shroudClearingRange ); }  ///< get vision range for Shroud ONLY (Design requested split)
+
 	//This one is okay to check directly... because it doesn't get effected by bonuses.
-	Real getShroudRevealToAllRange() const { return m_shroudRevealToAllRange; }
+	Fix getShroudRevealToAllRangeFix() const { return m_shroudRevealToAllRange; }
+	Real getShroudRevealToAllRange() const { return fixToReal( m_shroudRevealToAllRange ); }
 	
 	// This function is only for use by the AIUpdateModuleData::parseLocomotorSet function.
 	AIUpdateModuleData *friend_getAIModuleInfo(void);
@@ -615,10 +622,13 @@ public:
 	const FieldParse* getReskinFieldParse() const { return s_objectReskinFieldParseTable; }
 
 	Bool isBuildFacility() const { return m_isBuildFacility; }
-	Real getPlacementViewAngle( void ) const { return m_placementViewAngle; }
+	Fix getPlacementViewAngleFix( void ) const { return m_placementViewAngle; }
+	Real getPlacementViewAngle( void ) const { return fixToReal( m_placementViewAngle ); }
 
-	Real getFactoryExitWidth() const { return m_factoryExitWidth; }
-	Real getFactoryExtraBibWidth() const { return m_factoryExtraBibWidth; }
+	Fix getFactoryExitWidthFix() const { return m_factoryExitWidth; }
+	Fix getFactoryExtraBibWidthFix() const { return m_factoryExtraBibWidth; }
+	Real getFactoryExitWidth() const { return fixToReal( m_factoryExitWidth ); }
+	Real getFactoryExtraBibWidth() const { return fixToReal( m_factoryExtraBibWidth ); }
 
 	void setCopiedFromDefault();
 
@@ -649,7 +659,7 @@ protected:
 	// instead, because they will take player handicaps into account.
 	//
 	Int getBuildCost() const { return m_buildCost; }
-	Real getBuildTime() const { return m_buildTime; }
+	Fix getBuildTime() const { return m_buildTime; }
 	const PerUnitSoundMap* getAllPerUnitSounds( void ) const { return &m_perUnitSounds; }
 	void validateAudio();
 	const AudioEventRTS* getAudio(ThingTemplateAudioType t) const { return m_audioarray.m_audio[t] ? &m_audioarray.m_audio[t]->m_event : &s_audioEventNoSound; }
@@ -734,15 +744,15 @@ private:
 	const Image	*					m_buttonImage;			
 
 	// ---- Real-sized things
-	Real					m_fenceWidth;								///< Fence width for fence type objects.
-	Real					m_fenceXOffset;							///< Fence X offset for fence type objects.
-	Real					m_visionRange;								///< object "sees" this far around itself
-	Real					m_shroudClearingRange;				///< Since So many things got added to "Seeing" functionality, we need to split this part out.
-	Real					m_shroudRevealToAllRange;			///< When > zero, the shroud gets revealed to all players.
-	Real					m_placementViewAngle;				///< when placing buildings this will be the angle of the building when "floating" at the mouse
-	Real					m_factoryExitWidth;					///< when placing buildings this will be the width of the reserved exit area on the right side.
-	Real					m_factoryExtraBibWidth;					///< when placing buildings this will be the width of the reserved exit area on the right side.
-	Real					m_buildTime;									///< Seconds to build
+	Fix						m_fenceWidth;								///< Fence width for fence type objects.
+	Fix						m_fenceXOffset;							///< Fence X offset for fence type objects.
+	Fix						m_visionRange;								///< object "sees" this far around itself
+	Fix						m_shroudClearingRange;				///< Since So many things got added to "Seeing" functionality, we need to split this part out.
+	Fix						m_shroudRevealToAllRange;			///< When > zero, the shroud gets revealed to all players.
+	Fix						m_placementViewAngle;				///< when placing buildings this will be the angle of the building when "floating" at the mouse
+	Fix						m_factoryExitWidth;					///< when placing buildings this will be the width of the reserved exit area on the right side.
+	Fix						m_factoryExtraBibWidth;					///< when placing buildings this will be the width of the reserved exit area on the right side.
+	Fix						m_buildTime;									///< Seconds to build
 	Real					m_assetScale;
 	Real					m_instanceScaleFuzziness; ///< scale randomization tolerance to init for each Drawable instance, 
 	Real					m_shadowSizeX;				///< world-space extent of decal shadow texture

@@ -172,7 +172,7 @@ static void findUpgradeEffects( const ThingTemplate *thing, UpgradeEffects &effe
 		else if( module.compareNoCase( "ArmorUpgrade" ) == 0 )
 			effect.armor = TRUE;
 		else if( module.compareNoCase( "MaxHealthUpgrade" ) == 0 )
-			effect.addHealth = static_cast< const MaxHealthUpgradeModuleData * >( modules.getNthData( m ) )->m_addMaxHealth;
+			effect.addHealth = fixToReal( static_cast< const MaxHealthUpgradeModuleData * >( modules.getNthData( m ) )->m_addMaxHealth );
 		else
 			continue;
 

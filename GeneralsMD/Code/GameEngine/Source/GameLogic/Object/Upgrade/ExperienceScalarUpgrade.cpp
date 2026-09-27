@@ -34,12 +34,13 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Module/ExperienceScalarUpgrade.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 ExperienceScalarUpgradeModuleData::ExperienceScalarUpgradeModuleData( void )
 {
-	m_addXPScalar = 0.0f;
+	m_addXPScalar = Fix( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -51,7 +52,7 @@ void ExperienceScalarUpgradeModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "AddXPScalar",	INI::parseReal,		NULL, offsetof( ExperienceScalarUpgradeModuleData, m_addXPScalar ) },
+		{ "AddXPScalar",	INI::parseFix,		NULL, FIX_OFFSET( ExperienceScalarUpgradeModuleData, m_addXPScalar ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -82,7 +83,7 @@ void ExperienceScalarUpgrade::upgradeImplementation( )
 	ExperienceTracker *xpTracker = obj->getExperienceTracker();
 	if( xpTracker )
 	{
-		xpTracker->setExperienceScalar( xpTracker->getExperienceScalar() + data->m_addXPScalar );
+		xpTracker->setExperienceScalar( xpTracker->getExperienceScalar() + fixToReal( data->m_addXPScalar ) );	// P8: the tracker's scalar is saved float
 	}
 }
 

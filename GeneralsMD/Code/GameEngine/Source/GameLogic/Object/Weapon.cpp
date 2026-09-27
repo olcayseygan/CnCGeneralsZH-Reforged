@@ -48,6 +48,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
  
 #include "GameClient/Drawable.h"
 #include "GameClient/FXList.h"
@@ -195,30 +196,30 @@ WeaponStore *TheWeaponStore = NULL;					///< the weapon store definition
 const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] = 
 {
 
-	{ "PrimaryDamage",						INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_primaryDamage) },		
-	{ "PrimaryDamageRadius",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_primaryDamageRadius) },		
-	{ "SecondaryDamage",					INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_secondaryDamage) },		
-	{ "SecondaryDamageRadius",		INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_secondaryDamageRadius) },		
-	{ "ShockWaveAmount",					INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_shockWaveAmount) },		
-	{ "ShockWaveRadius",					INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_shockWaveRadius) },		
-	{ "ShockWaveTaperOff",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_shockWaveTaperOff) },		
-	{ "AttackRange",							INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_attackRange) },		
-	{ "MinimumAttackRange",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_minimumAttackRange) },		
-	{ "RequestAssistRange",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_requestAssistRange) },		
-	{ "AcceptableAimDelta",				INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_aimDelta) },		
-	{ "ScatterRadius",						INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterRadius) },		
-	{ "ScatterTargetScalar",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterTargetScalar) },		
-	{ "ScatterRadiusVsInfantry",	INI::parseReal,													NULL,							offsetof( WeaponTemplate, m_infantryInaccuracyDist ) },
+	{ "PrimaryDamage",						INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_primaryDamage) },
+	{ "PrimaryDamageRadius",			INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_primaryDamageRadius) },
+	{ "SecondaryDamage",					INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_secondaryDamage) },
+	{ "SecondaryDamageRadius",		INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_secondaryDamageRadius) },
+	{ "ShockWaveAmount",					INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_shockWaveAmount) },
+	{ "ShockWaveRadius",					INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_shockWaveRadius) },
+	{ "ShockWaveTaperOff",				INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_shockWaveTaperOff) },
+	{ "AttackRange",							INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_attackRange) },
+	{ "MinimumAttackRange",				INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_minimumAttackRange) },
+	{ "RequestAssistRange",				INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_requestAssistRange) },
+	{ "AcceptableAimDelta",				INI::parseAngleFix,											NULL,							FIX_OFFSET(WeaponTemplate, m_aimDelta) },
+	{ "ScatterRadius",						INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_scatterRadius) },
+	{ "ScatterTargetScalar",			INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_scatterTargetScalar) },
+	{ "ScatterRadiusVsInfantry",	INI::parseFix,													NULL,							FIX_OFFSET( WeaponTemplate, m_infantryInaccuracyDist ) },
 	{ "DamageType",								DamageTypeFlags::parseSingleBitFromINI,	NULL,							offsetof(WeaponTemplate, m_damageType) },		
 	{ "DamageStatusType",					ObjectStatusMaskType::parseSingleBitFromINI,	NULL,				offsetof(WeaponTemplate, m_damageStatusType) },		
 	{ "DeathType",								INI::parseIndexList,										TheDeathNames,		offsetof(WeaponTemplate, m_deathType) },		
-	{ "WeaponSpeed",							INI::parseVelocityReal,									NULL,							offsetof(WeaponTemplate, m_weaponSpeed) },		
-	{ "MinWeaponSpeed",						INI::parseVelocityReal,									NULL,							offsetof(WeaponTemplate, m_minWeaponSpeed) },		
-	{ "ScaleWeaponSpeed",					INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_isScaleWeaponSpeed) },		
-	{ "WeaponRecoil",							INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_weaponRecoil) },		
-	{ "MinTargetPitch",						INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_minTargetPitch) },		
-	{ "MaxTargetPitch",						INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_maxTargetPitch) },		
-	{ "RadiusDamageAngle",				INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_radiusDamageAngle) },		
+	{ "WeaponSpeed",							INI::parseVelocityFix,									NULL,							FIX_OFFSET(WeaponTemplate, m_weaponSpeed) },
+	{ "MinWeaponSpeed",						INI::parseVelocityFix,									NULL,							FIX_OFFSET(WeaponTemplate, m_minWeaponSpeed) },
+	{ "ScaleWeaponSpeed",					INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_isScaleWeaponSpeed) },
+	{ "WeaponRecoil",							INI::parseAngleFix,											NULL,							FIX_OFFSET(WeaponTemplate, m_weaponRecoil) },
+	{ "MinTargetPitch",						INI::parseAngleFix,											NULL,							FIX_OFFSET(WeaponTemplate, m_minTargetPitch) },
+	{ "MaxTargetPitch",						INI::parseAngleFix,											NULL,							FIX_OFFSET(WeaponTemplate, m_maxTargetPitch) },
+	{ "RadiusDamageAngle",				INI::parseAngleFix,											NULL,							FIX_OFFSET(WeaponTemplate, m_radiusDamageAngle) },
 	{ "ProjectileObject",					INI::parseAsciiString,									NULL,							offsetof(WeaponTemplate, m_projectileName) },		
 	{ "FireSound",								INI::parseAudioEventRTS,								NULL,							offsetof(WeaponTemplate, m_fireSound) },		
 	{ "FireSoundLoopTime",				INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_fireSoundLoopTime) },		
@@ -257,7 +258,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "LaserBoneName",						INI::parseAsciiString,									NULL,							offsetof(WeaponTemplate, m_laserBoneName) },
 	{ "WeaponBonus",							WeaponTemplate::parseWeaponBonusSet,		NULL,							0 },		
 	{ "HistoricBonusTime",				INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_historicBonusTime) },		
-	{ "HistoricBonusRadius",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_historicBonusRadius) },		
+	{ "HistoricBonusRadius",			INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_historicBonusRadius) },
 	{ "HistoricBonusCount",				INI::parseInt,													NULL,							offsetof(WeaponTemplate, m_historicBonusCount) },		
 	{ "HistoricBonusWeapon",			INI::parseWeaponTemplate,								NULL,							offsetof(WeaponTemplate, m_historicBonusWeapon) },		
 	{ "LeechRangeWeapon",					INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_leechRangeWeapon) },
@@ -268,7 +269,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "PlayFXWhenStealthed",			INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_playFXWhenStealthed) },
 	{ "PreAttackDelay",						INI::parseDurationUnsignedInt,					NULL,							offsetof( WeaponTemplate, m_preAttackDelay ) },
 	{ "PreAttackType",						INI::parseIndexList,										TheWeaponPrefireNames, offsetof(WeaponTemplate, m_prefireType) },		
-	{ "ContinueAttackRange",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_continueAttackRange) },
+	{ "ContinueAttackRange",			INI::parseFix,													NULL,							FIX_OFFSET(WeaponTemplate, m_continueAttackRange) },
 	{ "SuspendFXDelay",						INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_suspendFXDelay) },		
 	{ "MissileCallsOnDie",			INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_dieOnDetonate) },
 	{ NULL,												NULL,																		NULL,							0 }  // keep this last
@@ -285,28 +286,28 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 
 	m_name													= "NoNameWeapon";
 	m_nameKey												= NAMEKEY_INVALID;
-	m_primaryDamage									= 0.0f;
-	m_primaryDamageRadius						= 0.0f;
-	m_secondaryDamage								= 0.0f;
-	m_secondaryDamageRadius					= 0.0f;
-	m_attackRange										= 0.0f;
-	m_minimumAttackRange						= 0.0f;
-	m_requestAssistRange						= 0.0f;
-	m_aimDelta											= 0.0f;
-	m_scatterRadius									= 0.0f;
-	m_scatterTargetScalar						= 0.0f;
-	m_shockWaveAmount								= 0.0f;
-	m_shockWaveRadius								= 0.0f;
-	m_shockWaveTaperOff							= 0.0f;
+	m_primaryDamage									= Fix( 0 );
+	m_primaryDamageRadius						= Fix( 0 );
+	m_secondaryDamage								= Fix( 0 );
+	m_secondaryDamageRadius					= Fix( 0 );
+	m_attackRange										= Fix( 0 );
+	m_minimumAttackRange						= Fix( 0 );
+	m_requestAssistRange						= Fix( 0 );
+	m_aimDelta											= Fix( 0 );
+	m_scatterRadius									= Fix( 0 );
+	m_scatterTargetScalar						= Fix( 0 );
+	m_shockWaveAmount								= Fix( 0 );
+	m_shockWaveRadius								= Fix( 0 );
+	m_shockWaveTaperOff							= Fix( 0 );
 	m_damageType										= DAMAGE_EXPLOSION;
 	m_deathType											= DEATH_NORMAL;
-	m_weaponSpeed										= 999999.0f;	// effectively instant
-	m_minWeaponSpeed								= 999999.0f;	// effectively instant
+	m_weaponSpeed										= Fix( 999999 );	// effectively instant
+	m_minWeaponSpeed								= Fix( 999999 );	// effectively instant
 	m_isScaleWeaponSpeed						= FALSE;
-	m_weaponRecoil									= 0.0f;		// no recoil
-	m_minTargetPitch								= -PI;
-	m_maxTargetPitch								= PI;
-	m_radiusDamageAngle							= PI;	// PI each way, so full circle
+	m_weaponRecoil									= Fix( 0 );		// no recoil
+	m_minTargetPitch								= -FIX_PI;
+	m_maxTargetPitch								= FIX_PI;
+	m_radiusDamageAngle							= FIX_PI;	// PI each way, so full circle
 	m_projectileName.clear();					// no projectile
 	m_projectileTmpl								= NULL;
 	for (Int i = LEVEL_FIRST; i <= LEVEL_LAST; ++i)
@@ -342,7 +343,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_laserBoneName.clear();
 	m_historicBonusTime							= 0;
 	m_historicBonusCount						= 0;
-	m_historicBonusRadius						= 0;
+	m_historicBonusRadius						= Fix( 0 );
 	m_historicBonusWeapon						= NULL;
 	m_leechRangeWeapon							= FALSE;
 	m_capableOfFollowingWaypoint		= FALSE;
@@ -350,8 +351,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_allowAttackGarrisonedBldgs		= FALSE;
 	m_playFXWhenStealthed						= FALSE;
 	m_preAttackDelay								= 0;
-	m_continueAttackRange						= 0.0f;
-	m_infantryInaccuracyDist				= 0.0f;
+	m_continueAttackRange						= Fix( 0 );
+	m_infantryInaccuracyDist				= Fix( 0 );
 	m_damageStatusType							= OBJECT_STATUS_NONE;
 	m_suspendFXDelay								= 0;
 	m_dieOnDetonate						= FALSE;
@@ -488,13 +489,13 @@ Real WeaponTemplate::getAttackRange(const WeaponBonus& bonus) const
 	// Note - undersize by 1/4 of a pathfind cell, so that the goal is not teetering on the edge
 	// of firing range.  jba.
 	const Real UNDERSIZE = PATHFIND_CELL_SIZE_F*0.25f;
-	Real r = m_attackRange * bonus.getField(WeaponBonus::RANGE) - UNDERSIZE; 
+	Real r = fixToReal(m_attackRange) * bonus.getField(WeaponBonus::RANGE) - UNDERSIZE;	// P6
 	if (r < 0.0f) r = 0.0f;
 	return r;
 #else
 // fudge this a little to account for pathfinding roundoff & such
 	const Real ATTACK_RANGE_FUDGE = 1.05f;
-	return m_attackRange * bonus.getField(WeaponBonus::RANGE) * ATTACK_RANGE_FUDGE; 
+	return fixToReal(m_attackRange) * bonus.getField(WeaponBonus::RANGE) * ATTACK_RANGE_FUDGE;	// P6
 #endif
 }
 
@@ -505,19 +506,34 @@ Real WeaponTemplate::getMinimumAttackRange() const
 	// Note - undersize by 1/4 of a pathfind cell, so that the goal is not teetering on the edge
 	// of firing range.  jba.
 	const Real UNDERSIZE = PATHFIND_CELL_SIZE_F*0.25f;
-	Real r = m_minimumAttackRange - UNDERSIZE; 
+	Real r = fixToReal(m_minimumAttackRange) - UNDERSIZE;	// P6
 	if (r < 0.0f) r = 0.0f;
 	return r;
 #else
-	return m_minimumAttackRange; 
+	return fixToReal(m_minimumAttackRange);	// P6
 #endif
 }
 
 //-------------------------------------------------------------------------------------------------
 Real WeaponTemplate::getUnmodifiedAttackRange() const
 {
-	return m_attackRange;
+	return fixToReal(m_attackRange);	// P6
 }
+
+//-------------------------------------------------------------------------------------------------
+// P6: the float edge of the INI data, for the weapon code that is still float
+Real WeaponTemplate::getShockWaveAmount() const { return fixToReal(m_shockWaveAmount); }
+Real WeaponTemplate::getShockWaveRadius() const { return fixToReal(m_shockWaveRadius); }
+Real WeaponTemplate::getShockWaveTaperOff() const { return fixToReal(m_shockWaveTaperOff); }
+Real WeaponTemplate::getRequestAssistRange() const { return fixToReal(m_requestAssistRange); }
+Real WeaponTemplate::getWeaponSpeed() const { return fixToReal(m_weaponSpeed); }
+Real WeaponTemplate::getMinWeaponSpeed() const { return fixToReal(m_minWeaponSpeed); }
+Real WeaponTemplate::getWeaponRecoilAmount() const { return fixToReal(m_weaponRecoil); }
+Real WeaponTemplate::getContinueAttackRange() const { return fixToReal(m_continueAttackRange); }
+Real WeaponTemplate::getInfantryInaccuracyDist() const { return fixToReal(m_infantryInaccuracyDist); }
+Real WeaponTemplate::getAimDelta() const { return fixToReal(m_aimDelta); }
+Real WeaponTemplate::getScatterRadius() const { return fixToReal(m_scatterRadius); }
+Real WeaponTemplate::getScatterTargetScalar() const { return fixToReal(m_scatterTargetScalar); }
 
 //-------------------------------------------------------------------------------------------------
 Int WeaponTemplate::getDelayBetweenShots(const WeaponBonus& bonus) const 
@@ -554,25 +570,25 @@ Int WeaponTemplate::getPreAttackDelay( const WeaponBonus& bonus ) const
 //-------------------------------------------------------------------------------------------------
 Real WeaponTemplate::getPrimaryDamage(const WeaponBonus& bonus) const 
 {
-	return m_primaryDamage * bonus.getField(WeaponBonus::DAMAGE); 
+	return fixToReal(m_primaryDamage) * bonus.getField(WeaponBonus::DAMAGE);	// P6
 }
 
 //-------------------------------------------------------------------------------------------------
-Real WeaponTemplate::getPrimaryDamageRadius(const WeaponBonus& bonus) const 
+Real WeaponTemplate::getPrimaryDamageRadius(const WeaponBonus& bonus) const
 {
-	return m_primaryDamageRadius * bonus.getField(WeaponBonus::RADIUS); 
+	return fixToReal(m_primaryDamageRadius) * bonus.getField(WeaponBonus::RADIUS);	// P6
 }
 
 //-------------------------------------------------------------------------------------------------
-Real WeaponTemplate::getSecondaryDamage(const WeaponBonus& bonus) const 
+Real WeaponTemplate::getSecondaryDamage(const WeaponBonus& bonus) const
 {
-	return m_secondaryDamage * bonus.getField(WeaponBonus::DAMAGE); 
+	return fixToReal(m_secondaryDamage) * bonus.getField(WeaponBonus::DAMAGE);	// P6
 }
 
 //-------------------------------------------------------------------------------------------------
-Real WeaponTemplate::getSecondaryDamageRadius(const WeaponBonus& bonus) const 
+Real WeaponTemplate::getSecondaryDamageRadius(const WeaponBonus& bonus) const
 {
-	return m_secondaryDamageRadius * bonus.getField(WeaponBonus::RADIUS); 
+	return fixToReal(m_secondaryDamageRadius) * bonus.getField(WeaponBonus::RADIUS);	// P6
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -582,11 +598,11 @@ Bool WeaponTemplate::isContactWeapon() const
 	// Note - undersize by 1/4 of a pathfind cell, so that the goal is not teetering on the edge
 	// of firing range.  jba.
 	const Real UNDERSIZE = PATHFIND_CELL_SIZE_F*0.25f; 
-	return (m_attackRange - UNDERSIZE) < PATHFIND_CELL_SIZE_F;
+	return (fixToReal(m_attackRange) - UNDERSIZE) < PATHFIND_CELL_SIZE_F;	// P6
 #else
 // fudge this a little to account for pathfinding roundoff & such
 	const Real ATTACK_RANGE_FUDGE = 1.05f;
-	return m_attackRange * ATTACK_RANGE_FUDGE < PATHFIND_CELL_SIZE_F; 
+	return fixToReal(m_attackRange) * ATTACK_RANGE_FUDGE < PATHFIND_CELL_SIZE_F;	// P6
 #endif
 }
 
@@ -835,7 +851,7 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		return 0;
 	}
 
-	DEBUG_ASSERTCRASH((m_primaryDamage > 0)  ||  (victimObj == NULL), ("You can't really shoot a zero damage weapon at an Object.") );
+	DEBUG_ASSERTCRASH((m_primaryDamage > Fix( 0 ))  ||  (victimObj == NULL), ("You can't really shoot a zero damage weapon at an Object.") );
 
 	ObjectID sourceID = sourceObj->getID();
 	const Coord3D* sourcePos = sourceObj->getPosition();
@@ -1006,11 +1022,11 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 
 	Coord3D projectileDestination = *victimPos; //Need to copy this, as we have a pointer to their actual position
 	Real scatterRadius = 0.0f;
-	if( m_scatterRadius > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
+	if( m_scatterRadius > Fix( 0 ) || m_infantryInaccuracyDist > Fix( 0 ) && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
 	{
 		// This weapon scatters, so clear the victimObj, as we are no longer shooting it directly,
 		// and find a random point within the radius to shoot at as victimPos
-		scatterRadius = m_scatterRadius;
+		scatterRadius = fixToReal(m_scatterRadius);	// P6
 
 		// if it's an object, aim at the center, not the ground part (srj)
 		PathfindLayerEnum targetLayer = LAYER_GROUND;
@@ -1020,11 +1036,11 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 			{
 				victimObj->getGeometryInfo().getCenterPosition(*victimObj->getPosition(), projectileDestination);
 			}
-			if( m_infantryInaccuracyDist > 0.0f && victimObj->isKindOf( KINDOF_INFANTRY ) )
+			if( m_infantryInaccuracyDist > Fix( 0 ) && victimObj->isKindOf( KINDOF_INFANTRY ) )
 			{
 				//If we are firing a weapon that is considered inaccurate against infantry, then add it to
 				//the scatter radius!
-				scatterRadius += m_infantryInaccuracyDist;
+				scatterRadius += fixToReal(m_infantryInaccuracyDist);	// P6
 			}
 			targetLayer = victimObj->getLayer();
 		}
@@ -1300,7 +1316,7 @@ void WeaponTemplate::processHistoricDamage(const Object *source, const Coord3D *
 	const Int requiredCount = m_historicBonusCount - 1;	// minus 1 since we include ourselves implicitly
 	if ((Int)m_historicDamage.size() >= requiredCount)
 	{
-		const Real radSqr = m_historicBonusRadius * m_historicBonusRadius;
+		const Real radSqr = fixToReal(m_historicBonusRadius * m_historicBonusRadius);	// P6
 		Int count = 0;
 
 		for (HistoricWeaponDamageList::iterator it = m_historicDamage.begin();
@@ -1493,9 +1509,9 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 				damageDirection.sub( source->getPosition() );
 			}
 
-			Real allowedAngle = getRadiusDamageAngle();
-			if( allowedAngle < PI )
+			if( m_radiusDamageAngle < FIX_PI )
 			{
+				const Real allowedAngle = fixToReal( m_radiusDamageAngle );	// P6
 				if( curVictim == NULL  ||  source == NULL )
 					continue; // We are directional damage, but can't figure out our direction.  Just bail.
 				
@@ -1513,7 +1529,7 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 
 			// Grab the vector between the source object causing the damage and the victim in order that we can
 			// simulate a shockwave pushing objects around
-			damageInfo.in.m_shockWaveAmount = m_shockWaveAmount;
+			damageInfo.in.m_shockWaveAmount = fixToReal( m_shockWaveAmount );	// P6
 			if (damageInfo.in.m_shockWaveAmount > 0.0f)
 			{
 				// Calculate the vector of the shockwave
@@ -1529,8 +1545,8 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 
 				// Populate the damge information with the shockwave information
 				damageInfo.in.m_shockWaveVector = shockWaveVector;
-				damageInfo.in.m_shockWaveRadius = m_shockWaveRadius;
-				damageInfo.in.m_shockWaveTaperOff = m_shockWaveTaperOff;
+				damageInfo.in.m_shockWaveRadius = fixToReal( m_shockWaveRadius );	// P6
+				damageInfo.in.m_shockWaveTaperOff = fixToReal( m_shockWaveTaperOff );	// P6
 			}
 
       if (source && source->getControllingPlayer()) {
@@ -1991,7 +2007,7 @@ Weapon::Weapon(const WeaponTemplate* tmpl, WeaponSlotType wslot)
 	m_whenLastReloadStarted = 0;
 	m_projectileStreamID = INVALID_ID;
 	m_leechWeaponRangeActive = false;
-	m_pitchLimited = (m_template->getMinTargetPitch() > -PI || m_template->getMaxTargetPitch() < PI);
+	m_pitchLimited = (m_template->getMinTargetPitchFix() > -FIX_PI || m_template->getMaxTargetPitchFix() < FIX_PI);
 	m_maxShotCount = NO_MAX_SHOTS_LIMIT;
 	m_curBarrel = 0;
 	m_numShotsForCurBarrel = 	m_template->getShotsPerBarrel();
@@ -2012,7 +2028,7 @@ Weapon::Weapon(const Weapon& that)
 	this->m_whenWeCanFireAgain = 0;
 	this->m_projectileStreamID = INVALID_ID;
 	this->m_leechWeaponRangeActive = false;
-	this->m_pitchLimited = (m_template->getMinTargetPitch() > -PI || m_template->getMaxTargetPitch() < PI);
+	this->m_pitchLimited = (m_template->getMinTargetPitchFix() > -FIX_PI || m_template->getMaxTargetPitchFix() < FIX_PI);
 	this->m_maxShotCount = NO_MAX_SHOTS_LIMIT;
 	this->m_curBarrel = 0;
 	this->m_numShotsForCurBarrel = m_template->getShotsPerBarrel();
@@ -2034,7 +2050,7 @@ Weapon& Weapon::operator=(const Weapon& that)
 		this->m_whenLastReloadStarted = 0;
 		this->m_whenWeCanFireAgain = 0;
 		this->m_leechWeaponRangeActive = false;
-		this->m_pitchLimited = (m_template->getMinTargetPitch() > -PI || m_template->getMaxTargetPitch() < PI);
+		this->m_pitchLimited = (m_template->getMinTargetPitchFix() > -FIX_PI || m_template->getMaxTargetPitchFix() < FIX_PI);
 		this->m_maxShotCount = NO_MAX_SHOTS_LIMIT;
 		this->m_curBarrel = 0;
 		this->m_lastFireFrame = 0;
@@ -3061,13 +3077,17 @@ Bool Weapon::isWithinTargetPitch(const Object *source, const Object *victim) con
 	Real minPitch, maxPitch;
 	source->getGeometryInfo().calcPitches(*src, victim->getGeometryInfo(), *dst, minPitch, maxPitch);
 
+	// P6: the pitches are float
+	const Real minTargetPitch = fixToReal( m_template->getMinTargetPitchFix() );
+	const Real maxTargetPitch = fixToReal( m_template->getMaxTargetPitchFix() );
+
 	// if there's any intersection between the the two pitch ranges, we're good to go.
-	if ((minPitch >= m_template->getMinTargetPitch() && minPitch <= m_template->getMaxTargetPitch()) ||
-			(maxPitch >= m_template->getMinTargetPitch() && maxPitch <= m_template->getMaxTargetPitch()) ||
-			(minPitch <= m_template->getMinTargetPitch() && maxPitch >= m_template->getMaxTargetPitch()))
+	if ((minPitch >= minTargetPitch && minPitch <= maxTargetPitch) ||
+			(maxPitch >= minTargetPitch && maxPitch <= maxTargetPitch) ||
+			(minPitch <= minTargetPitch && maxPitch >= maxTargetPitch))
 		return true;
 
-	//DEBUG_LOG(("pitch %f-%f is out of range\n",rad2deg(minPitch),rad2deg(maxPitch),rad2deg(m_template->getMinTargetPitch()),rad2deg(m_template->getMaxTargetPitch())));
+	//DEBUG_LOG(("pitch %f-%f is out of range\n",rad2deg(minPitch),rad2deg(maxPitch),rad2deg(minTargetPitch),rad2deg(maxTargetPitch)));
 	return false;
 }
 

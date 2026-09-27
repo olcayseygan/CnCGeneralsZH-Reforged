@@ -88,7 +88,7 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	Real m_percentage;
+	Fix m_percentage;
 	KindOfMaskType m_kindOf;
 };
 

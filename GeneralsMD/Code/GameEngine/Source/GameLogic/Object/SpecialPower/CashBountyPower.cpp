@@ -55,6 +55,7 @@
 #include "Common/Xfer.h"
 #include "GameLogic/Module/CashBountyPower.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
 
 //-----------------------------------------------------------------------------
 // DEFINES ////////////////////////////////////////////////////////////////////
@@ -76,7 +77,7 @@ CashBountyPowerModuleData::CashBountyPowerModuleData()
 #ifdef NOT_IN_USE
 	m_upgrades.clear();
 #endif
-	m_defaultBounty = 0.0;
+	m_defaultBounty = Fix( 0 );
 } 
 
 #ifdef NOT_IN_USE
@@ -105,7 +106,7 @@ static void parseBountyUpgradePair( INI* ini, void * /*instance*/, void *store, 
 #ifdef NOT_IN_USE
 		{ "UpgradeBounty", parseBountyUpgradePair, NULL, offsetof( CashBountyPowerModuleData, m_upgrades ) },
 #endif
-		{ "Bounty",			INI::parsePercentToReal, NULL, offsetof( CashBountyPowerModuleData, m_defaultBounty ) },
+		{ "Bounty",			INI::parsePercentToFix, NULL, FIX_OFFSET( CashBountyPowerModuleData, m_defaultBounty ) },
 		{ 0, 0, 0, 0 } 
 	};
 	p.add(dataFieldParse);
@@ -161,7 +162,7 @@ Real CashBountyPower::findBounty() const
 		}
 	}
 #endif
-	return d->m_defaultBounty;
+	return fixToReal( d->m_defaultBounty );	// P8: the player's cash bounty is saved float
 }
 
 //-------------------------------------------------------------------------------------------------

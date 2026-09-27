@@ -1882,7 +1882,7 @@ void Team::updateState(void)
 			PartitionFilter *filters[] = { &filterTeam, &filterAlive, &filterMapStatus, &filterSeenKind, &filterStealth, NULL };
 			Real visionRange = iter.cur()->getVisionRange();
 			anyAliveInTeam = true;
-			Object *pObj = ThePartitionManager->getClosestObjectFix( iter.cur(), fixFromReal( visionRange ),	// P3
+			Object *pObj = ThePartitionManager->getClosestObjectFix( iter.cur(), fixFromReal( visionRange ),	// P9: Object's vision range is float
 				FROM_CENTER_2D, filters );
 			if (pObj) {
 				m_seeEnemy = true;

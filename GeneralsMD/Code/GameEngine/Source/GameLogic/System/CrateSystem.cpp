@@ -182,7 +182,7 @@ CrateTemplate *CrateSystem::friend_findCrateTemplate(AsciiString name)
 //--------------------------------------------------------------------------------
 const FieldParse CrateTemplate::TheCrateTemplateFieldParseTable[] = 
 {
-	{ "CreationChance",		INI::parseReal,													NULL,									offsetof( CrateTemplate, m_creationChance ) },
+	{ "CreationChance",		INI::parseFix,													NULL,									FIX_OFFSET( CrateTemplate, m_creationChance ) },
 	{ "VeterancyLevel",		INI::parseIndexList,										TheVeterancyNames,		offsetof( CrateTemplate, m_veterancyLevel ) },
 	{ "KilledByType",			KindOfMaskType::parseFromINI,												NULL,									offsetof( CrateTemplate, m_killedByTypeKindof) },
 	{ "CrateObject",			CrateTemplate::parseCrateCreationEntry,	NULL,									NULL },
@@ -195,7 +195,7 @@ CrateTemplate::CrateTemplate()
 {
 	m_name = "";
 
-	m_creationChance = 0;
+	m_creationChance = Fix( 0 );
 	CLEAR_KINDOFMASK(m_killedByTypeKindof);
 	m_veterancyLevel = LEVEL_INVALID;
 	m_killerScience = SCIENCE_INVALID;
@@ -216,13 +216,10 @@ void CrateTemplate::parseCrateCreationEntry( INI* ini, void *instance, void *, c
 	AsciiString crateName = token;
 
 	token = ini->getNextToken();
-	Real crateValue;
-	if (sscanf( token, "%f", &crateValue ) != 1)
-		throw INI_INVALID_DATA;
 
 	crateCreationEntry newEntry;
 	newEntry.crateName = crateName;
-	newEntry.crateChance = crateValue;
+	newEntry.crateChance = INI::scanFix( token );
 
 	self->m_possibleCrates.push_back( newEntry );
 }

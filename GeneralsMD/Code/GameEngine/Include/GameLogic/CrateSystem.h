@@ -41,7 +41,7 @@ enum ScienceType;
 struct crateCreationEntry
 {
 	AsciiString crateName;
-	Real crateChance;
+	Fix crateChance;
 };
 
 typedef std::list< crateCreationEntry >											crateCreationEntryList;
@@ -70,7 +70,7 @@ public:
 
 	AsciiString m_name;													///< name for this CrateTemplate
 
-	Real m_creationChance;											///< Condition for random percentage chance of creating
+	Fix m_creationChance;											///< Condition for random percentage chance of creating
 	VeterancyLevel m_veterancyLevel;						///< Condition specifing level of killed unit
 	KindOfMaskType m_killedByTypeKindof;				///< Must be killed by something with all these bits set
 	ScienceType m_killerScience;								///< Must be killed by something posessing this science

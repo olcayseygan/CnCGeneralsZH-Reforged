@@ -5395,9 +5395,9 @@ void Pathfinder::classifyFence( Object *obj, Bool insert )
 	const Coord3D *pos = obj->getPosition();
   Real angle = obj->getOrientation();
  
- 	Real halfsizeX = obj->getTemplate()->getFenceWidth()/2;
+ 	Real halfsizeX = obj->getTemplate()->getFenceWidth()/2;	// P5: the fence footprint is float
  	Real halfsizeY = PATHFIND_CELL_SIZE_F/10.0f;
- 	Real fenceOffset = obj->getTemplate()->getFenceXOffset();
+ 	Real fenceOffset = obj->getTemplate()->getFenceXOffset();	// P5
 
  	Real c = (Real)Cos(angle);
  	Real s = (Real)Sin(angle);
@@ -5520,7 +5520,7 @@ void Pathfinder::classifyObjectFootprint( Object *obj, Bool insert )
 		return;  // It is important to not abuse bridge towers.
 	}
 
-	if (obj->getTemplate()->getFenceWidth() > 0.0f) 
+	if (obj->getTemplate()->getFenceWidthFix() > Fix(0))
 	{
 		if (!obj->isKindOf(KINDOF_DEFENSIVE_WALL))
 		{

@@ -36,12 +36,13 @@
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Module/MaxHealthUpgrade.h"
 #include "GameLogic/Module/BodyModule.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 MaxHealthUpgradeModuleData::MaxHealthUpgradeModuleData( void )
 {
-	m_addMaxHealth = 0.0f;
+	m_addMaxHealth = Fix( 0 );
 	m_maxHealthChangeType = SAME_CURRENTHEALTH;
 }
 
@@ -54,7 +55,7 @@ void MaxHealthUpgradeModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "AddMaxHealth",					INI::parseReal,					NULL,										offsetof( MaxHealthUpgradeModuleData, m_addMaxHealth ) },
+		{ "AddMaxHealth",					INI::parseFix,					NULL,										FIX_OFFSET( MaxHealthUpgradeModuleData, m_addMaxHealth ) },
 		{ "ChangeType",						INI::parseIndexList,		TheMaxHealthChangeTypeNames, offsetof( MaxHealthUpgradeModuleData, m_maxHealthChangeType ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -89,8 +90,8 @@ void MaxHealthUpgrade::upgradeImplementation( )
 		// Veterancy multiplies max health when it arrives, so an addition made after a promotion has
 		// to carry the promotion's bonus too. Without it an Elite Paladin that researched Composite
 		// Armor ended on 750 where one armored first and promoted later ended on 780.
-		Real add = data->m_addMaxHealth * TheGlobalData->m_healthBonus[ obj->getVeterancyLevel() ];
-		body->setMaxHealth( body->getMaxHealth() + add, data->m_maxHealthChangeType );
+		Real add = fixToReal( data->m_addMaxHealth ) * TheGlobalData->m_healthBonus[ obj->getVeterancyLevel() ];
+		body->setMaxHealth( body->getMaxHealth() + add, data->m_maxHealthChangeType );	// P6: body health is float
 	}
 }
 

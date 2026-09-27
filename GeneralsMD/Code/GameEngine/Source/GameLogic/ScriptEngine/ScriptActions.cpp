@@ -4202,7 +4202,7 @@ void ScriptActions::doSkirmishFireSpecialPowerAtMostCost( const AsciiString &pla
 	const SpecialPowerTemplate *power = TheSpecialPowerStore->findSpecialPowerTemplate(specialPower);
 	if (power==NULL) 
 		return;
-	Real radius = 50.0f;
+	Real radius = 50.0f;	// P7: the script's target search is float
 	if (power->getRadiusCursorRadius()>radius) {
 		radius = power->getRadiusCursorRadius();
 	}

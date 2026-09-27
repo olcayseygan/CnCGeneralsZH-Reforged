@@ -51,7 +51,7 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	Real m_newShroudRange;
+	Fix m_newShroudRange;
 
 };
 

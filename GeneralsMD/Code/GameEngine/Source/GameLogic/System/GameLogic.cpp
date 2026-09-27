@@ -516,7 +516,7 @@ static Object * placeObjectAtPosition(Int slotNum, AsciiString objectTemplateNam
 		slotNum, pTemplate->getDisplayName().str()));
 	if (obj)
 	{
-		obj->setOrientationFix( fixFromReal( obj->getTemplate()->getPlacementViewAngle() ) );	// P3
+		obj->setOrientationFix( obj->getTemplate()->getPlacementViewAngleFix() );
 		FCoord3D fxPos = fcoordFromCoord3D( pos );	// P5: pos goes on to the pathfinder in float
 		obj->setPositionFix( &fxPos );
 
@@ -1968,7 +1968,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			Bool isProp = thingTemplate->isKindOf(KINDOF_PROP);
 			Bool isFluff = false;
 			if (thingTemplate->isKindOf(KINDOF_CLEARED_BY_BUILD)) {
-				if (thingTemplate->getFenceWidth() == 0.0f) {
+				if (thingTemplate->getFenceWidthFix() == Fix(0)) {
 					// Objects that are cleared by building, but aren't fences, are fluff. jba. [7/14/2003]
 					isFluff = true;
 				}
@@ -4213,7 +4213,7 @@ static Bool hasEnemyInSight( Object *obj )
 	PartitionFilterRelationship enemies( obj, PartitionFilterRelationship::ALLOW_ENEMIES );
 	PartitionFilter *filters[] = { &alive, &enemies, NULL };
 
-	return ThePartitionManager->getClosestObjectFix( obj, fixFromReal( obj->getVisionRange() ), FROM_CENTER_2D, filters ) != NULL;	// P3
+	return ThePartitionManager->getClosestObjectFix( obj, fixFromReal( obj->getVisionRange() ), FROM_CENTER_2D, filters ) != NULL;	// P9: Object's vision range is float
 }
 
 /* Somebody goes and gets the salvage.  A crate dropped by a wreck is money and a free upgrade lying

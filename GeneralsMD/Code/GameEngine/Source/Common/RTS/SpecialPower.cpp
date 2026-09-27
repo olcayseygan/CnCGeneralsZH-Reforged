@@ -205,8 +205,8 @@ void SpecialPowerStore::parseSpecialPowerDefinition( INI *ini )
 	{ "DetectionTime",						INI::parseDurationUnsignedInt,		NULL,	offsetof( SpecialPowerTemplate, m_detectionTime ) },
 	{ "SharedSyncedTimer",				INI::parseBool,										NULL, offsetof( SpecialPowerTemplate, m_sharedNSync ) },
 	{ "ViewObjectDuration",				INI::parseDurationUnsignedInt,		NULL,	offsetof( SpecialPowerTemplate, m_viewObjectDuration ) },
-	{ "ViewObjectRange",					INI::parseReal,										NULL,	offsetof( SpecialPowerTemplate, m_viewObjectRange ) },
-	{ "RadiusCursorRadius",				INI::parseReal,										NULL,	offsetof( SpecialPowerTemplate, m_radiusCursorRadius ) },
+	{ "ViewObjectRange",					INI::parseFix,										NULL,	FIX_OFFSET( SpecialPowerTemplate, m_viewObjectRange ) },
+	{ "RadiusCursorRadius",				INI::parseFix,										NULL,	FIX_OFFSET( SpecialPowerTemplate, m_radiusCursorRadius ) },
 	{ "ShortcutPower",						INI::parseBool,										NULL, offsetof( SpecialPowerTemplate, m_shortcutPower ) },
 	{ "AcademyClassify",					INI::parseIndexList,			TheAcademyClassificationTypeNames, offsetof( SpecialPowerTemplate, m_academyClassificationType ) },
 	{ NULL,	NULL, NULL,	0 }  // keep this last
@@ -225,8 +225,8 @@ SpecialPowerTemplate::SpecialPowerTemplate()
 	m_detectionTime = DEFAULT_DEFECTION_DETECTION_PROTECTION_TIME_LIMIT;
 	m_sharedNSync = FALSE;
 	m_viewObjectDuration = 0;
-	m_viewObjectRange = 0;
-	m_radiusCursorRadius = 0;
+	m_viewObjectRange = Fix( 0 );
+	m_radiusCursorRadius = Fix( 0 );
 	m_shortcutPower = FALSE;
 
 }  // end SpecialPowerTemplate

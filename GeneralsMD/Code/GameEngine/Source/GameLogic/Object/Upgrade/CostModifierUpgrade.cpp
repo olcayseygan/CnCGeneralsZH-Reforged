@@ -57,6 +57,7 @@
 #include "GameLogic/Module/CostModifierUpgrade.h"
 #include "GameLogic/Object.h"
 #include "Common/BitFlagsIO.h"
+#include "Lib/FixBoundary.h"
 //-----------------------------------------------------------------------------
 // DEFINES ////////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
@@ -76,7 +77,7 @@ CostModifierUpgradeModuleData::CostModifierUpgradeModuleData( void )
 {
 
 	m_kindOf = KINDOFMASK_NONE;
-	m_percentage = 0;
+	m_percentage = Fix( 0 );
 
 }  // end CostModifierUpgradeModuleData
 
@@ -89,7 +90,7 @@ CostModifierUpgradeModuleData::CostModifierUpgradeModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "EffectKindOf",		KindOfMaskType::parseFromINI, NULL, offsetof( CostModifierUpgradeModuleData, m_kindOf ) },
-		{ "Percentage",			INI::parsePercentToReal, NULL, offsetof( CostModifierUpgradeModuleData, m_percentage ) },
+		{ "Percentage",			INI::parsePercentToFix, NULL, FIX_OFFSET( CostModifierUpgradeModuleData, m_percentage ) },
 		{ 0, 0, 0, 0 } 
 	};
 	p.add(dataFieldParse);
@@ -127,7 +128,7 @@ void CostModifierUpgrade::onDelete( void )
 	// remove the radar from the player
 	Player *player = getObject()->getControllingPlayer();
 	if( player )
-		player->removeKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,getCostModifierUpgradeModuleData()->m_percentage );
+		player->removeKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,fixToReal( getCostModifierUpgradeModuleData()->m_percentage ) );	// P8: the player's cost table is float
 
 	// this upgrade module is now "not upgraded"
 	setUpgradeExecuted(FALSE);
@@ -147,14 +148,14 @@ void CostModifierUpgrade::onCapture( Player *oldOwner, Player *newOwner )
 	if( oldOwner )
 	{
 
-		oldOwner->removeKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,getCostModifierUpgradeModuleData()->m_percentage );
+		oldOwner->removeKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,fixToReal( getCostModifierUpgradeModuleData()->m_percentage ) );	// P8: the player's cost table is float
 		setUpgradeExecuted(FALSE);
 
 	}  // end if
 	if( newOwner )
 	{
 
-		newOwner->addKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,getCostModifierUpgradeModuleData()->m_percentage );
+		newOwner->addKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,fixToReal( getCostModifierUpgradeModuleData()->m_percentage ) );	// P8: the player's cost table is float
 		setUpgradeExecuted(TRUE);
 
 	}  // end if
@@ -168,7 +169,7 @@ void CostModifierUpgrade::upgradeImplementation( void )
 	Player *player = getObject()->getControllingPlayer();
 
 	// update the player with another TypeOfProductionCostChange
-	player->addKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,getCostModifierUpgradeModuleData()->m_percentage );
+	player->addKindOfProductionCostChange(getCostModifierUpgradeModuleData()->m_kindOf,fixToReal( getCostModifierUpgradeModuleData()->m_percentage ) );	// P8: the player's cost table is float
 
 }  // end upgradeImplementation
 

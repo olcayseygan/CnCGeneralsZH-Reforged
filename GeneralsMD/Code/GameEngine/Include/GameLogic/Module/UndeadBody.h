@@ -42,7 +42,7 @@ class Object;
 class UndeadBodyModuleData : public ActiveBodyModuleData 
 {
 public:
-	Real m_secondLifeMaxHealth;
+	Fix m_secondLifeMaxHealth;
 
 	UndeadBodyModuleData();
 

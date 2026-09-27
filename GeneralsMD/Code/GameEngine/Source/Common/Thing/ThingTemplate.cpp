@@ -117,19 +117,19 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "DisplayName",					INI::parseAndTranslateLabel,					NULL,								offsetof( ThingTemplate, m_displayName ) },
 	{ "RadarPriority",				INI::parseByteSizedIndexList,					RadarPriorityNames, offsetof( ThingTemplate, m_radarPriority ) },
 	{ "TransportSlotCount",		INI::parseUnsignedByte,								NULL,		offsetof( ThingTemplate, m_transportSlotCount ) },
-	{ "FenceWidth",						INI::parseReal,												NULL,		offsetof( ThingTemplate, m_fenceWidth ) },
-	{ "FenceXOffset",					INI::parseReal,												NULL,		offsetof( ThingTemplate, m_fenceXOffset ) },
+	{ "FenceWidth",						INI::parseFix,												NULL,		FIX_OFFSET( ThingTemplate, m_fenceWidth ) },
+	{ "FenceXOffset",					INI::parseFix,												NULL,		FIX_OFFSET( ThingTemplate, m_fenceXOffset ) },
 	{ "IsBridge",							INI::parseBool,												NULL,		offsetof( ThingTemplate, m_isBridge ) },
 	{ "ArmorSet",							ThingTemplate::parseArmorTemplateSet, NULL, 0},
 	{ "WeaponSet",						ThingTemplate::parseWeaponTemplateSet,NULL, 0},
-	{ "VisionRange",					INI::parseReal,												NULL,		offsetof( ThingTemplate, m_visionRange ) },
-	{ "ShroudClearingRange",	INI::parseReal,												NULL,		offsetof( ThingTemplate, m_shroudClearingRange ) },
-	{ "ShroudRevealToAllRange",	INI::parseReal,											NULL,		offsetof( ThingTemplate, m_shroudRevealToAllRange ) },
+	{ "VisionRange",					INI::parseFix,												NULL,		FIX_OFFSET( ThingTemplate, m_visionRange ) },
+	{ "ShroudClearingRange",	INI::parseFix,												NULL,		FIX_OFFSET( ThingTemplate, m_shroudClearingRange ) },
+	{ "ShroudRevealToAllRange",	INI::parseFix,											NULL,		FIX_OFFSET( ThingTemplate, m_shroudRevealToAllRange ) },
 
-	{ "PlacementViewAngle",		INI::parseAngleReal,									NULL,		offsetof( ThingTemplate, m_placementViewAngle ) },
+	{ "PlacementViewAngle",		INI::parseAngleFix,									NULL,		FIX_OFFSET( ThingTemplate, m_placementViewAngle ) },
 
-	{ "FactoryExitWidth",			INI::parseReal,												NULL,		offsetof( ThingTemplate, m_factoryExitWidth ) },
-	{ "FactoryExtraBibWidth",	INI::parseReal,												NULL,		offsetof( ThingTemplate, m_factoryExtraBibWidth ) },
+	{ "FactoryExitWidth",			INI::parseFix,												NULL,		FIX_OFFSET( ThingTemplate, m_factoryExitWidth ) },
+	{ "FactoryExtraBibWidth",	INI::parseFix,												NULL,		FIX_OFFSET( ThingTemplate, m_factoryExtraBibWidth ) },
 																											
 	{ "SkillPointValue",			ThingTemplate::parseIntList,					(void*)LEVEL_COUNT,		offsetof( ThingTemplate, m_skillPointValues ) },
 	{ "ExperienceValue",			ThingTemplate::parseIntList,					(void*)LEVEL_COUNT,		offsetof( ThingTemplate, m_experienceValues ) },
@@ -144,7 +144,7 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "Prerequisites",				ThingTemplate::parsePrerequisites,	0, 0 },
 	{ "Buildable",						INI::parseByteSizedIndexList,				BuildableStatusNames, offsetof( ThingTemplate, m_buildable) },
 	{ "BuildCost",						INI::parseUnsignedShort,						NULL,		offsetof( ThingTemplate, m_buildCost ) },
-	{ "BuildTime",						INI::parseReal,											NULL,		offsetof( ThingTemplate, m_buildTime ) },
+	{ "BuildTime",						INI::parseFix,											NULL,		FIX_OFFSET( ThingTemplate, m_buildTime ) },
 	{ "RefundValue",					INI::parseUnsignedShort,						NULL,   offsetof( ThingTemplate, m_refundValue ) },
 	{ "BuildCompletion",			INI::parseByteSizedIndexList,				BuildCompletionNames,		offsetof( ThingTemplate, m_buildCompletion ) },
 	{ "EnergyProduction",			INI::parseInt,											NULL,   offsetof( ThingTemplate, m_energyProduction ) },
@@ -222,17 +222,17 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 
 	{ "UnitSpecificSounds",		ThingTemplate::parsePerUnitSounds, NULL, offsetof(ThingTemplate, m_perUnitSounds) },
 	{ "UnitSpecificFX",				ThingTemplate::parsePerUnitFX, NULL, offsetof(ThingTemplate, m_perUnitFX) },
-	{ "Scale",								INI::parseReal,						NULL,		offsetof( ThingTemplate, m_assetScale ) },
+	{ "Scale",								INI::parseReal,						NULL,		REAL_OFFSET( ThingTemplate, m_assetScale ) },
 	{ "Geometry",							GeometryInfo::parseGeometryType,				NULL,  offsetof( ThingTemplate, m_geometryInfo ) },
 	{ "GeometryMajorRadius",	GeometryInfo::parseGeometryMajorRadius,	NULL,		offsetof( ThingTemplate, m_geometryInfo ) },
 	{ "GeometryMinorRadius",	GeometryInfo::parseGeometryMinorRadius,	NULL,		offsetof( ThingTemplate, m_geometryInfo ) },
 	{ "GeometryHeight",				GeometryInfo::parseGeometryHeight,			NULL,		offsetof( ThingTemplate, m_geometryInfo ) },
 	{ "GeometryIsSmall",			GeometryInfo::parseGeometryIsSmall,			NULL,		offsetof( ThingTemplate, m_geometryInfo ) },
 	{ "Shadow",								INI::parseBitString8,		TheShadowNames,		offsetof( ThingTemplate, m_shadowType ) },
-	{ "ShadowSizeX",					INI::parseReal,						NULL,	offsetof( ThingTemplate, m_shadowSizeX ) },
-	{ "ShadowSizeY",					INI::parseReal,						NULL,	offsetof( ThingTemplate, m_shadowSizeY ) },
-	{ "ShadowOffsetX",				INI::parseReal,						NULL,	offsetof( ThingTemplate, m_shadowOffsetX ) },
-	{ "ShadowOffsetY",				INI::parseReal,						NULL,	offsetof( ThingTemplate, m_shadowOffsetY ) },
+	{ "ShadowSizeX",					INI::parseReal,						NULL,	REAL_OFFSET( ThingTemplate, m_shadowSizeX ) },
+	{ "ShadowSizeY",					INI::parseReal,						NULL,	REAL_OFFSET( ThingTemplate, m_shadowSizeY ) },
+	{ "ShadowOffsetX",				INI::parseReal,						NULL,	REAL_OFFSET( ThingTemplate, m_shadowOffsetX ) },
+	{ "ShadowOffsetY",				INI::parseReal,						NULL,	REAL_OFFSET( ThingTemplate, m_shadowOffsetY ) },
 	{ "ShadowTexture",				INI::parseAsciiString,		NULL,	offsetof( ThingTemplate, m_shadowTextureName ) },
 	{ "OcclusionDelay",					INI::parseDurationUnsignedInt,		NULL, offsetof( ThingTemplate, m_occlusionDelay ) },
 	{ "AddModule",						ThingTemplate::parseAddModule,			NULL, 0 },
@@ -243,7 +243,7 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
   { "OverrideableByLikeKind",		ThingTemplate::OverrideableByLikeKind,	NULL, 0 },
 
 	{ "Locomotor",						AIUpdateModuleData::parseLocomotorSet, NULL, 0 },
-	{ "InstanceScaleFuzziness",	INI::parseReal,					NULL, offsetof(ThingTemplate, m_instanceScaleFuzziness ) },
+	{ "InstanceScaleFuzziness",	INI::parseReal,					NULL, REAL_OFFSET(ThingTemplate, m_instanceScaleFuzziness ) },
 	{ "StructureRubbleHeight",	INI::parseUnsignedByte,					NULL, offsetof(ThingTemplate, m_structureRubbleHeight ) },
 	{ "ThreatValue",						INI::parseUnsignedShort,		NULL, offsetof(ThingTemplate, m_threatValue ) }, 
   { "MaxSimultaneousOfType",	ThingTemplate::parseMaxSimultaneous,		NULL, offsetof(ThingTemplate, m_maxSimultaneousOfType ) }, 
@@ -266,8 +266,8 @@ const FieldParse ThingTemplate::s_objectReskinFieldParseTable[] =
 	{ "GeometryMinorRadius",	GeometryInfo::parseGeometryMinorRadius,	NULL,		offsetof( ThingTemplate, m_geometryInfo ) },
 	{ "GeometryHeight",				GeometryInfo::parseGeometryHeight,			NULL,		offsetof( ThingTemplate, m_geometryInfo ) },
 	{ "GeometryIsSmall",			GeometryInfo::parseGeometryIsSmall,			NULL,		offsetof( ThingTemplate, m_geometryInfo ) },
-	{ "FenceWidth",						INI::parseReal,													NULL,		offsetof( ThingTemplate, m_fenceWidth ) },
-	{ "FenceXOffset",					INI::parseReal,													NULL,		offsetof( ThingTemplate, m_fenceXOffset ) },
+	{ "FenceWidth",						INI::parseFix,													NULL,		FIX_OFFSET( ThingTemplate, m_fenceWidth ) },
+	{ "FenceXOffset",					INI::parseFix,													NULL,		FIX_OFFSET( ThingTemplate, m_fenceXOffset ) },
 
   // Needed to avoid some cheats with the scud storm rebuild hole
   { "MaxSimultaneousOfType",	ThingTemplate::parseMaxSimultaneous,		NULL, offsetof(ThingTemplate, m_maxSimultaneousOfType ) }, 
@@ -1032,14 +1032,14 @@ ThingTemplate::ThingTemplate() :
 
 	m_nextThingTemplate = NULL;
 	m_transportSlotCount = 0;
-	m_fenceWidth = 0;
-	m_fenceXOffset = 0;
-	m_visionRange = 0.0f;
-	m_shroudClearingRange = -1.0f;
-	m_shroudRevealToAllRange = -1.0f;
+	m_fenceWidth = Fix( 0 );
+	m_fenceXOffset = Fix( 0 );
+	m_visionRange = Fix( 0 );
+	m_shroudClearingRange = Fix( -1 );
+	m_shroudRevealToAllRange = Fix( -1 );
 
 	m_buildCost = 0;
-	m_buildTime = 1;
+	m_buildTime = Fix( 1 );
 	m_refundValue = 0;
 	m_energyProduction = 0;
 	m_energyBonus = 0;
@@ -1061,9 +1061,9 @@ ThingTemplate::ThingTemplate() :
 	//m_defaultOwningSide = "";	// unnecessary
 	m_isBuildFacility = FALSE;
 	m_isPrerequisite = FALSE;
-	m_placementViewAngle = 0.0f;
-	m_factoryExitWidth = 0.0f;
-	m_factoryExtraBibWidth = 0.0f;
+	m_placementViewAngle = Fix( 0 );
+	m_factoryExitWidth = Fix( 0 );
+	m_factoryExtraBibWidth = Fix( 0 );
 
 	m_selectedPortraitImage = NULL;
 	m_buttonImage = NULL;
@@ -1594,7 +1594,7 @@ Real ThingTemplate::calcMaxHealth( void ) const
 		for( const char **body = BODIES_WITH_HEALTH; *body != NULL; ++body )
 		{
 			if( modules.getNthName( m ).compareNoCase( *body ) == 0 )
-				return static_cast<const ActiveBodyModuleData *>( modules.getNthData( m ) )->m_maxHealth;
+				return fixToReal( static_cast<const ActiveBodyModuleData *>( modules.getNthData( m ) )->m_maxHealth );	// P7: read by the AI's estimate and the client, both float
 		}
 	}
 	return 0.0f;
@@ -1607,7 +1607,7 @@ Real ThingTemplate::calcMaxHealth( void ) const
 //-------------------------------------------------------------------------------------------------
 Int ThingTemplate::calcTimeToBuild( const Player* player) const
 {
-	Int buildTime = getBuildTime() * LOGICFRAMES_PER_SECOND;
+	Int buildTime = (Int)( ( m_buildTime * Fix( LOGICFRAMES_PER_SECOND ) ).raw() / Fix::ONE_RAW );
 	buildTime *= player->getHandicap()->getHandicap(Handicap::BUILDTIME, this);
 
 	Real factionModifier = 1 + player->getProductionTimeChangePercent( getName() );

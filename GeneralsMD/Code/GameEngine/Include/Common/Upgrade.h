@@ -207,7 +207,7 @@ protected:
 	AsciiString m_name;									///< upgrade name
 	NameKeyType m_nameKey;							///< name key
 	AsciiString m_displayNameLabel;			///< String manager label for UI display name
-	Real m_buildTime;										///< database # for how long it takes to "build" this
+	Fix m_buildTime;										///< database # for how long it takes to "build" this
 	Int m_cost;													///< cost for production 
 	UpgradeMaskType m_upgradeMask;			///< Unique bitmask for this upgrade template
 	AudioEventRTS	m_researchSound;			///< Sound played when upgrade researched.

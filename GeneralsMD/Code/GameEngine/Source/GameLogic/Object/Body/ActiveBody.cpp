@@ -133,11 +133,11 @@ static BodyDamageType calcDamageState(Real health, Real maxHealth)
 //-------------------------------------------------------------------------------------------------
 ActiveBodyModuleData::ActiveBodyModuleData()
 {
-	m_maxHealth = 0;
-	m_initialHealth = 0;
-	m_subdualDamageCap = 0;
+	m_maxHealth = Fix( 0 );
+	m_initialHealth = Fix( 0 );
+	m_subdualDamageCap = Fix( 0 );
 	m_subdualDamageHealRate = 0;
-	m_subdualDamageHealAmount = 0;
+	m_subdualDamageHealAmount = Fix( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -148,12 +148,12 @@ void ActiveBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "MaxHealth",						INI::parseReal,						NULL,		offsetof( ActiveBodyModuleData, m_maxHealth ) },
-		{ "InitialHealth",				INI::parseReal,						NULL,		offsetof( ActiveBodyModuleData, m_initialHealth ) },
+		{ "MaxHealth",						INI::parseFix,						NULL,		FIX_OFFSET( ActiveBodyModuleData, m_maxHealth ) },
+		{ "InitialHealth",				INI::parseFix,						NULL,		FIX_OFFSET( ActiveBodyModuleData, m_initialHealth ) },
 
-		{ "SubdualDamageCap",					INI::parseReal,									NULL,		offsetof( ActiveBodyModuleData, m_subdualDamageCap ) },
+		{ "SubdualDamageCap",					INI::parseFix,									NULL,		FIX_OFFSET( ActiveBodyModuleData, m_subdualDamageCap ) },
 		{ "SubdualDamageHealRate",		INI::parseDurationUnsignedInt,	NULL,		offsetof( ActiveBodyModuleData, m_subdualDamageHealRate ) },
-		{ "SubdualDamageHealAmount",	INI::parseReal,									NULL,		offsetof( ActiveBodyModuleData, m_subdualDamageHealAmount ) },
+		{ "SubdualDamageHealAmount",	INI::parseFix,									NULL,		FIX_OFFSET( ActiveBodyModuleData, m_subdualDamageHealAmount ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -177,10 +177,11 @@ ActiveBody::ActiveBody( Thing *thing, const ModuleData* moduleData ) :
 	m_currentSubdualDamage(0),
 	m_indestructible(false)
 {
-	m_currentHealth = getActiveBodyModuleData()->m_initialHealth;
-	m_prevHealth = getActiveBodyModuleData()->m_initialHealth;
-	m_maxHealth = getActiveBodyModuleData()->m_maxHealth;
-	m_initialHealth = getActiveBodyModuleData()->m_initialHealth;
+	// P6: the body's health is saved state and still float
+	m_currentHealth = fixToReal( getActiveBodyModuleData()->m_initialHealth );
+	m_prevHealth = fixToReal( getActiveBodyModuleData()->m_initialHealth );
+	m_maxHealth = fixToReal( getActiveBodyModuleData()->m_maxHealth );
+	m_initialHealth = fixToReal( getActiveBodyModuleData()->m_initialHealth );
 
 	// force an initially-valid armor setup
 	validateArmorAndDamageFX();
@@ -1337,7 +1338,7 @@ void ActiveBody::internalAddSubdualDamage( Real delta )
 	// The cap was applied at the top and nothing held the bottom, so healing that outruns weak
 	// subdual damage drives this below zero - and it stays there, building up a buffer the next
 	// subduing weapon has to fill before it does anything at all.
-	m_currentSubdualDamage = min(m_currentSubdualDamage, data->m_subdualDamageCap);
+	m_currentSubdualDamage = min(m_currentSubdualDamage, fixToReal(data->m_subdualDamageCap));	// P6: subdual damage is float
 	if (m_currentSubdualDamage < 0.0f)
 		m_currentSubdualDamage = 0.0f;
 }
@@ -1355,7 +1356,7 @@ Bool ActiveBody::canBeSubdued() const
 		return FALSE;
 
 	// Any body with subdue listings can be subdued.
-	return getActiveBodyModuleData()->m_subdualDamageCap > 0;
+	return getActiveBodyModuleData()->m_subdualDamageCap > Fix( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1449,7 +1450,7 @@ UnsignedInt ActiveBody::getSubdualDamageHealRate() const
 //-------------------------------------------------------------------------------------------------
 Real ActiveBody::getSubdualDamageHealAmount() const
 {
-	return getActiveBodyModuleData()->m_subdualDamageHealAmount;
+	return fixToReal( getActiveBodyModuleData()->m_subdualDamageHealAmount );	// P6: subdual damage is float
 }
 
 //-------------------------------------------------------------------------------------------------

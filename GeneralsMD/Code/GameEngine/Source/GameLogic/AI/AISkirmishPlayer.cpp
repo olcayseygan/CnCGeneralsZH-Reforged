@@ -803,7 +803,7 @@ void AISkirmishPlayer::buildAIBaseDefenseStructure(const AsciiString &thingName,
 
 		/* See if we can build there. */
 		Bool canBuild;
-		Real placeAngle = tTemplate->getPlacementViewAngle();
+		Real placeAngle = tTemplate->getPlacementViewAngle();	// P7: the build check takes a float angle
 		canBuild = LBC_OK == TheBuildAssistant->isLocationLegalToBuild(&buildPos, tTemplate, placeAngle, 
 			BuildAssistant::TERRAIN_RESTRICTIONS|BuildAssistant::NO_OBJECT_OVERLAP, NULL, m_player);
 		TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.

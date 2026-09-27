@@ -174,10 +174,10 @@ Bool SalvageCrateCollide::eligibleForLevel( Object *other )
 Bool SalvageCrateCollide::testWeaponChance()
 {
 	const SalvageCrateCollideModuleData *md = getSalvageCrateCollideModuleData();
-	if( md->m_weaponChance == 1.0f )
+	if( md->m_weaponChance == Fix( 1 ) )
 		return TRUE; // don't waste a random number for a 100%
 
-	Real randomNumber = GameLogicRandomValueReal( 0, 1 );
+	Fix randomNumber = GameLogicRandomValueFix( Fix( 0 ), Fix( 1 ) );
 	if( randomNumber < md->m_weaponChance )
 		return TRUE;
 
@@ -188,10 +188,10 @@ Bool SalvageCrateCollide::testWeaponChance()
 Bool SalvageCrateCollide::testLevelChance()
 {
 	const SalvageCrateCollideModuleData *md = getSalvageCrateCollideModuleData();
-	if( md->m_levelChance == 1.0f )
+	if( md->m_levelChance == Fix( 1 ) )
 		return TRUE; // don't waste a random number for a 100%
 
-	Real randomNumber = GameLogicRandomValueReal( 0, 1 );
+	Fix randomNumber = GameLogicRandomValueFix( Fix( 0 ), Fix( 1 ) );
 	if( randomNumber < md->m_levelChance )
 		return TRUE;
 

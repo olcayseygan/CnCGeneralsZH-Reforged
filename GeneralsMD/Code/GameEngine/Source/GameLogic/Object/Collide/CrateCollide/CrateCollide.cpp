@@ -87,8 +87,8 @@ void CrateCollideModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "PickupScience", INI::parseScience,	NULL,	offsetof( CrateCollideModuleData, m_pickupScience ) },
 		{ "ExecuteFX", INI::parseFXList, NULL, offsetof( CrateCollideModuleData, m_executeFX ) },
 		{ "ExecuteAnimation", INI::parseAsciiString, NULL, offsetof( CrateCollideModuleData, m_executionAnimationTemplate ) },
-		{ "ExecuteAnimationTime", INI::parseReal, NULL, offsetof( CrateCollideModuleData, m_executeAnimationDisplayTimeInSeconds ) },
-		{ "ExecuteAnimationZRise", INI::parseReal, NULL, offsetof( CrateCollideModuleData, m_executeAnimationZRisePerSecond ) },
+		{ "ExecuteAnimationTime", INI::parseReal, NULL, REAL_OFFSET( CrateCollideModuleData, m_executeAnimationDisplayTimeInSeconds ) },
+		{ "ExecuteAnimationZRise", INI::parseReal, NULL, REAL_OFFSET( CrateCollideModuleData, m_executeAnimationZRisePerSecond ) },
 		{ "ExecuteAnimationFades", INI::parseBool, NULL, offsetof( CrateCollideModuleData, m_executeAnimationFades ) },
 
 		{ 0, 0, 0, 0 }

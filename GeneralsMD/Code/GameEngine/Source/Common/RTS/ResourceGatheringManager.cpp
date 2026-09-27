@@ -40,6 +40,7 @@
 #include "GameLogic/Module/SupplyCenterDockUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
+#include "Lib/FixBoundary.h"
 
 ResourceGatheringManager::ResourceGatheringManager() :
 	m_suppliesDepletedVoicePlayed( FALSE )
@@ -115,27 +116,27 @@ void ResourceGatheringManager::removeSupplyWarehouse( Object *oldWarehouse )
 	}
 }
 
-static Real computeRelativeCost( Object *queryObject, Object *destObject, Real *pureDistanceSquared )
+static Fix computeRelativeCost( Object *queryObject, Object *destObject, Fix *pureDistanceSquared )
 {
 	/** @todo This gets filled with Pathfinding computations, analysis of Boxes remaining,
-			Threat calculations, paths of other trucks, and other fancy stuff. 
+			Threat calculations, paths of other trucks, and other fancy stuff.
 	*/
 
 	//A good score is a very small number.
 
 	if( queryObject == NULL  ||  destObject == NULL )
-		return FLT_MAX;
-	
+		return FIX_MAX;
+
 	if( !TheActionManager->canTransferSuppliesAt(queryObject, destObject, CMD_FROM_AI) )
-		return FLT_MAX;// Handles emptyness and alliances
+		return FIX_MAX;// Handles emptyness and alliances
 
 	DockUpdateInterface *dockInterface = destObject->getDockUpdateInterface();
 	if( !dockInterface->isClearToApproach( queryObject ) )
-		return FLT_MAX;
+		return FIX_MAX;
 
 	// since we don't care about the distance as a distance per se, but rather as
 	// a goodness-factor, save some time by getting the dist-sqr (srj)
-	Real distSquared = ThePartitionManager->getDistanceSquared(queryObject, destObject, FROM_CENTER_3D);
+	Fix distSquared = ThePartitionManager->getDistanceSquaredFix(queryObject, destObject, FROM_CENTER_3D);
 
 	// I need the distance, but I don't want to count on the coincidence that
 	// the abstract 'cost' this function returns happens to be just the distance, since it could
@@ -149,7 +150,7 @@ static Real computeRelativeCost( Object *queryObject, Object *destObject, Real *
 Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 {
 	Object *bestWarehouse = NULL;
-	Real maxDistanceSquared = 100000;
+	Fix maxDistanceSquared = Fix( 100000 );
 
 	if( ( queryObject == NULL ) || ( queryObject->getAI() == NULL ) )
 		return NULL;
@@ -165,7 +166,7 @@ Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 			static const NameKeyType key_warehouseUpdate = NAMEKEY("SupplyWarehouseDockUpdate");
 			SupplyWarehouseDockUpdate *warehouseModule = (SupplyWarehouseDockUpdate*)dock->findUpdateModule( key_warehouseUpdate );
 			//If remotely okay, let User win.
-			if( warehouseModule && computeRelativeCost( queryObject, dock, NULL ) != FLT_MAX )
+			if( warehouseModule && computeRelativeCost( queryObject, dock, NULL ) != FIX_MAX )
 				return dock;
 		}
 		// Please note, there is not a separate Warehouse and Center memory by Design.  Because
@@ -174,11 +175,13 @@ Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 
 		// Design wants a harvester to give up and return to base if it is "too far" to the warehouse.
 		// Note, the "PreferedDock" will override this, and there is no distance max on Centers.
-		maxDistanceSquared = supplyTruckAI->getWarehouseScanDistance() * supplyTruckAI->getWarehouseScanDistance();
+		// P3: the scan distance is module data in float; one whose square would not fit is no limit
+		const Fix scan = fixFromReal( supplyTruckAI->getWarehouseScanDistance() );
+		maxDistanceSquared = scan > Fix( 1 << 20 ) ? FIX_MAX : scan * scan;
 	}
 
 	//Otherwise, search for a good one.
-	Real bestCost = FLT_MAX;
+	Fix bestCost = FIX_MAX;
 
 	objectIDListIterator iterator = m_supplyWarehouses.begin();
 	while( iterator != m_supplyWarehouses.end() )
@@ -192,8 +195,8 @@ Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 		}
 		else
 		{
-			Real distanceSquared;
-			Real currentCost = computeRelativeCost( queryObject, currentWarehouse, &distanceSquared );
+			Fix distanceSquared = FIX_MAX;
+			Fix currentCost = computeRelativeCost( queryObject, currentWarehouse, &distanceSquared );
 			if( (currentCost < bestCost) && (distanceSquared < maxDistanceSquared) )
 			{
 				bestWarehouse = currentWarehouse;
@@ -223,7 +226,7 @@ Object *ResourceGatheringManager::findBestSupplyCenter( Object *queryObject )
 			static const NameKeyType key_centerUpdate = NAMEKEY("SupplyCenterDockUpdate");
 			SupplyWarehouseDockUpdate *centerModule = (SupplyWarehouseDockUpdate*)dock->findUpdateModule( key_centerUpdate );
 			//If remotely okay, let User win.
-			if( centerModule && computeRelativeCost( queryObject, dock, NULL ) != FLT_MAX )
+			if( centerModule && computeRelativeCost( queryObject, dock, NULL ) != FIX_MAX )
 				return dock;
 		}
 		// Please note, there is not a separate Warehouse and Center memory by Design.  Because
@@ -238,7 +241,7 @@ Object *ResourceGatheringManager::findBestSupplyCenter( Object *queryObject )
 Object *ResourceGatheringManager::findBestSupplyCenterInList(Object *queryObject)
 {
 	Object *bestCenter = NULL;
-	Real bestCost = FLT_MAX;
+	Fix bestCost = FIX_MAX;
 
 	objectIDListIterator iterator = m_supplyCenters.begin();
 	while( iterator != m_supplyCenters.end() )
@@ -252,7 +255,7 @@ Object *ResourceGatheringManager::findBestSupplyCenterInList(Object *queryObject
 		}
 		else
 		{
-			Real currentCost = computeRelativeCost( queryObject, currentCenter, NULL );
+			Fix currentCost = computeRelativeCost( queryObject, currentCenter, NULL );
 			if( currentCost < bestCost )
 			{
 				bestCenter = currentCenter;

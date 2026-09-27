@@ -60,6 +60,7 @@
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Scripts.h"
 #include "GameLogic/VictoryConditions.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -430,9 +431,12 @@ Bool ScriptConditions::evaluateNamedInsideArea(Parameter *pUnitParm, Parameter *
 	PolygonTrigger *pTrig = TheScriptEngine->getQualifiedTriggerAreaByName(pTriggerAreaParm->getString());
 	if (pTrig == NULL) return false;
 	if (theObj) {
-		Coord3D pCoord = *theObj->getPosition();
+		const FCoord3D *pCoord = theObj->getPositionFix();
 		ICoord3D iCoord;
-		iCoord.x = pCoord.x; iCoord.y = pCoord.y; iCoord.z = pCoord.z;
+		// truncated towards zero, as the float-to-int conversion did
+		iCoord.x = (Int)(pCoord->x.raw() / Fix::ONE_RAW);
+		iCoord.y = (Int)(pCoord->y.raw() / Fix::ONE_RAW);
+		iCoord.z = (Int)(pCoord->z.raw() / Fix::ONE_RAW);
 		return pTrig->pointInTrigger(iCoord);
 	}
 	return false; // Non existent team isn't in trigger area. :)
@@ -1090,10 +1094,10 @@ Bool ScriptConditions::evaluateEnemySighted(Parameter *pItemParm, Parameter *pAl
 
 	PartitionFilter *filters[] = { &filterTeam, &filterAlive, &filterStealth, &filterMapStatus, NULL };
 
-	Real visionRange = theObj->getVisionRange();
+	const Fix visionRange = fixFromReal( theObj->getVisionRange() );	// P3 vision range is float
 
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(
-								theObj, visionRange, FROM_CENTER_2D, filters); 
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(
+								theObj, visionRange, FROM_CENTER_2D, filters);
 	MemoryPoolObjectHolder hold(iter);
 	for (Object *them = iter->first(); them; them = iter->next())
 	{
@@ -1135,10 +1139,10 @@ Bool ScriptConditions::evaluateTypeSighted(Parameter *pItemParm, Parameter *pTyp
 
 	PartitionFilter *filters[] = { &filterAlive, &filterStealth, &filterMapStatus, NULL };
 
-	Real visionRange = theObj->getVisionRange();
+	const Fix visionRange = fixFromReal( theObj->getVisionRange() );	// P3 vision range is float
 
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(
-								theObj, visionRange, FROM_CENTER_2D, filters); 
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(
+								theObj, visionRange, FROM_CENTER_2D, filters);
 	MemoryPoolObjectHolder hold(iter);
 	for (Object *them = iter->first(); them; them = iter->next())
 	{
@@ -2218,9 +2222,11 @@ Bool ScriptConditions::evaluateSkirmishSuppliesWithinDistancePerimeter(Parameter
 		return false;
 	}
 
-	Coord3D center;
-	trigger->getCenterPoint(&center);
-	Real distance = trigger->getRadius() + pDistanceParm->getReal();
+	Coord3D triggerCenter;
+	trigger->getCenterPoint(&triggerCenter);
+	FCoord3D center;
+	center.set( fixFromReal( triggerCenter.x ), fixFromReal( triggerCenter.y ), fixFromReal( triggerCenter.z ) );
+	const Fix distance = fixFromReal( trigger->getRadius() ) + fixFromReal( pDistanceParm->getReal() );
 	
 	Real compareToValue = pValueParm->getReal();
 
@@ -2230,7 +2236,7 @@ Bool ScriptConditions::evaluateSkirmishSuppliesWithinDistancePerimeter(Parameter
 
 	PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
 
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(&center, distance, FROM_CENTER_2D, filters, ITER_FASTEST);
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(&center, distance, FROM_CENTER_2D, filters, ITER_FASTEST);
 	MemoryPoolObjectHolder hold(iter);
 
 	Real maxValue = 0;
@@ -2269,9 +2275,11 @@ Bool ScriptConditions::evaluateSkirmishPlayerTechBuildingWithinDistancePerimeter
 		return false;
 	}
 
-	Coord3D center;
-	pTrig->getCenterPoint(&center);
-	Real radius = pTrig->getRadius() + pDistanceParm->getReal();
+	Coord3D triggerCenter;
+	pTrig->getCenterPoint(&triggerCenter);
+	FCoord3D center;
+	center.set( fixFromReal( triggerCenter.x ), fixFromReal( triggerCenter.y ), fixFromReal( triggerCenter.z ) );
+	const Fix radius = fixFromReal( pTrig->getRadius() ) + fixFromReal( pDistanceParm->getReal() );
 
 	PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_TECH_BUILDING), KINDOFMASK_NONE);
 	PartitionFilterPlayerAffiliation f2(player, ALLOW_ALLIES, false);
@@ -2281,7 +2289,7 @@ Bool ScriptConditions::evaluateSkirmishPlayerTechBuildingWithinDistancePerimeter
 
 	PartitionFilter *filters[] = { &f1, &f2, &f3, &filterMapStatus, 0 };
 
-	Bool comparison = ThePartitionManager->getClosestObject(&center, radius, FROM_CENTER_2D, filters) != NULL;
+	Bool comparison = ThePartitionManager->getClosestObjectFix(&center, radius, FROM_CENTER_2D, filters) != NULL;
 	pCondition->setCustomData(-1); // false.
 	if (comparison) {
 		pCondition->setCustomData(1); // true.

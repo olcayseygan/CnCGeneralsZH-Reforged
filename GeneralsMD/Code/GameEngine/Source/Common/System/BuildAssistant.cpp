@@ -57,6 +57,7 @@
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/ParkingPlaceBehavior.h"
+#include "Lib/FixBoundary.h"
 
 // PUBLIC DATA ////////////////////////////////////////////////////////////////////////////////////
 BuildAssistant *TheBuildAssistant = NULL;
@@ -91,6 +92,16 @@ ObjectSellInfo::~ObjectSellInfo( void )
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+//-------------------------------------------------------------------------------------------------
+/** P7: every spot this file is handed comes from an order, the AI or the placement UI in float */
+//-------------------------------------------------------------------------------------------------
+static FCoord3D fixCoord( const Coord3D *pos )
+{
+	FCoord3D f;
+	f.set( fixFromReal( pos->x ), fixFromReal( pos->y ), fixFromReal( pos->z ) );
+	return f;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Is this object a dozer */
@@ -405,13 +416,11 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 		obj->setProducer(constructorObject);
 
 		// place on terrain surface
-		Coord3D groundPos;
-		groundPos.x = pos->x;
-		groundPos.y = pos->y;
-		groundPos.z = TheTerrainLogic->getGroundHeight( groundPos.x, groundPos.y );
-		obj->setPosition( &groundPos );
+		FCoord3D groundPos = fixCoord( pos );
+		groundPos.z = TheTerrainLogic->getGroundHeightFix( groundPos.x, groundPos.y );
+		obj->setPositionFix( &groundPos );
 
-		obj->setOrientation( angle );
+		obj->setOrientationFix( fixFromReal( angle ) );	// P7: the build order's angle is float
 
 		TheAI->pathfinder()->addObjectToPathfindMap( obj );
 
@@ -474,7 +483,7 @@ void BuildAssistant::buildObjectLineNow( Object *constructorObject, const ThingT
 		return;
 
 	// how big are each of our objects
-	Real objectSize = what->getTemplateGeometryInfo().getMajorRadius() * 2.0f;
+	Real objectSize = fixToReal( what->getTemplateGeometryInfo().getMajorRadiusFix() * Fix( 2 ) );	// P7: the tiling is float
 	
 	// what is our max tiling length we can make
 	Int maxObjects = TheGlobalData->m_maxLineBuildObjects;
@@ -587,21 +596,22 @@ void BuildAssistant::iterateFootprint( const ThingTemplate *build,
 	transform.Rotate_Z( buildOrientation );
 
 	// get the bounding footprint rectangle for the geometry we're looking at
-	Real halfFootprintHeight, 
+	// P7: the footprint sampler below is float, Matrix3D and all
+	Real halfFootprintHeight,
 			 halfFootprintWidth;
 	if( build->getTemplateGeometryInfo().getGeomType() == GEOMETRY_BOX )
 	{
 
-		halfFootprintHeight = build->getTemplateGeometryInfo().getMinorRadius();
-		halfFootprintWidth = build->getTemplateGeometryInfo().getMajorRadius();
+		halfFootprintHeight = fixToReal( build->getTemplateGeometryInfo().getMinorRadiusFix() );
+		halfFootprintWidth = fixToReal( build->getTemplateGeometryInfo().getMajorRadiusFix() );
 
 	}  // end if
 	else if( build->getTemplateGeometryInfo().getGeomType() == GEOMETRY_SPHERE ||
 					 build->getTemplateGeometryInfo().getGeomType() == GEOMETRY_CYLINDER )
 	{
 
-		halfFootprintHeight = build->getTemplateGeometryInfo().getBoundingCircleRadius();
-		halfFootprintWidth = build->getTemplateGeometryInfo().getBoundingCircleRadius();
+		halfFootprintHeight = fixToReal( build->getTemplateGeometryInfo().getBoundingCircleRadiusFix() );
+		halfFootprintWidth = halfFootprintHeight;
 
 	}  // end else if
 	else
@@ -642,7 +652,7 @@ void BuildAssistant::iterateFootprint( const ThingTemplate *build,
 				x = halfFootprintWidth;
 
 			// transform to world
-			v.Set( x, y, TheTerrainLogic->getGroundHeight( x, y ) );
+			v.Set( x, y, fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( x ), fixFromReal( y ) ) ) );
 			transform.Transform_Vector( transform, v, &v );
 
 			// for circular geometries we must actually be within the circle
@@ -662,7 +672,7 @@ void BuildAssistant::iterateFootprint( const ThingTemplate *build,
 			Coord3D pos;
 			pos.x = v.X;
 			pos.y = v.Y;
-			pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+			pos.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( pos.x ), fixFromReal( pos.y ) ) );
 			func( &pos, funcUserData );
 
 		}  // end for x
@@ -687,8 +697,8 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		 kept the height of the spot they started from, or passed 0, and a probe that floated above a
 		 building's roof found it clear: a Hard USA put three pairs of supply drop zones exactly on top of
 		 each other in one match. */
-	Coord3D groundPos = *worldPos;
-	groundPos.z = TheTerrainLogic->getGroundHeight( groundPos.x, groundPos.y );
+	Coord3D groundPos = *worldPos;	// P7: the collision query is float
+	groundPos.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( groundPos.x ), fixFromReal( groundPos.y ) ) );
 	ObjectIterator *iter =
 			ThePartitionManager->iteratePotentialCollisions( &groundPos,
 																											 build->getTemplateGeometryInfo(),
@@ -813,48 +823,51 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 	}
 	// Check for overlapping exit areas.
 
-	Real range = 2*(build->getTemplateGeometryInfo().getMajorRadius()+build->getTemplateGeometryInfo().getMinorRadius());
+	const GeometryInfo &buildGeom = build->getTemplateGeometryInfo();
+	Fix range = Fix(2)*(buildGeom.getMajorRadiusFix()+buildGeom.getMinorRadiusFix());
 
 	PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_STRUCTURE), KINDOFMASK_NONE);
 	PartitionFilter *filters[] = { &f1, NULL };
 
-	ObjectIterator *iter2 = ThePartitionManager->iterateObjectsInRange(worldPos, range, FROM_BOUNDINGSPHERE_2D, filters);
+	const FCoord3D worldFx = fixCoord(worldPos);
+	ObjectIterator *iter2 = ThePartitionManager->iterateObjectsInRangeFix(&worldFx, range, FROM_BOUNDINGSPHERE_2D, filters);
 	MemoryPoolObjectHolder hold2(iter2);
 
-	Real myFactoryExitWidth = build->getFactoryExitWidth();
-	Real myExtraWidth = build->getFactoryExtraBibWidth();
+	Fix myFactoryExitWidth = fixFromReal(build->getFactoryExitWidth());	// P3
+	Fix myExtraWidth = fixFromReal(build->getFactoryExtraBibWidth());		// P3
 
 	if (thePlayer && thePlayer->isSkirmishAIPlayer()) {
 		// Skirmish ai adds a little extra around the edges so it doesn't build itself into a corner.
-		if (myExtraWidth < 3*PATHFIND_CELL_SIZE_F) {
-			myExtraWidth = 3*PATHFIND_CELL_SIZE_F;
+		if (myExtraWidth < Fix(3*PATHFIND_CELL_SIZE)) {
+			myExtraWidth = Fix(3*PATHFIND_CELL_SIZE);
 			myFactoryExitWidth -= myExtraWidth;
-			if (myFactoryExitWidth<0) myFactoryExitWidth = 0;
+			if (myFactoryExitWidth<Fix(0)) myFactoryExitWidth = Fix(0);
 		}
 	}
 
+	// the collision test below is float with no Fix twin, so the exit spots and angles go out as float
 	Bool checkMyExit = false;
 	Coord3D myExitPos;
-	GeometryInfo myBounds = build->getTemplateGeometryInfo();
-	myBounds.setMajorRadius(myBounds.getMajorRadius()+myExtraWidth);
+	GeometryInfo myBounds = buildGeom;
+	myBounds.setMajorRadiusFix(myBounds.getMajorRadiusFix()+myExtraWidth);
 	if (myBounds.getGeomType() != GEOMETRY_BOX) {
-		myBounds.set(GEOMETRY_BOX, false, 40, myBounds.getMajorRadius(), myBounds.getMajorRadius());
+		myBounds.setFix(GEOMETRY_BOX, false, Fix(40), myBounds.getMajorRadiusFix(), myBounds.getMajorRadiusFix());
 	} else {
-		myBounds.setMinorRadius(myBounds.getMinorRadius()+myExtraWidth);
+		myBounds.setMinorRadiusFix(myBounds.getMinorRadiusFix()+myExtraWidth);
 	}
-	GeometryInfo myGeom = build->getTemplateGeometryInfo();
+	GeometryInfo myGeom = buildGeom;
 	if (myGeom.getGeomType() != GEOMETRY_BOX) {
-		myGeom.setMinorRadius(myGeom.getMajorRadius());
+		myGeom.setMinorRadiusFix(myGeom.getMajorRadiusFix());
 	}
-	myGeom.setMajorRadius(myFactoryExitWidth/2.0f);
-	if (myFactoryExitWidth>0) {
-		myExitPos = *worldPos;
+	myGeom.setMajorRadiusFix(myFactoryExitWidth*0.5_fx);
+	if (myFactoryExitWidth>Fix(0)) {
 		checkMyExit = true;
-		Real c = (Real)Cos(angle);
-		Real s = (Real)Sin(angle);
-		Real offset = build->getTemplateGeometryInfo().getMajorRadius() + myFactoryExitWidth/2.0f;
-		myExitPos.x += c*offset;
-		myExitPos.y += s*offset;
+		const Fix angleFx = fixFromReal(angle);	// P7
+		const Fix offset = buildGeom.getMajorRadiusFix() + myFactoryExitWidth*0.5_fx;
+		FCoord3D exitFx = worldFx;
+		exitFx.x += fixCos(angleFx)*offset;
+		exitFx.y += fixSin(angleFx)*offset;
+		myExitPos = exitFx.toCoord3D();
 	}
 
 
@@ -878,38 +891,40 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		if( isRemovableForConstruction( them ) == TRUE )
 			continue;
 
-		Real themFactoryExitWidth = them->getTemplate()->getFactoryExitWidth();
-		Real hisExtraWidth = them->getTemplate()->getFactoryExtraBibWidth();
+		Fix themFactoryExitWidth = fixFromReal(them->getTemplate()->getFactoryExitWidth());	// P3
+		Fix hisExtraWidth = fixFromReal(them->getTemplate()->getFactoryExtraBibWidth());		// P3
+
+		const Coord3D themPos = them->getPositionFix()->toCoord3D();		// no Fix twin of geomCollidesWithGeom
+		const Real themAngle = fixToReal(them->getOrientationFix());
 
 		Bool checkHisExit = false;
 		Coord3D hisExitPos;
 		GeometryInfo hisBounds = them->getGeometryInfo();
-		hisBounds.setMajorRadius(hisBounds.getMajorRadius()+hisExtraWidth);
+		hisBounds.setMajorRadiusFix(hisBounds.getMajorRadiusFix()+hisExtraWidth);
 		if (hisBounds.getGeomType() != GEOMETRY_BOX) {
-			hisBounds.set(GEOMETRY_BOX, false, 40, hisBounds.getMajorRadius(), hisBounds.getMajorRadius());
+			hisBounds.setFix(GEOMETRY_BOX, false, Fix(40), hisBounds.getMajorRadiusFix(), hisBounds.getMajorRadiusFix());
 		} else {
-			hisBounds.setMinorRadius(hisBounds.getMinorRadius()+myExtraWidth);
+			hisBounds.setMinorRadiusFix(hisBounds.getMinorRadiusFix()+myExtraWidth);
 		}
 		GeometryInfo hisGeom = them->getGeometryInfo();
-		hisGeom.setMajorRadius(themFactoryExitWidth/2.0f);
+		hisGeom.setMajorRadiusFix(themFactoryExitWidth*0.5_fx);
 		if (hisGeom.getGeomType() != GEOMETRY_BOX) {
-			hisGeom.setMinorRadius(them->getGeometryInfo().getMajorRadius());
+			hisGeom.setMinorRadiusFix(them->getGeometryInfo().getMajorRadiusFix());
 		}
-		if (themFactoryExitWidth>0) {
-			hisExitPos = *them->getPosition();
+		if (themFactoryExitWidth>Fix(0)) {
 			checkHisExit = true;
-			Real c = (Real)Cos(them->getOrientation());
-			Real s = (Real)Sin(them->getOrientation());
-			Real offset = them->getGeometryInfo().getMajorRadius() + themFactoryExitWidth/2.0f;
-			hisExitPos.x += c*offset;
-			hisExitPos.y += s*offset;
+			const Fix offset = them->getGeometryInfo().getMajorRadiusFix() + themFactoryExitWidth*0.5_fx;
+			FCoord3D exitFx = *them->getPositionFix();
+			exitFx.x += fixCos(them->getOrientationFix())*offset;
+			exitFx.y += fixSin(them->getOrientationFix())*offset;
+			hisExitPos = exitFx.toCoord3D();
 		}
-		if (ThePartitionManager->geomCollidesWithGeom(them->getPosition(), hisBounds, them->getOrientation(), 
+		if (ThePartitionManager->geomCollidesWithGeom(&themPos, hisBounds, themAngle,
 			worldPos, myBounds, angle)) {
 			TheTerrainVisual->addFactionBib(them, true);
 			return LBC_OBJECTS_IN_THE_WAY;
 		}
-		if (!checkMyExit && !checkHisExit && !hisExtraWidth && !myExtraWidth) 
+		if (!checkMyExit && !checkHisExit && hisExtraWidth == Fix(0) && myExtraWidth == Fix(0))
 		{
 			continue; // neither has extra exit space.
 		}
@@ -917,19 +932,19 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		// an immobile object will obstruct our building no matter what team it's on
 		if ( them->isKindOf( KINDOF_IMMOBILE ) )	{
 			/* Check for overlap of my exit rectangle to his geom info. */
-			if (checkMyExit && ThePartitionManager->geomCollidesWithGeom(them->getPosition(), hisBounds, them->getOrientation(), 
+			if (checkMyExit && ThePartitionManager->geomCollidesWithGeom(&themPos, hisBounds, themAngle,
 				&myExitPos, myGeom, angle)) {
 				TheTerrainVisual->addFactionBib(them, true);
 				return LBC_OBJECTS_IN_THE_WAY;
 			}
 			// Check for overlap of his exit rectangle with my geom info
-			if (checkHisExit && ThePartitionManager->geomCollidesWithGeom(&hisExitPos, hisGeom, them->getOrientation(), 
+			if (checkHisExit && ThePartitionManager->geomCollidesWithGeom(&hisExitPos, hisGeom, themAngle,
 					worldPos, myBounds, angle)) {
 				TheTerrainVisual->addFactionBib(them, true);
 				return LBC_OBJECTS_IN_THE_WAY;
 			}
 			// Check both exit rectangles together.
-			if (checkMyExit&&checkHisExit&&ThePartitionManager->geomCollidesWithGeom(&hisExitPos, hisGeom, them->getOrientation(), 
+			if (checkMyExit&&checkHisExit&&ThePartitionManager->geomCollidesWithGeom(&hisExitPos, hisGeom, themAngle,
 					&myExitPos, myGeom, angle)) {
 				TheTerrainVisual->addFactionBib(them, true);
 				return LBC_OBJECTS_IN_THE_WAY;
@@ -965,17 +980,18 @@ static Bool isDerrickClusterDefenseFull( const Coord3D *worldPos, const Player *
 
 	std::vector<Coord2D> derricks;
 	std::vector<Coord2D> defenses;
-	const Real range = (Real)( PRO_RULES_DERRICK_CLUSTER_RADIUS * PRO_RULES_DERRICK_SEARCH_STEPS );
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( worldPos, range, FROM_CENTER_2D, filters );
+	const Fix range = Fix( PRO_RULES_DERRICK_CLUSTER_RADIUS * PRO_RULES_DERRICK_SEARCH_STEPS );
+	const FCoord3D worldFx = fixCoord( worldPos );
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &worldFx, range, FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 	for( Object *them = iter->first(); them; them = iter->next() )
 	{
 		if( them->isEffectivelyDead() )
 			continue;
 
-		Coord2D at;
-		at.x = them->getPosition()->x;
-		at.y = them->getPosition()->y;
+		Coord2D at;	// P7: the cluster count is float
+		at.x = fixToReal( them->getPositionFix()->x );
+		at.y = fixToReal( them->getPositionFix()->y );
 
 		const AsciiString &name = them->getTemplate()->getName();
 		if( ProRulesIsOilDerrick( name ) )
@@ -1067,20 +1083,23 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		PartitionFilter *filters[] = { &f1, NULL };
 		
 		// see if there are any reasonably close by
-		Real range = build->getTemplateGeometryInfo().getBoundingCircleRadius() + TheGlobalData->m_SupplyBuildBorder*2;
-		Object* tooClose = ThePartitionManager->getClosestObject(worldPos, range, FROM_BOUNDINGSPHERE_2D, filters);
+		const Fix border = fixFromReal(TheGlobalData->m_SupplyBuildBorder);	// P3
+		Fix range = build->getTemplateGeometryInfo().getBoundingCircleRadiusFix() + border*Fix(2);
+		const FCoord3D worldFx = fixCoord(worldPos);
+		Object* tooClose = ThePartitionManager->getClosestObjectFix(&worldFx, range, FROM_BOUNDINGSPHERE_2D, filters);
 		if (tooClose != NULL)
 		{
 			// yep, see if we would collide with an expanded version
 			GeometryInfo tooCloseGeom = tooClose->getGeometryInfo();
 			tooCloseGeom.expandFootprint(TheGlobalData->m_SupplyBuildBorder);
+			const Coord3D tooClosePos = tooClose->getPositionFix()->toCoord3D();	// no Fix twin of geomCollidesWithGeom
 			if (ThePartitionManager->geomCollidesWithGeom(
 						worldPos,
 						build->getTemplateGeometryInfo(),
 						angle,
-						tooClose->getPosition(),
+						&tooClosePos,
 						tooCloseGeom,
-						tooClose->getOrientation()))
+						fixToReal(tooClose->getOrientationFix())))
 			{
 				TheTerrainVisual->addFactionBib(tooClose, true, TheGlobalData->m_SupplyBuildBorder);
 				return LBC_TOO_CLOSE_TO_SUPPLIES;
@@ -1168,8 +1187,9 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		PartitionFilterAcceptByKindOf structures( MAKE_KINDOF_MASK( KINDOF_STRUCTURE ), KINDOFMASK_NONE );
 		PartitionFilter *filters[] = { &structures, NULL };
 
-		Real range = build->getTemplateGeometryInfo().getBoundingCircleRadius() + PRO_RULES_ENEMY_STRUCTURE_CLEARANCE;
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( worldPos, range, FROM_BOUNDINGSPHERE_2D, filters );
+		Fix range = build->getTemplateGeometryInfo().getBoundingCircleRadiusFix() + Fix( PRO_RULES_ENEMY_STRUCTURE_CLEARANCE );
+		const FCoord3D worldFx = fixCoord( worldPos );
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &worldFx, range, FROM_BOUNDINGSPHERE_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
 		for( Object *them = iter->first(); them; them = iter->next() )
 		{
@@ -1314,7 +1334,7 @@ BuildAssistant::TileBuildInfo *BuildAssistant::buildTiledLocations( const ThingT
 		// compute position of object
 		pos.x = v.x * (tilingSize * i) + start->x;
 		pos.y = v.y * (tilingSize * i) + start->y;
-		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		pos.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( pos.x ), fixFromReal( pos.y ) ) );	// P7: the tiles are float
 
 		// check for a legal position to be at and stop the tiling process if that becomes broken
 		if( isLocationLegalToBuild( &pos, thingBeingTiled, angle,
@@ -1554,11 +1574,11 @@ Bool BuildAssistant::moveObjectsForConstruction( const ThingTemplate *whatToBuil
 																								 Player *playerToBuild,
 																								 const Object *ignore )
 {
-	GeometryInfo gi (GEOMETRY_BOX, false, 10, whatToBuild->getTemplateGeometryInfo().getMajorRadius(),
-		whatToBuild->getTemplateGeometryInfo().getMajorRadius());
-	if (whatToBuild->getTemplateGeometryInfo().getGeomType()==GEOMETRY_BOX) {
-		gi = whatToBuild->getTemplateGeometryInfo();
-	} 
+	GeometryInfo gi = whatToBuild->getTemplateGeometryInfo();
+	if (gi.getGeomType()!=GEOMETRY_BOX) {
+		const Fix r = gi.getMajorRadiusFix();
+		gi.setFix(GEOMETRY_BOX, false, Fix(10), r, r);
+	}
 	ObjectIterator *iter = 
 			ThePartitionManager->iteratePotentialCollisions( pos,
 																											 gi,
@@ -1566,8 +1586,8 @@ Bool BuildAssistant::moveObjectsForConstruction( const ThingTemplate *whatToBuil
 	Bool anyUnmovables = false;
 	MemoryPoolObjectHolder hold( iter );
 
-	Real radius = sqrt(sqr(gi.getMajorRadius()) + sqr(gi.getMinorRadius())); 
-	radius *= 1.4f;	// Fudge the distance,
+	Fix radius = fixSqrt(gi.getMajorRadiusFix()*gi.getMajorRadiusFix() + gi.getMinorRadiusFix()*gi.getMinorRadiusFix());
+	radius *= 1.4_fx;	// Fudge the distance,
 
 	for( Object *them = iter->first(); them; them = iter->next() )
 	{
@@ -1601,7 +1621,7 @@ Bool BuildAssistant::moveObjectsForConstruction( const ThingTemplate *whatToBuil
 				{
 					// Vary the distance to move between one half the diameter of the building (roughly) 
 					// and 1.5 times the diameter of the building
-					Real variedRadius = GameLogicRandomValueReal(0.5, 1.5) * radius;
+					Real variedRadius = GameLogicRandomValueReal(0.5, 1.5) * fixToReal(radius);	// P4: the move order is float
 
 					Coord3D destPos;					
 					Real dir = GameLogicRandomValueReal(-PI, PI);

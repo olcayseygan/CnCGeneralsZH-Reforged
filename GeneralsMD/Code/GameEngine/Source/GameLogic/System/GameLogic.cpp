@@ -114,6 +114,7 @@
 #include "GameNetwork/CrcAgreement.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
+#include "Lib/FixBoundary.h"
 
 #include <rts/profile.h>
 
@@ -494,6 +495,23 @@ void GameLogic::reset( void )
 	m_rankPointsToAddAtGameStart = 0;
 }  // end reset
 
+/// map data, waypoints and the pathfinder still hand out float positions: this is where they come in
+static FCoord3D fcoordFromCoord3D( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
+/// a map-data position with its z taken as an offset above the logic ground
+static FCoord3D fcoordOnGround( const Coord3D &c, Bool addToGround )
+{
+	FCoord3D f = fcoordFromCoord3D( c );
+	Fix ground = TheTerrainLogic->getGroundHeightFix( f.x, f.y );
+	f.z = addToGround ? f.z + ground : ground;
+	return f;
+}
+
 static Object * placeObjectAtPosition(Int slotNum, AsciiString objectTemplateName, Coord3D& pos, Player *pPlayer,
 																	const PlayerTemplate *pTemplate)
 {
@@ -506,8 +524,9 @@ static Object * placeObjectAtPosition(Int slotNum, AsciiString objectTemplateNam
 		slotNum, pTemplate->getDisplayName().str()));
 	if (obj)
 	{
-		obj->setOrientation(obj->getTemplate()->getPlacementViewAngle());	
-		obj->setPosition( &pos );
+		obj->setOrientationFix( fixFromReal( obj->getTemplate()->getPlacementViewAngle() ) );	// P3
+		FCoord3D fxPos = fcoordFromCoord3D( pos );	// P5: pos goes on to the pathfinder in float
+		obj->setPositionFix( &fxPos );
 
 		//DEBUG_LOG(("Placed a starting building for %s at waypoint %s\n", playerName.str(), waypointName.str()));
 		CRCDEBUG_LOG(("Placed an object for %ls at pos (%g,%g,%g)\n", pPlayer->getPlayerDisplayName().str(),
@@ -535,7 +554,8 @@ static Object * placeObjectAtPosition(Int slotNum, AsciiString objectTemplateNam
 			if (TheAI->pathfinder()->adjustDestination(obj, obj->getAIUpdateInterface()->getLocomotorSet(), &pos)) {
 				DUMPCOORD3D(&pos);
 				TheAI->pathfinder()->updateGoal(obj, &pos, LAYER_GROUND);	// Units always start on the ground for now.  jba.
-				obj->setPosition( &pos );
+				fxPos = fcoordFromCoord3D( pos );	// P5
+				obj->setPositionFix( &fxPos );
 			}
 		}
 	}
@@ -558,8 +578,8 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 	if (!waypoint)
 		return;
 
-	Coord3D pos = *waypoint->getLocation();
-	pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+	FCoord3D fxPos = fcoordOnGround( *waypoint->getLocation(), FALSE );
+	Coord3D pos = fxPos.toCoord3D();	// P5: placeObjectAtPosition hands it to the pathfinder
 
 	AsciiString buildingTemplateName = pTemplate->getStartingBuilding();
 
@@ -582,14 +602,14 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 	pPlayer->onStructureConstructionComplete(NULL, conYard, FALSE);
 
 	//pos.x -= conYard->getGeometryInfo().getBoundingSphereRadius()/2;
-	pos.y -= conYard->getGeometryInfo().getBoundingSphereRadius()/2;
-	pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+	const Fix conYardRadius = conYard->getGeometryInfo().getBoundingSphereRadiusFix();
+	fxPos.y -= conYardRadius / Fix( 2 );
+	fxPos.z = TheTerrainLogic->getGroundHeightFix( fxPos.x, fxPos.y );
 
 	if (rallyWaypoint)
-	{
-		pos = *rallyWaypoint->getLocation();
-		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
-	}
+		fxPos = fcoordOnGround( *rallyWaypoint->getLocation(), FALSE );
+
+	pos = fxPos.toCoord3D();	// P5: findPositionAround and the pathfinder are float
 
 	for (Int i=0; i<MAX_MP_STARTING_UNITS; ++i)
 	{
@@ -598,8 +618,8 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 		{
 			Coord3D objPos = pos;
 			FindPositionOptions options;
-			options.minRadius = conYard->getGeometryInfo().getBoundingSphereRadius() * 0.7f;
-			options.maxRadius = conYard->getGeometryInfo().getBoundingSphereRadius() * 1.3f;
+			options.minRadius = fixToReal( conYardRadius * 0.7_fx );	// P5: FindPositionOptions is float
+			options.maxRadius = fixToReal( conYardRadius * 1.3_fx );
 			DEBUG_LOG(("Placing starting object %d (%s)\n", i, objName.str()));
 			ThePartitionManager->update();
 			Bool foundPos = ThePartitionManager->findPositionAround(&pos, &options, &objPos);
@@ -1786,12 +1806,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		Object *obj = TheThingFactory->newObject( thingTemplate, team ); //, OBJECT_STATUS_LOADING_FROM_MAP );
 		if( obj )
 		{
-			Coord3D pos = *pMapObj->getLocation();
-			pos.z += TheTerrainLogic->getGroundHeight( pos.x, pos.y );
-
-			Real angle = normalizeAngle(pMapObj->getAngle());  
-			obj->setOrientation(angle);
-			obj->setPosition( &pos );
+			FCoord3D fxPos = fcoordOnGround( *pMapObj->getLocation(), TRUE );
+			obj->setOrientationFix( fixNormalizeAngle( fixFromReal( pMapObj->getAngle() ) ) );	// map data
+			obj->setPositionFix( &fxPos );
 			if (thingTemplate->isBridge()) {
 				TheTerrainLogic->addLandmarkBridgeToLogic(obj);
 			}
@@ -1940,13 +1957,13 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			if( thingTemplate->isKindOf( KINDOF_SHRUBBERY ) && !useTrees )
 				continue;
 
-			Coord3D pos = *pMapObj->getLocation();
-			pos.z += TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+			const FCoord3D fxPos = fcoordOnGround( *pMapObj->getLocation(), TRUE );
+			Coord3D pos = fxPos.toCoord3D();	// for the client's trees and props, and getLayerForDestination
 			Real angle = normalizeAngle(pMapObj->getAngle());
 			if (thingTemplate->isKindOf(KINDOF_OPTIMIZED_TREE)) {
 				// Opt trees and props just get drawables to tell the client about it, then deleted. jba [6/5/2003]
 				// This way there is no logic object to slow down partition manager and core logic stuff.
-				
+
 				Drawable *draw = TheThingFactory->newDrawable(thingTemplate, DRAWABLE_STATUS_NONE);
 				if (draw) {
 					draw->setOrientation(angle);
@@ -1986,8 +2003,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 					if(draw)
 						draw->setDrawableStatus( DRAWABLE_STATUS_DRAWS_IN_MIRROR );
 				}
-				obj->setOrientation(angle);
-				obj->setPosition( &pos );
+				obj->setOrientationFix( fixNormalizeAngle( fixFromReal( pMapObj->getAngle() ) ) );	// map data
+				obj->setPositionFix( &fxPos );
 
 				// Do this after positioning the object, because we may place objects in response to keys
 				// in the map object properties.
@@ -3780,7 +3797,8 @@ static void unitTimings(void)
 					Coord3D pos;
 					pos.x = UNIT_SPACING*i+UNIT_BORDER;
 					pos.y = UNIT_SPACING*j+UNIT_BORDER;
-					pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+					pos.z = 0;
+					pos = fcoordOnGround( pos, FALSE ).toCoord3D();
 					Team *team = ThePlayerList->getNthPlayer(1)->getDefaultTeam();
 					Object *obj = TheThingFactory->newObject( btt, team );
 					if (obj==NULL) break;
@@ -3794,8 +3812,9 @@ static void unitTimings(void)
 					{
 						g_UT_gotUnit = true;
 					
-						obj->setOrientation(0);	
-						obj->setPosition( &pos );
+						const FCoord3D fxPos = fcoordFromCoord3D( pos );
+						obj->setOrientationFix( Fix( 0 ) );
+						obj->setPositionFix( &fxPos );
 						
 						// Now onCreates were called at the constructor.  This magically created
 						// thing needs to be considered as Built for Game specific stuff.
@@ -4080,7 +4099,7 @@ static void peaceTimeTick( void )
 		PartitionFilterAlive alive;
 		PartitionFilter *filters[] = { &relationship, &alive, NULL };
 
-		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( base, radius,
+		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( base, fixFromReal( radius ),	// P3
 																						FROM_CENTER_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
 		for( Object *them = iter->first(); them != NULL; them = iter->next() )
@@ -4203,7 +4222,7 @@ static Bool hasEnemyInSight( Object *obj )
 	PartitionFilterRelationship enemies( obj, PartitionFilterRelationship::ALLOW_ENEMIES );
 	PartitionFilter *filters[] = { &alive, &enemies, NULL };
 
-	return ThePartitionManager->getClosestObject( obj, obj->getVisionRange(), FROM_CENTER_2D, filters ) != NULL;
+	return ThePartitionManager->getClosestObjectFix( obj, fixFromReal( obj->getVisionRange() ), FROM_CENTER_2D, filters ) != NULL;	// P3
 }
 
 /* Somebody goes and gets the salvage.  A crate dropped by a wreck is money and a free upgrade lying
@@ -4238,7 +4257,7 @@ static void salvageCrateTick( void )
 	if( now % LOGICFRAMES_PER_SECOND != 0 )
 		return;
 
-	const Real SALVAGE_CALL_RADIUS = 150.0f;
+	const Fix SALVAGE_CALL_RADIUS = Fix( 150 );
 
 	for( Object *crate = TheGameLogic->getFirstObject(); crate != NULL; crate = crate->getNextObject() )
 	{
@@ -4249,7 +4268,7 @@ static void salvageCrateTick( void )
 		PartitionFilterSameMapStatus sameMap( crate );
 		PartitionFilter *filters[] = { &alive, &sameMap, NULL };
 
-		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( crate, SALVAGE_CALL_RADIUS,
+		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( crate, SALVAGE_CALL_RADIUS,
 																						FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
 		MemoryPoolObjectHolder hold( iter );
 
@@ -4303,8 +4322,10 @@ static void salvageCrateTick( void )
 		if( hasEnemyInSight( collector ) )
 			continue;
 
-		const Coord3D post = *collector->getPosition();
-		collector->getAI()->aiMoveToPosition( crate->getPosition(), CMD_FROM_AI );
+		// P4: the move order and the return spot are float
+		const Coord3D post = collector->getPositionFix()->toCoord3D();
+		const Coord3D target = crate->getPositionFix()->toCoord3D();
+		collector->getAI()->aiMoveToPosition( &target, CMD_FROM_AI );
 		collector->getAI()->friend_setSalvageReturnPosition( &post );
 	}
 }
@@ -4327,8 +4348,9 @@ void GameLogic::scheduleTechRespawn( const Object *ruin )
 
 	PendingTechBuilding pending;
 	pending.m_template = ruin->getTemplate();
-	pending.m_position = *ruin->getPosition();
-	pending.m_angle = ruin->getOrientation();
+	// PendingTechBuilding is saved as float; it keeps that format
+	pending.m_position = ruin->getPositionFix()->toCoord3D();
+	pending.m_angle = fixToReal( ruin->getOrientationFix() );
 	pending.m_ruinID = ruin->getID();
 	pending.m_dueFrame = m_frame + m_techRespawnDelay;
 	m_pendingTechBuildings.push_back( pending );
@@ -4342,7 +4364,8 @@ void GameLogic::scheduleTechRespawn( const Object *ruin )
 static Bool techBuildingSpotIsTaken( const ThingTemplate *building, const Coord3D *position, Real angle, ObjectID ruinID )
 {
 	const GeometryInfo &footprint = building->getTemplateGeometryInfo();
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( position, footprint.getBoundingCircleRadius(),
+	const FCoord3D fxPosition = fcoordFromCoord3D( *position );
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &fxPosition, footprint.getBoundingCircleRadiusFix(),
 																																					FROM_BOUNDINGSPHERE_2D );
 	MemoryPoolObjectHolder hold( iter );
 	for( Object *them = iter->first(); them != NULL; them = iter->next() )
@@ -4356,7 +4379,9 @@ static Bool techBuildingSpotIsTaken( const ThingTemplate *building, const Coord3
 		if( them->isKindOf( KINDOF_IMMOBILE ) && !them->getControllingPlayer()->isPlayableSide() )
 			continue;
 
-		if( ThePartitionManager->geomCollidesWithGeom( them->getPosition(), them->getGeometryInfo(), them->getOrientation(),
+		// P2: geomCollidesWithGeom has no Fix twin yet
+		const Coord3D themPos = them->getPositionFix()->toCoord3D();
+		if( ThePartitionManager->geomCollidesWithGeom( &themPos, them->getGeometryInfo(), fixToReal( them->getOrientationFix() ),
 																									 position, footprint, angle ) )
 			return TRUE;
 	}
@@ -4402,8 +4427,9 @@ void GameLogic::techRespawnTick( void )
 		}
 
 		Object *building = TheThingFactory->newObject( pending.m_template, ThePlayerList->getNeutralPlayer()->getDefaultTeam() );
-		building->setOrientation( pending.m_angle );
-		building->setPosition( &pending.m_position );
+		const FCoord3D fxPos = fcoordFromCoord3D( pending.m_position );	// saved as float
+		building->setOrientationFix( fixFromReal( pending.m_angle ) );
+		building->setPositionFix( &fxPos );
 		building->setLayer( TheTerrainLogic->getLayerForDestination( &pending.m_position ) );
 		for( BehaviorModule **m = building->getBehaviorModules(); *m; ++m )
 		{
@@ -5658,7 +5684,8 @@ void GameLogic::prepareLogicForObjectLoad( void )
 		// is this a bridge object?
 		if( obj->isKindOf( KINDOF_BRIDGE ) )
 		{
-			Bridge *bridge = TheTerrainLogic->findBridgeAt( obj->getPosition() );
+			const Coord3D bridgePos = obj->getPositionFix()->toCoord3D();	// P2: findBridgeAt has no Fix twin
+			Bridge *bridge = TheTerrainLogic->findBridgeAt( &bridgePos );
 
 			// sanity
 			DEBUG_ASSERTCRASH( bridge, ("GameLogic::prepareLogicForObjectLoad - Unable to find bridge\n" ));

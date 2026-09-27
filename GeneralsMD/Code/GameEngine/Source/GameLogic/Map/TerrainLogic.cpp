@@ -72,6 +72,19 @@ TerrainLogic *TheTerrainLogic = NULL;
 // STATIC /////////////////////////////////////////////////////////////////////////////////////////
 WaterHandle TerrainLogic::m_gridWaterHandle;
 
+// the height map in fixed point: a cell is MAP_XY_FACTOR wide, and a raw height step is 10/16 of a unit
+static const Int MAP_XY_CELL = 10;
+
+/// floor( a / d ) for a positive d, exact, so a footprint hanging off the low edge still rounds down
+static Int fixFloorDiv( Fix a, Int d )
+{
+	const Int64 q = (Int64)d * Fix::ONE_RAW;
+	Int64 f = a.raw() / q;
+	if( a.raw() % q != 0 && a.raw() < 0 )
+		--f;
+	return (Int)f;
+}
+
 // Waypoint ///////////////////////////////////////////////////////////////////////////////////////
 
 //-------------------------------------------------------------------------------------------------
@@ -146,28 +159,28 @@ Object *Bridge::createTower( Coord3D *worldPos,
 	Object *tower = TheThingFactory->newObject( towerTemplate, bridge->getTeam() );
 
 	// location information
-	Real angle = 0;
+	Fix angle = Fix( 0 );
 	switch( towerType )
 	{
-		
+
 		// --------------------------------------------------------------------------------------------
 		case BRIDGE_TOWER_FROM_LEFT:
-			angle = bridge->getOrientation() + PI;
+			angle = bridge->getOrientationFix() + FIX_PI;
 			break;
 
 		// --------------------------------------------------------------------------------------------
 		case BRIDGE_TOWER_FROM_RIGHT:
-			angle = bridge->getOrientation() + PI;
+			angle = bridge->getOrientationFix() + FIX_PI;
 			break;
 
 		// --------------------------------------------------------------------------------------------
 		case BRIDGE_TOWER_TO_LEFT:
-			angle = bridge->getOrientation();
+			angle = bridge->getOrientationFix();
 			break;
 
 		// --------------------------------------------------------------------------------------------
 		case BRIDGE_TOWER_TO_RIGHT:
-			angle = bridge->getOrientation();
+			angle = bridge->getOrientationFix();
 			break;
 
 		// --------------------------------------------------------------------------------------------
@@ -177,9 +190,11 @@ Object *Bridge::createTower( Coord3D *worldPos,
 
 	}  // end switch
 
-	// set the position and angle
-	tower->setPosition( worldPos );
-	tower->setOrientation( angle );
+	// set the position and angle; the tower spots come from the bridge info, which is float map data
+	FCoord3D towerPos;
+	towerPos.set( fixFromReal( worldPos->x ), fixFromReal( worldPos->y ), fixFromReal( worldPos->z ) );
+	tower->setPositionFix( &towerPos );
+	tower->setOrientationFix( angle );
 
 	// tie it to the bridge
 	BridgeBehaviorInterface *bridgeInterface = BridgeBehavior::getBridgeBehaviorInterfaceFromObject( bridge );
@@ -251,11 +266,12 @@ m_bridgeInfo(theInfo)
 		return;
 	}
 	Object *bridge = TheThingFactory->newObject(genericBridgeTemplate, NULL);
-	Coord3D center;
-	center.x = (m_bridgeInfo.fromLeft.x + m_bridgeInfo.toRight.x)/2.0f;
-	center.y = (m_bridgeInfo.fromLeft.y + m_bridgeInfo.toRight.y)/2.0f;
-	center.z = (m_bridgeInfo.fromLeft.z + m_bridgeInfo.toRight.z)/2.0f;
-	bridge->setPosition(&center);
+	// the corners are float map data; the object that stands for the bridge is placed in Fix
+	FCoord3D center;
+	center.x = (fixFromReal( m_bridgeInfo.fromLeft.x ) + fixFromReal( m_bridgeInfo.toRight.x ))/Fix(2);
+	center.y = (fixFromReal( m_bridgeInfo.fromLeft.y ) + fixFromReal( m_bridgeInfo.toRight.y ))/Fix(2);
+	center.z = (fixFromReal( m_bridgeInfo.fromLeft.z ) + fixFromReal( m_bridgeInfo.toRight.z ))/Fix(2);
+	bridge->setPositionFix(&center);
 	m_bridgeInfo.bridgeObjectID = bridge->getID();
 	bridge->updateObjValuesFromMapProperties(props);
 
@@ -263,11 +279,10 @@ m_bridgeInfo(theInfo)
 	// we'll say the angle of this object representing the bridge is from the 'from' side
 	// to the 'to' side.
 	//
-	Coord2D v;
-	v.x = m_bridgeInfo.toLeft.x - m_bridgeInfo.fromLeft.x;
-	v.y = m_bridgeInfo.toLeft.y - m_bridgeInfo.fromLeft.y;
-	bridge->setOrientation( v.toAngle() );
+	bridge->setOrientationFix( fixAtan2( fixFromReal( m_bridgeInfo.toLeft.y ) - fixFromReal( m_bridgeInfo.fromLeft.y ),
+		fixFromReal( m_bridgeInfo.toLeft.x ) - fixFromReal( m_bridgeInfo.fromLeft.x ) ) );
 
+	Coord2D v;
 	v.x = m_bridgeInfo.toLeft.x - m_bridgeInfo.toRight.x;
 	v.y = m_bridgeInfo.toLeft.y - m_bridgeInfo.toRight.y;
 	v.normalize();
@@ -338,20 +353,21 @@ Bridge::Bridge(Object *bridgeObj)
 
 	DEBUG_ASSERTLOG( bridgeObj->getGeometryInfo().getGeomType()==GEOMETRY_BOX, ("Bridges need to be rectangles.\n"));
 
-	const Coord3D *pos = bridgeObj->getPosition();
-	Real angle = bridgeObj->getOrientation();
+	const FCoord3D *pos = bridgeObj->getPositionFix();
+	const Fix angle = bridgeObj->getOrientationFix();
 
-	Real halfsizeX = bridgeObj->getGeometryInfo().getMajorRadius();
-	Real halfsizeY = bridgeObj->getGeometryInfo().getMinorRadius();
-	m_bridgeInfo.bridgeWidth = 2*halfsizeY;
+	const Fix halfsizeX = bridgeObj->getGeometryInfo().getMajorRadiusFix();
+	const Fix halfsizeY = bridgeObj->getGeometryInfo().getMinorRadiusFix();
 
-	Real c = (Real)Cos(angle);
-	Real s = (Real)Sin(angle);
+	const Fix c = fixCos(angle);
+	const Fix s = fixSin(angle);
 
-	m_bridgeInfo.fromLeft.set(pos->x-halfsizeX*c-halfsizeY*s, pos->y + halfsizeY*c - halfsizeX*s, pos->z);
-	m_bridgeInfo.toLeft.set(pos->x+halfsizeX*c-halfsizeY*s, pos->y + halfsizeY*c + halfsizeX*s, pos->z);
-	m_bridgeInfo.fromRight.set(pos->x-halfsizeX*c+halfsizeY*s, pos->y - halfsizeY*c - halfsizeX*s, pos->z);
-	m_bridgeInfo.toRight.set(pos->x+halfsizeX*c+halfsizeY*s, pos->y - halfsizeY*c + halfsizeX*s, pos->z);
+	// P5 the bridge info is float: the pathfinder and the bridge layer read it
+	m_bridgeInfo.bridgeWidth = fixToReal( Fix(2)*halfsizeY );
+	m_bridgeInfo.fromLeft.set( fixToReal( pos->x - halfsizeX*c - halfsizeY*s ), fixToReal( pos->y + halfsizeY*c - halfsizeX*s ), fixToReal( pos->z ) );
+	m_bridgeInfo.toLeft.set( fixToReal( pos->x + halfsizeX*c - halfsizeY*s ), fixToReal( pos->y + halfsizeY*c + halfsizeX*s ), fixToReal( pos->z ) );
+	m_bridgeInfo.fromRight.set( fixToReal( pos->x - halfsizeX*c + halfsizeY*s ), fixToReal( pos->y - halfsizeY*c - halfsizeX*s ), fixToReal( pos->z ) );
+	m_bridgeInfo.toRight.set( fixToReal( pos->x + halfsizeX*c + halfsizeY*s ), fixToReal( pos->y - halfsizeY*c + halfsizeX*s ), fixToReal( pos->z ) );
 
 	m_bridgeInfo.from.x = (m_bridgeInfo.fromLeft.x + m_bridgeInfo.fromRight.x)/2.0f;
 	m_bridgeInfo.from.y = (m_bridgeInfo.fromLeft.y + m_bridgeInfo.fromRight.y)/2.0f;
@@ -413,7 +429,7 @@ Bridge::Bridge(Object *bridgeObj)
 		type = (BridgeTowerType)i;
 		towerTemplate = TheThingFactory->findTemplate( bridgeTemplate->getTowerObjectName( type ) );
 		if (towerTemplate) {
-			offset = towerTemplate->getTemplateGeometryInfo().getMajorRadius();
+			offset = fixToReal( towerTemplate->getTemplateGeometryInfo().getMajorRadiusFix() );	// P5 the bridge info is float
 		}
 		Coord3D pos = towerPos[type];
 		switch( type )
@@ -1133,7 +1149,7 @@ void TerrainLogic::newMap( Bool saveGame )
 	for( Waypoint *way = m_waypointListHead; way; way = way->getNext() ) 
 	{
 		const Coord3D* loc = way->getLocation();
-		way->setLocationZ(getGroundHeight(loc->x, loc->y));
+		way->setLocationZ(fixToReal(getGroundHeightFix(fixFromReal(loc->x), fixFromReal(loc->y))));	// P7 waypoints are float
 	}
 	//
 	// until we have a real way to specify different water planes in the map, we will check
@@ -1358,7 +1374,7 @@ void TerrainLogic::addWaypoint(MapObject *pMapObj)
 {
 	Coord3D loc = *pMapObj->getLocation();
 	// Snap the waypoint down to the terrain.
-	loc.z = getGroundHeight(loc.x, loc.y);
+	loc.z = fixToReal(getGroundHeightFix(fixFromReal(loc.x), fixFromReal(loc.y)));	// P7 waypoints are float
 	Bool exists;
 	AsciiString label1, label2, label3;
 	label1 = pMapObj->getProperties()->getAsciiString(TheKey_waypointPathLabel1, &exists);
@@ -1598,7 +1614,7 @@ PathfindLayerEnum TerrainLogic::alignOnTerrain( Real angle, const Coord3D& pos, 
 	layer = getLayerForDestination(&pos);
 
 	// get the normal of the terrain at our position
-	Real terrainAtPos = getLayerHeight(pos.x, pos.y, layer, &terrainNormal );
+	Real terrainAtPos = getLayerHeight(pos.x, pos.y, layer, &terrainNormal );	// P5 normal
 	if (layer != LAYER_GROUND) {
 		/// @todo - fix brutal hack for bridges that are too high. jba
 		terrainAtPos += 2.5f;
@@ -1770,7 +1786,8 @@ PathfindLayerEnum TerrainLogic::getLayerForDestination(const Coord3D *pos)
 {
 	Bridge *pBridge = getFirstBridge();
 	PathfindLayerEnum bestLayer = LAYER_GROUND;
-	Real bestDistance = fabs(pos->z - getGroundHeight(pos->x, pos->y));
+	// P5 walls and bridges are float; the ground comes from the Fix height
+	Real bestDistance = fabs(pos->z - fixToReal(getGroundHeightFix(fixFromReal(pos->x), fixFromReal(pos->y))));
 
 	if (bestDistance > TheAI->pathfinder()->getWallHeight()/2) {
 		// check wall.
@@ -1802,7 +1819,8 @@ PathfindLayerEnum TerrainLogic::getLayerForDestination(const Coord3D *pos)
 PathfindLayerEnum TerrainLogic::getHighestLayerForDestination(const Coord3D *pos, Bool onlyHealthyBridges)
 {
 	PathfindLayerEnum bestLayer = LAYER_GROUND;
-	Real bestDistance = pos->z - getGroundHeight(pos->x, pos->y);	// NOT fabs in this case.
+	// P5 walls and bridges are float; the ground comes from the Fix height
+	Real bestDistance = pos->z - fixToReal(getGroundHeightFix(fixFromReal(pos->x), fixFromReal(pos->y)));	// NOT fabs in this case.
 
 	if (bestDistance > TheAI->pathfinder()->getWallHeight()/2) {
 		// check wall.
@@ -1839,11 +1857,12 @@ PathfindLayerEnum TerrainLogic::getHighestLayerForDestination(const Coord3D *pos
 Bool TerrainLogic::objectInteractsWithBridgeLayer(Object *obj, Int layer, Bool considerBridgeHealth) const
 {
 	if (layer == LAYER_GROUND) return false;
+	const Coord3D objPos = obj->getPositionFix()->toCoord3D();	// P5 walls and bridges are float
 	if (layer == LAYER_WALL) {
 		if (obj->getLayer() == LAYER_WALL) {
 			return true; // objects on the wall can't fall off :)
 		}
-		if (TheAI->pathfinder()->isPointOnWall(obj->getPosition())) {
+		if (TheAI->pathfinder()->isPointOnWall(&objPos)) {
 			return true;
 		}
 		return false;
@@ -1853,16 +1872,16 @@ Bool TerrainLogic::objectInteractsWithBridgeLayer(Object *obj, Int layer, Bool c
 	while (pBridge ) {
 		if (pBridge->getLayer() == layer) {
 			Bool match = false;
-			const Bool overDeck = pBridge->isPointOnBridge(obj->getPosition());
+			const Bool overDeck = pBridge->isPointOnBridge(&objPos);
 			if (overDeck) {
 				match = true;
 			}
 
-			Real radius = obj->getGeometryInfo().getMinorRadius();
+			Real radius = fixToReal(obj->getGeometryInfo().getMinorRadiusFix());	// P5
 			radius += PATHFIND_CELL_SIZE_F/2.0f;
 			Region2D bounds;
-			bounds.lo.x = obj->getPosition()->x;
-			bounds.lo.y = obj->getPosition()->y;
+			bounds.lo.x = objPos.x;
+			bounds.lo.y = objPos.y;
 			bounds.hi = bounds.lo;
 			bounds.lo.x -= radius;
 			bounds.lo.y -= radius;
@@ -1881,8 +1900,8 @@ Bool TerrainLogic::objectInteractsWithBridgeLayer(Object *obj, Int layer, Bool c
 					 routed wide of the ramp by its size, came in at that corner, and one of eight never
 					 crossed.  So the mouth allows twice the gap the deck does. */
 				const Real allowed = overDeck ? LAYER_Z_CLOSE_ENOUGH_F : LAYER_Z_CLOSE_ENOUGH_F * 2.0f;
-				Real bridgeHeight = pBridge->getBridgeHeight(obj->getPosition(), NULL);
-				Real delta = fabs(obj->getPosition()->z-bridgeHeight);
+				Real bridgeHeight = pBridge->getBridgeHeight(&objPos, NULL);
+				Real delta = fabs(objPos.z-bridgeHeight);
 				if (delta>allowed) {
 					return false;
 				}
@@ -1909,17 +1928,18 @@ Bool TerrainLogic::objectInteractsWithBridgeLayer(Object *obj, Int layer, Bool c
 Bool TerrainLogic::objectInteractsWithBridgeEnd(Object *obj, Int layer) const
 {
 	if (layer == LAYER_GROUND) return NULL;
+	const Coord3D objPos = obj->getPositionFix()->toCoord3D();	// P5 bridges are float
 	Bridge *pBridge = getFirstBridge();
 
 	while (pBridge ) {
 		if (pBridge->getLayer() == layer) {
 			Bool match = false;
 
-			Real radius = obj->getGeometryInfo().getMinorRadius();
+			Real radius = fixToReal(obj->getGeometryInfo().getMinorRadiusFix());	// P5
 			radius += PATHFIND_CELL_SIZE_F/2.0f;
 			Region2D bounds;
-			bounds.lo.x = obj->getPosition()->x;
-			bounds.lo.y = obj->getPosition()->y;
+			bounds.lo.x = objPos.x;
+			bounds.lo.y = objPos.y;
 			bounds.hi = bounds.lo;
 			bounds.lo.x -= radius;
 			bounds.lo.y -= radius;
@@ -1930,9 +1950,9 @@ Bool TerrainLogic::objectInteractsWithBridgeEnd(Object *obj, Int layer) const
 			}
 
 			if (match) {
-				Real bridgeHeight = pBridge->getBridgeHeight(obj->getPosition(), NULL);
-				Real delta = fabs(obj->getPosition()->z-bridgeHeight);
-				if (delta>LAYER_Z_CLOSE_ENOUGH_F) 
+				Real bridgeHeight = pBridge->getBridgeHeight(&objPos, NULL);
+				Real delta = fabs(objPos.z-bridgeHeight);
+				if (delta>LAYER_Z_CLOSE_ENOUGH_F)
 				{
 					return false;
 				}			
@@ -2043,8 +2063,8 @@ void TerrainLogic::getBridgeAttackPoints(const Object *bridge, TBridgeAttackInfo
 		}
 		pBridge = pBridge->getNext();
 	}
-	attackInfo->attackPoint1 = *bridge->getPosition();
-	attackInfo->attackPoint2 = *bridge->getPosition();
+	attackInfo->attackPoint1 = bridge->getPositionFix()->toCoord3D();	// P4 the attack info is float
+	attackInfo->attackPoint2 = attackInfo->attackPoint1;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2182,7 +2202,7 @@ Coord3D TerrainLogic::findClosestEdgePoint ( const Coord3D *closestTo ) const
 		retVal.x = mapExtent.lo.x;
 	}
 
-	retVal.z = getGroundHeight( retVal.x, retVal.y );
+	retVal.z = fixToReal( getGroundHeightFix( fixFromReal( retVal.x ), fixFromReal( retVal.y ) ) );	// P4 edge points are float
 
 	return retVal;
 
@@ -2213,7 +2233,7 @@ Coord3D TerrainLogic::findFarthestEdgePoint( const Coord3D *farthestFrom ) const
 		retVal.y = mapExtent.lo.y;
 
 
-	retVal.z = getGroundHeight( retVal.x, retVal.y );
+	retVal.z = fixToReal( getGroundHeightFix( fixFromReal( retVal.x ), fixFromReal( retVal.y ) ) );	// P4 edge points are float
 
 	return retVal;
 
@@ -2454,33 +2474,36 @@ void TerrainLogic::setWaterHeight( const WaterHandle *water, Real height, Real d
 	if( damageAmount > 0.0f && height > previousHeight )
 	{
 
-		// find the center of the water "area" given the bounding region
-		Coord3D center;
-		center.x = affectedRegion.lo.x + affectedRegion.width() / 2.0f;
-		center.y = affectedRegion.lo.y + affectedRegion.height() / 2.0f;
-		center.z = 0.0f;  // irrelavant
+		// find the center of the water "area" given the bounding region; the region is float map data
+		const Fix loX = fixFromReal( affectedRegion.lo.x );
+		const Fix loY = fixFromReal( affectedRegion.lo.y );
+		const Fix width = fixFromReal( affectedRegion.hi.x ) - loX;
+		const Fix depth = fixFromReal( affectedRegion.hi.y ) - loY;
+		FCoord3D center;
+		center.x = loX + width / Fix(2);
+		center.y = loY + depth / Fix(2);
+		center.z = Fix(0);  // irrelavant
 
 		// the max radius to scan around us is the diagonal of the bounding region
-		Real maxDist = sqrt( affectedRegion.width() * affectedRegion.width() + 
-												 affectedRegion.height() * affectedRegion.height() );
+		const Fix maxDist = fixSqrt( width * width + depth * depth );
 
 		// scan the objects in the area of the water affected
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &center,
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &center,
 																																			 maxDist,
-																																			 FROM_CENTER_2D, 
+																																			 FROM_CENTER_2D,
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );
 		Object *obj;
-		const Coord3D *objPos;
+		const FCoord3D *objPos;
 		for( obj = iter->first(); obj; obj = iter->next() )
 		{
 
 			// get other object position
-			objPos = obj->getPosition();
+			objPos = obj->getPositionFix();
 
 			// if this object is underwater, do some damage; an aircraft or a bridge above the water is not
-			Real waterZ;
-			if( isUnderwater( objPos->x, objPos->y, &waterZ ) && objPos->z < waterZ )
+			Fix waterZ;
+			if( isUnderwaterFix( objPos->x, objPos->y, &waterZ ) && objPos->z < waterZ )
 			{
 
 				// do a lot of water damage
@@ -2749,90 +2772,65 @@ void TerrainLogic::flattenTerrain(Object *obj)
 		return;
 	}
 
-	const Coord3D *pos = obj->getPosition();
+	const FCoord3D *pos = obj->getPositionFix();
 	switch(obj->getGeometryInfo().getGeomType())
 	{
 		case GEOMETRY_BOX:
 		{
-			Real angle = obj->getOrientation();
+			const Fix angle = obj->getOrientationFix();
 
-			Real halfsizeX = obj->getGeometryInfo().getMajorRadius();
-			Real halfsizeY = obj->getGeometryInfo().getMinorRadius();
+			const Fix halfsizeX = obj->getGeometryInfo().getMajorRadiusFix();
+			const Fix halfsizeY = obj->getGeometryInfo().getMinorRadiusFix();
 
 
-			Real c = (Real)Cos(angle);
-			Real s = (Real)Sin(angle);
+			const Fix c = fixCos(angle);
+			const Fix s = fixSin(angle);
 
-			Vector3 topLeft(pos->x-halfsizeX*c-halfsizeY*s, pos->y + halfsizeY*c - halfsizeX*s, 0);
-			Vector3 topRight(pos->x+halfsizeX*c-halfsizeY*s, pos->y + halfsizeY*c + halfsizeX*s, 0);
-			Vector3 bottomRight(pos->x+halfsizeX*c+halfsizeY*s, pos->y - halfsizeY*c + halfsizeX*s, 0);
-			Vector3 bottomLeft(pos->x-halfsizeX*c+halfsizeY*s, pos->y - halfsizeY*c - halfsizeX*s, 0);
-
-			Real minX = topLeft.X;
-			if (minX>topRight.X) minX = topRight.X;
-			if (minX>bottomRight.X) minX = bottomRight.X;
-			if (minX>bottomLeft.X) minX = bottomLeft.X;
-			Real maxX = topLeft.X;
-			if (maxX<topRight.X) maxX = topRight.X;
-			if (maxX<bottomRight.X) maxX = bottomRight.X;
-			if (maxX<bottomLeft.X) maxX = bottomLeft.X;
-
-			Real minY = topLeft.Y;
-			if (minY>topRight.Y) minY = topRight.Y;
-			if (minY>bottomRight.Y) minY = bottomRight.Y;
-			if (minY>bottomLeft.Y) minY = bottomLeft.Y;
-			Real maxY = topLeft.Y;
-			if (maxY<topRight.Y) maxY = topRight.Y;
-			if (maxY<bottomRight.Y) maxY = bottomRight.Y;
-			if (maxY<bottomLeft.Y) maxY = bottomLeft.Y;
+			// how far the box reaches along each world axis: that is where its farthest corner lies
+			const Fix extentX = halfsizeX*fixAbs(c) + halfsizeY*fixAbs(s);
+			const Fix extentY = halfsizeX*fixAbs(s) + halfsizeY*fixAbs(c);
 
 			ICoord2D iMin, iMax;
-			iMin.x = REAL_TO_INT_FLOOR(minX/MAP_XY_FACTOR);
-			iMin.y = REAL_TO_INT_FLOOR(minY/MAP_XY_FACTOR);
-			iMax.x = REAL_TO_INT_FLOOR(maxX/MAP_XY_FACTOR);
-			iMax.y = REAL_TO_INT_FLOOR(maxY/MAP_XY_FACTOR);
+			iMin.x = fixFloorDiv(pos->x - extentX, MAP_XY_CELL);
+			iMin.y = fixFloorDiv(pos->y - extentY, MAP_XY_CELL);
+			iMax.x = fixFloorDiv(pos->x + extentX, MAP_XY_CELL);
+			iMax.y = fixFloorDiv(pos->y + extentY, MAP_XY_CELL);
+
+			// a grid point is under the box when it lies within both half sizes along the box's own axes;
+			// this is the pair of triangles the float version tested, edges included
+			auto pointInBox = [&]( Fix px, Fix py ) -> Bool
+			{
+				const Fix dx = px - pos->x;
+				const Fix dy = py - pos->y;
+				return fixAbs( dx*c + dy*s ) <= halfsizeX && fixAbs( dy*c - dx*s ) <= halfsizeY;
+			};
 
 			Int i, j;
-			Real totalHeight = 0;
+			Fix totalHeight = Fix(0);
 			Int numSamples = 0;
 			for (i=iMin.x; i<=iMax.x; i++) {
 				for (j=(iMin.y>0?iMin.y:0); j<=iMax.y; j++) {
-					Vector3	testPt(i*MAP_XY_FACTOR, j*MAP_XY_FACTOR, 0);
-					Bool match = false;
-					unsigned char flags;
-					if (Point_In_Triangle_2D(topLeft, topRight, bottomLeft, testPt, 0, 1, flags)) {
-						match = true;
-					}
-					if (Point_In_Triangle_2D(topRight, bottomRight, bottomLeft, testPt, 0, 1, flags)) {
-						match = true;
-					}
-					if (match) {
-						totalHeight += TheTerrainLogic->getGroundHeight(testPt.X, testPt.Y);
+					const Fix testX = Fix(i*MAP_XY_CELL);
+					const Fix testY = Fix(j*MAP_XY_CELL);
+					if (pointInBox(testX, testY)) {
+						totalHeight += TheTerrainLogic->getGroundHeightFix(testX, testY);
 						numSamples++;
 					}
 				}
 			}
 			if (numSamples == 0) return;
-			Real avgHeight = totalHeight/numSamples;
-			Int rawDataHeight = REAL_TO_INT_FLOOR(0.5f + avgHeight/MAP_HEIGHT_SCALE);
+			const Fix avgHeight = totalHeight/Fix(numSamples);
+			// half a raw step up, then down: (avg*16 + 5) / 10, rounded down
+			Int rawDataHeight = fixFloorDiv(avgHeight*Fix(16) + Fix(5), MAP_XY_CELL);
 
-			// Compare to the height at the building's origin, because setRawMapHeight will only lower, 
+			// Compare to the height at the building's origin, because setRawMapHeight will only lower,
 			// not raise.  jba
-			Int centerHeight = REAL_TO_INT_FLOOR(TheTerrainLogic->getGroundHeight(pos->x, pos->y)/MAP_HEIGHT_SCALE);
+			Int centerHeight = fixFloorDiv(TheTerrainLogic->getGroundHeightFix(pos->x, pos->y)*Fix(16), MAP_XY_CELL);
 			if (rawDataHeight>centerHeight) rawDataHeight = centerHeight;
 
 			for (i=iMin.x; i<=iMax.x; i++) {
 				for (j=(iMin.y>0?iMin.y:0); j<=iMax.y; j++) {
-					Vector3	testPt(i*MAP_XY_FACTOR, j*MAP_XY_FACTOR, 0);
-					Bool match = false;
-					unsigned char flags;
-					if (Point_In_Triangle_2D(topLeft, topRight, bottomLeft, testPt, 0, 1, flags)) {
-						match = true;
-					}
-					if (Point_In_Triangle_2D(topRight, bottomRight, bottomLeft, testPt, 0, 1, flags)) {
-						match = true;
-					}
-					if (match) {
+					if (pointInBox(Fix(i*MAP_XY_CELL), Fix(j*MAP_XY_CELL))) {
 						ICoord2D gridPos;
 						gridPos.x = i;
 						gridPos.y = j;
@@ -2875,45 +2873,38 @@ void TerrainLogic::flattenTerrain(Object *obj)
 		case GEOMETRY_CYLINDER:
 		{
 			// fill in all cells that overlap as obstacle cells
-			Real radius = obj->getGeometryInfo().getMajorRadius();	
-			Real radiusSqr = sqr(radius);
+			const Fix radius = obj->getGeometryInfo().getMajorRadiusFix();
+			const Fix radiusSqr = radius*radius;
 			ICoord2D iMin, iMax;
-			iMin.x = REAL_TO_INT_FLOOR((pos->x-radius)/MAP_XY_FACTOR);
-			iMin.y = REAL_TO_INT_FLOOR((pos->y-radius)/MAP_XY_FACTOR);
-			iMax.x = REAL_TO_INT_FLOOR((pos->x+radius)/MAP_XY_FACTOR);
-			iMax.y = REAL_TO_INT_FLOOR((pos->y+radius)/MAP_XY_FACTOR);
+			iMin.x = fixFloorDiv(pos->x-radius, MAP_XY_CELL);
+			iMin.y = fixFloorDiv(pos->y-radius, MAP_XY_CELL);
+			iMax.x = fixFloorDiv(pos->x+radius, MAP_XY_CELL);
+			iMax.y = fixFloorDiv(pos->y+radius, MAP_XY_CELL);
 
 			Int i, j;
-			Real totalHeight = 0;
+			Fix totalHeight = Fix(0);
 			Int numSamples = 0;
 			for (i=iMin.x; i<=iMax.x; i++) {
 				for (j=(iMin.y>0?iMin.y:0); j<=iMax.y; j++) {
-					Vector3	testPt(i*MAP_XY_FACTOR, j*MAP_XY_FACTOR, 0);
-					Bool match = false;
-					Real dx = testPt.X - pos->x;
-					Real dy = testPt.Y - pos->y;
+					const Fix testX = Fix(i*MAP_XY_CELL);
+					const Fix testY = Fix(j*MAP_XY_CELL);
+					const Fix dx = testX - pos->x;
+					const Fix dy = testY - pos->y;
 					if ( dx*dx+dy*dy<radiusSqr) {
-						match = true;
-					}
-					if (match) {
-						totalHeight += TheTerrainLogic->getGroundHeight(testPt.X, testPt.Y);
+						totalHeight += TheTerrainLogic->getGroundHeightFix(testX, testY);
 						numSamples++;
 					}
 				}
 			}
 			if (numSamples == 0) return;
-			Real avgHeight = totalHeight/numSamples;
-			Int rawDataHeight = REAL_TO_INT_FLOOR(0.5f + avgHeight/MAP_HEIGHT_SCALE);
+			const Fix avgHeight = totalHeight/Fix(numSamples);
+			// half a raw step up, then down: (avg*16 + 5) / 10, rounded down
+			Int rawDataHeight = fixFloorDiv(avgHeight*Fix(16) + Fix(5), MAP_XY_CELL);
 			for (i=iMin.x; i<=iMax.x; i++) {
 				for (j=(iMin.y>0?iMin.y:0); j<=iMax.y; j++) {
-					Vector3	testPt(i*MAP_XY_FACTOR, j*MAP_XY_FACTOR, 0);
-					Bool match = false;
-					Real dx = testPt.X - pos->x;
-					Real dy = testPt.Y - pos->y;
+					const Fix dx = Fix(i*MAP_XY_CELL) - pos->x;
+					const Fix dy = Fix(j*MAP_XY_CELL) - pos->y;
 					if ( dx*dx+dy*dy<radiusSqr) {
-						match = true;
-					}
-					if (match) {
 						ICoord2D gridPos;
 						gridPos.x = i;
 						gridPos.y = j;
@@ -2966,28 +2957,28 @@ void TerrainLogic::createCraterInTerrain(Object *obj)
 	if (obj->getGeometryInfo().getIsSmall()) 
 		return;
 
-	const Coord3D *pos = obj->getPosition();
-  Real radius = obj->getGeometryInfo().getMajorRadius();	
+	const FCoord3D *pos = obj->getPositionFix();
+  const Fix radius = obj->getGeometryInfo().getMajorRadiusFix();
 
-  if ( radius <= 0.0f )
+  if ( radius <= Fix(0) )
     return; // sanity
 
   ICoord2D iMin, iMax;
-  iMin.x = REAL_TO_INT_FLOOR( ( pos->x - radius ) / MAP_XY_FACTOR );
-  iMin.y = REAL_TO_INT_FLOOR( ( pos->y - radius ) / MAP_XY_FACTOR );
-  iMax.x = REAL_TO_INT_FLOOR( ( pos->x + radius ) / MAP_XY_FACTOR );
-	iMax.y = REAL_TO_INT_FLOOR( ( pos->y + radius ) / MAP_XY_FACTOR );
+  iMin.x = fixFloorDiv( pos->x - radius, MAP_XY_CELL );
+  iMin.y = fixFloorDiv( pos->y - radius, MAP_XY_CELL );
+  iMax.x = fixFloorDiv( pos->x + radius, MAP_XY_CELL );
+	iMax.y = fixFloorDiv( pos->y + radius, MAP_XY_CELL );
 
-  Real deltaX, deltaY;
+  Fix deltaX, deltaY;
 
-	for (Int i = iMin.x; i <= iMax.x; i++ ) 
+	for (Int i = iMin.x; i <= iMax.x; i++ )
   {
 		for ( Int j=(iMin.y>0?iMin.y:0); j <= iMax.y; j++ ) 	// see flattenTerrain: iMin.y was computed and then ignored
     {
-			deltaX = ( i * MAP_XY_FACTOR ) - pos->x;
-			deltaY = ( j * MAP_XY_FACTOR ) - pos->y;
+			deltaX = Fix( i * MAP_XY_CELL ) - pos->x;
+			deltaY = Fix( j * MAP_XY_CELL ) - pos->y;
 
-      Real distance = sqrt( sqr( deltaX ) + sqr( deltaY ) );
+      const Fix distance = fixSqrt( deltaX*deltaX + deltaY*deltaY );
 
 			if ( distance < radius ) //inside circle
       {
@@ -2996,9 +2987,11 @@ void TerrainLogic::createCraterInTerrain(Object *obj)
 				gridPos.y = j;
 
 
-        Real displacementAmount = radius * (1.0f - distance / radius );
+        // radius * (1 - distance / radius)
+        const Fix displacementAmount = radius - distance;
 
-        Int targetHeight = MAX( 1, TheTerrainVisual->getRawMapHeight( &gridPos ) - displacementAmount );
+        // the float version truncated; below one the MAX takes over, so rounding down is the same
+        Int targetHeight = MAX( 1, fixFloorDiv( Fix( TheTerrainVisual->getRawMapHeight( &gridPos ) ) - displacementAmount, 1 ) );
 
 				TheTerrainVisual->setRawMapHeight( &gridPos, targetHeight );
 			}

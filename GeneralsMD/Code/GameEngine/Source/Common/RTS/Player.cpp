@@ -103,6 +103,7 @@
 
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"		// the SUPERWEAPONS_ modes the lobby sends
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -127,7 +128,7 @@ public:
 
 	//Out
 	Object *m_closest;
-	Real m_closestDistSq;
+	Fix m_closestDistSq;
 
 };
 
@@ -138,7 +139,7 @@ ClosestKindOfData::ClosestKindOfData( void )
 	m_clearKindOf.clear();
 	m_source = NULL;
 	m_closest = NULL;
-	m_closestDistSq = FLT_MAX;
+	m_closestDistSq = FIX_MAX;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -150,7 +151,7 @@ static void findClosestKindOf( Object *obj, void *userData )
 		return; // Do nothing to the magic running total pointer man.
 
 	// is this the closest one so far
-	Real distSq = ThePartitionManager->getDistanceSquared( closestData->m_source, obj, FROM_CENTER_2D );
+	Fix distSq = ThePartitionManager->getDistanceSquaredFix( closestData->m_source, obj, FROM_CENTER_2D );
 	if( distSq < closestData->m_closestDistSq )
 	{
 		closestData->m_closest = obj;
@@ -724,8 +725,8 @@ void Player::addToBuildList(Object *obj)
 	BuildListInfo *newInfo = newInstance( BuildListInfo );
 	newInfo->setObjectID(obj->getID());	
 	newInfo->setTemplateName(obj->getTemplate()->getName());
-	newInfo->setLocation(*obj->getPosition());
-	newInfo->setAngle(obj->getOrientation());
+	newInfo->setLocation(obj->getPositionFix()->toCoord3D());	// P7: the build list is float
+	newInfo->setAngle(fixToReal(obj->getOrientationFix()));	// P7
 	newInfo->setNumRebuilds(0);	 // Can't rebuild. 
 	newInfo->setNextBuildList(m_pBuildList);
 	m_pBuildList = newInfo;
@@ -2314,10 +2315,11 @@ void Player::garrisonAllUnits(CommandSourceType source)
 	PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_STRUCTURE), KINDOFMASK_NONE);
 	PartitionFilter *filters[] = { &f1, NULL };
 
-	Coord3D pos = {50.0, 50.0, 50.0};
+	FCoord3D pos;
+	pos.set(Fix(50), Fix(50), Fix(50));
 /// @todo srj -- we should really use iterateAllObjects() here instead, but I have no time to
 // test such a change... make someday
-	ObjectIterator *iterBuilding = ThePartitionManager->iterateObjectsInRange(&pos, 1e9f, FROM_CENTER_3D, filters, ITER_SORTED_NEAR_TO_FAR);
+	ObjectIterator *iterBuilding = ThePartitionManager->iterateObjectsInRangeFix(&pos, FIX_MAX, FROM_CENTER_3D, filters, ITER_SORTED_NEAR_TO_FAR);
 	MemoryPoolObjectHolder hold(iterBuilding);
 
 	for (PlayerTeamList::iterator it = m_playerTeamPrototypes.begin(); 
@@ -2423,7 +2425,8 @@ void Player::setUnitsShouldIdleOrResume(Bool idle)
 				if (idle)
 				{
 					// force it to move to its position to make it stop.
- 					ai->aiMoveToPosition(obj->getPosition(), CMD_FROM_SCRIPT);
+					Coord3D here = obj->getPositionFix()->toCoord3D();	// P4
+ 					ai->aiMoveToPosition(&here, CMD_FROM_SCRIPT);
 				}
 				else
 				{

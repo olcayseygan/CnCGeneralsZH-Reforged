@@ -42,6 +42,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/CreateCrateDie.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -173,7 +174,7 @@ Bool CreateCrateDie::testKillerScience( CrateTemplate const *currentCrateData, O
 
 Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 {
-	Coord3D centerPoint = *getObject()->getPosition();
+	Coord3D centerPoint = getObject()->getPositionFix()->toCoord3D();	// P5: findPositionAround is float
 	PathfindLayerEnum layer = getObject()->getLayer();
 
 	// CreationChance is used for the success of this block, but this block can have any number of potential actual crates
@@ -233,8 +234,10 @@ Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 	if( spotFound )
 	{
 		Object *newCrate = TheThingFactory->newObject( crateType, NULL );
-		newCrate->setPosition( &creationPoint );
-		newCrate->setOrientation( GameLogicRandomValueReal( 0, 2*PI ) );
+		FCoord3D fixPoint;
+		fixPoint.set( fixFromReal( creationPoint.x ), fixFromReal( creationPoint.y ), fixFromReal( creationPoint.z ) );	// P5
+		newCrate->setPositionFix( &fixPoint );
+		newCrate->setOrientationFix( fixFromReal( GameLogicRandomValueReal( 0, 2*PI ) ) );	// random angle in float
 		newCrate->setLayer(layer);
 
 		Drawable *crateDrawable = newCrate->getDrawable();

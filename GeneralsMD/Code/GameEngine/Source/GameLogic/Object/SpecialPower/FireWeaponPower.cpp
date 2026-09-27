@@ -117,9 +117,10 @@ void FireWeaponPower::doSpecialPower( UnsignedInt commandOptions )
 		ai->aiAttackPosition( NULL, data->m_maxShotsToFire, CMD_FROM_AI );
 
 		//Order any turrets to attack as well.
+		Coord3D selfPos = self->getPositionFix()->toCoord3D();	// P7: turret targets are float
 		for( Int i = 0; i < MAX_TURRETS; i++ )
 		{
-			ai->setTurretTargetPosition( (WhichTurretType)i, self->getPosition() );
+			ai->setTurretTargetPosition( (WhichTurretType)i, &selfPos );
 		}
 	}
 }  

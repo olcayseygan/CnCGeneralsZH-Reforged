@@ -48,6 +48,7 @@
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpecialPowerUpdateModule.h"
 #include "GameLogic/ScriptEngine.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameClient/ChromaKeyboard.h"
 #include "GameClient/Eva.h"
@@ -540,7 +541,9 @@ void SpecialPowerModule::createViewObject( const Coord3D *location )
 	if( viewObject == NULL )
 		return;
 
-	viewObject->setPosition( location );
+	FCoord3D at;
+	at.set( fixFromReal( location->x ), fixFromReal( location->y ), fixFromReal( location->z ) );	// P7: the location arrives in float
+	viewObject->setPositionFix( &at );
 	viewObject->setShroudClearingRange( visionRange );
 
 	static NameKeyType key_DeletionUpdate = NAMEKEY("DeletionUpdate");
@@ -747,7 +750,8 @@ void SpecialPowerModule::doSpecialPowerAtObject( Object *obj, UnsignedInt comman
 	//is the napalm strike. If we don't call this now, it's up to the update module to do so.
 	if( !getSpecialPowerModuleData()->m_updateModuleStartsAttack )
 	{
-		triggerSpecialPower( obj->getPosition() );
+		Coord3D at = obj->getPositionFix()->toCoord3D();	// P7: the special power API is float
+		triggerSpecialPower( &at );
 	}
 }  
 

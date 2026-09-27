@@ -379,9 +379,12 @@ void TransitionDamageFX::onBodyDamageStateChange( const DamageInfo* damageInfo,
 				{
 
 					pos = getLocalEffectPos( &modData->m_OCL[ newState ][ i ].locInfo, draw );
-					getObject()->convertBonePosToWorldPos( &pos, NULL, &pos, NULL );
-					ObjectCreationList::create( modData->m_OCL[ newState ][ i ].ocl, 
-																			getObject(), &pos, damageSource ? damageSource->getPosition() : NULL, INVALID_ANGLE );	// the attacker can be dead already
+					getObject()->convertBonePosToWorldPos( &pos, NULL, &pos, NULL );	// no Fix twin: the bone comes from the drawable
+					Coord3D sourcePos;
+					if( damageSource )
+						sourcePos = damageSource->getPositionFix()->toCoord3D();	// P3: the OCL is float
+					ObjectCreationList::create( modData->m_OCL[ newState ][ i ].ocl,
+																			getObject(), &pos, damageSource ? &sourcePos : NULL, INVALID_ANGLE );	// the attacker can be dead already
 
 				}  // end if
 

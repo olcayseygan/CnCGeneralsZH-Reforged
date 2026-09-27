@@ -48,6 +48,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameClient/ControlBar.h"	// COMMAND_FIRED_BY_SCRIPT, the flag every script-fired power carries
 #include "GameClient/ParticleSys.h"
+#include "Lib/FixBoundary.h"
 
 #include <algorithm>
 #include <vector>
@@ -640,7 +641,8 @@ static Bool resolveScenarioPosition( const ScenarioAction &action, Coord3D *pos 
 		pos->y += start->getLocation()->y;
 	}
 
-	pos->z = TheTerrainLogic->getGroundHeight( pos->x, pos->y );
+	// the file's numbers are float and so are the orders they end up in (P4)
+	pos->z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( pos->x ), fixFromReal( pos->y ) ) );
 	return TRUE;
 }
 
@@ -665,8 +667,13 @@ static Bool spawnOne( const ThingTemplate *tmpl, Team *team, const Coord3D *pos 
 	if (obj == NULL)
 		return FALSE;
 
-	obj->setOrientation( 0 );
-	obj->setPosition( pos );
+	// pos->z is not read: the unit stands on the logic ground under the file's x and y
+	FCoord3D fxPos;
+	fxPos.x = fixFromReal( pos->x );
+	fxPos.y = fixFromReal( pos->y );
+	fxPos.z = TheTerrainLogic->getGroundHeightFix( fxPos.x, fxPos.y );
+	obj->setOrientationFix( Fix( 0 ) );
+	obj->setPositionFix( &fxPos );
 
 	for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
 	{
@@ -711,7 +718,7 @@ static Bool executeSpawn( const ScenarioAction &action, Player *player, const Co
 		Coord3D pos;
 		pos.x = centre.x + (i % columns) * action.spacing - halfWidth;
 		pos.y = centre.y + (i / columns) * action.spacing - halfHeight;
-		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		pos.z = 0;	// spawnOne stands it on the ground
 
 		if (spawnOne( tmpl, team, &pos ))
 			++made;

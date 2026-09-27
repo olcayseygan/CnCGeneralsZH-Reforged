@@ -51,6 +51,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BaikonurLaunchPower.h"
+#include "Lib/FixBoundary.h"
 
 BaikonurLaunchPowerModuleData::BaikonurLaunchPowerModuleData( void )
 {
@@ -115,7 +116,9 @@ void BaikonurLaunchPower::doSpecialPowerAtLocation( const Coord3D *loc, Real ang
 		Object *detonation = TheThingFactory->newObject( thing, getObject()->getTeam() );
 		if( detonation )
 		{
-			detonation->setPosition( loc );
+			FCoord3D at;
+			at.set( fixFromReal( loc->x ), fixFromReal( loc->y ), fixFromReal( loc->z ) );	// P7: the target arrives in float
+			detonation->setPositionFix( &at );
 		}
 	}
 }  

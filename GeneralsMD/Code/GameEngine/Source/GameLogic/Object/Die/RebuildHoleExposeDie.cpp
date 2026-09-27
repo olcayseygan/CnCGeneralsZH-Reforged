@@ -140,8 +140,8 @@ void RebuildHoleExposeDie::onDie( const DamageInfo *damageInfo )
 																			 getObject()->getTeam() );
 
 		// put the hole at our position and angle
-		hole->setPosition( us->getPosition() );
-		hole->setOrientation( us->getOrientation() );
+		hole->setPositionFix( us->getPositionFix() );
+		hole->setOrientationFix( us->getOrientationFix() );
 
 		//
 		// modify the hole extents to be the same as ours because we need to preserve the

@@ -62,6 +62,7 @@
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameLogic/ExperienceTracker.h"//LORENZEN
 
@@ -718,7 +719,7 @@ Bool ActionManager::canEnterObject( const Object *obj, const Object *objectToEnt
 	// Special case for aircraft.
 	if( obj->isKindOf( KINDOF_AIRCRAFT ) && objectToEnter->isKindOf( KINDOF_FS_AIRFIELD ) )
 	{
-		if( obj->getStatusBits().test( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) && obj->getCarrierDeckHeight() >= obj->getPosition()->z )
+		if( obj->getStatusBits().test( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) && fixFromReal( obj->getCarrierDeckHeight() ) >= obj->getPositionFix()->z )	// P3: the deck height is float
 		{
 			return FALSE;
 		}
@@ -958,7 +959,8 @@ CanAttackResult ActionManager::getCanAttackObject( const Object *obj, const Obje
 		if( spawnInterface )
 		{
 			//We found the spawn interface, now get the closest slave to the target.
-			Object *slave = spawnInterface->getClosestSlave( objectToAttack->getPosition() );
+			Coord3D targetPos = objectToAttack->getPositionFix()->toCoord3D();	// P7: the spawn module takes float
+			Object *slave = spawnInterface->getClosestSlave( &targetPos );
 			
 			if( slave )
 			{
@@ -1656,7 +1658,7 @@ Bool ActionManager::canDoSpecialPowerAtLocation( const Object *obj, const Coord3
 			case SPECIAL_CRATE_DROP:
 			case SPECIAL_TANK_PARADROP:
 			{
-				if( TheTerrainLogic->isUnderwater( loc->x, loc->y ) )
+				if( TheTerrainLogic->isUnderwaterFix( fixFromReal( loc->x ), fixFromReal( loc->y ) ) )	// P7: the target is float
 					return FALSE;
 			}
 		}

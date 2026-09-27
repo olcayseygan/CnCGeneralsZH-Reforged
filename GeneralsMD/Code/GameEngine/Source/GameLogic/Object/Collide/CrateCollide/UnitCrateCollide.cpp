@@ -37,6 +37,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/UnitCrateCollide.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -69,7 +70,7 @@ Bool UnitCrateCollide::executeCrateBehavior( Object *other )
 		Object *newObj = TheThingFactory->newObject( unitType, creationTeam );
 		if( newObj )
 		{
-			Coord3D creationPoint = *other->getPosition();
+			Coord3D creationPoint = other->getPositionFix()->toCoord3D();	// P5: findPositionAround is float
 			/// @todo As a user of the future findLegalPositionAround, I wouldn't mind not having to specify range.  I just want a non colliding point.
 			FindPositionOptions fpOptions;
 			fpOptions.minRadius = 0.0f;
@@ -78,8 +79,10 @@ Bool UnitCrateCollide::executeCrateBehavior( Object *other )
 																							 &fpOptions,
 																							 &creationPoint );
 
-			newObj->setOrientation( other->getOrientation() );
-			newObj->setPosition( &creationPoint );
+			newObj->setOrientationFix( other->getOrientationFix() );
+			FCoord3D fixPoint;
+			fixPoint.set( fixFromReal( creationPoint.x ), fixFromReal( creationPoint.y ), fixFromReal( creationPoint.z ) );	// P5
+			newObj->setPositionFix( &fixPoint );
 		} 
 	}
 

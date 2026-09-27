@@ -189,7 +189,8 @@ void OCLSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle, 
 	switch (modData->m_createLoc)
 	{
 		case CREATE_AT_EDGE_NEAR_SOURCE:
-			creationCoord = TheTerrainLogic->findClosestEdgePoint( getObject()->getPosition() );
+			creationCoord = getObject()->getPositionFix()->toCoord3D();	// P3: the OCL and the edge search are float
+			creationCoord = TheTerrainLogic->findClosestEdgePoint( &creationCoord );
 			ObjectCreationList::create( ocl, getObject(), &creationCoord, &targetCoord, angle );
 			break;
 		case CREATE_AT_EDGE_NEAR_TARGET:
@@ -231,7 +232,8 @@ void OCLSpecialPower::doSpecialPowerAtObject( Object *obj, UnsignedInt commandOp
 	// convert to a location
 	if( !obj )
 		return;
-	doSpecialPowerAtLocation( obj->getPosition(), INVALID_ANGLE, commandOptions );
+	Coord3D at = obj->getPositionFix()->toCoord3D();	// P7: the special power API is float
+	doSpecialPowerAtLocation( &at, INVALID_ANGLE, commandOptions );
 }  
 
 // ------------------------------------------------------------------------------------------------
@@ -240,8 +242,7 @@ void OCLSpecialPower::doSpecialPower( UnsignedInt commandOptions )
 	if (isRefused())
 		return;
 
-	Coord3D creationCoord;
-	creationCoord.set( getObject()->getPosition() );
+	Coord3D creationCoord = getObject()->getPositionFix()->toCoord3D();	// P3: the OCL is float
 	
 	// call the base class action cause we are *EXTENDING* functionality
 	SpecialPowerModule::doSpecialPowerAtLocation( &creationCoord, INVALID_ANGLE, commandOptions );

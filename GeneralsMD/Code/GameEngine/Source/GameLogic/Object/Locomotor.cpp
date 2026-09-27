@@ -36,6 +36,7 @@
 #define DEFINE_LOCO_APPEARANCE_NAMES
 
 #include "Common/INI.h"
+#include "Lib/FixBoundary.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Locomotor.h"
@@ -355,29 +356,29 @@ static void calcDirectionToApplyThrust(
 LocomotorTemplate::LocomotorTemplate()
 {
 	// these values mean "make the same as undamaged if not explicitly specified"
-	m_maxSpeedDamaged = -1.0f;
-	m_maxTurnRateDamaged = -1.0f;
-	m_accelerationDamaged = -1.0f;
-	m_liftDamaged = -1.0f;
+	m_maxSpeedDamaged = Fix( -1 );
+	m_maxTurnRateDamaged = Fix( -1 );
+	m_accelerationDamaged = Fix( -1 );
+	m_liftDamaged = Fix( -1 );
 
 	m_surfaces = 0;
-	m_maxSpeed = 0.0f;
-	m_maxTurnRate = 0.0f;
-	m_acceleration = 0.0f;
-	m_lift = 0.0f;
-	m_braking = BIGNUM;
-	m_minSpeed = 0.0f;
-	m_minTurnSpeed = BIGNUM;
+	m_maxSpeed = Fix( 0 );
+	m_maxTurnRate = Fix( 0 );
+	m_acceleration = Fix( 0 );
+	m_lift = Fix( 0 );
+	m_braking = Fix( 99999 );		// BIGNUM
+	m_minSpeed = Fix( 0 );
+	m_minTurnSpeed = Fix( 99999 );	// BIGNUM
 	m_behaviorZ = Z_NO_Z_MOTIVE_FORCE;
 	m_appearance = LOCO_OTHER;
 	m_movePriority = LOCO_MOVES_MIDDLE;
-	m_preferredHeight = 0;
-	m_preferredHeightDamping = 1.0f;
-	m_circlingRadius = 0;
+	m_preferredHeight = Fix( 0 );
+	m_preferredHeightDamping = Fix( 1 );
+	m_circlingRadius = Fix( 0 );
 
-	m_maxThrustAngle = 0;
-	m_speedLimitZ = 999999.0f;
-	m_extra2DFriction = 0.0f;
+	m_maxThrustAngle = Fix( 0 );
+	m_speedLimitZ = Fix( 999999 );
+	m_extra2DFriction = Fix( 0 );
 
 	m_accelPitchLimit = 0;
 	m_decelPitchLimit = 0;
@@ -390,10 +391,10 @@ LocomotorTemplate::LocomotorTemplate()
 // it's highly unlikely you want zero for the defaults for stiffness and damping... (srj)
 // for stiffness: stiffness of the "springs" in the suspension 0 = no stiffness, 1 = totally stiff (huh huh, he said "stiff")
 // for damping: 0=perfect spring, bounces forever.  1=glued to terrain.
-	m_pitchStiffness = 0.1f;
-	m_rollStiffness = 0.1f;
-	m_pitchDamping = 0.9f;
-	m_rollDamping = 0.9f;
+	m_pitchStiffness = 0.1_fx;
+	m_rollStiffness = 0.1_fx;
+	m_pitchDamping = 0.9_fx;
+	m_rollDamping = 0.9_fx;
 	m_forwardVelCoef = 0;
 	m_pitchByZVelCoef = 0;
 	m_thrustRoll = 0.0f;
@@ -404,7 +405,7 @@ LocomotorTemplate::LocomotorTemplate()
 	m_forwardAccelCoef = 0;
 	m_lateralAccelCoef = 0;
 	m_uniformAxialDamping = 1.0f;
-	m_turnPivotOffset = 0;
+	m_turnPivotOffset = Fix( 0 );
 	m_apply2DFrictionWhenAirborne = false;
 	m_downhillOnly = false;
 	m_allowMotiveForceWhileAirborne = false;
@@ -416,13 +417,13 @@ LocomotorTemplate::LocomotorTemplate()
 	m_wheelTurnAngle = 0;
 	m_maximumWheelExtension = 0;
 	m_maximumWheelCompression = 0;
-	m_closeEnoughDist = 1.0f;
+	m_closeEnoughDist = Fix( 1 );
 	m_isCloseEnoughDist3D = FALSE;
-	m_ultraAccurateSlideIntoPlaceFactor = 0.0f;
+	m_ultraAccurateSlideIntoPlaceFactor = Fix( 0 );
 
-	m_wanderWidthFactor = 0.0f;
-	m_wanderLengthFactor = 1.0f;
-	m_wanderAboutPointRadius = 0.0f;
+	m_wanderWidthFactor = Fix( 0 );
+	m_wanderLengthFactor = Fix( 1 );
+	m_wanderAboutPointRadius = Fix( 0 );
   
 	m_rudderCorrectionDegree    = 0.0f;
 	m_rudderCorrectionRate      = 0.0f;	
@@ -447,115 +448,108 @@ void LocomotorTemplate::validate()
 	//	("You must use Z_SURFACE_RELATIVE_HEIGHT or Z_ABSOLUTE_HEIGHT (or THRUST) to use preferredHeight"));
 
 	// for 'damaged' stuff that was omitted, set 'em to be the same as 'undamaged'...
-	if (m_maxSpeedDamaged < 0.0f)
+	if (m_maxSpeedDamaged < Fix( 0 ))
 		m_maxSpeedDamaged = m_maxSpeed;
-	
-	if (m_maxTurnRateDamaged < 0.0f)
+
+	if (m_maxTurnRateDamaged < Fix( 0 ))
 		m_maxTurnRateDamaged = m_maxTurnRate;
 
-	if (m_accelerationDamaged < 0.0f)
+	if (m_accelerationDamaged < Fix( 0 ))
 		m_accelerationDamaged = m_acceleration;
 
-	if (m_liftDamaged < 0.0f)
+	if (m_liftDamaged < Fix( 0 ))
 		m_liftDamaged = m_lift;
 
 	if (m_appearance == LOCO_WINGS)
 	{
-		if (m_minSpeed <= 0.0f)
+		if (m_minSpeed <= Fix( 0 ))
 		{
 			DEBUG_CRASH(("WINGS should always have positive minSpeeds (otherwise, they hover)"));
-			m_minSpeed = 0.01f;
+			m_minSpeed = 0.01_fx;
 		}
-		if (m_minTurnSpeed <= 0.0f)
+		if (m_minTurnSpeed <= Fix( 0 ))
 		{
 			DEBUG_CRASH(("WINGS should always have positive minTurnSpeed"));
-			m_minTurnSpeed = 0.01f;
+			m_minTurnSpeed = 0.01_fx;
 		}
 	}
 
 	if (m_appearance == LOCO_THRUST)
 	{
 		if (m_behaviorZ != Z_NO_Z_MOTIVE_FORCE ||
-				m_lift != 0.0f ||
-				m_liftDamaged != 0.0f)
+				m_lift != Fix( 0 ) ||
+				m_liftDamaged != Fix( 0 ))
 		{
 			DEBUG_CRASH(("THRUST locos may not use ZAxisBehavior or lift!\n"));
 			throw INI_INVALID_DATA;
 		}
-		if (m_maxSpeed <= 0.0f)
+		if (m_maxSpeed <= Fix( 0 ))
 		{
 			// if one of these was omitted, it defaults to zero... just quietly heal it here, rather than crashing
 			DEBUG_LOG(("THRUST locos may not have zero m_maxSpeed; healing...\n"));
-			m_maxSpeed = 0.01f;
+			m_maxSpeed = 0.01_fx;
 		}
-		if (m_maxSpeedDamaged <= 0.0f)
+		if (m_maxSpeedDamaged <= Fix( 0 ))
 		{
 			// if one of these was omitted, it defaults to zero... just quietly heal it here, rather than crashing
 			DEBUG_LOG(("THRUST locos may not have zero m_maxSpeedDamaged; healing...\n"));
-			m_maxSpeedDamaged = 0.01f;
+			m_maxSpeedDamaged = 0.01_fx;
 		}
-		if (m_minSpeed <= 0.0f)
+		if (m_minSpeed <= Fix( 0 ))
 		{
 			// if one of these was omitted, it defaults to zero... just quietly heal it here, rather than crashing
 			DEBUG_LOG(("THRUST locos may not have zero m_minSpeed; healing...\n"));
-			m_minSpeed = 0.01f;
+			m_minSpeed = 0.01_fx;
 		}
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
-static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	Real fricPerSec = INI::scanReal(ini->getNextToken());
-	Real fricPerFrame = fricPerSec * SECONDS_PER_LOGICFRAME_REAL;
-	*(Real *)store = fricPerFrame;
-} 
-
-//-------------------------------------------------------------------------------------------------
-const FieldParse* LocomotorTemplate::getFieldParse() const  
+const FieldParse* LocomotorTemplate::getFieldParse() const
 {
 	static const FieldParse TheFieldParse[] =
 	{
-		{ "Surfaces", INI::parseBitString32, TheLocomotorSurfaceTypeNames, offsetof(LocomotorTemplate, m_surfaces) },		
-		{ "Speed", INI::parseVelocityReal, NULL, offsetof(LocomotorTemplate, m_maxSpeed) },		
-		{ "SpeedDamaged", INI::parseVelocityReal, NULL, offsetof( LocomotorTemplate, m_maxSpeedDamaged ) },
-		{ "TurnRate", INI::parseAngularVelocityReal, NULL, offsetof(LocomotorTemplate, m_maxTurnRate) },		
-		{ "TurnRateDamaged", INI::parseAngularVelocityReal, NULL, offsetof( LocomotorTemplate, m_maxTurnRateDamaged ) },
-		{ "Acceleration", INI::parseAccelerationReal, NULL, offsetof(LocomotorTemplate, m_acceleration) },		
-		{ "AccelerationDamaged", INI::parseAccelerationReal, NULL, offsetof( LocomotorTemplate, m_accelerationDamaged ) },
-		{ "Lift", INI::parseAccelerationReal, NULL, offsetof(LocomotorTemplate, m_lift) },		
-		{ "LiftDamaged", INI::parseAccelerationReal, NULL, offsetof( LocomotorTemplate, m_liftDamaged ) },
-		{ "Braking", INI::parseAccelerationReal, NULL, offsetof(LocomotorTemplate, m_braking) },		
-		{ "MinSpeed", INI::parseVelocityReal, NULL, offsetof(LocomotorTemplate, m_minSpeed) },		
-		{ "MinTurnSpeed", INI::parseVelocityReal, NULL, offsetof(LocomotorTemplate, m_minTurnSpeed) },		
-		{ "PreferredHeight", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_preferredHeight) },
-		{ "PreferredHeightDamping", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_preferredHeightDamping) },
-		{ "CirclingRadius", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_circlingRadius) },
-		{ "Extra2DFriction", parseFrictionPerSec, NULL, offsetof(LocomotorTemplate, m_extra2DFriction) },
-		{ "SpeedLimitZ", INI::parseVelocityReal, NULL, offsetof(LocomotorTemplate, m_speedLimitZ) },
-		{ "MaxThrustAngle", INI::parseAngleReal, NULL, offsetof(LocomotorTemplate, m_maxThrustAngle) },		// yes, angle, not angular-vel
+		{ "Surfaces", INI::parseBitString32, TheLocomotorSurfaceTypeNames, offsetof(LocomotorTemplate, m_surfaces) },
+		{ "Speed", INI::parseVelocityFix, NULL, FIX_OFFSET(LocomotorTemplate, m_maxSpeed) },
+		{ "SpeedDamaged", INI::parseVelocityFix, NULL, FIX_OFFSET( LocomotorTemplate, m_maxSpeedDamaged ) },
+		{ "TurnRate", INI::parseAngularVelocityFix, NULL, FIX_OFFSET(LocomotorTemplate, m_maxTurnRate) },
+		{ "TurnRateDamaged", INI::parseAngularVelocityFix, NULL, FIX_OFFSET( LocomotorTemplate, m_maxTurnRateDamaged ) },
+		{ "Acceleration", INI::parseAccelerationFix, NULL, FIX_OFFSET(LocomotorTemplate, m_acceleration) },
+		{ "AccelerationDamaged", INI::parseAccelerationFix, NULL, FIX_OFFSET( LocomotorTemplate, m_accelerationDamaged ) },
+		{ "Lift", INI::parseAccelerationFix, NULL, FIX_OFFSET(LocomotorTemplate, m_lift) },
+		{ "LiftDamaged", INI::parseAccelerationFix, NULL, FIX_OFFSET( LocomotorTemplate, m_liftDamaged ) },
+		{ "Braking", INI::parseAccelerationFix, NULL, FIX_OFFSET(LocomotorTemplate, m_braking) },
+		{ "MinSpeed", INI::parseVelocityFix, NULL, FIX_OFFSET(LocomotorTemplate, m_minSpeed) },
+		{ "MinTurnSpeed", INI::parseVelocityFix, NULL, FIX_OFFSET(LocomotorTemplate, m_minTurnSpeed) },
+		{ "PreferredHeight", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_preferredHeight) },
+		{ "PreferredHeightDamping", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_preferredHeightDamping) },
+		{ "CirclingRadius", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_circlingRadius) },
+		{ "Extra2DFriction", INI::parseVelocityFix, NULL, FIX_OFFSET(LocomotorTemplate, m_extra2DFriction) },		// per second to per frame, the same scale as a velocity
+		{ "SpeedLimitZ", INI::parseVelocityFix, NULL, FIX_OFFSET(LocomotorTemplate, m_speedLimitZ) },
+		{ "MaxThrustAngle", INI::parseAngleFix, NULL, FIX_OFFSET(LocomotorTemplate, m_maxThrustAngle) },		// yes, angle, not angular-vel
 		{ "ZAxisBehavior", INI::parseIndexList, TheLocomotorBehaviorZNames, offsetof(LocomotorTemplate, m_behaviorZ) },		
 		{ "Appearance", INI::parseIndexList, TheLocomotorAppearanceNames, offsetof(LocomotorTemplate, m_appearance) },		\
 		{ "GroupMovementPriority", INI::parseIndexList, TheLocomotorPriorityNames, offsetof(LocomotorTemplate, m_movePriority) },		\
 
-		{ "AccelerationPitchLimit", INI::parseAngleReal, NULL, offsetof(LocomotorTemplate, m_accelPitchLimit) },
-		{ "DecelerationPitchLimit", INI::parseAngleReal, NULL, offsetof(LocomotorTemplate, m_decelPitchLimit) },
-		{ "BounceAmount", INI::parseAngularVelocityReal, NULL, offsetof(LocomotorTemplate, m_bounceKick) },		
-		{ "PitchStiffness", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_pitchStiffness) },		
-		{ "RollStiffness", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_rollStiffness) },		
-		{ "PitchDamping", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_pitchDamping) },		
-		{ "RollDamping", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_rollDamping) },		
-		{ "ThrustRoll", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_thrustRoll) },
-		{ "ThrustWobbleRate",	INI::parseReal, NULL, offsetof(LocomotorTemplate, m_wobbleRate) },
-		{ "ThrustMinWobble",	INI::parseReal, NULL, offsetof(LocomotorTemplate, m_minWobble) },
-		{ "ThrustMaxWobble",	INI::parseReal, NULL, offsetof(LocomotorTemplate, m_maxWobble) },
-		{ "PitchInDirectionOfZVelFactor", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_pitchByZVelCoef) },		
-		{ "ForwardVelocityPitchFactor", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_forwardVelCoef) },		
-		{ "LateralVelocityRollFactor", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_lateralVelCoef) },		
-		{ "ForwardAccelerationPitchFactor", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_forwardAccelCoef) },		
-		{ "LateralAccelerationRollFactor", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_lateralAccelCoef) },		
-		{ "UniformAxialDamping", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_uniformAxialDamping) },		
-		{ "TurnPivotOffset", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_turnPivotOffset) },		
+		// the Real entries below only move the Drawable; ParachuteContain's sway reads the stiffness and damping
+		{ "AccelerationPitchLimit", INI::parseAngleReal, NULL, REAL_OFFSET(LocomotorTemplate, m_accelPitchLimit) },
+		{ "DecelerationPitchLimit", INI::parseAngleReal, NULL, REAL_OFFSET(LocomotorTemplate, m_decelPitchLimit) },
+		{ "BounceAmount", INI::parseAngularVelocityReal, NULL, REAL_OFFSET(LocomotorTemplate, m_bounceKick) },
+		{ "PitchStiffness", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_pitchStiffness) },
+		{ "RollStiffness", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_rollStiffness) },
+		{ "PitchDamping", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_pitchDamping) },
+		{ "RollDamping", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_rollDamping) },
+		{ "ThrustRoll", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_thrustRoll) },
+		{ "ThrustWobbleRate",	INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_wobbleRate) },
+		{ "ThrustMinWobble",	INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_minWobble) },
+		{ "ThrustMaxWobble",	INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_maxWobble) },
+		{ "PitchInDirectionOfZVelFactor", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_pitchByZVelCoef) },
+		{ "ForwardVelocityPitchFactor", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_forwardVelCoef) },
+		{ "LateralVelocityRollFactor", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_lateralVelCoef) },
+		{ "ForwardAccelerationPitchFactor", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_forwardAccelCoef) },
+		{ "LateralAccelerationRollFactor", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_lateralAccelCoef) },
+		{ "UniformAxialDamping", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_uniformAxialDamping) },
+		{ "TurnPivotOffset", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_turnPivotOffset) },
 		{ "Apply2DFrictionWhenAirborne", INI::parseBool, NULL, offsetof(LocomotorTemplate, m_apply2DFrictionWhenAirborne) },
 		{ "DownhillOnly", INI::parseBool, NULL, offsetof(LocomotorTemplate, m_downhillOnly) },		
 		{ "AllowAirborneMotiveForce", INI::parseBool, NULL, offsetof(LocomotorTemplate, m_allowMotiveForceWhileAirborne) },
@@ -564,21 +558,21 @@ const FieldParse* LocomotorTemplate::getFieldParse() const
 		{ "StickToGround",				INI::parseBool,			NULL,	offsetof(LocomotorTemplate, m_stickToGround) },		
 		{ "CanMoveBackwards",				INI::parseBool,			NULL,	offsetof(LocomotorTemplate, m_canMoveBackward) },		
 		{ "HasSuspension",				INI::parseBool,			NULL,	offsetof(LocomotorTemplate, m_hasSuspension) },		
-		{ "FrontWheelTurnAngle", INI::parseAngleReal, NULL, offsetof(LocomotorTemplate, m_wheelTurnAngle) },		
-		{ "MaximumWheelExtension", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_maximumWheelExtension) },		
-		{ "MaximumWheelCompression", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_maximumWheelCompression) },		
-		{ "CloseEnoughDist",				 INI::parseReal, NULL, offsetof(LocomotorTemplate, m_closeEnoughDist) },
+		{ "FrontWheelTurnAngle", INI::parseAngleReal, NULL, REAL_OFFSET(LocomotorTemplate, m_wheelTurnAngle) },
+		{ "MaximumWheelExtension", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_maximumWheelExtension) },
+		{ "MaximumWheelCompression", INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_maximumWheelCompression) },
+		{ "CloseEnoughDist",				 INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_closeEnoughDist) },
 		{ "CloseEnoughDist3D",			 INI::parseBool, NULL, offsetof(LocomotorTemplate, m_isCloseEnoughDist3D) },
-		{ "SlideIntoPlaceTime",		INI::parseDurationReal, NULL, offsetof(LocomotorTemplate, m_ultraAccurateSlideIntoPlaceFactor) },
+		{ "SlideIntoPlaceTime",		INI::parseDurationFix, NULL, FIX_OFFSET(LocomotorTemplate, m_ultraAccurateSlideIntoPlaceFactor) },
 
-		{ "WanderWidthFactor", INI::parseReal, NULL, offsetof(LocomotorTemplate, m_wanderWidthFactor) },		
-		{ "WanderLengthFactor",				 INI::parseReal, NULL, offsetof(LocomotorTemplate, m_wanderLengthFactor) },
-		{ "WanderAboutPointRadius",				 INI::parseReal, NULL, offsetof(LocomotorTemplate, m_wanderAboutPointRadius) },
+		{ "WanderWidthFactor", INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_wanderWidthFactor) },
+		{ "WanderLengthFactor",				 INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_wanderLengthFactor) },
+		{ "WanderAboutPointRadius",				 INI::parseFix, NULL, FIX_OFFSET(LocomotorTemplate, m_wanderAboutPointRadius) },
 
-		{ "RudderCorrectionDegree",		 INI::parseReal, NULL, offsetof(LocomotorTemplate, m_rudderCorrectionDegree) },
-		{ "RudderCorrectionRate",			 INI::parseReal, NULL, offsetof(LocomotorTemplate, m_rudderCorrectionRate) },
-		{ "ElevatorCorrectionDegree",	 INI::parseReal, NULL, offsetof(LocomotorTemplate, m_elevatorCorrectionDegree) },
-		{ "ElevatorCorrectionRate",		 INI::parseReal, NULL, offsetof(LocomotorTemplate, m_elevatorCorrectionRate) },
+		{ "RudderCorrectionDegree",		 INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_rudderCorrectionDegree) },
+		{ "RudderCorrectionRate",			 INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_rudderCorrectionRate) },
+		{ "ElevatorCorrectionDegree",	 INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_elevatorCorrectionDegree) },
+		{ "ElevatorCorrectionRate",		 INI::parseReal, NULL, REAL_OFFSET(LocomotorTemplate, m_elevatorCorrectionRate) },
 		{ NULL, NULL, NULL, 0 }  // keep this last	
 	
 	};
@@ -737,17 +731,17 @@ Locomotor::Locomotor(const LocomotorTemplate* tmpl)
 	m_maxBraking = BIGNUM;
 	m_maxTurnRate = BIGNUM;
 	m_flags = 0;
-	m_closeEnoughDist = m_template->m_closeEnoughDist;
+	m_closeEnoughDist = fixToReal( m_template->m_closeEnoughDist );	// P4
 	setFlag(IS_CLOSE_ENOUGH_DIST_3D, m_template->m_isCloseEnoughDist3D);
 #ifdef CIRCLE_FOR_LANDING
 	m_circleThresh = 0.0f;
 #endif
-	m_preferredHeight = m_template->m_preferredHeight;
-	m_preferredHeightDamping = m_template->m_preferredHeightDamping;
+	m_preferredHeight = fixToReal( m_template->m_preferredHeight );	// P4
+	m_preferredHeightDamping = fixToReal( m_template->m_preferredHeightDamping );	// P4
 	m_sineDescentDistance = 0.0f;
 
 	m_angleOffset = GameLogicRandomValueReal(-PI/6, PI/6);
-	m_offsetIncrement = (PI/40) * (GameLogicRandomValueReal(0.8f, 1.2f)/m_template->m_wanderLengthFactor);
+	m_offsetIncrement = (PI/40) * (GameLogicRandomValueReal(0.8f, 1.2f)/fixToReal( m_template->m_wanderLengthFactor ));	// P4
 	setFlag(OFFSET_INCREASING, GameLogicRandomValue(0,1));
 	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_SECOND;
 }
@@ -878,9 +872,9 @@ Real Locomotor::getMaxSpeedForCondition(BodyDamageType condition) const
 	Real speed;
 
 	if( IS_CONDITION_BETTER( condition, TheGlobalData->m_movementPenaltyDamageState ) )
-		speed = m_template->m_maxSpeed;
+		speed = fixToReal( m_template->m_maxSpeed );	// P4
 	else
-		speed = m_template->m_maxSpeedDamaged;
+		speed = fixToReal( m_template->m_maxSpeedDamaged );	// P4
 
 	if (speed > m_maxSpeed)
 		speed = m_maxSpeed;
@@ -894,9 +888,9 @@ Real Locomotor::getMaxTurnRate(BodyDamageType condition) const
 	Real turn;
 
 	if( IS_CONDITION_BETTER( condition, TheGlobalData->m_movementPenaltyDamageState ) )
-		turn = m_template->m_maxTurnRate;
+		turn = fixToReal( m_template->m_maxTurnRate );	// P4
 	else
-		turn = m_template->m_maxTurnRateDamaged;
+		turn = fixToReal( m_template->m_maxTurnRateDamaged );	// P4
 
 	if (turn > m_maxTurnRate)
 		turn = m_maxTurnRate;
@@ -914,9 +908,9 @@ Real Locomotor::getMaxAcceleration(BodyDamageType condition) const
 	Real accel;
 
 	if( IS_CONDITION_BETTER( condition, TheGlobalData->m_movementPenaltyDamageState ) )
-		accel = m_template->m_acceleration;
+		accel = fixToReal( m_template->m_acceleration );	// P4
 	else
-		accel = m_template->m_accelerationDamaged;
+		accel = fixToReal( m_template->m_accelerationDamaged );	// P4
 
 	if (accel > m_maxAccel)
 		accel = m_maxAccel;
@@ -927,7 +921,7 @@ Real Locomotor::getMaxAcceleration(BodyDamageType condition) const
 //-------------------------------------------------------------------------------------------------
 Real Locomotor::getBraking() const
 {
-	Real braking = m_template->m_braking;
+	Real braking = fixToReal( m_template->m_braking );	// P4
 
 	if (braking > m_maxBraking)
 		braking = m_maxBraking;
@@ -941,15 +935,27 @@ Real Locomotor::getMaxLift(BodyDamageType condition) const
 	Real lift;
 
 	if( IS_CONDITION_BETTER( condition, TheGlobalData->m_movementPenaltyDamageState ) )
-		lift = m_template->m_lift;
+		lift = fixToReal( m_template->m_lift );	// P4
 	else
-		lift = m_template->m_liftDamaged;
+		lift = fixToReal( m_template->m_liftDamaged );	// P4
 
 	if (lift > m_maxLift)
 		lift = m_maxLift;
 
 	return lift;
 }
+
+//-------------------------------------------------------------------------------------------------
+// P4: the template is Fix, the movement code reading these is still float
+void Locomotor::restorePreferredHeightFromTemplate() { m_preferredHeight = fixToReal( m_template->m_preferredHeight ); }	// P4
+Real Locomotor::getMinSpeed() const { return fixToReal( m_template->m_minSpeed ); }	// P4
+Real Locomotor::getPitchStiffness() const { return fixToReal( m_template->m_pitchStiffness ); }	// P4
+Real Locomotor::getRollStiffness() const { return fixToReal( m_template->m_rollStiffness ); }	// P4
+Real Locomotor::getPitchDamping() const { return fixToReal( m_template->m_pitchDamping ); }	// P4
+Real Locomotor::getRollDamping() const { return fixToReal( m_template->m_rollDamping ); }	// P4
+Real Locomotor::getTurnPivotOffset() const { return fixToReal( m_template->m_turnPivotOffset ); }	// P4
+Real Locomotor::getWanderWidthFactor() const { return fixToReal( m_template->m_wanderWidthFactor ); }	// P4
+Real Locomotor::getWanderAboutPointRadius() const { return fixToReal( m_template->m_wanderAboutPointRadius ); }	// P4
 
 //-------------------------------------------------------------------------------------------------
 void Locomotor::locoUpdate_moveTowardsAngle(Object* obj, Real goalAngle)
@@ -1028,7 +1034,7 @@ void Locomotor::setPhysicsOptions(Object* obj)
 	// crank up the friction in ultra-accurate mode to increase movement precision.
 	const Real EXTRA_FRIC = 0.5f;
 	Real extraExtraFriction = getFlag(ULTRA_ACCURATE) ? EXTRA_FRIC : 0.0f;
-	physics->setExtraFriction(m_template->m_extra2DFriction + extraExtraFriction);
+	physics->setExtraFriction(fixToReal( m_template->m_extra2DFriction ) + extraExtraFriction);	// P4
 	physics->setAllowAirborneFriction(getApply2DFrictionWhenAirborne());	// you'd think we wouldn't want friction in the air, but it's needed for realistic behavior.
 	physics->setStickToGround(getStickToGround()); // walking guys aren't allowed to catch huge (or even small) air.
 }
@@ -1138,7 +1144,7 @@ void Locomotor::locoUpdate_moveTowardsPosition(Object* obj, const Coord3D& goalP
 	{
 		physics->scrubVelocity2D(desiredSpeed); // stop if we are about to run into the blocking object.
 		Real turnRate = getMaxTurnRate(obj->getBodyModule()->getDamageState());
-		if (m_template->m_wanderWidthFactor == 0.0f) 
+		if (m_template->m_wanderWidthFactor == Fix( 0 ))
 		{
 			*blocked = (TURN_NONE != rotateObjAroundLocoPivot(obj, goalPos, turnRate));
 		}
@@ -1391,7 +1397,7 @@ void Locomotor::moveTowardsPositionWheels(Object* obj, PhysicsBehavior *physics,
 	//
 	// See if we are turning.  If so, use the min turn speed.
 	//
-	Real turnSpeed = m_template->m_minTurnSpeed;
+	Real turnSpeed = fixToReal( m_template->m_minTurnSpeed );	// P4
 	Real angle = obj->getOrientation();
 //	Real relAngle = ThePartitionManager->getRelativeAngle2D( obj, &goalPos );
 //	Real desiredAngle = angle + relAngle;
@@ -1735,8 +1741,8 @@ void Locomotor::moveTowardsPositionLegs(Object* obj, PhysicsBehavior *physics, c
 //	Real desiredAngle = angle + relAngle;
 	Real desiredAngle = ATan2(goalPos.y - obj->getPosition()->y, goalPos.x - obj->getPosition()->x);
 
-	if (m_template->m_wanderWidthFactor != 0.0f) {
-		Real angleLimit = PI/8 * m_template->m_wanderWidthFactor;
+	if (m_template->m_wanderWidthFactor != Fix( 0 )) {
+		Real angleLimit = PI/8 * getWanderWidthFactor();
 		// This is the wander offline code - it forces the desired angle away from the goal, so we wander back & forth.  jba.
 		if (getFlag(OFFSET_INCREASING)) {
 			m_angleOffset += m_offsetIncrement*actualSpeed;
@@ -1766,10 +1772,10 @@ void Locomotor::moveTowardsPositionLegs(Object* obj, PhysicsBehavior *physics, c
 	Real goalSpeed = (1.0f - angleCoeff) * desiredSpeed;
 
 	//Real slowDownDist = (actualSpeed - m_template->m_minSpeed) / getBraking();
-	Real slowDownDist = calcSlowDownDist(actualSpeed, m_template->m_minSpeed, getBraking());
+	Real slowDownDist = calcSlowDownDist(actualSpeed, getMinSpeed(), getBraking());
 	if (onPathDistToGoal < slowDownDist && !getFlag(NO_SLOW_DOWN_AS_APPROACHING_DEST))
 	{
-		goalSpeed = m_template->m_minSpeed;
+		goalSpeed = getMinSpeed();
 	}
 
 
@@ -1893,10 +1899,10 @@ void Locomotor::moveTowardsPositionClimb(Object* obj, PhysicsBehavior *physics, 
 	}
 
 	//Real slowDownDist = (actualSpeed - m_template->m_minSpeed) / getBraking();
-	Real slowDownDist = calcSlowDownDist(actualSpeed, m_template->m_minSpeed, getBraking());
+	Real slowDownDist = calcSlowDownDist(actualSpeed, getMinSpeed(), getBraking());
 	if (onPathDistToGoal < slowDownDist && !getFlag(NO_SLOW_DOWN_AS_APPROACHING_DEST))
 	{
-		goalSpeed = m_template->m_minSpeed;
+		goalSpeed = getMinSpeed();
 	}
 
 	//
@@ -2013,15 +2019,15 @@ void Locomotor::moveTowardsPositionThrust(Object* obj, PhysicsBehavior *physics,
 	BodyDamageType bdt = obj->getBodyModule()->getDamageState();
 
 	Real maxForwardSpeed = getMaxSpeedForCondition(bdt);
-	desiredSpeed = clamp(m_template->m_minSpeed, desiredSpeed, maxForwardSpeed);
+	desiredSpeed = clamp(getMinSpeed(), desiredSpeed, maxForwardSpeed);
 	Real actualForwardSpeed = physics->getForwardSpeed3D();
 
 	if (getBraking() > 0)
 	{
 		//Real slowDownDist = (actualForwardSpeed - m_template->m_minSpeed) / getBraking();
-		Real slowDownDist = calcSlowDownDist(actualForwardSpeed, m_template->m_minSpeed, getBraking());
+		Real slowDownDist = calcSlowDownDist(actualForwardSpeed, getMinSpeed(), getBraking());
 		if (onPathDistToGoal < slowDownDist && !getFlag(NO_SLOW_DOWN_AS_APPROACHING_DEST))
-			desiredSpeed = m_template->m_minSpeed;
+			desiredSpeed = getMinSpeed();
 	}
 
 	Coord3D localGoalPos = goalPos;
@@ -2083,7 +2089,7 @@ void Locomotor::moveTowardsPositionThrust(Object* obj, PhysicsBehavior *physics,
 	calcDirectionToApplyThrust(obj, physics, localGoalPos, maxAccel, desiredThrustDir);
 
 	// we might not be able to thrust in that dir, so thrust as closely as we can
-	Real maxThrustAngle =	(maxTurnRate > 0) ? (m_template->m_maxThrustAngle) : 0;
+	Real maxThrustAngle =	(maxTurnRate > 0) ? fixToReal( m_template->m_maxThrustAngle ) : 0;	// P4
 	Vector3 thrustDir;
 	Real thrustAngle = tryToRotateVector3D(maxThrustAngle, forwardDir, desiredThrustDir, thrustDir);
 
@@ -2221,10 +2227,10 @@ Real Locomotor::calcLiftToUseAtPt(Object* obj, PhysicsBehavior *physics, Real cu
 			// use the max accel.
 			desiredAccel = maxAccel;
 		}
-		else if (fabs(curVelZ) > m_template->m_speedLimitZ)
+		else if (fabs(curVelZ) > fixToReal( m_template->m_speedLimitZ ))	// P4
 		{
 			// or, if we're going too fast, limit it here.
-			desiredAccel = m_template->m_speedLimitZ - curVelZ;
+			desiredAccel = fixToReal( m_template->m_speedLimitZ ) - curVelZ;	// P4
 		}
 		else
 		{
@@ -2512,8 +2518,8 @@ void Locomotor::moveTowardsPositionOther(Object* obj, PhysicsBehavior *physics, 
 //fabs(goalPos.y - pos->y),fabs(goalPos.x - pos->x),
 //fabs(goalPos.y - pos->y)/goalSpeed,fabs(goalPos.x - pos->x)/goalSpeed));
 	if (getFlag(ULTRA_ACCURATE) && 
-				fabs(goalPos.y - pos->y) <= goalSpeed * m_template->m_ultraAccurateSlideIntoPlaceFactor && 
-				fabs(goalPos.x - pos->x) <= goalSpeed * m_template->m_ultraAccurateSlideIntoPlaceFactor)
+				fabs(goalPos.y - pos->y) <= goalSpeed * fixToReal( m_template->m_ultraAccurateSlideIntoPlaceFactor ) && 	// P4
+				fabs(goalPos.x - pos->x) <= goalSpeed * fixToReal( m_template->m_ultraAccurateSlideIntoPlaceFactor ))	// P4
 	{
 		// don't turn, just slide in the right direction
 		physics->setTurning(TURN_NONE);
@@ -2530,10 +2536,10 @@ void Locomotor::moveTowardsPositionOther(Object* obj, PhysicsBehavior *physics, 
 
 	if (!getFlag(NO_SLOW_DOWN_AS_APPROACHING_DEST))
 	{
-		Real slowDownDist = calcSlowDownDist(actualSpeed, m_template->m_minSpeed, getBraking());
+		Real slowDownDist = calcSlowDownDist(actualSpeed, getMinSpeed(), getBraking());
 		if (onPathDistToGoal < slowDownDist)
 		{
-			goalSpeed = m_template->m_minSpeed;
+			goalSpeed = getMinSpeed();
 		}
 	}
 
@@ -2657,7 +2663,7 @@ void Locomotor::maintainCurrentPositionWings(Object* obj, PhysicsBehavior *physi
 
 			// aim for the spot on the opposite side of the circle.
 		BodyDamageType bdt = obj->getBodyModule()->getDamageState();
-		Real turnRadius = m_template->m_circlingRadius;
+		Real turnRadius = fixToReal( m_template->m_circlingRadius );	// P4
 		if (turnRadius == 0.0f)
 			turnRadius = calcMinTurnRadius(bdt, NULL);
 
@@ -2682,7 +2688,7 @@ void Locomotor::maintainCurrentPositionWings(Object* obj, PhysicsBehavior *physi
 		Coord3D desiredPos = m_maintainPos;
 		desiredPos.x += Cos(angleTowardMaintainPos) * turnRadius;
 		desiredPos.y += Sin(angleTowardMaintainPos) * turnRadius;
-		moveTowardsPositionWings(obj, physics, desiredPos, 0, m_template->m_minSpeed);
+		moveTowardsPositionWings(obj, physics, desiredPos, 0, getMinSpeed());
 	}
 }
 
@@ -2692,7 +2698,7 @@ void Locomotor::maintainCurrentPositionHover(Object* obj, PhysicsBehavior *physi
 	physics->setTurning(TURN_NONE);
 	if (physics->isMotive())	// no need to stop something that isn't moving.
 	{
-		DEBUG_ASSERTCRASH(m_template->m_minSpeed == 0.0f, ("HOVER should always have zero minSpeeds (otherwise, they WING)"));
+		DEBUG_ASSERTCRASH(m_template->m_minSpeed == Fix( 0 ), ("HOVER should always have zero minSpeeds (otherwise, they WING)"));
 
 		BodyDamageType bdt = obj->getBodyModule()->getDamageState();
 		Real maxAcceleration = getMaxAcceleration(bdt);
@@ -2700,7 +2706,7 @@ void Locomotor::maintainCurrentPositionHover(Object* obj, PhysicsBehavior *physi
 		//
 		// Stop
 		//
-		Real minSpeed = max( 1.0E-10f, m_template->m_minSpeed ); 
+		Real minSpeed = max( 1.0E-10f, getMinSpeed() );	// P4: the floor is below a Fix step
 		Real speedDelta = minSpeed - actualSpeed;
 		if (fabs(speedDelta) > minSpeed)
 		{

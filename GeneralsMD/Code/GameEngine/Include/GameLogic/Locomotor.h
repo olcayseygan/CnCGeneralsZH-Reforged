@@ -147,23 +147,23 @@ private:
 	*/
 	AsciiString								m_name;
 	LocomotorSurfaceTypeMask	m_surfaces;							///< flags indicating the kinds of surfaces we can use
-	Real											m_maxSpeed;							///< max speed
-	Real											m_maxSpeedDamaged;			///< max speed when "damaged"
-	Real											m_minSpeed;							///< we should never brake past this
-	Real											m_maxTurnRate;					///< max rate at which we can turn, in rads/frame
-	Real											m_maxTurnRateDamaged;		///< max turn rate when "damaged"
-	Real											m_acceleration;					///< max acceleration
-	Real											m_accelerationDamaged;	///< max acceleration when damaged
-	Real											m_lift;									///< max lifting acceleration (flying objects only)
-	Real											m_liftDamaged;					///< max lift when damaged
-	Real											m_braking;							///< max braking (deceleration)
-	Real											m_minTurnSpeed;					///< we must be going >= this speed in order to turn
-	Real											m_preferredHeight;			///< our preferred height (if flying)
-	Real											m_preferredHeightDamping;		///< how aggressively to adjust to preferred height: 1.0 = very much so, 0.1 = gradually, etc
-	Real											m_circlingRadius;				///< for flying things, the radius at which they circle their "maintain" destination. (pos = cw, neg = ccw, 0 = smallest possible)
-	Real											m_speedLimitZ;					///< try to avoid going up or down at more than this speed, if possible
-	Real											m_extra2DFriction;			///< extra 2dfriction to apply (via Physics)
-	Real											m_maxThrustAngle;				///< THRUST locos only: how much we deflect our thrust angle
+	Fix												m_maxSpeed;							///< max speed
+	Fix												m_maxSpeedDamaged;			///< max speed when "damaged"
+	Fix												m_minSpeed;							///< we should never brake past this
+	Fix												m_maxTurnRate;					///< max rate at which we can turn, in rads/frame
+	Fix												m_maxTurnRateDamaged;		///< max turn rate when "damaged"
+	Fix												m_acceleration;					///< max acceleration
+	Fix												m_accelerationDamaged;	///< max acceleration when damaged
+	Fix												m_lift;									///< max lifting acceleration (flying objects only)
+	Fix												m_liftDamaged;					///< max lift when damaged
+	Fix												m_braking;							///< max braking (deceleration)
+	Fix												m_minTurnSpeed;					///< we must be going >= this speed in order to turn
+	Fix												m_preferredHeight;			///< our preferred height (if flying)
+	Fix												m_preferredHeightDamping;		///< how aggressively to adjust to preferred height: 1.0 = very much so, 0.1 = gradually, etc
+	Fix												m_circlingRadius;				///< for flying things, the radius at which they circle their "maintain" destination. (pos = cw, neg = ccw, 0 = smallest possible)
+	Fix												m_speedLimitZ;					///< try to avoid going up or down at more than this speed, if possible
+	Fix												m_extra2DFriction;			///< extra 2dfriction to apply (via Physics)
+	Fix												m_maxThrustAngle;				///< THRUST locos only: how much we deflect our thrust angle
 	LocomotorBehaviorZ				m_behaviorZ;						///< z-axis behavior
 	LocomotorAppearance				m_appearance;						///< how we should diddle the Drawable to imitate this motion
 	LocomotorPriority					m_movePriority;					///< Where we move - front, middle, back.
@@ -171,10 +171,10 @@ private:
 	Real											m_accelPitchLimit;			///< Maximum amount we will pitch up  under acceleration (including recoil.)
 	Real											m_decelPitchLimit;			///< Maximum amount we will pitch down under deceleration (including recoil.)
 	Real											m_bounceKick;						///< How much simulating rough terrain "bounces" a wheel up.
-	Real											m_pitchStiffness;				///< How stiff the springs are forward & back.
-	Real											m_rollStiffness;				///< How stiff the springs are side to side.
-	Real											m_pitchDamping;					///< How good the shock absorbers are.
-	Real											m_rollDamping;					///< How good the shock absorbers are.
+	Fix												m_pitchStiffness;				///< How stiff the springs are forward & back.
+	Fix												m_rollStiffness;				///< How stiff the springs are side to side.
+	Fix												m_pitchDamping;					///< How good the shock absorbers are.
+	Fix												m_rollDamping;					///< How good the shock absorbers are.
 	Real											m_pitchByZVelCoef;			///< How much we pitch in response to z-speed.
 	Real											m_thrustRoll;						///< Thrust roll around X axis
 	Real											m_wobbleRate;						///< how fast thrust things "wobble"
@@ -185,12 +185,12 @@ private:
 	Real											m_forwardAccelCoef;			///< How much we pitch in response to acceleration.
 	Real											m_lateralAccelCoef;			///< How much we roll in response to acceleration.
 	Real											m_uniformAxialDamping;	///< For Attenuating the pitch and roll rates
-	Real											m_turnPivotOffset;			///< should we pivot around noncenter? (-1.0 = rear, 0.0 = center, 1.0 = front)
+	Fix												m_turnPivotOffset;			///< should we pivot around noncenter? (-1.0 = rear, 0.0 = center, 1.0 = front)
 	Int												m_airborneTargetingHeight;	///< The height transition at witch I should mark myself as a AA target.
 	
-	Real											m_closeEnoughDist;			///< How close we have to approach the end of a path before stopping
+	Fix												m_closeEnoughDist;			///< How close we have to approach the end of a path before stopping
 	Bool											m_isCloseEnoughDist3D;	///< And is that calculation 3D, for very rare cases that need to move straight down.
-	Real											m_ultraAccurateSlideIntoPlaceFactor;			///< how much we can fudge turning when ultra-accurate
+	Fix												m_ultraAccurateSlideIntoPlaceFactor;			///< how much we can fudge turning when ultra-accurate
 
 	Bool											m_locomotorWorksWhenDead;	///< should locomotor continue working even when object is "dead"?
 	Bool											m_allowMotiveForceWhileAirborne;	///< can we apply motive when airborne?
@@ -204,9 +204,9 @@ private:
 	Real											m_wheelTurnAngle;				///< How far the front wheels can turn.
 
 	// Fields for wander locomotor
-	Real											m_wanderWidthFactor;
-	Real											m_wanderLengthFactor;
-	Real											m_wanderAboutPointRadius;
+	Fix												m_wanderWidthFactor;
+	Fix												m_wanderLengthFactor;
+	Fix												m_wanderAboutPointRadius;
 
 
 	Real											m_rudderCorrectionDegree;
@@ -246,7 +246,7 @@ public:
 	Real getBraking() const;  ///< get braking given condition
 
 	inline Real getPreferredHeight() const { return m_preferredHeight;} ///< Just return preferredheight, no damage consideration
-	inline void restorePreferredHeightFromTemplate() { m_preferredHeight = m_template->m_preferredHeight; };
+	void restorePreferredHeightFromTemplate();
 	inline Real getPreferredHeightDamping() const { return m_preferredHeightDamping;} 
 	inline LocomotorAppearance getAppearance() const { return m_template->m_appearance; }
 	inline LocomotorPriority getMovePriority() const { return m_template->m_movePriority; }
@@ -254,14 +254,18 @@ public:
 	inline LocomotorBehaviorZ getBehaviorZ() const { return m_template->m_behaviorZ; }
 
 	inline AsciiString getTemplateName() const { return m_template->m_name;}
-	inline Real getMinSpeed() const { return m_template->m_minSpeed;}
+	// the template's Fix fields in float, out of line so this header stays off the Fix/float boundary
+	Real getMinSpeed() const;
+	Real getPitchStiffness() const;			///< How stiff the springs are forward & back.
+	Real getRollStiffness() const;			///< How stiff the springs are side to side.
+	Real getPitchDamping() const;				///< How good the shock absorbers are.
+	Real getRollDamping() const;				///< How good the shock absorbers are.
+	Real getTurnPivotOffset() const;
+	Real getWanderWidthFactor() const;
+	Real getWanderAboutPointRadius() const;
 	inline Real getAccelPitchLimit() const { return m_template->m_accelPitchLimit;}	///< Maximum amount we will pitch up or down under acceleration (including recoil.)
 	inline Real getDecelPitchLimit() const { return m_template->m_decelPitchLimit;}	///< Maximum amount we will pitch down under deceleration (including recoil.)
 	inline Real getBounceKick() const { return m_template->m_bounceKick;}						///< How much simulating rough terrain "bounces" a wheel up.
-	inline Real getPitchStiffness() const { return m_template->m_pitchStiffness;}			///< How stiff the springs are forward & back.
-	inline Real getRollStiffness() const { return m_template->m_rollStiffness;}				///< How stiff the springs are side to side.
-	inline Real getPitchDamping() const { return m_template->m_pitchDamping;}	///< How good the shock absorbers are.
-	inline Real getRollDamping() const { return m_template->m_rollDamping;}	///< How good the shock absorbers are.
 	inline Real getPitchByZVelCoef() const { return m_template->m_pitchByZVelCoef;}		///< How much we pitch in response to speed.
 	inline Real getThrustRoll() const { return m_template->m_thrustRoll; }  ///< Thrust roll
 	inline Real getWobbleRate() const { return m_template->m_wobbleRate; }  ///< how fast thrust things "wobble"
@@ -273,7 +277,6 @@ public:
 	inline Real getForwardAccelCoef() const { return m_template->m_forwardAccelCoef;}		///< How much we pitch in response to acceleration.
 	inline Real getLateralAccelCoef() const { return m_template->m_lateralAccelCoef;}			///< How much we roll in response to acceleration.
 	inline Real getUniformAxialDamping() const { return m_template->m_uniformAxialDamping;}			///< How much we roll in response to acceleration.
-	inline Real getTurnPivotOffset() const { return m_template->m_turnPivotOffset;}
 	inline Bool getApply2DFrictionWhenAirborne() const { return m_template->m_apply2DFrictionWhenAirborne; }
 	inline Bool getIsDownhillOnly() const { return m_template->m_downhillOnly; }
 	inline Bool getAllowMotiveForceWhileAirborne() const { return m_template->m_allowMotiveForceWhileAirborne; }
@@ -295,8 +298,6 @@ public:
 	inline Real getElevatorCorrectionRate()	  const { return m_template->m_elevatorCorrectionRate;}			///< How much we roll in response to acceleration.
 
 
-	inline Real getWanderWidthFactor() const {return m_template->m_wanderWidthFactor;}
-	inline Real getWanderAboutPointRadius() const {return m_template->m_wanderAboutPointRadius;}
 
 	Real calcMinTurnRadius(BodyDamageType condition, Real* timeToTravelThatDist) const;
 

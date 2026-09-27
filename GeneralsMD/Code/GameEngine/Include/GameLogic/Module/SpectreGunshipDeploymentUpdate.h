@@ -73,9 +73,9 @@ public:
   RadiusDecalTemplate   m_attackAreaDecalTemplate;
   RadiusDecalTemplate   m_targetingReticleDecalTemplate;
   UnsignedInt           m_orbitFrames;
-  Real                  m_attackAreaRadius;
-  Real                  m_targetingReticleRadius;
-  Real                  m_gunshipOrbitRadius;
+  Fix                   m_attackAreaRadius;
+  Fix                   m_targetingReticleRadius;
+  Fix                   m_gunshipOrbitRadius;	///< never parsed nor set here; EA's, left as it was
 	GunshipCreateLocType	m_createLoc;
 
 

@@ -82,7 +82,7 @@ void SlavedUpdate::onObjectCreated()
 {
 	const SlavedUpdateModuleData* data = getSlavedUpdateModuleData();
 
-	if( data->m_repairRatePerSecond > 0.0f )
+	if( data->m_repairRatePerSecond > Fix( 0 ) )
 	{
 		//If this object can repair, pack it up at init.
 		getObject()->setModelConditionState( MODELCONDITION_PACKING );
@@ -198,7 +198,7 @@ UpdateSleepTime SlavedUpdate::update( void )
 	//NOTE: Health percentage will always be 100 should the drone be incapable of
 	//repairing.
 	Int healthPercentage = 100;
-	if( data->m_repairRatePerSecond > 0.0f )
+	if( data->m_repairRatePerSecond > Fix( 0 ) )
 	{
 		BodyModuleInterface *body = master->getBodyModule();
 		if( body )
@@ -239,7 +239,7 @@ UpdateSleepTime SlavedUpdate::update( void )
 
 			//Check to see if master is close to the goal position.
 			Fix distSqr = ThePartitionManager->getDistanceSquaredFix( master, &masterDest, FROM_BOUNDINGSPHERE_2D );
-			Fix halfGuardRange = fixFromReal( data->m_guardMaxRange ) * 0.5_fx;	// P3
+			Fix halfGuardRange = Fix( data->m_guardMaxRange ) * 0.5_fx;
 			if( distSqr > halfGuardRange * halfGuardRange )
 			{
 				//If the master's distance to destination is more than half of the guarding range of the slave,
@@ -269,7 +269,7 @@ UpdateSleepTime SlavedUpdate::update( void )
 	if( data->m_guardMaxRange )
 	{
 		//3RD PRIORITY: Guard the master's area.
-		Fix strayRange = STRAY_MULTIPLIER * fixFromReal( data->m_guardMaxRange );	// P3
+		Fix strayRange = STRAY_MULTIPLIER * Fix( data->m_guardMaxRange );
 		if( myAI->isIdle() && ThePartitionManager->getDistanceSquaredFix(me, &pinnedPosition, FROM_CENTER_3D) > CLOSE_ENOUGH_SQR )
 		{
 			//I'm idle and too far away.
@@ -300,7 +300,7 @@ void SlavedUpdate::doAttackLogic( const Object *target )
 	//calculate the closest allowable position.
 	const FCoord3D *targetPos = target->getPositionFix();
 	Fix dist = ThePartitionManager->getDistanceSquaredFix( me, targetPos, FROM_BOUNDINGSPHERE_2D );
-	Fix attackRange = fixFromReal( data->m_attackRange );	// P3
+	Fix attackRange = Fix( data->m_attackRange );
 	// the leash is measured from the master, the same point the clamp below is taken from; measured
 	// from the drone it sent a drone far from a near target to a spot past that target
 	if( ThePartitionManager->getDistanceSquaredFix( master, targetPos, FROM_BOUNDINGSPHERE_2D ) > attackRange * attackRange )
@@ -346,7 +346,7 @@ void SlavedUpdate::doAttackLogic( const Object *target )
 		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 	}
 
-	Fix bonusDist = fixFromReal( data->m_distToTargetToGrantRangeBonus );	// P3
+	Fix bonusDist = Fix( data->m_distToTargetToGrantRangeBonus );
 	if( dist < bonusDist * bonusDist )
 	{
 		//Finally, seeing we are close enough to the target, grant our 
@@ -369,7 +369,7 @@ void SlavedUpdate::doScoutLogic( const FCoord3D *mastersDestination )
 	//calculate the closest allowable position.
 	// from the master, like the clamp below
 	Fix dist = ThePartitionManager->getDistanceSquaredFix( master, mastersDestination, FROM_BOUNDINGSPHERE_2D );
-	Fix scoutRange = fixFromReal( data->m_scoutRange );	// P3
+	Fix scoutRange = Fix( data->m_scoutRange );
 	if( dist > scoutRange * scoutRange )
 	{
 		//The distance is too far, so calculate the best allowable position.
@@ -500,7 +500,7 @@ void SlavedUpdate::doRepairLogic()
 			locomotor->setUsePreciseZPos( closeEnoughForZPrecision );
 		}
 		FCoord3D pos = *master->getPositionFix();
-		pos.z += GameLogicRandomValueFix( fixFromReal( data->m_repairMinAltitude ), fixFromReal( data->m_repairMaxAltitude ) );	// P3
+		pos.z += GameLogicRandomValueFix( data->m_repairMinAltitude, data->m_repairMaxAltitude );
 		const Coord3D goal = pos.toCoord3D();	// P4
 		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 
@@ -519,7 +519,7 @@ void SlavedUpdate::doRepairLogic()
 		if( body )
 		{
 			//Calculate the repair rate per frame.
-			Real repairAmount = data->m_repairRatePerSecond / LOGICFRAMES_PER_SECOND;
+			Real repairAmount = fixToReal( data->m_repairRatePerSecond ) / LOGICFRAMES_PER_SECOND;	// P6
 			
 			DamageInfo healingInfo;
 			healingInfo.in.m_amount = repairAmount;
@@ -699,7 +699,7 @@ void SlavedUpdate::moveToNewRepairSpot()
 		m_guardPointOffset.x += data->m_repairRange * Cos( randomDirection );
 		m_guardPointOffset.y += data->m_repairRange * Sin( randomDirection );
 		m_guardPointOffset.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( m_guardPointOffset.x ), fixFromReal( m_guardPointOffset.y ) ) );
-		Real altitude = GameLogicRandomValueReal( data->m_repairMinAltitude, data->m_repairMaxAltitude );
+		Real altitude = GameLogicRandomValueReal( fixToReal( data->m_repairMinAltitude ), fixToReal( data->m_repairMaxAltitude ) );	// P8
 		m_guardPointOffset.z += altitude;
 
 		AIUpdateInterface *ai = me->getAIUpdateInterface();

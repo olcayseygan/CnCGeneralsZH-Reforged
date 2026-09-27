@@ -47,7 +47,7 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	Real m_framesForFullHeal;			///< time (in frames) something becomes fully repaired
+	Fix m_framesForFullHeal;			///< time (in frames) something becomes fully repaired
 
 };
 

@@ -43,7 +43,7 @@ class StealthDetectorUpdateModuleData : public UpdateModuleData
 {
 public:
 	UnsignedInt											m_updateRate;
-	Real														m_detectionRange;
+	Fix															m_detectionRange;
 	Bool														m_initiallyDisabled;
 	AudioEventRTS										m_pingSound;
 	AudioEventRTS										m_loudPingSound;
@@ -60,7 +60,7 @@ public:
 	StealthDetectorUpdateModuleData()
 	{
 		m_updateRate = 1;
-		m_detectionRange = 0.0f;
+		m_detectionRange = Fix( 0 );
 		m_initiallyDisabled = false;
 		m_IRBeaconParticleSysTmpl = NULL;
 		m_IRParticleSysTmpl = NULL;

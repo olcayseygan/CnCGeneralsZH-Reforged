@@ -49,16 +49,16 @@ public:
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	Real m_waveDelay;													///< delay in frames to start the wave from when we become enabled
-	Real m_ySize;															///< size of object in Y
-	Real m_linearWaveSpacing;									///< linear waves get created at this resolution across the object
-	Real m_waveBendMagnitude;									///< for curved waveshape, larger # = more straight
+	Fix m_waveDelay;													///< delay in frames to start the wave from when we become enabled
+	Fix m_ySize;															///< size of object in Y
+	Fix m_linearWaveSpacing;									///< linear waves get created at this resolution across the object
+	Fix m_waveBendMagnitude;									///< for curved waveshape, larger # = more straight
 	Real m_waterVelocity;											///< (in distance per frame)this amount of force is applied to the water
-	Real m_preferredHeight;										///< this is our preferred water height after the wave passes
-	Real m_shorelineEffectDistance;						///< this far behind the wave we "hit" the shore
-	Real m_damageRadius;											///< damage distance from sample points to do damage
-	Real m_damageAmount;											///< amount of damage to do
-	Real m_toppleForce;												///< force strength we topple things with
+	Fix m_preferredHeight;										///< this is our preferred water height after the wave passes
+	Fix m_shorelineEffectDistance;						///< this far behind the wave we "hit" the shore
+	Fix m_damageRadius;											///< damage distance from sample points to do damage
+	Fix m_damageAmount;											///< amount of damage to do
+	Fix m_toppleForce;												///< force strength we topple things with
 	AudioEventRTS m_randomSplashSound;				///< random splash sound to play sometimes during the wave
 	Int m_randomSplashSoundFrequency;					///< number from 1-100 that must be above to play
 	const ParticleSystemTemplate *m_bridgeParticle;	///< particle system to play when the wave hits a bridge

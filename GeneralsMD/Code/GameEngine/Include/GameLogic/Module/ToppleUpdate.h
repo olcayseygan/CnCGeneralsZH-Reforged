@@ -59,9 +59,9 @@ public:
 	const FXList* m_toppleFX;
 	const FXList* m_bounceFX;
 	AsciiString m_stumpName;
-	Real m_initialVelocityPercent;
-	Real m_initialAccelPercent;
-	Real m_bounceVelocityPercent;
+	Fix m_initialVelocityPercent;
+	Fix m_initialAccelPercent;
+	Fix m_bounceVelocityPercent;
 	Bool m_killWhenToppled;
 	Bool m_killWhenStartToppled;
 	Bool m_killStumpWhenToppled;

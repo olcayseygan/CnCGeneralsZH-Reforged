@@ -77,7 +77,7 @@ SpectreGunshipDeploymentUpdateModuleData::SpectreGunshipDeploymentUpdateModuleDa
 {
 	m_specialPowerTemplate			   = NULL;
 	m_extraRequiredScience				 = SCIENCE_INVALID;
-/******BOTH*******//*BOTH*//******BOTH*******//******BOTH*******/  m_attackAreaRadius             = 200.0f;
+/******BOTH*******//*BOTH*//******BOTH*******//******BOTH*******/  m_attackAreaRadius             = Fix( 200 );
 	m_createLoc = CREATE_GUNSHIP_AT_EDGE_FARTHEST_FROM_TARGET;
 
 }
@@ -105,7 +105,7 @@ static Real zero = 0.0f;
 		{ "GunshipTemplateName",	    INI::parseAsciiString,				    NULL, offsetof( SpectreGunshipDeploymentUpdateModuleData, m_gunshipTemplateName ) },
 		{ "RequiredScience",					INI::parseScience,								NULL, offsetof( SpectreGunshipDeploymentUpdateModuleData, m_extraRequiredScience ) },
 /******BOTH*******/   { "SpecialPowerTemplate",     INI::parseSpecialPowerTemplate,   NULL, offsetof( SpectreGunshipDeploymentUpdateModuleData, m_specialPowerTemplate ) },
-/*******BOTH******/		{ "AttackAreaRadius",	        INI::parseReal,				            NULL, offsetof( SpectreGunshipDeploymentUpdateModuleData, m_attackAreaRadius ) },
+/*******BOTH******/		{ "AttackAreaRadius",	        INI::parseFix,				            NULL, FIX_OFFSET( SpectreGunshipDeploymentUpdateModuleData, m_attackAreaRadius ) },
 		{ "CreateLocation", INI::parseIndexList, TheGunshipCreateLocTypeNames, offsetof( SpectreGunshipDeploymentUpdateModuleData, m_createLoc ) },
 
     { 0, 0, 0, 0 }
@@ -222,7 +222,7 @@ Bool SpectreGunshipDeploymentUpdate::initiateIntentToDoSpecialPower(const Specia
     Fix distanceFromTarget = deltaToCreationPoint.length();
     if( distanceFromTarget > Fix( 0 ) )
     {
-      Fix reach = distanceFromTarget + fixFromReal( data->m_gunshipOrbitRadius );	// P3
+      Fix reach = distanceFromTarget + data->m_gunshipOrbitRadius;
       creation.x = target.x - deltaToCreationPoint.x / distanceFromTarget * reach;
       creation.y = target.y - deltaToCreationPoint.y / distanceFromTarget * reach;
     }

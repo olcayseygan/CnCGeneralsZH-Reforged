@@ -65,7 +65,7 @@ LaserUpdateModuleData::LaserUpdateModuleData()
 	{
 		{ "MuzzleParticleSystem",		INI::parseAsciiString,	NULL, offsetof( LaserUpdateModuleData, m_particleSystemName ) },
 		{ "TargetParticleSystem",		INI::parseAsciiString,  NULL, offsetof( LaserUpdateModuleData, m_targetParticleSystemName ) },
-		{ "PunchThroughScalar",			INI::parseReal,					NULL, offsetof( LaserUpdateModuleData, m_punchThroughScalar ) },
+		{ "PunchThroughScalar",			INI::parseReal,					NULL, REAL_OFFSET( LaserUpdateModuleData, m_punchThroughScalar ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);

@@ -43,13 +43,13 @@ class StickyBombUpdateModuleData : public UpdateModuleData
 {
 public:
 	AsciiString			m_attachToBone;
-	Real						m_offsetZ;
+	Fix							m_offsetZ;
 	WeaponTemplate*	m_geometryBasedDamageWeaponTemplate;
 	FXList*					m_geometryBasedDamageFX;
 
 	StickyBombUpdateModuleData()
 	{
-		m_offsetZ = 10.0f;
+		m_offsetZ = Fix( 10 );
 		m_geometryBasedDamageWeaponTemplate = NULL;
 		m_geometryBasedDamageFX = NULL;
 	}
@@ -60,7 +60,7 @@ public:
 		static const FieldParse dataFieldParse[] = 
 		{
 			{ "AttachToTargetBone",				INI::parseAsciiString,		NULL, offsetof( StickyBombUpdateModuleData, m_attachToBone ) },
-			{ "OffsetZ",									INI::parseReal,						NULL, offsetof( StickyBombUpdateModuleData, m_offsetZ ) },
+			{ "OffsetZ",									INI::parseFix,						NULL, FIX_OFFSET( StickyBombUpdateModuleData, m_offsetZ ) },
 			{ "GeometryBasedDamageWeapon",INI::parseWeaponTemplate, NULL, offsetof( StickyBombUpdateModuleData, m_geometryBasedDamageWeaponTemplate ) },
 			{ "GeometryBasedDamageFX",		INI::parseFXList,					NULL, offsetof( StickyBombUpdateModuleData, m_geometryBasedDamageFX ) },
 			{ 0, 0, 0, 0 }

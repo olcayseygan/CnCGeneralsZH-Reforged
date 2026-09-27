@@ -58,7 +58,7 @@ SupplyWarehouseDockUpdateModuleData::SupplyWarehouseDockUpdateModuleData( void )
 	// file - which matters, because the INI files are in the multiplayer checksum.
 	//
 	m_regenDelay = 40 * LOGICFRAMES_PER_SECOND;
-	m_regenRadius = 250.0f;
+	m_regenRadius = Fix( 250 );
 	m_regenMaxBoxes = -1;
 }
 
@@ -74,7 +74,7 @@ SupplyWarehouseDockUpdateModuleData::SupplyWarehouseDockUpdateModuleData( void )
 		{ "StartingBoxes",	INI::parseInt,	NULL, offsetof( SupplyWarehouseDockUpdateModuleData, m_startingBoxesData ) },
 		{ "DeleteWhenEmpty",	INI::parseBool,	NULL, offsetof( SupplyWarehouseDockUpdateModuleData, m_deleteWhenEmpty ) },
 		{ "RegenDelay",				INI::parseDurationUnsignedInt, NULL, offsetof( SupplyWarehouseDockUpdateModuleData, m_regenDelay ) },
-		{ "RegenRadius",			INI::parseReal,	NULL, offsetof( SupplyWarehouseDockUpdateModuleData, m_regenRadius ) },
+		{ "RegenRadius",			INI::parseFix,	NULL, FIX_OFFSET( SupplyWarehouseDockUpdateModuleData, m_regenRadius ) },
 		{ "RegenMaxBoxes",		INI::parseInt,	NULL, offsetof( SupplyWarehouseDockUpdateModuleData, m_regenMaxBoxes ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -115,7 +115,7 @@ void SupplyWarehouseDockUpdate::onObjectCreated()
 Int SupplyWarehouseDockUpdate::countNearbyCollectors( void ) const
 {
 	const SupplyWarehouseDockUpdateModuleData *data = getSupplyWarehouseDockUpdateModuleData();
-	if( data->m_regenRadius <= 0.0f || ThePartitionManager == NULL )
+	if( data->m_regenRadius <= Fix( 0 ) || ThePartitionManager == NULL )
 		return 0;
 
 	Object *self = (Object *)getObject();
@@ -125,7 +125,7 @@ Int SupplyWarehouseDockUpdate::countNearbyCollectors( void ) const
 	PartitionFilter *filters[] = { &fAlive, &fMap, NULL };
 
 	SimpleObjectIterator *iter =
-		ThePartitionManager->iterateObjectsInRange( self, data->m_regenRadius, FROM_CENTER_2D, filters );
+		ThePartitionManager->iterateObjectsInRangeFix( self, data->m_regenRadius, FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 
 	Int count = 0;

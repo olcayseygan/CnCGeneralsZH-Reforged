@@ -148,7 +148,7 @@ void MobMemberSlavedUpdate::onObjectCreated()
 {
 
 	const MobMemberSlavedUpdateModuleData* data = getMobMemberSlavedUpdateModuleData();
-	m_squirrellinessRatio = MIN(MAX_SQUIRRELLINESS, MAX(0, data->m_squirrellinessRatio));
+	m_squirrellinessRatio = MIN(MAX_SQUIRRELLINESS, MAX(0, fixToReal( data->m_squirrellinessRatio )));	// P8
 
 }
 
@@ -269,7 +269,7 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 	const Fix distanceToSlot = slotDelta.length();
 
 	const Fix distanceToMaster = fixSqrt( ThePartitionManager->getDistanceSquaredFix( me, master, FROM_CENTER_3D ) );
-	const Fix mustCatchUpRadius = fixFromReal( data->m_mustCatchUpRadius );	// P3
+	const Fix mustCatchUpRadius = Fix( data->m_mustCatchUpRadius );
 	const Bool lostTheMob = distanceToMaster > mustCatchUpRadius;
 
 	/* One body, one speed.  A member further from the nexus than it is allowed to be runs; a member

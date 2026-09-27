@@ -772,7 +772,8 @@ void SpecialAbilityUpdate::startPacking(Bool success)
 {
   const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
   m_packingState = STATE_PACKING;
-  Real variation = GameLogicRandomValueReal( 1.0f - data->m_packUnpackVariationFactor, 1.0f + data->m_packUnpackVariationFactor );
+  const Real variationFactor = fixToReal( data->m_packUnpackVariationFactor );	// P8
+  Real variation = GameLogicRandomValueReal( 1.0f - variationFactor, 1.0f + variationFactor );
   m_animFrames = data->m_packTime * variation;
 
   //Set the animation state
@@ -825,7 +826,8 @@ void SpecialAbilityUpdate::startUnpacking()
 {
   const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
   m_packingState = STATE_UNPACKING;
-  Real variation = GameLogicRandomValueReal( 1.0f - data->m_packUnpackVariationFactor, 1.0f + data->m_packUnpackVariationFactor );
+  const Real variationFactor = fixToReal( data->m_packUnpackVariationFactor );	// P8
+  Real variation = GameLogicRandomValueReal( 1.0f - variationFactor, 1.0f + variationFactor );
   m_animFrames = data->m_unpackTime * variation;
 
   //Set the animation state
@@ -855,9 +857,8 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
 
   //Quickly convert very short range approachs to "contact" class requiring collision before
   //stopping.
-  Real range = data->m_startAbilityRange;
-  const Real UNDERSIZE = PATHFIND_CELL_SIZE_F * 0.25f;
-  range = __max( 0.0f, range - UNDERSIZE );
+  const Fix UNDERSIZE = Fix( PATHFIND_CELL_SIZE ) * 0.25_fx;
+  const Fix range = fixMax( Fix( 0 ), data->m_startAbilityRange - UNDERSIZE );
 
   if( m_withinStartAbilityRange )
   {
@@ -887,10 +888,10 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
   }
 
   //Check to see how far we are from the target!
-  const Fix fStartRange = fixFromReal( data->m_startAbilityRange );	// P3
+  const Fix fStartRange = data->m_startAbilityRange;
   if( fDistSquared <= fStartRange * fStartRange )
   {
-    if( range == 0.0f && m_targetID != INVALID_ID )
+    if( range == Fix( 0 ) && m_targetID != INVALID_ID )
     {
       //We want to ensure we collided with our target first!
       ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( self->getPositionFix(), self->getGeometryInfo(), Fix( 0 ) );
@@ -910,7 +911,7 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
       //Make sure we can see the target!
       PartitionFilterLineOfSight  filterLOS( self );
       PartitionFilter *filters[] = { &filterLOS, NULL };
-      ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( self, fixFromReal( range ), FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR );	// P3
+      ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( self, range, FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR );
       MemoryPoolObjectHolder hold( iter );
       for( Object *theTarget = iter->first(); theTarget; theTarget = iter->next() ) 
       {
@@ -937,9 +938,8 @@ Bool SpecialAbilityUpdate::isWithinAbilityAbortRange() const
 
   //Quickly convert very short range approachs to "contact" class requiring collision before
   //stopping.
-  Real range = data->m_startAbilityRange;
-  const Real UNDERSIZE = PATHFIND_CELL_SIZE_F * 0.25f;
-  range = __max( 0.0f, range - UNDERSIZE );
+  const Fix UNDERSIZE = Fix( PATHFIND_CELL_SIZE ) * 0.25_fx;
+  const Fix range = fixMax( Fix( 0 ), data->m_startAbilityRange - UNDERSIZE );
 
   Fix fDistSquared = Fix( 0 );
   Object *target = NULL;
@@ -963,10 +963,10 @@ Bool SpecialAbilityUpdate::isWithinAbilityAbortRange() const
   }
 
   //Check to see how far we are from the target!
-  const Fix fAbortRange = fixFromReal( data->m_abilityAbortRange );	// P3
+  const Fix fAbortRange = data->m_abilityAbortRange;
   if( fDistSquared <= fAbortRange * fAbortRange )
   {
-    if( range == 0.0f && m_targetID != INVALID_ID )
+    if( range == Fix( 0 ) && m_targetID != INVALID_ID )
     {
       //We want to ensure we collided with our target first!
       ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( self->getPositionFix(), self->getGeometryInfo(), Fix( 0 ) );
@@ -1808,14 +1808,14 @@ void SpecialAbilityUpdate::finishAbility()
   //uses his remote charge special ability. With a target, he will plant the charge then flee. Without
   //a target, he simply detonates it without fleeing.
   Bool validTarget = m_targetPos.x || m_targetPos.y || m_targetPos.z || m_targetID != INVALID_ID;
-  if( data->m_fleeRangeAfterCompletion && validTarget )
+  if( data->m_fleeRangeAfterCompletion != Fix( 0 ) && validTarget )
   {
     FCoord3D pos = *getObject()->getPositionFix();
 
     AIUpdateInterface *ai = getObject()->getAIUpdateInterface();
     if( ai )
     {
-      const Fix fleeRange = fixFromReal( data->m_fleeRangeAfterCompletion );	// P3
+      const Fix fleeRange = data->m_fleeRangeAfterCompletion;
       FCoord3D dir = *getObject()->getUnitDirectionVector2DFix();
 			dir.scale( fleeRange );
 

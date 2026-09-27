@@ -89,8 +89,8 @@ public:
 	DieMuxData m_dieMuxData;
 	Int m_minToppleDelay;
 	Int m_maxToppleDelay;
-	Real m_structuralIntegrity;
-	Real m_structuralDecay;
+	Fix m_structuralIntegrity;
+	Fix m_structuralDecay;
 	DamageTypeFlags m_damageFXTypes;		///< flags used to play or not play the effects
 	FXList *m_toppleStartFXList;
 	FXList *m_toppleDelayFXList;
@@ -112,8 +112,8 @@ public:
 		m_maxToppleDelay = 0;
 		m_minToppleBurstDelay = 0;
 		m_maxToppleBurstDelay = 0;
-		m_structuralIntegrity = 0.1f;
-		m_structuralDecay = 0.0f;
+		m_structuralIntegrity = 0.1_fx;
+		m_structuralDecay = Fix( 0 );
 		m_damageFXTypes = DAMAGE_TYPE_FLAGS_NONE;
 		m_damageFXTypes.flip();
 		m_toppleStartFXList = NULL;

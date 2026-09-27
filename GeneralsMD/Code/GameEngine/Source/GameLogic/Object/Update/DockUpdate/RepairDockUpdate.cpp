@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/RepairDockUpdate.h"
@@ -40,7 +41,7 @@
 RepairDockUpdateModuleData::RepairDockUpdateModuleData( void )
 {
 
-	m_framesForFullHeal = 1.0f;  // 1 frame, instant heal by default (keeps away from divide by 0's)
+	m_framesForFullHeal = Fix( 1 );  // 1 frame, instant heal by default (keeps away from divide by 0's)
 
 }  // end RepairDockUpdateModuleData
 
@@ -53,7 +54,7 @@ RepairDockUpdateModuleData::RepairDockUpdateModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "TimeForFullHeal", INI::parseDurationReal, NULL, offsetof( RepairDockUpdateModuleData, m_framesForFullHeal ) },
+		{ "TimeForFullHeal", INI::parseDurationFix, NULL, FIX_OFFSET( RepairDockUpdateModuleData, m_framesForFullHeal ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -124,7 +125,7 @@ Bool RepairDockUpdate::action( Object *docker, Object *drone )
 		// figure out how much health we need to add each frame to this object so that it's
 		// fully healed at the right time
 		//
-		m_healthToAddPerFrame = (body->getMaxHealth() - body->getHealth()) / modData->m_framesForFullHeal;
+		m_healthToAddPerFrame = (body->getMaxHealth() - body->getHealth()) / fixToReal( modData->m_framesForFullHeal );	// P6
 
 	}  // end if
 

@@ -59,10 +59,10 @@ public:
 	
 	//Example: Below are used by battle drones
 	Int m_repairRange;
-	Real m_repairMinAltitude;
-	Real m_repairMaxAltitude;
+	Fix m_repairMinAltitude;
+	Fix m_repairMaxAltitude;
 
-	Real m_repairRatePerSecond;	//How fast I can repair
+	Fix m_repairRatePerSecond;	//How fast I can repair
 	Int m_repairWhenHealthBelowPercentage; //When should I prioritize repairing my master.
 	Int m_minReadyFrames;
 	Int m_maxReadyFrames;
@@ -82,10 +82,10 @@ public:
 		m_scoutRange = 0;
 		m_scoutWanderRange = 0;
 		m_distToTargetToGrantRangeBonus = 0;
-		m_repairRatePerSecond = 0.0f;
+		m_repairRatePerSecond = Fix( 0 );
 		m_repairWhenHealthBelowPercentage = 0;
-		m_repairMinAltitude = 0.0f;
-		m_repairMaxAltitude = 0.0f;
+		m_repairMinAltitude = Fix( 0 );
+		m_repairMaxAltitude = Fix( 0 );
 		m_minWeldFrames = 0;
 		m_maxWeldFrames = 0;
 		m_minReadyFrames = 0;
@@ -105,10 +105,10 @@ public:
 			{ "ScoutRange",					INI::parseInt,	NULL, offsetof( SlavedUpdateModuleData, m_scoutRange ) },
 			{ "ScoutWanderRange",		INI::parseInt,	NULL, offsetof( SlavedUpdateModuleData, m_scoutWanderRange ) },
 			{ "RepairRange",				INI::parseInt,	NULL, offsetof( SlavedUpdateModuleData, m_repairRange ) },
-			{ "RepairMinAltitude",		  INI::parseReal, NULL, offsetof( SlavedUpdateModuleData, m_repairMinAltitude ) },
-			{ "RepairMaxAltitude",		  INI::parseReal, NULL, offsetof( SlavedUpdateModuleData, m_repairMaxAltitude ) },
+			{ "RepairMinAltitude",		  INI::parseFix, NULL, FIX_OFFSET( SlavedUpdateModuleData, m_repairMinAltitude ) },
+			{ "RepairMaxAltitude",		  INI::parseFix, NULL, FIX_OFFSET( SlavedUpdateModuleData, m_repairMaxAltitude ) },
 			{ "DistToTargetToGrantRangeBonus", INI::parseInt, NULL, offsetof( SlavedUpdateModuleData, m_distToTargetToGrantRangeBonus ) },
-			{ "RepairRatePerSecond", INI::parseReal, NULL, offsetof( SlavedUpdateModuleData, m_repairRatePerSecond ) },
+			{ "RepairRatePerSecond", INI::parseFix, NULL, FIX_OFFSET( SlavedUpdateModuleData, m_repairRatePerSecond ) },
 			{ "RepairWhenBelowHealth%", INI::parseInt, NULL, offsetof( SlavedUpdateModuleData, m_repairWhenHealthBelowPercentage ) },
 			{ "RepairMinReadyTime", INI::parseDurationUnsignedInt, NULL, offsetof( SlavedUpdateModuleData, m_minReadyFrames ) },
 			{ "RepairMaxReadyTime", INI::parseDurationUnsignedInt, NULL, offsetof( SlavedUpdateModuleData, m_maxReadyFrames ) },

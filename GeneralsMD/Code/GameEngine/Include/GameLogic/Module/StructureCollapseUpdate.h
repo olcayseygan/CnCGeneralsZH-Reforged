@@ -66,7 +66,7 @@ public:
 	Int								m_minBurstDelay;
 	Int								m_maxBurstDelay;
 	Int								m_bigBurstFrequency;
-	Real							m_collapseDamping;
+	Fix								m_collapseDamping;
 	Real							m_maxShudder;
 	OCLVec						m_ocls[SC_PHASE_COUNT];
 	FXVec							m_fxs[SC_PHASE_COUNT];
@@ -80,7 +80,7 @@ public:
 		m_minBurstDelay = 9999;
 		m_maxBurstDelay = 9999;
 		m_maxShudder = 0;
-		m_collapseDamping = 0.0;
+		m_collapseDamping = Fix( 0 );
 		m_bigBurstFrequency = 0;
 
 		for (int i = 0; i < SC_PHASE_COUNT; ++i)

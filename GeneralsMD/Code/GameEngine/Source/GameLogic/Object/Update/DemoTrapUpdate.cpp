@@ -44,6 +44,7 @@
 #include "GameLogic\Module\PhysicsUpdate.h"
 #include "GameLogic\Weaponset.h"
 #include "GameLogic\Weapon.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -184,7 +185,8 @@ UpdateSleepTime DemoTrapUpdate::update()
 
 	//Scan for a valid enemy in proximity range.
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me->getPosition(), data->m_triggerDetonationRange, FROM_CENTER_2D );
+	const Fix triggerRange = fixFromReal( data->m_triggerDetonationRange );	// P3: INI data
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), triggerRange, FROM_CENTER_2D );
 	MemoryPoolObjectHolder hold(iter);
 
 	Bool shallDetonate = false;
@@ -235,8 +237,8 @@ UpdateSleepTime DemoTrapUpdate::update()
 		}
 
 		//Anyone close enough?
-		Real fDist = ThePartitionManager->getDistanceSquared( me, other, FROM_CENTER_2D );
-		if( fDist <= data->m_triggerDetonationRange * data->m_triggerDetonationRange )
+		Fix distSqr = ThePartitionManager->getDistanceSquaredFix( me, other, FROM_CENTER_2D );
+		if( distSqr <= triggerRange * triggerRange )
 		{
 			//Yeehaw!
 			shallDetonate = true;
@@ -268,7 +270,10 @@ void DemoTrapUpdate::detonate()
 
 	// Only shoot the weapon if not being built or sold.
 	if( !me->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) && !me->testStatus(OBJECT_STATUS_SOLD) )
-		TheWeaponStore->createAndFireTempWeapon( data->m_detonationWeaponTemplate, me, me->getPosition() );
+	{
+		Coord3D pos = me->getPositionFix()->toCoord3D();	// P6: weapons take a float position
+		TheWeaponStore->createAndFireTempWeapon( data->m_detonationWeaponTemplate, me, &pos );
+	}
 
 	me->kill();
 	m_detonated = true;

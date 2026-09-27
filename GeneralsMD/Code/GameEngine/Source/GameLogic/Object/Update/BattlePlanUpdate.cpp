@@ -60,6 +60,7 @@
 #include "GameLogic/Module/ActiveBody.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/StealthDetectorUpdate.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -463,10 +464,10 @@ void BattlePlanUpdate::createVisionObject()
 		m_visionObjectID = visionObject->getID();
 
 		// set position
-		visionObject->setPosition( obj->getPosition() );
+		visionObject->setPositionFix( obj->getPositionFix() );
 
-		// set the shroud clearing range
-		visionObject->setShroudClearingRange( obj->getGeometryInfo().getBoundingSphereRadius() );
+		// set the shroud clearing range; shroud ranges are still Real
+		visionObject->setShroudClearingRange( fixToReal( obj->getGeometryInfo().getBoundingSphereRadiusFix() ) );
 
 	}  // end if
 
@@ -559,9 +560,12 @@ void BattlePlanUpdate::setStatus( TransitionStatus newStatus )
 		case TRANSITIONSTATUS_UNPACKING:
 		{
 
+			// the radar blip and the announcements are client, in float
+			const Coord3D pos = obj->getPositionFix()->toCoord3D();
+
 			// play a radar blip showing the battle plan change in the color of the
 			TheRadar->createPlayerEvent( obj->getControllingPlayer(),
-																	 obj->getPosition(),
+																	 &pos,
 																	 RADAR_EVENT_BATTLE_PLAN );
 
 			//this is now handled with ShroudRevealToAllRange in thingTemplate
@@ -583,7 +587,7 @@ void BattlePlanUpdate::setStatus( TransitionStatus newStatus )
 					TheInGameUI->message( TheGameText->fetch( data->m_bombardmentMessageLabel ) );
 					if( m_bombardmentAnnouncement.getEventName().isEmpty() == FALSE )
 					{
-						m_bombardmentAnnouncement.setPosition( obj->getPosition() );
+						m_bombardmentAnnouncement.setPosition( &pos );
 						TheAudio->addAudioEvent( &m_bombardmentAnnouncement );
 					}
 					break;
@@ -602,7 +606,7 @@ void BattlePlanUpdate::setStatus( TransitionStatus newStatus )
 					TheInGameUI->message( TheGameText->fetch( data->m_holdTheLineMessageLabel ) );
 					if( m_holdTheLineAnnouncement.getEventName().isEmpty() == FALSE )
 					{
-						m_holdTheLineAnnouncement.setPosition( obj->getPosition() );
+						m_holdTheLineAnnouncement.setPosition( &pos );
 						TheAudio->addAudioEvent( &m_holdTheLineAnnouncement );
 					}
 					break;
@@ -621,7 +625,7 @@ void BattlePlanUpdate::setStatus( TransitionStatus newStatus )
 					TheInGameUI->message( TheGameText->fetch( data->m_searchAndDestroyMessageLabel ) );
 					if( m_searchAndDestroyAnnouncement.getEventName().isEmpty() == FALSE )
 					{
-						m_searchAndDestroyAnnouncement.setPosition( obj->getPosition() );
+						m_searchAndDestroyAnnouncement.setPosition( &pos );
 						TheAudio->addAudioEvent( &m_searchAndDestroyAnnouncement );
 					}
 					break;

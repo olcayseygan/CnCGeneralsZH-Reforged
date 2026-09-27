@@ -48,6 +48,7 @@
 #include "GameLogic\Weapon.h"
 #include "GameLogic\WeaponSet.h"
 #include "GameLogic\Module\AIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 
 //-------------------------------------------------------------------------------------------------
@@ -153,9 +154,10 @@ Object* AutoFindHealingUpdate::scanClosestTarget()
 	const AutoFindHealingUpdateModuleData *data = getAutoFindHealingUpdateModuleData();
 	Object *me = getObject();
 	Object *bestTarget = NULL;
-	Real closestDistSqr=0;
+	Fix closestDistSqr = Fix( 0 );
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me->getPosition(), data->m_scanRange, FROM_CENTER_2D );
+	// P3: ScanRange is still a Real from the INI
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), fixFromReal( data->m_scanRange ), FROM_CENTER_2D );
 	MemoryPoolObjectHolder hold(iter);
 
 	for( Object *other = iter->first(); other; other = iter->next() )
@@ -166,7 +168,7 @@ Object* AutoFindHealingUpdate::scanClosestTarget()
 			continue;
 		}
 
-		Real fDistSqr =  ThePartitionManager->getDistanceSquared( me, other, FROM_CENTER_2D ) ;
+		Fix fDistSqr = ThePartitionManager->getDistanceSquaredFix( me, other, FROM_CENTER_2D );
 		if (bestTarget==NULL) {
 			bestTarget = other;
 			closestDistSqr = fDistSqr;

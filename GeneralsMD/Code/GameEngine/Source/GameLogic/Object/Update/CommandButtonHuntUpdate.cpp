@@ -51,6 +51,7 @@
 #include "GameLogic/Module\SpecialAbilityUpdate.h"
 #include "GameLogic/Module\SpecialPowerModule.h"
 #include "GameLogic/ScriptEngine.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -301,7 +302,8 @@ Object* CommandButtonHuntUpdate::scanClosestTarget(void)
 			isPlaceExplosive = true;
 	}
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( me->getPosition(), data->m_scanRange, 
+	const Fix scanRange = fixFromReal( data->m_scanRange );	// P3: INI data
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), scanRange,
 		FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
 	MemoryPoolObjectHolder hold(iter);
 
@@ -333,23 +335,24 @@ Object* CommandButtonHuntUpdate::scanClosestTarget(void)
 			if( TheActionManager->canDoSpecialPowerAtObject( me, other, CMD_FROM_AI, spTemplate, 0 ) )
 			{
 				if (isPlaceExplosive) {
-					Real range = spTemplate->getViewObjectRange();
+					Fix range = fixFromReal( spTemplate->getViewObjectRange() );	// P3: template data
 					// Don't target things near explosives... It's just not a good idea.
 					PartitionFilterSamePlayer filterPlayer( me->getControllingPlayer() );	// Look for our own mines.
 					PartitionFilterAcceptByKindOf filterKind(MAKE_KINDOF_MASK(KINDOF_MINE), KINDOFMASK_NONE);
 					PartitionFilter *filters[] = { &filterKind, &filterPlayer, NULL };
-					Object *mine = ThePartitionManager->getClosestObject( other, range, FROM_BOUNDINGSPHERE_2D, filters );// could be null. this is ok.
+					Object *mine = ThePartitionManager->getClosestObjectFix( other, range, FROM_BOUNDINGSPHERE_2D, filters );// could be null. this is ok.
 					if (mine) {
 						continue;
 					}
 				}
-				Real distSqr = ThePartitionManager->getDistanceSquared(me, other, FROM_BOUNDINGSPHERE_2D);
-				Real dist = sqrt(distSqr);
-				Int curPriority = data->m_scanRange - dist;
+				Fix dist = fixSqrt( ThePartitionManager->getDistanceSquaredFix(me, other, FROM_BOUNDINGSPHERE_2D) );
+				// both only ever positive, so the floor is the truncation the float had
+				Int curPriority = (Int)( (scanRange - dist).raw() >> Fix::FRAC_BITS );
 				if (info) curPriority = info->getPriority(other->getTemplate());
-				if (curPriority == 0) 
+				if (curPriority == 0)
 					continue; // don't attack 0 priority targets.
-				Int modifier = dist/TheAI->getAiData()->m_attackPriorityDistanceModifier;
+				// P7: the AI's distance modifier is still a Real
+				Int modifier = (Int)( (dist / fixFromReal( TheAI->getAiData()->m_attackPriorityDistanceModifier )).raw() >> Fix::FRAC_BITS );
 				Int modPriority = curPriority-modifier;
 				if (modPriority < 1) 
 					modPriority = 1;

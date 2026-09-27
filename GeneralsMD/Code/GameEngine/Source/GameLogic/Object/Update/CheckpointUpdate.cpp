@@ -38,6 +38,7 @@
 #include "GameClient/Drawable.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 
@@ -49,7 +50,7 @@ m_enemyNear(false),
 m_enemyScanDelay(0),
 m_maxMinorRadius(0)
 {
-	m_maxMinorRadius = getObject()->getGeometryInfo().getMinorRadius();
+	m_maxMinorRadius = getObject()->getGeometryInfo().getMinorRadiusFix();
 
 	// bias a random amount so everyone doesn't spike at once
 	m_enemyScanDelay += GameLogicRandomValue(0, getCheckpointUpdateModuleData()->m_enemyScanDelayTime);
@@ -77,8 +78,8 @@ void CheckpointUpdate::checkForAlliesAndEnemies( void )
 		//to finding one will oscillate states open->closed->open...
 		Object *obj = getObject();
 		GeometryInfo geom = obj->getGeometryInfo();
-		Real restoreSpecialRadius = geom.getMinorRadius();
-		geom.setMinorRadius( m_maxMinorRadius );
+		Fix restoreSpecialRadius = geom.getMinorRadiusFix();
+		geom.setMinorRadiusFix( m_maxMinorRadius );
 		obj->setGeometryInfo( geom );
 
 		Object *enemy, *ally = NULL;
@@ -91,7 +92,7 @@ void CheckpointUpdate::checkForAlliesAndEnemies( void )
 		m_allyNear = (ally != NULL);
 
 		// here we restore the radius so that other units can path past the open gate
-		geom.setMinorRadius( restoreSpecialRadius );
+		geom.setMinorRadiusFix( restoreSpecialRadius );
 		obj->setGeometryInfo( geom );
 
 	}
@@ -150,15 +151,15 @@ UpdateSleepTime CheckpointUpdate::update()
 	//	geom.setMinorRadius( m_maxMinorRadius * animScrubScalar );
 
 		// THis method is more accidental than above, but it works for an unimportant thing like checkpoint
-		Real radius = geom.getMinorRadius();
-		
+		Fix radius = geom.getMinorRadiusFix();
+
 		if ( open )
 		{
-			if ( radius > 0 ) geom.setMinorRadius( radius - 0.333f );
+			if ( radius > Fix( 0 ) ) geom.setMinorRadiusFix( radius - 0.333_fx );
 		}
 		else //closed
 		{
-			if ( radius < m_maxMinorRadius ) geom.setMinorRadius( radius + 0.333f );
+			if ( radius < m_maxMinorRadius ) geom.setMinorRadiusFix( radius + 0.333_fx );
 		}
 		
 
@@ -184,13 +185,14 @@ void CheckpointUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: the max minor radius in fixed point */
 // ------------------------------------------------------------------------------------------------
 void CheckpointUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -204,7 +206,14 @@ void CheckpointUpdate::xfer( Xfer *xfer )
 	xfer->xferBool( &m_allyNear );
 
 	// max minor radius
-	xfer->xferReal( &m_maxMinorRadius );
+	if( version >= 2 )
+		xfer->xferFix( &m_maxMinorRadius );
+	else
+	{
+		Real old;
+		xfer->xferReal( &old );
+		m_maxMinorRadius = fixFromReal( old );
+	}
 
 	// enemy scan delay
 	xfer->xferUnsignedInt( &m_enemyScanDelay );

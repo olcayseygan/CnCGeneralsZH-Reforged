@@ -45,6 +45,17 @@
 #include "GameLogic\Weapon.h"
 #include "GameLogic\WeaponSet.h"
 #include "GameLogic\Module\AIUpdate.h"
+#include "Lib/FixBoundary.h"
+
+//-------------------------------------------------------------------------------------------------
+// the cleanup area and its range arrive from an AI command and go back to aiMoveToPosition, so they
+// stay float (P4/P7) and only the range queries run fixed.  ScanRange is INI data (P3).
+static FCoord3D cleanupPosFix( const Coord3D &pos )
+{
+	FCoord3D f;
+	f.set( fixFromReal( pos.x ), fixFromReal( pos.y ), fixFromReal( pos.z ) );
+	return f;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -177,8 +188,8 @@ UpdateSleepTime CleanupHazardUpdate::update()
 		AIUpdateInterface *ai = obj->getAI();
 		if( ai && (ai->isIdle() || ai->isBusy()) )
 		{
-			Real fDist = sqrt( ThePartitionManager->getDistanceSquared( obj, &m_pos, FROM_CENTER_2D ) );
-			if( fDist < 25.0f )
+			FCoord3D pos = cleanupPosFix( m_pos );
+			if( ThePartitionManager->getDistanceSquaredFix( obj, &pos, FROM_CENTER_2D ) < Fix( 25 * 25 ) )
 			{
 				//Abort clean area because there's nothing left to clean!
 				m_moveRange = 0.0f;
@@ -207,10 +218,9 @@ void CleanupHazardUpdate::fireWhenReady()
 	{
 		WeaponBonus bonus;
 		bonus.clear();
-		Real fireRange = m_weaponTemplate->getAttackRange( bonus );
+		Fix fireRange = fixFromReal( m_weaponTemplate->getAttackRange( bonus ) );	// P6: weapon range
 		Object *me = getObject();
-		Real fDist = sqrt( ThePartitionManager->getDistanceSquared( me, target, FROM_CENTER_2D ) );
-		if( fDist < fireRange )
+		if( ThePartitionManager->getDistanceSquaredFix( me, target, FROM_CENTER_2D ) < fireRange * fireRange )
 		{
 			//We are currently in range!
 			m_inRange = true;
@@ -278,12 +288,13 @@ Object* CleanupHazardUpdate::scanClosestTarget()
 	{
 		//Look for targets around the target position only (but add scan range and move range).
 		//This case only happens when we are performing a cleanup area command.
-		bestTargetInRange = ThePartitionManager->getClosestObject( &m_pos, data->m_scanRange + m_moveRange, FROM_CENTER_2D, filters );
+		FCoord3D pos = cleanupPosFix( m_pos );
+		bestTargetInRange = ThePartitionManager->getClosestObjectFix( &pos, fixFromReal( data->m_scanRange ) + fixFromReal( m_moveRange ), FROM_CENTER_2D, filters );
 	}
 	else
 	{
 		//Look for targets near me -- passive default.
-		bestTargetInRange = ThePartitionManager->getClosestObject( me->getPosition(), data->m_scanRange, FROM_CENTER_2D, filters );
+		bestTargetInRange = ThePartitionManager->getClosestObjectFix( me->getPositionFix(), fixFromReal( data->m_scanRange ), FROM_CENTER_2D, filters );
 	}
 
 	if( bestTargetInRange ) 

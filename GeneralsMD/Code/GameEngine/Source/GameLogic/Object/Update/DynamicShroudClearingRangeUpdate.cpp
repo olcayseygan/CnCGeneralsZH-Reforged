@@ -160,7 +160,8 @@ void DynamicShroudClearingRangeUpdate::createGridDecals( const RadiusDecalTempla
 void DynamicShroudClearingRangeUpdate::animateGridDecals( void )
 {
 
-	const Coord3D *ctr = getObject()->getPosition();
+	// the decals are client visuals, drawn in float
+	const Coord3D ctr = getObject()->getPositionFix()->toCoord3D();
 	Coord3D pos;
 	pos.z = 0;
 
@@ -171,8 +172,8 @@ void DynamicShroudClearingRangeUpdate::animateGridDecals( void )
 
 	for (int d = 0; d < GRID_FX_DECAL_COUNT; ++d)
 	{
-		pos.x = ctr->x + (Sin(angle) * radius);
-		pos.y = ctr->y + (Cos(angle) * radius);
+		pos.x = ctr.x + (Sin(angle) * radius);
+		pos.y = ctr.y + (Cos(angle) * radius);
 
 		pos.x -= ((Int)pos.x)%23;
 		pos.y -= ((Int)pos.y)%23;
@@ -214,7 +215,7 @@ UpdateSleepTime DynamicShroudClearingRangeUpdate::update( void )
 
 	if ( ! m_decalsCreated )
 	{
-		createGridDecals(md->m_gridDecalTemplate, 100, *(me->getPosition()));
+		createGridDecals(md->m_gridDecalTemplate, 100, me->getPositionFix()->toCoord3D());
 		m_decalsCreated = TRUE;
 	}
 	//-----------------------------------------------------

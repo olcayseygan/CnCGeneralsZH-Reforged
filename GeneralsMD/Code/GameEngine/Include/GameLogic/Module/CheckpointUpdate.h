@@ -82,7 +82,7 @@ public:
 protected:
 	Bool m_enemyNear;
 	Bool m_allyNear;
-	Real m_maxMinorRadius;
+	Fix m_maxMinorRadius;
 
 	UnsignedInt m_enemyScanDelay;
 	void checkForAlliesAndEnemies( void );

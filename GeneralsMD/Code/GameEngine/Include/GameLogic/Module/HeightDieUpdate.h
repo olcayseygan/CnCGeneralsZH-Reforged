@@ -75,7 +75,7 @@ protected:
 
 	Bool m_hasDied;							///< TRUE once we have triggered death
 	Bool m_particlesDestroyed;	///< TRUE once we destroy attached systems (so we do it only once)
-	Coord3D m_lastPosition;			///< we record our last position for logic that needs to know our direction of travel
+	FCoord3D m_lastPosition;		///< we record our last position for logic that needs to know our direction of travel
 	UnsignedInt m_earliestDeathFrame; ///< Earliest we are allowed to think about dying
 
 };

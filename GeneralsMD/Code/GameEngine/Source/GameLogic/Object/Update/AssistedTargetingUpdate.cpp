@@ -145,7 +145,7 @@ void AssistedTargetingUpdate::makeFeedbackLaser( const ThingTemplate *laserTempl
 		return;
 
 	// Give it a good basis in reality to ensure it can draw when on screen.
-	laser->setPosition(from->getPosition());
+	laser->setPositionFix(from->getPositionFix());
 	
 	Drawable *draw = laser->getDrawable();
 	static const NameKeyType key_LaserUpdate = NAMEKEY( "LaserUpdate" );
@@ -156,7 +156,10 @@ void AssistedTargetingUpdate::makeFeedbackLaser( const ThingTemplate *laserTempl
 		return;
 	}
 
-	update->initLaser( getObject(), to, from->getPosition(), to->getPosition(), "" );
+	// the laser is a client update; it draws in float
+	Coord3D fromPos = from->getPositionFix()->toCoord3D();
+	Coord3D toPos = to->getPositionFix()->toCoord3D();
+	update->initLaser( getObject(), to, &fromPos, &toPos, "" );
 }
 
 //-------------------------------------------------------------------------------------------------

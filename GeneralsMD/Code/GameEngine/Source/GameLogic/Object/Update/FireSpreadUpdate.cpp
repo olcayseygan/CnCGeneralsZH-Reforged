@@ -38,6 +38,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/FireSpreadUpdate.h"
 #include "GameLogic/Module/FlammableUpdate.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -144,7 +145,8 @@ UpdateSleepTime FireSpreadUpdate::update( void )
 // just ask for that; the above has to find ALL objects in range, but we ignore all 
 // but the first (closest).
 //
-			Object* objectToLight = ThePartitionManager->getClosestObject(getObject(), d->m_spreadTryRange, FROM_CENTER_3D, filters);
+			// P3: SpreadTryRange is still a Real from the INI
+			Object* objectToLight = ThePartitionManager->getClosestObjectFix(getObject(), fixFromReal(d->m_spreadTryRange), FROM_CENTER_3D, filters);
 			if( objectToLight )
 			{
 				static NameKeyType key_FlammableUpdate = NAMEKEY("FlammableUpdate");

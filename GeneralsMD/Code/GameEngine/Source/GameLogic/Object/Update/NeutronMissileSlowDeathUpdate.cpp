@@ -59,14 +59,14 @@ NeutronMissileSlowDeathBehaviorModuleData::NeutronMissileSlowDeathBehaviorModule
 	{
 
 		m_blastInfo[ i ].enabled = FALSE;
-		m_blastInfo[ i ].delay = 0.0f;
-		m_blastInfo[ i ].scorchDelay = 0.0f;
-		m_blastInfo[ i ].innerRadius = 0.0f;
-		m_blastInfo[ i ].outerRadius = 0.0f;
-		m_blastInfo[ i ].maxDamage = 0.0f;
-		m_blastInfo[ i ].minDamage = 0.0f;
-		m_blastInfo[ i ].toppleSpeed = 0.0f;
-		m_blastInfo[ i ].pushForceMag = 0.0f;
+		m_blastInfo[ i ].delay = Fix( 0 );
+		m_blastInfo[ i ].scorchDelay = Fix( 0 );
+		m_blastInfo[ i ].innerRadius = Fix( 0 );
+		m_blastInfo[ i ].outerRadius = Fix( 0 );
+		m_blastInfo[ i ].maxDamage = Fix( 0 );
+		m_blastInfo[ i ].minDamage = Fix( 0 );
+		m_blastInfo[ i ].toppleSpeed = Fix( 0 );
+		m_blastInfo[ i ].pushForceMag = Fix( 0 );
 
 	}  // end for i
 	m_scorchSize = 0.0f;
@@ -83,98 +83,98 @@ NeutronMissileSlowDeathBehaviorModuleData::NeutronMissileSlowDeathBehaviorModule
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "ScorchMarkSize", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_scorchSize ) },	
+		{ "ScorchMarkSize", INI::parseReal, NULL, REAL_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_scorchSize ) },	
 		{ "FXList",					INI::parseFXList, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_fxList ) },
 
 		{ "Blast1Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].enabled ) },	
-		{ "Blast1Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].delay ) },	
-		{ "Blast1ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].scorchDelay ) },	
-		{ "Blast1InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].innerRadius ) },	
-		{ "Blast1OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].outerRadius ) },	
-		{ "Blast1MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].maxDamage ) },	
-		{ "Blast1MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].minDamage ) },	
-		{ "Blast1ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].toppleSpeed ) },
-		{ "Blast1PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].pushForceMag ) },
+		{ "Blast1Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].delay ) },	
+		{ "Blast1ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].scorchDelay ) },	
+		{ "Blast1InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].innerRadius ) },	
+		{ "Blast1OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].outerRadius ) },	
+		{ "Blast1MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].maxDamage ) },	
+		{ "Blast1MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].minDamage ) },	
+		{ "Blast1ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].toppleSpeed ) },
+		{ "Blast1PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_1 ].pushForceMag ) },
 
 		{ "Blast2Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].enabled ) },	
-		{ "Blast2Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].delay ) },	
-		{ "Blast2ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].scorchDelay ) },	
-		{ "Blast2InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].innerRadius ) },	
-		{ "Blast2OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].outerRadius ) },	
-		{ "Blast2MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].maxDamage ) },	
-		{ "Blast2MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].minDamage ) },	
-		{ "Blast2ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].toppleSpeed ) },
-		{ "Blast2PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].pushForceMag ) },
+		{ "Blast2Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].delay ) },	
+		{ "Blast2ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].scorchDelay ) },	
+		{ "Blast2InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].innerRadius ) },	
+		{ "Blast2OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].outerRadius ) },	
+		{ "Blast2MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].maxDamage ) },	
+		{ "Blast2MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].minDamage ) },	
+		{ "Blast2ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].toppleSpeed ) },
+		{ "Blast2PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_2 ].pushForceMag ) },
 
 		{ "Blast3Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].enabled ) },	
-		{ "Blast3Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].delay ) },	
-		{ "Blast3ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].scorchDelay ) },	
-		{ "Blast3InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].innerRadius ) },	
-		{ "Blast3OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].outerRadius ) },	
-		{ "Blast3MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].maxDamage ) },	
-		{ "Blast3MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].minDamage ) },	
-		{ "Blast3ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].toppleSpeed ) },
-		{ "Blast3PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].pushForceMag ) },
+		{ "Blast3Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].delay ) },	
+		{ "Blast3ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].scorchDelay ) },	
+		{ "Blast3InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].innerRadius ) },	
+		{ "Blast3OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].outerRadius ) },	
+		{ "Blast3MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].maxDamage ) },	
+		{ "Blast3MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].minDamage ) },	
+		{ "Blast3ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].toppleSpeed ) },
+		{ "Blast3PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_3 ].pushForceMag ) },
 
 		{ "Blast4Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].enabled ) },	
-		{ "Blast4Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].delay ) },	
-		{ "Blast4ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].scorchDelay ) },	
-		{ "Blast4InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].innerRadius ) },	
-		{ "Blast4OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].outerRadius ) },	
-		{ "Blast4MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].maxDamage ) },	
-		{ "Blast4MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].minDamage ) },	
-		{ "Blast4ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].toppleSpeed ) },
-		{ "Blast4PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].pushForceMag ) },
+		{ "Blast4Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].delay ) },	
+		{ "Blast4ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].scorchDelay ) },	
+		{ "Blast4InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].innerRadius ) },	
+		{ "Blast4OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].outerRadius ) },	
+		{ "Blast4MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].maxDamage ) },	
+		{ "Blast4MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].minDamage ) },	
+		{ "Blast4ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].toppleSpeed ) },
+		{ "Blast4PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_4 ].pushForceMag ) },
 
 		{ "Blast5Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].enabled ) },	
-		{ "Blast5Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].delay ) },	
-		{ "Blast5ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].scorchDelay ) },	
-		{ "Blast5InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].innerRadius ) },	
-		{ "Blast5OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].outerRadius ) },	
-		{ "Blast5MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].maxDamage ) },	
-		{ "Blast5MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].minDamage ) },	
-		{ "Blast5ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].toppleSpeed ) },
-		{ "Blast5PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].pushForceMag ) },
+		{ "Blast5Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].delay ) },	
+		{ "Blast5ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].scorchDelay ) },	
+		{ "Blast5InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].innerRadius ) },	
+		{ "Blast5OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].outerRadius ) },	
+		{ "Blast5MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].maxDamage ) },	
+		{ "Blast5MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].minDamage ) },	
+		{ "Blast5ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].toppleSpeed ) },
+		{ "Blast5PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_5 ].pushForceMag ) },
 
 		{ "Blast6Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].enabled ) },	
-		{ "Blast6Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].delay ) },	
-		{ "Blast6ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].scorchDelay ) },			
-		{ "Blast6InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].innerRadius ) },	
-		{ "Blast6OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].outerRadius ) },	
-		{ "Blast6MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].maxDamage ) },	
-		{ "Blast6MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].minDamage ) },	
-		{ "Blast6ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].toppleSpeed ) },
-		{ "Blast6PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].pushForceMag ) },
+		{ "Blast6Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].delay ) },	
+		{ "Blast6ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].scorchDelay ) },			
+		{ "Blast6InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].innerRadius ) },	
+		{ "Blast6OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].outerRadius ) },	
+		{ "Blast6MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].maxDamage ) },	
+		{ "Blast6MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].minDamage ) },	
+		{ "Blast6ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].toppleSpeed ) },
+		{ "Blast6PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_6 ].pushForceMag ) },
 
 		{ "Blast7Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].enabled ) },	
-		{ "Blast7Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].delay ) },	
-		{ "Blast7ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].scorchDelay ) },			
-		{ "Blast7InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].innerRadius ) },	
-		{ "Blast7OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].outerRadius ) },	
-		{ "Blast7MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].maxDamage ) },	
-		{ "Blast7MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].minDamage ) },	
-		{ "Blast7ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].toppleSpeed ) },
-		{ "Blast7PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].pushForceMag ) },
+		{ "Blast7Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].delay ) },	
+		{ "Blast7ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].scorchDelay ) },			
+		{ "Blast7InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].innerRadius ) },	
+		{ "Blast7OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].outerRadius ) },	
+		{ "Blast7MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].maxDamage ) },	
+		{ "Blast7MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].minDamage ) },	
+		{ "Blast7ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].toppleSpeed ) },
+		{ "Blast7PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_7 ].pushForceMag ) },
 
 		{ "Blast8Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].enabled ) },	
-		{ "Blast8Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].delay ) },	
-		{ "Blast8ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].scorchDelay ) },			
-		{ "Blast8InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].innerRadius ) },	
-		{ "Blast8OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].outerRadius ) },	
-		{ "Blast8MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].maxDamage ) },	
-		{ "Blast8MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].minDamage ) },	
-		{ "Blast8ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].toppleSpeed ) },
-		{ "Blast8PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].pushForceMag ) },
+		{ "Blast8Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].delay ) },	
+		{ "Blast8ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].scorchDelay ) },			
+		{ "Blast8InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].innerRadius ) },	
+		{ "Blast8OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].outerRadius ) },	
+		{ "Blast8MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].maxDamage ) },	
+		{ "Blast8MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].minDamage ) },	
+		{ "Blast8ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].toppleSpeed ) },
+		{ "Blast8PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_8 ].pushForceMag ) },
 
 		{ "Blast9Enabled", INI::parseBool, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].enabled ) },	
-		{ "Blast9Delay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].delay ) },	
-		{ "Blast9ScorchDelay", INI::parseDurationReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].scorchDelay ) },			
-		{ "Blast9InnerRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].innerRadius ) },	
-		{ "Blast9OuterRadius", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].outerRadius ) },	
-		{ "Blast9MaxDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].maxDamage ) },	
-		{ "Blast9MinDamage", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].minDamage ) },	
-		{ "Blast9ToppleSpeed", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].toppleSpeed ) },
-		{ "Blast9PushForce", INI::parseReal, NULL, offsetof( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].pushForceMag ) },
+		{ "Blast9Delay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].delay ) },	
+		{ "Blast9ScorchDelay", INI::parseDurationFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].scorchDelay ) },			
+		{ "Blast9InnerRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].innerRadius ) },	
+		{ "Blast9OuterRadius", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].outerRadius ) },	
+		{ "Blast9MaxDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].maxDamage ) },	
+		{ "Blast9MinDamage", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].minDamage ) },	
+		{ "Blast9ToppleSpeed", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].toppleSpeed ) },
+		{ "Blast9PushForce", INI::parseFix, NULL, FIX_OFFSET( NeutronMissileSlowDeathBehaviorModuleData, m_blastInfo[ NEUTRON_BLAST_9 ].pushForceMag ) },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -255,7 +255,7 @@ UpdateSleepTime NeutronMissileSlowDeathBehavior::update( void )
 
 		// has the time of this blast come
 		if( m_completedBlasts[ i ] == FALSE &&
-				(currFrame - m_activationFrame > modData->m_blastInfo[ i ].delay) ) 
+				(Fix( (Int)(currFrame - m_activationFrame) ) > modData->m_blastInfo[ i ].delay) )
 		{
 
 			// do the blast
@@ -268,7 +268,7 @@ UpdateSleepTime NeutronMissileSlowDeathBehavior::update( void )
 
 		// has the time for a scorch blast come
 		if( m_completedScorchBlasts[ i ] == FALSE &&
-		    (currFrame - m_activationFrame > modData->m_blastInfo[ i ].scorchDelay) )
+		    (Fix( (Int)(currFrame - m_activationFrame) ) > modData->m_blastInfo[ i ].scorchDelay) )
 		{
 
 			// do the scorch blast
@@ -307,13 +307,13 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 	damageInfo.in.m_damageType = DAMAGE_EXPLOSION;
 	damageInfo.in.m_deathType = DEATH_EXPLODED;
 	damageInfo.in.m_sourceID = missile->getID();
-	damageInfo.in.m_amount = blastInfo->minDamage;
+	damageInfo.in.m_amount = fixToReal( blastInfo->minDamage );	// P6
 
 	// scan objects around us and do damage to objects we have "passed over" and are behind us
-	if( blastInfo->outerRadius )
+	if( blastInfo->outerRadius != Fix( 0 ) )
 	{
 		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( missilePos,
-																																			 fixFromReal( blastInfo->outerRadius ),	// P3
+																																			 blastInfo->outerRadius,
 																																			 FROM_BOUNDINGSPHERE_3D,
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );
@@ -321,7 +321,7 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 		const FCoord3D *otherPos;
 		FCoord3D forceVector;
 		FCoord3D edgeToMissile;
-		Real dist;
+		Fix dist;
 		for( other = iter->first(); other; other = iter->next() )
 		{
 
@@ -341,7 +341,7 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 
 			// try to topple other object
 			const Coord3D toppleVector = forceVector.toCoord3D();	// P8: topple is still float
-			other->topple( &toppleVector, blastInfo->toppleSpeed, TOPPLE_OPTIONS_NO_BOUNCE |
+			other->topple( &toppleVector, fixToReal( blastInfo->toppleSpeed ), TOPPLE_OPTIONS_NO_BOUNCE |	// P8
 																													 TOPPLE_OPTIONS_NO_FX );
 
 			//
@@ -350,17 +350,13 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo )
 			// we do a percentage based on how far away from the inner radius it is, but we
 			// will always do at least blastInfo->minDamage amount of damage
 			//
-			dist = fixToReal( forceVector.length() );	// P6: the damage falloff is float
+			dist = forceVector.length();
 			if( dist <= blastInfo->innerRadius )
-				damageInfo.in.m_amount = blastInfo->maxDamage;
+				damageInfo.in.m_amount = fixToReal( blastInfo->maxDamage );	// P6
 			else
 			{
-				Real percent;
-
-				percent = 1.0f - ((dist - blastInfo->innerRadius) / (blastInfo->outerRadius - blastInfo->innerRadius + 0.01f));
-				damageInfo.in.m_amount = blastInfo->maxDamage * percent;
-				if( damageInfo.in.m_amount < blastInfo->minDamage )
-					damageInfo.in.m_amount = blastInfo->minDamage;
+				Fix percent = Fix( 1 ) - ((dist - blastInfo->innerRadius) / (blastInfo->outerRadius - blastInfo->innerRadius + 0.01_fx));
+				damageInfo.in.m_amount = fixToReal( fixMax( blastInfo->maxDamage * percent, blastInfo->minDamage ) );	// P6
 
 			}  // end else
 					
@@ -431,10 +427,10 @@ void NeutronMissileSlowDeathBehavior::doScorchBlast( const BlastInfo *blastInfo 
 	const FCoord3D *missilePos = missile->getPositionFix();
 
 	// scan objects around us and do damage to objects we have "passed over" and are behind us
-	if( blastInfo->outerRadius )
+	if( blastInfo->outerRadius != Fix( 0 ) )
 	{
 		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( missilePos,
-																																			 fixFromReal( blastInfo->outerRadius ),	// P3
+																																			 blastInfo->outerRadius,
 																																			 FROM_CENTER_2D, 
 																																			 NULL );
 		MemoryPoolObjectHolder hold( iter );

@@ -50,8 +50,8 @@ public:
 	KindOfMaskType	m_primaryTargetKindOf;
 	KindOfMaskType  m_secondaryTargetKindOf;
 	UnsignedInt			m_scanFrames;
-	Real						m_scanRange;
-	Real						m_velocityFactor;
+	Fix							m_scanRange;
+	Fix							m_velocityFactor;
 
 	PointDefenseLaserUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

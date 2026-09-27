@@ -47,8 +47,8 @@ class PilotFindVehicleUpdateModuleData : public ModuleData
 {
 public:
 	UnsignedInt			m_scanFrames;
-	Real						m_scanRange;
-	Real						m_minHealth;
+	Fix							m_scanRange;
+	Fix							m_minHealth;
 
 	PilotFindVehicleUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

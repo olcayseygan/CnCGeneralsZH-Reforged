@@ -56,8 +56,8 @@
 PilotFindVehicleUpdateModuleData::PilotFindVehicleUpdateModuleData()
 {
 	m_scanFrames				= 0;
-	m_scanRange					= 0.0f;
-	m_minHealth					= 0.5f;
+	m_scanRange					= Fix( 0 );
+	m_minHealth					= 0.5_fx;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -68,8 +68,8 @@ PilotFindVehicleUpdateModuleData::PilotFindVehicleUpdateModuleData()
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( PilotFindVehicleUpdateModuleData, m_scanFrames ) },
-		{ "ScanRange",						INI::parseReal,									NULL, offsetof( PilotFindVehicleUpdateModuleData, m_scanRange ) },
-		{ "MinHealth",						INI::parseReal,									NULL, offsetof( PilotFindVehicleUpdateModuleData, m_minHealth ) },
+		{ "ScanRange",						INI::parseFix,									NULL, FIX_OFFSET( PilotFindVehicleUpdateModuleData, m_scanRange ) },
+		{ "MinHealth",						INI::parseFix,									NULL, FIX_OFFSET( PilotFindVehicleUpdateModuleData, m_minHealth ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -152,7 +152,7 @@ Object* PilotFindVehicleUpdate::scanClosestTarget()
 	filters[3] = &filterMapStatus;
 	filters[4] = NULL;
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), fixFromReal( data->m_scanRange ),	// P3
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), data->m_scanRange,
 		FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
 	MemoryPoolObjectHolder hold(iter);
 
@@ -162,7 +162,7 @@ Object* PilotFindVehicleUpdate::scanClosestTarget()
 		BodyModuleInterface *body = other->getBodyModule();
 		if (!body) continue;
 		//	If we're real healthy, don't bother looking for healing.
-		if (body->getHealth() < body->getMaxHealth()*data->m_minHealth) 
+		if (body->getHealth() < body->getMaxHealth()*fixToReal( data->m_minHealth ))	// P6
 		{
 			continue;
 		}

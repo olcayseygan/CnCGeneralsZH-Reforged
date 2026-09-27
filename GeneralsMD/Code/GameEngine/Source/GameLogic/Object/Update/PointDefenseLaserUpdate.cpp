@@ -54,8 +54,8 @@ PointDefenseLaserUpdateModuleData::PointDefenseLaserUpdateModuleData()
 {
 	m_weaponTemplate		= NULL;
 	m_scanFrames				= 0;
-	m_scanRange					= 0.0f;
-	m_velocityFactor		= 0.0f;
+	m_scanRange					= Fix( 0 );
+	m_velocityFactor		= Fix( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -69,8 +69,8 @@ PointDefenseLaserUpdateModuleData::PointDefenseLaserUpdateModuleData()
 		{ "PrimaryTargetTypes",		KindOfMaskType::parseFromINI,								NULL, offsetof( PointDefenseLaserUpdateModuleData, m_primaryTargetKindOf ) },
 		{ "SecondaryTargetTypes",	KindOfMaskType::parseFromINI,								NULL, offsetof( PointDefenseLaserUpdateModuleData, m_secondaryTargetKindOf ) },
 		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanFrames ) },
-		{ "ScanRange",						INI::parseReal,									NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanRange ) },
-		{ "PredictTargetVelocityFactor", INI::parseReal,					NULL, offsetof( PointDefenseLaserUpdateModuleData, m_velocityFactor ) },
+		{ "ScanRange",						INI::parseFix,									NULL, FIX_OFFSET( PointDefenseLaserUpdateModuleData, m_scanRange ) },
+		{ "PredictTargetVelocityFactor", INI::parseFix,					NULL, FIX_OFFSET( PointDefenseLaserUpdateModuleData, m_velocityFactor ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -111,10 +111,10 @@ void PointDefenseLaserUpdate::onObjectCreated()
 	WeaponBonus bonus;
 	bonus.clear();
 	Real attackRange = data->m_weaponTemplate->getAttackRange( bonus );
-	if( data->m_scanRange <= attackRange )
+	if( fixToReal( data->m_scanRange ) <= attackRange )	// P6
 	{
 		DEBUG_CRASH( ("PointDefenseLaserUpdate for %s requires the scan range (%.1f) being larger than the firing range (%.1f)",
-			getObject()->getTemplate()->getName().str(), data->m_scanRange, attackRange ) );
+			getObject()->getTemplate()->getName().str(), fixToReal( data->m_scanRange ), attackRange ) );
 	}
 }
 
@@ -253,7 +253,7 @@ Object* PointDefenseLaserUpdate::scanClosestTarget()
 	bonus.clear();
 	Fix fireRange = fixFromReal( data->m_weaponTemplate->getAttackRange( bonus ) );	// P6
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), fixFromReal( data->m_scanRange ), FROM_CENTER_2D );	// P3
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(), data->m_scanRange, FROM_CENTER_2D );
 	MemoryPoolObjectHolder hold(iter);
 
 	for( Object *other = iter->first(); other; other = iter->next() )
@@ -308,7 +308,7 @@ Object* PointDefenseLaserUpdate::scanClosestTarget()
 			//Outside fire range.
 
 			//Determine where the target will be based on current velocity using (m_velocityFactor * frames)
-			if( data->m_velocityFactor != 0.0f && !other->isKindOf( KINDOF_IMMOBILE ) )
+			if( data->m_velocityFactor != Fix( 0 ) && !other->isKindOf( KINDOF_IMMOBILE ) )
 			{
 				PhysicsBehavior *physics = other->getPhysics();
 				if( physics )
@@ -317,7 +317,7 @@ Object* PointDefenseLaserUpdate::scanClosestTarget()
 					const Coord3D *vel = physics->getVelocity();
 					FCoord3D pos;
 					pos.set( fixFromReal( vel->x ), fixFromReal( vel->y ), fixFromReal( vel->z ) );
-					pos.scale( fixFromReal( data->m_velocityFactor ) );	// P3
+					pos.scale( data->m_velocityFactor );
 					pos.add( *other->getPositionFix() );
 
 					//Recalculate the distance.

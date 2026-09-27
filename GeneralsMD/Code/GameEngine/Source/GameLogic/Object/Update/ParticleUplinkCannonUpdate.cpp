@@ -99,22 +99,22 @@ ParticleUplinkCannonUpdateModuleData::ParticleUplinkCannonUpdateModuleData()
 	m_totalFiringFrames							= 0;
 	m_totalScorchMarks							= 0;
 	m_scorchMarkScalar							= 1.0f;
-	m_damageRadiusScalar						= 1.0f;
+	m_damageRadiusScalar						= Fix( 1 );
 	m_groundHitFX										= NULL;
 	m_beamLaunchFX									= NULL;
 	m_framesBetweenLaunchFXRefresh  = 30;
 	m_totalDamagePulses							= 0;
-	m_damagePerSecond								= 0.0f;
+	m_damagePerSecond								= Fix( 0 );
 	m_damageType										= DAMAGE_LASER;
 	m_deathType											= DEATH_LASERED;
-	m_revealRange										= 0.0f;
-  m_manualDrivingSpeed						= 0.0f;
-  m_manualFastDrivingSpeed				= 0.0f;
+	m_revealRange										= Fix( 0 );
+  m_manualDrivingSpeed						= Fix( 0 );
+  m_manualFastDrivingSpeed				= Fix( 0 );
   m_doubleClickToFastDriveDelay		= 500;
 	//Added by Sadullah Nader
 	//Initializations inserted
-	m_swathOfDeathAmplitude					= 0.0f;
-	m_swathOfDeathDistance					=	0.0f;
+	m_swathOfDeathAmplitude					= Fix( 0 );
+	m_swathOfDeathDistance					=	Fix( 0 );
 	//
 }
 
@@ -132,7 +132,7 @@ ParticleUplinkCannonUpdateModuleData::ParticleUplinkCannonUpdateModuleData()
 		{ "WidthGrowTime",												INI::parseDurationUnsignedInt,	NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_widthGrowFrames ) },
 		{ "BeamTravelTime",												INI::parseDurationUnsignedInt,	NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_beamTravelFrames ) },
 		{ "TotalFiringTime",											INI::parseDurationUnsignedInt,  NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_totalFiringFrames ) },
-		{ "RevealRange",													INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_revealRange ) },
+		{ "RevealRange",													INI::parseFix,									NULL, FIX_OFFSET( ParticleUplinkCannonUpdateModuleData, m_revealRange ) },
 		
 		{ "OuterEffectBoneName",									INI::parseAsciiString,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_outerEffectBaseBoneName ) },
 		{ "OuterEffectNumBones",									INI::parseUnsignedInt,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_outerEffectNumBones ) },
@@ -153,19 +153,19 @@ ParticleUplinkCannonUpdateModuleData::ParticleUplinkCannonUpdateModuleData()
 
 		{ "ParticleBeamLaserName",								INI::parseAsciiString,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_particleBeamLaserName ) },
 
-		{ "SwathOfDeathDistance",									INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_swathOfDeathDistance ) },
-		{ "SwathOfDeathAmplitude",								INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_swathOfDeathAmplitude ) },
+		{ "SwathOfDeathDistance",									INI::parseFix,									NULL, FIX_OFFSET( ParticleUplinkCannonUpdateModuleData, m_swathOfDeathDistance ) },
+		{ "SwathOfDeathAmplitude",								INI::parseFix,									NULL, FIX_OFFSET( ParticleUplinkCannonUpdateModuleData, m_swathOfDeathAmplitude ) },
 		{ "TotalScorchMarks",											INI::parseUnsignedInt,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_totalScorchMarks ) },
-		{ "ScorchMarkScalar",											INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_scorchMarkScalar ) },
+		{ "ScorchMarkScalar",											INI::parseReal,									NULL, REAL_OFFSET( ParticleUplinkCannonUpdateModuleData, m_scorchMarkScalar ) },
 		{ "BeamLaunchFX",													INI::parseFXList,								NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_beamLaunchFX ) },
 		{ "DelayBetweenLaunchFX",									INI::parseDurationUnsignedInt,  NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_framesBetweenLaunchFXRefresh ) },
 		{ "GroundHitFX",													INI::parseFXList,								NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_groundHitFX ) },
 
-		{ "DamagePerSecond",											INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_damagePerSecond ) },
+		{ "DamagePerSecond",											INI::parseFix,									NULL, FIX_OFFSET( ParticleUplinkCannonUpdateModuleData, m_damagePerSecond ) },
 		{ "TotalDamagePulses",										INI::parseUnsignedInt,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_totalDamagePulses ) },
 		{ "DamageType",														DamageTypeFlags::parseSingleBitFromINI,	NULL,	offsetof( ParticleUplinkCannonUpdateModuleData, m_damageType ) },		
 		{ "DeathType",														INI::parseIndexList,						TheDeathNames,	offsetof( ParticleUplinkCannonUpdateModuleData, m_deathType ) },		
-		{ "DamageRadiusScalar",										INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_damageRadiusScalar ) },
+		{ "DamageRadiusScalar",										INI::parseFix,									NULL, FIX_OFFSET( ParticleUplinkCannonUpdateModuleData, m_damageRadiusScalar ) },
 
 		{ "PoweringUpSoundLoop",									INI::parseAsciiString,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_powerupSoundName ) },
 		{ "UnpackToIdleSoundLoop",								INI::parseAsciiString,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_unpackToReadySoundName ) },
@@ -173,8 +173,8 @@ ParticleUplinkCannonUpdateModuleData::ParticleUplinkCannonUpdateModuleData()
 		{ "GroundAnnihilationSoundLoop",					INI::parseAsciiString,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_annihilationSoundName ) },
 		{ "DamagePulseRemnantObjectName",					INI::parseAsciiString,					NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_damagePulseRemnantObjectName ) },
 
-    { "ManualDrivingSpeed",										INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_manualDrivingSpeed ) },
-    { "ManualFastDrivingSpeed",								INI::parseReal,									NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_manualFastDrivingSpeed ) },
+    { "ManualDrivingSpeed",										INI::parseFix,									NULL, FIX_OFFSET( ParticleUplinkCannonUpdateModuleData, m_manualDrivingSpeed ) },
+    { "ManualFastDrivingSpeed",								INI::parseFix,									NULL, FIX_OFFSET( ParticleUplinkCannonUpdateModuleData, m_manualFastDrivingSpeed ) },
     { "DoubleClickToFastDriveDelay",					INI::parseDurationUnsignedInt,	NULL, offsetof( ParticleUplinkCannonUpdateModuleData, m_doubleClickToFastDriveDelay ) },
 
 		{ 0, 0, 0, 0 }
@@ -551,11 +551,12 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 
 				//We're generating a swath that travels the points between sin( -1PI ) and sin( 1PI )
 				Real radians = (factor * TWO_PI) - PI;
-				Real cxDistance = (factor * data->m_swathOfDeathDistance ) - (data->m_swathOfDeathDistance * 0.5f); //cx is cartesian x
+				const Real swathDistance = fixToReal( data->m_swathOfDeathDistance );	// P6
+				Real cxDistance = (factor * swathDistance ) - (swathDistance * 0.5f); //cx is cartesian x
 
 				//Now calculate the amplitude value.
 				Real height = Sin( radians );
-				Real cxHeight = height * data->m_swathOfDeathAmplitude;
+				Real cxHeight = height * fixToReal( data->m_swathOfDeathAmplitude );	// P6
 
 				const Coord3D myPos = me->getPositionFix()->toCoord3D();	// P6: the swath is computed in float on saved float targets
 				Coord3D buildingToInitialTargetVector;
@@ -596,11 +597,11 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 			}
 			else
 			{
-				Real speed = data->m_manualDrivingSpeed;
+				Real speed = fixToReal( data->m_manualDrivingSpeed );	// P6
 				if( m_scriptedWaypointMode || m_lastDrivingClickFrame - m_2ndLastDrivingClickFrame < data->m_doubleClickToFastDriveDelay )
 				{
 					//Because we double clicked, use the faster driving speed.
-					speed = data->m_manualFastDrivingSpeed;
+					speed = fixToReal( data->m_manualFastDrivingSpeed );	// P6
 				}
 
 				//Convert speed to speed per frame.
@@ -653,7 +654,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 
 			const Real laserRadius = beamRadius * computeOrbitBeamWidthScalar( now );
 			const Real scorchRadius = laserRadius * data->m_scorchMarkScalar;
-			const Real damageRadius = laserRadius * data->m_damageRadiusScalar;
+			const Real damageRadius = laserRadius * fixToReal( data->m_damageRadiusScalar );	// P6
 
 			if( beam )
 			{
@@ -691,10 +692,10 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 				}
 
 				//Also reveal vision because the owning player has full rights to watch the carnage he created!
-				// P8: the beam's target and the reveal range are float
+				// P8: the beam's target is float
 				const Fix revealX = fixFromReal( m_currentTargetPosition.x );
 				const Fix revealY = fixFromReal( m_currentTargetPosition.y );
-				const Fix revealRange = fixFromReal( data->m_revealRange );
+				const Fix revealRange = data->m_revealRange;
 				ThePartitionManager->doShroudReveal( revealX, revealY, revealRange, me->getControllingPlayer()->getPlayerMask() );
 				ThePartitionManager->undoShroudReveal( revealX, revealY, revealRange, me->getControllingPlayer()->getPlayerMask() );
 			}
@@ -707,7 +708,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 				DamageInfo damageInfo;
 
 				Real totalFiringSeconds = data->m_totalFiringFrames / LOGICFRAMES_PER_SECOND;
-				Real damagePerPulse = (Real)(totalFiringSeconds * data->m_damagePerSecond) / (Real)data->m_totalDamagePulses;
+				Real damagePerPulse = (Real)(totalFiringSeconds * fixToReal( data->m_damagePerSecond )) / (Real)data->m_totalDamagePulses;	// P6
 
 				damageInfo.in.m_amount = damagePerPulse;
 				damageInfo.in.m_sourceID = me->getID();

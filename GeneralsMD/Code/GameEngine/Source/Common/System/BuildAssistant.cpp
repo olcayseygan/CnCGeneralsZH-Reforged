@@ -94,16 +94,6 @@ ObjectSellInfo::~ObjectSellInfo( void )
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 //-------------------------------------------------------------------------------------------------
-/** P7: every spot this file is handed comes from an order, the AI or the placement UI in float */
-//-------------------------------------------------------------------------------------------------
-static FCoord3D fixCoord( const Coord3D *pos )
-{
-	FCoord3D f;
-	f.set( fixFromReal( pos->x ), fixFromReal( pos->y ), fixFromReal( pos->z ) );
-	return f;
-}
-
-//-------------------------------------------------------------------------------------------------
 /** Is this object a dozer */
 //-------------------------------------------------------------------------------------------------
 static Bool isDozer( Object *obj )
@@ -416,7 +406,7 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 		obj->setProducer(constructorObject);
 
 		// place on terrain surface
-		FCoord3D groundPos = fixCoord( pos );
+		FCoord3D groundPos = fcoordFromCoord3D( pos );
 		groundPos.z = TheTerrainLogic->getGroundHeightFix( groundPos.x, groundPos.y );
 		obj->setPositionFix( &groundPos );
 
@@ -829,7 +819,7 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 	PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_STRUCTURE), KINDOFMASK_NONE);
 	PartitionFilter *filters[] = { &f1, NULL };
 
-	const FCoord3D worldFx = fixCoord(worldPos);
+	const FCoord3D worldFx = fcoordFromCoord3D(worldPos);
 	ObjectIterator *iter2 = ThePartitionManager->iterateObjectsInRangeFix(&worldFx, range, FROM_BOUNDINGSPHERE_2D, filters);
 	MemoryPoolObjectHolder hold2(iter2);
 
@@ -981,7 +971,7 @@ static Bool isDerrickClusterDefenseFull( const Coord3D *worldPos, const Player *
 	std::vector<Coord2D> derricks;
 	std::vector<Coord2D> defenses;
 	const Fix range = Fix( PRO_RULES_DERRICK_CLUSTER_RADIUS * PRO_RULES_DERRICK_SEARCH_STEPS );
-	const FCoord3D worldFx = fixCoord( worldPos );
+	const FCoord3D worldFx = fcoordFromCoord3D( worldPos );
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &worldFx, range, FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 	for( Object *them = iter->first(); them; them = iter->next() )
@@ -1085,7 +1075,7 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		// see if there are any reasonably close by
 		const Fix border = fixFromReal(TheGlobalData->m_SupplyBuildBorder);	// P3
 		Fix range = build->getTemplateGeometryInfo().getBoundingCircleRadiusFix() + border*Fix(2);
-		const FCoord3D worldFx = fixCoord(worldPos);
+		const FCoord3D worldFx = fcoordFromCoord3D(worldPos);
 		Object* tooClose = ThePartitionManager->getClosestObjectFix(&worldFx, range, FROM_BOUNDINGSPHERE_2D, filters);
 		if (tooClose != NULL)
 		{
@@ -1188,7 +1178,7 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 		PartitionFilter *filters[] = { &structures, NULL };
 
 		Fix range = build->getTemplateGeometryInfo().getBoundingCircleRadiusFix() + Fix( PRO_RULES_ENEMY_STRUCTURE_CLEARANCE );
-		const FCoord3D worldFx = fixCoord( worldPos );
+		const FCoord3D worldFx = fcoordFromCoord3D( worldPos );
 		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &worldFx, range, FROM_BOUNDINGSPHERE_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
 		for( Object *them = iter->first(); them; them = iter->next() )

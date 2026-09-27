@@ -80,13 +80,6 @@
 
 static Bool cannotPossiblyAttackObject( State *thisState, void* userData );
 
-/// a float position (a path node, a state's stored goal) into fixed point, for a Fix query or setPositionFix
-static FCoord3D fixFromCoord( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
 
 //----------------------------------------------------------------------------------------------------------
 AICommandParms::AICommandParms(AICommandType cmd, CommandSourceType cmdSource) : 
@@ -1427,7 +1420,7 @@ void AIIdleState::doInitIdleState()
 			if (!ultraAccurate && TheAI->pathfinder()->goalPosition(obj, &goalPos))
 			{
 				if (TheGameLogic->getFrame()<=1) {
-					const FCoord3D goalPosFix = fixFromCoord(goalPos);	// P5
+					const FCoord3D goalPosFix = fcoordFromCoord3D(goalPos);	// P5
 					obj->setPositionFix(&goalPosFix);
 				} else {
 #ifdef STOP_AND_SLIDE
@@ -1948,7 +1941,7 @@ StateReturnType AIInternalMoveToState::update()
 	// if our goal has moved, recompute our path
 	if (forceRecompute || TheGameLogic->getFrame() - m_pathTimestamp > MIN_REPATH_TIME)
 	{
-		if (forceRecompute || !isSamePosition(*obj->getPositionFix(), fixFromCoord(m_pathGoalPosition), fixFromCoord(m_goalPosition) ))	// P4
+		if (forceRecompute || !isSamePosition(*obj->getPositionFix(), fcoordFromCoord3D(m_pathGoalPosition), fcoordFromCoord3D(m_goalPosition) ))	// P4
 		{
 			// goal moved - repath
 			if (!computePath())
@@ -1982,9 +1975,9 @@ StateReturnType AIInternalMoveToState::update()
 		if (ai->isDoingGroundMovement()) {
 			// sanity check 
 			FCoord2D delta;
-			FCoord3D goalPos = fixFromCoord(m_goalPosition);	// P4
+			FCoord3D goalPos = fcoordFromCoord3D(m_goalPosition);	// P4
 			if (ai->getPath()->getLastNode()) {
-				goalPos = fixFromCoord(*ai->getPath()->getLastNode()->getPosition());	// P5
+				goalPos = fcoordFromCoord3D(*ai->getPath()->getLastNode()->getPosition());	// P5
 			}
 			delta.x = obj->getPositionFix()->x - goalPos.x;
 			delta.y = obj->getPositionFix()->y - goalPos.y;
@@ -2539,7 +2532,7 @@ Bool AIAttackApproachTargetState::computePath()
 
 		Object* source = getMachineOwner();
 		// if our victim's position hasn't changed, don't re-path
-		if (!forceRepath && isSamePosition(*source->getPositionFix(), fixFromCoord(m_prevVictimPos), *getMachineGoalObject()->getPositionFix() ))	// P4
+		if (!forceRepath && isSamePosition(*source->getPositionFix(), fcoordFromCoord3D(m_prevVictimPos), *getMachineGoalObject()->getPositionFix() ))	// P4
 		{
 			CRCDEBUG_LOG(("AIAttackApproachTargetState::computePath - bailing because victim in same place for object %d\n", getMachineOwner()->getID()));
 			return true;
@@ -2921,7 +2914,7 @@ void AIAttackApproachTargetState::onExit( StateExitType status )
 				ai->getCurLocomotor()->setUsePreciseZPos(false);
 		}
 		if (ai->isDoingGroundMovement()) {
-			const FCoord3D goalPos = fixFromCoord(m_goalPosition);	// P4
+			const FCoord3D goalPos = fcoordFromCoord3D(m_goalPosition);	// P4
 			Fix dx = goalPos.x-obj->getPositionFix()->x;
 			Fix dy = goalPos.y-obj->getPositionFix()->y;
 			if (dx*dx+dy*dy<Fix(PATHFIND_CELL_SIZE*PATHFIND_CELL_SIZE)/Fix(8))
@@ -2985,7 +2978,7 @@ Bool AIAttackPursueTargetState::computePath()
 
 		Object* source = getMachineOwner();
 		// if our victim's position hasn't changed, don't re-path
-		if (!forceRepath && isSamePosition(*source->getPositionFix(), fixFromCoord(m_prevVictimPos), *getMachineGoalObject()->getPositionFix() ))	// P4
+		if (!forceRepath && isSamePosition(*source->getPositionFix(), fcoordFromCoord3D(m_prevVictimPos), *getMachineGoalObject()->getPositionFix() ))	// P4
 			return true;
 
 		Weapon* weapon = source->getCurrentWeapon();
@@ -5691,7 +5684,7 @@ StateReturnType AIAttackAimAtTargetState::update()
 	{
 		Fix relAngle = m_isAttackingObject ?
 											relativeAngle2DFix( source, *victim->getPositionFix() ) :
-											relativeAngle2DFix( source, fixFromCoord(*getMachineGoalPosition()) );	// P4
+											relativeAngle2DFix( source, fcoordFromCoord3D(*getMachineGoalPosition()) );	// P4
 
 		const Fix REL_THRESH = 0.035_fx;	// about 2 degrees. (getRelativeAngle2D is current only accurate to about 1.25 degrees)
 
@@ -6005,7 +5998,7 @@ StateReturnType AIAttackFireWeaponState::update()
 				PartitionFilterPossibleToAttack filterAttack(ATTACK_NEW_TARGET, obj, lastCmdSource);
 				PartitionFilter *filters[] = { &filterAttack, &filterPlayer, &filterMapStatus, NULL };
 				// note that we look around originalVictimPos, *not* the current victim's pos.
-				const FCoord3D originalVictimPosFix = fixFromCoord(*originalVictimPos);	// P4
+				const FCoord3D originalVictimPosFix = fcoordFromCoord3D(*originalVictimPos);	// P4
 				victim = ThePartitionManager->getClosestObjectFix( &originalVictimPosFix, fixFromReal(continueRange), FROM_CENTER_2D, filters );// could be null. this is ok. P6: the continue range is weapon data
 				if (victim)
 				{
@@ -8232,7 +8225,7 @@ StateReturnType AIFaceState::update()
 	}
 	else
 	{
-		pos = fixFromCoord(*getMachineGoalPosition());	// P4
+		pos = fcoordFromCoord3D(*getMachineGoalPosition());	// P4
 	}
 	Fix relAngle = relativeAngle2DFix( obj, pos );
 

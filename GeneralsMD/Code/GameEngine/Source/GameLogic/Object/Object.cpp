@@ -1825,24 +1825,10 @@ inline Bool isAngleDifferent(Fix a, Fix b)
 //-------------------------------------------------------------------------------------------------
 // P2 shim conversions, float in and out of the fixed transform
 //-------------------------------------------------------------------------------------------------
-static FCoord3D fcoordFromCoord3D( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 /// toward zero, the way the (Int) cast on a float did
 static Int fixTruncToInt( Fix f )
 {
 	return (Int)( f.raw() / Fix::ONE_RAW );
-}
-
-static void fixMatrixFromMatrix3D( const Matrix3D &in, FixMatrix3D &out )
-{
-	for( Int i = 0; i < 3; ++i )
-		for( Int j = 0; j < 4; ++j )
-			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
 }
 
 // the map extent is float map data; its edges come in once through the boundary
@@ -1863,7 +1849,7 @@ static void alignOnTerrainFix( Fix angle, const FCoord3D &pos, FixMatrix3D &out 
 	Matrix3D mtx;
 	const Bool stickToGround = true;	// yes, set the "z" pos
 	TheTerrainLogic->alignOnTerrain( fixToReal( angle ), pos.toCoord3D(), stickToGround, mtx );
-	fixMatrixFromMatrix3D( mtx, out );
+	out = fixMatrixFromMatrix3D( mtx );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2021,8 +2007,7 @@ void Object::setOrientation( Real angle )
 
 void Object::setTransformMatrix( const Matrix3D *mx )
 {
-	FixMatrix3D f;
-	fixMatrixFromMatrix3D( *mx, f );
+	FixMatrix3D f = fixMatrixFromMatrix3D( *mx );
 	setTransformMatrixFix( &f );
 }
 
@@ -4592,8 +4577,7 @@ void Object::xfer( Xfer *xfer )
 		Matrix3D mtx;
 		m_fxTransform.toMatrix3D(&mtx);
 		xfer->xferMatrix3D(&mtx);
-		FixMatrix3D fmtx;
-		fixMatrixFromMatrix3D(mtx, fmtx);
+		FixMatrix3D fmtx = fixMatrixFromMatrix3D( mtx );
 		setTransformMatrixFix(&fmtx);
 	}
 	else

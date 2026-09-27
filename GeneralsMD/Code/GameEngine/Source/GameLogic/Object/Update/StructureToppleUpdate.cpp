@@ -69,10 +69,7 @@ static void preRotateTransform( Object *building, Real aroundX, Real aroundY, Re
 		xfrm.In_Place_Pre_Rotate_Y( aroundY );
 	if( aroundZ != 0.0f )
 		xfrm.In_Place_Pre_Rotate_Z( aroundZ );
-	FixMatrix3D fix;
-	for( Int i = 0; i < 3; ++i )
-		for( Int j = 0; j < 4; ++j )
-			fix.m[ i ][ j ] = fixFromReal( xfrm[ i ][ j ] );
+	const FixMatrix3D fix = fixMatrixFromMatrix3D( xfrm );
 	building->setTransformMatrixFix( &fix );
 }
 

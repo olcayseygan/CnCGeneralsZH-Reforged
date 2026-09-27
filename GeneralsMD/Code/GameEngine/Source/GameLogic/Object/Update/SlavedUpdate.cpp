@@ -60,14 +60,6 @@
 const Fix STRAY_MULTIPLIER = Fix( 2 ); // Multiplier from stating diestance from tunnel, to max distance from
 const Fix CLOSE_ENOUGH_SQR = Fix( 15 * 15 );				// Our moveTo commands and pathfinding can't handle people in the way, so quit trying to hump someone on your spot
 
-// P4 and P8: the AI's move goals and the saved guard offset are float
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 //-------------------------------------------------------------------------------------------------
 SlavedUpdate::SlavedUpdate( Thing *thing, const ModuleData* moduleData ) : UpdateModule( thing, moduleData )
 {
@@ -243,7 +235,7 @@ UpdateSleepTime SlavedUpdate::update( void )
 		//allows).
 		if( masterAI->getPath() )
 		{
-			const FCoord3D masterDest = toFix( *masterAI->getPath()->getLastNode()->getPosition() );	// P5
+			const FCoord3D masterDest = fcoordFromCoord3D( *masterAI->getPath()->getLastNode()->getPosition() );	// P5
 
 			//Check to see if master is close to the goal position.
 			Fix distSqr = ThePartitionManager->getDistanceSquaredFix( master, &masterDest, FROM_BOUNDINGSPHERE_2D );

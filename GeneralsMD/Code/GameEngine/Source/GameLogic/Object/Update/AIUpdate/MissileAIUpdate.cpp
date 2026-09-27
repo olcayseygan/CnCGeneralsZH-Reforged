@@ -53,14 +53,6 @@
 
 const Real BIGNUM = 99999.0f;
 
-// goal and target positions are still float (P5); this is where they come in
-static FCoord3D toFCoord3D( const Coord3D *c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
-	return f;
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -243,7 +235,7 @@ void MissileAIUpdate::projectileFireAtObjectOrPosition( const Object *victim, co
 		}
 	}
 
-	FCoord3D toVictim = toFCoord3D( victimPos );
+	FCoord3D toVictim = fcoordFromCoord3D( victimPos );
 	toVictim.sub( *obj->getPositionFix() );
 	Fix xyDist = fixMax( fixSqrt( toVictim.x * toVictim.x + toVictim.y * toVictim.y ), Fix( 1 ) );
 	Real zFactor = 0;
@@ -563,7 +555,7 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 		if (m_isTrackingTarget && (getGoalObject() != NULL)) {
 			distanceToTargetSquared = ThePartitionManager->getDistanceSquaredFix( getObject(), getGoalObject(), FROM_CENTER_2D);
 		}	else {
-			FCoord3D goalPos = toFCoord3D( getGoalPosition() );
+			FCoord3D goalPos = fcoordFromCoord3D( getGoalPosition() );
 			distanceToTargetSquared = ThePartitionManager->getDistanceSquaredFix( getObject(), &goalPos, FROM_CENTER_2D );
 		}
 		if (lockDistanceSquared > Fix( 0 )) {
@@ -676,7 +668,7 @@ UpdateSleepTime MissileAIUpdate::update()
 	{
 		// m_prevPos and m_noTurnDistLeft are saved as float
 		FCoord3D moved = newPos;
-		moved.sub( toFCoord3D( &m_prevPos ) );
+		moved.sub( fcoordFromCoord3D( &m_prevPos ) );
 		m_noTurnDistLeft -= fixToReal( moved.length() );
 		m_prevPos = newPos.toCoord3D();
 	}
@@ -840,7 +832,7 @@ void MissileAIUpdate::projectileNowJammed()
 	targetPosition.x += GameLogicRandomValue(-scatter, scatter);
 	targetPosition.y += GameLogicRandomValue(-scatter, scatter);
 	PathfindLayerEnum targetLayer = TheTerrainLogic->getHighestLayerForDestination(&targetPosition);
-	FCoord3D fxTarget = toFCoord3D( &targetPosition );
+	FCoord3D fxTarget = fcoordFromCoord3D( &targetPosition );
 	targetPosition.z = fixToReal( TheTerrainLogic->getLayerHeightFix( fxTarget.x, fxTarget.y, targetLayer ) );
 
 	getStateMachine()->setGoalObject(NULL);

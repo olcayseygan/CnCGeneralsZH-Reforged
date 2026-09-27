@@ -123,13 +123,6 @@ static void updateTeamAndPlayerStuff( Object *obj, void *userData )
 
 // STATICS ////////////////////////////////////////////////////////////////////////////////////////
 
-// waypoints, polygon triggers and script parameters are map data in float; this is their way in
-static FCoord3D fixCoordFromReal( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
 
 // DEFINES ////////////////////////////////////////////////////////////////////////////////////////
 #define REALLY_FAR	Fix( 100000 * 10 )		// 100000 * MAP_XY_FACTOR
@@ -530,11 +523,11 @@ void ScriptActions::doCreateReinforcements(const AsciiString& team, const AsciiS
 		return;
 	}
 	const TeamTemplateInfo *pInfo = theTeamProto->getTemplateInfo();
-	const FCoord3D fDestination = fixCoordFromReal( destination );
+	const FCoord3D fDestination = fcoordFromCoord3D( destination );
 	FCoord3D origin = fDestination;
 	way = TheTerrainLogic->getWaypointByName(pInfo->m_startReinforceWaypoint);
 	if (way) {
-		origin = fixCoordFromReal( *way->getLocation() );
+		origin = fcoordFromCoord3D( *way->getLocation() );
 		if (origin.x != fDestination.x || origin.y != fDestination.y) {
 			needToMoveToDestination = true;
 		}
@@ -1026,7 +1019,7 @@ void ScriptActions::doCreateObject(const AsciiString& objectName, const AsciiStr
 			}
 
 			obj->setOrientationFix( fixFromReal( angle ) );
-			const FCoord3D fpos = fixCoordFromReal( *pos );
+			const FCoord3D fpos = fcoordFromCoord3D( *pos );
 			obj->setPositionFix( &fpos );
 
       if ( obj->isKindOf( KINDOF_BLAST_CRATER ) ) // since these footprints are permanent
@@ -1216,7 +1209,7 @@ void ScriptActions::createUnitOnTeamAt(const AsciiString& unitName, const AsciiS
 			Waypoint *way = TheTerrainLogic->getWaypointByName( waypoint );
 			if (way)
 			{
-				const FCoord3D destination = fixCoordFromReal( *way->getLocation() );
+				const FCoord3D destination = fcoordFromCoord3D( *way->getLocation() );
 				obj->setPositionFix(&destination);
 			}
 		}  // end if
@@ -3704,7 +3697,7 @@ void ScriptActions::doNamedSetBoobytrapped( const AsciiString& thingTemplateName
 
 					//Get the angle and transform matrix from the obj... then transform the calculated
 					//position
-					pos = obj->getTransformMatrixFix()->transformPoint( fixCoordFromReal( pos ) ).toCoord3D();	// P6 sticky bomb takes float
+					pos = obj->getTransformMatrixFix()->transformPoint( fcoordFromCoord3D( pos ) ).toCoord3D();	// P6 sticky bomb takes float
 
 					update->initStickyBomb( obj, NULL, &pos );
 				}
@@ -3742,7 +3735,7 @@ void ScriptActions::doTeamSetBoobytrapped( const AsciiString& thingTemplateName,
 
 					//Get the angle and transform matrix from the obj... then transform the calculated
 					//position
-					pos = obj->getTransformMatrixFix()->transformPoint( fixCoordFromReal( pos ) ).toCoord3D();	// P6 sticky bomb takes float
+					pos = obj->getTransformMatrixFix()->transformPoint( fcoordFromCoord3D( pos ) ).toCoord3D();	// P6 sticky bomb takes float
 
 					update->initStickyBomb( obj, NULL, &pos );
 				}
@@ -5301,7 +5294,7 @@ void ScriptActions::doMoveTeamTowardsNearest( const AsciiString& teamName, const
 		return;
 	}
 
-	const FCoord3D teamPos = fixCoordFromReal( *team->getEstimateTeamPosition() );	// P7 the team estimate is float
+	const FCoord3D teamPos = fcoordFromCoord3D( *team->getEstimateTeamPosition() );	// P7 the team estimate is float
 	PartitionFilterSameMapStatus filterMapStatus( teamObj );
 	PartitionFilterPolygonTrigger acceptWithin( trig );
 	Object *bestObj = NULL;
@@ -5458,7 +5451,7 @@ void ScriptActions::doSkirmishCommandButtonOnMostValuable( const AsciiString& te
 
 	PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
 	// @todo: Should we add the group's radius to the range? Seems like a possibility.
-	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(&center, fixFromReal( range ), FROM_CENTER_2D, filters, ITER_SORTED_EXPENSIVE_TO_CHEAP);
 	MemoryPoolObjectHolder hold(iter);
 
@@ -5556,7 +5549,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestEnemy( const AsciiString& tea
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
-	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
@@ -5607,7 +5600,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestGarrisonedBuilding( const Asc
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &notOwn, &f2, &f3, &f4, &filterMapStatus, 0 };
-	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
@@ -5655,7 +5648,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestKindof( const AsciiString& te
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &f3, &filterMapStatus, 0 };
-	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
@@ -5703,7 +5696,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestBuilding( const AsciiString& 
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &f3, &filterMapStatus, 0 };
-	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
@@ -5752,7 +5745,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestBuildingClass( const AsciiStr
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &f3, &f4, &filterMapStatus, 0 };
-	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;
@@ -5806,7 +5799,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString
 		Coord3D pos;
 		theGroup->getCenter(&pos);
 
-		const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+		const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 		bestObj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 		if( !bestObj ) 
 		{
@@ -5824,7 +5817,7 @@ void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString
 
 			Coord3D groupCenter;
 			theGroup->getCenter(&groupCenter);
-			const FCoord3D pos = fixCoordFromReal( groupCenter );	// P4 the group center is float
+			const FCoord3D pos = fcoordFromCoord3D( groupCenter );	// P4 the group center is float
 			Fix closestDist;
 			Fix dist;
 
@@ -5915,7 +5908,7 @@ void ScriptActions::doTeamCaptureNearestUnownedFactionUnit( const AsciiString& t
 	theGroup->getCenter(&pos);
 
 	PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
-	const FCoord3D center = fixCoordFromReal( pos );	// P4 the group center is float
+	const FCoord3D center = fcoordFromCoord3D( pos );	// P4 the group center is float
 	Object *obj = ThePartitionManager->getClosestObjectFix(&center, REALLY_FAR, FROM_CENTER_2D, filters);
 	if (!obj) {
 		return;

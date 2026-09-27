@@ -83,12 +83,6 @@
 static inline Coord3D floatPosOf( const Object *obj ) { return obj->getPositionFix()->toCoord3D(); }
 /// the footprint for the crowd model (P4), which steers in float
 static inline Real floatRadiusOf( const Object *obj ) { return fixToReal( obj->getGeometryInfo().getBoundingCircleRadiusFix() ); }
-static inline FCoord3D fixPosOf( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
 // the ground under a goal or a path point that is still float (P4/P5), read from the fixed height map
 static inline Real groundHeightAt( Real x, Real y )
 {
@@ -1585,7 +1579,7 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 	// If we are near our final goal, don't get stuck.
 	if (goalCell.x>0 && goalCell.y>0) {
 		// P4: the state machine's goal is float
-		const FCoord3D goalPos = fixPosOf(*getStateMachine()->getGoalPosition());
+		const FCoord3D goalPos = fcoordFromCoord3D(*getStateMachine()->getGoalPosition());
 		const Fix cell = Fix(PATHFIND_CELL_SIZE);
 		if (fixAbs(goalPos.x-pos.x)<cell && fixAbs(goalPos.y-pos.y)<cell) {
 			return FALSE; // If we're approaching our goal, ignore obstacles.
@@ -1717,7 +1711,7 @@ Bool AIUpdateInterface::needToRotate(void)
 		CRCDEBUG_LOG(("AIUpdateInterface::needToRotate() - calling computePointOnPath() for object %d\n", getObject()->getID()));
 		// P5: the path is float
 		getPath()->computePointOnPath(getObject(), m_locomotorSet, floatPosOf(getObject()), info);
-		deltaAngle = relativeAngle2DFix( getObject(), fixPosOf(info.posOnPath) );
+		deltaAngle = relativeAngle2DFix( getObject(), fcoordFromCoord3D(info.posOnPath) );
 	}
 
 	if (fixAbs(deltaAngle)>FIX_PI/Fix(30))
@@ -2347,8 +2341,8 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 			TBridgeAttackInfo info;
 			TheTerrainLogic->getBridgeAttackPoints(victim, &info);
 			// the bridge's attack points are map data, in float
-			const FCoord3D point1 = fixPosOf(info.attackPoint1);
-			const FCoord3D point2 = fixPosOf(info.attackPoint2);
+			const FCoord3D point1 = fcoordFromCoord3D(info.attackPoint1);
+			const FCoord3D point2 = fcoordFromCoord3D(info.attackPoint2);
 			Fix distSqr1 = ThePartitionManager->getDistanceSquaredFix( source, &point1, FROM_BOUNDINGSPHERE_3D );
 			Fix distSqr2 = ThePartitionManager->getDistanceSquaredFix( source, &point2, FROM_BOUNDINGSPHERE_3D );
 			if (distSqr2<distSqr1) {
@@ -4102,7 +4096,7 @@ UpdateSleepTime AIUpdateInterface::doLocomotor( void )
 							FCoord3D pos = *getObject()->getPositionFix();
 							Bool onGround = !getObject()->isAboveTerrain() && getObject()->getLayer() == LAYER_GROUND;
 							// P4: the final position is a float move goal
-							FCoord3D finalPos = fixPosOf(m_finalPosition);
+							FCoord3D finalPos = fcoordFromCoord3D(m_finalPosition);
 							Fix dx = finalPos.x - pos.x;
 							Fix dy = finalPos.y - pos.y;
 							Fix dSqr = dx*dx+dy*dy;
@@ -4332,7 +4326,7 @@ Real AIUpdateInterface::getLocomotorDistanceToGoal()
 					dest = m_path->getLastNode()->getPosition();
 				}
 				// P4/P5: the goal is a float path point and the answer goes to the locomotor
-				const FCoord3D destFix = fixPosOf( *dest );
+				const FCoord3D destFix = fcoordFromCoord3D( *dest );
 				Fix distance = ThePartitionManager->getDistanceSquaredFix( me, &destFix, FROM_CENTER_3D );
 				return fixToReal( fixSqrt( distance ) );// Other paths return dots of normalized vectors, so one sqrt ain't so bad
 			}
@@ -5474,7 +5468,7 @@ void AIUpdateInterface::privateAttackPosition( const Coord3D *pos, Int maxShotsT
 		PartitionFilterSameMapStatus filterMapStatus(getObject());
 		PartitionFilter *filters[] = { &filterAttack, &filterMapStatus, NULL };
 		// P4/P6: the ordered spot and the weapon's continue range are float
-		const FCoord3D spot = fixPosOf(localPos);
+		const FCoord3D spot = fcoordFromCoord3D(localPos);
 		Object* victim = ThePartitionManager->getClosestObjectFix(&spot, fixFromReal(continueRange), FROM_CENTER_2D, filters);
 		getObject()->clearStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_IGNORING_STEALTH ) );
 

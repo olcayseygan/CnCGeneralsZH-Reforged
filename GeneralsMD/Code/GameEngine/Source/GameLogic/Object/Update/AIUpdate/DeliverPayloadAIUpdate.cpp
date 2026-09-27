@@ -51,14 +51,6 @@
 #include "GameLogic/WeaponSet.h"
 #include "Lib/FixBoundary.h"
 
-// the target and the xfer'd direction stay float until their owners move; they enter here
-static FCoord3D toFCoord3D( const Coord3D *c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
-	return f;
-}
-
 // the object's forward axis, normalized, as Object::getUnitDirectionVector3D computes it
 static FCoord3D unitDirection3D( const Object *obj )
 {
@@ -204,7 +196,7 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 		{
 			//Check to see if we are close enough to start diving.
 			Fix startDiveDistanceSquared = sqr( fixFromReal( getData()->m_diveStartDistance ) ); // P3
-			FCoord3D target = toFCoord3D( getTargetPos() );
+			FCoord3D target = fcoordFromCoord3D( getTargetPos() );
 			Fix currentDistanceSquared  = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_2D );
 			if( currentDistanceSquared <= startDiveDistanceSquared )
 			{
@@ -224,7 +216,7 @@ UpdateSleepTime DeliverPayloadAIUpdate::update( void )
 		{
 			//Check to see when we shall end diving
 			Fix endDiveDistance = fixFromReal( getData()->m_diveEndDistance ); // P3
-			FCoord3D target = toFCoord3D( getTargetPos() );
+			FCoord3D target = fcoordFromCoord3D( getTargetPos() );
 			Fix currentDistanceSquared  = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_3D );
 			if( currentDistanceSquared <= sqr( endDiveDistance ) )
 			{
@@ -399,7 +391,7 @@ Bool DeliverPayloadAIUpdate::isCloseEnoughToTarget()
 ////so the doors can open and payload can get ready...
 
 	Fix allowedDistanceSqr = sqr( fixFromReal( getAllowedDistanceToTarget() ) ); // P3
-	FCoord3D target = toFCoord3D( getTargetPos() );
+	FCoord3D target = fcoordFromCoord3D( getTargetPos() );
 	Fix currentDistanceSqr = ThePartitionManager->getDistanceSquaredFix( getObject(), &target, FROM_CENTER_2D );
 	// m_previousDistanceSqr is xfer'd and stays float: compare and store on that side
 	Bool inBound = m_previousDistanceSqr > fixToReal( currentDistanceSqr );
@@ -776,7 +768,7 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 			if (ai->getDropVariance().z > 0)
 				pos.z += fixFromReal( GameLogicRandomValueReal(-ai->getDropVariance().z, ai->getDropVariance().z) );
 
-			pos.add( toFCoord3D( &ai->getDropOffset() ) );
+			pos.add( fcoordFromCoord3D( &ai->getDropOffset() ) );
 			item->setPositionFix(&pos);
 
 			ContainModuleInterface *contain = item->getContain();
@@ -854,7 +846,7 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 							if( draw->getPristineBonePositions( ai->getData()->m_visibleDropBoneName.str(), ai->getVisibleItemsDelivered() + 1, &pos, NULL, 1 ) > 0 )
 							{
 								draw->convertBonePosToWorldPos( &pos, NULL, &pos, NULL );
-								FCoord3D fpos = toFCoord3D( &pos ); // bone data is float
+								FCoord3D fpos = fcoordFromCoord3D( &pos ); // bone data is float
 								payload->setPositionFix( &fpos );
 							}
 							else
@@ -876,7 +868,7 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 							payload->getPhysics()->applyMotiveForce( &startingForce );
 
 							FCoord3D backPosition = *payload->getPositionFix();
-							backPosition.sub( toFCoord3D( owner->getPhysics()->getVelocity() ) ); // P4
+							backPosition.sub( fcoordFromCoord3D( owner->getPhysics()->getVelocity() ) ); // P4
 							payload->setPositionFix( &backPosition );
 						}
 
@@ -1148,12 +1140,12 @@ StateReturnType RecoverFromOffMapState::update() // Success if we should try aga
 
 	Coord3D edge = owner->getPositionFix()->toCoord3D(); // the edge query is float
 	edge = TheTerrainLogic->findClosestEdgePoint( &edge );
-	FCoord3D enterCoord = toFCoord3D( &edge );
+	FCoord3D enterCoord = fcoordFromCoord3D( &edge );
 	if (owner->isAboveTerrain())
 		enterCoord.z = owner->getPositionFix()->z;
 	owner->setPositionFix(&enterCoord);
 
-	FCoord3D moveTo = toFCoord3D( ai->getMoveToPos() );
+	FCoord3D moveTo = fcoordFromCoord3D( ai->getMoveToPos() );
 	owner->setOrientationFix( fixAtan2( moveTo.y - enterCoord.y, moveTo.x - enterCoord.x ) );
 
 	PhysicsBehavior* physics = owner->getPhysics();
@@ -1239,7 +1231,7 @@ StateReturnType HeadOffMapState::update()
   if ( owner->getPhysics()->getTurning() != 0 )
   {
     FCoord3D currentDirection = unitDirection3D( owner );
-    FCoord3D facing = toFCoord3D( &facingDirectionUponDelivery );
+    FCoord3D facing = fcoordFromCoord3D( &facingDirectionUponDelivery );
   	Fix dot = facing.x * currentDirection.x
             + facing.y * currentDirection.y
             + facing.z * currentDirection.z;

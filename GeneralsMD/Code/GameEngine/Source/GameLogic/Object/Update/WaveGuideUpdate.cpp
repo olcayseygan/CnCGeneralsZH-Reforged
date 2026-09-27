@@ -51,14 +51,6 @@
 // DEFINES ////////////////////////////////////////////////////////////////////////////////////////
 #define PATH_EXTRA_DISTANCE (10 * PATHFIND_CELL_SIZE_F)
 
-// the shape points, the destination and the waypoints are float: members that are saved, and map data
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -213,8 +205,8 @@ Bool WaveGuideUpdate::startMoving( void )
 		}  // end if
 				
 		// get vector from next waypoint to first waypoint
-		const FCoord3D start = toFix( *waypoint->getLocation() );	// P5
-		const FCoord3D nextPos = toFix( *next->getLocation() );	// P5
+		const FCoord3D start = fcoordFromCoord3D(*waypoint->getLocation() );	// P5
+		const FCoord3D nextPos = fcoordFromCoord3D(*next->getLocation() );	// P5
 
 		// orient the waveguide the same direction
 		waveGuide->setOrientationFix( fixAtan2( nextPos.y - start.y, nextPos.x - start.x ) );
@@ -363,7 +355,7 @@ void WaveGuideUpdate::transformWaveShape( void )
 	{
 
 		// transform the point
-		FCoord3D point = transform->transformPoint( toFix( m_shapePoints[ i ] ) );
+		FCoord3D point = transform->transformPoint( fcoordFromCoord3D(m_shapePoints[ i ] ) );
 
 		// the Z of the transformed point will be on the terrain
 		point.z = TheTerrainLogic->getGroundHeightFix( point.x, point.y );
@@ -475,7 +467,7 @@ void WaveGuideUpdate::doShoreEffects( void )
 	{
 
 		// setup point to be a distance "behind" the wave shape points
-		FCoord3D point = toFix( m_shapePoints[ i ] );
+		FCoord3D point = fcoordFromCoord3D(m_shapePoints[ i ] );
 		point.x -= shorelineEffectDistance;
 
 		// transform the point
@@ -570,7 +562,7 @@ void WaveGuideUpdate::doDamage( void )
 	{
 
 		// scan objects around us and do damage to objects we have "passed over" and are behind us
-		const FCoord3D shapePoint = toFix( m_transformedShapePoints[ i ] );
+		const FCoord3D shapePoint = fcoordFromCoord3D(m_transformedShapePoints[ i ] );
 		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &shapePoint,
 																																			 damageRadius,
 																																			 FROM_CENTER_2D,
@@ -838,7 +830,7 @@ UpdateSleepTime WaveGuideUpdate::update( void )
 
 	// see if we are close enough to the end of our journey on the waypoint path
 	const FCoord3D *currentPos = waveGuide->getPositionFix();
-	const FCoord3D finalDestination = toFix( m_finalDestination );
+	const FCoord3D finalDestination = fcoordFromCoord3D(m_finalDestination );
 	const Fix pathExtraDistance = Fix( 10 * PATHFIND_CELL_SIZE );
 	FCoord2D v;
 	v.x = finalDestination.x - currentPos->x;

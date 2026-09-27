@@ -51,17 +51,6 @@
 #include "GameClient/Statistics.h"		// MuLaw/NormalizeToRange, for the bounce sound volume
 #include "Lib/FixBoundary.h"
 
-// P4: the body's integration (velocity, forces, the working matrix) is still float, and crosses
-// into the object's fixed transform through this.
-static FixMatrix3D toFix( const Matrix3D &in )
-{
-	FixMatrix3D out;
-	for( Int i = 0; i < 3; ++i )
-		for( Int j = 0; j < 4; ++j )
-			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
-	return out;
-}
-
 const Real DEFAULT_MASS = 1.0f;
 
 const Real DEFAULT_SHOCK_YAW = 0.05f;
@@ -853,7 +842,7 @@ UpdateSleepTime PhysicsBehavior::update()
 		}
 		else
 		{
-			const FixMatrix3D fixMtx = toFix(mtx);	// P4
+			const FixMatrix3D fixMtx = fixMatrixFromMatrix3D(mtx);	// P4
 			obj->setTransformMatrixFix(&fixMtx);
 		}
 	} // if not held
@@ -1122,7 +1111,7 @@ void PhysicsBehavior::setAngles( Real yaw, Real pitch, Real roll )
 	xfrm.In_Place_Pre_Rotate_Y( pitch );
 	xfrm.In_Place_Pre_Rotate_Z( yaw );
 	// the rotation is P4 float; the position never leaves fixed point
-	FixMatrix3D fixXfrm = toFix( xfrm );
+	FixMatrix3D fixXfrm = fixMatrixFromMatrix3D( xfrm );
 	fixXfrm.setTranslation( *getObject()->getPositionFix() );
 	getObject()->setTransformMatrixFix( &fixXfrm );
 }

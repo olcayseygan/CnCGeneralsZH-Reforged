@@ -64,14 +64,6 @@
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
 
-// the exit bones and the shared float signatures enter the fixed point transform here
-static FCoord3D fcoordFromCoord3D( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1360,10 +1352,7 @@ void OpenContain::putObjAtNextFirePoint( Object *obj )
 	}
 
 	// the fire points are bone transforms, float, and enter logic here
-	FixMatrix3D fxMatrix;
-	for( Int i = 0; i < 3; ++i )
-		for( Int j = 0; j < 4; ++j )
-			fxMatrix.m[ i ][ j ] = fixFromReal( matrix[ i ][ j ] );
+	FixMatrix3D fxMatrix = fixMatrixFromMatrix3D( matrix );
 
 	// set the object position
 	if( isEnclosingContainerFor( obj ) )

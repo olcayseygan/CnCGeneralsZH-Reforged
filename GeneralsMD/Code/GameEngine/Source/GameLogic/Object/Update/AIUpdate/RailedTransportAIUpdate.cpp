@@ -38,14 +38,6 @@
 #include "GameLogic/Object.h"
 #include "Lib/FixBoundary.h"
 
-// waypoints are map data in float; this is where they come in
-static FCoord3D toFCoord3D( const Coord3D *c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
-	return f;
-}
-
 // TYPES //////////////////////////////////////////////////////////////////////////////////////////
 static const Int INVALID_PATH = -1;
 
@@ -157,7 +149,7 @@ void RailedTransportAIUpdate::pickAndMoveToInitialLocation( void )
 		if( waypoint )
 		{
 			// vector from us to waypoint
-			FCoord3D v = toFCoord3D( waypoint->getLocation() );
+			FCoord3D v = fcoordFromCoord3D( waypoint->getLocation() );
 			v.sub( *ourPos );
 
 			// what is the distance (squared)
@@ -238,7 +230,7 @@ UpdateSleepTime RailedTransportAIUpdate::update( void )
 		DEBUG_ASSERTCRASH( waypoint, ("RailedTransportAIUpdate: Invalid target waypoint\n") );
 
 		// how far away are we from the target waypoint
-		FCoord3D v = toFCoord3D( waypoint->getLocation() );
+		FCoord3D v = fcoordFromCoord3D( waypoint->getLocation() );
 		v.sub( *us->getPositionFix() );
 		if( v.lengthSqr() <= Fix( 25 ) || isIdle() )
 		{

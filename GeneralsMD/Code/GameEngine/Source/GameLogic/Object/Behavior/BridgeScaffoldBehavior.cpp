@@ -36,13 +36,6 @@
 #include "GameLogic/Module/BridgeScaffoldBehavior.h"
 #include "Lib/FixBoundary.h"
 
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 BridgeScaffoldBehavior::BridgeScaffoldBehavior( Thing *thing, const ModuleData *moduleData )
@@ -161,7 +154,7 @@ UpdateSleepTime BridgeScaffoldBehavior::update( void )
 	const FCoord3D ourPos = *us->getPositionFix();
 
 	// the scaffold's positions and speeds are saved as float; the motion itself is fixed point
-	const FCoord3D targetPos = toFix( m_targetPos );
+	const FCoord3D targetPos = fcoordFromCoord3D( m_targetPos );
 
 	// compute direction vector from our position to the target position
 	FCoord3D dirV = targetPos;
@@ -206,9 +199,9 @@ UpdateSleepTime BridgeScaffoldBehavior::update( void )
 	}  // end switch
 
 	// adjust speed so it's slower at the end of motion
-	const FCoord3D fxEnd = toFix( *end );
+	const FCoord3D fxEnd = fcoordFromCoord3D( *end );
 	FCoord3D speedVector = fxEnd;
-	speedVector.sub( toFix( *start ) );
+	speedVector.sub( fcoordFromCoord3D( *start ) );
 	Fix totalDistance = speedVector.length() / Fix( 4 );
 	speedVector = fxEnd;
 	speedVector.sub( ourPos );

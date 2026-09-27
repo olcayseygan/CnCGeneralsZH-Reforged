@@ -51,24 +51,6 @@
 
 static const Real STRAIGHT_DOWN_SLOW_FACTOR = 0.5f;
 
-// P6: the missile's flight model (its velocity, targets and steering matrix) is still float, and
-// crosses into the object's fixed transform through these two.
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
-static FixMatrix3D toFix( const Matrix3D &in )
-{
-	FixMatrix3D out;
-	for( Int i = 0; i < 3; ++i )
-		for( Int j = 0; j < 4; ++j )
-			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
-	return out;
-}
-
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -253,7 +235,7 @@ void NeutronMissileUpdate::doLaunch( void )
 		worldTransform.Rotate_X( (PI / 2.0f) );
 
 		getObject()->getDrawable()->setDrawableHidden(false);
-		const FixMatrix3D worldFix = toFix( worldTransform );
+		const FixMatrix3D worldFix = fixMatrixFromMatrix3D( worldTransform );
 		const FCoord3D worldPos = worldFix.getTranslation();
 		getObject()->setTransformMatrixFix(&worldFix);
 		getObject()->setPositionFix(&worldPos);
@@ -273,7 +255,7 @@ void NeutronMissileUpdate::doLaunch( void )
 
 	// fall
 	FCoord3D pos = *getObject()->getPositionFix();
-	pos.add( toFix( m_vel ) );
+	pos.add( fcoordFromCoord3D( m_vel ) );
 	getObject()->setPositionFix( &pos );
 
 	FXList::doFXObj(getNeutronMissileUpdateModuleData()->m_ignitionFX, getObject());
@@ -437,8 +419,8 @@ void NeutronMissileUpdate::doAttack( void )
 //DEBUG_LOG(("vel %f accel %f z %f\n",m_vel.length(),m_accel.length(), pos.z));
 //Real vm = sqrt(m_vel.x*m_vel.x+m_vel.y*m_vel.y+m_vel.z*m_vel.z);
 //DEBUG_LOG(("vel is %f %f %f (%f)\n",m_vel.x,m_vel.y,m_vel.z,vm));
-	const FixMatrix3D fixMx = toFix( mx );
-	const FCoord3D fixPos = toFix( pos );
+	const FixMatrix3D fixMx = fixMatrixFromMatrix3D( mx );
+	const FCoord3D fixPos = fcoordFromCoord3D( pos );
 	getObject()->setTransformMatrixFix( &fixMx );
 	getObject()->setPositionFix( &fixPos );
 
@@ -494,7 +476,7 @@ UpdateSleepTime NeutronMissileUpdate::update( void )
 
 	if (!m_reachedIntermediatePos)
 	{
-		const FCoord3D intermedPos = toFix( m_intermedPos );
+		const FCoord3D intermedPos = fcoordFromCoord3D( m_intermedPos );
 		Fix distSqr = ThePartitionManager->getDistanceSquaredFix(getObject(), &intermedPos, FROM_CENTER_3D);
 		Fix bound = getObject()->getGeometryInfo().getBoundingSphereRadiusFix();
 		if (distSqr <= bound * bound)

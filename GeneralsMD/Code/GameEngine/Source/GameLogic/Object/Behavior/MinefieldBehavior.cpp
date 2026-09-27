@@ -338,18 +338,10 @@ void MinefieldBehavior::detonateOnce(const Coord3D& position)
 }
 
 //-----------------------------------------------------------------------------
-static FCoord3D toFCoord3D(const Coord3D& c)
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
-//-----------------------------------------------------------------------------
 static Fix calcDistSquared(const FCoord3D& a, const Coord3D& b)
 {
 	FCoord3D delta = a;
-	delta.sub( toFCoord3D( b ) );
+	delta.sub( fcoordFromCoord3D( b ) );
 	return delta.lengthSqr();
 }
 
@@ -585,8 +577,8 @@ void MinefieldBehavior::setScootParms(const Coord3D& start, const Coord3D& end)
 	const MinefieldBehaviorModuleData* d = getMinefieldBehaviorModuleData();
 	UnsignedInt scootFromStartingPointTime = d->m_scootFromStartingPointTime;
 
-	FCoord3D fStart = toFCoord3D( start );
-	FCoord3D endOnGround = toFCoord3D( end );
+	FCoord3D fStart = fcoordFromCoord3D( start );
+	FCoord3D endOnGround = fcoordFromCoord3D( end );
 	endOnGround.z = TheTerrainLogic->getGroundHeightFix( endOnGround.x, endOnGround.y );
 	if (fStart.z > endOnGround.z)
 	{

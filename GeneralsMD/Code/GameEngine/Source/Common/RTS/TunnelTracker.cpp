@@ -280,18 +280,10 @@ void TunnelTracker::onTunnelDestroyed( const Object *deadTunnel )
 // into whatever is shooting at it.
 static const UnsignedInt TUNNEL_UNDER_FIRE_FRAMES = 2 * LOGICFRAMES_PER_SECOND;
 
-// P4/P7: the points come from the AI and the move orders in float
-static FCoord3D toFix( const Coord3D *pos )
-{
-	FCoord3D f;
-	f.set( fixFromReal( pos->x ), fixFromReal( pos->y ), fixFromReal( pos->z ) );
-	return f;
-}
-
 Object *TunnelTracker::findQuietTunnelNear( const Coord3D *pos ) const
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
-	const FCoord3D posFx = toFix( pos );
+	const FCoord3D posFx = fcoordFromCoord3D( pos );
 	Object *nearest = NULL;
 	Fix nearestSqr = Fix( 0 );
 	for( std::list<ObjectID>::const_iterator it = m_tunnelIDs.begin(); it != m_tunnelIDs.end(); ++it )
@@ -366,8 +358,8 @@ Object *TunnelTracker::findTunnelShortcut( const Coord3D *from, const Coord3D *t
 	if( entrance == NULL || exit == entrance )
 		return NULL;
 
-	const FCoord3D fromFx = toFix( from );
-	const FCoord3D toFx = toFix( to );
+	const FCoord3D fromFx = fcoordFromCoord3D( from );
+	const FCoord3D toFx = fcoordFromCoord3D( to );
 	const Fix toEntrance = fixSqrt( ThePartitionManager->getDistanceSquaredFix( entrance, &fromFx, FROM_CENTER_2D ) );
 	const Fix fromExit = fixSqrt( ThePartitionManager->getDistanceSquaredFix( exit, &toFx, FROM_CENTER_2D ) );
 	if( toEntrance + fromExit >= fixFromReal( walk ) )	// P7

@@ -50,14 +50,6 @@
 
 const Real BIGNUM = 99999.0f;
 
-// parking spots, landing points and commands stay float until their owners move; they enter here
-static FCoord3D toFCoord3D( const Coord3D *c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
-	return f;
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -888,7 +880,7 @@ public:
 			{
 				ParkingPlaceBehaviorInterface::PPInfo ppinfo;
 				pp->calcPPInfo( jet->getID(), &ppinfo );
-				FCoord3D vector = toFCoord3D( &ppinfo.runwayEnd );
+				FCoord3D vector = fcoordFromCoord3D( &ppinfo.runwayEnd );
 				vector.sub( *jet->getPositionFix() );
 				Real dist = fixToReal( vector.length() );	// the lift is the locomotor's (P4)
 
@@ -954,7 +946,7 @@ EMPTY_DTOR(JetTakeoffOrLandingState)
 static Fix calcDistSqr(const FCoord3D& a, const Coord3D& b)
 {
 	FCoord3D d = a;
-	d.sub( toFCoord3D( &b ) );
+	d.sub( fcoordFromCoord3D( &b ) );
 	return d.lengthSqr();
 }
 
@@ -1200,10 +1192,10 @@ public:
 
 		// magically position it correctly.
 		jet->getPhysics()->scrubVelocity2D(0);
-		FCoord3D hoverloc = toFCoord3D( &ppinfo.parkingSpace );
+		FCoord3D hoverloc = fcoordFromCoord3D( &ppinfo.parkingSpace );
 		if( jet->testStatus( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) )
 		{
-			hoverloc = toFCoord3D( &ppinfo.runwayPrep );
+			hoverloc = fcoordFromCoord3D( &ppinfo.runwayPrep );
 		}
 
 		hoverloc.z = jet->getPositionFix()->z;

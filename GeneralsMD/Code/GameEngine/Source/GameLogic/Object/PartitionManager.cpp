@@ -172,13 +172,6 @@ struct FCollideLocAndNormal
 	FCoord3D normal;
 };
 
-static FCoord3D toFCoord3D(const Coord3D *c)
-{
-	FCoord3D f;
-	f.set(fixFromReal(c->x), fixFromReal(c->y), fixFromReal(c->z));
-	return f;
-}
-
 /// toward zero, the way the (Int) conversion of a float did
 static Int fixTruncToInt(Fix f)
 {
@@ -2033,8 +2026,8 @@ Bool PartitionManager::geomCollidesWithGeom(const Coord3D* pos1,
 		Real angle2) const
 {
 	// P9: this is float in the shared header; its arguments cross over here
-	FCoord3D fpos1 = toFCoord3D(pos1);
-	FCoord3D fpos2 = toFCoord3D(pos2);
+	FCoord3D fpos1 = fcoordFromCoord3D(pos1);
+	FCoord3D fpos2 = fcoordFromCoord3D(pos2);
 	CollideInfo thisInfo(&fpos1, geom1, fixFromReal(angle1));
 	CollideInfo thatInfo(&fpos2, geom2, fixFromReal(angle2));
 
@@ -3578,7 +3571,7 @@ Object *PartitionManager::getClosestObject(
 {
 	Fix dist;
 	FCoord3D vec;
-	FCoord3D fpos = toFCoord3D(pos);
+	FCoord3D fpos = fcoordFromCoord3D(pos);
 	Object *found = getClosestObjectsFix(NULL, &fpos, fixFromReal(maxDist), dc, filters, NULL, &dist, &vec);
 	if (closestDist)
 		*closestDist = fixToReal(dist);
@@ -3598,7 +3591,7 @@ void PartitionManager::getVectorTo(const Object *obj, const Object *otherObj, Di
 void PartitionManager::getVectorTo(const Object *obj, const Coord3D *pos, DistanceCalculationType dc, Coord3D& vec)
 {
 	FCoord3D fvec;
-	FCoord3D fpos = toFCoord3D(pos);
+	FCoord3D fpos = fcoordFromCoord3D(pos);
 	getDistanceSquaredFix(obj, &fpos, dc, &fvec);
 	vec = fvec.toCoord3D();
 }
@@ -3616,7 +3609,7 @@ Real PartitionManager::getDistanceSquared(const Object *obj, const Object *other
 Real PartitionManager::getDistanceSquared(const Object *obj, const Coord3D *pos, DistanceCalculationType dc, Coord3D *vec)
 {
 	FCoord3D fvec;
-	FCoord3D fpos = toFCoord3D(pos);
+	FCoord3D fpos = fcoordFromCoord3D(pos);
 	Fix d = getDistanceSquaredFix(obj, &fpos, dc, &fvec);
 	fromFCoord3D(fvec, vec);
 	return fixToReal(d);
@@ -3626,7 +3619,7 @@ Real PartitionManager::getDistanceSquared(const Object *obj, const Coord3D *pos,
 Real PartitionManager::getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Object *otherObj, DistanceCalculationType dc, Coord3D *vec)
 {
 	FCoord3D fvec;
-	FCoord3D fgoal = toFCoord3D(goalPos);
+	FCoord3D fgoal = fcoordFromCoord3D(goalPos);
 	Fix d = getGoalDistanceSquaredFix(obj, &fgoal, otherObj, dc, &fvec);
 	fromFCoord3D(fvec, vec);
 	return fixToReal(d);
@@ -3637,8 +3630,8 @@ Real PartitionManager::getGoalDistanceSquared(const Object *obj, const Coord3D *
 Real PartitionManager::getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Coord3D *otherPos, DistanceCalculationType dc, Coord3D *vec)
 {
 	FCoord3D fvec;
-	FCoord3D fgoal = toFCoord3D(goalPos);
-	FCoord3D fother = toFCoord3D(otherPos);
+	FCoord3D fgoal = fcoordFromCoord3D(goalPos);
+	FCoord3D fother = fcoordFromCoord3D(otherPos);
 	Fix d = getGoalDistanceSquaredFix(obj, &fgoal, &fother, dc, &fvec);
 	fromFCoord3D(fvec, vec);
 	return fixToReal(d);
@@ -3671,7 +3664,7 @@ Real PartitionManager::getRelativeAngle2D( const Object *obj, const Object *othe
 //-----------------------------------------------------------------------------
 Real PartitionManager::getRelativeAngle2D( const Object *obj, const Coord3D *pos )
 {
-	return fixToReal( relativeAngle2DFix( obj, toFCoord3D( pos ) ) );
+	return fixToReal( relativeAngle2DFix( obj, fcoordFromCoord3D( pos ) ) );
 }
 
 //-----------------------------------------------------------------------------
@@ -3695,7 +3688,7 @@ SimpleObjectIterator *PartitionManager::iterateObjectsInRange(
 	IterOrderType order
 )
 {
-	FCoord3D fpos = toFCoord3D(pos);
+	FCoord3D fpos = fcoordFromCoord3D(pos);
 	return iterateObjectsInRangeFix(&fpos, fixFromReal(maxDist), dc, filters, order);
 }
 
@@ -3716,7 +3709,7 @@ SimpleObjectIterator* PartitionManager::iteratePotentialCollisions(
 	PartitionFilterWouldCollide filter(*pos, geom, angle, true);
 	PartitionFilter *filters[] = { &filter, NULL };
 
-	FCoord3D fpos = toFCoord3D(pos);
+	FCoord3D fpos = fcoordFromCoord3D(pos);
 	getClosestObjectsFix(NULL, &fpos, maxDist, use2D ? FROM_BOUNDINGSPHERE_2D : FROM_BOUNDINGSPHERE_3D, filters, iter, NULL, NULL);
 
 	iterHolder.release();
@@ -3781,7 +3774,7 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 
 	// compute the spot on the terrain we've picked, in fixed point.  P9: findPositionAround, its
 	// options and its result are float in the shared header, so they cross over here
-	FCoord3D fcenter = toFCoord3D( center );
+	FCoord3D fcenter = fcoordFromCoord3D( center );
 	Fix fdist = fixFromReal( dist );
 	Fix fangle = fixFromReal( angle );
 	FCoord3D fpos;
@@ -5562,7 +5555,7 @@ PartitionFilterWouldCollide::PartitionFilterWouldCollide(const Coord3D& pos, con
 Bool PartitionFilterWouldCollide::allow(Object *objOther)
 {
 	// P9: the filter's own position and angle are float members in the shared header
-	FCoord3D thisPos = toFCoord3D(&m_position);
+	FCoord3D thisPos = fcoordFromCoord3D(&m_position);
 	CollideInfo thisInfo(&thisPos, m_geom, fixFromReal(m_angle));
 	CollideInfo thatInfo(objOther->getPositionFix(), objOther->getGeometryInfo(), objOther->getOrientationFix());
 

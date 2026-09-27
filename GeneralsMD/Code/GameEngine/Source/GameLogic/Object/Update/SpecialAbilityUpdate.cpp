@@ -66,14 +66,6 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "Lib/FixBoundary.h"
 
-// m_targetPos is saved in float
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -885,7 +877,7 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
   }
   else if( m_targetPos.x || m_targetPos.y || m_targetPos.z ) //It's zero if not used...
   {
-    const FCoord3D targetPos = toFix( m_targetPos );
+    const FCoord3D targetPos = fcoordFromCoord3D( m_targetPos );
     fDistSquared = ThePartitionManager->getDistanceSquaredFix( self, &targetPos, FROM_BOUNDINGSPHERE_2D );
   }
   else
@@ -962,7 +954,7 @@ Bool SpecialAbilityUpdate::isWithinAbilityAbortRange() const
   }
   else if( m_targetPos.x || m_targetPos.y || m_targetPos.z ) //It's zero if not used...
   {
-    const FCoord3D targetPos = toFix( m_targetPos );
+    const FCoord3D targetPos = fcoordFromCoord3D( m_targetPos );
     fDistSquared = ThePartitionManager->getDistanceSquaredFix( self, &targetPos, FROM_BOUNDINGSPHERE_2D );
   }
   else

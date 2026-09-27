@@ -64,14 +64,6 @@
 #include "GameLogic\Module\ContainModule.h"
 #include "Lib/FixBoundary.h"
 
-// P8: the gunship's targets are saved in float
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -550,7 +542,7 @@ UpdateSleepTime SpectreGunshipUpdate::update()
 
 
             // THIS WILL FIND A VALID TARGET WITHIN THE TARGETING RETICLE
-	          const FCoord3D reticleCenter = toFix( m_overrideTargetDestination );	// P8
+	          const FCoord3D reticleCenter = fcoordFromCoord3D( m_overrideTargetDestination );	// P8
 	          ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(&reticleCenter,
               fixFromReal( data->m_targetingReticleRadius ),	// P3
               FROM_BOUNDINGSPHERE_2D, 
@@ -576,7 +568,7 @@ UpdateSleepTime SpectreGunshipUpdate::update()
               {
                 // set a flag to start the targeting decal fading, since there is nothing to kill there
                 // THIS WILL FIND A VALID TARGET ANYWHERE INSIDE THE TARGETING AREA (THE BIG CIRCLE)
-	              const FCoord3D areaCenter = toFix( m_initialTargetPosition );	// P8
+	              const FCoord3D areaCenter = fcoordFromCoord3D( m_initialTargetPosition );	// P8
 	              ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(&areaCenter,
                   fixFromReal( data->m_attackAreaRadius ),	// P3
                   FROM_BOUNDINGSPHERE_2D, 

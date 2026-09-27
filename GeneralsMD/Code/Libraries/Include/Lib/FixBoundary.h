@@ -49,4 +49,19 @@ inline Real fixToReal( Fix f )
 	return (Real)f.raw() * (1.0f / (Real)Fix::ONE_RAW);
 }
 
+inline FCoord3D fcoordFromCoord3D( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
+inline FCoord3D fcoordFromCoord3D( const Coord3D *c )
+{
+	return fcoordFromCoord3D( *c );
+}
+
+/// every cell through fixFromReal; the way back is FixMatrix3D::toMatrix3D
+FixMatrix3D fixMatrixFromMatrix3D( const Matrix3D &in );
+
 #endif // _LIB_FIX_BOUNDARY_H_

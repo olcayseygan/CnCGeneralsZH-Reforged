@@ -495,14 +495,6 @@ void GameLogic::reset( void )
 	m_rankPointsToAddAtGameStart = 0;
 }  // end reset
 
-/// map data, waypoints and the pathfinder still hand out float positions: this is where they come in
-static FCoord3D fcoordFromCoord3D( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 /// a map-data position with its z taken as an offset above the logic ground
 static FCoord3D fcoordOnGround( const Coord3D &c, Bool addToGround )
 {

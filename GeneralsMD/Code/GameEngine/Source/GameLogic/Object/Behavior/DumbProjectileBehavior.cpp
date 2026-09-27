@@ -47,14 +47,6 @@
 #include "GameLogic/Weapon.h"
 #include "Lib/FixBoundary.h"
 
-// the flight path is float until projectile flight moves (P6)
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 /* Matrix3D::buildTransformMatrix in fixed point: the x axis along from->to, placed at pos, no roll.
 	 Yaw about z, then pitch about y, as the float one does it. */
 static void buildFlightMatrix( const FCoord3D &pos, const FCoord3D &from, const FCoord3D &to, FixMatrix3D &mtx )
@@ -408,7 +400,7 @@ void DumbProjectileBehavior::projectileFireAtObjectOrPosition( const Object *vic
 		// Some weapons want to scale their start speed to the range
 		Real minRange = detWeap->getMinimumAttackRange();
 		Real maxRange = detWeap->getUnmodifiedAttackRange();
-		const FCoord3D fxVictimPos = toFix( victimPosToUse );
+		const FCoord3D fxVictimPos = fcoordFromCoord3D( victimPosToUse );
 		Real range = fixToReal( fixSqrt( ThePartitionManager->getDistanceSquaredFix( projectile, &fxVictimPos, FROM_CENTER_2D ) ) );	// P6
 		// guard the degenerate min==max range and clamp: a shot inside the minimum range gave a
 		// negative ratio and a speed below MinWeaponSpeed (possibly <= 0, which then made
@@ -671,7 +663,7 @@ UpdateSleepTime DumbProjectileBehavior::update()
 	}
 
 	//Otherwise, continue to force the flight path
-	FCoord3D flightStep = toFix( m_flightPath[m_currentFlightPathStep] );
+	FCoord3D flightStep = fcoordFromCoord3D( m_flightPath[m_currentFlightPathStep] );
 
 	if (d->m_orientToFlightPath && (!d->m_tumbleRandomly) )
   {
@@ -681,7 +673,7 @@ UpdateSleepTime DumbProjectileBehavior::update()
 	  // since Physics is applying gravity, which we duly ignore, but the prevPos won't be what we expect.
 	  // get it from the flight path instead. (srj)
       FixMatrix3D orientMtx;
-		  buildFlightMatrix( flightStep, toFix( m_flightPath[m_currentFlightPathStep - 1] ), flightStep, orientMtx );
+		  buildFlightMatrix( flightStep, fcoordFromCoord3D( m_flightPath[m_currentFlightPathStep - 1] ), flightStep, orientMtx );
 		  getObject()->setTransformMatrixFix(&orientMtx);
     }
     else if ( m_flightPath.size() >= 2 ) // oops! how do we orient the projectile on the zeroeth frame? This didn't matter until we started using the
@@ -690,7 +682,7 @@ UpdateSleepTime DumbProjectileBehavior::update()
       // (a point blank shot has a single path point, and this used to read m_flightPath[1] anyway)
     {
       FixMatrix3D orientMtx;
-		  buildFlightMatrix( flightStep, toFix( m_flightPath[0] ), toFix( m_flightPath[1] ), orientMtx );
+		  buildFlightMatrix( flightStep, fcoordFromCoord3D( m_flightPath[0] ), fcoordFromCoord3D( m_flightPath[1] ), orientMtx );
 		  getObject()->setTransformMatrixFix(&orientMtx);
     }
 

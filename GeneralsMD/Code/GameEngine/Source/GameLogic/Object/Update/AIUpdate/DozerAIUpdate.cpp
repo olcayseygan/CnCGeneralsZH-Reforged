@@ -68,14 +68,6 @@ class DozerActionStateMachine;
 
 static const Fix MIN_ACTION_TOLERANCE = 70_fx;
 
-// dock points and pathfinder results are still float (P5); this is where they come in
-static FCoord3D toFCoord3D( const Coord3D *c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
-	return f;
-}
-
 //-------------------------------------------------------------------------------------------------
 /** Is the builder near enough to a dock point to work from where it stands?  One place, because the
 	* move-to state and the build state have to agree: the move ends when this says yes, so if the
@@ -88,7 +80,7 @@ static Bool dozerHasArrivedAt( const Object *dozer, const Coord3D *goalPos )
 		return FALSE;
 
 	const Fix SLOP = 15_fx;
-	FCoord3D goal = toFCoord3D( goalPos );
+	FCoord3D goal = fcoordFromCoord3D( goalPos );
 	Fix distSqr = ThePartitionManager->getDistanceSquaredFix( dozer, &goal, FROM_BOUNDINGSPHERE_2D );
 	Fix allowableDistance = fixMax( MIN_ACTION_TOLERANCE,
 																	dozer->getGeometryInfo().getBoundingSphereRadiusFix() + SLOP );
@@ -1859,7 +1851,7 @@ Object *DozerAIUpdate::construct( const ThingTemplate *what,
 
 	// initialize object
 	// P5: the placement comes in as float
-	FCoord3D adjustedPos = toFCoord3D( pos );
+	FCoord3D adjustedPos = fcoordFromCoord3D( pos );
 	obj->setPositionFix( &adjustedPos );
 	obj->setOrientationFix( fixFromReal( angle ) );
 
@@ -2108,7 +2100,7 @@ void DozerAIUpdate::privateResumeConstruction( Object *obj, CommandSourceType cm
 					// since towers are often in cliff cells.
 					if (found && ai->isPathAvailable(&tmp))
 					{
-						FCoord3D d = toFCoord3D( &tmp );
+						FCoord3D d = fcoordFromCoord3D( &tmp );
 						d.sub( *me->getPositionFix() );
 						Fix thisDistSqr = d.x * d.x + d.y * d.y;
 						if (thisDistSqr < bestDistSqr)

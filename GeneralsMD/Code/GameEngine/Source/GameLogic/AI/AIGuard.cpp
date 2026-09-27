@@ -57,13 +57,6 @@
 
 const Real CLOSE_ENOUGH = (25.0f);
 
-// P7: the guard position and a trigger area's centre are still float
-static FCoord3D guardFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -241,7 +234,7 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 	}
 
 	Object* targetToGuard = findTargetToGuardByID();
-	FCoord3D pos = targetToGuard ? *targetToGuard->getPositionFix() : guardFix( *getPositionToGuard() );
+	FCoord3D pos = targetToGuard ? *targetToGuard->getPositionFix() : fcoordFromCoord3D( *getPositionToGuard() );
 
 	const PolygonTrigger*								area = getAreaToGuard();
 	PartitionFilterRelationship					f1(owner, PartitionFilterRelationship::ALLOW_ENEMIES);
@@ -297,7 +290,7 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 		visionRange = fixFromReal( area->getRadius() );	// P7
 		Coord3D center;
 		area->getCenterPoint(&center);
-		pos = guardFix( center );
+		pos = fcoordFromCoord3D( center );
 	}
 
 	if (getGuardMode() == GUARDMODE_GUARD_FLYING_UNITS_ONLY) 

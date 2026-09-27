@@ -89,14 +89,6 @@ inline Real calcDistSqr(const Coord3D& a, const Coord3D& b)
 	return sqr(a.x - b.x) + sqr(a.y - b.y) + sqr(a.z - b.z);
 }
 
-// the garrison and station points are bone positions, saved as float; they enter the object here
-static FCoord3D fcoordFromCoord3D( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 // ------------------------------------------------------------------------------------------------
 /** Given the target position, find the garrison point that is closest to it */
 // ------------------------------------------------------------------------------------------------

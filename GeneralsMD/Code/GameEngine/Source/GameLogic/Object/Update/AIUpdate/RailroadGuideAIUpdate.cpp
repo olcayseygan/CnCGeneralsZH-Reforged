@@ -46,13 +46,6 @@
 #include "GameClient/Statistics.h"
 #include "Lib/FixBoundary.h"
 
-static FCoord3D toFCoord3D( const Coord3D *c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
-	return f;
-}
-
 // a zero vector stays zero, as Coord3D::normalize leaves it
 static void fixNormalize( FCoord3D &v )
 {
@@ -544,7 +537,7 @@ void RailroadBehavior::loadTrackData( void )
 		{
 			//measure the distance from me to the waypoint
 			delta = *myPos;
-			delta.sub( toFCoord3D( anyWaypoint->getLocation() ) );	// waypoints are map data in float
+			delta.sub( fcoordFromCoord3D( anyWaypoint->getLocation() ) );	// waypoints are map data in float
 			Fix dist = delta.length();
 			if (closestDistance > dist )
 			{
@@ -1359,10 +1352,7 @@ void RailroadBehavior::updatePositionTrackDistance( PullInfo *pullerInfo, PullIn
 
 
 	// the turned matrix enters the fixed transform here
-	FixMatrix3D fxMtx;
-	for (Int r = 0; r < 3; ++r)
-		for (Int c = 0; c < 4; ++c)
-			fxMtx.m[r][c] = fixFromReal(mtx[r][c]);
+	FixMatrix3D fxMtx = fixMatrixFromMatrix3D( mtx );
 	obj->setTransformMatrixFix(&fxMtx);
 
 	if (!m_inTunnel)

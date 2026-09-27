@@ -301,6 +301,15 @@ void FixMatrix3D::toMatrix3D( Matrix3D *out ) const
 						fixToReal( m[ 2 ][ 0 ] ), fixToReal( m[ 2 ][ 1 ] ), fixToReal( m[ 2 ][ 2 ] ), fixToReal( m[ 2 ][ 3 ] ) );
 }
 
+FixMatrix3D fixMatrixFromMatrix3D( const Matrix3D &in )
+{
+	FixMatrix3D out;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
+	return out;
+}
+
 Coord2D FCoord2D::toCoord2D() const
 {
 	Coord2D c;

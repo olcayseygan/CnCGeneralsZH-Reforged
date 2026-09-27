@@ -52,14 +52,6 @@
 
 const Real BIGNUM = 99999.0f;
 
-// destinations and bone data stay float until their owners move; they enter here
-static FCoord3D toFCoord3D( const Coord3D *c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
-	return f;
-}
-
 // the ground or bridge under a float point, for a float destination the pathfinder still owns (P5)
 static Real layerHeightAt( const Coord3D &p, PathfindLayerEnum layer )
 {
@@ -107,7 +99,7 @@ enum ChinookAIStateType
 static Fix calcDistSqr(const FCoord3D& a, const Coord3D& b)
 {
 	FCoord3D d = a;
-	d.sub( toFCoord3D( &b ) );
+	d.sub( fcoordFromCoord3D( &b ) );
 	return d.lengthSqr();
 }
 
@@ -551,7 +543,7 @@ public:
 			info.ropeDrawable = ropeTmpl ? TheThingFactory->newDrawable(ropeTmpl) : NULL;
 			if (info.ropeDrawable)
 			{
-				FCoord3D ropeTop = obj->getTransformMatrixFix()->transformPoint( toFCoord3D( &ropePos[i] ) );
+				FCoord3D ropeTop = obj->getTransformMatrixFix()->transformPoint( fcoordFromCoord3D( &ropePos[i] ) );
 				ropePos[i] = ropeTop.toCoord3D();
 				info.ropeDrawable->setPosition(&ropePos[i]);
 				info.ropeSpeed = 0.0f;
@@ -627,10 +619,7 @@ public:
 					}
 
 					// the drop matrix is xfer'd float; it enters the fixed transform here
-					FixMatrix3D dropStart;
-					for (Int r = 0; r < 3; ++r)
-						for (Int c = 0; c < 4; ++c)
-							dropStart.m[r][c] = fixFromReal(it->dropStartMtx[r][c]);
+					FixMatrix3D dropStart = fixMatrixFromMatrix3D( it->dropStartMtx );
 					rappeller->setTransformMatrixFix(&dropStart);
 
 					AIUpdateInterface* rappellerAI = rappeller ? rappeller->getAIUpdateInterface() : NULL;
@@ -766,7 +755,7 @@ public:
 		}
 		else
 		{
-			destPos = toFCoord3D( getMachineGoalPosition() );
+			destPos = fcoordFromCoord3D( getMachineGoalPosition() );
 		}
 
 		loco->setPreferredHeight(m_newPreferredHeight);

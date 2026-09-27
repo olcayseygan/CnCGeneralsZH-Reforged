@@ -49,13 +49,6 @@
 
 const UnsignedInt WAIT_INDEFINITELY = 0xffffffff;
 
-// P6: a turret's target position and a bridge's attack points are still float
-static FCoord3D turretFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1018,7 +1011,7 @@ StateReturnType TurretAIAimTurretState::update()
 	Coord3D enemyPosition;
 	Bool preventing = false;
 	TurretTargetType targetType =  turret->friend_getTurretTarget(enemy, enemyPosition);
-	FCoord3D enemyPositionFx = turretFix( enemyPosition );	// kept in step with enemyPosition below
+	FCoord3D enemyPositionFx = fcoordFromCoord3D( enemyPosition );	// kept in step with enemyPosition below
 	Object *enemyForDistanceCheckOnly = enemy;	// Note: Do not use this anywhere except for the range check.
 	Bool aimingAtGround = (targetType != TARGET_OBJECT);	// a position, or a building; decided before enemy is nulled
 
@@ -1075,8 +1068,8 @@ StateReturnType TurretAIAimTurretState::update()
 				// Special case - bridges have two attackable points at either end.
 				TBridgeAttackInfo info;
 				TheTerrainLogic->getBridgeAttackPoints(enemy, &info);
-				const FCoord3D point1 = turretFix( info.attackPoint1 );
-				const FCoord3D point2 = turretFix( info.attackPoint2 );
+				const FCoord3D point1 = fcoordFromCoord3D( info.attackPoint1 );
+				const FCoord3D point2 = fcoordFromCoord3D( info.attackPoint2 );
 				if (ThePartitionManager->getDistanceSquaredFix( obj, &point1, FROM_BOUNDINGSPHERE_3D ) >
 						ThePartitionManager->getDistanceSquaredFix( obj, &point2, FROM_BOUNDINGSPHERE_3D ) )
 				{

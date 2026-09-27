@@ -50,12 +50,6 @@
 //-------------------------------------------------------------------------------------------------
 // the cleanup area and its range arrive from an AI command and go back to aiMoveToPosition, so they
 // stay float (P4/P7) and only the range queries run fixed.  ScanRange is INI data (P3).
-static FCoord3D cleanupPosFix( const Coord3D &pos )
-{
-	FCoord3D f;
-	f.set( fixFromReal( pos.x ), fixFromReal( pos.y ), fixFromReal( pos.z ) );
-	return f;
-}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -188,7 +182,7 @@ UpdateSleepTime CleanupHazardUpdate::update()
 		AIUpdateInterface *ai = obj->getAI();
 		if( ai && (ai->isIdle() || ai->isBusy()) )
 		{
-			FCoord3D pos = cleanupPosFix( m_pos );
+			FCoord3D pos = fcoordFromCoord3D( m_pos );
 			if( ThePartitionManager->getDistanceSquaredFix( obj, &pos, FROM_CENTER_2D ) < Fix( 25 * 25 ) )
 			{
 				//Abort clean area because there's nothing left to clean!
@@ -288,7 +282,7 @@ Object* CleanupHazardUpdate::scanClosestTarget()
 	{
 		//Look for targets around the target position only (but add scan range and move range).
 		//This case only happens when we are performing a cleanup area command.
-		FCoord3D pos = cleanupPosFix( m_pos );
+		FCoord3D pos = fcoordFromCoord3D( m_pos );
 		bestTargetInRange = ThePartitionManager->getClosestObjectFix( &pos, fixFromReal( data->m_scanRange ) + fixFromReal( m_moveRange ), FROM_CENTER_2D, filters );
 	}
 	else

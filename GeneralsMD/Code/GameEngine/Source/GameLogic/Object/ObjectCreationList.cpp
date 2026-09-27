@@ -106,19 +106,9 @@ static void adjustVector(Coord3D *vec, const Matrix3D* mtx)
 // P3: an OCL's positions are float by its interface and its INI offsets; they cross into the
 // object's fixed transform here, and nowhere else in this file
 //-------------------------------------------------------------------------------------------------
-static FCoord3D oclFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 static void oclSetTransform( Object *obj, const Matrix3D *mtx )
 {
-	FixMatrix3D f;
-	for( Int i = 0; i < 3; ++i )
-		for( Int j = 0; j < 4; ++j )
-			f.m[ i ][ j ] = fixFromReal( (*mtx)[ i ][ j ] );
+	FixMatrix3D f = fixMatrixFromMatrix3D( *mtx );
 	obj->setTransformMatrixFix( &f );
 }
 
@@ -408,7 +398,7 @@ public:
 				startPos.x -= Cos(orient) * m_data.m_distToTarget * SLOP;
 				startPos.y -= Sin(orient) * m_data.m_distToTarget * SLOP;
 			}
-			FCoord3D fxStartPos = oclFix( startPos );
+			FCoord3D fxStartPos = fcoordFromCoord3D( startPos );
 
 			Object *transport;
 
@@ -1018,8 +1008,8 @@ protected:
 		if (mtx)
 			adjustVector(&offset, mtx);
 
-		FCoord3D chunkPos = oclFix( *pos );
-		chunkPos.add( oclFix( offset ) );
+		FCoord3D chunkPos = fcoordFromCoord3D( pos );
+		chunkPos.add( fcoordFromCoord3D( offset ) );
 		
 		if (!m_particleSysName.isEmpty())
 		{

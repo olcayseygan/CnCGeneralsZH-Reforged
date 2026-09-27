@@ -53,14 +53,6 @@
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "Lib/FixBoundary.h"
 
-// the deck and runway positions come from bones and are float (P3)
-static FCoord3D toFix( const Coord3D &c )
-{
-	FCoord3D f;
-	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
-	return f;
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -231,7 +223,7 @@ void FlightDeckBehavior::buildInfo(Bool createUnits)
 					jet->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) );
 
 					//Init positioning.
-					const FCoord3D prepPos = toFix( flightDeckInfo.m_prep );	// P3: the deck layout is float
+					const FCoord3D prepPos = fcoordFromCoord3D( flightDeckInfo.m_prep );	// P3: the deck layout is float
 					jet->setPositionFix( &prepPos );
 					jet->setOrientationFix( fixFromReal( flightDeckInfo.m_orientation ) );
 
@@ -838,7 +830,7 @@ Bool FlightDeckBehavior::isInPositionToTakeoff( const Object &jet ) const
 				//order it to taxi into the position. When this happens, the ramp triggers its
 				//animation, and the jet drives through it. So to counter that, simply check
 				//the distance between the jet and the space.
-				const FCoord3D prepPos = toFix( m_spaces[ i ].m_prep );
+				const FCoord3D prepPos = fcoordFromCoord3D( m_spaces[ i ].m_prep );
 				if( ThePartitionManager->getDistanceSquaredFix( &jet, &prepPos, FROM_CENTER_2D ) < Fix( 10 ) )
 				{
 					return TRUE;
@@ -1386,7 +1378,7 @@ void FlightDeckBehavior::exitObjectViaDoor( Object *newObj, ExitDoorType exitDoo
 	}
 
 	// the runway layout is float, read from bones (P3)
-	const FCoord3D creationPos = toFix( pCreationLocations->front() );
+	const FCoord3D creationPos = fcoordFromCoord3D( pCreationLocations->front() );
 	newObj->setPositionFix( &creationPos );
 	newObj->setOrientationFix( fixFromReal( m_runways[ ppi->m_runway ].m_startOrient ) );
 	TheAI->pathfinder()->addObjectToPathfindMap( newObj );

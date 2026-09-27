@@ -351,8 +351,7 @@ Object* CommandButtonHuntUpdate::scanClosestTarget(void)
 				if (info) curPriority = info->getPriority(other->getTemplate());
 				if (curPriority == 0)
 					continue; // don't attack 0 priority targets.
-				// P7: the AI's distance modifier is still a Real
-				Int modifier = (Int)( (dist / fixFromReal( TheAI->getAiData()->m_attackPriorityDistanceModifier )).raw() >> Fix::FRAC_BITS );
+				Int modifier = (Int)( (dist / TheAI->getAiData()->m_attackPriorityDistanceModifier).raw() >> Fix::FRAC_BITS );
 				Int modPriority = curPriority-modifier;
 				if (modPriority < 1) 
 					modPriority = 1;

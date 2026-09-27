@@ -33,9 +33,10 @@
 
 #include "Common/StateMachine.h"
 #include "Common/GameMemory.h"
+#include "Lib/Fix.h"
 
-const Real DEFAULT_TURN_RATE = 0.01f;
-const Real DEFAULT_PITCH_RATE = 0.01f;
+constexpr Fix DEFAULT_TURN_RATE = 0.01_fx;
+constexpr Fix DEFAULT_PITCH_RATE = 0.01_fx;
 
 /** 
  * The TurretAI state IDs.
@@ -217,21 +218,21 @@ class TurretAIData : public MemoryPoolObject
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(TurretAIData, "TurretAIData")		
 public:
-	Real						m_turnRate;
-	Real						m_pitchRate;
-	Real						m_naturalTurretAngle;
-	Real						m_naturalTurretPitch;
-	Real						m_turretFireAngleSweep[WEAPONSLOT_COUNT];	///< if nonzero, sweep within +/- this angle range while firing
-	Real						m_turretSweepSpeedModifier[WEAPONSLOT_COUNT];	///< While sweeping, change your speed by this
-	Real						m_firePitch;						///< if nonzero, I am on target at this fixed pitch, not when pointing at target
-	Real						m_minPitch;							///< dependent on allowspitch. defaults to 0 (horizontal). The lowest pitch allowed (negative to allow pointing down of a high turret)
-	Real						m_groundUnitPitch;			///< dependent on allowspitch. defaults to 0 (horizontal). The lowest pitch allowed when firing at ground units to give the weapon an arc.  jba
+	Fix							m_turnRate;
+	Fix							m_pitchRate;
+	Fix							m_naturalTurretAngle;
+	Fix							m_naturalTurretPitch;
+	Fix							m_turretFireAngleSweep[WEAPONSLOT_COUNT];	///< if nonzero, sweep within +/- this angle range while firing
+	Fix							m_turretSweepSpeedModifier[WEAPONSLOT_COUNT];	///< While sweeping, change your speed by this
+	Fix							m_firePitch;						///< if nonzero, I am on target at this fixed pitch, not when pointing at target
+	Fix							m_minPitch;							///< dependent on allowspitch. defaults to 0 (horizontal). The lowest pitch allowed (negative to allow pointing down of a high turret)
+	Fix							m_groundUnitPitch;		///< dependent on allowspitch. defaults to 0 (horizontal). The lowest pitch allowed when firing at ground units to give the weapon an arc.  jba
 	UnsignedInt			m_turretWeaponSlots;		///< which WeaponSlots are controlled by this turret
 #ifdef INTER_TURRET_DELAY
 	UnsignedInt			m_interTurretDelay;			///< special-case for multiturret battleships
 #endif
-	Real						m_minIdleScanAngle;			///< max angle the turret can turn while idling
-	Real						m_maxIdleScanAngle;			///< max angle the turret can turn while idling
+	Fix							m_minIdleScanAngle;			///< max angle the turret can turn while idling
+	Fix							m_maxIdleScanAngle;		///< max angle the turret can turn while idling
 	UnsignedInt			m_minIdleScanInterval;	///< min interval between idle scans
 	UnsignedInt			m_maxIdleScanInterval;	///< max interval between idle scans
 	UnsignedInt			m_recenterTime;					///< time to wait before recentering turret
@@ -269,18 +270,19 @@ public:
 
 	Real getTurretAngle() const { return m_angle; }
 	Real getTurretPitch() const { return m_pitch; }
-	Real getMinPitch() const { return m_data->m_minPitch; }
+	// the turret's own motion is still float: these hand the Fix data over at its edge (P7)
+	Real getMinPitch() const;
 	Bool isAllowsPitch() const { return m_data->m_isAllowsPitch; }
-	Real getTurnRate() const { return m_data->m_turnRate; }
-	Real getNaturalTurretAngle() const { return m_data->m_naturalTurretAngle; }
-	Real getPitchRate() const { return m_data->m_pitchRate; }
-	Real getFirePitch() const { return m_data->m_firePitch; }
-	Real getGroundUnitPitch() const { return m_data->m_groundUnitPitch; }
-	Real getNaturalTurretPitch() const { return m_data->m_naturalTurretPitch;	}
+	Real getTurnRate() const;
+	Real getNaturalTurretAngle() const;
+	Real getPitchRate() const;
+	Real getFirePitch() const;
+	Real getGroundUnitPitch() const;
+	Real getNaturalTurretPitch() const;
 	Real getTurretFireAngleSweepForWeaponSlot( WeaponSlotType slot ) const;
 	Real getTurretSweepSpeedModifierForWeaponSlot( WeaponSlotType slot ) const;
-	Real getMinIdleScanAngle() const { return m_data->m_minIdleScanAngle;	}
-	Real getMaxIdleScanAngle() const { return m_data->m_maxIdleScanAngle;	}
+	Real getMinIdleScanAngle() const;
+	Real getMaxIdleScanAngle() const;
 	UnsignedInt getMinIdleScanInterval() const { return m_data->m_minIdleScanInterval;	}
 	UnsignedInt getMaxIdleScanInterval() const { return m_data->m_maxIdleScanInterval;	}
 	UnsignedInt getRecenterTime() const { return m_data->m_recenterTime;	}

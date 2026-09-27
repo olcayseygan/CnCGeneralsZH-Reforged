@@ -181,9 +181,9 @@ AITNGuardMachine::~AITNGuardMachine()
 }
 
 //--------------------------------------------------------------------------------------
-/*static*/ Real AITNGuardMachine::getStdGuardRange(const Object* obj)
+/*static*/ Fix AITNGuardMachine::getStdGuardRange(const Object* obj)
 {
-	Real visionRange = TheAI->getAdjustedVisionRangeForObject(obj, 
+	Fix visionRange = TheAI->getAdjustedVisionRangeForObject(obj, 
 		AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD | AI_VISIONFACTOR_GUARDINNER);
 
 	return visionRange;
@@ -375,7 +375,7 @@ static Object *TunnelNetworkScan(Object *owner)
 		filters[count++] = &filterMapStatus;
 		filters[count++] = &filterFogged;	// guard picks what its player can see, as every other auto-target does
 
-		const Fix visionRange = fixFromReal( AITNGuardMachine::getStdGuardRange(owner) );	// P3
+		const Fix visionRange = AITNGuardMachine::getStdGuardRange(owner);
 
 		filters[count++] = NULL;
 

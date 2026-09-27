@@ -356,7 +356,7 @@ m_role(AIROLE_AGGRESSIVE)
 	//
 	m_role = (GameLogicRandomValue( 0, AIROLE_COUNT - 1 ) == 0) ? AIROLE_AGGRESSIVE : AIROLE_DEFENSIVE;
 
-	m_teamSeconds = TheAI->getAiData()->m_teamSeconds;
+	m_teamSeconds = (Int)( TheAI->getAiData()->m_teamSeconds.raw() >> Fix::FRAC_BITS );
 
 	//
 	// Stagger this player's repeating checks.  doBaseBuilding re-arms itself for 2 seconds,
@@ -535,7 +535,7 @@ void AIPlayer::checkForSupplyCenter( BuildListInfo *info, Object *bldg )
 
 			MemoryPoolObjectHolder hold;
 			SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRangeFix(
-					bldg->getPositionFix(), fixFromReal( TheAI->getAiData()->m_supplyCenterSafeRadius ), FROM_CENTER_2D, filters );	// P3
+					bldg->getPositionFix(), TheAI->getAiData()->m_supplyCenterSafeRadius, FROM_CENTER_2D, filters );
 			hold.hold( nearby );
 			for( Object *w = nearby->first(); w; w = nearby->next() )
 				++warehouses;
@@ -1441,7 +1441,7 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 	if (tthing == NULL) return 0;
 
 	// See if we have enemies.
-	Fix radius = fixFromReal( TheAI->getAiData()->m_supplyCenterSafeRadius );	// P3
+	Fix radius = TheAI->getAiData()->m_supplyCenterSafeRadius;
 	radius += tthing->getTemplateGeometryInfo().getBoundingCircleRadiusFix();
 
 	// only consider enemies.
@@ -2050,7 +2050,7 @@ Bool AIPlayer::isPossibleToBuildTeam( TeamPrototype *proto, Bool requireIdleFact
 			cost += thingCost * ((unitInfo[i].maxUnits+unitInfo[i].minUnits)/2.0f);
 		}
 	}
-	cost *= TheAI->getAiData()->m_teamResourcesToBuild;
+	cost *= fixToReal( TheAI->getAiData()->m_teamResourcesToBuild );	// P7
 	if (m_player->getMoney()->countMoney() < cost)	{
 		notEnoughMoney = true;
 		return false; // too expensive
@@ -2225,7 +2225,7 @@ Bool AIPlayer::selectTeamToReinforce( Int minPriority )
 		{
 			origin = curTeam->getFirstItemIn_TeamMemberList()->getPositionFix()->toCoord3D();	// P7: tryToRecruit is float
 		}
-		Object *unit = curTeam->tryToRecruit(curThing, &origin, TheAI->getAiData()->m_maxRecruitDistance);
+		Object *unit = curTeam->tryToRecruit(curThing, &origin, fixToReal( TheAI->getAiData()->m_maxRecruitDistance ));	// P7
 		if (unit) 
 		{
 			order->m_numCompleted = 1;
@@ -2609,7 +2609,7 @@ Bool AIPlayer::selectTeamToBuild( void )
 	const AIDifficultyProfile *profile = getSkillProfile();
 	AIEnemyComposition enemy;
 	std::vector<AIVisibleEnemy> army;
-	if (profile->m_counterCompositionWeight > 0.0f)
+	if (profile->m_counterCompositionWeight > Fix( 0 ))
 		computeEnemyComposition( &enemy, &army );
 
 	// what a perfect counter, and the role preference, are worth in units of production priority
@@ -2626,7 +2626,7 @@ Bool AIPlayer::selectTeamToBuild( void )
 		const Bool isDefenceTeam = info->m_isBaseDefense || info->m_isPerimeterDefense;
 
 		Real score = INT_TO_REAL( info->m_productionPriority );
-		score += profile->m_counterCompositionWeight * COUNTER_SPAN *
+		score += fixToReal( profile->m_counterCompositionWeight ) * COUNTER_SPAN *	// P7
 						 aiCounterScore( enemy, teamCapability( *t, m_player, army ) );
 		if( (m_role == AIROLE_DEFENSIVE) == (isDefenceTeam != FALSE) )
 			score += ROLE_SPAN;
@@ -3640,7 +3640,7 @@ void AIPlayer::queueUnits( void )
 			}
 			while (order->isWaitingToBuild()) {
 				
-				Object *unit = team->m_team->tryToRecruit(order->m_thing, &home, TheAI->getAiData()->m_maxRecruitDistance);
+				Object *unit = team->m_team->tryToRecruit(order->m_thing, &home, fixToReal( TheAI->getAiData()->m_maxRecruitDistance ));	// P7
 				if (unit) 
 				{
 					order->m_numCompleted++;
@@ -3690,12 +3690,12 @@ void AIPlayer::queueUnits( void )
  */
 Int AIPlayer::computeStructureDelay( void )
 {
-	return aiHoardAdjustedDelay( computeBuildDelay( TheAI->getAiData()->m_structureSeconds,
+	return aiHoardAdjustedDelay( computeBuildDelay( fixToReal( TheAI->getAiData()->m_structureSeconds ),	// P7
 													  m_player->getMoney()->countMoney(),
 													  TheAI->getAiData()->m_resourcesPoor,
 													  TheAI->getAiData()->m_resourcesWealthy,
-													  TheAI->getAiData()->m_structuresPoorMod,
-													  TheAI->getAiData()->m_structuresWealthyMod,
+													  fixToReal( TheAI->getAiData()->m_structuresPoorMod ),
+													  fixToReal( TheAI->getAiData()->m_structuresWealthyMod ),
 													  getBuildRateScale() ),
 															 m_player->getMoney()->countMoney(),
 															 getSkillProfile()->m_cashHoardThreshold );
@@ -3742,8 +3742,8 @@ Int AIPlayer::computeTeamDelay( void )
 													  m_player->getMoney()->countMoney(),
 													  TheAI->getAiData()->m_resourcesPoor,
 													  TheAI->getAiData()->m_resourcesWealthy,
-													  TheAI->getAiData()->m_teamPoorMod,
-													  TheAI->getAiData()->m_teamWealthyMod,
+													  fixToReal( TheAI->getAiData()->m_teamPoorMod ),	// P7
+													  fixToReal( TheAI->getAiData()->m_teamWealthyMod ),
 													  getBuildRateScale() ),
 															 m_player->getMoney()->countMoney(),
 															 getSkillProfile()->m_cashHoardThreshold );
@@ -6056,12 +6056,12 @@ static Bool retreatCanOrderHome( const Object *obj )
 void AIPlayer::doRetreats( void )
 {
 	const AIDifficultyProfile *profile = getSkillProfile();
-	if( profile->m_retreatTtkRatio <= 0.0f )
+	if( profile->m_retreatTtkRatio <= Fix( 0 ) )
 		return;			// the bottom rung does not know how to quit, on purpose
 
 	if( --m_retreatTimer > 0 )
 		return;
-	m_retreatTimer = REAL_TO_INT_CEIL( profile->m_decisionIntervalSeconds * LOGICFRAMES_PER_SECOND );
+	m_retreatTimer = (Int)( (profile->m_decisionIntervalSeconds * LOGICFRAMES_PER_SECOND).ceil().raw() >> Fix::FRAC_BITS );
 	if( m_retreatTimer < 1 )
 		m_retreatTimer = 1;
 
@@ -6154,7 +6154,7 @@ void AIPlayer::doRetreats( void )
 				continue;			// not in a fight
 
 			const Real ratio = aiRetreatRatio( myHealth, myPower, enemyHealth, enemyPower );
-			if( ratio >= profile->m_retreatTtkRatio )
+			if( ratio >= fixToReal( profile->m_retreatTtkRatio ) )	// P7
 				continue;			// holding, or winning
 
 			//
@@ -6185,7 +6185,7 @@ void AIPlayer::doRetreats( void )
 					// this one's own exchange, against the same enemy force
 					Real oneHealth = 0.0f, onePower = 0.0f;
 					addToForce( obj, &oneHealth, &onePower );
-					if( aiRetreatRatio( oneHealth, onePower, enemyHealth, enemyPower ) >= profile->m_retreatTtkRatio )
+					if( aiRetreatRatio( oneHealth, onePower, enemyHealth, enemyPower ) >= fixToReal( profile->m_retreatTtkRatio ) )	// P7
 						continue;
 				}
 
@@ -7364,7 +7364,7 @@ Bool AIPlayer::nextScoutTarget( Int slot, const Coord3D *from, Coord3D *pos )
 		m_scoutSeenFrame[ m_scoutTargetFor[ slot ] ] = now;
 
 	const AIDifficultyProfile *profile = getSkillProfile();
-	const UnsignedInt fresh = REAL_TO_INT_CEIL( profile->m_scoutIntervalSeconds * LOGICFRAMES_PER_SECOND );
+	const UnsignedInt fresh = (UnsignedInt)( (profile->m_scoutIntervalSeconds * LOGICFRAMES_PER_SECOND).ceil().raw() >> Fix::FRAC_BITS );
 
 	Int bestNdx = -1;
 	Real bestScore = 0.0f;
@@ -8072,7 +8072,7 @@ void AIPlayer::doScouting( void )
 	//
 	if( ordered )
 	{
-		Int interval = REAL_TO_INT_CEIL( profile->m_scoutIntervalSeconds * LOGICFRAMES_PER_SECOND );
+		Int interval = (Int)( (profile->m_scoutIntervalSeconds * LOGICFRAMES_PER_SECOND).ceil().raw() >> Fix::FRAC_BITS );
 		if( interval > m_scoutTimer )
 			m_scoutTimer = interval;
 	}

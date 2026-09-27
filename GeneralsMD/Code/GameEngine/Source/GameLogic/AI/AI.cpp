@@ -145,30 +145,30 @@ void AISideBuildList::addInfo(BuildListInfo *info)
 static const FieldParse TheAIFieldParseTable[] = 
 {
 																	 
-	{ "StructureSeconds",				INI::parseReal,NULL,		offsetof( TAiData, m_structureSeconds ) },
-	{ "TeamSeconds",						INI::parseReal,NULL,		offsetof( TAiData, m_teamSeconds ) },
+	{ "StructureSeconds",				INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_structureSeconds ) },
+	{ "TeamSeconds",						INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_teamSeconds ) },
 	{ "Wealthy",								INI::parseInt,NULL,			offsetof( TAiData, m_resourcesWealthy ) },
 	{ "Poor",										INI::parseInt,NULL,		  offsetof( TAiData, m_resourcesPoor ) },
 	{ "ForceIdleMSEC",					INI::parseDurationUnsignedInt,NULL,offsetof( TAiData, m_forceIdleFramesCount )	},
-	{ "StructuresWealthyRate",	INI::parseReal,NULL,		offsetof( TAiData, m_structuresWealthyMod ) },
-	{ "TeamsWealthyRate",				INI::parseReal,NULL,		offsetof( TAiData, m_teamWealthyMod ) },
-	{ "StructuresPoorRate",			INI::parseReal,NULL,		offsetof( TAiData, m_structuresPoorMod ) },
-	{ "TeamsPoorRate",					INI::parseReal,NULL,		offsetof( TAiData, m_teamPoorMod ) },
-	{ "TeamResourcesToStart",		INI::parseReal,NULL,		offsetof( TAiData, m_teamResourcesToBuild ) },
-	{ "GuardInnerModifierAI",		INI::parseReal,NULL,		offsetof( TAiData, m_guardInnerModifierAI ) },
-	{ "GuardOuterModifierAI",		INI::parseReal,NULL,		offsetof( TAiData, m_guardOuterModifierAI ) },
-	{ "GuardInnerModifierHuman",INI::parseReal,NULL,		offsetof( TAiData, m_guardInnerModifierHuman ) },
-	{ "GuardOuterModifierHuman",INI::parseReal,NULL,		offsetof( TAiData, m_guardOuterModifierHuman ) },
+	{ "StructuresWealthyRate",	INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_structuresWealthyMod ) },
+	{ "TeamsWealthyRate",				INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_teamWealthyMod ) },
+	{ "StructuresPoorRate",			INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_structuresPoorMod ) },
+	{ "TeamsPoorRate",					INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_teamPoorMod ) },
+	{ "TeamResourcesToStart",		INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_teamResourcesToBuild ) },
+	{ "GuardInnerModifierAI",		INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_guardInnerModifierAI ) },
+	{ "GuardOuterModifierAI",		INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_guardOuterModifierAI ) },
+	{ "GuardInnerModifierHuman",INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_guardInnerModifierHuman ) },
+	{ "GuardOuterModifierHuman",INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_guardOuterModifierHuman ) },
 	{ "GuardChaseUnitsDuration",				INI::parseDurationUnsignedInt,NULL,		offsetof( TAiData, m_guardChaseUnitFrames ) },
 	{ "GuardEnemyScanRate",				INI::parseDurationUnsignedInt,NULL,		offsetof( TAiData, m_guardEnemyScanRate ) },
 	{ "GuardEnemyReturnScanRate",				INI::parseDurationUnsignedInt,NULL,		offsetof( TAiData, m_guardEnemyReturnScanRate ) },
-	{ "SkirmishGroupFudgeDistance",	INI::parseReal,NULL,		offsetof( TAiData, m_skirmishGroupFudgeValue ) },
+	{ "SkirmishGroupFudgeDistance",	INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_skirmishGroupFudgeValue ) },
 
-	{ "RepulsedDistance",				INI::parseReal,NULL,		offsetof( TAiData, m_repulsedDistance ) },
+	{ "RepulsedDistance",				INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_repulsedDistance ) },
 	{ "EnableRepulsors",				INI::parseBool,NULL,		offsetof( TAiData, m_enableRepulsors ) },
 
-	{	"AlertRangeModifier",			INI::parseReal,NULL,		offsetof( TAiData, m_alertRangeModifier)	},
-	{	"AggressiveRangeModifier",INI::parseReal,NULL,		offsetof( TAiData, m_aggressiveRangeModifier)	},
+	{	"AlertRangeModifier",			INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_alertRangeModifier)	},
+	{	"AggressiveRangeModifier",INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_aggressiveRangeModifier)	},
 
 	{ "ForceSkirmishAI",				INI::parseBool,NULL,		offsetof( TAiData, m_forceSkirmishAI ) },
 	{ "RotateSkirmishBases",		INI::parseBool,NULL,		offsetof( TAiData, m_rotateSkirmishBases ) },
@@ -177,11 +177,11 @@ static const FieldParse TheAIFieldParseTable[] =
 	{ "AttackIgnoreInsignificantBuildings",	INI::parseBool,NULL,		offsetof( TAiData, m_attackIgnoreInsignificantBuildings ) },
 
 	
-	{ "AttackPriorityDistanceModifier", INI::parseReal,NULL, offsetof( TAiData, m_attackPriorityDistanceModifier) },
- 	{ "MaxRecruitRadius",				INI::parseReal,NULL,		offsetof( TAiData, m_maxRecruitDistance ) },
-	{ "SkirmishBaseDefenseExtraDistance",	INI::parseReal,NULL,	offsetof( TAiData, m_skirmishBaseDefenseExtraDistance ) },
+	{ "AttackPriorityDistanceModifier", INI::parseFix,NULL, FIX_OFFSET( TAiData, m_attackPriorityDistanceModifier) },
+ 	{ "MaxRecruitRadius",				INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_maxRecruitDistance ) },
+	{ "SkirmishBaseDefenseExtraDistance",	INI::parseFix,NULL,	FIX_OFFSET( TAiData, m_skirmishBaseDefenseExtraDistance ) },
 
- 	{ "WallHeight",							INI::parseReal,NULL,		offsetof( TAiData, m_wallHeight ) },
+ 	{ "WallHeight",							INI::parseFix,NULL,		FIX_OFFSET( TAiData, m_wallHeight ) },
 
 	{ "SideInfo",			AI::parseSideInfo,			NULL, NULL },
 
@@ -194,20 +194,20 @@ static const FieldParse TheAIFieldParseTable[] =
  	{ "MinInfantryForGroup",		INI::parseInt,NULL,			offsetof( TAiData, m_minInfantryForGroup ) },
  	{ "MinVehiclesForGroup",		INI::parseInt,NULL,			offsetof( TAiData, m_minVehiclesForGroup ) },
 
- 	{ "MinDistanceForGroup",		INI::parseReal,NULL,			offsetof( TAiData, m_minDistanceForGroup ) },
- 	{ "DistanceRequiresGroup",	INI::parseReal,NULL,			offsetof( TAiData, m_distanceRequiresGroup ) },
- 	{ "MinClumpDensity",				INI::parseReal,NULL,			offsetof( TAiData, m_minClumpDensity ) },
+ 	{ "MinDistanceForGroup",		INI::parseFix,NULL,			FIX_OFFSET( TAiData, m_minDistanceForGroup ) },
+ 	{ "DistanceRequiresGroup",	INI::parseFix,NULL,			FIX_OFFSET( TAiData, m_distanceRequiresGroup ) },
+ 	{ "MinClumpDensity",				INI::parseFix,NULL,			FIX_OFFSET( TAiData, m_minClumpDensity ) },
 
  	{ "InfantryPathfindDiameter",		INI::parseInt,NULL,			offsetof( TAiData, m_infantryPathfindDiameter ) },
  	{ "VehiclePathfindDiameter",		INI::parseInt,NULL,			offsetof( TAiData, m_vehiclePathfindDiameter ) },
  	{ "RebuildDelayTimeSeconds",		INI::parseInt,NULL,			offsetof( TAiData, m_rebuildDelaySeconds ) },
- 	{ "SupplyCenterSafeRadius",			INI::parseReal,NULL,			offsetof( TAiData, m_supplyCenterSafeRadius ) },
+ 	{ "SupplyCenterSafeRadius",			INI::parseFix,NULL,			FIX_OFFSET( TAiData, m_supplyCenterSafeRadius ) },
 
- 	{ "AIDozerBoredRadiusModifier",	INI::parseReal,NULL,			offsetof( TAiData, m_aiDozerBoredRadiusModifier ) },
+ 	{ "AIDozerBoredRadiusModifier",	INI::parseFix,NULL,			FIX_OFFSET( TAiData, m_aiDozerBoredRadiusModifier ) },
  	{ "AICrushesInfantry",	INI::parseBool,NULL,			offsetof( TAiData, m_aiCrushesInfantry ) },
 
- 	{ "MaxRetaliationDistance",	INI::parseReal,NULL,			offsetof( TAiData, m_maxRetaliateDistance ) },
- 	{ "RetaliationFriendsRadius",	INI::parseReal,NULL,			offsetof( TAiData, m_retaliateFriendsRadius ) },
+ 	{ "MaxRetaliationDistance",	INI::parseFix,NULL,			FIX_OFFSET( TAiData, m_maxRetaliateDistance ) },
+ 	{ "RetaliationFriendsRadius",	INI::parseFix,NULL,			FIX_OFFSET( TAiData, m_retaliateFriendsRadius ) },
 
 
 	{ NULL,					NULL,						NULL,						0 }  // keep this last
@@ -807,7 +807,7 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			// improvement keeps the nearest of equal threats - which is the whole priority
 			// order the caller wants: what shoots us (its own check, before we are called),
 			// then what is worth shooting, then what is closest.
-			Real distanceModifier = TheAI->getAiData()->m_attackPriorityDistanceModifier;
+			Real distanceModifier = fixToReal( TheAI->getAiData()->m_attackPriorityDistanceModifier );	// P7: AI_threatScore is float
 			Object *bestThreat = NULL;
 			Int bestScore = 0;
 			ObjectIterator *threatIter = ThePartitionManager->iterateObjectsInRangeFix(me, rangeFx, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR);
@@ -878,7 +878,7 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		}
 
 		const Fix dist = fixSqrt( ThePartitionManager->getDistanceSquaredFix(me, theEnemy, FROM_BOUNDINGSPHERE_2D) );
-		Int modifier = fixToReal( dist )/TheAI->getAiData()->m_attackPriorityDistanceModifier;	// P7
+		Int modifier = (Int)( (dist / TheAI->getAiData()->m_attackPriorityDistanceModifier).raw() >> Fix::FRAC_BITS );
 		Int modPriority = curPriority-modifier;
 		if (modPriority < 1)
 			modPriority = 1;
@@ -971,16 +971,16 @@ Object *AI::findClosestRepulsor( const Object *me, Real range)
 }
 /////////////////////////////
 
-Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToConsider)
+Fix AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToConsider)
 {
-	Real originalRange = object->getVisionRange();
+	Fix originalRange = fixFromReal( object->getVisionRange() );	// P3 vision range is float
 	const AIUpdateInterface *ai = object->getAI();
 	const TAiData *aiData = TheAI->getAiData();
 
-	if (!ai) 
+	if (!ai)
 	{
 		DEBUG_CRASH(("Unit without AI ('%s') calling AI::getAdjustedVisionRangeForObject. Notify jkmcd.", object->getTemplate()->getName().str()));
-		return 0.0f;
+		return Fix( 0 );
 	}
 	
 	UnsignedInt moodMatrixVal = ai->getMoodMatrixValue();
@@ -1007,8 +1007,8 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 
 	if (object->getContainedBy() != NULL) 
 	{
-		originalRange = object->getLargestWeaponRange();
-	} 
+		originalRange = fixFromReal( object->getLargestWeaponRange() );	// P6
+	}
 	else 
 	{
 		if ((factorsToConsider & AI_VISIONFACTOR_MOOD) && ((moodMatrixVal & MM_Controller_Player) == 0) ) 
@@ -1016,7 +1016,7 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 			switch(moodMatrixVal & MM_Mood_Bitmask)
 			{
 				case MM_Mood_Sleep:
-					return 0.0f;
+					return Fix( 0 );
 
 				case MM_Mood_Passive:
 				case MM_Mood_Normal: 
@@ -1050,7 +1050,7 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 				1.0f)
 		};
 
-		Vector3 pos(originalRange, 0, 0);
+		Vector3 pos(fixToReal( originalRange ), 0, 0);
 		for (int i = 0; i < TheGlobalData->m_debugVisibilityTileCount; ++i) 
 		{
 			pos.Rotate_Z(1.0f * i / TheGlobalData->m_debugVisibilityTileCount * 2 * PI);
@@ -1098,9 +1098,9 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 	*                      scoutS maxSc react decis   cntr  mass  ttk   indiv team  infl  focus  save   harv  expand guard hoard  econ */
 static const AIDifficultyProfile s_defaultSkillLadder[ AISKILL_COUNT ] =
 {
-	/* Easy      */ { 90.0f, 1, 10.0f,  0.00f, FALSE, 0.00f, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,     0, FALSE, FALSE },
-	/* Medium    */ { 60.0f, 1,  5.0f,  0.25f, FALSE, 0.35f, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE,  FALSE, 10000, FALSE, FALSE },
-	/* Brutal    */ { 25.0f, 2,  1.5f,  1.00f, TRUE,  0.50f, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,   4000, TRUE,  TRUE }
+	/* Easy      */ { 90.0_fx, 1, 10.0_fx,  0.00_fx, FALSE, 0.00_fx, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,     0, FALSE, FALSE },
+	/* Medium    */ { 60.0_fx, 1,  5.0_fx,  0.25_fx, FALSE, 0.35_fx, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE,  FALSE, 10000, FALSE, FALSE },
+	/* Brutal    */ { 25.0_fx, 2,  1.5_fx,  1.00_fx, TRUE,  0.50_fx, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,   4000, TRUE,  TRUE }
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -1411,12 +1411,12 @@ void AI::parseSkillLevel(INI *ini, void *instance, void* /*store*/, const void* 
 {
 	static const FieldParse myFieldParse[] =
 	{
-		{ "ScoutIntervalSeconds",			INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_scoutIntervalSeconds ) },
+		{ "ScoutIntervalSeconds",			INI::parseFix, NULL, FIX_OFFSET( AIDifficultyProfile, m_scoutIntervalSeconds ) },
 		{ "MaxScouts",								INI::parseInt,  NULL, offsetof( AIDifficultyProfile, m_maxScouts ) },
-		{ "DecisionIntervalSeconds",	INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_decisionIntervalSeconds ) },
-		{ "CounterCompositionWeight",	INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_counterCompositionWeight ) },
+		{ "DecisionIntervalSeconds",	INI::parseFix, NULL, FIX_OFFSET( AIDifficultyProfile, m_decisionIntervalSeconds ) },
+		{ "CounterCompositionWeight",	INI::parseFix, NULL, FIX_OFFSET( AIDifficultyProfile, m_counterCompositionWeight ) },
 		{ "MassBeforeAttacking",			INI::parseBool, NULL, offsetof( AIDifficultyProfile, m_massBeforeAttacking ) },
-		{ "RetreatTtkRatio",					INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_retreatTtkRatio ) },
+		{ "RetreatTtkRatio",					INI::parseFix, NULL, FIX_OFFSET( AIDifficultyProfile, m_retreatTtkRatio ) },
 		{ "RetreatIndividualUnits",		INI::parseBool, NULL, offsetof( AIDifficultyProfile, m_retreatIndividualUnits ) },
 		{ "RetreatTeams",							INI::parseBool, NULL, offsetof( AIDifficultyProfile, m_retreatTeams ) },
 		{ "UseInfluenceMapForAttackLane", INI::parseBool, NULL, offsetof( AIDifficultyProfile, m_useInfluenceMapForAttackLane ) },
@@ -1453,14 +1453,14 @@ TAiData::TAiData() :
 m_next(NULL), 
 m_sideInfo(NULL), 
 m_attackIgnoreInsignificantBuildings(false),
-m_skirmishGroupFudgeValue(0.0f),
+m_skirmishGroupFudgeValue(0),
 m_structureSeconds(0), 
 m_teamSeconds(0), 
 m_resourcesWealthy(0), 
 m_resourcesPoor(0), 
 m_forceIdleFramesCount(1),
-m_structuresWealthyMod(1.0f),	// divisor: never default to 0
-m_teamPoorMod(1.0f),			// divisor: never default to 0
+m_structuresWealthyMod(1),	// divisor: never default to 0
+m_teamPoorMod(1),		// divisor: never default to 0
 m_teamResourcesToBuild(0),
 m_guardInnerModifierAI(0),
 m_guardOuterModifierAI(0),
@@ -1483,21 +1483,21 @@ m_attackUsesLineOfSight(true),
 m_minInfantryForGroup(3),
 m_minVehiclesForGroup(4),
 m_minDistanceForGroup(100),
-m_minClumpDensity(0.5f),
+m_minClumpDensity(0.5_fx),
 m_infantryPathfindDiameter(6),
 m_vehiclePathfindDiameter(6),
 m_supplyCenterSafeRadius(250),
 m_rebuildDelaySeconds(10),
 //Added By Sadullah Nader
 //Initialization(s) inserted
-m_distanceRequiresGroup(0.0f),
+m_distanceRequiresGroup(0),
 m_sideBuildLists(NULL),
-m_structuresPoorMod(1.0f),		// divisor: never default to 0
-m_teamWealthyMod(1.0f),			// divisor: never default to 0
-m_aiDozerBoredRadiusModifier(2.0),
-m_aiCrushesInfantry(true), 
-m_maxRetaliateDistance(210.0f), 
-m_retaliateFriendsRadius(120.0f)
+m_structuresPoorMod(1),		// divisor: never default to 0
+m_teamWealthyMod(1),			// divisor: never default to 0
+m_aiDozerBoredRadiusModifier(2),
+m_aiCrushesInfantry(true),
+m_maxRetaliateDistance(210),
+m_retaliateFriendsRadius(120)
 //
 {
 	// the ladder starts at its shipped defaults; an AI.ini SkillLevel block overrides one rung
@@ -1508,29 +1508,29 @@ m_retaliateFriendsRadius(120.0f)
 //-------------------------------------------------------------------------------------------------
 void TAiData::crc( Xfer *xfer )
 {
-	xfer->xferReal( &m_structureSeconds );
-	xfer->xferReal( &m_teamSeconds );
+	xfer->xferFix( &m_structureSeconds );
+	xfer->xferFix( &m_teamSeconds );
 	xfer->xferInt( &m_resourcesWealthy );
 	xfer->xferInt( &m_resourcesPoor );
 	xfer->xferUnsignedInt( &m_forceIdleFramesCount );
-	xfer->xferReal( &m_structuresWealthyMod );
-	xfer->xferReal( &m_teamWealthyMod );
-	xfer->xferReal( &m_structuresPoorMod );
-	xfer->xferReal( &m_teamPoorMod );
-	xfer->xferReal( &m_teamResourcesToBuild );
-	xfer->xferReal( &m_guardInnerModifierAI );
-	xfer->xferReal( &m_guardOuterModifierAI );
-	xfer->xferReal( &m_guardInnerModifierHuman );
-	xfer->xferReal( &m_guardOuterModifierHuman );
+	xfer->xferFix( &m_structuresWealthyMod );
+	xfer->xferFix( &m_teamWealthyMod );
+	xfer->xferFix( &m_structuresPoorMod );
+	xfer->xferFix( &m_teamPoorMod );
+	xfer->xferFix( &m_teamResourcesToBuild );
+	xfer->xferFix( &m_guardInnerModifierAI );
+	xfer->xferFix( &m_guardOuterModifierAI );
+	xfer->xferFix( &m_guardInnerModifierHuman );
+	xfer->xferFix( &m_guardOuterModifierHuman );
 	xfer->xferUnsignedInt( &m_guardChaseUnitFrames );
 	xfer->xferUnsignedInt( &m_guardEnemyScanRate );
 	xfer->xferUnsignedInt( &m_guardEnemyReturnScanRate );
-	xfer->xferReal( &m_alertRangeModifier );
-	xfer->xferReal( &m_aggressiveRangeModifier );
-	xfer->xferReal( &m_attackPriorityDistanceModifier );
-	xfer->xferReal( &m_maxRecruitDistance );
-	xfer->xferReal( &m_skirmishBaseDefenseExtraDistance );
-	xfer->xferReal( &m_repulsedDistance );
+	xfer->xferFix( &m_alertRangeModifier );
+	xfer->xferFix( &m_aggressiveRangeModifier );
+	xfer->xferFix( &m_attackPriorityDistanceModifier );
+	xfer->xferFix( &m_maxRecruitDistance );
+	xfer->xferFix( &m_skirmishBaseDefenseExtraDistance );
+	xfer->xferFix( &m_repulsedDistance );
 	xfer->xferBool( &m_enableRepulsors );
 	CRCGEN_LOG(("CRC after AI TAiData for frame %d is 0x%8.8X\n", TheGameLogic->getFrame(), ((XferCRC *)xfer)->getCRC()));
 

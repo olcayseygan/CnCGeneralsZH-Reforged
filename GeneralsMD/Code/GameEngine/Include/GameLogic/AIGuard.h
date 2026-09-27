@@ -132,7 +132,7 @@ public:
 
 	Bool lookForInnerTarget(void);
 
-	static Real getStdGuardRange(const Object* obj);
+	static Fix getStdGuardRange(const Object* obj);
 };
 
 //--------------------------------------------------------------------------------------

@@ -187,23 +187,22 @@ TurretAIData::TurretAIData()
 {
 	m_turnRate = DEFAULT_TURN_RATE;
 	m_pitchRate = DEFAULT_PITCH_RATE;
-	m_naturalTurretAngle = 0.0f;
-	m_naturalTurretPitch = 0.0f;
+	m_naturalTurretAngle = 0;
+	m_naturalTurretPitch = 0;
 	for( Int slotIndex = 0; slotIndex < WEAPONSLOT_COUNT; ++slotIndex )
 	{
-		m_turretFireAngleSweep[slotIndex] = 0.0f;
-		m_turretSweepSpeedModifier[slotIndex] = 1.0f;
+		m_turretFireAngleSweep[slotIndex] = 0;
+		m_turretSweepSpeedModifier[slotIndex] = 1;
 	}
-	m_firePitch = 0.0f;
-	m_minPitch = 0.0f;
+	m_firePitch = 0;
+	m_minPitch = 0;
 	m_groundUnitPitch = 0;
 	m_turretWeaponSlots = 0;
 #ifdef INTER_TURRET_DELAY
 	m_interTurretDelay = 0;
 #endif
-	m_minIdleScanAngle = 0.0f;
-	m_maxIdleScanAngle = 0.0f;
-	m_groundUnitPitch = 0.0f;
+	m_minIdleScanAngle = 0;
+	m_maxIdleScanAngle = 0;
 
 	m_minIdleScanInterval = 9999999;
 	m_maxIdleScanInterval = 9999999;
@@ -231,7 +230,7 @@ void TurretAIData::parseTurretSweep(INI* ini, void *instance, void * /*store*/, 
 {
 	TurretAIData* self = (TurretAIData*)instance;
 	WeaponSlotType wslot = (WeaponSlotType)INI::scanIndexList(ini->getNextToken(), TheWeaponSlotTypeNames);
-	INI::parseAngleReal( ini, instance, &self->m_turretFireAngleSweep[wslot], NULL );
+	INI::parseAngleFix( ini, instance, &self->m_turretFireAngleSweep[wslot], NULL );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -239,7 +238,7 @@ void TurretAIData::parseTurretSweepSpeed(INI* ini, void *instance, void * /*stor
 {
 	TurretAIData* self = (TurretAIData*)instance;
 	WeaponSlotType wslot = (WeaponSlotType)INI::scanIndexList(ini->getNextToken(), TheWeaponSlotTypeNames);
-	INI::parseReal( ini, instance, &self->m_turretSweepSpeedModifier[wslot], NULL );
+	INI::parseFix( ini, instance, &self->m_turretSweepSpeedModifier[wslot], NULL );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -247,13 +246,13 @@ void TurretAIData::buildFieldParse(MultiIniFieldParse& p)
 {
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "TurretTurnRate",					INI::parseAngularVelocityReal,				NULL, offsetof( TurretAIData, m_turnRate ) },
-		{ "TurretPitchRate",				INI::parseAngularVelocityReal,				NULL, offsetof( TurretAIData, m_pitchRate ) },
-		{ "NaturalTurretAngle",			INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_naturalTurretAngle ) },
-		{ "NaturalTurretPitch",			INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_naturalTurretPitch ) },
-		{ "FirePitch",							INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_firePitch ) },
-		{ "MinPhysicalPitch",				INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_minPitch ) },
-		{ "GroundUnitPitch",				INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_groundUnitPitch ) },
+		{ "TurretTurnRate",					INI::parseAngularVelocityFix,					NULL, FIX_OFFSET( TurretAIData, m_turnRate ) },
+		{ "TurretPitchRate",				INI::parseAngularVelocityFix,					NULL, FIX_OFFSET( TurretAIData, m_pitchRate ) },
+		{ "NaturalTurretAngle",			INI::parseAngleFix,										NULL, FIX_OFFSET( TurretAIData, m_naturalTurretAngle ) },
+		{ "NaturalTurretPitch",			INI::parseAngleFix,										NULL, FIX_OFFSET( TurretAIData, m_naturalTurretPitch ) },
+		{ "FirePitch",							INI::parseAngleFix,										NULL, FIX_OFFSET( TurretAIData, m_firePitch ) },
+		{ "MinPhysicalPitch",				INI::parseAngleFix,										NULL, FIX_OFFSET( TurretAIData, m_minPitch ) },
+		{ "GroundUnitPitch",				INI::parseAngleFix,										NULL, FIX_OFFSET( TurretAIData, m_groundUnitPitch ) },
 		{ "TurretFireAngleSweep",		TurretAIData::parseTurretSweep,				NULL, NULL },
 		{ "TurretSweepSpeedModifier",TurretAIData::parseTurretSweepSpeed,	NULL, NULL },
 		{ "ControlledWeaponSlots",	parseTWS,															NULL, offsetof( TurretAIData, m_turretWeaponSlots ) },
@@ -261,8 +260,8 @@ void TurretAIData::buildFieldParse(MultiIniFieldParse& p)
 #ifdef INTER_TURRET_DELAY
 		{ "InterTurretDelay",				INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_interTurretDelay ) },
 #endif
-		{ "MinIdleScanAngle",				INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_minIdleScanAngle ) },
-		{ "MaxIdleScanAngle",				INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_maxIdleScanAngle ) },
+		{ "MinIdleScanAngle",				INI::parseAngleFix,										NULL, FIX_OFFSET( TurretAIData, m_minIdleScanAngle ) },
+		{ "MaxIdleScanAngle",				INI::parseAngleFix,										NULL, FIX_OFFSET( TurretAIData, m_maxIdleScanAngle ) },
 		{ "MinIdleScanInterval",		INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_minIdleScanInterval ) },
 		{ "MaxIdleScanInterval",		INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_maxIdleScanInterval ) },
 		{ "RecenterTime",						INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_recenterTime ) },
@@ -481,16 +480,18 @@ Bool TurretAI::isWeaponSlotOkToFire(WeaponSlotType wslot) const
 }
 
 //----------------------------------------------------------------------------------------------------------
-Real TurretAI::getTurretFireAngleSweepForWeaponSlot( WeaponSlotType slot ) const
-{
-	return m_data->m_turretFireAngleSweep[slot];	
-}
-
-//----------------------------------------------------------------------------------------------------------
-Real TurretAI::getTurretSweepSpeedModifierForWeaponSlot( WeaponSlotType slot ) const
-{
-	return m_data->m_turretSweepSpeedModifier[slot];
-}
+// P7: every getter below hands the turret's Fix data to its still-float motion
+Real TurretAI::getTurretFireAngleSweepForWeaponSlot( WeaponSlotType slot ) const { return fixToReal( m_data->m_turretFireAngleSweep[slot] ); }
+Real TurretAI::getTurretSweepSpeedModifierForWeaponSlot( WeaponSlotType slot ) const { return fixToReal( m_data->m_turretSweepSpeedModifier[slot] ); }
+Real TurretAI::getMinPitch() const { return fixToReal( m_data->m_minPitch ); }
+Real TurretAI::getTurnRate() const { return fixToReal( m_data->m_turnRate ); }
+Real TurretAI::getNaturalTurretAngle() const { return fixToReal( m_data->m_naturalTurretAngle ); }
+Real TurretAI::getPitchRate() const { return fixToReal( m_data->m_pitchRate ); }
+Real TurretAI::getFirePitch() const { return fixToReal( m_data->m_firePitch ); }
+Real TurretAI::getGroundUnitPitch() const { return fixToReal( m_data->m_groundUnitPitch ); }
+Real TurretAI::getNaturalTurretPitch() const { return fixToReal( m_data->m_naturalTurretPitch ); }
+Real TurretAI::getMinIdleScanAngle() const { return fixToReal( m_data->m_minIdleScanAngle ); }
+Real TurretAI::getMaxIdleScanAngle() const { return fixToReal( m_data->m_maxIdleScanAngle ); }
 
 //----------------------------------------------------------------------------------------------------------
 void TurretAI::notifyFired()

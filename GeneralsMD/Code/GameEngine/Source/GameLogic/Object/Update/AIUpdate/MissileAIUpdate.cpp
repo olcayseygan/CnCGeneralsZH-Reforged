@@ -757,15 +757,15 @@ UpdateSleepTime MissileAIUpdate::update()
 	// below the bridge translates into GROUND. (getLayerForDestination just does a "closest" check)
 	PathfindLayerEnum oldLayer = getObject()->getLayer();
 	FCoord3D here = *getObject()->getPositionFix();
-	Coord3D tmp = here.toCoord3D(); // P5: the layer queries are float
-	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
+	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestinationFix(&here);
 	getObject()->setLayer(newLayer);
 
 	if (projectileIsArmed() && oldLayer != LAYER_GROUND && newLayer == LAYER_GROUND)
 	{
 		// see if we' still in the bridge's xy area
-		tmp.z = 9999.0f;
-		PathfindLayerEnum testLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
+		FCoord3D tmp = here;
+		tmp.z = Fix( 9999 );
+		PathfindLayerEnum testLayer = TheTerrainLogic->getHighestLayerForDestinationFix(&tmp);
 		if (testLayer == oldLayer)
 		{
 			// ensure we are slightly above the bridge, to account for fudge & sloppy art
@@ -831,8 +831,8 @@ void MissileAIUpdate::projectileNowJammed()
 	Real scatter = data->m_distanceScatterWhenJammed;
 	targetPosition.x += GameLogicRandomValue(-scatter, scatter);
 	targetPosition.y += GameLogicRandomValue(-scatter, scatter);
-	PathfindLayerEnum targetLayer = TheTerrainLogic->getHighestLayerForDestination(&targetPosition);
 	FCoord3D fxTarget = fcoordFromCoord3D( &targetPosition );
+	PathfindLayerEnum targetLayer = TheTerrainLogic->getHighestLayerForDestinationFix(&fxTarget);
 	targetPosition.z = fixToReal( TheTerrainLogic->getLayerHeightFix( fxTarget.x, fxTarget.y, targetLayer ) );
 
 	getStateMachine()->setGoalObject(NULL);

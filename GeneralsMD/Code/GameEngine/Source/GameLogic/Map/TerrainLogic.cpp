@@ -1489,7 +1489,7 @@ void TerrainLogic::buildTriggerAreaIndex(void)
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool TerrainLogic::isClearLineOfSight(const Coord3D& pos, const Coord3D& posOther) const
+Bool TerrainLogic::isClearLineOfSight(const FCoord3D& pos, const FCoord3D& posOther) const
 {
 	DEBUG_CRASH(("implement ME"));
 	return false;
@@ -1498,8 +1498,10 @@ Bool TerrainLogic::isClearLineOfSight(const Coord3D& pos, const Coord3D& posOthe
 //-------------------------------------------------------------------------------------------------
 /** default get height for terrain logic */
 //-------------------------------------------------------------------------------------------------
-Fix TerrainLogic::getGroundHeightFix( Fix x, Fix y ) const
+Fix TerrainLogic::getGroundHeightFix( Fix x, Fix y, FCoord3D *normal ) const
 {
+	if( normal )
+		normal->zero();
 	return Fix( 0 );
 }
 
@@ -1508,12 +1510,16 @@ Fix TerrainLogic::getGroundHeightFix( Fix x, Fix y ) const
 		ground; the ground it starts from is the shim over getGroundHeightFix, and a height under 256
 		makes the round trip through a float exactly. */
 //-------------------------------------------------------------------------------------------------
-Fix TerrainLogic::getLayerHeightFix( Fix x, Fix y, PathfindLayerEnum layer, Bool clip ) const
+Fix TerrainLogic::getLayerHeightFix( Fix x, Fix y, PathfindLayerEnum layer, FCoord3D *normal, Bool clip ) const
 {
 	if( layer == LAYER_GROUND )
-		return getGroundHeightFix( x, y );
+		return getGroundHeightFix( x, y, normal );
 	// ponytail: bridges and walls stay float until the pathfinder's layers move (P5)
-	return fixFromReal( getLayerHeight( fixToReal( x ), fixToReal( y ), layer, NULL, clip ) );
+	Coord3D n;
+	Fix height = fixFromReal( getLayerHeight( fixToReal( x ), fixToReal( y ), layer, normal ? &n : NULL, clip ) );
+	if( normal )
+		*normal = fcoordFromCoord3D( n );
+	return height;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1759,6 +1765,13 @@ Bridge * TerrainLogic::findBridgeAt( const Coord3D *pLoc) const
 }
 
 //-------------------------------------------------------------------------------------------------
+Bridge * TerrainLogic::findBridgeAtFix( const FCoord3D *pLoc ) const
+{
+	const Coord3D loc = pLoc->toCoord3D();	// P5 bridges are float
+	return findBridgeAt( &loc );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Finds the bridge at a given x/y coordinate.  On a layer. */
 //-------------------------------------------------------------------------------------------------
 Bridge * TerrainLogic::findBridgeLayerAt( const Coord3D *pLoc, PathfindLayerEnum layer, Bool clip) const
@@ -1818,9 +1831,17 @@ PathfindLayerEnum TerrainLogic::getLayerForDestination(const Coord3D *pos)
 // (unlike getLayerForDestination, which will return the closest layer)
 PathfindLayerEnum TerrainLogic::getHighestLayerForDestination(const Coord3D *pos, Bool onlyHealthyBridges)
 {
+	const FCoord3D fpos = fcoordFromCoord3D( pos );
+	return getHighestLayerForDestinationFix( &fpos, onlyHealthyBridges );
+}
+
+PathfindLayerEnum TerrainLogic::getHighestLayerForDestinationFix(const FCoord3D *fpos, Bool onlyHealthyBridges)
+{
 	PathfindLayerEnum bestLayer = LAYER_GROUND;
 	// P5 walls and bridges are float; the ground comes from the Fix height
-	Real bestDistance = pos->z - fixToReal(getGroundHeightFix(fixFromReal(pos->x), fixFromReal(pos->y)));	// NOT fabs in this case.
+	const Coord3D floatPos = fpos->toCoord3D();
+	const Coord3D *pos = &floatPos;
+	Real bestDistance = pos->z - fixToReal(getGroundHeightFix(fpos->x, fpos->y));	// NOT fabs in this case.
 
 	if (bestDistance > TheAI->pathfinder()->getWallHeight()/2) {
 		// check wall.

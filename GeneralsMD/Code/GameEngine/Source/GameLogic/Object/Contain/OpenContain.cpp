@@ -617,11 +617,10 @@ void OpenContain::iterateContained( ContainIterateFunc func, void *userData, Boo
 
 //-------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-Object* OpenContain::getClosestRider( const Coord3D *pos )
+Object* OpenContain::getClosestRider( const FCoord3D *pos )
 {
 	Object *closest = NULL;
 	Fix closestDistance = Fix( 0 );
-	FCoord3D fxPos = fcoordFromCoord3D( *pos );
 
 	for(ContainedItemsList::const_iterator it = m_containList.begin(); it != m_containList.end(); ++it)
 	{
@@ -629,7 +628,7 @@ Object* OpenContain::getClosestRider( const Coord3D *pos )
 
     if (rider)
     {
-      Fix distance = ThePartitionManager->getDistanceSquaredFix( rider, &fxPos, FROM_CENTER_2D );
+      Fix distance = ThePartitionManager->getDistanceSquaredFix( rider, pos, FROM_CENTER_2D );
 	    if( !closest || closestDistance > distance ) 
 	    {
 		    closest = rider;

@@ -70,7 +70,8 @@
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/BodyModule.h"
-#include "GameLogic/Object.h"						
+#include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"						
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/TerrainLogic.h"
@@ -283,7 +284,7 @@ static CanAttackResult canObjectForceAttack( Object *obj, const Object *victim, 
 			  if( spawnInterface )
 			  {
 				  //We found the spawn interface, now get the closest slave to the target.
-				  Object *slave = spawnInterface->getClosestSlave( victim->getPosition() );
+				  Object *slave = spawnInterface->getClosestSlave( victim->getPositionFix() );
 				  if( slave ) 
 				  {
 					  result = slave->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET_FORCED, victim, CMD_FROM_PLAYER );
@@ -295,7 +296,7 @@ static CanAttackResult canObjectForceAttack( Object *obj, const Object *victim, 
         ContainModuleInterface *contain = obj->getContain();
         if ( contain )
         {
-          Object *rider = contain->getClosestRider( victim->getPosition() );
+          Object *rider = contain->getClosestRider( victim->getPositionFix() );
           if ( rider )
           {
             result = rider->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET_FORCED, victim, CMD_FROM_PLAYER );
@@ -318,6 +319,7 @@ static CanAttackResult canObjectForceAttack( Object *obj, const Object *victim, 
 		{
 
 			Object *testObj = obj;
+			const FCoord3D fxPos = fcoordFromCoord3D( pos );
 
 			if( obj->isKindOf( KINDOF_IMMOBILE ) || obj->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS ) )
 			{
@@ -325,7 +327,7 @@ static CanAttackResult canObjectForceAttack( Object *obj, const Object *victim, 
 				if( spawnInterface )
 				{
 					//We found the spawn interface, now get the closest slave to the target.
-					Object *slave = spawnInterface->getClosestSlave( pos );
+					Object *slave = spawnInterface->getClosestSlave( &fxPos );
 					if( slave )
 					{
 						testObj = slave;
@@ -339,7 +341,7 @@ static CanAttackResult canObjectForceAttack( Object *obj, const Object *victim, 
             ContainModuleInterface *contain = obj->getContain();
             if ( contain )
             {
-              Object *rider = contain->getClosestRider( pos );
+              Object *rider = contain->getClosestRider( &fxPos );
               if ( rider )
                 testObj = rider;
             }

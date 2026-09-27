@@ -481,26 +481,24 @@ Coord3D DockUpdate::computeApproachPosition( Int positionIndex, Object *forWhom 
 	if( m_positionsLoaded == FALSE )
 		loadDockPositions();
 
-	Coord3D workingPosition;// If findPositionAround fails, we need to say something.
-	
 	FindPositionOptions fpOptions;
 	// Start with the pristine bone, then convert it to the world, then find a clean spot around it.
-	
+
 	Object *us = getObject();
-	us->convertBonePosToWorldPos( &m_approachPositions[positionIndex], NULL, &workingPosition, NULL );
+	FCoord3D working = us->convertBonePosToWorldPosFix( m_approachPositions[positionIndex] );// If findPositionAround fails, we need to say something.
 
 	if( m_numberApproachPositionBones == 0 )
 	{
-		Coord3D ourPosition = *us->getPosition();
-		Coord3D theirPosition = *forWhom->getPosition();
 		// A Boneless building wants to bias towards the caller for the arbitrary position
-		Vector3 offset( theirPosition.x - ourPosition.x, theirPosition.y - ourPosition.y, theirPosition.z - ourPosition.z );
-		offset.Normalize();
-		offset = offset * (us->getGeometryInfo().getMajorRadius() / 2);
-
-		workingPosition.x += offset.X;
-		workingPosition.y += offset.Y;
-		workingPosition.z += offset.Z;
+		FCoord3D offset = *forWhom->getPositionFix();
+		offset.sub( *us->getPositionFix() );
+		const Fix length = offset.length();
+		if( length > Fix( 0 ) )
+		{
+			const Fix half = us->getGeometryInfo().getMajorRadiusFix() / Fix( 2 );
+			offset.set( offset.x * half / length, offset.y * half / length, offset.z * half / length );
+			working.add( offset );
+		}
 	}
 
 	fpOptions.minRadius = Fix( 0 );
@@ -510,15 +508,14 @@ Coord3D DockUpdate::computeApproachPosition( Int positionIndex, Object *forWhom 
 	if( forWhom->isUsingAirborneLocomotor() )
 		fpOptions.ignoreObject = getObject();// Flyers can ignore us, so they can approach right over us if they want.
 
-	// P8: the dock bones and the approach position are float
-	const FCoord3D working = fcoordFromCoord3D( workingPosition );
 	FCoord3D bestPosition;
 	Bool spotFound = ThePartitionManager->findPositionAround( &working, &fpOptions, &bestPosition );
 
+	// P8: the approach position is float
 	if( spotFound)
 		return bestPosition.toCoord3D();
 
-	return workingPosition;
+	return working.toCoord3D();
 }
 
 // ------------------------------------------------------------------------------------------------

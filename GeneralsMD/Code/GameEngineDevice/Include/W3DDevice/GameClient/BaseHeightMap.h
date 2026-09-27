@@ -227,13 +227,13 @@ public:
 	void setShoreLineDetail(void);	///<update shoreline tiles in case the feature was toggled by user.
 	Bool getMaximumVisibleBox(const FrustumClass &frustum,  AABoxClass *box, Bool ignoreMaxHeight);	///<3d extent of visible terrain.
 	Real getHeightMapHeight(Real x, Real y, Coord3D* normal) const;	///<return height and normal at given point
-	Fix getHeightMapHeightFix(Fix x, Fix y) const;	///< the same triangle, interpolated in fixed point, for the logic
+	Fix getHeightMapHeightFix(Fix x, Fix y, FCoord3D *normal = NULL) const;	///< the same triangle and smoothed normal, in fixed point, for the logic
 	Bool isCliffCell(Real x, Real y);	///<return height and normal at given point
 	Real getMinHeight(void) const {return m_minHeight;}	///<return minimum height of entire terrain
 	Real getMaxHeight(void) const {return m_maxHeight;}	///<return maximum height of entire terrain
 	Real getMaxCellHeight(Real x, Real y) const;	///< returns maximum height of the 4 cell corners.
 	WorldHeightMap *getMap(void) {return m_map;}	///< returns object holding the heightmap samples - need this for fast access.
-	Bool isClearLineOfSight(const Coord3D& pos, const Coord3D& posOther) const;
+	Bool isClearLineOfSight(const FCoord3D& pos, const FCoord3D& posOther) const;
 
 	Bool getShowImpassableAreas(void) {return m_showImpassableAreas;}
 	void setShowImpassableAreas(Bool show) {m_showImpassableAreas = show;}

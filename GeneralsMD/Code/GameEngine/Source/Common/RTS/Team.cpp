@@ -2256,7 +2256,7 @@ Bool Team::someInsideSomeOutside(PolygonTrigger *pTrigger, UnsignedInt whichToCo
 	return anyConsidered && anyInside && anyOutside;
 }
 
-const Coord3D* Team::getEstimateTeamPosition(void) const
+const FCoord3D* Team::getEstimateTeamPosition(void) const
 {
 	// this doesn't actually calculate the team position, but rather estimates it by
 	// returning the position of the first member of the team
@@ -2265,11 +2265,7 @@ const Coord3D* Team::getEstimateTeamPosition(void) const
 	if (!obj)
 		return NULL;
 
-	const Coord3D *pos = iter.cur()->getPosition();
-	if (!pos)
-		return NULL;
-
-	return pos;
+	return obj->getPositionFix();
 }
 
 // ------------------------------------------------------------------------

@@ -243,6 +243,9 @@ public:
 	Fix getOrientationFix() const { return m_fxAngle; }
 	const FixMatrix3D *getTransformMatrixFix() const { return &m_fxTransform; }
 	const FCoord3D *getUnitDirectionVector2DFix() const;
+	void getUnitDirectionVector3DFix( FCoord3D &dir ) const;
+	/// a bone position from the drawable or the INI, float, into the world through the fixed transform
+	FCoord3D convertBonePosToWorldPosFix( const Coord3D &bonePos ) const;
 	Fix getHeightAboveTerrainFix() const;
 	Fix getHeightAboveTerrainOrWaterFix() const;
 	Bool isAboveTerrain() const { return getHeightAboveTerrainFix() > Fix( 0 ); }
@@ -262,7 +265,6 @@ public:
 	const Matrix3D *getTransformMatrix() const { return &m_shimTransform; }
 	const Coord3D *getUnitDirectionVector2D() const;
 	void getUnitDirectionVector2D( Coord3D &dir ) const { dir = *getUnitDirectionVector2D(); }
-	void getUnitDirectionVector3D( Coord3D &dir ) const;
 	Real getHeightAboveTerrain() const;
 	Real getHeightAboveTerrainOrWater() const;
 	void convertBonePosToWorldPos( const Coord3D *bonePos, const Matrix3D *boneTransform, Coord3D *worldPos, Matrix3D *worldTransform ) const;

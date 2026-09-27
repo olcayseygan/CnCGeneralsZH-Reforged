@@ -231,7 +231,7 @@ public:
 	virtual void enableLoadSounds( Bool enable ) { m_loadSoundsEnabled = enable; }
 
   Real getDamagePercentageToUnits( void );
-  virtual Object* getClosestRider ( const Coord3D *pos );
+  virtual Object* getClosestRider ( const FCoord3D *pos );
 
   virtual void setEvacDisposition( EvacDisposition disp ) {};
 protected:

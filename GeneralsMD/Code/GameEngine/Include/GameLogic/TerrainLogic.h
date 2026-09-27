@@ -234,9 +234,9 @@ public:
 	/* The ground's height in fixed point, interpolated on the height map in integers.  The float
 		 getGroundHeight on the logic side is a P2 shim over this one, so a unit placed with either reads
 		 zero height above the ground with the other. */
-	virtual Fix getGroundHeightFix( Fix x, Fix y ) const;
+	virtual Fix getGroundHeightFix( Fix x, Fix y, FCoord3D *normal = NULL ) const;
 	/// the ground, or a bridge or wall on that layer when one is there and above the ground
-	Fix getLayerHeightFix( Fix x, Fix y, PathfindLayerEnum layer, Bool clip = true ) const;
+	Fix getLayerHeightFix( Fix x, Fix y, PathfindLayerEnum layer, FCoord3D *normal = NULL, Bool clip = true ) const;
 	/// the water's own height is map data in float; the ground under it is getGroundHeightFix
 	Bool isUnderwaterFix( Fix x, Fix y, Fix *waterZ = NULL, Fix *terrainZ = NULL );
 
@@ -247,7 +247,7 @@ public:
 	virtual void getMaximumPathfindExtent( Region3D *extent ) const { DEBUG_CRASH(("not implemented"));  }		///< @todo This should not be a stub - this should own this functionality
 	virtual Coord3D findClosestEdgePoint( const Coord3D *closestTo ) const ;
 	virtual Coord3D findFarthestEdgePoint( const Coord3D *farthestFrom ) const ;
-	virtual Bool isClearLineOfSight(const Coord3D& pos, const Coord3D& posOther) const;
+	virtual Bool isClearLineOfSight(const FCoord3D& pos, const FCoord3D& posOther) const;
 
 	virtual AsciiString getSourceFilename( void ) { return m_filenameString; }
 
@@ -289,6 +289,7 @@ public:
 
 	/// Find the bridge at a location.  NULL means no bridge.
 	virtual Bridge *findBridgeAt(const Coord3D *pLoc) const;
+	Bridge *findBridgeAtFix(const FCoord3D *pLoc) const;
 
 	/// Find the bridge at a location.  NULL means no bridge. Note that the layer value will be used to resolve crossing bridges.
 	virtual Bridge *findBridgeLayerAt(const Coord3D *pLoc, PathfindLayerEnum layer, Bool clip = true) const;
@@ -316,7 +317,8 @@ public:
 
 	// this is just like getLayerForDestination, but always return the highest layer that will be <= z at that point
 	// (unlike getLayerForDestination, which will return the closest layer)
-	PathfindLayerEnum getHighestLayerForDestination(const Coord3D *pos, Bool onlyHealthyBridges = false);
+	PathfindLayerEnum getHighestLayerForDestinationFix(const FCoord3D *pos, Bool onlyHealthyBridges = false);
+	PathfindLayerEnum getHighestLayerForDestination(const Coord3D *pos, Bool onlyHealthyBridges = false);	///< float face, for Locomotor (P4) and the pathfinder's goals (P5)
 
 	void enableWaterGrid( Bool enable );			///< enable/disable the water grid
 

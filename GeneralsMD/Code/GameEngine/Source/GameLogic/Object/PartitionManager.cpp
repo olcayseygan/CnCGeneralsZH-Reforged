@@ -3809,8 +3809,7 @@ Bool PartitionManager::tryPosition( const FCoord3D *center,
 	if ((options->flags & FPF_USE_HIGHEST_LAYER) != 0)
 	{
 		fpos.z = Fix( 99999 );
-		Coord3D probe = fpos.toCoord3D();
-		layer = TheTerrainLogic->getHighestLayerForDestination(&probe);
+		layer = TheTerrainLogic->getHighestLayerForDestinationFix(&fpos);
 		fpos.z = TheTerrainLogic->getLayerHeightFix(fpos.x, fpos.y, layer);
 		// ensure we are slightly above the bridge, to account for fudge & sloppy art
 		if (layer != LAYER_GROUND)
@@ -4905,8 +4904,7 @@ Bool PartitionManager::isClearLineOfSightTerrainFix(const Object* obj, const FCo
 	return true;
 
 #else
-	// P2: the terrain's line of sight is float
-	return TheTerrainLogic->isClearLineOfSight(pos.toCoord3D(), posOther.toCoord3D());
+	return TheTerrainLogic->isClearLineOfSight(pos, posOther);
 #endif
 }
 

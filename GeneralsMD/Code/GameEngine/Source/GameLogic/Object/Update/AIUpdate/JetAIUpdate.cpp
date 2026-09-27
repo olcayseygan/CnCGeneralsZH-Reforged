@@ -847,8 +847,7 @@ public:
 				ParkingPlaceBehaviorInterface* pp = getPP(jet->getProducerID());
 				const FCoord3D *jetPos = jet->getPositionFix();
 				Fix zSlop = 0.25_fx;
-				Coord3D pos = jetPos->toCoord3D();	// for the layer query and the sound, both float
-				PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination( &pos );
+				PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestinationFix( jetPos );
 				Fix groundZ = TheTerrainLogic->getLayerHeightFix( jetPos->x, jetPos->y, layer );
 				if( pp )
 				{
@@ -859,6 +858,7 @@ public:
 				{
 					m_landingSoundPlayed = TRUE;
 					AudioEventRTS soundToPlay = TheAudio->getMiscAudio()->m_aircraftWheelScreech;
+					const Coord3D pos = jetPos->toCoord3D();	// the sound is the client's
 					soundToPlay.setPosition( &pos );
 					TheAudio->addAudioEvent( &soundToPlay );
 				}

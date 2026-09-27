@@ -55,11 +55,9 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-// the terrain's bridge lookup is still float (P5)
 static Bridge *findBridgeUnder( const Object *obj )
 {
-	Coord3D pos = obj->getPositionFix()->toCoord3D();
-	return TheTerrainLogic->findBridgeAt( &pos );
+	return TheTerrainLogic->findBridgeAtFix( obj->getPositionFix() );
 }
 
 // ------------------------------------------------------------------------------------------------

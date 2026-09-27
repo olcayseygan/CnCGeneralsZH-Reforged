@@ -685,10 +685,10 @@ void WaveGuideUpdate::doDamage( void )
 						if( newBridge )
 						{
 							Real angle = 0.0f;
-							const Coord3D bridgePos = objPos->toCoord3D();	// P8: bridges and the particle below are float
+							const Coord3D bridgePos = objPos->toCoord3D();	// P8: the particle below is float
 
 							// get the bridge represented by the object we're killing
-							Bridge *oldBridge = TheTerrainLogic->findBridgeAt( &bridgePos );
+							Bridge *oldBridge = TheTerrainLogic->findBridgeAtFix( objPos );
 							if( oldBridge )
 							{
 								BridgeInfo bridgeInfo;

@@ -802,13 +802,9 @@ void SpectreGunshipUpdate::disengageAndDepartAO( Object *gunship )
 
   if ( shipAI)
   {
-    // head off the map in the direction you are facing: the unit x axis of the transform
-    const FixMatrix3D *mtx = gunship->getTransformMatrixFix();
+    // head off the map in the direction you are facing
     FCoord3D exitPoint;
-    exitPoint.set( mtx->m[ 0 ][ 0 ], mtx->m[ 1 ][ 0 ], mtx->m[ 2 ][ 0 ] );
-    Fix len = exitPoint.length();
-    if( len > Fix( 0 ) )
-      exitPoint.set( exitPoint.x / len, exitPoint.y / len, exitPoint.z / len );
+    gunship->getUnitDirectionVector3DFix( exitPoint );
     const Fix mapSize = Fix( 99999 );
     exitPoint.x *= mapSize;
     exitPoint.y *= mapSize;

@@ -161,9 +161,7 @@ UpdateSleepTime HeightDieUpdate::update( void )
 		// if including structures, check for bridges
 		if (modData->m_targetHeightIncludesStructures)
 		{
-			// P5: the layer lookup is still float
-			const Coord3D posF = pos.toCoord3D();
-			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(&posF);
+			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestinationFix(&pos);
 			if (layer != LAYER_GROUND)
 			{
 				Fix layerHeight = TheTerrainLogic->getLayerHeightFix(pos.x, pos.y, layer);

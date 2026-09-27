@@ -82,8 +82,7 @@ void HiveStructureBody::attemptDamage( DamageInfo *damageInfo )
 			Object *shooter = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
 			if( shooter )
 			{
-				Coord3D shooterPos = shooter->getPositionFix()->toCoord3D();	// P2: getClosestSlave still takes float
-				Object *slave = spawnInterface->getClosestSlave( &shooterPos );
+				Object *slave = spawnInterface->getClosestSlave( shooter->getPositionFix() );
 				if( slave )
 				{
 					//Propagate damage and return!
@@ -107,8 +106,7 @@ void HiveStructureBody::attemptDamage( DamageInfo *damageInfo )
 			Object *shooter = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
 			if( shooter )
 			{
-				Coord3D shooterPos = shooter->getPositionFix()->toCoord3D();	// P2: getClosestRider still takes float
-				Object *rider = contain->getClosestRider( &shooterPos );
+				Object *rider = contain->getClosestRider( shooter->getPositionFix() );
 				if( rider )
 				{
 					//Propagate damage and return!

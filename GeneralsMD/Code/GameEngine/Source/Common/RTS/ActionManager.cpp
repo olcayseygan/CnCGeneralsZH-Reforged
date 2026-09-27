@@ -959,8 +959,7 @@ CanAttackResult ActionManager::getCanAttackObject( const Object *obj, const Obje
 		if( spawnInterface )
 		{
 			//We found the spawn interface, now get the closest slave to the target.
-			Coord3D targetPos = objectToAttack->getPositionFix()->toCoord3D();	// P7: the spawn module takes float
-			Object *slave = spawnInterface->getClosestSlave( &targetPos );
+			Object *slave = spawnInterface->getClosestSlave( objectToAttack->getPositionFix() );
 			
 			if( slave )
 			{

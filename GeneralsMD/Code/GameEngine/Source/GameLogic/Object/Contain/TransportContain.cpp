@@ -345,10 +345,7 @@ void TransportContain::onRemoving( Object *rider )
 			Coord3D bonePos;
 			if (draw->getPristineBonePositions(d->m_exitBone.str(), 0, &bonePos, NULL, 1) == 1)
 			{
-				// the bone is the drawable's, float, and enters logic here
-				FCoord3D fxBone;
-				fxBone.set(fixFromReal(bonePos.x), fixFromReal(bonePos.y), fixFromReal(bonePos.z));
-				FCoord3D worldPos = getObject()->getTransformMatrixFix()->transformPoint(fxBone);
+				FCoord3D worldPos = getObject()->convertBonePosToWorldPosFix(bonePos);
 				rider->setPositionFix(&worldPos);
 			}
 		}

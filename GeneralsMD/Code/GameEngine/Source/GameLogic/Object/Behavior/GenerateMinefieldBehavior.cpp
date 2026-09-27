@@ -199,11 +199,11 @@ static void offsetBySmallRandomAmount(Coord3D& pt, Real maxAmt)
 //-------------------------------------------------------------------------------------------------
 Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTemplate* mineTemplate, Team* team, const Object* producer)
 {
-	Coord3D tmp = pt;
-	tmp.z = 99999.0f;
-	PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
-
 	const FCoord3D fxPt = { fixFromReal(pt.x), fixFromReal(pt.y), fixFromReal(pt.z) };
+	FCoord3D tmp = fxPt;
+	tmp.z = Fix( 99999 );
+	PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestinationFix(&tmp);
+
 	if (layer == LAYER_GROUND && TheTerrainLogic->isUnderwaterFix(fxPt.x, fxPt.y))
 		return NULL;
 

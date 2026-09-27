@@ -694,23 +694,21 @@ UpdateSleepTime DumbProjectileBehavior::update()
 
 	// note that we want to use getHighestLayerForDestination() here, so that anything even slightly
 	// below the bridge translates into GROUND. (getLayerForDestination just does a "closest" check)
-	// the layer lookups are still float (P5)
 	PathfindLayerEnum oldLayer = getObject()->getLayer();
-	Coord3D tmp = getObject()->getPositionFix()->toCoord3D();
-	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
+	FCoord3D tmp = *getObject()->getPositionFix();
+	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestinationFix(&tmp);
 	getObject()->setLayer(newLayer);
 
 	if (oldLayer != LAYER_GROUND && newLayer == LAYER_GROUND)
 	{
 		// see if we' still in the bridge's xy area
-		tmp.z = 9999.0f;
-		PathfindLayerEnum testLayer = TheTerrainLogic->getHighestLayerForDestination(&tmp);
+		tmp.z = Fix( 9999 );
+		PathfindLayerEnum testLayer = TheTerrainLogic->getHighestLayerForDestinationFix(&tmp);
 		if (testLayer == oldLayer)
 		{
 			// ensure we are slightly above the bridge, to account for fudge & sloppy art
-			FCoord3D fxTmp = *getObject()->getPositionFix();
-			fxTmp.z = TheTerrainLogic->getLayerHeightFix(fxTmp.x, fxTmp.y, testLayer) + Fix( 2 );
-			getObject()->setPositionFix(&fxTmp);
+			tmp.z = TheTerrainLogic->getLayerHeightFix(tmp.x, tmp.y, testLayer) + Fix( 2 );
+			getObject()->setPositionFix(&tmp);
 			// blow'd up!
 			detonate();
 			return UPDATE_SLEEP_NONE;

@@ -192,7 +192,7 @@ public:
 	virtual PlayerMaskType getPlayerWhoEntered(void) const = 0;
 
 	virtual void processDamageToContained(Real percentDamage) = 0; ///< Do our % damage to units now.
-  virtual Object* getClosestRider ( const Coord3D *pos ) = 0;
+  virtual Object* getClosestRider ( const FCoord3D *pos ) = 0;
 
 	virtual void enableLoadSounds( Bool enable ) = 0;
 

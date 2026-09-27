@@ -281,8 +281,9 @@ UpdateSleepTime TensileFormationUpdate::update( void )
 	//APPLY PHYSICS===========================
 	const FCoord3D *pos = getObject()->getPositionFix();
 
-	Coord3D normal = { 0.0f, 0.0f, 1.0f };
-	TheTerrainLogic->getGroundHeight(fixToReal(pos->x), fixToReal(pos->y), &normal); // which way does the ground slope?	P4: the normal has no Fix twin, and the inertia is saved in float
+	FCoord3D fxNormal;
+	TheTerrainLogic->getGroundHeightFix(pos->x, pos->y, &fxNormal); // which way does the ground slope?
+	const Coord3D normal = fxNormal.toCoord3D();	// P4: the inertia is saved in float
 
 	Coord3D slope = { normal.x, normal.y, 0.0f};
 	Real steepness = 1.0f - normal.z;

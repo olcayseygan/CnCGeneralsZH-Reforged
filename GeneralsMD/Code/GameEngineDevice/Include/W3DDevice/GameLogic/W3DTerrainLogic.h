@@ -56,7 +56,7 @@ public:
 	virtual Bool loadMap( AsciiString filename , Bool query );
 	virtual void newMap( Bool saveGame );	///< Initialize the logic for new map.
 
-	virtual Fix getGroundHeightFix( Fix x, Fix y ) const;
+	virtual Fix getGroundHeightFix( Fix x, Fix y, FCoord3D *normal = NULL ) const;
 	virtual Real getGroundHeight( Real x, Real y, Coord3D* normal = NULL ) const;
 
 	virtual Bool isCliffCell( Real x, Real y) const;			///< is point cliff cell.
@@ -69,7 +69,7 @@ public:
 
 	virtual void getExtentIncludingBorder( Region3D *extent ) const;
 
-	virtual Bool isClearLineOfSight(const Coord3D& pos, const Coord3D& posOther) const;
+	virtual Bool isClearLineOfSight(const FCoord3D& pos, const FCoord3D& posOther) const;
 
 protected:
 

@@ -2019,14 +2019,17 @@ const Coord3D *Object::getUnitDirectionVector2D() const
 	return &m_shimDirVector;
 }
 
-void Object::getUnitDirectionVector3D( Coord3D &dir ) const
+void Object::getUnitDirectionVector3DFix( FCoord3D &dir ) const
 {
-	FCoord3D v;
-	v.set( m_fxTransform.m[ 0 ][ 0 ], m_fxTransform.m[ 1 ][ 0 ], m_fxTransform.m[ 2 ][ 0 ] );
-	Fix len = v.length();
+	dir.set( m_fxTransform.m[ 0 ][ 0 ], m_fxTransform.m[ 1 ][ 0 ], m_fxTransform.m[ 2 ][ 0 ] );
+	Fix len = dir.length();
 	if( len > Fix( 0 ) )
-		v.set( v.x / len, v.y / len, v.z / len );
-	dir = v.toCoord3D();
+		dir.set( dir.x / len, dir.y / len, dir.z / len );
+}
+
+FCoord3D Object::convertBonePosToWorldPosFix( const Coord3D &bonePos ) const
+{
+	return m_fxTransform.transformPoint( fcoordFromCoord3D( bonePos ) );
 }
 
 Real Object::getHeightAboveTerrain() const
@@ -2044,13 +2047,7 @@ void Object::convertBonePosToWorldPos( const Coord3D *bonePos, const Matrix3D *b
 	if( worldTransform )
 		worldTransform->mul( m_shimTransform, *boneTransform );
 	if( worldPos )
-	{
-		Vector3 vector( bonePos->x, bonePos->y, bonePos->z );
-		m_shimTransform.Transform_Vector( m_shimTransform, vector, &vector );
-		worldPos->x = vector.X;
-		worldPos->y = vector.Y;
-		worldPos->z = vector.Z;
-	}
+		*worldPos = convertBonePosToWorldPosFix( *bonePos ).toCoord3D();
 }
 
 void Object::transformPoint( const Coord3D *in, Coord3D *out )

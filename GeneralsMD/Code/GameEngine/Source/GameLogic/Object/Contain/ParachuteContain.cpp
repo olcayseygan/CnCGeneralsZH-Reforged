@@ -429,8 +429,7 @@ UpdateSleepTime ParachuteContain::update( void )
 
 	// allow us to land on bridges!
 	const FCoord3D* paraPos = getObject()->getPositionFix();
-	Coord3D paraPosReal = paraPos->toCoord3D();	// P5: the layer query is float
-	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&paraPosReal);
+	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestinationFix(paraPos);
 	getObject()->setLayer(newLayer);
 	if (rider)
 		rider->setLayer(newLayer);

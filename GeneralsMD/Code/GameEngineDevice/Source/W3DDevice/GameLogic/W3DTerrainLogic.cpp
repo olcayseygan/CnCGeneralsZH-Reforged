@@ -263,7 +263,7 @@ void W3DTerrainLogic::getExtentIncludingBorder( Region3D *extent ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool W3DTerrainLogic::isClearLineOfSight(const Coord3D& pos, const Coord3D& posOther) const
+Bool W3DTerrainLogic::isClearLineOfSight(const FCoord3D& pos, const FCoord3D& posOther) const
 {
 	if (TheTerrainRenderObject) 
 	{
@@ -278,9 +278,13 @@ Bool W3DTerrainLogic::isClearLineOfSight(const Coord3D& pos, const Coord3D& posO
 //-------------------------------------------------------------------------------------------------
 /** W3D specific get height function for logical terrain */
 //-------------------------------------------------------------------------------------------------
-Fix W3DTerrainLogic::getGroundHeightFix( Fix x, Fix y ) const
+Fix W3DTerrainLogic::getGroundHeightFix( Fix x, Fix y, FCoord3D *normal ) const
 {
-	return TheTerrainRenderObject ? TheTerrainRenderObject->getHeightMapHeightFix( x, y ) : Fix( 0 );
+	if( TheTerrainRenderObject )
+		return TheTerrainRenderObject->getHeightMapHeightFix( x, y, normal );
+	if( normal )
+		normal->set( Fix( 0 ), Fix( 0 ), Fix( 1 ) );
+	return Fix( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------

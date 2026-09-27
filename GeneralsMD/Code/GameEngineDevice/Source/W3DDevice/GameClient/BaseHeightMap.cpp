@@ -66,6 +66,7 @@
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/TerrainLogic.h"
+#include "Lib/FixBoundary.h"
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
 #include "W3DDevice/GameClient/W3DScene.h"
@@ -919,8 +920,11 @@ static Int64 floorDivide( Int64 a, Int64 b )
 	return (a % b != 0 && a < 0) ? q - 1 : q;
 }
 
-Fix BaseHeightMapRenderObjClass::getHeightMapHeightFix(Fix x, Fix y) const
+Fix BaseHeightMapRenderObjClass::getHeightMapHeightFix(Fix x, Fix y, FCoord3D *normal) const
 {
+	if( normal )
+		normal->set( Fix( 0 ), Fix( 0 ), Fix( 1 ) );
+
 	WorldHeightMap *logicHeightMap = TheTerrainVisual?TheTerrainVisual->getLogicHeightMap():m_map;
 	if ( !logicHeightMap )
 		return Fix( 0 );
@@ -946,9 +950,27 @@ Fix BaseHeightMapRenderObjClass::getHeightMapHeightFix(Fix x, Fix y) const
 
 	const UnsignedByte* data = logicHeightMap->getDataPtr();
 	Int idx = ix + iy*xExtent;
+	const Fix one = Fix( 1 );
+	if( normal )
+	{
+		// the smoothed normal getHeightMapHeight builds from the twelve samples around the cell; its
+		// cross product of (32, 0, dX) and (0, 32, dY) normalizes to (-dX, -dY, 32) over the length
+		const Int i4 = idx - xExtent, i3 = idx + xExtent, i9 = idx + 2*xExtent;
+		const Fix dX0 = Fix( data[idx+1] - data[idx-1] );
+		const Fix dX1 = Fix( data[idx+2] - data[idx] );
+		const Fix dX2 = Fix( data[i3+2] - data[i3] );
+		const Fix dY0 = Fix( data[i3] - data[i4] );
+		const Fix dY1 = Fix( data[i3+1] - data[i4+1] );
+		const Fix dY2 = Fix( data[i9+1] - data[idx+1] );
+		const Fix dY3 = Fix( data[i9] - data[idx] );
+		const Fix dX = (dX0*(one-fx) + fx*dX1)*(one-fy) + fy*(dX1*(one-fx) + fx*dX2);
+		const Fix dY = (dY0*(one-fx) + fx*dY3)*(one-fy) + fy*(dY1*(one-fx) + fx*dY2);
+		const Fix side = Fix( 32 );
+		const Fix len = fixSqrt( dX*dX + dY*dY + side*side );
+		normal->set( -dX / len, -dY / len, side / len );
+	}
 	Fix p0 = Fix( data[idx] );
 	Fix p2 = Fix( data[idx + xExtent + 1] );
-	const Fix one = Fix( 1 );
 	if (fy > fx) // upper triangle
 	{
 		Fix p3 = Fix( data[idx + xExtent] );
@@ -1114,27 +1136,24 @@ Real BaseHeightMapRenderObjClass::getHeightMapHeight(Real x, Real y, Coord3D* no
 }
 
 //=============================================================================
-Bool BaseHeightMapRenderObjClass::isClearLineOfSight(const Coord3D& pos, const Coord3D& posOther) const
+Bool BaseHeightMapRenderObjClass::isClearLineOfSight(const FCoord3D& pos, const FCoord3D& posOther) const
 {
 	if (m_map == NULL)
 		return false;	// doh. should not happen.
 
   WorldHeightMap *logicHeightMap = TheTerrainVisual?TheTerrainVisual->getLogicHeightMap():m_map;
 
-#define DO_BRESENHAM
-#ifdef DO_BRESENHAM
-
 	/*
 		this is WAY faster, though not quite as accurate... however, the inaccuracy
 		is pretty minimal, so we really should force other code to live with it. (srj)
 	*/
-	const Real MAP_XY_FACTOR_INV = 1.0f / MAP_XY_FACTOR;
+	const Int64 CELL_RAW = 10 * Fix::ONE_RAW;
 
 	Int borderSize = logicHeightMap->getBorderSizeInline();
-	Int start_x = REAL_TO_INT_FLOOR(pos.x * MAP_XY_FACTOR_INV) + borderSize;
-	Int start_y = REAL_TO_INT_FLOOR(pos.y * MAP_XY_FACTOR_INV) + borderSize;
-	Int end_x = REAL_TO_INT_FLOOR(posOther.x * MAP_XY_FACTOR_INV) + borderSize;
-	Int end_y = REAL_TO_INT_FLOOR(posOther.y * MAP_XY_FACTOR_INV) + borderSize;
+	Int start_x = (Int)floorDivide(pos.x.raw(), CELL_RAW) + borderSize;
+	Int start_y = (Int)floorDivide(pos.y.raw(), CELL_RAW) + borderSize;
+	Int end_x = (Int)floorDivide(posOther.x.raw(), CELL_RAW) + borderSize;
+	Int end_y = (Int)floorDivide(posOther.y.raw(), CELL_RAW) + borderSize;
 	Int delta_x = abs(end_x - start_x);			// The difference between the x's
 	Int delta_y = abs(end_y - start_y);			// The difference between the y's
 	Int x = start_x;												// Start x off at the first pixel
@@ -1187,10 +1206,11 @@ Bool BaseHeightMapRenderObjClass::isClearLineOfSight(const Coord3D& pos, const C
 		numpixels = delta_y;							// There are more y-values than x-values
 	}
 
-	Real nsInv = 1.0f / numpixels;
-	Real z = pos.z;
-	Real dz = posOther.z - z;
-	Real zinc = dz * nsInv;
+	Fix z = pos.z;
+	const Fix zinc = numpixels ? (posOther.z - z) / Fix( numpixels ) : Fix( 0 );
+	const Fix maxHeight = fixFromReal( getMaxHeight() );
+	const Fix HEIGHT_SCALE = 0.625_fx;
+	const Fix LOS_FUDGE = 0.5_fx;
 
 	Bool result = true;
 	const UnsignedByte* data = logicHeightMap->getDataPtr();
@@ -1208,15 +1228,14 @@ Bool BaseHeightMapRenderObjClass::isClearLineOfSight(const Coord3D& pos, const C
 		}
 
 		Int idx = x + y*xExtent;
-		float height = data[idx];
-		height = __max(height, data[idx + 1]);
-		height = __max(height, data[idx + xExtent]);
-		height = __max(height, data[idx + xExtent + 1]);
-		height *= MAP_HEIGHT_SCALE;
+		Int sample = data[idx];
+		sample = __max(sample, data[idx + 1]);
+		sample = __max(sample, data[idx + xExtent]);
+		sample = __max(sample, data[idx + xExtent + 1]);
+		const Fix height = Fix( sample ) * HEIGHT_SCALE;
 
 		// if terrainHeight > z, we can't see, so punt.
 		// add a little fudge to account for slop.
-		const Real LOS_FUDGE = 0.5f;
 		if (height > z + LOS_FUDGE)
 		{
 			result = false;
@@ -1225,7 +1244,7 @@ Bool BaseHeightMapRenderObjClass::isClearLineOfSight(const Coord3D& pos, const C
 
 		// we're above the max height of the terrain and still looking up, so we're done.
 		// (don't bother for reverse test, since that doesn't generally happen)
-		if (z >= getMaxHeight() && zinc > 0.0f)
+		if (z >= maxHeight && zinc > Fix( 0 ))
 		{
 			break;
 		}
@@ -1245,61 +1264,6 @@ Bool BaseHeightMapRenderObjClass::isClearLineOfSight(const Coord3D& pos, const C
 	}
 	
 	return result;
-
-#else
-
-	// walk a line from obj to objOther and
-	// find the highest point in between 'em. while
-	// we're doing this, also estimate the point on the
-	// line at the same x,y as the high-terrain-point.
-
-	Real fx = pos.x;
-	Real fy = pos.y;
-	Real fz = pos.z;
-	Real fdx = posOther.x - fx;
-	Real fdy = posOther.y - fy;
-	Real fdz = posOther.z - fz;
-
-	// What's the largest step size that will be accurate enough?
-	// Currently we use a step size of about 2 "feet", which
-	// seems acceptable accuracy. If performance here is inadequate,
-	// we can try increasing the step size, but be sure to retest
-	// accuracy.
-	Real len = ceilf(sqrtf(fdx*fdx + fdy*fdy));
-	const Real STEP_LEN = 2.0f;
-	Int numSteps = REAL_TO_INT_CEIL(len / STEP_LEN);
-	if (numSteps < 1) numSteps = 1;
-	Real fnsInv = 1.0f / numSteps;
-	Real fxinc = fdx * fnsInv;
-	Real fyinc = fdy * fnsInv;
-	Real fzinc = fdz * fnsInv;
-	while (numSteps--)
-	{
-		Real terrainHeight = getHeightMapHeight( fx, fy, NULL );
-
-		// if terrainHeight > fz, we can't see, so punt.
-		// add a little fudge to account for slop.
-		const Real LOS_FUDGE = 0.5f;
-		if (terrainHeight > fz + LOS_FUDGE)
-		{
-			return false;
-		}
-
-		// we're above the max height of the terrain and still looking up, so we're done.
-		// (don't bother for reverse test, since that doesn't generally happen)
-		if (fz >= getMaxHeight() && fzinc > 0.0f)
-		{
-			return true;
-		}
-
-		fx += fxinc;
-		fy += fyinc;
-		fz += fzinc;
-
-	}
-
-	return true;
-#endif
 }
 
 //=============================================================================

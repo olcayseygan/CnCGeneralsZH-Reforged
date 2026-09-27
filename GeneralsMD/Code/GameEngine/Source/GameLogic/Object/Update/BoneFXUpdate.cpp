@@ -49,16 +49,6 @@
 const Int MAX_IDX = 32;
 
 //-------------------------------------------------------------------------------------------------
-// the bone comes from the client's model and the FX list and OCL take a float position, so only
-// the transform itself runs fixed
-static Coord3D boneToWorld(const Object *obj, const Coord3D *bonePos)
-{
-	FCoord3D bone;
-	bone.set(fixFromReal(bonePos->x), fixFromReal(bonePos->y), fixFromReal(bonePos->z));
-	return obj->getTransformMatrixFix()->transformPoint(bone).toCoord3D();
-}
-
-//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 BoneFXUpdateModuleData::BoneFXUpdateModuleData(void)
 {
@@ -417,7 +407,7 @@ void BoneFXUpdate::doFXListAtBone(const FXList *fxList, const Coord3D *bonePosit
 
 	// Convert the bone's position relative to the origin of the building to the current
 	// bone position in the world.
-	Coord3D newPos = boneToWorld(building, bonePosition);
+	Coord3D newPos = building->convertBonePosToWorldPosFix(*bonePosition).toCoord3D();	// the FX list is float
 
 	// execute the fx list at the calculated bone position.
 	FXList::doFXPos(fxList, &newPos, NULL);
@@ -441,7 +431,7 @@ void BoneFXUpdate::doOCLAtBone(const ObjectCreationList *ocl, const Coord3D *bon
 	// resolveBoneLocations.  Either that or it was correct to begin with.
 	Object *building = getObject();
 
-	Coord3D newPos = boneToWorld(building, bonePosition);
+	Coord3D newPos = building->convertBonePosToWorldPosFix(*bonePosition).toCoord3D();	// the OCL is float
 
 	ObjectCreationList::create( ocl, building, &newPos, NULL, INVALID_ANGLE );
 

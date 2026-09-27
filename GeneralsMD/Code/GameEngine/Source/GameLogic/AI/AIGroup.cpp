@@ -3302,7 +3302,7 @@ void AIGroup::groupEvacuate( CommandSourceType cmdSource )
 				//Calculate the highest point on the ground to drop off troops (chinook or other air transports)
 				const FCoord3D *at = (*i)->getPositionFix();
 				Coord3D pos = at->toCoord3D();	// P4: the drop-off spot is a float move goal
-				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination( &pos );
+				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestinationFix( at );
 				pos.z = fixToReal( TheTerrainLogic->getLayerHeightFix( at->x, at->y, layerAtDest ) );
 				ai->aiMoveToAndEvacuate( &pos, cmdSource );
 			}

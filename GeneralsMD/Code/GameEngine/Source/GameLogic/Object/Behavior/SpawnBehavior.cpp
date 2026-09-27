@@ -319,18 +319,16 @@ Bool SpawnBehavior::maySpawnSelfTaskAI( Real maxSelfTaskersRatio )
 }
 
 // ------------------------------------------------------------------------------------------------
-Object* SpawnBehavior::getClosestSlave( const Coord3D *pos )
+Object* SpawnBehavior::getClosestSlave( const FCoord3D *pos )
 {
 	Object *closest = NULL;
 	Fix closestDistance;
-	FCoord3D fpos;	// the interface takes float, its callers are not converted yet
-	fpos.set( fixFromReal( pos->x ), fixFromReal( pos->y ), fixFromReal( pos->z ) );
 	for( objectIDListIterator it = m_spawnIDs.begin(); it != m_spawnIDs.end(); ++it )
 	{
 		Object *obj = TheGameLogic->findObjectByID( *it );
 		if( obj )
 		{
-			Fix distance = ThePartitionManager->getDistanceSquaredFix( obj, &fpos, FROM_CENTER_2D );
+			Fix distance = ThePartitionManager->getDistanceSquaredFix( obj, pos, FROM_CENTER_2D );
 			
 			if( !closest || closestDistance > distance ) 
 			{

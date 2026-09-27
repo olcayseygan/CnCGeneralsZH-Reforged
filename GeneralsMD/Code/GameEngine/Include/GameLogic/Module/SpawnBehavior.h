@@ -115,7 +115,7 @@ public:
 
 	virtual Bool maySpawnSelfTaskAI( Real maxSelfTaskersRatio ) = 0;
 	virtual void onSpawnDeath( ObjectID deadSpawn, DamageInfo *damageInfo ) = 0;
-	virtual Object* getClosestSlave( const Coord3D *pos ) = 0;
+	virtual Object* getClosestSlave( const FCoord3D *pos ) = 0;
 	virtual void orderSlavesToAttackTarget( Object *target, Int maxShotsToFire, CommandSourceType cmdSource ) = 0;
 	virtual void orderSlavesToAttackPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource ) = 0;
 	virtual CanAttackResult getCanAnySlavesAttackSpecificTarget( AbleToAttackType attackType, const Object *target, CommandSourceType cmdSource ) = 0;
@@ -171,7 +171,7 @@ public:
 	// SpawnBehaviorInterface methods
 	virtual Bool maySpawnSelfTaskAI( Real maxSelfTaskersRatio );
 	virtual void onSpawnDeath( ObjectID deadSpawn, DamageInfo *damageInfo );	///< Something we spawned and set up to tell us it died just died.
-	virtual Object* getClosestSlave( const Coord3D *pos );
+	virtual Object* getClosestSlave( const FCoord3D *pos );
 	virtual void orderSlavesToAttackTarget( Object *target, Int maxShotsToFire, CommandSourceType cmdSource );
 	virtual void orderSlavesToAttackPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource );
 	virtual CanAttackResult getCanAnySlavesAttackSpecificTarget( AbleToAttackType attackType, const Object *target, CommandSourceType cmdSource );

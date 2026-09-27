@@ -2925,12 +2925,13 @@ void ScriptActions::doTeamRadarCreateEvent(const AsciiString& teamName, Int even
 		return;
 	
 	// get team's position
-	const Coord3D *pos = theTeam->getEstimateTeamPosition();
+	const FCoord3D *pos = theTeam->getEstimateTeamPosition();
 	if (!pos)
 		return;
 
 	// create event
-	TheRadar->createEvent(pos, (RadarEventType)eventType);
+	const Coord3D radarPos = pos->toCoord3D();	// the radar is the client's
+	TheRadar->createEvent(&radarPos, (RadarEventType)eventType);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5298,7 +5299,7 @@ void ScriptActions::doMoveTeamTowardsNearest( const AsciiString& teamName, const
 		return;
 	}
 
-	const FCoord3D teamPos = fcoordFromCoord3D( *team->getEstimateTeamPosition() );	// P7 the team estimate is float
+	const FCoord3D teamPos = *team->getEstimateTeamPosition();
 	PartitionFilterSameMapStatus filterMapStatus( teamObj );
 	PartitionFilterPolygonTrigger acceptWithin( trig );
 	Object *bestObj = NULL;

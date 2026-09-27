@@ -5674,8 +5674,7 @@ void GameLogic::prepareLogicForObjectLoad( void )
 		// is this a bridge object?
 		if( obj->isKindOf( KINDOF_BRIDGE ) )
 		{
-			const Coord3D bridgePos = obj->getPositionFix()->toCoord3D();	// P2: findBridgeAt has no Fix twin
-			Bridge *bridge = TheTerrainLogic->findBridgeAt( &bridgePos );
+			Bridge *bridge = TheTerrainLogic->findBridgeAtFix( obj->getPositionFix() );
 
 			// sanity
 			DEBUG_ASSERTCRASH( bridge, ("GameLogic::prepareLogicForObjectLoad - Unable to find bridge\n" ));

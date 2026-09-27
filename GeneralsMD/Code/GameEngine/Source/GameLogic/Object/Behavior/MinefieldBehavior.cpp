@@ -198,8 +198,7 @@ UpdateSleepTime MinefieldBehavior::update()
 		// srj sez: scooting mines always go on the highest layer.
 		FCoord3D tmp = pt;
 		tmp.z = Fix( 99999 );
-		Coord3D probe = tmp.toCoord3D(); // P5
-		PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&probe);
+		PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestinationFix(&tmp);
 		obj->setLayer(newLayer);
 
 		Fix ground = TheTerrainLogic->getLayerHeightFix( pt.x, pt.y, newLayer );

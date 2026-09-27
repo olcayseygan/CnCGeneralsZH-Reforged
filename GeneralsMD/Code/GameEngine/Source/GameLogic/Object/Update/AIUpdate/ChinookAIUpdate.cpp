@@ -545,14 +545,14 @@ public:
 			info.ropeDrawable = ropeTmpl ? TheThingFactory->newDrawable(ropeTmpl) : NULL;
 			if (info.ropeDrawable)
 			{
-				FCoord3D ropeTop = obj->getTransformMatrixFix()->transformPoint( fcoordFromCoord3D( &ropePos[i] ) );
+				FCoord3D ropeTop = obj->convertBonePosToWorldPosFix( ropePos[i] );
 				ropePos[i] = ropeTop.toCoord3D();
 				info.ropeDrawable->setPosition(&ropePos[i]);
 				info.ropeSpeed = 0.0f;
 				info.ropeLen = 1.0f;
 
 				const Bool onlyHealthyBridges = true;	// ignore dead bridges.
-				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination(&ropePos[i], onlyHealthyBridges);
+				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestinationFix(&ropeTop, onlyHealthyBridges);
 
 				// ropeLenMax is xfer'd and the rope's height is INI data (P3)
 				info.ropeLenMax = fixToReal( ropeTop.z - TheTerrainLogic->getLayerHeightFix(ropeTop.x, ropeTop.y, layerAtDest)

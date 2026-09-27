@@ -411,7 +411,7 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 				{
 
 					draw->getPristineBonePositions( modData->m_bladeBone.str(), 0, &bladePos, NULL, 1 );
-					draw->convertBonePosToWorldPos( &bladePos, NULL, &bladePos, NULL );
+					bladePos = copter->convertBonePosToWorldPosFix( bladePos ).toCoord3D();
 
 				}  // end if
 		
@@ -460,10 +460,9 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 	if (m_hitGroundFrame == 0)
 	{
 		// srj sez: if we haven't yet hit the ground, adjust our layer properly so we crash on bridges
-		// P5: the layer lookup is still float
-		Coord3D tmpPt = pos->toCoord3D();
-		tmpPt.z = 99999.0f;
-		PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&tmpPt);
+		FCoord3D tmpPt = *pos;
+		tmpPt.z = Fix( 99999 );
+		PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestinationFix(&tmpPt);
 		copter->setLayer(newLayer);
 
 		Fix ground = TheTerrainLogic->getLayerHeightFix( pos->x, pos->y, newLayer );

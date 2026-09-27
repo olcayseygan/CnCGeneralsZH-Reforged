@@ -1117,8 +1117,7 @@ protected:
 		if( BitTest( m_disposition, ON_GROUND_ALIGNED ) )
 		{
 			chunkPos.z = Fix( 99999 );
-			Coord3D probe = chunkPos.toCoord3D();	// P9: the layer lookup takes a float position
-			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(&probe);
+			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestinationFix(&chunkPos);
 			obj->setOrientationFix(GameLogicRandomValueFix(Fix(0), FIX_TWO_PI));
 			chunkPos.z = TheTerrainLogic->getLayerHeightFix( chunkPos.x, chunkPos.y, layer );
 			// ensure we are slightly above the bridge, to account for fudge & sloppy art

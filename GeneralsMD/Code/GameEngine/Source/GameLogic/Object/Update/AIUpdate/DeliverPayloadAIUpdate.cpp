@@ -51,18 +51,6 @@
 #include "GameLogic/WeaponSet.h"
 #include "Lib/FixBoundary.h"
 
-// the object's forward axis, normalized, as Object::getUnitDirectionVector3D computes it
-static FCoord3D unitDirection3D( const Object *obj )
-{
-	const FixMatrix3D *mx = obj->getTransformMatrixFix();
-	FCoord3D v;
-	v.set( mx->m[ 0 ][ 0 ], mx->m[ 1 ][ 0 ], mx->m[ 2 ][ 0 ] );
-	Fix len = v.length();
-	if( len > Fix( 0 ) )
-		v.set( v.x / len, v.y / len, v.z / len );
-	return v;
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -1208,7 +1196,9 @@ StateReturnType HeadOffMapState::onEnter() // Give move order out of town
 	ai->friend_setAcceptingCommands(false);
 
 
-  facingDirectionUponDelivery = unitDirection3D( owner ).toCoord3D();	// xfer'd, stays float
+  FCoord3D facing;
+  owner->getUnitDirectionVector3DFix( facing );
+  facingDirectionUponDelivery = facing.toCoord3D();	// xfer'd, stays float
 
 	return STATE_CONTINUE;
 }
@@ -1230,7 +1220,8 @@ StateReturnType HeadOffMapState::update()
   //I blow up, rather than face eternally spinning on the point of a mineret or derrick or something awful.
   if ( owner->getPhysics()->getTurning() != 0 )
   {
-    FCoord3D currentDirection = unitDirection3D( owner );
+    FCoord3D currentDirection;
+    owner->getUnitDirectionVector3DFix( currentDirection );
     FCoord3D facing = fcoordFromCoord3D( &facingDirectionUponDelivery );
   	Fix dot = facing.x * currentDirection.x
             + facing.y * currentDirection.y

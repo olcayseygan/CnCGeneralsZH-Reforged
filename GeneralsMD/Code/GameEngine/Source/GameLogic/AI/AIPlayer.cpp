@@ -3037,11 +3037,13 @@ void AIPlayer::buildSpecificBuildingNearestTeam( const AsciiString &thingName, c
 	}
 
 	//From the team's location, find the most valid build location.
-	const Coord3D *location = team->getEstimateTeamPosition();
-	if( !location )
+	const FCoord3D *teamPos = team->getEstimateTeamPosition();
+	if( !teamPos )
 	{
 		return;
 	}
+	const Coord3D teamLocation = teamPos->toCoord3D();	// P7 the build placement is float
+	const Coord3D *location = &teamLocation;
 
 	// offset back towards the base.
 	Coord2D offset;

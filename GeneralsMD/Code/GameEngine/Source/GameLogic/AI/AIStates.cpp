@@ -548,10 +548,9 @@ StateReturnType AIRappelState::onEnter()
 		m_targetIsBldg = false;
 
 	const FCoord3D* pos = obj->getPositionFix();
-	const Coord3D posF = pos->toCoord3D();	// P5
 
 	const Bool onlyHealthyBridges = true;	// ignore dead bridges.
-	PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination(&posF, onlyHealthyBridges);
+	PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestinationFix(pos, onlyHealthyBridges);
 	m_destZ = fixToReal(TheTerrainLogic->getLayerHeightFix(pos->x, pos->y, layerAtDest));	// P4
 	if (m_targetIsBldg)
 		m_destZ += bldg->getGeometryInfo().getMaxHeightAbovePosition();
@@ -2180,13 +2179,8 @@ StateReturnType AIMoveToState::update()
 			Fix goalSpeed = fixFromReal(goalObj->getPhysics()->getVelocityMagnitude());	// P4
 			if (mySpeed<Fix(5)) mySpeed = Fix(5); // avoid divide by 0.
 			Fix leadDistance = (0.5_fx*delta.length()) * goalSpeed / mySpeed;
-			// the goal's unit forward vector in 3D, read the way getUnitDirectionVector3D reads it
-			const FixMatrix3D *mx = goalObj->getTransformMatrixFix();
 			FCoord3D dir;
-			dir.set(mx->m[0][0], mx->m[1][0], mx->m[2][0]);
-			Fix dirLen = dir.length();
-			if (dirLen > Fix(0))
-				dir.set(dir.x / dirLen, dir.y / dirLen, dir.z / dirLen);
+			goalObj->getUnitDirectionVector3DFix(dir);
 			dir.scale(leadDistance);
 			goalPos.add(dir);
 		}

@@ -379,7 +379,7 @@ void TransitionDamageFX::onBodyDamageStateChange( const DamageInfo* damageInfo,
 				{
 
 					pos = getLocalEffectPos( &modData->m_OCL[ newState ][ i ].locInfo, draw );
-					getObject()->convertBonePosToWorldPos( &pos, NULL, &pos, NULL );	// no Fix twin: the bone comes from the drawable
+					pos = getObject()->convertBonePosToWorldPosFix( pos ).toCoord3D();	// the OCL is float
 					Coord3D sourcePos;
 					if( damageSource )
 						sourcePos = damageSource->getPositionFix()->toCoord3D();	// P3: the OCL is float

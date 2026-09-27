@@ -36,6 +36,15 @@
 #include "GameLogic/Module/RailedTransportAIUpdate.h"
 #include "GameLogic/Module/RailedTransportDockUpdate.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
+
+// waypoints are map data in float; this is where they come in
+static FCoord3D toFCoord3D( const Coord3D *c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
+	return f;
+}
 
 // TYPES //////////////////////////////////////////////////////////////////////////////////////////
 static const Int INVALID_PATH = -1;
@@ -134,12 +143,12 @@ void RailedTransportAIUpdate::loadWaypointData( void )
 void RailedTransportAIUpdate::pickAndMoveToInitialLocation( void )
 {
 	Object *us = getObject();
-	const Coord3D *ourPos = us->getPosition();
+	const FCoord3D *ourPos = us->getPositionFix();
 
 	// select the path with the closest ending waypoint to our location
 	Waypoint *waypoint, *closestEndWaypoint = NULL;
 	Int closestPath = INVALID_PATH;
-	Real closestDist = 99999999.9f;
+	Fix closestDist = FIX_MAX;
 	for( Int i = 0; i < m_numPaths; ++i )
 	{
 
@@ -147,15 +156,12 @@ void RailedTransportAIUpdate::pickAndMoveToInitialLocation( void )
 		waypoint = TheTerrainLogic->getWaypointByID( m_path[ i ].endWaypointID );
 		if( waypoint )
 		{
-			Coord3D v;
-
 			// vector from us to waypoint
-			v.x = waypoint->getLocation()->x - ourPos->x;
-			v.y = waypoint->getLocation()->y - ourPos->y;
-			v.z = waypoint->getLocation()->z - ourPos->z;
+			FCoord3D v = toFCoord3D( waypoint->getLocation() );
+			v.sub( *ourPos );
 
-			// what is the distance
-			Real dist = v.length();
+			// what is the distance (squared)
+			Fix dist = v.lengthSqr();
 
 			// if this distance is smaller, use this one
 			if( dist < closestDist )
@@ -232,14 +238,9 @@ UpdateSleepTime RailedTransportAIUpdate::update( void )
 		DEBUG_ASSERTCRASH( waypoint, ("RailedTransportAIUpdate: Invalid target waypoint\n") );
 
 		// how far away are we from the target waypoint
-		const Coord3D *start = us->getPosition();
-		const Coord3D *end = waypoint->getLocation();
-		Coord3D v;
-		v.x = end->x - start->x;
-		v.y = end->y - start->y;
-		v.z = end->z - start->z;
-		Real dist = v.length();
-		if( dist <= 5.0f || isIdle() )
+		FCoord3D v = toFCoord3D( waypoint->getLocation() );
+		v.sub( *us->getPositionFix() );
+		if( v.lengthSqr() <= Fix( 25 ) || isIdle() )
 		{
 
 			// we are no longer in transit

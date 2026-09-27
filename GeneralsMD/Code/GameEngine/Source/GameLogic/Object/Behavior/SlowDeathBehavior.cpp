@@ -50,6 +50,7 @@
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/Weapon.h"
 #include "GameClient/Drawable.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -288,13 +289,13 @@ void SlowDeathBehavior::beginSlowDeath(const DamageInfo *damageInfo)
 			if (physics)
 			{
 				// make sure we are at least a bit above the ground
-				const Real MIN_ALTITUDE = 1.0f;
-				Real altitude = obj->getHeightAboveTerrain();
+				const Fix MIN_ALTITUDE = Fix( 1 );
+				Fix altitude = obj->getHeightAboveTerrainFix();
 				if (altitude < MIN_ALTITUDE)
 				{
-					Coord3D pos = *obj->getPosition();
+					FCoord3D pos = *obj->getPositionFix();
 					pos.z += MIN_ALTITUDE;
-					obj->setPosition(&pos);
+					obj->setPositionFix(&pos);
 				}
 
 				Coord3D force;
@@ -373,7 +374,8 @@ void SlowDeathBehavior::doPhaseStuff(SlowDeathPhaseType sdphase)
 		const WeaponTemplate* wt = v[idx];
 		if (wt)
 		{
-			TheWeaponStore->createAndFireTempWeapon(wt, getObject(), getObject()->getPosition());
+			Coord3D pos = getObject()->getPositionFix()->toCoord3D(); // P6
+			TheWeaponStore->createAndFireTempWeapon(wt, getObject(), &pos);
 		}
 	}
 }
@@ -445,7 +447,7 @@ UpdateSleepTime SlowDeathBehavior::update()
 						obj->clearModelConditionFlags( MAKE_MODELCONDITION_MASK(MODELCONDITION_EXPLODED_FLAILING) ); 
 						obj->clearModelConditionFlags( MAKE_MODELCONDITION_MASK(MODELCONDITION_EXPLODED_BOUNCING) ); 
 						obj->setModelConditionFlags(   MAKE_MODELCONDITION_MASK(MODELCONDITION_PARACHUTING) ); //looks like he is snagged in a tree
-						obj->setPositionZ( obj->getPosition()->z - (d->m_sinkRate * 50.0f) );// make him sink faster
+						obj->setPositionZFix( obj->getPositionFix()->z - fixFromReal( d->m_sinkRate ) * Fix( 50 ) );// make him sink faster; P3
 						if ( !obj->isAboveTerrain() )
 							TheGameLogic->destroyObject(obj);
 
@@ -462,9 +464,9 @@ UpdateSleepTime SlowDeathBehavior::update()
 	{
 		// disable Physics (if any) so that we can control the sink...
 		obj->setDisabled( DISABLED_HELD );
-		Coord3D pos = *obj->getPosition();
-		pos.z -= d->m_sinkRate / m_acceleratedTimeScale;
-		obj->setPosition( &pos );
+		FCoord3D pos = *obj->getPositionFix();
+		pos.z -= fixFromReal( d->m_sinkRate / m_acceleratedTimeScale ); // P3, and the time scale is xfer'd
+		obj->setPositionFix( &pos );
 	}
 
 	if( now >= m_midpointFrame && (m_flags & (1<<MIDPOINT_EXECUTED)) == 0 )

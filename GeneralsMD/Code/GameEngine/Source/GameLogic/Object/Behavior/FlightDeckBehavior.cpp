@@ -51,6 +51,15 @@
 #include "GameLogic/Module/FlightDeckBehavior.h"
 #include "GameLogic/Module/JetAIUpdate.h"
 #include "GameLogic/Module/ProductionUpdate.h"
+#include "Lib/FixBoundary.h"
+
+// the deck and runway positions come from bones and are float (P3)
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -222,8 +231,9 @@ void FlightDeckBehavior::buildInfo(Bool createUnits)
 					jet->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) );
 
 					//Init positioning.
-					jet->setPosition( &flightDeckInfo.m_prep );
-					jet->setOrientation( flightDeckInfo.m_orientation );
+					const FCoord3D prepPos = toFix( flightDeckInfo.m_prep );	// P3: the deck layout is float
+					jet->setPositionFix( &prepPos );
+					jet->setOrientationFix( fixFromReal( flightDeckInfo.m_orientation ) );
 
 					//Assign jet to space
 					flightDeckInfo.m_objectInSpace = jet->getID();
@@ -828,8 +838,8 @@ Bool FlightDeckBehavior::isInPositionToTakeoff( const Object &jet ) const
 				//order it to taxi into the position. When this happens, the ramp triggers its
 				//animation, and the jet drives through it. So to counter that, simply check
 				//the distance between the jet and the space.
-				Real distanceSqr = ThePartitionManager->getDistanceSquared( &jet, &m_spaces[ i ].m_prep, FROM_CENTER_2D );
-				if( distanceSqr < 10.0f )
+				const FCoord3D prepPos = toFix( m_spaces[ i ].m_prep );
+				if( ThePartitionManager->getDistanceSquaredFix( &jet, &prepPos, FROM_CENTER_2D ) < Fix( 10 ) )
 				{
 					return TRUE;
 				}
@@ -1359,15 +1369,13 @@ void FlightDeckBehavior::exitObjectViaDoor( Object *newObj, ExitDoorType exitDoo
 	PPInfo ppinfo;
 	Matrix3D mtx;
 
-	DUMPMATRIX3D(getObject()->getTransformMatrix());
-	DUMPCOORD3D(getObject()->getPosition());
 	CRCDEBUG_LOG(("Produced at hangar (door = %d)\n", exitDoor));
 	DEBUG_ASSERTCRASH(exitDoor != DOOR_NONE_NEEDED, ("Hmm, unlikely"));
 	if (!reserveSpace(newObj->getID(), parkingOffset, &ppinfo)) //&loc, &orient, NULL, NULL, NULL, NULL, &hangarInternal, &hangOrient))
 	{
 		DEBUG_CRASH(("no spaces available, how did we get here?"));
-		ppinfo.parkingSpace = *getObject()->getPosition();
-		ppinfo.parkingOrientation = getObject()->getOrientation();
+		ppinfo.parkingSpace = getObject()->getPositionFix()->toCoord3D();	// P5: PPInfo is float
+		ppinfo.parkingOrientation = fixToReal( getObject()->getOrientationFix() );
 	}
 
 	const std::vector<Coord3D> *pCreationLocations = getCreationLocations( newObj->getID() );
@@ -1377,9 +1385,10 @@ void FlightDeckBehavior::exitObjectViaDoor( Object *newObj, ExitDoorType exitDoo
 		return;
 	}
 
-	// begin() was a Coord3D* under STLport; setPosition still wants the pointer.
-	newObj->setPosition( &pCreationLocations->front() );
-	newObj->setOrientation( m_runways[ ppi->m_runway ].m_startOrient );
+	// the runway layout is float, read from bones (P3)
+	const FCoord3D creationPos = toFix( pCreationLocations->front() );
+	newObj->setPositionFix( &creationPos );
+	newObj->setOrientationFix( fixFromReal( m_runways[ ppi->m_runway ].m_startOrient ) );
 	TheAI->pathfinder()->addObjectToPathfindMap( newObj );
 
 	AIUpdateInterface  *ai = newObj->getAIUpdateInterface();

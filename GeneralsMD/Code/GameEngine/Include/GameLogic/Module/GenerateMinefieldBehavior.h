@@ -37,6 +37,7 @@
 #include "GameLogic/Module/DieModule.h"
 #include "GameLogic/Module/UpgradeModule.h"
 #include "GameLogic/Module/UpdateModule.h"
+#include "Lib/Fix.h"
 
 //-------------------------------------------------------------------------------------------------
 class GenerateMinefieldBehaviorModuleData : public BehaviorModuleData
@@ -126,12 +127,12 @@ private:
 	Bool								m_upgraded;
 	std::list<ObjectID> m_mineList;
 
-	const Coord3D* getMinefieldTarget() const;
+	Coord3D getMinefieldTarget() const;
 	void placeMines();
 	void placeMinesInFootprint(const GeometryInfo& geom, const ThingTemplate* mineTemplate);
 	void placeMinesAroundCircle(const Coord3D& pos, Real radius, const ThingTemplate* mineTemplate);
 	void placeMinesAlongLine(const Coord3D& posStart, const Coord3D& posEnd, const ThingTemplate* mineTemplate, Bool skipOneAtStart);
-	void placeMinesAroundRect(const Coord3D& pos, Real majorRadius, Real minorRadius, const ThingTemplate* mineTemplate);
+	void placeMinesAroundRect(Fix majorRadius, Fix minorRadius, const ThingTemplate* mineTemplate);
 	Object* placeMineAt(const Coord3D& pt, const ThingTemplate* mineTemplate, Team* team, const Object* producer);
 };
 

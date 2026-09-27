@@ -172,7 +172,7 @@ void CaveContain::onRemoving( Object *obj )
 
 	/// place the object in the world at position of the container m_object
 	ThePartitionManager->registerObject( obj );
-	obj->setPosition( getObject()->getPosition() );
+	obj->setPositionFix( getObject()->getPositionFix() );
 	if( obj->getDrawable() )
 	{
 		obj->getDrawable()->setDrawableHidden( false );

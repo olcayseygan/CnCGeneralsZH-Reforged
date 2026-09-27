@@ -40,6 +40,7 @@
 #include "GameLogic/Module/HackInternetAIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
 //#include "GameLogic/PartitionManager.h"
 
 #ifdef _INTERNAL
@@ -578,16 +579,15 @@ StateReturnType HackInternetState::update()
 					//Display cash income floating over the hacker.
 					UnicodeString moneyString;
 					moneyString.format( TheGameText->fetch( "GUI:AddCash" ), amount );
-					Coord3D pos;
-					pos.zero();
-					pos.add( owner->getPosition() );
+					// client text: leaves fixed point here
+					Coord3D pos = owner->getPositionFix()->toCoord3D();
 					pos.z += 20.0f; //add a little z to make it show up above the unit.
-          
+
 
           if ( internetCenter )
           {
-            Real width = internetCenter->getGeometryInfo().getMajorRadius() * 0.3f;
-            Real depth = internetCenter->getGeometryInfo().getMinorRadius() * 0.3f;
+            Real width = fixToReal( internetCenter->getGeometryInfo().getMajorRadiusFix() ) * 0.3f;
+            Real depth = fixToReal( internetCenter->getGeometryInfo().getMinorRadiusFix() ) * 0.3f;
             pos.x += GameClientRandomValue(-width,width);
             pos.y += GameClientRandomValue(-depth,depth);
           }

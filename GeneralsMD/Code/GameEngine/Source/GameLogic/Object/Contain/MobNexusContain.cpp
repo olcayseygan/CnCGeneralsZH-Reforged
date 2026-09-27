@@ -33,6 +33,7 @@
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 #include "GameClient/Drawable.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
@@ -241,18 +242,21 @@ void MobNexusContain::onRemoving( Object *rider )
 		Drawable* draw = getObject()->getDrawable();
 		if (draw)
 		{
-			Coord3D bonePos, worldPos;
+			Coord3D bonePos;
 			if (draw->getPristineBonePositions(d->m_exitBone.str(), 0, &bonePos, NULL, 1) == 1)
 			{
-				getObject()->convertBonePosToWorldPos(&bonePos, NULL, &worldPos, NULL);
-				rider->setPosition(&worldPos);
+				// the bone is the drawable's, float, and enters logic here
+				FCoord3D fxBone;
+				fxBone.set(fixFromReal(bonePos.x), fixFromReal(bonePos.y), fixFromReal(bonePos.z));
+				FCoord3D worldPos = getObject()->getTransformMatrixFix()->transformPoint(fxBone);
+				rider->setPositionFix(&worldPos);
 			}
 		}
 	}
 
 	if (d->m_orientLikeContainerOnExit)
 	{
-		rider->setOrientation(getObject()->getOrientation());
+		rider->setOrientationFix(getObject()->getOrientationFix());
 	}
 
 	if (d->m_keepContainerVelocityOnExit)
@@ -400,14 +404,14 @@ ExitDoorType MobNexusContain::reserveDoorForExit( const ThingTemplate* objType, 
   if( me->isUsingAirborneLocomotor() )
    	return DOOR_1;
  
-  const Coord3D *myPosition = me->getPosition();
+  Coord3D myPosition = me->getPositionFix()->toCoord3D();	// P5: the pathfinder is float
  	if( !specificObject->getAIUpdateInterface() )
 	{
 		return DOOR_NONE_AVAILABLE;
 	}
 	const Locomotor *hisLocomotor = specificObject->getAIUpdateInterface()->getCurLocomotor();
   // He can't get to this spot naturally, so I can't force him there.  (amphib MobNexus)
-  if( ! TheAI->pathfinder()->validMovementTerrain(me->getLayer(), hisLocomotor, myPosition ) )
+  if( ! TheAI->pathfinder()->validMovementTerrain(me->getLayer(), hisLocomotor, &myPosition ) )
    	return DOOR_NONE_AVAILABLE;
  
   return DOOR_1;

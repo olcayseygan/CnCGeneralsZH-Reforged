@@ -43,6 +43,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/OpenContain.h"
 #include "GameLogic/Module/POWTruckAIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef ALLOW_SURRENDER
 
@@ -480,8 +481,8 @@ void POWTruckAIUpdate::updateCollectingTarget( void )
 	{
 
 		// are we close enought to tell them to start moving to us
-		Real distSq = sqr( us->getGeometryInfo().getBoundingSphereRadius() * 2.0f );
-		if( ThePartitionManager->getDistanceSquared( us, target, FROM_CENTER_2D ) <= distSq )
+		Fix dist = us->getGeometryInfo().getBoundingSphereRadiusFix() * Fix( 2 );
+		if( ThePartitionManager->getDistanceSquaredFix( us, target, FROM_CENTER_2D ) <= dist * dist )
 		{
 
 			// tell them to start moving to us
@@ -617,8 +618,8 @@ void POWTruckAIUpdate::doReturnToPrison( Object *prison )
 	const POWTruckAIUpdateModuleData *modData = getPOWTruckAIUpdateModuleData();
 
 	// if we're close enough to it then just stay here
-	Real distSq = ThePartitionManager->getDistanceSquared( us, prison, FROM_CENTER_2D );
-	if( distSq <= modData->m_hangAroundPrisonDistance * modData->m_hangAroundPrisonDistance )
+	Fix hangAround = fixFromReal( modData->m_hangAroundPrisonDistance ); // P3
+	if( ThePartitionManager->getDistanceSquaredFix( us, prison, FROM_CENTER_2D ) <= hangAround * hangAround )
 		return;
 
 	// dock us with the prison
@@ -662,7 +663,7 @@ Object *POWTruckAIUpdate::findBestTarget( void )
 
 	// scan all objects, there is no range
 	Object *other;
-	Real closestTargetDistSq = HUGE_DIST;
+	Fix closestTargetDistSq = FIX_MAX;
 	Object *closestTarget = NULL;
 	for( other = TheGameLogic->getFirstObject(); other; other = other->getNextObject() )
 	{
@@ -675,18 +676,20 @@ Object *POWTruckAIUpdate::findBestTarget( void )
 			continue;
 
 		// ignore targets that we cannot pathfind to as we will never be able to pick them up
-		if( isQuickPathAvailable( other->getPosition() ) == FALSE )
+		Coord3D otherPos = other->getPositionFix()->toCoord3D(); // P5: the pathfinder is float
+		if( isQuickPathAvailable( &otherPos ) == FALSE )
 			continue;
 
 		// is this target closer than the one we've found so far
-		Real distSq = ThePartitionManager->getDistanceSquared( us, other, FROM_CENTER_2D ); 
+		Fix distSq = ThePartitionManager->getDistanceSquaredFix( us, other, FROM_CENTER_2D );
 		if( closestTarget == NULL || distSq < closestTargetDistSq )
 		{
 
-			// we must be able to pathfind to this target 
+			// we must be able to pathfind to this target
+			Coord3D usPos = us->getPositionFix()->toCoord3D(); // P5
 			if( TheAI->pathfinder()->quickDoesPathExist( ai->getLocomotorSet(),
-																							us->getPosition(), 
-																							other->getPosition() ) == TRUE )
+																							&usPos,
+																							&otherPos ) == TRUE )
 			{
 
 				// this is our new closest target
@@ -809,9 +812,9 @@ void POWTruckAIUpdate::unloadPrisonersToPrison( Object *prison )
 				// display text above the building
 				Color moneyColor = TheGlobalData->m_prisonBountyTextColor;
 				UnicodeString moneyString;
-				Coord3D pos = *prison->getPosition();
-
-				pos.z += prison->getGeometryInfo().getMaxHeightAbovePosition();
+				FCoord3D textPos = *prison->getPositionFix();
+				textPos.z += prison->getGeometryInfo().getMaxHeightAbovePositionFix();
+				Coord3D pos = textPos.toCoord3D(); // client text
 				moneyString.format( TheGameText->fetch( "GUI:AddCash" ), prisonUnloadData.bounty );
 				TheInGameUI->addFloatingText( moneyString, &pos, moneyColor );
 

@@ -185,12 +185,13 @@ void FireWeaponWhenDamagedBehavior::onDamage( DamageInfo *damageInfo )
 
 	const Object *obj = getObject();
 	BodyDamageType bdt = obj->getBodyModule()->getDamageState();
+	Coord3D pos = obj->getPositionFix()->toCoord3D(); // P6
 
 	if ( bdt == BODY_RUBBLE )
 	{
 		if( m_reactionWeaponRubble && m_reactionWeaponRubble->getStatus() == READY_TO_FIRE )
 		{
-			m_reactionWeaponRubble->forceFireWeapon( obj, obj->getPosition() );
+			m_reactionWeaponRubble->forceFireWeapon( obj, &pos );
 		}
 
 	}
@@ -198,21 +199,21 @@ void FireWeaponWhenDamagedBehavior::onDamage( DamageInfo *damageInfo )
 	{
 		if( m_reactionWeaponReallyDamaged && m_reactionWeaponReallyDamaged->getStatus() == READY_TO_FIRE )
 		{
-			m_reactionWeaponReallyDamaged->forceFireWeapon( obj, obj->getPosition() );
+			m_reactionWeaponReallyDamaged->forceFireWeapon( obj, &pos );
 		}
 	}
 	else if ( bdt == BODY_DAMAGED )
 	{
 		if( m_reactionWeaponDamaged && m_reactionWeaponDamaged->getStatus() == READY_TO_FIRE )
 		{
-			m_reactionWeaponDamaged->forceFireWeapon( obj, obj->getPosition() );
+			m_reactionWeaponDamaged->forceFireWeapon( obj, &pos );
 		}
 	}
 	else // not damaged yet
 	{
 		if( m_reactionWeaponPristine && m_reactionWeaponPristine->getStatus() == READY_TO_FIRE )
 		{
-			m_reactionWeaponPristine->forceFireWeapon( obj, obj->getPosition() );
+			m_reactionWeaponPristine->forceFireWeapon( obj, &pos );
 		}
 	}
 
@@ -231,12 +232,13 @@ UpdateSleepTime FireWeaponWhenDamagedBehavior::update( void )
 
 	const Object *obj = getObject();
 	BodyDamageType bdt = obj->getBodyModule()->getDamageState();
+	Coord3D pos = obj->getPositionFix()->toCoord3D(); // P6
 
 	if ( bdt == BODY_RUBBLE )
 	{
 		if( m_continuousWeaponRubble && m_continuousWeaponRubble->getStatus() == READY_TO_FIRE )
 		{
-			m_continuousWeaponRubble->forceFireWeapon( obj, obj->getPosition() );
+			m_continuousWeaponRubble->forceFireWeapon( obj, &pos );
 		}
 
 	}
@@ -244,21 +246,21 @@ UpdateSleepTime FireWeaponWhenDamagedBehavior::update( void )
 	{
 		if( m_continuousWeaponReallyDamaged && m_continuousWeaponReallyDamaged->getStatus() == READY_TO_FIRE )
 		{
-			m_continuousWeaponReallyDamaged->forceFireWeapon( obj, obj->getPosition() );
+			m_continuousWeaponReallyDamaged->forceFireWeapon( obj, &pos );
 		}
 	}
 	else if ( bdt == BODY_DAMAGED )
 	{
 		if( m_continuousWeaponDamaged && m_continuousWeaponDamaged->getStatus() == READY_TO_FIRE )
 		{
-			m_continuousWeaponDamaged->forceFireWeapon( obj, obj->getPosition() );
+			m_continuousWeaponDamaged->forceFireWeapon( obj, &pos );
 		}
 	}
 	else // not damaged yet
 	{
 		if( m_continuousWeaponPristine && m_continuousWeaponPristine->getStatus() == READY_TO_FIRE )
 		{
-			m_continuousWeaponPristine->forceFireWeapon( obj, obj->getPosition() );
+			m_continuousWeaponPristine->forceFireWeapon( obj, &pos );
 		}
 	}
 

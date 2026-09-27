@@ -39,6 +39,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
@@ -86,6 +87,14 @@ GarrisonContainModuleData::GarrisonContainModuleData( void )
 inline Real calcDistSqr(const Coord3D& a, const Coord3D& b)
 {
 	return sqr(a.x - b.x) + sqr(a.y - b.y) + sqr(a.z - b.z);
+}
+
+// the garrison and station points are bone positions, saved as float; they enter the object here
+static FCoord3D fcoordFromCoord3D( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -181,7 +190,8 @@ void GarrisonContain::putObjectAtGarrisonPoint( Object *obj,
 	Coord3D pos = m_garrisonPoint[ conditionIndex ][ pointIndex ];
 
 	// set the object position
-	obj->setPosition( &pos );
+	FCoord3D fxPos = fcoordFromCoord3D( pos );
+	obj->setPositionFix( &fxPos );
 
 	// save the data for being place at this point
 	m_garrisonPointData[ pointIndex	].object = obj;
@@ -402,9 +412,13 @@ void GarrisonContain::putObjectAtBestGarrisonPoint( Object *obj, Object *target,
   const GarrisonContainModuleData *modData = getGarrisonContainModuleData();
   DEBUG_ASSERTCRASH(modData->m_isEnclosingContainer, ("calcBestGarrisonPosition... SHOULD NOT GET HERE, since this container is non-enclosing") );
 #endif
-	// if obj target, override pos
+	// if obj target, override pos; the garrison points it is measured against are float
+	Coord3D targetBuf;
 	if (target != NULL)
-		targetPos = target->getPosition();
+	{
+		targetBuf = target->getPositionFix()->toCoord3D();
+		targetPos = &targetBuf;
+	}
 
 	// if this object is already at a garrison point do nothing
 	if( getObjectGarrisonPointIndex( obj ) != GARRISON_INDEX_INVALID )
@@ -487,7 +501,7 @@ void GarrisonContain::removeObjectFromGarrisonPoint( Object *obj, Int index )
 	m_garrisonPointData[ removeIndex ].effect = NULL;
 
 	// set the position of the object to back to the center of the garrisoned building
-	obj->setPosition( getObject()->getPosition() );
+	obj->setPositionFix( getObject()->getPositionFix() );
 
 /*
 UnicodeString msg;
@@ -716,9 +730,15 @@ void GarrisonContain::trackTargets( void )
 
 				if( victim || victimPos )
 				{
+					// the garrison points and the victim position the AI hands over are float  // P4
+					Coord3D victimBuf;
 					if (victim)
-						victimPos = victim->getPosition();
-					const Coord3D *ourPos = obj->getPosition();
+					{
+						victimBuf = victim->getPositionFix()->toCoord3D();
+						victimPos = &victimBuf;
+					}
+					// live, like the pointer it replaces: a move below is seen by the effect code
+					const FCoord3D *ourPos = obj->getPositionFix();
 
 					// find the closest free (of all remaining) garrison points to our target
 					Int newIndex = findClosestFreeGarrisonPointIndex( conditionIndex, 
@@ -729,7 +749,7 @@ void GarrisonContain::trackTargets( void )
 					{
 
 						// get the distance from our current index to the target
-						Real currentDistSq = calcDistSqr(*victimPos, *ourPos );
+						Real currentDistSq = calcDistSqr(*victimPos, ourPos->toCoord3D() );
 
 						// get the distance from the newly chosen index
 						Real newDistSq = calcDistSqr(*victimPos, m_garrisonPoint[ conditionIndex ][ newIndex ] );
@@ -755,9 +775,10 @@ void GarrisonContain::trackTargets( void )
 					//
 					if( m_garrisonPointData[ ourIndex ].effect )
 					{
+						// the effect is a drawable, and the client is float
 						Coord2D v;
-						v.x = victimPos->x - ourPos->x;
-						v.y = victimPos->y - ourPos->y;
+						v.x = victimPos->x - fixToReal( ourPos->x );
+						v.y = victimPos->y - fixToReal( ourPos->y );
 //					v.z = victomPos->z - ourPos.z;
 
 						// orient the effect object towards the victim position
@@ -1027,7 +1048,8 @@ void GarrisonContain::positionObjectsAtStationGarrisonPoints()
 
       if( spd->occupantID == contained->getID() )
       {
-        contained->setPosition( &spd->position );
+        FCoord3D stationPos = fcoordFromCoord3D( spd->position );
+        contained->setPositionFix( &stationPos );
         foundHisSpot = TRUE;
         break;
       }
@@ -1328,7 +1350,7 @@ void GarrisonContain::loadGarrisonPoints( void )
 	//
 	for( i = 0; i < MAX_GARRISON_POINT_CONDITIONS; ++i )
 		for( j = 0; j < MAX_GARRISON_POINTS; ++j )
-			m_garrisonPoint[ i ][ j ] = *(structure->getPosition());
+			m_garrisonPoint[ i ][ j ] = structure->getPositionFix()->toCoord3D();
 
 	//
 	// in order to get all the garrison point positions we will actually switch the model
@@ -1442,11 +1464,13 @@ void GarrisonContain::validateRallyPoint( void )
 
 		// pick a location for everybody to rally at
 		options.flags = FPF_IGNORE_ALLY_OR_NEUTRAL_UNITS;
-		options.minRadius = getObject()->getGeometryInfo().getBoundingCircleRadius();
+		// findPositionAround and its options are float  // P8
+		options.minRadius = fixToReal( getObject()->getGeometryInfo().getBoundingCircleRadiusFix() );
 		options.maxRadius = options.minRadius * 1.8f;  // arbitrary max distance away, change as needed
 		options.ignoreObject = getObject();
 		options.relationshipObject = getObject();
-		m_rallyValid = ThePartitionManager->findPositionAround( getObject()->getPosition(),
+		Coord3D center = getObject()->getPositionFix()->toCoord3D();
+		m_rallyValid = ThePartitionManager->findPositionAround( &center,
 																													  &options,
 																													  &m_exitRallyPoint );
 	}  // end if
@@ -1511,26 +1535,33 @@ void GarrisonContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor 
 	Coord3D startPosition;
 	Coord3D endPosition;
 
-	Real exitAngle = getObject()->getOrientation();
+	Fix exitAngle = getObject()->getOrientationFix();
 
-  // Garrison doesn't have reserveDoor or exitDelay, so if we do nothing, everyone will appear on top 
+  // Garrison doesn't have reserveDoor or exitDelay, so if we do nothing, everyone will appear on top
 	// of each other and get stuck inside each others' extent (except for the first guy).  So we'll
 	// scatter the start point around a little to make it better.
-	startPosition = *getObject()->getPosition();
+	// startPosition is fxStart's float copy, for the pathfinder and the AI  // P5
+	FCoord3D fxStart = *getObject()->getPositionFix();
+	startPosition = fxStart.toCoord3D();
 	// In the case of cliff bunkers, the units start in a cliff.  So we want to adjust.
 	AIUpdateInterface  *ai = exitObj->getAI();
 	if (ai) {
-		Locomotor *loco = ai->getCurLocomotor(); 
+		Locomotor *loco = ai->getCurLocomotor();
 		if (loco && !TheAI->pathfinder()->validMovementTerrain( LAYER_GROUND, loco, &startPosition)) {
 			// try front & back.
-			Real offset = getObject()->getGeometryInfo().getMajorRadius();
-			startPosition.x -= offset*Cos(exitAngle);
-			startPosition.y -= offset*Sin(exitAngle);
+			Fix offset = getObject()->getGeometryInfo().getMajorRadiusFix();
+			Fix offsetX = offset*fixCos(exitAngle);
+			Fix offsetY = offset*fixSin(exitAngle);
+			fxStart.x -= offsetX;
+			fxStart.y -= offsetY;
+			startPosition = fxStart.toCoord3D();
 			if (!TheAI->pathfinder()->validMovementTerrain(LAYER_GROUND, loco, &startPosition)) {
-				startPosition.x += 2*offset*Cos(exitAngle);
-				startPosition.y += 2*offset*Sin(exitAngle);
+				fxStart.x += offsetX + offsetX;
+				fxStart.y += offsetY + offsetY;
+				startPosition = fxStart.toCoord3D();
 				if (!TheAI->pathfinder()->validMovementTerrain(LAYER_GROUND, loco, &startPosition)) {
-					startPosition = *getObject()->getPosition();
+					fxStart = *getObject()->getPositionFix();
+					startPosition = fxStart.toCoord3D();
 				}
 			}
 		}
@@ -1542,33 +1573,30 @@ void GarrisonContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor 
   if ( m_evacDisposition == EVAC_TO_LEFT || m_evacDisposition == EVAC_TO_RIGHT  )
   {
 
-    Real EVAC__SCALAR = ( m_evacDisposition == EVAC_TO_LEFT ? 1.0f : -1.0f );
+    Fix EVAC__SCALAR = ( m_evacDisposition == EVAC_TO_LEFT ? Fix( 1 ) : Fix( -1 ) );
 
-    Real containerHalfLength = getObject()->getGeometryInfo().getMajorRadius() ;
-    Real containerHalfWidth = getObject()->getGeometryInfo().getMinorRadius() ;
-    
-    Vector3 doorPosition;
-    doorPosition.X = GameLogicRandomValueReal( -containerHalfLength/4, containerHalfLength/4 );// a rectangular pocket to act as the "doorway"
-    doorPosition.Y = GameLogicRandomValueReal( containerHalfWidth/2, containerHalfWidth * 2) * EVAC__SCALAR;
-    doorPosition.Z = 0;
-    Vector3 walkToPosition;
-    walkToPosition.X = GameLogicRandomValueReal( -containerHalfLength, containerHalfLength );
-    walkToPosition.Y = containerHalfWidth * 10 * EVAC__SCALAR;// spread-out!
-    walkToPosition.Z = 0;
+    // the random ranges stay float, there is no fixed point random yet  // P8
+    Real containerHalfLength = fixToReal( getObject()->getGeometryInfo().getMajorRadiusFix() );
+    Real containerHalfWidth = fixToReal( getObject()->getGeometryInfo().getMinorRadiusFix() );
 
-    const Matrix3D *mtx = getObject()->getTransformMatrix();
-    mtx->Transform_Vector( *mtx, doorPosition, &doorPosition );
-    startPosition.x = doorPosition.X;
-    startPosition.y = doorPosition.Y;
-    startPosition.z = doorPosition.Z;
+    FCoord3D doorPosition;
+    doorPosition.x = fixFromReal( GameLogicRandomValueReal( -containerHalfLength/4, containerHalfLength/4 ) );// a rectangular pocket to act as the "doorway"
+    doorPosition.y = fixFromReal( GameLogicRandomValueReal( containerHalfWidth/2, containerHalfWidth * 2) ) * EVAC__SCALAR;
+    doorPosition.z = Fix( 0 );
+    FCoord3D walkToPosition;
+    walkToPosition.x = fixFromReal( GameLogicRandomValueReal( -containerHalfLength, containerHalfLength ) );
+    walkToPosition.y = getObject()->getGeometryInfo().getMinorRadiusFix() * Fix( 10 ) * EVAC__SCALAR;// spread-out!
+    walkToPosition.z = Fix( 0 );
 
-    mtx->Transform_Vector( *mtx, walkToPosition, &walkToPosition );
-    endPosition.x = walkToPosition.X;
-    endPosition.y = walkToPosition.Y;
-    endPosition.z = walkToPosition.Z;
+    const FixMatrix3D *mtx = getObject()->getTransformMatrixFix();
+    doorPosition = mtx->transformPoint( doorPosition );
+    startPosition = doorPosition.toCoord3D();
 
-	  exitObj->setPosition( &startPosition );
-	  exitObj->setOrientation( exitAngle );
+    walkToPosition = mtx->transformPoint( walkToPosition );
+    endPosition = walkToPosition.toCoord3D();
+
+	  exitObj->setPositionFix( &doorPosition );
+	  exitObj->setOrientationFix( exitAngle );
   
 	  ///< @todo This really should be automatically wrapped up in an activation sequence	for objects in general
 	  // tell the AI about it
@@ -1589,11 +1617,11 @@ void GarrisonContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor 
     // if we are not enclosed, then just walk away from where we "are."
   	if ( isEnclosingContainerFor( exitObj ))
     {
-      exitObj->setPosition( &startPosition ); // correct for non-ground-level station points
-      exitObj->setPositionZ( TheTerrainLogic->getGroundHeight( startPosition.x, startPosition.y ) );
+      exitObj->setPositionFix( &fxStart ); // correct for non-ground-level station points
+      exitObj->setPositionZFix( TheTerrainLogic->getGroundHeightFix( fxStart.x, fxStart.y ) );
     }
 
-    exitObj->setOrientation( exitAngle );
+    exitObj->setOrientationFix( exitAngle );
 	  ///< @todo This really should be automatically wrapped up in an activation sequence	for objects in general
 	  // tell the AI about it
 	  TheAI->pathfinder()->addObjectToPathfindMap( exitObj );
@@ -1636,7 +1664,7 @@ void GarrisonContain::onContaining( Object *obj, Bool wasSelected )
 
 	// put the object in the center of the building
   if (isEnclosingContainerFor( obj ))
-	  obj->setPosition( structure->getPosition() );
+	  obj->setPositionFix( structure->getPositionFix() );
 
 	obj->getControllingPlayer()->getAcademyStats()->recordBuildingGarrisoned();
 
@@ -1669,7 +1697,7 @@ void GarrisonContain::onRemoving( Object *obj )
     removeObjectFromStationPoint( obj );
 		//Kris: Patch 1.01 -- Passing in correct argument for Y (instead of X) fixes cases where selling firebases
 		//were dropping contained infantry to incorrect altitudes.
-    obj->setPositionZ( TheTerrainLogic->getGroundHeight( obj->getPosition()->x, obj->getPosition()->y ) );
+    obj->setPositionZFix( TheTerrainLogic->getGroundHeightFix( obj->getPositionFix()->x, obj->getPositionFix()->y ) );
   }
 	// give the object back a regular weapon
 	obj->clearWeaponBonusCondition( WEAPONBONUSCONDITION_GARRISONED );
@@ -1751,7 +1779,7 @@ void GarrisonContain::moveObjectsWithMe( void )
 		Object *obj;
 		// get the object
 		obj = *it;
-		obj->setPosition(getObject()->getPosition());
+		obj->setPositionFix(getObject()->getPositionFix());
 	}
 }
 
@@ -2032,7 +2060,7 @@ void GarrisonContain::loadStationGarrisonPoints( void )
   	// t is used after the loop; VC6 for-scope let it escape.
   	int t;
   	for( t = 0; t < MAX_GARRISON_POINTS; ++t )
-		  tempBuffer[ t ] = *(structure->getPosition());
+		  tempBuffer[ t ] = structure->getPositionFix()->toCoord3D();
 
 		count = structure->getMultiLogicalBonePosition("STATION", modData->m_containMax, tempBuffer, NULL);
 		if ( count > 0) stationBonesFound = TRUE;

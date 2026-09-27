@@ -38,6 +38,7 @@
 #include "GameLogic/Module/SupplyCenterDockUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/WorkerAIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
@@ -173,9 +174,9 @@ Bool SupplyTruckAIUpdate::gainOneBox( Int remainingStock )
 		if ( bestWarehouse )
 		{
 			//figure out whether the best one is considerably far from the previous one (current position)
-			Coord3D delta = *getObject()->getPosition();
-			delta.sub( bestWarehouse->getPosition() ); 
-			if ( delta.length() > getWarehouseScanDistance()/4)
+			FCoord3D delta = *getObject()->getPositionFix();
+			delta.sub( *bestWarehouse->getPositionFix() );
+			if ( delta.length() > fixFromReal( getWarehouseScanDistance() ) / Fix( 4 ) ) // P3
 			playDepleted = TRUE;
 		}
 		else
@@ -645,7 +646,7 @@ TheInGameUI->DEBUG_addFloatingText("entering regrouping state", getMachineOwner(
 		return STATE_FAILURE;
 	}
 
-	if( ThePartitionManager->getDistanceSquared(owner, destinationObject, FROM_BOUNDINGSPHERE_2D) < REGROUP_SUCCESS_DISTANCE_SQUARED )
+	if( ThePartitionManager->getDistanceSquaredFix(owner, destinationObject, FROM_BOUNDINGSPHERE_2D) < Fix( REGROUP_SUCCESS_DISTANCE_SQUARED ) )
 		return STATE_CONTINUE; // Don't say Success so we don't spin the machine.  After one update we'll go back.
 	
 	Coord3D destination;
@@ -653,7 +654,8 @@ TheInGameUI->DEBUG_addFloatingText("entering regrouping state", getMachineOwner(
 	fpOptions.minRadius = 0.0f;
 	fpOptions.maxRadius = 100.0f;
 
-	if( ! ThePartitionManager->findPositionAround( destinationObject->getPosition(), &fpOptions, &destination ) )
+	Coord3D destinationObjectPos = destinationObject->getPositionFix()->toCoord3D(); // P5
+	if( ! ThePartitionManager->findPositionAround( &destinationObjectPos, &fpOptions, &destination ) )
 		return STATE_FAILURE;
 
 	ownerAI->aiMoveToPosition( &destination, CMD_FROM_AI );

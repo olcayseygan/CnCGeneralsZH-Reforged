@@ -34,7 +34,8 @@
 #include "Common/Player.h"
 #include "Common/RandomValue.h"
 #include "Common/ThingTemplate.h"
-#include "Common/Xfer.h" 
+#include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/Locomotor.h"
@@ -48,6 +49,15 @@
 
 
 const Real NO_START_Z = 1e10;
+
+// where a bone sits relative to the object's position, in world axes.  The bones are the drawable's,
+// float, and so are the offsets kept from them: they are saved, and the sway matrix is client work.
+static Coord3D boneOffsetInWorld( const Object *obj, const Coord3D &bone )
+{
+	FCoord3D b;
+	b.set( fixFromReal( bone.x ), fixFromReal( bone.y ), fixFromReal( bone.z ) );
+	return obj->getTransformMatrixFix()->rotateVector( b ).toCoord3D();
+}
 
 
 #ifdef _INTERNAL
@@ -205,27 +215,13 @@ void ParachuteContain::updateBonePositions()
 //-------------------------------------------------------------------------------------------------
 void ParachuteContain::updateOffsetsFromBones()
 {
-	const Coord3D* objPos = getObject()->getPosition();
-
-	getObject()->convertBonePosToWorldPos(&m_paraSwayBone, NULL, &m_paraSwayOffset, NULL);
-	m_paraSwayOffset.x -= objPos->x;
-	m_paraSwayOffset.y -= objPos->y;
-	m_paraSwayOffset.z -= objPos->z;
-
-	getObject()->convertBonePosToWorldPos(&m_paraAttachBone, NULL, &m_paraAttachOffset, NULL);
-	m_paraAttachOffset.x -= objPos->x;
-	m_paraAttachOffset.y -= objPos->y;
-	m_paraAttachOffset.z -= objPos->z;
+	m_paraSwayOffset = boneOffsetInWorld(getObject(), m_paraSwayBone);
+	m_paraAttachOffset = boneOffsetInWorld(getObject(), m_paraAttachBone);
 
 	Object* rider = (getContainCount() > 0) ? getContainList().front() : NULL;
 	if (rider)
 	{
-		const Coord3D* riderPos = rider->getPosition();
-
-		rider->convertBonePosToWorldPos(&m_riderAttachBone, NULL, &m_riderAttachOffset, NULL);
-		m_riderAttachOffset.x -= riderPos->x;
-		m_riderAttachOffset.y -= riderPos->y;
-		m_riderAttachOffset.z -= riderPos->z;
+		m_riderAttachOffset = boneOffsetInWorld(rider, m_riderAttachBone);
 
 		m_riderAttachOffset.x = m_paraAttachOffset.x - m_riderAttachOffset.x;
 		m_riderAttachOffset.y = m_paraAttachOffset.y - m_riderAttachOffset.y;
@@ -298,21 +294,25 @@ UpdateSleepTime ParachuteContain::update( void )
 	const ParachuteContainModuleData* d = getParachuteContainModuleData();
 	Object* rider = (getContainCount() > 0) ? getContainList().front() : NULL;
 
+	// m_startZ stays float because it is saved; the open distance is INI data  // P3
+	Fix paraOpenDist = fixFromReal(d->m_paraOpenDist);
 	if (m_startZ == NO_START_Z)	{
-		m_startZ = parachute->getPosition()->z;	
-		Real groundHeight = TheTerrainLogic->getGroundHeight(parachute->getPosition()->x, parachute->getPosition()->y);
-		if (m_startZ-groundHeight < 2*d->m_paraOpenDist) {
+		const FCoord3D *startPos = parachute->getPositionFix();
+		Fix startZ = startPos->z;
+		Fix groundHeight = TheTerrainLogic->getGroundHeightFix(startPos->x, startPos->y);
+		if (startZ-groundHeight < paraOpenDist+paraOpenDist) {
 			// Oh dear - we ejected too close to the ground, and there isn't enough
-			// room to open the chute.  Well, since it's only a game, we'll fudge 
+			// room to open the chute.  Well, since it's only a game, we'll fudge
 			// a little so that the pilot doesn't slam into the ground & stick.
-			m_startZ = groundHeight+2*d->m_paraOpenDist;
+			startZ = groundHeight+paraOpenDist+paraOpenDist;
 		}
+		m_startZ = fixToReal(startZ);
 	}
 
 	if (!m_opened)
 	{
 		// see if we need to open.
-		if (fabs(m_startZ - parachute->getPosition()->z) >= d->m_paraOpenDist)
+		if (fixAbs(fixFromReal(m_startZ) - parachute->getPositionFix()->z) >= paraOpenDist)
 		{
 			m_opened = true;
 			parachute->clearAndSetModelConditionState(MODELCONDITION_FREEFALL, MODELCONDITION_PARACHUTING);
@@ -332,7 +332,7 @@ UpdateSleepTime ParachuteContain::update( void )
 			// by a DeliverPayload, otherwise any place clear is good.
 			if( parachuteAI ) 
 			{
-				Coord3D target = *parachute->getPosition();
+				Coord3D target = parachute->getPositionFix()->toCoord3D();	// P4: findPositionAround and the move call are float
 				if( m_isLandingOverrideSet )
 				{
 					target = m_landingOverride;
@@ -386,8 +386,8 @@ UpdateSleepTime ParachuteContain::update( void )
 			if (getContainCount() > 0)
 			{
 				Object* rider = getContainList().front();
-				const Real ALTITUDE_DAMP_START = 20.0f;
-				if (rider->getHeightAboveTerrain() <= ALTITUDE_DAMP_START)
+				const Fix ALTITUDE_DAMP_START = Fix( 20 );
+				if (rider->getHeightAboveTerrainFix() <= ALTITUDE_DAMP_START)
 					altitudeDamping = d->m_lowAltitudeDamping;
 			}
 
@@ -426,8 +426,9 @@ UpdateSleepTime ParachuteContain::update( void )
 	}
 
 	// allow us to land on bridges!
-	const Coord3D* paraPos = getObject()->getPosition();
-	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(paraPos);
+	const FCoord3D* paraPos = getObject()->getPositionFix();
+	Coord3D paraPosReal = paraPos->toCoord3D();	// P5: the layer query is float
+	PathfindLayerEnum newLayer = TheTerrainLogic->getHighestLayerForDestination(&paraPosReal);
 	getObject()->setLayer(newLayer);
 	if (rider)
 		rider->setLayer(newLayer);
@@ -438,11 +439,11 @@ UpdateSleepTime ParachuteContain::update( void )
 
 	// the collide system doesn't always collide us with the ground if we fall into water.
 	// so force the issue.
-	Real waterZ;
+	Fix waterZ;
 	if (!getObject()->isEffectivelyDead()
 			&& getObject()->getLayer() == LAYER_GROUND
-			&& TheTerrainLogic->isUnderwater(paraPos->x, paraPos->y, &waterZ)
-			&& (paraPos->z - waterZ) < d->m_killWhenLandingInWaterSlop)
+			&& TheTerrainLogic->isUnderwaterFix(paraPos->x, paraPos->y, &waterZ)
+			&& (paraPos->z - waterZ) < fixFromReal(d->m_killWhenLandingInWaterSlop))	// P3
 	{
 		getObject()->kill();
 	}
@@ -548,10 +549,10 @@ void ParachuteContain::onRemoving( Object *rider )
 	}
 	
 	// if we land in the water, we die. alas.
-	const Coord3D* riderPos = rider->getPosition();
-	Real waterZ, terrainZ;
-	if (TheTerrainLogic->isUnderwater(riderPos->x, riderPos->y, &waterZ, &terrainZ)
-			&& riderPos->z <= waterZ + d->m_killWhenLandingInWaterSlop
+	const FCoord3D* riderPos = rider->getPositionFix();
+	Fix waterZ, terrainZ;
+	if (TheTerrainLogic->isUnderwaterFix(riderPos->x, riderPos->y, &waterZ, &terrainZ)
+			&& riderPos->z <= waterZ + fixFromReal(d->m_killWhenLandingInWaterSlop)	// P3
 			&& rider->getLayer() == LAYER_GROUND)
 	{
 		// don't call kill(); do it manually, so we can specify DEATH_FLOODED
@@ -564,8 +565,10 @@ void ParachuteContain::onRemoving( Object *rider )
 	}
 	
 	// Kill if we landed on impassable ground
-	Int cellX = REAL_TO_INT( rider->getPosition()->x / PATHFIND_CELL_SIZE );
-	Int cellY = REAL_TO_INT( rider->getPosition()->y / PATHFIND_CELL_SIZE );
+	// P5: the world-to-cell conversion stays float until the pathfinder's own does
+	Coord3D riderNow = rider->getPositionFix()->toCoord3D();
+	Int cellX = REAL_TO_INT( riderNow.x / PATHFIND_CELL_SIZE );
+	Int cellY = REAL_TO_INT( riderNow.y / PATHFIND_CELL_SIZE );
 	
 	PathfindCell* cell = TheAI->pathfinder()->getCell( rider->getLayer(), cellX, cellY );
 	PathfindCell::CellType cellType = cell ? cell->getType() : PathfindCell::CELL_IMPASSABLE;
@@ -595,23 +598,22 @@ void ParachuteContain::positionRider(Object* rider)
 	updateBonePositions();
 	updateOffsetsFromBones();
 
-	Coord3D pos = *getObject()->getPosition();
-	///DUMPCOORD3D(&pos);
-	pos.x += m_riderAttachOffset.x;
-	pos.y += m_riderAttachOffset.y;
-	pos.z += m_riderAttachOffset.z;
-	//DUMPCOORD3D(&pos);
-	rider->setPosition(&pos);
+	// the attach offset is bone data, float, and enters logic here
+	FCoord3D pos = *getObject()->getPositionFix();
+	pos.x += fixFromReal(m_riderAttachOffset.x);
+	pos.y += fixFromReal(m_riderAttachOffset.y);
+	pos.z += fixFromReal(m_riderAttachOffset.z);
+	rider->setPositionFix(&pos);
 
-	Real alt = rider->getHeightAboveTerrain();
-	if (alt < 0.0f)
+	Fix alt = rider->getHeightAboveTerrainFix();
+	if (alt < Fix(0))
 	{
 		// don't let him go below ground.
 		pos.z -= alt;
-		rider->setPosition(&pos);
+		rider->setPositionFix(&pos);
 	}
 
-	rider->setOrientation(getObject()->getOrientation());
+	rider->setOrientationFix(getObject()->getOrientationFix());
 
 	Drawable* draw = rider->getDrawable();
 	if (draw)

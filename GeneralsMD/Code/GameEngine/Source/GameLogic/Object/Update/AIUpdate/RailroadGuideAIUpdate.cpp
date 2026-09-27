@@ -44,6 +44,22 @@
 
 #include "GameClient/Drawable.h"
 #include "GameClient/Statistics.h"
+#include "Lib/FixBoundary.h"
+
+static FCoord3D toFCoord3D( const Coord3D *c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
+	return f;
+}
+
+// a zero vector stays zero, as Coord3D::normalize leaves it
+static void fixNormalize( FCoord3D &v )
+{
+	Fix len = v.length();
+	if( len != Fix( 0 ) )
+		v.set( v.x / len, v.y / len, v.z / len );
+}
 
 
 ///#define RAILROAD_DESYNC_TEST
@@ -259,6 +275,7 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 
  	if (other->isKindOf( KINDOF_STRUCTURE ) )// now be careful here, we ignore buildings, except for hostile, nasty ones that can blow us up
 	{
+		Coord3D otherPos = other->getPositionFix()->toCoord3D(); // for the sound, which is client
 		//If it is a civilian building like a tunnel or a train station, let it be
 		//but if it is a faction building, kill it!
 		if (other->isKindOf( KINDOF_FS_POWER ) ||
@@ -268,7 +285,7 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 				other->isKindOf( KINDOF_REBUILD_HOLE ) ||
 				other->isFactionStructure() )	// supply centers, fakes and internet centers carry none of the four above
 		{
-			playImpactSound(other, other->getPosition());
+			playImpactSound(other, &otherPos);
 			other->kill(); 
 			return;
 		}
@@ -280,7 +297,7 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 			if( !other->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 				obj->kill(); // it can only detonate on me if it is ready
 
-			playImpactSound(other, other->getPosition());
+			playImpactSound(other, &otherPos);
 			other->kill();
 			return;
 		}
@@ -312,40 +329,36 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 
 	Bool victimIsInfantry = other->isKindOf( KINDOF_INFANTRY );
 
-	const Coord3D *myDir = obj->getUnitDirectionVector2D();
-	const Coord3D *myLoc = obj->getPosition();
-	const Coord3D *theirLoc = other->getPosition();
+	const FCoord3D *myDir = obj->getUnitDirectionVector2DFix();
+	const FCoord3D *myLoc = obj->getPositionFix();
+	const FCoord3D *theirLoc = other->getPositionFix();	// points at the live position: the shove below moves it
 
-  
+
 	//---------------------------
 	// if we made it this far, it is something we dont want to share space with
 
 
-  Coord3D dlt;
-	dlt.x = theirLoc->x - myLoc->x;
-	dlt.y = theirLoc->y - myLoc->y;
-	dlt.z = theirLoc->z - myLoc->z;
+  FCoord3D dlt = *theirLoc;
+	dlt.sub( *myLoc );
 
-	//Alert all the players of recent disaster 
+	//Alert all the players of recent disaster
 	if ( ! m_whistleSound.isCurrentlyPlaying())
 		m_whistleSound.setPlayingHandle(TheAudio->addAudioEvent( &m_whistleSound ));
 
 
-	Real dist = (Real)sqrtf( dlt.x*dlt.x + dlt.y*dlt.y + dlt.z*dlt.z);
-	Real usRadius = obj->getGeometryInfo().getMajorRadius();
-	Real themRadius = other->getGeometryInfo().getMajorRadius();
-	Real overlap = ((usRadius + themRadius) - dist) + 1;// the plus 1 makes them go just outside of me.
-	dlt.normalize();
+	Fix dist = dlt.length();
+	Fix usRadius = obj->getGeometryInfo().getMajorRadiusFix();
+	Fix themRadius = other->getGeometryInfo().getMajorRadiusFix();
+	Fix overlap = ((usRadius + themRadius) - dist) + Fix( 1 );// the plus 1 makes them go just outside of me.
+	fixNormalize( dlt );
 	if ( ! victimIsInfantry )
 	{
-		overlap/= 4;
+		overlap /= Fix( 4 );
 
-	  dlt.scale( overlap);
-	  Coord3D newPos;
-	  newPos.x = theirLoc->x + dlt.x;
-	  newPos.y = theirLoc->y + dlt.y;
-	  newPos.z = theirLoc->z + dlt.z;
-	  other->setPosition( &newPos );
+	  dlt.scale( overlap );
+	  FCoord3D newPos = *theirLoc;
+	  newPos.add( dlt );
+	  other->setPositionFix( &newPos );
 	}
 
   if ( m_conductorState == WAIT_AT_STATION || (m_conductorState == COAST && m_pullInfo.speed < modData->m_runningGarrisonSpeedMax) || !m_isLocomotive )
@@ -362,10 +375,12 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 
 
 	//figure out the relative slope between them and me
-	Coord3D delta = *theirLoc;
-	delta.sub( myLoc );
-	delta.normalize();
-	Real dot = delta.x * myDir->x + delta.y * myDir->y + delta.z * myDir->z;
+	FCoord3D slope = *theirLoc;
+	slope.sub( *myLoc );
+	fixNormalize( slope );
+	// delta and dot become a velocity for the physics (P4)
+	Real dot = fixToReal( slope.x * myDir->x + slope.y * myDir->y + slope.z * myDir->z );
+	Coord3D delta = slope.toCoord3D();
 
 	if (other->isEffectivelyDead())
 	{// we just run over debris, instead of shoving it around
@@ -395,9 +410,9 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 		}
 	}
 
-	Coord3D heft = *theirLoc;
-	heft.z = MAX(heft.z, TheTerrainLogic->getGroundHeight(heft.x, heft.y) + 2); // lift them off the ground
-	other->setPosition(&heft);
+	FCoord3D heft = *theirLoc;
+	heft.z = fixMax(heft.z, TheTerrainLogic->getGroundHeightFix(heft.x, heft.y) + Fix( 2 )); // lift them off the ground
+	other->setPositionFix(&heft);
 
 	delta.z = GameLogicRandomValueReal(0.05f, m_pullInfo.speed/10);	// for some fake heft
 	delta.scale(dot);
@@ -414,12 +429,9 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 	theirPhys->setAllowAirborneFriction( TRUE );
 
 
-	const Coord3D up = {0,0,1};
-	Coord3D cross;
-	myDir->crossProduct( myDir, &up, &cross );
-
+	// myDir crossed with straight up is (dir.y, -dir.x, 0); delta is still float (P4)
 	delta.normalize();
-	Real deviationCOG = cross.x * delta.x + cross.y * delta.y + cross.z * delta.z;
+	Real deviationCOG = fixToReal( myDir->y ) * delta.x - fixToReal( myDir->x ) * delta.y;
 
 	if (dot > 0)
 		theirPhys->setYawRate( deviationCOG * -0.06f * m_pullInfo.speed);
@@ -483,7 +495,8 @@ void RailroadBehavior::playImpactSound(Object *victim, const Coord3D *impactPosi
 
 		vel /= 2;
 		mass /= 2;//average of him and me
-		impact.setPosition(victim->getPosition());
+		Coord3D victimPos = victim->getPositionFix()->toCoord3D(); // audio is client
+		impact.setPosition(&victimPos);
 	} 
 
 	vel = MIN(NORMAL_VEL_Z, MAX(0, vel));
@@ -514,9 +527,9 @@ void RailroadBehavior::loadTrackData( void )
  
 	//First we scan the map for the nearest waypoint
 	Object *obj = getObject();
-	const Coord3D *myPos =  obj->getPosition();
-	Coord3D delta;
-	Real closestDistance = 99999.9f;
+	const FCoord3D *myPos =  obj->getPositionFix();
+	FCoord3D delta;
+	Fix closestDistance = 99999.9_fx;
 
 
 
@@ -530,12 +543,12 @@ void RailroadBehavior::loadTrackData( void )
 		while ( anyWaypoint )
 		{
 			//measure the distance from me to the waypoint
-			delta.x = myPos->x - anyWaypoint->getLocation()->x;
-			delta.y = myPos->y - anyWaypoint->getLocation()->y;
-			delta.z = myPos->z - anyWaypoint->getLocation()->z;
-			if (closestDistance > delta.length() )
+			delta = *myPos;
+			delta.sub( toFCoord3D( anyWaypoint->getLocation() ) );	// waypoints are map data in float
+			Fix dist = delta.length();
+			if (closestDistance > dist )
 			{
-				closestDistance = delta.length();
+				closestDistance = dist;
 				anchorWaypoint = anyWaypoint;
 				m_anchorWaypointID = anchorWaypoint->getID();// save for XFER, later
 			}
@@ -856,7 +869,7 @@ UpdateSleepTime RailroadBehavior::update( void )
 
 			// TURN OFF SMOKE EFFECTS IF WE ARE IN A TUNNEL
 		const Coord3D *drawPos = draw->getPosition();
-		if (drawPos->z < TheTerrainLogic->getGroundHeight(drawPos->x, drawPos->y) - 3.0f )
+		if (fixFromReal(drawPos->z) < TheTerrainLogic->getGroundHeightFix(fixFromReal(drawPos->x), fixFromReal(drawPos->y)) - Fix( 3 ) )
 			draw->setModelConditionState(MODELCONDITION_OVER_WATER);
 		else
 			draw->clearModelConditionState(MODELCONDITION_OVER_WATER);
@@ -971,11 +984,11 @@ void RailroadBehavior::createCarriages( void )
 
 
 	//First we'll see if the map artist put some cars down on the track for us to find
-	Real maxRadius = self->getGeometryInfo().getMajorRadius() * 2.0f;
-	Coord3D myHitchLoc  = *self->getPosition();
-	Coord3D hitchOffset = *self->getUnitDirectionVector2D();//copy that
+	Fix maxRadius = self->getGeometryInfo().getMajorRadiusFix() * Fix( 2 );
+	FCoord3D myHitchLoc  = *self->getPositionFix();
+	FCoord3D hitchOffset = *self->getUnitDirectionVector2DFix();//copy that
 	hitchOffset.scale ( - maxRadius );// negative, since I want the back, not the front
-	myHitchLoc.add( & hitchOffset );
+	myHitchLoc.add( hitchOffset );
 
 
 	PartitionFilterIsValidCarriage pfivc(self, md);
@@ -994,7 +1007,7 @@ void RailroadBehavior::createCarriages( void )
 	if (xferCarriage != NULL)
 		closeCarriage = xferCarriage;
 	else
-		closeCarriage = ThePartitionManager->getClosestObject( &myHitchLoc, maxRadius, FROM_CENTER_2D, filters);
+		closeCarriage = ThePartitionManager->getClosestObjectFix( &myHitchLoc, maxRadius, FROM_CENTER_2D, filters);
 
 		TemplateNameList list = md->m_carriageTemplateNameData;
 		TemplateNameIterator iter = list.begin();
@@ -1132,11 +1145,11 @@ void RailroadBehavior::hitchNewCarriagebyProximity( ObjectID locoID, TrainTrack 
 	//First we'll see if the map artist put some cars down on the track for us to find
 	const RailroadBehaviorModuleData* md = getRailroadBehaviorModuleData();
 	Object *self = getObject();
-	Real maxRadius = self->getGeometryInfo().getMajorRadius() * 2.0f;
-	Coord3D myHitchLoc  = *self->getPosition();
-	Coord3D hitchOffset = *self->getUnitDirectionVector2D();//copy that
+	Fix maxRadius = self->getGeometryInfo().getMajorRadiusFix() * Fix( 2 );
+	FCoord3D myHitchLoc  = *self->getPositionFix();
+	FCoord3D hitchOffset = *self->getUnitDirectionVector2DFix();//copy that
 	hitchOffset.scale ( - maxRadius );// negative, since I want the back, not the front
-	myHitchLoc.add( & hitchOffset );
+	myHitchLoc.add( hitchOffset );
 
 	PartitionFilterIsValidCarriage pfivc(self, md);
 	PartitionFilter *filters[] = { &pfivc, 0 };
@@ -1151,7 +1164,7 @@ void RailroadBehavior::hitchNewCarriagebyProximity( ObjectID locoID, TrainTrack 
 	if (xferCarriage != NULL)
 		closeCarriage = xferCarriage;
 	else
-		closeCarriage = ThePartitionManager->getClosestObject( &myHitchLoc, maxRadius, FROM_CENTER_2D, filters);
+		closeCarriage = ThePartitionManager->getClosestObjectFix( &myHitchLoc, maxRadius, FROM_CENTER_2D, filters);
 
 	
 	if ( closeCarriage )
@@ -1285,8 +1298,9 @@ void RailroadBehavior::updatePositionTrackDistance( PullInfo *pullerInfo, PullIn
 	// IF THIS HAS BEEN CALLED, AM AM GETTING PULLED BY SOMETHING,
 	// my conductor, or another car
 
-	Real hitchRadius = obj->getGeometryInfo().getMajorRadius();
-	myInfo->trackDistance = pullerInfo->trackDistance - (hitchRadius * 2);      
+	// the track, the pull info and the turn below are float until the train's steering moves (P4)
+	Real hitchRadius = fixToReal( obj->getGeometryInfo().getMajorRadiusFix() );
+	myInfo->trackDistance = pullerInfo->trackDistance - (hitchRadius * 2);
 	myInfo->speed = pullerInfo->speed;// YES, if I am getting pulled, I must obey puller
 	myInfo->m_direction = pullerInfo->m_direction;// YES, if I am getting pulled, I must obey puller
 
@@ -1305,14 +1319,14 @@ void RailroadBehavior::updatePositionTrackDistance( PullInfo *pullerInfo, PullIn
 													m_track->m_length, TRUE);
 
 
-	Coord3D turnPos = *obj->getPosition();
+	Coord3D turnPos = obj->getPositionFix()->toCoord3D(); // P4
 
 	if (!m_inTunnel)
-		turnPos.z = TheTerrainLogic->getGroundHeight( turnPos.x, turnPos.y );
+		turnPos.z = fixToReal( TheTerrainLogic->getGroundHeightFix( obj->getPositionFix()->x, obj->getPositionFix()->y ) );
 
-	const Coord3D* dir = obj->getUnitDirectionVector2D();
-	turnPos.x += dir->x * -hitchRadius;
-	turnPos.y += dir->y * -hitchRadius;
+	Coord3D dir = obj->getUnitDirectionVector2DFix()->toCoord3D(); // P4
+	turnPos.x += dir.x * -hitchRadius;
+	turnPos.y += dir.y * -hitchRadius;
 	Coord3D trackPosDelta;
 	trackPosDelta.x = carPosition.x - turnPos.x;
 	trackPosDelta.y = carPosition.y - turnPos.y;
@@ -1322,7 +1336,9 @@ void RailroadBehavior::updatePositionTrackDistance( PullInfo *pullerInfo, PullIn
 	Real desiredAngle = ATan2(dy, dx);
 
 
-	Real relAngle = stdAngleDiff(desiredAngle, obj->getTransformMatrix()->Get_Z_Rotation());
+	Matrix3D current;
+	obj->getTransformMatrixFix()->toMatrix3D( &current ); // P4
+	Real relAngle = stdAngleDiff(desiredAngle, current.Get_Z_Rotation());
 
 
 	Matrix3D mtx;
@@ -1334,20 +1350,23 @@ void RailroadBehavior::updatePositionTrackDistance( PullInfo *pullerInfo, PullIn
 	tmp.Translate(-turnPos.x, -turnPos.y, 0);
 
 
-	mtx.mul(tmp, *obj->getTransformMatrix());
+	mtx.mul(tmp, current);
 
 
 	//enforce ground elevation
-	Coord3D normal ;
-	Real enforceElevation = TheTerrainLogic->getGroundHeight( turnPos.x, turnPos.y, &normal );
-	
+	Fix enforceElevation = TheTerrainLogic->getGroundHeightFix( fixFromReal( turnPos.x ), fixFromReal( turnPos.y ) );
 
 
 
-	obj->setTransformMatrix(&mtx);
+	// the turned matrix enters the fixed transform here
+	FixMatrix3D fxMtx;
+	for (Int r = 0; r < 3; ++r)
+		for (Int c = 0; c < 4; ++c)
+			fxMtx.m[r][c] = fixFromReal(mtx[r][c]);
+	obj->setTransformMatrixFix(&fxMtx);
 
 	if (!m_inTunnel)
-		obj->setPositionZ( enforceElevation );
+		obj->setPositionZFix( enforceElevation );
 
 
 
@@ -1489,7 +1508,8 @@ void RailroadBehavior::FindPosByPathDistance( Coord3D *pos, const Real dist, con
 
 					if ( edge && ! m_inTunnel )
 					{//play my clickety clack sound, `cause I just rode over a join IN the tracks
-						m_clicketyClackSound.setPosition( getObject()->getPosition() );
+						Coord3D soundPos = getObject()->getPositionFix()->toCoord3D(); // audio is client
+						m_clicketyClackSound.setPosition( &soundPos );
 						m_clicketyClackSound.setVolume( (Real)conductorPullInfo.speed / 10.0f );//assumed max speed
 						TheAudio->addAudioEvent( &m_clicketyClackSound );
 					}

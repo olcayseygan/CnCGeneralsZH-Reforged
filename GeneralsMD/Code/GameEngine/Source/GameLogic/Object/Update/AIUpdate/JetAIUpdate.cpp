@@ -46,8 +46,17 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Weapon.h"
+#include "Lib/FixBoundary.h"
 
 const Real BIGNUM = 99999.0f;
+
+// parking spots, landing points and commands stay float until their owners move; they enter here
+static FCoord3D toFCoord3D( const Coord3D *c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c->x ), fixFromReal( c->y ), fixFromReal( c->z ) );
+	return f;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -189,7 +198,7 @@ static Object* findSuitableAirfield(Object* jet)
 	filters[numFilters++] = &filterMapStatus;
 	filters[numFilters] = NULL;
 
-	return ThePartitionManager->getClosestObject( jet, HUGE_DIST, FROM_CENTER_2D, filters );
+	return ThePartitionManager->getClosestObjectFix( jet, FIX_MAX, FROM_CENTER_2D, filters );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -274,7 +283,7 @@ public:
 				jetAI->destroyPath();
 				Path *movePath;
 				movePath = newInstance(Path);
-				Coord3D pos = *jet->getPosition();
+				Coord3D pos = jet->getPositionFix()->toCoord3D(); // P5
 				movePath->prependNode( &pos, LAYER_GROUND );
 				movePath->markOptimized();
 				movePath->appendNode( &bestPos, LAYER_GROUND );
@@ -536,7 +545,7 @@ public:
 		jetAI->destroyPath();
 		Path *movePath;
 		movePath = newInstance(Path);
-		Coord3D pos = *jet->getPosition();
+		Coord3D pos = jet->getPositionFix()->toCoord3D(); // P5
 		movePath->prependNode( &pos, LAYER_GROUND );
 		movePath->markOptimized();
 
@@ -825,7 +834,7 @@ public:
 		if (m_landing)
 		{
 #ifdef CIRCLE_FOR_LANDING
-			if (jet->getPosition()->z > m_circleForLandingPos.z)
+			if (jet->getPositionFix()->z > fixFromReal(m_circleForLandingPos.z))
 			{
 				const Real THRESH = 4.0f;
 				jetAI->getCurLocomotor()->setAltitudeChangeThresholdForCircling(THRESH);
@@ -844,20 +853,21 @@ public:
 			if( !m_landingSoundPlayed )
 			{
 				ParkingPlaceBehaviorInterface* pp = getPP(jet->getProducerID());
-				Real zPos = jet->getPosition()->z;
-				Real zSlop = 0.25f;
-				PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination( jet->getPosition() );
-				Real groundZ = TheTerrainLogic->getLayerHeight( jet->getPosition()->x, jet->getPosition()->y, layer );
+				const FCoord3D *jetPos = jet->getPositionFix();
+				Fix zSlop = 0.25_fx;
+				Coord3D pos = jetPos->toCoord3D();	// for the layer query and the sound, both float
+				PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination( &pos );
+				Fix groundZ = TheTerrainLogic->getLayerHeightFix( jetPos->x, jetPos->y, layer );
 				if( pp )
 				{
-					groundZ += pp->getLandingDeckHeightOffset();
+					groundZ += fixFromReal( pp->getLandingDeckHeightOffset() ); // P3
 				}
-				
-				if( zPos - zSlop <= groundZ )
+
+				if( jetPos->z - zSlop <= groundZ )
 				{
 					m_landingSoundPlayed = TRUE;
-					AudioEventRTS soundToPlay = TheAudio->getMiscAudio()->m_aircraftWheelScreech;	
-					soundToPlay.setPosition( jet->getPosition() );
+					AudioEventRTS soundToPlay = TheAudio->getMiscAudio()->m_aircraftWheelScreech;
+					soundToPlay.setPosition( &pos );
 					TheAudio->addAudioEvent( &soundToPlay );
 				}
 			}
@@ -878,9 +888,9 @@ public:
 			{
 				ParkingPlaceBehaviorInterface::PPInfo ppinfo;
 				pp->calcPPInfo( jet->getID(), &ppinfo );
-				Coord3D vector = ppinfo.runwayEnd;
-				vector.sub( jet->getPosition() );
-				Real dist = vector.length();
+				FCoord3D vector = toFCoord3D( &ppinfo.runwayEnd );
+				vector.sub( *jet->getPositionFix() );
+				Real dist = fixToReal( vector.length() );	// the lift is the locomotor's (P4)
 
 				Real ratio = 1.0f - (dist / ppinfo.runwayTakeoffDist);
 				ratio *= ratio; //dampen it....
@@ -941,9 +951,11 @@ public:
 EMPTY_DTOR(JetTakeoffOrLandingState)
 
 //-------------------------------------------------------------------------------------------------
-static Real calcDistSqr(const Coord3D& a, const Coord3D& b)
+static Fix calcDistSqr(const FCoord3D& a, const Coord3D& b)
 {
-	return sqr(a.x-b.x) + sqr(a.y-b.y) + sqr(a.z-b.z);
+	FCoord3D d = a;
+	d.sub( toFCoord3D( &b ) );
+	return d.lengthSqr();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1021,12 +1033,12 @@ public:
 			if (m_landing)
 			{
 				m_parkingLoc = jetAI->friend_getLandingPosForHelipadStuff();
-				m_parkingOrientation = jet->getOrientation();
+				m_parkingOrientation = fixToReal( jet->getOrientationFix() );	// xfer'd, stays float
 			}
 			else
 			{
-				m_parkingOrientation = jet->getOrientation();
-				m_parkingLoc = *jet->getPosition();
+				m_parkingOrientation = fixToReal( jet->getOrientationFix() );
+				m_parkingLoc = jet->getPositionFix()->toCoord3D();	// xfer'd, and the pathfinder's (P5)
 			}
 			landingApproach = m_parkingLoc;
 			landingApproach.z += pp->getApproachHeight() + pp->getLandingDeckHeightOffset();
@@ -1068,36 +1080,6 @@ public:
 		if( !jetAI )
 			return STATE_FAILURE;
 
-// I have disabled this because it is no longer necessary and is a bit funky lookin' (srj)
-#ifdef NOT_IN_USE
-		// magically position it correctly.
-		jet->getPhysics()->scrubVelocity2D(0);
-		Coord3D hoverloc = m_path[m_index];
-		hoverloc.z = jet->getPosition()->z;
-#if 1
-		Coord3D pos = *jet->getPosition();
-		Real dx = hoverloc.x - pos.x;
-		Real dy = hoverloc.y - pos.y;
-		Real dSqr = dx*dx+dy*dy;
-		const Real DARN_CLOSE = 0.25f;
-		if (dSqr < DARN_CLOSE) 
-		{
-			jet->setPosition(&hoverloc);
-		} 
-		else 
-		{
-			Real dist = sqrtf(dSqr);
-			if (dist<1) dist = 1;
-			pos.x += PATHFIND_CELL_SIZE_F*dx/(dist*LOGICFRAMES_PER_SECOND);
-			pos.y += PATHFIND_CELL_SIZE_F*dy/(dist*LOGICFRAMES_PER_SECOND);
-			jet->setPosition(&pos);
-		}
-#else
-		jet->setPosition(&hoverloc);
-#endif
-		jet->setOrientation(m_parkingOrientation);
-#endif
-
 		if (jet->isKindOf(KINDOF_PRODUCED_AT_HELIPAD) || !m_landing)
 		{
 			TheAI->pathfinder()->adjustDestination(jet, jetAI->getLocomotorSet(), &m_path[m_index]);
@@ -1106,11 +1088,9 @@ public:
 
 		jetAI->setLocomotorGoalPositionExplicit(m_path[m_index]);
 
-		const Real THRESH = 3.0f;
-		const Real THRESH_SQR = THRESH*THRESH;
-		const Coord3D* a = jet->getPosition();
-		const Coord3D* b = &m_path[m_index];
-		Real distSqr = calcDistSqr(*a, *b);
+		const Fix THRESH = Fix( 3 );
+		const Fix THRESH_SQR = THRESH*THRESH;
+		Fix distSqr = calcDistSqr(*jet->getPositionFix(), m_path[m_index]);
 		if (distSqr <= THRESH_SQR)
 			++m_index;
 		
@@ -1213,20 +1193,21 @@ public:
 		if (!pp->reserveSpace(jet->getID(), jetAI->friend_getParkingOffset(), &ppinfo))
 			return STATE_FAILURE;
 
-		const Real THRESH = 0.001f;
-		if (fabs(stdAngleDiff(jet->getOrientation(), ppinfo.parkingOrientation)) <= THRESH)
+		// the parking place's orientation and spots are float (its own module, not converted yet)
+		const Fix THRESH = 0.001_fx;
+		if (fixAbs(fixNormalizeAngle(jet->getOrientationFix() - fixFromReal(ppinfo.parkingOrientation))) <= THRESH)
 			return STATE_SUCCESS;
 
 		// magically position it correctly.
 		jet->getPhysics()->scrubVelocity2D(0);
-		Coord3D hoverloc = ppinfo.parkingSpace;
+		FCoord3D hoverloc = toFCoord3D( &ppinfo.parkingSpace );
 		if( jet->testStatus( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) )
 		{
-			hoverloc = ppinfo.runwayPrep;
+			hoverloc = toFCoord3D( &ppinfo.runwayPrep );
 		}
 
-		hoverloc.z = jet->getPosition()->z;
-		jet->setPosition(&hoverloc);
+		hoverloc.z = jet->getPositionFix()->z;
+		jet->setPositionFix(&hoverloc);
 
 		jetAI->setLocomotorGoalOrientation(ppinfo.parkingOrientation);
 
@@ -1851,9 +1832,9 @@ void JetAIUpdate::getProducerLocation()
 	Object* jet = getObject();
 	Object* airfield = TheGameLogic->findObjectByID( jet->getProducerID() );
 	if (airfield == NULL)
-		m_producerLocation = *jet->getPosition();
+		m_producerLocation = jet->getPositionFix()->toCoord3D();	// xfer'd, stays float
 	else
-		m_producerLocation = *airfield->getPosition();
+		m_producerLocation = airfield->getPositionFix()->toCoord3D();
 
 	/*
 		if we aren't allowed to fly, then we should be parked (or at least taxiing),
@@ -2003,7 +1984,7 @@ UpdateSleepTime JetAIUpdate::update()
 																	!getFlag(ALLOW_AIR_LOCO);
 		if( needToCheckMinHeight || jet->getStatusBits().test( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) )
 		{
-			Real ht = jet->isAboveTerrain() ? jet->getHeightAboveTerrain() : 0;
+			Real ht = jet->isAboveTerrain() ? fixToReal( jet->getHeightAboveTerrainFix() ) : 0;	// feeds the drawable's matrix
 			if (ht < minHeight)
 			{
 				Matrix3D tmp(1);
@@ -2124,11 +2105,11 @@ void JetAIUpdate::setLocomotorGoalNone()
 			&& getFlag(ALLOW_AIR_LOCO) && !getFlag(ALLOW_CIRCLING))
 	{
 		Object* jet = getObject();
-		Coord3D desiredPos = *jet->getPosition();
-		const Coord3D* dir = jet->getUnitDirectionVector2D();
-		desiredPos.x += dir->x * 1000.0f;
-		desiredPos.y += dir->y * 1000.0f;
-		setLocomotorGoalPositionExplicit(desiredPos);
+		FCoord3D ahead = *jet->getPositionFix();
+		const FCoord3D* dir = jet->getUnitDirectionVector2DFix();
+		ahead.x += dir->x * Fix( 1000 );
+		ahead.y += dir->y * Fix( 1000 );
+		setLocomotorGoalPositionExplicit(ahead.toCoord3D()); // P4
 	}
 	else
 	{
@@ -2145,10 +2126,12 @@ Bool JetAIUpdate::getSneakyTargetingOffset(Coord3D* offset) const
 		{
 			const JetAIUpdateModuleData* d = getJetAIUpdateModuleData();
 			const Object* jet = getObject();
-			const Coord3D* dir = jet->getUnitDirectionVector2D();
-			offset->x = dir->x * d->m_sneakyOffsetWhenAttacking;
-			offset->y = dir->y * d->m_sneakyOffsetWhenAttacking;
-			offset->z = 0.0f;
+			// the offset is INI data (P3) and goes to the attacker's float aim (P6)
+			const FCoord3D* dir = jet->getUnitDirectionVector2DFix();
+			Fix sneaky = fixFromReal( d->m_sneakyOffsetWhenAttacking );
+			FCoord3D off;
+			off.set( dir->x * sneaky, dir->y * sneaky, Fix( 0 ) );
+			*offset = off.toCoord3D();
 		}
 		return true;
 	}
@@ -2195,9 +2178,11 @@ void JetAIUpdate::positionLockon()
 	UnsignedInt remaining = m_untargetableExpireFrame - now;
 	UnsignedInt elapsed = d->m_lockonTime - remaining;
 
-	Coord3D pos = *getObject()->getPosition();
+	// the lock-on ring is a drawable: all of this is client side and float
+	const Coord3D objPos = getObject()->getPositionFix()->toCoord3D();
+	Coord3D pos = objPos;
 	Real frac = (Real)remaining / (Real)d->m_lockonTime;
-	Real finalDist = getObject()->getGeometryInfo().getBoundingCircleRadius();
+	Real finalDist = fixToReal( getObject()->getGeometryInfo().getBoundingCircleRadiusFix() );
 	Real dist = finalDist + (d->m_lockonInitialDist - finalDist) * frac;
 	Real angle = d->m_lockonAngleSpin * frac;
 
@@ -2206,8 +2191,8 @@ void JetAIUpdate::positionLockon()
 	// pos.z is untouched
 
 	m_lockonDrawable->setPosition(&pos);
-	Real dx = getObject()->getPosition()->x - pos.x;
-	Real dy = getObject()->getPosition()->y - pos.y;
+	Real dx = objPos.x - pos.x;
+	Real dy = objPos.y - pos.y;
 	if (dx || dy)
 		m_lockonDrawable->setOrientation(ATan2(dy, dx));
 
@@ -2361,11 +2346,11 @@ void JetAIUpdate::doLandingCommand(Object *airfield, CommandSourceType cmdSource
 {
 	if (getObject()->isKindOf(KINDOF_PRODUCED_AT_HELIPAD))
 	{
-		m_landingPosForHelipadStuff = *airfield->getPosition();
+		m_landingPosForHelipadStuff = airfield->getPositionFix()->toCoord3D();	// xfer'd, and the pathfinder's (P5)
 
 		Coord3D tmp;
 		FindPositionOptions options;
-		options.maxRadius = airfield->getGeometryInfo().getBoundingCircleRadius() * 10.0f;
+		options.maxRadius = fixToReal( airfield->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 10 ) ); // P5
 		if (ThePartitionManager->findPositionAround(&m_landingPosForHelipadStuff, &options, &tmp))
 			m_landingPosForHelipadStuff = tmp;
 	}

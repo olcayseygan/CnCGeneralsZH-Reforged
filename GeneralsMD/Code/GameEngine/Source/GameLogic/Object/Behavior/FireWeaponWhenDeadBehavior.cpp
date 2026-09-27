@@ -114,7 +114,8 @@ void FireWeaponWhenDeadBehavior::onDie( const DamageInfo *damageInfo )
 	if (d->m_deathWeapon)
 	{
 		// fire the default weapon
-	  TheWeaponStore->createAndFireTempWeapon(d->m_deathWeapon, obj, obj->getPosition());
+		Coord3D pos = obj->getPositionFix()->toCoord3D(); // P6
+		TheWeaponStore->createAndFireTempWeapon(d->m_deathWeapon, obj, &pos);
 	}
 }
 

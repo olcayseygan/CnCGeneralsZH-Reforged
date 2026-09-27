@@ -34,6 +34,14 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/BridgeScaffoldBehavior.h"
+#include "Lib/FixBoundary.h"
+
+static FCoord3D toFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -150,44 +158,47 @@ UpdateSleepTime BridgeScaffoldBehavior::update( void )
 
 	// get our info
 	Object *us = getObject();
-	const Coord3D *ourPos = us->getPosition();
+	const FCoord3D ourPos = *us->getPositionFix();
+
+	// the scaffold's positions and speeds are saved as float; the motion itself is fixed point
+	const FCoord3D targetPos = toFix( m_targetPos );
 
 	// compute direction vector from our position to the target position
-	Coord3D dirV;
-	dirV.x = m_targetPos.x - ourPos->x;
-	dirV.y = m_targetPos.y - ourPos->y;
-	dirV.z = m_targetPos.z - ourPos->z;
+	FCoord3D dirV = targetPos;
+	dirV.sub( ourPos );
 
 	// use normalized direction vector "v" to do the pulling movement
-	Coord3D v = dirV;
-	v.normalize();
+	FCoord3D v = dirV;
+	Fix len = v.length();
+	if( len != Fix( 0 ) )
+		v.set( v.x / len, v.y / len, v.z / len );
 
 	// depending on our motion type, we move at different speeds
-	Real topSpeed = 1.0f;
-	Coord3D *start, *end;
+	Fix topSpeed = Fix( 1 );
+	const Coord3D *start = &m_createPos, *end = &m_createPos;
 	switch( m_targetMotion )
 	{
 
 		case STM_RISE:
-			topSpeed = m_verticalSpeed;
+			topSpeed = fixFromReal( m_verticalSpeed );
 			start = &m_createPos;
 			end = &m_riseToPos;
 			break;
 
 		case STM_SINK:
-			topSpeed = m_verticalSpeed;
+			topSpeed = fixFromReal( m_verticalSpeed );
 			start = &m_riseToPos;
 			end = &m_createPos;
 			break;
 
 		case STM_BUILD_ACROSS:
-			topSpeed = m_lateralSpeed;
+			topSpeed = fixFromReal( m_lateralSpeed );
 			start = &m_riseToPos;
 			end = &m_buildPos;
 			break;
 
 		case STM_TEAR_DOWN_ACROSS:
-			topSpeed = m_lateralSpeed;
+			topSpeed = fixFromReal( m_lateralSpeed );
 			start = &m_buildPos;
 			end = &m_riseToPos;
 			break;
@@ -195,17 +206,16 @@ UpdateSleepTime BridgeScaffoldBehavior::update( void )
 	}  // end switch
 
 	// adjust speed so it's slower at the end of motion
-	Coord3D speedVector;
-	speedVector.x = end->x - start->x;
-	speedVector.y = end->y - start->y;
-	speedVector.z = end->z - start->z;
-	Real totalDistance = speedVector.length() * 0.25f;
-	speedVector.x = end->x - ourPos->x;
-	speedVector.y = end->y - ourPos->y;
-	speedVector.z = end->z - ourPos->z;
-	Real ourDistance = speedVector.length();
-	Real speed = (ourDistance / totalDistance) * topSpeed;
-	Real minSpeed = topSpeed * 0.08f;
+	const FCoord3D fxEnd = toFix( *end );
+	FCoord3D speedVector = fxEnd;
+	speedVector.sub( toFix( *start ) );
+	Fix totalDistance = speedVector.length() / Fix( 4 );
+	speedVector = fxEnd;
+	speedVector.sub( ourPos );
+	Fix ourDistance = speedVector.length();
+	// a zero-length leg divided by zero in float and ran at top speed
+	Fix speed = totalDistance > Fix( 0 ) ? (ourDistance / totalDistance) * topSpeed : topSpeed;
+	Fix minSpeed = topSpeed * 0.08_fx;
 	if( speed < minSpeed )
 		speed = minSpeed;
 	if( speed > topSpeed )
@@ -215,14 +225,13 @@ UpdateSleepTime BridgeScaffoldBehavior::update( void )
 	// make sure that speed can't get so incredibly small that we never finish our
 	// movement no matter what the speed and distance are
 	//
-	if( speed < 0.001f )
-		speed = 0.001f;
+	if( speed < 0.001_fx )
+		speed = 0.001_fx;
 
 	// compute the new position given the speed
-	Coord3D newPos;
-	newPos.x = v.x * speed + ourPos->x;
-	newPos.y = v.y * speed + ourPos->y;
-	newPos.z = v.z * speed + ourPos->z;
+	FCoord3D newPos = v;
+	newPos.scale( speed );
+	newPos.add( ourPos );
 
 	//
 	// will this new position push us beyond our target destination, we will take the vector
@@ -230,15 +239,13 @@ UpdateSleepTime BridgeScaffoldBehavior::update( void )
 	// tot he destination and dot them togehter ... if the result is < 0 then we have will
 	// overshoot the distance if we use the new position
 	//
-	Coord3D tooFarVector;
-	tooFarVector.x = m_targetPos.x - newPos.x;
-	tooFarVector.y = m_targetPos.y - newPos.y;
-	tooFarVector.z = m_targetPos.z - newPos.z;
-	if( tooFarVector.x * dirV.x + tooFarVector.y * dirV.y + tooFarVector.z * dirV.z <= 0.0f )
+	FCoord3D tooFarVector = targetPos;
+	tooFarVector.sub( newPos );
+	if( tooFarVector.x * dirV.x + tooFarVector.y * dirV.y + tooFarVector.z * dirV.z <= Fix( 0 ) )
 	{
 
 		// use the destination position
-		newPos = m_targetPos;
+		newPos = targetPos;
 
 		//
 		// we have reached our target position, switch motion to the next position in 
@@ -265,7 +272,7 @@ UpdateSleepTime BridgeScaffoldBehavior::update( void )
 	}  // end if
 
 	// set the new position
-	us->setPosition( &newPos );
+	us->setPositionFix( &newPos );
 
 	// do not sleep
 	return UPDATE_SLEEP_NONE;

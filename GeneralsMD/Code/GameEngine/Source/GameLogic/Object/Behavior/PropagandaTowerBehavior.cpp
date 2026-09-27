@@ -39,6 +39,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/PropagandaTowerBehavior.h"
@@ -497,8 +498,8 @@ void PropagandaTowerBehavior::doScan( void )
 																};
 
 	// scan objects in our region
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( us->getPosition(),
-																																		 modData->m_scanRadius,
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( us->getPositionFix(),
+																																		 fixFromReal( modData->m_scanRadius ), // P3
 																																		 FROM_CENTER_2D, 
 																																		 filters );
 	MemoryPoolObjectHolder hold( iter );

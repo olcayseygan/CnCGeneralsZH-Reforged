@@ -1625,13 +1625,15 @@ void GameState::gameStatePostProcessLoad( void )
 	* 2: Added save file type and mission map name (regular save vs automatic mission save)
 	* 3: the game speed
 	* 4: nothing new in this block; marks the fixed point object transform and extents (Object 11,
-	*    GeometryInfo 2).  Those blocks still read their float versions, converted. */
+	*    GeometryInfo 2).  Those blocks still read their float versions, converted.
+	* 5: nothing new in this block; marks the fixed point sightings (SightingInfo 3), which still
+	*    read their float version, converted. */
 // ------------------------------------------------------------------------------------------------
 void GameState::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 4;
+	XferVersion currentVersion = 5;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 

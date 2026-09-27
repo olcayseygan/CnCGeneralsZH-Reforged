@@ -39,6 +39,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/OCLSpecialPower.h"
+#include "Lib/FixBoundary.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // MODULE DATA ////////////////////////////////////////////////////////////////////////////////////
@@ -170,11 +171,12 @@ void OCLSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle, 
 	{
 		FindPositionOptions fpOptions;
 		fpOptions.flags = FPF_CLEAR_CELLS_ONLY;
-		fpOptions.maxRadius = MAX_ADJUST_RADIUS;
-		if ( ! ThePartitionManager->findPositionAround(&targetCoord, &fpOptions, &targetCoord) )
-    { // if findPosition() fails, then don't monkey with target Coord!
-    	targetCoord = *loc;
-    }
+		fpOptions.maxRadius = Fix( MAX_ADJUST_RADIUS );
+		const FCoord3D target = fcoordFromCoord3D( loc );	// the ordered spot is float
+		FCoord3D found;
+		if ( ThePartitionManager->findPositionAround(&target, &fpOptions, &found) )
+			targetCoord = found.toCoord3D();
+		// if findPosition() fails, then don't monkey with target Coord!
     
 
 	}

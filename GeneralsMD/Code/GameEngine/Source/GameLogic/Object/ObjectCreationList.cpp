@@ -1429,14 +1429,17 @@ protected:
 				// uninitialised stack Coord3D: the debris then appeared at whatever was on the stack.
 				Coord3D resultPos = *pos;
 				FindPositionOptions fpOptions;
-				fpOptions.minRadius = GameLogicRandomValueReal(m_minDistanceAFormation, m_minDistanceBFormation);
-				fpOptions.maxRadius = m_maxDistanceFormation;
+				fpOptions.minRadius = fixFromReal(GameLogicRandomValueReal(m_minDistanceAFormation, m_minDistanceBFormation));	// P3
+				fpOptions.maxRadius = fixFromReal(m_maxDistanceFormation);	// P3
 				fpOptions.flags = FPF_USE_HIGHEST_LAYER;
 				// DiesOnBadLand kills on the pathfind cell's type, and the search's own cliff and water
 				// tests read the terrain, which disagree at a shoreline: take only cells it accepts
 				if (m_diesOnBadLand)
 					fpOptions.flags = (FindPositionFlags)(fpOptions.flags | FPF_CLEAR_CELLS_ONLY);
-				ThePartitionManager->findPositionAround(pos, &fpOptions, &resultPos);
+				const FCoord3D center = fcoordFromCoord3D(pos);	// the creation spot is float
+				FCoord3D found;
+				if (ThePartitionManager->findPositionAround(&center, &fpOptions, &found))
+					resultPos = found.toCoord3D();
 				doStuffToObj( debris, m_names[pick], &resultPos, mtx, orientation, sourceObj, lifetimeFrames );
 			}
 			else 

@@ -1435,16 +1435,17 @@ void GarrisonContain::validateRallyPoint( void )
 	// if we have a rally point already picked, make sure it's valid
 	if( m_rallyValid == TRUE )
 	{
-		Coord3D result;
+		FCoord3D result;
 		FindPositionOptions options;
 
 		// ask for a valid position exactly at the rally point
 		options.flags = FPF_IGNORE_ALLY_OR_NEUTRAL_UNITS;
-		options.minRadius = 0.0f;
-		options.maxRadius = 0.0f;
+		options.minRadius = Fix( 0 );
+		options.maxRadius = Fix( 0 );
 		options.ignoreObject = getObject();
 		options.relationshipObject = getObject();
-		if( ThePartitionManager->findPositionAround( &m_exitRallyPoint, &options, &result ) == FALSE )
+		const FCoord3D rallyPoint = fcoordFromCoord3D( m_exitRallyPoint );	// P8: the saved rally point is float
+		if( ThePartitionManager->findPositionAround( &rallyPoint, &options, &result ) == FALSE )
 			m_rallyValid = FALSE;
 
 	}  // end if
@@ -1456,15 +1457,16 @@ void GarrisonContain::validateRallyPoint( void )
 
 		// pick a location for everybody to rally at
 		options.flags = FPF_IGNORE_ALLY_OR_NEUTRAL_UNITS;
-		// findPositionAround and its options are float  // P8
-		options.minRadius = fixToReal( getObject()->getGeometryInfo().getBoundingCircleRadiusFix() );
-		options.maxRadius = options.minRadius * 1.8f;  // arbitrary max distance away, change as needed
+		options.minRadius = getObject()->getGeometryInfo().getBoundingCircleRadiusFix();
+		options.maxRadius = options.minRadius * 1.8_fx;  // arbitrary max distance away, change as needed
 		options.ignoreObject = getObject();
 		options.relationshipObject = getObject();
-		Coord3D center = getObject()->getPositionFix()->toCoord3D();
-		m_rallyValid = ThePartitionManager->findPositionAround( &center,
+		FCoord3D rallyPoint;
+		m_rallyValid = ThePartitionManager->findPositionAround( getObject()->getPositionFix(),
 																													  &options,
-																													  &m_exitRallyPoint );
+																													  &rallyPoint );
+		if( m_rallyValid )
+			m_exitRallyPoint = rallyPoint.toCoord3D();	// P8: the saved rally point is float
 	}  // end if
 
 }  // end validateRallyPoint

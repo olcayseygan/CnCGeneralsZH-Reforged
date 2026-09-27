@@ -174,7 +174,7 @@ Bool CreateCrateDie::testKillerScience( CrateTemplate const *currentCrateData, O
 
 Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 {
-	Coord3D centerPoint = getObject()->getPositionFix()->toCoord3D();	// P5: findPositionAround is float
+	const FCoord3D centerPoint = *getObject()->getPositionFix();
 	PathfindLayerEnum layer = getObject()->getLayer();
 
 	// CreationChance is used for the success of this block, but this block can have any number of potential actual crates
@@ -203,11 +203,11 @@ Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 		return NULL;
 
 	Bool spotFound = FALSE;
-	Coord3D creationPoint;
+	FCoord3D creationPoint;
 	FindPositionOptions fpOptions;
 
-	fpOptions.minRadius = 0.0f;
-	fpOptions.maxRadius = 5.0f;
+	fpOptions.minRadius = Fix( 0 );
+	fpOptions.maxRadius = Fix( 5 );
 	fpOptions.relationshipObject = getObject();
 	fpOptions.flags = FPF_IGNORE_ALLY_OR_NEUTRAL_UNITS; // So the dead guy won't block, nor will his dead hulk.
 	if (layer != LAYER_GROUND) {
@@ -221,8 +221,8 @@ Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 	{
 		// If the tight ignore units scan fails, then try a great big scan so we appear on the edge
 		// of the large dead thing (building rubble)
-		fpOptions.minRadius = 0.0f;
-		fpOptions.maxRadius = 125.0f;
+		fpOptions.minRadius = Fix( 0 );
+		fpOptions.maxRadius = Fix( 125 );
 		fpOptions.relationshipObject = NULL;
 		fpOptions.flags = FPF_NONE; 
 		if( ThePartitionManager->findPositionAround( &centerPoint, &fpOptions, &creationPoint ) )
@@ -234,9 +234,7 @@ Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 	if( spotFound )
 	{
 		Object *newCrate = TheThingFactory->newObject( crateType, NULL );
-		FCoord3D fixPoint;
-		fixPoint.set( fixFromReal( creationPoint.x ), fixFromReal( creationPoint.y ), fixFromReal( creationPoint.z ) );	// P5
-		newCrate->setPositionFix( &fixPoint );
+		newCrate->setPositionFix( &creationPoint );
 		newCrate->setOrientationFix( fixFromReal( GameLogicRandomValueReal( 0, 2*PI ) ) );	// random angle in float
 		newCrate->setLayer(layer);
 

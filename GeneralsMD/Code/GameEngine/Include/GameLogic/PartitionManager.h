@@ -122,26 +122,26 @@ enum FindPositionFlags
 };
 // ----------------------------------------------------------------------------------------------
 
-const Real RANDOM_START_ANGLE = -99999.9f;			///< no start angle (an unlikely number to use for the start angle)
+constexpr Fix RANDOM_START_ANGLE = -99999.9_fx;			///< no start angle (an unlikely number to use for the start angle)
 
 struct FindPositionOptions
 {
 	FindPositionOptions( void )
 	{
 		flags									= FPF_NONE;
-		minRadius							= 0.0f;
-		maxRadius							= 0.0f;
+		minRadius							= Fix( 0 );
+		maxRadius							= Fix( 0 );
 		startAngle						= RANDOM_START_ANGLE;
-		maxZDelta							= 1e10f;	// ie, any z delta.
+		maxZDelta							= 1e10_fx;	// ie, any z delta.
 		ignoreObject					= NULL;
 		sourceToPathToDest    = NULL;
 		relationshipObject		= NULL;
 	};
 	FindPositionFlags flags;					///< flags for finding the legal position
-	Real minRadius;										///< min radius to search around
-	Real maxRadius;										///< max radius to search around
-	Real startAngle;									///< use this angle to start the search at
-	Real maxZDelta;										///< maximum delta-z we will allow
+	Fix minRadius;										///< min radius to search around
+	Fix maxRadius;										///< max radius to search around
+	Fix startAngle;										///< use this angle to start the search at
+	Fix maxZDelta;										///< maximum delta-z we will allow
 	const Object *ignoreObject;				///< ignore this object in legal position checks
 	const Object *sourceToPathToDest;	///< object that must be able to path to the position chosen
 	const Object *relationshipObject;	///< object to use for relationship tests
@@ -253,8 +253,8 @@ public:
 	void reset();
 	Bool isInvalid() const;
 
-	Coord3D					m_where;
-	Real						m_howFar;
+	FCoord3D				m_where;
+	Fix							m_howFar;
 	PlayerMaskType	m_forWhom;	// ask not for whom the sighting is masked; it masks for thee
 
 	/** For a sighting that hills and buildings cut short, the cells it actually revealed: one entry per
@@ -311,8 +311,8 @@ private:
 	CellAndObjectIntersection*		m_firstCoiInCell;	///< list of COIs in this cell (may be null).
 	ShroudLevel										m_shroudLevel[MAX_PLAYER_COUNT];	
 #ifdef PM_CACHE_TERRAIN_HEIGHT
-	Real													m_loTerrainZ;			///< lowest terrain-pt in this cell
-	Real													m_hiTerrainZ;			///< highest terrain-pt in this cell
+	Fix														m_loTerrainZ;			///< lowest terrain-pt in this cell
+	Fix														m_hiTerrainZ;			///< highest terrain-pt in this cell
 #endif
 	Int														m_threatValue[MAX_PLAYER_COUNT];
 	Int														m_cashValue[MAX_PLAYER_COUNT];
@@ -325,7 +325,7 @@ public:
 	// Note, we allocate these in arrays, thus we must have a default ctor (and NOT descend from MPO)
 	PartitionCell();
 #ifdef PM_CACHE_TERRAIN_HEIGHT
-	void init(Int x, Int y, Real loZ, Real hiZ) { m_cellX = x; m_cellY = y; m_loTerrainZ = loZ; m_hiTerrainZ = hiZ; }
+	void init(Int x, Int y, Fix loZ, Fix hiZ) { m_cellX = x; m_cellY = y; m_loTerrainZ = loZ; m_hiTerrainZ = hiZ; }
 #else
 	void init(Int x, Int y) { m_cellX = x; m_cellY = y; }
 #endif
@@ -359,11 +359,11 @@ public:
 	void updateSeenStructures(Int playerIndex, CellShroudStatus oldShroud, CellShroudStatus newShroud);	///< this cell just changed for that player: who kept or lost sight of which structure
 
 #ifdef PM_CACHE_TERRAIN_HEIGHT
-	inline Real getLoTerrain() const { return m_loTerrainZ; }
-	inline Real getHiTerrain() const { return m_hiTerrainZ; }
+	inline Fix getLoTerrain() const { return m_loTerrainZ; }
+	inline Fix getHiTerrain() const { return m_hiTerrainZ; }
 #endif
 
-	void getCellCenterPos(Real& x, Real& y);
+	void getCellCenterPos(Fix& x, Fix& y);
 
 	inline CellAndObjectIntersection *getFirstCoiInCell() { return m_firstCoiInCell; }
 
@@ -418,7 +418,7 @@ private:
 		Given a shape's geometry and size parameters, calculate the maximum number of COIs
 		that the object could possibly occupy.
 	*/
-	Int calcMaxCoiForShape(GeometryType geom, Real majorRadius, Real minorRadius, Bool isSmall);
+	Int calcMaxCoiForShape(GeometryType geom, Fix majorRadius, Fix minorRadius, Bool isSmall);
 
 	/**
 		Given an object's geometry and size parameters, calculate the maximum number of COIs
@@ -463,9 +463,9 @@ private:
 		rasterizer.
 	*/
 	void doSmallFill(
-		Real centerX,
-		Real centerY,
-		Real radius
+		Fix centerX,
+		Fix centerY,
+		Fix radius
 	);
 
 	/// helper function for doCircleFill.
@@ -479,12 +479,12 @@ private:
 		The same fill, asking whether the circle actually reaches each cell rather than drawing a
 		midpoint-circle outline and filling between its spans.
 	*/
-	void doCircleFillPrecise(Real centerX, Real centerY, Real radius);
+	void doCircleFillPrecise(Fix centerX, Fix centerY, Fix radius);
 
 	void doCircleFill(
-		Real centerX,
-		Real centerY,
-		Real radius
+		Fix centerX,
+		Fix centerY,
+		Fix radius
 	);
 
 	/**
@@ -492,11 +492,11 @@ private:
 		center, dimensions, and rotation.
 	*/
 	void doRectFill(
-		Real centerX,
-		Real centerY,
-		Real halfsizeX,
-		Real halfsizeY,
-		Real angle
+		Fix centerX,
+		Fix centerY,
+		Fix halfsizeX,
+		Fix halfsizeY,
+		Fix angle
 	);
 
 	/**
@@ -644,12 +644,12 @@ public:
 class PartitionFilterWouldCollide : public PartitionFilter
 {
 private:
-	Coord3D m_position;
+	FCoord3D m_position;
 	GeometryInfo m_geom;
-	Real m_angle;
+	Fix m_angle;
   Bool m_desiredCollisionResult;  // collision must match this for allow to return true
 public:
-	PartitionFilterWouldCollide(const Coord3D& pos, const GeometryInfo& geom, Real angle, Bool desired);
+	PartitionFilterWouldCollide(const FCoord3D& pos, const GeometryInfo& geom, Fix angle, Bool desired);
 	virtual Bool allow(Object *objOther);
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterWouldCollide"; }
@@ -1269,6 +1269,8 @@ private:
 	Region3D				m_worldExtents;		///< should be same as TheTerrainLogic->getExtents()
 	Real						m_cellSize;				///< edge size of each cell, in world coord space
 	Real						m_cellSizeInv;		///< 1/cellSize (used for efficiency)
+	Fix							m_cellSizeFix;		///< m_cellSize, which the cell math below runs on
+	FCoord2D				m_worldLoFix;			///< m_worldExtents.lo, likewise
 	Int							m_cellCountX;			///< number of cells, x
 	Int							m_cellCountY;			///< number of cells, y
 	Int							m_totalCellCount;	///< x * y
@@ -1303,17 +1305,17 @@ protected:
 	void shutdown( void );
 
 	/// used to validate the positions for findPositionAround family of methods
-	Bool tryPosition( const Coord3D *center, Real dist, Real angle,
-										const FindPositionOptions *options, Coord3D *result );
+	Bool tryPosition( const FCoord3D *center, Fix dist, Fix angle,
+										const FindPositionOptions *options, FCoord3D *result );
 
 	typedef Int (*CellAlongLineProc)(PartitionCell* cell, void* userData);
 
-	Int iterateCellsAlongLine(const Coord3D& pos, const Coord3D& posOther, CellAlongLineProc proc, void* userData);
+	Int iterateCellsAlongLine(const FCoord3D& pos, const FCoord3D& posOther, CellAlongLineProc proc, void* userData);
 	
 	// note iterateCellsBreadthFirst returns the cell index that made the CellBreadthFirstProc return
 	// non-Zero.
 	typedef Int (*CellBreadthFirstProc)(PartitionCell* cell, void* userData);
-	Int iterateCellsBreadthFirst(const Coord3D *pos, CellBreadthFirstProc proc, void *userData);
+	Int iterateCellsBreadthFirst(const FCoord3D *pos, CellBreadthFirstProc proc, void *userData);
 
 #ifdef FASTER_GCO
 	Int calcMinRadius(const ICoord2D& cur);
@@ -1384,8 +1386,8 @@ public:
 
 	/// A convenience funtion to reveal shroud at some location 
 	// Queueing does not give you control of the timestamp to enforce the queue.  I own the delay, you don't.
-	void doShroudReveal( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
-	void undoShroudReveal( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
+	void doShroudReveal( Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask);
+	void undoShroudReveal( Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask);
 	void queueUndoShroudReveal( SightingInfo *sighting );	///< takes the sighting's recorded cells with it
 
 	/** Reveal the circle around an eye except where a hill or a building stands between the eye and
@@ -1393,24 +1395,25 @@ public:
 		itself or the building it sits in. The sighting's range is the furthest the looker could see
 		from high ground; a cell lies inside it only as far as flatRange stretches from the height the
 		looker stands above that cell. */
-	void doBlockedShroudReveal( SightingInfo *sighting, const Object *looker, Real flatRange );
+	void doBlockedShroudReveal( SightingInfo *sighting, const Object *looker, Fix flatRange );
 
-	void doShroudCover( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
-	void undoShroudCover( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
+	void doShroudCover( Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask);
+	void undoShroudCover( Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask);
 
 	/// Perform threat map and value map updates.
-	void doThreatAffect( Real centerX, Real centerY, Real radius, UnsignedInt threatVal, PlayerMaskType playerMask);
-	void undoThreatAffect( Real centerX, Real centerY, Real radius, UnsignedInt threatVal, PlayerMaskType playerMask);
-	void doValueAffect( Real centerX, Real centerY, Real radius, UnsignedInt valueVal, PlayerMaskType playerMask);
-	void undoValueAffect( Real centerX, Real centerY, Real radius, UnsignedInt valueVal, PlayerMaskType playerMask);
+	void doThreatAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt threatVal, PlayerMaskType playerMask);
+	void undoThreatAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt threatVal, PlayerMaskType playerMask);
+	void doValueAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt valueVal, PlayerMaskType playerMask);
+	void undoValueAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt valueVal, PlayerMaskType playerMask);
 
-	void getCellCenterPos(Int x, Int y, Real& xx, Real& yy);
+	void getCellCenterPos(Int x, Int y, Fix& xx, Fix& yy);
 
-	// find the cell that covers the world coords (wx,wy) and return its coords.
-	void worldToCell(Real wx, Real wy, Int *cx, Int *cy);
+	// find the cell that covers the world coords (wx,wy) and return its coords, rounding down.
+	void worldToCellFix(Fix wx, Fix wy, Int *cx, Int *cy) const;
+	void worldToCell(Real wx, Real wy, Int *cx, Int *cy);	///< the client's float face of worldToCellFix
 
 	// given a distance in world coords, return the number of cells needed to cover that distance (rounding up)
-	Int worldToCellDist(Real w);
+	Int worldToCellDist(Fix w) const;
 
 	/* Distance and range queries.  The Fix ones are the real ones: every distance, square and radius
 		 in them is fixed point, and a maxDist past HUGE_DIST is taken as HUGE_DIST so its square fits.
@@ -1427,6 +1430,13 @@ public:
 		PartitionFilter **filters = NULL, IterOrderType order = ITER_FASTEST );
 	SimpleObjectIterator *iterateObjectsInRangeFix( const FCoord3D *pos, Fix maxDist, DistanceCalculationType dc,
 		PartitionFilter **filters = NULL, IterOrderType order = ITER_FASTEST );
+
+	/// the signed angle from obj's facing to the other object or to pos, in (-PI, PI]; zero when they coincide
+	Fix getRelativeAngle2DFix( const Object *obj, const Object *otherObj );
+	Fix getRelativeAngle2DFix( const Object *obj, const FCoord3D *pos );
+
+	void getVectorToFix( const Object *obj, const Object *otherObj, DistanceCalculationType dc, FCoord3D& vec );
+	void getVectorToFix( const Object *obj, const FCoord3D *pos, DistanceCalculationType dc, FCoord3D& vec );
 
 	// P2 SHIMS from here to END P2 SHIMS
 	Object *getClosestObject(
@@ -1446,8 +1456,7 @@ public:
 		Coord3D *closestDistVec = NULL
 	);
 
-	Real getRelativeAngle2D( const Object *obj, const Object *otherObj );
-	Real getRelativeAngle2D( const Object *obj, const Coord3D *pos );
+	Real getRelativeAngle2D( const Object *obj, const Coord3D *pos );		///< the client's float face of getRelativeAngle2DFix
 
 	void getVectorTo(const Object *obj, const Object *otherObj, DistanceCalculationType dc, Coord3D& vec);
 	void getVectorTo(const Object *obj, const Coord3D *pos, DistanceCalculationType dc, Coord3D& vec);
@@ -1495,31 +1504,36 @@ public:
 		return the Objects that would (or would not) collide with the given
 		geometry.
 	*/
-	SimpleObjectIterator* iteratePotentialCollisions(
-		const Coord3D* pos, 
+	SimpleObjectIterator* iteratePotentialCollisionsFix(
+		const FCoord3D* pos,
 		const GeometryInfo& geom,
-		Real angle,
+		Fix angle,
 		Bool use2D = false
 	);
-	
+	SimpleObjectIterator* iteratePotentialCollisions( const Coord3D* pos, const GeometryInfo& geom, Real angle, Bool use2D = false );	///< float face, for Weapon (P6)
+
 	Bool isColliding( const Object *a, const Object *b ) const;
 
-	/// Checks a geometry against an arbitrary geometry. 
-	Bool geomCollidesWithGeom( const Coord3D* pos1, 
+	/// Checks a geometry against an arbitrary geometry.
+	Bool geomCollidesWithGeomFix( const FCoord3D* pos1,
 							const GeometryInfo& geom1,
-							Real angle1, 
-							const Coord3D* pos2, 
+							Fix angle1,
+							const FCoord3D* pos2,
 							const GeometryInfo& geom2,
-							Real angle2 
+							Fix angle2
   ) const;
+	/// the client's float face of geomCollidesWithGeomFix, for the tree and prop buffers
+	Bool geomCollidesWithGeom( const Coord3D* pos1, const GeometryInfo& geom1, Real angle1,
+		const Coord3D* pos2, const GeometryInfo& geom2, Real angle2 ) const;
 
 	/// finding legal positions in the world
-	Bool findPositionAround( const Coord3D *center,
-													 const FindPositionOptions *options, 
-													 Coord3D *result );
+	Bool findPositionAround( const FCoord3D *center,
+													 const FindPositionOptions *options,
+													 FCoord3D *result );
 
 	/// return the size of a PartitionCell, in world coords.
 	Real getCellSize() { return m_cellSize; }				// only for the use of PartitionData!
+	Fix getCellSizeFix() const { return m_cellSizeFix; }
 
 	/// return (1.0 / getCellSize); this is used frequently, so we cache it for efficiency
 	Real getCellSizeInv() { return m_cellSizeInv; }
@@ -1529,7 +1543,8 @@ public:
 		this only takes terrain into account; it does not consider objects, units, 
 		trees, buildings, etc. 
 	*/
-	Bool isClearLineOfSightTerrain(const Object* obj, const Coord3D& objPos, const Object* other, const Coord3D& otherPos);
+	Bool isClearLineOfSightTerrainFix(const Object* obj, const FCoord3D& objPos, const Object* other, const FCoord3D& otherPos);
+	Bool isClearLineOfSightTerrain(const Object* obj, const Coord3D& objPos, const Object* other, const Coord3D& otherPos);	///< float face, for Weapon (P6)
 
 	inline Bool isInListDirtyModules(PartitionData* o) const
 	{
@@ -1588,7 +1603,7 @@ public:
 
 	Real getGroundOrStructureHeight(Real posx, Real posy);
 
-	void getMostValuableLocation( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, Coord3D *outLocation );
+	void getMostValuableLocation( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, FCoord3D *outLocation );
 
 	/** The same question, asked only of ground this player has actually seen.
 		*
@@ -1597,9 +1612,9 @@ public:
 		* the map author wrote deliberately, and is omniscience for an AI that is supposed to have to
 		* scout (AI-ROADMAP.md A2, B4).  Returns FALSE when nothing it can see has any value, which is
 		* the honest answer for an AI that has not looked yet. */
-	Bool getMostValuableVisibleLocation( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, Coord3D *outLocation );
-	void getNearestGroupWithValue( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, const Coord3D *sourceLocation,
-																 Int valueRequired, Bool greaterThan, Coord3D *outLocation );
+	Bool getMostValuableVisibleLocation( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, FCoord3D *outLocation );
+	void getNearestGroupWithValue( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, const FCoord3D *sourceLocation,
+																 Int valueRequired, Bool greaterThan, FCoord3D *outLocation );
 
 	// If saveToFog is true, then we are writing STORE_FOG. 
 	// If saveToFog is false, then we are writing STORE_PERMENANT_REVEAL
@@ -1607,17 +1622,30 @@ public:
 	void restoreFoggedCells(const ShroudStatusStoreRestore &inPartitionStore, Bool restoreToFog);
 };  // end class PartitionManager
 
-// -----------------------------------------------------------------------------
-inline void PartitionManager::worldToCell(Real wx, Real wy, Int *cx, Int *cy)
+//-----------------------------------------------------------------------------
+/// how many cells of the given size fit in w, rounded down or up; exact, where the float version multiplied by a rounded 1/size
+inline Int PartitionManager_cellsIn(Fix w, Fix cellSize, Bool roundUp)
 {
-	*cx = REAL_TO_INT_FLOOR((wx - m_worldExtents.lo.x) * m_cellSizeInv);
-	*cy = REAL_TO_INT_FLOOR((wy - m_worldExtents.lo.y) * m_cellSizeInv);
+	const Int64 d = w.raw();
+	const Int64 c = cellSize.raw();
+	if (c <= 0)
+		return 0;
+	Int64 q = d / c;
+	if (d % c != 0 && ((d > 0) == roundUp))
+		q += roundUp ? 1 : -1;
+	return (Int)q;
+}
+
+inline void PartitionManager::worldToCellFix(Fix wx, Fix wy, Int *cx, Int *cy) const
+{
+	*cx = PartitionManager_cellsIn(wx - m_worldLoFix.x, m_cellSizeFix, false);
+	*cy = PartitionManager_cellsIn(wy - m_worldLoFix.y, m_cellSizeFix, false);
 }
 
 //-----------------------------------------------------------------------------
-inline Int PartitionManager::worldToCellDist(Real w)
+inline Int PartitionManager::worldToCellDist(Fix w) const
 {
-	return REAL_TO_INT_CEIL(w  * m_cellSizeInv);
+	return PartitionManager_cellsIn(w, m_cellSizeFix, true);
 }
 
 //-----------------------------------------------------------------------------

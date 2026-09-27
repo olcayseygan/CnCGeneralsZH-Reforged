@@ -1024,7 +1024,7 @@ void ThingTemplate::parseMaxSimultaneous(INI *ini, void *instance, void *store, 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 ThingTemplate::ThingTemplate() :
-	m_geometryInfo(GEOMETRY_SPHERE, FALSE, 1, 1, 1)
+	m_geometryInfo(GEOMETRY_SPHERE, FALSE, Fix(1), Fix(1), Fix(1))
 {
 	m_moduleParsingMode = MODULEPARSE_NORMAL;
 	m_reskinnedFrom = NULL;

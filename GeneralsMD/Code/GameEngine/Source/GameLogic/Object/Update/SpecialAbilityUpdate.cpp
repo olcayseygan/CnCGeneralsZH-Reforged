@@ -893,8 +893,7 @@ Bool SpecialAbilityUpdate::isWithinStartAbilityRange() const
     if( range == 0.0f && m_targetID != INVALID_ID )
     {
       //We want to ensure we collided with our target first!
-      const Coord3D selfPos = self->getPositionFix()->toCoord3D();	// P2: iteratePotentialCollisions has no Fix twin
-      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( &selfPos, self->getGeometryInfo(), 0.0f );
+      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( self->getPositionFix(), self->getGeometryInfo(), Fix( 0 ) );
       MemoryPoolObjectHolder hold(iter);
       for( Object *them = iter->first(); them; them = iter->next() )
       {
@@ -970,8 +969,7 @@ Bool SpecialAbilityUpdate::isWithinAbilityAbortRange() const
     if( range == 0.0f && m_targetID != INVALID_ID )
     {
       //We want to ensure we collided with our target first!
-      const Coord3D selfPos = self->getPositionFix()->toCoord3D();	// P2: iteratePotentialCollisions has no Fix twin
-      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( &selfPos, self->getGeometryInfo(), 0.0f );
+      ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( self->getPositionFix(), self->getGeometryInfo(), Fix( 0 ) );
       MemoryPoolObjectHolder hold(iter);
       for( Object *them = iter->first(); them; them = iter->next() )
       {

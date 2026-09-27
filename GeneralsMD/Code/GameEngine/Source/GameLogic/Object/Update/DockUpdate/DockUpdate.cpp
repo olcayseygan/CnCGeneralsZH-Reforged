@@ -34,6 +34,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "Lib/FixBoundary.h"
 #include "GameLogic/Module/DockUpdate.h"
 
 // ------------------------------------------------------------------------------------------------
@@ -480,8 +481,7 @@ Coord3D DockUpdate::computeApproachPosition( Int positionIndex, Object *forWhom 
 	if( m_positionsLoaded == FALSE )
 		loadDockPositions();
 
-	Coord3D bestPosition;// This answer is the best, as it includes findPositionAround
-	Coord3D workingPosition;// But if findPositionAround fails, we need to say something.
+	Coord3D workingPosition;// If findPositionAround fails, we need to say something.
 	
 	FindPositionOptions fpOptions;
 	// Start with the pristine bone, then convert it to the world, then find a clean spot around it.
@@ -503,17 +503,20 @@ Coord3D DockUpdate::computeApproachPosition( Int positionIndex, Object *forWhom 
 		workingPosition.z += offset.Z;
 	}
 
-	fpOptions.minRadius = 0.0f;
-	fpOptions.maxRadius = 100.0f;
+	fpOptions.minRadius = Fix( 0 );
+	fpOptions.maxRadius = Fix( 100 );
 	fpOptions.sourceToPathToDest = forWhom;// This makes it find a place forWhom can get to.
 	fpOptions.relationshipObject = forWhom;// ... and one its own side's mines do not rule out
 	if( forWhom->isUsingAirborneLocomotor() )
 		fpOptions.ignoreObject = getObject();// Flyers can ignore us, so they can approach right over us if they want.
 
-	Bool spotFound = ThePartitionManager->findPositionAround( &workingPosition, &fpOptions, &bestPosition );
+	// P8: the dock bones and the approach position are float
+	const FCoord3D working = fcoordFromCoord3D( workingPosition );
+	FCoord3D bestPosition;
+	Bool spotFound = ThePartitionManager->findPositionAround( &working, &fpOptions, &bestPosition );
 
 	if( spotFound)
-		return bestPosition;
+		return bestPosition.toCoord3D();
 
 	return workingPosition;
 }

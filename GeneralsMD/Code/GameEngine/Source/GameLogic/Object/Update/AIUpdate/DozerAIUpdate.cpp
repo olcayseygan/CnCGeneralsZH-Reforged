@@ -224,27 +224,24 @@ StateReturnType DozerActionPickActionPosState::update( void )
 		//
 		FCoord3D delta = *dozer->getPositionFix();
 		delta.sub( *goalObject->getPositionFix() );
-		Coord2D v;
-		v.x = fixToReal( delta.x );
-		v.y = fixToReal( delta.y );
 
-		// P5: FindPositionOptions and findPositionAround are float
-		Real radius = fixToReal( goalObject->getGeometryInfo().getBoundingSphereRadiusFix() );
+		Fix radius = goalObject->getGeometryInfo().getBoundingSphereRadiusFix();
 		FindPositionOptions fpOptions;
 		fpOptions.minRadius = radius;
 		fpOptions.maxRadius = radius;
-		fpOptions.startAngle = v.toAngle();
-		Coord3D goalObjectPos = goalObject->getPositionFix()->toCoord3D();
-		if( ThePartitionManager->findPositionAround( &goalObjectPos,
+		fpOptions.startAngle = fixAtan2( delta.y, delta.x );
+		FCoord3D found;
+		if( ThePartitionManager->findPositionAround( goalObject->getPositionFix(),
 																								 &fpOptions,
-																								 &goalPos ) == FALSE )
+																								 &found ) == FALSE )
 		{
 
 			// return STATE_FAILURE; no, we don't ever want dozers to fail, particularly
 			// if ai.
-			goalPos = goalObjectPos;
+			found = *goalObject->getPositionFix();
 
-		}  // end if	
+		}  // end if
+		goalPos = found.toCoord3D();	// P5: the goal position is float
 
 		//
 		// we only ignore the goal object when we did the point selection in this more
@@ -2048,19 +2045,18 @@ void DozerAIUpdate::privateResumeConstruction( Object *obj, CommandSourceType cm
 	FCoord3D working = *theirPosition;
 	working.add( offset );
 
-	// P5: findPositionAround is float
-	Coord3D bestPosition = theirPosition->toCoord3D();// This answer is the best, as it includes findPositionAround
-	Coord3D workingPosition = working.toCoord3D();// But if findPositionAround fails, we need to say something.
+	FCoord3D bestPosition = *theirPosition;// This answer is the best, as it includes findPositionAround
+	const FCoord3D &workingPosition = working;// But if findPositionAround fails, we need to say something.
 
 	// this is a little cheesy... the idea is that we can only choose a location that is pretty close
 	// in z to the desired one. this prevents us from choosing a space at the bottom of a cliff when
 	// the space we want is at the top of the cliff. ideally we should do a funky terrain-zone compare
 	// but that isn't well-exposed... (srj)
-	const Real MAX_Z_DELTA = 10.0f;
+	const Fix MAX_Z_DELTA = Fix( 10 );
 
 	FindPositionOptions fpOptions;
-	fpOptions.minRadius = 0.0f;
-	fpOptions.maxRadius = 100.0f;
+	fpOptions.minRadius = Fix( 0 );
+	fpOptions.maxRadius = Fix( 100 );
 	fpOptions.sourceToPathToDest = me;// This makes it find a place forWhom can get to.
 	if (!me->isUsingAirborneLocomotor())
 		fpOptions.maxZDelta = MAX_Z_DELTA;
@@ -2069,7 +2065,7 @@ void DozerAIUpdate::privateResumeConstruction( Object *obj, CommandSourceType cm
 
 	Bool spotFound = ThePartitionManager->findPositionAround( &workingPosition, &fpOptions, &bestPosition );
 
-	positionOut = spotFound ? bestPosition : workingPosition;
+	positionOut = spotFound ? bestPosition.toCoord3D() : workingPosition.toCoord3D();	// P5: the position out is float
 
 	return spotFound;
 

@@ -332,7 +332,7 @@ UpdateSleepTime ParachuteContain::update( void )
 			// by a DeliverPayload, otherwise any place clear is good.
 			if( parachuteAI ) 
 			{
-				Coord3D target = parachute->getPositionFix()->toCoord3D();	// P4: findPositionAround and the move call are float
+				Coord3D target;	// P4: the move call is float
 				if( m_isLandingOverrideSet )
 				{
 					target = m_landingOverride;
@@ -342,11 +342,13 @@ UpdateSleepTime ParachuteContain::update( void )
 				else
 				{
 					FindPositionOptions fpOptions;
-					fpOptions.minRadius = 0.0f;
-					fpOptions.maxRadius = 100.0f;
+					fpOptions.minRadius = Fix( 0 );
+					fpOptions.maxRadius = Fix( 100 );
 					fpOptions.relationshipObject = NULL;
-					fpOptions.flags = FPF_NONE; 
-					ThePartitionManager->findPositionAround( &target, &fpOptions, &target );
+					fpOptions.flags = FPF_NONE;
+					FCoord3D landing = *parachute->getPositionFix();
+					ThePartitionManager->findPositionAround( &landing, &fpOptions, &landing );
+					target = landing.toCoord3D();
 				}
 				parachuteAI->aiMoveToPosition( &target, CMD_FROM_AI );
 			}

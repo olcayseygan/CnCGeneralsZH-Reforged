@@ -56,6 +56,7 @@
 #include "GameLogic/ScriptConditions.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/SidesList.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -6337,10 +6338,10 @@ void ScriptEngine::doNamedMapReveal(const AsciiString& revealName)
 		return;
 	}
 
-	Coord3D pos;
-	pos = *way->getLocation();
+	// the waypoint and the radius are script data, in float
+	const FCoord3D pos = fcoordFromCoord3D(way->getLocation());
 
-	ThePartitionManager->doShroudReveal(pos.x, pos.y, reveal->m_radiusToReveal, player->getPlayerMask());
+	ThePartitionManager->doShroudReveal(pos.x, pos.y, fixFromReal(reveal->m_radiusToReveal), player->getPlayerMask());
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6370,10 +6371,10 @@ void ScriptEngine::undoNamedMapReveal(const AsciiString& revealName)
 		return;
 	}
 
-	Coord3D pos;
-	pos = *way->getLocation();
+	// the waypoint and the radius are script data, in float
+	const FCoord3D pos = fcoordFromCoord3D(way->getLocation());
 
-	ThePartitionManager->undoShroudReveal(pos.x, pos.y, reveal->m_radiusToReveal, player->getPlayerMask());
+	ThePartitionManager->undoShroudReveal(pos.x, pos.y, fixFromReal(reveal->m_radiusToReveal), player->getPlayerMask());
 }
 
 //-------------------------------------------------------------------------------------------------

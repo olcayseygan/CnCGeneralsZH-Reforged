@@ -2103,7 +2103,7 @@ void Player::setUnitsShouldHunt(Bool unitsShouldHunt, CommandSourceType source)
 {
 	m_unitsShouldHunt = unitsShouldHunt;
 
-	Coord3D pos;
+	FCoord3D pos;
 	ThePartitionManager->getMostValuableLocation(getPlayerIndex(), ALLOW_ENEMIES, VOT_CashValue, &pos);
 	for (PlayerTeamList::iterator it = m_playerTeamPrototypes.begin(); 
 			 it != m_playerTeamPrototypes.end(); ++it) {

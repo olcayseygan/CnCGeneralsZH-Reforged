@@ -559,14 +559,13 @@ Bool AISkirmishPlayer::influenceMapAttackGoal( Coord3D *goal )
 	if( ThePartitionManager == NULL || goal == NULL )
 		return FALSE;
 
-	Coord3D found;
+	FCoord3D found;
 	if( !ThePartitionManager->getMostValuableVisibleLocation( m_player->getPlayerIndex(), ALLOW_ENEMIES,
 																													 VOT_CashValue, &found ) )
 		return FALSE;
 
-	goal->x = found.x;
-	goal->y = found.y;
-	goal->z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( goal->x ), fixFromReal( goal->y ) ) );	// P7: the goal is float
+	found.z = TheTerrainLogic->getGroundHeightFix( found.x, found.y );
+	*goal = found.toCoord3D();	// P7: the goal is float
 	return TRUE;
 }
 

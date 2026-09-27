@@ -601,22 +601,21 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 	if (rallyWaypoint)
 		fxPos = fcoordOnGround( *rallyWaypoint->getLocation(), FALSE );
 
-	pos = fxPos.toCoord3D();	// P5: findPositionAround and the pathfinder are float
-
 	for (Int i=0; i<MAX_MP_STARTING_UNITS; ++i)
 	{
 		AsciiString objName = pTemplate->getStartingUnit(i);
 		if (objName.isNotEmpty())
 		{
-			Coord3D objPos = pos;
+			FCoord3D found;
 			FindPositionOptions options;
-			options.minRadius = fixToReal( conYardRadius * 0.7_fx );	// P5: FindPositionOptions is float
-			options.maxRadius = fixToReal( conYardRadius * 1.3_fx );
+			options.minRadius = conYardRadius * 0.7_fx;
+			options.maxRadius = conYardRadius * 1.3_fx;
 			DEBUG_LOG(("Placing starting object %d (%s)\n", i, objName.str()));
 			ThePartitionManager->update();
-			Bool foundPos = ThePartitionManager->findPositionAround(&pos, &options, &objPos);
+			Bool foundPos = ThePartitionManager->findPositionAround(&fxPos, &options, &found);
 			if (foundPos)
 			{
+				Coord3D objPos = found.toCoord3D();	// P5: placeObjectAtPosition hands it to the pathfinder
 				Object *unit = placeObjectAtPosition(slotNum, objName, objPos, pPlayer, pTemplate);
 				if (unit) {
 					pPlayer->onUnitCreated(NULL, unit);
@@ -4357,6 +4356,7 @@ static Bool techBuildingSpotIsTaken( const ThingTemplate *building, const Coord3
 {
 	const GeometryInfo &footprint = building->getTemplateGeometryInfo();
 	const FCoord3D fxPosition = fcoordFromCoord3D( *position );
+	const Fix fxAngle = fixFromReal( angle );	// the pending building is saved as float
 	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &fxPosition, footprint.getBoundingCircleRadiusFix(),
 																																					FROM_BOUNDINGSPHERE_2D );
 	MemoryPoolObjectHolder hold( iter );
@@ -4371,10 +4371,8 @@ static Bool techBuildingSpotIsTaken( const ThingTemplate *building, const Coord3
 		if( them->isKindOf( KINDOF_IMMOBILE ) && !them->getControllingPlayer()->isPlayableSide() )
 			continue;
 
-		// P2: geomCollidesWithGeom has no Fix twin yet
-		const Coord3D themPos = them->getPositionFix()->toCoord3D();
-		if( ThePartitionManager->geomCollidesWithGeom( &themPos, them->getGeometryInfo(), fixToReal( them->getOrientationFix() ),
-																									 position, footprint, angle ) )
+		if( ThePartitionManager->geomCollidesWithGeomFix( them->getPositionFix(), them->getGeometryInfo(), them->getOrientationFix(),
+																									 &fxPosition, footprint, fxAngle ) )
 			return TRUE;
 	}
 

@@ -70,19 +70,17 @@ Bool UnitCrateCollide::executeCrateBehavior( Object *other )
 		Object *newObj = TheThingFactory->newObject( unitType, creationTeam );
 		if( newObj )
 		{
-			Coord3D creationPoint = other->getPositionFix()->toCoord3D();	// P5: findPositionAround is float
+			FCoord3D creationPoint = *other->getPositionFix();
 			/// @todo As a user of the future findLegalPositionAround, I wouldn't mind not having to specify range.  I just want a non colliding point.
 			FindPositionOptions fpOptions;
-			fpOptions.minRadius = 0.0f;
-			fpOptions.maxRadius = 20.0f;
+			fpOptions.minRadius = Fix( 0 );
+			fpOptions.maxRadius = Fix( 20 );
 			ThePartitionManager->findPositionAround( &creationPoint,
 																							 &fpOptions,
 																							 &creationPoint );
 
 			newObj->setOrientationFix( other->getOrientationFix() );
-			FCoord3D fixPoint;
-			fixPoint.set( fixFromReal( creationPoint.x ), fixFromReal( creationPoint.y ), fixFromReal( creationPoint.z ) );	// P5
-			newObj->setPositionFix( &fixPoint );
+			newObj->setPositionFix( &creationPoint );
 		} 
 	}
 

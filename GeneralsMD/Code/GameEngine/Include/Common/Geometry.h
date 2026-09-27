@@ -113,7 +113,7 @@ public:
 	static void parseGeometryMajorRadius( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ );
 	static void parseGeometryMinorRadius( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ );
 
-	GeometryInfo(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius)
+	GeometryInfo(GeometryType type, Bool isSmall, Fix height, Fix majorRadius, Fix minorRadius)
 	{
 		// Added by Sadullah Nader
 		// Initializations missing and needed
@@ -121,6 +121,14 @@ public:
 		m_boundingSphereRadius = Fix( 0 );
 		//
 
+		setFix(type, isSmall, height, majorRadius, minorRadius);
+	}
+
+	/// the float face of the one above, for the client's tree and prop buffers
+	GeometryInfo(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius)
+	{
+		m_boundingCircleRadius = Fix( 0 );
+		m_boundingSphereRadius = Fix( 0 );
 		set(type, isSmall, height, majorRadius, minorRadius);
 	}
 

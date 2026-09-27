@@ -687,12 +687,12 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		 kept the height of the spot they started from, or passed 0, and a probe that floated above a
 		 building's roof found it clear: a Hard USA put three pairs of supply drop zones exactly on top of
 		 each other in one match. */
-	Coord3D groundPos = *worldPos;	// P7: the collision query is float
-	groundPos.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( groundPos.x ), fixFromReal( groundPos.y ) ) );
+	FCoord3D groundPos = fcoordFromCoord3D( worldPos );	// P7: the placement is float
+	groundPos.z = TheTerrainLogic->getGroundHeightFix( groundPos.x, groundPos.y );
 	ObjectIterator *iter =
-			ThePartitionManager->iteratePotentialCollisions( &groundPos,
+			ThePartitionManager->iteratePotentialCollisionsFix( &groundPos,
 																											 build->getTemplateGeometryInfo(),
-																											 angle );
+																											 fixFromReal( angle ) );
 	Object *them;
 	Bool onlyCheckEnemies = (options == NO_ENEMY_OBJECT_OVERLAP);
 	MemoryPoolObjectHolder hold(iter);
@@ -835,9 +835,9 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		}
 	}
 
-	// the collision test below is float with no Fix twin, so the exit spots and angles go out as float
+	const Fix angleFx = fixFromReal(angle);	// P7
 	Bool checkMyExit = false;
-	Coord3D myExitPos;
+	FCoord3D myExitPos;
 	GeometryInfo myBounds = buildGeom;
 	myBounds.setMajorRadiusFix(myBounds.getMajorRadiusFix()+myExtraWidth);
 	if (myBounds.getGeomType() != GEOMETRY_BOX) {
@@ -852,12 +852,10 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 	myGeom.setMajorRadiusFix(myFactoryExitWidth*0.5_fx);
 	if (myFactoryExitWidth>Fix(0)) {
 		checkMyExit = true;
-		const Fix angleFx = fixFromReal(angle);	// P7
 		const Fix offset = buildGeom.getMajorRadiusFix() + myFactoryExitWidth*0.5_fx;
-		FCoord3D exitFx = worldFx;
-		exitFx.x += fixCos(angleFx)*offset;
-		exitFx.y += fixSin(angleFx)*offset;
-		myExitPos = exitFx.toCoord3D();
+		myExitPos = worldFx;
+		myExitPos.x += fixCos(angleFx)*offset;
+		myExitPos.y += fixSin(angleFx)*offset;
 	}
 
 
@@ -884,11 +882,11 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		Fix themFactoryExitWidth = fixFromReal(them->getTemplate()->getFactoryExitWidth());	// P3
 		Fix hisExtraWidth = fixFromReal(them->getTemplate()->getFactoryExtraBibWidth());		// P3
 
-		const Coord3D themPos = them->getPositionFix()->toCoord3D();		// no Fix twin of geomCollidesWithGeom
-		const Real themAngle = fixToReal(them->getOrientationFix());
+		const FCoord3D *themPos = them->getPositionFix();
+		const Fix themAngle = them->getOrientationFix();
 
 		Bool checkHisExit = false;
-		Coord3D hisExitPos;
+		FCoord3D hisExitPos;
 		GeometryInfo hisBounds = them->getGeometryInfo();
 		hisBounds.setMajorRadiusFix(hisBounds.getMajorRadiusFix()+hisExtraWidth);
 		if (hisBounds.getGeomType() != GEOMETRY_BOX) {
@@ -904,13 +902,12 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		if (themFactoryExitWidth>Fix(0)) {
 			checkHisExit = true;
 			const Fix offset = them->getGeometryInfo().getMajorRadiusFix() + themFactoryExitWidth*0.5_fx;
-			FCoord3D exitFx = *them->getPositionFix();
-			exitFx.x += fixCos(them->getOrientationFix())*offset;
-			exitFx.y += fixSin(them->getOrientationFix())*offset;
-			hisExitPos = exitFx.toCoord3D();
+			hisExitPos = *themPos;
+			hisExitPos.x += fixCos(themAngle)*offset;
+			hisExitPos.y += fixSin(themAngle)*offset;
 		}
-		if (ThePartitionManager->geomCollidesWithGeom(&themPos, hisBounds, themAngle,
-			worldPos, myBounds, angle)) {
+		if (ThePartitionManager->geomCollidesWithGeomFix(themPos, hisBounds, themAngle,
+			&worldFx, myBounds, angleFx)) {
 			TheTerrainVisual->addFactionBib(them, true);
 			return LBC_OBJECTS_IN_THE_WAY;
 		}
@@ -922,20 +919,20 @@ LegalBuildCode BuildAssistant::isLocationClearOfObjects( const Coord3D *worldPos
 		// an immobile object will obstruct our building no matter what team it's on
 		if ( them->isKindOf( KINDOF_IMMOBILE ) )	{
 			/* Check for overlap of my exit rectangle to his geom info. */
-			if (checkMyExit && ThePartitionManager->geomCollidesWithGeom(&themPos, hisBounds, themAngle,
-				&myExitPos, myGeom, angle)) {
+			if (checkMyExit && ThePartitionManager->geomCollidesWithGeomFix(themPos, hisBounds, themAngle,
+				&myExitPos, myGeom, angleFx)) {
 				TheTerrainVisual->addFactionBib(them, true);
 				return LBC_OBJECTS_IN_THE_WAY;
 			}
 			// Check for overlap of his exit rectangle with my geom info
-			if (checkHisExit && ThePartitionManager->geomCollidesWithGeom(&hisExitPos, hisGeom, themAngle,
-					worldPos, myBounds, angle)) {
+			if (checkHisExit && ThePartitionManager->geomCollidesWithGeomFix(&hisExitPos, hisGeom, themAngle,
+					&worldFx, myBounds, angleFx)) {
 				TheTerrainVisual->addFactionBib(them, true);
 				return LBC_OBJECTS_IN_THE_WAY;
 			}
 			// Check both exit rectangles together.
-			if (checkMyExit&&checkHisExit&&ThePartitionManager->geomCollidesWithGeom(&hisExitPos, hisGeom, themAngle,
-					&myExitPos, myGeom, angle)) {
+			if (checkMyExit&&checkHisExit&&ThePartitionManager->geomCollidesWithGeomFix(&hisExitPos, hisGeom, themAngle,
+					&myExitPos, myGeom, angleFx)) {
 				TheTerrainVisual->addFactionBib(them, true);
 				return LBC_OBJECTS_IN_THE_WAY;
 			}
@@ -1082,14 +1079,13 @@ LegalBuildCode BuildAssistant::isLocationLegalToBuild( const Coord3D *worldPos,
 			// yep, see if we would collide with an expanded version
 			GeometryInfo tooCloseGeom = tooClose->getGeometryInfo();
 			tooCloseGeom.expandFootprint(TheGlobalData->m_SupplyBuildBorder);
-			const Coord3D tooClosePos = tooClose->getPositionFix()->toCoord3D();	// no Fix twin of geomCollidesWithGeom
-			if (ThePartitionManager->geomCollidesWithGeom(
-						worldPos,
+			if (ThePartitionManager->geomCollidesWithGeomFix(
+						&worldFx,
 						build->getTemplateGeometryInfo(),
-						angle,
-						&tooClosePos,
+						fixFromReal(angle),	// P7
+						tooClose->getPositionFix(),
 						tooCloseGeom,
-						fixToReal(tooClose->getOrientationFix())))
+						tooClose->getOrientationFix()))
 			{
 				TheTerrainVisual->addFactionBib(tooClose, true, TheGlobalData->m_SupplyBuildBorder);
 				return LBC_TOO_CLOSE_TO_SUPPLIES;

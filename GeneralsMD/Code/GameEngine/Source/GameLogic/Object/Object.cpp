@@ -1094,10 +1094,8 @@ void Object::setStatus( ObjectStatusMaskType objectStatus, Bool set )
 		{
 
 			// CHECK FOR MINES, AND DETONATE THEM NOW 
-			// P9: iteratePotentialCollisions has no fixed twin in the shared header yet
-			Coord3D pos = m_fxPos.toCoord3D();
 			ObjectIterator *iter =
-					ThePartitionManager->iteratePotentialCollisions( &pos, getGeometryInfo(), fixToReal( m_fxAngle ) );
+					ThePartitionManager->iteratePotentialCollisionsFix( &m_fxPos, getGeometryInfo(), m_fxAngle );
 			MemoryPoolObjectHolder hold( iter );
 			Object *them;
 			for( them = iter->first(); them; them = iter->next() )
@@ -5420,11 +5418,11 @@ void Object::addValue()
 		return;
 
 
-	m_partitionLastValue->m_where = m_fxPos.toCoord3D();	// P9: SightingInfo and the value map are float
+	m_partitionLastValue->m_where = m_fxPos;
 	m_partitionLastValue->m_data = getTemplate()->friend_getBuildCost();
 
 	m_partitionLastValue->m_forWhom = getControllingPlayer()->getPlayerMask();
-	m_partitionLastValue->m_howFar = getVisionRange();	// we are valuable all the way to where we can target.
+	m_partitionLastValue->m_howFar = fixFromReal( getVisionRange() );	// we are valuable all the way to where we can target.  P9: the vision range is float
 
 	ThePartitionManager->doValueAffect(m_partitionLastValue->m_where.x,
 																		 m_partitionLastValue->m_where.y,
@@ -5470,11 +5468,11 @@ void Object::addThreat()
 		return;
 
 
-	m_partitionLastThreat->m_where = m_fxPos.toCoord3D();	// P9: SightingInfo and the threat map are float
+	m_partitionLastThreat->m_where = m_fxPos;
 	m_partitionLastThreat->m_data = getTemplate()->getThreatValue();
 
 	m_partitionLastThreat->m_forWhom = getControllingPlayer()->getPlayerMask();
-	m_partitionLastThreat->m_howFar = getVisionRange();	// we are threatening all the way to where we can target.
+	m_partitionLastThreat->m_howFar = fixFromReal( getVisionRange() );	// we are threatening all the way to where we can target.  P9: the vision range is float
 
 	ThePartitionManager->doThreatAffect(m_partitionLastThreat->m_where.x,
 																			m_partitionLastThreat->m_where.y,
@@ -5585,25 +5583,27 @@ void Object::look()
 				}
 
 				// the eye is at the top of the object, so an aircraft looks over the hill a tank cannot
-				FCoord3D fxEye = m_fxPos;
-				fxEye.z += getGeometryInfo().getMaxHeightAbovePositionFix();
-				Coord3D eye = fxEye.toCoord3D();	// P9: SightingInfo and the shroud are float
+				FCoord3D eye = m_fxPos;
+				eye.z += getGeometryInfo().getMaxHeightAbovePositionFix();
 
 				m_partitionLastLook->m_where = eye;
 				m_partitionLastLook->m_forWhom = lookingMask;
+
+				// P9: the sight ranges are float
+				const Fix fxShroudClearingRange = fixFromReal( shroudClearingRange );
 
 				// the spy satellite, the radar van scan, the spy drone and the superweapon pings are INERT:
 				// a reveal ability opens its whole circle, behind hills and buildings too
 				if( isKindOf( KINDOF_INERT ) )
 				{
-					m_partitionLastLook->m_howFar = shroudClearingRange;
-					ThePartitionManager->doShroudReveal( eye.x, eye.y, shroudClearingRange, lookingMask );
+					m_partitionLastLook->m_howFar = fxShroudClearingRange;
+					ThePartitionManager->doShroudReveal( eye.x, eye.y, fxShroudClearingRange, lookingMask );
 				}
 				else
 				{
 					// out to the furthest the high ground could carry it; each cell is cut back to its own height
-					m_partitionLastLook->m_howFar = Weapon_elevatedRange( this, shroudClearingRange, -FLT_MAX );
-					ThePartitionManager->doBlockedShroudReveal( m_partitionLastLook, this, shroudClearingRange );
+					m_partitionLastLook->m_howFar = fixFromReal( Weapon_elevatedRange( this, shroudClearingRange, -FLT_MAX ) );
+					ThePartitionManager->doBlockedShroudReveal( m_partitionLastLook, this, fxShroudClearingRange );
 				}
 
 	//			DEBUG_LOG(( "A %s looks at %f, %f for %x at range %f\n",
@@ -5628,12 +5628,12 @@ void Object::look()
 				Bool stealthedAndNotDetected = testStatus( OBJECT_STATUS_STEALTHED ) && !testStatus( OBJECT_STATUS_DETECTED ) && !testStatus( OBJECT_STATUS_DISGUISED );
 				if( !stealthedAndNotDetected )
 				{
-					Coord3D pos = m_fxPos.toCoord3D();	// P9: SightingInfo and the shroud are float
+					const Fix fxRevealToAllRange = fixFromReal( shroudRevealToAllRange );	// P9: the template's range is float
 					PlayerMaskType thePlayersMask = ThePlayerList->getPlayersWithRelationship( getControllingPlayer()->getPlayerIndex(), ALLOW_ENEMIES | ALLOW_NEUTRAL );
-					ThePartitionManager->doShroudReveal( pos.x, pos.y, shroudRevealToAllRange, thePlayersMask );
-					m_partitionRevealAllLastLook->m_where = pos;
+					ThePartitionManager->doShroudReveal( m_fxPos.x, m_fxPos.y, fxRevealToAllRange, thePlayersMask );
+					m_partitionRevealAllLastLook->m_where = m_fxPos;
 					m_partitionRevealAllLastLook->m_forWhom = thePlayersMask;
-					m_partitionRevealAllLastLook->m_howFar = shroudRevealToAllRange;
+					m_partitionRevealAllLastLook->m_howFar = fxRevealToAllRange;
 				}
 			}
 		}
@@ -5696,14 +5696,14 @@ void Object::shroud()
 				}
 			}
 
-			Coord3D pos = m_fxPos.toCoord3D();	// P9: SightingInfo and the shroud are float
-			ThePartitionManager->doShroudCover(pos.x, pos.y,
-				getShroudRange(), 
+			const Fix fxShroudRange = fixFromReal( getShroudRange() );	// P9: the shroud range is float
+			ThePartitionManager->doShroudCover(m_fxPos.x, m_fxPos.y,
+				fxShroudRange,
 				shroudingMask);
 
-			m_partitionLastShroud->m_where = pos;
+			m_partitionLastShroud->m_where = m_fxPos;
 			m_partitionLastShroud->m_forWhom = shroudingMask;
-			m_partitionLastShroud->m_howFar = getShroudRange();
+			m_partitionLastShroud->m_howFar = fxShroudRange;
 		}
 	}
 }

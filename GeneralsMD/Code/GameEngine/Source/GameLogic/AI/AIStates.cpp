@@ -234,19 +234,6 @@ static Bool isSamePosition( const FCoord3D &ourPos, const FCoord3D &prevTargetPo
 	return true;
 }
 
-/// PartitionManager::getRelativeAngle2D in fixed point: the signed angle from obj's facing to pos,
-/// in (-PI, PI].  acos of the dot signed by the cross is atan2 of the pair, and atan2 needs no normalizing.
-static Fix relativeAngle2DFix( const Object *obj, const FCoord3D &pos )
-{
-	const FCoord3D *objPos = obj->getPositionFix();
-	Fix vx = pos.x - objPos->x;
-	Fix vy = pos.y - objPos->y;
-	if (vx == Fix(0) && vy == Fix(0))
-		return Fix(0);
-	const FCoord3D *dir = obj->getUnitDirectionVector2DFix();
-	return fixAtan2( dir->x * vy - dir->y * vx, dir->x * vx + dir->y * vy );
-}
-
 /// REAL_TO_INT( w / PATHFIND_CELL_SIZE ): the cell a world coordinate falls in, truncated toward zero
 static Int fixToPathfindCell( Fix w )
 {
@@ -661,16 +648,15 @@ StateReturnType AIRappelState::update()
 					obj->setOrientationFix( exitAngle );
 
 					FindPositionOptions options;
-					options.startAngle = (Real)(1.5 * PI);//Down.
-					options.maxRadius = 200;
-					Coord3D endPosition;
-					const Coord3D startPositionF = startPosition.toCoord3D();	// P5
-					Bool foundPosition = ThePartitionManager->findPositionAround( &startPositionF, &options, &endPosition );
+					options.startAngle = 4.71238898038469_fx;//Down.
+					options.maxRadius = Fix(200);
+					FCoord3D endPosition;
+					Bool foundPosition = ThePartitionManager->findPositionAround( &startPosition, &options, &endPosition );
 
 					if( foundPosition )
 					{
 						std::vector<Coord3D> exitPath;
-						exitPath.push_back(endPosition);
+						exitPath.push_back(endPosition.toCoord3D());	// P4: the path is float
 						AIUpdateInterface* ai = obj->getAI();
 						if( ai )
 						{
@@ -5682,9 +5668,10 @@ StateReturnType AIAttackAimAtTargetState::update()
 	
 	// no else here!
 	{
+		const FCoord3D goalPos = fcoordFromCoord3D(*getMachineGoalPosition());	// P4
 		Fix relAngle = m_isAttackingObject ?
-											relativeAngle2DFix( source, *victim->getPositionFix() ) :
-											relativeAngle2DFix( source, fcoordFromCoord3D(*getMachineGoalPosition()) );	// P4
+											ThePartitionManager->getRelativeAngle2DFix( source, victim ) :
+											ThePartitionManager->getRelativeAngle2DFix( source, &goalPos );
 
 		const Fix REL_THRESH = 0.035_fx;	// about 2 degrees. (getRelativeAngle2D is current only accurate to about 1.25 degrees)
 
@@ -8227,7 +8214,7 @@ StateReturnType AIFaceState::update()
 	{
 		pos = fcoordFromCoord3D(*getMachineGoalPosition());	// P4
 	}
-	Fix relAngle = relativeAngle2DFix( obj, pos );
+	Fix relAngle = ThePartitionManager->getRelativeAngle2DFix( obj, &pos );
 
 	const Fix REL_THRESH = 0.035_fx;	// about 2 degrees. (getRelativeAngle2D is current only accurate to about 1.25 degrees)
 	if( fixAbs( relAngle ) < REL_THRESH )

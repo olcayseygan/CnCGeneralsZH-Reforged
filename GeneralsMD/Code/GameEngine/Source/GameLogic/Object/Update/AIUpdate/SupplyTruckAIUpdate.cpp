@@ -649,15 +649,15 @@ TheInGameUI->DEBUG_addFloatingText("entering regrouping state", getMachineOwner(
 	if( ThePartitionManager->getDistanceSquaredFix(owner, destinationObject, FROM_BOUNDINGSPHERE_2D) < Fix( REGROUP_SUCCESS_DISTANCE_SQUARED ) )
 		return STATE_CONTINUE; // Don't say Success so we don't spin the machine.  After one update we'll go back.
 	
-	Coord3D destination;
+	FCoord3D found;
 	FindPositionOptions fpOptions;
-	fpOptions.minRadius = 0.0f;
-	fpOptions.maxRadius = 100.0f;
+	fpOptions.minRadius = Fix( 0 );
+	fpOptions.maxRadius = Fix( 100 );
 
-	Coord3D destinationObjectPos = destinationObject->getPositionFix()->toCoord3D(); // P5
-	if( ! ThePartitionManager->findPositionAround( &destinationObjectPos, &fpOptions, &destination ) )
+	if( ! ThePartitionManager->findPositionAround( destinationObject->getPositionFix(), &fpOptions, &found ) )
 		return STATE_FAILURE;
 
+	const Coord3D destination = found.toCoord3D();	// P4: the move order is float
 	ownerAI->aiMoveToPosition( &destination, CMD_FROM_AI );
 	return STATE_CONTINUE;// Remember to say continue when you change ai command inside a state
 }

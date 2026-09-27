@@ -218,7 +218,7 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 	GeometryInfo geom = mineTemplate->getTemplateGeometryInfo();
 	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P3: footprint is float
 	geom.expandFootprint(mineRadius * -(1.0f - d->m_skipIfThisMuchUnderStructure));
-	ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( &pt, geom, orient );
+	ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( &fxPt, geom, fixFromReal( orient ) );
 	MemoryPoolObjectHolder hold(iter);
 	for (Object* them = iter->first(); them; them = iter->next())
 	{

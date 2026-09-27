@@ -93,20 +93,6 @@ static inline Real layerHeightAt( Real x, Real y, PathfindLayerEnum layer )
 	return fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( x ), fixFromReal( y ), layer ) );
 }
 
-// PartitionManager::getRelativeAngle2D in fixed point: the signed angle from the object's heading to
-// pos, in (-PI, PI], and zero when pos is where the object stands.  The atan2 of the cross and dot
-// products is the float version's acos of the dot with the cross product's sign.
-static Fix relativeAngle2DFix( const Object *obj, const FCoord3D &pos )
-{
-	const FCoord3D *objPos = obj->getPositionFix();
-	const Fix vx = pos.x - objPos->x;
-	const Fix vy = pos.y - objPos->y;
-	if( vx == Fix( 0 ) && vy == Fix( 0 ) )
-		return Fix( 0 );
-	const FCoord3D *dir = obj->getUnitDirectionVector2DFix();
-	return fixAtan2( dir->x * vy - dir->y * vx, dir->x * vx + dir->y * vy );
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -1656,8 +1642,8 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 			return FALSE;
 	}
 
-	Fix collisionAngle = relativeAngle2DFix( obj, otherPos );
-	Fix otherAngle = relativeAngle2DFix( other, pos );
+	Fix collisionAngle = ThePartitionManager->getRelativeAngle2DFix( obj, &otherPos );
+	Fix otherAngle = ThePartitionManager->getRelativeAngle2DFix( other, &pos );
 	//DEBUG_LOG(("Collision angle %.2f, %.2f, %s, %x %s\n", collisionAngle*180/PI, otherAngle*180/PI, obj->getTemplate()->getName().str(), obj, other->getTemplate()->getName().str()));
 	Fix angleLimit = FIX_PI/Fix(4); // 45 degrees.
 	const Fix halfPi = FIX_PI/Fix(2);
@@ -1711,7 +1697,8 @@ Bool AIUpdateInterface::needToRotate(void)
 		CRCDEBUG_LOG(("AIUpdateInterface::needToRotate() - calling computePointOnPath() for object %d\n", getObject()->getID()));
 		// P5: the path is float
 		getPath()->computePointOnPath(getObject(), m_locomotorSet, floatPosOf(getObject()), info);
-		deltaAngle = relativeAngle2DFix( getObject(), fcoordFromCoord3D(info.posOnPath) );
+		const FCoord3D posOnPath = fcoordFromCoord3D(info.posOnPath);
+		deltaAngle = ThePartitionManager->getRelativeAngle2DFix( getObject(), &posOnPath );
 	}
 
 	if (fixAbs(deltaAngle)>FIX_PI/Fix(30))
@@ -1814,7 +1801,7 @@ Bool AIUpdateInterface::processCollision(PhysicsBehavior *physics, Object *other
 				DEBUG_LOG(("MOVEBLOCK %d by %d %s at %.0f,%.0f facing %.2f moving %d waiting %d allowed %.3f bearing %.1f\n", TheGameLogic->getFrame(),
 					other->getID(), other->getTemplate()->getName().str(), otherPos.x, otherPos.y,
 					fixToReal(md->x * od->x + md->y * od->y), otherMoving, aiOther->isWaitingForPath(), maxSpeed,
-					fixToReal(relativeAngle2DFix( getObject(), *other->getPositionFix() )) * 180.0f / PI));
+					fixToReal(ThePartitionManager->getRelativeAngle2DFix( getObject(), other )) * 180.0f / PI));
 			}
 			if (maxSpeed < m_curMaxBlockedSpeed)
 			{
@@ -5492,12 +5479,13 @@ void AIUpdateInterface::privateAttackPosition( const Coord3D *pos, Int maxShotsT
 	if (weapon && weapon->isContactWeapon() && !weapon->isWithinAttackRange(getObject(), &localPos) && !isPathAvailable(&localPos))
 	{
 		FindPositionOptions fpOptions;
-		fpOptions.minRadius = 0.0f;
-		fpOptions.maxRadius = 100.0f;
+		fpOptions.minRadius = Fix(0);
+		fpOptions.maxRadius = Fix(100);
 		fpOptions.sourceToPathToDest = getObject();// This makes it find a place forWhom can get to.
-		Coord3D tmp;
-		if (ThePartitionManager->findPositionAround(&localPos, &fpOptions, &tmp))
-			localPos = tmp;
+		const FCoord3D center = fcoordFromCoord3D(localPos);	// P4: the ordered spot is float
+		FCoord3D tmp;
+		if (ThePartitionManager->findPositionAround(&center, &fpOptions, &tmp))
+			localPos = tmp.toCoord3D();
 	}
 
 	getStateMachine()->clear();

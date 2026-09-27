@@ -3047,12 +3047,14 @@ void ScriptActions::doRevealMapAtWaypoint(const AsciiString& waypointName, Real 
 	else
 		playerMask = getHumanPlayerMask();
 
-	Real positionX = way->getLocation()->x;
-	Real positionY = way->getLocation()->y;
+	// the waypoint and the radius are script data, in float
+	const Fix positionX = fixFromReal(way->getLocation()->x);
+	const Fix positionY = fixFromReal(way->getLocation()->y);
+	const Fix radius = fixFromReal(radiusToReveal);
 
 	// A reveal script is a quick look.  That way a Radar Jammer will still function correctly.
-	ThePartitionManager->doShroudReveal(positionX, positionY, radiusToReveal, playerMask);
-	ThePartitionManager->undoShroudReveal(positionX, positionY, radiusToReveal, playerMask);
+	ThePartitionManager->doShroudReveal(positionX, positionY, radius, playerMask);
+	ThePartitionManager->undoShroudReveal(positionX, positionY, radius, playerMask);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3072,12 +3074,14 @@ void ScriptActions::doShroudMapAtWaypoint(const AsciiString& waypointName, Real 
 	else
 		playerMask = getHumanPlayerMask();
 
-	Real positionX = way->getLocation()->x;
-	Real positionY = way->getLocation()->y;
+	// the waypoint and the radius are script data, in float
+	const Fix positionX = fixFromReal(way->getLocation()->x);
+	const Fix positionY = fixFromReal(way->getLocation()->y);
+	const Fix radius = fixFromReal(radiusToShroud);
 
 	// Likewise, this script does a dollop of shroud.  Not permanent active shroud
-	ThePartitionManager->doShroudCover(positionX, positionY, radiusToShroud, playerMask);
-	ThePartitionManager->undoShroudCover(positionX, positionY, radiusToShroud, playerMask);
+	ThePartitionManager->doShroudCover(positionX, positionY, radius, playerMask);
+	ThePartitionManager->undoShroudCover(positionX, positionY, radius, playerMask);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5398,15 +5402,17 @@ void ScriptActions::doSkirmishAttackNearestGroupWithValue( const AsciiString& te
 	if (!player)
 		return;
 
-	Coord3D loc;
+	FCoord3D loc;
 	Coord3D groupLoc;
 	theGroup->getCenter(&groupLoc);
 	if (comparison == Parameter::GREATER_EQUAL || comparison == Parameter::GREATER) {
-		ThePartitionManager->getNearestGroupWithValue(player->getPlayerIndex(), ALLOW_ENEMIES, VOT_CashValue, 
-			&groupLoc, value, true, &loc);
+		const FCoord3D groupFx = fcoordFromCoord3D(groupLoc);	// P7: the group and its orders are float
+		ThePartitionManager->getNearestGroupWithValue(player->getPlayerIndex(), ALLOW_ENEMIES, VOT_CashValue,
+			&groupFx, value, true, &loc);
 	}
 
-	theGroup->groupAttackMoveToPosition( &loc, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+	const Coord3D target = loc.toCoord3D();
+	theGroup->groupAttackMoveToPosition( &target, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
 }
 
 //-------------------------------------------------------------------------------------------------

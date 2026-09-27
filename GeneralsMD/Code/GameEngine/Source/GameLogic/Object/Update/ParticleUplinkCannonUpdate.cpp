@@ -691,8 +691,12 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 				}
 
 				//Also reveal vision because the owning player has full rights to watch the carnage he created!
-				ThePartitionManager->doShroudReveal( m_currentTargetPosition.x, m_currentTargetPosition.y, data->m_revealRange, me->getControllingPlayer()->getPlayerMask() );
-				ThePartitionManager->undoShroudReveal( m_currentTargetPosition.x, m_currentTargetPosition.y, data->m_revealRange, me->getControllingPlayer()->getPlayerMask() );
+				// P8: the beam's target and the reveal range are float
+				const Fix revealX = fixFromReal( m_currentTargetPosition.x );
+				const Fix revealY = fixFromReal( m_currentTargetPosition.y );
+				const Fix revealRange = fixFromReal( data->m_revealRange );
+				ThePartitionManager->doShroudReveal( revealX, revealY, revealRange, me->getControllingPlayer()->getPlayerMask() );
+				ThePartitionManager->undoShroudReveal( revealX, revealY, revealRange, me->getControllingPlayer()->getPlayerMask() );
 			}
 
 			//Handle damage pulses

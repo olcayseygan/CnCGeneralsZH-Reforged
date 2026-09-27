@@ -1123,13 +1123,7 @@ StateReturnType TurretAIAimTurretState::update()
 
 	Real turnSpeedModifier = 1.0f;// Just like how recentering turns you half speed, sweeping can change your turn speed
 	
-	/* getRelativeAngle2D has no fixed twin; this is it: the signed angle from our facing to the
-		 target, atan2 of the cross and the dot, which is its acos of the dot signed by the cross. */
-	const FCoord3D *objPos = obj->getPositionFix();
-	const FCoord3D *facing = obj->getUnitDirectionVector2DFix();
-	const Fix toX = enemyPositionFx.x - objPos->x;
-	const Fix toY = enemyPositionFx.y - objPos->y;
-	Real relAngle = fixToReal( fixAtan2( facing->x * toY - facing->y * toX, facing->x * toX + facing->y * toY ) );	// P6: turret angles are float
+	Real relAngle = fixToReal( ThePartitionManager->getRelativeAngle2DFix( obj, &enemyPositionFx ) );	// P6: turret angles are float
 
 	Real aimAngle = relAngle;
 	Real sweep = turret->getTurretFireAngleSweepForWeaponSlot( slot );

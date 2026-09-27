@@ -107,11 +107,8 @@ void SquishCollide::onCollide( Object *other, const Coord3D *loc, const Coord3D 
 		myGeom.setMinorRadiusFix(Fix(1));
 		const FCoord3D *pos = other->getPositionFix();
 		const FCoord3D *myPos = self->getPositionFix();
-		// P5: geomCollidesWithGeom is float
-		Coord3D otherPosF = pos->toCoord3D();
-		Coord3D myPosF = myPos->toCoord3D();
-		if (!ThePartitionManager->geomCollidesWithGeom(&otherPosF, other->getGeometryInfo(), fixToReal(other->getOrientationFix()),
-			&myPosF, myGeom, fixToReal(self->getOrientationFix()))) {
+		if (!ThePartitionManager->geomCollidesWithGeomFix(pos, other->getGeometryInfo(), other->getOrientationFix(),
+			myPos, myGeom, self->getOrientationFix())) {
 			return;
 		}
 

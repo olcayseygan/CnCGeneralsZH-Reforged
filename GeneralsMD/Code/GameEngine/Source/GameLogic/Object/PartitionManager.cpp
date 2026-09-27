@@ -1147,8 +1147,8 @@ PartitionCell::PartitionCell()
 	m_firstCoiInCell = NULL;
 	m_coiCount = 0;
 #ifdef PM_CACHE_TERRAIN_HEIGHT
-	m_loTerrainZ = HUGE_DIST;		// huge positive
-	m_hiTerrainZ = -HUGE_DIST;	// huge negative
+	m_loTerrainZ = HUGE_DIST_FIX;		// huge positive
+	m_hiTerrainZ = -HUGE_DIST_FIX;	// huge negative
 #endif
 	/*
 		You may be asking yourself: why do we model the shroud for all players,
@@ -1424,7 +1424,7 @@ void PartitionCell::friend_removeFromCellList(CellAndObjectIntersection *coi)
 }
 
 //-----------------------------------------------------------------------------
-void PartitionCell::getCellCenterPos(Real& x, Real& y)
+void PartitionCell::getCellCenterPos(Fix& x, Fix& y)
 {
 	ThePartitionManager->getCellCenterPos(m_cellX, m_cellY, x, y);
 }
@@ -1746,52 +1746,48 @@ void PartitionData::addSubPixToCoverage(PartitionCell *cell)
 
 // -----------------------------------------------------------------------------
 void PartitionData::doRectFill(
-	Real centerX,
-	Real centerY,
-	Real halfsizeX,
-	Real halfsizeY,
-	Real angle
+	Fix centerX,
+	Fix centerY,
+	Fix halfsizeX,
+	Fix halfsizeY,
+	Fix angle
 )
 {
-	Real c = (Real)Cos(angle);
-	Real s = (Real)Sin(angle);
+	Fix c = fixCos(angle);
+	Fix s = fixSin(angle);
 
-	Real actualCellSize = ThePartitionManager->getCellSize();
-	Real stepSize = actualCellSize * 0.5f; // in theory, should be getCellSize() exactly, but needs to be smaller to avoid aliasing problems
-	Real ydx = s * stepSize;
-	Real ydy = -c * stepSize;
-	Real xdx = c * stepSize;
-	Real xdy = s * stepSize;
+	Fix actualCellSize = ThePartitionManager->getCellSizeFix();
+	Fix stepSize = actualCellSize * 0.5_fx; // in theory, should be getCellSize() exactly, but needs to be smaller to avoid aliasing problems
+	Fix ydx = s * stepSize;
+	Fix ydy = -c * stepSize;
+	Fix xdx = c * stepSize;
+	Fix xdy = s * stepSize;
 
 	// GS 12-26-02  Oh my.  The step size has been fudged down to ensure that a cell is not jumped over,
 	// but then the original step size was used to determine the number of steps.  This error gets
 	// more pronounced on bigger buildings.  ie a 100 X 160 registers cells for a 80 x 100.  If you
 	// fudge one, you have to fudge the other.
-//	Real stepSizeInvTimes2 = 2.0f * ThePartitionManager->getCellSizeInv();
-	Real stepSizeInvTimes2 = 2.0f * (1.0f / stepSize);
 
 	/*
 		srj fixes subtle bug: need +1 to get all of misaligned geometries accted for.
 	*/
-//	Int numStepsX = REAL_TO_INT_CEIL(halfsizeX * stepSizeInvTimes2) + 1;
-//	Int numStepsY = REAL_TO_INT_CEIL(halfsizeY * stepSizeInvTimes2) + 1;
-	Int numStepsX = REAL_TO_INT_CEIL(halfsizeX * stepSizeInvTimes2);
-	Int numStepsY = REAL_TO_INT_CEIL(halfsizeY * stepSizeInvTimes2);
+	Int numStepsX = PartitionManager_cellsIn(halfsizeX * Fix(2), stepSize, true);
+	Int numStepsY = PartitionManager_cellsIn(halfsizeY * Fix(2), stepSize, true);
 	// GS 12-26-02  Oh my part 2.  Now that we are no longer greatly underestimating our COI imprint,
-	// we don't need this fudge.  The fudge is not in the calcMaxCOIForShape, so it just results in 
+	// we don't need this fudge.  The fudge is not in the calcMaxCOIForShape, so it just results in
 	// good COIs getting dropped since we didn't allocate enough to handle this fudge.
 
-	Real tl_x = centerX - halfsizeX*c - halfsizeY*s;
-	Real tl_y = centerY + halfsizeY*c - halfsizeX*s;
+	Fix tl_x = centerX - halfsizeX*c - halfsizeY*s;
+	Fix tl_y = centerY + halfsizeY*c - halfsizeX*s;
 
 	for (Int iy = 0; iy < numStepsY; ++iy, tl_x += ydx, tl_y += ydy)
 	{
-		Real x = tl_x;
-		Real y = tl_y;
+		Fix x = tl_x;
+		Fix y = tl_y;
 		for (Int ix = 0; ix < numStepsX; ++ix, x += xdx, y += xdy)
 		{
 			Int cellx, celly;
-			ThePartitionManager->worldToCell(x, y, &cellx, &celly);
+			ThePartitionManager->worldToCellFix(x, y, &cellx, &celly);
 			PartitionCell *cell = ThePartitionManager->getCellAt(cellx, celly);	// might be null if off the edge
 			if (cell)
 			{
@@ -1817,15 +1813,15 @@ void PartitionData::hLineCircle(Int x1, Int x2, Int y)
 
 // -----------------------------------------------------------------------------
 void PartitionData::doCircleFill(
-	Real centerX,
-	Real centerY,
-	Real radius
+	Fix centerX,
+	Fix centerY,
+	Fix radius
 )
 {
 	DEBUG_ASSERTCRASH(m_coiInUseCount == 0, ("expected no coi in use here"));
 
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 
 	Int cellRadius = ThePartitionManager->worldToCellDist(radius);
 	if (cellRadius < 1) 
@@ -1854,15 +1850,15 @@ void PartitionData::doCircleFill(
 // it claims cells the object does not reach and misses cells it does, most visibly for radii of
 // about 20 to 40 (one to two cells).  This one keeps a cell if the circle overlaps the cell's
 // square at all.
-void PartitionData::doCircleFillPrecise(Real centerX, Real centerY, Real radius)
+void PartitionData::doCircleFillPrecise(Fix centerX, Fix centerY, Fix radius)
 {
 	DEBUG_ASSERTCRASH(m_coiInUseCount == 0, ("expected no coi in use here"));
 
 	Int minCellX, minCellY, maxCellX, maxCellY;
-	ThePartitionManager->worldToCell(centerX - radius, centerY - radius, &minCellX, &minCellY);
-	ThePartitionManager->worldToCell(centerX + radius, centerY + radius, &maxCellX, &maxCellY);
+	ThePartitionManager->worldToCellFix(centerX - radius, centerY - radius, &minCellX, &minCellY);
+	ThePartitionManager->worldToCellFix(centerX + radius, centerY + radius, &maxCellX, &maxCellY);
 
-	const Real halfCell = ThePartitionManager->getCellSize() * 0.5f;
+	const Fix halfCell = ThePartitionManager->getCellSizeFix() * 0.5_fx;
 
 	for (Int x = minCellX; x <= maxCellX; ++x)
 	{
@@ -1872,18 +1868,14 @@ void PartitionData::doCircleFillPrecise(Real centerX, Real centerY, Real radius)
 			if (cell == NULL)
 				continue;
 
-			Real cellCenterX, cellCenterY;
+			Fix cellCenterX, cellCenterY;
 			ThePartitionManager->getCellCenterPos(x, y, cellCenterX, cellCenterY);
 
 			// distance from the circle's center to the closest point of the cell's square
-			Real dx = (Real)fabs(centerX - cellCenterX) - halfCell;
-			Real dy = (Real)fabs(centerY - cellCenterY) - halfCell;
-			if (dx < 0.0f)
-				dx = 0.0f;
-			if (dy < 0.0f)
-				dy = 0.0f;
+			Fix dx = fixMax(fixAbs(centerX - cellCenterX) - halfCell, Fix(0));
+			Fix dy = fixMax(fixAbs(centerY - cellCenterY) - halfCell, Fix(0));
 
-			if (sqr(dx) + sqr(dy) < sqr(radius))
+			if (dx*dx + dy*dy < radius*radius)
 				addSubPixToCoverage(cell);
 		}
 	}
@@ -1891,14 +1883,14 @@ void PartitionData::doCircleFillPrecise(Real centerX, Real centerY, Real radius)
 
 // -----------------------------------------------------------------------------
 void PartitionData::doSmallFill(
-	Real centerX,
-	Real centerY,
-	Real radius
+	Fix centerX,
+	Fix centerY,
+	Fix radius
 )
 {
 	DEBUG_ASSERTCRASH(m_coiInUseCount == 0, ("expected no coi in use here"));
 
-	Real halfCellSize = ThePartitionManager->getCellSize() * 0.5f;
+	Fix halfCellSize = ThePartitionManager->getCellSizeFix() * 0.5_fx;
 	if (radius > halfCellSize)
 	{
 		DEBUG_CRASH(("object is too large to use a 'small' geometry, truncating size to cellsize\n"));
@@ -1906,8 +1898,8 @@ void PartitionData::doSmallFill(
 	}
 
 	Int cx1, cy1, cx2, cy2;
-	ThePartitionManager->worldToCell(centerX - radius, centerY - radius, &cx1, &cy1);
-	ThePartitionManager->worldToCell(centerX + radius, centerY + radius, &cx2, &cy2);
+	ThePartitionManager->worldToCellFix(centerX - radius, centerY - radius, &cx1, &cy1);
+	ThePartitionManager->worldToCellFix(centerX + radius, centerY + radius, &cx2, &cy2);
 
 	DEBUG_ASSERTCRASH(absInt(cx2-cx1)<=1,("bad cx"));
 	DEBUG_ASSERTCRASH(absInt(cy2-cy1)<=1,("bad cy"));
@@ -2018,18 +2010,28 @@ Bool PartitionData::collidesWith(const PartitionData *that, CollideLocAndNormal 
 
 //-----------------------------------------------------------------------------
 /* See if thisObj collides with geom at pos & angle. */
-Bool PartitionManager::geomCollidesWithGeom(const Coord3D* pos1, 
+Bool PartitionManager::geomCollidesWithGeom(const Coord3D* pos1,
 		const GeometryInfo& geom1,
 		Real angle1,
-		const Coord3D* pos2, 
+		const Coord3D* pos2,
 		const GeometryInfo& geom2,
 		Real angle2) const
 {
-	// P9: this is float in the shared header; its arguments cross over here
 	FCoord3D fpos1 = fcoordFromCoord3D(pos1);
 	FCoord3D fpos2 = fcoordFromCoord3D(pos2);
-	CollideInfo thisInfo(&fpos1, geom1, fixFromReal(angle1));
-	CollideInfo thatInfo(&fpos2, geom2, fixFromReal(angle2));
+	return geomCollidesWithGeomFix(&fpos1, geom1, fixFromReal(angle1), &fpos2, geom2, fixFromReal(angle2));
+}
+
+//-----------------------------------------------------------------------------
+Bool PartitionManager::geomCollidesWithGeomFix(const FCoord3D* pos1,
+		const GeometryInfo& geom1,
+		Fix angle1,
+		const FCoord3D* pos2,
+		const GeometryInfo& geom2,
+		Fix angle2) const
+{
+	CollideInfo thisInfo(pos1, geom1, angle1);
+	CollideInfo thatInfo(pos2, geom2, angle2);
 
 	// invariant for all geometries: first do z collision check.
 	if (thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePositionFix() >= thatInfo.position.z &&
@@ -2058,32 +2060,32 @@ void PartitionData::updateCellsTouched()
 {
 	GeometryType geom;
 	Bool isSmall;
-	Coord3D pos;
-	Real angle,majorRadius,minorRadius;
+	FCoord3D pos;
+	Fix angle,majorRadius,minorRadius;
 
 
 	Object *obj = getObject();
 	DEBUG_ASSERTCRASH(obj != NULL || m_ghostObject != NULL, ("must be attached to an Object here 1"));
 
 	if (obj)
-	{	
+	{
 		//we have no object using this PartitionData but we still have a GhostObject so copy its data.
 		geom = obj->getGeometryInfo().getGeomType();
 		isSmall = obj->getGeometryInfo().getIsSmall();
-		// P9: the cell grid and the ghost object beside it are float
-		pos = obj->getPositionFix()->toCoord3D();
-		angle = fixToReal(obj->getOrientationFix());
-		majorRadius = fixToReal(obj->getGeometryInfo().getMajorRadiusFix());
-		minorRadius = fixToReal(obj->getGeometryInfo().getMinorRadiusFix());
+		pos = *obj->getPositionFix();
+		angle = obj->getOrientationFix();
+		majorRadius = obj->getGeometryInfo().getMajorRadiusFix();
+		minorRadius = obj->getGeometryInfo().getMinorRadiusFix();
 	}
 	else if (m_ghostObject)
 	{
+		// the ghost object is the client's, and float
 		geom = m_ghostObject->getGeometryType();
 		isSmall = m_ghostObject->getGeometrySmall();
-		pos = *m_ghostObject->getParentPosition();
-		angle = m_ghostObject->getParentAngle();
-		majorRadius = m_ghostObject->getGeometryMajorRadius();
-		minorRadius = m_ghostObject->getGeometryMinorRadius();
+		pos = fcoordFromCoord3D(m_ghostObject->getParentPosition());
+		angle = fixFromReal(m_ghostObject->getParentAngle());
+		majorRadius = fixFromReal(m_ghostObject->getGeometryMajorRadius());
+		minorRadius = fixFromReal(m_ghostObject->getGeometryMinorRadius());
 	}
 
 	removeAllTouchedCells();
@@ -2111,7 +2113,7 @@ void PartitionData::updateCellsTouched()
 	}
 
 	Int currentCellIndexX, currentCellIndexY;
-	ThePartitionManager->worldToCell( pos.x, pos.y, &currentCellIndexX, &currentCellIndexY );
+	ThePartitionManager->worldToCellFix( pos.x, pos.y, &currentCellIndexX, &currentCellIndexY );
 	const PartitionCell *currentCell = ThePartitionManager->getCellAt( currentCellIndexX, currentCellIndexY );
 	if(obj && currentCell != m_lastCell )
 	{
@@ -2164,7 +2166,7 @@ static AsciiString theObjName;
 #endif
 
 //-----------------------------------------------------------------------------
-Int PartitionData::calcMaxCoiForShape(GeometryType geom, Real majorRadius, Real minorRadius, Bool isSmall)
+Int PartitionData::calcMaxCoiForShape(GeometryType geom, Fix majorRadius, Fix minorRadius, Bool isSmall)
 {
 	Int result;
 
@@ -2188,13 +2190,13 @@ Int PartitionData::calcMaxCoiForShape(GeometryType geom, Real majorRadius, Real 
 			{
 				// note that majorRadius is a radius, not a diameter.
 				// this actually allocates a few too many, but that's ok.
-				Int cells = ThePartitionManager->worldToCellDist(majorRadius*2) + 1;
+				Int cells = ThePartitionManager->worldToCellDist(majorRadius*Fix(2)) + 1;
 				result = cells * cells;
 			}
 			case GEOMETRY_BOX:
 			{
-				Real diagonal = (Real)(sqrtf(majorRadius*majorRadius + minorRadius*minorRadius));
-				Int cells = ThePartitionManager->worldToCellDist(diagonal*2) + 1;
+				Fix diagonal = fixSqrt(majorRadius*majorRadius + minorRadius*minorRadius);
+				Int cells = ThePartitionManager->worldToCellDist(diagonal*Fix(2)) + 1;
 				result = cells * cells;
 			}
 		};
@@ -2211,9 +2213,8 @@ Int PartitionData::calcMaxCoiForObject()
 	DEBUG_ASSERTCRASH(obj != NULL, ("must be attached to an Object here 2"));
 	
 	GeometryType geom = obj->getGeometryInfo().getGeomType();
-	// P9: calcMaxCoiForShape is float in the shared header
-	Real majorRadius = fixToReal(obj->getGeometryInfo().getMajorRadiusFix());
-	Real minorRadius = fixToReal(obj->getGeometryInfo().getMinorRadiusFix());
+	Fix majorRadius = obj->getGeometryInfo().getMajorRadiusFix();
+	Fix minorRadius = obj->getGeometryInfo().getMinorRadiusFix();
 	Bool isSmall = obj->getGeometryInfo().getIsSmall();
 #if defined(_DEBUG) || defined(_INTERNAL)
 theObjName = obj->getTemplate()->getName();
@@ -2338,7 +2339,7 @@ void PartitionData::attachToGhostObject(GhostObject* object)
 	DEBUG_ASSERTCRASH(m_coiInUseCount == 0, ("hmm, coi count mismatch"));
 	freeCoiArray();
 
-	m_coiArrayCount = calcMaxCoiForShape(object->getGeometryType(), object->getGeometryMajorRadius(), object->getGeometryMinorRadius(),object->getGeometrySmall());
+	m_coiArrayCount = calcMaxCoiForShape(object->getGeometryType(), fixFromReal(object->getGeometryMajorRadius()), fixFromReal(object->getGeometryMinorRadius()),object->getGeometrySmall());
 	m_coiArray = MSGNEW("PartitionManager_COI") CellAndObjectIntersection[m_coiArrayCount];	// may throw!
 	m_coiInUseCount = 0;
 	makeDirty(true);
@@ -2578,6 +2579,8 @@ PartitionManager::PartitionManager()
 {
 	m_moduleList = NULL;
 	m_cellSize = m_cellSizeInv = 0.0f;
+	m_cellSizeFix = Fix(0);
+	m_worldLoFix.zero();
 	m_cellCountX = 0;
 	m_cellCountY = 0;
 	m_totalCellCount = 0;
@@ -2601,22 +2604,21 @@ PartitionManager::~PartitionManager()
 
 //-----------------------------------------------------------------------------
 #ifdef PM_CACHE_TERRAIN_HEIGHT
-static void calcHeights(const Region3D& world, Real cellSize, Int x, Int y, Real& loZ, Real& hiZ)
+static void calcHeights(const FCoord2D& worldLo, Fix cellSize, Int x, Int y, Fix& loZ, Fix& hiZ)
 {
 	DEBUG_ASSERTCRASH(TheTerrainLogic, ("no TheTerrainLogic"));
-	Real xbase = world.lo.x + (x * cellSize);
-	Real ybase = world.lo.y + (y * cellSize);
-	const Real ROUGH_STEP_SIZE = MAP_XY_FACTOR;	// no point in stepping smaller than grid scale
-	Real numSteps = ceilf(cellSize / ROUGH_STEP_SIZE);
-	Real step = cellSize / numSteps;
-	loZ = HUGE_DIST;		// huge positive
-	hiZ = -HUGE_DIST;		// huge negative
-	for (Real yy = 0; yy <= cellSize; yy += step) 
+	Fix xbase = worldLo.x + (Fix(x) * cellSize);
+	Fix ybase = worldLo.y + (Fix(y) * cellSize);
+	const Fix ROUGH_STEP_SIZE = Fix(10);	// MAP_XY_FACTOR: no point in stepping smaller than grid scale
+	Int numSteps = PartitionManager_cellsIn(cellSize, ROUGH_STEP_SIZE, true);
+	Fix step = cellSize / Fix(numSteps);
+	loZ = HUGE_DIST_FIX;		// huge positive
+	hiZ = -HUGE_DIST_FIX;		// huge negative
+	for (Fix yy = Fix(0); yy <= cellSize; yy += step)
 	{
-		for (Real xx = 0; xx <= cellSize; xx += step) 
+		for (Fix xx = Fix(0); xx <= cellSize; xx += step)
 		{
-			// P9: the cells' cached extremes are float in the shared header
-			Real h = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( xbase + xx ), fixFromReal( ybase + yy ) ) );
+			Fix h = TheTerrainLogic->getGroundHeightFix( xbase + xx, ybase + yy );
 			if (h < loZ) loZ = h;
 			if (h > hiZ) hiZ = h;
 		}
@@ -2632,6 +2634,8 @@ void PartitionManager::init()
 		m_cellSize = 1.0;
 
 	m_cellSizeInv = (Real)(1.0 / m_cellSize);
+	m_cellSizeFix = fixFromReal(m_cellSize);
+	m_worldLoFix.zero();
 
 	DEBUG_ASSERTCRASH(m_cells == NULL, ("double init"));
 
@@ -2646,6 +2650,7 @@ void PartitionManager::init()
 			m_worldExtents.hi.x = m_worldExtents.lo.x + 1.0f;
 		if (m_worldExtents.height() < 1.0f)
 			m_worldExtents.hi.y = m_worldExtents.lo.y + 1.0f;
+		m_worldLoFix.set(fixFromReal(m_worldExtents.lo.x), fixFromReal(m_worldExtents.lo.y));
 		m_cellCountX = REAL_TO_INT_CEIL(m_worldExtents.width() * m_cellSizeInv);
 		m_cellCountY = REAL_TO_INT_CEIL(m_worldExtents.height() * m_cellSizeInv);
 		m_totalCellCount = m_cellCountX * m_cellCountY;
@@ -2655,8 +2660,8 @@ void PartitionManager::init()
 			for (Int y = 0; y < m_cellCountY; y++)
 			{
 #ifdef PM_CACHE_TERRAIN_HEIGHT
-				Real loZ, hiZ;
-				calcHeights(m_worldExtents, m_cellSize, x, y, loZ, hiZ);
+				Fix loZ, hiZ;
+				calcHeights(m_worldLoFix, m_cellSizeFix, x, y, loZ, hiZ);
 				getCellAt(x, y)->init(x, y, loZ, hiZ);
 #else
 				getCellAt(x, y)->init(x, y);
@@ -2672,6 +2677,8 @@ void PartitionManager::init()
 	else
 	{
 		m_cellSize = m_cellSizeInv = 0.0f;
+		m_cellSizeFix = Fix(0);
+		m_worldLoFix.zero();
 		m_cellCountX = 0;
 		m_cellCountY = 0;
 		m_totalCellCount = 0;
@@ -2740,6 +2747,8 @@ void PartitionManager::shutdown()
 	m_cells = NULL;
 
 	m_cellSize = m_cellSizeInv = 0.0f;
+	m_cellSizeFix = Fix(0);
+	m_worldLoFix.zero();
 	m_cellCountX = 0;
 	m_cellCountY = 0;
 	m_totalCellCount = 0;
@@ -3297,7 +3306,7 @@ Object *PartitionManager::getClosestObjectsFix(
 
 	Int cellCenterX, cellCenterY;
 	// ponytail: the cell grid is still float; P5 gives world-to-cell its own fixed floor
-	worldToCell(fixToReal(objPos->x), fixToReal(objPos->y), &cellCenterX, &cellCenterY);
+	worldToCellFix(objPos->x, objPos->y, &cellCenterX, &cellCenterY);
 
 	Object* closestObj = NULL;
 	Fix closestDistSqr = maxDist * maxDist;	// if it's not closer than this, we shouldn't consider it anyway...
@@ -3310,7 +3319,7 @@ Object *PartitionManager::getClosestObjectsFix(
 	if (maxDist < HUGE_DIST_FIX)
 	{
 		// don't go outwards any farther than necessary.
-		maxRadius = minInt(m_maxGcoRadius, worldToCellDist(fixToReal(maxDist)));
+		maxRadius = minInt(m_maxGcoRadius, worldToCellDist(maxDist));
 	}
 #if defined(INTENSE_DEBUG)
 	/*
@@ -3580,10 +3589,22 @@ Object *PartitionManager::getClosestObject(
 }
 
 //-----------------------------------------------------------------------------
+void PartitionManager::getVectorToFix(const Object *obj, const Object *otherObj, DistanceCalculationType dc, FCoord3D& vec)
+{
+	getDistanceSquaredFix(obj, otherObj, dc, &vec);
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager::getVectorToFix(const Object *obj, const FCoord3D *pos, DistanceCalculationType dc, FCoord3D& vec)
+{
+	getDistanceSquaredFix(obj, pos, dc, &vec);
+}
+
+//-----------------------------------------------------------------------------
 void PartitionManager::getVectorTo(const Object *obj, const Object *otherObj, DistanceCalculationType dc, Coord3D& vec)
 {
 	FCoord3D fvec;
-	getDistanceSquaredFix(obj, otherObj, dc, &fvec);
+	getVectorToFix(obj, otherObj, dc, fvec);
 	vec = fvec.toCoord3D();
 }
 
@@ -3592,7 +3613,7 @@ void PartitionManager::getVectorTo(const Object *obj, const Coord3D *pos, Distan
 {
 	FCoord3D fvec;
 	FCoord3D fpos = fcoordFromCoord3D(pos);
-	getDistanceSquaredFix(obj, &fpos, dc, &fvec);
+	getVectorToFix(obj, &fpos, dc, fvec);
 	vec = fvec.toCoord3D();
 }
 
@@ -3641,11 +3662,11 @@ Real PartitionManager::getGoalDistanceSquared(const Object *obj, const Coord3D *
 /* The signed angle from the object's heading to pos, in (-PI, PI].  EA took the acos of the dot of
 	 the two unit vectors and signed it with their cross product; the atan2 of cross over dot is the
 	 same angle, and needs neither the normalizing nor the clamp. */
-static Fix relativeAngle2DFix( const Object *obj, const FCoord3D &pos )
+Fix PartitionManager::getRelativeAngle2DFix( const Object *obj, const FCoord3D *pos )
 {
 	const FCoord3D *objPos = obj->getPositionFix();
-	Fix vx = pos.x - objPos->x;
-	Fix vy = pos.y - objPos->y;
+	Fix vx = pos->x - objPos->x;
+	Fix vy = pos->y - objPos->y;
 	if (vx == Fix(0) && vy == Fix(0))
 		return Fix(0);
 
@@ -3656,15 +3677,16 @@ static Fix relativeAngle2DFix( const Object *obj, const FCoord3D &pos )
 }
 
 //-----------------------------------------------------------------------------
-Real PartitionManager::getRelativeAngle2D( const Object *obj, const Object *otherObj )
+Fix PartitionManager::getRelativeAngle2DFix( const Object *obj, const Object *otherObj )
 {
-	return fixToReal( relativeAngle2DFix( obj, *otherObj->getPositionFix() ) );
+	return getRelativeAngle2DFix( obj, otherObj->getPositionFix() );
 }
 
 //-----------------------------------------------------------------------------
 Real PartitionManager::getRelativeAngle2D( const Object *obj, const Coord3D *pos )
 {
-	return fixToReal( relativeAngle2DFix( obj, fcoordFromCoord3D( pos ) ) );
+	FCoord3D fpos = fcoordFromCoord3D( pos );
+	return fixToReal( getRelativeAngle2DFix( obj, &fpos ) );
 }
 
 //-----------------------------------------------------------------------------
@@ -3693,13 +3715,13 @@ SimpleObjectIterator *PartitionManager::iterateObjectsInRange(
 }
 
 //-----------------------------------------------------------------------------
-SimpleObjectIterator* PartitionManager::iteratePotentialCollisions(
-	const Coord3D* pos, 
+SimpleObjectIterator* PartitionManager::iteratePotentialCollisionsFix(
+	const FCoord3D* pos,
 	const GeometryInfo& geom,
-	Real angle,
+	Fix angle,
 	Bool use2D
 )
-{	
+{
 	Fix maxDist = geom.getBoundingSphereRadiusFix() * 1.1_fx;	// just a little slop
 
 	MemoryPoolObjectHolder iterHolder;
@@ -3709,11 +3731,17 @@ SimpleObjectIterator* PartitionManager::iteratePotentialCollisions(
 	PartitionFilterWouldCollide filter(*pos, geom, angle, true);
 	PartitionFilter *filters[] = { &filter, NULL };
 
-	FCoord3D fpos = fcoordFromCoord3D(pos);
-	getClosestObjectsFix(NULL, &fpos, maxDist, use2D ? FROM_BOUNDINGSPHERE_2D : FROM_BOUNDINGSPHERE_3D, filters, iter, NULL, NULL);
+	getClosestObjectsFix(NULL, pos, maxDist, use2D ? FROM_BOUNDINGSPHERE_2D : FROM_BOUNDINGSPHERE_3D, filters, iter, NULL, NULL);
 
 	iterHolder.release();
 	return iter;
+}
+
+//-----------------------------------------------------------------------------
+SimpleObjectIterator* PartitionManager::iteratePotentialCollisions( const Coord3D* pos, const GeometryInfo& geom, Real angle, Bool use2D )
+{
+	FCoord3D fpos = fcoordFromCoord3D(pos);
+	return iteratePotentialCollisionsFix(&fpos, geom, fixFromReal(angle), use2D);
 }
 
 //-----------------------------------------------------------------------------
@@ -3765,21 +3793,17 @@ SimpleObjectIterator *PartitionManager::iterateAllObjects(PartitionFilter **filt
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-Bool PartitionManager::tryPosition( const Coord3D *center,
-																		Real dist,
-																		Real angle,
+Bool PartitionManager::tryPosition( const FCoord3D *center,
+																		Fix dist,
+																		Fix angle,
 																		const FindPositionOptions *options,
-																		Coord3D *result )
+																		FCoord3D *result )
 {
 
-	// compute the spot on the terrain we've picked, in fixed point.  P9: findPositionAround, its
-	// options and its result are float in the shared header, so they cross over here
-	FCoord3D fcenter = fcoordFromCoord3D( center );
-	Fix fdist = fixFromReal( dist );
-	Fix fangle = fixFromReal( angle );
+	// compute the spot on the terrain we've picked
 	FCoord3D fpos;
-	fpos.x = fdist * fixCos( fangle ) + fcenter.x;
-	fpos.y = fdist * fixSin( fangle ) + fcenter.y;
+	fpos.x = dist * fixCos( angle ) + center->x;
+	fpos.y = dist * fixSin( angle ) + center->y;
 
 	PathfindLayerEnum layer = LAYER_GROUND;
 	if ((options->flags & FPF_USE_HIGHEST_LAYER) != 0)
@@ -3797,10 +3821,10 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 		fpos.z = TheTerrainLogic->getGroundHeightFix( fpos.x, fpos.y );
 	}
 
-	if (fixAbs(fpos.z - fcenter.z) > fixFromReal( options->maxZDelta ))
+	if (fixAbs(fpos.z - center->z) > options->maxZDelta)
 		return FALSE;
 
-	Coord3D pos = fpos.toCoord3D();	// for the float queries below and the result
+	Coord3D pos = fpos.toCoord3D();	// for the cliff map and the pathfinder, which are float
 
 	//
 	// we don't usually find positions on cliffs.
@@ -3815,8 +3839,8 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 	// someday, add bit options for this, like for water.
 	//
 	{
-		Int cellX = REAL_TO_INT_FLOOR(pos.x / PATHFIND_CELL_SIZE);	// P5: the pathfinder's own cell math
-		Int cellY = REAL_TO_INT_FLOOR(pos.y / PATHFIND_CELL_SIZE);
+		Int cellX = PartitionManager_cellsIn(fpos.x, Fix(PATHFIND_CELL_SIZE), false);
+		Int cellY = PartitionManager_cellsIn(fpos.y, Fix(PATHFIND_CELL_SIZE), false);
 		PathfindCell* cell = TheAI->pathfinder()->getCell(layer, cellX, cellY);
 		if (!cell || cell->getType() == PathfindCell::CELL_IMPASSABLE)
 		{
@@ -3854,8 +3878,8 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 		// iterate the potential collisions at this location using a 
 		// very small sphere geometry around the point
 		//
-		GeometryInfo geometry( GEOMETRY_SPHERE, TRUE, 5.0f, 5.0f, 5.0f );
-		ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisions( &pos, geometry, angle, true );
+		GeometryInfo geometry( GEOMETRY_SPHERE, TRUE, Fix( 5 ), Fix( 5 ), Fix( 5 ) );
+		ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( &fpos, geometry, angle, true );
 		MemoryPoolObjectHolder hold( iter );
 //	Bool overlap = FALSE;
 
@@ -3939,7 +3963,7 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 	}  // end if
 
 	// save result and return TRUE for position found
-	*result = pos;
+	*result = fpos;
 	return TRUE;
 
 }  // end tryPosition
@@ -3948,7 +3972,7 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 // the following determines how fast we expand our concentric ring search for the
 // find position methods
 //
-static Real ringSpacing = 5.0f;
+static const Fix ringSpacing = Fix( 5 );
 
 //-------------------------------------------------------------------------------------------------
 /** This method will attempt to find a legal postion from the center position specified,
@@ -3958,9 +3982,9 @@ static Real ringSpacing = 5.0f;
 	* return FALSE no legal position exists or invalid params 
 	*/
 //-------------------------------------------------------------------------------------------------
-Bool PartitionManager::findPositionAround( const Coord3D *center, 
-																					 const FindPositionOptions *options, 
-																					 Coord3D *result )
+Bool PartitionManager::findPositionAround( const FCoord3D *center,
+																					 const FindPositionOptions *options,
+																					 FCoord3D *result )
 {
 
 	// sanity
@@ -3969,9 +3993,12 @@ Bool PartitionManager::findPositionAround( const Coord3D *center,
 
 	Region3D extent;
 	TheTerrainLogic->getMaximumPathfindExtent(&extent);
+	FRegion3D fextent;	// the extent is the terrain's, in float
+	fextent.lo = fcoordFromCoord3D(extent.lo);
+	fextent.hi = fcoordFromCoord3D(extent.hi);
 	// If the goal is off the map, it is a scripted setup, so just
 	// use the center.
-	if (!extent.isInRegionNoZ(center)) {
+	if (!fextent.isInRegionNoZ(*center)) {
 		*result = *center;
 		return true;
 	}
@@ -3981,25 +4008,25 @@ Bool PartitionManager::findPositionAround( const Coord3D *center,
 										 ("PartitionManager::findPositionAround - The options FPF_WATER_ONLY and FPF_IGNORE_WATER are mutually exclusive.  You cannot use them together\n") );
 
 	// pick a random angle from the center location to start at
-	Real startAngle;
+	Fix startAngle;
 	if( options->startAngle == RANDOM_START_ANGLE )
-		startAngle = GameLogicRandomValueReal( 0.0f, TWO_PI );
+		startAngle = fixFromReal( GameLogicRandomValueReal( 0.0f, TWO_PI ) );
 	else
 		startAngle = options->startAngle;
 
 	// start the search at the most inner ring (minRadius) and expand to outer most ring (maxRadius)
-	for( Real dist = options->minRadius; dist <= options->maxRadius; dist += ringSpacing )
+	for( Fix dist = options->minRadius; dist <= options->maxRadius; dist += ringSpacing )
 	{
 
 		//
 		// given the spacing that we've been using for the angles on the 'idea' inner circle,
 		// we will need more points on larger circles to cover more ground
 		//
-		Real angleSpacing;
+		Fix angleSpacing;
 		if( dist == options->minRadius )
-			angleSpacing = TWO_PI;
+			angleSpacing = FIX_TWO_PI;
 		else
-			angleSpacing = (ringSpacing / (dist + 1.0f)) * (TWO_PI / 6.0f);  // larger float = more samples
+			angleSpacing = (ringSpacing / (dist + Fix(1))) * (FIX_TWO_PI / Fix(6));  // larger float = more samples
 
 		//
 		// on this "ring", try all the angles available to us in a circle ... we'll start at
@@ -4009,12 +4036,12 @@ Bool PartitionManager::findPositionAround( const Coord3D *center,
 		//
 
 		// how many samples will we test
-		Int samples = REAL_TO_INT_CEIL( (TWO_PI / angleSpacing) / 2.0f);
+		Int samples = PartitionManager_cellsIn( FIX_TWO_PI / angleSpacing, Fix(2), true );
 		for( Int i = 0; i < samples; ++i )
 		{
 
 			// try one "side"
-			if( tryPosition( center, dist, startAngle + angleSpacing * i, options, result ) == TRUE )
+			if( tryPosition( center, dist, startAngle + angleSpacing * Fix(i), options, result ) == TRUE )
 				return TRUE;
 
 			//
@@ -4022,7 +4049,7 @@ Bool PartitionManager::findPositionAround( const Coord3D *center,
 			// the same so we won't test it again in that case
 			//
 			if( i != 0 )
-				if( tryPosition( center, dist, startAngle - angleSpacing * i, options, result ) == TRUE )
+				if( tryPosition( center, dist, startAngle - angleSpacing * Fix(i), options, result ) == TRUE )
 					return TRUE;	
 
 		}  // end if
@@ -4040,10 +4067,10 @@ Bool PartitionManager::findPositionAround( const Coord3D *center,
 // is in Object where Allies make sense.  AddLooker literally just adds a looker for the player you specify.
 // This way, Full map reveals and Observer mode active look will not carry over to all 
 // allies.  They'll use the RevealWholeDamnMap series, which call addLooker directly.
-void PartitionManager::doShroudReveal(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask) 
+void PartitionManager::doShroudReveal(Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask) 
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 
 	Int cellRadius = ThePartitionManager->worldToCellDist(radius);
 	if (cellRadius < 1) 
@@ -4110,10 +4137,10 @@ void PartitionManager::resetPendingUndoShroudRevealQueue()
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::undoShroudReveal(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask) 
+void PartitionManager::undoShroudReveal(Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask) 
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 
 	Int cellRadius = ThePartitionManager->worldToCellDist(radius);
 	if (cellRadius < 1) 
@@ -4243,7 +4270,7 @@ static void hLineRecordedLooker( Int x1, Int x2, Int y, void *lookersVoid )
 }
 
 //-----------------------------------------------------------------------------
-static Int sightCellRadius( Real radius )
+static Int sightCellRadius( Fix radius )
 {
 	return max( ThePartitionManager->worldToCellDist( radius ), 1 );
 }
@@ -4252,7 +4279,7 @@ static Int sightCellRadius( Real radius )
 void PartitionManager::applyRecordedReveal( const SightingInfo *sighting, Bool reveal )
 {
 	Int cellCenterX, cellCenterY;
-	worldToCell( sighting->m_where.x, sighting->m_where.y, &cellCenterX, &cellCenterY );
+	worldToCellFix( sighting->m_where.x, sighting->m_where.y, &cellCenterX, &cellCenterY );
 	const Int cellRadius = sightCellRadius( sighting->m_howFar );
 
 	RecordedLookers lookers;
@@ -4280,9 +4307,12 @@ void PartitionManager::applyRecordedReveal( const SightingInfo *sighting, Bool r
 	cell and can miss the middle of one it crosses. */
 static Real sightGroundHeight( PartitionCell *cell )
 {
-	Real height = cell->getHiTerrain();
-	Real centerX, centerY;
-	cell->getCellCenterPos( centerX, centerY );
+	// P9: the sight margins and the bridges are float
+	Real height = fixToReal( cell->getHiTerrain() );
+	Fix fxCenterX, fxCenterY;
+	cell->getCellCenterPos( fxCenterX, fxCenterY );
+	const Real centerX = fixToReal( fxCenterX );
+	const Real centerY = fixToReal( fxCenterY );
 	const Real halfCell = 0.5f * ThePartitionManager->getCellSize();
 
 	for( Bridge *bridge = TheTerrainLogic->getFirstBridge(); bridge; bridge = bridge->getNext() )
@@ -4334,10 +4364,10 @@ static Real sightBlockingHeight( PartitionCell *cell, const Object *looker, cons
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::doBlockedShroudReveal( SightingInfo *sighting, const Object *looker, Real flatRange )
+void PartitionManager::doBlockedShroudReveal( SightingInfo *sighting, const Object *looker, Fix flatRange )
 {
 	Int cellCenterX, cellCenterY;
-	worldToCell( sighting->m_where.x, sighting->m_where.y, &cellCenterX, &cellCenterY );
+	worldToCellFix( sighting->m_where.x, sighting->m_where.y, &cellCenterX, &cellCenterY );
 	const Int cellRadius = sightCellRadius( sighting->m_howFar );
 	const Object *lookerContainer = looker->getContainedBy();
 
@@ -4358,7 +4388,8 @@ void PartitionManager::doBlockedShroudReveal( SightingInfo *sighting, const Obje
 		}
 	}
 
-	PartitionManager_findSightMargins( &heights[0], cellRadius, m_cellSize, sighting->m_where.z, &sightMargin[0] );
+	// P9: the sight margins are float
+	PartitionManager_findSightMargins( &heights[0], cellRadius, m_cellSize, fixToReal( sighting->m_where.z ), &sightMargin[0] );
 
 	// r * ( r + 1 ) rather than r squared: the circle the reveal is drawn with is a Bresenham one,
 	// and on flat ground this has to keep every cell of it
@@ -4371,7 +4402,8 @@ void PartitionManager::doBlockedShroudReveal( SightingInfo *sighting, const Obje
 		{
 			const Int offsetX = cell % side - cellRadius;
 			const Int offsetY = cell / side - cellRadius;
-			const Int reachCells = sightCellRadius( Weapon_elevatedRange( looker, flatRange, heights[ cell ] ) );
+			// P6: Weapon_elevatedRange is float
+			const Int reachCells = sightCellRadius( fixFromReal( Weapon_elevatedRange( looker, fixToReal( flatRange ), heights[ cell ] ) ) );
 			revealed = offsetX * offsetX + offsetY * offsetY <= reachCells * ( reachCells + 1 );
 		}
 		sighting->m_revealedCells[ cell ] = revealed;
@@ -4381,10 +4413,10 @@ void PartitionManager::doBlockedShroudReveal( SightingInfo *sighting, const Obje
 }
 	
 //-----------------------------------------------------------------------------
-void PartitionManager::doShroudCover(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask) 
+void PartitionManager::doShroudCover(Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask) 
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 
 	Int cellRadius = ThePartitionManager->worldToCellDist(radius);
 	if (cellRadius < 1) 
@@ -4405,10 +4437,10 @@ void PartitionManager::doShroudCover(Real centerX, Real centerY, Real radius, Pl
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::undoShroudCover(Real centerX, Real centerY, Real radius, PlayerMaskType playerMask) 
+void PartitionManager::undoShroudCover(Fix centerX, Fix centerY, Fix radius, PlayerMaskType playerMask) 
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 
 	Int cellRadius = ThePartitionManager->worldToCellDist(radius);
 	if (cellRadius < 1) 
@@ -4427,10 +4459,10 @@ void PartitionManager::undoShroudCover(Real centerX, Real centerY, Real radius, 
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::doThreatAffect( Real centerX, Real centerY, Real radius, UnsignedInt threatVal, PlayerMaskType playerMask)
+void PartitionManager::doThreatAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt threatVal, PlayerMaskType playerMask)
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 	Real fCellCenterX = INT_TO_REAL(cellCenterX);
 	Real fCellCenterY = INT_TO_REAL(cellCenterY);
 
@@ -4460,10 +4492,10 @@ void PartitionManager::doThreatAffect( Real centerX, Real centerY, Real radius, 
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::undoThreatAffect( Real centerX, Real centerY, Real radius, UnsignedInt threatVal, PlayerMaskType playerMask)
+void PartitionManager::undoThreatAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt threatVal, PlayerMaskType playerMask)
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 	Real fCellCenterX = INT_TO_REAL(cellCenterX);
 	Real fCellCenterY = INT_TO_REAL(cellCenterY);
 
@@ -4493,10 +4525,10 @@ void PartitionManager::undoThreatAffect( Real centerX, Real centerY, Real radius
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::doValueAffect( Real centerX, Real centerY, Real radius, UnsignedInt valueVal, PlayerMaskType playerMask)
+void PartitionManager::doValueAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt valueVal, PlayerMaskType playerMask)
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 	Real fCellCenterX = INT_TO_REAL(cellCenterX);
 	Real fCellCenterY = INT_TO_REAL(cellCenterY);
 
@@ -4526,10 +4558,10 @@ void PartitionManager::doValueAffect( Real centerX, Real centerY, Real radius, U
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::undoValueAffect( Real centerX, Real centerY, Real radius, UnsignedInt valueVal, PlayerMaskType playerMask)
+void PartitionManager::undoValueAffect( Fix centerX, Fix centerY, Fix radius, UnsignedInt valueVal, PlayerMaskType playerMask)
 {
 	Int cellCenterX, cellCenterY;
-	ThePartitionManager->worldToCell(centerX, centerY, &cellCenterX, &cellCenterY);
+	ThePartitionManager->worldToCellFix(centerX, centerY, &cellCenterX, &cellCenterY);
 	Real fCellCenterX = INT_TO_REAL(cellCenterX);
 	Real fCellCenterY = INT_TO_REAL(cellCenterY);
 
@@ -4559,12 +4591,18 @@ void PartitionManager::undoValueAffect( Real centerX, Real centerY, Real radius,
 }
 
 //-----------------------------------------------------------------------------
-void PartitionManager::getCellCenterPos(Int x, Int y, Real& xx, Real& yy)
+void PartitionManager::worldToCell(Real wx, Real wy, Int *cx, Int *cy)
+{
+	worldToCellFix(fixFromReal(wx), fixFromReal(wy), cx, cy);
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager::getCellCenterPos(Int x, Int y, Fix& xx, Fix& yy)
 {
 	DEBUG_ASSERTCRASH(x >= 0 && y >= 0, ("hmm, invalid cell"));
-	Real half = m_cellSize*0.5f;
-	xx = m_worldExtents.lo.x + (x * m_cellSize) + half;
-	yy = m_worldExtents.lo.y + (y * m_cellSize) + half;
+	Fix half = m_cellSizeFix*0.5_fx;
+	xx = m_worldLoFix.x + (Fix(x) * m_cellSizeFix) + half;
+	yy = m_worldLoFix.y + (Fix(y) * m_cellSizeFix) + half;
 }
 
 //-----------------------------------------------------------------------------
@@ -4572,45 +4610,29 @@ void PartitionManager::getCellCenterPos(Int x, Int y, Real& xx, Real& yy)
 
 	struct TerrainExtremeData
 	{
-		Real* minZ;
-		Real* maxZ;
-		Coord2D* minZPos;
-		Coord2D* maxZPos;
+		Fix minZ;
+		Fix maxZ;
+		FCoord2D minZPos;
+		FCoord2D maxZPos;
 		Bool isValid;
 	};
 
 static Int checkTerrainExtreme(PartitionCell* cell, void* userData)
 {
 	TerrainExtremeData* data = (TerrainExtremeData*)userData;
-	
+
 	data->isValid = true;
 
-	Real tmp;
-
-	if (data->minZ)
+	if (cell->getLoTerrain() < data->minZ)
 	{
-		tmp = cell->getLoTerrain();
-		if (tmp < *data->minZ ) 
-		{
-			*data->minZ = tmp;
-			if (data->minZPos)
-			{
-				cell->getCellCenterPos(data->minZPos->x, data->minZPos->y);
-			}
-		}
+		data->minZ = cell->getLoTerrain();
+		cell->getCellCenterPos(data->minZPos.x, data->minZPos.y);
 	}
 
-	if (data->maxZ)
+	if (cell->getHiTerrain() > data->maxZ)
 	{
-		tmp = cell->getHiTerrain();
-		if (tmp > *data->maxZ ) 
-		{
-			*data->maxZ = tmp;
-			if (data->maxZPos)
-			{
-				cell->getCellCenterPos(data->maxZPos->x, data->maxZPos->y);
-			}
-		}
+		data->maxZ = cell->getHiTerrain();
+		cell->getCellCenterPos(data->maxZPos.x, data->maxZPos.y);
 	}
 
 	return 0;	// zero to continue
@@ -4622,21 +4644,24 @@ static Int checkTerrainExtreme(PartitionCell* cell, void* userData)
 Bool PartitionManager::estimateTerrainExtremesAlongLine(const Coord3D& pos, const Coord3D& posOther, Real* minZ, Real* maxZ, Coord2D* minZPos, Coord2D* maxZPos)
 {
 	TerrainExtremeData data;
-	data.minZ = minZ;
-	data.maxZ = maxZ;
-	data.minZPos = minZPos;
-	data.maxZPos = maxZPos;
+	data.minZ = HUGE_DIST_FIX;
+	data.maxZ = -HUGE_DIST_FIX;
+	data.minZPos.zero();
+	data.maxZPos.zero();
 	data.isValid = false;
-	if (minZ) *minZ = HUGE_DIST;
-	if (maxZ) *maxZ = -HUGE_DIST;
-	iterateCellsAlongLine(pos, posOther, checkTerrainExtreme, &data);
+	iterateCellsAlongLine(fcoordFromCoord3D(pos), fcoordFromCoord3D(posOther), checkTerrainExtreme, &data);
+	// P6: this is float for its projectile caller
+	if (minZ) *minZ = fixToReal(data.minZ);
+	if (maxZ) *maxZ = fixToReal(data.maxZ);
+	if (minZPos && data.minZ < HUGE_DIST_FIX) *minZPos = data.minZPos.toCoord2D();
+	if (maxZPos && data.maxZ > -HUGE_DIST_FIX) *maxZPos = data.maxZPos.toCoord2D();
 	return data.isValid;
 }
 #endif
 
 //-----------------------------------------------------------------------------
 // Uses Bresenham line algorithm from www.gamedev.net.
-Int PartitionManager::iterateCellsAlongLine(const Coord3D& pos, const Coord3D& posOther, CellAlongLineProc proc, void* userData)
+Int PartitionManager::iterateCellsAlongLine(const FCoord3D& pos, const FCoord3D& posOther, CellAlongLineProc proc, void* userData)
 {
 	ICoord2D start, end, delta;
 	Int x, y;
@@ -4645,8 +4670,8 @@ Int PartitionManager::iterateCellsAlongLine(const Coord3D& pos, const Coord3D& p
 	Int den, num, numadd;
 	Int numpixels;
 
-	worldToCell(pos.x, pos.y, &start.x, &start.y);
-	worldToCell(posOther.x, posOther.y, &end.x, &end.y);
+	worldToCellFix(pos.x, pos.y, &start.x, &start.y);
+	worldToCellFix(posOther.x, posOther.y, &end.x, &end.y);
 
 	delta.x = abs(end.x - start.x);			// The difference between the x's
 	delta.y = abs(end.y - start.y);			// The difference between the y's
@@ -4721,7 +4746,7 @@ Int PartitionManager::iterateCellsAlongLine(const Coord3D& pos, const Coord3D& p
 }
 
 //-----------------------------------------------------------------------------
-Int PartitionManager::iterateCellsBreadthFirst(const Coord3D *pos, CellBreadthFirstProc proc, void *userData)
+Int PartitionManager::iterateCellsBreadthFirst(const FCoord3D *pos, CellBreadthFirstProc proc, void *userData)
 {
 	// starting at pos, iterate the cells in the following manner:
 	// left, up, right, down
@@ -4730,7 +4755,7 @@ Int PartitionManager::iterateCellsBreadthFirst(const Coord3D *pos, CellBreadthFi
 	// -1 means error, but we should add a define later for this.
 
 	Int cellX, cellY;
-	ThePartitionManager->worldToCell(pos->x, pos->y, &cellX, &cellY);
+	ThePartitionManager->worldToCellFix(pos->x, pos->y, &cellX, &cellY);
 	
 	// Note, bool. not Bool, cause bool will cause this to be a bitfield.
 	std::vector<bool> bitField;
@@ -4806,17 +4831,22 @@ static Real calcDist2D(Real x1, Real y1, Real x2, Real y2)
 //-----------------------------------------------------------------------------
 Bool PartitionManager::isClearLineOfSightTerrain(const Object* obj, const Coord3D& objPos, const Object* other, const Coord3D& otherPos)
 {
-	Coord3D pos, posOther;
-	
+	return isClearLineOfSightTerrainFix(obj, fcoordFromCoord3D(objPos), other, fcoordFromCoord3D(otherPos));
+}
+
+//-----------------------------------------------------------------------------
+Bool PartitionManager::isClearLineOfSightTerrainFix(const Object* obj, const FCoord3D& objPos, const Object* other, const FCoord3D& otherPos)
+{
+	FCoord3D pos, posOther;
+
 	if (obj)
 	{
-		FCoord3D eye = *obj->getPositionFix();
+		pos = *obj->getPositionFix();
 		// note that we want to measure from the top of the collision
 		// shape, not the bottom! (most objects have eyes a lot closer
 		// to their head than their feet. if we have really odd critters
 		// with eye-feet, we'll need to change this assumption.)
-		eye.z += obj->getGeometryInfo().getMaxHeightAbovePositionFix();
-		pos = eye.toCoord3D();	// P9: the terrain's line of sight is float
+		pos.z += obj->getGeometryInfo().getMaxHeightAbovePositionFix();
 	}
 	else
 	{
@@ -4825,13 +4855,12 @@ Bool PartitionManager::isClearLineOfSightTerrain(const Object* obj, const Coord3
 
 	if (other)
 	{
-		FCoord3D eye = *other->getPositionFix();
+		posOther = *other->getPositionFix();
 		// note that we want to measure from the top of the collision
 		// shape, not the bottom! (most objects have eyes a lot closer
 		// to their head than their feet. if we have really odd critters
 		// with eye-feet, we'll need to change this assumption.)
-		eye.z += other->getGeometryInfo().getMaxHeightAbovePositionFix();
-		posOther = eye.toCoord3D();	// P9: the terrain's line of sight is float
+		posOther.z += other->getGeometryInfo().getMaxHeightAbovePositionFix();
 	}
 	else
 	{
@@ -4876,7 +4905,8 @@ Bool PartitionManager::isClearLineOfSightTerrain(const Object* obj, const Coord3
 	return true;
 
 #else
-	return TheTerrainLogic->isClearLineOfSight(pos, posOther);
+	// P2: the terrain's line of sight is float
+	return TheTerrainLogic->isClearLineOfSight(pos.toCoord3D(), posOther.toCoord3D());
 #endif
 }
 
@@ -5044,7 +5074,7 @@ Real PartitionManager::getGroundOrStructureHeight(Real posx, Real posy)
 }
 
 //-------------------------------------------------------------------------------------------------
-void PartitionManager::getMostValuableLocation( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, Coord3D *outLocation )
+void PartitionManager::getMostValuableLocation( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType, FCoord3D *outLocation )
 {
 	if (!outLocation)
 		return;
@@ -5094,15 +5124,15 @@ void PartitionManager::getMostValuableLocation( Int playerIndex, UnsignedInt whi
 		return;
 	}
 
-	outLocation->set(m_cells[greatestValueCell].getCellX() * TheGlobalData->m_partitionCellSize,
-									 m_cells[greatestValueCell].getCellY() * TheGlobalData->m_partitionCellSize,
-									 0
+	outLocation->set(Fix(m_cells[greatestValueCell].getCellX()) * m_cellSizeFix,
+									 Fix(m_cells[greatestValueCell].getCellY()) * m_cellSizeFix,
+									 Fix(0)
 									);
 }
 
 //-------------------------------------------------------------------------------------------------
 Bool PartitionManager::getMostValuableVisibleLocation( Int playerIndex, UnsignedInt whichPlayerTypes,
-																											 ValueOrThreat valType, Coord3D *outLocation )
+																											 ValueOrThreat valType, FCoord3D *outLocation )
 {
 	if (!outLocation)
 		return FALSE;
@@ -5153,15 +5183,15 @@ Bool PartitionManager::getMostValuableVisibleLocation( Int playerIndex, Unsigned
 	if (greatestValueCell == -1)
 		return FALSE;
 
-	outLocation->set(m_cells[greatestValueCell].getCellX() * TheGlobalData->m_partitionCellSize,
-									 m_cells[greatestValueCell].getCellY() * TheGlobalData->m_partitionCellSize,
-									 0);
+	outLocation->set(Fix(m_cells[greatestValueCell].getCellX()) * m_cellSizeFix,
+									 Fix(m_cells[greatestValueCell].getCellY()) * m_cellSizeFix,
+									 Fix(0));
 	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
 void PartitionManager::getNearestGroupWithValue( Int playerIndex, UnsignedInt whichPlayerTypes, ValueOrThreat valType,
-															 const Coord3D *sourceLocation, Int valueRequired, Bool greaterThan, Coord3D *outLocation )
+															 const FCoord3D *sourceLocation, Int valueRequired, Bool greaterThan, FCoord3D *outLocation )
 {
 	if (!(sourceLocation && outLocation))
 		return;
@@ -5193,9 +5223,9 @@ void PartitionManager::getNearestGroupWithValue( Int playerIndex, UnsignedInt wh
 	
 	Int nearestGreat = iterateCellsBreadthFirst(sourceLocation, cellValueProc, &parms);
 	if (nearestGreat != -1) {
-		(*outLocation).x = m_cells[nearestGreat].getCellX() * TheGlobalData->m_partitionCellSize;
-		(*outLocation).y = m_cells[nearestGreat].getCellY() * TheGlobalData->m_partitionCellSize;
-		(*outLocation).z = 0;
+		(*outLocation).x = Fix(m_cells[nearestGreat].getCellX()) * m_cellSizeFix;
+		(*outLocation).y = Fix(m_cells[nearestGreat].getCellY()) * m_cellSizeFix;
+		(*outLocation).z = Fix(0);
 	}
 
 	// all done
@@ -5542,7 +5572,7 @@ Bool PartitionFilterIsFlying::allow(Object *objOther)
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-PartitionFilterWouldCollide::PartitionFilterWouldCollide(const Coord3D& pos, const GeometryInfo& geom, Real angle, Bool desired) :
+PartitionFilterWouldCollide::PartitionFilterWouldCollide(const FCoord3D& pos, const GeometryInfo& geom, Fix angle, Bool desired) :
   m_position(pos),
 	m_geom(geom),
   m_angle(angle),
@@ -5554,9 +5584,7 @@ PartitionFilterWouldCollide::PartitionFilterWouldCollide(const Coord3D& pos, con
 
 Bool PartitionFilterWouldCollide::allow(Object *objOther)
 {
-	// P9: the filter's own position and angle are float members in the shared header
-	FCoord3D thisPos = fcoordFromCoord3D(&m_position);
-	CollideInfo thisInfo(&thisPos, m_geom, fixFromReal(m_angle));
+	CollideInfo thisInfo(&m_position, m_geom, m_angle);
 	CollideInfo thatInfo(objOther->getPositionFix(), objOther->getGeometryInfo(), objOther->getOrientationFix());
 
   Bool doesCollide;
@@ -5712,9 +5740,7 @@ Bool PartitionFilterLineOfSight::allow(Object *objOther)
 	// objOther is guaranteed to be non-null, so we don't need to check (srj)
 
 	// both objects are given, so it measures from their own eyes and these positions go unread
-	Coord3D objPos = m_obj->getPositionFix()->toCoord3D();
-	Coord3D otherPos = objOther->getPositionFix()->toCoord3D();
-	if (!ThePartitionManager->isClearLineOfSightTerrain(m_obj, objPos, objOther, otherPos))
+	if (!ThePartitionManager->isClearLineOfSightTerrainFix(m_obj, *m_obj->getPositionFix(), objOther, *objOther->getPositionFix()))
 		return false;
 
 	if (TheAI && TheAI->pathfinder()->isViewBlockedByObstacle(m_obj, objOther))
@@ -6188,7 +6214,7 @@ SightingInfo::SightingInfo()
 void SightingInfo::reset()
 {
 	m_where.zero();
-	m_howFar = 0.0f;
+	m_howFar = Fix(0);
 	m_forWhom = 0;
 	m_data = 0;
 	m_revealedCells.clear();
@@ -6198,7 +6224,7 @@ void SightingInfo::reset()
 // ------------------------------------------------------------------------------------------------
 Bool SightingInfo::isInvalid() const
 {
-	return m_howFar == 0.0f;
+	return m_howFar == Fix(0);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -6213,21 +6239,32 @@ void SightingInfo::crc( Xfer *xfer )
 /** Xfer Method
 	* Version Info:
 	* 1: Initial version
-	* 2: m_revealedCells; a version 1 sighting was a whole circle and is undone as one */
+	* 2: m_revealedCells; a version 1 sighting was a whole circle and is undone as one
+	* 3: m_where and m_howFar in fixed point */
 // ------------------------------------------------------------------------------------------------
 void SightingInfo::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
-	// where
-	xfer->xferCoord3D( &m_where );
-
-	// how far
-	xfer->xferReal( &m_howFar );
+	if( version >= 3 )
+	{
+		xfer->xferFCoord3D( &m_where );
+		xfer->xferFix( &m_howFar );
+	}
+	else
+	{
+		// an old save's float where and how far, taken in once through the boundary
+		Coord3D where = m_where.toCoord3D();
+		Real howFar = fixToReal( m_howFar );
+		xfer->xferCoord3D( &where );
+		xfer->xferReal( &howFar );
+		m_where = fcoordFromCoord3D( where );
+		m_howFar = fixFromReal( howFar );
+	}
 
 	// for whom
 	xfer->xferUser( &m_forWhom, sizeof( PlayerMaskType ) );

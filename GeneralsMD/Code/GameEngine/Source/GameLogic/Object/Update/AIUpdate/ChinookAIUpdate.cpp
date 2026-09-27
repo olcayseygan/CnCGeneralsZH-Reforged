@@ -267,10 +267,12 @@ public:
 		{
 			Coord3D tmp;
 			FindPositionOptions options;
-			options.maxRadius = fixToReal( obj->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 ) ); // P5
-			if (ThePartitionManager->findPositionAround(&m_destLoc, &options, &tmp)) 
+			options.maxRadius = obj->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 );
+			const FCoord3D destFx = fcoordFromCoord3D( m_destLoc );	// P5: the destination is the pathfinder's, in float
+			FCoord3D found;
+			if (ThePartitionManager->findPositionAround(&destFx, &options, &found))
 			{
-				m_destLoc = tmp;
+				m_destLoc = found.toCoord3D();
 				TheAI->pathfinder()->adjustToLandingDestination(obj, &m_destLoc);
 			}
 			// recalc, since it may have changed. note that findPositionAround() will ALWAYS
@@ -1264,12 +1266,11 @@ void ChinookAIUpdate::privateGetRepaired( Object *repairDepot, CommandSourceType
 
 	setAirfieldForHealing(repairDepot->getID());
 
-	Coord3D pos = repairDepot->getPositionFix()->toCoord3D(); // P5
-	Coord3D tmp;
+	FCoord3D posFx = *repairDepot->getPositionFix();
 	FindPositionOptions options;
-	options.maxRadius = fixToReal( repairDepot->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 ) ); // P5
-	if (ThePartitionManager->findPositionAround(&pos, &options, &tmp))
-		pos = tmp;
+	options.maxRadius = repairDepot->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 );
+	ThePartitionManager->findPositionAround(&posFx, &options, &posFx);
+	Coord3D pos = posFx.toCoord3D(); // P5
 
 	setMyState(MOVE_TO_AND_LAND, NULL, &pos, cmdSource);
 
@@ -1293,12 +1294,13 @@ void ChinookAIUpdate::privateCombatDrop( Object* target, const Coord3D& pos, Com
 		// if target is null, we are dropping at a pos, not into a bldg.
 		// in this case, ensure there is no structure at the pos... this can happen
 		// if you combat-drop into a spot in the fog-of-war.
-		Coord3D tmp;
 		FindPositionOptions options;
-		options.maxRadius = fixToReal( getObject()->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 ) ); // P5
-		if (ThePartitionManager->findPositionAround(&localPos, &options, &tmp))
+		options.maxRadius = getObject()->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 100 );
+		const FCoord3D dropFx = fcoordFromCoord3D( localPos );	// P5: the drop spot is float
+		FCoord3D found;
+		if (ThePartitionManager->findPositionAround(&dropFx, &options, &found))
 		{
-			localPos = tmp;
+			localPos = found.toCoord3D();
 		}
 	}
 

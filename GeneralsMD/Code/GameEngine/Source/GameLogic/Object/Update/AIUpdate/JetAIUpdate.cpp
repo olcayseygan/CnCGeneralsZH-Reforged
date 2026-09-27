@@ -2338,13 +2338,11 @@ void JetAIUpdate::doLandingCommand(Object *airfield, CommandSourceType cmdSource
 {
 	if (getObject()->isKindOf(KINDOF_PRODUCED_AT_HELIPAD))
 	{
-		m_landingPosForHelipadStuff = airfield->getPositionFix()->toCoord3D();	// xfer'd, and the pathfinder's (P5)
-
-		Coord3D tmp;
+		FCoord3D landing = *airfield->getPositionFix();
 		FindPositionOptions options;
-		options.maxRadius = fixToReal( airfield->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 10 ) ); // P5
-		if (ThePartitionManager->findPositionAround(&m_landingPosForHelipadStuff, &options, &tmp))
-			m_landingPosForHelipadStuff = tmp;
+		options.maxRadius = airfield->getGeometryInfo().getBoundingCircleRadiusFix() * Fix( 10 );
+		ThePartitionManager->findPositionAround(&landing, &options, &landing);
+		m_landingPosForHelipadStuff = landing.toCoord3D();	// xfer'd, and the pathfinder's (P5)
 	}
 
 	for (BehaviorModule** i = airfield->getBehaviorModules(); *i; ++i)

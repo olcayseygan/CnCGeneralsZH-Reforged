@@ -44,6 +44,7 @@
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
 #include "Common/GameLOD.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameClient/Drawable.h"
 #include "GameClient/FXList.h"
@@ -101,6 +102,32 @@ static void adjustVector(Coord3D *vec, const Matrix3D* mtx)
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+// P3: an OCL's positions are float by its interface and its INI offsets; they cross into the
+// object's fixed transform here, and nowhere else in this file
+//-------------------------------------------------------------------------------------------------
+static FCoord3D oclFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
+static void oclSetTransform( Object *obj, const Matrix3D *mtx )
+{
+	FixMatrix3D f;
+	for( Int i = 0; i < 3; ++i )
+		for( Int j = 0; j < 4; ++j )
+			f.m[ i ][ j ] = fixFromReal( (*mtx)[ i ][ j ] );
+	obj->setTransformMatrixFix( &f );
+}
+
+/// toward zero, the way the (Int) cast on a float did
+static Int oclTruncToInt( Fix f )
+{
+	return (Int)( f.raw() / Fix::ONE_RAW );
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PRIVATE CLASSES ///////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,7 +135,13 @@ static void adjustVector(Coord3D *vec, const Matrix3D* mtx)
 //-------------------------------------------------------------------------------------------------
 Object* ObjectCreationNugget::create( const Object* primary, const Object* secondary, UnsignedInt lifetimeFrames ) const
 {
-	return create( primary, primary ? primary->getPosition() : NULL, secondary ? secondary->getPosition() : NULL, INVALID_ANGLE, lifetimeFrames );
+	// P3: the OCL interface takes float positions
+	Coord3D primaryPos, secondaryPos;
+	if( primary )
+		primaryPos = primary->getPositionFix()->toCoord3D();
+	if( secondary )
+		secondaryPos = secondary->getPositionFix()->toCoord3D();
+	return create( primary, primary ? &primaryPos : NULL, secondary ? &secondaryPos : NULL, INVALID_ANGLE, lifetimeFrames );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -375,6 +408,7 @@ public:
 				startPos.x -= Cos(orient) * m_data.m_distToTarget * SLOP;
 				startPos.y -= Sin(orient) * m_data.m_distToTarget * SLOP;
 			}
+			FCoord3D fxStartPos = oclFix( startPos );
 
 			Object *transport;
 
@@ -390,8 +424,8 @@ public:
 				{
 					firstTransport = transport;
 				}
-				transport->setPosition(&startPos);
-				transport->setOrientation(orient);
+				transport->setPositionFix(&fxStartPos);
+				transport->setOrientationFix(fixFromReal(orient));
 				transport->setProducer(primaryObj);
 				//Adding this nifty flag allows enemy players to target it manually with weapons :)
 				transport->setScriptStatus( OBJECT_STATUS_SCRIPT_TARGETABLE );
@@ -425,7 +459,7 @@ public:
 					PhysicsBehavior* physics = transport->getPhysics();
 					if (physics)
 					{
-						Coord3D startingForce = *transport->getUnitDirectionVector2D();
+						Coord3D startingForce = transport->getUnitDirectionVector2DFix()->toCoord3D();	// P4: forces are float
 						Real maxSpeed = ai->getCurLocomotor()->getMaxSpeedForCondition(transport->getBodyModule()->getDamageState());
 						Real factor = maxSpeed * physics->getMass();
 						startingForce.x *= factor;
@@ -442,8 +476,9 @@ public:
 				ai->deliverPayload( &moveToPos, &targetPos, &data );
 				if( m_startAtPreferredHeight && createOwner )
 				{
-					startPos.z = TheTerrainLogic->getGroundHeight(startPos.x, startPos.y) + ai->getCurLocomotor()->getPreferredHeight();
-					transport->setPosition(&startPos);
+					fxStartPos.z = TheTerrainLogic->getGroundHeightFix(fxStartPos.x, fxStartPos.y)
+						+ fixFromReal(ai->getCurLocomotor()->getPreferredHeight());	// P4
+					transport->setPositionFix(&fxStartPos);
 				}
 
 				const ThingTemplate* putInContainerTmpl = m_putInContainerName.isEmpty() ? NULL : TheThingFactory->findTemplate(m_putInContainerName);
@@ -459,7 +494,7 @@ public:
 					for (int i = 0; i < it->m_payloadCount; ++i)
 					{
 						Object* payload = TheThingFactory->newObject( payloadTmpl, owner );
-						payload->setPosition(&startPos);
+						payload->setPositionFix(&fxStartPos);
 						payload->setProducer(transport);
 
 						// Notify special power tracking
@@ -475,7 +510,7 @@ public:
 						if (putInContainerTmpl)
 						{
 							Object* container = TheThingFactory->newObject( putInContainerTmpl, owner );
-							container->setPosition(&startPos);
+							container->setPositionFix(&fxStartPos);
 							container->setProducer(transport);
 
 							// Notify special power tracking
@@ -794,7 +829,11 @@ public:
 			if (m_skipIfSignificantlyAirborne && primary->isSignificantlyAboveTerrain())
 				return NULL;
 
-			return reallyCreate( primary->getPosition(), primary->getTransformMatrix(), primary->getOrientation(), primary, lifetimeFrames );
+			// P3: reallyCreate works on the OCL's float offsets, so the source's transform goes over in float
+			Coord3D primaryPos = primary->getPositionFix()->toCoord3D();
+			Matrix3D primaryMtx;
+			primary->getTransformMatrixFix()->toMatrix3D( &primaryMtx );
+			return reallyCreate( &primaryPos, &primaryMtx, fixToReal( primary->getOrientationFix() ), primary, lifetimeFrames );
 		}
 		else
 		{
@@ -979,10 +1018,8 @@ protected:
 		if (mtx)
 			adjustVector(&offset, mtx);
 
-		Coord3D chunkPos;
-		chunkPos.x = pos->x + offset.x;
-		chunkPos.y = pos->y + offset.y;
-		chunkPos.z = pos->z + offset.z;
+		FCoord3D chunkPos = oclFix( *pos );
+		chunkPos.add( oclFix( offset ) );
 		
 		if (!m_particleSysName.isEmpty())
 		{
@@ -1052,10 +1089,10 @@ protected:
 		if( BitTest( m_disposition, LIKE_EXISTING ) )
 		{
 			if (mtx)
-				obj->setTransformMatrix(mtx);
+				oclSetTransform(obj, mtx);
 			else
-				obj->setOrientation(orientation);
-			obj->setPosition(&chunkPos);
+				obj->setOrientationFix(fixFromReal(orientation));
+			obj->setPositionFix(&chunkPos);
 			if (sourceObj && sourceObj->isAboveTerrain())
 			{
 				PhysicsBehavior* physics = obj->getPhysics();
@@ -1071,9 +1108,9 @@ protected:
       {
 	      // Flatten the terrain underneath the object, then adjust to the flattened height. jba.
 	      TheTerrainLogic->flattenTerrain(obj);
-	      Coord3D adjustedPos = *obj->getPosition();
-	      adjustedPos.z = TheTerrainLogic->getGroundHeight(pos->x, pos->y);
-	      obj->setPosition(&adjustedPos);
+	      FCoord3D adjustedPos = *obj->getPositionFix();
+	      adjustedPos.z = TheTerrainLogic->getGroundHeightFix(fixFromReal(pos->x), fixFromReal(pos->y));
+	      obj->setPositionFix(&adjustedPos);
 	      // Note - very important that we add to map AFTER we flatten terrain. jba.
 	      TheAI->pathfinder()->addObjectToPathfindMap( obj );
 
@@ -1089,22 +1126,23 @@ protected:
 
 		if( BitTest( m_disposition, ON_GROUND_ALIGNED ) )
 		{
-			chunkPos.z = 99999.0f;
-			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(&chunkPos);
-			obj->setOrientation(GameLogicRandomValueReal(0.0f, 2 * PI));
-			chunkPos.z = TheTerrainLogic->getLayerHeight( chunkPos.x, chunkPos.y, layer );
+			chunkPos.z = Fix( 99999 );
+			Coord3D probe = chunkPos.toCoord3D();	// P9: the layer lookup takes a float position
+			PathfindLayerEnum layer = TheTerrainLogic->getHighestLayerForDestination(&probe);
+			obj->setOrientationFix(GameLogicRandomValueFix(Fix(0), FIX_TWO_PI));
+			chunkPos.z = TheTerrainLogic->getLayerHeightFix( chunkPos.x, chunkPos.y, layer );
 			// ensure we are slightly above the bridge, to account for fudge & sloppy art
 			if (layer != LAYER_GROUND)
-				chunkPos.z += 1.0f;
+				chunkPos.z += Fix( 1 );
 			obj->setLayer(layer);
-			obj->setPosition(&chunkPos);
+			obj->setPositionFix(&chunkPos);
 		}
 
 		if( BitTest( m_disposition, SEND_IT_OUT ) )
 		{
-			obj->setOrientation(GameLogicRandomValueReal(0.0f, 2 * PI));
-			chunkPos.z = TheTerrainLogic->getGroundHeight( chunkPos.x, chunkPos.y );
-			obj->setPosition(&chunkPos);
+			obj->setOrientationFix(GameLogicRandomValueFix(Fix(0), FIX_TWO_PI));
+			chunkPos.z = TheTerrainLogic->getGroundHeightFix( chunkPos.x, chunkPos.y );
+			obj->setPositionFix(&chunkPos);
 			PhysicsBehavior* objUp = obj->getPhysics();
 			if (objUp)
 			{
@@ -1132,10 +1170,9 @@ protected:
 			if (mtx)
 			{
 				DUMPMATRIX3D(mtx);
-				obj->setTransformMatrix(mtx);
+				oclSetTransform(obj, mtx);
 			}
-			obj->setPosition(&chunkPos);
-			DUMPCOORD3D(&chunkPos);
+			obj->setPositionFix(&chunkPos);
 			PhysicsBehavior* objUp = obj->getPhysics();
 			if (objUp)
 			{
@@ -1219,7 +1256,6 @@ protected:
 				objUp->setPitchRate(pitch);
 				DUMPCOORD3D(objUp->getAcceleration());
 				DUMPCOORD3D(objUp->getVelocity());
-				DUMPMATRIX3D(obj->getTransformMatrix());
 
 			}
 		}
@@ -1272,10 +1308,10 @@ protected:
     if ( m_diesOnBadLand && obj )
     {
 	    // if we land in the water, we die. alas.
-	    const Coord3D* riderPos = obj->getPosition();
-	    Real waterZ, terrainZ;
-	    if (TheTerrainLogic->isUnderwater(riderPos->x, riderPos->y, &waterZ, &terrainZ)
-			    && riderPos->z <= waterZ + 10.0f
+	    const FCoord3D* riderPos = obj->getPositionFix();
+	    Fix waterZ, terrainZ;
+	    if (TheTerrainLogic->isUnderwaterFix(riderPos->x, riderPos->y, &waterZ, &terrainZ)
+			    && riderPos->z <= waterZ + Fix( 10 )
 			    && obj->getLayer() == LAYER_GROUND)
 	    {
 		    // don't call kill(); do it manually, so we can specify DEATH_FLOODED
@@ -1288,8 +1324,8 @@ protected:
 	    }
 	    
 	    // Kill if materialized on impassable ground
-	    Int cellX = REAL_TO_INT( obj->getPosition()->x / PATHFIND_CELL_SIZE );
-	    Int cellY = REAL_TO_INT( obj->getPosition()->y / PATHFIND_CELL_SIZE );
+	    Int cellX = oclTruncToInt( riderPos->x / Fix( PATHFIND_CELL_SIZE ) );	// P5 floors this
+	    Int cellY = oclTruncToInt( riderPos->y / Fix( PATHFIND_CELL_SIZE ) );
 	    
 	    PathfindCell* cell = TheAI->pathfinder()->getCell( obj->getLayer(), cellX, cellY );
 	    PathfindCell::CellType cellType = cell ? cell->getType() : PathfindCell::CELL_IMPASSABLE;

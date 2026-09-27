@@ -1027,7 +1027,7 @@ Bool Object::checkAndDetonateBoobyTrap(const Object *victim)
 	filters[1] = &filterMapStatus;
 	filters[2] = NULL;
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( getPosition(), BOOBY_TRAP_SCAN_RANGE + getGeometryInfo().getBoundingCircleRadius(), 
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( getPositionFix(), Fix( BOOBY_TRAP_SCAN_RANGE ) + getGeometryInfo().getBoundingCircleRadiusFix(),
 		FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
 	MemoryPoolObjectHolder hold(iter);// This is the magic thing that frees the dynamically made iter in its destructor
 
@@ -1094,8 +1094,10 @@ void Object::setStatus( ObjectStatusMaskType objectStatus, Bool set )
 		{
 
 			// CHECK FOR MINES, AND DETONATE THEM NOW 
-			ObjectIterator *iter = 
-					ThePartitionManager->iteratePotentialCollisions( getPosition(), getGeometryInfo(), getOrientation() );
+			// P9: iteratePotentialCollisions has no fixed twin in the shared header yet
+			Coord3D pos = m_fxPos.toCoord3D();
+			ObjectIterator *iter =
+					ThePartitionManager->iteratePotentialCollisions( &pos, getGeometryInfo(), fixToReal( m_fxAngle ) );
 			MemoryPoolObjectHolder hold( iter );
 			Object *them;
 			for( them = iter->first(); them; them = iter->next() )
@@ -1830,11 +1832,28 @@ static FCoord3D fcoordFromCoord3D( const Coord3D &c )
 	return f;
 }
 
+/// toward zero, the way the (Int) cast on a float did
+static Int fixTruncToInt( Fix f )
+{
+	return (Int)( f.raw() / Fix::ONE_RAW );
+}
+
 static void fixMatrixFromMatrix3D( const Matrix3D &in, FixMatrix3D &out )
 {
 	for( Int i = 0; i < 3; ++i )
 		for( Int j = 0; j < 4; ++j )
 			out.m[ i ][ j ] = fixFromReal( in[ i ][ j ] );
+}
+
+// the map extent is float map data; its edges come in once through the boundary
+static Bool isOnMapFix( const FCoord3D &pos )
+{
+	Region3D mapExtent;
+	TheTerrainLogic->getExtent( &mapExtent );
+	FRegion3D ext;
+	ext.lo = fcoordFromCoord3D( mapExtent.lo );
+	ext.hi = fcoordFromCoord3D( mapExtent.hi );
+	return ext.isInRegionNoZ( pos );
 }
 
 // ponytail: alignOnTerrain works in float on the terrain normal; its matrix is converted once here.
@@ -2112,10 +2131,8 @@ void Object::reactToTransformChange( const FCoord3D &oldPos, Fix oldAngle )
 	if (posDiff)
 	{
 		setTriggerAreaFlagsForChangeInPosition(); // Update for entered/exited
-		
-		Region3D mapExtent;
-		TheTerrainLogic->getExtent(&mapExtent);
-		if (mapExtent.isInRegionNoZ(getPosition()))
+
+		if (isOnMapFix(m_fxPos))
 			m_privateStatus &= ~OFF_MAP;
 		else
 			m_privateStatus |= OFF_MAP;
@@ -2484,11 +2501,12 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 
 	//Handle audio events!
  	AudioEventRTS sound;
+	const Coord3D soundPos = m_fxPos.toCoord3D();	// audio is client side, and float
 	if( type == DISABLED_UNMANNED && !isKindOf( KINDOF_DRONE ) )
 	{
 		//We've been sniped! Play a splatter sound for the pilot losing his face.
 		sound = TheAudio->getMiscAudio()->m_splatterVehiclePilotsBrain;
-		sound.setPosition( getPosition() );
+		sound.setPosition( &soundPos );
 		TheAudio->addAudioEvent( &sound );
 	}
 	else if( type == DISABLED_UNDERPOWERED || type == DISABLED_EMP || type == DISABLED_SUBDUED || type == DISABLED_HACKED )
@@ -2503,13 +2521,13 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 			if( isKindOf( KINDOF_STRUCTURE ) )
 			{
 				sound = TheAudio->getMiscAudio()->m_buildingDisabled;
-				sound.setPosition( getPosition() );
+				sound.setPosition( &soundPos );
 				TheAudio->addAudioEvent( &sound );
 			}
 			else if( isKindOf( KINDOF_VEHICLE ) )
 			{
 				sound = TheAudio->getMiscAudio()->m_vehicleDisabled;
-				sound.setPosition( getPosition() );
+				sound.setPosition( &soundPos );
 				TheAudio->addAudioEvent( &sound );
 			}
 		}
@@ -2670,6 +2688,7 @@ Bool Object::clearDisabled( DisabledType type )
 	{
 		//We've regained power-- make sure we aren't still disabled by another type.
 	 	AudioEventRTS sound;
+		const Coord3D soundPos = m_fxPos.toCoord3D();	// audio is client side, and float
 		if( (!isDisabledByType( DISABLED_UNDERPOWERED ) || type == DISABLED_UNDERPOWERED ) &&
 				(!isDisabledByType( DISABLED_EMP ) || type == DISABLED_EMP ) &&
 				(!isDisabledByType( DISABLED_SUBDUED ) || type == DISABLED_SUBDUED ) &&
@@ -2678,13 +2697,13 @@ Bool Object::clearDisabled( DisabledType type )
 			if( isKindOf( KINDOF_STRUCTURE ) )
 			{
 				sound = TheAudio->getMiscAudio()->m_buildingReenabled;
-				sound.setPosition( getPosition() );
+				sound.setPosition( &soundPos );
 				TheAudio->addAudioEvent( &sound );
 			}
 			else if( isKindOf( KINDOF_VEHICLE ) )
 			{
 				sound = TheAudio->getMiscAudio()->m_vehicleReenabled;
-				sound.setPosition( getPosition() );
+				sound.setPosition( &soundPos );
 				TheAudio->addAudioEvent( &sound );
 			}
 		}
@@ -3009,9 +3028,8 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 		return;
 
 	ICoord3D iPos;
-	Coord3D pos = *getPosition();
-	iPos.x = REAL_TO_INT(pos.x);
-	iPos.y = REAL_TO_INT(pos.y);
+	iPos.x = fixTruncToInt(m_fxPos.x);
+	iPos.y = fixTruncToInt(m_fxPos.y);
 	iPos.z = 0; // Trigger areas compare on xy only.
 	if (m_iPos.x == iPos.x && m_iPos.y == iPos.y) 
 	{
@@ -3024,9 +3042,10 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 		}
 	}
 
-	if (getAIUpdateInterface()) 
+	if (getAIUpdateInterface())
 	{
-		TheAI->pathfinder()->updatePos(this, getPosition());
+		Coord3D pos = m_fxPos.toCoord3D();	// P5: the pathfinder is float
+		TheAI->pathfinder()->updatePos(this, &pos);
 	}
 
 	UnsignedInt now = TheGameLogic->getFrame();
@@ -3151,7 +3170,8 @@ void Object::setLayer(PathfindLayerEnum layer)
 #endif
 		TheAI->pathfinder()->removePos(this);
 		m_layer = layer;
-		TheAI->pathfinder()->updatePos(this, getPosition());
+		Coord3D pos = m_fxPos.toCoord3D();	// P5: the pathfinder is float
+		TheAI->pathfinder()->updatePos(this, &pos);
 	}
 }
 
@@ -3242,9 +3262,7 @@ void Object::friend_notifyOfNewMapBoundary(void)
 	// Now that the PartitionManager has finished its reset, we need to relook
 	handlePartitionCellMaintenance();
 
-	Region3D mapExtent;
-	TheTerrainLogic->getExtent(&mapExtent);
-	if (mapExtent.isInRegionNoZ(getPosition()))
+	if (isOnMapFix(m_fxPos))
 		m_privateStatus &= ~OFF_MAP;
 	else
 		m_privateStatus |= OFF_MAP;
@@ -3255,28 +3273,13 @@ void Object::friend_notifyOfNewMapBoundary(void)
 //-------------------------------------------------------------------------------------------------
 void Object::calcNaturalRallyPoint(Coord2D *pt)
 {
-	const Matrix3D *transform = getTransformMatrix();
-	Vector3 v;
-
-	//
-	// get the natural rally point from the template, this coord is in model space relative
-	// to the model (0,0,0)
-	//
-/*
-	const Coord3D *naturalRallyPoint;
-  naturalRallyPoint = m_template->getNaturalRallyPoint();
-	v.X = naturalRallyPoint->x;
-	v.Y = naturalRallyPoint->y;
-	v.Z = naturalRallyPoint->z;
-*/
-	v.Set( 0, 0, 0 );
-
-	// transform the point into world space
-	transform->Transform_Vector( *transform, v, &v );
+	// the model's origin in world space, which is the translation; the rally point is float for the
+	// callers still on Coord2D
+	FCoord3D v = m_fxTransform.getTranslation();
 
 	// we're only concerned with the 2D elements for now
-	pt->x = v.X;
-	pt->y = v.Y;
+	pt->x = fixToReal( v.x );
+	pt->y = fixToReal( v.y );
 
 }
 
@@ -3517,7 +3520,9 @@ void Object::setConstructionPercent( Real percent )
 		// whoever wandered into the site while it was only a plan gets out of the way now, exactly
 		// as they would have when it was first placed - all but the builder, which is standing there
 		// because it is the one building it
-		TheBuildAssistant->moveObjectsForConstruction( getTemplate(), getPosition(), getOrientation(),
+		// P9: BuildAssistant takes a float position
+		Coord3D sitePos = m_fxPos.toCoord3D();
+		TheBuildAssistant->moveObjectsForConstruction( getTemplate(), &sitePos, fixToReal( m_fxAngle ),
 																									 getControllingPlayer(),
 																									 TheGameLogic->findObjectByID( m_builderID ) );
 
@@ -3666,7 +3671,7 @@ void Object::onVeterancyLevelChanged( VeterancyLevel oldLevel, VeterancyLevel ne
 		{
 			Anim2DTemplate *animTemplate = TheAnim2DCollection->findTemplate( TheGlobalData->m_levelGainAnimationName );
 
-			Coord3D pos = *getPosition(); 
+			Coord3D pos = m_fxPos.toCoord3D();	// the UI's animation is client side
 			pos.add(&m_healthBoxOffset);
 
 			TheInGameUI->addWorldAnimation( animTemplate,
@@ -3882,8 +3887,9 @@ Bool Object::isUsingAirborneLocomotor( void ) const
 //INTO A NEW Drawable::getHealthBox..() WHICH USES GEOM0INFO, MODEL DATA, INI DATA, ETC.
 void Object::getHealthBoxPosition(Coord3D& pos) const
 { 
-	pos = *getPosition(); 
-	pos.z += getGeometryInfo().getMaxHeightAbovePosition() + 10;
+	FCoord3D top = m_fxPos;
+	top.z += getGeometryInfo().getMaxHeightAbovePositionFix() + Fix( 10 );
+	pos = top.toCoord3D();	// the health box is drawn, so float from here
 	pos.add(&m_healthBoxOffset);
 
 	// this needs to get moved to the mobspawnerupdate
@@ -3944,9 +3950,10 @@ Bool Object::getHealthBoxDimensions(Real &healthBoxHeight, Real &healthBoxWidth)
 	}
 
 	//just add the major and minor axes
-	Real size = MAX(20.0f, MIN(150.0f, (getGeometryInfo().getMajorRadius() + getGeometryInfo().getMinorRadius())) );
-	healthBoxHeight = 3.0f; 
-	healthBoxWidth = MAX(20.0f, size * 2.0f);
+	const GeometryInfo& geom = getGeometryInfo();
+	Fix size = fixMax( Fix( 20 ), fixMin( Fix( 150 ), geom.getMajorRadiusFix() + geom.getMinorRadiusFix() ) );
+	healthBoxHeight = 3.0f;
+	healthBoxWidth = fixToReal( fixMax( Fix( 20 ), size * Fix( 2 ) ) );	// drawn, so float out
 	return TRUE;
 
 #endif
@@ -4445,7 +4452,9 @@ void Object::crc( Xfer *xfer )
 #ifdef DEBUG_CRC
 	if (doLogging)
 	{
-		const Matrix3D *mtx = getTransformMatrix();
+		Matrix3D mtxForLog;
+		m_fxTransform.toMatrix3D(&mtxForLog);
+		const Matrix3D *mtx = &mtxForLog;
 		CRCDEBUG_LOG(("CRC of Object %d (%s), owned by player %d, ", m_id, getTemplate()->getName().str(), getControllingPlayer()->getPlayerIndex()));
 		DUMPMATRIX3D(mtx);
 	}
@@ -4579,21 +4588,26 @@ void Object::xfer( Xfer *xfer )
 	}
 	else if (version >= 7)
 	{
-		Matrix3D mtx = *getTransformMatrix();
+		// an old save's float matrix, taken in once through the boundary
+		Matrix3D mtx;
+		m_fxTransform.toMatrix3D(&mtx);
 		xfer->xferMatrix3D(&mtx);
-		setTransformMatrix(&mtx);
+		FixMatrix3D fmtx;
+		fixMatrixFromMatrix3D(mtx, fmtx);
+		setTransformMatrixFix(&fmtx);
 	}
 	else
 	{
 		// object position
-		Coord3D pos = *getPosition();
+		Coord3D pos = m_fxPos.toCoord3D();
 		xfer->xferCoord3D( &pos );
-		setPosition( &pos );
+		FCoord3D fpos = fcoordFromCoord3D( pos );
+		setPositionFix( &fpos );
 
 		// orientation
-		Real orientation = getOrientation();
+		Real orientation = fixToReal( m_fxAngle );
 		xfer->xferReal( &orientation );
-		setOrientation( orientation );
+		setOrientationFix( fixFromReal( orientation ) );
 	}
 
 	// team
@@ -5204,7 +5218,8 @@ void Object::onDie( DamageInfo *damageInfo )
 		{
 			TheEva->setShouldPlay(EVA_UnitLost);
 			//Create a fake radar event so the user can use the spacebar to quickly jump to this!
-			TheRadar->tryEvent( RADAR_EVENT_FAKE, getPosition() );
+			Coord3D radarPos = m_fxPos.toCoord3D();	// the radar is client side
+			TheRadar->tryEvent( RADAR_EVENT_FAKE, &radarPos );
 		}
 	}
 
@@ -5421,7 +5436,7 @@ void Object::addValue()
 		return;
 
 
-	m_partitionLastValue->m_where = *getPosition();
+	m_partitionLastValue->m_where = m_fxPos.toCoord3D();	// P9: SightingInfo and the value map are float
 	m_partitionLastValue->m_data = getTemplate()->friend_getBuildCost();
 
 	m_partitionLastValue->m_forWhom = getControllingPlayer()->getPlayerMask();
@@ -5471,7 +5486,7 @@ void Object::addThreat()
 		return;
 
 
-	m_partitionLastThreat->m_where = *getPosition();
+	m_partitionLastThreat->m_where = m_fxPos.toCoord3D();	// P9: SightingInfo and the threat map are float
 	m_partitionLastThreat->m_data = getTemplate()->getThreatValue();
 
 	m_partitionLastThreat->m_forWhom = getControllingPlayer()->getPlayerMask();
@@ -5586,8 +5601,9 @@ void Object::look()
 				}
 
 				// the eye is at the top of the object, so an aircraft looks over the hill a tank cannot
-				Coord3D eye = *getPosition();
-				eye.z += getGeometryInfo().getMaxHeightAbovePosition();
+				FCoord3D fxEye = m_fxPos;
+				fxEye.z += getGeometryInfo().getMaxHeightAbovePositionFix();
+				Coord3D eye = fxEye.toCoord3D();	// P9: SightingInfo and the shroud are float
 
 				m_partitionLastLook->m_where = eye;
 				m_partitionLastLook->m_forWhom = lookingMask;
@@ -5628,7 +5644,7 @@ void Object::look()
 				Bool stealthedAndNotDetected = testStatus( OBJECT_STATUS_STEALTHED ) && !testStatus( OBJECT_STATUS_DETECTED ) && !testStatus( OBJECT_STATUS_DISGUISED );
 				if( !stealthedAndNotDetected )
 				{
-					Coord3D pos = *getPosition();
+					Coord3D pos = m_fxPos.toCoord3D();	// P9: SightingInfo and the shroud are float
 					PlayerMaskType thePlayersMask = ThePlayerList->getPlayersWithRelationship( getControllingPlayer()->getPlayerIndex(), ALLOW_ENEMIES | ALLOW_NEUTRAL );
 					ThePartitionManager->doShroudReveal( pos.x, pos.y, shroudRevealToAllRange, thePlayersMask );
 					m_partitionRevealAllLastLook->m_where = pos;
@@ -5696,8 +5712,8 @@ void Object::shroud()
 				}
 			}
 
-			Coord3D pos = *getPosition();
-			ThePartitionManager->doShroudCover(pos.x, pos.y, 
+			Coord3D pos = m_fxPos.toCoord3D();	// P9: SightingInfo and the shroud are float
+			ThePartitionManager->doShroudCover(pos.x, pos.y,
 				getShroudRange(), 
 				shroudingMask);
 
@@ -5736,7 +5752,8 @@ Real Object::getVisionRange() const
 		for (int i = 0; i < TheGlobalData->m_debugVisibilityTileCount; ++i) 
 		{
 			pos.Rotate_Z(1.0f * i / TheGlobalData->m_debugVisibilityTileCount * 2 * PI);
-			Coord3D coord = { pos.X + getPosition()->x, pos.Y + getPosition()->y, pos.Z + getPosition()->z };
+			Coord3D coord = m_fxPos.toCoord3D();	// a debug icon, drawn
+			coord.x += pos.X; coord.y += pos.Y; coord.z += pos.Z;
 
 			addIcon(&coord, TheGlobalData->m_debugVisibilityTileWidth, 
 											TheGlobalData->m_debugVisibilityTileDuration, 
@@ -5857,7 +5874,8 @@ Real Object::getShroudClearingRange() const
 		for (int i = 0; i < TheGlobalData->m_debugVisibilityTileCount; ++i) 
 		{
 			pos.Rotate_Z(1.0f * i / TheGlobalData->m_debugVisibilityTileCount * 2 * PI);
-			Coord3D coord = { pos.X + getPosition()->x, pos.Y + getPosition()->y, pos.Z + getPosition()->z };
+			Coord3D coord = m_fxPos.toCoord3D();	// a debug icon, drawn
+			coord.x += pos.X; coord.y += pos.Y; coord.z += pos.Z;
 
 			addIcon(&coord, TheGlobalData->m_debugVisibilityTileWidth, 
 											TheGlobalData->m_debugVisibilityTileDuration, 
@@ -5896,8 +5914,7 @@ void Object::setShroudClearingRange( Real newShroudClearingRange )
 
 			(srj)
 		*/
-		const Coord3D* pos = getPosition();
-		if (pos->x || pos->y || pos->z)
+		if (m_fxPos.x != Fix(0) || m_fxPos.y != Fix(0) || m_fxPos.z != Fix(0))
 		{
 	 		handlePartitionCellMaintenance();
 		}
@@ -5914,7 +5931,8 @@ Real Object::getShroudRange() const
 		for (int i = 0; i < TheGlobalData->m_debugVisibilityTileCount; ++i) 
 		{
 			pos.Rotate_Z(1.0f * i / TheGlobalData->m_debugVisibilityTileCount * 2 * PI);
-			Coord3D coord = { pos.X + getPosition()->x, pos.Y + getPosition()->y, pos.Z + getPosition()->z };
+			Coord3D coord = m_fxPos.toCoord3D();	// a debug icon, drawn
+			coord.x += pos.X; coord.y += pos.Y; coord.z += pos.Z;
 
 			addIcon(&coord, TheGlobalData->m_debugVisibilityTileWidth, 
 											TheGlobalData->m_debugVisibilityTileDuration, 
@@ -5964,8 +5982,7 @@ void Object::setVisionSpied(Bool setting, Int byWhom)
 		m_visionSpiedMask = workingMask;
 
 		// A unit spied as it is made still sits at the origin; the move that places it looks for it
-		const Coord3D* pos = getPosition();
-		if (pos->x || pos->y || pos->z)
+		if (m_fxPos.x != Fix(0) || m_fxPos.y != Fix(0) || m_fxPos.z != Fix(0))
 			handlePartitionCellMaintenance();
 	}
 }
@@ -6252,7 +6269,7 @@ void Object::doCommandButtonAtObject( const CommandButton *commandButton, Object
 			case GUI_COMMAND_COMBATDROP:
 				if( ai )
 				{
-					ai->aiCombatDrop( obj, *(obj->getPosition()), cmdSource );
+					ai->aiCombatDrop( obj, obj->getPositionFix()->toCoord3D(), cmdSource );	// P4: AI orders take float positions
 				}
 				return;
 			case GUI_COMMAND_SPECIAL_POWER:
@@ -6293,7 +6310,8 @@ void Object::doCommandButtonAtObject( const CommandButton *commandButton, Object
 						if( BitTest( commandButton->getOptions(), ATTACK_OBJECTS_POSITION ) )
 						{
 							//Actually, you know what.... we want to attack the object's location instead.
-							ai->aiAttackPosition( obj->getPosition(), commandButton->getMaxShotsToFire(), cmdSource );
+							Coord3D targetPos = obj->getPositionFix()->toCoord3D();	// P4: AI orders take float positions
+							ai->aiAttackPosition( &targetPos, commandButton->getMaxShotsToFire(), cmdSource );
 						}
 						else
 						{
@@ -6732,10 +6750,11 @@ Bool Object::getSingleLogicalBonePosition(const char* boneName, Coord3D* positio
 	}
 	else
 	{
-		if (position) 
-			*position = *getPosition();
-		if (transform) 
-			*transform = *getTransformMatrix();
+		// P6: the bone API is float, the drawable's bones and its callers with it
+		if (position)
+			*position = m_fxPos.toCoord3D();
+		if (transform)
+			m_fxTransform.toMatrix3D(transform);
 		return false;
 	}
 }
@@ -6777,8 +6796,11 @@ Bool Object::getSingleLogicalBonePositionOnTurret( WhichTurretType whichTurret, 
 	Matrix3D boneLogicTransform;
 	boneLogicTransform.mul( turnAdjustment, boneOffset );
 
+	// P6: the bone offsets are float drawable data, so the world transform is built in float
+	Matrix3D objTransform;
+	m_fxTransform.toMatrix3D(&objTransform);
 	Matrix3D worldTransform;
-	convertBonePosToWorldPos(NULL, &boneLogicTransform, NULL, &worldTransform);
+	worldTransform.mul( objTransform, boneLogicTransform );
 
 	Vector3 tmp = worldTransform.Get_Translation();
 	Coord3D worldPos;

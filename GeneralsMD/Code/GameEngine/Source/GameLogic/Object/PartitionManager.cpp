@@ -90,9 +90,10 @@
 #include "Common/PlayerList.h"
 #endif
 
+#include "Lib/FixBoundary.h"
+
 #ifdef PM_CACHE_TERRAIN_HEIGHT
 #include "common/mapobject.h"
-#include "Lib/FixBoundary.h"
 #endif
 
 /* Range queries this logic frame, and objects looked at inside them. Zeroed by
@@ -155,12 +156,34 @@ struct ThreatValueParms
 
 struct CollideInfo
 {
-	Coord3D position;
+	FCoord3D position;
 	GeometryInfo geom;
-	Real angle;
+	Fix angle;
 
-	CollideInfo(const Coord3D* p, const GeometryInfo& g, Real a) : position(*p), geom(g), angle(a) { }
+	CollideInfo(const FCoord3D* p, const GeometryInfo& g, Fix a) : position(*p), geom(g), angle(a) { }
 };
+
+/* The collision tests run in fixed point.  CollideLocAndNormal is float in the shared header and
+	 the collide modules take it that way (P4), so a result crosses over once, where a test is
+	 dispatched. */
+struct FCollideLocAndNormal
+{
+	FCoord3D loc;
+	FCoord3D normal;
+};
+
+static FCoord3D toFCoord3D(const Coord3D *c)
+{
+	FCoord3D f;
+	f.set(fixFromReal(c->x), fixFromReal(c->y), fixFromReal(c->z));
+	return f;
+}
+
+/// toward zero, the way the (Int) conversion of a float did
+static Int fixTruncToInt(Fix f)
+{
+	return (Int)(f.raw() / Fix::ONE_RAW);
+}
 
 struct CellValueProcParms
 {
@@ -186,7 +209,7 @@ static int cellValueProc(PartitionCell* cell, void* userData);
 			(thus the normal for b is exactly opposite in direction)
 	-- collideNormal is guaranteed to be a unit vector
 */
-typedef Bool (*CollideTestProc)(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
+typedef Bool (*CollideTestProc)(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
 
 // if the dist is greater than maxDist, return false, and the output stuff is undefined.
 typedef Bool (*DistCalcProc)
@@ -294,16 +317,16 @@ inline Bool filtersAllow(PartitionFilter **filters, Object *objOther)
 }
 
 //-----------------------------------------------------------------------------
-inline void vecDiff_2D(const Coord3D *posA, const Coord3D *posB, Coord3D *resultVec)
+inline void vecDiff_2D(const FCoord3D *posA, const FCoord3D *posB, FCoord3D *resultVec)
 {
 	DEBUG_ASSERTCRASH(posA && posB && resultVec, ("null parm"));
 	resultVec->x = posA->x - posB->x;
 	resultVec->y = posA->y - posB->y;
-	resultVec->z = 0.0f;
+	resultVec->z = Fix(0);
 }
 
 //-----------------------------------------------------------------------------
-inline void vecDiff_3D(const Coord3D *posA, const Coord3D *posB, Coord3D *resultVec)
+inline void vecDiff_3D(const FCoord3D *posA, const FCoord3D *posB, FCoord3D *resultVec)
 {
 	DEBUG_ASSERTCRASH(posA && posB && resultVec, ("null parm"));
 	resultVec->x = posA->x - posB->x;
@@ -312,15 +335,24 @@ inline void vecDiff_3D(const Coord3D *posA, const Coord3D *posB, Coord3D *result
 }
 
 //-----------------------------------------------------------------------------
-inline Real calcSqrDist_2D(const Coord3D *dist)
+inline Fix calcSqrDist_2D(const FCoord3D *dist)
 {
-	return sqr(dist->x) + sqr(dist->y);
+	return dist->x * dist->x + dist->y * dist->y;
 }
 
 //-----------------------------------------------------------------------------
-inline Real calcSqrDist_3D(const Coord3D *dist)
+inline Fix calcSqrDist_3D(const FCoord3D *dist)
 {
-	return sqr(dist->x) + sqr(dist->y) + sqr(dist->z);
+	return dist->lengthSqr();
+}
+
+//-----------------------------------------------------------------------------
+/// a zero vector stays zero, as Coord3D::normalize leaves it
+inline void normalizeFix(FCoord3D *v)
+{
+	Fix len = v->length();
+	if (len > Fix(0))
+		v->set(v->x / len, v->y / len, v->z / len);
 }
 
 //-----------------------------------------------------------------------------
@@ -342,59 +374,51 @@ inline Int maxInt(Int a, Int b)
 }
 
 //-----------------------------------------------------------------------------
-inline Real minReal(Real a, Real b)
-{
-	if (a < b) return a; else return b;
-}
-
-//-----------------------------------------------------------------------------
-inline Real maxReal(Real a, Real b)
-{
-	if (a > b) return a; else return b;
-}
-
-//-----------------------------------------------------------------------------
 //         Local Functions                                                      
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
 
-static void projectCoord3D(Coord3D *coord, const Coord3D *unitDir, Real dist);
-static void flipCoord3D(Coord3D *coord);
-
 static void rectToFourPoints(
 	const CollideInfo *a,		// z is ignored
-	Coord2D pts[]
+	FCoord2D pts[]
 );
 static void testRotatedPointsAgainstRect(
-	const Coord2D *pts,				// an array of 4
+	const FCoord2D *pts,				// an array of 4
 	const CollideInfo *a,
-	Coord2D *avg,
+	FCoord2D *avg,
 	Int *avgTot
 );
 
-static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool xy_collideTest_Rect_Circle(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool xy_collideTest_Circle_Rect(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool xy_collideTest_Circle_Circle(const Coord3D *a_pos, const Coord3D *b_pos, const Real a_radius, const Real b_radius, CollideLocAndNormal *cinfo);
+static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool xy_collideTest_Rect_Circle(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool xy_collideTest_Circle_Rect(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
 
-static Bool collideTest_Sphere_Sphere(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Sphere_Cylinder(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Sphere_Box(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Cylinder_Sphere(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Cylinder_Cylinder(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Cylinder_Box(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Box_Sphere(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Box_Cylinder(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
-static Bool collideTest_Box_Box(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo);
+static Bool collideTest_Sphere_Sphere(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Sphere_Cylinder(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Sphere_Box(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Cylinder_Sphere(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Cylinder_Cylinder(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Cylinder_Box(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Box_Sphere(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Box_Cylinder(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
+static Bool collideTest_Box_Box(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo);
 
 
 //-----------------------------------------------------------------------------
-inline void projectCoord3D(Coord3D *coord, const Coord3D *unitDir, Real dist)
+inline void projectCoord3D(FCoord3D *coord, const FCoord3D *unitDir, Fix dist)
 {
 	coord->x += unitDir->x * dist;
 	coord->y += unitDir->y * dist;
 	coord->z += unitDir->z * dist;
+}
+
+//-----------------------------------------------------------------------------
+inline void flipCoord3D(FCoord3D *coord)
+{
+	coord->x = -coord->x;
+	coord->y = -coord->y;
+	coord->z = -coord->z;
 }
 
 //-----------------------------------------------------------------------------
@@ -407,34 +431,28 @@ inline void flipCoord3D(Coord3D *coord)
 
 //-----------------------------------------------------------------------------
 static void testRotatedPointsAgainstRect(
-	const Coord2D *pts,				// an array of 4
+	const FCoord2D *pts,				// an array of 4
 	const CollideInfo *a,
-	Coord2D *avg,
+	FCoord2D *avg,
 	Int *avgTot
 )
 {
 	//DEBUG_ASSERTCRASH(a->geom.getGeomType() == GEOMETRY_BOX, ("only boxes are ok here"));
-	Real major = a->geom.getMajorRadius();
-	Real minor = (a->geom.getGeomType() == GEOMETRY_SPHERE) ? a->geom.getMajorRadius() : a->geom.getMinorRadius();
+	Fix major = a->geom.getMajorRadiusFix();
+	Fix minor = (a->geom.getGeomType() == GEOMETRY_SPHERE) ? a->geom.getMajorRadiusFix() : a->geom.getMinorRadiusFix();
 
-	Real c = (Real)Cos(-a->angle);
-	Real s = (Real)Sin(-a->angle);
+	Fix c = fixCos(-a->angle);
+	Fix s = fixSin(-a->angle);
 
 	for (Int i = 0; i < 4; ++i, ++pts)
 	{
 		// convert to a delta relative to rect ctr
-		Real ptx = pts->x - a->position.x;
-		Real pty = pts->y - a->position.y;
+		Fix ptx = pts->x - a->position.x;
+		Fix pty = pts->y - a->position.y;
 
 		// inverse-rotate it to the right coord system
-		Real ptx_new = (Real)fabs(ptx*c - pty*s);
-		Real pty_new = (Real)fabs(ptx*s + pty*c);
-
-		#ifdef INTENSE_DEBUG
-		Real mag_a = sqr(ptx)+sqr(pty);
-		Real mag_b = sqr(ptx_new)+sqr(pty_new);
-		DEBUG_ASSERTCRASH(fabs(mag_a - mag_b) <= 1.0, ("hmm, unlikely")); 
-		#endif
+		Fix ptx_new = fixAbs(ptx*c - pty*s);
+		Fix pty_new = fixAbs(ptx*s + pty*c);
 
 		if (ptx_new <= major && pty_new <= minor)
 		{
@@ -448,16 +466,16 @@ static void testRotatedPointsAgainstRect(
 //-----------------------------------------------------------------------------
 static void rectToFourPoints(
 	const CollideInfo *a,		// z is ignored
-	Coord2D pts[]
+	FCoord2D pts[]
 )
 {
-	Real c = (Real)Cos(a->angle);
-	Real s = (Real)Sin(a->angle);
+	Fix c = fixCos(a->angle);
+	Fix s = fixSin(a->angle);
 
-	Real exc = a->geom.getMajorRadius()*c;
-	Real eyc = a->geom.getMinorRadius()*c;
-	Real exs = a->geom.getMajorRadius()*s;
-	Real eys = a->geom.getMinorRadius()*s;
+	Fix exc = a->geom.getMajorRadiusFix()*c;
+	Fix eyc = a->geom.getMinorRadiusFix()*c;
+	Fix exs = a->geom.getMajorRadiusFix()*s;
+	Fix eys = a->geom.getMinorRadiusFix()*s;
 
 	// tl
 	pts[0].x = a->position.x - exc - eys;
@@ -480,7 +498,7 @@ static void rectToFourPoints(
 /**
 	2d utility routine for rect/cyl & rect/sphere collisions testing.
 */
-static Bool xy_collideTest_Circle_Rect(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool xy_collideTest_Circle_Rect(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	Bool result = xy_collideTest_Rect_Circle(b, a, cinfo);
 	if (cinfo)
@@ -492,68 +510,36 @@ static Bool xy_collideTest_Circle_Rect(const CollideInfo *a, const CollideInfo *
 /**
 	2d utility routine for rect/cyl & rect/sphere collisions testing.
 */
-static Bool xy_collideTest_Rect_Circle(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool xy_collideTest_Rect_Circle(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
-#if 1
-	/// @todo srj -- this is better than the other one, since it actually handles rotated rects,
-	// but still not as accurate as is could be. (srj)
+	/// @todo srj -- this handles rotated rects, but is still not as accurate as it could be:
+	/// the circle is tested as the square around it. (srj)
 	CollideInfo btmp = *b;
-	btmp.geom.setMinorRadius(btmp.geom.getMajorRadius());
+	btmp.geom.setMinorRadiusFix(btmp.geom.getMajorRadiusFix());
 	return xy_collideTest_Rect_Rect(a, &btmp, cinfo);
-#else
-	// note, this actually tests the intersection of the the rect with the circle's
-	// bounding box. in practice, this is usually good enough, since most of
-	// our sphere/cyl shapes are small relative to boxes. (in fact, the WWMath
-	// library takes a similar shortcut when colliding spheres with boxes in 3d.
-	// so I figured it was probably good enough for us too.)
-
-	Real circ_l = b->position.x - b->geom.getMajorRadius();
-	Real circ_r = b->position.x + b->geom.getMajorRadius();
-	Real circ_t = b->position.y - b->geom.getMajorRadius();
-	Real circ_b = b->position.y + b->geom.getMajorRadius();
-	Real rect_l = a->position.x - a->geom.getMajorRadius();
-	Real rect_r = a->position.x + a->geom.getMajorRadius();
-	Real rect_t = a->position.y - a->geom.getMinorRadius();
-	Real rect_b = a->position.y + a->geom.getMinorRadius();
-
-	if (circ_r >= rect_l &&	circ_l <= rect_r &&
-		circ_b >= rect_t &&	circ_t <= rect_b)
-	{
-		if (cinfo)
-		{
-			vecDiff_2D(&b->position, &a->position, &cinfo->normal);
-			cinfo->normal.normalize();
-			cinfo->loc.x = (maxReal(circ_l, rect_l) + minReal(circ_r, rect_r)) * 0.5f;
-			cinfo->loc.y = (maxReal(circ_t, rect_t) + minReal(circ_b, rect_b)) * 0.5f;
-			cinfo->loc.z = (a->position.z + b->position.z) * 0.5f;
-		}
-		return true;
-	}
-	return false;
-#endif
 }
 
 //-----------------------------------------------------------------------------
 /**
 	2d utility routine for cyl & sphere collisions testing.
 */
-static Bool xy_collideTest_Circle_Circle(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool xy_collideTest_Circle_Circle(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
-	Coord3D diff;
+	FCoord3D diff;
 	vecDiff_2D(&b->position, &a->position, &diff);
-	Real distSqr = calcSqrDist_2D(&diff);
-	Real touchingDistSqr = sqr(a->geom.getMajorRadius() + b->geom.getMajorRadius());
-	if (distSqr <= touchingDistSqr)
+	Fix distSqr = calcSqrDist_2D(&diff);
+	Fix touchingDist = a->geom.getMajorRadiusFix() + b->geom.getMajorRadiusFix();
+	if (distSqr <= touchingDist * touchingDist)
 	{
 		// calc the approximate location and normal.
 		if (cinfo)
 		{
 			cinfo->normal = diff;
-			cinfo->normal.normalize();
+			normalizeFix(&cinfo->normal);
 			cinfo->loc = a->position;
-			projectCoord3D(&cinfo->loc, &cinfo->normal, a->geom.getMajorRadius());
+			projectCoord3D(&cinfo->loc, &cinfo->normal, a->geom.getMajorRadiusFix());
 		}
-		
+
 		return true;
 	}
 	return false;
@@ -563,10 +549,10 @@ static Bool xy_collideTest_Circle_Circle(const CollideInfo *a, const CollideInfo
 /**
 	2d utility routine for rect collisions testing.
 */
-static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
-	Coord2D pts[4];
-	Coord2D avg; avg.x = avg.y = 0.0f;
+	FCoord2D pts[4];
+	FCoord2D avg; avg.zero();
 	Int avgTot = 0;
 
 	rectToFourPoints(a, pts);
@@ -580,9 +566,9 @@ static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b,
 		if (cinfo)
 		{
 			// this is a little hokey, but generally adequate...
-			cinfo->loc.x = avg.x / avgTot;
-			cinfo->loc.y = avg.y / avgTot;
-			cinfo->loc.z = (a->position.z + b->position.z) * 0.5f;
+			cinfo->loc.x = avg.x / Fix(avgTot);
+			cinfo->loc.y = avg.y / Fix(avgTot);
+			cinfo->loc.z = (a->position.z + b->position.z) * 0.5_fx;
 
 			// yow, what exactly does it mean to find the normal to two *intersecting*
 			// rects? with "true" physics we could project ahead and determine 
@@ -598,7 +584,7 @@ static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b,
 			// or (b) come up with a better definition of a useful normal in this case,
 			// I'm not sure we can do a whole lot better... (srj)
 			vecDiff_2D(&b->position, &a->position, &cinfo->normal);
-			cinfo->normal.normalize();
+			normalizeFix(&cinfo->normal);
 		}
 		return true;
 	}
@@ -606,10 +592,10 @@ static Bool xy_collideTest_Rect_Rect(const CollideInfo *a, const CollideInfo *b,
 }
 
 //-----------------------------------------------------------------------------
-inline Bool z_collideTest_Sphere_Nonsphere(CollideTestProc xyproc, const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+inline Bool z_collideTest_Sphere_Nonsphere(CollideTestProc xyproc, const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	// case 1: center of sphere is within the nonsphere z-space.
-	if (a->position.z >= b->position.z && a->position.z <= b->position.z + b->geom.getMaxHeightAbovePosition())
+	if (a->position.z >= b->position.z && a->position.z <= b->position.z + b->geom.getMaxHeightAbovePositionFix())
 	{
 		if (xyproc(a, b, cinfo))
 		{
@@ -627,13 +613,15 @@ inline Bool z_collideTest_Sphere_Nonsphere(CollideTestProc xyproc, const Collide
 	// major-radius of top or bottom.
 
 	// 2a: sphere is below the nonsphere
-	Real b_bot = b->position.z;
-	if (a->position.z < b_bot && a->position.z + a->geom.getMajorRadius() >= b_bot)
+	const Fix aRadius = a->geom.getMajorRadiusFix();
+	Fix b_bot = b->position.z;
+	if (a->position.z < b_bot && a->position.z + aRadius >= b_bot)
 	{
 		// find the radius of the slice of the sphere that is at b_bot
 		CollideInfo amod = *a;
 		amod.position.z = b_bot;
-		amod.geom.setMajorRadius((Real)sqrtf(sqr(a->geom.getMajorRadius()) - sqr(b_bot - a->position.z)));
+		Fix dz = b_bot - a->position.z;
+		amod.geom.setMajorRadiusFix(fixSqrt(aRadius * aRadius - dz * dz));
 		if (xyproc(&amod, b, cinfo))
 		{
 			// if you want to have 'end' collisions, you should add something like:
@@ -646,12 +634,13 @@ inline Bool z_collideTest_Sphere_Nonsphere(CollideTestProc xyproc, const Collide
 	}
 
 	// 2b: sphere is above the nonsphere
-	Real b_top = b->position.z + b->geom.getMaxHeightAbovePosition();
-	if (a->position.z > b_top && a->position.z - a->geom.getMajorRadius() <= b_top)
+	Fix b_top = b->position.z + b->geom.getMaxHeightAbovePositionFix();
+	if (a->position.z > b_top && a->position.z - aRadius <= b_top)
 	{
 		CollideInfo amod = *a;
 		amod.position.z = b_top;
-		amod.geom.setMajorRadius((Real)sqrtf(sqr(a->geom.getMajorRadius()) - sqr(a->position.z - b_top)));
+		Fix dz = a->position.z - b_top;
+		amod.geom.setMajorRadiusFix(fixSqrt(aRadius * aRadius - dz * dz));
 		if (xyproc(&amod, b, cinfo))
 		{
 			// if you want to have 'end' collisions, you should add something like:
@@ -667,22 +656,19 @@ inline Bool z_collideTest_Sphere_Nonsphere(CollideTestProc xyproc, const Collide
 }
 
 //-----------------------------------------------------------------------------
-inline Bool z_collideTest_Nonsphere_Nonsphere(CollideTestProc xyproc, const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+inline Bool z_collideTest_Nonsphere_Nonsphere(CollideTestProc xyproc, const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	// note: we already know that there is a z-intersection (our caller filters that out)
 	// so we need not recheck that here.
 
 	// Preflight for close objects.
-	Real dSqr = sqr(a->position.x-b->position.x) + sqr(a->position.y-b->position.y);
-	Real minRadius = a->geom.getMajorRadius();
-	Real r = a->geom.getMinorRadius();
-	if (minRadius>r) minRadius = r;
-	r = b->geom.getMajorRadius();
-	if (minRadius>r) minRadius = r;
-	r = b->geom.getMinorRadius();
-	if (minRadius>r) minRadius = r;
-	
-	Bool closeEnough = sqr(minRadius) > dSqr;
+	Fix dx = a->position.x - b->position.x;
+	Fix dy = a->position.y - b->position.y;
+	Fix dSqr = dx*dx + dy*dy;
+	Fix minRadius = fixMin(fixMin(a->geom.getMajorRadiusFix(), a->geom.getMinorRadiusFix()),
+		fixMin(b->geom.getMajorRadiusFix(), b->geom.getMinorRadiusFix()));
+
+	Bool closeEnough = minRadius * minRadius > dSqr;
 
 	if (closeEnough || xyproc(a, b, cinfo))
 	{
@@ -697,9 +683,9 @@ inline Bool z_collideTest_Nonsphere_Nonsphere(CollideTestProc xyproc, const Coll
 		if (cinfo)
 		{
 			if (b->position.z > a->position.z)
-				cinfo->loc.z = (b->position.z + a->position.z + a->geom.getMaxHeightAbovePosition()) * 0.5f;
+				cinfo->loc.z = (b->position.z + a->position.z + a->geom.getMaxHeightAbovePositionFix()) * 0.5_fx;
 			else
-				cinfo->loc.z = (a->position.z + b->position.z + b->geom.getMaxHeightAbovePosition()) * 0.5f;
+				cinfo->loc.z = (a->position.z + b->position.z + b->geom.getMaxHeightAbovePositionFix()) * 0.5_fx;
 		}
 		return true;
 	}
@@ -708,20 +694,20 @@ inline Bool z_collideTest_Nonsphere_Nonsphere(CollideTestProc xyproc, const Coll
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Sphere_Sphere(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Sphere_Sphere(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
-	Coord3D diff;
+	FCoord3D diff;
 	vecDiff_3D(&b->position, &a->position, &diff);
-	Real distSqr = calcSqrDist_3D(&diff);
-	Real touchingDistSqr = sqr(a->geom.getMajorRadius() + b->geom.getMajorRadius());
-	if (distSqr <= touchingDistSqr)
+	Fix distSqr = calcSqrDist_3D(&diff);
+	Fix touchingDist = a->geom.getMajorRadiusFix() + b->geom.getMajorRadiusFix();
+	if (distSqr <= touchingDist * touchingDist)
 	{
 		if (cinfo)
 		{
 			cinfo->normal = diff;
-			cinfo->normal.normalize();
+			normalizeFix(&cinfo->normal);
 			cinfo->loc = a->position;
-			projectCoord3D(&cinfo->loc, &cinfo->normal, a->geom.getMajorRadius());
+			projectCoord3D(&cinfo->loc, &cinfo->normal, a->geom.getMajorRadiusFix());
 		}
 
 		return true;
@@ -730,19 +716,19 @@ static Bool collideTest_Sphere_Sphere(const CollideInfo *a, const CollideInfo *b
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Sphere_Cylinder(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Sphere_Cylinder(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	return z_collideTest_Sphere_Nonsphere(xy_collideTest_Circle_Circle, a, b, cinfo);
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Sphere_Box(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Sphere_Box(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	return z_collideTest_Sphere_Nonsphere(xy_collideTest_Circle_Rect, a, b, cinfo);
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Cylinder_Sphere(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Cylinder_Sphere(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	Bool result = z_collideTest_Sphere_Nonsphere(xy_collideTest_Circle_Circle, b, a, cinfo);
 	if (cinfo)
@@ -751,19 +737,19 @@ static Bool collideTest_Cylinder_Sphere(const CollideInfo *a, const CollideInfo 
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Cylinder_Cylinder(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Cylinder_Cylinder(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	return z_collideTest_Nonsphere_Nonsphere(xy_collideTest_Circle_Circle, a, b, cinfo);
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Cylinder_Box(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Cylinder_Box(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	return z_collideTest_Nonsphere_Nonsphere(xy_collideTest_Circle_Rect, a, b, cinfo);
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Box_Sphere(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Box_Sphere(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	Bool result = z_collideTest_Sphere_Nonsphere(xy_collideTest_Circle_Rect, b, a, cinfo);
 	if (cinfo)
@@ -772,13 +758,13 @@ static Bool collideTest_Box_Sphere(const CollideInfo *a, const CollideInfo *b, C
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Box_Cylinder(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Box_Cylinder(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	return z_collideTest_Nonsphere_Nonsphere(xy_collideTest_Rect_Circle, a, b, cinfo);
 }
 
 //-----------------------------------------------------------------------------
-static Bool collideTest_Box_Box(const CollideInfo *a, const CollideInfo *b, CollideLocAndNormal *cinfo)
+static Bool collideTest_Box_Box(const CollideInfo *a, const CollideInfo *b, FCollideLocAndNormal *cinfo)
 {
 	return z_collideTest_Nonsphere_Nonsphere(xy_collideTest_Rect_Rect, a, b, cinfo);
 }
@@ -2002,14 +1988,14 @@ Bool PartitionData::collidesWith(const PartitionData *that, CollideLocAndNormal 
 	if( thisObj->isKindOf( KINDOF_NO_COLLIDE )  ||  thatObj->isKindOf( KINDOF_NO_COLLIDE ) )
 		return FALSE; // A collision extent of zero size is still a point and can collide, but we don't always want to.
 
-	CollideInfo thisInfo(thisObj->getPosition(), thisObj->getGeometryInfo(), thisObj->getOrientation());
-	CollideInfo thatInfo(thatObj->getPosition(), thatObj->getGeometryInfo(), thatObj->getOrientation());
+	CollideInfo thisInfo(thisObj->getPositionFix(), thisObj->getGeometryInfo(), thisObj->getOrientationFix());
+	CollideInfo thatInfo(thatObj->getPositionFix(), thatObj->getGeometryInfo(), thatObj->getOrientationFix());
 
 	// invariant for all geometries: first do z collision check.
-	Real thisTop = thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePosition();
-	Real thisBot = thisInfo.position.z - thisInfo.geom.getMaxHeightBelowPosition();
-	Real thatTop = thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePosition();
-	Real thatBot = thatInfo.position.z - thatInfo.geom.getMaxHeightBelowPosition();
+	Fix thisTop = thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePositionFix();
+	Fix thisBot = thisInfo.position.z - thisInfo.geom.getMaxHeightBelowPositionFix();
+	Fix thatTop = thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePositionFix();
+	Fix thatBot = thatInfo.position.z - thatInfo.geom.getMaxHeightBelowPositionFix();
 	if (thisTop >= thatBot && thisBot <= thatTop)
 	{
 		GeometryType thisGeom = thisObj->getGeometryInfo().getGeomType();
@@ -2020,7 +2006,15 @@ Bool PartitionData::collidesWith(const PartitionData *that, CollideLocAndNormal 
 		// order in which they appear in the enum list
 		//
 		CollideTestProc collideProc = theCollideTestProcs[ (thisGeom - GEOMETRY_FIRST) * GEOMETRY_NUM_TYPES + (thatGeom - GEOMETRY_FIRST) ];
-		return (*collideProc)(&thisInfo, &thatInfo, cinfo);
+		FCollideLocAndNormal floc;
+		Bool hit = (*collideProc)(&thisInfo, &thatInfo, cinfo ? &floc : NULL);
+		if (hit && cinfo)
+		{
+			// P4: the collide modules take the contact in float
+			cinfo->loc = floc.loc.toCoord3D();
+			cinfo->normal = floc.normal.toCoord3D();
+		}
+		return hit;
 	}
 	else
 	{
@@ -2038,12 +2032,15 @@ Bool PartitionManager::geomCollidesWithGeom(const Coord3D* pos1,
 		const GeometryInfo& geom2,
 		Real angle2) const
 {
-	CollideInfo thisInfo(pos1, geom1, angle1);
-	CollideInfo thatInfo(pos2, geom2, angle2);
+	// P9: this is float in the shared header; its arguments cross over here
+	FCoord3D fpos1 = toFCoord3D(pos1);
+	FCoord3D fpos2 = toFCoord3D(pos2);
+	CollideInfo thisInfo(&fpos1, geom1, fixFromReal(angle1));
+	CollideInfo thatInfo(&fpos2, geom2, fixFromReal(angle2));
 
 	// invariant for all geometries: first do z collision check.
-	if (thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePosition() >= thatInfo.position.z && 
-			thisInfo.position.z <= thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePosition())
+	if (thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePositionFix() >= thatInfo.position.z &&
+			thisInfo.position.z <= thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePositionFix())
 	{
 		GeometryType thisGeom = geom1.getGeomType();
 		GeometryType thatGeom = geom2.getGeomType();
@@ -2053,7 +2050,7 @@ Bool PartitionManager::geomCollidesWithGeom(const Coord3D* pos1,
 		// order in which they appear in the enum list
 		//
 		CollideTestProc collideProc = theCollideTestProcs[ (thisGeom - GEOMETRY_FIRST) * GEOMETRY_NUM_TYPES + (thatGeom - GEOMETRY_FIRST) ];
-		CollideLocAndNormal cloc;
+		FCollideLocAndNormal cloc;
 		return (*collideProc)(&thisInfo, &thatInfo, &cloc);
 	}
 	else
@@ -2080,10 +2077,11 @@ void PartitionData::updateCellsTouched()
 		//we have no object using this PartitionData but we still have a GhostObject so copy its data.
 		geom = obj->getGeometryInfo().getGeomType();
 		isSmall = obj->getGeometryInfo().getIsSmall();
-		pos = *(obj->getPosition());
-		angle = obj->getOrientation();
-		majorRadius = obj->getGeometryInfo().getMajorRadius();
-		minorRadius = obj->getGeometryInfo().getMinorRadius();
+		// P9: the cell grid and the ghost object beside it are float
+		pos = obj->getPositionFix()->toCoord3D();
+		angle = fixToReal(obj->getOrientationFix());
+		majorRadius = fixToReal(obj->getGeometryInfo().getMajorRadiusFix());
+		minorRadius = fixToReal(obj->getGeometryInfo().getMinorRadiusFix());
 	}
 	else if (m_ghostObject)
 	{
@@ -2220,8 +2218,9 @@ Int PartitionData::calcMaxCoiForObject()
 	DEBUG_ASSERTCRASH(obj != NULL, ("must be attached to an Object here 2"));
 	
 	GeometryType geom = obj->getGeometryInfo().getGeomType();
-	Real majorRadius = obj->getGeometryInfo().getMajorRadius();
-	Real minorRadius = obj->getGeometryInfo().getMinorRadius();
+	// P9: calcMaxCoiForShape is float in the shared header
+	Real majorRadius = fixToReal(obj->getGeometryInfo().getMajorRadiusFix());
+	Real minorRadius = fixToReal(obj->getGeometryInfo().getMinorRadiusFix());
 	Bool isSmall = obj->getGeometryInfo().getIsSmall();
 #if defined(_DEBUG) || defined(_INTERNAL)
 theObjName = obj->getTemplate()->getName();
@@ -2623,7 +2622,8 @@ static void calcHeights(const Region3D& world, Real cellSize, Int x, Int y, Real
 	{
 		for (Real xx = 0; xx <= cellSize; xx += step) 
 		{
-			Real h = TheTerrainLogic->getGroundHeight( xbase + xx, ybase + yy );
+			// P9: the cells' cached extremes are float in the shared header
+			Real h = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( xbase + xx ), fixFromReal( ybase + yy ) ) );
 			if (h < loZ) loZ = h;
 			if (h > hiZ) hiZ = h;
 		}
@@ -2828,7 +2828,7 @@ void PartitionManager::update()
 					Coord3D pos = { m_cells[i].getCellX() * size, 
 													m_cells[i].getCellY() * size, 
 													0 };
-					pos.z = TheTerrainLogic->getGroundHeight(pos.x, pos.y);
+					pos.z = fixToReal(TheTerrainLogic->getGroundHeightFix(fixFromReal(pos.x), fixFromReal(pos.y)));	// a debug icon, drawn
 					RGBColor color;
 					color.red = threatMul;
 					color.blue = 0.0f;
@@ -2858,7 +2858,7 @@ void PartitionManager::update()
 					Coord3D pos = { m_cells[i].getCellX() * size, 
 													m_cells[i].getCellY() * size, 
 													0 };
-					pos.z = TheTerrainLogic->getGroundHeight(pos.x, pos.y);
+					pos.z = fixToReal(TheTerrainLogic->getGroundHeightFix(fixFromReal(pos.x), fixFromReal(pos.y)));	// a debug icon, drawn
 					RGBColor color;
 					color.red = 0.0f;
 					color.blue = 0.0f;
@@ -3541,13 +3541,6 @@ SimpleObjectIterator *PartitionManager::iterateObjectsInRangeFix(const FCoord3D 
 //-----------------------------------------------------------------------------
 // P2 shims over the Fix queries above
 //-----------------------------------------------------------------------------
-static FCoord3D toFCoord3D(const Coord3D *c)
-{
-	FCoord3D f;
-	f.set(fixFromReal(c->x), fixFromReal(c->y), fixFromReal(c->z));
-	return f;
-}
-
 static void fromFCoord3D(const FCoord3D &f, Coord3D *c)
 {
 	if (c)
@@ -3596,13 +3589,18 @@ Object *PartitionManager::getClosestObject(
 //-----------------------------------------------------------------------------
 void PartitionManager::getVectorTo(const Object *obj, const Object *otherObj, DistanceCalculationType dc, Coord3D& vec)
 {
-	getDistanceSquared(obj, otherObj, dc, &vec);
+	FCoord3D fvec;
+	getDistanceSquaredFix(obj, otherObj, dc, &fvec);
+	vec = fvec.toCoord3D();
 }
 
 //-----------------------------------------------------------------------------
 void PartitionManager::getVectorTo(const Object *obj, const Coord3D *pos, DistanceCalculationType dc, Coord3D& vec)
 {
-	getDistanceSquared(obj, pos, dc, &vec);
+	FCoord3D fvec;
+	FCoord3D fpos = toFCoord3D(pos);
+	getDistanceSquaredFix(obj, &fpos, dc, &fvec);
+	vec = fvec.toCoord3D();
 }
 
 //-----------------------------------------------------------------------------
@@ -3647,58 +3645,33 @@ Real PartitionManager::getGoalDistanceSquared(const Object *obj, const Coord3D *
 }
 
 //-----------------------------------------------------------------------------
+/* The signed angle from the object's heading to pos, in (-PI, PI].  EA took the acos of the dot of
+	 the two unit vectors and signed it with their cross product; the atan2 of cross over dot is the
+	 same angle, and needs neither the normalizing nor the clamp. */
+static Fix relativeAngle2DFix( const Object *obj, const FCoord3D &pos )
+{
+	const FCoord3D *objPos = obj->getPositionFix();
+	Fix vx = pos.x - objPos->x;
+	Fix vy = pos.y - objPos->y;
+	if (vx == Fix(0) && vy == Fix(0))
+		return Fix(0);
+
+	const FCoord3D *dir = obj->getUnitDirectionVector2DFix();
+	Fix c = dir->x*vx + dir->y*vy;
+	Fix perpZ = dir->x*vy - dir->y*vx;
+	return fixAtan2( perpZ, c );
+}
+
+//-----------------------------------------------------------------------------
 Real PartitionManager::getRelativeAngle2D( const Object *obj, const Object *otherObj )
 {
-	return getRelativeAngle2D(obj, otherObj->getPosition());
+	return fixToReal( relativeAngle2DFix( obj, *otherObj->getPositionFix() ) );
 }
 
 //-----------------------------------------------------------------------------
 Real PartitionManager::getRelativeAngle2D( const Object *obj, const Coord3D *pos )
 {
-	Coord3D v;
-	
-	// compute vector to given position
-	Coord3D objPos = *obj->getPosition();
-	v.x = pos->x - objPos.x;
-	v.y = pos->y - objPos.y;
-	v.z = 0.0f;
-
-	Real dist = (Real)sqrtf(sqr(v.x) + sqr(v.y));
-
-	// normalize
-	if (dist == 0.0f)
-		return 0.0f;
-
-
-	const Coord3D *dir = obj->getUnitDirectionVector2D();
-
-	Real distInv = 1.0f / dist;
-	v.x *= distInv;
-	v.y *= distInv;
-	v.z *= distInv;
-
-	// dot of two unit vectors is cos of angle
-	Real c = dir->x*v.x + dir->y*v.y; // + dir->z*v.z;
-
-	// bound it in case of numerical error
-	if (c < -1.0)
-		c = -1.0;
-	else if (c > 1.0)
-		c = 1.0;
-
-	Real value = (Real)ACos( c );
-
-	// Determine sign by checking Z component of dir cross v
-	// Note this is assumes 2D, and is identical to dotting the perpendicular of v with dir
-	Real perpZ = dir->x * v.y - dir->y * v.x;
-	if (perpZ < 0.0f)
-		value = -value;
-
-	// note: to make this 3D, 'dir' and 'v' can be normalized and dotted just as they are
-	// to test sign, compute N = dir X v, then P = N x dir, then S = P . v, where sign of
-	// S is sign of angle - MSB
-
-	return value;
+	return fixToReal( relativeAngle2DFix( obj, toFCoord3D( pos ) ) );
 }
 
 //-----------------------------------------------------------------------------
@@ -3789,7 +3762,7 @@ SimpleObjectIterator *PartitionManager::iterateAllObjects(PartitionFilter **filt
 		Object *obj = mod->getObject();
 		if (obj && filtersAllow(filters, obj))
 		{
-			iter->insert( obj );
+			iter->insertFix( obj, Fix(0) );
 		}
 	}
 
@@ -3806,28 +3779,35 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 																		Coord3D *result )
 {
 
-	// compute the spot on the terrain we've picked
-	Coord3D pos;
-	pos.x = dist * Cos( angle ) + center->x;
-	pos.y = dist * Sin( angle ) + center->y;
+	// compute the spot on the terrain we've picked, in fixed point.  P9: findPositionAround, its
+	// options and its result are float in the shared header, so they cross over here
+	FCoord3D fcenter = toFCoord3D( center );
+	Fix fdist = fixFromReal( dist );
+	Fix fangle = fixFromReal( angle );
+	FCoord3D fpos;
+	fpos.x = fdist * fixCos( fangle ) + fcenter.x;
+	fpos.y = fdist * fixSin( fangle ) + fcenter.y;
 
 	PathfindLayerEnum layer = LAYER_GROUND;
 	if ((options->flags & FPF_USE_HIGHEST_LAYER) != 0)
 	{
-		pos.z = 99999.0f;
-		layer = TheTerrainLogic->getHighestLayerForDestination(&pos);
-		pos.z = TheTerrainLogic->getLayerHeight(pos.x, pos.y, layer);
+		fpos.z = Fix( 99999 );
+		Coord3D probe = fpos.toCoord3D();
+		layer = TheTerrainLogic->getHighestLayerForDestination(&probe);
+		fpos.z = TheTerrainLogic->getLayerHeightFix(fpos.x, fpos.y, layer);
 		// ensure we are slightly above the bridge, to account for fudge & sloppy art
 		if (layer != LAYER_GROUND)
-			pos.z += 1.0f;
+			fpos.z += Fix( 1 );
 	}
 	else
 	{
-		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		fpos.z = TheTerrainLogic->getGroundHeightFix( fpos.x, fpos.y );
 	}
 
-	if (fabs(pos.z - center->z) > options->maxZDelta)
+	if (fixAbs(fpos.z - fcenter.z) > fixFromReal( options->maxZDelta ))
 		return FALSE;
+
+	Coord3D pos = fpos.toCoord3D();	// for the float queries below and the result
 
 	//
 	// we don't usually find positions on cliffs.
@@ -3842,7 +3822,7 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 	// someday, add bit options for this, like for water.
 	//
 	{
-		Int cellX = REAL_TO_INT_FLOOR(pos.x / PATHFIND_CELL_SIZE);
+		Int cellX = REAL_TO_INT_FLOOR(pos.x / PATHFIND_CELL_SIZE);	// P5: the pathfinder's own cell math
 		Int cellY = REAL_TO_INT_FLOOR(pos.y / PATHFIND_CELL_SIZE);
 		PathfindCell* cell = TheAI->pathfinder()->getCell(layer, cellX, cellY);
 		if (!cell || cell->getType() == PathfindCell::CELL_IMPASSABLE)
@@ -3860,7 +3840,7 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 	//
 	if( BitTest( options->flags, FPF_IGNORE_WATER ) == FALSE )
 	{
-		Bool isUnderwater = TheTerrainLogic->isUnderwater( pos.x, pos.y );
+		Bool isUnderwater = TheTerrainLogic->isUnderwaterFix( fpos.x, fpos.y );
 
 		//
 		// if we want water spots only and this is underwater it's no good, otherwise we want
@@ -3957,8 +3937,9 @@ Bool PartitionManager::tryPosition( const Coord3D *center,
 		const AIUpdateInterface *ai = options->sourceToPathToDest->getAIUpdateInterface();
 
 		// check for path existence
+		Coord3D sourcePos = options->sourceToPathToDest->getPositionFix()->toCoord3D();	// P5: the pathfinder is float
 		if( ai && TheAI->pathfinder()->clientSafeQuickDoesPathExist( ai->getLocomotorSet(),
-																									options->sourceToPathToDest->getPosition(),
+																									&sourcePos,
 																									&pos ) == FALSE )
 				return FALSE;
 
@@ -4353,7 +4334,8 @@ static Real sightBlockingHeight( PartitionCell *cell, const Object *looker, cons
 		if( Object_isAwaitingBuilder( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ), obj->getConstructionPercent() ) )
 			continue;
 
-		height = max( height, obj->getPosition()->z + obj->getGeometryInfo().getMaxHeightAbovePosition() );
+		// P9: the shroud's heights are float, like the cell cache they start from
+		height = max( height, fixToReal( obj->getPositionFix()->z + obj->getGeometryInfo().getMaxHeightAbovePositionFix() ) );
 	}
 	return height;
 }
@@ -4835,12 +4817,13 @@ Bool PartitionManager::isClearLineOfSightTerrain(const Object* obj, const Coord3
 	
 	if (obj)
 	{
-		pos = *obj->getPosition();
+		FCoord3D eye = *obj->getPositionFix();
 		// note that we want to measure from the top of the collision
 		// shape, not the bottom! (most objects have eyes a lot closer
 		// to their head than their feet. if we have really odd critters
 		// with eye-feet, we'll need to change this assumption.)
-		pos.z += obj->getGeometryInfo().getMaxHeightAbovePosition();
+		eye.z += obj->getGeometryInfo().getMaxHeightAbovePositionFix();
+		pos = eye.toCoord3D();	// P9: the terrain's line of sight is float
 	}
 	else
 	{
@@ -4849,12 +4832,13 @@ Bool PartitionManager::isClearLineOfSightTerrain(const Object* obj, const Coord3
 
 	if (other)
 	{
-		posOther = *other->getPosition();
+		FCoord3D eye = *other->getPositionFix();
 		// note that we want to measure from the top of the collision
 		// shape, not the bottom! (most objects have eyes a lot closer
 		// to their head than their feet. if we have really odd critters
 		// with eye-feet, we'll need to change this assumption.)
-		posOther.z += other->getGeometryInfo().getMaxHeightAbovePosition();
+		eye.z += other->getGeometryInfo().getMaxHeightAbovePositionFix();
+		posOther = eye.toCoord3D();	// P9: the terrain's line of sight is float
 	}
 	else
 	{
@@ -5041,32 +5025,29 @@ void PartitionManager::loadPostProcess( void )
 //-----------------------------------------------------------------------------
 Real PartitionManager::getGroundOrStructureHeight(Real posx, Real posy)
 {
+	// P9: float in the shared header; the work inside is fixed
+	FCoord3D pos;
+	pos.x = fixFromReal( posx );
+	pos.y = fixFromReal( posy );
+
 	// get the terrain height
-	Real terrainHeightHere = TheTerrainLogic->getGroundHeight( posx, posy );
+	pos.z = TheTerrainLogic->getGroundHeightFix( pos.x, pos.y );
 
 	// scan all objects in the radius of our extent and find the tallest height among them
 	PartitionFilterAcceptByKindOf filter1( MAKE_KINDOF_MASK( KINDOF_STRUCTURE ), KINDOFMASK_NONE );
 	PartitionFilter *filters[] = { &filter1, NULL };
-  Coord3D pos;
-  pos.x = posx;
-  pos.y = posy;
-  pos.z = terrainHeightHere;
-	const Real RANGE = 1.0f;
-	ObjectIterator *iter = iterateObjectsInRange( &pos, RANGE, FROM_BOUNDINGSPHERE_2D, filters );
+	const Fix RANGE = Fix( 1 );
+	ObjectIterator *iter = iterateObjectsInRangeFix( &pos, RANGE, FROM_BOUNDINGSPHERE_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 
-	Real tallestHeight = 0.0f;
-	Real thisHeight;
+	Fix tallestHeight = Fix( 0 );
 	for( Object* obj = iter->first(); obj; obj = iter->next() )
 	{
 		// store the height of the tallest object under us
-		thisHeight = obj->getGeometryInfo().getMaxHeightAbovePosition();
-		if( thisHeight > tallestHeight )
-			tallestHeight = thisHeight;
-
+		tallestHeight = fixMax( tallestHeight, obj->getGeometryInfo().getMaxHeightAbovePositionFix() );
 	}
-		
-  return terrainHeightHere + tallestHeight;
+
+  return fixToReal( pos.z + tallestHeight );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5465,15 +5446,16 @@ Bool PartitionFilterRepulsor::allow( Object *other )
 Bool PartitionFilterIrregularArea::allow( Object *other )
 {
 
-	return PointInsideArea2D(other->getPosition(), m_area, m_numPointsInArea);
+	Coord3D pos = other->getPositionFix()->toCoord3D();	// P7: the area is float script data
+	return PointInsideArea2D(&pos, m_area, m_numPointsInArea);
 }
 
 //-----------------------------------------------------------------------------
 Bool PartitionFilterPolygonTrigger::allow( Object *other )
 {
 	ICoord3D iPos;
-	iPos.x = other->getPosition()->x;
-	iPos.y = other->getPosition()->y;
+	iPos.x = fixTruncToInt(other->getPositionFix()->x);
+	iPos.y = fixTruncToInt(other->getPositionFix()->y);
 	iPos.z = 0; // Trigger areas compare on xy only.
 	return m_trigger->pointInTrigger(iPos);
 }
@@ -5579,14 +5561,16 @@ PartitionFilterWouldCollide::PartitionFilterWouldCollide(const Coord3D& pos, con
 
 Bool PartitionFilterWouldCollide::allow(Object *objOther)
 {
-	CollideInfo thisInfo(&m_position, m_geom, m_angle);
-	CollideInfo thatInfo(objOther->getPosition(), objOther->getGeometryInfo(), objOther->getOrientation());
+	// P9: the filter's own position and angle are float members in the shared header
+	FCoord3D thisPos = toFCoord3D(&m_position);
+	CollideInfo thisInfo(&thisPos, m_geom, fixFromReal(m_angle));
+	CollideInfo thatInfo(objOther->getPositionFix(), objOther->getGeometryInfo(), objOther->getOrientationFix());
 
   Bool doesCollide;
 
 	// invariant for all geometries: first do z collision check.
-	if (thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePosition() >= thatInfo.position.z && 
-			thisInfo.position.z <= thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePosition())
+	if (thisInfo.position.z + thisInfo.geom.getMaxHeightAbovePositionFix() >= thatInfo.position.z &&
+			thisInfo.position.z <= thatInfo.position.z + thatInfo.geom.getMaxHeightAbovePositionFix())
 	{
 		GeometryType thisGeom = m_geom.getGeomType();
 		GeometryType thatGeom = objOther->getGeometryInfo().getGeomType();
@@ -5596,7 +5580,7 @@ Bool PartitionFilterWouldCollide::allow(Object *objOther)
 		// order in which they appear in the enum list
 		//
 		CollideTestProc collideProc = theCollideTestProcs[ (thisGeom - GEOMETRY_FIRST) * GEOMETRY_NUM_TYPES + (thatGeom - GEOMETRY_FIRST) ];
-		CollideLocAndNormal cinfo;
+		FCollideLocAndNormal cinfo;
 		doesCollide = (*collideProc)(&thisInfo, &thatInfo, &cinfo);
 	}
 	else
@@ -5710,21 +5694,15 @@ Bool PartitionFilterRejectBehind::allow( Object *other )
 {
 	// objOther is guaranteed to be non-null, so we don't need to check (srj)
 
-//const Coord3D *pos = m_obj->getPosition();
-//const Coord3D *dir = m_obj->getUnitDirectionVector2D();
-	Vector3 dir = m_obj->getTransformMatrix()->Get_X_Vector();
-	dir.Normalize();
-//const Coord3D *otherPos = other->getPosition();
+	// the model's x axis; only the sign of the dot is wanted, so it needs no normalizing
+	const FixMatrix3D *mtx = m_obj->getTransformMatrixFix();
 
-	Coord3D v;
-	ThePartitionManager->getVectorTo( m_obj, other, FROM_CENTER_3D, v );
+	FCoord3D v;
+	ThePartitionManager->getDistanceSquaredFix( m_obj, other, FROM_CENTER_3D, &v );
 
-	Real dot = dir.X * v.x + dir.Y * v.y + dir.Z * v.z;
+	Fix dot = mtx->m[0][0] * v.x + mtx->m[1][0] * v.y + mtx->m[2][0] * v.z;
 
-	if (dot > 0.0f)
-		return true;
-
-	return false;
+	return dot > Fix(0);
 }
 
 
@@ -5740,7 +5718,10 @@ Bool PartitionFilterLineOfSight::allow(Object *objOther)
 {
 	// objOther is guaranteed to be non-null, so we don't need to check (srj)
 
-	if (!ThePartitionManager->isClearLineOfSightTerrain(m_obj, *m_obj->getPosition(), objOther, *objOther->getPosition()))
+	// both objects are given, so it measures from their own eyes and these positions go unread
+	Coord3D objPos = m_obj->getPositionFix()->toCoord3D();
+	Coord3D otherPos = objOther->getPositionFix()->toCoord3D();
+	if (!ThePartitionManager->isClearLineOfSightTerrain(m_obj, objPos, objOther, otherPos))
 		return false;
 
 	if (TheAI && TheAI->pathfinder()->isViewBlockedByObstacle(m_obj, objOther))

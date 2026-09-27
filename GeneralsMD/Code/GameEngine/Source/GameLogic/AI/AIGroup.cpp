@@ -60,6 +60,7 @@
 #include "GameLogic/ObjectIter.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
+#include "Lib/FixBoundary.h"		// group goals, paths and lane offsets are still float
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -291,34 +292,29 @@ Bool AIGroup::removeAnyObjectsNotOwnedByPlayer( const Player *ownerPlayer )
 
 
 /**
- * Compute the centroid of the group
+ * Compute the centroid of the group, in fixed point
  */
-Bool AIGroup::getCenter( Coord3D *center )
+static Bool groupCenterFix( const std::list<Object *> &members, FCoord3D *center )
 {
 	Int count = 0;
-	center->x = 0.0f;
-	center->y = 0.0f;
-	center->z = 0.0f;
+	center->zero();
 
-	std::list<Object *>::iterator i;
-	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
-	{													 
-		if( (*i)->isDisabledByType( DISABLED_HELD) ) 
+	std::list<Object *>::const_iterator i;
+	for( i = members.begin(); i != members.end(); ++i )
+	{
+		if( (*i)->isDisabledByType( DISABLED_HELD) )
 		{
 			continue; // don't bother counting riders in the center calculation.
 		}
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
 		if (ai)
 		{
-			const Coord3D *objPos = (*i)->getPosition();
-			center->x += objPos->x;
-			center->y += objPos->y;
-			center->z += objPos->z;
+			center->add( *(*i)->getPositionFix() );
 			++count;
 		}
 	}
 
-	if (count == 0 && !m_memberList.empty())
+	if (count == 0 && !members.empty())
 	{
 		/*
 			if there are no AIs (eg, the team consists of a faction bldg), we can get here.
@@ -327,37 +323,47 @@ Bool AIGroup::getCenter( Coord3D *center )
 			So if you have a mix of ai's & not ai's, you want just the ais.
 			But it seems reasonable that if there are no ai's, it returns the center of the other stuff.  Cause they won't be moving anyway.
 		*/
-		for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
+		for( i = members.begin(); i != members.end(); ++i )
 		{
-			if( (*i)->isDisabledByType( DISABLED_HELD) ) 
+			if( (*i)->isDisabledByType( DISABLED_HELD) )
 			{
 				continue; // don't bother counting riders in the center calculation.
 			}
-			const Coord3D *objPos = (*i)->getPosition();
-			center->x += objPos->x;
-			center->y += objPos->y;
-			center->z += objPos->z;
+			center->add( *(*i)->getPositionFix() );
 			++count;
 		}
 	}
 
-	center->x /= count;
-	center->y /= count;
-	center->z /= count;
+	if (count > 0)
+	{
+		const Fix n( count );
+		center->x /= n;
+		center->y /= n;
+		center->z /= n;
+	}
 
 	return count > 0;
+}
+
+/**
+ * Compute the centroid of the group
+ */
+Bool AIGroup::getCenter( Coord3D *center )
+{
+	FCoord3D c;
+	Bool ok = groupCenterFix( m_memberList, &c );
+	*center = c.toCoord3D();	// P5: the center goes on to the pathfinder and the move calls
+	return ok;
 }
 
 Bool AIGroup::getMinMaxAndCenter( Coord2D *min, Coord2D *max, Coord3D *center )
 {
 	Int count = 0;
-	min->x = 1e10f;
-	max->x = -1e10f;
-	min->y = 1e10f;
-	max->y = -1e10f;
-	center->x = 0.0f;
-	center->y = 0.0f;
-	center->z = 0.0f;
+	FCoord2D lo, hi;
+	lo.set( FIX_MAX, FIX_MAX );
+	hi.set( -FIX_MAX, -FIX_MAX );
+	FCoord3D sum;
+	sum.zero();
 
 	std::list<Object *>::iterator i;
 	FormationID id= NO_FORMATION_ID;
@@ -370,16 +376,14 @@ Bool AIGroup::getMinMaxAndCenter( Coord2D *min, Coord2D *max, Coord3D *center )
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
 		if (ai)
 		{
-			const Coord3D *objPos = (*i)->getPosition();
-			center->x += objPos->x;
-			center->y += objPos->y;
-			center->z += objPos->z;
+			const FCoord3D *objPos = (*i)->getPositionFix();
+			sum.add( *objPos );
 
 			//Calculate the bounding coordinates of all units
-			min->x = min->x > objPos->x ? objPos->x : min->x;
-			max->x = max->x < objPos->x ? objPos->x : max->x;
-			min->y = min->y > objPos->y ? objPos->y : min->y;
-			max->y = max->y < objPos->y ? objPos->y : max->y;
+			lo.x = fixMin( lo.x, objPos->x );
+			hi.x = fixMax( hi.x, objPos->x );
+			lo.y = fixMin( lo.y, objPos->y );
+			hi.y = fixMax( hi.y, objPos->y );
 			FormationID curID = (*i)->getFormationID() ;
 			if (count==0) {
 				id = curID;
@@ -393,9 +397,17 @@ Bool AIGroup::getMinMaxAndCenter( Coord2D *min, Coord2D *max, Coord3D *center )
 		}
 	}
 
-	center->x /= count;
-	center->y /= count;
-	center->z /= count;
+	if (count > 0)
+	{
+		const Fix n( count );
+		sum.x /= n;
+		sum.y /= n;
+		sum.z /= n;
+	}
+	// P5: the box and the center go on to the ground path planner
+	*min = lo.toCoord2D();
+	*max = hi.toCoord2D();
+	*center = sum.toCoord3D();
 	Bool isFormation = (id!=NO_FORMATION_ID);
 	if (count<2) isFormation = false;
 	return isFormation;
@@ -408,12 +420,12 @@ Bool AIGroup::getMinMaxAndCenter( Coord2D *min, Coord2D *max, Coord3D *center )
  */
 void AIGroup::recompute( void )
 {
-	Real closeDist = 999999999.9f;
-	Real dx, dy, dist;
-	const Coord3D *objPos;
-	Coord3D center;
+	Fix closeDist = FIX_MAX;
+	Fix dx, dy, dist;
+	const FCoord3D *objPos;
+	FCoord3D center;
 
-	getCenter( &center );
+	groupCenterFix( m_memberList, &center );
 
 	if (m_groundPath) {
 		m_groundPath->deleteInstance();
@@ -450,7 +462,7 @@ void AIGroup::recompute( void )
 				m_speed = maxSpeed;
 
 			// leader is closest to the group's center
-			objPos = obj->getPosition();
+			objPos = obj->getPositionFix();
 			dx = objPos->x - center.x;
 			dy = objPos->y - center.y;
 			dist = dx*dx + dy*dy;
@@ -490,16 +502,18 @@ void AIGroup::computeIndividualDestination( Coord3D *dest, const Coord3D *groupD
 	Coord2D v;
 
 	// compute vector from "group center" to self
-	const Coord3D *pos = obj->getPosition();
+	// P5: the offset is laid out in float against the float destination the pathfinder takes
+	const FCoord3D *pos = obj->getPositionFix();
 	if (isFormation) {
 		obj->getFormationOffset(&v);
 	}	else {
-		v.x = pos->x - center->x;
-		v.y = pos->y - center->y;
+		v.x = fixToReal( pos->x ) - center->x;
+		v.y = fixToReal( pos->y ) - center->y;
 	}
 	Real length = v.length();
-	if (length > 6*obj->getGeometryInfo().getBoundingCircleRadius()) {
-		length = 6*obj->getGeometryInfo().getBoundingCircleRadius();
+	const Real maxLength = fixToReal( 6 * obj->getGeometryInfo().getBoundingCircleRadiusFix() );
+	if (length > maxLength) {
+		length = maxLength;
 	}
 	v.normalize();
 	v.x *= length;
@@ -510,7 +524,7 @@ void AIGroup::computeIndividualDestination( Coord3D *dest, const Coord3D *groupD
 	/// @todo use fast int->real type cast here later
 	dest->x = groupDest->x + v.x;
 	dest->y = groupDest->y + v.y;
-	dest->z = TheTerrainLogic->getLayerHeight( dest->x, dest->y, layer );
+	dest->z = fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( dest->x ), fixFromReal( dest->y ), layer ) );
 	AIUpdateInterface *ai = obj->getAIUpdateInterface();
 	if (ai && ai->isDoingGroundMovement()) {
 		if (isFormation) {
@@ -586,7 +600,7 @@ Bool AIGroup::friend_computeGroundPath( const Coord3D *pos, CommandSourceType cm
 			continue;
 		}
 		// Note - we are getting the closest of ANY type of unit for later testing intentionally. jba.
-		Coord3D unitPos = *((*i)->getPosition());
+		Coord3D unitPos = (*i)->getPositionFix()->toCoord3D();	// P5: measured against the float goal
 
 		dx = unitPos.x-pos->x;
 		dy = unitPos.y-pos->y;
@@ -610,7 +624,7 @@ Bool AIGroup::friend_computeGroundPath( const Coord3D *pos, CommandSourceType cm
 	}
 
 	if(centerVehicle==NULL) return false;
-	center = *centerVehicle->getPosition();
+	center = centerVehicle->getPositionFix()->toCoord3D();	// P5
 
 	dx = max.x - min.x;
 	dy = max.y - min.y;
@@ -644,7 +658,7 @@ Bool AIGroup::friend_computeGroundPath( const Coord3D *pos, CommandSourceType cm
 			if (ai)
 			{
 				if (!TheAI->pathfinder()->isLinePassable(obj, 
-								ai->getLocomotorSet().getValidSurfaces(), obj->getLayer(), *obj->getPosition(), 
+								ai->getLocomotorSet().getValidSurfaces(), obj->getLayer(), obj->getPositionFix()->toCoord3D(),	// P5
 								center, false, true)) {
 					isPassable = false;
 				}
@@ -654,7 +668,7 @@ Bool AIGroup::friend_computeGroundPath( const Coord3D *pos, CommandSourceType cm
 	}
 	if (!closeEnough) return false;
 	
-	Coord3D trunkStart = (leadVehicle != NULL) ? *leadVehicle->getPosition() : center;
+	Coord3D trunkStart = (leadVehicle != NULL) ? leadVehicle->getPositionFix()->toCoord3D() : center;	// P5
 	m_groundPath = TheAI->pathfinder()->findGroundPath(&trunkStart, pos, PATH_DIAMETER_IN_CELLS, false);
 	return m_groundPath!=NULL;
 
@@ -792,12 +806,12 @@ Bool AIGroup::friend_moveInfantryToPos( const Coord3D *pos, CommandSourceType cm
 		if ((*i)->getControllingPlayer()) {
 			controllingPlayerType = (*i)->getControllingPlayer()->getPlayerType();
 		}
-		Coord3D unitPos = *((*i)->getPosition());
+		Coord3D unitPos = (*i)->getPositionFix()->toCoord3D();	// P5: laid against the float ground path
 		TheAI->pathfinder()->removeGoal(*i);
 		dx = unitPos.x - center.x;
 		dy = unitPos.y - center.y;
 		// Sort by the dot product of normal.
-		iter->insert((*i), dx*startVectorNormal.x+dy*startVectorNormal.y);
+		iter->insertFix((*i), fixFromReal(dx*startVectorNormal.x+dy*startVectorNormal.y));	// P5
 		unitsToPath++;
 
 		// If units are closer to the end vector than the start vector, use the end vector.
@@ -823,15 +837,15 @@ Bool AIGroup::friend_moveInfantryToPos( const Coord3D *pos, CommandSourceType cm
 		// resort unsing the end vector.
 		startVector = endVector;
 		startVectorNormal =	endVectorNormal;
-		for (theUnit = iter->first(); theUnit; theUnit = iter->next()) iter2->insert(theUnit);
+		for (theUnit = iter->first(); theUnit; theUnit = iter->next()) iter2->insertFix(theUnit, Fix(0));
 		iter->makeEmpty();
 		for (theUnit = iter2->first(); theUnit; theUnit = iter2->next())
 		{
-			Coord3D unitPos = *(theUnit->getPosition());
+			Coord3D unitPos = theUnit->getPositionFix()->toCoord3D();	// P5
 			dx = unitPos.x - center.x;
 			dy = unitPos.y - center.y;
 			// Sort by the dot product of normal.
-			iter->insert(theUnit, dx*startVectorNormal.x+dy*startVectorNormal.y);
+			iter->insertFix(theUnit, fixFromReal(dx*startVectorNormal.x+dy*startVectorNormal.y));	// P5
 		}
 		iter2->makeEmpty();
 	}
@@ -857,8 +871,8 @@ Bool AIGroup::friend_moveInfantryToPos( const Coord3D *pos, CommandSourceType cm
 		ai->setTmpValue( (fiveColumnDelta<<16)|(columnDelta&0x00ffff));
 		// Sort next pass by the dot product of start vector.
 		dx, dy;
-		dx = theUnit->getPosition()->x - center.x;
-		dy = theUnit->getPosition()->y - center.y;
+		dx = fixToReal(theUnit->getPositionFix()->x) - center.x;	// P5
+		dy = fixToReal(theUnit->getPositionFix()->y) - center.y;
 		Int adjust = 0;
 		LocomotorPriority movePriority = LOCO_MOVES_FRONT;
 		if (ai->getCurLocomotor()) {
@@ -869,7 +883,7 @@ Bool AIGroup::friend_moveInfantryToPos( const Coord3D *pos, CommandSourceType cm
 				adjust = -200*PATHFIND_CELL_SIZE_F;
 			}
 		}
-		iter2->insert(theUnit, adjust + dx*startVector.x + dy*startVector.y);
+		iter2->insertFix(theUnit, fixFromReal(adjust + dx*startVector.x + dy*startVector.y));	// P5
 		curIndex++;
 
 	}
@@ -953,7 +967,7 @@ Bool AIGroup::friend_moveInfantryToPos( const Coord3D *pos, CommandSourceType cm
 		std::vector<Coord3D> path;
 		PathNode *node = startNode;
 		PathNode *previousNode = m_groundPath->getFirstNode();
-		Coord3D prevPos = *theUnit->getPosition();
+		Coord3D prevPos = theUnit->getPositionFix()->toCoord3D();	// P5
 		while (node) {
 			Coord3D dest = *node->getPosition();
 			PathNode *tmpNode;
@@ -1030,7 +1044,7 @@ Bool AIGroup::friend_moveInfantryToPos( const Coord3D *pos, CommandSourceType cm
 
 		dest.x -= factor*offset*endVector.x;
 		dest.y -= factor*offset*endVector.y;
-		dest.z = TheTerrainLogic->getLayerHeight( dest.x, dest.y, layer );
+		dest.z = fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( dest.x ), fixFromReal( dest.y ), layer ) );	// P5
 
 		while (path.size()>0) {
 			Coord2D curVector;
@@ -1123,9 +1137,9 @@ void AIGroup::friend_moveFormationToPos( const Coord3D *pos, CommandSourceType c
 		Bool isDifferentFormation = false;
 		Coord2D offset;
 		if (isDifferentFormation) {
-			Coord3D pos = *theUnit->getPosition();
-			offset.x = pos.x - center.x;
-			offset.y = pos.y - center.y;
+			const FCoord3D *pos = theUnit->getPositionFix();
+			offset.x = fixToReal( pos->x ) - center.x;	// P5: the offset is added to float path points
+			offset.y = fixToReal( pos->y ) - center.y;
 			theUnit->setFormationOffset(offset);
 		}
 		theUnit->getFormationOffset(&offset);
@@ -1266,13 +1280,13 @@ Bool AIGroup::friend_moveVehicleToPos( const Coord3D *pos, CommandSourceType cmd
 		if ((*i)->getControllingPlayer()) {
 			controllingPlayerType = (*i)->getControllingPlayer()->getPlayerType();
 		}
-		Coord3D unitPos = *((*i)->getPosition());
+		Coord3D unitPos = (*i)->getPositionFix()->toCoord3D();	// P5: laid against the float ground path
 		TheAI->pathfinder()->removeGoal(*i);
 		Real dx, dy;
 		dx = unitPos.x - center.x;
 		dy = unitPos.y - center.y;
 		// Sort by the dot product of normal.
-		iter->insert((*i), dx*startVectorNormal.x+dy*startVectorNormal.y);
+		iter->insertFix((*i), fixFromReal(dx*startVectorNormal.x+dy*startVectorNormal.y));	// P5
 		unitsToPath++;
 
 		// If units are closer to the end vector than the start vector, use the end vector.
@@ -1298,15 +1312,15 @@ Bool AIGroup::friend_moveVehicleToPos( const Coord3D *pos, CommandSourceType cmd
 		// resort unsing the end vector.
 		startVector = endVector;
 		startVectorNormal =	endVectorNormal;
-		for (theUnit = iter->first(); theUnit; theUnit = iter->next()) iter2->insert(theUnit);
+		for (theUnit = iter->first(); theUnit; theUnit = iter->next()) iter2->insertFix(theUnit, Fix(0));
 		iter->makeEmpty();
 		for (theUnit = iter2->first(); theUnit; theUnit = iter2->next())
 		{
-			Coord3D unitPos = *(theUnit->getPosition());
+			Coord3D unitPos = theUnit->getPositionFix()->toCoord3D();	// P5
 			dx = unitPos.x - center.x;
 			dy = unitPos.y - center.y;
 			// Sort by the dot product of normal.
-			iter->insert(theUnit, dx*startVectorNormal.x+dy*startVectorNormal.y);
+			iter->insertFix(theUnit, fixFromReal(dx*startVectorNormal.x+dy*startVectorNormal.y));	// P5
 		}
 		iter2->makeEmpty();
 	}
@@ -1332,8 +1346,8 @@ Bool AIGroup::friend_moveVehicleToPos( const Coord3D *pos, CommandSourceType cmd
 		ai->setTmpValue( (threeColumnDelta<<16)|(columnDelta&0x00ffff));
 		// Sort next pass by the dot product of start vector.
 		Real dx, dy;
-		dx = theUnit->getPosition()->x - center.x;
-		dy = theUnit->getPosition()->y - center.y;
+		dx = fixToReal(theUnit->getPositionFix()->x) - center.x;	// P5
+		dy = fixToReal(theUnit->getPositionFix()->y) - center.y;
 		Int adjust = 0;
 #if 0
 		LocomotorPriority movePriority = LOCO_MOVES_FRONT;
@@ -1346,7 +1360,7 @@ Bool AIGroup::friend_moveVehicleToPos( const Coord3D *pos, CommandSourceType cmd
 			}
 		}
 #endif 
-		iter2->insert(theUnit, adjust + dx*startVector.x + dy*startVector.y);
+		iter2->insertFix(theUnit, fixFromReal(adjust + dx*startVector.x + dy*startVector.y));	// P5
 		curIndex++;
 
 	}
@@ -1435,7 +1449,7 @@ Bool AIGroup::friend_moveVehicleToPos( const Coord3D *pos, CommandSourceType cmd
 		std::vector<Coord3D> path;
 		PathNode *node = startNode;
 		PathNode *previousNode = m_groundPath->getFirstNode();
-		Coord3D prevPos = *theUnit->getPosition();
+		Coord3D prevPos = theUnit->getPositionFix()->toCoord3D();	// P5
 		while (node) {
 			Coord3D dest = *node->getPosition();
 			PathNode *tmpNode;
@@ -1514,7 +1528,7 @@ Bool AIGroup::friend_moveVehicleToPos( const Coord3D *pos, CommandSourceType cmd
 #endif
 		dest.x -= factor*offset*endVector.x;
 		dest.y -= factor*offset*endVector.y;
-		dest.z = TheTerrainLogic->getLayerHeight( dest.x, dest.y, layer );
+		dest.z = fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( dest.x ), fixFromReal( dest.y ), layer ) );	// P5
 
 		while (path.size()>0) {
 			Coord2D curVector;
@@ -1567,7 +1581,7 @@ void clampWaypointPosition( Coord3D &position, Int margin )
     else if ( position.y < mapExtent.lo.y )
       position.y = mapExtent.lo.y;
 
-    position.z = TheTerrainLogic->getGroundHeight( position.x, position.y );
+    position.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( position.x ), fixFromReal( position.y ) ) );	// P5: a float goal
   }
 }
 
@@ -1624,14 +1638,10 @@ static void spreadAirborneGoals( const Coord3D& clicked, const std::vector<Objec
 	if (count < 2)
 		return;
 
-	Real spacing = 0.0f;
+	Fix widest = Fix( 0 );
 	for (Int i = 0; i < count; i++)
-	{
-		const Real body = members[ i ]->getGeometryInfo().getBoundingCircleRadius();
-		if (body > spacing)
-			spacing = body;
-	}
-	spacing *= AIRBORNE_BODY_CLEARANCE;
+		widest = fixMax( widest, members[ i ]->getGeometryInfo().getBoundingCircleRadiusFix() );
+	const Real spacing = fixToReal( widest ) * AIRBORNE_BODY_CLEARANCE;	// P4: laid out round a float move goal
 	if (spacing < 1.0f)
 		return;
 
@@ -1641,9 +1651,9 @@ static void spreadAirborneGoals( const Coord3D& clicked, const std::vector<Objec
 	{
 		LaneSeed seed;
 		seed.obj = members[ i ];
-		const Coord3D *at = members[ i ]->getPosition();
+		const FCoord3D *at = members[ i ]->getPositionFix();
 		// squared: this is only ever sorted on, and the order is the same either way
-		seed.lat = sqr( at->x - clicked.x ) + sqr( at->y - clicked.y );
+		seed.lat = sqr( fixToReal( at->x ) - clicked.x ) + sqr( fixToReal( at->y ) - clicked.y );	// P4
 		order.push_back( seed );
 	}
 	std::sort( order.begin(), order.end(), laneSeedIsLeftOf );
@@ -1684,7 +1694,7 @@ static Int crowdRoadLanes( Object *probe, const Coord3D& center, const Coord2D& 
 													 Real *bias )
 {
 	Coord3D from = center;
-	from.z = TheTerrainLogic->getGroundHeight( from.x, from.y );
+	from.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( from.x ), fixFromReal( from.y ) ) );	// P5: the lane probe takes a float point
 
 	Coord2D left, right;
 	left.x = -dir.y;	left.y = dir.x;
@@ -1769,7 +1779,7 @@ static Bool crowdPlanLane( Object *unit, const CrowdRoute& trunk, Real offset, c
 			Coord3D p = c.pos;
 			p.x += shifts[ k ].x * (Real)q / (Real)CROWD_PLAN_STEPS;
 			p.y += shifts[ k ].y * (Real)q / (Real)CROWD_PLAN_STEPS;
-			p.z = TheTerrainLogic->getLayerHeight( p.x, p.y, c.layer );
+			p.z = fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( p.x ), fixFromReal( p.y ), c.layer ) );	// P5
 			if (pf->validMovementPosition( crusher, c.layer, loco, &p )
 						&& pf->isLinePassable( unit, surfaces, c.layer, c.pos, p, false, true ))
 			{
@@ -1788,7 +1798,7 @@ static Bool crowdPlanLane( Object *unit, const CrowdRoute& trunk, Real offset, c
 	}
 
 	//--- then the lane itself, leg by leg from where the member stands -------------------------------
-	Coord3D prev = *unit->getPosition();
+	Coord3D prev = unit->getPositionFix()->toCoord3D();	// P5: the lane is a float route
 	PathfindLayerEnum prevLayer = unit->getLayer();
 	Int prevCorner = -1;				// which of the group's corners prev was laid off, if any
 	for (Int k = 1; k + 1 < corners; k++)
@@ -1814,7 +1824,7 @@ static Bool crowdPlanLane( Object *unit, const CrowdRoute& trunk, Real offset, c
 			p.pos = c.pos;
 			p.pos.x += shifts[ k ].x * (Real)q / (Real)CROWD_PLAN_STEPS;
 			p.pos.y += shifts[ k ].y * (Real)q / (Real)CROWD_PLAN_STEPS;
-			p.pos.z = TheTerrainLogic->getLayerHeight( p.pos.x, p.pos.y, p.layer );
+			p.pos.z = fixToReal( TheTerrainLogic->getLayerHeightFix( fixFromReal( p.pos.x ), fixFromReal( p.pos.y ), p.layer ) );	// P5
 
 			// the group's own leg, corner to corner, is the wide search's answer and is not asked again:
 			// that search measures clearance by diameter, and a straight-line test by body can refuse it
@@ -1906,11 +1916,12 @@ static void crowdSeedLanes( std::list<Object *>& members, const Coord3D& center,
 
 		LaneSeed seed;
 		seed.obj = o;
-		seed.lat = (o->getPosition()->x - center.x) * -dir.y
-						 + (o->getPosition()->y - center.y) * dir.x;
+		const FCoord3D *at = o->getPositionFix();
+		seed.lat = (fixToReal( at->x ) - center.x) * -dir.y		// P4: lanes are float offsets handed to AIUpdate
+						 + (fixToReal( at->y ) - center.y) * dir.x;
 		across.push_back( seed );
 
-		const Real body = 2.0f * o->getGeometryInfo().getBoundingCircleRadius();
+		const Real body = fixToReal( 2 * o->getGeometryInfo().getBoundingCircleRadiusFix() );	// P4
 		if (body > spacing)
 		{
 			spacing = body;
@@ -2066,7 +2077,7 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
     if ( groupMember->isKindOf( KINDOF_PRODUCED_AT_HELIPAD ) )//helicopter
     {
       isFormation = FALSE;
-      extraMargin = MAX( extraMargin, groupMember->getGeometryInfo().getMajorRadius() );
+      extraMargin = MAX( extraMargin, fixToReal( groupMember->getGeometryInfo().getMajorRadiusFix() ) );	// P5: a float waypoint margin
     }
     else if ( groupMember->isKindOf( KINDOF_AIRCRAFT ) )// fixed wing aircraft only
     {
@@ -2110,9 +2121,10 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
 	iterHolder.hold(iter);
-	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )	
+	const Fix goalX = fixFromReal( pos->x ), goalY = fixFromReal( pos->y );	// P5: the ordered point
+	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
 	{
-		Real dx, dy;
+		Fix dx, dy;
 		if ((*i)->isDisabledByType( DISABLED_HELD ) ) 
 		{
 			continue; // don't bother telling the occupants to move.
@@ -2140,12 +2152,12 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 				}
 			}	 
 		}
-		Coord3D unitPos = *((*i)->getPosition());
+		const FCoord3D *unitPos = (*i)->getPositionFix();
 		TheAI->pathfinder()->removeGoal(*i);
-		dx = unitPos.x - pos->x;
-		dy = unitPos.y - pos->y;
+		dx = unitPos->x - goalX;
+		dy = unitPos->y - goalY;
 		// adjust so units are sorted first by move priority.
-		Real adjust = 0;
+		Fix adjust = Fix(0);
 #if 0	 // Nope.  jba.
 		LocomotorPriority movePriority = LOCO_MOVES_FRONT;
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
@@ -2158,7 +2170,7 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 			}
 		}
 #endif 
-		iter->insert((*i), adjust + dx*dx+dy*dy);
+		iter->insertFix((*i), adjust + dx*dx+dy*dy);
 	}
 
 	Coord3D goalPos = *pos;
@@ -2208,11 +2220,12 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 
 			LaneSeed seed;
 			seed.obj = o;
-			seed.lat = (o->getPosition()->x - groupCenter.x) * -groupDir.y
-							 + (o->getPosition()->y - groupCenter.y) * groupDir.x;
+			const FCoord3D *at = o->getPositionFix();
+			seed.lat = (fixToReal( at->x ) - groupCenter.x) * -groupDir.y		// P4: lanes are float offsets handed to AIUpdate
+							 + (fixToReal( at->y ) - groupCenter.y) * groupDir.x;
 			across.push_back( seed );
 
-			Real body = 2.0f * o->getGeometryInfo().getBoundingCircleRadius();
+			Real body = fixToReal( 2 * o->getGeometryInfo().getBoundingCircleRadiusFix() );	// P4
 			if (body > spacing)
 			{
 				spacing = body;
@@ -2312,15 +2325,15 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 			Real bestSqr = 1.0e30f;
 			for (Int m = 0; m < (Int)laneMembers.size(); m++)
 			{
-				const Coord3D *p = laneMembers[m]->getPosition();
-				const Real d = (p->x - groupCenter.x) * (p->x - groupCenter.x) + (p->y - groupCenter.y) * (p->y - groupCenter.y);
+				const Coord3D p = laneMembers[m]->getPositionFix()->toCoord3D();	// P5: measured against the float trunk start
+				const Real d = (p.x - groupCenter.x) * (p.x - groupCenter.x) + (p.y - groupCenter.y) * (p.y - groupCenter.y);
 				if (d < bestSqr && !laneMembers[m]->isKindOf( KINDOF_INFANTRY ))
 				{
 					bestSqr = d;
 					trunkUnit = laneMembers[m];
 				}
 			}
-			const Coord3D trunkStart = (trunkUnit != NULL) ? *trunkUnit->getPosition() : groupCenter;
+			const Coord3D trunkStart = (trunkUnit != NULL) ? trunkUnit->getPositionFix()->toCoord3D() : groupCenter;	// P5
 
 			Path *trunk = NULL;
 			for (Int attempt = 0; attempt < 2 && trunk == NULL; attempt++)
@@ -2394,7 +2407,7 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 				goalPos.x -= v.x;
 				goalPos.y -= v.y;
 			}	else {
-				center = *theUnit->getPosition();	
+				center = theUnit->getPositionFix()->toCoord3D();	// P5
 			}
 			firstUnit = false;
 		}
@@ -2509,14 +2522,15 @@ void AIGroup::groupScatter( CommandSourceType cmdSource )
 	Coord3D dest;
 
 	getMinMaxAndCenter( &min, &max, &center );
+	const Fix centerX = fixFromReal( center.x ), centerY = fixFromReal( center.y );
 
 	// Move.
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
 	iterHolder.hold(iter);
-	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )	
+	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
 	{
-		Real dx, dy;
+		Fix dx, dy;
 		if ((*i)->isDisabledByType( DISABLED_HELD ) ) 
 		{
 			continue; // don't bother telling the occupants to move.
@@ -2529,11 +2543,11 @@ void AIGroup::groupScatter( CommandSourceType cmdSource )
 		{	
 			continue;
 		}
-		Coord3D unitPos = *((*i)->getPosition());
+		const FCoord3D *unitPos = (*i)->getPositionFix();
 		TheAI->pathfinder()->removeGoal(*i);
-		dx = unitPos.x - center.x;
-		dy = unitPos.y - center.y;
-		iter->insert((*i), dx*dx+dy*dy);
+		dx = unitPos->x - centerX;
+		dy = unitPos->y - centerY;
+		iter->insertFix((*i), dx*dx+dy*dy);
 	}
 
 	iter->sort(ITER_SORTED_FAR_TO_NEAR);
@@ -2542,14 +2556,15 @@ void AIGroup::groupScatter( CommandSourceType cmdSource )
 	{
 		center.x -= 0.01f;
 		AIUpdateInterface *ai = theUnit->getAIUpdateInterface();
-		Coord3D unitPos = *theUnit->getPosition();
+		Coord3D unitPos = theUnit->getPositionFix()->toCoord3D();	// P4: the scatter goal is a float move
 		Coord2D delta;
 		dest = unitPos;
 		delta.x = unitPos.x - center.x;
 		delta.y = unitPos.y - center.y;
 		delta.normalize();
-		dest.x += delta.x*4*theUnit->getGeometryInfo().getBoundingCircleRadius();
-		dest.y += delta.y*4*theUnit->getGeometryInfo().getBoundingCircleRadius();
+		const Real reach = fixToReal( 4 * theUnit->getGeometryInfo().getBoundingCircleRadiusFix() );	// P4
+		dest.x += delta.x*reach;
+		dest.y += delta.y*reach;
 		ai->aiMoveToPosition( &dest, cmdSource );
 	}
 }
@@ -2622,10 +2637,11 @@ void AIGroup::groupTightenToPosition( const Coord3D *pos, Bool addWaypoint, Comm
 	iterHolder.hold(iter);
 
 	std::list<Object *>::iterator i;
+	const Fix goalX = fixFromReal( pos->x ), goalY = fixFromReal( pos->y );	// P5: the ordered point
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )	{
-		Real dx, dy;
-		Coord3D unitPos = *((*i)->getPosition());
-		if ((*i)->isDisabledByType( DISABLED_HELD ) ) 
+		Fix dx, dy;
+		const FCoord3D *unitPos = (*i)->getPositionFix();
+		if ((*i)->isDisabledByType( DISABLED_HELD ) )
 		{
 			continue; // don't bother telling the occupants to move.
 		}
@@ -2637,9 +2653,9 @@ void AIGroup::groupTightenToPosition( const Coord3D *pos, Bool addWaypoint, Comm
 		{	
 			continue;
 		}
-		dx = unitPos.x - pos->x;
-		dy = unitPos.y - pos->y;
-		iter->insert((*i), dx*dx+dy*dy);
+		dx = unitPos->x - goalX;
+		dy = unitPos->y - goalY;
+		iter->insertFix((*i), dx*dx+dy*dy);
 	}
 
 	iter->sort(ITER_SORTED_NEAR_TO_FAR);
@@ -2676,7 +2692,7 @@ void AIGroup::groupTightenToPosition( const Coord3D *pos, Bool addWaypoint, Comm
 
 	for (theUnit = iter->first(); theUnit; theUnit = iter->next())
 	{
-		Coord3D unitPos = *theUnit->getPosition();
+		Coord3D unitPos = theUnit->getPositionFix()->toCoord3D();	// P5
 		TheAI->pathfinder()->updatePos(theUnit, &unitPos);
 	}
 }
@@ -2882,21 +2898,21 @@ void AIGroup::groupAttackObjectPrivate( Bool forced, Object *victim, Int maxShot
 		// Hard to kill em if they're already dead.  jba
 		return;
 	}
-	Coord3D victimPos = *victim->getPosition();
+	const FCoord3D victimPos = *victim->getPositionFix();
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
 	iterHolder.hold(iter);
 
 	std::list<Object *>::iterator i;
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )	{
-		Real dx, dy;
-		Coord3D unitPos = *((*i)->getPosition());
+		Fix dx, dy;
+		const FCoord3D *unitPos = (*i)->getPositionFix();
 		// Held units were skipped here on the grounds that there is no point telling a passenger to
 		// walk somewhere - but this is the attack order, not a move, and a unit that is held can
 		// still shoot.  A bunkered Battle Bus ignored every attack you gave it.
-		dx = unitPos.x - victimPos.x;
-		dy = unitPos.y - victimPos.y;
-		iter->insert((*i), dx*dx+dy*dy);
+		dx = unitPos->x - victimPos.x;
+		dy = unitPos->y - victimPos.y;
+		iter->insertFix((*i), dx*dx+dy*dy);
 	}
 
 	iter->sort(ITER_SORTED_NEAR_TO_FAR);
@@ -2987,7 +3003,7 @@ void AIGroup::groupAttackPosition( const Coord3D *pos, Int maxShotsToFire, Comma
 		if( !pos )
 		{
 			//If you specify a NULL position, it means you are attacking your own location.
-			attackPos.set( (*i)->getPosition() );
+			attackPos = (*i)->getPositionFix()->toCoord3D();	// P6: the weapon and attack orders take a float spot
 		}
 
 		//This code allows garrisoned buildings to force attack a ground position
@@ -3081,6 +3097,7 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
 	iterHolder.hold(iter);
+	const Fix goalX = fixFromReal( pos->x ), goalY = fixFromReal( pos->y );	// P5: the ordered point
 	std::list<Object *>::iterator i;
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
 	{
@@ -3093,9 +3110,9 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 			continue;
 
 		TheAI->pathfinder()->removeGoal( member );
-		Real dx = member->getPosition()->x - pos->x;
-		Real dy = member->getPosition()->y - pos->y;
-		iter->insert( member, dx*dx + dy*dy );
+		const Fix dx = member->getPositionFix()->x - goalX;
+		const Fix dy = member->getPositionFix()->y - goalY;
+		iter->insertFix( member, dx*dx + dy*dy );
 	}
 	iter->sort( ITER_SORTED_NEAR_TO_FAR );
 
@@ -3108,7 +3125,7 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 		if (firstUnit)
 		{
 			// the member nearest the goal defines the shape; everyone else keeps its offset from it.
-			center = *theUnit->getPosition();
+			center = theUnit->getPositionFix()->toCoord3D();	// P5
 			firstUnit = false;
 		}
 
@@ -3283,9 +3300,10 @@ void AIGroup::groupEvacuate( CommandSourceType cmdSource )
 			if( (*i)->isKindOf( KINDOF_AIRCRAFT ) && (*i)->isAirborneTarget() )
 			{
 				//Calculate the highest point on the ground to drop off troops (chinook or other air transports)
-				Coord3D pos = *((*i)->getPosition());
+				const FCoord3D *at = (*i)->getPositionFix();
+				Coord3D pos = at->toCoord3D();	// P4: the drop-off spot is a float move goal
 				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination( &pos );
-				pos.z = TheTerrainLogic->getLayerHeight( pos.x, pos.y, layerAtDest );
+				pos.z = fixToReal( TheTerrainLogic->getLayerHeightFix( at->x, at->y, layerAtDest ) );
 				ai->aiMoveToAndEvacuate( &pos, cmdSource );
 			}
 			else
@@ -3463,10 +3481,10 @@ void AIGroup::groupCreateFormation( CommandSourceType cmdSource )				///< Create
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
 		if (ai)
 		{
-			Coord3D pos = *obj->getPosition();
+			const FCoord3D *pos = obj->getPositionFix();
 			Coord2D offset;
-			offset.x = pos.x - center.x;
-			offset.y = pos.y - center.y;
+			offset.x = fixToReal( pos->x ) - center.x;	// P5: the offset is added to float path goals
+			offset.y = fixToReal( pos->y ) - center.y;
 			obj->setFormationID(id);
 			obj->setFormationOffset(offset);
 		}

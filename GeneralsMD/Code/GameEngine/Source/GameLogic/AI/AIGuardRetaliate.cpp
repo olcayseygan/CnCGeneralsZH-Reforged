@@ -51,6 +51,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/PolygonTrigger.h"
+#include "Lib/FixBoundary.h"
 
 const Real CLOSE_ENOUGH = (25.0f);
 
@@ -143,23 +144,26 @@ Bool GuardRetaliateExitConditions::shouldExit(const StateMachine* machine) const
 	
 	if (m_conditionsToConsider & ATTACK_ExitIfOutsideRadius) 
 	{
-		Coord3D deltaAggressor, myRange;
-		Coord3D objPos = *machine->getGoalObject()->getPosition();
-		Coord3D myPos = *machine->getOwner()->getPosition();
-		deltaAggressor.x = objPos.x - m_center.x;
-		deltaAggressor.y = objPos.y - m_center.y;
-		deltaAggressor.z = 0; // BGC - when we search for a target we don't account for Z, so why should we here?
+		// P7: m_center and m_radiusSqr are float members of the exit conditions
+		FCoord2D deltaAggressor, myRange;
+		const FCoord3D *objPos = machine->getGoalObject()->getPositionFix();
+		const FCoord3D *myPos = machine->getOwner()->getPositionFix();
+		const Fix centerX = fixFromReal( m_center.x );
+		const Fix centerY = fixFromReal( m_center.y );
+		deltaAggressor.x = objPos->x - centerX;
+		deltaAggressor.y = objPos->y - centerY;
+		// no z: BGC - when we search for a target we don't account for Z, so why should we here?
 													// changing this fixed a crash where a GLARebelInfantry would be in GuardReturnState, find
 													// a target that is within range, then not be able to attack because its actually out of range.
 													// then it would look for a new target, get the same one, and proceed in an infinite recursive
 													// loop that eventually blew the stack.
 	
-		Real guardRangeSqr = sqr( AIGuardRetaliateMachine::getStdGuardRange( machine->getOwner() ) );
-		myRange.x = myPos.x - m_center.x;
-		myRange.y = myPos.y - m_center.y;
-		myRange.z = 0;
+		const Fix guardRange = fixFromReal( AIGuardRetaliateMachine::getStdGuardRange( machine->getOwner() ) );	// P3
+		const Fix guardRangeSqr = guardRange * guardRange;
+		myRange.x = myPos->x - centerX;
+		myRange.y = myPos->y - centerY;
 
-		if( deltaAggressor.lengthSqr() > m_radiusSqr )
+		if( deltaAggressor.lengthSqr() > fixFromReal( m_radiusSqr ) )
 		{
 			//The aggressor is too far away now... give up retaliation.
 			return TRUE;
@@ -307,7 +311,7 @@ Bool AIGuardRetaliateMachine::lookForInnerTarget(void)
 
 	filters[count++] = &filterMapStatus;
 
-	Real visionRange = AIGuardRetaliateMachine::getStdGuardRange(owner);
+	const Fix visionRange = fixFromReal( AIGuardRetaliateMachine::getStdGuardRange(owner) );	// P3
 
 	filters[count++] = NULL;
 
@@ -320,8 +324,9 @@ Bool AIGuardRetaliateMachine::lookForInnerTarget(void)
 // just ask for that; the above has to find ALL objects in range, but we ignore all 
 // but the first (closest).
 //
-	const Coord3D *pos = getPositionToGuard();
-	Object* target = ThePartitionManager->getClosestObject(pos, visionRange, FROM_CENTER_2D, filters);
+	FCoord3D pos;	// P7: the guard position is float
+	pos.set( fixFromReal( getPositionToGuard()->x ), fixFromReal( getPositionToGuard()->y ), fixFromReal( getPositionToGuard()->z ) );
+	Object* target = ThePartitionManager->getClosestObjectFix(&pos, visionRange, FROM_CENTER_2D, filters);
 	if (target) 
 	{
 		setNemesisID(target->getID());	
@@ -558,12 +563,13 @@ StateReturnType AIGuardRetaliateOuterState::update( void )
 	Object* goalObj = m_attackState->getMachineGoalObject();
 	if (goalObj) 
 	{
-		Coord3D deltaAggr;
-		deltaAggr.x = m_exitConditions.m_center.x - goalObj->getPosition()->x;
-		deltaAggr.y = m_exitConditions.m_center.y - goalObj->getPosition()->y;
-		deltaAggr.z = m_exitConditions.m_center.z - goalObj->getPosition()->z;
-		Real visionSqr = sqr(AIGuardRetaliateMachine::getStdGuardRange(getMachineOwner()));
-		if (deltaAggr.lengthSqr() <= visionSqr) 
+		const FCoord3D *goalPos = goalObj->getPositionFix();
+		FCoord3D deltaAggr;
+		deltaAggr.x = fixFromReal( m_exitConditions.m_center.x ) - goalPos->x;	// P7: m_center is float
+		deltaAggr.y = fixFromReal( m_exitConditions.m_center.y ) - goalPos->y;
+		deltaAggr.z = fixFromReal( m_exitConditions.m_center.z ) - goalPos->z;
+		const Fix vision = fixFromReal( AIGuardRetaliateMachine::getStdGuardRange(getMachineOwner()) );	// P3
+		if (deltaAggr.lengthSqr() <= vision * vision)
 		{
 			// reset the counter
 			m_exitConditions.m_attackGiveUpFrame = TheGameLogic->getFrame() + TheAI->getAiData()->m_guardChaseUnitFrames;

@@ -46,6 +46,7 @@
 #include "GameLogic/AIPlayer.h"		// for the per-frame AI profile the slow-frame report prints
 #include "GameLogic/Weapon.h"
 #include "GameLogic/WeaponSet.h"
+#include "Lib/FixBoundary.h"
 
 extern void addIcon(const Coord3D *pos, Real width, Int numFramesDuration, RGBColor color);
 
@@ -597,7 +598,8 @@ public:
 				continue;
 
 			// a garrisoned soldier idles at the middle of the building and shoots from its edge
-			if (w->isWithinAttackRangeFromFirePoint(m_obj, objOther, objOther->getPosition()))
+			const Coord3D victimPos = objOther->getPositionFix()->toCoord3D();	// P6
+			if (w->isWithinAttackRangeFromFirePoint(m_obj, objOther, &victimPos))
 			{
 				return true;
 			}
@@ -795,7 +797,9 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 
 	filters[numFilters] = NULL;
 
-	if (info == NULL || info == TheScriptEngine->getDefaultAttackInfo()) 
+	const Fix rangeFx = fixFromReal( range );	// P7: the caller's range is still AI/INI data
+
+	if (info == NULL || info == TheScriptEngine->getDefaultAttackInfo())
 	{
 		if (qualifiers & PREFER_HIGH_THREAT)
 		{
@@ -806,11 +810,11 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			Real distanceModifier = TheAI->getAiData()->m_attackPriorityDistanceModifier;
 			Object *bestThreat = NULL;
 			Int bestScore = 0;
-			ObjectIterator *threatIter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR);
+			ObjectIterator *threatIter = ThePartitionManager->iterateObjectsInRangeFix(me, rangeFx, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR);
 			MemoryPoolObjectHolder threatHolder(threatIter);
 			for (Object *theEnemy = threatIter->first(); theEnemy; theEnemy = threatIter->next())
 			{
-				Real dist = sqrt( ThePartitionManager->getDistanceSquared(me, theEnemy, FROM_BOUNDINGSPHERE_2D) );
+				const Fix dist = fixSqrt( ThePartitionManager->getDistanceSquaredFix(me, theEnemy, FROM_BOUNDINGSPHERE_2D) );
 
 				/* Score it as if it were armed first, which is the best this candidate can possibly
 					 do: the armed bonus is the only thing getAbleToAttackSpecificObject decides here and
@@ -823,7 +827,7 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 					 cannot clear it. */
 				const Int armedScore = AI_threatScore( theEnemy->getTemplate()->getThreatValue(),
 																		theEnemy->getTemplate()->calcCostToBuild( theEnemy->getControllingPlayer() ),
-																		true, dist, distanceModifier );
+																		true, fixToReal( dist ), distanceModifier );	// P7
 				if (armedScore <= bestScore || !AI_filtersAllow(filters + numGatherFilters, theEnemy))
 					continue;
 
@@ -846,14 +850,14 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		}
 
 		// No additional attack info, so just return the closest one.
-		Object* o = ThePartitionManager->getClosestObject( me, range, FROM_BOUNDINGSPHERE_2D, filters );
+		Object* o = ThePartitionManager->getClosestObjectFix( me, rangeFx, FROM_BOUNDINGSPHERE_2D, filters );
 		return o;
 	}
 
 	Object *bestEnemy = NULL;
 	Int			effectivePriority=0;
 	Int			actualPriority=0;
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR);
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(me, rangeFx, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR);
 	MemoryPoolObjectHolder holder(iter);
 	for (Object *theEnemy = iter->first(); theEnemy; theEnemy = iter->next()) 
 	{
@@ -873,9 +877,8 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			}
 		}
 
-		Real distSqr = ThePartitionManager->getDistanceSquared(me, theEnemy, FROM_BOUNDINGSPHERE_2D);
-		Real dist = sqrt(distSqr);
-		Int modifier = dist/TheAI->getAiData()->m_attackPriorityDistanceModifier;
+		const Fix dist = fixSqrt( ThePartitionManager->getDistanceSquaredFix(me, theEnemy, FROM_BOUNDINGSPHERE_2D) );
+		Int modifier = fixToReal( dist )/TheAI->getAiData()->m_attackPriorityDistanceModifier;	// P7
 		Int modPriority = curPriority-modifier;
 		if (modPriority < 1)
 			modPriority = 1;
@@ -932,7 +935,7 @@ Object *AI::findClosestAlly( const Object *me, Real range, UnsignedInt qualifier
 
 	filters[numFilters] = NULL;
 
-	return ThePartitionManager->getClosestObject( me, range, FROM_BOUNDINGSPHERE_2D, filters );
+	return ThePartitionManager->getClosestObjectFix( me, fixFromReal( range ), FROM_BOUNDINGSPHERE_2D, filters );	// P7: range
 }
 /////////////////////////////
 
@@ -964,7 +967,7 @@ Object *AI::findClosestRepulsor( const Object *me, Real range)
 	filters[numFilters++] = &filterStealth;
 	filters[numFilters] = NULL;
 
-	return ThePartitionManager->getClosestObject( me, range, FROM_BOUNDINGSPHERE_2D, filters );
+	return ThePartitionManager->getClosestObjectFix( me, fixFromReal( range ), FROM_BOUNDINGSPHERE_2D, filters );	// P7: range
 }
 /////////////////////////////
 
@@ -1051,7 +1054,10 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 		for (int i = 0; i < TheGlobalData->m_debugVisibilityTileCount; ++i) 
 		{
 			pos.Rotate_Z(1.0f * i / TheGlobalData->m_debugVisibilityTileCount * 2 * PI);
-			Coord3D coord = { pos.X + object->getPosition()->x, pos.Y + object->getPosition()->y, pos.Z + object->getPosition()->z };
+			Coord3D coord = object->getPositionFix()->toCoord3D();	// client: a debug icon
+			coord.x += pos.X;
+			coord.y += pos.Y;
+			coord.z += pos.Z;
 
 			addIcon(&coord, TheGlobalData->m_debugVisibilityTileWidth, 
 											TheGlobalData->m_debugVisibilityTileDuration, 

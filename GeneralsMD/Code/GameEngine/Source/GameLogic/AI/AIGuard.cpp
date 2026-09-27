@@ -53,8 +53,17 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/PolygonTrigger.h"
+#include "Lib/FixBoundary.h"
 
 const Real CLOSE_ENOUGH = (25.0f);
+
+// P7: the guard position and a trigger area's centre are still float
+static FCoord3D guardFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -141,18 +150,18 @@ Bool ExitConditions::shouldExit(const StateMachine* machine) const
 	
 	if (m_conditionsToConsider & ATTACK_ExitIfOutsideRadius) 
 	{
-		Coord3D deltaAggressor;
-		Coord3D objPos = *machine->getGoalObject()->getPosition();
-		deltaAggressor.x = objPos.x - m_center.x;
-		deltaAggressor.y = objPos.y - m_center.y;
-//	deltaAggressor.z = objPos.z - m_center.z;
-		deltaAggressor.z = 0; // BGC - when we search for a target we don't account for Z, so why should we here?
+		// P7: m_center and m_radiusSqr are float members of the exit conditions
+		const FCoord3D *objPos = machine->getGoalObject()->getPositionFix();
+		FCoord2D deltaAggressor;
+		deltaAggressor.x = objPos->x - fixFromReal( m_center.x );
+		deltaAggressor.y = objPos->y - fixFromReal( m_center.y );
+		// no z: BGC - when we search for a target we don't account for Z, so why should we here?
 													// changing this fixed a crash where a GLARebelInfantry would be in GuardReturnState, find
 													// a target that is within range, then not be able to attack because its actually out of range.
 													// then it would look for a new target, get the same one, and proceed in an infinite recursive
 													// loop that eventually blew the stack.
 
-		if (deltaAggressor.lengthSqr() > m_radiusSqr) 
+		if (deltaAggressor.lengthSqr() > fixFromReal( m_radiusSqr ))
 		{
 			return true;
 		} 
@@ -232,7 +241,7 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 	}
 
 	Object* targetToGuard = findTargetToGuardByID();
-	Coord3D pos = targetToGuard ? *targetToGuard->getPosition() : *getPositionToGuard();
+	FCoord3D pos = targetToGuard ? *targetToGuard->getPositionFix() : guardFix( *getPositionToGuard() );
 
 	const PolygonTrigger*								area = getAreaToGuard();
 	PartitionFilterRelationship					f1(owner, PartitionFilterRelationship::ALLOW_ENEMIES);
@@ -276,17 +285,19 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 	// (getNextMoodTarget's UNFOGGED). It picks from what its player can see now.
 	filters[count++] = &filterFogged;
 
-	Real visionRange = AIGuardMachine::getStdGuardRange(owner);
+	Fix visionRange = fixFromReal( AIGuardMachine::getStdGuardRange(owner) );	// P3
 
-	if (area) 
+	if (area)
 	{
 		UnsignedInt checkFrame = TheGameLogic->getFrameObjectsChangedTriggerAreas()+TheAI->getAiData()->m_guardEnemyScanRate;
 		if (TheGameLogic->getFrame()>checkFrame) {
-			return false; 
+			return false;
 		}
 		filters[count++] = &f3;
-		visionRange = area->getRadius();
-		area->getCenterPoint(&pos);
+		visionRange = fixFromReal( area->getRadius() );	// P7
+		Coord3D center;
+		area->getCenterPoint(&center);
+		pos = guardFix( center );
 	}
 
 	if (getGuardMode() == GUARDMODE_GUARD_FLYING_UNITS_ONLY) 
@@ -306,7 +317,7 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 // just ask for that; the above has to find ALL objects in range, but we ignore all 
 // but the first (closest).
 //
-	Object* target = ThePartitionManager->getClosestObject(&pos, visionRange, FROM_CENTER_2D, filters);
+	Object* target = ThePartitionManager->getClosestObjectFix(&pos, visionRange, FROM_CENTER_2D, filters);
 	if (target) 
 	{
 		setNemesisID(target->getID());	
@@ -415,7 +426,7 @@ StateReturnType AIGuardInnerState::onEnter( void )
 	else
 	{
 		Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
-		Coord3D pos = targetToGuard ? *targetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
+		Coord3D pos = targetToGuard ? targetToGuard->getPositionFix()->toCoord3D() : *getGuardMachine()->getPositionToGuard();	// P7: exit conditions are float
 		Object* nemesis = TheGameLogic->findObjectByID(getGuardMachine()->getNemesisID()) ;
 		if (nemesis == NULL) 
 		{
@@ -450,7 +461,7 @@ StateReturnType AIGuardInnerState::update( void )
 		Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
 		if (targetToGuard) 
 		{
-			m_exitConditions.m_center = *targetToGuard->getPosition();
+			m_exitConditions.m_center = targetToGuard->getPositionFix()->toCoord3D();	// P7
 		}
 		
 		return m_attackState->update();
@@ -527,7 +538,7 @@ StateReturnType AIGuardOuterState::onEnter( void )
 	}
 
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
-	Coord3D pos = targetToGuard ? *targetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
+	Coord3D pos = targetToGuard ? targetToGuard->getPositionFix()->toCoord3D() : *getGuardMachine()->getPositionToGuard();	// P7: exit conditions are float
 
 	Object* nemesis = TheGameLogic->findObjectByID(getGuardMachine()->getNemesisID()) ;
 	if (nemesis == NULL) 
@@ -574,18 +585,19 @@ StateReturnType AIGuardOuterState::update( void )
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
 	if (targetToGuard) 
 	{
-		m_exitConditions.m_center = *targetToGuard->getPosition();
+		m_exitConditions.m_center = targetToGuard->getPositionFix()->toCoord3D();	// P7
 	}
 
 	Object* goalObj = m_attackState->getMachineGoalObject();
 	if (goalObj) 
 	{
-		Coord3D deltaAggr;
-		deltaAggr.x = m_exitConditions.m_center.x - goalObj->getPosition()->x;
-		deltaAggr.y = m_exitConditions.m_center.y - goalObj->getPosition()->y;
-		deltaAggr.z = m_exitConditions.m_center.z - goalObj->getPosition()->z;
-		Real visionSqr = sqr(AIGuardMachine::getStdGuardRange(getMachineOwner()));
-		if (deltaAggr.lengthSqr() <= visionSqr) 
+		const FCoord3D *goalPos = goalObj->getPositionFix();
+		FCoord3D deltaAggr;
+		deltaAggr.x = fixFromReal( m_exitConditions.m_center.x ) - goalPos->x;	// P7: m_center is float
+		deltaAggr.y = fixFromReal( m_exitConditions.m_center.y ) - goalPos->y;
+		deltaAggr.z = fixFromReal( m_exitConditions.m_center.z ) - goalPos->z;
+		const Fix vision = fixFromReal( AIGuardMachine::getStdGuardRange(getMachineOwner()) );	// P3
+		if (deltaAggr.lengthSqr() <= vision * vision)
 		{
 			// reset the counter
 			m_exitConditions.m_attackGiveUpFrame = TheGameLogic->getFrame() + TheAI->getAiData()->m_guardChaseUnitFrames;
@@ -645,7 +657,7 @@ StateReturnType AIGuardReturnState::onEnter( void )
 //		return STATE_FAILURE; // early termination because we found a target.
 
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
-	m_goalPosition = targetToGuard ? *targetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
+	m_goalPosition = targetToGuard ? targetToGuard->getPositionFix()->toCoord3D() : *getGuardMachine()->getPositionToGuard();	// P5: a pathfinder goal
 
 	const PolygonTrigger *area = getGuardMachine()->getAreaToGuard();
 	if (area) 
@@ -754,15 +766,17 @@ StateReturnType AIGuardIdleState::update( void )
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
 	if (targetToGuard) 
 	{
-		Coord3D pos = *targetToGuard->getPosition();
-		Real delta = m_guardeePos.x-pos.x;
-		if (delta*delta > 4*PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F) {
-			m_guardeePos = pos;
+		// P7: m_guardeePos is a float member
+		const FCoord3D *pos = targetToGuard->getPositionFix();
+		const Fix limitSqr( 4*PATHFIND_CELL_SIZE*PATHFIND_CELL_SIZE );
+		Fix delta = fixFromReal( m_guardeePos.x ) - pos->x;
+		if (delta*delta > limitSqr) {
+			m_guardeePos = pos->toCoord3D();
 			return STATE_FAILURE; // goes to AIGuardReturnState.
 		}
-		delta = m_guardeePos.y-pos.y;
-		if (delta*delta > 4*PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F) {
-			m_guardeePos = pos;
+		delta = fixFromReal( m_guardeePos.y ) - pos->y;
+		if (delta*delta > limitSqr) {
+			m_guardeePos = pos->toCoord3D();
 			return STATE_FAILURE; // goes to AIGuardReturnState.
 		}
 	} 
@@ -839,7 +853,7 @@ StateReturnType AIGuardAttackAggressorState::onEnter( void )
 	}
 
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
-	Coord3D pos = targetToGuard ? *targetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
+	Coord3D pos = targetToGuard ? targetToGuard->getPositionFix()->toCoord3D() : *getGuardMachine()->getPositionToGuard();	// P7: exit conditions are float
 	//Don't allow guarding units to leave their guard radius!
 	m_exitConditions.m_center = pos;
 	m_exitConditions.m_radiusSqr = sqr(AIGuardMachine::getStdGuardRange(getMachineOwner()));
@@ -868,7 +882,7 @@ StateReturnType AIGuardAttackAggressorState::update( void )
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
 	if (targetToGuard) 
 	{
-		m_exitConditions.m_center = *targetToGuard->getPosition();
+		m_exitConditions.m_center = targetToGuard->getPositionFix()->toCoord3D();	// P7
 	}
 	
 	return m_attackState->update();

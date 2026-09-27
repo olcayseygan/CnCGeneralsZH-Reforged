@@ -28,6 +28,7 @@
 #include "GameLogic/CrowdModel.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Object.h"
+#include "Lib/FixBoundary.h"
 
 //-------------------------------------------------------------------------------------------------
 CrowdCorridor::CrowdCorridor( void )
@@ -63,7 +64,7 @@ static Real crowdExtent( const Object *obj, const LocomotorSet& locomotorSet, Pa
 
 	// the body has to fit in whatever was found, so the lane only owns the part past its own radius
 	if (obj)
-		room -= obj->getGeometryInfo().getBoundingCircleRadius();
+		room -= fixToReal( obj->getGeometryInfo().getBoundingCircleRadiusFix() );	// P5: the probe is float
 
 	return room > 0.0f ? room : 0.0f;
 }
@@ -536,21 +537,19 @@ Bool Crowd_outranks( const Object *big, const Object *little )
 {
 	if (big == NULL || little == NULL)
 		return FALSE;
-	const Real rb = big->getGeometryInfo().getBoundingCircleRadius();
-	const Real rs = little->getGeometryInfo().getBoundingCircleRadius();
-	return rb > rs + 2.0f;
+	return big->getGeometryInfo().getBoundingCircleRadiusFix() > little->getGeometryInfo().getBoundingCircleRadiusFix() + Fix( 2 );
 }
 
 //-------------------------------------------------------------------------------------------------
 Real Crowd_gap( const Object *a, const Object *b )
 {
-	const Coord3D *pa = a->getPosition();
-	const Coord3D *pb = b->getPosition();
-	const Real dx = pb->x - pa->x;
-	const Real dy = pb->y - pa->y;
-	const Real d = (Real)sqrt( dx * dx + dy * dy );
-	return d - a->getGeometryInfo().getBoundingCircleRadius()
-					 - b->getGeometryInfo().getBoundingCircleRadius();
+	const FCoord3D *pa = a->getPositionFix();
+	const FCoord3D *pb = b->getPositionFix();
+	FCoord2D d;
+	d.set( pb->x - pa->x, pb->y - pa->y );
+	// P4: the gap feeds the brake speed
+	return fixToReal( d.length() - a->getGeometryInfo().getBoundingCircleRadiusFix()
+					 - b->getGeometryInfo().getBoundingCircleRadiusFix() );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -570,10 +569,11 @@ Real Crowd_remaining( const Object *obj )
 	const Coord3D *goal = ai->getGoalPosition();
 	if (goal == NULL)
 		return 0.0f;
-	const Coord3D *pos = obj->getPosition();
-	const Real dx = goal->x - pos->x;
-	const Real dy = goal->y - pos->y;
-	return (Real)sqrt( dx * dx + dy * dy );
+	// P4: the goal and the route distance above are float
+	const FCoord3D *pos = obj->getPositionFix();
+	FCoord2D d;
+	d.set( fixFromReal( goal->x ) - pos->x, fixFromReal( goal->y ) - pos->y );
+	return fixToReal( d.length() );
 }
 
 //-------------------------------------------------------------------------------------------------

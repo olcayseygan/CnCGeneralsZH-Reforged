@@ -45,8 +45,17 @@
 #include "GameLogic/TurretAI.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/WeaponSet.h"
+#include "Lib/FixBoundary.h"
 
 const UnsignedInt WAIT_INDEFINITELY = 0xffffffff;
+
+// P6: a turret's target position and a bridge's attack points are still float
+static FCoord3D turretFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1009,6 +1018,7 @@ StateReturnType TurretAIAimTurretState::update()
 	Coord3D enemyPosition;
 	Bool preventing = false;
 	TurretTargetType targetType =  turret->friend_getTurretTarget(enemy, enemyPosition);
+	FCoord3D enemyPositionFx = turretFix( enemyPosition );	// kept in step with enemyPosition below
 	Object *enemyForDistanceCheckOnly = enemy;	// Note: Do not use this anywhere except for the range check.
 	Bool aimingAtGround = (targetType != TARGET_OBJECT);	// a position, or a building; decided before enemy is nulled
 
@@ -1065,19 +1075,24 @@ StateReturnType TurretAIAimTurretState::update()
 				// Special case - bridges have two attackable points at either end.
 				TBridgeAttackInfo info;
 				TheTerrainLogic->getBridgeAttackPoints(enemy, &info);
-				Real distSqr = ThePartitionManager->getDistanceSquared( obj, &info.attackPoint1, FROM_BOUNDINGSPHERE_3D );
-				if (distSqr > ThePartitionManager->getDistanceSquared( obj, &info.attackPoint2, FROM_BOUNDINGSPHERE_3D ) ) 
+				const FCoord3D point1 = turretFix( info.attackPoint1 );
+				const FCoord3D point2 = turretFix( info.attackPoint2 );
+				if (ThePartitionManager->getDistanceSquaredFix( obj, &point1, FROM_BOUNDINGSPHERE_3D ) >
+						ThePartitionManager->getDistanceSquaredFix( obj, &point2, FROM_BOUNDINGSPHERE_3D ) )
 				{
 					enemyPosition = info.attackPoint2;
-				}	
-				else 
+					enemyPositionFx = point2;
+				}
+				else
 				{
 					enemyPosition = info.attackPoint1;
+					enemyPositionFx = point1;
 				}
-			}	
-			else 
+			}
+			else
 			{
-				enemyPosition = *enemy->getPosition();
+				enemyPositionFx = *enemy->getPositionFix();
+				enemyPosition = enemyPositionFx.toCoord3D();	// P6: the weapon range check is float
 			}
 
 			enemyAI = enemy ? enemy->getAI() : NULL;
@@ -1115,8 +1130,14 @@ StateReturnType TurretAIAimTurretState::update()
 
 	Real turnSpeedModifier = 1.0f;// Just like how recentering turns you half speed, sweeping can change your turn speed
 	
-	Real relAngle = ThePartitionManager->getRelativeAngle2D( obj, &enemyPosition );
-	
+	/* getRelativeAngle2D has no fixed twin; this is it: the signed angle from our facing to the
+		 target, atan2 of the cross and the dot, which is its acos of the dot signed by the cross. */
+	const FCoord3D *objPos = obj->getPositionFix();
+	const FCoord3D *facing = obj->getUnitDirectionVector2DFix();
+	const Fix toX = enemyPositionFx.x - objPos->x;
+	const Fix toY = enemyPositionFx.y - objPos->y;
+	Real relAngle = fixToReal( fixAtan2( facing->x * toY - facing->y * toX, facing->x * toX + facing->y * toY ) );	// P6: turret angles are float
+
 	Real aimAngle = relAngle;
 	Real sweep = turret->getTurretFireAngleSweepForWeaponSlot( slot );
 	if (sweep > 0.0f && turret->friend_isSweepEnabled())
@@ -1158,17 +1179,18 @@ StateReturnType TurretAIAimTurretState::update()
 		else
 		{
 			// Find the pitch to the target, but unlike Turn, we can't go 360 so bind at 0;
-			Coord3D v;
-			ThePartitionManager->getVectorTo(obj, &enemyPosition, FROM_CENTER_3D, v);
+			FCoord3D v;
+			ThePartitionManager->getDistanceSquaredFix(obj, &enemyPositionFx, FROM_CENTER_3D, &v);
 
 			//GetVectorTo only takes Object as the first, but we want the angle from our Weapon to the
 			// target, not us to the target.  Raise our side to get the line to make sense.
-			v.z -= obj->getGeometryInfo().getMaxHeightAbovePosition() / 2; // I kinda hate our logic/client split.  
+			v.z -= obj->getGeometryInfo().getMaxHeightAbovePositionFix() / Fix( 2 ); // I kinda hate our logic/client split.
 			//The point to fire from should be intrinsic to the turret, but in reality it is very slow to look it up.
 
+			const Fix vLength = v.length();
  			Real actualPitch;
- 			if( v.length() > 0 )
- 				actualPitch = ASin( v.z / v.length() ); 
+ 			if( vLength > Fix( 0 ) )
+ 				actualPitch = ASin( fixToReal( v.z / vLength ) );	// P6: the pitch is turret data
  			else
  				actualPitch = 0;// Don't point at NAN, just point at 0 if they are right on us
  
@@ -1186,7 +1208,7 @@ StateReturnType TurretAIAimTurretState::update()
 				}
 				if (adjust) {
 					Real range = curWeapon->getAttackRange(obj);
-					Real dist = v.length();
+					Real dist = fixToReal( vLength );	// P6
 					if (range<1) range = 1; // paranoia. jba.		 
 					// As the unit gets closer, reduce the pitch so we don't shoot over him.
 					Real groundPitch = turret->getGroundUnitPitch() * (dist/range);

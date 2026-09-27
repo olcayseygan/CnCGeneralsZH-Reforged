@@ -44,6 +44,7 @@
 #include "Common/TunnelTracker.h"
 #include "Common/Xfer.h"
 #include "Common/XFerCRC.h"
+#include "Lib/FixBoundary.h"
 
 #include "GameClient/ControlBar.h"
 #include "GameClient/FXList.h"
@@ -78,6 +79,14 @@
 #endif
 
 static Bool cannotPossiblyAttackObject( State *thisState, void* userData );
+
+/// a float position (a path node, a state's stored goal) into fixed point, for a Fix query or setPositionFix
+static FCoord3D fixFromCoord( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
 
 //----------------------------------------------------------------------------------------------------------
 AICommandParms::AICommandParms(AICommandType cmd, CommandSourceType cmdSource) : 
@@ -210,27 +219,45 @@ void AICommandParmsStorage::doXfer(Xfer *xfer)
  * Compare two positions to see if they are logically equal
  * @todo Move this somewhere more useful (MSB)
  */
-static Bool isSamePosition( const Coord3D *ourPos, const Coord3D *prevTargetPos, const Coord3D *curTargetPos )
+static Bool isSamePosition( const FCoord3D &ourPos, const FCoord3D &prevTargetPos, const FCoord3D &curTargetPos )
 {
-	Coord3D diff;
+	FCoord2D diff;
 
 	// for pathfinding purposes, only care about 2d pos. (srj)
-	diff.x = curTargetPos->x - prevTargetPos->x;
-	diff.y = curTargetPos->y - prevTargetPos->y;
+	diff.x = curTargetPos.x - prevTargetPos.x;
+	diff.y = curTargetPos.y - prevTargetPos.y;
 
-	Coord3D toTarget;
+	FCoord2D toTarget;
  	// for pathfinding purposes, only care about 2d pos. (srj)
-	toTarget.x = curTargetPos->x - ourPos->x;
-	toTarget.y = curTargetPos->y - ourPos->y;
+	toTarget.x = curTargetPos.x - ourPos.x;
+	toTarget.y = curTargetPos.y - ourPos.y;
 
 	// Tolerance is (dist/10)squared.
-	const Real TOLERANCE_FACTOR = 1.0f / (10.0f * 10.0f);
-	Real toleranceSqr = (toTarget.x*toTarget.x+toTarget.y*toTarget.y) * TOLERANCE_FACTOR;
+	Fix toleranceSqr = toTarget.lengthSqr() / Fix( 10 * 10 );
 
-	if (diff.x * diff.x + diff.y * diff.y > toleranceSqr)
+	if (diff.lengthSqr() > toleranceSqr)
 		return false;
 
 	return true;
+}
+
+/// PartitionManager::getRelativeAngle2D in fixed point: the signed angle from obj's facing to pos,
+/// in (-PI, PI].  acos of the dot signed by the cross is atan2 of the pair, and atan2 needs no normalizing.
+static Fix relativeAngle2DFix( const Object *obj, const FCoord3D &pos )
+{
+	const FCoord3D *objPos = obj->getPositionFix();
+	Fix vx = pos.x - objPos->x;
+	Fix vy = pos.y - objPos->y;
+	if (vx == Fix(0) && vy == Fix(0))
+		return Fix(0);
+	const FCoord3D *dir = obj->getUnitDirectionVector2DFix();
+	return fixAtan2( dir->x * vy - dir->y * vx, dir->x * vx + dir->y * vy );
+}
+
+/// REAL_TO_INT( w / PATHFIND_CELL_SIZE ): the cell a world coordinate falls in, truncated toward zero
+static Int fixToPathfindCell( Fix w )
+{
+	return (Int)( w.raw() / ( (Int64)PATHFIND_CELL_SIZE * Fix::ONE_RAW ) );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -540,11 +567,12 @@ StateReturnType AIRappelState::onEnter()
 	if (bldg == NULL || bldg->isEffectivelyDead() || !bldg->isKindOf(KINDOF_STRUCTURE))
 		m_targetIsBldg = false;
 
-	const Coord3D* pos = obj->getPosition();
+	const FCoord3D* pos = obj->getPositionFix();
+	const Coord3D posF = pos->toCoord3D();	// P5
 
 	const Bool onlyHealthyBridges = true;	// ignore dead bridges.
-	PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination(pos, onlyHealthyBridges);
-	m_destZ = TheTerrainLogic->getLayerHeight(pos->x, pos->y, layerAtDest);
+	PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination(&posF, onlyHealthyBridges);
+	m_destZ = fixToReal(TheTerrainLogic->getLayerHeightFix(pos->x, pos->y, layerAtDest));	// P4
 	if (m_targetIsBldg)
 		m_destZ += bldg->getGeometryInfo().getMaxHeightAbovePosition();
 	else
@@ -565,7 +593,7 @@ StateReturnType AIRappelState::update()
 	StateReturnType result = STATE_CONTINUE;
 	
 	Object* obj = getMachineOwner();
-	const Coord3D* pos = obj->getPosition();
+	const FCoord3D* pos = obj->getPositionFix();
 
 	Object* bldg = getMachineGoalObject();
 	if (m_targetIsBldg && (bldg == NULL || bldg->isEffectivelyDead()))
@@ -573,7 +601,7 @@ StateReturnType AIRappelState::update()
 		// if bldg is destroyed, just head for the ground
 		// BGC - bldg could be destroyed as they are heading down the rope.
 		m_targetIsBldg = false;
-		m_destZ = TheTerrainLogic->getGroundHeight(pos->x, pos->y);
+		m_destZ = fixToReal(TheTerrainLogic->getGroundHeightFix(pos->x, pos->y));	// P4
 	}
 	
 	// nuke 2d speed...
@@ -585,13 +613,14 @@ StateReturnType AIRappelState::update()
 	{
 		// if heading for ground, do this every frame... since jitter at the very start
 		// can move us slightly, and on uneven ground it might matter.
-		m_destZ = TheTerrainLogic->getLayerHeight(pos->x, pos->y, obj->getLayer());
+		m_destZ = fixToReal(TheTerrainLogic->getLayerHeightFix(pos->x, pos->y, obj->getLayer()));	// P4
 	}
-	if (pos->z <= m_destZ)
+	const Fix destZ = fixFromReal(m_destZ);	// P4
+	if (pos->z <= destZ)
 	{
-		Coord3D tmp = *pos;
-		tmp.z = m_destZ;
-		obj->setPosition(&tmp);
+		FCoord3D tmp = *pos;
+		tmp.z = destZ;
+		obj->setPositionFix(&tmp);
 		
 		if (m_targetIsBldg)
 		{
@@ -623,26 +652,27 @@ StateReturnType AIRappelState::update()
 				{
 					// this can legitimately happen if you drop into a full (or nearly full) building.
 					// let's just place the guy on the ground nearby, since it sucks to fall from the top of a building.
-					Real exitAngle = bldg->getOrientation();
-					// Garrison doesn't have reserveDoor or exitDelay, so if we do nothing, everyone will appear on top 
+					Fix exitAngle = bldg->getOrientationFix();
+					// Garrison doesn't have reserveDoor or exitDelay, so if we do nothing, everyone will appear on top
 					// of each other and get stuck inside each others' extent (except for the first guy).  So we'll
 					// scatter the start point around a little to make it better.
-					Real offset = min(obj->getGeometryInfo().getBoundingCircleRadius(), 
-														bldg->getGeometryInfo().getBoundingCircleRadius());
-					Real angle = GameLogicRandomValueReal( PI, 2*PI );//Downish.
-					Coord3D startPosition = *bldg->getPosition();
-					startPosition.x += offset * Cos( angle );
-					startPosition.y += offset * Sin( angle );
-					startPosition.z = TheTerrainLogic->getGroundHeight( startPosition.x, startPosition.y );
+					Fix offset = fixMin(obj->getGeometryInfo().getBoundingCircleRadiusFix(),
+														bldg->getGeometryInfo().getBoundingCircleRadiusFix());
+					Fix angle = fixFromReal(GameLogicRandomValueReal( PI, 2*PI ));//Downish.
+					FCoord3D startPosition = *bldg->getPositionFix();
+					startPosition.x += offset * fixCos( angle );
+					startPosition.y += offset * fixSin( angle );
+					startPosition.z = TheTerrainLogic->getGroundHeightFix( startPosition.x, startPosition.y );
 
-					obj->setPosition( &startPosition );
-					obj->setOrientation( exitAngle );
-					
+					obj->setPositionFix( &startPosition );
+					obj->setOrientationFix( exitAngle );
+
 					FindPositionOptions options;
 					options.startAngle = (Real)(1.5 * PI);//Down.
 					options.maxRadius = 200;
 					Coord3D endPosition;
-					Bool foundPosition = ThePartitionManager->findPositionAround( &startPosition, &options, &endPosition );
+					const Coord3D startPositionF = startPosition.toCoord3D();	// P5
+					Bool foundPosition = ThePartitionManager->findPositionAround( &startPositionF, &options, &endPosition );
 
 					if( foundPosition )
 					{
@@ -1160,8 +1190,8 @@ Bool outOfWeaponRangeObject( State *thisState, void* userData )
 		// so just skip it for contact weapons
 		if (victim && !weapon->isContactWeapon() && onGround && !victim->isSignificantlyAboveTerrain()) 
 		{
-			viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(obj, *obj->getPosition(), victim, *victim->getPosition());
-		}	 
+			viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(obj, obj->getPositionFix()->toCoord3D(), victim, victim->getPositionFix()->toCoord3D());	// P5
+		}
 		// A weapon with leech range temporarily has unlimited range and is locked onto its target.
 		if (!weapon->hasLeechRange() && viewBlocked) 
 		{
@@ -1248,7 +1278,7 @@ Bool outOfWeaponRangePosition( State *thisState, void* userData )
 		Bool viewBlocked = false;
 		if (onGround) 
 		{
-			viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(obj, *obj->getPosition(), NULL, *pos);
+			viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(obj, obj->getPositionFix()->toCoord3D(), NULL, *pos);	// P5
 		}	 
 		if (viewBlocked)
 		{
@@ -1389,15 +1419,16 @@ void AIIdleState::doInitIdleState()
 
 		*/
 		// Update the goal.
-		Coord3D goalPos = *obj->getPosition();
+		Coord3D goalPos = obj->getPositionFix()->toCoord3D();	// P5
 		// but only if we have a valid position.
 		if (goalPos.x || goalPos.y || goalPos.z)
 		{
 			TheAI->pathfinder()->updateGoal(obj, &goalPos, obj->getLayer());
-			if (!ultraAccurate && TheAI->pathfinder()->goalPosition(obj, &goalPos)) 
+			if (!ultraAccurate && TheAI->pathfinder()->goalPosition(obj, &goalPos))
 			{
 				if (TheGameLogic->getFrame()<=1) {
-					obj->setPosition(&goalPos);
+					const FCoord3D goalPosFix = fixFromCoord(goalPos);	// P5
+					obj->setPositionFix(&goalPosFix);
 				} else {
 #ifdef STOP_AND_SLIDE
 					ai->setFinalPosition(&goalPos);
@@ -1669,9 +1700,9 @@ StateReturnType AIInternalMoveToState::onEnter()
 		// pop into idle for 1 frame.  jba.
 		//Determine if we are on a cliff cell... if so, use the climbing model condition
 		//instead of moving.
-		Int cellX = REAL_TO_INT( obj->getPosition()->x / PATHFIND_CELL_SIZE );
-		Int cellY = REAL_TO_INT( obj->getPosition()->y / PATHFIND_CELL_SIZE );
-		
+		Int cellX = fixToPathfindCell( obj->getPositionFix()->x );
+		Int cellY = fixToPathfindCell( obj->getPositionFix()->y );
+
 		PathfindCell* cell = TheAI->pathfinder()->getCell( obj->getLayer(), cellX, cellY );
 		ModelConditionFlagType modelConditionFlag = (cell && cell->getType() != PathfindCell::CELL_CLIFF) ? MODELCONDITION_MOVING : MODELCONDITION_CLIMBING;
 		obj->setModelConditionState( modelConditionFlag );
@@ -1775,9 +1806,9 @@ void AIInternalMoveToState::onExit( StateExitType status )
 		DEBUG_ASSERTLOG(obj->getTeam(), ("AIInternalMoveToState::onExit obj has NULL team.\n"));
 		if (obj->getTeam() && ai->isDoingGroundMovement() && ai->getCurLocomotor() && 
 								ai->getCurLocomotor()->isUltraAccurate()) {
-			Real dx = m_goalPosition.x-obj->getPosition()->x;
-			Real dy = m_goalPosition.y-obj->getPosition()->y;
-			if (dx*dx+dy*dy<PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F) 
+			Fix dx = fixFromReal(m_goalPosition.x)-obj->getPositionFix()->x;	// P4
+			Fix dy = fixFromReal(m_goalPosition.y)-obj->getPositionFix()->y;	// P4
+			if (dx*dx+dy*dy<Fix(PATHFIND_CELL_SIZE*PATHFIND_CELL_SIZE))
 			{
 				// We are doing accurate ground movement, so make sure we end exactly at the goal.
 				ai->setFinalPosition(&m_goalPosition);
@@ -1866,9 +1897,9 @@ StateReturnType AIInternalMoveToState::update()
 
 	//Determine if we are on a cliff cell... if so, use the climbing model condition
 	//instead of moving.
-	Int cellX = REAL_TO_INT( obj->getPosition()->x / PATHFIND_CELL_SIZE );
-	Int cellY = REAL_TO_INT( obj->getPosition()->y / PATHFIND_CELL_SIZE );
-	
+	Int cellX = fixToPathfindCell( obj->getPositionFix()->x );
+	Int cellY = fixToPathfindCell( obj->getPositionFix()->y );
+
 	PathfindCell* cell = TheAI->pathfinder()->getCell( obj->getLayer(), cellX, cellY );
 	ModelConditionFlagType setConditionFlag = MODELCONDITION_MOVING;
 	// Totally hacky set of conditions to make col. burton's monkey ass not slide down 
@@ -1917,7 +1948,7 @@ StateReturnType AIInternalMoveToState::update()
 	// if our goal has moved, recompute our path
 	if (forceRecompute || TheGameLogic->getFrame() - m_pathTimestamp > MIN_REPATH_TIME)
 	{
-		if (forceRecompute || !isSamePosition(obj->getPosition(), &m_pathGoalPosition, &m_goalPosition ))
+		if (forceRecompute || !isSamePosition(*obj->getPositionFix(), fixFromCoord(m_pathGoalPosition), fixFromCoord(m_goalPosition) ))	// P4
 		{
 			// goal moved - repath
 			if (!computePath())
@@ -1950,15 +1981,14 @@ StateReturnType AIInternalMoveToState::update()
 	{
 		if (ai->isDoingGroundMovement()) {
 			// sanity check 
-			Coord3D delta;
-			Coord3D goalPos = m_goalPosition;
+			FCoord2D delta;
+			FCoord3D goalPos = fixFromCoord(m_goalPosition);	// P4
 			if (ai->getPath()->getLastNode()) {
-				goalPos = *ai->getPath()->getLastNode()->getPosition();
+				goalPos = fixFromCoord(*ai->getPath()->getLastNode()->getPosition());	// P5
 			}
-			delta.x = obj->getPosition()->x - goalPos.x;
-			delta.y = obj->getPosition()->y - goalPos.y;
-			delta.z = 0;
-			if (delta.length() > 4*PATHFIND_CELL_SIZE_F) {
+			delta.x = obj->getPositionFix()->x - goalPos.x;
+			delta.y = obj->getPositionFix()->y - goalPos.y;
+			if (delta.length() > Fix(4*PATHFIND_CELL_SIZE)) {
 				//DEBUG_LOG(("AIInternalMoveToState Trying to finish early.  Continuing...\n"));
 				onPathDistToGoal = ai->getLocomotorDistanceToGoal();
 				return STATE_CONTINUE;
@@ -2082,14 +2112,15 @@ StateReturnType AIMoveToState::onEnter()
 
 	// if we have a goal object, move to it, otherwise move to goal position
 	if (getMachineGoalObject())	{
-		m_goalPosition = *getMachineGoalObject()->getPosition();
+		FCoord3D goalPos = *getMachineGoalObject()->getPositionFix();
 		if (getMachineOwner()->isKindOf(KINDOF_PROJECTILE)) {
-			Real halfHeight = getMachineGoalObject()->getGeometryInfo().getMaxHeightAbovePosition()/2.0f;
-			m_goalPosition.z += halfHeight;
-			if (getMachineGoalObject()->getPosition()->z < m_goalPosition.z) {
-				m_goalPosition.z += halfHeight;
+			Fix halfHeight = getMachineGoalObject()->getGeometryInfo().getMaxHeightAbovePositionFix()/Fix(2);
+			goalPos.z += halfHeight;
+			if (getMachineGoalObject()->getPositionFix()->z < goalPos.z) {
+				goalPos.z += halfHeight;
 			}
 		}
+		m_goalPosition = goalPos.toCoord3D();	// P4
 	} else
 		m_goalPosition = *getMachineGoalPosition();
 
@@ -2151,43 +2182,45 @@ StateReturnType AIMoveToState::update()
 	Object *obj = getMachineOwner();
 	if (goalObj)
 	{
-		m_goalPosition = *goalObj->getPosition();
+		FCoord3D goalPos = *goalObj->getPositionFix();
 		Bool gotPhysics = obj->getPhysics()!=NULL && goalObj->getPhysics()!=NULL;
 		Bool isMissile = obj->isKindOf(KINDOF_PROJECTILE);
 		if (isMissile) {
-			Real halfHeight = getMachineGoalObject()->getGeometryInfo().getMaxHeightAbovePosition()/2.0f;
-			m_goalPosition.z += halfHeight;
-			Real zDelta = m_goalPosition.z - obj->getPosition()->z;
-			if (zDelta>0) {
-				m_goalPosition.z += zDelta;
+			Fix halfHeight = getMachineGoalObject()->getGeometryInfo().getMaxHeightAbovePositionFix()/Fix(2);
+			goalPos.z += halfHeight;
+			Fix zDelta = goalPos.z - obj->getPositionFix()->z;
+			if (zDelta>Fix(0)) {
+				goalPos.z += zDelta;
 			}
 		}
 		//gotPhysics = false;
 		if (gotPhysics && isMissile && !goalObj->isKindOf(KINDOF_IMMOBILE)) {
-			Coord3D ourPos = *obj->getPosition();
-			Coord3D delta;
-			delta.x = m_goalPosition.x - ourPos.x;
-			delta.y = m_goalPosition.y - ourPos.y;
-			delta.z = m_goalPosition.z - ourPos.z;
-			Real mySpeed = obj->getPhysics()->getVelocityMagnitude();
-			Real goalSpeed = goalObj->getPhysics()->getVelocityMagnitude();
-			if (mySpeed<5.0f) mySpeed = 5.0f; // avoid divide by 0.
-			Real leadDistance = (0.5*delta.length()) * goalSpeed / mySpeed;
-			Coord3D dir;
-			goalObj->getUnitDirectionVector3D(dir);
-			m_goalPosition.x += dir.x*leadDistance;
-			m_goalPosition.y += dir.y*leadDistance;
-			m_goalPosition.z += dir.z*leadDistance;
+			FCoord3D delta = goalPos;
+			delta.sub(*obj->getPositionFix());
+			Fix mySpeed = fixFromReal(obj->getPhysics()->getVelocityMagnitude());	// P4
+			Fix goalSpeed = fixFromReal(goalObj->getPhysics()->getVelocityMagnitude());	// P4
+			if (mySpeed<Fix(5)) mySpeed = Fix(5); // avoid divide by 0.
+			Fix leadDistance = (0.5_fx*delta.length()) * goalSpeed / mySpeed;
+			// the goal's unit forward vector in 3D, read the way getUnitDirectionVector3D reads it
+			const FixMatrix3D *mx = goalObj->getTransformMatrixFix();
+			FCoord3D dir;
+			dir.set(mx->m[0][0], mx->m[1][0], mx->m[2][0]);
+			Fix dirLen = dir.length();
+			if (dirLen > Fix(0))
+				dir.set(dir.x / dirLen, dir.y / dirLen, dir.z / dirLen);
+			dir.scale(leadDistance);
+			goalPos.add(dir);
 		}
+		m_goalPosition = goalPos.toCoord3D();	// P4
 		//DEBUG_LOG(("update goal pos to %f %f %f\n",m_goalPosition.x,m_goalPosition.y,m_goalPosition.z));
 	} else {
 		Bool isMissile = obj->isKindOf(KINDOF_PROJECTILE);
 		if (isMissile) {
 			// When missiles are moving uphill, they need to start up quickly to clear hills.  jba.
 			m_goalPosition = *getMachineGoalPosition();
-			Real zDelta = m_goalPosition.z - obj->getPosition()->z;
-			if (zDelta>0) {
-				m_goalPosition.z += zDelta;
+			Fix zDelta = fixFromReal(m_goalPosition.z) - obj->getPositionFix()->z;	// P4
+			if (zDelta>Fix(0)) {
+				m_goalPosition.z += fixToReal(zDelta);	// P4
 			}
 		}
 
@@ -2450,10 +2483,10 @@ static Bool canPursue(Object *source, Weapon *weapon, Object *victim)
 	if (victimSpeed < ourMaxSpeed/10) {
 		return false; // They aren't moving very fast, so don't chase.
 	}
-	Real dx = victim->getPosition()->x - source->getPosition()->x;
-	Real dy = victim->getPosition()->y - source->getPosition()->y;
-	Coord3D victimVector = *victim->getUnitDirectionVector2D();
-	if (dx*victimVector.x + dy*victimVector.y < 0 ) {
+	Fix dx = victim->getPositionFix()->x - source->getPositionFix()->x;
+	Fix dy = victim->getPositionFix()->y - source->getPositionFix()->y;
+	const FCoord3D *victimVector = victim->getUnitDirectionVector2DFix();
+	if (dx*victimVector->x + dy*victimVector->y < Fix(0) ) {
 		return false; // they are moving towards us.
 	}
 	return true;
@@ -2506,7 +2539,7 @@ Bool AIAttackApproachTargetState::computePath()
 
 		Object* source = getMachineOwner();
 		// if our victim's position hasn't changed, don't re-path
-		if (!forceRepath && isSamePosition(source->getPosition(), &m_prevVictimPos, getMachineGoalObject()->getPosition() ))
+		if (!forceRepath && isSamePosition(*source->getPositionFix(), fixFromCoord(m_prevVictimPos), *getMachineGoalObject()->getPositionFix() ))	// P4
 		{
 			CRCDEBUG_LOG(("AIAttackApproachTargetState::computePath - bailing because victim in same place for object %d\n", getMachineOwner()->getID()));
 			return true;
@@ -2521,13 +2554,13 @@ Bool AIAttackApproachTargetState::computePath()
 
 		// remember where we think our victim is, so if it moves, we can re-path
 		Object *victim = getMachineGoalObject();	 
-		m_prevVictimPos = *victim->getPosition();
-		if (canPursue(source, weapon, victim)) 
+		m_prevVictimPos = victim->getPositionFix()->toCoord3D();	// P4
+		if (canPursue(source, weapon, victim))
 		{
 			return false;  // break out, and do the pursuit state.
 		}
 		setAdjustsDestination(true);
-		if (weapon->isContactWeapon()) 
+		if (weapon->isContactWeapon())
 		{
 			// Weapon is basically a contact weapon, so let the attacker pathfind into the target.
 			ai->ignoreObstacle(victim);
@@ -2538,9 +2571,11 @@ Bool AIAttackApproachTargetState::computePath()
 		m_goalPosition = m_prevVictimPos;
 		m_waitingForPath = true;
 
-		Coord3D pos;
-		victim->getGeometryInfo().getCenterPosition( *victim->getPosition(), pos );
-		
+		// the victim's geometric centre, as getCenterPosition finds it
+		FCoord3D center = *victim->getPositionFix();
+		center.z += victim->getGeometryInfo().getZDeltaToCenterPositionFix();
+		Coord3D pos = center.toCoord3D();	// P5
+
 		CRCDEBUG_LOG(("AIAttackApproachTargetState::computePath - requestAttackPath() for object %d\n", getMachineOwner()->getID()));
 		ai->requestAttackPath(victim->getID(), &pos );
 		m_stopIfInRange = false; // we have calculated a position to shoot from, so go there.
@@ -2654,7 +2689,7 @@ StateReturnType AIAttackApproachTargetState::onEnter()
 			Bool viewBlocked = false;
 			if (source && victim && ai->isDoingGroundMovement() && !victim->isSignificantlyAboveTerrain()) 
 			{
-				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, *source->getPosition(), victim, *victim->getPosition());
+				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, source->getPositionFix()->toCoord3D(), victim, victim->getPositionFix()->toCoord3D());	// P5
 			}
 			if (!viewBlocked) 
 			{
@@ -2779,7 +2814,7 @@ StateReturnType AIAttackApproachTargetState::updateInternal()
 			Bool viewBlocked = false;
 			if (victim && ai->isDoingGroundMovement() && !victim->isSignificantlyAboveTerrain()) 
 			{
-				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, *source->getPosition(), victim, *victim->getPosition());
+				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, source->getPositionFix()->toCoord3D(), victim, victim->getPositionFix()->toCoord3D());	// P5
 			}
 			if (!viewBlocked) 
 			{
@@ -2809,7 +2844,7 @@ StateReturnType AIAttackApproachTargetState::updateInternal()
 			Bool viewBlocked = false;
 			if ( ai->isDoingGroundMovement() ) 
 			{
-				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, *source->getPosition(), NULL, m_goalPosition);
+				viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, source->getPositionFix()->toCoord3D(), NULL, m_goalPosition);	// P5
 			}
 			if (!viewBlocked) 
 			{
@@ -2886,12 +2921,13 @@ void AIAttackApproachTargetState::onExit( StateExitType status )
 				ai->getCurLocomotor()->setUsePreciseZPos(false);
 		}
 		if (ai->isDoingGroundMovement()) {
-			Real dx = m_goalPosition.x-obj->getPosition()->x;
-			Real dy = m_goalPosition.y-obj->getPosition()->y;
-			if (dx*dx+dy*dy<PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F*0.125) 
+			const FCoord3D goalPos = fixFromCoord(m_goalPosition);	// P4
+			Fix dx = goalPos.x-obj->getPositionFix()->x;
+			Fix dy = goalPos.y-obj->getPositionFix()->y;
+			if (dx*dx+dy*dy<Fix(PATHFIND_CELL_SIZE*PATHFIND_CELL_SIZE)/Fix(8))
 			{
 				// We are doing accurate ground movement, so make sure we end exactly at the goal.
-				obj->setPosition(&m_goalPosition);
+				obj->setPositionFix(&goalPos);
 			}
 		}
 	}
@@ -2949,7 +2985,7 @@ Bool AIAttackPursueTargetState::computePath()
 
 		Object* source = getMachineOwner();
 		// if our victim's position hasn't changed, don't re-path
-		if (!forceRepath && isSamePosition(source->getPosition(), &m_prevVictimPos, getMachineGoalObject()->getPosition() ))
+		if (!forceRepath && isSamePosition(*source->getPositionFix(), fixFromCoord(m_prevVictimPos), *getMachineGoalObject()->getPositionFix() ))	// P4
 			return true;
 
 		Weapon* weapon = source->getCurrentWeapon();
@@ -2963,7 +2999,7 @@ Bool AIAttackPursueTargetState::computePath()
 
 		// remember where we think our victim is, so if it moves, we can re-path
 		Object *victim = getMachineGoalObject();
-		m_prevVictimPos = *victim->getPosition();
+		m_prevVictimPos = victim->getPositionFix()->toCoord3D();	// P4
 
 		setAdjustsDestination(true);
 
@@ -3144,7 +3180,7 @@ StateReturnType AIAttackPursueTargetState::updateInternal()
 		Bool viewBlocked = false;
 		if (ai->isDoingGroundMovement() && !victim->isSignificantlyAboveTerrain()) 
 		{
-			viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, *source->getPosition(), victim, *victim->getPosition());
+			viewBlocked = TheAI->pathfinder()->isAttackViewBlockedByObstacle(source, source->getPositionFix()->toCoord3D(), victim, victim->getPositionFix()->toCoord3D());	// P5
 		}
 		if (!viewBlocked && victim->getPhysics() && weapon->isWithinAttackRange(source, victim)) {
 			// If we have a turret, start aiming.
@@ -3152,7 +3188,9 @@ StateReturnType AIAttackPursueTargetState::updateInternal()
 			//  match speeds;
 			m_isInitialApproach = false;
 			Real victimSpeed = victim->getPhysics()->getForwardSpeed2D();
-			if (weapon->isGoalPosWithinAttackRange(source, source->getPosition(), victim, victim->getPosition())){
+			const Coord3D sourcePos = source->getPositionFix()->toCoord3D();	// P6
+			const Coord3D victimPos = victim->getPositionFix()->toCoord3D();	// P6
+			if (weapon->isGoalPosWithinAttackRange(source, &sourcePos, victim, &victimPos)){
 				victimSpeed *= 0.95f;
 			}
 			if (source->canCrushOrSquish(victim)) {
@@ -3257,7 +3295,7 @@ StateReturnType AIPickUpCrateState::onEnter()
 		return STATE_FAILURE;
 	}
 	setAdjustsDestination(true);
-	m_goalPosition = *goalObj->getPosition();
+	m_goalPosition = goalObj->getPositionFix()->toCoord3D();	// P4
 	m_delayCounter = 3;
 	return STATE_CONTINUE;
 
@@ -3425,10 +3463,10 @@ StateReturnType AIFollowPathState::update()
 
 		Bool tooClose=true;
 		while (pos && tooClose) {
-			Real dx = pos->x - obj->getPosition()->x;
-			Real dy = pos->y - obj->getPosition()->y;
+			Fix dx = fixFromReal(pos->x) - obj->getPositionFix()->x;	// P4
+			Fix dy = fixFromReal(pos->y) - obj->getPositionFix()->y;	// P4
 			tooClose = false;
-			if (sqr(dx) + sqr(dy) < sqr(PATHFIND_CELL_SIZE_F)) {
+			if (dx*dx + dy*dy < Fix(PATHFIND_CELL_SIZE*PATHFIND_CELL_SIZE)) {
 				tooClose = true;
 			}
 			if (tooClose) {
@@ -3532,12 +3570,12 @@ StateReturnType AIMoveAndEvacuateState::onEnter()
 
 	getMachine()->lock("AIMoveAndEvacuateState::onEnter");		// This state is not user interruptable.
 
-	m_origin = *obj->getPosition();
+	m_origin = obj->getPositionFix()->toCoord3D();	// P4
 	setAdjustsDestination(true);
 
 	// if we have a goal object, move to it, otherwise move to goal position
 	if (getMachine()->getGoalObject())
-		m_goalPosition = *getMachine()->getGoalObject()->getPosition();
+		m_goalPosition = getMachine()->getGoalObject()->getPositionFix()->toCoord3D();	// P4
 	else
 		m_goalPosition = *getMachine()->getGoalPosition();
 	return AIInternalMoveToState::onEnter();
@@ -3693,7 +3731,7 @@ StateReturnType AIAttackMoveToState::onEnter()
 	m_chaseWasAllowed = ai->isAllowedToChase();
 	m_victimID = INVALID_ID;
 	m_engageStartFrame = 0;
-	m_engageOrigin = *owner->getPosition();
+	m_engageOrigin = owner->getPositionFix()->toCoord3D();	// P4
 	m_reengageGoalDistSqr = 0.0f;
 	m_frameToApproachOn = 0;
 	// spread the scans of a group that was all ordered on the same frame over the scan interval.
@@ -3780,7 +3818,7 @@ void AIAttackMoveToState::startEngaging( Object *victim, Bool allowChase )
 		ai->destroyPath();		// drop the attack move path; it is rebuilt when the fight is over
 	}
 
-	m_engageOrigin = *owner->getPosition();
+	m_engageOrigin = owner->getPositionFix()->toCoord3D();	// P4
 	m_victimID = victim->getID();
 	m_engageStartFrame = TheGameLogic->getFrame();
 	m_ammoAtEngage = countRemainingAmmo( owner );
@@ -3925,8 +3963,8 @@ Bool AIAttackMoveToState::hasLeftTheLeash( void )
 	return AIAttackMove_leashBroken(
 						owner->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN,
 						owner->isUsingAirborneLocomotor(),
-						owner->getPosition()->x - m_engageOrigin.x,
-						owner->getPosition()->y - m_engageOrigin.y,
+						fixToReal(owner->getPositionFix()->x - fixFromReal(m_engageOrigin.x)),	// P4: the leash test seam takes Real
+						fixToReal(owner->getPositionFix()->y - fixFromReal(m_engageOrigin.y)),	// P4
 						ATTACK_MOVE_LEASH_CELLS );
 }
 
@@ -4053,10 +4091,10 @@ Bool AIAttackMove_mayTakeTarget( Bool targetIsInRangeNow, Bool targetIsTheLastDu
 void AIAttackMoveToState::requireProgressTowardGoal( void )
 {
 	Object *owner = getMachineOwner();
-	Real dx = owner->getPosition()->x - m_goalPosition.x;
-	Real dy = owner->getPosition()->y - m_goalPosition.y;
-	Real distToGoal = sqrt(dx*dx + dy*dy) - ATTACK_MOVE_LEASH_CELLS*PATHFIND_CELL_SIZE_F;
-	m_reengageGoalDistSqr = (distToGoal > 0.0f) ? sqr(distToGoal) : 0.0f;
+	Fix dx = owner->getPositionFix()->x - fixFromReal(m_goalPosition.x);	// P4
+	Fix dy = owner->getPositionFix()->y - fixFromReal(m_goalPosition.y);	// P4
+	Fix distToGoal = fixSqrt(dx*dx + dy*dy) - Fix(ATTACK_MOVE_LEASH_CELLS*PATHFIND_CELL_SIZE);
+	m_reengageGoalDistSqr = fixToReal((distToGoal > Fix(0)) ? distToGoal*distToGoal : Fix(0));	// P4
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -4069,9 +4107,9 @@ Bool AIAttackMoveToState::mayEngageYet( void )
 		return TRUE;
 
 	Object *owner = getMachineOwner();
-	Real dx = owner->getPosition()->x - m_goalPosition.x;
-	Real dy = owner->getPosition()->y - m_goalPosition.y;
-	if ((dx*dx + dy*dy) > m_reengageGoalDistSqr)
+	Fix dx = owner->getPositionFix()->x - fixFromReal(m_goalPosition.x);	// P4
+	Fix dy = owner->getPositionFix()->y - fixFromReal(m_goalPosition.y);	// P4
+	if ((dx*dx + dy*dy) > fixFromReal(m_reengageGoalDistSqr))	// P4
 		return FALSE;
 
 	m_reengageGoalDistSqr = 0.0f;		// paid up
@@ -4217,11 +4255,14 @@ StateReturnType AIAttackMoveToState::update()
 	if (ret != STATE_CONTINUE) {
 		if (m_retryCount<1) return ret;
 		/* check for close enough. */
-		Real distSqr = sqr(owner->getPosition()->x - m_pathGoalPosition.x) + sqr(owner->getPosition()->y-m_pathGoalPosition.y);
-		if (distSqr < sqr(ATTACK_CLOSE_ENOUGH_CELLS*PATHFIND_CELL_SIZE_F)) {
+		Fix dx = owner->getPositionFix()->x - fixFromReal(m_pathGoalPosition.x);	// P4
+		Fix dy = owner->getPositionFix()->y - fixFromReal(m_pathGoalPosition.y);	// P4
+		Fix distSqr = dx*dx + dy*dy;
+		const Fix closeEnough = Fix(ATTACK_CLOSE_ENOUGH_CELLS*PATHFIND_CELL_SIZE);
+		if (distSqr < closeEnough*closeEnough) {
 			return ret;
 		}
-		DEBUG_LOG(("AIAttackMoveToState::update Distance from goal %f, retrying.\n", sqrt(distSqr)));
+		DEBUG_LOG(("AIAttackMoveToState::update Distance from goal %f, retrying.\n", fixToReal(fixSqrt(distSqr))));	// client
 
 		ret = STATE_CONTINUE;
 		m_retryCount--;
@@ -4274,7 +4315,7 @@ StateReturnType AIMoveAndDeleteState::onEnter()
 	getMachine()->lock("AIMoveAndDeleteState::onEnter");
 	// if we have a goal object, move to it, otherwise move to goal position
 	if (getMachine()->getGoalObject())
-		m_goalPosition = *getMachine()->getGoalObject()->getPosition();
+		m_goalPosition = getMachine()->getGoalObject()->getPositionFix()->toCoord3D();	// P4
 	else
 		m_goalPosition = *getMachine()->getGoalPosition();
 	m_appendGoalPosition = true; // We may be moving off the map.
@@ -4300,7 +4341,7 @@ StateReturnType AIMoveAndDeleteState::update()
 		Path *thePath = ai->getPath();
 		if (!ai->isWaitingForPath() && ai->getPath()) 
 		{
-			m_goalPosition.z = TheTerrainLogic->getGroundHeight(m_goalPosition.x, m_goalPosition.y);
+			m_goalPosition.z = fixToReal(TheTerrainLogic->getGroundHeightFix(fixFromReal(m_goalPosition.x), fixFromReal(m_goalPosition.y)));	// P5
 			thePath->appendNode( &m_goalPosition, LAYER_GROUND);
 			m_appendGoalPosition = false; // just did it.
 		}
@@ -4445,8 +4486,8 @@ void AIFollowWaypointPathState::computeGoal(Bool useGroupOffsets)
 
 #define NO_ROTATE_OFFSETS
 #ifdef ROTATE_OFFSETS
-	Real dx = (dest.x) - (obj->getPosition()->x - m_groupOffset.x);
-	Real dy = (dest.y) - (obj->getPosition()->y - m_groupOffset.y);
+	Real dx = (dest.x) - (fixToReal(obj->getPositionFix()->x) - m_groupOffset.x);	// P4, compiled out
+	Real dy = (dest.y) - (fixToReal(obj->getPositionFix()->y) - m_groupOffset.y);	// P4, compiled out
 	Real angle;
 	if (m_priorWaypoint) {
 		dx = dest.x - m_priorWaypoint->getLocation()->x;
@@ -4474,8 +4515,8 @@ void AIFollowWaypointPathState::computeGoal(Bool useGroupOffsets)
 			m_goalPosition = dest;
 		}
 	} else {
-		m_goalPosition.z = TheTerrainLogic->getGroundHeight(m_goalPosition.x, m_goalPosition.y);
-	}	
+		m_goalPosition.z = fixToReal(TheTerrainLogic->getGroundHeightFix(fixFromReal(m_goalPosition.x), fixFromReal(m_goalPosition.y)));	// P4
+	}
 	Region3D extent;
 	TheTerrainLogic->getMaximumPathfindExtent(&extent);
 
@@ -4623,8 +4664,8 @@ StateReturnType AIFollowWaypointPathState::onEnter()
 			Coord3D center;
 			
 			group->getCenter( &center );
-			m_groupOffset.x = obj->getPosition()->x - center.x;
-			m_groupOffset.y = obj->getPosition()->y - center.y;
+			m_groupOffset.x = fixToReal(obj->getPositionFix()->x - fixFromReal(center.x));	// P4
+			m_groupOffset.y = fixToReal(obj->getPositionFix()->y - fixFromReal(center.y));	// P4
 		}
 	}
 	// set initial movement goal
@@ -4873,8 +4914,8 @@ StateReturnType AIFollowWaypointPathExactState::onEnter()
 			Coord3D center;
 			
 			group->getCenter( &center );
-			groupOffset.x = obj->getPosition()->x - center.x;
-			groupOffset.y = obj->getPosition()->y - center.y;
+			groupOffset.x = fixToReal(obj->getPositionFix()->x - fixFromReal(center.x));	// P4
+			groupOffset.y = fixToReal(obj->getPositionFix()->y - fixFromReal(center.y));	// P4
 		}
 	}
 	ai->setCanPathThroughUnits(true);
@@ -5238,7 +5279,7 @@ void AIWanderInPlaceState::loadPostProcess( void )
 // ------------------------------------------------------------------------------------------------
 StateReturnType AIWanderInPlaceState::onEnter()
 {
-	m_origin = *getMachineOwner()->getPosition();
+	m_origin = getMachineOwner()->getPositionFix()->toCoord3D();	// P4
 
 	AIUpdateInterface *ai = getMachineOwner()->getAI();
 	if (ai) {
@@ -5648,16 +5689,16 @@ StateReturnType AIAttackAimAtTargetState::update()
 	
 	// no else here!
 	{
-		Real relAngle = m_isAttackingObject ?
-											ThePartitionManager->getRelativeAngle2D( source, victim ) : 
-											ThePartitionManager->getRelativeAngle2D( source, getMachineGoalPosition() );
+		Fix relAngle = m_isAttackingObject ?
+											relativeAngle2DFix( source, *victim->getPositionFix() ) :
+											relativeAngle2DFix( source, fixFromCoord(*getMachineGoalPosition()) );	// P4
 
-		const Real REL_THRESH = 0.035f;	// about 2 degrees. (getRelativeAngle2D is current only accurate to about 1.25 degrees)
+		const Fix REL_THRESH = 0.035_fx;	// about 2 degrees. (getRelativeAngle2D is current only accurate to about 1.25 degrees)
 
 		Weapon* weapon = source->getCurrentWeapon();
-		Real aimDelta = weapon ? weapon->getAimDelta() : 0.0f;
-		
-		if (aimDelta < REL_THRESH) 
+		Fix aimDelta = weapon ? fixFromReal(weapon->getAimDelta()) : Fix(0);	// P6
+
+		if (aimDelta < REL_THRESH)
 		{
 			aimDelta = REL_THRESH;
 		}
@@ -5665,19 +5706,19 @@ StateReturnType AIAttackAimAtTargetState::update()
 		//DEBUG_LOG(("AIM: desired %f, actual %f, delta %f, aimDelta %f, goalpos %f %f\n",rad2deg(obj->getOrientation() + relAngle),rad2deg(obj->getOrientation()),rad2deg(relAngle),rad2deg(aimDelta),victim->getPosition()->x,victim->getPosition()->y));
 		if (m_canTurnInPlace)
 		{
-			if (fabs(relAngle) > aimDelta) 
+			if (fixAbs(relAngle) > aimDelta)
 			{
-				Real desiredAngle = source->getOrientation() + relAngle;
-				sourceAI->setLocomotorGoalOrientation(desiredAngle);
+				Fix desiredAngle = source->getOrientationFix() + relAngle;
+				sourceAI->setLocomotorGoalOrientation(fixToReal(desiredAngle));	// P4
 				m_setLocomotor = true;
 			}
 		}
 		else
 		{
-			sourceAI->setLocomotorGoalPositionExplicit(m_isAttackingObject ? *victim->getPosition() : *getMachineGoalPosition());
+			sourceAI->setLocomotorGoalPositionExplicit(m_isAttackingObject ? victim->getPositionFix()->toCoord3D() : *getMachineGoalPosition());	// P4
 		}
 
-		if (fabs(relAngle) < aimDelta /*&& !m_preAttackFrames*/ )
+		if (fixAbs(relAngle) < aimDelta /*&& !m_preAttackFrames*/ )
 		{
 			AIUpdateInterface* victimAI = victim ? victim->getAI() : NULL;
 			// add ourself as a targeter BEFORE calling isTemporarilyPreventingAimSuccess().
@@ -5964,7 +6005,8 @@ StateReturnType AIAttackFireWeaponState::update()
 				PartitionFilterPossibleToAttack filterAttack(ATTACK_NEW_TARGET, obj, lastCmdSource);
 				PartitionFilter *filters[] = { &filterAttack, &filterPlayer, &filterMapStatus, NULL };
 				// note that we look around originalVictimPos, *not* the current victim's pos.
-				victim = ThePartitionManager->getClosestObject( originalVictimPos, continueRange, FROM_CENTER_2D, filters );// could be null. this is ok.
+				const FCoord3D originalVictimPosFix = fixFromCoord(*originalVictimPos);	// P4
+				victim = ThePartitionManager->getClosestObjectFix( &originalVictimPosFix, fixFromReal(continueRange), FROM_CENTER_2D, filters );// could be null. this is ok. P6: the continue range is weapon data
 				if (victim)
 				{
 					getMachine()->setGoalObject(victim);
@@ -6225,7 +6267,7 @@ StateReturnType AIAttackState::onEnter()
 		}
 		m_victimTeam = victim->getTeam();
 		m_attackMachine->setGoalObject( victim );
-		m_originalVictimPos = *victim->getPosition();
+		m_originalVictimPos = victim->getPositionFix()->toCoord3D();	// P4
 	}
 	else
 	{
@@ -6691,7 +6733,7 @@ Object *AIAttackSquadState::chooseVictim(void)
 			PartitionFilterSameMapStatus filterMapStatus(getMachineOwner());
 			PartitionFilter *filters[] = { &f1, &filterMapStatus, NULL };
 			
-			Object *victim = ThePartitionManager->getClosestObject(getMachineOwner(), HUGE_DIST, FROM_CENTER_2D, filters, NULL, NULL);
+			Object *victim = ThePartitionManager->getClosestObjectFix(getMachineOwner(), FIX_MAX, FROM_CENTER_2D, filters, NULL, NULL);	// clamped to HUGE_DIST inside
 			return victim;
 			break;
 		}
@@ -6928,7 +6970,7 @@ StateReturnType AIEnterState::onEnter()
 		if( !TheActionManager->canEnterObject( obj, goal, obj->getAI()->getLastCommandSource(), enterCapacityCheck( obj ) ) )
 			return STATE_FAILURE;
 
-		m_goalPosition = *goal->getPosition();
+		m_goalPosition = goal->getPositionFix()->toCoord3D();	// P4
 
 		ContainModuleInterface* contain = goal->getContain();
 		if (contain)
@@ -6991,10 +7033,10 @@ void AIEnterState::onExit( StateExitType status )
 /** Do the two objects' vertical extents touch at all? */
 static Bool hasVerticalOverlap( const Object* a, const Object* b )
 {
-	const Real aLower = a->getPosition()->z;
-	const Real aUpper = aLower + a->getGeometryInfo().getMaxHeightAbovePosition();
-	const Real bLower = b->getPosition()->z;
-	const Real bUpper = bLower + b->getGeometryInfo().getMaxHeightAbovePosition();
+	const Fix aLower = a->getPositionFix()->z;
+	const Fix aUpper = aLower + a->getGeometryInfo().getMaxHeightAbovePositionFix();
+	const Fix bLower = b->getPositionFix()->z;
+	const Fix bUpper = bLower + b->getGeometryInfo().getMaxHeightAbovePositionFix();
 	return aUpper >= bLower && aLower <= bUpper;
 }
 
@@ -7017,7 +7059,7 @@ StateReturnType AIEnterState::update()
 			return STATE_FAILURE;	
 		}
 
-		m_goalPosition = *goal->getPosition();
+		m_goalPosition = goal->getPositionFix()->toCoord3D();	// P4
 		obj->getAI()->friend_setGoalObject(goal);
 		if (!TheActionManager->canEnterObject(obj, goal, obj->getAI()->getLastCommandSource(), enterCapacityCheck( obj )))
 		{
@@ -7086,13 +7128,13 @@ StateReturnType AIEnterState::update()
 			if (goal)
 			{
 				// we didn't enter.  See if we're close.
-				Real dx = (obj->getPosition()->x - goal->getPosition()->x);
-				Real dy = (obj->getPosition()->y - goal->getPosition()->y);
-				Real radius = goal->getGeometryInfo().getMinorRadius();
+				Fix dx = (obj->getPositionFix()->x - goal->getPositionFix()->x);
+				Fix dy = (obj->getPositionFix()->y - goal->getPositionFix()->y);
+				Fix radius = goal->getGeometryInfo().getMinorRadiusFix();
 				if (goal->getGeometryInfo().getGeomType()!=GEOMETRY_BOX) {
-					radius = goal->getGeometryInfo().getMajorRadius();
+					radius = goal->getGeometryInfo().getMajorRadiusFix();
 				}
-				Bool closeEnough = dx*dx+dy*dy < sqr(radius);
+				Bool closeEnough = dx*dx+dy*dy < radius*radius;
 				if (closeEnough) {
 					// Grab the container and force ourselves into it.
 					// This case is primarily to handle transports on the map border for scripted setup.
@@ -8177,21 +8219,25 @@ StateReturnType AIFaceState::update()
 	Object *obj = getMachineOwner();
 	AIUpdateInterface *ai = obj->getAI();
 
-	const Coord3D* pos = getMachineGoalPosition();
+	FCoord3D pos;
 	if (m_obj)
 	{
 		Object *target = getMachineGoalObject();
 		if (!target)
 		{
 			// Nothing to face.
-			return STATE_FAILURE;	
+			return STATE_FAILURE;
 		}
-		pos = target->getPosition();
+		pos = *target->getPositionFix();
 	}
-	Real relAngle = ThePartitionManager->getRelativeAngle2D( obj, pos );
+	else
+	{
+		pos = fixFromCoord(*getMachineGoalPosition());	// P4
+	}
+	Fix relAngle = relativeAngle2DFix( obj, pos );
 
-	const Real REL_THRESH = 0.035f;	// about 2 degrees. (getRelativeAngle2D is current only accurate to about 1.25 degrees)
-	if( fabs( relAngle ) < REL_THRESH )
+	const Fix REL_THRESH = 0.035_fx;	// about 2 degrees. (getRelativeAngle2D is current only accurate to about 1.25 degrees)
+	if( fixAbs( relAngle ) < REL_THRESH )
 	{
 		return STATE_SUCCESS;
 	}
@@ -8200,12 +8246,16 @@ StateReturnType AIFaceState::update()
 
 	if (m_canTurnInPlace)
 	{
-		Real desiredAngle = obj->getOrientation() + relAngle;
-		ai->setLocomotorGoalOrientation( desiredAngle );
+		Fix desiredAngle = obj->getOrientationFix() + relAngle;
+		ai->setLocomotorGoalOrientation( fixToReal(desiredAngle) );	// P4
+	}
+	else if (m_obj)
+	{
+		ai->setLocomotorGoalPositionExplicit(pos.toCoord3D());	// P4
 	}
 	else
 	{
-		ai->setLocomotorGoalPositionExplicit(*pos);
+		ai->setLocomotorGoalPositionExplicit(*getMachineGoalPosition());
 	}
 
 	return STATE_CONTINUE;

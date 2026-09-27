@@ -52,6 +52,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/PolygonTrigger.h"
+#include "Lib/FixBoundary.h"
 
 const Real CLOSE_ENOUGH = (25.0f);
 
@@ -105,20 +106,20 @@ static Bool hasAttackedMeAndICanReturnFire( State *thisState, void* /*userData*/
 	return FALSE;
 }
 
-static Object *findBestTunnel(Player *ownerPlayer, const Coord3D *pos) 
+static Object *findBestTunnel(Player *ownerPlayer, const FCoord3D *pos)
 {
 	if (!ownerPlayer) return NULL; // should never happen, but hey.  jba.
 	TunnelTracker *tunnels = ownerPlayer->getTunnelSystem();
 	Object *bestTunnel = NULL;
-	Real bestDistSqr = 0;
+	Fix bestDistSqr( 0 );
 	const std::list<ObjectID> *allTunnels = tunnels->getContainerList();
 	for( std::list<ObjectID>::const_iterator iter = allTunnels->begin(); iter != allTunnels->end(); iter++ ) {
 		// For each ID, look it up and change its team.  We all get captured together.
 		Object *currentTunnel = TheGameLogic->findObjectByID( *iter );
 		if( currentTunnel ) {
-			Real dx = currentTunnel->getPosition()->x-pos->x;
-			Real dy = currentTunnel->getPosition()->y-pos->y;
-			Real distSqr = dx*dx+dy*dy;
+			const Fix dx = currentTunnel->getPositionFix()->x-pos->x;
+			const Fix dy = currentTunnel->getPositionFix()->y-pos->y;
+			const Fix distSqr = dx*dx+dy*dy;
 			if (bestTunnel==NULL || distSqr<bestDistSqr) {
 				bestDistSqr = distSqr;
 				bestTunnel = currentTunnel;
@@ -374,11 +375,11 @@ static Object *TunnelNetworkScan(Object *owner)
 		filters[count++] = &filterMapStatus;
 		filters[count++] = &filterFogged;	// guard picks what its player can see, as every other auto-target does
 
-		Real visionRange = AITNGuardMachine::getStdGuardRange(owner);
+		const Fix visionRange = fixFromReal( AITNGuardMachine::getStdGuardRange(owner) );	// P3
 
 		filters[count++] = NULL;
 
-		Object* target = ThePartitionManager->getClosestObject(owner->getPosition(), visionRange, FROM_CENTER_2D, filters);
+		Object* target = ThePartitionManager->getClosestObjectFix(owner->getPositionFix(), visionRange, FROM_CENTER_2D, filters);
 		return target;
 }
 
@@ -610,7 +611,7 @@ StateReturnType AITNGuardReturnState::onEnter( void )
 
 	// Find tunnel network to enter.
 	// Scan my tunnels.
-	Object *bestTunnel = findBestTunnel(getMachineOwner()->getControllingPlayer(), getMachineOwner()->getPosition());
+	Object *bestTunnel = findBestTunnel(getMachineOwner()->getControllingPlayer(), getMachineOwner()->getPositionFix());
 	if (bestTunnel==NULL) return STATE_FAILURE;
 
 	getMachine()->setGoalObject(bestTunnel);
@@ -736,7 +737,7 @@ StateReturnType AITNGuardIdleState::update( void )
 			return STATE_SLEEP(0);
 		}
 		if (getMachineOwner()->getContainedBy()) {
-			Object *bestTunnel = findBestTunnel(owner->getControllingPlayer(), nemesis->getPosition());
+			Object *bestTunnel = findBestTunnel(owner->getControllingPlayer(), nemesis->getPositionFix());
 			ExitInterface* goalExitInterface = bestTunnel->getContain() ? bestTunnel->getContain()->getContainExitInterface() : NULL;
 			if( goalExitInterface == NULL )
 				return STATE_FAILURE;
@@ -749,7 +750,7 @@ StateReturnType AITNGuardIdleState::update( void )
 		return STATE_SUCCESS;	// Transitions to AITNGuardInnerState.
 	}
 
-	if (!owner->getContainedBy() && findBestTunnel(owner->getControllingPlayer(), owner->getPosition())) {
+	if (!owner->getContainedBy() && findBestTunnel(owner->getControllingPlayer(), owner->getPositionFix())) {
 		return STATE_FAILURE;	 // go to AITNGuardReturnState, & enter a tunnel.
 	}
 

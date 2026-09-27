@@ -50,17 +50,17 @@ public:
 	Bool									m_initiallyActive;
 	Bool									m_singleBurst;
 	Int										m_healingAmount;
-	Real									m_startRadius; 
-	Real									m_finalRadius; 
-	Real									m_radiusGrowRate; 
+	Fix										m_startRadius;
+	Fix										m_finalRadius;
+	Fix										m_radiusGrowRate;
 	KindOfMaskType				m_kindOf;	//Only these types can heal -- defaults to everything.
 	const ParticleSystemTemplate*				m_radiusParticleSystemTmpl;					//Optional particle system meant to apply to entire effect for entire duration.
 
 	GrantStealthBehaviorModuleData()
 	{
-		m_finalRadius = 200.0f;
-		m_startRadius = 0.0f;
-    m_radiusGrowRate = 10.0f;
+		m_finalRadius = Fix( 200 );
+		m_startRadius = Fix( 0 );
+    m_radiusGrowRate = Fix( 10 );
 		m_radiusParticleSystemTmpl = NULL;
 		SET_ALL_KINDOFMASK_BITS( m_kindOf );
 	}
@@ -71,9 +71,9 @@ public:
     
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "StartRadius",						         INI::parseReal,									 NULL, offsetof( GrantStealthBehaviorModuleData, m_startRadius ) },
-			{ "FinalRadius",						         INI::parseReal,									 NULL, offsetof( GrantStealthBehaviorModuleData, m_finalRadius ) },
-			{ "RadiusGrowRate",						       INI::parseReal,									 NULL, offsetof( GrantStealthBehaviorModuleData, m_radiusGrowRate ) },
+			{ "StartRadius",						         INI::parseFix,									 NULL, FIX_OFFSET( GrantStealthBehaviorModuleData, m_startRadius ) },
+			{ "FinalRadius",						         INI::parseFix,									 NULL, FIX_OFFSET( GrantStealthBehaviorModuleData, m_finalRadius ) },
+			{ "RadiusGrowRate",						       INI::parseFix,									 NULL, FIX_OFFSET( GrantStealthBehaviorModuleData, m_radiusGrowRate ) },
 			{ "KindOf",						    KindOfMaskType::parseFromINI,					       NULL, offsetof( GrantStealthBehaviorModuleData, m_kindOf ) },		
 			{ "RadiusParticleSystemName",				 INI::parseParticleSystemTemplate, NULL, offsetof( GrantStealthBehaviorModuleData, m_radiusParticleSystemTmpl ) },
 			{ 0, 0, 0, 0 }

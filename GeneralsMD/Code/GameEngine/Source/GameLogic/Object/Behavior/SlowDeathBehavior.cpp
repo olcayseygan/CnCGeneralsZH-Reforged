@@ -132,21 +132,21 @@ static void parseWeapon( INI* ini, void *instance, void * /*store*/, const void*
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "SinkRate",													INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_sinkRate ) },
+		{ "SinkRate",													INI::parseVelocityFix,						NULL, FIX_OFFSET( SlowDeathBehaviorModuleData, m_sinkRate ) },
 		{ "ProbabilityModifier",							INI::parseInt,										NULL, offsetof( SlowDeathBehaviorModuleData, m_probabilityModifier ) },
-		{ "ModifierBonusPerOverkillPercent",	INI::parsePercentToReal,					NULL, offsetof( SlowDeathBehaviorModuleData, m_modifierBonusPerOverkillPercent ) },
+		{ "ModifierBonusPerOverkillPercent",	INI::parsePercentToFix,					NULL, FIX_OFFSET( SlowDeathBehaviorModuleData, m_modifierBonusPerOverkillPercent ) },
 		{ "SinkDelay",												INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_sinkDelay ) },
 		{ "SinkDelayVariance",								INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_sinkDelayVariance ) },
 		{ "DestructionDelay",									INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_destructionDelay ) },
 		{ "DestructionDelayVariance",					INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_destructionDelayVariance ) },
-		{ "DestructionAltitude",							INI::parseReal,										NULL, offsetof( SlowDeathBehaviorModuleData, m_destructionAltitude ) },
+		{ "DestructionAltitude",							INI::parseFix,										NULL, FIX_OFFSET( SlowDeathBehaviorModuleData, m_destructionAltitude ) },
 		{ "FX",																parseFX,													NULL, 0 },
 		{ "OCL",															parseOCL,													NULL, 0 },
 		{ "Weapon",														parseWeapon,											NULL, 0 },
-		{ "FlingForce",												INI::parseReal,										NULL, offsetof( SlowDeathBehaviorModuleData, m_flingForce) },
-		{ "FlingForceVariance",								INI::parseReal,										NULL, offsetof( SlowDeathBehaviorModuleData, m_flingForceVariance) },
-		{ "FlingPitch",												INI::parseAngleReal,							NULL, offsetof( SlowDeathBehaviorModuleData, m_flingPitch) },
-		{ "FlingPitchVariance",								INI::parseAngleReal,							NULL, offsetof( SlowDeathBehaviorModuleData, m_flingPitchVariance) },
+		{ "FlingForce",												INI::parseFix,										NULL, FIX_OFFSET( SlowDeathBehaviorModuleData, m_flingForce) },
+		{ "FlingForceVariance",								INI::parseFix,										NULL, FIX_OFFSET( SlowDeathBehaviorModuleData, m_flingForceVariance) },
+		{ "FlingPitch",												INI::parseAngleFix,								NULL, FIX_OFFSET( SlowDeathBehaviorModuleData, m_flingPitch) },
+		{ "FlingPitchVariance",								INI::parseAngleFix,								NULL, FIX_OFFSET( SlowDeathBehaviorModuleData, m_flingPitchVariance) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -187,7 +187,7 @@ Int SlowDeathBehavior::getProbabilityModifier( const DamageInfo *damageInfo ) co
 	// eg ( 200 hp max, had 10 left, took 50 damage, 40 overkill, (40/200) * 100 = 20 overkill %)
 	Int overkillDamage = damageInfo->out.m_actualDamageDealt - damageInfo->out.m_actualDamageClipped;
 	Real overkillPercent = (float)overkillDamage / (float)getObject()->getBodyModule()->getMaxHealth();
-	Int overkillModifier = overkillPercent * getSlowDeathBehaviorModuleData()->m_modifierBonusPerOverkillPercent;
+	Int overkillModifier = overkillPercent * fixToReal( getSlowDeathBehaviorModuleData()->m_modifierBonusPerOverkillPercent ); // P6
 
 	return max( getSlowDeathBehaviorModuleData()->m_probabilityModifier + overkillModifier, 1 );
 }
@@ -220,7 +220,7 @@ void SlowDeathBehavior::beginSlowDeath(const DamageInfo *damageInfo)
 		const SlowDeathBehaviorModuleData* d = getSlowDeathBehaviorModuleData();
 		Object* obj = getObject();
 
-		if (d->m_sinkRate && obj->isKindOf(KINDOF_INFANTRY))
+		if (d->m_sinkRate != Fix( 0 ) && obj->isKindOf(KINDOF_INFANTRY))
 		{
 
 			Drawable *draw = getObject()->getDrawable();
@@ -269,7 +269,7 @@ void SlowDeathBehavior::beginSlowDeath(const DamageInfo *damageInfo)
 
 		UnsignedInt now = TheGameLogic->getFrame();
 
-		if (d->m_flingForce > 0)
+		if (d->m_flingForce > Fix( 0 ))
 		{
 
 			
@@ -299,8 +299,8 @@ void SlowDeathBehavior::beginSlowDeath(const DamageInfo *damageInfo)
 				}
 
 				Coord3D force;
-				calcRandomForce(d->m_flingForce, d->m_flingForce + d->m_flingForceVariance, 
-												d->m_flingPitch, d->m_flingPitch + d->m_flingPitchVariance, force);
+				calcRandomForce(fixToReal(d->m_flingForce), fixToReal(d->m_flingForce + d->m_flingForceVariance),
+												fixToReal(d->m_flingPitch), fixToReal(d->m_flingPitch + d->m_flingPitchVariance), force);	// P4, the force is float
 				physics->setAllowToFall(true);
 				physics->applyForce(&force);
 				physics->setExtraBounciness(-1.0);					// we don't want this guy to bounce at all
@@ -447,7 +447,7 @@ UpdateSleepTime SlowDeathBehavior::update()
 						obj->clearModelConditionFlags( MAKE_MODELCONDITION_MASK(MODELCONDITION_EXPLODED_FLAILING) ); 
 						obj->clearModelConditionFlags( MAKE_MODELCONDITION_MASK(MODELCONDITION_EXPLODED_BOUNCING) ); 
 						obj->setModelConditionFlags(   MAKE_MODELCONDITION_MASK(MODELCONDITION_PARACHUTING) ); //looks like he is snagged in a tree
-						obj->setPositionZFix( obj->getPositionFix()->z - fixFromReal( d->m_sinkRate ) * Fix( 50 ) );// make him sink faster; P3
+						obj->setPositionZFix( obj->getPositionFix()->z - d->m_sinkRate * Fix( 50 ) );// make him sink faster
 						if ( !obj->isAboveTerrain() )
 							TheGameLogic->destroyObject(obj);
 
@@ -460,12 +460,12 @@ UpdateSleepTime SlowDeathBehavior::update()
 		}
 	}
 
-	if ( (now >= m_sinkFrame && d->m_sinkRate > 0.0f) )
+	if ( (now >= m_sinkFrame && d->m_sinkRate > Fix( 0 )) )
 	{
 		// disable Physics (if any) so that we can control the sink...
 		obj->setDisabled( DISABLED_HELD );
 		FCoord3D pos = *obj->getPositionFix();
-		pos.z -= fixFromReal( d->m_sinkRate / m_acceleratedTimeScale ); // P3, and the time scale is xfer'd
+		pos.z -= d->m_sinkRate / fixFromReal( m_acceleratedTimeScale ); // P8, the time scale is xfer'd float
 		obj->setPositionFix( &pos );
 	}
 

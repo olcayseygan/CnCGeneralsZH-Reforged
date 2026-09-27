@@ -57,7 +57,7 @@ public:
 	Int										m_healingAmount;
 	UnsignedInt						m_healingDelay;
 	UnsignedInt						m_startHealingDelay;	///< how long since our last damage till autoheal starts.
-	Real									m_radius; //If non-zero, then it becomes a area effect.
+	Fix										m_radius; //If non-zero, then it becomes a area effect.
 	Bool									m_affectsWholePlayer; ///< I have more than a range, I try to affect everything the player owns
 	Bool									m_skipSelfForHealing; ///< Don't heal myself.
 	KindOfMaskType				m_kindOf;	//Only these types can heal -- defaults to everything.
@@ -72,7 +72,7 @@ public:
 		m_healingAmount = 0;
 		m_healingDelay = UINT_MAX;
 		m_startHealingDelay = 0;
-		m_radius = 0.0f;
+		m_radius = Fix( 0 );
 		m_radiusParticleSystemTmpl = NULL;
 		m_unitHealPulseParticleSystemTmpl = NULL;
 		m_affectsWholePlayer = FALSE;
@@ -89,7 +89,7 @@ public:
 			{ "SingleBurst",	INI::parseBool, NULL, offsetof( AutoHealBehaviorModuleData, m_singleBurst ) },
 			{ "HealingAmount",		INI::parseInt,												NULL, offsetof( AutoHealBehaviorModuleData, m_healingAmount ) },
 			{ "HealingDelay",			INI::parseDurationUnsignedInt,				NULL, offsetof( AutoHealBehaviorModuleData, m_healingDelay ) },
-			{ "Radius",						INI::parseReal,												NULL, offsetof( AutoHealBehaviorModuleData, m_radius ) },
+			{ "Radius",						INI::parseFix,												NULL, FIX_OFFSET( AutoHealBehaviorModuleData, m_radius ) },
 			{ "KindOf",						KindOfMaskType::parseFromINI,											NULL, offsetof( AutoHealBehaviorModuleData, m_kindOf ) },		
 			{ "ForbiddenKindOf",	KindOfMaskType::parseFromINI,											NULL, offsetof( AutoHealBehaviorModuleData, m_forbiddenKindOf ) },
 			{ "RadiusParticleSystemName",					INI::parseParticleSystemTemplate,	NULL, offsetof( AutoHealBehaviorModuleData, m_radiusParticleSystemTmpl ) },

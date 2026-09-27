@@ -46,7 +46,7 @@ public:
 	UpgradeMuxData				m_upgradeMuxData;
 	Bool									m_initiallyActive;
 	DamageTypeFlags				m_damageTypes;					
-	Real									m_damageAmount;	
+	Fix										m_damageAmount;
 	const WeaponTemplate* m_reactionWeaponPristine;///< fire these weapons only when damage is received				
 	const WeaponTemplate* m_reactionWeaponDamaged;				
 	const WeaponTemplate* m_reactionWeaponReallyDamaged;	
@@ -86,7 +86,7 @@ public:
 			{ "ContinuousWeaponReallyDamaged", INI::parseWeaponTemplate, NULL, offsetof(FireWeaponWhenDamagedBehaviorModuleData,m_continuousWeaponReallyDamaged) },
 			{ "ContinuousWeaponRubble", INI::parseWeaponTemplate, NULL, offsetof(FireWeaponWhenDamagedBehaviorModuleData,				m_continuousWeaponRubble) },
 			{ "DamageTypes", INI::parseDamageTypeFlags, NULL, offsetof( FireWeaponWhenDamagedBehaviorModuleData, m_damageTypes ) },
-			{ "DamageAmount", INI::parseReal, NULL, offsetof( FireWeaponWhenDamagedBehaviorModuleData, m_damageAmount ) },
+			{ "DamageAmount", INI::parseFix, NULL, FIX_OFFSET( FireWeaponWhenDamagedBehaviorModuleData, m_damageAmount ) },
 			{ 0, 0, 0, 0 }
 		};
 

@@ -53,7 +53,7 @@ public:
 
 
 	Bool m_doIHealObjects;
-	Real m_framesForFullHeal;
+	Fix m_framesForFullHeal;
 	Bool m_mobileGarrison;
 	Bool m_immuneToClearBuildingAttacks;
   Bool m_isEnclosingContainer;
@@ -70,7 +70,7 @@ public:
 		{
 			{ "MobileGarrison", INI::parseBool, NULL, offsetof( GarrisonContainModuleData, m_mobileGarrison ) },
 			{ "HealObjects", INI::parseBool, NULL, offsetof( GarrisonContainModuleData, m_doIHealObjects ) },
-			{ "TimeForFullHeal", INI::parseDurationReal, NULL, offsetof( GarrisonContainModuleData, m_framesForFullHeal ) },
+			{ "TimeForFullHeal", INI::parseDurationFix, NULL, FIX_OFFSET( GarrisonContainModuleData, m_framesForFullHeal ) },
 			{ "InitialRoster", parseInitialRoster, NULL, 0 },
 			{ "ImmuneToClearBuildingAttacks", INI::parseBool, NULL, offsetof( GarrisonContainModuleData, m_immuneToClearBuildingAttacks ) },
       { "IsEnclosingContainer", INI::parseBool, NULL, offsetof( GarrisonContainModuleData, m_isEnclosingContainer ) },      

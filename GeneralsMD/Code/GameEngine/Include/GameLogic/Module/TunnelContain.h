@@ -39,6 +39,7 @@
 #include "GameLogic/Module/DieModule.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "Common/GameMemory.h"
+#include "Lib/FixBoundary.h"
 class Team;
 class TunnelTracker;
 
@@ -47,13 +48,13 @@ class TunnelContainModuleData : public OpenContainModuleData
 {
 public:
 
-	Real m_framesForFullHeal;			///< time (in frames) something becomes fully healed
+	Fix m_framesForFullHeal;			///< time (in frames) something becomes fully healed
 
 	TunnelContainModuleData()
 	{
 
 		// by default, takes no time to heal ppl
-		m_framesForFullHeal = 1.0f;
+		m_framesForFullHeal = Fix( 1 );
 
 		//
 		// by default we say that transports can have infantry inside them, this will be totally
@@ -69,7 +70,7 @@ public:
 
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "TimeForFullHeal", INI::parseDurationReal, NULL, offsetof( TunnelContainModuleData, m_framesForFullHeal ) },
+			{ "TimeForFullHeal", INI::parseDurationFix, NULL, FIX_OFFSET( TunnelContainModuleData, m_framesForFullHeal ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);
@@ -95,7 +96,7 @@ public:
 	virtual Bool isBustable() const { return TRUE; }	///< can this container get busted by a bunkerbuster
 	virtual Bool isHealContain() const { return false; } ///< true when container only contains units while healing (not a transport!)
 	virtual Bool isTunnelContain() const { return TRUE; }
-	Real getFullTimeForHeal() const { return getTunnelContainModuleData()->m_framesForFullHeal; } ///< frames until a contained object is fully healed
+	Real getFullTimeForHeal() const { return fixToReal( getTunnelContainModuleData()->m_framesForFullHeal ); } ///< frames until a contained object is fully healed; P8, TunnelTracker heals in float
 	virtual Bool isImmuneToClearBuildingAttacks() const { return true; }
   virtual Bool isSpecialOverlordStyleContainer() const {return FALSE;}
 

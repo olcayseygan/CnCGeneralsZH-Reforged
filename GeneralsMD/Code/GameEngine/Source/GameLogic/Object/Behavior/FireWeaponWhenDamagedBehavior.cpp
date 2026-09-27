@@ -48,6 +48,7 @@
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/Weapon.h"
 #include "GameClient/Drawable.h"
+#include "Lib/FixBoundary.h"
 
 const Int MAX_IDX = 32;
 
@@ -180,7 +181,7 @@ void FireWeaponWhenDamagedBehavior::onDamage( DamageInfo *damageInfo )
 		return;
 
 	// right amount? (use actual [post-armor] damage dealt)
-	if (damageInfo->out.m_actualDamageDealt < d->m_damageAmount)
+	if (damageInfo->out.m_actualDamageDealt < fixToReal( d->m_damageAmount )) // P6
 		return;
 
 	const Object *obj = getObject();

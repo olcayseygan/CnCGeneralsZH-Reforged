@@ -100,7 +100,7 @@ GrantStealthBehavior::GrantStealthBehavior( Thing *thing, const ModuleData* modu
 
 	m_radiusParticleSystemID = INVALID_PARTICLE_SYSTEM_ID;
 
-  m_currentScanRadius = d->m_startRadius;
+  m_currentScanRadius = fixToReal( d->m_startRadius ); // P8, the scan radius is xfer'd float
 
 
   Object *obj = getObject();
@@ -154,12 +154,12 @@ UpdateSleepTime GrantStealthBehavior::update( void )
 	PartitionFilter *filters[] = { &relationship, &filterAlive, &filterMapStatus, NULL };
 
 
-  m_currentScanRadius += d->m_radiusGrowRate;
+  m_currentScanRadius += fixToReal( d->m_radiusGrowRate ); // P8
 
   Bool thisIsFinalScan = FALSE;
-  if ( m_currentScanRadius >=  d->m_finalRadius )
+  if ( m_currentScanRadius >=  fixToReal( d->m_finalRadius ) ) // P8
   {
-    m_currentScanRadius = d->m_finalRadius;
+    m_currentScanRadius = fixToReal( d->m_finalRadius ); // P8
     thisIsFinalScan = TRUE;
   }
 

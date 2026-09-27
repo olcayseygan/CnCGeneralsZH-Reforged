@@ -68,10 +68,10 @@ public:
 	const FXList *m_fxFinalBlowUp;								///< FxList for final blow up
 	const ObjectCreationList *m_oclFinalBlowUp;		///< OCL for final blow up
 
-	Real m_rollRate;															///< our initial roll rate
-	Real m_rollRateDelta;													///< how our roll rate changes over time
-	Real m_pitchRate;															///< spin speed on another axis after hitting the ground
-	Real m_fallHowFast;														///< a fraction of gravity we use to modify the jet locmotor lift
+	Fix m_rollRate;																///< our initial roll rate
+	Fix m_rollRateDelta;												///< how our roll rate changes over time
+	Fix m_pitchRate;															///< spin speed on another axis after hitting the ground
+	Fix m_fallHowFast;														///< a fraction of gravity we use to modify the jet locmotor lift
 
 	AudioEventRTS m_deathLoopSound;								///< looping death sound
 

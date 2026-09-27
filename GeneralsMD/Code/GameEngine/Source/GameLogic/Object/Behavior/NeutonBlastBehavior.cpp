@@ -72,7 +72,7 @@ void NeutronBlastBehavior::onDie( const DamageInfo *damageInfo )
 		return;
 
 	const NeutronBlastBehaviorModuleData *data = getNeutronBlastBehaviorModuleData();
-	Fix blastRadius = fixFromReal( data->m_blastRadius ); // P3
+	Fix blastRadius = data->m_blastRadius;
 	Bool hitAir = data->m_isAffectAirborne;
 
 	// setup scan filters

@@ -54,8 +54,8 @@
 RebuildHoleBehaviorModuleData::RebuildHoleBehaviorModuleData( void )
 {
 
-	m_workerRespawnDelay = 0.0f;
-	m_holeHealthRegenPercentPerSecond = 0.1f;
+	m_workerRespawnDelay = Fix( 0 );
+	m_holeHealthRegenPercentPerSecond = 0.1_fx;
 
 }  // end RebuildHoleBehaviorModuleData
 
@@ -69,8 +69,8 @@ RebuildHoleBehaviorModuleData::RebuildHoleBehaviorModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 	  { "WorkerObjectName", INI::parseAsciiString, NULL, offsetof( RebuildHoleBehaviorModuleData, m_workerTemplateName ) },
-		{ "WorkerRespawnDelay", INI::parseDurationReal,	NULL, offsetof( RebuildHoleBehaviorModuleData, m_workerRespawnDelay ) },
-		{ "HoleHealthRegen%PerSecond", INI::parsePercentToReal, NULL, offsetof( RebuildHoleBehaviorModuleData, m_holeHealthRegenPercentPerSecond ) },
+		{ "WorkerRespawnDelay", INI::parseDurationFix,	NULL, FIX_OFFSET( RebuildHoleBehaviorModuleData, m_workerRespawnDelay ) },
+		{ "HoleHealthRegen%PerSecond", INI::parsePercentToFix, NULL, FIX_OFFSET( RebuildHoleBehaviorModuleData, m_holeHealthRegenPercentPerSecond ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -131,7 +131,7 @@ void RebuildHoleBehavior::newWorkerRespawnProcess( Object *existingWorker )
 	m_workerID = INVALID_ID;
 	
 	// set the timer for the next worker respawn
-	m_workerWaitCounter = modData->m_workerRespawnDelay;
+	m_workerWaitCounter = (UnsignedInt)( modData->m_workerRespawnDelay.raw() >> Fix::FRAC_BITS );
 
 	//
 	// this method is called when a worker needs to be respawned from the hole.  One of those
@@ -314,7 +314,7 @@ UpdateSleepTime RebuildHoleBehavior::update( void )
 		DamageInfo healingInfo;
 
 		// do some healing
-		healingInfo.in.m_amount = (modData->m_holeHealthRegenPercentPerSecond / LOGICFRAMES_PER_SECOND) * 
+		healingInfo.in.m_amount = (fixToReal( modData->m_holeHealthRegenPercentPerSecond ) / LOGICFRAMES_PER_SECOND) * // P6
 															body->getMaxHealth();
 		healingInfo.in.m_sourceID = hole->getID();
 		healingInfo.in.m_damageType = DAMAGE_HEALING;

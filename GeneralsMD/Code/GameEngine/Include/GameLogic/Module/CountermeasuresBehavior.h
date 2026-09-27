@@ -51,10 +51,10 @@ public:
 	UpgradeMuxData				m_upgradeMuxData;
 	AsciiString						m_flareTemplateName;
 	AsciiString						m_flareBoneBaseName;
-  Real									m_evasionRate;
+  Fix										m_evasionRate;
   UnsignedInt						m_volleySize;
-  Real									m_volleyArcAngle;
-	Real									m_volleyVelocityFactor;
+  Fix										m_volleyArcAngle;
+	Fix										m_volleyVelocityFactor;
   UnsignedInt						m_framesBetweenVolleys;
 	UnsignedInt						m_numberOfVolleys;
   UnsignedInt						m_reloadFrames;
@@ -65,14 +65,14 @@ public:
 	CountermeasuresBehaviorModuleData()
 	{
     m_volleySize            = 0;
-		m_volleyArcAngle				= 0.0f;
+		m_volleyArcAngle				= Fix( 0 );
     m_framesBetweenVolleys  = 0;
 		m_numberOfVolleys       = 0;
     m_reloadFrames          = 0;
-    m_evasionRate           = 0.0f;
+    m_evasionRate           = Fix( 0 );
 		m_mustReloadAtAirfield	= FALSE;
 		m_missileDecoyFrames		= 0;
-		m_volleyVelocityFactor  = 1.0f;
+		m_volleyVelocityFactor  = Fix( 1 );
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -82,12 +82,12 @@ public:
 			{ "FlareTemplateName",			INI::parseAsciiString,					NULL, offsetof( CountermeasuresBehaviorModuleData, m_flareTemplateName ) },
 			{ "FlareBoneBaseName",			INI::parseAsciiString,					NULL, offsetof( CountermeasuresBehaviorModuleData, m_flareBoneBaseName ) },
 			{ "VolleySize",							INI::parseUnsignedInt,					NULL, offsetof( CountermeasuresBehaviorModuleData, m_volleySize ) },
-			{ "VolleyArcAngle",					INI::parseAngleReal,						NULL, offsetof( CountermeasuresBehaviorModuleData, m_volleyArcAngle ) },
-			{ "VolleyVelocityFactor",		INI::parseReal,						NULL, offsetof( CountermeasuresBehaviorModuleData, m_volleyVelocityFactor ) },
+			{ "VolleyArcAngle",					INI::parseAngleFix,						NULL, FIX_OFFSET( CountermeasuresBehaviorModuleData, m_volleyArcAngle ) },
+			{ "VolleyVelocityFactor",		INI::parseFix,						NULL, FIX_OFFSET( CountermeasuresBehaviorModuleData, m_volleyVelocityFactor ) },
 			{ "DelayBetweenVolleys",		INI::parseDurationUnsignedInt,  NULL, offsetof( CountermeasuresBehaviorModuleData, m_framesBetweenVolleys ) },
 			{ "NumberOfVolleys",				INI::parseUnsignedInt,					NULL, offsetof( CountermeasuresBehaviorModuleData, m_numberOfVolleys ) },
 			{ "ReloadTime",							INI::parseDurationUnsignedInt,  NULL, offsetof( CountermeasuresBehaviorModuleData, m_reloadFrames ) },
-			{ "EvasionRate",						INI::parsePercentToReal,				NULL, offsetof( CountermeasuresBehaviorModuleData, m_evasionRate ) },
+			{ "EvasionRate",						INI::parsePercentToFix,				NULL, FIX_OFFSET( CountermeasuresBehaviorModuleData, m_evasionRate ) },
 			{ "MustReloadAtAirfield",		INI::parseBool,									NULL, offsetof( CountermeasuresBehaviorModuleData, m_mustReloadAtAirfield ) },
 			{ "MissileDecoyDelay",			INI::parseDurationUnsignedInt,	NULL, offsetof( CountermeasuresBehaviorModuleData, m_missileDecoyFrames ) },
 			{ "ReactionLaunchLatency",	INI::parseDurationUnsignedInt,	NULL, offsetof( CountermeasuresBehaviorModuleData, m_countermeasureReactionFrames ) },

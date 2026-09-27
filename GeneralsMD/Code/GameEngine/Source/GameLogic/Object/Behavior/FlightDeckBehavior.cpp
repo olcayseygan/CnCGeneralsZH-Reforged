@@ -65,8 +65,8 @@ FlightDeckBehaviorModuleData::FlightDeckBehaviorModuleData()
 	m_healAmount = 0;
 	m_numRows = 0;
 	m_numCols = 0;
-	m_approachHeight = 0.0f;
-	m_landingDeckHeightOffset = 0.0f;
+	m_approachHeight = Fix( 0 );
+	m_landingDeckHeightOffset = Fix( 0 );
 	m_dockAnimationFrames = 0;
 	m_catapultFireFrames = 0;
 }
@@ -112,9 +112,9 @@ void FlightDeckBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "Runway2Creation",				INI::parseAsciiStringVector,			NULL, offsetof( FlightDeckBehaviorModuleData, m_runwayInfo[ 1 ].m_creationBoneNames ) },
 		{ "Runway2CatapultSystem",	INI::parseParticleSystemTemplate,	NULL, offsetof( FlightDeckBehaviorModuleData, m_runwayInfo[ 1 ].m_catapultParticleSystem ) },
 
-		{ "ApproachHeight",					INI::parseReal,										NULL, offsetof( FlightDeckBehaviorModuleData, m_approachHeight ) },
-		{ "LandingDeckHeightOffset",INI::parseReal,										NULL, offsetof( FlightDeckBehaviorModuleData, m_landingDeckHeightOffset ) },
-		{ "HealAmountPerSecond",		INI::parseReal,										NULL, offsetof( FlightDeckBehaviorModuleData, m_healAmount ) },
+		{ "ApproachHeight",					INI::parseFix,										NULL, FIX_OFFSET( FlightDeckBehaviorModuleData, m_approachHeight ) },
+		{ "LandingDeckHeightOffset",INI::parseFix,										NULL, FIX_OFFSET( FlightDeckBehaviorModuleData, m_landingDeckHeightOffset ) },
+		{ "HealAmountPerSecond",		INI::parseFix,										NULL, FIX_OFFSET( FlightDeckBehaviorModuleData, m_healAmount ) },
 		{ "ParkingCleanupPeriod",		INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_cleanupFrames ) },
 		{ "HumanFollowPeriod",			INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_humanFollowFrames ) },
 		{ "PayloadTemplate",				INI::parseAsciiString,				  	NULL, offsetof( FlightDeckBehaviorModuleData, m_thingTemplateName ) },
@@ -223,7 +223,7 @@ void FlightDeckBehavior::buildInfo(Bool createUnits)
 					jet->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_DECK_HEIGHT_OFFSET ) );
 
 					//Init positioning.
-					const FCoord3D prepPos = fcoordFromCoord3D( flightDeckInfo.m_prep );	// P3: the deck layout is float
+					const FCoord3D prepPos = fcoordFromCoord3D( flightDeckInfo.m_prep );	// P8: the deck layout is float, read from bones
 					jet->setPositionFix( &prepPos );
 					jet->setOrientationFix( fixFromReal( flightDeckInfo.m_orientation ) );
 
@@ -487,7 +487,7 @@ Bool FlightDeckBehavior::reserveSpace(ObjectID id, Real parkingOffset, ParkingPl
 	ppi->m_objectInSpace = id;
 	//validateAssignments();
 	
-	if( d->m_landingDeckHeightOffset )
+	if( d->m_landingDeckHeightOffset != Fix( 0 ) )
 	{
 		Object *obj = TheGameLogic->findObjectByID( id );
 		if( obj )
@@ -557,14 +557,14 @@ void FlightDeckBehavior::calcPPInfo( ObjectID id, PPInfo *info )
 		info->runwayExit = rr.m_end;
 		info->runwayExit.x += (rr.m_end.x - rr.m_start.x) * APPROACH_DIST;
 		info->runwayExit.y += (rr.m_end.y - rr.m_start.y) * APPROACH_DIST;
-		info->runwayExit.z = rr.m_end.z + d->m_approachHeight + d->m_landingDeckHeightOffset;
+		info->runwayExit.z = rr.m_end.z + fixToReal( d->m_approachHeight ) + fixToReal( d->m_landingDeckHeightOffset ); // P8, the runway layout is float
 
 		info->runwayLandingStart = rr.m_landingStart;
 		info->runwayLandingEnd = rr.m_landingEnd;
 		info->runwayApproach = rr.m_landingStart;
 		info->runwayApproach.x += (rr.m_landingStart.x - rr.m_landingEnd.x) * APPROACH_DIST;
 		info->runwayApproach.y += (rr.m_landingStart.y - rr.m_landingEnd.y) * APPROACH_DIST;
-		info->runwayApproach.z = rr.m_landingStart.z + d->m_approachHeight + d->m_landingDeckHeightOffset;
+		info->runwayApproach.z = rr.m_landingStart.z + fixToReal( d->m_approachHeight ) + fixToReal( d->m_landingDeckHeightOffset ); // P8
 
 		//Cache the runway's takeoff distance used by JetAIUpdate for calculating lift.
 		Coord3D vector = info->runwayStart;
@@ -1129,7 +1129,7 @@ UpdateSleepTime FlightDeckBehavior::update()
 					healInfo.in.m_damageType = DAMAGE_HEALING;
 					healInfo.in.m_deathType = DEATH_NONE;
 					healInfo.in.m_sourceID = getObject()->getID();
-					healInfo.in.m_amount = HEAL_RATE_FRAMES * data->m_healAmount * SECONDS_PER_LOGICFRAME_REAL;
+					healInfo.in.m_amount = HEAL_RATE_FRAMES * fixToReal( data->m_healAmount ) * SECONDS_PER_LOGICFRAME_REAL; // P6
 					BodyModuleInterface *body = objToHeal->getBodyModule();
 					body->attemptHealing( &healInfo );
 					++it;
@@ -1377,7 +1377,7 @@ void FlightDeckBehavior::exitObjectViaDoor( Object *newObj, ExitDoorType exitDoo
 		return;
 	}
 
-	// the runway layout is float, read from bones (P3)
+	// the runway layout is float, read from bones (P8)
 	const FCoord3D creationPos = fcoordFromCoord3D( pCreationLocations->front() );
 	newObj->setPositionFix( &creationPos );
 	newObj->setOrientationFix( fixFromReal( m_runways[ ppi->m_runway ].m_startOrient ) );

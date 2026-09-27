@@ -82,8 +82,8 @@ BunkerBusterBehaviorModuleData::BunkerBusterBehaviorModuleData( void )
 		{ "DetonationFX",			              INI::parseFXList,				        NULL, offsetof( BunkerBusterBehaviorModuleData, m_detonationFX ) },
 		{ "CrashThroughBunkerFX",			      INI::parseFXList,				        NULL, offsetof( BunkerBusterBehaviorModuleData, m_crashThroughBunkerFX ) },
 		{ "CrashThroughBunkerFXFrequency",	INI::parseDurationUnsignedInt,	NULL, offsetof( BunkerBusterBehaviorModuleData, m_crashThroughBunkerFXFrequency ) },
-		{ "SeismicEffectRadius",			      INI::parseReal,				          NULL, offsetof( BunkerBusterBehaviorModuleData, m_seismicEffectRadius ) },
-		{ "SeismicEffectMagnitude",	        INI::parseReal,	                NULL, offsetof( BunkerBusterBehaviorModuleData, m_seismicEffectMagnitude ) },
+		{ "SeismicEffectRadius",			      INI::parseReal,				          NULL, REAL_OFFSET( BunkerBusterBehaviorModuleData, m_seismicEffectRadius ) },
+		{ "SeismicEffectMagnitude",	        INI::parseReal,	                NULL, REAL_OFFSET( BunkerBusterBehaviorModuleData, m_seismicEffectMagnitude ) },
     { "ShockwaveWeaponTemplate",        INI::parseWeaponTemplate,       NULL, offsetof( BunkerBusterBehaviorModuleData, m_shockwaveWeaponTemplate ) },
     { "OccupantDamageWeaponTemplate",   INI::parseWeaponTemplate,       NULL, offsetof( BunkerBusterBehaviorModuleData, m_occupantDamageWeaponTemplate ) },
 

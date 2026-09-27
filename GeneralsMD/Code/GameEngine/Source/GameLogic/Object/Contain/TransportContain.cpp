@@ -66,9 +66,9 @@ TransportContainModuleData::TransportContainModuleData()
   m_armedRidersUpgradeWeaponSet = FALSE;
 	m_resetMoodCheckTimeOnExit = true;
 	m_destroyRidersWhoAreNotFreeToExit = false;
-	m_exitPitchRate = 0.0f;
+	m_exitPitchRate = Fix( 0 );
 	m_initialPayload.count = 0;
-	m_healthRegen = 0.0f;
+	m_healthRegen = Fix( 0 );
 	m_exitDelay = 0;
 	m_isDelayExitInAir = FALSE;
 
@@ -109,9 +109,9 @@ void TransportContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ResetMoodCheckTimeOnExit",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_resetMoodCheckTimeOnExit ) },
 		{ "DestroyRidersWhoAreNotFreeToExit",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_destroyRidersWhoAreNotFreeToExit ) },
 		{ "ExitBone",	INI::parseAsciiString,		NULL, offsetof( TransportContainModuleData, m_exitBone ) },
-		{ "ExitPitchRate",	INI::parseAngularVelocityReal,		NULL, offsetof( TransportContainModuleData, m_exitPitchRate ) },
+		{ "ExitPitchRate",	INI::parseAngularVelocityFix,		NULL, FIX_OFFSET( TransportContainModuleData, m_exitPitchRate ) },
 		{ "InitialPayload", parseInitialPayload, NULL, 0 },
-		{ "HealthRegen%PerSec", INI::parseReal, NULL, offsetof( TransportContainModuleData, m_healthRegen ) },
+		{ "HealthRegen%PerSec", INI::parseFix, NULL, FIX_OFFSET( TransportContainModuleData, m_healthRegen ) },
 		{ "ExitDelay",	INI::parseDurationUnsignedInt,		NULL, offsetof( TransportContainModuleData, m_exitDelay ) },
 		{ "ArmedRidersUpgradeMyWeaponSet",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_armedRidersUpgradeWeaponSet ) },
 		{ "DelayExitInAir",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_isDelayExitInAir ) },
@@ -369,7 +369,7 @@ void TransportContain::onRemoving( Object *rider )
 			startingForce.z *= mass;
 			child->applyMotiveForce( &startingForce );
 
-			Real pitchRate = child->getCenterOfMassOffset() * d->m_exitPitchRate;
+			Real pitchRate = child->getCenterOfMassOffset() * fixToReal( d->m_exitPitchRate ); // P4
 			child->setPitchRate( pitchRate );
 		}
 	}
@@ -484,7 +484,7 @@ UpdateSleepTime TransportContain::update()
 	if( m_payloadCreated == FALSE && !getObject()->isDestroyed() )
 		createPayload();
 
-	if( moduleData && moduleData->m_healthRegen )
+	if( moduleData && moduleData->m_healthRegen != Fix( 0 ) )
 	{
 		ContainModuleInterface *contain = getObject()->getContain();
 		if( contain )
@@ -508,7 +508,7 @@ UpdateSleepTime TransportContain::update()
 					if( body->getHealth() < body->getMaxHealth() )
 					{
 						//Calculate the health to be regenerated on each unit.
-						Real regen = body->getMaxHealth() * moduleData->m_healthRegen / 100.0f * SECONDS_PER_LOGICFRAME_REAL;
+						Real regen = body->getMaxHealth() * fixToReal( moduleData->m_healthRegen ) / 100.0f * SECONDS_PER_LOGICFRAME_REAL; // P6
 
 						//Perform the actual healing for this frame.
 //						DamageInfo damageInfo;

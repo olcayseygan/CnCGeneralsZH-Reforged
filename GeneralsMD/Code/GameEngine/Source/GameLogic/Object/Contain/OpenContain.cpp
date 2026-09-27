@@ -77,7 +77,7 @@ OpenContainModuleData::OpenContainModuleData( void )
 	m_passengersAllowedToFire = FALSE;
 	m_passengersInTurret = FALSE;
 	m_numberOfExitPaths = 1;
-	m_damagePercentageToUnits = 0;
+	m_damagePercentageToUnits = Fix( 0 );
 	m_isBurnedDeathToUnits = TRUE;
 	m_doorOpenTime = 1;
 	m_allowInsideKindOf.clear(); m_allowInsideKindOf.flip();		// everything is allowed
@@ -99,7 +99,7 @@ OpenContainModuleData::OpenContainModuleData( void )
 		{ "ContainMax",								INI::parseInt, NULL, offsetof( OpenContainModuleData, m_containMax ) },
 		{ "EnterSound",								INI::parseAudioEventRTS,		NULL, offsetof( OpenContainModuleData, m_enterSound ) },
 		{ "ExitSound",								INI::parseAudioEventRTS,		NULL, offsetof( OpenContainModuleData, m_exitSound ) },
-		{ "DamagePercentToUnits",			INI::parsePercentToReal,		NULL, offsetof( OpenContainModuleData, m_damagePercentageToUnits ) },
+		{ "DamagePercentToUnits",			INI::parsePercentToFix,		NULL, FIX_OFFSET( OpenContainModuleData, m_damagePercentageToUnits ) },
 		{ "BurnedDeathToUnits",				INI::parseBool,							NULL, offsetof( OpenContainModuleData, m_isBurnedDeathToUnits ) },
 		{ "AllowInsideKindOf",				KindOfMaskType::parseFromINI, NULL, offsetof( OpenContainModuleData, m_allowInsideKindOf ) },
 		{ "ForbidInsideKindOf",				KindOfMaskType::parseFromINI, NULL, offsetof( OpenContainModuleData, m_forbidInsideKindOf ) },
@@ -924,7 +924,7 @@ void OpenContain::onDie( const DamageInfo * damageInfo )
 	killRidersWhoAreNotFreeToExit();
 
 	//Check to see if we are going to inflict damage on contained units.
-	if( getDamagePercentageToUnits() > 0 )
+	if( getDamagePercentageToUnits() > Fix( 0 ) )
 	{
 		//Cycle through the units and apply damage to them!
 		processDamageToContained(getDamagePercentageToUnits());
@@ -1509,7 +1509,7 @@ void OpenContain::orderAllPassengersToHackInternet( CommandSourceType commandSou
 
 
 //-------------------------------------------------------------------------------------------------
-void OpenContain::processDamageToContained(Real percentDamage)
+void OpenContain::processDamageToContained(Fix percentDamage)
 {
 	const OpenContainModuleData *data = getOpenContainModuleData();
 
@@ -1535,7 +1535,7 @@ void OpenContain::processDamageToContained(Real percentDamage)
 		DEBUG_ASSERTCRASH( object, ("Contain list must not contain NULL element") );
 
 		//Calculate the damage to be inflicted on each unit.
-		Real damage = object->getBodyModule()->getMaxHealth() * percentDamage;
+		Real damage = object->getBodyModule()->getMaxHealth() * fixToReal( percentDamage ); // P6
 
 		DamageInfo damageInfo;
 		damageInfo.in.m_damageType = DAMAGE_UNRESISTABLE;
@@ -1544,7 +1544,7 @@ void OpenContain::processDamageToContained(Real percentDamage)
 		damageInfo.in.m_amount = damage;
 		object->attemptDamage( &damageInfo );
 
-		if( !object->isEffectivelyDead() && percentDamage == 1.0f )
+		if( !object->isEffectivelyDead() && percentDamage == Fix( 1 ) )
 			object->kill(); // in case we are carrying flame proof troops we have been asked to kill
 
 		if( object->isEffectivelyDead() )
@@ -1588,7 +1588,7 @@ WeaponBonusConditionFlags OpenContain::getWeaponBonusPassedToPassengers() const
 }
 
 //-------------------------------------------------------------------------------------------------
-Real OpenContain::getDamagePercentageToUnits( void ) 
+Fix OpenContain::getDamagePercentageToUnits( void )
 { 
 	return getOpenContainModuleData()->m_damagePercentageToUnits; 
 }

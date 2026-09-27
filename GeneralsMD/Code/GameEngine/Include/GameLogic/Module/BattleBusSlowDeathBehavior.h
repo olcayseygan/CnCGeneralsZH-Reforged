@@ -56,8 +56,8 @@ public:
 	const FXList *m_fxHitGround;									///< FXList for when we land
 	const ObjectCreationList *m_oclHitGround;			///< OCL for when we land
 
-	Real m_throwForce;														///< How hard we are thrown in to the air
-	Real m_percentDamageToPassengers;							///< At the moment we throw up, how hard the people inside are hit
+	Fix m_throwForce;									///< How hard we are thrown in to the air
+	Fix m_percentDamageToPassengers;					///< At the moment we throw up, how hard the people inside are hit
 	UnsignedInt m_emptyHulkDestructionDelay;			///< Another reason this is a BattleBus module, and not a generic two stage death.  If non-zero, time empty before we kill ourselves.
 
 };

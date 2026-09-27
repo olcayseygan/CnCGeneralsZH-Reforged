@@ -76,7 +76,7 @@ GarrisonContainModuleData::GarrisonContainModuleData( void )
 
 	m_mobileGarrison = FALSE;
 	m_doIHealObjects = false;			///< if T, then I heal objects that are inside of me
-	m_framesForFullHeal = 1.0f;		///< the number of frames something inside of me takes to heal
+	m_framesForFullHeal = Fix( 1 );		///< the number of frames something inside of me takes to heal
 	m_immuneToClearBuildingAttacks = false;
   m_isEnclosingContainer = TRUE; ///< a sensible default for a garrison container... few exceptions, firebase is one
 
@@ -1124,7 +1124,7 @@ void GarrisonContain::onDamage( DamageInfo * /*info*/ )
 //		// get the object
 //		obj = *it;
 //
-//		healSingleObject(obj, modData->m_framesForFullHeal);
+//		healSingleObject(obj, fixToReal( modData->m_framesForFullHeal )); // P8, the heal is float
 //	}
   
 
@@ -1151,7 +1151,7 @@ void GarrisonContain::healObjects( void )
 		// get the object
 		obj = *it;
 
-		healSingleObject(obj, modData->m_framesForFullHeal);
+		healSingleObject(obj, fixToReal( modData->m_framesForFullHeal )); // P8, the heal is float
 	}
 }
 

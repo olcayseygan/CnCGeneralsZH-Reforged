@@ -36,6 +36,7 @@
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/DieModule.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "Lib/FixBoundary.h"
 
 
 #define MAX_RUNWAYS			2 //***NOTE: If you change this, make sure you update the parsing section!
@@ -69,9 +70,9 @@ class FlightDeckBehaviorModuleData : public AIUpdateModuleData
 public:
 	RunwayDefinition m_runwayInfo[ MAX_RUNWAYS ];
 	AsciiString   m_thingTemplateName;
-	Real					m_healAmount;
-	Real					m_approachHeight;
-	Real					m_landingDeckHeightOffset;
+	Fix						m_healAmount;
+	Fix						m_approachHeight;
+	Fix						m_landingDeckHeightOffset;
 	Int						m_numRows;
 	Int						m_numCols;
 	UnsignedInt		m_cleanupFrames;
@@ -143,8 +144,9 @@ public:
 	virtual Int getRunwayCount() const { return m_runways.size(); }
 	virtual ObjectID getRunwayReservation( Int r, RunwayReservationType type );
 	virtual void transferRunwayReservationToNextInLineForTakeoff(ObjectID id);
-	virtual Real getApproachHeight() const { return getFlightDeckBehaviorModuleData()->m_approachHeight; }
-	virtual Real getLandingDeckHeightOffset() const { return getFlightDeckBehaviorModuleData()->m_landingDeckHeightOffset; }
+	virtual Real getApproachHeight() const { return fixToReal( getFlightDeckBehaviorModuleData()->m_approachHeight ); } // P7, JetAIUpdate
+	virtual Real getLandingDeckHeightOffset() const { return fixToReal( getFlightDeckBehaviorModuleData()->m_landingDeckHeightOffset ); } // P7, JetAIUpdate and Object::getCarrierDeckHeight
+	virtual Fix getLandingDeckHeightOffsetFix() const { return getFlightDeckBehaviorModuleData()->m_landingDeckHeightOffset; }
 	virtual void setHealee(Object* healee, Bool add);
 	virtual void killAllParkedUnits();
 	virtual void defectAllParkedUnits(Team* newTeam, UnsignedInt detectionTime);

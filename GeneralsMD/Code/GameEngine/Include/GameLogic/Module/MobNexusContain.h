@@ -46,13 +46,13 @@ public:
 	};
 
 	Int								m_slotCapacity;								///< max units that can be inside us
-	Real							m_exitPitchRate;
+	Fix								m_exitPitchRate;
 	Bool							m_scatterNearbyOnExit;
 	Bool							m_orientLikeContainerOnExit;
 	Bool							m_keepContainerVelocityOnExit;
 	AsciiString				m_exitBone;
 	InitialPayload		m_initialPayload;
-	Real							m_healthRegen;
+	Fix								m_healthRegen;
 
 	MobNexusContainModuleData();
 

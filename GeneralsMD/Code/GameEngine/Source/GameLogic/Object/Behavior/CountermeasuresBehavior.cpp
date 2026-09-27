@@ -124,7 +124,7 @@ void CountermeasuresBehavior::reportMissileForCountermeasures( Object *missile )
 		//be diverted.
 		const CountermeasuresBehaviorModuleData *data = getCountermeasuresBehaviorModuleData();
 
-		if( GameLogicRandomValueReal( 0.0f, 1.0f ) < data->m_evasionRate )
+		if( GameLogicRandomValueFix( Fix( 0 ), Fix( 1 ) ) < data->m_evasionRate )
 		{
 			//This missile will be diverted!
 			ProjectileUpdateInterface* pui = NULL;
@@ -317,7 +317,7 @@ void CountermeasuresBehavior::launchVolley()
 			ratio = Fix( i ) / (volleySize - Fix( 1 )) * Fix( 2 ) - Fix( 1 );
 		}
 		//Now calculate the angle. Simply multiply it by the ratio!
-		Fix angle = ratio * fixFromReal( data->m_volleyArcAngle ); // P3
+		Fix angle = ratio * data->m_volleyArcAngle;
 
 		PhysicsBehavior *physics = obj->getPhysics();
 
@@ -342,7 +342,7 @@ void CountermeasuresBehavior::launchVolley()
 		{
 			velocity = Fix( -10 );
 		}
-		flareVector.scale( velocity * fixFromReal( data->m_volleyVelocityFactor ) ); // P3
+		flareVector.scale( velocity * data->m_volleyVelocityFactor );
 		Coord3D vel = flareVector.toCoord3D(); // P4
 
 		const ThingTemplate *thing = TheThingFactory->findTemplate( data->m_flareTemplateName );

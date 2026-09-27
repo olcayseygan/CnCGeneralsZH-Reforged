@@ -851,7 +851,7 @@ public:
 				Fix groundZ = TheTerrainLogic->getLayerHeightFix( jetPos->x, jetPos->y, layer );
 				if( pp )
 				{
-					groundZ += fixFromReal( pp->getLandingDeckHeightOffset() ); // P3
+					groundZ += pp->getLandingDeckHeightOffsetFix();
 				}
 
 				if( jetPos->z - zSlop <= groundZ )

@@ -43,6 +43,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+#include "Lib/FixBoundary.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -71,8 +72,8 @@ BattleBusSlowDeathBehaviorModuleData::BattleBusSlowDeathBehaviorModuleData( void
 	m_fxHitGround = NULL;
 	m_oclHitGround = NULL;
 
-	m_throwForce = 1.0f;
-	m_percentDamageToPassengers = 0.0f;
+	m_throwForce = Fix( 1 );
+	m_percentDamageToPassengers = Fix( 0 );
 	m_emptyHulkDestructionDelay = 0;
 
 }  // end BattleBusSlowDeathBehaviorModuleData
@@ -92,8 +93,8 @@ BattleBusSlowDeathBehaviorModuleData::BattleBusSlowDeathBehaviorModuleData( void
 		{ "FXHitGround",	INI::parseFXList,	NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_fxHitGround ) },
 		{ "OCLHitGround", INI::parseObjectCreationList, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_oclHitGround ) },
 
-		{ "ThrowForce", INI::parseReal, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_throwForce ) },
-		{ "PercentDamageToPassengers", INI::parsePercentToReal, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_percentDamageToPassengers ) },
+		{ "ThrowForce", INI::parseFix, NULL, FIX_OFFSET( BattleBusSlowDeathBehaviorModuleData, m_throwForce ) },
+		{ "PercentDamageToPassengers", INI::parsePercentToFix, NULL, FIX_OFFSET( BattleBusSlowDeathBehaviorModuleData, m_percentDamageToPassengers ) },
 		{ "EmptyHulkDestructionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_emptyHulkDestructionDelay ) },
 
 		{ 0, 0, 0, 0 }
@@ -169,7 +170,7 @@ void BattleBusSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 			Coord3D throwForce;
 			throwForce.x = 0;
 			throwForce.y = 0;
-			throwForce.z = data->m_throwForce;
+			throwForce.z = fixToReal( data->m_throwForce ); // P4
 			me->getPhysics()->applyShock(&throwForce);
 			me->getPhysics()->applyRandomRotation();
 		}

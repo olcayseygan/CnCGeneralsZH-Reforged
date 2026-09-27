@@ -63,7 +63,7 @@ public:
 	Bool m_passengersAllowedToFire;	///< Can the passengers shoot out of us?
 	Bool m_passengersInTurret;			///< The Firepoint bones are in our turret, not our chassis
 	Int m_numberOfExitPaths;				///< Will alternate through ExitStart/End paths as we exit people.
-	Real m_damagePercentageToUnits;
+	Fix m_damagePercentageToUnits;
 	Bool m_isBurnedDeathToUnits;		///< Turn off the hardcoded burn death when killing guys in transport
 	UnsignedInt m_doorOpenTime;
 	KindOfMaskType m_allowInsideKindOf;			///< objects must have at least one of these kind of bits set to be contained by us
@@ -223,14 +223,14 @@ public:
 	// returns true iff there are objects currently waiting to enter.
 	virtual Bool hasObjectsWantingToEnterOrExit() const;
 
-	virtual void processDamageToContained(Real percentDamage); ///< Do our % damage to units now.
+	virtual void processDamageToContained(Fix percentDamage); ///< Do our % damage to units now.
 
 	virtual Bool isWeaponBonusPassedToPassengers() const;
 	virtual WeaponBonusConditionFlags getWeaponBonusPassedToPassengers() const;
 
 	virtual void enableLoadSounds( Bool enable ) { m_loadSoundsEnabled = enable; }
 
-  Real getDamagePercentageToUnits( void );
+  Fix getDamagePercentageToUnits( void );
   virtual Object* getClosestRider ( const FCoord3D *pos );
 
   virtual void setEvacDisposition( EvacDisposition disp ) {};

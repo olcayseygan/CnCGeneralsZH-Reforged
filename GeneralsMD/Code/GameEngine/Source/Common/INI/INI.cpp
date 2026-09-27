@@ -1747,11 +1747,15 @@ namespace
 		if( d.mantissa == 0 )
 			return Fix( 0 );
 
-		// anything this far up is already out of range; anything this far down is already zero
+		// a value the text says is not zero never loads as zero: anything that rounds below one step
+		// is one step, so PrimaryDamage = 0.00001 still does damage and a small rate still moves
+		const Fix oneStep = Fix::fromRaw( d.negative ? -1 : 1 );
+
+		// anything this far up is already out of range; anything this far down is one step
 		if( d.exponent > 40 )
 			throw INI_INVALID_DATA;
 		if( d.exponent < -60 )
-			return Fix( 0 );
+			return oneStep;
 
 		UnsignedInt64 w[ DECIMAL_WORDS ] = { d.mantissa };
 		multiplyWords( w, numerator );
@@ -1770,6 +1774,8 @@ namespace
 		UnsignedInt64 magnitude = (w[ 0 ] >> 1) + (w[ 0 ] & 1);
 		if( magnitude > 0x7FFFFFFFFFFFFFFFull )
 			throw INI_INVALID_DATA;
+		if( magnitude == 0 )
+			return oneStep;
 
 		return Fix::fromRaw( d.negative ? -(Int64)magnitude : (Int64)magnitude );
 	}

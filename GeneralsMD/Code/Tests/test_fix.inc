@@ -105,9 +105,6 @@ TEST(fix_ini_scanner_reads_the_decimal_exactly)
 	CHECK_EQ( INI::scanFix( "12abc" ).raw(), 12 * 65536 );						// and neither is trailing text
 	CHECK_EQ( INI::scanFix( "0.00000762939453125" ).raw(), 1 );			// 2^-17, halfway: away from zero
 	CHECK_EQ( INI::scanFix( "-0.00000762939453125" ).raw(), -1 );
-	CHECK_EQ( INI::scanFix( "0.0000076293945312" ).raw(), 0 );				// just under halfway
-	CHECK_EQ( INI::scanFix( "0.000001" ).raw(), 0 );
-	CHECK_EQ( INI::scanFix( "1e-70" ).raw(), 0 );
 	CHECK_EQ( INI::scanFix( "123456.789" ).raw(), 8090864124LL );
 	CHECK_EQ( INI::scanFix( "0.1000000000000000000000001" ).raw(), 6554 );	// digits past 19 dropped
 	CHECK_EQ( INI::scanFix( "140737488355327" ).raw(), 140737488355327LL * 65536 );	// 2^47 - 1
@@ -121,6 +118,21 @@ TEST(fix_ini_scanner_reads_the_decimal_exactly)
 		if( !threw ) printf( "  scanFix(\"%s\") did not throw\n", bad[ i ] );
 		CHECK( threw );
 	}
+}
+
+// PrimaryDamage = 0.00001 is in four Zero Hour weapons; rounded to the nearest step it would do no
+// damage at all.  A value the text says is not zero loads as at least one step.
+TEST(fix_ini_scanner_rounds_a_tiny_value_up_to_one_step)
+{
+	CHECK_EQ( INI::scanFix( "0.00001" ).raw(), 1 );							// 0.655 of a step
+	CHECK_EQ( INI::scanFix( "0.0000076293945312" ).raw(), 1 );				// just under halfway
+	CHECK_EQ( INI::scanFix( "0.000001" ).raw(), 1 );
+	CHECK_EQ( INI::scanFix( "1e-70" ).raw(), 1 );								// past the exponent cut
+	CHECK_EQ( INI::scanFix( "-0.000001" ).raw(), -1 );
+	CHECK_EQ( INI::scanFix( "0.0000152587890625" ).raw(), 1 );				// exactly one step stays one
+	CHECK_EQ( INI::scanFix( "0.00003" ).raw(), 2 );							// 1.97: ordinary rounding
+	CHECK_EQ( INI::scanFix( "0" ).raw(), 0 );									// zero is still zero
+	CHECK_EQ( INI::scanFix( "0.0e-80" ).raw(), 0 );
 }
 
 // the parsers read the next token off strtok's buffer, so prime it with a field name first
@@ -144,6 +156,7 @@ TEST(fix_ini_parsers_scale_before_they_round)
 	CHECK_EQ( parseFixField( INI::parseDurationFix, "100" ).raw(), 3 * 65536 );		// exact, where 100 * 0.03f is not
 	CHECK_EQ( parseFixField( INI::parseVelocityFix, "30" ).raw(), 65536 );
 	CHECK_EQ( parseFixField( INI::parseVelocityFix, "10" ).raw(), 21845 );			// 21845.33
+	CHECK_EQ( parseFixField( INI::parseVelocityFix, "0.0003" ).raw(), 1 );			// 0.66 of a step after the divide
 	CHECK_EQ( parseFixField( INI::parseAccelerationFix, "900" ).raw(), 65536 );
 	CHECK_EQ( parseFixField( INI::parseAngleFix, "180" ).raw(), 205887 );				// PI: 205887.42
 	CHECK_EQ( parseFixField( INI::parseAngleFix, "90" ).raw(), 102944 );				// 102943.71

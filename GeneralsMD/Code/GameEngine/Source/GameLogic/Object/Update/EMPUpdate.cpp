@@ -108,8 +108,7 @@ EMPUpdate::EMPUpdate( Thing *thing, const ModuleData* moduleData ) : UpdateModul
 		//	m_spinRate *= -1.0f;
 		//}
 
-		// the logic stream still rolls Reals
-		getObject()->setOrientationFix(fixFromReal(GameLogicRandomValueReal(-PI,PI)));
+		getObject()->setOrientationFix(GameLogicRandomValueFix(-FIX_PI, FIX_PI));
 
 		DEBUG_ASSERTCRASH( m_tintEnvPlayFrame < m_dieFrame, ("EMPUpdate::EMPUpdate - you cant play fade after death\n" ) );
 		

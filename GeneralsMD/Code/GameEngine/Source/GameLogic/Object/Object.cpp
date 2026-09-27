@@ -1821,7 +1821,7 @@ inline Bool isAngleDifferent(Fix a, Fix b)
 }
 
 //-------------------------------------------------------------------------------------------------
-// P2 shim conversions, float in and out of the fixed transform
+// where the fixed transform still meets float: the map extent and the terrain alignment
 //-------------------------------------------------------------------------------------------------
 /// toward zero, the way the (Int) cast on a float did
 static Int fixTruncToInt( Fix f )
@@ -1841,7 +1841,7 @@ static Bool isOnMapFix( const FCoord3D &pos )
 }
 
 // ponytail: alignOnTerrain works in float on the terrain normal; its matrix is converted once here.
-// A fixed version waits for the height map's normal in fixed point.
+// getGroundHeightFix hands back the normal in fixed point, so a fixed version is a port of alignOnTerrain.
 static void alignOnTerrainFix( Fix angle, const FCoord3D &pos, FixMatrix3D &out )
 {
 	Matrix3D mtx;
@@ -1985,17 +1985,12 @@ Bool Object::isSignificantlyAboveTerrain() const
 }
 
 //-------------------------------------------------------------------------------------------------
-// P2 shims
+// P9 shims
 //-------------------------------------------------------------------------------------------------
 void Object::setPosition( const Coord3D *pos )
 {
 	FCoord3D f = fcoordFromCoord3D( *pos );
 	setPositionFix( &f );
-}
-
-void Object::setPositionZ( Real z )
-{
-	setPositionZFix( fixFromReal( z ) );
 }
 
 void Object::setOrientation( Real angle )
@@ -2037,29 +2032,12 @@ Real Object::getHeightAboveTerrain() const
 	return fixToReal( getHeightAboveTerrainFix() );
 }
 
-Real Object::getHeightAboveTerrainOrWater() const
-{
-	return fixToReal( getHeightAboveTerrainOrWaterFix() );
-}
-
 void Object::convertBonePosToWorldPos( const Coord3D *bonePos, const Matrix3D *boneTransform, Coord3D *worldPos, Matrix3D *worldTransform ) const
 {
 	if( worldTransform )
 		worldTransform->mul( m_shimTransform, *boneTransform );
 	if( worldPos )
 		*worldPos = convertBonePosToWorldPosFix( *bonePos ).toCoord3D();
-}
-
-void Object::transformPoint( const Coord3D *in, Coord3D *out )
-{
-	if( in == NULL || out == NULL )
-		return;
-	Vector3 vectorIn( in->x, in->y, in->z );
-	Vector3 vectorOut;
-	m_shimTransform.Transform_Vector( m_shimTransform, vectorIn, &vectorOut );
-	out->x = vectorOut.X;
-	out->y = vectorOut.Y;
-	out->z = vectorOut.Z;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2087,7 +2065,7 @@ void Object::reactToTransformChange( const FCoord3D &oldPos, Fix oldAngle )
 {
 	//USE_PERF_TIMER(Object_reactToTransformChange)
 
-	// the P2 float mirrors, and the one place the transform crosses to the client
+	// the P9 float mirrors, and the one place the transform crosses to the client
 	m_fxTransform.toMatrix3D( &m_shimTransform );
 	m_shimPos = m_fxPos.toCoord3D();
 	m_shimAngle = fixToReal( m_fxAngle );

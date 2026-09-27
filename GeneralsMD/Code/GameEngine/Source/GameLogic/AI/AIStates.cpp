@@ -637,7 +637,7 @@ StateReturnType AIRappelState::update()
 					// scatter the start point around a little to make it better.
 					Fix offset = fixMin(obj->getGeometryInfo().getBoundingCircleRadiusFix(),
 														bldg->getGeometryInfo().getBoundingCircleRadiusFix());
-					Fix angle = fixFromReal(GameLogicRandomValueReal( PI, 2*PI ));//Downish.
+					Fix angle = GameLogicRandomValueFix( FIX_PI, FIX_TWO_PI );//Downish.
 					FCoord3D startPosition = *bldg->getPositionFix();
 					startPosition.x += offset * fixCos( angle );
 					startPosition.y += offset * fixSin( angle );

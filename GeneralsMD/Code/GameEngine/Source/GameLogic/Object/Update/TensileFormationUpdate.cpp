@@ -210,7 +210,7 @@ void TensileFormationUpdate::initLinks( void )
 	//gridPos.y = REAL_TO_INT_FLOOR(getObject()->getPosition()->y/MAP_XY_FACTOR);
 	//TheTerrainVisual->setRawMapHeight(&gridPos, 500);
 
-	getObject()->setOrientationFix(fixFromReal(GameLogicRandomValueReal(-PI,PI)));	// P8: the logic random stream is float
+	getObject()->setOrientationFix(GameLogicRandomValueFix(-FIX_PI, FIX_PI));
 
 }
 

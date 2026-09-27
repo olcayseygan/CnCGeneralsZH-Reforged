@@ -742,15 +742,14 @@ void OpenContain::scatterToNearbyPosition(Object* rider)
 	// NOPE, can't do that ... all players screen angles will be different, unless
 	// we maintain the angle of each players screen in the player structure or something
 	//
-	// the random draws stay float, there is no fixed point random yet  // P8
-	Fix angle = fixFromReal( GameLogicRandomValueReal( 0.0f, 2.0f * PI ) );
+	Fix angle = GameLogicRandomValueFix( Fix( 0 ), FIX_TWO_PI );
 //	angle = TheTacticalView->getAngle();
 //	angle -= GameLogicRandomValueReal( PI / 3.0f, 2.0f * (PI / 3.0F) );
 
-	Real minRadius = fixToReal( theContainer->getGeometryInfo().getBoundingCircleRadiusFix() );
-	Real maxRadius = minRadius + minRadius / 2.0f;
+	Fix minRadius = theContainer->getGeometryInfo().getBoundingCircleRadiusFix();
+	Fix maxRadius = minRadius + minRadius / Fix( 2 );
 	const FCoord3D *containerPos = theContainer->getPositionFix();
-	Fix dist = fixFromReal( GameLogicRandomValueReal( minRadius, maxRadius ) );
+	Fix dist = GameLogicRandomValueFix( minRadius, maxRadius );
 
 	FCoord3D pos;
 	pos.x = dist * fixCos( angle ) + containerPos->x;

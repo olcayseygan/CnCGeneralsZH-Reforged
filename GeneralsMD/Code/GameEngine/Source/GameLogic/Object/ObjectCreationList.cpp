@@ -1428,7 +1428,7 @@ protected:
 				// uninitialised stack Coord3D: the debris then appeared at whatever was on the stack.
 				Coord3D resultPos = *pos;
 				FindPositionOptions fpOptions;
-				fpOptions.minRadius = fixFromReal(GameLogicRandomValueReal(m_minDistanceAFormation, m_minDistanceBFormation));	// P3
+				fpOptions.minRadius = GameLogicRandomValueFix(fixFromReal(m_minDistanceAFormation), fixFromReal(m_minDistanceBFormation));	// P3
 				fpOptions.maxRadius = fixFromReal(m_maxDistanceFormation);	// P3
 				fpOptions.flags = FPF_USE_HIGHEST_LAYER;
 				// DiesOnBadLand kills on the pathfind cell's type, and the search's own cliff and water

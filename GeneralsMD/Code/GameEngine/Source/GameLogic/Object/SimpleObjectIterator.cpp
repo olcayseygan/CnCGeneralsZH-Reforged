@@ -81,11 +81,6 @@ SimpleObjectIterator::~SimpleObjectIterator()
 	 already and the lock is uncontended in a single-threaded logic frame, so the 16,523
 	 critical-section operations a frame are cheap operations. Worth knowing before anybody spends a
 	 fortnight on the allocator. */
-void SimpleObjectIterator::insert(Object *obj, Real numeric)
-{
-	insertFix(obj, fixFromReal(numeric));
-}
-
 void SimpleObjectIterator::insertFix(Object *obj, Fix numeric)
 {
 	DEBUG_ASSERTCRASH(obj, ("sorry, no nulls allowed here"));

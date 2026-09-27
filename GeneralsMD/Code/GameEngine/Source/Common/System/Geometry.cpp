@@ -114,21 +114,18 @@ void GeometryInfo::setFix(GeometryType type, Bool isSmall, Fix height, Fix major
 }
 
 //-----------------------------------------------------------------------------
-// P2 shims
+// P9 shims, for the client and the float callers of P4 to P7
 //-----------------------------------------------------------------------------
 void GeometryInfo::set(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius)
 {
 	setFix(type, isSmall, fixFromReal(height), fixFromReal(majorRadius), fixFromReal(minorRadius));
 }
-void GeometryInfo::setMajorRadius(Real majorRadius) { setMajorRadiusFix(fixFromReal(majorRadius)); }
-void GeometryInfo::setMinorRadius(Real minorRadius) { setMinorRadiusFix(fixFromReal(minorRadius)); }
 Real GeometryInfo::getMajorRadius() const { return fixToReal(m_majorRadius); }
 Real GeometryInfo::getMinorRadius() const { return fixToReal(m_minorRadius); }
 Real GeometryInfo::getBoundingCircleRadius() const { return fixToReal(m_boundingCircleRadius); }
 Real GeometryInfo::getBoundingSphereRadius() const { return fixToReal(m_boundingSphereRadius); }
 Real GeometryInfo::getMaxHeightAbovePosition() const { return fixToReal(getMaxHeightAbovePositionFix()); }
 Real GeometryInfo::getMaxHeightBelowPosition() const { return fixToReal(getMaxHeightBelowPositionFix()); }
-Real GeometryInfo::getZDeltaToCenterPosition() const { return fixToReal(getZDeltaToCenterPositionFix()); }
 void GeometryInfo::setMaxHeightAbovePosition(Real z) { setMaxHeightAbovePositionFix(fixFromReal(z)); }
 void GeometryInfo::expandFootprint(Real radius)
 {
@@ -272,7 +269,7 @@ Fix GeometryInfo::getZDeltaToCenterPositionFix() const
 void GeometryInfo::getCenterPosition(const Coord3D& pos, Coord3D& center) const
 {
 	center = pos;
-	center.z += getZDeltaToCenterPosition();
+	center.z += fixToReal(getZDeltaToCenterPositionFix());
 }
 
 //=============================================================================

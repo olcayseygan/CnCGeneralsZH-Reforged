@@ -288,9 +288,10 @@ Fix W3DTerrainLogic::getGroundHeightFix( Fix x, Fix y, FCoord3D *normal ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-/** P2 shim: the height is the fixed point one, so an object put on the ground by a float caller
-		stands at exactly zero above it for the fixed ones.  The normal still comes from the float
-		triangle. */
+/** P9 shim, for the client and the logic still in float (Locomotor, AIPathfind, Weapon, the dock
+		and production exit updates, scripts): the height is the fixed point one, so an object put on
+		the ground by a float caller stands at exactly zero above it for the fixed ones.  The normal
+		still comes from the float triangle. */
 //-------------------------------------------------------------------------------------------------
 Real W3DTerrainLogic::getGroundHeight( Real x, Real y, Coord3D* normal ) const
 {

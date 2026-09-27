@@ -1417,7 +1417,7 @@ public:
 
 	/* Distance and range queries.  The Fix ones are the real ones: every distance, square and radius
 		 in them is fixed point, and a maxDist past HUGE_DIST is taken as HUGE_DIST so its square fits.
-		 The Real ones after them are P2 shims that convert and call these. */
+		 The Real ones after them are P9 shims that convert and call these. */
 	Object *getClosestObjectFix( const Object *obj, Fix maxDist, DistanceCalculationType dc,
 		PartitionFilter **filters = NULL, Fix *closestDist = NULL, FCoord3D *closestDistVec = NULL );
 	Object *getClosestObjectFix( const FCoord3D *pos, Fix maxDist, DistanceCalculationType dc,
@@ -1438,15 +1438,9 @@ public:
 	void getVectorToFix( const Object *obj, const Object *otherObj, DistanceCalculationType dc, FCoord3D& vec );
 	void getVectorToFix( const Object *obj, const FCoord3D *pos, DistanceCalculationType dc, FCoord3D& vec );
 
-	// P2 SHIMS from here to END P2 SHIMS
-	Object *getClosestObject(
-		const Object *obj,
-		Real maxDist,
-		DistanceCalculationType dc,
-		PartitionFilter **filters = NULL,
-		Real *closestDist = NULL,
-		Coord3D *closestDistVec = NULL
-	);
+	/* P9 SHIMS from here to END P9 SHIMS.  getClosestObject is AIPathfind's (P5), getRelativeAngle2D
+		 the client's; the distances and vectors are Weapon's (P6), with getDistanceSquared also read by
+		 AssaultTransportAIUpdate, RailedTransportDockUpdate and SupplyWarehouseDockUpdate. */
 	Object *getClosestObject(
 		const Coord3D *pos, 
 		Real maxDist, 
@@ -1468,7 +1462,7 @@ public:
 	// just like 'getDistanceSquared', but return the dist-sqr where the obj is at goalPos.
 	Real getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Object *otherObj, DistanceCalculationType dc, Coord3D *vec = NULL);
 	Real getGoalDistanceSquared(const Object *obj, const Coord3D *goalPos, const Coord3D *otherPos, DistanceCalculationType dc, Coord3D *vec = NULL);
-	// END P2 SHIMS
+	// END P9 SHIMS
 
 #ifdef PM_CACHE_TERRAIN_HEIGHT
 	// note that the 2d positions aren't guaranteed to be the actual spot within the cell where the terrain
@@ -1481,7 +1475,8 @@ public:
 	void getPMStats(double& gcoTimeThisFrameTotal, double& gcoTimeThisFrameAvg);
 #endif
 
-	// P2 SHIMS over iterateObjectsInRangeFix
+	/* P9 SHIMS over iterateObjectsInRangeFix, for the client, Weapon (P6), BuildAssistant (P7),
+		 DemoralizeSpecialPower and SupplyWarehouseDockUpdate */
 	SimpleObjectIterator *iterateObjectsInRange(
 		const Object *obj,
 		Real maxDist, 

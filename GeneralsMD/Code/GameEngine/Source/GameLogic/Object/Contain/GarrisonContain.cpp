@@ -1569,17 +1569,16 @@ void GarrisonContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor 
 
     Fix EVAC__SCALAR = ( m_evacDisposition == EVAC_TO_LEFT ? Fix( 1 ) : Fix( -1 ) );
 
-    // the random ranges stay float, there is no fixed point random yet  // P8
-    Real containerHalfLength = fixToReal( getObject()->getGeometryInfo().getMajorRadiusFix() );
-    Real containerHalfWidth = fixToReal( getObject()->getGeometryInfo().getMinorRadiusFix() );
+    Fix containerHalfLength = getObject()->getGeometryInfo().getMajorRadiusFix();
+    Fix containerHalfWidth = getObject()->getGeometryInfo().getMinorRadiusFix();
 
     FCoord3D doorPosition;
-    doorPosition.x = fixFromReal( GameLogicRandomValueReal( -containerHalfLength/4, containerHalfLength/4 ) );// a rectangular pocket to act as the "doorway"
-    doorPosition.y = fixFromReal( GameLogicRandomValueReal( containerHalfWidth/2, containerHalfWidth * 2) ) * EVAC__SCALAR;
+    doorPosition.x = GameLogicRandomValueFix( -containerHalfLength / Fix( 4 ), containerHalfLength / Fix( 4 ) );// a rectangular pocket to act as the "doorway"
+    doorPosition.y = GameLogicRandomValueFix( containerHalfWidth / Fix( 2 ), containerHalfWidth * Fix( 2 ) ) * EVAC__SCALAR;
     doorPosition.z = Fix( 0 );
     FCoord3D walkToPosition;
-    walkToPosition.x = fixFromReal( GameLogicRandomValueReal( -containerHalfLength, containerHalfLength ) );
-    walkToPosition.y = getObject()->getGeometryInfo().getMinorRadiusFix() * Fix( 10 ) * EVAC__SCALAR;// spread-out!
+    walkToPosition.x = GameLogicRandomValueFix( -containerHalfLength, containerHalfLength );
+    walkToPosition.y = containerHalfWidth * Fix( 10 ) * EVAC__SCALAR;// spread-out!
     walkToPosition.z = Fix( 0 );
 
     const FixMatrix3D *mtx = getObject()->getTransformMatrixFix();

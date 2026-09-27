@@ -86,7 +86,7 @@ static const Real EXTENT_BIG_CHANGE = 10.0f;
 class GeometryInfo : public Snapshot
 {
 private:
-	// the extents are fixed point, read from the INI straight into Fix; the Real getters below are P2 shims
+	// the extents are fixed point, read from the INI straight into Fix; the Real getters below are P9 shims
 	GeometryType m_type;
 	Bool m_isSmall;						///< if true, geometry is assumed to fit in a single partition cell
 	Fix m_height;
@@ -148,15 +148,16 @@ public:
 	Fix getZDeltaToCenterPositionFix() const;
 	void setMaxHeightAbovePositionFix(Fix z);
 
-	// P2 SHIMS: the float face of the extents, converted on the way in and out.  P9 deletes them.
+	/* P9 SHIMS: the float face of the extents, converted on the way in and out.  set is the Real
+		 constructor's, for the client's tree and prop buffers.  The getters are read by the client,
+		 Weapon (P6), Locomotor (P4), AIPathfind (P5), BuildAssistant (P7), and still by AIStates,
+		 TerrainLogic's bridge towers and SupplyWarehouseDockUpdate. */
 	void set(GeometryType type, Bool isSmall, Real height, Real majorRadius, Real minorRadius);
-	void setMajorRadius(Real majorRadius);
-	void setMinorRadius(Real minorRadius);
 	Real getMajorRadius() const;
 	Real getMinorRadius() const;
 	Real getBoundingCircleRadius() const;
 	Real getBoundingSphereRadius() const;
-	// END P2 SHIMS
+	// END P9 SHIMS
 
 	Bool isIntersectedByLineSegment(const Coord3D& loc, const Coord3D& from, const Coord3D& to) const;
 
@@ -167,9 +168,6 @@ public:
 
 	// given an object with this geom, how far below the object's canonical position does its max z extend?
 	Real getMaxHeightBelowPosition() const;
-
-	// given an object with this geom, how far above/below the object's canonical position is its center?
-	Real getZDeltaToCenterPosition() const;
 
 	// given an object with this geom, located at 'pos', where is the "center" of the geometry?
 	void getCenterPosition(const Coord3D& pos, Coord3D& center) const;

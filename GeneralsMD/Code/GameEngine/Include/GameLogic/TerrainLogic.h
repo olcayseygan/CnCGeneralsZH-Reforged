@@ -232,7 +232,7 @@ public:
 	virtual void newMap( Bool saveGame );	///< Initialize the logic for new map.
 
 	/* The ground's height in fixed point, interpolated on the height map in integers.  The float
-		 getGroundHeight on the logic side is a P2 shim over this one, so a unit placed with either reads
+		 getGroundHeight on the logic side is a P9 shim over this one, so a unit placed with either reads
 		 zero height above the ground with the other. */
 	virtual Fix getGroundHeightFix( Fix x, Fix y, FCoord3D *normal = NULL ) const;
 	/// the ground, or a bridge or wall on that layer when one is there and above the ground

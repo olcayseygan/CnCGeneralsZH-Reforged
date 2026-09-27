@@ -235,7 +235,7 @@ Object *CreateCrateDie::createCrate( CrateTemplate const *currentCrateData )
 	{
 		Object *newCrate = TheThingFactory->newObject( crateType, NULL );
 		newCrate->setPositionFix( &creationPoint );
-		newCrate->setOrientationFix( fixFromReal( GameLogicRandomValueReal( 0, 2*PI ) ) );	// random angle in float
+		newCrate->setOrientationFix( GameLogicRandomValueFix( Fix( 0 ), FIX_TWO_PI ) );
 		newCrate->setLayer(layer);
 
 		Drawable *crateDrawable = newCrate->getDrawable();

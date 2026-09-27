@@ -749,12 +749,13 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 			FCoord3D pos = *item->getPositionFix();
 
 			// variance and offset are INI data (P3)
-			if (ai->getDropVariance().x > 0)
-				pos.x += fixFromReal( GameLogicRandomValueReal(-ai->getDropVariance().x, ai->getDropVariance().x) );
-			if (ai->getDropVariance().y > 0)
-				pos.y += fixFromReal( GameLogicRandomValueReal(-ai->getDropVariance().y, ai->getDropVariance().y) );
-			if (ai->getDropVariance().z > 0)
-				pos.z += fixFromReal( GameLogicRandomValueReal(-ai->getDropVariance().z, ai->getDropVariance().z) );
+			FCoord3D variance = fcoordFromCoord3D( &ai->getDropVariance() );
+			if (variance.x > Fix( 0 ))
+				pos.x += GameLogicRandomValueFix( -variance.x, variance.x );
+			if (variance.y > Fix( 0 ))
+				pos.y += GameLogicRandomValueFix( -variance.y, variance.y );
+			if (variance.z > Fix( 0 ))
+				pos.z += GameLogicRandomValueFix( -variance.z, variance.z );
 
 			pos.add( fcoordFromCoord3D( &ai->getDropOffset() ) );
 			item->setPositionFix(&pos);

@@ -3305,7 +3305,6 @@ Object *PartitionManager::getClosestObjectsFix(
 		++thePartitionGathers;
 
 	Int cellCenterX, cellCenterY;
-	// ponytail: the cell grid is still float; P5 gives world-to-cell its own fixed floor
 	worldToCellFix(objPos->x, objPos->y, &cellCenterX, &cellCenterY);
 
 	Object* closestObj = NULL;
@@ -3541,31 +3540,12 @@ SimpleObjectIterator *PartitionManager::iterateObjectsInRangeFix(const FCoord3D 
 }
 
 //-----------------------------------------------------------------------------
-// P2 shims over the Fix queries above
+// P9 shims over the Fix queries above
 //-----------------------------------------------------------------------------
 static void fromFCoord3D(const FCoord3D &f, Coord3D *c)
 {
 	if (c)
 		*c = f.toCoord3D();
-}
-
-//-----------------------------------------------------------------------------
-Object *PartitionManager::getClosestObject(
-	const Object *obj,
-	Real maxDist,
-	DistanceCalculationType dc,
-	PartitionFilter **filters,
-	Real *closestDist,
-	Coord3D *closestDistVec
-)
-{
-	Fix dist;
-	FCoord3D vec;
-	Object *found = getClosestObjectsFix(obj, NULL, fixFromReal(maxDist), dc, filters, NULL, &dist, &vec);
-	if (closestDist)
-		*closestDist = fixToReal(dist);
-	fromFCoord3D(vec, closestDistVec);
-	return found;
 }
 
 //-----------------------------------------------------------------------------
@@ -4009,7 +3989,7 @@ Bool PartitionManager::findPositionAround( const FCoord3D *center,
 	// pick a random angle from the center location to start at
 	Fix startAngle;
 	if( options->startAngle == RANDOM_START_ANGLE )
-		startAngle = fixFromReal( GameLogicRandomValueReal( 0.0f, TWO_PI ) );
+		startAngle = GameLogicRandomValueFix( Fix( 0 ), FIX_TWO_PI );
 	else
 		startAngle = options->startAngle;
 

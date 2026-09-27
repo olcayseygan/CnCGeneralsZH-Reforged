@@ -1397,7 +1397,7 @@ void ThingTemplate::initForLTA(const AsciiString& name)
 	m_displayName.translate( name );
 	m_shadowType = SHADOW_VOLUME;
 
-	m_geometryInfo.set(GEOMETRY_SPHERE, false, 10.0, 10.0, 10.0);
+	m_geometryInfo.setFix(GEOMETRY_SPHERE, false, Fix(10), Fix(10), Fix(10));
 	
 }
 #endif

@@ -500,8 +500,7 @@ void SlavedUpdate::doRepairLogic()
 			locomotor->setUsePreciseZPos( closeEnoughForZPrecision );
 		}
 		FCoord3D pos = *master->getPositionFix();
-		Real altitude = GameLogicRandomValueReal( data->m_repairMinAltitude, data->m_repairMaxAltitude );
-		pos.z += fixFromReal( altitude );	// P3
+		pos.z += GameLogicRandomValueFix( fixFromReal( data->m_repairMinAltitude ), fixFromReal( data->m_repairMaxAltitude ) );	// P3
 		const Coord3D goal = pos.toCoord3D();	// P4
 		ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 

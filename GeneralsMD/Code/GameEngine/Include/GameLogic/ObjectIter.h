@@ -125,14 +125,19 @@ private:
 public:
 	SimpleObjectIterator();
 //~SimpleObjectIterator();	// provided by MPO
-	Object *first() { return firstWithNumeric(NULL); }
-	Object *next() { return nextWithNumeric(NULL); }
+	Object *first() { return firstWithNumericFix(NULL); }
+	Object *next() { return nextWithNumericFix(NULL); }
 
 	Object *firstWithNumericFix(Fix *num) { reset(); return nextWithNumericFix(num); }
 	Object *nextWithNumericFix(Fix *num);
+	/**
+		insert an object at the head of the iterator. the given numeric value
+		(typically, dist-squared) is used only for subsequent sort() calls;
+		if you aren't going to sort, pass 0.
+	*/
 	void insertFix(Object *obj, Fix numeric);
 
-	// P2 SHIMS: the numeric as a float, converted on the way in and out
+	// P9 SHIMS: the numeric as a float, for Weapon's damage walk (P6)
 	Object *firstWithNumeric(Real *num = NULL) { reset(); return nextWithNumeric(num); }
 	Object *nextWithNumeric(Real *num = NULL);
 
@@ -141,14 +146,7 @@ public:
 	/**
 		throw away all contents of the iterator.
 	*/
-	void makeEmpty();	
-
-	/**
-		insert an object at the head of the iterator. the given numeric value
-		(typically, dist-squared) is used only for subsequent sort() calls;
-		if you aren't going to sort, pass 0.0f.
-	*/
-	void insert(Object *obj, Real numeric = 0.0f);	///< P2 SHIM over insertFix
+	void makeEmpty();
 
 	/**
 		sort the iterator based on the numeric values for objects and the

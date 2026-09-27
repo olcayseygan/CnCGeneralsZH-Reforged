@@ -210,7 +210,7 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 	if (layer == LAYER_GROUND && TheTerrainLogic->isCliffCell(pt.x, pt.y))
 		return NULL;
 
-	Real orient = GameLogicRandomValueReal(-PI, PI);
+	Fix orient = GameLogicRandomValueFix(-FIX_PI, FIX_PI);
 
 	// if the mine will be "mostly" under a structure, don't place it.
 	// for now, "mostly" means "central third of radius would overlap"
@@ -218,7 +218,7 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 	GeometryInfo geom = mineTemplate->getTemplateGeometryInfo();
 	Real mineRadius = fixToReal(mineTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix());	// P3: footprint is float
 	geom.expandFootprint(mineRadius * -(1.0f - d->m_skipIfThisMuchUnderStructure));
-	ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( &fxPt, geom, fixFromReal( orient ) );
+	ObjectIterator *iter = ThePartitionManager->iteratePotentialCollisionsFix( &fxPt, geom, orient );
 	MemoryPoolObjectHolder hold(iter);
 	for (Object* them = iter->first(); them; them = iter->next())
 	{
@@ -228,7 +228,7 @@ Object* GenerateMinefieldBehavior::placeMineAt(const Coord3D& pt, const ThingTem
 
 	Object* mine = TheThingFactory->newObject(mineTemplate, team);
 	mine->setPositionFix(&fxPt);
-	mine->setOrientationFix(fixFromReal(orient));
+	mine->setOrientationFix(orient);
 	mine->setProducer(producer);
 
 	for (BehaviorModule** bmi = mine->getBehaviorModules(); *bmi; ++bmi)

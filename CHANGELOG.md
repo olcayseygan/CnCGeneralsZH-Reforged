@@ -191,6 +191,7 @@ found and fixed â€” EA's own, not port damage.**
 - Repaired aircraft fly to the rally point instead of hovering over the pad.
 - Infantry leaving a captured building follow its rally point too.
 - A Chinook unloads its passengers one at a time, not stacked in one frame.
+- Campaign reinforcements flown in by Chinook land again. That one-at-a-time unloading sent a mission's scripted Chinooks home with their cargo still aboard, so on the second American mission the dozers announced at the docks never got off, and neither did the next one.
 - A guarding unit no longer fights itself between returning to post and shooting back.
 - Engineers can clear mines and booby traps they cannot see.
 - A helicopter no longer boards a transport from the air.

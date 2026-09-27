@@ -54,7 +54,8 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Module/ProductionUpdate.h"
-#include "GameClient/TerrainVisual.h"	
+#include "GameClient/TerrainVisual.h"
+#include "Lib/FixBoundary.h"	
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -184,7 +185,8 @@ void AISkirmishPlayer::processBaseBuilding( void )
 							if (myDozer==NULL) {
 								DEBUG_LOG(("AI's Dozer got killed (or captured).  Find another dozer.\n"));
 								queueDozer();
- 								myDozer = findDozer(bldg->getPosition());
+								const Coord3D bldgPos = bldg->getPositionFix()->toCoord3D();	// P7: findDozer takes float
+ 								myDozer = findDozer(&bldgPos);
 								if (myDozer==NULL || myDozer->getAI()==NULL) {
 									continue;
 								}
@@ -564,7 +566,7 @@ Bool AISkirmishPlayer::influenceMapAttackGoal( Coord3D *goal )
 
 	goal->x = found.x;
 	goal->y = found.y;
-	goal->z = TheTerrainLogic->getGroundHeight( goal->x, goal->y );
+	goal->z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( goal->x ), fixFromReal( goal->y ) ) );	// P7: the goal is float
 	return TRUE;
 }
 
@@ -742,7 +744,7 @@ void AISkirmishPlayer::buildAIBaseDefenseStructure(const AsciiString &thingName,
 		offset.x *= defenseDistance;
 		offset.y *= defenseDistance;
 
-		Real structureRadius = tTemplate->getTemplateGeometryInfo().getBoundingCircleRadius();
+		Real structureRadius = fixToReal( tTemplate->getTemplateGeometryInfo().getBoundingCircleRadiusFix() );	// P7: defense angles are float
 		Real baseCircumference = 2*PI*defenseDistance;
 		Real angleOffset = 2*PI*(structureRadius*4/baseCircumference);
 
@@ -826,7 +828,7 @@ void AISkirmishPlayer::buildAIBaseDefenseStructure(const AsciiString &thingName,
 	*/
 Bool AISkirmishPlayer::checkBridges(Object *unit, Waypoint *way)
 {
-	Coord3D unitPos = *unit->getPosition();
+	const Coord3D unitPos = unit->getPositionFix()->toCoord3D();	// P5: pathfinder queries
 	AIUpdateInterface *ai = unit->getAI();
 	if (!ai) return false; // no ai 
 	const LocomotorSet& locoSet = ai->getLocomotorSet();
@@ -920,7 +922,7 @@ void AISkirmishPlayer::recruitSpecificAITeam(TeamPrototype *teamProto, Real recr
 						if (ai) 
 						{
 #if defined(_DEBUG) || defined(_INTERNAL)
-							Coord3D pos = *unit->getPosition();
+							Coord3D pos = unit->getPositionFix()->toCoord3D();	// client: a log line
 							Coord3D to = teamProto->getTemplateInfo()->m_homeLocation;
 							DEBUG_LOG(("Moving unit from %f,%f to %f,%f\n", pos.x, pos.y , to.x, to.y ));
 #endif
@@ -1099,7 +1101,7 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 			// See if it's a command center.
 			if (obj->isKindOf(KINDOF_COMMANDCENTER)) {
 				foundStart = true;
-				startPos = *obj->getPosition();
+				startPos = obj->getPositionFix()->toCoord3D();	// P7: the start position is float
 				m_player->onStructureUndone(obj);
 				TheAI->pathfinder()->removeObjectFromPathfindMap(obj);
 				TheGameLogic->destroyObject(obj);
@@ -1300,7 +1302,7 @@ Bool AISkirmishPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *powe
 		*retPos = m_baseCenter;
 		retPos->x += offset.x;
 		retPos->y += offset.y;
-		retPos->z = TheTerrainLogic->getGroundHeight(retPos->x, retPos->y);
+		retPos->z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( retPos->x ), fixFromReal( retPos->y ) ) );	// P7: base placement is float
 		return TRUE;
 	}
 

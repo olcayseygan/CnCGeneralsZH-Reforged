@@ -218,7 +218,7 @@ StateReturnType AIDockApproachState::onEnter( void )
 	dock->getEnterPosition( getMachineOwner(), &enterPosition );
 	if( dock->getActiveDocker() == INVALID_ID
 			&& ( (AIDockMachine*)getMachine() )->m_approachPosition == 0
-			&& !( enterPosition == *getMachineOwner()->getPosition() ) )
+			&& !( enterPosition == getMachineOwner()->getPositionFix()->toCoord3D() ) )	// P4: the dock's positions are float
 	{
 		dock->onApproachReached( getMachineOwner() );
 		return STATE_SUCCESS;

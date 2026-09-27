@@ -73,6 +73,7 @@
 #include "GameLogic/Module/CollideModule.h"	// ... and the collide that takes a vehicle by touching it
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/JetAIUpdate.h"		// a Comanche is a jet with no runway
+#include "Lib/FixBoundary.h"		// the AI's own Coord3D state and the float systems it drives
 #include <map>
 
 #ifdef _INTERNAL
@@ -82,6 +83,18 @@
 #endif
 
 #define SUPPLY_CENTER_CLOSE_DIST (20*PATHFIND_CELL_SIZE_F)
+#define SUPPLY_CENTER_CLOSE_DIST_FIX Fix( 20*PATHFIND_CELL_SIZE )
+
+/// the AI's own state (m_baseCenter, build list, scripts) is still float; this is its way in (P7)
+static FCoord3D aiFix( const Coord3D &c )
+{
+	FCoord3D f;
+	f.set( fixFromReal( c.x ), fixFromReal( c.y ), fixFromReal( c.z ) );
+	return f;
+}
+
+/// rounded down, which is the truncation a non-negative Real to Int gave
+static Int aiFixFloor( Fix f ) { return (Int)(f.raw() >> Fix::FRAC_BITS); }
 
 #define USE_DOZER 1
 
@@ -190,8 +203,8 @@ static const Int CAPTURE_CHECK_RATE = 5 * LOGICFRAMES_PER_SECOND;
 
 /** A capture further than this from the capturer goes by helicopter when one is waiting, and the
 	* helicopter puts it down this far short of the building. */
-static const Real FERRY_MIN_WALK = 900.0f;
-static const Real FERRY_DROP_STANDOFF = 60.0f;
+static const Fix FERRY_MIN_WALK = Fix( 900 );
+static const Fix FERRY_DROP_STANDOFF = Fix( 60 );
 
 /** How often the AI looks for a vehicle to take.  Same rhythm as the capture check, and the target
 	* has to be in sight, so a faster clock would only re-order what is already walking. */
@@ -529,8 +542,8 @@ void AIPlayer::checkForSupplyCenter( BuildListInfo *info, Object *bldg )
 			PartitionFilter *filters[] = { &supplyOnly, &filterAlive, 0 };
 
 			MemoryPoolObjectHolder hold;
-			SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRange(
-					bldg->getPosition(), TheAI->getAiData()->m_supplyCenterSafeRadius, FROM_CENTER_2D, filters );
+			SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRangeFix(
+					bldg->getPositionFix(), fixFromReal( TheAI->getAiData()->m_supplyCenterSafeRadius ), FROM_CENTER_2D, filters );	// P3
 			hold.hold( nearby );
 			for( Object *w = nearby->first(); w; w = nearby->next() )
 				++warehouses;
@@ -610,8 +623,7 @@ void AIPlayer::queueSupplyTruck( void )
 					continue; // don't consider rebuild holes.
 				}
 				// Make sure we have a supplies near it.
-				Coord3D center = *supplyCenter->getPosition();
-				Real radius = SUPPLY_CENTER_CLOSE_DIST + supplyCenter->getGeometryInfo().getBoundingCircleRadius();
+				Fix radius = SUPPLY_CENTER_CLOSE_DIST_FIX + supplyCenter->getGeometryInfo().getBoundingCircleRadiusFix();
 
 				PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_SUPPLY_SOURCE), KINDOFMASK_NONE);
 				PartitionFilterPlayer f2(m_player, false);	// Only find other.
@@ -619,7 +631,7 @@ void AIPlayer::queueSupplyTruck( void )
 
 				PartitionFilter *filters[] = { &f1, &f2, &filterMapStatus, 0 };
 
-				Object *supplySource = ThePartitionManager->getClosestObject(&center, radius, FROM_BOUNDINGSPHERE_2D, filters);
+				Object *supplySource = ThePartitionManager->getClosestObjectFix(supplyCenter->getPositionFix(), radius, FROM_BOUNDINGSPHERE_2D, filters);
 				if (!supplySource) {
 					// No supplies.
 					continue;
@@ -919,7 +931,7 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 	}
 	// construct the building
 	Coord3D pos = *info->getLocation();
-	pos.z += TheTerrainLogic->getGroundHeight(pos.x, pos.y);
+	pos.z += fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( pos.x ), fixFromReal( pos.y ) ) );	// P7
 	if( !dozer->getAIUpdateInterface() )
 	{
 		return NULL;
@@ -1036,12 +1048,14 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 	}
 
 	TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
+	const Coord3D dozerPos = dozer->getPositionFix()->toCoord3D();	// P5
 	if (!TheAI->pathfinder()->clientSafeQuickDoesPathExist(dozer->getAI()->getLocomotorSet(),
-		dozer->getPosition(), &pos)) {
+		&dozerPos, &pos)) {
 		AsciiString bldgName = bldgPlan->getName();
 		bldgName.concat(" - Dozer unable to reach building.  Teleporting.");
 		TheScriptEngine->AppendDebugMessage(bldgName, false);
-		dozer->setPosition(&pos);
+		const FCoord3D teleport = aiFix( pos );	// P7
+		dozer->setPositionFix(&teleport);
 	}
 
 	Object *bldg = TheBuildAssistant->buildObjectNow( dozer, 
@@ -1060,26 +1074,30 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 		color.blue = 0;
 		color.red = 1;
 		color.green = 0;
-		Coord3D myPos;
-		myPos = *dozer->getPosition();
-		myPos.z = TheTerrainLogic->getGroundHeight( myPos.x, myPos.y ) + 0.5f;
-		addIcon(&myPos, 2*PATHFIND_CELL_SIZE_F, 120, color);
-		myPos = pos;
-		myPos.z = TheTerrainLogic->getGroundHeight( myPos.x, myPos.y ) + 0.5f;
-		addIcon(&myPos, 2*PATHFIND_CELL_SIZE_F, 120, color);	
-		Real dx, dy;
-		dx = dozer->getPosition()->x - pos.x;
-		dy = dozer->getPosition()->y - pos.y;
+		// client: debug icons only
+		const FCoord3D *from = dozer->getPositionFix();
+		const FCoord3D to = aiFix( pos );
+		FCoord3D myPos = *from;
+		myPos.z = TheTerrainLogic->getGroundHeightFix( myPos.x, myPos.y ) + 0.5_fx;
+		Coord3D icon = myPos.toCoord3D();
+		addIcon(&icon, 2*PATHFIND_CELL_SIZE_F, 120, color);
+		myPos = to;
+		myPos.z = TheTerrainLogic->getGroundHeightFix( myPos.x, myPos.y ) + 0.5_fx;
+		icon = myPos.toCoord3D();
+		addIcon(&icon, 2*PATHFIND_CELL_SIZE_F, 120, color);
+		FCoord2D d;
+		d.set( from->x - to.x, from->y - to.y );
 
-		Int count = sqrt(dx*dx+dy*dy)/(PATHFIND_CELL_SIZE_F/2);
+		Int count = aiFixFloor( d.length() / Fix( PATHFIND_CELL_SIZE/2 ) );
 		if (count<2) count = 2;
 		Int i;
 		color.green = 1;
 		for (i=1; i<count; i++) {
-			myPos.x = dozer->getPosition()->x + (pos.x-dozer->getPosition()->x)*i/count;
-			myPos.y = dozer->getPosition()->y + (pos.y-dozer->getPosition()->y)*i/count;
-			myPos.z = TheTerrainLogic->getGroundHeight( myPos.x, myPos.y ) + 0.5f;
-			addIcon(&myPos, PATHFIND_CELL_SIZE_F/2, 120, color);
+			myPos.x = from->x + (to.x-from->x)*Fix(i)/Fix(count);
+			myPos.y = from->y + (to.y-from->y)*Fix(i)/Fix(count);
+			myPos.z = TheTerrainLogic->getGroundHeightFix( myPos.x, myPos.y ) + 0.5_fx;
+			icon = myPos.toCoord3D();
+			addIcon(&icon, PATHFIND_CELL_SIZE_F/2, 120, color);
 
 		}
 	}	
@@ -1176,7 +1194,8 @@ void AIPlayer::processBaseBuilding( void )
 							Object* myDozer = TheGameLogic->findObjectByID(builder);
 							if (myDozer==NULL) {
 								DEBUG_LOG(("AI's Dozer got killed.  Find another dozer.\n"));
- 								myDozer = findDozer(bldg->getPosition());
+ 								const Coord3D bldgPos = bldg->getPositionFix()->toCoord3D();	// P7: findDozer's signature
+ 								myDozer = findDozer(&bldgPos);
 								if (myDozer==NULL || myDozer->getAI()==NULL) {
 									AI_BASE_SUB_END( BASE_SUB_DOZERFIX );
 									continue;
@@ -1321,26 +1340,31 @@ void AIPlayer::guardSupplyCenter( Team *team, Int minSupplies )
 			return;
 		}
 		team->getTeamAsAIGroup(theGroup);
-		Coord3D location = *warehouse->getPosition();
+		FCoord3D location = *warehouse->getPositionFix();
 		// It's probably a defensive move - position towards the enemy.
 		Region2D bounds;
 		// getSkirmishEnemyPlayer() can be NULL (no resolvable human enemy, e.g. an all-AI game);
 		// every caller in ScriptActions checks it, these two did not.
 		Player *skirmishEnemy = TheScriptEngine->getSkirmishEnemyPlayer();
-		Coord3D offset;
+		FCoord2D offset;
 		offset.zero();
 		if (skirmishEnemy)
 		{
 			getPlayerStructureBounds(&bounds, skirmishEnemy->getPlayerIndex(), FALSE, m_player->getPlayerIndex());
-			offset.x = location.x - (bounds.lo.x+bounds.hi.x)*0.5f;
-			offset.y = location.y - (bounds.lo.y+bounds.hi.y)*0.5f;
-			offset.normalize();
+			offset.x = location.x - fixFromReal( bounds.lo.x+bounds.hi.x )/Fix(2);	// P7
+			offset.y = location.y - fixFromReal( bounds.lo.y+bounds.hi.y )/Fix(2);
+			const Fix len = offset.length();
+			if (len != Fix(0)) {
+				offset.x /= len;
+				offset.y /= len;
+			}
 		}
-		Real radius = warehouse->getGeometryInfo().getBoundingCircleRadius()*0.8f;
+		Fix radius = warehouse->getGeometryInfo().getBoundingCircleRadiusFix()*0.8_fx;
 
 		location.x -= offset.x*radius;
 		location.y -= offset.y*radius;
-		theGroup->groupGuardPosition( &location, GUARDMODE_NORMAL, CMD_FROM_SCRIPT );
+		const Coord3D guardAt = location.toCoord3D();	// P4
+		theGroup->groupGuardPosition( &guardAt, GUARDMODE_NORMAL, CMD_FROM_SCRIPT );
 
 	}
 }
@@ -1413,7 +1437,8 @@ Bool AIPlayer::isSupplySourceSafe( Int minSupplies )
 {
 	Object *warehouse = findSupplyCenter(minSupplies);
 	if (warehouse==NULL) return true; // it's safe cause it doesn't exist.
-	return (isLocationSafe(warehouse->getPosition(), warehouse->getTemplate()));
+	const Coord3D at = warehouse->getPositionFix()->toCoord3D();	// P7: isLocationSafe's signature
+	return (isLocationSafe(&at, warehouse->getTemplate()));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1424,8 +1449,8 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 	if (tthing == NULL) return 0;
 
 	// See if we have enemies.
-	Real radius = TheAI->getAiData()->m_supplyCenterSafeRadius;
-	radius += tthing->getTemplateGeometryInfo().getBoundingCircleRadius();
+	Fix radius = fixFromReal( TheAI->getAiData()->m_supplyCenterSafeRadius );	// P3
+	radius += tthing->getTemplateGeometryInfo().getBoundingCircleRadiusFix();
 
 	// only consider enemies.
 	PartitionFilterPlayerAffiliation	filterTeam(m_player, (ALLOW_ALLIES|ALLOW_NEUTRAL), false);
@@ -1457,7 +1482,8 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 	filters[numFilters++] = &filterDozer;
 	filters[numFilters] = NULL;
 
-	Object *enemy = ThePartitionManager->getClosestObject(  pos, radius, FROM_BOUNDINGSPHERE_2D, filters );
+	const FCoord3D fpos = aiFix( *pos );	// P7
+	Object *enemy = ThePartitionManager->getClosestObjectFix(  &fpos, radius, FROM_BOUNDINGSPHERE_2D, filters );
 	if (enemy!=NULL) {
 		return false;
 	}
@@ -1763,7 +1789,7 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 					if( !observerKnowsAbout( pObj, observerNdx ) )
 						continue;
 
-					Coord3D pos = *pObj->getPosition();
+					Coord3D pos = pObj->getPositionFix()->toCoord3D();	// P7: superweaponScore's signature
 					pos.z = 0;
 					Int curCash = superweaponScore( &pos, playerNdx, 2*weaponRadius, targetMilitaryUnits );
 					if( curCash > cash )
@@ -1808,7 +1834,7 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 		veryBestPos.x /= count;
 		veryBestPos.y /= count;
 	}
-	veryBestPos.z = TheTerrainLogic->getGroundHeight(veryBestPos.x, veryBestPos.y);
+	veryBestPos.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( veryBestPos.x ), fixFromReal( veryBestPos.y ) ) );	// P7
 	*retPos = veryBestPos;
 
   success = ( cash > -1 );
@@ -1841,7 +1867,9 @@ Int AIPlayer::getPlayerSuperweaponValue(Coord3D *center, Int playerNdx, Real rad
 	}
 	Player::PlayerTeamList::const_iterator it;
 	Real cash = 0;
-	Real radSqr = sqr(radius);
+	const Fix fxRadius = fixFromReal( radius );	// P7: the superweapon API is float
+	const Fix radSqr = sqr(fxRadius);
+	const FCoord3D fxCenter = aiFix( *center );
 
 	Player* pPlayer = ThePlayerList->getNthPlayer(playerNdx);
 	if (pPlayer == NULL) 
@@ -1884,13 +1912,13 @@ Int AIPlayer::getPlayerSuperweaponValue(Coord3D *center, Int playerNdx, Real rad
 						continue; // Don't target flying aircraft.  OK if in the airstrip.
 					}
 				}
-				Coord3D pos = *pObj->getPosition();
-				Real dx = center->x - pos.x;
-				Real dy = center->y - pos.y;
-				if (dx*dx+dy*dy<radSqr) 
+				const FCoord3D *pos = pObj->getPositionFix();
+				const Fix dx = fxCenter.x - pos->x;
+				const Fix dy = fxCenter.y - pos->y;
+				if (dx*dx+dy*dy<radSqr)
 				{
-					Real dist = sqrt(dx*dx+dy*dy);
-					Real factor = 1.0f - (dist/(2*radius)); // 1.0 in center, 0.5 on edges.
+					const Fix dist = fixSqrt(dx*dx+dy*dy);
+					Real factor = 1.0f - fixToReal(dist/(Fix(2)*fxRadius)); // 1.0 in center, 0.5 on edges.  P7: the score is float
 					Real value = pObj->getTemplate()->calcCostToBuild(pPlayer);
 					if (pObj->isKindOf(KINDOF_COMMANDCENTER)) 
 					{
@@ -2203,7 +2231,7 @@ Bool AIPlayer::selectTeamToReinforce( Int minPriority )
 		origin = curTeam->getPrototype()->getTemplateInfo()->m_homeLocation;
 		if (curTeam->getFirstItemIn_TeamMemberList()) 
 		{
-			origin = *curTeam->getFirstItemIn_TeamMemberList()->getPosition();
+			origin = curTeam->getFirstItemIn_TeamMemberList()->getPositionFix()->toCoord3D();	// P7: tryToRecruit is float
 		}
 		Object *unit = curTeam->tryToRecruit(curThing, &origin, TheAI->getAiData()->m_maxRecruitDistance);
 		if (unit) 
@@ -2791,7 +2819,7 @@ void AIPlayer::buildBySupplies(Int minimumCash, const AsciiString& thingName)
 
 	if (bestSupplyWarehouse && tTemplate) {
 		Coord3D location;
-		location = *bestSupplyWarehouse->getPosition();
+		location = bestSupplyWarehouse->getPositionFix()->toCoord3D();	// P7: build placement is float
 		// offset back towards the base.
 		Coord2D offset;
 		offset.x = location.x - m_baseCenter.x;
@@ -2809,7 +2837,7 @@ void AIPlayer::buildBySupplies(Int minimumCash, const AsciiString& thingName)
 				offset.y = location.y - (bounds.lo.y+bounds.hi.y)*0.5f;
 				offset.normalize();
 			}
-			radius = bestSupplyWarehouse->getGeometryInfo().getBoundingCircleRadius();
+			radius = fixToReal( bestSupplyWarehouse->getGeometryInfo().getBoundingCircleRadiusFix() );	// P7
 		}
 		location.x -= offset.x*radius;
 		location.y -= offset.y*radius;
@@ -2822,12 +2850,12 @@ void AIPlayer::buildBySupplies(Int minimumCash, const AsciiString& thingName)
 																									 BuildAssistant::NO_OBJECT_OVERLAP,
 																									 NULL, m_player ) != LBC_OK ) {
 			// Warn. 
-			const Coord3D *warehouseLocation = bestSupplyWarehouse->getPosition();
+			const FCoord3D *warehouseLocation = bestSupplyWarehouse->getPositionFix();
 			AsciiString debugMessage;
 			debugMessage.format(" %s - buildBySupplies unable to place near dock at (%.2f,%.2f).  Attempting to adjust position.",
 													tTemplate->getName().str(),
-													warehouseLocation->x,
-													warehouseLocation->y
+													fixToReal( warehouseLocation->x ),	// client: a debug message
+													fixToReal( warehouseLocation->y )
 													);
 			TheScriptEngine->AppendDebugMessage(debugMessage, false);
 			if( TheGlobalData->m_debugSupplyCenterPlacement )
@@ -3112,16 +3140,17 @@ void AIPlayer::buildSpecificBuildingNearestTeam( const AsciiString &thingName, c
 Object *AIPlayer::findSupplyCenter(Int minimumCash)
 {
 	Object *bestSupplyWarehouse = NULL;
-	Real bestDistSqr = 0;
+	Fix bestDistSqr = Fix(0);
 	Object *obj;
-	Coord3D enemyCenter;
+	FCoord2D enemyCenter;
 	enemyCenter.zero();
 	Region2D bounds;
 	Player *enemy = getAiEnemy();
 	if (enemy) {
 		getPlayerStructureBounds(&bounds, enemy->getPlayerIndex(), FALSE, m_player->getPlayerIndex());
-		enemyCenter.set( (bounds.lo.x+bounds.hi.x)*0.5f, (bounds.lo.y+bounds.hi.y)*0.5f, 0);
+		enemyCenter.set( fixFromReal( bounds.lo.x+bounds.hi.x )/Fix(2), fixFromReal( bounds.lo.y+bounds.hi.y )/Fix(2) );	// P7
 	}
+	const FCoord3D baseCenter = aiFix( m_baseCenter );
 
 	do {
 		for( obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
@@ -3141,8 +3170,8 @@ Object *AIPlayer::findSupplyCenter(Int minimumCash)
 				}
 
 				// Make sure we don't have a supply center near it.
-				Coord3D center = *obj->getPosition();
-				Real radius = SUPPLY_CENTER_CLOSE_DIST + obj->getGeometryInfo().getBoundingCircleRadius();
+				const FCoord3D *center = obj->getPositionFix();
+				Fix radius = SUPPLY_CENTER_CLOSE_DIST_FIX + obj->getGeometryInfo().getBoundingCircleRadiusFix();
 
 				PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_CASH_GENERATOR), KINDOFMASK_NONE);
 				//
@@ -3158,21 +3187,21 @@ Object *AIPlayer::findSupplyCenter(Int minimumCash)
 				PartitionFilter *ours[] = { &f1, &f2Ally, &filterMapStatus, 0 };
 				PartitionFilter **filters = (m_role == AIROLE_SUPPORTIVE) ? ours : mine;
 
-				Object *supplyCenter = ThePartitionManager->getClosestObject(&center, radius, FROM_BOUNDINGSPHERE_2D, filters);
+				Object *supplyCenter = ThePartitionManager->getClosestObjectFix(center, radius, FROM_BOUNDINGSPHERE_2D, filters);
 				if (supplyCenter) {
 					// We already have a supply center.
 					continue;
 				}
 
-				Real dx, dy;
-				dx = obj->getPosition()->x - m_baseCenter.x;
-				dy = obj->getPosition()->y - m_baseCenter.y;
-				Real distSqr = dx*dx + dy*dy;
+				Fix dx, dy;
+				dx = center->x - baseCenter.x;
+				dy = center->y - baseCenter.y;
+				Fix distSqr = dx*dx + dy*dy;
 				if (enemy) {
 					// make sure this isn't closer to our enemy than us.
-					dx = obj->getPosition()->x - enemyCenter.x;
-					dy = obj->getPosition()->y - enemyCenter.y;
-					if (distSqr*0.4>(dx*dx+dy*dy)*0.6f) {
+					dx = center->x - enemyCenter.x;
+					dy = center->y - enemyCenter.y;
+					if (distSqr*0.4_fx>(dx*dx+dy*dy)*0.6_fx) {
 						// closer than 60/40 to enemy than to us, probably not a good candidate for expansion.
 						continue;
 					}
@@ -3281,7 +3310,7 @@ void AIPlayer::updateBridgeRepair(void)
 
 	// Got a bridge to repair.
 	Object *dozer = NULL;
-	Coord3D bridgePos = *bridgeObj->getPosition();
+	Coord3D bridgePos = bridgeObj->getPositionFix()->toCoord3D();	// P7: findDozer's signature
 	enum BodyDamageType bridgeState = bridgeObj->getBodyModule()->getDamageState(); 
 	if (m_repairDozer==INVALID_ID) {
 		m_dozerIsRepairing = false;
@@ -3292,7 +3321,7 @@ void AIPlayer::updateBridgeRepair(void)
 		dozer = findDozer(&bridgePos);
 		if (dozer) {
 			m_repairDozer = dozer->getID();
-			m_repairDozerOrigin = *dozer->getPosition();
+			m_repairDozerOrigin = dozer->getPositionFix()->toCoord3D();	// P7
 			dozer->getAI()->aiRepair(bridgeObj, CMD_FROM_AI);
 			DEBUG_LOG(("Telling dozer to repair\n"));
 			m_dozerIsRepairing = true;
@@ -3541,9 +3570,9 @@ void AIPlayer::recruitSpecificAITeam(TeamPrototype *teamProto, Real recruitRadiu
 						if (ai) 
 						{
 #if defined(_DEBUG) || defined(_INTERNAL)
-							Coord3D pos = *unit->getPosition();
+							const FCoord3D *pos = unit->getPositionFix();
 							Coord3D to = teamProto->getTemplateInfo()->m_homeLocation;
-							DEBUG_LOG(("Moving unit from %f,%f to %f,%f\n", pos.x, pos.y , to.x, to.y ));
+							DEBUG_LOG(("Moving unit from %f,%f to %f,%f\n", fixToReal( pos->x ), fixToReal( pos->y ), to.x, to.y ));	// client: a log line
 #endif
 							ai->aiMoveToPosition( &teamProto->getTemplateInfo()->m_homeLocation, CMD_FROM_AI);
 						}
@@ -4299,28 +4328,27 @@ void AIPlayer::computeCenterAndRadiusOfBase(Coord3D *center, Real *radius)
 	center->x = totalPos.x;
 	center->y = totalPos.y;
 
-	Real maxRadSqr = 0;
+	Fix maxRadSqr = Fix(0);
+	const FCoord3D fxCenter = aiFix( *center );	// P7: the build list is float
 	//
 	for( info = m_player->getBuildList(); info; info = info->getNext() )
 	{
 		AsciiString name = info->getTemplateName();
 		if (name.isEmpty()) continue;
 		const ThingTemplate *bldgPlan = TheThingFactory->findTemplate( name );
-		if (!bldgPlan) {																											 
+		if (!bldgPlan) {
 			continue;
 		}
-		Coord3D pos = *info->getLocation();
-		Real dx = pos.x-center->x;
-		Real dy = pos.y-center->y;
-		if (dx<0) dx = -dx;
-		if (dy<0) dy = -dy;
-		Real bldgRadius = bldgPlan->getTemplateGeometryInfo().getBoundingCircleRadius()*0.4f;
+		const FCoord3D pos = aiFix( *info->getLocation() );
+		Fix dx = fixAbs( pos.x-fxCenter.x );
+		Fix dy = fixAbs( pos.y-fxCenter.y );
+		const Fix bldgRadius = bldgPlan->getTemplateGeometryInfo().getBoundingCircleRadiusFix()*0.4_fx;
 		dx += bldgRadius;
-		dy += bldgRadius; 
-		Real radSqr = dx*dx+dy*dy;
+		dy += bldgRadius;
+		const Fix radSqr = dx*dx+dy*dy;
 		if (radSqr>maxRadSqr) maxRadSqr=radSqr;
 	}
-	*radius = sqrt(maxRadSqr);
+	*radius = fixToReal( fixSqrt(maxRadSqr) );	// P7: m_baseRadius
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -4468,7 +4496,7 @@ static const Int PLACEMENT_ANGLES = 12;
 static const Int PLACEMENT_RINGS = 2;
 
 /** How far either side of a waypoint an approach counts the guns along it. */
-static const Real APPROACH_WATCH_RADIUS = 250.0f;
+static const Fix APPROACH_WATCH_RADIUS = Fix( 250 );
 
 /** Longest approach walked, in waypoints; a path that loops would otherwise never end. */
 static const Int APPROACH_MAX_WAYPOINTS = 64;
@@ -4476,6 +4504,7 @@ static const Int APPROACH_MAX_WAYPOINTS = 64;
 /** The influence map's cell: a fifth of a tank's range, so the edge of a gun's reach is placed to
 	* within a tank's length. */
 static const Real INFLUENCE_CELL_SIZE = 60.0f;
+static const Fix INFLUENCE_CELL_SIZE_FIX = Fix( 60 );
 
 /** A unit that kited this recently is left in its fight by the retreat. */
 static const UnsignedInt KITE_KEEPS_FIGHT_FRAMES = 5 * LOGICFRAMES_PER_SECOND;
@@ -4598,7 +4627,7 @@ static void findInternetCenterWithRoom( Object *obj, void *userData )
 }
 
 /** How near the quiet spot a hacker has to be before it sits down there. */
-static const Real HACK_SPOT_RADIUS = 120.0f;
+static const Fix HACK_SPOT_RADIUS = Fix( 120 );
 
 
 /** A hacker standing about is income nobody switched on.  It used to switch on wherever it stood,
@@ -4618,15 +4647,16 @@ static void putToHacking( Object *obj, void *userData )
 		ai->aiEnter( duty->internetCenter, CMD_FROM_AI );
 		return;
 	}
-	const Real distSqr = sqr( obj->getPosition()->x - duty->spot.x ) + sqr( obj->getPosition()->y - duty->spot.y );
+	FCoord3D dest = aiFix( duty->spot );	// P7
+	const Fix distSqr = sqr( obj->getPositionFix()->x - dest.x ) + sqr( obj->getPositionFix()->y - dest.y );
 	if( distSqr > sqr( HACK_SPOT_RADIUS ) )
 	{
 		// spread round the spot by id, so a dozen of them do not queue for the same square
-		const Real angle = 2.0f * PI * (obj->getID() % PLACEMENT_ANGLES) / PLACEMENT_ANGLES;
-		Coord3D dest = duty->spot;
-		dest.x += HACK_SPOT_RADIUS * 0.5f * Cos( angle );
-		dest.y += HACK_SPOT_RADIUS * 0.5f * Sin( angle );
-		ai->aiMoveToPosition( &dest, CMD_FROM_AI );
+		const Fix angle = FIX_TWO_PI * Fix( (Int)(obj->getID() % PLACEMENT_ANGLES) ) / Fix( PLACEMENT_ANGLES );
+		dest.x += HACK_SPOT_RADIUS / Fix(2) * fixCos( angle );
+		dest.y += HACK_SPOT_RADIUS / Fix(2) * fixSin( angle );
+		const Coord3D moveTo = dest.toCoord3D();	// P4
+		ai->aiMoveToPosition( &moveTo, CMD_FROM_AI );
 		return;
 	}
 	ai->aiHackInternet( CMD_FROM_AI );
@@ -4997,16 +5027,19 @@ void AIPlayer::doEconomy( void )
 			continue;
 
 		const Object *warehouse = TheGameLogic->findObjectByID( m_curWarehouseID );
-		if( warehouse && isHeldExpansion( warehouse ) && placeNear( tmpl, warehouse->getPosition(),
-																warehouse->getGeometryInfo().getBoundingCircleRadius() + SUPPLY_CENTER_CLOSE_DIST*0.5f ) )
-			return;
+		if( warehouse && isHeldExpansion( warehouse ) )
+		{
+			const Coord3D at = warehouse->getPositionFix()->toCoord3D();	// P7: placeNear's signature
+			if( placeNear( tmpl, &at, fixToReal( warehouse->getGeometryInfo().getBoundingCircleRadiusFix() + SUPPLY_CENTER_CLOSE_DIST_FIX/Fix(2) ) ) )
+				return;
+		}
 		if( placeNear( tmpl, &m_baseCenter, m_baseRadius ) )
 			return;
 	}
 }
 
 /** How near a point one of this player's tunnels has to stand to count as covering it. */
-static const Real TUNNEL_COVER_RADIUS = 350.0f;
+static const Fix TUNNEL_COVER_RADIUS = Fix( 350 );
 
 /** How far out along the line to the nearest enemy the forward tunnel goes, as a share of the way.
 	* A wave sets off from the edge of its own base, and an exit short of the enemy's doorstep saves
@@ -5043,10 +5076,11 @@ static const ThingTemplate *buildableTunnel( Object *builder )
 static Bool hasTunnelNear( Player *player, const Coord3D *spot )
 {
 	const std::list<ObjectID> *tunnels = player->getTunnelSystem()->getContainerList();
+	const FCoord3D at = aiFix( *spot );	// P7: the spots are the AI's float state
 	for( std::list<ObjectID>::const_iterator it = tunnels->begin(); it != tunnels->end(); ++it )
 	{
 		const Object *tunnel = TheGameLogic->findObjectByID( *it );
-		if( tunnel && sqr( tunnel->getPosition()->x - spot->x ) + sqr( tunnel->getPosition()->y - spot->y ) <= sqr( TUNNEL_COVER_RADIUS ) )
+		if( tunnel && sqr( tunnel->getPositionFix()->x - at.x ) + sqr( tunnel->getPositionFix()->y - at.y ) <= sqr( TUNNEL_COVER_RADIUS ) )
 			return TRUE;
 	}
 	return FALSE;
@@ -5079,8 +5113,8 @@ void AIPlayer::doTunnels( Object *dozer )
 	const Object *warehouse = TheGameLogic->findObjectByID( m_curWarehouseID );
 	if( warehouse && isHeldExpansion( warehouse ) )
 	{
-		spots[ count ] = *warehouse->getPosition();
-		innerRadius[ count++ ] = warehouse->getGeometryInfo().getBoundingCircleRadius();
+		spots[ count ] = warehouse->getPositionFix()->toCoord3D();	// P7: placeNear's signature
+		innerRadius[ count++ ] = fixToReal( warehouse->getGeometryInfo().getBoundingCircleRadiusFix() );
 	}
 
 	// on the road the parked wave is about to take, which the script chose knowing where the enemy is;
@@ -5138,8 +5172,8 @@ void AIPlayer::doTunnels( Object *dozer )
 /** One of this player's supply centers stands within reach of a warehouse. */
 struct SupplyCenterSearch
 {
-	Coord3D at;
-	Real reachSqr;
+	FCoord3D at;
+	Fix reachSqr;
 	Bool found;
 };
 
@@ -5148,7 +5182,7 @@ static void findSupplyCenterNear( Object *obj, void *userData )
 	SupplyCenterSearch *search = (SupplyCenterSearch *)userData;
 	if( search->found || !obj->isKindOf( KINDOF_FS_SUPPLY_CENTER ) || obj->isEffectivelyDead() )
 		return;
-	if( sqr( obj->getPosition()->x - search->at.x ) + sqr( obj->getPosition()->y - search->at.y ) <= search->reachSqr )
+	if( sqr( obj->getPositionFix()->x - search->at.x ) + sqr( obj->getPositionFix()->y - search->at.y ) <= search->reachSqr )
 		search->found = TRUE;
 }
 
@@ -5162,23 +5196,27 @@ static void findSupplyCenterNear( Object *obj, void *userData )
 //----------------------------------------------------------------------------------------------------------
 Bool AIPlayer::isHeldExpansion( const Object *warehouse )
 {
-	const Real reach = warehouse->getGeometryInfo().getBoundingCircleRadius() + SUPPLY_CENTER_CLOSE_DIST;
+	const Fix reach = warehouse->getGeometryInfo().getBoundingCircleRadiusFix() + SUPPLY_CENTER_CLOSE_DIST_FIX;
 	SupplyCenterSearch search;
-	search.at = *warehouse->getPosition();
+	search.at = *warehouse->getPositionFix();
 	search.reachSqr = reach * reach;
 	search.found = FALSE;
 	m_player->iterateObjects( findSupplyCenterNear, &search );
 	if( !search.found )
 		return FALSE;
 
-	const Real oursSqr = sqr( search.at.x - m_baseCenter.x ) + sqr( search.at.y - m_baseCenter.y );
+	const FCoord3D base = aiFix( m_baseCenter );	// P7
+	const Fix oursSqr = sqr( search.at.x - base.x ) + sqr( search.at.y - base.y );
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 	{
 		Player *them = ThePlayerList->getNthPlayer( i );
 		if( them == m_player || m_player->getRelationship( them->getDefaultTeam() ) != ENEMIES || !them->hasAnyObjects() )
 			continue;
 		Coord3D theirs;
-		if( enemyStartGuess( i, &theirs ) && sqr( search.at.x - theirs.x ) + sqr( search.at.y - theirs.y ) < oursSqr )
+		if( !enemyStartGuess( i, &theirs ) )
+			continue;
+		const FCoord3D guess = aiFix( theirs );	// P7
+		if( sqr( search.at.x - guess.x ) + sqr( search.at.y - guess.y ) < oursSqr )
 			return FALSE;
 	}
 	return TRUE;
@@ -5322,19 +5360,22 @@ void AIPlayer::buyMoneyUnits( void )
 //----------------------------------------------------------------------------------------------------------
 Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius )
 {
-	const Real structureRadius = tmpl->getTemplateGeometryInfo().getBoundingCircleRadius();
+	const Fix structureRadius = tmpl->getTemplateGeometryInfo().getBoundingCircleRadiusFix();
 	const Real placeAngle = tmpl->getPlacementViewAngle();
+	const FCoord3D fxCenter = aiFix( *center );	// P7: the spot and the build calls are float
+	const Fix fxInner = fixFromReal( innerRadius );
 
 	for( Int ring = 0; ring < PLACEMENT_RINGS; ++ring )
 	{
-		const Real distance = innerRadius + structureRadius * (2 * ring + 1);
+		const Fix distance = fxInner + structureRadius * Fix(2 * ring + 1);
 		for( Int step = 0; step < PLACEMENT_ANGLES; ++step )
 		{
-			const Real angle = 2.0f * PI * step / PLACEMENT_ANGLES;
-			Coord3D pos = *center;
-			pos.x += distance * Cos( angle );
-			pos.y += distance * Sin( angle );
-			pos.z = 0;
+			const Fix angle = FIX_TWO_PI * Fix( step ) / Fix( PLACEMENT_ANGLES );
+			FCoord3D at = fxCenter;
+			at.x += distance * fixCos( angle );
+			at.y += distance * fixSin( angle );
+			at.z = Fix(0);
+			Coord3D pos = at.toCoord3D();	// P7
 
 			const Bool legal = TheBuildAssistant->isLocationLegalToBuild( &pos, tmpl, placeAngle,
 												BuildAssistant::CLEAR_PATH | BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP,
@@ -5464,7 +5505,8 @@ Real AIPlayer::knownFirepowerNear( const Coord3D *pos )
 	PartitionFilter *filters[] = { &enemies, &alive, NULL };
 
 	Real firepower = 0.0f;
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, APPROACH_WATCH_RADIUS, FROM_BOUNDINGSPHERE_2D, filters );
+	const FCoord3D at = aiFix( *pos );	// P7: waypoints are float
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( &at, APPROACH_WATCH_RADIUS, FROM_BOUNDINGSPHERE_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 	for( Object *obj = iter->first(); obj; obj = iter->next() )
 	{
@@ -5547,8 +5589,8 @@ static Bool isTransportWithRoom( const Object *obj )
 	* the gunships with riders among them. */
 struct HomeAirSearch
 {
-	Coord3D home;
-	Real reachSqr;
+	FCoord3D home;
+	Fix reachSqr;
 	AIGroup *wave;
 	ObjectID ferry;		///< the helicopter carrying the capturer, which stays on that job
 };
@@ -5576,7 +5618,7 @@ static void addHomeHelicopter( Object *obj, void *userData )
 	// on guard or doing nothing, wherever the guard team put it; one already out on an attack keeps going
 	const StateID state = obj->getAI()->getCurrentStateID();
 	const Bool waiting = state == AI_IDLE || state == AI_GUARD || state == AI_GUARD_RETALIATE;
-	const Bool atHome = sqr( obj->getPosition()->x - search->home.x ) + sqr( obj->getPosition()->y - search->home.y ) <= search->reachSqr;
+	const Bool atHome = sqr( obj->getPositionFix()->x - search->home.x ) + sqr( obj->getPositionFix()->y - search->home.y ) <= search->reachSqr;
 	if( !waiting && !atHome )
 		return;
 	// loadGunships only seats riders who can shoot out, so anything carrying riders is a gunship
@@ -5756,8 +5798,8 @@ void AIPlayer::doWaves( void )
 		 within reach of the base, and a gunship carrying riders, leaves with the wave and flies over it
 		 at the wave's pace: its guns are with the army, and its riders' rockets are over it. */
 	HomeAirSearch air;
-	air.home = m_baseCenter;
-	air.reachSqr = sqr( 2.0f * m_baseRadius );
+	air.home = aiFix( m_baseCenter );	// P7
+	air.reachSqr = sqr( Fix(2) * fixFromReal( m_baseRadius ) );
 	air.wave = wave;
 	air.ferry = m_ferryID;
 	m_player->iterateObjects( addHomeHelicopter, &air );
@@ -5811,8 +5853,8 @@ void AIPlayer::doWaves( void )
 //----------------------------------------------------------------------------------------------------------
 struct GunshipList
 {
-	Coord3D home;
-	Real reachSqr;
+	FCoord3D home;
+	Fix reachSqr;
 	ObjectID ferry;		///< the capturer's helicopter, not a seat for the wave
 	std::vector<Object *> gunships;
 };
@@ -5824,15 +5866,15 @@ static void findGunshipAtHome( Object *obj, void *userData )
 		return;
 	const StateID state = obj->getAI()->getCurrentStateID();
 	const Bool waiting = state == AI_IDLE || state == AI_GUARD || state == AI_GUARD_RETALIATE;
-	if( waiting || sqr( obj->getPosition()->x - list->home.x ) + sqr( obj->getPosition()->y - list->home.y ) <= list->reachSqr )
+	if( waiting || sqr( obj->getPositionFix()->x - list->home.x ) + sqr( obj->getPositionFix()->y - list->home.y ) <= list->reachSqr )
 		list->gunships.push_back( obj );
 }
 
 void AIPlayer::loadGunships( void )
 {
 	GunshipList list;
-	list.home = m_baseCenter;
-	list.reachSqr = sqr( 2.0f * m_baseRadius );
+	list.home = aiFix( m_baseCenter );	// P7
+	list.reachSqr = sqr( Fix(2) * fixFromReal( m_baseRadius ) );
 	list.ferry = m_ferryID;
 	m_player->iterateObjects( findGunshipAtHome, &list );
 	if( list.gunships.empty() )
@@ -5867,7 +5909,7 @@ void AIPlayer::loadGunships( void )
 	{
 		Object *rider = *r;
 		Int nearest = -1;
-		Real nearestSqr = 0.0f;
+		Fix nearestSqr = Fix(0);
 		for( size_t g = 0; g < list.gunships.size(); ++g )
 		{
 			const Object *gunship = list.gunships[ g ];
@@ -5878,7 +5920,7 @@ void AIPlayer::loadGunships( void )
 				continue;
 			if( !m_influence.isBuilt() && !gunship->getContain()->isPassengerAllowedToFire( rider->getID() ) )
 				continue;		// nothing would put cargo down without the tactics: gunship seats only
-			const Real distSqr = sqr( gunship->getPosition()->x - rider->getPosition()->x ) + sqr( gunship->getPosition()->y - rider->getPosition()->y );
+			const Fix distSqr = sqr( gunship->getPositionFix()->x - rider->getPositionFix()->x ) + sqr( gunship->getPositionFix()->y - rider->getPositionFix()->y );
 			if( nearest < 0 || distSqr < nearestSqr )
 			{
 				nearest = (Int)g;
@@ -5959,7 +6001,7 @@ void AIPlayer::sendWaveThroughTunnels( AIGroup *wave, const Coord3D *center, Way
 /** How far around a fight to look for what is in it.  Wide enough to catch the base defences and
 	* the second rank shooting into it, not so wide that a skirmish at the front counts the garrison
 	* at the back as part of the same exchange. */
-static const Real RETREAT_ENGAGEMENT_RADIUS = 300.0f;
+static const Fix RETREAT_ENGAGEMENT_RADIUS = Fix( 300 );
 
 /** A unit's contribution to an exchange: what it can still take, and what it can still deal.  The
 	* threat value the data already carries stands in for damage per second - it is what
@@ -6046,8 +6088,8 @@ void AIPlayer::doRetreats( void )
 				continue;
 
 			// where this team is
-			Real count = 0.0f;
-			Coord3D centre;
+			Int count = 0;
+			FCoord3D centre;
 			centre.zero();
 			for( DLINK_ITERATOR<Object> objIter = team->iterate_TeamMemberList(); !objIter.done(); objIter.advance() )
 			{
@@ -6056,15 +6098,15 @@ void AIPlayer::doRetreats( void )
 					continue;
 				if( obj->isKindOf( KINDOF_PROJECTILE ) || !retreatCanOrderHome( obj ) )
 					continue;			// only the units that could actually be pulled out place the fight
-				centre.x += obj->getPosition()->x;
-				centre.y += obj->getPosition()->y;
-				count += 1.0f;
+				centre.x += obj->getPositionFix()->x;
+				centre.y += obj->getPositionFix()->y;
+				++count;
 			}
-			if( count < 1.0f )
+			if( count < 1 )
 				continue;
-			centre.x /= count;
-			centre.y /= count;
-			centre.z = TheTerrainLogic->getGroundHeight( centre.x, centre.y );
+			centre.x /= Fix( count );
+			centre.y /= Fix( count );
+			centre.z = TheTerrainLogic->getGroundHeightFix( centre.x, centre.y );
 
 			//
 			// Both sides of the exchange, measured the same way: everything of ours in this fight
@@ -6084,7 +6126,7 @@ void AIPlayer::doRetreats( void )
 				PartitionFilter *filters[] = { &filterAlive, &filterOnMap, 0 };
 
 				MemoryPoolObjectHolder hold;
-				SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRange(
+				SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRangeFix(
 						&centre, RETREAT_ENGAGEMENT_RADIUS, FROM_CENTER_2D, filters );
 				hold.hold( nearby );
 				for( Object *e = nearby->first(); e; e = nearby->next() )
@@ -6127,10 +6169,12 @@ void AIPlayer::doRetreats( void )
 			// fight the team as a whole is still winning.  Through the tunnels, when there is one
 			// near the fight and one near home.
 			//
-			const Real homeX = m_baseCenter.x - centre.x;
-			const Real homeY = m_baseCenter.y - centre.y;
-			Object *homeTunnel = m_player->getTunnelSystem()->findTunnelShortcut( &centre, &m_baseCenter,
-				(Real)sqrt( homeX * homeX + homeY * homeY ) );
+			const FCoord3D base = aiFix( m_baseCenter );	// P7
+			FCoord2D home;
+			home.set( base.x - centre.x, base.y - centre.y );
+			const Coord3D fightAt = centre.toCoord3D();	// P7: the tunnel tracker is float
+			Object *homeTunnel = m_player->getTunnelSystem()->findTunnelShortcut( &fightAt, &m_baseCenter,
+				fixToReal( home.length() ) );
 			if( homeTunnel )
 				DEBUG_LOG(("AI RETREAT frame %d player %d falls back through tunnel %d\n", TheGameLogic->getFrame(),
 					m_player->getPlayerIndex(), homeTunnel->getID()));
@@ -6242,10 +6286,11 @@ static Real groundAttackRange( const Object *obj )
 	* (Weapon_elevatedRange), so it counts as standing on the ground under it. */
 static Real firingHeight( const Object *obj )
 {
-	const Coord3D *pos = obj->getPosition();
+	const FCoord3D *pos = obj->getPositionFix();
+	// P6: the weapons' elevation bonus and the influence map it feeds are float
 	if( obj->isKindOf( KINDOF_AIRCRAFT ) )
-		return TheTerrainLogic->getGroundHeight( pos->x, pos->y );
-	return pos->z;
+		return fixToReal( TheTerrainLogic->getGroundHeightFix( pos->x, pos->y ) );
+	return fixToReal( pos->z );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -6267,7 +6312,7 @@ void AIPlayer::rebuildInfluence( void )
 			{
 				Real x, y;
 				m_influence.cellCenter( col, row, &x, &y );
-				m_influence.setCellHeight( col, row, TheTerrainLogic->getGroundHeight( x, y ) );
+				m_influence.setCellHeight( col, row, fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( x ), fixFromReal( y ) ) ) );	// P7: the influence map is float
 			}
 		}
 	}
@@ -6288,11 +6333,12 @@ void AIPlayer::rebuildInfluence( void )
 		const Real range = groundAttackRange( obj );
 		if( range <= 0.0f )
 			continue;
-		const Coord3D *pos = obj->getPosition();
+		const FCoord3D *pos = obj->getPositionFix();
+		// P7: the influence map is float
 		if( mine || relation == ALLIES )
-			m_influence.stampFriend( pos->x, pos->y, firingHeight( obj ), range, power );
+			m_influence.stampFriend( fixToReal( pos->x ), fixToReal( pos->y ), firingHeight( obj ), range, power );
 		else if( observerKnowsAbout( obj, me ) )
-			m_influence.stampEnemy( pos->x, pos->y, firingHeight( obj ), range, power );
+			m_influence.stampEnemy( fixToReal( pos->x ), fixToReal( pos->y ), firingHeight( obj ), range, power );
 	}
 	m_influence.markBuilt( TheGameLogic->getFrame() );
 }
@@ -6405,7 +6451,7 @@ Bool AIPlayer::pickTacticalSpot( const Object *obj, const Coord3D *from, const C
 		Coord3D at;
 		at.x = awayFrom->x + (dx * c - dy * s) * distance;
 		at.y = awayFrom->y + (dx * s + dy * c) * distance;
-		at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+		at.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( at.x ), fixFromReal( at.y ) ) );	// P7: the spot feeds the influence map and a move
 
 		if( !groundLineClear( from, &at ) )
 			continue;
@@ -6547,8 +6593,8 @@ void AIPlayer::doTransports( void )
 	for( size_t s = 0; s < found.ships.size(); ++s )
 	{
 		Object *ship = found.ships[ s ];
-		const Coord3D *pos = ship->getPosition();
-		if( m_influence.enemyAt( pos->x, pos->y ) <= 0.0f )
+		const FCoord3D *pos = ship->getPositionFix();
+		if( m_influence.enemyAt( fixToReal( pos->x ), fixToReal( pos->y ) ) <= 0.0f )	// P7: the influence map is float
 			continue;		// not at the fight yet
 
 		ContainModuleInterface *contain = ship->getContain();
@@ -6567,22 +6613,24 @@ void AIPlayer::doTransports( void )
 		if( cargo.empty() || dropping )
 			continue;
 
-		Coord3D drop = *pos;
-		const Real homeX = m_baseCenter.x - pos->x;
-		const Real homeY = m_baseCenter.y - pos->y;
-		const Real homeDist = sqrt( homeX * homeX + homeY * homeY );
-		for( Int back = 1; back <= DROP_BACKOFF_CELLS && homeDist > 1.0f; ++back )
+		FCoord3D drop = *pos;
+		const FCoord3D base = aiFix( m_baseCenter );	// P7
+		const Fix homeX = base.x - pos->x;
+		const Fix homeY = base.y - pos->y;
+		const Fix homeDist = fixSqrt( homeX * homeX + homeY * homeY );
+		for( Int back = 1; back <= DROP_BACKOFF_CELLS && homeDist > Fix(1); ++back )
 		{
-			drop.x = pos->x + homeX / homeDist * back * INFLUENCE_CELL_SIZE;
-			drop.y = pos->y + homeY / homeDist * back * INFLUENCE_CELL_SIZE;
-			if( m_influence.enemyAt( drop.x, drop.y ) <= 0.0f )
+			drop.x = pos->x + homeX / homeDist * Fix( back ) * INFLUENCE_CELL_SIZE_FIX;
+			drop.y = pos->y + homeY / homeDist * Fix( back ) * INFLUENCE_CELL_SIZE_FIX;
+			if( m_influence.enemyAt( fixToReal( drop.x ), fixToReal( drop.y ) ) <= 0.0f )
 				break;
 		}
-		drop.z = TheTerrainLogic->getGroundHeight( drop.x, drop.y );
+		drop.z = TheTerrainLogic->getGroundHeightFix( drop.x, drop.y );
+		const Coord3D dropAt = drop.toCoord3D();	// P4
 		DEBUG_LOG(("AI TRANSPORT frame %d player %d drops %d riders from '%s' at (%.0f,%.0f)\n", TheGameLogic->getFrame(),
-			m_player->getPlayerIndex(), (Int)cargo.size(), ship->getTemplate()->getName().str(), drop.x, drop.y));
+			m_player->getPlayerIndex(), (Int)cargo.size(), ship->getTemplate()->getName().str(), dropAt.x, dropAt.y));
 		// an order rather than an AI's aside, or it is laid under the wave's path and never happens
-		ship->getAI()->aiMoveToAndEvacuate( &drop, CMD_FROM_SCRIPT );
+		ship->getAI()->aiMoveToAndEvacuate( &dropAt, CMD_FROM_SCRIPT );
 		m_droppedRiders.insert( m_droppedRiders.end(), cargo.begin(), cargo.end() );
 	}
 }
@@ -6615,7 +6663,10 @@ void AIPlayer::tacticsFor( Object *obj )
 			return;
 	}
 
-	const Coord3D *pos = obj->getPosition();
+	const FCoord3D *fpos = obj->getPositionFix();
+	// P7: the influence map, the tactical spots and the moves to them are float
+	const Coord3D here = fpos->toCoord3D();
+	const Coord3D *pos = &here;
 	const UnsignedInt now = TheGameLogic->getFrame();
 	const Real threatHere = m_influence.enemyAt( pos->x, pos->y );
 	Object *victim = ai->getCurrentVictim();
@@ -6655,24 +6706,25 @@ void AIPlayer::tacticsFor( Object *obj )
 	if( step->rejoin && victim == NULL && threatHere <= 0.0f && !ai->isMoving() )
 	{
 		step->rejoin = FALSE;
-		Coord3D centre;
+		FCoord3D centre;
 		centre.zero();
-		Real count = 0.0f;
+		Int count = 0;
 		for( DLINK_ITERATOR<Object> iter = team->iterate_TeamMemberList(); !iter.done(); iter.advance() )
 		{
 			const Object *mate = iter.cur();
 			if( mate == NULL || mate == obj || mate->isEffectivelyDead() || mate->isContained() )
 				continue;
-			centre.x += mate->getPosition()->x;
-			centre.y += mate->getPosition()->y;
-			count += 1.0f;
+			centre.x += mate->getPositionFix()->x;
+			centre.y += mate->getPositionFix()->y;
+			++count;
 		}
-		if( count > 0.0f )
+		if( count > 0 )
 		{
-			centre.x /= count;
-			centre.y /= count;
-			centre.z = TheTerrainLogic->getGroundHeight( centre.x, centre.y );
-			ai->aiAttackMoveToPosition( &centre, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+			centre.x /= Fix( count );
+			centre.y /= Fix( count );
+			centre.z = TheTerrainLogic->getGroundHeightFix( centre.x, centre.y );
+			const Coord3D rejoinAt = centre.toCoord3D();	// P4
+			ai->aiAttackMoveToPosition( &rejoinAt, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
 		}
 		return;
 	}
@@ -6703,7 +6755,7 @@ void AIPlayer::tacticsFor( Object *obj )
 			{
 				safe.x = x + homeX * INFLUENCE_CELL_SIZE / homeDist;		// a cell past the edge of the reach
 				safe.y = y + homeY * INFLUENCE_CELL_SIZE / homeDist;
-				safe.z = TheTerrainLogic->getGroundHeight( safe.x, safe.y );
+				safe.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( safe.x ), fixFromReal( safe.y ) ) );	// P7
 				break;
 			}
 		}
@@ -6716,14 +6768,16 @@ void AIPlayer::tacticsFor( Object *obj )
 	// kite: the nearest thing that is about to reach it and that it outranges
 	Object *closing = NULL;
 	Real closingRange = 0.0f;
-	Real closingDistSqr = 0.0f;
+	Fix closingDistSqr = Fix(0);
 	Object *nearestArmed = NULL;			// the closest armed thing in this unit's reach, whatever else it is
-	Real nearestArmedDistSqr = 0.0f;
+	Fix nearestArmedDistSqr = Fix(0);
+	// P6: the ranges are the weapons' float; the distances they are held against are fixed
+	const Fix myRangeSqr = sqr( fixFromReal( myRange ) );
 	{
 		PartitionFilterPlayerAffiliation enemies( m_player, ALLOW_ENEMIES, true );
 		PartitionFilterAlive alive;
 		PartitionFilter *filters[] = { &enemies, &alive, NULL };
-		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, myRange, FROM_CENTER_2D, filters );
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( fpos, fixFromReal( myRange ), FROM_CENTER_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
 		for( Object *enemy = iter->first(); enemy; enemy = iter->next() )
 		{
@@ -6736,7 +6790,7 @@ void AIPlayer::tacticsFor( Object *obj )
 			if( enemyRange <= 0.0f )
 				continue;
 			const Real reach = enemyRange + Weapon_elevationRangeBonus( enemyRange, firingHeight( enemy ) - pos->z );
-			const Real distSqr = sqr( enemy->getPosition()->x - pos->x ) + sqr( enemy->getPosition()->y - pos->y );
+			const Fix distSqr = sqr( enemy->getPositionFix()->x - fpos->x ) + sqr( enemy->getPositionFix()->y - fpos->y );
 			// and only one it can shoot: without this a Battlemaster "turned on" every Helix overhead,
 			// 410 times in two matches, and drove after aircraft its gun cannot reach
 			if( (nearestArmed == NULL || distSqr < nearestArmedDistSqr) &&
@@ -6747,7 +6801,7 @@ void AIPlayer::tacticsFor( Object *obj )
 			}
 			// watched from as far out as the unit drives while it turns round, since a vehicle cannot
 			// reverse: a buggy that started its turn at the enemy's reach finished it inside
-			if( distSqr > sqr( reach + KITE_WATCH_MARGIN + ai->getCurLocomotorSpeed() * KITE_TURN_FRAMES ) )
+			if( distSqr > sqr( fixFromReal( reach + KITE_WATCH_MARGIN + ai->getCurLocomotorSpeed() * KITE_TURN_FRAMES ) ) )	// P4 P6
 				continue;		// not close enough to hurt yet, nor soon
 			// running from something faster only means not shooting at it; a gun that cannot move is
 			// always worth standing off from
@@ -6761,7 +6815,7 @@ void AIPlayer::tacticsFor( Object *obj )
 			// Four tanks sent at one buggy of four drove through the other three.
 			const Object *enemyVictim = enemyAI ? enemyAI->getCurrentVictim() : NULL;
 			const Bool comingForUs = enemyVictim && enemyVictim->getControllingPlayer() == m_player;
-			if( enemyMoves && !comingForUs && distSqr > sqr( reach ) )
+			if( enemyMoves && !comingForUs && distSqr > sqr( fixFromReal( reach ) ) )
 				continue;
 			// a gun that walks is run from only by something that outranges it by a long way, a rocket
 			// launcher against a tank; a tank that hopped back from another tank's slightly shorter gun
@@ -6788,31 +6842,33 @@ void AIPlayer::tacticsFor( Object *obj )
 	// ... and only when what it is shooting at is in reach; a gun that is ready while it drives towards a
 	// target further off is not about to fire, and waiting on it let a buggy drive into the tanks
 	const Bool gunBusy = gun && (gun->getStatus() == READY_TO_FIRE || gun->getStatus() == PRE_ATTACK) && victim != NULL &&
-		sqr( victim->getPosition()->x - pos->x ) + sqr( victim->getPosition()->y - pos->y ) <= sqr( myRange );
-	const Bool alreadyHit = closing && closingDistSqr <= sqr( closingRange );
+		sqr( victim->getPositionFix()->x - fpos->x ) + sqr( victim->getPositionFix()->y - fpos->y ) <= myRangeSqr;
+	const Bool alreadyHit = closing && closingDistSqr <= sqr( fixFromReal( closingRange ) );
 	// Only what can aim without driving: infantry, or a gun on a turret.  A Rocket Buggy's rack is fixed
 	// to the chassis and a car cannot turn on the spot, so every hop cost it a three-second circle to
 	// face the tank again, and it fired less kiting than standing.
 	const Bool aimsWithoutDriving = obj->isKindOf( KINDOF_INFANTRY ) || ai->getWhichTurretForCurWeapon() != TURRET_INVALID;
 	Real standoff = 0.0f;
 	if( aimsWithoutDriving && closing && (alreadyHit || !gunBusy) && AIKite_standoffDistance( myRange, closingRange, KITE_MARGIN, &standoff ) &&
-			closingDistSqr < sqr( standoff - KITE_MARGIN ) )		// already standing off: a step would only slide it sideways
+			closingDistSqr < sqr( fixFromReal( standoff - KITE_MARGIN ) ) )		// already standing off: a step would only slide it sideways
 	{
 		Coord3D spot;
-		if( pickTacticalSpot( obj, pos, closing->getPosition(), standoff, closing->getPosition(), myRange, &spot ) )
+		const Coord3D closingAt = closing->getPositionFix()->toCoord3D();	// P7: pickTacticalSpot's signature
+		if( pickTacticalSpot( obj, pos, &closingAt, standoff, &closingAt, myRange, &spot ) )
 		{
 			// back to shooting the gun it stepped away from, which the spot keeps in reach; going back to a
 			// target further off drove the buggies through the tanks in front of it to get there
 			step->target = closing->getID();
 			DEBUG_LOG(("AI TACTICS frame %d player %d kites '%s' back from '%s', %.0f outranging %.0f, (%.0f,%.0f) to (%.0f,%.0f) away from (%.0f,%.0f)\n",
 				now, m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), closing->getTemplate()->getName().str(), myRange, closingRange,
-				pos->x, pos->y, spot.x, spot.y, closing->getPosition()->x, closing->getPosition()->y));
+				pos->x, pos->y, spot.x, spot.y, closingAt.x, closingAt.y));
 			step->origin = *pos;
 			// long enough to turn round and drive there; a vehicle given one second did not finish the turn
 			step->lastKiteFrame = now;
 			const Real speed = max( ai->getCurLocomotorSpeed(), 0.1f );
-			const Real walk = sqrt( sqr( spot.x - pos->x ) + sqr( spot.y - pos->y ) );
-			step->resumeFrame = now + min<UnsignedInt>( KITE_STEP_MAX_FRAMES, KITE_TURN_FRAMES + REAL_TO_INT_CEIL( walk / speed ) );
+			const FCoord3D to = aiFix( spot );
+			const Fix walk = fixSqrt( sqr( to.x - fpos->x ) + sqr( to.y - fpos->y ) );
+			step->resumeFrame = now + min<UnsignedInt>( KITE_STEP_MAX_FRAMES, KITE_TURN_FRAMES + REAL_TO_INT_CEIL( fixToReal( walk ) / speed ) );	// P4: the speed is the locomotor's
 			step->rejoin = TRUE;
 			stepCalmly( obj, step, &spot );
 			return;
@@ -6823,7 +6879,7 @@ void AIPlayer::tacticsFor( Object *obj )
 	// the last of four tanks drove past the other three with their rockets loaded and died without one
 	// shot fired.  With an armed enemy already in reach, that is the one it shoots.
 	if( victim && nearestArmed && nearestArmed != victim &&
-			sqr( victim->getPosition()->x - pos->x ) + sqr( victim->getPosition()->y - pos->y ) > sqr( myRange ) )
+			sqr( victim->getPositionFix()->x - fpos->x ) + sqr( victim->getPositionFix()->y - fpos->y ) > myRangeSqr )
 	{
 		DEBUG_LOG(("AI TACTICS frame %d player %d turns '%s' on the '%s' in reach instead of walking to its target\n", now,
 			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), nearestArmed->getTemplate()->getName().str()));
@@ -6838,7 +6894,7 @@ void AIPlayer::tacticsFor( Object *obj )
 	const Real victimRange = victim ? groundAttackRange( victim ) : 0.0f;
 	const Real victimReachHere = victimRange + (victim ? Weapon_elevationRangeBonus( victimRange, firingHeight( victim ) - pos->z ) : 0.0f);
 	const Bool victimHitsMe = victim && victimRange > 0.0f &&
-		sqr( victim->getPosition()->x - pos->x ) + sqr( victim->getPosition()->y - pos->y ) <= sqr( victimReachHere );
+		sqr( victim->getPositionFix()->x - fpos->x ) + sqr( victim->getPositionFix()->y - fpos->y ) <= sqr( fixFromReal( victimReachHere ) );
 	if( victimHitsMe && !ai->isMoving() && now >= step->nextClimbFrame )
 	{
 		step->nextClimbFrame = now + CLIMB_INTERVAL_FRAMES;
@@ -6855,7 +6911,7 @@ void AIPlayer::tacticsFor( Object *obj )
 				Coord3D at;
 				at.x = pos->x + radius * Cos( angle );
 				at.y = pos->y + radius * Sin( angle );
-				at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+				at.z = fixToReal( TheTerrainLogic->getGroundHeightFix( fixFromReal( at.x ), fixFromReal( at.y ) ) );	// P5: the spot is a pathfinder cell and a move
 				if( at.z < bestZ )
 					continue;
 				ICoord2D cell;
@@ -6863,11 +6919,13 @@ void AIPlayer::tacticsFor( Object *obj )
 				const PathfindCell *pathCell = TheAI->pathfinder()->getCell( LAYER_GROUND, cell.x, cell.y );
 				if( pathCell == NULL || pathCell->getType() != PathfindCell::CELL_CLEAR )
 					continue;
-				const Coord3D *vpos = victim->getPosition();
-				const Real reachFromThere = myRange + Weapon_elevationRangeBonus( myRange, at.z - vpos->z );
+				const FCoord3D *vpos = victim->getPositionFix();
+				const FCoord3D fat = aiFix( at );
+				// P6: the weapons' elevation bonus is float
+				const Real reachFromThere = myRange + Weapon_elevationRangeBonus( myRange, at.z - fixToReal( vpos->z ) );
 				const Real victimReachThere = victimRange + Weapon_elevationRangeBonus( victimRange, firingHeight( victim ) - at.z );
-				const Real distSqr = sqr( at.x - vpos->x ) + sqr( at.y - vpos->y );
-				if( distSqr > sqr( reachFromThere ) || distSqr <= sqr( victimReachThere + KITE_MARGIN ) )
+				const Fix distSqr = sqr( fat.x - vpos->x ) + sqr( fat.y - vpos->y );
+				if( distSqr > sqr( fixFromReal( reachFromThere ) ) || distSqr <= sqr( fixFromReal( victimReachThere + KITE_MARGIN ) ) )
 					continue;		// out of its own reach, or still inside the target's
 				if( m_influence.enemyAt( at.x, at.y ) > threatHere || !groundLineClear( pos, &at ) )
 					continue;
@@ -7146,10 +7204,8 @@ void AIPlayer::updateStartIntel( void )
 		if( scout == NULL || scout->isEffectivelyDead() )
 			continue;
 
-		const Coord3D *at = scout->getPosition();
-		Real see = scout->getVisionRange();
-		if( see < 1.0f )
-			see = 1.0f;
+		const FCoord3D *at = scout->getPositionFix();
+		const Fix see = fixMax( fixFromReal( scout->getVisionRange() ), Fix(1) );	// P3
 
 		for( Int startNdx = 0; startNdx < MAX_PLAYER_COUNT; ++startNdx )
 		{
@@ -7170,8 +7226,9 @@ void AIPlayer::updateStartIntel( void )
 			if( !startPositionLoc( startNdx, &there ) )
 				continue;
 
-			const Real dx = there.x - at->x;
-			const Real dy = there.y - at->y;
+			const FCoord3D start = aiFix( there );	// P7: map start positions are float
+			const Fix dx = start.x - at->x;
+			const Fix dy = start.y - at->y;
 			if( dx*dx + dy*dy > see*see )
 				continue;			// not close enough to say anything about it
 
@@ -7457,7 +7514,8 @@ Object *AIPlayer::nearestTechBuilding( const Coord3D *from, Bool wantOurs )
 
 	const Int myNdx = m_player->getPlayerIndex();
 	Object *best = NULL;
-	Real bestDistSqr = 0.0f;
+	Fix bestDistSqr = Fix(0);
+	const FCoord3D fxFrom = aiFix( *from );	// P7: the signature is float
 
 	const Int playerCount = ThePlayerList->getPlayerCount();
 	for( Int i = 0; i < playerCount; ++i )
@@ -7491,10 +7549,10 @@ Object *AIPlayer::nearestTechBuilding( const Coord3D *from, Bool wantOurs )
 					if( !observerKnowsAbout( obj, myNdx ) )
 						continue;			// not found yet, so not a plan
 
-					const Coord3D *at = obj->getPosition();
-					const Real dx = at->x - from->x;
-					const Real dy = at->y - from->y;
-					const Real distSqr = dx*dx + dy*dy;
+					const FCoord3D *at = obj->getPositionFix();
+					const Fix dx = at->x - fxFrom.x;
+					const Fix dy = at->y - fxFrom.y;
+					const Fix distSqr = dx*dx + dy*dy;
 					if( best == NULL || distSqr < bestDistSqr )
 					{
 						best = obj;
@@ -7536,7 +7594,8 @@ void AIPlayer::doCapture( void )
 
 	Coord3D from = m_baseCenter;
 	if( capturer )
-		from = *capturer->getPosition();
+		from = capturer->getPositionFix()->toCoord3D();	// P7: nearestTechBuilding's signature
+	const FCoord3D fxFrom = capturer ? *capturer->getPositionFix() : aiFix( m_baseCenter );
 
 	Object *target = nearestTechBuilding( &from, FALSE );
 
@@ -7554,18 +7613,19 @@ void AIPlayer::doCapture( void )
 		Object *ship = capturer->getContainedBy();
 		if( ship && ship->getID() == m_ferryID && ship->getAI() && ship->getAI()->isIdle() && target )
 		{
-			Coord3D drop = *target->getPosition();
-			const Real dx = ship->getPosition()->x - drop.x;
-			const Real dy = ship->getPosition()->y - drop.y;
-			const Real length = sqrt( dx * dx + dy * dy );
+			FCoord3D drop = *target->getPositionFix();
+			const Fix dx = ship->getPositionFix()->x - drop.x;
+			const Fix dy = ship->getPositionFix()->y - drop.y;
+			const Fix length = fixSqrt( dx * dx + dy * dy );
 			if( length > FERRY_DROP_STANDOFF )
 			{
 				drop.x += dx / length * FERRY_DROP_STANDOFF;
 				drop.y += dy / length * FERRY_DROP_STANDOFF;
 			}
-			drop.z = TheTerrainLogic->getGroundHeight( drop.x, drop.y );
+			drop.z = TheTerrainLogic->getGroundHeightFix( drop.x, drop.y );
 			DEBUG_LOG(("AI player %d flies its capturer to a '%s'\n", m_player->getPlayerIndex(), target->getTemplate()->getName().str()));
-			ship->getAI()->aiMoveToAndEvacuate( &drop, CMD_FROM_AI );
+			const Coord3D dropAt = drop.toCoord3D();	// P4
+			ship->getAI()->aiMoveToAndEvacuate( &dropAt, CMD_FROM_AI );
 		}
 		return;
 	}
@@ -7611,22 +7671,22 @@ void AIPlayer::doCapture( void )
 		// a long walk goes by air when a helicopter with a seat is waiting at home: the rifleman who
 		// walked across the map to a derrick was the capture a player saw take minutes
 		Object *ship = NULL;
-		const Real walkSqr = sqr( target->getPosition()->x - from.x ) + sqr( target->getPosition()->y - from.y );
+		const Fix walkSqr = sqr( target->getPositionFix()->x - fxFrom.x ) + sqr( target->getPositionFix()->y - fxFrom.y );
 		if( walkSqr > sqr( FERRY_MIN_WALK ) && !measuringWithoutTactics() )
 		{
 			GunshipList list;
-			list.home = m_baseCenter;
-			list.reachSqr = sqr( 2.0f * m_baseRadius );
+			list.home = aiFix( m_baseCenter );	// P7
+			list.reachSqr = sqr( Fix(2) * fixFromReal( m_baseRadius ) );
 			list.ferry = INVALID_ID;
 			m_player->iterateObjects( findGunshipAtHome, &list );
-			Real nearestSqr = 0.0f;
+			Fix nearestSqr = Fix(0);
 			for( size_t g = 0; g < list.gunships.size(); ++g )
 			{
 				Object *candidate = list.gunships[ g ];
 				if( candidate->getAI() == NULL || !candidate->getAI()->isIdle() ||
 						!candidate->getContain()->isValidContainerFor( capturer, TRUE ) )
 					continue;
-				const Real distSqr = sqr( candidate->getPosition()->x - from.x ) + sqr( candidate->getPosition()->y - from.y );
+				const Fix distSqr = sqr( candidate->getPositionFix()->x - fxFrom.x ) + sqr( candidate->getPositionFix()->y - fxFrom.y );
 				if( ship == NULL || distSqr < nearestSqr )
 				{
 					ship = candidate;
@@ -7779,9 +7839,10 @@ Object *AIPlayer::nearestStealableVehicle( const Coord3D *from, Real reach )
 		return NULL;
 
 	const Int myNdx = m_player->getPlayerIndex();
-	const Real reachSqr = reach * reach;
+	const Fix reachSqr = sqr( fixFromReal( reach ) );	// P7: the signature is float
+	const FCoord3D fxFrom = aiFix( *from );
 	Object *best = NULL;
-	Real bestDistSqr = 0.0f;
+	Fix bestDistSqr = Fix(0);
 
 	const Int playerCount = ThePlayerList->getPlayerCount();
 	for( Int i = 0; i < playerCount; ++i )
@@ -7813,10 +7874,10 @@ Object *AIPlayer::nearestStealableVehicle( const Coord3D *from, Real reach )
 					if( !observerKnowsAbout( obj, myNdx ) )
 						continue;
 
-					const Coord3D *at = obj->getPosition();
-					const Real dx = at->x - from->x;
-					const Real dy = at->y - from->y;
-					const Real distSqr = dx*dx + dy*dy;
+					const FCoord3D *at = obj->getPositionFix();
+					const Fix dx = at->x - fxFrom.x;
+					const Fix dy = at->y - fxFrom.y;
+					const Fix distSqr = dx*dx + dy*dy;
 					if( distSqr > reachSqr )
 						continue;
 					if( best == NULL || distSqr < bestDistSqr )
@@ -7875,7 +7936,8 @@ void AIPlayer::doHijack( void )
 	m_player->iterateObjects( findIdleVehicleHacker, &hacker );
 	if( hacker )
 	{
-		Object *victim = nearestStealableVehicle( hacker->getPosition(), VEHICLE_HACK_REACH );
+		const Coord3D hackerAt = hacker->getPositionFix()->toCoord3D();	// P7: nearestStealableVehicle's signature
+		Object *victim = nearestStealableVehicle( &hackerAt, VEHICLE_HACK_REACH );
 		SpecialPowerModuleInterface *mod = hacker->findSpecialPowerModuleInterface( SPECIAL_BLACKLOTUS_DISABLE_VEHICLE_HACK );
 		if( victim && mod && TheActionManager->canDisableVehicleViaHacking( hacker, victim, CMD_FROM_AI ) )
 		{
@@ -7898,7 +7960,7 @@ void AIPlayer::doHijack( void )
 
 	Coord3D from = m_baseCenter;
 	if( thief )
-		from = *thief->getPosition();
+		from = thief->getPositionFix()->toCoord3D();	// P7: nearestStealableVehicle's signature
 
 	Object *target = nearestStealableVehicle( &from, HIJACK_REACH );
 	if( target == NULL )
@@ -7996,7 +8058,8 @@ void AIPlayer::doScouting( void )
 			continue;			// still on its way
 
 		Coord3D goal;
-		if( nextScoutTarget( slot, scout->getPosition(), &goal ) )
+		const Coord3D scoutAt = scout->getPositionFix()->toCoord3D();	// P7: nextScoutTarget's signature
+		if( nextScoutTarget( slot, &scoutAt, &goal ) )
 		{
 			ai->aiMoveToPosition( &goal, CMD_FROM_AI );
 			ordered = TRUE;
@@ -8113,12 +8176,12 @@ const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
  */
 struct FindDozerSearch
 {
-	const Coord3D *pos;
+	FCoord3D pos;
 	ObjectID repairDozer;
 	Bool needDozer;
 	Object *dozer;
 	Object *closestDozer;
-	Real closestDistSqr;
+	Fix closestDistSqr;
 };
 
 static void considerDozer( Object *obj, void *userData )
@@ -8156,9 +8219,9 @@ static void considerDozer( Object *obj, void *userData )
 
 	if (search->dozer && !dozerAI->isAnyTaskPending()) {
 		// Got a good one, track closest.
-		const Real dx = search->pos->x - search->dozer->getPosition()->x;
-		const Real dy = search->pos->y - search->dozer->getPosition()->y;
-		const Real distSqr = dx*dx+dy*dy;
+		const Fix dx = search->pos.x - search->dozer->getPositionFix()->x;
+		const Fix dy = search->pos.y - search->dozer->getPositionFix()->y;
+		const Fix distSqr = dx*dx+dy*dy;
 		if (search->closestDozer == NULL || distSqr < search->closestDistSqr) {
 			search->closestDozer = search->dozer;
 			search->closestDistSqr = distSqr;
@@ -8172,12 +8235,12 @@ static void considerDozer( Object *obj, void *userData )
 Object * AIPlayer::findDozer( const Coord3D *pos )
 {
 	FindDozerSearch search;
-	search.pos = pos;
+	search.pos = aiFix( *pos );	// P7: the signature is float
 	search.repairDozer = m_repairDozer;
 	search.needDozer = true;
 	search.dozer = NULL;
 	search.closestDozer = NULL;
-	search.closestDistSqr = 0;
+	search.closestDistSqr = Fix(0);
 
 	m_player->iterateObjects( considerDozer, &search );
 
@@ -8191,9 +8254,9 @@ Object * AIPlayer::findDozer( const Coord3D *pos )
 /** The nearest live dozer, busy or not. */
 struct NearestDozerSearch
 {
-	Coord3D pos;
+	FCoord3D pos;
 	Object *dozer;
-	Real distSqr;
+	Fix distSqr;
 };
 
 static void considerAnyDozer( Object *obj, void *userData )
@@ -8201,7 +8264,7 @@ static void considerAnyDozer( Object *obj, void *userData )
 	NearestDozerSearch *search = (NearestDozerSearch *)userData;
 	if( !obj->isKindOf( KINDOF_DOZER ) || obj->isEffectivelyDead() || obj->getAI() == NULL )
 		return;
-	const Real distSqr = sqr( obj->getPosition()->x - search->pos.x ) + sqr( obj->getPosition()->y - search->pos.y );
+	const Fix distSqr = sqr( obj->getPositionFix()->x - search->pos.x ) + sqr( obj->getPositionFix()->y - search->pos.y );
 	if( search->dozer == NULL || distSqr < search->distSqr )
 	{
 		search->dozer = obj;
@@ -8212,9 +8275,9 @@ static void considerAnyDozer( Object *obj, void *userData )
 Object * AIPlayer::findNearestDozer( const Coord3D *pos )
 {
 	NearestDozerSearch search;
-	search.pos = *pos;
+	search.pos = aiFix( *pos );	// P7: the signature is float
 	search.dozer = NULL;
-	search.distSqr = 0.0f;
+	search.distSqr = Fix(0);
 	m_player->iterateObjects( considerAnyDozer, &search );
 	return search.dozer;
 }
@@ -8868,7 +8931,7 @@ void AIPlayer::getPlayerStructureBounds( Region2D *bounds, Int playerNdx, Bool c
 				}
 
 				{
-					Coord3D pos = *pObj->getPosition();
+					const Coord3D pos = pObj->getPositionFix()->toCoord3D();	// P7: the bounds are a float Region2D
 
 					//
 					// objBounds spans EVERY object, so it can stand in for a player who owns no

@@ -1,0 +1,27 @@
+# Fixed-point golden run 4 of 4: three Inferno Cannons shell a barracks.
+#
+# Ballistic arcs, splash radius and fire damage over time, against a target that does not move.
+# The barracks' health on each tally frame is the number to compare.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 1800 -jobthreads 0
+#     -scenario fxartillery -logPrefix fxartillery_
+#
+# The last arrive prints each cannon's final position as a HEADLESS STRAGGLER (see fxtank.txt).
+
+30    spawn   1  ChinaBarracks              1  1100 1150
+30    spawn   0  ChinaVehicleInfernoCannon  3  760 920  40
+60    attack  0  ChinaVehicleInfernoCannon     1  ChinaBarracks
+60    tally   1  ChinaBarracks
+300   tally   1  ChinaBarracks
+350   tally   1  ChinaBarracks
+400   tally   1  ChinaBarracks
+450   tally   1  ChinaBarracks
+500   tally   1  ChinaBarracks
+550   tally   1  ChinaBarracks
+600   tally   1  ChinaBarracks
+900   tally   1  ChinaBarracks
+1200  tally   1  ChinaBarracks
+1790  tally   1  ChinaBarracks
+1790  arrive  0  ChinaVehicleInfernoCannon     1 1 1

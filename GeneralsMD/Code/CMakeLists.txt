@@ -831,6 +831,10 @@ find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
   add_test(NAME bigfile_selfcheck
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/bigfile.py selfcheck)
+  # The fixed-point conversion's ratchet: the count of Real, float literals, sqrt and the float
+  # vector types left in GameLogic must not grow past Tools/fixcheck.limit at the repo root.
+  add_test(NAME fixcheck
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../../Tools/fixcheck.py)
   # Tools/vfx_tune.py rewrites those INIs in place; its selfcheck runs both rule sets over a
   # synthetic one and checks the block parser did not eat an End or duplicate a key.
   add_test(NAME vfx_tune_selfcheck

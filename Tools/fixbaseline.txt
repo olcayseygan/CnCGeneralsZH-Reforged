@@ -1,0 +1,83 @@
+# Fixed-point conversion, phase P0: what the float build did, 2026-09-27.
+#
+# Exe: GeneralsMD/Run/generals.exe built 2026-09-27 17:35 from main (225e6c56 and its parent differ
+# only in a tree-check script). Every later phase runs the same lines and compares against these
+# numbers. The explanation is docs/plans/FIXED-POINT-BASELINE.md in the wrapper.
+#
+# Positions are the %.0f the HEADLESS STRAGGLER line prints: whole world units, truncated by the log.
+# Every scenario was run twice (and fxartillery a third time) with identical output and CRC.
+
+## Golden scenarios. Masters in GeneralsMD/Code/Data/Scenarios/fx*.txt, copy them to Run/Scenarios.
+#   cd GeneralsMD/Run
+#   .\generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes <N> -jobthreads 0
+#     -scenario <name> -logPrefix <name>_
+
+fxtank       maxframes 3000  CRC 0x9A299459
+  arrive start1 (1063,428) r150: 1 of 1, after 1748 frames
+  final: id 224 (1125,486) idle
+
+fxinfantry   maxframes 3000  CRC 0xB6EFCD62
+  depart: 12 of 12, last after 42 frames
+  arrive start1 (1063,428) r150: 12 of 12, first 2548, mean 2652, last 2738 frames
+  final: id 224 (1010,481)  225 (1130,471)  226 (1141,391)  227 (1151,451)
+         id 228 (1110,491)  229 (1130,491)  230 (1151,471)  231 (1151,491)
+         id 232 (1100,511)  233 (1121,511)  234 (1141,511)  235 (1165,411) still moving
+
+fxair        maxframes 600   CRC 0xF163A61E
+  arrive (1400,1400) r150: 2 of 2, first 163, mean 165, last 167 frames
+  ChinaSupplyCenter health: f60 2000  f200 2000  f300 1300  f590 1200 (of 2000)
+  AmericaJetRaptor health:  f300 320  f450 289  f590 212 (of 320, both alive)
+  final: id 225 (695,892)  226 (880,910)  state 1013
+
+fxartillery  maxframes 1800  CRC 0x36381E80
+  ChinaBarracks health: f60 1000  f300 442  f350 160  f400 dead
+  final: id 225 (834,895)  226 (811,925)  227 (775,975) idle
+
+## measure-ai batch
+#   .\ai-batch.ps1 -Runs 40 -SeedStart 1000 -Tag fxp0 -Parallel 8 -ExtraArgs "-jobthreads","0"
+# 2 players, brutal, generated maps (96/128/160 cells by seed), cap 30000 frames.
+# decided 20/40, frame-limited 20, failed (no result) 0. Slot 0 (player 2) 9 wins, slot 1
+# (player 3) 11 wins. Average length of a decided match 10,661 frames.
+# seed cells outcome winner frames CRC
+1000   96 decided  p3  10354 0x83DED952
+1001  128 limit    -   30000 0xE15566FD
+1002  160 decided  p2  14324 0xF9289F89
+1003   96 limit    -   30000 0x0E5BA0E2
+1004  128 limit    -   30000 0xE09AD360
+1005  160 decided  p2  13383 0x2D2CD8AD
+1006   96 limit    -   30000 0x1F05F0D3
+1007  128 limit    -   30000 0x6FA19095
+1008  160 limit    -   30000 0x768CC2A0
+1009   96 limit    -   30000 0xF1A1ADB3
+1010  128 decided  p2   7164 0x77485B7D
+1011  160 decided  p2  16855 0x60F7F86F
+1012   96 decided  p3  12681 0x8E2BBCCF
+1013  128 decided  p3  12640 0x6EDF9834
+1014  160 decided  p3  17562 0xEC2716A3
+1015   96 decided  p3   7874 0x2DAA8AAB
+1016  128 decided  p3  13932 0xCCEBA78E
+1017  160 limit    -   30000 0x20CEAE65
+1018   96 limit    -   30000 0x3EE4E556
+1019  128 limit    -   30000 0x0E538582
+1020  160 decided  p3  12277 0xEBAF53B9
+1021   96 decided  p2   5132 0x75C2853E
+1022  128 limit    -   30000 0x4515BF34
+1023  160 decided  p3  13603 0xBE070933
+1024   96 decided  p2  10623 0xAEABB979
+1025  128 limit    -   30000 0xBDE3D746
+1026  160 limit    -   30000 0xE4F3A729
+1027   96 limit    -   30000 0xF4525292
+1028  128 decided  p2   7159 0xD421C4B8
+1029  160 limit    -   30000 0xEF1CF37D
+1030   96 decided  p3   5258 0x0560CE43
+1031  128 limit    -   30000 0xDBD29FE9
+1032  160 decided  p3   8263 0x3F06128E
+1033   96 decided  p3   4935 0x0460E24C
+1034  128 limit    -   30000 0xBAA67483
+1035  160 decided  p2  12163 0x2F8256B0
+1036   96 decided  p2   7031 0x4CA17A02
+1037  128 limit    -   30000 0x37988495
+1038  160 limit    -   30000 0x19AF5996
+1039   96 limit    -   30000 0x54E8865A

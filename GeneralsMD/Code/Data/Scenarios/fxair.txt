@@ -1,0 +1,25 @@
+# Fixed-point golden run 3 of 4: two Raptors strike a supply center 800 away.
+#
+# Jet physics, the missile flight and the damage roll in one run. There is no airfield, and the
+# jets are gone by frame 1490 of a longer run, so this one stops at 600 while they are still in the
+# air.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 600 -jobthreads 0
+#     -scenario fxair -logPrefix fxair_
+#
+# The last arrive prints each jet's final position as a HEADLESS STRAGGLER (see fxtank.txt).
+
+30    spawn   1  ChinaSupplyCenter  1  1400 1400
+30    spawn   0  AmericaJetRaptor   2  760 920  40
+60    attack  0  AmericaJetRaptor      1  ChinaSupplyCenter
+60    arrive  0  AmericaJetRaptor      1400 1400 150
+60    tally   1  ChinaSupplyCenter
+200   tally   1  ChinaSupplyCenter
+300   tally   1  ChinaSupplyCenter
+300   tally   0  AmericaJetRaptor
+450   tally   0  AmericaJetRaptor
+590   tally   1  ChinaSupplyCenter
+590   tally   0  AmericaJetRaptor
+590   arrive  0  AmericaJetRaptor      1 1 1

@@ -1,0 +1,18 @@
+# Fixed-point golden run 1 of 4: one tank drives from one start to the other.
+#
+# The baseline every phase of the Q47.16 conversion is compared against (docs/plans/FIXED-POINT-
+# BASELINE.md in the wrapper, numbers in Tools/fixbaseline.txt). One Crusader, no crowd, so the
+# arrival frame and the final position measure the locomotor and the path alone.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 3000 -jobthreads 0
+#     -scenario fxtank -logPrefix fxtank_
+#
+# The last arrive asks for a point nobody reaches, radius 1, so every unit still alive is printed as
+# a HEADLESS STRAGGLER with its position at the end of the run. That is the final position.
+
+30    spawn   0  AmericaTankCrusader  1  start0:0:260
+60    move    0  AmericaTankCrusader     start1
+60    arrive  0  AmericaTankCrusader     start1  150
+2990  arrive  0  AmericaTankCrusader     1 1 1

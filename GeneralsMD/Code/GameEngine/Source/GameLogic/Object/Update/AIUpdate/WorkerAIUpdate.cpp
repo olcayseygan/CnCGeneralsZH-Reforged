@@ -229,13 +229,15 @@ UnsignedInt WorkerAIUpdate::getActionDelayForDock( Object *dock )
 	SupplyWarehouseDockUpdate *warehouseModule = (SupplyWarehouseDockUpdate*) dock->findUpdateModule( key_warehouseUpdate );
 	if (warehouseModule) {
 		// One action moves the whole load, so the wait is the whole load's worth of action delay.
-		return supplyWarehouseActionDelay( getWorkerAIUpdateModuleData()->m_warehouseDelay,
-																			 warehouseModule->getBoxesStored(), getNumberBoxes(), getMaxBoxes() );
+		// Never sooner after the last docking than a walk could have been: see supplyDockLegDelay.
+		return supplyDockLegDelay( supplyWarehouseActionDelay( getWorkerAIUpdateModuleData()->m_warehouseDelay,
+																			 warehouseModule->getBoxesStored(), getNumberBoxes(), getMaxBoxes() ),
+															 TheGameLogic->getFrame(), m_dockActionEndFrame );
 	}
 	static const NameKeyType key_centerUpdate = NAMEKEY("SupplyCenterDockUpdate");
 	SupplyCenterDockUpdate *centerModule = (SupplyCenterDockUpdate*) dock->findUpdateModule( key_centerUpdate );
 	if (centerModule) {
-		return getWorkerAIUpdateModuleData()->m_centerDelay;
+		return supplyDockLegDelay( getWorkerAIUpdateModuleData()->m_centerDelay, TheGameLogic->getFrame(), m_dockActionEndFrame );
 	}
 
 	return 0;
@@ -1497,11 +1499,12 @@ void WorkerAIUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: The dock action window, which now times the shortest leg between two supply dockings */
 // ------------------------------------------------------------------------------------------------
 void WorkerAIUpdate::xfer( Xfer *xfer )
 {
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -1545,6 +1548,11 @@ void WorkerAIUpdate::xfer( Xfer *xfer )
 	xfer->xferObjectID(&m_preferredDock);
 	xfer->xferInt(&m_numberBoxes);
 	xfer->xferBool(&m_forcePending);
+	if( version >= 2 )
+	{
+		xfer->xferUnsignedInt(&m_dockActionStartFrame);
+		xfer->xferUnsignedInt(&m_dockActionEndFrame);
+	}
 
 	//-------------------------- xfer Worker info
 	xfer->xferSnapshot(m_workerMachine);

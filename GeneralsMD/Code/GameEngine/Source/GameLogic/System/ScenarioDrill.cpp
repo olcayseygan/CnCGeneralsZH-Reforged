@@ -176,6 +176,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_ATTACK;
 	else if (token == "enter")
 		*action = SCENARIO_ACTION_ENTER;
+	else if (token == "dock")
+		*action = SCENARIO_ACTION_DOCK;
 	else if (token == "stop")
 		*action = SCENARIO_ACTION_STOP;
 	else if (token == "arrive")
@@ -286,6 +288,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_SHIFTUPGRADE:	return SCENARIO_TOKENS_SHIFTUPGRADE;
 		case SCENARIO_ACTION_ATTACK:			return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_ENTER:				return SCENARIO_TOKENS_ATTACK;
+		case SCENARIO_ACTION_DOCK:				return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_PRODUCE:			return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_STOP:				return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_TALLY:				return SCENARIO_TOKENS_STOP;
@@ -373,6 +376,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 
 		case SCENARIO_ACTION_ATTACK:
 		case SCENARIO_ACTION_ENTER:
+		case SCENARIO_ACTION_DOCK:
 		case SCENARIO_ACTION_SHIFTATTACK:
 		case SCENARIO_ACTION_SHIFTPOWER:
 		{
@@ -1026,8 +1030,9 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 		worth += obj->getTemplate()->friend_getBuildCost();
 	}
 
-	DEBUG_LOG(("HEADLESS TALLY: frame %d slot %d '%s': %d alive, health %.0f of %.0f, worth %d, %d inside\n",
-						 action.frame, action.slot, action.selector.str(), alive, health, maxHealth, worth, inside));
+	DEBUG_LOG(("HEADLESS TALLY: frame %d slot %d '%s': %d alive, health %.0f of %.0f, worth %d, %d inside, money %d\n",
+						 action.frame, action.slot, action.selector.str(), alive, health, maxHealth, worth, inside,
+						 player->getMoney()->countMoney()));
 	return TRUE;
 }
 
@@ -1183,8 +1188,10 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 
 		case SCENARIO_ACTION_ATTACK:
 		case SCENARIO_ACTION_ENTER:
+		case SCENARIO_ACTION_DOCK:
 		{
-			const char *verb = (action.action == SCENARIO_ACTION_ATTACK) ? "attack" : "enter";
+			const char *verb = (action.action == SCENARIO_ACTION_ATTACK) ? "attack"
+											 : (action.action == SCENARIO_ACTION_DOCK) ? "dock" : "enter";
 			Player *targetPlayer = findPlayerForSlot( action.targetSlot );
 			Object *target = (targetPlayer != NULL)
 											 ? findFirstMatching( targetPlayer, action.targetSelector )
@@ -1199,6 +1206,8 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 
 			if (action.action == SCENARIO_ACTION_ATTACK)
 				group->groupAttackObject( target, SCENARIO_ATTACK_SHOTS, CMD_FROM_SCRIPT );
+			else if (action.action == SCENARIO_ACTION_DOCK)
+				group->groupDock( target, CMD_FROM_SCRIPT );
 			else
 				group->groupEnter( target, CMD_FROM_SCRIPT );
 

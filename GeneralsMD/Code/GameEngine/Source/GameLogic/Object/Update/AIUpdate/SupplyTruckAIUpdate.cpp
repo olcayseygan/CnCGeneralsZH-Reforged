@@ -232,13 +232,15 @@ UnsignedInt SupplyTruckAIUpdate::getActionDelayForDock( Object *dock )
 	SupplyWarehouseDockUpdate *warehouseModule = (SupplyWarehouseDockUpdate*) dock->findUpdateModule( key_warehouseUpdate );
 	if (warehouseModule) {
 		// One action moves the whole load, so the wait is the whole load's worth of action delay.
-		return supplyWarehouseActionDelay( getSupplyTruckAIUpdateModuleData()->m_warehouseDelay,
-																			 warehouseModule->getBoxesStored(), m_numberBoxes, getMaxBoxes() );
+		// Never sooner after the last docking than a walk could have been: see supplyDockLegDelay.
+		return supplyDockLegDelay( supplyWarehouseActionDelay( getSupplyTruckAIUpdateModuleData()->m_warehouseDelay,
+																			 warehouseModule->getBoxesStored(), m_numberBoxes, getMaxBoxes() ),
+															 TheGameLogic->getFrame(), m_dockActionEndFrame );
 	}
 	static const NameKeyType key_centerUpdate = NAMEKEY("SupplyCenterDockUpdate");
 	SupplyCenterDockUpdate *centerModule = (SupplyCenterDockUpdate*) dock->findUpdateModule( key_centerUpdate );
 	if (centerModule) {
-		return getSupplyTruckAIUpdateModuleData()->m_centerDelay;
+		return supplyDockLegDelay( getSupplyTruckAIUpdateModuleData()->m_centerDelay, TheGameLogic->getFrame(), m_dockActionEndFrame );
 	}
 
 	return 0;
@@ -295,11 +297,12 @@ void SupplyTruckAIUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: The dock action window, which now times the shortest leg between two supply dockings */
 // ------------------------------------------------------------------------------------------------
 void SupplyTruckAIUpdate::xfer( Xfer *xfer )
 {
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -310,6 +313,11 @@ void SupplyTruckAIUpdate::xfer( Xfer *xfer )
 	xfer->xferObjectID(&m_preferredDock);
 	xfer->xferInt(&m_numberBoxes);
 	xfer->xferBool(&m_forcePending);
+	if( version >= 2 )
+	{
+		xfer->xferUnsignedInt(&m_dockActionStartFrame);
+		xfer->xferUnsignedInt(&m_dockActionEndFrame);
+	}
 
 }  // end xfer
 

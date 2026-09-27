@@ -1,0 +1,30 @@
+# A GLA supply stash built as close to a supply pile as SupplyBuildBorder allows (90 feet centre to
+# centre, a gap about 24 feet wide between them), one worker sent to the pile. Neither building has
+# dock bones, so a worker standing in the gap is on both approach spots at once and never walks.
+# The money column of each tally line is the seat's cash; the difference between two lines over the
+# frames between them is the income. The workers that end up on the pile are the spawned one and
+# the stash's own.
+#
+# Before the leg floor: 101 deliveries by frame 1860, money 17425. After it: 50, money 13675.
+# A stash at 830 920 (closer than a player may build) has its workers walk, and earned 11950 both ways.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLA -side 1 FactionAmerica -seed 1 -maxframes 1900
+#     -scenario stashbeside -logPrefix stashbeside_
+#
+# See mobstress.txt for the line grammar.
+
+30    spawn   0  SupplyPile          1  760 920
+30    spawn   0  GLASupplyStash      1  670 920
+30    spawn   0  GLAInfantryWorker   1  715 960
+
+60    dock    0  GLAInfantryWorker   0  SupplyPile
+
+60    tally   0  GLAInfantryWorker
+360   tally   0  GLAInfantryWorker
+660   tally   0  GLAInfantryWorker
+960   tally   0  GLAInfantryWorker
+1260  tally   0  GLAInfantryWorker
+1560  tally   0  GLAInfantryWorker
+1860  tally   0  GLAInfantryWorker

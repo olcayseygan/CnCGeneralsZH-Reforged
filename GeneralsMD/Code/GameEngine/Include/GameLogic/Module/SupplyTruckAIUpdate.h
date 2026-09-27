@@ -60,6 +60,27 @@ inline Bool supplyDockHasNextBox( Int stockLeft, Int dockerBoxes, Int dockerMax 
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The shortest a leg between two supply dockings may take, pile to centre or centre to pile.  A
+	* supply pile and a GLA stash have no dock bones, so each one docks a worker wherever its approach
+	* spot is, and that spot is the clear ground nearest the building on the worker's side.  A stash
+	* built at the legal limit leaves a gap about 24 feet wide beside the pile, and a worker standing
+	* in it is on both approach spots at once: it loaded and unloaded without taking a step, a box
+	* every 15 frames where a worker that walks the same gap needs 37 or more.  37 frames is that
+	* shortest walked leg, so the floor only ever catches a worker that did not walk. */
+//-------------------------------------------------------------------------------------------------
+enum { SUPPLY_DOCK_MIN_LEG_FRAMES = 37 };
+
+inline UnsignedInt supplyDockLegDelay( UnsignedInt dockDelay, UnsignedInt now, UnsignedInt lastActionFrame )
+{
+	// 0 is a docker that has never docked
+	const UnsignedInt earliest = lastActionFrame + SUPPLY_DOCK_MIN_LEG_FRAMES;
+	if( lastActionFrame == 0 || now >= earliest || earliest - now <= dockDelay )
+		return dockDelay;
+
+	return earliest - now;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** How long one visit to a supply point takes.  The whole load changes hands in a single action
 	* now, so the visit is priced by what that load is: SupplyWarehouseActionDelay buys one box, and
 	* a docker leaving with four of them waits for four.  Same total as taking them one at a time,

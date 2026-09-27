@@ -9160,6 +9160,25 @@ TEST(a_supply_visit_costs_what_the_load_costs)
 	CHECK_EQ( 30u, supplyWarehouseActionDelay( 30, 1, 7, 8 ) );
 }
 
+/** A worker standing in the gap between a supply pile and a stash built beside it docked at both
+	 without a step, a $75 box every 15 frames.  A docking now waits out the rest of the shortest leg a
+	 walking worker takes, counted from the last one; a worker that did walk never waits longer. */
+TEST(a_worker_that_does_not_walk_still_pays_for_the_walk)
+{
+	// docked at frame 1000, arrives at the other building 10 frames later with a 5-frame dock delay
+	CHECK_EQ( (UnsignedInt)SUPPLY_DOCK_MIN_LEG_FRAMES - 10, supplyDockLegDelay( 5, 1010, 1000 ) );
+
+	// walked the leg: only the dock's own delay
+	CHECK_EQ( 5u, supplyDockLegDelay( 5, 1000 + SUPPLY_DOCK_MIN_LEG_FRAMES, 1000 ) );
+	CHECK_EQ( 5u, supplyDockLegDelay( 5, 5000, 1000 ) );
+
+	// a dock delay longer than what is left of the leg is not shortened
+	CHECK_EQ( 90u, supplyDockLegDelay( 90, 1010, 1000 ) );
+
+	// never docked before
+	CHECK_EQ( 5u, supplyDockLegDelay( 5, 3, 0 ) );
+}
+
 
 /** EA's floor and ceil nudged the value by the largest float below one and truncated.  The nudge
 	 does not survive the addition: for anything from 2 upwards, f + 0.99999994 rounds to f + 1, so

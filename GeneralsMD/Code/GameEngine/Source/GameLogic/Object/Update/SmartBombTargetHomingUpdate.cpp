@@ -94,7 +94,7 @@ UpdateSleepTime SmartBombTargetHomingUpdate::update( void )
 
   FCoord3D pos = *self->getPositionFix();
 
-  Fix statusCoeff = fixMax( Fix( 0 ), fixMin( Fix( 1 ), fixFromReal( d->m_courseCorrectionScalar ) ) );	// P3
+  Fix statusCoeff = fixMax( Fix( 0 ), fixMin( Fix( 1 ), d->m_courseCorrectionScalar ) );
   Fix targetCoeff = Fix( 1 ) - statusCoeff;
 
   // P8: the target is saved in float

@@ -73,9 +73,9 @@ static void preRotateTransform( Object *obj, Real aroundX, Real aroundY, Real ar
 //-------------------------------------------------------------------------------------------------
 ToppleUpdateModuleData::ToppleUpdateModuleData()
 {
-	const Real START_VELOCITY_PERCENT = 0.2f;
-	const Real START_ACCEL_PERCENT = 0.01f;
-	const Real VELOCITY_BOUNCE_PERCENT = 0.3f;			// multiply the velocity by this when you bounce
+	const Fix START_VELOCITY_PERCENT = 0.2_fx;
+	const Fix START_ACCEL_PERCENT = 0.01_fx;
+	const Fix VELOCITY_BOUNCE_PERCENT = 0.3_fx;			// multiply the velocity by this when you bounce
 	m_toppleFX = NULL;
 	m_bounceFX = NULL;
 	m_stumpName.clear();
@@ -105,9 +105,9 @@ void ToppleUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "KillStumpWhenToppled",	INI::parseBool, NULL, offsetof( ToppleUpdateModuleData, m_killStumpWhenToppled ) },
 		{ "ToppleLeftOrRightOnly",	INI::parseBool, NULL, offsetof( ToppleUpdateModuleData, m_toppleLeftOrRightOnly ) },
 		{ "ReorientToppledRubble",	INI::parseBool, NULL, offsetof( ToppleUpdateModuleData, m_reorientToppledRubble ) },
-		{ "InitialVelocityPercent",	INI::parsePercentToReal, NULL, offsetof( ToppleUpdateModuleData, m_initialVelocityPercent ) },
-		{ "InitialAccelPercent",	INI::parsePercentToReal, NULL, offsetof( ToppleUpdateModuleData, m_initialAccelPercent ) },
-		{ "BounceVelocityPercent",	INI::parsePercentToReal, NULL, offsetof( ToppleUpdateModuleData, m_bounceVelocityPercent ) },
+		{ "InitialVelocityPercent",	INI::parsePercentToFix, NULL, FIX_OFFSET( ToppleUpdateModuleData, m_initialVelocityPercent ) },
+		{ "InitialAccelPercent",	INI::parsePercentToFix, NULL, FIX_OFFSET( ToppleUpdateModuleData, m_initialAccelPercent ) },
+		{ "BounceVelocityPercent",	INI::parsePercentToFix, NULL, FIX_OFFSET( ToppleUpdateModuleData, m_bounceVelocityPercent ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -186,8 +186,8 @@ void ToppleUpdate::applyTopplingForce( const Coord3D* toppleDirection, Real topp
 	if (toppleSpeed < MIN_TOPPLE_SPEED)
 		toppleSpeed = MIN_TOPPLE_SPEED;
 
-	m_angularVelocity = toppleSpeed * d->m_initialVelocityPercent;
-	m_angularAcceleration = toppleSpeed * d->m_initialAccelPercent;
+	m_angularVelocity = toppleSpeed * fixToReal( d->m_initialVelocityPercent );	// P8
+	m_angularAcceleration = toppleSpeed * fixToReal( d->m_initialAccelPercent );	// P8
 	m_toppleState = TOPPLE_FALLING;
 	m_options = options;
 
@@ -318,7 +318,7 @@ UpdateSleepTime ToppleUpdate::update()
 	if ((m_angularAccumulation >= ANGULAR_LIMIT) && (m_angularVelocity > 0))
 	{
 		// Hit so either bounce or stop if too little remaining velocity.
-		m_angularVelocity *= -d->m_bounceVelocityPercent;
+		m_angularVelocity *= -fixToReal( d->m_bounceVelocityPercent );	// P8
 
 		if( BitTest( m_options, TOPPLE_OPTIONS_NO_BOUNCE ) == TRUE || 
 				fabs(m_angularVelocity) < VELOCITY_BOUNCE_LIMIT )

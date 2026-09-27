@@ -64,17 +64,17 @@ WaveGuideUpdateModuleData::WaveGuideUpdateModuleData( void )
 	m_bridgeParticle = NULL;
 	m_bridgeParticleAngleFudge = 0.0f;
 	m_randomSplashSoundFrequency = 0;
-	m_waveDelay = 0.0f;
+	m_waveDelay = Fix( 0 );
 	//
-	m_ySize = 0.0f;
-	m_linearWaveSpacing = 0.0f;
-	m_waveBendMagnitude = 0.0f;
+	m_ySize = Fix( 0 );
+	m_linearWaveSpacing = Fix( 0 );
+	m_waveBendMagnitude = Fix( 0 );
 	m_waterVelocity = 0.0f;
-	m_preferredHeight = 0.0f;
-	m_shorelineEffectDistance = 0.0f;
-	m_damageRadius = 0.0f;
-	m_damageAmount = 0.0f;
-	m_toppleForce = 0.0f;
+	m_preferredHeight = Fix( 0 );
+	m_shorelineEffectDistance = Fix( 0 );
+	m_damageRadius = Fix( 0 );
+	m_damageAmount = Fix( 0 );
+	m_toppleForce = Fix( 0 );
 
 }  // end WaveGuideUpdateModuleData
 
@@ -88,20 +88,20 @@ WaveGuideUpdateModuleData::WaveGuideUpdateModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 
-		{ "WaveDelay", INI::parseDurationReal, NULL, offsetof( WaveGuideUpdateModuleData, m_waveDelay ) },	
-		{ "YSize", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_ySize ) },
-		{ "LinearWaveSpacing", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_linearWaveSpacing ) },
-		{ "WaveBendMagnitude", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_waveBendMagnitude ) },
-		{ "WaterVelocity", INI::parseVelocityReal, NULL, offsetof( WaveGuideUpdateModuleData, m_waterVelocity ) },
-		{ "PreferredHeight", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_preferredHeight ) },
-		{ "ShorelineEffectDistance", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_shorelineEffectDistance ) },
-		{ "DamageRadius", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_damageRadius ) },
-		{ "DamageAmount", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_damageAmount ) },
-		{ "ToppleForce", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_toppleForce ) },
+		{ "WaveDelay", INI::parseDurationFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_waveDelay ) },
+		{ "YSize", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_ySize ) },
+		{ "LinearWaveSpacing", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_linearWaveSpacing ) },
+		{ "WaveBendMagnitude", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_waveBendMagnitude ) },
+		{ "WaterVelocity", INI::parseVelocityReal, NULL, REAL_OFFSET( WaveGuideUpdateModuleData, m_waterVelocity ) },
+		{ "PreferredHeight", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_preferredHeight ) },
+		{ "ShorelineEffectDistance", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_shorelineEffectDistance ) },
+		{ "DamageRadius", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_damageRadius ) },
+		{ "DamageAmount", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_damageAmount ) },
+		{ "ToppleForce", INI::parseFix, NULL, FIX_OFFSET( WaveGuideUpdateModuleData, m_toppleForce ) },
 		{ "RandomSplashSound", INI::parseAudioEventRTS, NULL, offsetof( WaveGuideUpdateModuleData, m_randomSplashSound ) },
 		{ "RandomSplashSoundFrequency", INI::parseInt, NULL, offsetof( WaveGuideUpdateModuleData, m_randomSplashSoundFrequency ) },
 		{ "BridgeParticle",	INI::parseParticleSystemTemplate, NULL, offsetof( WaveGuideUpdateModuleData, m_bridgeParticle ) },
-		{ "BridgeParticleAngleFudge", INI::parseAngleReal, NULL, offsetof( WaveGuideUpdateModuleData, m_bridgeParticleAngleFudge ) },
+		{ "BridgeParticleAngleFudge", INI::parseAngleReal, NULL, REAL_OFFSET( WaveGuideUpdateModuleData, m_bridgeParticleAngleFudge ) },
 		{ "LoopingSound", INI::parseAudioEventRTS, NULL, offsetof( WaveGuideUpdateModuleData, m_loopingSound ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -317,9 +317,10 @@ void WaveGuideUpdate::computeWaveShapePoints( void )
 	// created in local object space and can be put through the transform matrix of the
 	// object to get the world position given the waveguides' current position and orientation
 	//
-	Int halfY = modData->m_ySize / 2.0f;
+	// both truncate toward zero, as the float-to-Int conversions they replace did
+	Int halfY = (Int)( (modData->m_ySize / Fix( 2 )).raw() / Fix::ONE_RAW );
 
-	for( Int y = -halfY; y < halfY; y += modData->m_linearWaveSpacing )
+	for( Int y = -halfY; y < halfY; y = (Int)( (Fix( y ) + modData->m_linearWaveSpacing).raw() / Fix::ONE_RAW ) )
 	{
 
 		// sanity
@@ -330,8 +331,8 @@ void WaveGuideUpdate::computeWaveShapePoints( void )
 		// if there is a bend magnitude we will use a form of "y = x^2" to make a parabola
 		// that forms the wavefront ... otherwise we just make a straight line
 		//
-		if( modData->m_waveBendMagnitude )
-			m_shapePoints[ m_shapePointCount ].x = -(y * y) / modData->m_waveBendMagnitude;
+		if( modData->m_waveBendMagnitude != Fix( 0 ) )
+			m_shapePoints[ m_shapePointCount ].x = -(y * y) / fixToReal( modData->m_waveBendMagnitude );	// P8: the shape is saved in float
 		else
 			m_shapePoints[ m_shapePointCount ].x = 0.0f;
 		m_shapePoints[ m_shapePointCount ].y = y;
@@ -395,7 +396,7 @@ void WaveGuideUpdate::doShapeEffects( void )
 				// point array ... just set the LOCAL position for the particle system to reflect
 				// this Z *IF* that Z will not take us above the target water height
 				//
-				if( m_transformedShapePoints[ i ].z < modData->m_preferredHeight )
+				if( m_transformedShapePoints[ i ].z < fixToReal( modData->m_preferredHeight ) )
 				{
 
 					particleSys->getPosition( &pos );
@@ -431,8 +432,8 @@ void WaveGuideUpdate::doWaterMotion( void )
 		// push up the water here
 		TheTerrainVisual->addWaterVelocity( m_transformedShapePoints[ i ].x,
 																				m_transformedShapePoints[ i ].y,
-																				modData->m_waterVelocity, 
-																				modData->m_preferredHeight );
+																				modData->m_waterVelocity,
+																				fixToReal( modData->m_preferredHeight ) );
 
 
 	}  // end for i
@@ -455,8 +456,8 @@ void WaveGuideUpdate::doShoreEffects( void )
 
 	// get module data
 	const WaveGuideUpdateModuleData *modData = getWaveGuideUpdateModuleData();
-	const Fix shorelineEffectDistance = fixFromReal( modData->m_shorelineEffectDistance );	// P3
-	const Fix preferredHeight = fixFromReal( modData->m_preferredHeight );	// P3
+	const Fix shorelineEffectDistance = modData->m_shorelineEffectDistance;
+	const Fix preferredHeight = modData->m_preferredHeight;
 
 	//
 	// setup an array of points just behind the front of the wave where the first wave
@@ -554,8 +555,8 @@ void WaveGuideUpdate::doDamage( void )
 
 	// get our position forward unit direction vector
 	const FCoord3D *unitForward = waveGuide->getUnitDirectionVector2DFix();
-	const Fix damageRadius = fixFromReal( modData->m_damageRadius );	// P3
-	const Fix preferredHeight = fixFromReal( modData->m_preferredHeight );	// P3
+	const Fix damageRadius = modData->m_damageRadius;
+	const Fix preferredHeight = modData->m_preferredHeight;
 
 	// iterate over all our sample points and kill stuff around us
 	for( Int i = 0; i < m_shapePointCount; i++ )
@@ -649,7 +650,7 @@ void WaveGuideUpdate::doDamage( void )
 
 					// some things can be toppled ... ooo, xtra special of us!
 					const Coord3D toppleVector = v.toCoord3D();	// P8
-					obj->topple( &toppleVector, modData->m_toppleForce, TOPPLE_OPTIONS_NO_BOUNCE | 
+					obj->topple( &toppleVector, fixToReal( modData->m_toppleForce ), TOPPLE_OPTIONS_NO_BOUNCE | 	// P8
 																															TOPPLE_OPTIONS_NO_FX );
 
 					// do a lot of water damage
@@ -657,7 +658,7 @@ void WaveGuideUpdate::doDamage( void )
 					damageInfo.in.m_damageType = DAMAGE_WATER;
 					damageInfo.in.m_deathType = DEATH_FLOODED;
 					damageInfo.in.m_sourceID = waveGuide->getID();
-					damageInfo.in.m_amount = modData->m_damageAmount;
+					damageInfo.in.m_amount = fixToReal( modData->m_damageAmount );	// P6
 					obj->attemptDamage( &damageInfo );
 
 					//
@@ -781,7 +782,7 @@ UpdateSleepTime WaveGuideUpdate::update( void )
 		m_activeFrame = TheGameLogic->getFrame();
 
 	// if we're waiting for a delay check it and get out of here
-	if( TheGameLogic->getFrame() - m_activeFrame < modData->m_waveDelay )
+	if( Fix( (Int)(TheGameLogic->getFrame() - m_activeFrame) ) < modData->m_waveDelay )
 		return UPDATE_SLEEP_NONE;
 
 	// get our position

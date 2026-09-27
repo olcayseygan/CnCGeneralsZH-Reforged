@@ -82,10 +82,10 @@ public:
 	ObjectStatusMaskType m_forbiddenStatus;
 	FXList				*m_disguiseRevealFX;
 	FXList				*m_disguiseFX;
-	Real					m_stealthSpeed;
+	Fix						m_stealthSpeed;
 	Real					m_friendlyOpacityMin;
 	Real					m_friendlyOpacityMax;
-	Real					m_revealDistanceFromTarget;
+	Fix						m_revealDistanceFromTarget;
 	UnsignedInt		m_disguiseTransitionFrames;
 	UnsignedInt		m_disguiseRevealTransitionFrames;
 	UnsignedInt		m_pulseFrames;
@@ -151,7 +151,7 @@ protected:
 
 	StealthLookType calcStealthedStatusForPlayer(const Object* obj, const Player* player);
 	Bool canDisguise() const { return getStealthUpdateModuleData()->m_teamDisguised; }
-	Real getRevealDistanceFromTarget() const { return getStealthUpdateModuleData()->m_revealDistanceFromTarget; }
+	Fix getRevealDistanceFromTarget() const { return getStealthUpdateModuleData()->m_revealDistanceFromTarget; }
 	void hintDetectableWhileUnstealthed( void ) ;
 
 	void changeVisualDisguise();

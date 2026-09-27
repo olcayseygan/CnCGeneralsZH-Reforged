@@ -63,12 +63,12 @@ public:
   UnsignedInt           m_orbitFrames;
   UnsignedInt           m_howitzerFiringRate;
   UnsignedInt           m_howitzerFollowLag;
-  Real                  m_attackAreaRadius;
-  Real                  m_targetingReticleRadius;
-  Real                  m_gunshipOrbitRadius;
-  Real                  m_strafingIncrement;
-  Real                  m_orbitInsertionSlope;
-  Real                  m_randomOffsetForHowitzer;
+  Fix                   m_attackAreaRadius;
+  Fix                   m_targetingReticleRadius;
+  Fix                   m_gunshipOrbitRadius;
+  Fix                   m_strafingIncrement;
+  Fix                   m_orbitInsertionSlope;
+  Fix                   m_randomOffsetForHowitzer;
 
 	const ParticleSystemTemplate * m_gattlingStrafeFXParticleSystem;
 

@@ -70,7 +70,7 @@ WeaponBonusUpdateModuleData::WeaponBonusUpdateModuleData()
 	m_forbiddenAffectKindOf.clear();
 	m_bonusDuration = 0;
 	m_bonusDelay = 0;
-	m_bonusRange = 0;
+	m_bonusRange = Fix( 0 );
 	m_bonusConditionType = WEAPONBONUSCONDITION_INVALID;
 }
 
@@ -84,7 +84,7 @@ void WeaponBonusUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ForbiddenAffectKindOf",	KindOfMaskType::parseFromINI,		NULL, offsetof( WeaponBonusUpdateModuleData, m_forbiddenAffectKindOf ) },
 		{ "BonusDuration",					INI::parseDurationUnsignedInt,	NULL, offsetof( WeaponBonusUpdateModuleData, m_bonusDuration ) },
 		{ "BonusDelay",							INI::parseDurationUnsignedInt,	NULL, offsetof( WeaponBonusUpdateModuleData, m_bonusDelay ) },
-		{ "BonusRange",							INI::parseReal,									NULL, offsetof( WeaponBonusUpdateModuleData, m_bonusRange ) },
+		{ "BonusRange",							INI::parseFix,									NULL, FIX_OFFSET( WeaponBonusUpdateModuleData, m_bonusRange ) },
 		{ "BonusConditionType",			INI::parseIndexList,	TheWeaponBonusNames, offsetof( WeaponBonusUpdateModuleData, m_bonusConditionType ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -140,7 +140,7 @@ UpdateSleepTime WeaponBonusUpdate::update( void )
 
 	// scan objects in our region
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix( me->getPositionFix(),
-																																			fixFromReal( data->m_bonusRange ),	// P3
+																																			data->m_bonusRange,
 																																			FROM_CENTER_2D, 
 																																			filters );
 	MemoryPoolObjectHolder hold( iter );

@@ -117,8 +117,8 @@ static void parseOCL( INI* ini, void *instance, void * /*store*/, const void* /*
 		{ "MaxCollapseDelay",						INI::parseDurationUnsignedInt,		NULL, offsetof( StructureCollapseUpdateModuleData, m_maxCollapseDelay ) },
 		{ "MinBurstDelay",							INI::parseDurationUnsignedInt,		NULL, offsetof( StructureCollapseUpdateModuleData, m_minBurstDelay ) },
 		{ "MaxBurstDelay",							INI::parseDurationUnsignedInt,		NULL, offsetof( StructureCollapseUpdateModuleData, m_maxBurstDelay ) },
-		{ "CollapseDamping",						INI::parseReal,										NULL, offsetof( StructureCollapseUpdateModuleData, m_collapseDamping ) },
-		{ "MaxShudder",									INI::parseReal,										NULL, offsetof( StructureCollapseUpdateModuleData, m_maxShudder ) },
+		{ "CollapseDamping",						INI::parseFix,										NULL, FIX_OFFSET( StructureCollapseUpdateModuleData, m_collapseDamping ) },
+		{ "MaxShudder",									INI::parseReal,										NULL, REAL_OFFSET( StructureCollapseUpdateModuleData, m_maxShudder ) },
 		{ "BigBurstFrequency",					INI::parseInt,										NULL, offsetof( StructureCollapseUpdateModuleData, m_bigBurstFrequency ) },
 		{ "OCL",												parseOCL,													NULL, 0 },
 		{ "FXList",											parseFX,													NULL, 0 },
@@ -212,7 +212,7 @@ UpdateSleepTime StructureCollapseUpdate::update( void )
 		Object *building = getObject();
 		UnsignedInt now = TheGameLogic->getFrame();
 		m_currentHeight -= m_collapseVelocity;
-		m_collapseVelocity -= TheGlobalData->m_gravity * (1.0 - d->m_collapseDamping);
+		m_collapseVelocity -= TheGlobalData->m_gravity * (1.0 - fixToReal( d->m_collapseDamping ));	// P8
 
 		const FCoord3D *currentPosition = building->getPositionFix();
 		Vector3 shudder;

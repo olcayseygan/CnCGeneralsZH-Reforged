@@ -44,7 +44,7 @@ class SpecialPowerModule;
 class FXList;
 enum SpecialPowerType;
 
-#define SPECIAL_ABILITY_HUGE_DISTANCE 10000000.0f
+#define SPECIAL_ABILITY_HUGE_DISTANCE Fix( 10000000 )
 
 //-------------------------------------------------------------------------------------------------
 /** Walking away from a special ability in progress breaks it off - a rifleman ordered off a
@@ -77,10 +77,10 @@ public:
 	AsciiString						m_specialObjectName;
 	AsciiString						m_specialObjectAttachToBoneName;
 	const SpecialPowerTemplate*	m_specialPowerTemplate;		///< pointer to the special power template
-	Real									m_startAbilityRange;
-	Real									m_abilityAbortRange;
-	Real									m_packUnpackVariationFactor;
-	Real									m_fleeRangeAfterCompletion;
+	Fix										m_startAbilityRange;
+	Fix										m_abilityAbortRange;
+	Fix										m_packUnpackVariationFactor;
+	Fix										m_fleeRangeAfterCompletion;
 	Int										m_effectValue;
 	Int										m_awardXPForTriggering;
 	Int										m_skillPointsForTriggering;
@@ -119,7 +119,7 @@ public:
 		m_persistentPrepFrames = 0;
 		m_packTime = 0;
 		m_unpackTime = 0;
-		m_packUnpackVariationFactor = 0.0f;
+		m_packUnpackVariationFactor = Fix( 0 );
 		m_effectDuration = 0;
 		m_maxSpecialObjects = 1;
 		m_effectValue = 1;
@@ -130,7 +130,7 @@ public:
 		m_flipObjectAfterPacking = FALSE;
 		m_flipObjectAfterUnpacking = FALSE;
 		m_disableFXParticleSystem = NULL;
-		m_fleeRangeAfterCompletion = 0.0f;
+		m_fleeRangeAfterCompletion = Fix( 0 );
 		m_doCaptureFX = FALSE;
 		m_alwaysValidateSpecialObjects = FALSE;
 		m_loseStealthOnTrigger = FALSE;
@@ -150,15 +150,15 @@ public:
 		{
 			//Primary data values
 			{ "SpecialPowerTemplate",				INI::parseSpecialPowerTemplate,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_specialPowerTemplate ) },
-			{ "StartAbilityRange",					INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_startAbilityRange ) },
-			{ "AbilityAbortRange",					INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_abilityAbortRange ) },
+			{ "StartAbilityRange",					INI::parseFix,										NULL, FIX_OFFSET( SpecialAbilityUpdateModuleData, m_startAbilityRange ) },
+			{ "AbilityAbortRange",					INI::parseFix,										NULL, FIX_OFFSET( SpecialAbilityUpdateModuleData, m_abilityAbortRange ) },
 			{ "PreparationTime",						INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_preparationFrames ) },
 			{ "PersistentPrepTime",					INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_persistentPrepFrames ) },
 			{ "PackTime",										INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_packTime ) },
 			{ "UnpackTime",									INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_unpackTime ) },
 			{ "PreTriggerUnstealthTime",	  INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_preTriggerUnstealthFrames ) },
 			{ "SkipPackingWithNoTarget",		INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_skipPackingWithNoTarget ) },
-			{ "PackUnpackVariationFactor",	INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_packUnpackVariationFactor ) },
+			{ "PackUnpackVariationFactor",	INI::parseFix,										NULL, FIX_OFFSET( SpecialAbilityUpdateModuleData, m_packUnpackVariationFactor ) },
  
 			//Secondary data values
 			{ "SpecialObject",							INI::parseAsciiString,						NULL, offsetof( SpecialAbilityUpdateModuleData, m_specialObjectName ) },
@@ -172,7 +172,7 @@ public:
 			{ "AlwaysValidateSpecialObjects",				INI::parseBool,						NULL, offsetof( SpecialAbilityUpdateModuleData, m_alwaysValidateSpecialObjects ) },
 			{ "FlipOwnerAfterPacking",			INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_flipObjectAfterPacking ) },
 			{ "FlipOwnerAfterUnpacking",		INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_flipObjectAfterUnpacking ) },
-			{ "FleeRangeAfterCompletion",		INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_fleeRangeAfterCompletion ) },
+			{ "FleeRangeAfterCompletion",		INI::parseFix,										NULL, FIX_OFFSET( SpecialAbilityUpdateModuleData, m_fleeRangeAfterCompletion ) },
 			{ "DisableFXParticleSystem",		INI::parseParticleSystemTemplate, NULL, offsetof( SpecialAbilityUpdateModuleData, m_disableFXParticleSystem ) },
 			{ "DoCaptureFX",								INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_doCaptureFX ) },
 			{ "PackSound",									INI::parseAudioEventRTS,					NULL, offsetof( SpecialAbilityUpdateModuleData, m_packSound ) },

@@ -147,7 +147,7 @@ void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, con
 			//keep it at ground height for mine clearing units to reach
 		}
 		else
-			pos.z += fixFromReal( d->m_offsetZ ); // ride on the roof of the truck/tank	// P3
+			pos.z += d->m_offsetZ; // ride on the roof of the truck/tank
 
 		getObject()->setPositionFix( &pos );
 
@@ -192,7 +192,7 @@ UpdateSleepTime StickyBombUpdate::update( void )
 		{
 			const StickyBombUpdateModuleData* d = getStickyBombUpdateModuleData();
 			FCoord3D newPos = *target->getPositionFix();
-			newPos.z += fixFromReal( d->m_offsetZ );	// P3
+			newPos.z += d->m_offsetZ;
 
 			self->setPositionFix( &newPos );
 		}

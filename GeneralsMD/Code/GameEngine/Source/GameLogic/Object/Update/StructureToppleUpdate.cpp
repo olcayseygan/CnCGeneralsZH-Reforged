@@ -143,8 +143,8 @@ static void parseAngleFX(INI* ini, void *instance, void * /* store */, const voi
 		{ "MaxToppleDelay",						INI::parseDurationUnsignedInt,		NULL, offsetof( StructureToppleUpdateModuleData, m_maxToppleDelay ) },
 		{ "MinToppleBurstDelay",			INI::parseDurationUnsignedInt,		NULL, offsetof( StructureToppleUpdateModuleData, m_minToppleBurstDelay ) },
 		{ "MaxToppleBurstDelay",			INI::parseDurationUnsignedInt,		NULL, offsetof( StructureToppleUpdateModuleData, m_maxToppleBurstDelay ) },
-		{ "StructuralIntegrity",			INI::parseReal,										NULL, offsetof( StructureToppleUpdateModuleData, m_structuralIntegrity ) },
-		{ "StructuralDecay",					INI::parseReal,										NULL, offsetof( StructureToppleUpdateModuleData, m_structuralDecay ) },
+		{ "StructuralIntegrity",			INI::parseFix,										NULL, FIX_OFFSET( StructureToppleUpdateModuleData, m_structuralIntegrity ) },
+		{ "StructuralDecay",					INI::parseFix,										NULL, FIX_OFFSET( StructureToppleUpdateModuleData, m_structuralDecay ) },
 		{ "DamageFXTypes",						INI::parseDamageTypeFlags,				NULL, offsetof( StructureToppleUpdateModuleData, m_damageFXTypes ) },
 		{ "TopplingFX",								INI::parseFXList,									NULL, offsetof( StructureToppleUpdateModuleData, m_toppleFXList ) },
 		{ "ToppleDelayFX",						INI::parseFXList,									NULL, offsetof( StructureToppleUpdateModuleData, m_toppleDelayFXList ) },
@@ -259,7 +259,7 @@ UpdateSleepTime StructureToppleUpdate::update( void )
 		}
 		if (now >= m_toppleFrame) {
 			m_toppleState = TOPPLESTATE_TOPPLING;
-			m_structuralIntegrity = d->m_structuralIntegrity;
+			m_structuralIntegrity = fixToReal( d->m_structuralIntegrity );	// P8: saved in float
 		}
 	}
 
@@ -273,7 +273,7 @@ UpdateSleepTime StructureToppleUpdate::update( void )
 
 		// doesn't make sense to have a structural integrity less than zero.
 		if (m_structuralIntegrity > 0.0f) {
-			m_structuralIntegrity *= d->m_structuralDecay;
+			m_structuralIntegrity *= fixToReal( d->m_structuralDecay );	// P8
 			if (m_structuralIntegrity < 0.0f) {
 				m_structuralIntegrity = 0.0f;
 			}

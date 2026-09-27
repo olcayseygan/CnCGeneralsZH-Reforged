@@ -77,12 +77,12 @@ StealthUpdateModuleData::StealthUpdateModuleData()
     //
     m_stealthDelay		= UINT_MAX;
     m_stealthLevel		= 0;
-    m_stealthSpeed		= 0.0f;
+    m_stealthSpeed		= Fix( 0 );
     m_friendlyOpacityMin = 0.5f;
     m_friendlyOpacityMax = 1.0f;
     m_pulseFrames = 30;
     m_teamDisguised		= false;
-    m_revealDistanceFromTarget = 0.0f;
+    m_revealDistanceFromTarget = Fix( 0 );
     m_orderIdleEnemiesToAttackMeUponReveal = false;
     m_innateStealth   = true;
     m_disguiseTransitionFrames = 0;
@@ -103,16 +103,16 @@ void StealthUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "StealthDelay",									INI::parseDurationUnsignedInt,	NULL, offsetof( StealthUpdateModuleData, m_stealthDelay ) },
-		{ "MoveThresholdSpeed",						INI::parseVelocityReal,					NULL, offsetof( StealthUpdateModuleData, m_stealthSpeed ) },
+		{ "MoveThresholdSpeed",						INI::parseVelocityFix,					NULL, FIX_OFFSET( StealthUpdateModuleData, m_stealthSpeed ) },
 		{ "StealthForbiddenConditions",		INI::parseBitString32,					TheStealthLevelNames, offsetof( StealthUpdateModuleData, m_stealthLevel) }, 
 		{ "HintDetectableConditions",	  	ObjectStatusMaskType::parseFromINI,	NULL, offsetof( StealthUpdateModuleData, m_hintDetectableStates) },
 		{ "RequiredStatus",								ObjectStatusMaskType::parseFromINI,	NULL, offsetof( StealthUpdateModuleData, m_requiredStatus ) },
 		{ "ForbiddenStatus",							ObjectStatusMaskType::parseFromINI,	NULL, offsetof( StealthUpdateModuleData, m_forbiddenStatus ) },
-		{ "FriendlyOpacityMin",						INI::parsePercentToReal,				NULL, offsetof( StealthUpdateModuleData, m_friendlyOpacityMin ) },
-		{ "FriendlyOpacityMax",						INI::parsePercentToReal,				NULL, offsetof( StealthUpdateModuleData, m_friendlyOpacityMax ) },
+		{ "FriendlyOpacityMin",						INI::parsePercentToReal,				NULL, REAL_OFFSET( StealthUpdateModuleData, m_friendlyOpacityMin ) },
+		{ "FriendlyOpacityMax",						INI::parsePercentToReal,				NULL, REAL_OFFSET( StealthUpdateModuleData, m_friendlyOpacityMax ) },
 		{ "PulseFrequency",								INI::parseDurationUnsignedInt,	NULL, offsetof( StealthUpdateModuleData, m_pulseFrames ) },
 		{ "DisguisesAsTeam",							INI::parseBool,									NULL, offsetof( StealthUpdateModuleData, m_teamDisguised ) },
-		{ "RevealDistanceFromTarget",			INI::parseReal,									NULL, offsetof( StealthUpdateModuleData, m_revealDistanceFromTarget ) },
+		{ "RevealDistanceFromTarget",			INI::parseFix,									NULL, FIX_OFFSET( StealthUpdateModuleData, m_revealDistanceFromTarget ) },
 		{ "OrderIdleEnemiesToAttackMeUponReveal", INI::parseBool,					NULL, offsetof( StealthUpdateModuleData, m_orderIdleEnemiesToAttackMeUponReveal ) },
 		{ "DisguiseFX",										INI::parseFXList,								NULL, offsetof( StealthUpdateModuleData, m_disguiseFX ) },
 		{ "DisguiseRevealFX",							INI::parseFXList,								NULL, offsetof( StealthUpdateModuleData, m_disguiseRevealFX ) },
@@ -425,7 +425,7 @@ Bool StealthUpdate::allowedToStealth( Object *stealthOwner ) const
 
 	const PhysicsBehavior *physics = self->getPhysics();
 	if ((flags & STEALTH_NOT_WHILE_MOVING) && physics != NULL && 
-					physics->getVelocityMagnitude() > getStealthUpdateModuleData()->m_stealthSpeed)
+					physics->getVelocityMagnitude() > fixToReal( getStealthUpdateModuleData()->m_stealthSpeed ))	// P4
 		return FALSE;
 	
 	if( self->testScriptStatusBit(OBJECT_STATUS_SCRIPT_UNSTEALTHED))
@@ -711,8 +711,8 @@ UpdateSleepTime StealthUpdate::update( void )
 	}
 
 /// @todo srj -- do we need to do this EVERY frame?
-	Real revealDistance = getRevealDistanceFromTarget();
-	if( revealDistance > 0.0f )
+	const Fix reveal = getRevealDistanceFromTarget();
+	if( reveal > Fix( 0 ) )
 	{
 		AIUpdateInterface *ai = self->getAI();
 		if( ai )
@@ -721,7 +721,6 @@ UpdateSleepTime StealthUpdate::update( void )
 			if( target )
 			{
 				Fix distSqrd = ThePartitionManager->getDistanceSquaredFix( self, target, FROM_CENTER_2D );
-				Fix reveal = fixFromReal( revealDistance );	// P3
 				if( distSqrd <= reveal * reveal )
 				{
 					//We're close enough to reveal ourselves
@@ -865,7 +864,7 @@ void setWakeupIfInRange( Object *obj, void *userData)
 		return;
 	}
 
-	Fix vision = fixFromReal( obj->getVisionRange() );	// P3
+	Fix vision = fixFromReal( obj->getVisionRange() );	// P9: the vision range is float
 
 	FCoord3D srcpos = *obj->getPositionFix();
 	srcpos.sub( *victim->getPositionFix() );

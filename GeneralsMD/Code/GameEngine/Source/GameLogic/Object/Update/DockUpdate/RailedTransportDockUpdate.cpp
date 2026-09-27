@@ -32,6 +32,7 @@
 
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Lib/FixBoundary.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/InGameUI.h"
 #include "GameLogic/GameLogic.h"
@@ -52,7 +53,7 @@ RailedTransportDockUpdateModuleData::RailedTransportDockUpdateModuleData( void )
 
 	m_pullInsideDurationInFrames = 0;
 	m_pushOutsideDurationInFrames = 0;
-	m_toleranceDistance = 50.0f;
+	m_toleranceDistance = Fix( 50 );
 }  // end RailedTransportDockUpdateModuleData
 
 // ------------------------------------------------------------------------------------------------
@@ -66,7 +67,7 @@ RailedTransportDockUpdateModuleData::RailedTransportDockUpdateModuleData( void )
 
 		{ "PullInsideDuration", INI::parseDurationUnsignedInt, NULL, offsetof( RailedTransportDockUpdateModuleData, m_pullInsideDurationInFrames ) },	
 		{ "PushOutsideDuration",INI::parseDurationUnsignedInt, NULL, offsetof( RailedTransportDockUpdateModuleData, m_pushOutsideDurationInFrames ) },
-		{ "ToleranceDistance",  INI::parseReal,								 NULL, offsetof( RailedTransportDockUpdateModuleData, m_toleranceDistance ) },
+		{ "ToleranceDistance",  INI::parseFix,								 NULL, FIX_OFFSET( RailedTransportDockUpdateModuleData, m_toleranceDistance ) },
 		{ 0, 0, 0, 0 }
 
 	};
@@ -149,7 +150,7 @@ Bool RailedTransportDockUpdate::action( Object *docker, Object *drone )
 		const RailedTransportDockUpdateModuleData *modData = getRailedTransportDockUpdateModuleData();
 
 		//Are we close enough to even be able to get sucked in?
-		if( mag <= modData->m_toleranceDistance )
+		if( mag <= fixToReal( modData->m_toleranceDistance ) )	// P8
 		{
 			m_dockingObjectID = docker->getID();
 

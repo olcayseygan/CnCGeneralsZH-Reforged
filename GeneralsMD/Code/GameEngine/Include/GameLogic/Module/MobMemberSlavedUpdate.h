@@ -52,14 +52,14 @@ public:
 	//Example: Currently used by scout drones owned by rangers AND stinger soldiers owned by stinger sites.
 	Int m_mustCatchUpRadius;		//Distance from master I'm allowed when he's idle. If I go too far away, I'll come back.
 	Int m_noNeedToCatchUpRadius;	//Allowable wander distance from master while guarding master.
-	Real m_squirrellinessRatio; 
+	Fix m_squirrellinessRatio;
 	UnsignedInt m_catchUpCrisisBailTime; //after this many consecutive frames outside the catchup radius, I will teleport to the nexus
 
 	MobMemberSlavedUpdateModuleData()
 	{
 		m_mustCatchUpRadius = DEFAULT_MUST_CATCH_UP_RADIUS;
 		m_noNeedToCatchUpRadius = DEFAULT_NO_NEED_TO_CATCH_UP_RADIUS;
-		m_squirrellinessRatio = 0;
+		m_squirrellinessRatio = Fix( 0 );
 		m_catchUpCrisisBailTime = 999999;//default to very large number
 	}
 
@@ -71,7 +71,7 @@ public:
 			{ "MustCatchUpRadius",			INI::parseInt,	NULL, offsetof( MobMemberSlavedUpdateModuleData, m_mustCatchUpRadius ) },
 			{ "CatchUpCrisisBailTime",			INI::parseUnsignedInt,	NULL, offsetof( MobMemberSlavedUpdateModuleData, m_catchUpCrisisBailTime ) },
 			{ "NoNeedToCatchUpRadius",		INI::parseInt,	NULL, offsetof( MobMemberSlavedUpdateModuleData, m_noNeedToCatchUpRadius ) },
-			{ "Squirrelliness",     INI::parseReal, NULL, offsetof( MobMemberSlavedUpdateModuleData, m_squirrellinessRatio ) },
+			{ "Squirrelliness",     INI::parseFix, NULL, FIX_OFFSET( MobMemberSlavedUpdateModuleData, m_squirrellinessRatio ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);

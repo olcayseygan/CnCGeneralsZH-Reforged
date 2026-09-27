@@ -66,7 +66,7 @@ void StealthDetectorUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "DetectionRate",							INI::parseDurationUnsignedInt,			NULL, offsetof( StealthDetectorUpdateModuleData, m_updateRate ) },
-		{ "DetectionRange",							INI::parseReal,											NULL, offsetof( StealthDetectorUpdateModuleData, m_detectionRange ) },
+		{ "DetectionRange",							INI::parseFix,											NULL, FIX_OFFSET( StealthDetectorUpdateModuleData, m_detectionRange ) },
 		{ "InitiallyDisabled",					INI::parseBool,											NULL, offsetof( StealthDetectorUpdateModuleData, m_initiallyDisabled ) },
 		{ "PingSound",									INI::parseAudioEventRTS,						NULL, offsetof( StealthDetectorUpdateModuleData, m_pingSound ) },
 		{ "LoudPingSound",							INI::parseAudioEventRTS,						NULL, offsetof( StealthDetectorUpdateModuleData, m_loudPingSound ) },
@@ -198,15 +198,15 @@ UpdateSleepTime StealthDetectorUpdate::update( void )
 	PartitionFilterSameMapStatus					filterMapStatus(getObject());
 	PartitionFilter*											filters[] = { &filterStealthOrStealthGarrisoned, &filterTeam, &filterKindof, &filterMapStatus, NULL };
 
-	Real visionRange = self->getVisionRange();
-	if( data->m_detectionRange > 0.0f )
+	Fix visionRange = data->m_detectionRange;
+	if( visionRange <= Fix( 0 ) )
 	{
-		visionRange = data->m_detectionRange;
+		visionRange = fixFromReal( self->getVisionRange() );	// P9: the vision range is float
 	}
 	Bool foundSomeone = FALSE;
 
 	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRangeFix(
-								self, fixFromReal( visionRange ), FROM_CENTER_2D, filters);	// P3
+								self, visionRange, FROM_CENTER_2D, filters);
 	MemoryPoolObjectHolder hold(iter);
 	for (Object *them = iter->first(); them; them = iter->next())
 	{

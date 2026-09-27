@@ -298,6 +298,7 @@ private:
 	Bool isDoingScriptedCamera( void ) const;				///< True while any scripted camera movement owns the view
 	void stopDoingScriptedCamera( void );						///< Hand the view back to the user, whatever the script was doing
 	void setCameraTransform( void );								///< set the transform matrix of m_3DCamera, based on m_pos & m_angle
+	Bool wantsIsometric( void ) const;							///< the option is on and no cinematic has the camera
 	void buildCameraTransform( Matrix3D *transform ) ;			///< calculate (but do not set) the transform matrix of m_3DCamera, based on m_pos & m_angle
 	void calcCameraConstraints() ;			///< recalc m_cameraConstraint
 	void moveAlongWaypointPath(Int milliseconds); ///< Move camera along path.

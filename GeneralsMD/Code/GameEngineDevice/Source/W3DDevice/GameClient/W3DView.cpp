@@ -831,6 +831,19 @@ private:
 };
 
 //-------------------------------------------------------------------------------------------------
+// The isometric camera is the player's.  A cinematic is shot for the perspective lens: the scripts
+// drop the eye to ten units off the ground and tilt it up at a rocket or the skyline (m_FXPitch
+// runs from -1.5 to 52 in USA01's intro), and there is no ground in that frame for
+// IsometricFrameFit to fit.  Its elevation search then sits on one end of its range or the other,
+// so each shot came out as a view from above of somewhere else, jumping as the pitch changed, and
+// a shallow one looked past the edge of the map into white.  So the letterbox, which a scripted
+// cinematic puts up, hands the camera back to perspective until it comes down.
+Bool W3DView::wantsIsometric( void ) const
+{
+	return TheGlobalData->m_isometricCamera && !(TheDisplay && TheDisplay->isLetterBoxed());
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DView::setCameraTransform( void )
 {
 	m_cameraHasMovedSinceRequest = true;
@@ -898,7 +911,7 @@ void W3DView::setCameraTransform( void )
 	// the perspective camera would, on any screen shape.  Rotating and zooming work as they always
 	// did, because the perspective camera they move is still built first.
 	const Bool wasIsometric = m_isometricApplied;
-	m_isometricApplied = TheGlobalData->m_isometricCamera;
+	m_isometricApplied = wantsIsometric();
 	const Real perspectiveFov = perspectiveHorizontalFov(getWidth());
 	if (m_isometricApplied)
 	{
@@ -1715,7 +1728,7 @@ void W3DView::update(void)
 	// The isometric camera holds its height over the view's ground level instead, for the reason
 	// IsometricFrameFit gives: following the hills made the picture grow and shrink under the pan.
 	//
-	if (TheGlobalData->m_isometricCamera)
+	if (wantsIsometric())
 		m_terrainHeightUnderCamera = m_groundLevel;
 	else
 		m_terrainHeightUnderCamera = m_zoomAnchorValid ? m_zoomAnchorTerrainHeight : getHeightAroundPos(m_pos.x, m_pos.y);
@@ -1791,7 +1804,7 @@ void W3DView::update(void)
 	}
 	
 	// (gth) C&C3 if m_isCameraSlaved then force the camera to update each frame
-	if ((recalcCamera) || (m_isCameraSlaved) || TheGlobalData->m_isometricCamera != m_isometricApplied) {
+	if ((recalcCamera) || (m_isCameraSlaved) || wantsIsometric() != m_isometricApplied) {
 		setCameraTransform();
 	}
 	m_recalcCamera = false;

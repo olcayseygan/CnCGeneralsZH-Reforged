@@ -155,7 +155,7 @@ def play(env, q, seed, rng, show=None, shots=None):
     built, enemy_built, lost, killed = Counter(), Counter(), Counter(), Counter()
     counts, army, events, pictures = Counter(), [], [], []
     sshots = user_data_folder(env) if shots else None
-    total, refused, threat, step, done, last = 0.0, 0, False, 0, False, None
+    total, refused, threat, step, done, last, damage, idle = 0.0, 0, False, 0, False, None, 0.0, 0
     if show:
         show(0, info["frame"], q[state], mask)
     while not done:
@@ -179,6 +179,7 @@ def play(env, q, seed, rng, show=None, shots=None):
         state, mask, total = next_state, info["mask"], total + r
         refused += info["refused"]
         counts[ACTION_NAMES[action]] += 1
+        damage, idle = damage + info["damage"], idle + info["idle"]
 
         finished, gone = changes(ours, env.ours)
         enemy_finished, enemy_gone = changes(theirs, env.theirs)
@@ -204,7 +205,7 @@ def play(env, q, seed, rng, show=None, shots=None):
                 os.remove(os.path.join(shots, picture["file"]))
         pictures = [pictures[i] for i in keep]
     return {"seed": seed, "result": info["result"], "final_frame": info["frame"], "decisions": step,
-            "return": round(total, 3), "refused": refused, "seconds": round(time.time() - started, 1),
+            "return": round(total, 3), "refused": refused, "damage": round(damage), "idle": idle, "seconds": round(time.time() - started, 1),
             "action_counts": dict(counts), "built": dict(built), "lost": dict(lost), "enemy_built": dict(enemy_built),
             "killed": dict(killed), "army_columns": ["frame", "army", "enemy_army", "money"], "army": army,
             "events": events, "pictures": pictures}
@@ -417,6 +418,7 @@ def main():
                 state, info = env.reset(arguments.seed + episode)
                 mask = info["mask"]
                 transitions, total, refused, counts, refused_by = [], 0.0, 0, [0] * N_ACTIONS, [0] * N_ACTIONS
+                damage, idle = 0.0, 0
                 if arguments.watch:
                     env.show(watched(episode, eps, 0, info["frame"], q[state], mask))
                 done = False
@@ -432,6 +434,7 @@ def main():
                     refused += info["refused"]
                     refused_by[action] += info["refused"]
                     counts[action] += 1
+                    damage, idle = damage + info["damage"], idle + info["idle"]
                 env.close()
                 with lock:
                     learn(q, transitions)
@@ -440,15 +443,17 @@ def main():
                            "result": info["result"], "frame": info["frame"], "return": round(total, 3),
                            "lead": round(info["lead"], 3), "decisions": len(transitions), "refused": refused,
                            "unfinished": info["unfinished"], "dozers": info["dozers"],
+                           "damage": round(damage), "idle": idle,
                            "actions": dict(zip(ACTION_NAMES, counts)),
                            "refused_by": {name: n for name, n in zip(ACTION_NAMES, refused_by) if n},
                            "seconds": round(time.time() - started, 1)}
                     rows.append(row)
                     log.write(json.dumps(row) + "\n")
                     log.flush()
-                    print("episode %4d  %-4s  frame %5d  return %7.2f  lead %6.2f  refused %3d/%3d  eps %.2f  %.0fs"
+                    print("episode %4d  %-4s  frame %5d  return %7.2f  lead %6.2f  refused %3d/%3d  idle %3d  "
+                          "damage %6d  eps %.2f  %.0fs"
                           % (episode, row["result"], row["frame"], total, row["lead"], refused, len(transitions),
-                             eps, row["seconds"]), flush=True)
+                             idle, damage, eps, row["seconds"]), flush=True)
                     steps[0] += len(transitions)
                     if every and steps[0] >= last_checkpoint[0] + every:
                         last_checkpoint[0] = steps[0] // every * every

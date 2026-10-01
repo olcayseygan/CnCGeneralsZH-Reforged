@@ -24,7 +24,15 @@ those. What the game still refuses after that costs REFUSED_PENALTY and otherwis
 Reward is the change in net-worth lead, our money plus what our objects are worth minus what the
 enemy's objects are worth, in units of WORTH_SCALE, plus WIN_REWARD or -WIN_REWARD when a side has nothing left. An
 object's worth is its build cost scaled by its health, so spending is neutral, income and kills pay,
-losses cost. It is a potential difference, so it shapes without changing which policy is best.
+losses cost. Three terms sit on top of that potential difference, each found missing in the first
+200k-step run:
+- DAMAGE_BONUS times the enemy worth our side destroyed in the step, counted per object so that the
+  enemy building something new cannot hide it. Damage pays 1.5 times its worth and our losses 1 time,
+  so an even trade is a small gain and losing twice what we kill is still a loss.
+- IDLE_PENALTY for a noop while anything else is valid, and for a gather that moves nobody. Both left
+  the state as it was at zero reward, and the greedy table sat in them for 100-170 of 180 decisions.
+- train dozer is masked at DOZER_CAP dozers. A dozer kept its full price as worth, so dozers were a
+  risk-free bank and the table bought 20-40 of them; four build all four structures at once.
 
 With watch=True the game runs in a window with the camera locked on our command center, the game's
 own interface off (-cinema watch, which keeps the mouse pointer) and show() sending the trainer's
@@ -66,6 +74,10 @@ PROBE_FRAMES = 2                # how long a construct or produce gets to show u
 WORTH_SCALE = 2000.0
 WIN_REWARD = 10.0
 REFUSED_PENALTY = 0.05
+IDLE_PENALTY = 0.02             # a noop forever is worth -2.0, the price of a supply center
+DAMAGE_BONUS = 0.5              # on top of the potential, which already counts enemy worth destroyed once
+DOZER_CAP = 4
+GATHERED_RADIUS = 250.0         # an army unit this close to home is already gathered
 
 US, THEM = 0, 1
 COMMAND_CENTER = "AmericaCommandCenter"
@@ -91,7 +103,8 @@ N_ACTIONS = len(ACTIONS)
 MONEY_EDGES = (900, 2000)
 ARMY_EDGES = (1, 5, 12)
 THREAT_RADIUS = 600.0
-N_STATES = (len(MONEY_EDGES) + 1) * 16 * 2 * (len(ARMY_EDGES) + 1) * 2 * 2
+PHASE_EDGES = (5400, 13500)     # early under three minutes, late past seven and a half
+N_STATES = (len(PHASE_EDGES) + 1) * (len(MONEY_EDGES) + 1) * 16 * 2 * (len(ARMY_EDGES) + 1) * 2 * 2
 
 
 # -- what things cost and what they are, out of the game's own INI ---------------------------------
@@ -146,13 +159,28 @@ def is_army(kinds):
     return not kinds & {"STRUCTURE", "DOZER", "HARVESTER"}
 
 
+def worths(units, templates):
+    """{id: build cost scaled by health}."""
+    return {u["id"]: templates.get(u["template"], (0, ()))[0] * u["health"] / u["maxHealth"] for u in units}
+
+
 def worth(units, templates):
-    return sum(templates.get(u["template"], (0, ()))[0] * u["health"] / u["maxHealth"] for u in units)
+    return sum(worths(units, templates).values())
 
 
-def discretize(money, have, dozers, army, army_lead, threat):
-    """Table row: money band x which of the four buildings stand x a dozer x army band x lead x threat."""
-    row = int(np.searchsorted(MONEY_EDGES, money, side="right"))
+def destroyed(before, after):
+    """Worth lost between two worths() of one side: health lost by what is still there plus all of
+    what is gone. Growth, a building going up or a new object, counts nothing.
+
+    ponytail: a unit that leaves the list without dying (into a garrison) counts as destroyed; the
+    agent cannot cause that on the enemy's side, so it is noise rather than an exploit."""
+    return sum(worth - after.get(i, 0.0) for i, worth in before.items() if after.get(i, 0.0) < worth)
+
+
+def discretize(frame, money, have, dozers, army, army_lead, threat):
+    """Table row: phase x money band x which of the four buildings stand x a dozer x army band x lead x threat."""
+    row = int(np.searchsorted(PHASE_EDGES, frame, side="right"))
+    row = row * (len(MONEY_EDGES) + 1) + int(np.searchsorted(MONEY_EDGES, money, side="right"))
     for building in (POWER, BARRACKS, SUPPLY, FACTORY):
         row = row * 2 + int(building in have)
     row = row * 2 + int(dozers > 0)
@@ -262,7 +290,7 @@ class MacroEnv(object):
         threat = any(np.hypot(u["x"] - centre[0], u["y"] - centre[1]) < THREAT_RADIUS for u in enemy_army)
         lead = worth(army, self.templates) >= worth(enemy_army, self.templates)
         have = {u["template"] for u in self.ours}
-        return discretize(self.money, have, self._free_dozers(), len(army), lead, threat)
+        return discretize(self.frame, self.money, have, self._free_dozers(), len(army), lead, threat)
 
     def base(self):
         centres = [u for u in self.ours if u["template"] == COMMAND_CENTER] or self.ours
@@ -280,7 +308,8 @@ class MacroEnv(object):
             return bool(self.money >= self.templates[what][0] and self._free_dozers() > 0
                         and (need is None or self._built(need)) and self._spot(what) is not None)
         if kind == "train":
-            return bool(self.money >= self.templates[what][0] * count and self._built(producer))
+            return bool(self.money >= self.templates[what][0] * count and self._built(producer)
+                        and (what != DOZER or self._count(DOZER) < DOZER_CAP))
         if kind in ("attack", "gather"):
             return bool(self._army(self.ours))
         return True
@@ -315,6 +344,14 @@ class MacroEnv(object):
         for template in templates:
             self.game.send("%s %d %s %g %g" % (verb, US, template, point[0], point[1]))
         return bool(templates)
+
+    def _idle(self, action):
+        """Whether action is a wait: a noop while something else is valid, or a gather that moves nobody."""
+        kind = ACTIONS[action][1]
+        if kind is None:
+            return bool(self.mask()[1:].any())
+        return kind == "gather" and all(np.hypot(u["x"] - self.home[0], u["y"] - self.home[1]) < GATHERED_RADIUS
+                                        for u in self._army(self.ours))
 
     def _target(self):
         """Their army when it is at our door, else their structure nearest our base, else anything of theirs."""
@@ -352,19 +389,24 @@ class MacroEnv(object):
         self.home = centre + 0.25 * (self.enemy_start - centre)
         self.spots = placement_spots(centre, self.enemy_start)
         self.phi = self.potential()
+        self.enemy_worths = worths(self.theirs, self.templates)
         if self.watch:
             self.game.follow([u for u in self.ours if u["template"] == COMMAND_CENTER][0]["id"])
         return self.observe(), {"frame": self.frame, "mask": self.mask()}
 
     def step(self, action):
         started = self.frame
+        idle = self._idle(action)
         done_ok = self.act(action)
         alive = self._step(max(1, DECISION_FRAMES - (self.frame - started)))
         if alive:
             self._read()
         phi = self.potential()
-        r = phi - self.phi - (0.0 if done_ok else REFUSED_PENALTY)
-        self.phi = phi
+        enemy_worths = worths(self.theirs, self.templates)
+        damage = destroyed(self.enemy_worths, enemy_worths)
+        r = (phi - self.phi + DAMAGE_BONUS * damage / WORTH_SCALE - (0.0 if done_ok else REFUSED_PENALTY)
+             - (IDLE_PENALTY if idle else 0.0))
+        self.phi, self.enemy_worths = phi, enemy_worths
         result = None
         if not self.theirs:
             result = "win"
@@ -373,7 +415,8 @@ class MacroEnv(object):
         elif not alive or self.frame >= FRAME_CAP:
             result = "draw"
         r += {"win": WIN_REWARD, "loss": -WIN_REWARD}.get(result, 0.0)
-        info = {"frame": self.frame, "result": result, "refused": not done_ok, "lead": phi,
+        info = {"frame": self.frame, "result": result, "refused": not done_ok, "lead": phi, "idle": idle,
+                "damage": damage,
                 "army": len(self._army(self.ours)), "enemy_army": len(self._army(self.theirs)), "mask": self.mask(),
                 "unfinished": self._unfinished(), "dozers": self._count(DOZER)}
         return self.observe() if self.ours else 0, r, result in ("win", "loss"), result == "draw", info
@@ -405,13 +448,18 @@ def self_check():
     assert not is_army(templates[DOZER][1]) and not is_army(templates["AmericaVehicleChinook"][1])
     assert not is_army(templates[COMMAND_CENTER][1]) and is_army(templates[RANGER][1])
 
-    rows = {discretize(m, have, d, a, l, t)
-            for m in (0, 900, 5000) for d in (0, 2) for a in (0, 1, 5, 40) for l in (0, 1) for t in (0, 1)
+    rows = {discretize(f, m, have, d, a, l, t)
+            for f in (0, 5400, 27000) for m in (0, 900, 5000) for d in (0, 2) for a in (0, 1, 5, 40)
+            for l in (0, 1) for t in (0, 1)
             for have in ({POWER}, {POWER, BARRACKS, SUPPLY, FACTORY}, set(), {BARRACKS, FACTORY})}
-    assert len(rows) == 3 * 2 * 4 * 2 * 2 * 4 and all(0 <= row < N_STATES for row in rows)
+    assert len(rows) == 3 * 3 * 2 * 4 * 2 * 2 * 4 and all(0 <= row < N_STATES for row in rows)
 
-    tank = [{"template": CRUSADER, "health": 240.0, "maxHealth": 480.0}]
+    tank = [{"id": 1, "template": CRUSADER, "health": 240.0, "maxHealth": 480.0}]
     assert worth(tank, templates) == 450.0
+    # damage: health lost and objects gone count, a building going up and a new unit do not
+    before = {1: 900.0, 2: 1000.0, 3: 100.0}
+    assert destroyed(before, {1: 450.0, 3: 400.0, 4: 2000.0}) == 450.0 + 1000.0
+    assert destroyed(before, before) == 0.0
     spots = placement_spots(np.array([0.0, 0.0]), np.array([1000.0, 0.0]))
     assert np.hypot(*spots[0]) < 200 and spots[0][0] < 0          # nearest ring, back of the base first
 
@@ -425,10 +473,19 @@ def self_check():
     env.money, env.ours, env.spots, env.game = 0, [], spots, Ground()
     assert list(env.mask()) == [True] + [False] * (N_ACTIONS - 1)    # noop is never masked
     env.money = 5000
-    env.ours = [{"template": t, "built": True} for t in (COMMAND_CENTER, DOZER, POWER, BARRACKS, RANGER)]
+    assert not env._idle(0)                                          # a noop with nothing else to do is free
+    env.home = np.array([0.0, 0.0])
+    env.ours = [{"template": t, "built": True, "x": 0.0, "y": 0.0}
+                for t in (COMMAND_CENTER, DOZER, POWER, BARRACKS, RANGER)]
     names = [a[0] for a, ok in zip(ACTIONS, env.mask()) if ok]
     assert names == ["noop", "build power", "build barracks", "build supply", "train dozer", "train rangers",
                      "attack", "gather"]
+    assert env._idle(0) and env._idle(9) and not env._idle(8)        # the ranger already stands at home
+    env.ours[4]["x"] = 1000.0
+    assert not env._idle(9)
+    env.ours += [{"template": DOZER, "built": True} for _ in range(DOZER_CAP - 1)]
+    assert not env.mask()[5]                                         # no dozer past the cap
+    del env.ours[-(DOZER_CAP - 1):]
     env.ours[2]["built"] = env.ours[3]["built"] = False               # power plant and barracks still going up
     assert not env.mask()[6] and not env.mask()[1:5].any()           # and the one dozer is on them
     env.ours.append({"template": DOZER, "built": True})

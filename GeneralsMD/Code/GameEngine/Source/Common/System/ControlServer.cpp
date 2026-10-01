@@ -35,6 +35,7 @@
 #include "Common/Money.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/ThingTemplate.h"
 #include "GameClient/Display.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
@@ -47,6 +48,7 @@
 #include "GameLogic/ScenarioDrill.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameNetwork/GameInfo.h"		// MAX_SLOTS, for the skirmish command's player count
+#include "GameNetwork/NetworkDefs.h"	// TheNetwork, which step refuses
 
 #include <vector>
 
@@ -251,6 +253,13 @@ static std::vector<char> theIncoming;
 static std::vector<AsciiString> thePendingCommands;
 static Bool theQuitRequested = FALSE;
 
+// step: whether the client owns the logic clock, the frame the current step started from and the
+// one it runs to, and whether its reply is still owed
+static Bool theStepping = FALSE;
+static UnsignedInt theStepStart = 0;
+static UnsignedInt theStepTarget = 0;
+static Bool theStepReplyOwed = FALSE;
+
 static void closeClient( void )
 {
 	if (theClientSocket != INVALID_SOCKET)
@@ -260,6 +269,10 @@ static void closeClient( void )
 	}
 	theHandshakeDone = FALSE;
 	theIncoming.clear();
+
+	// a client that went away cannot send the next step, so the wall clock takes the logic back
+	theStepping = FALSE;
+	theStepReplyOwed = FALSE;
 }
 
 static Bool setNonBlocking( SOCKET s )
@@ -517,6 +530,15 @@ static void replyError( const char *why )
 	sendText( reply );
 }
 
+/** Hand the logic clock back to the wall, answering a step still owed with why it will not finish. */
+static void endStepping( const char *why )
+{
+	if (theStepReplyOwed)
+		replyError( why );
+	theStepping = FALSE;
+	theStepReplyOwed = FALSE;
+}
+
 /** Share of the map, in percent, the player can see right now, from a grid of samples.  Fogged
 	ground, seen once and not watched any more, does not count; a skirmish starts with the whole map
 	fogged rather than black. */
@@ -614,6 +636,58 @@ static void replyStatus( void )
 	sendText( &reply[ 0 ] );
 }
 
+/** units <slot> <selector>: what that seat owns and the selector names, alive, with where it stands
+	  and its health.  Read on the render pass and never written, so it changes nothing logic sees. */
+static void replyUnits( const char *arguments )
+{
+	Int slot = 0;
+	char selectorText[ 256 ];
+	if (sscanf( arguments, "%d %255s", &slot, selectorText ) != 2)
+	{
+		replyError( "units wants <slot> <selector>" );
+		return;
+	}
+	if (TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
+	{
+		replyError( "no match is running" );
+		return;
+	}
+	const Player *player = ScenarioDrill_findPlayerForSlot( slot );
+	if (player == NULL)
+	{
+		replyError( "nobody is sitting in that slot" );
+		return;
+	}
+	const AsciiString selector( selectorText );
+
+	std::vector<char> reply;
+	char piece[ 512 ];
+	sprintf( piece, "{\"ok\":true,\"frame\":%d,\"units\":[", (Int)TheGameLogic->getFrame() );
+	for( const char *at = piece; *at; ++at )
+		reply.push_back( *at );
+
+	Bool first = TRUE;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if (obj->getControllingPlayer() != player || obj->isEffectivelyDead()
+				|| !ScenarioDrill_selectorMatches( selector, obj ))
+			continue;
+
+		const BodyModuleInterface *body = obj->getBodyModule();
+		sprintf( piece, "%s{\"id\":%d,\"template\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"health\":%.2f,\"maxHealth\":%.2f}",
+						 first ? "" : ",", (Int)obj->getID(), obj->getTemplate()->getName().str(),
+						 obj->getPosition()->x, obj->getPosition()->y, body->getHealth(), body->getMaxHealth() );
+		for( const char *at = piece; *at; ++at )
+			reply.push_back( *at );
+		first = FALSE;
+	}
+
+	reply.push_back( ']' );
+	reply.push_back( '}' );
+	reply.push_back( 0 );
+	sendText( &reply[ 0 ] );
+}
+
 /** Everything that changes the world is queued; see the header for why. */
 static void handleCommand( const AsciiString &command )
 {
@@ -647,7 +721,47 @@ static void handleCommand( const AsciiString &command )
 	if (command == "quit")
 	{
 		theQuitRequested = TRUE;
+		endStepping( "quit before the step finished" );		// the quit is carried out on a logic frame, which a held clock never runs
 		replyOk( "\"quitting\":true" );
+		return;
+	}
+
+	if (strncmp( command.str(), "units ", 6 ) == 0)
+	{
+		replyUnits( command.str() + 6 );
+		return;
+	}
+
+	/* step <n>: run n logic frames and answer when they have run.  The reply is sent from
+		 ControlServer_poll on the pass that finds the frame reached.  A network match has a clock of
+		 its own that every machine shares, so it is refused there. */
+	if (strncmp( command.str(), "step ", 5 ) == 0)
+	{
+		Int frames = 0;
+		if (sscanf( command.str() + 5, "%d", &frames ) != 1 || frames < 1)
+		{
+			replyError( "step wants a number of logic frames above zero" );
+			return;
+		}
+		if (TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
+		{
+			replyError( "no match is running" );
+			return;
+		}
+		if (TheNetwork != NULL)
+		{
+			replyError( "step only runs in a match without a network" );
+			return;
+		}
+		if (theStepReplyOwed)
+		{
+			replyError( "the last step has not finished" );
+			return;
+		}
+		theStepping = TRUE;
+		theStepStart = TheGameLogic->getFrame();
+		theStepTarget = theStepStart + frames;
+		theStepReplyOwed = TRUE;
 		return;
 	}
 
@@ -944,6 +1058,26 @@ void ControlServer_poll( void )
 			return;
 	}
 
+	/* A step belongs to the match it was asked in.  When that match ends the frame goes back to 0,
+		 and a clock still held would race the shell map and then freeze the next match; a paused game
+		 runs no logic, so the step would never finish and the client would wait forever. */
+	if (theStepping)
+	{
+		if (!TheGameLogic->isInGame() || TheGameLogic->isInShellGame() || TheGameLogic->getFrame() < theStepStart)
+			endStepping( "the match ended before the step finished" );
+		else if (theStepReplyOwed && TheGameLogic->isGamePaused())
+			endStepping( "the game is paused" );
+	}
+
+	// the logic ran before this pass's poll, so a step that reached its frame did so just now
+	if (theStepReplyOwed && TheGameLogic->getFrame() >= theStepTarget)
+	{
+		char extra[ 64 ];
+		sprintf( extra, "\"frame\":%d", (Int)TheGameLogic->getFrame() );
+		replyOk( extra );
+		theStepReplyOwed = FALSE;
+	}
+
 	unsigned char opcode = 0;
 	AsciiString payload;
 	while (theClientSocket != INVALID_SOCKET && takeFrame( &opcode, &payload ))
@@ -985,6 +1119,16 @@ void ControlServer_runCommands( void )
 	}
 
 	thePendingCommands.clear();
+}
+
+Bool ControlServer_isStepping( void )
+{
+	return theStepping;
+}
+
+Bool ControlServer_holdsLogic( void )
+{
+	return theStepping && TheGameLogic->getFrame() >= theStepTarget;
 }
 
 void ControlServer_shutdown( void )

@@ -36,8 +36,22 @@
 //   move|attackmove <slot> <selector> <x> <y>
 //   attack <slot> <selector> <targetSlot> <targetSelector>
 //   stop <slot> <selector>
+//   teleport <slot> <selector> <x> <y>
 //
-// plus a handful the files have no use for: ping, status, screenshot, skirmish, quit, and
+// plus a handful the files have no use for: ping, status, screenshot, skirmish, quit,
+//
+//   units <slot> <selector>
+//
+// which answers at once with the id, template, position and health of everything of that seat the
+// selector names,
+//
+//   step <n>
+//
+// which hands the logic clock to the client: from the first step on, logic frames run only while a
+// step has frames left, and the reply comes once the n-th of them has run.  A training loop reads
+// the world, queues its orders, steps, and reads again, and the frames between two reads no longer
+// depend on how fast anybody drew.  The clock goes back to the wall when the client disconnects.
+// And
 //
 //   key <KEY_name> [ALT] [CTRL] [SHIFT]
 //
@@ -67,6 +81,13 @@ extern void ControlServer_poll( void );
 /** Carry out the world commands that arrived since the last logic frame.  Called from
 	  GameLogic::update, which is the only place it is safe to make an object. */
 extern void ControlServer_runCommands( void );
+
+/** Whether a client has taken the logic clock with step.  The engine then runs a logic frame every
+	  pass, as -headless does, for as long as the step lasts. */
+extern Bool ControlServer_isStepping( void );
+
+/** Whether a stepping client's frames are all spent, so the logic has to wait for the next step. */
+extern Bool ControlServer_holdsLogic( void );
 
 /** Close the socket.  Called when the engine shuts down. */
 extern void ControlServer_shutdown( void );

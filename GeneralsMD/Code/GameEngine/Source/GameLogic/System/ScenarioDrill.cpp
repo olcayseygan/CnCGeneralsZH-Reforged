@@ -42,6 +42,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/CreateModule.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Object.h"
@@ -205,6 +206,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_SHIFTUPGRADE;
 	else if (token == "construct")
 		*action = SCENARIO_ACTION_CONSTRUCT;
+	else if (token == "teleport")
+		*action = SCENARIO_ACTION_TELEPORT;
 	else
 		return FALSE;
 
@@ -287,6 +290,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_SHIFTATTACKMOVE:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_SHIFTGUARD:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_CONSTRUCT:		return SCENARIO_TOKENS_MOVE;
+		case SCENARIO_ACTION_TELEPORT:		return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_SHIFTATTACK:	return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_SHIFTPOWER:	return SCENARIO_TOKENS_SHIFTPOWER;
 		case SCENARIO_ACTION_SHIFTUPGRADE:	return SCENARIO_TOKENS_SHIFTUPGRADE;
@@ -367,6 +371,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_SHIFTATTACKMOVE:
 		case SCENARIO_ACTION_SHIFTGUARD:
 		case SCENARIO_ACTION_CONSTRUCT:
+		case SCENARIO_ACTION_TELEPORT:
 		{
 			Int next = SCENARIO_ORDER_POSITION_TOKEN;
 			const ScenarioParseResult position = parseScenarioPosition( tokens, count, &next, action );
@@ -600,6 +605,16 @@ static Bool selectorMatches( const AsciiString &selector, const Object *obj )
 		return strncmp( tmpl->getName().str(), selector.str(), length - 1 ) == 0;
 
 	return tmpl->getName() == selector;
+}
+
+Player *ScenarioDrill_findPlayerForSlot( Int slot )
+{
+	return findPlayerForSlot( slot );
+}
+
+Bool ScenarioDrill_selectorMatches( const AsciiString &selector, const Object *obj )
+{
+	return selectorMatches( selector, obj );
 }
 
 /** Whether this player owns the object, it matches the selector and it can be given an order at all. */
@@ -1237,6 +1252,29 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 			group->groupIdle( CMD_FROM_SCRIPT );
 			DEBUG_LOG(("SCENARIO: frame %d stop slot %d '%s' x%d\n",
 								 action.frame, action.slot, action.selector.str(), taken));
+			break;
+		}
+
+		case SCENARIO_ACTION_TELEPORT:
+		{
+			// Stopped first, so no path from before the jump drags them back.  The pathfinder learns the
+			// new cell from AIUpdate on the next frame, the way it does for every unit standing still.
+			group->groupIdle( CMD_FROM_SCRIPT );
+			const std::vector<ObjectID> ids = group->getAllIDs();
+			for( std::vector<ObjectID>::const_iterator it = ids.begin(); it != ids.end(); ++it )
+			{
+				// one riding in a transport or a building goes where its container goes
+				Object *obj = TheGameLogic->findObjectByID( *it );
+				if (obj->getContainedBy() != NULL)
+					continue;
+				obj->setPosition( &dest );
+				obj->setLayer( LAYER_GROUND );		// off a bridge deck, since dest is the ground under the point
+				PhysicsBehavior *physics = obj->getPhysics();
+				if (physics)		// infantry and vehicles carry one; a few orderable things do not
+					physics->resetDynamicPhysics();
+			}
+			DEBUG_LOG(("SCENARIO: frame %d teleport slot %d '%s' x%d to (%.0f,%.0f)\n",
+								 action.frame, action.slot, action.selector.str(), taken, dest.x, dest.y));
 			break;
 		}
 

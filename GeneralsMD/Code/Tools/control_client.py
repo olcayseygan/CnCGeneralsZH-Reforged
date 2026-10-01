@@ -10,7 +10,8 @@ Start the game with -control (default port 8787) and then, from here:
         game.send("screenshot")
 
 World commands are the scenario-file grammar with the leading frame number left off, so a line
-that works in Run/Scenarios/*.txt works here. The rest are ping, status, screenshot and quit.
+that works in Run/Scenarios/*.txt works here. The rest are ping, status, screenshot, quit, units
+(read what a seat owns) and step (run n logic frames, after which the game waits for the next step).
 
 No dependencies on purpose: this speaks enough of RFC 6455 to talk to one server on loopback, and
 anybody who wants to poke the game should not first have to install anything.
@@ -193,6 +194,18 @@ class Control(object):
 
     def stop(self, slot, selector):
         return self.send("stop %d %s" % (slot, selector))
+
+    def teleport(self, slot, selector, x, y):
+        return self.send("teleport %d %s %g %g" % (slot, selector, x, y))
+
+    def units(self, slot, selector="*"):
+        """The list of {id, template, x, y, health, maxHealth} the seat owns under the selector."""
+        return self.send("units %d %s" % (slot, selector))["units"]
+
+    def step(self, frames=1):
+        """Run that many logic frames and return the frame reached. From the first call on the game
+        runs no logic frame it was not stepped through, until this connection closes."""
+        return self.send("step %d" % frames)["frame"]
 
     def screenshot(self):
         return self.send("screenshot")

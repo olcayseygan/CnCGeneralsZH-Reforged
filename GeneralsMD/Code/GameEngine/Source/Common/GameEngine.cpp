@@ -2447,6 +2447,10 @@ void GameEngine::update( void )
 			 of an unattended run. */
 		fastMode = fastMode || TheGlobalData->m_headless;
 
+		/* A -control client that steps owns the clock: a logic frame every pass while its step lasts,
+			 and none once it is spent (logicMayRun below). */
+		fastMode = fastMode || ControlServer_isStepping();
+
 		/* -turbo: the same for a run that draws, unless a network or a sound recording owns the clock.
 			 The five seconds before a -screenshot run at the real rate.  Taken straight out of
 			 fast-forward, a shot differed from its own repeat on 5.6% of the pixels; settled first, on
@@ -2509,7 +2513,8 @@ void GameEngine::update( void )
 		}
 
 		const Bool logicMayRun =
-				((TheNetwork == NULL && !TheGameLogic->isGamePaused()) || (TheNetwork && TheNetwork->isFrameDataReady()));
+				((TheNetwork == NULL && !TheGameLogic->isGamePaused()) || (TheNetwork && TheNetwork->isFrameDataReady()))
+				&& !ControlServer_holdsLogic();
 
 		if (!logicMayRun)
 		{

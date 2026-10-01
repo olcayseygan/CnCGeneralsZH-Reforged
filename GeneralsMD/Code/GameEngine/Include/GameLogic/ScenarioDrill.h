@@ -52,6 +52,9 @@
 #include "Lib/BaseType.h"
 #include "Common/AsciiString.h"
 
+class Object;
+class Player;
+
 // ------------------------------------------------------------------------------------------------
 /** What one scenario line asks for. */
 // ------------------------------------------------------------------------------------------------
@@ -82,7 +85,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_SHIFTPOWER,				///< shiftpower <slot> <selector> <targetSlot> <targetSelector> <power>; the same with a special power armed, on one object
 	SCENARIO_ACTION_SHIFTUPGRADE,			///< shiftupgrade <slot> <selector> <upgrade>; shift on an object upgrade button, bought by every unit that matches
 	SCENARIO_ACTION_DOCK,							///< dock <slot> <selector> <targetSlot> <targetSelector>; a right click on a supply point or a dock
-	SCENARIO_ACTION_CONSTRUCT					///< construct <slot> <template> <position>; the local player's placement click, whatever is selected, as a message that is recorded and crosses the network
+	SCENARIO_ACTION_CONSTRUCT,				///< construct <slot> <template> <position>; the local player's placement click, whatever is selected, as a message that is recorded and crosses the network
+	SCENARIO_ACTION_TELEPORT					///< teleport <slot> <selector> <position>; stop them and stand them there, an episode reset rather than an order
 };
 
 /// ScenarioAction::atStart when the position is plain numbers
@@ -137,6 +141,13 @@ extern void ScenarioDrill_tick( void );
 	  that a command typed down a socket means exactly what the same line means in a file.  Only safe
 	  from inside a logic frame, and only while a match is running. */
 extern Bool ScenarioDrill_execute( const ScenarioAction &action );
+
+/** The player sitting in a seat, the same number -side takes, or NULL.  Read-only, so the control
+	  server's units query can ask it from a render pass. */
+extern Player *ScenarioDrill_findPlayerForSlot( Int slot );
+
+/** Whether a selector (a template name, "*" or a prefix ending in "*") names this object. */
+extern Bool ScenarioDrill_selectorMatches( const AsciiString &selector, const Object *obj );
 
 /** One line for the end-of-run summary: how much of the file actually happened. */
 extern const char *ScenarioDrill_report( void );

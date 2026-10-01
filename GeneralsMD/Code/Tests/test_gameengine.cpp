@@ -14232,6 +14232,12 @@ TEST(scenario_parses_the_order_lines)
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "900 stop 2 *", &action ), (Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_STOP );
 
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 teleport 0 AmericaVehicleHumvee 700 800", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_TELEPORT );
+	CHECK_NEAR( action.at.x, 700.0f, 0.01f );
+	CHECK_NEAR( action.at.y, 800.0f, 0.01f );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 teleport 2 *", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
+
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "200 shiftmove 0 * start1:0:-400", &action ), (Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_SHIFTMOVE );
 	CHECK_EQ( action.atStart, 1 );
@@ -14306,7 +14312,7 @@ TEST(scenario_refuses_a_line_it_cannot_read)
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "12x spawn 2 X 1 0 0", &action ), (Int)SCENARIO_PARSE_BAD_FRAME );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "-5 stop 2 *", &action ), (Int)SCENARIO_PARSE_BAD_FRAME );
 
-	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 teleport 2 *", &action ), (Int)SCENARIO_PARSE_BAD_ACTION );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 dance 2 *", &action ), (Int)SCENARIO_PARSE_BAD_ACTION );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 stop two *", &action ), (Int)SCENARIO_PARSE_BAD_SLOT );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "0 attack 2 * nobody Thing", &action ), (Int)SCENARIO_PARSE_BAD_SLOT );
 

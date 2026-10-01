@@ -286,6 +286,10 @@ public:
 			and carried by a save. */
 	Int getSupplyPileLimit( void ) const { return m_supplyPileLimit; }
 
+	/** The match's Ruleset (GameInfo.h), RULESET_NONE for the retail game.  Fixed when the match
+			starts and carried by a save; Player::rulesetAllows says what it lets through. */
+	Int getRuleset( void ) const { return m_ruleset; }
+
 #ifdef DUMP_PERF_STATS
 	void getAIMetricsStatistics( UnsignedInt *numAI, UnsignedInt *numMoving, UnsignedInt *numAttacking, UnsignedInt *numWaitingForPath, UnsignedInt *overallFailedPathfinds );
 	void resetOverallFailedPathfinds() { m_overallFailedPathfinds = 0; }
@@ -408,6 +412,7 @@ private:
 	Int m_incomeSharing;							///< which earnings allies split, an IncomeSharing
 	UnsignedInt m_techRespawnDelay;		///< frames a destroyed tech building stays down, 0 = for good
 	Int m_supplyPileLimit;						///< players who may gather from one supply pile at once, 0 = any number
+	Int m_ruleset;										///< a Ruleset, RULESET_NONE = the retail game
 
 	/// a destroyed tech building waiting to stand again
 	struct PendingTechBuilding

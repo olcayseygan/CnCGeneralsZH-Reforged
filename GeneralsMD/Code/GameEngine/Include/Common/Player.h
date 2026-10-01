@@ -155,6 +155,11 @@ Bool UnitCapRefuses( Int unitsTowardCap, Int unitsItAdds, UnsignedInt unitCap );
 Bool IncomeSharingSplits( Int incomeSharing, Bool fromTechBuilding );
 UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers );
 
+// The match's Ruleset (GameInfo.h, GameLogic::getRuleset): whether a player may build or train the
+// thing of this name.  Every ruleset also refuses all upgrades, sciences, promotions and special
+// powers; those gates ask GameLogic::getRuleset directly.
+Bool RulesetAllowsThing( Int ruleset, const AsciiString &templateName );
+
 // Pro Rules, PRO-RULES.md: what every skirmish and network match refuses whoever plays it.
 // GameLogic::isProRules() says whether a match is under them; these say what they cover, by name
 // or by type, so a test can ask them without a match.

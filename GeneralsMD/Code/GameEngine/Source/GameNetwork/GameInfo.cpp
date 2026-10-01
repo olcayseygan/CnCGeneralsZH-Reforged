@@ -400,6 +400,7 @@ void GameInfo::reset( void )
   m_incomeSharing = INCOME_SHARING_OFF;
   m_techRespawn = 0;
   m_supplyPileLimit = 0;
+  m_ruleset = RULESET_NONE;
 
 	//
 
@@ -848,6 +849,12 @@ void GameInfo::setSupplyPileLimit( Int players )
   m_supplyPileLimit = players;
 }
 
+// a value from a newer build or a hand-made options string reads as the retail game
+void GameInfo::setRuleset( Int ruleset )
+{
+  m_ruleset = ( ruleset > RULESET_NONE && ruleset < RULESET_COUNT ) ? ruleset : RULESET_NONE;
+}
+
 Bool GameInfo::isColorTaken(Int colorIdx, Int slotToIgnore ) const
 {
 	for (Int i=0; i<MAX_SLOTS; ++i)
@@ -1193,6 +1200,15 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 		game->getUnitLimit() ? 1 : 0, game->getProRules() ? 1 : 0, game->getIncomeSharing(), game->getTechRespawn(),
 		game->getSupplyPileLimit() );
 
+	// only when one is set: an older build refuses a key it does not know, and the retail string stays
+	// the string it always was
+	if (game->getRuleset() != RULESET_NONE)
+	{
+		AsciiString ruleset;
+		ruleset.format("RS=%d;", game->getRuleset());
+		optionsString.concat(ruleset);
+	}
+
 	//add player info for each slot
 	optionsString.concat(slotListID);
 	optionsString.concat('=');
@@ -1272,6 +1288,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
   Int incomeSharing = INCOME_SHARING_OFF; // the same
   Int techRespawn = 0; // the same
   Int supplyPileLimit = 0; // the same
+  Int ruleset = RULESET_NONE; // the same
 
 	Bool sawMap, sawMapCRC, sawMapSize, sawSeed, sawSlotlist, sawUseStats, sawSuperweaponRestriction, sawStartingCash, sawOldFactions;
 	sawMap = sawMapCRC = sawMapSize = sawSeed = sawSlotlist = sawUseStats = sawSuperweaponRestriction = sawStartingCash = sawOldFactions = FALSE;
@@ -1397,6 +1414,10 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     else if (key.compare("PL") == 0 )
     {
       supplyPileLimit = atoi(val.str());
+    }
+    else if (key.compare("RS") == 0 )
+    {
+      ruleset = atoi(val.str());
     }
 		else if (key.getLength() == 1 && *key.str() == slotListID)
 		{
@@ -1749,6 +1770,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     game->setIncomeSharing( incomeSharing );
     game->setTechRespawn( techRespawn );
     game->setSupplyPileLimit( supplyPileLimit );
+    game->setRuleset( ruleset );
 
 		return true;
 	}
@@ -1775,7 +1797,7 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 10;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit
+	const XferVersion currentVersion = 11;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 m_ruleset
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1925,6 +1947,15 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
   else if ( xfer->getXferMode() == XFER_LOAD )
   {
     m_supplyPileLimit = 0;
+  }
+
+  if ( version >= 11 )
+  {
+    xfer->xferInt( &m_ruleset );
+  }
+  else if ( xfer->getXferMode() == XFER_LOAD )
+  {
+    m_ruleset = RULESET_NONE;
   }
 
 }  // end xfer

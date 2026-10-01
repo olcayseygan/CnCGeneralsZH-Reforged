@@ -43,6 +43,7 @@
 
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameNetwork/GameInfo.h"
 #include "GameLogic/Module/DeletionUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
@@ -65,10 +66,12 @@
 //-------------------------------------------------------------------------------------------------
 /** Rules 2 and 15 of Pro Rules: the silo stands and charges and firing it is refused, and so is a
 	* Carpet Bomb below rank 3.  Every route to firing - the button, a hotkey, a script, a computer
-	* player - ends in one of the four do calls. */
-static Bool proRulesRefuse( const Object *object, const SpecialPowerTemplate *specialPowerTemplate )
+	* player - ends in one of the four do calls.  A match under a ruleset refuses every power there,
+	* the general's, the superweapons' and a unit's own ability alike. */
+static Bool matchRulesRefuse( const Object *object, const SpecialPowerTemplate *specialPowerTemplate )
 {
-	return ProRulesRefuseSpecialPower( object->getControllingPlayer(), specialPowerTemplate->getSpecialPowerType() );
+	return TheGameLogic->getRuleset() != RULESET_NONE
+		|| ProRulesRefuseSpecialPower( object->getControllingPlayer(), specialPowerTemplate->getSpecialPowerType() );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -711,7 +714,7 @@ void SpecialPowerModule::aboutToDoSpecialPower( const Coord3D *location )
 //-------------------------------------------------------------------------------------------------
 void SpecialPowerModule::doSpecialPower( UnsignedInt commandOptions )
 {
-	if (m_pausedCount > 0 || getObject()->isDisabled() || proRulesRefuse( getObject(), getSpecialPowerTemplate() )) {
+	if (m_pausedCount > 0 || getObject()->isDisabled() || matchRulesRefuse( getObject(), getSpecialPowerTemplate() )) {
 		return;
 	}
 
@@ -733,7 +736,7 @@ void SpecialPowerModule::doSpecialPower( UnsignedInt commandOptions )
 //-------------------------------------------------------------------------------------------------
 void SpecialPowerModule::doSpecialPowerAtObject( Object *obj, UnsignedInt commandOptions )
 {
-	if (m_pausedCount > 0 || getObject()->isDisabled() || proRulesRefuse( getObject(), getSpecialPowerTemplate() )) {
+	if (m_pausedCount > 0 || getObject()->isDisabled() || matchRulesRefuse( getObject(), getSpecialPowerTemplate() )) {
 		return;
 	}
 
@@ -754,7 +757,7 @@ void SpecialPowerModule::doSpecialPowerAtObject( Object *obj, UnsignedInt comman
 //-------------------------------------------------------------------------------------------------
 Bool SpecialPowerModule::isRefused() const
 {
-	return m_pausedCount > 0 || getObject()->isDisabled() || proRulesRefuse( getObject(), getSpecialPowerTemplate() );
+	return m_pausedCount > 0 || getObject()->isDisabled() || matchRulesRefuse( getObject(), getSpecialPowerTemplate() );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -783,7 +786,7 @@ void SpecialPowerModule::doSpecialPowerAtLocation( const Coord3D *loc, Real angl
 //-------------------------------------------------------------------------------------------------
 void SpecialPowerModule::doSpecialPowerUsingWaypoints( const Waypoint *way, UnsignedInt commandOptions )
 {
-	if (m_pausedCount > 0 || getObject()->isDisabled() || proRulesRefuse( getObject(), getSpecialPowerTemplate() )) {
+	if (m_pausedCount > 0 || getObject()->isDisabled() || matchRulesRefuse( getObject(), getSpecialPowerTemplate() )) {
 		return;
 	}
 

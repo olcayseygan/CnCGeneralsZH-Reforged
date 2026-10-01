@@ -67,6 +67,16 @@ enum IncomeSharing
 	INCOME_SHARING_COUNT
 };
 
+// A ruleset narrows what every player in the match may make.  It has no lobby control; -ruleset sets
+// it for an unattended run and it travels in the options string as RS, so a replay or a -netgame copy
+// plays under the same one.  The values are on the wire and in saves, so only append.
+enum Ruleset
+{
+	RULESET_NONE,							// the retail game
+	RULESET_USA_BASIC,				// power plant, barracks, supply center, war factory; dozer, ranger, crusader; nothing else
+	RULESET_COUNT
+};
+
 /**
   * GameSlot class - maintains information about the contents of a
 	* game slot.  This persists throughout the game.
@@ -281,6 +291,10 @@ public:
   inline Int getSupplyPileLimit( void ) const;
   void setSupplyPileLimit( Int players );
 
+  // A Ruleset, RULESET_NONE for the retail game.
+  inline Int getRuleset( void ) const;
+  void setRuleset( Int ruleset );
+
   Bool hasAIPlayers( void ) const;									///< is any slot held by a computer player?
 
 protected:
@@ -310,6 +324,7 @@ protected:
   Int m_incomeSharing; // an IncomeSharing, INCOME_SHARING_OFF = the retail game
   Int m_techRespawn; // minutes before a destroyed tech building comes back, 0 = never
   Int m_supplyPileLimit; // players who may gather from one supply pile at once, 0 = any number
+  Int m_ruleset; // a Ruleset, RULESET_NONE = the retail game
 };
 
 extern GameInfo *TheGameInfo;
@@ -343,6 +358,7 @@ Bool        GameInfo::getProRules( void ) const             { return m_proRules;
 Int         GameInfo::getIncomeSharing( void ) const        { return m_incomeSharing; }
 Int         GameInfo::getTechRespawn( void ) const          { return m_techRespawn; }
 Int         GameInfo::getSupplyPileLimit( void ) const      { return m_supplyPileLimit; }
+Int         GameInfo::getRuleset( void ) const              { return m_ruleset; }
 
 AsciiString GameInfoToAsciiString( const GameInfo *game );
 Bool ParseAsciiStringToGameInfo( GameInfo *game, AsciiString options );

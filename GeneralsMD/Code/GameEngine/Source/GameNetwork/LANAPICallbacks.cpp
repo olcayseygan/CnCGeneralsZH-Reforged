@@ -277,6 +277,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	game->setIncomeSharing( TheGlobalData->m_incomeSharing );
 	game->setTechRespawn( TheGlobalData->m_techRespawn );
 	game->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
+	game->setRuleset( TheGlobalData->m_ruleset );
 	game->setIsDirectConnect( FALSE );
 	game->setLastHeard( timeGetTime() );
 	game->setLocalIP( m_localIP );

@@ -62,6 +62,7 @@
 #include "GameLogic/FiringTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Locomotor.h"
+#include "GameNetwork/GameInfo.h"
 
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/AutoHealBehavior.h"
@@ -6610,6 +6611,11 @@ const AsciiString& Object::getCommandSetString() const
 //=============================================================================
 Bool Object::canProduceUpgrade( const UpgradeTemplate *upgrade )
 {
+	// A ruleset refuses every upgrade.  The production queue asks here before it takes one, whoever
+	// sent it - the command bar, a shift-queued order, a computer player or a script
+	if( TheGameLogic->getRuleset() != RULESET_NONE )
+		return FALSE;
+
 	// We need to have the button to make the upgrade.  CommandSets are a weird Logic/Client hybrid.
 	const CommandSet *set = TheControlBar->findCommandSet(getCommandSetString());
 

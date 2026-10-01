@@ -14012,6 +14012,46 @@ TEST(supply_pile_limit_starts_off_clamps_and_closes_a_full_pile)
 	CHECK( !SupplyPileLimitCloses( 2, ( 1u << 2 ) | ( 1u << 3 ), 3 ) );
 }
 
+/* The ruleset arrives as RS= in the options string, so a value this build does not know reads as the
+	 retail game.  Under the USA basic ruleset the seven names on its list are buildable and their
+	 neighbours on the same menus, a general's copy and the command center are not. */
+TEST(ruleset_starts_off_clamps_and_lets_through_only_its_list)
+{
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+
+	SkirmishGameInfo game;
+	game.init();
+	CHECK_EQ( game.getRuleset(), (Int)RULESET_NONE );
+	game.setRuleset( RULESET_USA_BASIC );
+	CHECK_EQ( game.getRuleset(), (Int)RULESET_USA_BASIC );
+	game.setRuleset( RULESET_COUNT );
+	CHECK_EQ( game.getRuleset(), (Int)RULESET_NONE );
+	game.setRuleset( -1 );
+	CHECK_EQ( game.getRuleset(), (Int)RULESET_NONE );
+	game.setRuleset( RULESET_USA_BASIC );
+	game.reset();
+	CHECK_EQ( game.getRuleset(), (Int)RULESET_NONE );
+
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+
+	CHECK( RulesetAllowsThing( RULESET_NONE, AsciiString( "AmericaParticleCannonUplink" ) ) );
+	CHECK( RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaPowerPlant" ) ) );
+	CHECK( RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaBarracks" ) ) );
+	CHECK( RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaSupplyCenter" ) ) );
+	CHECK( RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaWarFactory" ) ) );
+	CHECK( RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaVehicleDozer" ) ) );
+	CHECK( RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaInfantryRanger" ) ) );
+	CHECK( RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaTankCrusader" ) ) );
+	CHECK( !RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaCommandCenter" ) ) );
+	CHECK( !RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaVehicleChinook" ) ) );
+	CHECK( !RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaVehicleHumvee" ) ) );
+	CHECK( !RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AmericaStrategyCenter" ) ) );
+	CHECK( !RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "AirF_AmericaTankCrusader" ) ) );
+	CHECK( !RulesetAllowsThing( RULESET_USA_BASIC, AsciiString( "ChinaVehicleDozer" ) ) );
+}
+
 #include "Common/SpecialPowerType.h"
 
 /* Pro Rules name what they ban by the ending every general's copy shares, so each check below

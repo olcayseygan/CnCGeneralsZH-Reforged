@@ -635,6 +635,13 @@ static void startAutoSkirmish( Int numPlayersWanted )
 		sideTemplate[ s ] = templateIndex;
 	}
 
+	// a -ruleset nobody recognises is refused for the same reason
+	if (TheGlobalData->m_ruleset < 0)
+	{
+		DEBUG_LOG(("-ruleset: not a ruleset this build knows; usabasic is the one there is\n"));
+		return;
+	}
+
 	/* -takeover leaves the opponents' seats occupied but driverless. SLOT_TAKEOVER is written into
 		 the slot list as an opponent, but startNewGame marks it playerIsHuman, so setPlayerType never
 		 news an AIPlayer and nothing on that side thinks. A measurement wants that: an AI building and
@@ -697,6 +704,7 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	TheSkirmishGameInfo->setIncomeSharing( TheGlobalData->m_incomeSharing );
 	TheSkirmishGameInfo->setTechRespawn( TheGlobalData->m_techRespawn );
 	TheSkirmishGameInfo->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
+	TheSkirmishGameInfo->setRuleset( TheGlobalData->m_ruleset );
 
 	/* -seed makes the whole run repeatable: the seed drives the factions, the colours, the start
 		 positions and every logic random draw after them, so the same command line replays the same

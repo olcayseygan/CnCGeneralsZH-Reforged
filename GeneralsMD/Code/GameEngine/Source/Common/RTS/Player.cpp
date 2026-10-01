@@ -2613,7 +2613,8 @@ Bool Player::addSkillPoints(Int delta)
 {
 	delta = REAL_TO_INT_CEIL(m_skillPointsModifier * INT_TO_REAL(delta));
 
-	if( delta == 0 )
+	// a ruleset promotes nobody: the general stays at the rank the match started him at
+	if( delta == 0 || TheGameLogic->getRuleset() != RULESET_NONE )
 		return false;
 
 	Int levelCap = min( TheGameLogic->getRankLevelLimit(), TheRankInfoStore->getRankLevelCount() );
@@ -2790,6 +2791,12 @@ AIRole Player::getAIRole(void) const
 Bool Player::isCapableOfPurchasingScience(ScienceType science) const
 {
 	if (science == SCIENCE_INVALID)
+	{
+		return false;
+	}
+
+	// a ruleset sells no general's powers; the purchase menu, a computer player and a script all ask here
+	if (TheGameLogic->getRuleset() != RULESET_NONE)
 	{
 		return false;
 	}
@@ -3066,6 +3073,35 @@ Int UnitLimitPerPlayer( Int nonObserverPlayers )
 }
 
 //=============================================================================
+/* RULESET_USA_BASIC: the plain USA faction's four economy and production buildings and the three
+   units they make that need no upgrade.  The command center a player starts with is placed by the
+   match, not built, so it stands without being on the list - and a lost one stays lost.  The names
+   are exact: a general's copy (AirF_, Lazr_, SupW_) is a different thing and is refused. */
+static const char *const theRulesetUsaBasicThings[] =
+{
+  "AmericaPowerPlant",
+  "AmericaBarracks",
+  "AmericaSupplyCenter",
+  "AmericaWarFactory",
+  "AmericaVehicleDozer",
+  "AmericaInfantryRanger",
+  "AmericaTankCrusader"
+};
+
+Bool RulesetAllowsThing( Int ruleset, const AsciiString &templateName )
+{
+  if ( ruleset == RULESET_NONE )
+    return TRUE;
+
+  for ( Int i = 0; i < ARRAY_SIZE( theRulesetUsaBasicThings ); ++i )
+  {
+    if ( templateName.compare( theRulesetUsaBasicThings[ i ] ) == 0 )
+      return TRUE;
+  }
+  return FALSE;
+}
+
+//=============================================================================
 /* Pro Rules.  A general's copy of a unit is the faction's name with a prefix (SupW_, AirF_,
    Lazr_, Demo_), so a rule names the ending every copy shares.  The Air Force General's Alpha
    Aurora is AirF_AmericaJetAurora, which is why rules 4 and 5 are one ending. */
@@ -3338,6 +3374,10 @@ Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild, Int unitsPerO
   // Pro Rules refuse a banned unit outright, through the same door
   const Bool proRules = TheGameLogic && TheGameLogic->isProRules();
   if ( proRules && ProRulesBanThing( whatToBuild->getName() ) )
+    return false;
+
+  // and so does the match's ruleset, for every player in it, the computer players included
+  if ( TheGameLogic && !RulesetAllowsThing( TheGameLogic->getRuleset(), whatToBuild->getName() ) )
     return false;
 
   // make sure we're not maxed out for this type of unit.

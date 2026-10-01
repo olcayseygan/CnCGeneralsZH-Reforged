@@ -2042,6 +2042,19 @@ Int parseSupplyPileLimit(char *args[], int num)
 	return 1;
 }
 
+/* -ruleset <name>: the match's Ruleset for an -autoskirmish or -netgame run, carried the same way as
+	 -incomesharing.  usabasic is the only one: four USA buildings and three units, nothing else.  A
+	 name nobody knows is kept as -1 so startAutoSkirmish refuses the run instead of playing retail. */
+Int parseRuleset(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1 && args[1])
+	{
+		TheWritableGlobalData->m_ruleset = stricmp(args[1], "usabasic") == 0 ? RULESET_USA_BASIC : -1;
+		return 2;
+	}
+	return 1;
+}
+
 /* -slowframe <ms> lowers the bar a logic frame has to clear before it logs its own breakdown.
 
 	 The default of 20ms is a stutter hunt: it catches the frames a player would notice. Chasing a
@@ -2470,6 +2483,7 @@ static CommandLineParam params[] =
 	{ "-incomesharing", parseIncomeSharing },
 	{ "-techrespawn", parseTechRespawn },
 	{ "-supplypilelimit", parseSupplyPileLimit },
+	{ "-ruleset", parseRuleset },
 	{ "-showlanes", parseShowLanes },
 	{ "-uidrill", parseUIDrill },
 	{ "-resdrill", parseResDrill },

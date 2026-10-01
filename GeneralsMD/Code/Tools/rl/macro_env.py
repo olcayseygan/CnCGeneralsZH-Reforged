@@ -1,10 +1,15 @@
 """Play USA against the easy computer player one macro decision at a time.
 
 Each episode is one real skirmish on Winter Wolf: slot 0 is the local seat, America, driven over the
--control socket; slot 1 is the built-in AI at -aidiff easy, GLA. Without -observer and -takeover the
-autoskirmish lobby puts the local player in slot 0 and an AI in every other slot, so one socket and
-one AI share the match with no engine change. Every DECISION_FRAMES logic frames (five seconds) the
-agent picks one of ACTIONS; the game is held between decisions by the lockstep `step` verb.
+-control socket; slot 1 is the built-in AI at -aidiff easy, America as well. Without -observer and
+-takeover the autoskirmish lobby puts the local player in slot 0 and an AI in every other slot, so one
+socket and one AI share the match with no engine change. Every DECISION_FRAMES logic frames (five
+seconds) the agent picks one of ACTIONS; the game is held between decisions by the lockstep `step` verb.
+
+The match is played under -ruleset usabasic, a rule the logic holds for both seats: the four
+buildings and three units ACTIONS names are all either side can make, and upgrades, generals' powers,
+promotions and superweapons are off. The mirror is the agent's own action space, so the AI has
+nothing the agent cannot answer.
 
 Buildings go down with `construct`, the placement click, which the logic checks for money,
 prerequisites and ground. The agent does not choose where: the env tries the next free spot on a ring
@@ -45,6 +50,7 @@ RUN_FOLDER = os.environ.get("ZHR_RUN") or os.path.normpath(os.path.join(TOOLS, "
 EXE = "generals_rl.exe"
 PORT = 8811                     # 8787, 8788 and 8797 belong to other sessions
 MAP = "Maps\\Winter Wolf\\Winter Wolf.map"
+RULESET = "usabasic"            # both seats may make only what ACTIONS names
 LOAD_TIMEOUT_SECONDS = 180
 
 DECISION_FRAMES = 150           # five seconds of game time at 30 logic frames a second
@@ -185,7 +191,7 @@ class MacroEnv(object):
         self.process = subprocess.Popen(
             [os.path.join(self.run_folder, EXE), "-win" if self.watch else "-headless", "-quickstart", "-noshellmap", "-multiInstance",
              "-noFPSLimit", "-map", MAP, "-autoskirmish", "2", "-aidiff", "easy",
-             "-side", "0", "FactionAmerica", "-side", "1", "FactionGLA", "-seed", str(seed),
+             "-side", "0", "FactionAmerica", "-side", "1", "FactionAmerica", "-ruleset", RULESET, "-seed", str(seed),
              "-control", str(self.port), "-logPrefix", self.log_prefix]
             + (["-cinema", "nohud"] if self.watch else []),
             cwd=self.run_folder)
@@ -363,8 +369,8 @@ def self_check():
     templates = read_templates()
     assert templates[POWER][0] == 800 and "STRUCTURE" in templates[POWER][1]
     assert templates[CRUSADER][0] == 900 and is_army(templates[CRUSADER][1])
-    assert not is_army(templates[DOZER][1]) and not is_army(templates["GLAInfantryWorker"][1])
-    assert not is_army(templates["GLACommandCenter"][1]) and is_army(templates["GLAInfantryRebel"][1])
+    assert not is_army(templates[DOZER][1]) and not is_army(templates["AmericaVehicleChinook"][1])
+    assert not is_army(templates[COMMAND_CENTER][1]) and is_army(templates[RANGER][1])
 
     rows = {discretize(m, have, d, a, l, t)
             for m in (0, 900, 5000) for d in (0, 2) for a in (0, 1, 5, 40) for l in (0, 1) for t in (0, 1)

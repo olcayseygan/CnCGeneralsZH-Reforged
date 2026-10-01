@@ -1,4 +1,5 @@
-"""Tabular Q-learning for MacroEnv: USA against the easy AI, one macro action every five seconds.
+"""Tabular Q-learning for MacroEnv: USA against the easy USA AI under -ruleset usabasic, one macro
+action every five seconds.
 
     cd GeneralsMD/Code/Tools/rl
     python train_macro.py --episodes 300 --workers 5            # trains, one real match an episode
@@ -26,7 +27,7 @@ from humvee_env import overlay_lines
 from macro_env import ACTIONS, N_ACTIONS, N_STATES, PORT, MacroEnv, prepare_exe, read_templates
 
 ACTION_NAMES = [a[0] for a in ACTIONS]
-TITLE = "RL macro: USA vs easy GLA"
+TITLE = "RL macro: USA vs easy USA, usabasic"
 
 ALPHA = 0.1
 GAMMA = 0.99

@@ -38,6 +38,7 @@
 #include "Common/StatsCollector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameClient/CinemaDirector.h"
 #include "GameClient/Display.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindowManager.h"	// for what the pointer is over, at the screen's edges
@@ -413,8 +414,11 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 			// edge, so believing it would scroll the map for as long as the mouse sat on the desktop.
 			// Nor while a watcher's director or player camera drives: the spectator page stands on the
 			// top and right edges, and the pointer on its way to it took the camera away (ObserverCamera.h).
+			// Nor under -cinema with the interface off: a watched training run is recorded from the
+			// camera the control socket's follow holds, and a pointer resting on an edge broke the lock.
 			const Bool edgeScrollAllowed = (!TheGlobalData->m_windowed || TheGlobalData->m_edgeScrollInWindowedMode)
-																			&& TheMouse->isCursorInWindow() && !TheObserverCamera.isDriving();
+																			&& TheMouse->isCursorInWindow() && !TheObserverCamera.isDriving()
+																			&& !CinemaDirector_hidesHud();
 
 			if (m_isScrolling)
 			{

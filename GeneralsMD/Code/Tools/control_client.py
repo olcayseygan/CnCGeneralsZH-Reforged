@@ -199,8 +199,14 @@ class Control(object):
         return self.send("teleport %d %s %g %g" % (slot, selector, x, y))
 
     def units(self, slot, selector="*"):
-        """The list of {id, template, x, y, health, maxHealth} the seat owns under the selector."""
+        """The list of {id, template, x, y, health, maxHealth, built} the seat owns under the selector;
+        built is false while a structure is still going up."""
         return self.send("units %d %s" % (slot, selector))["units"]
+
+    def can_build(self, slot, template, points):
+        """For each (x, y), the ground check a placement click there would meet: 0 when the structure
+        would go down, else the engine's LegalBuildCode."""
+        return self.send("canbuild %d %s %s" % (slot, template, " ".join("%g %g" % p for p in points)))["legal"]
 
     def step(self, frames=1):
         """Run that many logic frames and return the frame reached. From the first call on the game

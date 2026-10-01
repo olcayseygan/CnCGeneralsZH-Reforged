@@ -1005,7 +1005,15 @@ static Bool executePower( const ScenarioAction &action, Player *player, const Co
 	  queue refuses is counted and reported, not forced. */
 static Bool executeProduce( const ScenarioAction &action, Player *player )
 {
-	Object *building = findFirstMatching( player, action.selector );
+	// the first matching building that is up and not being sold, since the newest is listed first
+	// and one still under construction refuses every unit a finished one beside it would take
+	Object *building = NULL;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj && building == NULL; obj = obj->getNextObject() )
+	{
+		if (obj->getControllingPlayer() == player && !obj->isEffectivelyDead() && selectorMatches( action.selector, obj )
+				&& !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) && !obj->testStatus( OBJECT_STATUS_SOLD ))
+			building = obj;
+	}
 	ProductionUpdateInterface *queue = building ? building->getProductionUpdateInterface() : NULL;
 	const ThingTemplate *made = TheThingFactory->findTemplate( action.targetSelector );
 	if (queue == NULL || made == NULL)

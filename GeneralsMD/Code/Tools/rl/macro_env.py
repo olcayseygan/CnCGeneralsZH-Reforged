@@ -12,12 +12,12 @@ promotions and superweapons are off. The mirror is the agent's own action space,
 nothing the agent cannot answer.
 
 Buildings go down with `construct`, the placement click, which the logic checks for money,
-prerequisites and ground. The agent does not choose where: the env tries the next free spot on a ring
-around the command center and moves on to the following spot when the ground refuses. Units come from
-`produce`. mask() says which actions get past the checks act() makes before it tries anything (money,
-a dozer, the prerequisite, a producer, an army, a spot left), and the trainer picks only from those.
-What the game still refuses after that, mostly ground no spot fits, costs REFUSED_PENALTY and
-otherwise does nothing.
+prerequisites and ground. The agent does not choose where: the env asks the game with `canbuild`
+which spots on rings around the command center the ground would take, and clicks the first. Units
+come from `produce`. Prerequisites and producers count only finished buildings, as the game's do.
+mask() says which actions get past the checks act() makes before it tries anything (money, a dozer,
+a finished prerequisite, a finished producer, an army, a legal spot), and the trainer picks only from
+those. What the game still refuses after that costs REFUSED_PENALTY and otherwise does nothing.
 
 Reward is the change in net-worth lead, our money plus what our objects are worth minus what the
 enemy's objects are worth, in units of WORTH_SCALE, plus WIN_REWARD or -WIN_REWARD when a side has nothing left. An
@@ -59,7 +59,6 @@ LOAD_TIMEOUT_SECONDS = 180
 DECISION_FRAMES = 150           # five seconds of game time at 30 logic frames a second
 FRAME_CAP = 27000               # fifteen minutes; a match still going then is a draw
 PROBE_FRAMES = 2                # how long a construct or produce gets to show up before it is judged
-PLACEMENT_TRIES = 3
 
 WORTH_SCALE = 2000.0
 WIN_REWARD = 10.0
@@ -164,7 +163,7 @@ def placement_spots(centre, enemy):
     the base does not grow into the attack lane."""
     toward = (enemy - centre) / max(1.0, np.linalg.norm(enemy - centre))
     spots = []
-    for radius in (170, 260, 350, 440):
+    for radius in (170, 260, 350, 440, 530, 620):
         for k in range(int(2 * np.pi * radius / 110)):
             angle = 2 * np.pi * k / int(2 * np.pi * radius / 110)
             offset = radius * np.array([np.cos(angle), np.sin(angle)])
@@ -231,6 +230,9 @@ class MacroEnv(object):
     def _count(self, template):
         return sum(u["template"] == template for u in self.ours)
 
+    def _built(self, template):
+        return sum(u["template"] == template and u["built"] for u in self.ours)
+
     def _kinds(self, unit):
         return self.templates.get(unit["template"], (0, frozenset()))[1]
 
@@ -258,14 +260,15 @@ class MacroEnv(object):
 
     def valid(self, action):
         """Whether act(action) gets past what the env can see before trying it: money, a dozer, the
-        prerequisite, a producer, an army, a placement spot left. The game can still refuse after."""
+        prerequisite and producer finished, an army, a spot the ground takes. The game can still refuse
+        after."""
         name, kind, what, producer, count = ACTIONS[action]
         if kind == "build":
             need = PREREQUISITE[what]
             return bool(self.money >= self.templates[what][0] and self._count(DOZER)
-                        and (need is None or self._count(need)) and self.spots)
+                        and (need is None or self._built(need)) and self._spot(what) is not None)
         if kind == "train":
-            return bool(self.money >= self.templates[what][0] * count and self._count(producer))
+            return bool(self.money >= self.templates[what][0] * count and self._built(producer))
         if kind in ("attack", "gather"):
             return bool(self._army(self.ours))
         return True
@@ -274,18 +277,18 @@ class MacroEnv(object):
         """The actions valid() lets through now; noop always is."""
         return np.array([self.valid(action) for action in range(N_ACTIONS)])
 
+    def _spot(self, template):
+        """The first spot the game says the ground would take for template, None when none does."""
+        legal = self.game.can_build(US, template, self.spots)
+        return next((spot for spot, code in zip(self.spots, legal) if code == 0), None)
+
     def _build(self, template):
         before = self._count(template)
-        for _ in range(PLACEMENT_TRIES):
-            if not self.spots:
-                return False
-            x, y = self.spots.pop(0)
-            self.game.send("construct %d %s %g %g" % (US, template, x, y))
-            self._step(PROBE_FRAMES)
-            self._read()
-            if self._count(template) > before:
-                return True
-        return False
+        x, y = self._spot(template)
+        self.game.send("construct %d %s %g %g" % (US, template, x, y))
+        self._step(PROBE_FRAMES)
+        self._read()
+        return self._count(template) > before
 
     def _train(self, template, producer, count):
         cost = self.templates[template][0] * count
@@ -399,16 +402,24 @@ def self_check():
     spots = placement_spots(np.array([0.0, 0.0]), np.array([1000.0, 0.0]))
     assert np.hypot(*spots[0]) < 200 and spots[0][0] < 0          # nearest ring, back of the base first
 
+    class Ground(object):                                            # canbuild's answer, every spot one code
+        code = 0
+
+        def can_build(self, slot, template, points):
+            return [self.code] * len(points)
+
     env = MacroEnv(templates=templates)
-    env.money, env.ours, env.spots = 0, [], spots
+    env.money, env.ours, env.spots, env.game = 0, [], spots, Ground()
     assert list(env.mask()) == [True] + [False] * (N_ACTIONS - 1)    # noop is never masked
     env.money = 5000
-    env.ours = [{"template": t} for t in (COMMAND_CENTER, DOZER, POWER, BARRACKS, RANGER)]
+    env.ours = [{"template": t, "built": True} for t in (COMMAND_CENTER, DOZER, POWER, BARRACKS, RANGER)]
     names = [a[0] for a, ok in zip(ACTIONS, env.mask()) if ok]
     assert names == ["noop", "build power", "build barracks", "build supply", "train dozer", "train rangers",
                      "attack", "gather"]
-    env.spots = []
-    assert not env.mask()[1:5].any()                                 # no spot left, no building
+    env.ours[2]["built"] = env.ours[3]["built"] = False               # power plant and barracks still going up
+    assert not env.mask()[3] and not env.mask()[6] and env.mask()[2]
+    env.game.code = 3                                                # LBC_OBJECTS_IN_THE_WAY everywhere
+    assert not env.mask()[1:5].any()
     print("self-check passed: %d templates, %d states x %d actions" % (len(templates), N_STATES, N_ACTIONS))
 
 

@@ -43,7 +43,12 @@
 //   units <slot> <selector>
 //
 // which answers at once with the id, template, position and health of everything of that seat the
-// selector names,
+// selector names, and whether it is built or still going up,
+//
+//   canbuild <slot> <template> <x> <y> [<x> <y> ...]
+//
+// which answers at once, for each point, the ground check the logic makes when a placement click
+// lands there (0 when the structure would go down),
 //
 //   step <n>
 //

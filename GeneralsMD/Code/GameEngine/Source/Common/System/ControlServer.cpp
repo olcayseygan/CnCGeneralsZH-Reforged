@@ -27,6 +27,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/ControlServer.h"
+#include "Common/BuildAssistant.h"
 #include "Common/Energy.h"
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
@@ -35,6 +36,7 @@
 #include "Common/Money.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/Display.h"
 #include "GameClient/InGameUI.h"
@@ -675,14 +677,86 @@ static void replyUnits( const char *arguments )
 			continue;
 
 		const BodyModuleInterface *body = obj->getBodyModule();
-		sprintf( piece, "%s{\"id\":%d,\"template\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"health\":%.2f,\"maxHealth\":%.2f}",
+		sprintf( piece, "%s{\"id\":%d,\"template\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"health\":%.2f,\"maxHealth\":%.2f,\"built\":%s}",
 						 first ? "" : ",", (Int)obj->getID(), obj->getTemplate()->getName().str(),
-						 obj->getPosition()->x, obj->getPosition()->y, body->getHealth(), body->getMaxHealth() );
+						 obj->getPosition()->x, obj->getPosition()->y, body->getHealth(), body->getMaxHealth(),
+						 obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) ? "false" : "true" );
 		for( const char *at = piece; *at; ++at )
 			reply.push_back( *at );
 		first = FALSE;
 	}
 
+	reply.push_back( ']' );
+	reply.push_back( '}' );
+	reply.push_back( 0 );
+	sendText( &reply[ 0 ] );
+}
+
+/** canbuild <slot> <template> <x> <y> [<x> <y> ...]: whether the ground at each point would take that
+	  structure, by the check the logic makes when the placement click lands (GameLogicDispatch's
+	  MSG_DOZER_CONSTRUCT: terrain and overlap, no shroud, no path), with one of the seat's dozers as
+	  the builder.  One LegalBuildCode per point, 0 for legal.  Read on the render pass, nothing
+	  written, the ghost's red bibs left off. */
+static void replyCanBuild( const char *arguments )
+{
+	Int slot = 0, used = 0;
+	char templateText[ 256 ];
+	if (sscanf( arguments, "%d %255s%n", &slot, templateText, &used ) != 2)
+	{
+		replyError( "canbuild wants <slot> <template> <x> <y> [<x> <y> ...]" );
+		return;
+	}
+	if (TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
+	{
+		replyError( "no match is running" );
+		return;
+	}
+	const Player *player = ScenarioDrill_findPlayerForSlot( slot );
+	const ThingTemplate *build = TheThingFactory->findTemplate( AsciiString( templateText ) );
+	if (player == NULL || build == NULL)
+	{
+		replyError( "nobody is sitting in that slot, or that is no template" );
+		return;
+	}
+	Object *dozer = NULL;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj && dozer == NULL; obj = obj->getNextObject() )
+	{
+		if (obj->getControllingPlayer() == player && !obj->isEffectivelyDead() && obj->isKindOf( KINDOF_DOZER ))
+			dozer = obj;
+	}
+	if (dozer == NULL)
+	{
+		replyError( "that seat has no dozer" );
+		return;
+	}
+
+	std::vector<char> reply;
+	char piece[ 64 ];
+	sprintf( piece, "{\"ok\":true,\"legal\":[" );
+	for( const char *at = piece; *at; ++at )
+		reply.push_back( *at );
+	const char *rest = arguments + used;
+	Real x, y;
+	Int read = 0;
+	Bool first = TRUE;
+	while (sscanf( rest, "%f %f%n", &x, &y, &read ) == 2)
+	{
+		rest += read;
+		Coord3D loc;
+		loc.set( x, y, TheTerrainLogic->getGroundHeight( x, y ) );
+		LegalBuildCode code = TheBuildAssistant->isLocationLegalToBuild( &loc, build, 0.0f,
+																			BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP,
+																			dozer, NULL );
+		sprintf( piece, "%s%d", first ? "" : ",", (Int)code );
+		for( const char *at = piece; *at; ++at )
+			reply.push_back( *at );
+		first = FALSE;
+	}
+	if (first)
+	{
+		replyError( "canbuild wants at least one <x> <y>" );
+		return;
+	}
 	reply.push_back( ']' );
 	reply.push_back( '}' );
 	reply.push_back( 0 );
@@ -730,6 +804,12 @@ static void handleCommand( const AsciiString &command )
 	if (strncmp( command.str(), "units ", 6 ) == 0)
 	{
 		replyUnits( command.str() + 6 );
+		return;
+	}
+
+	if (strncmp( command.str(), "canbuild ", 9 ) == 0)
+	{
+		replyCanBuild( command.str() + 9 );
 		return;
 	}
 

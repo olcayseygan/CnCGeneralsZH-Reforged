@@ -14877,6 +14877,35 @@ TEST(a_page_goes_to_litehtml_with_its_style_apart_and_its_spaces_folded)
 	CHECK_STR( styles.c_str(), "" );
 }
 
+// The control socket's overlay arrives as JSON from a training script and fills Training.html:
+// scalars are values, an object a prefix, an array a data-each list; anything else is refused whole.
+TEST(an_overlay_payload_reads_as_values_and_lists)
+{
+	HtmlValues values;
+	HtmlLists lists;
+	CHECK( HtmlTemplate_readJson( " {\"title\": \"RL \\\"macro\\\" \\u03b5\", \"step\": 81, \"q\": -1.5e-3, \"on\": true,"
+																" \"off\": false, \"run\": {\"seed\": 4}, \"actions\": [{\"name\": \"noop\", \"w\": 62},"
+																" {\"name\": \"attack\"}], \"marks\": [1, \"x\"], \"none\": []} ", values, lists ) );
+	CHECK_STR( values[ "title" ].c_str(), "RL \"macro\" \xCE\xB5" );
+	CHECK_STR( values[ "step" ].c_str(), "81" );
+	CHECK_STR( values[ "q" ].c_str(), "-1.5e-3" );
+	CHECK_STR( values[ "on" ].c_str(), "on" );
+	CHECK_STR( values[ "off" ].c_str(), "" );
+	CHECK_STR( values[ "run.seed" ].c_str(), "4" );
+	CHECK( lists[ "actions" ].size() == 2 );
+	CHECK_STR( lists[ "actions" ][ 0 ][ "w" ].c_str(), "62" );
+	CHECK_STR( lists[ "actions" ][ 1 ][ "name" ].c_str(), "attack" );
+	CHECK_STR( lists[ "marks" ][ 1 ][ "value" ].c_str(), "x" );
+	CHECK( lists[ "none" ].empty() );
+
+	CHECK( !HtmlTemplate_readJson( "{\"a\": [{\"b\": [1]}]}", values, lists ) );
+	CHECK( values.empty() && lists.empty() );
+	CHECK( !HtmlTemplate_readJson( "noop  greedy", values, lists ) );
+	CHECK( !HtmlTemplate_readJson( "{\"a\": 1} trailing", values, lists ) );
+	CHECK( !HtmlTemplate_readJson( "{\"a\": 1", values, lists ) );
+	CHECK( HtmlTemplate_readJson( "{}", values, lists ) && values.empty() );
+}
+
 // The spectator's page is the shipped one.  It switches no options any more - the strips drop-down
 // that did went with the shelves it switched - so an option: click is a box that does nothing, and
 // only a watched match would show it.

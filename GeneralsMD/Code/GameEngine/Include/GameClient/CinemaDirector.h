@@ -41,6 +41,7 @@ enum CinemaVerb
 	CINEMA_VERB_UNFOLLOW,		///< unfollow: stop following, stay where the camera is
 	CINEMA_VERB_HUD,				///< hud on|off
 	CINEMA_VERB_LETTERBOX,	///< letterbox on|off
+	CINEMA_VERB_CURSOR,			///< cursor on|off: the mouse pointer while the hud is off, off until asked
 	CINEMA_VERB_SHOT,				///< shot: one screenshot
 	CINEMA_VERB_END,				///< end: quit the game
 

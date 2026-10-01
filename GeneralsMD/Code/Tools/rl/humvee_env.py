@@ -8,7 +8,8 @@ frames over the -control socket.
 
 With watch=True the game runs in a window instead: the camera is locked on the Humvee (the
 `follow` verb) and a Comanche hovers over the target, so a person can watch it learn. The game's own
-interface is off (-cinema nohud) and show() puts the trainer's lines in the top left corner.
+interface is off (-cinema watch, which keeps the mouse pointer) and show() sends the trainer's panels
+to the overlay verb, which draws them with Run/Window/Html/Training.html.
 
 The API is gymnasium's without the dependency: reset() -> (obs, info) and
 step(action) -> (obs, reward, terminated, truncated, info). The observation is the target's
@@ -99,14 +100,63 @@ def kill_with_python(process):
     return job  # the handle has to stay open for as long as the game should live
 
 
-def overlay_lines(title, facts, names, q_row, action, mask=None):
-    """What a watched game shows top left: a title, (label, value) facts, then every action with its
-    Q-value, the chosen one marked '>' so the game highlights it (None marks none). An action the
-    mask rules out shows 'x' in place of its Q-value."""
-    mask = [True] * len(names) if mask is None else mask
-    lines = [title] + ["%-8s %s" % fact for fact in facts] + ["  %-15s %8s" % ("action", "Q")]
-    return lines + ["%s %-15s %8s" % (">" if i == action else " ", name, "%+.3f" % value if ok else "x")
-                    for i, (name, value, ok) in enumerate(zip(names, q_row, mask))]
+# -- what a watched game shows: the overlay verb's JSON, laid out by Run/Window/Html/Training.html -----
+
+WATCH_HISTORY = 30              # finished episodes the right panel charts
+
+
+def q_rows(names, q_row, action, mask=None):
+    """Every action's row: its Q-value as text and a bar in percent, a sliver at the lowest valid
+    value and full at the highest, marked "chosen" (action, None for none), "best" (the greedy pick)
+    or "masked" (ruled out, no bar)."""
+    mask = [True] * len(names) if mask is None else [bool(ok) for ok in mask]
+    valid = [value for value, ok in zip(q_row, mask) if ok]
+    low, high = min(valid), max(valid)
+    rows = []
+    for index, (name, value, ok) in enumerate(zip(names, q_row, mask)):
+        state = ["chosen"] * (index == action) + ["best"] * (ok and value == high) + ["masked"] * (not ok)
+        width = 0.0 if not ok else 100.0 if high == low else 6 + 94 * (value - low) / (high - low)
+        rows.append({"name": name, "q": "%+.3f" % value if ok else "masked", "w": round(width, 1),
+                     "state": " ".join(state)})
+    return rows
+
+
+def signed(label, value):
+    """A fact the page colours green above zero and red below."""
+    return {"label": label, "value": "%+.3f" % value, "sign": "pos" if value > 0 else "neg" if value < 0 else ""}
+
+
+def history_chart(returns, limit=WATCH_HISTORY):
+    """The last `limit` returns as bars standing on a zero line (or hanging from it), every length in
+    percent of the chart, and the note under it."""
+    recent = list(returns[-limit:])
+    high, low = max(recent + [0.0]), min(recent + [0.0])
+    span = (high - low) or 1.0
+    zero = 100.0 * high / span
+    slot = 100.0 / limit
+    bars = []
+    for index, value in enumerate(recent):
+        h = max(100.0 * abs(value) / span, 2.0)
+        bars.append({"x": round((index + 0.15) * slot, 2), "w": round(0.7 * slot, 2),
+                     "top": round(max(0.0, zero - h) if value >= 0 else zero, 2), "h": round(h, 2),
+                     "sign": "pos" if value >= 0 else "neg", "last": "last" if index == len(recent) - 1 else ""})
+    note = "last %d returns, mean %+.2f" % (len(recent), np.mean(recent)) if recent else "no episode finished yet"
+    return {"history": bars, "zero": round(zero, 2), "historynote": note}
+
+
+class Pace(object):
+    """How fast the game runs against the wall clock, from the logic frames between two calls."""
+
+    def __init__(self):
+        self.frame = self.time = None
+
+    def __call__(self, frame):
+        now = time.time()
+        text = "-"
+        if self.frame is not None and now > self.time and frame > self.frame:
+            text = "x%.1f" % ((frame - self.frame) / (now - self.time) / 30.0)
+        self.frame, self.time = frame, now
+        return text
 
 
 class HumveeEnv(object):
@@ -122,7 +172,7 @@ class HumveeEnv(object):
             [os.path.join(run_folder, "generals.exe"), "-win" if watch else "-headless", "-quickstart", "-noshellmap",
              "-multiInstance", "-noFPSLimit", "-randommap", "1", "2", "small", "-autoskirmish", "2",
              "-takeover", "-side", "0", "FactionAmerica", "-side", "1", "FactionGLA", "-seed", "1",
-             "-control", str(port), "-logPrefix", "rl_"] + (["-cinema", "nohud"] if watch else []),
+             "-control", str(port), "-logPrefix", "rl_"] + (["-cinema", "watch"] if watch else []),
             cwd=run_folder)
         self.job = kill_with_python(self.process)
         atexit.register(self.close)
@@ -135,7 +185,7 @@ class HumveeEnv(object):
         self._ok(self.game.spawn(0, UNIT, 1, self.home[0], self.home[1]))
         if watch:
             self._ok(self.game.spawn(0, MARKER, 1, self.home[0], self.home[1]))
-        self.game.step(2)
+        self.frame = self.game.step(2)
         if watch:
             self._ok(self.game.follow(self.game.units(0, UNIT)[0]["id"]))
 
@@ -187,7 +237,7 @@ class HumveeEnv(object):
         self._ok(self.game.teleport(0, UNIT, self.home[0], self.home[1]))
         if self.watch:
             self._ok(self.game.teleport(0, MARKER, self.target[0], self.target[1]))
-        self.game.step(2)
+        self.frame = self.game.step(2)
         self.steps = 0
         obs, self.distance = self._observe()
         return obs, {"distance": self.distance, "target": self.target}
@@ -197,18 +247,18 @@ class HumveeEnv(object):
             self._ok(self.game.stop(0, UNIT))
         else:
             self._ok(self.game.move(0, UNIT, *order_point(self.position[0], self.position[1], action)))
-        self.game.step(FRAMES_PER_ACTION)
+        self.frame = self.game.step(FRAMES_PER_ACTION)
         self.steps += 1
         obs, distance = self._observe()
         arrived = distance < ARRIVE_RADIUS
         r = reward(self.distance, distance, arrived)
         self.distance = distance
-        return obs, r, arrived, self.steps >= STEP_LIMIT and not arrived, {"distance": distance}
+        return obs, r, arrived, self.steps >= STEP_LIMIT and not arrived, {"distance": distance, "frame": self.frame}
 
-    def show(self, lines):
-        """The overlay in the top left corner, in a watched game only."""
+    def show(self, payload):
+        """The overlay's panels (q_rows, history_chart), in a watched game only."""
         if self.watch:
-            self.game.overlay(lines)
+            self.game.overlay(payload)
 
     def close(self):
         if self.process.poll() is None:
@@ -248,10 +298,13 @@ def self_check():
     assert reward(100, 100, False) == -STEP_COST
     assert reward(40, 20, True) > ARRIVE_BONUS
 
-    lines = overlay_lines("title", [("step", "3")], ["left", "right"], [0.5, -1.0], 1)
-    assert len(lines) == 5 and lines[-1].startswith(">") and not lines[-2].startswith(">")
-    lines = overlay_lines("title", [], ["left", "right"], [0.5, -1.0], None, [True, False])
-    assert lines[-1].endswith(" x") and lines[-2].endswith("+0.500")
+    rows = q_rows(["left", "right", "stop"], [0.5, -1.0, 2.0], 1)
+    assert [row["state"] for row in rows] == ["", "chosen", "best"] and rows[2]["w"] == 100 and rows[1]["w"] == 6
+    rows = q_rows(["left", "right"], [0.5, -1.0], None, [True, False])
+    assert rows[1] == {"name": "right", "q": "masked", "w": 0.0, "state": "masked"} and rows[0]["state"] == "best"
+    chart = history_chart([2.0, -1.0, 0.0])
+    assert chart["zero"] == round(200 / 3, 2) and chart["history"][0]["top"] == 0 and chart["history"][1]["top"] == chart["zero"]
+    assert chart["history"][-1]["last"] == "last" and history_chart([])["history"] == []
     print("self-check passed: %d states x %d actions" % (N_STATES, N_ACTIONS))
 
 

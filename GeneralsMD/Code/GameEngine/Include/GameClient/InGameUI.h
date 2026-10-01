@@ -1380,9 +1380,9 @@ public:
 	/// control socket's "spectator" verb, which a script uses instead of finding the pixel
 	void runSpectatorAction( const std::string &action );
 
-	/// the control socket's "overlay" verb: one display line per line of the text, top left, a line
-	/// starting '>' highlighted; empty text takes it down
-	void setControlOverlay( const AsciiString &text );
+	/// the control socket's "overlay" verb: a JSON object laid out by Window/Html/Training.html; empty
+	/// text takes it down, and FALSE is text that is not a JSON object, which takes it down too
+	Bool setControlOverlay( const AsciiString &json );
 protected:
 
 	void clearWorldAnimations( void );					///< delete all world animations
@@ -1495,8 +1495,7 @@ protected:
 	void drawPeaceTimer( void );					///< the lobby's peace time, counting down at the top of the screen
 	void drawPeaceCountdown( UnsignedInt framesLeft );	///< the last seconds of it, one big digit in the middle of the screen
 	void drawHudOverlay( void );					///< the small elapsed-time / fps plate (ShowHudOverlay)
-	enum { CONTROL_OVERLAY_POINT_SIZE = 12 };	///< the socket's overlay text, before the resolution scales it
-	void drawControlOverlay( void );			///< what setControlOverlay was last given, top left over everything
+	void drawControlOverlay( void );			///< what setControlOverlay was last given, over everything
 	void drawProductionStrip( void );			///< the production queue rows above the control bar
 	///< the run of cells, a column, with its left edge at 'left' and its first cell's top edge at 'bottomY'
 	void drawProductionStripColumn( Int left, Int bottomY );
@@ -1642,7 +1641,11 @@ protected:
 	DisplayString *							m_peaceTimeDisplayString;	///< the peace time clock at the top of the screen
 	DisplayString *							m_peaceTimeLabelDisplayString;	///< the word written over that clock
 	DisplayString *							m_peaceCountdownDisplayString;	///< the big digit of its last ten seconds
-	std::vector<DisplayString *>	m_controlOverlayLines;	///< the control socket's overlay, a string a line
+	HtmlOverlay *								m_controlOverlay;				///< the control socket's overlay, Window/Html/Training.html
+	std::string									m_controlOverlayPage;
+	Bool												m_controlOverlayPageLoaded;	///< read once a match, like the spectator's page
+	HtmlValues									m_controlOverlayValues;	///< what the socket's JSON said, empty while it is down
+	HtmlLists										m_controlOverlayLists;
 	Int													m_lastMoneyDisplayed;		///< so the money gadget is only written when the amount changes
 	Int													m_lastEarningDisplayed;	///< or the money earned a second beside it
 	Bool												m_lastEarningPerMinute;	///< or whether that was written per minute

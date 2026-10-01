@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<!--
+  A training run as somebody watching it reads it: the control socket's overlay verb, sent by the
+  trainers in Tools/rl after every decision.  Two panels against the top corners, the agent on the
+  left and its finished episodes on the right, so the middle of the screen, where the camera holds
+  the base or the unit being trained, is never under either.  Drawn after every window and also while
+  -cinema has the rest of the interface off.
+
+  Laid out by litehtml and drawn by the game (GameClient/HtmlOverlay.h): a CSS pixel is a pixel of an
+  800x600 screen, so at 16:9 the page is 1067 pixels wide at any resolution.  Text always gets a
+  black shadow; rounded corners and overflow clipping are not drawn.
+
+  Every value comes from the JSON object the socket was sent (HtmlTemplate_readJson): a string or
+  number by its key, an array of objects as a data-each list.  The page computes nothing, so a bar's
+  length arrives as a percentage.
+    {{eyebrow}} {{title}} {{subtitle}}   the run's name, over and under it
+    {{progress}}                       percent of the run's episodes done, the bar under the title
+    data-each="stats"                  the header readings: {{label}} {{value}}
+    {{action}} {{mode}} {{result}}     the decision just taken, "explore" or "greedy", and "ok" or
+                                       "refused"; a tag reading "ok" or "none" is not drawn
+    data-each="actions"                every action: {{name}} {{q}} (the text), {{w}} (bar, 0-100) and
+                                       {{state}}, any of "chosen", "best", "masked"
+    data-each="facts"                  under the actions: {{label}} {{value}} {{sign}} "pos" or "neg"
+    {{runs}}                           the right panel's heading
+    data-each="tally"                  {{label}} {{value}} {{kind}}: "win", "loss", "draw" or "rate"
+    data-each="history"                one bar per finished episode: {{x}} {{w}} {{top}} {{h}} in
+                                       percent of the chart, {{sign}} "pos" or "neg", {{last}} "last"
+    {{zero}}                           the zero line's height in the chart, percent from its top
+    {{historynote}}                    the line under the chart
+    data-each="runfacts"               under that: {{label}} {{value}}
+
+  Edit the copy under Run/Window/Html and the next match reads it.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Training</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { background-color: #3b4a36; color: #e6ebf0; font-family: "Segoe UI"; font-size: 8px; }
+
+  .panel { position: absolute; top: 10px; padding: 9px 11px 10px 11px; background-color: rgba(9, 13, 18, 0.82);
+           border-top: 1px solid rgba(255, 255, 255, 0.16); }
+  #agent { left: 10px; width: 214px; }
+  #runs { right: 10px; width: 172px; }
+
+  .eyebrow { font-size: 6px; font-weight: bold; color: #5fd4c4; text-transform: uppercase; }
+  .title { font-size: 13px; font-weight: bold; color: #ffffff; margin-top: 2px; }
+  .subtitle { font-size: 7px; color: #8b97a3; margin-top: 1px; }
+  .progress { height: 2px; margin-top: 7px; background-color: rgba(255, 255, 255, 0.08); }
+  .progress div { height: 2px; background-color: #5fd4c4; }
+
+  .label { font-size: 6px; color: #7b8894; text-transform: uppercase; }
+  .stats { display: flex; flex-wrap: wrap; margin-top: 7px; }
+  .stat { width: 25%; margin-bottom: 3px; }
+  .stat .value { font-size: 10px; font-weight: bold; color: #f4f7fa; white-space: nowrap; }
+
+  .section { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+  .heading { font-size: 6px; color: #7b8894; text-transform: uppercase; margin-bottom: 4px; }
+
+  .decision { display: flex; align-items: center; }
+  .decision .name { font-size: 11px; font-weight: bold; color: #ffc457; white-space: nowrap; }
+  .tag { font-size: 6px; font-weight: bold; color: #0a0e13; padding: 1px 4px 1px 4px; margin-left: 6px;
+         text-transform: uppercase; background-color: #8b97a3; }
+  .tag.explore { background-color: #ffc457; }
+  .tag.greedy { background-color: #5fd4c4; }
+  .tag.refused { background-color: #ff6b6b; }
+  .tag.ok, .tag.none { display: none; }
+
+  .row { display: flex; align-items: center; height: 12px; padding-left: 4px; border-left: 2px solid rgba(0, 0, 0, 0); }
+  .row .n { width: 76px; font-size: 7px; color: #c4cdd6; white-space: nowrap; }
+  .row .track { flex-grow: 1; height: 4px; margin: 0 6px 0 2px; background-color: rgba(255, 255, 255, 0.07); }
+  .row .fill { height: 4px; background-color: #4d7fae; }
+  .row .q { width: 34px; font-size: 7px; color: #c4cdd6; text-align: right; white-space: nowrap; }
+  .row.best .fill { background-color: #5fd4c4; }
+  .row.chosen { border-left-color: #ffc457; background-color: rgba(255, 196, 87, 0.10); }
+  .row.chosen .n, .row.chosen .q { color: #ffc457; font-weight: bold; }
+  .row.chosen .fill { background-color: #ffc457; }
+  .row.masked .n, .row.masked .q { color: #46505a; }
+
+  .facts { display: flex; flex-wrap: wrap; }
+  .fact { width: 33.3%; }
+  .fact .value { font-size: 10px; font-weight: bold; color: #f4f7fa; white-space: nowrap; }
+  .pos { color: #5be49b; }
+  .neg { color: #ff6b6b; }
+  .fact .value.pos { color: #5be49b; }
+  .fact .value.neg { color: #ff6b6b; }
+
+  .runtitle { font-size: 6px; font-weight: bold; color: #5fd4c4; text-transform: uppercase; }
+  .tally { display: flex; margin-top: 5px; }
+  .count { flex-grow: 1; }
+  .count .value { font-size: 14px; font-weight: bold; color: #f4f7fa; }
+  .count.win .value { color: #5be49b; }
+  .count.loss .value { color: #ff6b6b; }
+  .count.draw .value { color: #aab4be; }
+  .count.rate .value { color: #5fd4c4; }
+
+  .chart { position: relative; height: 48px; margin-top: 8px; background-color: rgba(255, 255, 255, 0.035); }
+  .zero { position: absolute; left: 0; right: 0; height: 1px; background-color: rgba(255, 255, 255, 0.22); }
+  .bar { position: absolute; background-color: #5be49b; }
+  .bar.neg { background-color: #ff6b6b; }
+  .bar.pos.last { background-color: #b5ffd2; }
+  .bar.neg.last { background-color: #ffb3b3; }
+  .note { font-size: 6px; color: #7b8894; margin-top: 3px; white-space: nowrap; }
+  .runfacts { margin-top: 5px; }
+  .runfact { display: flex; height: 10px; align-items: center; }
+  .runfact .label { flex-grow: 1; }
+  .runfact .value { font-size: 7px; font-weight: bold; color: #e6ebf0; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="agent" class="panel">
+  <div class="eyebrow">{{eyebrow}}</div>
+  <div class="title">{{title}}</div>
+  <div class="subtitle">{{subtitle}}</div>
+  <div class="progress"><div style="width: {{progress}}%"></div></div>
+  <div class="stats">
+    <div class="stat" data-each="stats"><div class="label">{{label}}</div><div class="value">{{value}}</div></div>
+  </div>
+
+  <div class="section">
+    <div class="heading">Decision</div>
+    <div class="decision"><span class="name">{{action}}</span><span class="tag {{mode}}">{{mode}}</span><span class="tag {{result}}">{{result}}</span></div>
+  </div>
+
+  <div class="section">
+    <div class="heading">Q-values</div>
+    <div class="row {{state}}" data-each="actions"><div class="n">{{name}}</div><div class="track"><div class="fill" style="width: {{w}}%"></div></div><div class="q">{{q}}</div></div>
+  </div>
+
+  <div class="section facts">
+    <div class="fact" data-each="facts"><div class="label">{{label}}</div><div class="value {{sign}}">{{value}}</div></div>
+  </div>
+</div>
+
+<div id="runs" class="panel">
+  <div class="runtitle">{{runs}}</div>
+  <div class="tally">
+    <div class="count {{kind}}" data-each="tally"><div class="value">{{value}}</div><div class="label">{{label}}</div></div>
+  </div>
+  <div class="chart">
+    <div class="zero" style="top: {{zero}}%"></div>
+    <div class="bar {{sign}} {{last}}" data-each="history" style="left: {{x}}%; width: {{w}}%; top: {{top}}%; height: {{h}}%"></div>
+  </div>
+  <div class="note">{{historynote}}</div>
+  <div class="runfacts">
+    <div class="runfact" data-each="runfacts"><span class="label">{{label}}</span><span class="value">{{value}}</span></div>
+  </div>
+</div>
+</body>
+</html>

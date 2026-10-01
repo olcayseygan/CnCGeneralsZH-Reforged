@@ -142,6 +142,7 @@ static void considerBuilderProc( Object *obj, void *userData )
 #include "GameClient/ParticleSys.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/Shell.h"
+#include "GameClient/TerrainVisual.h"
 #include "GameClient/Module/BeaconClientUpdate.h"
 #include "GameClient/LookAtXlat.h"
 
@@ -1891,10 +1892,15 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			// third of a second apart and refusing an order for that would be a new bug.  The line
 			// build checks every tile after the first for itself (buildTiledLocations).
 			//
-			if( TheBuildAssistant->isLocationLegalToBuild( &loc, place, angle,
+			// A refusal paints the red bib of whatever is in the way, the placement ghost's feedback,
+			// and with no ghost up nothing takes it off again: it stayed on every machine in the
+			// match, the way the AI's own checks would if it did not clear them after each.
+			const LegalBuildCode ground = TheBuildAssistant->isLocationLegalToBuild( &loc, place, angle,
 																										BuildAssistant::TERRAIN_RESTRICTIONS |
 																										BuildAssistant::NO_OBJECT_OVERLAP,
-																										constructorObject, NULL ) != LBC_OK )
+																										constructorObject, NULL );
+			TheTerrainVisual->removeAllBibs();
+			if( ground != LBC_OK )
 				break;
 
 			if( msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT )

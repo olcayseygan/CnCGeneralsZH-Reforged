@@ -50,6 +50,13 @@ typedef std::function< Bool( const std::string &name, std::string &value ) > Htm
 extern std::string HtmlTemplate_expand( const std::string &page, const HtmlValues &values,
 																				const HtmlLists &lists, const HtmlLookup &lookup );
 
+/** A JSON object as a page's values and lists, for a page whose numbers come from outside the game
+	* (the control socket's overlay).  A scalar is a value by its key, written as the text a page shows
+	* (true is "on", false and null nothing); an object inside is values under "key."; an array is the
+	* list by its key, each entry an object's values or a scalar as {{value}}.  FALSE, with both left
+	* empty, for anything else, an array inside a list's entry included. */
+extern Bool HtmlTemplate_readJson( const std::string &json, HtmlValues &values, HtmlLists &lists );
+
 /** The text with & < > " and ' written as entities, so a player's name cannot open a tag. */
 extern std::string HtmlTemplate_escape( const std::string &text );
 

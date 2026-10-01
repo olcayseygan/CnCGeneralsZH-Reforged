@@ -42,6 +42,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/TerrainVisual.h"
 #include "GameClient/View.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -696,7 +697,7 @@ static void replyUnits( const char *arguments )
 	  structure, by the check the logic makes when the placement click lands (GameLogicDispatch's
 	  MSG_DOZER_CONSTRUCT: terrain and overlap, no shroud, no path), with one of the seat's dozers as
 	  the builder.  One LegalBuildCode per point, 0 for legal.  Read on the render pass, nothing
-	  written, the ghost's red bibs left off. */
+	  written, and the red bibs the check paints taken up again before the frame is drawn. */
 static void replyCanBuild( const char *arguments )
 {
 	Int slot = 0, used = 0;
@@ -752,6 +753,9 @@ static void replyCanBuild( const char *arguments )
 			reply.push_back( *at );
 		first = FALSE;
 	}
+	// every refusal above painted the red bib of what stood in the way, for a placement ghost that is
+	// not there; nothing else takes them up, so the watched base filled with red rectangles
+	TheTerrainVisual->removeAllBibs();
 	if (first)
 	{
 		replyError( "canbuild wants at least one <x> <y>" );
@@ -829,12 +833,17 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	/* overlay [text]: lines of text in the top left corner for whoever is watching, one per line of
-		 the frame, a line starting '>' highlighted; bare overlay takes it down.  Drawn even while
-		 -cinema hides the rest of the interface.  Client state, so it runs where it arrives. */
+	/* overlay [json]: a training script's panels for whoever is watching, a JSON object that
+		 Window/Html/Training.html lays out (its header names the keys); bare overlay takes it down.
+		 Drawn even while -cinema hides the rest of the interface.  Client state, so it runs where it
+		 arrives. */
 	if (command == "overlay" || strncmp( command.str(), "overlay ", 8 ) == 0)
 	{
-		TheInGameUI->setControlOverlay( AsciiString( command.getLength() > 8 ? command.str() + 8 : "" ) );
+		if (!TheInGameUI->setControlOverlay( AsciiString( command.getLength() > 8 ? command.str() + 8 : "" ) ))
+		{
+			replyError( "overlay wants one JSON object, its arrays holding objects or plain values" );
+			return;
+		}
 		replyOk( "\"overlay\":true" );
 		return;
 	}

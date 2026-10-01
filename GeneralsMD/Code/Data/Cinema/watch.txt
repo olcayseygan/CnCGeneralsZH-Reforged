@@ -1,0 +1,10 @@
+# The interface off and the mouse pointer kept, for a person watching a game rather than filming
+# one: the trainers in Tools/rl launch with it under --watch.  No camera shots, so the camera stays
+# with the player, or with whatever the control socket's follow verb locked it on.
+#
+#   generals.exe -cinema watch -control 8811 ...
+#
+# Window/Html/Training.html, filled by the socket's overlay verb, is the only thing drawn over the
+# world besides the pointer.
+
+0     cursor  on

@@ -225,7 +225,188 @@ void compile( const std::string &written, Blocks &blocks )
 	}
 }
 
+/** A JSON object read straight into a page's values and lists, see HtmlTemplate_readJson. */
+class JsonReader
+{
+public:
+	explicit JsonReader( const std::string &text ) : m_text( text ), m_at( 0 ) {}
+
+	Bool whole( HtmlValues &values, HtmlLists &lists )
+	{
+		if( !object( std::string(), values, &lists ) )
+			return FALSE;
+		space();
+		return m_at == m_text.size();
+	}
+
+private:
+	void space( void )
+	{
+		while( m_at < m_text.size() && isspace( (unsigned char)m_text[ m_at ] ) )
+			m_at++;
+	}
+
+	Bool take( char wanted )
+	{
+		space();
+		if( m_at >= m_text.size() || m_text[ m_at ] != wanted )
+			return FALSE;
+		m_at++;
+		return TRUE;
+	}
+
+	Bool peek( char wanted )
+	{
+		space();
+		return m_at < m_text.size() && m_text[ m_at ] == wanted;
+	}
+
+	/** \u escapes come out as UTF-8, which is what the page is drawn from. */
+	static void appendUtf8( std::string &out, unsigned int code )
+	{
+		if( code < 0x80 )
+			out += (char)code;
+		else if( code < 0x800 )
+		{
+			out += (char)( 0xC0 | ( code >> 6 ) );
+			out += (char)( 0x80 | ( code & 0x3F ) );
+		}
+		else
+		{
+			out += (char)( 0xE0 | ( code >> 12 ) );
+			out += (char)( 0x80 | ( ( code >> 6 ) & 0x3F ) );
+			out += (char)( 0x80 | ( code & 0x3F ) );
+		}
+	}
+
+	Bool string( std::string &out )
+	{
+		if( !take( '"' ) )
+			return FALSE;
+		out.clear();
+		while( m_at < m_text.size() && m_text[ m_at ] != '"' )
+		{
+			const char character = m_text[ m_at++ ];
+			if( character != '\\' )
+			{
+				out += character;
+				continue;
+			}
+			if( m_at >= m_text.size() )
+				return FALSE;
+			const char escaped = m_text[ m_at++ ];
+			switch( escaped )
+			{
+				case 'n': out += '\n'; break;
+				case 't': out += '\t'; break;
+				case 'r': out += '\r'; break;
+				case 'b': out += '\b'; break;
+				case 'f': out += '\f'; break;
+				case 'u':
+				{
+					if( m_at + 4 > m_text.size() )
+						return FALSE;
+					char *end = NULL;
+					const std::string digits = m_text.substr( m_at, 4 );
+					const unsigned long code = strtoul( digits.c_str(), &end, 16 );
+					if( end != digits.c_str() + 4 )
+						return FALSE;
+					appendUtf8( out, (unsigned int)code );
+					m_at += 4;
+					break;
+				}
+				default: out += escaped; break;
+			}
+		}
+		return take( '"' );
+	}
+
+	/** A string, or a number, true, false or null as the text a page shows for it: the number as
+		* written, true as "on" so it can switch a class, false and null as nothing. */
+	Bool scalar( std::string &out )
+	{
+		if( peek( '"' ) )
+			return string( out );
+		const size_t start = m_at;
+		while( m_at < m_text.size() && ( isalnum( (unsigned char)m_text[ m_at ] ) || strchr( "+-.", m_text[ m_at ] ) ) )
+			m_at++;
+		const std::string word = m_text.substr( start, m_at - start );
+		if( word == "true" )
+			out = "on";
+		else if( word == "false" || word == "null" )
+			out.clear();
+		else if( !word.empty() && strchr( "+-.0123456789", word[ 0 ] ) )
+			out = word;
+		else
+			return FALSE;
+		return TRUE;
+	}
+
+	/** An object's scalars become values under `prefix`, an object inside it a deeper prefix, and an
+		* array a list of entries, each an object's values or a scalar's {{value}}.  `lists` is NULL
+		* inside a list's entry, where a further list has nowhere to go. */
+	Bool object( const std::string &prefix, HtmlValues &values, HtmlLists *lists )
+	{
+		if( !take( '{' ) )
+			return FALSE;
+		if( take( '}' ) )
+			return TRUE;
+		do
+		{
+			std::string key;
+			if( !string( key ) || !take( ':' ) )
+				return FALSE;
+			const std::string name = prefix + key;
+			if( peek( '{' ) )
+			{
+				if( !object( name + ".", values, lists ) )
+					return FALSE;
+			}
+			else if( peek( '[' ) )
+			{
+				if( lists == NULL || !list( ( *lists )[ name ] ) )
+					return FALSE;
+			}
+			else if( !scalar( values[ name ] ) )
+				return FALSE;
+		}
+		while( take( ',' ) );
+		return take( '}' );
+	}
+
+	Bool list( std::vector< HtmlValues > &entries )
+	{
+		take( '[' );
+		entries.clear();
+		if( take( ']' ) )
+			return TRUE;
+		do
+		{
+			entries.push_back( HtmlValues() );
+			if( peek( '{' ) ? !object( std::string(), entries.back(), NULL ) : !scalar( entries.back()[ "value" ] ) )
+				return FALSE;
+		}
+		while( take( ',' ) );
+		return take( ']' );
+	}
+
+	const std::string &m_text;
+	size_t m_at;
+};
+
 }	// namespace
+
+//-------------------------------------------------------------------------------------------------
+Bool HtmlTemplate_readJson( const std::string &json, HtmlValues &values, HtmlLists &lists )
+{
+	values.clear();
+	lists.clear();
+	if( JsonReader( json ).whole( values, lists ) )
+		return TRUE;
+	values.clear();
+	lists.clear();
+	return FALSE;
+}
 
 //-------------------------------------------------------------------------------------------------
 std::string HtmlTemplate_escape( const std::string &text )

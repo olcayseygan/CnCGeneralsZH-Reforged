@@ -217,9 +217,10 @@ class Control(object):
         """Lock the camera on the object with that id, as units reports it."""
         return self.send("follow %d" % object_id)
 
-    def overlay(self, lines):
-        """Write these lines in the top left corner; a line starting '>' is highlighted, no lines clears it."""
-        return self.send("overlay " + "\n".join(lines))
+    def overlay(self, payload=None):
+        """Show a dict of panels over the game, drawn by Run/Window/Html/Training.html, whose header
+        names the keys; None takes it down."""
+        return self.send("overlay" if payload is None else "overlay " + json.dumps(payload))
 
     def screenshot(self):
         return self.send("screenshot")

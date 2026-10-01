@@ -1219,6 +1219,8 @@ InGameUI::InGameUI()
 	for( Int stripString = 0; stripString < STRIP_OVERFLOW_STRINGS; stripString++ )
 		m_productionStripOverflow[ stripString ] = NULL;
 	m_spectatorOverlay = NULL;
+	m_controlOverlay = NULL;
+	m_controlOverlayPageLoaded = FALSE;
 	m_spectatorPageLoaded = FALSE;
 	m_spectatorPageShown = FALSE;
 	m_spectatorListsFrame = 0;
@@ -1369,6 +1371,8 @@ InGameUI::~InGameUI()
 
 	delete m_spectatorOverlay;
 	m_spectatorOverlay = NULL;
+	delete m_controlOverlay;
+	m_controlOverlay = NULL;
 	delete m_feedOverlay;
 	m_feedOverlay = NULL;
 	delete m_chatOverlay;
@@ -1833,6 +1837,7 @@ static Real elevatedReach( Real reach, Real range, const Coord3D &center, Real a
 // in the player's language.
 //-------------------------------------------------------------------------------------------------
 static const char *const SPECTATOR_PAGE = "Window\\Html\\Spectator.html";
+static const char *const TRAINING_PAGE = "Window\\Html\\Training.html";	///< the control socket's overlay
 static const std::string FLIP_ACTION = "flip:";
 static const std::string PICK_ACTION = "pick:";
 // data-click="camera:free", "camera:director" or "camera:player" picks who drives the camera
@@ -4087,6 +4092,7 @@ void InGameUI::reset( void )
 	m_quitMenuPageLoaded = FALSE;
 	m_signalsWereShown = FALSE;
 	m_spectatorPageLoaded = FALSE;
+	m_controlOverlayPageLoaded = FALSE;
 	TheObserverCamera.reset();
 	m_spectatorFlipped.clear();
 	m_spectatorPicked.clear();
@@ -9584,73 +9590,44 @@ void InGameUI::drawPeaceTimer( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The control socket's "overlay": whatever the script driving the game wants a person watching to
-	* read, a training loop's episode, step and chosen action among it.  One display string a line,
-	* because the text renderer draws a newline as a character, and a string keeps its texture while
-	* its text stays the same.  Client state that nothing reads back. */
+/** The control socket's "overlay": a JSON object from the script driving the game, a training loop's
+	* episode, step, Q-values and history, laid out by Window/Html/Training.html.  FALSE, and the
+	* overlay down, for text that is not one.  Empty text takes it down.  Client state that nothing
+	* reads back. */
 //-------------------------------------------------------------------------------------------------
-void InGameUI::setControlOverlay( const AsciiString &text )
+Bool InGameUI::setControlOverlay( const AsciiString &json )
 {
-	size_t count = 0;
-	AsciiString line;
-	for( const char *c = text.str(); text.isNotEmpty(); ++c )
+	if( json.isEmpty() )
 	{
-		if( *c != '\n' && *c != 0 )
-		{
-			if( *c != '\r' )
-				line.concat( *c );
-			continue;
-		}
-		if( count == m_controlOverlayLines.size() )
-		{
-			DisplayString *made = TheDisplayStringManager->newDisplayString();
-			made->setFont( TheFontLibrary->getFont( AsciiString( "Courier New" ),
-										 TheGlobalLanguageData->adjustFontSize( CONTROL_OVERLAY_POINT_SIZE ), TRUE ) );
-			m_controlOverlayLines.push_back( made );
-		}
-		UnicodeString wide;
-		wide.translate( line );
-		m_controlOverlayLines[ count++ ]->setText( wide );
-		line.clear();
-		if( *c == 0 )
-			break;
+		m_controlOverlayValues.clear();
+		m_controlOverlayLists.clear();
+		return TRUE;
 	}
-	while( m_controlOverlayLines.size() > count )
-	{
-		TheDisplayStringManager->freeDisplayString( m_controlOverlayLines.back() );
-		m_controlOverlayLines.pop_back();
-	}
+	return HtmlTemplate_readJson( json.str(), m_controlOverlayValues, m_controlOverlayLists );
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Top left on a dark plate, drawn last and also while -cinema has the rest of the interface off,
-	* which is how a training run is watched: the world and the script's own words, nothing else. */
+/** Drawn last and also while -cinema has the rest of the interface off, which is how a training run
+	* is watched: the world and the script's own numbers, nothing else.  The page says where. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::drawControlOverlay( void )
 {
-	if( m_controlOverlayLines.empty() )
+	if( m_controlOverlayValues.empty() && m_controlOverlayLists.empty() )
 		return;
 
-	const Int pad = 6;
-	const Int lineHeight = m_controlOverlayLines[ 0 ]->getFont()->height;
-	Int plateWidth = 0;
-	for( size_t i = 0; i < m_controlOverlayLines.size(); ++i )
+	if( !m_controlOverlayPageLoaded )
 	{
-		Int width = 0, height = 0;
-		m_controlOverlayLines[ i ]->getSize( &width, &height );
-		if( width > plateWidth )
-			plateWidth = width;
+		m_controlOverlayPageLoaded = TRUE;
+		readHtmlPage( TRAINING_PAGE, m_controlOverlayPage );
 	}
-	TheDisplay->drawFillRect( pad, pad, plateWidth + pad*2, lineHeight * (Int)m_controlOverlayLines.size() + pad*2,
-														GameMakeColor( 0, 0, 0, 170 ) );
+	if( m_controlOverlayPage.empty() )
+		return;
+	if( m_controlOverlay == NULL )
+		m_controlOverlay = new HtmlOverlay( m_superweaponNormalFont );
 
-	for( size_t i = 0; i < m_controlOverlayLines.size(); ++i )
-	{
-		const UnicodeString &text = m_controlOverlayLines[ i ]->peekText();
-		const Bool highlighted = !text.isEmpty() && text.getCharAt( 0 ) == L'>';
-		const Color color = highlighted ? GameMakeColor( 255, 210, 60, 255 ) : GameMakeColor( 225, 225, 225, 255 );
-		m_controlOverlayLines[ i ]->draw( pad*2, pad*2 + lineHeight * (Int)i, color, GameMakeColor( 0, 0, 0, 255 ) );
-	}
+	m_controlOverlay->setPage( HtmlTemplate_expand( m_controlOverlayPage, m_controlOverlayValues, m_controlOverlayLists,
+																									lookupGameText ) );
+	m_controlOverlay->draw();
 }
 
 //-------------------------------------------------------------------------------------------------

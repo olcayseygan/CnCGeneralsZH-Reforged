@@ -254,11 +254,11 @@ Bool CinemaDirector_parseLine( const char *line, CinemaShot *shot, Bool *isShot,
 		else
 			shot->verb = CINEMA_VERB_END;
 	}
-	else if (verb == "hud" || verb == "letterbox")
+	else if (verb == "hud" || verb == "letterbox" || verb == "cursor")
 	{
-		shot->verb = (verb == "hud") ? CINEMA_VERB_HUD : CINEMA_VERB_LETTERBOX;
+		shot->verb = (verb == "hud") ? CINEMA_VERB_HUD : (verb == "letterbox") ? CINEMA_VERB_LETTERBOX : CINEMA_VERB_CURSOR;
 		if (args != 1 || !parseCinemaSwitch( tokens[ 2 ], &shot->on ))
-			return refuseCinemaLine( reason, "hud and letterbox take on or off" );
+			return refuseCinemaLine( reason, "hud, letterbox and cursor take on or off" );
 	}
 	else
 	{
@@ -362,6 +362,7 @@ static Bool theCinemaLoaded = FALSE;
 static std::vector<CinemaShot> theCinemaShots;
 static size_t theCinemaNext = 0;
 static Bool theCinemaHudHidden = FALSE;
+static Bool theCinemaCursor = FALSE;			///< the pointer stays up with the hud off: a watched training run, not footage
 static Bool theCinemaLetterbox = FALSE;
 static Bool theCinemaFlying = FALSE;			///< a camera verb has run; until then the player has the camera
 static Real theCinemaBaseZoom = 1.0f;
@@ -594,8 +595,9 @@ static void cinemaHoldTheFrame( void )
 		GameWindow *bar = cinemaControlBarWindow();
 		if (bar != NULL && !bar->winIsHidden())
 			HideControlBar( TRUE );
-		// the cursor comes back whenever the game decides it should, so it is put away every pass
-		TheMouse->setVisibility( FALSE );
+		// the cursor comes back whenever the game decides it should, so it is put away every pass,
+		// unless the shot list asked to keep it for a person watching rather than for footage
+		TheMouse->setVisibility( theCinemaCursor );
 		if (TheInGameUI->getSelectCount() > 0)
 			TheInGameUI->deselectAllDrawables();
 	}
@@ -698,6 +700,10 @@ static void runShot( const CinemaShot &shot )
 
 		case CINEMA_VERB_LETTERBOX:
 			theCinemaLetterbox = shot.on;
+			break;
+
+		case CINEMA_VERB_CURSOR:
+			theCinemaCursor = shot.on;
 			break;
 
 		case CINEMA_VERB_SHOT:

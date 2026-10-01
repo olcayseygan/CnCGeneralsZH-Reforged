@@ -4,7 +4,7 @@ action every five seconds.
     cd GeneralsMD/Code/Tools/rl
     python train_macro.py --episodes 300 --workers 5            # trains, one real match an episode
     python train_macro.py --episodes 20 --resume --epsilon 0    # play the saved table greedily
-    python train_macro.py --episodes 3 --resume --watch         # one windowed game, no game interface, the agent top left
+    python train_macro.py --episodes 3 --resume --watch         # one windowed game, no game interface, the agent's panels over it
 
 Each worker owns one game at a time on its own port (--port, --port + 1, ...), so the matches run side
 by side and every one is a fresh generals_rl.exe with its own seed. The table is shared: a worker plays
@@ -20,17 +20,17 @@ Every finished match is one line in --log (JSON), and the table is saved to --ou
 
 import argparse
 import json
+import os
 import sys
 import threading
 import time
 
 import numpy as np
 
-from humvee_env import overlay_lines
+from humvee_env import Pace, history_chart, q_rows, signed
 from macro_env import ACTIONS, N_ACTIONS, N_STATES, PORT, MacroEnv, prepare_exe, read_templates
 
 ACTION_NAMES = [a[0] for a in ACTIONS]
-TITLE = "RL macro: USA vs easy USA, usabasic"
 
 ALPHA = 0.1
 GAMMA = 0.99
@@ -88,6 +88,8 @@ def main():
     lock = threading.Lock()
     next_episode = [0]
     rows = []
+    # a resumed table carries the matches that taught it, so the watched history starts from them
+    earlier = [json.loads(line) for line in open(arguments.log)] if arguments.resume and os.path.exists(arguments.log) else []
     log = open(arguments.log, "a")
 
     def epsilon(episode):
@@ -95,6 +97,37 @@ def main():
             return arguments.epsilon
         share = min(1.0, episode / max(1.0, EXPLORE_SHARE * arguments.episodes))
         return EPSILON_START + (EPSILON_END - EPSILON_START) * share
+
+    pace = Pace()
+
+    def watched(episode, eps, step, frame, q_row, mask, action=None, explore=False, refused=False, r=0.0, total=0.0,
+                army=(0, 0)):
+        """The overlay a --watch game shows after every decision: the agent left, its episodes right."""
+        with lock:
+            done = earlier + rows
+        results = [row["result"] for row in done]
+        payload = {
+            "eyebrow": "Tabular Q-learning", "title": "Macro agent", "subtitle": "USA vs easy USA, usabasic, Winter Wolf",
+            "progress": round(100.0 * episode / arguments.episodes, 1),
+            "stats": [{"label": "episode", "value": "%d / %d" % (episode + 1, arguments.episodes)},
+                      {"label": "step", "value": step}, {"label": "frame", "value": frame},
+                      {"label": "epsilon", "value": "%.2f" % eps}, {"label": "speed", "value": pace(frame)},
+                      {"label": "seed", "value": arguments.seed + episode}],
+            "action": ACTION_NAMES[action] if action is not None else "match starting",
+            "mode": "none" if action is None else "explore" if explore else "greedy",
+            "result": "refused" if refused else "ok",
+            "actions": q_rows(ACTION_NAMES, q_row, action, mask),
+            "facts": [signed("reward", r), signed("return", total), {"label": "army", "value": "%d vs %d" % army}],
+            "runs": "Episodes",
+            "tally": [{"label": "won", "value": results.count("win"), "kind": "win"},
+                      {"label": "drawn", "value": results.count("draw"), "kind": "draw"},
+                      {"label": "lost", "value": results.count("loss"), "kind": "loss"}],
+            "runfacts": [{"label": "best return",
+                          "value": "%+.2f" % max(row["return"] for row in done) if done else "-"},
+                         {"label": "decisions refused", "value": "%d of %d" % (sum(row["refused"] for row in done),
+                                                                               sum(row["decisions"] for row in done))}]}
+        payload.update(history_chart([row["return"] for row in done]))
+        return payload
 
     def worker(index):
         rng = np.random.default_rng(arguments.seed * 1000 + index)
@@ -112,21 +145,16 @@ def main():
                 state, info = env.reset(arguments.seed + episode)
                 mask = info["mask"]
                 transitions, total, refused, counts, refused_by = [], 0.0, 0, [0] * N_ACTIONS, [0] * N_ACTIONS
-                env.show(overlay_lines(TITLE, [("episode", "%d  seed %d" % (episode, arguments.seed + episode)),
-                                               ("epsilon", "%.2f" % eps)], ACTION_NAMES, q[state], None, mask))
+                if arguments.watch:
+                    env.show(watched(episode, eps, 0, info["frame"], q[state], mask))
                 done = False
                 while not done:
                     explore = rng.random() < eps
                     action = int(rng.choice(np.flatnonzero(mask))) if explore else greedy(q[state], mask, rng)
                     next_state, r, terminated, truncated, info = env.step(action)
-                    env.show(overlay_lines(TITLE, [
-                        ("episode", "%d  seed %d" % (episode, arguments.seed + episode)),
-                        ("step", "%d  frame %d" % (len(transitions) + 1, info["frame"])),
-                        ("action", "%s (%s)" % (ACTION_NAMES[action], "explore" if explore else "greedy")),
-                        ("result", "REFUSED" if info["refused"] else "done"), ("reward", "%+.3f" % r),
-                        ("return", "%+.3f" % (total + r)), ("epsilon", "%.2f" % eps),
-                        ("army", "%d vs %d" % (info["army"], info["enemy_army"]))], ACTION_NAMES, q[state], action,
-                        mask))
+                    if arguments.watch:
+                        env.show(watched(episode, eps, len(transitions) + 1, info["frame"], q[state], mask, action,
+                                         explore, info["refused"], r, total + r, (info["army"], info["enemy_army"])))
                     transitions.append((state, action, r, next_state, terminated, info["mask"]))
                     state, mask, total, done = next_state, info["mask"], total + r, terminated or truncated
                     refused += info["refused"]

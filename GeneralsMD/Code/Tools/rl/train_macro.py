@@ -124,8 +124,8 @@ def main():
                       {"label": "lost", "value": results.count("loss"), "kind": "loss"}],
             "runfacts": [{"label": "best return",
                           "value": "%+.2f" % max(row["return"] for row in done) if done else "-"},
-                         {"label": "decisions refused", "value": "%d of %d" % (sum(row["refused"] for row in done),
-                                                                               sum(row["decisions"] for row in done))}]}
+                         {"label": "refused", "value": "%d of %d" % (sum(row["refused"] for row in done),
+                                                                     sum(row["decisions"] for row in done))}]}
         payload.update(history_chart([row["return"] for row in done]))
         return payload
 

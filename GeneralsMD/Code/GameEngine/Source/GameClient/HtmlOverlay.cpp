@@ -453,13 +453,22 @@ litehtml::uint_ptr HtmlOverlayContainer::create_font( const litehtml::font_descr
 }
 
 //-------------------------------------------------------------------------------------------------
+/** getSize adds the font's pixel overlap (an eighth of its height, up to four pixels) once a string,
+	* and litehtml measures every word and every space as a string of its own, so a gap between two
+	* words came out a space plus two overlaps: "Macro  agent" at 1080 lines.  A word is measured by
+	* its letters' advance alone and a space keeps one overlap, which is also what stops a small
+	* font's space, two pixels of advance or less, from closing up altogether. */
+//-------------------------------------------------------------------------------------------------
 litehtml::pixel_t HtmlOverlayContainer::text_width( const char *text, litehtml::uint_ptr font )
 {
 	if( font == 0 )
 		return 0;
 
+	DisplayString *string = displayString( (GameFont *)font, text );
+	if( text[ 0 ] != ' ' )
+		return page( string->getWidth() );
 	Int width = 0, height = 0;
-	displayString( (GameFont *)font, text )->getSize( &width, &height );
+	string->getSize( &width, &height );
 	return page( width );
 }
 

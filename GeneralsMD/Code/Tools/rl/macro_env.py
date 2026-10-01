@@ -22,7 +22,7 @@ dozer, a finished prerequisite, a finished producer, an army, a legal spot), and
 those. What the game still refuses after that costs REFUSED_PENALTY and otherwise does nothing.
 
 Reward is the change in net-worth lead, our money plus what our objects are worth minus what the
-enemy's objects are worth, in units of WORTH_SCALE, plus WIN_REWARD or -WIN_REWARD when a side has nothing left. An
+enemy's objects are worth, in units of WORTH_SCALE, plus WIN_REWARD or -WIN_REWARD when a side has no structure left. An
 object's worth is its build cost scaled by its health, so spending is neutral, income and kills pay,
 losses cost. Three terms sit on top of that potential difference, each found missing in the first
 200k-step run:
@@ -156,7 +156,8 @@ def read_templates(run_folder=RUN_FOLDER):
 
 
 def is_army(kinds):
-    return not kinds & {"STRUCTURE", "DOZER", "HARVESTER"}
+    """PROJECTILE is the hull a dead tank leaves (GenericTankShell): nothing fights it or with it."""
+    return not kinds & {"STRUCTURE", "DOZER", "HARVESTER", "PROJECTILE"}
 
 
 def worths(units, templates):
@@ -279,6 +280,21 @@ class MacroEnv(object):
     def _army(self, units):
         return [u for u in units if is_army(self._kinds(u))]
 
+    def _structures(self, units):
+        return [u for u in units if "STRUCTURE" in self._kinds(u)]
+
+    def _result(self, alive):
+        """A side with no structure left, finished or not, has lost: its units and hulls do not keep
+        the match going. Without a structure nothing in ACTIONS can be trained, so the same rule
+        judges both seats."""
+        if not self._structures(self.theirs):
+            return "win"
+        if not self._structures(self.ours):
+            return "loss"
+        if not alive or self.frame >= FRAME_CAP:
+            return "draw"
+        return None
+
     def potential(self):
         # the enemy's bank is left out: the easy AI hoards tens of thousands it never spends, and that
         # drift would swamp every signal the agent can act on
@@ -354,12 +370,13 @@ class MacroEnv(object):
                                         for u in self._army(self.ours))
 
     def _target(self):
-        """Their army when it is at our door, else their structure nearest our base, else anything of theirs."""
-        if not self.theirs:
-            return self.enemy_start
+        """Their army when it is at our door, else their structure nearest our base wherever it stands,
+        since the last structure is what ends the match."""
         centre = self.base()
         near = [u for u in self._army(self.theirs) if np.hypot(u["x"] - centre[0], u["y"] - centre[1]) < THREAT_RADIUS]
-        near = near or [u for u in self.theirs if "STRUCTURE" in self._kinds(u)] or self.theirs
+        near = near or self._structures(self.theirs)
+        if not near:
+            return self.enemy_start
         nearest = min(near, key=lambda u: np.hypot(u["x"] - centre[0], u["y"] - centre[1]))
         return np.array([nearest["x"], nearest["y"]])
 
@@ -407,14 +424,8 @@ class MacroEnv(object):
         r = (phi - self.phi + DAMAGE_BONUS * damage / WORTH_SCALE - (0.0 if done_ok else REFUSED_PENALTY)
              - (IDLE_PENALTY if idle else 0.0))
         self.phi, self.enemy_worths = phi, enemy_worths
-        result = None
-        if not self.theirs:
-            result = "win"
-        elif not self.ours:
-            result = "loss"
-        elif not alive or self.frame >= FRAME_CAP:
-            result = "draw"
-        r += {"win": WIN_REWARD, "loss": -WIN_REWARD}.get(result, 0.0)
+        result = self._result(alive)
+        r +={"win": WIN_REWARD, "loss": -WIN_REWARD}.get(result, 0.0)
         info = {"frame": self.frame, "result": result, "refused": not done_ok, "lead": phi, "idle": idle,
                 "damage": damage,
                 "army": len(self._army(self.ours)), "enemy_army": len(self._army(self.theirs)), "mask": self.mask(),
@@ -493,6 +504,21 @@ def self_check():
     assert not env.mask()[3] and env.mask()[2]                        # a free dozer, still no finished power
     env.game.code = 3                                                # LBC_OBJECTS_IN_THE_WAY everywhere
     assert not env.mask()[1:5].any()
+
+    # the match ends on structures: a pilot, a hull and a Chinook left over are still a win
+    assert not is_army(templates["GenericTankShell"][1])
+    env.frame, env.enemy_start = 900, np.array([5000.0, 0.0])
+    env.theirs = [{"template": t, "x": 100.0, "y": 0.0} for t in ("AmericaInfantryPilot", "GenericTankShell")]
+    env.theirs.append({"template": "AmericaVehicleChinook", "x": 4000.0, "y": 0.0})
+    assert env._result(True) == "win"
+    assert tuple(env._target()) == (100.0, 0.0)                     # the pilot at our door first
+    env.theirs[0]["x"] = 3000.0
+    assert tuple(env._target()) == (5000.0, 0.0)                    # a hull is no threat; no structure, their start
+    env.theirs.append({"template": POWER, "x": 4500.0, "y": 0.0, "built": False})
+    assert env._result(True) is None and tuple(env._target()) == (4500.0, 0.0)
+    assert env._result(False) == "draw"
+    env.ours = [u for u in env.ours if "STRUCTURE" not in templates[u["template"]][1]]
+    assert env._result(True) == "loss"                               # rangers and dozers alone have lost
     print("self-check passed: %d templates, %d states x %d actions" % (len(templates), N_STATES, N_ACTIONS))
 
 

@@ -235,7 +235,7 @@ def play_panels(title, match, step, frame, q_row, mask, action=None, refused=Fal
 
 def play_only(arguments, templates):
     q = np.load(arguments.play)
-    env = MacroEnv(port=arguments.port, templates=templates, log_prefix="rlplay_", watch=True)
+    env = MacroEnv(port=arguments.port, templates=templates, log_prefix="rlplay%d_" % arguments.port, watch=True)
     rng = np.random.default_rng(arguments.seed)
     finished = []
     title = os.path.basename(arguments.play)
@@ -285,7 +285,10 @@ def main():
     # a resumed table carries the matches that taught it, so the watched history starts from them
     earlier = [json.loads(line) for line in open(arguments.log)] if arguments.resume and os.path.exists(arguments.log) else []
     log = open(arguments.log, "a")
-    # a resumed --steps run counts the decisions that taught the table against its budget
+    # a resumed run numbers its matches after the logged ones, so seeds and episode numbers do not repeat
+    first = len(earlier)
+    # a resumed --steps run counts the decisions that taught the table against its budget, which also
+    # puts epsilon and the checkpoint numbering where the run left them
     steps = [sum(row["decisions"] for row in earlier) if arguments.steps else 0]
     every = arguments.checkpoint_every
     last_checkpoint = [steps[0] // every * every if every else 0]
@@ -302,13 +305,19 @@ def main():
             share = min(1.0, episode / max(1.0, EXPLORE_SHARE * arguments.episodes))
         return EPSILON_START + (EPSILON_END - EPSILON_START) * share
 
+    if arguments.resume:
+        print("resumed: %d episodes, %d steps, epsilon %.3f, next episode %d, next checkpoint %s"
+              % (first, steps[0], epsilon(0, steps[0]), first,
+                 "step%d" % (last_checkpoint[0] + every) if every else "none"), flush=True)
+
     def write_summary(folder, summary):
         with open(os.path.join(folder, "summary.json"), "w") as f:
             json.dump(summary, f, indent=1)
 
     def evaluate(k, snapshot, summary, folder):
         """The checkpoint's play match, on its own thread while the workers carry on."""
-        env = MacroEnv(port=arguments.eval_port, templates=templates, log_prefix="rlplay_", watch=True)
+        env = MacroEnv(port=arguments.eval_port, templates=templates, log_prefix="rlplay%d_" % arguments.eval_port,
+                       watch=True)
         try:
             summary["play"] = play(env, snapshot, EVAL_SEED, np.random.default_rng(k),
                                    lambda *shown: env.show(play_panels("Checkpoint step %d" % k, "eval", *shown)),
@@ -383,7 +392,7 @@ def main():
                        else "%d / %d" % (episode + 1, arguments.episodes)},
                       {"label": "step", "value": step}, {"label": "frame", "value": frame},
                       {"label": "epsilon", "value": "%.2f" % eps}, {"label": "speed", "value": pace(frame)},
-                      {"label": "seed", "value": arguments.seed + episode}],
+                      {"label": "seed", "value": arguments.seed + first + episode}],
             "action": ACTION_NAMES[action] if action is not None else "match starting",
             "mode": "none" if action is None else "explore" if explore else "greedy",
             "result": "refused" if refused else "ok",
@@ -402,7 +411,7 @@ def main():
 
     def worker(index):
         rng = np.random.default_rng(arguments.seed * 1000 + index)
-        env = MacroEnv(port=arguments.port + index, templates=templates, log_prefix="rlmacro%d_" % index,
+        env = MacroEnv(port=arguments.port + index, templates=templates, log_prefix="rlmacro%d_" % (arguments.port + index),
                        watch=arguments.watch)
         try:
             while True:
@@ -415,7 +424,8 @@ def main():
                     next_episode[0] += 1
                     eps = epsilon(episode, steps[0])
                 started = time.time()
-                state, info = env.reset(arguments.seed + episode)
+                number = first + episode
+                state, info = env.reset(arguments.seed + number)
                 mask = info["mask"]
                 transitions, total, refused, counts, refused_by = [], 0.0, 0, [0] * N_ACTIONS, [0] * N_ACTIONS
                 damage, idle = 0.0, 0
@@ -439,7 +449,7 @@ def main():
                 with lock:
                     learn(q, transitions)
                     np.save(arguments.out, q)
-                    row = {"episode": episode, "seed": arguments.seed + episode, "epsilon": round(eps, 3),
+                    row = {"episode": number, "seed": arguments.seed + number, "epsilon": round(eps, 3),
                            "result": info["result"], "frame": info["frame"], "return": round(total, 3),
                            "lead": round(info["lead"], 3), "decisions": len(transitions), "refused": refused,
                            "unfinished": info["unfinished"], "dozers": info["dozers"],
@@ -452,7 +462,7 @@ def main():
                     log.flush()
                     print("episode %4d  %-4s  frame %5d  return %7.2f  lead %6.2f  refused %3d/%3d  idle %3d  "
                           "damage %6d  eps %.2f  %.0fs"
-                          % (episode, row["result"], row["frame"], total, row["lead"], refused, len(transitions),
+                          % (number, row["result"], row["frame"], total, row["lead"], refused, len(transitions),
                              idle, damage, eps, row["seconds"]), flush=True)
                     steps[0] += len(transitions)
                     if every and steps[0] >= last_checkpoint[0] + every:

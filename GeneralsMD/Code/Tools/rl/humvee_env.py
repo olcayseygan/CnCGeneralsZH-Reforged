@@ -7,7 +7,8 @@ one of eight directions (or a stop), followed by a lockstep `step` of FRAMES_PER
 frames over the -control socket.
 
 With watch=True the game runs in a window instead: the camera is locked on the Humvee (the
-`follow` verb) and a Comanche hovers over the target, so a person can watch it learn.
+`follow` verb) and a Comanche hovers over the target, so a person can watch it learn. The game's own
+interface is off (-cinema nohud) and show() puts the trainer's lines in the top left corner.
 
 The API is gymnasium's without the dependency: reset() -> (obs, info) and
 step(action) -> (obs, reward, terminated, truncated, info). The observation is the target's
@@ -98,6 +99,14 @@ def kill_with_python(process):
     return job  # the handle has to stay open for as long as the game should live
 
 
+def overlay_lines(title, facts, names, q_row, action):
+    """What a watched game shows top left: a title, (label, value) facts, then every action with its
+    Q-value, the chosen one marked '>' so the game highlights it (None marks none)."""
+    lines = [title] + ["%-8s %s" % fact for fact in facts] + ["  %-15s %8s" % ("action", "Q")]
+    return lines + ["%s %-15s %+8.3f" % (">" if i == action else " ", name, value)
+                    for i, (name, value) in enumerate(zip(names, q_row))]
+
+
 class HumveeEnv(object):
     def __init__(self, port=PORT, seed=None, run_folder=RUN_FOLDER, watch=False):
         self.rng = np.random.default_rng(seed)
@@ -111,7 +120,7 @@ class HumveeEnv(object):
             [os.path.join(run_folder, "generals.exe"), "-win" if watch else "-headless", "-quickstart", "-noshellmap",
              "-multiInstance", "-noFPSLimit", "-randommap", "1", "2", "small", "-autoskirmish", "2",
              "-takeover", "-side", "0", "FactionAmerica", "-side", "1", "FactionGLA", "-seed", "1",
-             "-control", str(port), "-logPrefix", "rl_"],
+             "-control", str(port), "-logPrefix", "rl_"] + (["-cinema", "nohud"] if watch else []),
             cwd=run_folder)
         self.job = kill_with_python(self.process)
         atexit.register(self.close)
@@ -194,6 +203,11 @@ class HumveeEnv(object):
         self.distance = distance
         return obs, r, arrived, self.steps >= STEP_LIMIT and not arrived, {"distance": distance}
 
+    def show(self, lines):
+        """The overlay in the top left corner, in a watched game only."""
+        if self.watch:
+            self.game.overlay(lines)
+
     def close(self):
         if self.process.poll() is None:
             if self.game is not None:
@@ -231,6 +245,9 @@ def self_check():
     assert reward(100, 80, False) > 0 > reward(100, 120, False)
     assert reward(100, 100, False) == -STEP_COST
     assert reward(40, 20, True) > ARRIVE_BONUS
+
+    lines = overlay_lines("title", [("step", "3")], ["left", "right"], [0.5, -1.0], 1)
+    assert len(lines) == 5 and lines[-1].startswith(">") and not lines[-2].startswith(">")
     print("self-check passed: %d states x %d actions" % (N_STATES, N_ACTIONS))
 
 

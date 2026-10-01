@@ -16,7 +16,8 @@ enemy's objects are worth, in units of WORTH_SCALE, plus WIN_REWARD or -WIN_REWA
 object's worth is its build cost scaled by its health, so spending is neutral, income and kills pay,
 losses cost. It is a potential difference, so it shapes without changing which policy is best.
 
-With watch=True the game runs in a window with the camera locked on our command center.
+With watch=True the game runs in a window with the camera locked on our command center, the game's
+own interface off (-cinema nohud) and show() writing the trainer's lines in the top left corner.
 
 The game is launched from a copy of generals.exe, generals_rl.exe, so that a build can still replace
 generals.exe in Run/ while training games are running.
@@ -185,7 +186,8 @@ class MacroEnv(object):
             [os.path.join(self.run_folder, EXE), "-win" if self.watch else "-headless", "-quickstart", "-noshellmap", "-multiInstance",
              "-noFPSLimit", "-map", MAP, "-autoskirmish", "2", "-aidiff", "easy",
              "-side", "0", "FactionAmerica", "-side", "1", "FactionGLA", "-seed", str(seed),
-             "-control", str(self.port), "-logPrefix", self.log_prefix],
+             "-control", str(self.port), "-logPrefix", self.log_prefix]
+            + (["-cinema", "nohud"] if self.watch else []),
             cwd=self.run_folder)
         self.job = kill_with_python(self.process)
         deadline = time.time() + LOAD_TIMEOUT_SECONDS
@@ -336,6 +338,11 @@ class MacroEnv(object):
         info = {"frame": self.frame, "result": result, "refused": not done_ok, "lead": phi,
                 "army": len(self._army(self.ours)), "enemy_army": len(self._army(self.theirs))}
         return self.observe() if self.ours else 0, r, result in ("win", "loss"), result == "draw", info
+
+    def show(self, lines):
+        """The overlay in the top left corner, in a watched game only."""
+        if self.watch:
+            self.game.overlay(lines)
 
     def close(self):
         if self.process is not None and self.process.poll() is None:

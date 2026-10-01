@@ -14,7 +14,9 @@ import time
 
 import numpy as np
 
-from humvee_env import N_ACTIONS, N_STATES, PORT, HumveeEnv, discretize
+from humvee_env import N_ACTIONS, N_STATES, PORT, HumveeEnv, discretize, overlay_lines
+
+ACTION_NAMES = ["move %d deg" % (45 * k) for k in range(N_ACTIONS - 1)] + ["stop"]
 
 ALPHA = 0.2
 GAMMA = 0.95
@@ -45,8 +47,14 @@ def main():
             state = discretize(*obs)
             total, done = 0.0, False
             while not done:
-                action = int(rng.integers(N_ACTIONS)) if rng.random() < epsilon else int(np.argmax(q[state]))
+                explore = rng.random() < epsilon
+                action = int(rng.integers(N_ACTIONS)) if explore else int(np.argmax(q[state]))
                 obs, r, terminated, truncated, info = env.step(action)
+                env.show(overlay_lines("RL humvee: drive to the helicopter", [
+                    ("episode", "%d" % episode), ("step", "%d" % env.steps),
+                    ("action", "%s (%s)" % (ACTION_NAMES[action], "explore" if explore else "greedy")),
+                    ("distance", "%.0f" % info["distance"]), ("reward", "%+.3f" % r),
+                    ("return", "%+.3f" % (total + r)), ("epsilon", "%.2f" % epsilon)], ACTION_NAMES, q[state], action))
                 next_state = discretize(*obs)
                 target = r if terminated else r + GAMMA * q[next_state].max()
                 q[state, action] += ALPHA * (target - q[state, action])

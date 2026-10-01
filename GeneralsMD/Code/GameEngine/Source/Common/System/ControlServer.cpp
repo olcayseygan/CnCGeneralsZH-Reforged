@@ -749,6 +749,16 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* overlay [text]: lines of text in the top left corner for whoever is watching, one per line of
+		 the frame, a line starting '>' highlighted; bare overlay takes it down.  Drawn even while
+		 -cinema hides the rest of the interface.  Client state, so it runs where it arrives. */
+	if (command == "overlay" || strncmp( command.str(), "overlay ", 8 ) == 0)
+	{
+		TheInGameUI->setControlOverlay( AsciiString( command.getLength() > 8 ? command.str() + 8 : "" ) );
+		replyOk( "\"overlay\":true" );
+		return;
+	}
+
 	/* step <n>: run n logic frames and answer when they have run.  The reply is sent from
 		 ControlServer_poll on the pass that finds the frame reached.  A network match has a clock of
 		 its own that every machine shares, so it is refused there. */

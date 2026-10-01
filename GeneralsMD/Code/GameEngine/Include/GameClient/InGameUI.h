@@ -1379,6 +1379,10 @@ public:
 	/// what a data-click on the spectator's page does, by its text: a click on the page, or the
 	/// control socket's "spectator" verb, which a script uses instead of finding the pixel
 	void runSpectatorAction( const std::string &action );
+
+	/// the control socket's "overlay" verb: one display line per line of the text, top left, a line
+	/// starting '>' highlighted; empty text takes it down
+	void setControlOverlay( const AsciiString &text );
 protected:
 
 	void clearWorldAnimations( void );					///< delete all world animations
@@ -1491,6 +1495,8 @@ protected:
 	void drawPeaceTimer( void );					///< the lobby's peace time, counting down at the top of the screen
 	void drawPeaceCountdown( UnsignedInt framesLeft );	///< the last seconds of it, one big digit in the middle of the screen
 	void drawHudOverlay( void );					///< the small elapsed-time / fps plate (ShowHudOverlay)
+	enum { CONTROL_OVERLAY_POINT_SIZE = 12 };	///< the socket's overlay text, before the resolution scales it
+	void drawControlOverlay( void );			///< what setControlOverlay was last given, top left over everything
 	void drawProductionStrip( void );			///< the production queue rows above the control bar
 	///< the run of cells, a column, with its left edge at 'left' and its first cell's top edge at 'bottomY'
 	void drawProductionStripColumn( Int left, Int bottomY );
@@ -1636,6 +1642,7 @@ protected:
 	DisplayString *							m_peaceTimeDisplayString;	///< the peace time clock at the top of the screen
 	DisplayString *							m_peaceTimeLabelDisplayString;	///< the word written over that clock
 	DisplayString *							m_peaceCountdownDisplayString;	///< the big digit of its last ten seconds
+	std::vector<DisplayString *>	m_controlOverlayLines;	///< the control socket's overlay, a string a line
 	Int													m_lastMoneyDisplayed;		///< so the money gadget is only written when the amount changes
 	Int													m_lastEarningDisplayed;	///< or the money earned a second beside it
 	Bool												m_lastEarningPerMinute;	///< or whether that was written per minute

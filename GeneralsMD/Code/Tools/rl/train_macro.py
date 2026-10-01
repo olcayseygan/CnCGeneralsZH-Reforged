@@ -3,7 +3,7 @@
     cd GeneralsMD/Code/Tools/rl
     python train_macro.py --episodes 300 --workers 5            # trains, one real match an episode
     python train_macro.py --episodes 20 --resume --epsilon 0    # play the saved table greedily
-    python train_macro.py --episodes 3 --resume --watch         # one windowed game at a time, to look at
+    python train_macro.py --episodes 3 --resume --watch         # one windowed game, no game interface, the agent top left
 
 Each worker owns one game at a time on its own port (--port, --port + 1, ...), so the matches run side
 by side and every one is a fresh generals_rl.exe with its own seed. The table is shared: a worker plays
@@ -22,7 +22,11 @@ import time
 
 import numpy as np
 
+from humvee_env import overlay_lines
 from macro_env import ACTIONS, N_ACTIONS, N_STATES, PORT, MacroEnv, prepare_exe, read_templates
+
+ACTION_NAMES = [a[0] for a in ACTIONS]
+TITLE = "RL macro: USA vs easy GLA"
 
 ALPHA = 0.1
 GAMMA = 0.99
@@ -101,10 +105,20 @@ def main():
                 started = time.time()
                 state, _ = env.reset(arguments.seed + episode)
                 transitions, total, refused, counts = [], 0.0, 0, [0] * N_ACTIONS
+                env.show(overlay_lines(TITLE, [("episode", "%d  seed %d" % (episode, arguments.seed + episode)),
+                                               ("epsilon", "%.2f" % eps)], ACTION_NAMES, q[state], None))
                 done = False
                 while not done:
-                    action = int(rng.integers(N_ACTIONS)) if rng.random() < eps else greedy(q[state], rng)
+                    explore = rng.random() < eps
+                    action = int(rng.integers(N_ACTIONS)) if explore else greedy(q[state], rng)
                     next_state, r, terminated, truncated, info = env.step(action)
+                    env.show(overlay_lines(TITLE, [
+                        ("episode", "%d  seed %d" % (episode, arguments.seed + episode)),
+                        ("step", "%d  frame %d" % (len(transitions) + 1, info["frame"])),
+                        ("action", "%s (%s)" % (ACTION_NAMES[action], "explore" if explore else "greedy")),
+                        ("result", "REFUSED" if info["refused"] else "done"), ("reward", "%+.3f" % r),
+                        ("return", "%+.3f" % (total + r)), ("epsilon", "%.2f" % eps),
+                        ("army", "%d vs %d" % (info["army"], info["enemy_army"]))], ACTION_NAMES, q[state], action))
                     transitions.append((state, action, r, next_state, terminated))
                     state, total, done = next_state, total + r, terminated or truncated
                     refused += info["refused"]

@@ -9584,6 +9584,76 @@ void InGameUI::drawPeaceTimer( void )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The control socket's "overlay": whatever the script driving the game wants a person watching to
+	* read, a training loop's episode, step and chosen action among it.  One display string a line,
+	* because the text renderer draws a newline as a character, and a string keeps its texture while
+	* its text stays the same.  Client state that nothing reads back. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::setControlOverlay( const AsciiString &text )
+{
+	size_t count = 0;
+	AsciiString line;
+	for( const char *c = text.str(); text.isNotEmpty(); ++c )
+	{
+		if( *c != '\n' && *c != 0 )
+		{
+			if( *c != '\r' )
+				line.concat( *c );
+			continue;
+		}
+		if( count == m_controlOverlayLines.size() )
+		{
+			DisplayString *made = TheDisplayStringManager->newDisplayString();
+			made->setFont( TheFontLibrary->getFont( AsciiString( "Courier New" ),
+										 TheGlobalLanguageData->adjustFontSize( CONTROL_OVERLAY_POINT_SIZE ), TRUE ) );
+			m_controlOverlayLines.push_back( made );
+		}
+		UnicodeString wide;
+		wide.translate( line );
+		m_controlOverlayLines[ count++ ]->setText( wide );
+		line.clear();
+		if( *c == 0 )
+			break;
+	}
+	while( m_controlOverlayLines.size() > count )
+	{
+		TheDisplayStringManager->freeDisplayString( m_controlOverlayLines.back() );
+		m_controlOverlayLines.pop_back();
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Top left on a dark plate, drawn last and also while -cinema has the rest of the interface off,
+	* which is how a training run is watched: the world and the script's own words, nothing else. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawControlOverlay( void )
+{
+	if( m_controlOverlayLines.empty() )
+		return;
+
+	const Int pad = 6;
+	const Int lineHeight = m_controlOverlayLines[ 0 ]->getFont()->height;
+	Int plateWidth = 0;
+	for( size_t i = 0; i < m_controlOverlayLines.size(); ++i )
+	{
+		Int width = 0, height = 0;
+		m_controlOverlayLines[ i ]->getSize( &width, &height );
+		if( width > plateWidth )
+			plateWidth = width;
+	}
+	TheDisplay->drawFillRect( pad, pad, plateWidth + pad*2, lineHeight * (Int)m_controlOverlayLines.size() + pad*2,
+														GameMakeColor( 0, 0, 0, 170 ) );
+
+	for( size_t i = 0; i < m_controlOverlayLines.size(); ++i )
+	{
+		const UnicodeString &text = m_controlOverlayLines[ i ]->peekText();
+		const Bool highlighted = !text.isEmpty() && text.getCharAt( 0 ) == L'>';
+		const Color color = highlighted ? GameMakeColor( 255, 210, 60, 255 ) : GameMakeColor( 225, 225, 225, 255 );
+		m_controlOverlayLines[ i ]->draw( pad*2, pad*2 + lineHeight * (Int)i, color, GameMakeColor( 0, 0, 0, 255 ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The last ten seconds of that peace time, one digit at a time, with the plate at the top of the
 	* screen taken down for them.  The word PEACE goes over the digit at a quarter of its size, on
 	* the same line the plate's own word was on, so what happens at ten seconds is the time being

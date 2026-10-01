@@ -410,8 +410,12 @@ void W3DInGameUI::draw( void )
 	// -cinema: none of the interface and none of the windows either.  Painting the window list let a
 	// star banner slide in at the top right of an observer's footage (twice in trailer_chaos, frames
 	// 930 and 1230), and nothing on the list belongs in a shot.  The letterbox is the display's own.
+	// The control socket's overlay stays: a script that hid the rest put it there to be read.
 	if( CinemaDirector_hidesHud() )
+	{
+		drawControlOverlay();
 		return;
+	}
 
 	preDraw();
 
@@ -505,6 +509,7 @@ void W3DInGameUI::draw( void )
 	drawPeaceTimer();
 	drawHudOverlay();
 	drawScoreboard();
+	drawControlOverlay();
 
 #ifdef EXTENDED_STATS
 	}

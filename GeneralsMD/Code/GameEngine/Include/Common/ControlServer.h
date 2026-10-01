@@ -54,8 +54,13 @@
 //
 //   follow <objectId>
 //
-// locks the camera on one object by the id units gave, so somebody can watch a training run.
-// And
+// locks the camera on one object by the id units gave, so somebody can watch a training run, and
+//
+//   overlay [text]
+//
+// writes the text in the top left corner, one line per line of the frame, a line starting '>'
+// highlighted, over everything and even while -cinema has the rest of the interface off.  Bare
+// overlay takes it down.  And
 //
 //   key <KEY_name> [ALT] [CTRL] [SHIFT]
 //

@@ -99,12 +99,14 @@ def kill_with_python(process):
     return job  # the handle has to stay open for as long as the game should live
 
 
-def overlay_lines(title, facts, names, q_row, action):
+def overlay_lines(title, facts, names, q_row, action, mask=None):
     """What a watched game shows top left: a title, (label, value) facts, then every action with its
-    Q-value, the chosen one marked '>' so the game highlights it (None marks none)."""
+    Q-value, the chosen one marked '>' so the game highlights it (None marks none). An action the
+    mask rules out shows 'x' in place of its Q-value."""
+    mask = [True] * len(names) if mask is None else mask
     lines = [title] + ["%-8s %s" % fact for fact in facts] + ["  %-15s %8s" % ("action", "Q")]
-    return lines + ["%s %-15s %+8.3f" % (">" if i == action else " ", name, value)
-                    for i, (name, value) in enumerate(zip(names, q_row))]
+    return lines + ["%s %-15s %8s" % (">" if i == action else " ", name, "%+.3f" % value if ok else "x")
+                    for i, (name, value, ok) in enumerate(zip(names, q_row, mask))]
 
 
 class HumveeEnv(object):
@@ -248,6 +250,8 @@ def self_check():
 
     lines = overlay_lines("title", [("step", "3")], ["left", "right"], [0.5, -1.0], 1)
     assert len(lines) == 5 and lines[-1].startswith(">") and not lines[-2].startswith(">")
+    lines = overlay_lines("title", [], ["left", "right"], [0.5, -1.0], None, [True, False])
+    assert lines[-1].endswith(" x") and lines[-2].endswith("+0.500")
     print("self-check passed: %d states x %d actions" % (N_STATES, N_ACTIONS))
 
 

@@ -12,6 +12,9 @@ its whole match with the table as it stands, then replays the match backward thr
 last decision first, so a win or a loss reaches the opening moves in one pass instead of creeping
 back one step per episode.
 
+Exploration, the greedy pick and the update's bootstrap all look only at the actions the env's mask()
+lets through, so the table never learns or chooses an action the game was certain to refuse.
+
 Every finished match is one line in --log (JSON), and the table is saved to --out after each.
 """
 
@@ -35,15 +38,17 @@ EPSILON_START, EPSILON_END = 1.0, 0.05
 EXPLORE_SHARE = 0.7             # epsilon reaches its floor after this share of the episodes
 
 
-def greedy(row, rng):
-    best = np.flatnonzero(row == row.max())
-    return int(rng.choice(best))
+def greedy(row, mask, rng):
+    """The best of the valid actions, ties broken at random."""
+    row = np.where(mask, row, -np.inf)
+    return int(rng.choice(np.flatnonzero(row == row.max())))
 
 
 def learn(q, episode):
-    """One backward sweep of Q-learning over a finished match: [(state, action, reward, next, done)]."""
-    for state, action, r, next_state, done in reversed(episode):
-        target = r if done else r + GAMMA * q[next_state].max()
+    """One backward sweep of Q-learning over a finished match: [(state, action, reward, next, done,
+    next mask)]. The bootstrap takes the best of the actions valid in the next state only."""
+    for state, action, r, next_state, done, next_mask in reversed(episode):
+        target = r if done else r + GAMMA * q[next_state][next_mask].max()
         q[state, action] += ALPHA * (target - q[state, action])
 
 
@@ -104,14 +109,15 @@ def main():
                     next_episode[0] += 1
                 eps = epsilon(episode)
                 started = time.time()
-                state, _ = env.reset(arguments.seed + episode)
-                transitions, total, refused, counts = [], 0.0, 0, [0] * N_ACTIONS
+                state, info = env.reset(arguments.seed + episode)
+                mask = info["mask"]
+                transitions, total, refused, counts, refused_by = [], 0.0, 0, [0] * N_ACTIONS, [0] * N_ACTIONS
                 env.show(overlay_lines(TITLE, [("episode", "%d  seed %d" % (episode, arguments.seed + episode)),
-                                               ("epsilon", "%.2f" % eps)], ACTION_NAMES, q[state], None))
+                                               ("epsilon", "%.2f" % eps)], ACTION_NAMES, q[state], None, mask))
                 done = False
                 while not done:
                     explore = rng.random() < eps
-                    action = int(rng.integers(N_ACTIONS)) if explore else greedy(q[state], rng)
+                    action = int(rng.choice(np.flatnonzero(mask))) if explore else greedy(q[state], mask, rng)
                     next_state, r, terminated, truncated, info = env.step(action)
                     env.show(overlay_lines(TITLE, [
                         ("episode", "%d  seed %d" % (episode, arguments.seed + episode)),
@@ -119,10 +125,12 @@ def main():
                         ("action", "%s (%s)" % (ACTION_NAMES[action], "explore" if explore else "greedy")),
                         ("result", "REFUSED" if info["refused"] else "done"), ("reward", "%+.3f" % r),
                         ("return", "%+.3f" % (total + r)), ("epsilon", "%.2f" % eps),
-                        ("army", "%d vs %d" % (info["army"], info["enemy_army"]))], ACTION_NAMES, q[state], action))
-                    transitions.append((state, action, r, next_state, terminated))
-                    state, total, done = next_state, total + r, terminated or truncated
+                        ("army", "%d vs %d" % (info["army"], info["enemy_army"]))], ACTION_NAMES, q[state], action,
+                        mask))
+                    transitions.append((state, action, r, next_state, terminated, info["mask"]))
+                    state, mask, total, done = next_state, info["mask"], total + r, terminated or truncated
                     refused += info["refused"]
+                    refused_by[action] += info["refused"]
                     counts[action] += 1
                 env.close()
                 with lock:
@@ -131,7 +139,8 @@ def main():
                     row = {"episode": episode, "seed": arguments.seed + episode, "epsilon": round(eps, 3),
                            "result": info["result"], "frame": info["frame"], "return": round(total, 3),
                            "lead": round(info["lead"], 3), "decisions": len(transitions), "refused": refused,
-                           "actions": dict(zip([a[0] for a in ACTIONS], counts)),
+                           "actions": dict(zip(ACTION_NAMES, counts)),
+                           "refused_by": {name: n for name, n in zip(ACTION_NAMES, refused_by) if n},
                            "seconds": round(time.time() - started, 1)}
                     rows.append(row)
                     log.write(json.dumps(row) + "\n")
@@ -155,9 +164,15 @@ def main():
 def self_check():
     q = np.zeros((3, 2))
     # a two-step match: the win at the end reaches the first decision in one backward sweep
-    learn(q, [(0, 1, 0.0, 1, False), (1, 0, 10.0, 2, True)])
+    learn(q, [(0, 1, 0.0, 1, False, np.array([True, True])), (1, 0, 10.0, 2, True, np.array([True, False]))])
     assert q[1, 0] == ALPHA * 10 and q[0, 1] == ALPHA * GAMMA * q[1, 0]
-    assert greedy(np.array([0.0, 2.0, 2.0]), np.random.default_rng(0)) in (1, 2)
+    # the bootstrap ignores a masked action however good its Q-value
+    q = np.array([[0.0, 0.0], [-1.0, 5.0]])
+    learn(q, [(0, 0, 0.0, 1, False, np.array([True, False]))])
+    assert q[0, 0] == ALPHA * GAMMA * -1.0
+    rng = np.random.default_rng(0)
+    assert greedy(np.array([0.0, 2.0, 2.0]), np.array([True, True, True]), rng) in (1, 2)
+    assert all(greedy(np.array([-3.0, 2.0, 9.0]), np.array([True, False, False]), rng) == 0 for _ in range(10))
     print("self-check passed")
 
 

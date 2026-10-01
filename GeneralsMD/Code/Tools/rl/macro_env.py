@@ -14,7 +14,10 @@ nothing the agent cannot answer.
 Buildings go down with `construct`, the placement click, which the logic checks for money,
 prerequisites and ground. The agent does not choose where: the env tries the next free spot on a ring
 around the command center and moves on to the following spot when the ground refuses. Units come from
-`produce`. An action the game refuses costs REFUSED_PENALTY and otherwise does nothing.
+`produce`. mask() says which actions get past the checks act() makes before it tries anything (money,
+a dozer, the prerequisite, a producer, an army, a spot left), and the trainer picks only from those.
+What the game still refuses after that, mostly ground no spot fits, costs REFUSED_PENALTY and
+otherwise does nothing.
 
 Reward is the change in net-worth lead, our money plus what our objects are worth minus what the
 enemy's objects are worth, in units of WORTH_SCALE, plus WIN_REWARD or -WIN_REWARD when a side has nothing left. An
@@ -253,11 +256,25 @@ class MacroEnv(object):
 
     # -- the actions --------------------------------------------------------
 
+    def valid(self, action):
+        """Whether act(action) gets past what the env can see before trying it: money, a dozer, the
+        prerequisite, a producer, an army, a placement spot left. The game can still refuse after."""
+        name, kind, what, producer, count = ACTIONS[action]
+        if kind == "build":
+            need = PREREQUISITE[what]
+            return bool(self.money >= self.templates[what][0] and self._count(DOZER)
+                        and (need is None or self._count(need)) and self.spots)
+        if kind == "train":
+            return bool(self.money >= self.templates[what][0] * count and self._count(producer))
+        if kind in ("attack", "gather"):
+            return bool(self._army(self.ours))
+        return True
+
+    def mask(self):
+        """The actions valid() lets through now; noop always is."""
+        return np.array([self.valid(action) for action in range(N_ACTIONS)])
+
     def _build(self, template):
-        cost = self.templates[template][0]
-        need = PREREQUISITE[template]
-        if self.money < cost or not self._count(DOZER) or (need and not self._count(need)):
-            return False
         before = self._count(template)
         for _ in range(PLACEMENT_TRIES):
             if not self.spots:
@@ -272,8 +289,6 @@ class MacroEnv(object):
 
     def _train(self, template, producer, count):
         cost = self.templates[template][0] * count
-        if self.money < cost or not self._count(producer):
-            return False
         before = self.money
         self.game.send("produce %d %s %s %d" % (US, producer, template, count))
         self._step(PROBE_FRAMES)
@@ -298,6 +313,8 @@ class MacroEnv(object):
 
     def act(self, action):
         name, kind, what, producer, count = ACTIONS[action]
+        if not self.valid(action):
+            return False
         if kind == "build":
             return self._build(what)
         if kind == "train":
@@ -322,7 +339,7 @@ class MacroEnv(object):
         self.phi = self.potential()
         if self.watch:
             self.game.follow([u for u in self.ours if u["template"] == COMMAND_CENTER][0]["id"])
-        return self.observe(), {"frame": self.frame}
+        return self.observe(), {"frame": self.frame, "mask": self.mask()}
 
     def step(self, action):
         started = self.frame
@@ -342,7 +359,7 @@ class MacroEnv(object):
             result = "draw"
         r += {"win": WIN_REWARD, "loss": -WIN_REWARD}.get(result, 0.0)
         info = {"frame": self.frame, "result": result, "refused": not done_ok, "lead": phi,
-                "army": len(self._army(self.ours)), "enemy_army": len(self._army(self.theirs))}
+                "army": len(self._army(self.ours)), "enemy_army": len(self._army(self.theirs)), "mask": self.mask()}
         return self.observe() if self.ours else 0, r, result in ("win", "loss"), result == "draw", info
 
     def show(self, lines):
@@ -381,6 +398,17 @@ def self_check():
     assert worth(tank, templates) == 450.0
     spots = placement_spots(np.array([0.0, 0.0]), np.array([1000.0, 0.0]))
     assert np.hypot(*spots[0]) < 200 and spots[0][0] < 0          # nearest ring, back of the base first
+
+    env = MacroEnv(templates=templates)
+    env.money, env.ours, env.spots = 0, [], spots
+    assert list(env.mask()) == [True] + [False] * (N_ACTIONS - 1)    # noop is never masked
+    env.money = 5000
+    env.ours = [{"template": t} for t in (COMMAND_CENTER, DOZER, POWER, BARRACKS, RANGER)]
+    names = [a[0] for a, ok in zip(ACTIONS, env.mask()) if ok]
+    assert names == ["noop", "build power", "build barracks", "build supply", "train dozer", "train rangers",
+                     "attack", "gather"]
+    env.spots = []
+    assert not env.mask()[1:5].any()                                 # no spot left, no building
     print("self-check passed: %d templates, %d states x %d actions" % (len(templates), N_STATES, N_ACTIONS))
 
 

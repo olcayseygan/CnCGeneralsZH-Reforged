@@ -2,6 +2,7 @@
 
     cd GeneralsMD/Code/Tools/rl
     python train_q.py --episodes 200                     # launches Run/generals.exe, trains, quits
+    python train_q.py --episodes 20 --watch              # the same in a window, to watch it learn
     $env:ZHR_RUN = "D:\\path\\to\\GeneralsMD\\Run"        # when the Run beside this tree has no game
 
 The table is saved to --out after every episode, so a killed run keeps what it learned, and
@@ -27,11 +28,12 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default="q_table.npy")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--watch", action="store_true", help="windowed game, camera on the Humvee, a helicopter over the target")
     arguments = parser.parse_args()
 
     rng = np.random.default_rng(arguments.seed)
     q = np.load(arguments.out) if arguments.resume else np.zeros((N_STATES, N_ACTIONS))
-    env = HumveeEnv(port=arguments.port, seed=arguments.seed)
+    env = HumveeEnv(port=arguments.port, seed=arguments.seed, watch=arguments.watch)
     try:
         arrivals = 0
         for episode in range(arguments.episodes):

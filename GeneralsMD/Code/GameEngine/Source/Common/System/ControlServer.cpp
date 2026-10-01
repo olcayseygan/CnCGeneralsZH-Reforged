@@ -40,6 +40,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/View.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
@@ -729,6 +730,22 @@ static void handleCommand( const AsciiString &command )
 	if (strncmp( command.str(), "units ", 6 ) == 0)
 	{
 		replyUnits( command.str() + 6 );
+		return;
+	}
+
+	/* follow <objectId>: lock the camera on one object, the id units reports.  Only the view moves,
+		 so this is client state and runs where it arrives. */
+	if (strncmp( command.str(), "follow ", 7 ) == 0)
+	{
+		Int id = 0;
+		if (sscanf( command.str() + 7, "%d", &id ) != 1 || TheGameLogic == NULL || TheGameLogic->findObjectByID( (ObjectID)id ) == NULL)
+		{
+			replyError( "follow wants the id of an object on the map" );
+			return;
+		}
+		TheTacticalView->setCameraLock( (ObjectID)id );
+		TheTacticalView->snapToCameraLock();
+		replyOk( "\"following\":true" );
 		return;
 	}
 

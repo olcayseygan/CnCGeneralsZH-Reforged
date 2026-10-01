@@ -207,6 +207,10 @@ class Control(object):
         runs no logic frame it was not stepped through, until this connection closes."""
         return self.send("step %d" % frames)["frame"]
 
+    def follow(self, object_id):
+        """Lock the camera on the object with that id, as units reports it."""
+        return self.send("follow %d" % object_id)
+
     def screenshot(self):
         return self.send("screenshot")
 

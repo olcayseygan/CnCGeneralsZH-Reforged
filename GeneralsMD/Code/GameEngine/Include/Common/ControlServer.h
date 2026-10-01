@@ -51,6 +51,10 @@
 // step has frames left, and the reply comes once the n-th of them has run.  A training loop reads
 // the world, queues its orders, steps, and reads again, and the frames between two reads no longer
 // depend on how fast anybody drew.  The clock goes back to the wall when the client disconnects.
+//
+//   follow <objectId>
+//
+// locks the camera on one object by the id units gave, so somebody can watch a training run.
 // And
 //
 //   key <KEY_name> [ALT] [CTRL] [SHIFT]

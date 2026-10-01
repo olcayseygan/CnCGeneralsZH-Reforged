@@ -6,6 +6,9 @@ the same home point and picks a random target around it; every action is a short
 one of eight directions (or a stop), followed by a lockstep `step` of FRAMES_PER_ACTION logic
 frames over the -control socket.
 
+With watch=True the game runs in a window instead: the camera is locked on the Humvee (the
+`follow` verb) and a Comanche hovers over the target, so a person can watch it learn.
+
 The API is gymnasium's without the dependency: reset() -> (obs, info) and
 step(action) -> (obs, reward, terminated, truncated, info). The observation is the target's
 position relative to the unit, (dx, dy) in world units; discretize() turns it into a table row.
@@ -14,12 +17,14 @@ position relative to the unit, (dx, dy) in world units; discretize() turns it in
 """
 
 import atexit
+import ctypes
 import math
 import os
 import socket
 import subprocess
 import sys
 import time
+from ctypes import wintypes
 
 import numpy as np
 
@@ -33,6 +38,9 @@ LOAD_TIMEOUT_SECONDS = 180
 MATCH_SETTLE_FRAME = 60
 
 UNIT = "AmericaVehicleHumvee"
+# --watch only: a helicopter hovering over the target. It flies, so nothing on the ground collides
+# with it. The system arrows (VerticalArrow, RallyPointMarker) spawn ownerless and teleport refuses them.
+MARKER = "AmericaVehicleComanche"
 FRAMES_PER_ACTION = 15          # half a second of game time at 30 logic frames a second
 MOVE_DISTANCE = 80.0            # how far ahead each directional order points
 STEP_LIMIT = 60                 # 900 frames, 30 s of game time
@@ -66,20 +74,46 @@ def order_point(x, y, action):
     return x + MOVE_DISTANCE * math.cos(angle), y + MOVE_DISTANCE * math.sin(angle)
 
 
+class _JobLimits(ctypes.Structure):
+    """JOBOBJECT_EXTENDED_LIMIT_INFORMATION; only LimitFlags is set."""
+    _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD), ("IoCounters", ctypes.c_uint64 * 6),
+                ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+
+def kill_with_python(process):
+    """Put the game in a job that Windows kills when this Python dies, however it dies: a closed
+    console or a terminated trainer runs no finally and no atexit."""
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    job = kernel32.CreateJobObjectW(None, None)
+    limits = _JobLimits(LimitFlags=0x2000)  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if not job or not kernel32.SetInformationJobObject(wintypes.HANDLE(job), 9, ctypes.byref(limits), ctypes.sizeof(limits)) \
+            or not kernel32.AssignProcessToJobObject(wintypes.HANDLE(job), wintypes.HANDLE(int(process._handle))):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return job  # the handle has to stay open for as long as the game should live
+
+
 class HumveeEnv(object):
-    def __init__(self, port=PORT, seed=None, run_folder=RUN_FOLDER):
+    def __init__(self, port=PORT, seed=None, run_folder=RUN_FOLDER, watch=False):
         self.rng = np.random.default_rng(seed)
         self.game = None
+        self.watch = watch
         # another session's game on this port would answer instead of ours
         with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", port)) == 0:
                 raise RuntimeError("port %d already has a game listening; pass another --port" % port)
         self.process = subprocess.Popen(
-            [os.path.join(run_folder, "generals.exe"), "-headless", "-quickstart", "-noshellmap",
+            [os.path.join(run_folder, "generals.exe"), "-win" if watch else "-headless", "-quickstart", "-noshellmap",
              "-multiInstance", "-noFPSLimit", "-randommap", "1", "2", "small", "-autoskirmish", "2",
              "-takeover", "-side", "0", "FactionAmerica", "-side", "1", "FactionGLA", "-seed", "1",
              "-control", str(port), "-logPrefix", "rl_"],
             cwd=run_folder)
+        self.job = kill_with_python(self.process)
         atexit.register(self.close)
         self.game = self._connect(port)
         while not self._wait_match():
@@ -88,7 +122,11 @@ class HumveeEnv(object):
         ours, theirs = self._centre(0), self._centre(1)
         self.home = ours + HOME_TOWARD_ENEMY * (theirs - ours)
         self._ok(self.game.spawn(0, UNIT, 1, self.home[0], self.home[1]))
+        if watch:
+            self._ok(self.game.spawn(0, MARKER, 1, self.home[0], self.home[1]))
         self.game.step(2)
+        if watch:
+            self._ok(self.game.follow(self.game.units(0, UNIT)[0]["id"]))
 
     # -- the socket -----------------------------------------------------------
 
@@ -136,6 +174,8 @@ class HumveeEnv(object):
         radius = self.rng.uniform(TARGET_MIN, TARGET_MAX)
         self.target = self.home + radius * np.array([math.cos(angle), math.sin(angle)])
         self._ok(self.game.teleport(0, UNIT, self.home[0], self.home[1]))
+        if self.watch:
+            self._ok(self.game.teleport(0, MARKER, self.target[0], self.target[1]))
         self.game.step(2)
         self.steps = 0
         obs, self.distance = self._observe()
@@ -165,6 +205,9 @@ class HumveeEnv(object):
             if self.process.poll() is None:
                 self.process.kill()
                 self.process.wait()
+        elif self.game is not None:
+            print("generals.exe had already exited, code %d" % self.process.returncode, file=sys.stderr)
+        self.game = None
 
 
 def self_check():

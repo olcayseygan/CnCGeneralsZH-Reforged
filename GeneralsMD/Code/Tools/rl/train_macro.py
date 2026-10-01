@@ -139,6 +139,7 @@ def main():
                     row = {"episode": episode, "seed": arguments.seed + episode, "epsilon": round(eps, 3),
                            "result": info["result"], "frame": info["frame"], "return": round(total, 3),
                            "lead": round(info["lead"], 3), "decisions": len(transitions), "refused": refused,
+                           "unfinished": info["unfinished"], "dozers": info["dozers"],
                            "actions": dict(zip(ACTION_NAMES, counts)),
                            "refused_by": {name: n for name, n in zip(ACTION_NAMES, refused_by) if n},
                            "seconds": round(time.time() - started, 1)}

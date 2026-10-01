@@ -15,8 +15,10 @@ Buildings go down with `construct`, the placement click, which the logic checks 
 prerequisites and ground. The agent does not choose where: the env asks the game with `canbuild`
 which spots on rings around the command center the ground would take, and clicks the first. Units
 come from `produce`. Prerequisites and producers count only finished buildings, as the game's do.
-mask() says which actions get past the checks act() makes before it tries anything (money, a dozer,
-a finished prerequisite, a finished producer, an army, a legal spot), and the trainer picks only from
+A building waits for a dozer with no unfinished structure of its own, so one is never placed to sit
+at 0%; the logic's placement picks the idle dozer nearest the site.
+mask() says which actions get past the checks act() makes before it tries anything (money, a free
+dozer, a finished prerequisite, a finished producer, an army, a legal spot), and the trainer picks only from
 those. What the game still refuses after that costs REFUSED_PENALTY and otherwise does nothing.
 
 Reward is the change in net-worth lead, our money plus what our objects are worth minus what the
@@ -233,6 +235,15 @@ class MacroEnv(object):
     def _built(self, template):
         return sum(u["template"] == template and u["built"] for u in self.ours)
 
+    def _unfinished(self):
+        return sum(not u["built"] for u in self.ours)
+
+    def _free_dozers(self):
+        """Dozers left over once every unfinished structure has one. A placement while none is free
+        does not take a dozer off its job (BuildAssistant::buildObjectNow keeps it), but the new
+        structure is paid for and sits at 0% until a dozer gets to it."""
+        return self._count(DOZER) - self._unfinished()
+
     def _kinds(self, unit):
         return self.templates.get(unit["template"], (0, frozenset()))[1]
 
@@ -250,7 +261,7 @@ class MacroEnv(object):
         threat = any(np.hypot(u["x"] - centre[0], u["y"] - centre[1]) < THREAT_RADIUS for u in enemy_army)
         lead = worth(army, self.templates) >= worth(enemy_army, self.templates)
         have = {u["template"] for u in self.ours}
-        return discretize(self.money, have, self._count(DOZER), len(army), lead, threat)
+        return discretize(self.money, have, self._free_dozers(), len(army), lead, threat)
 
     def base(self):
         centres = [u for u in self.ours if u["template"] == COMMAND_CENTER] or self.ours
@@ -259,13 +270,13 @@ class MacroEnv(object):
     # -- the actions --------------------------------------------------------
 
     def valid(self, action):
-        """Whether act(action) gets past what the env can see before trying it: money, a dozer, the
-        prerequisite and producer finished, an army, a spot the ground takes. The game can still refuse
-        after."""
+        """Whether act(action) gets past what the env can see before trying it: money, a free dozer,
+        the prerequisite and producer finished, an army, a spot the ground takes. The game can still
+        refuse after."""
         name, kind, what, producer, count = ACTIONS[action]
         if kind == "build":
             need = PREREQUISITE[what]
-            return bool(self.money >= self.templates[what][0] and self._count(DOZER)
+            return bool(self.money >= self.templates[what][0] and self._free_dozers() > 0
                         and (need is None or self._built(need)) and self._spot(what) is not None)
         if kind == "train":
             return bool(self.money >= self.templates[what][0] * count and self._built(producer))
@@ -362,7 +373,8 @@ class MacroEnv(object):
             result = "draw"
         r += {"win": WIN_REWARD, "loss": -WIN_REWARD}.get(result, 0.0)
         info = {"frame": self.frame, "result": result, "refused": not done_ok, "lead": phi,
-                "army": len(self._army(self.ours)), "enemy_army": len(self._army(self.theirs)), "mask": self.mask()}
+                "army": len(self._army(self.ours)), "enemy_army": len(self._army(self.theirs)), "mask": self.mask(),
+                "unfinished": self._unfinished(), "dozers": self._count(DOZER)}
         return self.observe() if self.ours else 0, r, result in ("win", "loss"), result == "draw", info
 
     def show(self, lines):
@@ -417,7 +429,10 @@ def self_check():
     assert names == ["noop", "build power", "build barracks", "build supply", "train dozer", "train rangers",
                      "attack", "gather"]
     env.ours[2]["built"] = env.ours[3]["built"] = False               # power plant and barracks still going up
-    assert not env.mask()[3] and not env.mask()[6] and env.mask()[2]
+    assert not env.mask()[6] and not env.mask()[1:5].any()           # and the one dozer is on them
+    env.ours.append({"template": DOZER, "built": True})
+    env.ours.append({"template": DOZER, "built": True})
+    assert not env.mask()[3] and env.mask()[2]                        # a free dozer, still no finished power
     env.game.code = 3                                                # LBC_OBJECTS_IN_THE_WAY everywhere
     assert not env.mask()[1:5].any()
     print("self-check passed: %d templates, %d states x %d actions" % (len(templates), N_STATES, N_ACTIONS))

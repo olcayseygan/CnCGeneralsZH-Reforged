@@ -1299,6 +1299,20 @@ if(MSVC)
   endforeach()
 endif()
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
+# The global operator new against the alignment the ABI promises for it, on Linux, where it is also the
+# one Mesa's libLLVM gets.  See Tests/test_global_new_alignment.cpp.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_executable(test_global_new_alignment ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_global_new_alignment.cpp
+    ${GE}/Source/Common/System/GameMemory.cpp ${GE}/Source/Common/System/MemoryInit.cpp
+    ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
+    ${GE}/Source/Common/System/WideCharFns.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/gcc_eager_vtable_stubs.cpp)
+  target_include_directories(test_global_new_alignment PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_global_new_alignment PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+    ZH_EAGER_VTABLE_STUB_NO_POOL)
+  set_target_properties(test_global_new_alignment PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_global_new_alignment PRIVATE ${ZH_ZHIO_LIBS})
+  add_test(NAME test_global_new_alignment COMMAND test_global_new_alignment)
+endif()
 if(ZH_GAME_DATA)
   set_tests_properties(gametext_csf PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()

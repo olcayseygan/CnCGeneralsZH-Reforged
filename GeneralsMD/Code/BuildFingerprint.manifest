@@ -2736,6 +2736,7 @@ Tests/test_game_results.inc
 Tests/test_gameengine.cpp
 Tests/test_gameengine_stubs.cpp
 Tests/test_gametext_csf.cpp
+Tests/test_global_new_alignment.cpp
 Tests/test_glyph_rasteriser.cpp
 Tests/test_harness.h
 Tests/test_install_guard.sh

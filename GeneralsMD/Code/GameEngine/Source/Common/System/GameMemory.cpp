@@ -3353,8 +3353,19 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 	its .big files.  The pools stay (MemoryPoolObject classes have operators of their own), and so do the
 	strings, which allocate from TheDynamicMemoryAllocator by name.  Without the define, as in every
 	normal build, this file is what it was.
+
+	Linux takes the same calloc and free in every build.  There the executable's operator new is the one
+	every shared library in the process gets, and Mesa's Vulkan drivers load libLLVM, whose static
+	constructors store to their blocks with SSE instructions that need the 16 bytes the ABI promises
+	(__STDCPP_DEFAULT_NEW_ALIGNMENT__).  TheDynamicMemoryAllocator's blocks are 4-byte aligned
+	(MEM_BOUND_ALIGNMENT), so the game died with SIGSEGV inside SDL_CreateGPUDevice on a Radeon Vega with
+	Pardus 23 (Debian 12, Mesa 22.3), or ran, depending on where the blocks happened to land.  glibc's
+	calloc gives 16.  See Tests/test_global_new_alignment.cpp.
 */
-#ifndef ZH_SANITIZER_BUILD
+#if defined(ZH_SANITIZER_BUILD) || defined(__linux__)
+#define ZH_SYSTEM_GLOBAL_NEW
+#endif
+#ifndef ZH_SYSTEM_GLOBAL_NEW
 //-----------------------------------------------------------------------------
 /**
 	overload for global operator new; send requests to TheDynamicMemoryAllocator.
@@ -3507,9 +3518,9 @@ void operator delete[](void * p, const char *, int)
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
 #else
-// A sanitizer build: every form from calloc, zeroed as allocateBytes zeroes, and back to free.  They count
+// A sanitizer build or Linux: every form from calloc, zeroed as allocateBytes zeroes, and back to free.  They count
 // in theLinkTester as the forms above do, so initMemoryManager's link test holds unchanged.
-static void *sanitizerAllocate(size_t size)
+static void *systemAllocate(size_t size)
 {
 	++theLinkTester;
 	void *p = calloc(1, size != 0 ? size : 1);
@@ -3517,26 +3528,26 @@ static void *sanitizerAllocate(size_t size)
 		throw ERROR_OUT_OF_MEMORY;
 	return p;
 }
-static void sanitizerFree(void *p)
+static void systemFree(void *p)
 {
 	++theLinkTester;
 	free(p);
 }
-void *operator new(size_t size) { return sanitizerAllocate(size); }
-void *operator new[](size_t size) { return sanitizerAllocate(size); }
-void operator delete(void *p) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
-void operator delete[](void *p) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
-void operator delete(void *p, size_t) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
-void operator delete[](void *p, size_t) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void *operator new(size_t size) { return systemAllocate(size); }
+void *operator new[](size_t size) { return systemAllocate(size); }
+void operator delete(void *p) WW_NOEXCEPT_DELETE { systemFree(p); }
+void operator delete[](void *p) WW_NOEXCEPT_DELETE { systemFree(p); }
+void operator delete(void *p, size_t) WW_NOEXCEPT_DELETE { systemFree(p); }
+void operator delete[](void *p, size_t) WW_NOEXCEPT_DELETE { systemFree(p); }
 void *operator new(size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE { return calloc(1, size != 0 ? size : 1); }
 void *operator new[](size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE { return calloc(1, size != 0 ? size : 1); }
 void operator delete(void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE { free(p); }
 void operator delete[](void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE { free(p); }
-void* operator new(size_t size, const char *, int) { return sanitizerAllocate(size); }
-void operator delete(void * p, const char *, int) { sanitizerFree(p); }
-void* operator new[](size_t size, const char *, int) { return sanitizerAllocate(size); }
-void operator delete[](void * p, const char *, int) { sanitizerFree(p); }
-#endif // ZH_SANITIZER_BUILD
+void* operator new(size_t size, const char *, int) { return systemAllocate(size); }
+void operator delete(void * p, const char *, int) { systemFree(p); }
+void* operator new[](size_t size, const char *, int) { return systemAllocate(size); }
+void operator delete[](void * p, const char *, int) { systemFree(p); }
+#endif // ZH_SYSTEM_GLOBAL_NEW
 
 //-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_OVERRIDE_MALLOC

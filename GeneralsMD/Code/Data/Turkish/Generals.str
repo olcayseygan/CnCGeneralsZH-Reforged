@@ -15633,6 +15633,38 @@ GUI:PeaceTimeOver
 "Barış süresi sona erdi."
 END
 
+GUI:Apocalypse
+"KIYAMET"
+END
+
+GUI:ApocalypseToolTip
+"En fazla üç arkadaşınızla, arkası kesilmeyen zombilere karşı dayanın."
+END
+
+GUI:ApocalypseFlow
+"Zombi akışı"
+END
+
+GUI:ApocalypseWaves
+"Dalgalar"
+END
+
+GUI:ApocalypseContinuous
+"Kesintisiz"
+END
+
+GUI:ApocalypseWave
+"Dalga %d"
+END
+
+GUI:ApocalypseSurvived
+"%d dalga dayandınız, %d:%02d."
+END
+
+OBJECT:ApocalypseZombie
+"Zombi"
+END
+
 GUI:PeaceTimeHudLabel
 "BARIŞ"
 END

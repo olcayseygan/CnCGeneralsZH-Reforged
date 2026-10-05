@@ -15057,6 +15057,38 @@ GUI:PeaceTimeOver
 "Die Friedenszeit ist vorbei."
 END
 
+GUI:Apocalypse
+"APOKALYPSE"
+END
+
+GUI:ApocalypseToolTip
+"Halte mit bis zu drei Freunden gegen Zombies durch, die nie aufhören zu kommen."
+END
+
+GUI:ApocalypseFlow
+"Zombiestrom"
+END
+
+GUI:ApocalypseWaves
+"Wellen"
+END
+
+GUI:ApocalypseContinuous
+"Durchgehend"
+END
+
+GUI:ApocalypseWave
+"Welle %d"
+END
+
+GUI:ApocalypseSurvived
+"Ihr habt %d Wellen durchgehalten, %d:%02d."
+END
+
+OBJECT:ApocalypseZombie
+"Zombie"
+END
+
 GUI:PeaceTimeHudLabel
 "FRIEDEN"
 END

@@ -49,6 +49,7 @@
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/GameClient.h"
+#include "GameLogic/Apocalypse.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScriptActions.h"
@@ -186,6 +187,8 @@ void VictoryConditions::update( void )
 			m_endFrame = TheGameLogic->getFrame();
 			// the score screen shows the match as it was decided, not what the winner did during the victory window
 			TheGameLogic->enableScoring(FALSE);
+			// in Apocalypse mode the last alliance is always the zombies, and the number is how long it took them
+			Apocalypse_announceEnd(m_endFrame);
 		}
 	}
 
@@ -282,6 +285,10 @@ Bool VictoryConditions::hasBeenDefeated(Player *player)
 Bool VictoryConditions::hasSinglePlayerBeenDefeated(Player *player)
 {
 	if (!player)
+		return false;
+
+	// the zombies own nothing until the first wave and must not lose for it
+	if (Apocalypse_isZombiePlayer(player))
 		return false;
 
 	KindOfMaskType mask;

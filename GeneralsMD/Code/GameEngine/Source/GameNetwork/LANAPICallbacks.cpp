@@ -42,6 +42,7 @@
 #include "Common/RandomValue.h"
 #include "Common/UserPreferences.h"
 #include "GameClient/GameText.h"
+#include "GameClient/GUICallbacks.h"
 #include "GameClient/LanguageFilter.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/MessageBox.h"
@@ -231,6 +232,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 		 split.  Without it every slot is -1, "no team", and everybody fights everybody - which is
 		 what a scripted throughput test wants and what a test of anything allied cannot use. */
 	const Int teams = TheGlobalData->m_autoSkirmishTeams;
+	const Bool apocalypse = TheGlobalData->m_apocalypseMode > APOCALYPSE_OFF;
 	// -netai seats come after the addresses and take part in the team split like any other seat
 	const Int numSeats = numSlots + TheGlobalData->m_netGameAISlots;
 	const Int slotsPerTeam = (teams > 1 && numSeats >= teams) ? ((numSeats + teams - 1) / teams) : 0;
@@ -242,8 +244,9 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 		UnicodeString playerName;
 		playerName.format( u"Player%d", i + 1 );
 
-		Int teamNumber = -1;
-		if (slotsPerTeam > 0)
+		// Apocalypse puts every seat on team 1, the way its lobby does, whatever -teams says
+		Int teamNumber = apocalypse ? 0 : -1;
+		if (slotsPerTeam > 0 && !apocalypse)
 		{
 			teamNumber = i / slotsPerTeam;
 			if (teamNumber >= teams)
@@ -280,6 +283,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	game->setIncomeSharing( TheGlobalData->m_incomeSharing );
 	game->setTechRespawn( TheGlobalData->m_techRespawn );
 	game->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
+	game->setApocalypseMode( TheGlobalData->m_apocalypseMode );
 	game->setIsDirectConnect( FALSE );
 	game->setLastHeard( Clock_Milliseconds() );
 	game->setLocalIP( m_localIP );
@@ -760,6 +764,9 @@ void LANAPI::OnGameCreate( ReturnType ret )
 {
 	if (ret == RET_OK)
 	{
+		// a game hosted from the Apocalypse lobby is an Apocalypse game, waves unless -apocalypse said otherwise
+		if (LanLobbyApocalypse)
+			m_currentGame->setApocalypseMode( TheGlobalData->m_apocalypseMode > APOCALYPSE_OFF ? TheGlobalData->m_apocalypseMode : APOCALYPSE_WAVES );
 
 		LANbuttonPushed = true;
 		TheShell->push( AsciiString("Menus/LanGameOptionsMenu.wnd") );

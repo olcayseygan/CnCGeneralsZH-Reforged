@@ -16,6 +16,7 @@ Data/Art/Textures/ReforgedSignalLook.tga
 Data/Cinema/demo.txt
 Data/Cinema/inf_jam.txt
 Data/Cinema/inf_walk.txt
+Data/Cinema/missileapex_film.txt
 Data/Cinema/mobwatch.txt
 Data/Cinema/nohud.txt
 Data/Cinema/rf_ai.txt
@@ -49,6 +50,7 @@ Data/Cinema/s240_md.txt
 Data/Cinema/s240_snow.txt
 Data/Cinema/s240_tank.txt
 Data/Cinema/s240_town.txt
+Data/Cinema/scudlaunch_film.txt
 Data/Cinema/tr_arrival.txt
 Data/Cinema/tr_chaos.txt
 Data/Cinema/tr_clash.txt
@@ -84,6 +86,7 @@ Data/Scenarios/chokeprobe.txt
 Data/Scenarios/comturret.txt
 Data/Scenarios/crowdbattle.txt
 Data/Scenarios/driveby.txt
+Data/Scenarios/empfriendly.txt
 Data/Scenarios/guardradius.txt
 Data/Scenarios/helislide.txt
 Data/Scenarios/helitypes.txt
@@ -101,6 +104,8 @@ Data/Scenarios/mappers.txt
 Data/Scenarios/mass420x2.txt
 Data/Scenarios/mass840.txt
 Data/Scenarios/massmove.txt
+Data/Scenarios/missileapex.txt
+Data/Scenarios/missileapex_film.txt
 Data/Scenarios/missiledefence.txt
 Data/Scenarios/mob100.txt
 Data/Scenarios/mob250.txt
@@ -134,7 +139,9 @@ Data/Scenarios/s240_hud.txt
 Data/Scenarios/s240_snow.txt
 Data/Scenarios/s240_tank.txt
 Data/Scenarios/s240_town.txt
+Data/Scenarios/scudlaunch_film.txt
 Data/Scenarios/scudstorm.txt
+Data/Scenarios/sentrydrone.txt
 Data/Scenarios/shiftorders.txt
 Data/Scenarios/shiftqueue.txt
 Data/Scenarios/squad30.txt
@@ -187,6 +194,8 @@ Data/Window/Html/Spectator.html
 Data/Window/Html/Tooltip.html
 Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
+Data/Window/Menus/LanLobbyMenu.wnd
+Data/Window/Menus/MainMenu.wnd
 Data/Window/Menus/OptionsMenu.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd
 Data/dx11shaders.shipped
@@ -466,6 +475,7 @@ GameEngine/Include/GameLogic/AIPlayer.h
 GameEngine/Include/GameLogic/AISkirmishPlayer.h
 GameEngine/Include/GameLogic/AIStateMachine.h
 GameEngine/Include/GameLogic/AITNGuard.h
+GameEngine/Include/GameLogic/Apocalypse.h
 GameEngine/Include/GameLogic/Armor.h
 GameEngine/Include/GameLogic/ArmorSet.h
 GameEngine/Include/GameLogic/CRCSnapshotRing.h
@@ -1349,6 +1359,7 @@ GameEngine/Source/GameLogic/ScriptEngine/ScriptConditions.cpp
 GameEngine/Source/GameLogic/ScriptEngine/ScriptEngine.cpp
 GameEngine/Source/GameLogic/ScriptEngine/Scripts.cpp
 GameEngine/Source/GameLogic/ScriptEngine/VictoryConditions.cpp
+GameEngine/Source/GameLogic/System/Apocalypse.cpp
 GameEngine/Source/GameLogic/System/CRCSnapshotRing.cpp
 GameEngine/Source/GameLogic/System/CaveSystem.cpp
 GameEngine/Source/GameLogic/System/CrateSystem.cpp
@@ -3685,6 +3696,7 @@ Tools/lobbyroom_layout.py
 Tools/lobbysettings_layout.py
 Tools/lod-first-run-check.sh
 Tools/macos-app-licenses.txt
+Tools/mainmenu_layout.py
 Tools/make-macos-app.sh
 Tools/mangler/Makefile
 Tools/mangler/crc.cpp

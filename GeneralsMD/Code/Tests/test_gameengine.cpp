@@ -9905,6 +9905,25 @@ TEST(two_copies_on_one_machine_each_get_their_own_lobby_address_and_name)
 	CHECK( TheGlobalData->m_skirmishLobbyOnStart );
 	CHECK( !TheGlobalData->m_shellMapOn );
 
+	// -apocalypselobby, the same for the Apocalypse lobby; -apocalypse names the mode, and its
+	// name being the start of the other switch's must not make one stand in for the other
+	TheWritableGlobalData->m_shellMapOn = TRUE;
+	CHECK( !TheGlobalData->m_apocalypseLobby );
+	CHECK_EQ( TheGlobalData->m_apocalypseMode, 0 );
+	char apocalypse[] = "-apocalypse";
+	char two[] = "2";
+	char *argvApocalypse[] = { exe, apocalypse, two };
+	parseCommandLine( 3, argvApocalypse );
+	CHECK_EQ( TheGlobalData->m_apocalypseMode, 2 );
+	CHECK( !TheGlobalData->m_apocalypseLobby );
+	CHECK( TheGlobalData->m_shellMapOn );
+	char apocalypseLobby[] = "-apocalypselobby";
+	char *argvApocalypseLobby[] = { exe, apocalypseLobby };
+	parseCommandLine( 2, argvApocalypseLobby );
+	CHECK( TheGlobalData->m_apocalypseLobby );
+	CHECK( !TheGlobalData->m_shellMapOn );
+	CHECK_EQ( TheGlobalData->m_apocalypseMode, 2 );
+
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
 }
@@ -14654,6 +14673,97 @@ TEST(supply_pile_limit_starts_off_clamps_and_closes_a_full_pile)
 	CHECK( !SupplyPileLimitCloses( 2, 1u << 2, 3 ) );
 	CHECK(  SupplyPileLimitCloses( 2, ( 1u << 2 ) | ( 1u << 3 ), 4 ) );
 	CHECK( !SupplyPileLimitCloses( 2, ( 1u << 2 ) | ( 1u << 3 ), 3 ) );
+}
+
+#include "Common/GameState.h"
+#include "Common/MultiplayerSettings.h"
+#include "Common/PlayerTemplate.h"
+#include "GameClient/MapUtil.h"
+#include "GameLogic/Apocalypse.h"
+
+/* Apocalypse mode travels as AP= in the host's options string.  A host from before it sends no AP=
+	 and a newer one may send a mode this build does not know; both play the ordinary game. */
+TEST(apocalypse_mode_round_trips_through_the_options_string)
+{
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+	GameState *savedState = TheGameState;
+	TheGameState = NEW GameState;
+	MapCache *savedCache = TheMapCache;
+	TheMapCache = NEW MapCache;
+	// empty: the seats' colour and faction are both -1, random, which needs neither to hold anything
+	MultiplayerSettings *savedSettings = TheMultiplayerSettings;
+	TheMultiplayerSettings = NEW MultiplayerSettings;
+	PlayerTemplateStore *savedTemplates = ThePlayerTemplateStore;
+	ThePlayerTemplateStore = NEW PlayerTemplateStore;
+
+	SkirmishGameInfo host;
+	host.init();
+	CHECK_EQ( host.getApocalypseMode(), (Int)APOCALYPSE_OFF );
+	host.setApocalypseMode( APOCALYPSE_WAVES );
+	CHECK_EQ( host.getApocalypseMode(), (Int)APOCALYPSE_WAVES );
+	host.setApocalypseMode( 7 );
+	CHECK_EQ( host.getApocalypseMode(), (Int)APOCALYPSE_OFF );
+	host.setApocalypseMode( APOCALYPSE_CONTINUOUS );
+	host.setMap( "Maps\\Alpine Assault\\Alpine Assault.map" );
+	// computer seats throughout: an open, closed or human seat reads its name out of TheGameText
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+		host.getSlot( i )->setState( SLOT_EASY_AI );
+
+	const AsciiString options = GameInfoToAsciiString( &host );
+	CHECK( strstr( options.str(), ";AP=2;" ) != NULL );
+
+	SkirmishGameInfo joiner;
+	joiner.init();
+	CHECK( ParseAsciiStringToGameInfo( &joiner, options ) );
+	CHECK_EQ( joiner.getApocalypseMode(), (Int)APOCALYPSE_CONTINUOUS );
+
+	// the same string from an older host, AP= cut out
+	std::string older = options.str();
+	older.erase( older.find( "AP=2;" ), strlen( "AP=2;" ) );
+	CHECK( ParseAsciiStringToGameInfo( &joiner, AsciiString( older.c_str() ) ) );
+	CHECK_EQ( joiner.getApocalypseMode(), (Int)APOCALYPSE_OFF );
+
+	// and from a newer one, with a mode past the end of the enum
+	std::string newer = options.str();
+	newer.replace( newer.find( "AP=2;" ), strlen( "AP=2;" ), "AP=9;" );
+	CHECK( ParseAsciiStringToGameInfo( &joiner, AsciiString( newer.c_str() ) ) );
+	CHECK_EQ( joiner.getApocalypseMode(), (Int)APOCALYPSE_OFF );
+
+	host.reset();
+	CHECK_EQ( host.getApocalypseMode(), (Int)APOCALYPSE_OFF );
+
+	delete ThePlayerTemplateStore;
+	ThePlayerTemplateStore = savedTemplates;
+	delete TheMultiplayerSettings;
+	TheMultiplayerSettings = savedSettings;
+	delete TheMapCache;
+	TheMapCache = savedCache;
+	delete TheGameState;
+	TheGameState = savedState;
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
+/* The waves grow by a fixed step a player, and the steady stream's gap shrinks a step a level and
+	 is shared between the players, down to a floor it never passes. */
+TEST(apocalypse_waves_grow_and_the_stream_speeds_up_to_a_floor)
+{
+	CHECK_EQ( Apocalypse_waveSize( 1, 1 ), 5 );
+	CHECK_EQ( Apocalypse_waveSize( 2, 1 ), 8 );
+	CHECK_EQ( Apocalypse_waveSize( 10, 1 ), 32 );
+	CHECK_EQ( Apocalypse_waveSize( 1, 4 ), 20 );
+
+	CHECK_EQ( Apocalypse_streamInterval( 1, 1 ), 300u );
+	CHECK_EQ( Apocalypse_streamInterval( 2, 1 ), 276u );
+	CHECK_EQ( Apocalypse_streamInterval( 1, 4 ), 75u );
+	CHECK_EQ( Apocalypse_streamInterval( 12, 1 ), 36u );
+	CHECK_EQ( Apocalypse_streamInterval( 13, 1 ), 15u );
+	CHECK_EQ( Apocalypse_streamInterval( 1000, 1 ), 15u );
+	CHECK_EQ( Apocalypse_streamInterval( 5, 4 ), 51u );
+	CHECK_EQ( Apocalypse_streamInterval( 9, 4 ), 27u );
+	CHECK_EQ( Apocalypse_streamInterval( 10, 4 ), 21u );
+	CHECK_EQ( Apocalypse_streamInterval( 12, 4 ), 15u );
 }
 
 #include "Common/SpecialPowerType.h"

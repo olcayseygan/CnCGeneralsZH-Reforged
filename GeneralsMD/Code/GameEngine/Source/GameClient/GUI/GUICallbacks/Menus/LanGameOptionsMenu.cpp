@@ -128,6 +128,7 @@ static NameKeyType checkBoxProRulesID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
+static NameKeyType comboBoxApocalypseFlowID = NAMEKEY_INVALID;
 static NameKeyType windowMapID = NAMEKEY_INVALID;
 // Window Pointers ------------------------------------------------------------------------
 static GameWindow *parentLanGameOptions = NULL;
@@ -145,6 +146,7 @@ static GameWindow *checkBoxProRules = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
+static GameWindow *comboBoxApocalypseFlow = NULL;
 static GameWindow *windowMap = NULL;
 
 static GameWindow *comboBoxPlayer[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
@@ -277,6 +279,10 @@ void StartPressed(void)
 		}
 	}
 
+	// Apocalypse is every player on one team against the zombies, so one player is enough, one team
+	// is the point, and the player and team counts below do not apply
+	const Bool apocalypse = myGame->getApocalypseMode() != APOCALYPSE_OFF;
+
 	// Check for too many players
 	const MapMetaData *md = TheMapCache->findMap( myGame->getMap() );
 	if (!md || md->m_numPlayers < numUsers)
@@ -290,8 +296,9 @@ void StartPressed(void)
 		return;
 	}
 
-	// Check for observer + AI players
-	if (TheGlobalData->m_netMinPlayers && !numHumans)
+	// Check for observer + AI players.  Apocalypse needs one human seat whatever the minimum says:
+	// the waves are sized by the seats, and a room of observers has none to size them by.
+	if ((TheGlobalData->m_netMinPlayers || apocalypse) && !numHumans)
 	{
 		if (TheLAN->AmIHost())
 		{
@@ -302,7 +309,7 @@ void StartPressed(void)
 	}
 
 	// Check for too few players
-	if (numUsers < TheGlobalData->m_netMinPlayers)
+	if (!apocalypse && numUsers < TheGlobalData->m_netMinPlayers)
 	{
 		if (TheLAN->AmIHost())
 		{
@@ -331,7 +338,7 @@ void StartPressed(void)
 			}
 		}
 	}
-	if (numRandom + teams.size() < TheGlobalData->m_netMinPlayers)
+	if (!apocalypse && numRandom + teams.size() < TheGlobalData->m_netMinPlayers)
 	{
 		if (TheLAN->AmIHost())
 		{
@@ -342,7 +349,7 @@ void StartPressed(void)
 		return;
 	}
 
-	if (numRandom + teams.size() < 2)
+	if (!apocalypse && numRandom + teams.size() < 2)
 	{
 		UnicodeString text;
 		text.format(TheGameText->fetch("GUI:SandboxMode"));
@@ -428,6 +435,7 @@ void LANDisableButtons()
 	buttonBack->winEnable(false);
 	buttonSelectMap->winEnable(false);
 	comboBoxStartingCash->winEnable(false);
+	comboBoxApocalypseFlow->winEnable(false);
 
 	GameWindow *optionalGadgets[] = { comboBoxSuperweapons, comboBoxPeaceTime, checkBoxUnitLimit,
 		checkBoxProRules, comboBoxIncomeSharing, comboBoxTechRespawn, comboBoxSupplyPileLimit };
@@ -755,6 +763,85 @@ static void handleSupplyPileLimitSelection()
   }
 }
 
+// Apocalypse's zombie flow: entry 0 is APOCALYPSE_WAVES, entry 1 APOCALYPSE_CONTINUOUS.  The box lies
+// on peace time's row, which an Apocalypse game hides: it has a computer side, and a computer side
+// turns peace time off anyway.
+static void populateApocalypseFlowComboBox( void )
+{
+  GadgetComboBoxReset(comboBoxApocalypseFlow);
+  Color color = comboBoxApocalypseFlow->winGetEnabled() ? comboBoxApocalypseFlow->winGetEnabledTextColor() : comboBoxApocalypseFlow->winGetDisabledTextColor();
+  GadgetComboBoxAddEntry(comboBoxApocalypseFlow, TheGameText->fetch("GUI:ApocalypseWaves"), color);
+  GadgetComboBoxAddEntry(comboBoxApocalypseFlow, TheGameText->fetch("GUI:ApocalypseContinuous"), color);
+}
+
+static void updateApocalypseFlowComboBox( LANGameInfo *myGame )
+{
+  comboBoxApocalypseFlow->winEnable( TheLAN->AmIHost() );
+
+  Int selected = -1;
+  GadgetComboBoxGetSelectedPos( comboBoxApocalypseFlow, &selected );
+  if ( selected != myGame->getApocalypseMode() - APOCALYPSE_WAVES )
+    GadgetComboBoxSetSelectedPos( comboBoxApocalypseFlow, myGame->getApocalypseMode() - APOCALYPSE_WAVES, TRUE );
+}
+
+static void handleApocalypseFlowSelection()
+{
+  LANGameInfo *myGame = TheLAN->GetMyGame();
+
+  Int selected = -1;
+  GadgetComboBoxGetSelectedPos( comboBoxApocalypseFlow, &selected );
+  // emptying the box deselects it, and that must not read as Apocalypse off; setting it from the
+  // host's options selects it too, and only a real change is worth a new options string
+  if ( selected < 0 || myGame->getApocalypseMode() == APOCALYPSE_WAVES + selected )
+    return;
+
+  myGame->setApocalypseMode( APOCALYPSE_WAVES + selected );
+  myGame->resetAccepted();
+
+  if (myGame->amIHost() && !s_isIniting)
+  {
+    TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
+    lanUpdateSlotList(); // Update the accepted button UI
+  }
+}
+
+// What an Apocalypse game changes on this screen: its title, the flow row in place of peace time, no
+// team column (everybody is on team 1), and no seats past the fourth.  The layout may be one the
+// last game left in either state, so both ways are set.
+static void showApocalypseGadgets( LANGameInfo *myGame )
+{
+  const Bool apocalypse = myGame->getApocalypseMode() != APOCALYPSE_OFF;
+  AsciiString name;
+
+  GadgetStaticTextSetText( TheWindowManager->winGetWindowFromId( parentLanGameOptions, TheNameKeyGenerator->nameToKey( "LanGameOptionsMenu.wnd:StaticTextTitle" ) ),
+    TheGameText->fetch( apocalypse ? "GUI:Apocalypse" : "GUI:GameOptions" ) );
+
+  const char *peaceTime[] = { "LabelPeaceTime", "ComboBoxPeaceTime" };
+  const char *flow[] = { "LabelApocalypseFlow", "ComboBoxApocalypseFlow" };
+  for ( Int i = 0; i < 2; ++i )
+  {
+    name.format( "LanGameOptionsMenu.wnd:%s", peaceTime[i] );
+    TheWindowManager->winGetWindowFromId( parentLanGameOptions, TheNameKeyGenerator->nameToKey( name ) )->winHide( apocalypse );
+    name.format( "LanGameOptionsMenu.wnd:%s", flow[i] );
+    TheWindowManager->winGetWindowFromId( parentLanGameOptions, TheNameKeyGenerator->nameToKey( name ) )->winHide( !apocalypse );
+  }
+
+  TheWindowManager->winGetWindowFromId( parentLanGameOptions, TheNameKeyGenerator->nameToKey( "LanGameOptionsMenu.wnd:StaticTextTeam" ) )->winHide( apocalypse );
+  for ( Int i = 0; i < MAX_SLOTS; ++i )
+  {
+    comboBoxTeam[i]->winHide( apocalypse );
+    // GenerateGameOptionsString keeps these seats shut; this keeps the host from opening them
+    if ( apocalypse && i >= APOCALYPSE_SEATS )
+      comboBoxPlayer[i]->winEnable( FALSE );
+  }
+
+  if ( apocalypse )
+  {
+    populateApocalypseFlowComboBox();
+    updateApocalypseFlowComboBox( myGame );
+  }
+}
+
 static void handleProRulesSelection()
 {
   LANGameInfo *myGame = TheLAN->GetMyGame();
@@ -844,6 +931,7 @@ void InitLanGameGadgets( void )
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxIncomeSharing" ) );
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxTechRespawn" ) );
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxSupplyPileLimit" ) );
+  comboBoxApocalypseFlowID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxApocalypseFlow" ) );
 	windowMapID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:MapWindow" ) );
 
 	// Initialize the pointers to our gadgets
@@ -898,6 +986,7 @@ void InitLanGameGadgets( void )
   DEBUG_ASSERTCRASH(comboBoxSupplyPileLimit, ("Could not find the comboBoxSupplyPileLimit"));
 	if (comboBoxSupplyPileLimit)
 		PopulateSupplyPileLimitComboBox(comboBoxSupplyPileLimit, TheLAN->GetMyGame(), TheLAN->AmIHost());
+	comboBoxApocalypseFlow = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxApocalypseFlowID );
 
 	windowMap = TheWindowManager->winGetWindowFromId( parentLanGameOptions,windowMapID  );
 	DEBUG_ASSERTCRASH(windowMap, ("Could not find the LanGameOptionsMenu.wnd:MapWindow" ));
@@ -982,6 +1071,8 @@ void InitLanGameGadgets( void )
 	if( buttonAccept[0] )
 		GadgetButtonSetEnabledColor(buttonAccept[0], acceptTrueColor );
 
+	showApocalypseGadgets( TheLAN->GetMyGame() );
+
 	// the settings page and the chat log share one rectangle; this opens on the chat log
 	InitLobbyTabs( parentLanGameOptions, "LanGameOptionsMenu.wnd", "TabChat", "ListboxChatWindowLanGame" );
 }
@@ -1005,6 +1096,7 @@ void DeinitLanGameGadgets( void )
   comboBoxIncomeSharing = NULL;
   comboBoxTechRespawn = NULL;
   comboBoxSupplyPileLimit = NULL;
+  comboBoxApocalypseFlow = NULL;
 	windowMap = NULL;
 	for (Int i = 0; i < MAX_SLOTS; i++)
 	{
@@ -1198,6 +1290,9 @@ void updateGameOptions( void )
 			UpdateTechRespawnComboBox( comboBoxTechRespawn, theGame, TheLAN->AmIHost() );
 		if (comboBoxSupplyPileLimit)
 			UpdateSupplyPileLimitComboBox( comboBoxSupplyPileLimit, theGame, TheLAN->AmIHost() );
+		// the mode itself is fixed when the game is made; only the flow changes in here
+		if (theGame->getApocalypseMode() != APOCALYPSE_OFF)
+			updateApocalypseFlowComboBox( theGame );
 	}
 }
 
@@ -1375,6 +1470,10 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
         else if ( controlID == comboBoxSupplyPileLimitID )
         {
           handleSupplyPileLimitSelection();
+        }
+        else if ( controlID == comboBoxApocalypseFlowID )
+        {
+          handleApocalypseFlowSelection();
         }
         else
         {

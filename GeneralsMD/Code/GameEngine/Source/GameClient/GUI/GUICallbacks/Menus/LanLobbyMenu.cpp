@@ -55,7 +55,9 @@
 #include "GameClient/GameInfoWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetTextEntry.h"
+#include "GameClient/GUICallbacks.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/GameWindowTransitions.h"
 #include "GameLogic/GameLogic.h"
@@ -68,6 +70,7 @@ Bool LANisShuttingDown = false;
 Bool LANbuttonPushed = false;
 Bool LANSocketErrorDetected = FALSE;
 char *LANnextScreen = NULL;
+Bool LanLobbyApocalypse = FALSE;
 
 static Int	initialGadgetDelay = 2;
 static Bool justEntered = FALSE;
@@ -386,6 +389,10 @@ void LanLobbyMenuInit( WindowLayout *layout, void *userData )
 	listboxGames = TheWindowManager->winGetWindowFromId( NULL, listboxGamesID );
 	staticTextGameInfo = TheWindowManager->winGetWindowFromId( NULL, staticTextGameInfoID );
 	listboxPlayers->winSetTooltipFunc(playerTooltip);
+
+	// one screen, two lobbies; the list below shows only this one's games
+	GameWindow *title = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "LanLobbyMenu.wnd:StaticTextTitle" ) );
+	GadgetStaticTextSetText( title, TheGameText->fetch( LanLobbyApocalypse ? "GUI:Apocalypse" : "GUI:LANLobby" ) );
 
 	// Show Menu
 	layout->hide( FALSE );
@@ -722,7 +729,7 @@ WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 				
 					if (rowSelected >= 0)
 					{
-						LANGameInfo * theGame = TheLAN->LookupGameByListOffset(rowSelected);
+						LANGameInfo * theGame = (LANGameInfo *)GadgetListBoxGetItemData(listboxGames, rowSelected, 0);
 						if (theGame)
 						{
 							TheLAN->RequestGameJoin(theGame);
@@ -745,7 +752,8 @@ WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 						HideGameInfoWindow(TRUE);
 						break;
 					}
-					LANGameInfo * theGame = TheLAN->LookupGameByListOffset(rowSelected);
+					// the list leaves out the other lobby's games, so a row is not an offset into TheLAN's list
+					LANGameInfo * theGame = (LANGameInfo *)GadgetListBoxGetItemData(listboxGames, rowSelected, 0);
 					if (theGame)
 						RefreshGameInfoWindow(theGame, theGame->getName());
 					else
@@ -796,7 +804,7 @@ WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 
 					if (rowSelected >= 0)
 					{
-						LANGameInfo * theGame = TheLAN->LookupGameByListOffset(rowSelected);
+						LANGameInfo * theGame = (LANGameInfo *)GadgetListBoxGetItemData(listboxGames, rowSelected, 0);
 						if (theGame)
 						{
 							TheLAN->RequestGameJoin(theGame);

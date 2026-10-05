@@ -147,7 +147,6 @@ public:
 
 	// Misc utility functions
 	virtual LANGameInfo * LookupGame( UnicodeString gameName ) = 0;														///< return a pointer to a game we know about
-	virtual LANGameInfo * LookupGameByListOffset( Int offset ) = 0;														///< return a pointer to a game we know about
 	virtual Bool SetLocalIP( UnsignedInt localIP ) = 0;																		///< For multiple NIC machines
 	virtual void SetLocalIP( AsciiString localIP ) = 0;																		///< For multiple NIC machines
 	virtual Bool AmIHost( void ) = 0;																											///< Am I hosting a game?
@@ -215,7 +214,6 @@ public:
 
 	// Misc utility functions
 	virtual LANGameInfo * LookupGame( UnicodeString gameName );														///< return a pointer to a game we know about
-	virtual LANGameInfo * LookupGameByListOffset( Int offset );														///< return a pointer to a game we know about
 	virtual LANPlayer * LookupPlayer( UnsignedInt playerIP );													///< return a pointer to a player we know about
 	virtual Bool SetLocalIP( UnsignedInt localIP );																		///< For multiple NIC machines
 	virtual void SetLocalIP( AsciiString localIP );																		///< For multiple NIC machines

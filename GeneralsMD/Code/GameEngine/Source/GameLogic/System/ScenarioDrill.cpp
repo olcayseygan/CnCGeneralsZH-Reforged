@@ -691,11 +691,11 @@ static Object *findFirstMatching( Player *player, const AsciiString &selector )
 /** The recipe the debug spawn path uses (GameLogic.cpp's unitTimings): a template's onCreate ran in
 	  the constructor, but a unit that was never built still has to be told it is finished, or half
 	  its modules never start.  The team has to be activated too, or it counts as an empty team. */
-static Bool spawnOne( const ThingTemplate *tmpl, Team *team, const Coord3D *pos )
+Object *ScenarioDrill_spawnOne( const ThingTemplate *tmpl, Team *team, const Coord3D *pos )
 {
 	Object *obj = TheThingFactory->newObject( tmpl, team );
 	if (obj == NULL)
-		return FALSE;
+		return NULL;
 
 	obj->setOrientation( 0 );
 	obj->setPosition( pos );
@@ -713,7 +713,7 @@ static Bool spawnOne( const ThingTemplate *tmpl, Team *team, const Coord3D *pos 
 
 	team->setActive();
 	TheAI->pathfinder()->addObjectToPathfindMap( obj );
-	return TRUE;
+	return obj;
 }
 
 static Bool executeSpawn( const ScenarioAction &action, Player *player, const Coord3D &centre )
@@ -745,7 +745,7 @@ static Bool executeSpawn( const ScenarioAction &action, Player *player, const Co
 		pos.y = centre.y + (i / columns) * action.spacing - halfHeight;
 		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 
-		if (spawnOne( tmpl, team, &pos ))
+		if (ScenarioDrill_spawnOne( tmpl, team, &pos ))
 			++made;
 	}
 

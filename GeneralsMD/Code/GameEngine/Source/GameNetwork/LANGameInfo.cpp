@@ -34,6 +34,7 @@
 #include "GameClient/GameInfoWindow.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GUICallbacks.h"
 #include "GameNetwork/LANGameInfo.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "Common/MultiplayerSettings.h"
@@ -224,8 +225,12 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 
 		GadgetListBoxReset(gameListbox);
 		
-		while (gameList)
+		for (; gameList; gameList = gameList->getNext())
 		{
+			// the LAN lobby and the Apocalypse lobby are one screen over one list of games
+			if ((gameList->getApocalypseMode() != APOCALYPSE_OFF) != (LanLobbyApocalypse != FALSE))
+				continue;
+
 			UnicodeString txtGName;
 			txtGName = u"";
 			if( gameList->isGameInProgress() )
@@ -242,8 +247,6 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 
 			if (selectedPtr == gameList)
 				indexToSelect = addedIndex;
-
-			gameList = gameList->getNext();
 		}
 
 		if (indexToSelect >= 0)
@@ -260,7 +263,26 @@ AsciiString GenerateGameOptionsString( void )
 	if(!TheLAN->GetMyGame() || !TheLAN->GetMyGame()->amIHost())
 		return AsciiString::TheEmptyString;
 
-	return GameInfoToAsciiString(TheLAN->GetMyGame());
+	// Every options string the host sends comes through here, the periodic resend included, so this
+	// is the one place that keeps an Apocalypse game to its seating: the seats past the fourth shut
+	// and every player on team 1, whatever joined or changed since the last string went out.
+	LANGameInfo *game = TheLAN->GetMyGame();
+	if (game->getApocalypseMode() != APOCALYPSE_OFF)
+	{
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+		{
+			GameSlot *slot = game->getSlot(i);
+			if (!slot->isOccupied())
+			{
+				if (i >= APOCALYPSE_SEATS)
+					slot->setState(SLOT_CLOSED);
+			}
+			else if (slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
+				slot->setTeamNumber(0);
+		}
+	}
+
+	return GameInfoToAsciiString(game);
 }
 
 Bool ParseGameOptionsString(LANGameInfo *game, AsciiString options)

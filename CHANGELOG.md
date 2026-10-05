@@ -8,6 +8,10 @@ found and fixed â€” EA's own, not port damage.**
 
 ---
 
+## Apocalypse: hold the line against the dead
+
+- A new mode on the main menu. One to four players share a team and the zombies come at them from one point on the map, either in waves or in a stream that never lets up, whichever the lobby picked. There is no winning. The match ends when the last of you falls, and the score is the waves you held and the minutes you lasted.
+
 ## Zero Hour on a Mac, on Linux and on the Steam Deck
 
 - The game runs on Apple silicon Macs and on Linux, the Steam Deck included, as a program built for that machine. There is no Wine or Proton underneath. It draws through Metal on a Mac and through Vulkan on Linux, from the same Zero Hour files you already own.
@@ -1893,3 +1897,4 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - Internet play. LAN works: two separate PCs have played each other on one network. Matches over the internet wait on Reforged's own lobby server, which is still on paper.
 - A frame through Direct3D 11 still costs a little more than it does through the old renderer: 7.6ms against 6.3ms in a screen full of inferno cannon fire. `-d3d9` on the command line puts the old renderer back on its own.
 - You need to own the game; no game data ships here.
+- The zombies in Apocalypse still wear the GLA Rebel's model and carry his rifle. Only their slow shamble is their own.

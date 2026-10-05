@@ -722,6 +722,8 @@ GlobalData::GlobalData()
 	m_incomeSharing = 0;						// INCOME_SHARING_OFF unless -incomesharing asks
 	m_techRespawn = 0;							// a destroyed tech building stays destroyed unless -techrespawn asks
 	m_supplyPileLimit = 0;					// a supply pile takes any number of players unless -supplypilelimit asks
+	m_apocalypseMode = 0;						// APOCALYPSE_OFF unless -apocalypse asks
+	m_apocalypseLobby = FALSE;
 	m_superweapons = 0;							// SUPERWEAPONS_ALLOW unless -superweapons asks
 	m_autoSkirmishObserver = FALSE;
 	m_headless = FALSE;

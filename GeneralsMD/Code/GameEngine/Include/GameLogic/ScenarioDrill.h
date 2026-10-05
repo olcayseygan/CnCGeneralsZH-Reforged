@@ -52,6 +52,10 @@
 #include "Lib/BaseType.h"
 #include "Common/AsciiString.h"
 
+class Object;
+class Team;
+class ThingTemplate;
+
 // ------------------------------------------------------------------------------------------------
 /** What one scenario line asks for. */
 // ------------------------------------------------------------------------------------------------
@@ -147,5 +151,9 @@ extern const char *ScenarioDrill_report( void );
 	  radius, and how many frames after the line fired the first and the last of them did.  The last
 	  one's time is the choke probe's number (ROADMAP M0.3). */
 extern void ScenarioDrill_logArrivals( void );
+
+/** Put one finished unit of a template on the field for a team, the way the spawn line does.  Apocalypse
+	  mode brings its zombies in through the same door.  Only safe from inside a logic frame. */
+extern Object *ScenarioDrill_spawnOne( const ThingTemplate *tmpl, Team *team, const Coord3D *pos );
 
 #endif // __SCENARIODRILL_H_

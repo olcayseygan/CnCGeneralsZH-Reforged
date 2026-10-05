@@ -138,6 +138,10 @@ extern void LanLobbyMenuUpdate( WindowLayout *layout, void *userData );
 extern void LanLobbyMenuShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType LanLobbyMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
+// The LAN lobby is also the Apocalypse lobby: the main menu's Apocalypse button and -apocalypselobby
+// set this before pushing it, Network clears it.  It decides the title, which games the list shows
+// and what kind of game Host makes.
+extern Bool LanLobbyApocalypse;
 
 // Lan Game Options Menu ---------------------------------------------------------------------------
 extern void LanGameOptionsMenuInit( WindowLayout *layout, void *userData );

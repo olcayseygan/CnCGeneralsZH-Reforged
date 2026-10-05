@@ -1152,21 +1152,6 @@ LANGameInfo * LANAPI::LookupGame( UnicodeString gameName )
 	return theGame; // NULL means we didn't find anything.
 }
 
-LANGameInfo * LANAPI::LookupGameByListOffset( Int offset )
-{
-	LANGameInfo *theGame = m_games;
-
-	if (offset < 0)
-		return NULL;
-
-	while (offset-- && theGame)
-	{
-		theGame = theGame->getNext();
-	}
-
-	return theGame; // NULL means we didn't find anything.
-}
-
 void LANAPI::removeGame( LANGameInfo *game )
 {
 	LANGameInfo *g = m_games;

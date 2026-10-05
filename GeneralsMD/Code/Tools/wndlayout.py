@@ -46,6 +46,10 @@ class Window(object):
         self.props = []
         self.indent = indent   # the indentation this window's properties were read at
         self.children = []
+        # Read without a CHILD in front of it.  The game's parser takes CHILD once and then every
+        # WINDOW up to ENDALLCHILDREN, so EA's 1.04 MainMenu.wnd gets away with one sibling that
+        # skips the keyword; remembering it keeps that file round tripping.
+        self.bare = False
 
     # -- properties -----------------------------------------------------------
 
@@ -163,7 +167,8 @@ class Window(object):
             else:
                 out.append(line)
         for child in self.children:
-            out.append(pad + _INDENT + "CHILD")
+            if not child.bare:
+                out.append(pad + _INDENT + "CHILD")
             child.emit(depth + 1, out)
         if self.children:
             out.append(pad + _INDENT + "ENDALLCHILDREN")
@@ -207,6 +212,10 @@ def parse(text):
             token = line.strip()
             if token == "CHILD":
                 child, at = parse_window(at + 1, depth + 1)
+                window.children.append(child)
+            elif token == "WINDOW":
+                child, at = parse_window(at, depth + 1)
+                child.bare = True
                 window.children.append(child)
             elif token == "ENDALLCHILDREN":
                 at += 1

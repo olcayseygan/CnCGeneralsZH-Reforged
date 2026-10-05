@@ -102,6 +102,7 @@
 #include "Common/ControlServer.h"
 #include "GameLogic/PolygonTrigger.h"
 #include "GameLogic/ScenarioDrill.h"
+#include "GameLogic/Apocalypse.h"
 #include "GameLogic/ScriptActions.h"
 #include "GameLogic/ScriptConditions.h"
 #include "GameLogic/ScriptEngine.h"
@@ -1297,6 +1298,21 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
       m_peaceTimeEndFrame = TheGlobalData->m_peaceTime * 60 * LOGICFRAMES_PER_SECOND;
   }
 
+	/* Apocalypse mode puts every seat on one team, whatever the lobby said, before anything below
+		 reads the team numbers: the alliances, the start positions and the count of teams that decides
+		 whether the match can be lost at all.  On a loaded save the game info came out of the save and
+		 says the same thing again. */
+	Apocalypse_newGame( game ? game->getApocalypseMode() : APOCALYPSE_OFF );
+	if ( Apocalypse_mode() != APOCALYPSE_OFF )
+	{
+		for ( Int i = 0; i < MAX_SLOTS; ++i )
+		{
+			GameSlot *slot = game->getSlot( i );
+			if ( slot->isOccupied() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER )
+				slot->setTeamNumber( 0 );
+		}
+	}
+
 	checkForDuplicateColors( game );
 
 	Bool isSkirmishOrSkirmishReplay = FALSE;
@@ -1465,7 +1481,14 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 					if(!alliesString.isEmpty())
 						alliesString.concat(" ");
 					alliesString.concat(teamPlayerName);
-				}				
+				}
+			}
+			// and the zombies, added after the slots, are everybody's enemy
+			if (Apocalypse_mode() != APOCALYPSE_OFF)
+			{
+				if(!enemiesString.isEmpty())
+					enemiesString.concat(" ");
+				enemiesString.concat(APOCALYPSE_PLAYER_NAME);
 			}
 			d.setAsciiString(TheKey_playerAllies, alliesString);
 			d.setAsciiString(TheKey_playerEnemies, enemiesString);
@@ -1583,7 +1606,50 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		d.setBool(TheKey_teamIsSingleton, true);
 		TheSidesList->addTeam(&d);
 	//}
-	TheSidesList->validateSides();		
+
+	/* Apocalypse mode's zombie side.  Not a seat, so nothing places a base or a dozer for it.  Marked
+		 human the way a takeover seat is, so no AIPlayer is made for it: even a plain one scouts, retreats
+		 and fights with whatever its side owns, and that took zombies off the hunt Apocalypse_tick sent
+		 them on.  The local player is never this one - ReplayObserver comes first.  It is the enemy of
+		 every seat, and every seat names it an enemy too, because a relationship is one player's view of
+		 another.  Its start index is the start position it comes from, where an allied AI sent after it
+		 should go; -1 when it comes in from the edge, which every reader takes as no position. */
+	if (game && Apocalypse_mode() != APOCALYPSE_OFF)
+	{
+		const Int zombieStart = Apocalypse_chooseSpawnPoint(game);
+
+		AsciiString seats;
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+		{
+			if (!game->getConstSlot(i)->isOccupied())
+				continue;
+			AsciiString seat;
+			seat.format("player%d", i);
+			if (!seats.isEmpty())
+				seats.concat(" ");
+			seats.concat(seat);
+		}
+
+		Dict zombies;
+		zombies.setAsciiString(TheKey_playerName, APOCALYPSE_PLAYER_NAME);
+		zombies.setBool(TheKey_playerIsHuman, TRUE);
+		zombies.setUnicodeString(TheKey_playerDisplayName, UnicodeString(u"Zombies"));
+		zombies.setAsciiString(TheKey_playerFaction, "FactionGLA");
+		zombies.setAsciiString(TheKey_playerAllies, AsciiString::TheEmptyString);
+		zombies.setAsciiString(TheKey_playerEnemies, seats);
+		zombies.setInt(TheKey_playerColor, APOCALYPSE_ZOMBIE_COLOR);
+		zombies.setInt(TheKey_playerNightColor, APOCALYPSE_ZOMBIE_COLOR);
+		zombies.setInt(TheKey_multiplayerStartIndex, zombieStart);
+		zombies.setBool(TheKey_multiplayerIsLocal, FALSE);
+		TheSidesList->addSide(&zombies);
+
+		zombies.clear();
+		zombies.setAsciiString(TheKey_teamName, "team" APOCALYPSE_PLAYER_NAME);
+		zombies.setAsciiString(TheKey_teamOwner, APOCALYPSE_PLAYER_NAME);
+		zombies.setBool(TheKey_teamIsSingleton, true);
+		TheSidesList->addTeam(&zombies);
+	}
+	TheSidesList->validateSides();
 
 	// update the loadscreen 
 	updateLoadProgress(LOAD_PROGRESS_POST_SIDE_LIST_INIT);
@@ -1621,6 +1687,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 				}
 			}
 		}
+		// every seat is one team in Apocalypse mode, and the zombies are the other
+		if (Apocalypse_mode() != APOCALYPSE_OFF)
+			++numTeams;
 
 		if (numTeams > 1)
 		{
@@ -4577,6 +4646,9 @@ void GameLogic::update( void )
 	// ... and the tech buildings the lobby wants back
 	techRespawnTick();
 
+	// ... and the zombies, in Apocalypse mode
+	Apocalypse_tick();
+
 	/* The scripted measurement harness.  Keyed to the logic frame rather than to the render pass, so the same
 		 scenario file plays out on the same frames however fast the machine draws - which is the whole
 		 point of measuring two builds against it. */
@@ -5783,13 +5855,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 15: xfer m_incomeSharing
 	* 16: xfer m_techRespawnDelay and m_pendingTechBuildings
 	* 17: xfer m_supplyPileLimit
+	* 18: xfer Apocalypse mode's waves and spawn point
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 17;
+	const XferVersion currentVersion = 18;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -6213,6 +6286,10 @@ void GameLogic::xfer( Xfer *xfer )
   {
     m_supplyPileLimit = 0;
   }
+
+  // an older save has no Apocalypse state, and startNewGame has already turned the mode off for it
+  if ( version >= 18 )
+    Apocalypse_xfer( xfer );
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

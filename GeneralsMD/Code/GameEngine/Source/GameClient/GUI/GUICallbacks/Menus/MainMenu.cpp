@@ -117,6 +117,7 @@ void DoCompressTest( void );
 // window ids -------------------------------------------------------------------------------------
 static NameKeyType mainMenuID = NAMEKEY_INVALID;
 static NameKeyType skirmishID = NAMEKEY_INVALID;
+static NameKeyType apocalypseID = NAMEKEY_INVALID;
 static NameKeyType onlineID = NAMEKEY_INVALID;
 static NameKeyType networkID = NAMEKEY_INVALID;
 static NameKeyType optionsID = NAMEKEY_INVALID;
@@ -487,6 +488,7 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	mainMenuID = TheNameKeyGenerator->nameToKey( AsciiString( "MainMenu.wnd:MainMenuParent" ) );
 //	campaignID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCampaign") );
 	skirmishID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonSkirmish") );
+	apocalypseID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonApocalypse") );
 	onlineID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOnline") );
 	networkID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonNetwork") );
 	optionsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOptions") );
@@ -1443,7 +1445,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				TheTransitionHandler->reverse("MainMenuLoadReplayMenuBackTransition");
 				TheShell->push(AsciiString("Menus/ReplayMenu.wnd"));
 			}
-			else if( controlID == skirmishID )
+			else if( controlID == skirmishID || controlID == apocalypseID )
 			{
 				if(campaignSelected || dontAllowTransitions)
 					break;
@@ -1464,8 +1466,18 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				checkCDBeforeCampaign(DIFFICULTY_NORMAL);
 				break;
 #endif
-				TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
-				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_SKIRMISH_SELECTED]);
+				// Apocalypse leaves the way Skirmish does, into the LAN lobby: the skirmish room seats
+				// one human, and this mode is up to four of them, so even a game alone starts from there
+				if( controlID == apocalypseID )
+				{
+					LanLobbyApocalypse = TRUE;
+					TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
+				}
+				else
+				{
+					TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
+					TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_SKIRMISH_SELECTED]);
+				}
 			}
 			else if( controlID == onlineID )
 			{
@@ -1489,6 +1501,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				buttonPushed = TRUE;
 				dropDownWindows[DROPDOWN_MULTIPLAYER]->winHide(FALSE);
 				TheTransitionHandler->reverse("MainMenuMultiPlayerMenuTransitionToNext");
+				LanLobbyApocalypse = FALSE;
 				TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
 
 				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_SELECTED]);

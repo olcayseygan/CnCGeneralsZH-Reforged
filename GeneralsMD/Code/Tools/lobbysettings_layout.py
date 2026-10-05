@@ -176,6 +176,10 @@ STRINGS = [
     "TOOLTIP:SupplyPileLimit",
     "GUI:SupplyPileLimitOff",
     "GUI:SupplyPileLimitFormat",
+    # the LAN room's Apocalypse flow row, which lobbyroom_layout.py lays over peace time
+    "GUI:ApocalypseFlow",
+    "GUI:ApocalypseWaves",
+    "GUI:ApocalypseContinuous",
 ]
 
 

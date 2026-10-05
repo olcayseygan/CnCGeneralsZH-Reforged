@@ -1294,6 +1294,41 @@ GUI:PeaceTimeOver
 "Peace time is over."
 END
 
+// Apocalypse - the co-op zombie survival mode: its menu button and lobby title, the lobby's flow
+// combo box, the wave message, the closing score and the zombie's own name.
+
+GUI:Apocalypse
+"APOCALYPSE"
+END
+
+GUI:ApocalypseToolTip
+"Hold out with up to three friends against zombies that never stop coming."
+END
+
+GUI:ApocalypseFlow
+"Zombie flow"
+END
+
+GUI:ApocalypseWaves
+"Waves"
+END
+
+GUI:ApocalypseContinuous
+"Continuous"
+END
+
+GUI:ApocalypseWave
+"Wave %d"
+END
+
+GUI:ApocalypseSurvived
+"You held out for %d waves, %d:%02d."
+END
+
+OBJECT:ApocalypseZombie
+"Zombie"
+END
+
 GUI:PeaceTimeHud
 "%d:%02d"
 END

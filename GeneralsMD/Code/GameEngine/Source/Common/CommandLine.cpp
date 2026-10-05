@@ -2096,6 +2096,19 @@ Int parseSupplyPileLimit(char *args[], int num)
 	return 1;
 }
 
+/* -apocalypse <1|2>: Apocalypse mode, 1 waves and 2 a steady stream, for an -autoskirmish or
+	 -netgame run, carried the same way as -incomesharing; GameInfo::setApocalypseMode reads any other
+	 number as off. */
+Int parseApocalypse(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1 && args[1])
+	{
+		TheWritableGlobalData->m_apocalypseMode = atoi(args[1]);
+		return 2;
+	}
+	return 1;
+}
+
 /* -slowframe <ms> lowers the bar a logic frame has to clear before it logs its own breakdown.
 
 	 The default of 20ms is a stutter hunt: it catches the frames a player would notice. Chasing a
@@ -2213,6 +2226,17 @@ Int parseSkirmishLobby(char *args[], int num)
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_skirmishLobbyOnStart = TRUE;
+		TheWritableGlobalData->m_shellMapOn = FALSE;
+	}
+	return 1;
+}
+
+/* -apocalypselobby opens the Apocalypse lobby at startup.  Same shell map handling as -lanlobby. */
+Int parseApocalypseLobby(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_apocalypseLobby = TRUE;
 		TheWritableGlobalData->m_shellMapOn = FALSE;
 	}
 	return 1;
@@ -2532,6 +2556,8 @@ static CommandLineParam params[] =
 	{ "-techrespawn", parseTechRespawn },
 	{ "-superweapons", parseSuperweapons },
 	{ "-supplypilelimit", parseSupplyPileLimit },
+	{ "-apocalypse", parseApocalypse },
+	{ "-apocalypselobby", parseApocalypseLobby },
 	{ "-showlanes", parseShowLanes },
 	{ "-uidrill", parseUIDrill },
 	{ "-resdrill", parseResDrill },

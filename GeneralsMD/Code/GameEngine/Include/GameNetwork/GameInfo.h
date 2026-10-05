@@ -68,6 +68,16 @@ enum IncomeSharing
 	INCOME_SHARING_COUNT
 };
 
+// The lobby's Apocalypse mode: every player on one team against a computer zombie side that walks
+// in from one spot on the map.  The values travel in the options string and in saves, so only append.
+enum ApocalypseMode
+{
+	APOCALYPSE_OFF = 0,				// the retail game
+	APOCALYPSE_WAVES = 1,			// waves that grow, with a pause between them
+	APOCALYPSE_CONTINUOUS = 2,		// one zombie at a time, faster and faster
+	APOCALYPSE_COUNT
+};
+
 /**
   * GameSlot class - maintains information about the contents of a
 	* game slot.  This persists throughout the game.
@@ -282,6 +292,10 @@ public:
   inline Int getSupplyPileLimit( void ) const;
   void setSupplyPileLimit( Int players );
 
+  // An ApocalypseMode.  Off is the retail game.
+  inline Int getApocalypseMode( void ) const;
+  void setApocalypseMode( Int mode );
+
   Bool hasAIPlayers( void ) const;									///< is any slot held by a computer player?
 
 protected:
@@ -311,6 +325,7 @@ protected:
   Int m_incomeSharing; // an IncomeSharing, INCOME_SHARING_OFF = the retail game
   Int m_techRespawn; // minutes before a destroyed tech building comes back, 0 = never
   Int m_supplyPileLimit; // players who may gather from one supply pile at once, 0 = any number
+  Int m_apocalypseMode; // an ApocalypseMode, APOCALYPSE_OFF = the retail game
 };
 
 extern GameInfo *TheGameInfo;
@@ -344,6 +359,7 @@ Bool        GameInfo::getProRules( void ) const             { return m_proRules;
 Int         GameInfo::getIncomeSharing( void ) const        { return m_incomeSharing; }
 Int         GameInfo::getTechRespawn( void ) const          { return m_techRespawn; }
 Int         GameInfo::getSupplyPileLimit( void ) const      { return m_supplyPileLimit; }
+Int         GameInfo::getApocalypseMode( void ) const       { return m_apocalypseMode; }
 
 AsciiString GameInfoToAsciiString( const GameInfo *game );
 Bool ParseAsciiStringToGameInfo( GameInfo *game, AsciiString options );

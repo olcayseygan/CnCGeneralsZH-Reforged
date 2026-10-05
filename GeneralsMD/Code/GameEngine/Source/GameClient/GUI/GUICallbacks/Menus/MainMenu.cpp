@@ -1466,18 +1466,10 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				checkCDBeforeCampaign(DIFFICULTY_NORMAL);
 				break;
 #endif
-				// Apocalypse leaves the way Skirmish does, into the LAN lobby: the skirmish room seats
-				// one human, and this mode is up to four of them, so even a game alone starts from there
-				if( controlID == apocalypseID )
-				{
-					LanLobbyApocalypse = TRUE;
-					TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
-				}
-				else
-				{
-					TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
-					TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_SKIRMISH_SELECTED]);
-				}
+				// Apocalypse is the skirmish room with the computer seats on the player's side
+				SkirmishApocalypse = controlID == apocalypseID;
+				TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
+				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_SKIRMISH_SELECTED]);
 			}
 			else if( controlID == onlineID )
 			{
@@ -1501,7 +1493,6 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				buttonPushed = TRUE;
 				dropDownWindows[DROPDOWN_MULTIPLAYER]->winHide(FALSE);
 				TheTransitionHandler->reverse("MainMenuMultiPlayerMenuTransitionToNext");
-				LanLobbyApocalypse = FALSE;
 				TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
 
 				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_NETWORK_SELECTED]);

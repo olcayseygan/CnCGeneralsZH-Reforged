@@ -42,7 +42,6 @@
 #include "Common/RandomValue.h"
 #include "Common/UserPreferences.h"
 #include "GameClient/GameText.h"
-#include "GameClient/GUICallbacks.h"
 #include "GameClient/LanguageFilter.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/MessageBox.h"
@@ -764,9 +763,8 @@ void LANAPI::OnGameCreate( ReturnType ret )
 {
 	if (ret == RET_OK)
 	{
-		// a game hosted from the Apocalypse lobby is an Apocalypse game, waves unless -apocalypse said otherwise
-		if (LanLobbyApocalypse)
-			m_currentGame->setApocalypseMode( TheGlobalData->m_apocalypseMode > APOCALYPSE_OFF ? TheGlobalData->m_apocalypseMode : APOCALYPSE_WAVES );
+		// a standard game unless -apocalypse said otherwise; the host's mode box changes it from here
+		m_currentGame->setApocalypseMode( TheGlobalData->m_apocalypseMode );
 
 		LANbuttonPushed = true;
 		TheShell->push( AsciiString("Menus/LanGameOptionsMenu.wnd") );

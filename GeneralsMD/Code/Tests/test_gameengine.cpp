@@ -9905,7 +9905,7 @@ TEST(two_copies_on_one_machine_each_get_their_own_lobby_address_and_name)
 	CHECK( TheGlobalData->m_skirmishLobbyOnStart );
 	CHECK( !TheGlobalData->m_shellMapOn );
 
-	// -apocalypselobby, the same for the Apocalypse lobby; -apocalypse names the mode, and its
+	// -apocalypselobby, the same for the skirmish room in Apocalypse mode; -apocalypse names the mode, and its
 	// name being the start of the other switch's must not make one stand in for the other
 	TheWritableGlobalData->m_shellMapOn = TRUE;
 	CHECK( !TheGlobalData->m_apocalypseLobby );
@@ -14764,6 +14764,18 @@ TEST(apocalypse_waves_grow_and_the_stream_speeds_up_to_a_floor)
 	CHECK_EQ( Apocalypse_streamInterval( 9, 4 ), 27u );
 	CHECK_EQ( Apocalypse_streamInterval( 10, 4 ), 21u );
 	CHECK_EQ( Apocalypse_streamInterval( 12, 4 ), 15u );
+
+	// a full lobby of eight: the first wave is 40, the stream hits its floor by level 9, and the live
+	// cap grows past four seats so wave 8's 208 is not cut down to 200
+	CHECK_EQ( Apocalypse_waveSize( 1, 8 ), 40 );
+	CHECK_EQ( Apocalypse_waveSize( 8, 8 ), 208 );
+	CHECK_EQ( Apocalypse_streamInterval( 1, 8 ), 37u );
+	CHECK_EQ( Apocalypse_streamInterval( 8, 8 ), 16u );
+	CHECK_EQ( Apocalypse_streamInterval( 9, 8 ), 15u );
+	CHECK_EQ( Apocalypse_maxLive( 1 ), 200 );
+	CHECK_EQ( Apocalypse_maxLive( 4 ), 200 );
+	CHECK_EQ( Apocalypse_maxLive( 5 ), 225 );
+	CHECK_EQ( Apocalypse_maxLive( 8 ), 300 );
 }
 
 #include "Common/SpecialPowerType.h"

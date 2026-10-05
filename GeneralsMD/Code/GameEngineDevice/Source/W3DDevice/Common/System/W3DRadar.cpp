@@ -37,8 +37,10 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 
+#include "GameLogic/Apocalypse.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/GameLogic.h"
+#include "GameNetwork/GameInfo.h"
 #include "GameLogic/Object.h"
 
 #include "GameClient/Color.h"
@@ -90,6 +92,15 @@ enum { LANDMARK_ICON_MIN_SIZE = 9 };
 // landmarks of one kind within this many cells of each other are drawn as the one place they are.
 //
 enum { LANDMARK_MERGE_CELLS = 6 };
+
+//
+// The Apocalypse zombie heat: radar cells per side of one heat cell, the alpha one zombie adds at
+// the middle of its blurred patch before the blur spreads it (about a seventh of it stays there),
+// and the most the haze may cover the ground with, so a horde never hides the dots inside it.
+//
+enum { ZOMBIE_HEAT_CELL = 4 };
+enum { ZOMBIE_HEAT_ALPHA_PER_ZOMBIE = 80 };
+enum { ZOMBIE_HEAT_MAX_ALPHA = 170 };
 
 //-------------------------------------------------------------------------------------------------
 /** Is the point legal, that is, inside the resolution of the radar cells */
@@ -762,6 +773,142 @@ void W3DRadar::drawIcons( Int pixelX, Int pixelY, Int width, Int height )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Would the screen drawn for this player show the object's dot: not under fog or shroud, not a
+	* local-only unit of somebody else, not an enemy in stealth that nobody has detected. */
+//-------------------------------------------------------------------------------------------------
+static Bool radarShowsObject( const Object *obj, Int playerIndex )
+{
+
+	if( obj->getShroudedStatus( playerIndex ) > OBJECTSHROUD_PARTIAL_CLEAR )
+		return FALSE;
+
+	//
+	// objects with a local only unit priority will only appear on the radar if they
+	// are controlled by the local player, or if the local player is an observer (cause
+	// they are godlike and can see everything)
+	//
+	if( obj->getRadarPriority() == RADAR_PRIORITY_LOCAL_UNIT_ONLY &&
+			obj->getControllingPlayer() != ThePlayerList->getLocalPlayer() &&
+			ThePlayerList->getLocalPlayer()->isPlayerActive() )
+		return FALSE;
+
+	// an enemy of whoever the screen is drawn for: the local player, or the followed one with fog on
+	if( obj->testStatus( OBJECT_STATUS_STEALTHED ) &&
+			ThePlayerList->getNthPlayer( playerIndex )->getRelationship( obj->getTeam() ) == ENEMIES &&
+			!obj->testStatus( OBJECT_STATUS_DETECTED ) && !obj->testStatus( OBJECT_STATUS_DISGUISED ) )
+		return FALSE;
+
+	return TRUE;
+
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Write one ARGB8888 colour into the locked overlay.  The overlay is A8R8G8B8 or, where that is
+	* missing, A4R4G4B4; Draw_Pixel keeps only the low 16 bits of the colour at two bytes a pixel,
+	* which on the 4444 texture is green and blue read as alpha and red, so pack it first. */
+//-------------------------------------------------------------------------------------------------
+static void drawOverlayPixel( Int x, Int y, Color c, UnsignedInt bytesPerPixel, void *bits, Int pitch )
+{
+	UnsignedInt color = (UnsignedInt)c;
+	if( bytesPerPixel == 2 )
+		color = ((color >> 28) << 12) | (((color >> 20) & 0xF) << 8) | (((color >> 12) & 0xF) << 4) | ((color >> 4) & 0xF);
+	SurfaceClass::Draw_Pixel( x, y, color, bytesPerPixel, bits, pitch );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One pass of a [1 2 1] filter over a w by h grid, along x when dx is 1 and along y when dy is,
+	* holding the edge cell at the border */
+//-------------------------------------------------------------------------------------------------
+static void blurZombieHeat( const Real *src, Real *dst, Int w, Int h, Int dx, Int dy )
+{
+	for( Int y = 0; y < h; y++ )
+	{
+		const Int ya = max( y - dy, 0 );
+		const Int yb = min( y + dy, h - 1 );
+		for( Int x = 0; x < w; x++ )
+		{
+			const Int xa = max( x - dx, 0 );
+			const Int xb = min( x + dx, w - 1 );
+			dst[ y * w + x ] = 0.25f * src[ ya * w + xa ] + 0.5f * src[ y * w + x ] + 0.25f * src[ yb * w + xb ];
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Apocalypse: paint where the zombies are thick as a red haze into the texture, under the dots
+	* renderObjectList draws after it.  The zombies the local screen could show a dot for are counted
+	* into a coarse grid, the grid is blurred twice each way and spread back over the radar's cells
+	* bilinearly, so a horde reads as one warm patch and a single straggler barely tints the ground. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::renderZombieHeat( TextureClass *texture )
+{
+	enum { HEAT_W = RADAR_CELL_WIDTH / ZOMBIE_HEAT_CELL, HEAT_H = RADAR_CELL_HEIGHT / ZOMBIE_HEAT_CELL };
+	Real heat[ HEAT_W * HEAT_H ];
+	Real scratch[ HEAT_W * HEAT_H ];
+	for( Int i = 0; i < HEAT_W * HEAT_H; i++ )
+		heat[ i ] = 0.0f;
+
+	const Int playerIndex = TheObserverCamera.getShroudPlayerIndex();
+	for( const RadarObject *rObj = getObjectList(); rObj; rObj = rObj->friend_getNext() )
+	{
+		const Object *obj = rObj->friend_getObject();
+		if( rObj->isTemporarilyHidden() ||
+				!Apocalypse_isZombiePlayer( obj->getControllingPlayer() ) ||
+				!radarShowsObject( obj, playerIndex ) )
+			continue;
+
+		// the same mapping renderObjectList puts the dot at, in heat cells instead of radar cells
+		const Coord3D *pos = obj->getPosition();
+		const Int x = REAL_TO_INT_FLOOR( pos->x / (m_mapExtent.width() / HEAT_W) );
+		const Int y = REAL_TO_INT_FLOOR( pos->y / (m_mapExtent.height() / HEAT_H) );
+		if( x >= 0 && y >= 0 && x < HEAT_W && y < HEAT_H )
+			heat[ y * HEAT_W + x ] += 1.0f;
+	}
+
+	for( Int pass = 0; pass < 2; pass++ )
+	{
+		blurZombieHeat( heat, scratch, HEAT_W, HEAT_H, 1, 0 );
+		blurZombieHeat( scratch, heat, HEAT_W, HEAT_H, 0, 1 );
+	}
+
+	SurfaceClass *surface = texture->Get_Surface_Level();
+	Int pitch;
+	void *bits = surface->Lock( &pitch );
+	const UnsignedInt bytesPerPixel = surface->Get_Bytes_Per_Pixel();
+
+	for( Int py = 0; py < RADAR_CELL_HEIGHT; py++ )
+	{
+		const Real fy = (py + 0.5f) / ZOMBIE_HEAT_CELL - 0.5f;
+		Int y0 = REAL_TO_INT_FLOOR( fy );
+		const Real ty = fy - y0;
+		const Int y1 = min( y0 + 1, HEAT_H - 1 );
+		y0 = max( y0, 0 );
+
+		for( Int px = 0; px < RADAR_CELL_WIDTH; px++ )
+		{
+			const Real fx = (px + 0.5f) / ZOMBIE_HEAT_CELL - 0.5f;
+			Int x0 = REAL_TO_INT_FLOOR( fx );
+			const Real tx = fx - x0;
+			const Int x1 = min( x0 + 1, HEAT_W - 1 );
+			x0 = max( x0, 0 );
+
+			const Real top = heat[ y0 * HEAT_W + x0 ] + tx * (heat[ y0 * HEAT_W + x1 ] - heat[ y0 * HEAT_W + x0 ]);
+			const Real bottom = heat[ y1 * HEAT_W + x0 ] + tx * (heat[ y1 * HEAT_W + x1 ] - heat[ y1 * HEAT_W + x0 ]);
+			const Int alpha = min( REAL_TO_INT( (top + ty * (bottom - top)) * ZOMBIE_HEAT_ALPHA_PER_ZOMBIE ),
+														 (Int)ZOMBIE_HEAT_MAX_ALPHA );
+			if( alpha <= 0 )
+				continue;
+
+			drawOverlayPixel( px, py, GameMakeColor( 255, 24, 16, alpha ), bytesPerPixel, bits, pitch );
+		}
+	}
+
+	surface->Unlock();
+	REF_PTR_RELEASE(surface);
+
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Render an object list into the texture passed in */
 //-------------------------------------------------------------------------------------------------
 void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *texture, Bool calcHero )
@@ -805,23 +952,9 @@ void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *text
 		{
 			m_cachedHeroPosList.push_back(*obj->getPosition());
 		}
-    Bool skip = FALSE;
 
-		// check for shrouded status
-		if (obj->getShroudedStatus(playerIndex) > OBJECTSHROUD_PARTIAL_CLEAR)
-			skip = TRUE;	//object is fogged or shrouded, don't render it.
-
- 		//
- 		// objects with a local only unit priority will only appear on the radar if they
- 		// are controlled by the local player, or if the local player is an observer (cause
-		// they are godlike and can see everything)
- 		//
-
-
- 		if( obj->getRadarPriority() == RADAR_PRIORITY_LOCAL_UNIT_ONLY &&
- 				obj->getControllingPlayer() != ThePlayerList->getLocalPlayer() &&
-				ThePlayerList->getLocalPlayer()->isPlayerActive() )
- 			skip = TRUE;
+		if( !radarShowsObject( obj, playerIndex ) )
+			continue;
 
 		// get object position
 		const Coord3D *pos = obj->getPosition();
@@ -830,34 +963,22 @@ void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *text
 		radarPoint.x = pos->x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
 		radarPoint.y = pos->y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
 
-
-    if ( skip )
-      continue;
-
     // get the color we're going to draw in
 		Color c = clientColor( rObj->getColor() );
 
-		
-		
+
+
 		// adjust the alpha for stealth units so they "fade/blink" on the radar for the controller
 		// if( obj->getRadarPriority() == RADAR_PRIORITY_LOCAL_UNIT_ONLY )
-		// ML-- What the heck is this? local-only and neutral-observier-viewed units are stealthy?? Since when?	
+		// ML-- What the heck is this? local-only and neutral-observier-viewed units are stealthy?? Since when?
 		// Now it twinkles for any stealthed object, whether locally controlled or neutral-observier-viewed
 		if( obj->testStatus( OBJECT_STATUS_STEALTHED ) )
 		{
-      // an enemy of whoever the screen is drawn for: the local player, or the followed one with fog on
-      if ( ThePlayerList->getNthPlayer( playerIndex )->getRelationship(obj->getTeam()) == ENEMIES )
-        if( !obj->testStatus( OBJECT_STATUS_DETECTED ) && !obj->testStatus( OBJECT_STATUS_DISGUISED ) )
-				  skip = TRUE;
-
 			UnsignedByte r, g, b, a;
 			GameGetColorComponents( c, &r, &g, &b, &a );
 
 			const UnsignedInt framesForTransition = LOGICFRAMES_PER_SECOND;
 			const UnsignedByte minAlpha = 32;
-			
-      if (skip)
-        continue;
 
 			Real alphaScale = INT_TO_REAL(TheGameLogic->getFrame() % framesForTransition) / (framesForTransition / 2.0f);
 			if( alphaScale > 0.0f )
@@ -873,19 +994,19 @@ void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *text
 		
 		// draw the blip, but make sure the points are legal
 		if( legalRadarPoint( radarPoint.x, radarPoint.y ) )
-			surface->Draw_Pixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
+			drawOverlayPixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
 
 		radarPoint.y++;
 		if( legalRadarPoint( radarPoint.x, radarPoint.y ) )
-			surface->Draw_Pixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
+			drawOverlayPixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
 
 		radarPoint.x++;
 		if( legalRadarPoint( radarPoint.x, radarPoint.y ) )
-			surface->Draw_Pixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
+			drawOverlayPixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
 
 		radarPoint.y--;
 		if( legalRadarPoint( radarPoint.x, radarPoint.y ) )
-			surface->Draw_Pixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
+			drawOverlayPixel( radarPoint.x, radarPoint.y, c, bytesPerPixel, surfaceBits, surfacePitch );
 
 	}  // end for
 	surface->Unlock();
@@ -1555,6 +1676,10 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 		SurfaceClass *surface = m_overlayTexture->Get_Surface_Level();
 		surface->Clear();
 		REF_PTR_RELEASE(surface);
+
+		// the zombie haze goes in first so every dot lands on top of it
+		if( Apocalypse_mode() != APOCALYPSE_OFF )
+			renderZombieHeat( m_overlayTexture );
 
 		// rebuild the object overlay
 		renderObjectList( getObjectList(), m_overlayTexture );

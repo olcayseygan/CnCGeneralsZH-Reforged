@@ -15638,19 +15638,19 @@ GUI:Apocalypse
 END
 
 GUI:ApocalypseToolTip
-"En fazla üç arkadaşınızla, arkası kesilmeyen zombilere karşı dayanın."
+"En fazla yedi bilgisayar müttefikiyle, arkası kesilmeyen zombilere karşı dayanın."
 END
 
-GUI:ApocalypseFlow
-"Zombi akışı"
+GUI:GameModeStandard
+"Standart oyun"
 END
 
 GUI:ApocalypseWaves
-"Dalgalar"
+"Kıyamet: dalgalar"
 END
 
 GUI:ApocalypseContinuous
-"Kesintisiz"
+"Kıyamet: kesintisiz"
 END
 
 GUI:ApocalypseWave

@@ -72,6 +72,8 @@
 #include "GameClient/Water.h"
 #include "GameClient/UiAnimClock.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/Apocalypse.h"
+#include "GameNetwork/GameInfo.h"	//APOCALYPSE_OFF
 #include "Common/GlobalData.h"
 #include "Common/GameLOD.h"
 #include "d3dx9runtime.h"
@@ -378,6 +380,76 @@ static void renderBloom(IDirect3DTexture9 *sceneTexture, Real x, Real y, Real w,
 	if (oldDepth) oldDepth->Release();
 }
 
+/*=========  Apocalypse dusk	=============================================================*/
+/// Direct3D 9's half of the dusk an Apocalypse match is drawn in.  Direct3D 11 runs the grade as the
+/// last pass of its post chain (dx11post.cpp); here it is the copy ScreenDefaultFilter makes of the
+/// scene, drawn through a pixel shader compiled from the same HLSL function, so both devices take
+/// the colour out, lay the haze and darken the corners by the same arithmetic.  Like the chain it
+/// runs before anything two dimensional, so the health bars and the command bar keep their colours.
+/// The fixed-function bloom is added after the copy and keeps its glow ungraded, a difference only
+/// where something burns.  Nothing off Windows: the grade's text lives in the Direct3D 11 library.
+
+#if defined(_WIN32)
+
+static IDirect3DPixelShader9 *s_duskShader = NULL;
+static LPD3DXBUFFER s_duskCode = NULL;	///< the ps_2_0 bytecode, kept for the run
+static Bool s_duskRefused = FALSE;	///< the compiler or the device said no once; it will say no again
+
+/// Follows the grade's own text.  The texture coordinate is the place on the screen, the tactical
+/// view covering the whole of it.
+static const char *const DUSK_D3D9_SHADER_BODY =
+	"sampler2D Scene : register(s0);\n"
+	"\n"
+	"float4 main(float2 at : TEXCOORD0) : COLOR0\n"
+	"{\n"
+	"    return float4(dusk_grade(tex2D(Scene, at).rgb, at), 1.0);\n"
+	"}\n";
+
+/** The grade's program when this frame wants it: an Apocalypse match drawn by Direct3D 9, which
+	means Direct3D 11 is not presenting and running the same grade in its own chain.  NULL for every
+	other frame, which is what keeps a normal game's copy the plain copy it always was. */
+static IDirect3DPixelShader9 *duskShaderForThisFrame(void)
+{
+	if (Direct3D11_Is_Active() || Apocalypse_mode() == APOCALYPSE_OFF || s_duskRefused)
+		return NULL;
+	if (s_duskShader)
+		return s_duskShader;
+
+	//Compiled once a run, on the first frame that wants it; a device reset only makes the shader
+	//again from the bytecode kept here, so no later frame pays the compiler.
+	if (s_duskCode == NULL)
+	{
+		AsciiString source = DX11Post_Dusk_Grade_Source();
+		source.concat(DUSK_D3D9_SHADER_BODY);
+		LPD3DXBUFFER errors = NULL;
+		const RenderResult result = D3DXCompileShader(source.str(), (unsigned int)source.getLength(), NULL, NULL,
+			"main", "ps_2_0", 0, &s_duskCode, &errors, NULL);
+		if (!Render_Succeeded(result))
+		{
+			DEBUG_LOG(("Apocalypse dusk: ps_2_0 compile refused - %s\n",
+								 errors ? (const char *)errors->GetBufferPointer() : "no D3DX"));
+			if (s_duskCode) { s_duskCode->Release(); s_duskCode = NULL; }
+		}
+		if (errors) errors->Release();
+	}
+	if (s_duskCode)
+		DX8Wrapper::_Get_D3D_Device()->CreatePixelShader((const RenderUInt32 *)s_duskCode->GetBufferPointer(), &s_duskShader);
+	s_duskRefused = (s_duskShader == NULL);
+	return s_duskShader;
+}
+
+static void releaseDuskShader(void)
+{
+	if (s_duskShader) { s_duskShader->Release(); s_duskShader = NULL; }
+}
+
+#else
+
+static IDirect3DPixelShader9 *duskShaderForThisFrame(void) { return NULL; }
+static void releaseDuskShader(void) {}
+
+#endif
+
 Int ScreenDefaultFilter::init(void)
 {
 	if (!W3DShaderManager::canRenderToTexture()) {
@@ -412,10 +484,10 @@ Int ScreenDefaultFilter::init(void)
 Bool ScreenDefaultFilter::preRender(Bool &skipRender, CustomScenePassModes &scenePassMode)
 {
 	//Right now this filter is only used for smudges, so don't bother if none are present -
-	//unless bloom is on, which needs the scene in a texture on every frame.
+	//unless bloom or the Apocalypse dusk is on, which need the scene in a texture on every frame.
 	//Called before the smudge check so the Direct3D 11 chain gets the option every frame.
 	const Int fixedBloom = fixedFunctionBloomIntensity();
-	if (TheSmudgeManager && fixedBloom == 0)
+	if (TheSmudgeManager && fixedBloom == 0 && duskShaderForThisFrame() == NULL)
 	{	if (((W3DSmudgeManager *)TheSmudgeManager)->getSmudgeCountLastFrame() == 0)
 			return FALSE;
 	}
@@ -466,7 +538,13 @@ Bool ScreenDefaultFilter::postRender(enum FilterModes mode, Coord2D &scrollDelta
 	//not worth bothering with index/vertex buffers.
 	DX8Wrapper::Set_Vertex_Format(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1);
 
+	//An Apocalypse match on Direct3D 9 grades the scene on its way back; any other frame copies it.
+	IDirect3DPixelShader9 *dusk = duskShaderForThisFrame();
+	if (dusk) DX8Wrapper::Set_Pixel_Shader(dusk);
+
 	DX8Wrapper::_Draw_DX8_Primitive_UP(D3DPT_TRIANGLESTRIP, 2, v, sizeof(_TRANS_LIT_TEX_VERTEX));
+
+	if (dusk) DX8Wrapper::Set_Pixel_Shader(NULL);
 
 	//v[3] is the top left corner of the viewport inside the scene texture, v[0] the bottom right
 	if (fixedFunctionBloomIntensity() > 0)
@@ -480,6 +558,7 @@ Bool ScreenDefaultFilter::postRender(enum FilterModes mode, Coord2D &scrollDelta
 Int ScreenDefaultFilter::shutdown(void)
 {
 	releaseBloomTargets();	//D3DPOOL_DEFAULT, so these do not survive a device reset
+	releaseDuskShader();
 	return TRUE;
 }
 

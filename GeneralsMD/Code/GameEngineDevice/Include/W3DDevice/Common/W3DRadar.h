@@ -99,6 +99,7 @@ protected:
 	void buildTerrainTexture( TerrainLogic *terrain );	 ///< create the terrain texture of the radar
 	void drawIcons( Int pixelX, Int pixelY, Int width, Int height );	///< draw all of the radar icons
 	void renderObjectList( const RadarObject *listHead, TextureClass *texture, Bool calcHero = FALSE );			 ///< render an object list to the texture
+	void renderZombieHeat( TextureClass *texture );	///< Apocalypse: zombie density as a red haze under the dots
 	void interpolateColorForHeight( RGBColor *color, 
 																	Real height, 
 																	Real hiZ, 

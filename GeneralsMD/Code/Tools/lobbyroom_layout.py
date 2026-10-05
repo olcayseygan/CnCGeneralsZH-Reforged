@@ -14,10 +14,11 @@ Play Game. Back goes bottom left, as far from Play Game as the panel allows. One
 EA's disabled caption colour measured 2.1:1 on the panel. Nothing is redrawn: every control keeps
 its art, only its rectangle moves.
 
-The LAN room also gets Apocalypse's zombie flow row, cloned from the peace time row and laid on top
-of it, both hidden. An Apocalypse game has a computer side, which turns peace time off anyway, so the
-menu code shows one pair or the other. The page has no free row with room for a label: every column
-is full and the third one is only wide enough for a check box.
+Both rooms also get a game mode box, cloned from starting cash, at the top right in line with the
+title and the map column. Neither settings page has a free row wide enough for "Apocalypse:
+continuous", and the header band right of the title is empty in both. It is hidden in the file: the
+LAN room shows it always (Standard or Apocalypse), the skirmish room only when the main menu's
+Apocalypse button opened it.
 
     python lobbyroom_layout.py <Menus dir in> <Menus dir out>
 
@@ -115,11 +116,11 @@ LAN_SETTINGS = [
 ]
 LAN_SETTING_ROW_PITCH = 28
 LAN_SETTING_TOP_PADDING = 4
-# (the Apocalypse control, the peace time control it is cloned from and lies on, its caption)
-APOCALYPSE_FLOW = [
-    ("LabelApocalypseFlow", "LabelPeaceTime", "GUI:ApocalypseFlow"),
-    ("ComboBoxApocalypseFlow", "ComboBoxPeaceTime", None),
-]
+# the game mode box and the control it is cloned from; it sits on the map column's edges, centred
+# in the band between the frame top and the rule
+GAME_MODE, GAME_MODE_MODEL = "ComboBoxGameMode", "ComboBoxStartingCash"
+GAME_MODE_RECT = (MAP_LEFT, (FRAME[1] + RULE_TOP - ROW_HEIGHT) // 2, MAP_WIDTH, ROW_HEIGHT)
+GAME_MODE_DATA = "ISEDITABLE: 0, MAXCHARS: 48, MAXDISPLAY: 5, ASCIIONLY: 0, LETTERSANDNUMBERS: 0"
 
 STAT_ROWS = [
     ("StaticTextBestStreak", "StaticTextBestStreakValue"),
@@ -270,6 +271,7 @@ def build_skirmish(layout):
         label.place(label_left, top, value_left - label_left, ROW_HEIGHT)
         left_align(label)
         need(layout, value_name).place(value_left, top, STAT_VALUE_WIDTH, ROW_HEIGHT)
+    add_game_mode(layout, "SkirmishGameOptionsMenu")
     return layout
 
 
@@ -288,25 +290,25 @@ def build_lan(layout):
     need(layout, "ButtonEmote").place(INNER_RIGHT - EMOTE_WIDTH, entry_top, EMOTE_WIDTH, ROW_HEIGHT)
     place_settings(layout, LAN_SETTINGS, INNER_LEFT, INNER_RIGHT, PAGE_TOP, PAGE_TOP + listbox_height,
                    LAN_SETTING_ROW_PITCH, LAN_SETTING_TOP_PADDING)
-    add_apocalypse_flow(layout)
+    add_game_mode(layout, "LanGameOptionsMenu")
     return layout
 
 
-def add_apocalypse_flow(layout):
-    page = need(layout, "PageLobbySettings")
-    for name, model_name, text in APOCALYPSE_FLOW:
-        model = need(layout, model_name)
-        control = layout.find(name)
-        if control is None:
-            control = wndlayout.clone(model, "LanGameOptionsMenu.wnd:" + name)
-            control.children = []
-            if text is not None:
-                control.set_prop("TEXT", '"%s"' % text)
-            # the peace time tooltip would explain the wrong thing, and Waves or Continuous needs none
-            del control.props[control.prop_index("TOOLTIPTEXT")]
-            control.set_prop("STATUS", model.prop("STATUS").split("=")[1].strip(" ;") + "+HIDDEN")
-            page.children.append(control)
-        control.rect = model.rect
+def add_game_mode(layout, menu):
+    control = layout.find(GAME_MODE)
+    if control is None:
+        model = need(layout, GAME_MODE_MODEL)
+        control = wndlayout.clone(model, "%s.wnd:%s" % (menu, GAME_MODE))
+        control.children = []
+        # the starting cash tooltip would explain the wrong thing, and the entries say what they are
+        tooltip = control.prop_index("TOOLTIPTEXT")
+        if tooltip >= 0:
+            del control.props[tooltip]
+        control.set_prop("STATUS", model.prop("STATUS").split("=")[1].strip(" ;") + "+HIDDEN")
+        need(layout, ROOMS[menu]["container"]).children.append(control)
+    # the shown entry is cut to MAXCHARS, and starting cash's 16 would leave "Apocalypse: continuou"
+    control.set_prop("COMBOBOXDATA", GAME_MODE_DATA)
+    control.place(*GAME_MODE_RECT)
 
 
 BUILDERS = {"SkirmishGameOptionsMenu": build_skirmish, "LanGameOptionsMenu": build_lan}
@@ -351,22 +353,21 @@ def shared_edges(layout):
     return found
 
 
-def apocalypse_flow(layout):
-    """The flow row the menu code names, on the settings page, hidden, on top of peace time."""
+def game_mode(layout, container_name):
+    """The mode box the menu code names, in the room's container, hidden, at the top right."""
+    control = layout.find(GAME_MODE)
+    if control is None:
+        return ["no %s" % GAME_MODE]
     found = []
-    page = layout.find("PageLobbySettings")
-    for name, model_name, _text in APOCALYPSE_FLOW:
-        control = layout.find(name)
-        model = layout.find(model_name)
-        if control is None:
-            found.append("no %s" % name)
-            continue
-        if page is None or control not in page.children:
-            found.append("%s is not on the settings page" % name)
-        if "HIDDEN" not in (control.prop("STATUS") or ""):
-            found.append("%s is not hidden; peace time shows unless the game is Apocalypse" % name)
-        if model is not None and control.rect != model.rect:
-            found.append("%s does not lie on %s" % (name, model_name))
+    if control not in need(layout, container_name).children:
+        found.append("%s is not in %s" % (GAME_MODE, container_name))
+    if "HIDDEN" not in (control.prop("STATUS") or ""):
+        found.append("%s is not hidden; the menu code shows it" % GAME_MODE)
+    if GAME_MODE_DATA not in (control.prop("COMBOBOXDATA") or ""):
+        found.append("%s cuts its entries short; COMBOBOXDATA is not %s" % (GAME_MODE, GAME_MODE_DATA))
+    left, top, right, bottom = control.rect[:4]
+    if (left, top, right - left, bottom - top) != GAME_MODE_RECT:
+        found.append("%s is not at %s" % (GAME_MODE, (GAME_MODE_RECT,)))
     return found
 
 
@@ -385,8 +386,7 @@ def selfcheck():
             problems.append("%s.wnd no longer builds: %s" % (menu, error))
         problems.extend("%s.wnd: %s" % (menu, problem) for problem in overlaps(container, spec["swapped"]))
         problems.extend("%s.wnd: %s" % (menu, problem) for problem in shared_edges(layout))
-        if menu == "LanGameOptionsMenu":
-            problems.extend("%s.wnd: %s" % (menu, problem) for problem in apocalypse_flow(layout))
+        problems.extend("%s.wnd: %s" % (menu, problem) for problem in game_mode(layout, spec["container"]))
 
     for problem in problems:
         print("lobbyroom: %s" % problem)

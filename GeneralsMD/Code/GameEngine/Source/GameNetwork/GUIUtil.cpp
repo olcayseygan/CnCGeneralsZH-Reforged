@@ -697,6 +697,54 @@ Int SupplyPileLimitFromComboBox(GameWindow *comboBox)
 }
 
 // -----------------------------------------------------------------------------
+// Game mode: the retail game or one of Apocalypse's two zombie flows.
+static const char * theGameModeCaptions[ APOCALYPSE_COUNT ] =
+{
+  "GUI:GameModeStandard", "GUI:ApocalypseWaves", "GUI:ApocalypseContinuous"
+};
+
+void PopulateGameModeComboBox(GameWindow *comboBox, Int firstMode, GameInfo *myGame, Bool hostMayEdit)
+{
+  GadgetComboBoxReset(comboBox);
+
+  Color color = comboBox->winGetEnabled() ? comboBox->winGetEnabledTextColor() : comboBox->winGetDisabledTextColor();
+  for ( Int mode = firstMode; mode < APOCALYPSE_COUNT; mode++ )
+  {
+    Int newIndex = GadgetComboBoxAddEntry(comboBox, TheGameText->fetch( theGameModeCaptions[mode] ), color);
+    GadgetComboBoxSetItemData(comboBox, newIndex, (void *)(intptr_t)mode);
+  }
+
+  UpdateGameModeComboBox(comboBox, myGame, hostMayEdit);
+}
+
+void UpdateGameModeComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit)
+{
+  comboBox->winEnable( hostMayEdit );
+
+  Int itemCount = GadgetComboBoxGetLength(comboBox);
+  for ( Int index = 0; index < itemCount; index++ )
+  {
+    if ( (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, index) == myGame->getApocalypseMode() )
+    {
+      Int selected = -1;
+      GadgetComboBoxGetSelectedPos( comboBox, &selected );
+      if ( selected != index )
+        GadgetComboBoxSetSelectedPos(comboBox, index, TRUE);
+      return;
+    }
+  }
+}
+
+Int GameModeFromComboBox(GameWindow *comboBox)
+{
+  Int selIndex = -1;
+  GadgetComboBoxGetSelectedPos(comboBox, &selIndex);
+  if ( selIndex < 0 )
+    return -1;
+  return (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, selIndex);
+}
+
+// -----------------------------------------------------------------------------
 // The lobby tab strip.
 static GameWindow *theLobbySettingsPage = NULL;
 static GameWindow *theLobbyOtherWindow = NULL;

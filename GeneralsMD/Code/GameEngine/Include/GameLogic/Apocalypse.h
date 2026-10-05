@@ -77,4 +77,7 @@ extern Int Apocalypse_waveSize( Int wave, Int players );
 /** Frames between two zombies of the steady stream at level n (from 1) against this many players. */
 extern UnsignedInt Apocalypse_streamInterval( Int level, Int players );
 
+/** The most zombies alive at once against this many players; a spawn past it is skipped. */
+extern Int Apocalypse_maxLive( Int players );
+
 #endif // __APOCALYPSE_H_

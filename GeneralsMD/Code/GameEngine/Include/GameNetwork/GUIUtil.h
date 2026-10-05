@@ -103,6 +103,13 @@ void PopulateSupplyPileLimitComboBox(GameWindow *comboBox, GameInfo *myGame, Boo
 void UpdateSupplyPileLimitComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
 Int SupplyPileLimitFromComboBox(GameWindow *comboBox);
 
+// The game mode dropdown at the room's top right, an ApocalypseMode in each entry's item data,
+// travelling as AP.  The LAN room lists every mode from APOCALYPSE_OFF; the skirmish room in
+// Apocalypse mode starts at APOCALYPSE_WAVES.  -1 from the getter while nothing is selected.
+void PopulateGameModeComboBox(GameWindow *comboBox, Int firstMode, GameInfo *myGame, Bool hostMayEdit);
+void UpdateGameModeComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
+Int GameModeFromComboBox(GameWindow *comboBox);
+
 // The lobby's own tab strip: one page of host settings, and the window that page covers - the chat
 // log in the two network lobbies, the map info list in the skirmish one.  All three screens share
 // these because only one lobby is ever up, and because a tab strip written three times drifts.

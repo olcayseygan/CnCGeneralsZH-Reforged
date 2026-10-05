@@ -180,10 +180,7 @@ void LANDisableButtons();
 void LANDisplaySlotList( void );		///< Displays the slot list according to TheLANGameInfo
 void LANDisplayGameOptions( void );	///< Displays the game options according to TheLANGameInfo
 
-// An Apocalypse game seats this many players, all on one team; the seats past them stay closed.
-enum { APOCALYPSE_SEATS = 4 };
-
-AsciiString GenerateGameOptionsString( void );	///< also holds the host's game to the Apocalypse seating
+AsciiString GenerateGameOptionsString( void );	///< also puts an Apocalypse game's players on one team
 Bool ParseGameOptionsString(LANGameInfo *game, AsciiString options);
 
 

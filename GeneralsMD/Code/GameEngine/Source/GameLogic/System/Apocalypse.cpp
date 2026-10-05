@@ -66,9 +66,12 @@ static const Int APOCALYPSE_EDGE_STEPS = 10;
 static const Real APOCALYPSE_EDGE_STEP_FRACTION = 0.05f;
 static const Real APOCALYPSE_EDGE_SEARCH_RADIUS = 100.0f;
 
-// ponytail: one fixed cap on zombies alive, whatever the player count; scale it with the players if
-// four of them clear the field faster than it refills.
-static const Int APOCALYPSE_MAX_LIVE = 200;
+/// zombies alive at once: the floor holds up to four players, and each seat past the fourth adds a
+/// step, so eight players face 300 rather than a wave of 208 already pressed against 200
+// ponytail: a guess at what the engine carries next to eight bases, not a measured frame budget;
+// lower the step if an eight-player match crawls once the cap is full.
+static const Int APOCALYPSE_MAX_LIVE_FLOOR = 200;
+static const Int APOCALYPSE_MAX_LIVE_STEP = 25;
 
 static Int theMode = APOCALYPSE_OFF;
 static Int theWave = 0;										///< the wave, or the steady stream's level, last announced
@@ -89,6 +92,13 @@ UnsignedInt Apocalypse_streamInterval( Int level, Int players )
 {
 	const Int interval = (APOCALYPSE_STREAM_START - APOCALYPSE_STREAM_STEP * (level - 1)) / players;
 	return (UnsignedInt)(interval > APOCALYPSE_STREAM_FLOOR ? interval : APOCALYPSE_STREAM_FLOOR);
+}
+
+//-------------------------------------------------------------------------------------------------
+Int Apocalypse_maxLive( Int players )
+{
+	const Int cap = APOCALYPSE_MAX_LIVE_FLOOR + APOCALYPSE_MAX_LIVE_STEP * (players - 4);
+	return cap > APOCALYPSE_MAX_LIVE_FLOOR ? cap : APOCALYPSE_MAX_LIVE_FLOOR;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -205,8 +215,9 @@ static void spawnZombies( Int count )
 
 	Int live = 0;
 	zombies->countObjectsByThingTemplate( 1, &tmpl, TRUE, &live );
-	if( count > APOCALYPSE_MAX_LIVE - live )
-		count = APOCALYPSE_MAX_LIVE - live;
+	const Int maxLive = Apocalypse_maxLive( thePlayers );
+	if( count > maxLive - live )
+		count = maxLive - live;
 
 	FindPositionOptions options;
 	options.maxRadius = APOCALYPSE_SPREAD_RADIUS;

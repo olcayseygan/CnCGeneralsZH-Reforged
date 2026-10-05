@@ -46,6 +46,8 @@
 #include "Common/ThingTemplate.h"
 #include "Common/WellKnownKeys.h"
 
+#include "GameLogic/Apocalypse.h"
+#include "GameNetwork/GameInfo.h"	// APOCALYPSE_OFF
 #include "GameLogic/PolygonTrigger.h"
 #include "GameLogic/SidesList.h"
 
@@ -364,6 +366,26 @@ Real WorldHeightMap::getBilinearSampleSeismicZVelocity( Int x, Int y)
 
 
 
+/* An Apocalypse match is played at dusk, and the map's own lights are where it starts: every time of
+	day the map defines is scaled by these as it is read, so the terrain, the objects, the trees and
+	the props all darken through the paths that already light them.  The sun drops further than the
+	sky, which softens the shadows rather than deepening them, and green keeps a little more than red
+	and blue.  The colour taken out, the haze and the dark corners are the grade in dx11post.cpp.
+	The map is read again for every match and the chunk sets every value before this scales it, so
+	nothing carries into the next game.  No GameLogic code reads these lights. */
+static const RGBColor APOCALYPSE_DUSK_AMBIENT = { 0.80f, 0.86f, 0.78f };
+static const RGBColor APOCALYPSE_DUSK_DIFFUSE = { 0.58f, 0.63f, 0.56f };
+
+static void duskLight(GlobalData::TerrainLighting &light)
+{
+	light.ambient.red *= APOCALYPSE_DUSK_AMBIENT.red;
+	light.ambient.green *= APOCALYPSE_DUSK_AMBIENT.green;
+	light.ambient.blue *= APOCALYPSE_DUSK_AMBIENT.blue;
+	light.diffuse.red *= APOCALYPSE_DUSK_DIFFUSE.red;
+	light.diffuse.green *= APOCALYPSE_DUSK_DIFFUSE.green;
+	light.diffuse.blue *= APOCALYPSE_DUSK_DIFFUSE.blue;
+}
+
 /**
 * WorldHeightMap::ParseLightingDataChunk - read a global lights chunk.
 * Format is the newer CHUNKY format.
@@ -439,6 +461,14 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 			UnsignedInt shadowColor = file.readInt();
 			if (TheW3DShadowManager) {
 				TheW3DShadowManager->setShadowColor(shadowColor);
+			}
+		}
+		if (Apocalypse_mode() != APOCALYPSE_OFF) {
+			for (i=0; i<4; i++) {
+				for (Int j=0; j<MAX_GLOBAL_LIGHTS; j++) {
+					duskLight(TheWritableGlobalData->m_terrainLighting[i+TIME_OF_DAY_FIRST][j]);
+					duskLight(TheWritableGlobalData->m_terrainObjectsLighting[i+TIME_OF_DAY_FIRST][j]);
+				}
 			}
 		}
 	DEBUG_ASSERTCRASH(file.atEndOfChunk(), ("Unexpected data left over."));

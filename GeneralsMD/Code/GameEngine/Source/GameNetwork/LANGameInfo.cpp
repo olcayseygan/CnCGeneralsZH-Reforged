@@ -34,7 +34,6 @@
 #include "GameClient/GameInfoWindow.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GadgetListBox.h"
-#include "GameClient/GUICallbacks.h"
 #include "GameNetwork/LANGameInfo.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "Common/MultiplayerSettings.h"
@@ -227,10 +226,6 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 		
 		for (; gameList; gameList = gameList->getNext())
 		{
-			// the LAN lobby and the Apocalypse lobby are one screen over one list of games
-			if ((gameList->getApocalypseMode() != APOCALYPSE_OFF) != (LanLobbyApocalypse != FALSE))
-				continue;
-
 			UnicodeString txtGName;
 			txtGName = u"";
 			if( gameList->isGameInProgress() )
@@ -241,6 +236,12 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 			if( gameList->isGameInProgress() )
 			{
 				txtGName.concat(u"]");
+			}
+			// so a player looking for a zombie game can tell it from a match
+			if( gameList->getApocalypseMode() != APOCALYPSE_OFF )
+			{
+				txtGName.concat(u"  ");
+				txtGName.concat(TheGameText->fetch("GUI:Apocalypse"));
 			}
 			Int addedIndex = GadgetListBoxAddEntryText(gameListbox, txtGName, (gameList->isGameInProgress())?gameInProgressColor:gameColor, -1, -1);
 			GadgetListBoxSetItemData(gameListbox, (void *)gameList, addedIndex, 0 );
@@ -264,20 +265,15 @@ AsciiString GenerateGameOptionsString( void )
 		return AsciiString::TheEmptyString;
 
 	// Every options string the host sends comes through here, the periodic resend included, so this
-	// is the one place that keeps an Apocalypse game to its seating: the seats past the fourth shut
-	// and every player on team 1, whatever joined or changed since the last string went out.
+	// is the one place that keeps an Apocalypse game's players on team 1, whatever joined or changed
+	// since the last string went out.
 	LANGameInfo *game = TheLAN->GetMyGame();
 	if (game->getApocalypseMode() != APOCALYPSE_OFF)
 	{
 		for (Int i = 0; i < MAX_SLOTS; ++i)
 		{
 			GameSlot *slot = game->getSlot(i);
-			if (!slot->isOccupied())
-			{
-				if (i >= APOCALYPSE_SEATS)
-					slot->setState(SLOT_CLOSED);
-			}
-			else if (slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
+			if (slot->isOccupied() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
 				slot->setTeamNumber(0);
 		}
 	}

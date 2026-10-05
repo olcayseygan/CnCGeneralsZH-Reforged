@@ -13,25 +13,20 @@ WindowZH.big: the patch archives are loaded over the rest, so that is the layout
 It carries a Custom Mission button between Skirmish and Back, which the fork's code does not
 answer; it stays where the list puts it.
 
-The LAN lobby's title is unnamed in EA's LanLobbyMenu.wnd, and the Apocalypse lobby is that screen
-with another caption, so the title gets a name here and nothing else changes in that file.
-
     python bigfile.py extract ../../Run/PatchWindow.big "*MainMenu.wnd" -o wnd
-    python bigfile.py extract ../../Run/WindowZH.big "*LanLobbyMenu.wnd" -o wnd
     python mainmenu_layout.py wnd/Window/Menus ../Data/Window/Menus
 
-writes both masters.
+writes the master.
 
     python mainmenu_layout.py selfcheck
 
-reads the tracked files back: the button is there, under Skirmish, inside the dropdown, the list
-does not overlap itself or the logo, the lobby title has its name, and Patch.str has the strings.
+reads the tracked file back: the button is there, under Skirmish, inside the dropdown, the list
+does not overlap itself or the logo, and Patch.str has the strings.
 WindowTransitions.ini names every other button in the list and not this one, so it comes up with
 the dropdown instead of flashing in after Skirmish.
 """
 
 import os
-import re
 import sys
 
 import wndlayout
@@ -49,8 +44,6 @@ LOGO = "WinFactionSkirmish"
 FIRST_TOP, PITCH, HEIGHT = 116, 36, 34
 # EA's margins: the list ends 2 pixels inside its panel, the panel 8 inside the border
 LIST_MARGIN, BORDER_MARGIN = 2, 8
-
-LOBBY_TITLE_TEXT, LOBBY_TITLE = "GUI:LANLobby", "StaticTextTitle"
 
 STRINGS = ["GUI:Apocalypse", "GUI:ApocalypseToolTip"]
 
@@ -93,15 +86,7 @@ def build_main_menu(layout):
     return layout
 
 
-def build_lan_lobby(layout):
-    for node in layout.root.walk():
-        if re.search(r'"%s"' % LOBBY_TITLE_TEXT, node.prop("TEXT") or ""):
-            node.put_prop("NAME", '"LanLobbyMenu.wnd:%s"' % LOBBY_TITLE)
-            return layout
-    raise KeyError("LanLobbyMenu.wnd has no %s caption" % LOBBY_TITLE_TEXT)
-
-
-BUILDERS = {"MainMenu": build_main_menu, "LanLobbyMenu": build_lan_lobby}
+BUILDERS = {"MainMenu": build_main_menu}
 
 
 def read_strings():
@@ -137,8 +122,6 @@ def selfcheck():
 
     main_menu = wndlayout.load(os.path.join(MENUS, "MainMenu.wnd"))
     problems.extend(check_main_menu(main_menu))
-    if wndlayout.load(os.path.join(MENUS, "LanLobbyMenu.wnd")).find(LOBBY_TITLE) is None:
-        problems.append("LanLobbyMenu.wnd has no %s" % LOBBY_TITLE)
 
     for problem in problems:
         print("mainmenu: %s" % problem)

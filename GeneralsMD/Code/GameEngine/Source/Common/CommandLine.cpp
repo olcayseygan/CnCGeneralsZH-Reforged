@@ -2231,7 +2231,8 @@ Int parseSkirmishLobby(char *args[], int num)
 	return 1;
 }
 
-/* -apocalypselobby opens the Apocalypse lobby at startup.  Same shell map handling as -lanlobby. */
+/* -apocalypselobby opens the skirmish room in Apocalypse mode at startup.  Same shell map handling as
+	 -skirmishlobby. */
 Int parseApocalypseLobby(char *args[], int num)
 {
 	if (TheWritableGlobalData)

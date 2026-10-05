@@ -194,7 +194,6 @@ Data/Window/Html/Spectator.html
 Data/Window/Html/Tooltip.html
 Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
-Data/Window/Menus/LanLobbyMenu.wnd
 Data/Window/Menus/MainMenu.wnd
 Data/Window/Menus/OptionsMenu.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd

@@ -101,6 +101,11 @@
 #include "WW3D2/predlod.h"
 #include "WW3D2/ww3d.h"
 #include "WW3D2/dx11runtime.h"
+#if defined(_WIN32)
+#include "dx11post.h"	//DX11Post_Set_Dusk; the library is not built off Windows
+#endif
+#include "GameLogic/Apocalypse.h"
+#include "GameNetwork/GameInfo.h"	//APOCALYPSE_OFF
 
 #include "W3DDevice/GameClient/camerashakesystem.h"
 
@@ -2024,14 +2029,19 @@ void W3DView::draw( void )
 	Bool doExtraRender = false;
 	CustomScenePassModes customScenePassMode  = SCENE_PASS_DEFAULT;
 	Bool preRenderResult = false;
+	// A filter draws the unit the camera follows over its own output, unfiltered.  Under the
+	// default view in an Apocalypse match that output is the dusk grade on Direct3D 9, and the unit
+	// would stand out of the dusk in full colour, so there it is drawn with the rest of the scene.
+	// Decided once, since a failed postRender changes m_viewFilter between the hide and the redraw.
+	const Bool lockedDrawnOverFilter = m_viewFilter != FT_VIEW_DEFAULT || Apocalypse_mode() == APOCALYPSE_OFF;
 
-	if (m_viewFilterMode && 
-			m_viewFilter > FT_NULL_FILTER && 
+	if (m_viewFilterMode &&
+			m_viewFilter > FT_NULL_FILTER &&
 			m_viewFilter < FT_MAX)
-	{	
+	{
 		// Most likely will redirect rendering to a texture.
 		preRenderResult=W3DShaderManager::filterPreRender(m_viewFilter, skipRender, customScenePassMode);
-		if (!skipRender && getCameraLock()) 
+		if (!skipRender && lockedDrawnOverFilter && getCameraLock())
 		{
 			Object* cameraLockObj = TheGameLogic->findObjectByID(getCameraLock());
 			if (cameraLockObj) 
@@ -2080,10 +2090,10 @@ void W3DView::draw( void )
 									 (Int)m_viewFilter, (Int)m_viewFilterMode));
 			}
 		}
-		if (!skipRender && getCameraLock()) 
+		if (!skipRender && lockedDrawnOverFilter && getCameraLock())
 		{
 			Object* cameraLockObj = TheGameLogic->findObjectByID(getCameraLock());
-			if (cameraLockObj) 
+			if (cameraLockObj)
 			{
 				Drawable *drawable = cameraLockObj->getDrawable();
 				drawable->setDrawableHidden(false);
@@ -2363,6 +2373,11 @@ void W3DView::draw( void )
 #ifdef DEBUG_LOGGING
 	Int64 tPostChainStart, tPostChainEnd, tIconStart, tIconEnd;
 	tPostChainStart = Clock_Ticks();
+#endif
+#if defined(_WIN32)
+	// An Apocalypse match is drawn at dusk: the chain's last pass grades the world it hands over.
+	// Asked every frame, so the shell map after the match is back to the plain chain.
+	DX11Post_Set_Dusk( Apocalypse_mode() != APOCALYPSE_OFF );
 #endif
 	Direct3D11_Finish_Scene();
 #ifdef DEBUG_LOGGING

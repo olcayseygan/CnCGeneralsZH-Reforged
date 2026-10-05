@@ -15062,19 +15062,19 @@ GUI:Apocalypse
 END
 
 GUI:ApocalypseToolTip
-"Halte mit bis zu drei Freunden gegen Zombies durch, die nie aufhören zu kommen."
+"Halte mit bis zu sieben Computer-Verbündeten gegen Zombies durch, die nie aufhören zu kommen."
 END
 
-GUI:ApocalypseFlow
-"Zombiestrom"
+GUI:GameModeStandard
+"Standardspiel"
 END
 
 GUI:ApocalypseWaves
-"Wellen"
+"Apokalypse: Wellen"
 END
 
 GUI:ApocalypseContinuous
-"Durchgehend"
+"Apokalypse: durchgehend"
 END
 
 GUI:ApocalypseWave

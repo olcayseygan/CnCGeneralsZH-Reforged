@@ -78,6 +78,7 @@
 #endif
 
 SkirmishGameInfo *TheSkirmishGameInfo = NULL;
+Bool SkirmishApocalypse = FALSE;
 
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentSkirmishGameOptionsID = NAMEKEY_INVALID;
@@ -125,6 +126,7 @@ static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
+static NameKeyType comboBoxGameModeID = NAMEKEY_INVALID;
 
 // Window Pointers ------------------------------------------------------------------------
 static GameWindow *parentSkirmishGameOptions = NULL;
@@ -141,6 +143,7 @@ static GameWindow *checkBoxUnitLimit = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
+static GameWindow *comboBoxGameMode = NULL;
 static GameWindow *comboBoxPlayer[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
 																									 NULL,NULL,NULL,NULL };
 
@@ -1094,6 +1097,32 @@ static void handleSupplyPileLimitSelection()
     TheSkirmishGameInfo->setSupplyPileLimit( SupplyPileLimitFromComboBox( comboBoxSupplyPileLimit ) );
 }
 
+static void handleGameModeSelection()
+{
+  // emptying the box deselects it, and that must not read as a mode
+  const Int mode = GameModeFromComboBox( comboBoxGameMode );
+  if ( mode >= 0 )
+    TheSkirmishGameInfo->setApocalypseMode( mode );
+}
+
+// The room opened from the Apocalypse button: its title, the zombie flow box and no team column, since
+// GameLogic puts every seat, the computer ones included, on one team against the zombies.
+static void showApocalypseGadgets( void )
+{
+  GadgetStaticTextSetText( TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, TheNameKeyGenerator->nameToKey( "SkirmishGameOptionsMenu.wnd:StaticTextTitle" ) ),
+    TheGameText->fetch( SkirmishApocalypse ? "GUI:Apocalypse" : "GUI:Skirmish" ) );
+  comboBoxGameMode->winHide( !SkirmishApocalypse );
+  UpdateGameModeComboBox( comboBoxGameMode, TheSkirmishGameInfo, TRUE );
+
+  // ShowUnderlyingGUIElements puts the column back on every options update, and hides it for a
+  // campaign map, so this only ever hides
+  if ( !SkirmishApocalypse )
+    return;
+  TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, TheNameKeyGenerator->nameToKey( "SkirmishGameOptionsMenu.wnd:StaticTextTeam" ) )->winHide( TRUE );
+  for ( Int i = 0; i < MAX_SLOTS; ++i )
+    comboBoxTeam[i]->winHide( TRUE );
+}
+
 
 //-------------------------------------------------------------------------------------------------
 /** Initialize the Gadgets Options Menu */
@@ -1114,6 +1143,7 @@ void InitSkirmishGameGadgets( void )
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxIncomeSharing" ) );
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxTechRespawn" ) );
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxSupplyPileLimit" ) );
+  comboBoxGameModeID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxGameMode" ) );
 
 	// Initialize the pointers to our gadgets
 	parentSkirmishGameOptions = TheWindowManager->winGetWindowFromId( NULL, parentSkirmishGameOptionsID );
@@ -1152,6 +1182,9 @@ void InitSkirmishGameGadgets( void )
   DEBUG_ASSERTCRASH(comboBoxSupplyPileLimit, ("Could not find the comboBoxSupplyPileLimit"));
   if ( comboBoxSupplyPileLimit )
     PopulateSupplyPileLimitComboBox( comboBoxSupplyPileLimit, TheSkirmishGameInfo, TRUE );
+  // Apocalypse's two flows only: a standard skirmish is the other button on the main menu
+  comboBoxGameMode = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxGameModeID );
+  PopulateGameModeComboBox( comboBoxGameMode, APOCALYPSE_WAVES, TheSkirmishGameInfo, TRUE );
 
 	textEntryPlayerNameID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:TextEntryPlayerName" ) );
   textEntryPlayerName = TheWindowManager->winGetWindowFromId( NULL, textEntryPlayerNameID );
@@ -1347,6 +1380,8 @@ void updateSkirmishGameOptions( void )
   // see LanGameOptionsMenu: an amount from the player's INI that the list does not carry
   if ( index == itemCount )
     PopulateStartingCashComboBox( comboBoxStartingCash, TheSkirmishGameInfo );
+
+  showApocalypseGadgets();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1407,6 +1442,10 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	TheSkirmishGameInfo->setSlot(1, gSlot);
 
 	ParseAsciiStringToGameInfo(TheSkirmishGameInfo, prefs.getSlotList());
+	// the slot list carries the last game's mode; the button that opened the room decides it instead,
+	// waves unless -apocalypse 2 asked for the stream
+	TheSkirmishGameInfo->setApocalypseMode( !SkirmishApocalypse ? APOCALYPSE_OFF
+		: ( TheGlobalData->m_apocalypseMode == APOCALYPSE_CONTINUOUS ? APOCALYPSE_CONTINUOUS : APOCALYPSE_WAVES ) );
 	// -seed repeats a match set up here too, as it does -autoskirmish's (GameEngine.cpp): the same match from the
 	// same choices
 	TheSkirmishGameInfo->setSeed((TheGlobalData->m_fixedSeed >= 0) ? TheGlobalData->m_fixedSeed : Clock_Milliseconds_Coarse());
@@ -1673,6 +1712,10 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
         else if ( controlID == comboBoxSupplyPileLimitID )
         {
           handleSupplyPileLimitSelection();
+        }
+        else if ( controlID == comboBoxGameModeID )
+        {
+          handleGameModeSelection();
         }
         else
         {

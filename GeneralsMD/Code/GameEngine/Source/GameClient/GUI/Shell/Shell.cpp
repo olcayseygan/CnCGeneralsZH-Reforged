@@ -549,18 +549,13 @@ void Shell::showShell( Bool runInit )
 		TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
 	}
 
-	// -apocalypselobby: the same screen as the main menu's Apocalypse button opens, spent the same way
-	if( TheGlobalData->m_apocalypseLobby )
+	// -skirmishlobby: the same trick for the single-player staging room, spent the same way, and
+	// -apocalypselobby: that room as the main menu's Apocalypse button opens it.
+	if( TheGlobalData->m_skirmishLobbyOnStart || TheGlobalData->m_apocalypseLobby )
 	{
-		TheWritableGlobalData->m_apocalypseLobby = FALSE;
-		LanLobbyApocalypse = TRUE;
-		TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
-	}
-
-	// -skirmishlobby: the same trick for the single-player staging room, spent the same way.
-	if( TheGlobalData->m_skirmishLobbyOnStart )
-	{
+		SkirmishApocalypse = TheGlobalData->m_apocalypseLobby;
 		TheWritableGlobalData->m_skirmishLobbyOnStart = FALSE;
+		TheWritableGlobalData->m_apocalypseLobby = FALSE;
 		TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
 	}
 

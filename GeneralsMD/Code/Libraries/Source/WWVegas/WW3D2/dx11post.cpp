@@ -86,6 +86,56 @@ void DX11Post_Set_Bloom(float threshold, float intensity)
 	BloomIntensity = (intensity > 0.0f) ? intensity : 0.0f;
 }
 
+static bool DuskEnabled = false;
+
+void DX11Post_Set_Dusk(bool enabled)
+{
+	DuskEnabled = enabled;
+}
+
+// Apocalypse's dusk, the tunable part.  The lights of the map are dimmed before any of this sees the
+// frame (WorldHeightMap.cpp, APOCALYPSE_DUSK_*), so this pass does not darken the middle of the
+// screen at all: it takes colour out, tints what is left, lays the haze over the far ground and
+// darkens the corners, where the minimap and the command bar sit anyway.
+//
+// The haze goes by height on the screen rather than by depth.  The tactical camera looks down at the
+// ground from the south, so the top of the screen is the far ground on every map, and the Direct3D 9
+// screen filter that draws the same grade has no depth to read.
+static const char * const DUSK_GRADE_SOURCE =
+	"static const float3 DUSK_LUMINANCE = float3(0.299, 0.587, 0.114);\n"
+	// How much of its own colour a pixel keeps: one is all of it, zero is grey.
+	"static const float DUSK_SATURATION = 0.6;\n"
+	// Multiplied in once the colour is out: a little less red and blue than green.
+	"static const float3 DUSK_TINT = float3(0.93, 1.0, 0.90);\n"
+	// The haze's colour, and how much of the picture it takes: the floor everywhere, rising to the
+	// top value at the top edge across the top reach of the screen.
+	"static const float3 DUSK_HAZE_COLOUR = float3(0.38, 0.42, 0.36);\n"
+	"static const float DUSK_HAZE_FLOOR = 0.06;\n"
+	"static const float DUSK_HAZE_TOP = 0.38;\n"
+	"static const float DUSK_HAZE_REACH = 0.6;\n"
+	// How dark a corner goes, and where between the centre (0) and a corner (1) the darkening starts
+	// and where it is complete.
+	"static const float DUSK_VIGNETTE_STRENGTH = 0.45;\n"
+	"static const float DUSK_VIGNETTE_INNER = 0.45;\n"
+	"static const float DUSK_VIGNETTE_OUTER = 1.0;\n"
+	"\n"
+	"float3 dusk_grade(float3 colour, float2 at)\n"
+	"{\n"
+	"    float grey = dot(colour, DUSK_LUMINANCE);\n"
+	"    colour = lerp(float3(grey, grey, grey), colour, DUSK_SATURATION) * DUSK_TINT;\n"
+	"    float haze = DUSK_HAZE_FLOOR\n"
+	"        + (DUSK_HAZE_TOP - DUSK_HAZE_FLOOR) * saturate(1.0 - at.y / DUSK_HAZE_REACH);\n"
+	"    colour = lerp(colour, DUSK_HAZE_COLOUR, haze);\n"
+	"    float edge = smoothstep(DUSK_VIGNETTE_INNER, DUSK_VIGNETTE_OUTER,\n"
+	"        length(at - 0.5) * 1.41421356);\n"
+	"    return colour * (1.0 - DUSK_VIGNETTE_STRENGTH * edge);\n"
+	"}\n";
+
+const char * DX11Post_Dusk_Grade_Source()
+{
+	return DUSK_GRADE_SOURCE;
+}
+
 // How dark a fully occluded pixel goes, how far a neighbour may be in front before it counts as a
 // different object rather than a corner, and how wide the ring reaches at one unit of depth.  The
 // clip planes come from the frame itself.
@@ -342,6 +392,14 @@ static const char * const BLOOM_COMPOSITE_SHADER_BODY =
 	"    return float4(tone_curve(scene + glow * Tuning.y), 1.0);\n"
 	"}\n";
 
+// Follows DUSK_GRADE_SOURCE in the program.  The texture coordinate is the place on the screen,
+// since every pass here covers the whole of it.
+static const char * const DUSK_SHADER_BODY =
+	"float4 main(VertexOutput input) : SV_TARGET\n"
+	"{\n"
+	"    return float4(dusk_grade(Source.Sample(Sampler, input.Texture).rgb, input.Texture), 1.0);\n"
+	"}\n";
+
 static D3DCompileFunction compiler_function()
 {
 	static D3DCompileFunction compiler = NULL;
@@ -460,6 +518,7 @@ DX11PostProcessClass::DX11PostProcessClass()
 	, FarPlane(1200.0f)
 	, BloomBlurShader(NULL)
 	, BloomCompositeShader(NULL)
+	, DuskShader(NULL)
 	, Sampler(NULL)
 	, BlendState(NULL)
 	, DepthState(NULL)
@@ -515,6 +574,7 @@ void DX11PostProcessClass::Shutdown()
 	release_interface(reinterpret_cast<IUnknown **>(&DepthState));
 	release_interface(reinterpret_cast<IUnknown **>(&BlendState));
 	release_interface(reinterpret_cast<IUnknown **>(&Sampler));
+	release_interface(reinterpret_cast<IUnknown **>(&DuskShader));
 	release_interface(reinterpret_cast<IUnknown **>(&BloomCompositeShader));
 	release_interface(reinterpret_cast<IUnknown **>(&BloomBlurShader));
 	release_interface(reinterpret_cast<IUnknown **>(&BloomExtractShader));
@@ -591,6 +651,11 @@ bool DX11PostProcessClass::Create_Shaders()
 			return false;
 		}
 	}
+
+	// The dusk is on its own: a grade the compiler refuses leaves DuskShader null, which Finish reads
+	// as no dusk, and costs Apocalypse its look rather than every match its chain.
+	compile_pixel_shader(compiler, device,
+		(std::string(DUSK_GRADE_SOURCE) + DUSK_SHADER_BODY).c_str(), &DuskShader);
 
 	return compile_pixel_shader(compiler, device, TONE_MAP_SHADER_BODY, &ToneMapShader)
 		&& compile_pixel_shader(compiler, device, BLOOM_EXTRACT_SHADER_BODY, &BloomExtractShader)
@@ -903,12 +968,16 @@ bool DX11PostProcessClass::Finish(const DX11PostEffect * effects, unsigned count
 		return false;
 	}
 
+	// With the dusk on, the last effect writes a chain target rather than the screen and the grade
+	// takes it from there.  Off, every branch below is the one it always was.
+	const bool dusk = DuskEnabled && DuskShader != NULL;
+
 	unsigned first = 0;
 	ID3D11ShaderResourceView * source = SceneTarget.Resource;
 	if (effects[0] == DX11_POST_BLOOM) {
 		// Bloom is the only effect that reads the half float scene, and the frame is eight bits by
 		// the time it hands over. If it is also the last thing in the chain it writes the screen.
-		const bool alone = (count == 1);
+		const bool alone = (count == 1) && !dusk;
 		ID3D11RenderTargetView * bloom_destination = alone ? back_buffer : ChainTargets[0].View;
 		if (BloomIntensity > 0.0f) {
 			source = Run_Bloom(bloom_destination);
@@ -945,7 +1014,7 @@ bool DX11PostProcessClass::Finish(const DX11PostEffect * effects, unsigned count
 	pass.SourceWidth = Width;
 	pass.SourceHeight = Height;
 	for (unsigned index = first; index < count; ++index) {
-		const bool last = (index + 1 == count);
+		const bool last = (index + 1 == count) && !dusk;
 		pass.Shader = PixelShaders[effects[index]];
 		// The occlusion pass is the one effect that reads something other than the frame: the
 		// frame's own depth, which the device keeps as a texture as well as a depth buffer.
@@ -956,6 +1025,15 @@ bool DX11PostProcessClass::Finish(const DX11PostEffect * effects, unsigned count
 		Draw_Pass(pass);
 		source = ChainTargets[destination].Resource;
 		destination = 1 - destination;
+	}
+
+	if (dusk) {
+		pass.Shader = DuskShader;
+		pass.Extra = NULL;
+		pass.Occlusion = false;
+		pass.Source = source;
+		pass.Destination = back_buffer;
+		Draw_Pass(pass);
 	}
 
 	Resolved = true;

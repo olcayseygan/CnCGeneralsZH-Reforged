@@ -108,6 +108,19 @@ const char * DX11Post_Effect_Name(DX11PostEffect effect);
 // runs at the values it was tuned at, which is what the tests measure.
 void DX11Post_Set_Bloom(float threshold, float intensity);
 
+// Apocalypse mode's dusk: the finished world desaturated toward a grey green, a haze that thickens
+// toward the top of the screen, which in this camera is the far ground, and the corners darkened.
+// One more pass at the end of the chain, so it needs a chain: "-dx11post off" turns it off with the
+// rest.  The game sets it every frame from the match it is drawing; off, the chain is the chain it
+// always was.  W3DView calls this, nothing here knows what a game mode is.
+void DX11Post_Set_Dusk(bool enabled);
+
+// The grade itself as one HLSL function, float3 dusk_grade(float3 colour, float2 at), with at the
+// place on the screen from (0,0) at the top left to (1,1) at the bottom right.  It is plain enough
+// for ps_2_0 as well as ps_4_0, so the Direct3D 9 screen filter compiles this same text and the two
+// devices draw the same dusk.  Its strengths are the DUSK_ constants at the top of the text.
+const char * DX11Post_Dusk_Grade_Source();
+
 class DX11PostProcessClass
 {
 public:
@@ -197,6 +210,7 @@ private:
 	ID3D11PixelShader * BloomExtractShader;
 	ID3D11PixelShader * BloomBlurShader;
 	ID3D11PixelShader * BloomCompositeShader;
+	ID3D11PixelShader * DuskShader;
 	ID3D11SamplerState * Sampler;
 	ID3D11BlendState * BlendState;
 	ID3D11DepthStencilState * DepthState;

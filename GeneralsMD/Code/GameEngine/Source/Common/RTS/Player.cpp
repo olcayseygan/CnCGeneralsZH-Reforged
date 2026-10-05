@@ -85,6 +85,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/AISkirmishPlayer.h"
+#include "GameLogic/Apocalypse.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Scripts.h"
@@ -835,7 +836,10 @@ void Player::setPlayerType(PlayerType t, Bool skirmish)
 	}
 	m_ai = NULL;
 
-	if (t == PLAYER_COMPUTER)
+	// The zombie side is a computer player so that its units chase and pick buildings the computer's
+	// way, but it gets no AIPlayer: even a plain one scouts, retreats and regroups what its side owns,
+	// which takes zombies off the hunt Apocalypse_tick sends them on.
+	if (t == PLAYER_COMPUTER && !Apocalypse_isZombiePlayer(this))
 	{
 		if (skirmish || TheAI->getAiData()->m_forceSkirmishAI) {
 			// create AIPlayer and attach to this Player

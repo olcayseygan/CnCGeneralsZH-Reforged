@@ -550,13 +550,15 @@ void Shell::showShell( Bool runInit )
 	}
 
 	// -skirmishlobby: the same trick for the single-player staging room, spent the same way, and
-	// -apocalypselobby: that room as the main menu's Apocalypse button opens it.
+	// -apocalypselobby: that room as the main menu's Apocalypse button opens it.  The main menu goes
+	// immediately: its animated way out waits on MainMenuUpdate, and on the frame it was pushed that
+	// wait never ended, so the room was never opened.
 	if( TheGlobalData->m_skirmishLobbyOnStart || TheGlobalData->m_apocalypseLobby )
 	{
 		SkirmishApocalypse = TheGlobalData->m_apocalypseLobby;
 		TheWritableGlobalData->m_skirmishLobbyOnStart = FALSE;
 		TheWritableGlobalData->m_apocalypseLobby = FALSE;
-		TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
+		TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd"), TRUE );
 	}
 
 	// -optionsmenu: the options layout over the main menu, opened the way the main menu's button opens it

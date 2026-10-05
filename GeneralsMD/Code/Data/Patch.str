@@ -1302,7 +1302,7 @@ GUI:Apocalypse
 END
 
 GUI:ApocalypseToolTip
-"Hold out with up to seven computer allies against zombies that never stop coming."
+"Hold out against zombies."
 END
 
 GUI:GameModeStandard

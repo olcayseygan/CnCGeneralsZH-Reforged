@@ -1607,11 +1607,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		TheSidesList->addTeam(&d);
 	//}
 
-	/* Apocalypse mode's zombie side.  Not a seat, so nothing places a base or a dozer for it.  Marked
-		 human the way a takeover seat is, so no AIPlayer is made for it: even a plain one scouts, retreats
-		 and fights with whatever its side owns, and that took zombies off the hunt Apocalypse_tick sent
-		 them on.  The local player is never this one - ReplayObserver comes first.  It is the enemy of
-		 every seat, and every seat names it an enemy too, because a relationship is one player's view of
+	/* Apocalypse mode's zombie side.  Not a seat, so nothing places a base or a dozer for it.  A
+		 computer player with no AIPlayer behind it (Player::setPlayerType): a human side's units do not
+		 chase what they pick up on their own and never pick an unarmed building, which left every wave
+		 standing at the spawn.  The local player is never this one - ReplayObserver comes first.  It is
+		 the enemy of every seat, and every seat names it an enemy too, because a relationship is one player's view of
 		 another.  Its start index is the start position it comes from, where an allied AI sent after it
 		 should go; -1 when it comes in from the edge, which every reader takes as no position. */
 	if (game && Apocalypse_mode() != APOCALYPSE_OFF)
@@ -1632,7 +1632,6 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 
 		Dict zombies;
 		zombies.setAsciiString(TheKey_playerName, APOCALYPSE_PLAYER_NAME);
-		zombies.setBool(TheKey_playerIsHuman, TRUE);
 		zombies.setUnicodeString(TheKey_playerDisplayName, UnicodeString(u"Zombies"));
 		zombies.setAsciiString(TheKey_playerFaction, "FactionGLA");
 		zombies.setAsciiString(TheKey_playerAllies, AsciiString::TheEmptyString);

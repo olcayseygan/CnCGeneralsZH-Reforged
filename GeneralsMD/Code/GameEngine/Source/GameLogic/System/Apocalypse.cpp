@@ -19,7 +19,8 @@
 // FILE: Apocalypse.cpp //////////////////////////////////////////////////////////////////////////
 //
 // Apocalypse mode's zombies.  Everything here runs inside the logic frame on every machine, so it
-// reads the frame number and the logic random stream and nothing else that could differ.
+// reads the frame number, the logic random stream and logic state (the objects, the per-player
+// shroud the partition manager keeps and CRCs every frame) and nothing else that could differ.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,12 +36,17 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/Apocalypse.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LogicRandomValue.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScenarioDrill.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameInfo.h"
+#include "Lib/Trig.h"
+
+#include <algorithm>
 
 /// the players get this long to put a base up before anything arrives
 static const UnsignedInt APOCALYPSE_FIRST_SPAWN_FRAME = 120 * LOGICFRAMES_PER_SECOND;
@@ -57,14 +63,20 @@ static const Int APOCALYPSE_STREAM_STEP = 24;
 static const Int APOCALYPSE_STREAM_FLOOR = LOGICFRAMES_PER_SECOND / 2;
 static const UnsignedInt APOCALYPSE_STREAM_LEVEL = 60 * LOGICFRAMES_PER_SECOND;
 
-/// how far from the spawn point a zombie may stand when it arrives
+/// how far from the spawn spot a zombie may stand when it arrives
 static const Real APOCALYPSE_SPREAD_RADIUS = 150.0f;
 
-/// a full map's spawn: from the far corner, this many probes a twentieth of the way to the players
-/// each, every one looking this far round itself for a clear cell
-static const Int APOCALYPSE_EDGE_STEPS = 10;
-static const Real APOCALYPSE_EDGE_STEP_FRACTION = 0.05f;
-static const Real APOCALYPSE_EDGE_SEARCH_RADIUS = 100.0f;
+/// where a group rises: CANDIDATES spots round one of the visited seat's objects, the first RING_MIN
+/// away and each next one a step further out to RING_MAX, every one at a random bearing.  The
+/// nearest that no seat can see and that stands RING_MIN clear of every seat's objects wins (an
+/// object with no sight range, or one a hill blinds, can have fog right beside it); when none
+/// qualifies, the one farthest from all the seats' objects does.  Each spot is moved to a clear cell
+/// within CLEAR_SEARCH of it first.  ANCHORS objects get their ring walked before that fallback.
+static const Real APOCALYPSE_RING_MIN = 300.0f;
+static const Real APOCALYPSE_RING_MAX = 1200.0f;
+static const Int APOCALYPSE_RING_CANDIDATES = 32;
+static const Int APOCALYPSE_RING_ANCHORS = 4;
+static const Real APOCALYPSE_CLEAR_SEARCH = 60.0f;
 
 /// zombies alive at once: the floor holds up to four players, and each seat past the fourth adds a
 /// step, so eight players face 300 rather than a wave of 208 already pressed against 200
@@ -76,9 +88,7 @@ static const Int APOCALYPSE_MAX_LIVE_STEP = 25;
 static Int theMode = APOCALYPSE_OFF;
 static Int theWave = 0;										///< the wave, or the steady stream's level, last announced
 static Int thePlayers = 1;									///< the non-observer seats, which size the waves
-static Bool theSpawnChosen = FALSE;					///< theSpawnPoint holds the answer; until then the edge search is still to run
-static Coord3D theSpawnPoint;
-static Coord3D theCentroid;									///< the middle of the seats' start positions
+static Int theTurn = 0;										///< zombies raised so far, which says whose turn it is next
 static UnsignedInt theNextSpawnFrame = 0;
 
 //-------------------------------------------------------------------------------------------------
@@ -102,14 +112,12 @@ Int Apocalypse_maxLive( Int players )
 }
 
 //-------------------------------------------------------------------------------------------------
-void Apocalypse_newGame( Int mode )
+void Apocalypse_newGame( const GameInfo *game )
 {
-	theMode = mode;
+	theMode = game ? game->getApocalypseMode() : APOCALYPSE_OFF;
 	theWave = 0;
-	thePlayers = 1;
-	theSpawnChosen = FALSE;
-	theSpawnPoint.zero();
-	theCentroid.zero();
+	thePlayers = game ? game->getNumNonObserverPlayers() : 1;
+	theTurn = 0;
 	theNextSpawnFrame = APOCALYPSE_FIRST_SPAWN_FRAME;
 }
 
@@ -125,89 +133,132 @@ Bool Apocalypse_isZombiePlayer( const Player *player )
 	return theMode != APOCALYPSE_OFF && player->getPlayerNameKey() == NAMEKEY( APOCALYPSE_PLAYER_NAME );
 }
 
-//-------------------------------------------------------------------------------------------------
-static Waypoint *startWaypoint( Int startPos )
+/// a seat still in the match - human or computer - and what it has on the field
+struct ApocalypseSeat
 {
-	AsciiString name;
-	name.format( "Player_%d_Start", startPos + 1 );	// start waypoints are 1-based
-	return TheTerrainLogic->getWaypointByName( name );
+	Player *player;
+	std::vector<Object *> objects;
+};
+
+//-------------------------------------------------------------------------------------------------
+static void collectSeatObject( Object *obj, void *userData )
+{
+	// a shell in flight or a radar scan's marker is not where anybody stands
+	if( !obj->isKindOf( KINDOF_PROJECTILE ) && !obj->isKindOf( KINDOF_INERT ) && !obj->isEffectivelyDead() )
+		((std::vector<Object *> *)userData)->push_back( obj );
 }
 
-/** The zombies come from the free start position farthest from the players, which on a map built
-	  for more players than the lobby holds is somebody's empty base: open ground the map maker
-	  already made reachable.  A full map has none, and then they come from the corner of the map
-	  farthest from the players, resolved on the first tick (edgeSpawnPoint). */
-Int Apocalypse_chooseSpawnPoint( const GameInfo *game )
+//-------------------------------------------------------------------------------------------------
+static bool objectIDLess( const Object *a, const Object *b )
 {
-	Bool taken[ MAX_SLOTS ];
-	for( Int k = 0; k < MAX_SLOTS; ++k )
-		taken[ k ] = FALSE;
+	return a->getID() < b->getID();
+}
 
-	theCentroid.zero();
-	thePlayers = 0;
-	for( Int i = 0; i < MAX_SLOTS; ++i )
+/** Every seat the zombies hunt that is still in it: computer seats too, which a headless run is made
+	  of.  An observer, and a seat already defeated, sees the whole map revealed, so neither may take
+	  part in the test of who can see a spot. */
+static void findSeats( Player *zombies, std::vector<ApocalypseSeat> &seats )
+{
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 	{
-		const GameSlot *slot = game->getConstSlot( i );
-		if( !slot->isOccupied() || slot->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER )
+		Player *player = ThePlayerList->getNthPlayer( i );
+		if( zombies->getRelationship( player->getDefaultTeam() ) != ENEMIES || !player->isPlayerActive() ||
+				TheVictoryConditions->hasSinglePlayerBeenDefeated( player ) )
 			continue;
 
-		taken[ slot->getStartPos() ] = TRUE;
-		theCentroid.add( startWaypoint( slot->getStartPos() )->getLocation() );
-		++thePlayers;
+		seats.push_back( ApocalypseSeat() );
+		seats.back().player = player;
+		player->iterateObjects( collectSeatObject, &seats.back().objects );
+		if( seats.back().objects.empty() )
+			seats.pop_back();
+		else	// a loaded save rebuilds the team lists in load order, so the random anchor draw goes by ID
+			std::sort( seats.back().objects.begin(), seats.back().objects.end(), objectIDLess );
 	}
-	theCentroid.scale( 1.0f / thePlayers );
+}
 
-	Int start = -1;
-	Real farthest = -1.0f;
-	for( Int k = 0; k < MAX_SLOTS; ++k )
+/** Somebody can see this point right now.  Each seat's shroud already carries its allies' eyes
+	  (Object::look reveals for every ally), so asking every seat covers shared vision. */
+static Bool seenBySeat( const std::vector<ApocalypseSeat> &seats, Real x, Real y )
+{
+	Coord3D pos;
+	pos.set( x, y, 0.0f );
+	for( size_t i = 0; i < seats.size(); ++i )
 	{
-		Waypoint *waypoint = taken[ k ] ? NULL : startWaypoint( k );
-		if( waypoint == NULL )
-			continue;
+		if( ThePartitionManager->getShroudStatusForPlayer( seats[ i ].player->getPlayerIndex(), &pos ) == CELLSHROUD_CLEAR )
+			return TRUE;
+	}
+	return FALSE;
+}
 
-		const Real dx = waypoint->getLocation()->x - theCentroid.x;
-		const Real dy = waypoint->getLocation()->y - theCentroid.y;
-		if( dx * dx + dy * dy > farthest )
+//-------------------------------------------------------------------------------------------------
+static Real nearestSeatDistSqr( const std::vector<ApocalypseSeat> &seats, const Coord3D *pos )
+{
+	Real nearest = FLT_MAX;
+	for( size_t i = 0; i < seats.size(); ++i )
+	{
+		for( size_t k = 0; k < seats[ i ].objects.size(); ++k )
 		{
-			farthest = dx * dx + dy * dy;
-			theSpawnPoint = *waypoint->getLocation();
-			start = k;
+			const Coord3D *at = seats[ i ].objects[ k ]->getPosition();
+			const Real d = (at->x - pos->x) * (at->x - pos->x) + (at->y - pos->y) * (at->y - pos->y);
+			if( d < nearest )
+				nearest = d;
 		}
 	}
-	theSpawnChosen = start >= 0;
-	DEBUG_LOG(( "APOCALYPSE: mode %d, %d players, zombies start at position %d (%.0f,%.0f)\n",
-							theMode, thePlayers, start, theSpawnPoint.x, theSpawnPoint.y ));
-	return start;
+	return nearest;
 }
 
-/** The corner of the playable area farthest from the players is often a cliff or the impassable rim
-	  the map maker painted round the edge, and a zombie standing there never reaches anybody.  So the
-	  search walks from the corner towards the players and takes the first clear cell it meets. */
-// ponytail: a clear cell is not proof of a road to the players (a walled-off plateau passes);
-// a path query with the zombie's locomotor would be, if a map turns up that needs it.
-static Coord3D edgeSpawnPoint( void )
+/** Where a group rises near this seat: round one of its objects picked at random, so a base and an
+	  army in the field both get visited, on a ring walked outwards until a clear cell nobody sees.
+	  An object in the middle of the seats' combined sight gets no such cell, so up to ANCHORS of
+	  them are tried before the farthest spot of all their rings is taken. */
+// ponytail: a clear cell is not proof of a road to the seat (a walled-off plateau passes), and when
+// not one candidate finds a clear cell the group rises on the first anchor itself; a path query with
+// the zombie's locomotor would settle both, if a map turns up that needs it.
+static Coord3D spawnSpotNear( const std::vector<ApocalypseSeat> &seats, const ApocalypseSeat &seat )
 {
-	const Coord3D corner = TheTerrainLogic->findFarthestEdgePoint( &theCentroid );
+	Region3D extent;
+	TheTerrainLogic->getMaximumPathfindExtent( &extent );
 
 	FindPositionOptions options;
 	options.flags = FPF_CLEAR_CELLS_ONLY;
-	options.maxRadius = APOCALYPSE_EDGE_SEARCH_RADIUS;
-	Coord3D probe = corner;
-	for( Int step = 1; step <= APOCALYPSE_EDGE_STEPS; ++step )
-	{
-		const Real t = step * APOCALYPSE_EDGE_STEP_FRACTION;
-		probe.x = corner.x + (theCentroid.x - corner.x) * t;
-		probe.y = corner.y + (theCentroid.y - corner.y) * t;
-		probe.z = TheTerrainLogic->getGroundHeight( probe.x, probe.y );
+	options.maxRadius = APOCALYPSE_CLEAR_SEARCH;
 
-		Coord3D found;
-		if( ThePartitionManager->findPositionAround( &probe, &options, &found ) )
-			return found;
+	Coord3D best;
+	Real bestDistSqr = -1.0f;
+	for( Int a = 0; a < APOCALYPSE_RING_ANCHORS; ++a )
+	{
+		const Coord3D anchor = *seat.objects[ GameLogicRandomValue( 0, (Int)seat.objects.size() - 1 ) ]->getPosition();
+		if( a == 0 )
+			best = anchor;
+		for( Int i = 0; i < APOCALYPSE_RING_CANDIDATES; ++i )
+		{
+			const Real radius = APOCALYPSE_RING_MIN + (APOCALYPSE_RING_MAX - APOCALYPSE_RING_MIN) * i / (APOCALYPSE_RING_CANDIDATES - 1);
+			const Real angle = GameLogicRandomValueReal( 0.0f, TWO_PI );
+			Coord3D probe;
+			probe.x = anchor.x + radius * Cos( angle );
+			probe.y = anchor.y + radius * Sin( angle );
+			if( probe.x < extent.lo.x || probe.x > extent.hi.x || probe.y < extent.lo.y || probe.y > extent.hi.y )
+				continue;
+			probe.z = TheTerrainLogic->getGroundHeight( probe.x, probe.y );
+
+			Coord3D found;
+			if( !ThePartitionManager->findPositionAround( &probe, &options, &found ) )
+				continue;
+			const Real distSqr = nearestSeatDistSqr( seats, &found );
+			if( distSqr >= APOCALYPSE_RING_MIN * APOCALYPSE_RING_MIN && !seenBySeat( seats, found.x, found.y ) )
+				return found;
+			if( distSqr > bestDistSqr )
+			{
+				bestDistSqr = distSqr;
+				best = found;
+			}
+		}
 	}
-	return probe;
+	return best;
 }
 
-//-------------------------------------------------------------------------------------------------
+/** Raise count zombies, split evenly over the seats still in the match and the remainder to whoever
+	  is next in turn, each seat's share as one group in the fog near it. */
 static void spawnZombies( Int count )
 {
 	Player *zombies = ThePlayerList->findPlayerWithNameKey( NAMEKEY( APOCALYPSE_PLAYER_NAME ) );
@@ -219,17 +270,41 @@ static void spawnZombies( Int count )
 	if( count > maxLive - live )
 		count = maxLive - live;
 
+	// the frames between the last seat falling and the victory check calling the match
+	std::vector<ApocalypseSeat> seats;
+	findSeats( zombies, seats );
+	if( seats.empty() )
+		return;
+
+	const Int n = (Int)seats.size();
 	FindPositionOptions options;
 	options.maxRadius = APOCALYPSE_SPREAD_RADIUS;
-	for( Int i = 0; i < count; ++i )
+	for( Int k = 0; k < n; ++k )
 	{
-		Coord3D pos = theSpawnPoint;
-		ThePartitionManager->findPositionAround( &theSpawnPoint, &options, &pos );
-		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		const Int share = count / n + ( k < count % n ? 1 : 0 );
+		if( share == 0 )
+			continue;
 
-		Object *zombie = ScenarioDrill_spawnOne( tmpl, zombies->getDefaultTeam(), &pos );
-		zombie->getAI()->aiHunt( CMD_FROM_AI );
+		const ApocalypseSeat &seat = seats[ (theTurn + k) % n ];
+		const Coord3D spot = spawnSpotNear( seats, seat );
+		const Bool spotHidden = !seenBySeat( seats, spot.x, spot.y );
+		for( Int i = 0; i < share; ++i )
+		{
+			// the search takes the first free point from minRadius out, and a zombie does not block
+			// the next one, so without a random start the whole group would stand on the spot itself
+			options.minRadius = GameLogicRandomValueReal( 0.0f, APOCALYPSE_SPREAD_RADIUS );
+			Coord3D pos = spot;
+			ThePartitionManager->findPositionAround( &spot, &options, &pos );
+			// a hidden spot can have somebody's sight on part of its circle; nobody watches one rise
+			if( spotHidden && seenBySeat( seats, pos.x, pos.y ) )
+				pos = spot;
+			pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+
+			Object *zombie = ScenarioDrill_spawnOne( tmpl, zombies->getDefaultTeam(), &pos );
+			zombie->getAI()->aiHunt( CMD_FROM_AI );
+		}
 	}
+	theTurn += count;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -237,15 +312,6 @@ void Apocalypse_tick( void )
 {
 	if( theMode == APOCALYPSE_OFF )
 		return;
-
-	// the edge search needs the pathfinder's cells, which are not there yet when startNewGame chooses
-	if( !theSpawnChosen )
-	{
-		theSpawnPoint = edgeSpawnPoint();
-		theSpawnChosen = TRUE;
-		DEBUG_LOG(( "APOCALYPSE: no free start position, zombies come from (%.0f,%.0f)\n",
-								theSpawnPoint.x, theSpawnPoint.y ));
-	}
 
 	const UnsignedInt now = TheGameLogic->getFrame();
 	if( now < theNextSpawnFrame )
@@ -282,13 +348,25 @@ void Apocalypse_announceEnd( UnsignedInt endFrame )
 }
 
 //-------------------------------------------------------------------------------------------------
-void Apocalypse_xfer( Xfer *xfer )
+void Apocalypse_xfer( Xfer *xfer, UnsignedByte gameLogicVersion )
 {
 	xfer->xferInt( &theMode );
 	xfer->xferInt( &theWave );
 	xfer->xferInt( &thePlayers );
-	xfer->xferBool( &theSpawnChosen );
-	xfer->xferCoord3D( &theSpawnPoint );
-	xfer->xferCoord3D( &theCentroid );
+
+	// version 18 came from one fixed spot: whether it was found, the spot and the seats' middle
+	if( gameLogicVersion < 19 )
+	{
+		Bool spawnChosen;
+		Coord3D spawnPoint;
+		Coord3D centroid;
+		xfer->xferBool( &spawnChosen );
+		xfer->xferCoord3D( &spawnPoint );
+		xfer->xferCoord3D( &centroid );
+	}
+
 	xfer->xferUnsignedInt( &theNextSpawnFrame );
+
+	if( gameLogicVersion >= 19 )
+		xfer->xferInt( &theTurn );
 }

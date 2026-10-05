@@ -1302,7 +1302,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		 reads the team numbers: the alliances, the start positions and the count of teams that decides
 		 whether the match can be lost at all.  On a loaded save the game info came out of the save and
 		 says the same thing again. */
-	Apocalypse_newGame( game ? game->getApocalypseMode() : APOCALYPSE_OFF );
+	Apocalypse_newGame( game );
 	if ( Apocalypse_mode() != APOCALYPSE_OFF )
 	{
 		for ( Int i = 0; i < MAX_SLOTS; ++i )
@@ -1612,12 +1612,10 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		 chase what they pick up on their own and never pick an unarmed building, which left every wave
 		 standing at the spawn.  The local player is never this one - ReplayObserver comes first.  It is
 		 the enemy of every seat, and every seat names it an enemy too, because a relationship is one player's view of
-		 another.  Its start index is the start position it comes from, where an allied AI sent after it
-		 should go; -1 when it comes in from the edge, which every reader takes as no position. */
+		 another.  It has no start position (-1, which every reader takes as none): its zombies rise in
+		 the fog round whichever seat Apocalypse_tick visits. */
 	if (game && Apocalypse_mode() != APOCALYPSE_OFF)
 	{
-		const Int zombieStart = Apocalypse_chooseSpawnPoint(game);
-
 		AsciiString seats;
 		for (Int i = 0; i < MAX_SLOTS; ++i)
 		{
@@ -1638,7 +1636,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		zombies.setAsciiString(TheKey_playerEnemies, seats);
 		zombies.setInt(TheKey_playerColor, APOCALYPSE_ZOMBIE_COLOR);
 		zombies.setInt(TheKey_playerNightColor, APOCALYPSE_ZOMBIE_COLOR);
-		zombies.setInt(TheKey_multiplayerStartIndex, zombieStart);
+		zombies.setInt(TheKey_multiplayerStartIndex, -1);
 		zombies.setBool(TheKey_multiplayerIsLocal, FALSE);
 		TheSidesList->addSide(&zombies);
 
@@ -5855,13 +5853,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 16: xfer m_techRespawnDelay and m_pendingTechBuildings
 	* 17: xfer m_supplyPileLimit
 	* 18: xfer Apocalypse mode's waves and spawn point
+	* 19: Apocalypse mode drops the spawn point and keeps whose turn it is to be visited
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 18;
+	const XferVersion currentVersion = 19;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -6288,7 +6287,7 @@ void GameLogic::xfer( Xfer *xfer )
 
   // an older save has no Apocalypse state, and startNewGame has already turned the mode off for it
   if ( version >= 18 )
-    Apocalypse_xfer( xfer );
+    Apocalypse_xfer( xfer, version );
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

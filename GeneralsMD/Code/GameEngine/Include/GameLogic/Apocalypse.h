@@ -19,9 +19,9 @@
 // FILE: Apocalypse.h ////////////////////////////////////////////////////////////////////////////
 //
 // Apocalypse mode: every player in the lobby on one team, against a computer side that owns no
-// base and no money and walks zombies in from one spot on the map until nobody is left.  The lobby
-// picks it (GameInfo's AP=, an ApocalypseMode), GameLogic::startNewGame puts the players on one
-// team and adds the zombie side, and Apocalypse_tick brings the zombies in.
+// base and no money and raises zombies in the fog round each player in turn until nobody is left.
+// The lobby picks it (GameInfo's AP=, an ApocalypseMode), GameLogic::startNewGame puts the players
+// on one team and adds the zombie side, and Apocalypse_tick brings the zombies in.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,15 +45,10 @@ class Xfer;
 /// what spawns; an ObjectReskin in FixesReforged.ini
 #define APOCALYPSE_ZOMBIE_TEMPLATE "ApocalypseZombie"
 
-/** Forget the last match and start this one in the given ApocalypseMode.  Called from
-	  GameLogic::startNewGame on every start, a loaded save included; the save's own state follows. */
-extern void Apocalypse_newGame( Int mode );
-
-/** Choose where the zombies come from, once the map is loaded and every seat has its start position.
-	  Returns the free start position they take, which is also the zombie side's own start index so
-	  that an allied AI sent at them goes there, or -1 when the map has none free: then they come in
-	  from the edge, found on the first tick, and the side has no start position at all. */
-extern Int Apocalypse_chooseSpawnPoint( const GameInfo *game );
+/** Forget the last match and start this one in the game's ApocalypseMode (off without a game), sized
+	  by its non-observer seats.  Called from GameLogic::startNewGame on every start, a loaded save
+	  included; the save's own state follows. */
+extern void Apocalypse_newGame( const GameInfo *game );
 
 /** The ApocalypseMode of the match in progress. */
 extern Int Apocalypse_mode( void );
@@ -61,8 +56,9 @@ extern Int Apocalypse_mode( void );
 /** Bring in whatever is due on this logic frame.  Called from GameLogic::update. */
 extern void Apocalypse_tick( void );
 
-/** The wave counter, the next spawn and the spawn point, for a save. */
-extern void Apocalypse_xfer( Xfer *xfer );
+/** The wave counter, the next spawn and whose turn it is, for a save; gameLogicVersion is the
+	  version of the GameLogic block it sits in, 18 or later. */
+extern void Apocalypse_xfer( Xfer *xfer, UnsignedByte gameLogicVersion );
 
 /** The zombie side is never defeated: it starts the match with nothing, and the match ends when it
 	  is the last alliance standing. */

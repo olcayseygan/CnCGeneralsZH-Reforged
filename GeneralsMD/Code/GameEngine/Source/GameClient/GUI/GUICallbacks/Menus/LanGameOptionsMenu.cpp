@@ -763,26 +763,96 @@ static void handleSupplyPileLimitSelection()
   }
 }
 
+// The seat table as the layout drew it, read when the room opens: an Apocalypse game gives the Team
+// column's width and its gap to the player names, and moves Color and Army right by as much, so the
+// table still ends on the map column's edge with no hole where the team column was.
+static Int s_playerColumnWidth = 0;
+static Int s_colorColumnLeft = 0;
+static Int s_armyColumnLeft = 0;
+static Int s_colorHeadingLeft = 0;
+static Int s_armyHeadingLeft = 0;
+static Int s_teamColumnShift = 0;
+// whether the seat table is laid out and its seat boxes filled for Apocalypse, which offers no AI
+static Bool s_seatsForApocalypse = FALSE;
+// Refilling a seat box selects its first line, Open, and the box reports that as the host's pick:
+// a closed seat would open and a joined player be thrown out.  The picks are not his while this is set.
+static Bool s_refillingSeats = FALSE;
+
+static GameWindow *lanWindow( const char *name )
+{
+  AsciiString fullName;
+  fullName.format( "LanGameOptionsMenu.wnd:%s", name );
+  return TheWindowManager->winGetWindowFromId( parentLanGameOptions, TheNameKeyGenerator->nameToKey( fullName ) );
+}
+
+static void readSeatColumns( void )
+{
+  Int x, y, width, height, armyWidth;
+  comboBoxPlayer[0]->winGetSize( &s_playerColumnWidth, &height );
+  comboBoxColor[0]->winGetPosition( &s_colorColumnLeft, &y );
+  comboBoxPlayerTemplate[0]->winGetPosition( &s_armyColumnLeft, &y );
+  comboBoxPlayerTemplate[0]->winGetSize( &armyWidth, &height );
+  comboBoxTeam[0]->winGetPosition( &x, &y );
+  comboBoxTeam[0]->winGetSize( &width, &height );
+  s_teamColumnShift = x + width - ( s_armyColumnLeft + armyWidth );
+  lanWindow( "StaticTextColor" )->winGetPosition( &s_colorHeadingLeft, &y );
+  lanWindow( "StaticTextFaction" )->winGetPosition( &s_armyHeadingLeft, &y );
+  s_seatsForApocalypse = FALSE;
+}
+
+static void placeSeatColumns( Bool apocalypse )
+{
+  const Int shift = apocalypse ? s_teamColumnShift : 0;
+  Int x, y, width, height;
+  for ( Int i = 0; i < MAX_SLOTS; ++i )
+  {
+    comboBoxPlayer[i]->winGetSize( &width, &height );
+    comboBoxPlayer[i]->winSetSize( s_playerColumnWidth + shift, height );
+    comboBoxColor[i]->winGetPosition( &x, &y );
+    comboBoxColor[i]->winSetPosition( s_colorColumnLeft + shift, y );
+    comboBoxPlayerTemplate[i]->winGetPosition( &x, &y );
+    comboBoxPlayerTemplate[i]->winSetPosition( s_armyColumnLeft + shift, y );
+  }
+  GameWindow *heading = lanWindow( "StaticTextColor" );
+  heading->winGetPosition( &x, &y );
+  heading->winSetPosition( s_colorHeadingLeft + shift, y );
+  heading = lanWindow( "StaticTextFaction" );
+  heading->winGetPosition( &x, &y );
+  heading->winSetPosition( s_armyHeadingLeft + shift, y );
+}
+
 // What an Apocalypse game changes on this screen: its title, the mode box, no peace time (the zombie
-// side is a computer side, and a computer side turns peace time off anyway) and no team column
-// (everybody is on team 1).  The mode can change under a client at any time, so both ways are set.
+// side is a computer side, and a computer side turns peace time off anyway), no team column
+// (everybody is on team 1) and no AI in the seat boxes (it is humans only).  The mode can change
+// under a client at any time, so both ways are set.
 static void showApocalypseGadgets( LANGameInfo *myGame )
 {
   const Bool apocalypse = myGame->getApocalypseMode() != APOCALYPSE_OFF;
 
-  GadgetStaticTextSetText( TheWindowManager->winGetWindowFromId( parentLanGameOptions, TheNameKeyGenerator->nameToKey( "LanGameOptionsMenu.wnd:StaticTextTitle" ) ),
-    TheGameText->fetch( apocalypse ? "GUI:Apocalypse" : "GUI:GameOptions" ) );
+  GadgetStaticTextSetText( lanWindow( "StaticTextTitle" ), TheGameText->fetch( apocalypse ? "GUI:Apocalypse" : "GUI:GameOptions" ) );
   UpdateGameModeComboBox( comboBoxGameMode, myGame, TheLAN->AmIHost() );
 
   const char *hidden[] = { "LabelPeaceTime", "ComboBoxPeaceTime", "StaticTextTeam" };
   for ( Int i = 0; i < (Int)ARRAY_SIZE(hidden); ++i )
-  {
-    AsciiString name;
-    name.format( "LanGameOptionsMenu.wnd:%s", hidden[i] );
-    TheWindowManager->winGetWindowFromId( parentLanGameOptions, TheNameKeyGenerator->nameToKey( name ) )->winHide( apocalypse );
-  }
+    lanWindow( hidden[i] )->winHide( apocalypse );
   for ( Int i = 0; i < MAX_SLOTS; ++i )
     comboBoxTeam[i]->winHide( apocalypse );
+
+  if ( apocalypse == s_seatsForApocalypse )
+    return;
+  s_seatsForApocalypse = apocalypse;
+  placeSeatColumns( apocalypse );
+  s_refillingSeats = TRUE;
+  for ( Int i = 0; i < MAX_SLOTS; ++i )
+  {
+    if ( i == myGame->getLocalSlotNum() )
+      continue;
+    GadgetComboBoxReset( comboBoxPlayer[i] );
+    PopulatePlayerSlotComboBox( comboBoxPlayer[i], white, FALSE, !apocalypse );
+  }
+  // the boxes were just emptied; this selects each seat's state in them again
+  lanUpdateSlotList();
+  s_refillingSeats = FALSE;
 }
 
 static void handleGameModeSelection()
@@ -797,6 +867,17 @@ static void handleGameModeSelection()
 
   myGame->setApocalypseMode( mode );
   myGame->resetAccepted();
+  // Apocalypse is humans only: the host's computer seats open, as if he had picked Open for each
+  if ( mode != APOCALYPSE_OFF && myGame->amIHost() )
+  {
+    for ( Int i = 0; i < MAX_SLOTS; ++i )
+    {
+      if ( !myGame->getLANSlot(i)->isAI() )
+        continue;
+      myGame->getLANSlot(i)->setState( SLOT_OPEN );
+      PopulatePlayerTemplateComboBox( i, comboBoxPlayerTemplate, myGame, TRUE );
+    }
+  }
   showApocalypseGadgets( myGame );
 
   if (myGame->amIHost() && !s_isIniting)
@@ -1038,6 +1119,7 @@ void InitLanGameGadgets( void )
 	if( buttonAccept[0] )
 		GadgetButtonSetEnabledColor(buttonAccept[0], acceptTrueColor );
 
+	readSeatColumns();
 	showApocalypseGadgets( TheLAN->GetMyGame() );
 
 	// the settings page and the chat log share one rectangle; this opens on the chat log
@@ -1456,7 +1538,7 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 					  {
 						  handleTeamSelection(i);
 					  }
-					  else if( controlID == comboBoxPlayerID[i] && myGame->amIHost() )
+					  else if( controlID == comboBoxPlayerID[i] && myGame->amIHost() && !s_refillingSeats )
 					  {
 						  // We don't have anything that'll happen if we click on ourselves
 						  if(i == myGame->getLocalSlotNum())

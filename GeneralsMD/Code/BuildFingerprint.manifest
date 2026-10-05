@@ -192,6 +192,7 @@ Data/Window/Html/Readout.html
 Data/Window/Html/Scoreboard.html
 Data/Window/Html/Spectator.html
 Data/Window/Html/Tooltip.html
+Data/Window/Menus/ApocalypseGameOptionsMenu.wnd
 Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
 Data/Window/Menus/MainMenu.wnd
@@ -3659,6 +3660,7 @@ Tools/WorldBuilder/src/propedit.cpp
 Tools/WorldBuilder/src/teamsdialog.cpp
 Tools/WorldBuilder/src/wbview.cpp
 Tools/WorldBuilder/src/wbview3d.cpp
+Tools/apocalypseroom_layout.py
 Tools/asan-check.sh
 Tools/assetcull/assetcull.cpp
 Tools/assetcull/assetcull.dsp

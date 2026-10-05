@@ -195,7 +195,7 @@ void ShowUnderlyingGUIElements( Bool show, const char *layoutFilename, const cha
 	* SlotState order and read the choice back as SlotState(position), so a seat appended to the enum
 	* - the takeover seat - could not be offered there at all.  Every entry now carries the state it
 	* stands for and the position it sits at means nothing. */
-void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover)
+void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover, Bool allowAI)
 {
 	if (!comboBox)
 		return;
@@ -210,6 +210,7 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 		SLOT_MED_AI,
 		SLOT_BRUTAL_AI,
 	};
+	const Int computerSeats = 3;
 
 	// The combo box only grows its listbox when an add crosses the current length, and both
 	// GadgetListBoxSetItemData and the add itself silently do nothing past it - so make room for
@@ -217,6 +218,8 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 	Int numSeats = (Int)(sizeof(seats)/sizeof(seats[0]));
 	if (!allowTakeover)
 		--numSeats;
+	if (!allowAI)
+		numSeats -= computerSeats;
 	GameWindow *listBox = GadgetComboBoxGetListBox(comboBox);
 	if (listBox)
 	{
@@ -230,6 +233,8 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 	for (Int i = 0; i < (Int)(sizeof(seats)/sizeof(seats[0])); ++i)
 	{
 		if (seats[i] == SLOT_TAKEOVER && !allowTakeover)
+			continue;
+		if (seats[i] >= SLOT_EASY_AI && seats[i] <= SLOT_BRUTAL_AI && !allowAI)
 			continue;
 		GadgetComboBoxAddEntry(comboBox, SlotStateName(seats[i]), color);
 		GadgetComboBoxSetItemData(comboBox, shown, (void *)seats[i]);
@@ -702,15 +707,21 @@ static const char * theGameModeCaptions[ APOCALYPSE_COUNT ] =
 {
   "GUI:GameModeStandard", "GUI:ApocalypseWaves", "GUI:ApocalypseContinuous"
 };
+// the same modes under a Zombie Flow label, where "Apocalypse:" would say it twice
+static const char * theZombieFlowCaptions[ APOCALYPSE_COUNT ] =
+{
+  "GUI:GameModeStandard", "GUI:ApocalypseFlowWaves", "GUI:ApocalypseFlowContinuous"
+};
 
 void PopulateGameModeComboBox(GameWindow *comboBox, Int firstMode, GameInfo *myGame, Bool hostMayEdit)
 {
   GadgetComboBoxReset(comboBox);
 
+  const char **captions = ( firstMode == APOCALYPSE_OFF ) ? theGameModeCaptions : theZombieFlowCaptions;
   Color color = comboBox->winGetEnabled() ? comboBox->winGetEnabledTextColor() : comboBox->winGetDisabledTextColor();
   for ( Int mode = firstMode; mode < APOCALYPSE_COUNT; mode++ )
   {
-    Int newIndex = GadgetComboBoxAddEntry(comboBox, TheGameText->fetch( theGameModeCaptions[mode] ), color);
+    Int newIndex = GadgetComboBoxAddEntry(comboBox, TheGameText->fetch( captions[mode] ), color);
     GadgetComboBoxSetItemData(comboBox, newIndex, (void *)(intptr_t)mode);
   }
 

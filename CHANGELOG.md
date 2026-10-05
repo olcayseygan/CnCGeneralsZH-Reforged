@@ -10,8 +10,9 @@ found and fixed â€” EA's own, not port damage.**
 
 ## Apocalypse: hold the line against the dead
 
-- A new mode on the main menu, under Skirmish. You and up to seven computer allies share a team and the zombies come at you from one point on the map, either in waves or in a stream that never lets up, whichever you picked. There is no winning. The match ends when the last of you falls, and the score is the waves you held and the minutes you lasted.
-- On a LAN the host picks Apocalypse from the mode box in the game room, and the game list marks it. All eight seats can play, people and computers alike, and the waves grow with every seat taken.
+- A new mode on the main menu, under Skirmish. It is people only: no computer fights beside you, and the zombies come at you from one point on the map, either in waves or in a stream that never lets up, whichever you picked. There is no winning. The match ends when the last of you falls, and the score is the waves you held and the minutes you lasted.
+- Alone, you get a screen made for one: your name, army and color, the zombie flow, starting cash and the rest down one side, the map large on the other. No empty seats to close and no team to pick.
+- On a LAN the host picks Apocalypse from the mode box in the game room, and the game list marks it. Up to eight players share one side, so the team column goes and the player names get its room; any computer seat opens when the host switches, and the waves grow with every seat taken.
 
 ## Zero Hour on a Mac, on Linux and on the Steam Deck
 

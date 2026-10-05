@@ -1294,8 +1294,9 @@ GUI:PeaceTimeOver
 "Peace time is over."
 END
 
-// Apocalypse - the co-op zombie survival mode: its menu button and room title, the rooms' game mode
-// box, the wave message, the closing score and the zombie's own name.
+// Apocalypse - the co-op zombie survival mode: its menu button and room title, the LAN room's game
+// mode box, the single player room's zombie flow row, the wave message, the closing score and the
+// zombie's own name.
 
 GUI:Apocalypse
 "APOCALYPSE"
@@ -1315,6 +1316,18 @@ END
 
 GUI:ApocalypseContinuous
 "Apocalypse: continuous"
+END
+
+GUI:ApocalypseFlow
+"Zombie Flow"
+END
+
+GUI:ApocalypseFlowWaves
+"Waves"
+END
+
+GUI:ApocalypseFlowContinuous
+"Continuous"
 END
 
 GUI:ApocalypseWave

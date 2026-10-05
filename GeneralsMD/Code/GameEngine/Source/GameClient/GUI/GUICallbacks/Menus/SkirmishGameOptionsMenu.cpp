@@ -80,6 +80,11 @@
 SkirmishGameInfo *TheSkirmishGameInfo = NULL;
 Bool SkirmishApocalypse = FALSE;
 
+AsciiString SkirmishRoomLayout( void )
+{
+	return AsciiString( SkirmishApocalypse ? "Menus/ApocalypseGameOptionsMenu.wnd" : "Menus/SkirmishGameOptionsMenu.wnd" );
+}
+
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentSkirmishGameOptionsID = NAMEKEY_INVALID;
 static NameKeyType textEntryPlayerNameID = NAMEKEY_INVALID;
@@ -400,7 +405,9 @@ Bool SkirmishPreferences::write(void)
   setInt( "TechRespawn", TheSkirmishGameInfo->getTechRespawn() );
   setInt( "SupplyPileLimit", TheSkirmishGameInfo->getSupplyPileLimit() );
 
-	setSlotList();
+	// Apocalypse's one seat is not the skirmish table the slot list keeps for next time
+	if (!SkirmishApocalypse)
+		setSlotList();
 
 	setInt("FPS", selectedGameSpeed());
 
@@ -1105,25 +1112,6 @@ static void handleGameModeSelection()
     TheSkirmishGameInfo->setApocalypseMode( mode );
 }
 
-// The room opened from the Apocalypse button: its title, the zombie flow box and no team column, since
-// GameLogic puts every seat, the computer ones included, on one team against the zombies.
-static void showApocalypseGadgets( void )
-{
-  GadgetStaticTextSetText( TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, TheNameKeyGenerator->nameToKey( "SkirmishGameOptionsMenu.wnd:StaticTextTitle" ) ),
-    TheGameText->fetch( SkirmishApocalypse ? "GUI:Apocalypse" : "GUI:Skirmish" ) );
-  comboBoxGameMode->winHide( !SkirmishApocalypse );
-  UpdateGameModeComboBox( comboBoxGameMode, TheSkirmishGameInfo, TRUE );
-
-  // ShowUnderlyingGUIElements puts the column back on every options update, and hides it for a
-  // campaign map, so this only ever hides
-  if ( !SkirmishApocalypse )
-    return;
-  TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, TheNameKeyGenerator->nameToKey( "SkirmishGameOptionsMenu.wnd:StaticTextTeam" ) )->winHide( TRUE );
-  for ( Int i = 0; i < MAX_SLOTS; ++i )
-    comboBoxTeam[i]->winHide( TRUE );
-}
-
-
 //-------------------------------------------------------------------------------------------------
 /** Initialize the Gadgets Options Menu */
 //-------------------------------------------------------------------------------------------------
@@ -1182,9 +1170,11 @@ void InitSkirmishGameGadgets( void )
   DEBUG_ASSERTCRASH(comboBoxSupplyPileLimit, ("Could not find the comboBoxSupplyPileLimit"));
   if ( comboBoxSupplyPileLimit )
     PopulateSupplyPileLimitComboBox( comboBoxSupplyPileLimit, TheSkirmishGameInfo, TRUE );
-  // Apocalypse's two flows only: a standard skirmish is the other button on the main menu
+  // only Apocalypse's room has the zombie flow row, so this is NULL in the skirmish one: a standard
+  // skirmish is the other button on the main menu
   comboBoxGameMode = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxGameModeID );
-  PopulateGameModeComboBox( comboBoxGameMode, APOCALYPSE_WAVES, TheSkirmishGameInfo, TRUE );
+  if ( SkirmishApocalypse )
+    PopulateGameModeComboBox( comboBoxGameMode, APOCALYPSE_WAVES, TheSkirmishGameInfo, TRUE );
 
 	textEntryPlayerNameID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:TextEntryPlayerName" ) );
   textEntryPlayerName = TheWindowManager->winGetWindowFromId( NULL, textEntryPlayerNameID );
@@ -1263,8 +1253,10 @@ void InitSkirmishGameGadgets( void )
 	
 	populateSkirmishBattleHonors();
 
-	// the settings page and the map info list share one rectangle; this opens on the info list
-	InitLobbyTabs( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", "TabInfo", "ListboxInfo" );
+	// the settings page and the map info list share one rectangle; this opens on the info list.
+	// Apocalypse's room has no info list: its settings page is the whole form, always shown.
+	if ( !SkirmishApocalypse )
+		InitLobbyTabs( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", "TabInfo", "ListboxInfo" );
 }
 
 void skirmishUpdateSlotList( void )
@@ -1381,7 +1373,8 @@ void updateSkirmishGameOptions( void )
   if ( index == itemCount )
     PopulateStartingCashComboBox( comboBoxStartingCash, TheSkirmishGameInfo );
 
-  showApocalypseGadgets();
+  if ( SkirmishApocalypse )
+    UpdateGameModeComboBox( comboBoxGameMode, TheSkirmishGameInfo, TRUE );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1432,16 +1425,21 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
   gSlot.setPlayerTemplate(prefs.getPreferredFaction());
   TheSkirmishGameInfo->setSlot(0,gSlot);
 
-	SkirmishBattleHonors honors;
-	if (honors.getWins() > 10)
-		gSlot.setState(SLOT_BRUTAL_AI);
-	else if (honors.getWins() > 5)
-		gSlot.setState(SLOT_MED_AI);
-	else
-		gSlot.setState(SLOT_EASY_AI);
-	TheSkirmishGameInfo->setSlot(1, gSlot);
+	// Apocalypse is the player alone against the zombies: no computer seat, and none of the last
+	// skirmish's from the slot list, so every seat past his own stays closed
+	if (!SkirmishApocalypse)
+	{
+		SkirmishBattleHonors honors;
+		if (honors.getWins() > 10)
+			gSlot.setState(SLOT_BRUTAL_AI);
+		else if (honors.getWins() > 5)
+			gSlot.setState(SLOT_MED_AI);
+		else
+			gSlot.setState(SLOT_EASY_AI);
+		TheSkirmishGameInfo->setSlot(1, gSlot);
 
-	ParseAsciiStringToGameInfo(TheSkirmishGameInfo, prefs.getSlotList());
+		ParseAsciiStringToGameInfo(TheSkirmishGameInfo, prefs.getSlotList());
+	}
 	// the slot list carries the last game's mode; the button that opened the room decides it instead,
 	// waves unless -apocalypse 2 asked for the stream
 	TheSkirmishGameInfo->setApocalypseMode( !SkirmishApocalypse ? APOCALYPSE_OFF

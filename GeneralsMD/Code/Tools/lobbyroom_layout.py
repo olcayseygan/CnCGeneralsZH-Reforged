@@ -14,11 +14,12 @@ Play Game. Back goes bottom left, as far from Play Game as the panel allows. One
 EA's disabled caption colour measured 2.1:1 on the panel. Nothing is redrawn: every control keeps
 its art, only its rectangle moves.
 
-Both rooms also get a game mode box, cloned from starting cash, at the top right in line with the
-title and the map column. Neither settings page has a free row wide enough for "Apocalypse:
-continuous", and the header band right of the title is empty in both. It is hidden in the file: the
-LAN room shows it always (Standard or Apocalypse), the skirmish room only when the main menu's
-Apocalypse button opened it.
+The LAN room also gets a game mode box, cloned from starting cash, at the top right in line with the
+title and the map column. The settings page has no free row wide enough for "Apocalypse:
+continuous", and the header band right of the title is empty. It is hidden in the file and the menu
+code shows it. The skirmish room has none: single player Apocalypse is a room of its own, written
+by apocalypseroom_layout.py from this one's output. Peace time is the last row of its column,
+because an Apocalypse game hides it and a hidden last row leaves no hole.
 
     python lobbyroom_layout.py <Menus dir in> <Menus dir out>
 
@@ -110,8 +111,8 @@ SKIRMISH_SETTING_TOP_PADDING = 4
 LAN_SETTINGS = [
     (96, 152, [("StartingCashLabel", "ComboBoxStartingCash"), ("LabelSuperweapons", "ComboBoxSuperweapons"),
                ("LabelTechRespawn", "ComboBoxTechRespawn")]),
-    (96, 152, [("LabelPeaceTime", "ComboBoxPeaceTime"), ("LabelIncomeSharing", "ComboBoxIncomeSharing"),
-               ("LabelSupplyPileLimit", "ComboBoxSupplyPileLimit")]),
+    (96, 152, [("LabelIncomeSharing", "ComboBoxIncomeSharing"), ("LabelSupplyPileLimit", "ComboBoxSupplyPileLimit"),
+               ("LabelPeaceTime", "ComboBoxPeaceTime")]),
     (0, 128, [("CheckBoxProRules",), ("CheckBoxUnitLimit",)]),
 ]
 LAN_SETTING_ROW_PITCH = 28
@@ -129,10 +130,11 @@ STAT_ROWS = [
     ("StaticTextLosses", "StaticTextLossesValue"),
 ]
 
-# the container each room's controls live in, and the windows its menu code swaps with the page
+# the container each room's controls live in, the windows its menu code swaps with the page, and
+# whether it carries the game mode box
 ROOMS = {
-    "SkirmishGameOptionsMenu": dict(container="SubParent", swapped="ListboxInfo"),
-    "LanGameOptionsMenu": dict(container="GadgetParent", swapped="ListboxChatWindowLanGame"),
+    "SkirmishGameOptionsMenu": dict(container="SubParent", swapped="ListboxInfo", game_mode=False),
+    "LanGameOptionsMenu": dict(container="GadgetParent", swapped="ListboxChatWindowLanGame", game_mode=True),
 }
 
 
@@ -271,7 +273,10 @@ def build_skirmish(layout):
         label.place(label_left, top, value_left - label_left, ROW_HEIGHT)
         left_align(label)
         need(layout, value_name).place(value_left, top, STAT_VALUE_WIDTH, ROW_HEIGHT)
-    add_game_mode(layout, "SkirmishGameOptionsMenu")
+    # an earlier version put the mode box here too; Apocalypse has its own room now
+    mode = layout.find(GAME_MODE)
+    if mode is not None:
+        need(layout, ROOMS["SkirmishGameOptionsMenu"]["container"]).children.remove(mode)
     return layout
 
 
@@ -386,7 +391,10 @@ def selfcheck():
             problems.append("%s.wnd no longer builds: %s" % (menu, error))
         problems.extend("%s.wnd: %s" % (menu, problem) for problem in overlaps(container, spec["swapped"]))
         problems.extend("%s.wnd: %s" % (menu, problem) for problem in shared_edges(layout))
-        problems.extend("%s.wnd: %s" % (menu, problem) for problem in game_mode(layout, spec["container"]))
+        if spec["game_mode"]:
+            problems.extend("%s.wnd: %s" % (menu, problem) for problem in game_mode(layout, spec["container"]))
+        elif layout.find(GAME_MODE) is not None:
+            problems.append("%s.wnd: carries %s, which only the LAN room has" % (menu, GAME_MODE))
 
     for problem in problems:
         print("lobbyroom: %s" % problem)

@@ -15077,6 +15077,18 @@ GUI:ApocalypseContinuous
 "Apokalypse: durchgehend"
 END
 
+GUI:ApocalypseFlow
+"Zombiestrom"
+END
+
+GUI:ApocalypseFlowWaves
+"Wellen"
+END
+
+GUI:ApocalypseFlowContinuous
+"Durchgehend"
+END
+
 GUI:ApocalypseWave
 "Welle %d"
 END

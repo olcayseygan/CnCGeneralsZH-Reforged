@@ -41,8 +41,9 @@ void ShowUnderlyingGUIElements( Bool show, const char *layoutFilename, const cha
 
 // Every seat a lobby can offer - Open, Closed and the six rungs of the AI ladder - in one list,
 // each entry tagged with the SlotState it stands for.  allowTakeover adds the empty seat you
-// take over in game, which only the skirmish lobby offers.
-void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover);
+// take over in game, which only the skirmish lobby offers; allowAI FALSE leaves the AI ladder out,
+// for Apocalypse, which is humans only.
+void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeover, Bool allowAI = TRUE);
 void PopulateColorComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool isObserver = FALSE);
 void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool allowObservers );
 void PopulateTeamComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool isObserver = FALSE);
@@ -103,9 +104,10 @@ void PopulateSupplyPileLimitComboBox(GameWindow *comboBox, GameInfo *myGame, Boo
 void UpdateSupplyPileLimitComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
 Int SupplyPileLimitFromComboBox(GameWindow *comboBox);
 
-// The game mode dropdown at the room's top right, an ApocalypseMode in each entry's item data,
-// travelling as AP.  The LAN room lists every mode from APOCALYPSE_OFF; the skirmish room in
-// Apocalypse mode starts at APOCALYPSE_WAVES.  -1 from the getter while nothing is selected.
+// The game mode dropdown, an ApocalypseMode in each entry's item data, travelling as AP.  The LAN
+// room lists every mode from APOCALYPSE_OFF at its top right; single player Apocalypse's room starts
+// at APOCALYPSE_WAVES, on a row labelled Zombie Flow, so its entries are just "Waves" and
+// "Continuous".  -1 from the getter while nothing is selected.
 void PopulateGameModeComboBox(GameWindow *comboBox, Int firstMode, GameInfo *myGame, Bool hostMayEdit);
 void UpdateGameModeComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
 Int GameModeFromComboBox(GameWindow *comboBox);

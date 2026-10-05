@@ -2670,6 +2670,12 @@ if(Python3_Interpreter_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/lobbyroom_layout.py selfcheck)
 
+  # Single player Apocalypse's room is written from the skirmish room, so a change there that is not
+  # carried into it, or a window its menu code names that it lost, shows up here.
+  add_test(NAME apocalypseroom_selfcheck
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/apocalypseroom_layout.py selfcheck)
+
   # The main menu's buttons, the Apocalypse one included, checked the same way.
   add_test(NAME mainmenu_selfcheck
            COMMAND ${Python3_EXECUTABLE}

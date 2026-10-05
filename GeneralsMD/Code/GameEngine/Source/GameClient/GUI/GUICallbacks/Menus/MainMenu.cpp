@@ -1466,9 +1466,9 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				checkCDBeforeCampaign(DIFFICULTY_NORMAL);
 				break;
 #endif
-				// Apocalypse is the skirmish room with the computer seats on the player's side
+				// Apocalypse has a room of its own, one seat and no computer, run by the skirmish room's code
 				SkirmishApocalypse = controlID == apocalypseID;
-				TheShell->push( AsciiString("Menus/SkirmishGameOptionsMenu.wnd") );
+				TheShell->push( SkirmishRoomLayout() );
 				TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_SKIRMISH_SELECTED]);
 			}
 			else if( controlID == onlineID )

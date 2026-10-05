@@ -15653,6 +15653,18 @@ GUI:ApocalypseContinuous
 "Kıyamet: kesintisiz"
 END
 
+GUI:ApocalypseFlow
+"Zombi Akışı"
+END
+
+GUI:ApocalypseFlowWaves
+"Dalgalar"
+END
+
+GUI:ApocalypseFlowContinuous
+"Kesintisiz"
+END
+
 GUI:ApocalypseWave
 "Dalga %d"
 END

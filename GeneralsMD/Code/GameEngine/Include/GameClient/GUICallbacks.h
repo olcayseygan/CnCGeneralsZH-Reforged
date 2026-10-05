@@ -117,10 +117,12 @@ extern void SkirmishGameOptionsMenuUpdate( WindowLayout *layout, void *userData 
 extern void SkirmishGameOptionsMenuShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType SkirmishGameOptionsMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
-// The skirmish room is also the Apocalypse room: the main menu's Apocalypse button and -apocalypselobby
-// set this before pushing it, Skirmish and -skirmishlobby clear it.  It decides the title, the mode
-// box and the team column, and it outlives a match so the room comes back as it was left.
+// The skirmish room's code also runs single player Apocalypse's room, a layout of its own with one
+// seat (ApocalypseGameOptionsMenu.wnd, Tools/apocalypseroom_layout.py): the main menu's Apocalypse
+// button and -apocalypselobby set this before pushing SkirmishRoomLayout(), Skirmish and
+// -skirmishlobby clear it.  It outlives a match, as the shell's own record of the layout does.
 extern Bool SkirmishApocalypse;
+extern AsciiString SkirmishRoomLayout( void );
 
 // SkirmishMapSelectMenu
 extern void SkirmishMapSelectMenuInit( WindowLayout *layout, void *userData );

@@ -45,6 +45,7 @@
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetRadioButton.h"
 #include "GameClient/GadgetStaticText.h"
+#include "GameClient/GUICallbacks.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameClient/MapUtil.h"
 #include "Common/RandomMapGenerator.h"
@@ -326,6 +327,13 @@ void showSkirmishGameOptionsUnderlyingGUIElements( Bool show )
 
 	win	= TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey("SkirmishGameOptionsMenu.wnd:ButtonBack") );
 	win->winEnable( show );
+
+	// Apocalypse's room is a form on its settings page, half of it under the map list
+	if( SkirmishApocalypse )
+	{
+		win	= TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey("SkirmishGameOptionsMenu.wnd:PageLobbySettings") );
+		win->winHide( !show );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -33,6 +33,20 @@
 #include "Common/Xfer.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/WeaponSetUpgrade.h"
+#include "GameLogic/WeaponSetFlags.h"
+
+//-------------------------------------------------------------------------------------------------
+void WeaponSetUpgradeModuleData::buildFieldParse( MultiIniFieldParse& p )
+{
+	UpgradeModuleData::buildFieldParse( p );
+
+	static const FieldParse dataFieldParse[] =
+	{
+		{ "WeaponSetFlag", INI::parseIndexList, WeaponSetFlags::getBitNames(), offsetof( WeaponSetUpgradeModuleData, m_weaponSetFlag ) },
+		{ 0, 0, 0, 0 }
+	};
+	p.add( dataFieldParse );
+}
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -53,7 +67,7 @@ void WeaponSetUpgrade::upgradeImplementation( )
 	// Very simple; just need to flag the Object as having the player upgrade, and the WeaponSet chooser 
 	// will do the work of picking the right one from ini.  This comment is as long as the code.
 	Object *obj = getObject();
-	obj->setWeaponSetFlag( WEAPONSET_PLAYER_UPGRADE );
+	obj->setWeaponSetFlag( getWeaponSetUpgradeModuleData()->m_weaponSetFlag );
 }
 
 // ------------------------------------------------------------------------------------------------

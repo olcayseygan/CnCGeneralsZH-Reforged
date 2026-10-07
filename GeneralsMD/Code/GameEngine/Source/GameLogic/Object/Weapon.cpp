@@ -221,6 +221,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "RequestAssistRange",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_requestAssistRange) },		
 	{ "AcceptableAimDelta",				INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_aimDelta) },		
 	{ "ScatterRadius",						INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterRadius) },		
+	{ "BlindScatterRadius",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_blindScatterRadius) },
 	{ "ScatterTargetScalar",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterTargetScalar) },		
 	{ "ScatterRadiusVsInfantry",	INI::parseReal,													NULL,							offsetof( WeaponTemplate, m_infantryInaccuracyDist ) },
 	{ "DamageType",								DamageTypeFlags::parseSingleBitFromINI,	NULL,							offsetof(WeaponTemplate, m_damageType) },		
@@ -308,6 +309,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_requestAssistRange						= 0.0f;
 	m_aimDelta											= 0.0f;
 	m_scatterRadius									= 0.0f;
+	m_blindScatterRadius						= 0.0f;
 	m_scatterTargetScalar						= 0.0f;
 	m_shockWaveAmount								= 0.0f;
 	m_shockWaveRadius								= 0.0f;
@@ -1020,11 +1022,18 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 
 	Coord3D projectileDestination = *victimPos; //Need to copy this, as we have a pointer to their actual position
 	Real scatterRadius = 0.0f;
-	if( m_scatterRadius > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
+	/* Turkey's artillery fires past its own sight and leans on a spotter.  A shot at ground its
+		 player does not see (a force fire into the fog, a target the spotter lost) spreads by
+		 BlindScatterRadius on top.  The shroud is logic state, the same every machine reads. */
+	Real blindScatter = 0.0f;
+	if( m_blindScatterRadius > 0.0f && sourceObj && sourceObj->getControllingPlayer() &&
+			ThePartitionManager->getShroudStatusForPlayer( sourceObj->getControllingPlayer()->getPlayerIndex(), victimPos ) != CELLSHROUD_CLEAR )
+		blindScatter = m_blindScatterRadius;
+	if( m_scatterRadius > 0.0f || blindScatter > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
 	{
 		// This weapon scatters, so clear the victimObj, as we are no longer shooting it directly,
 		// and find a random point within the radius to shoot at as victimPos
-		scatterRadius = m_scatterRadius;
+		scatterRadius = m_scatterRadius + blindScatter;
 
 		// if it's an object, aim at the center, not the ground part (srj)
 		PathfindLayerEnum targetLayer = LAYER_GROUND;

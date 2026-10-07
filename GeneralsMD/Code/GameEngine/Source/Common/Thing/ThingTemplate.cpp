@@ -126,6 +126,8 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "WeaponSet",						ThingTemplate::parseWeaponTemplateSet,NULL, 0},
 	{ "VisionRange",					INI::parseReal,												NULL,		offsetof( ThingTemplate, m_visionRange ) },
 	{ "ShroudClearingRange",	INI::parseReal,												NULL,		offsetof( ThingTemplate, m_shroudClearingRange ) },
+	{ "AcquiresBeyondVision",	INI::parseBool,												NULL,		offsetof( ThingTemplate, m_acquiresBeyondVision ) },
+	{ "SpotterSight",					INI::parseBool,												NULL,		offsetof( ThingTemplate, m_spotterSight ) },
 	{ "ShroudRevealToAllRange",	INI::parseReal,											NULL,		offsetof( ThingTemplate, m_shroudRevealToAllRange ) },
 
 	{ "PlacementViewAngle",		INI::parseAngleReal,									NULL,		offsetof( ThingTemplate, m_placementViewAngle ) },
@@ -687,7 +689,9 @@ void ThingTemplate::parsePrerequisites( INI* ini, void *instance, void *store, c
 		{ 0, 0, 0, 0 }
 	};
 
-	if (ini->getLoadType() == INI_LOAD_CREATE_OVERRIDES)
+	// a patch file (MULTIFILE, TurkeyReforged.ini) states the whole list too, not an addition to the
+	// list its reskin source left behind
+	if (ini->getLoadType() == INI_LOAD_CREATE_OVERRIDES || ini->getLoadType() == INI_LOAD_MULTIFILE)
 	{
 		self->m_prereqInfo.clear();
 	}
@@ -1083,6 +1087,8 @@ ThingTemplate::ThingTemplate() :
 	m_fenceXOffset = 0;
 	m_visionRange = 0.0f;
 	m_shroudClearingRange = -1.0f;
+	m_acquiresBeyondVision = FALSE;
+	m_spotterSight = FALSE;
 	m_shroudRevealToAllRange = -1.0f;
 
 	m_buildCost = 0;

@@ -510,6 +510,7 @@ private:
 	Real m_requestAssistRange;							///< My object will look this far around to get people to join in the attack.
 	Real m_aimDelta;												///< when aiming, consider yourself "aimed" if you are within +/- this much of an angle
 	Real m_scatterRadius;										///< Radius of area actual fire point will be in, default is zero for no deviation
+	Real m_blindScatterRadius;							///< added to the scatter when the firer's player cannot see where the shot is going
 	Real m_scatterTargetScalar;							///< Radius of area covered by the coordinates in the scatterTarget table
 	std::vector<Coord2D> m_scatterTargets;	///< instead of pure randomness, this is the list of places I will randomly choose from to attack
 	DamageType m_damageType;								///< damage type enum

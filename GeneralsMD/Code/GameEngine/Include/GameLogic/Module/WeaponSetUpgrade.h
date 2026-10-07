@@ -34,18 +34,31 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "GameLogic/Module/UpgradeModule.h"
+#include "GameLogic/WeaponSetType.h"
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class Thing;
 
 //-------------------------------------------------------------------------------------------------
-/** The default	die module */
+/** WeaponSetFlag names the flag the upgrade raises, PLAYER_UPGRADE when it is left out.  EA's data
+	has one weapon set upgrade a unit; Turkey's artillery has two (Extended Range and Precision
+	Guidance), so the second raises CRATEUPGRADE_ONE, which no Turkey unit gets from a crate. */
+//-------------------------------------------------------------------------------------------------
+class WeaponSetUpgradeModuleData : public UpgradeModuleData
+{
+public:
+	WeaponSetUpgradeModuleData( void ) : m_weaponSetFlag( WEAPONSET_PLAYER_UPGRADE ) { }
+	static void buildFieldParse( MultiIniFieldParse& p );
+
+	WeaponSetType m_weaponSetFlag;
+};
+
 //-------------------------------------------------------------------------------------------------
 class WeaponSetUpgrade : public UpgradeModule
 {
 
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( WeaponSetUpgrade, "WeaponSetUpgrade" )
-	MAKE_STANDARD_MODULE_MACRO( WeaponSetUpgrade );
+	MAKE_STANDARD_MODULE_MACRO_WITH_MODULE_DATA( WeaponSetUpgrade, WeaponSetUpgradeModuleData );
 
 public:
 

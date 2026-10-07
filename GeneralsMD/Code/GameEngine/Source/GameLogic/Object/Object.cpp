@@ -5424,9 +5424,10 @@ void Object::look()
 			// applied here and not in getShroudClearingRange, so the sight bonuses that multiply the
 			// stored range and later divide it back out never bake the weapon cap into it.  A dozer or
 			// a worker carries a mine-clearing weapon a few feet long, and capped by it the builder
-			// was blind: it keeps its template's sight
+			// was blind: it keeps its template's sight.  So does a spotter, whose sight is its job and
+			// whose carbine is for show
 			Real shroudClearingRange = getShroudClearingRange();
-			if( !isKindOf( KINDOF_STRUCTURE ) && !isKindOf( KINDOF_DOZER ) )
+			if( !isKindOf( KINDOF_STRUCTURE ) && !isKindOf( KINDOF_DOZER ) && !getTemplate()->hasSpotterSight() )
 				shroudClearingRange = Object_armedShroudClearingRange( shroudClearingRange, getLargestWeaponRange() );
 
 			if( shroudClearingRange > 0.0f )

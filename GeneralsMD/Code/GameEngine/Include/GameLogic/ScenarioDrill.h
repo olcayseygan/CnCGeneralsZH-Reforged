@@ -75,6 +75,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_PLAYERATTACKMOVE,	///< playerattackmove <slot> <selector> <position>; the player's attack move, not a script's
 	SCENARIO_ACTION_PRODUCE,			///< produce <slot> <building> <template> <count>; queue that many in its first matching building
 	SCENARIO_ACTION_TALLY,				///< tally <slot> <selector>; log how many are alive, their health and what they cost
+	SCENARIO_ACTION_RESUME,				///< resume <slot> <selector> <targetSlot> <targetSelector>; a player's right click of builders on a half-built structure
+	SCENARIO_ACTION_PURCHASE,			///< purchase <slot> <science>; the rank needed and the points, then MSG_PURCHASE_SCIENCE as the science button sends it
 	SCENARIO_ACTION_SHIFTMOVE,				///< shiftmove <slot> <selector> <position>; a shift right click, onto the units' order queue
 	SCENARIO_ACTION_SHIFTATTACKMOVE,	///< shiftattackmove <slot> <selector> <position>; the same with attack move
 	SCENARIO_ACTION_SHIFTATTACK,			///< shiftattack <slot> <selector> <targetSlot> <targetSelector>; the same with an attack on one unit

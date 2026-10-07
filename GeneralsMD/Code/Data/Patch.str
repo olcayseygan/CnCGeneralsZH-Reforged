@@ -2128,3 +2128,107 @@ END
 CONTROLBAR:TooltipTurkeyMinefield
 "Minefield \n Recharge: 4:00"
 END
+
+SCIENCE:TurkeyFuelResupply
+"Fuel Resupply"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceFuelResupply
+"Bayraktar drones carry one more munition and Akinci one more bomb on every sortie."
+END
+
+SCIENCE:TurkeySwarmMunition
+"Loitering Munition"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceSwarmMunition
+"One loitering munition circles where you point and dives on the most expensive target it finds. \n \n Deploy from: Headquarters"
+END
+
+CONTROLBAR:TurkeySwarmMunition
+"Loitering &Munition"
+END
+
+CONTROLBAR:TooltipTurkeySwarmMunition
+"Loitering Munition \n Recharge: 3:00"
+END
+
+SCIENCE:TurkeyElectronicBlinding
+"Electronic Blinding"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceElectronicBlinding
+"Every enemy with a building in the target area loses its radar for 30 seconds. \n \n Deploy from: Headquarters"
+END
+
+CONTROLBAR:TurkeyElectronicBlinding
+"Electronic &Blinding"
+END
+
+CONTROLBAR:TooltipTurkeyElectronicBlinding
+"Electronic Blinding \n Recharge: 4:00"
+END
+
+SCIENCE:TurkeySwarmStrike
+"Swarm Strike"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceSwarmStrike
+"A swarm of munitions hunts down the ten most valuable targets in a wide area, one munition each. A packed base shrugs it off; a spread-out army does not. \n \n Deploy from: Headquarters"
+END
+
+CONTROLBAR:TurkeySwarmStrike
+"S&warm Strike"
+END
+
+CONTROLBAR:TooltipTurkeySwarmStrike
+"Swarm Strike \n Recharge: 6:00"
+END
+
+UPGRADE:TurkeyThermal
+"Thermal Sights"
+END
+
+CONTROLBAR:UpgradeTurkeyThermal
+"T&hermal Sights"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyThermal
+"Spotter Teams and Cobras see out to 550 and spot camouflaged units."
+END
+
+UPGRADE:TurkeyFuelCell
+"Fuel Cell"
+END
+
+CONTROLBAR:UpgradeTurkeyFuelCell
+"&Fuel Cell"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyFuelCell
+"Bayraktar and Akinci stay over the target twice as long, with twice the munitions."
+END
+
+UPGRADE:TurkeySwarmSoftware
+"Swarm Software"
+END
+
+CONTROLBAR:UpgradeTurkeySwarmSoftware
+"Swarm Soft&ware"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeySwarmSoftware
+"Bayraktar munitions pick their own target: the most expensive enemy in reach."
+END
+
+UPGRADE:TurkeyFuelResupply
+"Fuel Resupply"
+END
+
+CONTROLBAR:TurkeyHijack
+"Hi&jack Truck"
+END
+
+CONTROLBAR:ToolTipTurkeyHijack
+"Takes an enemy supply truck, cargo and all. The Beret stays at the wheel."
+END

@@ -16500,3 +16500,107 @@ END
 CONTROLBAR:TooltipTurkeyMinefield
 "Mayın Tarlası \n Geri Sayım: 4:00"
 END
+
+SCIENCE:TurkeyFuelResupply
+"Yakıt İkmali"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceFuelResupply
+"Bayraktar her uçuşta bir mühimmat, Akıncı bir bomba fazla taşır."
+END
+
+SCIENCE:TurkeySwarmMunition
+"Gezgin Mühimmat"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceSwarmMunition
+"Bir gezgin mühimmat gösterdiğin yerde döner ve bulduğu en pahalı hedefe dalar. \n \n Kullanıldığı yer: Karargah"
+END
+
+CONTROLBAR:TurkeySwarmMunition
+"Gezgin &Mühimmat"
+END
+
+CONTROLBAR:TooltipTurkeySwarmMunition
+"Gezgin Mühimmat \n Geri Sayım: 3:00"
+END
+
+SCIENCE:TurkeyElectronicBlinding
+"Elektronik Körleme"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceElectronicBlinding
+"Hedef alanda binası olan her düşmanın radarı 30 saniye kapanır. \n \n Kullanıldığı yer: Karargah"
+END
+
+CONTROLBAR:TurkeyElectronicBlinding
+"Elektronik &Körleme"
+END
+
+CONTROLBAR:TooltipTurkeyElectronicBlinding
+"Elektronik Körleme \n Geri Sayım: 4:00"
+END
+
+SCIENCE:TurkeySwarmStrike
+"Sürü Akını"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceSwarmStrike
+"Bir mühimmat sürüsü geniş bir alandaki en değerli on hedefi tek tek bulur, her birine bir mühimmat. Sıkışık bir üs bunu az hisseder, dağınık bir ordu çok. \n \n Kullanıldığı yer: Karargah"
+END
+
+CONTROLBAR:TurkeySwarmStrike
+"Sürü Akı&nı"
+END
+
+CONTROLBAR:TooltipTurkeySwarmStrike
+"Sürü Akını \n Geri Sayım: 6:00"
+END
+
+UPGRADE:TurkeyThermal
+"Termal Görüş"
+END
+
+CONTROLBAR:UpgradeTurkeyThermal
+"T&ermal Görüş"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyThermal
+"Gözcü timi ve Cobra 550'ye kadar görür, kamufle birimleri fark eder."
+END
+
+UPGRADE:TurkeyFuelCell
+"Yakıt Hücresi"
+END
+
+CONTROLBAR:UpgradeTurkeyFuelCell
+"&Yakıt Hücresi"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyFuelCell
+"Bayraktar ve Akıncı hedefin üstünde iki kat kalır, iki kat mühimmatla."
+END
+
+UPGRADE:TurkeySwarmSoftware
+"Sürü Yazılımı"
+END
+
+CONTROLBAR:UpgradeTurkeySwarmSoftware
+"Sürü Ya&zılımı"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeySwarmSoftware
+"Bayraktar'ın mühimmatı hedefini kendi seçer: menzildeki en pahalı düşman."
+END
+
+UPGRADE:TurkeyFuelResupply
+"Yakıt İkmali"
+END
+
+CONTROLBAR:TurkeyHijack
+"Kamyonu Ka&p"
+END
+
+CONTROLBAR:ToolTipTurkeyHijack
+"Düşmanın tedarik kamyonunu yüküyle birlikte alır. Bordo bereli direksiyonda kalır."
+END

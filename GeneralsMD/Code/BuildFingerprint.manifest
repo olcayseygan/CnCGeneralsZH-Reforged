@@ -86,6 +86,7 @@ Data/Cinema/v240_md.txt
 Data/Cinema/v240_tank.txt
 Data/Cinema/wreckcheck.txt
 Data/German/Generals.str
+Data/INI/AIDataReforged.ini
 Data/INI/BalanceReforged.ini
 Data/INI/CommandMapReforged.ini
 Data/INI/CommandSetReforged.ini
@@ -96,8 +97,11 @@ Data/INI/MappedImages/HandCreated/ReforgedBarChinaBeacon.ini
 Data/INI/MappedImages/HandCreated/ReforgedOrders.ini
 Data/INI/ObjectCreationListReforged.ini
 Data/INI/ParticleSystemReforged.ini
+Data/INI/PlayerTemplateReforged.ini
 Data/INI/ScienceReforged.ini
 Data/INI/SpecialPowerReforged.ini
+Data/INI/TurkeyReforged.ini
+Data/INI/TurkeyWeaponReforged.ini
 Data/INI/UpgradeReforged.ini
 Data/Install_Final.bmp
 Data/Patch.str

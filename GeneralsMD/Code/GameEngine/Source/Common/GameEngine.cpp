@@ -1119,6 +1119,9 @@ void GameEngine::init( int argc, char *argv[] )
 			 it silently refuses every multiplayer join from a machine that does not have the same one. */
 		ini.load( AsciiString( "Data\\INI\\FXListReforged.ini" ), INI_LOAD_OVERWRITE, &xferCRC );
 		initSubsystem(TheWeaponStore,"TheWeaponStore", MSGNEW("GameEngineSubsystem") WeaponStore(), &xferCRC, NULL, "Data\\INI\\Weapon.ini");
+		/* Turkey's own weapons.  OVERWRITE rather than MULTIFILE: a patch file may only edit a weapon
+			 that exists, and every one of these is new. */
+		ini.load( AsciiString( "Data\\INI\\TurkeyWeaponReforged.ini" ), INI_LOAD_OVERWRITE, &xferCRC );
 		initSubsystem(TheObjectCreationListStore,"TheObjectCreationListStore", MSGNEW("GameEngineSubsystem") ObjectCreationListStore(), &xferCRC, "Data\\INI\\Default\\ObjectCreationList.ini", "Data\\INI\\ObjectCreationList.ini");
 		/* Lists EA left out or got wrong, before any object names one: a list parsed again is cleared
 			 and replaced whole, and a new name is simply added. */

@@ -16134,9 +16134,353 @@ SIDE:Turkey
 END
 
 TOOLTIP:BioStrategyLong_Turkey
-"Türkiye kendi ordusu hazırlanana kadar ABD cephaneliğiyle savaşır"
+"Türkiye uzaktan öldürür ama kendi gözüyle göremez: topçusu 600 atar, 100 görür, hedefi bir gözcü, İHA ya da radar kulesi bulmalıdır"
 END
 
 GUI:BioFeatures_Turkey
-"ABD birlikleri ve güçleri \n Geçici taraf"
+"Uzun menzilli topçu, kısa görüş \n Dozer yerine istihkam takımı kurar \n Topçuya gözcü, İHA ve radar kulesi nişan aldırır"
+END
+
+OBJECT:TurkeyInfantryMehmetcik
+"Mehmetçik"
+END
+
+CONTROLBAR:ConstructTurkeyInfantryMehmetcik
+"&Mehmetçik"
+END
+
+CONTROLBAR:ToolTipTurkeyInfantryMehmetcik
+"Hat piyadesi. Binaya girer, bina temizler."
+END
+
+OBJECT:TurkeyInfantryEngineer
+"İstihkam Takımı"
+END
+
+CONTROLBAR:ConstructTurkeyInfantryEngineer
+"İstihkam &Takımı"
+END
+
+CONTROLBAR:ToolTipTurkeyInfantryEngineer
+"Yapı kurar ve onarır. Piyadedir: ezilir, taranır."
+END
+
+OBJECT:TurkeyInfantrySungur
+"Sungur Nişancısı"
+END
+
+CONTROLBAR:ConstructTurkeyInfantrySungur
+"&Sungur Nişancısı"
+END
+
+CONTROLBAR:ToolTipTurkeyInfantrySungur
+"Tanka ve uçağa karşı füzeli piyade."
+END
+
+OBJECT:TurkeyInfantrySpotter
+"Gözcü Timi"
+END
+
+CONTROLBAR:ConstructTurkeyInfantrySpotter
+"&Gözcü Timi"
+END
+
+CONTROLBAR:ToolTipTurkeyInfantrySpotter
+"450 görür, neredeyse hiç savaşmaz. Tepeye çıkınca arkadaki topçunun gözü olur."
+END
+
+OBJECT:TurkeyInfantryMaroonBeret
+"Bordo Bereli"
+END
+
+CONTROLBAR:ConstructTurkeyInfantryMaroonBeret
+"&Bordo Bereli"
+END
+
+CONTROLBAR:ToolTipTurkeyInfantryMaroonBeret
+"Özel kuvvet. Bina temizler, patlayıcı taşımaz."
+END
+
+OBJECT:TurkeyVehicleSupplyTruck
+"İkmal Kamyonu"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleSupplyTruck
+"İk&mal Kamyonu"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleSupplyTruck
+"İkmal merkezine para taşır."
+END
+
+OBJECT:TurkeyVehicleCobra
+"Cobra"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleCobra
+"&Cobra"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleCobra
+"Hızlı, kırılgan keşif aracı, 400 görür: zincirin en ucuz halkası."
+END
+
+OBJECT:TurkeyVehicleKirpi
+"Kirpi"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleKirpi
+"&Kirpi"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleKirpi
+"Beş piyade taşıyan zırhlı araç."
+END
+
+OBJECT:TurkeyTankAltay
+"Altay"
+END
+
+CONTROLBAR:ConstructTurkeyTankAltay
+"&Altay"
+END
+
+CONTROLBAR:ToolTipTurkeyTankAltay
+"Ana muharebe tankı, fabrikada doğrudan ateş eden tek araç."
+END
+
+OBJECT:TurkeyVehicleKorkut
+"Korkut"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleKorkut
+"K&orkut"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleKorkut
+"300 menzilli ikiz top: uçağa ve piyadeye."
+END
+
+OBJECT:TurkeyVehicleFirtina
+"Fırtına Obüsü"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleFirtina
+"&Fırtına Obüsü"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleFirtina
+"600 atar, 100 görür: nişan için gözcü, İHA ya da radar kulesi ister."
+END
+
+OBJECT:TurkeyVehicleSakarya
+"Sakarya Çok Namlulu"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleSakarya
+"&Sakarya Çok Namlulu"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleSakarya
+"500 menzile altılı salvo atar, sonra 15 saniye dolar. Gözcü ister."
+END
+
+OBJECT:TurkeyTankKoral
+"Koral"
+END
+
+CONTROLBAR:ConstructTurkeyTankKoral
+"Ko&ral"
+END
+
+CONTROLBAR:ToolTipTurkeyTankKoral
+"Elektronik harp aracı; ışını düşman binasını 400 menzilden susturur."
+END
+
+OBJECT:TurkeyVehicleBayraktar
+"Bayraktar İHA"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleBayraktar
+"&Bayraktar İHA"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleBayraktar
+"Gönderildiği yerde durur ve 400 görür. Hafif mühimmat. Topçunun gözü."
+END
+
+OBJECT:TurkeyVehicleGokbey
+"Gökbey"
+END
+
+CONTROLBAR:ConstructTurkeyVehicleGokbey
+"&Gökbey"
+END
+
+CONTROLBAR:ToolTipTurkeyVehicleGokbey
+"Beş piyade taşıyan nakliye helikopteri."
+END
+
+OBJECT:TurkeyJetAkinci
+"Akıncı"
+END
+
+CONTROLBAR:ConstructTurkeyJetAkinci
+"&Akıncı"
+END
+
+CONTROLBAR:ToolTipTurkeyJetAkinci
+"Ağır silahlı İHA. Uçaksavarın altında ölür."
+END
+
+OBJECT:TurkeyJetKizilelma
+"Kızılelma"
+END
+
+CONTROLBAR:ConstructTurkeyJetKizilelma
+"&Kızılelma"
+END
+
+CONTROLBAR:ToolTipTurkeyJetKizilelma
+"Yalnız hava hakimiyeti: yere ateş edemez."
+END
+
+OBJECT:TurkeyRadarTower
+"Radar Kulesi"
+END
+
+CONTROLBAR:ConstructTurkeyRadarTower
+"Ra&dar Kulesi"
+END
+
+CONTROLBAR:ToolTipTurkeyRadarTower
+"Ucuz sabit göz: topçu için 500 görür. Bir hedeftir."
+END
+
+OBJECT:TurkeyAntiAirSite
+"Uçaksavar Mevzisi"
+END
+
+CONTROLBAR:ConstructTurkeyAntiAirSite
+"&Uçaksavar Mevzisi"
+END
+
+CONTROLBAR:ToolTipTurkeyAntiAirSite
+"Uçağa ve yere karşı sabit top."
+END
+
+OBJECT:TurkeyLandMine
+"Mayın"
+END
+
+CONTROLBAR:ConstructTurkeyLandMine
+"Ma&yın"
+END
+
+CONTROLBAR:ToolTipTurkeyLandMine
+"Toprağa gömülü patlayıcı. Mayın seti ister."
+END
+
+UPGRADE:TurkeyExtendedRange
+"Uzatılmış Menzil"
+END
+
+CONTROLBAR:UpgradeTurkeyExtendedRange
+"&Uzatılmış Menzil"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyExtendedRange
+"Fırtına ve Sakarya yüzde 15 uzağa atar."
+END
+
+UPGRADE:TurkeyPrecisionGuidance
+"Hassas Güdüm"
+END
+
+CONTROLBAR:UpgradeTurkeyPrecisionGuidance
+"&Hassas Güdüm"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyPrecisionGuidance
+"Kimsenin görmediği yere atışın dağılımı dörtte birine iner."
+END
+
+UPGRADE:TurkeyArmorPack
+"Zırh Paketi"
+END
+
+CONTROLBAR:UpgradeTurkeyArmorPack
+"&Zırh Paketi"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyArmorPack
+"Kirpi ile Altay'ın can puanı yüzde 20 artar."
+END
+
+UPGRADE:TurkeyMineKit
+"Mayın Seti"
+END
+
+CONTROLBAR:UpgradeTurkeyMineKit
+"Ma&yın Seti"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkeyMineKit
+"İstihkam takımı mayın döşeyebilir."
+END
+
+OBJECT:TurkeyCommandCenter
+"Karargah"
+END
+
+CONTROLBAR:ConstructTurkeyCommandCenter
+"Ka&rargah"
+END
+
+OBJECT:TurkeyPowerPlant
+"Santral"
+END
+
+CONTROLBAR:ConstructTurkeyPowerPlant
+"&Santral"
+END
+
+OBJECT:TurkeyBarracks
+"Kışla"
+END
+
+CONTROLBAR:ConstructTurkeyBarracks
+"&Kışla"
+END
+
+OBJECT:TurkeyWarFactory
+"Fabrika"
+END
+
+CONTROLBAR:ConstructTurkeyWarFactory
+"&Fabrika"
+END
+
+OBJECT:TurkeyAirfield
+"Hava Alanı"
+END
+
+CONTROLBAR:ConstructTurkeyAirfield
+"&Hava Alanı"
+END
+
+OBJECT:TurkeySupplyCenter
+"İkmal Merkezi"
+END
+
+CONTROLBAR:ConstructTurkeySupplyCenter
+"İk&mal Merkezi"
+END
+
+OBJECT:TurkeyPatriotBattery
+"Siper Bataryası"
+END
+
+CONTROLBAR:ConstructTurkeyPatriotBattery
+"Si&per Bataryası"
 END

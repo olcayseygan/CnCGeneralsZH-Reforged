@@ -10,8 +10,11 @@ found and fixed â€” EA's own, not port damage.**
 
 ## Turkey joins the fight
 
-- Turkey is a fourth side in the skirmish and multiplayer lobbies. For now it fields the American army under its own name: the same buildings, tanks, aircraft and generals' powers, with the American voice, load screen and command bar. Every piece of it is already Turkey's own, from the Paladin and Colonel Burton to the pilot climbing out of a wreck, the drones on a Humvee and the A-10s a power calls in, so its own units, art and powers can replace them one at a time.
-- The computer plays Turkey too. A Turkish AI builds its base, sends Chinooks for supplies, trains an army, earns ranks and spends them on powers, and attacks the way an American AI does.
+- Turkey is a fourth side in the skirmish and multiplayer lobbies, with an army of its own: Mehmetcik riflemen, Sungur missile teams and Maroon Berets from the Barracks; the Altay tank, the Kirpi carrier, Korkut air defense, Firtina howitzers and Sakarya rocket launchers from the Factory; Bayraktar and Akinci drones, the Gokbey helicopter and the Kizilelma fighter from the Airfield. Every name and tooltip reads in English and in Turkish.
+- Turkey kills from range and cannot see for itself. The Firtina throws a shell 600 and sees 100, so it waits until a spotter team, a Cobra scout, a drone or a cheap Radar Tower finds the target, then fires on its own. Force it to shell ground nobody can see and the shots go wide, about half of them off a barracks-sized target. Extended Range and Precision Guidance at the Factory push the guns further and tighten the blind spread.
+- Combat Engineers build the base in place of a dozer. They are infantry, so they can be shot and run over. The Barracks' Mine Kit lets them bury mines, and the Factory's Armor Pack toughens the Kirpi and the Altay.
+- The units still borrow American and other sides' models, voices and cameos, and Turkey still buys the American generals' powers with its ranks.
+- The computer plays Turkey too. A Turkish AI puts up a full base with radar towers and air defense sites, sends supply trucks, fields the new army, artillery included, and attacks.
 
 ## Zero Hour on a Mac, on Linux and on the Steam Deck
 

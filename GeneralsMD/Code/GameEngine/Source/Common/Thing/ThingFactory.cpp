@@ -257,6 +257,7 @@ void ThingFactory::reset( void )
 	m_nextTemplateID = m_firstTemplate ? (UnsignedShort)(m_firstTemplate->getTemplateID() + 1) : 1;
 	// it may hold the overrides just deleted
 	m_sideReskins.clear();
+	m_sidesBorrowing.clear();
 }  // end reset
 
 //-------------------------------------------------------------------------------------------------
@@ -394,6 +395,24 @@ const ThingTemplate *ThingFactory::findSideReskin( const ThingTemplate *tmplate,
 	}
 	m_sideReskins[ key ] = found;
 	return found;
+}
+
+//=============================================================================
+Bool ThingFactory::sideBorrowsTemplates( const AsciiString &side )
+{
+	const NameKeyType key = NAMEKEY( side );
+	std::map< NameKeyType, Bool >::const_iterator it = m_sidesBorrowing.find( key );
+	if (it != m_sidesBorrowing.end())
+		return it->second;
+
+	Bool borrows = FALSE;
+	for (const ThingTemplate *t = m_firstTemplate; t != NULL && !borrows; t = t->friend_getNextTemplate())
+	{
+		const ThingTemplate *source = t->friend_getReskinnedFrom();
+		borrows = t->getDefaultOwningSide() == side && source != NULL && source->getDefaultOwningSide() != side;
+	}
+	m_sidesBorrowing[ key ] = borrows;
+	return borrows;
 }
 
 //=============================================================================

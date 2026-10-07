@@ -2223,19 +2223,38 @@ Object *AIPlayer::findFactory(const ThingTemplate *thing, Bool busyOK)
 }
 
 // ------------------------------------------------------------------------------------------------
+/** A side built out of another side's reskins runs that side's scripts, and a unit they name with
+	* no reskin for this side (America's Stealth Fighter, for Turkey) is left out of the team rather
+	* than keeping the whole team off the build list. */
+// ------------------------------------------------------------------------------------------------
+static Bool sideCanNeverField( const Player *player, const ThingTemplate *thing )
+{
+	const AsciiString &side = player->getSide();
+	return thing->getDefaultOwningSide() != side && TheThingFactory->sideBorrowsTemplates( side ) &&
+		TheThingFactory->findSideReskin( thing, side ) == NULL;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Return true if team can be considered for building */
 // ------------------------------------------------------------------------------------------------
 Bool AIPlayer::isPossibleToBuildTeam( TeamPrototype *proto, Bool requireIdleFactory, Bool &notEnoughMoney)
 {
 	/* Make sure we have at least one idle factory, and factories for all unit types. */
 	Bool anyIdle = false;
+	Bool anyFielded = false;
+	Bool anyLeftOut = false;
 	Int cost=0;
 	notEnoughMoney = false;
 	for( int i=0; i<proto->getTemplateInfo()->m_numUnitsInfo; i++ )
 	{
 		const TCreateUnitsInfo *unitInfo = &proto->getTemplateInfo()->m_unitsInfo[0];
 		const ThingTemplate *thing = TheThingFactory->findTemplate( unitInfo[i].unitThingName );
+		if (thing && sideCanNeverField(m_player, thing)) {
+			anyLeftOut = true;
+			continue;
+		}
 		if (thing) {
+			anyFielded = true;
 			Int thingCost = thing->calcCostToBuild(m_player);
 			if (NULL == findFactory(thing, true)) {
 				// Couldn't find a factory.
@@ -2248,6 +2267,8 @@ Bool AIPlayer::isPossibleToBuildTeam( TeamPrototype *proto, Bool requireIdleFact
 			cost += thingCost * ((unitInfo[i].maxUnits+unitInfo[i].minUnits)/2.0f);
 		}
 	}
+	if (anyLeftOut && !anyFielded)
+		return false;		// nothing in it this side can field
 	cost *= TheAI->getAiData()->m_teamResourcesToBuild;
 	if (m_player->getMoney()->countMoney() < cost)	{
 		notEnoughMoney = true;
@@ -3707,7 +3728,7 @@ void AIPlayer::buildSpecificAITeam( TeamPrototype *teamProto, Bool priorityBuild
 		for( i=0; i<teamProto->getTemplateInfo()->m_numUnitsInfo; i++ )
 		{
 			const ThingTemplate *thing = TheThingFactory->findTemplate( unitInfo[i].unitThingName );
-			if (thing)
+			if (thing && !sideCanNeverField(m_player, thing))
 			{
 				int count = unitInfo[i].maxUnits-unitInfo[i].minUnits;
 				if (count>0) {
@@ -3725,7 +3746,7 @@ void AIPlayer::buildSpecificAITeam( TeamPrototype *teamProto, Bool priorityBuild
 		for( i=0; i<teamProto->getTemplateInfo()->m_numUnitsInfo; i++ )
 		{
 			const ThingTemplate *thing = TheThingFactory->findTemplate( unitInfo[i].unitThingName );
-			if (thing)
+			if (thing && !sideCanNeverField(m_player, thing))
 			{
 				int count = unitInfo[i].minUnits;
 				WorkOrder *order = newInstance(WorkOrder);
@@ -4509,6 +4530,7 @@ void AIPlayer::update( void )
 	AI_PHASE( AIP_ECONOMY, doEconomy() );						// ... and the money sitting in the bank.
 	AI_PHASE( AIP_POWER,   doPower() );							// Keep the lights on, and out of reach.
 	AI_PHASE( AIP_ECONOMY, doSuperweapons() );			// The big guns, as soon as they can be bought.
+	AI_PHASE( AIP_ECONOMY, doReadySpecialPowers() );	// The powers no script knows to fire, as soon as they are ready.
 	AI_PHASE( AIP_WAVE,    doWaves() );							// Send the parked attack teams out together.
 	AI_PHASE( AIP_TACTICS, doTactics() );						// Fight each unit from where it is strongest.
 	AI_PHASE( AIP_TACTICS, doTransports() );				// Put the helicopters' riders down at the fight.
@@ -5950,6 +5972,57 @@ void AIPlayer::doSuperweapons( void )
 	// buildableOfKind already asked canMakeUnit, which holds the defence ration
 	if( superweapon && !priorityBuildPending( m_player, superweapon ) )
 		buildAsap( superweapon );
+}
+
+//----------------------------------------------------------------------------------------------------------
+static void collectObjects( Object *obj, void *userData )
+{
+	((std::vector<Object*> *)userData)->push_back( obj );
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The skirmish scripts fire the powers they name and nothing else, so a side that runs another
+	* side's scripts (Turkey runs America's) never touched its own.  A power marked AIFiresWhenReady goes
+	* off the moment it is ready and the science behind it is bought, at the target the scripts' own
+	* "fire at most cost" would pick. */
+//----------------------------------------------------------------------------------------------------------
+static const Int SPECIAL_POWER_CHECK_RATE = 2 * LOGICFRAMES_PER_SECOND;
+
+void AIPlayer::doReadySpecialPowers( void )
+{
+	const Int phase = computeUpdatePhase( m_player->getPlayerIndex(), SPECIAL_POWER_CHECK_RATE );
+	if( (TheGameLogic->getFrame() + phase) % SPECIAL_POWER_CHECK_RATE != 0 )
+		return;
+	Player *enemy = getAiEnemy();
+	if( enemy == NULL )
+		return;
+
+	std::vector<Object*> owned;
+	m_player->iterateObjects( collectObjects, &owned );
+	for( std::vector<Object*>::iterator it = owned.begin(); it != owned.end(); ++it )
+	{
+		Object *obj = *it;
+		if( obj->isEffectivelyDead() || obj->isDisabled() )
+			continue;
+		for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
+		{
+			SpecialPowerModuleInterface *power = (*m)->getSpecialPower();
+			if( power == NULL || !power->getSpecialPowerTemplate()->isFiredByAIWhenReady() || !power->isReady() )
+				continue;
+			const ScienceType science = power->getRequiredScience();
+			if( science != SCIENCE_INVALID && !m_player->hasScience( science ) )
+				continue;
+
+			const SpecialPowerTemplate *tmpl = power->getSpecialPowerTemplate();
+			const Real radius = max( 50.0f, tmpl->getRadiusCursorRadius() );
+			Coord3D target;
+			if( !m_player->computeSuperweaponTarget( tmpl, &target, enemy->getPlayerIndex(), radius ) || target.lengthSqr() <= 0.0f )
+				continue;
+			DEBUG_LOG(("AI POWER frame %d player %d fires '%s' at (%.0f,%.0f)\n", TheGameLogic->getFrame(),
+				m_player->getPlayerIndex(), tmpl->getName().str(), target.x, target.y));
+			power->doSpecialPowerAtLocation( &target, INVALID_ANGLE, COMMAND_FIRED_BY_SCRIPT );
+		}
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -9978,6 +10051,64 @@ void AIPlayer::doTransports( void )
 }
 
 //----------------------------------------------------------------------------------------------------------
+void AIPlayer::spotterStandOff( Object *obj, TacticalStep *step )
+{
+	AIUpdateInterface *ai = obj->getAI();
+	const Coord3D *pos = obj->getPosition();
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Real sight = obj->getVisionRange();
+
+	Object *threat = NULL;
+	Real threatReach = 0.0f;
+	Real threatDistSqr = 0.0f;
+	PartitionFilterPlayerAffiliation enemies( m_player, ALLOW_ENEMIES, true );
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &enemies, &alive, NULL };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, sight, FROM_CENTER_2D, filters );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *enemy = iter->first(); enemy; enemy = iter->next() )
+	{
+		if( enemy->getControllingPlayer() == m_player || m_player->getRelationship( enemy->getTeam() ) != ENEMIES )
+			continue;
+		if( enemy->isKindOf( KINDOF_PROJECTILE ) || !observerKnowsAbout( enemy, m_player->getPlayerIndex() ) )
+			continue;
+		const Real enemyRange = groundAttackRange( enemy );
+		if( enemyRange <= 0.0f )
+			continue;
+		const Real reach = enemyRange + Weapon_elevationRangeBonus( enemyRange, firingHeight( enemy ) - pos->z );
+		const Real distSqr = sqr( enemy->getPosition()->x - pos->x ) + sqr( enemy->getPosition()->y - pos->y );
+		if( distSqr > sqr( reach + KITE_WATCH_MARGIN + ai->getCurLocomotorSpeed() * KITE_TURN_FRAMES ) )
+			continue;
+		if( threat == NULL || distSqr < threatDistSqr )
+		{
+			threat = enemy;
+			threatReach = reach;
+			threatDistSqr = distSqr;
+		}
+	}
+	if( threat == NULL )
+		return;
+
+	const Real standoff = min( threatReach + KITE_MARGIN, sight );
+	if( threatDistSqr >= sqr( standoff - KITE_MARGIN ) )
+		return;		// already standing off: a step would only slide it sideways
+	Coord3D spot;
+	if( !pickTacticalSpot( obj, pos, threat->getPosition(), standoff, threat->getPosition(), sight, &spot ) )
+		return;
+	DEBUG_LOG(("AI TACTICS frame %d player %d keeps spotter '%s' out of '%s' reach %.0f, (%.0f,%.0f) to (%.0f,%.0f)\n",
+		now, m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), threat->getTemplate()->getName().str(), threatReach,
+		pos->x, pos->y, spot.x, spot.y));
+	// when the step is over it attack-moves to the origin; the spot, so it does not walk back in
+	step->target = INVALID_ID;
+	step->origin = spot;
+	const Real speed = max( ai->getCurLocomotorSpeed(), 0.1f );
+	const Real walk = sqrt( sqr( spot.x - pos->x ) + sqr( spot.y - pos->y ) );
+	step->resumeFrame = now + min<UnsignedInt>( KITE_STEP_MAX_FRAMES, KITE_TURN_FRAMES + REAL_TO_INT_CEIL( walk / speed ) );
+	step->rejoin = TRUE;
+	stepCalmly( obj, step, &spot );
+}
+
+//----------------------------------------------------------------------------------------------------------
 void AIPlayer::tacticsFor( Object *obj )
 {
 	// armed, not "able to attack" this frame: that reads false while a clip reloads, which is exactly
@@ -10102,6 +10233,14 @@ void AIPlayer::tacticsFor( Object *obj )
 		stepCalmly( obj, step, &safe );
 		step->rejoin = TRUE;
 		step->leaveAloneUntil = now + LEAVE_ALONE_FRAMES;
+		return;
+	}
+
+	// a spotter is the eyes of the guns behind it, and its carbine is for show: it stays just out of
+	// reach of every armed enemy it can see and keeps that enemy in sight, rather than trade shots
+	if( obj->getTemplate()->hasSpotterSight() )
+	{
+		spotterStandOff( obj, step );
 		return;
 	}
 

@@ -333,6 +333,9 @@ protected:
 		* tech building so one of them blowing up leaves the tree standing. */
 	virtual void doSuperweapons(void);
 
+	/** Fire every ready special power whose template says AIFiresWhenReady, once its science is bought. */
+	void doReadySpecialPowers(void);
+
 	Bool enemyDirection(Coord3D *dir);	///< unit vector from this base towards the nearest enemy's best known address
 	Bool isHeldExpansion(const Object *warehouse);	///< our supply center stands at it, and it is nearer our base than any enemy's
 	Bool isOurSideOfMap(const Coord3D *pos);	///< no nearer any living enemy's base than ours
@@ -637,6 +640,7 @@ protected:
 	void restoreMood(Object *obj, TacticalStep *step);
 	Bool pickTacticalSpot(const Object *obj, const Coord3D *from, const Coord3D *awayFrom, Real distance,
 		const Coord3D *mustReach, Real reach, Coord3D *spot);
+	void spotterStandOff(Object *obj, TacticalStep *step);	///< a spotter backs out of the nearest armed enemy's reach, keeping it in sight
 };
 
 #endif // _AI_PLAYER_H_

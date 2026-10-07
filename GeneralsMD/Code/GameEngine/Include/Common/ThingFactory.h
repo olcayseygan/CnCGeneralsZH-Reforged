@@ -94,6 +94,10 @@ public:
 		that one in its place, so a pilot, a drone or a paradrop the American data spawns comes out Turkish. */
 	const ThingTemplate *findSideReskin( const ThingTemplate *tmplate, const AsciiString &side );
 
+	/** Is side built out of another side's reskins (Turkey out of America's)?  Its AI runs that side's
+		scripts, so a unit the scripts name that has no reskin for side is one it can never field. */
+	Bool sideBorrowsTemplates( const AsciiString &side );
+
 	/** request a new drawable using the given template. 
 		this will throw an exception on failure; it will never return null.
 	*/
@@ -137,6 +141,8 @@ private:
 
 	/// findSideReskin's answers, NULL ones included; reset() empties it with the map's overrides
 	std::map< std::pair< const ThingTemplate*, NameKeyType >, const ThingTemplate* > m_sideReskins;
+	/// sideBorrowsTemplates' answers; reset() empties it with m_sideReskins
+	std::map< NameKeyType, Bool > m_sidesBorrowing;
 		
 };
 

@@ -44,6 +44,7 @@
 #include "GameLogic/Object.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/Team.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -254,6 +255,8 @@ void ThingFactory::reset( void )
 	// whatever the assert had just complained about.
 	DEBUG_ASSERTCRASH( m_firstTemplate != NULL, ("no templates left after deleting overrides") );
 	m_nextTemplateID = m_firstTemplate ? (UnsignedShort)(m_firstTemplate->getTemplateID() + 1) : 1;
+	// it may hold the overrides just deleted
+	m_sideReskins.clear();
 }  // end reset
 
 //-------------------------------------------------------------------------------------------------
@@ -331,6 +334,15 @@ Object *ThingFactory::newObject( const ThingTemplate *tmplate, Team *team, Objec
 			tmplate = tmp;
 	}
 
+	// a side's own reskin in place of another side's template: Turkey is built on the American data
+	const Player *owner = team ? team->getControllingPlayer() : NULL;
+	if (owner != NULL)
+	{
+		const ThingTemplate *own = findSideReskin( tmplate, owner->getSide() );
+		if (own != NULL)
+			tmplate = own;
+	}
+
 	DEBUG_ASSERTCRASH(!tmplate->isKindOf(KINDOF_DRAWABLE_ONLY), ("You may not create Objects with the template %s, only Drawables\n",tmplate->getName().str()));
 
 	// have the game logic create an object of the correct type.
@@ -359,7 +371,30 @@ Object *ThingFactory::newObject( const ThingTemplate *tmplate, Team *team, Objec
 
 	return obj;
 
-} 
+}
+
+//=============================================================================
+const ThingTemplate *ThingFactory::findSideReskin( const ThingTemplate *tmplate, const AsciiString &side )
+{
+	// EA's reskins never cross a side, so this answers NULL for every template of theirs
+	const AsciiString &tmplateSide = tmplate->getDefaultOwningSide();
+	if (side.isEmpty() || tmplateSide.isEmpty() || tmplateSide == side)
+		return NULL;
+
+	const std::pair< const ThingTemplate*, NameKeyType > key( tmplate, NAMEKEY( side ) );
+	std::map< std::pair< const ThingTemplate*, NameKeyType >, const ThingTemplate* >::const_iterator it = m_sideReskins.find( key );
+	if (it != m_sideReskins.end())
+		return it->second;
+
+	const ThingTemplate *found = NULL;
+	for (const ThingTemplate *t = m_firstTemplate; t != NULL && found == NULL; t = t->friend_getNextTemplate())
+	{
+		if (t->getDefaultOwningSide() == side && t->isEquivalentTo( tmplate ))
+			found = (const ThingTemplate *)t->getFinalOverride();
+	}
+	m_sideReskins[ key ] = found;
+	return found;
+}
 
 //=============================================================================
 Drawable *ThingFactory::newDrawable(const ThingTemplate *tmplate, DrawableStatus statusBits)

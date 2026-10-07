@@ -919,23 +919,8 @@ void AIPlayer::clearTeamsInQueue( void )
 Object *AIPlayer::buildStructureNow(const ThingTemplate *bldgPlan, BuildListInfo *info)
 {
 
-	/* No builder here to pick the side's own building, so pick it from the side.  Turkey's build list
-		 names AmericaCommandCenter (the skirmish scripts ask for it by that name), and the command
-		 center adjustBuildList puts up in place of the starting one came out American, with American
-		 dozers that built an American base. */
-	if (bldgPlan->getDefaultOwningSide() != m_player->getSide())
-	{
-		for (const ThingTemplate *t = TheThingFactory->firstTemplate(); t; t = t->friend_getNextTemplate())
-		{
-			if (t->getDefaultOwningSide() == m_player->getSide() && t->isEquivalentTo(bldgPlan))
-			{
-				bldgPlan = t;
-				break;
-			}
-		}
-	}
-
-	// inst-construct the building
+	// inst-construct the building.  Turkey's build list names AmericaCommandCenter (the skirmish
+	// scripts ask for it by that name); ThingFactory::newObject makes a Turkey player's the Turkish one.
 	Object *bldg = TheBuildAssistant->buildObjectNow( NULL, 
 																						bldgPlan,
 																						info->getLocation(),

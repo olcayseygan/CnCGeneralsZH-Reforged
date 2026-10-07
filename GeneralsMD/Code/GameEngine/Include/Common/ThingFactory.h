@@ -89,6 +89,11 @@ public:
 	*/
 	Object *newObject( const ThingTemplate *tmplate, Team *team, ObjectStatusMaskType statusMask = OBJECT_STATUS_MASK_NONE );
 
+	/** The reskin of tmplate that belongs to side, when tmplate belongs to another: TurkeyInfantryPilot
+		for an AmericaInfantryPilot made for a Turkey player.  NULL when there is none.  newObject makes
+		that one in its place, so a pilot, a drone or a paradrop the American data spawns comes out Turkish. */
+	const ThingTemplate *findSideReskin( const ThingTemplate *tmplate, const AsciiString &side );
+
 	/** request a new drawable using the given template. 
 		this will throw an exception on failure; it will never return null.
 	*/
@@ -129,6 +134,9 @@ private:
 	UnsignedShort					m_nextTemplateID;			///< next available ID for templates 
 
 	ThingTemplateHashMap	m_templateHashMap;		///< all thing templates, for fast lookup.
+
+	/// findSideReskin's answers, NULL ones included; reset() empties it with the map's overrides
+	std::map< std::pair< const ThingTemplate*, NameKeyType >, const ThingTemplate* > m_sideReskins;
 		
 };
 

@@ -128,6 +128,8 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "ShroudClearingRange",	INI::parseReal,												NULL,		offsetof( ThingTemplate, m_shroudClearingRange ) },
 	{ "AcquiresBeyondVision",	INI::parseBool,												NULL,		offsetof( ThingTemplate, m_acquiresBeyondVision ) },
 	{ "SpotterSight",					INI::parseBool,												NULL,		offsetof( ThingTemplate, m_spotterSight ) },
+	{ "CooperativeBuilder",		INI::parseBool,												NULL,		offsetof( ThingTemplate, m_cooperativeBuilder ) },
+	{ "SpeedScale",						INI::parseReal,												NULL,		offsetof( ThingTemplate, m_speedScale ) },
 	{ "ShroudRevealToAllRange",	INI::parseReal,											NULL,		offsetof( ThingTemplate, m_shroudRevealToAllRange ) },
 
 	{ "PlacementViewAngle",		INI::parseAngleReal,									NULL,		offsetof( ThingTemplate, m_placementViewAngle ) },
@@ -1089,6 +1091,8 @@ ThingTemplate::ThingTemplate() :
 	m_shroudClearingRange = -1.0f;
 	m_acquiresBeyondVision = FALSE;
 	m_spotterSight = FALSE;
+	m_cooperativeBuilder = FALSE;
+	m_speedScale = 1.0f;
 	m_shroudRevealToAllRange = -1.0f;
 
 	m_buildCost = 0;

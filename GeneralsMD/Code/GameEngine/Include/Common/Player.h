@@ -525,6 +525,7 @@ public:
 	void removeRadar( Bool disableProof );///< One less thing produces radar
 	void disableRadar();	///< No matter how many radar producers I have, I do not have radar
 	void enableRadar();	///< remove the restriction imposed by disableRadar
+	void jamRadarUntil( UnsignedInt frame );	///< an enemy's electronic blinding: no radar at all, disable proof or not, before this frame
 	Bool hasRadar() const;///< A positive number of radar producers, plus my radar is not disabled
 	Bool okToPlayRadarEdgeSound();///< just like it "sounds"
 	//Battle plans effect the players abilities... so may as well add it here. Also
@@ -943,6 +944,7 @@ private:
 	Int													m_radarCount;									///< # of facilities that have a radar under the players control
 	Int													m_disableProofRadarCount;			///< # of disable proof radars.  A disable proof one will be in both refcounts
 	Bool												m_radarDisabled;							///< The radar is disabled regardless of the number of radar objects
+	UnsignedInt									m_radarJammedUntilFrame;			///< no radar at all before this logic frame (jamRadarUntil)
 	Int													m_bombardBattlePlans;					///< Number of strategy centers with active bombardment plan
 	Int													m_holdTheLineBattlePlans;			///< Number of strategy centers with active hold the line plan
 	Int													m_searchAndDestroyBattlePlans;///< Number of strategy centers with active search and destroy plan

@@ -178,6 +178,7 @@ const ScienceInfo* ScienceStore::findScienceInfo(ScienceType st) const
 			{ "IsGrantable", INI::parseBool, NULL, offsetof( ScienceInfo, m_grantable ) },
 			{ "DisplayName", INI::parseAndTranslateLabel, NULL, offsetof( ScienceInfo, m_name) },
 			{ "Description", INI::parseAndTranslateLabel, NULL, offsetof( ScienceInfo, m_description) },
+			{ "GrantsUpgrade", INI::parseAsciiString, NULL, offsetof( ScienceInfo, m_grantedUpgradeName) },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -248,6 +249,13 @@ Int ScienceStore::getSciencePurchaseCost(ScienceType st) const
 	{
 		return 0;
 	}
+}
+
+//-----------------------------------------------------------------------------
+AsciiString ScienceStore::getGrantedUpgradeName(ScienceType st) const
+{
+	const ScienceInfo* si = findScienceInfo(st);
+	return si ? si->m_grantedUpgradeName : AsciiString::TheEmptyString;
 }
 
 //-----------------------------------------------------------------------------

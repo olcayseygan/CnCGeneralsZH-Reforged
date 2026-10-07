@@ -65,6 +65,7 @@ private:
 	ScienceVec						m_prereqSciences;
 	Int										m_sciencePurchasePointCost;
 	Bool									m_grantable;
+	AsciiString						m_grantedUpgradeName;	// a player upgrade the player completes the moment it has this science
 
 	ScienceInfo() :
 		m_science(SCIENCE_INVALID),
@@ -107,6 +108,9 @@ public:
 	Bool playerHasRootPrereqsForScience(const Player* player, ScienceType st) const;
 
 	Int getSciencePurchaseCost(ScienceType science) const;
+
+	/// GrantsUpgrade: the player upgrade that comes with the science, empty when none
+	AsciiString getGrantedUpgradeName(ScienceType science) const;
 
 	/// does st name prereq among its own prerequisites (one level, not the whole chain)
 	Bool isDirectPrereq(ScienceType prereq, ScienceType st) const;

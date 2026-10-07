@@ -1040,6 +1040,7 @@ Bool AIUpdateInterface::chooseLocomotorSetExplicit(LocomotorSetType wst)
 			if (lt)
 				m_locomotorSet.addLocomotor(lt);
 		}
+		m_locomotorSet.setSpeedScale(obj->getTemplate()->getSpeedScale());
 		m_curLocomotorSet = wst;
 		return TRUE;
 	}

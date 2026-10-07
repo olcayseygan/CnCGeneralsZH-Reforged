@@ -126,6 +126,7 @@ public:
 	Real getViewObjectRange( void ) const { return getFO()->m_viewObjectRange; }
 	Real getRadiusCursorRadius() const { return getFO()->m_radiusCursorRadius; }
 	Bool isShortcutPower() const { return getFO()->m_shortcutPower; }
+	Bool isFiredByAIWhenReady() const { return getFO()->m_aiFiresWhenReady; }
 	AcademyClassificationType getAcademyClassificationType() const { return m_academyClassificationType; }
 
 private: 
@@ -148,6 +149,7 @@ private:
 	Bool							m_publicTimer;				///< display a countdown timer for this special power for all to see
 	Bool							m_sharedNSync;				///< If true, this is a special that is shared between all of a player's command centers
 	Bool							m_shortcutPower;		///< Is this shortcut power capable of being fired by the side panel?
+	Bool							m_aiFiresWhenReady;	///< the skirmish AI fires it on its own (AIPlayer::doReadySpecialPowers); no script names it
 
 	static const FieldParse m_specialPowerFieldParse[];		///< the parse table
 

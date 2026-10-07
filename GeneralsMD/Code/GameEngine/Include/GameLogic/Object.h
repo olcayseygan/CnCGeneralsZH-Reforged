@@ -485,6 +485,9 @@ public:
 	Real getOwnShroudClearingRange() const { return m_shroudClearingRange; }	///< the range set on us, before a scaffold's zero; what a scalar multiplies
 	void setShroudClearingRange( Real newShroudClearingRange );	///< Access to setting someone's clear shroud distance
 	void setVisionSpied(Bool setting, Int byWhom);///< Change who is looking through our eyes
+	void addSightJammer();		///< an enemy jammer's field took it in: its sight shrinks until the last one lets go
+	void removeSightJammer();	///< a jammer's field let go of it
+	Bool isSightJammed() const { return m_sightJammerCount > 0; }
 
 	// Both of these calls are intended to only be used by TerrainLogic, specifically setActiveBoundary()
 	void friend_prepareForMapBoundaryAdjust(void);
@@ -788,6 +791,7 @@ private:
 	Real					m_visionRange;										///< looking range
 	Real					m_shroudClearingRange;						///< looking range for shroud ONLY
 	Real					m_shroudRange;										///< like looking range, this is how far I shroud others' looks
+	Int						m_sightJammerCount;								///< enemy jammers in whose field this stands; above zero its sight shrinks to a few feet
 
 	DisabledMaskType	m_disabledMask;
 	UnsignedInt				m_disabledTillFrame[ DISABLED_COUNT ];

@@ -411,6 +411,7 @@ public:
 	inline Real getShockWaveTaperOff() const { return m_shockWaveTaperOff; }
 
 	inline Real getRequestAssistRange() const {return m_requestAssistRange;}
+	inline Bool seeksMostValuable() const { return m_seeksMostValuable; }
 	inline AsciiString getName() const { return m_name; }
 	inline AsciiString getProjectileStreamName() const { return m_projectileStreamName; }
 	inline AsciiString getLaserName() const { return m_laserName; }
@@ -511,6 +512,7 @@ private:
 	Real m_aimDelta;												///< when aiming, consider yourself "aimed" if you are within +/- this much of an angle
 	Real m_scatterRadius;										///< Radius of area actual fire point will be in, default is zero for no deviation
 	Real m_blindScatterRadius;							///< added to the scatter when the firer's player cannot see where the shot is going
+	Bool m_seeksMostValuable;								///< fired at a unit, it goes for the most expensive enemy within its range instead
 	Real m_scatterTargetScalar;							///< Radius of area covered by the coordinates in the scatterTarget table
 	std::vector<Coord2D> m_scatterTargets;	///< instead of pure randomness, this is the list of places I will randomly choose from to attack
 	DamageType m_damageType;								///< damage type enum
@@ -921,6 +923,11 @@ extern Real Weapon_elevationRangeBonus( Real range, Real heightAboveTarget );
 
 ///< range as source reaches something standing at targetZ; an aircraft gets no high ground
 extern Real Weapon_elevatedRange( const Object *source, Real range, Real targetZ );
+
+///< source's enemies on the ground within radius of center, the most expensive first and the lower
+///< ObjectID first among equals, at most maxCount of them; the order is the same on every machine
+extern void Weapon_findMostValuableEnemies( const Object *source, const Coord3D *center, Real radius,
+																					 Int maxCount, std::vector<Object*>& found );
 
 #endif // __WEAPON_H_
 

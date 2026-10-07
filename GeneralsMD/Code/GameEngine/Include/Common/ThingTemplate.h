@@ -436,7 +436,11 @@ public:
 	Bool acquiresBeyondVision() const { return m_acquiresBeyondVision; }
 	/// SpotterSight: it keeps its whole ShroudClearingRange however short its weapon is (Object::look)
 	Bool hasSpotterSight() const { return m_spotterSight; }
-	
+	/// CooperativeBuilder: it keeps building a site another builder of its player is already on, and both add progress
+	Bool isCooperativeBuilder() const { return m_cooperativeBuilder; }
+	/// SpeedScale: multiplies the speeds of every locomotor it drives on, which a reskin shares with its source
+	Real getSpeedScale() const { return m_speedScale; }
+
 	//This one is okay to check directly... because it doesn't get effected by bonuses.
 	Real getShroudRevealToAllRange() const { return m_shroudRevealToAllRange; }
 	
@@ -750,6 +754,8 @@ private:
 	Real					m_shroudClearingRange;				///< Since So many things got added to "Seeing" functionality, we need to split this part out.
 	Bool					m_acquiresBeyondVision;				///< Turkey's artillery: idle auto-acquire reaches its weapon range through a spotter's eyes
 	Bool					m_spotterSight;								///< Turkey's spotters: sight not capped at half as far again as the weapon reaches
+	Bool					m_cooperativeBuilder;					///< Turkey's engineers: two on one site build it twice as fast
+	Real					m_speedScale;									///< Turkey's units: their plan's speeds on the American locomotors
 	Real					m_shroudRevealToAllRange;			///< When > zero, the shroud gets revealed to all players.
 	Real					m_placementViewAngle;				///< when placing buildings this will be the angle of the building when "floating" at the mouse
 	Real					m_factoryExitWidth;					///< when placing buildings this will be the width of the reserved exit area on the right side.

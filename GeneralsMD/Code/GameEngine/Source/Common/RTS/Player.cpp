@@ -363,6 +363,7 @@ Player::Player( Int playerIndex )
 	m_radarCount = 0;
 	m_disableProofRadarCount = 0;
 	m_radarDisabled = FALSE;
+	m_radarJammedUntilFrame = 0;
 	m_bombardBattlePlans = 0;
 	m_holdTheLineBattlePlans = 0;
 	m_searchAndDestroyBattlePlans = 0;
@@ -415,6 +416,7 @@ void Player::init(const PlayerTemplate* pt)
 	m_radarCount = 0;
 	m_disableProofRadarCount = 0;
 	m_radarDisabled = FALSE;
+	m_radarJammedUntilFrame = 0;
 
 	m_bombardBattlePlans = 0;
 	m_holdTheLineBattlePlans = 0;
@@ -2736,9 +2738,19 @@ Bool Player::addScience(ScienceType science)
 
 	}
 
+	// a science can carry a player upgrade (Turkey's fuel resupply): it lands on every unit the
+	// player has now and every unit it builds later, the same as a bought one
+	AsciiString grantedUpgradeName = TheScienceStore->getGrantedUpgradeName(science);
+	if (!grantedUpgradeName.isEmpty())
+	{
+		const UpgradeTemplate *grantedUpgrade = TheUpgradeCenter->findUpgrade(grantedUpgradeName);
+		DEBUG_ASSERTCRASH(grantedUpgrade, ("science %s grants unknown upgrade %s\n", TheScienceStore->getInternalNameForScience(science).str(), grantedUpgradeName.str()));
+		addUpgrade(grantedUpgrade, UPGRADE_STATUS_COMPLETE);
+	}
+
 	// notify the script engine
 	TheScriptEngine->notifyOfAcquiredScience(getPlayerIndex(), science);
-	
+
 	return true;
 }
 
@@ -3822,8 +3834,26 @@ void Player::enableRadar()
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
+void Player::jamRadarUntil( UnsignedInt frame )
+{
+	Bool hadRadar = hasRadar();
+	m_radarJammedUntilFrame = max( m_radarJammedUntilFrame, frame );
+
+	if( hadRadar && !hasRadar() && okToPlayRadarEdgeSound() )
+	{
+		AudioEventRTS soundToPlay = TheAudio->getMiscAudio()->m_radarOfflineSound;
+		soundToPlay.setPlayerIndex(getPlayerIndex());
+		TheAudio->addAudioEvent(&soundToPlay);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 Bool Player::hasRadar() const
 {
+	if( TheGameLogic->getFrame() < m_radarJammedUntilFrame )
+		return FALSE;
+
 	if( m_radarDisabled  && (m_disableProofRadarCount == 0) )
 		return FALSE;// Nope, no matter how many you have, if I say no, you don't have it
 
@@ -4641,13 +4671,14 @@ void Player::crc( Xfer *xfer )
 	* 9: The shift queue, m_orderQueue (fork).
 	* 10: The vision spies (fork).
 	* 11: m_attackedFrame, which the skirmish AI's base-under-attack test reads (fork).
+	* 12: m_radarJammedUntilFrame, an enemy's electronic blinding (fork).
 	*/
 // ------------------------------------------------------------------------------------------------
 void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 11;
+	const XferVersion currentVersion = 12;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5210,6 +5241,11 @@ void Player::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt( &m_attackedFrame );
 	else
 		m_attackedFrame = 0;
+
+	if( version >= 12 )
+		xfer->xferUnsignedInt( &m_radarJammedUntilFrame );
+	else
+		m_radarJammedUntilFrame = 0;
 
 }  // end xfer
 

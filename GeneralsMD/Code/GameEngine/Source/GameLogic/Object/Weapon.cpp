@@ -222,6 +222,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "AcceptableAimDelta",				INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_aimDelta) },		
 	{ "ScatterRadius",						INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterRadius) },		
 	{ "BlindScatterRadius",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_blindScatterRadius) },
+	{ "SeeksMostValuable",				INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_seeksMostValuable) },
 	{ "ScatterTargetScalar",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterTargetScalar) },		
 	{ "ScatterRadiusVsInfantry",	INI::parseReal,													NULL,							offsetof( WeaponTemplate, m_infantryInaccuracyDist ) },
 	{ "DamageType",								DamageTypeFlags::parseSingleBitFromINI,	NULL,							offsetof(WeaponTemplate, m_damageType) },		
@@ -310,6 +311,7 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_aimDelta											= 0.0f;
 	m_scatterRadius									= 0.0f;
 	m_blindScatterRadius						= 0.0f;
+	m_seeksMostValuable							= FALSE;
 	m_scatterTargetScalar						= 0.0f;
 	m_shockWaveAmount								= 0.0f;
 	m_shockWaveRadius								= 0.0f;
@@ -2993,9 +2995,63 @@ void Weapon::preFireWeapon( const Object *source, const Object *victim )
 }
 
 //-------------------------------------------------------------------------------------------------
+struct ValuedEnemy
+{
+	Int cost;
+	Object *obj;
+};
+
+static Bool isMoreValuable( const ValuedEnemy& a, const ValuedEnemy& b )
+{
+	if( a.cost != b.cost )
+		return a.cost > b.cost;
+	return a.obj->getID() < b.obj->getID();
+}
+
+void Weapon_findMostValuableEnemies( const Object *source, const Coord3D *center, Real radius,
+																		 Int maxCount, std::vector<Object*>& found )
+{
+	found.clear();
+
+	PartitionFilterRelationship filterEnemies( source, PartitionFilterRelationship::ALLOW_ENEMIES );
+	PartitionFilterAlive filterAlive;
+	PartitionFilterSameMapStatus filterMapStatus( source );
+	PartitionFilterStealthedAndUndetected filterHidden( source, FALSE );
+	PartitionFilter *filters[] = { &filterEnemies, &filterAlive, &filterMapStatus, &filterHidden, NULL };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( center, radius, FROM_CENTER_2D, filters );
+	MemoryPoolObjectHolder hold( iter );
+
+	std::vector<ValuedEnemy> candidates;
+	for( Object *obj = iter->first(); obj; obj = iter->next() )
+	{
+		if( obj->isAirborneTarget() || obj->isKindOf( KINDOF_PROJECTILE ) || obj->isKindOf( KINDOF_MINE ) ||
+				obj->isKindOf( KINDOF_UNATTACKABLE ) || obj->isKindOf( KINDOF_INERT ) )
+			continue;
+
+		ValuedEnemy candidate;
+		candidate.cost = obj->getTemplate()->calcCostToBuild( obj->getControllingPlayer() );
+		candidate.obj = obj;
+		candidates.push_back( candidate );
+	}
+
+	std::sort( candidates.begin(), candidates.end(), isMoreValuable );
+	for( Int i = 0; i < (Int)candidates.size() && i < maxCount; ++i )
+		found.push_back( candidates[ i ].obj );
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool Weapon::fireWeapon(const Object *source, Object *target, ObjectID* projectileID)
 {
 	//CRCDEBUG_LOG(("Weapon::fireWeapon() for %s at %s\n", DescribeObject(source).str(), DescribeObject(target).str()));
+	/* Turkey's swarm software: the munition picks its own target, the most expensive enemy it can
+		 reach, whatever the drone was aimed at. */
+	if( m_template->seeksMostValuable() && target )
+	{
+		std::vector<Object*> found;
+		Weapon_findMostValuableEnemies( source, source->getPosition(), getAttackRange( source ), 1, found );
+		if( !found.empty() )
+			target = found.front();
+	}
 	return privateFireWeapon( source, target, NULL, false, false, 0, projectileID, TRUE );
 }
 

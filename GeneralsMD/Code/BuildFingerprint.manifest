@@ -642,6 +642,7 @@ GameEngine/Include/GameLogic/Module/ImmortalBody.h
 GameEngine/Include/GameLogic/Module/InactiveBody.h
 GameEngine/Include/GameLogic/Module/InstantDeathBehavior.h
 GameEngine/Include/GameLogic/Module/InternetHackContain.h
+GameEngine/Include/GameLogic/Module/JammerUpdate.h
 GameEngine/Include/GameLogic/Module/JetAIUpdate.h
 GameEngine/Include/GameLogic/Module/JetSlowDeathBehavior.h
 GameEngine/Include/GameLogic/Module/KeepObjectDie.h
@@ -692,6 +693,7 @@ GameEngine/Include/GameLogic/Module/ProneUpdate.h
 GameEngine/Include/GameLogic/Module/PropagandaCenterBehavior.h
 GameEngine/Include/GameLogic/Module/PropagandaTowerBehavior.h
 GameEngine/Include/GameLogic/Module/QueueProductionExitUpdate.h
+GameEngine/Include/GameLogic/Module/RadarJamSpecialPower.h
 GameEngine/Include/GameLogic/Module/RadarUpdate.h
 GameEngine/Include/GameLogic/Module/RadarUpgrade.h
 GameEngine/Include/GameLogic/Module/RadiusDecalUpdate.h
@@ -714,6 +716,7 @@ GameEngine/Include/GameLogic/Module/SabotageSupplyCenterCrateCollide.h
 GameEngine/Include/GameLogic/Module/SabotageSupplyDropzoneCrateCollide.h
 GameEngine/Include/GameLogic/Module/SalvageCrateCollide.h
 GameEngine/Include/GameLogic/Module/ShroudCrateCollide.h
+GameEngine/Include/GameLogic/Module/SightUpgrade.h
 GameEngine/Include/GameLogic/Module/SlavedUpdate.h
 GameEngine/Include/GameLogic/Module/SlowDeathBehavior.h
 GameEngine/Include/GameLogic/Module/SmartBombTargetHomingUpdate.h
@@ -748,6 +751,7 @@ GameEngine/Include/GameLogic/Module/SupplyTruckAIUpdate.h
 GameEngine/Include/GameLogic/Module/SupplyWarehouseCreate.h
 GameEngine/Include/GameLogic/Module/SupplyWarehouseCripplingBehavior.h
 GameEngine/Include/GameLogic/Module/SupplyWarehouseDockUpdate.h
+GameEngine/Include/GameLogic/Module/SwarmStrikeSpecialPower.h
 GameEngine/Include/GameLogic/Module/TechBuildingBehavior.h
 GameEngine/Include/GameLogic/Module/TempWeaponBonusHelper.h
 GameEngine/Include/GameLogic/Module/TensileFormationUpdate.h
@@ -1299,9 +1303,11 @@ GameEngine/Source/GameLogic/Object/SpecialPower/DefectorSpecialPower.cpp
 GameEngine/Source/GameLogic/Object/SpecialPower/DemoralizeSpecialPower.cpp
 GameEngine/Source/GameLogic/Object/SpecialPower/FireWeaponPower.cpp
 GameEngine/Source/GameLogic/Object/SpecialPower/OCLSpecialPower.cpp
+GameEngine/Source/GameLogic/Object/SpecialPower/RadarJamSpecialPower.cpp
 GameEngine/Source/GameLogic/Object/SpecialPower/SpecialAbility.cpp
 GameEngine/Source/GameLogic/Object/SpecialPower/SpecialPowerModule.cpp
 GameEngine/Source/GameLogic/Object/SpecialPower/SpyVisionSpecialPower.cpp
+GameEngine/Source/GameLogic/Object/SpecialPower/SwarmStrikeSpecialPower.cpp
 GameEngine/Source/GameLogic/Object/Update/AIUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/AIUpdate/AssaultTransportAIUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/AIUpdate/ChinookAIUpdate.cpp
@@ -1350,6 +1356,7 @@ GameEngine/Source/GameLogic/Object/Update/HeightDieUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/HelicopterSlowDeathUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/HijackerUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/HordeUpdate.cpp
+GameEngine/Source/GameLogic/Object/Update/JammerUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/LaserUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/LifetimeUpdate.cpp
 GameEngine/Source/GameLogic/Object/Update/MissileLauncherBuildingUpdate.cpp
@@ -1402,6 +1409,7 @@ GameEngine/Source/GameLogic/Object/Upgrade/PassengersFireUpgrade.cpp
 GameEngine/Source/GameLogic/Object/Upgrade/PowerPlantUpgrade.cpp
 GameEngine/Source/GameLogic/Object/Upgrade/RadarUpgrade.cpp
 GameEngine/Source/GameLogic/Object/Upgrade/ReplaceObjectUpgrade.cpp
+GameEngine/Source/GameLogic/Object/Upgrade/SightUpgrade.cpp
 GameEngine/Source/GameLogic/Object/Upgrade/StatusBitsUpgrade.cpp
 GameEngine/Source/GameLogic/Object/Upgrade/StealthUpgrade.cpp
 GameEngine/Source/GameLogic/Object/Upgrade/SubObjectsUpgrade.cpp

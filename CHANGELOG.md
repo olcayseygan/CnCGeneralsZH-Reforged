@@ -8,12 +8,12 @@ found and fixed â€” EA's own, not port damage.**
 
 ---
 
-## Turkey joins the fight
+## Türkiye joins the fight
 
-- Turkey is a fourth side in the skirmish and multiplayer lobbies, with an army of its own: Mehmetcik riflemen, Sungur missile teams and Maroon Berets from the Barracks; the Altay tank, the Kirpi carrier, Korkut air defense, Firtina howitzers and Sakarya rocket launchers from the Factory; Bayraktar and Akinci drones, the Gokbey helicopter and the Kizilelma fighter from the Airfield. Every name and tooltip reads in English and in Turkish.
-- Turkey kills from range and cannot see for itself. The Firtina throws a shell 600 and sees 100, so it waits until a spotter team, a Cobra scout, a drone or a cheap Radar Tower finds the target, then fires on its own. Force it to shell ground nobody can see and the shots go wide, about half of them off a barracks-sized target. Extended Range and Precision Guidance at the Factory push the guns further and tighten the blind spread.
+- Türkiye is a fourth side in the skirmish and multiplayer lobbies, with an army of its own: Mehmetcik riflemen, Sungur missile teams and Maroon Berets from the Barracks; the Altay tank, the Kirpi carrier, Korkut air defense, Firtina howitzers and Sakarya rocket launchers from the Factory; Bayraktar and Akinci drones, the Gokbey helicopter and the Kizilelma fighter from the Airfield. Every name and tooltip reads in English and in Turkish.
+- Türkiye kills from range and cannot see for itself. The Firtina throws a shell 600 and sees 100, so it waits until a spotter team, a Cobra scout, a drone or a cheap Radar Tower finds the target, then fires on its own. Force it to shell ground nobody can see and the shots go wide, about half of them off a barracks-sized target. Extended Range and Precision Guidance at the Factory push the guns further and tighten the blind spread.
 - Combat Engineers build the base in place of a dozer. They are infantry, so they can be shot and run over. The Barracks' Mine Kit lets them bury mines, and the Factory's Armor Pack toughens the Kirpi and the Altay.
-- Turkey's first rank buys its own power, a Minefield a cargo plane sows wherever you point, beside the Spy Drone and Fuel Resupply, which keeps the drones over the target longer. Rank 3 offers a loitering munition that dives on whatever it is pointed at, Electronic Blinding, which shuts every enemy radar in the area off for 30 seconds, and paratroopers. The top rank buys the Swarm Strike: ten munitions over a wide circle, each on a different target and the most expensive first, so a column of tanks loses its tanks and the riflemen walking beside them are left standing. Leaflet Drop and the Spectre gunship are still American borrowings.
+- Türkiye's first rank buys its own power, a Minefield a cargo plane sows wherever you point, beside the Spy Drone and Fuel Resupply, which keeps the drones over the target longer. Rank 3 offers a loitering munition that dives on whatever it is pointed at, Electronic Blinding, which shuts every enemy radar in the area off for 30 seconds, and paratroopers. The top rank buys the Swarm Strike: ten munitions over a wide circle, each on a different target and the most expensive first, so a column of tanks loses its tanks and the riflemen walking beside them are left standing. Leaflet Drop and the Spectre gunship are still American borrowings.
 - Two engineers on one building put it up in half the time, three in a third.
 - The Koral electronic warfare vehicle jams everything within 400 of it. Enemy drones and spotters inside the field go nearly blind, and guided missiles fired into it lose their lock and fly wide.
 - A Maroon Beret can take an enemy supply truck. The truck becomes yours without any money changing hands, and the Beret stays inside it for good. American harvesters are helicopters, so there is nothing to take from America.
@@ -21,7 +21,7 @@ found and fixed â€” EA's own, not port damage.**
 - Turkish units move at their own speeds. The engineer, the spotter team and the Kirpi are slow, and the Korkut keeps up with the tanks.
 - A Turkish computer player fires its powers, the Minefield included, as soon as they are ready, and pulls its spotter teams back out of the enemy's reach while keeping the enemy in sight.
 - The units still borrow American and other sides' models, voices and cameos.
-- The computer plays Turkey too. A Turkish AI puts up a full base with radar towers and air defense sites, sends supply trucks, fields the new army, artillery included, and attacks.
+- The computer plays Türkiye too. A Turkish AI puts up a full base with radar towers and air defense sites, sends supply trucks, fields the new army, artillery included, and attacks.
 
 ## Zero Hour on a Mac, on Linux and on the Steam Deck
 

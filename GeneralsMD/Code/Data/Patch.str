@@ -1754,15 +1754,15 @@ END
 // The Turkey faction (PlayerTemplateReforged.ini, TurkeyReforged.ini). Units, buildings, buttons, upgrades.
 
 INI:FactionTurkey
-"Turkey"
+"Türkiye"
 END
 
 SIDE:Turkey
-"Turkey"
+"Türkiye"
 END
 
 TOOLTIP:BioStrategyLong_Turkey
-"Turkey kills from range but cannot see for itself: its artillery fires 600 and sees 100, so a spotter, a UAV or a radar tower has to find the target"
+"Türkiye kills from range but cannot see for itself: its artillery fires 600 and sees 100, so a spotter, a UAV or a radar tower has to find the target"
 END
 
 GUI:BioFeatures_Turkey
@@ -1874,7 +1874,7 @@ CONTROLBAR:ConstructTurkeyTankAltay
 END
 
 CONTROLBAR:ToolTipTurkeyTankAltay
-"Main battle tank, the only direct-fire vehicle in Turkey's factory."
+"Main battle tank, the only direct-fire vehicle in Türkiye's factory."
 END
 
 OBJECT:TurkeyVehicleKorkut

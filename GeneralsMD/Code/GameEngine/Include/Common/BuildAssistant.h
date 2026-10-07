@@ -197,6 +197,11 @@ public:
 	/// are all the requirements for making this unit (except available cash) are satisfied
 	virtual Bool isPossibleToMakeUnit( Object *builder, const ThingTemplate *whatToBuild ) const;
 
+	/** The template the builder's own build button names for whatToBuild, which differs from it when
+		the two are reskins of each other: asked for an AmericaVehicleChinook, a Turkey Supply Center
+		makes its TurkeyVehicleChinook.  NULL when no button builds it. */
+	const ThingTemplate *findBuildButtonTemplate( Object *builder, const ThingTemplate *whatToBuild ) const;
+
 	/// sell an object
 	virtual void sellObject( Object *obj );
 

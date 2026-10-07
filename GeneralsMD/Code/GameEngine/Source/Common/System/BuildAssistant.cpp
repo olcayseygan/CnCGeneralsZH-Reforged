@@ -356,6 +356,10 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 	// A NULL constructor Object means a script built building so let it slide.
 	if( (constructorObject != NULL) && !isPossibleToMakeUnit(constructorObject, what) )
 		return NULL;
+	// the dozer puts up its own side's building: a Turkey dozer the AI asks for an AmericaBarracks
+	// builds a TurkeyBarracks, and an American one never a Turkish reskin
+	if( constructorObject != NULL )
+		what = findBuildButtonTemplate( constructorObject, what );
 
 	// clear out any objects from the building area that are "auto-clearable" when building
 	clearRemovableForConstruction( what, pos, angle );
@@ -1382,6 +1386,24 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 	if( builder == NULL || whatToBuild == NULL )
 		return FALSE;
 
+	const ThingTemplate *buttonTemplate = findBuildButtonTemplate( builder, whatToBuild );
+	if( buttonTemplate == NULL )
+		return FALSE;
+
+	// make sure that the player can actually make this unit by checking prereqs and such
+	Player *player = builder->getControllingPlayer();
+	if( player->canBuild( buttonTemplate ) == FALSE )
+		return FALSE;
+
+	// all is well
+	return TRUE;
+
+}
+
+//-------------------------------------------------------------------------------------------------
+const ThingTemplate *BuildAssistant::findBuildButtonTemplate( Object *builder, const ThingTemplate *whatToBuild ) const
+{
+
 	// get the command set for the producer object
 	const CommandSet *commandSet = TheControlBar->findCommandSet( builder->getCommandSetString() );
 	
@@ -1393,40 +1415,34 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 													whatToBuild->getName().str(),
 													builder->getTemplate()->getName().str(),
 													builder->getTemplate()->getName().str()) );
-		return FALSE;
+		return NULL;
 
 	}  // end if
 
 	//
 	// scan the command set, we must find whatToBuild as one of the "build" commands available
 	// in the command set.  We want to have all players run this logic on all their machines
-	// so that nobody can hack one game and cheat to make stuff that they can't usually make
+	// so that nobody can hack one game and cheat to make stuff that they can't usually make.
+	// A button naming whatToBuild itself wins over one naming a reskin of it.
 	//
-	const CommandButton *commandButton;
-	const CommandButton *foundCommand = NULL;
-	Int i;
-	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	const ThingTemplate *found = NULL;
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
-		
+
 		// get this button
-		commandButton = commandSet->getCommandButton(i);
+		const CommandButton *commandButton = commandSet->getCommandButton(i);
 		if( commandButton &&
 				(commandButton->getCommandType() == GUI_COMMAND_UNIT_BUILD ||
 				 commandButton->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT) &&
 				commandButton->getThingTemplate()->isEquivalentTo(whatToBuild) )
-			foundCommand = commandButton;
+		{
+			found = commandButton->getThingTemplate();
+			if( found == whatToBuild )
+				break;
+		}
 
 	}  // end for i
-	if( foundCommand == NULL )
-		return FALSE;
-
-	// make sure that the player can actually make this unit by checking prereqs and such
-	Player *player = builder->getControllingPlayer();
-	if( player->canBuild( foundCommand->getThingTemplate() ) == FALSE )
-		return FALSE;
-
-	// all is well
-	return TRUE;
+	return found;
 
 }
 

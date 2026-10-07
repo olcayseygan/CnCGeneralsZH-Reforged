@@ -1369,13 +1369,13 @@ void MultiPlayerLoadScreen::init( GameInfo *game )
 	}
 	else 
 	{
-		// the main original factions don't have associated generals
+		// the main original factions don't have associated generals; the fork's own (Turkey) wear the logo of the side they are built on
 		AsciiString imageName;
-		if (pt->getName() == "FactionAmerica")
+		if (pt->getBaseSide() == "USA")
 			portrait = TheMappedImageCollection->findImageByName("SAFactionLogoLg_US");
-		else if (pt->getName() == "FactionGLA")
+		else if (pt->getBaseSide() == "GLA")
 			portrait = TheMappedImageCollection->findImageByName("SUFactionLogoLg_GLA");
-		else if (pt->getName() == "FactionChina")
+		else if (pt->getBaseSide() == "China")
 			portrait = TheMappedImageCollection->findImageByName("SNFactionLogoLg_China");
 		else
 			DEBUG_ASSERTCRASH(NULL, ("Unexpected player template"));
@@ -1654,13 +1654,13 @@ void GameSpyLoadScreen::init( GameInfo *game )
 	}
 	else 
 	{
-		// the main original factions don't have associated generals
+		// the main original factions don't have associated generals; the fork's own (Turkey) wear the logo of the side they are built on
 		AsciiString imageName;
-		if (pt->getName() == "FactionAmerica")
+		if (pt->getBaseSide() == "USA")
 			portrait = TheMappedImageCollection->findImageByName("SAFactionLogo144_US");
-		else if (pt->getName() == "FactionGLA")
+		else if (pt->getBaseSide() == "GLA")
 			portrait = TheMappedImageCollection->findImageByName("SUFactionLogo144_GLA");
-		else if (pt->getName() == "FactionChina")
+		else if (pt->getBaseSide() == "China")
 			portrait = TheMappedImageCollection->findImageByName("SNFactionLogo144_China");
 		else
 			DEBUG_ASSERTCRASH(NULL, ("Unexpected player template"));

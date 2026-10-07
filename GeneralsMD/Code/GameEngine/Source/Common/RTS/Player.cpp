@@ -864,6 +864,29 @@ void Player::setDefaultTeam(void) {
 }
 
 //=============================================================================
+static Int findSkirmishSideNamed(const AsciiString& side)
+{
+	for (Int i = 0; i < TheSidesList->getNumSkirmishSides(); ++i)
+	{
+		const PlayerTemplate* spt = ThePlayerTemplateStore->findPlayerTemplate(NAMEKEY(TheSidesList->getSkirmishSideInfo(i)->getDict()->getAsciiString(TheKey_playerFaction)));
+		if (spt && spt->getSide() == side)
+			return i;
+	}
+	return -1;
+}
+
+/* The skirmish player whose scripts and teams a computer seat of this side takes.  A faction the
+   map's skirmish scripts were never written for (the fork's own, Turkey) takes the scripts of the
+   original faction it is built on. */
+static Int findSkirmishSide(const AsciiString& side, const AsciiString& baseSide)
+{
+	Int i = findSkirmishSideNamed(side);
+	if (i < 0)
+		i = findSkirmishSideNamed(ThePlayerTemplateStore->getOldFactionSide(baseSide));
+	return i;
+}
+
+//=============================================================================
 // This is called from PlayerList->newGame()
 //
 void Player::initFromDict(const Dict* d)
@@ -889,16 +912,7 @@ void Player::initFromDict(const Dict* d)
 		// poorly-formed user maps might not, which would be bad, and could crash us later. so if it doesn't
 		// actually have a skirmish player defined for this side, declare it nonskirmish... the player won't
 		// really work, but it's better than crashing.
-		for (Int spIdx = 0; spIdx < TheSidesList->getNumSkirmishSides(); ++spIdx)
-		{
-			AsciiString spTemplateName = TheSidesList->getSkirmishSideInfo(spIdx)->getDict()->getAsciiString(TheKey_playerFaction);
-			const PlayerTemplate* spt = ThePlayerTemplateStore->findPlayerTemplate(NAMEKEY(spTemplateName));
-			if (spt && spt->getSide() == getSide()) 
-			{
-				skirmish = true;
-				break;
-			}
-		}
+		skirmish = findSkirmishSide(getSide(), getBaseSide()) >= 0;
 
 		DEBUG_ASSERTCRASH(skirmish, ("Could not find skirmish player for side %s... quietly making into nonskirmish.", getSide().str()));
 		if (!skirmish)
@@ -954,18 +968,12 @@ void Player::initFromDict(const Dict* d)
 		// Copy and qualify scripts, and teams.
 
 		AsciiString mySide = getSide();
-		Int i, skirmishNdx;
-		Bool found = false;
+		Int i;
+		Int skirmishNdx = findSkirmishSide(mySide, getBaseSide());
+		Bool found = skirmishNdx >= 0;
 		AsciiString  qualTemplatePlayerName;
-		for (skirmishNdx=0; skirmishNdx<TheSidesList->getNumSkirmishSides(); skirmishNdx++) {
-			AsciiString templateName = TheSidesList->getSkirmishSideInfo(skirmishNdx)->getDict()->getAsciiString(TheKey_playerFaction);
-			pt = ThePlayerTemplateStore->findPlayerTemplate(NAMEKEY(templateName));
-			if (pt && pt->getSide() == mySide) {
-				qualTemplatePlayerName.format("%s%d", TheSidesList->getSkirmishSideInfo(skirmishNdx)->getDict()->getAsciiString(TheKey_playerName).str(), m_mpStartIndex);
-				found = true;
-				break;
-			}
-		}
+		if (found)
+			qualTemplatePlayerName.format("%s%d", TheSidesList->getSkirmishSideInfo(skirmishNdx)->getDict()->getAsciiString(TheKey_playerName).str(), m_mpStartIndex);
 		Int diffInt  = d->getInt(TheKey_skirmishDifficulty, &exists);
 		GameDifficulty difficulty = TheScriptEngine->getGlobalDifficulty();
 		if (exists) 

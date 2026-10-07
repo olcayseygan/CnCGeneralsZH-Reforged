@@ -16124,3 +16124,19 @@ END
 CONTROLBAR:Demo_ToolTipGLAScienceRebelAmbush
 "Her yerde Asilerle ani bir pusu kurmanızı sağlar \n \n Seviye 1: 4 Asi \n Seviye 2: 6 Asi \n Seviye 3: 10 Asi \n \n Çağrıldığı yer: Komuta Merkezi"
 END
+
+INI:FactionTurkey
+"Türkiye"
+END
+
+SIDE:Turkey
+"Türkiye"
+END
+
+TOOLTIP:BioStrategyLong_Turkey
+"Türkiye kendi ordusu hazırlanana kadar ABD cephaneliğiyle savaşır"
+END
+
+GUI:BioFeatures_Turkey
+"ABD birlikleri ve güçleri \n Geçici taraf"
+END

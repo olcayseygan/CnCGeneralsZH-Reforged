@@ -221,7 +221,10 @@ public:
 	const PlayerTemplate* findPlayerTemplate(NameKeyType namekey) const;
 	inline Int getPlayerTemplateCount() const { return m_playerTemplates.size(); }
 	Int getTemplateNumByName(AsciiString name) const;
-	
+	/// The Side of the original faction (OldFaction) built on this BaseSide - "America" for "USA".  Data
+	/// written per side (skirmish scripts, Eva lines, bar schemes) has nothing for the fork's own factions, so they borrow it.
+	AsciiString getOldFactionSide(const AsciiString& baseSide) const;
+
 	// This function will fill outStringList with all the sides found in all the templates
 	void getAllSideStrings(AsciiStringList *outStringList);	
 

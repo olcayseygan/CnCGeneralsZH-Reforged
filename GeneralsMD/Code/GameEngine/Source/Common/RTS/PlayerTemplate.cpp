@@ -315,6 +315,18 @@ Int PlayerTemplateStore::getTemplateNumByName(AsciiString name) const
 }
 
 //-----------------------------------------------------------------------------
+AsciiString PlayerTemplateStore::getOldFactionSide(const AsciiString& baseSide) const
+{
+	for (PlayerTemplateVector::const_iterator it = m_playerTemplates.begin(); it != m_playerTemplates.end(); ++it)
+	{
+		// Civilian and Observer are old factions with no BaseSide; a side with none borrows nothing
+		if (it->isOldFaction() && !baseSide.isEmpty() && it->getBaseSide() == baseSide)
+			return it->getSide();
+	}
+	return AsciiString::TheEmptyString;
+}
+
+//-----------------------------------------------------------------------------
 const PlayerTemplate* PlayerTemplateStore::findPlayerTemplate(NameKeyType namekey) const
 {
 // begin ugly, hokey code to quietly load old maps...

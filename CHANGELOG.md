@@ -8,6 +8,11 @@ found and fixed â€” EA's own, not port damage.**
 
 ---
 
+## Turkey joins the fight
+
+- Turkey is a fourth side in the skirmish and multiplayer lobbies. For now it fields the American army under its own name: the same buildings, tanks, aircraft and generals' powers, with the American voice, load screen and command bar. Its own units, art and powers come later and replace these one at a time.
+- The computer plays Turkey too. A Turkish AI builds its base, sends trucks for supplies, trains an army, earns ranks and spends them on powers, and attacks the way an American AI does.
+
 ## Zero Hour on a Mac, on Linux and on the Steam Deck
 
 - The game runs on Apple silicon Macs and on Linux, the Steam Deck included, as a program built for that machine. There is no Wine or Proton underneath. It draws through Metal on a Mac and through Vulkan on Linux, from the same Zero Hour files you already own.

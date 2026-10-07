@@ -1750,3 +1750,21 @@ END
 CONTROLBAR:Demo_ToolTipGLAScienceRebelAmbush
 "Allows you to create a surprise ambush of Rebels anywhere \n \n Rank 1: 4 Rebels \n Rank 2: 6 Rebels \n Rank 3: 10 Rebels \n \n Deploy from: Command Center"
 END
+
+// The Turkey faction (PlayerTemplateReforged.ini). Its units still wear the American names.
+
+INI:FactionTurkey
+"Turkey"
+END
+
+SIDE:Turkey
+"Turkey"
+END
+
+TOOLTIP:BioStrategyLong_Turkey
+"Turkey fields the American arsenal for now while its own army is being built"
+END
+
+GUI:BioFeatures_Turkey
+"American units and powers \n Placeholder faction"
+END

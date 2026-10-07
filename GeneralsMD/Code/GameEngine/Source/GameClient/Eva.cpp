@@ -31,6 +31,7 @@
 
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/PlayerTemplate.h"
 #include "GameLogic/GameLogic.h"
 
 #ifdef _INTERNAL
@@ -192,6 +193,15 @@ static void parseSideSoundsList( INI *ini, void *instance, void *store, const vo
 
 	// This could be made more efficient, but to be honest, it shouldn't be that slow.
 	sounds->push_back(newSounds);
+}
+
+//-------------------------------------------------------------------------------------------------
+static Int findSideSounds( const std::vector<EvaSideSounds> &sounds, const AsciiString &side )
+{
+	for (Int i = 0; i < (Int)sounds.size(); ++i)
+		if (side.compareNoCase(sounds[i].m_side) == 0)
+			return i;
+	return -1;
 }
 
 //----------------------------------------------------------------------------------- EvaSideSounds
@@ -529,22 +539,20 @@ void Eva::processPlayingMessages(UnsignedInt currentFrame)
 		return;
 	}
 
-	// We've got a winner!
-	AsciiString side = ThePlayerList->getLocalPlayer()->getSide();
-	Int numSides = storedIt->m_evaInfo->m_evaSideSounds.size();
+	// We've got a winner!  A side Eva.ini has no line for (the fork's own Turkey) speaks with the
+	// original faction it is built on.
+	const Player *localPlayer = ThePlayerList->getLocalPlayer();
+	const std::vector<EvaSideSounds> &sideSounds = storedIt->m_evaInfo->m_evaSideSounds;
+	Int found = findSideSounds(sideSounds, localPlayer->getSide());
+	if (found < 0)
+		found = findSideSounds(sideSounds, ThePlayerTemplateStore->getOldFactionSide(localPlayer->getBaseSide()));
 
   // clear it. If we can't find the side we want, don't play anything
   m_evaSpeech.setEventName(AsciiString::TheEmptyString);
 
-	for (Int i = 0; i < numSides; ++i) {
-		if (side.compareNoCase(storedIt->m_evaInfo->m_evaSideSounds[i].m_side) == 0) {
-			// Its this one.
-			if (storedIt->m_evaInfo->m_evaSideSounds[i].m_soundNames.size() > 0) {
-				Int soundToPlay = GameClientRandomValue(0, storedIt->m_evaInfo->m_evaSideSounds[i].m_soundNames.size() - 1);
-				m_evaSpeech.setEventName(storedIt->m_evaInfo->m_evaSideSounds[i].m_soundNames[soundToPlay]);
-			}
-      break;
-		}
+	if (found >= 0 && sideSounds[found].m_soundNames.size() > 0) {
+		Int soundToPlay = GameClientRandomValue(0, sideSounds[found].m_soundNames.size() - 1);
+		m_evaSpeech.setEventName(sideSounds[found].m_soundNames[soundToPlay]);
 	}
 
 	// Update the entry

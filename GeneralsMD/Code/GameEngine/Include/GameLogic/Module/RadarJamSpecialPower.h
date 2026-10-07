@@ -18,7 +18,7 @@
 
 // FILE: RadarJamSpecialPower.h //////////////////////////////////////////////////////////////////
 //
-// Turkey's electronic blinding: every enemy player with a structure within Radius of the click
+// Turkiye's electronic blinding: every enemy player with a structure within Radius of the click
 // loses its radar for Duration, disable-proof radar included.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////

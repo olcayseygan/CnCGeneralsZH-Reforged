@@ -89,12 +89,12 @@ public:
 	*/
 	Object *newObject( const ThingTemplate *tmplate, Team *team, ObjectStatusMaskType statusMask = OBJECT_STATUS_MASK_NONE );
 
-	/** The reskin of tmplate that belongs to side, when tmplate belongs to another: TurkeyInfantryPilot
-		for an AmericaInfantryPilot made for a Turkey player.  NULL when there is none.  newObject makes
+	/** The reskin of tmplate that belongs to side, when tmplate belongs to another: TurkiyeInfantryPilot
+		for an AmericaInfantryPilot made for a Turkiye player.  NULL when there is none.  newObject makes
 		that one in its place, so a pilot, a drone or a paradrop the American data spawns comes out Turkish. */
 	const ThingTemplate *findSideReskin( const ThingTemplate *tmplate, const AsciiString &side );
 
-	/** Is side built out of another side's reskins (Turkey out of America's)?  Its AI runs that side's
+	/** Is side built out of another side's reskins (Turkiye out of America's)?  Its AI runs that side's
 		scripts, so a unit the scripts name that has no reskin for side is one it can never field. */
 	Bool sideBorrowsTemplates( const AsciiString &side );
 

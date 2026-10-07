@@ -1098,7 +1098,7 @@ void ControlBarSchemeManager::setControlBarSchemeByPlayerTemplate( const PlayerT
 	// picked again every time, even for the side on screen: a new resolution can want a different
 	// scheme for it (findSchemeForSide), and the multiplier below is the screen's
 	ControlBarScheme *tempScheme = findSchemeForSide( side );
-	// a faction with no bar of its own (the fork's Turkey) wears the original faction's it is built on
+	// a faction with no bar of its own (the fork's Turkiye) wears the original faction's it is built on
 	if(tempScheme == NULL)
 	{
 		side = ThePlayerTemplateStore->getOldFactionSide( pt->getBaseSide() );
@@ -1147,7 +1147,7 @@ void ControlBarSchemeManager::setControlBarSchemeByPlayer(Player *p)
 	// picked again every time, even for the side on screen: a new resolution can want a different
 	// scheme for it (findSchemeForSide), and the multiplier below is the screen's
 	ControlBarScheme *tempScheme = findSchemeForSide( side );
-	// a faction with no bar of its own (the fork's Turkey) wears the original faction's it is built on
+	// a faction with no bar of its own (the fork's Turkiye) wears the original faction's it is built on
 	if(tempScheme == NULL)
 	{
 		side = ThePlayerTemplateStore->getOldFactionSide( p->getBaseSide() );

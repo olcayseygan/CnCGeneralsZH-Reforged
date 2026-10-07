@@ -1024,7 +1024,7 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 
 	Coord3D projectileDestination = *victimPos; //Need to copy this, as we have a pointer to their actual position
 	Real scatterRadius = 0.0f;
-	/* Turkey's artillery fires past its own sight and leans on a spotter.  A shot at ground its
+	/* Turkiye's artillery fires past its own sight and leans on a spotter.  A shot at ground its
 		 player does not see (a force fire into the fog, a target the spotter lost) spreads by
 		 BlindScatterRadius on top.  The shroud is logic state, the same every machine reads. */
 	Real blindScatter = 0.0f;
@@ -3043,7 +3043,7 @@ void Weapon_findMostValuableEnemies( const Object *source, const Coord3D *center
 Bool Weapon::fireWeapon(const Object *source, Object *target, ObjectID* projectileID)
 {
 	//CRCDEBUG_LOG(("Weapon::fireWeapon() for %s at %s\n", DescribeObject(source).str(), DescribeObject(target).str()));
-	/* Turkey's swarm software: the munition picks its own target, the most expensive enemy it can
+	/* Turkiye's swarm software: the munition picks its own target, the most expensive enemy it can
 		 reach, whatever the drone was aimed at. */
 	if( m_template->seeksMostValuable() && target )
 	{

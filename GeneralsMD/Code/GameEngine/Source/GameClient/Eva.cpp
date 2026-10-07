@@ -539,7 +539,7 @@ void Eva::processPlayingMessages(UnsignedInt currentFrame)
 		return;
 	}
 
-	// We've got a winner!  A side Eva.ini has no line for (the fork's own Turkey) speaks with the
+	// We've got a winner!  A side Eva.ini has no line for (the fork's own Turkiye) speaks with the
 	// original faction it is built on.
 	const Player *localPlayer = ThePlayerList->getLocalPlayer();
 	const std::vector<EvaSideSounds> &sideSounds = storedIt->m_evaInfo->m_evaSideSounds;

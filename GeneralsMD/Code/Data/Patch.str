@@ -1751,484 +1751,484 @@ CONTROLBAR:Demo_ToolTipGLAScienceRebelAmbush
 "Allows you to create a surprise ambush of Rebels anywhere \n \n Rank 1: 4 Rebels \n Rank 2: 6 Rebels \n Rank 3: 10 Rebels \n \n Deploy from: Command Center"
 END
 
-// The Turkey faction (PlayerTemplateReforged.ini, TurkeyReforged.ini). Units, buildings, buttons, upgrades.
+// The Turkiye faction (PlayerTemplateReforged.ini, TurkiyeReforged.ini). Units, buildings, buttons, upgrades.
 
-INI:FactionTurkey
-"Türkiye"
+INI:FactionTurkiye
+"Turkiye"
 END
 
-SIDE:Turkey
-"Türkiye"
+SIDE:Turkiye
+"Turkiye"
 END
 
-TOOLTIP:BioStrategyLong_Turkey
-"Türkiye kills from range but cannot see for itself: its artillery fires 600 and sees 100, so a spotter, a UAV or a radar tower has to find the target"
+TOOLTIP:BioStrategyLong_Turkiye
+"Turkiye kills from range but cannot see for itself: its artillery fires 600 and sees 100, so a spotter, a UAV or a radar tower has to find the target"
 END
 
-GUI:BioFeatures_Turkey
+GUI:BioFeatures_Turkiye
 "Long-range artillery, short sight \n Combat Engineers build in place of a dozer \n Spotters, UAVs and radar towers aim the guns"
 END
 
-OBJECT:TurkeyInfantryMehmetcik
+OBJECT:TurkiyeInfantryMehmetcik
 "Mehmetcik Rifleman"
 END
 
-CONTROLBAR:ConstructTurkeyInfantryMehmetcik
+CONTROLBAR:ConstructTurkiyeInfantryMehmetcik
 "&Mehmetcik Rifleman"
 END
 
-CONTROLBAR:ToolTipTurkeyInfantryMehmetcik
+CONTROLBAR:ToolTipTurkiyeInfantryMehmetcik
 "Line infantry. Clears and holds buildings."
 END
 
-OBJECT:TurkeyInfantryEngineer
+OBJECT:TurkiyeInfantryEngineer
 "Combat Engineers"
 END
 
-CONTROLBAR:ConstructTurkeyInfantryEngineer
+CONTROLBAR:ConstructTurkiyeInfantryEngineer
 "Combat &Engineers"
 END
 
-CONTROLBAR:ToolTipTurkeyInfantryEngineer
+CONTROLBAR:ToolTipTurkiyeInfantryEngineer
 "Builds and repairs structures. Infantry: it can be crushed and shot."
 END
 
-OBJECT:TurkeyInfantrySungur
+OBJECT:TurkiyeInfantrySungur
 "Sungur Gunner"
 END
 
-CONTROLBAR:ConstructTurkeyInfantrySungur
+CONTROLBAR:ConstructTurkiyeInfantrySungur
 "&Sungur Gunner"
 END
 
-CONTROLBAR:ToolTipTurkeyInfantrySungur
+CONTROLBAR:ToolTipTurkiyeInfantrySungur
 "Missile infantry against tanks and aircraft."
 END
 
-OBJECT:TurkeyInfantrySpotter
+OBJECT:TurkiyeInfantrySpotter
 "Spotter Team"
 END
 
-CONTROLBAR:ConstructTurkeyInfantrySpotter
+CONTROLBAR:ConstructTurkiyeInfantrySpotter
 "S&potter Team"
 END
 
-CONTROLBAR:ToolTipTurkeyInfantrySpotter
+CONTROLBAR:ToolTipTurkiyeInfantrySpotter
 "Sees 450 and barely fights. Put it on a hill and the artillery behind it can shoot."
 END
 
-OBJECT:TurkeyInfantryMaroonBeret
+OBJECT:TurkiyeInfantryMaroonBeret
 "Maroon Beret"
 END
 
-CONTROLBAR:ConstructTurkeyInfantryMaroonBeret
+CONTROLBAR:ConstructTurkiyeInfantryMaroonBeret
 "Maroon &Beret"
 END
 
-CONTROLBAR:ToolTipTurkeyInfantryMaroonBeret
+CONTROLBAR:ToolTipTurkiyeInfantryMaroonBeret
 "Special forces. Clears buildings; carries no explosives."
 END
 
-OBJECT:TurkeyVehicleSupplyTruck
+OBJECT:TurkiyeVehicleSupplyTruck
 "Supply Truck"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleSupplyTruck
+CONTROLBAR:ConstructTurkiyeVehicleSupplyTruck
 "Supply &Truck"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleSupplyTruck
+CONTROLBAR:ToolTipTurkiyeVehicleSupplyTruck
 "Carries supplies to the Supply Center."
 END
 
-OBJECT:TurkeyVehicleCobra
+OBJECT:TurkiyeVehicleCobra
 "Cobra Scout"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleCobra
+CONTROLBAR:ConstructTurkiyeVehicleCobra
 "&Cobra Scout"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleCobra
+CONTROLBAR:ToolTipTurkiyeVehicleCobra
 "Fast, fragile scout car that sees 400: the cheapest spotter."
 END
 
-OBJECT:TurkeyVehicleKirpi
+OBJECT:TurkiyeVehicleKirpi
 "Kirpi APC"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleKirpi
+CONTROLBAR:ConstructTurkiyeVehicleKirpi
 "&Kirpi APC"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleKirpi
+CONTROLBAR:ToolTipTurkiyeVehicleKirpi
 "Armored personnel carrier for five infantry."
 END
 
-OBJECT:TurkeyTankAltay
+OBJECT:TurkiyeTankAltay
 "Altay Tank"
 END
 
-CONTROLBAR:ConstructTurkeyTankAltay
+CONTROLBAR:ConstructTurkiyeTankAltay
 "&Altay Tank"
 END
 
-CONTROLBAR:ToolTipTurkeyTankAltay
-"Main battle tank, the only direct-fire vehicle in Türkiye's factory."
+CONTROLBAR:ToolTipTurkiyeTankAltay
+"Main battle tank, the only direct-fire vehicle in Turkiye's factory."
 END
 
-OBJECT:TurkeyVehicleKorkut
+OBJECT:TurkiyeVehicleKorkut
 "Korkut Air Defense"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleKorkut
+CONTROLBAR:ConstructTurkiyeVehicleKorkut
 "K&orkut Air Defense"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleKorkut
+CONTROLBAR:ToolTipTurkiyeVehicleKorkut
 "Twin cannons out to 300 against aircraft and infantry."
 END
 
-OBJECT:TurkeyVehicleFirtina
+OBJECT:TurkiyeVehicleFirtina
 "Firtina Howitzer"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleFirtina
+CONTROLBAR:ConstructTurkiyeVehicleFirtina
 "&Firtina Howitzer"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleFirtina
+CONTROLBAR:ToolTipTurkiyeVehicleFirtina
 "Fires 600 and sees 100: it needs a spotter, a UAV or a radar tower to aim."
 END
 
-OBJECT:TurkeyVehicleSakarya
+OBJECT:TurkiyeVehicleSakarya
 "Sakarya Rocket Launcher"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleSakarya
+CONTROLBAR:ConstructTurkiyeVehicleSakarya
 "&Sakarya Rocket Launcher"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleSakarya
+CONTROLBAR:ToolTipTurkiyeVehicleSakarya
 "Fires a six-rocket salvo out to 500, then reloads for 15 seconds. Needs a spotter."
 END
 
-OBJECT:TurkeyTankKoral
+OBJECT:TurkiyeTankKoral
 "Koral Electronic Warfare"
 END
 
-CONTROLBAR:ConstructTurkeyTankKoral
+CONTROLBAR:ConstructTurkiyeTankKoral
 "Ko&ral Electronic Warfare"
 END
 
-CONTROLBAR:ToolTipTurkeyTankKoral
+CONTROLBAR:ToolTipTurkiyeTankKoral
 "Electronic warfare vehicle; its beam shuts enemy buildings down from 400."
 END
 
-OBJECT:TurkeyVehicleBayraktar
+OBJECT:TurkiyeVehicleBayraktar
 "Bayraktar UAV"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleBayraktar
+CONTROLBAR:ConstructTurkiyeVehicleBayraktar
 "&Bayraktar UAV"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleBayraktar
+CONTROLBAR:ToolTipTurkiyeVehicleBayraktar
 "Hovers where it is sent and sees 400. Light munitions. The eye of the artillery."
 END
 
-OBJECT:TurkeyVehicleGokbey
+OBJECT:TurkiyeVehicleGokbey
 "Gokbey Helicopter"
 END
 
-CONTROLBAR:ConstructTurkeyVehicleGokbey
+CONTROLBAR:ConstructTurkiyeVehicleGokbey
 "&Gokbey Helicopter"
 END
 
-CONTROLBAR:ToolTipTurkeyVehicleGokbey
+CONTROLBAR:ToolTipTurkiyeVehicleGokbey
 "Transport helicopter for five infantry."
 END
 
-OBJECT:TurkeyJetAkinci
+OBJECT:TurkiyeJetAkinci
 "Akinci UAV"
 END
 
-CONTROLBAR:ConstructTurkeyJetAkinci
+CONTROLBAR:ConstructTurkiyeJetAkinci
 "&Akinci UAV"
 END
 
-CONTROLBAR:ToolTipTurkeyJetAkinci
+CONTROLBAR:ToolTipTurkiyeJetAkinci
 "Heavy armed UAV. Dies under air defense."
 END
 
-OBJECT:TurkeyJetKizilelma
+OBJECT:TurkiyeJetKizilelma
 "Kizilelma Fighter"
 END
 
-CONTROLBAR:ConstructTurkeyJetKizilelma
+CONTROLBAR:ConstructTurkiyeJetKizilelma
 "&Kizilelma Fighter"
 END
 
-CONTROLBAR:ToolTipTurkeyJetKizilelma
+CONTROLBAR:ToolTipTurkiyeJetKizilelma
 "Air superiority only: it cannot hit the ground."
 END
 
-OBJECT:TurkeyRadarTower
+OBJECT:TurkiyeRadarTower
 "Radar Tower"
 END
 
-CONTROLBAR:ConstructTurkeyRadarTower
+CONTROLBAR:ConstructTurkiyeRadarTower
 "&Radar Tower"
 END
 
-CONTROLBAR:ToolTipTurkeyRadarTower
+CONTROLBAR:ToolTipTurkiyeRadarTower
 "Cheap fixed eye: sees 500 for the artillery. A target."
 END
 
-OBJECT:TurkeyAntiAirSite
+OBJECT:TurkiyeAntiAirSite
 "Air Defense Site"
 END
 
-CONTROLBAR:ConstructTurkeyAntiAirSite
+CONTROLBAR:ConstructTurkiyeAntiAirSite
 "Air &Defense Site"
 END
 
-CONTROLBAR:ToolTipTurkeyAntiAirSite
+CONTROLBAR:ToolTipTurkiyeAntiAirSite
 "Fixed cannon against aircraft and ground."
 END
 
-OBJECT:TurkeyLandMine
+OBJECT:TurkiyeLandMine
 "Minefield"
 END
 
-CONTROLBAR:ConstructTurkeyLandMine
+CONTROLBAR:ConstructTurkiyeLandMine
 "&Minefield"
 END
 
-CONTROLBAR:ToolTipTurkeyLandMine
+CONTROLBAR:ToolTipTurkiyeLandMine
 "A charge buried in the ground. Needs the Mine Kit."
 END
 
-UPGRADE:TurkeyExtendedRange
+UPGRADE:TurkiyeExtendedRange
 "Extended Range"
 END
 
-CONTROLBAR:UpgradeTurkeyExtendedRange
+CONTROLBAR:UpgradeTurkiyeExtendedRange
 "&Extended Range"
 END
 
-CONTROLBAR:ToolTipUpgradeTurkeyExtendedRange
+CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
 "Firtina and Sakarya reach 15 percent further."
 END
 
-UPGRADE:TurkeyPrecisionGuidance
+UPGRADE:TurkiyePrecisionGuidance
 "Precision Guidance"
 END
 
-CONTROLBAR:UpgradeTurkeyPrecisionGuidance
+CONTROLBAR:UpgradeTurkiyePrecisionGuidance
 "&Precision Guidance"
 END
 
-CONTROLBAR:ToolTipUpgradeTurkeyPrecisionGuidance
+CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
 "Shots at ground nobody sees spread four times less."
 END
 
-UPGRADE:TurkeyArmorPack
+UPGRADE:TurkiyeArmorPack
 "Armor Pack"
 END
 
-CONTROLBAR:UpgradeTurkeyArmorPack
+CONTROLBAR:UpgradeTurkiyeArmorPack
 "Ar&mor Pack"
 END
 
-CONTROLBAR:ToolTipUpgradeTurkeyArmorPack
+CONTROLBAR:ToolTipUpgradeTurkiyeArmorPack
 "Kirpi and Altay get 20 percent more health."
 END
 
-UPGRADE:TurkeyMineKit
+UPGRADE:TurkiyeMineKit
 "Mine Kit"
 END
 
-CONTROLBAR:UpgradeTurkeyMineKit
+CONTROLBAR:UpgradeTurkiyeMineKit
 "Mine &Kit"
 END
 
-CONTROLBAR:ToolTipUpgradeTurkeyMineKit
+CONTROLBAR:ToolTipUpgradeTurkiyeMineKit
 "Combat Engineers can lay mines."
 END
 
-OBJECT:TurkeyCommandCenter
+OBJECT:TurkiyeCommandCenter
 "Headquarters"
 END
 
-CONTROLBAR:ConstructTurkeyCommandCenter
+CONTROLBAR:ConstructTurkiyeCommandCenter
 "&Headquarters"
 END
 
-OBJECT:TurkeyPowerPlant
+OBJECT:TurkiyePowerPlant
 "Power Plant"
 END
 
-CONTROLBAR:ConstructTurkeyPowerPlant
+CONTROLBAR:ConstructTurkiyePowerPlant
 "&Power Plant"
 END
 
-OBJECT:TurkeyBarracks
+OBJECT:TurkiyeBarracks
 "Barracks"
 END
 
-CONTROLBAR:ConstructTurkeyBarracks
+CONTROLBAR:ConstructTurkiyeBarracks
 "&Barracks"
 END
 
-OBJECT:TurkeyWarFactory
+OBJECT:TurkiyeWarFactory
 "Factory"
 END
 
-CONTROLBAR:ConstructTurkeyWarFactory
+CONTROLBAR:ConstructTurkiyeWarFactory
 "&Factory"
 END
 
-OBJECT:TurkeyAirfield
+OBJECT:TurkiyeAirfield
 "Airfield"
 END
 
-CONTROLBAR:ConstructTurkeyAirfield
+CONTROLBAR:ConstructTurkiyeAirfield
 "&Airfield"
 END
 
-OBJECT:TurkeySupplyCenter
+OBJECT:TurkiyeSupplyCenter
 "Supply Center"
 END
 
-CONTROLBAR:ConstructTurkeySupplyCenter
+CONTROLBAR:ConstructTurkiyeSupplyCenter
 "&Supply Center"
 END
 
-OBJECT:TurkeyPatriotBattery
+OBJECT:TurkiyePatriotBattery
 "Siper Battery"
 END
 
-CONTROLBAR:ConstructTurkeyPatriotBattery
+CONTROLBAR:ConstructTurkiyePatriotBattery
 "S&iper Battery"
 END
 
-SCIENCE:TurkeyMinefield
+SCIENCE:TurkiyeMinefield
 "Minefield"
 END
 
-CONTROLBAR:ToolTipTurkeyScienceMinefield
+CONTROLBAR:ToolTipTurkiyeScienceMinefield
 "A cargo plane sows a minefield wherever you point. \n \n Deploy from: Headquarters"
 END
 
-CONTROLBAR:TurkeyMinefield
+CONTROLBAR:TurkiyeMinefield
 "Mine&field"
 END
 
-CONTROLBAR:TooltipTurkeyMinefield
+CONTROLBAR:TooltipTurkiyeMinefield
 "Minefield \n Recharge: 4:00"
 END
 
-SCIENCE:TurkeyFuelResupply
+SCIENCE:TurkiyeFuelResupply
 "Fuel Resupply"
 END
 
-CONTROLBAR:ToolTipTurkeyScienceFuelResupply
+CONTROLBAR:ToolTipTurkiyeScienceFuelResupply
 "Bayraktar drones carry one more munition and Akinci one more bomb on every sortie."
 END
 
-SCIENCE:TurkeySwarmMunition
+SCIENCE:TurkiyeSwarmMunition
 "Loitering Munition"
 END
 
-CONTROLBAR:ToolTipTurkeyScienceSwarmMunition
+CONTROLBAR:ToolTipTurkiyeScienceSwarmMunition
 "One loitering munition circles where you point and dives on the most expensive target it finds. \n \n Deploy from: Headquarters"
 END
 
-CONTROLBAR:TurkeySwarmMunition
+CONTROLBAR:TurkiyeSwarmMunition
 "Loitering &Munition"
 END
 
-CONTROLBAR:TooltipTurkeySwarmMunition
+CONTROLBAR:TooltipTurkiyeSwarmMunition
 "Loitering Munition \n Recharge: 3:00"
 END
 
-SCIENCE:TurkeyElectronicBlinding
+SCIENCE:TurkiyeElectronicBlinding
 "Electronic Blinding"
 END
 
-CONTROLBAR:ToolTipTurkeyScienceElectronicBlinding
+CONTROLBAR:ToolTipTurkiyeScienceElectronicBlinding
 "Every enemy with a building in the target area loses its radar for 30 seconds. \n \n Deploy from: Headquarters"
 END
 
-CONTROLBAR:TurkeyElectronicBlinding
+CONTROLBAR:TurkiyeElectronicBlinding
 "Electronic &Blinding"
 END
 
-CONTROLBAR:TooltipTurkeyElectronicBlinding
+CONTROLBAR:TooltipTurkiyeElectronicBlinding
 "Electronic Blinding \n Recharge: 4:00"
 END
 
-SCIENCE:TurkeySwarmStrike
+SCIENCE:TurkiyeSwarmStrike
 "Swarm Strike"
 END
 
-CONTROLBAR:ToolTipTurkeyScienceSwarmStrike
+CONTROLBAR:ToolTipTurkiyeScienceSwarmStrike
 "A swarm of munitions hunts down the ten most valuable targets in a wide area, one munition each. A packed base shrugs it off; a spread-out army does not. \n \n Deploy from: Headquarters"
 END
 
-CONTROLBAR:TurkeySwarmStrike
+CONTROLBAR:TurkiyeSwarmStrike
 "S&warm Strike"
 END
 
-CONTROLBAR:TooltipTurkeySwarmStrike
+CONTROLBAR:TooltipTurkiyeSwarmStrike
 "Swarm Strike \n Recharge: 6:00"
 END
 
-UPGRADE:TurkeyThermal
+UPGRADE:TurkiyeThermal
 "Thermal Sights"
 END
 
-CONTROLBAR:UpgradeTurkeyThermal
+CONTROLBAR:UpgradeTurkiyeThermal
 "T&hermal Sights"
 END
 
-CONTROLBAR:ToolTipUpgradeTurkeyThermal
+CONTROLBAR:ToolTipUpgradeTurkiyeThermal
 "Spotter Teams and Cobras see out to 550 and spot camouflaged units."
 END
 
-UPGRADE:TurkeyFuelCell
+UPGRADE:TurkiyeFuelCell
 "Fuel Cell"
 END
 
-CONTROLBAR:UpgradeTurkeyFuelCell
+CONTROLBAR:UpgradeTurkiyeFuelCell
 "&Fuel Cell"
 END
 
-CONTROLBAR:ToolTipUpgradeTurkeyFuelCell
+CONTROLBAR:ToolTipUpgradeTurkiyeFuelCell
 "Bayraktar and Akinci stay over the target twice as long, with twice the munitions."
 END
 
-UPGRADE:TurkeySwarmSoftware
+UPGRADE:TurkiyeSwarmSoftware
 "Swarm Software"
 END
 
-CONTROLBAR:UpgradeTurkeySwarmSoftware
+CONTROLBAR:UpgradeTurkiyeSwarmSoftware
 "Swarm Soft&ware"
 END
 
-CONTROLBAR:ToolTipUpgradeTurkeySwarmSoftware
+CONTROLBAR:ToolTipUpgradeTurkiyeSwarmSoftware
 "Bayraktar munitions pick their own target: the most expensive enemy in reach."
 END
 
-UPGRADE:TurkeyFuelResupply
+UPGRADE:TurkiyeFuelResupply
 "Fuel Resupply"
 END
 
-CONTROLBAR:TurkeyHijack
+CONTROLBAR:TurkiyeHijack
 "Hi&jack Truck"
 END
 
-CONTROLBAR:ToolTipTurkeyHijack
+CONTROLBAR:ToolTipTurkiyeHijack
 "Takes an enemy supply truck, cargo and all. The Beret stays at the wheel."
 END

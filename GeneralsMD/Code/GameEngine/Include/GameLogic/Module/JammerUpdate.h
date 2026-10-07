@@ -18,7 +18,7 @@
 
 // FILE: JammerUpdate.h //////////////////////////////////////////////////////////////////////////
 //
-// Turkey's Koral.  Within Radius, enemy drones and spotters see only what is under them, and an
+// Turkiye's Koral.  Within Radius, enemy drones and spotters see only what is under them, and an
 // enemy guided missile loses its lock and comes down scattered (MissileAIUpdate::projectileNowJammed).
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////

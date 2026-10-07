@@ -18,7 +18,7 @@
 
 // FILE: SwarmStrikeSpecialPower.cpp /////////////////////////////////////////////////////////////
 //
-// Turkey's loitering munitions.  A nuke burns one spot; this spends one munition on each of the
+// Turkiye's loitering munitions.  A nuke burns one spot; this spends one munition on each of the
 // most expensive targets in a wide circle, so a spread-out army hurts more than a packed base.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////

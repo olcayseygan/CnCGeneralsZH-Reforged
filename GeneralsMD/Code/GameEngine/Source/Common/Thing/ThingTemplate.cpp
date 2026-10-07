@@ -691,7 +691,7 @@ void ThingTemplate::parsePrerequisites( INI* ini, void *instance, void *store, c
 		{ 0, 0, 0, 0 }
 	};
 
-	// a patch file (MULTIFILE, TurkeyReforged.ini) states the whole list too, not an addition to the
+	// a patch file (MULTIFILE, TurkiyeReforged.ini) states the whole list too, not an addition to the
 	// list its reskin source left behind
 	if (ini->getLoadType() == INI_LOAD_CREATE_OVERRIDES || ini->getLoadType() == INI_LOAD_MULTIFILE)
 	{

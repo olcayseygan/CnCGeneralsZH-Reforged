@@ -325,7 +325,7 @@ public:
 	*/
 	Bool isGroundVehicle(const Object* obj) const;
 
-	/// the owner's SpeedScale: Turkey's reskins drive on the American locomotors at their own pace
+	/// the owner's SpeedScale: Turkiye's reskins drive on the American locomotors at their own pace
 	inline void setSpeedScale(Real scale) { m_speedScale = scale; }
 
 	/// this is handy for doing things like forcing helicopters to crash realistically: cut their lift.

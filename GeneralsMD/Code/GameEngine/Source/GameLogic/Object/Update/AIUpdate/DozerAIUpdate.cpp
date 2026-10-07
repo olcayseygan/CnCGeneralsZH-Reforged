@@ -379,7 +379,7 @@ StateReturnType DozerActionMoveToActionPosState::update( void )
 	// First will register, and idle for a frame, second will see first as not active and say yes
 	// Next frame, first will start the build task, without reasking validity
 	// Infinite number of workers can be told to build something with just two in progress buildings
-	// A cooperative builder (Turkey's engineers) is meant to double up: each one on the site adds its
+	// A cooperative builder (Turkiye's engineers) is meant to double up: each one on the site adds its
 	// own share of progress every frame, so two of them finish it in half the time.
 	if( (m_task == DOZER_TASK_BUILD) && goalObject && (goalObject->getBuilderID() != dozer->getID()) &&
 			!dozer->getTemplate()->isCooperativeBuilder() )

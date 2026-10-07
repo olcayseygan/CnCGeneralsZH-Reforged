@@ -18,7 +18,7 @@
 
 // FILE: SightUpgrade.h //////////////////////////////////////////////////////////////////////////
 //
-// Turkey's thermal sights: the upgrade sets VisionRange and ShroudClearingRange, and with
+// Turkiye's thermal sights: the upgrade sets VisionRange and ShroudClearingRange, and with
 // EnablesStealthDetector switches on a StealthDetectorUpdate the unit carries InitiallyDisabled.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////

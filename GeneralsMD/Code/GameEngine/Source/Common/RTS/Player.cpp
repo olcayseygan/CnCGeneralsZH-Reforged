@@ -878,7 +878,7 @@ static Int findSkirmishSideNamed(const AsciiString& side)
 }
 
 /* The skirmish player whose scripts and teams a computer seat of this side takes.  A faction the
-   map's skirmish scripts were never written for (the fork's own, Turkey) takes the scripts of the
+   map's skirmish scripts were never written for (the fork's own, Turkiye) takes the scripts of the
    original faction it is built on. */
 static Int findSkirmishSide(const AsciiString& side, const AsciiString& baseSide)
 {
@@ -2738,7 +2738,7 @@ Bool Player::addScience(ScienceType science)
 
 	}
 
-	// a science can carry a player upgrade (Turkey's fuel resupply): it lands on every unit the
+	// a science can carry a player upgrade (Turkiye's fuel resupply): it lands on every unit the
 	// player has now and every unit it builds later, the same as a bought one
 	AsciiString grantedUpgradeName = TheScienceStore->getGrantedUpgradeName(science);
 	if (!grantedUpgradeName.isEmpty())

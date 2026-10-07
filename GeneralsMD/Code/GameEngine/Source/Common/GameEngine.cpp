@@ -1119,9 +1119,9 @@ void GameEngine::init( int argc, char *argv[] )
 			 it silently refuses every multiplayer join from a machine that does not have the same one. */
 		ini.load( AsciiString( "Data\\INI\\FXListReforged.ini" ), INI_LOAD_OVERWRITE, &xferCRC );
 		initSubsystem(TheWeaponStore,"TheWeaponStore", MSGNEW("GameEngineSubsystem") WeaponStore(), &xferCRC, NULL, "Data\\INI\\Weapon.ini");
-		/* Turkey's own weapons.  OVERWRITE rather than MULTIFILE: a patch file may only edit a weapon
+		/* Turkiye's own weapons.  OVERWRITE rather than MULTIFILE: a patch file may only edit a weapon
 			 that exists, and every one of these is new. */
-		ini.load( AsciiString( "Data\\INI\\TurkeyWeaponReforged.ini" ), INI_LOAD_OVERWRITE, &xferCRC );
+		ini.load( AsciiString( "Data\\INI\\TurkiyeWeaponReforged.ini" ), INI_LOAD_OVERWRITE, &xferCRC );
 		initSubsystem(TheObjectCreationListStore,"TheObjectCreationListStore", MSGNEW("GameEngineSubsystem") ObjectCreationListStore(), &xferCRC, "Data\\INI\\Default\\ObjectCreationList.ini", "Data\\INI\\ObjectCreationList.ini");
 		/* Lists EA left out or got wrong, before any object names one: a list parsed again is cleared
 			 and replaced whole, and a new name is simply added. */
@@ -1154,8 +1154,8 @@ void GameEngine::init( int argc, char *argv[] )
 		/* Mistakes in EA's data for the nine generals, patched the same way: a copy that missed the
 			 original's change, a wrong faction's sound, an icon naming an upgrade that does not exist. */
 		ini.load( AsciiString( "Data\\INI\\FixesReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
-		// Turkey's objects, reskins of the American ones, so they come after the balance and fixes they copy
-		ini.load( AsciiString( "Data\\INI\\TurkeyReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
+		// Turkiye's objects, reskins of the American ones, so they come after the balance and fixes they copy
+		ini.load( AsciiString( "Data\\INI\\TurkiyeReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
 
 	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////
 	GetPrecisionTimer(&endTime64);//////////////////////////////////////////////////////////////////

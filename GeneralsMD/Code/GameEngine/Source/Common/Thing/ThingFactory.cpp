@@ -335,7 +335,7 @@ Object *ThingFactory::newObject( const ThingTemplate *tmplate, Team *team, Objec
 			tmplate = tmp;
 	}
 
-	// a side's own reskin in place of another side's template: Turkey is built on the American data
+	// a side's own reskin in place of another side's template: Turkiye is built on the American data
 	const Player *owner = team ? team->getControllingPlayer() : NULL;
 	if (owner != NULL)
 	{

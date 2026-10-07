@@ -18,7 +18,7 @@
 
 // FILE: SwarmStrikeSpecialPower.h ///////////////////////////////////////////////////////////////
 //
-// Turkey's loitering munitions: within Radius of the click, the TargetCount most expensive enemies
+// Turkiye's loitering munitions: within Radius of the click, the TargetCount most expensive enemies
 // on the ground each take one Weapon shot, and TargetFX plays on each of them.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////

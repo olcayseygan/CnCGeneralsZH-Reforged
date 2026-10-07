@@ -752,10 +752,10 @@ private:
 	Real					m_fenceXOffset;							///< Fence X offset for fence type objects.
 	Real					m_visionRange;								///< object "sees" this far around itself
 	Real					m_shroudClearingRange;				///< Since So many things got added to "Seeing" functionality, we need to split this part out.
-	Bool					m_acquiresBeyondVision;				///< Turkey's artillery: idle auto-acquire reaches its weapon range through a spotter's eyes
-	Bool					m_spotterSight;								///< Turkey's spotters: sight not capped at half as far again as the weapon reaches
-	Bool					m_cooperativeBuilder;					///< Turkey's engineers: two on one site build it twice as fast
-	Real					m_speedScale;									///< Turkey's units: their plan's speeds on the American locomotors
+	Bool					m_acquiresBeyondVision;				///< Turkiye's artillery: idle auto-acquire reaches its weapon range through a spotter's eyes
+	Bool					m_spotterSight;								///< Turkiye's spotters: sight not capped at half as far again as the weapon reaches
+	Bool					m_cooperativeBuilder;					///< Turkiye's engineers: two on one site build it twice as fast
+	Real					m_speedScale;									///< Turkiye's units: their plan's speeds on the American locomotors
 	Real					m_shroudRevealToAllRange;			///< When > zero, the shroud gets revealed to all players.
 	Real					m_placementViewAngle;				///< when placing buildings this will be the angle of the building when "floating" at the mouse
 	Real					m_factoryExitWidth;					///< when placing buildings this will be the width of the reserved exit area on the right side.

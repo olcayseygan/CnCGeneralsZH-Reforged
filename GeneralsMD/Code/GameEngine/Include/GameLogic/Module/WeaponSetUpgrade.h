@@ -41,8 +41,8 @@ class Thing;
 
 //-------------------------------------------------------------------------------------------------
 /** WeaponSetFlag names the flag the upgrade raises, PLAYER_UPGRADE when it is left out.  EA's data
-	has one weapon set upgrade a unit; Turkey's artillery has two (Extended Range and Precision
-	Guidance), so the second raises CRATEUPGRADE_ONE, which no Turkey unit gets from a crate. */
+	has one weapon set upgrade a unit; Turkiye's artillery has two (Extended Range and Precision
+	Guidance), so the second raises CRATEUPGRADE_ONE, which no Turkiye unit gets from a crate. */
 //-------------------------------------------------------------------------------------------------
 class WeaponSetUpgradeModuleData : public UpgradeModuleData
 {

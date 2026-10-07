@@ -919,8 +919,8 @@ void AIPlayer::clearTeamsInQueue( void )
 Object *AIPlayer::buildStructureNow(const ThingTemplate *bldgPlan, BuildListInfo *info)
 {
 
-	// inst-construct the building.  Turkey's build list names AmericaCommandCenter (the skirmish
-	// scripts ask for it by that name); ThingFactory::newObject makes a Turkey player's the Turkish one.
+	// inst-construct the building.  Turkiye's build list names AmericaCommandCenter (the skirmish
+	// scripts ask for it by that name); ThingFactory::newObject makes a Turkiye player's the Turkish one.
 	Object *bldg = TheBuildAssistant->buildObjectNow( NULL, 
 																						bldgPlan,
 																						info->getLocation(),
@@ -2224,7 +2224,7 @@ Object *AIPlayer::findFactory(const ThingTemplate *thing, Bool busyOK)
 
 // ------------------------------------------------------------------------------------------------
 /** A side built out of another side's reskins runs that side's scripts, and a unit they name with
-	* no reskin for this side (America's Stealth Fighter, for Turkey) is left out of the team rather
+	* no reskin for this side (America's Stealth Fighter, for Turkiye) is left out of the team rather
 	* than keeping the whole team off the build list. */
 // ------------------------------------------------------------------------------------------------
 static Bool sideCanNeverField( const Player *player, const ThingTemplate *thing )
@@ -5982,7 +5982,7 @@ static void collectObjects( Object *obj, void *userData )
 
 //----------------------------------------------------------------------------------------------------------
 /** The skirmish scripts fire the powers they name and nothing else, so a side that runs another
-	* side's scripts (Turkey runs America's) never touched its own.  A power marked AIFiresWhenReady goes
+	* side's scripts (Turkiye runs America's) never touched its own.  A power marked AIFiresWhenReady goes
 	* off the moment it is ready and the science behind it is bought, at the target the scripts' own
 	* "fire at most cost" would pick. */
 //----------------------------------------------------------------------------------------------------------

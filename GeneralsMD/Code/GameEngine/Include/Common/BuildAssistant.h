@@ -198,8 +198,8 @@ public:
 	virtual Bool isPossibleToMakeUnit( Object *builder, const ThingTemplate *whatToBuild ) const;
 
 	/** The template the builder's own build button names for whatToBuild, which differs from it when
-		the two are reskins of each other: asked for an AmericaVehicleChinook, a Turkey Supply Center
-		makes its TurkeyVehicleChinook.  NULL when no button builds it. */
+		the two are reskins of each other: asked for an AmericaVehicleChinook, a Turkiye Supply Center
+		makes its TurkiyeVehicleChinook.  NULL when no button builds it. */
 	const ThingTemplate *findBuildButtonTemplate( Object *builder, const ThingTemplate *whatToBuild ) const;
 
 	/// sell an object

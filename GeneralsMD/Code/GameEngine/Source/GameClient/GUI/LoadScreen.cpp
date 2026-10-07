@@ -1369,7 +1369,7 @@ void MultiPlayerLoadScreen::init( GameInfo *game )
 	}
 	else 
 	{
-		// the main original factions don't have associated generals; the fork's own (Turkey) wear the logo of the side they are built on
+		// the main original factions don't have associated generals; the fork's own (Turkiye) wear the logo of the side they are built on
 		AsciiString imageName;
 		if (pt->getBaseSide() == "USA")
 			portrait = TheMappedImageCollection->findImageByName("SAFactionLogoLg_US");
@@ -1654,7 +1654,7 @@ void GameSpyLoadScreen::init( GameInfo *game )
 	}
 	else 
 	{
-		// the main original factions don't have associated generals; the fork's own (Turkey) wear the logo of the side they are built on
+		// the main original factions don't have associated generals; the fork's own (Turkiye) wear the logo of the side they are built on
 		AsciiString imageName;
 		if (pt->getBaseSide() == "USA")
 			portrait = TheMappedImageCollection->findImageByName("SAFactionLogo144_US");

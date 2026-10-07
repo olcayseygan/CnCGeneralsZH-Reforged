@@ -356,8 +356,8 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 	// A NULL constructor Object means a script built building so let it slide.
 	if( (constructorObject != NULL) && !isPossibleToMakeUnit(constructorObject, what) )
 		return NULL;
-	// the dozer puts up its own side's building: a Turkey dozer the AI asks for an AmericaBarracks
-	// builds a TurkeyBarracks, and an American one never a Turkish reskin
+	// the dozer puts up its own side's building: a Turkiye dozer the AI asks for an AmericaBarracks
+	// builds a TurkiyeBarracks, and an American one never a Turkish reskin
 	if( constructorObject != NULL )
 		what = findBuildButtonTemplate( constructorObject, what );
 

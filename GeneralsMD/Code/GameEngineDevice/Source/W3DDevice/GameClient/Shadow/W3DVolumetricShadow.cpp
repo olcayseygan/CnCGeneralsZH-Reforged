@@ -77,6 +77,8 @@
 #include "GameClient/ParticleSys.h"
 #include <algorithm>
 #include <vector>
+#include <cstdint>
+#include <cstring>
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -4390,7 +4392,9 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		 Nothing else in the game sets this state, so it goes back to zero rather than to the
 		 wrapper's cached value, which an invalidate leaves as a sentinel. */
 	const float bridgeSlopeBias = SHADOW_MAP_BRIDGE_SLOPE_BIAS;
-	DX8Wrapper::Set_DX8_Render_State( D3DRS_SLOPESCALEDEPTHBIAS, *(const DWORD *)&bridgeSlopeBias );
+	uint32_t bridgeSlopeBiasBits;
+	memcpy(&bridgeSlopeBiasBits, &bridgeSlopeBias, sizeof(bridgeSlopeBiasBits));
+	DX8Wrapper::Set_DX8_Render_State( D3DRS_SLOPESCALEDEPTHBIAS, bridgeSlopeBiasBits );
 	TheTerrainRenderObject->getBridgeBuffer()->drawBridgeShadowCasters();
 	DX8Wrapper::Set_DX8_Render_State( D3DRS_SLOPESCALEDEPTHBIAS, 0 );
 

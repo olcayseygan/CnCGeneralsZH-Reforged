@@ -285,7 +285,9 @@ int main(int argument_count, char ** arguments)
 		return 1;
 	}
 	const float depthBias = DEPTH_BIAS;
-	if (FAILED(device->SetRenderState(D3DRS_DEPTHBIAS, *(const DWORD *)&depthBias))) {
+	uint32_t depthBiasBits;
+	memcpy(&depthBiasBits, &depthBias, sizeof(depthBiasBits));
+	if (FAILED(device->SetRenderState(D3DRS_DEPTHBIAS, depthBiasBits))) {
 		printf("FAIL: D3DRS_ZBIAS has no working D3DRS_DEPTHBIAS replacement\n");
 		return 1;
 	}

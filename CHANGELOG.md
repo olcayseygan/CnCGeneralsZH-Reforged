@@ -13,7 +13,8 @@ found and fixed â€” EA's own, not port damage.**
 - Turkey is a fourth side in the skirmish and multiplayer lobbies, with an army of its own: Mehmetcik riflemen, Sungur missile teams and Maroon Berets from the Barracks; the Altay tank, the Kirpi carrier, Korkut air defense, Firtina howitzers and Sakarya rocket launchers from the Factory; Bayraktar and Akinci drones, the Gokbey helicopter and the Kizilelma fighter from the Airfield. Every name and tooltip reads in English and in Turkish.
 - Turkey kills from range and cannot see for itself. The Firtina throws a shell 600 and sees 100, so it waits until a spotter team, a Cobra scout, a drone or a cheap Radar Tower finds the target, then fires on its own. Force it to shell ground nobody can see and the shots go wide, about half of them off a barracks-sized target. Extended Range and Precision Guidance at the Factory push the guns further and tighten the blind spread.
 - Combat Engineers build the base in place of a dozer. They are infantry, so they can be shot and run over. The Barracks' Mine Kit lets them bury mines, and the Factory's Armor Pack toughens the Kirpi and the Altay.
-- The units still borrow American and other sides' models, voices and cameos, and Turkey still buys the American generals' powers with its ranks.
+- Turkey's first rank buys its own power, a Minefield a cargo plane sows wherever you point, beside the Spy Drone. Rank 3 offers paratroopers and the A-10 strike, and rank 8 the American powers for now.
+- The units still borrow American and other sides' models, voices and cameos.
 - The computer plays Turkey too. A Turkish AI puts up a full base with radar towers and air defense sites, sends supply trucks, fields the new army, artillery included, and attacks.
 
 ## Zero Hour on a Mac, on Linux and on the Steam Deck

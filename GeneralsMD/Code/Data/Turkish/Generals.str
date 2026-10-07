@@ -16484,3 +16484,19 @@ END
 CONTROLBAR:ConstructTurkeyPatriotBattery
 "Si&per Bataryası"
 END
+
+SCIENCE:TurkeyMinefield
+"Mayın Tarlası"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceMinefield
+"Bir kargo uçağı gösterdiğiniz yere mayın döşer. \n \n Çağrıldığı yer: Karargah"
+END
+
+CONTROLBAR:TurkeyMinefield
+"Mayın Ta&rlası"
+END
+
+CONTROLBAR:TooltipTurkeyMinefield
+"Mayın Tarlası \n Geri Sayım: 4:00"
+END

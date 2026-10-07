@@ -2112,3 +2112,19 @@ END
 CONTROLBAR:ConstructTurkeyPatriotBattery
 "S&iper Battery"
 END
+
+SCIENCE:TurkeyMinefield
+"Minefield"
+END
+
+CONTROLBAR:ToolTipTurkeyScienceMinefield
+"A cargo plane sows a minefield wherever you point. \n \n Deploy from: Headquarters"
+END
+
+CONTROLBAR:TurkeyMinefield
+"Mine&field"
+END
+
+CONTROLBAR:TooltipTurkeyMinefield
+"Minefield \n Recharge: 4:00"
+END

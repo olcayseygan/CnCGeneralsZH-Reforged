@@ -511,6 +511,12 @@ if(ZH_PLATFORM_WINDOWS)
   # which Wwutil drags in for Get_File_Id_String.  Both are Windows import libraries; B2 replaces
   # the first with a platform clock and B3 the second.
   target_link_libraries(wwlib PUBLIC winmm version)
+else()
+  # thread.cpp and mutex.cpp call pthreads, which before glibc 2.34 (the Steam Runtime's 2.31 among
+  # them) live in libpthread rather than libc: without this, a program that links wwlib and nothing
+  # else that carries threads, such as wwmath_selfcheck, cannot link there.
+  find_package(Threads REQUIRED)
+  target_link_libraries(wwlib PUBLIC Threads::Threads)
 endif()
 
 # ---- wwsaveload -----------------------------------------------------------
@@ -2498,7 +2504,7 @@ target_include_directories(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameen
 target_compile_definitions(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
   ZH_EAGER_VTABLE_STUB_STRINGS)	# GCC's eager vtables; see Tests/gcc_eager_vtable_stubs.cpp
 set_target_properties(test_crash_reporting PROPERTIES CXX_STANDARD 17)
-target_link_libraries(test_crash_reporting PRIVATE wwlib wwdebug)
+target_link_libraries(test_crash_reporting PRIVATE wwlib wwdebug ${CMAKE_DL_LIBS})	# dladdr: libdl before glibc 2.34
 add_test(NAME test_crash_reporting COMMAND test_crash_reporting)
 # It crashes on purpose (a null write, an abort, raised SIGFPE and SIGBUS) and checks the crash handler's report.  Under
 # ZH_SANITIZE the sanitizer's own SEGV handler reports and exits first, which proves nothing about ours.

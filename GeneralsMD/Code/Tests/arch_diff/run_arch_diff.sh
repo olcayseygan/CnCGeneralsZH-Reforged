@@ -93,10 +93,14 @@ command -v clang++ >/dev/null 2>&1 || skip "no clang++ on PATH"
 probe="$here/arch_probe.cpp"
 [ -e "$probe" ] || { echo "[arch-diff] ERROR: $probe is missing"; exit 1; }
 
-printf 'int main(void){return 0;}\n' > "$work/canary.c"
-clang -arch x86_64 "$work/canary.c" -o "$work/canary_x86" 2>/dev/null \
+# Each canary refuses to compile for any other architecture: off Darwin an older clang (the Steam
+# Runtime's 11) accepts -arch, ignores it and builds for the host, and then both sides are arm64
+# and agree on everything, the known differences included.
+printf '#ifndef __x86_64__\n#error not x86_64\n#endif\nint main(void){return 0;}\n' > "$work/canary_x86.c"
+printf '#ifndef __aarch64__\n#error not arm64\n#endif\nint main(void){return 0;}\n' > "$work/canary_arm.c"
+clang -arch x86_64 "$work/canary_x86.c" -o "$work/canary_x86" 2>/dev/null \
   || skip "this clang cannot target x86_64 (no cross toolchain)"
-clang -arch arm64  "$work/canary.c" -o "$work/canary_arm" 2>/dev/null \
+clang -arch arm64  "$work/canary_arm.c" -o "$work/canary_arm" 2>/dev/null \
   || skip "this clang cannot target arm64"
 "$work/canary_x86" >/dev/null 2>&1 \
   || skip "x86_64 binaries do not run here (Rosetta 2 is not installed)"

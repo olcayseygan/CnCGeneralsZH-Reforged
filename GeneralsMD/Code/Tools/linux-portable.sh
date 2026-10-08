@@ -49,8 +49,9 @@
 #   --out       the folder to make; its name is the package's (e.g. .../ZeroHourReforged-linux-x86_64)
 #   --cmake     a Linux CMake of 3.29 or later that runs inside the container: the SDK's own 3.25 cannot
 #               configure this project, and a distribution's CMake needs its distribution's glibc.
-#               Kitware's release tarball (cmake-3.31.6-linux-x86_64) is what P3 uses
-#   --image     default registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest
+#               Kitware's release tarball (cmake-3.31.6-linux-x86_64, or -aarch64 on arm64) is what P3 uses
+#   --image     default registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest, or sniper/sdk/arm64:latest
+#               on an arm64 host (the Steam Frame's architecture); the folder is built for the image's
 #   --jobs      the build's parallelism (default: ZH_BUILD_JOBS, else the CPU count)
 #   --no-art    leaves the 1.6 GB of Reforged*.big art out (the game then looks as ClassicGraphics does)
 #   --no-build  stages from what <build> already holds
@@ -63,7 +64,7 @@
 
 set -u
 
-BUILD="" OUT="" CMAKE="" IMAGE="registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest" JOBS="" ART=1 TAR=1 DOBUILD=1
+BUILD="" OUT="" CMAKE="" IMAGE="" JOBS="" ART=1 TAR=1 DOBUILD=1
 APPIMAGETOOL="" RUNTIME=""
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -80,6 +81,12 @@ while [ $# -gt 0 ]; do
 		*) echo "linux-portable: unknown argument $1" >&2; exit 2;;
 	esac
 done
+if [ -z "$IMAGE" ]; then
+	case "$(uname -m)" in
+		aarch64|arm64) IMAGE="registry.gitlab.steamos.cloud/steamrt/sniper/sdk/arm64:latest";;
+		*) IMAGE="registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest";;
+	esac
+fi
 fail() { echo "linux-portable: $*" >&2; [ -n "${STARTED:-}" ] && rm -rf -- "${OUT:?}"; exit 1; }
 [ -n "$BUILD" ] && [ -n "$OUT" ] || fail "--build and --out are required"
 [ "$DOBUILD" -eq 0 ] || [ -x "$CMAKE" ] || fail "--cmake must name a Linux CMake of 3.29 or later (Kitware's release tarball)"
@@ -98,6 +105,8 @@ mounts=( -v "$REPO:$REPO" -v "$BUILD:$BUILD" )
 in_sdk() {	# in_sdk <command>: runs a shell command inside the SDK as this user
 	docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp "${mounts[@]}" -w "$BUILD" "$IMAGE" bash -c "$1"
 }
+ARCH="$(in_sdk "uname -m")" || fail "cannot run $IMAGE"
+case "$ARCH" in x86_64|aarch64) ;; *) fail "$IMAGE is $ARCH: only x86_64 and aarch64 are built";; esac
 
 # ---- the build ---------------------------------------------------------------------------------------------
 if [ "$DOBUILD" -eq 1 ]; then
@@ -134,7 +143,7 @@ glibc="$(printf '%s\n' "$needs" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
 [ -n "$glibc" ] || fail "cannot read generals' glibc symbols"
 [ "$(printf '%s\n%s\n' "$glibc" GLIBC_2.31 | sort -V | tail -1)" = GLIBC_2.31 ] || fail "refused: generals needs $glibc, newer than GLIBC_2.31"
 ! grep -qE 'GLIBCXX_|CXXABI_' <<< "$needs" || fail "refused: generals needs libstdc++ symbols (it must link it statically)"
-allowed='^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|ld-linux-x86-64\.so\.2|libfontconfig\.so\.1)$'
+allowed='^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|ld-linux-x86-64\.so\.2|ld-linux-aarch64\.so\.1|libfontconfig\.so\.1)$'
 extra="$(printf '%s\n' "$libs" | grep -vE "$allowed")"
 [ -z "$extra" ] || fail "refused: generals needs shared libraries a SteamOS may lack: $(printf '%s ' $extra)"
 
@@ -247,7 +256,7 @@ image_id="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE" 2>
 compiler="$(in_sdk "g++-14 --version | head -1")"
 version="$(awk '/#define VERSION_MAJOR/ {a=$3} /#define VERSION_MINOR/ {b=$3} /#define VERSION_BUILDNUM/ {c=$3} END {print a"."b"."c}' "$BUILD/generated/BuildVersion.h")"
 cat > "$OUT/VERSION" <<VERSION_EOF
-Zero Hour Reforged $version for Linux (x86_64)
+Zero Hour Reforged $version for Linux ($ARCH)
 commit $commit
 built $built
 built in $image_id
@@ -316,7 +325,7 @@ if [ -n "$APPIMAGETOOL" ]; then
 	cp "$OUT/zero-hour-reforged.sh" "$A/AppRun" && cp "$OUT/share/applications/zero-hour-reforged.desktop" "$A/" \
 		&& cp "$OUT/share/icons/hicolor/128x128/apps/zero-hour-reforged.png" "$A/zero-hour-reforged.png" \
 		&& ln -s zero-hour-reforged.png "$A/.DirIcon" || fail "cannot complete $A"
-	ARCH=x86_64 "$APPIMAGETOOL" --no-appstream --runtime-file "$RUNTIME" "$A" "$OUT.AppImage" > "$OUT.appimagetool.log" 2>&1 \
+	ARCH="$ARCH" "$APPIMAGETOOL" --no-appstream --runtime-file "$RUNTIME" "$A" "$OUT.AppImage" > "$OUT.appimagetool.log" 2>&1 \
 		|| { tail -5 "$OUT.appimagetool.log" >&2; rm -rf -- "$A"; fail "appimagetool failed"; }
 	rm -rf -- "$A"
 	# a type-2 runtime answers --appimage-offset with where its squashfs starts, without mounting anything

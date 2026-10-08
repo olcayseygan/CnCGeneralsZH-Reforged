@@ -4390,7 +4390,7 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		 Nothing else in the game sets this state, so it goes back to zero rather than to the
 		 wrapper's cached value, which an invalidate leaves as a sentinel. */
 	const float bridgeSlopeBias = SHADOW_MAP_BRIDGE_SLOPE_BIAS;
-	DX8Wrapper::Set_DX8_Render_State( D3DRS_SLOPESCALEDEPTHBIAS, *(const DWORD *)&bridgeSlopeBias );
+	DX8Wrapper::Set_DX8_Render_State( D3DRS_SLOPESCALEDEPTHBIAS, *(const uint32 *)&bridgeSlopeBias );
 	TheTerrainRenderObject->getBridgeBuffer()->drawBridgeShadowCasters();
 	DX8Wrapper::Set_DX8_Render_State( D3DRS_SLOPESCALEDEPTHBIAS, 0 );
 

@@ -111,12 +111,14 @@ struct DirectorShowing
 /// this frame
 Bool ObserverCamera_advanceShowing( std::vector< DirectorShowing > &queue, UnsignedInt frame, UnsignedInt moveFrames, UnsignedInt holdAlone,
 	Bool keepLast );
-/// how far in a queued thing that comes and goes over moveFrames is on frame, 0 to 1, eased in and out
-Real ObserverCamera_showingShown( const DirectorShowing &showing, UnsignedInt frame, UnsignedInt moveFrames );
+/// how far in a queued thing that comes and goes over moveFrames is on frame, 0 to 1, eased in and out.
+/// frame and the frames below are a picture's time (GameEngine_pictureFrame), between two logic frames
+/// for a -recordfps picture
+Real ObserverCamera_showingShown( const DirectorShowing &showing, Real frame, UnsignedInt moveFrames );
 /// a defeated player's card on frame: how bright its red flash is, how far the line through it has
 /// drawn and how far it has collapsed, each 0 to 1.  defeated is the frame he lost on, collapseFrom the
 /// frame his card starts to go
-void ObserverCamera_cardExit( UnsignedInt frame, UnsignedInt defeated, UnsignedInt collapseFrom, Real *flash, Real *struck, Real *collapse );
+void ObserverCamera_cardExit( Real frame, UnsignedInt defeated, UnsignedInt collapseFrom, Real *flash, Real *struck, Real *collapse );
 /// the frame the card of a player who lost on defeated starts to collapse: once it has been seen struck,
 /// and not before the card that went before it, from lastCollapse, has gone, so the others slide for
 /// one card at a time
@@ -351,7 +353,7 @@ Real ObserverCamera_paneGround( Real screenGround, Real circleGround, Real reach
 Int ObserverCamera_panePolygon( const Real *rays, Int count, Int pane, const Coord2D &origin, Int width, Int height,
 	Coord2D *vertices );
 /// how far an animation of length frames that started on start is on frame, eased in and out, 0 to 1
-Real ObserverCamera_easeFrames( UnsignedInt frame, UnsignedInt start, UnsignedInt length );
+Real ObserverCamera_easeFrames( Real frame, UnsignedInt start, UnsignedInt length );
 /// the dark edge each side of the gold of a line between panes and of the radar's frame, in pixels
 enum { OBSERVER_PANE_LINE_EDGE = 2 };
 /// the gold of a line between panes, in pixels, for a picture height pixels high: 6 at 720, 9 at 1080
@@ -367,7 +369,7 @@ Real ObserverCamera_bandShown( Real progress );
 Real ObserverCamera_frameTraced( Real progress );
 /// where along the gold lines the travelling light is on logic frame frame, 0 at the meeting point and
 /// 1 at the far end, eased; below 0 between two runs
-Real ObserverCamera_shimmerAt( UnsignedInt frame );
+Real ObserverCamera_shimmerAt( Real frame );
 
 class ObserverCamera
 {
@@ -500,6 +502,7 @@ private:
 	Real splitApart( const Coord2D &second ) const;
 	void updateIntroPlaces( void );
 	void advancePanes( UnsignedInt frame );
+	void easePanes( Real at );
 	void fitPanes( UnsignedInt frame );
 	Real paneZoom( Int pane ) const;
 	void stepPaneCameras( const ViewLocation &step, Real elapsedSeconds );
@@ -555,6 +558,8 @@ private:
 	Bool m_survivorHandover;				///< the panes have just gone out on pane 1, whose camera the single view takes over this update
 	Coord3D m_drivenTo;							///< where this put the camera last frame, inside the view's constraint
 	UnsignedInt m_lastUpdate;
+	UnsignedInt m_directedFrame;		///< the logic frame -directorrecord's once-a-frame work last ran on; -recordfps updates a frame more than once
+	Bool m_directing;								///< this update is the logic frame's first, or there is no -directorrecord: the director decides on it
 	ObserverCameraVelocity m_velocity;
 
 	ViewLocation m_playerViews[ MAX_PLAYER_COUNT ];

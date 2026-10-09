@@ -59,6 +59,24 @@ Int GameEngine_logicCatchupMaxFrames( Int logicFps );
 void GameEngine_noteLogicTickDone( Int logicFps, Bool fastMode );
 Real GameEngine_logicTickFraction( void );
 
+/** -video and -directorrecord: whether the logic frame is one a range records.  -recordfps draws
+	GameEngine_videoPictures() pictures of each of those, and the logic runs after the last; the coming
+	draw is picture GameEngine_videoPicture() of them, 0 first.  1 and 0 outside a range, and at 30.
+	The last picture shows the logic frame, and each one before it is that share of a frame earlier: its
+	blend fraction is (picture + 1) / pictures, and GameEngine_pictureFrame is its time in logic frames,
+	what an animation drawn for footage runs on instead of the wall clock.  GameEngine_pictureMilliseconds
+	is the same time in milliseconds, the logic frame times 1000 / LOGICFRAMES_PER_SECOND for its last
+	picture.  All client side: the logic runs the frames it always did. */
+Bool GameEngine_isVideoFrame( void );
+Int GameEngine_videoPictures( void );
+/** The pictures of this logic frame or of the next one are blends, so smooth motion has to see this one. */
+Bool GameEngine_videoBlends( void );
+/** What the movie is told: -recordfps, or 30 where it does not apply (a network game, -headless). */
+Int GameEngine_videoFramesPerSecond( void );
+Int GameEngine_videoPicture( void );
+Real GameEngine_pictureFrame( void );
+UnsignedInt GameEngine_pictureMilliseconds( void );
+
 /**	How long the catch-up loop may keep starting new logic ticks before it gives up for this pass.
 
 	A frame count cannot tell a cheap tick from an expensive one, and that is the whole difference

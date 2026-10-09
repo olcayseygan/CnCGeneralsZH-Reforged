@@ -4193,7 +4193,9 @@ void InGameUI::update( void )
 			if( !CinemaDirector_showsMap() )
 				CinemaDirector_setHudHidden( TRUE, TRUE );
 			TheMouse->setVisibility( FALSE );
-			observerNowMs = TheGameLogic->getFrame() * 1000 / LOGICFRAMES_PER_SECOND;
+			// the picture's own time, a share of a frame before the logic frame for a -recordfps
+			// picture between two of them
+			observerNowMs = GameEngine_pictureMilliseconds();
 		}
 		TheObserverCamera.update( observerNowMs );
 	}
@@ -11074,7 +11076,7 @@ void InGameUI::drawDirectorBroadcast( void )
 		const Int seat = named[ index ].player->getPlayerIndex();
 		Real flash = 0.0f, struck = 0.0f, collapse = 0.0f;
 		if( TheObserverCamera.getDefeatFrame( seat ) != 0 )
-			ObserverCamera_cardExit( frame, TheObserverCamera.getDefeatFrame( seat ), TheObserverCamera.getCollapseFrame( seat ),
+			ObserverCamera_cardExit( GameEngine_pictureFrame(), TheObserverCamera.getDefeatFrame( seat ), TheObserverCamera.getCollapseFrame( seat ),
 				&flash, &struck, &collapse );
 		if( collapse >= 1.0f )
 			continue;

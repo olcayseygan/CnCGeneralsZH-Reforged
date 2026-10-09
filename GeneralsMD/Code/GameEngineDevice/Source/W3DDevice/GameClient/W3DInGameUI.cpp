@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include "Lib/Clock.h"
 
+#include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
@@ -497,7 +498,7 @@ static void drawPaneRays( void )
 		}
 	}
 
-	const Real shimmer = ObserverCamera_shimmerAt( TheGameLogic->getFrame() );
+	const Real shimmer = ObserverCamera_shimmerAt( GameEngine_pictureFrame() );
 	if( drawn < 1.0f || shimmer < 0.0f )
 		return;
 	const Real half = length * PANE_SHIMMER_SHARE * 0.5f;

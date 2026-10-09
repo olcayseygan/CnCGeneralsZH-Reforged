@@ -23,6 +23,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/GameEngine.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
@@ -1367,11 +1368,11 @@ Bool ObserverCamera_parseMoment( const char *line, DirectorMoment *moment )
 }
 
 //-------------------------------------------------------------------------------------------------
-Real ObserverCamera_easeFrames( UnsignedInt frame, UnsignedInt start, UnsignedInt length )
+Real ObserverCamera_easeFrames( Real frame, UnsignedInt start, UnsignedInt length )
 {
-	if( frame <= start )
+	if( frame <= (Real)start )
 		return 0.0f;
-	const Real t = min( (Real)( frame - start ) / length, 1.0f );
+	const Real t = min( ( frame - (Real)start ) / length, 1.0f );
 	return t * t * ( 3.0f - 2.0f * t );
 }
 
@@ -1413,12 +1414,12 @@ Real ObserverCamera_frameTraced( Real progress )
 }
 
 //-------------------------------------------------------------------------------------------------
-Real ObserverCamera_shimmerAt( UnsignedInt frame )
+Real ObserverCamera_shimmerAt( Real frame )
 {
-	const UnsignedInt into = frame % PANE_SHIMMER_PERIOD;
-	if( into >= PANE_SHIMMER_FRAMES )
+	const Real into = fmodf( frame, (Real)PANE_SHIMMER_PERIOD );
+	if( into >= (Real)PANE_SHIMMER_FRAMES )
 		return -1.0f;
-	return ObserverCamera_easeBetween( (Real)into, 0.0f, (Real)PANE_SHIMMER_FRAMES );
+	return ObserverCamera_easeBetween( into, 0.0f, (Real)PANE_SHIMMER_FRAMES );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1443,7 +1444,7 @@ Bool ObserverCamera_advanceShowing( std::vector< DirectorShowing > &queue, Unsig
 }
 
 //-------------------------------------------------------------------------------------------------
-Real ObserverCamera_showingShown( const DirectorShowing &showing, UnsignedInt frame, UnsignedInt moveFrames )
+Real ObserverCamera_showingShown( const DirectorShowing &showing, Real frame, UnsignedInt moveFrames )
 {
 	if( showing.start == 0 )
 		return 0.0f;
@@ -1454,7 +1455,7 @@ Real ObserverCamera_showingShown( const DirectorShowing &showing, UnsignedInt fr
 }
 
 //-------------------------------------------------------------------------------------------------
-void ObserverCamera_cardExit( UnsignedInt frame, UnsignedInt defeated, UnsignedInt collapseFrom, Real *flash, Real *struck, Real *collapse )
+void ObserverCamera_cardExit( Real frame, UnsignedInt defeated, UnsignedInt collapseFrom, Real *flash, Real *struck, Real *collapse )
 {
 	// up in a third of the flash, down over the rest
 	const UnsignedInt up = CARD_FLASH_FRAMES / 3;
@@ -1503,6 +1504,8 @@ void ObserverCamera::reset( void )
 	m_survivorHandover = FALSE;
 	m_drivenTo.zero();
 	m_lastUpdate = 0;
+	m_directedFrame = 0xFFFFFFFFu;
+	m_directing = TRUE;
 	m_velocity.x = m_velocity.y = m_velocity.z = m_velocity.angle = m_velocity.pitch = m_velocity.zoom = 0.0f;
 	for( Int index = 0; index < MAX_PLAYER_COUNT; index++ )
 		m_playerViews[ index ] = ViewLocation();
@@ -1745,7 +1748,7 @@ const DirectorShowing *ObserverCamera::getPowerFlag( Int playerIndex, Real *drop
 	const std::vector< DirectorShowing > &flags = m_flags[ playerIndex ];
 	if( flags.empty() || flags.front().start == 0 )
 		return NULL;
-	*drop = ObserverCamera_showingShown( flags.front(), TheGameLogic->getFrame(), FLAG_MOVE_FRAMES );
+	*drop = ObserverCamera_showingShown( flags.front(), GameEngine_pictureFrame(), FLAG_MOVE_FRAMES );
 	return &flags.front();
 }
 
@@ -1754,14 +1757,14 @@ const DirectorShowing *ObserverCamera::getDefeatBanner( Real *shown ) const
 {
 	if( m_defeatBanners.empty() || m_defeatBanners.front().start == 0 )
 		return NULL;
-	*shown = ObserverCamera_showingShown( m_defeatBanners.front(), TheGameLogic->getFrame(), BANNER_MOVE_FRAMES );
+	*shown = ObserverCamera_showingShown( m_defeatBanners.front(), GameEngine_pictureFrame(), BANNER_MOVE_FRAMES );
 	return &m_defeatBanners.front();
 }
 
 //-------------------------------------------------------------------------------------------------
 Real ObserverCamera::getWinnerShown( void ) const
 {
-	return m_winnerFrame == 0 ? 0.0f : ObserverCamera_easeFrames( TheGameLogic->getFrame(), m_winnerFrame, BANNER_MOVE_FRAMES );
+	return m_winnerFrame == 0 ? 0.0f : ObserverCamera_easeFrames( GameEngine_pictureFrame(), m_winnerFrame, BANNER_MOVE_FRAMES );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2499,7 +2502,15 @@ void ObserverCamera::advancePanes( UnsignedInt frame )
 		m_panePhase = next;
 		m_panePhaseStart = frame;
 	}
+}
 
+//-------------------------------------------------------------------------------------------------
+/** How far the panes, the corner radar and the lines are into the phase advancePanes left them in, at
+	* the picture's time: the logic frame, or a share of one before it for a -recordfps picture between
+	* two logic frames. */
+//-------------------------------------------------------------------------------------------------
+void ObserverCamera::easePanes( Real at )
+{
 	switch( m_panePhase )
 	{
 		case PANES_NONE:
@@ -2508,10 +2519,10 @@ void ObserverCamera::advancePanes( UnsignedInt frame )
 			break;
 		case PANES_RADAR_OUT:
 			m_paneProgress = 0.0f;
-			m_cornerRadarSlide = ObserverCamera_easeFrames( frame, m_panePhaseStart, PANE_RADAR_FRAMES );
+			m_cornerRadarSlide = ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_RADAR_FRAMES );
 			break;
 		case PANES_IN:
-			m_paneProgress = ObserverCamera_easeFrames( frame, m_panePhaseStart, PANE_SLIDE_FRAMES );
+			m_paneProgress = ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_SLIDE_FRAMES );
 			m_cornerRadarSlide = 1.0f;
 			break;
 		case PANES_DRAW:
@@ -2527,22 +2538,22 @@ void ObserverCamera::advancePanes( UnsignedInt frame )
 			m_cornerRadarSlide = 1.0f;
 			break;
 		case PANES_OUT:
-			m_paneProgress = 1.0f - ObserverCamera_easeFrames( frame, m_panePhaseStart, PANE_SLIDE_FRAMES );
+			m_paneProgress = 1.0f - ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_SLIDE_FRAMES );
 			m_cornerRadarSlide = 1.0f;
 			break;
 		case PANES_RADAR_IN:
 			m_paneProgress = 0.0f;
-			m_cornerRadarSlide = 1.0f - ObserverCamera_easeFrames( frame, m_panePhaseStart, PANE_RADAR_FRAMES );
+			m_cornerRadarSlide = 1.0f - ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_RADAR_FRAMES );
 			break;
 	}
 
 	// the gold draws on the panes once they have settled and goes back in before they leave
-	const UnsignedInt phaseFrames = frame >= m_panePhaseStart ? frame - m_panePhaseStart : 0;
+	const Real phaseFrames = at >= (Real)m_panePhaseStart ? at - (Real)m_panePhaseStart : 0.0f;
 	m_lineProgress = m_panePhase == PANES_HELD ? 1.0f : 0.0f;
 	if( m_panePhase == PANES_DRAW )
-		m_lineProgress = min( (Real)phaseFrames / PANE_DRAW_FRAMES, 1.0f );
+		m_lineProgress = min( phaseFrames / PANE_DRAW_FRAMES, 1.0f );
 	if( m_panePhase == PANES_UNDRAW )
-		m_lineProgress = 1.0f - min( (Real)phaseFrames / PANE_UNDRAW_FRAMES, 1.0f );
+		m_lineProgress = 1.0f - min( phaseFrames / PANE_UNDRAW_FRAMES, 1.0f );
 	m_paneOrigin.x = TheDisplay->getWidth() * 0.5f;
 	m_paneOrigin.y = TheDisplay->getHeight() * 0.5f;
 	if( m_paneCount >= 2 )
@@ -3268,7 +3279,7 @@ Bool ObserverCamera::chooseTarget( const ViewLocation &current, ViewLocation *ta
 	Coord2D place;
 	if( !directorPlace( narrowTo, &place ) )
 		return FALSE;
-	if( TheGlobalData->m_directorRecord && m_placeScanned == TheGameLogic->getFrame() && updateSplit() )
+	if( TheGlobalData->m_directorRecord && m_directing && m_placeScanned == TheGameLogic->getFrame() && updateSplit() )
 		place = m_place;
 	// the opening shows the first player's base in pane 0.  Pane 0 keeps its place until the panes
 	// have gone: a split ends when the director moves onto the second fight, and pane 0 going there at
@@ -3389,16 +3400,23 @@ void ObserverCamera::update( UnsignedInt nowMilliseconds )
 		return;
 	}
 
-	// -directorrecord's panes run on the logic clock, on the split the last scan decided
-	if( TheGlobalData->m_directorRecord )
+	// -directorrecord's panes run on the logic clock, on the split the last scan decided.  What it decides
+	// it decides once a logic frame, -recordfps updating each frame once a picture; the glide and the
+	// panes' easing below go on at every picture's own time
+	m_directing = !TheGlobalData->m_directorRecord || TheGameLogic->getFrame() != m_directedFrame;
+	if( TheGlobalData->m_directorRecord && !m_directing )
+		easePanes( GameEngine_pictureFrame() );
+	else if( TheGlobalData->m_directorRecord )
 	{
 		const UnsignedInt frame = TheGameLogic->getFrame();
+		m_directedFrame = frame;
 		if( !m_timelineLoaded )
 			loadTimeline();
 		checkTimeline( frame );
 		updateBroadcastMoments( frame );
 		const Bool introStarting = !m_introDone;
 		advancePanes( frame );
+		easePanes( GameEngine_pictureFrame() );
 		if( m_intro && introStarting )
 			pickIntroBases();
 		if( m_intro && ( introStarting || frame % DIRECTOR_SCAN_FRAMES == 0 ) )
@@ -3553,7 +3571,7 @@ void ObserverCamera::update( UnsignedInt nowMilliseconds )
 	TheTacticalView->getPosition( &m_drivenTo );
 	m_driving = TRUE;
 
-	if( TheGlobalData->m_directorRecord )
+	if( TheGlobalData->m_directorRecord && m_directing )
 	{
 		logPanes( TheGameLogic->getFrame() );
 		logHandover( step, placed );

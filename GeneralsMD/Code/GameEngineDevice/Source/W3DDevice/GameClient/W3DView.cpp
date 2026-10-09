@@ -43,6 +43,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "Common/BuildAssistant.h"
+#include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
 #include "Common/Radar.h"
 #include "Common/Module.h"
@@ -127,6 +128,28 @@
 Int TheW3DFrameLengthInMsec = 1000/LOGICFRAMES_PER_SECOND; // default is 33msec/frame == 30fps. but we may change it depending on sys config.
 static const Int MAX_REQUEST_CACHE_SIZE = 40;	// Any size larger than 10, or examine code below for changes. jkmcd.
 static const Real DRAWABLE_OVERSCAN = 75.0f;  ///< 3D world coords of how much to overscan in the 3D screen region
+
+/* The drawables are drawn when W3D's clock has moved, which is once a logic frame: the clock stands still
+	 between ticks.  -recordfps moves it on every picture of a recorded frame, and a picture after the
+	 first has nothing new to draw them with; smooth motion moves the models for it. */
+static Bool drawsDrawables( void )
+{
+	return WW3D::Get_Frame_Time() != 0 && GameEngine_videoPicture() == 0;
+}
+
+/* The camera's own clock: the wall clock, and while a -video range records the time of the picture
+	 being drawn, which is what the footage shows however long the picture took to draw and save.  A
+	 scripted pan that freezes the logic keeps the wall clock: the picture's time stands still with the
+	 logic, and W3DDisplay::draw loops until the pan is done. */
+static Bool onPictureClock( View *view )
+{
+	return GameEngine_isVideoFrame() && !( view->isTimeFrozen() && !view->isCameraMovementFinished() );
+}
+
+static UnsignedInt cameraClockMilliseconds( View *view )
+{
+	return onPictureClock( view ) ? GameEngine_pictureMilliseconds() : Clock_Milliseconds();
+}
 
 
 
@@ -516,8 +539,8 @@ void W3DView::buildCameraTransform( Matrix3D *transform )
 	//WST 11/12/2002 New camera shaker system
 	// This runs once per render frame (and again on every scrollBy), not once per 30Hz
 	// tick, so step the shaker by real elapsed time to keep shakes framerate-independent.
-	static UnsignedInt prevShakeTime = Clock_Milliseconds();
-	UnsignedInt nowShakeTime = Clock_Milliseconds();
+	static UnsignedInt prevShakeTime = cameraClockMilliseconds( this );
+	UnsignedInt nowShakeTime = cameraClockMilliseconds( this );
 	Real shakeDt = (nowShakeTime - prevShakeTime) * 0.001f;
 	prevShakeTime = nowShakeTime;
 	if (shakeDt > 1.0f/30.0f)
@@ -1671,13 +1694,25 @@ void W3DView::update(void)
 	// the original wall-clock cadence so camera motion speed is framerate-independent,
 	// while the camera transform itself still updates every render frame.
 	static UnsignedInt prevCameraStepTime = 0;
-	UnsignedInt nowCameraStepTime = Clock_Milliseconds();
+	const Bool pictureClock = onPictureClock( this );
+	UnsignedInt nowCameraStepTime = cameraClockMilliseconds( this );
 	Bool stepTime = (nowCameraStepTime - prevCameraStepTime) >= (UnsignedInt)TheW3DFrameLengthInMsec;
 	// During a scripted frozen-time pan, W3DDisplay::draw's inner loop calls us and
 	// paces itself to ~30fps already; gating on top of that ran the pan at half speed.
 	if (isTimeFrozen() && !isCameraMovementFinished())
 		stepTime = TRUE;
-	if (stepTime)
+	if (pictureClock)
+	{
+		// a recorded logic frame steps once, on its last picture: not on a -recordfps picture before it,
+		// whose 16 or 17 ms would put the step on every second picture in a phase that drifts, nor on a
+		// -directorrecord pane's second draw
+		static UnsignedInt steppedFrame = 0xFFFFFFFFu;
+		stepTime = GameEngine_videoPicture() == GameEngine_videoPictures() - 1 && TheGameLogic->getFrame() != steppedFrame;
+		if (stepTime)
+			steppedFrame = TheGameLogic->getFrame();
+		prevCameraStepTime = nowCameraStepTime;
+	}
+	else if (stepTime)
 	{
 		// carry the remainder instead of discarding it: with a render cadence that is not
 		// a multiple of 33ms (the shell caps at 45fps), discarding ran the steppers at a
@@ -1740,7 +1775,7 @@ void W3DView::update(void)
 		wholeMap.hi.y += DRAWABLE_OVERSCAN;
 		wholeMap.lo.z -= 999999.0f;
 		wholeMap.hi.z += 999999.0f;
-		if (WW3D::Get_Frame_Time())
+		if (drawsDrawables())
 			TheGameClient->iterateDrawablesInRegion( &wholeMap, drawDrawable, this );
 		return;
 	}
@@ -2025,8 +2060,10 @@ void W3DView::update(void)
 	static UnsignedInt prevZoomStepTime = 0;
 	Real zoomSteps = (Real)(nowCameraStepTime - prevZoomStepTime) / (Real)TheW3DFrameLengthInMsec;
 	prevZoomStepTime = nowCameraStepTime;
-	if (zoomSteps <= 0.0f || zoomSteps > 10.0f)
-		zoomSteps = 1.0f;		// first frame ever, or a hitch: take one plain step
+	// first frame ever, or a hitch: take one plain step.  A recorded picture's second draw, a
+	// -directorrecord pane, is no time at all and takes none
+	if ((zoomSteps <= 0.0f && !pictureClock) || zoomSteps > 10.0f)
+		zoomSteps = 1.0f;
 	Real cameraAdjustSpeed = 1.0f - (Real)pow(1.0f - TheGlobalData->m_cameraAdjustSpeed, zoomSteps);
 	// The director asks for a slower settle: at CameraAdjustSpeed's third of a second every ridge
 	// the five height samples crossed during a glide stepped the picture in and out.
@@ -2106,7 +2143,7 @@ void W3DView::update(void)
 
 	// render all of the visible Drawables
 	/// @todo this needs to use a real region partition or something
-	if (WW3D::Get_Frame_Time())	//make sure some time actually elapsed
+	if (drawsDrawables())	//make sure some time actually elapsed
 		TheGameClient->iterateDrawablesInRegion( &axisAlignedRegion, drawDrawable, this );
 }
 

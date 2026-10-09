@@ -486,7 +486,9 @@ static Real cinemaNow( void )
 		if (fraction > 1.0f)
 			fraction = 1.0f;
 	}
-	const Real logicNow = ((Real)frame + fraction) / (Real)LOGICFRAMES_PER_SECOND;
+	// recording, the picture's own time: the logic frame, or a share of one before it for a -recordfps
+	// picture between two (CinemaDirector_update runs after the logic loop has named the coming picture)
+	const Real logicNow = (recording ? GameEngine_pictureFrame() : (Real)frame + fraction) / (Real)LOGICFRAMES_PER_SECOND;
 
 	const Real wallSeconds = (Real)(wall - theCinemaClockWall) / 1000.0f;
 	theCinemaClockWall = wall;

@@ -516,40 +516,58 @@ Real ObserverCamera_easeHeight( Real from, Real to, Real *velocity, Real elapsed
 }
 
 //-------------------------------------------------------------------------------------------------
-Int ObserverCamera_groundOf( const Coord2D &place, const Coord2D *homes, Int count )
+Bool ObserverCamera_secondPlace( const std::vector< DirectorHeat > &hits, const Coord2D &first, Real needed, Coord2D *place, Real *heat )
 {
-	Int nearest = 0;
-	Real nearestSquared = 0.0f;
-	for( Int home = 0; home < count; home++ )
-	{
-		const Real dx = homes[ home ].x - place.x;
-		const Real dy = homes[ home ].y - place.y;
-		const Real squared = dx * dx + dy * dy;
-		if( home == 0 || squared < nearestSquared )
-		{
-			nearest = home;
-			nearestSquared = squared;
-		}
-	}
-	return nearest;
-}
-
-//-------------------------------------------------------------------------------------------------
-Bool ObserverCamera_secondPlace( const std::vector< DirectorHeat > &hits, const Coord2D &first, Real needed, const Coord2D *homes,
-	Int homeCount, Coord2D *place, Real *heat )
-{
-	const Int firstGround = ObserverCamera_groundOf( first, homes, homeCount );
 	std::vector< DirectorHeat > apart;
 	for( size_t index = 0; index < hits.size(); index++ )
 	{
 		const Real dx = hits[ index ].position.x - first.x;
 		const Real dy = hits[ index ].position.y - first.y;
-		if( homeCount >= 2 && ObserverCamera_groundOf( hits[ index ].position, homes, homeCount ) == firstGround )
-			continue;
 		if( dx * dx + dy * dy > needed * needed )
 			apart.push_back( hits[ index ] );
 	}
 	return ObserverCamera_hottestPlace( apart, place, heat );
+}
+
+//-------------------------------------------------------------------------------------------------
+void ObserverCamera_sideCandidates( const std::vector< DirectorHeat > &hits, const std::vector< PlayerMaskType > &sources,
+	const std::vector< DirectorHeat > &sights, const std::vector< PlayerMaskType > &owners, PlayerMaskType side,
+	std::vector< DirectorHeat > *candidates, Bool *fighting )
+{
+	candidates->clear();
+	for( size_t index = 0; index < hits.size(); index++ )
+		if( ( sources[ index ] & side ) != 0 )
+			candidates->push_back( hits[ index ] );
+	*fighting = !candidates->empty();
+	if( *fighting )
+		return;
+	for( size_t index = 0; index < sights.size(); index++ )
+		if( ( owners[ index ] & side ) != 0 )
+			candidates->push_back( sights[ index ] );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ObserverCamera_sidePlaces( const std::vector< DirectorHeat > *dealt, Real apart, Coord2D *places, Real *heats )
+{
+	heats[ 0 ] = heats[ 1 ] = 0.0f;
+	for( Int lead = 0; lead < 2; lead++ )
+	{
+		const Int other = 1 - lead;
+		Coord2D tried[ 2 ];
+		Real triedHeat[ 2 ] = { 0.0f, 0.0f };
+		if( !ObserverCamera_hottestPlace( dealt[ lead ], &tried[ lead ], &triedHeat[ lead ] ) )
+			continue;
+		if( !ObserverCamera_secondPlace( dealt[ other ], tried[ lead ], apart, &tried[ other ], &triedHeat[ other ] ) )
+			continue;
+		if( min( triedHeat[ 0 ], triedHeat[ 1 ] ) <= min( heats[ 0 ], heats[ 1 ] ) )
+			continue;
+		for( Int side = 0; side < 2; side++ )
+		{
+			places[ side ] = tried[ side ];
+			heats[ side ] = triedHeat[ side ];
+		}
+	}
+	return heats[ 0 ] > 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1304,9 +1322,8 @@ Bool ObserverCamera_fightLasts( const std::vector< DirectorMoment > &timeline, c
 
 //-------------------------------------------------------------------------------------------------
 Int ObserverCamera_plannedSecond( const std::vector< DirectorMoment > &timeline, const Coord2D &first, UnsignedInt frame, Real apart,
-	Bool keeping, const Coord2D *homes, Int homeCount )
+	Bool keeping )
 {
-	const Int firstGround = ObserverCamera_groundOf( first, homes, homeCount );
 	Int best = -1;
 	for( size_t index = 0; index < timeline.size(); index++ )
 	{
@@ -1316,8 +1333,6 @@ Int ObserverCamera_plannedSecond( const std::vector< DirectorMoment > &timeline,
 		if( !keeping && frame >= fight.start )
 			continue;
 		if( within( fight.place, first, apart ) )
-			continue;
-		if( homeCount >= 2 && ObserverCamera_groundOf( fight.place, homes, homeCount ) == firstGround )
 			continue;
 		if( best < 0 || fight.peak > timeline[ best ].peak )
 			best = (Int)index;
@@ -1517,6 +1532,11 @@ void ObserverCamera::reset( void )
 	m_winnerFrame = 0;
 	m_fights.clear();
 	m_fightSides.clear();
+	m_fightSources.clear();
+	m_sights.clear();
+	m_sightOwners.clear();
+	m_sidePlayers[ 0 ] = m_sidePlayers[ 1 ] = NULL;
+	m_sideFirst.x = m_sideFirst.y = 0.0f;
 	m_broadcast.clear();
 	m_broadcastTop = 0.0f;
 	m_screenGround = 0.0f;
@@ -1531,7 +1551,6 @@ void ObserverCamera::reset( void )
 	m_introDone = FALSE;
 	m_introGlide = FALSE;
 	m_panesLeftPlace.x = m_panesLeftPlace.y = 0.0f;
-	m_homeCount = 0;
 	m_paneCount = 0;
 	m_paneProgress = 0.0f;
 	m_lineProgress = 0.0f;
@@ -1548,7 +1567,6 @@ void ObserverCamera::reset( void )
 	{
 		m_paneRays[ pane ] = 0.0f;
 		m_panePlayers[ pane ] = NULL;
-		m_homes[ pane ].x = m_homes[ pane ].y = 0.0f;
 		m_paneSubject[ pane ].x = m_paneSubject[ pane ].y = 0.0f;
 		m_paneMark[ pane ].x = m_paneMark[ pane ].y = m_paneMark[ pane ].z = 0.0f;
 		m_paneCentres[ pane ].x = m_paneCentres[ pane ].y = 0.0f;
@@ -2160,8 +2178,10 @@ Real ObserverCamera::splitApart( const Coord2D &second ) const
 	* going up, or a dozer clearing trees, is no reason to split.  A special power the director is
 	* showing counts as a fight beside it. */
 //-------------------------------------------------------------------------------------------------
-void ObserverCamera::updateSplit( void )
+Bool ObserverCamera::updateSplit( void )
 {
+	if( m_sidePlayers[ 0 ] != NULL )
+		return updateSideSplit();
 	const UnsignedInt frame = TheGameLogic->getFrame();
 	if( m_paneCount < 2 )
 		measureScreenGround();
@@ -2174,7 +2194,7 @@ void ObserverCamera::updateSplit( void )
 	const Real searched = m_split ? m_splitApart : splitApart( m_place );
 	Coord2D second = { 0.0f, 0.0f };
 	Real secondHeat = 0.0f;
-	ObserverCamera_secondPlace( m_fights, m_place, searched, m_homes, m_homeCount, &second, &secondHeat );
+	ObserverCamera_secondPlace( m_fights, m_place, searched, &second, &secondHeat );
 	if( secondHeat > 0.0f && ObserverCamera_fizzles( m_timeline, second, frame ) )
 		secondHeat = 0.0f;
 	// with a timeline a split is decided before it opens: pane 0 needs a fight the scouting pass saw
@@ -2192,7 +2212,7 @@ void ObserverCamera::updateSplit( void )
 	const Real sameGround = searched * SPLIT_SAME_GROUND_SHARE;
 	const Bool handedOver = m_split && within( m_place, m_secondPlace, sameGround );
 	const Bool mayPlan = m_placeKind != PLACE_SIGHT && ( m_split || firstLasts );
-	const Int planned = mayPlan ? ObserverCamera_plannedSecond( m_timeline, m_place, frame, searched, m_split, m_homes, m_homeCount ) : -1;
+	const Int planned = mayPlan ? ObserverCamera_plannedSecond( m_timeline, m_place, frame, searched, m_split ) : -1;
 	// a planned moment whose split was ended early does not open another
 	const Bool plannedSplit = planned >= 0 && planned != m_spentMoment;
 	if( plannedSplit && frame < m_timeline[ planned ].start && ( secondHeat <= 0.0f || !within( second, m_timeline[ planned ].place, sameGround ) ) )
@@ -2240,9 +2260,8 @@ void ObserverCamera::updateSplit( void )
 	}
 	if( split != m_split )
 	{
-		DEBUG_LOG(( "OBSCAM frame %u split %s, first (%.0f,%.0f) heat %.1f on home %d's ground, second (%.0f,%.0f) heat %.1f on home %d's, %.0f apart of %.0f needed, screen %.0f%s\n",
-			frame, split ? "on" : "off", m_place.x, m_place.y, firstHeat, ObserverCamera_groundOf( m_place, m_homes, m_homeCount ), shown.x, shown.y,
-			secondHeat, ObserverCamera_groundOf( shown, m_homes, m_homeCount ), apart, needed, m_screenGround, plannedSplit ? ", planned" : "" ));
+		DEBUG_LOG(( "OBSCAM frame %u split %s, first heat %.1f, second (%.0f,%.0f) heat %.1f, %.0f apart of %.0f needed, screen %.0f%s\n",
+			frame, split ? "on" : "off", firstHeat, shown.x, shown.y, secondHeat, apart, needed, m_screenGround, plannedSplit ? ", planned" : "" ));
 		m_split = split;
 		m_splitChanged = frame;
 		m_splitApart = needed;
@@ -2253,6 +2272,93 @@ void ObserverCamera::updateSplit( void )
 	}
 	if( m_split )
 		m_secondPlace = shown;
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** -directorrecord in a match of two: a pane each player, pane 0 always the opening's pane 0 player
+	* and pane 1 the other, so the two sides keep their halves of the screen from the opening on.  What
+	* a player is doing is where his own fire falls, or with none his base and his army on the move.
+	* The split is up whenever the two are far enough apart, the opening's panes handing straight over
+	* to it, and the director follows pane 0's player while it is.  It goes when a pane's player turns
+	* to something somewhere else, when the two come together (one fight both are in, which the whole
+	* screen shows), or after SPLIT_MOST_FRAMES with a fight in it and twice that without, so the
+	* director gets its turn.  TRUE when it moved the director. */
+//-------------------------------------------------------------------------------------------------
+Bool ObserverCamera::updateSideSplit( void )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( m_paneCount < 2 )
+		measureScreenGround();
+	std::vector< DirectorHeat > candidates[ 2 ];
+	Bool fighting[ 2 ];
+	for( Int side = 0; side < 2; side++ )
+		ObserverCamera_sideCandidates( m_fights, m_fightSources, m_sights, m_sightOwners, m_sidePlayers[ side ]->getPlayerMask(),
+			&candidates[ side ], &fighting[ side ] );
+	Coord2D places[ 2 ];
+	places[ 0 ] = m_sideFirst;
+	places[ 1 ] = m_secondPlace;
+	Real heats[ 2 ];
+	const Real searched = m_split ? m_splitApart : SPLIT_APART;
+	const Bool found = ObserverCamera_sidePlaces( candidates, searched, places, heats );
+	const Real ax = places[ 1 ].x - places[ 0 ].x;
+	const Real ay = places[ 1 ].y - places[ 0 ].y;
+	const Real apart = sqrtf( ax * ax + ay * ay );
+	const Real needed = m_split ? m_splitApart : max( SPLIT_APART, max( paneGround( places[ 0 ] ), paneGround( places[ 1 ] ) ) );
+	const UnsignedInt since = frame >= m_splitChanged ? frame - m_splitChanged : 0;
+	const Real sameGround = needed * SPLIT_SAME_GROUND_SHARE;
+
+	Bool split = found && apart > needed && ( m_split || since >= SPLIT_REST_FRAMES );
+	if( m_split && since >= SPLIT_LEAST_FRAMES )
+	{
+		const Bool fight = fighting[ 0 ] || fighting[ 1 ];
+		const Bool upTooLong = since >= ( fight ? SPLIT_MOST_FRAMES : 2 * SPLIT_MOST_FRAMES );
+		const Bool paneZeroLeft = found && !within( places[ 0 ], m_sideFirst, sameGround );
+		const Bool paneOneLeft = found && !within( places[ 1 ], m_secondPlace, sameGround );
+		if( split && ( upTooLong || paneZeroLeft || paneOneLeft ) )
+		{
+			DEBUG_LOG(( "OBSCAM frame %u split ends:%s%s%s\n", frame, upTooLong ? " up too long" : "",
+				paneZeroLeft ? " pane 0's player turned elsewhere" : "", paneOneLeft ? " pane 1's player turned elsewhere" : "" ));
+			split = FALSE;
+		}
+	}
+	else if( m_split )
+		split = TRUE;
+
+	if( split != m_split )
+	{
+		DEBUG_LOG(( "OBSCAM frame %u split %s, pane 0 player %d %s (%.0f,%.0f) heat %.1f, pane 1 player %d %s (%.0f,%.0f) heat %.1f, %.0f apart of %.0f needed%s\n",
+			frame, split ? "on" : "off", m_sidePlayers[ 0 ]->getPlayerIndex(), fighting[ 0 ] ? "fighting" : "sights", places[ 0 ].x, places[ 0 ].y,
+			heats[ 0 ], m_sidePlayers[ 1 ]->getPlayerIndex(), fighting[ 1 ] ? "fighting" : "sights", places[ 1 ].x, places[ 1 ].y, heats[ 1 ],
+			apart, needed, m_intro ? ", from the opening" : "" ));
+		m_split = split;
+		m_splitChanged = frame;
+		m_splitApart = needed;
+		m_paneSurvivor = 0;
+		if( split )
+		{
+			m_sideFirst = places[ 0 ];
+			m_secondPlace = places[ 1 ];
+		}
+	}
+	if( !m_split )
+		return FALSE;
+	// each pane follows its player once his place has moved a little, the way the director follows,
+	// and only within the split's same ground: further is a cut, which chooseTarget refuses pane 0, and
+	// following it anyway left pane 0 held on the old ground for 360 frames while the place it was
+	// compared against had already gone
+	if( !within( places[ 0 ], m_sideFirst, DIRECTOR_FOLLOW_SLACK ) && within( places[ 0 ], m_sideFirst, sameGround ) )
+		m_sideFirst = places[ 0 ];
+	if( !within( places[ 1 ], m_secondPlace, DIRECTOR_FOLLOW_SLACK ) && within( places[ 1 ], m_secondPlace, sameGround ) )
+		m_secondPlace = places[ 1 ];
+	if( within( m_place, m_sideFirst, DIRECTOR_FOLLOW_SLACK ) )
+		return FALSE;
+	m_place = m_sideFirst;
+	m_placeKind = fighting[ 0 ] ? PLACE_FIGHT : PLACE_SIGHT;
+	m_placePeak = heats[ 0 ];
+	m_placeSince = frame;
+	m_placeValid = TRUE;
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2341,6 +2447,16 @@ void ObserverCamera::advancePanes( UnsignedInt frame )
 				next = PANES_HELD;
 			break;
 		case PANES_HELD:
+			// a match of two whose split is already up keeps the opening's panes: the same player in the
+			// same pane, from his base to whatever he does next
+			if( m_intro && elapsed >= PANE_INTRO_FRAMES && m_split && m_sidePlayers[ 0 ] != NULL )
+			{
+				DEBUG_LOG(( "OBSCAM frame %u the opening's panes stay as the split\n", frame ));
+				m_intro = FALSE;
+				// from what each pane shows now, so neither cuts; updateSideSplit follows from there
+				m_sideFirst = m_paneSubject[ 0 ];
+				m_secondPlace = m_paneSubject[ 1 ];
+			}
 			if( m_intro ? elapsed >= PANE_INTRO_FRAMES : !m_split )
 				next = PANES_UNDRAW;
 			// the opening ends on pane 0's base and the director stays there until something happens;
@@ -2514,10 +2630,13 @@ void ObserverCamera::pickIntroBases( void )
 		m_paneMark[ pane ].y = m_paneSubject[ pane ].y;
 		m_paneMark[ pane ].z = TheTerrainLogic->getGroundHeight( m_paneSubject[ pane ].x, m_paneSubject[ pane ].y );
 	}
-	for( Int pane = 0; pane < m_paneCount; pane++ )
-		m_homes[ pane ] = m_paneSubject[ pane ];
-	m_homeCount = m_paneCount;
-	DEBUG_LOG(( "OBSCAM frame %u %d homes, a split's second fight on another's ground\n", TheGameLogic->getFrame(), m_homeCount ));
+	if( m_paneCount == 2 )
+	{
+		m_sidePlayers[ 0 ] = m_panePlayers[ 0 ];
+		m_sidePlayers[ 1 ] = m_panePlayers[ 1 ];
+		DEBUG_LOG(( "OBSCAM frame %u splits follow player %d in pane 0 and player %d in pane 1\n", TheGameLogic->getFrame(),
+			m_sidePlayers[ 0 ]->getPlayerIndex(), m_sidePlayers[ 1 ]->getPlayerIndex() ));
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2689,6 +2808,9 @@ void ObserverCamera::getPaneCircle( Int pane, Coord2D *centre, Real *radius ) co
 //-------------------------------------------------------------------------------------------------
 PlayerMaskType ObserverCamera::getPaneSides( Int pane ) const
 {
+	// a match of two names each pane's own player
+	if( m_sidePlayers[ 0 ] != NULL && pane < 2 )
+		return m_sidePlayers[ pane ]->getPlayerMask();
 	const Coord2D &subject = pane == 0 ? m_panesLeftPlace : m_secondPlace;
 	PlayerMaskType sides = 0;
 	for( size_t index = 0; index < m_fights.size(); index++ )
@@ -2904,6 +3026,8 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 	std::vector< DirectorHeat > hits;
 	std::vector< DirectorHeat > fights;
 	std::vector< PlayerMaskType > sides;
+	std::vector< PlayerMaskType > sources;
+	std::vector< PlayerMaskType > sightOwners;
 	std::vector< DirectorHeat > sights;
 	for( Object *obj = TheGameLogic->getFirstObject(); obj != NULL; obj = obj->getNextObject() )
 	{
@@ -2921,6 +3045,9 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 			const Bool busy = marching || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION );
 			heat.weight = ObserverCamera_sightWeight( cost, obj->isKindOf( KINDOF_STRUCTURE ), busy, superweapon );
 			sights.push_back( heat );
+			// a neutral thing with a price, a civilian building, has no player and is nobody's sight
+			const Player *owner = obj->getControllingPlayer();
+			sightOwners.push_back( owner != NULL ? owner->getPlayerMask() : 0 );
 		}
 
 		// a thing with no body module takes no damage, so it has no hits to count
@@ -2942,9 +3069,19 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 			continue;
 		fights.push_back( heat );
 		sides.push_back( between );
+		sources.push_back( body->getLastDamageInfo()->in.m_sourcePlayerMask );
 	}
 	m_fights = fights;
 	m_fightSides = sides;
+	m_fightSources = sources;
+	m_sights = sights;
+	m_sightOwners = sightOwners;
+	// a split a pane each player holds the director on pane 0's player; updateSideSplit moves it
+	if( m_split && m_sidePlayers[ 0 ] != NULL && narrowTo == NULL )
+	{
+		*place = m_place;
+		return TRUE;
+	}
 
 	Coord2D hottest;
 	Real hottestHeat = 0.0f;
@@ -3131,8 +3268,8 @@ Bool ObserverCamera::chooseTarget( const ViewLocation &current, ViewLocation *ta
 	Coord2D place;
 	if( !directorPlace( narrowTo, &place ) )
 		return FALSE;
-	if( TheGlobalData->m_directorRecord && m_placeScanned == TheGameLogic->getFrame() )
-		updateSplit();
+	if( TheGlobalData->m_directorRecord && m_placeScanned == TheGameLogic->getFrame() && updateSplit() )
+		place = m_place;
 	// the opening shows the first player's base in pane 0.  Pane 0 keeps its place until the panes
 	// have gone: a split ends when the director moves onto the second fight, and pane 0 going there at
 	// once showed that fight twice while pane 1 slid out

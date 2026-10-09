@@ -3175,8 +3175,10 @@ void Drawable::drawIconUI( void )
 	/* -cinema takes the interface off, and these are interface: the health bar, the rank chevrons a
 		 promotion puts up, the healing cross, the ammo pips, the capture clock and the captions.  The
 		 gate is here rather than on TheGameLogic's own m_drawIconUI because that one is logic state,
-		 saved with the game and carried in the network snapshot; footage must not touch it. */
-	if( CinemaDirector_hidesHud() )
+		 saved with the game and carried in the network snapshot; footage must not touch it.
+		 -directorrecord keeps the health bar alone: a cup film has to show who is losing a fight. */
+	const Bool barOnly = CinemaDirector_hidesHud();
+	if( barOnly && !TheGlobalData->m_directorRecord )
 		return;
 
 	if( TheGameLogic->getDrawIconUI() && (TheScriptEngine->getFade()==ScriptEngine::FADE_NONE) )
@@ -3193,8 +3195,10 @@ void Drawable::drawIconUI( void )
 			return;
 
 		//Icons that can be drawn on dead things
-		drawHealthBar( healthBarRegion );                                        
-		drawEmoticon( healthBarRegion );                                         
+		drawHealthBar( healthBarRegion );
+		if( barOnly )
+			return;
+		drawEmoticon( healthBarRegion );                                       
 
 		drawCaption( healthBarRegion );
 		drawConstructPercent( healthBarRegion );

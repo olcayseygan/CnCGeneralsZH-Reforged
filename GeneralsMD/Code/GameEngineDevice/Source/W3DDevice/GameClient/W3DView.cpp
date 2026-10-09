@@ -1574,8 +1574,9 @@ static void drawablePostDraw( Drawable *draw, void *userData )
 	if (draw->isDrawableEffectivelyHidden() || FXPitch < 0.0f)
 		return;
 
-	// -cinema: no health bars, ranks or captions over the units
-	if (CinemaDirector_hidesHud())
+	// -cinema: no health bars, ranks or captions over the units (-directorrecord keeps the bars,
+	// Drawable::drawIconUI)
+	if (CinemaDirector_hidesHud() && !TheGlobalData->m_directorRecord)
 		return;
 
 	Object* obj = draw->getObject();

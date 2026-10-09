@@ -484,6 +484,7 @@ public:
 	Int m_techRespawn;							///< -techrespawn <n>: the lobby's tech building respawn, in minutes, for an -autoskirmish run
 	Int m_supplyPileLimit;					///< -supplypilelimit <n>: the lobby's supply pile limit, in players a pile, for an -autoskirmish run
 	Int m_superweapons;							///< -superweapons <n>: the lobby's superweapon rule, a SUPERWEAPONS_ mode, for an -autoskirmish run
+	Int m_startingCash;							///< -startingcash <n>: the lobby's starting cash for an -autoskirmish run (0 = DefaultStartingCash)
 	Int m_maxGameFrames;						///< -maxframes <n>: quit after n logic frames however the match is going (0 = no limit)
 	Int m_screenShotFrame;					///< -screenshot <n>: save one picture when the run reaches logic frame n (0 = never)
 	Int m_videoStartFrame;					///< -video <from> <to> [name]: the first logic frame recorded

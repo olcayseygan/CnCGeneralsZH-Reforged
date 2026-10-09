@@ -2235,6 +2235,18 @@ Int parseTechRespawn(char *args[], int num)
 	return 1;
 }
 
+/* -startingcash <n>: the lobby's starting cash for an -autoskirmish run, any amount rather than the
+	 lobby's list, carried the same way as -incomesharing. */
+Int parseStartingCash(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1 && args[1])
+	{
+		TheWritableGlobalData->m_startingCash = atoi(args[1]);
+		return 2;
+	}
+	return 1;
+}
+
 /* -supplypilelimit <players>: the lobby's supply pile limit for an -autoskirmish run, carried the
 	 same way as -incomesharing. */
 Int parseSupplyPileLimit(char *args[], int num)
@@ -2688,6 +2700,7 @@ static CommandLineParam params[] =
 	{ "-techrespawn", parseTechRespawn },
 	{ "-superweapons", parseSuperweapons },
 	{ "-supplypilelimit", parseSupplyPileLimit },
+	{ "-startingcash", parseStartingCash },
 	{ "-showlanes", parseShowLanes },
 	{ "-uidrill", parseUIDrill },
 	{ "-resdrill", parseResDrill },

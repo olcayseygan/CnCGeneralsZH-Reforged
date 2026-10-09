@@ -727,6 +727,12 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	TheSkirmishGameInfo->setTechRespawn( TheGlobalData->m_techRespawn );
 	TheSkirmishGameInfo->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
 	TheSkirmishGameInfo->setSuperweaponRestriction( (UnsignedShort)TheGlobalData->m_superweapons );
+	if (TheGlobalData->m_startingCash > 0)
+	{
+		Money cash;
+		cash.deposit( (UnsignedInt)TheGlobalData->m_startingCash, FALSE );
+		TheSkirmishGameInfo->setStartingCash( cash );
+	}
 
 	/* -seed makes the whole run repeatable: the seed drives the factions, the colours, the start
 		 positions and every logic random draw after them, so the same command line replays the same
@@ -755,8 +761,8 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	msg->appendIntegerArgument( 0 );
 	msg->appendIntegerArgument( maxFPS );
 
-	DEBUG_LOG(("-autoskirmish: %d slots on '%s', seed %d, up to %d fps, %s%s%s\n",
-		numPlayers, mapName.str(), seed, maxFPS,
+	DEBUG_LOG(("-autoskirmish: %d slots on '%s', seed %d, starting cash %u, up to %d fps, %s%s%s\n",
+		numPlayers, mapName.str(), seed, TheSkirmishGameInfo->getStartingCash().countMoney(), maxFPS,
 		observing ? "every slot AI, watching from the free camera" : "slot 0 is the local player",
 		takeover ? ", seats driverless" : "",
 		fixedStartPositions ? ", start positions fixed to slot order" : ""));

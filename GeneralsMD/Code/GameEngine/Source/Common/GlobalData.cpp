@@ -725,6 +725,7 @@ GlobalData::GlobalData()
 	m_techRespawn = 0;							// a destroyed tech building stays destroyed unless -techrespawn asks
 	m_supplyPileLimit = 0;					// a supply pile takes any number of players unless -supplypilelimit asks
 	m_superweapons = 0;							// SUPERWEAPONS_ALLOW unless -superweapons asks
+	m_startingCash = 0;							// the INI's DefaultStartingCash unless -startingcash asks
 	m_autoSkirmishObserver = FALSE;
 	m_headless = FALSE;
 	m_turbo = FALSE;

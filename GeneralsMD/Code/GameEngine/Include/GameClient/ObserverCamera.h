@@ -185,9 +185,12 @@ Bool ObserverCamera_fizzles( const std::vector< DirectorMoment > &timeline, cons
 /// a fight worth filming beginning within SPLIT_LEAD_FRAMES after frame, or with keeping, the split up
 /// already, one going on at frame, more than apart from first: the hottest such, -1 for none.  A
 /// fight already going is not split for anew: where it began is only a guess at where it is now, and
-/// a fight that had wandered off left pane 1 on empty ground
+/// a fight that had wandered off left pane 1 on empty ground.  With homes, on another player's ground
+/// than first, as ObserverCamera_secondPlace
 Int ObserverCamera_plannedSecond( const std::vector< DirectorMoment > &timeline, const Coord2D &first, UnsignedInt frame, Real apart,
-	Bool keeping );
+	Bool keeping, const Coord2D *homes, Int homeCount );
+/// whose ground place is on: the index of the nearest of count homes, each player's base at the start
+Int ObserverCamera_groundOf( const Coord2D &place, const Coord2D *homes, Int count );
 /// a moment as one line of the timeline file, and back; FALSE for a line that is not one
 AsciiString ObserverCamera_formatMoment( const DirectorMoment &moment );
 Bool ObserverCamera_parseMoment( const char *line, DirectorMoment *moment );
@@ -245,8 +248,11 @@ ViewLocation ObserverCamera_approach( const ViewLocation &from, const ViewLocati
 /// gathers and slows over about 1.6 s; a cut takes it there at once
 Real ObserverCamera_easeHeight( Real from, Real to, Real *velocity, Real elapsedSeconds, Bool cut );
 /// -directorrecord's second fight: the hottest place among the hits more than needed from first, so
-/// the two halves of a split screen never show the same ground.  FALSE when nothing that far was hit
-Bool ObserverCamera_secondPlace( const std::vector< DirectorHeat > &hits, const Coord2D &first, Real needed, Coord2D *place, Real *heat );
+/// the two halves of a split screen never show the same ground.  With two homes or more it is also on
+/// another player's ground than first, so a split shows the other side: in a 1v1 the two fights had
+/// both been in one player's half, his base beside his own army.  FALSE when nothing such was hit
+Bool ObserverCamera_secondPlace( const std::vector< DirectorHeat > &hits, const Coord2D &first, Real needed, const Coord2D *homes,
+	Int homeCount, Coord2D *place, Real *heat );
 /// whether the recording's picture is split, given whether it is now, how far apart the two places
 /// are against the needed distance, and how long ago it last went on or off: on, after a rest, for a
 /// second fight more than needed away that is big on its own and next to a first one; held through
@@ -610,6 +616,8 @@ private:
 	Real m_cornerRadarSlide;
 	IRegion2D m_radarFrame;
 	const Player *m_panePlayers[ OBSERVER_MOST_PANES ];	///< the intro's player for each pane
+	Coord2D m_homes[ OBSERVER_MOST_PANES ];						///< each opening player's base, whose ground a split's second fight must not share with the first
+	Int m_homeCount;
 	Coord2D m_paneSubject[ OBSERVER_MOST_PANES ];			///< what each pane past the first looks at
 	Coord3D m_paneMark[ OBSERVER_MOST_PANES ];				///< the top of each opening player's command centre
 	ViewLocation m_paneGlide[ OBSERVER_MOST_PANES ];		///< where each pane's subject glide has got to

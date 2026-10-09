@@ -340,16 +340,49 @@ TEST(the_recording_splits_for_a_second_fight_far_from_the_first_and_never_for_th
 	Coord2D second;
 	Real heat = 0.0f;
 	const Real needed = 660.0f;
-	CHECK( !ObserverCamera_secondPlace( hits, first, needed, &second, &heat ) );
+	CHECK( !ObserverCamera_secondPlace( hits, first, needed, NULL, 0, &second, &heat ) );
 
 	for( Int each = 0; each < 3; each++ )
 		hits.push_back( directorHit( 3000.0f, 3000.0f + each * 20.0f ) );
-	CHECK( ObserverCamera_secondPlace( hits, first, needed, &second, &heat ) );
+	CHECK( ObserverCamera_secondPlace( hits, first, needed, NULL, 0, &second, &heat ) );
 	CHECK_NEAR( heat, 3.0f, 0.001f );
 	CHECK_NEAR( second.x, 3000.0f, 0.001f );
 	CHECK_NEAR( second.y, 3020.0f, 0.001f );
 	// a picture that spans more ground wants the second fight further off
-	CHECK( !ObserverCamera_secondPlace( hits, first, 3000.0f, &second, &heat ) );
+	CHECK( !ObserverCamera_secondPlace( hits, first, 3000.0f, NULL, 0, &second, &heat ) );
+}
+
+TEST(the_recording_splits_onto_the_other_players_ground)
+{
+	// S1-A1 on Tournament Desert: USA's base in the south, China's in the north
+	Coord2D homes[ 2 ];
+	homes[ 0 ].x = 1011.0f;
+	homes[ 0 ].y = 2103.0f;
+	homes[ 1 ].x = 1005.0f;
+	homes[ 1 ].y = 584.0f;
+	CHECK_EQ( ObserverCamera_groundOf( homes[ 0 ], homes, 2 ), 0 );
+	CHECK_EQ( ObserverCamera_groundOf( homes[ 1 ], homes, 2 ), 1 );
+
+	// frame 25816: the director at USA's west edge, a hotter fight further up in USA's half and a
+	// smaller one in China's.  Pane 1 had taken the hotter one, two USA fights side by side
+	Coord2D first;
+	first.x = 421.0f;
+	first.y = 2225.0f;
+	std::vector< DirectorHeat > hits;
+	for( Int each = 0; each < 4; each++ )
+		hits.push_back( directorHit( 1074.0f + each * 20.0f, 1632.0f ) );
+	for( Int each = 0; each < 2; each++ )
+		hits.push_back( directorHit( 1284.0f + each * 20.0f, 564.0f ) );
+	Coord2D second;
+	Real heat = 0.0f;
+	CHECK( ObserverCamera_secondPlace( hits, first, 859.0f, NULL, 0, &second, &heat ) );
+	CHECK_NEAR( second.y, 1632.0f, 0.001f );
+	CHECK( ObserverCamera_secondPlace( hits, first, 859.0f, homes, 2, &second, &heat ) );
+	CHECK_NEAR( second.y, 564.0f, 0.001f );
+	CHECK_NEAR( heat, 2.0f, 0.001f );
+	// nothing on China's ground: no split at all rather than a second USA fight
+	hits.resize( 4 );
+	CHECK( !ObserverCamera_secondPlace( hits, first, 859.0f, homes, 2, &second, &heat ) );
 }
 
 TEST(the_recording_splits_for_a_big_second_fight_holds_it_and_rests_after)
@@ -419,7 +452,7 @@ TEST(the_recording_splits_only_beside_a_real_fight)
 	first.x = first.y = 1000.0f;
 	Coord2D second;
 	Real heat = 0.0f;
-	CHECK( !ObserverCamera_secondPlace( none, first, 660.0f, &second, &heat ) );
+	CHECK( !ObserverCamera_secondPlace( none, first, 660.0f, NULL, 0, &second, &heat ) );
 }
 
 static Real paneArea( const Real *rays, Int count, Int pane, Int width, Int height )
@@ -906,12 +939,12 @@ TEST(the_recording_splits_before_a_known_second_fight_far_from_the_first)
 	first.x = first.y = 1000.0f;
 	// three seconds ahead: at four pane 1 sat on an empty bridge
 	const UnsignedInt lead = 3 * LOGICFRAMES_PER_SECOND;
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1000 - lead - 1, 660.0f, FALSE ), -1 );
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1000 - lead, 660.0f, FALSE ), 0 );
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1500, 660.0f, TRUE ), 0 );
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1501, 660.0f, TRUE ), -1 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1000 - lead - 1, 660.0f, FALSE, NULL, 0 ), -1 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1000 - lead, 660.0f, FALSE, NULL, 0 ), 0 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1500, 660.0f, TRUE, NULL, 0 ), 0 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1501, 660.0f, TRUE, NULL, 0 ), -1 );
 	// the fight 4243 away is too near once the picture is so wide a split wants 4300
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1000 - lead, 4300.0f, FALSE ), -1 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 1000 - lead, 4300.0f, FALSE, NULL, 0 ), -1 );
 }
 
 TEST(a_split_is_planned_only_beside_a_fight_that_outlasts_its_least_hold)
@@ -948,10 +981,31 @@ TEST(the_recording_splits_ahead_for_a_fight_still_to_begin_and_not_anew_for_one_
 	first.x = 2346.0f;
 	first.y = 1668.0f;
 	// a split already up keeps the fight while it lasts
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 6451, 660.0f, TRUE ), 0 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 6451, 660.0f, TRUE, NULL, 0 ), 0 );
 	// none up: where it began twenty seconds ago is no place to send a pane
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 6451, 660.0f, FALSE ), -1 );
-	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 5864, 660.0f, FALSE ), 0 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 6451, 660.0f, FALSE, NULL, 0 ), -1 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 5864, 660.0f, FALSE, NULL, 0 ), 0 );
+}
+
+TEST(the_recording_plans_its_split_onto_the_other_players_ground)
+{
+	// the pair the scouting pass planned is held to the rule a live split keeps: the hotter fight in
+	// the director's own player's half loses to the smaller one in the other's
+	Coord2D homes[ 2 ];
+	homes[ 0 ].x = 1011.0f;
+	homes[ 0 ].y = 2103.0f;
+	homes[ 1 ].x = 1005.0f;
+	homes[ 1 ].y = 584.0f;
+	Coord2D first;
+	first.x = 421.0f;
+	first.y = 2225.0f;
+	std::vector< DirectorMoment > timeline;
+	timeline.push_back( scoutedFight( 1000, 1500, 1074.0f, 1632.0f, 20.0f ) );
+	timeline.push_back( scoutedFight( 1000, 1500, 1284.0f, 564.0f, 8.0f ) );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 950, 859.0f, FALSE, NULL, 0 ), 0 );
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 950, 859.0f, FALSE, homes, 2 ), 1 );
+	timeline.pop_back();
+	CHECK_EQ( ObserverCamera_plannedSecond( timeline, first, 950, 859.0f, FALSE, homes, 2 ), -1 );
 }
 
 TEST(a_timeline_line_reads_back_as_the_moment_it_was_written_from)

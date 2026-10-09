@@ -516,13 +516,36 @@ Real ObserverCamera_easeHeight( Real from, Real to, Real *velocity, Real elapsed
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool ObserverCamera_secondPlace( const std::vector< DirectorHeat > &hits, const Coord2D &first, Real needed, Coord2D *place, Real *heat )
+Int ObserverCamera_groundOf( const Coord2D &place, const Coord2D *homes, Int count )
 {
+	Int nearest = 0;
+	Real nearestSquared = 0.0f;
+	for( Int home = 0; home < count; home++ )
+	{
+		const Real dx = homes[ home ].x - place.x;
+		const Real dy = homes[ home ].y - place.y;
+		const Real squared = dx * dx + dy * dy;
+		if( home == 0 || squared < nearestSquared )
+		{
+			nearest = home;
+			nearestSquared = squared;
+		}
+	}
+	return nearest;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ObserverCamera_secondPlace( const std::vector< DirectorHeat > &hits, const Coord2D &first, Real needed, const Coord2D *homes,
+	Int homeCount, Coord2D *place, Real *heat )
+{
+	const Int firstGround = ObserverCamera_groundOf( first, homes, homeCount );
 	std::vector< DirectorHeat > apart;
 	for( size_t index = 0; index < hits.size(); index++ )
 	{
 		const Real dx = hits[ index ].position.x - first.x;
 		const Real dy = hits[ index ].position.y - first.y;
+		if( homeCount >= 2 && ObserverCamera_groundOf( hits[ index ].position, homes, homeCount ) == firstGround )
+			continue;
 		if( dx * dx + dy * dy > needed * needed )
 			apart.push_back( hits[ index ] );
 	}
@@ -1281,8 +1304,9 @@ Bool ObserverCamera_fightLasts( const std::vector< DirectorMoment > &timeline, c
 
 //-------------------------------------------------------------------------------------------------
 Int ObserverCamera_plannedSecond( const std::vector< DirectorMoment > &timeline, const Coord2D &first, UnsignedInt frame, Real apart,
-	Bool keeping )
+	Bool keeping, const Coord2D *homes, Int homeCount )
 {
+	const Int firstGround = ObserverCamera_groundOf( first, homes, homeCount );
 	Int best = -1;
 	for( size_t index = 0; index < timeline.size(); index++ )
 	{
@@ -1292,6 +1316,8 @@ Int ObserverCamera_plannedSecond( const std::vector< DirectorMoment > &timeline,
 		if( !keeping && frame >= fight.start )
 			continue;
 		if( within( fight.place, first, apart ) )
+			continue;
+		if( homeCount >= 2 && ObserverCamera_groundOf( fight.place, homes, homeCount ) == firstGround )
 			continue;
 		if( best < 0 || fight.peak > timeline[ best ].peak )
 			best = (Int)index;
@@ -1505,6 +1531,7 @@ void ObserverCamera::reset( void )
 	m_introDone = FALSE;
 	m_introGlide = FALSE;
 	m_panesLeftPlace.x = m_panesLeftPlace.y = 0.0f;
+	m_homeCount = 0;
 	m_paneCount = 0;
 	m_paneProgress = 0.0f;
 	m_lineProgress = 0.0f;
@@ -1521,6 +1548,7 @@ void ObserverCamera::reset( void )
 	{
 		m_paneRays[ pane ] = 0.0f;
 		m_panePlayers[ pane ] = NULL;
+		m_homes[ pane ].x = m_homes[ pane ].y = 0.0f;
 		m_paneSubject[ pane ].x = m_paneSubject[ pane ].y = 0.0f;
 		m_paneMark[ pane ].x = m_paneMark[ pane ].y = m_paneMark[ pane ].z = 0.0f;
 		m_paneCentres[ pane ].x = m_paneCentres[ pane ].y = 0.0f;
@@ -2146,7 +2174,7 @@ void ObserverCamera::updateSplit( void )
 	const Real searched = m_split ? m_splitApart : splitApart( m_place );
 	Coord2D second = { 0.0f, 0.0f };
 	Real secondHeat = 0.0f;
-	ObserverCamera_secondPlace( m_fights, m_place, searched, &second, &secondHeat );
+	ObserverCamera_secondPlace( m_fights, m_place, searched, m_homes, m_homeCount, &second, &secondHeat );
 	if( secondHeat > 0.0f && ObserverCamera_fizzles( m_timeline, second, frame ) )
 		secondHeat = 0.0f;
 	// with a timeline a split is decided before it opens: pane 0 needs a fight the scouting pass saw
@@ -2164,7 +2192,7 @@ void ObserverCamera::updateSplit( void )
 	const Real sameGround = searched * SPLIT_SAME_GROUND_SHARE;
 	const Bool handedOver = m_split && within( m_place, m_secondPlace, sameGround );
 	const Bool mayPlan = m_placeKind != PLACE_SIGHT && ( m_split || firstLasts );
-	const Int planned = mayPlan ? ObserverCamera_plannedSecond( m_timeline, m_place, frame, searched, m_split ) : -1;
+	const Int planned = mayPlan ? ObserverCamera_plannedSecond( m_timeline, m_place, frame, searched, m_split, m_homes, m_homeCount ) : -1;
 	// a planned moment whose split was ended early does not open another
 	const Bool plannedSplit = planned >= 0 && planned != m_spentMoment;
 	if( plannedSplit && frame < m_timeline[ planned ].start && ( secondHeat <= 0.0f || !within( second, m_timeline[ planned ].place, sameGround ) ) )
@@ -2212,8 +2240,9 @@ void ObserverCamera::updateSplit( void )
 	}
 	if( split != m_split )
 	{
-		DEBUG_LOG(( "OBSCAM frame %u split %s, first heat %.1f, second (%.0f,%.0f) heat %.1f, %.0f apart of %.0f needed, screen %.0f%s\n",
-			frame, split ? "on" : "off", firstHeat, shown.x, shown.y, secondHeat, apart, needed, m_screenGround, plannedSplit ? ", planned" : "" ));
+		DEBUG_LOG(( "OBSCAM frame %u split %s, first (%.0f,%.0f) heat %.1f on home %d's ground, second (%.0f,%.0f) heat %.1f on home %d's, %.0f apart of %.0f needed, screen %.0f%s\n",
+			frame, split ? "on" : "off", m_place.x, m_place.y, firstHeat, ObserverCamera_groundOf( m_place, m_homes, m_homeCount ), shown.x, shown.y,
+			secondHeat, ObserverCamera_groundOf( shown, m_homes, m_homeCount ), apart, needed, m_screenGround, plannedSplit ? ", planned" : "" ));
 		m_split = split;
 		m_splitChanged = frame;
 		m_splitApart = needed;
@@ -2485,6 +2514,10 @@ void ObserverCamera::pickIntroBases( void )
 		m_paneMark[ pane ].y = m_paneSubject[ pane ].y;
 		m_paneMark[ pane ].z = TheTerrainLogic->getGroundHeight( m_paneSubject[ pane ].x, m_paneSubject[ pane ].y );
 	}
+	for( Int pane = 0; pane < m_paneCount; pane++ )
+		m_homes[ pane ] = m_paneSubject[ pane ];
+	m_homeCount = m_paneCount;
+	DEBUG_LOG(( "OBSCAM frame %u %d homes, a split's second fight on another's ground\n", TheGameLogic->getFrame(), m_homeCount ));
 }
 
 //-------------------------------------------------------------------------------------------------

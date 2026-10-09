@@ -505,15 +505,20 @@ void W3DRadar::drawPaneBox( Int pane, Int pixelX, Int pixelY, Int width, Int hei
 	Coord2D centre;
 	Real radius = 0.0f;
 	TheObserverCamera.getPaneCircle( pane, &centre, &radius );
+	// setLocation only stores the place; the picks below go through the W3D camera, which the draw
+	// builds, so it is aimed here as ObserverCamera::aimView does.  Without it pane 1's box was pane
+	// 0's camera picked at pane 1's circle, and in S1-A1's opening both boxes sat on the top base
 	ViewLocation own;
 	if( pane != 0 )
 	{
 		TheTacticalView->getLocation( &own );
 		TheTacticalView->setLocation( &TheObserverCamera.getPaneView( pane ) );
+		TheTacticalView->aimCamera();
 	}
 	const Real sideX[ 4 ] = { -1.0f, 1.0f, 1.0f, -1.0f };
 	const Real sideY[ 4 ] = { -1.0f, -1.0f, 1.0f, 1.0f };
 	ICoord2D corners[ 4 ];
+	Coord2D middle = { 0.0f, 0.0f };
 	for( Int corner = 0; corner < 4; corner++ )
 	{
 		ICoord2D screen;
@@ -521,13 +526,25 @@ void W3DRadar::drawPaneBox( Int pane, Int pixelX, Int pixelY, Int width, Int hei
 		screen.y = REAL_TO_INT( centre.y + sideY[ corner ] * radius );
 		Coord3D world;
 		TheTacticalView->screenToWorldAtZ( &screen, &world, getTerrainAverageZ() );
+		middle.x += world.x * 0.25f;
+		middle.y += world.y * 0.25f;
 		ICoord2D radar;
 		radar.x = world.x / ( m_mapExtent.width() / RADAR_CELL_WIDTH );
 		radar.y = world.y / ( m_mapExtent.height() / RADAR_CELL_HEIGHT );
 		radarToPixel( &radar, &corners[ corner ], pixelX, pixelY, width, height );
 	}
 	if( pane != 0 )
+	{
 		TheTacticalView->setLocation( &own );
+		TheTacticalView->aimCamera();
+	}
+	// a second a box, to set against the OBSCAM pane subject lines
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( frame % LOGICFRAMES_PER_SECOND == 0 && frame != m_paneBoxLogged[ pane ] )
+	{
+		m_paneBoxLogged[ pane ] = frame;
+		DEBUG_LOG(( "RADAR frame %u pane %d box round (%.0f,%.0f)\n", frame, pane, middle.x, middle.y ));
+	}
 	drawBoxLines( corners );
 }
 
@@ -1018,6 +1035,8 @@ W3DRadar::W3DRadar( void )
 
 	m_reconstructViewBox = TRUE;
 	m_viewBoxesDrawn = 1;
+	for( Int pane = 0; pane < OBSERVER_MOST_PANES; pane++ )
+		m_paneBoxLogged[ pane ] = 0;
 	for( Int i = 0; i < 4; i++ )
 	{
 

@@ -507,7 +507,7 @@ struct Capture
 struct Engine
 {
 	Engine() : contextReady(false), deviceReady(false), serviceRunning(false), started(false), deviceRate(0),
-		capture(NULL) {}
+		capture(NULL), offline(false), mixAnchored(false), mixedFrames(0), capturedFrames(0), capturedRate(0) {}
 
 	// A process can end without AIL_shutdown - a test, or a game that exits in a hurry - and a
 	// std::thread still joinable at destruction calls std::terminate.  The Windows build's service
@@ -543,6 +543,16 @@ struct Engine
 	bool started;
 	unsigned deviceRate;
 	Capture *capture;
+
+	// AIL_ex_offline_mix: the device is opened on the null backend and never started, and the mix
+	// moves only through AIL_ex_mix_to_frame.  mixedFrames is where the logic clock has it, in output
+	// frames from logic frame zero.  Game thread only.
+	bool offline;
+	bool mixAnchored;
+	long long mixedFrames;
+	// What the last finished capture wrote, for AIL_ex_capture_length.
+	unsigned capturedFrames;
+	unsigned capturedRate;
 };
 
 Engine g_engine;
@@ -1084,7 +1094,7 @@ void dataCallback(ma_device *, void *output, const void *, ma_uint32 frameCount)
 bool useNullBackend()
 {
 	const char *backend = getenv("ZH_AUDIO_BACKEND");
-	return backend != NULL && strcmp(backend, "null") == 0;
+	return g_engine.offline || (backend != NULL && strcmp(backend, "null") == 0);
 }
 
 } // namespace
@@ -1137,7 +1147,7 @@ S32 AILCALL AIL_quick_startup(S32 use_digital, S32, U32, S32, S32)
 	}
 	g_engine.deviceRate = g_engine.device.sampleRate;
 	g_engine.deviceReady = true;
-	if (ma_device_start(&g_engine.device) != MA_SUCCESS) {
+	if (!g_engine.offline && ma_device_start(&g_engine.device) != MA_SUCCESS) {
 		ma_device_uninit(&g_engine.device);
 		ma_context_uninit(&g_engine.context);
 		g_engine.deviceReady = false;
@@ -1296,8 +1306,47 @@ void AILCALL AIL_ex_stop_capture(void)
 	if (capture != NULL) {
 		writeCaptureSizes(capture);
 		fclose(capture->file);
+		g_engine.capturedFrames = capture->dataBytes / (capture->channels * sizeof(short));
+		g_engine.capturedRate = capture->samplesPerSecond;
 		delete capture;
 	}
+}
+
+void AILCALL AIL_ex_offline_mix(void)
+{
+	g_engine.offline = true;
+}
+
+// The logic runs 30 frames a second of game time (LOGICFRAMES_PER_SECOND), whatever the wall clock
+// does.  Each target is computed from the absolute frame, so the remainders of a rate 30 does not
+// divide never add up: frames a to b always mix (b - a) * rate / 30, give or take one sample.
+void AILCALL AIL_ex_mix_to_frame(S32 logicFrame)
+{
+	const long long LOGIC_FRAMES_PER_SECOND = 30;
+	if (!g_engine.offline || !g_engine.deviceReady) {
+		return;
+	}
+	const long long target = (long long)logicFrame * g_engine.deviceRate / LOGIC_FRAMES_PER_SECOND;
+	// The first call, and a logic clock that went back (a new match starts at frame 0), place the mix
+	// rather than make it play the difference.
+	if (!g_engine.mixAnchored || target < g_engine.mixedFrames) {
+		g_engine.mixAnchored = true;
+		g_engine.mixedFrames = target;
+		return;
+	}
+	float out[MIX_CHUNK_FRAMES * OUTPUT_CHANNELS];
+	while (g_engine.mixedFrames < target) {
+		const unsigned frames = target - g_engine.mixedFrames < MIX_CHUNK_FRAMES
+			? (unsigned)(target - g_engine.mixedFrames) : MIX_CHUNK_FRAMES;
+		dataCallback(&g_engine.device, out, NULL, frames);
+		g_engine.mixedFrames += frames;
+	}
+}
+
+void AILCALL AIL_ex_capture_length(S32 *frames, S32 *rate)
+{
+	*frames = (S32)g_engine.capturedFrames;
+	*rate = (S32)g_engine.capturedRate;
 }
 
 void AILCALL AIL_shutdown(void)

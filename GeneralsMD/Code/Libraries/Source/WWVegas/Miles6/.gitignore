@@ -14,6 +14,10 @@
 !include/MSS/MSS.h
 # mss_ex_pcm.h: miniaudio's pushed-PCM voice for the movies (V1), declared beside it.
 !include/MSS/mss_ex_pcm.h
+# Windows links both backends: each under its own prefix (mss_backend_names.h), miles_dispatch.cpp
+# owning the plain names.
+!include/MSS/mss_backend_names.h
+!miles_dispatch.cpp
 !xaudio2/
 !xaudio2/miles_xaudio2.cpp
 !miniaudio/

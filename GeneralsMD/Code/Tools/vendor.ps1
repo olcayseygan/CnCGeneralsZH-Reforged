@@ -185,6 +185,20 @@ function Install-Nanosvg {
   Step "nanosvg -> Libraries\Source\nanosvg"
 }
 
+# --- miniaudio 0.11.25, the one header and its one implementation file, the same pin as vendor.sh.
+# Windows plays through XAudio2 but records -wav through miniaudio's mix (miles_dispatch.cpp), the
+# one the logic clock can move. Copied file by file so the committed .gitignore is left alone.
+function Install-Miniaudio {
+  $destination = Join-Path $libraries 'Source\miniaudio'
+  if ((Test-Path (Join-Path $destination 'miniaudio.c')) -and -not $Force) { return }
+  $archive = Get-File 'https://github.com/mackron/miniaudio/archive/9634bedb5b5a2ca38c1ee7108a9358a4e233f14d.zip' (Join-Path $work 'miniaudio-0.11.25.zip')
+  $source = Expand-Source $archive 'miniaudio'
+  foreach ($name in @('miniaudio.h', 'miniaudio.c', 'LICENSE')) {
+    Copy-Item (Join-Path $source $name) (Join-Path $destination $name) -Force
+  }
+  Step "miniaudio 0.11.25 -> Libraries\Source\miniaudio"
+}
+
 # --- The fork's own upscaled art: every 3D texture at twice its size, and the ground. Not in git -
 # ReforgedTextures.big alone is a gigabyte, ten times
 # what GitHub takes in a file, and LFS in a fork is billed to the parent repository.
@@ -294,11 +308,12 @@ Install-GameSpy
 Install-Litehtml
 Install-LitehtmlPatch
 Install-Nanosvg
-# SDL3 and miniaudio are the platform layer for everything that is not Windows (decision 3 in
-# PORTING.md). Windows keeps Win32Device and Miles, so they are not fetched here;
-# vendor.sh fetches them, and says it skips DirectX the same way. The same holds for SDL3's Metal patch,
-# Libraries\Source\sdl3-metal-windowless.patch: vendor.sh applies it, and there is nothing here to apply.
-Step 'skipping SDL3 and miniaudio: not Windows, and vendor.sh is what fetches them'
+Install-Miniaudio
+# SDL3 is the platform layer for everything that is not Windows (decision 3 in PORTING.md). Windows
+# keeps Win32Device, so it is not fetched here; vendor.sh fetches it, and says it skips DirectX the
+# same way. The same holds for SDL3's Metal patch, Libraries\Source\sdl3-metal-windowless.patch:
+# vendor.sh applies it, and there is nothing here to apply.
+Step 'skipping SDL3: not Windows, and vendor.sh is what fetches it'
 # glslang, SPIRV-Cross and SDL_shadercross compile the shader generators' SDL3 GPU target (decision 4).
 # Windows compiles the D3D11 target with d3dcompiler_47.dll, so they are not fetched here.
 Step 'skipping glslang, SPIRV-Cross and SDL_shadercross: the SDL3 GPU shader path, vendor.sh fetches them'

@@ -523,38 +523,25 @@ void MilesAudioManager::reset()
 //-------------------------------------------------------------------------------------------------
 /** -wav <from> <to> [name]: record the finished mix over a range of logic frames.
 	*
-	* The mixer plays at the speed a person hears, and -video saves frames at the speed the disk takes
-	* them, so one run cannot make both halves of a film.  This is the other run: the same seed and the
-	* same shot list play the same match, and what comes out lines up with the picture as long as the
-	* run held 30 logic frames a second.  That is the one thing worth checking, so the closing line says
-	* how much sound was recorded against how much the picture is going to be.
-	*
-	* A run that is not pacing itself cannot be recorded from at all, which is why -headless and a
-	* lifted frame limit are refused here rather than producing something quietly wrong. */
+	* A -wav run opens no audio device (openDevice): the mix is moved by the logic clock, here, by
+	* exactly 1/30 of a second of sound per logic frame, however long the frame took on the wall clock.
+	* So the file is as long as the frames it spans and lines up with the picture of the same frames,
+	* in a run that plays at the speed a person hears, in a -directorrecord run that crawls, and on a
+	* machine with no speakers.  A sound asked for during frame N starts N/30 seconds in, because the
+	* requests are only played after this has mixed up to N.  Nothing is heard while it runs. */
 static void updateSoundCapture( void )
 {
 	static Bool recording = FALSE;
 	static Bool finished = FALSE;
-#if defined(_WIN32)
-	static __int64 startTicks = 0;
-#else
-	static Int64 startTicks = 0;
-#endif
 
-	if (TheGlobalData->m_wavEndFrame <= 0 || finished)
+	if (TheGlobalData->m_wavEndFrame <= 0 || TheGameLogic == NULL)
 		return;
-	if (TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
-		return;
-
-	if (TheGlobalData->m_headless || !TheGlobalData->m_useFpsLimit)
-	{
-		finished = TRUE;
-		DEBUG_LOG(("AUDIO: -wav needs a run that plays at the speed a person hears it, so -headless "
-			"and -noFPSLimit record nothing\n"));
-		return;
-	}
 
 	const UnsignedInt frame = TheGameLogic->getFrame();
+	AIL_ex_mix_to_frame((S32)frame);
+
+	if (finished || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
+		return;
 	if (frame < (UnsignedInt)TheGlobalData->m_wavStartFrame)
 		return;
 
@@ -578,7 +565,6 @@ static void updateSoundCapture( void )
 		}
 
 		recording = TRUE;
-		startTicks = Clock_Ticks();
 		DEBUG_LOG(("AUDIO: recording logic frames %d to %d into %s\n",
 			TheGlobalData->m_wavStartFrame, TheGlobalData->m_wavEndFrame, pathname));
 		return;
@@ -590,19 +576,14 @@ static void updateSoundCapture( void )
 	finished = TRUE;
 	AIL_ex_stop_capture();
 
-#if defined(_WIN32)
-	__int64 nowTicks = 0;
-	__int64 ticksPerSecond = 0;
-#else
-	Int64 nowTicks = 0;
-	Int64 ticksPerSecond = 0;
-#endif
-	nowTicks = Clock_Ticks();
-	ticksPerSecond = Clock_Ticks_Per_Second();
-	const Real recordedSeconds = (Real)(nowTicks - startTicks) / (Real)ticksPerSecond;
-	const Real pictureSeconds = (Real)(frame - TheGlobalData->m_wavStartFrame) / LOGICFRAMES_PER_SECONDS_REAL;
-	DEBUG_LOG(("AUDIO: recorded %.2f seconds of sound for %.2f seconds of picture, %.2f adrift\n",
-		recordedSeconds, pictureSeconds, recordedSeconds - pictureSeconds));
+	// The file's own length, counted in samples written, against the frames the capture spanned.
+	S32 samples = 0;
+	S32 rate = 0;
+	AIL_ex_capture_length(&samples, &rate);
+	const double recordedSeconds = rate > 0 ? (double)samples / (double)rate : 0.0;
+	const double pictureSeconds = (double)(frame - TheGlobalData->m_wavStartFrame) / LOGICFRAMES_PER_SECONDS_REAL;
+	DEBUG_LOG(("AUDIO: recorded %.3f seconds of sound (%d samples at %d Hz) for %.3f seconds of picture, "
+		"%.3f adrift\n", recordedSeconds, (Int)samples, (Int)rate, pictureSeconds, recordedSeconds - pictureSeconds));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1697,6 +1678,10 @@ void MilesAudioManager::openDevice( void )
 	}
 	
 	AIL_set_redist_directory("MSS\\");
+	// -wav records from a mix the logic clock moves (updateSoundCapture), so the run plays no sound
+	// and needs no audio device.
+	if (TheGlobalData->m_wavEndFrame > 0)
+		AIL_ex_offline_mix();
 	AIL_startup();
 	Int retval = 0;
 

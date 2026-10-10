@@ -113,6 +113,7 @@ Data/Patch.str
 Data/Scenarios/airbelow.txt
 Data/Scenarios/airbelowfar.txt
 Data/Scenarios/alphaaurora.txt
+Data/Scenarios/ambulanceclean.txt
 Data/Scenarios/aurorafog.txt
 Data/Scenarios/avengerlasers.txt
 Data/Scenarios/blastcheck.txt
@@ -128,6 +129,8 @@ Data/Scenarios/dragonfirewall.txt
 Data/Scenarios/dragonflame.txt
 Data/Scenarios/driveby.txt
 Data/Scenarios/empfriendly.txt
+Data/Scenarios/exitmovebuild.txt
+Data/Scenarios/exitorders.txt
 Data/Scenarios/explreel.txt
 Data/Scenarios/glowbase.txt
 Data/Scenarios/glowfight.txt
@@ -180,6 +183,7 @@ Data/Scenarios/nukefade.txt
 Data/Scenarios/obeyorders.txt
 Data/Scenarios/overlordbridge.txt
 Data/Scenarios/overlordlong.txt
+Data/Scenarios/overlordrush.txt
 Data/Scenarios/parade.txt
 Data/Scenarios/particles100k.txt
 Data/Scenarios/reachshot.txt
@@ -208,12 +212,14 @@ Data/Scenarios/sentryattack.txt
 Data/Scenarios/sentrydrone.txt
 Data/Scenarios/shiftorders.txt
 Data/Scenarios/shiftqueue.txt
+Data/Scenarios/spectre_reaim.txt
 Data/Scenarios/squad30.txt
 Data/Scenarios/stance.txt
 Data/Scenarios/standinbuild.txt
 Data/Scenarios/standinfake.txt
 Data/Scenarios/stashbeside.txt
 Data/Scenarios/statues.txt
+Data/Scenarios/stealthintruder.txt
 Data/Scenarios/swhole.txt
 Data/Scenarios/swpair.txt
 Data/Scenarios/techrespawn.txt
@@ -227,6 +233,7 @@ Data/Scenarios/trailer_fourway.txt
 Data/Scenarios/trailer_intro.txt
 Data/Scenarios/tunnelattack.txt
 Data/Scenarios/tunnelfull.txt
+Data/Scenarios/tunnelgap.txt
 Data/Scenarios/tunnelqueue.txt
 Data/Scenarios/tunnelshortcut.txt
 Data/Scenarios/tunnelsplit.txt
@@ -1849,8 +1856,10 @@ Libraries/Source/WWVegas/Bink/ffmpeg/bink_ffmpeg.cpp
 Libraries/Source/WWVegas/Bink/include/bink.h
 Libraries/Source/WWVegas/Miles6/.gitignore
 Libraries/Source/WWVegas/Miles6/include/MSS/MSS.h
+Libraries/Source/WWVegas/Miles6/include/MSS/mss_backend_names.h
 Libraries/Source/WWVegas/Miles6/include/MSS/mss_ex_pcm.h
 Libraries/Source/WWVegas/Miles6/include/Mss.h
+Libraries/Source/WWVegas/Miles6/miles_dispatch.cpp
 Libraries/Source/WWVegas/Miles6/miniaudio/miles_miniaudio.cpp
 Libraries/Source/WWVegas/Miles6/xaudio2/miles_xaudio2.cpp
 Libraries/Source/WWVegas/WW3D2/DX8 Rationalizations.txt

@@ -2725,8 +2725,8 @@ void GameEngine::update( void )
 			 of an unattended run. */
 		fastMode = fastMode || TheGlobalData->m_headless;
 
-		/* -turbo: the same for a run that draws, unless a network or a sound recording owns the clock.
-			 The five seconds before a -screenshot run at the real rate.  Taken straight out of
+		/* -turbo: the same for a run that draws, unless a network owns the clock.  A -wav recording does
+			 not: its mix moves with the logic frames, not the wall clock (updateSoundCapture).  The five seconds before a -screenshot run at the real rate.  Taken straight out of
 			 fast-forward, a shot differed from its own repeat on 5.6% of the pixels; settled first, on
 			 0.01%, where two paced runs differ on 0.1%. */
 		const Int TURBO_SETTLE_FRAMES = 150;
@@ -2734,8 +2734,7 @@ void GameEngine::update( void )
 		const Bool turboSettling = TheGlobalData->m_screenShotFrame > 0
 			&& turboFrame + TURBO_SETTLE_FRAMES >= TheGlobalData->m_screenShotFrame
 			&& turboFrame <= TheGlobalData->m_screenShotFrame;
-		fastMode = fastMode || ( TheGlobalData->m_turbo && !turboSettling && TheNetwork == NULL
-														 && TheGlobalData->m_wavEndFrame == 0 );
+		fastMode = fastMode || ( TheGlobalData->m_turbo && !turboSettling && TheNetwork == NULL );
 
 		/* -video: one logic frame a pass across the range being recorded, so the draw in front of each
 			 logic frame is the one picture of it.  Paced by the wall clock, a pass that fell behind would

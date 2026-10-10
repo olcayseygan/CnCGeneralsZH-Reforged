@@ -35,7 +35,9 @@
 #ifndef MSS_EX_PCM_H
 #define MSS_EX_PCM_H
 
-#if defined(_WIN32)
+/* Windows builds miles_miniaudio.cpp too, for -wav (miles_dispatch.cpp), and it defines these under
+   their plain names; the movies there keep their own XAudio2 engine and call none of them. */
+#if defined(_WIN32) && !defined(MSS_BACKEND_PREFIX)
 #error "mss_ex_pcm.h is miles_miniaudio's; on Windows the movies keep their own XAudio2 engine"
 #endif
 

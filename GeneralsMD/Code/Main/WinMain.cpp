@@ -604,7 +604,9 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 
 					ClipCursor( NULL );
 					isCursorClippedToWindow = false;
-					if (TheAudio)
+					// A -wav run is heard by its file, not a person: muting it here silenced the
+					// capture whenever another window took the focus.
+					if (TheAudio && TheGlobalData->m_wavEndFrame <= 0)
 						TheAudio->loseFocus();
 				}  // end if
 				else

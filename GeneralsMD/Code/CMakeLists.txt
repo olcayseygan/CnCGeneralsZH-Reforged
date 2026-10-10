@@ -139,7 +139,8 @@ set(VENDORED
 # portable includes.
 if(ZH_PLATFORM_WINDOWS)
   list(APPEND VENDORED
-    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/DirectX/Include/d3d8.h)
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/DirectX/Include/d3d8.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/miniaudio/miniaudio.c)
   set(VENDOR_HINT "Run Tools\\vendor.ps1 (build.bat does it for you).")
 else()
   # SDL3 and miniaudio are the platform layer everywhere but Windows (decision 3).
@@ -1693,9 +1694,18 @@ add_library(binkvideo STATIC ${WW}/Bink/ffmpeg/bink_ffmpeg.cpp)
 target_include_directories(binkvideo PRIVATE ${WW}/Bink/include ${FFMPEG_DIR}/include)
 target_link_libraries(binkvideo PRIVATE ${FFMPEG_CORE} ${FFMPEG_DIR}/lib/swscale.lib xaudio2)
 
-add_library(milesaudio STATIC ${WW}/Miles6/xaudio2/miles_xaudio2.cpp)
-target_include_directories(milesaudio PRIVATE ${WW}/Miles6/include ${FFMPEG_DIR}/include)
-target_link_libraries(milesaudio PRIVATE ${FFMPEG_CORE} xaudio2)
+# Two Miles backends in one library: XAudio2 for what a player hears, and miniaudio's mix, the one
+# off Windows, for -wav, where the logic clock has to move the mix and XAudio2 cannot be stepped.
+# Each is compiled under its own prefix (MSS/mss_backend_names.h) and miles_dispatch.cpp owns the
+# plain names.  miniaudio opens no device here: AIL_ex_offline_mix puts it on the null backend.
+add_library(miniaudio STATIC ${LIBSRC}/miniaudio/miniaudio.c)
+target_include_directories(miniaudio PUBLIC ${LIBSRC}/miniaudio)
+add_library(milesaudio STATIC ${WW}/Miles6/xaudio2/miles_xaudio2.cpp ${WW}/Miles6/miniaudio/miles_miniaudio.cpp
+  ${WW}/Miles6/miles_dispatch.cpp)
+set_source_files_properties(${WW}/Miles6/xaudio2/miles_xaudio2.cpp PROPERTIES COMPILE_DEFINITIONS MSS_BACKEND_PREFIX=XA_)
+set_source_files_properties(${WW}/Miles6/miniaudio/miles_miniaudio.cpp PROPERTIES COMPILE_DEFINITIONS MSS_BACKEND_PREFIX=MA_)
+target_include_directories(milesaudio PRIVATE ${WW}/Miles6/include ${FFMPEG_DIR}/include ${WW}/WWLib)
+target_link_libraries(milesaudio PRIVATE ${FFMPEG_CORE} xaudio2 miniaudio)
 
 add_library(gameenginedevice STATIC ${GAMEENGINEDEVICE_SOURCES})
 

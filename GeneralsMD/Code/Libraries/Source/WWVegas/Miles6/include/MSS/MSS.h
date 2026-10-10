@@ -23,6 +23,12 @@
 #ifndef MSS_H
 #define MSS_H
 
+/* Windows links both backends into one exe, XAudio2 for play and miniaudio for a -wav run, each
+   compiled under its own prefix; miles_dispatch.cpp owns the plain names and picks one. */
+#ifdef MSS_BACKEND_PREFIX
+#include "mss_backend_names.h"
+#endif
+
 /* The real Mss.H pulls in the Windows multimedia headers; WWAudio relies on
  * that for LPWAVEFORMAT in its Miles-facing signatures. */
 #if defined(_WIN32)
@@ -262,6 +268,15 @@ void      AILCALL AIL_quick_set_volume(HAUDIO audio, F32 volume, F32 extravol);
    decides when the recording starts, because only the caller knows what logic frame it is. */
 S32       AILCALL AIL_ex_start_capture(const char *pathname);
 void      AILCALL AIL_ex_stop_capture(void);
+
+/* The logic clock's mix, for -wav.  AIL_ex_offline_mix, called before AIL_startup, opens no audio
+   device: the mix moves only when AIL_ex_mix_to_frame asks it to, logicFrame * rate / 30 frames from
+   the start, so a capture holds exactly the sound of the logic frames it spans however fast or slow
+   the run went.  Nothing is heard meanwhile.  AIL_ex_capture_length reports what the last finished
+   capture wrote, in frames at its rate; the XAudio2 backend does not count and says zero. */
+void      AILCALL AIL_ex_offline_mix(void);
+void      AILCALL AIL_ex_mix_to_frame(S32 logicFrame);
+void      AILCALL AIL_ex_capture_length(S32 *frames, S32 *rate);
 
 /* ---- distance falloff -------------------------------------------------- */
 /* Not Miles.  Nonzero makes every 3D sample fall off in a straight line from min_dist to max_dist

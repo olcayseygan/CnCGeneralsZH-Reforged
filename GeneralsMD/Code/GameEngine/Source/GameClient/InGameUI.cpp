@@ -10695,6 +10695,8 @@ static const Color BROADCAST_DEFEAT = GameMakeColor( 0xb8, 0x26, 0x1f, 255 );
 static const Int BROADCAST_BANNER_POINTS = 16;
 static const Int BROADCAST_BANNER_WORD_POINTS = 12;
 static const Real BROADCAST_BANNER_FOOT = 0.7f;
+/// the whole screen's "X vs Y" plate comes and goes over this many logic frames
+static const Real BROADCAST_WHOLE_PLATE_FADE_FRAMES = 15.0f;
 
 /** A banner's height with title over under, its rule included. */
 static Int broadcastBannerHeight( const BroadcastPlate &title, const BroadcastPlate &under )
@@ -11117,8 +11119,8 @@ void InGameUI::drawDirectorBroadcast( void )
 	const Int frameEdge = frameGold + max( REAL_TO_INT( screenRows / BROADCAST_FRAME_EDGE_ROWS_A_PIXEL ), 1 );
 	const Int frameHalo = max( ( ObserverCamera_paneBandWidth( screenRows ) - lineGold ) / 2 - OBSERVER_PANE_LINE_EDGE, 0 ) / 2;
 	const Int frameReach = frameEdge + frameHalo;
-	// while the screen is split the bar goes up off the top, frame and all, as the corner radar slides
-	// out to the left, and comes back down as the radar comes back: the panes have the screen to
+	// while the screen is split the bar goes up off the top, frame and all, as the radar slides down
+	// off the bottom, and comes back down as the radar comes back: the panes have the screen to
 	// themselves.  Everything the bar draws hangs from its layouts' rows, so lifting those lifts it
 	const Int lift = REAL_TO_INT( TheObserverCamera.getCornerRadarSlide() * ( max( from.height, to.height ) + frameReach ) );
 	auto liftLayout = [ lift ]( BroadcastLayout &l )
@@ -11396,7 +11398,8 @@ void InGameUI::drawDirectorBroadcast( void )
 	TheObserverCamera.addBroadcast( bar );
 	for( size_t flag = 0; flag < flagsDrawn.size(); flag++ )
 		TheObserverCamera.addBroadcast( flagsDrawn[ flag ] );
-	TheObserverCamera.setBroadcastTop( (Real)max( height + frameReach + pad, 0 ) );
+	const Int barFoot = max( height + frameReach + pad, 0 );
+	TheObserverCamera.setBroadcastTop( (Real)barFoot );
 	static Int loggedHeight = -1;
 	if( !sliding && lift == 0 && height != loggedHeight )
 	{
@@ -11406,14 +11409,14 @@ void InGameUI::drawDirectorBroadcast( void )
 			from.cardWidth, from.fullCardWidth ));
 	}
 
-	// a split's plate a pane, faded in and out with the panes; the opening's are each pane's own
+	// a split's plate a pane, faded in and out with the panes, and with no panes the director's fight's
+	// on the whole screen under the score bar; the opening's are each pane's own
 	const Real paneShown = TheObserverCamera.getPaneProgress();
 	const Int panes = TheObserverCamera.isIntro() ? 0 : TheObserverCamera.getDrawnPaneCount();
 	DisplayString *versus = broadcastText( "versus", UnicodeString( u"vs" ), BROADCAST_WORDS, broadcastPoints( BROADCAST_SIDE_POINTS ), FALSE );
-	for( Int pane = 0; pane < panes && panes >= 2; pane++ )
+	// a team of two or more by its name once, a player alone by his own
+	auto sidesPlate = [ & ]( PlayerMaskType sides ) -> BroadcastPlate
 	{
-		const PlayerMaskType sides = TheObserverCamera.getPaneSides( pane );
-		// a team of two or more by its name once, a player alone by his own
 		BroadcastPlate plate;
 		for( size_t block = 0; block < from.blockFirst.size(); block++ )
 		{
@@ -11436,25 +11439,68 @@ void InGameUI::drawDirectorBroadcast( void )
 					break;
 			}
 		}
-		if( plate.pieces.empty() )
-			continue;
-
-		Int plateWidth = 0, plateHeight = 0;
-		broadcastPlateSize( plate, &plateWidth, &plateHeight );
-		Coord2D centre;
-		Real radius = 0.0f;
-		TheObserverCamera.getPaneCircle( pane, &centre, &radius );
-		const Int plateTop = REAL_TO_INT( ObserverCamera_paneLabelTop( centre, radius, (Real)plateWidth, (Real)plateHeight ) );
-		const Int plateLeft = REAL_TO_INT( centre.x ) - plateWidth / 2;
-		drawBroadcastPlate( plate, plateLeft, plateTop, paneShown );
-
+		return plate;
+	};
+	// each plate's sides are logged when they change, the whole screen's last, so a film's plates can
+	// be counted
+	static PlayerMaskType loggedSides[ OBSERVER_MOST_PANES + 1 ];
+	auto placePlate = [ & ]( Int slot, PlayerMaskType sides, const BroadcastPlate &plate, Int plateLeft, Int plateTop, Int plateWidth,
+		Int plateHeight, Real shown )
+	{
+		if( sides != loggedSides[ slot ] )
+		{
+			loggedSides[ slot ] = sides;
+			DEBUG_LOG(( "OBSCAM frame %u %s plate %d, %d name(s)%s\n", frame, slot < OBSERVER_MOST_PANES ? "pane" : "whole screen",
+				slot, (Int)( plate.pieces.size() + 1 ) / 2, plate.pieces.size() > 1 ? ", vs" : "" ));
+		}
+		drawBroadcastPlate( plate, plateLeft, plateTop, shown );
 		IRegion2D drawn;
 		drawn.lo.x = plateLeft;
 		drawn.lo.y = plateTop;
 		drawn.hi.x = plateLeft + plateWidth;
 		drawn.hi.y = plateTop + plateHeight;
 		TheObserverCamera.addBroadcast( drawn );
+	};
+	for( Int pane = 0; pane < OBSERVER_MOST_PANES; pane++ )
+	{
+		const PlayerMaskType sides = pane < panes && panes >= 2 ? TheObserverCamera.getPaneSides( pane ) : 0;
+		const BroadcastPlate plate = sidesPlate( sides );
+		if( plate.pieces.empty() )
+		{
+			loggedSides[ pane ] = 0;
+			continue;
+		}
+		Int plateWidth = 0, plateHeight = 0;
+		broadcastPlateSize( plate, &plateWidth, &plateHeight );
+		Coord2D centre;
+		Real radius = 0.0f;
+		TheObserverCamera.getPaneCircle( pane, &centre, &radius );
+		const Int plateTop = REAL_TO_INT( ObserverCamera_paneLabelTop( centre, radius, (Real)plateWidth, (Real)plateHeight ) );
+		placePlate( pane, sides, plate, REAL_TO_INT( centre.x ) - plateWidth / 2, plateTop, plateWidth, plateHeight, paneShown );
 	}
+	// the whole screen's plate names a fight between two sides or more, fades in over the panes' slide
+	// and out again keeping the names it had
+	static PlayerMaskType wholeSides = 0;
+	static Real wholeShown = 0.0f;
+	static Real wholeShownAt = 0.0f;
+	const Real picture = GameEngine_pictureFrame();
+	const PlayerMaskType placeSides = panes == 1 ? TheObserverCamera.getPlaceSides() : 0;
+	const Bool fightShown = sidesPlate( placeSides ).pieces.size() > 1;
+	if( fightShown )
+		wholeSides = placeSides;
+	const Real wholeStep = max( picture - wholeShownAt, 0.0f ) / BROADCAST_WHOLE_PLATE_FADE_FRAMES;
+	wholeShownAt = picture;
+	wholeShown = fightShown ? min( wholeShown + wholeStep, 1.0f ) : max( wholeShown - wholeStep, 0.0f );
+	if( wholeShown > 0.0f )
+	{
+		const BroadcastPlate plate = sidesPlate( wholeSides );
+		Int plateWidth = 0, plateHeight = 0;
+		broadcastPlateSize( plate, &plateWidth, &plateHeight );
+		placePlate( OBSERVER_MOST_PANES, wholeSides, plate, ( TheDisplay->getWidth() - plateWidth ) / 2, barFoot, plateWidth, plateHeight,
+			wholeShown );
+	}
+	else
+		loggedSides[ OBSERVER_MOST_PANES ] = 0;
 
 	// a defeated player's banner across the lower picture, the broadcast's red in its tab, and once the
 	// match is decided the winner's under it in gold.  A banner names the player in his colour, under it

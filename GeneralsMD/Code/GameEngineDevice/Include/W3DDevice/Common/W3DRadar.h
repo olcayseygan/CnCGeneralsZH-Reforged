@@ -97,7 +97,6 @@ protected:
 	void cacheLandmarks( void );													///< rebuild the landmark list from both object lists
 	void collectLandmarks( const RadarObject *listHead );	///< add the landmarks of one list to the cache
 	void drawViewBox( Int pixelX, Int pixelY, Int width, Int height );  ///< draw view box
-	void drawPaneBox( Int pane, Int pixelX, Int pixelY, Int width, Int height );	///< -directorrecord: one pane's view box
 	void drawBoxLines( const ICoord2D *corners );	///< a view box's lines through its four corners in pixels
 	void buildTerrainTexture( TerrainLogic *terrain );	 ///< create the terrain texture of the radar
 	void drawIcons( Int pixelX, Int pixelY, Int width, Int height );	///< draw all of the radar icons
@@ -137,8 +136,6 @@ protected:
 	//
 	Bool m_reconstructViewBox;										///< true when we need to reconstruct the box
 	ICoord2D m_viewBox[ 4 ];											///< radar cell points for the 4 corners of view box
-	Int m_viewBoxesDrawn;													///< how many view boxes the last draw had, one a -directorrecord pane
-	UnsignedInt m_paneBoxLogged[ OBSERVER_MOST_PANES ];		///< the logic frame each pane's box was last logged on
 
 	// By value, not by pointer into the object.  The list is rebuilt every OVERLAY_REFRESH_RATE
 	// frames and read on every one of them, so a hero killed in between left a pointer into a

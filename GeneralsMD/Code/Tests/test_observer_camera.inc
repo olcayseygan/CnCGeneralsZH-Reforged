@@ -422,6 +422,59 @@ TEST(the_recording_splits_a_match_of_two_into_a_pane_each_player)
 	CHECK_NEAR( heats[ 1 ], 3.0f, 0.001f );
 }
 
+TEST(a_match_of_two_splits_after_its_opening_only_for_a_big_moment)
+{
+	const Real needed = 930.0f;
+	const Real farApart = 1500.0f;
+	const UnsignedInt second = LOGICFRAMES_PER_SECOND;
+	// the opening's split: on after the usual rest whenever the two players are far apart, bases or not
+	CHECK( ObserverCamera_holdSideSplit( FALSE, TRUE, FALSE, 0, farApart, needed, 4 * second ) );
+	CHECK( !ObserverCamera_holdSideSplit( FALSE, TRUE, FALSE, 0, farApart, needed, 3 * second ) );
+	// held through its least whatever, then up to 18 s with a fight and 36 s without
+	CHECK( ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 0, 0.0f, needed, 7 * second ) );
+	CHECK( ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 0, farApart, needed, 30 * second ) );
+	CHECK( !ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 1, farApart, needed, 18 * second ) );
+	CHECK( !ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 0, farApart, needed, 36 * second ) );
+
+	// past it, two players merely firing far apart split nothing however long the rest; S1-A1 went to
+	// panes and back every few seconds for it
+	const UnsignedInt rested = 120 * second;
+	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, FALSE, 2, farApart, needed, 600 * second ) );
+	// a big moment splits, but only after a long rest and only for fights far enough apart
+	CHECK( ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, farApart, needed, rested ) );
+	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, farApart, needed, rested - 1 ) );
+	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, 900.0f, needed, rested ) );
+	// once on it stays the panes' slide and 15 s whatever the fights do, no 8 s flicker
+	const UnsignedInt least = 12 + 15 + 21 + 15 * second;
+	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, 8 * second ) );
+	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, least - 1 ) );
+	CHECK( !ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, least ) );
+	// then while both players fight, up to 40 s
+	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 2, farApart, needed, 30 * second ) );
+	CHECK( !ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 1, farApart, needed, 30 * second ) );
+	CHECK( !ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 2, farApart, needed, 40 * second ) );
+}
+
+TEST(a_big_moment_wants_fights_the_scouting_pass_saw_peak_hot)
+{
+	std::vector< DirectorMoment > timeline;
+	DirectorMoment fight;
+	fight.start = 1000;
+	fight.last = 2000;
+	fight.place.x = fight.target.x = 1000.0f;
+	fight.place.y = fight.target.y = 1000.0f;
+	fight.peak = 8.0f;
+	fight.sides = 3;
+	fight.power = FALSE;
+	fight.superweapon = FALSE;
+	timeline.push_back( fight );
+	const Coord2D place = { 1000.0f, 1000.0f };
+	CHECK( ObserverCamera_fightLasts( timeline, place, 1100, 1500, NULL ) );
+	CHECK( !ObserverCamera_fightLasts( timeline, place, 1100, 1500, NULL, 12.0f ) );
+	timeline[ 0 ].peak = 12.0f;
+	CHECK( ObserverCamera_fightLasts( timeline, place, 1100, 1500, NULL, 12.0f ) );
+}
+
 TEST(the_recording_splits_for_a_big_second_fight_holds_it_and_rests_after)
 {
 	const UnsignedInt rested = 5 * LOGICFRAMES_PER_SECOND;
@@ -1189,10 +1242,7 @@ TEST(the_score_bar_sets_every_side_in_one_row_and_fits_eight_players)
 TEST(the_pane_lines_grow_out_then_their_band_fades_in_and_a_light_runs_along_them)
 {
 	// the line is whole three quarters of the way through its draw, its band only at the end, and
-	// the band has not begun while the line is still short; the radar's frame goes round by 0.6
-	CHECK_NEAR( ObserverCamera_frameTraced( 0.0f ), 0.0f, 0.0001f );
-	CHECK_NEAR( ObserverCamera_frameTraced( 0.6f ), 1.0f, 0.0001f );
-	CHECK( ObserverCamera_frameTraced( 0.3f ) > 0.3f && ObserverCamera_frameTraced( 0.3f ) < 0.7f );
+	// the band has not begun while the line is still short
 	CHECK_NEAR( ObserverCamera_lineDrawn( 0.0f ), 0.0f, 0.0001f );
 	CHECK_NEAR( ObserverCamera_lineDrawn( 0.75f ), 1.0f, 0.0001f );
 	CHECK_NEAR( ObserverCamera_lineDrawn( 1.0f ), 1.0f, 0.0001f );

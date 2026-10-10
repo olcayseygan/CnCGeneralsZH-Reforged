@@ -495,59 +495,6 @@ void W3DRadar::drawBoxLines( const ICoord2D *corners )
 	}
 }
 
-//-------------------------------------------------------------------------------------------------
-/** -directorrecord's box for one pane: the square round the circle the pane fits its subject in,
-	* put on the ground through that pane's own camera.  The view is moved to a pane past the first
-	* for the four corners and put back, the way GameClient's pane pass moves it for a draw */
-//-------------------------------------------------------------------------------------------------
-void W3DRadar::drawPaneBox( Int pane, Int pixelX, Int pixelY, Int width, Int height )
-{
-	Coord2D centre;
-	Real radius = 0.0f;
-	TheObserverCamera.getPaneCircle( pane, &centre, &radius );
-	// setLocation only stores the place; the picks below go through the W3D camera, which the draw
-	// builds, so it is aimed here as ObserverCamera::aimView does.  Without it pane 1's box was pane
-	// 0's camera picked at pane 1's circle, and in S1-A1's opening both boxes sat on the top base
-	ViewLocation own;
-	if( pane != 0 )
-	{
-		TheTacticalView->getLocation( &own );
-		TheTacticalView->setLocation( &TheObserverCamera.getPaneView( pane ) );
-		TheTacticalView->aimCamera();
-	}
-	const Real sideX[ 4 ] = { -1.0f, 1.0f, 1.0f, -1.0f };
-	const Real sideY[ 4 ] = { -1.0f, -1.0f, 1.0f, 1.0f };
-	ICoord2D corners[ 4 ];
-	Coord2D middle = { 0.0f, 0.0f };
-	for( Int corner = 0; corner < 4; corner++ )
-	{
-		ICoord2D screen;
-		screen.x = REAL_TO_INT( centre.x + sideX[ corner ] * radius );
-		screen.y = REAL_TO_INT( centre.y + sideY[ corner ] * radius );
-		Coord3D world;
-		TheTacticalView->screenToWorldAtZ( &screen, &world, getTerrainAverageZ() );
-		middle.x += world.x * 0.25f;
-		middle.y += world.y * 0.25f;
-		ICoord2D radar;
-		radar.x = world.x / ( m_mapExtent.width() / RADAR_CELL_WIDTH );
-		radar.y = world.y / ( m_mapExtent.height() / RADAR_CELL_HEIGHT );
-		radarToPixel( &radar, &corners[ corner ], pixelX, pixelY, width, height );
-	}
-	if( pane != 0 )
-	{
-		TheTacticalView->setLocation( &own );
-		TheTacticalView->aimCamera();
-	}
-	// a second a box, to set against the OBSCAM pane subject lines
-	const UnsignedInt frame = TheGameLogic->getFrame();
-	if( frame % LOGICFRAMES_PER_SECOND == 0 && frame != m_paneBoxLogged[ pane ] )
-	{
-		m_paneBoxLogged[ pane ] = frame;
-		DEBUG_LOG(( "RADAR frame %u pane %d box round (%.0f,%.0f)\n", frame, pane, middle.x, middle.y ));
-	}
-	drawBoxLines( corners );
-}
-
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 void W3DRadar::drawSingleBeaconEvent( Int pixelX, Int pixelY, Int width, Int height, Int index )
@@ -1034,9 +981,6 @@ W3DRadar::W3DRadar( void )
 	m_textureHeight = RADAR_CELL_HEIGHT;
 
 	m_reconstructViewBox = TRUE;
-	m_viewBoxesDrawn = 1;
-	for( Int pane = 0; pane < OBSERVER_MOST_PANES; pane++ )
-		m_paneBoxLogged[ pane ] = 0;
 	for( Int i = 0; i < 4; i++ )
 	{
 
@@ -1649,21 +1593,9 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 	if( m_reconstructViewBox )
 		reconstructViewBox();
 
-	// -directorrecord's panes, the opening's included, each get a box of their own; the one view box
-	// stood for pane 0 alone while the other half of the screen showed somewhere else
-	const Int boxes = TheGlobalData->m_directorRecord ? TheObserverCamera.getDrawnPaneCount() : 1;
-	if( boxes != m_viewBoxesDrawn )
-	{
-		DEBUG_LOG(( "RADAR frame %u %d view boxes\n", TheGameLogic->getFrame(), boxes ));
-		m_viewBoxesDrawn = boxes;
-	}
-
-	// draw the view region on top of the radar reconstructing if necessary
-	if( boxes < 2 )
-		drawViewBox( ul.x, ul.y, scaledWidth, scaledHeight );
-	else
-		for( Int pane = 0; pane < boxes; pane++ )
-			drawPaneBox( pane, ul.x, ul.y, scaledWidth, scaledHeight );
+	// draw the view region on top of the radar reconstructing if necessary.  -directorrecord draws no
+	// radar while its panes are up, so there is one view to box
+	drawViewBox( ul.x, ul.y, scaledWidth, scaledHeight );
 
 }  // end draw
 

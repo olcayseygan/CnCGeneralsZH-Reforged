@@ -168,10 +168,10 @@ void ObserverCamera_markLandings( std::vector< DirectorMoment > &moments, const 
 /// it did not see, so a match it did not scout waits for the hits
 Bool ObserverCamera_powerLands( const std::vector< DirectorMoment > &timeline, UnsignedInt frame, const Coord2D &at );
 /// whether the timeline has a fight worth filming near place, going on at frame or beginning within
-/// the pre-roll, that lasts to until, leaving out any that is also near besides, the place another
-/// pane already shows (NULL for none)
+/// the pre-roll, that lasts to until and peaked at least leastPeak, leaving out any that is also near
+/// besides, the place another pane already shows (NULL for none)
 Bool ObserverCamera_fightLasts( const std::vector< DirectorMoment > &timeline, const Coord2D &place, UnsignedInt frame, UnsignedInt until,
-	const Coord2D *besides );
+	const Coord2D *besides, Real leastPeak = 0.0f );
 /// the scouting pass's fights as its run ends on frame end: one still going was cut short by the end
 /// of the match, not by itself, and is counted as lasting, so a last battle that got hot is filmed
 /// rather than skipped as a fizzle
@@ -266,6 +266,14 @@ Bool ObserverCamera_sidePlaces( const std::vector< DirectorHeat > *candidates, R
 /// at once, however new, when the two places come within two thirds of needed and the two panes
 /// would show the same ground
 Bool ObserverCamera_holdSplit( Bool split, Real firstHeat, Real secondHeat, Real apart, Real needed, UnsignedInt framesSince );
+/// the same in a match of two, a pane each player, with apart 0 when no place was found for either.
+/// The opening's split goes on after SPLIT_REST_FRAMES whenever the two are further apart than needed
+/// and stays through SPLIT_LEAST_FRAMES, then up to SPLIT_MOST_FRAMES while fighting has either player
+/// in a fight and twice that while it has neither.  Past the opening it goes on only for big, each
+/// player in a big fight of his own, and only SIDE_SPLIT_REST_FRAMES after the last one went off; it
+/// stays through SIDE_SPLIT_LEAST_FRAMES whatever happens, then while both players fight, up to
+/// SIDE_SPLIT_MOST_FRAMES
+Bool ObserverCamera_holdSideSplit( Bool split, Bool opening, Bool big, Int fighting, Real apart, Real needed, UnsignedInt framesSince );
 
 /// -directorrecord's panes.  The picture is cut by rays from one point, and pane i is the wedge from
 /// ray i counterclockwise to ray i + 1.  Angles are degrees, 0 to the right and 90 up the screen
@@ -365,8 +373,6 @@ Int ObserverCamera_paneBandWidth( Int height );
 Real ObserverCamera_lineDrawn( Real progress );
 /// how far a line's band has faded in at progress, behind the line
 Real ObserverCamera_bandShown( Real progress );
-/// how much of the radar frame's gold has been traced round the map at progress
-Real ObserverCamera_frameTraced( Real progress );
 /// where along the gold lines the travelling light is on logic frame frame, 0 at the meeting point and
 /// 1 at the far end, eased; below 0 between two runs
 Real ObserverCamera_shimmerAt( Real frame );
@@ -420,12 +426,10 @@ public:
 	const Real *getPaneRays( void ) const { return m_paneRays; }
 	/// where the rays meet on the screen, in pixels, which slides in from off the screen and back out
 	Coord2D getPaneOrigin( void ) const { return m_paneOrigin; }
-	/// how far the radar in the bottom left corner is slid out to the left, 0 to 1
+	/// how far the radar in the middle of the bottom edge is slid down off the screen, 0 to 1
 	Real getCornerRadarSlide( void ) const { return m_cornerRadarSlide; }
-	/// the radar framed on the rays' meeting point, pane 0's, while there are panes; its middle comes
-	/// with the meeting point and goes off the screen with it
+	/// whether there are panes on the screen, which the radar is not drawn over
 	Bool isRadarFramed( void ) const { return m_paneCount >= 2 && m_paneProgress > 0.0f; }
-	Coord2D getFramedRadarMiddle( Real radarDiagonal ) const;
 	/// the framed radar's rectangle as it was drawn, frame included: the recording takes it from pane 0
 	void setRadarFrame( const IRegion2D &frame ) { m_radarFrame = frame; }
 	const IRegion2D &getRadarFrame( void ) const { return m_radarFrame; }
@@ -442,8 +446,11 @@ public:
 	Real getPaneProgress( void ) const { return m_paneProgress; }
 	/// how far the gold lines have drawn out on the settled panes, 0 to 1, not eased
 	Real getLineProgress( void ) const { return m_lineProgress; }
-	/// who a split's pane shows: everybody dealing or taking hits in its fight; 0 when nobody is
+	/// who a split's pane shows: everybody dealing or taking hits in its fight, and in a match of two
+	/// the pane's own player whatever he does; 0 when nobody is
 	PlayerMaskType getPaneSides( Int pane ) const;
+	/// who the director's fight on the whole screen is between; 0 when it shows no fight
+	PlayerMaskType getPlaceSides( void ) const;
 	/// the panes are the match's opening, each one player's: his index, and the point over his command
 	/// centre his plate hangs from, on the ground where his things crowd when he has none
 	Bool isIntro( void ) const { return m_intro; }
@@ -451,8 +458,6 @@ public:
 	const Coord3D &getIntroMark( Int pane ) const { return m_paneMark[ pane ]; }
 	Bool isDrawingSecond( void ) const { return m_drawingPane != 0; }
 	Int getDrawingPane( void ) const { return m_drawingPane; }
-	/// the camera a pane past the first draws from; pane 0's is the view's own
-	const ViewLocation &getPaneView( Int pane ) const { return m_paneView[ pane ]; }
 	/// the view moved to a pane's camera for one draw, and put back after it
 	void beginPanePass( Int pane );
 	void endPanePass( void );
@@ -497,6 +502,8 @@ private:
 	Region2D mapRegion( void ) const;
 	Bool updateSplit( void );
 	Bool updateSideSplit( void );
+	/// everybody dealing or taking the last scan's hits in the fight at subject
+	PlayerMaskType sidesAround( const Coord2D &subject ) const;
 	void measureScreenGround( void );
 	Real paneGround( const Coord2D &subject ) const;
 	Real splitApart( const Coord2D &second ) const;
@@ -592,6 +599,7 @@ private:
 	std::vector< PlayerMaskType > m_sightOwners;	///< and whose each of them is, 0 for nobody's
 	const Player *m_sidePlayers[ 2 ];			///< a match of two: the opening's pane players, each split's pane 0 and pane 1 follow the same one
 	Coord2D m_sideFirst;									///< where pane 0's player is, the place the director holds while that split is up
+	Bool m_sideOpening;										///< the split up is the one the opening's panes went on as
 	std::vector< IRegion2D > m_broadcast;	///< the rectangles the broadcast drew over pane 0 this frame
 	Real m_broadcastTop;									///< the rows the score bar took
 	Real m_screenGround;									///< the ground the whole picture spans across its middle row, last measured with no panes up

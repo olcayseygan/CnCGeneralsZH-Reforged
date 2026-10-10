@@ -22,9 +22,11 @@
 // The mode and the followed player are picked apart, from two lists.  Free is the camera in the
 // watcher's own hands.  Director goes to the fight of the last few seconds with the most at stake,
 // each hit counted by what the thing hit cost and more for a kill or a superweapon, and stays there
-// a while before it looks for a bigger fight.  A special power used anywhere outranks any fight: a
-// superweapon is shown leaving its silo, then where it lands until the dust settles, a laser
-// followed along its sweep.  The camera glides between places on a spring and only cuts across
+// a while before it looks for a bigger fight.  A special power used anywhere outranks any fight and
+// takes the camera at once: it is shown where it lands until the dust settles, for 30 seconds at the
+// most, a laser followed along its sweep, and two landing far apart at once split a recording's
+// picture a pane each.  Hits on infantry count for a quarter, so a skirmish of riflemen rarely
+// takes the camera from tanks or buildings.  The camera glides between places on a spring and only cuts across
 // most of a map, and stops short of a place that would put ground off the map on the screen.  Over
 // a wide fight it rises above the watcher's own height, which the wheel still moves, and comes back
 // down to it when the camera goes elsewhere or is taken back.  With no fight on it goes round the armies on the
@@ -73,9 +75,10 @@ struct DirectorHeat
 class Player;
 class SpecialPowerTemplate;
 class ThingTemplate;
+class UpgradeTemplate;
 
 /// a special power used lately: who used it, where it was fired from, where it lands, and until which
-/// logic frame it is worth watching.  A superweapon is shown leaving its silo before its target
+/// logic frame it is worth watching
 struct DirectorEvent
 {
 	UnsignedInt id;
@@ -91,10 +94,10 @@ struct DirectorEvent
 	const ThingTemplate *sourceThing;		///< what it was fired from
 };
 
-/// -directorrecord's broadcast shows some things one at a time from a queue: a special power's flag
-/// under its player's card in the score bar, and a defeated player's banner.  start is the logic frame
-/// it began to come in, 0 while it waits behind another; leaving the frame it began to go, 0 while it
-/// holds.  A defeat's banner has no power
+/// -directorrecord's broadcast shows some things one at a time from a queue: a special power's or a
+/// bought upgrade's flag under its player's card in the score bar, and a defeated player's banner.
+/// start is the logic frame it began to come in, 0 while it waits behind another; leaving the frame it
+/// began to go, 0 while it holds.  A defeat's banner has neither power nor upgrade
 struct DirectorShowing
 {
 	Int player;
@@ -103,6 +106,7 @@ struct DirectorShowing
 	Bool superweapon;
 	UnsignedInt start;
 	UnsignedInt leaving;
+	const UpgradeTemplate *upgrade;
 };
 
 /// one logic frame of such a queue: the first in it comes in over moveFrames, holds holdAlone frames
@@ -176,9 +180,10 @@ Bool ObserverCamera_fightLasts( const std::vector< DirectorMoment > &timeline, c
 /// of the match, not by itself, and is counted as lasting, so a last battle that got hot is filmed
 /// rather than skipped as a fizzle
 void ObserverCamera_closeTimeline( std::vector< DirectorMoment > &moments, UnsignedInt end );
-/// the moment the director goes to wait at on frame: of the fights worth filming and the superweapons
-/// that begin within the pre-roll after frame, a superweapon first and then the hottest, leaving out
-/// any within apart of taken, the place another pane already shows (NULL for none).  -1 for none
+/// the moment the director goes to wait at on frame: of the moments worth filming that begin within the
+/// pre-roll after frame, a superweapon first, then any other special power, then the hottest fight,
+/// leaving out any within apart of taken, the place another pane already shows (NULL for none).  A
+/// power is waited for where it lands.  -1 for none
 Int ObserverCamera_prerollMoment( const std::vector< DirectorMoment > &timeline, UnsignedInt frame, const Coord2D *taken, Real apart );
 /// whether the fight going on at place on frame is one the scouting pass saw fizzle, which the
 /// director does not cut to.  FALSE where the pass saw nothing, so a match it did not scout is
@@ -209,26 +214,26 @@ Real ObserverCamera_heatAround( const std::vector< DirectorHeat > &hits, const C
 /// peakHere is the hottest the place has been while held, and a place burnt down from it lets go sooner
 Bool ObserverCamera_shouldMove( Real heatHere, Real heatThere, UnsignedInt framesHere, Real peakHere );
 /// what one recent hit counts for: more the dearer the thing hit, more again if it died or is a
-/// superweapon
-Real ObserverCamera_hitWeight( Int cost, Bool killed, Bool superweapon );
+/// superweapon, and a quarter of that for infantry
+Real ObserverCamera_hitWeight( Int cost, Bool killed, Bool superweapon, Bool infantry );
 /// what one thing is worth looking at with no fight on: its cost, doubled while it marches or is
 /// being built, halved for a building that is only standing there, tripled for a superweapon
 Real ObserverCamera_sightWeight( Int cost, Bool structure, Bool busy, Bool superweapon );
 /// the best place among the sights away from the ones in seen; FALSE when every sight was seen
 Bool ObserverCamera_nextSight( const std::vector< DirectorHeat > &sights, const std::vector< Coord2D > &seen, Coord2D *place );
-/// where an event is best watched on a frame: a superweapon's silo for its first few seconds, then
-/// where it lands
-Coord2D ObserverCamera_eventPlace( const DirectorEvent &event, UnsignedInt frame );
 /// whether the director stays on the event it is showing, current, rather than go to best, the
-/// biggest one it may show now.  best is NULL when none may be shown: narrowed to a player whose
-/// things round the target are all gone, the current one is filtered out and is still kept
-Bool ObserverCamera_stayOnEvent( const DirectorEvent *current, const DirectorEvent *best, UnsignedInt held );
+/// biggest and latest one it may show now: it stays while best lands in the same picture or weighs
+/// less, and goes at once, settled or not, to a power as big landing anywhere else.  best is NULL when
+/// none may be shown: narrowed to a player whose things round the target are all gone, the current
+/// one is filtered out and is still kept
+Bool ObserverCamera_stayOnEvent( const DirectorEvent *current, const DirectorEvent *best );
 /// whether owner using power on target at frame is more of event, a use still shown, rather than a new one
 Bool ObserverCamera_sameUse( const DirectorEvent &event, const Player *owner, const SpecialPowerTemplate *power, const Coord2D &target,
 	UnsignedInt frame );
-/// whether an event takes the camera from a fight or a sight held for held frames.  A superweapon
-/// still on its way out of the silo goes at once, or the launch is over before the settle is
-Bool ObserverCamera_eventCutsIn( const DirectorEvent &event, UnsignedInt frame, UnsignedInt held );
+/// the frame an event shown until until is kept to when something more happens at it on frame: a few
+/// seconds past frame, never past EVENT_MOST_FRAMES after it began.  Kept going by every hit round its
+/// target, a particle cannon fired into the middle of a map held the camera there for eight minutes
+UnsignedInt ObserverCamera_eventKeptTo( const DirectorEvent &event, UnsignedInt frame, UnsignedInt more );
 /// how widely the hits within DIRECTOR_GATHER_RADIUS of a place lie round it, by weight
 Real ObserverCamera_spreadAround( const std::vector< DirectorHeat > &hits, const Coord2D &around );
 /// how much higher than the watcher's own the director takes the camera over a fight this spread
@@ -413,6 +418,9 @@ public:
 	/// a superweapon is hitting the ground here this frame, a beam or a warhead.  Keeps the event it
 	/// belongs to going a few seconds more, and with follow the event's target moves with it
 	void noteSuperweaponHit( const Player *owner, const Coord3D *at, Bool follow );
+	/// a player finished buying an upgrade, for himself or for one of his things: -directorrecord hangs
+	/// its flag under his card.  Logic tells, and never asks back
+	void noteUpgrade( const Player *owner, const UpgradeTemplate *upgrade );
 
 	/// the watcher's own height back on the view, if the director had raised it over a fight
 	void releaseHeight( void );
@@ -447,10 +455,9 @@ public:
 	/// how far the gold lines have drawn out on the settled panes, 0 to 1, not eased
 	Real getLineProgress( void ) const { return m_lineProgress; }
 	/// who a split's pane shows: everybody dealing or taking hits in its fight, and in a match of two
-	/// the pane's own player whatever he does; 0 when nobody is
+	/// the pane's own player whatever he does, or for a pane a special power holds the player who used
+	/// it; 0 when nobody is
 	PlayerMaskType getPaneSides( Int pane ) const;
-	/// who the director's fight on the whole screen is between; 0 when it shows no fight
-	PlayerMaskType getPlaceSides( void ) const;
 	/// the panes are the match's opening, each one player's: his index, and the point over his command
 	/// centre his plate hangs from, on the ground where his things crowd when he has none
 	Bool isIntro( void ) const { return m_intro; }
@@ -501,6 +508,7 @@ private:
 	void pickIntroBases( void );
 	Region2D mapRegion( void ) const;
 	Bool updateSplit( void );
+	Bool updateEventSplit( void );
 	Bool updateSideSplit( void );
 	/// everybody dealing or taking the last scan's hits in the fight at subject
 	PlayerMaskType sidesAround( const Coord2D &subject ) const;
@@ -580,6 +588,9 @@ private:
 	Real m_placeHeight;							///< how much higher than the watcher's own the place is watched from
 	Real m_placePeak;								///< the hottest the fight held has been since the director came to it
 	UnsignedInt m_placeEvent;				///< the id of the event the place is, while it is one
+	UnsignedInt m_eventSecond;			///< another event landing far from that one at the same time, 0 for none; the split's pane 1
+	Bool m_eventSplit;							///< the split up is the two events', which no rest or hold of a fight's split keeps down
+	PlayerMaskType m_eventPaneSides[ 2 ];	///< who used each of those two
 	std::vector< Coord2D > m_seen;	///< the last few sights, oldest first, not gone back to while there is another
 	std::vector< DirectorEvent > m_events;	///< the special powers still worth watching, oldest first
 	UnsignedInt m_nextEventId;

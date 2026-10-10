@@ -48,6 +48,7 @@
 #include "GameClient/Eva.h"
 #include "GameClient/GameText.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/ObserverCamera.h"
 
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -1025,6 +1026,9 @@ UpdateSleepTime ProductionUpdate::update( void )
 				us->getControllingPlayer()->getPlayerIndex(),
 				upgrade->getUpgradeName(),
 				us->getID());
+
+			// a recording's broadcast hangs the upgrade's flag under the player's card; this only tells the client
+			TheObserverCamera.noteUpgrade( player, upgrade );
 
 			// print a message to the local player, if it wants one
 			if( us->isLocallyControlled() && !upgrade->getDisplayNameLabel().isEmpty() )

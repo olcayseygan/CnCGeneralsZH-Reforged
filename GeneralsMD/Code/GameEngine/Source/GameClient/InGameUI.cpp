@@ -10695,8 +10695,6 @@ static const Color BROADCAST_DEFEAT = GameMakeColor( 0xb8, 0x26, 0x1f, 255 );
 static const Int BROADCAST_BANNER_POINTS = 16;
 static const Int BROADCAST_BANNER_WORD_POINTS = 12;
 static const Real BROADCAST_BANNER_FOOT = 0.7f;
-/// the whole screen's "X vs Y" plate comes and goes over this many logic frames
-static const Real BROADCAST_WHOLE_PLATE_FADE_FRAMES = 15.0f;
 
 /** A banner's height with title over under, its rule included. */
 static Int broadcastBannerHeight( const BroadcastPlate &title, const BroadcastPlate &under )
@@ -11053,8 +11051,8 @@ void InGameUI::layOutBroadcast( const std::vector< SpectatorStats > &players, co
 	* his colour, his general or difficulty, his cash and the cost of everything he has standing that is
 	* not a building.  A team's cards sit together under its name and its armies' total.  Under the row
 	* the armies pull on one bar, each player his colour in the cards' order, gold at the middle when
-	* two sides play so the side ahead is the one past it.  A special power a player used drops its icon
-	* in a flag from under his card.  A player who loses has his card flash red and struck through, then
+	* two sides play so the side ahead is the one past it.  A special power a player used, or an upgrade
+	* he bought, drops its icon in a flag from under his card.  A player who loses has his card flash red and struck through, then
 	* it closes while the others slide to where they stand without it, and his banner comes up across
 	* the lower picture; once the match is decided the winner's comes up under the last.  While
 	* a split is up each pane carries a plate in the top of its circle, inside its wedge and clear of
@@ -11196,7 +11194,7 @@ void InGameUI::drawDirectorBroadcast( void )
 		const DirectorShowing *flag = TheObserverCamera.getPowerFlag( from.players[ index ].player->getPlayerIndex(), &drop );
 		if( flag == NULL || drop <= 0.0f )
 			continue;
-		const Image *icon = superweaponCameo( flag->power );
+		const Image *icon = flag->upgrade != NULL ? flag->upgrade->getButtonImage() : superweaponCameo( flag->power );
 		if( icon == NULL && flag->sourceThing != NULL )
 			icon = flag->sourceThing->getButtonImage();
 		if( icon == NULL || icon->getImageHeight() <= 0 )
@@ -11409,8 +11407,8 @@ void InGameUI::drawDirectorBroadcast( void )
 			from.cardWidth, from.fullCardWidth ));
 	}
 
-	// a split's plate a pane, faded in and out with the panes, and with no panes the director's fight's
-	// on the whole screen under the score bar; the opening's are each pane's own
+	// a split's plate a pane, faded in and out with the panes; the opening's are each pane's own.  The
+	// whole screen has none: the score bar over it already names every side
 	const Real paneShown = TheObserverCamera.getPaneProgress();
 	const Int panes = TheObserverCamera.isIntro() ? 0 : TheObserverCamera.getDrawnPaneCount();
 	DisplayString *versus = broadcastText( "versus", UnicodeString( u"vs" ), BROADCAST_WORDS, broadcastPoints( BROADCAST_SIDE_POINTS ), FALSE );
@@ -11441,17 +11439,16 @@ void InGameUI::drawDirectorBroadcast( void )
 		}
 		return plate;
 	};
-	// each plate's sides are logged when they change, the whole screen's last, so a film's plates can
-	// be counted
-	static PlayerMaskType loggedSides[ OBSERVER_MOST_PANES + 1 ];
+	// each plate's sides are logged when they change, so a film's plates can be counted
+	static PlayerMaskType loggedSides[ OBSERVER_MOST_PANES ];
 	auto placePlate = [ & ]( Int slot, PlayerMaskType sides, const BroadcastPlate &plate, Int plateLeft, Int plateTop, Int plateWidth,
 		Int plateHeight, Real shown )
 	{
 		if( sides != loggedSides[ slot ] )
 		{
 			loggedSides[ slot ] = sides;
-			DEBUG_LOG(( "OBSCAM frame %u %s plate %d, %d name(s)%s\n", frame, slot < OBSERVER_MOST_PANES ? "pane" : "whole screen",
-				slot, (Int)( plate.pieces.size() + 1 ) / 2, plate.pieces.size() > 1 ? ", vs" : "" ));
+			DEBUG_LOG(( "OBSCAM frame %u pane plate %d, %d name(s)%s\n", frame, slot, (Int)( plate.pieces.size() + 1 ) / 2,
+				plate.pieces.size() > 1 ? ", vs" : "" ));
 		}
 		drawBroadcastPlate( plate, plateLeft, plateTop, shown );
 		IRegion2D drawn;
@@ -11478,30 +11475,6 @@ void InGameUI::drawDirectorBroadcast( void )
 		const Int plateTop = REAL_TO_INT( ObserverCamera_paneLabelTop( centre, radius, (Real)plateWidth, (Real)plateHeight ) );
 		placePlate( pane, sides, plate, REAL_TO_INT( centre.x ) - plateWidth / 2, plateTop, plateWidth, plateHeight, paneShown );
 	}
-	// the whole screen's plate names a fight between two sides or more, fades in over the panes' slide
-	// and out again keeping the names it had
-	static PlayerMaskType wholeSides = 0;
-	static Real wholeShown = 0.0f;
-	static Real wholeShownAt = 0.0f;
-	const Real picture = GameEngine_pictureFrame();
-	const PlayerMaskType placeSides = panes == 1 ? TheObserverCamera.getPlaceSides() : 0;
-	const Bool fightShown = sidesPlate( placeSides ).pieces.size() > 1;
-	if( fightShown )
-		wholeSides = placeSides;
-	const Real wholeStep = max( picture - wholeShownAt, 0.0f ) / BROADCAST_WHOLE_PLATE_FADE_FRAMES;
-	wholeShownAt = picture;
-	wholeShown = fightShown ? min( wholeShown + wholeStep, 1.0f ) : max( wholeShown - wholeStep, 0.0f );
-	if( wholeShown > 0.0f )
-	{
-		const BroadcastPlate plate = sidesPlate( wholeSides );
-		Int plateWidth = 0, plateHeight = 0;
-		broadcastPlateSize( plate, &plateWidth, &plateHeight );
-		placePlate( OBSERVER_MOST_PANES, wholeSides, plate, ( TheDisplay->getWidth() - plateWidth ) / 2, barFoot, plateWidth, plateHeight,
-			wholeShown );
-	}
-	else
-		loggedSides[ OBSERVER_MOST_PANES ] = 0;
-
 	// a defeated player's banner across the lower picture, the broadcast's red in its tab, and once the
 	// match is decided the winner's under it in gold.  A banner names the player in his colour, under it
 	// his general or difficulty and his team

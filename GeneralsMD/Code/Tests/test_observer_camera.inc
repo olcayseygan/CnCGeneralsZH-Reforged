@@ -67,28 +67,6 @@ TEST(the_director_leaves_early_for_a_much_bigger_fight_and_late_for_any_bigger_o
 	CHECK( !ObserverCamera_shouldMove( 4.0f, 5.0f, tired, 4.0f ) );
 }
 
-TEST(the_director_shows_a_superweapon_leaving_its_silo_then_where_it_lands)
-{
-	DirectorEvent nuke;
-	nuke.id = 1;
-	nuke.owner = NULL;
-	nuke.source.x = 500.0f;
-	nuke.source.y = 500.0f;
-	nuke.target.x = 3000.0f;
-	nuke.target.y = 2000.0f;
-	nuke.since = 1000;
-	nuke.until = 2000;
-	nuke.weight = 5.0f;
-	nuke.superweapon = TRUE;
-	CHECK_NEAR( ObserverCamera_eventPlace( nuke, 1001 ).x, 500.0f, 0.001f );
-	CHECK_NEAR( ObserverCamera_eventPlace( nuke, 1000 + 10 * LOGICFRAMES_PER_SECOND ).x, 3000.0f, 0.001f );
-
-	// a bomber's strike has nothing worth seeing where it was ordered from
-	DirectorEvent strike = nuke;
-	strike.superweapon = FALSE;
-	CHECK_NEAR( ObserverCamera_eventPlace( strike, 1001 ).x, 3000.0f, 0.001f );
-}
-
 TEST(the_director_goes_where_more_is_at_stake_not_where_more_was_hit)
 {
 	// six rifles plinked at one end, two Overlords killed at the other
@@ -98,17 +76,52 @@ TEST(the_director_goes_where_more_is_at_stake_not_where_more_was_hit)
 	for( Int each = 0; each < 2; each++ )
 	{
 		DirectorHeat hit = directorHit( 3000.0f + each * 10.0f, 3000.0f );
-		hit.weight = ObserverCamera_hitWeight( 2000, TRUE, FALSE );
+		hit.weight = ObserverCamera_hitWeight( 2000, TRUE, FALSE, FALSE );
 		hits.push_back( hit );
 	}
 	for( Int each = 0; each < 6; each++ )
-		hits[ each ].weight = ObserverCamera_hitWeight( 225, FALSE, FALSE );
+		hits[ each ].weight = ObserverCamera_hitWeight( 225, FALSE, FALSE, FALSE );
 
 	Coord2D place;
 	Real heat = 0.0f;
 	CHECK( ObserverCamera_hottestPlace( hits, &place, &heat ) );
 	CHECK_NEAR( place.y, 3000.0f, 0.001f );
-	CHECK( ObserverCamera_hitWeight( 5000, FALSE, TRUE ) > ObserverCamera_hitWeight( 5000, FALSE, FALSE ) );
+	CHECK( ObserverCamera_hitWeight( 5000, FALSE, TRUE, FALSE ) > ObserverCamera_hitWeight( 5000, FALSE, FALSE, FALSE ) );
+}
+
+TEST(a_skirmish_of_riflemen_does_not_take_the_camera_from_two_tanks)
+{
+	// eight riflemen shot at, two of them killed, against two tanks hit once each
+	std::vector< DirectorHeat > hits;
+	for( Int each = 0; each < 8; each++ )
+	{
+		DirectorHeat hit = directorHit( 1000.0f + each * 10.0f, 1000.0f );
+		hit.weight = ObserverCamera_hitWeight( 225, each < 2, FALSE, TRUE );
+		hits.push_back( hit );
+	}
+	for( Int each = 0; each < 2; each++ )
+	{
+		DirectorHeat hit = directorHit( 3000.0f + each * 10.0f, 3000.0f );
+		hit.weight = ObserverCamera_hitWeight( 900, FALSE, FALSE, FALSE );
+		hits.push_back( hit );
+	}
+	Coord2D place;
+	Real heat = 0.0f;
+	CHECK( ObserverCamera_hottestPlace( hits, &place, &heat ) );
+	CHECK_NEAR( place.y, 3000.0f, 0.001f );
+}
+
+TEST(a_special_power_holds_the_camera_thirty_seconds_at_the_most)
+{
+	DirectorEvent cannon;
+	cannon.since = 1000;
+	cannon.until = 1000 + 20 * LOGICFRAMES_PER_SECOND;
+	// a hit at the target keeps it five seconds past the hit
+	CHECK_EQ( ObserverCamera_eventKeptTo( cannon, 1000 + 18 * LOGICFRAMES_PER_SECOND, 5 * LOGICFRAMES_PER_SECOND ),
+		1000u + 23 * LOGICFRAMES_PER_SECOND );
+	// and never past 30 seconds from the launch: the fight round S1-A1's middle kept one for eight minutes
+	CHECK_EQ( ObserverCamera_eventKeptTo( cannon, 1000 + 400 * LOGICFRAMES_PER_SECOND, 5 * LOGICFRAMES_PER_SECOND ),
+		1000u + 30 * LOGICFRAMES_PER_SECOND );
 }
 
 TEST(the_director_with_no_fight_goes_round_the_sights_and_never_parks)
@@ -164,15 +177,26 @@ TEST(the_director_keeps_its_event_when_none_may_be_shown_any_more)
 	// narrowed to a player whose things at the target all died, the event it shows is filtered out
 	// and nothing is left to compare it with; this read a NULL best and crashed
 	const DirectorEvent nuke = directorEvent( 1, 5.0f, TRUE );
-	CHECK( ObserverCamera_stayOnEvent( &nuke, NULL, 0 ) );
-	CHECK( ObserverCamera_stayOnEvent( &nuke, &nuke, 0 ) );
-	CHECK( !ObserverCamera_stayOnEvent( NULL, &nuke, 0 ) );
-	CHECK( !ObserverCamera_stayOnEvent( NULL, NULL, 0 ) );
+	CHECK( ObserverCamera_stayOnEvent( &nuke, NULL ) );
+	CHECK( ObserverCamera_stayOnEvent( &nuke, &nuke ) );
+	CHECK( !ObserverCamera_stayOnEvent( NULL, &nuke ) );
+	CHECK( !ObserverCamera_stayOnEvent( NULL, NULL ) );
+}
 
-	// a bomber's strike gives way to a superweapon once it has settled, not before
-	const DirectorEvent strike = directorEvent( 2, 1.0f, FALSE );
-	CHECK( ObserverCamera_stayOnEvent( &strike, &nuke, LOGICFRAMES_PER_SECOND ) );
-	CHECK( !ObserverCamera_stayOnEvent( &strike, &nuke, 7 * LOGICFRAMES_PER_SECOND ) );
+TEST(a_new_power_landing_elsewhere_takes_the_camera_at_once)
+{
+	DirectorEvent nuke = directorEvent( 1, 5.0f, TRUE );
+	nuke.target.x = 5000.0f;
+	DirectorEvent strike = directorEvent( 2, 1.0f, FALSE );
+	DirectorEvent scan = directorEvent( 3, 1.0f, FALSE );
+	scan.target.x = 3500.0f;
+	// a superweapon takes the camera from a strike at once, and a strike never takes it from one
+	CHECK( !ObserverCamera_stayOnEvent( &strike, &nuke ) );
+	CHECK( ObserverCamera_stayOnEvent( &nuke, &strike ) );
+	// a power as big elsewhere goes at once; one landing in the picture already shown does not move it
+	CHECK( !ObserverCamera_stayOnEvent( &strike, &scan ) );
+	scan.target.x = 3100.0f;
+	CHECK( ObserverCamera_stayOnEvent( &strike, &scan ) );
 }
 
 TEST(one_use_of_a_power_is_one_event_and_another_power_or_player_is_new)
@@ -198,18 +222,6 @@ TEST(one_use_of_a_power_is_one_event_and_another_power_or_player_is_new)
 	// a warhead nobody's power sent is never folded into another
 	used.power = NULL;
 	CHECK( !ObserverCamera_sameUse( used, one, NULL, beside, 1500 ) );
-}
-
-TEST(a_superweapon_leaving_its_silo_takes_the_camera_before_the_settle_is_up)
-{
-	const DirectorEvent nuke = directorEvent( 1, 5.0f, TRUE );
-	const DirectorEvent strike = directorEvent( 2, 1.0f, FALSE );
-	const UnsignedInt justArrived = LOGICFRAMES_PER_SECOND;
-	CHECK( ObserverCamera_eventCutsIn( nuke, 1001, justArrived ) );
-	CHECK( !ObserverCamera_eventCutsIn( strike, 1001, justArrived ) );
-	// once the missile is out of the silo the nuke waits for the settle like anything else
-	CHECK( !ObserverCamera_eventCutsIn( nuke, 1000 + 5 * LOGICFRAMES_PER_SECOND, justArrived ) );
-	CHECK( ObserverCamera_eventCutsIn( strike, 1001, 7 * LOGICFRAMES_PER_SECOND ) );
 }
 
 TEST(the_director_rises_over_a_wide_fight_and_not_over_a_tight_one)
@@ -971,6 +983,8 @@ TEST(the_director_goes_to_wait_for_a_fight_four_seconds_before_it_starts_superwe
 	timeline.push_back( scoutedFight( 1010, 1030, 5000.0f, 5000.0f, 2.0f ) );
 	timeline.push_back( scoutedPower( 1020, 6000.0f, 1000.0f, FALSE ) );
 	timeline.push_back( scoutedPower( 1100, 6000.0f, 3000.0f, TRUE ) );
+	// a power the scout never saw land, a scan, is not waited for
+	timeline[ 3 ].peak = 0.0f;
 	const UnsignedInt preroll = 4 * LOGICFRAMES_PER_SECOND;
 	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1000 - preroll - 1, NULL, 660.0f ), -1 );
 	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1000 - preroll, NULL, 660.0f ), 0 );
@@ -980,6 +994,13 @@ TEST(the_director_goes_to_wait_for_a_fight_four_seconds_before_it_starts_superwe
 	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1100 - preroll, NULL, 660.0f ), 4 );
 	// one that has started is no longer waited for
 	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1100, NULL, 660.0f ), -1 );
+	// a power that landed is waited for ahead of any fight, a superweapon still ahead of it
+	timeline[ 3 ].peak = 1.0f;
+	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1050 - preroll, NULL, 660.0f ), 3 );
+	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1100 - preroll, NULL, 660.0f ), 4 );
+	// and is passed over where another pane already shows its target, not where it was fired from
+	Coord2D taken = { 7500.0f, 1000.0f };
+	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1050 - preroll, &taken, 660.0f ), 1 );
 }
 
 TEST(the_director_does_not_wait_for_the_fight_the_other_pane_already_shows)

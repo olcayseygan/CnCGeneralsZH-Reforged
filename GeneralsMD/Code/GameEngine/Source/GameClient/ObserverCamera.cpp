@@ -30,6 +30,7 @@
 #include "Common/Science.h"
 #include "Common/SpecialPower.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "GameClient/Display.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
@@ -82,15 +83,19 @@ static const Real EVENT_SUPERWEAPON_WEIGHT = 5.0f;
 /// missiles take a while to arrive, a bomber longer to fly in
 static const UnsignedInt EVENT_FRAMES = 12 * LOGICFRAMES_PER_SECOND;
 static const UnsignedInt EVENT_SUPERWEAPON_FRAMES = 20 * LOGICFRAMES_PER_SECOND;
-/// how long a superweapon is shown at its silo before the camera goes to where it will land
+/// hits at an event's target in its first seconds are the fight that was there before it, not its own
 static const UnsignedInt EVENT_LAUNCH_FRAMES = 4 * LOGICFRAMES_PER_SECOND;
 /// the camera stays this long after the last hit at an event's target, for the cloud and the fires
 static const UnsignedInt EVENT_AFTERMATH_FRAMES = 5 * LOGICFRAMES_PER_SECOND;
+/// and never longer than this after it began, however much goes on hitting round the target
+static const UnsignedInt EVENT_MOST_FRAMES = 30 * LOGICFRAMES_PER_SECOND;
 /// a hit on a thing that cost this much counts twice what a free one does
 static const Real DIRECTOR_COST_PER_WEIGHT = 500.0f;
 /// a kill counts this many times a hit, and anything on a superweapon this many times again
 static const Real DIRECTOR_KILL_FACTOR = 2.0f;
 static const Real DIRECTOR_SUPERWEAPON_FACTOR = 3.0f;
+/// and a hit on infantry this share of it: a few riflemen trading shots took the camera from tanks
+static const Real DIRECTOR_INFANTRY_FACTOR = 0.25f;
 /// with no fight on, how long the director looks at one army, base or building site
 static const UnsignedInt DIRECTOR_SIGHT_FRAMES = 9 * LOGICFRAMES_PER_SECOND;
 /// how many of the last sights the director will not go back to while there is another
@@ -262,13 +267,26 @@ static Bool sameFight( const Coord2D &a, const Coord2D &b )
 }
 
 //-------------------------------------------------------------------------------------------------
-Real ObserverCamera_hitWeight( Int cost, Bool killed, Bool superweapon )
+/** A power the player fires rather than one of his units: a superweapon, a general's power, or one
+	* fired from a building, the command centre's spy satellite.  NULL, a warhead no power sent, is none. */
+//-------------------------------------------------------------------------------------------------
+static Bool playersPower( const SpecialPowerTemplate *power, const ThingTemplate *sourceThing, Bool superweapon )
+{
+	if( power == NULL )
+		return FALSE;
+	return superweapon || power->getRequiredScience() != SCIENCE_INVALID || ( sourceThing != NULL && sourceThing->isKindOf( KINDOF_STRUCTURE ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+Real ObserverCamera_hitWeight( Int cost, Bool killed, Bool superweapon, Bool infantry )
 {
 	Real weight = 1.0f + cost / DIRECTOR_COST_PER_WEIGHT;
 	if( killed )
 		weight *= DIRECTOR_KILL_FACTOR;
 	if( superweapon )
 		weight *= DIRECTOR_SUPERWEAPON_FACTOR;
+	if( infantry )
+		weight *= DIRECTOR_INFANTRY_FACTOR;
 	return weight;
 }
 
@@ -364,14 +382,6 @@ Bool ObserverCamera_shouldMove( Real heatHere, Real heatThere, UnsignedInt frame
 }
 
 //-------------------------------------------------------------------------------------------------
-Coord2D ObserverCamera_eventPlace( const DirectorEvent &event, UnsignedInt frame )
-{
-	if( event.superweapon && frame < event.since + EVENT_LAUNCH_FRAMES && !sameFight( event.source, event.target ) )
-		return event.source;
-	return event.target;
-}
-
-//-------------------------------------------------------------------------------------------------
 Bool ObserverCamera_sameUse( const DirectorEvent &event, const Player *owner, const SpecialPowerTemplate *power, const Coord2D &target,
 	UnsignedInt frame )
 {
@@ -379,17 +389,19 @@ Bool ObserverCamera_sameUse( const DirectorEvent &event, const Player *owner, co
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool ObserverCamera_stayOnEvent( const DirectorEvent *current, const DirectorEvent *best, UnsignedInt held )
+Bool ObserverCamera_stayOnEvent( const DirectorEvent *current, const DirectorEvent *best )
 {
 	if( current == NULL )
 		return FALSE;
-	return best == NULL || best == current || !ObserverCamera_shouldMove( current->weight, best->weight, held, current->weight );
+	if( best == NULL || best == current || sameFight( best->target, current->target ) )
+		return TRUE;
+	return best->weight < current->weight;
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool ObserverCamera_eventCutsIn( const DirectorEvent &event, UnsignedInt frame, UnsignedInt held )
+UnsignedInt ObserverCamera_eventKeptTo( const DirectorEvent &event, UnsignedInt frame, UnsignedInt more )
 {
-	return held >= DIRECTOR_SETTLE_FRAMES || ( event.superweapon && frame < event.since + EVENT_LAUNCH_FRAMES );
+	return min( max( event.until, frame + more ), event.since + EVENT_MOST_FRAMES );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1290,16 +1302,16 @@ Int ObserverCamera_prerollMoment( const std::vector< DirectorMoment > &timeline,
 	for( size_t index = 0; index < timeline.size(); index++ )
 	{
 		const DirectorMoment &moment = timeline[ index ];
-		if( moment.start <= frame || moment.start > frame + DIRECTOR_PREROLL_FRAMES )
+		if( moment.start <= frame || moment.start > frame + DIRECTOR_PREROLL_FRAMES || !ObserverCamera_worthFilming( moment ) )
 			continue;
-		if( moment.power ? !moment.superweapon : !ObserverCamera_worthFilming( moment ) )
-			continue;
-		if( taken != NULL && within( moment.place, *taken, apart ) )
+		if( taken != NULL && within( moment.power ? moment.target : moment.place, *taken, apart ) )
 			continue;
 		if( best >= 0 )
 		{
 			const DirectorMoment &held = timeline[ best ];
-			const Bool better = moment.superweapon != held.superweapon ? moment.superweapon : moment.peak > held.peak;
+			const Int rank = ( moment.superweapon ? 2 : 0 ) + ( moment.power ? 1 : 0 );
+			const Int heldRank = ( held.superweapon ? 2 : 0 ) + ( held.power ? 1 : 0 );
+			const Bool better = rank != heldRank ? rank > heldRank : moment.peak > held.peak;
 			if( !better )
 				continue;
 		}
@@ -1544,6 +1556,9 @@ void ObserverCamera::reset( void )
 	m_placeKind = PLACE_SIGHT;
 	m_placeHeight = 0.0f;
 	m_placeEvent = 0;
+	m_eventSecond = 0;
+	m_eventSplit = FALSE;
+	m_eventPaneSides[ 0 ] = m_eventPaneSides[ 1 ] = 0;
 	m_placeMoment = -1;
 	m_skippedFight.x = m_skippedFight.y = 0.0f;
 	m_seen.clear();
@@ -1625,6 +1640,12 @@ void ObserverCamera::reset( void )
 void ObserverCamera::noteSpecialPower( const Player *owner, const Coord3D *from, const Coord3D *at, Bool superweapon,
 	const SpecialPowerTemplate *power, const ThingTemplate *sourceThing )
 {
+	// a power with no place of its own, one aimed at a unit or at nothing, is shown where it was used
+	// from when it is the player's; a unit's own ability, a hacker's or a sniper's, is no event
+	if( at == NULL && !playersPower( power, sourceThing, superweapon ) )
+		return;
+	if( at == NULL )
+		at = from;
 	const UnsignedInt frame = TheGameLogic->getFrame();
 	dropOldEvents( frame );
 
@@ -1637,7 +1658,7 @@ void ObserverCamera::noteSpecialPower( const Player *owner, const Coord3D *from,
 	{
 		if( ObserverCamera_sameUse( m_events[ index ], owner, power, target, frame ) )
 		{
-			m_events[ index ].until = max( m_events[ index ].until, frame + ( superweapon ? EVENT_SUPERWEAPON_FRAMES : EVENT_FRAMES ) );
+			m_events[ index ].until = ObserverCamera_eventKeptTo( m_events[ index ], frame, superweapon ? EVENT_SUPERWEAPON_FRAMES : EVENT_FRAMES );
 			return;
 		}
 	}
@@ -1660,8 +1681,11 @@ void ObserverCamera::noteSpecialPower( const Player *owner, const Coord3D *from,
 	event.power = power;
 	event.sourceThing = sourceThing;
 	m_events.push_back( event );
-	if( event.landed )
-		noteFlag( event );
+	// its flag goes up as it is used, whether or not it lands: a scan's flag is all there is of it
+	noteFlag( event );
+	if( TheGlobalData->m_directorRecord && power != NULL )
+		DEBUG_LOG(( "OBSCAM frame %u special power %u %s used by player %d at (%.0f,%.0f)%s%s\n", frame, event.id, power->getName().str(),
+			owner->getPlayerIndex(), target.x, target.y, superweapon ? ", superweapon" : "", event.landed ? ", lands" : ", waits for a hit" ));
 
 	if( !TheGlobalData->m_directorScoutFile.isEmpty() )
 	{
@@ -1693,7 +1717,7 @@ void ObserverCamera::noteSuperweaponHit( const Player *owner, const Coord3D *at,
 
 		if( follow )
 			event.target = where;
-		event.until = max( event.until, frame + EVENT_AFTERMATH_FRAMES );
+		event.until = ObserverCamera_eventKeptTo( event, frame, EVENT_AFTERMATH_FRAMES );
 		return;
 	}
 
@@ -1703,17 +1727,33 @@ void ObserverCamera::noteSuperweaponHit( const Player *owner, const Coord3D *at,
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A power that landed hangs its flag under its player's card: a superweapon, or a general's power,
-	* one a promotion bought.  A unit's own ability, a sniper's shot or a hacker's, is neither. */
+/** A power used hangs its flag under its player's card when it is the player's, not a unit's: a
+	* superweapon, a general's power one a promotion bought, or one a building fires, the command
+	* centre's spy satellite.  A unit's own ability, a sniper's shot or a hacker's, is none of them.  It
+	* goes ahead of any upgrade still waiting, which a Hard AI buys a dozen of in a minute. */
 //-------------------------------------------------------------------------------------------------
 void ObserverCamera::noteFlag( const DirectorEvent &event )
 {
-	if( !TheGlobalData->m_directorRecord || event.power == NULL )
-		return;
-	if( !event.superweapon && event.power->getRequiredScience() == SCIENCE_INVALID )
+	if( !TheGlobalData->m_directorRecord || !playersPower( event.power, event.sourceThing, event.superweapon ) )
 		return;
 	const Int index = event.owner->getPlayerIndex();
-	const DirectorShowing flag = { index, event.power, event.sourceThing, event.superweapon, 0, 0 };
+	const DirectorShowing flag = { index, event.power, event.sourceThing, event.superweapon, 0, 0, NULL };
+	std::vector< DirectorShowing > &flags = m_flags[ index ];
+	std::vector< DirectorShowing >::iterator waiting = flags.begin();
+	while( waiting != flags.end() && ( waiting->start != 0 || waiting->upgrade == NULL ) )
+		++waiting;
+	flags.insert( waiting, flag );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Called from the logic on every machine, like noteSpecialPower, and only adds to the flags. */
+//-------------------------------------------------------------------------------------------------
+void ObserverCamera::noteUpgrade( const Player *owner, const UpgradeTemplate *upgrade )
+{
+	if( !TheGlobalData->m_directorRecord || upgrade->getButtonImage() == NULL )
+		return;
+	const Int index = owner->getPlayerIndex();
+	const DirectorShowing flag = { index, NULL, NULL, FALSE, 0, 0, upgrade };
 	m_flags[ index ].push_back( flag );
 }
 
@@ -1741,7 +1781,7 @@ void ObserverCamera::updateBroadcastMoments( UnsignedInt frame )
 		m_collapseFrame[ index ] = ObserverCamera_collapseFrom( frame, m_lastCollapse );
 		m_lastCollapse = m_collapseFrame[ index ];
 		m_flags[ index ].clear();
-		const DirectorShowing banner = { index, NULL, NULL, FALSE, 0, 0 };
+		const DirectorShowing banner = { index, NULL, NULL, FALSE, 0, 0, NULL };
 		m_defeatBanners.push_back( banner );
 		DEBUG_LOG(( "OBSCAM frame %u defeat: player %d '%s' (%s), card struck, collapses at frame %u\n", frame, index,
 			WideCharAsUtf8( player->getPlayerDisplayName().str() ).str(), WideCharAsUtf8( player->getPlayerTemplate()->getDisplayName().str() ).str(),
@@ -1764,8 +1804,9 @@ void ObserverCamera::updateBroadcastMoments( UnsignedInt frame )
 		if( !ObserverCamera_advanceShowing( m_flags[ index ], frame, FLAG_MOVE_FRAMES, FLAG_HOLD_FRAMES, FALSE ) )
 			continue;
 		const DirectorShowing &flag = m_flags[ index ].front();
-		DEBUG_LOG(( "OBSCAM frame %u power flag under player %d's card: %s%s, %d waiting\n", frame, index, flag.power->getName().str(),
-			flag.superweapon ? " (superweapon)" : "", (Int)m_flags[ index ].size() - 1 ));
+		DEBUG_LOG(( "OBSCAM frame %u %s flag under player %d's card: %s%s, %d waiting\n", frame, flag.upgrade != NULL ? "upgrade" : "power", index,
+			flag.upgrade != NULL ? flag.upgrade->getUpgradeName().str() : flag.power->getName().str(), flag.superweapon ? " (superweapon)" : "",
+			(Int)m_flags[ index ].size() - 1 ));
 	}
 }
 
@@ -2210,6 +2251,8 @@ Real ObserverCamera::splitApart( const Coord2D &second ) const
 //-------------------------------------------------------------------------------------------------
 Bool ObserverCamera::updateSplit( void )
 {
+	if( updateEventSplit() )
+		return FALSE;
 	if( m_sidePlayers[ 0 ] != NULL )
 		return updateSideSplit();
 	const UnsignedInt frame = TheGameLogic->getFrame();
@@ -2303,6 +2346,47 @@ Bool ObserverCamera::updateSplit( void )
 	if( m_split )
 		m_secondPlace = shown;
 	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** -directorrecord: two special powers landing far apart at once split the picture, pane 0 on the one
+	* directorPlace shows and pane 1 on the other, at once and however recently the last split went;
+	* the rests and holds keep only fights from splitting too often.  A split already up for a fight
+	* is taken over where it stands.  It goes when either power is over.  TRUE while it decides the
+	* split, which no fight's rule then looks at. */
+//-------------------------------------------------------------------------------------------------
+Bool ObserverCamera::updateEventSplit( void )
+{
+	DirectorEvent *second = m_eventSecond != 0 && m_placeValid && m_placeKind == PLACE_EVENT ? findEvent( m_eventSecond ) : NULL;
+	if( second == NULL && !m_eventSplit )
+		return FALSE;
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( second == NULL )
+	{
+		// the director already on pane 1's power keeps pane 1's picture as the panes go
+		m_paneSurvivor = within( m_place, m_secondPlace, m_splitApart * SPLIT_SAME_GROUND_SHARE ) && !m_intro ? 1 : 0;
+		DEBUG_LOG(( "OBSCAM frame %u split off, a special power of the two is over%s\n", frame, m_paneSurvivor == 1 ? ", pane 1 stays" : "" ));
+		m_split = FALSE;
+		m_eventSplit = FALSE;
+		m_splitChanged = frame;
+		return TRUE;
+	}
+	const DirectorEvent *first = findEvent( m_placeEvent );
+	if( !m_eventSplit || !m_split )
+	{
+		m_splitApart = splitApart( second->target );
+		DEBUG_LOG(( "OBSCAM frame %u split on for two special powers, pane 0 power %u at (%.0f,%.0f), pane 1 power %u at (%.0f,%.0f), %.0f apart of %.0f needed%s\n",
+			frame, first->id, m_place.x, m_place.y, second->id, second->target.x, second->target.y,
+			sqrtf( distanceSquared( m_place, second->target ) ), m_splitApart, m_split ? ", over the split up" : "" ));
+		m_eventSplit = TRUE;
+		m_split = TRUE;
+		m_splitChanged = frame;
+		m_paneSurvivor = 0;
+	}
+	m_secondPlace = second->target;
+	m_eventPaneSides[ 0 ] = first->owner->getPlayerMask();
+	m_eventPaneSides[ 1 ] = second->owner->getPlayerMask();
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2859,15 +2943,11 @@ PlayerMaskType ObserverCamera::sidesAround( const Coord2D &subject ) const
 PlayerMaskType ObserverCamera::getPaneSides( Int pane ) const
 {
 	// a match of two names each pane's own player, and whoever he is fighting there: named alone, the
-	// "X vs Y" plate never showed in a 1v1 film
-	const PlayerMaskType own = m_sidePlayers[ 0 ] != NULL && pane < 2 ? m_sidePlayers[ pane ]->getPlayerMask() : 0;
+	// "X vs Y" plate never showed in a 1v1 film.  Two powers' panes name who used each
+	PlayerMaskType own = m_sidePlayers[ 0 ] != NULL && pane < 2 ? m_sidePlayers[ pane ]->getPlayerMask() : 0;
+	if( m_eventSplit && pane < 2 )
+		own = m_eventPaneSides[ pane ];
 	return own | sidesAround( pane == 0 ? m_panesLeftPlace : m_secondPlace );
-}
-
-//-------------------------------------------------------------------------------------------------
-PlayerMaskType ObserverCamera::getPlaceSides( void ) const
-{
-	return m_placeValid && m_placeKind == PLACE_FIGHT ? sidesAround( m_place ) : 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2953,7 +3033,7 @@ void ObserverCamera::scout( void )
 		hit.position.x = obj->getPosition()->x;
 		hit.position.y = obj->getPosition()->y;
 		hit.weight = ObserverCamera_hitWeight( obj->getTemplate()->friend_getBuildCost(), obj->isEffectivelyDead(),
-			obj->isKindOf( KINDOF_FS_SUPERWEAPON ) );
+			obj->isKindOf( KINDOF_FS_SUPERWEAPON ), obj->isKindOf( KINDOF_INFANTRY ) );
 		hits.push_back( hit );
 	}
 	ObserverCamera_markLandings( m_scouted, hits, frame );
@@ -3111,7 +3191,7 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 		if( !mine && ( body->getLastDamageInfo()->in.m_sourcePlayerMask & narrowTo->getPlayerMask() ) == 0 )
 			continue;
 
-		heat.weight = ObserverCamera_hitWeight( cost, obj->isEffectivelyDead(), superweapon );
+		heat.weight = ObserverCamera_hitWeight( cost, obj->isEffectivelyDead(), superweapon, obj->isKindOf( KINDOF_INFANTRY ) );
 		hits.push_back( heat );
 
 		// -directorrecord's split counts only fights, and its labels name who is in them
@@ -3152,6 +3232,7 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 	// land on his things count, the way only his fights do
 	dropOldEvents( frame );
 	DirectorEvent *best = NULL;
+	std::vector< DirectorEvent * > landed;
 	for( size_t index = 0; index < m_events.size(); index++ )
 	{
 		DirectorEvent &event = m_events[ index ];
@@ -3160,36 +3241,59 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 			continue;
 		// hits at the target keep it going: the missiles arriving, the bombs, the fires after
 		if( frame >= event.since + EVENT_LAUNCH_FRAMES && ObserverCamera_heatAround( hits, event.target, &middle ) > 0.0f )
-			event.until = max( event.until, frame + EVENT_AFTERMATH_FRAMES );
+			event.until = ObserverCamera_eventKeptTo( event, frame, EVENT_AFTERMATH_FRAMES );
 		if( !event.landed && ObserverCamera_heatAround( fights, event.target, &middle ) > 0.0f )
-		{
 			event.landed = TRUE;
-			noteFlag( event );
-		}
 		if( !event.landed )
 			continue;
+		landed.push_back( &event );
 		if( best == NULL || event.weight >= best->weight )
 			best = &event;
 	}
+	// a power takes the camera from anything the moment it lands, settled or not: waiting out the
+	// settle, S1-A1 showed special power 3 three seconds after it hit.  Two at once each keep their pane
+	// while both go on, the one shown first in pane 0 and the new one in pane 1; the heavier taking pane
+	// 0 would swap the two panes' pictures
+	const Bool splits = TheGlobalData->m_directorRecord && narrowTo == NULL;
 	DirectorEvent *current = m_placeValid && m_placeKind == PLACE_EVENT ? findEvent( m_placeEvent ) : NULL;
-	if( ObserverCamera_stayOnEvent( current, best, held ) )
+	DirectorEvent *second = m_eventSplit && current != NULL ? findEvent( m_eventSecond ) : NULL;
+	const Bool bestSplitsOff = splits && current != NULL && best != NULL && best != current
+		&& !within( best->target, current->target, splitApart( best->target ) );
+	DirectorEvent *shown = NULL;
+	if( second != NULL || bestSplitsOff || ObserverCamera_stayOnEvent( current, best ) )
+		shown = current;
+	else if( best != NULL )
 	{
-		m_place = ObserverCamera_eventPlace( *current, frame );
-		*place = m_place;
-		return TRUE;
-	}
-	// an event that just ended hands straight over to the next; anything else is given its settle
-	// first, except a superweapon still leaving its silo
-	if( best != NULL && ( sideSplit || !m_placeValid || m_placeKind == PLACE_EVENT || ObserverCamera_eventCutsIn( *best, frame, held ) ) )
-	{
-		DEBUG_LOG(( "OBSCAM frame %u director to special power %u at (%.0f,%.0f)%s%s\n", frame, best->id,
-			best->target.x, best->target.y, best->superweapon ? " superweapon" : "", sideSplit ? ", out of the split" : "" ));
-		m_place = ObserverCamera_eventPlace( *best, frame );
+		DEBUG_LOG(( "OBSCAM frame %u director to special power %u %s at (%.0f,%.0f)%s%s\n", frame, best->id,
+			best->power != NULL ? best->power->getName().str() : "warhead", best->target.x, best->target.y,
+			best->superweapon ? " superweapon" : "", sideSplit ? ", out of the split" : "" ));
 		m_placeKind = PLACE_EVENT;
 		m_placeHeight = 0.0f;
 		m_placeEvent = best->id;
 		m_placeSince = frame;
 		m_placeValid = TRUE;
+		shown = best;
+	}
+	m_eventSecond = 0;
+	if( shown != NULL )
+	{
+		m_place = shown->target;
+		// -directorrecord: another power landing far from it at the same time gets a pane of its own,
+		// whatever keeps fights from splitting
+		if( splits )
+		{
+			if( second != NULL && within( second->target, m_place, splitApart( second->target ) * SPLIT_SAME_GROUND_SHARE ) )
+				second = NULL;
+			if( second == NULL && bestSplitsOff )
+				second = best;
+			for( size_t index = 0; index < landed.size() && second == NULL; index++ )
+			{
+				DirectorEvent *other = landed[ index ];
+				if( other != shown && !within( other->target, m_place, splitApart( other->target ) ) )
+					second = other;
+			}
+			m_eventSecond = second != NULL ? second->id : 0;
+		}
 		*place = m_place;
 		return TRUE;
 	}
@@ -3220,11 +3324,13 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 		const DirectorMoment &moment = m_timeline[ upcoming ];
 		Coord2D middle;
 		const Real heatHere = m_placeValid && m_placeKind == PLACE_FIGHT ? ObserverCamera_heatAround( hits, m_place, &middle ) : 0.0f;
-		if( moment.superweapon || heatHere <= 0.0f || ( held >= DIRECTOR_SETTLE_FRAMES && moment.peak > heatHere * DIRECTOR_SWITCH_MARGIN ) )
+		if( moment.power || heatHere <= 0.0f || ( held >= DIRECTOR_SETTLE_FRAMES && moment.peak > heatHere * DIRECTOR_SWITCH_MARGIN ) )
 		{
+			// a power is waited for where it lands, not where it is fired from
+			const Coord2D &waitAt = moment.power ? moment.target : moment.place;
 			DEBUG_LOG(( "OBSCAM frame %u pre-roll to %s at frame %u (%.0f,%.0f) peak %.1f\n", frame,
-				moment.superweapon ? "superweapon" : "fight", moment.start, moment.place.x, moment.place.y, moment.peak ));
-			m_place = moment.place;
+				moment.superweapon ? "superweapon" : moment.power ? "special power" : "fight", moment.start, waitAt.x, waitAt.y, moment.peak ));
+			m_place = waitAt;
 			m_placeKind = PLACE_UPCOMING;
 			m_placeHeight = 0.0f;
 			m_placeMoment = upcoming;
@@ -3333,10 +3439,11 @@ Bool ObserverCamera::chooseTarget( const ViewLocation &current, ViewLocation *ta
 	const Bool panesUp = m_panePhase == PANES_IN || panesSettled() || m_panePhase == PANES_OUT;
 	if( panesUp && ( leaving || ( !m_split && !m_intro ) ) )
 		place = m_panesLeftPlace;
-	else if( panesUp && m_split && !m_intro && !within( place, m_panesLeftPlace, m_splitApart * SPLIT_SAME_GROUND_SHARE ) )
+	else if( panesUp && m_split && !m_intro && !m_eventSplit && !within( place, m_panesLeftPlace, m_splitApart * SPLIT_SAME_GROUND_SHARE ) )
 	{
 		// updateSplit ends a split whose pane 0 the director takes elsewhere before this is reached; a
-		// place that still moves this far under panes would be a jump, so pane 0 stays and says so
+		// place that still moves this far under panes would be a jump, so pane 0 stays and says so.  Two
+		// special powers taking over a split up go to where they land, jump or not
 		DEBUG_LOG(( "OBSCAM frame %u pane 0 would jump to (%.0f,%.0f) under a split, held at (%.0f,%.0f)\n", TheGameLogic->getFrame(),
 			place.x, place.y, m_panesLeftPlace.x, m_panesLeftPlace.y ));
 		place = m_panesLeftPlace;

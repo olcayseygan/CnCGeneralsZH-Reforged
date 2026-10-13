@@ -1614,6 +1614,14 @@ if(ZH_PLATFORM_POSIX)
     set_tests_properties(test_install_textures PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 
+  # A fullscreen device at a size the POSIX adapter's mode list does not hold still has texture
+  # formats, so video buffers can be made.  See Tests/test_render_device_modes.cpp.
+  add_executable(test_render_device_modes ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_render_device_modes.cpp)
+  set_target_properties(test_render_device_modes PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_render_device_modes PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_render_device_modes PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_render_device_modes COMMAND test_render_device_modes)
+
   # The renderer's hooks gameengine calls, W3DDevice's own off Windows as on it, and decision 2 (B19 (c))
   # in W3DShaderManager's testMinimumRequirements, checked against the shipped GameLODPresets.ini when
   # ZH_GAME_DATA is set.  See Tests/test_render_hooks.cpp.

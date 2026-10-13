@@ -1614,6 +1614,22 @@ if(ZH_PLATFORM_POSIX)
     set_tests_properties(test_install_textures PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 
+  # DDSFileClass's DXT3 decoding, one hand-made block read pixel by pixel and converted to A8R8G8B8.
+  # See Tests/test_ddsfile.cpp.
+  add_executable(test_ddsfile ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_ddsfile.cpp)
+  set_target_properties(test_ddsfile PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_ddsfile PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_ddsfile PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_ddsfile COMMAND test_ddsfile)
+
+  # -mod read alone and mounted before the rest of the command line, so a mod's GameData.ini is read.
+  # See Tests/test_mod_mount.cpp.
+  add_executable(test_mod_mount ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_mod_mount.cpp)
+  set_target_properties(test_mod_mount PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_mod_mount PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_mod_mount PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_mod_mount COMMAND test_mod_mount)
+
   # The renderer's hooks gameengine calls, W3DDevice's own off Windows as on it, and decision 2 (B19 (c))
   # in W3DShaderManager's testMinimumRequirements, checked against the shipped GameLODPresets.ini when
   # ZH_GAME_DATA is set.  See Tests/test_render_hooks.cpp.

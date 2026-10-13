@@ -2902,6 +2902,7 @@ Tests/test_d3dx9portable_oracle.cpp
 Tests/test_d3dx9posix.cpp
 Tests/test_d3dx_assemble_stub.cpp
 Tests/test_d3dxportable.cpp
+Tests/test_ddsfile.cpp
 Tests/test_debug.cpp
 Tests/test_detround.cpp
 Tests/test_dx11backend.cpp
@@ -2945,6 +2946,7 @@ Tests/test_main.cpp
 Tests/test_miles_miniaudio.cpp
 Tests/test_milesaudiomanager.cpp
 Tests/test_minimap_input.inc
+Tests/test_mod_mount.cpp
 Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc
 Tests/test_pixelcentre.cpp

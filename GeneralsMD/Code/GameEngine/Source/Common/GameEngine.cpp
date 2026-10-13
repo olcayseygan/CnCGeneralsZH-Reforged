@@ -1026,6 +1026,11 @@ void GameEngine::init( int argc, char *argv[] )
 		ini.load( AsciiString( "Data\\INI\\GameDataDebug.ini" ), INI_LOAD_OVERWRITE, NULL );
 	#endif
 		
+		// a mod's archives mount first, and its GameData.ini is read over EA's (see mountModFromCommandLine)
+		mountModFromCommandLine(argc, argv);
+		if (TheGlobalData->m_modDir.isNotEmpty() || TheGlobalData->m_modBIG.isNotEmpty())
+			ini.load( AsciiString( "Data\\INI\\GameData.ini" ), INI_LOAD_OVERWRITE, &xferCRC );
+
 		// special-case: parse command-line parameters after loading global data
 		parseCommandLine(argc, argv);
 
@@ -1386,6 +1391,7 @@ void GameEngine::init( int argc, char *argv[] )
 			MapCache::const_iterator it = TheMapCache->find(lowerName);
 			if (it == TheMapCache->end())
 			{
+				DEBUG_LOG(("GameEngine::init - shell map '%s' is not in the map cache (%d maps); the shell map is off\n", lowerName.str(), (Int)TheMapCache->size()));
 				TheWritableGlobalData->m_shellMapOn = FALSE;
 			}
 		}

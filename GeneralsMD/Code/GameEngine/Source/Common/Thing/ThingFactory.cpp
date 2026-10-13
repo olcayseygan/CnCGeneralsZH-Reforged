@@ -406,7 +406,19 @@ AsciiString TheThingTemplateBeingParsedName;
 		scratch->deleteInstance();
 		return;
 	}
-	else if( !thingTemplate )
+	if( ini->getLoadType() == INI_LOAD_MULTIFILE && reskinFrom.isNotEmpty()
+			&& ( thingTemplate || !TheThingFactory->findTemplate( reskinFrom ) ) )
+	{
+		/* A patch's reskin made over a mod's objects: Shockwave has no SDILasers and builds its own
+			 SupW_SDILasers, and FixesReforged.ini's pink reskin of the one into the other stopped the game
+			 at start.  The mod's object stays as the mod made it, and the block is read and thrown away. */
+		DEBUG_LOG(( "[LINE: %d in '%s'] ObjectReskin %s of %s meets a mod's objects; the block is skipped.\n", ini->getLineNum(), ini->getFilename().str(), name.str(), reskinFrom.str() ));
+		ThingTemplate *scratch = newInstance(ThingTemplate);
+		ini->initFromINI( scratch, scratch->getReskinFieldParse() );
+		scratch->deleteInstance();
+		return;
+	}
+	if( !thingTemplate )
 	{
 		// no item is present, create a new one
 		thingTemplate = TheThingFactory->newTemplate( name );

@@ -35,6 +35,7 @@
 class AsciiString;
 
 void parseCommandLine(int argc, char *argv[]); ///< Parse command-line parameters
+void mountModFromCommandLine(int argc, char *argv[]); ///< Read -mod alone and mount its archives
 
 /// "maps\foo.map" -> "maps\foo\foo.map".  Exposed so a test can hand it a path with no map file
 /// in it; that used to run until AsciiString's length ceiling threw out of parseCommandLine.

@@ -821,6 +821,88 @@ TEST(patch_of_a_missing_object_is_skipped)
 	}
 }
 
+/* FixesReforged.ini reskins SDILasers into SupW_SDILasers.  Shockwave has no SDILasers and makes its own
+	 SupW_SDILasers, and the reskin threw in ThingFactory::parseObjectDefinition and stopped the game at
+	 start.  A patch's reskin is skipped now when its source is missing or its name is already taken, and
+	 the lines after it still parse; over EA's own objects it applies as before. */
+TEST(patch_reskin_over_a_mods_objects_is_skipped)
+{
+	CHECK( bootOnce() );
+
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if( savedGlobals == NULL )
+		TheWritableGlobalData = NEW GlobalData;
+	if( TheModuleFactory == NULL )
+	{
+		TheModuleFactory = NEW ModuleFactory;
+		TheModuleFactory->init();
+	}
+	if( TheThingFactory == NULL )
+		TheThingFactory = NEW ThingFactory;
+
+	// the loaded data: a source to reskin, and an object a mod made under the reskin's own name
+	writeFile( TEST_INI,
+		"Object ReskinProbeSource\r\n"
+		"  BuildCost = 100\r\n"
+		"  FenceWidth = 1.0\r\n"
+		"End\r\n"
+		"Object ReskinProbeModsOwn\r\n"
+		"  BuildCost = 700\r\n"
+		"  FenceWidth = 7.0\r\n"
+		"End\r\n" );
+	CHECK( loadIni( TEST_INI ) );
+
+	writeFile( TEST_INI,
+		"ObjectReskin ReskinProbeOfAbsent ReskinProbeAbsentSource\r\n"
+		"  FenceWidth = 2.0\r\n"
+		"End\r\n"
+		"ObjectReskin ReskinProbeModsOwn ReskinProbeSource\r\n"
+		"  FenceWidth = 3.0\r\n"
+		"End\r\n"
+		"ObjectReskin ReskinProbeNew ReskinProbeSource\r\n"
+		"  FenceWidth = 4.0\r\n"
+		"End\r\n" );
+	Bool threw = FALSE;
+	try
+	{
+		INI patch;
+		patch.load( AsciiString( TEST_INI ), INI_LOAD_MULTIFILE, NULL );
+	}
+	catch( ... )
+	{
+		threw = TRUE;
+	}
+	CHECK( threw == FALSE );
+
+	// a missing source: no template is made for the name
+	CHECK( TheThingFactory->findTemplate( "ReskinProbeOfAbsent", FALSE ) == NULL );
+
+	// a name the mod already made: the mod's object stays as it was, not a copy of the source
+	const ThingTemplate *own = TheThingFactory->findTemplate( "ReskinProbeModsOwn" );
+	CHECK( own != NULL );
+	if( own != NULL )
+	{
+		CHECK_EQ( own->friend_getBuildCost(), 700 );
+		CHECK_NEAR( own->getFenceWidth(), 7.0f, 0.001f );
+	}
+
+	// EA's case, after both skipped blocks: a new name over a source that exists is still made
+	const ThingTemplate *made = TheThingFactory->findTemplate( "ReskinProbeNew", FALSE );
+	CHECK( made != NULL );
+	if( made != NULL )
+	{
+		CHECK_EQ( made->friend_getBuildCost(), 100 );
+		CHECK_NEAR( made->getFenceWidth(), 4.0f, 0.001f );
+	}
+
+	remove( TEST_INI );
+	if( savedGlobals == NULL )
+	{
+		delete TheWritableGlobalData;
+		TheWritableGlobalData = NULL;
+	}
+}
+
 /* Data\INI\FXListReforged.ini is the fork's own explosion light: 89 of EA's FXLists, each repeated
 	 whole with one LightPulse added.  Whole, because FXListStore::parseFXListDefinition clears an
 	 entry before re-reading it - a half-copied block does not add a light, it deletes an explosion.

@@ -2807,7 +2807,20 @@ void parseCommandLine(int argc, char *argv[])
 			arg++;
 		}
 	}
+}
 
+/* -mod, read on its own and mounted before the rest of the command line.  The mod's archives used to
+	 mount at the end of parseCommandLine, after GameData.ini had been read, so a mod's GameData.ini never
+	 counted: Shockwave's shell map, camera and the rest stayed EA's, and its map cache did not list EA's
+	 shell map, so the menus had no shell map at all.  GameEngine::init reads GameData.ini again after
+	 this, and parseCommandLine then runs over it as before, so a switch still beats the mod's file. */
+void mountModFromCommandLine(int argc, char *argv[])
+{
+	for (int arg = 1; arg < argc; ++arg)
+	{
+		if (strcasecmp(argv[arg], "-mod") == 0)
+			arg += parseMod(argv + arg, argc - arg) - 1;
+	}
 	TheArchiveFileSystem->loadMods();
 }
 

@@ -962,12 +962,30 @@ unsigned DDSFileClass::Get_Pixel(unsigned level,unsigned x,unsigned y) const
 			}
 		}
 		break;
+	// DXT3 (and DXT2) came back plain white; Get_4x4_Block says why it has to decode them
 	case WW3D_FORMAT_DXT2:
-		return 0xffffffff;
 	case WW3D_FORMAT_DXT3:
-		return 0xffffffff;
-	case WW3D_FORMAT_DXT4:
-		return 0xffffffff;
+		{
+			const unsigned char* alpha_block=Get_Memory_Pointer(level)+(x/4)*16+((y/4)*(Get_Width(level)/4))*16;
+			const unsigned char* alpha_byte=alpha_block+2*(y%4)+(x%4)/2;
+			unsigned alpha_value=((*alpha_byte>>((x%2)*4))&0xf)*17;
+			alpha_value<<=24;
+
+			const unsigned char* color_block=alpha_block+8;
+			unsigned col0=RGB565_To_ARGB8888(*(unsigned short*)&color_block[0]);
+			unsigned col1=RGB565_To_ARGB8888(*(unsigned short*)&color_block[2]);
+			unsigned char line=color_block[4+(y%4)];
+			line>>=(x%4)*2;
+			line=(line&3);
+			switch (line) {
+			case 0: return col0|alpha_value;
+			case 1: return col1|alpha_value;
+			case 2: return Combine_Colors(col1,col0,85)|alpha_value;
+			case 3: return Combine_Colors(col0,col1,85)|alpha_value;
+			}
+		}
+		break;
+	case WW3D_FORMAT_DXT4:		// DXT5's premultiplied form, the same blocks
 	case WW3D_FORMAT_DXT5:
 		{
 			const unsigned char* alpha_block=Get_Memory_Pointer(level)+(x/4)*16+((y/4)*(Get_Width(level)/4))*16;
@@ -1140,12 +1158,51 @@ bool DDSFileClass::Get_4x4_Block(
 			}
 		}
 		break;
+	/* DXT3 (and DXT2, its premultiplied form with the same blocks) returned without writing the block, and
+		 a texture that had to be converted came out empty.  Retail sent DXT3 to the card as it was; on the
+		 POSIX device a converted one is what draws, so Shockwave's Generals Challenge map, DXT3 where EA's
+		 is DXT5, was not there at all.  The alpha is stored outright, four bits a pixel, row by row, ahead
+		 of the same colour block DXT5 has. */
 	case WW3D_FORMAT_DXT2:
-		return false;
 	case WW3D_FORMAT_DXT3:
-		return false;
-	case WW3D_FORMAT_DXT4:
-		return false;
+		{
+			const unsigned char* alpha_block=Get_Memory_Pointer(level)+(source_x/4)*16+((source_y/4)*(Get_Width(level)/4))*16;
+			const unsigned char* color_block=alpha_block+8;
+			unsigned col0=RGB565_To_ARGB8888(*(unsigned short*)&color_block[0]);
+			unsigned col1=RGB565_To_ARGB8888(*(unsigned short*)&color_block[2]);
+			if (has_hsv_shift) {
+				Recolor(col0,hsv_shift);
+				Recolor(col1,hsv_shift);
+			}
+
+			bool contains_alpha=false;
+			unsigned dest_pixel=0;
+			for (int y=0;y<4;++y) {
+				unsigned char* tmp_dest_ptr=dest_ptr;
+				dest_ptr+=dest_pitch;
+				unsigned char line=color_block[4+y];
+				unsigned alpha_line=alpha_block[2*y]|(alpha_block[2*y+1]<<8);
+				for (int x=0;x<4;++x) {
+					unsigned alpha_value=(alpha_line&0xf)*17;
+					alpha_line>>=4;
+					contains_alpha|=alpha_value!=255;
+					alpha_value<<=24;
+
+					switch (line&3) {
+					case 0: dest_pixel=col0|alpha_value; break;
+					case 1: dest_pixel=col1|alpha_value; break;
+					case 2: dest_pixel=Combine_Colors(col1,col0,85)|alpha_value; break;
+					case 3: dest_pixel=Combine_Colors(col0,col1,85)|alpha_value; break;
+					}
+					line>>=2;
+
+					BitmapHandlerClass::Write_B8G8R8A8(tmp_dest_ptr,dest_format,dest_pixel);
+					tmp_dest_ptr+=dest_bpp;
+				}
+			}
+			return contains_alpha;
+		}
+	case WW3D_FORMAT_DXT4:		// DXT5's premultiplied form, the same blocks
 	case WW3D_FORMAT_DXT5:
 		{
 			// Init alphas

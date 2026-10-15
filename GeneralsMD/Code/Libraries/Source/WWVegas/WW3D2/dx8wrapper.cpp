@@ -1599,8 +1599,25 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 		/*
 		** Try to find a mode that matches the user's desired bit-depth.
 		*/
-		Find_Color_And_Z_Mode(ResolutionWidth,ResolutionHeight,BitDepth,&DisplayFormat,
-			&_PresentParameters.BackBufferFormat,&_PresentParameters.AutoDepthStencilFormat);
+		if (!Find_Color_And_Z_Mode(ResolutionWidth,ResolutionHeight,BitDepth,&DisplayFormat,
+			&_PresentParameters.BackBufferFormat,&_PresentParameters.AutoDepthStencilFormat)) {
+			/* A size the adapter's mode list does not hold - the POSIX device lists fourteen, up to
+			   2560x1440, and a fullscreen game takes the desktop's size, 3840x2160 on a 4K screen - left
+			   both formats UNKNOWN.  The device was made anyway, but the caps then supported no texture
+			   format at all, so no video buffer could be made: the EA logo, the sizzle and the Generals
+			   Challenge load screen, portraits and all, never played.  Take the desktop's format, as the
+			   windowed branch above does. */
+			D3DDISPLAYMODE desktop_mode;
+			memset(&desktop_mode,0, sizeof(D3DDISPLAYMODE));
+			D3DInterface->GetAdapterDisplayMode( CurRenderDevice, &desktop_mode );
+			DisplayFormat=_PresentParameters.BackBufferFormat=desktop_mode.Format;
+			if (BitDepth==32 && D3DInterface->CheckDeviceType(CurRenderDevice,D3DDEVTYPE_HAL,desktop_mode.Format,D3DFMT_A8R8G8B8, true) == D3D_OK) {
+				_PresentParameters.BackBufferFormat = D3DFMT_A8R8G8B8;
+			}
+			if (!Find_Z_Mode(DisplayFormat,_PresentParameters.BackBufferFormat,&_PresentParameters.AutoDepthStencilFormat)) {
+				_PresentParameters.AutoDepthStencilFormat=D3DFMT_UNKNOWN;
+			}
+		}
 	}
 
 	/*

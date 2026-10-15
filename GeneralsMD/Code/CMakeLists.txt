@@ -64,7 +64,7 @@ endif()
 # cycles (gameengine, ww3d2, wwsaveload, w3ddevice ...), which GNU ld resolves only in link order, so
 # generals failed to link with hundreds of undefined references; Apple's linker, LLD and mold resolve
 # archives in any order.  mold is for the Steam Runtime's SDK (P3's portable build), which has it and no
-# LLD.  With neither, GNU ld is left as it was and the cycles still need resolving (W1 records it).
+# LLD.  With neither, group the libraries so GNU ld rescans them to resolve cycles.
 if(ZH_PLATFORM_LINUX)
   find_program(ZH_LLD NAMES ld.lld)
   find_program(ZH_MOLD NAMES ld.mold mold)
@@ -73,7 +73,9 @@ if(ZH_PLATFORM_LINUX)
   elseif(ZH_MOLD)
     add_link_options(-fuse-ld=mold)
   else()
-    message(WARNING "No ld.lld or mold: GNU ld cannot resolve the engine's circular static libraries in link order")
+    string(REPLACE "<LINK_LIBRARIES>"
+      "-Wl,--start-group <LINK_LIBRARIES> -Wl,--end-group"
+      CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE}")
   endif()
 endif()
 
@@ -503,6 +505,10 @@ target_include_directories(wwlib PUBLIC ${WW}/WWLib
   PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
           ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 target_link_libraries(wwlib PRIVATE wwdebug)
+# WWDebug's memory logger uses FastAllocatorGeneral, implemented in WWLib.
+# Declare the reverse dependency so CMake repeats these static archives when
+# linking consumers, including those that first reach the allocator via WWDebug.
+target_link_libraries(wwdebug PRIVATE wwlib)
 if(ZH_PLATFORM_WINDOWS)
   # winmm: timeGetTime/timeBeginPeriod.  version: verchk.cpp's GetFileVersionInfo,
   # which Wwutil drags in for Get_File_Id_String.  Both are Windows import libraries; B2 replaces

@@ -195,6 +195,35 @@ because Zero Hour mounts both. Saves and replays go to
 `~/Library/Application Support/Command and Conquer Generals Zero Hour Data` on a Mac and
 `~/.local/share/Command and Conquer Generals Zero Hour Data` on Linux.
 
+<details>
+<summary>Where it looks for Zero Hour</summary>
+
+<br>
+
+First match wins (`PosixInstallRoot.cpp`, `PosixChooseInstallRoot`):
+
+1. `-root <folder>` on the command line
+2. `InstallPath` in `Registry.ini` in the data folder above, while it still holds the game
+3. The known places below, for the staged build (`build-linux/ZeroHourReforged/bin/generals`) and the packages.
+   A bare `build-linux/generals` uses its own folder instead
+4. A folder chooser, asked until the choice holds Zero Hour. The answer goes into `Registry.ini`
+
+| Where | Linux | macOS |
+|:--|:--|:--|
+| `~/Games/<name>` | ✓ | ✓ |
+| `<library>/steamapps/common/<name>` for every Steam library: `~/.local/share/Steam`, `~/.steam/steam`, `~/.steam/root`, Flatpak's `~/.var/app/com.valvesoftware.Steam/.local/share/Steam`, and each library their `libraryfolders.vdf` lists (an SD card's too) | ✓ | |
+| `/Applications/<name>` | | ✓ |
+| CrossOver and Whisky bottles: `drive_c/Program Files*/` (`EA Games`, `Origin Games`, `Steam/steamapps/common`, `Command & Conquer The First Decade`, or the folder itself) `/<name>` | | ✓ |
+
+`<name>` is any of `Command & Conquer Generals Zero Hour`, `Command and Conquer Generals Zero Hour`,
+`Command & Conquer Generals - Zero Hour`, `Command & Conquer(tm) Generals Zero Hour` or `Zero Hour`,
+spelled exactly. A folder counts when it holds `INIZH.big` and the original Generals' `Textures.big`
+is in it, in `ZH_Generals/`, in `../Command & Conquer Generals` or `../Command & Conquer(tm) Generals`
+beside it, or in the folder `Generals\InstallPath` in `Registry.ini` names. File names inside these
+folders match in any case. When only Generals is missing, the chooser asks for its folder too.
+
+</details>
+
 The upscaled art has no download there. Copy the `Reforged*.big` files into `ReforgedArt/` in that
 folder by hand, or play at the original textures.
 

@@ -174,6 +174,8 @@ public:
 	/// retail language that has one (english first), otherwise empty.
 	/// Only meaningful once the archives are mounted.
 	AsciiString installedLanguage(const AsciiString &language) const;
+	/// the retail language whose <language>ZH.big sits loose in the install folder, otherwise empty.
+	AsciiString zeroHourLanguage() const;
 
 	Bool areMusicFilesOnCD();
 	void loadMusicFilesFromCD();

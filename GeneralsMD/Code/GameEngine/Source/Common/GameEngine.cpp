@@ -1038,7 +1038,14 @@ void GameEngine::init( int argc, char *argv[] )
 		// The first place the archives can answer it, and before anything builds a path under
 		// Data\<language>: GlobalLanguage, GameText, the CommandMap, speech and localized art all ask after this.
 		{
-			const AsciiString registryLanguage = GetRegistryLanguage();
+			AsciiString registryLanguage = GetRegistryLanguage();
+			AsciiString named;
+			if (!GetStringFromRegistry( "", "Language", named ))
+			{
+				const AsciiString shipped = TheFileSystem->zeroHourLanguage();
+				if (!shipped.isEmpty())
+					registryLanguage = shipped;
+			}
 			const AsciiString language = TheFileSystem->installedLanguage( registryLanguage );
 			if (language.isEmpty())
 			{
@@ -1048,11 +1055,10 @@ void GameEngine::init( int argc, char *argv[] )
 				_exit(1);
 			}
 			if (language.compareNoCase( registryLanguage ) != 0)
-			{
 				DEBUG_LOG(("GameEngine::init - Language=%s has no Data\\%s\\Language.ini, using %s\n",
 					registryLanguage.str(), registryLanguage.str(), language.str()));
+			if (language.compareNoCase( GetRegistryLanguage() ) != 0)
 				SetRegistryLanguage( language );
-			}
 		}
 
 		initSubsystem(TheWritableGlobalData, "TheWritableGlobalData", MSGNEW("GameEngineSubsystem") GlobalData(), &xferCRC, "Data\\INI\\Default\\GameData.ini", "Data\\INI\\GameData.ini");

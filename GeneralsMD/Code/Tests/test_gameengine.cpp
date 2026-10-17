@@ -569,6 +569,19 @@ TEST(installed_language_falls_back_to_english_when_its_data_is_missing)
 	std::filesystem::remove( "Data", ec );		// only if this test made it; a non-empty one stays
 }
 
+/* A German Zero Hour on Linux has no Language in Registry.ini, and english found the base game's
+   English.big: Generals' text, Zero Hour's strings missing.  The loose <language>ZH.big names it. */
+TEST(zero_hour_language_is_the_one_its_language_archive_names)
+{
+	CHECK( bootOnce() );
+	CHECK_STR( TheFileSystem->zeroHourLanguage().str(), "" );
+
+	// the probe's own spelling: this test's local file system is fopen's, not the game's case-blind one
+	writeFile( "polishZH.big", "" );
+	CHECK_STR( TheFileSystem->zeroHourLanguage().str(), "polish" );
+	remove( "polishZH.big" );
+}
+
 /* An unknown block name aborts the whole file - INI::load throws
    INI_UNKNOWN_TOKEN and the blocks after it never get read.  Worth pinning:
    nothing in the loader skips unknown blocks, so an INI written for a newer

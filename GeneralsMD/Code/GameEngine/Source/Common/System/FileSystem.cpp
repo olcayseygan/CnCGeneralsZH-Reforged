@@ -680,20 +680,38 @@ Bool FileSystem::createDirectory(AsciiString directory)
 	 then threw on Data\german\Language.ini before the first frame (player report #39). A German-only
 	 install has no english to fall back to either (issue #63), so every retail language is tried.
 	 Empty when no Language.ini is found at all. */
+static const char *const RetailLanguages[] = { "english", "german", "french", "spanish", "italian",
+	"korean", "chinese", "brazilian", "polish", "russian" };
+
 AsciiString FileSystem::installedLanguage(const AsciiString &language) const
 {
-	static const char *const fallbacks[] = { "english", "german", "french", "spanish", "italian",
-		"korean", "chinese", "brazilian", "polish", "russian" };
 	AsciiString probe;
 	if (!language.isEmpty()) {
 		probe.format("Data\\%s\\Language.ini", language.str());
 		if (doesFileExist(probe.str()))
 			return language;
 	}
-	for (Int i = 0; i < (Int)(sizeof(fallbacks) / sizeof(fallbacks[0])); ++i) {
-		probe.format("Data\\%s\\Language.ini", fallbacks[i]);
+	for (Int i = 0; i < (Int)ARRAY_SIZE(RetailLanguages); ++i) {
+		probe.format("Data\\%s\\Language.ini", RetailLanguages[i]);
 		if (doesFileExist(probe.str()))
-			return AsciiString(fallbacks[i]);
+			return AsciiString(RetailLanguages[i]);
+	}
+	return AsciiString::TheEmptyString;
+}
+
+//============================================================================
+// FileSystem::zeroHourLanguage
+//============================================================================
+/* With no Language in the registry (a Linux or Mac install never ran EA's installer, which writes it)
+	 the default english finds the base game's English.big in ZH_Generals, so a German Zero Hour showed
+	 Generals' text with Zero Hour's strings missing.  Zero Hour's own language archive says which it is. */
+AsciiString FileSystem::zeroHourLanguage() const
+{
+	AsciiString probe;
+	for (Int i = 0; i < (Int)ARRAY_SIZE(RetailLanguages); ++i) {
+		probe.format("%sZH.big", RetailLanguages[i]);
+		if (TheLocalFileSystem != NULL && TheLocalFileSystem->doesFileExist(probe.str()))
+			return AsciiString(RetailLanguages[i]);
 	}
 	return AsciiString::TheEmptyString;
 }

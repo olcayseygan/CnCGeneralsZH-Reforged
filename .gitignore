@@ -28,3 +28,6 @@ AGENTS.md
 # does not belong in the repo; re-extract it with Tools/bigfile.py when a layout has to be redone.
 **/Tools/wnd/
 build64/
+
+# JetBrains IDE settings
+.idea/

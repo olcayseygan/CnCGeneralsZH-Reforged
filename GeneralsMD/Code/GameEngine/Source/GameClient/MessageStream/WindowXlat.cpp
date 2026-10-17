@@ -184,7 +184,15 @@ GameMessageDisposition WindowTranslator::translateGameMessage(const GameMessage 
 			msg->getType() == GameMessage::MSG_RAW_MOUSE_RIGHT_DOUBLE_CLICK )
 		m_rightClickTaken = FALSE;
 	if( m_rightClickTaken && msg->getType() == GameMessage::MSG_RAW_MOUSE_RIGHT_DRAG )
+	{
+		// the window that took the press still sees the drag (the radar's held look), the world does not
+		if( TheWindowManager )
+		{
+			ICoord2D mousePos = msg->getArgument(0)->pixel;
+			TheWindowManager->winProcessMouseEvent(GWM_RIGHT_DRAG, &mousePos, NULL);
+		}
 		return DESTROY_MESSAGE;
+	}
 	if( m_rightClickTaken && msg->getType() == GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP )
 	{
 		m_rightClickTaken = FALSE;

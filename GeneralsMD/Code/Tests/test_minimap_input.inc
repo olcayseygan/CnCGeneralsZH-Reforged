@@ -391,9 +391,9 @@ TEST(minimap_drag_works_during_keyboard_scroll_and_pins_to_a_letterboxed_picture
 	CHECK(f.windows.winGetGrabWindow() == NULL);
 }
 
-/* 1.04's radar in both of its mouse setups: the look button moves the camera on the press and a drag
-   after it leaves the camera alone. */
-TEST(minimap_classic_looks_on_the_press_in_both_mouse_setups)
+/* Classic's radar in both of its mouse setups: the look button moves the camera on the press, and held
+   it keeps the camera under the cursor (ControlBarCallback.cpp, LeftHUDInput). */
+TEST(minimap_classic_looks_on_the_press_and_follows_the_drag_in_both_mouse_setups)
 {
 	CHECK(bootOnce());
 	for (Int alternate = 0; alternate < 2; ++alternate)
@@ -409,10 +409,13 @@ TEST(minimap_classic_looks_on_the_press_in_both_mouse_setups)
 		const GameMessage::Type lookDrag = alternate ? GameMessage::MSG_RAW_MOUSE_LEFT_DRAG : GameMessage::MSG_RAW_MOUSE_RIGHT_DRAG;
 		const GameMessage::Type lookUp = alternate ? GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP : GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP;
 
+		// the cursor is over the radar before the press, as a player's is; a right press does not
+		// hold the radar, so entering it after the press would end the look
+		f.event(messages, GameMessage::MSG_RAW_MOUSE_POSITION, 120, 220);
 		f.event(messages, lookDown, 120, 220);
 		CHECK(f.engine.view.lookAtCalls == 1);
 		f.event(messages, lookDrag, 150, 250);
-		CHECK(f.engine.view.lookAtCalls == 1);
+		CHECK(f.engine.view.lookAtCalls == 2);
 		f.event(messages, lookUp, 150, 250);
 		CHECK(messages.commands.getFirstMessage() == NULL);
 	}

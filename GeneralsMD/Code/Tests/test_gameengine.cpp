@@ -11,14 +11,15 @@
  * plain CRT _open/_read and does live in gameengine.
  */
 /* crc.h pulls winsock2.h, so it has to come before anything that drags in
-   windows.h (and with it winsock.h) - otherwise ws2def.h redefines sockaddr. */
-#include "Common/crc.h"
-
-#include "test_harness.h"
-
+   windows.h (and with it winsock.h) - otherwise ws2def.h redefines sockaddr.
+   <filesystem> goes first again: GCC 15's pulls <locale>, which BaseType.h's min/max macros break. */
 #include <filesystem>
 #include <limits>
 #include <string>
+
+#include "Common/crc.h"
+
+#include "test_harness.h"
 
 #include "Common/AsciiString.h"
 #include "Common/CommandLine.h"

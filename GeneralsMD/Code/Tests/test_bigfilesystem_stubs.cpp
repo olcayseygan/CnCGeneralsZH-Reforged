@@ -65,6 +65,9 @@ void INI::load(AsciiString, INILoadType, Xfer *) { unreachable("INI::load"); }
 
 FileSystem *TheFileSystem = NULL;
 File *FileSystem::openFile(const Char *, Int) { unreachable("FileSystem::openFile"); return NULL; }
+// ArchiveFileSystem asks these only of a mod's archives; nothing loads mods here.
+Bool FileSystem::isMapPath(const AsciiString &) { unreachable("FileSystem::isMapPath"); return FALSE; }
+Bool FileSystem::isForkUIPath(const AsciiString &) { unreachable("FileSystem::isForkUIPath"); return FALSE; }
 
 // GameDataGone (Common/Debug.h): an archive read failed because its drive went away.  Every archive this
 // test opens is on the local install and stays there, so that never happens here.

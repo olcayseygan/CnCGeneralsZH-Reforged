@@ -148,7 +148,7 @@ cached_config=
 if [ -e "$BUILD/CMakeCache.txt" ]; then
   cached_config=$(sed -n 's/^CMAKE_BUILD_TYPE:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
 fi
-if [ ! -e "$BUILD/CMakeCache.txt" ] || [ "$cached_config" != "$CONFIG" ]; then
+if [ ! -e "$BUILD/CMakeCache.txt" ] || [ ! -e "$BUILD/build.ninja" ] || [ "$cached_config" != "$CONFIG" ]; then
   echo "[build] configuring $SRC -> $BUILD"
   "$CMAKE" -S "$SRC" -B "$BUILD" -G "$GENERATOR" -DCMAKE_BUILD_TYPE="$CONFIG" || fail "configure failed."
 fi

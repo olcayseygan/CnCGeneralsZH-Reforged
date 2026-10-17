@@ -69,8 +69,10 @@ sudo apt-get install cmake ninja-build g++ git curl unzip xz-utils make pkg-conf
 SKIPPED without it.
 
 `build-linux/ZeroHourReforged/` has the Linux package's layout: `bin/generals` and the staged overlay at
-`share/zero-hour-reforged/overlay`, a link back into the build tree, so it runs where it is and is not a folder
-to hand to anyone. `GeneralsMD/Code/Tools/linux-check.sh` builds and tests the tree in containers ({gcc,
+`share/zero-hour-reforged/overlay`, a copy, so the whole folder can be moved; `bin/generals` moved alone is an
+unpacked build, which takes its own folder for the install. It links against this machine's libraries, so it
+is not a folder to hand to anyone: `linux-portable.sh` below makes that one.
+`GeneralsMD/Code/Tools/linux-check.sh` builds and tests the tree in containers ({gcc,
 clang} x {arm64, amd64}) from a Mac or a Linux host with Docker.
 
 **The Steam Deck and other distributions.** `GeneralsMD/Code/Tools/linux-portable.sh --build <dir> --out

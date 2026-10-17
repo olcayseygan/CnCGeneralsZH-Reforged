@@ -182,7 +182,8 @@ else
   rm -rf "$package"
   mkdir -p "$package/bin" "$package/share/zero-hour-reforged"
   cp "$BUILD/generals" "$package/bin/generals"
-  ln -s ../../../overlay "$package/share/zero-hour-reforged/overlay"
+  # a copy, not a link into the build tree, so the folder runs from wherever it is moved
+  cp -R "$BUILD/overlay" "$package/share/zero-hour-reforged/overlay"
   echo "[build] done: run $package/bin/generals"
 fi
 echo "[build] It finds your Zero Hour in the usual places, or asks for its folder on the first start: the one"

@@ -198,6 +198,12 @@ because Zero Hour mounts both. Saves and replays go to
 The upscaled art has no download there. Copy the `Reforged*.big` files into `ReforgedArt/` in that
 folder by hand, or play at the original textures.
 
+No install to point it at? `./extract-game.sh <iso|folder> [target]` lays the games out from a disc, an
+`.iso` or a copy of a Windows install, without installing or Wine: Zero Hour into target, Generals into
+`target/ZH_Generals`. The default target is `~/Games/Command & Conquer Generals Zero Hour`, after asking.
+Run it once per disc. It needs `7z` or `bsdtar` for an `.iso`, and `unshield` for InstallShield discs.
+Discs carry 1.00 and the engine is 1.04's, so files from a 1.04 install (Steam, the EA app) are safer.
+
 <details>
 <summary>Settings the options screen does not show</summary>
 

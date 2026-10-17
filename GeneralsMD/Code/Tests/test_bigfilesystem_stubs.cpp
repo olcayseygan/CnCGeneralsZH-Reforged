@@ -66,6 +66,12 @@ void INI::load(AsciiString, INILoadType, Xfer *) { unreachable("INI::load"); }
 FileSystem *TheFileSystem = NULL;
 File *FileSystem::openFile(const Char *, Int) { unreachable("FileSystem::openFile"); return NULL; }
 
+// The mod path checks ArchiveFileSystem grew (a mod's Maps.big never wins and a mod never brings the
+// interface).  This test mounts no mods, so neither is reached; they are here because addToTree,
+// collectUITextures and getFileListInDirectory name them and the test does not link FileSystem.cpp.
+Bool FileSystem::isMapPath(const AsciiString &) { unreachable("FileSystem::isMapPath"); return FALSE; }
+Bool FileSystem::isForkUIPath(const AsciiString &) { unreachable("FileSystem::isForkUIPath"); return FALSE; }
+
 // GameDataGone (Common/Debug.h): an archive read failed because its drive went away.  Every archive this
 // test opens is on the local install and stays there, so that never happens here.
 extern "C" void GameDataGone(const char *what) { fprintf(stderr, "GameDataGone(%s)\n", what); unreachable("GameDataGone"); }

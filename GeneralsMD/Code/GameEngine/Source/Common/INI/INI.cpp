@@ -663,7 +663,7 @@ void ModNamespace::finishScan( Int mod )
 	{
 		Bool reserved = FALSE;
 		for (size_t i = 0; i < ARRAY_SIZE( Reserved ) && !reserved; ++i)
-			reserved = stricmp( it->c_str(), Reserved[ i ] ) == 0;
+			reserved = strcasecmp( it->c_str(), Reserved[ i ] ) == 0;
 		if (reserved)
 			it = names.all.erase( it );
 		else
@@ -739,7 +739,7 @@ Bool ModNamespace::isAssetField( const std::string &field )
 	};
 	for (size_t i = 0; i < ARRAY_SIZE( AssetFields ); ++i)
 	{
-		if (stricmp( field.c_str(), AssetFields[ i ] ) == 0)
+		if (strcasecmp( field.c_str(), AssetFields[ i ] ) == 0)
 			return TRUE;
 	}
 	return FALSE;

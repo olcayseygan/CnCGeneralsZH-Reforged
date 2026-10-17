@@ -445,6 +445,15 @@ int main( int argc, char *argv[] )
 	// lists in the user's format.  LC_NUMERIC would change how the INI parser reads decimals.
 	setlocale( LC_TIME, "" );
 
+#ifdef __linux__
+	// Before SDL first starts (the folder chooser may): Wayland and X11 name the window by this app id,
+	// and desktops match it to the .desktop file of that name for the icon and the dock entry.  SDL's own
+	// default is the executable's name, generals, which no .desktop file has.  The Flatpak's is its id.
+	const char *flatpakId = getenv( "FLATPAK_ID" );
+	SDL_SetAppMetadata( "Zero Hour Reforged", VERSION_STRING,
+		flatpakId != NULL && flatpakId[0] != 0 ? flatpakId : "zero-hour-reforged" );
+#endif
+
 	try {
 
 		TheUnicodeStringCriticalSection = &critSec2;

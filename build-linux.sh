@@ -25,6 +25,7 @@
 #
 # Needs a C++ compiler, CMake, Ninja and SDL3's X11, Wayland and Vulkan headers; it prints the apt, dnf
 # or pacman command when something is missing. The result is build-linux/ZeroHourReforged/bin/generals.
+# build-linux/ZeroHourReforged/add-to-menu.sh puts it in the desktop's app menu, with Generals' icon.
 # GeneralsMD/Code/Tools/build-posix.sh does the work, shared with build-macos.sh. The release packages
 # (AppImage, .deb, .rpm, Arch, Flatpak) are GeneralsMD/Code/Tools/linux-packages.sh's.
 

@@ -1837,6 +1837,21 @@ if(ZH_PLATFORM_POSIX)
   if(APPLE)
     target_link_libraries(sdldevice PRIVATE "-framework CoreGraphics")		# SdlDisplays' panel size
   endif()
+  # Linux has no icon in the executable: the window sets Generals.ico's pixels on itself (SdlGameEngine).
+  # The Mac app's icon is the bundle's.
+  if(ZH_PLATFORM_LINUX)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    set(ZH_WINDOW_ICON_HEADER ${CMAKE_CURRENT_BINARY_DIR}/generated/zh_window_icon.h)
+    add_custom_command(OUTPUT ${ZH_WINDOW_ICON_HEADER}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/generated
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/generals-icon.py header
+              ${CMAKE_CURRENT_SOURCE_DIR}/Main/Generals.ico ${ZH_WINDOW_ICON_HEADER}
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Main/Generals.ico ${CMAKE_CURRENT_SOURCE_DIR}/Tools/generals-icon.py
+      COMMENT "Window icon from Main/Generals.ico")
+    target_sources(sdldevice PRIVATE ${ZH_WINDOW_ICON_HEADER})
+    target_include_directories(sdldevice PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    target_compile_definitions(sdldevice PRIVATE ZH_WINDOW_ICON)
+  endif()
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})

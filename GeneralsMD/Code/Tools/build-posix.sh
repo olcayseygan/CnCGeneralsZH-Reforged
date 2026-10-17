@@ -181,6 +181,13 @@ else
   package="$BUILD/ZeroHourReforged"
   rm -rf "$package"
   mkdir -p "$package/bin" "$package/share/zero-hour-reforged"
+  # Generals' icon and add-to-menu.sh, which puts the folder in the app menu with it
+  for size in 48 128; do
+    mkdir -p "$package/share/icons/hicolor/${size}x${size}/apps"
+    python3 "$SRC/Tools/generals-icon.py" png "$SRC/Main/Generals.ico" \
+      "$package/share/icons/hicolor/${size}x${size}/apps/zero-hour-reforged.png" $size || fail "cannot make the icon."
+  done
+  cp "$SRC/Tools/linux-menu-entry.sh" "$package/add-to-menu.sh"
   cp "$BUILD/generals" "$package/bin/generals"
   ln -s ../../../overlay "$package/share/zero-hour-reforged/overlay"
   echo "[build] done: run $package/bin/generals"

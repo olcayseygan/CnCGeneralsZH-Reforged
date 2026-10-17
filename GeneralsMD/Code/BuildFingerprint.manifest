@@ -3838,11 +3838,13 @@ Tools/fingerprint/build_fingerprint.cpp
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1
+Tools/generals-icon.py
 Tools/gentrigtables.py
 Tools/include_case_check.py
 Tools/install-guard.sh
 Tools/license-headers.py
 Tools/linux-check.sh
+Tools/linux-menu-entry.sh
 Tools/linux-packages-check.sh
 Tools/linux-packages.sh
 Tools/linux-packages/CMakeLists.txt

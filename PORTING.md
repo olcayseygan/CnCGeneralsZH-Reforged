@@ -62,7 +62,7 @@ pkg-config, and prints the apt, dnf or pacman command for whatever is missing. O
 ```sh
 sudo apt-get install cmake ninja-build g++ git curl unzip xz-utils make pkg-config python3 libx11-dev \
   libxext-dev libxcursor-dev libxi-dev libxfixes-dev libxrandr-dev libxss-dev libxtst-dev libwayland-dev \
-  libxkbcommon-dev wayland-protocols libegl-dev libdrm-dev libgbm-dev libvulkan-dev
+  libxkbcommon-dev wayland-protocols libegl-dev libdrm-dev libgbm-dev libvulkan-dev libfontconfig-dev lld unifdef
 ```
 
 `spirv-tools` is optional: `test_shader_sdl` validates every generated program with `spirv-val` and says

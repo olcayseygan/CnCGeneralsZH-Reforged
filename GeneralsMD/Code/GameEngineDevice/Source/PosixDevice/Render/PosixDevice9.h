@@ -177,7 +177,8 @@ public:
 	void Get_Sun_Caster_Effect(unsigned &effect, float parameters[4]) const;
 	void Set_Smoke_Glow(bool glow) { SmokeGlow = glow; }
 	bool Begin_Sun_Shadow(unsigned size);
-	bool End_Sun_Shadow();
+	// Optional submission status is independent of whether the shadow image can be used.
+	bool End_Sun_Shadow(bool *submission_ok = NULL);
 	bool Set_Sun_Shadow_Parameters(float bias, float strength, float widest, float narrowest,
 		float texelsPerGap, float unitsPerDepth, float skyFill);
 	bool Sun_Receives_View();

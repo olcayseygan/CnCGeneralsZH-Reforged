@@ -106,8 +106,9 @@ bool PosixDevice9::Sun_Target(SdlTarget &target) const
     return true;
 }
 
-bool PosixDevice9::End_Sun_Shadow()
+bool PosixDevice9::End_Sun_Shadow(bool *submission_ok)
 {
+    if (submission_ok) *submission_ok = false;
     if (!SunActive || !Sun) return false;
     const float *view = &Transforms[D3DTS_VIEW]._11;
     const float *projection = &Transforms[D3DTS_PROJECTION]._11;
@@ -128,6 +129,7 @@ bool PosixDevice9::End_Sun_Shadow()
     std::string error;
     const bool restored = Resolve_Target(scene, error);
     if (restored) Gpu->Set_Target(scene);
+    if (submission_ok) *submission_ok = submitted;
     SunReady = submitted && restored && !SunFailed;
     return SunReady;
 }

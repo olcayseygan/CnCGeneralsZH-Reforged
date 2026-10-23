@@ -179,6 +179,8 @@ found and fixed â€” EA's own, not port damage.**
 
 ## Zero Hour on a Mac, on Linux and on the Steam Deck
 
+- On Linux and Mac, a failed resolution change no longer discards the old picture before its replacement is ready. Pending drawing finishes before the old targets are retired, and a refused replacement leaves the previous display settings in place for another attempt.
+- Linux and Mac keep the ordinary depth format when the graphics card cannot provide the depth copy needed by modern water and volumetric clouds, instead of choosing a potentially larger format for effects it cannot draw.
 - The game runs on Apple silicon Macs and on Linux, the Steam Deck included, as a program built for that machine. There is no Wine or Proton underneath. It draws through Metal on a Mac and through Vulkan on Linux, from the same Zero Hour files you already own.
 - The first start finds your game. It looks in your Steam libraries, `~/Games`, `/Applications`, and CrossOver and Whisky bottles, and asks for the folder only when it comes up empty.
 - One command builds it. `./build-macos.sh` leaves a Mac app ready to open and `./build-linux.sh` a folder ready to start, and each checks your machine first and names the package to install for anything missing. On Linux it can make an AppImage, a .deb, an .rpm, an Arch package and a Flatpak, none of them carrying EA's files, and the Flatpak has played a full check match on a Steam Deck.

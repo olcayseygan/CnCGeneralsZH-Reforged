@@ -1825,6 +1825,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixResources9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixResources9.h
 GameEngineDevice/Source/PosixDevice/Render/SdlConstants.h
 GameEngineDevice/Source/PosixDevice/Render/SdlCreationLog.h
+GameEngineDevice/Source/PosixDevice/Render/SdlGpuDepthFormat.h
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.h
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameBatch.cpp
@@ -3162,6 +3163,7 @@ Tests/test_observer_camera.inc
 Tests/test_pixelcentre.cpp
 Tests/test_posix_draw_resolve.cpp
 Tests/test_posix_gpu_draw.cpp
+Tests/test_posix_reset.cpp
 Tests/test_posix_resources.cpp
 Tests/test_posixlocalfilesystem.cpp
 Tests/test_posixlocalfilesystem_stubs.cpp
@@ -3172,6 +3174,7 @@ Tests/test_rank_ladder.cpp
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
 Tests/test_road_buffer.cpp
+Tests/test_sdl_gpu_depth_format.cpp
 Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_input.cpp
 Tests/test_sdl_pipeline_state.cpp

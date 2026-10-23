@@ -1408,6 +1408,14 @@ if(ZH_PLATFORM_POSIX)
   # pass) the way the generated ones are compiled.
   target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex)
 
+  # Depth-format fallback follows the complete scene-depth capability, without requiring a GPU.
+  add_executable(sdl_gpu_depth_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_depth_format.cpp)
+  set_target_properties(sdl_gpu_depth_format_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(sdl_gpu_depth_format_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(sdl_gpu_depth_format_selfcheck PRIVATE SDL3::Headers)
+  add_test(NAME sdl_gpu_depth_format_selfcheck COMMAND sdl_gpu_depth_format_selfcheck)
+
   # A3a's frame: a clear read back, and the gamma pass through a picture that shows any flip.  Needs a GPU
   # but no window; exits 77 (skipped, and ctest says so) where SDL has no GPU device to give.
   add_executable(sdl_gpu_frame_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_frame.cpp)
@@ -1454,6 +1462,18 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(posix_gpu_draw_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
   add_test(NAME posix_gpu_draw_selfcheck COMMAND posix_gpu_draw_selfcheck)
   set_tests_properties(posix_gpu_draw_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+
+  if(ZH_PLATFORM_LINUX)
+    add_executable(posix_reset_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_reset.cpp)
+    set_target_properties(posix_reset_selfcheck PROPERTIES CXX_STANDARD 17)
+    target_include_directories(posix_reset_selfcheck PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+    target_link_libraries(posix_reset_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
+    target_link_options(posix_reset_selfcheck PRIVATE
+      "LINKER:--wrap=SDL_AcquireGPUCommandBuffer" "LINKER:--wrap=SDL_CreateGPUTexture")
+    add_test(NAME posix_reset_selfcheck COMMAND posix_reset_selfcheck)
+    set_tests_properties(posix_reset_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
 
   if(ZH_PLATFORM_LINUX)
     # Dedicated water material editor: the same device, FFT and shader as the game.

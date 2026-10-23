@@ -21,6 +21,7 @@
 // PosixD3D9Caps.cpp.  See PosixDevice9.h for which file holds what and how a device without a window behaves.
 
 #include "PosixDevice9.h"
+#include "PosixD3D9Caps.h"
 #include "SdlCreationLog.h"
 #include "Platform/EngineShaderName.h"
 #include "Platform/RendererName.h"
@@ -507,12 +508,47 @@ RenderResult PosixDevice9::CreateAdditionalSwapChain(D3DPRESENT_PARAMETERS *, ID
 
 RenderResult PosixDevice9::Reset(D3DPRESENT_PARAMETERS *parameters)
 {
-	Shore_End();
 	if (parameters == NULL || parameters->BackBufferWidth == 0 || parameters->BackBufferHeight == 0) {
 		return D3DERR_INVALIDCALL;
 	}
+	// Stage the CPU surfaces too: once the GPU attachments change, committing the reset cannot fail.
+	const D3DFORMAT format = parameters->BackBufferFormat == D3DFMT_UNKNOWN
+		? D3DFMT_X8R8G8B8 : parameters->BackBufferFormat;
+	if (!posixFormatSupported(D3DUSAGE_RENDERTARGET, D3DRTYPE_SURFACE, format)
+		|| (parameters->EnableAutoDepthStencil && !posixFormatSupported(D3DUSAGE_DEPTHSTENCIL,
+			D3DRTYPE_SURFACE, parameters->AutoDepthStencilFormat))) {
+		return D3DERR_INVALIDCALL;
+	}
+	PosixSurface9 *back = PosixSurface9::createStandalone(parameters->BackBufferWidth,
+		parameters->BackBufferHeight, format, D3DUSAGE_RENDERTARGET, D3DPOOL_DEFAULT,
+		parameters->MultiSampleType, parameters->MultiSampleQuality);
+	if (!back) return D3DERR_OUTOFVIDEOMEMORY;
+	PosixSurface9 *depth = NULL;
+	if (parameters->EnableAutoDepthStencil) {
+		depth = PosixSurface9::createStandalone(parameters->BackBufferWidth, parameters->BackBufferHeight,
+			parameters->AutoDepthStencilFormat, D3DUSAGE_DEPTHSTENCIL, D3DPOOL_DEFAULT,
+			parameters->MultiSampleType, parameters->MultiSampleQuality);
+		if (!depth) {
+			back->Release();
+			return D3DERR_OUTOFVIDEOMEMORY;
+		}
+	}
+	SdlGpuFrame::ResizeFailure failure = SdlGpuFrame::RESIZE_NONE;
+	// Restore an active capture before Resize can retire the scene attachments it restores to.
+	bool capture_submitted = true;
+	if (SunActive) End_Sun_Shadow(&capture_submitted);
+	if (!capture_submitted || (Gpu != NULL && !Gpu->Resize(parameters->BackBufferWidth,
+		parameters->BackBufferHeight, &failure))) {
+		back->Release();
+		if (depth) depth->Release();
+		return !capture_submitted || failure == SdlGpuFrame::RESIZE_FLUSH_FAILED
+			? D3DERR_DEVICELOST : D3DERR_OUTOFVIDEOMEMORY;
+	}
+	Shore_End();
 	Clear_Sun_Shadow();
 	Sun.reset();
+	// A failed flush must never drop these bindings: a standalone target can have no other owner,
+	// while the retained batch still references its mirror. Resize has now submitted that batch.
 	Release_Surfaces();
 	Parameters = *parameters;
 	if (Parameters.hDeviceWindow != NULL) {
@@ -524,10 +560,11 @@ RenderResult PosixDevice9::Reset(D3DPRESENT_PARAMETERS *parameters)
 	Viewport.Height = Parameters.BackBufferHeight;
 	Viewport.MinZ = 0.0f;
 	Viewport.MaxZ = 1.0f;
-	if (Gpu != NULL && !Gpu->Resize(Parameters.BackBufferWidth, Parameters.BackBufferHeight)) {
-		return D3DERR_OUTOFVIDEOMEMORY;
-	}
-	return Create_Implicit_Surfaces();
+	BackBuffer = back;
+	Posix_Bind(RenderTargets[0], BackBuffer);
+	DepthSurface = depth;
+	Posix_Bind(DepthStencil, DepthSurface);
+	return D3D_OK;
 }
 
 RenderResult PosixDevice9::Present(const RenderRect *, const RenderRect *, RenderWindow, const void *)

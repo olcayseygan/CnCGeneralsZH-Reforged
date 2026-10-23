@@ -114,8 +114,10 @@ public:
 	static SdlGpuFrame * Create(RenderWindow window, unsigned int width, unsigned int height, std::string & error);
 	~SdlGpuFrame();
 
-	/// A new back buffer and depth-stencil of this size (Reset), after running what is recorded.
-	bool Resize(unsigned int width, unsigned int height);
+	/// A failed flush or allocation retains the old attachments and dimensions.
+	/// Recording/submission failures still have Flush's batch-consumption semantics.
+	enum ResizeFailure { RESIZE_NONE, RESIZE_INVALID_SIZE, RESIZE_FLUSH_FAILED, RESIZE_ALLOCATION_FAILED };
+	bool Resize(unsigned int width, unsigned int height, ResizeFailure *failure = NULL);
 
 	/// Where the clears and draws recorded from now on go (A3d); the back buffer until told otherwise.
 	void Set_Target(const SdlTarget & target);

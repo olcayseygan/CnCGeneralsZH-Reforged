@@ -19,6 +19,7 @@
 // The device's frame on SDL3 GPU (decision 7, phase A3a).  See SdlGpuFrame.h.
 
 #include "SdlGpuFrame.h"
+#include "SdlGpuDepthFormat.h"
 #include "sdl3shadercompile.h"
 #include "Platform/WaterFftSpectrum.h"
 
@@ -180,25 +181,12 @@ SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsig
 		delete frame;
 		return NULL;
 	}
-	// Prefer a sampleable stencil format for the scene depth resolve (water, hazard clouds). Preserve rendering on a
-	// device without one by retaining the ordinary depth target, and disabling scene-depth sampling.
-	const SDL_GPUTextureFormat depth_formats[] = {
-		SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT, SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT };
-	for (unsigned int sampled = 1; frame->DepthFormat == SDL_GPU_TEXTUREFORMAT_INVALID; --sampled) {
-		const SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET
-			| (sampled ? SDL_GPU_TEXTUREUSAGE_SAMPLER : 0);
-		for (unsigned int i = 0; i < 2; ++i) {
-			if (SDL_GPUTextureSupportsFormat(frame->GpuDevice, depth_formats[i], SDL_GPU_TEXTURETYPE_2D, usage)) {
-				frame->DepthFormat = depth_formats[i];
-				frame->DepthSampleable = sampled != 0;
-				break;
-			}
-		}
-		if (!sampled) break;
-	}
-	frame->DepthSampleable = frame->DepthSampleable && SDL_GPUTextureSupportsFormat(frame->GpuDevice,
-		SDL_GPU_TEXTUREFORMAT_R32_FLOAT, SDL_GPU_TEXTURETYPE_2D,
-		SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
+	const SdlGpuDepthFormat depth = Sdl_Select_Depth_Format(
+		[frame](SDL_GPUTextureFormat format, SDL_GPUTextureType type, SDL_GPUTextureUsageFlags usage) {
+			return SDL_GPUTextureSupportsFormat(frame->GpuDevice, format, type, usage);
+		});
+	frame->DepthFormat = depth.Format;
+	frame->DepthSampleable = depth.Sampleable;
 	if (frame->DepthFormat == SDL_GPU_TEXTUREFORMAT_INVALID) {
 		error = "no supported depth/stencil render-target format";
 		delete frame;
@@ -264,14 +252,25 @@ bool SdlGpuFrame::Create_Targets(unsigned int width, unsigned int height)
 	info.layer_count_or_depth = 1;
 	info.num_levels = 1;
 	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-	BackBuffer = SDL_CreateGPUTexture(GpuDevice, &info);
-	FrontCopy = SDL_CreateGPUTexture(GpuDevice, &info);
+	SDL_GPUTexture *back = SDL_CreateGPUTexture(GpuDevice, &info);
+	SDL_GPUTexture *front = SDL_CreateGPUTexture(GpuDevice, &info);
 	info.format = (SDL_GPUTextureFormat)DepthFormat;
 	info.usage = Depth_Usage();
-	DepthStencil = SDL_CreateGPUTexture(GpuDevice, &info);
+	SDL_GPUTexture *depth = SDL_CreateGPUTexture(GpuDevice, &info);
+	if (!back || !front || !depth) {
+		if (back) SDL_ReleaseGPUTexture(GpuDevice, back);
+		if (front) SDL_ReleaseGPUTexture(GpuDevice, front);
+		if (depth) SDL_ReleaseGPUTexture(GpuDevice, depth);
+		return false;
+	}
+	// Keep the old attachments, scratch depths and snapshots until every replacement exists.
+	Release_Targets();
+	BackBuffer = back;
+	FrontCopy = front;
+	DepthStencil = depth;
 	BackWidth = width;
 	BackHeight = height;
-	return BackBuffer != NULL && DepthStencil != NULL && FrontCopy != NULL;
+	return true;
 }
 
 void SdlGpuFrame::Release_Targets()
@@ -670,14 +669,24 @@ bool SdlGpuFrame::Resolve_Scene_Depth(SDL_GPUCommandBuffer *commands, SDL_GPUTex
 	return true;
 }
 
-bool SdlGpuFrame::Resize(unsigned int width, unsigned int height)
+bool SdlGpuFrame::Resize(unsigned int width, unsigned int height, ResizeFailure *failure)
 {
-	// What is recorded runs first: the GPU copies count the uploads it carries as done.  The current
-	// target named the old back buffer; the device sets it again before its next draw.
-	if (!width || !height || !Flush()) return false;
+	if (failure) *failure = RESIZE_NONE;
+	if (!width || !height) {
+		if (failure) *failure = RESIZE_INVALID_SIZE;
+		return false;
+	}
+	// Submit before replacing anything: queued targets and mirror uploads still name the old resources.
+	if (!Flush()) {
+		if (failure) *failure = RESIZE_FLUSH_FAILED;
+		return false;
+	}
+	if (!Create_Targets(width, height)) {
+		if (failure) *failure = RESIZE_ALLOCATION_FAILED;
+		return false;
+	}
 	TargetSet = false;
-	Release_Targets();
-	return Create_Targets(width, height);
+	return true;
 }
 
 void SdlGpuFrame::Clear_Back_Buffer(bool colour, bool depth, bool stencil, uint32_t argb, float z, uint32_t stencil_value)

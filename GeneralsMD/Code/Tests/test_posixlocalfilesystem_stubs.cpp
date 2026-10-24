@@ -27,6 +27,8 @@
  *    subsystem through it.
  *  - TheFileSystem, FileSystem::openFile: RAMFile::open(const char*) opens through the whole file
  *    system; the test opens files through PosixLocalFileSystem directly.
+ *  - LogicThread: JobSystem::parallel_for asks whether it runs on the logic thread; nothing here
+ *    starts one, so it never does and the census is never taken.
  */
 #include <stdarg.h>
 #include <stdio.h>
@@ -35,6 +37,7 @@
 #include "Common/Debug.h"
 #include "Common/FileSystem.h"
 #include "Common/INI.h"
+#include "Common/LogicThread.h"
 
 extern "C" void DebugInit(int)
 {
@@ -62,3 +65,6 @@ void INI::load(AsciiString, INILoadType, Xfer *) { unreachable("INI::load"); }
 
 FileSystem *TheFileSystem = NULL;
 File *FileSystem::openFile(const Char *, Int) { unreachable("FileSystem::openFile"); return NULL; }
+
+thread_local Bool LogicThread::t_isLogicThread = FALSE;
+void LogicThread::noteCensus(Channel) {}

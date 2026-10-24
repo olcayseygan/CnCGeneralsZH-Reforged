@@ -28,6 +28,8 @@
  *    subsystem through it.
  *  - TheFileSystem, FileSystem::openFile: RAMFile::open(const char*) opens through the whole file
  *    system; the test opens files through PosixLocalFileSystem directly.
+ *  - LogicThread: JobSystem::parallel_for asks whether it runs on the logic thread; nothing here
+ *    starts one, so it never does and the census is never taken.
  */
 #include <stdarg.h>
 #include <stdio.h>
@@ -38,6 +40,7 @@
 #include "Common/GameAudio.h"
 #include "Common/GlobalData.h"
 #include "Common/INI.h"
+#include "Common/LogicThread.h"
 
 extern "C" void DebugInit(int)
 {
@@ -88,3 +91,6 @@ int MessageBoxWrapper(const char *text, const char *caption, unsigned int)
 	++g_messageBoxes;
 	return 1;
 }
+
+thread_local Bool LogicThread::t_isLogicThread = FALSE;
+void LogicThread::noteCensus(Channel) {}

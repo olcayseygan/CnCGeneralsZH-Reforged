@@ -297,16 +297,28 @@ void findBars( void )
 			}
 			const Int forceSlot = ControlBar_forceAttackSlot( types, MAX_COMMANDS_PER_SET, ControlBar_forceFires( thing ) );
 			if( forceSlot >= 0 && force )
+			{
 				slots[ forceSlot ] = force;
+				types[ forceSlot ] = force->getCommandType();
+			}
+			// the windows as the bar fills them (ControlBar::populateCommand), so a slot here is the
+			// slot a Name@slot key and the grid's letters mean: a set's button past the bar's
+			// windows moves into an empty one
+			Bool windowed[ MAX_COMMANDS_PER_SET ];
+			Int shown[ MAX_COMMANDS_PER_SET ];
+			for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+				windowed[ slot ] = slot < BAR_SLOTS;
+			ControlBar_fitCommandSlots( types, windowed, MAX_COMMANDS_PER_SET, shown );
 			BarObject object;
 			object.building = thing->isKindOf( KINDOF_STRUCTURE );
 			Bool any = FALSE;
 			for( Int slot = 0; slot < BAR_SLOTS; slot++ )
 			{
-				// a button with no picture is a leftover no player sees, and what only it builds is not reached
-				object.slots[ slot ] = ( slots[ slot ] && slots[ slot ]->getButtonImage() ) ? slots[ slot ] : NULL;
+				object.slots[ slot ] = shown[ slot ] >= 0 ? slots[ shown[ slot ] ] : NULL;
+				// a button with no picture is a blank cell on the bar that still holds its key and its
+				// place among the upgrades; it is not listed, and what only it builds is not reached
 				const CommandButton *button = object.slots[ slot ];
-				if( button == NULL )
+				if( button == NULL || button->getButtonImage() == NULL )
 					continue;
 				any = TRUE;
 				const GUICommandType type = button->getCommandType();
@@ -458,7 +470,7 @@ void fillButtons( void )
 	for( Int slot = 0; slot < BAR_SLOTS; slot++ )
 	{
 		const CommandButton *button = object->slots[ slot ];
-		if( button == NULL )
+		if( button == NULL || button->getButtonImage() == NULL )
 			continue;
 		const UnicodeString key = buttonKeyText( object, slot, keys );
 		const Bool waiting = s_capture == CAPTURE_BUTTON && button == s_button;

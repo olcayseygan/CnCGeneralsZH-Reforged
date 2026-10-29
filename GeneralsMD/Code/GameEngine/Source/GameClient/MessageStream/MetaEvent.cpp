@@ -50,6 +50,7 @@
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/DebugDisplay.h"	// for AudioDebugDisplay
 #include "GameClient/GameText.h"
+#include "GameClient/HotKey.h"
 #include "GameClient/MetaEvent.h"
 
 #include "GameLogic/GameLogic.h" // for TheGameLogic->getFrame()
@@ -515,6 +516,16 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 																 key == KEY_LSHIFT || key == KEY_RSHIFT ||
 																 key == KEY_LALT || key == KEY_RALT );
 
+		// one keystroke does one thing (HotKeyManager::strokeDown): a letter a showing button holds,
+		// as the press found the bar, is the button's on its release, and no command fires on it
+		Bool barKey = FALSE;
+		if( !isModifierKey )
+		{
+			if( t == GameMessage::MSG_RAW_KEY_DOWN && ( keyState & KEY_STATE_DOWN ) && !( keyState & KEY_STATE_AUTOREPEAT ) )
+				HotKeyManager::strokeDown( key, HotKeyManager::barHoldsKey( key, newModState ) );
+			barKey = HotKeyManager::strokeToBar( key );
+		}
+
 		if( isModifierKey && ( keyState & KEY_STATE_UP ) )
 		{
 			for( Int keyIndex = 0; keyIndex < NUM_MAPPABLE_KEYS; ++keyIndex )
@@ -607,7 +618,8 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			// ok, now check for "normal" key transitions.
 			Int cmpModState = metaIgnoresShift(map) ? (newModState & ~SHIFT) : newModState;
 			if (
-						map->m_key == key && 
+						!barKey &&
+						map->m_key == key &&
 						map->m_modState == cmpModState &&
 						(
 							(map->m_transition == UP && (keyState & KEY_STATE_UP)) ||
@@ -649,6 +661,9 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 					/*GameMessage *metaMsg =*/ TheMessageStream->appendMessage(map->m_meta);
 					//DEBUG_LOG(("Frame %d: MetaEventTranslator::translateGameMessage() normal: %s\n", TheGameLogic->getFrame(), findGameMessageNameByType(map->m_meta)));
 				}
+				// the press is the command's: its release presses no button
+				if( keyState & KEY_STATE_DOWN )
+					HotKeyManager::strokeToCommand( key );
 				disp = DESTROY_MESSAGE;
 				break;
 			}

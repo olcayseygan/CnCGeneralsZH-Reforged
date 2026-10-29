@@ -70,6 +70,7 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/Shell.h"
 //-----------------------------------------------------------------------------
 // DEFINES ////////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
@@ -79,6 +80,79 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
+/** The letter the player's key with this scan code types, the one a label's '&' and the bar's keys
+	* mean.  The game's own key tables know four layouts and name every key by its US position, so on
+	* a Turkish keyboard the key marked i read as an apostrophe; on Windows the player's layout says. */
+static WideChar typedLetter( UnsignedByte scanCode )
+{
+	WideChar typed = TheKeyboard->getPrintableKey(scanCode, 0);
+#if defined(_WIN32)
+	HKL layout = GetKeyboardLayout(0);
+	const UINT virtualKey = MapVirtualKeyExW(scanCode, MAPVK_VSC_TO_VK, layout);
+	BYTE keys[256] = { 0 };
+	WCHAR out[4] = { 0 };
+	// a Cyrillic or other non-Latin letter never names a hotkey, so that player keeps the US position
+	if( virtualKey != 0 && ToUnicodeEx(virtualKey, scanCode, keys, out, 4, 0x4, layout) == 1 && out[0] < 0x0250 )
+		typed = (WideChar)out[0];
+#endif
+	return typed;
+}
+
+//-----------------------------------------------------------------------------
+/** One keystroke does one thing (issue 128).  MetaEventTranslator fires a command map key on its
+	* press and this translator a command bar button on its release, so a letter both held used to do
+	* both: W selected every aircraft, the empty selection put a worker's bar up, and the release
+	* started his War Factory.  The press decides now (HotKeyManager::strokeDown): a showing button on
+	* the letter takes the stroke and the command stands aside; otherwise the command keeps it as
+	* before and the release presses nothing.  By scan code, the key both translators are handed. */
+enum { STROKE_KEYS = 256 };
+static Bool s_strokeToBar[ STROKE_KEYS ];
+static Bool s_strokeToCommand[ STROKE_KEYS ];
+
+void HotKeyManager::strokeDown( Int key, Bool barHolds )
+{
+	if( key < 0 || key >= STROKE_KEYS )
+		return;
+	s_strokeToBar[ key ] = barHolds;
+	s_strokeToCommand[ key ] = FALSE;
+}
+
+Bool HotKeyManager::strokeToBar( Int key )
+{
+	return key >= 0 && key < STROKE_KEYS && s_strokeToBar[ key ];
+}
+
+void HotKeyManager::strokeToCommand( Int key )
+{
+	if( key >= 0 && key < STROKE_KEYS )
+		s_strokeToCommand[ key ] = TRUE;
+}
+
+Bool HotKeyManager::strokePressesBar( Int key )
+{
+	if( key < 0 || key >= STROKE_KEYS )
+		return TRUE;
+	const Bool command = s_strokeToCommand[ key ];
+	s_strokeToBar[ key ] = s_strokeToCommand[ key ] = FALSE;
+	return !command;
+}
+
+Bool HotKeyManager::barHoldsKey( Int key, Int modState )
+{
+	// the release presses a button bare or with shift (a batch); a chord with Ctrl or Alt is the command's
+	if( TheHotKeyManager == NULL || TheKeyboard == NULL || key < 0 || key >= STROKE_KEYS || ( modState & ~SHIFT ) != 0 )
+		return FALSE;
+	if( TheShell && TheShell->isShellActive() )
+		return FALSE;	// the menus have no command bar, whatever the map still names
+	const WideChar letter = typedLetter( (UnsignedByte)key );
+	if( letter == 0 )
+		return FALSE;
+	Bool pressable = FALSE;
+	GameWindow *win = TheHotKeyManager->findHotKey( nameOf( letter ), &pressable );
+	return win != NULL && !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN );
+}
+
+//-----------------------------------------------------------------------------
 GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage *msg)
 {
 	GameMessageDisposition disp = KEEP_MESSAGE;
@@ -86,7 +160,10 @@ GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage 
 
 	if ( t == GameMessage::MSG_RAW_KEY_UP)
 	{
-		
+		// a press the command map took presses no button on its release, whatever the bar shows now
+		if( !HotKeyManager::strokePressesBar( msg->getArgument(0)->integer ) )
+			return disp;
+
 		//char key = msg->getArgument(0)->integer;
 		Int keyState = msg->getArgument(1)->integer;
 
@@ -118,21 +195,7 @@ GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage 
 		if( !repeatChord && ( keyState & KEY_STATE_PRESSED_WITH_CTRL_ALT ) )
 			return disp;
 		const UnsignedByte scanCode = (UnsignedByte)msg->getArgument(0)->integer;
-		WideChar typed = TheKeyboard->getPrintableKey(scanCode, 0);
-#if defined(_WIN32)
-		// The game's own key tables know four layouts and name every key by its US position, so on a
-		// Turkish keyboard the key marked i read as an apostrophe.  The letter the player's layout
-		// puts on that key is the one a label's '&' means.
-		{
-			HKL layout = GetKeyboardLayout(0);
-			const UINT virtualKey = MapVirtualKeyExW(scanCode, MAPVK_VSC_TO_VK, layout);
-			BYTE keys[256] = { 0 };
-			WCHAR out[4] = { 0 };
-			// a Cyrillic or other non-Latin letter never names a hotkey, so that player keeps the US position
-			if( virtualKey != 0 && ToUnicodeEx(virtualKey, scanCode, keys, out, 4, 0x4, layout) == 1 && out[0] < 0x0250 )
-				typed = (WideChar)out[0];
-		}
-#endif
+		const WideChar typed = typedLetter( scanCode );
 		if( repeatChord )
 		{
 			// straight to the bar rather than as a click: a repeated unit the bank cannot pay for
@@ -195,7 +258,7 @@ void HotKeyManager::reset( void )
 static Int keyClaim( GameWindow *win, const AsciiString& key, Int barSlot );
 
 //-----------------------------------------------------------------------------
-void HotKeyManager::addHotKey( GameWindow *win, const AsciiString& keyIn, Int barSlot )
+Bool HotKeyManager::addHotKey( GameWindow *win, const AsciiString& keyIn, Int barSlot, GameWindow **displaced )
 {
 	AsciiString key = keyIn;
 	key.toLower();
@@ -206,13 +269,16 @@ void HotKeyManager::addHotKey( GameWindow *win, const AsciiString& keyIn, Int ba
 	if( it != m_hotKeyMap.end() && it->second.m_win != win && claim <= it->second.m_claim )
 	{
 		DEBUG_LOG(( "HOTKEYS: %s already on %s, not on %s\n", key.str(), it->second.m_win->winGetInstanceData()->m_decoratedNameString.str(), win->winGetInstanceData()->m_decoratedNameString.str() ));
-		return;
+		return FALSE;
 	}
+	if( displaced )
+		*displaced = ( it != m_hotKeyMap.end() && it->second.m_win != win ) ? it->second.m_win : NULL;
 	HotKey newHK;
 	newHK.m_key.set(key);
 	newHK.m_win = win;
 	newHK.m_claim = claim;
 	m_hotKeyMap[key] = newHK;
+	return TRUE;
 }
 
 //-----------------------------------------------------------------------------

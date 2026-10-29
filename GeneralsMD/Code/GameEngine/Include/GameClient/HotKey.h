@@ -100,8 +100,10 @@ public:
 	virtual void reset( void );															///< Reset
 	//-----------------------------------------------------------------------------------------------
 
-	/// barSlot: win's command bar window slot (0-based), -1 off the bar; see playerButtonKey
-	void addHotKey( GameWindow *win, const AsciiString& key, Int barSlot = -1 );
+	/** TRUE when win holds key afterwards, FALSE when a stronger or earlier claimant keeps it.
+		* barSlot: win's command bar window slot (0-based), -1 off the bar; see playerButtonKey.
+		* *displaced, when given, gets the window that held key until now, or NULL. */
+	Bool addHotKey( GameWindow *win, const AsciiString& key, Int barSlot = -1, GameWindow **displaced = NULL );
 	Bool executeHotKey( const AsciiString& key); // called fromt eh HotKeyTranslator
 	
 	AsciiString searchHotKey( const AsciiString& label);
@@ -138,6 +140,18 @@ public:
 	/** Each of `count` command bar slots' upgradeRank: GUI_COMMAND_PLAYER_UPGRADE and
 		* GUI_COMMAND_OBJECT_UPGRADE count 0, 1, 2 in slot order, any other type is -1. */
 	static void commandBarUpgradeRanks( const Int *types, Int count, Int *ranks );
+	/** One keystroke does one thing (issue 128), by the key's scan code.  On a press, strokeDown
+		* records whether a showing hotkey button holds its letter (barHoldsKey); while one does
+		* (strokeToBar) the command map lets the key alone, press and release.  A press the command map
+		* did take is marked with strokeToCommand, and strokePressesBar on the release then says FALSE,
+		* so the button the press's command put on the bar is not pressed too.  strokePressesBar ends
+		* the stroke. */
+	static void strokeDown( Int key, Bool barHolds );
+	static Bool strokeToBar( Int key );
+	static void strokeToCommand( Int key );
+	static Bool strokePressesBar( Int key );
+	/// a showing button in the hotkey map holds the letter this key types, pressed bare or with shift
+	static Bool barHoldsKey( Int key, Int modState );
 	/// CommandBarGrid in Hotkeys.ini: every command bar button keyed by its window slot
 	static Bool commandBarGrid( void );
 	static void setCommandBarGrid( Bool grid );

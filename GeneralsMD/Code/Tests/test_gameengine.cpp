@@ -5466,6 +5466,45 @@ TEST(hotkeys_command_bar_grid_keys_by_window_slot)
 	CHECK( Hotkeys_format( file, rows ).find( "CommandBarGrid" ) == std::string::npos );
 }
 
+/* Issue 128: one keystroke does one thing, decided on the press.  W selected every aircraft on its
+   press, the empty selection put a worker's bar up, and the release started his War Factory from W */
+TEST(hotkeys_one_keystroke_does_one_thing)
+{
+	enum { W = 0x11, Q = 0x10, E = 0x12 };
+
+	// a showing button holds W as the key goes down: the command map stands aside, the release presses it
+	HotKeyManager::strokeDown( W, TRUE );
+	CHECK( HotKeyManager::strokeToBar( W ) );
+	CHECK( HotKeyManager::strokePressesBar( W ) );
+	CHECK( !HotKeyManager::strokeToBar( W ) );			// the release ends the stroke
+
+	// nothing holds W on the press, so the command fires; the bar its selection brought up presses nothing
+	HotKeyManager::strokeDown( W, FALSE );
+	CHECK( !HotKeyManager::strokeToBar( W ) );
+	HotKeyManager::strokeToCommand( W );
+	CHECK( !HotKeyManager::strokePressesBar( W ) );
+	// and the next stroke starts clean
+	HotKeyManager::strokeDown( W, FALSE );
+	CHECK( HotKeyManager::strokePressesBar( W ) );
+
+	// a key with no command and no button on its press still presses what the bar shows on release
+	HotKeyManager::strokeDown( E, FALSE );
+	CHECK( HotKeyManager::strokePressesBar( E ) );
+
+	// strokes are per key: Q held for the bar while W went to a command
+	HotKeyManager::strokeDown( Q, TRUE );
+	HotKeyManager::strokeDown( W, FALSE );
+	HotKeyManager::strokeToCommand( W );
+	CHECK( HotKeyManager::strokeToBar( Q ) );
+	CHECK( HotKeyManager::strokePressesBar( Q ) );
+	CHECK( !HotKeyManager::strokePressesBar( W ) );
+
+	// no hotkey manager, no bar: a key out of range or with Ctrl never belongs to it
+	CHECK( !HotKeyManager::barHoldsKey( W, 0 ) );
+	CHECK( !HotKeyManager::strokeToBar( -1 ) );
+	CHECK( HotKeyManager::strokePressesBar( 4096 ) );
+}
+
 TEST(metamap_format_chord_names_the_hold)
 {
 	CHECK( MetaMap_formatChord( MK_NONE, CTRL, COMMANDUSABLE_GAME ) == UnicodeString( u"Ctrl" ) );

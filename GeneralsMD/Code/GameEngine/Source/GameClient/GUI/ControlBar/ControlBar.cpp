@@ -4589,12 +4589,21 @@ void ControlBar::setControlCommand( GameWindow *button, const CommandButton *com
 		const WideChar letter = standInOrder ? 0 : HotKeyManager::playerButtonKey( commandButton->getName(),
 			TheGameText ? TheGameText->fetchEnglishHotKey( commandButton->getTextLabel() ) : 0,
 			commandButton->getCommandType(), barSlot, barSlot >= 0 ? m_commandUpgradeRank[ barSlot ] : -1 );
-		if( letter != 0 )
+		// the badge shows a letter only while this window holds the key: one that lost it to a
+		// stronger or earlier button shows none, and one that takes it wipes the badge it took it from
+		GameWindow *displaced = NULL;
+		const AsciiString key = letter != 0 ? HotKeyManager::nameOf( letter ) : AsciiString::TheEmptyString;
+		if( letter != 0 && TheHotKeyManager->addHotKey( button, key, barSlot, &displaced ) )
 		{
-			TheHotKeyManager->addHotKey( button, HotKeyManager::nameOf( letter ), barSlot );
 			const WideChar text[ 2 ] = { letter, 0 };
 			GadgetButtonSetText( button, UnicodeString( text ) );
 			button->winSetStatus( WIN_STATUS_SHORTCUT_BUTTON );
+			const UnicodeString shown = displaced ? displaced->winGetText() : UnicodeString::TheEmptyString;
+			if( shown.getLength() == 1 && HotKeyManager::nameOf( shown.getCharAt( 0 ) ) == key )
+			{
+				GadgetButtonSetText( displaced, UnicodeString( u"" ) );
+				displaced->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
+			}
 		}
 		else
 		{

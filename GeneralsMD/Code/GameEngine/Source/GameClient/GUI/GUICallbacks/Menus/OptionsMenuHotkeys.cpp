@@ -221,13 +221,18 @@ std::map< std::string, WideChar > buttonKeys( void )
 	return keys;
 }
 
-/// A button's key on a bar as text: Force Attack's chord, else its letter; empty for none.
-UnicodeString buttonKeyText( const CommandButton *button, const std::map< std::string, WideChar >& keys )
+/// A button's key in a bar's slot as text: Force Attack's chord, else its letter; empty for none.
+UnicodeString buttonKeyText( const BarObject *object, Int slot, const std::map< std::string, WideChar >& keys )
 {
+	const CommandButton *button = object->slots[ slot ];
 	if( button->getCommandType() == GUI_COMMAND_FORCE_ATTACK )
 		return wide( Hotkeys_chordText( bindingOf( *forceAttackRow() ) ) );
+	Int types[ BAR_SLOTS ], ranks[ BAR_SLOTS ];
+	for( Int each = 0; each < BAR_SLOTS; each++ )
+		types[ each ] = object->slots[ each ] ? object->slots[ each ]->getCommandType() : GUI_COMMAND_NONE;
+	HotKeyManager::commandBarUpgradeRanks( types, BAR_SLOTS, ranks );
 	const WideChar letter = HotKeyManager::buttonKeyIn( button->getName(),
-		TheGameText->fetchEnglishHotKey( button->getTextLabel() ), button->getCommandType(), keys );
+		TheGameText->fetchEnglishHotKey( button->getTextLabel() ), button->getCommandType(), keys, slot, ranks[ slot ] );
 	return letterText( letter );
 }
 
@@ -346,7 +351,7 @@ std::map< KeyText, std::vector< UnicodeString > > barClashes( const BarObject *o
 	for( Int slot = 0; slot < BAR_SLOTS; slot++ )
 		if( object->slots[ slot ] )
 		{
-			const UnicodeString key = buttonKeyText( object->slots[ slot ], keys );
+			const UnicodeString key = buttonKeyText( object, slot, keys );
 			if( !key.isEmpty() )
 				byKey[ key.str() ].push_back( buttonName( object->slots[ slot ] ) );
 		}
@@ -455,7 +460,7 @@ void fillButtons( void )
 		const CommandButton *button = object->slots[ slot ];
 		if( button == NULL )
 			continue;
-		const UnicodeString key = buttonKeyText( button, keys );
+		const UnicodeString key = buttonKeyText( object, slot, keys );
 		const Bool waiting = s_capture == CAPTURE_BUTTON && button == s_button;
 		const Bool changed = button->getCommandType() == GUI_COMMAND_FORCE_ATTACK
 			? s_file.commands.count( "BEGIN_FORCEATTACK" ) != 0

@@ -302,6 +302,20 @@ FixedOrderKeys
 End
 ```
 
+Another block keys the command bar by place. Every button takes the letter of the cell it sits in,
+Q W E R T Y U over A S D F G H J down the columns (I O over K L on the nine-column bar), and the bar's
+upgrades take X C V B N in order. The fixed keys are off on the bar while it is on.
+
+```ini
+CommandBarGrid
+  Enabled = Yes
+End
+```
+
+A button's own letter still beats its cell's. `CommandButtonHotKey Command_TransportExit@3` with
+`Key = M` keys that button only while it stands in the third cell, so the passenger buttons of one
+transport can each have their own key.
+
 </details>
 
 ## Build it

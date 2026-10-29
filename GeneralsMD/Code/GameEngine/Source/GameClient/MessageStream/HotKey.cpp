@@ -165,6 +165,7 @@ HotKey::HotKey()
 	//Initializations missing and needed
 	m_key.clear();
 	//
+	m_claim = 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -191,17 +192,18 @@ void HotKeyManager::reset( void )
 	m_hotKeyMap.clear();
 }
 
-static Int keyClaim( GameWindow *win, const AsciiString& key );
+static Int keyClaim( GameWindow *win, const AsciiString& key, Int barSlot );
 
 //-----------------------------------------------------------------------------
-void HotKeyManager::addHotKey( GameWindow *win, const AsciiString& keyIn)
+void HotKeyManager::addHotKey( GameWindow *win, const AsciiString& keyIn, Int barSlot )
 {
 	AsciiString key = keyIn;
 	key.toLower();
 	HotKeyMap::iterator it = m_hotKeyMap.find(key);
 	// two buttons on one letter, which the Hotkeys page marks: a fixed order on its own letter keeps
-	// it, a letter the player gave beats a label's, and between equals the first keeps it
-	if( it != m_hotKeyMap.end() && keyClaim( win, key ) <= keyClaim( it->second.m_win, key ) )
+	// it, a letter the player gave beats a label's or the grid's, and between equals the first keeps it
+	const Int claim = keyClaim( win, key, barSlot );
+	if( it != m_hotKeyMap.end() && it->second.m_win != win && claim <= it->second.m_claim )
 	{
 		DEBUG_LOG(( "HOTKEYS: %s already on %s, not on %s\n", key.str(), it->second.m_win->winGetInstanceData()->m_decoratedNameString.str(), win->winGetInstanceData()->m_decoratedNameString.str() ));
 		return;
@@ -209,6 +211,7 @@ void HotKeyManager::addHotKey( GameWindow *win, const AsciiString& keyIn)
 	HotKey newHK;
 	newHK.m_key.set(key);
 	newHK.m_win = win;
+	newHK.m_claim = claim;
 	m_hotKeyMap[key] = newHK;
 }
 
@@ -345,6 +348,13 @@ static const WideChar FIXED_KEYS[] = { 'A', 'S', 'G', 'Y', 'V', 'N', 'C', 'H' };
 	* orders included, wears its label's letter or the player's, as in the game as shipped.  Read with
 	* the button keys, back to on before each read. */
 static Bool s_fixedOrderKeys = TRUE;
+/** CommandBarGrid in Hotkeys.ini: a command bar button takes its window slot's letter
+	* (HotKeyManager::commandBarGridKey) in place of its fixed and label letters.  Read with the button
+	* keys, back to off before each read.  The launcher holds the same tables (hotkeys.js, GRID_ROWS
+	* and GRID_UPGRADE_KEYS). */
+static Bool s_commandBarGrid = FALSE;
+static const char GRID_ROWS[ 2 ][ 10 ] = { "QWERTYUIO", "ASDFGHJKL" };
+static const char GRID_UPGRADE_KEYS[] = "XCVBN";
 static const char *const FIXED_H_BUTTONS[] =
 {
 	"command_upgradechinamines", "command_upgradeempmines", "command_upgradecamonetting", "command_upgradeglacamonetting",
@@ -408,10 +418,25 @@ static std::string withoutModPrefix( const char *lowerName, Int *mod )
 
 static Bool findPlayerKey( const std::map< std::string, WideChar >& keys, const std::string& bare, Int ownMod, WideChar *letter );
 
-/** How strongly the command button win holds key, the map's lower case name: 2 when it is the
-	* button's fixed letter (fixedButtonKey) and the player left the button alone, 1 when the player
-	* gave it that letter in Hotkeys.ini, 0 for the label's. */
-static Int keyClaim( GameWindow *win, const AsciiString& key )
+/** The player's key for a button standing in command bar slot barSlot (-1 off the bar), into *letter:
+	* his "<button>@<barSlot + 1>" there, else his "<button>".  FALSE leaves *letter alone. */
+static Bool findPlayerSlotKey( const std::map< std::string, WideChar >& keys, const std::string& bare, Int ownMod, Int barSlot, WideChar *letter )
+{
+	if( barSlot >= 0 )
+	{
+		char at[ 16 ];
+		snprintf( at, sizeof( at ), "@%d", barSlot + 1 );
+		if( findPlayerKey( keys, bare + at, ownMod, letter ) )
+			return TRUE;
+	}
+	return findPlayerKey( keys, bare, ownMod, letter );
+}
+
+/** How strongly the command button win, in command bar slot barSlot or -1, holds key, the map's
+	* lower case name: 2 when it is the button's fixed letter (fixedButtonKey) and the player left the
+	* button alone, 1 when the player gave it that letter in Hotkeys.ini, 0 for the label's or the
+	* grid's.  With the grid on a bar button has no fixed letter. */
+static Int keyClaim( GameWindow *win, const AsciiString& key, Int barSlot )
 {
 	const CommandButton *command = (const CommandButton *)GadgetButtonGetData( win );
 	AsciiString lower = command->getName();
@@ -419,8 +444,10 @@ static Int keyClaim( GameWindow *win, const AsciiString& key )
 	Int mod = -1;
 	const std::string bare = withoutModPrefix( lower.str(), &mod );
 	WideChar letter = 0;
-	if( findPlayerKey( s_playerButtonKeys, bare, mod, &letter ) )
+	if( findPlayerSlotKey( s_playerButtonKeys, bare, mod, barSlot, &letter ) )
 		return letter != 0 && HotKeyManager::nameOf( letter ) == key ? 1 : 0;
+	if( s_commandBarGrid && barSlot >= 0 )
+		return 0;
 	const WideChar fixed = fixedButtonKey( AsciiString( bare.c_str() ), command->getCommandType() );
 	return fixed != 0 && HotKeyManager::nameOf( fixed ) == key ? 2 : 0;
 }
@@ -462,9 +489,42 @@ static Bool isOneOf( WideChar letter, const WideChar *letters, Int count )
 }
 
 //-----------------------------------------------------------------------------
-WideChar HotKeyManager::playerButtonKey( const AsciiString& button, WideChar labelKey, Int commandType )
+WideChar HotKeyManager::playerButtonKey( const AsciiString& button, WideChar labelKey, Int commandType,
+	Int barSlot, Int upgradeRank )
 {
-	return buttonKeyIn( button, labelKey, commandType, s_playerButtonKeys );
+	return buttonKeyIn( button, labelKey, commandType, s_playerButtonKeys, barSlot, upgradeRank );
+}
+
+//-----------------------------------------------------------------------------
+WideChar HotKeyManager::commandBarGridKey( Int barSlot, Int upgradeRank )
+{
+	if( barSlot < 0 || barSlot >= 2 * (Int)strlen( GRID_ROWS[ 0 ] ) )
+		return 0;
+	if( upgradeRank >= 0 && upgradeRank < (Int)strlen( GRID_UPGRADE_KEYS ) )
+		return GRID_UPGRADE_KEYS[ upgradeRank ];
+	return GRID_ROWS[ barSlot % 2 ][ barSlot / 2 ];
+}
+
+//-----------------------------------------------------------------------------
+void HotKeyManager::commandBarUpgradeRanks( const Int *types, Int count, Int *ranks )
+{
+	Int upgrades = 0;
+	for( Int slot = 0; slot < count; slot++ )
+	{
+		const Bool upgrade = types[ slot ] == GUI_COMMAND_PLAYER_UPGRADE || types[ slot ] == GUI_COMMAND_OBJECT_UPGRADE;
+		ranks[ slot ] = upgrade ? upgrades++ : -1;
+	}
+}
+
+//-----------------------------------------------------------------------------
+Bool HotKeyManager::commandBarGrid( void )
+{
+	return s_commandBarGrid;
+}
+
+void HotKeyManager::setCommandBarGrid( Bool grid )
+{
+	s_commandBarGrid = grid;
 }
 
 //-----------------------------------------------------------------------------
@@ -493,7 +553,7 @@ std::string HotKeyManager::fileButtonName( const AsciiString& button )
 
 //-----------------------------------------------------------------------------
 WideChar HotKeyManager::buttonKeyIn( const AsciiString& button, WideChar labelKey, Int commandType,
-	const std::map< std::string, WideChar >& keys )
+	const std::map< std::string, WideChar >& keys, Int barSlot, Int upgradeRank )
 {
 	// Force Attack is Ctrl.  The English label's F is not the key and may not bind the button.
 	if( commandType == GUI_COMMAND_FORCE_ATTACK )
@@ -502,9 +562,15 @@ WideChar HotKeyManager::buttonKeyIn( const AsciiString& button, WideChar labelKe
 	lower.toLower();
 	Int ownMod = -1;
 	const std::string bare = withoutModPrefix( lower.str(), &ownMod );
-	// the player's letter first, a fixed order's included: the fixed letter is only its default
+	// the player's letter first, his for this slot before his for the button, a fixed order's
+	// included: the fixed letter is only its default.  With the grid on, the bar's place is next
 	WideChar letter = labelKey;
-	const Bool chosen = findPlayerKey( keys, bare, ownMod, &letter );
+	const Bool chosen = findPlayerSlotKey( keys, bare, ownMod, barSlot, &letter );
+	if( !chosen && s_commandBarGrid && barSlot >= 0 )
+	{
+		const Bool upgrade = commandType == GUI_COMMAND_PLAYER_UPGRADE || commandType == GUI_COMMAND_OBJECT_UPGRADE;
+		return commandBarGridKey( barSlot, upgrade ? upgradeRank : -1 );
+	}
 	if( !chosen )
 	{
 		const WideChar fixed = fixedButtonKey( AsciiString( bare.c_str() ), commandType );
@@ -547,8 +613,9 @@ void HotKeyManager::setFixedOrderKeys( Bool fixed )
 }
 
 //-----------------------------------------------------------------------------
-/** CommandBarGrid, Enabled = Yes or No, End: the grid keys a launcher before 2026-10-15 wrote into
-	* Hotkeys.ini.  Grid keys are gone, so the block is read and ignored. */
+/** CommandBarGrid, Enabled = Yes or No, End: whether command bar buttons take their window slot's
+	* letter (s_commandBarGrid).  A launcher before 2026-10-15 wrote the same block for the place-based
+	* grid it had then; that file now turns this one on. */
 /*static*/ void INI::parseCommandBarGridDefinition( INI *ini )
 {
 	static const FieldParse fields[] =
@@ -556,8 +623,10 @@ void HotKeyManager::setFixedOrderKeys( Bool fixed )
 		{ "Enabled", INI::parseBool, NULL, 0 },
 		{ NULL, NULL, NULL, 0 }
 	};
-	Bool ignored = FALSE;
-	ini->initFromINI( &ignored, fields );
+	Bool enabled = FALSE;
+	ini->initFromINI( &enabled, fields );
+	s_commandBarGrid = enabled;
+	DEBUG_LOG(( "HOTKEYS: command bar grid %s\n", enabled ? "on" : "off" ));
 }
 
 //-----------------------------------------------------------------------------
@@ -591,6 +660,7 @@ void HotKeyManager::loadPlayerKeys( void )
 {
 	s_playerButtonKeys.clear();
 	s_fixedOrderKeys = TRUE;
+	s_commandBarGrid = FALSE;
 	AsciiString hotkeys = TheGlobalData->getPath_UserData();
 	hotkeys.concat( "Hotkeys.ini" );
 	if( !TheFileSystem->doesFileExist( hotkeys.str() ) )
@@ -884,6 +954,8 @@ HotkeysFile Hotkeys_parse( const std::string& text, const std::vector< HotkeyCom
 			const std::string enabled = lowered( block.field( "Enabled", "yes" ) );
 			file.fixedOrderKeys = !( enabled == "no" || enabled == "false" );
 		}
+		else if( block.type == "CommandBarGrid" )
+			file.commandBarGrid = lowered( block.field( "Enabled", "no" ) ) == "yes";
 		else if( block.type == "CommandButtonHotKey" )
 		{
 			const Bool letter = key.size() == 1 && isalpha( (unsigned char)key[ 0 ] );
@@ -1007,6 +1079,8 @@ std::string Hotkeys_format( const HotkeysFile& file, const std::vector< HotkeyCo
 		"\r\n";
 	if( !file.fixedOrderKeys )
 		out += "FixedOrderKeys\r\n  Enabled = No\r\nEnd\r\n\r\n";
+	if( file.commandBarGrid )
+		out += "CommandBarGrid\r\n  Enabled = Yes\r\nEnd\r\n\r\n";
 	std::map< std::string, Bool > named;
 	std::vector< std::string > ids = sortedNames( file.commands );
 	for( size_t each = 0; each < ids.size(); each++ )

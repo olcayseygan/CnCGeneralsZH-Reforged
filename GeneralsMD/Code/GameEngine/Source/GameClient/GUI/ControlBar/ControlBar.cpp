@@ -1652,6 +1652,7 @@ ControlBar::ControlBar( void )
 	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		m_commandWindows[ i ] = NULL;
+		m_commandUpgradeRank[ i ] = -1;
 	// removed from multiplayer branch
 		//m_commandMarkers[ i ] = NULL;
 	}
@@ -4569,25 +4570,28 @@ void ControlBar::setControlCommand( GameWindow *button, const CommandButton *com
 	// A builder standing in for an empty selection lends the keys its buildings and nothing else.
 	// Nobody selected it, so its orders keep no letter: H with nothing selected is the command map's
 	// (view the command center), not the GLA worker's switch to fake buildings, and S stops nothing.
-	Bool standInOrder = FALSE;
-	if( m_standInBuilderID != INVALID_DRAWABLE_ID && m_currentSelectedDrawable
-			&& m_currentSelectedDrawable->getID() == m_standInBuilderID
-			&& commandButton->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT )
-		for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-			standInOrder = standInOrder || m_commandWindows[ slot ] == button;
+	// the command bar window slot the button sits in, -1 off the bar
+	Int barSlot = -1;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		if( m_commandWindows[ slot ] == button )
+			barSlot = slot;
+	const Bool standInOrder = barSlot >= 0 && m_standInBuilderID != INVALID_DRAWABLE_ID && m_currentSelectedDrawable
+		&& m_currentSelectedDrawable->getID() == m_standInBuilderID
+		&& commandButton->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT;
 
 	// the key is the one the player gave the button on the launcher's Hotkeys page, or else the
 	// game's own, the letter after the '&' in the button's label - the English label's in every
 	// language, so a Turkish or German player presses what an English one does - and the button
-	// wears it in its top left corner.
+	// wears it in its top left corner.  With the command bar grid on, a bar button's key is its
+	// window slot's letter unless the player gave it one.
 	if( TheHotKeyManager )
 	{
 		const WideChar letter = standInOrder ? 0 : HotKeyManager::playerButtonKey( commandButton->getName(),
 			TheGameText ? TheGameText->fetchEnglishHotKey( commandButton->getTextLabel() ) : 0,
-			commandButton->getCommandType() );
+			commandButton->getCommandType(), barSlot, barSlot >= 0 ? m_commandUpgradeRank[ barSlot ] : -1 );
 		if( letter != 0 )
 		{
-			TheHotKeyManager->addHotKey( button, HotKeyManager::nameOf( letter ) );
+			TheHotKeyManager->addHotKey( button, HotKeyManager::nameOf( letter ), barSlot );
 			const WideChar text[ 2 ] = { letter, 0 };
 			GadgetButtonSetText( button, UnicodeString( text ) );
 			button->winSetStatus( WIN_STATUS_SHORTCUT_BUTTON );

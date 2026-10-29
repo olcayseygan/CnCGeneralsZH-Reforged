@@ -1294,6 +1294,7 @@ protected:
 	GameWindow *m_specialPowerShortcutParent;
 
 	GameWindow *m_commandWindows[ MAX_COMMANDS_PER_SET ];			///< command window controls for easy access
+	Int m_commandUpgradeRank[ MAX_COMMANDS_PER_SET ];					///< each window's upgradeRank on the bar populateCommand last filled (HotKeyManager::playerButtonKey)
 
 
 	/** A player upgrade is researched once, so it goes to exactly one of the selected buildings -

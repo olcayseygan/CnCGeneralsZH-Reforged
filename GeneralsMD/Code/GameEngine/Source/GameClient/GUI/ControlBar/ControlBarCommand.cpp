@@ -414,6 +414,14 @@ void ControlBar::populateCommand( Object *obj )
 				slot[ i ] = NULL;
 	}
 
+	// the order of the bar's upgrades, which the command bar grid keys X C V B N
+	{
+		Int types[ MAX_COMMANDS_PER_SET ];
+		for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+			types[ i ] = ( m_commandWindows[ i ] && slot[ i ] ) ? slot[ i ]->getCommandType() : GUI_COMMAND_NONE;
+		HotKeyManager::commandBarUpgradeRanks( types, MAX_COMMANDS_PER_SET, m_commandUpgradeRank );
+	}
+
 	// populate the button with commands defined
 	const CommandButton *commandButton;
 	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )

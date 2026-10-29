@@ -5396,6 +5396,76 @@ TEST(hotkeys_fixed_order_keys_switch_off_gives_the_labels_letters)
 	CHECK( Hotkeys_format( file, rows ).find( "FixedOrderKeys" ) == std::string::npos );
 }
 
+/* CommandBarGrid, Enabled = Yes: a bar button's key is its window slot, ButtonCommand01 Q over 02 A
+   down the columns, the bar's upgrades X C V B N in slot order, and the player's Name@slot over his
+   Name over the grid */
+TEST(hotkeys_command_bar_grid_keys_by_window_slot)
+{
+	// two rows read down the columns, seven on the bar, nine on the wide one
+	static const char TOP[] = "QWERTYUIO", BOTTOM[] = "ASDFGHJKL";
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		CHECK_EQ( HotKeyManager::commandBarGridKey( slot, -1 ), (WideChar)( slot % 2 == 0 ? TOP : BOTTOM )[ slot / 2 ] );
+	CHECK_EQ( HotKeyManager::commandBarGridKey( 13, -1 ), (WideChar)'J' );		// ButtonCommand14, the narrow bar's last
+	CHECK_EQ( HotKeyManager::commandBarGridKey( 14, -1 ), (WideChar)'I' );		// 15, the wide bar's eighth column
+	CHECK_EQ( HotKeyManager::commandBarGridKey( 17, -1 ), (WideChar)'L' );		// 18, its ninth, bottom
+	CHECK_EQ( HotKeyManager::commandBarGridKey( 18, -1 ), 0 );
+	CHECK_EQ( HotKeyManager::commandBarGridKey( -1, -1 ), 0 );
+
+	// upgrades in slot order, whatever else stands between; the sixth keeps its slot's letter
+	const Int N = GUI_COMMAND_NONE, U = GUI_COMMAND_PLAYER_UPGRADE, O = GUI_COMMAND_OBJECT_UPGRADE, B = GUI_COMMAND_UNIT_BUILD;
+	const Int types[ MAX_COMMANDS_PER_SET ] = { B, U, N, O, B, U, U, N, O, N, U, N, N, N, N, N, N, N };
+	Int ranks[ MAX_COMMANDS_PER_SET ];
+	HotKeyManager::commandBarUpgradeRanks( types, MAX_COMMANDS_PER_SET, ranks );
+	static const Int RANKS[ MAX_COMMANDS_PER_SET ] = { -1, 0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, -1, -1, -1, -1, -1, -1 };
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		CHECK_EQ( ranks[ slot ], RANKS[ slot ] );
+	static const char KEYS[] = "QXWCEVBFNGYHUJIKOL";
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		CHECK_EQ( HotKeyManager::commandBarGridKey( slot, ranks[ slot ] ), (WideChar)KEYS[ slot ] );
+
+	std::map< std::string, WideChar > keys;
+	const AsciiString guard( "Command_Guard" ), exit( "Command_TransportExit" ), mines( "Command_UpgradeChinaMines" );
+	CHECK( !HotKeyManager::commandBarGrid() );
+	HotKeyManager::setCommandBarGrid( TRUE );
+	// the fixed keys are off on the bar: guard in slot 13 is U; off the bar it is still G
+	CHECK_EQ( HotKeyManager::buttonKeyIn( guard, 'G', GUI_COMMAND_GUARD, keys, 12, -1 ), (WideChar)'U' );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( guard, 'G', GUI_COMMAND_GUARD, keys ), (WideChar)'G' );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( mines, 'M', GUI_COMMAND_PLAYER_UPGRADE, keys, 4, 1 ), (WideChar)'C' );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( mines, 'M', GUI_COMMAND_PLAYER_UPGRADE, keys, 4, 5 ), (WideChar)'E' );
+	// a rank on anything but an upgrade means nothing; Force Attack is Ctrl
+	CHECK_EQ( HotKeyManager::buttonKeyIn( exit, 0, GUI_COMMAND_EXIT_CONTAINER, keys, 2, 0 ), (WideChar)'W' );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( AsciiString( "Command_ForceAttack" ), 'F', GUI_COMMAND_FORCE_ATTACK, keys, 11, -1 ), 0 );
+
+	// the player's Name beats the grid, his Name@slot beats Name in that slot only, and NONE is none
+	keys[ "command_transportexit" ] = 'Z';
+	keys[ "command_transportexit@4" ] = 'M';
+	keys[ "command_transportexit@6" ] = 0;
+	CHECK_EQ( HotKeyManager::buttonKeyIn( exit, 0, GUI_COMMAND_EXIT_CONTAINER, keys, 0, -1 ), (WideChar)'Z' );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( exit, 0, GUI_COMMAND_EXIT_CONTAINER, keys, 3, -1 ), (WideChar)'M' );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( exit, 0, GUI_COMMAND_EXIT_CONTAINER, keys, 5, -1 ), 0 );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( exit, 0, GUI_COMMAND_EXIT_CONTAINER, keys ), (WideChar)'Z' );
+	HotKeyManager::setCommandBarGrid( FALSE );
+	// a slot's own key holds without the grid too; the rest is as before
+	CHECK_EQ( HotKeyManager::buttonKeyIn( exit, 0, GUI_COMMAND_EXIT_CONTAINER, keys, 3, -1 ), (WideChar)'M' );
+	CHECK_EQ( HotKeyManager::buttonKeyIn( guard, 'W', GUI_COMMAND_GUARD, keys, 12, -1 ), (WideChar)'G' );
+
+	// the options page's Accept keeps the switch and every slot's key
+	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
+	static const char FILE_TEXT[] =
+		"CommandBarGrid\r\n  Enabled = Yes\r\nEnd\r\n\r\n"
+		"CommandButtonHotKey Command_TransportExit@4\r\n  Key = M\r\nEnd\r\n\r\n"
+		"CommandButtonHotKey shockwave:Command_TransportExit@12\r\n  Key = NONE\r\nEnd\r\n\r\n";
+	HotkeysFile file = Hotkeys_parse( FILE_TEXT, rows );
+	CHECK( file.commandBarGrid );
+	CHECK_STR( file.buttons[ "Command_TransportExit@4" ].c_str(), "M" );
+	CHECK( file.buttons.count( "shockwave:Command_TransportExit@12" ) == 1 );
+	const std::string text = Hotkeys_format( file, rows );
+	CHECK( text.find( FILE_TEXT ) != std::string::npos );
+	CHECK( Hotkeys_format( Hotkeys_parse( text, rows ), rows ) == text );
+	file.commandBarGrid = FALSE;
+	CHECK( Hotkeys_format( file, rows ).find( "CommandBarGrid" ) == std::string::npos );
+}
+
 TEST(metamap_format_chord_names_the_hold)
 {
 	CHECK( MetaMap_formatChord( MK_NONE, CTRL, COMMANDUSABLE_GAME ) == UnicodeString( u"Ctrl" ) );

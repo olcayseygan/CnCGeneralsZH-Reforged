@@ -152,6 +152,19 @@ Bool HotKeyManager::barHoldsKey( Int key, Int modState )
 	return win != NULL && !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN );
 }
 
+Bool HotKeyManager::commandMapHolds( const AsciiString& key )
+{
+	if( TheMetaMap == NULL || TheKeyboard == NULL || key.isEmpty() )
+		return FALSE;
+	// the replay's fast forward lets its key through to the bar (MetaEventTranslator), so it holds none
+	for( const MetaMapRec *rec = TheMetaMap->getFirstMetaMapRec(); rec; rec = rec->m_next )
+		if( rec->m_modState == NONE && BitTest( rec->m_usableIn, COMMANDUSABLE_GAME ) && rec->m_key != MK_NONE
+				&& rec->m_meta != GameMessage::MSG_META_TOGGLE_FAST_FORWARD_REPLAY
+				&& nameOf( typedLetter( (UnsignedByte)rec->m_key ) ) == key )
+			return TRUE;
+	return FALSE;
+}
+
 //-----------------------------------------------------------------------------
 GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage *msg)
 {

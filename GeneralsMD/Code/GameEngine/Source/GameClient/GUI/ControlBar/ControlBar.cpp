@@ -4570,14 +4570,16 @@ void ControlBar::setControlCommand( GameWindow *button, const CommandButton *com
 	// A builder standing in for an empty selection lends the keys its buildings and nothing else.
 	// Nobody selected it, so its orders keep no letter: H with nothing selected is the command map's
 	// (view the command center), not the GLA worker's switch to fake buildings, and S stops nothing.
+	// Its buildings give up a letter the command map uses bare too (issue 128): with the grid on they
+	// sit on Q and W, and with nothing selected those still select everything and every aircraft.
 	// the command bar window slot the button sits in, -1 off the bar
 	Int barSlot = -1;
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
 		if( m_commandWindows[ slot ] == button )
 			barSlot = slot;
-	const Bool standInOrder = barSlot >= 0 && m_standInBuilderID != INVALID_DRAWABLE_ID && m_currentSelectedDrawable
-		&& m_currentSelectedDrawable->getID() == m_standInBuilderID
-		&& commandButton->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT;
+	const Bool standIn = barSlot >= 0 && m_standInBuilderID != INVALID_DRAWABLE_ID && m_currentSelectedDrawable
+		&& m_currentSelectedDrawable->getID() == m_standInBuilderID;
+	const Bool standInOrder = standIn && commandButton->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT;
 
 	// the key is the one the player gave the button on the launcher's Hotkeys page, or else the
 	// game's own, the letter after the '&' in the button's label - the English label's in every
@@ -4586,9 +4588,11 @@ void ControlBar::setControlCommand( GameWindow *button, const CommandButton *com
 	// window slot's letter unless the player gave it one.
 	if( TheHotKeyManager )
 	{
-		const WideChar letter = standInOrder ? 0 : HotKeyManager::playerButtonKey( commandButton->getName(),
+		WideChar letter = standInOrder ? 0 : HotKeyManager::playerButtonKey( commandButton->getName(),
 			TheGameText ? TheGameText->fetchEnglishHotKey( commandButton->getTextLabel() ) : 0,
 			commandButton->getCommandType(), barSlot, barSlot >= 0 ? m_commandUpgradeRank[ barSlot ] : -1 );
+		if( standIn && letter != 0 && HotKeyManager::commandMapHolds( HotKeyManager::nameOf( letter ) ) )
+			letter = 0;
 		// the badge shows a letter only while this window holds the key: one that lost it to a
 		// stronger or earlier button shows none, and one that takes it wipes the badge it took it from
 		GameWindow *displaced = NULL;

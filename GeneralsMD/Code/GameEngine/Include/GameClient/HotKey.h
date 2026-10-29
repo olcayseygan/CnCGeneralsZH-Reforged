@@ -152,6 +152,8 @@ public:
 	static Bool strokePressesBar( Int key );
 	/// a showing button in the hotkey map holds the letter this key types, pressed bare or with shift
 	static Bool barHoldsKey( Int key, Int modState );
+	/// a command map record fires in a match on the key that types this letter (nameOf), bare
+	static Bool commandMapHolds( const AsciiString& key );
 	/// CommandBarGrid in Hotkeys.ini: every command bar button keyed by its window slot
 	static Bool commandBarGrid( void );
 	static void setCommandBarGrid( Bool grid );

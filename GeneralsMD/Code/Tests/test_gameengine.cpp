@@ -19286,6 +19286,10 @@ TEST(scenario_parses_the_order_lines)
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1 ChinaGattlingCannon", &action ), (Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_TALLY );
 	CHECK_STR( action.selector.str(), "ChinaGattlingCannon" );
+	CHECK_EQ( action.count, -1 );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1 ChinaGattlingCannon 0", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( action.count, 0 );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1 ChinaGattlingCannon some", &action ), (Int)SCENARIO_PARSE_BAD_COUNT );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
 
 	// the stance key

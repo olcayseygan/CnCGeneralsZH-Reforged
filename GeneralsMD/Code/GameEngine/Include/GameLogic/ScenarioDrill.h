@@ -131,7 +131,7 @@ struct ScenarioAction
 	AsciiString selector;					///< a template name, or "*" for everything that seat owns
 	Coord2D at;										///< spawn, move, attackmove and arrive target, or the offset from atStart
 	Int atStart;									///< the start position at is measured from, SCENARIO_NO_START for none
-	Int count;										///< how many to spawn
+	Int count;										///< how many to spawn; for tally, how many should be standing, -1 for no opinion
 	Real spacing;									///< how far apart to spawn them, in world units
 	Real radius;									///< how close to the target counts as arrived
 	Int targetSlot;								///< whose units to attack

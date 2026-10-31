@@ -543,9 +543,14 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 				return SCENARIO_PARSE_BAD_COUNT;
 			break;
 
+		case SCENARIO_ACTION_TALLY:
+			action->count = -1;		// nothing wanted, unless the file names a count
+			if (count > SCENARIO_TOKENS_STOP && !parseWholeNumber( tokens[ SCENARIO_TOKENS_STOP ], &action->count ))
+				return SCENARIO_PARSE_BAD_COUNT;
+			break;
+
 		case SCENARIO_ACTION_STOP:
 		case SCENARIO_ACTION_CLICKSTOP:
-		case SCENARIO_ACTION_TALLY:
 		case SCENARIO_ACTION_PURCHASE:
 			break;
 	}
@@ -1538,6 +1543,10 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 	DEBUG_LOG(("HEADLESS TALLY: frame %d slot %d '%s': %d alive, health %.0f of %.0f, worth %d, %d inside, money %d\n",
 						 action.frame, action.slot, action.selector.str(), alive, health, maxHealth, worth, inside,
 						 player->getMoney()->countMoney()));
+	if (action.count >= 0)
+		DEBUG_LOG(("HEADLESS EXPECT: %s: frame %d slot %d '%s': %d alive, wanted %d\n",
+							 alive == action.count ? "PASS" : "FAIL",
+							 action.frame, action.slot, action.selector.str(), alive, action.count));
 	return TRUE;
 }
 

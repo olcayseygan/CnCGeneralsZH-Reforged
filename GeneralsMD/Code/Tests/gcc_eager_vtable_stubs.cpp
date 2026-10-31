@@ -59,6 +59,7 @@
 #include "Common/AsciiString.h"
 #include "Common/AudioEventRTS.h"
 #include "Common/GameMemory.h"
+#include "Common/LogicThread.h"
 #include "Common/UnicodeString.h"
 
 #include <stdio.h>
@@ -77,6 +78,11 @@ void MemoryPool::freeBlock( void * ) { neverCalled( "MemoryPool::freeBlock" ); }
 MemoryPool *MemoryPoolFactory::createMemoryPool( const char *, Int, Int, Int ) { neverCalled( "MemoryPoolFactory::createMemoryPool" ); return NULL; }
 #endif
 AudioEventRTS::~AudioEventRTS() { neverCalled( "AudioEventRTS::~AudioEventRTS" ); }
+
+// JobSystem::parallel_for's LOGIC_CENSUS names these.  The flag stays false here, so census()
+// does not call noteCensus; the symbol still has to exist, and reaching it is a failing test.
+thread_local Bool LogicThread::t_isLogicThread = FALSE;
+void LogicThread::noteCensus( LogicThread::Channel ) { neverCalled( "LogicThread::noteCensus" ); }
 
 #if defined(ZH_EAGER_VTABLE_STUB_STRINGS)
 void AsciiString::freeBytes( void ) { neverCalled( "AsciiString::freeBytes" ); }

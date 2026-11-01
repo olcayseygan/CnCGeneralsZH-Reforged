@@ -1106,6 +1106,7 @@ GameEngine/Include/GameNetwork/GameSpyGP.h
 GameEngine/Include/GameNetwork/GameSpyGameInfo.h
 GameEngine/Include/GameNetwork/GameSpyOverlay.h
 GameEngine/Include/GameNetwork/GameSpyThread.h
+GameEngine/Include/GameNetwork/GameSpyTitleConfig.h
 GameEngine/Include/GameNetwork/IPEnumeration.h
 GameEngine/Include/GameNetwork/KeepAliveSchedule.h
 GameEngine/Include/GameNetwork/LANAPI.h
@@ -3256,6 +3257,7 @@ Tests/test_milesaudiomanager.cpp
 Tests/test_minimap_input.inc
 Tests/test_modern_water_config.cpp
 Tests/test_msvc_float_casts.cpp
+Tests/test_network_sources.cpp
 Tests/test_observer_camera.inc
 Tests/test_pixelcentre.cpp
 Tests/test_posix_draw_resolve.cpp

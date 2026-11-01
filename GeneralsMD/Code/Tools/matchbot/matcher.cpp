@@ -18,6 +18,7 @@
 
 #include "global.h"
 #include "matcher.h"
+#include "../../GameEngine/Include/GameNetwork/GameSpyTitleConfig.h"
 #include "encrypt.h"
 #include "timezone.h"
 #include "debug.h"
@@ -322,7 +323,7 @@ void MatcherClass::connectAndLoop(void)
 	// Defaults.
 	////////////
 	Wstring title = "gmtest";
-	Wstring secretKey = "HA6zkS";
+	Wstring secretKey = "";
 	Wstring serialNo = "";
 	m_profileID = 0;
 	Global.config.getString("Nick", m_baseNick, "LOGIN");
@@ -332,6 +333,11 @@ void MatcherClass::connectAndLoop(void)
 	Global.config.getString("SecretKey", secretKey, "LOGIN");
 	Global.config.getInt("ProfileID", m_profileID, "LOGIN");
 	Global.config.getString("CDKey", serialNo, "LOGIN");
+	if (!GameSpy_validTitleField(title.get()) || !GameSpy_validTitleField(secretKey.get()))
+	{
+		DBGMSG("Configure LOGIN/Title and LOGIN/SecretKey (1..31 letters, digits, underscores or hyphens)");
+		return;
+	}
 	PEERCallbacks callbacks;
 	PEERBool pingRooms[NumRooms];
 	PEERBool crossPingRooms[NumRooms];

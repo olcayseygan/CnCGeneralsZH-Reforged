@@ -76,6 +76,7 @@
 #include "GameLogic/ScenarioDrill.h"
 #include "GameLogic/OrderQueue.h"
 #include "Common/ControlServer.h"
+#include "GameNetwork/GameSpyTitleConfig.h"
 #include "GameLogic/LogicRandomValue.h"
 #include "GameClient/ClientRandomValue.h"
 #include "Common/ThingTemplate.h"
@@ -1923,14 +1924,14 @@ TEST(force_fire_is_the_attack_key_and_nothing_else)
 /* HotKey.cpp: a label's '&' letter and the key a Turkish keyboard types meet on one map key. */
 TEST(hotkey_names_fold_turkish_letters_and_case)
 {
-	CHECK_STR( HotKeyManager::nameOf( L'B' ).str(), "b" );
-	CHECK_STR( HotKeyManager::nameOf( L'b' ).str(), "b" );
-	CHECK( HotKeyManager::nameOf( 0x0130 ) == HotKeyManager::nameOf( L'i' ) );	// İptal against the i key
-	CHECK( HotKeyManager::nameOf( 0x0131 ) == HotKeyManager::nameOf( L'I' ) );
+	CHECK_STR( HotKeyManager::nameOf( u'B' ).str(), "b" );
+	CHECK_STR( HotKeyManager::nameOf( u'b' ).str(), "b" );
+	CHECK( HotKeyManager::nameOf( 0x0130 ) == HotKeyManager::nameOf( u'i' ) );	// İptal against the i key
+	CHECK( HotKeyManager::nameOf( 0x0131 ) == HotKeyManager::nameOf( u'I' ) );
 	CHECK( HotKeyManager::nameOf( 0x015E ) == HotKeyManager::nameOf( 0x015F ) );	// Ş ş
 	CHECK( HotKeyManager::nameOf( 0x00C7 ) == HotKeyManager::nameOf( 0x00E7 ) );	// Ç ç
 	CHECK( HotKeyManager::nameOf( 0x011E ) == HotKeyManager::nameOf( 0x011F ) );	// Ğ ğ
-	CHECK( HotKeyManager::nameOf( 0x015E ) != HotKeyManager::nameOf( L'^' ) );	// not its low byte
+	CHECK( HotKeyManager::nameOf( 0x015E ) != HotKeyManager::nameOf( u'^' ) );	// not its low byte
 }
 
 /* HotKey.cpp, Hotkeys_*: the options menu's Hotkeys page writes Hotkeys.ini the way the launcher does.
@@ -7642,14 +7643,14 @@ TEST(capitals_reach_turkish_and_cyrillic_letters)
 {
 	GlobalData *saved = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;
-	const UnicodeString words( u"ordu seç, şiğ öü ı зіґ" );
+	const UnicodeString words( u"ordu se\u00e7, \u015fi\u011f \u00f6\u00fc \u0131 \u0437\u0456\u0491" );
 	TheWritableGlobalData->m_textLanguage = TEXT_LANGUAGE_TURKISH;
-	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SEÇ, ŞİĞ ÖÜ I ЗІҐ" ) );
+	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SE\u00c7, \u015e\u0130\u011e \u00d6\u00dc I \u0417\u0406\u0490" ) );
 	// a map's name is English whatever the language, so its i stays plain
 	CHECK( UIStyle::nameCapitals( UnicodeString( u"Twilight Flame" ) ) == UnicodeString( u"TWILIGHT FLAME" ) );
 	TheWritableGlobalData->m_textLanguage = TEXT_LANGUAGE_ENGLISH;
-	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SEÇ, ŞIĞ ÖÜ I ЗІҐ" ) );
-	CHECK( UIStyle::capitals( UnicodeString( u"ß ÷" ) ) == UnicodeString( u"ß ÷" ) );
+	CHECK( UIStyle::capitals( words ) == UnicodeString( u"ORDU SE\u00c7, \u015eI\u011e \u00d6\u00dc I \u0417\u0406\u0490" ) );
+	CHECK( UIStyle::capitals( UnicodeString( u"\u00df \u00f7" ) ) == UnicodeString( u"\u00df \u00f7" ) );
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
 }
@@ -20928,4 +20929,84 @@ TEST(file_write_queue_writes_what_the_file_calls_wrote)
 	std::filesystem::remove( queued );
 	std::filesystem::remove( direct );
 	CHECK( ca == cb );
+}
+
+TEST(control_upgrade_preserves_native_tools_and_requires_browser_capability)
+{
+    const char *token = "synthetic-browser-capability-0123456789";
+    const std::string headers = "GET / HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nUpgrade: websocket\r\nConnection: keep-alive, Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n";
+    char key[64], protocol[160];
+    auto accepts = [&](const std::string &extra, const char *configured) {
+        const std::string request = headers+extra+"\r\n";
+        return ControlServer_validateHandshake(request.data(), (Int)request.size(), configured,
+            key, sizeof(key), protocol, sizeof(protocol));
+    };
+    CHECK(accepts("", NULL));
+    CHECK_STR(key, "dGhlIHNhbXBsZSBub25jZQ==");
+    CHECK_STR(protocol, "");
+    CHECK(!accepts("Origin: https://untrusted.invalid\r\n", NULL));
+    CHECK(!accepts("oRiGiN: null\r\n", token));
+    const std::string capability = std::string("Sec-WebSocket-Protocol: zhr-control.")+token+"\r\n";
+    CHECK(accepts("Origin: https://local-tool.invalid\r\n"+capability, token));
+    CHECK_STR(protocol, (std::string("zhr-control.")+token).c_str());
+    CHECK(accepts("oRiGiN: null\r\n"+capability, token));
+    CHECK(!accepts("Origin: null\r\n"+capability, "a-different-capability-01234567890123"));
+    CHECK(!accepts("Origin: null\r\n"+capability, "short"));
+    CHECK(!accepts("Origin: null\r\nOrigin: null\r\n"+capability, token));
+    CHECK(!accepts("Origin: null\r\n"+capability+capability, token));
+    CHECK(!accepts("X-Value: Origin: null\r\nOrigin: null\r\n", NULL));
+    CHECK(!accepts(" Origin: null\r\n", token));
+    CHECK(!accepts(std::string("X-Value: hidden")+'\0'+"Origin: null\r\n", token));
+    CHECK(!accepts("\r\nOrigin: null\r\n", token));
+    CHECK(!accepts("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n", NULL));
+    // No connection authorization survives a rejected or successful request.
+    CHECK(!accepts("Origin: null\r\n", token));
+    CHECK_STR(protocol, "");
+    CHECK(accepts("", NULL));
+}
+
+TEST(gamespy_title_configuration_is_bounded_without_truncation)
+{
+    char title[32], key[32];
+    CHECK(GameSpy_copyTitleConfig("custom_release", "synthetic-test-key", title, sizeof(title), key, sizeof(key)));
+    CHECK_STR(title, "custom_release"); CHECK_STR(key, "synthetic-test-key");
+    CHECK(GameSpy_copyTitleConfig("custom_beta", "synthetic-test-key", title, sizeof(title), key, sizeof(key)));
+    const std::string longest(31,'x'), oversized(32,'x');
+    CHECK(GameSpy_copyTitleConfig(longest.c_str(), longest.c_str(), title, sizeof(title), key, sizeof(key)));
+    CHECK(!GameSpy_copyTitleConfig(oversized.c_str(), longest.c_str(), title, sizeof(title), key, sizeof(key)));
+    CHECK_STR(title, ""); CHECK_STR(key, "");
+    CHECK(!GameSpy_copyTitleConfig("custom_release", oversized.c_str(), title, sizeof(title), key, sizeof(key)));
+    CHECK(!GameSpy_copyTitleConfig("custom_release", NULL, title, sizeof(title), key, sizeof(key)));
+    CHECK(!GameSpy_copyTitleConfig("custom_release", "", title, sizeof(title), key, sizeof(key)));
+    CHECK(!GameSpy_copyTitleConfig("custom_release", "line\nbreak", title, sizeof(title), key, sizeof(key)));
+    CHECK(!GameSpy_copyTitleConfig("custom\\title", "synthetic-test-key", title, sizeof(title), key, sizeof(key)));
+    CHECK(!GameSpy_copyTitleConfig("custom_release", "synthetic-test-key", title, 4, key, sizeof(key)));
+}
+
+TEST(network_sources_preserve_router_and_requested_recovery_without_direct_impersonation)
+{
+    NetCommandMsg *msg = newInstance(NetCommandMsg);
+    msg->setPlayerID(0);
+    const NetCommandType direct[] = {NETCOMMANDTYPE_FILEANNOUNCE, NETCOMMANDTYPE_FILE,
+        NETCOMMANDTYPE_LOADCOMPLETE, NETCOMMANDTYPE_DISCONNECTVOTE, NETCOMMANDTYPE_FRAMERESENDREQUEST};
+    for (NetCommandType type : direct) {
+        msg->setNetCommandType(type);
+        CHECK(NetworkCommandSourceAllowed(msg, 0, 2, FALSE));
+        CHECK(!NetworkCommandSourceAllowed(msg, 1, 2, FALSE));
+        CHECK(!NetworkCommandSourceAllowed(msg, 2, 2, TRUE));
+        CHECK(!NetworkCommandSourceAllowed(msg, MAX_SLOTS, 2, TRUE));
+    }
+    msg->setNetCommandType(NETCOMMANDTYPE_FRAMEINFO);
+    CHECK(NetworkCommandSourceAllowed(msg, 2, 2, FALSE));
+    CHECK(NetworkCommandSourceAllowed(msg, 1, 2, TRUE));
+    CHECK(!NetworkCommandSourceAllowed(msg, 1, 2, FALSE));
+    msg->setNetCommandType(NETCOMMANDTYPE_CHAT);
+    CHECK(NetworkCommandSourceAllowed(msg, 2, 2, FALSE));
+    CHECK(!NetworkCommandSourceAllowed(msg, 1, 2, TRUE));
+    msg->setNetCommandType(NETCOMMANDTYPE_WRAPPER);
+    CHECK(NetworkCommandSourceAllowed(msg, 2, 2, FALSE));
+    CHECK(!NetworkCommandSourceAllowed(msg, 1, 2, FALSE));
+    msg->setPlayerID(MAX_SLOTS);
+    CHECK(!NetworkCommandSourceAllowed(msg, 2, 2, TRUE));
+    msg->detach();
 }

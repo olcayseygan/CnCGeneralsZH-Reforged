@@ -29,92 +29,74 @@
 /*  Internal Functions                                          */
 /****************************************************************/
 
-struct BTreeDecodeContext
+// Source and destination limits are mandatory: archive lengths are untrusted.
+static int BTREE_decompress(const unsigned char *src, int length, unsigned char *dest, int capacity)
 {
-    signed char    cluetbl[256];
-    unsigned char  left[256];
-    unsigned char  right[256];
-    unsigned char  *d;
-};
-
-static void BTREE_chase(struct BTreeDecodeContext *DC, unsigned char node)
-{
-    if (DC->cluetbl[node])
-    {
-        BTREE_chase(DC,DC->left[node]);
-        BTREE_chase(DC,DC->right[node]);
-        return;
+    if (!src || !dest || length < 7 || capacity <= 0) return 0;
+    unsigned type = (unsigned(src[0]) << 8) | src[1];
+    if (type != 0x46fb && type != 0x47fb) return 0;
+    int pos = type == 0x47fb ? 5 : 2;
+    if (length - pos < 5) return 0;
+    unsigned size = (unsigned(src[pos]) << 16) | (unsigned(src[pos+1]) << 8) | src[pos+2];
+    pos += 3;
+    if (!size || size > unsigned(capacity)) return 0;
+    const unsigned clue = src[pos++], nodes = src[pos++];
+    if (nodes > unsigned((length - pos) / 3)) return 0;
+    bool branch[256] = {};
+    unsigned char left[256] = {}, right[256] = {};
+    for (unsigned i = 0; i < nodes; ++i) {
+        unsigned node = src[pos++];
+        // The encoder reserves the clue and assigns each branch once.
+        if (node == clue || branch[node]) return 0;
+        branch[node] = true; left[node] = src[pos++]; right[node] = src[pos++];
     }
-    *DC->d++ = node;
-}
-
-static int BTREE_decompress(unsigned char *packbuf,unsigned char *unpackbuf)
-{
-    int  node;
-    int  i;
-    int  nodes;
-    int  clue;
-    int ulen;
-    unsigned char *s;
-    signed char c;
-    unsigned int type;
-    struct BTreeDecodeContext DC;
-
-    s = packbuf;
-    DC.d = unpackbuf;
-    ulen = 0L;
-
-    if (s)
-    {
-        type = ggetm(s,2);
-        s += 2;
-
-        /* (skip nothing for 0x46fb) */
-        if (type==0x47fb)                       /* skip ulen */
-            s += 3;
-
-        ulen = ggetm(s,3);
-        s += 3;
-
-        for (i=0;i<256;++i)                     /* 0 means a code is a leaf */
-            DC.cluetbl[i] = 0;
-
-        clue = *s++;
-        DC.cluetbl[clue] = 1;                   /* mark clue as special */
-
-        nodes = *s++;
-        for (i=0;i<nodes;++i)
-        {   node = *s++;
-            DC.left[node]  = *s++;
-            DC.right[node] = *s++;
-            DC.cluetbl[node] = (signed char)-1;
-        }
-
-        for (;;)
-        {
-            node = (int) *s++;
-            c=DC.cluetbl[node];
-            if (!c)
-            {
-                *DC.d++ = (unsigned char) node;
-                continue;
+    // Validate the entire dictionary, including unused nodes. Iterative DFS also
+    // computes expansion lengths, bounding work and rejecting cycles before output.
+    unsigned state[256] = {}, expanded[256] = {};
+    unsigned stack[512];
+    for (unsigned root = 0; root < 256; ++root) {
+        if (!branch[root] || state[root] == 2) continue;
+        unsigned top = 0; stack[top++] = root;
+        while (top) {
+            unsigned node = stack[top-1];
+            if (!branch[node]) { expanded[node] = 1; state[node] = 2; --top; continue; }
+            if (state[node] == 0) state[node] = 1;
+            unsigned child = state[left[node]] != 2 ? left[node] : right[node];
+            if (state[left[node]] == 2 && state[right[node]] == 2) {
+                // Unused dictionary entries may expand beyond this member. Saturate
+                // their lengths; reject only if an oversized branch is actually used.
+                expanded[node] = expanded[left[node]] > size || expanded[right[node]] > size - expanded[left[node]]
+                    ? size+1 : expanded[left[node]] + expanded[right[node]];
+                state[node] = 2; --top; continue;
             }
-            if (c<0)
-            {
-                BTREE_chase(&DC,DC.left[node]);
-                BTREE_chase(&DC,DC.right[node]);
-                continue;
-            }
-            node = (int) *s++;
-            if (node)
-            {
-                *DC.d++ = (char) node;
-                continue;
-            }
-            break;
+            if (child == clue || state[child] == 1 || top == 512) return 0;
+            stack[top++] = child;
         }
     }
-    return(ulen);
+    unsigned written = 0;
+    while (pos < length) {
+        unsigned node = src[pos++];
+        if (node == clue) {
+            if (pos == length) return 0;
+            node = src[pos++];
+            if (!node) return written == size ? int(written) : 0;
+            if (written == size) return 0;
+            dest[written++] = (unsigned char)node;
+        } else {
+            unsigned top = 0; stack[top++] = node;
+            while (top) {
+                node = stack[--top];
+                if (branch[node]) {
+                    if (expanded[node] > size - written || top > 509) return 0;
+                    stack[top++] = right[node]; stack[top++] = left[node];
+                } else {
+                    if (written == size) return 0;
+                    dest[written++] = (unsigned char)node;
+                }
+            }
+        }
+    }
+    return 0; // A complete end marker is required, even when output is full.
 }
 
 /****************************************************************/
@@ -156,9 +138,9 @@ int GCALL BTREE_size(const void *compresseddata)
     return(len);
 }
 
-int GCALL BTREE_decode(void *dest, const void *compresseddata, int *compressedsize)
+int GCALL BTREE_decode(void *dest, const void *compresseddata, int *compressedsize, int capacity)
 {
-    return(BTREE_decompress((unsigned char *)compresseddata,(unsigned char *)dest));
+    return compressedsize ? BTREE_decompress((const unsigned char *)compresseddata, *compressedsize, (unsigned char *)dest, capacity) : 0;
 }
 
 #endif

@@ -28,6 +28,8 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/ControlServer.h"
+#include <algorithm>
+#include <string>
 #include "Common/Energy.h"
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
@@ -480,49 +482,109 @@ static Bool takeFrame( unsigned char *opcodeOut, AsciiString *payloadOut )
 // the http upgrade
 // ------------------------------------------------------------------------------------------------
 
-/** Read the client key out of the request headers.  Case-insensitive on the header name, because
-	  RFC 7230 says header names are, and browsers and Python libraries disagree about the casing. */
-static Bool findClientKey( const char *request, char *keyOut, Int keyOutSize )
+// Parse only complete HTTP header lines. Browser requests need a capability;
+// originless local tools retain their existing protocol and command grammar.
+Bool ControlServer_validateHandshake( const char *request, Int length, const char *browserToken,
+    char *keyOut, Int keySize, char *protocolOut, Int protocolSize )
 {
-	static const char *HEADER = "sec-websocket-key:";
-	const Int headerLength = (Int)strlen( HEADER );
-
-	for( const char *at = request; *at; ++at )
-	{
-		Int i = 0;
-		while (i < headerLength && at[ i ] && tolower( (unsigned char)at[ i ] ) == HEADER[ i ])
-			++i;
-		if (i < headerLength)
-			continue;
-
-		const char *value = at + headerLength;
-		while (*value == ' ' || *value == '\t')
-			++value;
-
-		Int written = 0;
-		while (*value && *value != '\r' && *value != '\n' && written < keyOutSize - 1)
-			keyOut[ written++ ] = *value++;
-		keyOut[ written ] = 0;
-		return written > 0;
-	}
-
-	return FALSE;
+    if (!request || length <= 0 || !keyOut || keySize < 25 || !protocolOut || protocolSize <= 0)
+        return FALSE;
+    keyOut[0] = protocolOut[0] = 0;
+    const std::string text(request, (size_t)length);
+    if (text.find('\0') != std::string::npos || text.size() < 4 ||
+        text.compare(text.size()-4, 4, "\r\n\r\n") != 0) return FALSE;
+    size_t end = text.find("\r\n");
+    if (end == std::string::npos || text.compare(0, 5, "GET /") != 0 ||
+        end < 14 || text.compare(end-9, 9, " HTTP/1.1") != 0) return FALSE;
+    for (size_t i = 4; i < end-9; ++i)
+        if ((unsigned char)text[i] <= 32 || (unsigned char)text[i] >= 127) return FALSE;
+    std::string key, protocol, upgrade, connection;
+    bool originSeen = false, keySeen = false, protocolSeen = false, upgradeSeen = false, connectionSeen = false;
+    for (size_t at = end+2; at < text.size()-2; at = end+2) {
+        end = text.find("\r\n", at);
+        if (end == std::string::npos || end == at) return FALSE;
+        const size_t colon = text.find(':', at);
+        if (colon == std::string::npos || colon == at || colon >= end) return FALSE;
+        std::string name;
+        for (size_t i = at; i < colon; ++i) {
+            const unsigned char c = (unsigned char)text[i];
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                  (c >= '0' && c <= '9') || c == '-')) return FALSE;
+            name += (char)tolower(c);
+        }
+        size_t first = colon+1, last = end;
+        while (first < last && (text[first] == ' ' || text[first] == '\t')) ++first;
+        while (last > first && (text[last-1] == ' ' || text[last-1] == '\t')) --last;
+        const std::string value = text.substr(first, last-first);
+        for (unsigned char c : value) if (c < 32 || c >= 127) return FALSE;
+        if (name == "origin") {
+            if (originSeen || value.empty()) return FALSE;
+            originSeen = true;
+        } else if (name == "sec-websocket-key") {
+            if (keySeen) return FALSE;
+            keySeen = true; key = value;
+        } else if (name == "sec-websocket-protocol") {
+            if (protocolSeen) return FALSE;
+            protocolSeen = true; protocol = value;
+        } else if (name == "upgrade") {
+            if (upgradeSeen) return FALSE;
+            upgradeSeen = true; upgrade = value;
+        } else if (name == "connection") {
+            if (connectionSeen) return FALSE;
+            connectionSeen = true; connection = value;
+        }
+    }
+    if (!keySeen || key.size() != 24 || key[22] != '=' || key[23] != '=') return FALSE;
+    for (unsigned i = 0; i < 22; ++i)
+        if (!((key[i] >= 'a' && key[i] <= 'z') || (key[i] >= 'A' && key[i] <= 'Z') ||
+              (key[i] >= '0' && key[i] <= '9') || key[i] == '+' || key[i] == '/')) return FALSE;
+    if (key[21] != 'A' && key[21] != 'Q' && key[21] != 'g' && key[21] != 'w') return FALSE;
+    for (char &c : upgrade) c = (char)tolower((unsigned char)c);
+    for (char &c : connection) c = (char)tolower((unsigned char)c);
+    if (upgrade != "websocket") return FALSE;
+    bool hasUpgrade = false;
+    size_t at = 0;
+    while (at < connection.size()) {
+        size_t comma = connection.find(',', at);
+        if (comma == std::string::npos) comma = connection.size();
+        std::string part = connection.substr(at, comma-at);
+        const size_t first = part.find_first_not_of(' '), last = part.find_last_not_of(' ');
+        if (first != std::string::npos && part.substr(first,last-first+1) == "upgrade") hasUpgrade = true;
+        at = comma+1;
+    }
+    if (!hasUpgrade) return FALSE;
+    if (originSeen || protocolSeen) {
+        // An explicitly configured, URL-safe random token is also usable from browser JS.
+        if (!browserToken) return FALSE;
+        const size_t tokenLength = strlen(browserToken);
+        if (tokenLength < 32 || tokenLength > 128) return FALSE;
+        for (size_t i = 0; i < tokenLength; ++i) {
+            const unsigned char c = browserToken[i];
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                  (c >= '0' && c <= '9') || c == '-' || c == '_')) return FALSE;
+        }
+        const std::string expected = std::string("zhr-control.")+browserToken;
+        if (!protocolSeen || protocol != expected || protocol.size() >= (size_t)protocolSize) return FALSE;
+        memcpy(protocolOut, protocol.c_str(), protocol.size()+1);
+    }
+    memcpy(keyOut, key.c_str(), key.size()+1);
+    return TRUE;
 }
 
 static Bool tryHandshake( void )
 {
-	// the request ends at the blank line; until then there is nothing to answer
-	theIncoming.push_back( 0 );
-	const char *request = &theIncoming[ 0 ];
-	const char *end = strstr( request, "\r\n\r\n" );
-	theIncoming.pop_back();
-
-	if (end == NULL)
-		return FALSE;
+	// Do not depend on NUL termination or scan bytes belonging to a queued frame.
+	static const char terminator[] = "\r\n\r\n";
+	const auto end = std::search(theIncoming.begin(), theIncoming.end(), terminator, terminator+4);
+	if (end == theIncoming.end()) return FALSE;
+	const Int consumed = (Int)(end-theIncoming.begin())+4;
+	const char *request = &theIncoming[0];
 
 	char clientKey[ 256 ];
 	char acceptKey[ 64 ];
-	if (!findClientKey( request, clientKey, sizeof( clientKey ) )
+	char protocol[160];
+	if (!ControlServer_validateHandshake( request, consumed, getenv("ZH_CONTROL_TOKEN"),
+			clientKey, sizeof(clientKey), protocol, sizeof(protocol) )
 			|| !ControlServer_computeAcceptKey( clientKey, acceptKey, sizeof( acceptKey ) ))
 	{
 		DEBUG_LOG(("CONTROL: not a websocket request, closing\n"));
@@ -535,11 +597,10 @@ static Bool tryHandshake( void )
 					 "HTTP/1.1 101 Switching Protocols\r\n"
 					 "Upgrade: websocket\r\n"
 					 "Connection: Upgrade\r\n"
-					 "Sec-WebSocket-Accept: %s\r\n\r\n",
-					 acceptKey );
+					 "Sec-WebSocket-Accept: %s\r\n%s%s%s\r\n",
+					 acceptKey, protocol[0] ? "Sec-WebSocket-Protocol: " : "", protocol, protocol[0] ? "\r\n" : "" );
 	send( theClientSocket, reply, (Int)strlen( reply ), CONTROL_SEND_FLAGS );
 
-	const Int consumed = (Int)(end - request) + 4;
 	theIncoming.erase( theIncoming.begin(), theIncoming.begin() + consumed );
 	theHandshakeDone = TRUE;
 	DEBUG_LOG(("CONTROL: client connected\n"));

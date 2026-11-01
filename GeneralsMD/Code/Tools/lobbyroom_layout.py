@@ -594,7 +594,8 @@ def selfcheck():
                             % (menu, len(stale), stale[0]))
         try:
             rebuilt = build(wndlayout.parse(tracked), menu).text()
-            if rebuilt != tracked:
+            # WND writers use CRLF; Git checkouts may use LF. Compare all content, including final newlines.
+            if rebuilt.replace("\r\n", "\n") != tracked.replace("\r\n", "\n"):
                 problems.append("%s.wnd is not what lobbyroom_layout.py writes; regenerate it" % menu)
         except (KeyError, ValueError) as error:
             problems.append("%s.wnd no longer builds: %s" % (menu, error))

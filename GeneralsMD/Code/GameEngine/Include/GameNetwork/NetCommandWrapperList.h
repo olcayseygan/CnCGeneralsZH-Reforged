@@ -48,6 +48,7 @@ public:
 
 	Int getPercentComplete(void);
 
+	UnsignedByte m_sourceMask; ///< Union of the validated physical senders of these chunks.
 	NetCommandWrapperListNode *m_next;
 
 protected:

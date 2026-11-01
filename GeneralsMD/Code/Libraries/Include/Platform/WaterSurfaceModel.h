@@ -33,6 +33,17 @@
  X(2.3156f, 3.0217f, 0.013f,5.40f, 2.57f)
 
 namespace WaterSurfaceModel {
+// Darwin sinf and the combined sin/cos routine can round differently. Use the
+// same combined evaluation for full and height-only ocean paths; derivatives
+// remain compiled out of the height-only specialization.
+inline void OceanSinCos(float phase, float &sine, float &cosine) {
+#if defined(__APPLE__)
+    __sincosf(phase, &sine, &cosine);
+#else
+    sine=std::sin(phase); cosine=std::cos(phase);
+#endif
+}
+
 struct Sample { float height, dx, dy; };
 inline Sample Evaluate(float x, float y, float seconds) {
     Sample value = {0,0,0};
@@ -75,7 +86,7 @@ struct OceanSurface { float height,dx,dy,laplacian; };
 template<bool Curvature,bool Slopes=true,bool SwellOnly=false> inline OceanSurface EvaluateOceanInternal(float x,float y,float seconds) {
     const float q0=x*0.0241f+y*0.0157f-seconds*0.23f+0.4f;
     const float q1=x*-0.0173f+y*0.0299f-seconds*0.19f+2.1f;
-    const float s0=std::sin(q0),c0=std::cos(q0),s1=std::sin(q1),c1=std::cos(q1);
+    float s0,c0,s1,c1; OceanSinCos(q0,s0,c0); OceanSinCos(q1,s1,c1);
     const float px=x+5.0f*s0,py=y+4.0f*s1;
     const float xx=1.0f+5.0f*c0*0.0241f,xy=5.0f*c0*0.0157f;
     const float yx=4.0f*c1*-0.0173f,yy=1.0f+4.0f*c1*0.0299f;
@@ -86,7 +97,7 @@ template<bool Curvature,bool Slopes=true,bool SwellOnly=false> inline OceanSurfa
     OceanSurface value={0,0,0,0};
 #define WATER_OCEAN_EVAL(kx,ky,amplitude,omega,phase) if (!SwellOnly || kx*kx+ky*ky<0.18f) { \
     const float p=px*kx+py*ky-seconds*omega+phase; \
-    const float s=std::sin(p),c=std::cos(p); \
+    float s,c; OceanSinCos(p,s,c); \
     value.height+=amplitude*(s+0.16f*s*c); \
     if (Slopes || Curvature) { \
         const float derivative=amplitude*(c+0.16f*(c*c-s*s)); \

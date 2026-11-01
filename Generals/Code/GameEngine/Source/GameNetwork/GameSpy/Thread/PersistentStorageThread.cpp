@@ -29,7 +29,8 @@
 // the game.
 // Author: Matthew D. Campbell, July 2002
 
-#include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "PreRTS.h"
+#include "GameNetwork/GameSpyTitleConfig.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/UserPreferences.h"
 #include "Common/PlayerTemplate.h"
@@ -592,6 +593,12 @@ Bool PSThreadClass::tryConnect( void )
 		return true;
 	}
 
+	if (!GameSpy_readTitleConfig("ccgenerals", gcd_gamename, 32, gcd_secret_key, 32))
+	{
+		DEBUG_LOG(("GameSpy stats: missing or invalid title configuration\n"));
+		return false;
+	}
+
 	// this may block for 1-2 seconds (according to GS) so it's nice we're not in the UI thread :)
 	result = InitStatsConnection(0);
 
@@ -829,30 +836,7 @@ void PSThreadClass::Thread_Function()
 {
 	try {
 	_set_se_translator( DumpExceptionInfo ); // Hook that allows stack trace.
-	/*********
-	First step, set our game authentication info
-	We could do:
-		strcpy(gcd_gamename,"ccgenerals");
-		strcpy(gcd_secret_key,"h5T2f6");
-	or
-		strcpy(gcd_gamename,"ccgeneralsb");
-		strcpy(gcd_secret_key,"g3T9s2");
-	...but this is more secure:
-	**********/
-	/**
-	gcd_gamename[0]='c';gcd_gamename[1]='c';gcd_gamename[2]='g';gcd_gamename[3]='e';
-	gcd_gamename[4]='n';gcd_gamename[5]='e';gcd_gamename[6]='r';gcd_gamename[7]='a';
-	gcd_gamename[8]='l';gcd_gamename[9]='s';gcd_gamename[10]='b';gcd_gamename[11]='\0';
-	gcd_secret_key[0]='g';gcd_secret_key[1]='3';gcd_secret_key[2]='T';gcd_secret_key[3]='9';
-	gcd_secret_key[4]='s';gcd_secret_key[5]='2';gcd_secret_key[6]='\0';
-	/**/
-	gcd_gamename[0]='c';gcd_gamename[1]='c';gcd_gamename[2]='g';gcd_gamename[3]='e';
-	gcd_gamename[4]='n';gcd_gamename[5]='e';gcd_gamename[6]='r';gcd_gamename[7]='a';
-	gcd_gamename[8]='l';gcd_gamename[9]='s';gcd_gamename[10]='\0';
-	gcd_secret_key[0]='h';gcd_secret_key[1]='5';gcd_secret_key[2]='T';gcd_secret_key[3]='2';
-	gcd_secret_key[4]='f';gcd_secret_key[5]='6';gcd_secret_key[6]='\0';
-	/**/
-	
+
 	//strcpy(StatsServerHostname, "sdkdev.gamespy.com");
 
 	PSRequest req;

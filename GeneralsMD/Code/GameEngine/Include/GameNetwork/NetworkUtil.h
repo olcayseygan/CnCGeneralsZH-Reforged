@@ -35,6 +35,13 @@
 
 UnsignedInt ResolveIP(AsciiString host);
 
+/** Source policy after endpoint lookup. Recovery is restricted to explicitly requested frame data. */
+Bool NetworkCommandAuthorAllowed(NetCommandMsg *msg, UnsignedByte routerAuthors);
+
+Bool NetworkCommandSourceAllowed(NetCommandMsg *msg, UnsignedInt sender, UnsignedInt router,
+    Bool requestedRecovery);
+
+
 /** Read a comma separated list of addresses - a -netgame slot list - into host order addresses,
     in the order they were given, since that order is the player order on every machine.  Returns
     how many were read, or -1 if the list is longer than maxAddresses or one entry is not an

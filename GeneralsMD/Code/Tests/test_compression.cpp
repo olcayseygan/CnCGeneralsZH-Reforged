@@ -502,3 +502,75 @@ TEST(name_tables_stop_at_compression_max)
 	CHECK_STR(CompressionManager::getDecompressionNameByType(COMPRESSION_NONE), "d_None");
 	CHECK_STR(CompressionManager::getDecompressionNameByType(COMPRESSION_REFPACK), "d_RefPack");
 }
+
+// Both the archive header and the member header are attacker-controlled. A
+// smaller outer length used to let these readers write past the caller's buffer.
+TEST(legacy_codecs_reject_inconsistent_lengths_and_truncated_headers)
+{
+    char source[512], packed[4096], output[544];
+    fill_text(source, sizeof(source), 3);
+    const CompressionType codecs[] = {COMPRESSION_BTREE, COMPRESSION_HUFF};
+    for (CompressionType codec : codecs) {
+        const int length = CompressionManager::compressData(codec, source, sizeof(source), packed, sizeof(packed));
+        CHECK(length > 16);
+        CHECK_EQ(CompressionManager::decompressData(packed, length, output, sizeof(source)), int(sizeof(source)));
+        CHECK_MEM(source, output, sizeof(source));
+        // Outer header claims one byte, inner header and encoded stream claim 512.
+        const unsigned small = 1;
+        memcpy(packed+4, &small, sizeof(small));
+        memset(output, 0x5a, sizeof(output));
+        CHECK_EQ(CompressionManager::decompressData(packed, length, output, 1), 0);
+        for (int i = 1; i < int(sizeof(output)); ++i) CHECK_EQ((unsigned char)output[i], 0x5a);
+        const unsigned full = sizeof(source);
+        memcpy(packed+4, &full, sizeof(full));
+        for (int n = 8; n < 15; ++n)
+            CHECK_EQ(CompressionManager::decompressData(packed, n, output, sizeof(source)), 0);
+        // A second attack keeps the outer bound but lies in the member's size.
+        const int sizeAt = 8+2+((packed[8]&1) ? 3 : 0);
+        packed[sizeAt] = 0; packed[sizeAt+1] = 0; packed[sizeAt+2] = 1;
+        CHECK_EQ(CompressionManager::decompressData(packed, length, output, sizeof(source)), 0);
+    }
+}
+
+TEST(btree_rejects_cyclic_and_truncated_dictionaries)
+{
+    char cyclic[] = {'E','A','B',0, 1,0,0,0, 0x46,(char)0xfb,0,0,1,
+        (char)255,1, (char)254,(char)254,'x', (char)254,(char)255,0};
+    char output[16]; memset(output, 0x5a, sizeof(output));
+    CHECK_EQ(CompressionManager::decompressData(cyclic, sizeof(cyclic), output, 1), 0);
+    CHECK_EQ((unsigned char)output[1], 0x5a);
+    CHECK_EQ(CompressionManager::decompressData(cyclic, 17, output, 1), 0);
+    // A literal-only legacy dictionary is still a valid stream.
+    char valid[] = {'E','A','B',0, 1,0,0,0, 0x46,(char)0xfb,0,0,1,(char)255,0,'x',(char)255,0};
+    CHECK_EQ(CompressionManager::decompressData(valid, sizeof(valid), output, 1), 1);
+    CHECK_EQ(output[0], 'x');
+    // An unused but well-formed branch is allowed to expand beyond the member size.
+    char unused[] = {'E','A','B',0, 1,0,0,0, 0x46,(char)0xfb,0,0,1,
+        (char)255,1,(char)254,'x','y','z',(char)255,0};
+    CHECK_EQ(CompressionManager::decompressData(unused, sizeof(unused), output, 1), 1);
+    CHECK_EQ(output[0], 'z');
+}
+
+TEST(huffman_rejects_invalid_tables_and_clue_runs)
+{
+    char packed[64], output[16];
+    auto decode = [&](const char *bits) {
+        memset(packed, 0, sizeof(packed)); memset(output, 0x5a, sizeof(output));
+        memcpy(packed, "EAH", 3); packed[4]=1;
+        packed[8]=0x30; packed[9]=(char)0xfb; packed[12]=1; packed[13]=1;
+        int bit=0;
+        for (; bits[bit]; ++bit) if (bits[bit]=='1') packed[14+bit/8] |= (unsigned char)(1u<<(7-bit%8));
+        return CompressionManager::decompressData(packed, 14+(bit+7)/8, output, 1);
+    };
+    // Two one-bit symbols: zero and the clue. Literal zero, clue, run zero, EOF.
+    CHECK_EQ(decode("110100100011001"),1); CHECK_EQ(output[0],0);
+    const char *invalid[] = {
+        "111",                  // three one-bit symbols cannot form a prefix code
+        "1101001001101",        // run one before any preceding output byte
+        "1101001000111011001"    // literal followed by a run two beyond the output bound
+    };
+    for (const char *bits : invalid) {
+        CHECK_EQ(decode(bits),0);
+        for (int i=1;i<int(sizeof(output));++i) CHECK_EQ((unsigned char)output[i],0x5a);
+    }
+}

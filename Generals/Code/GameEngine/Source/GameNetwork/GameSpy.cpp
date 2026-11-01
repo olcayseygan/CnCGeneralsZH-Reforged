@@ -26,7 +26,8 @@
 // GameSpy callbacks, etc
 // Author: Matthew D. Campbell, February 2002
 
-#include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "PreRTS.h"
+#include "GameNetwork/GameSpyTitleConfig.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "GameSpy/GP/GP.h"
 #include "GameSpy/gstats/gpersist.h"
@@ -1394,7 +1395,9 @@ void GameSpyChat::login(AsciiString loginName, AsciiString password, AsciiString
 	
 	// Set the title.
 	/////////////////
-	if(!peerSetTitle(m_peer, "gmtest", "HA6zkS", "gmtest", "HA6zkS", 15, pingRooms, crossPingRooms))
+	char configuredTitle[32], configuredKey[32];
+	if (!GameSpy_readTitleConfig("gmtest", configuredTitle, sizeof(configuredTitle), configuredKey, sizeof(configuredKey)) ||
+		!peerSetTitle(m_peer, configuredTitle, configuredKey, configuredTitle, configuredKey, 15, pingRooms, crossPingRooms))
 	{
 		GSMessageBoxOk(UnicodeString(L"Error setting title"), UnicodeString(L"Error setting title"), NULL);
 		peerShutdown(m_peer);

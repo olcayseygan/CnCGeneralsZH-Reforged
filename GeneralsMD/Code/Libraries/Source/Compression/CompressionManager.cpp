@@ -304,13 +304,13 @@ Int CompressionManager::decompressData( void *srcVoid, Int srcLen, void *destVoi
 
 	const Int expected = getUncompressedSize(src, srcLen);
 	if (expected <= 0 || expected > destLen) return 0;
-	// Preserve legacy codec compatibility. Their unbounded decoders remain audit follow-up;
-	// RefPack below, the preferred map codec, has an explicit capacity contract.
+	// Both member and archive lengths are untrusted; bounded readers must agree with the outer size.
 	if (compType == COMPRESSION_BTREE || compType == COMPRESSION_HUFF)
 	{
 		Int slen = srcLen - 8;
-		return compType == COMPRESSION_BTREE ? BTREE_decode(dest, src + 8, &slen)
-											: HUFF_decode(dest, src + 8, &slen);
+		const Int result = compType == COMPRESSION_BTREE ? BTREE_decode(dest, src + 8, &slen, expected)
+											: HUFF_decode(dest, src + 8, &slen, expected);
+		return result == expected ? result : 0;
 	}
 	if (compType == COMPRESSION_REFPACK)
 	{

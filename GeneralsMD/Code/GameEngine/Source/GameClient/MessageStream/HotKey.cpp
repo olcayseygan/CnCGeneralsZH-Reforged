@@ -276,10 +276,10 @@ Bool HotKeyManager::executeHotKey( const AsciiString& keyIn )
 	* English player's I key have to meet, and so do the I key of a Turkish Q layout and a label's I. */
 AsciiString HotKeyManager::nameOf( WideChar c )
 {
-	if( c == 0x0130 || c == 0x0131 || c == L'I' )
-		c = L'i';
-	else if( c >= L'A' && c <= L'Z' )
-		c = c + ( L'a' - L'A' );
+	if( c == 0x0130 || c == 0x0131 || c == u'I' )
+		c = u'i';
+	else if( c >= u'A' && c <= u'Z' )
+		c = c + ( u'a' - u'A' );
 	else if( c >= 0x00C0 && c <= 0x00DE && c != 0x00D7 )
 		c = c + 0x20;
 	else if( c >= 0x0100 && c <= 0x017F && ( c & 1 ) == 0 )

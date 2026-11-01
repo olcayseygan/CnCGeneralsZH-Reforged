@@ -2145,6 +2145,7 @@ static std::array<std::vector<float>,WaterFftSpectrum::Phases+1> check_ocean_mip
 			const double error=std::abs(double(result[level][i])-expected[level][i]);maximumError=(std::max)(maximumError,error);
 			valid &= std::isfinite(result[level][i]) && error<1e-6+std::abs(expected[level][i])*3e-6;
 		}
+		if(!valid) printf("ocean mip %u first %.9g expected %.9g maxerror %.9g\n",level,result[level][0],expected[level][0],maximumError);
 		CHECK(valid);
 	}
 	return result;

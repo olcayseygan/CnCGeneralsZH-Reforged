@@ -26,7 +26,8 @@
 // GameSpy Persistent Storage callbacks, utils, etc
 // Author: Matthew D. Campbell, March 2002
 
-#include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "PreRTS.h"
+#include "GameNetwork/GameSpyTitleConfig.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "GameSpy/gstats/gpersist.h"
 
@@ -324,17 +325,11 @@ static Bool gameSpyInitPersistentStorageConnection( void )
 	isProfileAuthorized = false;
 	Int result;
 
-	/*********
-	First step, set our game authentication info
-	We could do:
-		strcpy(gcd_gamename,"gmtest");
-		strcpy(gcd_secret_key,"HA6zkS");
-	...but this is more secure:
-	**********/
-	gcd_gamename[0]='g';gcd_gamename[1]='m';gcd_gamename[2]='t';gcd_gamename[3]='e';
-	gcd_gamename[4]='s';gcd_gamename[5]='t';gcd_gamename[6]='\0';
-	gcd_secret_key[0]='H';gcd_secret_key[1]='A';gcd_secret_key[2]='6';gcd_secret_key[3]='z';
-	gcd_secret_key[4]='k';gcd_secret_key[5]='S';gcd_secret_key[6]='\0';
+	if (!GameSpy_readTitleConfig("gmtest", gcd_gamename, 32, gcd_secret_key, 32))
+	{
+		DEBUG_LOG(("GameSpy stats: configure the title credentials before connecting\n"));
+		return false;
+	}
 
 	/*********
 	Next, open the stats connection. This may block for

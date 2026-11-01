@@ -31,7 +31,8 @@
 // the game.
 // Author: Matthew D. Campbell, June 2002
 
-#include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "PreRTS.h"
+#include "GameNetwork/GameSpyTitleConfig.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Lib/Clock.h"
 
 #include "Common/Registry.h"
@@ -1308,30 +1309,19 @@ void PeerThreadClass::Thread_Function()
 	crossPingRooms[GroupRoom] = PEERFalse;
 	crossPingRooms[StagingRoom] = PEERFalse;
 	
-	/*********
-	First step, set our game authentication info
-	We could do:
-		strcpy(gcd_gamename,"ccgenzh");
-		strcpy(gcd_secret_key,"D6s9k3");
-	or
-		strcpy(gcd_gamename,"ccgeneralsb");
-		strcpy(gcd_secret_key,"whatever the key is");
-	...but this is more secure:
-	**********/
-	char gameName[12] = {0};
-	char secretKey[7] = {0};
-	/**
-	gameName[0]='c';gameName[1]='c';gameName[2]='g';gameName[3]='e';
-	gameName[4]='n';gameName[5]='e';gameName[6]='r';gameName[7]='a';
-	gameName[8]='l';gameName[9]='s';gameName[10]='b';gameName[11]='\0';
-	secretKey[0]='g';secretKey[1]='3';secretKey[2]='T';secretKey[3]='9';
-	secretKey[4]='s';secretKey[5]='2';secretKey[6]='\0';
-	/**/
-	gameName[0]='c';gameName[1]='c';gameName[2]='g';gameName[3]='e';
-	gameName[4]='n';gameName[5]='z';gameName[6]='h';gameName[7]='\0';
-	secretKey[0]='D';secretKey[1]='6';secretKey[2]='s';secretKey[3]='9';
-	secretKey[4]='k';secretKey[5]='3';secretKey[6]='\0';
-	/**/
+	char gameName[32], secretKey[32];
+	if (!GameSpy_readTitleConfig("ccgenzh", gameName, sizeof(gameName), secretKey, sizeof(secretKey)))
+	{
+		DEBUG_LOG(("GameSpy: configure a valid ZH_GAMESPY_TITLE and ZH_GAMESPY_SECRET_KEY before connecting\n"));
+		peerShutdown(peer);
+		peer = NULL;
+		markAsDisconnected();
+		PeerResponse resp;
+		resp.peerResponseType = PeerResponse::PEERRESPONSE_DISCONNECT;
+		resp.discon.reason = DISCONNECT_COULDNOTCONNECT;
+		TheGameSpyPeerMessageQueue->addResponse(resp);
+		return;
+	}
 
 	// Set the title.
 	/////////////////

@@ -3460,8 +3460,7 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 	runtime's frees accepts.  calloc, not malloc, because this operator new zeroes (allocateBytes), and the
 	engine reads members nothing else set: with the sanitizer's own unzeroed new the game crashed loading
 	its .big files.  The pools stay (MemoryPoolObject classes have operators of their own), and so do the
-	strings, which allocate from TheDynamicMemoryAllocator by name.  Without the define, as in every
-	normal build, this file is what it was.
+	strings, which allocate from TheDynamicMemoryAllocator by name.
 
 	Linux takes the same calloc and free in every build.  There the executable's operator new is the one
 	every shared library in the process gets, and Mesa's Vulkan drivers load libLLVM, whose static
@@ -3470,8 +3469,15 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 	(MEM_BOUND_ALIGNMENT), so the game died with SIGSEGV inside SDL_CreateGPUDevice on a Radeon Vega with
 	Pardus 23 (Debian 12, Mesa 22.3), or ran, depending on where the blocks happened to land.  glibc's
 	calloc gives 16.  See Tests/test_global_new_alignment.cpp.
+
+	macOS also needs these system-compatible global forms in normal builds.  AppKit/CoreGraphics and
+	their C++ libraries can allocate through the system runtime but resolve a matching delete to this
+	executable's operator.  In a native Cocoa window check CoreGraphics' Clipper2 destructor passed
+	such a block to our delete, which treated the preceding bytes as a DMA block header and crashed.
+	Conversely, a block from our global new must remain valid for a framework's system deallocator.
+	Named string allocations and explicit MemoryPoolObject operators still use their existing pools.
 */
-#if defined(ZH_SANITIZER_BUILD) || defined(__linux__)
+#if defined(ZH_SANITIZER_BUILD) || defined(__linux__) || defined(__APPLE__)
 #define ZH_SYSTEM_GLOBAL_NEW
 #endif
 #ifndef ZH_SYSTEM_GLOBAL_NEW
@@ -3627,7 +3633,7 @@ void operator delete[](void * p, const char *, int)
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
 #else
-// A sanitizer build or Linux: every form from calloc, zeroed as allocateBytes zeroes, and back to free.  They count
+// A sanitizer build or POSIX desktop: every form from calloc, zeroed as allocateBytes zeroes, and back to free. They count
 // in theLinkTester as the forms above do, so initMemoryManager's link test holds unchanged.
 static void *systemAllocate(size_t size)
 {

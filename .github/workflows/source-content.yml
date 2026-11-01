@@ -20,3 +20,7 @@ jobs:
         run: python3 GeneralsMD/Code/Tests/test_installer.py
       - name: Exercise Make and build dispatch with synthetic backends
         run: python3 GeneralsMD/Code/Tests/test_makefile.py
+      - name: Exercise macOS CPU and target architecture selection
+        run: python3 GeneralsMD/Code/Tests/test_macos_build.py
+      - name: Exercise bounded architecture runtime probes
+        run: python3 GeneralsMD/Code/Tests/test_arch_runtime.py

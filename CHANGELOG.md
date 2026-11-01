@@ -10,6 +10,10 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- macOS system frameworks can safely share C++ allocations with the engine. This prevents a CoreGraphics crash during native window drawing while retaining the engine's object and string pools.
+
+- Native VSync now follows the selected setting, including after a graphics reset. Input-method candidates follow window and monitor-scale changes while preserving the text being composed. Apple Silicon builds recognize M1 through M5 scheduling profiles and keep the engine and movie decoder on the same target architecture.
+
 - Unit and faction names can be selected independently of the text language. Guided setup offers both choices, existing preferences take precedence, and the game settings allow changing them for the next launch. The choices affect names without changing models, voices or match rules.
 
 - macOS fullscreen uses native Spaces and declares Game Mode support, with the legacy fullscreen override retained. Background and offscreen runs release idle display-sleep prevention. The app includes English and German LAN-permission descriptions for current macOS versions.

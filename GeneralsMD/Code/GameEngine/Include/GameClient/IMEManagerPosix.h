@@ -90,6 +90,8 @@ public:
 		* GadgetTextEntry ends an edit on - the platform's text events never carry it.  Nothing while
 		* composing, where the key belongs to the input method. */
 	void enterPressed( void );
+	/// Refresh an active field's candidate rectangle without detaching or ending its composition.
+	void refreshTextInputArea( void );
 
 protected:
 	/// GWM_IME_CHAR to the window, through the window manager

@@ -35,6 +35,18 @@ switching to another app or running offscreen releases that assertion; simulatio
 and networking continue as before. `SDL_VIDEO_ALLOW_SCREENSAVER=1` also allows
 display sleep while playing.
 
+The VSync setting also controls Metal presentation when the device is created or
+reset. When VSync is off, immediate presentation is used if the display backend
+supports it; otherwise presentation stays synchronized. The game's frame limit
+and simulation timing remain separate.
+
+Native input-method candidates follow an active text field after window,
+monitor or Retina-scaling changes, without interrupting an ongoing composition.
+
+Global C++ allocations use system-compatible storage, so AppKit, CoreGraphics
+and graphics drivers can safely release it across library boundaries. Explicit
+engine object and string pools retain their existing allocation paths.
+
 On macOS 15 and later, the LAN lobby may trigger the system's local-network
 permission dialog. The app explains discovery, hosting and multiplayer in English
 or German. Allow access to use LAN multiplayer; an existing choice can be changed
@@ -46,9 +58,10 @@ permission tracking. See Apple's [local-network privacy guidance](https://develo
 
 ## Apple Silicon
 
-Release builds run natively on arm64. On an M2, M2 Pro, M2 Max or M2 Ultra,
-`ZH_MACOS_CPU_TUNING=auto` detects the CPU and uses Clang's `-mtune=apple-m2` for
-instruction scheduling. It retains the existing instruction set, so a build can
+Release builds run natively on arm64. `ZH_MACOS_CPU_TUNING=auto` recognizes the
+M1 through M5 families, including Pro, Max and Ultra variants, and uses the
+corresponding Clang `-mtune` profile when both C and C++ compilers support it.
+On an M2 Max that profile is `apple-m2`. It retains the existing instruction set, so a build can
 still run on M1; it does not use `-march=native`, `-mcpu=native` or fast math.
 Intel, Windows and Linux builds keep their architecture paths. Explicit selection:
 
@@ -57,11 +70,16 @@ ZH_MACOS_CPU_TUNING=apple-m2 ./build-macos.sh Release test
 ZH_MACOS_CPU_TUNING=generic ./build-macos.sh Release test
 ```
 
-CMake users can set `-DZH_MACOS_CPU_TUNING=auto|generic|apple-m1|apple-m2`.
+CMake users can set `-DZH_MACOS_CPU_TUNING=auto|generic|apple-m1|apple-m2|apple-m3|apple-m4|apple-m5`.
 Changing the setting through the build script reconfigures the existing tree.
-An older compiler without M2 scheduling falls back to generic in automatic mode;
+An older compiler without the detected CPU's scheduling profile falls back to generic in automatic mode;
 explicit unsupported settings report an error. Build in a native terminal for an
 arm64 app; an Intel/Rosetta build remains an Intel build.
+
+FFmpeg uses the same selected target architecture as the engine, including when
+`CMAKE_OSX_ARCHITECTURES` is left at CMake's default. An explicit architecture or
+`CMAKE_APPLE_SILICON_PROCESSOR` override remains the caller's choice. Universal
+apps still use separate arm64 and x86_64 builds before combining the executables.
 
 The Metal renderer uses SDL's native Apple GPU resources and asynchronous command
 buffers. The shader loader preserves binding slots for textures read without
@@ -229,6 +247,11 @@ retail archive/media containers in the Git index. It is a guard against accident
 inclusion, not a rights audit of inherited icons, textures, screenshots or scripts.
 Windows and Linux remain supported; shared parser changes must preserve their
 formats and behavior too.
+
+The architecture comparison first checks whether both runtime architectures can
+start. A nonresponsive canary, including a stalled Rosetta launch, times out after
+ten seconds and marks that comparison unavailable. Once the runtimes respond,
+the arithmetic comparison still reports differences as failures.
 
 BTree, Huffman and RefPack use bounded readers; the legacy formats remain supported.
 For browser control capabilities, runtime GameSpy configuration and the remaining

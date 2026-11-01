@@ -30,6 +30,7 @@
 //   - Any GPU but this one.  Exits 77, and ctest reports it skipped, where SDL has no GPU device.
 
 #include "SdlGpuFrame.h"
+#include "SdlPresentMode.h"
 #include "SdlPipelineCache.h"
 #include "SdlConstants.h"
 #include "SdlResourceMirror.h"
@@ -6818,6 +6819,38 @@ float4 main(float4 pixel:SV_Position):SV_Target0 {
 
 int main()
 {
+	CHECK(Sdl_Choose_Present_Mode(true, false) == SDL_GPU_PRESENTMODE_VSYNC);
+	CHECK(Sdl_Choose_Present_Mode(true, true) == SDL_GPU_PRESENTMODE_VSYNC);
+	CHECK(Sdl_Choose_Present_Mode(false, false) == SDL_GPU_PRESENTMODE_VSYNC);
+	CHECK(Sdl_Choose_Present_Mode(false, true) == SDL_GPU_PRESENTMODE_IMMEDIATE);
+	// Model a backend that changes state before returning failure (Vulkan may
+	// fail while recreating its swapchain). A fallback must actively repair it.
+	std::vector<SDL_GPUPresentMode> attempts;
+	SDL_GPUPresentMode actual = SDL_GPU_PRESENTMODE_VSYNC;
+	SDL_GPUPresentMode applied = SDL_GPU_PRESENTMODE_MAILBOX;
+	CHECK(Sdl_Apply_Present_Mode(SDL_GPU_PRESENTMODE_IMMEDIATE, [&](SDL_GPUPresentMode mode) {
+		attempts.push_back(mode);
+		actual = mode;
+		return mode == SDL_GPU_PRESENTMODE_VSYNC;
+	}, applied));
+	CHECK(attempts.size() == 2 && attempts[0] == SDL_GPU_PRESENTMODE_IMMEDIATE
+		&& attempts[1] == SDL_GPU_PRESENTMODE_VSYNC);
+	CHECK(actual == SDL_GPU_PRESENTMODE_VSYNC && applied == SDL_GPU_PRESENTMODE_VSYNC);
+	attempts.clear();
+	applied = SDL_GPU_PRESENTMODE_MAILBOX;
+	CHECK(!Sdl_Apply_Present_Mode(SDL_GPU_PRESENTMODE_IMMEDIATE, [&](SDL_GPUPresentMode mode) {
+		attempts.push_back(mode);
+		return false;
+	}, applied));
+	CHECK(attempts.size() == 2 && applied == SDL_GPU_PRESENTMODE_MAILBOX);
+	attempts.clear();
+	CHECK(!Sdl_Apply_Present_Mode(SDL_GPU_PRESENTMODE_VSYNC, [&](SDL_GPUPresentMode mode) {
+		attempts.push_back(mode);
+		return false;
+	}, applied));
+	CHECK(attempts.size() == 1 && attempts[0] == SDL_GPU_PRESENTMODE_VSYNC
+		&& applied == SDL_GPU_PRESENTMODE_MAILBOX);
+	if (failures) return 1;
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		printf("sdl_gpu_frame_selfcheck: SKIP - SDL_Init: %s\n", SDL_GetError());
 		return 77;
@@ -6830,6 +6863,11 @@ int main()
 		return 77;
 	}
 	printf("sdl_gpu_frame_selfcheck: %s\n", SDL_GetGPUDeviceDriver(frame->Device()));
+	// An offscreen frame has no swapchain: VSync changes must neither claim a
+	// window nor enable or change the independent offscreen presentation pacer.
+	CHECK(frame->Configure_Presentation(false) && !frame->Using_VSync());
+	CHECK(frame->Configure_Presentation(true) && !frame->Using_VSync());
+	CHECK(!frame->Offscreen_Presents());
 	check_colour_only_target(frame);
 	check_scene_depth_snapshot(frame);
 	check_gpu_fft_ocean(frame);

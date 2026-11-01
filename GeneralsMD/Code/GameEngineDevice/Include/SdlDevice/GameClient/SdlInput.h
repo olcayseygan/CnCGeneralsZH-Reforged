@@ -25,6 +25,7 @@
 //   - text to the IME manager (PosixIMEManager): committed text, the composition, and Return/keypad
 //     Enter as the '\r' WM_CHAR carries;
 //   - mouse motion, buttons and the wheel to SdlMouse, in the game's pixels.
+// Window geometry and display changes refresh the active text field's candidate rectangle.
 // A device that does not exist yet (the keyboard and mouse are made in GameClient::init, after the
 // first events can arrive) is skipped, as WndProc skips a NULL TheWin32Mouse.
 
@@ -38,7 +39,7 @@
 union SDL_Event;
 struct SDL_Window;
 
-/// One event; TRUE when it was input and was taken
+/// One event; TRUE when input or text-input geometry was handled
 Bool SdlInput_dispatch( const SDL_Event &event );
 
 /** The hints and hooks the rest needs, once: Control+click stays a left click (force fire), the

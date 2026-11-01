@@ -5,10 +5,13 @@
 // No game data, screen recording or Accessibility permission is needed. Run from
 // an interactive desktop; exit 77 means that Cocoa/a WindowServer is unavailable.
 #import <AppKit/AppKit.h>
+#import <QuartzCore/CAMetalLayer.h>
 
 #include <SDL3/SDL.h>
 #include "SdlDevice/Common/SdlMacWindow.h"
 #include "SdlDevice/Common/SdlWindowPolicy.h"
+#include "../GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.h"
+#include "../GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.h"
 
 #include <stdio.h>
 
@@ -41,12 +44,15 @@ void pump( SDL_Window *window )
 struct DesktopState
 {
     SDL_Window *window = NULL;
+    IDirect3DDevice9 *renderer = NULL;
     NSApplicationPresentationOptions presentation = NSApplicationPresentationDefault;
     NSRunningApplication *previousApplication = [[NSWorkspace sharedWorkspace] frontmostApplication];
     bool videoStarted = false;
 
     ~DesktopState()
     {
+        if (renderer != NULL)
+            renderer->Release();
         SdlMacWindow_updatePresentation( NULL );
         if (window != NULL) {
             SDL_SetWindowFullscreen( window, false );
@@ -68,6 +74,65 @@ struct DesktopState
         }
     }
 };
+
+CAMetalLayer *metalLayer( NSView *view )
+{
+    if ([view.layer isKindOfClass:[CAMetalLayer class]])
+        return (CAMetalLayer *)view.layer;
+    for (NSView *child in view.subviews) {
+        CAMetalLayer *found = metalLayer( child );
+        if (found != nil)
+            return found;
+    }
+    return nil;
+}
+
+bool checkPresentation( DesktopState &desktop, NSWindow *native )
+{
+    PosixDirect3D9 *adapter = new PosixDirect3D9;
+    D3DPRESENT_PARAMETERS parameters = {};
+    parameters.BackBufferWidth = 64;
+    parameters.BackBufferHeight = 48;
+    parameters.BackBufferFormat = D3DFMT_X8R8G8B8;
+    parameters.Windowed = 1;
+    parameters.hDeviceWindow = reinterpret_cast<RenderWindow>(desktop.window);
+    parameters.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+    const RenderResult created = adapter->CreateDevice( 0, D3DDEVTYPE_HAL,
+        parameters.hDeviceWindow, 0, &parameters, &desktop.renderer );
+    adapter->Release();
+    if (!check( created == D3D_OK && desktop.renderer != NULL, "create windowed GPU with VSync disabled" ))
+        return false;
+    PosixDevice9 *device = static_cast<PosixDevice9 *>(desktop.renderer);
+    SdlGpuFrame *frame = device->Get_Gpu();
+    if (!check( frame != NULL, "windowed D3D device owns an SDL GPU frame" ))
+        return false;
+    const bool immediate = SDL_WindowSupportsGPUPresentMode( frame->Device(), desktop.window,
+        SDL_GPU_PRESENTMODE_IMMEDIATE );
+    check( frame->Using_VSync() == !immediate, "initial presentation follows VSync or its supported fallback" );
+    CAMetalLayer *layer = metalLayer( native.contentView );
+    if (!check( layer != nil, "window exposes its actual Metal swapchain layer" ))
+        return false;
+    check( layer.displaySyncEnabled == !immediate, "Metal layer uses the initial presentation choice" );
+
+    parameters.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
+    check( device->Reset( &parameters ) == D3D_OK, "reset enables VSync" );
+    check( frame->Using_VSync() && layer.displaySyncEnabled, "VSync reset reaches Metal" );
+    parameters.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+    check( device->Reset( &parameters ) == D3D_OK, "reset disables VSync when supported" );
+    check( frame->Using_VSync() == !immediate && layer.displaySyncEnabled == !immediate,
+        "immediate reset reaches Metal or retains the supported fallback" );
+    D3DPRESENT_PARAMETERS invalid = parameters;
+    invalid.BackBufferWidth = 0;
+    invalid.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
+    check( device->Reset( &invalid ) == D3DERR_INVALIDCALL,
+        "invalid reset is refused before changing presentation" );
+    check( frame->Using_VSync() == !immediate && layer.displaySyncEnabled == !immediate,
+        "refused reset preserves the previous Metal presentation mode" );
+    parameters.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+    check( device->Reset( &parameters ) == D3D_OK, "reset selects default presentation" );
+    check( frame->Using_VSync() && layer.displaySyncEnabled, "default presentation retains VSync" );
+    return true;
+}
 
 int run()
 {
@@ -110,6 +175,8 @@ int run()
     else
         [NSApp activateIgnoringOtherApps:YES];
     pump( window );
+    if (!checkPresentation( desktop, native ))
+        return 1;
     // Activation is cooperative on current macOS; another app's user activity
     // can defer it until the fullscreen transition brings this window forward.
     int pixelsWidth = 0, pixelsHeight = 0;

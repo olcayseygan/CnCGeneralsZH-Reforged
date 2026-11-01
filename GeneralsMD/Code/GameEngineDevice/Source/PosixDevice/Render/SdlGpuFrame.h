@@ -184,6 +184,11 @@ public:
 
 	/// Flush, then the back buffer to the window through the gamma ramp (null: none, a straight blit).
 	bool Present(const uint16_t (*ramp)[256]);
+	/// The claimed window's presentation policy. No window is a no-op, including
+	/// -offscreen's independent pacer. Unsupported immediate mode falls back to VSYNC.
+	bool Configure_Presentation(bool vsync);
+	bool Presentation_Ready() const { return Window == NULL || PresentationKnown; }
+	bool Using_VSync() const { return Window != NULL && VSync; }
 
 	/// PERF1's timing aid (PosixDevice9's ZH_GPU_TIMING): with Serialize_Submits, every submit waits for
 	/// its fence, so the waits add up to the GPU's time for the work (CPU and GPU no longer overlap, so a
@@ -308,6 +313,8 @@ private:
 
 	SDL_GPUDevice * GpuDevice;
 	SDL_Window * Window;				///< C2's, claimed; null for an offscreen frame
+	bool VSync;					///< last confirmed swapchain mode; SDL claims a window with VSYNC
+	bool PresentationKnown;		///< a failed backend change must be retried, never treated as a cache hit
 	SDL_GPUTexture * BackBuffer;
 	SDL_GPUTexture * DepthStencil;
 	SDL_GPUTexture * FrontCopy;			///< the last presented picture

@@ -187,42 +187,41 @@ if(NOT _zh_lzhl_patched)
   message(FATAL_ERROR "LZH-Light lacks lzhl-clear-history.patch. ${VENDOR_HINT}")
 endif()
 
-# Tune scheduling without enabling a newer instruction set. An app built on M2
-# therefore still runs on M1, while Windows/Linux and Intel targets keep their flags.
-set(ZH_MACOS_CPU_TUNING "auto" CACHE STRING "Apple arm64 CPU scheduling: auto, generic, apple-m1, apple-m2")
-set_property(CACHE ZH_MACOS_CPU_TUNING PROPERTY STRINGS auto generic apple-m1 apple-m2)
-if(NOT ZH_MACOS_CPU_TUNING MATCHES "^(auto|generic|apple-m1|apple-m2)$")
-  message(FATAL_ERROR "Invalid ZH_MACOS_CPU_TUNING: ${ZH_MACOS_CPU_TUNING}")
-endif()
+# Tune scheduling without enabling a newer instruction set. An app built on a
+# recent Apple chip therefore keeps the portable arm64 instruction baseline.
+include(${CMAKE_CURRENT_SOURCE_DIR}/Tools/cmake/MacOSBuildPolicy.cmake)
+set(ZH_MACOS_CPU_TUNING "auto" CACHE STRING "Apple arm64 CPU scheduling: auto, generic, apple-m1 through apple-m5")
+set_property(CACHE ZH_MACOS_CPU_TUNING PROPERTY STRINGS auto generic apple-m1 apple-m2 apple-m3 apple-m4 apple-m5)
+zh_macos_validate_tuning("${ZH_MACOS_CPU_TUNING}")
 set(ZH_MACOS_EFFECTIVE_CPU_TUNING "generic")
-if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
-   (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR
-    (NOT CMAKE_OSX_ARCHITECTURES AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")))
-  set(ZH_MACOS_EFFECTIVE_CPU_TUNING "${ZH_MACOS_CPU_TUNING}")
-  if(ZH_MACOS_CPU_TUNING STREQUAL "auto")
-    set(ZH_MACOS_EFFECTIVE_CPU_TUNING "generic")
-    if(NOT CMAKE_CROSSCOMPILING)
+if(APPLE)
+  zh_macos_target_arch("${CMAKE_OSX_ARCHITECTURES}" "${CMAKE_SYSTEM_PROCESSOR}"
+    ZH_MACOS_TARGET_ARCH ZH_MACOS_FFMPEG_ARCH)
+  if(ZH_MACOS_TARGET_ARCH STREQUAL "arm64")
+    set(_zh_cpu_brand "")
+    if(ZH_MACOS_CPU_TUNING STREQUAL "auto" AND NOT CMAKE_CROSSCOMPILING)
       execute_process(COMMAND /usr/sbin/sysctl -n machdep.cpu.brand_string
         OUTPUT_VARIABLE _zh_cpu_brand OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-      if(_zh_cpu_brand MATCHES "Apple M2")
-        set(ZH_MACOS_EFFECTIVE_CPU_TUNING "apple-m2")
+    endif()
+    zh_macos_tuning_candidate("${ZH_MACOS_CPU_TUNING}" "${ZH_MACOS_TARGET_ARCH}"
+      "${_zh_cpu_brand}" "${CMAKE_CROSSCOMPILING}" _zh_tune_candidate)
+    if(NOT _zh_tune_candidate STREQUAL "generic")
+      include(CheckCCompilerFlag)
+      include(CheckCXXCompilerFlag)
+      string(MAKE_C_IDENTIFIER "ZH_HAS_C_${_zh_tune_candidate}_TUNING" _zh_c_tune_check)
+      string(MAKE_C_IDENTIFIER "ZH_HAS_CXX_${_zh_tune_candidate}_TUNING" _zh_cxx_tune_check)
+      check_c_compiler_flag("-mtune=${_zh_tune_candidate}" ${_zh_c_tune_check})
+      check_cxx_compiler_flag("-mtune=${_zh_tune_candidate}" ${_zh_cxx_tune_check})
+      zh_macos_checked_tuning("${ZH_MACOS_CPU_TUNING}" "${_zh_tune_candidate}"
+        "${${_zh_c_tune_check}}" "${${_zh_cxx_tune_check}}" ZH_MACOS_EFFECTIVE_CPU_TUNING)
+      if(ZH_MACOS_EFFECTIVE_CPU_TUNING STREQUAL "generic")
+        message(STATUS "Toolchain has no shared ${_zh_tune_candidate} tuning; retaining portable arm64 scheduling")
+      else()
+        add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:-mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}>")
       endif()
     endif()
+    message(STATUS "macOS arm64 CPU scheduling: ${ZH_MACOS_EFFECTIVE_CPU_TUNING}; instruction baseline unchanged")
   endif()
-  if(NOT ZH_MACOS_EFFECTIVE_CPU_TUNING STREQUAL "generic")
-    include(CheckCXXCompilerFlag)
-    string(MAKE_C_IDENTIFIER "ZH_HAS_${ZH_MACOS_EFFECTIVE_CPU_TUNING}_TUNING" _zh_tune_check)
-    check_cxx_compiler_flag("-mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}" ${_zh_tune_check})
-    if(${_zh_tune_check})
-      add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:-mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}>")
-    elseif(ZH_MACOS_CPU_TUNING STREQUAL "auto")
-      set(ZH_MACOS_EFFECTIVE_CPU_TUNING "generic")
-      message(STATUS "Compiler has no M2 tuning; retaining portable arm64 scheduling")
-    else()
-      message(FATAL_ERROR "Compiler cannot tune for ${ZH_MACOS_CPU_TUNING}; use generic or a newer Clang")
-    endif()
-  endif()
-  message(STATUS "macOS arm64 CPU scheduling: ${ZH_MACOS_EFFECTIVE_CPU_TUNING}; instruction baseline unchanged")
 endif()
 
 # The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
@@ -1351,9 +1350,9 @@ if(MSVC)
   endforeach()
 endif()
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
-# The global operator new against the alignment the ABI promises for it, on Linux, where it is also the
-# one Mesa's libLLVM gets.  See Tests/test_global_new_alignment.cpp.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+# Global C++ allocation also crosses system-framework/driver boundaries on macOS and Linux.
+# See Tests/test_global_new_alignment.cpp.
+if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_executable(test_global_new_alignment ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_global_new_alignment.cpp
     ${GE}/Source/Common/System/GameMemory.cpp ${GE}/Source/Common/System/MemoryInit.cpp
     ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
@@ -1634,17 +1633,9 @@ if(ZH_PLATFORM_POSIX)
   # FFmpeg's own configure picks the host's architecture, so a build for another one (x86_64 on Apple
   # Silicon, run under Rosetta: E1's architecture axis) names it.  One at a time: configure builds one.
   set(FFMPEG_POSIX_ARCH "")
-  if(APPLE AND CMAKE_OSX_ARCHITECTURES)
-    list(LENGTH CMAKE_OSX_ARCHITECTURES FFMPEG_ARCH_COUNT)
-    if(NOT FFMPEG_ARCH_COUNT EQUAL 1)
-      message(FATAL_ERROR "FFmpeg builds one architecture at a time; CMAKE_OSX_ARCHITECTURES is '${CMAKE_OSX_ARCHITECTURES}'.")
-    endif()
-    string(STRIP "${FFMPEG_POSIX_CFLAGS} -arch ${CMAKE_OSX_ARCHITECTURES}" FFMPEG_POSIX_CFLAGS)
-    if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
-      set(FFMPEG_POSIX_ARCH aarch64)
-    else()
-      set(FFMPEG_POSIX_ARCH ${CMAKE_OSX_ARCHITECTURES})
-    endif()
+  if(APPLE)
+    string(STRIP "${FFMPEG_POSIX_CFLAGS} -arch ${ZH_MACOS_TARGET_ARCH}" FFMPEG_POSIX_CFLAGS)
+    set(FFMPEG_POSIX_ARCH "${ZH_MACOS_FFMPEG_ARCH}")
   endif()
   add_custom_command(
     OUTPUT ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h
@@ -2015,7 +2006,8 @@ if(ZH_PLATFORM_POSIX)
   if(APPLE)
     # Opens and switches a real Cocoa window; run explicitly in a desktop session.
     add_executable(macos_window_selfcheck EXCLUDE_FROM_ALL
-      ${CMAKE_CURRENT_SOURCE_DIR}/Tests/macos_window_selfcheck.mm)
+      ${CMAKE_CURRENT_SOURCE_DIR}/Tests/macos_window_selfcheck.mm
+      ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
     set_target_properties(macos_window_selfcheck PROPERTIES OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED YES)
     target_link_libraries(macos_window_selfcheck PRIVATE sdldevice)
   endif()
@@ -2890,6 +2882,11 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_installer.py)
     add_test(NAME makefile_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_makefile.py)
+    add_test(NAME macos_build_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_macos_build.py)
+    set_tests_properties(macos_build_check PROPERTIES ENVIRONMENT "CMAKE=${CMAKE_COMMAND}")
+    add_test(NAME arch_runtime_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_arch_runtime.py)
     add_test(NAME retail_data_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/check_game_assets.py)
     set_tests_properties(retail_data_check PROPERTIES SKIP_RETURN_CODE 77)
@@ -2972,7 +2969,7 @@ if(ZH_PLATFORM_POSIX)
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/arch_diff/run_arch_diff.sh
                    ${CMAKE_CURRENT_SOURCE_DIR}
                    ${CMAKE_CURRENT_BINARY_DIR}/arch_diff)
-  set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77)
+  set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 180)
 endif()
 
 # The D3DX oracle: runs Microsoft's own D3DXVec4Transform machine code under Rosetta and compares

@@ -851,7 +851,10 @@ static const char * const SKY_SHADER_BODY =
 // and left the ground in sight a pale disc inside it, on Alpine Assault's far base at the flat tilt.
 // The ring past the map (MapSize, the playable map from the world's origin) has no shroud cells and
 // draws black, which against a sky stood as a black wall round the world on every map: it goes into the
-// horizon's colour over BORDER_FADE units from the map's edge.  Only depth still at the clear is sky, and
+// horizon's colour across the one shroud cell (SHROUD_CELL, the game's PartitionCellSize) over which the
+// shroud's filter itself falls to the border's black, half inside the map's edge and half out.  A fade
+// starting at the edge and running on past that left the black showing first, and at a flat tilt 100 units
+// of a cliff past the edge is a black smear a tenth of the frame high.  Only depth still at the clear is sky, and
 // takes none; ground in the far plane's last sliver read as sky at 0.99999 and stayed unfaded, a hairline
 // tracing a ridge whose body had gone.  Below the horizon the same empty depth gets the sky's colour again,
 // because the sea runs on past the terrain, writes no depth and draws black out there: Bombardment Beach
@@ -864,7 +867,7 @@ static const char * const ATMOSPHERE_SHADER_BODY =
 	"static const float FOCUS_MARGIN = 1.1;\n"
 	"static const float FOCUS_MOST = 2000.0;\n"
 	"static const float FAR_CLOSE = 0.85;\n"
-	"static const float BORDER_FADE = 100.0;\n"
+	"static const float SHROUD_CELL = 40.0;\n"
 	"\n"
 	"float4 main(VertexOutput input) : SV_TARGET\n"
 	"{\n"
@@ -884,7 +887,7 @@ static const char * const ATMOSPHERE_SHADER_BODY =
 	"    float lit = lerp(1.0, Shroud.SampleLevel(Sampler, (here - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).g, HazeSun.z);\n"
 	"    float2 outside = max(-here, here - MapSize.xy);\n"
 	"    float closing = max(smoothstep(FAR_CLOSE, 1.0, dot(ray, axis) / (axisLength * axisLength)),\n"
-	"        smoothstep(0.0, BORDER_FADE, max(outside.x, outside.y)));\n"
+	"        smoothstep(-0.5 * SHROUD_CELL, 0.5 * SHROUD_CELL, max(outside.x, outside.y)));\n"
 	"    return float4(haze_along(ray.z / max(reach, 0.0001)) * lerp(lit, 1.0, closing), max(amount, closing));\n"
 	"}\n";
 

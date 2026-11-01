@@ -803,7 +803,8 @@ TEST(dx11post_the_ground_haze_lies_over_a_scene_under_its_top)
 // a unit from the eye, a third of the way into a fade of scale one, and takes the white horizon.  With
 // depth at the far plane and the eye looking up the fade leaves the frame alone: it is sky by then.
 // Looking down, the same empty depth takes the horizon, over the sea that draws past the terrain.  The sky
-// itself reads no depth and covers everything, a null texture here, so it goes black.
+// itself reads no depth and covers everything, a null texture here, so it goes black.  Half a shroud cell
+// past the map's edge the shroud's border is black, so the ground there is the horizon however near it is.
 TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 {
 	DeviceFixture fixture;
@@ -819,8 +820,9 @@ TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 	const float identity[16] = {
 		1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
 	// The eye at height nought looks down its depth, its focus on the ground right there, so no start.
+	// It stands 500 units into the map, or the map's corner closes the fade over the frame's centre.
 	const float looking_down[16] = {
-		1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
+		1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 500.0f, 500.0f, 0.0f, 1.0f };
 	DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0f, 1.0f, 0.0f, 1.0e6f, 1.0e6f, NULL);
 
 	unsigned char picture[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
@@ -829,9 +831,13 @@ TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 	post.Set_Chain(copy_only, 1);
 	post.Compile_Atmosphere_Programs();
 
-	const float DEPTHS[4] = { 0.5f, 1.0f, 0.5f, 1.0f };
-	unsigned char levels[4] = { 0, 0, 0, 0 };
-	for (unsigned run = 0; run < 4; ++run) {
+	const float DEPTHS[5] = { 0.5f, 1.0f, 0.5f, 1.0f, 0.5f };
+	unsigned char levels[5] = { 0, 0, 0, 0, 0 };
+	for (unsigned run = 0; run < 5; ++run) {
+		if (run == 4) {
+			// A fade too long to count, and a map whose edge lies 25 units short of the eye.
+			DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0e6f, 1.0f, 0.0f, 475.0f, 475.0f, NULL);
+		}
 		post.Open_Frame();
 		post.Begin_Frame();
 		device.Set_Scene_View(post.Scene_View());
@@ -854,9 +860,12 @@ TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 	DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0f, 0.0f, 0.0f, 1.0e6f, 1.0e6f, NULL);
 
 	CHECK(levels[0] >= DARK_LEVEL + LIFTED_BY_AT_LEAST);
+	CHECK(levels[0] < 70);
 	CHECK(levels[1] == DARK_LEVEL);
 	CHECK(levels[2] == 0);
 	CHECK(levels[3] >= DARK_LEVEL + LIFTED_BY_AT_LEAST);
+	// All of the horizon's colour, dimmed below the horizon by BELOW_DIM, 0.55 of white.
+	CHECK(levels[4] >= 130);
 
 	// Strength zero is no pass at all.
 	post.Open_Frame();

@@ -65,13 +65,46 @@ The direct build entry points remain available:
 
 ```sh
 make build                       # build and package Release
-make test                        # also run the tests
-make build CONFIG=Debug
+make test                        # build, run every test, then package
+make test-only                   # repeat tests in an existing configured build
+make install CONFIG=Debug        # the guided build also honors CONFIG
+make install JOBS=8 TEST_JOBS=4
+make test-only TEST_JOBS=1        # run sequentially if needed
 make build CPU_TUNING=generic     # portable scheduling instead of automatic CPU tuning
 ```
 
-These commands do not prompt before each build step, which suits developers and
-CI. `build.bat` and the Windows builds are unchanged.
+Build workers are chosen from CPU count and memory, capped at eight by default.
+Tests use at most four workers automatically; `JOBS` and `TEST_JOBS` accept `auto`
+or a positive integer. A job count controls the backend, while `make -j` does not
+start two workflows against the same build tree or terminal simultaneously.
+Existing CMake/CTest parallel-level environment settings are honored unless the
+corresponding Make variable is explicitly set. The nested FFmpeg build uses the
+same build-worker limit.
+
+`BUILD=/path/to/build` selects a different build directory, including for the
+application the installer offers to launch. `CMAKE=/path/to/cmake` selects the
+CMake executable. Both also work as environment overrides of `build.local.sh`.
+For example:
+
+```sh
+make install CONFIG=Debug BUILD="$HOME/Builds/Zero Hour Debug"
+make test-only CONFIG=Debug BUILD="$HOME/Builds/Zero Hour Debug"
+```
+
+`test-only` runs the entire existing suite without fetching dependencies,
+configuring, compiling or packaging. The directory must already be configured
+for the requested `CONFIG`; after changing source files use `make test` to rebuild
+before testing. The test timeout and resource locks are retained. Large engine
+suites can take several minutes even when no output appears from that one test.
+A `Skipped` result usually means original game data or an external reference tool
+is missing; it is not a failed test or proof that this case was exercised. See
+[the test guide in README](../README.md#how-it-is-tested) for data-dependent checks.
+
+These direct commands do not prompt before each build step, which suits developers
+and CI. `make install` keeps every confirmation. Questions are printed as complete,
+flushed lines before reading an answer; child diagnostics share the same output
+stream so the question cannot lag behind a later build message. `build.bat` and
+the Windows builds are unchanged.
 
 ## Adding a language
 

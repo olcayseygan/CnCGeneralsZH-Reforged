@@ -12,6 +12,7 @@ if [ "$(uname -s)" = Darwin ] && [ "$(command -v python3 || true)" = /usr/bin/py
    ! xcode-select -p >/dev/null 2>&1; then
   say "Apple's system Python needs the Command Line Tools. Open the installer dialog? [y/N] " \
       'Apples System-Python benötigt die Command Line Tools. Installationsdialog öffnen? [j/N] '
+  echo
   IFS= read -r answer || exit 130
   case "$lang:$answer" in
     *:[yY]|*:[yY][eE][sS]|de:[jJ]|de:[jJ][aA]) xcode-select --install ;;

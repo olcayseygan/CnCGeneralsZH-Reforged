@@ -27,6 +27,8 @@ class InstallerTests(unittest.TestCase):
         self.home = Path(self.temp.name).resolve()
         self.repo = self.home / 'source checkout'
         self.repo.mkdir()
+        environment = mock.patch.dict(os.environ, {'ZH_BUILD_CONFIG': 'Release', 'BUILD': ''})
+        environment.start(); self.addCleanup(environment.stop)
         patcher = mock.patch.object(installer, 'ROOT', self.repo)
         patcher.start(); self.addCleanup(patcher.stop)
         # Answers below are English; the catalog tests cover other languages.
@@ -263,6 +265,85 @@ xcode-select() {
             self.assertEqual('XCODE_REQUESTED' in result.stdout, install, (lang, answer))
             self.assertEqual(result.returncode, 130 if not answer else 1)
             self.assertIn('[j/N]' if lang.lower().startswith('de') else '[y/N]', result.stdout)
+
+    def test_questions_are_visible_before_any_answer_is_sent(self):
+        import select
+        import subprocess
+        import sys
+        import time
+        commands = [
+            ([sys.executable, str(TOOLS / 'install_i18n.py'), 'confirm', 'Visible question?'], b'Visible question? [y/N]\n'),
+            ([sys.executable, '-c',
+              'import sys; sys.path.insert(0, sys.argv[1]); import install; '
+              'raise SystemExit(0 if install.confirm("Visible question?") else 1)', str(TOOLS)],
+             b'Visible question? [y/N]\n')
+        ]
+        for command, expected in commands:
+            child = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                     env=dict(os.environ, ZH_INSTALL_LANG='en'))
+            try:
+                visible = b''
+                deadline = time.monotonic()+5
+                while expected not in visible:
+                    remaining = deadline-time.monotonic()
+                    self.assertGreater(remaining, 0, visible)
+                    ready, _, _ = select.select([child.stdout], [], [], remaining)
+                    self.assertTrue(ready, visible)
+                    chunk = os.read(child.stdout.fileno(), 4096)
+                    self.assertTrue(chunk, visible)
+                    visible += chunk
+                self.assertIsNone(child.poll())  # the process is still awaiting our first answer
+                child.stdin.write(b'n\n'); child.stdin.flush()
+                _, errors = child.communicate(timeout=5)
+                self.assertEqual(child.returncode, 1, errors)
+                self.assertEqual(errors, b'')
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                child.communicate()
+
+    def test_child_output_uses_one_ordered_stream(self):
+        import subprocess
+        import sys
+        script = ('import sys; sys.path.insert(0, sys.argv[1]); import install; '
+                  'install.run([sys.executable, "-c", sys.argv[2]])')
+        child_code = "import os; os.write(1, b'first-out\\n'); os.write(2, b'second-error\\n')"
+        result = subprocess.run([sys.executable, '-c', script, str(TOOLS), child_code],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, '')
+        self.assertTrue(result.stdout.endswith('first-out\nsecond-error\n'), result.stdout)
+
+    def test_selected_configuration_and_build_directory_reach_build_and_launch(self):
+        for directory in ('output with spaces', str(self.home / 'external build')):
+            build = Path(directory)
+            if not build.is_absolute():
+                build = self.repo / build
+            app = build / 'Zero Hour Reforged.app'
+            app.mkdir(parents=True)
+            with mock.patch.object(installer.sys, 'argv', ['install.py']), \
+                 mock.patch.object(installer.sys.stdin, 'isatty', return_value=True), \
+                 mock.patch.object(installer.platform, 'system', return_value='Darwin'), \
+                 mock.patch.object(installer, 'prerequisites'), \
+                 mock.patch.dict(os.environ, {'ZH_BUILD_CONFIG': 'Debug', 'BUILD': directory}), \
+                 mock.patch('builtins.input', side_effect=['yes', '', '', 'yes']), \
+                 mock.patch.object(installer, 'run') as run, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(installer.main(), 0)
+                self.assertEqual(run.call_args_list[0].args[0], [self.repo / 'build-macos.sh', 'Debug', 'test'])
+                self.assertEqual(run.call_args_list[1].args[0], ['open', str(app)])
+
+    def test_configuration_cannot_select_the_builders_clean_command(self):
+        with mock.patch.object(installer.sys, 'argv', ['install.py']), \
+             mock.patch.object(installer.sys.stdin, 'isatty', return_value=True), \
+             mock.patch.object(installer.platform, 'system', return_value='Darwin'), \
+             mock.patch.dict(os.environ, {'ZH_BUILD_CONFIG': 'clean'}), \
+             mock.patch.object(installer, 'prerequisites') as prerequisites, \
+             mock.patch.object(installer, 'run') as run, \
+             contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(ValueError): installer.main()
+            prerequisites.assert_not_called()
+            run.assert_not_called()
 
 
 if __name__ == '__main__':

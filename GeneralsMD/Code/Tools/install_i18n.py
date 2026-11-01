@@ -78,12 +78,18 @@ class Translator:
 translator = Translator()
 
 
+def prompt(message):
+    """Finish and flush the question before waiting, also when output is captured."""
+    print(message, flush=True)
+    return input()
+
+
 def confirm_main(argv):
     if not argv:
         return 2
     _ = translator
     try:
-        answer = input('\n%s %s ' % (_(argv[0], *argv[1:]), _.hint))
+        answer = prompt('\n%s %s' % (_(argv[0], *argv[1:]), _.hint))
     except EOFError:
         print()
         return 130

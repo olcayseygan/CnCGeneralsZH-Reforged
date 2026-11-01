@@ -10,6 +10,8 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- Setup questions appear before the installer waits for an answer. Build and test work use bounded parallelism; the full suite remains available, and tests can be repeated without rebuilding. Configuration, build-directory and CPU choices reach the guided build and the application it starts.
+
 - BTree and Huffman now bound source reads, dictionary expansion and output; cyclic dictionaries, invalid code tables and inconsistent member lengths fail without removing legacy format support. Both engine source trees use bounded EAC decoders.
 - Match packets require a known endpoint and valid direct/relay/recovery source; wrapped commands retain source provenance. Browser control uses a configured session capability while existing native control tools remain compatible. Historical GameSpy credentials move to validated runtime configuration.
 - Metal shader loading retains the actual texture and uniform slot extents, including Load-only textures. Explicit FP rules preserve physical water across shader variants. Native M2 scheduling retains the portable arm64 instruction baseline and deterministic simulation rules.

@@ -53,6 +53,11 @@ if [ $# -lt 4 ]; then
 fi
 tarball="$1" work="$2" prefix="$3" cc="$4" extra_cflags="${5:-}" target_arch="${6:-}"
 
+tools_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+# shellcheck source=build-jobs.sh
+. "$tools_dir/build-jobs.sh"
+jobs=$(zh_resolve_build_jobs "${ZH_BUILD_JOBS:-${CMAKE_BUILD_PARALLEL_LEVEL:-auto}}") || exit 2
+
 # A target architecture (FFmpeg's name for it) builds for that one rather than the host's: configure
 # otherwise detects the machine it runs on.  The flags that name it go to the linker too, or
 # configure's own link tests build for the host.
@@ -112,7 +117,6 @@ if ! grep -q "^License: LGPL version 2.1 or later$" configure.log; then
   exit 1
 fi
 
-jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 if ! make -j"$jobs" > make.log 2>&1; then
   tail -30 make.log >&2
   exit 1

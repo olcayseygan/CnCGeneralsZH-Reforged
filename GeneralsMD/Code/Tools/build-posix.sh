@@ -37,10 +37,13 @@
 
 set -euo pipefail
 
-CMAKE=
-GENERATOR=Ninja
+# Explicit environment overrides take precedence over build.local.sh defaults.
+zh_environment_cmake=${CMAKE:-}
+zh_environment_build=${BUILD:-}
+CMAKE=${CMAKE:-}
+GENERATOR=${GENERATOR:-Ninja}
 DEFAULT_CONFIG=Release
-BUILD=
+BUILD=${BUILD:-}
 
 PLATFORM="${1:-}"
 [ $# -eq 0 ] || shift
@@ -61,14 +64,21 @@ if [ -e "$ROOT/build.local.sh" ]; then
   . "$ROOT/build.local.sh"
 fi
 
+[ -z "$zh_environment_cmake" ] || CMAKE=$zh_environment_cmake
+[ -z "$zh_environment_build" ] || BUILD=$zh_environment_build
+
 SRC="$ROOT/GeneralsMD/Code"
 if [ "$PLATFORM" = macos ]; then : "${BUILD:=$ROOT/build-mac}"; else : "${BUILD:=$ROOT/build-linux}"; fi
+case "$BUILD" in /*) ;; *) BUILD="$ROOT/$BUILD" ;; esac
+TEST_ONLY=${ZH_TEST_ONLY:-0}
+case "$TEST_ONLY" in 0|1) ;; *) fail "ZH_TEST_ONLY must be 0 or 1." ;; esac
 
 CONFIG="${1:-}"
 ARG2="${2:-}"
+CLEAN_BUILD=0
 if [ "$(lower "$CONFIG")" = clean ]; then
-  echo "[build] removing $BUILD"
-  rm -rf "$BUILD"
+  [ "$TEST_ONLY" = 0 ] || fail "test-only cannot clean the build tree."
+  CLEAN_BUILD=1
   CONFIG="$ARG2"
   ARG2="${3:-}"
 fi
@@ -80,6 +90,72 @@ if [ "$(lower "$ARG2")" = test ]; then
   RUNTESTS=1
 elif [ -n "$ARG2" ]; then
   TARGET="$ARG2"
+fi
+
+# One validated worker limit is shared by CMake and its nested FFmpeg build.
+# shellcheck source=build-jobs.sh
+. "$SRC/Tools/build-jobs.sh"
+BUILD_JOBS=$(zh_resolve_build_jobs "${ZH_BUILD_JOBS:-${CMAKE_BUILD_PARALLEL_LEVEL:-auto}}") || exit 2
+TEST_JOBS=$(zh_resolve_test_jobs "${ZH_TEST_JOBS:-${CTEST_PARALLEL_LEVEL:-auto}}" "$BUILD_JOBS") || exit 2
+export ZH_BUILD_JOBS="$BUILD_JOBS" CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS"
+export ZH_TEST_JOBS="$TEST_JOBS" CTEST_PARALLEL_LEVEL="$TEST_JOBS"
+if [ "$CLEAN_BUILD" = 1 ]; then
+  echo "[build] removing $BUILD"
+  rm -rf "$BUILD"
+fi
+
+resolve_executable() {
+  local candidate=$1
+  case "$candidate" in
+    */*) [ -x "$candidate" ] && printf '%s\n' "$candidate" ;;
+    *) command -v "$candidate" 2>/dev/null ;;
+  esac
+}
+
+# The interactive installer opts in. Existing build/CI entry points remain unattended.
+# Prompt text and yes-words come from install_i18n.py (English, plus installer_locales/*.json).
+guided_step() {
+  [ "${ZH_GUIDED_BUILD:-0}" = 1 ] || return 0
+  local status=0
+  python3 "$SRC/Tools/install_i18n.py" confirm "$@" || status=$?
+  case "$status" in
+    0|1) return "$status" ;;
+    *) exit "$status" ;;
+  esac
+}
+
+run_tests() {
+  local cached_ctest= resolved_cmake=
+  CTEST=${CTEST:-}
+  if [ -z "$CTEST" ] && [ -n "$CMAKE" ]; then
+    resolved_cmake=$(resolve_executable "$CMAKE" || true)
+    if [ -n "$resolved_cmake" ] && [ -x "$(dirname "$resolved_cmake")/ctest" ]; then
+      CTEST="$(dirname "$resolved_cmake")/ctest"
+    fi
+  fi
+  if [ -z "$CTEST" ] && [ -f "$BUILD/CMakeCache.txt" ]; then
+    cached_ctest=$(sed -n 's/^CMAKE_CTEST_COMMAND:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
+    [ ! -x "$cached_ctest" ] || CTEST=$cached_ctest
+  fi
+  [ -n "$CTEST" ] || CTEST=ctest
+  CTEST=$(resolve_executable "$CTEST") || fail "ctest not found; install CMake or set CTEST to its executable."
+  if guided_step "Run the full test suite (some tests need a GPU or your own game data)?"; then
+    echo "[build] running $CTEST with $TEST_JOBS workers"
+    echo "[build] Large engine and packaging checks can take several minutes."
+    "$CTEST" --test-dir "$BUILD" --parallel "$TEST_JOBS" --output-on-failure --no-tests=error || fail "tests failed."
+  fi
+}
+
+echo "[build] config: $CONFIG"
+echo "[build] tree:   $BUILD ($GENERATOR)"
+echo "[build] workers: build=$BUILD_JOBS, tests=$TEST_JOBS"
+if [ "$TEST_ONLY" = 1 ]; then
+  [ -n "$RUNTESTS" ] && [ -z "$TARGET" ] || fail "test-only requires a configuration followed by test."
+  [ -f "$BUILD/CMakeCache.txt" ] || fail "no configured build at $BUILD; run make build first."
+  cached_config=$(sed -n 's/^CMAKE_BUILD_TYPE:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
+  [ "$cached_config" = "$CONFIG" ] || fail "build is configured for ${cached_config:-an unknown configuration}, not $CONFIG; build that configuration first."
+  run_tests
+  exit 0
 fi
 
 # --- the toolchain. cmake's own failure ("No CMAKE_CXX_COMPILER could be found", "could not find X11
@@ -128,31 +204,18 @@ else
   fi
 fi
 
-# --- locate cmake: the override, then PATH, then where the macOS installers put it ---
-if [ -n "$CMAKE" ] && [ ! -x "$CMAKE" ]; then
-  fail "CMAKE is set to \"$CMAKE\" (build.local.sh, or the top of this file), but that file does not exist."
+# --- locate cmake: the override, then PATH, then common macOS installers ---
+if [ -n "$CMAKE" ]; then
+  requested_cmake=$CMAKE
+  CMAKE=$(resolve_executable "$CMAKE") || fail "CMAKE is set to \"$requested_cmake\", but no executable was found."
+else
+  CMAKE=$(command -v cmake 2>/dev/null || true)
+  for try in /Applications/CMake.app/Contents/bin/cmake /opt/homebrew/bin/cmake /usr/local/bin/cmake; do
+    if [ -z "$CMAKE" ] && [ -x "$try" ]; then CMAKE=$try; fi
+  done
 fi
-[ -n "$CMAKE" ] || CMAKE=$(command -v cmake 2>/dev/null || true)
-for try in /Applications/CMake.app/Contents/bin/cmake /opt/homebrew/bin/cmake /usr/local/bin/cmake; do
-  if [ -z "$CMAKE" ] && [ -x "$try" ]; then CMAKE="$try"; fi
-done
 [ -n "$CMAKE" ] || fail "cmake not found."
-
 echo "[build] cmake:  $CMAKE"
-echo "[build] config: $CONFIG"
-echo "[build] tree:   $BUILD ($GENERATOR)"
-
-# The interactive installer opts in. Existing build/CI entry points remain unattended.
-# Prompt text and yes-words come from install_i18n.py (English, plus installer_locales/*.json).
-guided_step() {
-  [ "${ZH_GUIDED_BUILD:-0}" = 1 ] || return 0
-  local status=0
-  python3 "$SRC/Tools/install_i18n.py" confirm "$@" || status=$?
-  case "$status" in
-    0|1) return "$status" ;;
-    *) exit "$status" ;;
-  esac
-}
 
 # --- third-party sources the repository does not carry. Fetches whatever is
 # missing and is a no-op once it is there. ---
@@ -180,27 +243,19 @@ fi
 guided_step "Build the %s code with the native compiler in %s?" "$CONFIG" "$BUILD" || exit 0
 if [ -n "$TARGET" ]; then
   echo "[build] building target $TARGET"
-  "$CMAKE" --build "$BUILD" --target "$TARGET" || fail "build failed."
+  "$CMAKE" --build "$BUILD" --parallel "$BUILD_JOBS" --target "$TARGET" || fail "build failed."
   echo "[build] done: $TARGET in $BUILD"
   exit 0
 fi
-"$CMAKE" --build "$BUILD" || fail "build failed."
+"$CMAKE" --build "$BUILD" --parallel "$BUILD_JOBS" || fail "build failed."
 
 # --- tests ---
-if [ -n "$RUNTESTS" ] && guided_step "Run the full test suite (some tests need a GPU or your own game data)?"; then
-  # ctest lives beside cmake, and the copy on PATH need not be the same one when cmake came from
-  # the override or from CMake.app.
-  CTEST="$(dirname "$CMAKE")/ctest"
-  [ -x "$CTEST" ] || CTEST=$(command -v ctest 2>/dev/null || true)
-  [ -n "$CTEST" ] || fail "ctest not found beside $CMAKE or on PATH."
-  echo "[build] running $CTEST"
-  "$CTEST" --test-dir "$BUILD" --output-on-failure || fail "tests failed."
-fi
+if [ -n "$RUNTESTS" ]; then run_tests; fi
 
 # --- the game, staged where it runs ---
 guided_step "Create/refresh the application package in %s (on Linux only the previous package in this build folder is replaced)?" "$BUILD" || exit 0
 if [ "$PLATFORM" = macos ]; then
-  "$CMAKE" --build "$BUILD" --target macos_app || fail "the app bundle failed."
+  "$CMAKE" --build "$BUILD" --parallel "$BUILD_JOBS" --target macos_app || fail "the app bundle failed."
   echo "[build] done: open \"$BUILD/Zero Hour Reforged.app\""
 else
   package="$BUILD/ZeroHourReforged"

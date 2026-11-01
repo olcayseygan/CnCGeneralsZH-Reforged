@@ -18,3 +18,5 @@ jobs:
         run: python3 GeneralsMD/Code/Tests/test_developer_tools.py
       - name: Exercise the guided installer without executing system commands
         run: python3 GeneralsMD/Code/Tests/test_installer.py
+      - name: Exercise Make and build dispatch with synthetic backends
+        run: python3 GeneralsMD/Code/Tests/test_makefile.py

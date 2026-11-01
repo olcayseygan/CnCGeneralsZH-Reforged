@@ -3251,6 +3251,7 @@ Tests/test_lan_broadcast.cpp
 Tests/test_linux_portable.sh
 Tests/test_macos_app.sh
 Tests/test_main.cpp
+Tests/test_makefile.py
 Tests/test_map_ini_rollback.inc
 Tests/test_miles_effects.cpp
 Tests/test_miles_miniaudio.cpp
@@ -4104,6 +4105,7 @@ Tools/assetcull/assetcull.cpp
 Tools/assetcull/assetcull.dsp
 Tools/aura_rings.py
 Tools/bigfile.py
+Tools/build-jobs.sh
 Tools/build-posix.sh
 Tools/buildVersionUpdate/buildVersionUpdate.cpp
 Tools/buildVersionUpdate/buildVersionUpdate.dsp

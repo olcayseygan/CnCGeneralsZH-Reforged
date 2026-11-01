@@ -69,10 +69,43 @@ Die bisherigen direkten Build-Einstiege bleiben verfügbar:
 
 ```sh
 make build                       # Release bauen und paketieren
-make test                        # zusätzlich die Tests ausführen
-make build CONFIG=Debug
+make test                        # bauen, alle Tests ausführen und paketieren
+make test-only                   # Tests im vorhandenen Build erneut ausführen
+make install CONFIG=Debug        # auch der geführte Build beachtet CONFIG
+make install JOBS=8 TEST_JOBS=4
+make test-only TEST_JOBS=1        # bei Bedarf nacheinander testen
 make build CPU_TUNING=generic     # portables Scheduling statt automatischer CPU-Anpassung
 ```
 
-Diese direkten Befehle fragen nicht nach jedem Build-Schritt und passen für
-Entwickler/CI. `build.bat` und die Windows-Builds bleiben unverändert nutzbar.
+Die Zahl der Build-Prozesse wird anhand von CPU und RAM gewählt, automatisch
+höchstens acht. Tests laufen automatisch mit höchstens vier Prozessen parallel.
+`JOBS` und `TEST_JOBS` akzeptieren `auto` oder eine positive ganze Zahl. Auch der
+FFmpeg-Build hält sich an die Build-Grenze. `make -j` startet keine konkurrierenden
+Abläufe im selben Build-Verzeichnis oder Terminal. Vorhandene CMake-/CTest-
+Parallelitätseinstellungen werden berücksichtigt, sofern keine entsprechende
+Make-Variable angegeben wird.
+
+`BUILD=/pfad/zum/build` wählt ein anderes Build-Verzeichnis, auch für die vom
+Installer angebotene Anwendung. `CMAKE=/pfad/zu/cmake` wählt CMake. Beide lassen
+sich ebenfalls als Umgebungsvariable setzen und haben dann Vorrang vor
+`build.local.sh`. Beispiel:
+
+```sh
+make install CONFIG=Debug BUILD="$HOME/Builds/Zero Hour Debug"
+make test-only CONFIG=Debug BUILD="$HOME/Builds/Zero Hour Debug"
+```
+
+`test-only` startet die vollständige vorhandene Testsuite ohne Downloads,
+Konfiguration, Kompilieren oder Paketierung. Das Verzeichnis muss bereits für die
+angegebene `CONFIG` konfiguriert sein. Nach Quellcodeänderungen mit `make test`
+zuerst neu bauen. Zeitlimits und bestehende Ressourcensperren bleiben erhalten.
+Große Engine-Tests können mehrere Minuten dauern, ohne zwischendurch eine eigene
+Meldung auszugeben. `Skipped` bedeutet meistens, dass Originalspieldaten oder
+externe Referenzwerkzeuge fehlen: Der Test ist damit weder fehlgeschlagen noch
+inhaltlich geprüft. Siehe [Testanleitung](../README.md#how-it-is-tested).
+
+Die direkten Befehle fragen nicht nach jedem Schritt und passen für Entwickler
+und CI. `make install` behält alle Bestätigungen. Fragen werden vollständig
+angezeigt und geflusht, bevor auf die Antwort gewartet wird. Kindprozesse nutzen
+denselben Ausgabekanal für ihre Meldungen. `build.bat` und die Windows-Builds
+bleiben unverändert nutzbar.

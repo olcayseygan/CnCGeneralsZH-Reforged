@@ -1634,6 +1634,7 @@ if(ZH_PLATFORM_POSIX)
             ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-work ${FFMPEG_POSIX} ${CMAKE_C_COMPILER} "${FFMPEG_POSIX_CFLAGS}"
             "${FFMPEG_POSIX_ARCH}"
     DEPENDS ${FFMPEG_TARBALL} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh
+            ${CMAKE_CURRENT_SOURCE_DIR}/Tools/build-jobs.sh
     COMMENT "Building FFmpeg 8.1.2's Bink decoders for the movies (V1)"
     VERBATIM)
   add_custom_target(ffmpeg_posix DEPENDS ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h)
@@ -2854,6 +2855,8 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_developer_tools.py)
     add_test(NAME installer_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_installer.py)
+    add_test(NAME makefile_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_makefile.py)
     add_test(NAME retail_data_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/check_game_assets.py)
     set_tests_properties(retail_data_check PROPERTIES SKIP_RETURN_CODE 77)

@@ -12,14 +12,14 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from install_i18n import translator as _  # noqa: E402
+from install_i18n import prompt, translator as _  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
 def confirm(message):
     try:
-        answer = input('\n%s %s ' % (message, _.hint))
+        answer = prompt('\n%s %s' % (message, _.hint))
     except EOFError:
         raise SystemExit(_('Input ended; no further steps will be run.'))
     return _.is_yes(answer)
@@ -27,6 +27,7 @@ def confirm(message):
 
 def run(command, **kwargs):
     print('\n$ ' + ' '.join(shlex.quote(str(arg)) for arg in command), flush=True)
+    kwargs.setdefault('stderr', subprocess.STDOUT)
     subprocess.run([str(arg) for arg in command], check=True, cwd=ROOT, **kwargs)
 
 
@@ -102,7 +103,7 @@ def choose_game(label, required, candidates):
     for index, path in enumerate(candidates, 1):
         print('  %d. %s' % (index, path))
     while True:
-        raw = input(_('Enter a number or the full installation path (empty = skip): ')).strip()
+        raw = prompt(_('Enter a number or the full installation path (empty = skip): ')).strip()
         if not raw:
             return None
         try:
@@ -187,10 +188,13 @@ def main():
             'The installer does not download original game data. You need your own complete installations of Generals and Zero Hour.\n'
             'Game data stays outside this repository. Steam/GOG credentials are never requested.\n'
             'Cancel any time with Ctrl+C; completed steps are kept.'))
+    config = os.environ.get('ZH_BUILD_CONFIG', 'Release') or 'Release'
+    if config.lower() == 'clean':
+        raise ValueError(_('Choose a build configuration such as Release or Debug; cleaning is a separate command.'))
     prerequisites(system)
-    if confirm(_('Prepare the local Release build? Downloads, configuration, compiling, tests and packaging each get their own question.')):
+    if confirm(_('Prepare the local %s build? Downloads, configuration, compiling, tests and packaging each get their own question.', config)):
         env = dict(os.environ, ZH_GUIDED_BUILD='1')
-        run([ROOT / ('build-macos.sh' if system == 'Darwin' else 'build-linux.sh'), 'Release', 'test'], env=env)
+        run([ROOT / ('build-macos.sh' if system == 'Darwin' else 'build-linux.sh'), config, 'test'], env=env)
     selected = None
     if confirm(_('Select or search for your own original game installations and optionally copy them?')):
         candidates = {'zero_hour': [], 'generals': []}
@@ -204,7 +208,7 @@ def main():
             default = Path.home() / 'Games/Command & Conquer Generals Zero Hour'
             while True:
                 try:
-                    raw = input(_('New data folder [%s]: ', default)).strip()
+                    raw = prompt(_('New data folder [%s]: ', default)).strip()
                     target = external_path(raw or str(default))
                     if target.exists():
                         raise ValueError(_('This destination folder already exists. Please choose a new name.'))
@@ -229,7 +233,10 @@ def main():
             print(_('The existing Zero Hour folder is used directly. On first launch the game may ask separately for Generals.'))
         else:
             print(_('Choose the Zero Hour folder on first launch. Steam/GOG notes: docs/macos.md'))
-    build = ROOT / ('build-mac' if system == 'Darwin' else 'build-linux')
+    configured_build = os.environ.get('BUILD', '')
+    build = Path(configured_build) if configured_build else ROOT / ('build-mac' if system == 'Darwin' else 'build-linux')
+    if not build.is_absolute():
+        build = ROOT / build
     app = build / 'Zero Hour Reforged.app'
     binary = build / 'ZeroHourReforged/bin/generals'
     if system == 'Darwin' and app.is_dir():

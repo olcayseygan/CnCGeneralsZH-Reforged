@@ -12598,6 +12598,8 @@ TEST(a_template_map_comes_out_the_same_twice_and_every_start_walks_to_every_othe
 	names a file of town building names, one a line, standing in for the object INI. Run as
 	test_gameengine.exe write_the_maps_RMG_TEMPLATE_DUMP_names. */
 //-------------------------------------------------------------------------------------------------
+#include "Lib/Clock.h"
+
 TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
 {
 	const char *dump = getenv( "RMG_TEMPLATE_DUMP" );
@@ -12637,11 +12639,9 @@ TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
 		RandomMapGenerator::clampSettings( settings );
 		std::vector<char> map, preview;
 		RMGTemplateReport report;
-		LARGE_INTEGER frequency, before, after;
-		QueryPerformanceFrequency( &frequency );
-		QueryPerformanceCounter( &before );
+		const long long before = Clock_Ticks();
 		Bool built = rmgSynthesise( settings, exemplar, civilians ? isListedCivilian : NULL, map, &preview, &report );
-		QueryPerformanceCounter( &after );
+		const long long after = Clock_Ticks();
 		CHECK( built );
 		if( !built )
 			continue;
@@ -12661,7 +12661,7 @@ TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
 		fclose( out );
 		printf( "  wrote %s.map (%d bytes) in %.2f s: %d pads, %d ramps cut, %d patches, %d bridges, %d rivers, %d towns, %d tech, %d road "
 			"segments, %d trees, %d scenery; cut off %d starts, %d sites, %d tech\n%s",
-			name, (Int)map.size(), (double)( after.QuadPart - before.QuadPart ) / (double)frequency.QuadPart,
+			name, (Int)map.size(), (double)( after - before ) / (double)Clock_Ticks_Per_Second(),
 			report.m_pads, report.m_ramps, report.m_patches, report.m_bridges, report.m_rivers, report.m_towns, report.m_tech,
 			report.m_roads, report.m_trees, report.m_scenery, report.m_cutOffStarts, report.m_cutOffSites, report.m_cutOffTech,
 			report.m_notes.str() );

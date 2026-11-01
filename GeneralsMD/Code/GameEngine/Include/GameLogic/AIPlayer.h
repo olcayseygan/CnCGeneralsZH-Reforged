@@ -341,6 +341,7 @@ protected:
 	/** B?: an oil derrick is income standing in the open.  The AI used to walk past the neutral ones
 		* and shoot the enemy's, which is the one thing you can do with a derrick that earns nothing. */
 	virtual void doCapture(void);
+	void logOpeningCensus(void);				///< for the log only: what this player knows and owns of what pays, and what it has earned
 	Object *findCapturer(void);					///< a unit of ours that can walk into a building and own it
 	Object *nearestTechBuilding(const Coord3D *from, Bool wantOurs);	///< the closest one worth taking, or worth sitting on
 	void queueCapturer(void);						///< ... or build the cheapest thing that can take one
@@ -698,6 +699,13 @@ protected:
 	Int				m_hijackTimer;					///< frames until the next look for a vehicle to take
 	Int				m_retreatTimer;					///< frames until the next look at how the fights are going
 	Int				m_expandTimer;					///< frames until the next look for somewhere to expand to
+	Int				m_logTechKnown;					///< for the log only, not saved: the last census, so a line is written when a number moves
+	Int				m_logTechTotal;
+	Int				m_logTechOwned;
+	Int				m_logDocksKnown;
+	Int				m_logDocksTotal;
+	UnsignedInt m_logMoneyFrame;				///< for the log only, not saved: when the next earnings line is due
+	ObjectID	m_logCaptureTarget;				///< for the log only, not saved: the building last ordered taken, until it is ours
 
 	Bool		m_readyToBuildTeam;				///< True if the team select timer has expired.
 	Bool		m_readyToBuildStructure;	///< True if the buildDelay timer has expired.

@@ -429,6 +429,13 @@ m_role(AIROLE_AGGRESSIVE)
 	m_healerSeconds = 0;
 	m_healerClearSeconds = 0;
 	m_captureTimer = 1;
+	m_logTechKnown = -1;
+	m_logTechTotal = -1;
+	m_logTechOwned = -1;
+	m_logDocksKnown = -1;
+	m_logDocksTotal = -1;
+	m_logMoneyFrame = 0;
+	m_logCaptureTarget = INVALID_ID;
 	m_hijackerID = INVALID_ID;
 	m_hijackTimer = 1;
 
@@ -5893,6 +5900,13 @@ static Bool hasGuardNear( Player *player, const Coord3D *pos, Real reach )
 	return FALSE;
 }
 
+/** For the log only: what stopped this look at expanding. */
+static void logExpansionStop( Player *player, const char *gate )
+{
+	DEBUG_LOG(("AI EXPAND frame %d player %d stopped by %s, %d in the bank\n", TheGameLogic->getFrame(),
+		player->getPlayerIndex(), gate, player->getMoney()->countMoney()));
+}
+
 //----------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------
 /** Notice that there is money to be had, and go and take it.
@@ -5912,14 +5926,22 @@ void AIPlayer::doExpansion( void )
 {
 	const AIDifficultyProfile *profile = getSkillProfile();
 	if( !profile->m_selfTriggeredExpansion )
+	{
+		// no timer runs on this path, so the line's minute comes off the frame
+		if( TheGameLogic->getFrame() % ( EXPANSION_CHECK_SECONDS * LOGICFRAMES_PER_SECOND ) == 0 )
+			logExpansionStop( m_player, "profile off" );
 		return;
+	}
 
 	if( --m_expandTimer > 0 )
 		return;
 	m_expandTimer = EXPANSION_CHECK_SECONDS * LOGICFRAMES_PER_SECOND;
 
 	if( !m_player->getCanBuildBase() || !m_baseCenterSet )
+	{
+		logExpansionStop( m_player, "no base" );
 		return;
+	}
 
 	//
 	// What this faction calls a supply centre: whatever is already flagged as one on the build
@@ -5936,7 +5958,10 @@ void AIPlayer::doExpansion( void )
 		}
 	}
 	if( supplyCenterName.isEmpty() )
+	{
+		logExpansionStop( m_player, "no supply center template" );
 		return;
+	}
 
 	//
 	// A centre queued by the last check and not yet standing does not count as "a centre beside that
@@ -5944,11 +5969,17 @@ void AIPlayer::doExpansion( void )
 	// search run again: 2,300 checks, 23-33ms, each time.  The base builder still owns the queued one.
 	//
 	if( hasPendingRequest( m_player, supplyCenterName ) )
+	{
+		logExpansionStop( m_player, "request pending" );
 		return;
+	}
 
 	const ThingTemplate *tmpl = TheThingFactory->findTemplate( supplyCenterName, FALSE );
 	if( tmpl == NULL )
+	{
+		logExpansionStop( m_player, "no supply center template" );
 		return;
+	}
 
 	//
 	// One expansion at a time.  The last one, if its supply center still stands, its pile still has
@@ -5964,12 +5995,19 @@ void AIPlayer::doExpansion( void )
 			hasSuppliesNear( m_player, last, 0.0f ) &&
 			!hasGuardNear( m_player, last->getPosition(), TheAI->getAiData()->m_supplyCenterSafeRadius ) &&
 			buildExpansionDefense() )
+	{
+		logExpansionStop( m_player, "waiting for gun" );
 		return;
+	}
 
 	// pay for it out of what is spare, not out of the army's money
 	const Int cost = tmpl->calcCostToBuild( m_player );
 	if( m_player->getMoney()->countMoney() < 2 * cost )
+	{
+		DEBUG_LOG(("AI EXPAND frame %d player %d stopped by money, %d in the bank, needs %d\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), m_player->getMoney()->countMoney(), 2 * cost));
 		return;
+	}
 
 	//
 	// Somewhere worth going. findSupplyCenter already refuses a warehouse that is picked clean, one
@@ -5977,9 +6015,15 @@ void AIPlayer::doExpansion( void )
 	//
 	const Int WORTH_TAKING = 1000;
 	if( findSupplyCenter( WORTH_TAKING, TRUE ) == NULL )
+	{
+		logExpansionStop( m_player, "no dock" );
 		return;
+	}
 
+	// the one that does expand is buildBySupplies' own AI EXPAND line
 	buildBySupplies( WORTH_TAKING, supplyCenterName, TRUE );
+	if( !hasPendingRequest( m_player, supplyCenterName ) )
+		logExpansionStop( m_player, "no room" );
 
 	// the gun follows a supply center that was asked for: buildBySupplies puts it at the dock it
 	// chose last, and a call that found no room chose none
@@ -17001,6 +17045,71 @@ Object *AIPlayer::nearestTechBuilding( const Coord3D *from, Bool wantOurs )
 
 //----------------------------------------------------------------------------------------------------------
 /**
+ * For the log only, on doCapture's five seconds: reads the object list and decides nothing, so a
+ * headless batch can read each bot's opening.  A census line is written when one of its numbers moves.
+ */
+void AIPlayer::logOpeningCensus( void )
+{
+#ifdef DEBUG_LOGGING
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Int me = m_player->getPlayerIndex();
+
+	const Object *taking = TheGameLogic->findObjectByID( m_logCaptureTarget );
+	if( taking && taking->getControllingPlayer() == m_player )
+	{
+		DEBUG_LOG(("AI CAPTURE frame %d player %d took a '%s' %d\n", now, me, taking->getTemplate()->getName().str(), taking->getID()));
+		m_logCaptureTarget = INVALID_ID;
+	}
+
+	Int techKnown = 0;
+	Int techTotal = 0;
+	Int techOwned = 0;
+	Int docksKnown = 0;
+	Int docksTotal = 0;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( obj->isEffectivelyDead() )
+			continue;
+		if( obj->isKindOf( KINDOF_TECH_BUILDING ) && !obj->isKindOf( KINDOF_IMMUNE_TO_CAPTURE ) )
+		{
+			++techTotal;
+			if( observerKnowsAbout( obj, me ) )
+				++techKnown;
+			if( obj->getControllingPlayer() == m_player )
+				++techOwned;
+		}
+		if( obj->isKindOf( KINDOF_STRUCTURE ) && obj->isKindOf( KINDOF_SUPPLY_SOURCE ) )
+		{
+			++docksTotal;
+			if( observerKnowsAbout( obj, me ) )
+				++docksKnown;
+		}
+	}
+
+	if( techKnown != m_logTechKnown || techTotal != m_logTechTotal || techOwned != m_logTechOwned )
+	{
+		DEBUG_LOG(("AI TECH frame %d player %d knows %d of %d, owns %d\n", now, me, techKnown, techTotal, techOwned));
+		m_logTechKnown = techKnown;
+		m_logTechTotal = techTotal;
+		m_logTechOwned = techOwned;
+	}
+	if( docksKnown != m_logDocksKnown || docksTotal != m_logDocksTotal )
+	{
+		DEBUG_LOG(("AI DOCKS frame %d player %d knows %d of %d\n", now, me, docksKnown, docksTotal));
+		m_logDocksKnown = docksKnown;
+		m_logDocksTotal = docksTotal;
+	}
+	if( now >= m_logMoneyFrame )
+	{
+		DEBUG_LOG(("AI MONEY frame %d player %d earned %d, %d in the bank\n", now, me,
+			m_player->getScoreKeeper()->getTotalMoneyEarned(), m_player->getMoney()->countMoney()));
+		m_logMoneyFrame = now + 60 * LOGICFRAMES_PER_SECOND;
+	}
+#endif
+}
+
+//----------------------------------------------------------------------------------------------------------
+/**
  * Go and take the buildings that pay.
  *
  * An oil derrick is a supply pile that never runs out and costs one infantryman to own, and the AI
@@ -17014,6 +17123,8 @@ void AIPlayer::doCapture( void )
 	if( --m_captureTimer > 0 )
 		return;
 	m_captureTimer = CAPTURE_CHECK_RATE;
+
+	logOpeningCensus();
 
 	Object *capturer = TheGameLogic->findObjectByID( m_capturerID );
 	if( capturer && (capturer->isEffectivelyDead() || capturer->getControllingPlayer() != m_player) )
@@ -17059,7 +17170,8 @@ void AIPlayer::doCapture( void )
 				drop.y += dy / length * FERRY_DROP_STANDOFF;
 			}
 			drop.z = TheTerrainLogic->getGroundHeight( drop.x, drop.y );
-			DEBUG_LOG(("AI player %d flies its capturer to a '%s'\n", m_player->getPlayerIndex(), target->getTemplate()->getName().str()));
+			DEBUG_LOG(("AI CAPTURE frame %d player %d flies its capturer to a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+				target->getTemplate()->getName().str(), target->getID()));
 			ship->getAI()->aiMoveToAndEvacuate( &drop, CMD_FROM_AI );
 		}
 		return;
@@ -17109,16 +17221,17 @@ void AIPlayer::doCapture( void )
 		const Bool queued = m_player->hasUpgradeInProduction( captureUpgrade );
 		buildUpgrade( captureUpgradeName );
 		if( !queued && m_player->hasUpgradeInProduction( captureUpgrade ) )
-			DEBUG_LOG(("AI player %d buys the capture upgrade for a '%s'\n", m_player->getPlayerIndex(),
-				target->getTemplate()->getName().str()));
+			DEBUG_LOG(("AI CAPTURE frame %d player %d buys the capture upgrade for a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+				target->getTemplate()->getName().str(), target->getID()));
 		return;
 	}
 
 	if( mod && TheActionManager->canCaptureBuilding( capturer, target, CMD_FROM_AI ) )
 	{
 		mod->doSpecialPowerAtObject( target, 0 );
-		DEBUG_LOG(("AI player %d capturing a '%s'\n", m_player->getPlayerIndex(),
-							 target->getTemplate()->getName().str()));
+		DEBUG_LOG(("AI CAPTURE frame %d player %d capturing a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+							 target->getTemplate()->getName().str(), target->getID()));
+		m_logCaptureTarget = target->getID();
 	}
 	else
 	{
@@ -17151,13 +17264,20 @@ void AIPlayer::doCapture( void )
 		}
 		if( ship )
 		{
-			DEBUG_LOG(("AI player %d boards its capturer onto '%s' %d for a '%s'\n", m_player->getPlayerIndex(),
-				ship->getTemplate()->getName().str(), ship->getID(), target->getTemplate()->getName().str()));
+			DEBUG_LOG(("AI CAPTURE frame %d player %d boards its capturer onto '%s' %d for a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+				ship->getTemplate()->getName().str(), ship->getID(), target->getTemplate()->getName().str(), target->getID()));
 			m_ferryID = ship->getID();
 			ai->aiEnter( ship, CMD_FROM_AI );
 		}
 		else
+		{
+			// asked again every five seconds while a target stays out of reach, so one line for each target
+			if( target->getID() != m_logCaptureTarget )
+				DEBUG_LOG(("AI CAPTURE frame %d player %d walks its capturer to a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+					target->getTemplate()->getName().str(), target->getID()));
+			m_logCaptureTarget = target->getID();
 			ai->aiMoveToObject( target, CMD_FROM_AI );
+		}
 	}
 }
 

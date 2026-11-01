@@ -94,6 +94,7 @@ DECLARE_PERF_TIMER(MemoryPoolInitFilling)
 	define MPSB_DLINK to add a backlink to MemoryPoolSingleBlock; this makes it 
 	faster to free raw DMA blocks. 
 	@todo verify this speedup is enough to be worth the extra space
+	A blob block has no use for the backlink, so there it holds the free mark instead (isOnFreeList).
 */
 #define MPSB_DLINK
 
@@ -462,7 +463,7 @@ private:
 	MemoryPoolBlob				*m_owningBlob;			///< will be NULL if the single block was allocated via sysAllocate()
 	MemoryPoolSingleBlock	*m_nextBlock;				///< if m_owningBlob is nonnull, this points to next free (unallocated) block in the blob; if m_owningBlob is null, this points to the next used (allocated) raw block in the pool.
 #ifdef MPSB_DLINK
-	MemoryPoolSingleBlock	*m_prevBlock;				///< if m_owningBlob is nonnull, this points to prev free (unallocated) block in the blob; if m_owningBlob is null, this points to the prev used (allocated) raw block in the pool.
+	MemoryPoolSingleBlock	*m_prevBlock;				///< if m_owningBlob is nonnull, this points to itself while the block is free and is null while allocated; if m_owningBlob is null, this points to the prev used (allocated) raw block in the pool.
 #endif
 #ifdef MEMORYPOOL_CHECKPOINTING
 	BlockCheckpointInfo		*m_checkpointInfo;	///< ptr to the checkpointinfo for this block
@@ -501,6 +502,8 @@ public:
 
 	MemoryPoolSingleBlock *getNextFreeBlock();
 	void setNextFreeBlock(MemoryPoolSingleBlock *b);
+	Bool isOnFreeList();
+	void setOnFreeList(Bool onFreeList);
 	MemoryPoolSingleBlock *getNextRawBlock();
 	void setNextRawBlock(MemoryPoolSingleBlock *b);
 
@@ -656,13 +659,22 @@ inline void MemoryPoolSingleBlock::setNextFreeBlock(MemoryPoolSingleBlock *b)
 { 
 	//DEBUG_ASSERTCRASH(m_owningBlob != NULL && b->m_owningBlob != NULL, ("must be called on blob block")); 
 	// don't check the 'b' block -- we need to call this before 'b' is fully initialized.
-	DEBUG_ASSERTCRASH(m_owningBlob != NULL, ("must be called on blob block")); 
+	DEBUG_ASSERTCRASH(m_owningBlob != NULL, ("must be called on blob block"));
 	this->m_nextBlock = b;
-#ifdef MPSB_DLINK
-	if (b) {
-		b->m_prevBlock = this;
-	}
-#endif
+}
+
+/**
+	true while this blob block sits on its blob's free list.  A list walk would answer the same at a
+	cost this path cannot pay; the mark is one load from a line freeSingleBlock writes anyway.
+*/
+inline Bool MemoryPoolSingleBlock::isOnFreeList()
+{
+	return m_prevBlock == this;
+}
+
+inline void MemoryPoolSingleBlock::setOnFreeList(Bool onFreeList)
+{
+	m_prevBlock = onFreeList ? this : NULL;
 }
 
 /**
@@ -1260,6 +1272,7 @@ void MemoryPoolBlob::initBlob(MemoryPool *owningPool, Int allocationCount)
 		block->initBlock(m_owningPool->getAllocationSize(), this, owningPool->getOwningFactory());
 #endif
 		block->setNextFreeBlock((i > 0) ? next : NULL);
+		block->setOnFreeList(TRUE);
 #ifdef MEMORYPOOL_DEBUG
 		block->debugMarkBlockAsFree();
 #endif
@@ -1324,6 +1337,10 @@ inline Bool MemoryPoolBlob::holdsAddress(const void *p)
 	pool that really holds the block and the bytes around its header, so the report names the
 	corruption and shows what was written over it, then crash.  The header's own blob pointer is what
 	is in doubt, so the holder is looked up in pools[], and the dump stays inside that blob.
+
+	Crash report 2655 came through here with nothing overwritten: the freed pointer was 8 bytes past a
+	block's user data, so the "header" was the real one read 8 bytes late, its next link taken for the
+	blob.  A pointer that is not on a block boundary says so instead.
 */
 void MemoryPoolBlob::crashOnCorruptBlockHeader(MemoryPoolSingleBlock *block, MemoryPool *const *pools, Int numPools)
 {
@@ -1342,16 +1359,22 @@ void MemoryPoolBlob::crashOnCorruptBlockHeader(MemoryPoolSingleBlock *block, Mem
 	const char *hi = lo + sizeof(MemoryPoolSingleBlock);
 	Int poolSize = -1;
 	const char *poolName = "no pool of this allocator";
+	Int pastBoundary = 0;
 	if (holder != NULL)
 	{
 		poolSize = holder->m_owningPool->getAllocationSize();
 		poolName = holder->m_owningPool->getPoolName();
-		const char *blobEnd = holder->m_blockData + (uintptr_t)holder->m_totalBlocksInBlob * MemoryPoolSingleBlock::calcRawBlockSize(poolSize);
+		const uintptr_t rawBlockSize = MemoryPoolSingleBlock::calcRawBlockSize(poolSize);
+		pastBoundary = (Int)((uintptr_t)(lo - holder->m_blockData) % rawBlockSize);
+		const char *blobEnd = holder->m_blockData + (uintptr_t)holder->m_totalBlocksInBlob * rawBlockSize;
 		lo = (lo - holder->m_blockData > 64) ? lo - 64 : holder->m_blockData;
 		hi = (blobEnd - hi > 32) ? hi + 32 : blobEnd;
 	}
 
-	DEBUG_LOG(("Memory pool block header at %p overwritten, in '%s' (%d bytes); offsets from the header:\n", block, poolName, poolSize));
+	if (pastBoundary != 0)
+		DEBUG_LOG(("Memory pool pointer %d bytes past a block boundary at %p, in '%s' (%d bytes); offsets from that pointer's supposed header:\n", pastBoundary, block, poolName, poolSize));
+	else
+		DEBUG_LOG(("Memory pool block header at %p overwritten, in '%s' (%d bytes); offsets from the header:\n", block, poolName, poolSize));
 	for (const char *row = lo; row < hi; row += 16)
 	{
 		char hex[16*3 + 1];
@@ -1368,8 +1391,11 @@ void MemoryPoolBlob::crashOnCorruptBlockHeader(MemoryPoolSingleBlock *block, Mem
 		DEBUG_LOG(("%+5d  %-48s %s\n", (Int)(row - (const char *)block), hex, text));
 	}
 
-	char reason[96];
-	snprintf(reason, sizeof(reason), "memory pool block header overwritten (pool %d bytes)", poolSize);
+	char reason[128];
+	if (pastBoundary != 0)
+		snprintf(reason, sizeof(reason), "memory pool pointer %d bytes past a block boundary (pool %d bytes)", pastBoundary, poolSize);
+	else
+		snprintf(reason, sizeof(reason), "memory pool block header overwritten (pool %d bytes)", poolSize);
 	RELEASE_CRASH(reason);
 }
 
@@ -1389,6 +1415,7 @@ MemoryPoolSingleBlock *MemoryPoolBlob::allocateSingleBlock(DECLARE_LITERALSTRING
 	if (block->getOwningBlob() != this || (next != NULL && !holdsAddress(next)))
 		crashOnCorruptBlockHeader(block, &m_owningPool, 1);
 	m_firstFreeBlock = next;
+	block->setOnFreeList(FALSE);
 	++m_usedBlocksInBlob;
 
 #ifdef MEMORYPOOL_INTENSE_VERIFY
@@ -1418,6 +1445,7 @@ void MemoryPoolBlob::freeSingleBlock(MemoryPoolSingleBlock *block)
 	DEBUG_ASSERTCRASH(block->getOwningBlob() == this, ("block does not belong to this blob"));
 
 	block->setNextFreeBlock(m_firstFreeBlock);
+	block->setOnFreeList(TRUE);
 	m_firstFreeBlock = block;
 	--m_usedBlocksInBlob;
 
@@ -1854,6 +1882,20 @@ void* MemoryPool::allocateBlockImplementation(DECLARE_LITERALSTRING_ARG1)
 
 //-----------------------------------------------------------------------------
 /**
+	Crash report 2655: a block freed while it headed the free list linked to itself, and every later
+	allocation of that size got that one block, so the crash came minutes later from whichever two
+	owners collided.  Crash at the second free, whose stack is the one worth having.  Its own function,
+	so the buffer costs freeBlock nothing on the way past.
+*/
+static void crashOnDoubleFree(MemoryPool *pool)
+{
+	char reason[128];
+	snprintf(reason, sizeof(reason), "memory pool block freed twice (pool '%s', %d bytes)", pool->getPoolName(), pool->getAllocationSize());
+	RELEASE_CRASH(reason);
+}
+
+//-----------------------------------------------------------------------------
+/**
 	free a block allocated by this pool. it's ok to pass null.
 */
 void MemoryPool::freeBlock(void* pBlockPtr)
@@ -1874,6 +1916,14 @@ void MemoryPool::freeBlock(void* pBlockPtr)
 	{
 		MemoryPool *self = this;
 		MemoryPoolBlob::crashOnCorruptBlockHeader(block, &self, 1);
+	}
+
+	// in Release too.  ReleaseCrash comes back only at shutdown, when TheGlobalData is gone, and the
+	// block is already free, so nothing is left to do for it.
+	if (block->isOnFreeList())
+	{
+		crashOnDoubleFree(this);
+		return;
 	}
 
 #ifdef MEMORYPOOL_CHECKPOINTING

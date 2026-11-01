@@ -277,13 +277,19 @@ inline HWND getThreadHWND()
 #endif
 
 /* Before a message box in full screen the game's window is hidden, so that the box can be seen.  The
-	 window is Windows' ApplicationHWnd; off Windows there is none until C2 creates one. */
+	 window is Windows' ApplicationHWnd; off Windows there is none until C2 creates one.
+	 ShowWindow on another thread's window waits until that thread pumps.  A crash on the logic thread
+	 can hold the memory pool locks here, and the main thread stops pumping at its next allocation, so
+	 the wait never ended and no crash file got written.  Off the main thread, ask and carry on. */
 static void hideFullScreenWindowForMessage( void )
 {
 #if defined(_WIN32)
 	if (!DX8Wrapper_IsWindowed) {
 		if (ApplicationHWnd) {
-			ShowWindow(ApplicationHWnd, SW_HIDE);
+			if (getThreadHWND() != NULL)
+				ShowWindow(ApplicationHWnd, SW_HIDE);
+			else
+				ShowWindowAsync(ApplicationHWnd, SW_HIDE);
 		}
 	}
 #endif
@@ -956,7 +962,8 @@ void ReleaseCrash(const char *reason)
 	FileWriteQueue::flushAll();
 #ifdef DEBUG_LOGGING
 	// From here to _exit the file is this thread's alone, so the writer cannot cut into the report
-	// with other threads' lines.  Never released; what is queued meanwhile goes out before each _exit.
+	// with other threads' lines.  Released only on the shutdown return below; what is queued meanwhile
+	// goes out before each _exit.
 	if (theLogQueue != NULL)
 		theLogQueue->fileLock.lock();
 #endif
@@ -978,6 +985,11 @@ void ReleaseCrash(const char *reason)
 	char curbuf[ _MAX_PATH ];
 
 	if (TheGlobalData==NULL) {
+#ifdef DEBUG_LOGGING
+		// the process goes on, and stopping the log writer waits for this lock
+		if (theLogQueue != NULL)
+			theLogQueue->fileLock.unlock();
+#endif
 		return; // We are shutting down, and TheGlobalData has been freed.  jba. [4/15/2003]
 	}
 
@@ -1136,7 +1148,11 @@ void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m)
 #endif
 	if (!TheGameText) {
 		ReleaseCrash(m.str());
-		// This won't ever return
+		// Back here only when TheGlobalData is gone; the lock taken above goes as ReleaseCrash's did.
+#ifdef DEBUG_LOGGING
+		if (theLogQueue != NULL)
+			theLogQueue->fileLock.unlock();
+#endif
 		return;
 	}
 

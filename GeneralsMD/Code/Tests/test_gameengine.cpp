@@ -15792,6 +15792,57 @@ TEST(an_allocation_inside_a_job_is_counted)
 	JobSystem::shutdown();
 }
 
+/* Crash report 2655: a block freed twice linked to itself and every later allocation of that size got
+	 that one block.  ReleaseCrash ends the process unless TheGlobalData is gone, as at shutdown, so with
+	 it gone the real path runs and comes back, and what the free list hands out next says whether the
+	 second free got through.  Freed twice in a row, the old code gives the same block forever; with one
+	 free between, a check against the list's head alone hands it out again. */
+TEST(a_pool_block_freed_twice_never_goes_back_on_the_free_list)
+{
+	CHECK( bootOnce() );
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NULL;
+
+	MemoryPool *pool = TheMemoryPoolFactory->createMemoryPool( "testDoubleFree", 64, 8, 8 );
+
+	// healthy order first: the mark must not change which block comes next
+	void *a = pool->allocateBlock( "testDoubleFree" );
+	void *b = pool->allocateBlock( "testDoubleFree" );
+	pool->freeBlock( a );
+	pool->freeBlock( b );
+	void *again = pool->allocateBlock( "testDoubleFree" );
+	CHECK( again == b );
+	again = pool->allocateBlock( "testDoubleFree" );
+	CHECK( again == a );
+
+	pool->freeBlock( a );
+	pool->freeBlock( a );
+	void *first = pool->allocateBlock( "testDoubleFree" );
+	void *second = pool->allocateBlock( "testDoubleFree" );
+	CHECK( first == a );
+	CHECK( second != a );
+	pool->freeBlock( second );
+	pool->freeBlock( first );
+
+	void *c = pool->allocateBlock( "testDoubleFree" );
+	pool->freeBlock( c );
+	pool->freeBlock( b );
+	pool->freeBlock( c );
+	void *third = pool->allocateBlock( "testDoubleFree" );
+	void *fourth = pool->allocateBlock( "testDoubleFree" );
+	void *fifth = pool->allocateBlock( "testDoubleFree" );
+	CHECK( third == b );
+	CHECK( fourth == c );
+	CHECK( fifth != b && fifth != c );
+	pool->freeBlock( third );
+	pool->freeBlock( fourth );
+	pool->freeBlock( fifth );
+
+	CHECK_EQ( 0, pool->getUsedBlockCount() );
+	TheMemoryPoolFactory->destroyMemoryPool( pool );
+	TheWritableGlobalData = saved;
+}
+
 /* A fork made the moment the last one returned finds some workers still on their way back to the
 	 wait; a fork made after a pause finds them all asleep.  A wake lost in either case hangs this test,
 	 and a wake left over from one fork and taken by the next returns before its workers are done,

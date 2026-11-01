@@ -103,7 +103,7 @@ CompressionType CompressionManager::getPreferredCompression( void )
 
 CompressionType CompressionManager::getCompressionType( const void *mem, Int len )
 {
-	if (len < 8)
+	if (!mem || len < 8)
 		return COMPRESSION_NONE;
 
 	if ( memcmp( mem, "NOX\0", 4 ) == 0 )
@@ -173,8 +173,8 @@ Int CompressionManager::getMaxCompressedSize( Int uncompressedLen, CompressionTy
 
 Int CompressionManager::getUncompressedSize( const void *mem, Int len )
 {
-	if (len < 8)
-		return len;
+	if (!mem || len < 8)
+		return len > 0 && mem ? len : 0;
 
 	CompressionType compType = getCompressionType( mem, len );
 	switch (compType)
@@ -192,7 +192,12 @@ Int CompressionManager::getUncompressedSize( const void *mem, Int len )
 		case COMPRESSION_BTREE:
 		case COMPRESSION_HUFF:
 		case COMPRESSION_REFPACK:
-			return *(Int *)(((UnsignedByte *)mem)+4);
+			{
+			Int size = 0;
+			memcpy(&size, (const UnsignedByte *)mem + 4, sizeof(size));
+			// Reject signed/overflowed lengths before callers allocate their output buffer.
+			return size > 0 ? size : 0;
+		}
 	}
 
 	return len;
@@ -289,7 +294,7 @@ Int CompressionManager::compressData( CompressionType compType, void *srcVoid, I
 
 Int CompressionManager::decompressData( void *srcVoid, Int srcLen, void *destVoid, Int destLen )
 {
-	if (srcLen < 8)
+	if (!srcVoid || !destVoid || srcLen < 8 || destLen <= 0)
 		return 0;
 
 	UnsignedByte *src = (UnsignedByte *)srcVoid;
@@ -297,32 +302,21 @@ Int CompressionManager::decompressData( void *srcVoid, Int srcLen, void *destVoi
 
 	CompressionType compType = getCompressionType(src, srcLen);
 
-	if (compType == COMPRESSION_BTREE)
+	const Int expected = getUncompressedSize(src, srcLen);
+	if (expected <= 0 || expected > destLen) return 0;
+	// Preserve legacy codec compatibility. Their unbounded decoders remain audit follow-up;
+	// RefPack below, the preferred map codec, has an explicit capacity contract.
+	if (compType == COMPRESSION_BTREE || compType == COMPRESSION_HUFF)
 	{
 		Int slen = srcLen - 8;
-		Int ret = BTREE_decode(dest, src+8, &slen);
-		if (ret)
-			return ret;
-		else
-			return 0;
-	}
-	if (compType == COMPRESSION_HUFF)
-	{
-		Int slen = srcLen - 8;
-		Int ret = HUFF_decode(dest, src+8, &slen);
-		if (ret)
-			return ret;
-		else
-			return 0;
+		return compType == COMPRESSION_BTREE ? BTREE_decode(dest, src + 8, &slen)
+											: HUFF_decode(dest, src + 8, &slen);
 	}
 	if (compType == COMPRESSION_REFPACK)
 	{
 		Int slen = srcLen - 8;
-		Int ret = REF_decode(dest, src+8, &slen);
-		if (ret)
-			return ret;
-		else
-			return 0;
+		const Int ret = REF_decode(dest, src + 8, &slen, expected);
+		return ret == expected ? ret : 0;
 	}
 
 	if (compType == COMPRESSION_NOXLZH)

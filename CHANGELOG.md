@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Safer files and macOS setup
+
+- Corrupt BIG archive names and excessive map-script parameter counts are rejected before they can overwrite memory. RefPack map decompression now checks its input, output and backward references. The other compression formats remain supported.
+- Cinematic text keeps multi-word font names and rejects malformed font descriptions instead of overrunning a fixed buffer.
+
 ## Missions keep the time their script wrote
 
 - EA's cinematics slow the game on purpose, so the radio lines fit and the camera lands where the next shot starts. This build had stopped honouring that on 18 October. Every mission's cutscenes now run at the pace their script asks for. China's parade had 16 seconds of radio talking over itself, and has 11 now: what is left is EA's own script, which starts the tank crews' lines two thirds of a second apart.

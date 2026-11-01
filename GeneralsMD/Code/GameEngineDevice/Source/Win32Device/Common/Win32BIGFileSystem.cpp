@@ -230,118 +230,63 @@ void Win32BIGFileSystem::update() {
 void Win32BIGFileSystem::postProcessLoad() {
 }
 
+// Discard the whole index on malformed input; no partially mounted archive escapes.
+static ArchiveFile *rejectBIGArchive(File *file, ArchiveFile *archive)
+{
+	file->close();
+	delete archive;
+	return NULL;
+}
+
 ArchiveFile * Win32BIGFileSystem::openArchiveFile(const Char *filename) {
 	File *fp = TheLocalFileSystem->openFile(filename, File::READ | File::BINARY);
-	AsciiString archiveFileName;
-	archiveFileName = filename;
-	archiveFileName.toLower();
-	Int archiveFileSize = 0;
-	Int numLittleFiles = 0;
-
-	DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - opening BIG file %s\n", filename));
-
-	if (fp == NULL) {
-		DEBUG_CRASH(("Could not open archive file %s for parsing", filename));
-		return NULL;
-	}
-
-	AsciiString asciibuf;
+	if (fp == NULL) return NULL;
+	const Int actualSize = fp->size();
 	char buffer[_MAX_PATH];
-	fp->read(buffer, 4); // read the "BIG" at the beginning of the file.
-	buffer[4] = 0;
-	if (strcmp(buffer, BIGFileIdentifier) != 0) {
-#if defined(_WIN32)
-		DEBUG_CRASH(("Error reading BIG file identifier in file %s", filename));
-#else
-		// Quietly, and once for each such file: macOS leaves a "._" AppleDouble companion beside every
-		// file it copies onto exFAT or FAT, and "*.big" finds them, so an install that came off such a
-		// volume has twenty of these.  They are not archives and nothing is lost by leaving them out
-		// (C1, PR (f)).
-		DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - %s is not a BIG archive (no BIGF), left out\n", filename));
-#endif
-		fp->close();
-		fp = NULL;
-		return NULL;
-	}
-
-	// Allocated after the checks above, not before them: both of those returns used to walk away
-	// from a Win32BIGFile that had just been made. A directory of files that are not archives -
-	// which is what a mod folder handed to -mod can be - leaked one per file.
-	ArchiveFile *archiveFile = NEW Win32BIGFile;
-
-	// read in the file size.
-	fp->read(&archiveFileSize, 4);
-
-	DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - size of archive file is %d bytes\n", archiveFileSize));
-
-//	char t;
-
-	// read in the number of files contained in this BIG file.
-	// change the order of the bytes cause the file size is in reverse byte order for some reason.
-	fp->read(&numLittleFiles, 4);
-	numLittleFiles = ntohl(numLittleFiles);
-
-	DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - %d are contained in archive\n", numLittleFiles));
-//	for (Int i = 0; i < 2; ++i) {
-//		t = buffer[i];
-//		buffer[i] = buffer[(4-i)-1];
-//		buffer[(4-i)-1] = t;
-//	}
-
-	// seek to the beginning of the directory listing.
-	fp->seek(0x10, File::START);
-	// read in each directory listing.
-	ArchivedFileInfo *fileInfo = NEW ArchivedFileInfo;
-
-	for (Int i = 0; i < numLittleFiles; ++i) {
-		Int filesize = 0;
-		Int fileOffset = 0;
-		fp->read(&fileOffset, 4);
-		fp->read(&filesize, 4);
-
-		filesize = ntohl(filesize);
-		fileOffset = ntohl(fileOffset);
-
-		fileInfo->m_archiveFilename = archiveFileName;
-		fileInfo->m_offset = fileOffset;
-		fileInfo->m_size = filesize;
-		
-		// read in the path name of the file.
-		Int pathIndex = -1;
+	if (actualSize < 16 || fp->read(buffer, 4) != 4 || memcmp(buffer, BIGFileIdentifier, 4) != 0)
+		return rejectBIGArchive(fp, NULL);
+	Int archiveSize = 0, count = 0, dataStart = 0;
+	if (fp->read(&archiveSize, 4) != 4 || fp->read(&count, 4) != 4 || fp->read(&dataStart, 4) != 4)
+		return rejectBIGArchive(fp, NULL);
+	count = ntohl(count);
+	if (count < 0 || count > (actualSize - 16) / 9) return rejectBIGArchive(fp, NULL);
+	// The stored archive size and data-start fields are advisory in retail archives.
+	ArchiveFile *archive = NEW Win32BIGFile;
+	archive->attachFile(NULL);
+	AsciiString archiveName(filename);
+	archiveName.toLower();
+	Int firstData = actualSize;
+	for (Int i = 0; i < count; ++i) {
+		Int offset = 0, size = 0;
+		if (fp->read(&offset, 4) != 4 || fp->read(&size, 4) != 4)
+			return rejectBIGArchive(fp, archive);
+		offset = ntohl(offset);
+		size = ntohl(size);
+		if (offset < 16 || offset > actualSize || size < 0 || size > actualSize - offset)
+			return rejectBIGArchive(fp, archive);
+		if (offset < firstData) firstData = offset;
+		Int pathLength = 0;
 		do {
-			++pathIndex;
-			fp->read(buffer + pathIndex, 1);
-		} while (buffer[pathIndex] != 0);
-
-		Int filenameIndex = pathIndex;
-		// the index test first: a name with no separator used to read buffer[-1] before the test stopped it
-		while ((filenameIndex >= 0) && (buffer[filenameIndex] != '\\') && (buffer[filenameIndex] != '/')) {
+			if (pathLength >= (Int)sizeof(buffer) || fp->read(buffer + pathLength, 1) != 1)
+				return rejectBIGArchive(fp, archive);
+		} while (buffer[pathLength++] != 0);
+		if (pathLength == 1) return rejectBIGArchive(fp, archive);
+		Int filenameIndex = pathLength - 1;
+		while (filenameIndex >= 0 && buffer[filenameIndex] != '\\' && buffer[filenameIndex] != '/')
 			--filenameIndex;
-		}
-
-		fileInfo->m_filename = (char *)(buffer + filenameIndex + 1);
-		fileInfo->m_filename.toLower();
+		ArchivedFileInfo info;
+		info.m_archiveFilename = archiveName;
+		info.m_offset = offset;
+		info.m_size = size;
+		info.m_filename = buffer + filenameIndex + 1;
+		if (info.m_filename.isEmpty()) return rejectBIGArchive(fp, archive);
+		info.m_filename.toLower();
 		buffer[filenameIndex + 1] = 0;
-
-		AsciiString path;
-		path = buffer;
-
-		AsciiString debugpath;
-		debugpath = path;
-		debugpath.concat(fileInfo->m_filename);
-//		DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - adding file %s to archive file %s, file number %d\n", debugpath.str(), fileInfo->m_archiveFilename.str(), i));
-
-		archiveFile->addFile(path, fileInfo);
+		archive->addFile(AsciiString(buffer), &info);
 	}
-
-	archiveFile->attachFile(fp);
-
-	delete fileInfo;
-	fileInfo = NULL;
-
-	// leave fp open as the archive file will be using it.
-
-	return archiveFile;
+	if (fp->position() > firstData) return rejectBIGArchive(fp, archive);
+	archive->attachFile(fp);
+	return archive;
 }
 
 void Win32BIGFileSystem::closeArchiveFile(const Char *filename) {

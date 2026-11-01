@@ -12,6 +12,8 @@ found and fixed, EA's own, not port damage.**
 
 - Corrupt BIG archive names and excessive map-script parameter counts are rejected before they can overwrite memory. RefPack map decompression now checks its input, output and backward references. The other compression formats remain supported.
 - Cinematic text keeps multi-word font names and rejects malformed font descriptions instead of overrunning a fixed buffer.
+- On macOS and Linux, saving into a folder with a dot in its name, or saving a file without an extension, creates the right directories. macOS also searches native Steam libraries and their external library folders.
+- The installation-copy helper works with Apple's system Bash. Game data stays outside the source checkout; optional art downloads now need an explicit external destination. The macOS setup guide covers owned Steam data and the current GOG availability.
 
 ## Missions keep the time their script wrote
 

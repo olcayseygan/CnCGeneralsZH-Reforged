@@ -27,28 +27,41 @@
 # is in place costs one directory check per library and nothing else.
 #
 #   --force   re-fetch even what is already there
+#   --art-dir <outside-checkout-directory>  optionally download artwork there
 #
-# What it cannot get is the game itself: the .big files from a Zero Hour install go next to the
-# executable in GeneralsMD/Run, and the base game's in Run/ZH_Generals. The game says so on startup
-# when they are missing.
+# Retail game data stays outside the checkout. See docs/macos.md for an owned installation.
+# Only dependency sources are fetched by default; optional artwork needs --art-dir.
 
 set -euo pipefail
 
 force=
+art_directory=
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --force|-f) force=1 ;;
+    --art-dir)
+      [ $# -ge 2 ] && [ -n "$2" ] || { echo '[vendor] --art-dir needs a directory' >&2; exit 2; }
+      art_directory=$2; shift ;;
     -h|--help) sed -n '3,$p' "$0" | sed -n '/^[^#]/q; s/^#\{1\} \{0,1\}//p'; exit 0 ;;
     *) echo "[vendor] ERROR: unknown argument '$1' (try --force)" >&2; exit 1 ;;
   esac
   shift
 done
 
-tools_dir=$(cd "$(dirname "$0")" && pwd)
+tools_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
 code_root=$(dirname "$tools_dir")
 libraries="$code_root/Libraries"
-run_folder="$(dirname "$code_root")/Run"
+# No art is acquired by a normal build. Explicit art downloads must stay outside Git.
+run_folder=
+if [ -n "$art_directory" ]; then
+  mkdir -p "$art_directory"
+  run_folder=$(CDPATH= cd "$art_directory" && pwd -P)
+  repo=$(CDPATH= cd "$code_root/../.." && pwd -P)
+  case "$run_folder/" in
+    "$repo/"*) echo '[vendor] --art-dir must be outside the source checkout' >&2; exit 2 ;;
+  esac
+fi
 work="${TMPDIR:-/tmp}/zhr-vendor"
 work="${work%/}"
 
@@ -684,6 +697,9 @@ install_art() {
   local name url size sha target partial hash
   while IFS=$'\t' read -r name url size sha; do
     [ -n "$name" ] || continue
+    case "$name" in
+      */*|*\\*|*:*) echo '[vendor] invalid art manifest filename' >&2; return 1 ;;
+    esac
     target="$run_folder/$name"
     if [ -e "$target" ] && [ -z "$force" ] && [ "$(sha256_of "$target")" = "$(lower "$sha")" ]; then
       continue
@@ -700,7 +716,7 @@ install_art() {
       exit 1
     fi
     mv -f "$partial" "$target"
-    step "$name -> Run"
+    step "$name -> $run_folder"
   done <<EOF
 $wanted
 EOF
@@ -728,5 +744,5 @@ install_spirv_cross
 install_shadercross
 install_freetype
 install_ffmpeg
-install_art
+if [ -n "$run_folder" ]; then install_art; fi
 step 'everything the build needs is in place'

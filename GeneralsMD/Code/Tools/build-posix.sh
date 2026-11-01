@@ -21,7 +21,7 @@
 #   build-posix.sh <macos|linux> [clean] [Release|RelWithDebInfo|Debug] [test|<target>]
 #
 # From a fresh clone it checks the toolchain and names what to install when something is missing,
-# fetches the third-party sources EA stripped and the fork's own art (vendor.sh), configures, builds,
+# fetches the third-party dependency sources (vendor.sh), configures, builds,
 # runs ctest when asked, and stages a game that runs:
 #
 #   macOS   build-mac/Zero Hour Reforged.app (the macos_app target)
@@ -44,7 +44,7 @@ BUILD=
 
 PLATFORM="${1:-}"
 [ $# -eq 0 ] || shift
-ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+ROOT=$(CDPATH= cd "$(dirname "$0")/../../.." && pwd)
 
 fail() { echo "[build] ERROR: $1" >&2; exit 1; }
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
@@ -142,7 +142,7 @@ echo "[build] cmake:  $CMAKE"
 echo "[build] config: $CONFIG"
 echo "[build] tree:   $BUILD ($GENERATOR)"
 
-# --- third-party sources the repository does not carry and the upscaled art. Fetches whatever is
+# --- third-party sources the repository does not carry. Fetches whatever is
 # missing and is a no-op once it is there. ---
 "$SRC/Tools/vendor.sh" || fail "fetching the third-party sources failed."
 

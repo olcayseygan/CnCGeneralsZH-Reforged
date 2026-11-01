@@ -40,6 +40,14 @@ request, so bring your branch up to date with `git rebase main` rather than merg
 
 ## Before you open it
 
+Keep proprietary retail data outside the checkout: no game archives, movies,
+music, voices or installer images. Use synthetic test inputs and document the
+provenance/licence of any new media. The released GPL source and its existing
+copyright notices remain intact. `Tools/check_game_assets.py` under
+`GeneralsMD/Code/` checks common retail containers in the Git index, including
+files forced past `.gitignore`; it does not establish the rights to existing media.
+See [the macOS setup guide](docs/macos.md) for using an independently owned install.
+
 Build Release and run the tests. One command does both on each platform: `build.bat Release test`
 on Windows, `./build-macos.sh Release test` on a Mac and `./build-linux.sh Release test` on Linux.
 The build is 64-bit only, and `-A Win32` stops at configure.

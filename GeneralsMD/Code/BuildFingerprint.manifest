@@ -3206,6 +3206,7 @@ Tests/test_d3dx_assemble_stub.cpp
 Tests/test_d3dxportable.cpp
 Tests/test_debug.cpp
 Tests/test_detround.cpp
+Tests/test_developer_tools.py
 Tests/test_dx11backend.cpp
 Tests/test_dx11device.cpp
 Tests/test_dx11layout.cpp
@@ -4104,6 +4105,7 @@ Tools/build-posix.sh
 Tools/buildVersionUpdate/buildVersionUpdate.cpp
 Tools/buildVersionUpdate/buildVersionUpdate.dsp
 Tools/cheat_check.py
+Tools/check_game_assets.py
 Tools/china_beacon.py
 Tools/control_client.py
 Tools/d3d9posix_check.py

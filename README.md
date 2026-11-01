@@ -204,6 +204,10 @@ crashes, the launcher sends the report without asking you for anything.
 
 ### macOS and Linux
 
+[macOS setup: build, Steam game data, GOG availability and troubleshooting](docs/macos.md).
+Keep retail data outside this source checkout. By default the dependency scripts
+download library sources only; optional game artwork uses an explicit external directory.
+
 There is no launcher for these yet, so the game is built from this repository with one command (see
 [Build it](#build-it)) and pointed at the Zero Hour you already have installed. The folder it wants is
 the one holding `INIZH.big`, with the original Generals inside it as `ZH_Generals/` or beside it,
@@ -227,7 +231,7 @@ First match wins (`PosixInstallRoot.cpp`, `PosixChooseInstallRoot`):
 | Where | Linux | macOS |
 |:--|:--|:--|
 | `~/Games/<name>` | yes | yes |
-| `<library>/steamapps/common/<name>` for every Steam library: `~/.local/share/Steam`, `~/.steam/steam`, `~/.steam/root`, Flatpak's `~/.var/app/com.valvesoftware.Steam/.local/share/Steam`, and each library their `libraryfolders.vdf` lists (an SD card's too) | yes | |
+| `<library>/steamapps/common/<name>` for every Steam library: Linux's usual and Flatpak paths, macOS's `~/Library/Application Support/Steam`, and each library their `libraryfolders.vdf` lists | yes | yes |
 | `/Applications/<name>` | | yes |
 | CrossOver and Whisky bottles: `drive_c/Program Files*/` (`EA Games`, `Origin Games`, `Steam/steamapps/common`, `Command & Conquer The First Decade`, or the folder itself) `/<name>` | | yes |
 
@@ -445,7 +449,7 @@ block rather than an edit to `Object`.
 | `GeneralsMD/Code/Data/` | the fork's INI, strings, interface pages and the Turkish and German text |
 | `GeneralsMD/Code/Tests/` | the test harnesses, FFReference among them |
 | `GeneralsMD/Code/Tools/` | the vendor scripts, packaging and the build fingerprint |
-| `GeneralsMD/Run/` | where the exe lands, where your `*.big` go, and the only place the game starts |
+| `GeneralsMD/Run/` | historical Windows run layout; macOS/Linux use a separate retail installation and a build or packaged executable |
 | `Generals/` | the base game's tree as EA released it; nothing here builds it |
 | `Tools/` | side tools in Python, PathLab for movement ideas and the balance harness among them |
 

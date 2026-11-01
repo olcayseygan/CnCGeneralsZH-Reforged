@@ -1,0 +1,18 @@
+name: Source content
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  retail-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keep retail game containers outside the source tree
+        run: python3 GeneralsMD/Code/Tools/check_game_assets.py
+      - name: Exercise developer tools with synthetic data
+        run: python3 GeneralsMD/Code/Tests/test_developer_tools.py

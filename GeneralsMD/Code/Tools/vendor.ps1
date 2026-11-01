@@ -5,19 +5,30 @@
 # is in place costs one directory check per library and nothing else.
 #
 #   -Force   re-fetch even what is already there
+#   -ArtDirectory <outside-checkout-directory>  optionally download artwork there
 #
 # What it cannot get is the game itself: the .big files from a Zero Hour install go next to
 # generals.exe in GeneralsMD\Run, and the base game's in Run\ZH_Generals. The game says so on
 # startup when they are missing.
 [CmdletBinding()]
-param([switch] $Force)
+param([switch] $Force, [string] $ArtDirectory)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $codeRoot = Split-Path -Parent $PSScriptRoot
 $libraries = Join-Path $codeRoot 'Libraries'
-$runFolder = Join-Path (Split-Path -Parent $codeRoot) 'Run'
+# Only an explicitly chosen external directory receives optional artwork.
+$runFolder = $null
+if ($ArtDirectory) {
+  New-Item -ItemType Directory -Force -Path $ArtDirectory | Out-Null
+  $runFolder = (Resolve-Path -LiteralPath $ArtDirectory).Path
+  $repo = (Resolve-Path -LiteralPath (Join-Path $codeRoot '../..')).Path
+  $separator = [System.IO.Path]::DirectorySeparatorChar
+  if (($runFolder + $separator).StartsWith($repo + $separator, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw '-ArtDirectory must be outside the source checkout'
+  }
+}
 $work = Join-Path $env:TEMP 'zhr-vendor'
 
 function Step($message) { Write-Host "[vendor] $message" }
@@ -234,6 +245,7 @@ function Install-Art {
 
   New-Item -ItemType Directory -Force -Path $runFolder | Out-Null
   foreach ($file in $wanted) {
+    if ($file.name -match '[/\\:]') { throw 'invalid art manifest filename' }
     $target = Join-Path $runFolder $file.name
     if ((Test-Path $target) -and -not $Force -and
         (Get-FileHash $target -Algorithm SHA256).Hash -eq $file.sha256.ToUpper()) {
@@ -248,7 +260,7 @@ function Install-Art {
       throw "$($file.name) downloaded with hash $hash, and it was published as $($file.sha256)"
     }
     Move-Item $partial $target -Force
-    Step "$($file.name) -> Run"
+    Step "$($file.name) -> $runFolder"
   }
 }
 
@@ -272,5 +284,5 @@ Step 'skipping FreeType: text off Windows, vendor.sh fetches it'
 # FFmpeg's source is built only off Windows (V1); Windows links the committed dist/ that
 # Tools/ffmpeg-build.sh made, so the tarball is not fetched here.
 Step 'skipping the FFmpeg source: the POSIX movie decoder, vendor.sh fetches it'
-Install-Art
+if ($runFolder) { Install-Art }
 Step 'everything the build needs is in place'

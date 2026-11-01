@@ -52,25 +52,12 @@ File * PosixLocalFileSystem::openFile(const Char *filename, Int access /* = 0 */
 	PosixLocalFile *file = newInstance( PosixLocalFile );
 
 	if (access & File::WRITE) {
-		// Win32LocalFileSystem's walk: every token before the file is a directory to create, and the
-		// file is the first token with a '.' when no '.' follows it.  nextToken drops a leading
-		// separator, which on Windows only loses nothing ("C:" comes first); here it would turn an
-		// absolute path relative, so the root is put back.  A last component with no '.' ran that
-		// walk on Windows until AsciiString's length ceiling threw (port defect 12); here it stops when the name runs out.
-		AsciiString string;
-		string = filename;
-		AsciiString token;
-		AsciiString dirName;
-		string.nextToken(&token, "\\/");
-		if (filename[0] == '/' || filename[0] == '\\') {
-			dirName = "/";
-		}
-		dirName.concat(token);
-		while (token.isNotEmpty() && ((token.find('.') == NULL) || (string.find('.') != NULL))) {
-			createDirectory(dirName);
-			string.nextToken(&token, "\\/");
-			dirName.concat('\\');
-			dirName.concat(token);
+		// Only separators distinguish parents from the leaf. Dotted directories and
+		// extensionless saves are ordinary paths; keep the leading root intact.
+		const std::string path(filename);
+		for (size_t end = path.find_first_of("\\/"); end != std::string::npos;
+				end = path.find_first_of("\\/", end + 1)) {
+			if (end > 0) createDirectory(AsciiString(path.substr(0, end).c_str()));
 		}
 	}
 

@@ -31,3 +31,14 @@ build64/
 
 # JetBrains IDE settings
 .idea/
+
+# Retail archives, media and installation images belong outside the checkout.
+*.[bB][iI][gG]
+*.[bB][iI][kK]
+*.[iI][sS][oO]
+*.[cC][aA][bB]
+*.[mM][pP]3
+*.[wW][aA][vV]
+*.[cC][sS][fF]
+.DS_Store
+._*

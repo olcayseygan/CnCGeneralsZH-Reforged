@@ -33,7 +33,7 @@
 
 set -euo pipefail
 
-CODE="$(cd "$(dirname "$0")/.." && pwd)"
+CODE="$(CDPATH= cd "$(dirname "$0")/.." && pwd)"
 MANIFEST="$CODE/BuildFingerprint.manifest"
 
 if ! command -v git >/dev/null 2>&1 || ! git -C "$CODE" rev-parse --git-dir >/dev/null 2>&1; then

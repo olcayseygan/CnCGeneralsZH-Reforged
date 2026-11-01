@@ -4,6 +4,44 @@ The native port uses SDL3 and Metal. The deployment target is macOS 13 or later;
 build on the Mac you intend to use (Apple silicon or Intel). A universal app
 requires separate builds of both architectures; the normal command builds one.
 
+## Guided setup
+
+Run `make install` for a step-by-step installer in German. It asks before every
+executing step and can optionally discover/copy your owned Steam/GOG installation
+outside the checkout. See [the installer guide](installer.md).
+
+## Apple Silicon and M2 Max
+
+Release builds run natively on arm64. On an M2, M2 Pro, M2 Max or M2 Ultra,
+`ZH_MACOS_CPU_TUNING=auto` detects the CPU and uses Clang's `-mtune=apple-m2` for
+instruction scheduling. It retains the existing instruction set, so a build can
+still run on M1; it does not use `-march=native`, `-mcpu=native` or fast math.
+Intel, Windows and Linux builds keep their architecture paths. Explicit selection:
+
+```sh
+ZH_MACOS_CPU_TUNING=apple-m2 ./build-macos.sh Release test
+ZH_MACOS_CPU_TUNING=generic ./build-macos.sh Release test
+```
+
+CMake users can set `-DZH_MACOS_CPU_TUNING=auto|generic|apple-m1|apple-m2`.
+Changing the setting through the build script reconfigures the existing tree.
+An older compiler without M2 scheduling falls back to generic in automatic mode;
+explicit unsupported settings report an error. Build in a native terminal for an
+arm64 app; an Intel/Rosetta build remains an Intel build.
+
+The Metal renderer uses SDL's native Apple GPU resources and asynchronous command
+buffers. The shader loader preserves binding slots for textures read without
+samplers; this keeps FFT mips and water/foam fields active on Apple GPUs. Its FP
+contract preserves the physical-water invariants across shader variants. The
+height-only CPU path uses Darwin's combined sine/cosine evaluation to match the
+full model exactly while still omitting derivative calculations.
+
+The scheduling distinction is described in the [Clang driver reference](https://clang.llvm.org/docs/ClangCommandLineReference.html).
+For game-specific measurements use [Metal profiling in Instruments](https://developer.apple.com/documentation/xcode/analyzing-the-performance-of-your-metal-app).
+Scheduling flags alone are not a measured FPS improvement; actual gameplay
+profiling requires your original game data. No game assets are needed for the
+synthetic GPU and cross-architecture regression tests.
+
 ## Build the engine
 
 Install Apple's command line tools and CMake/Ninja:
@@ -144,8 +182,6 @@ inclusion, not a rights audit of inherited icons, textures, screenshots or scrip
 Windows and Linux remain supported; shared parser changes must preserve their
 formats and behavior too.
 
-The security review found remaining work in legacy BTree/Huffman decoding and
-UDP sender authentication. These paths remain available for compatibility; the
-bounded RefPack reader does not make the other codecs safe. The optional
-`-control` WebSocket also retains its browser interface and has no Origin or
-authentication check. Leave it disabled outside a controlled development session.
+BTree, Huffman and RefPack use bounded readers; the legacy formats remain supported.
+For browser control capabilities, runtime GameSpy configuration and the remaining
+trusted-relay boundary of the UDP protocol, see [network configuration](network-control.md).

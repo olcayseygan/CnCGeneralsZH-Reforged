@@ -10,6 +10,11 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- BTree and Huffman now bound source reads, dictionary expansion and output; cyclic dictionaries, invalid code tables and inconsistent member lengths fail without removing legacy format support. Both engine source trees use bounded EAC decoders.
+- Match packets require a known endpoint and valid direct/relay/recovery source; wrapped commands retain source provenance. Browser control uses a configured session capability while existing native control tools remain compatible. Historical GameSpy credentials move to validated runtime configuration.
+- Metal shader loading retains the actual texture and uniform slot extents, including Load-only textures. Explicit FP rules preserve physical water across shader variants. Native M2 scheduling retains the portable arm64 instruction baseline and deterministic simulation rules.
+- `make install` guides macOS/Linux users through dependencies, builds, tests and optional discovery/copying of independently owned game installations. It asks before each action and keeps retail content outside the checkout.
+
 - Corrupt BIG archive names and excessive map-script parameter counts are rejected before they can overwrite memory. RefPack map decompression now checks its input, output and backward references. The other compression formats remain supported.
 - Cinematic text keeps multi-word font names and rejects malformed font descriptions instead of overrunning a fixed buffer.
 - On macOS and Linux, saving into a folder with a dot in its name, or saving a file without an extension, creates the right directories. macOS also searches native Steam libraries and their external library folders.

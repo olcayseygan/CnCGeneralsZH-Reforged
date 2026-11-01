@@ -16,3 +16,5 @@ jobs:
         run: python3 GeneralsMD/Code/Tools/check_game_assets.py
       - name: Exercise developer tools with synthetic data
         run: python3 GeneralsMD/Code/Tests/test_developer_tools.py
+      - name: Exercise the guided installer without executing system commands
+        run: python3 GeneralsMD/Code/Tests/test_installer.py

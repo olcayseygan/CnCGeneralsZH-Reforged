@@ -171,6 +171,44 @@ if(NOT _zh_lzhl_patched)
   message(FATAL_ERROR "LZH-Light lacks lzhl-clear-history.patch. ${VENDOR_HINT}")
 endif()
 
+# Tune scheduling without enabling a newer instruction set. An app built on M2
+# therefore still runs on M1, while Windows/Linux and Intel targets keep their flags.
+set(ZH_MACOS_CPU_TUNING "auto" CACHE STRING "Apple arm64 CPU scheduling: auto, generic, apple-m1, apple-m2")
+set_property(CACHE ZH_MACOS_CPU_TUNING PROPERTY STRINGS auto generic apple-m1 apple-m2)
+if(NOT ZH_MACOS_CPU_TUNING MATCHES "^(auto|generic|apple-m1|apple-m2)$")
+  message(FATAL_ERROR "Invalid ZH_MACOS_CPU_TUNING: ${ZH_MACOS_CPU_TUNING}")
+endif()
+set(ZH_MACOS_EFFECTIVE_CPU_TUNING "generic")
+if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+   (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR
+    (NOT CMAKE_OSX_ARCHITECTURES AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")))
+  set(ZH_MACOS_EFFECTIVE_CPU_TUNING "${ZH_MACOS_CPU_TUNING}")
+  if(ZH_MACOS_CPU_TUNING STREQUAL "auto")
+    set(ZH_MACOS_EFFECTIVE_CPU_TUNING "generic")
+    if(NOT CMAKE_CROSSCOMPILING)
+      execute_process(COMMAND /usr/sbin/sysctl -n machdep.cpu.brand_string
+        OUTPUT_VARIABLE _zh_cpu_brand OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+      if(_zh_cpu_brand MATCHES "Apple M2")
+        set(ZH_MACOS_EFFECTIVE_CPU_TUNING "apple-m2")
+      endif()
+    endif()
+  endif()
+  if(NOT ZH_MACOS_EFFECTIVE_CPU_TUNING STREQUAL "generic")
+    include(CheckCXXCompilerFlag)
+    string(MAKE_C_IDENTIFIER "ZH_HAS_${ZH_MACOS_EFFECTIVE_CPU_TUNING}_TUNING" _zh_tune_check)
+    check_cxx_compiler_flag("-mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}" ${_zh_tune_check})
+    if(${_zh_tune_check})
+      add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:-mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}>")
+    elseif(ZH_MACOS_CPU_TUNING STREQUAL "auto")
+      set(ZH_MACOS_EFFECTIVE_CPU_TUNING "generic")
+      message(STATUS "Compiler has no M2 tuning; retaining portable arm64 scheduling")
+    else()
+      message(FATAL_ERROR "Compiler cannot tune for ${ZH_MACOS_CPU_TUNING}; use generic or a newer Clang")
+    endif()
+  endif()
+  message(STATUS "macOS arm64 CPU scheduling: ${ZH_MACOS_EFFECTIVE_CPU_TUNING}; instruction baseline unchanged")
+endif()
+
 # The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
 # written against.  They mean nothing to any other compiler and cost nothing there, so they stay
 # unconditional.  WIN32 and _WINDOWS are statements about the operating system, and most of the
@@ -1562,6 +1600,9 @@ if(ZH_PLATFORM_POSIX)
   if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
     set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
+  if(APPLE AND NOT ZH_MACOS_EFFECTIVE_CPU_TUNING STREQUAL "generic")
+    string(APPEND FFMPEG_POSIX_CFLAGS " -mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}")
+  endif()
   # The SDK CMake gives our own targets.  Only /usr/bin/cc, the xcrun shim, finds one by itself; CMake may
   # choose the toolchain's own cc (/Library/Developer/CommandLineTools/usr/bin/cc, as on one build Mac here),
   # and FFmpeg's configure then cannot link its test program ("library 'System' not found") nor compile its
@@ -2811,6 +2852,8 @@ if(Python3_Interpreter_FOUND)
   if(ZH_PLATFORM_POSIX)
     add_test(NAME developer_tools_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_developer_tools.py)
+    add_test(NAME installer_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_installer.py)
     add_test(NAME retail_data_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/check_game_assets.py)
     set_tests_properties(retail_data_check PROPERTIES SKIP_RETURN_CODE 77)

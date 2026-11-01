@@ -310,6 +310,11 @@ End
 
 ## Build it
 
+On macOS and Linux, `make install` starts an interactive setup that asks before
+installing tools, downloading dependencies, building, testing, copying your own
+game data outside the checkout and launching the result. See the
+[guided installer](docs/installer.md). Existing direct build commands remain below.
+
 Each platform builds from a fresh clone with one command. It fetches what EA stripped and what GitHub
 will not hold, configures, builds Release and leaves a game you can start. Put `test` after the
 configuration to run the tests too, as in `./build-linux.sh Release test`.

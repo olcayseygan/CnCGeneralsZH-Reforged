@@ -1765,6 +1765,7 @@ GameEngine/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
 GameEngine/Source/GameNetwork/udp.cpp
 GameEngine/Source/Precompiled/PreRTS.cpp
 GameEngineDevice/GameEngineDevice.dsp
+GameEngineDevice/Include/MilesAudioDevice/AudioFileLoader.h
 GameEngineDevice/Include/MilesAudioDevice/AudioMixPolicy.h
 GameEngineDevice/Include/MilesAudioDevice/MilesAudioManager.h
 GameEngineDevice/Include/PosixDevice/Common/PosixFileResolutionDump.h

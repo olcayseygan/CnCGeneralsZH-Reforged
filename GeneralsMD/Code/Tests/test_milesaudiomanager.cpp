@@ -165,6 +165,7 @@ public:
 		processCompletedAudio();
 		setDeviceListenerPosition();
 		processRequestList();
+		m_audioCache->waitForLoads();		// the next tick plays what this one asked the disk for, however slow the disk
 		processPlayingList();
 		processFadingList();
 	}
@@ -522,11 +523,11 @@ TEST(two_track_changes_in_one_update_leave_one_track_playing)
 		TheAudio->removeAudioEvent( AHSV_StopTheMusicFade );
 		play( pick );
 	}
-	audio->tick();
+	audio->runFor( 20 );		// one tick for the stops and to warm the file, one to start the last track
 	CHECK_EQ( audio->musicPlaying(), 1 );
 	// a track started with no stop in front of it replaces the one playing
 	play( pick );
-	audio->tick();
+	audio->runFor( 20 );
 	CHECK_EQ( audio->musicPlaying(), 1 );
 	TheAudio->removeAudioEvent( AHSV_StopTheMusic );
 	audio->runFor( 100 );

@@ -104,6 +104,8 @@ static inline PlayingStatus playingStatusCompareExchange( volatile PlayingStatus
 #endif
 
 enum { INFINITE_LOOP_COUNT = 1000000 };
+static const UnsignedInt MIN_AUDIO_CACHE_BYTES = 64 * 1024 * 1024;
+static const Real LATE_SOUND_MS = 500.0f;
 
 // Callback functions useful for Miles ////////////////////////////////////////////////////////////
 static void AILCALLBACK setSampleCompleted( HSAMPLE sampleCompleted );
@@ -166,6 +168,7 @@ MilesAudioManager::~MilesAudioManager()
 	DEBUG_ASSERTCRASH(m_binkHandle == NULL, ("Leaked a Bink handle. Chuybregts"));
 	releaseHandleForBink();
 	closeDevice();
+	m_audioCache->logLoads();
 	delete m_audioCache;
 	
 	DEBUG_ASSERTCRASH(this == TheAudio, ("Umm...\n"));
@@ -512,7 +515,10 @@ void MilesAudioManager::init()
 
 	// We should now know how many samples we want to load
 	openDevice();
-	m_audioCache->setMaxSize(getAudioSettings()->m_maxCacheSize);
+	// The shipped 4 MB held about a tenth of what one match plays, so sounds pushed each other out and
+	// came back from the disk all the time: 3508 reads of 338 files in two minutes of eight AIs, 314 MB.
+	// All 474 files of a whole 17 minute match come to 39 MB.  A bigger figure in the INI still stands.
+	m_audioCache->setMaxSize(max(getAudioSettings()->m_maxCacheSize, MIN_AUDIO_CACHE_BYTES));
 
 	// Now, set the file callbacks to load the streams from Biggie files
 	AIL_set_file_callbacks(streamingFileOpen, streamingFileClose, streamingFileSeek, streamingFileRead);
@@ -535,6 +541,10 @@ void MilesAudioManager::reset()
 	AudioManager::reset();
 	stopAllAudioImmediately();
   removeAllAudioRequests();
+	// A file read past this point would read the file system's mod list through a GlobalData that
+	// its own reset, which comes after this one, is about to free.
+	m_audioCache->waitForLoads();
+	m_audioCache->logLoads();
 	m_recentShots.clear();
 	m_replyAtMs.clear();
 	// the bed went with everything else; the next map, the same one again included, chooses anew
@@ -737,7 +747,8 @@ void MilesAudioManager::pauseAudio( AudioAffect which )
 	for (ait = m_audioRequests.begin(); ait != m_audioRequests.end(); /* empty */) 
 	{
 		AudioRequest *req = (*ait);
-		if( req && req->m_request == AR_Play ) 
+		// a track that waits for its file while the music plays on through this pause is not paused
+		if( req && req->m_request == AR_Play && (BitTest(which, AudioAffect_Music) || !audioIsType(req->m_pendingEvent, AT_Music)) )
 		{
 			req->deleteInstance();
 			ait = m_audioRequests.erase(ait);
@@ -814,7 +825,8 @@ void MilesAudioManager::playAudioEvent( AudioEventRTS *event, Bool requestStop, 
 		delete event;			// nothing downstream will take it now
 		return;
 	}
-	if (!event->getIsLogicalAudio() && refuseReply(event)) {
+	// a line's next portion, come round by the request list for its file, is that line going on
+	if (!nextLoop && !event->getIsLogicalAudio() && refuseReply(event)) {
 		delete event;
 		return;
 	}
@@ -880,6 +892,7 @@ void MilesAudioManager::playAudioEvent( AudioEventRTS *event, Bool requestStop, 
 			HSTREAM stream;
 			if (!handleToKill || foundSoundToReplace) {
 				stream = AIL_open_stream(m_digitalHandle, fileToPlay.str(), 0);
+				m_audioCache->streamOpened(fileToPlay);
 			} else {
 				stream = NULL;
 			}
@@ -1098,6 +1111,17 @@ void MilesAudioManager::stopAudioEvent( AudioHandle handle )
 				{
 					stopPlayingAudio( audio );
 				}
+			}
+		}
+
+		// A track asked for ahead of this stop and still waiting for its file would start after it.
+		std::list<AudioRequest*>::iterator waiting = m_audioRequests.begin();
+		while (waiting != m_audioRequests.end() && !((*waiting)->m_request == AR_Stop && (*waiting)->m_handleToInteractOn == handle)) {
+			if ((*waiting)->m_usePendingEvent && audioIsType((*waiting)->m_pendingEvent, AT_Music)) {
+				(*waiting)->deleteInstance();
+				waiting = m_audioRequests.erase(waiting);
+			} else {
+				++waiting;
 			}
 		}
 	}
@@ -1585,6 +1609,17 @@ void MilesAudioManager::stopAllSpeech( void )
 	}
 
 	releasePlayingAudioInListIfStopped(m_playingStreams, m_playingStreamsCS);
+
+	// and a line still waiting for its file, which would talk over the one that asked for this
+	std::list<AudioRequest*>::iterator waiting = m_audioRequests.begin();
+	while (waiting != m_audioRequests.end()) {
+		if ((*waiting)->m_usePendingEvent && audioIsType((*waiting)->m_pendingEvent, AT_Streaming)) {
+			(*waiting)->deleteInstance();
+			waiting = m_audioRequests.erase(waiting);
+		} else {
+			++waiting;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2006,6 +2041,10 @@ void MilesAudioManager::notifyOfAudioCompletion( UnsignedIntPtr audioCompleted, 
 		// middle of this call, and close that file a second time.
 		closeFile(playing->m_file);
 		playing->m_file = NULL;
+		if (playing->m_type != PAT_Stream && !fileIsReady(playing->m_audioEventRTS)) {
+			continueFromRequestList(playing);
+			return;
+		}
 		if (playing->m_type == PAT_Sample) {
 			playing->m_file = playSample(playing->m_audioEventRTS, playing->m_sample);
 			
@@ -2999,8 +3038,30 @@ void MilesAudioManager::processRequestList( void )
 			continue;
 		}
 
+		// Asked first: a sound waiting out its distance reads its file in the meantime.
+		const Bool fileReady = !req->m_usePendingEvent || fileIsReady(req->m_pendingEvent);
+
 		if (!shouldProcessRequestThisFrame(req)) {
 			adjustRequest(req);
+			++it;
+			continue;
+		}
+
+		if (!fileReady && fileComesTooLate(req)) {
+			req->deleteInstance();
+			it = m_audioRequests.erase(it);
+			continue;
+		}
+
+		if (!fileReady) {
+			// It stays, as one waiting for its distance does, so a stop still finds it, and is asked
+			// again as it lands.  The sound it was to replace may have ended by then, and a replacement
+			// that finds nothing to replace does not play, so the question of who gives way is open
+			// again (checkForSample, for a sound effect; a stream keeps its victim and is not asked).
+			if (req->m_pendingEvent->getAudioEventInfo()->m_soundType == AT_SoundEffect) {
+				req->m_pendingEvent->setHandleToKill(0);
+				req->m_requiresCheckForSample = true;
+			}
 			++it;
 			continue;
 		}
@@ -3804,6 +3865,69 @@ Real MilesAudioManager::getEffectiveVolume(AudioEventRTS *event) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** This pass is done, and the next waits on the request list, for its delay or its file, with a copy
+	* of the event.  EA handed over the event itself and kept pointing at it until the sweep, so a stop
+	* that dropped the request in the same update freed it under this entry, and the next walk of the
+	* list (stopAudioEvent, the sweep's stopPlayingAudio) read freed memory. */
+void MilesAudioManager::continueFromRequestList( PlayingAudio *playing )
+{
+#if defined(_WIN32)
+	InterlockedCompareExchange( (volatile long *)&playing->m_status, PS_Stopping, PS_Playing );
+#else
+	playingStatusCompareExchange( &playing->m_status, PS_Stopping, PS_Playing );
+#endif
+
+	AudioRequest *req = allocateAudioRequest(true);
+	req->m_pendingEvent = MSGNEW("AudioEventRTS") AudioEventRTS(*playing->m_audioEventRTS);
+	req->m_pendingEvent->setHandleToKill(0);	// it made room when it started, and a replacement that finds nothing to replace does not play
+	req->m_requiresCheckForSample = true;
+	req->m_nextLoop = true;
+	req->m_requestStop = playing->m_requestStop;	// a stop's decay portion, which plays and ends there
+	appendAudioRequest(req);
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The sound effects' files are the ones the cache reads.  Streams open their own, and a -wav run
+	* moves the mix by the logic clock, where a late sound would be late in the film for good, and the
+	* wall clock does not matter: its files are read where they are asked for. */
+Bool MilesAudioManager::fileIsReady( AudioEventRTS *event )
+{
+	if (event->getAudioEventInfo() == NULL) {
+		getInfoForAudioEvent(event);
+	}
+	const AudioEventInfo *info = event->getAudioEventInfo();
+	if (info == NULL || TheGlobalData->m_wavEndFrame > 0) {
+		return TRUE;
+	}
+	// Loading a map with mod factions turns the file system's focus to each mod in turn, which would
+	// send a read on another thread into the wrong mod's files.  Nobody is watching frames then.
+	if (TheGlobalData->m_modFactions && TheGameLogic->isLoadingMap()) {
+		return TRUE;
+	}
+	if (info->m_soundType != AT_SoundEffect) {
+		return m_audioCache->streamIsWarm(event->getFilename());
+	}
+	// a reply answers a click, so it goes past the battle's first plays in the queue
+	return m_audioCache->fileIsReady(event, BitTest(info->m_type, ST_VOICE));
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A shot half a second behind its muzzle flash reads as a different shot, and in a fight the next
+	* one is coming anyway, so a one-shot world or interface sound gives up there.  The file still
+	* lands in the cache for the next one.  A reply is still the answer to the click, a script may be
+	* waiting on its sound, and a loop's next pass would otherwise end it for good: those play late. */
+Bool MilesAudioManager::fileComesTooLate( AudioRequest *req )
+{
+	AudioEventRTS *event = req->m_pendingEvent;
+	const AudioEventInfo *info = event->getAudioEventInfo();
+	if (info == NULL || info->m_soundType != AT_SoundEffect || (info->m_control & AC_LOOP) || BitTest(info->m_type, ST_VOICE)
+			|| event->getIsLogicalAudio() || req->m_nextLoop) {
+		return FALSE;
+	}
+	return m_audioCache->fileComesTooLate(event);
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool MilesAudioManager::startNextLoop( PlayingAudio *looping )
 {
 	closeFile(looping->m_file);
@@ -3817,23 +3941,8 @@ Bool MilesAudioManager::startNextLoop( PlayingAudio *looping )
 		// generate a new filename, and test to see whether we can play with it now
 		looping->m_audioEventRTS->generateFilename();
 		
-		if (looping->m_audioEventRTS->getDelay() > MSEC_PER_LOGICFRAME_REAL) {
-			// This pass is done, and the next waits on the request list for its delay with a copy of
-			// the event.  EA handed over the event itself and kept pointing at it until the sweep, so a
-			// stop that dropped the request in the same update freed it under this entry, and the next
-			// walk of the list (stopAudioEvent, the sweep's stopPlayingAudio) read freed memory.
-#if defined(_WIN32)
-			InterlockedCompareExchange( (volatile long *)&looping->m_status, PS_Stopping, PS_Playing );
-#else
-			playingStatusCompareExchange( &looping->m_status, PS_Stopping, PS_Playing );
-#endif
-
-
-			AudioRequest *req = allocateAudioRequest(true);
-			req->m_pendingEvent = MSGNEW("AudioEventRTS") AudioEventRTS(*looping->m_audioEventRTS);
-			req->m_requiresCheckForSample = true;
-			req->m_nextLoop = true;
-			appendAudioRequest(req);
+		if (looping->m_audioEventRTS->getDelay() > MSEC_PER_LOGICFRAME_REAL || !fileIsReady(looping->m_audioEventRTS)) {
+			continueFromRequestList(looping);
 			return true;
 		}
 
@@ -4171,12 +4280,27 @@ U32 AILCALLBACK streamingFileRead(AILFILEHANDLE file_handle, void *buffer, U32 b
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-AudioFileCache::AudioFileCache() : m_maxSize(0), m_currentlyUsedSize(0), m_mutexName("AudioFileCacheMutex")
+/** AudioFileLoader's way to the files, on its thread.  What it reads is the same open and read any
+	* other reader off the main thread makes: the archive's read has its own lock. */
+static char *readAudioFile( const char *name, unsigned *size )
+{
+	File *file = TheFileSystem->openFile(name);
+	if (!file) {
+		return NULL;
+	}
+	*size = file->size();
+	return file->readEntireAndClose();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The mutex had a name, which made it every process's: a second copy of the game on the machine
+	* waited on this one's disk reads, up to the 500 ms ScopedMutex gives up after. */
+AudioFileCache::AudioFileCache() : m_maxSize(0), m_currentlyUsedSize(0), m_loader(readAudioFile), m_readsOnTheFrame(0), m_droppedLate(0)
 {
 #if defined(_WIN32)
-	m_mutex = CreateMutex(NULL, FALSE, m_mutexName);
+	m_mutex = CreateMutex(NULL, FALSE, NULL);
 #else
-	m_mutex = new std::timed_mutex;	// the process's own: Windows' name made it every process's, by accident
+	m_mutex = new std::timed_mutex;
 #endif
 }
 
@@ -4207,25 +4331,94 @@ AudioFileCache::~AudioFileCache()
 }
 
 //-------------------------------------------------------------------------------------------------
+static AsciiString nextFileOf( AudioEventRTS *event )
+{
+	switch (event->getNextPlayPortion())
+	{
+		case PP_Attack:
+			return event->getAttackFilename();
+		case PP_Sound:
+			return event->getFilename();
+		case PP_Decay:
+			return event->getDecayFilename();
+	}
+	return AsciiString::TheEmptyString;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AudioFileCache::fileIsReady( AudioEventRTS *eventToOpenFrom, Bool urgent )
+{
+	ScopedMutex mut(m_mutex);
+
+	const AsciiString name = nextFileOf(eventToOpenFrom);
+	return name.isEmpty() || m_openFiles.find(name) != m_openFiles.end() || m_loader.ready(name.str(), urgent != FALSE);
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AudioFileCache::fileComesTooLate( AudioEventRTS *eventToOpenFrom )
+{
+	ScopedMutex mut(m_mutex);
+
+	if (m_loader.waitedMs(nextFileOf(eventToOpenFrom).str()) < LATE_SOUND_MS) {
+		return FALSE;
+	}
+	++m_droppedLate;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A stream's file is opened on the main thread, and that was 277 ms for a music track on a hard disk,
+	* against 2 ms with its sectors in the OS's cache, so this reads them first and throws them away.  An
+	* archived track is read whole by the open here, as by the one that follows (FileSystem::openFile
+	* does not pass File::STREAMING on to the archive); a loose one takes the start, where FFmpeg learns
+	* the format, and the end, where it looks for tags. */
+char *AudioFileCache::warmStreamFile( const char *name, unsigned *size )
+{
+	static const Int START_BYTES = 1024 * 1024;
+	static const Int END_BYTES = 64 * 1024;
+	File *file = TheFileSystem->openFile(name, File::READ | File::STREAMING);
+	if (file) {
+		char *buffer = NEW char[START_BYTES];
+		file->read(buffer, START_BYTES);
+		file->seek(-END_BYTES, File::END);
+		file->read(buffer, END_BYTES);
+		delete [] buffer;
+		file->close();
+	}
+	return NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
+void AudioFileCache::streamOpened( const AsciiString &name )
+{
+	AudioFileLoader::Loaded nothing;
+	m_loader.take(name.str(), &nothing);	// so the next play of it warms it again
+}
+
+//-------------------------------------------------------------------------------------------------
+void AudioFileCache::logLoads()
+{
+	const AudioFileLoader::Stats stats = m_loader.stats();
+	if (stats.files == 0 && m_readsOnTheFrame == 0) {
+		return;
+	}
+	const double files = stats.files > 0 ? stats.files : 1;
+	DEBUG_LOG(("AUDIO FILES: %u off the frame, %u on it, %u sounds dropped as too late | read %.2f/%.2f decode %.2f/%.2f asked to done "
+		"%.2f/%.2f ms mean/worst, %u/%u/%u/%u/%u/%u of them within 5/17/33/100/500/more | %u of %u bytes held\n", stats.files,
+		m_readsOnTheFrame, m_droppedLate, stats.readMs / files, stats.readWorstMs, stats.decodeMs / files, stats.decodeWorstMs,
+		stats.askedToDoneMs / files, stats.askedToDoneWorstMs, stats.doneWithin[0], stats.doneWithin[1], stats.doneWithin[2],
+		stats.doneWithin[3], stats.doneWithin[4], stats.doneWithin[5], m_currentlyUsedSize, m_maxSize));
+}
+
+//-------------------------------------------------------------------------------------------------
 void *AudioFileCache::openFile( AudioEventRTS *eventToOpenFrom )
 {
 	// Protect the entire openFile function
 	ScopedMutex mut(m_mutex);
 
-	AsciiString strToFind;
-	switch (eventToOpenFrom->getNextPlayPortion())
-	{
-		case PP_Attack:
-			strToFind = eventToOpenFrom->getAttackFilename();
-			break;
-		case PP_Sound:
-			strToFind = eventToOpenFrom->getFilename();
-			break;
-		case PP_Decay:
-			strToFind = eventToOpenFrom->getDecayFilename();
-			break;
-		case PP_Done:
-			return NULL;
+	const AsciiString strToFind = nextFileOf(eventToOpenFrom);
+	if (strToFind.isEmpty()) {
+		return NULL;
 	}
 
 	OpenFilesHash::iterator it;
@@ -4241,53 +4434,31 @@ void *AudioFileCache::openFile( AudioEventRTS *eventToOpenFrom )
 		return it->second.m_file;
 	}
 
-	// Couldn't find the file, so actually open it.
-	File *file = TheFileSystem->openFile(strToFind.str());
-	if (!file) {
-		DEBUG_ASSERTLOG(strToFind.isEmpty(), ("Missing Audio File: '%s'\n", strToFind.str()));
+	// Not in memory.  A sound in a match waited on the request list for the loader to finish this
+	// (fileIsReady); what comes here unasked is read here, a -wav run and the forced briefing voice.
+	AudioFileLoader::Loaded loaded;
+	if (!m_loader.take(strToFind.str(), &loaded)) {
+		AudioFileLoader::load(readAudioFile, strToFind.str(), &loaded);
+		++m_readsOnTheFrame;
+	}
+	if (!loaded.file) {
+		DEBUG_ASSERTLOG(FALSE, ("Missing or unreadable Audio File: '%s'\n", strToFind.str()));
 		return NULL;
 	}
 
-	UnsignedInt fileSize = file->size();
-	char* buffer = file->readEntireAndClose();
+	if (eventToOpenFrom->isPositionalAudio() && loaded.info.channels > 1) {
+		DEBUG_CRASH(("Requested Positional Play of audio '%s', but it is in stereo.", strToFind.str()));
+		AudioFileLoader::release(&loaded);
+		return NULL;
+	}
 
 	OpenAudioFile openedAudioFile;
 	openedAudioFile.m_eventInfo = eventToOpenFrom->getAudioEventInfo();
-
-	AILSOUNDINFO soundInfo;
-	AIL_WAV_info(buffer, &soundInfo);
-
-	if (eventToOpenFrom->isPositionalAudio()) {
-		if (soundInfo.channels > 1) {
-			DEBUG_CRASH(("Requested Positional Play of audio '%s', but it is in stereo.", strToFind.str()));
-			delete [] buffer;
-			return NULL;
-		}
-	}
-	
-	if (soundInfo.format == WAVE_FORMAT_IMA_ADPCM) {
-		void *decompressFileBuffer;
-		U32 newFileSize;
-		AIL_decompress_ADPCM(&soundInfo, &decompressFileBuffer, &newFileSize);
-		fileSize = newFileSize;
-		openedAudioFile.m_compressed = TRUE;
-		delete [] buffer;
-		openedAudioFile.m_file = decompressFileBuffer;
-		openedAudioFile.m_soundInfo = soundInfo;
-		openedAudioFile.m_openCount = 1;
-	} else if (soundInfo.format == WAVE_FORMAT_PCM) {
-		openedAudioFile.m_compressed = FALSE;
-		openedAudioFile.m_file = buffer;
-		openedAudioFile.m_soundInfo = soundInfo;
-		openedAudioFile.m_openCount = 1;
-	} else {
-		DEBUG_CRASH(("Unexpected compression type in '%s'\n", strToFind.str()));
-		// prevent leaks
-		delete [] buffer;
-		return NULL;
-	}
-
-	openedAudioFile.m_fileSize = fileSize;
+	openedAudioFile.m_compressed = loaded.compressed ? TRUE : FALSE;
+	openedAudioFile.m_file = loaded.file;
+	openedAudioFile.m_soundInfo = loaded.info;
+	openedAudioFile.m_openCount = 1;
+	openedAudioFile.m_fileSize = loaded.size;
 	m_currentlyUsedSize += openedAudioFile.m_fileSize;
 	if (m_currentlyUsedSize > m_maxSize) {
 		// We need to free some samples, or we're not going to be able to play this sound.

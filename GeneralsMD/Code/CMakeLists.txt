@@ -2522,7 +2522,7 @@ add_test(NAME miles_smoke COMMAND miles_smoke
 # the test calls it by the same names.
 add_executable(test_miles_effects ${TESTS}/test_miles_effects.cpp ${WW}/Miles6/miniaudio/miles_miniaudio.cpp)
 set_source_files_properties(${TESTS}/test_miles_effects.cpp PROPERTIES COMPILE_DEFINITIONS MSS_BACKEND_PREFIX=MA_)
-target_include_directories(test_miles_effects PRIVATE ${WW}/Miles6/include ${WW}/WWLib)
+target_include_directories(test_miles_effects PRIVATE ${WW}/Miles6/include ${WW}/WWLib ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 target_link_libraries(test_miles_effects PRIVATE test_harness miniaudio)
 add_test(NAME test_miles_effects COMMAND test_miles_effects)
 endif()  # ZH_PLATFORM_WINDOWS - device and codec smoke tests
@@ -2554,7 +2554,7 @@ else()
 endif()
 # The same file Windows runs: the air, room and duck in the offline mix.
 add_executable(test_miles_effects ${TESTS}/test_miles_effects.cpp)
-target_include_directories(test_miles_effects PRIVATE ${WW}/Miles6/include)
+target_include_directories(test_miles_effects PRIVATE ${WW}/Miles6/include ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 target_link_libraries(test_miles_effects PRIVATE test_harness milesaudio)
 add_test(NAME test_miles_effects COMMAND test_miles_effects)
 

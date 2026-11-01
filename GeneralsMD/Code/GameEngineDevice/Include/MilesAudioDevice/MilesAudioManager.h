@@ -26,6 +26,7 @@
 #include "Common/AudioSettings.h"
 #include "Common/GameAudio.h"
 #include "MSS/MSS.h"
+#include "MilesAudioDevice/AudioFileLoader.h"
 #include "mutex.h"
 #include <list>
 #include <map>
@@ -160,7 +161,18 @@ class AudioFileCache
 		void *openFile( AudioEventRTS *eventToOpenFrom );
 		void closeFile( void *fileToClose );
 		void setMaxSize( UnsignedInt size );
+		/// Can openFile give this event its next file without the disk?  A no starts the read, off the frame.
+		Bool fileIsReady( AudioEventRTS *eventToOpenFrom, Bool urgent );
+		/// Has this one waited past the point of being heard as what it was?  A yes is counted as dropped.
+		Bool fileComesTooLate( AudioEventRTS *eventToOpenFrom );
 		// End Protected by mutex
+
+		/// A stream opens its own file, on the main thread: this reads its start and end ahead of that.
+		Bool streamIsWarm( const AsciiString &name ) { return m_loader.ready(name.str(), false, warmStreamFile); }
+		void streamOpened( const AsciiString &name );
+
+		void waitForLoads() { m_loader.waitUntilIdle(); }
+		void logLoads();
 
 		// Note: These functions should be used for informational purposes only. For speed reasons,
 		// they are not protected by the mutex, so they are not guarenteed to be valid if called from
@@ -180,9 +192,14 @@ class AudioFileCache
 #if defined(_WIN32)
 		HANDLE m_mutex;
 #else
-		std::timed_mutex *m_mutex;	///< Windows' named mutex, as a process's own (C4): ScopedMutex.h
+		std::timed_mutex *m_mutex;	///< Windows' mutex, as a process's own (C4): ScopedMutex.h
 #endif
-		const char *m_mutexName;
+		AudioFileLoader m_loader;
+		UnsignedInt m_readsOnTheFrame;	///< files read where they were asked for: -wav, the forced briefing voice
+		UnsignedInt m_droppedLate;
+
+	private:
+		static char *warmStreamFile( const char *name, unsigned *size );
 };
 
 class MilesAudioManager : public AudioManager
@@ -308,6 +325,9 @@ class MilesAudioManager : public AudioManager
 
 		// Looping functions
 		Bool startNextLoop( PlayingAudio *looping );
+		Bool fileIsReady( AudioEventRTS *event );
+		Bool fileComesTooLate( AudioRequest *req );
+		void continueFromRequestList( PlayingAudio *playing );
 		void endLoopPassNow( PlayingAudio *audio );
 
 		void playStream( AudioEventRTS *event, HSTREAM stream );

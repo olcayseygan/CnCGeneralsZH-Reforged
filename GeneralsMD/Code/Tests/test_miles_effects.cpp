@@ -10,6 +10,9 @@
  * back through AIL_ex_start_capture, the tap -wav writes its file from.  The expected numbers are the
  * physics the helpers in MSS.h claim, worked out here, not read back from them.
  *
+ * Also the read of a sound's file off the frame (AudioFileLoader.h), against a disk the test holds,
+ * and through this backend's decompress and mix.
+ *
  * Not covered: XAudio2's own filter, which needs an audio device.
  */
 #include "test_harness.h"
@@ -18,10 +21,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "MSS/MSS.h"
+#include "MilesAudioDevice/AudioFileLoader.h"
 
 static const unsigned TONE_RATE = 22050;
 static const double TONE_PI = 3.14159265358979323846;	// MSVC's math.h gives M_PI only on request
@@ -266,6 +274,231 @@ TEST(a_loud_mix_never_reaches_full_scale)
 	CHECK(capture.peak <= AIL_EX_LIMITER_CEILING + 0.001);
 	CHECK(capture.peak > AIL_EX_LIMITER_CEILING - 0.05);
 	CHECK(rms(capture, 1.1, 1.2) < 0.0002);
+}
+
+// ---- A sound's file off the frame (AudioFileLoader) ----------------------------------------------
+
+// A disk that holds every read until the test lets it go, so "the asker did not wait" is no race.
+static std::mutex g_diskLock;
+static std::condition_variable g_diskMoved;
+static bool g_diskOpen = false;
+static int g_diskReads = 0;
+static std::vector<unsigned char> g_diskImage;
+
+static char *readFromHeldDisk(const char *name, unsigned *size)
+{
+	std::unique_lock<std::mutex> lock(g_diskLock);
+	++g_diskReads;
+	g_diskMoved.wait(lock, [] { return g_diskOpen; });
+	if (strcmp(name, "missing.wav") == 0) {
+		return NULL;
+	}
+	char *buffer = new char[g_diskImage.size()];
+	memcpy(buffer, &g_diskImage[0], g_diskImage.size());
+	*size = (unsigned)g_diskImage.size();
+	return buffer;
+}
+
+static void holdDisk(const std::vector<unsigned char> &image)
+{
+	std::lock_guard<std::mutex> lock(g_diskLock);
+	g_diskImage = image;
+	g_diskOpen = false;
+	g_diskReads = 0;
+}
+
+static void openDisk()
+{
+	std::lock_guard<std::mutex> lock(g_diskLock);
+	g_diskOpen = true;
+	g_diskMoved.notify_all();
+}
+
+static int diskReads()
+{
+	std::lock_guard<std::mutex> lock(g_diskLock);
+	return g_diskReads;
+}
+
+// A WAV image of IMA ADPCM, the shape of the game's voices: runs of one nibble up and one down, a
+// triangle wave and so a sound, with no encoder here to get wrong.
+static std::vector<unsigned char> makeAdpcm(unsigned blocks)
+{
+	const unsigned BLOCK = 256;
+	const unsigned dataBytes = blocks * BLOCK;
+	std::vector<unsigned char> image(60 + dataBytes);
+	memcpy(&image[0], "RIFF", 4);
+	put32(&image[4], (unsigned)image.size() - 8);
+	memcpy(&image[8], "WAVEfmt ", 8);
+	put32(&image[16], 20);
+	put16(&image[20], 0x11);
+	put16(&image[22], 1);
+	put32(&image[24], TONE_RATE);
+	put32(&image[28], TONE_RATE / 2);
+	put16(&image[32], BLOCK);
+	put16(&image[34], 4);
+	put16(&image[36], 2);
+	put16(&image[38], 1 + (BLOCK - 4) * 2);
+	memcpy(&image[40], "fact", 4);
+	put32(&image[44], 4);
+	put32(&image[48], blocks * (1 + (BLOCK - 4) * 2));
+	memcpy(&image[52], "data", 4);
+	put32(&image[56], dataBytes);
+	for (unsigned i = 0; i < dataBytes; ++i) {
+		image[60 + i] = (i % BLOCK) < 4 ? 0 : ((i % 80) < 40 ? 0x44 : 0xCC);
+	}
+	return image;
+}
+
+TEST(a_file_on_a_stuck_disk_leaves_the_asker_free_and_is_read_once)
+{
+	startAudio();
+	const std::vector<unsigned char> image = makeAdpcm(40);
+	holdDisk(image);
+	{
+		AudioFileLoader loader(readFromHeldDisk);
+		AudioFileLoader::Loaded loaded;
+
+		// every call comes straight back while the read sits on the disk: one held under the lock
+		// would hang here
+		CHECK(!loader.ready("voice.wav"));
+		CHECK(!loader.ready("voice.wav"));
+		CHECK(!loader.take("voice.wav", &loaded));
+		CHECK(!loader.take("never asked.wav", &loaded));
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		CHECK(loader.waitedMs("voice.wav") >= 10.0f);
+		CHECK_EQ(loader.waitedMs("never asked.wav"), 0.0f);
+
+		openDisk();
+		loader.waitUntilIdle();
+		CHECK(loader.ready("voice.wav"));
+		CHECK_EQ(loader.waitedMs("voice.wav"), 0.0f);
+		CHECK_EQ(diskReads(), 1);
+		CHECK(loader.take("voice.wav", &loaded));
+		CHECK(!loader.take("voice.wav", &loaded));	// handed over once
+
+		// what comes back is what the mixer's own decompress makes of the file
+		AILSOUNDINFO info;
+		AIL_WAV_info(&image[0], &info);
+		void *direct = NULL;
+		U32 directSize = 0;
+		CHECK(AIL_decompress_ADPCM(&info, &direct, &directSize) != 0);
+		CHECK(loaded.compressed);
+		CHECK_EQ(loaded.size, (unsigned)directSize);
+		CHECK_EQ(memcmp(loaded.file, direct, directSize), 0);
+		CHECK_EQ((int)loaded.info.format, 0x11);
+		AIL_mem_free_lock(direct);
+
+		// and it plays
+		const std::vector<unsigned char> decoded((unsigned char *)loaded.file, (unsigned char *)loaded.file + loaded.size);
+		std::vector<H3DSAMPLE> sound(1, place(decoded, -20.0f, 0.0f, 1.0f));
+		const Capture capture = listen(sound, 0.4);
+		CHECK(rms(capture, 0.0, 0.3) > 0.01);
+		AudioFileLoader::release(&loaded);
+		CHECK(loaded.file == NULL);
+
+		const AudioFileLoader::Stats stats = loader.stats();
+		CHECK_EQ(stats.files, 1u);
+	}
+}
+
+TEST(an_urgent_file_goes_past_the_queue_but_not_the_one_on_the_disk)
+{
+	static std::vector<std::string> order;
+	order.clear();
+	struct Recording
+	{
+		static char *read(const char *name, unsigned *size)
+		{
+			char *buffer = readFromHeldDisk(name, size);
+			std::lock_guard<std::mutex> lock(g_diskLock);
+			order.push_back(name);
+			return buffer;
+		}
+	};
+	holdDisk(makeTone(440.0, 50));
+	AudioFileLoader loader(Recording::read);
+	loader.ready("in hand.wav");
+	while (diskReads() == 0) {
+		std::this_thread::yield();
+	}
+	loader.ready("shot.wav");
+	loader.ready("reply.wav", true);
+	openDisk();
+	loader.waitUntilIdle();
+	CHECK_EQ((int)order.size(), 3);
+	CHECK_STR(order[0].c_str(), "in hand.wav");
+	CHECK_STR(order[1].c_str(), "reply.wav");
+	CHECK_STR(order[2].c_str(), "shot.wav");
+	const char *names[3] = { "in hand.wav", "reply.wav", "shot.wav" };
+	for (int i = 0; i < 3; ++i) {
+		AudioFileLoader::Loaded loaded;
+		CHECK(loader.take(names[i], &loaded));
+		AudioFileLoader::release(&loaded);
+	}
+}
+
+TEST(a_plain_pcm_file_comes_through_untouched)
+{
+	const std::vector<unsigned char> image = makeTone(440.0, 100);
+	holdDisk(image);
+	openDisk();
+	AudioFileLoader loader(readFromHeldDisk);
+	loader.ready("shot.wav");
+	loader.waitUntilIdle();
+	AudioFileLoader::Loaded loaded;
+	CHECK(loader.take("shot.wav", &loaded));
+	CHECK(!loaded.compressed);
+	CHECK_EQ(loaded.size, (unsigned)image.size());
+	CHECK_EQ(memcmp(loaded.file, &image[0], image.size()), 0);
+	AudioFileLoader::release(&loaded);
+}
+
+TEST(a_missing_file_comes_back_empty_and_the_next_ask_looks_again)
+{
+	holdDisk(std::vector<unsigned char>(1, 0));
+	openDisk();
+	AudioFileLoader loader(readFromHeldDisk);
+	AudioFileLoader::Loaded loaded;
+	loader.ready("missing.wav");
+	loader.waitUntilIdle();
+	CHECK(loader.take("missing.wav", &loaded));
+	CHECK(loaded.file == NULL);
+	CHECK(!loader.ready("missing.wav"));
+	loader.waitUntilIdle();
+	CHECK_EQ(diskReads(), 2);
+}
+
+TEST(closing_waits_for_the_file_in_hand_and_reads_no_more)
+{
+	const std::vector<unsigned char> image = makeTone(440.0, 50);
+	holdDisk(image);
+	{
+		AudioFileLoader loader(readFromHeldDisk);
+		loader.ready("first.wav");
+		loader.ready("second.wav");
+		loader.ready("third.wav");
+		// the thread is on the disk with the first before the disk opens, and the close starts behind it
+		while (diskReads() == 0) {
+			std::this_thread::yield();
+		}
+		std::thread opener([] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			openDisk();
+		});
+		opener.detach();
+	}
+	CHECK_EQ(diskReads(), 1);
+
+	// a finished file nobody took goes with the loader
+	holdDisk(image);
+	openDisk();
+	{
+		AudioFileLoader loader(readFromHeldDisk);
+		loader.ready("not taken.wav");
+		loader.waitUntilIdle();
+	}
+	CHECK_EQ(diskReads(), 1);
 }
 
 TEST(headphones_hear_a_sound_on_the_right_later_quieter_and_duller_in_the_left_ear)

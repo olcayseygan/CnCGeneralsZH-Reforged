@@ -5415,6 +5415,80 @@ TEST(controlbar_wide_grid_only_for_a_set_past_fourteen)
 	CHECK( ControlBar_needsWideCommandGrid( full, SLOTS ) );
 }
 
+/* What the options menu's Hotkeys page lists for a set: each window's letter, in the steps findBars and
+   buttonKeyText take, on the windows the game's decision leaves the bar.  0 for an empty window. */
+static void hotkeysPageLetters( const Int *types, Bool spareWindows, Bool wide,
+	const std::map< std::string, WideChar >& keys, WideChar *letters )
+{
+	enum { SLOTS = MAX_COMMANDS_PER_SET };
+	Bool windowed[ SLOTS ];
+	Int shown[ SLOTS ], windowTypes[ SLOTS ], ranks[ SLOTS ];
+	for( Int slot = 0; slot < SLOTS; slot++ )
+		windowed[ slot ] = ControlBar_usesCommandWindow( slot, spareWindows, wide );
+	ControlBar_fitCommandSlots( types, windowed, SLOTS, shown );
+	for( Int slot = 0; slot < SLOTS; slot++ )
+		windowTypes[ slot ] = shown[ slot ] >= 0 ? types[ shown[ slot ] ] : GUI_COMMAND_NONE;
+	HotKeyManager::commandBarUpgradeRanks( windowTypes, SLOTS, ranks );
+	for( Int slot = 0; slot < SLOTS; slot++ )
+		letters[ slot ] = shown[ slot ] >= 0
+			? HotKeyManager::buttonKeyIn( AsciiString( "Command_Synthetic" ), 'Z', windowTypes[ slot ], keys, slot, ranks[ slot ] ) : 0;
+}
+
+/* The expected letters, one a window, '.' for an empty one */
+static void checkHotkeysPageLetters( const WideChar *letters, const char *expected )
+{
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		CHECK_EQ( letters[ slot ], (WideChar)( expected[ slot ] == '.' ? 0 : expected[ slot ] ) );
+}
+
+/* A synthetic mod.  Its sets are made up for this test, shaped like a mod drawn for eighteen windows;
+   no mod's data is read here */
+TEST(hotkeys_page_shows_the_wide_bar_windows_and_letters)
+{
+	enum { SLOTS = MAX_COMMANDS_PER_SET };
+	const Int N = GUI_COMMAND_NONE, B = GUI_COMMAND_UNIT_BUILD, U = GUI_COMMAND_OBJECT_UPGRADE, W = GUI_COMMAND_SWITCH_WEAPON;
+	const Int A = GUI_COMMAND_ATTACK_MOVE, G = GUI_COMMAND_GUARD, S = GUI_COMMAND_STOP, P = GUI_COMMAND_SPECIAL_POWER;
+	std::map< std::string, WideChar > keys;
+	WideChar letters[ SLOTS ];
+
+	// the set that makes the bar wide: seventeen buttons, the columns' letters past fourteen
+	const Int factory[ SLOTS ] = { B, B, B, B, B, B, B, B, B, B, B, B, B, B, A, N, G, S };
+	CHECK( ControlBar_needsWideCommandGrid( factory, SLOTS ) );
+	// a bar is wide for all its sets: this one needs no wide bar and still stands on one
+	const Int soldier[ SLOTS ] = { U, U, U, U, U, N, P, W, N, W, N, N, N, N, A, N, G, S };
+	CHECK( !ControlBar_needsWideCommandGrid( soldier, SLOTS ) );
+
+	HotKeyManager::setCommandBarGrid( TRUE );
+	hotkeysPageLetters( factory, TRUE, TRUE, keys, letters );
+	checkHotkeysPageLetters( letters, "QAWSEDRFTGYHUJI.OL" );
+	hotkeysPageLetters( soldier, TRUE, TRUE, keys, letters );
+	checkHotkeysPageLetters( letters, "XCVBN.RF.G....I.OL" );
+
+	// the same sets on fourteen windows: the orders move, and three of the factory's seventeen have no window
+	hotkeysPageLetters( factory, TRUE, FALSE, keys, letters );
+	checkHotkeysPageLetters( letters, "QAWSEDRFTGYHUJ...." );
+	hotkeysPageLetters( soldier, TRUE, FALSE, keys, letters );
+	checkHotkeysPageLetters( letters, "XCVBN.RF.GY.UJ...." );
+
+	// a mod's own ControlBar.wnd keeps all it drew, whatever the sets need
+	hotkeysPageLetters( soldier, FALSE, FALSE, keys, letters );
+	checkHotkeysPageLetters( letters, "XCVBN.RF.G....I.OL" );
+
+	// a key for a window past fourteen counts on the wide bar alone
+	keys[ "command_synthetic@15" ] = 'M';
+	hotkeysPageLetters( soldier, TRUE, TRUE, keys, letters );
+	CHECK_EQ( letters[ 14 ], (WideChar)'M' );
+	hotkeysPageLetters( soldier, TRUE, FALSE, keys, letters );
+	checkHotkeysPageLetters( letters, "XCVBN.RF.GY.UJ...." );
+	keys.clear();
+	HotKeyManager::setCommandBarGrid( FALSE );
+
+	// a set of Zero Hour's on its bar: every button stays in its window, the fixed letters on the orders
+	const Int humvee[ SLOTS ] = { U, U, U, N, N, N, N, N, GUI_COMMAND_EVACUATE, N, A, N, G, S, N, N, N, N };
+	hotkeysPageLetters( humvee, TRUE, FALSE, keys, letters );
+	checkHotkeysPageLetters( letters, "ZZZ.....V.A.GS...." );
+}
+
 TEST(controlbar_force_attack_slot_is_under_attack_move)
 {
 	enum { SLOTS = MAX_COMMANDS_PER_SET, WINDOWS = 14 };

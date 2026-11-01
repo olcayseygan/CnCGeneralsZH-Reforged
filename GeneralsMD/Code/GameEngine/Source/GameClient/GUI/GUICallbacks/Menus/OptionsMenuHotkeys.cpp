@@ -52,7 +52,7 @@
 namespace
 {
 
-enum { BAR_SLOTS = 14 };	///< ControlBar.wnd's ButtonCommand01 to 14; 15 to 18 are for scripts
+enum { BAR_SLOTS = MAX_COMMANDS_PER_SET };	///< ButtonCommand01 to 18; which of them the bar uses is ControlBar::hasCommandWindow
 
 struct BarObject
 {
@@ -303,11 +303,11 @@ void findBars( void )
 			}
 			// the windows as the bar fills them (ControlBar::populateCommand), so a slot here is the
 			// slot a Name@slot key and the grid's letters mean: a set's button past the bar's
-			// windows moves into an empty one
+			// windows moves into an empty one.  A mod's wide bar has all eighteen.
 			Bool windowed[ MAX_COMMANDS_PER_SET ];
 			Int shown[ MAX_COMMANDS_PER_SET ];
 			for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-				windowed[ slot ] = slot < BAR_SLOTS;
+				windowed[ slot ] = TheControlBar->hasCommandWindow( slot );
 			ControlBar_fitCommandSlots( types, windowed, MAX_COMMANDS_PER_SET, shown );
 			BarObject object;
 			object.building = thing->isKindOf( KINDOF_STRUCTURE );
@@ -463,10 +463,10 @@ void fillButtons( void )
 	}
 	const std::map< std::string, WideChar > keys = buttonKeys();
 	const std::map< KeyText, std::vector< UnicodeString > > clashes = barClashes( object );
-	// a cameo is 61 by 48 on the bar; a third of that keeps fourteen rows to a short scroll
+	// a cameo is 61 by 48 on the bar; a third of that keeps a bar's rows, eighteen on a mod's wide one, to a short scroll
 	const Int height = 22;
 	Int selectedRow = -1;
-	// the bar's own order: two rows of seven read down each column, 1 over 2
+	// the bar's own order: two rows, seven or nine across, read down each column, 1 over 2
 	for( Int slot = 0; slot < BAR_SLOTS; slot++ )
 	{
 		const CommandButton *button = object->slots[ slot ];

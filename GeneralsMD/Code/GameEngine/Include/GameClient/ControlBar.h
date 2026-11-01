@@ -525,6 +525,11 @@ enum
 	* only one of Zero Hour's with a slot past 14, is laid out on its own screen and never counts. */
 Bool ControlBar_needsWideCommandGrid( const Int *types, Int count );
 
+/** Whether the bar uses its window for `slot`.  spareWindows: our layout's 15 to 18 stand hidden past
+	* the plate, which a mod's own ControlBar.wnd does not do; wide: ControlBar::isCommandGridWide.  Our
+	* narrow bar is the only one that leaves windows out. */
+Bool ControlBar_usesCommandWindow( Int slot, Bool spareWindows, Bool wide );
+
 /** Slot 12 (0-based 11) when the set already has Attack Move and that hole is empty: left of Stop,
 	* under Attack Move. An object ControlBar_forceFires names takes 12 too, or 11 above it when 12 is
 	* taken (Gattling Cannon's mines, Stinger Site's camo net, Fire Base's Sell). -1 when neither
@@ -1072,6 +1077,9 @@ public:
 		* is the layout: the grid is then nine columns, one more at each end of the plate, and the
 		* scheme draws its painting's <name>Wide copy.  Fixed when the windows are looked up. */
 	Bool isCommandGridWide( void ) const { return m_commandGridWide; }
+
+	/// Whether command set slot `slot` has a window on this bar, for what lays a set out without an object.
+	Bool hasCommandWindow( Int slot ) const { return m_commandWindows[ slot ] != NULL; }
 
 	/// top edge of the highest visible window the bar owns, and where MoneyDisplay is; see -uidrill
 	void forEachPlacedWindow( Int *topOut, Int *moneyOut );

@@ -486,6 +486,12 @@ Bool ControlBar_needsWideCommandGrid( const Int *types, Int count )
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool ControlBar_usesCommandWindow( Int slot, Bool spareWindows, Bool wide )
+{
+	return !spareWindows || wide || slot < COMMAND_GRID_NARROW_SLOTS;
+}
+
+//-------------------------------------------------------------------------------------------------
 Int ControlBar_forceAttackSlot( const Int *types, Int count, Bool forceFires )
 {
 	enum { SLOT = 11, ABOVE = 10 };
@@ -2692,8 +2698,8 @@ void ControlBar::initWindows( void )
 		}  // end for i
 
 		// the narrow grid leaves our spare four hidden and out of the bar's reach, the bar it always was
-		if( spareWindows && !m_commandGridWide )
-			for( i = COMMAND_GRID_NARROW_SLOTS; i < MAX_COMMANDS_PER_SET; i++ )
+		for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+			if( !ControlBar_usesCommandWindow( i, spareWindows, m_commandGridWide ) )
 				m_commandWindows[ i ] = NULL;
 		Int windowCount = 0;
 		for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )

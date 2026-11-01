@@ -223,6 +223,11 @@ static Bool playerStartPosition( Int playerNdx, Coord3D *pos )
 	* order and the base builder has its own rhythm to keep. */
 static const Int EXPANSION_CHECK_SECONDS = 60;
 
+/** The same during the opening (AI_PURCHASE_EARLY_FRAMES), when money sits in the bank and the docks
+	* are free for whoever gets there first: a look a minute left a Hard AI's first expansion of its own
+	* waiting behind a check that had already said no. */
+static const Int EXPANSION_OPENING_CHECK_SECONDS = 15;
+
 /** How often the scout is looked at.  It only ever gets an order when it has arrived, so this is a
 	* check, not a repath. */
 static const Int SCOUT_CHECK_RATE = 2 * LOGICFRAMES_PER_SECOND;
@@ -2039,6 +2044,12 @@ void AIPlayer::onUnitProduced( Object *factory, Object *unit )
 				// a support order the fork's AI put in for a job of its own; EA's AI never has one, and
 				// a unit that came out of anything else must not land in those slots
 				const Bool dutyOrder = order->m_isScout && runsOwnAI();
+				// the first one out that can take a building is the capturer, whichever job ordered it: left
+				// for doCapture's five-second look, the scout or a bunker had it first and the capture started over
+				if (dutyOrder && ai && m_capturerID == INVALID_ID && unit->findSpecialPowerModuleInterface( SPECIAL_INFANTRY_CAPTURE_BUILDING )) {
+					m_capturerID = unit->getID();
+					ai->setIsRecruitable( FALSE );
+				}
 				if (ai) {
 					// tell it to start gathering resources.
 					// Here is the special bit for this exit style, force wanting on SupplyTruck types
@@ -5935,7 +5946,8 @@ void AIPlayer::doExpansion( void )
 
 	if( --m_expandTimer > 0 )
 		return;
-	m_expandTimer = EXPANSION_CHECK_SECONDS * LOGICFRAMES_PER_SECOND;
+	const Bool opening = TheGameLogic->getFrame() < AI_PURCHASE_EARLY_FRAMES;
+	m_expandTimer = ( opening ? EXPANSION_OPENING_CHECK_SECONDS : EXPANSION_CHECK_SECONDS ) * LOGICFRAMES_PER_SECOND;
 
 	if( !m_player->getCanBuildBase() || !m_baseCenterSet )
 	{
@@ -6000,12 +6012,13 @@ void AIPlayer::doExpansion( void )
 		return;
 	}
 
-	// pay for it out of what is spare, not out of the army's money
-	const Int cost = tmpl->calcCostToBuild( m_player );
-	if( m_player->getMoney()->countMoney() < 2 * cost )
+	// pay for it out of what is spare, not out of the army's money.  In the opening there is no army to
+	// save for and income comes first: at twice the price 35 of 42 stops in Hard's first three minutes were this
+	const Int needs = tmpl->calcCostToBuild( m_player ) * ( opening ? 1 : 2 );
+	if( m_player->getMoney()->countMoney() < needs )
 	{
 		DEBUG_LOG(("AI EXPAND frame %d player %d stopped by money, %d in the bank, needs %d\n", TheGameLogic->getFrame(),
-			m_player->getPlayerIndex(), m_player->getMoney()->countMoney(), 2 * cost));
+			m_player->getPlayerIndex(), m_player->getMoney()->countMoney(), needs));
 		return;
 	}
 
@@ -14125,6 +14138,9 @@ void AIPlayer::releaseMended( void )
 		if( ai == NULL || ai->isRecruitable() || obj->isEffectivelyDead() || obj->isContained() ||
 				(obj->getVeterancyLevel() <= LEVEL_REGULAR && !obj->isKindOf( KINDOF_INFANTRY )) )
 			continue;
+		// never the capturer: mid-capture it reads as idle, and a script team recruited it off the derrick
+		if( obj->getID() == m_capturerID )
+			continue;
 		const StateID state = ai->getCurrentStateID();
 		if( state == AI_DOCK || state == AI_ENTER || state >= 1000 || ai->isMoving() )
 			continue;
@@ -16964,6 +16980,8 @@ Object *AIPlayer::findCapturer( void )
 			continue;
 		if( obj->findSpecialPowerModuleInterface( SPECIAL_INFANTRY_CAPTURE_BUILDING ) == NULL )
 			continue;
+		if( obj->isContained() )
+			continue;		// a soldier in a bunker stays there, and doCapture waits for its capturer's ride to land
 
 		Bool busy = FALSE;
 		for( Int slot = 0; slot < MAX_AI_SCOUTS; ++slot )
@@ -17134,7 +17152,10 @@ void AIPlayer::doCapture( void )
 		m_capturerID = INVALID_ID;
 		capturer = findCapturer();
 		if( capturer )
+		{
 			m_capturerID = capturer->getID();
+			capturer->getAI()->setIsRecruitable( FALSE );
+		}
 	}
 
 	Coord3D from = m_baseCenter;
@@ -17146,13 +17167,33 @@ void AIPlayer::doCapture( void )
 	// derricks behind the base waited on it for minutes, or were never taken.
 	Object *target = nearestTechBuilding( &m_baseCenter, FALSE );
 
-	if( capturer == NULL )
+	// only pay for one when there is something to spend it on
+	if( capturer == NULL && target )
+		queueCapturer();
+
+	//
+	// The Ranger, the Red Guard and the Rebel all come out of the barracks with the capture paused
+	// until the player buys it there, and nothing bought it: the capturer walked up to a derrick and
+	// stood on it all match.  Buy it (buildUpgrade waits for the money and ignores a repeat) the moment
+	// a barracks stands, behind the capturer in that barracks' queue.  This used to wait for a capturer
+	// standing idle, and the scout took the first one out, so it asked at frame 3615 at the earliest,
+	// with the opening's bank spent and the research still to come.
+	//
+	static const AsciiString captureUpgradeName( "Upgrade_InfantryCaptureBuilding" );
+	const UpgradeTemplate *captureUpgrade = TheUpgradeCenter->findUpgrade( captureUpgradeName );
+	SpecialPowerModuleInterface *mod = capturer ? capturer->findSpecialPowerModuleInterface( SPECIAL_INFANTRY_CAPTURE_BUILDING ) : NULL;
+	if( target && captureUpgrade && (capturer == NULL || (mod && mod->getPercentReady() < 1.0f)) &&
+			!m_player->hasUpgradeComplete( captureUpgrade ) )
 	{
-		// only pay for one when there is something to spend it on
-		if( target )
-			queueCapturer();
-		return;
+		const Bool queued = m_player->hasUpgradeInProduction( captureUpgrade );
+		buildUpgrade( captureUpgradeName );
+		if( !queued && m_player->hasUpgradeInProduction( captureUpgrade ) )
+			DEBUG_LOG(("AI CAPTURE frame %d player %d buys the capture upgrade for a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+				target->getTemplate()->getName().str(), target->getID()));
 	}
+
+	if( capturer == NULL )
+		return;
 
 	// the ride out: a capturer sitting in its helicopter is flown to the building and put down beside it
 	if( capturer->isContained() )
@@ -17203,29 +17244,10 @@ void AIPlayer::doCapture( void )
 	}
 
 	//
-	// canCaptureBuilding refuses through the shroud and the capture itself has a range, so a target
-	// we know about but cannot reach from here is walked to first and asked again next check.
+	// canCaptureBuilding refuses through the shroud, the capture itself has a range and an upgrade not
+	// in yet reads as not ready, so a target we know about but cannot take from here is walked to first
+	// and asked again next check: the research finishes with the capturer already standing on it.
 	//
-	SpecialPowerModuleInterface *mod = capturer->findSpecialPowerModuleInterface( SPECIAL_INFANTRY_CAPTURE_BUILDING );
-
-	//
-	// The Ranger, the Red Guard and the Rebel all come out of the barracks with the capture paused
-	// until the player buys it there, and nothing bought it: the capturer walked up to a derrick and
-	// stood on it all match.  Buy it (buildUpgrade waits for the money and ignores a repeat) and keep
-	// the capturer home until it is in.
-	//
-	static const AsciiString captureUpgradeName( "Upgrade_InfantryCaptureBuilding" );
-	const UpgradeTemplate *captureUpgrade = TheUpgradeCenter->findUpgrade( captureUpgradeName );
-	if( mod && captureUpgrade && mod->getPercentReady() < 1.0f && !m_player->hasUpgradeComplete( captureUpgrade ) )
-	{
-		const Bool queued = m_player->hasUpgradeInProduction( captureUpgrade );
-		buildUpgrade( captureUpgradeName );
-		if( !queued && m_player->hasUpgradeInProduction( captureUpgrade ) )
-			DEBUG_LOG(("AI CAPTURE frame %d player %d buys the capture upgrade for a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
-				target->getTemplate()->getName().str(), target->getID()));
-		return;
-	}
-
 	if( mod && TheActionManager->canCaptureBuilding( capturer, target, CMD_FROM_AI ) )
 	{
 		mod->doSpecialPowerAtObject( target, 0 );

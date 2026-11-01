@@ -99,6 +99,10 @@ BUILD_JOBS=$(zh_resolve_build_jobs "${ZH_BUILD_JOBS:-${CMAKE_BUILD_PARALLEL_LEVE
 TEST_JOBS=$(zh_resolve_test_jobs "${ZH_TEST_JOBS:-${CTEST_PARALLEL_LEVEL:-auto}}" "$BUILD_JOBS") || exit 2
 export ZH_BUILD_JOBS="$BUILD_JOBS" CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS"
 export ZH_TEST_JOBS="$TEST_JOBS" CTEST_PARALLEL_LEVEL="$TEST_JOBS"
+desired_personnel=${ZH_TEXT_PERSONNEL:-unchanged}
+desired_factions=${ZH_TEXT_FACTIONS:-unchanged}
+case "$desired_personnel" in unchanged|humans|robots) ;; *) fail "ZH_TEXT_PERSONNEL must be unchanged, humans or robots." ;; esac
+case "$desired_factions" in unchanged|original|adapted) ;; *) fail "ZH_TEXT_FACTIONS must be unchanged, original or adapted." ;; esac
 if [ "$CLEAN_BUILD" = 1 ]; then
   echo "[build] removing $BUILD"
   rm -rf "$BUILD"
@@ -228,15 +232,20 @@ guided_step "Download missing third-party sources and unpack them locally (no or
 # to configure again, or it silently rebuilds the configuration that is already there.
 cached_config=
 cached_tuning=
+cached_personnel=
+cached_factions=
 desired_tuning=${ZH_MACOS_CPU_TUNING:-auto}
 if [ -e "$BUILD/CMakeCache.txt" ]; then
   cached_tuning=$(sed -n 's/^ZH_MACOS_CPU_TUNING:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
   cached_config=$(sed -n 's/^CMAKE_BUILD_TYPE:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
+  cached_personnel=$(sed -n 's/^ZH_TEXT_PERSONNEL:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
+  cached_factions=$(sed -n 's/^ZH_TEXT_FACTIONS:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
 fi
-if [ ! -e "$BUILD/CMakeCache.txt" ] || [ ! -e "$BUILD/build.ninja" ] || [ "$cached_config" != "$CONFIG" ] || [ "$cached_tuning" != "$desired_tuning" ]; then
+if [ ! -e "$BUILD/CMakeCache.txt" ] || [ ! -e "$BUILD/build.ninja" ] || [ "$cached_config" != "$CONFIG" ] || [ "$cached_tuning" != "$desired_tuning" ] || [ "$cached_personnel" != "$desired_personnel" ] || [ "$cached_factions" != "$desired_factions" ]; then
   guided_step "Configure CMake and write build files to %s?" "$BUILD" || exit 0
   echo "[build] configuring $SRC -> $BUILD"
-  "$CMAKE" -S "$SRC" -B "$BUILD" -G "$GENERATOR" -DCMAKE_BUILD_TYPE="$CONFIG" -DZH_MACOS_CPU_TUNING="$desired_tuning" || fail "configure failed."
+  "$CMAKE" -S "$SRC" -B "$BUILD" -G "$GENERATOR" -DCMAKE_BUILD_TYPE="$CONFIG" -DZH_MACOS_CPU_TUNING="$desired_tuning" \
+    -DZH_TEXT_PERSONNEL="$desired_personnel" -DZH_TEXT_FACTIONS="$desired_factions" || fail "configure failed."
 fi
 
 # --- build ---

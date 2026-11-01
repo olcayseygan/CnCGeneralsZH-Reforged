@@ -15,12 +15,13 @@ import unittest
 CODE = Path(__file__).resolve().parents[1]
 ROOT = CODE.parents[1]
 MAKE = shutil.which('make')
-OVERRIDES = ('CONFIG', 'CPU_TUNING', 'JOBS', 'TEST_JOBS', 'BUILD', 'CMAKE', 'CTEST',
+OVERRIDES = ('CONFIG', 'CPU_TUNING', 'JOBS', 'TEST_JOBS', 'PERSONNEL', 'FACTIONS', 'BUILD', 'CMAKE', 'CTEST',
              'ZH_BUILD_CONFIG', 'ZH_MACOS_CPU_TUNING', 'ZH_BUILD_JOBS', 'ZH_TEST_JOBS',
+             'ZH_TEXT_PERSONNEL', 'ZH_TEXT_FACTIONS',
              'CMAKE_BUILD_PARALLEL_LEVEL', 'CTEST_PARALLEL_LEVEL', 'ZH_TEST_ONLY',
              'ZH_GUIDED_BUILD', 'MAKEFLAGS', 'MFLAGS', 'BASH_ENV', 'ENV')
 RECORDED_ENV = ('ZH_BUILD_CONFIG', 'ZH_MACOS_CPU_TUNING', 'ZH_BUILD_JOBS',
-                'ZH_TEST_JOBS', 'ZH_TEST_ONLY', 'BUILD', 'CMAKE')
+                'ZH_TEST_JOBS', 'ZH_TEXT_PERSONNEL', 'ZH_TEXT_FACTIONS', 'ZH_TEST_ONLY', 'BUILD', 'CMAKE')
 
 
 @unittest.skipUnless(os.name == 'posix' and MAKE, 'requires POSIX and Make')
@@ -107,6 +108,8 @@ sys.exit(int(os.environ.get('ZH_STUB_EXIT', '0')))
                 record = self.calls()[-1]
                 self.assertEqual((record['program'], record['args']), (program, arguments))
                 self.assertEqual(record['env'].get('ZH_TEST_ONLY'), '1' if target == 'test-only' else None)
+                self.assertEqual(record['env']['ZH_TEXT_PERSONNEL'], 'unchanged')
+                self.assertEqual(record['env']['ZH_TEXT_FACTIONS'], 'unchanged')
 
     def test_windows_guidance_does_not_run_a_posix_backend(self):
         result = self.make('build', env=dict(self.env, ZH_FAKE_SYSTEM='MSYS_NT-10.0'))
@@ -122,12 +125,15 @@ sys.exit(int(os.environ.get('ZH_STUB_EXIT', '0')))
         self.assertEqual(settings['ZH_MACOS_CPU_TUNING'], 'auto')
         self.assertEqual(settings['ZH_BUILD_JOBS'], 'auto')
         self.assertEqual(settings['ZH_TEST_JOBS'], 'auto')
+        self.assertEqual(settings['ZH_TEXT_PERSONNEL'], 'unchanged')
+        self.assertEqual(settings['ZH_TEXT_FACTIONS'], 'unchanged')
         self.assertNotIn('BUILD', settings)
         self.assertNotIn('CMAKE', settings)
 
     def test_existing_environment_settings_are_preserved(self):
         settings = {'ZH_BUILD_CONFIG': 'Debug', 'ZH_MACOS_CPU_TUNING': 'generic',
                     'ZH_BUILD_JOBS': '2', 'ZH_TEST_JOBS': '3',
+                    'ZH_TEXT_PERSONNEL': 'humans', 'ZH_TEXT_FACTIONS': 'original',
                     'BUILD': str(self.work / 'existing build'), 'CMAKE': str(self.bin / 'custom cmake')}
         result = self.make('build', env=dict(self.env, **settings))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -144,15 +150,29 @@ sys.exit(int(os.environ.get('ZH_STUB_EXIT', '0')))
 
     def test_explicit_make_settings_override_environment(self):
         result = self.make('test', 'CONFIG=RelWithDebInfo', 'CPU_TUNING=apple-m1', 'JOBS=4', 'TEST_JOBS=2',
+                           'PERSONNEL=robots', 'FACTIONS=adapted',
                            'BUILD=' + str(self.work / 'explicit build'), 'CMAKE=' + str(self.bin / 'chosen cmake'),
                            env=dict(self.env, ZH_BUILD_CONFIG='Debug', ZH_MACOS_CPU_TUNING='generic',
-                                    ZH_BUILD_JOBS='1', ZH_TEST_JOBS='1'))
+                                    ZH_BUILD_JOBS='1', ZH_TEST_JOBS='1',
+                                    ZH_TEXT_PERSONNEL='humans', ZH_TEXT_FACTIONS='original'))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         record = self.calls()[0]
         self.assertEqual(record['args'], ['RelWithDebInfo', 'test'])
         self.assertEqual(record['env'], {'ZH_BUILD_CONFIG': 'RelWithDebInfo', 'ZH_MACOS_CPU_TUNING': 'apple-m1',
                                         'ZH_BUILD_JOBS': '4', 'ZH_TEST_JOBS': '2',
+                                        'ZH_TEXT_PERSONNEL': 'robots', 'ZH_TEXT_FACTIONS': 'adapted',
                                         'BUILD': str(self.work / 'explicit build'), 'CMAKE': str(self.bin / 'chosen cmake')})
+
+    def test_text_choices_reach_guided_setup_on_macos_and_linux(self):
+        for system in ('Darwin', 'Linux'):
+            with self.subTest(system=system):
+                result = self.make('install', 'PERSONNEL=humans', 'FACTIONS=adapted',
+                                   env=dict(self.env, ZH_FAKE_SYSTEM=system))
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                record = self.calls()[-1]
+                self.assertEqual((record['program'], record['args']), ('install', []))
+                self.assertEqual(record['env']['ZH_TEXT_PERSONNEL'], 'humans')
+                self.assertEqual(record['env']['ZH_TEXT_FACTIONS'], 'adapted')
 
     def test_backend_failure_fails_make(self):
         result = self.make('build', env=dict(self.env, ZH_STUB_EXIT='23'))
@@ -183,13 +203,52 @@ sys.exit(int(os.environ.get('ZH_STUB_EXIT', '0')))
         (build / 'CTestTestfile.cmake').write_text('# Synthetic test project\n', encoding='utf-8')
         return build
 
-    def builder(self, build, platform='macos', **settings):
+    def builder(self, build, platform='macos', action='test', **settings):
         env = dict(self.env, BUILD=str(build), CMAKE=str(self.bin / 'cmake'),
                    ZH_TEST_ONLY='1', ZH_BUILD_JOBS='2', ZH_TEST_JOBS='2',
                    ZH_FAKE_SYSTEM='Linux' if platform == 'linux' else 'Darwin')
         env.update(settings)
-        return subprocess.run(['/bin/bash', str(self.tools / 'build-posix.sh'), platform, 'Release', 'test'],
+        return subprocess.run(['/bin/bash', str(self.tools / 'build-posix.sh'), platform, 'Release', action],
                               env=env, capture_output=True, text=True)
+
+    def test_text_defaults_reconfigure_cached_builds_and_reach_cmake(self):
+        build = self.prepare_real_builder()
+        self.stub(self.tools / 'vendor.sh', 'vendor')
+        (build / 'build.ninja').write_text('# Synthetic build rules\n', encoding='utf-8')
+        cases = ((None, None, 'unchanged', 'unchanged', True),
+                 ('unchanged', 'unchanged', 'robots', 'unchanged', True),
+                 ('humans', 'original', 'humans', 'adapted', True),
+                 ('robots', 'adapted', 'robots', 'adapted', False))
+        for platform in ('macos', 'linux'):
+            for cached_personnel, cached_factions, personnel, factions, reconfigure in cases:
+                with self.subTest(platform=platform, cached=(cached_personnel, cached_factions),
+                                  selected=(personnel, factions)):
+                    self.log.unlink(missing_ok=True)
+                    cache = 'CMAKE_BUILD_TYPE:STRING=Release\nZH_MACOS_CPU_TUNING:STRING=auto\n'
+                    if cached_personnel is not None:
+                        cache += 'ZH_TEXT_PERSONNEL:STRING=%s\nZH_TEXT_FACTIONS:STRING=%s\n' % (cached_personnel, cached_factions)
+                    (build / 'CMakeCache.txt').write_text(cache, encoding='utf-8')
+                    result = self.builder(build, platform=platform, action='generals', ZH_TEST_ONLY='0',
+                                          ZH_TEXT_PERSONNEL=personnel, ZH_TEXT_FACTIONS=factions)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    commands = [record['args'] for record in self.calls() if record['program'] == 'cmake']
+                    configure = [arguments for arguments in commands if '-S' in arguments]
+                    self.assertEqual(len(configure), int(reconfigure), commands)
+                    if reconfigure:
+                        self.assertIn('-DZH_TEXT_PERSONNEL=' + personnel, configure[0])
+                        self.assertIn('-DZH_TEXT_FACTIONS=' + factions, configure[0])
+                    self.assertEqual(commands[-1], ['--build', str(build), '--parallel', '2', '--target', 'generals'])
+                    self.assertNotIn('ctest', [record['program'] for record in self.calls()])
+
+    def test_invalid_text_defaults_fail_before_any_backend_action(self):
+        build = self.prepare_real_builder()
+        for name, value in (('ZH_TEXT_PERSONNEL', 'human'), ('ZH_TEXT_FACTIONS', 'adapt'),
+                            ('ZH_TEXT_PERSONNEL', '2'), ('ZH_TEXT_FACTIONS', '2')):
+            with self.subTest(setting=name, value=value):
+                result = self.builder(build, ZH_TEST_ONLY='0', **{name: value})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(name, result.stdout + result.stderr)
+                self.assertEqual(self.calls(), [])
 
     def test_test_only_uses_existing_build_and_never_configures_or_packages(self):
         build = self.prepare_real_builder()

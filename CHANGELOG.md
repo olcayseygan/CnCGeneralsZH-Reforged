@@ -10,6 +10,8 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- Unit and faction names can be selected independently of the text language. Guided setup offers both choices, existing preferences take precedence, and the game settings allow changing them for the next launch. The choices affect names without changing models, voices or match rules.
+
 - macOS fullscreen uses native Spaces and declares Game Mode support, with the legacy fullscreen override retained. Background and offscreen runs release idle display-sleep prevention. The app includes English and German LAN-permission descriptions for current macOS versions.
 
 - Setup questions appear before the installer waits for an answer. Build and test work use bounded parallelism; the full suite remains available, and tests can be repeated without rebuilding. Configuration, build-directory and CPU choices reach the guided build and the application it starts.

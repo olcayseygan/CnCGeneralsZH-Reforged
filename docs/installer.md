@@ -69,9 +69,23 @@ make test                        # build, run every test, then package
 make test-only                   # repeat tests in an existing configured build
 make install CONFIG=Debug        # the guided build also honors CONFIG
 make install JOBS=8 TEST_JOBS=4
+make install PERSONNEL=humans FACTIONS=original
 make test-only TEST_JOBS=1        # run sequentially if needed
 make build CPU_TUNING=generic     # portable scheduling instead of automatic CPU tuning
 ```
+
+`PERSONNEL=unchanged|humans|robots` and `FACTIONS=unchanged|original|adapted`
+select independent defaults for unit and faction names. Guided setup offers both
+choices before compiling; Enter keeps the displayed default. Both can also be
+changed on the game's interface/language page and take effect on the next launch.
+Explicit personal preferences take precedence over build defaults.
+
+Language remains separate. These choices change selected short names, including
+human/robot terminology and original/adapted factions. They do not replace every
+campaign line, models, videos or voices, or reconstruct a complete retail edition.
+No original game data is downloaded or copied into the repository for them.
+`unchanged` preserves existing behavior. Direct CMake builds, including Windows,
+use `ZH_TEXT_PERSONNEL` and `ZH_TEXT_FACTIONS` with the same values.
 
 Build workers are chosen from CPU count and memory, capped at eight by default.
 Tests use at most four workers automatically; `JOBS` and `TEST_JOBS` accept `auto`

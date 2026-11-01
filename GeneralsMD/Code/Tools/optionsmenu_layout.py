@@ -184,6 +184,10 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxPlayerColors",   None),
     (LABEL,  "LabelLanguage",          "GUI:Language"),
     (COMBO,  "ComboBoxLanguage",       None),
+    (LABEL,  "LabelTextPersonnel",     "GUI:TextPersonnel"),
+    (COMBO,  "ComboBoxTextPersonnel",  None),
+    (LABEL,  "LabelTextFactions",      "GUI:TextFactions"),
+    (COMBO,  "ComboBoxTextFactions",   None),
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
     (CHECK,  "CheckNetBox",            "GUI:NetBox"),
     (CHECK,  "CheckEmptyBuildingPips", "GUI:EmptyBuildingPips"),
@@ -464,7 +468,9 @@ GROUP_LAYOUT = [
             ("check", "CheckOrderLines"),
             ("check", "CheckEmptyBuildingPips")]),
         ("GUI:OptionsGroupLanguage", [
-            setting("LabelLanguage", "ComboBoxLanguage")]),
+            setting("LabelLanguage", "ComboBoxLanguage"),
+            setting("LabelTextPersonnel", "ComboBoxTextPersonnel"),
+            setting("LabelTextFactions", "ComboBoxTextFactions")]),
         ("GUI:OptionsGroupReplays", [
             ("check", "CheckBoxSaveCamera"),
             ("check", "CheckBoxUseCamera")])]),
@@ -1022,6 +1028,16 @@ def selfcheck():
             problems.append("CloudStyle must be on the Graphics page")
         if cloud_label.rect[1] != cloud.rect[1] - ROW_HEIGHT:
             problems.append("CloudStyle label must sit above its combo box")
+
+    # Wording choices belong beside the language choice, independently of graphics.
+    interface = layout.find("PageInterface")
+    for name in ("Language", "TextPersonnel", "TextFactions"):
+        label, combo = layout.find("Label" + name), layout.find("ComboBox" + name)
+        if interface and label and combo:
+            if label not in interface.children or combo not in interface.children:
+                problems.append("%s must be on the Interface page" % name)
+            if label.rect[1] != combo.rect[1] - ROW_HEIGHT:
+                problems.append("%s label must sit above its combo box" % name)
 
     for problem in problems:
         print("optionsmenu: %s" % problem)

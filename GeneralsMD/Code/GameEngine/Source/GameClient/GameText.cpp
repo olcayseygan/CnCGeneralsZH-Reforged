@@ -54,6 +54,7 @@
 #include "Common/Language.h"
 #include "Common/Registry.h"
 #include "GameClient/LanguageFilter.h"
+#include "GameClient/TextTerminology.h"
 #include "Common/Debug.h"
 #include "Common/UnicodeString.h"
 #include "Common/AsciiString.h"
@@ -496,6 +497,32 @@ void GameTextManager::init( void )
 		AsciiString label = m_stringInfo[ i ].label;
 		label.toLower();
 		m_englishHotKeys[ label.str() ] = amp[ 1 ];
+	}
+
+	// Text-only preferences apply to the main display table after command keys
+	// have been recorded. Mods and map-specific string tables keep their own names.
+	if (TheGlobalData && (TheGlobalData->m_textPersonnel != 0 || TheGlobalData->m_textFactions != 0))
+	{
+		Int terminologyLanguage = language;
+		if (language == TEXT_LANGUAGE_ENGLISH)
+		{
+			// No language overlay means the retail CSF's language, which can
+			// differ from English on a localized installation.
+			static const char *const names[] = { "English", "Turkish", "German", "Ukrainian", "Russian", "French" };
+			const AsciiString sourceLanguage = GetRegistryLanguage();
+			terminologyLanguage = -1;
+			for (Int candidate = 0; candidate < TEXT_LANGUAGE_COUNT; ++candidate)
+				if (sourceLanguage.compareNoCase( names[candidate] ) == 0)
+					terminologyLanguage = candidate;
+		}
+		for (Int i = 0; i < filled; ++i)
+		{
+			const std::u16string source( m_stringInfo[i].text.str() );
+			const std::u16string name = TextTerminology::apply( m_stringInfo[i].label.str(), source,
+				terminologyLanguage, TheGlobalData->m_textPersonnel, TheGlobalData->m_textFactions );
+			if (name != source)
+				m_stringInfo[i].text.set( name.c_str() );
+		}
 	}
 
 	m_stringLUT = NEW StringLookUp[m_textCount];

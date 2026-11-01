@@ -25,6 +25,23 @@ def confirm(message):
     return _.is_yes(answer)
 
 
+def choose_text_setting(message, choices, current):
+    if current not in dict(choices):
+        raise ValueError(_('Unknown text setting: %s', current))
+    print('\n' + message)
+    for index, (value, label) in enumerate(choices, 1):
+        print('  %d. %s%s' % (index, label, ' *' if value == current else ''))
+    while True:
+        answer = prompt(_('Selection [Enter = %s]: ', dict(choices)[current])).strip().casefold()
+        if not answer:
+            return current
+        if answer in dict(choices):
+            return answer
+        if answer.isdecimal() and 1 <= int(answer) <= len(choices):
+            return choices[int(answer)-1][0]
+        print(_('Choose a listed number or press Enter to keep the current choice.'))
+
+
 def run(command, **kwargs):
     print('\n$ ' + ' '.join(shlex.quote(str(arg)) for arg in command), flush=True)
     kwargs.setdefault('stderr', subprocess.STDOUT)
@@ -193,7 +210,14 @@ def main():
         raise ValueError(_('Choose a build configuration such as Release or Debug; cleaning is a separate command.'))
     prerequisites(system)
     if confirm(_('Prepare the local %s build? Downloads, configuration, compiling, tests and packaging each get their own question.', config)):
-        env = dict(os.environ, ZH_GUIDED_BUILD='1')
+        print(_('Text choices set defaults for new preferences; existing personal settings take precedence. They change names only, not models, voices or gameplay.'))
+        personnel = choose_text_setting(_('Unit names:'),
+            [('unchanged', _('Unchanged')), ('humans', _('Humans')), ('robots', _('Robots'))],
+            os.environ.get('ZH_TEXT_PERSONNEL', 'unchanged') or 'unchanged')
+        factions = choose_text_setting(_('Faction names:'),
+            [('unchanged', _('Unchanged')), ('original', _('Original countries')), ('adapted', _('Adapted factions'))],
+            os.environ.get('ZH_TEXT_FACTIONS', 'unchanged') or 'unchanged')
+        env = dict(os.environ, ZH_GUIDED_BUILD='1', ZH_TEXT_PERSONNEL=personnel, ZH_TEXT_FACTIONS=factions)
         run([ROOT / ('build-macos.sh' if system == 'Darwin' else 'build-linux.sh'), config, 'test'], env=env)
     selected = None
     if confirm(_('Select or search for your own original game installations and optionally copy them?')):

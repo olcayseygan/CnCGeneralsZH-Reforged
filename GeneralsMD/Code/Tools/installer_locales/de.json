@@ -55,6 +55,17 @@
     "Create/refresh the application package in %s (on Linux only the previous package in this build folder is replaced)?": "Das Anwendungspaket in %s erzeugen/erneuern (unter Linux wird nur das bisherige Paket in diesem Build-Ordner ersetzt)?",
     "Zero Hour Reforged - guided setup\nEvery executing step needs your consent; Enter means no.\nThe installer does not download original game data. You need your own complete installations of Generals and Zero Hour.\nGame data stays outside this repository. Steam/GOG credentials are never requested.\nCancel any time with Ctrl+C; completed steps are kept.": "Zero Hour Reforged – geführte Einrichtung\nJeder ausführende Schritt braucht deine Zustimmung; Enter bedeutet Nein.\nDer Installer lädt keine Original-Spieldaten herunter. Du benötigst deine eigenen vollständigen Installationen von Generals und Zero Hour.\nSpieldaten bleiben außerhalb dieses Repos. Steam-/GOG-Zugangsdaten werden nie abgefragt.\nAbbrechen jederzeit mit Strg+C; abgeschlossene Schritte bleiben erhalten.",
     "Prepare the local %s build? Downloads, configuration, compiling, tests and packaging each get their own question.": "Den lokalen %s-Build vorbereiten? Vor Downloads, Konfiguration, Kompilieren, Tests und Paketierung folgt jeweils eine eigene Frage.",
-    "Choose a build configuration such as Release or Debug; cleaning is a separate command.": "Wähle eine Build-Konfiguration wie Release oder Debug; das Löschen des Builds ist ein separater Befehl."
+    "Choose a build configuration such as Release or Debug; cleaning is a separate command.": "Wähle eine Build-Konfiguration wie Release oder Debug; das Löschen des Builds ist ein separater Befehl.",
+    "Unknown text setting: %s": "Unbekannte Texteinstellung: %s",
+    "Selection [Enter = %s]: ": "Auswahl [Enter = %s]: ",
+    "Choose a listed number or press Enter to keep the current choice.": "Wähle eine aufgeführte Nummer oder behalte mit Enter die aktuelle Auswahl.",
+    "Text choices set defaults for new preferences; existing personal settings take precedence. They change names only, not models, voices or gameplay.": "Die Textwahl setzt Vorgaben für neue Einstellungen; vorhandene persönliche Einstellungen haben Vorrang. Sie ändert nur Bezeichnungen, keine Modelle, Stimmen oder Spielregeln.",
+    "Unit names:": "Einheitenbezeichnungen:",
+    "Faction names:": "Fraktionsbezeichnungen:",
+    "Unchanged": "Unverändert",
+    "Humans": "Menschen",
+    "Robots": "Roboter",
+    "Original countries": "Ursprüngliche Länder",
+    "Adapted factions": "Angepasste Fraktionen"
   }
 }

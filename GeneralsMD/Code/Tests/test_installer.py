@@ -27,7 +27,8 @@ class InstallerTests(unittest.TestCase):
         self.home = Path(self.temp.name).resolve()
         self.repo = self.home / 'source checkout'
         self.repo.mkdir()
-        environment = mock.patch.dict(os.environ, {'ZH_BUILD_CONFIG': 'Release', 'BUILD': ''})
+        environment = mock.patch.dict(os.environ, {'ZH_BUILD_CONFIG': 'Release', 'BUILD': '',
+                                                  'ZH_TEXT_PERSONNEL': 'unchanged', 'ZH_TEXT_FACTIONS': 'unchanged'})
         environment.start(); self.addCleanup(environment.stop)
         patcher = mock.patch.object(installer, 'ROOT', self.repo)
         patcher.start(); self.addCleanup(patcher.stop)
@@ -127,11 +128,11 @@ class InstallerTests(unittest.TestCase):
              mock.patch.object(installer.platform, 'machine', return_value='arm64'), \
              mock.patch.object(installer, 'prerequisites'), \
              mock.patch.dict(os.environ, {'ZH_MACOS_CPU_TUNING': 'generic'}), \
-             mock.patch('builtins.input', side_effect=['yes', '']) as prompt, \
+             mock.patch('builtins.input', side_effect=['yes', '', '', '']) as prompt, \
              mock.patch.object(installer, 'run') as run, \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(installer.main(), 0)
-            self.assertEqual(prompt.call_count, 2)  # build consent, then optional game data
+            self.assertEqual(prompt.call_count, 4)  # build consent, two text choices, optional game data
             run.assert_called_once()
             args, kwargs = run.call_args
             self.assertEqual(args[0], [self.repo / 'build-macos.sh', 'Release', 'test'])
@@ -326,7 +327,7 @@ xcode-select() {
                  mock.patch.object(installer.platform, 'system', return_value='Darwin'), \
                  mock.patch.object(installer, 'prerequisites'), \
                  mock.patch.dict(os.environ, {'ZH_BUILD_CONFIG': 'Debug', 'BUILD': directory}), \
-                 mock.patch('builtins.input', side_effect=['yes', '', '', 'yes']), \
+                 mock.patch('builtins.input', side_effect=['yes', '', '', '', '', 'yes']), \
                  mock.patch.object(installer, 'run') as run, \
                  contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(installer.main(), 0)
@@ -344,6 +345,29 @@ xcode-select() {
             with self.assertRaises(ValueError): installer.main()
             prerequisites.assert_not_called()
             run.assert_not_called()
+
+    def test_text_choices_are_independent_and_reach_the_guided_build(self):
+        for personnel_index, personnel in enumerate(('unchanged', 'humans', 'robots'), 1):
+            for faction_index, factions in enumerate(('unchanged', 'original', 'adapted'), 1):
+                with self.subTest(personnel=personnel, factions=factions), \
+                     mock.patch.object(installer.sys, 'argv', ['install.py']), \
+                     mock.patch.object(installer.sys.stdin, 'isatty', return_value=True), \
+                     mock.patch.object(installer.platform, 'system', return_value='Linux'), \
+                     mock.patch.object(installer, 'prerequisites'), \
+                     mock.patch('builtins.input', side_effect=['yes', str(personnel_index), str(faction_index), '']), \
+                     mock.patch.object(installer, 'run') as run, \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(installer.main(), 0)
+                    self.assertEqual(run.call_args.kwargs['env']['ZH_TEXT_PERSONNEL'], personnel)
+                    self.assertEqual(run.call_args.kwargs['env']['ZH_TEXT_FACTIONS'], factions)
+
+    def test_text_choice_retries_invalid_input_and_preserves_enter_default(self):
+        choices = [('unchanged', 'Unchanged'), ('humans', 'Humans'), ('robots', 'Robots')]
+        with mock.patch('builtins.input', side_effect=['0', '4', 'invalid', '']), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(installer.choose_text_setting('Names', choices, 'robots'), 'robots')
+        with self.assertRaises(ValueError):
+            installer.choose_text_setting('Names', choices, 'invalid')
 
 
 if __name__ == '__main__':

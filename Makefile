@@ -9,10 +9,14 @@ CONFIG ?= $(if $(ZH_BUILD_CONFIG),$(ZH_BUILD_CONFIG),Release)
 CPU_TUNING ?= $(if $(ZH_MACOS_CPU_TUNING),$(ZH_MACOS_CPU_TUNING),auto)
 JOBS ?= $(if $(ZH_BUILD_JOBS),$(ZH_BUILD_JOBS),$(if $(CMAKE_BUILD_PARALLEL_LEVEL),$(CMAKE_BUILD_PARALLEL_LEVEL),auto))
 TEST_JOBS ?= $(if $(ZH_TEST_JOBS),$(ZH_TEST_JOBS),$(if $(CTEST_PARALLEL_LEVEL),$(CTEST_PARALLEL_LEVEL),auto))
+PERSONNEL ?= $(if $(ZH_TEXT_PERSONNEL),$(ZH_TEXT_PERSONNEL),unchanged)
+FACTIONS ?= $(if $(ZH_TEXT_FACTIONS),$(ZH_TEXT_FACTIONS),unchanged)
 export ZH_BUILD_CONFIG := $(CONFIG)
 export ZH_MACOS_CPU_TUNING := $(CPU_TUNING)
 export ZH_BUILD_JOBS := $(JOBS)
 export ZH_TEST_JOBS := $(TEST_JOBS)
+export ZH_TEXT_PERSONNEL := $(PERSONNEL)
+export ZH_TEXT_FACTIONS := $(FACTIONS)
 # Leave the platform defaults and build.local.sh in charge when unset.
 ifneq ($(origin BUILD),undefined)
 export BUILD
@@ -37,6 +41,8 @@ help:
 	  '  BUILD=/path          Override the platform build directory' \
 	  '  CMAKE=/path/cmake    Override the CMake executable' \
 	  '  CPU_TUNING=generic   Opt out of automatic Apple Silicon tuning' \
+	  '  PERSONNEL=unchanged  Unit names: unchanged, humans, robots' \
+	  '  FACTIONS=unchanged   Faction names: unchanged, original, adapted' \
 	  '' \
 	  'Examples: make install JOBS=8 TEST_JOBS=4' \
 	  '          make test-only TEST_JOBS=2'

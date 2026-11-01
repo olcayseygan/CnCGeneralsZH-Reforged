@@ -1344,6 +1344,16 @@ GlobalData::GlobalData()
 	m_playerColorScheme = PLAYER_COLORS_ORIGINAL;
 	// the words the game shipped with until somebody picks a translation
 	m_textLanguage = TEXT_LANGUAGE_ENGLISH;
+#ifdef ZH_DEFAULT_TEXT_PERSONNEL
+	m_textPersonnel = ZH_DEFAULT_TEXT_PERSONNEL;
+#else
+	m_textPersonnel = TEXT_PERSONNEL_UNCHANGED;
+#endif
+#ifdef ZH_DEFAULT_TEXT_FACTIONS
+	m_textFactions = ZH_DEFAULT_TEXT_FACTIONS;
+#else
+	m_textFactions = TEXT_FACTIONS_UNCHANGED;
+#endif
 	m_showOrderLines = FALSE;
 
 	m_particleEdit = FALSE;

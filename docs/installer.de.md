@@ -73,9 +73,26 @@ make test                        # bauen, alle Tests ausführen und paketieren
 make test-only                   # Tests im vorhandenen Build erneut ausführen
 make install CONFIG=Debug        # auch der geführte Build beachtet CONFIG
 make install JOBS=8 TEST_JOBS=4
+make install PERSONNEL=humans FACTIONS=original
 make test-only TEST_JOBS=1        # bei Bedarf nacheinander testen
 make build CPU_TUNING=generic     # portables Scheduling statt automatischer CPU-Anpassung
 ```
+
+`PERSONNEL=unchanged|humans|robots` und `FACTIONS=unchanged|original|adapted`
+wählen unabhängig voneinander Vorgaben für Einheiten- und Fraktionsbezeichnungen.
+Im geführten Build werden beide Auswahlen vor dem Kompilieren angeboten; Enter
+behält die angezeigte Vorgabe. Im Spiel lassen sich beide unter den
+Oberflächen-/Spracheinstellungen ändern; nach einem Neustart gilt die neue Wahl.
+Explizite persönliche Einstellungen haben Vorrang vor Build-Vorgaben.
+
+Die Sprache bleibt eine eigene Einstellung. Die Varianten ändern gezielte kurze
+Namen, beispielsweise Menschen-/Roboterbezeichnungen und USA/Westliche Allianz.
+Sie ersetzen weder sämtliche Kampagnentexte noch Modelle, Videos oder Stimmen
+und stellen keine vollständige andere Originaledition her. Originaldaten werden
+dafür weder heruntergeladen noch ins Repo kopiert. `unchanged` bewahrt das
+bisherige Verhalten. Direkte CMake-Aufrufe verwenden `ZH_TEXT_PERSONNEL` und
+`ZH_TEXT_FACTIONS` mit denselben Werten; unter Windows sind diese CMake-Optionen
+ebenfalls verfügbar.
 
 Die Zahl der Build-Prozesse wird anhand von CPU und RAM gewählt, automatisch
 höchstens acht. Tests laufen automatisch mit höchstens vier Prozessen parallel.

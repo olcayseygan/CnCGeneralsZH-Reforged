@@ -143,17 +143,20 @@ echo "[build] config: $CONFIG"
 echo "[build] tree:   $BUILD ($GENERATOR)"
 
 # The interactive installer opts in. Existing build/CI entry points remain unattended.
+# Prompt text and yes-words come from install_i18n.py (English, plus installer_locales/*.json).
 guided_step() {
   [ "${ZH_GUIDED_BUILD:-0}" = 1 ] || return 0
-  local answer
-  printf '\n[setup] %s [j/N] ' "$1"
-  IFS= read -r answer || { echo; exit 130; }
-  case "$answer" in j|J|ja|Ja|JA|y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+  local status=0
+  python3 "$SRC/Tools/install_i18n.py" confirm "$@" || status=$?
+  case "$status" in
+    0|1) return "$status" ;;
+    *) exit "$status" ;;
+  esac
 }
 
 # --- third-party sources the repository does not carry. Fetches whatever is
 # missing and is a no-op once it is there. ---
-guided_step "Fehlende Drittanbieter-Quellen herunterladen und lokal entpacken (keine Original-Spieldaten)?" || exit 0
+guided_step "Download missing third-party sources and unpack them locally (no original game data)?" || exit 0
 "$SRC/Tools/vendor.sh" || fail "fetching the third-party sources failed."
 
 # --- configure ---
@@ -168,13 +171,13 @@ if [ -e "$BUILD/CMakeCache.txt" ]; then
   cached_config=$(sed -n 's/^CMAKE_BUILD_TYPE:[^=]*=\(.*\)$/\1/p' "$BUILD/CMakeCache.txt" | head -n 1)
 fi
 if [ ! -e "$BUILD/CMakeCache.txt" ] || [ ! -e "$BUILD/build.ninja" ] || [ "$cached_config" != "$CONFIG" ] || [ "$cached_tuning" != "$desired_tuning" ]; then
-  guided_step "CMake konfigurieren und Build-Dateien in $BUILD schreiben?" || exit 0
+  guided_step "Configure CMake and write build files to %s?" "$BUILD" || exit 0
   echo "[build] configuring $SRC -> $BUILD"
   "$CMAKE" -S "$SRC" -B "$BUILD" -G "$GENERATOR" -DCMAKE_BUILD_TYPE="$CONFIG" -DZH_MACOS_CPU_TUNING="$desired_tuning" || fail "configure failed."
 fi
 
 # --- build ---
-guided_step "Den $CONFIG-Code mit dem nativen Compiler in $BUILD bauen?" || exit 0
+guided_step "Build the %s code with the native compiler in %s?" "$CONFIG" "$BUILD" || exit 0
 if [ -n "$TARGET" ]; then
   echo "[build] building target $TARGET"
   "$CMAKE" --build "$BUILD" --target "$TARGET" || fail "build failed."
@@ -184,7 +187,7 @@ fi
 "$CMAKE" --build "$BUILD" || fail "build failed."
 
 # --- tests ---
-if [ -n "$RUNTESTS" ] && guided_step "Die vollständige Testsuite ausführen (einige Tests benötigen eine GPU oder eigene Spieldaten)?"; then
+if [ -n "$RUNTESTS" ] && guided_step "Run the full test suite (some tests need a GPU or your own game data)?"; then
   # ctest lives beside cmake, and the copy on PATH need not be the same one when cmake came from
   # the override or from CMake.app.
   CTEST="$(dirname "$CMAKE")/ctest"
@@ -195,7 +198,7 @@ if [ -n "$RUNTESTS" ] && guided_step "Die vollständige Testsuite ausführen (ei
 fi
 
 # --- the game, staged where it runs ---
-guided_step "Das Anwendungspaket in $BUILD erzeugen/erneuern (unter Linux wird nur das bisherige Paket in diesem Build-Ordner ersetzt)?" || exit 0
+guided_step "Create/refresh the application package in %s (on Linux only the previous package in this build folder is replaced)?" "$BUILD" || exit 0
 if [ "$PLATFORM" = macos ]; then
   "$CMAKE" --build "$BUILD" --target macos_app || fail "the app bundle failed."
   echo "[build] done: open \"$BUILD/Zero Hour Reforged.app\""

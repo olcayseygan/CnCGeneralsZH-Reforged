@@ -1,70 +1,88 @@
-# Geführte Einrichtung auf macOS und Linux
+# Guided setup on macOS and Linux
 
-Starte im Repository:
+English · [Deutsch](installer.de.md)
+
+Run this in the repository:
 
 ```sh
 make install
 ```
 
-Alternativ funktioniert `./GeneralsMD/Code/Tools/install-posix.sh` ohne Make.
-Python 3.8 oder neuer wird benötigt. Auf einem frischen Mac zuerst Apples Command
-Line Tools installieren (`xcode-select --install`); falls Python fehlt, meldet der
-Einstieg das vor weiteren Schritten. `make` allein zeigt die verfügbaren Befehle.
+`./GeneralsMD/Code/Tools/install-posix.sh` does the same without Make. Python 3.8
+or newer is required. On a fresh Mac, install Apple's Command Line Tools first
+(`xcode-select --install`); if Python is missing, the entry point says so before
+doing anything else. Plain `make` lists the available commands.
 
-Der Installer fragt vor jedem Schritt. **Enter bedeutet Nein**, Strg+C bricht ab.
-Ein Terminal ist erforderlich; es gibt absichtlich kein automatisches Ja.
-Bereits abgeschlossene Schritte bleiben bei einem Abbruch erhalten.
+The installer asks before every step. **Enter means no**, Ctrl+C cancels. A
+terminal is required; there is deliberately no automatic yes. Steps that already
+finished are kept if you cancel.
 
-1. Vorhandene Werkzeuge lokal prüfen. Fehlende Werkzeuge können über einen
-   vorhandenen Homebrew-, apt-, dnf- oder pacman-Paketmanager installiert werden.
-   Der genaue Befehl steht vor der Frage; Systempakete benötigen gegebenenfalls
-   dein Administratorpasswort. Homebrew selbst wird nicht automatisch installiert.
-2. Auf Apple Silicon wählen, ob der Compiler M2-Scheduling automatisch nutzen
-   soll. Die arm64-Instruktionsbasis bleibt kompatibel mit anderen Apple-Macs.
-3. Fehlende Drittanbieter-Quellen laden, CMake konfigurieren, kompilieren, Tests
-   ausführen und die Anwendung paketieren. **Jede dieser Aktionen hat eine eigene
-   Frage.** Wenn ein notwendiger Build-Schritt abgelehnt wird, endet dieser Build;
-   die Einrichtung kann mit vorhandenen Spieldaten fortgesetzt werden.
-4. Optional nach deinen bereits installierten Originalspielen suchen. Gelesen
-   werden Steam-Bibliotheken einschließlich `libraryfolders.vdf`, persönliche
-   Spieleordner und bekannte Wine-, CrossOver-, Whisky- und Bottles-Verzeichnisse.
-   Die Suche folgt keinen untergeordneten Verzeichnislinks und hat ein Suchlimit;
-   weitere Ordner können manuell angegeben werden. Es wird kein ganzer Datenträger
-   durchsucht und kein Spiel von Steam oder GOG heruntergeladen.
-5. Die gefundenen Ordner auswählen oder Pfade manuell eingeben. Benötigt werden
-   Zero Hour mit `INIZH.big` und Generals mit `Textures.big`. Die ausgewählten
-   Installationen können direkt verwendet oder vollständig in einen **neuen**
-   persönlichen Datenordner kopiert werden. Vor dem Kopieren werden beide
-   Quellen und Ziele nochmals angezeigt. Generals landet in `ZH_Generals/`.
-   Vorhandene Datenziele werden nicht überschrieben. Symbolische Links in den
-   zu kopierenden Daten werden abgelehnt; verwende eine vollständige lokale Kopie.
-6. Optional die Mac-App nach `~/Applications/` kopieren oder unter Linux einen
-   persönlichen Menüeintrag anlegen. Eine vorhandene Mac-App wird nicht ersetzt;
-   das aktuelle Paket im Build-Ordner bleibt direkt nutzbar.
-7. Optional das Spiel starten und den gewählten Zero-Hour-Pfad übergeben. Falls
-   Generals separat liegt, kann die Anwendung dessen Ordner beim Start erfragen.
+Messages follow `LC_ALL`, `LC_MESSAGES` or `LANG`; override them with
+`ZH_INSTALL_LANG=en` (or `de`). Untranslated languages fall back to English.
 
-Originaldateien dürfen nicht in dieses Repository kopiert werden. Der Installer
-prüft dafür auch auf Pfade über symbolische Links. Die Quellen werden nicht
-verändert. Bei einem Kopierfehler bleiben die Originalinstallationen erhalten;
-kurzzeitige Arbeitskopien werden aufgeräumt. Abbrüche während des abschließenden
-Verschiebens können einen unvollständigen neuen Zielordner hinterlassen; wähle bei
-Wiederholung einen neuen Ordner oder verwende deine unveränderten Quellen direkt.
+1. Check the existing tools locally. Missing tools can be installed through an
+   existing Homebrew, apt, dnf or pacman. The exact command is shown before the
+   question; system packages may need your administrator password. Homebrew
+   itself is never installed automatically.
+2. Hardware-specific optimizations (for example CPU scheduling on Apple Silicon)
+   are detected automatically and never asked about. The instruction baseline
+   stays compatible with other machines of the same architecture. Opt out with
+   `CPU_TUNING=generic`.
+3. Download missing third-party sources, configure CMake, compile, run the tests
+   and package the application. **Each of these actions has its own question.**
+   If a required build step is declined, that build ends; setup can continue with
+   existing game data.
+4. Optionally search for your already installed original games. Read: Steam
+   libraries including `libraryfolders.vdf`, personal game folders and known Wine,
+   CrossOver, Whisky and Bottles directories. The search follows no subdirectory
+   links and has a limit; further folders can be entered manually. No whole disk
+   is scanned and no game is downloaded from Steam or GOG.
+5. Pick the found folders or enter paths manually. Zero Hour with `INIZH.big` and
+   Generals with `Textures.big` are required. The selected installations can be
+   used in place or copied completely into a **new** personal data folder. Both
+   sources and the destination are shown again before copying. Generals goes into
+   `ZH_Generals/`. Existing destinations are never overwritten. Symbolic links in
+   the data to copy are rejected; use a complete local copy.
+6. Optionally copy the Mac app to `~/Applications/`, or add a personal menu entry
+   on Linux. An existing Mac app is not replaced; the package in the build folder
+   stays usable.
+7. Optionally launch the game with the chosen Zero Hour path. If Generals lives
+   elsewhere, the application can ask for its folder at start.
 
-Für eigene Steam-Daten und die derzeitige GOG-Verfügbarkeit siehe
-[die Anleitung zu den Originalspielen](macos.md#obtain-your-own-generals-and-zero-hour-data).
-Der Installer fragt niemals nach Steam-/GOG-Passwörtern. Er lädt keine EA-Archive,
-Filme, Musik oder Sprachdateien herunter. Die GPL-Freigabe des bestehenden Codes
-und seine Copyright-Hinweise bleiben davon getrennt.
+Original files must not be copied into this repository. The installer also checks
+for paths that reach it through symbolic links. Sources are never modified. After a
+copy error the original installations are untouched and temporary working copies
+are cleaned up. An interruption during the final move can leave an incomplete new
+destination; pick a new folder when repeating, or use your unchanged sources.
 
-Die bisherigen direkten Build-Einstiege bleiben verfügbar:
+For your own Steam data and current GOG availability see
+[the guide to the original games](macos.md#obtain-your-own-generals-and-zero-hour-data).
+The installer never asks for Steam/GOG passwords and downloads no EA archives,
+movies, music or voice files. The GPL release of the existing code and its
+copyright notices remain separate from this.
+
+The direct build entry points remain available:
 
 ```sh
-make build                       # Release bauen und paketieren
-make test                        # zusätzlich die Tests ausführen
+make build                       # build and package Release
+make test                        # also run the tests
 make build CONFIG=Debug
-make build CPU_TUNING=generic     # portables Scheduling statt automatischem M2-Tuning
+make build CPU_TUNING=generic     # portable scheduling instead of automatic CPU tuning
 ```
 
-Diese direkten Befehle fragen nicht nach jedem Build-Schritt und passen für
-Entwickler/CI. `build.bat` und die Windows-Builds bleiben unverändert nutzbar.
+These commands do not prompt before each build step, which suits developers and
+CI. `build.bat` and the Windows builds are unchanged.
+
+## Adding a language
+
+Messages are English in the source. A translation is one JSON file,
+`GeneralsMD/Code/Tools/installer_locales/<language>.json`, with the yes-words, the
+`[y/N]` hint and a `messages` table that maps each English message to its
+translation. Keep every `%s`/`%d` placeholder, in the same order. `de.json` is a
+complete example; `Tests/test_installer.py` fails if a catalog misses a message or
+changes a placeholder. Answers `y`/`yes` are always accepted in addition to the
+language's own.
+
+Missing or malformed catalogs fall back to English. An invalid translated format
+also uses the English message with its original arguments. Enter, `n` and `no`
+never authorize a step, even if a catalog accidentally lists them as yes-words.

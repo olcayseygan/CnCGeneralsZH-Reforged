@@ -6,11 +6,12 @@ requires separate builds of both architectures; the normal command builds one.
 
 ## Guided setup
 
-Run `make install` for a step-by-step installer in German. It asks before every
+Run `make install` for a step-by-step installer (English, German; see
+[adding a language](installer.md#adding-a-language)). It asks before every
 executing step and can optionally discover/copy your owned Steam/GOG installation
 outside the checkout. See [the installer guide](installer.md).
 
-## Apple Silicon and M2 Max
+## Apple Silicon
 
 Release builds run natively on arm64. On an M2, M2 Pro, M2 Max or M2 Ultra,
 `ZH_MACOS_CPU_TUNING=auto` detects the CPU and uses Clang's `-mtune=apple-m2` for

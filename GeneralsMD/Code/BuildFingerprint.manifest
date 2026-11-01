@@ -4130,6 +4130,8 @@ Tools/include_case_check.py
 Tools/install-guard.sh
 Tools/install-posix.sh
 Tools/install.py
+Tools/install_i18n.py
+Tools/installer_locales/de.json
 Tools/license-headers.py
 Tools/linux-check.sh
 Tools/linux-menu-entry.sh

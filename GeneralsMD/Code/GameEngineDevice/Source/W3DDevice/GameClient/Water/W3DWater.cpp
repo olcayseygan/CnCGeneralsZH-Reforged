@@ -945,8 +945,8 @@ bool Supported()
 
 #if ZH_MODERN_WATER
 /** The Modern style is asked for and a device draws it.  Classic graphics is the 2003 picture, so it
-		keeps EA's water whatever WaterStyle says, as it keeps the old clouds and drops the foam; the
-		quality slider and its presets put Modern into WaterStyle from Medium up. */
+		keeps EA's water whatever WaterStyle says, as it keeps the old clouds and drops the foam.  The
+		quality slider and its presets leave WaterStyle alone: Modern is the player's own pick. */
 static Bool wantsModernWater(void)
 {
 	return TheGlobalData && TheGlobalData->m_waterStyle != 0 && !TheGlobalData->m_classicGraphics

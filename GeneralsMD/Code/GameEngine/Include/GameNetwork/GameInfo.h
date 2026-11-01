@@ -91,6 +91,13 @@ Int PlayerTemplateFromPreference( const AsciiString &text );
 AsciiString PlayerTemplateSlotField( Int pick );
 Int PlayerTemplateFromSlotField( const AsciiString &field );
 
+// The lobby's handicap column, in percent of a unit's max health.
+enum
+{
+	HANDICAP_FULL = 100,
+	HANDICAP_STEP = 10
+};
+
 // The lobby's income sharing: which earnings are split evenly between a player and every ally
 // still in the match.  The values travel in the options string and in saves, so only append.
 enum IncomeSharing
@@ -132,7 +139,10 @@ public:
 	void setPlayerTemplate( Int playerTemplate ) 
 	{ m_playerTemplate = playerTemplate;
 		if (playerTemplate == PLAYERTEMPLATE_OBSERVER)
+		{
 			m_startPos = -1;
+			m_handicap = HANDICAP_FULL;
+		}
 	 }
 	Int getPlayerTemplate( void ) const { return m_playerTemplate; }
 
@@ -141,6 +151,9 @@ public:
 
 	void setAIPersonality( Int persona ) { m_aiPersonality = persona; }	///< an AIPersonality; RANDOM stays RANDOM until the match starts
 	Int getAIPersonality( void ) const { return m_aiPersonality; }
+
+	void setHandicap( Int handicap ) { m_handicap = handicap; }	///< percent of max health this seat's units have, see IsValidHandicap
+	Int getHandicap( void ) const { return m_handicap; }
 
 	inline void setName( UnicodeString name ) { m_name = name; }
 	inline UnicodeString getName( void ) const { return m_name; }
@@ -192,6 +205,7 @@ protected:
 	Int m_playerTemplate;															///< PlayerTemplate
 	Int m_teamNumber;																	///< alliance, -1 for none
 	Int m_aiPersonality;															///< AIPersonality of an AI seat, AIPERSONA_NORMAL otherwise
+	Int m_handicap;																		///< percent of max health this seat's units have, HANDICAP_FULL for none
 	Int m_origColor;																			///< color, or -1 for random
 	Int m_origStartPos;																		///< start position, or -1 for random
 	Int m_origPlayerTemplate;															///< PlayerTemplate
@@ -416,6 +430,18 @@ AsciiString GameInfoMapPathFromField( const AsciiString& field );
 // know is Normal, so a bad field costs the seat its personality and never the whole parse.
 AsciiString AIPersonaSlotField( Int persona );
 Int AIPersonaFromSlotField( const char *field );
+
+// A seat's handicap is the last field of its slot entry, human or AI, written only when it is not
+// HANDICAP_FULL, so every string without a pick stays the one it was.  An AI seat writes its persona
+// as ",0" when a handicap has to follow it.  Absent, or a value the lobby does not offer, is full health.
+Bool IsValidHandicap( Int handicap );
+AsciiString HandicapSlotField( Int handicap );
+Int HandicapFromSlotField( const char *field );
+
+// A guest's "Handicap=<n>" request reaching the host.  TRUE when the slot list has to go round again,
+// which it does for a pick that does not fit in the options string as well: the guest's box has to
+// come back to what the host kept.
+Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap );
 
 //
 // Three things every lobby - skirmish, LAN and online - has to agree on about a slot state, kept

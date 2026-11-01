@@ -2239,6 +2239,25 @@ Int parseTeam(char *args[], int num)
 	return 1;
 }
 
+/* -handicap <slot> <percent> gives one -autoskirmish or -netgame seat a lobby's handicap: 100, 90 ...
+	 10 percent of max health on its units, anything else is refused, since the options string would
+	 read it back as 100 in the replay.  It goes into the slot like a lobby's pick; a real lobby never
+	 looks at it, and every copy of a -netgame match has to be given the same line, as with -side. */
+Int parseHandicap(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 2 && args[1] && args[2])
+	{
+		const Int slot = atoi(args[1]);
+		const Int handicap = atoi(args[2]);
+		if (slot >= 0 && slot < MAX_SLOTS && IsValidHandicap(handicap))
+			TheWritableGlobalData->m_autoSkirmishHandicap[slot] = handicap;
+		else
+			DEBUG_LOG(("-handicap: slot %d at %d percent is no lobby's pick\n", slot, handicap));
+		return 3;
+	}
+	return 1;
+}
+
 /* -seatname <slot> <name> calls one -autoskirmish seat by a name instead of its difficulty, the way a
 	 player's own name stands on his seat: a cup's bots by their entrants' names, or a long one to see
 	 the director's score bar cut it.  ASCII only; it is read before the game text is. */
@@ -3038,6 +3057,7 @@ static CommandLineParam params[] =
 	{ "-freecam", parseFreeCamera },
 	{ "-side", parseSide },
 	{ "-team", parseTeam },
+	{ "-handicap", parseHandicap },
 	{ "-seatname", parseSeatName },
 	{ "-takeover", parseTakeover },
 	{ "-replay", parseReplay },

@@ -170,6 +170,13 @@ static NameKeyType comboBoxAIPersonaID[MAX_SLOTS] = { NAMEKEY_INVALID,NAMEKEY_IN
 																										NAMEKEY_INVALID,NAMEKEY_INVALID,
 																										NAMEKEY_INVALID,NAMEKEY_INVALID };
 
+static GameWindow *comboBoxHandicap[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
+																								NULL,NULL,NULL,NULL };
+static NameKeyType comboBoxHandicapID[MAX_SLOTS] = { NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID };
+
 //static GameWindow *buttonStartPosition[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
 //																								NULL,NULL,NULL,NULL };
 //
@@ -461,6 +468,8 @@ void LANDisableButtons()
 		comboBoxColor[i]->winEnable(false);
 		comboBoxPlayerTemplate[i]->winEnable(false);
 		comboBoxTeam[i]->winEnable(false);
+		if (comboBoxHandicap[i])
+			comboBoxHandicap[i]->winEnable(false);
 		buttonAccept[i]->winEnable(false);
 		buttonMapStartPosition[i]->winEnable(false);
 	}
@@ -682,6 +691,28 @@ static void handleTeamSelection(int index)
 	}
 }
 
+// HandleHandicapSelection has set the host's slot; the same round as a team pick from here
+static void handleHandicapSelection(Int handicap)
+{
+	LANGameInfo *myGame = TheLAN->GetMyGame();
+	myGame->resetAccepted();
+
+	if (myGame->amIHost())
+	{
+		if (!s_isIniting)
+		{
+			TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
+			lanUpdateSlotList();
+		}
+	}
+	else if (AreSlotListUpdatesEnabled())
+	{
+		AsciiString options;
+		options.format("Handicap=%d", handicap);
+		TheLAN->RequestGameOptions(options, true);
+	}
+}
+
 static void handleStartingCashSelection()
 {
   LANGameInfo *myGame = TheLAN->GetMyGame();
@@ -869,6 +900,7 @@ void lanUpdateSlotList( void )
 	UpdateSlotList( TheLAN->GetMyGame(), comboBoxPlayer, comboBoxColor,
 		comboBoxPlayerTemplate, comboBoxTeam, buttonAccept, buttonStart, buttonMapStartPosition);
 	UpdateAIPersonaComboBoxes( TheLAN->GetMyGame(), comboBoxAIPersona );
+	UpdateHandicapComboBoxes( TheLAN->GetMyGame(), comboBoxHandicap, comboBoxTeam );
 	UpdateLobbySeatVisuals( TheLAN->GetMyGame() );
 
 	updateMapStartSpots(TheLAN->GetMyGame(), buttonMapStartPosition);
@@ -1040,6 +1072,7 @@ void InitLanGameGadgets( void )
 		GadgetButtonSetEnabledColor(buttonAccept[0], acceptTrueColor );
 
 	InitAIPersonaComboBoxes( parentLanGameOptions, "LanGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
+	InitHandicapComboBoxes( parentLanGameOptions, "LanGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentLanGameOptions, "LanGameOptionsMenu.wnd" );
 
 	// the settings page and the chat log share one rectangle; this opens on the chat log
@@ -1074,6 +1107,7 @@ void DeinitLanGameGadgets( void )
 		comboBoxColor[i] = NULL;
 		comboBoxPlayerTemplate[i] = NULL;
 		comboBoxTeam[i] = NULL;
+		comboBoxHandicap[i] = NULL;
 		buttonAccept[i] = NULL;
 //		buttonStartPosition[i] = NULL;
 		buttonMapStartPosition[i] = NULL;
@@ -1451,6 +1485,10 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
             TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
             lanUpdateSlotList();
           }
+        }
+        else if ( Int handicap = HandleHandicapSelection( myGame, comboBoxHandicap, comboBoxHandicapID, (NameKeyType)controlID ) )
+        {
+          handleHandicapSelection( handicap );
         }
         else
         {

@@ -1014,6 +1014,98 @@ Bool HandleAIPersonaSelection(GameInfo *myGame, GameWindow *comboPersona[], Name
 
 // -----------------------------------------------------------------------------
 
+// the box's lines run 100, 90 ... 10
+static Int handicapComboPos(Int handicap)
+{
+	return (HANDICAP_FULL - handicap) / HANDICAP_STEP;
+}
+
+void InitHandicapComboBoxes(GameWindow *parent, const char *layoutFilename,
+														GameWindow *comboHandicap[], NameKeyType comboHandicapID[])
+{
+	const Int lines = HANDICAP_FULL / HANDICAP_STEP;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		AsciiString name;
+		name.format("%s:ComboBoxHandicap%d", layoutFilename, i);
+		comboHandicapID[i] = NAMEKEY(name);
+		comboHandicap[i] = TheWindowManager->winGetWindowFromId(parent, comboHandicapID[i]);
+		if (!comboHandicap[i])
+			continue;	// a layout from before the column
+
+		GameWindow *listBox = GadgetComboBoxGetListBox(comboHandicap[i]);
+		ListboxData *listData = (ListboxData *)listBox->winGetUserData();
+		if (listData->listLength < lines)
+			GadgetListBoxSetListLength(listBox, lines);
+		GadgetComboBoxSetMaxDisplay(comboHandicap[i], min(lines, 8));	// as the personality box, for the lower seats
+
+		GadgetComboBoxReset(comboHandicap[i]);
+		const Color color = comboHandicap[i]->winGetEnabledTextColor();
+		for (Int handicap = HANDICAP_FULL; handicap >= HANDICAP_STEP; handicap -= HANDICAP_STEP)
+		{
+			UnicodeString label;
+			label.format(u"%d%%", handicap);
+			Int index = GadgetComboBoxAddEntry(comboHandicap[i], label, color);
+			GadgetComboBoxSetItemData(comboHandicap[i], index, (void *)(intptr_t)handicap);
+		}
+		GadgetComboBoxSetSelectedPos(comboHandicap[i], handicapComboPos(HANDICAP_FULL), TRUE);
+		comboHandicap[i]->winEnable(FALSE);	// until UpdateHandicapComboBoxes knows whose seat it is
+	}
+}
+
+void UpdateHandicapComboBoxes(GameInfo *myGame, GameWindow *comboHandicap[], GameWindow *comboTeam[])
+{
+	if (!AreSlotListUpdatesEnabled())
+		return;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		if (!comboHandicap[i])
+			continue;
+		comboHandicap[i]->winEnable(comboTeam[i] && BitTest(comboTeam[i]->winGetStatus(), WIN_STATUS_ENABLED));
+		const Int wanted = handicapComboPos(myGame->getConstSlot(i)->getHandicap());
+		Int pos = -1;
+		GadgetComboBoxGetSelectedPos(comboHandicap[i], &pos);
+		if (pos != wanted)
+			GadgetComboBoxSetSelectedPos(comboHandicap[i], wanted, TRUE);
+	}
+}
+
+Int HandleHandicapSelection(GameInfo *myGame, GameWindow *comboHandicap[], NameKeyType comboHandicapID[],
+														NameKeyType controlID)
+{
+	// setting a box's selection sends this too, and filling the boxes at init is no pick
+	if (!AreSlotListUpdatesEnabled())
+		return 0;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		if (!comboHandicap[i] || controlID != comboHandicapID[i])
+			continue;
+		Int pos = -1;
+		GadgetComboBoxGetSelectedPos(comboHandicap[i], &pos);
+		GameSlot *slot = myGame->getSlot(i);
+		const Int was = slot->getHandicap();
+		const Int handicap = (Int)(intptr_t)GadgetComboBoxGetItemData(comboHandicap[i], pos);
+		if (handicap == was)
+			return 0;
+		// A guest's slot takes it from the host's list. Written here, a start already on its way would
+		// have this seat play a handicap nobody else ever saw.
+		if (!myGame->amIHost())
+			return handicap;
+		slot->setHandicap(handicap);
+		// an options string past the LAN budget comes back empty and is never sent
+		if (GameInfoToAsciiString(myGame).isEmpty())
+		{
+			slot->setHandicap(was);
+			GadgetComboBoxSetSelectedPos(comboHandicap[i], handicapComboPos(was), TRUE);
+			return 0;
+		}
+		return handicap;
+	}
+	return 0;
+}
+
+// -----------------------------------------------------------------------------
+
 static GameWindow *theSeatCard[MAX_SLOTS];
 static GameWindow *theSeatBar[MAX_SLOTS];
 static GameWindow *theSeatSwatch[MAX_SLOTS];

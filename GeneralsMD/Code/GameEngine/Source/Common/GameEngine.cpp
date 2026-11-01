@@ -779,6 +779,7 @@ static void startAutoSkirmish( Int numPlayersWanted )
 		if (TheGlobalData->m_autoSkirmishTeam[ i ] != AUTO_SKIRMISH_TEAM_UNSET)
 			teamNumber = TheGlobalData->m_autoSkirmishTeam[ i ];
 		slot.setTeamNumber( teamNumber );
+		slot.setHandicap( TheGlobalData->m_autoSkirmishHandicap[ i ] );
 		TheSkirmishGameInfo->setSlot( i, slot );
 	}
 	TheSkirmishGameInfo->setLocalIP( TheSkirmishGameInfo->getSlot(0)->getIP() );

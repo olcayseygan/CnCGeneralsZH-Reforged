@@ -4905,6 +4905,11 @@ void Player::crc( Xfer *xfer )
 	// The bank, so an income or a refund that drifted is caught before it buys something.
 	xfer->xferSnapshot( &m_money );
 
+	// The lobby's handicap, only on a seat that has one, so every other replay keeps the CRC it has.
+	Real healthHandicap = m_handicap.getGenericHandicap( Handicap::MAXHEALTH );
+	if( healthHandicap != 1.0f )
+		xfer->xferReal( &healthHandicap );
+
 }  // end crc
 
 // ------------------------------------------------------------------------------------------------

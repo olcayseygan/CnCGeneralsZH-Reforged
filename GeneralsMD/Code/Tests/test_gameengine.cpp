@@ -21034,6 +21034,177 @@ TEST(file_write_queue_writes_what_the_file_calls_wrote)
 	queue.start( q );
 	const char head[] = "GENREP\0\0\0\0";
 	fwrite( head, 1, 10, d );
+#include "Common/MultiplayerSettings.h"
+#include "GameNetwork/LANAPICallbacks.h"
+
+/* A seat's handicap is the last field of its slot entry, and only when the seat has one: a string
+	 with none, a replay's header and Skirmish.ini stay byte for byte what they were, and an older one
+	 reads as full health.  An AI seat at Normal has to write its persona as 0 for the handicap to land
+	 in the right field.  The host's copy of a guest's request refuses what the lobby does not offer and
+	 what the 400 bytes of a LAN packet have no room for. */
+TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
+{
+	CHECK( bootOnce() );
+
+	CHECK_STR( HandicapSlotField( HANDICAP_FULL ).str(), "" );
+	CHECK_STR( HandicapSlotField( 50 ).str(), ",50" );
+	for( Int h = HANDICAP_STEP; h <= HANDICAP_FULL; h += HANDICAP_STEP )
+	{
+		CHECK( IsValidHandicap( h ) );
+		AsciiString field = HandicapSlotField( h );
+		CHECK_EQ( HandicapFromSlotField( field.isEmpty() ? NULL : field.str() + 1 ), h );
+	}
+	static const char *const refused[] = { "", "0", "5", "55", "110", "-10", "x" };
+	for( Int r = 0; r < (Int)ARRAY_SIZE( refused ); ++r )
+		CHECK_EQ( HandicapFromSlotField( refused[r] ), (Int)HANDICAP_FULL );
+	CHECK_EQ( HandicapFromSlotField( NULL ), (Int)HANDICAP_FULL );
+
+	UnicodeString playerName;
+	playerName.translate( AsciiString( "Player" ) );
+
+	GameSlot seat;
+	CHECK_EQ( seat.getHandicap(), (Int)HANDICAP_FULL );
+	seat.setState( SLOT_MED_AI );
+	seat.setHandicap( 40 );
+	seat.setState( SLOT_BRUTAL_AI );		// another rung keeps it, as it keeps the faction
+	CHECK_EQ( seat.getHandicap(), 40 );
+	GameSlot copy = seat;								// GameInfo::setSlot copies the parsed slot in whole
+	CHECK_EQ( copy.getHandicap(), 40 );
+	seat.setState( SLOT_PLAYER, playerName );
+	CHECK_EQ( seat.getHandicap(), (Int)HANDICAP_FULL );
+	seat.setHandicap( 40 );
+	seat.setPlayerTemplate( PLAYERTEMPLATE_OBSERVER );	// an observer has no units to weaken
+	CHECK_EQ( seat.getHandicap(), (Int)HANDICAP_FULL );
+
+	// what building and parsing a whole string asks of the engine, and no more
+	GlobalData *savedData = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+	GameState *savedState = TheGameState;
+	TheGameState = NEW GameState;
+	MultiplayerSettings *savedSettings = TheMultiplayerSettings;
+	TheMultiplayerSettings = NEW MultiplayerSettings;
+	PlayerTemplateStore *savedStore = ThePlayerTemplateStore;
+	ThePlayerTemplateStore = NEW PlayerTemplateStore;
+	ThePlayerTemplateStore->init();
+	LANAPI *savedLAN = TheLAN;
+
+	const AsciiString mapPath( "Save\\test\\test.map" );
+	SkirmishGameInfo host;
+	host.init();
+	AsciiString mapInSaves = TheGameState->getSaveDirectory();
+	mapInSaves.concat( "test.map" );
+	host.setMap( mapInSaves );
+	host.setSeed( 7 );
+	GameSlot *slot = host.getSlot( 0 );
+	slot->setState( SLOT_PLAYER, playerName, 0xC0A80164u );
+	slot->setPort( 8088 );
+	slot->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+	slot->setAccept();
+	slot->setMapAvailability( TRUE );
+	host.getSlot( 1 )->setState( SLOT_BRUTAL_AI );
+	host.getSlot( 1 )->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+	host.getSlot( 2 )->setState( SLOT_EASY_AI );
+	host.getSlot( 2 )->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+	host.getSlot( 2 )->setAIPersonality( AIPERSONA_TURTLE );
+	// parsing an open or closed seat asks TheGameText, which the harness does not stand up
+	for( Int i = 3; i < MAX_SLOTS; ++i )
+	{
+		host.getSlot( i )->setState( SLOT_MED_AI );
+		host.getSlot( i )->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+	}
+
+	// nobody picked: the old string, not one byte more
+	const AsciiString untouched = GameInfoOptionsString( &host, mapPath, 0 );
+	AsciiString humanEntry;
+	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d:", (Int)slot->getNATBehavior() );
+	AsciiString aiEntries;
+	aiEntries.format( "CH,-1,-1,-1,-1:CE,-1,-1,-1,-1,%d:", (Int)AIPERSONA_TURTLE );
+	CHECK( strstr( untouched.str(), humanEntry.str() ) != NULL );
+	CHECK( strstr( untouched.str(), aiEntries.str() ) != NULL );
+
+	// a pick on each kind of seat comes back as itself, and the persona beside it stays put
+	host.getSlot( 0 )->setHandicap( 50 );
+	host.getSlot( 1 )->setHandicap( 30 );
+	host.getSlot( 2 )->setHandicap( 70 );
+	const AsciiString picked = GameInfoOptionsString( &host, mapPath, 0 );
+	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,50:", (Int)slot->getNATBehavior() );
+	aiEntries.format( "CH,-1,-1,-1,-1,0,30:CE,-1,-1,-1,-1,%d,70:", (Int)AIPERSONA_TURTLE );
+	CHECK( strstr( picked.str(), humanEntry.str() ) != NULL );
+	CHECK( strstr( picked.str(), aiEntries.str() ) != NULL );
+
+	SkirmishGameInfo guest;
+	guest.init();
+	CHECK( ParseAsciiStringToGameInfo( &guest, picked ) );
+	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), 50 );
+	CHECK_EQ( guest.getSlot( 1 )->getHandicap(), 30 );
+	CHECK_EQ( guest.getSlot( 1 )->getAIPersonality(), (Int)AIPERSONA_NORMAL );
+	CHECK_EQ( guest.getSlot( 2 )->getHandicap(), 70 );
+	CHECK_EQ( guest.getSlot( 2 )->getAIPersonality(), (Int)AIPERSONA_TURTLE );
+	CHECK_EQ( guest.getSlot( 3 )->getHandicap(), (Int)HANDICAP_FULL );
+
+	// a string from before the column, and one whose value no build wrote
+	CHECK( ParseAsciiStringToGameInfo( &guest, untouched ) );
+	for( Int i = 0; i < MAX_SLOTS; ++i )
+		CHECK_EQ( guest.getSlot( i )->getHandicap(), (Int)HANDICAP_FULL );
+	CHECK_EQ( guest.getSlot( 2 )->getAIPersonality(), (Int)AIPERSONA_TURTLE );
+	AsciiString odd;
+	odd.format( "US=0;M=00save/test;MC=0;MS=0;SD=7;C=100;SR=0;SC=0;O=N;S=HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,77:CH,-1,-1,-1,-1,0,120:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:;",
+		(Int)slot->getNATBehavior() );
+	CHECK( ParseAsciiStringToGameInfo( &guest, odd ) );
+	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );
+	CHECK_EQ( guest.getSlot( 1 )->getHandicap(), (Int)HANDICAP_FULL );
+
+	// the host's answer to a guest's request
+	GameSlot *asker = host.getSlot( 0 );
+	CHECK( ApplyHandicapRequest( &host, asker, 60 ) );
+	CHECK_EQ( asker->getHandicap(), 60 );
+	CHECK( !ApplyHandicapRequest( &host, asker, 60 ) );	// nothing changed, nothing to send round
+	CHECK( !ApplyHandicapRequest( &host, asker, 55 ) );
+	CHECK( !ApplyHandicapRequest( &host, asker, 0 ) );
+	CHECK( !ApplyHandicapRequest( &host, asker, 110 ) );
+	CHECK_EQ( asker->getHandicap(), 60 );
+
+	// a room so full of fixed fields that its last few picks have no room: those do not stand, the
+	// string never empties, and the list still goes round so the guest's box comes back
+	host.setPeaceTime( 30 );
+	host.setIncomeSharing( INCOME_SHARING_ALL );
+	host.setTechRespawn( 300 );
+	host.setSupplyPileLimit( 60000 );
+	host.setUnitLimit( TRUE );
+	host.setTurbo( TRUE );
+	host.setMapCRC( 0xFFFFFFFFu );
+	host.setMapSize( 9999999 );
+	host.setSeed( 2147483647 );
+	for( Int i = 0; i < MAX_SLOTS; ++i )
+	{
+		host.getSlot( i )->setState( SLOT_PLAYER, playerName, 0xC0A80164u + i );
+		host.getSlot( i )->setPort( 8088 );
+	}
+	TheLAN = reinterpret_cast<LANAPI *>( &host );	// asked only whether it is there, for the budget
+	CHECK( !GameInfoToAsciiString( &host ).isEmpty() );
+	Int stood = 0;
+	for( Int i = 0; i < MAX_SLOTS; ++i )
+	{
+		CHECK( ApplyHandicapRequest( &host, host.getSlot( i ), 50 ) );
+		CHECK( !GameInfoToAsciiString( &host ).isEmpty() );
+		if( host.getSlot( i )->getHandicap() == 50 )
+			++stood;
+	}
+	printf( "    a full room took %d of %d picks\n", stood, MAX_SLOTS );
+	CHECK( stood > 0 );
+	CHECK( stood < MAX_SLOTS );
+	TheLAN = savedLAN;
+
+	delete ThePlayerTemplateStore;
+	ThePlayerTemplateStore = savedStore;
+	delete TheMultiplayerSettings;
+	TheMultiplayerSettings = savedSettings;
+	delete TheGameState;
+	TheGameState = savedState;
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = savedData;
+}
+
 	queue.write( head, 10 );
 	const UnsignedInt patch = 0x11223344;
 	long end = ftell( d );		// a patch before the first flush, as logGameStart's

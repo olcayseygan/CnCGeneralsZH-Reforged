@@ -1558,6 +1558,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			d.setInt(TheKey_playerColor, TheMultiplayerSettings->getColor(slot->getColor())->getColor());
 			d.setInt(TheKey_playerNightColor, TheMultiplayerSettings->getColor(slot->getColor())->getNightColor());
 			d.setInt(TheKey_multiplayerStartIndex, slot->getStartPos());
+			// Player's Handicap reads it; absent at full health, so such a seat's dict is the one it always was
+			if (slot->getHandicap() != HANDICAP_FULL)
+				d.setReal(TheNameKeyGenerator->nameToKey("HANDICAP_MAXHEALTH_GENERIC"), slot->getHandicap() / (Real)HANDICAP_FULL);
 //			d.setBool(TheKey_multiplayerIsLocal, slot->isLocalPlayer());
 //			d.setBool(TheKey_multiplayerIsLocal, slot->getIP() == game->getLocalIP());
 			//

@@ -139,7 +139,7 @@ void UndeadBody::startSecondLife(DamageInfo *damageInfo)
 	m_isSecondLife = TRUE;
 
 	// Modify ActiveBody's max health and initial health
-	setMaxHealth(data->m_secondLifeMaxHealth, FULLY_HEAL);
+	setMaxHealth(data->m_secondLifeMaxHealth * getObject()->getHandicapHealthFactor(), FULLY_HEAL);
 
 	// Set Armor set flag to use second life armor
 	setArmorSetFlag(ARMORSET_SECOND_LIFE);

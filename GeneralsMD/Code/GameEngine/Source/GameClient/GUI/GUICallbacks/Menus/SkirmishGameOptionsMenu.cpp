@@ -202,6 +202,13 @@ static NameKeyType comboBoxAIPersonaID[MAX_SLOTS] = { NAMEKEY_INVALID,NAMEKEY_IN
 																										NAMEKEY_INVALID,NAMEKEY_INVALID,
 																										NAMEKEY_INVALID,NAMEKEY_INVALID };
 
+static GameWindow *comboBoxHandicap[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
+																								NULL,NULL,NULL,NULL };
+static NameKeyType comboBoxHandicapID[MAX_SLOTS] = { NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID };
+
 //static GameWindow *buttonStartPosition[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
 //																								NULL,NULL,NULL,NULL };
 //
@@ -1375,6 +1382,7 @@ void InitSkirmishGameGadgets( void )
 	}
 	
 	InitAIPersonaComboBoxes( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
+	InitHandicapComboBoxes( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd" );
 
 	populateSkirmishBattleHonors();
@@ -1401,6 +1409,7 @@ void skirmishUpdateSlotList( void )
 										comboBoxColor, comboBoxPlayerTemplate,
 									  comboBoxTeam, NULL, buttonStart, buttonMapStartPosition );
 		UpdateAIPersonaComboBoxes( TheSkirmishGameInfo, comboBoxAIPersona );
+		UpdateHandicapComboBoxes( TheSkirmishGameInfo, comboBoxHandicap, comboBoxTeam );
 		UpdateLobbySeatVisuals( TheSkirmishGameInfo );
 		updateMapStartSpots(TheSkirmishGameInfo, buttonMapStartPosition, FALSE);
     doUpdateSlotList = TRUE;
@@ -1429,6 +1438,7 @@ static const char *gadgetsToHide[] =
 	"StaticTextPlayers",
 	"StaticTextColor",
 	"StaticTextTeam",
+	"StaticTextHandicap",
 	"StaticTextFaction",
 	NULL // keep this last
 };
@@ -1436,6 +1446,7 @@ static const char *perPlayerGadgetsToHide[] =
 {
 	"ComboBoxPlayer",
 	"ComboBoxTeam",
+	"ComboBoxHandicap",
 	"ComboBoxColor",
 	"ComboBoxPlayerTemplate",
 	"ComboBoxAIPersona",
@@ -1840,6 +1851,10 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
         else if ( HandleAIPersonaSelection( TheSkirmishGameInfo, comboBoxAIPersona, comboBoxAIPersonaID, (NameKeyType)controlID ) )
         {
           // the slot has it; Skirmish.ini keeps it with the rest of the slot list
+        }
+        else if ( HandleHandicapSelection( TheSkirmishGameInfo, comboBoxHandicap, comboBoxHandicapID, (NameKeyType)controlID ) )
+        {
+          // the same
         }
         else
         {

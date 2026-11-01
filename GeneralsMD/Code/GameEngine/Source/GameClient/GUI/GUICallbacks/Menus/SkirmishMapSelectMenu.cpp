@@ -137,6 +137,7 @@ static const char *gadgetsToHide[] =
 	"MapWindow",
 	"StaticTextPlayers",
 	"StaticTextTeam",
+	"StaticTextHandicap",
 	"StaticTextFaction",
 	"StaticTextColor",
 	"TextEntryPlayerName",
@@ -155,6 +156,7 @@ static const char *perPlayerGadgetsToHide[] =
 	"ComboBoxPlayer",
 	"ComboBoxAIPersona",
 	"ComboBoxTeam",
+	"ComboBoxHandicap",
 	"ComboBoxColor",
 	"ComboBoxPlayerTemplate",
 	NULL // keep this last

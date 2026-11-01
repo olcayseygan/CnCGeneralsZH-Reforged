@@ -916,6 +916,7 @@ void TeamPrototype::setControllingPlayer(Player *newController)
 			if (oldController)
 				oldController->removeTemplateCountMember(objIt.cur());
 			newController->addTemplateCountMember(objIt.cur());
+			objIt.cur()->friend_ownerChangedHandicap(oldController);
 		}
 	}
 }

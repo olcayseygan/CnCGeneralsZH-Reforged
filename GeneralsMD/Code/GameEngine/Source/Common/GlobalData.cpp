@@ -1121,6 +1121,7 @@ GlobalData::GlobalData()
 	{
 		m_autoSkirmishSide[ slot ].clear(); // every faction still comes out of the seed unless -side names one
 		m_autoSkirmishTeam[ slot ] = AUTO_SKIRMISH_TEAM_UNSET; // and every team out of -teams unless -team names one
+		m_autoSkirmishHandicap[ slot ] = 100; // and every seat at full health unless -handicap names it
 		m_autoSkirmishSeatName[ slot ].clear(); // and every computer seat is called by its difficulty unless -seatname names it
 		m_autoSkirmishPersona[ slot ] = -1; // and plays the personality -aipersonaall or -aipersona2 gives it
 	}

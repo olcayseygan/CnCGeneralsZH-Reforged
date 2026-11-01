@@ -687,6 +687,7 @@ public:
 	Int m_autoSkirmishTakeoverSlot;	///< -takeover <slot>: only that seat is driverless and the AI plays the rest; -1 for every seat
 	AsciiString m_autoSkirmishSide[ MAX_PLAYER_COUNT ];	///< -side <slot> <faction>: name that slot's faction instead of drawing it from the seed
 	Int m_autoSkirmishTeam[ MAX_PLAYER_COUNT ];	///< -team <slot> <n>: that slot's team, -1 for none; AUTO_SKIRMISH_TEAM_UNSET leaves it to -teams
+	Int m_autoSkirmishHandicap[ MAX_PLAYER_COUNT ];	///< -handicap <slot> <percent>: that seat's lobby handicap, 100 for none; read only into the game slot
 	AsciiString m_autoSkirmishSeatName[ MAX_PLAYER_COUNT ];	///< -seatname <slot> <name>: what that seat is called instead of its difficulty
 	Int m_autoSkirmishPersona[ MAX_PLAYER_COUNT ];	///< -aipersona <slot> <name>: that AI seat's AIPersonality, -1 leaves it to the two below
 	Int m_autoSkirmishPersonaOdd;		///< -aipersona2 <name>: the odd seats' personality, -1 for the same as every seat's

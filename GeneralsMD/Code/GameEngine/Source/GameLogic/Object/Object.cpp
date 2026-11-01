@@ -186,8 +186,26 @@ AsciiString DescribeObject(const Object *obj)
 #endif // DEBUG_LOGGING
 
 //-------------------------------------------------------------------------------------------------
+// The lobby's handicap on the body, its share of health kept. An InactiveBody has no health to scale.
 //-------------------------------------------------------------------------------------------------
-Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatusMask, Team *team ) : 
+static void scaleMaxHealth( Object *obj, Real factor )
+{
+	BodyModuleInterface *body = obj->getBodyModule();
+	if( factor != 1.0f && body && body->getMaxHealth() > 0.0f )
+		body->setMaxHealth( body->getMaxHealth() * factor, PRESERVE_RATIO );
+}
+
+// what walks, drives or flies: a seat's missiles, mines and parachutes are not its units
+static Real handicapHealthFactor( const Object *obj, const Player *owner )
+{
+	if( owner == NULL || ( !obj->isKindOf( KINDOF_INFANTRY ) && !obj->isKindOf( KINDOF_VEHICLE ) ) )
+		return 1.0f;
+	return owner->getHandicap()->getHandicap( Handicap::MAXHEALTH, obj->getTemplate() );
+}
+
+//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatusMask, Team *team ) :
 	Thing(tt),
 	m_indicatorColor(0),
 	m_ai(NULL),
@@ -512,6 +530,10 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	// If a valid team has been assigned me, then I have a Player I can ask about my starting level
 	const Player* controller = getControllingPlayer();
 	m_experienceTracker->setVeterancyLevel( controller->getProductionVeterancyLevel( getTemplate()->getName() ) );
+
+	// Before the create modules and initObject can run an upgrade, whose addition already comes out at
+	// this factor. A save's loaded object gets its saved health over this afterwards.
+	scaleMaxHealth( this, getHandicapHealthFactor() );
 
 	/// allow for inter-Module resolution
 	for (BehaviorModule** b = m_behaviors; *b; ++b)
@@ -954,6 +976,7 @@ void Object::setOrRestoreTeam( Team* team, Bool restoring )
 		return;
 
 	Team* oldTeam = m_team;
+	const Player *oldOwner = getControllingPlayer();
 
 	// Before Switch //////////////////////////
 	if (m_team)
@@ -1004,6 +1027,11 @@ void Object::setOrRestoreTeam( Team* team, Bool restoring )
 		if (draw)
 			draw->changedTeam();
 	}
+
+	// A captured unit serves at its new owner's handicap.  Before onCapture, whose upgrade check adds at
+	// the new factor.  A save has the health already.
+	if( !restoring )
+		friend_ownerChangedHandicap( oldOwner );
 
 	// This can't just go in ::defect, because some things just do setTeam.  The act of
 	// setting a new team needs to tell the modules and do other important stuff.
@@ -1726,6 +1754,24 @@ Player * Object::getControllingPlayer() const
 		return myTeam->getControllingPlayer(); 
 
 	return NULL;
+}
+
+//=============================================================================
+// Object::getHandicapHealthFactor
+//=============================================================================
+Real Object::getHandicapHealthFactor() const
+{
+	return handicapHealthFactor( this, getControllingPlayer() );
+}
+
+//=============================================================================
+// Object::friend_ownerChangedHandicap
+//=============================================================================
+void Object::friend_ownerChangedHandicap( const Player *oldOwner )
+{
+	// A new object takes its factor at the end of its constructor; one going away has no use for one.
+	if( m_modulesReady && !isDestroyed() )
+		scaleMaxHealth( this, getHandicapHealthFactor() / handicapHealthFactor( this, oldOwner ) );
 }
 
 //=============================================================================
@@ -3961,7 +4007,7 @@ void Object::updateObjValuesFromMapProperties(Dict* properties)
 	if (exists && valInt >= 0) {
 		BodyModuleInterface* body = getBodyModule();
 		if (body)	{
-			body->setMaxHealth(valInt);
+			body->setMaxHealth(valInt * getHandicapHealthFactor());
 		}
 	}
 

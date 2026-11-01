@@ -128,6 +128,17 @@ void UpdateAIPersonaComboBoxes(GameInfo *myGame, GameWindow *comboPersona[]);
 Bool HandleAIPersonaSelection(GameInfo *myGame, GameWindow *comboPersona[], NameKeyType comboPersonaID[],
 															NameKeyType controlID);
 
+// The handicap column: one combo box a seat, 100 down to 10 percent with the value as item data.
+// Whoever may change a seat's team may change its handicap, so UpdateHandicapComboBoxes, called after
+// UpdateSlotList, copies the team box's enabled state.  HandleHandicapSelection answers the new
+// percent when the click was one of the boxes and is a change, 0 otherwise.  The host's pick goes into
+// the slot, unless the options string has no room for it; a guest's waits for the host's slot list.
+void InitHandicapComboBoxes(GameWindow *parent, const char *layoutFilename,
+														GameWindow *comboHandicap[], NameKeyType comboHandicapID[]);
+void UpdateHandicapComboBoxes(GameInfo *myGame, GameWindow *comboHandicap[], GameWindow *comboTeam[]);
+Int HandleHandicapSelection(GameInfo *myGame, GameWindow *comboHandicap[], NameKeyType comboHandicapID[],
+														NameKeyType controlID);
+
 // What a seat row shows beside its combo boxes: a bar and a swatch in the seat's colour, a swatch in
 // the team's colour (both framed like the check boxes), and in the network rooms a green card for
 // a player who is ready and a gold edge round the host's.  All of it is drawn from the slot on every

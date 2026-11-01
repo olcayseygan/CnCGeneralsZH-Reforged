@@ -226,6 +226,7 @@ void GameSlot::reset()
 	m_playerTemplate = -1;
 	m_teamNumber = -1;
 	m_aiPersonality = AIPERSONA_NORMAL;
+	m_handicap = HANDICAP_FULL;
 	m_NATBehavior = FirewallHelperClass::FIREWALL_TYPE_SIMPLE;
 	m_lastFrameInGame = 0;
 	m_disconnected = FALSE;
@@ -454,6 +455,7 @@ void GameSlot::setState( SlotState state, UnicodeString name, UnsignedInt IP )
 		m_playerTemplate = -1;
 		m_teamNumber = -1;
 		m_aiPersonality = AIPERSONA_NORMAL;
+		m_handicap = HANDICAP_FULL;
 
 		if (state == SLOT_OPEN && TheGameSpyGame && TheGameSpyGame->getConstSlot(0) == this)
 		{
@@ -1442,23 +1444,27 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 		if (slot && slot->isHuman())
 		{
 			AsciiString tmp;  //all this data goes after name
-			tmp.format( ",%X,%d,%c%c,%d,%s,%d,%d,%d:",
+			tmp.format( ",%X,%d,%c%c,%d,%s,%d,%d,%d%s:",
 				slot->getIP(), slot->getPort(),
 				(slot->isAccepted()?'T':'F'),
 				(slot->hasMap()?'T':'F'),
 				slot->getColor(), PlayerTemplateSlotField(slot->getPlayerTemplate()).str(),
 				slot->getStartPos(), slot->getTeamNumber(),
-				slot->getNATBehavior() );
+				slot->getNATBehavior(),
+				HandicapSlotField(slot->getHandicap()).str() );
 
 			str.format( "H%s%s", playerNames[i].str(), tmp.str() );
 		}
 		else if (slot && slot->isAI())
 		{
 			// an older parser stops at the team and never sees the personality after it
-			str.format("C%c,%d,%s,%d,%d%s:", SlotStateToOptionsChar(slot->getState()),
+			const Int handicap = slot->getHandicap();
+			const Bool personaHolds = handicap != HANDICAP_FULL && slot->getAIPersonality() == AIPERSONA_NORMAL;
+			str.format("C%c,%d,%s,%d,%d%s%s:", SlotStateToOptionsChar(slot->getState()),
 				slot->getColor(), PlayerTemplateSlotField(slot->getPlayerTemplate()).str(),
 				slot->getStartPos(), slot->getTeamNumber(),
-				AIPersonaSlotField(slot->getAIPersonality()).str());
+				personaHolds ? ",0" : AIPersonaSlotField(slot->getAIPersonality()).str(),
+				HandicapSlotField(handicap).str());
 		}
 		else if (slot && slot->getState() == SLOT_OPEN)
 		{
@@ -1494,6 +1500,42 @@ Int AIPersonaFromSlotField( const char *field )
 		return AIPERSONA_NORMAL;
 	const Int persona = atoi(field);
 	return (persona > AIPERSONA_NORMAL && persona < AIPERSONA_COUNT) ? persona : AIPERSONA_NORMAL;
+}
+
+Bool IsValidHandicap( Int handicap )
+{
+	return handicap >= HANDICAP_STEP && handicap <= HANDICAP_FULL && handicap % HANDICAP_STEP == 0;
+}
+
+AsciiString HandicapSlotField( Int handicap )
+{
+	AsciiString field;
+	if (handicap != HANDICAP_FULL)
+		field.format(",%d", handicap);
+	return field;
+}
+
+Int HandicapFromSlotField( const char *field )
+{
+	if (field == NULL)
+		return HANDICAP_FULL;
+	const Int handicap = atoi(field);
+	return IsValidHandicap(handicap) ? handicap : HANDICAP_FULL;
+}
+
+Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap )
+{
+	if (!IsValidHandicap(handicap) || handicap == slot->getHandicap() || slot->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER)
+	{
+		DEBUG_LOG(("Rejecting invalid handicap %d\n", handicap));
+		return FALSE;
+	}
+	const Int was = slot->getHandicap();
+	slot->setHandicap(handicap);
+	// a pick that pushes the options string past the packet would empty it for everyone
+	if (GameInfoToAsciiString(game).isEmpty())
+		slot->setHandicap(was);
+	return TRUE;
 }
 
 static Int grabHexInt(const char *s)
@@ -1821,6 +1863,9 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 							}
 							newSlot[i].setNATBehavior(NATType);
 							DEBUG_LOG(("ParseAsciiStringToGameInfo - NAT behavior is %X\n", NATType));
+
+							//Read the optional handicap
+							newSlot[i].setHandicap(HandicapFromSlotField(strtok_r(NULL,",",&slotPos)));
 						}// case 'H':
 						break;
 						case 'C':
@@ -1934,6 +1979,9 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 							//Read the optional personality
 							newSlot[i].setAIPersonality(AIPersonaFromSlotField(strtok_r(NULL,",",&slotPos)));
 
+							//Read the optional handicap
+							newSlot[i].setHandicap(HandicapFromSlotField(strtok_r(NULL,",",&slotPos)));
+
 						}//case 'C':
 						break;
 						case 'O':
@@ -2025,7 +2073,7 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 11;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality
+	const XferVersion currentVersion = 12;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2086,6 +2134,12 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 		else
 			persona = AIPERSONA_NORMAL;
 
+		Int handicap = m_slot[slot]->getHandicap();
+		if (version >= 12)
+			xfer->xferInt(&handicap);
+		else
+			handicap = HANDICAP_FULL;
+
 		if( xfer->getXferMode() == XFER_LOAD ) {
 			m_slot[slot]->setState((SlotState)state, name);
 			if (isAccepted) m_slot[slot]->setAccept();
@@ -2100,6 +2154,7 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 			m_slot[slot]->setStartPos(startPos);
 			m_slot[slot]->setPlayerTemplate(playerTemplate);
 			m_slot[slot]->setAIPersonality(persona);
+			m_slot[slot]->setHandicap(handicap);
 		}
 	}
 

@@ -260,6 +260,13 @@ static NameKeyType comboBoxAIPersonaID[MAX_SLOTS] = { NAMEKEY_INVALID,NAMEKEY_IN
 																										NAMEKEY_INVALID,NAMEKEY_INVALID,
 																										NAMEKEY_INVALID,NAMEKEY_INVALID };
 
+static GameWindow *comboBoxHandicap[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
+																								NULL,NULL,NULL,NULL };
+static NameKeyType comboBoxHandicapID[MAX_SLOTS] = { NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID,
+																										NAMEKEY_INVALID,NAMEKEY_INVALID };
+
 //static GameWindow *buttonStartPosition[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
 //																								NULL,NULL,NULL,NULL };
 //
@@ -796,6 +803,35 @@ static void handleTeamSelection(int index)
 	}
 }
 
+// HandleHandicapSelection has set the host's slot; the same round as a team pick from here
+static void handleHandicapSelection(Int handicap)
+{
+	GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
+
+	if (TheGameSpyInfo->amIHost())
+	{
+		// send around a new slotlist
+		myGame->resetAccepted();
+		TheGameSpyInfo->setGameOptions();
+		WOLDisplaySlotList();
+	}
+	else
+	{
+		// request the handicap from the host
+		AsciiString options;
+		options.format("Handicap=%d", handicap);
+		AsciiString hostName;
+		hostName.translate(myGame->getSlot(0)->getName());
+		PeerRequest req;
+		req.peerRequestType = PeerRequest::PEERREQUEST_UTMPLAYER;
+		req.UTM.isStagingRoom = TRUE;
+		req.id = "REQ/";
+		req.nick = hostName.str();
+		req.options = options.str();
+		TheGameSpyPeerMessageQueue->addRequest(req);
+	}
+}
+
 static void handleStartingCashSelection()
 {
   GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
@@ -1272,6 +1308,7 @@ void WOLDisplaySlotList( void )
 	UpdateSlotList( game, comboBoxPlayer, comboBoxColor,
 		comboBoxPlayerTemplate, comboBoxTeam, buttonAccept, buttonStart, buttonMapStartPosition );
 	UpdateAIPersonaComboBoxes( game, comboBoxAIPersona );
+	UpdateHandicapComboBoxes( game, comboBoxHandicap, comboBoxTeam );
 	UpdateLobbySeatVisuals( game );
 
 	WOLDisplayGameOptions();
@@ -1536,6 +1573,7 @@ void InitWOLGameGadgets( void )
 		//GadgetButtonSetEnabledColor(buttonAccept[0], GameSpyColor[GSCOLOR_ACCEPT_TRUE]);
 
 	InitAIPersonaComboBoxes( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
+	InitHandicapComboBoxes( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd" );
 
 	// the settings page and the chat log share one rectangle; this opens on the chat log
@@ -1574,6 +1612,7 @@ void DeinitWOLGameGadgets( void )
 		comboBoxColor[i] = NULL;
 		comboBoxPlayerTemplate[i] = NULL;
 		comboBoxTeam[i] = NULL;
+		comboBoxHandicap[i] = NULL;
 		buttonAccept[i] = NULL;
 //		buttonStartPosition[i] = NULL;
 		buttonMapStartPosition[i] = NULL;
@@ -2649,6 +2688,14 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 										DEBUG_LOG(("Rejecting invalid team %d\n", val));
 									}
 								}
+								else if (key == "Handicap")
+								{
+									if (ApplyHandicapRequest(game, slot, val))
+									{
+										change = true;
+										shouldUnaccept = true;
+									}
+								}
 								else if (key == "IP")
 								{
 									if (uVal != slot->getIP())
@@ -2918,6 +2965,10 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
           TheGameSpyInfo->getCurrentStagingRoom()->resetAccepted();
           TheGameSpyInfo->setGameOptions();
           WOLDisplaySlotList();
+        }
+        else if ( Int handicap = HandleHandicapSelection( TheGameSpyInfo->getCurrentStagingRoom(), comboBoxHandicap, comboBoxHandicapID, (NameKeyType)controlID ) )
+        {
+          handleHandicapSelection( handicap );
         }
         else
         {

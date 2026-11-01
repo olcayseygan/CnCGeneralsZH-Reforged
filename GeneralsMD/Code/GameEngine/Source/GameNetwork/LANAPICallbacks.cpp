@@ -266,6 +266,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 			slot.setState( (SlotState)TheGlobalData->m_autoSkirmishAIState );
 			slot.setAIPersonality( TheGlobalData->autoSkirmishPersona( i ) );
 		}
+		slot.setHandicap( TheGlobalData->m_autoSkirmishHandicap[ i ] );	// after setState, which clears it
 		// -side names a seat's army here too, the same words on every machine; a name nobody knows is a
 		// random draw, which then shows in the run's own log
 		const Int named = TheGlobalData->m_autoSkirmishSide[ i ].isEmpty() ? -1 : ThePlayerTemplateStore->getTemplateNumByName( TheGlobalData->m_autoSkirmishSide[ i ] );
@@ -606,6 +607,14 @@ void LANAPI::OnGameOptions( UnsignedInt playerIP, Int playerSlot, AsciiString op
 					else
 					{
 						DEBUG_LOG(("Rejecting invalid team %d\n", val));
+					}
+				}
+				else if (key == "Handicap")
+				{
+					if (ApplyHandicapRequest(m_currentGame, slot, val))
+					{
+						change = true;
+						shouldUnaccept = true;
 					}
 				}
 				else if (key == "NAT")

@@ -73,6 +73,7 @@ void Handicap::readFromDict(const Dict* d)
 	{
 		"BUILDCOST",
 		"BUILDTIME",
+		"MAXHEALTH",
 //		"FIREPOWER",
 //		"ARMOR",
 //		"GROUNDSPEED",

@@ -75,6 +75,7 @@ static const char *gadgetsToHide[] =
 	"MapWindow",
 	"StaticTextGameName",
 	"StaticTextTeam",
+	"StaticTextHandicap",
 	"StaticTextFaction",
 	"StaticTextColor",
 	"StaticTextPlayers",
@@ -87,6 +88,7 @@ static const char *gadgetsToHide[] =
 static const char *perPlayerGadgetsToHide[] =
 {
 	"ComboBoxTeam",
+	"ComboBoxHandicap",
 	"ComboBoxColor",
 	"ComboBoxPlayerTemplate",
 	"ComboBoxAIPersona",

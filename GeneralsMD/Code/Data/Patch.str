@@ -2181,6 +2181,15 @@ GUI:AIPersona
 "Personality"
 END
 
+// The lobby's handicap column, one box a seat
+GUI:Handicap
+"Handicap"
+END
+
+TOOLTIP:Handicap
+"Lowers the maximum health of this player's units."
+END
+
 // What a computer player with a personality says in chat: when a wave leaves (two lines), when its
 // base is hit, and when an enemy is wiped out (AIPlayer::personaChat)
 GUI:AIChatAttackerWave1

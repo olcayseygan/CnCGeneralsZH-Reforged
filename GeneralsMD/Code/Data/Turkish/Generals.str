@@ -16552,6 +16552,15 @@ GUI:AIPersona
 "Kişilik"
 END
 
+// Lobideki handikap sütunu, koltuk başına bir kutu
+GUI:Handicap
+"Handikap"
+END
+
+TOOLTIP:Handicap
+"Bu oyuncunun birimlerinin en yüksek canını düşürür."
+END
+
 // Kişilikli bir bilgisayar oyuncusunun sohbete yazdıkları: bir dalga çıkarken (iki satır), üssü
 // vurulunca ve bir düşman silinince (AIPlayer::personaChat)
 GUI:AIChatAttackerWave1

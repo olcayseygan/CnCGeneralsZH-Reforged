@@ -9,9 +9,9 @@ than 4:3 at one scale (GameWindowManagerScript.cpp, parseScreenRect): exact on 1
 
 One grid drives all three rooms. The seat table takes the left of the panel, one row a seat: a
 colour bar, the player (or the computer's level) and the computer's personality, the army, a colour
-swatch and the colour, a team swatch and the team; the swatches are the rules page's check boxes'
-size, framed like them. The personality column has no heading: only a computer's row fills it, and
-on every other row the menu code widens the player box over it (InitAIPersonaComboBoxes in
+swatch and the colour, a team swatch and the team, the handicap; the swatches are the rules page's
+check boxes' size, framed like them. The personality column has no heading: only a computer's row
+fills it, and on every other row the menu code widens the player box over it (InitAIPersonaComboBoxes in
 GUIUtil.cpp). A player who is
 ready turns his row green, so the network rooms need no status column; their ready lights are kept
 at no size, since the menu code still sets them. The online room puts a ping light ahead of the row.
@@ -133,6 +133,11 @@ VEIL = (2, 4, 12, 120)
 PERSONA_PREFIX, PERSONA_TOOLTIP = "ComboBoxAIPersona", "GUI:AIPersonaTooltip"
 RETIRED_PERSONA_HEADING = "StaticTextAIPersona"
 
+# The handicap column, on every row since a human takes a handicap too. Combo boxes and heading are
+# cloned from the team's; the menu code fills the boxes.
+HANDICAP_PREFIX, HANDICAP_TOOLTIP = "ComboBoxHandicap", "TOOLTIP:Handicap"
+HANDICAP_HEADING, HANDICAP_TEXT = "StaticTextHandicap", "GUI:Handicap"
+
 # Turbo mode replaced the skirmish room's game speed dropdown: a box cloned from the unit limit's,
 # which every room has, so it inherits that box's art and lettering.
 TURBO_BOX = ("CheckBoxTurbo", "GUI:TurboMode", "TOOLTIP:TurboMode")
@@ -154,20 +159,26 @@ STAT_ROWS = [
 # centred in the row.
 # Widths measured, not guessed: the longest English, Turkish or German entry each box can show,
 # in Arial at the 19 pixels the rooms draw at 1080p, plus 10 of inset and the 40 pixel arrow.
-# Players "Geschlossen" 112, personality "Hava Kuvvetleri" 135, army "ABD Hava Kuvvetleri
-# Generali" 258, colour "Camgöbeği" 98, team "Keins" 49.
+# Player "Medium AI" 92: the box is this narrow only on a computer's row, where the levels are not
+# translated (SlotStateName), and its open list has no arrow beside "Geschlossen" 114. Personality
+# "Hava Kuvvetleri" 136, army "ABD Hava Kuvvetleri Generali" 259, colour "Camgöbeği" 100, team
+# "Keins" 49, handicap "100%" 50. The army's rest is 342 here and 310 online. The handicap box is
+# wider than its text so that its heading, 115 at the 27 pixels column heads measure, ends about
+# over the seat card's edge.
+PLAYER_WIDTH = 142
 SEAT_COLUMNS = [
-    ("StaticTextPlayers", ("ComboBoxPlayer",), 190),
-    (None, (PERSONA_PREFIX,), 210),
+    ("StaticTextPlayers", ("ComboBoxPlayer",), PLAYER_WIDTH),
+    (None, (PERSONA_PREFIX,), 186),
     ("StaticTextFaction", ("ComboBoxPlayerTemplate",), None),
     ("StaticTextColor", ("SeatSwatch",), SWATCH),
-    (None, ("ComboBoxColor",), 170),
+    (None, ("ComboBoxColor",), 150),
     ("StaticTextTeam", ("SeatTeam",), SWATCH),
-    (None, ("ComboBoxTeam",), 120),
+    (None, ("ComboBoxTeam",), 99),
+    (HANDICAP_HEADING, (HANDICAP_PREFIX,), 110),
 ]
 # A seat's player name in the online room is a static text over its combo, as EA drew it.
 GAMESPY_COLUMNS = [(None, ("GenericPing",), PING),
-                   ("StaticTextPlayers", ("ComboBoxPlayer", "StaticTextPlayer"), 190)] + SEAT_COLUMNS[1:]
+                   ("StaticTextPlayers", ("ComboBoxPlayer", "StaticTextPlayer"), PLAYER_WIDTH)] + SEAT_COLUMNS[1:]
 SQUARES = {"SeatSwatch": SWATCH, "SeatTeam": SWATCH, "GenericPing": PING}
 # a swatch and the box after it share one heading
 SWATCHES = ("SeatSwatch", "SeatTeam")
@@ -249,21 +260,32 @@ def remove(layout, names):
             layout.root.parent_of(window).children.remove(window)
 
 
-def add_persona_column(layout, menu):
-    """One personality combo box a seat, cloned in once and ahead of the team heading, seat 7 first
-    like EA's columns. A layout that already has them is left alone."""
-    if layout.find(PERSONA_PREFIX + "0") is not None:
+def add_combo_column(layout, menu, prefix, template, tooltip):
+    """One combo box a seat, cloned from the template's and in once, ahead of the team heading, seat
+    7 first like EA's columns. A layout that already has them is left alone."""
+    if layout.find(prefix + "0") is not None:
         return
     named = lambda name: "%s.wnd:%s" % (menu, name)
     team = need(layout, "StaticTextTeam")
     container = layout.root.parent_of(team)
     added = []
     for seat in reversed(range(SEAT_COUNT)):
-        combo = clone(need(layout, "ComboBoxPlayerTemplate%d" % seat), named("%s%d" % (PERSONA_PREFIX, seat)))
-        combo.put_prop("TOOLTIPTEXT", '"%s"' % PERSONA_TOOLTIP)
+        combo = clone(need(layout, "%s%d" % (template, seat)), named("%s%d" % (prefix, seat)))
+        combo.put_prop("TOOLTIPTEXT", '"%s"' % tooltip)
         added.append(combo)
     at = container.children.index(team)
     container.children[at:at] = added
+
+
+def add_handicap_column(layout, menu):
+    add_combo_column(layout, menu, HANDICAP_PREFIX, "ComboBoxTeam", HANDICAP_TOOLTIP)
+    if layout.find(HANDICAP_HEADING) is not None:
+        return
+    team = need(layout, "StaticTextTeam")
+    heading = clone(team, "%s.wnd:%s" % (menu, HANDICAP_HEADING))
+    heading.put_prop("TEXT", '"%s"' % HANDICAP_TEXT)
+    container = layout.root.parent_of(team)
+    container.children.insert(container.children.index(team), heading)
 
 
 def widen(layout):
@@ -353,6 +375,10 @@ def place_seats(layout, spec, seat_zero_player):
         if heading_name is not None:
             heading = need(layout, heading_name)
             span = width + (6 + widths[index + 1] if prefixes[0] in SWATCHES else 0)
+            if index == len(columns) - 1:
+                # the word is wider than its box, and a static text wraps and clips to its rectangle;
+                # nothing stands between it and the map's heading
+                span = COLUMN_LEFT - left
             heading.place(left - TEXT_NUDGE, HEADER_TOP, span, HEADER_HEIGHT)
             left_align(heading)
         for seat in range(SEAT_COUNT):
@@ -523,7 +549,8 @@ def place_record(layout, menu, container):
 def build(layout, menu):
     spec = ROOMS[menu]
     widen(layout)
-    add_persona_column(layout, menu)
+    add_combo_column(layout, menu, PERSONA_PREFIX, "ComboBoxPlayerTemplate", PERSONA_TOOLTIP)
+    add_handicap_column(layout, menu)
     remove(layout, TABS + GAME_SPEED_DROPDOWN + (RETIRED_PERSONA_HEADING,))
     add_turbo_box(layout)
     container = need(layout, spec["container"])

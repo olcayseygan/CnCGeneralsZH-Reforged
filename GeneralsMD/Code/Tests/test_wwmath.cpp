@@ -118,6 +118,57 @@ TEST(wwmath_float_to_int_chop_and_floor)
 	CHECK_EQ(WWMath::Float_To_Int_Floor(-4.0f), -4);
 }
 
+TEST(wwmath_float_to_int_boundaries)
+{
+	struct Case { float input; int chop, floor; };
+	const float tiny = std::numeric_limits<float>::denorm_min();
+	const Case cases[] = {
+		{ 0.0f, 0, 0 }, { -0.0f, 0, 0 }, { tiny, 0, 0 }, { -tiny, 0, -1 },
+		{ std::numeric_limits<float>::min(), 0, 0 }, { -std::numeric_limits<float>::min(), 0, -1 },
+		{ 0.5f, 0, 0 }, { -0.5f, 0, -1 },
+		{ std::nextafter(1.0f, 0.0f), 0, 0 }, { std::nextafter(-1.0f, 0.0f), 0, -1 },
+		{ 1.0f, 1, 1 }, { -1.0f, -1, -1 },
+		{ std::nextafter(1.0f, 2.0f), 1, 1 }, { std::nextafter(-1.0f, -2.0f), -1, -2 },
+		{ 16777216.0f, 16777216, 16777216 }, { -16777216.0f, -16777216, -16777216 },
+		{ 2147483520.0f, 2147483520, 2147483520 },
+		{ -2147483520.0f, -2147483520, -2147483520 },
+		{ -2147483648.0f, INT32_MIN, INT32_MIN },
+	};
+	for (const Case &item : cases) {
+		CHECK_EQ(WWMath::Float_To_Int_Chop(item.input), item.chop);
+		CHECK_EQ(WWMath::Float_To_Int_Floor(item.input), item.floor);
+	}
+}
+
+TEST(wwmath_float_to_int_invalid_inputs)
+{
+	// These inputs had undefined shifts/conversions in the old implementation. Their new
+	// contract follows DetRound; it is not a claim about legacy replay results for invalid data.
+	const float limit = 2147483648.0f;
+	const float invalid[] = {
+		limit, std::nextafter(limit, std::numeric_limits<float>::infinity()),
+		std::nextafter(-limit, -std::numeric_limits<float>::infinity()),
+		std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(),
+		std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
+		std::numeric_limits<float>::quiet_NaN(), -std::numeric_limits<float>::quiet_NaN(),
+	};
+	for (float input : invalid) {
+		CHECK_EQ(WWMath::Float_To_Int_Chop(input), INT32_MIN);
+		CHECK_EQ(WWMath::Float_To_Int_Floor(input), INT32_MIN);
+	}
+}
+
+TEST(wwmath_float_to_int_quarter_sweep)
+{
+	// Independent integer arithmetic covers negative fractions, exact integers and the
+	// small magnitudes used by lookup-table indices and vertex-lighting channels.
+	for (int quarter = -8192; quarter <= 8192; ++quarter) {
+		const float input = quarter * 0.25f;
+		CHECK_EQ(WWMath::Float_To_Int_Chop(input), quarter / 4);
+		CHECK_EQ(WWMath::Float_To_Int_Floor(input), (quarter < 0 ? quarter - 3 : quarter) / 4);
+	}
+}
+
 TEST(wwmath_clamp_wrap_lerp)
 {
 	CHECK_NEAR(WWMath::Clamp(0.5f, 0.0f, 1.0f), 0.5f, EPS);

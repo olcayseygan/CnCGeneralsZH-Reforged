@@ -10,6 +10,8 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- Float-to-integer rounding now handles fractions, exact integers and out-of-range values without invalid shifts or integer overflow. This keeps animation and rendering calculations consistent across Apple silicon, Intel and other supported processors.
+
 - On macOS and Linux, unchanged brightness settings reuse their gamma table without rebuilding it every frame. Failed GPU allocations and uploads can be retried safely, and a failed submission no longer lets newer texture or vertex data replace an earlier draw's contents. Shore rendering also reuses an existing shader when the fast lookup cache misses, avoiding repeated compilation and leaked GPU programs.
 
 - macOS system frameworks can safely share C++ allocations with the engine. This prevents a CoreGraphics crash during native window drawing while retaining the engine's object and string pools.

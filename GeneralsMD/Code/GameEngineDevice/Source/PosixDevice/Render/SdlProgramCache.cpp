@@ -353,6 +353,12 @@ const SdlProgram &SdlProgramCache::Shore_Pixel_Program(const CombinerDescription
 		++found->Uses;return *found;
 	}
 	const std::string key="shore-overlay:"+CombinerShader_Key(description);
+	auto existing = PixelPrograms.find(key);
+	if (existing != PixelPrograms.end()) {
+		++existing->second.Uses;
+		ShorePixelByBytes.Add(&description, sizeof(description), &existing->second);
+		return existing->second;
+	}
 	std::string hlsl;
 	bool generated=!description.ShadowReceiving && !description.SoftParticle && !description.DrawEffect
 		&& !description.SmokeGlow && description.StageCount<=2

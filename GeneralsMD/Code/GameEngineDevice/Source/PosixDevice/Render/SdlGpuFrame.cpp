@@ -147,7 +147,9 @@ SdlGpuFrame::SdlGpuFrame() :
 	GammaPipeline(NULL),
 	GammaPipelineFormat(SDL_GPU_TEXTUREFORMAT_INVALID),
 	RampTexture(NULL),
-	PointSampler(NULL)
+	PointSampler(NULL),
+	UploadedRampValid(false),
+	RampUploadPending(false)
 {
 	memset(LastConstants,0,sizeof(LastConstants));memset(LastConstantsSize,0,sizeof(LastConstantsSize));
 	memset(ClearPipelines, 0, sizeof(ClearPipelines));
@@ -913,17 +915,12 @@ SDL_GPUGraphicsPipeline * SdlGpuFrame::Gamma_Pipeline(unsigned int format)
 // The three ramps as a 256 x 1 R16G16B16A16 texture, uploaded only when they change.
 bool SdlGpuFrame::Upload_Ramp(SDL_GPUCommandBuffer * commands, const uint16_t (*ramp)[256])
 {
-	std::vector<uint16_t> texels(256 * 4);
-	for (int index = 0; index < 256; ++index) {
-		texels[index * 4 + 0] = ramp[0][index];
-		texels[index * 4 + 1] = ramp[1][index];
-		texels[index * 4 + 2] = ramp[2][index];
-		texels[index * 4 + 3] = 0xFFFF;
-	}
-	if (RampTexture != NULL && texels == UploadedRamp) {
+	if (RampTexture != NULL && PointSampler != NULL && UploadedRampValid
+		&& memcmp(UploadedRamp, ramp, sizeof(UploadedRamp)) == 0) {
 		return true;
 	}
-	if (RampTexture == NULL) {
+	UploadedRampValid = false;
+	if (RampTexture == NULL || PointSampler == NULL) {
 		SDL_GPUTextureCreateInfo info;
 		SDL_zero(info);
 		info.type = SDL_GPU_TEXTURETYPE_2D;
@@ -933,7 +930,8 @@ bool SdlGpuFrame::Upload_Ramp(SDL_GPUCommandBuffer * commands, const uint16_t (*
 		info.height = 1;
 		info.layer_count_or_depth = 1;
 		info.num_levels = 1;
-		RampTexture = SDL_CreateGPUTexture(GpuDevice, &info);
+		SDL_GPUTexture *texture = SDL_CreateGPUTexture(GpuDevice, &info);
+		if (texture == NULL) return false;
 		SDL_GPUSamplerCreateInfo sampler;
 		SDL_zero(sampler);
 		sampler.min_filter = SDL_GPU_FILTER_NEAREST;
@@ -942,12 +940,26 @@ bool SdlGpuFrame::Upload_Ramp(SDL_GPUCommandBuffer * commands, const uint16_t (*
 		sampler.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
 		sampler.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
 		sampler.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-		PointSampler = SDL_CreateGPUSampler(GpuDevice, &sampler);
-		if (RampTexture == NULL || PointSampler == NULL) {
+		SDL_GPUSampler *point = SDL_CreateGPUSampler(GpuDevice, &sampler);
+		if (point == NULL) {
+			SDL_ReleaseGPUTexture(GpuDevice, texture);
 			return false;
 		}
+		// Publish the pair together. A failed sampler must not leave a texture
+		// that makes a later retry skip sampler creation.
+		if (RampTexture != NULL) SDL_ReleaseGPUTexture(GpuDevice, RampTexture);
+		if (PointSampler != NULL) SDL_ReleaseGPUSampler(GpuDevice, PointSampler);
+		RampTexture = texture;
+		PointSampler = point;
 	}
-	const Uint32 bytes = (Uint32)(texels.size() * sizeof(uint16_t));
+	uint16_t texels[256 * 4];
+	for (int index = 0; index < 256; ++index) {
+		texels[index * 4 + 0] = ramp[0][index];
+		texels[index * 4 + 1] = ramp[1][index];
+		texels[index * 4 + 2] = ramp[2][index];
+		texels[index * 4 + 3] = 0xFFFF;
+	}
+	const Uint32 bytes = sizeof(texels);
 	SDL_GPUTransferBufferCreateInfo transfer_info;
 	SDL_zero(transfer_info);
 	transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
@@ -964,6 +976,10 @@ bool SdlGpuFrame::Upload_Ramp(SDL_GPUCommandBuffer * commands, const uint16_t (*
 	memcpy(mapped, &texels[0], bytes);
 	SDL_UnmapGPUTransferBuffer(GpuDevice, transfer);
 	SDL_GPUCopyPass * copy = SDL_BeginGPUCopyPass(commands);
+	if (copy == NULL) {
+		SDL_ReleaseGPUTransferBuffer(GpuDevice, transfer);
+		return false;
+	}
 	SDL_GPUTextureTransferInfo source;
 	SDL_zero(source);
 	source.transfer_buffer = transfer;
@@ -973,11 +989,23 @@ bool SdlGpuFrame::Upload_Ramp(SDL_GPUCommandBuffer * commands, const uint16_t (*
 	region.w = 256;
 	region.h = 1;
 	region.d = 1;
-	SDL_UploadToGPUTexture(copy, &source, &region, false);
+	// Prior frames may still sample the old curve. Cycling keeps their backing
+	// texture alive instead of overwriting it while those frames are in flight.
+	SDL_UploadToGPUTexture(copy, &source, &region, true);
 	SDL_EndGPUCopyPass(copy);
 	SDL_ReleaseGPUTransferBuffer(GpuDevice, transfer);
-	UploadedRamp = texels;
+	memcpy(UploadedRamp, ramp, sizeof(UploadedRamp));
+	RampUploadPending = true;
 	return true;
+}
+
+void SdlGpuFrame::Finish_Ramp_Upload(bool submitted)
+{
+	if (!submitted)
+		UploadedRampValid = false;
+	else if (RampUploadPending)
+		UploadedRampValid = true;
+	RampUploadPending = false;
 }
 
 bool SdlGpuFrame::Present_Into(SDL_GPUCommandBuffer * commands, SDL_GPUTexture * target, unsigned int width,
@@ -1044,6 +1072,7 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 	Refresh_Water_Snapshots();
 	SDL_GPUCommandBuffer * commands = SDL_AcquireGPUCommandBuffer(GpuDevice);
 	if (commands == NULL) {
+		Finish_Ramp_Upload(false);
 		return false;
 	}
 	bool ok = Record_Batch(commands) && Copy_To_Front(commands);
@@ -1095,10 +1124,13 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 			ok = Present_Into(commands, DisplayTexture, BackWidth, BackHeight, BACK_BUFFER_FORMAT, ramp) && ok;
 		}
 		const bool submitted = Submit_Offscreen(commands);
+		const bool presented = submitted && ok && DisplayTexture != NULL;
+		Finish_Ramp_Upload(presented);
 		End_Batch();
-		return submitted && ok && DisplayTexture != NULL;
+		return presented;
 	}
 	const bool submitted = Submit(commands);
+	Finish_Ramp_Upload(submitted && ok);
 	End_Batch();
 	return submitted && ok;
 }
@@ -1109,11 +1141,13 @@ bool SdlGpuFrame::Present_To(SDL_GPUTexture * target, unsigned int width, unsign
 	Refresh_Water_Snapshots();
 	SDL_GPUCommandBuffer * commands = SDL_AcquireGPUCommandBuffer(GpuDevice);
 	if (commands == NULL) {
+		Finish_Ramp_Upload(false);
 		return false;
 	}
 	bool ok = Record_Batch(commands) && Copy_To_Front(commands);
 	ok = Present_Into(commands, target, width, height, BACK_BUFFER_FORMAT, ramp) && ok;
 	const bool submitted = Submit(commands);
+	Finish_Ramp_Upload(submitted && ok);
 	End_Batch();
 	return submitted && ok;
 }

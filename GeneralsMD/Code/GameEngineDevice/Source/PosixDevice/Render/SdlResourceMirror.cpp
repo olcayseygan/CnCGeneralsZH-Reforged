@@ -236,12 +236,15 @@ size_t SdlResourceMirrors::Live_Copies() const
 	return Copies.size();
 }
 
-void SdlResourceMirrors::Prepare_Update(Copy & copy)
+bool SdlResourceMirrors::Prepare_Update(Copy & copy)
 {
 	if (copy.UsedBatch == Frame->Batch()) {
+		if (!Frame->Flush()) {
+			return false;
+		}
 		++StaleFlushes;
-		Frame->Flush();
 	}
+	return true;
 }
 
 SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::string & refusal)
@@ -319,7 +322,10 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 		stale = copy.Versions[level] != texture->level(level).version();
 	}
 	if (stale) {
-		Prepare_Update(copy);
+		if (!Prepare_Update(copy)) {
+			refusal = std::string("the GPU refused to flush before a texture update: ") + SDL_GetError();
+			return NULL;
+		}
 		copy.Versions.resize(levels);
 		dump_texture_if_asked(texture->level(0), texture, TexturesUploaded);
 		for (unsigned int level = 0; level < levels; ++level) {
@@ -419,7 +425,10 @@ SDL_GPUBuffer * SdlResourceMirrors::Buffer(const void * owner, const PosixBuffer
 	}
 	Copy & copy = found->second;
 	if (copy.Versions.size() != 1 || copy.Versions[0] != storage.version()) {
-		Prepare_Update(copy);
+		if (!Prepare_Update(copy)) {
+			refusal = std::string("the GPU refused to flush before a buffer update: ") + SDL_GetError();
+			return NULL;
+		}
 		uint32_t offset = 0;
 		uint8_t * space = Frame->Upload_Space(size, offset);
 		memcpy(space, storage.bytes(), storage.length());

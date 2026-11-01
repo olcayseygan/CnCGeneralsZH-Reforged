@@ -310,6 +310,7 @@ private:
 		unsigned int height, unsigned int format, const uint16_t (*ramp)[256]);
 	SDL_GPUGraphicsPipeline * Gamma_Pipeline(unsigned int format);
 	bool Upload_Ramp(struct SDL_GPUCommandBuffer * commands, const uint16_t (*ramp)[256]);
+	void Finish_Ramp_Upload(bool submitted);
 
 	SDL_GPUDevice * GpuDevice;
 	SDL_Window * Window;				///< C2's, claimed; null for an offscreen frame
@@ -422,7 +423,9 @@ private:
 	unsigned int GammaPipelineFormat;
 	SDL_GPUTexture * RampTexture;		///< 256 x 1, the three ramps in R, G and B
 	SDL_GPUSampler * PointSampler;
-	std::vector<uint16_t> UploadedRamp;	///< what RampTexture holds, to upload only a change
+	uint16_t UploadedRamp[3][256];	///< raw channels: compare before packing or allocating
+	bool UploadedRampValid;			///< published only after its command buffer was submitted
+	bool RampUploadPending;			///< recorded this frame; a failed frame must retry it
 };
 
 /// Whether the three ramps are D3D9's identity, value i as i * 257, which Present takes as a blit.

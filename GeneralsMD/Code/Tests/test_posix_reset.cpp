@@ -17,12 +17,15 @@
 */
 
 // Faults at the SDL allocation/acquire boundary exercise the actual reset, batch and mirror code.
-// No window or game is run. The linker wrappers are confined to this Linux selfcheck.
+// No window or game is run. SDL wrappers are confined to this selfcheck.
 #include "PosixDevice9.h"
+#include "PosixResources9.h"
 #include "SdlGpuFrame.h"
 #include "SdlResourceMirror.h"
+#include "../Libraries/Source/WWVegas/WW3D2/sdl3shadercompile.h"
 #include <SDL3/SDL.h>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -34,8 +37,22 @@ static bool fail_acquire = false;
 static int fail_texture = 0;
 static bool fail_all_textures = false;
 static unsigned texture_calls = 0, acquire_calls = 0;
-extern "C" SDL_GPUCommandBuffer *__real_SDL_AcquireGPUCommandBuffer(SDL_GPUDevice *);
-extern "C" SDL_GPUTexture *__real_SDL_CreateGPUTexture(SDL_GPUDevice *, const SDL_GPUTextureCreateInfo *);
+static bool fail_sampler = false, fail_transfer = false, fail_map = false, fail_copy = false, fail_submit = false;
+static unsigned sampler_calls = 0, transfer_calls = 0, map_calls = 0, copy_calls = 0, submit_calls = 0;
+// On Mach-O, test-only renderer objects call __wrap_ names and these aliases call SDL itself.
+// ELF's --wrap supplies the __real_ names at link time.
+#if defined(__APPLE__)
+#define REAL_SDL(name) __asm__("_" #name)
+#else
+#define REAL_SDL(name)
+#endif
+extern "C" SDL_GPUCommandBuffer *__real_SDL_AcquireGPUCommandBuffer(SDL_GPUDevice *) REAL_SDL(SDL_AcquireGPUCommandBuffer);
+extern "C" SDL_GPUTexture *__real_SDL_CreateGPUTexture(SDL_GPUDevice *, const SDL_GPUTextureCreateInfo *) REAL_SDL(SDL_CreateGPUTexture);
+extern "C" SDL_GPUSampler *__real_SDL_CreateGPUSampler(SDL_GPUDevice *, const SDL_GPUSamplerCreateInfo *) REAL_SDL(SDL_CreateGPUSampler);
+extern "C" SDL_GPUTransferBuffer *__real_SDL_CreateGPUTransferBuffer(SDL_GPUDevice *, const SDL_GPUTransferBufferCreateInfo *) REAL_SDL(SDL_CreateGPUTransferBuffer);
+extern "C" void *__real_SDL_MapGPUTransferBuffer(SDL_GPUDevice *, SDL_GPUTransferBuffer *, bool) REAL_SDL(SDL_MapGPUTransferBuffer);
+extern "C" SDL_GPUCopyPass *__real_SDL_BeginGPUCopyPass(SDL_GPUCommandBuffer *) REAL_SDL(SDL_BeginGPUCopyPass);
+extern "C" bool __real_SDL_SubmitGPUCommandBuffer(SDL_GPUCommandBuffer *) REAL_SDL(SDL_SubmitGPUCommandBuffer);
 extern "C" SDL_GPUCommandBuffer *__wrap_SDL_AcquireGPUCommandBuffer(SDL_GPUDevice *device)
 {
 	++acquire_calls;
@@ -53,6 +70,188 @@ extern "C" SDL_GPUTexture *__wrap_SDL_CreateGPUTexture(SDL_GPUDevice *device, co
 		return NULL;
 	}
 	return __real_SDL_CreateGPUTexture(device, info);
+}
+extern "C" SDL_GPUSampler *__wrap_SDL_CreateGPUSampler(SDL_GPUDevice *device, const SDL_GPUSamplerCreateInfo *info)
+{
+	++sampler_calls;
+	if (fail_sampler) { SDL_SetError("GPU selfcheck: sampler allocation refused"); return NULL; }
+	return __real_SDL_CreateGPUSampler(device, info);
+}
+extern "C" SDL_GPUTransferBuffer *__wrap_SDL_CreateGPUTransferBuffer(SDL_GPUDevice *device, const SDL_GPUTransferBufferCreateInfo *info)
+{
+	++transfer_calls;
+	if (fail_transfer) { SDL_SetError("GPU selfcheck: transfer allocation refused"); return NULL; }
+	return __real_SDL_CreateGPUTransferBuffer(device, info);
+}
+extern "C" void *__wrap_SDL_MapGPUTransferBuffer(SDL_GPUDevice *device, SDL_GPUTransferBuffer *transfer, bool cycle)
+{
+	++map_calls;
+	if (fail_map) { SDL_SetError("GPU selfcheck: transfer mapping refused"); return NULL; }
+	return __real_SDL_MapGPUTransferBuffer(device, transfer, cycle);
+}
+extern "C" SDL_GPUCopyPass *__wrap_SDL_BeginGPUCopyPass(SDL_GPUCommandBuffer *commands)
+{
+	++copy_calls;
+	if (fail_copy) { SDL_SetError("GPU selfcheck: copy pass refused"); return NULL; }
+	return __real_SDL_BeginGPUCopyPass(commands);
+}
+extern "C" bool __wrap_SDL_SubmitGPUCommandBuffer(SDL_GPUCommandBuffer *commands)
+{
+	++submit_calls;
+	if (fail_submit) {
+		SDL_CancelGPUCommandBuffer(commands);
+		SDL_SetError("GPU selfcheck: submission refused");
+		return false;
+	}
+	return __real_SDL_SubmitGPUCommandBuffer(commands);
+}
+
+// A full-screen triangle consumes both kinds of resource mirror, so a later upload cannot
+// silently overwrite the bytes of a draw retained after command acquisition fails.
+class MirrorDraw
+{
+public:
+	SdlGpuFrame *Frame;
+	SDL_GPUShader *Vertex = NULL, *Pixel = NULL;
+	SDL_GPUGraphicsPipeline *Pipeline = NULL;
+	SDL_GPUSampler *Sampler = NULL;
+	PosixTexture9 *Texture = NULL;
+	PosixVertexBuffer9 *Buffer = NULL;
+	explicit MirrorDraw(SdlGpuFrame *frame) : Frame(frame)
+	{
+		const char *vertex =
+			"struct Output { float4 position:SV_Position; float4 colour:TEXCOORD0; };\n"
+			"Output main(float4 colour:TEXCOORD0, uint id:SV_VertexID) { Output o;\n"
+			"o.position=float4(id==1?3.0:-1.0,id==2?3.0:-1.0,0,1); o.colour=colour; return o; }";
+		const char *pixel =
+			"Texture2D Image:register(t0,space2); SamplerState ImageSampler:register(s0,space2);\n"
+			"float4 main(float4 colour:TEXCOORD0):SV_Target0 {\n"
+			"return Image.SampleLevel(ImageSampler,float2(0.5,0.5),0)*colour; }";
+		std::vector<unsigned char> spirv;
+		std::string error;
+		CHECK(SDL3_Compile_HLSL_To_SPIRV(vertex, true, spirv, error));
+		Vertex = SDL3_Create_Shader(frame->Device(), spirv, true, error); CHECK(Vertex);
+		CHECK(SDL3_Compile_HLSL_To_SPIRV(pixel, false, spirv, error));
+		Pixel = SDL3_Create_Shader(frame->Device(), spirv, false, error); CHECK(Pixel);
+		SDL_GPUVertexBufferDescription buffer = {};
+		buffer.pitch = sizeof(float) * 4;
+		buffer.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+		SDL_GPUVertexAttribute attribute = {};
+		attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+		SDL_GPUColorTargetDescription colour = {};
+		colour.format = (SDL_GPUTextureFormat)SdlGpuFrame::Target_Format();
+		SDL_GPUGraphicsPipelineCreateInfo info = {};
+		info.vertex_shader = Vertex; info.fragment_shader = Pixel;
+		info.vertex_input_state.vertex_buffer_descriptions = &buffer;
+		info.vertex_input_state.num_vertex_buffers = 1;
+		info.vertex_input_state.vertex_attributes = &attribute;
+		info.vertex_input_state.num_vertex_attributes = 1;
+		info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+		info.target_info.color_target_descriptions = &colour;
+		info.target_info.num_color_targets = 1;
+		info.target_info.has_depth_stencil_target = true;
+		info.target_info.depth_stencil_format = (SDL_GPUTextureFormat)frame->Depth_Format();
+		if (Vertex && Pixel) Pipeline = SDL_CreateGPUGraphicsPipeline(frame->Device(), &info);
+		CHECK(Pipeline);
+		SDL_GPUSamplerCreateInfo sampler = {};
+		sampler.address_mode_u = sampler.address_mode_v = sampler.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+		Sampler = SDL_CreateGPUSampler(frame->Device(), &sampler); CHECK(Sampler);
+		Texture = PosixTexture9::create(1, 1, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED); CHECK(Texture);
+		Buffer = PosixVertexBuffer9::create(sizeof(float) * 12, 0, 0, D3DPOOL_MANAGED); CHECK(Buffer);
+	}
+	~MirrorDraw()
+	{
+		Frame->Flush();
+		if (Texture) Texture->Release();
+		if (Buffer) Buffer->Release();
+		if (Sampler) SDL_ReleaseGPUSampler(Frame->Device(), Sampler);
+		if (Pipeline) SDL_ReleaseGPUGraphicsPipeline(Frame->Device(), Pipeline);
+		if (Pixel) SDL_ReleaseGPUShader(Frame->Device(), Pixel);
+		if (Vertex) SDL_ReleaseGPUShader(Frame->Device(), Vertex);
+	}
+	void Set_Texture(uint32_t colour)
+	{
+		D3DLOCKED_RECT locked = {};
+		CHECK(Texture->LockRect(0, &locked, NULL, 0) == D3D_OK);
+		if (locked.pBits) *(uint32_t *)locked.pBits = colour;
+		CHECK(Texture->UnlockRect(0) == D3D_OK);
+	}
+	void Set_Buffer(float red, float green, float blue)
+	{
+		float *bytes = NULL;
+		CHECK(Buffer->Lock(0, 0, (void **)&bytes, 0) == D3D_OK);
+		if (bytes) for (unsigned i = 0; i < 3; ++i) {
+			bytes[i * 4] = red; bytes[i * 4 + 1] = green;
+			bytes[i * 4 + 2] = blue; bytes[i * 4 + 3] = 1;
+		}
+		CHECK(Buffer->Unlock() == D3D_OK);
+	}
+	void Draw(SDL_GPUTexture *texture, SDL_GPUBuffer *buffer)
+	{
+		Frame->Set_Target(Frame->Back_Buffer_Target());
+		SdlRecordedDraw draw = {};
+		draw.Pipeline = Pipeline; draw.VertexBuffer = buffer; draw.Count = 3;
+		draw.SamplerCount = 1; draw.Textures[0] = texture; draw.Samplers[0] = Sampler;
+		draw.Viewport[2] = Frame->Width(); draw.Viewport[3] = Frame->Height(); draw.Viewport[5] = 1;
+		draw.Scissor[2] = Frame->Width(); draw.Scissor[3] = Frame->Height();
+		Frame->Record_Draw(draw);
+	}
+	void Check_Colour(uint32_t expected)
+	{
+		std::vector<uint8_t> pixels;
+		CHECK(Frame->Read_Back(Frame->Back_Buffer(), Frame->Width(), Frame->Height(), pixels));
+		CHECK(pixels.size() == (size_t)Frame->Width() * Frame->Height() * 4);
+		bool equal = !pixels.empty();
+		for (size_t i = 0; i + 3 < pixels.size(); i += 4)
+			for (unsigned channel = 0; channel < 4; ++channel)
+				equal = equal && pixels[i + channel] == ((expected >> (channel * 8)) & 255);
+		CHECK(equal);
+	}
+};
+
+static void check_mirror_update_failure(PosixDevice9 *device, bool texture_update)
+{
+	SdlGpuFrame *frame = device->Get_Gpu();
+	SdlResourceMirrors *mirrors = device->Get_Mirrors();
+	CHECK(frame->Flush());
+	MirrorDraw draw(frame);
+	if (!draw.Texture || !draw.Buffer || !draw.Pipeline || !draw.Sampler) return;
+	draw.Set_Texture(texture_update ? 0xFF123456 : 0xFFFFFFFF);
+	draw.Set_Buffer(1, texture_update ? 1 : 0, texture_update ? 1 : 0);
+	std::string refusal;
+	SDL_GPUTexture *texture = mirrors->Texture(draw.Texture, refusal); CHECK(texture);
+	SDL_GPUBuffer *buffer = mirrors->Buffer(draw.Buffer, draw.Buffer->storage(), refusal); CHECK(buffer);
+	if (!texture || !buffer) return;
+	draw.Draw(texture, buffer);
+	const uint64_t batch = frame->Batch();
+	const unsigned uploads = texture_update ? mirrors->Textures_Uploaded() : mirrors->Buffers_Uploaded();
+	const unsigned flushes = mirrors->Stale_Flushes();
+	if (texture_update) draw.Set_Texture(0xFF654321);
+	else draw.Set_Buffer(0, 1, 0);
+	fail_acquire = true; acquire_calls = 0;
+	// Retrying while the queue is unavailable must not accept/cache B or mark a new batch used.
+	for (unsigned attempt = 0; attempt < 2; ++attempt) {
+		refusal.clear();
+		if (texture_update) CHECK(mirrors->Texture(draw.Texture, refusal) == NULL);
+		else CHECK(mirrors->Buffer(draw.Buffer, draw.Buffer->storage(), refusal) == NULL);
+		CHECK(refusal.find("flush") != std::string::npos);
+		CHECK(refusal.find("command acquisition refused") != std::string::npos);
+		CHECK(frame->Batch() == batch);
+		CHECK((texture_update ? mirrors->Textures_Uploaded() : mirrors->Buffers_Uploaded()) == uploads);
+		CHECK(mirrors->Stale_Flushes() == flushes);
+	}
+	fail_acquire = false;
+	CHECK(acquire_calls == 2);
+	draw.Check_Colour(texture_update ? 0xFF123456 : 0xFFFF0000); // retained draw still sees A
+	if (texture_update) CHECK(mirrors->Texture(draw.Texture, refusal) == texture);
+	else CHECK(mirrors->Buffer(draw.Buffer, draw.Buffer->storage(), refusal) == buffer);
+	CHECK((texture_update ? mirrors->Textures_Uploaded() : mirrors->Buffers_Uploaded()) == uploads + 1);
+	draw.Draw(texture, buffer);
+	draw.Check_Colour(texture_update ? 0xFF654321 : 0xFF00FF00);
+	// B is current after recovery; recording it again must reuse the accepted upload.
+	if (texture_update) CHECK(mirrors->Texture(draw.Texture, refusal) == texture);
+	else CHECK(mirrors->Buffer(draw.Buffer, draw.Buffer->storage(), refusal) == buffer);
+	CHECK((texture_update ? mirrors->Textures_Uploaded() : mirrors->Buffers_Uploaded()) == uploads + 1);
 }
 
 static void check_state(PosixDevice9 *device, const D3DPRESENT_PARAMETERS &parameters,
@@ -231,6 +430,81 @@ static void check_capture_restore_allocation(PosixDevice9 *device)
 	}
 }
 
+static void check_gamma_pixels(SdlGpuFrame *frame, SDL_GPUTexture *target, const uint16_t (*ramp)[256])
+{
+	std::vector<uint8_t> pixels;
+	CHECK(frame->Read_Back(target, 4, 4, pixels));
+	CHECK(pixels.size() == 4 * 4 * 4);
+	const int expected[4] = { (int)((ramp[2][0x10] * 255u + 32767u) / 65535u),
+		(int)((ramp[1][0x20] * 255u + 32767u) / 65535u),
+		(int)((ramp[0][0x40] * 255u + 32767u) / 65535u), 255 };
+	for (size_t pixel = 0; pixel + 3 < pixels.size(); pixel += 4)
+		for (int channel = 0; channel < 4; ++channel)
+			CHECK(abs((int)pixels[pixel + channel] - expected[channel]) <= 1);
+}
+
+static void check_gamma_failure_recovery()
+{
+	// A new frame ensures that texture/sampler faults hit their first use. Later
+	// faults replace a known curve, so caching an unsubmitted upload is observable.
+	for (int fault = 0; fault < 6; ++fault) {
+		std::string error;
+		SdlGpuFrame *frame = SdlGpuFrame::Create(NULL, 4, 4, error);
+		CHECK(frame != NULL);
+		if (!frame) continue;
+		SDL_GPUTextureCreateInfo info = {};
+		info.type = SDL_GPU_TEXTURETYPE_2D;
+		info.format = (SDL_GPUTextureFormat)SdlGpuFrame::Target_Format();
+		info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		info.width = info.height = 4;
+		info.layer_count_or_depth = info.num_levels = 1;
+		SDL_GPUTexture *target = SDL_CreateGPUTexture(frame->Device(), &info);
+		CHECK(target != NULL);
+		if (!target) { delete frame; continue; }
+		frame->Clear_Back_Buffer(true, false, false, 0xFF402010u, 1.0f, 0);
+		uint16_t original[3][256], changed[3][256];
+		for (int index = 0; index < 256; ++index) {
+			original[0][index] = (uint16_t)((255 - index) * 257);
+			original[1][index] = original[2][index] = (uint16_t)(index * 257);
+			changed[0][index] = (uint16_t)(index * 257);
+			changed[1][index] = (uint16_t)((255 - index) * 257);
+			changed[2][index] = (uint16_t)((index / 2) * 257);
+		}
+		if (fault >= 2) {
+			CHECK(frame->Present_To(target, 4, 4, original));
+			check_gamma_pixels(frame, target, original);
+		}
+		const uint16_t (*requested)[256] = fault >= 2 ? changed : original;
+		const unsigned samplers_before = sampler_calls;
+		fail_texture = fault == 0 ? 1 : 0;
+		fail_sampler = fault == 1;
+		fail_transfer = fault == 2;
+		fail_map = fault == 3;
+		fail_copy = fault == 4;
+		fail_submit = fault == 5;
+		CHECK(!frame->Present_To(target, 4, 4, requested));
+		fail_texture = 0;
+		fail_sampler = fail_transfer = fail_map = fail_copy = fail_submit = false;
+		if (fault == 0) CHECK(sampler_calls == samplers_before);
+		const unsigned transfers_before = transfer_calls;
+		const unsigned samplers_retry = sampler_calls;
+		CHECK(frame->Present_To(target, 4, 4, requested));
+		CHECK(transfer_calls == transfers_before + 1);
+		if (fault <= 1) CHECK(sampler_calls == samplers_retry + 1);
+		check_gamma_pixels(frame, target, requested);
+		const unsigned transfers_repeated = transfer_calls;
+		CHECK(frame->Present_To(target, 4, 4, requested));
+		CHECK(transfer_calls == transfers_repeated);
+		check_gamma_pixels(frame, target, requested);
+		if (fault >= 2) {
+			CHECK(frame->Present_To(target, 4, 4, original));
+			check_gamma_pixels(frame, target, original);
+		}
+		SDL_ReleaseGPUTexture(frame->Device(), target);
+		delete frame;
+	}
+}
+
 int main()
 {
 	IDirect3D9 *d3d = Direct3DCreate9(D3D_SDK_VERSION);
@@ -249,9 +523,12 @@ int main()
 		return failures ? 1 : 77;
 	}
 	check_reset(device);
+	check_mirror_update_failure(device, true);
+	check_mirror_update_failure(device, false);
 	check_capture_reset(device);
 	check_capture_restore_allocation(device);
+	check_gamma_failure_recovery();
 	device->Release(); d3d->Release(); SDL_Quit();
-	printf("posix_reset_selfcheck: %s\n", failures ? "FAILED" : "PASS: acquire/allocation failures retain reset state and queued uploads; retry succeeds");
+	printf("posix_reset_selfcheck: %s\n", failures ? "FAILED" : "PASS: reset, mirror updates and gamma uploads preserve valid state across failures and retries");
 	return failures ? 1 : 0;
 }

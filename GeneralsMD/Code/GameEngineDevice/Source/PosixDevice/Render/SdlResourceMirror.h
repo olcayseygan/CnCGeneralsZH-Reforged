@@ -109,8 +109,8 @@ private:
 	};
 
 	static void Destroyed(const void * resource);
-	/// Flushes the batch first when a draw of it has used the copy; then marks it used by this batch.
-	void Prepare_Update(Copy & copy);
+	/// Flushes a batch that already uses this copy. Failure leaves its pending upload untouched.
+	bool Prepare_Update(Copy & copy);
 
 	SdlGpuFrame * Frame;
 	mutable std::mutex Lock;							///< Copies and Dead: the destroyed hook runs on any thread

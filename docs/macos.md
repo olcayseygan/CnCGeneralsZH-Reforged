@@ -94,6 +94,27 @@ Scheduling flags alone are not a measured FPS improvement; actual gameplay
 profiling requires your original game data. No game assets are needed for the
 synthetic GPU and cross-architecture regression tests.
 
+Unchanged gamma ramps are cached without allocating or repacking their entries
+each frame. Ramp changes cycle the GPU texture, so previously submitted frames
+retain their own values. Failed uploads and submissions invalidate the cached
+ramp and can be retried. Texture and vertex-buffer updates stop if a required
+flush fails, preserving any commands still queued. Shore shaders use the
+canonical program cache when the fast lookup misses.
+
+After building, the offscreen GPU checks can run with Apple's
+[Metal API Validation](https://developer.apple.com/documentation/xcode/validating-your-apps-metal-api-usage):
+
+```sh
+MTL_DEBUG_LAYER=1 ZH_GPU_DEBUG=1 ctest --test-dir build-mac \
+  -R '^(sdl_gpu_frame_selfcheck|sdl_program_cache_selfcheck|sdl_pipeline_state_selfcheck|posix_gpu_draw_selfcheck|posix_reset_selfcheck|ffref_gpu_selfcheck)$' \
+  --output-on-failure
+```
+
+These checks use synthetic data and require no original game files. The reset
+check deliberately refuses allocations, uploads and submissions, then checks
+that retrying preserves the rendered data. Validation is a development tool
+with runtime overhead; leave it off during gameplay measurements.
+
 ## Build the engine
 
 Install Apple's command line tools and CMake/Ninja:

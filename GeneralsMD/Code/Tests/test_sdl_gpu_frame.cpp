@@ -6996,6 +6996,23 @@ int main()
 	// The armed control: the same output against the identity must differ nearly everywhere.
 	const unsigned int control = mismatches(pixels, identity);
 	CHECK(control > WIDTH * HEIGHT / 2);
+	// Reuse an unchanged curve, then change each channel independently. Returning
+	// to the original curve must restore its pixels rather than reuse a later one.
+	CHECK(frame->Present_To(target, WIDTH, HEIGHT, ramp));
+	CHECK(frame->Read_Back(target, WIDTH, HEIGHT, pixels));
+	CHECK(mismatches(pixels, ramp) == 0);
+	for (int channel = 0; channel < 3; ++channel) {
+		uint16_t changed[3][256];
+		memcpy(changed, ramp, sizeof(changed));
+		for (int index = 0; index < 256; ++index)
+			changed[channel][index] = (uint16_t)(65535u - changed[channel][index]);
+		CHECK(frame->Present_To(target, WIDTH, HEIGHT, changed));
+		CHECK(frame->Read_Back(target, WIDTH, HEIGHT, pixels));
+		CHECK(mismatches(pixels, changed) == 0);
+	}
+	CHECK(frame->Present_To(target, WIDTH, HEIGHT, ramp));
+	CHECK(frame->Read_Back(target, WIDTH, HEIGHT, pixels));
+	CHECK(mismatches(pixels, ramp) == 0);
 
 	// The identity ramp is a blit: the picture back as it went in.
 	CHECK(frame->Present_To(target, WIDTH, HEIGHT, identity));

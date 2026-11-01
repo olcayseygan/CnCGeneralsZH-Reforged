@@ -11,6 +11,9 @@ if(CMAKE_HOST_APPLE AND "${CMAKE_OSX_DEPLOYMENT_TARGET}" STREQUAL "")
 endif()
 
 project(GeneralsMD CXX C)
+if(APPLE)
+  enable_language(OBJCXX)
+endif()
 
 # Which operating system this build is for.  MSVC used to answer that question too, because for
 # twenty years there was only one answer, and this file used the two interchangeably from its first
@@ -1959,7 +1962,9 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(sdldevice PUBLIC posixdevice w3ddevice SDL3::SDL3-static milesaudiomanager sdlinput)
   if(APPLE)
-    target_link_libraries(sdldevice PRIVATE "-framework CoreGraphics")		# SdlDisplays' panel size
+    target_sources(sdldevice PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/Common/SdlMacWindow.mm)
+    set_target_properties(sdldevice PROPERTIES OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED YES)
+    target_link_libraries(sdldevice PRIVATE "-framework CoreGraphics" "-framework AppKit")
   endif()
   # Linux has no icon in the executable: the window sets Generals.ico's pixels on itself (SdlGameEngine).
   # The Mac app's icon is the bundle's.
@@ -1991,6 +1996,13 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(test_sdl_platform PROPERTIES CXX_STANDARD 17)
   target_link_libraries(test_sdl_platform PRIVATE sdldevice test_harness)
   add_test(NAME test_sdl_platform COMMAND test_sdl_platform)
+  if(APPLE)
+    # Opens and switches a real Cocoa window; run explicitly in a desktop session.
+    add_executable(macos_window_selfcheck EXCLUDE_FROM_ALL
+      ${CMAKE_CURRENT_SOURCE_DIR}/Tests/macos_window_selfcheck.mm)
+    set_target_properties(macos_window_selfcheck PROPERTIES OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED YES)
+    target_link_libraries(macos_window_selfcheck PRIVATE sdldevice)
+  endif()
 
   # C4's upper half: Windows' MilesAudioManager over the Miles surface on miniaudio's null backend, fed
   # the install's own INIs and sounds through a read-only farm of its archives (rule 9), heard through
@@ -3082,7 +3094,7 @@ if(APPLE)
     get_target_property(_zh_type ${_zh_target} TYPE)
     if(_zh_type MATCHES "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$")
       target_compile_options(${_zh_target} PRIVATE
-        $<$<COMPILE_LANGUAGE:C,CXX>:-Werror=unguarded-availability-new>)
+        $<$<COMPILE_LANGUAGE:C,CXX,OBJCXX>:-Werror=unguarded-availability-new>)
     endif()
   endforeach()
 endif()

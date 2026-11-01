@@ -11,6 +11,39 @@ Run `make install` for a step-by-step installer (English, German; see
 executing step and can optionally discover/copy your owned Steam/GOG installation
 outside the checkout. See [the installer guide](installer.md).
 
+## Native fullscreen and system integration
+
+Fullscreen uses a native macOS Space. On Apple silicon with macOS 14 or later,
+this allows the system's [Game Mode](https://support.apple.com/105118) to prioritize
+the game. The app declares Game Mode support; macOS decides when to activate it,
+and you can turn it off in the system's Game Mode menu. macOS 13 and Intel Macs
+keep native fullscreen without requiring Game Mode.
+
+The Dock and menu bar stay hidden while the game owns its fullscreen Space, so
+moving the pointer to an edge still scrolls the map. Switching to another app
+restores normal desktop behavior. Window transitions finish before the renderer
+resets its device. If a particular display setup needs the previous fullscreen
+behavior, launch the packaged executable with SDL's compatibility override:
+
+```sh
+SDL_VIDEO_MAC_FULLSCREEN_SPACES=0 \
+  "build-mac/Zero Hour Reforged.app/Contents/MacOS/generals"
+```
+
+Only a visible, focused game window prevents idle display sleep. Minimizing it,
+switching to another app or running offscreen releases that assertion; simulation
+and networking continue as before. `SDL_VIDEO_ALLOW_SCREENSAVER=1` also allows
+display sleep while playing.
+
+On macOS 15 and later, the LAN lobby may trigger the system's local-network
+permission dialog. The app explains discovery, hosting and multiplayer in English
+or German. Allow access to use LAN multiplayer; an existing choice can be changed
+in **System Settings → Privacy & Security → Local Network**. This permission is
+managed by macOS, and the app does not request it merely to install or copy game
+data. A rebuilt, ad-hoc-signed app may be treated as a new identity and prompt
+again; a distributed release needs an Apple-issued signing identity for reliable
+permission tracking. See Apple's [local-network privacy guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+
 ## Apple Silicon
 
 Release builds run natively on arm64. On an M2, M2 Pro, M2 Max or M2 Ultra,
@@ -175,6 +208,20 @@ textures, movies, voices or music.
   `-root` and `-overlay build-mac/overlay` when launching it directly.
 - Build/test logs and diagnostics are useful; do not attach retail archives to
   issues. Use synthetic reproductions for parser bugs.
+
+The normal suite checks window policy on SDL's offscreen driver. To exercise
+actual Cocoa fullscreen transitions, Retina dimensions, menu overrides and
+display-sleep assertions in a desktop session, run the explicit native check:
+
+```sh
+cmake --build build-mac --target macos_window_selfcheck
+./build-mac/macos_window_selfcheck
+```
+
+It briefly opens a test window and switches Spaces, then closes it. It needs no
+game data and is excluded from automatic builds and CTest runs. The actual
+Game Mode indicator and the local-network permission dialog still need checking
+with the packaged game; the check does not change system permission choices.
 
 Before contributing, run the Release tests and
 `python3 GeneralsMD/Code/Tools/check_game_assets.py`. The latter detects common

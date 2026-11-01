@@ -10,6 +10,8 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- macOS fullscreen uses native Spaces and declares Game Mode support, with the legacy fullscreen override retained. Background and offscreen runs release idle display-sleep prevention. The app includes English and German LAN-permission descriptions for current macOS versions.
+
 - Setup questions appear before the installer waits for an answer. Build and test work use bounded parallelism; the full suite remains available, and tests can be repeated without rebuilding. Configuration, build-directory and CPU choices reach the guided build and the application it starts.
 
 - BTree and Huffman now bound source reads, dictionary expansion and output; cyclic dictionaries, invalid code tables and inconsistent member lengths fail without removing legacy format support. Both engine source trees use bounded EAC decoders.

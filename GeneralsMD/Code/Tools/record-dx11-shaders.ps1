@@ -26,8 +26,9 @@
 
   This plays AI-against-AI skirmishes with the picture drawn by Direct3D 11, on a Windows machine whose
   d3dcompiler_47 is Microsoft's. Each run names its setup in a user data folder of this script's own:
-  reforged-look.ini as Options.ini for the Reforged picture, none for a run marked Classic, which is what a
-  first start draws. It does so at the default post chain and with it off, on a few seeds,
+  reforged-look.ini as Options.ini for the Reforged picture (High), none for a run marked Classic, which is
+  what a first start draws, and reforged-look.ini with the slider's Ultra rows for a run marked Ultra, the
+  nine looks of 2026-10-31 on. It does so at the default post chain and with it off, on a few seeds,
   plus the two scenarios that stage the per-object looks, plus the shell map. It starts each run from an empty cache: the player's cache is moved aside and put
   back afterwards, and the farm's shipped file is unlinked. What the runs compiled is then the shipped
   file. The bytecode is exactly what run-time D3DCompile gives on this machine, because it is that output.
@@ -63,6 +64,8 @@ param(
 	[int] $TimeoutMinutes = 30,
 	# leave the shipped file in the farm: a check that a run with it compiles nothing it holds
 	[switch] $KeepShipped,
+	# only the runs whose names match one of these wildcards (seed0-classic, seed0, seed0-ultra): the short check
+	[string[]] $Only = @(),
 	# given to every run, after its own switches (for example -noDynamicLOD)
 	[string[]] $ExtraArgs = @()
 )
@@ -87,17 +90,20 @@ New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $runs = @()
 foreach ($seed in $Seeds) {
 	$match = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-randommap", $seed, 2,
-		"-autoskirmish", 2, "-aidiff", "brutal", "-seed", $seed, "-observer")
+		"-autoskirmish", 2, "-aidiff", "hard", "-seed", $seed, "-observer")
 	$runs += , @{ Name = "seed$seed"; Args = $match; Minutes = $TimeoutMinutes }
 	$runs += , @{ Name = "seed$seed-nopost"; Args = $match + @("-dx11post", "off"); Minutes = $TimeoutMinutes }
+	$runs += , @{ Name = "seed$seed-ultra"; Args = $match; Minutes = $TimeoutMinutes; Ultra = $true }
+	$runs += , @{ Name = "seed$seed-ultra-nopost"; Args = $match + @("-dx11post", "off"); Minutes = $TimeoutMinutes; Ultra = $true }
 }
 foreach ($map in $Maps) {
 	# quoted by hand: Start-Process joins its arguments with spaces and the names have them
 	$named = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-map", "`"Maps\$map\$map.map`"",
-		"-autoskirmish", 2, "-aidiff", "brutal", "-seed", 0, "-observer")
+		"-autoskirmish", 2, "-aidiff", "hard", "-seed", 0, "-observer")
 	$tag = $map -replace '[^A-Za-z0-9]', ''
 	$runs += , @{ Name = "map-$tag"; Args = $named; Minutes = $TimeoutMinutes }
 	$runs += , @{ Name = "map-$tag-nopost"; Args = $named + @("-dx11post", "off"); Minutes = $TimeoutMinutes }
+	$runs += , @{ Name = "map-$tag-ultra"; Args = $named; Minutes = $TimeoutMinutes; Ultra = $true }
 }
 # The per-object looks (power outage, EMP, cloak and its shadow, revealed), each a program of its own on every
 # mesh it dresses, which an observer's match never draws: an observer sees every stealthed unit as a friend's
@@ -110,14 +116,28 @@ foreach ($look in @(
 		"-autoskirmish", 2, "-takeover") + $look.Sides + @("-seed", 7, "-scenario", $look.Name, "-cinema", $look.Name)
 	$runs += , @{ Name = $look.Name; Args = $staged; Minutes = $TimeoutMinutes }
 	$runs += , @{ Name = "$($look.Name)-nopost"; Args = $staged + @("-dx11post", "off"); Minutes = $TimeoutMinutes }
+	$runs += , @{ Name = "$($look.Name)-ultra"; Args = $staged; Minutes = $TimeoutMinutes; Ultra = $true }
 }
 # The main menu's shell map, the first thing a player sees: the intro movies, then the menu, which runs until
 # it is killed.  The cache is written while the game runs, so the kill loses nothing.
 $runs += , @{ Name = "shellmap"; Args = @("-multiInstance", "-noFPSLimit"); Minutes = 5 }
+$runs += , @{ Name = "shellmap-ultra"; Args = @("-multiInstance", "-noFPSLimit"); Minutes = 5; Ultra = $true }
 # What a first start draws: the Classic game, no Options.ini, on the menu and in a match.
 $runs += , @{ Name = "shellmap-classic"; Args = @("-multiInstance", "-noFPSLimit"); Minutes = 5; Classic = $true }
 $runs += , @{ Name = "seed0-classic"; Args = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-randommap", 0, 2,
-	"-autoskirmish", 2, "-aidiff", "brutal", "-seed", 0, "-observer"); Minutes = $TimeoutMinutes; Classic = $true }
+	"-autoskirmish", 2, "-aidiff", "hard", "-seed", 0, "-observer"); Minutes = $TimeoutMinutes; Classic = $true }
+
+# Ultra, the slider's step 10 (TheGraphicsQualityTable): reforged-look.ini (High) with the rows that rise above
+# High. The nine looks of 2026-10-31 are the ones that change a generated program; the rest (the Ultra
+# detail level with its particle ring, Warm Light, 8x MSAA, the shadow map size, Smoke) rides along so the
+# rung is whole.
+$ultraRows = [ordered]@{ StaticGameLOD = "Ultra"; GraphicsQuality = 10; MSAA = 3; ShadowQuality = 2; Smoke = 1; MapLight = "yes";
+	Firelight = "yes"; HemiAmbient = "yes"; AmbientOcclusion = "yes"; InternalHdr = "yes"; Weather = "yes"; WaterSplashes = "yes";
+	Atmosphere = "yes"; StructureCollapse = "yes"; GroundMarks = "yes" }
+$ultraIni = @(Get-Content (Join-Path $repoRoot "reforged-look.ini") | Where-Object { $_ -notmatch "^\s*($($ultraRows.Keys -join '|'))\s*=" }) +
+	@($ultraRows.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)" })
+
+if ($Only.Count -gt 0) { $runs = @($runs | Where-Object { $name = $_.Name; @($Only | Where-Object { $name -like $_ }).Count -gt 0 }) }
 
 New-Item -ItemType Directory -Force $UserData | Out-Null
 $env:ZH_USER_DATA_DIR = (Resolve-Path $UserData).Path
@@ -129,6 +149,7 @@ try {
 		New-Farm $zh $farm
 		$options = Join-Path $UserData "Options.ini"
 		if ($run.Classic) { Remove-Item -LiteralPath $options -Force -ErrorAction SilentlyContinue }
+		elseif ($run.Ultra) { Set-Content -LiteralPath $options -Value $ultraIni -Encoding ASCII }
 		else { Copy-Item (Join-Path $repoRoot "reforged-look.ini") $options -Force }
 		$shipped = Join-Path $farm "dx11shaders.shipped"
 		if (-not $KeepShipped -and (Test-Path -LiteralPath $shipped)) { Remove-Item -LiteralPath $shipped -Force }	# the link, never its target

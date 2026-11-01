@@ -897,7 +897,6 @@ private:
 	DisplayString*			m_constructDisplayString;  ///< string to display construction % complete
 	DisplayString*			m_supplyCashDisplayString; ///< string to display the cash left in a supply pile
 	Int									m_lastSupplyCashDisplayed; ///< so the string is only rebuilt when the pile shrinks
-	DisplayString*			m_productionTimeDisplayString; ///< seconds left on what this building is making
 	DisplayString*			m_chargeTimeDisplayString; ///< seconds left on a public timer charging here
 	DisplayString*			m_captionDisplayString;		///< string to display caption
 	DisplayString*			m_groupNumber;						///< string to display the group number of this drawable

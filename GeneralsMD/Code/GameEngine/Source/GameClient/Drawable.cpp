@@ -642,7 +642,6 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_lastConstructDisplayed = -1.0f;
 	m_supplyCashDisplayString = NULL;
 	m_lastSupplyCashDisplayed = -1;
-	m_productionTimeDisplayString = NULL;
 	m_chargeTimeDisplayString = NULL;
 	m_constructDisplayString = NULL;	// buildRenderObjects
 
@@ -848,10 +847,6 @@ Drawable::~Drawable()
 	if( m_supplyCashDisplayString )
 		TheDisplayStringManager->freeDisplayString( m_supplyCashDisplayString );
 	m_supplyCashDisplayString = NULL;
-
-	if( m_productionTimeDisplayString )
-		TheDisplayStringManager->freeDisplayString( m_productionTimeDisplayString );
-	m_productionTimeDisplayString = NULL;
 
 	if( m_chargeTimeDisplayString )
 		TheDisplayStringManager->freeDisplayString( m_chargeTimeDisplayString );
@@ -4995,13 +4990,13 @@ static void freeOwnCountdown( DisplayString *&countdown )
 	countdown = NULL;
 }
 
-static Int drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int y )
+static void drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int y )
 {
 	if( countdown == NULL )
 	{
 		countdown = TheDisplayStringManager->newDisplayString();
 		if( countdown == NULL )
-			return 0;
+			return;
 
 		countdown->setFont( TheFontLibrary->getFont( TheInGameUI->getDrawableCaptionFontName(),
 							TheGlobalLanguageData->adjustFontSize( TheInGameUI->getDrawableCaptionPointSize() - 2 ),
@@ -5015,7 +5010,6 @@ static Int drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int 
 	Int textW, textH;
 	countdown->getSize( &textW, &textH );
 	countdown->draw( x, y - textH, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
-	return textH;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5288,11 +5282,10 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 															(healthBoxWidth - 2) - healthFillWidth, healthBoxHeight - 2,
 															GameMakeColor( 10, 10, 10, 190 ) );
 
-		// bars stack upwards from just above the health bar, each clearing the seconds written over
-		// the one below it
+		// bars stack upwards from just above the health bar, each clearing what is drawn over the one below it
 		Int stackY = healthBarRegion->lo.y - 3;
 
-		// own producers show a white production-progress bar above the health bar, with seconds left at its top-left
+		// own producers show a white production-progress bar above the health bar
 		ProductionUpdateInterface *pu = hasIconModule( ICON_MODULE_PRODUCTION ) && showsOwnerDetail( obj )
 			? obj->getProductionUpdateInterface() : NULL;
 		const ProductionEntry *pe = pu ? pu->firstProduction() : NULL;
@@ -5311,19 +5304,30 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 																(healthBoxWidth - 2) * pct * 0.01f, healthBoxHeight - 2,
 																GameMakeColor( 255, 255, 255, 255 ) );
 
-			Player *player = obj->getControllingPlayer();
-			Int totalFrames = pe->getProductionType() == PRODUCTION_UNIT
-												? pe->getProductionObject()->calcTimeToBuild( player )
-												: pe->getProductionUpgrade()->calcTimeToBuild( player );
-			Int secondsLeft = ControlBar_secondsFromFrames( totalFrames * (1.0f - pct * 0.01f) );
+			stackY = prodY - 3;
 
-			Int textH = drawOwnCountdown( m_productionTimeDisplayString, secondsLeft, healthBarRegion->lo.x, prodY );
-
-			// whatever comes next goes above the seconds, not through them
-			stackY = prodY - textH - 1;
+			//
+			// One white square over the bar's right end for each entry waiting behind the one being made.
+			// The squares share a black outline, so they stay apart on any ground, follow the bar's own
+			// thickness up the screen sizes, and start a new row when a far zoom makes the bar too short.
+			//
+			const Int waiting = (Int)pu->getProductionCount() - 1;
+			if( waiting > 0 )
+			{
+				const Int side = (Int)healthBoxHeight + 2;
+				const Int pitch = side - 1;
+				const Int perRow = max( 1, ((Int)healthBoxWidth - 1) / pitch );
+				const Int bottom = prodY - 1 - side;
+				for( Int i = 0; i < waiting; ++i )
+				{
+					const Int x = healthBarRegion->lo.x + (Int)healthBoxWidth - side - (i % perRow) * pitch;
+					const Int y = bottom - (i / perRow) * pitch;
+					TheDisplay->drawFillRect( x, y, side, side, GameMakeColor( 0, 0, 0, 255 ) );
+					TheDisplay->drawFillRect( x + 1, y + 1, side - 2, side - 2, GameMakeColor( 255, 255, 255, 255 ) );
+				}
+				stackY = bottom - ((waiting - 1) / perRow) * pitch - 3;
+			}
 		}
-		else
-			freeOwnCountdown( m_productionTimeDisplayString );
 
 		//
 		// A weapon on a long reload, on a unit of ours the player is looking at: selected or under

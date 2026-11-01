@@ -24,6 +24,8 @@
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "GameClient/ApplicationWindowTitle.h"
+#include "GameClient/Display.h"
+#include "GameClient/DisplayCutout.h"
 #include "GameLogic/GameLogic.h"
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
@@ -65,6 +67,28 @@ static const int INITIAL_WINDOW_HEIGHT = 600;
 
 // The window GameText's title hook names.  One window per process, as on Windows (ApplicationHWnd).
 static SDL_Window *s_titledWindow = NULL;
+
+#if defined(__APPLE__)
+static Bool displayCutoutInGamePixels( Int &x, Int &y, Int &width, Int &height )
+{
+	SDL_Rect cutout;
+	if (s_titledWindow == NULL || !SdlMacWindow_getDisplayCutout( s_titledWindow, &cutout ))
+		return FALSE;
+	Int windowWidth = 0, windowHeight = 0;
+	SDL_GetWindowSize( s_titledWindow, &windowWidth, &windowHeight );
+	const Int gameWidth = TheDisplay ? (Int)TheDisplay->getWidth() : windowWidth;
+	const Int gameHeight = TheDisplay ? (Int)TheDisplay->getHeight() : windowHeight;
+	if (windowWidth <= 0 || windowHeight <= 0 || gameWidth <= 0 || gameHeight <= 0)
+		return FALSE;
+	const double sx = (double)gameWidth / windowWidth;
+	const double sy = (double)gameHeight / windowHeight;
+	x = (Int)floor( cutout.x * sx );
+	y = (Int)floor( cutout.y * sy );
+	width = (Int)ceil( (cutout.x + cutout.w) * sx ) - x;
+	height = (Int)ceil( (cutout.y + cutout.h) * sy ) - y;
+	return width > 0 && height > 0;
+}
+#endif
 
 static void setTitleOfWindow( const char *utf8Title )
 {
@@ -163,6 +187,11 @@ static Bool s_pendingVideo = FALSE;
 
 SdlGameEngine::~SdlGameEngine()
 {
+	SdlInput_setGestureWindow( NULL );
+#if defined(__APPLE__)
+	if (TheDisplayCutoutQuery == displayCutoutInGamePixels)
+		TheDisplayCutoutQuery = NULL;
+#endif
 	s_pendingWindow = m_window;
 	s_pendingVideo = m_sdlVideoStarted;
 	m_window = NULL;
@@ -200,6 +229,9 @@ void SdlGameEngine::createWindow( void )
 		startOffscreen();
 		return;
 	}
+#if defined(__APPLE__)
+	SdlMacWindow_configureFullscreen();
+#endif
 
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
@@ -242,6 +274,7 @@ void SdlGameEngine::createWindow( void )
 		return;
 	}
 	syncWindow( m_window );
+	SdlInput_setGestureWindow( m_window );
 	SdlWindowPolicy_updateScreenSaver( SDL_GetWindowFlags( m_window ) );
 #ifdef ZH_WINDOW_ICON
 	// a Linux executable carries no icon, so the window brings its own for the taskbar and alt-tab;
@@ -259,6 +292,9 @@ void SdlGameEngine::createWindow( void )
 		m_request.hidden ? ", hidden" : "" ));
 
 	s_titledWindow = m_window;
+#if defined(__APPLE__)
+	TheDisplayCutoutQuery = displayCutoutInGamePixels;
+#endif
 	TheApplicationWindowTitleHook = setTitleOfWindow;
 	setSdlMessageBoxOwner( m_window );
 
@@ -314,7 +350,10 @@ void SdlGameEngine::startOffscreen( void )
 
 void SdlGameEngine_releaseWindow( void )
 {
+	SdlInput_setGestureWindow( NULL );
 #if defined(__APPLE__)
+	if (TheDisplayCutoutQuery == displayCutoutInGamePixels)
+		TheDisplayCutoutQuery = NULL;
 	SdlMacWindow_updatePresentation( NULL );
 #endif
 	if (s_pendingWindow != NULL)
@@ -376,11 +415,18 @@ void SdlGameEngine::serviceWindowsOS( void )
 				break;
 
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
+				SdlInput_cancelGestures();
 				// WinMain's WM_ACTIVATE rule: silent behind another window unless MuteInBackground is
 				// off, and never in a -wav run.  Once a loss, since loseFocus keeps one set of volumes.
 				if (TheAudio && isActive() && TheGlobalData->m_wavEndFrame <= 0 && TheGlobalData->m_muteInBackground)
 					TheAudio->loseFocus();
 				setIsActive( FALSE );
+				break;
+
+			case SDL_EVENT_WINDOW_HIDDEN:
+			case SDL_EVENT_WINDOW_MINIMIZED:
+				SdlInput_cancelGestures();
+				SdlInput_dispatch( event );
 				break;
 
 			default:

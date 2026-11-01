@@ -190,6 +190,7 @@ cat > "$C/Info.plist" <<PLIST_EOF
 	<key>LSMinimumSystemVersion</key>		<string>$minos</string>
 	<key>LSSupportsGameMode</key>			<true/>
 	<key>NSHighResolutionCapable</key>		<true/>
+	<key>NSPrefersDisplaySafeAreaCompatibilityMode</key>	<false/>
 	<key>NSLocalNetworkUsageDescription</key>	<string>$network_usage_en</string>
 	<key>ZHReforgedBuildDate</key>			<string>$built</string>
 	<key>ZHReforgedCommit</key>			<string>$commit</string>

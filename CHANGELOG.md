@@ -10,6 +10,9 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- MacBooks can use the full display beside the camera notch. Full-panel fullscreen is selected when a notched display is attached; native Spaces remain selectable. Only obscured score-bar and HUD widgets move below the housing, leaving the map and unobscured corners available.
+- On macOS, two-finger scrolling pans the battlefield and pinch zooms continuously. UI scrolling, physical wheels, clicks, keyboard controls and placement commands keep their behavior. Gestures cancel across focus, display and UI changes, and never become game or network commands.
+
 - On the M2 Max, a synthetic engine-shader workload needs 21% less render-thread CPU time while the classic shader control remains effectively unchanged. Small mip updates upload only the changed level, preserving rendered contents and sibling levels: a 32×32 update in a 2048×2048 texture stages 4,096 bytes instead of 22,369,620. Initial uploads and all existing rendering features remain available. These are targeted measurements, not match FPS.
 
 - Invalid object-allocation paths now fail consistently in Release builds instead of returning a null pointer. Normal pool allocation, object destruction and cleanup after constructor exceptions retain their existing behavior.
@@ -24,7 +27,7 @@ found and fixed, EA's own, not port damage.**
 
 - Unit and faction names can be selected independently of the text language. Guided setup offers both choices, existing preferences take precedence, and the game settings allow changing them for the next launch. The choices affect names without changing models, voices or match rules.
 
-- macOS fullscreen uses native Spaces and declares Game Mode support, with the legacy fullscreen override retained. Background and offscreen runs release idle display-sleep prevention. The app includes English and German LAN-permission descriptions for current macOS versions.
+- macOS fullscreen retains native Spaces and declares Game Mode support, with the legacy fullscreen override retained. Background and offscreen runs release idle display-sleep prevention. The app includes English and German LAN-permission descriptions for current macOS versions.
 
 - Setup questions appear before the installer waits for an answer. Build and test work use bounded parallelism; the full suite remains available, and tests can be repeated without rebuilding. Configuration, build-directory and CPU choices reach the guided build and the application it starts.
 

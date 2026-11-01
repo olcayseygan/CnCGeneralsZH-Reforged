@@ -11,24 +11,40 @@ Run `make install` for a step-by-step installer (English, German; see
 executing step and can optionally discover/copy your owned Steam/GOG installation
 outside the checkout. See [the installer guide](installer.md).
 
-## Native fullscreen and system integration
+## Fullscreen, the camera notch and system integration
 
-Fullscreen uses a native macOS Space. On Apple silicon with macOS 14 or later,
-this allows the system's [Game Mode](https://support.apple.com/105118) to prioritize
-the game. The app declares Game Mode support; macOS decides when to activate it,
-and you can turn it off in the system's Game Mode menu. macOS 13 and Intel Macs
-keep native fullscreen without requiring Game Mode.
+When a notched display is attached, fullscreen defaults to SDL's full-panel
+mode. It draws into the areas beside the camera housing as well as below it.
+The packaged app opts out of macOS's reduced-display compatibility mode. The
+physical housing remains opaque; only HUD widgets which intersect it move
+below it. The world viewport and the unobscured top corners keep the full area.
 
-The Dock and menu bar stay hidden while the game owns its fullscreen Space, so
-moving the pointer to an edge still scrolls the map. Switching to another app
-restores normal desktop behavior. Window transitions finish before the renderer
-resets its device. If a particular display setup needs the previous fullscreen
-behavior, launch the packaged executable with SDL's compatibility override:
+This is a separate presentation choice from native macOS Spaces. On the tested
+MacBook, Spaces provided a 3456×2168 drawable, while full-panel mode provided all
+3456×2234 pixels. Changing the plist or requesting a larger native window alone
+did not expand that Space. Both modes retain exact windowed restoration.
+
+On displays without a camera housing, native Spaces remain the default. They
+also remain explicitly available on a MacBook:
 
 ```sh
-SDL_VIDEO_MAC_FULLSCREEN_SPACES=0 \
+SDL_VIDEO_MAC_FULLSCREEN_SPACES=1 \
   "build-mac/Zero Hour Reforged.app/Contents/MacOS/generals"
 ```
+
+An explicit SDL hint/environment setting takes precedence over detection.
+`SDL_VIDEO_MAC_FULLSCREEN_SPACES=0` explicitly selects full-panel fullscreen.
+The app retains its Game Mode declaration. On Apple silicon with macOS 14 or
+later, the native-Space route allows macOS's
+[Game Mode](https://support.apple.com/105118); macOS decides when to activate it.
+macOS 13 and Intel remain supported. Apple's
+[display compatibility guidance](https://developer.apple.com/documentation/bundleresources/information-property-list/nsprefersdisplaysafeareacompatibilitymode)
+describes the camera-housing regions and the bundle preference.
+
+The Dock and menu bar stay hidden while the focused game owns fullscreen, so
+moving the pointer to an edge still scrolls the map. Switching to another app
+restores normal desktop behavior. Window transitions finish before the renderer
+resets its device.
 
 Only a visible, focused game window prevents idle display sleep. Minimizing it,
 switching to another app or running offscreen releases that assertion; simulation
@@ -42,6 +58,25 @@ and simulation timing remain separate.
 
 Native input-method candidates follow an active text field after window,
 monitor or Retina-scaling changes, without interrupting an ongoing composition.
+
+## Trackpad camera controls
+
+Two-finger scrolling over the battlefield moves the map with macOS's natural
+scroll direction and momentum. Pinching zooms continuously, respecting the
+existing zoom limits, zoom speed and optional zoom-to-cursor setting. These
+gestures do not simulate mouse clicks or wheel commands.
+
+Scrolling over UI keeps its normal UI behavior. A gesture which starts over a
+control does not later take over the map; one which loses camera ownership is
+cancelled. Menus, dialogs, text input, selection, placement and scripted cameras
+block camera gestures. Focus, window and Retina changes discard pending motion.
+Input is applied after mouse/keyboard messages and UI translation, outside the
+logic-thread overlap window. It remains local camera input.
+
+Physical mouse wheels, right-click/two-finger click, Control-click force fire,
+keyboard controls, drag rotation and wheel modifiers retain their existing
+behavior. To restore wheel-style zoom for trackpad scrolling, put
+`MacTrackpadPan = no` in your personal `Options.ini`; pinch zoom remains available.
 
 Global C++ allocations use system-compatible storage, so AppKit, CoreGraphics
 and graphics drivers can safely release it across library boundaries. Explicit
@@ -261,9 +296,10 @@ display-sleep assertions in a desktop session, run the explicit native check:
 ```sh
 cmake --build build-mac --target macos_window_selfcheck
 ./build-mac/macos_window_selfcheck
+./build-mac/macos_window_selfcheck --full-display
 ```
 
-It briefly opens a test window and switches Spaces, then closes it. It needs no
+These briefly open a test window in each fullscreen mode, then close it. They need no
 game data and is excluded from automatic builds and CTest runs. The actual
 Game Mode indicator and the local-network permission dialog still need checking
 with the packaged game; the check does not change system permission choices.

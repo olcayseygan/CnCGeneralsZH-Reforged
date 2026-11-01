@@ -72,6 +72,7 @@ check '[ "$(key CFBundleShortVersionString)" = "$version" ] && [ "$(key LSMinimu
 check '[ "$(key NSHighResolutionCapable)" = true ] && [ "$(key LSApplicationCategoryType)" = public.app-category.strategy-games ] && [ "$(key CFBundleIconFile)" = AppIcon ]' \
 	"high resolution, the strategy games category, and the icon"
 check '[ "$(key LSSupportsGameMode)" = true ]' "the bundle declares Game Mode support"
+check '[ "$(key NSPrefersDisplaySafeAreaCompatibilityMode)" = false ]' "the bundle opts out of camera-housing display compatibility scaling"
 network_usage_en='Zero Hour Reforged uses the local network to find and host LAN games and connect to other players.'
 network_usage_de='Zero Hour Reforged verwendet das lokale Netzwerk, um LAN-Spiele zu finden, zu hosten und mit anderen Spielern zu spielen.'
 check '[ "$(key NSLocalNetworkUsageDescription)" = "$network_usage_en" ]' "the local-network purpose explains LAN discovery, hosting and multiplayer"

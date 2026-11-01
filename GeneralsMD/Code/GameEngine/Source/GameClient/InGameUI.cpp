@@ -98,6 +98,7 @@
 #include "GameClient/CinemaDirector.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayCutout.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/ParticleSys.h"
@@ -9049,7 +9050,12 @@ void InGameUI::drawDirectorBroadcast( void )
 	// while the screen is split the bar goes up off the top, frame and all, as the radar slides down
 	// off the bottom, and comes back down as the radar comes back: the panes have the screen to
 	// themselves.  Everything the bar draws hangs from its layouts' rows, so lifting those lifts it
-	const Int lift = REAL_TO_INT( TheObserverCamera.getCornerRadarSlide() * ( max( from.height, to.height ) + frameReach ) );
+	const Int safeOffset = displayCutoutTopOffset( from.left + ( from.barWidth - clockBox ) / 2,
+		0, clockBox, clockBoxHeight );
+	// Shift this score-bar group, including its hit regions. The world and other HUD keep their
+	// full display area; adding the offset to the travel also leaves the bar fully offscreen at exit.
+	const Int lift = REAL_TO_INT( TheObserverCamera.getCornerRadarSlide()
+		* ( max( from.height, to.height ) + frameReach + safeOffset ) ) - safeOffset;
 	auto liftLayout = [ lift ]( BroadcastLayout &l )
 	{
 		for( size_t index = 0; index < l.cardTops.size(); index++ )
@@ -9747,6 +9753,7 @@ void InGameUI::drawHudOverlay( void )
 	const UIRect box = TheUIRect();
 	Int x = box.x + box.w - stripWidth - pad - stripPixels( 4 );
 	Int y = box.y + stripPixels( 2 );
+	y += displayCutoutTopOffset( x - pad, y - 1, stripWidth + pad*2, textHeight + 2 );
 
 	// a plate behind it, so it stays legible over bright terrain
 	TheDisplay->drawFillRect( x - pad, y - 1, stripWidth + pad*2, textHeight + 2,
@@ -9783,7 +9790,8 @@ void InGameUI::drawKickVoteBanner( void )
 	const UIRect box = TheUIRect();
 	const Int pad = stripPixels( 3 );
 	const Int x = box.x + ( box.w - width ) / 2;
-	const Int y = box.y + stripPixels( 40 );
+	Int y = box.y + stripPixels( 40 );
+	y += displayCutoutTopOffset( x - pad, y - pad, width + pad*2, height + pad*2 );
 	TheDisplay->drawFillRect( x - pad, y - pad, width + pad*2, height + pad*2, GameMakeColor( 0, 0, 0, 170 ) );
 	banner->draw( x, y, GameMakeColor( 255, 210, 90, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
 }

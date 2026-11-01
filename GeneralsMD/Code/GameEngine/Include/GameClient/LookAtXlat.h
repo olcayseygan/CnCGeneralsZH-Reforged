@@ -50,6 +50,10 @@ public:
 	void setCurrentPos( const ICoord2D& pos );
 	/// one step of the held scroll; the frame tick's, and a picture's drawn beside a tick (LOGIC-THREAD.md phase 4)
 	void scrollView( void );
+	/// Local device gesture, never a gameplay command. Pixel is the pointer in game pixels;
+	/// pan is the desired content displacement in those pixels, scale > 1 magnifies the view.
+	/// Zero displacement and scale 1 only query eligibility. The input device owns gesture phases.
+	Bool applyCameraGesture( const ICoord2D &pixel, Real panX, Real panY, Real zoomScale );
 
 	void resetModes(); //Used when disabling input, so when we reenable it we aren't stuck in a mode.
 

@@ -20008,6 +20008,8 @@ TEST(chroma_money_bar_is_a_thousand_credits_a_lamp)
 #include "test_camera_behavior.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
+#include "test_camera_gestures.inc"
+#include "test_display_cutout.inc"
 
 // The two cursor indexes a float decides.  Mouse.ini's FPS or GameData.ini's scroll speed of inf or NaN
 // made them INT_MIN on Windows and indexed a table with that; a negative FPS made a negative frame on

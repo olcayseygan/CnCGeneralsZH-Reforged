@@ -700,6 +700,7 @@ GameEngine/Include/GameClient/DebugDisplay.h
 GameEngine/Include/GameClient/Diplomacy.h
 GameEngine/Include/GameClient/DisconnectMenu.h
 GameEngine/Include/GameClient/Display.h
+GameEngine/Include/GameClient/DisplayCutout.h
 GameEngine/Include/GameClient/DisplayString.h
 GameEngine/Include/GameClient/DisplayStringManager.h
 GameEngine/Include/GameClient/DrawGroupInfo.h
@@ -1288,6 +1289,7 @@ GameEngine/Source/GameClient/CinemaDirector.cpp
 GameEngine/Source/GameClient/Color.cpp
 GameEngine/Source/GameClient/Credits.cpp
 GameEngine/Source/GameClient/Display.cpp
+GameEngine/Source/GameClient/DisplayCutout.cpp
 GameEngine/Source/GameClient/DisplayString.cpp
 GameEngine/Source/GameClient/DisplayStringManager.cpp
 GameEngine/Source/GameClient/DrawGroupInfo.cpp
@@ -1786,6 +1788,7 @@ GameEngineDevice/Include/SdlDevice/GameClient/AniCursor.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlInput.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyTable.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyboard.h
+GameEngineDevice/Include/SdlDevice/GameClient/SdlMacGesture.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlMouse.h
 GameEngineDevice/Include/VideoDevice/Bink/BinkVideoPlayer.h
 GameEngineDevice/Include/W3DDevice/Common/W3DConvert.h
@@ -1944,6 +1947,7 @@ GameEngineDevice/Source/SdlDevice/GameClient/AniCursor.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlInput.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyTable.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyboard.cpp
+GameEngineDevice/Source/SdlDevice/GameClient/SdlMacGesture.mm
 GameEngineDevice/Source/SdlDevice/GameClient/SdlMouse.cpp
 GameEngineDevice/Source/VideoDevice/Bink/BinkVideoPlayer.cpp
 GameEngineDevice/Source/W3DDevice/Common/System/W3DFunctionLexicon.cpp
@@ -3188,6 +3192,7 @@ Tests/macos_window_selfcheck.mm
 Tests/miles_listen.cpp
 Tests/miles_smoke.cpp
 Tests/replay_wide_oracle.cpp
+Tests/require_test_summary.cmake
 Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
 Tests/run_ini_crlf_check.sh
@@ -3206,6 +3211,7 @@ Tests/test_bigfilesystem.cpp
 Tests/test_bigfilesystem_stubs.cpp
 Tests/test_binkvideo.cpp
 Tests/test_camera_behavior.inc
+Tests/test_camera_gestures.inc
 Tests/test_cinema.inc
 Tests/test_clock.cpp
 Tests/test_compression.cpp
@@ -3218,6 +3224,7 @@ Tests/test_d3dxportable.cpp
 Tests/test_debug.cpp
 Tests/test_detround.cpp
 Tests/test_developer_tools.py
+Tests/test_display_cutout.inc
 Tests/test_dx11backend.cpp
 Tests/test_dx11device.cpp
 Tests/test_dx11layout.cpp
@@ -3295,6 +3302,7 @@ Tests/test_sdl_program_cache.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp
 Tests/test_smooth_motion.cpp
+Tests/test_summary_guard.cmake
 Tests/test_sun_shadow_sorting.cpp
 Tests/test_supply_center_save.inc
 Tests/test_support.cpp

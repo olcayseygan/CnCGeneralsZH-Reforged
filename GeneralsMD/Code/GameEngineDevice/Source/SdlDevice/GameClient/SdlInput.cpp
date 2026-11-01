@@ -21,19 +21,99 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "GameClient/Display.h"
+#include "Common/GlobalData.h"
+#include "Common/GameEngine.h"
 #include "GameClient/IMEManagerPosix.h"
+#include "GameClient/LookAtXlat.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlKeyTable.h"
 #include "SdlDevice/GameClient/SdlKeyboard.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
+#include "SdlDevice/GameClient/SdlMacGesture.h"
 
 #include <SDL3/SDL.h>
 
 #include <math.h>
+#include <cmath>
 
 namespace {
 
 Real theWheelCarry = 0.0f;		///< the fraction of a WM_MOUSEWHEEL unit not yet reported
+
+SDL_Window *theGestureWindow = NULL; // Borrowed; detached before SDL destroys it.
+Uint32 theScrollEventType = 0;
+SdlScrollGestureTarget thePanTarget, thePinchTarget;
+SDL_WindowID thePinchWindow = 0;
+uint64_t thePanSequence = 0, theCancelledPanSequence = 0;
+SdlScrollGestureQueue theScrolls;
+SdlPendingCameraGestures thePendingGestures;
+
+bool scrollEventType()
+{
+	if (!theScrollEventType) theScrollEventType = SDL_RegisterEvents(1);
+	return theScrollEventType != 0;
+}
+
+SDL_Window *gestureWindow()
+{
+	return theGestureWindow ? theGestureWindow : SdlInput_gameWindow();
+}
+
+bool resolveGesture(SDL_WindowID windowID, float x, float y, Real deltaX, Real deltaY, Real scale,
+	bool pan, SdlResolvedCameraGesture &gesture)
+{
+	if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(deltaX)
+		|| !std::isfinite(deltaY) || !std::isfinite(scale) || scale <= 0 || !TheLookAtTranslator)
+		return false;
+	SDL_Window *window = gestureWindow();
+	if (!window || (windowID && windowID != SDL_GetWindowID(window))
+		|| !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || SDL_GetMouseFocus() != window)
+		return false;
+	Int width = 0, height = 0;
+	SDL_GetWindowSize(window, &width, &height);
+	if (width <= 0 || height <= 0 || x < 0 || y < 0 || x >= width || y >= height) return false;
+	const Int gameWidth = TheDisplay && TheDisplay->getWidth() > 0 ? (Int)TheDisplay->getWidth() : width;
+	const Int gameHeight = TheDisplay && TheDisplay->getHeight() > 0 ? (Int)TheDisplay->getHeight() : height;
+	Int gameX, gameY;
+	SdlInput_scaleToGame(x, y, width, height, gameWidth, gameHeight, gameX, gameY);
+	// Scale displacement without flooring it: a Retina/subpixel drag must retain small changes.
+	const Real sx = (Real)gameWidth / width;
+	const Real sy = (Real)gameHeight / height;
+	gesture = { SDL_GetWindowID(window), gameX, gameY, deltaX * sx, deltaY * sy, scale, pan };
+	return std::isfinite(gesture.panX) && std::isfinite(gesture.panY);
+}
+
+bool cameraGestureEligibleAt(SDL_WindowID windowID, float x, float y)
+{
+	SdlResolvedCameraGesture gesture;
+	if (!resolveGesture(windowID, x, y, 0, 0, 1, false, gesture)) return false;
+	const ICoord2D pixel = { gesture.x, gesture.y };
+	return TheLookAtTranslator->applyCameraGesture(pixel, 0, 0, 1);
+}
+
+bool queueResolvedGesture(SDL_WindowID windowID, float x, float y, Real deltaX, Real deltaY, Real scale, bool pan)
+{
+	SdlResolvedCameraGesture gesture;
+	if (!resolveGesture(windowID, x, y, deltaX, deltaY, scale, pan, gesture)
+		|| !thePendingGestures.push(gesture)) {
+		SdlInput_cancelGestures();
+		return false;
+	}
+	return true;
+}
+
+void dispatchScroll(const SDL_Event &event)
+{
+	const Uint32 code = static_cast<Uint32>(event.user.code);
+	SdlScrollGestureQueue::Payload pending;
+	if (!theScrolls.pop(code, pending)) return;
+	if (pending.sequence == theCancelledPanSequence) return;
+	const SdlMacScroll &scroll = pending.scroll;
+	if ((TheGlobalData && !TheGlobalData->m_macTrackpadPan)
+		|| event.user.windowID != scroll.windowID || !scroll.focused || !scroll.inside || scroll.buttonsDown
+		|| !queueResolvedGesture(scroll.windowID, scroll.x, scroll.y, scroll.deltaX, scroll.deltaY, 1, true))
+		SdlInput_cancelGestures();
+}
 
 void startTextInput( Int x, Int y, Int width, Int height )
 {
@@ -71,12 +151,101 @@ UnsignedInt milliseconds( Uint64 timestampNs )
 
 }  // namespace
 
+void SdlInput_cancelGestures(void)
+{
+	if (theScrollEventType && SDL_WasInit(SDL_INIT_EVENTS)) SDL_FlushEvent(theScrollEventType);
+	theScrolls.clear();
+	thePendingGestures.clear();
+	thePanTarget.cancel();
+	thePinchTarget.cancel();
+	theCancelledPanSequence = thePanSequence;
+}
+
+void SdlInput_applyPendingGestures(void)
+{
+	const bool accepted = thePendingGestures.drain([](const SdlResolvedCameraGesture &gesture) {
+		SDL_Window *window = gestureWindow();
+		float pointerX = 0, pointerY = 0;
+		const SDL_MouseButtonFlags buttons = SDL_GetMouseState(&pointerX, &pointerY);
+		if (!window || gesture.windowID != SDL_GetWindowID(window) || !TheLookAtTranslator
+			|| !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || SDL_GetMouseFocus() != window
+			|| buttons != 0
+			|| (gesture.pan && TheGlobalData && !TheGlobalData->m_macTrackpadPan)) return false;
+#if defined(__APPLE__)
+		if (SdlMacGesture_buttonsDown()) return false;
+#endif
+		// A later mouse/UI message may have moved the pointer over a control after this action
+		// was queued. Recheck that context too, while keeping the action's captured pixel/scale.
+		if (!cameraGestureEligibleAt(gesture.windowID, pointerX, pointerY)) return false;
+		const ICoord2D pixel = { gesture.x, gesture.y };
+		return TheLookAtTranslator->applyCameraGesture(pixel, gesture.panX, gesture.panY, gesture.scale) != FALSE;
+	});
+	if (!accepted) SdlInput_cancelGestures();
+}
+
+void SdlInput_setGestureWindow(SDL_Window *window)
+{
+#if defined(__APPLE__)
+	SdlMacGesture_remove();
+#endif
+	SdlInput_cancelGestures();
+	theGestureWindow = window;
+	thePanTarget.reset();
+	thePinchTarget.reset();
+	thePinchWindow = 0;
+	if (!window) {
+		theScrollEventType = 0;
+		return;
+	}
+#if defined(__APPLE__)
+	if (scrollEventType()) SdlMacGesture_install(window, SdlInput_queueTrackpadScroll);
+#endif
+}
+
+bool SdlInput_queueTrackpadScroll(const SdlMacScroll &scroll) noexcept
+{
+	const bool begin = scroll.phase == SdlGesturePhase::Begin;
+	if (begin) ++thePanSequence;
+	const bool enabled = !TheGlobalData || TheGlobalData->m_macTrackpadPan;
+	SDL_Window *window = gestureWindow();
+	bool eligible = enabled && scroll.focused && scroll.inside && !scroll.buttonsDown
+		&& window && scroll.windowID == SDL_GetWindowID(window)
+		&& std::isfinite(scroll.x) && std::isfinite(scroll.y)
+		&& std::isfinite(scroll.deltaX) && std::isfinite(scroll.deltaY);
+	// The only synchronous engine call is a mutation-free BEGIN eligibility probe. Movement
+	// waits in SDL's queue, behind earlier keyboard/button events from the same native pump.
+	if (begin && eligible) eligible = cameraGestureEligibleAt(scroll.windowID, scroll.x, scroll.y);
+	const bool moves = scroll.deltaX != 0 || scroll.deltaY != 0;
+	const auto decision = thePanTarget.advance(scroll.phase, scroll.momentum, eligible, moves);
+	if (decision == SdlScrollGestureTarget::Decision::PassThrough) return false;
+	if (!eligible || scroll.phase == SdlGesturePhase::Cancel || scroll.momentum == SdlGesturePhase::Cancel)
+		SdlInput_cancelGestures();
+	if (decision != SdlScrollGestureTarget::Decision::Apply) return true;
+	Uint32 code = 0;
+	if (!scrollEventType() || !theScrolls.push(scroll, thePanSequence, code)) {
+		SdlInput_cancelGestures();
+		return true;
+	}
+	SDL_Event event;
+	SDL_zero(event);
+	event.type = theScrollEventType;
+	event.user.windowID = scroll.windowID;
+	event.user.code = static_cast<Sint32>(code);
+	if (!SDL_PushEvent(&event)) {
+		SdlScrollGestureQueue::Payload discarded;
+		theScrolls.pop(code, discarded);
+		SdlInput_cancelGestures();
+	}
+	return true;
+}
+
 void SdlInput_install( void )
 {
 	static Bool installed = FALSE;
 	if (installed)
 		return;
 	installed = TRUE;
+	TheClientInputAfterMessagesHook = SdlInput_applyPendingGestures;
 	SDL_SetHint( SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "0" );	// force fire is Control + LEFT click
 	SDL_SetHint( SDL_HINT_IME_IMPLEMENTED_UI, "composition" );				// W3DTextEntry draws it; the platform draws candidates
 	PosixIMEManager::DeviceHooks hooks = { startTextInput, stopTextInput };
@@ -133,8 +302,40 @@ void SdlInput_resetWheel( void )
 Bool SdlInput_dispatch( const SDL_Event &event )
 {
 	SdlInput_install();
+	if (theScrollEventType && event.type == theScrollEventType) {
+		dispatchScroll(event);
+		return TRUE;
+	}
 	switch (event.type)
 	{
+		case SDL_EVENT_PINCH_BEGIN:
+		case SDL_EVENT_PINCH_UPDATE:
+		case SDL_EVENT_PINCH_END:
+		{
+			SDL_Window *window = gestureWindow();
+			if (!window || (event.pinch.windowID && event.pinch.windowID != SDL_GetWindowID(window))) return TRUE;
+			const SDL_WindowID windowID = SDL_GetWindowID(window);
+			if (event.type == SDL_EVENT_PINCH_BEGIN) thePinchWindow = windowID;
+			if (thePinchWindow != windowID) return TRUE;
+			if (event.type == SDL_EVENT_PINCH_END) {
+				thePinchTarget.reset();
+				thePinchWindow = 0;
+				return TRUE; // Cocoa BEGIN/END carry scale 0, not a zoom ratio.
+			}
+			const bool begin = event.type == SDL_EVENT_PINCH_BEGIN;
+			const Real scale = begin ? 1 : event.pinch.scale;
+			float x = 0, y = 0;
+			const SDL_MouseButtonFlags buttons = SDL_GetMouseState(&x, &y);
+			const bool eligible = !buttons && cameraGestureEligibleAt(windowID, x, y)
+				&& std::isfinite(scale) && scale > 0;
+			if (!begin && !eligible) SdlInput_cancelGestures();
+			const auto decision = thePinchTarget.advance(begin ? SdlGesturePhase::Begin : SdlGesturePhase::Update,
+				SdlGesturePhase::None, eligible, !begin && scale != 1);
+			if (decision == SdlScrollGestureTarget::Decision::Apply)
+				queueResolvedGesture(windowID, x, y, 0, 0, scale, false);
+			return TRUE;
+		}
+
 		case SDL_EVENT_WINDOW_RESIZED:
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
 		case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
@@ -144,9 +345,13 @@ Bool SdlInput_dispatch( const SDL_Event &event )
 			// Recompute its rectangle in the current window's points while keeping the
 			// active input session and composition. Ignore events from other windows.
 			SDL_Window *window = SdlInput_gameWindow();
-			if (window != NULL && event.window.windowID == SDL_GetWindowID( window )
-					&& SDL_TextInputActive( window ) && theIME() != NULL)
-				theIME()->refreshTextInputArea();
+			if (window != NULL && event.window.windowID == SDL_GetWindowID( window )) {
+				// A queued movement belongs to the geometry in which it started. Do not apply
+				// its old point/pixel conversion after a resize, Retina change or display move.
+				SdlInput_cancelGestures();
+				if (SDL_TextInputActive( window ) && theIME() != NULL)
+					theIME()->refreshTextInputArea();
+			}
 			return TRUE;
 		}
 

@@ -169,6 +169,8 @@ public:
 	virtual void setOrigin( Int x, Int y);			///< Sets location of top-left view corner on display 
 
 	virtual void scrollBy( Coord2D *delta );  ///< Shift the view by the given delta
+	virtual Bool panByScreenDelta( Real x, Real y );
+	virtual Bool isManualCameraInputAllowed( void );
 
 	virtual void forceRedraw();
 

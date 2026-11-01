@@ -151,6 +151,11 @@ public:
 	virtual void lookAt( const Coord3D *o );														///< Center the view on the given coordinate
 	virtual void initHeightForMap( void ) {};														///<  Init the camera height for the map at the current position.
 	virtual void scrollBy( Coord2D *delta );														///< Shift the view by the given delta
+	/// Move the picture by this many screen pixels, including fractions. A displacement, not a
+	/// held scroll speed: no frame time is applied, and positive x/y move the content right/down.
+	virtual Bool panByScreenDelta( Real x, Real y );
+	/// Whether a local gesture may take this view; scripted and locked cameras keep their owner.
+	virtual Bool isManualCameraInputAllowed( void );
 
 	virtual void moveCameraTo(const Coord3D *o, Int frames, Int shutter, Bool orient, Real easeIn, Real easeOut) { lookAt( o ); }
 	virtual void moveCameraAlongWaypointPath(Waypoint *way, Int frames, Int shutter, Bool orient, Real easeIn, Real easeOut) { }

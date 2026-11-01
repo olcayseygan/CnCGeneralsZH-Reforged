@@ -10,6 +10,8 @@
 # and the Cobra (both get its 0.10 at frame 60) and walks to the same Kirpi: beside the Altay it gives
 # the Altay 0.10 (frame 600), and once inside the Altay drops back to the Sungur's 0.05 (frame 960)
 # while the Beret itself holds nothing. The Kirpi, a vehicle outside, takes the Altay's 0.10.
+# Those frames are from when one pass did every object. Each now takes its aura on its own frame of
+# the second, so a line comes up to two seconds later, and the Engineer gets one before it climbs in.
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover

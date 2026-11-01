@@ -110,6 +110,7 @@ public:
 	Bool doTurretsFunctionOnlyWhenDeployed() const { return getDeployStyleAIUpdateModuleData()->m_turretsFunctionOnlyWhenDeployed; }
 	Bool doTurretsHaveToCenterBeforePacking() const { return getDeployStyleAIUpdateModuleData()->m_turretsMustCenterBeforePacking; }
 	void setMyState( DeployStateTypes StateID, Bool reverseDeploy = FALSE );
+	Bool willTargetStayInRange( const Weapon *weapon ) const;
 
 protected:
 

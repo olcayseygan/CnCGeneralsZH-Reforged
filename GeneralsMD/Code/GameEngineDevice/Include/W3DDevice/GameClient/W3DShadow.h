@@ -30,8 +30,29 @@
 
 #include "matrix4.h"
 #include "GameClient/Shadow.h"
+#include "WW3D2/dx8wrapper.h"
 
 class Drawable;	//forward reference
+
+/** Copy one range into a streaming buffer and its Direct3D 11 twin.  While Direct3D 11 presents,
+		Direct3D 9 draws nothing indexed, so its buffer is left alone and the twin is written in place; a
+		twin the device refused keeps the Direct3D 9 copy. */
+template <class D3D9_BUFFER>
+inline Bool uploadStreamingRange(D3D9_BUFFER *d3d9Buffer, DX11BufferTwinClass *twin, const void *source,
+	UnsignedInt byteOffset, UnsignedInt byteCount, UnsignedInt lockFlags)
+{
+	const Bool d3d9Draws = !Direct3D11_Present_Is_Enabled() || twin == NULL;
+	void *d3d9Memory = NULL;
+	if (d3d9Draws && d3d9Buffer->Lock(byteOffset, byteCount, &d3d9Memory, lockFlags) != D3D_OK)
+		return FALSE;	//a lost device refuses the lock
+	DX11BufferLockClass lock;
+	void *target = lock.Begin(twin, d3d9Memory, byteOffset, byteCount, lockFlags, d3d9Draws);
+	memcpy(target != NULL ? target : d3d9Memory, source, byteCount);
+	lock.End();
+	if (d3d9Draws)
+		d3d9Buffer->Unlock();
+	return TRUE;
+}
 
 // ShadowManager -------------------------------------------------------------
 class W3DShadowManager

@@ -572,6 +572,16 @@ void SpecialPowerModule::aboutToDoSpecialPower( const Coord3D *location )
 		getSpecialPowerModuleData()->m_specialPowerTemplate->getName(),
 		getObject()->getID());
 
+	// every seat hears a launch, below, and a computer player gets the same word: who fired, never where
+	const SpecialPowerType launchType = getSpecialPowerModuleData()->m_specialPowerTemplate->getSpecialPowerType();
+	if( launchType == SPECIAL_PARTICLE_UPLINK_CANNON || launchType == SUPW_SPECIAL_PARTICLE_UPLINK_CANNON || launchType == LAZR_SPECIAL_PARTICLE_UPLINK_CANNON ||
+			launchType == SPECIAL_NEUTRON_MISSILE || launchType == NUKE_SPECIAL_NEUTRON_MISSILE || launchType == SUPW_SPECIAL_NEUTRON_MISSILE ||
+			launchType == SPECIAL_SCUD_STORM )
+	{
+		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+			ThePlayerList->getNthPlayer( i )->noteStrikeLaunched( getObject()->getControllingPlayer() );
+	}
+
 	// the observer's director camera goes to see it, a power aimed at a unit or at nothing included
 	// (location NULL); this only tells the client
 	TheObserverCamera.noteSpecialPower( getObject()->getControllingPlayer(), getObject()->getPosition(), location,

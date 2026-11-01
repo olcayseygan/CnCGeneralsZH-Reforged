@@ -71,6 +71,7 @@ enum
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "GameLogic/ScriptEngine.h"
+#include "GameClient/Snow.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
@@ -2287,7 +2288,7 @@ void W3DTreeBuffer::drawTrees(CameraClass * camera, RefRenderObjListIterator *pD
 
 	// if breeze changes, always process the full update, even if not visible, 
 	// so that things offscreen won't 'pop' when first viewed
-	const BreezeInfo& info = TheScriptEngine->getBreezeInfo();
+	const BreezeInfo& info = weatherBreezeInfo();
 	Bool pause = TheScriptEngine->isTimeFrozenScript() || TheScriptEngine->isTimeFrozenDebug();
 	if (TheGameLogic && TheGameLogic->isGamePaused()) {
 		pause = true;

@@ -324,8 +324,18 @@ void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], Game
 
 	std::set<AsciiString> seenSides;
 
+	// retail's armies, then each mod's own block; the fork's own factions load after the mods' and still
+	// belong with retail's
+	std::vector<Int> order(numPlayerTemplates);
 	for (Int c=0; c<numPlayerTemplates; ++c)
+		order[c] = c;
+	std::stable_sort(order.begin(), order.end(), [](Int a, Int b) {
+		return ThePlayerTemplateStore->getNthPlayerTemplate(a)->getModIndex() < ThePlayerTemplateStore->getNthPlayerTemplate(b)->getModIndex();
+	});
+
+	for (Int n=0; n<numPlayerTemplates; ++n)
 	{
+		const Int c = order[n];
 		const PlayerTemplate *fac = ThePlayerTemplateStore->getNthPlayerTemplate(c);
 		if (!fac)
 			continue;
@@ -348,7 +358,7 @@ void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], Game
 
 		AsciiString side;
 		side.format("SIDE:%s", fac->getSide().str());
-		// -modfactions: each mod's America is a side of its own, "<mod name> - USA"
+		// each mod's America is a side of its own, "<mod name> - USA"
 		AsciiString seenKey;
 		seenKey.format("%d:%s", fac->getModIndex(), side.str());
 		if (seenSides.find(seenKey) != seenSides.end())

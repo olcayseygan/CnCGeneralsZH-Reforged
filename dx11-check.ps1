@@ -56,7 +56,14 @@ $env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"
-$shots = "$env:USERPROFILE\Documents\Command and Conquer Generals Zero Hour Data"
+# A user data folder of its own with reforged-look.ini as its Options.ini: the renderers are compared on
+# the Reforged picture, and the player's file, or none, would be some other picture.  Less the rows
+# only Direct3D 11 draws, which the -d3d9 shot lacks and this would count as the backend's error.
+$shots = Join-Path $env:TEMP "dx11check_userdata"
+$env:ZH_USER_DATA_DIR = $shots
+$null = New-Item -ItemType Directory -Force $shots
+Get-Content (Join-Path $PSScriptRoot "reforged-look.ini") | Where-Object { $_ -notmatch '^(WaterFoam|TeamGlow|CloudStyle) ' } |
+  Set-Content (Join-Path $shots "Options.ini")
 $tmp = Join-Path $env:TEMP "dx11check"
 if (-not (Test-Path $tmp)) { $null = New-Item -ItemType Directory $tmp }
 

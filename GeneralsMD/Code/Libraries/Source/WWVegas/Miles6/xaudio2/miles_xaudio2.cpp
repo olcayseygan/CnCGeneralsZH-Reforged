@@ -12,11 +12,9 @@
  *                           a source voice in ~200ms buffers by the service thread below.
  *   3D positioning       -> distance attenuation and a stereo pan computed here, not by XAudio2's
  *                           X3DAudio: the game only ever asks for a position, a min/max distance
- *                           pair and an occlusion scalar.  On top of those (MSS.h's AIL_ex_ air,
- *                           room and duck): the voice's own one-pole filter for air and occlusion,
- *                           its frequency ratio for doppler, and a second send into one submix
- *                           running mss_ex_room.h's room, miles_miniaudio's own.
- *   EOS callbacks        -> the service thread notices a voice run dry and calls back from there,
+ *                           pair and an occlusion scalar.  The voice's own one-pole filter plays the
+ *                           occlusion, and its frequency ratio doppler (MSS.h's AIL_ex_set_3D_air).
+ *   EOS callbacks       -> the service thread notices a voice run dry and calls back from there,
  *                           which is the thread context Miles used (MilesAudioManager locks for it).
  *   speaker types        -> headphones run AIL_ex_hrtf in an effect on every 3D voice; 4, 5.1 and 7.1
  *                           are a mastering voice of that many channels, 3D voices panned round it.
@@ -46,7 +44,6 @@ extern "C" {
 }
 
 #include "MSS/MSS.h"
-#include "MSS/mss_ex_room.h"
 
 namespace {
 
@@ -60,7 +57,6 @@ const int AVIO_BUFFER_BYTES = 32768;
 // made again once the endpoints have been quiet this long, not once for each.
 const ULONGLONG ENDPOINT_SETTLE_MS = 300;
 const int OUTPUT_DEVICE_CHARS = 256;
-const float HEADPHONE_ROOM_SEND = 0.7071f;	// both ears into the room: about the one signal a speaker voice sends
 const float HALF_TURN_RADIANS = 3.14159265f;
 
 struct WaveImage
@@ -483,7 +479,6 @@ struct Sample
 	float minDistance, maxDistance;
 	float occlusion;
 	float velocityX, velocityY, velocityZ;	// units a second, AIL_set_3D_velocity_vector
-	bool unducked;	// started a duck, so the duck leaves it alone until it is over or the sample stops
 	bool dry;	// AIL_ex_set_3D_sample_dry
 	HeadEffect *head;	// our reference to the voice's head under AIL_3D_HEADPHONE, NULL otherwise
 	ULONGLONG silentEndMs;	// playing with no voice: when the sound it would have been is over
@@ -543,7 +538,6 @@ struct Engine
 	unsigned int masterRate;
 	unsigned int masterChannels;
 	bool onPickedDevice;	// the master is on AIL_ex_set_output_device's endpoint, not the default
-	IXAudio2SubmixVoice *room;	// RoomTap, AIL_ex_set_reverb; NULL where it could not be made
 	IMMDeviceEnumerator *endpoints;	// holds EndpointWatch's registration
 	CRITICAL_SECTION lock;
 	HANDLE serviceThread;
@@ -569,31 +563,7 @@ std::atomic<ULONGLONG> g_endpointsMovedMs(0);
 S32 g_linearFalloff;	// AIL_ex_set_3D_linear_falloff
 // written by the game's thread with no lock, read by the service thread under it
 std::atomic<float> g_speedOfSound(0.0f);	// AIL_ex_set_3D_air
-std::atomic<float> g_absorptionDistance(0.0f);
-std::atomic<float> g_roomSend(0.0f);	// AIL_ex_set_reverb's wet
 std::atomic<bool> g_limiter(true);	// AIL_ex_set_limiter, read by MasterTap on XAudio2's thread
-
-// The rest of AIL_ex_set_reverb, under the lock, for a room made again with the output.
-struct RoomSettings
-{
-	bool given;
-	float decay;
-	float damping;
-	float echo;
-	float slap;
-};
-RoomSettings g_roomSettings = { false, 0.0f, 0.0f, 0.0f, 0.0f };
-
-// AIL_ex_duck, under the lock.  duckNow is the gain the service thread worked out last.
-struct Duck
-{
-	bool active;
-	ULONGLONG startMs;
-	float gain;
-	float seconds;
-	float duckNow;
-};
-Duck g_duck = { false, 0, 1.0f, 0.0f, 1.0f };
 
 AILFILEOPENCB g_fileOpen;
 AILFILECLOSECB g_fileClose;
@@ -614,8 +584,7 @@ float clampUnit(float value)
 }
 
 // Every source channel into each of the master's speakers at that speaker's gain, the way Miles sums a
-// sample's channels into both sides of a pan.  The master by name: a 3D sample's voice has a second
-// send, into the room.
+// sample's channels into both sides of a pan.
 void applySpeakerGains(IXAudio2SourceVoice *voice, unsigned int sourceChannels, const float *gains)
 {
 	std::vector<float> matrix((size_t)sourceChannels * g_engine.masterChannels, 0.0f);
@@ -687,13 +656,6 @@ void applyEars(IXAudio2SourceVoice *voice)
 	voice->SetOutputMatrix(g_engine.master, 2, g_engine.masterChannels, &matrix[0]);
 }
 
-// Every channel the voice gives out into both of the room's, at one gain relative to its volume.
-void applyRoomSend(IXAudio2SourceVoice *voice, unsigned int voiceChannels, float send)
-{
-	std::vector<float> matrix((size_t)voiceChannels * 2, send);
-	voice->SetOutputMatrix(g_engine.room, voiceChannels, 2, &matrix[0]);
-}
-
 struct Spatial
 {
 	float volume;
@@ -701,7 +663,6 @@ struct Spatial
 	float side;		// AIL_ex_3D_bearing, for the head and the surround pan
 	float front;
 	float cutoff;	// Hz, AIL_ex_3D_cutoff
-	float send;		// into the room, AIL_ex_3D_send
 	float doppler;	// pitch ratio, AIL_ex_doppler_ratio
 };
 
@@ -734,18 +695,8 @@ Spatial computeSpatial(const Sample &sample)
 	spatial.pan = pan;
 	AIL_ex_3D_bearing(dx, dy, dz, listener.faceX, listener.faceY, listener.faceZ,
 		listener.upX, listener.upY, listener.upZ, &spatial.side, &spatial.front);
-	// a duck muffles everything but its trigger, as miles_miniaudio's mix does
-	const float muffle = sample.unducked ? AIL_EX_OPEN_CUTOFF : AIL_ex_duck_cutoff(g_duck.duckNow);
-	if (sample.dry) {
-		spatial.cutoff = AIL_ex_3D_cutoff(distance, 0.0f, sample.occlusion);
-		spatial.send = 0.0f;
-		spatial.doppler = 1.0f;
-	} else {
-		spatial.cutoff = AIL_ex_3D_cutoff(distance, g_absorptionDistance.load(), sample.occlusion);
-		spatial.send = AIL_ex_3D_send(clampUnit(sample.volume), attenuation, g_roomSend.load());
-		spatial.doppler = AIL_ex_doppler_ratio(dx, dy, dz, sample.velocityX, sample.velocityY, sample.velocityZ, g_speedOfSound.load());
-	}
-	spatial.cutoff = spatial.cutoff < muffle ? spatial.cutoff : muffle;
+	spatial.cutoff = AIL_ex_3D_cutoff(sample.occlusion);
+	spatial.doppler = sample.dry ? 1.0f : AIL_ex_doppler_ratio(dx, dy, dz, sample.velocityX, sample.velocityY, sample.velocityZ, g_speedOfSound.load());
 	return spatial;
 }
 
@@ -776,20 +727,6 @@ void refreshSampleOutput(Sample *sample)
 		if (sample->head != NULL) {
 			sample->head->aim(side, front);
 		}
-		// the voice's volume scales both sends, so the room's is given relative to it; a head gives
-		// out two ears where a speaker voice gives its own channels
-		if (g_engine.room != NULL) {
-			const float send = volume > 0.0f ? spatial.send / volume : 0.0f;
-			sample->voice->SetOutputFilterParameters(g_engine.room, &filter);
-			if (sample->head != NULL) {
-				applyRoomSend(sample->voice, 2, send * HEADPHONE_ROOM_SEND);
-			} else {
-				applyRoomSend(sample->voice, sample->format.nChannels, send);
-			}
-		}
-	}
-	if (!sample->unducked) {
-		volume *= g_duck.duckNow;
 	}
 
 	sample->voice->SetVolume(clampUnit(volume));
@@ -866,11 +803,11 @@ bool freshVoice(Sample *sample, const WAVEFORMATEX &format)
 	if (!sample->is3D) {
 		return SUCCEEDED(g_engine.xaudio->CreateSourceVoice(&sample->voice, &format, 0, 4.0f, &g_sampleCallback));
 	}
-	// A 3D sample's voice has the filter for air and occlusion, and sends into the room as well.  Each
-	// send filters again, which makes the two one-pole stages miles_miniaudio runs.  Under headphones
-	// the voice's head comes after the filter and gives out two ears, whatever the file has.
-	XAUDIO2_SEND_DESCRIPTOR sends[2] = { { XAUDIO2_SEND_USEFILTER, g_engine.master }, { XAUDIO2_SEND_USEFILTER, g_engine.room } };
-	XAUDIO2_VOICE_SENDS sendList = { g_engine.room != NULL ? 2u : 1u, sends };
+	// A 3D sample's voice has the filter for occlusion.  Its send filters again, which makes the two
+	// one-pole stages miles_miniaudio runs.  Under headphones the voice's head comes after the filter
+	// and gives out two ears, whatever the file has.
+	XAUDIO2_SEND_DESCRIPTOR sends[1] = { { XAUDIO2_SEND_USEFILTER, g_engine.master } };
+	XAUDIO2_VOICE_SENDS sendList = { 1u, sends };
 	if (g_speakerType != AIL_3D_HEADPHONE) {
 		return SUCCEEDED(g_engine.xaudio->CreateSourceVoice(&sample->voice, &format, XAUDIO2_VOICE_USEFILTER, 4.0f,
 			&g_sampleCallback, &sendList));
@@ -1038,7 +975,7 @@ void playStream(Stream *stream)
 		stream->silentEndMs = GetTickCount64() + (ULONGLONG)(stream->totalMs * loops);
 		return;
 	}
-	stream->voice->SetVolume(clampUnit(stream->volume) * g_duck.duckNow);
+	stream->voice->SetVolume(clampUnit(stream->volume));
 	applyPan(stream->voice, stream->voiceFormat.nChannels, stream->pan);
 	stream->voice->Start(0);
 }
@@ -1189,26 +1126,8 @@ DWORD WINAPI serviceThreadMain(LPVOID)
 			}
 		}
 
-		// A duck reaches every voice, 2D ones and streams too, so while it runs all of them are
-		// refreshed, and once more as it ends; the triggers go back to being ducked like the rest.
-		const bool ducking = g_duck.active;
-		if (ducking) {
-			const float elapsed = (float)(GetTickCount64() - g_duck.startMs) / 1000.0f;
-			g_duck.duckNow = AIL_ex_duck_gain(elapsed, g_duck.gain, g_duck.seconds);
-			g_duck.active = elapsed < g_duck.seconds;
-			for (size_t i = 0; i < g_engine.streams.size(); ++i) {
-				Stream *stream = g_engine.streams[i];
-				if (stream->voice != NULL) {
-					stream->voice->SetVolume(clampUnit(stream->volume) * g_duck.duckNow);
-				}
-			}
-		}
-
 		for (size_t i = 0; i < g_engine.samples.size(); ++i) {
 			Sample *sample = g_engine.samples[i];
-			if (ducking && !g_duck.active) {
-				sample->unducked = false;
-			}
 			// started with no voice to play on, or its voice went with the output: over once the
 			// sound would have been, and the handle comes back the way a played one does
 			if (sample->voice == NULL) {
@@ -1224,7 +1143,7 @@ DWORD WINAPI serviceThreadMain(LPVOID)
 				}
 				continue;
 			}
-			if (sample->is3D || ducking) {
+			if (sample->is3D) {
 				refreshSampleOutput(sample);
 			}
 			if (!sample->playing) {
@@ -1433,99 +1352,6 @@ bool installMasterTap(FILE *file)
 	return SUCCEEDED(result);
 }
 
-// The room submix's effect: the send, which every voice puts on both channels alike, through
-// mss_ex_room.h's room, the one miles_miniaudio mixes, so a player and a -wav run hear one room.
-class RoomTap : public Effect
-{
-public:
-	explicit RoomTap(unsigned int samplesPerSecond)
-		: Effect(true), m_pending(false), m_decay(0.0f), m_damping(0.0f), m_echo(0.0f), m_slap(0.0f)
-	{
-		InitializeCriticalSection(&m_settingsLock);
-		initRoom(&m_room, samplesPerSecond);
-	}
-
-	// AIL_ex_set_reverb's, from the game's thread: the mixer takes them up at its next pass.
-	void set(float decay, float damping, float echo, float slap)
-	{
-		EnterCriticalSection(&m_settingsLock);
-		m_decay = decay;
-		m_damping = damping;
-		m_echo = echo;
-		m_slap = slap;
-		m_pending = true;
-		LeaveCriticalSection(&m_settingsLock);
-	}
-
-	STDMETHOD(LockForProcess)(UINT32, const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *input, UINT32,
-		const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *)
-	{
-		m_send.resize(input[0].MaxFrameCount);
-		return S_OK;
-	}
-
-	STDMETHOD_(void, Process)(UINT32, const XAPO_PROCESS_BUFFER_PARAMETERS *input, UINT32,
-		XAPO_PROCESS_BUFFER_PARAMETERS *output, BOOL)
-	{
-		EnterCriticalSection(&m_settingsLock);
-		if (m_pending) {
-			setRoom(&m_room, m_decay, m_damping, m_echo, m_slap);
-			m_pending = false;
-		}
-		LeaveCriticalSection(&m_settingsLock);
-
-		// in place: the send read off the left channel, then the buffer is the room's answer alone; a
-		// silent pass is no send, and the tail still rings
-		const UINT32 frames = input[0].ValidFrameCount;
-		float *mix = (float *)input[0].pBuffer;
-		const bool silent = input[0].BufferFlags == XAPO_BUFFER_SILENT;
-		for (UINT32 frame = 0; frame < frames; ++frame) {
-			m_send[frame] = silent ? 0.0f : mix[frame * ROOM_OUTPUT_CHANNELS];
-		}
-		memset(mix, 0, (size_t)frames * ROOM_OUTPUT_CHANNELS * sizeof(float));
-		processRoom(&m_room, &m_send[0], mix, frames);
-		if (output != NULL) {
-			output[0].ValidFrameCount = frames;
-			output[0].BufferFlags = XAPO_BUFFER_VALID;
-		}
-	}
-
-private:
-	~RoomTap()
-	{
-		DeleteCriticalSection(&m_settingsLock);
-	}
-
-	Room m_room;	// the mixer thread's alone
-	std::vector<float> m_send;
-	CRITICAL_SECTION m_settingsLock;
-	bool m_pending;
-	float m_decay;
-	float m_damping;
-	float m_echo;
-	float m_slap;
-};
-
-RoomTap *g_roomTap;	// our reference, for AIL_ex_set_reverb; the room voice holds XAudio2's
-
-// The room every 3D sample sends to: RoomTap on a stereo submix into the master, at the master's
-// rate, and the last room AIL_ex_set_reverb asked for, since this is made again with the output.
-void createRoom()
-{
-	RoomTap *tap = new RoomTap(g_engine.masterRate);
-	XAUDIO2_EFFECT_DESCRIPTOR descriptor = { static_cast<IXAPO *>(tap), TRUE, 2 };
-	XAUDIO2_EFFECT_CHAIN chain = { 1, &descriptor };
-	if (FAILED(g_engine.xaudio->CreateSubmixVoice(&g_engine.room, 2, g_engine.masterRate, 0, 0, NULL, &chain))) {
-		g_engine.room = NULL;
-		tap->Release();
-		return;
-	}
-	if (g_roomSettings.given) {
-		tap->set(g_roomSettings.decay, g_roomSettings.damping, g_roomSettings.echo, g_roomSettings.slap);
-	}
-	g_roomTap = tap;
-}
-
 // ---------------------------------------------------------------------------------------------
 // The output, and keeping it
 //
@@ -1620,12 +1446,6 @@ void closeOutput()
 		}
 		stream->queued.clear();
 	}
-	if (g_engine.room != NULL) {
-		g_engine.room->DestroyVoice();
-		g_engine.room = NULL;
-		g_roomTap->Release();
-		g_roomTap = NULL;
-	}
 	if (g_engine.master != NULL) {
 		g_engine.master->DestroyVoice();
 		g_engine.master = NULL;
@@ -1638,7 +1458,7 @@ void closeOutput()
 }
 
 // The engine and its master, on the endpoint AIL_ex_set_output_device picked or the default when that
-// one is not there, at the speaker type's channel count; then the room, the master's tap and a voice
+// one is not there, at the speaker type's channel count; then the master's tap and a voice
 // for every stream, playing again where one was.  False with no endpoint at all, the engine kept.
 // Under the lock.
 bool openOutput()
@@ -1664,7 +1484,6 @@ bool openOutput()
 	g_engine.master->GetVoiceDetails(&masterDetails);
 	g_engine.masterRate = masterDetails.InputSampleRate;
 	g_engine.masterChannels = masterDetails.InputChannels;
-	createRoom();
 	installMasterTap(NULL);
 
 	for (size_t i = 0; i < g_engine.streams.size(); ++i) {
@@ -2199,11 +2018,6 @@ void AILCALL AIL_resume_3D_sample(H3DSAMPLE handle)
 void AILCALL AIL_end_3D_sample(H3DSAMPLE handle)
 {
 	AIL_stop_sample((HSAMPLE)handle);
-	// the manager ends every handle it takes back, and the next sound on it ducks like the rest; a
-	// stop is also a pause, which keeps the exemption
-	EnterCriticalSection(&g_engine.lock);
-	((Sample *)handle)->unducked = false;
-	LeaveCriticalSection(&g_engine.lock);
 }
 
 void AILCALL AIL_set_3D_sample_volume(H3DSAMPLE handle, F32 volume)
@@ -2250,46 +2064,16 @@ void AILCALL AIL_ex_set_3D_linear_falloff(S32 linear)
 	g_linearFalloff = linear;
 }
 
-void AILCALL AIL_ex_set_3D_air(F32 speed_of_sound, F32 absorption_distance)
+void AILCALL AIL_ex_set_3D_air(F32 speed_of_sound)
 {
 	// No lock, as AIL_ex_set_3D_linear_falloff
 	g_speedOfSound.store(speed_of_sound);
-	g_absorptionDistance.store(absorption_distance);
 }
 
 void AILCALL AIL_ex_set_limiter(S32 on)
 {
 	// No lock, as AIL_ex_set_3D_linear_falloff; the master's next pass takes it up
 	g_limiter.store(on != 0);
-}
-
-void AILCALL AIL_ex_set_reverb(F32 wet, F32 decay, F32 damping, F32 echo, F32 slap)
-{
-	g_roomSend.store(wet);
-	// kept for a room made again with the output; the lock because that is when g_roomTap changes
-	if (g_engine.started) {
-		EnterCriticalSection(&g_engine.lock);
-	}
-	const RoomSettings settings = { true, decay, damping, echo, slap };
-	g_roomSettings = settings;
-	if (g_roomTap != NULL) {
-		g_roomTap->set(decay, damping, echo, slap);
-	}
-	if (g_engine.started) {
-		LeaveCriticalSection(&g_engine.lock);
-	}
-}
-
-void AILCALL AIL_ex_duck(H3DSAMPLE trigger, F32 gain, F32 seconds)
-{
-	EnterCriticalSection(&g_engine.lock);
-	((Sample *)trigger)->unducked = true;
-	g_duck.active = true;
-	g_duck.startMs = GetTickCount64();
-	g_duck.gain = gain;
-	g_duck.seconds = seconds;
-	refreshSampleOutput((Sample *)trigger);
-	LeaveCriticalSection(&g_engine.lock);
 }
 
 void AILCALL AIL_ex_set_3D_sample_dry(H3DSAMPLE handle, S32 dry)
@@ -2579,8 +2363,7 @@ void AILCALL AIL_set_stream_volume_pan(HSTREAM handle, F32 volume, F32 pan)
 	stream->volume = volume;
 	stream->pan = pan;
 	if (stream->voice != NULL) {
-		// a fade writes this every pass, so it carries the duck the service thread last set
-		stream->voice->SetVolume(clampUnit(volume) * g_duck.duckNow);
+		stream->voice->SetVolume(clampUnit(volume));
 		applyPan(stream->voice, stream->voiceFormat.nChannels, pan);
 	}
 	LeaveCriticalSection(&g_engine.lock);

@@ -272,17 +272,6 @@ AsciiString ScienceStore::getGrantedUpgradeName(ScienceType st) const
 }
 
 //-----------------------------------------------------------------------------
-/** Does st ask for prereq directly - the way Artillery Barrage 2 asks for Artillery Barrage 1? */
-Bool ScienceStore::isDirectPrereq(ScienceType prereq, ScienceType st) const
-{
-	const ScienceInfo* si = findScienceInfo(st);
-	if (si == NULL)
-		return false;
-
-	return std::find(si->m_prereqSciences.begin(), si->m_prereqSciences.end(), prereq) != si->m_prereqSciences.end();
-}
-
-//-----------------------------------------------------------------------------
 Bool ScienceStore::isScienceGrantable(ScienceType st) const
 {
 	const ScienceInfo* si = findScienceInfo(st);

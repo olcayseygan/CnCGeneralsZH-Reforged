@@ -498,7 +498,7 @@ GUI:ClassicGraphics
 END
 
 TOOLTIP:ClassicGraphics
-"The game as it looked in 2003: its own textures and ground, the old hard shadows, no bump detail and no glow or sharpening. Off is Reforged. Takes effect the next time the game starts."
+"The game as it looked in 2003: its own textures and ground, the old hard shadows, no bump detail and no glow or sharpening. The game opens this way. Untick it for the Reforged picture: the High preset fills in the boxes, and you can move the slider from there. Takes effect the next time the game starts."
 END
 
 GUI:InfantryShadows
@@ -551,26 +551,6 @@ END
 
 TOOLTIP:Smoke
 "How long smoke hangs in the air and how dense it looks. 175 of the game's 1088 effects are smoke. Very Thick cost 0.7 ms a frame over a burning column when it was measured. Takes effect the next time the game starts."
-END
-
-GUI:VolumeSmoke
-"Smoke simulation"
-END
-
-GUI:VolumeSmoke0
-"Off"
-END
-
-GUI:VolumeSmoke1
-"Low"
-END
-
-GUI:VolumeSmoke2
-"High"
-END
-
-TOOLTIP:VolumeSmoke
-"Smoke and dust as a moving body of air instead of flat sprites: it rolls, rises with the heat, parts round buildings and is pushed by passing tanks, jets and helicopters. It costs graphics card time, so leave it Off on a weak card. Low costs about two thirds of what High does. Applies the moment you Accept, mid-match too."
 END
 
 GUI:ParticleBounce
@@ -710,7 +690,15 @@ GUI:LegacySound
 END
 
 TOOLTIP:LegacySound
-"The original game's sound: no echo off the map, no muffling by distance, hills or buildings, no delay or pitch bend on distant and passing sounds, no dip after big blasts, no cap on battle sounds or unit replies, no limiter, no map ambience and no music following the fight. Master volume, the device and the speakers still apply. Takes effect at once."
+"The original game's sound: no pitch bend on passing sounds, no Aurora sonic boom, no cap on battle sounds or unit replies, no limiter, no map ambience and no music following the fight. Master volume, the device and the speakers still apply. Takes effect at once."
+END
+
+GUI:CameraShake
+"Camera Shake"
+END
+
+TOOLTIP:CameraShake
+"Blasts shake the camera. A nuke or a big building coming down nearby kicks it hard for a moment. Untick to keep the view still. Applies when you press Accept."
 END
 
 GUI:IsometricCamera
@@ -1493,7 +1481,7 @@ GUI:MapLight
 END
 
 TOOLTIP:MapLight
-"A low afternoon sun that lights the map warmer and casts longer shadows, and a light haze lying over low ground that aircraft part as they fly through it. Direct3D 11 only. Applies from the next map."
+"A low afternoon sun that lights the map warmer and casts longer shadows, and a light haze lying still over low ground. Direct3D 11 only. Applies from the next map."
 END
 
 GUI:TeamGlow
@@ -1510,6 +1498,86 @@ END
 
 TOOLTIP:WaterFoam
 "Rivers and lakes carry flecks of foam and a band of it along the shore, and the sun's shadows fall on the water. The sea's waves are unchanged. Direct3D 11 and Classic water only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:GroundMarks
+"Battle Marks"
+END
+
+TOOLTIP:GroundMarks
+"Shells and missiles leave burns on the ground, a fallen building leaves a dark stain with cracks in it, a nuke leaves a burnt ring, and tank treads stay dark for longer. They fade over about four minutes. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:Firelight
+"Firelight"
+END
+
+TOOLTIP:Firelight
+"Burning buildings, wrecks and explosions throw a flickering orange light on the ground, the walls and the units around them. It shows most on night maps. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:HemiAmbient
+"Sky And Ground Light"
+END
+
+TOOLTIP:HemiAmbient
+"Models take the map's ambient light from the sky above and the ground below instead of evenly, so a tank's deck is lighter than its belly. Walls keep the light they had and a night map stays dark. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:AmbientOcclusion
+"Ambient Occlusion"
+END
+
+TOOLTIP:AmbientOcclusion
+"Corners and the ground under what stands on it go darker, so a tank sits on the sand instead of hovering over it. Water and the fog of war stay out of it. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:InternalHdr
+"Internal HDR Tone Mapping"
+END
+
+TOOLTIP:InternalHdr
+"Fire, blasts and lasers past white keep their colour on the way to your screen instead of ending in one flat white, and team colours hold a little more of theirs. Ground and walls away from a fire stay as they were. This is inside the game's picture: your monitor still gets a normal image, and an HDR monitor gets no HDR signal. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:Weather
+"Weather"
+END
+
+TOOLTIP:Weather
+"Rain falls, or sand blows on a desert map and snow on a snowy one, and a wind bends the trees and leans the smoke. A map with its own rain or snow keeps it and takes only the wind. Only your picture changes: what units see and hit stays the same, and other players see their own setting. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:WaterSplashes
+"Water Splashes"
+END
+
+TOOLTIP:WaterSplashes
+"A shell, a bomb or a falling body that comes down in water throws up a splash and sends rings across the surface. Only your picture changes: nothing in the game reads it, and other players see their own setting. Direct3D 11 and Classic water only, and off under Classic Graphics. Applies when you press Accept."
+END
+
+GUI:Atmosphere
+"Atmosphere"
+END
+
+TOOLTIP:Atmosphere
+"The ground far from the camera fades toward the sky's colour, and where the map ends or the camera lies flat you see a sky by the map's time of day instead of black. The ground near the camera stays clear and fog of war keeps its dark. Only your picture changes: nothing in the game reads it, and other players see their own setting. Direct3D 11 only, and off under Classic Graphics."
+END
+
+GUI:SmoothMotion
+"Smooth Motion"
+END
+
+TOOLTIP:SmoothMotion
+"On a screen faster than 60 Hz, units are drawn between their last two positions instead of holding each one until the next. A 60 Hz screen shows no change. Only your picture changes: nothing in the game reads it, and other players see their own setting. Applies when you press Accept."
+END
+
+GUI:StructureCollapse
+"Collapsing Buildings"
+END
+
+TOOLTIP:StructureCollapse
+"A destroyed building sinks into the ground under the blast instead of vanishing in one frame, or swapping to its rubble in one. Only your picture changes: it blocks nothing, nothing in the game reads it, and other players see their own setting. Direct3D 11 only, and off under Classic Graphics."
 END
 
 GUI:FormationDrag

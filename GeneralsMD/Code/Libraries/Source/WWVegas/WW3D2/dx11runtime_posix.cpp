@@ -61,6 +61,8 @@ DX11BufferTwinClass * Direct3D11_Twin_Vertex_Buffer(unsigned, bool) { return NUL
 DX11BufferTwinClass * Direct3D11_Twin_Index_Buffer(unsigned, bool) { return NULL; }
 void Direct3D11_Mirror_Texture(unsigned, struct IDirect3DBaseTexture9 *) {}
 void Direct3D11_Set_Haze_Shroud(struct IDirect3DBaseTexture9 *, const float [4]) {}
+void Direct3D11_Set_Atmosphere(const float [3], const float [3], float, float, float, float, float, float, struct IDirect3DBaseTexture9 *) {}
+void Direct3D11_Atmosphere_Sky() {}
 
 void Direct3D11_Set_Headlights(const float *, unsigned, const float [3]) {}
 void Direct3D11_Set_Blast_Lights(const float *, unsigned) {}
@@ -85,6 +87,7 @@ void Direct3D11_Set_Smoke_Glow(bool) {}
 void Direct3D11_Set_Fire_Look(bool) {}
 void Direct3D11_Set_Emissive(bool) {}
 void Direct3D11_Set_Team_Glow(bool) {}
+void Direct3D11_Set_Hemi_Ambient(bool) {}
 void Direct3D11_Set_Draw_Effect(unsigned, const float [4]) {}
 bool Direct3D11_Draw_Effects() { return false; }
 void Direct3D11_Allow_Draw_Effects(bool) {}
@@ -95,6 +98,7 @@ unsigned Direct3D11_Requested_Draw_Effect(float parameters[4])
 	return 0;
 }
 void Direct3D11_Occlude_Scene() {}
+void Direct3D11_Ambient_Occlusion() {}
 void Direct3D11_Set_Glow_Draw(bool) {}
 void Direct3D11_Set_Scene_Stand_In(struct IDirect3DBaseTexture9 *, struct IDirect3DSurface9 *) {}
 

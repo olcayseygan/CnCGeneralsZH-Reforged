@@ -85,6 +85,7 @@
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
+#include "GameLogic/GameLogic.h"
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/light.h"
 #include "WW3D2/scene.h"
@@ -184,6 +185,7 @@ Int BaseHeightMapRenderObjClass::freeMapResources(void)
 void BaseHeightMapRenderObjClass::drawScorches(void)
 {
 
+	updateGroundMarks();
 	updateScorches();
 	if (m_curNumScorchIndices == 0) {
 		return;
@@ -1628,7 +1630,9 @@ void BaseHeightMapRenderObjClass::updateScorches(void)
 	if (m_scorchesInBuffer > 0) {
 		return;
 	}
-	if (m_numScorches==0) {
+	if (m_numScorches==0 && m_groundMarks.empty()) {
+		m_curNumScorchVertices = 0;
+		m_curNumScorchIndices = 0;
 		return;
 	}
 	if (!m_indexScorch || !m_vertexScorch) {
@@ -1672,11 +1676,37 @@ void BaseHeightMapRenderObjClass::updateScorches(void)
 	if (shadeB > 255.0f) shadeB = 255.0f;	if (shadeB < 0.0f) shadeB = 0.0f;
 	Int diffuse=REAL_TO_INT(shadeB) | (REAL_TO_INT(shadeG) << 8) | (REAL_TO_INT(shadeR) << 16) | ((int)255 << 24);
 	m_scorchesInBuffer = 0;
-	for (curScorch=m_numScorches-1; curScorch>=0; curScorch--) {
-		m_scorchesInBuffer++;
-		Real radius = m_scorches[curScorch].radius;
-		Vector3 loc = m_scorches[curScorch].location;
-		Int type = m_scorches[curScorch].scorchType;
+	// The loop runs over the scorches and, above them, the Battle Marks' slots, which come first, newest
+	// first and in at most half the indices, so a long fight leaves the other half to the scorches.  The
+	// ring is empty with the option off and this is the old loop.
+	const Int markSlots = m_groundMarks.empty() ? 0 : GroundMarks::CAPACITY;
+	const UnsignedInt markFrame = TheGameLogic->getFrame();
+	const Real MARK_ALPHA = 220.0f;
+	for (curScorch=m_numScorches-1+markSlots; curScorch>=0; curScorch--) {
+		Real radius;
+		Vector3 loc;
+		Int type;
+		Int vertexDiffuse = diffuse;
+		if (curScorch >= m_numScorches) {
+			const GroundMarks::Mark &mark = m_groundMarks.newest(m_numScorches + markSlots - 1 - curScorch);
+			if (mark.radius <= 0.0f) {
+				continue;
+			}
+			m_scorchesInBuffer++;
+			const Real strength = GroundMarks::strength(markFrame - mark.born);
+			if (strength <= 0.0f || m_curNumScorchIndices > MAX_SCORCH_INDEX/2) {
+				continue;
+			}
+			radius = mark.radius;
+			loc.Set(mark.x, mark.y, 0.0f);
+			type = mark.type;
+			vertexDiffuse = (diffuse & 0x00FFFFFF) | (REAL_TO_INT(strength * MARK_ALPHA) << 24);
+		} else {
+			m_scorchesInBuffer++;
+			radius = m_scorches[curScorch].radius;
+			loc = m_scorches[curScorch].location;
+			type = m_scorches[curScorch].scorchType;
+		}
 		if (type<0) {
 			type = 0;
 		}
@@ -1715,8 +1745,8 @@ void BaseHeightMapRenderObjClass::updateScorches(void)
 		Int i, j;
 		for (j=minY; j<maxY; j++) {
 			for (i=minX; i<maxX; i++) {
-				curVb->diffuse = diffuse;
-				Real theZ; 
+				curVb->diffuse = vertexDiffuse;
+				Real theZ;
 				theZ = amtToFloat+((float)getClipHeight(i+m_map->getBorderSizeInline(),j+m_map->getBorderSizeInline())*MAP_HEIGHT_SCALE);
 				// The scorchmarks are spaced out by 1.5 in the texture.
 				Real uOffset = (type%SCORCH_PER_ROW) * 1.5f;
@@ -1780,8 +1810,60 @@ void BaseHeightMapRenderObjClass::clearAllScorches(void)
 	m_numScorches=0;
 	m_numStaticScorches=0;
 	m_scorchesInBuffer=0;
+	m_groundMarks.clear();
+	m_groundMarksBuilt=0;
+	m_groundMarksPending=FALSE;
 #endif
 }
+
+//=============================================================================
+// BaseHeightMapRenderObjClass::groundMarksOn
+//=============================================================================
+Bool BaseHeightMapRenderObjClass::groundMarksOn(void)
+{
+	return TheGlobalData->m_groundMarks && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled();
+}
+
+//=============================================================================
+// BaseHeightMapRenderObjClass::addGroundMark
+//=============================================================================
+void BaseHeightMapRenderObjClass::addGroundMark(const Vector3 &location, Real radius, Int type)
+{
+#ifdef DO_SCORCH
+	if (groundMarksOn() && !TheTerrainLogic->isUnderwater(location.X, location.Y)) {
+		m_groundMarks.add(location.X, location.Y, radius, type, TheGameLogic->getFrame());
+		m_groundMarksPending = TRUE;
+	}
+#endif
+}
+
+#ifdef DO_SCORCH
+//=============================================================================
+// BaseHeightMapRenderObjClass::updateGroundMarks
+//=============================================================================
+/** The marks share the scorches' buffers, whose rebuild is two whole-buffer locks, so a new mark does
+	* not rebuild them at once (a barrage would, every frame) and a fade moves in steps.  The option
+	* turned off, or every mark spent, takes one last rebuild with the ring empty. */
+//=============================================================================
+void BaseHeightMapRenderObjClass::updateGroundMarks(void)
+{
+	if (m_groundMarks.empty()) {
+		return;
+	}
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if (!groundMarksOn() || !m_groundMarks.anyLeft(now)) {
+		m_groundMarks.clear();
+		m_groundMarksPending = FALSE;
+		m_scorchesInBuffer = 0;
+		return;
+	}
+	if (now - m_groundMarksBuilt >= (UnsignedInt)(m_groundMarksPending ? GroundMarks::NEW_MARK_FRAMES : GroundMarks::FADE_STEP_FRAMES)) {
+		m_groundMarksPending = FALSE;
+		m_groundMarksBuilt = now;
+		m_scorchesInBuffer = 0;
+	}
+}
+#endif
 
 //=============================================================================
 // BaseHeightMapRenderObjClass::markScorchesStatic
@@ -2104,6 +2186,11 @@ void BaseHeightMapRenderObjClass::stepTrees(void)
 void BaseHeightMapRenderObjClass::takeWaypointsForRender(void)
 {
 	m_waypointBuffer->takeReadsForRender();
+}
+
+void BaseHeightMapRenderObjClass::takePropShroudForRender(void)
+{
+	m_propBuffer->takeShroudForRender();
 }
 
 //=============================================================================

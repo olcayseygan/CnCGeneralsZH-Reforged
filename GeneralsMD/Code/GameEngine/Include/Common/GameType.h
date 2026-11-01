@@ -99,6 +99,7 @@ enum Scorches
 	SCORCH_3 = 2, 
 	SCORCH_4 = 3, 
 	SHADOW_SCORCH = 4,
+	SCORCH_CRACKS = 5,	///< in the texture since EA's day, no INI names it; the Battle Marks option draws it
 /*	SCORCH_6 = 5, 
 	SCORCH_7 = 6, 
 	SCORCH_8 = 7, 

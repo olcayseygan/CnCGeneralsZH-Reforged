@@ -275,6 +275,41 @@ TEST(ffvertexcompile_a_soft_billboard_hands_its_half_width_on)
 	CHECK(compiles(compile, hlsl, D3D11_PROFILE));
 }
 
+// The Hemispheric Ambient program is keyed apart and swings the scene ambient on the normal's height
+// through the unused half of MaterialPower.  With the option off the text does not move, which is
+// what keeps the shipped shader cache whole.  Refused on an unlit draw.
+TEST(ffvertexcompile_a_lit_draw_takes_the_ambient_from_sky_and_ground)
+{
+	VertexPipelineDescription flat = plain_description();
+	flat.LightingEnabled = true;
+	flat.LightCount = 1;
+	flat.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
+	VertexPipelineDescription hemi = flat;
+	hemi.HemiAmbient = true;
+
+	std::string flat_hlsl;
+	std::string hemi_hlsl;
+	CHECK(VertexShader_Generate(flat, VERTEX_SHADER_TARGET_D3D11, flat_hlsl));
+	CHECK(VertexShader_Generate(hemi, VERTEX_SHADER_TARGET_D3D11, hemi_hlsl));
+	CHECK(flat_hlsl.find("MaterialPower.yzw") == std::string::npos);
+	CHECK(flat_hlsl.find("(GlobalAmbient.rgb + ambient_light)") != std::string::npos);
+	CHECK(hemi_hlsl.find("dot(view_normal, MaterialPower.yzw)") != std::string::npos);
+	CHECK(hemi_hlsl.find("(hemi_ambient + ambient_light)") != std::string::npos);
+	CHECK(VertexShader_Key(hemi) == VertexShader_Key(flat) + ":H");
+
+	VertexPipelineDescription unlit = plain_description();
+	unlit.HemiAmbient = true;
+	CHECK(!VertexShader_Generate(unlit, VERTEX_SHADER_TARGET_D3D11, hemi_hlsl));
+
+	D3DCompileFunction compile = load_compiler();
+	if (compile == NULL) {
+		printf("  d3dcompiler_47.dll not present, skipping the compile\n");
+		return;
+	}
+	CHECK(VertexShader_Generate(hemi, VERTEX_SHADER_TARGET_D3D11, hemi_hlsl));
+	CHECK(compiles(compile, hemi_hlsl, D3D11_PROFILE));
+}
+
 // A fire billboard's age and seed ride the second coordinate set through to TexCoord1, written after
 // the empty stages are zeroed so the zero does not win.  Keyed apart; refused with one set or a
 // second stage.

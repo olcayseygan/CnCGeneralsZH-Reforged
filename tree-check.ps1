@@ -9,6 +9,8 @@
 #   .\tree-check.ps1                 # eight views over five maps, each against its own limit
 #   .\tree-check.ps1 -Limit 4        # one limit for every view; a tree-dense map with long shadows reached ~3.7%
 #   .\tree-check.ps1 -Extra '-d3d9'  # switches added to both builds' command lines
+#   .\tree-check.ps1 -Options ''     # no Options.ini: the first-run game, Classic since 2026-10-31.  The default
+#                                    # is reforged-look.ini, the Reforged picture, named so neither build draws its own default
 #   .\tree-check.ps1 -NewEnv 'ZH_D3DX_PORTABLE=1'   # NAME=value set for generals.exe's runs only: with a copy
 #                                    # of the same exe as generals_base.exe, one code path against another
 #
@@ -25,7 +27,7 @@
 #
 # Exit code is the number of views over the limit.
 param([double]$Limit = 0, [string[]]$Extra = @(), [string[]]$NewEnv = @(), [string]$Base = 'generals_base.exe', [string]$Candidate = 'generals.exe',
-      [int]$BaseFps = 60)
+      [int]$BaseFps = 60, [string]$Options = (Join-Path $PSScriptRoot 'reforged-look.ini'))
 $LogicFps = 60	# LOGICFRAMES_PER_SECOND of the candidate build
 $env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
@@ -35,6 +37,8 @@ $run = Join-Path $PSScriptRoot "GeneralsMD\Run"
 # same machine writes its shots into the player's folder, and one of those was once compared as if it were ours.
 $shots = Join-Path $env:TEMP "treecheck_userdata_$PID"
 $env:ZH_USER_DATA_DIR = $shots
+$null = New-Item -ItemType Directory -Force $shots
+if ($Options) { Copy-Item $Options (Join-Path $shots 'Options.ini') }
 $tmp = Join-Path $env:TEMP "treecheck_$PID"
 "pictures in $tmp"
 if (-not (Test-Path $tmp)) { $null = New-Item -ItemType Directory $tmp }

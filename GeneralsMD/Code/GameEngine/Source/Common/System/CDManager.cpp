@@ -192,7 +192,11 @@ void CDManager::init( void )
 
 void CDManager::update( void )
 {
-	// Every so often, check to make sure the CD is still in the drive
+	/* Every so often, check to make sure the CD is still in the drive.  Not in a match: asking an empty
+		 optical drive for its volume took 7 to 11 ms on the game thread every five seconds, the 10 ms in
+		 the p99.9 of the pass's sync part, and all a disc pulled mid-match costs is the music on it. */
+	if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame())
+		return;
 	if ((TheGameLogic->getFrame() % 300) == 299) {
 		refreshDrives();
 	}

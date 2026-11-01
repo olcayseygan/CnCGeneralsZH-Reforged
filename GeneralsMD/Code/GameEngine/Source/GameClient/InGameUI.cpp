@@ -10478,7 +10478,7 @@ void InGameUI::updateAndDrawWorldAnimations( void )
 			// a grade gained floats up as its insignia, half again its health bar size, centred where the
 			// chevron would have been
 			const Real RANK_GAIN_SCALE = 1.5f;
-			if( wad->m_rankOf && Drawable::drawRankInsignia( wad->m_rankOf, wad->m_rankInsignia, screen.x, screen.y - REAL_TO_INT( height * zoomScale / 2 ),
+			if( wad->m_rankOf && !TheGlobalData->m_classicGraphics && Drawable::drawRankInsignia( wad->m_rankOf, wad->m_rankInsignia, screen.x, screen.y - REAL_TO_INT( height * zoomScale / 2 ),
 					TRUE, RANK_GAIN_SCALE * zoomScale, GameMakeColor( 255, 255, 255, REAL_TO_INT( 255 * alpha ) ) ) )
 			{
 				++it;

@@ -71,7 +71,7 @@ unsigned emberConstants(const FieldState &field, unsigned index, bool terrain,
                         float timeSeconds, EmberConstants &constants);
 
 // Row-major 4x4 product and inverse, in the device's layout (the inverse in doubles, so a camera
-// far from the origin still comes back); the -volsmoke volumes take them too.
+// far from the origin still comes back); the reach overlay takes them too.
 void multiply(const float left[16], const float right[16], float result[16]);
 bool inverse(const float source[16], float result[16]);
 

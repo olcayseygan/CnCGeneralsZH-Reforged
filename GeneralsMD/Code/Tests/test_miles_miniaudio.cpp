@@ -381,8 +381,7 @@ TEST(linear_falloff_is_a_straight_line_between_the_distances)
 
 TEST(occlusion_is_a_low_pass_and_inside_the_minimum_is_full)
 {
-	// Occlusion was a cut in volume and is a filter now (MSS.h's AIL_ex_3D_cutoff): half occluded is a
-	// one-pole at 5 kHz, which leaves the 440 Hz tone at 0.993 of itself.
+	// Occlusion is a filter (MSS.h's AIL_ex_3D_cutoff): half occluded is a one-pole at 5 kHz, which leaves the 440 Hz tone at 0.993 of itself.
 	Heard heard = play3D(-5.0f, 0.5f);
 	if (!audio()) return;
 	CHECK(near(heard.right, TONE_RMS));

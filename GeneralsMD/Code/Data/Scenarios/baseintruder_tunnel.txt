@@ -1,0 +1,42 @@
+# An enemy Tunnel Network comes up in a computer player's base three minutes in: how long it stands.
+# Seat 1 has no AI, so nothing else of the enemy's is near; the seat 0 rung plays the whole game.
+# Ground 537,3708 on Twilight Flame takes a building on every rung and seed (LBC check in the spawn).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover 1 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 30000 -scenario baseintruder_tunnel
+
+# a second command center far off, so the match outlasts the seat's start falling
+30 spawn 1 GLACommandCenter 1 4361 3126
+5400 spawn 1 GLATunnelNetwork 1 start0:0:520
+5400 tally 1 GLATunnelNetwork
+5700 tally 1 GLATunnelNetwork
+6000 tally 1 GLATunnelNetwork
+6300 tally 1 GLATunnelNetwork
+6600 tally 1 GLATunnelNetwork
+6900 tally 1 GLATunnelNetwork
+7200 tally 1 GLATunnelNetwork
+7500 tally 1 GLATunnelNetwork
+7800 tally 1 GLATunnelNetwork
+8100 tally 1 GLATunnelNetwork
+8400 tally 1 GLATunnelNetwork
+8700 tally 1 GLATunnelNetwork
+9000 tally 1 GLATunnelNetwork
+9300 tally 1 GLATunnelNetwork
+9600 tally 1 GLATunnelNetwork
+9900 tally 1 GLATunnelNetwork
+10200 tally 1 GLATunnelNetwork
+10500 tally 1 GLATunnelNetwork
+10800 tally 1 GLATunnelNetwork
+11100 tally 1 GLATunnelNetwork
+11400 tally 1 GLATunnelNetwork
+11700 tally 1 GLATunnelNetwork
+12000 tally 1 GLATunnelNetwork
+12300 tally 1 GLATunnelNetwork
+12600 tally 1 GLATunnelNetwork
+12900 tally 1 GLATunnelNetwork
+13200 tally 1 GLATunnelNetwork
+13500 tally 1 GLATunnelNetwork
+13800 tally 1 GLATunnelNetwork
+14100 tally 1 GLATunnelNetwork
+14400 tally 1 GLATunnelNetwork

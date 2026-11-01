@@ -271,8 +271,6 @@ class AudioManager : public SubsystemInterface
 
 		const AudioSettings *getAudioSettings( void ) const;
 		const MiscAudio *getMiscAudio( void ) const;
-		/// how long a sound from there takes to reach the microphone, milliseconds, at most MaxSoundDelay
-		Real getTravelMs( const Coord3D *position ) const;
 
 		// This function should only be called by AudioManager, MusicManager and SoundManager
 		virtual void releaseAudioEventRTS( AudioEventRTS *eventToRelease );
@@ -316,7 +314,7 @@ class AudioManager : public SubsystemInterface
 		Real getZoomVolume() const { return m_zoomVolume; }
 		/// how far out the camera is between ZoomMixNearHeight (0) and ZoomMixFarHeight (1)
 		Real getZoomOut() const { return m_zoomOut; }
-		/// what every world sound's MinRange, MaxRange and the air are multiplied by: the camera's zoom past
+		/// what every world sound's MinRange and MaxRange are multiplied by: the camera's zoom past
 		/// MaxCameraHeight, so the screen sounds as far across at any zoom as at the one the ranges were made for
 		Real getRangeScale() const { return m_rangeScale; }
 

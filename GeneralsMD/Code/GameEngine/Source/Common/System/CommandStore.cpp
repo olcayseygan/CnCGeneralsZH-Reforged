@@ -25,6 +25,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/CommandStore.h"
+#include "Common/FileSystem.h"
 #include "Common/INI.h"
 #include "GameClient/ControlBar.h"
 
@@ -247,6 +248,18 @@ CommandSet *CommandStore::newCommandSetOverride( CommandSet *setToOverride )
 	}  // end if
 	else if( ini->getLoadType() == INI_LOAD_MULTIFILE )
 	{
+		// The fork's sets are EA's with corrections.  A mod that ships its own CommandSet.ini fills the
+		// same names with its own buttons, and a set replaced whole took Contra's Demolitions General
+		// his power tray and left its Air Force General two columns of promotions.  The mod's set stays.
+		Bool inModArchive = FALSE;
+		if( TheFileSystem->modLooseFile( AsciiString( "Data\\INI\\CommandSet.ini" ), &inModArchive ).isNotEmpty() || inModArchive )
+		{
+			CommandSet *unused = newInstance(CommandSet)( name );
+			ini->initFromINI( unused, unused->friend_getFieldParse() );
+			unused->deleteInstance();
+			return;
+		}
+
 		// a patch file's set replaces the set whole, in place, so every pointer to it stays good
 		commandSet->friend_clearCommands();
 	}

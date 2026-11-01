@@ -87,6 +87,7 @@ public:
 	virtual void createLightPulse( const Coord3D *pos, const RGBColor *color, Real innerRadius,Real outerRadius, 
 																 UnsignedInt increaseFrameTime, UnsignedInt decayFrameTime//, Bool donut = FALSE 
 																 );
+	virtual void stepDynamicLights( void );
 	virtual void setTimeOfDay ( TimeOfDay tod );
 
 	/// draw a line on the display in screen coordinates

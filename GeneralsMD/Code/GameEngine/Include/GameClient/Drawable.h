@@ -474,6 +474,7 @@ public:
 		first (animation timing, a model rebuild), which an on-demand flush inside the tick runs; the
 		rest an on-demand flush leaves for after the tick. */
 	void doClientWork( const std::function<void()>& work, ClientWorkOrder order, Bool movesBones = FALSE );
+	void startCollapse();		///< the Collapse option, on the way to rubble
 
 	//---------------------------------------------------------------------------
 	void setDrawableStatus( DrawableStatus bit )  { BitSet( m_status, bit ); }
@@ -545,8 +546,11 @@ public:
 		UnsignedInt			tintStatus;
 		Vector3					tintColor;
 		Vector3					selectionColor;
+		Coord3D					position;
 	};
 	void takeLookForDraw( void );
+	/** Where it stood at the sync point, for the draw's own walks of the drawables: the Thing's cache moves with the tick. */
+	const Coord3D *getPositionForDraw( void ) const { return &m_lookForDraw.position; }
 
 	void colorFlash( const RGBColor *color, UnsignedInt decayFrames = DEF_DECAY_FRAMES, UnsignedInt attackFrames = 0, UnsignedInt sustainAtPeak = FALSE );  ///< flash a drawable in the color specified for a short time
 	void colorTint( const RGBColor *color );	 ///< tint this drawable the color specified
@@ -893,7 +897,6 @@ private:
 	DisplayString*			m_constructDisplayString;  ///< string to display construction % complete
 	DisplayString*			m_supplyCashDisplayString; ///< string to display the cash left in a supply pile
 	Int									m_lastSupplyCashDisplayed; ///< so the string is only rebuilt when the pile shrinks
-	DisplayString*			m_productionTimeDisplayString; ///< seconds left on what this building is making
 	DisplayString*			m_chargeTimeDisplayString; ///< seconds left on a public timer charging here
 	DisplayString*			m_captionDisplayString;		///< string to display caption
 	DisplayString*			m_groupNumber;						///< string to display the group number of this drawable
@@ -919,6 +922,7 @@ private:
 	mutable Bool m_clientWorkQueued;		///< this drawable's ID is in the list flushPendingClientWork walks
 	Bool m_transformPending;						///< the tick moved it; the draw modules have not been told
 	Bool m_renderPending;								///< made in a tick: the draw modules have not built their render objects
+	Int m_clipFeedbackSlots;						///< the draw modules' getProjectileClipFeedbackSlots, or'd at creation
 	struct PendingStep
 	{
 		ModelConditionFlags condition;		///< a state an in-tick flush would have applied, when work is empty

@@ -156,9 +156,6 @@ extern RenderWindow ApplicationHWnd;
 W3DWindowFrameHook TheW3DWindowFrameHook = NULL;
 W3DWindowSizeHook TheW3DWindowSizeHook = NULL;
 #endif
-#ifdef _WIN32
-#include "W3DDevice/GameClient/VolumeSmoke.h"
-#endif
 #include "zhio.h"		// zh_fopen, zh_remove, zh_mkdir: the engine's Windows-spelled paths (C1)
 
 #ifdef _INTERNAL
@@ -1303,6 +1300,16 @@ void W3DDisplay::init( void )
 		}
 	}
 
+	// the setup this run draws: every option as it stands now the preset is in, and what ClassicGraphics took back
+	logOptionCatalog();
+	DEBUG_LOG(("OPTIONS in force: detail %s reduction %d particles %d volumes %d decals %d lightmap %d softwater %d scaffolds %d sway %d heat %d dynamicLOD %d trees %d; shadow map %d post chain '%s' smooth motion %d\n",
+						 TheGameLODManager->getStaticGameLODLevelName(TheGameLODManager->getStaticLODLevel()),
+						 TheGlobalData->m_textureReductionFactor, TheGlobalData->m_maxParticleCount,
+						 (Int)TheGlobalData->m_useShadowVolumes, (Int)TheGlobalData->m_useShadowDecals,
+						 (Int)TheGlobalData->m_useLightMap, (Int)TheGlobalData->m_showSoftWaterEdge, (Int)!TheGlobalData->m_useDrawModuleLOD,
+						 (Int)TheGlobalData->m_useTreeSway, (Int)TheGlobalData->m_useHeatEffects, (Int)TheGlobalData->m_enableDynamicLOD, (Int)TheGlobalData->m_useTrees,
+						 (Int)TheGlobalData->m_shadowMap, TheGlobalData->m_direct3D11PostChain.str(), (Int)TheGlobalData->m_smoothMotion));
+
 	if (TheGlobalData->m_displayGamma != 1.0f)
 		setGamma(TheGlobalData->m_displayGamma,0.0f,1.0f,FALSE);
 
@@ -2209,9 +2216,13 @@ extern UnsignedInt TheSceneDrawCalls;
 // R1, smooth motion (W3DSmoothMotion.h).  Three steps around the scene's render, and only the picture:
 //   smoothMotionBegin    before updateViews: the blend's alpha, and on a new tick each drawable's position
 //                        (the camera's lock follows the blended one)
-//   smoothMotionApply    after the particles, before the render targets and the scene: on a new tick each
-//                        model's transform is captured, then every model is shown blended
+//   smoothMotionApply    after the particles and the sync point, before the overlap window opens: on a new
+//                        tick each model's transform is captured, then every model is shown blended
 //   smoothMotionRestore  after the render loop: the logic transforms go back before picking and the logic
+// A tick reads live bones (ParticleUplinkCannonUpdate), so it never runs beside a blend: a picture that holds
+// one keeps its tick serial.  A picture with a tick beside it shows the state before that tick, which was due
+// when it was handed over, so it is a whole tick behind and blends nothing anyway; the pictures drawn again
+// beside it (phase 4) show the logic transforms as they stand.
 //=============================================================================
 bool TheSmoothMotionActive = false;
 float TheSmoothMotionAlpha = 1.0f;
@@ -2219,6 +2230,8 @@ static UnsignedInt s_smoothPositionFrame = 0xFFFFFFFFu;
 static UnsignedInt s_smoothModelFrame = 0xFFFFFFFFu;
 static Bool s_smoothApplied = FALSE;
 static Bool s_smoothBehind = FALSE;		// this picture is a whole tick or more behind: nothing captured or blended
+static Bool s_pacingNoted = FALSE;			// ZH_SMOOTH_MOTION_STATS samples this pass's pictures, of s_pacingFrame
+static UnsignedInt s_pacingFrame = 0;
 
 /* Smooth motion's default: a blend only on a display that refreshes faster than the logic ticks.  At 60 Hz
 	 every refresh shows a new tick already, and the blend would only draw each one a tick late.  The
@@ -2293,13 +2306,12 @@ static void notePacing(UnsignedInt frame)
 
 static void smoothMotionBegin()
 {
-	// on a display faster than the logic, unless -nosmoothmotion says no or the logic thread wants the
-	// render beside its tick; -recordfps's pictures between two logic frames always blend, from the frame
-	// before the first so that one is captured
+	// on a display faster than the logic, unless -nosmoothmotion says no, at every -logicthread setting;
+	// -recordfps's pictures between two logic frames always blend, from the frame before the first so that
+	// one is captured
 	const Bool video = GameEngine_videoBlends();
 	TheSmoothMotionActive = !TheGlobalData->m_headless
-		&& ((TheGlobalData->m_smoothMotion && !LogicThread::isEnabled()
-				&& (TheGlobalData->m_smoothMotionAnyDisplay || displayOutpacesLogic()))
+		&& ((TheGlobalData->m_smoothMotion && (TheGlobalData->m_smoothMotionAnyDisplay || displayOutpacesLogic()))
 			|| video);
 	TheSmoothMotionAlpha = TheSmoothMotionActive ? GameEngine_logicTickFraction() : 1.0f;
 	// A picture a whole tick or more behind the battle shows every model at its logic transform, so it
@@ -2309,8 +2321,10 @@ static void smoothMotionBegin()
 	// an alpha of 1, and the frame before the first blended one has to be captured.
 	s_smoothBehind = TheSmoothMotionAlpha >= 1.0f && !video;
 	static const Bool stats = getenv("ZH_SMOOTH_MOTION_STATS") != NULL;
-	if (stats && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isGamePaused())
-		notePacing(TheGameClient->getFrame());
+	s_pacingNoted = stats && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isGamePaused();
+	s_pacingFrame = TheGameClient->getFrame();
+	if (s_pacingNoted)
+		notePacing(s_pacingFrame);
 	if (!TheSmoothMotionActive || s_smoothBehind)
 		return;
 	const UnsignedInt frame = TheGameClient->getFrame();
@@ -2376,6 +2390,18 @@ static void smoothMotionApply()
 	}
 	s_smoothApplied = TRUE;
 	s_smoothPassTicks += Clock_Ticks() - passStart;
+}
+
+/* Phase 4's picture drawn again beside the tick.  Only a pass with no blend held hands its tick over, so
+	 this picture, like the pass's first, is a whole tick behind and shows the logic transforms; it touches
+	 no drawable and no logic, and is only counted, for the cost and pacing figures. */
+static void smoothMotionDrawAgain()
+{
+	DEBUG_ASSERTCRASH(!s_smoothApplied, ("smooth motion: a blend held beside a tick"));
+	if (s_pacingNoted)
+		notePacing(s_pacingFrame);
+	if (TheSmoothMotionActive)
+		++s_smoothPasses;
 }
 
 static void smoothMotionRestore()
@@ -2445,6 +2471,10 @@ static void takeReadsForRender( Bool renders )
 		static_cast<W3DView *>( view )->recordPostDraw();
 	TheInGameUI->recordDraw();
 	TheTerrainRenderObject->takeWaypointsForRender();
+	// never the load screen's: no tick runs beside it, and with the shroud off nothing wipes what it would
+	// read before the partition's first update
+	if( !TheGlobalData->m_loadScreenRender )
+		TheTerrainRenderObject->takePropShroudForRender();
 	TheTerrainRenderObject->stepTrees();	// before the particles: a falling tree's FX makes systems
 #if ZH_MODERN_WATER
 	if (TheWaterRenderObj) TheWaterRenderObj->takeReadsForRender();
@@ -2464,8 +2494,9 @@ void W3DDisplay::draw( void )
 		// the particle update below is the only thing that retires a particle system, so skipping
 		// it with the draw stacked up every system the match made in the meantime, all of them to
 		// start emitting at once on return (TheSuperHackers #2709 reproduce it with Propaganda
-		// Towers).  Same bookkeeping as the lost-device branch below.
+		// Towers).  Same bookkeeping as the lost-device branch below, and the light pulses' with it.
 		TheParticleSystemManager->update();
+		stepDynamicLights();
 		return;
 	}
 #endif
@@ -2637,6 +2668,15 @@ AGAIN:
 		const UnsignedInt MAX_SYNC_STEP_MS = TheW3DFrameLengthInMsec * 4 * LOGICFRAMES_PER_RETAIL_FRAME;
 		if (deltaMs > MAX_SYNC_STEP_MS)
 			deltaMs = MAX_SYNC_STEP_MS;
+		// a cinematic that slowed the game slows the animations with it, or soldiers march on the spot
+		const Real missionRate = GameEngine_missionTimeRate();
+		if (missionRate < 1.0f)
+		{
+			static Real slowedMs = 0.0f;
+			slowedMs += deltaMs * missionRate;
+			deltaMs = (UnsignedInt)slowedMs;
+			slowedMs -= deltaMs;
+		}
 		// a recorded picture is its share of a logic frame however long it took to draw and save, so the
 		// clock moves that much too, or the footage plays every animation fast.  Read off the pictures'
 		// own clock rather than added up: a 60 Hz frame is not a whole number of milliseconds, and
@@ -2678,9 +2718,6 @@ AGAIN:
 	} 
 
 
-#ifdef _WIN32
-	VolumeSmoke::Gather();	// the drawables and structures the smoke volumes read, before the window
-#endif
 	// the span a logic thread could run beside, marked for LOGIC-THREAD.md phase 3's count of logic reads
 	// made inside it; opened each time round below and closed after End_Render, or after the loop when
 	// a continue skips that.  Phase 4: while the tick handed over at its opening runs on and another
@@ -2727,6 +2764,7 @@ AGAIN:
 				now = Clock_Milliseconds();		// the letterbox's fade runs on it
 				TheLookAtTranslator->scrollView();
 				primaryW3DView->updateCameraBesideTick();
+				smoothMotionDrawAgain();
 #ifdef DEBUG_LOGGING
 				tOverlapStart = Clock_Ticks();
 #endif
@@ -2754,6 +2792,9 @@ AGAIN:
 				TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );
 #endif
 				takeReadsForRender( rendersThisPass() );
+				// R1: after the particles read the logic bones (Lorenzen's note above) and the sync point
+				// flushed the models' conditions, before anything renders and before a tick may start
+				smoothMotionApply();
 				pictureStart = Clock_Ticks();
 #ifdef DEBUG_LOGGING
 				tOverlapStart = Clock_Ticks();
@@ -2761,11 +2802,13 @@ AGAIN:
 				// a draw from inside a tick (the load screen the map start paints) is the tick's own.  The
 				// tick runs beside a render that reads logic only through the sync point's copies, which
 				// rules out the scripted camera's loop of renders, the debug overlays and displays that walk
-				// the objects live, -cinema's own interface, smooth motion's restore and the load screen.
+				// the objects live, -cinema's own interface, a blend on the models (the tick reads live
+				// bones) and the load screen.
 				if( !TheGameLogic->isInGameLogicUpdate() )
 				{
-					Bool mayOverlap = !loopForCameraMovement && rendersThisPass() && !TheSmoothMotionActive
+					Bool mayOverlap = !loopForCameraMovement && rendersThisPass() && !s_smoothApplied
 						&& m_debugDisplayCallback == NULL && !TheGlobalData->m_loadScreenRender
+						&& !TheGlobalData->m_breakTheMovie && !TheGlobalData->m_disableRender	// takeReadsForRender took nothing
 						&& !TheGlobalData->m_showLanes && !CinemaDirector_hidesHud()
 						&& TheObserverCamera.getDrawnPaneCount() <= 1;
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -2778,15 +2821,12 @@ AGAIN:
 				}
 			}
 
-			// R1: after the particles read the logic bones (Lorenzen's note above), before anything renders.
-			smoothMotionApply();
-
 			// After the smooth motion, so a lamp's light sits where its model is drawn this frame.
 			if (primaryW3DView && primaryW3DView->get3DCamera())
 				W3DModelDraw::lightHeadlights(primaryW3DView->get3DCamera()->Get_Position());
 
 			// Once a frame and before any view draws, so a script's blur or black and white filter
-			// does not freeze the haze the way pushing it from the default filter did.
+			// does not cost the haze its levels and shroud the way pushing it from the default filter did.
 			W3DShaderManager::pushProtoHaze();
 
 			if (TheWaterRenderObj)
@@ -2812,9 +2852,11 @@ AGAIN:
 			// read the client transform while it is still valid.  There is no updateViews here and
 			// nothing to draw the result of, so a frame's worth of stale transforms costs nothing.
 			// Not beside a tick (phase 4's pictures drawn again), which may be making systems.
+			// The light pulses fade and park only in the render as well (RTS3DScene::stepDynamicLights).
 			//
 			if (!drawAgain)
 				TheParticleSystemManager->update();
+			stepDynamicLights();
 		}
 
 		Debug_Statistics::End_Statistics();	//record number of polygons rendered in RenderTargetTextures.
@@ -3040,6 +3082,12 @@ AGAIN:
 				}
 			}
 		}
+		else
+		{
+			// A replay's fast forward and a seek draw one frame a game second, and only the draw
+			// faded and parked the light pulses, so the frame after a seek was lit by its muzzle flashes.
+			stepDynamicLights();
+		}
 #ifdef DEBUG_LOGGING
 		if (tOverlapStart)
 			TheOverlapWindowMS += w3dElapsedMS( tOverlapStart, Clock_Ticks() );
@@ -3174,6 +3222,11 @@ void W3DDisplay::createLightPulse( const Coord3D *pos, const RGBColor *color,
 	//theDynamicLight->setDonut(donut);
 	// (gth) CNC3 enable far attenuation.  C&C3 defaults to disabled.  Must enable to match Generals. MW 8-06-03
 	theDynamicLight->Set_Flag(LightClass::FAR_ATTENUATION,true);
+}
+
+void W3DDisplay::stepDynamicLights( void )
+{
+	m_3DScene->stepDynamicLights();
 }
 
 void W3DDisplay::toggleLetterBox(void)

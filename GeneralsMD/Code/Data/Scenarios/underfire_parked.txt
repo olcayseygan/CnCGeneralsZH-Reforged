@@ -1,0 +1,42 @@
+# Under fire where the wave gathers: a computer player's scripts take the tanks into a team and park it on
+# Alpine Assault's middle road, at (1433,889), and Fire Bases go up in reach of it once it is there.  Each tank
+# they hit should leave their ground, or go for them when the odds allow it.  AI FIRE lines say which it did.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 7200
+#     -scenario underfire_parked -logPrefix uf_
+
+30    spawn   1  ChinaTankBattleMaster   4  start1:0:650  40
+35    spawn   1  ChinaInfantryRedguard   4  start1:0:250  20
+1200  spawn   0  AmericaFireBase         6  1640 889  90
+1200  tally   1  ChinaTankBattleMaster
+1300  tally   1  ChinaTankBattleMaster
+1400  tally   1  ChinaTankBattleMaster
+1500  tally   1  ChinaTankBattleMaster
+1600  tally   1  ChinaTankBattleMaster
+1700  tally   1  ChinaTankBattleMaster
+1800  tally   1  ChinaTankBattleMaster
+1900  tally   1  ChinaTankBattleMaster
+2000  tally   1  ChinaTankBattleMaster
+2200  tally   1  ChinaTankBattleMaster
+2400  tally   1  ChinaTankBattleMaster
+2600  tally   1  ChinaTankBattleMaster
+2800  tally   1  ChinaTankBattleMaster
+3000  tally   1  ChinaTankBattleMaster
+3200  tally   1  ChinaTankBattleMaster
+3400  tally   1  ChinaTankBattleMaster
+3590  tally   1  ChinaTankBattleMaster
+3800  tally   1  ChinaTankBattleMaster
+4000  tally   1  ChinaTankBattleMaster
+4200  tally   1  ChinaTankBattleMaster
+4400  tally   1  ChinaTankBattleMaster
+4600  tally   1  ChinaTankBattleMaster
+4800  tally   1  ChinaTankBattleMaster
+5000  tally   1  ChinaTankBattleMaster
+5200  tally   1  ChinaTankBattleMaster
+5400  tally   1  ChinaTankBattleMaster
+5600  tally   1  ChinaTankBattleMaster
+5800  tally   1  ChinaTankBattleMaster
+5990  tally   1  ChinaTankBattleMaster
+5990  tally   0  AmericaFireBase

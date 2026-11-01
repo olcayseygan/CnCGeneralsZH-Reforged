@@ -113,6 +113,9 @@ public:
 	*/
 	virtual void doFXObj(const FXObjectView* primary, const FXObjectView* secondary = NULL) const;
 
+	/// How wide a burn this nugget's blast asks for under Battle Marks: 0 has no say, below 0 scorches the ground itself, as wide as the value's size.
+	virtual Real blastMarkRadius() const { return 0.0f; }
+
 private:
 
 };
@@ -168,7 +171,15 @@ public:
 	void swap(FXList &that)
 	{
 		m_nuggets.swap(that.m_nuggets);
+		std::swap(m_markRadius, that.m_markRadius);
+		std::swap(m_splashRadius, that.m_splashRadius);
 	}
+
+	/// Battle Marks and Water Splashes: told the list's name once it is parsed, decides whether it is a blast on the ground.
+	void noteBlastByName(const char *name);
+
+	/// How wide this list splashes in water under Water Splashes, 0 for not at all.
+	Real getSplashRadius() const { return m_splashRadius; }
 
 	/// inline convenience method to avoid having to check for null.
 	inline static void doFXPos(const FXList* fx, const Coord3D *primary, const Matrix3D* primaryMtx = NULL, const Real primarySpeed = 0.0f, const Coord3D *secondary = NULL, const Real overrideRadius = 0.0f)
@@ -211,10 +222,13 @@ private:
 	/// what the two above do, at once outside a tick and after it for one a tick asked for
 	void doFXPosNow(const Coord3D *primary, const Matrix3D* primaryMtx, const Real primarySpeed, const Coord3D *secondary, const Real overrideRadius) const;
 	void doFXObjNow(const FXObjectView* primary, const FXObjectView* secondary, const Object* primaryObject) const;
+	void leaveBlastMark(const Coord3D *at) const;
 
 	typedef std::list< FXNugget* > FXNuggetList;
 
 	FXNuggetList m_nuggets;
+	Real m_markRadius;	///< the burn this list leaves on the ground under Battle Marks, 0 for none
+	Real m_splashRadius;	///< how wide it splashes in water under Water Splashes, 0 for not at all
 
 };  
 
@@ -242,6 +256,10 @@ public:
 	
 	static void parseFXListDefinition(INI* ini);
 
+	/** FXListReforged.ini under Classic Graphics: the file is read, and so checksummed, like anyone's, and
+		* its blocks go nowhere. */
+	void setClassicDropsBlocks( Bool drops ) { m_classicDropsBlocks = drops; }
+
 private:
 
 	// use the hashing function for Ints. 
@@ -251,6 +269,8 @@ private:
 
 	FXListMap m_beforeMapOverrides;					///< a map.ini's edited lists, as they were before it
 	std::vector<NameKeyType> m_addedByMap;	///< names a map.ini brought
+	Bool m_classicDropsBlocks = FALSE;
+	Bool m_classicDroppedGeneralCopies = FALSE;	///< SupW_ names now answer with EA's plain list
 
 };
 

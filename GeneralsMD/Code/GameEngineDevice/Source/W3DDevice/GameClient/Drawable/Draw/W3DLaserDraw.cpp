@@ -292,7 +292,7 @@ static Vector3 glowHue( Color inner, Color outer )
 // widens instead, and the Direct3D 11 gain takes the lines over white (GLOW_ENABLE below).
 static Real glowStrength()
 {
-	return TheGlobalData->m_bloomIntensity / 50.0f;
+	return TheGlobalData->m_classicGraphics ? 0.0f : TheGlobalData->m_bloomIntensity / 50.0f;
 }
 
 // The plain additive preset, opted into the Glow option's gain: EA's beam layers and the glow

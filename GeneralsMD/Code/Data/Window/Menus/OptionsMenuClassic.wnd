@@ -2559,6 +2559,100 @@ WINDOW
         END
         CHILD
         WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 288 238, BOTTOMRIGHT: 512 262, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckStructureCollapse";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:StructureCollapse";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:StructureCollapse";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 288 266, BOTTOMRIGHT: 512 290, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckSmoothMotion";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:SmoothMotion";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:SmoothMotion";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
           WINDOWTYPE = STATICTEXT;
           SCREENRECT = UPPERLEFT: 536 182, BOTTOMRIGHT: 760 206, CREATIONRESOLUTION: 800 600;
           NAME = "OptionsMenu.wnd:AntiAliasingLabel";
@@ -4546,6 +4640,53 @@ WINDOW
           TOOLTIPTEXT = "TOOLTIP:TeamGlow";
           TOOLTIPDELAY = -1;
           TEXT = "GUI:TeamGlow";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 288 434, BOTTOMRIGHT: 512 458, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckAtmosphere";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:Atmosphere";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:Atmosphere";
           TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
                       DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
                       HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
@@ -6860,6 +7001,194 @@ WINDOW
         WINDOW
           WINDOWTYPE = CHECKBOX;
           SCREENRECT = UPPERLEFT: 288 266, BOTTOMRIGHT: 512 290, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckGroundMarks";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:GroundMarks";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:GroundMarks";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 288 294, BOTTOMRIGHT: 512 318, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckHemiAmbient";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:HemiAmbient";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:HemiAmbient";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 288 322, BOTTOMRIGHT: 512 346, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckAmbientOcclusion";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:AmbientOcclusion";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:AmbientOcclusion";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 288 350, BOTTOMRIGHT: 512 374, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckInternalHdr";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:InternalHdr";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:InternalHdr";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 288 378, BOTTOMRIGHT: 512 402, CREATIONRESOLUTION: 800 600;
           NAME = "OptionsMenu.wnd:CheckExtraAnimations";
           STATUS = ENABLED+IMAGE+BORDER;
           STYLE = CHECKBOX+MOUSETRACK;
@@ -6906,7 +7235,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = CHECKBOX;
-          SCREENRECT = UPPERLEFT: 288 294, BOTTOMRIGHT: 512 318, CREATIONRESOLUTION: 800 600;
+          SCREENRECT = UPPERLEFT: 288 406, BOTTOMRIGHT: 512 430, CREATIONRESOLUTION: 800 600;
           NAME = "OptionsMenu.wnd:CheckTreeSway";
           STATUS = ENABLED+IMAGE+BORDER;
           STYLE = CHECKBOX+MOUSETRACK;
@@ -6953,7 +7282,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = CHECKBOX;
-          SCREENRECT = UPPERLEFT: 288 322, BOTTOMRIGHT: 512 346, CREATIONRESOLUTION: 800 600;
+          SCREENRECT = UPPERLEFT: 288 434, BOTTOMRIGHT: 512 458, CREATIONRESOLUTION: 800 600;
           NAME = "OptionsMenu.wnd:CheckBehindBuilding";
           STATUS = ENABLED+IMAGE+BORDER;
           STYLE = CHECKBOX+MOUSETRACK;
@@ -7500,296 +7829,8 @@ WINDOW
         END
         CHILD
         WINDOW
-          WINDOWTYPE = STATICTEXT;
-          SCREENRECT = UPPERLEFT: 530 294, BOTTOMRIGHT: 754 318, CREATIONRESOLUTION: 800 600;
-          NAME = "OptionsMenu.wnd:LabelVolumeSmoke";
-          TOOLTIPTEXT = "TOOLTIP:VolumeSmoke";
-          STATUS = ENABLED;
-          STYLE = STATICTEXT+MOUSETRACK;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
-          HEADERTEMPLATE = "MinorTitle";
-          TOOLTIPDELAY = -1;
-          TEXT = "GUI:VolumeSmoke";
-          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
-                      HILITE:   128 128 255 255, HILITEBORDER:   0 0 128 255;
-          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 0 0 0 0, BORDERCOLOR: 0 0 0 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
-          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 64 64 64 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
-          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 128 0 255, BORDERCOLOR: 128 255 128 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255,
-                           IMAGE: NoImage, COLOR: 255 255 255 255, BORDERCOLOR: 255 255 255 255;
-          STATICTEXTDATA = CENTERED: 0;
-        END
-        CHILD
-        WINDOW
-          WINDOWTYPE = COMBOBOX;
-          SCREENRECT = UPPERLEFT: 536 318, BOTTOMRIGHT: 760 342, CREATIONRESOLUTION: 800 600;
-          NAME = "OptionsMenu.wnd:ComboBoxVolumeSmoke";
-          TOOLTIPTEXT = "TOOLTIP:VolumeSmoke";
-          STATUS = ENABLED+IMAGE;
-          STYLE = MOUSETRACK+COMBOBOX;
-          SYSTEMCALLBACK = "[None]";
-          INPUTCALLBACK = "[None]";
-          TOOLTIPCALLBACK = "[None]";
-          DRAWCALLBACK = "[None]";
-          FONT = NAME: "Arial", SIZE: 10, BOLD: 0;
-          HEADERTEMPLATE = "ComboBoxEntry";
-          TOOLTIPDELAY = -1;
-          TEXTCOLOR = ENABLED:  254 254 254 255, ENABLEDBORDER:  0 0 0 255,
-                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
-                      HILITE:   128 128 255 255, HILITEBORDER:   0 0 128 255;
-          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                            IMAGE: NoImage, COLOR: 47 55 168 255, BORDERCOLOR: 254 254 254 255,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                             IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
-                           IMAGE: ListBoxHiliteSelectedItemLeftEnd, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
-                           IMAGE: ListBoxHiliteSelectedItemRightEnd, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: ListBoxHiliteSelectedItemRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: ListBoxHiliteSelectedItemSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXDATA = ISEDITABLE: 0,
-                        MAXCHARS: 16,
-                        MAXDISPLAY: 5,
-                        ASCIIONLY: 0,
-                        LETTERSANDNUMBERS: 0;
-          COMBOBOXDROPDOWNBUTTONENABLEDDRAWDATA = IMAGE: VSliderDownButtonEnabled, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                                                  IMAGE: VSliderDownButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                                                  IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                  IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                  IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                  IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                  IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                  IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                  IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXDROPDOWNBUTTONDISABLEDDRAWDATA = IMAGE: VSliderDownButtonDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                                                   IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 128 128 128 255,
-                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                   IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXDROPDOWNBUTTONHILITEDRAWDATA = IMAGE: VSliderDownButtonHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
-                                                 IMAGE: VSliderDownButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                                                 IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                 IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                 IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                 IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                 IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                 IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                                 IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXEDITBOXENABLEDDRAWDATA = IMAGE: TextEntryEnabledLeftEnd, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                                           IMAGE: TextEntryEnabledRightEnd, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                                           IMAGE: TextEntryEnabledRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: TextEntryEnabledSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXEDITBOXDISABLEDDRAWDATA = IMAGE: TextEntryDisabledLeftEnd, COLOR: 128 128 128 255, BORDERCOLOR: 0 0 0 255,
-                                            IMAGE: TextEntryDisabledRightEnd, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
-                                            IMAGE: TextEntryDisabledRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: TextEntryDisabledSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXEDITBOXHILITEDRAWDATA = IMAGE: TextEntryHiliteLeftEnd, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
-                                          IMAGE: TextEntryHiliteRightEnd, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
-                                          IMAGE: TextEntryHiliteRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: TextEntryHiliteSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXLISTBOXENABLEDDRAWDATA = IMAGE: BlackSquare, COLOR: 0 0 0 255, BORDERCOLOR: 49 55 168 255,
-                                           IMAGE: ListBoxHiliteItemLeftEnd, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                                           IMAGE: ListBoxHiliteItemRightEnd, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: ListBoxHiliteItemRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: ListBoxHiliteItemSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXLISTBOXDISABLEDDRAWDATA = IMAGE: BlackSquare, COLOR: 0 0 0 255, BORDERCOLOR: 49 55 168 255,
-                                            IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          COMBOBOXLISTBOXHILITEDRAWDATA = IMAGE: BlackSquare, COLOR: 0 0 0 255, BORDERCOLOR: 49 55 168 255,
-                                          IMAGE: ListBoxHiliteSelectedItemLeftEnd, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
-                                          IMAGE: ListBoxHiliteSelectedItemRightEnd, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: ListBoxHiliteSelectedItemRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: ListBoxHiliteSelectedItemSmallRepeatingCenter, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXENABLEDUPBUTTONDRAWDATA = IMAGE: VSliderUpButtonEnabled, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                                           IMAGE: VSliderUpButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXDISABLEDUPBUTTONDRAWDATA = IMAGE: VSliderUpButtonDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                                            IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXHILITEUPBUTTONDRAWDATA = IMAGE: VSliderUpButtonHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
-                                          IMAGE: VSliderUpButtonHiliteSelected, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXENABLEDDOWNBUTTONDRAWDATA = IMAGE: VSliderDownButtonEnabled, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
-                                             IMAGE: VSliderDownButtonHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXDISABLEDDOWNBUTTONDRAWDATA = IMAGE: VSliderDownButtonDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                                              IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
-                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                              IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXHILITEDOWNBUTTONDRAWDATA = IMAGE: VSliderDownButtonHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
-                                            IMAGE: VSliderDownButtonHiliteSelected, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXENABLEDSLIDERDRAWDATA = IMAGE: NoImage, COLOR: 168 255 12 0, BORDERCOLOR: 47 55 168 255,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                         IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXDISABLEDSLIDERDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 0, BORDERCOLOR: 148 112 0 255,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                          IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          LISTBOXHILITESLIDERDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 0, BORDERCOLOR: 49 55 168 255,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          SLIDERTHUMBENABLEDDRAWDATA = IMAGE: ScrollBarThumbEnabled, COLOR: 255 4 0 0, BORDERCOLOR: 255 243 28 255,
-                                       IMAGE: ScrollBarThumbHiliteSelected, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
-                                       IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                       IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                       IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                       IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                       IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                       IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                       IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          SLIDERTHUMBDISABLEDDRAWDATA = IMAGE: ScrollBarThumbDisabled, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
-                                        IMAGE: NoImage, COLOR: 192 192 192 255, BORDERCOLOR: 254 254 254 255,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                        IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-          SLIDERTHUMBHILITEDRAWDATA = IMAGE: ScrollBarThumbHilite, COLOR: 0 255 0 255, BORDERCOLOR: 0 128 0 255,
-                                      IMAGE: ScrollBarThumbHiliteSelected, COLOR: 254 254 254 255, BORDERCOLOR: 0 128 0 255,
-                                      IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                      IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                      IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                      IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                      IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                      IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
-                                      IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
-        END
-        CHILD
-        WINDOW
           WINDOWTYPE = CHECKBOX;
-          SCREENRECT = UPPERLEFT: 536 350, BOTTOMRIGHT: 760 374, CREATIONRESOLUTION: 800 600;
+          SCREENRECT = UPPERLEFT: 536 294, BOTTOMRIGHT: 760 318, CREATIONRESOLUTION: 800 600;
           NAME = "OptionsMenu.wnd:CheckParticleBounce";
           STATUS = ENABLED+IMAGE+BORDER;
           STYLE = CHECKBOX+MOUSETRACK;
@@ -7836,7 +7877,7 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = CHECKBOX;
-          SCREENRECT = UPPERLEFT: 536 378, BOTTOMRIGHT: 760 402, CREATIONRESOLUTION: 800 600;
+          SCREENRECT = UPPERLEFT: 536 322, BOTTOMRIGHT: 760 346, CREATIONRESOLUTION: 800 600;
           NAME = "OptionsMenu.wnd:CheckSmokeFireLighting";
           STATUS = ENABLED+IMAGE+BORDER;
           STYLE = CHECKBOX+MOUSETRACK;
@@ -7883,7 +7924,54 @@ WINDOW
         CHILD
         WINDOW
           WINDOWTYPE = CHECKBOX;
-          SCREENRECT = UPPERLEFT: 536 406, BOTTOMRIGHT: 760 430, CREATIONRESOLUTION: 800 600;
+          SCREENRECT = UPPERLEFT: 536 350, BOTTOMRIGHT: 760 374, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckFirelight";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:Firelight";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:Firelight";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 536 378, BOTTOMRIGHT: 760 402, CREATIONRESOLUTION: 800 600;
           NAME = "OptionsMenu.wnd:CheckDebrisTrails";
           STATUS = ENABLED+IMAGE+BORDER;
           STYLE = CHECKBOX+MOUSETRACK;
@@ -7896,6 +7984,100 @@ WINDOW
           TOOLTIPTEXT = "TOOLTIP:DebrisTrails";
           TOOLTIPDELAY = -1;
           TEXT = "GUI:DebrisTrails";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 536 406, BOTTOMRIGHT: 760 430, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckWeather";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:Weather";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:Weather";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 536 434, BOTTOMRIGHT: 760 458, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckWaterSplashes";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:WaterSplashes";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:WaterSplashes";
           TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
                       DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
                       HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
@@ -10299,6 +10481,53 @@ WINDOW
           TOOLTIPTEXT = "TOOLTIP:EdgeScrollWindowed";
           TOOLTIPDELAY = -1;
           TEXT = "GUI:EdgeScrollWindowed";
+          TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
+                      DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
+                      HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;
+          ENABLEDDRAWDATA = IMAGE: NoImage, COLOR: 255 0 0 255, BORDERCOLOR: 255 128 128 255,
+                            IMAGE: Active-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: Active-Checked, COLOR: 0 0 255 255, BORDERCOLOR: 128 128 255 255,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                            IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          DISABLEDDRAWDATA = IMAGE: NoImage, COLOR: 128 128 128 255, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Unchecked, COLOR: 255 255 255 0, BORDERCOLOR: 192 192 192 255,
+                             IMAGE: Disabled-Checked, COLOR: 64 64 64 255, BORDERCOLOR: 254 254 254 255,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                             IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+          HILITEDRAWDATA = IMAGE: NoImage, COLOR: 0 255 0 255, BORDERCOLOR: 128 255 128 255,
+                           IMAGE: Active-HiLighted, COLOR: 255 255 255 0, BORDERCOLOR: 128 128 255 255,
+                           IMAGE: Active-Checked, COLOR: 255 255 0 255, BORDERCOLOR: 254 254 254 255,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0,
+                           IMAGE: NoImage, COLOR: 255 255 255 0, BORDERCOLOR: 255 255 255 0;
+        END
+        CHILD
+        WINDOW
+          WINDOWTYPE = CHECKBOX;
+          SCREENRECT = UPPERLEFT: 40 434, BOTTOMRIGHT: 264 458, CREATIONRESOLUTION: 800 600;
+          NAME = "OptionsMenu.wnd:CheckCameraShake";
+          STATUS = ENABLED+IMAGE+BORDER;
+          STYLE = CHECKBOX+MOUSETRACK;
+          SYSTEMCALLBACK = "[None]";
+          INPUTCALLBACK = "[None]";
+          TOOLTIPCALLBACK = "[None]";
+          DRAWCALLBACK = "[None]";
+          FONT = NAME: "Arial", SIZE: 14, BOLD: 0;
+          HEADERTEMPLATE = "MinorTitle";
+          TOOLTIPTEXT = "TOOLTIP:CameraShake";
+          TOOLTIPDELAY = -1;
+          TEXT = "GUI:CameraShake";
           TEXTCOLOR = ENABLED:  255 255 255 255, ENABLEDBORDER:  0 0 0 255,
                       DISABLED: 192 192 192 255, DISABLEDBORDER: 64 64 64 255,
                       HILITE:   186 255 12 255, HILITEBORDER:   0 0 0 255;

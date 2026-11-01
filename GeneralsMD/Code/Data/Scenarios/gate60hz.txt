@@ -1,0 +1,34 @@
+# The crowd gate-60hz.ps1 measures: eight AIs on Twilight Flame held at 2000 objects from minute ten
+# on, the working target of 60 Hz however long a match runs. Left alone the same match peaks near 1560
+# with a mean of 1240, and money, -teams and a bigger map do not move that, because population caps
+# and the AI's spending stop it first. One unit a frame at most while the world is under the number,
+# the lines taking turns, every seat the same three kinds on its road to the centre of the map.
+#
+#   .\gate-60hz.ps1 -Minutes 17 -Window 2
+#
+# The frames are 30 Hz, so 18000 is logic frame 36000.
+
+18000 topup 0 AmericaInfantryRanger          2000
+18000 topup 0 AmericaInfantryMissileDefender 2000
+18000 topup 0 AmericaTankCrusader            2000
+18000 topup 1 ChinaInfantryRedguard          2000
+18000 topup 1 ChinaInfantryTankHunter        2000
+18000 topup 1 ChinaTankBattleMaster          2000
+18000 topup 2 GLAInfantryRebel               2000
+18000 topup 2 GLAInfantryTunnelDefender      2000
+18000 topup 2 GLATankScorpion                2000
+18000 topup 3 AmericaInfantryRanger          2000
+18000 topup 3 AmericaInfantryMissileDefender 2000
+18000 topup 3 AmericaTankCrusader            2000
+18000 topup 4 ChinaInfantryRedguard          2000
+18000 topup 4 ChinaInfantryTankHunter        2000
+18000 topup 4 ChinaTankBattleMaster          2000
+18000 topup 5 GLAInfantryRebel               2000
+18000 topup 5 GLAInfantryTunnelDefender      2000
+18000 topup 5 GLATankScorpion                2000
+18000 topup 6 AmericaInfantryRanger          2000
+18000 topup 6 AmericaInfantryMissileDefender 2000
+18000 topup 6 AmericaTankCrusader            2000
+18000 topup 7 ChinaInfantryRedguard          2000
+18000 topup 7 ChinaInfantryTankHunter        2000
+18000 topup 7 ChinaTankBattleMaster          2000

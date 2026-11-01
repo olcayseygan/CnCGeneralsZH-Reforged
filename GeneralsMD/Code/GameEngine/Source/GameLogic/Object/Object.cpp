@@ -309,6 +309,8 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_sightJammerCount = 0;
 	for( Int aura = 0; aura < RANK_AURA_COUNT; ++aura )
 		m_rankAura[ aura ] = 0.0f;
+	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
+		m_rankAuraGathered[ aura ] = 0.0f;
 	m_rankRallyUntil = 0;
 	m_forgoRankRally = FALSE;
 
@@ -4559,13 +4561,14 @@ static void xferModule( Xfer *xfer, BehaviorModule *module, const Object *obj )
 	* 13: how many enemy jammers are cutting its sight
 	* 14: the rank auras on it and when its death rally ends
 	* 15: the six aura kinds mend, pace, drill, steady, capture and spoils
+	* 16: the auras gathered since its last turn of the once-a-second pass
 	*/
 //-------------------------------------------------------------------------------------------------
 void Object::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 15;
+	const XferVersion currentVersion = 16;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5043,6 +5046,12 @@ void Object::xfer( Xfer *xfer )
 	}
 	if( version >= 14 )
 		xfer->xferUnsignedInt( &m_rankRallyUntil );
+
+	if( version >= 16 )
+	{
+		for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
+			xfer->xferReal( &m_rankAuraGathered[ aura ] );
+	}
 
 }  // end xfer
 
@@ -5603,16 +5612,19 @@ Real Object::getRankAura( RankAura aura ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-void Object::clearRankAuras()
+void Object::takeGatheredRankAuras()
 {
 	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-		m_rankAura[ aura ] = 0.0f;
+	{
+		m_rankAura[ aura ] = m_rankAuraGathered[ aura ];
+		m_rankAuraGathered[ aura ] = 0.0f;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
 void Object::raiseRankAura( RankAura aura, Real strength )
 {
-	m_rankAura[ aura ] = MAX( m_rankAura[ aura ], strength );
+	m_rankAuraGathered[ aura ] = MAX( m_rankAuraGathered[ aura ], strength );
 }
 
 //-------------------------------------------------------------------------------------------------

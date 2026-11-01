@@ -1,0 +1,40 @@
+# A worker walks into a computer player's base three minutes in, the first step of a tunnel or a Patriot: how long it lives.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover 1 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 30000 -scenario baseintruder_worker
+
+# a second command center far off, so the match outlasts the seat's start falling
+30 spawn 1 GLACommandCenter 1 4361 3126
+5400 spawn 1 GLAInfantryWorker 1 start0:0:520
+5400 tally 1 GLAInfantryWorker
+5700 tally 1 GLAInfantryWorker
+6000 tally 1 GLAInfantryWorker
+6300 tally 1 GLAInfantryWorker
+6600 tally 1 GLAInfantryWorker
+6900 tally 1 GLAInfantryWorker
+7200 tally 1 GLAInfantryWorker
+7500 tally 1 GLAInfantryWorker
+7800 tally 1 GLAInfantryWorker
+8100 tally 1 GLAInfantryWorker
+8400 tally 1 GLAInfantryWorker
+8700 tally 1 GLAInfantryWorker
+9000 tally 1 GLAInfantryWorker
+9300 tally 1 GLAInfantryWorker
+9600 tally 1 GLAInfantryWorker
+9900 tally 1 GLAInfantryWorker
+10200 tally 1 GLAInfantryWorker
+10500 tally 1 GLAInfantryWorker
+10800 tally 1 GLAInfantryWorker
+11100 tally 1 GLAInfantryWorker
+11400 tally 1 GLAInfantryWorker
+11700 tally 1 GLAInfantryWorker
+12000 tally 1 GLAInfantryWorker
+12300 tally 1 GLAInfantryWorker
+12600 tally 1 GLAInfantryWorker
+12900 tally 1 GLAInfantryWorker
+13200 tally 1 GLAInfantryWorker
+13500 tally 1 GLAInfantryWorker
+13800 tally 1 GLAInfantryWorker
+14100 tally 1 GLAInfantryWorker
+14400 tally 1 GLAInfantryWorker

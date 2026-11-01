@@ -266,7 +266,10 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 			slot.setState( (SlotState)TheGlobalData->m_autoSkirmishAIState );
 			slot.setAIPersonality( TheGlobalData->autoSkirmishPersona( i ) );
 		}
-		slot.setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+		// -side names a seat's army here too, the same words on every machine; a name nobody knows is a
+		// random draw, which then shows in the run's own log
+		const Int named = TheGlobalData->m_autoSkirmishSide[ i ].isEmpty() ? -1 : ThePlayerTemplateStore->getTemplateNumByName( TheGlobalData->m_autoSkirmishSide[ i ] );
+		slot.setPlayerTemplate( named >= 0 ? named : PLAYERTEMPLATE_RANDOM );
 		slot.setColor( -1 );			// -1 is "random" to populateRandomSideAndColor
 		slot.setStartPos( -1 );		// and to populateRandomStartPosition
 		slot.setTeamNumber( teamNumber );

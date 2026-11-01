@@ -267,6 +267,7 @@ DX11BackendClass::DX11BackendClass()
 	, FireLook(false)
 	, Emissive(false)
 	, TeamGlow(false)
+	, HemiAmbient(false)
 	, AdditiveGain(1.0f)
 	, GlowDraw(false)
 	, SceneStandIn(NULL)
@@ -1600,6 +1601,15 @@ void DX11BackendClass::Set_Team_Glow(bool glow)
 	if (TeamGlow != glow) {
 		TeamGlow = glow;
 		PipelineChanged = true;
+	}
+}
+
+void DX11BackendClass::Set_Hemi_Ambient(bool hemi)
+{
+	if (HemiAmbient != hemi) {
+		HemiAmbient = hemi;
+		PipelineChanged = true;
+		VertexConstantsChanged = true;
 	}
 }
 
@@ -3211,6 +3221,9 @@ bool DX11BackendClass::Build_Vertex_Description(VertexPipelineDescription & desc
 	description.SmokeGlow = Smoke_Glow();
 	description.SoftParticle = Soft_Particle() != SOFT_PARTICLE_NONE;
 	description.FireLook = Fire_Look() != FIRE_LOOK_NONE;
+	// SoftParticlesAllowed carries the Classic setting, and the sun's caster pass writes depth alone.
+	description.HemiAmbient = HemiAmbient && SoftParticlesAllowed && !ShadowMapBound
+		&& description.LightingEnabled && (VertexFormat & D3DFVF_XYZRHW) == 0;
 	return true;
 }
 
@@ -3586,6 +3599,11 @@ void DX11BackendClass::Upload_Vertex_Constants()
 	memcpy(vertex_block.MaterialSpecular, MaterialSpecular, sizeof(MaterialSpecular));
 	memcpy(vertex_block.MaterialEmissive, MaterialEmissive, sizeof(MaterialEmissive));
 	vertex_block.MaterialPower[0] = MaterialPower;
+	if (HemiAmbient) {
+		// The world's up through the view, for the HemiAmbient programs.  Without the option these
+		// stay nought, so the block's bytes are what they always were.
+		memcpy(&vertex_block.MaterialPower[1], &View[8], sizeof(float) * 3);
+	}
 
 	const DWORD ambient = RenderStates.Get_Render_State(D3DRS_AMBIENT);
 	vertex_block.GlobalAmbient[0] = static_cast<float>((ambient >> 16) & 0xff) / 255.0f;

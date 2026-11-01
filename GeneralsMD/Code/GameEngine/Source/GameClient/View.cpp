@@ -173,9 +173,9 @@ View *View::prependViewToList( View *list )
 
 //-------------------------------------------------------------------------------------------------
 /** The zoom a match opens at: START_CAMERA_HEIGHT over the ground in either interface, a little
-	* inside GameData.ini's MaxCameraHeight of 310, the map default a Classic match opened at before.
-	* StartAtMaxZoom opens it as far out as the wheel itself may go instead.  The shell map behind the
-	* menus keeps the map's framing.  Here rather than in GameLogic, which calls it, because both
+	* inside GameData.ini's MaxCameraHeight of 310, the map default Classic Graphics opens at as EA's
+	* did.  StartAtMaxZoom opens it as far out as the wheel itself may go instead.  The shell map behind
+	* the menus keeps the map's framing.  Here rather than in GameLogic, which calls it, because both
 	* answers are client settings. */
 //-------------------------------------------------------------------------------------------------
 #define START_CAMERA_HEIGHT (300.0f)
@@ -185,6 +185,8 @@ void View::setZoomToStart( Bool shellMap )
 		setZoomToDefault();
 	else if( TheGlobalData->m_startAtMaxZoom )
 		setZoomToMax();
+	else if( TheGlobalData->m_classicGraphics )
+		setZoomToDefault();
 	else
 		setZoomToHeight( START_CAMERA_HEIGHT );
 	DEBUG_LOG(( "CAMERA START height %.1f\n", getHeightAboveGround() ));

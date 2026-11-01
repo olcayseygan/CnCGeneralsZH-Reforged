@@ -109,9 +109,6 @@
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
 
-#define no_OPTIMIZED_HEIGHTMAP_LIGHTING	01
-// Doesn't work well.  jba.
-
 const Bool HALF_RES_MESH = false;
 
 HeightMapRenderObjClass *TheHeightMap = NULL;
@@ -183,7 +180,7 @@ Int HeightMapRenderObjClass::freeMapResources(void)
 //=============================================================================
 /** Calculates the diffuse lighting as affected by dynamic lighting. */
 //=============================================================================
-UnsignedInt HeightMapRenderObjClass::doTheDynamicLight(VERTEX_FORMAT *vb, VERTEX_FORMAT *vbMirror, Vector3*light, Vector3*normal,  const DynamicLightInputs lights[], Int numLights)
+UnsignedInt HeightMapRenderObjClass::doTheDynamicLight(VERTEX_FORMAT *vb, VERTEX_FORMAT *vbMirror, Vector3*light, Vector3*normal,  const DynamicLightInputs lights[], const Int lightsHere[], Int numHere)
 {
 #ifdef USE_NORMALS
 	return;
@@ -202,8 +199,8 @@ UnsignedInt HeightMapRenderObjClass::doTheDynamicLight(VERTEX_FORMAT *vb, VERTEX
 
 	Int alpha = (diffuse>>24)&0x00FF;
 	Int k;
-	for (k=0; k<numLights; k++) {
-		const DynamicLightInputs &dl = lights[k];
+	for (k=0; k<numHere; k++) {
+		const DynamicLightInputs &dl = lights[lightsHere[k]];
 		if (!dl.enabled) {
 			continue; // he is turned off.
 		}
@@ -541,34 +538,8 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 /** Update the dynamic lighting values only in a rectangular block of the given Vertex Buffer. 
 The vertex locations and texture coords are unchanged.
 */
-/** Whether the quad at map cell (xCoord, yCoord) lies under any of the lights, where they are now or
-where they were at the last relight: the test updateVBForLight relights a quad by. */
-Bool HeightMapRenderObjClass::quadUnderLight(W3DDynamicLight *pLights[], Int numLights, Int xCoord, Int yCoord)
-{
-	for (Int k=0; k<numLights; k++) {
-		if (pLights[k]->m_minX <= xCoord+1 &&
-			pLights[k]->m_maxX >= xCoord &&
-			pLights[k]->m_minY <= yCoord+1 &&
-			pLights[k]->m_maxY >= yCoord) {
-			return true;
-		}
-		if (pLights[k]->m_prevMinX <= xCoord+1 &&
-			pLights[k]->m_prevMaxX >= xCoord &&
-			pLights[k]->m_prevMinY <= yCoord+1 &&
-			pLights[k]->m_prevMaxY >= yCoord) {
-			return true;
-		}
-	}
-	return false;
-}
-
 Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *data, Int x0, Int y0, Int x1, Int y1, Int originX, Int originY, W3DDynamicLight *pLights[], Int numLights)
 {
-
-#if (OPTIMIZED_HEIGHTMAP_LIGHTING)	// (gth) if optimizations are enabled, jump over to the "optimized" version of this function.
-	return updateVBForLightOptimized( pVB, data, x0, y0, x1, y1, originX, originY, pLights, numLights );
-#endif	
-	
 	Int i,j,k;
 	Int vn0,un0,vp1,up1;
 	Vector3 l2r,n2f,normalAtTexel;
@@ -580,21 +551,53 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 		assert(x0 >= originX && y0 >= originY && x1>x0 && y1>y0 && x1<=originX+VERTEX_BUFFER_TILE_LENGTH && y1<=originY+VERTEX_BUFFER_TILE_LENGTH);
 #endif 
 
-		// Lock only from the first quad the loop below writes to the end of the last one.  The
-		// whole tile is 4096 vertices, and with Direct3D 11 its unlock copied every byte into the
-		// D3D9 buffer and again into the D3D11 one for a light a few cells wide.  The bytes outside
-		// the range are untouched, and every copy of them already holds the same thing.
-		Int firstVertex = -1;
-		Int endVertex = 0;
+		// The tile's columns and rows each light covers, one bit each, where it is now and where it was
+		// at the last relight.  A quad under either rectangle of any light is rewritten, the old rectangle
+		// so it goes back to its own colour.  Only the lights whose new rectangle holds a quad can reach
+		// its corners: that rectangle is the light's whole range rounded out to cells.  Asking every light
+		// at every quad and every corner was a third of the render on a crowded Classic frame.
+		UnsignedInt colsNow[MAX_ENABLED_DYNAMIC_LIGHTS], colsPrev[MAX_ENABLED_DYNAMIC_LIGHTS];
+		UnsignedInt rowsNow[MAX_ENABLED_DYNAMIC_LIGHTS], rowsPrev[MAX_ENABLED_DYNAMIC_LIGHTS];
+		for (k=0; k<numLights; k++) {
+			colsNow[k] = colsPrev[k] = rowsNow[k] = rowsPrev[k] = 0;
+		}
+		for (i=x0; i<x1; i++)
+		{
+			if (HALF_RES_MESH && (i&1)) continue;
+			Int xCoord = getXWithOrigin(i)+m_map->getDrawOrgX()-m_map->getBorderSizeInline();
+			for (k=0; k<numLights; k++) {
+				if (pLights[k]->m_minX <= xCoord+1 && pLights[k]->m_maxX >= xCoord) colsNow[k] |= 1u<<(i-x0);
+				if (pLights[k]->m_prevMinX <= xCoord+1 && pLights[k]->m_prevMaxX >= xCoord) colsPrev[k] |= 1u<<(i-x0);
+			}
+		}
 		for (j=y0; j<y1; j++)
 		{
 			if (HALF_RES_MESH && (j&1)) continue;
 			Int yCoord = getYWithOrigin(j)+m_map->getDrawOrgY()-m_map->getBorderSizeInline();
+			for (k=0; k<numLights; k++) {
+				if (pLights[k]->m_minY <= yCoord+1 && pLights[k]->m_maxY >= yCoord) rowsNow[k] |= 1u<<(j-y0);
+				if (pLights[k]->m_prevMinY <= yCoord+1 && pLights[k]->m_prevMaxY >= yCoord) rowsPrev[k] |= 1u<<(j-y0);
+			}
+		}
+
+		// Lock only from the first quad the loop below writes to the end of the last one.  The
+		// whole tile is 4096 vertices, and with Direct3D 11 its unlock copied every byte into the
+		// D3D9 buffer and again into the D3D11 one for a light a few cells wide.  The bytes outside
+		// the range are untouched, and every copy of them already holds the same thing.
+		UnsignedInt quadsInRow[VERTEX_BUFFER_TILE_LENGTH];
+		Int firstVertex = -1;
+		Int endVertex = 0;
+		for (j=y0; j<y1; j++)
+		{
+			UnsignedInt quads = 0;
+			for (k=0; k<numLights; k++) {
+				if (rowsNow[k] & (1u<<(j-y0))) quads |= colsNow[k];
+				if (rowsPrev[k] & (1u<<(j-y0))) quads |= colsPrev[k];
+			}
+			quadsInRow[j-y0] = quads;
 			for (i=x0; i<x1; i++)
 			{
-				if (HALF_RES_MESH && (i&1)) continue;
-				Int xCoord = getXWithOrigin(i)+m_map->getDrawOrgX()-m_map->getBorderSizeInline();
-				if (!quadUnderLight(pLights, numLights, xCoord, yCoord)) continue;
+				if (!(quads & (1u<<(i-x0)))) continue;
 				Int offset = (j-originY)*vertsPerRow+4*(i-originX);
 				if (HALF_RES_MESH) {
 					offset = (j-originY)*vertsPerRow/4+2*(i-originX);
@@ -618,22 +621,8 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 
 		for (j=y0; j<y1; j++)
 		{
-			if (HALF_RES_MESH) {
-				if (j&1) continue;
-			}
-			Int yCoord = getYWithOrigin(j)+m_map->getDrawOrgY()-m_map->getBorderSizeInline();
-			Bool intersect = false;
-			for (k=0; k<numLights; k++) {
-				if (pLights[k]->m_minY <= yCoord+1 && 
-					pLights[k]->m_maxY >= yCoord) {
-					intersect = true;
-				}
-				if (pLights[k]->m_prevMinY <= yCoord+1 && 
-					pLights[k]->m_prevMaxY >= yCoord) {
-					intersect = true;
-				}
-			}
-			if (!intersect) {
+			const UnsignedInt quads = quadsInRow[j-y0];
+			if (quads == 0) {
 				continue;
 			}
 			vn0 = getYWithOrigin(j)-1;
@@ -645,27 +634,15 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 
 			for (i=x0; i<x1; i++)
 			{
-				if (HALF_RES_MESH) {
-					if (i&1) continue;
-				}
-				Int xCoord = getXWithOrigin(i)+m_map->getDrawOrgX()-m_map->getBorderSizeInline();
-				Bool intersect = false;
-				for (k=0; k<numLights; k++) {
-					if (pLights[k]->m_minX <= xCoord+1 && 
-						pLights[k]->m_maxX >= xCoord &&
-						pLights[k]->m_minY <= yCoord+1 && 
-						pLights[k]->m_maxY >= yCoord) {
-						intersect = true;
-					}
-					if (pLights[k]->m_prevMinX <= xCoord+1 && 
-						pLights[k]->m_prevMaxX >= xCoord &&
-						pLights[k]->m_prevMinY <= yCoord+1 && 
-						pLights[k]->m_prevMaxY >= yCoord) {
-						intersect = true;
-					}
-				}
-				if (!intersect) {
+				if (!(quads & (1u<<(i-x0)))) {
 					continue;
+				}
+				Int lightsHere[MAX_ENABLED_DYNAMIC_LIGHTS];
+				Int numHere = 0;
+				for (k=0; k<numLights; k++) {
+					if ((rowsNow[k] & (1u<<(j-y0))) && (colsNow[k] & (1u<<(i-x0)))) {
+						lightsHere[numHere++] = k;
+					}
 				}
 				// vb is the pointer to the vertex in the hardware dx8 vertex buffer.
 				Int offset = (j-originY)*vertsPerRow+4*(i-originX);
@@ -675,7 +652,7 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 				vb = vBase + offset;	//skip to correct row in vertex buffer
 				// vbMirror is the pointer to the vertex in our memory based copy.
 				// The important point is that we can read out of our copy to get the original
-				// diffuse color, and xyz location.  It is VERY SLOW to read out of the 
+				// diffuse color, and xyz location.  It is VERY SLOW to read out of the
 				// hardware vertex buffer, possibly worse... jba.
 				VERTEX_FORMAT *vbMirror = ((VERTEX_FORMAT*)data)  + offset;
 				un0 = getXWithOrigin(i)-1;
@@ -697,7 +674,7 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 				Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
 #endif
 
-				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
+				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, lightsHere, numHere);
 				vb++;	vbMirror++;
 
 				//top-right sample
@@ -710,7 +687,7 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 				Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
 #endif
 
-				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
+				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, lightsHere, numHere);
 				vb++;	vbMirror++;
 
 				//bottom-right sample
@@ -723,7 +700,7 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 				Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
 #endif
 
-				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
+				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, lightsHere, numHere);
 				vb++;	vbMirror++;
 
 				//bottom-left sample
@@ -736,7 +713,7 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 				Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
 #endif
 
-				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
+				doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, lightsHere, numHere);
 				vb++;	vbMirror++;
 			}
 		}
@@ -746,203 +723,6 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 }
 
 
-Int HeightMapRenderObjClass::updateVBForLightOptimized(DX8VertexBufferClass	*pVB, char *data, Int x0, Int y0, Int x1, Int y1, Int originX, Int originY, W3DDynamicLight *pLights[], Int numLights)
-{
-	Int i,j,k;
-	Int vn0,un0,vp1,up1;
-	Vector3 l2r,n2f,normalAtTexel;
-	Int	vertsPerRow=(VERTEX_BUFFER_TILE_LENGTH)*4;	//vertices per row of VB
-
-	if (m_vertexBufferTiles && m_map)
-	{
-#ifdef _DEBUG
-		assert(x0 >= originX && y0 >= originY && x1>x0 && y1>y0 && x1<=originX+VERTEX_BUFFER_TILE_LENGTH && y1<=originY+VERTEX_BUFFER_TILE_LENGTH);
-#endif 
-
-		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(pVB);
-		VERTEX_FORMAT *vBase = (VERTEX_FORMAT*)lockVtxBuffer.Get_Vertex_Array();
-		// a failed lock - a device that has gone away - hands back nothing to light
-		if (vBase == NULL) {
-			m_lastRelightValid = false;	// nothing written, so the next pass tries again
-			return 0;
-		}
-		VERTEX_FORMAT *vb;
-		
-		//
-		// (gth) the optimization in this function is to take advantage of verts in the same
-		// x,y position who have already computed their lighting.  To do this, we need to set up
-		// some offsets in the vertex buffer.  I've computed these offsets to be consistent with
-		// the formula's that Generals is using but in the case of the "half-res-mesh" I'm not
-		// sure things are correct...
-		//
-		Int quad_right_offset;
-		Int quad_below_offset;
-		Int quad_below_right_offset;
-
-		if (HALF_RES_MESH == false) {
-			// offset = (j-originY)*vertsPerRow+4*(i-originX);
-			quad_right_offset = 4;
-			quad_below_offset = vertsPerRow;
-			quad_below_right_offset = vertsPerRow + 4;
-
-		} else {
-			// offset = (j-originY)*vertsPerRow/4+2*(i-originX);
-			quad_right_offset = 2;
-			quad_below_offset = vertsPerRow/4;
-			quad_below_right_offset = vertsPerRow/4 + 2;
-		}
-
-		// 
-		// i,j loop over the quads affected by the light.  Each quad has its *own* 4 vertices.  This
-		// means that for any vertex position on the map, there are actually 4 copies of the vertex. 
-		//
-		for (j=y0; j<y1; j++)
-		{
-			if (HALF_RES_MESH) {
-				if (j&1) continue;
-			}
-			Int yCoord = getYWithOrigin(j)+m_map->getDrawOrgY()-m_map->getBorderSizeInline();
-			Bool intersect = false;
-			for (k=0; k<numLights; k++) {
-				if (pLights[k]->m_minY <= yCoord+1 && 
-					pLights[k]->m_maxY >= yCoord) {
-					intersect = true;
-				}
-				if (pLights[k]->m_prevMinY <= yCoord+1 && 
-					pLights[k]->m_prevMaxY >= yCoord) {
-					intersect = true;
-				}
-			}
-			if (!intersect) {
-				continue;
-			}
-			vn0 = getYWithOrigin(j)-1;
-			if (vn0 < -m_map->getDrawOrgY())
-				vn0=-m_map->getDrawOrgY();
-			vp1 = getYWithOrigin(j+1)+1;
-			if (vp1 >= m_map->getYExtent()-m_map->getDrawOrgY())
-				vp1=m_map->getYExtent()-m_map->getDrawOrgY()-1;
-
-			for (i=x0; i<x1; i++)
-			{
-				if (HALF_RES_MESH) {
-					if (i&1) continue;
-				}
-				Int xCoord = getXWithOrigin(i)+m_map->getDrawOrgX()-m_map->getBorderSizeInline();
-				Bool intersect = false;
-				for (k=0; k<numLights; k++) {
-					if (pLights[k]->m_minX <= xCoord+1 && 
-						pLights[k]->m_maxX >= xCoord &&
-						pLights[k]->m_minY <= yCoord+1 && 
-						pLights[k]->m_maxY >= yCoord) {
-						intersect = true;
-					}
-					if (pLights[k]->m_prevMinX <= xCoord+1 && 
-						pLights[k]->m_prevMaxX >= xCoord &&
-						pLights[k]->m_prevMinY <= yCoord+1 && 
-						pLights[k]->m_prevMaxY >= yCoord) {
-						intersect = true;
-					}
-				}
-				if (!intersect) {
-					continue;
-				}
-				// vb is the pointer to the vertex in the hardware dx8 vertex buffer.
-				Int offset = (j-originY)*vertsPerRow+4*(i-originX);
-				if (HALF_RES_MESH) {
-					offset = (j-originY)*vertsPerRow/4+2*(i-originX);
-				}
-				vb = vBase + offset;	//skip to correct row in vertex buffer
-				// vbMirror is the pointer to the vertex in our memory based copy.
-				// The important point is that we can read out of our copy to get the original
-				// diffuse color, and xyz location.  It is VERY SLOW to read out of the 
-				// hardware vertex buffer, possibly worse... jba.
-				VERTEX_FORMAT *vbMirror = ((VERTEX_FORMAT*)data)  + offset;
-				VERTEX_FORMAT *vbaseMirror = ((VERTEX_FORMAT*)data);
-				un0 = getXWithOrigin(i)-1;
-				if (un0 < -m_map->getDrawOrgX())
-					un0=-m_map->getDrawOrgX();
-				up1 = getXWithOrigin(i+1)+1;
-				if (up1 >= m_map->getXExtent()-m_map->getDrawOrgX())
-					up1=m_map->getXExtent()-m_map->getDrawOrgX()-1;
-
-				Vector3 lightRay(0,0,0);
-
-				//
-				// (gth) Following the set of rules below lets us take advantage of lighting values that have
-				// been previously computed.  The idea is to copy them ahead to future quads that will need them
-				// and then not compute them when we get to those quads.  This also avoids having to read-back
-				// from the vertex buffer but we do jump around in memory... probably bad anyway, maybe we should
-				// compute into a temporary buffer and copy all at once...
-				//
-				unsigned long light_copy;
-
-				// top-left sample -> only compute when i==0 and j==0 
-				if ((i==x0) && (j==y0)) {
-					l2r.Set(2*MAP_XY_FACTOR,0,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(getXWithOrigin(i)+1, getYWithOrigin(j)) - m_map->getDisplayHeight(un0, getYWithOrigin(j))));
-					n2f.Set(0,2*MAP_XY_FACTOR,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(getXWithOrigin(i), (getYWithOrigin(j)+1)) - m_map->getDisplayHeight(getXWithOrigin(i), vn0)));
-					Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
-					doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
-				} 
-				vb++;	vbMirror++;
-
-				//top-right sample -> compute when j==0, then copy to (right,0)
-				if (j==y0) {
-					l2r.Set(2*MAP_XY_FACTOR,0,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(up1 , getYWithOrigin(j) ) - m_map->getDisplayHeight(getXWithOrigin(i) , getYWithOrigin(j) )));
-					n2f.Set(0,2*MAP_XY_FACTOR,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(getXWithOrigin(i)+1 , (getYWithOrigin(j)+1) ) - m_map->getDisplayHeight(getXWithOrigin(i)+1 , vn0 )));
-					Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
-					light_copy = doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
-				
-					if (i < x1-1) {
-						// copy light to (right,0)
-						(vBase + offset + quad_right_offset)->diffuse = (light_copy&0x00FFFFFF) | ((vbaseMirror + offset + quad_right_offset)->diffuse&0xff000000) ;
-					}
-				} 
-				vb++;	vbMirror++;
-
-				//bottom-right sample -> always compute, then copy to (right,3), (down,1), (down+right,0)
-				l2r.Set(2*MAP_XY_FACTOR,0,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(up1 , (getYWithOrigin(j)+1) ) - m_map->getDisplayHeight(getXWithOrigin(i) , (getYWithOrigin(j)+1) )));
-				n2f.Set(0,2*MAP_XY_FACTOR,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(getXWithOrigin(i)+1 , vp1 ) - m_map->getDisplayHeight(getXWithOrigin(i)+1 , getYWithOrigin(j) )));
-				Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
-				light_copy = doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
-				
-				if (i < x1-1) {
-					// copy light to (right,3)
-					//(vBase + offset + quad_right_offset + 3)->diffuse = light_copy;
-					(vBase + offset + quad_right_offset + 3)->diffuse = (light_copy&0x00FFFFFF) | ((vbaseMirror + offset + quad_right_offset + 3)->diffuse&0xff000000) ;
-				}
-				if (j < y1-1) {
-					// copy light to (down,1)
-					//(vBase + offset + quad_below_offset + 1)->diffuse = light_copy;
-					(vBase + offset + quad_right_offset + 1)->diffuse = (light_copy&0x00FFFFFF) | ((vbaseMirror + offset + quad_right_offset + 1)->diffuse&0xff000000) ;
-				}
-				if ((i < x1-1) && (j < y1-1)) {
-					// copy light to (right+down,0)
-					//(vBase + offset + quad_below_right_offset)->diffuse = light_copy;
-					(vBase + offset + quad_right_offset)->diffuse = (light_copy&0x00FFFFFF) | ((vbaseMirror + offset + quad_right_offset)->diffuse&0xff000000) ;
-				}
-				vb++;	vbMirror++;
-
-				//bottom-left sample -> compute when i==0, otherwise copy from (left,2)
-				if (i==x0) {
-					l2r.Set(2*MAP_XY_FACTOR,0,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(getXWithOrigin(i)+1 , (getYWithOrigin(j)+1) ) - m_map->getDisplayHeight(un0 , (getYWithOrigin(j)+1) )));
-					n2f.Set(0,2*MAP_XY_FACTOR,MAP_HEIGHT_SCALE*(m_map->getDisplayHeight(getXWithOrigin(i) , vp1 ) - m_map->getDisplayHeight(getXWithOrigin(i) , getYWithOrigin(j) )));
-					Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
-					light_copy = doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, numLights);
-
-					if (j < y1-1) {
-						// copy light to (down,0)
-						//(vBase + offset + quad_below_offset)->diffuse = light_copy;
-						(vBase + offset + quad_below_offset)->diffuse = (light_copy&0x00FFFFFF) | ((vbaseMirror + offset + quad_below_offset)->diffuse&0xff000000) ;
-					}
-				} 
-				vb++;	vbMirror++;
-			}
-		}
-		return 0; //success.
-	}
-	return -1;
-}
 
 
 

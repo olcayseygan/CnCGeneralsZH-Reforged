@@ -149,6 +149,12 @@ struct VertexPipelineDescription
 	// TexCoord1, which a one-stage draw leaves empty.  Refused on a format with one set or none, a
 	// pretransformed one, or a draw with a second stage, whose coordinates that output is.
 	bool FireLook = false;
+
+	// A lit draw under the Hemispheric Ambient option: the scene ambient comes down from the sky and
+	// up from the ground instead of evenly.  The world's up in camera space rides in MaterialPower.yzw,
+	// which nothing else reads, so every other program keeps its text and the block keeps its layout.
+	// Refused on an unlit or a pretransformed draw.
+	bool HemiAmbient = false;
 };
 
 // Which profile the generated text is for.  The two differ in the output semantic and in how the

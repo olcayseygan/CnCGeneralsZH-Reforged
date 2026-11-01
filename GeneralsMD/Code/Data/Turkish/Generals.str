@@ -14990,7 +14990,7 @@ GUI:ClassicGraphics
 END
 
 TOOLTIP:ClassicGraphics
-"Oyunun 2003'teki görünümü: kendi kaplamaları ve zemini, eski keskin gölgeler, kabartma ayrıntısı yok, parlama ve keskinleştirme yok. Kapalıyken Reforged. Oyun bir sonraki açılışında geçerli olur."
+"Oyunun 2003'teki görünümü: kendi kaplamaları ve zemini, eski keskin gölgeler, kabartma ayrıntısı yok, parlama ve keskinleştirme yok. Oyun böyle açılır. Reforged görüntüsü için işareti kaldırın: Yüksek hazır ayarı kutuları doldurur, oradan kaydırıcıyı oynatabilirsiniz. Oyun bir sonraki açılışında geçerli olur."
 END
 
 GUI:InfantryShadows
@@ -15043,26 +15043,6 @@ END
 
 TOOLTIP:Smoke
 "Dumanın havada ne kadar asılı kaldığı ve ne kadar yoğun göründüğü. Oyundaki 1088 efektin 175'i duman. Çok Kalın, ölçüldüğünde yanan bir kolonun üstünde kare başına 0,7 ms tuttu. Oyun bir sonraki açılışında etkinleşir."
-END
-
-GUI:VolumeSmoke
-"Duman Simülasyonu"
-END
-
-GUI:VolumeSmoke0
-"Kapalı"
-END
-
-GUI:VolumeSmoke1
-"Düşük"
-END
-
-GUI:VolumeSmoke2
-"Yüksek"
-END
-
-TOOLTIP:VolumeSmoke
-"Duman ve toz düz resimler yerine hareket eden bir hava kütlesi olur: yuvarlanır, sıcakla yükselir, binaların etrafından dolaşır, geçen tank, jet ve helikopterler onu iter. Ekran kartına yük bindirir, zayıf kartta Kapalı bırak. Düşük, Yüksek'in yaklaşık üçte ikisi kadar yük getirir. Kabul Et'e bastığın an uygulanır, maç ortasında da."
 END
 
 GUI:ParticleBounce
@@ -15194,7 +15174,15 @@ GUI:LegacySound
 END
 
 TOOLTIP:LegacySound
-"Özgün oyunun sesi: haritada yankı yok, uzaklık, tepe ya da bina boğukluğu yok, uzak ve geçen seslerde gecikme ya da perde kayması yok, büyük patlamalardan sonra kısılma yok, savaş seslerine ve birlik cevaplarına sınır yok, sınırlayıcı yok, harita ambiyansı yok, müzik de çatışmayı izlemez. Ana ses, cihaz ve hoparlörler yine geçerlidir. Hemen etkili olur."
+"Özgün oyunun sesi: geçen seslerde perde kayması yok, Aurora'nın ses patlaması yok, savaş seslerine ve birlik cevaplarına sınır yok, sınırlayıcı yok, harita ambiyansı yok, müzik de çatışmayı izlemez. Ana ses, cihaz ve hoparlörler yine geçerlidir. Hemen etkili olur."
+END
+
+GUI:CameraShake
+"Kamera Sarsıntısı"
+END
+
+TOOLTIP:CameraShake
+"Patlamalar kamerayı sarsar. Yakında bir nükleer patlama ya da büyük bir binanın yıkılması onu bir an sertçe iter. Görüntünün sabit kalması için işareti kaldır. Kabul Et'e basınca uygulanır."
 END
 
 GUI:IsometricCamera
@@ -15886,7 +15874,7 @@ GUI:MapLight
 END
 
 TOOLTIP:MapLight
-"Haritayı daha sıcak aydınlatıp daha uzun gölgeler düşüren alçak bir ikindi güneşi ve alçak zeminin üstünde duran, içinden geçen uçakların araladığı hafif bir pus. Yalnızca Direct3D 11. Bir sonraki haritada uygulanır."
+"Haritayı daha sıcak aydınlatıp daha uzun gölgeler düşüren alçak bir ikindi güneşi ve alçak zeminin üstünde kımıldamadan duran hafif bir pus. Yalnızca Direct3D 11. Bir sonraki haritada uygulanır."
 END
 
 GUI:TeamGlow
@@ -15903,6 +15891,86 @@ END
 
 TOOLTIP:WaterFoam
 "Nehirlerde ve göllerde köpük benekleri ve kıyı boyunca bir köpük şeridi belirir, güneşin gölgeleri suya düşer. Denizin dalgaları değişmez. Yalnızca Direct3D 11 ve Klasik su ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:GroundMarks
+"Savaş İzleri"
+END
+
+TOOLTIP:GroundMarks
+"Mermiler ve füzeler yerde yanık bırakır, yıkılan bina çatlaklarla dolu koyu bir leke bırakır, nükleer patlama yanık bir halka bırakır, tank paletlerinin izi daha uzun süre koyu kalır. Yaklaşık dört dakikada silinirler. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:Firelight
+"Ateş Işığı"
+END
+
+TOOLTIP:Firelight
+"Yanan binalar, enkazlar ve patlamalar çevrelerindeki zemine, duvarlara ve birimlere titreyen turuncu bir ışık vurur. En çok gece haritalarında belli olur. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:HemiAmbient
+"Gökyüzü ve Zemin Işığı"
+END
+
+TOOLTIP:HemiAmbient
+"Modeller haritanın ortam ışığını eşit almak yerine yukarıdan gökyüzünden, aşağıdan zeminden alır, böylece bir tankın üstü altından açık görünür. Duvarlar aynı ışıkta kalır, gece haritası karanlık kalır. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:AmbientOcclusion
+"Ortam Gölgeleme"
+END
+
+TOOLTIP:AmbientOcclusion
+"Köşeler ve bir şeyin üstünde durduğu zemin koyulaşır, böylece tank kumun üstünde uçuyormuş gibi değil kumda duruyormuş gibi görünür. Su ve savaş sisi bundan etkilenmez. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:InternalHdr
+"Dahili HDR Ton Eşleme"
+END
+
+TOOLTIP:InternalHdr
+"Ateş, patlama ve lazerler beyazı geçince ekrana düz beyaz olarak gelmek yerine renklerini korur, takım renkleri de rengini biraz daha iyi tutar. Ateşten uzak zemin ve duvarlar olduğu gibi kalır. Bu oyunun kendi görüntüsünün içindedir: monitörünüz yine normal görüntü alır, HDR monitöre HDR sinyali gitmez. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:Weather
+"Hava Durumu"
+END
+
+TOOLTIP:Weather
+"Yağmur yağar, çöl haritasında kum, karlı haritada kar savrulur; rüzgâr ağaçları büker, dumanı yana yatırır. Kendi yağmuru ya da karı olan harita onu korur, yalnızca rüzgârı alır. Değişen sadece sizin görüntünüzdür: birliklerin gördüğü ve vurduğu aynı kalır, diğer oyuncular kendi ayarını görür. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:WaterSplashes
+"Su Sıçramaları"
+END
+
+TOOLTIP:WaterSplashes
+"Suya düşen mermi, bomba ya da ceset su sıçratır ve yüzeyde halkalar yayar. Değişen sadece sizin görüntünüzdür: oyunda hiçbir şey bunu okumaz, diğer oyuncular kendi ayarını görür. Yalnızca Direct3D 11 ve Klasik su ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:Atmosphere
+"Atmosfer"
+END
+
+TOOLTIP:Atmosphere
+"Kameradan uzak zemin gökyüzünün rengine doğru solar; haritanın bittiği yerde ya da kamera yatık durduğunda siyah yerine haritanın saatine uygun bir gökyüzü görünür. Kameraya yakın zemin temiz kalır, savaş sisi karanlığını korur. Değişen sadece sizin görüntünüzdür: oyunda hiçbir şey bunu okumaz, diğer oyuncular kendi ayarını görür. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır."
+END
+
+GUI:SmoothMotion
+"Akıcı Hareket"
+END
+
+TOOLTIP:SmoothMotion
+"60 Hz'den hızlı ekranda birimler, her konumu bir sonrakine kadar tutmak yerine son iki konumlarının arasında çizilir. 60 Hz ekranda fark görünmez. Yalnızca sizin görüntünüz değişir: oyundaki hiçbir şey bunu okumaz, diğer oyuncular kendi ayarını görür. Kabul'e basınca geçerli olur."
+END
+
+GUI:StructureCollapse
+"Yıkılan Binalar"
+END
+
+TOOLTIP:StructureCollapse
+"Yok edilen bina bir karede kaybolmak ya da enkaza dönmek yerine patlamanın altında yere gömülür. Değişen sadece sizin görüntünüzdür: hiçbir şeyi engellemez, oyunda hiçbir şey bunu okumaz, diğer oyuncular kendi ayarını görür. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır."
 END
 
 GUI:FormationDrag

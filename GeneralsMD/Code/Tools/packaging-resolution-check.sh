@@ -109,6 +109,8 @@ lay_over() {	# lay_over <overlay> <farm>: the overlay's entries into the farm, e
 dump() {	# dump <name> <root> <out> <switches...>
 	local name="$1" root="$2" out="$3"; shift 3
 	mkdir -p "$WORK/user_$name"
+	# the Reforged archives are what this checks the order of, and a first run leaves them out
+	echo "ClassicGraphics = no" > "$WORK/user_$name/Options.ini"
 	( cd "$root" && ZH_USER_DATA_DIR="$WORK/user_$name" "$GENERALS" -headless -root "$root" "$@" -quickstart -noshellmap \
 		-multiInstance -logPrefix "$TAG$name" -dumpFileResolution "$out" \
 		> "$WORK/$name.out" 2> "$WORK/$name.err" )

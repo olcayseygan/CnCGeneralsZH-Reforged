@@ -1,0 +1,66 @@
+# Under fire, and able to kill the gun: six Battlemasters of a computer player stand idle 300 from two
+# Tomahawks, who outrange them and fire from past their sight.  The Red Guards are for the AI's scout
+# order, which takes the newest of the default team and would otherwise walk the target off.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 2400
+#     -scenario underfire_cankill -logPrefix underfire_cankill_
+
+30    spawn   1  ChinaTankBattleMaster   6  start1:0:650  40
+31    spawn   0  AmericaVehicleTomahawk  2  start1:0:950  40
+35    spawn   1  ChinaInfantryRedguard   4  start1:0:250  20
+40    attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+190   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+340   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+490   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+640   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+790   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+40    tally   1  ChinaTankBattleMaster
+70    tally   1  ChinaTankBattleMaster
+100   tally   1  ChinaTankBattleMaster
+130   tally   1  ChinaTankBattleMaster
+160   tally   1  ChinaTankBattleMaster
+190   tally   1  ChinaTankBattleMaster
+220   tally   1  ChinaTankBattleMaster
+250   tally   1  ChinaTankBattleMaster
+280   tally   1  ChinaTankBattleMaster
+310   tally   1  ChinaTankBattleMaster
+340   tally   1  ChinaTankBattleMaster
+370   tally   1  ChinaTankBattleMaster
+400   tally   1  ChinaTankBattleMaster
+430   tally   1  ChinaTankBattleMaster
+460   tally   1  ChinaTankBattleMaster
+490   tally   1  ChinaTankBattleMaster
+520   tally   1  ChinaTankBattleMaster
+550   tally   1  ChinaTankBattleMaster
+580   tally   1  ChinaTankBattleMaster
+610   tally   1  ChinaTankBattleMaster
+640   tally   1  ChinaTankBattleMaster
+670   tally   1  ChinaTankBattleMaster
+700   tally   1  ChinaTankBattleMaster
+730   tally   1  ChinaTankBattleMaster
+760   tally   1  ChinaTankBattleMaster
+790   tally   1  ChinaTankBattleMaster
+820   tally   1  ChinaTankBattleMaster
+850   tally   1  ChinaTankBattleMaster
+880   tally   1  ChinaTankBattleMaster
+910   tally   1  ChinaTankBattleMaster
+940   tally   1  ChinaTankBattleMaster
+970   tally   1  ChinaTankBattleMaster
+1000  tally   1  ChinaTankBattleMaster
+1100  tally   1  ChinaTankBattleMaster
+1190  tally   1  ChinaTankBattleMaster
+250   tally   0  AmericaVehicleTomahawk
+310   tally   0  AmericaVehicleTomahawk
+340   tally   0  AmericaVehicleTomahawk
+370   tally   0  AmericaVehicleTomahawk
+400   tally   0  AmericaVehicleTomahawk
+430   tally   0  AmericaVehicleTomahawk
+460   tally   0  AmericaVehicleTomahawk
+490   tally   0  AmericaVehicleTomahawk
+520   tally   0  AmericaVehicleTomahawk
+580   tally   0  AmericaVehicleTomahawk
+640   tally   0  AmericaVehicleTomahawk
+940   tally   0  AmericaVehicleTomahawk
+1190  tally   0  AmericaVehicleTomahawk

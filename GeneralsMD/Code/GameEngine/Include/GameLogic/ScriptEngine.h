@@ -337,6 +337,12 @@ public:
 	void doFreezeTime( void );
 	void doUnfreezeTime( void );
 
+	/** A script has taken the player's input away (a mission's opening cinematic, say): the logic's own
+		copy of what the client's UI hears after the tick.  Not saved: a load lands in a playable game, and
+		the worst a load mid-cinematic does is post the retaliation switch early. */
+	Bool isInputHeldByScript( void ) const { return m_inputHeldByScript; }
+	void setInputHeldByScript( Bool held ) { m_inputHeldByScript = held; }
+
 	/// The following functions are used to update and query the debug window
 	Bool isTimeFrozenDebug( void );		///< Ask whether the debug window has requested a pause.
 	Bool isTimeFast( void );		///< Ask whether the debug window has requested a fast forward.
@@ -515,6 +521,7 @@ protected:
 	GameDifficulty		m_gameDifficulty;
 
 	Bool							m_freezeByScript;
+	Bool							m_inputHeldByScript;
 	AllObjectTypes		m_allObjectTypeLists;
 	Bool							m_objectsShouldReceiveDifficultyBonus;
 	Bool							m_ChooseVictimAlwaysUsesNormal;

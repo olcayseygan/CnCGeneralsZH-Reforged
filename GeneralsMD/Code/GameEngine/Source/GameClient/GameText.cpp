@@ -175,7 +175,7 @@ class GameTextManager : public GameTextInterface
 
 	protected:
 
-		/// -modfactions: each mod's own labels (English CSF and STR), by mod index; empty without the switch
+		/// -modfactions: each mod's own labels (English CSF and STR), by mod index; empty with no full -mod
 		std::vector< ModStringTable > m_modStrings;
 		/// each mod's CSF in the player's language, text only: never consulted for the label set
 		std::vector< ModStringTable > m_modLangStrings;

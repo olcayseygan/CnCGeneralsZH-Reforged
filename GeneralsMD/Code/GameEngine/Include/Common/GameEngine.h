@@ -58,6 +58,16 @@ Int GameEngine_logicCatchupMaxFrames( Int logicFps );
 	replay plays back at the speed its match had. */
 Int GameEngine_matchFramesPerSecond( Bool turbo );
 
+/** The logic frames a second a mission runs at after its script's SET_FPS_LIMIT.  EA's cinematics ask
+	for 20 to 28 of retail's 30 and time their voices against that; 0 or 30 and up ask for the game back,
+	which is the match's speed, turbo mode included. */
+Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps );
+
+/** How fast a mission's logic runs against the wall clock: 0.77 in a cinematic that asked for 23, 2
+	in turbo mode, 1 everywhere else.  Whatever a cinematic times against its script's frames and draws
+	on the wall clock (the scripted camera, W3D's animation clock) multiplies by this. */
+Real GameEngine_missionTimeRate( void );
+
 /** R1, smooth motion: the renderer's blend reads how far into the next logic tick the wall clock is
 	(0 when the last tick was due, 1 a whole tick later or more; always 1 in fast mode or before the first
 	tick).  GameEngine_tickFraction is the arithmetic, on the fine clock's ticks: 1 for a tick length of
@@ -108,6 +118,13 @@ UnsignedInt GameEngine_pictureMilliseconds( void );
 
 /** Whether the catch-up loop may start another logic tick this pass. */
 Bool GameEngine_mayStartAnotherCatchupTick( Int ticksSoFar, Int maxTicks, Real elapsedMsInLoop );
+
+/** Whether one more tick, about as long as the last, leaves this pass's picture inside a 60 Hz frame.
+	A pass already past it is late whatever runs next, so it pays its debt under the budget above. */
+Bool GameEngine_catchupTickFitsPicture( Real passSoFarMS, Real lastTickMS );
+
+/** Milliseconds since this pass, or its last extra picture, began. */
+Real GameEngine_msSincePassStart( void );
 
 /** A rate sampled every half second, averaged, and the whole number written on screen for it. */
 struct RateReading
@@ -185,6 +202,9 @@ public:
 		* first tick runs beside the render: the draw shows another picture while it waits only if one fits.
 		* 0 outside a paced single-player pass that planOverlappedTick planned (fast mode, a network game). */
 	Real msUntilNextTickDue( void );
+
+	/// That same pass: true when the clock paces it, so a picture beside a late tick costs no network turn.
+	Bool isPassPacedByClock( void );
 
 	/** What the pacer decided for one pass, see planLogicPass. */
 	struct LogicPassPlan

@@ -1111,24 +1111,6 @@ Int parseNoSmokeFireLight(char *args[], int)
 	return 1;
 }
 
-/* -volsmoke [off|low|high]: the VolumeSmoke option for one run; bare, High. */
-Int parseVolumeSmoke(char *args[], int num)
-{
-	if (!TheWritableGlobalData) return 1;
-	TheWritableGlobalData->m_volumeSmoke = 2;
-	if (num > 1)
-	{
-		static const char *const levels[] = { "off", "low", "high" };
-		for (Int level = 0; level < 3; ++level)
-			if (strcasecmp(args[1], levels[level]) == 0)
-			{
-				TheWritableGlobalData->m_volumeSmoke = level;
-				return 2;
-			}
-	}
-	return 1;
-}
-
 /* -lighting <classic|reforged>: the LightingStyle option for one run, the before and after of any
 	 picture of it. */
 Int parseLightingStyle(char *args[], int num)
@@ -1357,7 +1339,7 @@ Int parseNoTactics(char *args[], int num)
 	return 2;
 }
 
-/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit: those slots keep their rung with these knobs
+/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge: those slots keep their rung with these knobs
 	* of its profile off, so a batch can play Hard against Hard without them, or a scenario against the AI
 	* as it was.  A measuring aid like -notactics: read only in a single-player skirmish, never in a
 	* network game, and a replay made with it is played back with it given again. */
@@ -1373,6 +1355,8 @@ Int parseAIKnobsOff(char *args[], int num)
 		if (strstr(names.str(), "engagegate")) mask |= AIKNOB_ENGAGE_GATE;
 		if (strstr(names.str(), "answerarmy")) mask |= AIKNOB_ANSWER_ARMY;
 		if (strstr(names.str(), "massunit")) mask |= AIKNOB_MASS_UNIT;
+		if (strstr(names.str(), "basewatch")) mask |= AIKNOB_BASE_WATCH;
+		if (strstr(names.str(), "strikedodge")) mask |= AIKNOB_STRIKE_DODGE;
 		TheWritableGlobalData->m_aiKnobsOffMask = mask;
 	}
 	return 3;
@@ -2846,13 +2830,13 @@ Int parseMod(char *args[], Int num)
 }
 
 /** -modpatch <folder>: a mod that changes the one given before it file by file rather than bringing
-	* armies of its own, or retail's files when it comes first.  Without -modfactions it is a plain -mod. */
+	* armies of its own, or retail's files when it comes first.  With no full -mod at all it is a plain -mod. */
 Int parseModPatch(char *args[], Int num)
 {
 	return addMod( args, num, TRUE );
 }
 
-/** -modfactions keeps each full mod's files apart, so a patch joins the full mod before it (retail's
+/** A mod's factions load beside retail's, each full mod's files apart, so a patch joins the full mod before it (retail's
 	* files when none is) and the full mods alone are the faction sets, M1, M2 and so on. */
 static void foldModPatches()
 {
@@ -2878,15 +2862,6 @@ static void foldModPatches()
 	data->m_modNames = names;
 }
 
-Int parseModFactions(char *args[], Int)
-{
-	if (TheWritableGlobalData)
-	{
-		TheWritableGlobalData->m_modFactions = TRUE;
-	}
-	return 1;
-}
-
 static CommandLineParam params[] =
 {
 	{ "-noshellmap", parseNoShellMap },
@@ -2900,7 +2875,6 @@ static CommandLineParam params[] =
 	{ "-scriptDebug", parseScriptDebug },
 	{ "-playStats", parsePlayStats },
 	{ "-mod", parseMod },
-	{ "-modfactions", parseModFactions },
 	{ "-modpatch", parseModPatch },
 	{ "-noshaders", parseNoShaders },
 	{ "-particlebounce", parseParticleBounce },
@@ -2919,7 +2893,6 @@ static CommandLineParam params[] =
 	{ "-smoothmotion", parseSmoothMotion },
 	{ "-nosmokefirelight", parseNoSmokeFireLight },
 	{ "-lighting", parseLightingStyle },
-	{ "-volsmoke", parseVolumeSmoke },
 	{ "-quickstart", parseQuickStart },
 	/* In every build: EA kept them to Debug and Internal, so a Release run could not skip the logo or the
 		 movies. */
@@ -3137,11 +3110,11 @@ void parseCommandLine(int argc, char *argv[])
 		}
 	}
 
-	// with no full -mod there is nothing to keep apart, and the retail focus would have no tree to read;
-	// patches alone then stack as plain mods
+	// Any full -mod's factions stand beside retail's, one mod or five; never merged over them.  With no
+	// full -mod there is nothing to keep apart, and the retail focus would have no tree to read; patches
+	// alone then stack as plain mods.
 	const std::vector<Bool> &isPatch = TheGlobalData->m_modIsPatch;
-	if (std::find( isPatch.begin(), isPatch.end(), FALSE ) == isPatch.end())
-		TheWritableGlobalData->m_modFactions = FALSE;
+	TheWritableGlobalData->m_modFactions = std::find( isPatch.begin(), isPatch.end(), FALSE ) != isPatch.end();
 	if (TheGlobalData->m_modFactions)
 		foldModPatches();
 	TheArchiveFileSystem->loadMods();

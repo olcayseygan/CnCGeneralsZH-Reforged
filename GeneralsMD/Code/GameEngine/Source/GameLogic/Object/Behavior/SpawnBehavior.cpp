@@ -343,6 +343,15 @@ Object* SpawnBehavior::getClosestSlave( const Coord3D *pos )
 }
 
 // ------------------------------------------------------------------------------------------------
+Int SpawnBehavior::getSlaveIndex( ObjectID slave ) const
+{
+	Int index = 0;
+	for( objectIDList::const_iterator it = m_spawnIDs.begin(); it != m_spawnIDs.end() && *it != slave; ++it )
+		++index;
+	return index;
+}
+
+// ------------------------------------------------------------------------------------------------
 void SpawnBehavior::orderSlavesToAttackTarget( Object *target, Int maxShotsToFire, CommandSourceType cmdSource )
 {
 	for( objectIDListIterator it = m_spawnIDs.begin(); it != m_spawnIDs.end(); ++it )

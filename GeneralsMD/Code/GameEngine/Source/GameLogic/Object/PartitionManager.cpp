@@ -3440,6 +3440,9 @@ Object *PartitionManager::getClosestObjects(
 )
 {
 	//USE_PERF_TIMER(getClosestObjects)
+	// theIterFlag and each module's done flag below are shared by every scan; one from the render
+	// beside a tick lets the tick's own scan skip an object, so a different target and a desync
+	LOGIC_WINDOW_READ( WINDOW_PARTITION_ITERATE );
 
 #ifdef DUMP_PERF_STATS
 	if (TheGameLogic->getFrame() != s_gcoPerfFrame)
@@ -3546,6 +3549,17 @@ Object *PartitionManager::getClosestObjects(
 		}
 		maxRadiusLimit = -1;	// nothing left for the ring walk to find
 	}
+
+	/* Every offset past the on-map cell farthest from the centre lands off the map, where getCellAt
+		 returns NULL, yet a REALLY_FAR search that found nothing stepped through all of them. A ring's
+		 radius never shrinks as the offset grows on either axis, so the farthest corner cell bounds
+		 every on-map one. Its radius is at least its longer side less one, so a nearer limit, which is
+		 every small search, skips the lookup. */
+	ICoord2D farthestOnMap;
+	farthestOnMap.x = maxInt(cellCenterX, m_cellCountX - 1 - cellCenterX);
+	farthestOnMap.y = maxInt(cellCenterY, m_cellCountY - 1 - cellCenterY);
+	if (maxRadiusLimit >= maxInt(farthestOnMap.x, farthestOnMap.y))
+		maxRadiusLimit = minInt(maxRadiusLimit, calcMinRadius(farthestOnMap));
 
 	/*
 		m_radiusVec[curRadius] contains a list of the cells (foo) that could

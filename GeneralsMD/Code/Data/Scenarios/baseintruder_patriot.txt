@@ -1,0 +1,41 @@
+# A Patriot put down in a computer player's base three minutes in, with power behind it at the enemy's start.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover 1 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 30000 -scenario baseintruder_patriot
+
+30 spawn 1 AmericaPowerPlant 2 start1:-250:-100 120
+# a second command center far off, so the match outlasts the seat's start falling
+30 spawn 1 AmericaCommandCenter 1 4361 3126
+5400 spawn 1 AmericaPatriotBattery 1 start0:0:520
+5400 tally 1 AmericaPatriotBattery
+5700 tally 1 AmericaPatriotBattery
+6000 tally 1 AmericaPatriotBattery
+6300 tally 1 AmericaPatriotBattery
+6600 tally 1 AmericaPatriotBattery
+6900 tally 1 AmericaPatriotBattery
+7200 tally 1 AmericaPatriotBattery
+7500 tally 1 AmericaPatriotBattery
+7800 tally 1 AmericaPatriotBattery
+8100 tally 1 AmericaPatriotBattery
+8400 tally 1 AmericaPatriotBattery
+8700 tally 1 AmericaPatriotBattery
+9000 tally 1 AmericaPatriotBattery
+9300 tally 1 AmericaPatriotBattery
+9600 tally 1 AmericaPatriotBattery
+9900 tally 1 AmericaPatriotBattery
+10200 tally 1 AmericaPatriotBattery
+10500 tally 1 AmericaPatriotBattery
+10800 tally 1 AmericaPatriotBattery
+11100 tally 1 AmericaPatriotBattery
+11400 tally 1 AmericaPatriotBattery
+11700 tally 1 AmericaPatriotBattery
+12000 tally 1 AmericaPatriotBattery
+12300 tally 1 AmericaPatriotBattery
+12600 tally 1 AmericaPatriotBattery
+12900 tally 1 AmericaPatriotBattery
+13200 tally 1 AmericaPatriotBattery
+13500 tally 1 AmericaPatriotBattery
+13800 tally 1 AmericaPatriotBattery
+14100 tally 1 AmericaPatriotBattery
+14400 tally 1 AmericaPatriotBattery

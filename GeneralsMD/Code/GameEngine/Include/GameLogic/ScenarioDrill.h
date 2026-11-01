@@ -97,7 +97,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_RANK,							///< rank <slot> <selector> veteran|elite|heroic|xp N|grade N; a level as the rank cheat sets it (a ladder's pin), N same-class kills of experience, or a ladder grade
 	SCENARIO_ACTION_GIVEMONEY,				///< givemoney <slot> <targetSlot> <amount>; the Tab screen's Send, as MSG_TRANSFER_MONEY onto the message stream
 	SCENARIO_ACTION_CLICKSTOP,				///< clickstop <slot> <selector>; the Stop key, the group idle MSG_DO_STOP gives (CMD_FROM_PLAYER)
-	SCENARIO_ACTION_REACHPROOF				///< reachproof <slot> <selector> <targetSlot> <probe> [samples]; every matching defence's reach overlay against the logic, the probe stood on each sample point (ReachOverlay_prove)
+	SCENARIO_ACTION_REACHPROOF,				///< reachproof <slot> <selector> <targetSlot> <probe> [samples]; every matching defence's reach overlay against the logic, the probe stood on each sample point (ReachOverlay_prove)
+	SCENARIO_ACTION_TOPUP							///< topup <slot> <template> <objects>; from now on, while the world holds fewer objects than that, this line's turn makes one on the road from the seat's start to the map's centre and attack-moves it there
 };
 
 /// ScenarioAction::atStart when the position is plain numbers
@@ -130,7 +131,7 @@ struct ScenarioAction
 	AsciiString selector;					///< a template name, or "*" for everything that seat owns
 	Coord2D at;										///< spawn, move, attackmove and arrive target, or the offset from atStart
 	Int atStart;									///< the start position at is measured from, SCENARIO_NO_START for none
-	Int count;										///< how many to spawn
+	Int count;										///< how many to spawn; for tally, how many should be standing, -1 for no opinion
 	Real spacing;									///< how far apart to spawn them, in world units
 	Real radius;									///< how close to the target counts as arrived
 	Int targetSlot;								///< whose units to attack

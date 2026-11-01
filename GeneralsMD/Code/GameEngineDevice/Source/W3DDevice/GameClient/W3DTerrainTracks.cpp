@@ -837,7 +837,9 @@ Try improving the fit to vertical surfaces like cliffs.
 	if (shadeB > 255.0f) shadeB = 255.0f;	if (shadeB < 0.0f) shadeB = 0.0f;
 
 	diffuseLight = REAL_TO_INT(shadeB) | (REAL_TO_INT(shadeG) << 8) | (REAL_TO_INT(shadeR) << 16);
-	Real numFadedEdges=m_maxTankTrackEdges-m_maxTankTrackOpaqueEdges;
+	// Battle Marks: a track stays dark for three quarters of its edges, where it fades after a quarter
+	const Int opaqueEdges = BaseHeightMapRenderObjClass::groundMarksOn() ? m_maxTankTrackEdges*3/4 : m_maxTankTrackOpaqueEdges;
+	Real numFadedEdges=m_maxTankTrackEdges-opaqueEdges;
 
 	// Lock only the vertices this pass writes.  A whole-buffer lock is every track the detail level
 	// allows times every edge, and with Direct3D 11 its unlock copied all of it twice on every pass.
@@ -886,10 +888,10 @@ Try improving the fit to vertical surfaces like cliffs.
 		
 					distanceFade=1.0f;
 
-					if ((mod->m_activeEdgeCount -1 -i) >= m_maxTankTrackOpaqueEdges)// && i < (MAX_PER_TRACK_EDGE_COUNT-FORCE_FADE_AT_EDGE))
+					if ((mod->m_activeEdgeCount -1 -i) >= opaqueEdges)// && i < (MAX_PER_TRACK_EDGE_COUNT-FORCE_FADE_AT_EDGE))
 					{	//we're getting close to the limit on the number of track pieces allowed
 						//so force it to fade out.
-						distanceFade=1.0f-(float)((mod->m_activeEdgeCount -i)-m_maxTankTrackOpaqueEdges)/numFadedEdges;
+						distanceFade=1.0f-(float)((mod->m_activeEdgeCount -i)-opaqueEdges)/numFadedEdges;
 					}
 
 					distanceFade *= mod->m_edges[index].alpha;	//adjust fade with distance from start of track

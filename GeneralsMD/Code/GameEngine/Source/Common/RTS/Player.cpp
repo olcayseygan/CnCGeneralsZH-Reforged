@@ -812,7 +812,12 @@ void Player::update()
 	{
 		UnsignedInt now = TheGameLogic->getFrame();
 		//Only check and post the message once every second so we don't spam the message stream to account for lag.
-		if( now % LOGICFRAMES_PER_SECOND == 0 )
+		// Not while a mission's script holds the player's input, as EA's input gate kept it out: retaliation
+		// in an opening cinematic set the player's idle props shooting at what the script needs alive.  On
+		// China's first mission they killed the bomb truck short of the area its detonation waits for, so the
+		// cinematic never ended.
+		const Bool inputHeldByMission = TheGameLogic->isInSinglePlayerGame() && TheScriptEngine->isInputHeldByScript();
+		if( now % LOGICFRAMES_PER_SECOND == 0 && !inputHeldByMission )
 		{
 			if( TheGlobalData->m_clientRetaliationModeEnabled != isLogicalRetaliationModeEnabled() )
 			{
@@ -1149,6 +1154,13 @@ void Player::becomingTeamMember(Object *obj, Bool yes, Bool objectXferLoad)
 	if (!obj)
 		return;
 
+	// Object::setOrRestoreTeam calls this right after the team member list changes, before
+	// anything below can ask for a count, and on a load too
+	if (yes)
+		addTemplateCountMember(obj);
+	else
+		removeTemplateCountMember(obj);
+
 	// energy production/consumption hooks, note we ignore things that are UNDER_CONSTRUCTION
 	if( !obj->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 	{
@@ -1324,6 +1336,12 @@ void Player::noteTeamRequest( Int kind, Int from, Int enemy, const Coord3D *pos 
 {
 	if( m_ai )
 		m_ai->noteTeamRequest( (AITeamRequestKind)kind, from, enemy, pos );
+}
+
+void Player::noteStrikeLaunched( const Player *launcher )
+{
+	if( m_ai )
+		m_ai->noteStrikeLaunched( launcher );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1958,20 +1976,109 @@ void Player::iterateObjects( ObjectIterateFunc func, void *userData ) const
 	}
 }
 
+// Walk every team on every count, the way the count was taken before the lists, and log any
+// difference. Debug only; define it in Release for a replay-check proof run.
+#ifdef _DEBUG
+#define TEMPLATE_COUNT_CHECK
+#endif
+
+//=============================================================================
+void Player::addTemplateCountMember(Object *obj)
+{
+	// Object's constructor pins getTemplate() to the final override, and a map's INI overrides
+	// are all hung before the first object exists, so the key holds for the object's life
+	const ThingTemplate *tmpl = obj->getTemplate();
+	for (std::vector<TemplateCountMembers>::iterator it = m_templateCountMembers.begin(); it != m_templateCountMembers.end(); ++it)
+	{
+		if (it->m_template == tmpl)
+		{
+			it->m_objects.push_back(obj);
+			return;
+		}
+	}
+	m_templateCountMembers.push_back(TemplateCountMembers());
+	m_templateCountMembers.back().m_template = tmpl;
+	m_templateCountMembers.back().m_objects.push_back(obj);
+}
+
+//=============================================================================
+void Player::removeTemplateCountMember(Object *obj)
+{
+	const ThingTemplate *tmpl = obj->getTemplate();
+	for (std::vector<TemplateCountMembers>::iterator it = m_templateCountMembers.begin(); it != m_templateCountMembers.end(); ++it)
+	{
+		if (it->m_template != tmpl)
+			continue;
+
+		std::vector<Object *> &objects = it->m_objects;
+		for (size_t k = 0; k < objects.size(); ++k)
+		{
+			if (objects[k] == obj)
+			{
+				objects[k] = objects.back();
+				objects.pop_back();
+				return;
+			}
+		}
+		break;
+	}
+	DEBUG_CRASH(("Player %d leaves object %d '%s' it never counted\n", getPlayerIndex(), obj->getID(), tmpl->getName().str()));
+}
+
+//=============================================================================
+Bool Player::hasTemplateMember(const ThingTemplate *tmpl) const
+{
+	for (std::vector<TemplateCountMembers>::const_iterator it = m_templateCountMembers.begin(); it != m_templateCountMembers.end(); ++it)
+	{
+		if (!it->m_objects.empty() && it->m_template->isEquivalentTo(tmpl))
+			return true;
+	}
+	return false;
+}
+
 //=============================================================================
 void Player::countObjectsByThingTemplate(Int numTmplates, const ThingTemplate* const * things, Bool ignoreDead, Int *counts, Bool ignoreUnderConstruction ) const
 {
-	Int i;
-
-	for (i = 0; i < numTmplates; ++i)
+	for (Int i = 0; i < numTmplates; ++i)
 		counts[i] = 0;
 
-	for (PlayerTeamList::const_iterator it = m_playerTeamPrototypes.begin(); 
-			 it != m_playerTeamPrototypes.end(); 
-			 ++it)
-	{	
-		(*it)->countObjectsByThingTemplate(numTmplates, things, ignoreDead, counts, ignoreUnderConstruction);
+	// The walk counts an object once, for the first template it is equivalent to, and whether it
+	// counts at all is a question about the object alone. Every object in one list shares its
+	// template, so one equivalence pass per list stands for all of them.
+	for (std::vector<TemplateCountMembers>::const_iterator it = m_templateCountMembers.begin(); it != m_templateCountMembers.end(); ++it)
+	{
+		if (it->m_objects.empty())
+			continue;
+
+		Int i = 0;
+		while (i < numTmplates && !it->m_template->isEquivalentTo(things[i]))
+			++i;
+		if (i == numTmplates)
+			continue;
+
+		for (std::vector<Object *>::const_iterator obj = it->m_objects.begin(); obj != it->m_objects.end(); ++obj)
+		{
+			if (Team::countsTowardTemplate(*obj, ignoreDead, ignoreUnderConstruction))
+				++counts[i];
+		}
 	}
+
+#ifdef TEMPLATE_COUNT_CHECK
+	static UnsignedInt s_checks = 0;
+	static UnsignedInt s_mismatches = 0;
+	std::vector<Int> walked(numTmplates, 0);
+	for (PlayerTeamList::const_iterator it = m_playerTeamPrototypes.begin(); it != m_playerTeamPrototypes.end(); ++it)
+		(*it)->countObjectsByThingTemplate(numTmplates, things, ignoreDead, walked.data(), ignoreUnderConstruction);
+	for (Int i = 0; i < numTmplates; ++i)
+	{
+		if (walked[i] != counts[i] && ++s_mismatches <= 50)
+			DEBUG_LOG(("TEMPLATECOUNT MISMATCH: frame %u player %d '%s' lists %d walk %d (ignoreDead %d ignoreUnderConstruction %d)\n",
+				TheGameLogic->getFrame(), getPlayerIndex(), things[i] ? things[i]->getName().str() : "(null)",
+				counts[i], walked[i], ignoreDead, ignoreUnderConstruction));
+	}
+	if ((++s_checks & 0x3FFFF) == 0)
+		DEBUG_LOG(("TEMPLATECOUNT CHECK: %u calls, %u mismatches, frame %u\n", s_checks, s_mismatches, TheGameLogic->getFrame()));
+#endif
 }
 
 //=============================================================================

@@ -649,6 +649,9 @@ public:
 
 	Bool isEquivalentTo(const ThingTemplate* tt) const;
 
+	/// the -mod whose army this is, read off the "M<n>~" on its name; -1 for retail's
+	Int getModIndex() const;
+
 	UnsignedByte getCrushableLevel() const { return m_crushableLevel; }
 	UnsignedByte getCrusherLevel() const { return m_crusherLevel; }
 	

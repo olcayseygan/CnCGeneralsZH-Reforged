@@ -1,0 +1,42 @@
+# Under fire on the road: six Battlemasters of a computer player attack-move north past two Tomahawks that stand
+# off to the side, past their sight, and shell them all the way.  They should stop for the guns rather than
+# drive on under them.  The Red Guards are for the AI's scout order, which would otherwise walk one of the tanks
+# off.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 3600
+#     -scenario underfire_road -logPrefix uf_
+
+30    spawn   1  ChinaTankBattleMaster   6  start1:0:400  40
+31    spawn   0  AmericaVehicleTomahawk  2  start1:340:900  40
+35    spawn   1  ChinaInfantryRedguard   4  start1:0:250  20
+40    attackmove 1 ChinaTankBattleMaster   start1:0:1700
+40    attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+190   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+340   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+490   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+640   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+790   attack  0  AmericaVehicleTomahawk     1  ChinaTankBattleMaster
+40    tally   1  ChinaTankBattleMaster
+100   tally   1  ChinaTankBattleMaster
+160   tally   1  ChinaTankBattleMaster
+220   tally   1  ChinaTankBattleMaster
+280   tally   1  ChinaTankBattleMaster
+340   tally   1  ChinaTankBattleMaster
+400   tally   1  ChinaTankBattleMaster
+460   tally   1  ChinaTankBattleMaster
+520   tally   1  ChinaTankBattleMaster
+580   tally   1  ChinaTankBattleMaster
+640   tally   1  ChinaTankBattleMaster
+700   tally   1  ChinaTankBattleMaster
+800   tally   1  ChinaTankBattleMaster
+900   tally   1  ChinaTankBattleMaster
+1000  tally   1  ChinaTankBattleMaster
+1200  tally   1  ChinaTankBattleMaster
+1400  tally   1  ChinaTankBattleMaster
+1790  tally   1  ChinaTankBattleMaster
+340   tally   0  AmericaVehicleTomahawk
+640   tally   0  AmericaVehicleTomahawk
+1000  tally   0  AmericaVehicleTomahawk
+1790  tally   0  AmericaVehicleTomahawk

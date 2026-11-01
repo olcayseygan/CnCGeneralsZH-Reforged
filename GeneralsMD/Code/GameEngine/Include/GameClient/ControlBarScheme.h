@@ -312,7 +312,7 @@ private:
 //-----------------------------------------------------------------------------
 // EXTERNALS //////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
-/// a mod's faction, which gets our American power tray and our science layout (owner's call)
+/// a mod's faction, which gets our American power tray (owner's call)
 Bool ControlBarIsModFaction( const PlayerTemplate *pt );
 
 #endif // __CONTROL_BAR_SCHEME_H_

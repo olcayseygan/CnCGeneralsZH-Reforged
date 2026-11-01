@@ -34,7 +34,7 @@ class Xfer;
 	* data almost never sets, so every one of its cells reads zero.  This one stamps each armed thing's
 	* combat power onto every cell its guns reach, the reach stretched by the high ground the way
 	* Weapon_elevatedRange stretches it, so "how much can hit me here" is one lookup.  The friendly
-	* layer is the same stamp for this player's own units and its allies'.
+	* layer is the same stamp for this player's own units and its allies', drawn for Hard's tactics alone.
 	*
 	* Everything here is plain arithmetic on logic state in the order the caller hands it over, so two
 	* machines that stamp the same objects in the same order hold the same map. */
@@ -66,6 +66,7 @@ public:
 	void xfer( Xfer *xfer );
 
 	void markBuilt( UnsignedInt frame ) { m_builtFrame = frame; m_built = TRUE; }
+	void markUnbuilt() { m_built = FALSE; }
 	Bool isBuilt() const { return m_built; }
 	UnsignedInt getBuiltFrame() const { return m_builtFrame; }
 

@@ -1,0 +1,44 @@
+# Under a tower while it shoots buildings: six Battlemasters of a computer player are sent at four Power Plants
+# in turn, with a Gattling Cannon behind them and in reach of where the tanks stop to shoot.  They should turn
+# on the gun and then go on with the buildings, and not stand on the buildings with the tower on them.  The Red
+# Guards are for the AI's scout order, which would otherwise walk one of the tanks off.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 3600
+#     -scenario underfire_building -logPrefix uf_
+
+30    spawn   1  ChinaTankBattleMaster   6  start1:0:650  40
+31    spawn   0  AmericaPowerPlant       4  start1:-60:900  120
+30    spawn   0  ChinaGattlingCannon     1  start1:170:830
+35    spawn   1  ChinaInfantryRedguard   4  start1:0:250  20
+40    attack  1  ChinaTankBattleMaster      0  AmericaPowerPlant
+280   attack  1  ChinaTankBattleMaster      0  AmericaPowerPlant
+520   attack  1  ChinaTankBattleMaster      0  AmericaPowerPlant
+760   attack  1  ChinaTankBattleMaster      0  AmericaPowerPlant
+40    tally   1  ChinaTankBattleMaster
+100   tally   1  ChinaTankBattleMaster
+160   tally   1  ChinaTankBattleMaster
+220   tally   1  ChinaTankBattleMaster
+280   tally   1  ChinaTankBattleMaster
+340   tally   1  ChinaTankBattleMaster
+400   tally   1  ChinaTankBattleMaster
+460   tally   1  ChinaTankBattleMaster
+520   tally   1  ChinaTankBattleMaster
+580   tally   1  ChinaTankBattleMaster
+640   tally   1  ChinaTankBattleMaster
+700   tally   1  ChinaTankBattleMaster
+800   tally   1  ChinaTankBattleMaster
+900   tally   1  ChinaTankBattleMaster
+1000  tally   1  ChinaTankBattleMaster
+1200  tally   1  ChinaTankBattleMaster
+1400  tally   1  ChinaTankBattleMaster
+1790  tally   1  ChinaTankBattleMaster
+340   tally   0  ChinaGattlingCannon
+640   tally   0  ChinaGattlingCannon
+1000  tally   0  ChinaGattlingCannon
+1790  tally   0  ChinaGattlingCannon
+340   tally   0  AmericaPowerPlant
+640   tally   0  AmericaPowerPlant
+1000  tally   0  AmericaPowerPlant
+1790  tally   0  AmericaPowerPlant

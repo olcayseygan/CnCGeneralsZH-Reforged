@@ -49,6 +49,7 @@
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GUICallbacks.h"
+#include "GameClient/HotKey.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/WindowLayout.h"
@@ -977,11 +978,18 @@ GameMessageDisposition GameConsoleTranslator::translateGameMessage( const GameMe
 			const UnsignedByte key = msg->getArgument( 0 )->integer;
 			const UnsignedShort keyState = msg->getArgument( 1 )->integer;
 
-			// the key above Tab belongs to the console whether it is open or shut
+			// The key above Tab belongs to the console whether it is open or shut, unless a button on
+			// screen is labelled with it: Contra's Special Powers menu is "&`", and its tooltip sends the
+			// player to this key.  Shift still reaches the console.  The button is asked for by name and
+			// not by what the layout types here, which on a Turkish keyboard is a double quote.
 			if( key == KEY_TICK )
 			{
 				if( BitTest( keyState, KEY_STATE_DOWN ) && !BitTest( keyState, KEY_STATE_AUTOREPEAT ) )
-					TheGameConsole->toggle();
+				{
+					const Bool plain = !BitTest( keyState, KEY_STATE_CONTROL | KEY_STATE_SHIFT | KEY_STATE_ALT );
+					if( TheGameConsole->isOpen() || !plain || !TheHotKeyManager->executeHotKey( HotKeyManager::nameOf( u'`' ) ) )
+						TheGameConsole->toggle();
+				}
 				return DESTROY_MESSAGE;
 			}
 

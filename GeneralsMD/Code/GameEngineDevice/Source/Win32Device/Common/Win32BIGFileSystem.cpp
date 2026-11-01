@@ -148,7 +148,7 @@ void Win32BIGFileSystem::init() {
 		return;
 	}
 
-	theClassicGraphics = getEarlyOptionBool("ClassicGraphics", false);
+	theClassicGraphics = getEarlyOptionBool("ClassicGraphics", true);
 
 	//
 	// The exe's own directory and no further down.  This used to walk every subdirectory under it,

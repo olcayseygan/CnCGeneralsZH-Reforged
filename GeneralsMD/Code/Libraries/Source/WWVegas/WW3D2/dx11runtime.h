@@ -119,6 +119,13 @@ void Direct3D11_Mirror_Texture(unsigned stage, struct IDirect3DBaseTexture9 * te
 // terrain's world to texture mapping (DX11Post_Set_Haze_Shroud).  Null reads everything as in sight.
 void Direct3D11_Set_Haze_Shroud(struct IDirect3DBaseTexture9 * texture, const float rect[4]);
 
+// The Atmosphere option's fade and sky for this frame (DX11Post_Set_Atmosphere), with the sky's D3D9
+// texture.  Strength zero is no pass.
+void Direct3D11_Set_Atmosphere(const float horizon[3], const float tint[3], float start, float scale,
+	float strength, float ground, float map_width, float map_height, struct IDirect3DBaseTexture9 * sky);
+// That sky, over the whole frame, before anything is drawn on it.  The fade goes on with the haze.
+void Direct3D11_Atmosphere_Sky();
+
 // The vehicle headlights for the frame, nearest the camera first, eight floats each: world
 // position, reach, world direction, cosine of the cone's edge; and what a pixel gains per channel
 // per unit of their light.  A Direct3D 9 run ignores them.
@@ -238,6 +245,11 @@ void Direct3D11_Set_Emissive(bool emissive);
 // (DX11BackendClass::Set_Team_Glow, the Team Glow option).  The mesh renderer sets it around the mesh.
 void Direct3D11_Set_Team_Glow(bool glow);
 
+// The Hemispheric Ambient option (DX11BackendClass::Set_Hemi_Ambient): lit models take the scene
+// ambient from the sky above and the ground below.  The scene hands it over every frame.  -d3d9,
+// -headless and the SDL3 port keep the flat ambient.
+void Direct3D11_Set_Hemi_Ambient(bool hemi);
+
 // The look one object's draws are dressed in (DRAW_EFFECT_* in ffshader.h) and its four numbers
 // (DX11BackendClass::Set_Draw_Effect).  The mesh renderer sets it around a mesh's draws and puts
 // zero back after them.  -d3d9, -headless and the SDL3 port draw the object as they always did.
@@ -261,6 +273,11 @@ unsigned Direct3D11_Requested_Draw_Effect(float parameters[4]);
 // not shaded by the corners of what is behind them.  The chain then skips its own occlusion pass.
 // Nothing happens without "ao" in the chain or while a filter or a mirror holds the target.
 void Direct3D11_Occlude_Scene();
+
+// The Ambient Occlusion option (DX11PostProcessClass::World_Occlude_Scene), called once the opaque world
+// is down and before the water.  The chain's own occlusion stands down for the frame.  -d3d9, Classic
+// graphics, -headless and the SDL3 port draw nothing here.
+void Direct3D11_Ambient_Occlusion();
 
 // Whether the draws that follow take the Glow option's additive gain (DX11BackendClass::
 // Set_Glow_Draw).  ShaderClass::Apply sends it from the shader's GLOW_ENABLE bit.

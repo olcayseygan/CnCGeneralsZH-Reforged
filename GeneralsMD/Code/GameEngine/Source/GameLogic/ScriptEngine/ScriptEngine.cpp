@@ -478,6 +478,7 @@ m_currentPlayer(NULL),
 m_skirmishHumanPlayer(NULL),
 m_fade(FADE_NONE),
 m_freezeByScript(FALSE),
+m_inputHeldByScript(FALSE),
 m_frameObjectCountChanged(0),
 //Added By Sadullah Nader
 //Initializations inserted
@@ -5349,6 +5350,7 @@ void ScriptEngine::reset( void )
 	m_breezeInfo.m_breezeVersion = 0;
 
 	m_freezeByScript = FALSE;
+	m_inputHeldByScript = FALSE;
 	m_objectsShouldReceiveDifficultyBonus = TRUE;
 	m_ChooseVictimAlwaysUsesNormal = false;
 

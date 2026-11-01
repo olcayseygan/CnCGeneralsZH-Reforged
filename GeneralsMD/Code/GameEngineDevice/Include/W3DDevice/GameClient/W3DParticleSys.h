@@ -48,6 +48,10 @@
 
 class TextureClass;
 
+namespace FireLights { struct Light; }
+/// The Firelight option's lights the last doParticles picked: none with the option off.
+const FireLights::Light *getFirelights( Int *count );
+
 //=============================================================================
 /** W3D implementation of the game display which is responsible for creating
   * all interaction with the screen and updating the display 
@@ -149,6 +153,8 @@ private:
 	/// attachment that decide a fade change in the logic alone, or in doDrawModule before a pass's first
 	/// refresh.  Anything else that changes one of them mid-frame is not seen until the next logic frame.
 	std::vector<SystemView>		m_frameView;
+	std::vector<ParticleSystem *>	m_frameFires;			///< the additive and Emissive FireLook systems among them, for the Firelight option
+	std::vector<Real>					m_frameFireFades;		///< and their fades
 	std::vector<ParticleSystem *>	m_fieldSystems;		///< the contamination fields' systems, empty ones too
 	std::vector<SunMapCaster>	m_sunMapCasters;
 	Bool											m_frameViewValid;

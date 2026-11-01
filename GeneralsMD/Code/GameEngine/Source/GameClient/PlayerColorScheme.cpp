@@ -25,6 +25,7 @@
 
 #include "Common/GameCommon.h"
 #include "Common/GlobalData.h"
+#include "Common/LogicThread.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/Team.h"
@@ -358,6 +359,12 @@ static void rebuildTable( void )
 // ------------------------------------------------------------------------------------------------
 static void ensureTable( void )
 {
+	// only the main thread outside the window builds the table, every pass (GameClient::update) before
+	// the draw: the tick reads it beside the render, and a rebuild walks the players' relationships the
+	// tick may be changing, so a change the tick made shows one pass later
+	if( LogicThread::t_isLogicThread || LogicThread::isInsideWindow() )
+		return;
+
 	if( TheGlobalData == NULL )
 		return;
 

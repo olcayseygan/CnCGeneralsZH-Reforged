@@ -34,6 +34,17 @@ inline bool SunShadowReachesTheFrame( const FrustumClass &view, const Vector3 &u
 	return nearest.Length2() <= reach * reach;
 }
 
+/** Where the sun's box sits on one axis of its own frame, the look point at zero and lo to hi the
+		ground the frame shows, which holds the look point.  The box goes round that stretch.  When the
+		stretch is wider than the box it stays as near the look point as it can with no texel past
+		either end, so what falls off is the far ground and never the ground at the camera's feet. */
+inline float SunBoxMiddle( float lo, float hi, float halfWidth )
+{
+	if (hi - lo <= 2.0f * halfWidth)
+		return (lo + hi) * 0.5f;
+	return WWMath::Clamp( 0.0f, lo + halfWidth, hi - halfWidth );
+}
+
 struct SunShadowCasterCull {
     const FrustumClass &View;
     Vector3 ToSun;

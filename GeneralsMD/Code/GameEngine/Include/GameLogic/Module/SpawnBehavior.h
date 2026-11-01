@@ -131,6 +131,7 @@ public:
 	virtual void revealSlaves() = 0;
 	virtual Bool doSlavesHaveFreedom() const = 0;
 	virtual Int getSlaveCount() const = 0;
+	virtual Int getSlaveIndex( ObjectID slave ) const = 0;	///< its place among the living slaves, oldest first
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -187,6 +188,7 @@ public:
 	virtual void revealSlaves();
 	virtual Bool doSlavesHaveFreedom() const { return getSpawnBehaviorModuleData()->m_slavesHaveFreeWill; }
 	virtual Int getSlaveCount() const { return m_spawnCount; }
+	virtual Int getSlaveIndex( ObjectID slave ) const;
 
 	// **********************************************************************************************
 	// our own methods

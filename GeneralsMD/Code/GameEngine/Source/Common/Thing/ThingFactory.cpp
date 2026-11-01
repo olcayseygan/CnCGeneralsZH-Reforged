@@ -400,9 +400,10 @@ const ThingTemplate *ThingFactory::findSideReskin( const ThingTemplate *tmplate,
 	// skip a Toxin player's chassis was swapped for Chem_GLAVehicleTechnical itself, a unit with no
 	// weapon or locomotor: the Arms Dealer charged for a Technical and nothing drove out.
 	const ThingTemplate *found = NULL;
+	const Int mod = tmplate->getModIndex();
 	for (const ThingTemplate *t = m_firstTemplate; t != NULL && found == NULL; t = t->friend_getNextTemplate())
 	{
-		if (t->getDefaultOwningSide() == side && t->getBuildVariations().empty() && t->isEquivalentTo( tmplate ))
+		if (t->getDefaultOwningSide() == side && t->getModIndex() == mod && t->getBuildVariations().empty() && t->isEquivalentTo( tmplate ))
 			found = (const ThingTemplate *)t->getFinalOverride();
 	}
 	m_sideReskins[ key ] = found;

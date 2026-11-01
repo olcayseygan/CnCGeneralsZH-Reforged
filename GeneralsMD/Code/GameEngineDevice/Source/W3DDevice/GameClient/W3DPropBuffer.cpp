@@ -326,6 +326,17 @@ void W3DPropBuffer::notifyShroudChanged()
 	}
 }
 
+/** LOGIC-THREAD.md phase 3: what the shroud change wiped is read again at the sync point, since a
+	* pass inside the window finds the cells being written by the tick beside it. */
+void W3DPropBuffer::takeShroudForRender()
+{
+	const Int localPlayerIndex = TheObserverCamera.getShroudPlayerIndex();
+	for (Int i=0; i<m_numProps; i++) {
+		if (m_props[i].ss == OBJECTSHROUD_INVALID)
+			m_props[i].ss = ThePartitionManager->getPropShroudStatusForPlayer(localPlayerIndex, &m_props[i].location);
+	}
+}
+
 
 DECLARE_PERF_TIMER(Prop_Render)
 

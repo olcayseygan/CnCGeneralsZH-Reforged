@@ -291,6 +291,7 @@ private:
 	Real m_shakeAngleCos;														///< the cosine of the orientation of the oscillation
 	Real m_shakeAngleSin;														///< the sine of the orientation of the oscillation
 	Real m_shakeIntensity;													///< the intensity of the oscillation
+	Bool m_shakeKick;																///< a nuke's or a falling building's: settles at the hard rate
 	Vector3 m_shakerAngles;													//WST 11/12/2002 new multiple instance camera shaker system
 
 	enum { MAX_SCREEN_DISTORTIONS = 4 };						///< the post chain's warp limit

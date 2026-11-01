@@ -226,6 +226,7 @@ W3DView::W3DView()
 	m_shakeOffset.x = 0.0f;
 	m_shakeOffset.y = 0.0f;
 	m_shakeIntensity = 0.0f;
+	m_shakeKick = FALSE;
 	m_FXPitch = 1.0f;
 	m_freezeTimeForCameraMovement = false;
 	m_cameraHasMovedSinceRequest = true;
@@ -1772,6 +1773,25 @@ void W3DView::update(void)
 	if (waypointElapsedMs > 100)
 		waypointElapsedMs = 100;	// a hitch should not teleport the camera down the path
 
+	/* EA stepped a scripted move once an engine frame, so a move kept time with the script's timers at
+		 whatever speed the map ran.  On the wall clock it arrives early in a cinematic that slowed the game
+		 and late in turbo mode, and the timer that starts the next shot cuts it off.  A pan that froze the
+		 logic has no other clock, and a recorded picture is a logic frame already. */
+	const Real scriptedRate = pictureClock || (isTimeFrozen() && !isCameraMovementFinished()) ? 1.0f : GameEngine_missionTimeRate();
+	static Real scriptedWaypointMs = 0.0f;
+	scriptedWaypointMs += waypointElapsedMs * scriptedRate;
+	const Int scriptedElapsedMs = (Int)scriptedWaypointMs;
+	scriptedWaypointMs -= scriptedElapsedMs;
+	Bool scriptedStepTime = stepTime;
+	if (scriptedRate != 1.0f)
+	{
+		static Real scriptedStepMs = 0.0f;
+		scriptedStepMs += waypointElapsedMs * scriptedRate;
+		scriptedStepTime = scriptedStepMs >= (Real)CAMERA_STEP_MSEC;
+		if (scriptedStepTime)
+			scriptedStepMs -= (Real)CAMERA_STEP_MSEC;
+	}
+
 	IRegion2D dirtyTerrain;
 	if (TheTerrainRenderObject->doesNeedFullUpdate()) {
 		RefRenderObjListIterator *it = W3DDisplay::m_3DScene->createLightsIterator();
@@ -2013,12 +2033,12 @@ void W3DView::update(void)
 	// when both are scripted, as before)
 	if (scriptMovesAllowed && m_doingMoveCameraOnWaypointPath && !m_doingRotateCamera) {
 		m_previousLookAtPosition = *getPosition();
-		moveAlongWaypointPath(waypointElapsedMs);
+		moveAlongWaypointPath(scriptedElapsedMs);
 		didScriptedMovement = true;
 		recalcCamera = true;
 	}
 
-	if (stepTime && scriptMovesAllowed) {
+	if (scriptedStepTime && scriptMovesAllowed) {
 		// If we aren't frozen for debug, allow the camera to follow scripted movements.
 		if (updateCameraMovements()) {
 			didScriptedMovement = true;
@@ -2042,9 +2062,10 @@ void W3DView::update(void)
 
 			// fake a stiff spring/damper.  A big kick settles at EA's rate and what is left of it rumbles
 			// on: the damping eases from 0.75 a step at an intensity of two or more to 0.88 near rest, so
-			// a heavy blast trails off over about a second instead of stopping dead after half of one.
+			// a heavy blast trails off over about a second instead of stopping dead after half of one.  A
+			// kick (shake) keeps the hard rate all the way down: over in a quarter of a second, no rumble.
 			const Real HARD_DAMPING = 0.75f;
-			const Real TAIL_DAMPING = 0.88f;
+			const Real TAIL_DAMPING = m_shakeKick ? HARD_DAMPING : 0.88f;
 			const Real hardness = WWMath::Clamp(m_shakeIntensity * 0.5f, 0.0f, 1.0f);
 			const Real dampingCoeff = TAIL_DAMPING + (HARD_DAMPING - TAIL_DAMPING) * hardness;
 			m_shakeIntensity *= dampingCoeff;
@@ -2060,6 +2081,7 @@ void W3DView::update(void)
 			m_shakeIntensity = 0.0f;
 			m_shakeOffset.x = 0.0f;
 			m_shakeOffset.y = 0.0f;
+			m_shakeKick = FALSE;
 		}
 	}
 
@@ -4320,6 +4342,9 @@ void W3DView::moveAlongWaypointPath(Int milliseconds)
 void W3DView::shake( const Coord3D *epicenter, CameraShakeType shakeType )
 {
 	LOGIC_CENSUS( CENSUS_TACTICALVIEW );
+	if (!TheGlobalData->m_cameraShake)
+		return;
+
 	Real angle = GameClientRandomValueReal( 0, 2*PI );
 
 	m_shakeAngleCos = (Real)cos( angle );
@@ -4363,18 +4388,24 @@ void W3DView::shake( const Coord3D *epicenter, CameraShakeType shakeType )
 
 	Real dist = (Real)sqrt( d.x*d.x + d.y*d.y );
 
-	if (dist > TheGlobalData->m_maxShakeRange)
+	// Every SEVERE shake (a nuke, a Scud warhead, a bomb truck) is a kick: three times the range, since
+	// at 150 units a nuke in plain view moved nothing at all, a third harder at the epicentre, up to
+	// MaxShakeIntensity, and no rumble after it.  Not under Classic or Direct3D 9.
+	const Bool kick = shakeType == SHAKE_SEVERE && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled();
+	const Real range = TheGlobalData->m_maxShakeRange * (kick ? 3.0f : 1.0f);
+	if (dist > range)
 		return;
 
 	// A square of the remaining distance rather than a straight line, and half as much again at the
 	// epicentre: a shell landing under the camera kicks it hard, one at the edge of the range barely
 	// moves it.  The two meet the old line at about a third of the range.
 	const Real SHAKE_NEAR_BOOST = 1.5f;
-	const Real nearness = 1.0f - (dist/TheGlobalData->m_maxShakeRange);
-	intensity *= SHAKE_NEAR_BOOST * nearness * nearness;
+	const Real nearness = 1.0f - (dist/range);
+	intensity *= SHAKE_NEAR_BOOST * nearness * nearness * (kick ? 1.33f : 1.0f);
 
 	// add intensity and clamp
 	m_shakeIntensity += intensity;
+	m_shakeKick = kick;
 
 	// Held at the ceiling.  EA's line put it back to 3.0 once the sum passed MaxShakeIntensity, so
 	// the hit that took a barrage over the top shook the camera less than the one before it.
@@ -4585,6 +4616,9 @@ void W3DView::cameraDisableRealZoomMode(void) //WST added 10/18/2002
 
 void W3DView::Add_Camera_Shake (const Coord3D & position,float radius,float duration,float power) //WST added 11/13/02
 {
+	if (!TheGlobalData->m_cameraShake)
+		return;
+
 	Vector3 vpos;
 
 	vpos.X = position.x;

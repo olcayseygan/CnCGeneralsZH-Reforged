@@ -613,6 +613,7 @@ public:
 	/// Get the enemy an ai player is currently focused on.  NOTE - Can be NULL.
 	Player  *getCurrentEnemy( void );
 	void noteTeamRequest( Int kind, Int from, Int enemy, const Coord3D *pos );	///< an ally's request, for this player's AI if it has one (aiPostTeamRequest)
+	void noteStrikeLaunched( const Player *launcher );	///< the word of a superweapon launch every seat hears, for this player's AI if it has one
 
 	/// Is this player a skirmish ai player?
 	Bool isSkirmishAIPlayer( void );
@@ -655,10 +656,21 @@ public:
 	/**
 		a convenience routine to count the number of owned objects that match a set of ThingTemplates.
 		You input the count and an array of ThingTemplate*, and provide an array of Int of the same
-		size. It fills in the array to the correct counts. This is handy because we must traverse
-		the player's list-of-objects only once.
+		size. It fills in the array to the correct counts. It reads the per-template member lists
+		below instead of walking every team, and gives the walk's answer at every call.
 	*/
 	void countObjectsByThingTemplate(Int numTmplates, const ThingTemplate* const * things, Bool ignoreDead, Int *counts, Bool ignoreUnderConstruction = TRUE ) const;
+
+	/**
+		the per-template member lists follow the team member lists: an object is in them exactly
+		while it sits on a team whose prototype this player controls. becomingTeamMember and
+		TeamPrototype::setControllingPlayer are the only callers.
+	*/
+	void addTemplateCountMember(Object *obj);
+	void removeTemplateCountMember(Object *obj);
+
+	/// whether any member of our teams, dead or alive, has a template equivalent to tmpl
+	Bool hasTemplateMember(const ThingTemplate *tmpl) const;
 
 	/**
 		simply returns the number of buildings owned by this player
@@ -999,6 +1011,13 @@ private:
 	UnicodeString					m_generalName;		///< (SAVE) This is the name of the general the player is allowed to change.
 	
 	PlayerTeamList				m_playerTeamPrototypes;				///< ALL the teams we control, via prototype
+
+	struct TemplateCountMembers
+	{
+		const ThingTemplate		*m_template;					///< every object here answers getTemplate() with this
+		std::vector<Object *>	m_objects;						///< in no particular order; counts are sums
+	};
+	std::vector<TemplateCountMembers>	m_templateCountMembers;	///< (NO-SAVE) every member of our teams, grouped by template
 	PlayerRelationMap			*m_playerRelations;						///< allies & enemies
 	TeamRelationMap				*m_teamRelations;							///< allies & enemies
 	

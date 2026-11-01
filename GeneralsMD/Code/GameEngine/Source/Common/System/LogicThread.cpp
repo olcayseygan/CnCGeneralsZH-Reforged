@@ -76,6 +76,11 @@ namespace
 	Bool											s_quitting = FALSE;
 	std::exception_ptr				s_error;
 	Real											s_tickMS = 0.0f;		///< the tick as the logic thread timed it
+	/* R3's park, under s_lock too: the render inside the window beside a tick (set as startOverlap hands
+		 the tick over, cleared as waitOverlap starts to wait), and the tick asking it to close (parkRender). */
+	std::condition_variable		s_parkCv;
+	Bool											s_renderBeside = FALSE;
+	Bool											s_parkWanted = FALSE;
 
 	// Written by the logic thread only, read by the main thread after a handoff has published them.
 	Int64				s_census[ LogicThread::CENSUS_COUNT ] = { 0 };
@@ -95,7 +100,7 @@ namespace
 	const char *const WINDOW_NAMES[ LogicThread::WINDOW_COUNT ] =
 	{
 		"drawableobject", "findobject", "objectlist", "logicframe", "thing", "shroud", "partition",
-		"terrain", "player", "radarobject", "drawablefield", "playerstate"
+		"terrain", "player", "radarobject", "drawablefield", "playerstate", "partitioniterate", "audiohandle"
 	};
 
 	// step 3b, main thread only: the pass's first tick due and allowed beside the render (prepareOverlap),
@@ -107,6 +112,7 @@ namespace
 	std::exception_ptr	s_overlapError;
 	LogicClock::time_point	s_overlapStart;
 	Real				s_overlapTickMS = 0.0f;
+	Real				s_overlapSyncMS = 0.0f;		///< how far into the pass this tick started
 	Real				s_overlapWaitMS = 0.0f;
 	Int					s_overlappedTicks = 0;
 	Real				s_overlapWaitTotalMS = 0.0f;
@@ -131,7 +137,8 @@ namespace
 		"drawable", "modelcondition", "audio", "ingameui", "controlbar", "tacticalview", "radar",
 		"fxlist", "terrainvisual", "particles", "gameclient", "eva", "newdrawable", "clientrandom",
 		"ghost", "messagestream", "display", "jobs", "ondemandflush", "observerlookat",
-		"drawablepush", "destroydrawable", "audioread", "clientread", "assetload"
+		"drawablepush", "destroydrawable", "audioread", "clientread", "assetload", "assetloadinwindow",
+		"livemodellock"
 	};
 
 	// M5: what the tick asked of the audio, the FX lists and the particle systems, in call order.
@@ -283,12 +290,58 @@ namespace
 void LogicThread::noteCensus( Channel channel )
 {
 	++s_census[ channel ];
+	// R3: a load beside the render touches the asset manager and the reference counts the render uses;
+	// one with the window closed has the main thread waiting.  A stale relaxed read only counts too many.
+	if( channel == CENSUS_ASSET_LOAD && g_windowOpen.load( std::memory_order_relaxed ) )
+		++s_census[ CENSUS_ASSET_LOAD_IN_WINDOW ];
 }
 
 //-------------------------------------------------------------------------------------------------
 void LogicThread::noteWindow( WindowRead read )
 {
 	s_windowReads[ read ].fetch_add( 1, std::memory_order_relaxed );
+}
+
+//-------------------------------------------------------------------------------------------------
+/* The handshake runs under s_lock, never on g_windowOpen's relaxed stores: the main thread clears
+	 s_renderBeside in waitOverlap after its last render call, so the lock's release and acquire publish
+	 everything the render did before the tick goes on, and the main thread then waits for the tick.
+
+	 No deadlock.  The tick waits only for the main thread to reach waitOverlap, which it does when the
+	 picture it is drawing ends (closeOrDrawAgain sees s_parkWanted and closes) or at once between
+	 pictures.  Inside the window the main thread waits on nothing of the tick's but g_liveModelLock (the
+	 shadow pass's pose fork, W3DVolumetricShadow.cpp), released before End_Render, and the tick parks
+	 before it takes that lock (TickReachesLiveModels), never while it holds it. */
+void LogicThread::parkRender( void )
+{
+	if( !t_isLogicThread )
+		return;
+	std::unique_lock<std::mutex> lock( s_lock );
+	if( !s_renderBeside )
+		return;
+	s_parkWanted = TRUE;
+	s_doneCv.notify_one();		// the main thread may be in tickOutlastsNextPicture
+	s_parkCv.wait( lock, []{ return !s_renderBeside; } );
+}
+
+//-------------------------------------------------------------------------------------------------
+LogicThread::TickReachesLiveModels::TickReachesLiveModels( void ) : m_locked( t_isLogicThread )
+{
+	if( !m_locked )
+		return;
+	noteCensus( CENSUS_LIVE_MODEL_LOCK );
+	// the flush behind the reach can build render objects, add them to the scene and load from the asset
+	// manager, and the bone read poses the live model: none of it beside the render
+	parkRender();
+	g_liveModelLock.lock();
+}
+
+//-------------------------------------------------------------------------------------------------
+LogicThread::TickReachesLiveModels::~TickReachesLiveModels( void )
+{
+	if( !m_locked )
+		return;
+	g_liveModelLock.unlock();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -301,13 +354,16 @@ static void startOverlap( void )
 		return;
 	captureClientBlock();
 	TheGameClient->setFrame( TheGameLogic->getFrame() );
+	TheGameLogic->growObjectLookupForTick();
 	jitter();
+	s_overlapSyncMS = GameEngine_msSincePassStart();
 	s_overlapStart = LogicClock::now();
 	// open before the tick wakes, so nothing the main thread does beside it reads as outside the window
 	LogicThread::g_windowOpen.store( 1, std::memory_order_relaxed );
 	{
 		std::lock_guard<std::mutex> lock( s_lock );
 		s_tickPending = TRUE;
+		s_renderBeside = TRUE;
 	}
 	s_wakeCv.notify_one();
 	s_overlapRunning = TRUE;
@@ -321,6 +377,10 @@ static void waitOverlap( void )
 	Real tickMS;
 	{
 		std::unique_lock<std::mutex> lock( s_lock );
+		// the render is done with the window: a tick parked in parkRender goes on with this thread waiting
+		s_renderBeside = FALSE;
+		s_parkWanted = FALSE;
+		s_parkCv.notify_one();
 		s_doneCv.wait( lock, []{ return s_tickDone; } );
 		s_tickDone = FALSE;
 		error = s_error;
@@ -357,6 +417,36 @@ void LogicThread::OverlapWindow::open( Bool mayOverlap )
 }
 
 //-------------------------------------------------------------------------------------------------
+/* Behind the clock the next tick is due the whole time, so the rule in closeOrDrawAgain never draws
+	 again and the eye waits on the tick: sync + a 13 ms tick is an 18 ms frame on the 2000 object crowd
+	 with 4 ms of picture in it.  Wait for the tick only as long as the sync point and a picture still
+	 fit in a 60 Hz frame after it, then draw once more, timed to end as the last tick's length says this
+	 one does, since a picture still going when the tick ends holds the next tick up.  A picture that
+	 fills the frame by itself (a slow card) gains nothing from a second one.  A present that waits for
+	 the refresh never gets one either: the sync point ate the start of that refresh, so the picture's
+	 own length looks like room, and the second picture's whole refresh halved the game's speed. */
+static Bool tickOutlastsNextPicture( Real pictureMS )
+{
+#if defined(_WIN32)
+	const Bool presentWaitsForRefresh = TheGlobalData->m_vsync;
+#else
+	const Bool presentWaitsForRefresh = TRUE;	// the SDL GPU swapchain's VSYNC, whatever was asked for
+#endif
+	if( presentWaitsForRefresh || !TheGameEngine->isPassPacedByClock() )
+		return FALSE;
+	const Real PICTURE_BUDGET_MS = 15.0f;		// 16.7 less the flush and the sync point's slower passes
+	if( pictureMS >= PICTURE_BUDGET_MS )
+		return FALSE;
+	const Real latestStartMS = PICTURE_BUDGET_MS - s_overlapSyncMS - pictureMS;
+	const Real tickLeftMS = s_overlapTickMS - elapsedMS( s_overlapStart, LogicClock::now() );
+	const Real startMS = tickLeftMS <= latestStartMS ? latestStartMS : std::min( latestStartMS, tickLeftMS - pictureMS );
+	// whole microseconds: a float duration added to the steady clock rounds away the wait
+	const std::chrono::microseconds wait( (long long)( std::max( startMS, 0.0f ) * 1000.0f ) );
+	std::unique_lock<std::mutex> lock( s_lock );
+	return !s_doneCv.wait_for( lock, wait, []{ return s_tickDone || s_parkWanted; } );
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool LogicThread::OverlapWindow::closeOrDrawAgain( Real pictureMS )
 {
 	if( m_open && s_overlapRunning )
@@ -364,11 +454,12 @@ Bool LogicThread::OverlapWindow::closeOrDrawAgain( Real pictureMS )
 		Bool running;
 		{
 			std::lock_guard<std::mutex> lock( s_lock );
-			running = !s_tickDone;
+			// a tick parked in parkRender waits for this window to close
+			running = !s_tickDone && !s_parkWanted;
 		}
 		// the plan's rule, wait only once the next tick is due, with the next picture's length taken off
 		// so a picture never holds the next tick up; the last picture stands in for the next one
-		if( running && TheGameEngine->msUntilNextTickDue() > pictureMS )
+		if( running && ( TheGameEngine->msUntilNextTickDue() > pictureMS || tickOutlastsNextPicture( pictureMS ) ) )
 		{
 			++s_extraPictures;
 			return TRUE;
@@ -434,9 +525,13 @@ void LogicThread::takeOverlapTimes( Real &tickMS, Real &waitMS )
 //-------------------------------------------------------------------------------------------------
 void LogicThread::init( void )
 {
-	// 0 unless the command line asks otherwise, since v3.3.0's crash reports showed the heap corrupted
-	// by the tick beside the render; -logicthread 1 hands it to its own thread
+	// the command line has the last word.  Off Windows the tick stays on the main thread: a macOS std::thread
+	// has a 512 KB stack, and a tick needs more
+#if defined(_WIN32)
+	char value[ 32 ] = "1";
+#else
 	char value[ 32 ] = "0";
+#endif
 	findEarlyCommandLineValue( L"-logicthread", value, sizeof(value) );
 	if( atoi( value ) == 0 )
 		return;
@@ -450,12 +545,6 @@ void LogicThread::init( void )
 #endif
 	s_thread = new std::thread( threadMain );
 	DEBUG_LOG(( "LOGICTHREAD: the tick runs on its own thread, the main thread waiting for it\n" ));
-}
-
-//-------------------------------------------------------------------------------------------------
-Bool LogicThread::isEnabled( void )
-{
-	return s_enabled;
 }
 
 //-------------------------------------------------------------------------------------------------

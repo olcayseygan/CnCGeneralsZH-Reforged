@@ -542,10 +542,6 @@ Bool GameLODManager::setStaticLODLevel(StaticGameLODLevel level)
 	if (level == STATIC_GAME_LOD_UNKNOWN || (level != STATIC_GAME_LOD_CUSTOM && m_currentStaticLOD == level))
 		return FALSE;	//level is already applied.  Custom levels are always applied since random options could change.
 
-	// the first preset of a run with no quality step saved brings its column's catalog rows with it
-	if (m_currentStaticLOD == STATIC_GAME_LOD_UNKNOWN)
-		applyGraphicsQualityColumnAtStartup(level);
-
 	applyStaticLODLevel(level);
 	m_currentStaticLOD = level;
 

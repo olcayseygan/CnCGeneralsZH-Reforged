@@ -330,6 +330,10 @@ public:
 	// around such a mesh's draws.  A draw it does not suit takes none (Team_Glow).
 	void Set_Team_Glow(bool glow);
 
+	// The Hemispheric Ambient option: lit draws take the scene ambient from the sky above and the ground
+	// below (ffvertex.h, HemiAmbient).  Off under Classic, whose picture is -d3d9's.
+	void Set_Hemi_Ambient(bool hemi);
+
 	// The look the draws that follow are dressed in (a DRAW_EFFECT_* value, ffshader.h) and its
 	// four numbers: wall clock seconds, strength, a per-object seed and the object's opacity.  The
 	// mesh renderer sets it around one object's draws and puts DRAW_EFFECT_NONE back after them.
@@ -375,6 +379,8 @@ public:
 	// haze).  False when Set_Scene_View has not run since Open_Frame, when that projection is not a
 	// perspective one or the matrix has no inverse.
 	bool Scene_World_From_Clip(float world_from_clip[16]) const;
+	// How that projection scales x and y: a world unit at eye distance d is x / d and y / d of half the frame.
+	void Scene_Projection_Scale(float & x, float & y) const { x = SceneProjection[0]; y = SceneProjection[5]; }
 	// The top of a frame, before any scene of it: Scene_World_From_Clip waits for this frame's view.
 	void Open_Frame();
 
@@ -726,6 +732,8 @@ private:
 	// Set_Team_Glow, and whether the current draw takes it.
 	bool TeamGlow;
 	bool Team_Glow() const;
+	// Set_Hemi_Ambient.
+	bool HemiAmbient;
 	// Set_Draw_Effect's look and numbers, and the look the current draw takes after the checks.
 	unsigned DrawEffect;
 	float DrawEffectNumbers[4];

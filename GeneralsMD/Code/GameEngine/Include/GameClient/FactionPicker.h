@@ -50,5 +50,9 @@ void FactionPickerOpenOnStart( Bool custom, const char *side );
 Bool FactionPickerSideTicked( UnsignedInt pool, UnsignedInt side );
 /// a click on a side's tick box: the whole side in, or out when it was all in already
 UnsignedInt FactionPickerToggleSide( UnsignedInt pool, UnsignedInt side );
+/// the army list's bar, in pixels: where the thumb stands below the track's top at a scroll
+Int FactionPickerThumbTop( Int scroll, Int scrollMax, Int track, Int thumb );
+/// the scroll a thumb held at thumbTop means, reaching both ends of the list however it rounds
+Int FactionPickerScrollAtThumb( Int thumbTop, Int scrollMax, Int track, Int thumb );
 
 #endif // _FACTIONPICKER_H_

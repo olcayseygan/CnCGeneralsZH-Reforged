@@ -46,6 +46,7 @@
 #include "strtok_r.h"
 #include "GameClient/Shell.h"
 #include "Common/CRCDebug.h"
+#include "Common/LogicThread.h"
 #include "GameLogic/GameLogic.h"
 
 #include "Common/RandomValue.h"
@@ -62,11 +63,12 @@
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
 
-#if defined(DEBUG_CRC)
-Int NET_CRC_INTERVAL = 1;
-#else
-Int NET_CRC_INTERVAL = 100;
-#endif
+/* How many logic frames apart a network game checks the world CRC; the host's value travels in the
+	 lobby string, so the room runs on the host's.  Release has DEBUG_CRC on, where EA's 1 meant a full
+	 getCRC every frame, about 1.6 ms of a late-game tick.  At 10 a split is still caught within a sixth
+	 of a second, and the 32-slot CRCSnapshotRing then reaches 320 frames back, past any
+	 run-ahead.  -NetCRCInterval 1 for a desync hunt. */
+Int NET_CRC_INTERVAL = 10;
 
 // DEFINES ////////////////////////////////////////////////////////////////////
 
@@ -389,7 +391,9 @@ void Network::setSawCRCMismatch( void )
 	m_sawCRCMismatch = TRUE;
 
 	TheScriptActions->closeWindows( TRUE );
-	m_messageWindow = TheWindowManager->winCreateFromScript("Menus/CRCMismatch.wnd");
+	// the tick calls this, beside the render: the window list is the render's until the flush, which
+	// runs this behind closeWindows' destroy
+	LogicThread::callAfterTick( [this]() { m_messageWindow = TheWindowManager->winCreateFromScript("Menus/CRCMismatch.wnd"); } );
 	TheScriptEngine->startEndGameTimer();
 
 	TheRecorder->logCRCMismatch();

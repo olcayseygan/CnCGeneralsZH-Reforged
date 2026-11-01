@@ -170,7 +170,7 @@ public:
 	UnsignedInt getFrameForClient( void ) const { return m_frameForClient; }	///< the frame the last tick ran, for the client's clock (LogicThread::runTick)
 	UnsignedInt getCRC( Int mode = CRC_CACHED, AsciiString deepCRCFileName = AsciiString::TheEmptyString );		///< Returns the CRC
 
-	void setObjectIDCounter( ObjectID nextObjID ) { m_nextObjID = nextObjID; }
+	void setObjectIDCounter( ObjectID nextObjID ) { m_nextObjID = nextObjID; m_nextObjIDFromSave = nextObjID; }
 	ObjectID getObjectIDCounter( void ) { return m_nextObjID; }
 
 	//-----------------------------------------------------------------------------------------------
@@ -187,6 +187,7 @@ public:
 	Object *findObjectByID( ObjectID id );								///< Given an ObjectID, return a pointer to the object.
  	Object *getFirstObject( void );									///< Returns the "first" object in the world. When used with the object method "getNextObject()", all objects in the world can be iterated.
 	ObjectID allocateObjectID( void );							///< Returns a new unique object id
+	void growObjectLookupForTick( void );						///< LogicThread's sync point: room for the next tick's objects, so it never reallocates the lookup beside the render
 
 	// super hack
 	void startNewGame( Bool loadSaveGame );
@@ -428,6 +429,7 @@ private:
 	ObjectPointerList m_objectsToDestroy;										///< List of things that need to be destroyed at end of frame
 
 	ObjectID m_nextObjID;																		///< For allocating object id's
+	ObjectID m_nextObjIDFromSave;														///< The counter a save held, for loadPostProcess
 
 	void setDefaults( Bool loadSaveGame );									///< Set default values of class object
 	void processDestroyList( void );												///< Destroy all pending objects on the destroy list

@@ -328,6 +328,126 @@ TEST(dx11backend_a_light_is_carried_into_camera_space)
 	backend.Shutdown();
 }
 
+// The Hemispheric Ambient option on a quad lit by the scene ambient alone, whose normal stays (0,0,1)
+// in camera space.  A view with no turn has the world's up at (0,0,1), so the quad faces straight up
+// and takes one plus the spread; turned half way round x, up is (0,0,-1) and the same quad faces
+// straight down.  If the program read the wrong half of MaterialPower the two pixels would come out
+// the same.  Tilted 45 degrees round x with no world, the quad still faces straight up; the view's
+// third column in place of its third row would read it as a wall.  Off, the flat ambient comes back.
+TEST(dx11backend_the_hemispheric_ambient_follows_the_view)
+{
+	DX11DeviceClass device;
+	CHECK(device.Create_Offscreen());
+	ID3D11Device * d3d = device.Get_Device();
+
+	DX11BackendClass backend;
+	CHECK(backend.Initialise(&device));
+
+	D3D11_TEXTURE2D_DESC target_description;
+	memset(&target_description, 0, sizeof(target_description));
+	target_description.Width = TARGET_SIZE;
+	target_description.Height = TARGET_SIZE;
+	target_description.MipLevels = 1;
+	target_description.ArraySize = 1;
+	target_description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	target_description.SampleDesc.Count = 1;
+	target_description.Usage = D3D11_USAGE_DEFAULT;
+	target_description.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+	ID3D11Texture2D * target = NULL;
+	CHECK(SUCCEEDED(d3d->CreateTexture2D(&target_description, NULL, &target)));
+
+	D3D11_TEXTURE2D_DESC staging_description = target_description;
+	staging_description.Usage = D3D11_USAGE_STAGING;
+	staging_description.BindFlags = 0;
+	staging_description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+	ID3D11Texture2D * staging = NULL;
+	CHECK(SUCCEEDED(d3d->CreateTexture2D(&staging_description, NULL, &staging)));
+
+	ID3D11RenderTargetView * target_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateRenderTargetView(target, NULL, &target_view)));
+
+	device.Get_Context()->OMSetRenderTargets(1, &target_view, NULL);
+
+	backend.Set_Viewport(0, 0, TARGET_SIZE, TARGET_SIZE);
+	configure_unlit_pass_through(backend);
+
+	backend.Set_Render_State(D3DRS_LIGHTING, TRUE);
+	backend.Set_Render_State(D3DRS_SPECULARENABLE, FALSE);
+	backend.Set_Render_State(D3DRS_AMBIENTMATERIALSOURCE, D3DMCS_MATERIAL);
+	backend.Set_Render_State(D3DRS_DIFFUSEMATERIALSOURCE, D3DMCS_MATERIAL);
+	backend.Set_Render_State(D3DRS_EMISSIVEMATERIALSOURCE, D3DMCS_MATERIAL);
+	backend.Set_Render_State(D3DRS_AMBIENT, 0x00808080);
+
+	const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	const float black[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	backend.Set_Material(white, black, black, black, 1.0f);
+
+	ID3D11Buffer * vertices = NULL;
+	CHECK(DX11Resource_Create_Vertex_Buffer(d3d, sizeof(QUAD_VERTICES), D3DPOOL_MANAGED, 0,
+		QUAD_VERTICES, &vertices));
+
+	ID3D11Buffer * indices = NULL;
+	CHECK(DX11Resource_Create_Index_Buffer(d3d, sizeof(QUAD_INDICES), D3DPOOL_MANAGED, 0,
+		QUAD_INDICES, &indices));
+
+	backend.Set_Stream_Source(vertices, sizeof(BackendVertex), 0);
+	backend.Set_Indices(indices, DXGI_FORMAT_R16_UINT);
+
+	float identity[16];
+	set_identity(identity);
+	float half_turn[16];		// as the view and as the world that undoes it, so the same quad is drawn
+	set_identity(half_turn);
+	half_turn[5] = -1.0f;
+	half_turn[10] = -1.0f;
+
+	float tilt[16];
+	set_identity(tilt);
+	tilt[5] = 0.70710678f;  tilt[6] = 0.70710678f;
+	tilt[9] = -0.70710678f; tilt[10] = 0.70710678f;
+
+	struct Shot { bool Hemi; const float * View; const float * World; unsigned char Bgr[3]; };
+	Shot shots[4] = {
+		{ false, identity, identity, { 0, 0, 0 } },
+		{ true, identity, identity, { 0, 0, 0 } },
+		{ true, half_turn, half_turn, { 0, 0, 0 } },
+		{ true, tilt, identity, { 0, 0, 0 } }
+	};
+	for (unsigned index = 0; index < 4; ++index) {
+		const float clear_colour[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		device.Get_Context()->ClearRenderTargetView(target_view, clear_colour);
+		backend.Set_Hemi_Ambient(shots[index].Hemi);
+		backend.Set_Transform(D3DTS_VIEW, shots[index].View);
+		backend.Set_Transform(D3DTS_WORLD, shots[index].World);
+		CHECK(backend.Draw_Indexed_Triangles(6, 0, 0));
+		device.Get_Context()->CopyResource(staging, target);
+		D3D11_MAPPED_SUBRESOURCE mapped;
+		CHECK(SUCCEEDED(device.Get_Context()->Map(staging, 0, D3D11_MAP_READ, 0, &mapped)));
+		const unsigned char * centre = static_cast<const unsigned char *>(mapped.pData)
+			+ mapped.RowPitch * (TARGET_SIZE / 2) + (TARGET_SIZE / 2) * 4;
+		memcpy(shots[index].Bgr, centre, 3);
+		device.Get_Context()->Unmap(staging, 0);
+	}
+
+	// 0x80 flat; times 1.4, 1.3, 1.25 facing up and 0.6, 0.7, 0.75 facing down (blue, green, red).
+	CHECK(shots[0].Bgr[0] >= 126 && shots[0].Bgr[0] <= 130);
+	CHECK(shots[1].Bgr[0] >= 177 && shots[1].Bgr[0] <= 181);
+	CHECK(shots[1].Bgr[1] >= 164 && shots[1].Bgr[1] <= 168);
+	CHECK(shots[1].Bgr[2] >= 158 && shots[1].Bgr[2] <= 162);
+	CHECK(shots[2].Bgr[0] >= 75 && shots[2].Bgr[0] <= 79);
+	CHECK(shots[2].Bgr[1] >= 88 && shots[2].Bgr[1] <= 92);
+	CHECK(shots[2].Bgr[2] >= 94 && shots[2].Bgr[2] <= 98);
+	CHECK(shots[3].Bgr[0] >= 177 && shots[3].Bgr[0] <= 181);
+
+	indices->Release();
+	vertices->Release();
+	target_view->Release();
+	staging->Release();
+	target->Release();
+	backend.Shutdown();
+}
+
 // The same state twice is one pipeline, and a changed stage program is a second.  The engine sets
 // the same handful of combinations thousands of times a frame, so a cache that missed would compile
 // a shader per draw and the frame time would be the symptom rather than the picture.

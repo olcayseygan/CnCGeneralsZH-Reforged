@@ -49,6 +49,7 @@
 #include "GameLogic/Weapon.h"
 #include "GameLogic/LogicRandomValue.h"
 #include "GameClient/FXList.h"
+#include "GameClient/GameClient.h"
 #include "GameClient/Statistics.h"		// MuLaw/NormalizeToRange, for the bounce sound volume
 
 const Real DEFAULT_MASS = 1.0f;
@@ -871,6 +872,7 @@ UpdateSleepTime PhysicsBehavior::update()
 	if (getFlag(WAS_AIRBORNE_LAST_FRAME) && !airborneAtEnd && !getFlag(IMMUNE_TO_FALLING_DAMAGE))
 	{
 		doBounceSound(prevPos);
+		TheGameClient->splashInWater(obj->getPosition(), obj->getGeometryInfo().getBoundingCircleRadius());
 
 		// the normal always points straight down, though we could
 		// get the alignWithTerrain() normal if it proves interesting

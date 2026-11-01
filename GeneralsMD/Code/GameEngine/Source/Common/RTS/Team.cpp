@@ -895,6 +895,7 @@ void TeamPrototype::setControllingPlayer(Player *newController)
 		return;
 	}
 
+	Player *oldController = m_owningPlayer;
 	if (m_owningPlayer)
 		m_owningPlayer->removeTeamFromList(this);
 
@@ -904,7 +905,7 @@ void TeamPrototype::setControllingPlayer(Player *newController)
 	m_owningPlayer->addTeamToList(this);
 
 	// every member changed hands without changing team; the partition counts each cell's
-	// objects per player and has to hear of it now
+	// objects per player and has to hear of it now, and so do the players' template counts
 	for (DLINK_ITERATOR<Team> teamIt = iterate_TeamInstanceList(); !teamIt.done(); teamIt.advance())
 	{
 		for (DLINK_ITERATOR<Object> objIt = teamIt.cur()->iterate_TeamMemberList(); !objIt.done(); objIt.advance())
@@ -912,6 +913,9 @@ void TeamPrototype::setControllingPlayer(Player *newController)
 			PartitionData *pd = objIt.cur()->friend_getPartitionData();
 			if (pd)
 				pd->refreshCountedPlayer();
+			if (oldController)
+				oldController->removeTemplateCountMember(objIt.cur());
+			newController->addTemplateCountMember(objIt.cur());
 		}
 	}
 }
@@ -1663,6 +1667,25 @@ static Bool objectKeepsOwnerAlive(const Object *obj)
 }
 
 // ------------------------------------------------------------------------
+Bool Team::countsTowardTemplate(const Object *obj, Bool ignoreDead, Bool ignoreUnderConstruction)
+{
+	if (ignoreDead && (obj->isEffectivelyDead() || obj->isDestroyed()))
+		return false;
+
+	if( ignoreUnderConstruction && obj->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		return false;
+
+	// The plan skip rides on ignoreUnderConstruction rather than running for everyone. A
+	// caller that passes false is asking for sites still being built, and a plan is one of
+	// them. Every caller today takes the default TRUE, and a plan carries UNDER_CONSTRUCTION,
+	// so the check above already drops it; this line states the rule, it changes no count.
+	if (ignoreUnderConstruction && !objectKeepsOwnerAlive(obj))
+		return false;
+
+	return true;
+}
+
+// ------------------------------------------------------------------------
 void Team::countObjectsByThingTemplate(Int numTmplates, const ThingTemplate* const* things, Bool ignoreDead, Int *counts, Bool ignoreUnderConstruction) const
 {
 	for (DLINK_ITERATOR<Object> iter = iterate_TeamMemberList(); !iter.done(); iter.advance())
@@ -1676,17 +1699,7 @@ void Team::countObjectsByThingTemplate(Int numTmplates, const ThingTemplate* con
 				continue;
 			}
 
-			if (ignoreDead && (iter.cur()->isEffectivelyDead() || iter.cur()->isDestroyed()))
-				continue;
-
-			if( ignoreUnderConstruction && iter.cur()->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
-				continue;
-
-			// The plan skip rides on ignoreUnderConstruction rather than running for everyone. A
-			// caller that passes false is asking for sites still being built, and a plan is one of
-			// them. Every caller today takes the default TRUE, and a plan carries UNDER_CONSTRUCTION,
-			// so the check above already drops it; this line states the rule, it changes no count.
-			if (ignoreUnderConstruction && !objectKeepsOwnerAlive(iter.cur()))
+			if (!countsTowardTemplate(iter.cur(), ignoreDead, ignoreUnderConstruction))
 				continue;
 
 			counts[i] += 1;

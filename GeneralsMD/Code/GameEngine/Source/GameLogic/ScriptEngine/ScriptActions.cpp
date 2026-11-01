@@ -38,6 +38,7 @@
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
+#include "Common/INI.h"
 #include "Common/LogicThread.h"
 #include "Common/MapObject.h"							// For MAP_XY_FACTOR
 #include "Common/PartitionSolver.h"
@@ -3297,6 +3298,7 @@ void ScriptActions::doMergeTeamIntoTeam(const AsciiString& teamSrcName, const As
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doDisableInput()
 {
+	TheScriptEngine->setInputHeldByScript( TRUE );
 #if defined(_DEBUG) || defined(_INTERNAL)
 	if (!TheGlobalData->m_disableScriptedInputDisabling)
 #endif
@@ -3322,6 +3324,7 @@ void ScriptActions::doDisableInput()
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doEnableInput()
 {
+	TheScriptEngine->setInputHeldByScript( FALSE );
 	LogicThread::callAfterTick( []{
 		TheInGameUI->setInputEnabled(true);
 		TheMouse->setVisibility(true);
@@ -3408,12 +3411,19 @@ void ScriptActions::doMusicTrackChange(const AsciiString& newTrackName, Bool fad
 		TheAudio->removeAudioEvent(AHSV_StopTheMusic);
 	}
 
-	AudioEventRTS event(newTrackName);
+	// The scripts a human runs are retail's and name retail's tracks; on a mod's faction he hears that
+	// mod's track of the name.  Only this machine's music player reads the answer.
+	const PlayerTemplate *localFaction = ThePlayerList->getLocalPlayer()->getPlayerTemplate();
+	const AsciiString track = localFaction != NULL && localFaction->getModIndex() >= 0
+		? TheModNamespace.modName(localFaction->getModIndex(), MODNAME_AUDIOEVENT, newTrackName) : newTrackName;
+	DEBUG_LOG(("MUSIC track %s\n", track.str()));
+
+	AudioEventRTS event(track);
 	event.setShouldFade(fadein);
 	event.setPlayerIndex(ThePlayerList->getLocalPlayer()->getPlayerIndex());
 	TheAudio->addAudioEvent(&event);
 
-	TheScriptEngine->setCurrentTrackName(newTrackName);
+	TheScriptEngine->setCurrentTrackName(track);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5842,6 +5852,29 @@ void ScriptActions::doTeamUseCommandButtonOnNearestBuildingClass( const AsciiStr
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Whether anyone PartitionFilterPlayerAffiliation(me, ALLOW_ENEMIES | ALLOW_NEUTRAL, true) lets
+	through holds a member equivalent to type: an enemy, a neutral, or me, whose own objects pass that
+	filter as well. Every Object in the partition sits on some player's team, so with no such holder
+	a REALLY_FAR search for the type finds nothing, after walking the whole map to be sure. */
+//-------------------------------------------------------------------------------------------------
+static Bool enemyNeutralOrSelfHolds( const Player *me, const ThingTemplate *type )
+{
+	// with no team-keyed override a relationship to a team depends only on the team's player, and
+	// that player's default team answers for all of its teams (Team::getEnemyPlayerMask)
+	const Bool perTeam = me->hasTeamRelationships();
+	for (Int i = 0; i < ThePlayerList->getPlayerCount(); ++i)
+	{
+		const Player *holder = ThePlayerList->getNthPlayer(i);
+		if (!holder->hasTemplateMember(type))
+			continue;
+		if (perTeam || holder == me || holder->getDefaultTeam()->getControllingPlayer() != holder
+				|| me->getRelationship(holder->getDefaultTeam()) != ALLIES)
+			return true;
+	}
+	return false;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** doTeamUseCommandButtonOnNearestObjectType */
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString& teamName, const AsciiString& commandAbility, const AsciiString& objectType )
@@ -5874,8 +5907,13 @@ void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString
 
 	//First look for a specific object type (object lists will fail)
 	const ThingTemplate *thingTemplate = TheThingFactory->findTemplate( objectType, FALSE );
-	if( thingTemplate ) 
+	if( thingTemplate )
 	{
+		// The Stealth General's GPS Scrambler script asks this for its own Quad Cannon every frame, and
+		// with none on the map the search walked every ring offset of it to come back empty
+		if (!enemyNeutralOrSelfHolds(team->getControllingPlayer(), thingTemplate))
+			return;
+
 		PartitionFilterPlayerAffiliation f1(team->getControllingPlayer(), ALLOW_ENEMIES | ALLOW_NEUTRAL, true);
 		PartitionFilterThing f2(thingTemplate, true);
 		PartitionFilterValidCommandButtonTarget f3(srcObj, commandButton, true, CMD_FROM_SCRIPT);
@@ -5913,6 +5951,10 @@ void ScriptActions::doTeamUseCommandButtonOnNearestObjectType( const AsciiString
 				{
 					PartitionFilterThing f2( thisType, true );
 					PartitionFilter *filters[] = { &f1, &f2, &f3, &f4, 0 };
+
+					// the search walks every ring offset of the map before it gives up on a type
+					if (!enemyNeutralOrSelfHolds(team->getControllingPlayer(), thisType))
+						continue;
 
 					Object *obj = ThePartitionManager->getClosestObject(&pos, REALLY_FAR, FROM_CENTER_2D, filters, &dist );
 					if( obj )
@@ -7149,8 +7191,15 @@ void ScriptActions::executeAction( ScriptAction *pAction )
 			// (LOGIC-THREAD.md hazard 24), which is when the engine next paces anyway
 			const Int asked = pAction->getParameter(0)->getInt();
 			LogicThread::callAfterTick( [asked]{
-				// A match someone plays, or its replay, keeps the speed it started at: normal, or turbo
-				// mode's twice that.  Only the shell map's scripts may still pace themselves.
+				// A mission's cinematic slows the game down, and its voices and music are timed to that speed:
+				// a line the script starts 70 frames after the last one needs the 3 seconds 23 frames a second
+				// gives it.  Skirmish, a network room or a replay keeps the speed it started at: normal, or
+				// turbo mode's twice that.  The shell map's scripts pace themselves as they always did.
+				if (TheGameLogic->isInSinglePlayerGame() && !TheGameLogic->isInReplayGame())
+				{
+					TheGameEngine->setFramesPerSecondLimit( GameEngine_missionFramesPerSecond( asked, GameEngine_matchFramesPerSecond( TheGlobalData->m_turboMode ) ) );
+					return;
+				}
 				if (!TheGameLogic->isInShellGame())
 					return;
 				if (!asked)

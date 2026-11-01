@@ -66,7 +66,9 @@
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/W3DCustomScene.h"
 #include "W3DDevice/GameClient/W3DSmudge.h"
+#include "W3DDevice/GameClient/W3DWater.h"
 #include "GameClient/View.h"
+#include "GameClient/Snow.h"
 #include "GameClient/CommandXlat.h"
 #include "GameClient/Display.h"
 #include "GameClient/Water.h"
@@ -84,14 +86,7 @@
 #include "dx8caps.h"
 #include "Common/GameLOD.h"
 #include "benchmark.h"
-#include "Common/GameEngine.h"
-#include "GameClient/Drawable.h"
-#include "GameClient/GameClient.h"
-#include "W3DDevice/GameClient/W3DSmoothMotion.h"
-#include <algorithm>
-#include <map>
 #include <math.h>
-#include <vector>
 #include <string.h>	// memset, strcpy, strlen
 
 #ifdef _INTERNAL
@@ -316,621 +311,6 @@ static Real protoHazeMiddle(WorldHeightMap *map)
 	return 0.0f;
 }
 
-/* The haze moves.  Its patches drift on a fixed wind (the shader's noise, PROTO_HAZE_WIND and
-	PROTO_HAZE_PATCH), and what goes through it leaves a mark: a field of PROTO_FIELD squared cells
-	over PROTO_FIELD_SPAN world units round the camera's look point (six units a cell, fine enough
-	for a tank's track to read), stepped PROTO_FIELD_RATE times a second, that fades over
-	PROTO_FIELD_LIFE seconds, spreads a little each step and is carried by the same wind.  The field
-	follows the camera a whole cell at a time, so what is on screen keeps its marks and what scrolls
-	out is dropped.  Vehicles on the ground rub a strip along their track.  Aircraft over the haze
-	and within PROTO_STIR_AIR_BAND above its top (a jet at cruise height over a valley too, a licence
-	taken for the look) leave wakes instead, below: the haze opens behind them as a wave.  Only what the
-	local player can see stamps: a unit under the shroud, hidden or stealthed out of sight leaves
-	nothing, or the haze would give it away.  Read from the drawables only (where they are drawn,
-	what kind of thing they are), never from the logic, and it costs the logic nothing.  Everything
-	runs on the game's clock (the picture clock under -video), so a pause stops the wind and the
-	marks with the units. */
-static const Int PROTO_FIELD = (Int)DX11_POST_HAZE_FIELD_SIZE;
-static const Real PROTO_FIELD_SPAN = 1536.0f;			// world units the field covers each way
-static const Real PROTO_HAZE_WIND[2] = { 11.0f, 4.0f };	// world units a second
-static const Real PROTO_HAZE_PATCH = 1.0f / 320.0f;	// one over a patch's size
-static const Real PROTO_HAZE_STIR = 0.85f;				// share of the haze a full mark takes away
-static const Real PROTO_HAZE_SUN_WARMTH = 1.0f;		// how much warmer it looks toward the sun
-static const Real PROTO_FIELD_RATE = 30.0f;			// field steps a second
-static const Real PROTO_FIELD_LIFE = 1.6f;				// seconds for a mark to fall to a third (a disc left behind is gone in about three)
-static const Real PROTO_FIELD_SPREAD = 0.10f;			// share of a cell's neighbours it takes each step
-static const Real PROTO_STIR_VEHICLE_RADIUS = 16.0f;
-static const Real PROTO_STIR_VEHICLE_RATE = 6.0f;		// field a second, at full speed
-static const Real PROTO_STIR_VEHICLE_SPEED = 30.0f;	// full speed, world units a second
-static const Real PROTO_STIR_VEHICLE_HEIGHT = 20.0f;	// higher off the ground than this stirs nothing
-static const Real PROTO_STIR_AIR_BAND = 400.0f;		// an aircraft this far over the haze's top stirs nothing
-
-static Real s_hazeField[2][PROTO_FIELD * PROTO_FIELD];
-static Int s_hazeFieldCurrent = 0;
-static unsigned char s_hazeFieldBytes[PROTO_FIELD * PROTO_FIELD];
-static WorldHeightMap *s_hazeFieldMap = NULL;
-static Int s_hazeFieldCellX = 0;	// the field's origin, in whole cells of the world
-static Int s_hazeFieldCellY = 0;
-/* Aircraft wakes.  Each aircraft over the haze keeps a trail of where it was, a point every
-	PROTO_TRAIL_EVERY seconds for the last PROTO_WAKE_LIFE, and every frame the shader gets the path
-	from the aircraft (moved on from the last step by its speed) back along that trail as segments.
-	Behind it the haze parts in a narrow V, PROTO_WAKE_ANGLE_SLOW degrees each side of the path for
-	a slow flyer down to PROTO_WAKE_ANGLE_FAST at PROTO_WAKE_FAST world units a second, a vortex
-	PROTO_WAKE_VORTEX across rolling along each arm, as long as the path it flew in PROTO_WAKE_LIFE.
-	One whose trail took it less than PROTO_WAKE_HOVER_SPEED a second over the last
-	PROTO_WAKE_HOVER_SPAN or more hovers: its rotor wash pushes two rings of turbulence out from it,
-	PROTO_RIPPLE_REACH far every PROTO_RIPPLE_PERIOD seconds, half a period apart.
-	The wake comes out straight under the aircraft, the haze being on the ground.  Its height over the
-	haze's top sets it: skimming the haze the wake is narrow, sharp and strong; climbing, the V and the
-	rings open wider (PROTO_WAKE_HIGH_WIDEN more at the band's top, in a straight line), the shader
-	softens it and the strength falls on a smoothstep to nothing at PROTO_STIR_AIR_BAND. */
-static const Int PROTO_TRAIL_POINTS = 14;
-static const Real PROTO_TRAIL_EVERY = 0.2f;
-static const Real PROTO_WAKE_LIFE = 2.8f;
-static const Real PROTO_WAKE_ANGLE_SLOW = 18.0f;
-static const Real PROTO_WAKE_ANGLE_FAST = 10.0f;
-static const Real PROTO_WAKE_FAST = 250.0f;
-static const Real PROTO_WAKE_VORTEX = 7.0f;
-static const Real PROTO_WAKE_OPEN_SOFT = 12.0f;
-static const Real PROTO_WAKE_HOVER_SPEED = 15.0f;
-static const Real PROTO_WAKE_HOVER_SPAN = 0.6f;
-static const Real PROTO_WAKE_LANDED_HEIGHT = 10.0f;	// lower over the ground than this is landed, no wake
-static const Real PROTO_WAKE_HIGH_WIDEN = 2.0f;		// how much wider than a skimming wake one at the band's top is
-static const Real PROTO_RIPPLE_REACH = 70.0f;
-static const Real PROTO_RIPPLE_PERIOD = 1.4f;
-
-/** A trail point: where the aircraft was (the wake lies straight under it), the clock it was there
-	at, and the wake's strength and width for its height then.  Fixed once laid, so a turn, a climb or
-	the camera moving after it moves only the newest end. */
-enum { PROTO_POINT_X, PROTO_POINT_Y, PROTO_POINT_AT, PROTO_POINT_STRENGTH, PROTO_POINT_WIDTH, PROTO_POINT_FIELDS };
-
-/** Where a stirring drawable was at the last step, its speed then, and for an aircraft the wake it
-	is laying now (strength, 0 for none, and width) and its trail, newest first.  Kept from step to
-	step in place, so a step allocates only for a drawable it has not seen before; step says which
-	step last saw it.  An aircraft that stops laying (out of the haze's band, landed, fogged, hidden,
-	gone) keeps its entry while the trail it laid lives, and the trail fades out where it lies. */
-struct ProtoHazeSeen
-{
-	Coord3D pos;
-	Real velX;
-	Real velY;
-	Real seenAt;
-	UnsignedInt frame;	// the logic frame pos is from
-	Real wake;
-	Real wakeWidth;
-	Real trail[PROTO_TRAIL_POINTS][PROTO_POINT_FIELDS];
-	Int trailCount;
-	Int step;
-};
-
-/** The wake an aircraft this far over the haze's top lays: full strength and its narrowest at the
-	top or under it, nothing at PROTO_STIR_AIR_BAND. */
-static Real protoWakeStrength(Real over)
-{
-	const Real high = min(max(over / PROTO_STIR_AIR_BAND, 0.0f), 1.0f);
-	return 1.0f - high * high * (3.0f - 2.0f * high);
-}
-
-static Real protoWakeWidth(Real over)
-{
-	return 1.0f + PROTO_WAKE_HIGH_WIDEN * min(max(over / PROTO_STIR_AIR_BAND, 0.0f), 1.0f);
-}
-
-static std::map<DrawableID, ProtoHazeSeen> s_hazeLastSeen;
-static Int s_hazeStepNumber = 0;
-static Real s_hazeLastClock = -1.0f;
-static Real s_hazeClockLead = 0.0f;	// how far the clock is past the logic frame the drawables stand on, in seconds
-static Real s_hazeSeconds = 0.0f;
-static Real s_hazeStepDue = 0.0f;
-
-/** The points of a trail still inside the wake's life, moved to start at kept; the new count.  The
-	two may be one trail, kept no further on than the point read. */
-static Int keepProtoTrail(const Real (*from)[PROTO_POINT_FIELDS], Int count, Real (*to)[PROTO_POINT_FIELDS], Int kept)
-{
-	for (Int index = 0; index < count && kept < PROTO_TRAIL_POINTS; ++index)
-	{
-		const Real age = s_hazeSeconds - from[index][PROTO_POINT_AT];
-		if (age < 0.0f || age > PROTO_WAKE_LIFE)
-			break;
-		memmove(to[kept], from[index], sizeof(to[kept]));
-		++kept;
-	}
-	return kept;
-}
-
-/** A new newest point for an aircraft at x, y laying a wake of this strength and width. */
-static void pushProtoTrail(ProtoHazeSeen &entry, Real x, Real y, Real strength, Real width)
-{
-	Real older[PROTO_TRAIL_POINTS][PROTO_POINT_FIELDS];
-	memcpy(older, entry.trail, sizeof(older));
-	entry.trailCount = keepProtoTrail(older, entry.trailCount, entry.trail, 1);
-	entry.trail[0][PROTO_POINT_X] = x;
-	entry.trail[0][PROTO_POINT_Y] = y;
-	entry.trail[0][PROTO_POINT_AT] = s_hazeSeconds;
-	entry.trail[0][PROTO_POINT_STRENGTH] = strength;
-	entry.trail[0][PROTO_POINT_WIDTH] = width;
-}
-
-/** The game's time in seconds as the picture shows it: the logic frame and how far into the next
-	one the blend is, or the picture's own time while -video records. */
-static Real protoHazeClock(void)
-{
-	if (GameEngine_isVideoFrame())
-		return (Real)GameEngine_pictureMilliseconds() * 0.001f;
-	return ((Real)TheGameClient->getFrame() + GameEngine_logicTickFraction()) / (Real)LOGICFRAMES_PER_SECOND;
-}
-
-/** A rectangle of field cells, both ends inside; empty when x1 < x0. */
-struct ProtoFieldRect
-{
-	Int x0, y0, x1, y1;
-	Bool isEmpty(void) const { return x1 < x0 || y1 < y0; }
-	void clear(void) { x0 = y0 = PROTO_FIELD; x1 = y1 = -1; }
-	void add(Int ax0, Int ay0, Int ax1, Int ay1)
-	{
-		x0 = min(x0, ax0); y0 = min(y0, ay0); x1 = max(x1, ax1); y1 = max(y1, ay1);
-	}
-};
-
-/** Adds amount to the field in a soft disc of the given world radius about a world point, and
-	grows marked to cover it. */
-static void stampProtoHaze(Real *field, ProtoFieldRect &marked, Real cellsPerUnitX, Real cellsPerUnitY,
-	Real originX, Real originY, Real x, Real y, Real radius, Real amount)
-{
-	const Real cx = (x - originX) * cellsPerUnitX;
-	const Real cy = (y - originY) * cellsPerUnitY;
-	const Real rx = radius * cellsPerUnitX;
-	const Real ry = radius * cellsPerUnitY;
-	// off the field's outer ring of cells, which stepProtoHaze's loop reads as clear neighbours only
-	const Int x0 = max((Int)(cx - rx), 1);
-	const Int x1 = min((Int)(cx + rx) + 1, PROTO_FIELD - 2);
-	const Int y0 = max((Int)(cy - ry), 1);
-	const Int y1 = min((Int)(cy + ry) + 1, PROTO_FIELD - 2);
-	for (Int j = y0; j <= y1; ++j)
-	{
-		for (Int i = x0; i <= x1; ++i)
-		{
-			const Real dx = ((Real)i + 0.5f - cx) / rx;
-			const Real dy = ((Real)j + 0.5f - cy) / ry;
-			const Real fall = 1.0f - (dx * dx + dy * dy);
-			if (fall <= 0.0f)
-				continue;
-			Real &cell = field[i + j * PROTO_FIELD];
-			cell = min(cell + amount * fall, 1.0f);
-		}
-	}
-	if (x0 <= x1 && y0 <= y1)
-		marked.add(x0, y0, x1, y1);
-}
-
-// The cells holding a mark, and the cells whose byte may not be zero.  A step works over the first
-// and one cell round it only (the spread and the drift reach no further), so a quiet field costs
-// nothing and a battle costs its own corner of it.  The buffer a step writes into is clear all over
-// before it starts: each step clears the cells it read once it is done with them.
-static ProtoFieldRect s_hazeActive = { PROTO_FIELD, PROTO_FIELD, -1, -1 };
-static ProtoFieldRect s_hazeWritten = { PROTO_FIELD, PROTO_FIELD, -1, -1 };
-
-/** Moves the marks by whole cells as the field follows the camera: the cell (x, y) takes what was at
-	(x + moveX, y + moveY), and what had no cell to come from starts clear. */
-static void shiftProtoHaze(Int moveX, Int moveY)
-{
-	if (s_hazeActive.isEmpty())
-		return;
-	Real *field = s_hazeField[s_hazeFieldCurrent];
-	Real *spare = s_hazeField[1 - s_hazeFieldCurrent];
-	const ProtoFieldRect old = s_hazeActive;
-	s_hazeActive.x0 = max(old.x0 - moveX, 1);
-	s_hazeActive.x1 = min(old.x1 - moveX, PROTO_FIELD - 2);
-	s_hazeActive.y0 = max(old.y0 - moveY, 1);
-	s_hazeActive.y1 = min(old.y1 - moveY, PROTO_FIELD - 2);
-	if (!s_hazeActive.isEmpty())
-	{
-		for (Int y = s_hazeActive.y0; y <= s_hazeActive.y1; ++y)
-			memcpy(spare + s_hazeActive.x0 + y * PROTO_FIELD, field + (s_hazeActive.x0 + moveX) + (y + moveY) * PROTO_FIELD,
-				(s_hazeActive.x1 - s_hazeActive.x0 + 1) * sizeof(Real));
-	}
-	else
-	{
-		s_hazeActive.clear();
-	}
-	for (Int y = old.y0; y <= old.y1; ++y)
-		memset(field + old.x0 + y * PROTO_FIELD, 0, (old.x1 - old.x0 + 1) * sizeof(Real));
-	s_hazeFieldCurrent = 1 - s_hazeFieldCurrent;
-}
-
-/** One field step: follow the camera, fade, drift on the wind and spread, then what moved since the
-	last step. */
-static void stepProtoHaze(Real top, Real dt)
-{
-	WorldHeightMap *map = TheTerrainRenderObject->getMap();
-	if (map != s_hazeFieldMap)
-	{
-		s_hazeFieldMap = map;
-		memset(s_hazeField, 0, sizeof(s_hazeField));
-		memset(s_hazeFieldBytes, 0, sizeof(s_hazeFieldBytes));
-		s_hazeActive.clear();
-		s_hazeWritten.clear();
-		s_hazeLastSeen.clear();
-		DX11Post_Set_Haze_Field(s_hazeFieldBytes);
-	}
-	const Real cellSize = PROTO_FIELD_SPAN / (Real)PROTO_FIELD;
-	const Real cellsPerUnitX = 1.0f / cellSize;
-	const Real cellsPerUnitY = cellsPerUnitX;
-	Coord3D look;
-	TheTacticalView->getPosition(&look);
-	const Int cellX = (Int)floor(look.x / cellSize) - PROTO_FIELD / 2;
-	const Int cellY = (Int)floor(look.y / cellSize) - PROTO_FIELD / 2;
-	const Int moveCellsX = cellX - s_hazeFieldCellX;
-	const Int moveCellsY = cellY - s_hazeFieldCellY;
-	s_hazeFieldCellX = cellX;
-	s_hazeFieldCellY = cellY;
-	if (moveCellsX != 0 || moveCellsY != 0)
-		shiftProtoHaze(moveCellsX, moveCellsY);
-	const Real originX = (Real)cellX * cellSize;
-	const Real originY = (Real)cellY * cellSize;
-
-	const Real *from = s_hazeField[s_hazeFieldCurrent];
-	Real *to = s_hazeField[1 - s_hazeFieldCurrent];
-	const Real keep = (Real)exp(-dt / PROTO_FIELD_LIFE);
-	// the wind moves a mark well under a cell a step, so a bilinear read that far upwind is the drift
-	const Real shiftX = PROTO_HAZE_WIND[0] * dt * cellsPerUnitX;
-	const Real shiftY = PROTO_HAZE_WIND[1] * dt * cellsPerUnitY;
-	const Int stepX = (shiftX >= 0.0f) ? -1 : 1;
-	const Int stepY = (shiftY >= 0.0f) ? -1 : 1;
-	const Real fx = (Real)fabs(shiftX);
-	const Real fy = (Real)fabs(shiftY);
-	const Real w00 = keep * (1.0f - PROTO_FIELD_SPREAD) * (1.0f - fx) * (1.0f - fy);
-	const Real w10 = keep * (1.0f - PROTO_FIELD_SPREAD) * fx * (1.0f - fy);
-	const Real w01 = keep * (1.0f - PROTO_FIELD_SPREAD) * (1.0f - fx) * fy;
-	const Real w11 = keep * (1.0f - PROTO_FIELD_SPREAD) * fx * fy;
-	const Real wAround = keep * PROTO_FIELD_SPREAD * 0.25f;
-
-	// the marks, one cell wider; everything outside is clear in both buffers
-	ProtoFieldRect work;
-	work.clear();
-	if (!s_hazeActive.isEmpty())
-		work.add(max(s_hazeActive.x0 - 1, 1), max(s_hazeActive.y0 - 1, 1),
-			min(s_hazeActive.x1 + 1, PROTO_FIELD - 2), min(s_hazeActive.y1 + 1, PROTO_FIELD - 2));
-	ProtoFieldRect live;
-	live.clear();
-	// No mark ever lies on the field's outer ring of cells (the stamps and the shift keep off it), so
-	// every cell worked on has its four neighbours inside and the loop needs no clamping.
-	for (Int j = work.y0; j <= work.y1; ++j)
-	{
-		const Real *row = from + j * PROTO_FIELD;
-		const Real *rowUp = row - PROTO_FIELD;
-		const Real *rowDown = row + PROTO_FIELD;
-		const Real *rowWind = row + stepY * PROTO_FIELD;
-		Real *out = to + j * PROTO_FIELD;
-		Int rowLow = PROTO_FIELD;
-		Int rowHigh = -1;
-		for (Int i = work.x0; i <= work.x1; ++i)
-		{
-			Real value = w00 * row[i] + w10 * row[i + stepX] + w01 * rowWind[i] + w11 * rowWind[i + stepX]
-				+ wAround * (row[i - 1] + row[i + 1] + rowUp[i] + rowDown[i]);
-			// a mark faded under a byte's half step is gone, so the field goes quiet again
-			if (value < 0.002f)
-			{
-				value = 0.0f;
-			}
-			else
-			{
-				if (i < rowLow)
-					rowLow = i;
-				rowHigh = i;
-			}
-			out[i] = value;
-		}
-		if (rowHigh >= 0)
-			live.add(rowLow, j, rowHigh, j);
-	}
-	// the buffer read is the next step's to write into, so it goes back to clear
-	if (!s_hazeActive.isEmpty())
-	{
-		for (Int j = s_hazeActive.y0; j <= s_hazeActive.y1; ++j)
-			memset((Real *)from + s_hazeActive.x0 + j * PROTO_FIELD, 0, (s_hazeActive.x1 - s_hazeActive.x0 + 1) * sizeof(Real));
-	}
-	s_hazeFieldCurrent = 1 - s_hazeFieldCurrent;
-
-	++s_hazeStepNumber;
-	for (Drawable *draw = TheGameClient->firstDrawable(); draw != NULL; draw = draw->getNextDrawable())
-	{
-		const Bool air = draw->isKindOf(KINDOF_AIRCRAFT);
-		if (!air && !draw->isKindOf(KINDOF_VEHICLE))
-			continue;
-		if (draw->getFullyObscuredByShroud() || draw->isDrawableEffectivelyHidden()
-			|| draw->getStealthLook() == STEALTHLOOK_INVISIBLE)
-			continue;
-		const Coord3D pos = *draw->getPosition();
-		std::map<DrawableID, ProtoHazeSeen>::iterator found = s_hazeLastSeen.find(draw->getID());
-		const Bool fresh = found == s_hazeLastSeen.end();
-		ProtoHazeSeen &now = fresh ? s_hazeLastSeen[draw->getID()] : found->second;
-		// what the last step saw, before this one writes over it
-		const ProtoHazeSeen before = now;
-		now.pos = pos;
-		now.velX = 0.0f;
-		now.velY = 0.0f;
-		// pos is where the drawable stood at the start of its logic frame, not at the clock's fraction
-		// of the way into the next one
-		now.seenAt = s_hazeSeconds - s_hazeClockLead;
-		now.frame = TheGameClient->getFrame();
-		now.wake = 0.0f;
-		now.trailCount = fresh ? 0 : keepProtoTrail(before.trail, before.trailCount, now.trail, 0);
-		now.step = s_hazeStepNumber;
-		// one the last step did not see (new, or back from the fog) starts its motion over; a trail
-		// it laid before going keeps fading where it lies
-		if (fresh || before.step != s_hazeStepNumber - 1)
-			continue;
-		const Real moveX = pos.x - before.pos.x;
-		const Real moveY = pos.y - before.pos.y;
-		const Real moved = (Real)sqrt(moveX * moveX + moveY * moveY);
-		const Real speed = moved / dt;
-
-		if (air)
-		{
-			/* The speed is the move over the logic frames it took. Over the step's time it came out 126 to
-				 239 a second for a Raptor holding 170: the position moves a whole frame at a time and the
-				 step falls anywhere inside one, and the wake's length and opening follow the speed, so the
-				 whole wake pulsed thirty times a second. */
-			const UnsignedInt frames = now.frame - before.frame;
-			now.velX = (frames > 0) ? moveX * LOGICFRAMES_PER_SECOND / (Real)frames : before.velX;
-			now.velY = (frames > 0) ? moveY * LOGICFRAMES_PER_SECOND / (Real)frames : before.velY;
-			const Real ground = TheTerrainRenderObject->getHeightMapHeight(pos.x, pos.y, NULL);
-			const Real over = pos.z - top;
-			// one parked on a runway or a pad is no wake; a base's planes took every slot
-			if (ground <= top && over < PROTO_STIR_AIR_BAND && pos.z - ground >= PROTO_WAKE_LANDED_HEIGHT)
-			{
-				now.wake = protoWakeStrength(over);
-				now.wakeWidth = protoWakeWidth(over);
-			}
-			// the trail: the last one's points still inside the wake's life, and this one in front
-			// once the newest is old enough, while it lays a wake; one that just stopped lays a last
-			// point where it stopped, so the end that was following it stays there
-			if (now.wake > 0.0f)
-			{
-				if (now.trailCount == 0 || s_hazeSeconds - now.trail[0][PROTO_POINT_AT] >= PROTO_TRAIL_EVERY
-						|| s_hazeSeconds < now.trail[0][PROTO_POINT_AT])
-					pushProtoTrail(now, pos.x, pos.y, now.wake, now.wakeWidth);
-			}
-			else if (before.wake > 0.0f)
-			{
-				pushProtoTrail(now, pos.x, pos.y, before.wake, before.wakeWidth);
-			}
-			continue;
-		}
-		const Real ground = TheTerrainRenderObject->getHeightMapHeight(pos.x, pos.y, NULL);
-		if (ground > top)
-			continue;
-		if (pos.z - ground >= PROTO_STIR_VEHICLE_HEIGHT)
-			continue;
-		const Real radius = PROTO_STIR_VEHICLE_RADIUS;
-		const Real rate = PROTO_STIR_VEHICLE_RATE * min(speed / PROTO_STIR_VEHICLE_SPEED, 1.0f);
-		if (rate <= 0.0f)
-			continue;
-		// along the stretch moved since the last step, so a quick one leaves a strip and not beads
-		const Int dabs = min(max((Int)(moved / (radius * 0.5f)) + 1, 1), 8);
-		for (Int dab = 0; dab < dabs; ++dab)
-		{
-			const Real along = ((Real)dab + 1.0f) / (Real)dabs;
-			stampProtoHaze(to, live, cellsPerUnitX, cellsPerUnitY, originX, originY,
-				before.pos.x + moveX * along, before.pos.y + moveY * along, radius, rate * dt / (Real)dabs);
-		}
-	}
-	// what this step did not see (fogged, hidden, gone) lays nothing, and is forgotten once the wake
-	// it laid has faded
-	for (std::map<DrawableID, ProtoHazeSeen>::iterator it = s_hazeLastSeen.begin(); it != s_hazeLastSeen.end(); )
-	{
-		ProtoHazeSeen &gone = it->second;
-		if (gone.step != s_hazeStepNumber)
-		{
-			// the last place it was laying from, as for one that stopped in sight
-			if (gone.wake > 0.0f)
-				pushProtoTrail(gone, gone.pos.x, gone.pos.y, gone.wake, gone.wakeWidth);
-			gone.wake = 0.0f;
-			gone.velX = 0.0f;
-			gone.velY = 0.0f;
-			gone.trailCount = keepProtoTrail(gone.trail, gone.trailCount, gone.trail, 0);
-			if (gone.trailCount == 0)
-			{
-				s_hazeLastSeen.erase(it++);
-				continue;
-			}
-		}
-		++it;
-	}
-
-	// the bytes that were not zero and the ones that may not be now; nothing to send when both are
-	// empty, which is a field with nothing going on
-	ProtoFieldRect bytes = s_hazeWritten;
-	if (!live.isEmpty())
-		bytes.add(live.x0, live.y0, live.x1, live.y1);
-	if (!bytes.isEmpty())
-	{
-		for (Int j = bytes.y0; j <= bytes.y1; ++j)
-		{
-			const Real *in = to + j * PROTO_FIELD;
-			unsigned char *out = s_hazeFieldBytes + j * PROTO_FIELD;
-			for (Int i = bytes.x0; i <= bytes.x1; ++i)
-				out[i] = (unsigned char)(in[i] * 255.0f + 0.5f);
-		}
-		DX11Post_Set_Haze_Field(s_hazeFieldBytes);
-	}
-	s_hazeActive = live;
-	s_hazeWritten = live;
-}
-
-/** The haze's motion for this frame, and a field step when one is due. */
-static void stirProtoHaze(Real top)
-{
-	const Real now = protoHazeClock();
-	Real elapsed = now - s_hazeLastClock;
-	s_hazeLastClock = now;
-	// a blended picture's clock counts from the logic's frame, one past the client's between ticks,
-	// and the aircraft is drawn up to a frame behind its position
-	const UnsignedInt standsOn = TheGameClient->getFrame() + (TheSmoothMotionActive ? 1 : 0);
-	s_hazeClockLead = now - (Real)standsOn / (Real)LOGICFRAMES_PER_SECOND;
-	// the first frame, a new match (the clock starts again) or a long hitch moves nothing; a pause
-	// is no time at all
-	if (elapsed < 0.0f || elapsed > 0.25f)
-		elapsed = 0.0f;
-	s_hazeSeconds += elapsed;
-	// the drift wraps well before the noise's hash runs out of float precision
-	// the times kept against it go back with it, or every wake's points read as laid in the future
-	// and the wakes all vanished at the wrap
-	if (s_hazeSeconds > 4000.0f)
-	{
-		s_hazeSeconds -= 4000.0f;
-		for (std::map<DrawableID, ProtoHazeSeen>::iterator it = s_hazeLastSeen.begin(); it != s_hazeLastSeen.end(); ++it)
-		{
-			it->second.seenAt -= 4000.0f;
-			for (Int index = 0; index < it->second.trailCount; ++index)
-				it->second.trail[index][PROTO_POINT_AT] -= 4000.0f;
-		}
-	}
-	s_hazeStepDue += elapsed;
-	if (s_hazeStepDue >= 1.0f / PROTO_FIELD_RATE)
-	{
-		stepProtoHaze(top, s_hazeStepDue);
-		s_hazeStepDue = 0.0f;
-	}
-
-	const Real cellSize = PROTO_FIELD_SPAN / (Real)PROTO_FIELD;
-	const float rect[4] = { (Real)s_hazeFieldCellX * cellSize, (Real)s_hazeFieldCellY * cellSize,
-		1.0f / PROTO_FIELD_SPAN, 1.0f / PROTO_FIELD_SPAN };
-
-	const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainObjectsLighting[TheGlobalData->m_timeOfDay][0];
-	const Real length = (Real)sqrt(sun.lightPos.x * sun.lightPos.x + sun.lightPos.y * sun.lightPos.y
-		+ sun.lightPos.z * sun.lightPos.z);
-	const float towardSun[3] = { -sun.lightPos.x / length, -sun.lightPos.y / length, -sun.lightPos.z / length };
-	const Real daylight = (0.299f * sun.diffuse.red + 0.587f * sun.diffuse.green + 0.114f * sun.diffuse.blue - 0.25f) / 0.5f;
-	const Real warmth = PROTO_HAZE_SUN_WARMTH * max(min(daylight, 1.0f), 0.0f);
-
-	DX11Post_Set_Haze_Motion(rect, PROTO_HAZE_WIND[0] * s_hazeSeconds, PROTO_HAZE_WIND[1] * s_hazeSeconds,
-		PROTO_HAZE_PATCH, PROTO_HAZE_STIR, towardSun, warmth);
-
-	// each aircraft's wake: from where it is now (the last step's place moved on by its speed) back
-	// along its trail, or two rings round it while it hovers; nearest the camera first, so the
-	// segments run out on the aircraft furthest away
-	float wakes[DX11_POST_HAZE_WAKE_LIMIT][8];
-	unsigned wakeCount = 0;
-	Coord3D look;
-	TheTacticalView->getPosition(&look);
-	// kept between frames, so a frame allocates nothing once it has held the most flyers
-	static std::vector<std::pair<Real, const ProtoHazeSeen *> > flyers;
-	flyers.clear();
-	for (std::map<DrawableID, ProtoHazeSeen>::const_iterator it = s_hazeLastSeen.begin(); it != s_hazeLastSeen.end(); ++it)
-	{
-		if (it->second.trailCount == 0)
-			continue;
-		const Real offX = it->second.pos.x - look.x;
-		const Real offY = it->second.pos.y - look.y;
-		flyers.push_back(std::make_pair(offX * offX + offY * offY, &it->second));
-	}
-	std::sort(flyers.begin(), flyers.end());
-	for (size_t order = 0; order < flyers.size() && wakeCount < DX11_POST_HAZE_WAKE_LIMIT; ++order)
-	{
-		const ProtoHazeSeen &flyer = *flyers[order].second;
-		// Laying a wake now, the newest end is the aircraft itself; stopped (out of the band, landed,
-		// fogged, gone), the wake keeps its last point as its newest end and fades out from there by
-		// the time since that point was laid, wherever the aircraft went.
-		const Bool laying = flyer.wake > 0.0f;
-		const Real *newest = flyer.trail[0];
-		const Real newestAge = max(s_hazeSeconds - newest[PROTO_POINT_AT], 0.0f);
-		const Real strength = laying ? flyer.wake : newest[PROTO_POINT_STRENGTH];
-		const Real width = laying ? flyer.wakeWidth : newest[PROTO_POINT_WIDTH];
-		// up to a frame behind the step's under -video, whose pictures fall between two logic frames
-		const Real since = min(max(s_hazeSeconds - flyer.seenAt, -1.0f / (Real)LOGICFRAMES_PER_SECOND), 0.1f);
-		// straight under the aircraft (the last step's place moved on by its speed), the haze being
-		// on the ground; every trail point keeps the place it was laid at, so the wake stays where it
-		// was left and the aircraft moves on
-		const Real tipX = laying ? flyer.pos.x + flyer.velX * since : newest[PROTO_POINT_X];
-		const Real tipY = laying ? flyer.pos.y + flyer.velY * since : newest[PROTO_POINT_Y];
-		const Real speed = (Real)sqrt(flyer.velX * flyer.velX + flyer.velY * flyer.velY);
-		// Hovering goes by how far it got over the whole trail, not by the last step: a hovering
-		// helicopter sways and slides, and stepped it reads faster than the hover speed while going
-		// nowhere, which drew a wedge folded up under itself and no rings.
-		Real travel = speed;
-		if (flyer.trailCount > 0)
-		{
-			const Real *oldest = flyer.trail[flyer.trailCount - 1];
-			const Real age = s_hazeSeconds - oldest[PROTO_POINT_AT];
-			const Real awayX = flyer.pos.x - oldest[PROTO_POINT_X];
-			const Real awayY = flyer.pos.y - oldest[PROTO_POINT_Y];
-			if (age >= PROTO_WAKE_HOVER_SPAN)
-				travel = (Real)sqrt(awayX * awayX + awayY * awayY) / age;
-		}
-		if (travel < PROTO_WAKE_HOVER_SPEED)
-		{
-			// left behind, the rings die down over the wake's life where it hovered last
-			const Real left = laying ? 1.0f : max(1.0f - newestAge / PROTO_WAKE_LIFE, 0.0f);
-			for (Int ripple = 0; ripple < 2 && wakeCount < DX11_POST_HAZE_WAKE_LIMIT && left > 0.0f; ++ripple)
-			{
-				Real phase = s_hazeSeconds / PROTO_RIPPLE_PERIOD + 0.5f * (Real)ripple;
-				phase -= (Real)floor(phase);
-				float *wake = wakes[wakeCount++];
-				wake[0] = wake[2] = tipX;
-				wake[1] = wake[3] = tipY;
-				wake[4] = phase * PROTO_RIPPLE_REACH * width;
-				wake[5] = -1.0f;
-				wake[6] = strength * left;
-				wake[7] = phase;
-			}
-			continue;
-		}
-		// a narrow V, narrower the faster it flies
-		const Real quick = min(max((speed - PROTO_WAKE_HOVER_SPEED) / (PROTO_WAKE_FAST - PROTO_WAKE_HOVER_SPEED), 0.0f), 1.0f);
-		const Real tangent = (Real)tan((PROTO_WAKE_ANGLE_SLOW + (PROTO_WAKE_ANGLE_FAST - PROTO_WAKE_ANGLE_SLOW) * quick) * PI / 180.0f);
-		// the trail's travel can call it flying on a step it stood still
-		Real perLength = 1.0f / (max(speed, PROTO_WAKE_HOVER_SPEED) * PROTO_WAKE_LIFE);
-		Real nearX = tipX;
-		Real nearY = tipY;
-		// Left behind, the newest end is already as old as its point: the shader's age runs on the
-		// distance behind the newest end, so the time since then goes in as a distance in front.
-		const Real lead = laying ? 0.0f : newestAge / (PROTO_WAKE_LIFE * perLength);
-		Real behind = lead;
-		const unsigned firstWake = wakeCount;
-		for (Int index = laying ? 0 : 1; index < flyer.trailCount && wakeCount < DX11_POST_HAZE_WAKE_LIMIT; ++index)
-		{
-			const Real farX = flyer.trail[index][PROTO_POINT_X];
-			const Real farY = flyer.trail[index][PROTO_POINT_Y];
-			const Real length = (Real)sqrt((farX - nearX) * (farX - nearX) + (farY - nearY) * (farY - nearY));
-			if (length < 1.0f)
-				continue;
-			float *wake = wakes[wakeCount++];
-			wake[0] = farX;
-			wake[1] = farY;
-			wake[2] = nearX;
-			wake[3] = nearY;
-			wake[4] = behind;
-			// as wide and as strong as the height it was laid at
-			wake[5] = tangent * flyer.trail[index][PROTO_POINT_WIDTH];
-			wake[6] = flyer.trail[index][PROTO_POINT_STRENGTH];
-			wake[7] = perLength;
-			behind += length;
-			nearX = farX;
-			nearY = farY;
-		}
-		// The wake has faded out by the trail's last point, however short the trail is against the
-		// speed (one speeding up, one cut off by the segment limit): ending at full strength, the last
-		// segment's square end drew a straight edge across the strip.  Left behind, the trail's own
-		// length still measures from the newest end, so the lead keeps growing with the clock.
-		const Real span = behind - lead;
-		if (span > 1.0f)
-		{
-			const Real least = 1.0f / span;
-			if (perLength < least)
-			{
-				for (unsigned index = firstWake; index < wakeCount; ++index)
-				{
-					wakes[index][4] = (wakes[index][4] - lead) + lead * perLength / least;
-					wakes[index][7] = least;
-				}
-			}
-		}
-	}
-	DX11Post_Set_Haze_Wakes(wakes, wakeCount, PROTO_WAKE_VORTEX, PROTO_WAKE_OPEN_SOFT, s_hazeSeconds);
-}
-
 // The haze's levels hold for the whole match (the ground and the water areas do not move), so they
 // are worked out once a map: the median walks a quarter of the height map's cells.  The shell map
 // and the match's are made one after the other and may land at the same address, so the key is the
@@ -952,6 +332,8 @@ static void pushProtoHazeFrame(void)
 	Real rise = PROTO_HAZE_MIN_RISE;
 	Real water = -1.0e6f;
 	float colour[3] = { PROTO_HAZE_COLOUR[0], PROTO_HAZE_COLOUR[1], PROTO_HAZE_COLOUR[2] };
+	float towardSun[3] = { 0.0f, 0.0f, 1.0f };
+	Real warmth = 0.0f;
 	if (TheTerrainRenderObject != NULL && TheTerrainRenderObject->getMap() != NULL)
 	{
 		WorldHeightMap *map = TheTerrainRenderObject->getMap();
@@ -987,11 +369,25 @@ static void pushProtoHazeFrame(void)
 		colour[0] *= dim;
 		colour[1] *= dim;
 		colour[2] *= dim;
-	}
-	DX11Post_Set_Haze(colour, top, rise, strength, PROTO_HAZE_REACH, water);
 
-	// The fog the terrain draws, through the terrain's own mapping (ShroudTextureShader::set): the
-	// texture starts a cell before the draw origin, a texel to a cell.
+		// Toward the sun the haze looks warmer, the more so the brighter the sun.
+		const GlobalData::TerrainLighting &objectSun = TheGlobalData->m_terrainObjectsLighting[TheGlobalData->m_timeOfDay][0];
+		const Real length = (Real)sqrt(objectSun.lightPos.x * objectSun.lightPos.x + objectSun.lightPos.y * objectSun.lightPos.y
+			+ objectSun.lightPos.z * objectSun.lightPos.z);
+		towardSun[0] = -objectSun.lightPos.x / length;
+		towardSun[1] = -objectSun.lightPos.y / length;
+		towardSun[2] = -objectSun.lightPos.z / length;
+		const Real daylight = (0.299f * objectSun.diffuse.red + 0.587f * objectSun.diffuse.green + 0.114f * objectSun.diffuse.blue - 0.25f) / 0.5f;
+		warmth = max(min(daylight, 1.0f), 0.0f);
+	}
+	DX11Post_Set_Haze(colour, top, rise, strength, PROTO_HAZE_REACH, water, towardSun, warmth);
+}
+
+// The fog the terrain draws, through the terrain's own mapping (ShroudTextureShader::set): the
+// texture starts a cell before the draw origin, a texel to a cell.  The haze and the Ambient Occlusion
+// option read it.
+static void pushShroudFrame(void)
+{
 	W3DShroud *shroud = (TheTerrainRenderObject != NULL) ? TheTerrainRenderObject->getShroud() : NULL;
 	if (shroud != NULL && shroud->getShroudTexture() != NULL)
 	{
@@ -1004,16 +400,100 @@ static void pushProtoHazeFrame(void)
 		const float wholeRect[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
 		Direct3D11_Set_Haze_Shroud(NULL, wholeRect);
 	}
-	if (strength > 0.0f)
-		stirProtoHaze(top);
+}
+
+// The Weather option's haze: the same still layer, over all the ground, in the kind's colour.
+static void pushWeatherHaze(void)
+{
+	float colour[3];
+	Real strength;
+	TheSnowManager->getWeatherHaze(colour, &strength);
+	const float up[3] = { 0.0f, 0.0f, 1.0f };
+	DX11Post_Set_Haze(colour, 1.0e5f, 1.0f, strength, PROTO_HAZE_REACH, -1.0e6f, up, 0.0f);
+}
+
+/* The Atmosphere option (DX11Post_Set_Atmosphere).  The horizon's colour goes by the time of day, scaled by
+	the map's own light as the weather's haze is, so a map with a dim or tinted sun gets the sky that goes
+	with it; under the Weather option it is the weather's colour.  A map whose script drew EA's skybox keeps
+	that, and the isometric camera has no far ground to fade. */
+static const Real ATMOSPHERE_START = 500.0f;		// the least eye distance the fade starts at
+static const Real ATMOSPHERE_SCALE = 2200.0f;		// how far past it the fade takes to reach about two thirds
+static const Real ATMOSPHERE_STRENGTH = 0.85f;		// the most of the horizon's colour the far ground takes
+static const Real ATMOSPHERE_SKY_FLOOR = 0.7f;		// a night's sky keeps this much, or the stars go
+static const float ATMOSPHERE_HORIZON[TIME_OF_DAY_COUNT][3] = {
+	{ 0.72f, 0.80f, 0.90f },	// invalid, as afternoon
+	{ 0.80f, 0.80f, 0.84f },	// morning
+	{ 0.72f, 0.80f, 0.90f },	// afternoon
+	{ 0.80f, 0.58f, 0.44f },	// evening
+	{ 0.07f, 0.10f, 0.18f } };	// night
+
+static void pushAtmosphere(Bool weatherHaze)
+{
+	static Bool s_on = FALSE;
+	const Bool on = TheGlobalData->m_atmosphere && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled()
+		&& !TheGlobalData->m_drawSkyBox && !TheGlobalData->m_isometricCamera
+		&& TheTerrainRenderObject != NULL && TheTerrainRenderObject->getMap() != NULL
+		&& TheWaterRenderObj != NULL && TheWaterRenderObj->getSkyTexture() != NULL;
+	if (on)
+	{
+		const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];
+		const float light[3] = { min(sun.ambient.red + sun.diffuse.red, 1.0f), min(sun.ambient.green + sun.diffuse.green, 1.0f),
+			min(sun.ambient.blue + sun.diffuse.blue, 1.0f) };
+		float horizon[3];
+		float tint[3];
+		for (Int i = 0; i < 3; ++i)
+		{
+			horizon[i] = ATMOSPHERE_HORIZON[TheGlobalData->m_timeOfDay][i] * light[i];
+			tint[i] = max(light[i], ATMOSPHERE_SKY_FLOOR);
+		}
+		if (weatherHaze)
+		{
+			Real strength;
+			TheSnowManager->getWeatherHaze(horizon, &strength);
+			memcpy(tint, horizon, sizeof(tint));
+		}
+		TextureClass *sky = TheWaterRenderObj->getSkyTexture();
+		if (!sky->Is_Initialized())
+			sky->Init();
+		// The ground under the focus, at the map's lowest: a height at the focus would pulse the fade as
+		// the camera scrolled over a ridge, and reading the logic's is a read inside the overlap window.
+		WorldHeightMap *map = TheTerrainRenderObject->getMap();
+		Direct3D11_Set_Atmosphere(horizon, tint, ATMOSPHERE_START, ATMOSPHERE_SCALE, ATMOSPHERE_STRENGTH,
+			TheTerrainRenderObject->getMinHeight(),
+			(map->getXExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR,
+			(map->getYExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR, sky->Peek_D3D_Base_Texture());
+	}
+	else if (s_on)
+	{
+		const float none[3] = { 0.0f, 0.0f, 0.0f };
+		DX11Post_Set_Atmosphere(none, none, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+	}
+	s_on = on;
 }
 #endif
 
 void W3DShaderManager::pushProtoHaze(void)
 {
 #if defined(_WIN32)
-	if (TheGlobalData->m_mapLight && Direct3D11_Is_Active())
+	// The kind is NONE unless the option is on and Direct3D 11 presents.  Weather's haze takes the place
+	// of the Warm Light one while it lasts.  Either option goes off live, and the haze holds what it was
+	// last handed.
+	const Bool weatherHaze = TheSnowManager != NULL && TheSnowManager->getWeatherKind() != WEATHER_KIND_NONE
+		&& TheSnowManager->isVisible();
+	static Bool s_hazed = FALSE;
+	if (weatherHaze)
+		pushWeatherHaze();
+	else if (TheGlobalData->m_mapLight && Direct3D11_Is_Active())
 		pushProtoHazeFrame();
+	else if (s_hazed)
+	{
+		const float none[3] = { 0.0f, 0.0f, 0.0f };
+		DX11Post_Set_Haze(none, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, none, 0.0f);
+	}
+	s_hazed = weatherHaze || TheGlobalData->m_mapLight;
+	pushAtmosphere(weatherHaze);
+	if ((TheGlobalData->m_mapLight || TheGlobalData->m_ambientOcclusion || TheGlobalData->m_atmosphere || weatherHaze) && Direct3D11_Is_Active())
+		pushShroudFrame();
 #endif
 }
 
@@ -1029,6 +509,7 @@ static Int fixedFunctionBloomIntensity(void)
 		const GlowTuning tuning = glowTuning();
 		DX11Post_Set_Bloom(tuning.threshold, tuning.intensity, tuning.additiveGain, tuning.blurPasses);
 		DX11Post_Set_Grade(TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED ? 1.0f : 0.0f);
+		DX11Post_Set_Internal_Hdr(TheGlobalData->m_internalHdr != FALSE);
 #endif
 		return 0;
 	}

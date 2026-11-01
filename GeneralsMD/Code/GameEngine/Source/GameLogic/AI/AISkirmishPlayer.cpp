@@ -601,7 +601,9 @@ Int AISkirmishPlayer::getMyEnemyPlayerIndex(void) {
 	* are.  Fog-masked, so it is somewhere this AI has actually seen; FALSE means it has not looked
 	* yet and the caller keeps the old aim point.
 	*
-	* Off on every rung, deliberately - see the note on useInfluenceMapForAttackLane in AI.cpp.
+	* Hard's alone, and only where the map has no approach path to take: with one the attack goes down
+	* the road chooseApproachLabel picks instead, since aiming at the money walked past the army.  See the
+	* note on useInfluenceMapForAttackLane in AI.cpp.  This is the engine's cash layer, not AIInfluenceMap.
 	*/
 //----------------------------------------------------------------------------------------------------------
 Bool AISkirmishPlayer::influenceMapAttackGoal( Coord3D *goal )

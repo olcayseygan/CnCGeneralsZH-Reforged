@@ -81,6 +81,40 @@ EMPTY_DTOR(WeatherSetting)
 
 extern OVERRIDE<WeatherSetting> TheWeatherSetting;
 
+struct BreezeInfo;
+
+/** What the Weather option falls on a map.  NONE on a map with a Weather block of its own: that is
+	what EA's maps rain or snow with (EXRainDrop.tga on Flooded Plains, Winding River and two more),
+	and the option adds only its wind there. */
+enum WeatherKind
+{
+	WEATHER_KIND_NONE = 0,
+	WEATHER_KIND_RAIN,
+	WEATHER_KIND_SAND,
+	WEATHER_KIND_SNOW,
+	WEATHER_KIND_COUNT
+};
+
+/// A map's own Weather block wins, a snowy map snows, more than two fifths of desert ground blows sand.
+inline WeatherKind weatherKindForMap(Bool mapHasWeather, Bool snowyMap, Int sandCells, Int cells)
+{
+	if (mapHasWeather)
+		return WEATHER_KIND_NONE;
+	if (snowyMap)
+		return WEATHER_KIND_SNOW;
+	return (sandCells * 5 > cells * 2) ? WEATHER_KIND_SAND : WEATHER_KIND_RAIN;
+}
+
+/// x brought into [origin, origin + size), so a drop stays put in the world while the tile follows the camera.
+inline Real weatherWrap(Real x, Real origin, Real size)
+{
+	const Real along = (x - origin) / size;
+	return origin + (along - (Real)floor(along)) * size;
+}
+
+/// The script's breeze, or the Weather option's stronger one while it is on.  Trees read this.
+const BreezeInfo &weatherBreezeInfo(void);
+
 class SnowManager : public SubsystemInterface
 {
   public :
@@ -97,7 +131,19 @@ class SnowManager : public SubsystemInterface
 	virtual void updateIniSettings (void);
 	void setVisible(Bool showWeather);	///<enable/disable rendering of weather - assuming it's available on map.
 
+	Bool isWeatherOn(void) const { return m_weatherOn; }	///< the Weather option is on and this device draws it.
+	Bool isVisible(void) const { return m_isVisible; }	///< a script has not hidden the weather.
+	WeatherKind getWeatherKind(void) const { return m_weatherKind; }	///< NONE while the option is off.
+	const Coord3D &getWeatherWind(void) const { return m_weatherWind; }	///< what the option's wind adds to smoke per update.
+	void getWeatherHaze(float colour[3], Real *strength) const;	///< the still ground haze that goes with the kind.
+
   protected :
+
+	void setWeatherWind(Real strength);	///< the option's breeze and smoke drift, along the script's breeze direction.
+
+	Bool				m_weatherOn;
+	WeatherKind			m_weatherKind;
+	Coord3D				m_weatherWind;
 
 	Real				*m_startingHeights;
 	Real				m_time;	///<time elapsed since it started snowing.

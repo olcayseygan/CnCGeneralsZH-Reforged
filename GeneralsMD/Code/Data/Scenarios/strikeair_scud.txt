@@ -1,0 +1,22 @@
+# A Scud Storm aimed at six Comanches hovering in a computer player's base.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover 1 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 12000 -scenario strikeair_scud
+
+30 spawn 1 GLAScudStorm 1 start1:-280:-120
+3000 spawn 0 AmericaVehicleComanche 6 start0:240:120 40
+3000 tally 0 AmericaVehicleComanche
+3010 power 1 GLAScudStorm start0:240:120
+3010 tally 0 AmericaVehicleComanche
+3090 tally 0 AmericaVehicleComanche
+3180 tally 0 AmericaVehicleComanche
+3270 tally 0 AmericaVehicleComanche
+3360 tally 0 AmericaVehicleComanche
+3450 tally 0 AmericaVehicleComanche
+3540 tally 0 AmericaVehicleComanche
+3630 tally 0 AmericaVehicleComanche
+3720 tally 0 AmericaVehicleComanche
+3900 tally 0 AmericaVehicleComanche
+4200 tally 0 AmericaVehicleComanche
+4800 tally 0 AmericaVehicleComanche

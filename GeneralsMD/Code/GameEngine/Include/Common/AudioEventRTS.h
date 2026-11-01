@@ -154,8 +154,6 @@ public:
 	Bool getUninterruptable( ) const { return m_uninterruptable; }
 	void setUninterruptable( Bool uninterruptable ) { m_uninterruptable = uninterruptable; }
 	void setSkipAttack( Bool skipAttack ) { m_skipAttack = skipAttack; }	///< start on the loop itself, for a loop picked up again mid-way
-	Bool getTravels( void ) const { return m_travels; }
-	void setTravels( Bool travels ) { m_travels = travels; }	///< started late by its distance, so it stops late by it too
 
 	/** LOGIC-THREAD.md M5.  A random list remembers its last pick in the caller's event so it does not
 		* play one variant twice running, and a sound a tick asks for picks after the tick.  The caller is
@@ -206,7 +204,6 @@ protected:
 	Bool m_isLogicalAudio;					///< Should probably only be true for scripted sounds
 	Bool m_uninterruptable;
 	Bool m_skipAttack;
-	Bool m_travels;
 
 	// Playing attributes
 	Real m_pitchShift;							///< Pitch shift that should occur on this piece of audio

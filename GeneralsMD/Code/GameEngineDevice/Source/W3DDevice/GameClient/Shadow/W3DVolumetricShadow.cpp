@@ -127,15 +127,21 @@ const Real cosAngleToCare = cos ((0.2 * PI) / 180.0);	//1.5 degree difference
 
 // The sun's depth buffer and the box it covers.  2048 texels over 1800 world units is about one
 // texel to the metre at the game's own scale, which is finer than the stencil edge it replaces.
-// The box is centred on what the tactical camera looks at and is never narrower than that; it
-// opens to the ground the camera sees once a zoom shows more (shadowMapHalfWidth), because at
-// full zoom-out the top of the screen is about 1100 units past the look point and the ground
-// there had no shadow at all.  The widest it goes is the cap below, 2.3 units a texel.
+// The box goes round the ground the tactical camera sees and is never narrower than that; it opens
+// once a zoom or a tilt shows more (shadowMapHalfWidth), because at full zoom-out the top of the
+// screen is about 1100 units past the look point and the ground there had no shadow at all.  The
+// widest it goes is the cap below, 2.3 units a texel.
 #define SHADOW_MAP_TEXELS 2048
 #define SHADOW_MAP_HALF_WIDTH 900.0f
 #define SHADOW_MAP_WIDEST_HALF_WIDTH 2400.0f
 // The box grows in these steps, so the texel grid holds still while the zoom does.
 #define SHADOW_MAP_HALF_WIDTH_STEP 64.0f
+// How far the box stays past the frame's ground: the filter at its widest reads about 16 units beside
+// a pixel, and a read off the map's edge would smear its last texel along the frame's corner.
+#define SHADOW_MAP_FIT_MARGIN 32.0f
+// How far above the highest ground the frame's receivers reach: a roof at the bottom of the frame is
+// nearer the camera than the ground under it, and past the box it would read as a lit strip.
+#define SHADOW_MAP_RECEIVER_HEADROOM 150.0f
 #define SHADOW_MAP_SUN_DISTANCE 2000.0f
 #define SHADOW_MAP_NEAR_CLIP 10.0f
 #define SHADOW_MAP_FAR_CLIP 4000.0f
@@ -1679,8 +1685,6 @@ void W3DVolumetricShadow::RenderDynamicMeshVolume(Int meshIndex, Int lightIndex,
 {
 	Geometry *geometry;
 	Int numVerts, numPolys, numIndex;
-	SHADOW_DYNAMIC_VOLUME_VERTEX* pvVertices;
-	UnsignedShort *pvIndices;
 
 	//Get D3D Device used by W3D for quicker access.
 	LPDIRECT3DDEVICE9 m_pDev=DX8Wrapper::_Get_D3D_Device();
@@ -1707,104 +1711,48 @@ void W3DVolumetricShadow::RenderDynamicMeshVolume(Int meshIndex, Int lightIndex,
 		return;
 
 
-	DX11BufferLockClass vertexLock;
+	/* Classic's stencil shadows hand over a volume per mesh, twice a picture, and these were a Direct3D 9
+		 lock, a copy into a block, a copy into the D3D9 buffer and a copy into the D3D11 one for each of
+		 them, with Direct3D 9 drawing nothing: a quarter of the shadow pass went in d3d9.dll alone. */
 	const UnsignedInt vertexStride = sizeof(SHADOW_DYNAMIC_VOLUME_VERTEX);
-	UnsignedInt vertexOffset;
-	UnsignedInt vertexFlags;
-	if (nShadowVertsInBuf > (SHADOW_VERTEX_SIZE-numVerts))	//check if room for model verts
-	{	//flush the buffer by drawing the contents and re-locking again
-		vertexOffset=0;
-		vertexFlags=D3DLOCK_DISCARD;
-		if (shadowVertexBufferD3D->Lock(0,numVerts*vertexStride,(void**)&pvVertices,D3DLOCK_DISCARD) != D3D_OK)
-			return;
+	const Bool vertexDiscard = nShadowVertsInBuf > (SHADOW_VERTEX_SIZE-numVerts);	//check if room for model verts
+	if (!uploadStreamingRange(shadowVertexBufferD3D, shadowVertexTwin, geometry->GetVertex(0),
+			vertexDiscard ? 0 : nShadowVertsInBuf*vertexStride, numVerts*vertexStride,
+			vertexDiscard ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE))
+		return;
+	if (vertexDiscard)
+	{
 		nShadowVertsInBuf=0;
 		nShadowStartBatchVertex=0;
 	}
-	else
-	{	vertexOffset=nShadowVertsInBuf*vertexStride;
-		vertexFlags=D3DLOCK_NOOVERWRITE;
-		if (shadowVertexBufferD3D->Lock(vertexOffset,numVerts*vertexStride, (void**)&pvVertices,D3DLOCK_NOOVERWRITE) != D3D_OK)
-			return;
-	}
 
-	// From here the fill writes into the twin's own block instead of the D3D9 pointer, and the
-	// unlock below copies that range into both.  Without a twin Begin answers null and the fill
-	// carries on writing where it always did.
-	void *vertexTarget = vertexLock.Begin(shadowVertexTwin, pvVertices, vertexOffset,
-		numVerts*vertexStride, vertexFlags);
-	if (vertexTarget != NULL)
-		pvVertices = (SHADOW_DYNAMIC_VOLUME_VERTEX *)vertexTarget;
-#ifdef SV_DEBUG
-	srand(0x1345465);
-#endif
-	if(pvVertices)
+	short firstPolygonIndices[3];
+	const Bool indexDiscard = nShadowIndicesInBuf > (SHADOW_INDEX_SIZE-numIndex);	//check if room for model verts
+	if (!uploadStreamingRange(shadowIndexBufferD3D, shadowIndexTwin, geometry->GetPolygonIndex(0,firstPolygonIndices),
+			indexDiscard ? 0 : nShadowIndicesInBuf*sizeof(short), numIndex*sizeof(short),
+			indexDiscard ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE))
+		return;
+	if (indexDiscard)
 	{
-#ifdef SV_DEBUG
-		for (Int i=0; i<numVerts; i++)
-		{
-			(*((Vector3 *)pvVertices))=*geometry->GetVertex(i);	//cast is valid since both start with xyz
-			pvVertices->diffuse=(rand()%255) | ((rand()%255)<<8) | ((rand()%255)<<16);
-			pvVertices++;
-		}
-#else
-		memcpy(pvVertices,geometry->GetVertex(0),numVerts*sizeof(SHADOW_DYNAMIC_VOLUME_VERTEX));
-#endif
-	}
-
-	vertexLock.End();
-	shadowVertexBufferD3D->Unlock();
-
-	DX11BufferLockClass indexLock;
-	UnsignedInt indexOffset;
-	UnsignedInt indexFlags;
-	if (nShadowIndicesInBuf > (SHADOW_INDEX_SIZE-numIndex))	//check if room for model verts
-	{	//flush the buffer by drawing the contents and re-locking again
-		indexOffset=0;
-		indexFlags=D3DLOCK_DISCARD;
-		if (shadowIndexBufferD3D->Lock(0,numIndex*sizeof(short),(void**)&pvIndices,D3DLOCK_DISCARD) != D3D_OK)
-			return;
 		nShadowIndicesInBuf=0;
 		nShadowStartBatchIndex=0;
 	}
-	else
-	{	indexOffset=nShadowIndicesInBuf*sizeof(short);
-		indexFlags=D3DLOCK_NOOVERWRITE;
-		if (shadowIndexBufferD3D->Lock(indexOffset,numIndex*sizeof(short), (void**)&pvIndices,D3DLOCK_NOOVERWRITE) != D3D_OK)
-			return;
-	}
-
-	void *indexTarget = indexLock.Begin(shadowIndexTwin, pvIndices, indexOffset,
-		numIndex*sizeof(short), indexFlags);
-	if (indexTarget != NULL)
-		pvIndices = (UnsignedShort *)indexTarget;
-
-	try {
-	if(pvIndices)
-	{
-		memcpy(pvIndices,geometry->GetPolygonIndex(0,(short *)pvIndices),numPolys*3*sizeof(short));
-	}
-	IndexBufferExceptionFunc();
-	} catch(...) {
-		IndexBufferExceptionFunc();
-	}
-
-	indexLock.End();
-	shadowIndexBufferD3D->Unlock();
-
-	// D3D9 takes the base vertex index on the draw call, not here.
-	m_pDev->SetIndices(shadowIndexBufferD3D);
-	Direct3D11_Mirror_Indices(shadowIndexTwin);
 
 	Matrix4x4 mWorld(*meshXform);
 	Matrix4x4 mWorldTransposed = mWorld.Transpose();
 
-	m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorldTransposed);
-	Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorldTransposed);
-
-	if (shadowVertexBufferD3D != lastActiveVertexBuffer)
-	{	m_pDev->SetStreamSource(0,shadowVertexBufferD3D,0,vertexStride);
-		lastActiveVertexBuffer = shadowVertexBufferD3D;
+	// D3D9 takes the base vertex index on the draw call, not here.
+	if (!Direct3D11_Present_Is_Enabled())
+	{
+		m_pDev->SetIndices(shadowIndexBufferD3D);
+		m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorldTransposed);
+		if (shadowVertexBufferD3D != lastActiveVertexBuffer)
+		{	m_pDev->SetStreamSource(0,shadowVertexBufferD3D,0,vertexStride);
+			lastActiveVertexBuffer = shadowVertexBufferD3D;
+		}
 	}
+	Direct3D11_Mirror_Indices(shadowIndexTwin);
+	Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorldTransposed);
 	Direct3D11_Mirror_Stream_Source(shadowVertexTwin, vertexStride, 0);
 
 	if (DX8Wrapper::_Is_Triangle_Draw_Enabled())
@@ -2124,11 +2072,8 @@ void W3DVolumetricShadow::Update()
 		//buggies from being flagged as "flying".  We minimize the number of flying units because their shadow
 		//volumes are extruded longer to reach the lowest point on the map.  Regular shadows only extend far
 		//enough to reach the base of the model (presumes base is already touching the ground).
-		Real groundHeight; 
-		if (TheTerrainLogic)
-			groundHeight=TheTerrainLogic->getGroundHeight(pos.X,pos.Y);	//logic knows about bridges so use if available.
-		else
-			groundHeight=TheTerrainRenderObject->getHeightMapHeight(pos.X,pos.Y, NULL);
+		// the drawn map's copy, since this runs beside a tick; only a seismic effect moves it apart from the logic's
+		const Real groundHeight = TheTerrainRenderObject->getDrawHeight(pos.X,pos.Y);
    		if (fabs(pos.Z - groundHeight) >= AIRBORNE_UNIT_GROUND_DELTA)
    		{	
  			Real extent = MAX_SHADOW_LENGTH_EXTRA_AIRBORNE_SCALE_FACTOR * m_robjExtent;
@@ -4280,25 +4225,44 @@ static Vector3 viewEdgeAtHeight( const Vector3 &nearPoint, const Vector3 &farPoi
 	return nearPoint + (farPoint - nearPoint) * ((nearPoint.Z - z) / (nearPoint.Z - farPoint.Z));
 }
 
-/** How wide the sun's box has to be to hold the ground the tactical camera sees.  Every ground point
-		in view lies on an edge-bounded stretch of the view between the highest and the lowest ground on
-		the map, so each edge is cut at both heights and the eight points are taken into the sun's frame
-		around the look point: the box is as wide as the furthest of them, rounded up to a step.  The
-		lowest level alone would miss a hill at the bottom of the screen, whose point sits much nearer
-		the camera and can land outside all four low ones in the sun's frame. */
+/** What the frame wants of the sun's box, for -shadowmapreport: half the width the box goes round, and
+		what the same ground would ask of a box centred on the look point. */
+static Real s_sunBoxWanted = 0.0f;
+static Real s_sunBoxWantedCentred = 0.0f;
+
+/** How wide the sun's box has to be to hold the ground the tactical camera sees, and where its middle
+		goes.  Every ground point in view lies on an edge-bounded stretch of the view between the highest
+		and the lowest ground on the map, so each edge is cut at both heights and the eight points are
+		taken into the sun's frame around the look point.  The lowest level alone would miss a hill at
+		the bottom of the screen, whose point sits much nearer the camera and can land outside all four
+		low ones in the sun's frame.  The look point is nowhere near the middle of that shape, the far
+		side of the frame reaching further than the near one, so a box centred on it spends texels on
+		ground no pixel reads.  The box goes round the shape instead. */
 static Real shadowMapHalfWidth( const CameraClass &sceneCamera, const Matrix3D &sunAtFocus, Real lowestGround,
-	Real highestGround )
+	Real highestGround, Vector3 *middle )
 {
 	const Vector3 *corners = sceneCamera.Get_Frustum().Corners;
-	Real needed = 0.0f;
+	Real loX = 0.0f, hiX = 0.0f, loY = 0.0f, hiY = 0.0f;
+	Real centred = 0.0f;
 	for (Int i = 0; i < 8; ++i)
 	{
 		const Vector3 ground = viewEdgeAtHeight( corners[ i & 3 ], corners[ (i & 3) + 4 ],
-			(i < 4) ? lowestGround : highestGround );
+			(i < 4) ? lowestGround : highestGround + SHADOW_MAP_RECEIVER_HEADROOM );
 		Vector3 inSun;
 		Matrix3D::Inverse_Transform_Vector( sunAtFocus, ground, &inSun );
-		needed = WWMath::Max( needed, WWMath::Max( WWMath::Fabs( inSun.X ), WWMath::Fabs( inSun.Y ) ) );
+		loX = WWMath::Min( loX, inSun.X );
+		hiX = WWMath::Max( hiX, inSun.X );
+		loY = WWMath::Min( loY, inSun.Y );
+		hiY = WWMath::Max( hiY, inSun.Y );
+		centred = WWMath::Max( centred, WWMath::Max( WWMath::Fabs( inSun.X ), WWMath::Fabs( inSun.Y ) ) );
 	}
+	loX -= SHADOW_MAP_FIT_MARGIN;
+	hiX += SHADOW_MAP_FIT_MARGIN;
+	loY -= SHADOW_MAP_FIT_MARGIN;
+	hiY += SHADOW_MAP_FIT_MARGIN;
+	const Real needed = WWMath::Max( hiX - loX, hiY - loY ) * 0.5f;
+	s_sunBoxWanted = needed;
+	s_sunBoxWantedCentred = centred;
 	/* It grows at once and shrinks only a whole step late.  The look point's own ground height moves
 		 the footprint in the sun's frame as the camera scrolls over hills, and a box that followed it
 		 both ways would hop across a step and back, and every shadow edge on the screen with it. */
@@ -4308,6 +4272,7 @@ static Real shadowMapHalfWidth( const CameraClass &sceneCamera, const Matrix3D &
 		const Real stepped = WWMath::Ceil( needed / SHADOW_MAP_HALF_WIDTH_STEP ) * SHADOW_MAP_HALF_WIDTH_STEP;
 		held = WWMath::Clamp( stepped, SHADOW_MAP_HALF_WIDTH, SHADOW_MAP_WIDEST_HALF_WIDTH );
 	}
+	Matrix3D::Transform_Vector( sunAtFocus, Vector3( SunBoxMiddle( loX, hiX, held ), SunBoxMiddle( loY, hiY, held ), 0.0f ), middle );
 	return held;
 }
 
@@ -4348,7 +4313,7 @@ static void wholeMapSunBox( const Vector3 &toSun, Vector3 *focus, Real *halfWidt
 /** The sun's depth pass.  The casters are the ones that cast a volume today, drawn again from the
 		sun into a depth buffer nothing samples yet, so this phase can be proved on its own: with it
 		off the frame is what it was, and with it on the map has the world in it and the frame is
-		still what it was.  The box is square and centred on what the tactical camera is looking at,
+		still what it was.  The box is square and goes round what the tactical camera can see,
 		which is the ground the player can see; a cascade is only worth it once the box has to cover
 		more than one view.  SHADOW-MAP-PLAN.md phase 1. */
 void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
@@ -4421,6 +4386,7 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	toSun.Normalize();
 
 	Vector3 focus;
+	Vector3 boxMiddle;
 	Real halfWidth;
 	Real sunDistance = SHADOW_MAP_SUN_DISTANCE;
 	Real farClip = SHADOW_MAP_FAR_CLIP;
@@ -4430,6 +4396,8 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	{
 		wholeMapSunBox( toSun, &focus, &halfWidth, &sunDistance, &farClip );
 		transform.Look_At( focus + toSun * sunDistance, focus, 0.0f );
+		boxMiddle = focus;
+		s_sunBoxWanted = s_sunBoxWantedCentred = halfWidth;
 	}
 	else
 	{
@@ -4437,8 +4405,12 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		TheTacticalView->getPosition( &look );
 		focus.Set( look.x, look.y, TheTerrainRenderObject->getDrawHeight( look.x, look.y ) );
 		transform.Look_At( focus + toSun * sunDistance, focus, 0.0f );
+		Vector3 middle;
 		halfWidth = shadowMapHalfWidth( sceneCamera, transform, lowestReceiver,
-			TheTerrainRenderObject->getMaxHeight() );
+			TheTerrainRenderObject->getMaxHeight(), &middle );
+		// Slid along the sun's own ray back to the look point's height, which moves nothing on the map
+		// and keeps the box's depth, below, reckoned from the height it always was.
+		boxMiddle = middle + toSun * ((focus.Z - middle.Z) / WWMath::Max( toSun.Z, 0.01f ));
 		/* The box's depth has to hold the ground its width holds.  Level ground a distance across the
 			 box toward or away from the sun sits that distance times the sun's cotangent nearer or further
 			 along the ray, so a box opened for the zoom with a low sun put the top of the screen past the
@@ -4461,17 +4433,17 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 
 	/* The box has to sit on whole texels of its own map, or every scroll of the camera slides the
 		 grid under the world by a fraction of a texel and every shadow edge crawls and sparkles.  The
-		 look point is taken into the sun's own frame, rounded to the texel it lands in, and taken back
+		 box's middle is taken into the sun's own frame, rounded to the texel it lands in, and taken back
 		 out: the box then moves in texel steps and a shadow that did not move does not shimmer.  The
 		 frame it is rounded in has to stay put in the world.  Rounded in the box's own frame, which is
-		 centred on the look point, the look point is always at zero and rounds to itself: the grid
+		 centred on that middle, the middle is always at zero and rounds to itself: the grid
 		 slid on every scroll all the same.  The sun's frame on the world's origin turns the same way,
 		 since only the sun's direction decides that, and holds still. */
 	const Real texelWidth = (2.0f * halfWidth) / (Real)texels;
 	Matrix3D sunAtOrigin;
 	sunAtOrigin.Look_At( toSun, Vector3( 0.0f, 0.0f, 0.0f ), 0.0f );
 	Vector3 focusInSun;
-	Matrix3D::Inverse_Transform_Vector( sunAtOrigin, focus, &focusInSun );
+	Matrix3D::Inverse_Transform_Vector( sunAtOrigin, boxMiddle, &focusInSun );
 	focusInSun.X = WWMath::Floor( focusInSun.X / texelWidth + 0.5f ) * texelWidth;
 	focusInSun.Y = WWMath::Floor( focusInSun.Y / texelWidth + 0.5f ) * texelWidth;
 	Vector3 snapped;
@@ -4780,7 +4752,8 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 					oldMeshes.concat(entry);
 				}
 			}
-			DEBUG_LOG(("SHADOWMAP: %d casters, %d left out as reaching nothing in view, %d light meshes left out, lean %d draws %d instances (%d alpha tested, %d skinned), old %u draws, old meshes:%s, %s\n",
+			DEBUG_LOG(("SHADOWMAP: box half width %.0f, frame wants %.0f (%.0f centred on the look point), %.2f units a texel, %d casters, %d left out as reaching nothing in view, %d light meshes left out, lean %d draws %d instances (%d alpha tested, %d skinned), old %u draws, old meshes:%s, %s\n",
+				halfWidth, s_sunBoxWanted, s_sunBoxWantedCentred, texelWidth,
 				castersCounted, castersOutOfView, MeshClass::Shadow_Pass_Light_Meshes,
 				DX8MeshRendererClass::Shadow_Lean_Draws, DX8MeshRendererClass::Shadow_Lean_Instances,
 				DX8MeshRendererClass::Shadow_Lean_Alpha_Tested, DX8MeshRendererClass::Shadow_Lean_Skinned,

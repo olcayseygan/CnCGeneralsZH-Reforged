@@ -1,5 +1,0 @@
-# Fixed frames over Scenarios/geproto_wake.txt so the wake's ground position can be judged.
-0     hud     off
-3     cut     2966 742 1.2 -45 0    # the Comanche between the dry bank and the outcrop
-30    cut     2940 840 1.5 -45 0    # wider and still: the Raptor's turns over the bank
-52    end

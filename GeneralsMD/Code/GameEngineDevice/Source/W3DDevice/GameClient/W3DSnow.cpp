@@ -22,7 +22,9 @@
 
 #include "W3DDevice/GameClient/W3DSnow.h"
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "Common/GlobalData.h"
 #include "GameClient/View.h"
+#include "GameLogic/ScriptEngine.h"
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/rinfo.h"
 #include "WW3D2/camera.h"
@@ -50,11 +52,21 @@ W3DSnowManager::W3DSnowManager(void)
 	m_indexBuffer=NULL;
 	m_snowTexture=NULL;
 	m_VertexBufferD3D=NULL;
+	m_weatherDrops=NULL;
+	m_weatherTextures[0]=NULL;
+	m_weatherTextures[1]=NULL;
+	m_weatherTime=0.0;
+	m_weatherMap=NULL;
+	m_weatherMapData=NULL;
+	m_weatherMapWidth=0;
+	m_weatherSandCells=0;
+	m_weatherCells=0;
 }
 
 W3DSnowManager::~W3DSnowManager()
 {
 	ReleaseResources();
+	delete [] m_weatherDrops;
 }
 
 // Direct3D 11 has no point sprites at all: the fixed-function primitive that expands one vertex
@@ -89,6 +101,8 @@ void W3DSnowManager::init( void )
 void W3DSnowManager::ReleaseResources(void)
 {
 	REF_PTR_RELEASE(m_snowTexture);
+	REF_PTR_RELEASE(m_weatherTextures[0]);
+	REF_PTR_RELEASE(m_weatherTextures[1]);
 
 	if (m_VertexBufferD3D)
 		m_VertexBufferD3D->Release();
@@ -103,7 +117,7 @@ Bool W3DSnowManager::ReAcquireResources(void)
 {
 	ReleaseResources();
 
-	if (!TheWeatherSetting->m_snowEnabled)
+	if (!TheWeatherSetting->m_snowEnabled && m_weatherKind == WEATHER_KIND_NONE)
 		return TRUE;	//no need for resources if snow is disabled.
 
 	if (snowUsesPointSprites())
@@ -192,6 +206,223 @@ void W3DSnowManager::update(void)
 
 	//find current time offset, adjusting for overflow
 	m_time=fmod(m_time,m_fullTimePeriod);
+
+	m_weatherOn = TheGlobalData->m_weatherEffects && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled();
+	if (m_weatherOn)
+		updateWeather();
+	else
+		m_weatherKind = WEATHER_KIND_NONE;
+}
+
+/* The Weather option (Options > Effects, Direct3D 11, off under Classic).  A client's picture and no
+	more: quads, a wind on the trees and on rising smoke, the still haze.  Nothing here reaches logic,
+	sight or the shroud, so two players may see different weather in one match.
+
+	Each layer keeps a fixed number of quads in a square tile that follows the camera; a quad wraps
+	round the tile, which leaves it where it is in the world while the camera pans.  So the cost is the
+	count, whatever the zoom.  A quad covers no pixel the texture would not, and the program is the one
+	EA's snow draws with. */
+struct WeatherLayer
+{
+	const char *texture;
+	Int count;			// quads on a tile of WEATHER_TILE_STEP; a smaller tile takes fewer
+	Real along;			// world units a second down the wind
+	Real down;			// and toward the ground
+	Real length;		// a streak's length along its flight, or a card's height
+	Real width;
+	UnsignedInt colour;	// taken down with the map's light
+	Real height;		// the layer's depth over the ground the camera looks at; 0 falls from the camera
+	Bool facesCamera;	// a card instead of a streak along the flight
+};
+
+static const WeatherLayer WEATHER_LAYERS[WEATHER_KIND_COUNT][2] =
+{
+	{ { NULL }, { NULL } },
+	{ { "EXRainDrop.tga", 8000, 180.0f, 1100.0f, 44.0f, 3.4f, 0xe0d8e4f0, 0.0f, FALSE }, { NULL } },
+	{ { "EXRainDrop.tga", 6000, 520.0f, 25.0f, 72.0f, 3.2f, 0xb0ecd4a4, 150.0f, FALSE },
+		{ "EXCloud01.tga", 200, 260.0f, 4.0f, 260.0f, 260.0f, 0x40d0ac7c, 170.0f, TRUE } },
+	{ { "EXSnowFlake1.tga", 7000, 34.0f, 46.0f, 2.4f, 2.4f, 0xe0e8eef4, 0.0f, TRUE }, { NULL } }
+};
+
+static const Real WEATHER_WIND_STRENGTH[WEATHER_KIND_COUNT] = { 0.5f, 0.8f, 1.0f, 0.35f };
+static const Int WEATHER_MAX_DROPS = 8192;
+static const Real WEATHER_TILE_STEP = 2048.0f;
+static const Real WEATHER_TILE_MIN = 512.0f;
+static const Real WEATHER_TILE_MAX = 4096.0f;
+static const Real WEATHER_FALL_PER_TILE = 0.75f;	// how far a falling layer reaches, by the tile
+static const Real WEATHER_EYE_CLEARANCE = 0.55f;	// of the eye's height: nothing falls against the lens, where a streak would cross the screen
+
+void W3DSnowManager::updateWeather(void)
+{
+	m_weatherTime = fmod(m_weatherTime + WW3D::Get_Frame_Time() / 1000.0, 3600.0);
+
+	WorldHeightMap *map = TheTerrainRenderObject != NULL ? TheTerrainRenderObject->getMap() : NULL;
+	if (map != NULL && (map != m_weatherMap || map->getDataPtr() != m_weatherMapData || map->getXExtent() != m_weatherMapWidth))
+	{
+		m_weatherMap = map;
+		m_weatherMapData = map->getDataPtr();
+		m_weatherMapWidth = map->getXExtent();
+		map->countSandCells(&m_weatherSandCells, &m_weatherCells);
+		DEBUG_LOG(("WEATHER map is %d sand of %d cells\n", m_weatherSandCells, m_weatherCells));
+	}
+
+	const WeatherKind kind = map == NULL ? WEATHER_KIND_NONE : weatherKindForMap(TheWeatherSetting->m_snowEnabled,
+		TheGlobalData->m_weather == WEATHER_SNOWY, m_weatherSandCells, m_weatherCells);
+	if (kind != m_weatherKind)
+	{
+		m_weatherKind = kind;
+		REF_PTR_RELEASE(m_weatherTextures[0]);
+		REF_PTR_RELEASE(m_weatherTextures[1]);
+	}
+	setWeatherWind(WEATHER_WIND_STRENGTH[kind]);
+}
+
+void W3DSnowManager::renderWeather(RenderInfoClass &rinfo)
+{
+	if (m_weatherDrops == NULL)
+	{
+		m_weatherDrops = NEW WeatherDrop[WEATHER_MAX_DROPS];
+		for (Int i = 0; i < WEATHER_MAX_DROPS; ++i)
+		{
+			m_weatherDrops[i].x = rand() / (Real)RAND_MAX;
+			m_weatherDrops[i].y = rand() / (Real)RAND_MAX;
+			m_weatherDrops[i].phase = rand() / (Real)RAND_MAX;
+		}
+	}
+	if (!m_indexBuffer)
+		ReAcquireResources();
+
+	Matrix4x4 identity(true);
+	DX8Wrapper::Set_Transform(D3DTS_WORLD, identity);
+	Matrix3D view;
+	rinfo.Camera.Get_View_Matrix(&view);
+	DX8Wrapper::Set_Transform(D3DTS_VIEW, view);
+	VertexMaterialClass *vmat = VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
+	DX8Wrapper::Set_Material(vmat);
+	REF_PTR_RELEASE(vmat);
+	DX8Wrapper::Set_Index_Buffer(m_indexBuffer, 0);
+
+	const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];
+	const Real light = WWMath::Clamp(0.299f * (sun.ambient.red + sun.diffuse.red) + 0.587f * (sun.ambient.green + sun.diffuse.green)
+		+ 0.114f * (sun.ambient.blue + sun.diffuse.blue), 0.3f, 1.0f);
+
+	// No sun's shadow on what falls: with it every pixel of every quad pays the blocker search, for a
+	// shade nobody could see on a streak.
+	Direct3D11_Set_Emissive(true);
+	drawWeatherLayer(rinfo, 0, light);
+	if (WEATHER_LAYERS[m_weatherKind][1].texture != NULL)
+		drawWeatherLayer(rinfo, 1, light);
+	Direct3D11_Set_Emissive(false);
+}
+
+void W3DSnowManager::drawWeatherLayer(RenderInfoClass &rinfo, Int layerIndex, Real light)
+{
+	const WeatherLayer &layer = WEATHER_LAYERS[m_weatherKind][layerIndex];
+	if (m_weatherTextures[layerIndex] == NULL)
+		m_weatherTextures[layerIndex] = WW3DAssetManager::Get_Instance()->Get_Texture(layer.texture);
+	DX8Wrapper::Set_Texture(0, m_weatherTextures[layerIndex]);
+	// A card wider than a unit would cut a hard line where it meets the ground, so it takes no depth:
+	// a cloud between the eye and the ground goes over all of it anyway.
+	ShaderClass shader(ShaderClass::_PresetAlphaShader);
+	if (layer.height > 0.0f && layer.facesCamera)
+		shader.Set_Depth_Compare(ShaderClass::PASS_ALWAYS);
+	// A near vertical streak past the point under the camera turns its back to it at a steep tilt.
+	shader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+	DX8Wrapper::Set_Shader(shader);
+
+	CameraClass &camera = rinfo.Camera;
+	const Vector3 eye = camera.Get_Position();
+
+	// The tile: a power of two times the step, so it holds through a pan and only a change of zoom
+	// moves the drops, and centred ahead of the camera as far as it may go and still hold the near ground.
+	AABoxClass visible;
+	TheTerrainRenderObject->getMaximumVisibleBox(camera.Get_Frustum(), &visible, TRUE);
+	const Real wanted = 2.0f * max(visible.Extent.X, visible.Extent.Y);
+	Real tile = WEATHER_TILE_MIN;
+	while (tile < wanted && tile < WEATHER_TILE_MAX)
+		tile *= 2.0f;
+	Vector2 ahead(visible.Center.X - eye.X, visible.Center.Y - eye.Y);
+	const Real farthest = tile * 0.45f;
+	if (ahead.Length() > farthest)
+		ahead *= farthest / ahead.Length();
+	const Real centreX = eye.X + ahead.X;
+	const Real centreY = eye.Y + ahead.Y;
+	const Real originX = centreX - tile * 0.5f;
+	const Real originY = centreY - tile * 0.5f;
+
+	const Real ground = TheTerrainRenderObject->getHeightMapHeight(centreX, centreY, NULL);
+	const Real depth = layer.height > 0.0f ? layer.height : tile * WEATHER_FALL_PER_TILE;
+	const Real top = layer.height > 0.0f ? ground + layer.height : eye.Z - (eye.Z - ground) * WEATHER_EYE_CLEARANCE;
+
+	const Coord2D &wind = weatherBreezeInfo().m_directionVec;
+	const Real shiftX = (Real)fmod(m_weatherTime * wind.x * layer.along, (double)tile);
+	const Real shiftY = (Real)fmod(m_weatherTime * wind.y * layer.along, (double)tile);
+	const Real fallen = (Real)fmod(m_weatherTime * layer.down / depth, 1.0);
+
+	// A streak lies along its flight and takes its width across the view, so it never turns edge on.
+	const Matrix3D &eyeFrame = camera.Get_Transform();
+	Vector3 axis;
+	Vector3 side;
+	if (layer.facesCamera)
+	{
+		axis = eyeFrame.Get_Y_Vector() * -1.0f;
+		side = eyeFrame.Get_X_Vector();
+	}
+	else
+	{
+		axis.Set(wind.x * layer.along, wind.y * layer.along, -layer.down);
+		axis.Normalize();
+		Vector3::Cross_Product(eyeFrame.Get_Z_Vector(), axis, &side);
+		side.Normalize();
+	}
+	axis *= layer.length * 0.5f;
+	side *= layer.width * 0.5f;
+	const Vector3 corners[4] = { -axis - side, axis - side, axis + side, -axis + side };
+	static const Real CORNER_U[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+	static const Real CORNER_V[4] = { 0.0f, 1.0f, 1.0f, 0.0f };
+
+	const UnsignedInt colour = (layer.colour & 0xff000000)
+		| ((UnsignedInt)(((layer.colour >> 16) & 0xff) * light) << 16)
+		| ((UnsignedInt)(((layer.colour >> 8) & 0xff) * light) << 8)
+		| (UnsignedInt)((layer.colour & 0xff) * light);
+
+	const Int count = min((Int)(layer.count * tile * tile / (WEATHER_TILE_STEP * WEATHER_TILE_STEP)), layer.count);
+	Int done = 0;
+	while (done < count)
+	{
+		const Int batch = min(count - done, (Int)SNOW_BATCH_SIZE);
+		DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8, dynamic_fvf_type, batch * 4);
+		{
+			DynamicVBAccessClass::WriteLockClass lock(&vb_access);
+			VertexFormatXYZNDUV2 *verts = lock.Get_Formatted_Vertex_Array();
+			for (Int i = 0; i < batch; ++i)
+			{
+				const WeatherDrop &drop = m_weatherDrops[done + i];
+				const Real x = weatherWrap(drop.x * tile + shiftX, originX, tile);
+				const Real y = weatherWrap(drop.y * tile + shiftY, originY, tile);
+				const Real phase = drop.phase + fallen;
+				const Real z = top - (phase - (Int)phase) * depth;
+				for (Int corner = 0; corner < 4; ++corner)
+				{
+					verts->x = x + corners[corner].X;
+					verts->y = y + corners[corner].Y;
+					verts->z = z + corners[corner].Z;
+					verts->nx = 0;	//keep AGP write-combining active
+					verts->ny = 0;
+					verts->nz = 0;
+					verts->diffuse = colour;
+					verts->u1 = CORNER_U[corner];
+					verts->v1 = CORNER_V[corner];
+					verts->u2 = 0;
+					verts->v2 = 0;
+					verts++;
+				}
+			}
+		}
+		DX8Wrapper::Set_Vertex_Buffer(vb_access);
+		DX8Wrapper::Draw_Triangles(0, batch * 2, 0, batch * 4);
+		done += batch;
+	}
 }
 
 #define MAXIMUM_CAMERA_DISTANCE 100000	//maximum distance of camera position from world origin.
@@ -353,6 +584,12 @@ flush_particles:
 
 void W3DSnowManager::render(RenderInfoClass &rinfo)
 {
+	if (m_weatherKind != WEATHER_KIND_NONE && m_isVisible)
+	{
+		renderWeather(rinfo);
+		return;
+	}
+
 	if (!TheWeatherSetting->m_snowEnabled || !m_isVisible)
 		return;
 

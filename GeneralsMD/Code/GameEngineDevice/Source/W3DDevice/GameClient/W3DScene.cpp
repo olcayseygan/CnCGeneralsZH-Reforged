@@ -55,6 +55,8 @@
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
+#include "W3DDevice/GameClient/W3DParticleSys.h"
+#include "W3DDevice/GameClient/FireLights.h"
 #include "W3DDevice/GameClient/W3DGranny.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/W3DVolumetricShadow.h"
@@ -1100,6 +1102,12 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	//don't draw shadows in this mode because they interfere with destination alpha
 	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
 		DoShadows(rinfo, true);	//draw all stencil shadows
+
+	// The Ambient Occlusion option goes on under the water and every translucent draw, none of which
+	// writes depth: the water takes no corner's shade from its bed and only the bed's shows through it.
+	if (TheGlobalData->m_ambientOcclusion && !TheGlobalData->m_classicGraphics && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+		Direct3D11_Ambient_Occlusion();
+
 	WW3D::Render_And_Clear_Static_Sort_Lists(rinfo);	//draws things like water
 
 	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
@@ -1400,6 +1408,20 @@ static void handBlastLights(RefRenderObjListClass &dynamicLights, const Vector3 
 
 	static float lights[BLAST_LIGHT_SLOTS][BLAST_LIGHT_FLOATS];
 	unsigned count = 0;
+	// The Firelight option's fires come first, so a barrage's muzzle flashes cannot take a burning base
+	// off the ground for a frame and give it back the next; FireLights::MAX_LIGHTS leaves the pulses the rest.
+	Int fireCount;
+	const FireLights::Light *fires = getFirelights(&fireCount);
+	for (Int i = 0; i < fireCount; ++i)
+	{
+		const FireLights::Light &fire = fires[i];
+		float *slot = lights[count++];
+		slot[0] = fire.x; slot[1] = fire.y; slot[2] = fire.z; slot[3] = fire.reach;
+		slot[4] = fire.red / base[0]; slot[5] = fire.green / base[1]; slot[6] = fire.blue / base[2];
+		slot[7] = fire.inner;
+		slot[8] = slot[4] * FireLights::AMBIENT_SHARE; slot[9] = slot[5] * FireLights::AMBIENT_SHARE; slot[10] = slot[6] * FireLights::AMBIENT_SHARE;
+		slot[11] = 0.0f;
+	}
 	for (size_t i = 0; i < nearest.size() && count < BLAST_LIGHT_SLOTS; ++i)
 	{
 		W3DDynamicLight *light = nearest[i].second;
@@ -1442,7 +1464,13 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 	if (TheW3DVolumetricShadowManager != NULL && m_customPassMode == SCENE_PASS_DEFAULT &&
 		!ShaderClass::Is_Backface_Culling_Inverted() &&
 		Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+	{
 		TheW3DVolumetricShadowManager->renderShadowMap(rinfo.Camera);
+		// Before the frame for the same reason: it has to lie under all of it.  The pass above has just
+		// handed the backend the camera it needs.
+		if (TheGlobalData->m_atmosphere)
+			Direct3D11_Atmosphere_Sky();
+	}
 
 	Int localPlayerIndex = ThePlayerList ? TheObserverCamera.getShroudPlayerIndex() : 0;
 
@@ -1473,6 +1501,8 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 			it.Peek_Obj()->On_Frame_Update();
 		}
 	}
+
+	Direct3D11_Set_Hemi_Ambient(TheGlobalData->m_hemiAmbient);
 
 	// After the lights' fade has stepped and before the terrain and the models are lit.
 	if (m_customPassMode == SCENE_PASS_DEFAULT && !ShaderClass::Is_Backface_Culling_Inverted())
@@ -2086,6 +2116,26 @@ void RTS3DScene::parkSpentDynamicLights(void)
 		UpdateList.Remove(pLight);
 		m_dynamicLightList.Remove(pLight);
 	}
+}
+
+//=============================================================================
+// RTS3DScene::stepDynamicLights
+//=============================================================================
+/** The lights' half of Customized_Render, in its order, for a pass whose draw is skipped: -headless,
+	* the undrawn stretch of -jumpToFrame, a minimised window, a lost device, a replay's fast forward and
+	* seek (29 passes in 30 skip the draw).  Only the render stepped a light's fade and parked it, so
+	* those runs kept every light pulse of the match switched on and getADynamicLight walked all of
+	* them for each new one: 28 to 37% of the main thread late in a
+	* headless match, and a -jumpToFrame's first drawn frame lit by every muzzle flash of the jump.  The
+	* fade counts logic frames and is gated on the client frame, so a later render steps nothing twice,
+	* and a light the terrain still holds is not spent and waits for it. */
+//=============================================================================
+void RTS3DScene::stepDynamicLights(void)
+{
+	parkSpentDynamicLights();
+	RefRenderObjListIterator dynaLightIt(&m_dynamicLightList);
+	for (dynaLightIt.First(); !dynaLightIt.Is_Done(); dynaLightIt.Next())
+		dynaLightIt.Peek_Obj()->On_Frame_Update();
 }
 
 //=============================================================================

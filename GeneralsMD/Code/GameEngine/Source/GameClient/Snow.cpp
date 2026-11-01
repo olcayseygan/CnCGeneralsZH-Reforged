@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the Game
 #include "GameClient/Snow.h"
 #include "GameClient/View.h"
+#include "GameLogic/ScriptEngine.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -45,6 +46,9 @@ SnowManager::SnowManager()
 	m_time = 0;
 	m_velocity = 1;
 	m_isVisible = TRUE;	//default to showing if it's enabled via INI.
+	m_weatherOn = FALSE;
+	m_weatherKind = WEATHER_KIND_NONE;
+	m_weatherWind.zero();
 }
 
 void SnowManager::init( void )
@@ -84,6 +88,53 @@ void SnowManager::updateIniSettings(void)
 
 	//Time for snow flake to make it from top to bottom of rendered cube around camera.
 	m_fullTimePeriod = m_boxDimensions/m_velocity;
+}
+
+/* The Weather option's wind.  Strength 1 is a sandstorm.  Sway and lean are radians over the default
+	breeze's 0.055 of each, the smoke's drift is world units per particle update; a smoke column rises
+	about twice that, so it leans by some 25 degrees. */
+static const Real WEATHER_SWAY = 0.11f;
+static const Real WEATHER_LEAN = 0.16f;
+static const Real WEATHER_SMOKE_DRIFT = 0.5f;
+static const Short WEATHER_BREEZE_PERIOD = LOGICFRAMES_PER_SECOND * 3;
+static const Short WEATHER_BREEZE_VERSION = 0x2000;	// past any count a map's scripts reach, so trees notice the switch
+static BreezeInfo s_weatherBreeze;
+
+const BreezeInfo &weatherBreezeInfo(void)
+{
+	return (TheSnowManager != NULL && TheSnowManager->isWeatherOn()) ? s_weatherBreeze : TheScriptEngine->getBreezeInfo();
+}
+
+void SnowManager::setWeatherWind(Real strength)
+{
+	const BreezeInfo &script = TheScriptEngine->getBreezeInfo();
+	s_weatherBreeze = script;
+	s_weatherBreeze.m_intensity = max(script.m_intensity, WEATHER_SWAY * strength);
+	s_weatherBreeze.m_lean = max(script.m_lean, WEATHER_LEAN * strength);
+	s_weatherBreeze.m_breezePeriod = min(script.m_breezePeriod, WEATHER_BREEZE_PERIOD);
+	// the kind too: a tree buffer outlives its map, and the next map may blow harder
+	s_weatherBreeze.m_breezeVersion = script.m_breezeVersion + WEATHER_BREEZE_VERSION + (Short)m_weatherKind;
+	m_weatherWind.x = script.m_directionVec.x * WEATHER_SMOKE_DRIFT * strength;
+	m_weatherWind.y = script.m_directionVec.y * WEATHER_SMOKE_DRIFT * strength;
+	m_weatherWind.z = 0.0f;
+}
+
+/* Strength is the most of the colour a pixel takes before the haze's own cap of a half.  The colour
+	takes the map's light channel by channel and the strength its brightness: a tan veil at full strength
+	took the blue out of Dark Night's moonlight. */
+void SnowManager::getWeatherHaze(float colour[3], Real *strength) const
+{
+	static const float COLOURS[WEATHER_KIND_COUNT][3] = {
+		{ 0.0f, 0.0f, 0.0f }, { 0.50f, 0.54f, 0.60f }, { 0.74f, 0.58f, 0.38f }, { 0.82f, 0.86f, 0.92f } };
+	static const Real STRENGTHS[WEATHER_KIND_COUNT] = { 0.0f, 0.24f, 0.70f, 0.28f };
+	const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];
+	const Real red = min(sun.ambient.red + sun.diffuse.red, 1.0f);
+	const Real green = min(sun.ambient.green + sun.diffuse.green, 1.0f);
+	const Real blue = min(sun.ambient.blue + sun.diffuse.blue, 1.0f);
+	colour[0] = COLOURS[m_weatherKind][0] * red;
+	colour[1] = COLOURS[m_weatherKind][1] * green;
+	colour[2] = COLOURS[m_weatherKind][2] * blue;
+	*strength = STRENGTHS[m_weatherKind] * (0.299f * red + 0.587f * green + 0.114f * blue);
 }
 
 void SnowManager::setVisible(Bool showWeather)

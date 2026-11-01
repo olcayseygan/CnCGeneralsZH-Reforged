@@ -41,6 +41,7 @@
 #define DEFINE_BUILDABLE_STATUS_NAMES			// for BuildableStatusNames[]
 
 #include "Common/DamageFX.h"
+#include "Common/FileSystem.h"
 #include "Common/GameAudio.h"
 #include "Common/GameCommon.h"
 #include "Common/GlobalData.h"
@@ -1641,6 +1642,15 @@ UnsignedInt ThingTemplate::getMaxSimultaneousOfType() const
 
 
 
+
+//-------------------------------------------------------------------------------------------------
+Int ThingTemplate::getModIndex() const
+{
+	Int mod = -1;
+	AsciiString bareName;
+	FileSystem::splitModName( getName(), &mod, &bareName );
+	return mod;
+}
 
 //-------------------------------------------------------------------------------------------------
 Bool ThingTemplate::isEquivalentTo(const ThingTemplate* tt) const

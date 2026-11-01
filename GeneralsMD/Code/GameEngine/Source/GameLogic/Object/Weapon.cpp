@@ -130,7 +130,9 @@ Real Weapon_elevationRangeBonus( Real range, Real heightAboveTarget )
 
 Real Weapon_elevatedRange( const Object *source, Real range, Real targetZ )
 {
-	if( source->isKindOf( KINDOF_AIRCRAFT ) )
+	// a man firing out of a helicopter is as high as it flies and stands on no hill
+	const Object *container = source->getContainedBy();
+	if( source->isKindOf( KINDOF_AIRCRAFT ) || ( container && container->isKindOf( KINDOF_AIRCRAFT ) ) )
 		return range;
 
 	return range + Weapon_elevationRangeBonus( range, source->getPosition()->z - targetZ );
@@ -2492,7 +2494,7 @@ Bool Weapon::isSourceObjectWithGoalPositionWithinAttackRange( const Object *sour
 	else
 		return false;
 
-	Real attackRangeSqr = sqr( getAttackRange( source ) );
+	Real attackRangeSqr = sqr( Weapon_elevatedRange( source, getAttackRange( source ), target ? target->getPosition()->z : targetPos->z ) );
 	Real minAttackRangeSqr = sqr(m_template->getMinimumAttackRange());
 #ifdef RATIONALIZE_ATTACK_RANGE
 	if (distSqr < minAttackRangeSqr)

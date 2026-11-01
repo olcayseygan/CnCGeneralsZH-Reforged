@@ -127,6 +127,7 @@ public:
 	virtual void createLightPulse( const Coord3D *pos, const RGBColor *color, Real innerRadius,Real attenuationWidth, 
 																 UnsignedInt increaseFrameTime, UnsignedInt decayFrameTime//, Bool donut = FALSE
 																 ) = 0;
+	virtual void stepDynamicLights( void ) { }	///< a pass that skips the draw: fade the light pulses and park the spent ones, as the draw does
 
 	/// draw a line on the display in pixel coordinates with the specified color
 	virtual void drawLine( Int startX, Int startY, Int endX, Int endY, 

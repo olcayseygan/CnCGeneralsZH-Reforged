@@ -557,6 +557,64 @@ TEST(dx11post_bloom_keeps_ordinary_levels_and_folds_overbright_to_white)
 	}
 }
 
+// The blue of one whole frame of colour through the chain.  pixel_level reads the first byte of a
+// pixel, and the back buffer is blue first.
+static int frame_blue(DeviceFixture & fixture, float red, float green, float blue, bool chain)
+{
+	fixture.Get_Post().Begin_Frame();
+	ID3D11RenderTargetView * view = fixture.Get_Post().Scene_View();
+	CHECK(view != NULL);
+	const float colour[4] = { red, green, blue, 1.0f };
+	fixture.Get_Device().Get_Context()->ClearRenderTargetView(view, colour);
+	CHECK(chain ? fixture.Get_Post().Run_Chain() : fixture.Get_Post().Copy_Through());
+	unsigned pitch = 0;
+	unsigned char * result = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(result != NULL);
+	const int level = (result != NULL) ? pixel_level(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2) : -1;
+	delete [] result;
+	return level;
+}
+
+TEST(dx11post_internal_hdr_keeps_colour_past_white_and_moves_nothing_under_it)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	const DX11PostEffect chain[] = { DX11_POST_BLOOM };
+	fixture.Get_Post().Set_Chain(chain, 1);
+
+	// A fire at eight times white, with the option off: every channel is past the curve's room, so
+	// it arrives white, blue and all.  A pale wall under white is the off figure to hold.
+	const int offFire = frame_blue(fixture, 8.0f, 4.0f, 1.6f, true);
+	const int offWall = frame_blue(fixture, 0.95f, 0.95f, 0.9f, true);
+	CHECK_EQ(255, offFire);
+
+	DX11Post_Set_Internal_Hdr(true);
+
+	// The same fire stays orange, a hotter one is whiter than it, and white-hot still reaches white.
+	// Art under white comes out to the bit as it did.
+	const int onFire = frame_blue(fixture, 8.0f, 4.0f, 1.6f, true);
+	const int onHotter = frame_blue(fixture, 32.0f, 16.0f, 6.4f, true);
+	CHECK(onFire < 160);
+	CHECK(onHotter > onFire);
+	CHECK(frame_blue(fixture, 64.0f, 64.0f, 64.0f, true) >= 250);
+	CHECK_EQ(offWall, frame_blue(fixture, 0.95f, 0.95f, 0.9f, true));
+
+	// The plain tone pass, with the Glow option off, takes the same curve.
+	DX11Post_Set_Bloom(1.0f, 0.0f, 1.0f, 2);
+	CHECK(frame_blue(fixture, 8.0f, 4.0f, 1.6f, true) < 160);
+	DX11Post_Set_Bloom(1.0f, 1.5f, 1.0f, 2);
+
+	// A frame with no match on it, a loading screen with its interface in the scene, keeps the old one.
+	CHECK(frame_blue(fixture, 8.0f, 4.0f, 1.6f, false) >= 250);
+
+	DX11Post_Set_Internal_Hdr(false);
+	CHECK_EQ(offFire, frame_blue(fixture, 8.0f, 4.0f, 1.6f, true));
+}
+
 TEST(dx11post_bloom_spreads_light_past_the_pixels_that_carry_it)
 {
 	DeviceFixture fixture;
@@ -688,33 +746,31 @@ TEST(dx11post_the_scene_takes_its_occlusion_once_a_frame_and_the_chain_then_skip
 	delete [] picture;
 }
 
-// The prototype haze, white over a black scene, with the given wakes; hands back the level at the
-// middle of the picture and at a corner.  The clip to world matrix is the identity, so a pixel's
-// world x and y are its own clip x and y and the depth, cleared to a half, is its height: under the
-// haze's top of one.
-static bool haze_levels(DeviceFixture & fixture, const float (*segments)[8], unsigned count,
-	unsigned char & middle_level, unsigned char & corner_level)
+// The ground haze, white over a black scene, drawn for real: the program compiles, finds its constants
+// where the pass writes them and lays the layer over the ground.  The clip to world matrix is the
+// identity, so a pixel's world x and y are its own clip x and y and the depth, cleared to a half, is
+// its height: under the haze's top of one.
+TEST(dx11post_the_ground_haze_lies_over_a_scene_under_its_top)
 {
-	const float WAKE_SPREAD = 0.05f;
-	const float OPEN_SOFT = 0.05f;
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
 	const float HAZE_TOP = 1.0f;
 	const float HAZE_THICKNESS = 1.0f;
 	const float HAZE_STRENGTH = 1.0f;
 	const float HAZE_REACH = 1000.0f;
 	const float NO_WATER = -1.0e6f;
-	const float NOISE_SCALE = 1.0f;
-	const float STIR = 0.85f;
 	const float SCENE_DEPTH = 0.5f;
-	const float CLOCK = 1.0f;
+	const unsigned char LIFTED_BY_AT_LEAST = 16;
 	DX11DeviceClass & device = fixture.Get_Device();
 	DX11PostProcessClass & post = fixture.Get_Post();
 
-	DX11Post_Set_Haze_Wakes(segments, count, WAKE_SPREAD, OPEN_SOFT, CLOCK);
 	const float white[3] = { 1.0f, 1.0f, 1.0f };
-	DX11Post_Set_Haze(white, HAZE_TOP, HAZE_THICKNESS, HAZE_STRENGTH, HAZE_REACH, NO_WATER);
-	const float field[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
 	const float overhead[3] = { 0.0f, 0.0f, 1.0f };
-	DX11Post_Set_Haze_Motion(field, 0.0f, 0.0f, NOISE_SCALE, STIR, overhead, 0.0f);
+	DX11Post_Set_Haze(white, HAZE_TOP, HAZE_THICKNESS, HAZE_STRENGTH, HAZE_REACH, NO_WATER, overhead, 0.0f);
 
 	unsigned char picture[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
 	fill_flat(picture, DARK_LEVEL);
@@ -731,24 +787,25 @@ static bool haze_levels(DeviceFixture & fixture, const float (*segments)[8], uns
 	const bool drawn = write_scene(device, post, picture)
 		&& post.Haze_Scene(device.Get_Depth_Texture(), identity) && post.Run_Chain();
 	device.Set_Scene_View(NULL);
-	DX11Post_Set_Haze(white, 0.0f, HAZE_THICKNESS, 0.0f, HAZE_REACH, NO_WATER);
-	DX11Post_Set_Haze_Wakes(segments, 0, WAKE_SPREAD, OPEN_SOFT, CLOCK);
+	DX11Post_Set_Haze(white, 0.0f, HAZE_THICKNESS, 0.0f, HAZE_REACH, NO_WATER, overhead, 0.0f);
 
+	CHECK(drawn);
 	unsigned pitch = 0;
 	unsigned char * result = drawn ? read_back_buffer(device, pitch) : NULL;
-	if (result == NULL) {
-		return false;
+	CHECK(result != NULL);
+	if (result != NULL) {
+		CHECK(pixel_level(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2) >= DARK_LEVEL + LIFTED_BY_AT_LEAST);
+		delete [] result;
 	}
-	middle_level = pixel_level(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2);
-	corner_level = pixel_level(result, pitch, 1, 1);
-	delete [] result;
-	return true;
 }
 
-// A hovering helicopter's rotor wash, drawn for real: the disc inside its ring clears, and the haze
-// well outside it is left as it was.  The ring sits in a late slot behind segments far off the
-// picture, which is where the second half of each segment lives past the first 32.
-TEST(dx11post_a_hover_ring_parts_the_haze_inside_it_in_any_slot)
+// The Atmosphere option drawn for real, as the haze's test is.  With depth at a half the ground lies half
+// a unit from the eye, a third of the way into a fade of scale one, and takes the white horizon.  With
+// depth at the far plane and the eye looking up the fade leaves the frame alone: it is sky by then.
+// Looking down, the same empty depth takes the horizon, over the sea that draws past the terrain.  The sky
+// itself reads no depth and covers everything, a null texture here, so it goes black.  Half a shroud cell
+// past the map's edge the shroud's border is black, so the ground there is the horizon however near it is.
+TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 {
 	DeviceFixture fixture;
 	if (!fixture.Create()) {
@@ -756,27 +813,137 @@ TEST(dx11post_a_hover_ring_parts_the_haze_inside_it_in_any_slot)
 		return;
 	}
 
-	const unsigned RING_SLOT = 40;
-	const float RING_RADIUS = 0.5f;
-	const float RING_AGE = 0.3f;
-	const float FAR_OFF = 100.0f;
-	const unsigned char CLEARED_BY_AT_LEAST = 8;
-	float segments[RING_SLOT + 1][8];
-	for (unsigned slot = 0; slot < RING_SLOT; ++slot) {
-		const float far_segment[8] = { FAR_OFF, FAR_OFF, FAR_OFF + 1.0f, FAR_OFF, 0.0f, 0.2f, 1.0f, 0.01f };
-		memcpy(segments[slot], far_segment, sizeof(far_segment));
-	}
-	const float ring[8] = { 0.0f, 0.0f, 0.0f, 0.0f, RING_RADIUS, -1.0f, 1.0f, RING_AGE };
-	memcpy(segments[RING_SLOT], ring, sizeof(ring));
+	const unsigned char LIFTED_BY_AT_LEAST = 16;
+	DX11DeviceClass & device = fixture.Get_Device();
+	DX11PostProcessClass & post = fixture.Get_Post();
+	const float white[3] = { 1.0f, 1.0f, 1.0f };
+	const float identity[16] = {
+		1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
+	// The eye at height nought looks down its depth, its focus on the ground right there, so no start.
+	// It stands 500 units into the map, or the map's corner closes the fade over the frame's centre.
+	const float looking_down[16] = {
+		1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 500.0f, 500.0f, 0.0f, 1.0f };
+	DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0f, 1.0f, 0.0f, 1.0e6f, 1.0e6f, NULL);
 
-	unsigned char calm_middle = 0;
-	unsigned char calm_corner = 0;
-	unsigned char washed_middle = 0;
-	unsigned char washed_corner = 0;
-	CHECK(haze_levels(fixture, segments, RING_SLOT, calm_middle, calm_corner));
-	CHECK(haze_levels(fixture, segments, RING_SLOT + 1, washed_middle, washed_corner));
-	printf("middle %u calm, %u washed; corner %u calm, %u washed\n", calm_middle, washed_middle,
-		calm_corner, washed_corner);
-	CHECK(calm_middle >= washed_middle + CLEARED_BY_AT_LEAST);
-	CHECK_EQ(calm_corner, washed_corner);
+	unsigned char picture[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
+	fill_flat(picture, DARK_LEVEL);
+	const DX11PostEffect copy_only[] = { DX11_POST_COPY };
+	post.Set_Chain(copy_only, 1);
+	post.Compile_Atmosphere_Programs();
+
+	const float DEPTHS[5] = { 0.5f, 1.0f, 0.5f, 1.0f, 0.5f };
+	unsigned char levels[5] = { 0, 0, 0, 0, 0 };
+	for (unsigned run = 0; run < 5; ++run) {
+		if (run == 4) {
+			// A fade too long to count, and a map whose edge lies 25 units short of the eye.
+			DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0e6f, 1.0f, 0.0f, 475.0f, 475.0f, NULL);
+		}
+		post.Open_Frame();
+		post.Begin_Frame();
+		device.Set_Scene_View(post.Scene_View());
+		device.Get_Context()->ClearDepthStencilView(device.Get_Depth_Stencil_View(), D3D11_CLEAR_DEPTH,
+			DEPTHS[run], 0);
+		const bool drawn = write_scene(device, post, picture)
+			&& (run == 2 ? post.Sky_Scene(identity)
+				: post.Atmosphere_Scene(device.Get_Depth_Texture(), run == 1 ? identity : looking_down))
+			&& post.Run_Chain();
+		device.Set_Scene_View(NULL);
+		CHECK(drawn);
+		unsigned pitch = 0;
+		unsigned char * result = drawn ? read_back_buffer(device, pitch) : NULL;
+		CHECK(result != NULL);
+		if (result != NULL) {
+			levels[run] = pixel_level(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2);
+			delete [] result;
+		}
+	}
+	DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0f, 0.0f, 0.0f, 1.0e6f, 1.0e6f, NULL);
+
+	CHECK(levels[0] >= DARK_LEVEL + LIFTED_BY_AT_LEAST);
+	CHECK(levels[0] < 70);
+	CHECK(levels[1] == DARK_LEVEL);
+	CHECK(levels[2] == 0);
+	CHECK(levels[3] >= DARK_LEVEL + LIFTED_BY_AT_LEAST);
+	// All of the horizon's colour, dimmed below the horizon by BELOW_DIM, 0.55 of white.
+	CHECK(levels[4] >= 130);
+
+	// Strength zero is no pass at all.
+	post.Open_Frame();
+	CHECK(!post.Atmosphere_Scene(device.Get_Depth_Texture(), identity));
+}
+
+// The Ambient Occlusion option drawn for real over a white scene.  The world is the clip space times
+// forty across and a thousand deep, so the frame is 80 units across at 0.8 of a pixel a unit, the left
+// half stands 10 units nearer the eye than the right, and the near plane, which a tap past the frame's
+// edge reads, is out of reach.  The floor at that step's foot goes dark; the floor past the reach and
+// the top of the step stay exactly white, and the chain's own "ao" stands down.
+TEST(dx11post_world_occlusion_darkens_the_foot_of_a_step_and_nothing_else)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	const float FLOOR_DEPTH = 0.5f;
+	const float TOP_DEPTH = 0.49f;
+	const float UNITS_DEEP = 1000.0f;
+	const float UNITS_A_CLIP = 40.0f;
+	const float PROJECTION_SCALE = 1.0f / UNITS_A_CLIP;
+	const unsigned char DARKENED_BY_AT_LEAST = 10;
+	DX11DeviceClass & device = fixture.Get_Device();
+	DX11PostProcessClass & post = fixture.Get_Post();
+
+	float depth[SURFACE_SIZE * SURFACE_SIZE];
+	for (unsigned y = 0; y < SURFACE_SIZE; ++y) {
+		for (unsigned x = 0; x < SURFACE_SIZE; ++x) {
+			depth[y * SURFACE_SIZE + x] = (x < SURFACE_SIZE / 2) ? TOP_DEPTH : FLOOR_DEPTH;
+		}
+	}
+	D3D11_TEXTURE2D_DESC description;
+	ZeroMemory(&description, sizeof(description));
+	description.Width = SURFACE_SIZE;
+	description.Height = SURFACE_SIZE;
+	description.MipLevels = 1;
+	description.ArraySize = 1;
+	description.Format = DXGI_FORMAT_R32_FLOAT;
+	description.SampleDesc.Count = 1;
+	description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	D3D11_SUBRESOURCE_DATA initial;
+	ZeroMemory(&initial, sizeof(initial));
+	initial.pSysMem = depth;
+	initial.SysMemPitch = SURFACE_SIZE * sizeof(float);
+	ID3D11Texture2D * texture = NULL;
+	ID3D11ShaderResourceView * view = NULL;
+	CHECK(SUCCEEDED(device.Get_Device()->CreateTexture2D(&description, &initial, &texture)));
+	CHECK(SUCCEEDED(device.Get_Device()->CreateShaderResourceView(texture, NULL, &view)));
+
+	unsigned char picture[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
+	fill_flat(picture, LIGHT_LEVEL);
+	const DX11PostEffect ao_only[] = { DX11_POST_AO };
+	post.Set_Chain(ao_only, 1);
+	post.Compile_World_Ao_Programs();
+	post.Open_Frame();
+	post.Begin_Frame();
+	device.Set_Scene_View(post.Scene_View());
+	const float world_from_clip[16] = {
+		UNITS_A_CLIP, 0.0f, 0.0f, 0.0f, 0.0f, UNITS_A_CLIP, 0.0f, 0.0f, 0.0f, 0.0f, UNITS_DEEP, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
+	const bool drawn = write_scene(device, post, picture)
+		&& post.World_Occlude_Scene(view, world_from_clip, PROJECTION_SCALE, PROJECTION_SCALE);
+	CHECK(drawn);
+	CHECK(!post.Occlude_Scene(device.Get_Depth_Texture()));
+	CHECK(post.Run_Chain());
+	device.Set_Scene_View(NULL);
+
+	unsigned pitch = 0;
+	unsigned char * result = drawn ? read_back_buffer(device, pitch) : NULL;
+	CHECK(result != NULL);
+	if (result != NULL) {
+		CHECK(pixel_level(result, pitch, SURFACE_SIZE / 2 + 2, SURFACE_SIZE / 2) <= LIGHT_LEVEL - DARKENED_BY_AT_LEAST);
+		CHECK_EQ((unsigned)LIGHT_LEVEL, (unsigned)pixel_level(result, pitch, SURFACE_SIZE - 3, SURFACE_SIZE / 2));
+		CHECK_EQ((unsigned)LIGHT_LEVEL, (unsigned)pixel_level(result, pitch, 3, SURFACE_SIZE / 2));
+		delete [] result;
+	}
+	view->Release();
+	texture->Release();
 }

@@ -16870,7 +16870,7 @@ GUI:MapLight
 END
 
 TOOLTIP:MapLight
-"Un soleil bas d'après-midi qui éclaire la carte plus chaudement et allonge les ombres, et une légère brume posée sur les terrains bas que les avions fendent en la traversant. Direct3D 11 seulement. S'applique à partir de la carte suivante."
+"Un soleil bas d'après-midi qui éclaire la carte plus chaudement et allonge les ombres, et une légère brume immobile posée sur les terrains bas. Direct3D 11 seulement. S'applique à partir de la carte suivante."
 END
 
 GUI:TeamGlow

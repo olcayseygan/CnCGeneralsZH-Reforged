@@ -364,7 +364,7 @@ public:
 	virtual void doDrawModule(const Matrix3D* transformMtx);
 	virtual void buildRenderObjects( Bool madeInTick );
 
-	/// the name the render object was made from; under -modfactions it keeps the "M<n>~" its Get_Name drops
+	/// the name the render object was made from; under a mod it keeps the "M<n>~" its Get_Name drops
 	const AsciiString& getCurrentModelName() const { return m_curState->m_modelName; }
 	/// Hands the frame's lit headlights to the Direct3D 11 frame, nearest the camera first.  Once a
 	/// frame, after the smooth motion has placed every model and before anything is drawn.
@@ -411,6 +411,7 @@ public:
 	virtual Bool getCurrentWorldspaceClientBonePositions(const char* boneName, Matrix3D& transform) const;
 	virtual Bool getProjectileLaunchOffset(const ModelConditionFlags& condition, WeaponSlotType wslot, Int specificBarrelToUse, Matrix3D* launchPos, WhichTurretType tur, Coord3D* turretRotPos, Coord3D* turretPitchPos = NULL) const;
 	virtual void updateProjectileClipStatus( UnsignedInt shotsRemaining, UnsignedInt maxShots, WeaponSlotType slot ); ///< This will do the show/hide work if ProjectileBoneFeedbackEnabled is set.
+	virtual Int getProjectileClipFeedbackSlots() const;
 	virtual void updateDrawModuleSupplyStatus( Int maxSupply, Int currentSupply ); ///< This will do visual feedback on Supplies carried
 	virtual void notifyDrawModuleDependencyCleared( ){}///< if you were waiting for something before you drew, it's ready now
 

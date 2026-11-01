@@ -1030,26 +1030,27 @@ GlobalData::GlobalData()
 	m_useCloudPlane = FALSE;
 	m_downwindAngle = ( -0.785f );//Northeast!
 	m_useShadowVolumes = FALSE;
-	m_useShadowVolumesForSkins = TRUE;	//on by default: the shipped INI has no entry for it
+	m_useShadowVolumesForSkins = FALSE;	//the fork's; retail infantry wear their round decal until a box says otherwise
 	m_useShadowDecals = FALSE;
-	m_shadowsForProjectiles = TRUE;	//on by default: the shipped INI has no entry for it
+	m_shadowsForProjectiles = FALSE;
 	m_startAtMaxZoom = FALSE;		//off, a match opens at START_CAMERA_HEIGHT (View.cpp); on, as far out as the wheel goes
 	m_turboMode = FALSE;				//a mission runs at normal speed
-	m_shadowsForProps = TRUE;				//likewise: scenery with no shadow of its own gets one
-	m_shadowsForParticles = TRUE;	//on by default: the shipped INI has no entry for it
-	m_volumetricSmokeShadows = TRUE;
-	m_smokeFireLighting = TRUE;
-	m_smoothMotion = TRUE;
+	m_shadowsForProps = FALSE;			//on, scenery with no shadow of its own gets one
+	m_shadowsForParticles = FALSE;
+	m_volumetricSmokeShadows = FALSE;
+	m_smokeFireLighting = FALSE;
+	m_smoothMotion = FALSE;					//a model stands where the last logic tick left it until the box is ticked
 	m_smoothMotionAnyDisplay = FALSE;
 	m_waterStyle = 0;				// classic by default; modern water is an explicit option
 	m_cloudStyle = 0;				// Classic by default; volumetric hazard clouds are opt-in
-	m_volumeSmoke = 0;			// off by default: the volumes cost GPU time a low-end card does not have
-	m_explosionDebrisTrails = TRUE;
+	m_explosionDebrisTrails = FALSE;
 	m_shadowQuality = 1;					//medium, the 2048 map the shadows always had
 	m_graphicsQuality = TheGraphicsQualityAnchors[ STATIC_GAME_LOD_HIGH ];	//a preset moves it to its own step as the menu opens
-	m_classicGraphics = FALSE;
-	m_lightingStyle = LIGHTING_STYLE_REFORGED;
-	m_shadowMap = TRUE;						//the sun's own shadows are what the game draws with now
+	// The owner's rule of 2026-10-31: the game opens in Classic with everything the fork added off, and
+	// whoever wants the Reforged picture turns it on in Options.  Options.ini wins over all of this.
+	m_classicGraphics = TRUE;
+	m_lightingStyle = LIGHTING_STYLE_CLASSIC;
+	m_shadowMap = TRUE;						//the sun's own shadows, once ClassicGraphics is off; parseGameDataDefinition takes them back while it is on
 	m_shadowMapOnly = TRUE;				//and they replace the stencil volumes rather than joining them
 	m_shadowMapReport = FALSE;
 	m_shadowMapOldCasters = FALSE;
@@ -1057,7 +1058,7 @@ GlobalData::GlobalData()
 	m_shadowMapSkyFill = 0.0f;
 	m_shadowMapStrength = 0.0f;
 	m_shadowMapWidest = 0.0f;
-	m_contactShadows = TRUE;		//on by default: a building with nothing under it reads as laid on the ground
+	m_contactShadows = TRUE;		//a building with nothing under it reads as laid on the ground; Classic graphics draws none (W3DModelDraw)
 	m_textureReductionFactor = -1;
 	m_enableBehindBuildingMarkers = TRUE;
 	m_scriptDebug = FALSE;
@@ -1136,6 +1137,15 @@ GlobalData::GlobalData()
 	m_mapLight = FALSE;
 	m_teamGlow = FALSE;
 	m_waterFoam = FALSE;
+	m_groundMarks = FALSE;
+	m_firelight = FALSE;
+	m_hemiAmbient = FALSE;
+	m_ambientOcclusion = FALSE;
+	m_weatherEffects = FALSE;
+	m_waterSplashes = FALSE;
+	m_atmosphere = FALSE;
+	m_structureCollapse = FALSE;
+	m_internalHdr = FALSE;
 	m_horizontalScrollSpeedFactor = 1.0;
 	m_verticalScrollSpeedFactor = 1.0;
 
@@ -1325,8 +1335,8 @@ GlobalData::GlobalData()
 	m_showClientPhysics = TRUE;
 	m_showTerrainNormals = FALSE;
 	m_showObjectHealth = FALSE;
-	// what this fork has always done, so nobody's game changes until they say so
-	m_healthBarMode = HEALTH_BAR_ALWAYS;
+	// retail's: the selection and whatever is under the cursor
+	m_healthBarMode = HEALTH_BAR_SELECTION;
 	m_healthBarColors = 0;
 	// the game's own mouse unless the launcher passes -mouse reforged
 	m_mouseStyle = MOUSE_STYLE_CLASSIC;
@@ -1334,8 +1344,7 @@ GlobalData::GlobalData()
 	m_playerColorScheme = PLAYER_COLORS_ORIGINAL;
 	// the words the game shipped with until somebody picks a translation
 	m_textLanguage = TEXT_LANGUAGE_ENGLISH;
-	// the lines have been on since they were added, so nobody loses them until they say so
-	m_showOrderLines = TRUE;
+	m_showOrderLines = FALSE;
 
 	m_particleEdit = FALSE;
 
@@ -1519,10 +1528,10 @@ GlobalData::GlobalData()
   m_voiceVolumeFactor = 0.5f;
 	// Half the effects slider's 80: birds, wind and water used to play at the battle's volume and
 	// covered the replies and the guns.
-	m_ambientVolume = 40;
+	m_ambientVolume = 80;		// retail's: ambience played at AudioSettings.ini's 80% effects volume
 	m_masterVolume = 100;
-	m_dynamicMusic = TRUE;
-	m_legacySound = FALSE;
+	m_dynamicMusic = FALSE;
+	m_legacySound = TRUE;		// retail's mix; this is the one row where on is the original
 	m_muteInBackground = TRUE;	// retail's: loseFocus on every deactivation
   m_3DSoundPref = false;
 
@@ -1532,33 +1541,28 @@ GlobalData::GlobalData()
 	m_enforceMaxCameraHeight = TRUE;
 
 	//
-	// The fork's own conveniences default ON. They were opt-in at first, which in practice meant
-	// nobody saw them: an Options.ini that predates them simply has no such key, so every one of
-	// them stayed off and the features looked like they had never been added.
-	//
-	// The camera rows, grid placement and snap-to-45 building rotation are still catalog rows, so
-	// Options.ini (and for some the menu) can turn them off. The rest are not: they left TheOptionCatalog with the
-	// controls that used to set them, and what is written here is what every game gets. GameData.ini
-	// remains the way to change one, because the field table above still names it.
-	//
-	// The snaps are the exception: the camera's and a building's 45 degree steps, grid placement, the
-	// snap to a neighbour's edge, the nudge off a blocked spot and zoom to cursor start off, ticked on
-	// Options > Controls by whoever wants them.
+	// The fork's conveniences that are catalog rows start off, ticked in Options by whoever wants them,
+	// and an Options.ini line beats this.  Camera shake stays on: it is EA's own, and off is the choice
+	// the fork added.  Workers returning to supply, replay archiving and the placement preview below are
+	// not rows: they left TheOptionCatalog with the controls that used to set them, and what is written
+	// here is what every game gets. GameData.ini remains the way to change one, because the field table
+	// above still names it.
 	//
 	m_useCameraConstraints = TRUE;
-	m_cameraBoundaryMargin = 200;
-	m_edgeScrollInWindowedMode = TRUE;
+	m_cameraBoundaryMargin = 0;		// retail's limit; above 0 a manual pan may pull back inside limits a scripted path widened
+	m_edgeScrollInWindowedMode = FALSE;
 	m_snapCameraRotateTo45 = FALSE;
 	m_zoomToCursor = FALSE;		// the wheel zooms on the middle of the screen, as 1.04 did, until ticked
 	m_zoomSpeed = 100;				// a notch moves the camera the 60 units it always did
 	m_isometricCamera = FALSE;
+	m_cameraShake = TRUE;
 	m_dragTolerance = 25;		// what Mouse.ini in INIZH.big says, so nothing moves until the slider does
 	// a left drag with the move, attack move or guard key armed draws a formation line
-	m_formationDrag = TRUE;
-	m_buildWithoutWorker = TRUE;
-	m_chromaLighting = TRUE;	//costs nothing on a machine with no Razer server: the handshake fails once
+	m_formationDrag = FALSE;
+	m_buildWithoutWorker = FALSE;
+	m_chromaLighting = FALSE;
 	m_menuTransitionSpeed = 100;
-	m_textureFilterMode = 2;	// anisotropic; retail shipped bilinear on a 2003 fill-rate budget
+	m_textureFilterMode = 0;	// bilinear, as retail shipped it; anisotropic is the option's 2
 	m_anisotropyLevel = 0;		// whatever the card offers, capped at 16 in _Init_Filters
 
 	m_snapBuildPlacementTo45 = FALSE;
@@ -1568,16 +1572,16 @@ GlobalData::GlobalData()
 	m_moneyPerMinute = 0;
 	m_buildPlacementOpacity = PLACEMENT_SILHOUETTE_OPACITY;
 	m_buildPlacementShadows = TRUE;
-	m_showNetBox = TRUE;
+	m_showNetBox = FALSE;
 	m_showEmptyBuildingPips = TRUE;
 	m_workersReturnToSupply = TRUE;
 	m_archiveReplays = TRUE;
 
-	// Glow defaults to the options screen's Medium, 50 percent.  GameData.ini sets the field as a
+	// Glow defaults to the options screen's Off.  GameData.ini sets the field as a
 	// percentage; the options screen offers levels and stores one of those in Options.ini, and
 	// OptionsCatalog.cpp holds the percentage each level stands for.  W3DShaderManager.cpp turns
 	// the percentage into the additive gain, the bloom strength and the blur width.
-	m_bloomIntensity = 50;
+	m_bloomIntensity = 0;
 	
 	m_animateWindows = TRUE;
 	
@@ -1917,6 +1921,14 @@ void GlobalData::computeExeCRC( void )
 		{
 			const UnsignedInt modScriptsMark = 0x4D4F4453;	// "MODS"
 			exeCRC.computeCRC( &modScriptsMark, sizeof( modScriptsMark ) );
+		}
+
+		// A mod's CommandSet.ini keeps its sets from the fork's corrections (CommandStore), and a copy
+		// byte for byte of EA's would hash the same as no copy at all.
+		if( TheFileSystem->modLooseFile( AsciiString( "Data\\INI\\CommandSet.ini" ), &inModArchive ).isNotEmpty() || inModArchive )
+		{
+			const UnsignedInt modSetsMark = 0x4D4F4443;	// "MODC"
+			exeCRC.computeCRC( &modSetsMark, sizeof( modSetsMark ) );
 		}
 	}
 

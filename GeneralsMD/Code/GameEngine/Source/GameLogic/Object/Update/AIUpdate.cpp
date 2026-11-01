@@ -7108,7 +7108,7 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	PartitionFilter *arc = NULL;
 	if( allowOutOfWeaponRangeTargets && obj->isKindOf( KINDOF_AIRCRAFT ) )
 		arc = &filterArc;
-	else if( !obj->isKindOf( KINDOF_AIRCRAFT ) && container == NULL )
+	else if( !obj->isKindOf( KINDOF_AIRCRAFT ) )
 	{
 		arc = &filterHeight;
 		rangeToFindWithin += Weapon_elevationRangeBonus( rangeToFindWithin, FLT_MAX );

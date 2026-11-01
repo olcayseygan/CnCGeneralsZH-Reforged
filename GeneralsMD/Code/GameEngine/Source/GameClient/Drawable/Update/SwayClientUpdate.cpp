@@ -32,6 +32,7 @@
 
 #include "GameClient/Drawable.h"
 #include "GameClient/Module/SwayClientUpdate.h"
+#include "GameClient/Snow.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/ThingFactory.h"
@@ -80,8 +81,8 @@ SwayClientUpdate::~SwayClientUpdate( void )
 //-------------------------------------------------------------------------------------------------
 void SwayClientUpdate::updateSway()
 {
-	const BreezeInfo& info = TheScriptEngine->getBreezeInfo();
-	if (info.m_randomness == 0.0f) 
+	const BreezeInfo& info = weatherBreezeInfo();
+	if (info.m_randomness == 0.0f)
 	{
 		m_curValue = 0;
 	} 
@@ -107,8 +108,8 @@ void SwayClientUpdate::clientUpdate( void )
 
 	// if breeze changes, always process the full update, even if not visible, 
 	// so that things offscreen won't 'pop' when first viewed
-	const BreezeInfo& info = TheScriptEngine->getBreezeInfo();
-	if (info.m_breezeVersion != m_curVersion) 
+	const BreezeInfo& info = weatherBreezeInfo();
+	if (info.m_breezeVersion != m_curVersion)
 	{
 		updateSway();
 	}

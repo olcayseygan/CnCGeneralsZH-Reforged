@@ -84,8 +84,6 @@
 #define AIL_ex_capture_length                MSS_BACKEND_NAME(AIL_ex_capture_length)
 #define AIL_ex_set_3D_linear_falloff         MSS_BACKEND_NAME(AIL_ex_set_3D_linear_falloff)
 #define AIL_ex_set_3D_air                    MSS_BACKEND_NAME(AIL_ex_set_3D_air)
-#define AIL_ex_set_reverb                    MSS_BACKEND_NAME(AIL_ex_set_reverb)
-#define AIL_ex_duck                          MSS_BACKEND_NAME(AIL_ex_duck)
 #define AIL_ex_set_3D_sample_dry             MSS_BACKEND_NAME(AIL_ex_set_3D_sample_dry)
 #define AIL_ex_set_limiter                   MSS_BACKEND_NAME(AIL_ex_set_limiter)
 #define AIL_ex_set_output_device             MSS_BACKEND_NAME(AIL_ex_set_output_device)

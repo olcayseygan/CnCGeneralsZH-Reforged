@@ -11,7 +11,12 @@ $env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"
-$shots = "$env:USERPROFILE\Documents\Command and Conquer Generals Zero Hour Data"
+# A user data folder of its own with reforged-look.ini as its Options.ini: Classic, a first run's picture,
+# draws no shadow map to compare.
+$shots = Join-Path $env:TEMP "shadowcheck_userdata"
+$env:ZH_USER_DATA_DIR = $shots
+$null = New-Item -ItemType Directory -Force $shots
+Copy-Item (Join-Path $PSScriptRoot "reforged-look.ini") (Join-Path $shots "Options.ini")
 $out = Join-Path $env:TEMP "shadowcheck"
 if (-not (Test-Path $out)) { $null = New-Item -ItemType Directory $out }
 

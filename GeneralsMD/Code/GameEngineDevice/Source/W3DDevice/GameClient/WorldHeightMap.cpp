@@ -1834,8 +1834,37 @@ Int WorldHeightMap::getTextureClass(Int xIndex, Int yIndex, Bool baseClass)
 
 
 
+/** How much of the playable ground, every second cell each way, is laid in a desert or sand class of
+Terrain.ini.  Once a map, for the Weather option. */
+void WorldHeightMap::countSandCells(Int *sandCells, Int *cells)
+{
+	Bool sandy[NUM_TEXTURE_CLASSES];
+	for (Int i = 0; i < m_numTextureClasses; i++) {
+		TerrainType *terrain = TheTerrainTypes->findTerrain(m_textureClasses[i].name);	// a map may name one its data lacks
+		const TerrainClass terrainClass = terrain != NULL ? terrain->getClass() : TERRAIN_NONE;
+		sandy[i] = terrainClass == TERRAIN_DESERT_1 || terrainClass == TERRAIN_DESERT_2 || terrainClass == TERRAIN_DESERT_3
+			|| terrainClass == TERRAIN_DRY_DESERT || terrainClass == TERRAIN_LIVE_DESERT || terrainClass == TERRAIN_SAND
+			|| terrainClass == TERRAIN_ACCENT_SAND;
+	}
+	*sandCells = 0;
+	*cells = 0;
+	for (Int y = m_borderSize; y < m_height - m_borderSize; y += 2) {
+		for (Int x = m_borderSize; x < m_width - m_borderSize; x += 2) {
+			const Int tile = m_tileNdxes[x + y * m_width] >> 2;
+			for (Int i = 0; i < m_numTextureClasses; i++) {
+				if (tile >= m_textureClasses[i].firstTile && tile < m_textureClasses[i].firstTile + m_textureClasses[i].numTiles) {
+					if (sandy[i])
+						++*sandCells;
+					break;
+				}
+			}
+			++*cells;
+		}
+	}
+}
+
 /** Gets global texture class. */
-Int WorldHeightMap::getTextureClassFromNdx(Int tileNdx) 
+Int WorldHeightMap::getTextureClassFromNdx(Int tileNdx)
 {
 	Int i;
 	tileNdx = tileNdx>>2;

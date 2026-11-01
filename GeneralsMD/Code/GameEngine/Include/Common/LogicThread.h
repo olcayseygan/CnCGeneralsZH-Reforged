@@ -39,9 +39,11 @@ class Drawable;
 class Player;
 
 /**
-	* `-logicthread 0`, the default since v3.3.0's crash reports, runs the tick on the main thread.
-	* `-logicthread 1` hands every tick to a dedicated thread; outside a network game
-	* the render draws beside it (phases 3 and 4), reading only the copies taken at the sync point.
+	* `-logicthread 1`, the default on Windows, hands every tick to a dedicated thread; outside a network
+	* game the render draws beside it (phases 3 and 4), reading only the copies taken at the sync point,
+	* and in one the main thread waits for it (phase 5).  No option or saved setting reaches this.
+	* `-logicthread 0`, the default off Windows and otherwise for a desync hunt, runs the tick on the main
+	* thread.
 	* `-logicthread 2` adds jitter to the tick to shake out races.
 	*
 	* The census counts calls into the client made from the logic thread, one count per channel
@@ -79,6 +81,8 @@ namespace LogicThread
 		CENSUS_AUDIO_READ,			///< a logic read of the audio device: sound lengths, a track done, a handle still playing (hazard 4, M7)
 		CENSUS_CLIENT_READ,			///< a logic read of other client state: selection, input enabled, camera (hazard 4, M7)
 		CENSUS_ASSET_LOAD,			///< the W3D asset manager loading a model or an animation for a cache logic reads (hazards 5 and 22, M7)
+		CENSUS_ASSET_LOAD_IN_WINDOW,	///< the CENSUS_ASSET_LOAD calls made while the render's window is open; noteCensus counts it, never place it
+		CENSUS_LIVE_MODEL_LOCK,	///< TickReachesLiveModels: the tick taking g_liveModelLock
 		CENSUS_COUNT
 	};
 
@@ -114,6 +118,8 @@ namespace LogicThread
 		WINDOW_RADAR_OBJECT,		///< RadarObject::friend_getObject, the radar's list of Objects
 		WINDOW_DRAWABLE_FIELD,	///< a drawable's model condition or status bits, which the tick sets beside the render (step 3b); the look is LookForDraw's
 		WINDOW_PLAYER_STATE,		///< a player's energy, radar, rank or defeat, which the tick changes (step 3b)
+		WINDOW_PARTITION_ITERATE,	///< PartitionManager's iterate core (projected shadow receivers), whose iteration flags the tick's scans share
+		WINDOW_AUDIO_HANDLE,		///< AudioManager::allocateNewHandle, the truck draws' sounds: a pool the tick draws from
 		WINDOW_COUNT
 	};
 
@@ -159,16 +165,18 @@ namespace LogicThread
 		* reaches a live model through Drawable::getDrawModulesFlushed, which can set a model's state or
 		* pose its bones.  Neither side waits for the other while holding it, so neither can deadlock, and
 		* a bone read lands at the same pose either side of the fork: posing is a function of the model
-		* and the frame's sync time alone.  Recursive, because those reaches nest. */
+		* and the frame's sync time alone.  Recursive, because those reaches nest.  TickReachesLiveModels
+		* parks the render (parkRender) before it takes this, so the tick never waits while holding it. */
 	extern std::recursive_mutex g_liveModelLock;
 
-	/** The tick's half of g_liveModelLock; nothing on any other thread, where the tick is not running
-		* beside a fork. */
+	/** The tick's half of g_liveModelLock, after parkRender: the flush behind a reach builds render
+		* objects, adds them to the scene and loads assets, none of which may run beside the render.
+		* Nothing on any other thread, where the tick is not running beside a fork. */
 	class TickReachesLiveModels
 	{
 	public:
-		TickReachesLiveModels( void ) : m_locked( t_isLogicThread ) { if( m_locked ) g_liveModelLock.lock(); }
-		~TickReachesLiveModels( void ) { if( m_locked ) g_liveModelLock.unlock(); }
+		TickReachesLiveModels( void );
+		~TickReachesLiveModels( void );
 	private:
 		TickReachesLiveModels( const TickReachesLiveModels & );
 		TickReachesLiveModels &operator=( const TickReachesLiveModels & );
@@ -179,6 +187,13 @@ namespace LogicThread
 		* draw: at 1 and 2 it asks GameEngine::planOverlappedTick, which runs the message stream and the
 		* pacer there in a single-player match, whether the pass's first tick is due. */
 	void prepareOverlap( void );
+
+	/** R3, on the logic thread before the tick fills a template's bone caches from the W3D asset manager,
+		* whose hash tables and reference counts the render uses unlocked, or reaches a live model
+		* (TickReachesLiveModels): a tick running beside the render
+		* asks it to close its window and waits until it has, so the rest of the tick runs with the main
+		* thread waiting for it (one picture's hitch, once per state).  Anywhere else it returns at once. */
+	void parkRender( void );
 
 	/** W3DDisplay::draw, after the render's own restore (smooth motion): the tick that ran beside the
 		* render is flushed here, as runTick flushes one, and an exception it threw is thrown again. */
@@ -192,10 +207,6 @@ namespace LogicThread
 
 	/** Read -logicthread and start the thread if it asks for one.  Called once, from GameEngine::init. */
 	void init( void );
-
-	/** TRUE once init started the thread (-logicthread 1 or 2).  Smooth motion stays off then, so the
-		* render may overlap the tick (W3DDisplay::draw). */
-	Bool isEnabled( void );
 
 	/** Join the thread.  Safe without an init(). */
 	void shutdown( void );

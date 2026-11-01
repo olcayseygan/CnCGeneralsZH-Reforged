@@ -60,7 +60,7 @@ second cloud drawn until 4436).
 ## What Volumetric draws
 
 Approved green toxin, blue beta, purple gamma and amber nuclear palettes use transparency defaults
-of 67%, 77%, 74% and 0%. Effects read their actual emission radius and hazard lifetime. Toxin
+of 86%, 86%, 86% and 0%. Effects read their actual emission radius and hazard lifetime. Toxin
 billows form outward; nuclear haze fades into its full footprint. Formation is capped to one quarter
 of short hazard lifetimes. Visible infantry stir the smoke; hidden, stealthed or shrouded infantry
 leave no wakes. Nothing here changes damage, weapons, movement, gameplay randomness or simulation

@@ -2508,7 +2508,7 @@ void WaterRenderObjClass::update( void )
 			updateModernWaterTextures();refreshModernWaterOpticalPolygons();updateModernWaterShore();
 		}
 #endif
-		const Real step = elapsedSec * AUTHORED_FPS * WATER_SCROLL_SPEED;
+		const Real step = elapsedSec * AUTHORED_FPS * (TheGlobalData->m_classicGraphics ? 1.0f : WATER_SCROLL_SPEED);
 
 		m_riverVOrigin += 0.002f * step;
 		m_riverXOffset += (Real)(0.0125*33/5000) * step;

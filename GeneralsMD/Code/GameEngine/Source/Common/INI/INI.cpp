@@ -507,7 +507,7 @@ void INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 
 //-------------------------------------------------------------------------------------------------
 /** -modfactions: one pass of path per -mod, each seeing only its own files and reading its own names
-	* with the mod's prefix.  Without the switch this does nothing. */
+	* with the mod's prefix.  With no full -mod this does nothing. */
 //-------------------------------------------------------------------------------------------------
 void INI::loadModPasses( const char *path, Xfer *pXfer, Bool directory )
 {

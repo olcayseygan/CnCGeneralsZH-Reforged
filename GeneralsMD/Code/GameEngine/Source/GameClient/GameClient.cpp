@@ -1014,7 +1014,7 @@ void GameClient::update( void )
 				TheClientDrawMS = (Real)((double)(drawEnd - drawStart) * 1000.0 / (double)freq);
 #endif
 		}
-		else if( TheParticleSystemManager )
+		else
 		{
 			//
 			// The particle manager is updated from inside the draw, and its update is the only thing
@@ -1028,7 +1028,11 @@ void GameClient::update( void )
 			// the same bookkeeping a rendered run does, on a run that has no picture.  The same seed
 			// ends with 138 systems instead of 26,811, and the run takes 19.1s against 18.8 and 19.0.
 			//
-			TheParticleSystemManager->update();
+			if( TheParticleSystemManager )
+				TheParticleSystemManager->update();
+			// The light pulses are the same story: only the render faded and parked them, so a headless
+			// match kept every muzzle flash of the match switched on, and each new one walked them all.
+			TheDisplay->stepDynamicLights();
 		}
 	}
 
@@ -1693,6 +1697,19 @@ void GameClient::preloadAssets( TimeOfDay timeOfDay )
 	getPreloadMemoryStatus(before);
 	for (i=0; *textureNames[i]; ++i)
 		TheDisplay->preloadTextureAssets(textureNames[i]);
+
+	// A ring's texture is otherwise read the frame the first ring of its kind lights, as much as
+	// 125 ms off a cold disk in the middle of a battle.  They are small and every match wants them.
+	for (Int kind = 0; kind < RANK_AURA_COUNT; ++kind)
+	{
+		const RadiusDecalTemplate &ring = TheGlobalData->m_rankAuraRing[kind];
+		if (!ring.valid())
+			continue;
+
+		AsciiString textureFile = ring.getTexture();
+		textureFile.concat(".tga");
+		TheDisplay->preloadTextureAssets(textureFile);
+	}
 	getPreloadMemoryStatus(after);
 
 	DEBUG_LOG(("Preloading memory dwAvailPageFile %d --> %d : %d\n",

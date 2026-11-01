@@ -1,0 +1,21 @@
+# Does a Nuke Cannon fire on what parked at the far end of its reach?
+#
+# Two Humvees drive off and park, the cannon chases and stops with them 341 from its edge against a
+# reach of 356. A cannon that tested the target's centre against that reach saw 357, so it stood
+# there undeployed for good and both Humvees lived. Pass is the EXPECT line:
+#
+#   HEADLESS EXPECT: PASS: frame 1500 slot 1 'AmericaVehicleHumvee': 0 alive, wanted 0
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 3100
+#     -scenario deploystall -logPrefix deploystall_
+#
+# See mobstress.txt for the line grammar.
+
+30    spawn   0  ChinaVehicleNukeLauncher  1  700 500
+30    spawn   1  AmericaVehicleHumvee      2  950 500  20
+60    move    1  AmericaVehicleHumvee         1150 510
+64    attack  0  ChinaVehicleNukeLauncher  1  AmericaVehicleHumvee
+
+1500  tally   1  AmericaVehicleHumvee      0

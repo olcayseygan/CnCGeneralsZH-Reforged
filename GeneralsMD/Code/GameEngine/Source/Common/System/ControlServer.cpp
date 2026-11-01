@@ -32,6 +32,7 @@
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
+#include "Common/LogicThread.h"
 #include "Common/MessageStream.h"
 #include "Common/Money.h"
 #include "Common/Player.h"
@@ -700,6 +701,8 @@ static void handleCommand( const AsciiString &command )
 
 	if (command == "quit")
 	{
+		// a driven run never reaches the unattended report: net_check reads the census from here
+		LogicThread::report();
 		theQuitRequested = TRUE;
 		replyOk( "\"quitting\":true" );
 		return;

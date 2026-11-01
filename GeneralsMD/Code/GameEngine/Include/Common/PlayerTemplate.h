@@ -141,8 +141,9 @@ public:
 	AsciiString getScoreScreenMusic() const { return m_scoreScreenMusic; }
 
   inline Bool isOldFaction( void ) const { return m_oldFaction; }
-	/// a plain Random never draws it; a lobby's own pick of the Random pool may still tick it in
-	inline Bool isRandomExcluded( void ) const { return m_randomExcluded; }
+	/// a plain Random never draws it; a lobby's own pick of the Random pool may still tick it in.  A mod's
+	/// faction is always out of a plain Random: it plays only when somebody picks it.
+	inline Bool isRandomExcluded( void ) const { return m_randomExcluded || m_modIndex >= 0; }
 
 	static const FieldParse* getFieldParse();
 

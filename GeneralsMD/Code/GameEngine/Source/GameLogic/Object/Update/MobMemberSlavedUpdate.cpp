@@ -64,14 +64,12 @@
 #endif
 
 
-/* Where a member stands inside the mob.  The slot comes from the member's own object id, which is
-	 handed out in creation order and is the same number on every machine, so ten members spawned in
-	 a row take ten different slots and keep them for as long as they live.  The slots sit on a
-	 sunflower spiral - turn by the golden angle, step out by the square root of the slot number -
-	 which spreads any number of them evenly over a disc without any ring bookkeeping.  Before this,
-	 every member pathed to the one point the nexus was headed for, arrived on top of its
-	 neighbours, and spent the rest of the trip being shoved around by the pathfinder. */
-const Int MOB_FORMATION_SLOT_COUNT = 12;
+/* Where a member stands inside the mob.  The slot is the member's place in its nexus' list, so no
+	 two members of a mob ever share one, whatever the mob's size or whatever else was built between
+	 them.  The slots sit on a sunflower spiral - turn by the golden angle, step out by the square
+	 root of the slot number - which spreads any number of them evenly over a disc without any ring
+	 bookkeeping.  Before this, every member pathed to the one point the nexus was headed for, arrived
+	 on top of its neighbours, and spent the rest of the trip being shoved around by the pathfinder. */
 const Real MOB_FORMATION_GOLDEN_ANGLE = 2.39996f;
 const Real MOB_FORMATION_SPACING_IN_RADII = 2.2f;	// just over two bodies apart, so neighbours do not shove
 
@@ -90,8 +88,11 @@ const Real MOB_FORMATION_ARRIVED_DISTANCE = PATHFIND_CELL_SIZE_F * 1.2f;
 // How far my slot has to have moved before it is worth spending another path on it.
 const Real MOB_FORMATION_REPATH_DISTANCE = PATHFIND_CELL_SIZE_F * 5.0f;
 
-// How far ahead of the nexus I may get before I ease off and let it catch up.
-const Real MOB_FORMATION_LEAD_ALLOWANCE = 25.0f;
+// Speed added for each unit I am behind the nexus on the march, taken away for each unit ahead of it.
+const Real MOB_PACE_GAIN = 0.2f;
+
+// The slowest I walk to let the nexus catch up, as a fraction of its speed.
+const Real MOB_PACE_SLOWEST = 0.7f;
 
 // Beyond this multiple of the catch-up radius I have lost the mob and stop being subtle about it.
 const Real MOB_CATCH_UP_CRISIS_MULTIPLIER = 3.0f;
@@ -255,11 +256,6 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 	Object *primaryVictim = TheGameLogic->findObjectByID(m_primaryVictimID);
 
 
-	//now, we don't know if master is standing still or going somewhere, so
-	Real masterPathDistToGoal = masterAI->getLocomotorDistanceToGoal();
-	Real myPathDistToGoal = myAI->getLocomotorDistanceToGoal();
-
-
 	Coord3D slotPosition;
 	computeSlotPosition( master, &slotPosition );
 
@@ -268,18 +264,48 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 	const Real distanceToSlot = slotDelta.length();
 
 	const Real distanceToMaster = sqrtf( ThePartitionManager->getDistanceSquared( me, master, FROM_CENTER_3D ) );
-	const Bool lostTheMob = distanceToMaster > data->m_mustCatchUpRadius;
 
-	/* One body, one speed.  A member further from the nexus than it is allowed to be runs; a member
-		 that is closer to the shared destination than the nexus is eases off rather than arriving
-		 alone and standing there.  EA rolled a die here instead, which is why a third of the mob was
-		 always ambling while the rest of it ran. */
+	/* On the march, how far I am behind the nexus along the line to its goal.  Plain distance from
+		 the nexus cannot say that: a member whose slot sits out on the wing is far away without being
+		 late, and one that has got ahead reads as lost and sprints further ahead.  Nor can the two
+		 distances left along the paths, which come from different searches and jump by a hundred units
+		 from one look to the next. */
+	Coord3D toGoal = *masterAI->getGoalPosition();
+	toGoal.sub( master->getPosition() );
+	toGoal.z = 0.0f;
+	const Real masterDistToGoal = toGoal.length();
+	const Bool marching = masterAI->isMoving() && myAI->isMoving() && ! myAI->isAttacking() && masterDistToGoal > 1.0f;
+	Real lag = 0.0f;
+	if ( marching )
+	{
+		const Coord3D *myPos = me->getPosition();
+		const Coord3D *masterPos = master->getPosition();
+		lag = ( ( masterPos->x - myPos->x ) * toGoal.x + ( masterPos->y - myPos->y ) * toGoal.y ) / masterDistToGoal;
+	}
+	const Bool lostTheMob = marching ? lag > data->m_mustCatchUpRadius : distanceToMaster > data->m_mustCatchUpRadius;
+
+	/* One body, one speed.  EA rolled a die here, and switching between the walk and the run on a
+		 threshold was no better: the run outpaces the nexus, the walk loses to it, so the mob surged
+		 back and forth around the threshold every couple of seconds.  A member holds the nexus' own
+		 speed and closes any gap gradually; only one that has really lost the mob runs. */
 	if ( lostTheMob )
+	{
 		myAI->chooseLocomotorSet( LOCOMOTORSET_PANIC );
-	else if ( masterAI->isMoving() && myPathDistToGoal + MOB_FORMATION_LEAD_ALLOWANCE < masterPathDistToGoal )
-		myAI->chooseLocomotorSet( LOCOMOTORSET_WANDER );
+		myAI->setDesiredSpeed( FAST_AS_POSSIBLE );
+	}
 	else
+	{
 		myAI->chooseLocomotorSet( LOCOMOTORSET_NORMAL );
+		if ( marching )
+		{
+			const Real masterSpeed = masterAI->getCurLocomotor()->getMaxSpeedForCondition( master->getBodyModule()->getDamageState() );
+			myAI->setDesiredSpeed( MAX( masterSpeed + lag * MOB_PACE_GAIN, masterSpeed * MOB_PACE_SLOWEST ) );
+		}
+		else
+		{
+			myAI->setDesiredSpeed( FAST_AS_POSSIBLE );
+		}
+	}
 
 	/* The formation is for the road and nothing else.  A nexus that has stopped is a nexus in a
 		 fight, and a member that walks to a spot on the ground during one is a member not throwing
@@ -387,7 +413,7 @@ void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *positi
 		*position = *master->getPosition();
 	}
 
-	const Int slot = ((Int)me->getID()) % MOB_FORMATION_SLOT_COUNT;
+	const Int slot = master->getSpawnBehaviorInterface()->getSlaveIndex( me->getID() );
 	const Real spacing = me->getGeometryInfo().getBoundingCircleRadius() * MOB_FORMATION_SPACING_IN_RADII;
 	const Real angle = slot * MOB_FORMATION_GOLDEN_ANGLE;
 	const Real radius = spacing * sqrtf( slot + 0.5f );

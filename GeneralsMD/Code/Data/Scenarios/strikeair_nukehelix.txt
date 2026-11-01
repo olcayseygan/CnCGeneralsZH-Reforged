@@ -1,0 +1,23 @@
+# The same missile at four Helixes, the slowest helicopter there is.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover 1 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionChina -seed 1 -maxframes 12000 -scenario strikeair_nukehelix
+
+30 spawn 1 ChinaPowerPlant 2 start1:-280:-300 120
+30 spawn 1 ChinaNuclearMissileLauncher 1 start1:-280:-120
+3000 spawn 0 ChinaVehicleHelix 4 start0:240:120 40
+3000 tally 0 ChinaVehicleHelix
+3010 power 1 ChinaNuclearMissileLauncher start0:240:120
+3010 tally 0 ChinaVehicleHelix
+3090 tally 0 ChinaVehicleHelix
+3180 tally 0 ChinaVehicleHelix
+3270 tally 0 ChinaVehicleHelix
+3360 tally 0 ChinaVehicleHelix
+3450 tally 0 ChinaVehicleHelix
+3540 tally 0 ChinaVehicleHelix
+3630 tally 0 ChinaVehicleHelix
+3720 tally 0 ChinaVehicleHelix
+3900 tally 0 ChinaVehicleHelix
+4200 tally 0 ChinaVehicleHelix
+4800 tally 0 ChinaVehicleHelix

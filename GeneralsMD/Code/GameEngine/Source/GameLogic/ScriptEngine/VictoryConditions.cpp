@@ -199,8 +199,8 @@ void VictoryConditions::update( void )
 			if (TheGameLogic->getFrame() > 1)
 			{
 				ThePartitionManager->revealMapForPlayerPermanently( p->getPlayerIndex() );
-				TheGameClient->updateFakeDrawables();
-				
+				LogicThread::callAfterTick( []() { TheGameClient->updateFakeDrawables(); } );
+
 				UnicodeString defeated;
 				defeated.format( TheGameText->fetch( "GUI:PlayerHasBeenDefeated" ), p->getPlayerDisplayName().str() );
 				TheInGameUI->playerMessage( p, defeated );
@@ -226,7 +226,8 @@ void VictoryConditions::update( void )
 
 			// destroy any remaining units (infantry if its a short game, for example)
 			p->killPlayer();
-			PopulateInGameDiplomacyPopup();
+			// it writes the tab screen's windows, which the render draws beside the tick
+			LogicThread::callAfterTick( []() { PopulateInGameDiplomacyPopup(); } );
 		}
 	}
 

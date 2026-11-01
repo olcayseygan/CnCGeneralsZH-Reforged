@@ -14326,7 +14326,7 @@ GUI:ClassicGraphics
 END
 
 TOOLTIP:ClassicGraphics
-"Das Spiel wie 2003: eigene Texturen und Boden, die alten harten Schatten, keine Bump-Details, kein Leuchten und keine Schärfung. Aus ist Reforged. Gilt ab dem nächsten Spielstart."
+"Das Spiel wie 2003: eigene Texturen und Boden, die alten harten Schatten, keine Bump-Details, kein Leuchten und keine Schärfung. So startet das Spiel. Für das Reforged-Bild den Haken entfernen: Die Stufe Hoch füllt die Felder aus, von dort lässt sich der Regler verschieben. Gilt ab dem nächsten Spielstart."
 END
 
 GUI:InfantryShadows
@@ -14994,7 +14994,7 @@ GUI:MapLight
 END
 
 TOOLTIP:MapLight
-"Eine tief stehende Nachmittagssonne taucht die Karte in wärmeres Licht und wirft längere Schatten, und über tiefem Gelände liegt ein leichter Dunst, den Flugzeuge beim Durchfliegen teilen. Nur mit Direct3D 11. Gilt ab der nächsten Karte."
+"Eine tief stehende Nachmittagssonne taucht die Karte in wärmeres Licht und wirft längere Schatten, und über tiefem Gelände liegt reglos ein leichter Dunst. Nur mit Direct3D 11. Gilt ab der nächsten Karte."
 END
 
 GUI:TeamGlow

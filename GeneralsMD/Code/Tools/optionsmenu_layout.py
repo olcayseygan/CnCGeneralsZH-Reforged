@@ -189,6 +189,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckEmptyBuildingPips", "GUI:EmptyBuildingPips"),
     (CHECK,  "CheckZoomToCursor",      "GUI:ZoomToCursor"),
     (CHECK,  "CheckIsometricCamera",   "GUI:IsometricCamera"),
+    (CHECK,  "CheckCameraShake",       "GUI:CameraShake"),
     (CHECK,  "CheckStartAtMaxZoom",    "GUI:StartAtMaxZoom"),
     (CHECK,  "CheckSnapCamera45",      "GUI:SnapCamera45"),
     (CHECK,  "CheckGridBuild",         "GUI:GridBuild"),
@@ -204,8 +205,6 @@ NEW_CONTROLS = [
     (CHECK,  "CheckParticleShadows",   "GUI:ParticleShadows"),
     (LABEL,  "LabelSmoke",             "GUI:Smoke"),
     (COMBO,  "ComboBoxSmoke",          None),
-    (LABEL,  "LabelVolumeSmoke",       "GUI:VolumeSmoke"),
-    (COMBO,  "ComboBoxVolumeSmoke",    None),
     (CHECK,  "CheckParticleBounce",    "GUI:ParticleBounce"),
     (CHECK,  "CheckChromaLighting",    "GUI:ChromaLighting"),
     (LABEL,  "LabelAmbientVolume",     "GUI:AmbientVolume"),
@@ -239,6 +238,16 @@ NEW_CONTROLS = [
     (CHECK,  "CheckMapLight",          "GUI:MapLight"),
     (CHECK,  "CheckTeamGlow",          "GUI:TeamGlow"),
     (CHECK,  "CheckWaterFoam",         "GUI:WaterFoam"),
+    (CHECK,  "CheckGroundMarks",       "GUI:GroundMarks"),
+    (CHECK,  "CheckFirelight",         "GUI:Firelight"),
+    (CHECK,  "CheckHemiAmbient",       "GUI:HemiAmbient"),
+    (CHECK,  "CheckAmbientOcclusion",  "GUI:AmbientOcclusion"),
+    (CHECK,  "CheckInternalHdr",       "GUI:InternalHdr"),
+    (CHECK,  "CheckWeather",           "GUI:Weather"),
+    (CHECK,  "CheckWaterSplashes",     "GUI:WaterSplashes"),
+    (CHECK,  "CheckAtmosphere",        "GUI:Atmosphere"),
+    (CHECK,  "CheckStructureCollapse", "GUI:StructureCollapse"),
+    (CHECK,  "CheckSmoothMotion",      "GUI:SmoothMotion"),
     (LABEL,  "LabelGraphicsQuality",   "GUI:GraphicsQuality"),
     (SLIDER, "SliderGraphicsQuality",  None),
 ]
@@ -343,7 +352,10 @@ GROUP_LAYOUT = [
             setting("LabelFullscreenScaling", "ComboBoxFullscreenScaling"),
             ("check", "CheckVSync")]),
         ("GUI:OptionsGroupPicture", [
-            setting("GammaLabel", "SliderGamma", "ValueGamma")])]),
+            setting("GammaLabel", "SliderGamma", "ValueGamma"),
+            # every column of Graphics and Effects is full
+            ("check", "CheckStructureCollapse"),
+            ("check", "CheckSmoothMotion")])]),
 
     ("PageGraphics", [
         # the particle limit went to Effects' Particles group to make room for the quality slider
@@ -360,7 +372,8 @@ GROUP_LAYOUT = [
             setting("LabelAnisotropy", "SliderAnisotropy", "ValueAnisotropy"),
             # the Lighting column is full with the water and cloud styles
             ("check", "CheckMapLight"),
-            ("check", "CheckTeamGlow")]),
+            ("check", "CheckTeamGlow"),
+            ("check", "CheckAtmosphere")]),
         ("GUI:OptionsGroupLighting", [
             setting("LabelLightingStyle", "ComboBoxLightingStyle"),
             setting("LabelBloom", "ComboBoxBloom"),
@@ -378,16 +391,22 @@ GROUP_LAYOUT = [
             ("check", "CheckShowProps"),
             ("check", "CheckSmoothWater"),
             ("check", "CheckWaterFoam"),
+            ("check", "CheckGroundMarks"),
+            ("check", "CheckHemiAmbient"),
+            ("check", "CheckAmbientOcclusion"),
+            ("check", "CheckInternalHdr"),
             ("check", "CheckExtraAnimations"),
             ("check", "CheckTreeSway"),
             ("check", "CheckBehindBuilding")]),
         ("GUI:OptionsGroupParticles", [
             setting("LabelParticleCap", "ParticleCapSlider", "ValueParticleCap"),
             setting("LabelSmoke", "ComboBoxSmoke"),
-            setting("LabelVolumeSmoke", "ComboBoxVolumeSmoke"),
             ("check", "CheckParticleBounce"),
             ("check", "CheckSmokeFireLighting"),
-            ("check", "CheckDebrisTrails")])]),
+            ("check", "CheckFirelight"),
+            ("check", "CheckDebrisTrails"),
+            ("check", "CheckWeather"),
+            ("check", "CheckWaterSplashes")])]),
 
     ("PageAudio", [
         ("GUI:OptionsGroupVolume", [
@@ -412,7 +431,8 @@ GROUP_LAYOUT = [
             ("check", "CheckZoomToCursor"),
             ("check", "CheckStartAtMaxZoom"),
             ("check", "CheckSnapCamera45"),
-            ("check", "CheckEdgeScrollWindowed")]),
+            ("check", "CheckEdgeScrollWindowed"),
+            ("check", "CheckCameraShake")]),
         ("GUI:OptionsGroupOrders", [
             setting("LabelDragTolerance", "SliderDragTolerance", "ValueDragTolerance"),
             ("check", "CheckAlternateMouse"),
@@ -973,17 +993,18 @@ def selfcheck():
         for key in ("GUI:%s" % setting_of(name), "TOOLTIP:%s" % setting_of(name)):
             if key not in keys:
                 problems.append("%s needs %s in Patch.str" % (name, key))
-    # every row of the quality slider names a control on Graphics or Effects and has a value for
-    # every step; a row one value short still compiles, with a 0 in the last step
+    # every row of the quality slider names a control on Graphics, Effects or Display, where the full
+    # columns pushed Collapsing Buildings, and has a value for every step; a row one value short still
+    # compiles, with a 0 in the last step
     steps = enum_count("GRAPHICS_QUALITY_STEPS")
     quality = read_quality_table()
     if len(quality) < 9:
         problems.append("only %d quality rows parsed, the regex has stopped matching" % len(quality))
-    on_pages = set(short(child) for page in ("PageGraphics", "PageEffects")
+    on_pages = set(short(child) for page in ("PageGraphics", "PageEffects", "PageDisplay")
                    for child in layout.find(page).children)
     for control, values in quality:
         if control not in on_pages:
-            problems.append("quality row %s is not a control on the Graphics or Effects page" % control)
+            problems.append("quality row %s is not a control on the Graphics, Effects or Display page" % control)
         if len(values) != steps:
             problems.append("quality row %s has %d values for %d steps" % (control, len(values), steps))
 

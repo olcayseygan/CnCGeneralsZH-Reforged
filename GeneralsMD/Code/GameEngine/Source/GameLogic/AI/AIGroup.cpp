@@ -2035,6 +2035,11 @@ static void crowdSeedLanesAlongWaypoint( AIGroup *group, std::list<Object *>& me
 {
 	if (group == NULL || way == NULL)
 		return;
+	/* A waypoint path in a mission is a route a scripter drew, down a road between what the cinematic
+		 puts on either side of it.  With a lane each, China's parade fanned out 80 feet across the road and
+		 off it, so the team drives its own offsets, as in EA's game. */
+	if (TheGameLogic->isInSinglePlayerGame())
+		return;
 	Coord2D min, max;
 	Coord3D center;
 	group->getMinMaxAndCenter( &min, &max, &center );

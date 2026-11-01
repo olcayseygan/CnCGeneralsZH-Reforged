@@ -99,6 +99,7 @@ public:
 	RefRenderObjListClass				*getLightList(void) {return &LightList;};	///< for a stack iterator where a heap one per call costs
 	RefRenderObjListClass				*getDynamicLights(void) {return &m_dynamicLightList;};
 	W3DDynamicLight *getADynamicLight(void);
+	void				stepDynamicLights(void);	///< what Customized_Render does to the lights, for a pass that does not render
 	void				setGlobalLight(LightClass *pLight,Int lightIndex=0);
 	LightEnvironmentClass &getDefaultLightEnv(void) {return m_defaultLightEnv;}
 

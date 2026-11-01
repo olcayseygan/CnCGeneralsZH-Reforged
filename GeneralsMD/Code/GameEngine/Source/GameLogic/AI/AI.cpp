@@ -832,6 +832,28 @@ Int AI_threatScore( Int templateThreatValue, Int buildCost, Bool threatensMe,
 
 //-----------------------------------------------------------------------------
 /**
+ * Whether a candidate of the scripted-priority search below takes the lead, Object-free so
+ * test_gameengine can link to it.
+ *
+ * That search used to sort every enemy on the map near to far, a stable merge sort over the
+ * gathered list, and let a candidate lead only on a higher priority after distance or an equal
+ * one with a higher priority before it. So the pick was the best by those two, then the smaller
+ * distance, then whichever the gathered list held first. One pass over the unsorted list that
+ * compares on all of it and keeps the incumbent on a full tie picks the same Object. A hunting
+ * unit asks for this over the whole map once a second, and the sort was 7% of its time.
+ */
+Bool AI_attackPriorityTakesLead( Int modPriority, Int curPriority, Real distSqr,
+																 Int bestModPriority, Int bestCurPriority, Real bestDistSqr )
+{
+	if (modPriority != bestModPriority)
+		return modPriority > bestModPriority;
+	if (curPriority != bestCurPriority)
+		return curPriority > bestCurPriority;
+	return distSqr < bestDistSqr;
+}
+
+//-----------------------------------------------------------------------------
+/**
  * Return the closest enemy, according to the qualifiers.
  */
 static Bool AI_filtersAllow( PartitionFilter **filters, Object *candidate )
@@ -1009,9 +1031,13 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	Object *bestEnemy = NULL;
 	Int			effectivePriority=0;
 	Int			actualPriority=0;
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR, enemyPlayers);
+	Real		bestDistSqr=0.0f;
+	// unsorted, see AI_attackPriorityTakesLead; each entry carries the distance the gather measured,
+	// which is what getDistanceSquared would measure again
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_FASTEST, enemyPlayers);
 	MemoryPoolObjectHolder holder(iter);
-	for (Object *theEnemy = iter->first(); theEnemy; theEnemy = iter->next()) 
+	Real distSqr;
+	for (Object *theEnemy = iter->firstWithNumeric(&distSqr); theEnemy; theEnemy = iter->nextWithNumeric(&distSqr))
 	{
 		Int curPriority = info->getPriority(theEnemy->getTemplate());
 		if (curPriority == 0) 
@@ -1029,18 +1055,17 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			}
 		}
 
-		Real distSqr = ThePartitionManager->getDistanceSquared(me, theEnemy, FROM_BOUNDINGSPHERE_2D);
 		Real dist = sqrt(distSqr);
 		Int modifier = floatToIntAsMsvc(dist/TheAI->getAiData()->m_attackPriorityDistanceModifier);
 		Int modPriority = curPriority-modifier;
 		if (modPriority < 1)
 			modPriority = 1;
-		const Bool takesLead = modPriority > effectivePriority ||
-			(modPriority == effectivePriority && curPriority > actualPriority);
-		if (takesLead && AI_filtersAllow(filters + numGatherFilters, theEnemy))
+		if (AI_attackPriorityTakesLead(modPriority, curPriority, distSqr, effectivePriority, actualPriority, bestDistSqr)
+			&& AI_filtersAllow(filters + numGatherFilters, theEnemy))
 		{
 			effectivePriority = modPriority;
 			actualPriority = curPriority;
+			bestDistSqr = distSqr;
 			bestEnemy = theEnemy;
 		}
 	}	
@@ -1249,7 +1274,7 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 	* opened a gap the two lower rungs could not cross.  Easy looks every 75 seconds and re-decides
 	* every 7, and its trucks follow the piles; it still never retreats, never counters and never
 	* hurries a spend.  Medium looks every 45 and re-decides every 3, counters at half weight, and
-	* starts spending past 6000 instead of 10000.  Massing, team retreat, the influence map, defended
+	* starts spending past 6000 instead of 10000.  Massing, team retreat, the attack lanes, defended
 	* expansions, extra buildings and tactical fighting stay on Hard, and the two measured columns
 	* above were left where the matches put them.
 	*
@@ -1344,12 +1369,25 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 	* Easy's few, half of Medium's and a quarter of Hard's.  A side that names no Artillery or Spotter
 	* draws nothing and plays as before.
 	*
-	*                      scoutS maxSc decis  cntr  mass   ttk  indiv team infl focus save harv expand guard hoard econ micro  gate  answer massU  bankS  floor payoff upgr    nonc  share backlog push   minPow  siege  beam  strikeE strikeT swDef                     stall  lost retry  stage  spot arty */
+	* inflS to fireMem, 2026-10-30.  The owner: "bu ai lar artik su influence map i falan biraz ciddiye
+	* alsinlar, hedef aliniyorlar hala devam ediyorlar ayni yerde."  Units shelled from past their sight
+	* stood and took it on every rung, so every rung now reads the map and answers a hit (AIPlayer::
+	* answerFire).  inflS is how old the map may be when read: Hard draws it on the clock every second as
+	* before, and the rungs below draw it only when something asks, every two and every four seconds at
+	* the most, so a quiet match costs them nothing.  fireLook is how often a rung looks at who is being hit:
+	* Easy every three seconds.  A roll for the share of hits it noticed came out: hits come seconds apart, so
+	* a miss threw away what may be the only look a tank gets, and every draw redrew the match.  word is how far the rest of the group goes with a unit hit: Easy's answer alone, one at a time, which is the
+	* sloppy part, and Hard's whole group at once.  odds is what ours have to be worth against what covers
+	* the gun before they go for it, with Hard the least willing to walk into a loss and Easy the most, as
+	* with the odds at a known defence's edge.  fireMem is how long a gun it has lost sight of stays on its
+	* map, and with it the ground it covers.
+	*
+	*                      scoutS maxSc decis  cntr  mass   ttk  indiv team infl focus save harv expand guard hoard econ micro  gate  answer massU  bankS  floor payoff upgr    nonc  share backlog push   minPow  siege  beam  strikeE strikeT swDef                     stall  lost retry  stage  spot arty    inflS fireLook word   odds   fireMem  watch watchOdds dodge */
 static const AIDifficultyProfile s_defaultSkillLadder[ AISKILL_COUNT ] =
 {
-	/* Easy      */ { 75.0f, 1,  7.0f,  0.00f, FALSE, 0.00f, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE, FALSE,     0, FALSE, FALSE, FALSE, FALSE, FALSE, 120.0f, 6000, 4.0f, 720.0f, 0.05f, 0.05f,  90.0f, 360.0f, 1500.0f,  80.0f, 0.00f, 0.0f, 2.0f, 3,                        300.0f, 3, 300.0f, FALSE, 1, 1.00f },
-	/* Medium    */ { 45.0f, 1,  3.0f,  0.50f, FALSE, 0.35f, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  6000, FALSE, FALSE, FALSE, FALSE, FALSE,  60.0f, 5000, 2.5f, 420.0f, 0.05f, 0.25f,  75.0f, 300.0f, 2000.0f, 120.0f, 1.00f, 2.0f, 1.0f, 6,                        240.0f, 2, 240.0f, TRUE,  1, 0.50f },
-	/* Hard      */ { 25.0f, 2,  1.5f,  1.00f, TRUE,  0.50f, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,   4000, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  30.0f, 4000, 1.5f, 180.0f, 0.05f, 1.00f,  45.0f, 240.0f, 4500.0f, 160.0f, 0.25f, 3.0f, 0.0f, DEFENSES_PER_SUPERWEAPON, 180.0f, 2, 180.0f, TRUE,  2, 0.25f }
+	/* Easy      */ { 75.0f, 1,  7.0f,  0.00f, FALSE, 0.00f, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE, FALSE,     0, FALSE, FALSE, FALSE, FALSE, FALSE, 120.0f, 6000, 4.0f, 720.0f, 0.05f, 0.05f,  90.0f, 360.0f, 1500.0f,  80.0f, 0.00f, 0.0f, 2.0f, 3,                        300.0f, 3, 300.0f, FALSE, 1, 1.00f, 4.0f, 3.00f,   0.0f, 0.60f, 10.0f, 16.0f, 1.0f, 3.25f },
+	/* Medium    */ { 45.0f, 1,  3.0f,  0.50f, FALSE, 0.35f, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  6000, FALSE, FALSE, FALSE, FALSE, FALSE,  60.0f, 5000, 2.5f, 420.0f, 0.05f, 0.25f,  75.0f, 300.0f, 2000.0f, 120.0f, 1.00f, 2.0f, 1.0f, 6,                        240.0f, 2, 240.0f, TRUE,  1, 0.50f, 2.0f, 1.00f, 150.0f, 0.80f, 20.0f,  6.0f, 1.5f, 1.50f },
+	/* Hard      */ { 25.0f, 2,  1.5f,  1.00f, TRUE,  0.50f, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,   4000, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  30.0f, 4000, 1.5f, 180.0f, 0.05f, 1.00f,  45.0f, 240.0f, 4500.0f, 160.0f, 0.25f, 3.0f, 0.0f, DEFENSES_PER_SUPERWEAPON, 180.0f, 2, 180.0f, TRUE,  2, 0.25f, 1.0f, 0.33f, 300.0f, 1.00f, 40.0f,  2.0f, 2.0f, 0.33f }
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -1378,7 +1416,7 @@ Real aiRetreatRatio( Real myHealth, Real myPower, Real enemyHealth, Real enemyPo
 	return (ratio > NOT_A_FIGHT) ? NOT_A_FIGHT : ratio;
 }
 
-static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount )
+static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount, const AIInfluenceMap *map )
 {
 	for( Int g = 0; g < gunCount; ++g )
 	{
@@ -1387,36 +1425,178 @@ static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount )
 		if( gx * gx + gy * gy <= guns[ 3 * g + 2 ] * guns[ 3 * g + 2 ] )
 			return TRUE;
 	}
-	return FALSE;
+	return map != NULL && map->enemyAt( x, y ) > 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Where a force that is losing stops falling back: walking from (fromX, fromY) towards home in
-	* steps, the first spot no gun in guns[] reaches with one more step of clear ground past it, and
-	* that next step is where it stands, so the edge of a reach is never the place.  guns holds x, y
-	* and reach for each of gunCount guns.  FALSE, with home in the answer, when the line never leaves
-	* their reach before it gets home. */
+/** How far a force at (fromX, fromY) walks along (dirX, dirY), a unit vector, in steps, to the first
+	* spot no gun reaches with one more step of clear ground past it, that next step included; -1 when it
+	* is not out by maxWalk, or walks off the map (bounds: low x, low y, high x, high y) first. */
+static Real walkOutOfReach( Real fromX, Real fromY, Real dirX, Real dirY, Real maxWalk, Real step,
+														const Real *guns, Int gunCount, const Real *bounds, const AIInfluenceMap *map )
+{
+	for( Real along = step; along + step < maxWalk; along += step )
+	{
+		const Real nextX = fromX + dirX * (along + step);
+		const Real nextY = fromY + dirY * (along + step);
+		if( nextX < bounds[ 0 ] || nextY < bounds[ 1 ] || nextX > bounds[ 2 ] || nextY > bounds[ 3 ] )
+			return -1.0f;
+		if( !gunsReach( fromX + dirX * along, fromY + dirY * along, guns, gunCount, map ) &&
+				!gunsReach( fromX + dirX * (along + step), fromY + dirY * (along + step), guns, gunCount, map ) )
+			return along + step;
+	}
+	return -1.0f;
+}
+
+/** Where a force that is losing stops falling back: the first spot no gun in guns[] reaches with one
+	* more step of clear ground past it, and that next step is where it stands, so the edge of a reach is
+	* never the place.  guns holds x, y and reach for each of gunCount guns.  FALSE, with home in the
+	* answer, when no way leaves their reach before it has walked as far as home is.
+	*
+	* The way out is the road home, or 45 or 90 degrees off it when that gets out of reach more than a
+	* step sooner.  Home alone walked a force past the guns whenever they stood between it and home, the
+	* Gatling Cannons by Tournament Desert's middle docks among them, and one in seven units a Hard China
+	* pulled out of a fight there died to a building within fifteen seconds of the order.  A way that walks
+	* off the map (bounds) is no way out; ground the pathfinder cannot stand on is its to move to the
+	* nearest that it can, as with any move.  With a map, every enemy gun on it counts as well as the ones in
+	* guns[]: those are the guns of the fight, and a spot clear of them stood under the next gun over. */
 //-------------------------------------------------------------------------------------------------
 Bool aiRetreatFallbackPoint( Real fromX, Real fromY, Real homeX, Real homeY, Real step,
-														 const Real *guns, Int gunCount, Real *outX, Real *outY )
+														 const Real *guns, Int gunCount, const Real *bounds, Real *outX, Real *outY,
+														 const AIInfluenceMap *map )
 {
 	*outX = homeX;
 	*outY = homeY;
 	const Real dx = homeX - fromX;
 	const Real dy = homeY - fromY;
 	const Real homeDist = (Real)sqrt( dx * dx + dy * dy );
-	for( Real along = step; along + step < homeDist; along += step )
+	if( homeDist <= 0.0f )
+		return FALSE;
+	const Real hx = dx / homeDist;
+	const Real hy = dy / homeDist;
+	const Real HALF_ROOT_TWO = 0.70710678f;		// cos and sin of 45 degrees, no trig in logic
+	const Real ways[ 5 ][ 2 ] =
 	{
-		const Real x = fromX + dx * (along + step) / homeDist;
-		const Real y = fromY + dy * (along + step) / homeDist;
-		if( gunsReach( fromX + dx * along / homeDist, fromY + dy * along / homeDist, guns, gunCount ) ||
-				gunsReach( x, y, guns, gunCount ) )
-			continue;
-		*outX = x;
-		*outY = y;
-		return TRUE;
+		{ hx, hy },
+		{ HALF_ROOT_TWO * (hx - hy), HALF_ROOT_TWO * (hx + hy) },
+		{ HALF_ROOT_TWO * (hx + hy), HALF_ROOT_TWO * (hy - hx) },
+		{ -hy, hx },
+		{ hy, -hx }
+	};
+	Int best = -1;
+	Real bestWalk = 0.0f;
+	for( Int w = 0; w < 5; ++w )
+	{
+		const Real walk = walkOutOfReach( fromX, fromY, ways[ w ][ 0 ], ways[ w ][ 1 ], homeDist, step, guns, gunCount, bounds, map );
+		if( walk >= 0.0f && (best < 0 || walk + step < bestWalk) )
+		{
+			best = w;
+			bestWalk = walk;
+		}
 	}
-	return FALSE;
+	if( best < 0 )
+		return FALSE;
+	*outX = fromX + ways[ best ][ 0 ] * bestWalk;
+	*outY = fromY + ways[ best ][ 1 ] * bestWalk;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+AIFireAnswer aiAnswerFire( Bool onTheGun, Bool fightingAGun, Bool canShootNow, Bool canGetAtIt, Real ours, Real cover, Real odds, Bool mayLeave, Bool idle )
+{
+	if( onTheGun || fightingAGun )
+		return AIFIRE_CARRY_ON;
+	if( canShootNow )
+		return AIFIRE_SHOOT_BACK;
+	if( canGetAtIt && !aiOutgunned( ours, cover, odds ) )
+		return AIFIRE_GO_KILL;
+	if( mayLeave )
+		return AIFIRE_LEAVE;
+	if( !idle )
+		return AIFIRE_CARRY_ON;
+	return canGetAtIt ? AIFIRE_GO_KILL : AIFIRE_LEAVE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Real aiFireOddsNow( Real odds, Bool sentAtIt, Real margin )
+{
+	return sentAtIt ? odds / margin : odds;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiFireMayGoBack( Bool sentAtIt )
+{
+	return !sentAtIt;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiFireAnswerOver( Bool retreatHasIt, Bool steppedAway, UnsignedInt framesOnIt, UnsignedInt maxFrames )
+{
+	return retreatHasIt || steppedAway || framesOnIt >= maxFrames;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiHolderLetGo( Bool retreatSeesIt, UnsignedInt heldFrames, Bool moving, UnsignedInt holdFrames, UnsignedInt staleFrames )
+{
+	if( heldFrames > staleFrames )
+		return TRUE;
+	return !retreatSeesIt && !moving && heldFrames > holdFrames;
+}
+
+//-------------------------------------------------------------------------------------------------
+void aiStrikeDodgeSpot( Real x, Real y, Real clumpX, Real clumpY, Real reach, const Real *bounds, Int tie, Real *outX, Real *outY )
+{
+	Real dx = x - clumpX;
+	Real dy = y - clumpY;
+	Real length = (Real)sqrt( dx * dx + dy * dy );
+	if( length < 1.0f )
+	{
+		dx = (tie & 1) ? 1.0f : -1.0f;
+		dy = (tie & 2) ? 1.0f : -1.0f;
+		length = (Real)sqrt( 2.0f );
+	}
+	dx *= reach / length;
+	dy *= reach / length;
+	if( x + dx < bounds[ 0 ] || x + dx > bounds[ 2 ] )
+		dx = -dx;
+	if( y + dy < bounds[ 1 ] || y + dy > bounds[ 3 ] )
+		dy = -dy;
+	*outX = x + dx;
+	*outY = y + dy;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiFireMayLeave( Bool unitAtHome, Bool gunAtHome, Bool rungRetreats, Bool gunKnown, Real gunDistance, Real retreatRadius )
+{
+	if( unitAtHome )
+		return !gunAtHome;
+	return !(rungRetreats && gunKnown && gunDistance <= retreatRadius);
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiOutgunned( Real ours, Real cover, Real odds )
+{
+	return cover > 0.0f && ours < odds * cover;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiRecentlyHit( UnsignedInt hitFrame, UnsignedInt now, UnsignedInt window )
+{
+	return hitFrame <= now && now - hitFrame <= window;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiWalkEntersReach( Real x, Real y, Real dirX, Real dirY, Real gunX, Real gunY, Real reach, Real edge, Real lookahead )
+{
+	const Real toX = gunX - x;
+	const Real toY = gunY - y;
+	const Real along = toX * dirX + toY * dirY;
+	if( toX * toX + toY * toY <= reach * reach || along <= 0.0f )
+		return FALSE;
+	const Real ahead = along > lookahead ? lookahead : along;
+	const Real nearX = x + dirX * ahead - gunX;
+	const Real nearY = y + dirY * ahead - gunY;
+	return nearX * nearX + nearY * nearY <= edge * edge;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2090,6 +2270,12 @@ Real aiWinChance( Real myPower, Real enemyPower )
 }
 
 //-------------------------------------------------------------------------------------------------
+Real aiSideWinChance( Real myPower, Real alliedPower, Real enemyPower, Int enemyAllies, Real allyShare )
+{
+	return aiWinChance( myPower + alliedPower * allyShare, enemyPower * (1.0f + INT_TO_REAL( enemyAllies ) * allyShare) );
+}
+
+//-------------------------------------------------------------------------------------------------
 AIPressure aiPressureLevel( Real chance, Bool enemyBaseInSight, AIPressure current )
 {
 	const Real FINISH_AT = 0.85f;
@@ -2294,6 +2480,14 @@ void AI::parseSkillLevel(INI *ini, void *instance, void* /*store*/, const void* 
 		{ "StageDozers",							INI::parseBool, NULL, offsetof( AIDifficultyProfile, m_stageDozers ) },
 		{ "ArtillerySpotters",				INI::parseInt,  NULL, offsetof( AIDifficultyProfile, m_artillerySpotters ) },
 		{ "ArtilleryShare",						INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_artilleryShare ) },
+		{ "InfluenceSeconds",					INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_influenceSeconds ) },
+		{ "FireLookSeconds",					INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_fireLookSeconds ) },
+		{ "FireWordRadius",						INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_fireWordRadius ) },
+		{ "FireChargeOdds",						INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_fireChargeOdds ) },
+		{ "FireMemorySeconds",				INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_fireMemorySeconds ) },
+		{ "BaseWatchSeconds",					INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_baseWatchSeconds ) },
+		{ "BaseWatchOdds",						INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_baseWatchOdds ) },
+		{ "StrikeDodgeSeconds",				INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_strikeDodgeSeconds ) },
 		{ NULL, NULL, NULL, 0 }
 	};
 

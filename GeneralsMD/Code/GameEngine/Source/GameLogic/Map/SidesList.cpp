@@ -54,6 +54,8 @@
 #include "Common/GlobalData.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/RandomMapGenerator.h"
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
 #include "Common/WellKnownKeys.h"
 #include "Common/Xfer.h"
 #include "GameLogic/AI.h"
@@ -513,10 +515,30 @@ struct ModScriptNames
 			case Parameter::UPGRADE: type = MODNAME_UPGRADE; break;
 			case Parameter::SCIENCE: type = MODNAME_SCIENCE; break;
 			case Parameter::SPECIAL_POWER: type = MODNAME_SPECIALPOWER; break;
-			case Parameter::COMMAND_BUTTON: type = MODNAME_COMMANDBUTTON; break;
+			case Parameter::COMMAND_BUTTON:
+			case Parameter::COMMANDBUTTON_ABILITY:
+			case Parameter::COMMANDBUTTON_ALL_ABILITIES: type = MODNAME_COMMANDBUTTON; break;
 			default: return;
 		}
-		parm->friend_setString(TheModNamespace.modName(mod, type, parm->getString()));
+		const AsciiString modded = TheModNamespace.modName(mod, type, parm->getString());
+		if (type != MODNAME_OBJECT || !namesMapObject(parm->getString(), modded))
+			parm->friend_setString(modded);
+	}
+	/** Maps stay retail's under every mod, so what stands on them is retail's: a mod's script asking
+		* after a SupplyDock means the map's, and M<n>~SupplyDock stands nowhere.  Contra's stash trucks
+		* never left home for a pile. */
+	Bool namesMapObject(const AsciiString& name, const AsciiString& modded) const
+	{
+		const ThingTemplate *modTemplate = TheThingFactory->findTemplate(modded, FALSE);
+		if (modTemplate == NULL || modded == name || TheThingFactory->findTemplate(name, FALSE) == NULL)
+			return FALSE;
+		for (Int i = 0; i < ThePlayerTemplateStore->getPlayerTemplateCount(); ++i)
+		{
+			const PlayerTemplate *faction = ThePlayerTemplateStore->getNthPlayerTemplate(i);
+			if (faction->getModIndex() == mod && faction->getSide() == modTemplate->getDefaultOwningSide())
+				return FALSE;
+		}
+		return TRUE;
 	}
 	void script(Script *s) const
 	{

@@ -590,6 +590,7 @@ void Drawable::takeLookForDraw( void )
 	look.hasSelectionColor = selection != NULL;
 	if( selection )
 		look.selectionColor = *selection;
+	look.position = *getPosition();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -641,7 +642,6 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_lastConstructDisplayed = -1.0f;
 	m_supplyCashDisplayString = NULL;
 	m_lastSupplyCashDisplayed = -1;
-	m_productionTimeDisplayString = NULL;
 	m_chargeTimeDisplayString = NULL;
 	m_constructDisplayString = NULL;	// buildRenderObjects
 
@@ -757,6 +757,14 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	}
 	*m = NULL;
 
+	m_clipFeedbackSlots = 0;
+	for (DrawModule** dm = getDrawModulesNonDirty(); *dm; ++dm)
+	{
+		ObjectDrawInterface* di = (*dm)->getObjectDrawInterface();
+		if (di)
+			m_clipFeedbackSlots |= di->getProjectileClipFeedbackSlots();
+	}
+
 	const ModuleInfo& cuMI = thingTemplate->getClientUpdateModuleInfo();
 	if (cuMI.getCount())
 	{
@@ -839,10 +847,6 @@ Drawable::~Drawable()
 	if( m_supplyCashDisplayString )
 		TheDisplayStringManager->freeDisplayString( m_supplyCashDisplayString );
 	m_supplyCashDisplayString = NULL;
-
-	if( m_productionTimeDisplayString )
-		TheDisplayStringManager->freeDisplayString( m_productionTimeDisplayString );
-	m_productionTimeDisplayString = NULL;
 
 	if( m_chargeTimeDisplayString )
 		TheDisplayStringManager->freeDisplayString( m_chargeTimeDisplayString );
@@ -1456,10 +1460,34 @@ const Real Drawable::getScale (void) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The Collapse option: a building that is about to vanish or swap to rubble in one frame hands over
+	its model as it stands, which is why this comes before the rubble state.  What stages its own end
+	keeps it: EA's high rises, towers that topple, a slow death and a landmark bridge's animation. */
+//-------------------------------------------------------------------------------------------------
+void Drawable::startCollapse()
+{
+	const Object *obj = getObject();
+	if (obj == NULL || !isKindOf(KINDOF_STRUCTURE) || isKindOf(KINDOF_BRIDGE) || isKindOf(KINDOF_BRIDGE_TOWER)
+		|| obj->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) || obj->testStatus(OBJECT_STATUS_SOLD))
+		return;
+	static const NameKeyType collapseKey = NAMEKEY("StructureCollapseUpdate");
+	static const NameKeyType toppleKey = NAMEKEY("StructureToppleUpdate");
+	static const NameKeyType slowDeathKey = NAMEKEY("SlowDeathBehavior");
+	if (obj->findUpdateModule(collapseKey) || obj->findUpdateModule(toppleKey) || obj->findUpdateModule(slowDeathKey))
+		return;
+	// the template's: by now the body has put the object's own geometry at rubble height
+	const Real height = obj->getTemplate()->getTemplateGeometryInfo().getMaxHeightAbovePosition();
+	doClientWork( [this, height]() { TheGameClient->structureCollapsing( this, height ); }, WORK_AFTER_FLUSH );
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 void Drawable::reactToBodyDamageStateChange(BodyDamageType newState)
 {
-	static const ModelConditionFlagType TheDamageMap[BODYDAMAGETYPE_COUNT] = 
+	if (newState == BODY_RUBBLE && TheGlobalData->m_structureCollapse && !TheGameLogic->isLoadingMap())
+		startCollapse();
+
+	static const ModelConditionFlagType TheDamageMap[BODYDAMAGETYPE_COUNT] =
 	{
 		MODELCONDITION_INVALID,
 		MODELCONDITION_DAMAGED,
@@ -1479,6 +1507,9 @@ void Drawable::reactToBodyDamageStateChange(BodyDamageType newState)
   // correctly react to customizations
   if ( !TheGameLogic->isLoadingMap() )
  	  startAmbientSound(newState, TheGlobalData->m_timeOfDay);
+
+	if (newState == BODY_RUBBLE && !TheGameLogic->isLoadingMap() && getObject() && isKindOf(KINDOF_STRUCTURE) && !isKindOf(KINDOF_BRIDGE))
+		TheGameClient->structureFell(getPosition(), getObject()->getGeometryInfo().getBoundingCircleRadius());
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2239,7 +2270,7 @@ void Drawable::calcPhysicsXformGround( const Locomotor *locomotor, PhysicsXformI
 	UnsignedInt logicFrame = TheGameLogic->getFrame();
 	Real logicAngle = getOrientation();
 	UnsignedInt gap = logicFrame - m_locoInfo->m_headingFrame;
-	if (!m_locoInfo->m_headingSeeded || gap > HEADING_CATCH_UP_FRAMES || owner->isKindOf(KINDOF_AIRCRAFT))
+	if (!m_locoInfo->m_headingSeeded || gap > HEADING_CATCH_UP_FRAMES || owner->isKindOf(KINDOF_AIRCRAFT) || TheGlobalData->m_classicGraphics)
 	{
 		// first drawn, long unseen, or a taxiing jet or landed helicopter, which eases its own turn in the logic
 		m_locoInfo->m_headingLag = 0.0f;
@@ -4776,7 +4807,7 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 	// EA's chevron for the level
 	const RankLadder *ladder = TheGlobalData->getRankLadder( obj->getTemplate() );
 	VeterancyLevel level = obj->getVeterancyLevel();
-	const Image* image = ladder ? getRankInsignia( obj ) : s_veterancyImage[level];
+	const Image* image = ( ladder && !TheGlobalData->m_classicGraphics ) ? getRankInsignia( obj ) : s_veterancyImage[level];
 	if (!image)
 		return;
 
@@ -4810,7 +4841,7 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 
 	// the insignia in line with the bar, just past its right end and centred on it: the ammo and
 	// passenger pips start from the left end, and hanging under the bar it read as part of the unit
-	if( ladder )
+	if( ladder && !TheGlobalData->m_classicGraphics )
 	{
 		Int left = screenCenter.x + 2;
 		Int middle = screenCenter.y;
@@ -4959,13 +4990,13 @@ static void freeOwnCountdown( DisplayString *&countdown )
 	countdown = NULL;
 }
 
-static Int drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int y )
+static void drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int y )
 {
 	if( countdown == NULL )
 	{
 		countdown = TheDisplayStringManager->newDisplayString();
 		if( countdown == NULL )
-			return 0;
+			return;
 
 		countdown->setFont( TheFontLibrary->getFont( TheInGameUI->getDrawableCaptionFontName(),
 							TheGlobalLanguageData->adjustFontSize( TheInGameUI->getDrawableCaptionPointSize() - 2 ),
@@ -4979,7 +5010,6 @@ static Int drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int 
 	Int textW, textH;
 	countdown->getSize( &textW, &textH );
 	countdown->draw( x, y - textH, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
-	return textH;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5252,11 +5282,10 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 															(healthBoxWidth - 2) - healthFillWidth, healthBoxHeight - 2,
 															GameMakeColor( 10, 10, 10, 190 ) );
 
-		// bars stack upwards from just above the health bar, each clearing the seconds written over
-		// the one below it
+		// bars stack upwards from just above the health bar, each clearing what is drawn over the one below it
 		Int stackY = healthBarRegion->lo.y - 3;
 
-		// own producers show a white production-progress bar above the health bar, with seconds left at its top-left
+		// own producers show a white production-progress bar above the health bar
 		ProductionUpdateInterface *pu = hasIconModule( ICON_MODULE_PRODUCTION ) && showsOwnerDetail( obj )
 			? obj->getProductionUpdateInterface() : NULL;
 		const ProductionEntry *pe = pu ? pu->firstProduction() : NULL;
@@ -5275,19 +5304,30 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 																(healthBoxWidth - 2) * pct * 0.01f, healthBoxHeight - 2,
 																GameMakeColor( 255, 255, 255, 255 ) );
 
-			Player *player = obj->getControllingPlayer();
-			Int totalFrames = pe->getProductionType() == PRODUCTION_UNIT
-												? pe->getProductionObject()->calcTimeToBuild( player )
-												: pe->getProductionUpgrade()->calcTimeToBuild( player );
-			Int secondsLeft = ControlBar_secondsFromFrames( totalFrames * (1.0f - pct * 0.01f) );
+			stackY = prodY - 3;
 
-			Int textH = drawOwnCountdown( m_productionTimeDisplayString, secondsLeft, healthBarRegion->lo.x, prodY );
-
-			// whatever comes next goes above the seconds, not through them
-			stackY = prodY - textH - 1;
+			//
+			// One white square over the bar's right end for each entry waiting behind the one being made.
+			// The squares share a black outline, so they stay apart on any ground, follow the bar's own
+			// thickness up the screen sizes, and start a new row when a far zoom makes the bar too short.
+			//
+			const Int waiting = (Int)pu->getProductionCount() - 1;
+			if( waiting > 0 )
+			{
+				const Int side = (Int)healthBoxHeight + 2;
+				const Int pitch = side - 1;
+				const Int perRow = max( 1, ((Int)healthBoxWidth - 1) / pitch );
+				const Int bottom = prodY - 1 - side;
+				for( Int i = 0; i < waiting; ++i )
+				{
+					const Int x = healthBarRegion->lo.x + (Int)healthBoxWidth - side - (i % perRow) * pitch;
+					const Int y = bottom - (i / perRow) * pitch;
+					TheDisplay->drawFillRect( x, y, side, side, GameMakeColor( 0, 0, 0, 255 ) );
+					TheDisplay->drawFillRect( x + 1, y + 1, side - 2, side - 2, GameMakeColor( 255, 255, 255, 255 ) );
+				}
+				stackY = bottom - ((waiting - 1) / perRow) * pitch - 3;
+			}
 		}
-		else
-			freeOwnCountdown( m_productionTimeDisplayString );
 
 		//
 		// A weapon on a long reload, on a unit of ours the player is looking at: selected or under
@@ -6443,6 +6483,11 @@ void Drawable::setDrawableHidden( Bool hidden )
 //-------------------------------------------------------------------------------------------------
 void Drawable::updateDrawableClipStatus( UnsignedInt shotsRemaining, UnsignedInt maxShots, WeaponSlotType slot )
 {
+	// every armed object asks every frame; only a model with projectile bones on this slot answers,
+	// so the rest queue nothing. Those that do still ask every frame, which is what shows the bones
+	// again after a model state change rebuilt the render object
+	if ((m_clipFeedbackSlots & (1 << slot)) == 0)
+		return;
 	doClientWork( [this, shotsRemaining, maxShots, slot]() {
 		for (DrawModule** dm = getDrawModulesNonDirty(); *dm; ++dm)
 		{

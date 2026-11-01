@@ -33,6 +33,7 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/ParticleSys.h"
 #include "GameClient/Module/BeaconClientUpdate.h"
+#include "Common/LogicThread.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/Radar.h"
@@ -127,6 +128,10 @@ static ParticleSystem* createParticleSystem( Drawable *draw )
 //-------------------------------------------------------------------------------------------------
 void BeaconClientUpdate::hideBeacon( void )
 {
+	// the tick's beacon messages call this, and it stops a live particle system; a beacon destroyed by
+	// the same tick has its drawable until the flush has run this
+	LOGIC_AFTER_TICK( [this]() { hideBeacon(); } );
+
 	Drawable *draw = getDrawable();
 	if (draw)
 	{

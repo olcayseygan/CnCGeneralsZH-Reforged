@@ -139,6 +139,7 @@ public:
 	Real getWaterHeight(Real x, Real y);	///<return water height at given point - for use by WB.
 
 	void replaceSkyboxTexture(const AsciiString& oldTexName, const AsciiString& newTextName);
+	TextureClass *getSkyTexture(void) const { return m_settings[m_tod].skyTexture; }	///< the time of day's sky, as WaterSet names it
 	Bool hasModernVesselFoam(UnsignedInt objectID) const; ///< replacement was submitted for this hull in the current render frame
 	Bool isModernWaterMirrorForOwner(UnsignedInt objectID) const; ///< owner's surface foam must not reflect back into the same water plane
 

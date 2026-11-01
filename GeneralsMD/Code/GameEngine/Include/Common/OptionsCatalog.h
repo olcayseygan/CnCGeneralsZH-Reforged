@@ -147,8 +147,6 @@ enum { SMOKE_LEVEL_COUNT = 3 };
 enum { WATER_STYLE_COUNT = 2 };
 // Classic is the original hazard effect; Volumetric is the Linux toxin/radiation cloud.
 enum { CLOUD_STYLE_COUNT = 2 };
-// Volume smoke: Off, Low and High (DX11VolumeSmoke.cpp sizes its grids by it).
-enum { VOLUME_SMOKE_COUNT = 3 };
 
 // Shadow quality is the size of the sun's depth map, low, medium and high: 1024, 2048 and 4096
 // texels a side (W3DVolumetricShadow.cpp, renderShadowMap).  Medium is the size the map always had.
@@ -187,19 +185,21 @@ extern const Int TheGraphicsQualityAnchors[];
 /** The row for this control, or NULL. */
 extern const GraphicsQualityRow *findGraphicsQualityRow( const char *control );
 
+/** A row the fork added to the picture, as against one of EA's detail settings.  While Classic
+	* Graphics is ticked the slider and the presets move only EA's, and unticking it fills these in. */
+extern Bool graphicsQualityRowIsReforged( const GraphicsQualityRow &row );
+
 /** Options.ini -> TheWritableGlobalData, for every row.  A key that is absent leaves the field at
-	* whatever GlobalData's constructor put there, which is what makes an old Options.ini keep
-	* working when a row is added.  A file that names a detail preset and no GraphicsQuality, one
-	* written before the slider or by the launcher alone, first gets that preset's column of
-	* TheGraphicsQualityTable, so the keys it does carry still win. */
+	* whatever GlobalData's constructor put there, which is off for everything the fork added: a detail
+	* preset named in the file, or picked for a first run, sets only the GameLOD fields.  The rest of
+	* its column reaches a row through the menu, which saves what it shows. */
 extern void loadOptionsFromPreferences( UserPreferences& pref );
 
-/** The first detail preset GameLODManager applies, when Options.ini had no GraphicsQuality: every
-	* catalog row its column names goes to that column, except a row Options.ini named or a switch or
-	* ClassicGraphics changed after the load.  This is how a first run with no Options.ini, whose
-	* preset is picked only once the display starts, gets the boxes its preset shows.  Custom, and
-	* every later call, changes nothing. */
-extern void applyGraphicsQualityColumnAtStartup( Int staticGameLODLevel );
+/** What this row holds with no line in Options.ini, the value a first run has.  The menu's Defaults. */
+extern Int optionDefaultValue( const OptionDef& def );
+
+/** One log line with every row's value as it stands, for a run's log to say which setup it drew. */
+extern void logOptionCatalog( void );
 
 /** TheGlobalData -> Options.ini, for every row.  The options menu's Accept writes only the rows the
 	* player changed instead, so a value the command line or ClassicGraphics put in GlobalData for one

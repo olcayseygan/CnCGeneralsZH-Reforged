@@ -30,6 +30,7 @@
 #include "quat.h"
 #include "render2dsentence.h"
 #include "fullscreenfit.h"
+#include "../GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h"
 
 /*
  * W3DMPO_GLUE gives every pooled class an operator new that routes through
@@ -77,6 +78,27 @@ void freeFromW3DMemPool(void * /*pool*/, void *p)
 		return;
 	}
 	::operator delete(raw);
+}
+
+/*=========================================================================
+   SunBoxMiddle - the sun's box round the ground the frame shows
+  =========================================================================*/
+
+TEST(sun_box_goes_round_the_frames_ground)
+{
+	/* the far side reaches 1500 past the look point, the near side 500: a box 1000 each way fits */
+	CHECK_EQ(SunBoxMiddle(-500.0f, 1500.0f, 1000.0f), 500.0f);
+	/* a box wider than the ground stays in the middle of it */
+	CHECK_EQ(SunBoxMiddle(-500.0f, 1500.0f, 2400.0f), 500.0f);
+}
+
+TEST(sun_box_past_its_cap_keeps_the_ground_at_the_cameras_feet)
+{
+	/* 5500 of ground under a box 4800 wide: the near end stays in and the far 700 falls off */
+	CHECK_EQ(SunBoxMiddle(-500.0f, 5000.0f, 2400.0f), 1900.0f);
+	CHECK_EQ(SunBoxMiddle(-5000.0f, 500.0f, 2400.0f), -1900.0f);
+	/* with ground far past both sides it sits on the look point */
+	CHECK_EQ(SunBoxMiddle(-3000.0f, 3000.0f, 2400.0f), 0.0f);
 }
 
 /*=========================================================================

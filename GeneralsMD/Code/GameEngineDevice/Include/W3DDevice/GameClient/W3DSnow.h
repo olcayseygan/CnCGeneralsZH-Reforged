@@ -48,6 +48,21 @@ class W3DSnowManager : public SnowManager
 	Bool	ReAcquireResources(void);
 
  private:
+	void	updateWeather(void);
+	void	renderWeather(RenderInfoClass &rinfo);
+	void	drawWeatherLayer(RenderInfoClass &rinfo, Int layer, Real light);
+
+	// The Weather option.  None of it is allocated, loaded or read while the option is off.
+	struct WeatherDrop { Real x, y, phase; };	///< a drop's place in its tile and in its fall, 0 to 1
+	WeatherDrop *m_weatherDrops;
+	TextureClass *m_weatherTextures[2];
+	double m_weatherTime;			///< seconds; double, because it is multiplied by a speed and wrapped by the tile
+	const void *m_weatherMap;		///< the map m_weatherSandCells was counted on, with its samples: see W3DShaderManager's haze
+	const void *m_weatherMapData;
+	Int m_weatherMapWidth;
+	Int m_weatherSandCells;
+	Int m_weatherCells;
+
 	DX8IndexBufferClass	*m_indexBuffer;
 	TextureClass *m_snowTexture;
 	IDirect3DVertexBuffer9*  m_VertexBufferD3D;

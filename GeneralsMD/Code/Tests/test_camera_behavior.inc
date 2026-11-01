@@ -445,8 +445,13 @@ TEST(a_match_opens_300_over_the_ground_in_both_interfaces)
 	{
 		f.global->m_mouseStyle = style ? MOUSE_STYLE_CLASSIC : MOUSE_STYLE_REFORGED;
 		f.global->m_startAtMaxZoom = FALSE;
+		f.global->m_classicGraphics = FALSE;
 		f.view.setZoomToStart(FALSE);
 		CHECK_NEAR(f.view.getHeightAboveGround(), 300.0f, 0.001f);
+		// Classic Graphics opens on the map's framing, as EA's did
+		f.global->m_classicGraphics = TRUE;
+		f.view.setZoomToStart(FALSE);
+		CHECK_NEAR(f.view.getHeightAboveGround(), -1.0f, 0.001f);
 		// the shell map behind the menus keeps its own framing
 		f.view.setZoomToStart(TRUE);
 		CHECK_NEAR(f.view.getHeightAboveGround(), -1.0f, 0.001f);

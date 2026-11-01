@@ -272,6 +272,8 @@ enum
 	AIKNOB_ENGAGE_GATE	= 1,
 	AIKNOB_ANSWER_ARMY	= 2,
 	AIKNOB_MASS_UNIT		= 4,
+	AIKNOB_BASE_WATCH		= 8,
+	AIKNOB_STRIKE_DODGE	= 16,
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -377,7 +379,6 @@ public:
 	Bool m_smoothMotionAnyDisplay;	// -smoothmotion: the same whatever the display's refresh rate
 	Int m_waterStyle;					// "WaterStyle": 0 = Classic, 1 = Modern (SDL); applied between render frames
 	Int m_cloudStyle;					// "CloudStyle": 0 = Classic (default), 1 = Volumetric (when supported)
-	Int m_volumeSmoke;				// "VolumeSmoke": smoke as a simulated volume, 0 Off (default), 1 Low, 2 High (Direct3D 11); -volsmoke for one run
 	Bool m_explosionDebrisTrails;	// "DebrisTrails": blasts throw smoke-trailing fragments and burning shrapnel
 	Int m_shadowQuality;				// "ShadowQuality": the sun's depth map at 1024, 2048 or 4096 texels a side (Direct3D 11)
 	Int m_graphicsQuality;			// "GraphicsQuality": where the options menu's Performance / Quality slider stands; Custom takes the particle ring from the preset at or below it
@@ -619,6 +620,7 @@ public:
 	Bool m_zoomToCursor;				///< the mouse wheel zooms toward whatever the cursor is over
 	Int m_zoomSpeed;					///< "ZoomSpeed" in Options.ini: percent of the height one wheel notch moves the camera; 100 is the game's own
 	Bool m_isometricCamera;				///< the tactical view from far off down a narrow cone, near enough orthographic
+	Bool m_cameraShake;						///< "CameraShake": blasts and scripts may shake the view (client only)
 	Int m_dragTolerance;				///< pixels the pointer may travel with a button held before the press is a drag; replaces Mouse.ini's DragTolerance
 	Bool m_formationDrag;				///< with the move, attack move or guard key armed, a left drag spreads the selection along the line drawn
 	Bool m_buildWithoutWorker;			///< with nothing selected the command bar shows a builder's buildings; off, an empty bar as 1.04 had it
@@ -703,9 +705,18 @@ public:
 	Bool m_lanLobbyOnStart;						///< -lanlobby: open the LAN lobby instead of stopping at the main menu
 	Bool m_skirmishLobbyOnStart;			///< -skirmishlobby: open the skirmish staging room instead of stopping at the main menu
 	Bool m_optionsMenuOnStart;				///< -optionsmenu: open the options screen over the main menu at startup
-	Bool m_mapLight;								///< "MapLight": warm low sun, ground haze and aircraft wakes (Direct3D 11, client only)
+	Bool m_mapLight;								///< "MapLight": warm low sun and a still ground haze (Direct3D 11, client only)
 	Bool m_teamGlow;								///< "TeamGlow": bright house colour glows (Direct3D 11, client only)
 	Bool m_waterFoam;								///< "WaterFoam": foam, shore band and the sun's shadow on water (Direct3D 11, client only)
+	Bool m_groundMarks;							///< "GroundMarks": craters, stains and longer treads that fade over minutes (Direct3D 11, client only)
+	Bool m_firelight;								///< "Firelight": flames light the ground, walls and units around them (Direct3D 11, client only)
+	Bool m_hemiAmbient;							///< "HemiAmbient": models take the ambient from the sky above and the ground below (Direct3D 11, client only)
+	Bool m_ambientOcclusion;				///< "AmbientOcclusion": corners and the ground under what stands on it darken, half size in world units (Direct3D 11, client only)
+	Bool m_weatherEffects;					///< "Weather": rain, blowing sand or snow by the map's ground, and a wind on trees and smoke (Direct3D 11, client only)
+	Bool m_waterSplashes;						///< "WaterSplashes": a splash and rings where a blast or a falling body meets water (Direct3D 11, client only)
+	Bool m_atmosphere;							///< "Atmosphere": the far ground fades toward the horizon and an empty frame takes a sky (Direct3D 11, client only)
+	Bool m_structureCollapse;				///< "StructureCollapse": a building's last model goes into the ground (Direct3D 11, client only)
+	Bool m_internalHdr;							///< "InternalHdr": what passes white in the half float scene keeps its colour on the way to eight bits; no HDR monitor output (Direct3D 11, client only)
 
 	Int m_maxParticleCount;						///< maximum number of particles that can exist
 	Int m_maxFieldParticleCount;			///< maximum number of field-type particles that can exist (roughly)
@@ -935,10 +946,10 @@ public:
 	std::vector<AsciiString> m_mods;	///< every -mod in command-line order, later wins: a folder ends in '\', anything else is a .big
 	AsciiString m_modName;	///< UTF-8, each mod's "<name> <version>" from its mod.json (else the folder or archive name), joined by ", " in m_mods order; empty without -mod
 	std::vector<AsciiString> m_modNames;	///< UTF-8, each mod's mod.json "name" (else the folder or archive name), in m_mods order
-	std::vector<Bool> m_modIsPatch;	///< -modpatch: TRUE for each m_mods entry given as a patch; without -modfactions a patch is a plain -mod
+	std::vector<Bool> m_modIsPatch;	///< -modpatch: TRUE for each m_mods entry given as a patch; with no full -mod the patches stack as plain mods
 	std::vector< std::vector<AsciiString> > m_modPatches;	///< -modfactions: the -modpatch folders over each m_mods[n], later wins
 	std::vector<AsciiString> m_retailPatches;	///< -modfactions: the -modpatch folders given before any -mod, over retail's files
-	Bool m_modFactions;	///< -modfactions: every mod's factions load beside retail's under "M<n>~" names (ModNamespace)
+	Bool m_modFactions;	///< any full -mod given: every mod's factions load beside retail's under "M<n>~" names (ModNamespace).  "-modfactions" in a comment is this; the switch is gone
 
 	//-allAdvice feature
 	//Bool m_allAdvice;

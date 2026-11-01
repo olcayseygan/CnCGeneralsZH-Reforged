@@ -242,6 +242,7 @@ public:  // height map info.
 
 	Int getTextureClassNoBlend(Int xIndex, Int yIndex, Bool baseClass=false);
 	Int getTextureClass(Int xIndex, Int yIndex, Bool baseClass=false);
+	void countSandCells(Int *sandCells, Int *cells);
 	TXTextureClass getTextureFromIndex( Int textureIndex );
 
 public:  // tile and texture info.	

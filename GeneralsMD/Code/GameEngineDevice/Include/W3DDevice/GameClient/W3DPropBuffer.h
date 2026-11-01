@@ -111,6 +111,7 @@ public:
 	Bool updatePropPosition(Int id, const Coord3D &location, Real angle, Real scale);
 	/// Let us know that the shroud has changed.
 	void notifyShroudChanged(void);
+	void takeShroudForRender(void);	///< the render's sync point
 
 	void removePropsForConstruction(
 		const Coord3D* pos, 

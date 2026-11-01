@@ -1108,9 +1108,9 @@ ControlBarScheme *ControlBarSchemeManager::findSchemeForSide( const AsciiString&
 }
 
 //-----------------------------------------------------------------------------
-/** The owner's call: a mod's faction gets our American power tray and our science layout, whatever
-	* .wnd the mod names.  Its buttons, cameos and portrait are still the mod's.  Under -modfactions that
-	* is a faction with a mod index; under a single -mod every faction is the mod's.  The observer is
+/** The owner's call: a mod's faction gets our American power tray, whatever .wnd the mod names.  Its
+	* buttons, cameos and portrait are still the mod's.  That is a faction with a mod index, or any
+	* faction under patches with no full -mod.  The observer is
 	* none. */
 //-----------------------------------------------------------------------------
 Bool ControlBarIsModFaction( const PlayerTemplate *pt )

@@ -1,0 +1,19 @@
+# Five Red Guard in a Bunker on a hill, three Rangers on the slope below them, 180 away.
+#
+# The hill on Dark Mountain stands 28 above the ground the Rangers are on, which stretches a 100 rifle
+# to 184. The same men on foot on the same spot reach them. Inside the Bunker they used to stand and
+# watch, because the search for a target left the high ground out for anything inside a building.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Dark Mountain\Dark Mountain.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 3100
+#     -scenario hillbunker -logPrefix hillbunker_
+#
+# Read the HEADLESS TALLY at 1500: 0 Rangers alive, all 5 Red Guard inside. It was 3 Rangers alive.
+
+30    spawn      0  ChinaBunker              1  760 1840
+30    spawn      0  ChinaInfantryRedguard    5  760 1880  8
+60    enter      0  ChinaInfantryRedguard    0  ChinaBunker
+30    spawn      1  AmericaInfantryRanger    3  760 1660  6
+1500  tally      1  AmericaInfantryRanger
+1500  tally      0  ChinaInfantryRedguard

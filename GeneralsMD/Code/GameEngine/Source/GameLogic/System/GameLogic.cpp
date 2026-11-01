@@ -260,6 +260,7 @@ GameLogic::GameLogic( void )
 	m_objList = NULL;
 	m_curUpdateModule = NULL;
 	m_nextObjID = INVALID_ID;
+	m_nextObjIDFromSave = INVALID_ID;
 	m_startNewGame = FALSE;
 	m_gameMode = GAME_NONE;
 	m_rankLevelLimit = 1000;
@@ -2756,14 +2757,22 @@ void GameLogic::processDestroyList( void )
 		UpdateModulePtr sleepyUpdatesForThisObject[MAX_SUO];
 		Int numSUO = 0;
 
-		for (std::vector<SleepyEntry>::iterator it2 = m_sleepyUpdates.begin(); it2 != m_sleepyUpdates.end(); ++it2)
+		/* The object's own modules say where they sit in the heap, which is the order a scan of the whole
+			 heap met them in.  That scan, one per death, took 3.7 ms of a 17 ms frame in a late fight. */
+		for (BehaviorModule** b = currentObject->getBehaviorModules(); *b && numSUO < MAX_SUO; ++b)
 		{
-			UpdateModulePtr u = it2->module;
-			if (u->friend_getObject() == currentObject && numSUO < MAX_SUO)
+#ifdef DIRECT_UPDATEMODULE_ACCESS
+			UpdateModulePtr u = (UpdateModulePtr)((*b)->getUpdate());
+#else
+			UpdateModulePtr u = (*b)->getUpdate();
+#endif
+			if (u && u->friend_getIndexInLogic() >= 0)
 			{
 				sleepyUpdatesForThisObject[numSUO++] = u;
 			}
 		}
+		std::sort(sleepyUpdatesForThisObject, sleepyUpdatesForThisObject + numSUO,
+			[](UpdateModulePtr a, UpdateModulePtr b) { return a->friend_getIndexInLogic() < b->friend_getIndexInLogic(); });
 
 		for (--numSUO; numSUO >= 0; --numSUO)
 		{
@@ -4064,128 +4073,116 @@ static void unitTimings(void)
 #endif
 
 //-------------------------------------------------------------------------------------------------
-/** The rank auras, once a second (docs/plans/RANK-LADDER.md in the wrapper).  Every unit's slots are
-	* cleared, then each leader writes its strength into the slots of the friendly units within its
-	* radius, keeping the larger, so three leaders of one kind give the strongest one's and the walk's
-	* order does not matter.  A leader never reaches itself; each kind has its own radius, and reaches
-	* units, only infantry, or units and buildings as its line says.  The DETECT perk works here too: a
-	* stealthed enemy within its radius stays detected until the next pass.  Afterwards a unit whose
-	* sight moved looks again, one whose pace moved takes its new speed, and a drill aura teaches. */
+/** The rank auras (docs/plans/RANK-LADDER.md in the wrapper), each object on its own frame of the second
+	* (oncePerSecondTurn), so a late game's leaders do not all walk the object list on one frame.  A
+	* leader's turn writes its strength into the gathered slots of the friendly units within
+	* its radius, keeping the larger, so three leaders of one kind give the strongest one's and the
+	* order of the turns does not matter.  A unit's own turn takes what was gathered since its last one,
+	* every leader's once, as what it holds.  A leader never reaches itself; each kind has its own
+	* radius, and reaches units, only infantry, or units and buildings as its line says.  The DETECT perk
+	* works here too: a stealthed enemy within its radius stays detected until the leader's next turn.
+	* A unit whose sight moved looks again, one whose pace moved takes its new speed, and a drill aura
+	* teaches. */
 //-------------------------------------------------------------------------------------------------
-static void updateRankAuras( Object *objList )
+static void rankAuraTake( Object *obj )
 {
-	struct Before { Real sight; Real aura[ RANK_AURA_PASSED ]; };
-	static std::vector<Before> before;
-	before.clear();
-	for( Object *obj = objList; obj; obj = obj->getNextObject() )
-	{
-		Before was;
-		was.sight = obj->getRankSightScalar();
-		for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-			was.aura[ aura ] = obj->getRankAura( (RankAura)aura );
-		before.push_back( was );
-		obj->clearRankAuras();
-	}
-
-	for( Object *leader = objList; leader; leader = leader->getNextObject() )
-	{
-		const RankLadder *ladder = TheGlobalData->getRankLadder( leader->getTemplate() );
-		// a leader inside a building, a bunker or a transport leads nobody and spots nothing
-		if( ladder == NULL || leader->isEffectivelyDead() || leader->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
-				|| leader->getContainedBy() )
-			continue;
-		const Int grade = leader->getRankGrade();
-		Real strength[ RANK_AURA_PASSED ], radiusSqr[ RANK_AURA_PASSED ];
-		RankReach reach[ RANK_AURA_PASSED ];
-		Bool gives = FALSE;
-		for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-		{
-			strength[ aura ] = ladder->aura( grade, (RankAura)aura );
-			const Real radius = ladder->auraRadius( grade, (RankAura)aura );
-			radiusSqr[ aura ] = radius * radius;
-			reach[ aura ] = ladder->auraReach( grade, (RankAura)aura );
-			gives = gives || strength[ aura ] > 0.0f;
-		}
-		gives = gives && leader->leadsRankAuras();
-		const Real detect = ladder->perk( grade, RANK_PERK_DETECT );
-		if( !gives && detect <= 0.0f )
-			continue;
-
-		const Coord3D *at = leader->getPosition();
-		for( Object *other = objList; other; other = other->getNextObject() )
-		{
-			if( other == leader || other->isEffectivelyDead() || other->getContainedBy() )
-				continue;
-			const Real dx = other->getPosition()->x - at->x, dy = other->getPosition()->y - at->y;
-			const Real distSqr = dx * dx + dy * dy;
-			if( detect > 0.0f && distSqr <= detect * detect && other->getStealth()
-					&& other->testStatus( OBJECT_STATUS_STEALTHED ) && leader->getRelationship( other ) == ENEMIES )
-			{
-				// a fresh find pings the leader's owner the way StealthDetectorUpdate does, after the tick
-				if( !other->testStatus( OBJECT_STATUS_DETECTED ) && ThePlayerList->getLocalPlayer() == leader->getControllingPlayer() )
-				{
-					const Coord3D found = *other->getPosition();
-					const Int playerIndex = leader->getControllingPlayer()->getPlayerIndex();
-					const EvaMessage message = other->getStealth()->getEnemyDetectionEvaEvent();
-					LogicThread::callAfterTick( [found, playerIndex, message]()
-					{
-						if( !TheRadar->tryEvent( RADAR_EVENT_STEALTH_DISCOVERED, &found ) )
-							return;
-						static AudioEventRTS discoveredSound = TheAudio->getMiscAudio()->m_stealthDiscoveredSound;
-						discoveredSound.setPlayerIndex( playerIndex );
-						TheAudio->addAudioEvent( &discoveredSound );
-						TheInGameUI->message( TheGameText->fetch( "MESSAGE:StealthDiscovered" ) );
-						if( message != EVA_Invalid && TheEva != NULL )
-							TheEva->setShouldPlay( message );
-					} );
-				}
-				other->getStealth()->markAsDetected( LOGICFRAMES_PER_SECOND + 1 );
-			}
-			if( !gives || leader->getRelationship( other ) != ALLIES )
-				continue;
-			const Bool structure = other->isKindOf( KINDOF_STRUCTURE ), infantry = other->isKindOf( KINDOF_INFANTRY );
-			for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-				if( strength[ aura ] > 0.0f && distSqr <= radiusSqr[ aura ]
-						&& ( structure ? reach[ aura ] == RANK_REACH_STRUCTURES : reach[ aura ] != RANK_REACH_INFANTRY || infantry ) )
-					other->raiseRankAura( (RankAura)aura, strength[ aura ] );
-		}
-	}
+	const Real sightBefore = obj->getRankSightScalar();
+	Real before[ RANK_AURA_PASSED ];
+	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
+		before[ aura ] = obj->getRankAura( (RankAura)aura );
+	obj->takeGatheredRankAuras();
 
 	// a unit that came into or left a leader's reach logs what it holds now
-	size_t index = 0;
-	for( Object *obj = objList; obj; obj = obj->getNextObject(), ++index )
-	{
-		Bool moved = FALSE;
-		for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-			moved = moved || obj->getRankAura( (RankAura)aura ) != before[ index ].aura[ aura ];
-		if( moved )
-			DEBUG_LOG(("RANK AURA frame=%d id=%d template=%s grade=%d rof=%.2f sight=%.2f guard=%.2f range=%.2f"
-				" mend=%.4f pace=%.2f drill=%.0f steady=%.2f capture=%.2f spoils=%.2f\n",
-				TheGameLogic->getFrame(), obj->getID(), obj->getTemplate()->getName().str(), obj->getRankGrade(),
-				obj->getRankAura( RANK_AURA_RATE_OF_FIRE ), obj->getRankAura( RANK_AURA_SIGHT ),
-				obj->getRankAura( RANK_AURA_GUARD ), obj->getRankAura( RANK_AURA_RANGE ),
-				obj->getRankAura( RANK_AURA_MEND ), obj->getRankAura( RANK_AURA_PACE ), obj->getRankAura( RANK_AURA_DRILL ),
-				obj->getRankAura( RANK_AURA_STEADY ), obj->getRankAura( RANK_AURA_CAPTURE ), obj->getRankAura( RANK_AURA_SPOILS )));
-		obj->onRankSightChanged( before[ index ].sight );
-		if( obj->getRankAura( RANK_AURA_PACE ) != before[ index ].aura[ RANK_AURA_PACE ] && obj->getAIUpdateInterface() )
-			obj->getAIUpdateInterface()->refreshVeterancySpeed();
-	}
+	Bool moved = FALSE;
+	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
+		moved = moved || obj->getRankAura( (RankAura)aura ) != before[ aura ];
+	if( moved )
+		DEBUG_LOG(("RANK AURA frame=%d id=%d template=%s grade=%d rof=%.2f sight=%.2f guard=%.2f range=%.2f"
+			" mend=%.4f pace=%.2f drill=%.0f steady=%.2f capture=%.2f spoils=%.2f\n",
+			TheGameLogic->getFrame(), obj->getID(), obj->getTemplate()->getName().str(), obj->getRankGrade(),
+			obj->getRankAura( RANK_AURA_RATE_OF_FIRE ), obj->getRankAura( RANK_AURA_SIGHT ),
+			obj->getRankAura( RANK_AURA_GUARD ), obj->getRankAura( RANK_AURA_RANGE ),
+			obj->getRankAura( RANK_AURA_MEND ), obj->getRankAura( RANK_AURA_PACE ), obj->getRankAura( RANK_AURA_DRILL ),
+			obj->getRankAura( RANK_AURA_STEADY ), obj->getRankAura( RANK_AURA_CAPTURE ), obj->getRankAura( RANK_AURA_SPOILS )));
+	obj->onRankSightChanged( sightBefore );
+	if( obj->getRankAura( RANK_AURA_PACE ) != before[ RANK_AURA_PACE ] && obj->getAIUpdateInterface() )
+		obj->getAIUpdateInterface()->refreshVeterancySpeed();
 
 	// a drill aura teaches a unit of a ladder up to its cap, through the one-grade clip; one that
-	// passes its points on (a pilot's sink) learns nothing here.  Apart from the walk above, since a
-	// promotion may hand out an upgrade that makes an object.
-	for( Object *obj = objList; obj; obj = obj->getNextObject() )
+	// passes its points on (a pilot's sink) learns nothing here
+	const Int drillCap = REAL_TO_INT_FLOOR( obj->getRankAura( RANK_AURA_DRILL ) );
+	const RankLadder *drillLadder = drillCap > 0 ? TheGlobalData->getRankLadder( obj->getTemplate() ) : NULL;
+	ExperienceTracker *tracker = obj->getExperienceTracker();
+	if( drillLadder && !obj->isEffectivelyDead() && tracker->isTrainable() && tracker->getExperienceSink() == INVALID_ID )
 	{
-		const Int drillCap = REAL_TO_INT_FLOOR( obj->getRankAura( RANK_AURA_DRILL ) );
-		const RankLadder *ladder = drillCap > 0 ? TheGlobalData->getRankLadder( obj->getTemplate() ) : NULL;
-		ExperienceTracker *tracker = obj->getExperienceTracker();
-		if( ladder && !obj->isEffectivelyDead() && tracker->isTrainable() && tracker->getExperienceSink() == INVALID_ID )
+		const Int gain = drillLadder->drillGain( RankLadder::unitValue( obj->getTemplate() ), tracker->getCurrentExperience(),
+																				drillCap, TheGlobalData->m_rankDrillRate );
+		if( gain > 0 )
+			tracker->addExperiencePoints( gain, FALSE );
+	}
+}
+
+static void rankAuraGive( Object *leader )
+{
+	const RankLadder *ladder = TheGlobalData->getRankLadder( leader->getTemplate() );
+	// a leader inside a building, a bunker or a transport leads nobody and spots nothing
+	if( ladder == NULL || leader->isEffectivelyDead() || leader->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
+			|| leader->getContainedBy() )
+		return;
+	const Int grade = leader->getRankGrade();
+	Real strength[ RANK_AURA_PASSED ], radiusSqr[ RANK_AURA_PASSED ];
+	RankReach reach[ RANK_AURA_PASSED ];
+	Bool gives = FALSE;
+	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
+	{
+		strength[ aura ] = ladder->aura( grade, (RankAura)aura );
+		const Real radius = ladder->auraRadius( grade, (RankAura)aura );
+		radiusSqr[ aura ] = radius * radius;
+		reach[ aura ] = ladder->auraReach( grade, (RankAura)aura );
+		gives = gives || strength[ aura ] > 0.0f;
+	}
+	gives = gives && leader->leadsRankAuras();
+	const Real detect = ladder->perk( grade, RANK_PERK_DETECT );
+	if( !gives && detect <= 0.0f )
+		return;
+
+	const Coord3D *at = leader->getPosition();
+	for( Object *other = TheGameLogic->getFirstObject(); other; other = other->getNextObject() )
+	{
+		if( other == leader || other->isEffectivelyDead() || other->getContainedBy() )
+			continue;
+		const Real dx = other->getPosition()->x - at->x, dy = other->getPosition()->y - at->y;
+		const Real distSqr = dx * dx + dy * dy;
+		if( detect > 0.0f && distSqr <= detect * detect && other->getStealth()
+				&& other->testStatus( OBJECT_STATUS_STEALTHED ) && leader->getRelationship( other ) == ENEMIES )
 		{
-			const Int gain = ladder->drillGain( RankLadder::unitValue( obj->getTemplate() ), tracker->getCurrentExperience(),
-																					drillCap, TheGlobalData->m_rankDrillRate );
-			if( gain > 0 )
-				tracker->addExperiencePoints( gain, FALSE );
+			// a fresh find pings the leader's owner the way StealthDetectorUpdate does, after the tick
+			if( !other->testStatus( OBJECT_STATUS_DETECTED ) && ThePlayerList->getLocalPlayer() == leader->getControllingPlayer() )
+			{
+				const Coord3D found = *other->getPosition();
+				const Int playerIndex = leader->getControllingPlayer()->getPlayerIndex();
+				const EvaMessage message = other->getStealth()->getEnemyDetectionEvaEvent();
+				LogicThread::callAfterTick( [found, playerIndex, message]()
+				{
+					if( !TheRadar->tryEvent( RADAR_EVENT_STEALTH_DISCOVERED, &found ) )
+						return;
+					static AudioEventRTS discoveredSound = TheAudio->getMiscAudio()->m_stealthDiscoveredSound;
+					discoveredSound.setPlayerIndex( playerIndex );
+					TheAudio->addAudioEvent( &discoveredSound );
+					TheInGameUI->message( TheGameText->fetch( "MESSAGE:StealthDiscovered" ) );
+					if( message != EVA_Invalid && TheEva != NULL )
+						TheEva->setShouldPlay( message );
+				} );
+			}
+			other->getStealth()->markAsDetected( LOGICFRAMES_PER_SECOND + 1 );
 		}
+		if( !gives || leader->getRelationship( other ) != ALLIES )
+			continue;
+		const Bool structure = other->isKindOf( KINDOF_STRUCTURE ), infantry = other->isKindOf( KINDOF_INFANTRY );
+		for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
+			if( strength[ aura ] > 0.0f && distSqr <= radiusSqr[ aura ]
+					&& ( structure ? reach[ aura ] == RANK_REACH_STRUCTURES : reach[ aura ] != RANK_REACH_INFANTRY || infantry ) )
+				other->raiseRankAura( (RankAura)aura, strength[ aura ] );
 	}
 }
 
@@ -4587,41 +4584,33 @@ static void peaceTimeTick( void )
 	 three percent a second a hospital cleared with a flamethrower was whole again before the squad
 	 that cleared it had walked over to it, so taking a building off somebody bought you nothing.
 
-	 Once a second, off the same object walk peace time uses.  Tech buildings and garrisonable
-	 structures are the test; KINDOF_CAPTURABLE is not, because it sits on every faction structure
-	 as well - Black Lotus takes those - and would hand every command center on the map a free
-	 repair crew. */
-static void neutralBuildingRepairTick( void )
+	 Once a second, on the building's turn.  Tech buildings and garrisonable structures are the
+	 test; KINDOF_CAPTURABLE is not, because it sits on every faction structure as well - Black Lotus
+	 takes those - and would hand every command center on the map a free repair crew. */
+static void neutralBuildingRepair( Object *obj )
 {
-	const UnsignedInt now = TheGameLogic->getFrame();
-	if( now % LOGICFRAMES_PER_SECOND != 0 )
-		return;
-
 	const UnsignedInt quietFrames = 10 * LOGICFRAMES_PER_SECOND;
 	const Real repairFractionPerSecond = 0.0125f;
 
-	for( Object *obj = TheGameLogic->getFirstObject(); obj != NULL; obj = obj->getNextObject() )
-	{
-		if( !obj->isKindOf( KINDOF_STRUCTURE ) || obj->isEffectivelyDead() )
-			continue;
-		if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
-			continue;
+	if( !obj->isKindOf( KINDOF_STRUCTURE ) || obj->isEffectivelyDead() )
+		return;
+	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		return;
 
-		ContainModuleInterface *contain = obj->getContain();
-		const Bool mendsItself = obj->isKindOf( KINDOF_TECH_BUILDING )
-													|| obj->isKindOf( KINDOF_TECH_BASE_DEFENSE )
-													|| ( contain != NULL && contain->isGarrisonable() );
-		if( !mendsItself )
-			continue;
+	ContainModuleInterface *contain = obj->getContain();
+	const Bool mendsItself = obj->isKindOf( KINDOF_TECH_BUILDING )
+												|| obj->isKindOf( KINDOF_TECH_BASE_DEFENSE )
+												|| ( contain != NULL && contain->isGarrisonable() );
+	if( !mendsItself )
+		return;
 
-		BodyModuleInterface *body = obj->getBodyModule();
-		if( body->getHealth() >= body->getMaxHealth() )
-			continue;
-		if( body->getLastDamageTimestamp() + quietFrames > now )
-			continue;
+	BodyModuleInterface *body = obj->getBodyModule();
+	if( body->getHealth() >= body->getMaxHealth() )
+		return;
+	if( body->getLastDamageTimestamp() + quietFrames > TheGameLogic->getFrame() )
+		return;
 
-		obj->attemptHealing( body->getMaxHealth() * repairFractionPerSecond, obj );
-	}
+	obj->attemptHealing( body->getMaxHealth() * repairFractionPerSecond, obj );
 }
 
 /** A unit that can still take something off a wreck besides the money in it. */
@@ -4712,86 +4701,112 @@ static Bool hasEnemyInSight( Object *obj )
 	 A dozer and a harvester are left alone: both have a job of their own that earns more than the
 	 crate does.  An aircraft is left alone too, because a crate cannot be claimed from the air, and
 	 so is anything that dies when it fires - a terrorist is worth more than every crate on the map. */
-static void salvageCrateTick( void )
+static void salvageCrateCall( Object *crate )
 {
-	const UnsignedInt now = TheGameLogic->getFrame();
-	if( now % LOGICFRAMES_PER_SECOND != 0 )
-		return;
-
 	const Real SALVAGE_CALL_RADIUS = 150.0f;
 
-	for( Object *crate = TheGameLogic->getFirstObject(); crate != NULL; crate = crate->getNextObject() )
+	if( !crate->isSalvageCrate() || crate->isDestroyed() )
+		return;
+
+	PartitionFilterAlive alive;
+	PartitionFilterSameMapStatus sameMap( crate );
+	PartitionFilter *filters[] = { &alive, &sameMap, NULL };
+
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( crate, SALVAGE_CALL_RADIUS,
+																					FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	MemoryPoolObjectHolder hold( iter );
+
+	Object *collector = NULL;
+	Bool collectorUpgrades = FALSE;
+	Bool collectorIsIdle = FALSE;
+	for( Object *them = iter->first(); them != NULL; them = iter->next() )
 	{
-		if( !crate->isSalvageCrate() || crate->isDestroyed() )
+		if( them->isKindOf( KINDOF_STRUCTURE ) || them->isKindOf( KINDOF_AIRCRAFT ) )
+			continue;
+		if( them->isKindOf( KINDOF_DOZER ) || them->isKindOf( KINDOF_HARVESTER ) )
+			continue;
+		if( them->isContained() || them->isEffectivelyDead() || them->isNeutralControlled() )
+			continue;
+		AIUpdateInterface *ai = them->getAI();
+		if( ai == NULL )
+			continue;
+		const Bool idle = ai->isIdle();
+		if( !idle && !detoursForACrate( ai ) )
+			continue;
+		if( diesUsingItsOwnWeapon( them ) )
 			continue;
 
-		PartitionFilterAlive alive;
-		PartitionFilterSameMapStatus sameMap( crate );
-		PartitionFilter *filters[] = { &alive, &sameMap, NULL };
+		const Player *owner = them->getControllingPlayer();
+		if( owner == NULL || crate->getShroudedStatus( owner->getPlayerIndex() ) >= OBJECTSHROUD_FOGGED )
+			continue;
+		// a human's units go where the human sends them; only the computer's are sent for salvage,
+		// and only on an official or random map: in a mission, a Challenge or on a player's own map
+		// the computer plays EA's game, which never went for a crate on its own
+		if( !owner->isForkMapComputer() )
+			continue;
 
-		SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( crate, SALVAGE_CALL_RADIUS,
-																						FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
-		MemoryPoolObjectHolder hold( iter );
-
-		Object *collector = NULL;
-		Bool collectorUpgrades = FALSE;
-		Bool collectorIsIdle = FALSE;
-		for( Object *them = iter->first(); them != NULL; them = iter->next() )
+		const Bool upgrades = wantsSalvageUpgrade( them );
+		if( collector == NULL || ( upgrades && !collectorUpgrades ) )
 		{
-			if( them->isKindOf( KINDOF_STRUCTURE ) || them->isKindOf( KINDOF_AIRCRAFT ) )
-				continue;
-			if( them->isKindOf( KINDOF_DOZER ) || them->isKindOf( KINDOF_HARVESTER ) )
-				continue;
-			if( them->isContained() || them->isEffectivelyDead() || them->isNeutralControlled() )
-				continue;
-			AIUpdateInterface *ai = them->getAI();
-			if( ai == NULL )
-				continue;
-			const Bool idle = ai->isIdle();
-			if( !idle && !detoursForACrate( ai ) )
-				continue;
-			if( diesUsingItsOwnWeapon( them ) )
-				continue;
-
-			const Player *owner = them->getControllingPlayer();
-			if( owner == NULL || crate->getShroudedStatus( owner->getPlayerIndex() ) >= OBJECTSHROUD_FOGGED )
-				continue;
-			// a human's units go where the human sends them; only the computer's are sent for salvage,
-			// and only on an official or random map: in a mission, a Challenge or on a player's own map
-			// the computer plays EA's game, which never went for a crate on its own
-			if( !owner->isForkMapComputer() )
-				continue;
-
-			const Bool upgrades = wantsSalvageUpgrade( them );
-			if( collector == NULL || ( upgrades && !collectorUpgrades ) )
-			{
-				collector = them;
-				collectorUpgrades = upgrades;
-				collectorIsIdle = idle;
-			}
-
-			// the iterator runs near to far, so the first one that can be upgraded is the best answer
-			if( collectorUpgrades )
-				break;
+			collector = them;
+			collectorUpgrades = upgrades;
+			collectorIsIdle = idle;
 		}
 
-		if( collector == NULL )
-			continue;
-
-		if( !collectorIsIdle )
-		{
-			// its own machine picks the moment and puts it back on the order it had
-			collector->getAI()->notifyCrate( crate->getID() );
-			continue;
-		}
-
-		if( hasEnemyInSight( collector ) )
-			continue;
-
-		const Coord3D post = *collector->getPosition();
-		collector->getAI()->aiMoveToPosition( crate->getPosition(), CMD_FROM_AI );
-		collector->getAI()->friend_setSalvageReturnPosition( &post );
+		// the iterator runs near to far, so the first one that can be upgraded is the best answer
+		if( collectorUpgrades )
+			break;
 	}
+
+	if( collector == NULL )
+		return;
+
+	if( !collectorIsIdle )
+	{
+		// its own machine picks the moment and puts it back on the order it had
+		collector->getAI()->notifyCrate( crate->getID() );
+		return;
+	}
+
+	if( hasEnemyInSight( collector ) )
+		return;
+
+	const Coord3D post = *collector->getPosition();
+	collector->getAI()->aiMoveToPosition( crate->getPosition(), CMD_FROM_AI );
+	collector->getAI()->friend_setSalvageReturnPosition( &post );
+}
+
+/* The once-a-second work, one object at a time.  An object's turn is the frame of the second its ID
+	 falls on, never all of them on the frame that divides by sixty: with this pass on one frame, a
+	 frame of the second was ten times as likely to run past 13 ms as any other.  The count of turns a
+	 frame comes out of the object list and nothing else, so every machine and every replay takes the
+	 same turns on the same frames. */
+static void oncePerSecondTurn( Object *obj )
+{
+	rankAuraTake( obj );
+	rankAuraGive( obj );
+
+	// Faction veterancy's self-repair (GLA): a ranked unit that has gone unhurt for the Veterancy
+	// block's SelfRepairDelay heals its side's share of its max health.  Healing itself earns it
+	// nothing (Object::scoreTheHeal).
+	// A grade's MEND perk is the same heal at its own rate.  A leader's mend aura heals at once, hurt
+	// recently or not, and a unit takes the larger of the two.
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Real self = MAX( TheGlobalData->getRankStat( obj->getTemplate(), obj->getRankGrade(), RANK_STAT_SELF_REPAIR ),
+												 obj->getRankPerk( RANK_PERK_MEND ) );
+	const Real aura = obj->getRankAura( RANK_AURA_MEND );
+	if( ( self > 0.0f || aura > 0.0f ) && !obj->isEffectivelyDead() )
+	{
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const UnsignedInt lastHurt = body->getLastDamageTimestamp();
+		const Bool resting = !( lastHurt <= now && now - lastHurt < TheGlobalData->m_veterancySelfRepairDelay );
+		const Real share = MAX( aura, resting ? self : 0.0f );
+		if( share > 0.0f && body->getHealth() < body->getMaxHealth() )
+			obj->attemptHealing( body->getMaxHealth() * share, obj );
+	}
+
+	neutralBuildingRepair( obj );
+	salvageCrateCall( obj );
 }
 
 /* Tech building respawn, asked for in GitHub #23.  In the retail game an oil derrick blown up in
@@ -5038,12 +5053,6 @@ void GameLogic::update( void )
 
 	// a vote kick that ran out of time
 	expireKickVote();
-
-	// and the buildings nobody repairs
-	neutralBuildingRepairTick();
-
-	// ... and the salvage nobody collects
-	salvageCrateTick();
 
 	// ... and the tech buildings the lobby wants back
 	techRespawnTick();
@@ -5313,43 +5322,17 @@ void GameLogic::update( void )
 
 	{
 		//Handle disabled statii (and re-enable objects once frame matches)
+		const UnsignedInt turn = m_frame % LOGICFRAMES_PER_SECOND;
 		for( Object *obj = m_objList; obj; obj = obj->getNextObject() )
 		{
 			if( obj->isDisabled() )
 			{
 				obj->checkDisabledStatus();
 			}
+			if( (UnsignedInt)obj->getID() % LOGICFRAMES_PER_SECOND == turn )
+				oncePerSecondTurn( obj );
 		}
 	}
-
-	// Faction veterancy's self-repair (GLA): once a second a ranked unit that has gone unhurt for
-	// the Veterancy block's SelfRepairDelay heals its side's share of its max health.  Healing itself earns it
-	// nothing (Object::scoreTheHeal).
-	// A grade's MEND perk is the same heal at its own rate.  A leader's mend aura heals at once, hurt
-	// recently or not, and a unit takes the larger of the two.
-	if( m_frame % LOGICFRAMES_PER_SECOND == 0 )
-	{
-		updateRankAuras( m_objList );
-		for( Object *obj = m_objList; obj; obj = obj->getNextObject() )
-		{
-			const Real self = MAX( TheGlobalData->getRankStat( obj->getTemplate(), obj->getRankGrade(), RANK_STAT_SELF_REPAIR ),
-														 obj->getRankPerk( RANK_PERK_MEND ) );
-			const Real aura = obj->getRankAura( RANK_AURA_MEND );
-			if( ( self <= 0.0f && aura <= 0.0f ) || obj->isEffectivelyDead() )
-				continue;
-			const BodyModuleInterface *body = obj->getBodyModule();
-			const UnsignedInt lastHurt = body->getLastDamageTimestamp();
-			const Bool resting = !( lastHurt <= m_frame && m_frame - lastHurt < TheGlobalData->m_veterancySelfRepairDelay );
-			const Real share = MAX( aura, resting ? self : 0.0f );
-			if( share <= 0.0f || body->getHealth() >= body->getMaxHealth() )
-				continue;
-			obj->attemptHealing( body->getMaxHealth() * share, obj );
-		}
-	}
-
-  
-
-
 
 	// how long did that take?  only a frame that ran over budget is worth a line in the log
 	tFrameEnd = Clock_Ticks();
@@ -5432,6 +5415,18 @@ void GameLogic::addObjectToLookupTable( Object *obj )
 	m_objVector[ newID ] = obj;
 
 }  // end addObjectToLookupTable
+
+// ------------------------------------------------------------------------------------------------
+/** A tick beside the render (LogicThread's startOverlap) makes its objects in room grown here, at the
+	sync point, so addObjectToLookupTable does not reallocate m_objVector under a reader on the main
+	thread.  Nothing observes the size past findObjectByID's bound, where a missing slot and a NULL one
+	answer alike.  ponytail: a tick making more than 4096 objects still grows it in place. */
+// ------------------------------------------------------------------------------------------------
+void GameLogic::growObjectLookupForTick( void )
+{
+	while( (UnsignedInt)m_nextObjID + 4096 >= m_objVector.size() )
+		m_objVector.resize( m_objVector.size() * 2, NULL );
+}
 
 // ------------------------------------------------------------------------------------------------
 /** Remove object from the ID lookup table */
@@ -6829,9 +6824,11 @@ void GameLogic::loadPostProcess( void )
 	// climbing higher and higher due to us allocating objects during load (even though
 	// those objects have their ids overwritten with data from the file.  To prevent the
 	// m_nextObjID from getting un-necessarily high we will set it to the next available
-	// id from the objects that are now in the world and actually in use
+	// id from the objects that are now in the world and actually in use, or to the counter
+	// the save held if that is higher: an ID picks the frames an object takes its turns on,
+	// so a loaded game has to hand a new object the ID the game it was saved from would
 	//
-	m_nextObjID = INVALID_ID;
+	m_nextObjID = m_nextObjIDFromSave;
 	Object *obj;
 	for( obj = getFirstObject(); obj; obj = obj->getNextObject() )
 		if( obj->getID() >= m_nextObjID )

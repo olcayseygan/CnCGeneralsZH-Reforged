@@ -98,6 +98,31 @@ void DeployStyleAIUpdate::aiDoCommand( const AICommandParms* parms )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Setting up takes as long as the data says, and a Nuke Cannon's is 3.3 seconds, then as long again
+	* to pack.  One that unpacked for anything in reach this instant finished just as a Humvee drove out
+	* of reach and packed again without a shot, 6.7 seconds gone.  So it unpacks only for a target still
+	* in reach by the time it is ready, if the target keeps on going the way it is going.
+	*
+	* This moves us back along the target's travel rather than the target forward, because a target
+	* that is an Object and not a point keeps its bounding circle in the sum.  Reach is measured edge to
+	* edge, so the test against a bare point came up short by the target's radius: a parked target in
+	* that last stretch was in reach and would never stay in reach, and nothing moved or fired. */
+//-------------------------------------------------------------------------------------------------
+Bool DeployStyleAIUpdate::willTargetStayInRange( const Weapon *weapon ) const
+{
+	const Object *victim = getCurrentVictim();
+	if( victim == NULL || victim->getPhysics() == NULL )
+		return TRUE;
+
+	const Coord3D *velocity = victim->getPhysics()->getVelocity();
+	const Real frames = (Real)getUnpackTime();
+	Coord3D from = *getObject()->getPosition();
+	from.x -= velocity->x * frames;
+	from.y -= velocity->y * frames;
+	return weapon->isSourceObjectWithGoalPositionWithinAttackRange( getObject(), &from, victim, NULL );
+}
+
+//-------------------------------------------------------------------------------------------------
 UpdateSleepTime DeployStyleAIUpdate::update( void )
 {
 	// have to call our parent's isIdle, because we override it to never return true
@@ -158,7 +183,8 @@ UpdateSleepTime DeployStyleAIUpdate::update( void )
 		{
 			case READY_TO_MOVE:
 				//We're need to deploy before we can attack.
-				setMyState( DEPLOY );
+				if( isInGuardIdleState || willTargetStayInRange( weapon ) )
+					setMyState( DEPLOY );
 				break;
 			case READY_TO_ATTACK:
 				//Let the AI handle attacking.

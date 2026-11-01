@@ -57,6 +57,12 @@ static const unsigned REGISTER_VIEWPORT = VERTEX_REGISTER_VIEWPORT;
 static const unsigned REGISTER_LIGHTS = VERTEX_REGISTER_LIGHTS;
 static const unsigned REGISTERS_PER_LIGHT = VERTEX_REGISTERS_PER_LIGHT;
 
+// How far the scene ambient swings per channel between a face looking straight up (one plus this) and
+// one looking straight down (one minus it).  A wall keeps exactly the map's ambient, so a night map
+// stays a night map and the model's overall weight stays where the art had it.  Blue swings most: the
+// sky is bluer than the ambient and the ground's bounce warmer.
+static const char * const HEMI_AMBIENT_SPREAD = "float3(0.25, 0.30, 0.40)";
+
 static bool has_normal(FixedFunctionValue fvf)
 {
 	return (fvf & FF_FVF_NORMAL) != 0;
@@ -519,6 +525,9 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 			|| description.StageCount > 1)) {
 		return false;
 	}
+	if (description.HemiAmbient && (!description.LightingEnabled || is_pretransformed(description.FVF))) {
+		return false;
+	}
 
 	// A pre-transformed vertex has been through the transform, the lighting and the coordinate
 	// generation already: its position is in pixels, its colour is in the vertex, and D3D9 reads
@@ -595,8 +604,15 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 			return false;
 		}
 
+		std::string scene_ambient = "GlobalAmbient.rgb";
+		if (description.HemiAmbient) {
+			body += std::string("    float3 hemi_ambient = GlobalAmbient.rgb * (1.0 + ") + HEMI_AMBIENT_SPREAD
+				+ " * dot(view_normal, MaterialPower.yzw));\n";
+			scene_ambient = "hemi_ambient";
+		}
+
 		body += "    output.Diffuse.rgb = saturate(" + diffuse + ".rgb * diffuse_light + "
-			+ ambient + ".rgb * (GlobalAmbient.rgb + ambient_light) + " + emissive + ".rgb);\n";
+			+ ambient + ".rgb * (" + scene_ambient + " + ambient_light) + " + emissive + ".rgb);\n";
 		body += "    output.Diffuse.a = " + diffuse + ".a;\n";
 
 		if (description.SpecularEnabled) {
@@ -775,6 +791,9 @@ std::string VertexShader_Key(const VertexPipelineDescription & description)
 	}
 	if (description.FireLook) {
 		key += ":B";
+	}
+	if (description.HemiAmbient) {
+		key += ":H";
 	}
 	return key;
 }

@@ -176,7 +176,7 @@ void RankInfoStore::friend_parseRankDefinition( INI* ini )
 		} 
 		else
 		{
-			// -modfactions: a mod's pass fills that mod's own table, its sciences already under its names
+			// a mod's pass fills that mod's own table, its sciences already under its names
 			const Int mod = TheModNamespace.getActive();
 			if (mod >= 0 && (Int)TheRankInfoStore->m_modRankInfos.size() <= mod)
 				TheRankInfoStore->m_modRankInfos.resize(mod + 1);

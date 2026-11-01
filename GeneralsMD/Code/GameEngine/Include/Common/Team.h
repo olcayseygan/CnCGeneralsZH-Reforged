@@ -400,6 +400,9 @@ public:
 		the team's list-of-objects only once.
 	*/
 	void countObjectsByThingTemplate(Int numTmplates, const ThingTemplate* const* things, Bool ignoreDead, Int *counts, Bool ignoreUnderConstruction = TRUE ) const;
+
+	/// whether countObjectsByThingTemplate counts this object once its template has matched
+	static Bool countsTowardTemplate(const Object *obj, Bool ignoreDead, Bool ignoreUnderConstruction);
 	
 	
 	/**

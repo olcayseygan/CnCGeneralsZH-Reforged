@@ -1,0 +1,40 @@
+# A barracks with no gun put down in a computer player's base three minutes in: a building nothing has to answer until it trains.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover 1 -aidiff hard
+#     -side 0 FactionGLA -side 1 FactionAmerica -seed 1 -maxframes 30000 -scenario baseintruder_barracks
+
+# a second command center far off, so the match outlasts the seat's start falling
+30 spawn 1 AmericaCommandCenter 1 4361 3126
+5400 spawn 1 AmericaBarracks 1 start0:0:520
+5400 tally 1 AmericaBarracks
+5700 tally 1 AmericaBarracks
+6000 tally 1 AmericaBarracks
+6300 tally 1 AmericaBarracks
+6600 tally 1 AmericaBarracks
+6900 tally 1 AmericaBarracks
+7200 tally 1 AmericaBarracks
+7500 tally 1 AmericaBarracks
+7800 tally 1 AmericaBarracks
+8100 tally 1 AmericaBarracks
+8400 tally 1 AmericaBarracks
+8700 tally 1 AmericaBarracks
+9000 tally 1 AmericaBarracks
+9300 tally 1 AmericaBarracks
+9600 tally 1 AmericaBarracks
+9900 tally 1 AmericaBarracks
+10200 tally 1 AmericaBarracks
+10500 tally 1 AmericaBarracks
+10800 tally 1 AmericaBarracks
+11100 tally 1 AmericaBarracks
+11400 tally 1 AmericaBarracks
+11700 tally 1 AmericaBarracks
+12000 tally 1 AmericaBarracks
+12300 tally 1 AmericaBarracks
+12600 tally 1 AmericaBarracks
+12900 tally 1 AmericaBarracks
+13200 tally 1 AmericaBarracks
+13500 tally 1 AmericaBarracks
+13800 tally 1 AmericaBarracks
+14100 tally 1 AmericaBarracks
+14400 tally 1 AmericaBarracks

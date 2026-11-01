@@ -81,15 +81,19 @@ void AIInfluenceMap::stamp( std::vector<Real> &layer, Real x, Real y, Real z, Re
 	const Int colHi = min<Int>( m_cols - 1, REAL_TO_INT_FLOOR( (x + farthest - m_originX) / m_cellSize ) );
 	const Int rowLo = max<Int>( 0, REAL_TO_INT_FLOOR( (y - farthest - m_originY) / m_cellSize ) );
 	const Int rowHi = min<Int>( m_rows - 1, REAL_TO_INT_FLOOR( (y + farthest - m_originY) / m_cellSize ) );
+	const Real rangeSqr = sqr( range ), farthestSqr = sqr( farthest );
 	for( Int row = rowLo; row <= rowHi; ++row )
 	{
 		const Real cy = m_originY + (row + 0.5f) * m_cellSize;
 		for( Int col = colLo; col <= colHi; ++col )
 		{
-			const Int index = row * m_cols + col;
 			const Real cx = m_originX + (col + 0.5f) * m_cellSize;
-			const Real reach = range + Weapon_highGroundRangeBonus( range, z - m_height[ index ] );
-			if( sqr( cx - x ) + sqr( cy - y ) <= sqr( reach ) )
+			const Real distSqr = sqr( cx - x ) + sqr( cy - y );
+			// the bonus is never below 0 nor past the cap, so the height only decides the ring between
+			if( distSqr > farthestSqr )
+				continue;
+			const Int index = row * m_cols + col;
+			if( distSqr <= rangeSqr || distSqr <= sqr( range + Weapon_highGroundRangeBonus( range, z - m_height[ index ] ) ) )
 				layer[ index ] += power;
 		}
 	}

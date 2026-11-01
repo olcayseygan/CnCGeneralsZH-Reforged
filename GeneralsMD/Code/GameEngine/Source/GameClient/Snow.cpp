@@ -126,7 +126,7 @@ void SnowManager::getWeatherHaze(float colour[3], Real *strength) const
 {
 	static const float COLOURS[WEATHER_KIND_COUNT][3] = {
 		{ 0.0f, 0.0f, 0.0f }, { 0.50f, 0.54f, 0.60f }, { 0.74f, 0.58f, 0.38f }, { 0.82f, 0.86f, 0.92f } };
-	static const Real STRENGTHS[WEATHER_KIND_COUNT] = { 0.0f, 0.24f, 0.70f, 0.28f };
+	static const Real STRENGTHS[WEATHER_KIND_COUNT] = { 0.0f, 0.10f, 0.20f, 0.12f };
 	const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];
 	const Real red = min(sun.ambient.red + sun.diffuse.red, 1.0f);
 	const Real green = min(sun.ambient.green + sun.diffuse.green, 1.0f);

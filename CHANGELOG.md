@@ -48,7 +48,7 @@ found and fixed, EA's own, not port damage.**
 
 ## Weather, if you want it
 
-- Weather, under Options, Effects, is a new setting, off by default until it has been played. A green map gets rain, and a desert map gets blowing sand over a still tan haze. A snowy map with no flakes of its own gets them. The trees lean and sway harder and smoke drifts downwind; a map that already rains or snows, Flooded Plains or Bitter Winter, keeps what EA gave it and takes only the wind. No part of the game reads any of this: what a unit sees and hits stays what the map says, so you and your opponent can have different weather in one match. A sandstorm over a battle of three armies and three superweapons takes the graphics card's frame from about 7.9 to 8.5 ms. Direct3D 11 only, and off under Classic Graphics.
+- Weather, under Options, Effects, is a new setting, off by default until it has been played. A green map gets rain, and a desert map gets blowing sand over a still tan haze. A snowy map with no flakes of its own gets them. The trees lean and sway harder and smoke drifts downwind; a map that already rains or snows, Flooded Plains or Bitter Winter, keeps what EA gave it and takes only the wind. The weather is much lighter than it first was, so the field stays readable in rain, sand and snow. No part of the game reads any of this: what a unit sees and hits stays what the map says, so you and your opponent can have different weather in one match. A sandstorm over a battle of three armies and three superweapons takes the graphics card's frame from about 7.9 to 8.5 ms. Direct3D 11 only, and off under Classic Graphics.
 
 ## Fire keeps its colour
 

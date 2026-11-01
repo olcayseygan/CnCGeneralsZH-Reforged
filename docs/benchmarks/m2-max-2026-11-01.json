@@ -1,0 +1,546 @@
+{
+  "schema": 1,
+  "baseline_commit": "bf6fcd62cbfe67c9bf0e061f9d42556ac511a630",
+  "configuration": {
+    "build": "Release",
+    "architecture": "arm64",
+    "cpu_tuning": "apple-m2",
+    "minimum_macos": "13.0",
+    "validation_during_measurement": false,
+    "pairs_per_case": 9,
+    "ordering": "AB/BA alternating"
+  },
+  "cases": {
+    "engine_lights4": {
+      "utc": "2026-11-01T18:52:35Z",
+      "config": {
+        "benchmark": "sdl_draw",
+        "backend": "metal",
+        "mode": "engine",
+        "width": 32,
+        "height": 32,
+        "frames": 300,
+        "warmup": 60,
+        "draws": 1024,
+        "lights": 4,
+        "qos": "user_initiated",
+        "checksum": "3b1656fc6a2ac325"
+      },
+      "baseline_sha256": "1a9b0b853e869fbc523cfd24cca7fe44b9f68481c82368a48724799d6ab982f4",
+      "candidate_sha256": "70ad7a471f3969d5baf7e37a3ceae69727395b18820f695ae9056d48e09065bd",
+      "summary": {
+        "record_cpu_ns_per_frame": {
+          "baseline_median": 377166.13,
+          "candidate_median": 298379.863,
+          "baseline_range": [
+            368117.613,
+            380774.05
+          ],
+          "candidate_range": [
+            292884.293,
+            306179.977
+          ],
+          "paired_reduction_percent_median": 21.114223270438657,
+          "paired_reduction_percent_range": [
+            17.228796487200448,
+            22.61717414829083
+          ]
+        },
+        "record_ns_per_frame": {
+          "baseline_median": 378369.707,
+          "candidate_median": 298736.657,
+          "baseline_range": [
+            368585.02,
+            382403.893
+          ],
+          "candidate_range": [
+            293269.16,
+            307123.057
+          ],
+          "paired_reduction_percent_median": 21.310621741733936,
+          "paired_reduction_percent_range": [
+            17.054482255596547,
+            22.81550151478191
+          ]
+        },
+        "complete_ns_per_frame": {
+          "baseline_median": 816108.51,
+          "candidate_median": 722427.763,
+          "baseline_range": [
+            773581.82,
+            931639.437
+          ],
+          "candidate_range": [
+            698473.46,
+            862769.16
+          ],
+          "paired_reduction_percent_median": 11.72817288720589,
+          "paired_reduction_percent_range": [
+            -8.726447732711474,
+            18.201739564187214
+          ]
+        }
+      },
+      "thermal_before": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "thermal_after": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "engine_lights0": {
+      "utc": "2026-11-01T18:53:31Z",
+      "config": {
+        "benchmark": "sdl_draw",
+        "backend": "metal",
+        "mode": "engine",
+        "width": 32,
+        "height": 32,
+        "frames": 300,
+        "warmup": 60,
+        "draws": 1024,
+        "lights": 0,
+        "qos": "user_initiated",
+        "checksum": "3b1656fc6a2ac325"
+      },
+      "baseline_sha256": "1a9b0b853e869fbc523cfd24cca7fe44b9f68481c82368a48724799d6ab982f4",
+      "candidate_sha256": "70ad7a471f3969d5baf7e37a3ceae69727395b18820f695ae9056d48e09065bd",
+      "summary": {
+        "record_cpu_ns_per_frame": {
+          "baseline_median": 343503.307,
+          "candidate_median": 300183.223,
+          "baseline_range": [
+            341791.957,
+            348477.393
+          ],
+          "candidate_range": [
+            296518.89,
+            307314.993
+          ],
+          "paired_reduction_percent_median": 12.69060690096505,
+          "paired_reduction_percent_range": [
+            11.50323830797937,
+            13.388403115926062
+          ]
+        },
+        "record_ns_per_frame": {
+          "baseline_median": 344681.12,
+          "candidate_median": 301190.573,
+          "baseline_range": [
+            342053.35,
+            351087.32
+          ],
+          "candidate_range": [
+            297475.69,
+            309581.4
+          ],
+          "paired_reduction_percent_median": 12.712274415548809,
+          "paired_reduction_percent_range": [
+            11.238696244313939,
+            13.395927870418166
+          ]
+        },
+        "complete_ns_per_frame": {
+          "baseline_median": 774058.627,
+          "candidate_median": 879736.67,
+          "baseline_range": [
+            760940.547,
+            1081873.043
+          ],
+          "candidate_range": [
+            717566.55,
+            1058553.503
+          ],
+          "paired_reduction_percent_median": 0.43973919201553135,
+          "paired_reduction_percent_range": [
+            -24.960822740792853,
+            27.532124765216103
+          ]
+        }
+      },
+      "thermal_before": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "thermal_after": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "fixed_function_control": {
+      "utc": "2026-11-01T18:49:42Z",
+      "config": {
+        "benchmark": "sdl_draw",
+        "backend": "metal",
+        "mode": "fixed",
+        "width": 32,
+        "height": 32,
+        "frames": 300,
+        "warmup": 60,
+        "draws": 1024,
+        "lights": 4,
+        "qos": "user_initiated",
+        "checksum": "3b1656fc6a2ac325"
+      },
+      "baseline_sha256": "1a9b0b853e869fbc523cfd24cca7fe44b9f68481c82368a48724799d6ab982f4",
+      "candidate_sha256": "70ad7a471f3969d5baf7e37a3ceae69727395b18820f695ae9056d48e09065bd",
+      "summary": {
+        "record_cpu_ns_per_frame": {
+          "baseline_median": 359661.957,
+          "candidate_median": 356651.937,
+          "baseline_range": [
+            355181.937,
+            413316.827
+          ],
+          "candidate_range": [
+            352144.883,
+            376294.183
+          ],
+          "paired_reduction_percent_median": 1.283657441671393,
+          "paired_reduction_percent_range": [
+            -5.787736535041321,
+            14.344186620788124
+          ]
+        },
+        "record_ns_per_frame": {
+          "baseline_median": 360702.457,
+          "candidate_median": 357690.267,
+          "baseline_range": [
+            355687.477,
+            484950.153
+          ],
+          "candidate_range": [
+            352348.653,
+            377811.937
+          ],
+          "paired_reduction_percent_median": 1.444812268362261,
+          "paired_reduction_percent_range": [
+            -6.061885289486746,
+            26.856396517107605
+          ]
+        },
+        "complete_ns_per_frame": {
+          "baseline_median": 1024717.757,
+          "candidate_median": 1012742.35,
+          "baseline_range": [
+            1012935.69,
+            1309289.04
+          ],
+          "candidate_range": [
+            989254.45,
+            1040881.95
+          ],
+          "paired_reduction_percent_median": 1.2266130114417129,
+          "paired_reduction_percent_range": [
+            -2.601089676178958,
+            24.321395831740865
+          ]
+        }
+      },
+      "thermal_before": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "thermal_after": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "mip_level6": {
+      "utc": "2026-11-01T18:43:13Z",
+      "config": {
+        "workload": "managed_dirty_mip",
+        "backend": "metal",
+        "mode": "upload_flush_idle",
+        "frames": 120,
+        "warmup": 30,
+        "width": 2048,
+        "height": 2048,
+        "level": 6,
+        "qos": "user_initiated",
+        "checksum": "b1fabcdf67d59ffc"
+      },
+      "baseline_sha256": "0670f26ef3f6a9a329ec33b314be2c0c47f18c51e4fa2980c0a56437099c7566",
+      "candidate_sha256": "4603f1c153c5e0e6f1525e7c83a4bcb40cad1d925f6c75d94e09879e8088505f",
+      "summary": {
+        "record_cpu_ns_per_frame": {
+          "baseline_median": 1083179.808,
+          "candidate_median": 15111.383,
+          "baseline_range": [
+            1043897.567,
+            1355071.908
+          ],
+          "candidate_range": [
+            11681.917,
+            31272.233
+          ],
+          "paired_reduction_percent_median": 98.58495414965925,
+          "paired_reduction_percent_range": [
+            97.19280208254831,
+            98.904363751538
+          ]
+        },
+        "record_ns_per_frame": {
+          "baseline_median": 1118864.558,
+          "candidate_median": 15160.808,
+          "baseline_range": [
+            1053311.458,
+            1528090.967
+          ],
+          "candidate_range": [
+            11505.9,
+            35902.042
+          ],
+          "paired_reduction_percent_median": 98.61026239383497,
+          "paired_reduction_percent_range": [
+            96.97505420986438,
+            98.92770253915414
+          ]
+        },
+        "total_ns_per_frame": {
+          "baseline_median": 2060813.533,
+          "candidate_median": 220945.825,
+          "baseline_range": [
+            1870530.158,
+            2317839.967
+          ],
+          "candidate_range": [
+            166146.842,
+            350344.783
+          ],
+          "paired_reduction_percent_median": 88.1880640066109,
+          "paired_reduction_percent_range": [
+            83.37029926955086,
+            92.00625834832643
+          ]
+        }
+      },
+      "thermal_before": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "thermal_after": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "mip_level0": {
+      "utc": "2026-11-01T18:45:32Z",
+      "config": {
+        "workload": "managed_dirty_mip",
+        "backend": "metal",
+        "mode": "upload_flush_idle",
+        "frames": 120,
+        "warmup": 30,
+        "width": 2048,
+        "height": 2048,
+        "level": 0,
+        "qos": "user_initiated",
+        "checksum": "1ff13c203ac617fc"
+      },
+      "baseline_sha256": "0670f26ef3f6a9a329ec33b314be2c0c47f18c51e4fa2980c0a56437099c7566",
+      "candidate_sha256": "4603f1c153c5e0e6f1525e7c83a4bcb40cad1d925f6c75d94e09879e8088505f",
+      "summary": {
+        "record_cpu_ns_per_frame": {
+          "baseline_median": 1387164.217,
+          "candidate_median": 1141332.567,
+          "baseline_range": [
+            1314876.05,
+            1661209.042
+          ],
+          "candidate_range": [
+            1118497.183,
+            1250884.042
+          ],
+          "paired_reduction_percent_median": 17.088411681544425,
+          "paired_reduction_percent_range": [
+            4.866771130252179,
+            30.56892974701254
+          ]
+        },
+        "record_ns_per_frame": {
+          "baseline_median": 1399701.35,
+          "candidate_median": 1152999.967,
+          "baseline_range": [
+            1319161.058,
+            1795433.692
+          ],
+          "candidate_range": [
+            1123955.892,
+            1289813.208
+          ],
+          "paired_reduction_percent_median": 18.046133555561696,
+          "paired_reduction_percent_range": [
+            2.224735927582233,
+            35.20495280980837
+          ]
+        },
+        "total_ns_per_frame": {
+          "baseline_median": 2329547.525,
+          "candidate_median": 2083772.925,
+          "baseline_range": [
+            2158735.042,
+            2761375.742
+          ],
+          "candidate_range": [
+            1915121.183,
+            2279413.558
+          ],
+          "paired_reduction_percent_median": 13.669880693352654,
+          "paired_reduction_percent_range": [
+            -2.108252118559384,
+            19.352561426185755
+          ]
+        }
+      },
+      "thermal_before": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "thermal_after": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    }
+  },
+  "host": {
+    "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "Apple M2 Max",
+    "thermal_before": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "thermal_after": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+  },
+  "raw_csv_sha256": "a03b9c40f92f757c0c23c61340aa6c30e1959dada2e20e4b01a65dc32e206074",
+  "baseline_renderer_archive": {
+    "baseline_commit": "bf6fcd62cbfe67c9bf0e061f9d42556ac511a630",
+    "archive_sha256": "ff224b1584f5f6dd0ed7d88827c8cba6e512f786c72cc7737668e70f4eb93555",
+    "files": {
+      "PosixDevice9Draw.cpp": "74414e1dd5fdc1131d4f1c4d3db8b38b7a6b1d365782cc0334f3cada0cb3fa24",
+      "SdlGpuFrameBatch.cpp": "a2f0c920cd05d7e3341d2ff60b3b10180fdb382ec585604dabc5b58cfb5d02da",
+      "SdlResourceMirror.cpp": "27ce1a0953b80db89e7a708d84cfc906ebf1e48c534d13b756b316fe21bd9709"
+    }
+  },
+  "draw_link_provenance": {
+    "base_commit": "bf6fcd62",
+    "baseline_draw_object": "/private/tmp/zhr-metal-m2-baseline/PosixDevice9Draw.cpp.o",
+    "baseline_draw_sha256": "74414e1dd5fdc1131d4f1c4d3db8b38b7a6b1d365782cc0334f3cada0cb3fa24",
+    "link_command": [
+      "/usr/bin/c++",
+      "-O3",
+      "-DNDEBUG",
+      "-mmacosx-version-min=13.0",
+      "-Wl,-search_paths_first",
+      "-Wl,-headerpad_max_install_names",
+      "-lpthread",
+      "CMakeFiles/sdl_draw_bench.dir/Tools/sdl_draw_bench.cpp.o",
+      "-o",
+      "/private/tmp/zhr-metal-draw-comparison/baseline",
+      "/private/tmp/zhr-metal-m2-baseline/PosixDevice9Draw.cpp.o",
+      "libposixd3d9.a",
+      "SDL3/libSDL3.a",
+      "libsdl3shadercompile.a",
+      "libsdl3_shadercross.a",
+      "SDL3/libSDL3.a",
+      "-lm",
+      "-framework",
+      "CoreMedia",
+      "-framework",
+      "CoreVideo",
+      "-framework",
+      "Cocoa",
+      "-Xlinker",
+      "-weak_framework",
+      "-Xlinker",
+      "UniformTypeIdentifiers",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "Carbon",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "Metal",
+      "-framework",
+      "QuartzCore",
+      "SPIRV-Cross/libspirv-cross-c.a",
+      "SPIRV-Cross/libspirv-cross-msl.a",
+      "SPIRV-Cross/libspirv-cross-glsl.a",
+      "SPIRV-Cross/libspirv-cross-core.a",
+      "glslang/glslang/libglslang.a",
+      "glslang/glslang/libglslang-default-resource-limits.a",
+      "libengineshader.a",
+      "libffshader.a",
+      "libffvertex.a"
+    ],
+    "benchmark_object_sha256": "be4ded2874ad0bb204db0e1f680f8ad7114791c13f6cd45894b56e152ce7480f",
+    "archives": {
+      "libposixd3d9.a": "ae49a4fd4b4a17fb0c5d77df5c9afb2480fbf81c9bd70dc54fce7fc1f7db8f5a",
+      "SDL3/libSDL3.a": "ed4cc6ee50772bb17f15ede24918e88d530aebe0d01fdbeb48f4d58ad57e68b7",
+      "libsdl3shadercompile.a": "c150a480e65ce4b95b9859077283e5ba4156ce426a65c97c41dbdcfe30eeb6c6",
+      "libsdl3_shadercross.a": "f946a8aeaff5e56237a10b57957fbaac15514bb26ff8a47fe0ae32ef92fb71c9",
+      "SPIRV-Cross/libspirv-cross-c.a": "d909895065c5451e551907721f50c8add660d695aa1bc0365c8c80251e44db45",
+      "SPIRV-Cross/libspirv-cross-msl.a": "2718d3e195538d2be0c111328e0c67ead67eb6f364f70b089569d4e50fb9c831",
+      "SPIRV-Cross/libspirv-cross-glsl.a": "be186289234c69b0896b61daab8298ab98bcf91980cac5257fb0b6677d17b6ef",
+      "SPIRV-Cross/libspirv-cross-core.a": "ca3b8dc4dfb5058790d83c773d3e6dc3882f96b8c9646ffdf72e596205b443e2",
+      "glslang/glslang/libglslang.a": "2079a9dd4632c46a0d782259be090a9b4d897e4f8b6efb6aba24f528369ca781",
+      "glslang/glslang/libglslang-default-resource-limits.a": "f93e5ab6353f7c7cf2bf97ff2c33df015d95ad2c5f8736512fa6facc502898b5",
+      "libengineshader.a": "d8c0474f32d07e0cc143f81d1c441a5f1e1e79e20c5bc303f6e12bed7147999b",
+      "libffshader.a": "c8947c2fb45b161bde91d963a93ce5e8162733f46e658f1de612bb3cfa8eb5dc",
+      "libffvertex.a": "595500cdbee688efadf51e113bfaec421f4ee038d0b1536d2d35a7ebeb434dee"
+    },
+    "baseline_sha256": "1a9b0b853e869fbc523cfd24cca7fe44b9f68481c82368a48724799d6ab982f4",
+    "candidate_sha256": "70ad7a471f3969d5baf7e37a3ceae69727395b18820f695ae9056d48e09065bd"
+  },
+  "mip_link_provenance": {
+    "base_commit": "bf6fcd62cbfe67c9bf0e061f9d42556ac511a630",
+    "baseline_archive_sha256": "ff224b1584f5f6dd0ed7d88827c8cba6e512f786c72cc7737668e70f4eb93555",
+    "link_command": [
+      "/usr/bin/c++",
+      "-O3",
+      "-DNDEBUG",
+      "-mmacosx-version-min=13.0",
+      "-Wl,-search_paths_first",
+      "-Wl,-headerpad_max_install_names",
+      "-lpthread",
+      "CMakeFiles/sdl_mip_bench.dir/Tools/sdl_mip_bench.cpp.o",
+      "-o",
+      "/private/tmp/zhr-metal-mip-comparison/baseline",
+      "/private/tmp/zhr-metal-m2-baseline/libposixd3d9.a",
+      "SDL3/libSDL3.a",
+      "libsdl3shadercompile.a",
+      "libsdl3_shadercross.a",
+      "SDL3/libSDL3.a",
+      "-lm",
+      "-framework",
+      "CoreMedia",
+      "-framework",
+      "CoreVideo",
+      "-framework",
+      "Cocoa",
+      "-Xlinker",
+      "-weak_framework",
+      "-Xlinker",
+      "UniformTypeIdentifiers",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "Carbon",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "Metal",
+      "-framework",
+      "QuartzCore",
+      "SPIRV-Cross/libspirv-cross-c.a",
+      "SPIRV-Cross/libspirv-cross-msl.a",
+      "SPIRV-Cross/libspirv-cross-glsl.a",
+      "SPIRV-Cross/libspirv-cross-core.a",
+      "glslang/glslang/libglslang.a",
+      "glslang/glslang/libglslang-default-resource-limits.a",
+      "libengineshader.a",
+      "libffshader.a",
+      "libffvertex.a"
+    ],
+    "benchmark_object_sha256": "340c59650c8e66e0a9bd4359816aca7d851346aee8f97202b1418229d759c8bf",
+    "archives": {
+      "/private/tmp/zhr-metal-m2-baseline/libposixd3d9.a": "ff224b1584f5f6dd0ed7d88827c8cba6e512f786c72cc7737668e70f4eb93555",
+      "SDL3/libSDL3.a": "ed4cc6ee50772bb17f15ede24918e88d530aebe0d01fdbeb48f4d58ad57e68b7",
+      "libsdl3shadercompile.a": "c150a480e65ce4b95b9859077283e5ba4156ce426a65c97c41dbdcfe30eeb6c6",
+      "libsdl3_shadercross.a": "f946a8aeaff5e56237a10b57957fbaac15514bb26ff8a47fe0ae32ef92fb71c9",
+      "SPIRV-Cross/libspirv-cross-c.a": "d909895065c5451e551907721f50c8add660d695aa1bc0365c8c80251e44db45",
+      "SPIRV-Cross/libspirv-cross-msl.a": "2718d3e195538d2be0c111328e0c67ead67eb6f364f70b089569d4e50fb9c831",
+      "SPIRV-Cross/libspirv-cross-glsl.a": "be186289234c69b0896b61daab8298ab98bcf91980cac5257fb0b6677d17b6ef",
+      "SPIRV-Cross/libspirv-cross-core.a": "ca3b8dc4dfb5058790d83c773d3e6dc3882f96b8c9646ffdf72e596205b443e2",
+      "glslang/glslang/libglslang.a": "2079a9dd4632c46a0d782259be090a9b4d897e4f8b6efb6aba24f528369ca781",
+      "glslang/glslang/libglslang-default-resource-limits.a": "f93e5ab6353f7c7cf2bf97ff2c33df015d95ad2c5f8736512fa6facc502898b5",
+      "libengineshader.a": "d8c0474f32d07e0cc143f81d1c441a5f1e1e79e20c5bc303f6e12bed7147999b",
+      "libffshader.a": "c8947c2fb45b161bde91d963a93ce5e8162733f46e658f1de612bb3cfa8eb5dc",
+      "libffvertex.a": "595500cdbee688efadf51e113bfaec421f4ee038d0b1536d2d35a7ebeb434dee"
+    },
+    "baseline_sha256": "0670f26ef3f6a9a329ec33b314be2c0c47f18c51e4fa2980c0a56437099c7566",
+    "candidate_sha256": "4603f1c153c5e0e6f1525e7c83a4bcb40cad1d925f6c75d94e09879e8088505f"
+  },
+  "source_sha256": {
+    "Tools/sdl_draw_bench.cpp": "e89f613b8bd6427c99c198c03d7886a3bbf28c1c2e0345ae351cb200612184c3",
+    "Tools/sdl_mip_bench.cpp": "82c1d899dd917e2c2551b31e02b3671411804ca9f3a0ae1e8a7c6290d5afb984",
+    "Tools/RenderBenchTiming.h": "3c2ccf7a388f644cf5fecc79f73e32af4a85573aca9f33e3b30d1fe22ddd0020",
+    "Tools/compare-render-bench.py": "8dfc8038c60f5ca157cffbc1c0df979b2a187ac3ecfd773fdd25b73615a9fe1f",
+    "Tools/relink-render-bench.py": "e7ffb35a14aeaee58ed21414b168bd435a47bb277261bb888598b290803ab3bc",
+    "GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Draw.cpp": "3e923c39a7aa14c3d2745ef6ecc207a19f9956a18734fd90a2ddebd81fbe0e9a",
+    "GameEngineDevice/Source/PosixDevice/Render/SdlResourceMirror.cpp": "ada677ad935a55931df70c49ba9df6265a1d7bc55e302453088b4255737218b2",
+    "GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameBatch.cpp": "f1d8373d30d49a13ccb6b4a16a86bd2be99551bdddcfe5c966bf2c6c5895d541",
+    "GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.h": "f3918af88b9c452442f0f23f9e64ddec4aaf67c3dfe8bf3b678e657f957de141"
+  }
+}

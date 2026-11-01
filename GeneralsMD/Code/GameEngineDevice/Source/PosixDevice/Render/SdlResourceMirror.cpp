@@ -317,9 +317,12 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 		created = true;
 	}
 	Copy & copy = found->second;
-	bool stale = copy.Versions.size() != levels;
-	for (unsigned int level = 0; !stale && level < levels; ++level) {
-		stale = copy.Versions[level] != texture->level(level).version();
+	const bool firstUpload = copy.Versions.size() != levels;
+	bool stale = false, completeChain = true;
+	for (unsigned int level = 0; level < levels; ++level) {
+		const bool changed = firstUpload || copy.Versions[level] != texture->level(level).version();
+		stale = stale || changed;
+		completeChain = completeChain && changed;
 	}
 	if (stale) {
 		if (!Prepare_Update(copy)) {
@@ -330,10 +333,13 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 		dump_texture_if_asked(texture->level(0), texture, TexturesUploaded);
 		for (unsigned int level = 0; level < levels; ++level) {
 			const PosixImage & image = texture->level(level);
+			if (!firstUpload && copy.Versions[level] == image.version())
+				continue;
 			uint32_t offset = 0;
 			uint8_t * space = Frame->Upload_Space(Sdl_Level_Upload_Size(image, copy.Native), offset);
 			Sdl_Convert_Level(image, copy.Native, space);
-			Frame->Queue_Texture_Upload(copy.Texture, level, image.width(), image.height(), offset);
+			Frame->Queue_Texture_Upload(copy.Texture, level, image.width(), image.height(), offset,
+				completeChain && level == 0);
 			copy.Versions[level] = image.version();
 		}
 		++TexturesUploaded;

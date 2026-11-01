@@ -10,6 +10,8 @@ found and fixed, EA's own, not port damage.**
 
 ## Safer files and macOS setup
 
+- On the M2 Max, a synthetic engine-shader workload needs 21% less render-thread CPU time while the classic shader control remains effectively unchanged. Small mip updates upload only the changed level, preserving rendered contents and sibling levels: a 32×32 update in a 2048×2048 texture stages 4,096 bytes instead of 22,369,620. Initial uploads and all existing rendering features remain available. These are targeted measurements, not match FPS.
+
 - Invalid object-allocation paths now fail consistently in Release builds instead of returning a null pointer. Normal pool allocation, object destruction and cleanup after constructor exceptions retain their existing behavior.
 
 - Float-to-integer rounding now handles fractions, exact integers and out-of-range values without invalid shifts or integer overflow. This keeps animation and rendering calculations consistent across Apple silicon, Intel and other supported processors.

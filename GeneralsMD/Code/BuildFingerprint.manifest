@@ -3655,6 +3655,7 @@ Tools/ParticleEditor/post-build-Release.bat
 Tools/ParticleEditor/post-build.bat
 Tools/ParticleEditor/res/ParticleEditor.rc2
 Tools/ProfileSampler/eip_sampler.cpp
+Tools/RenderBenchTiming.h
 Tools/WW3D/max2w3d/AlphaModifier.cpp
 Tools/WW3D/max2w3d/AlphaModifier.h
 Tools/WW3D/max2w3d/AppData.cpp
@@ -4125,6 +4126,7 @@ Tools/cheat_check.py
 Tools/check_game_assets.py
 Tools/china_beacon.py
 Tools/cmake/MacOSBuildPolicy.cmake
+Tools/compare-render-bench.py
 Tools/control_client.py
 Tools/d3d9posix_check.py
 Tools/diplomacy_layout.py
@@ -4294,8 +4296,11 @@ Tools/rank_insignia_gla.py
 Tools/rank_insignia_turkiye.py
 Tools/rank_insignia_usa.py
 Tools/record-dx11-shaders.ps1
+Tools/relink-render-bench.py
 Tools/replay-check.sh
 Tools/root-readonly-check.sh
+Tools/sdl_draw_bench.cpp
+Tools/sdl_mip_bench.cpp
 Tools/signal_marks.py
 Tools/stage-overlay.sh
 Tools/sun-shadow-check.py

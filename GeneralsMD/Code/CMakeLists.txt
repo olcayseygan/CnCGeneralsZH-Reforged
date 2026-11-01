@@ -1483,6 +1483,17 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(sdl_gpu_frame_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
   add_test(NAME sdl_gpu_frame_selfcheck COMMAND sdl_gpu_frame_selfcheck)
 
+  # Opt-in measurements use synthetic data and the production renderer. They do
+  # not run under CTest: timings need an otherwise idle GPU and validation off.
+  foreach(_zh_render_bench sdl_draw_bench sdl_mip_bench)
+    add_executable(${_zh_render_bench} EXCLUDE_FROM_ALL
+      ${CMAKE_CURRENT_SOURCE_DIR}/Tools/${_zh_render_bench}.cpp)
+    set_target_properties(${_zh_render_bench} PROPERTIES CXX_STANDARD 17)
+    target_include_directories(${_zh_render_bench} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render ${WW}/WW3D2)
+    target_link_libraries(${_zh_render_bench} PRIVATE posixd3d9 SDL3::SDL3-static)
+  endforeach()
+
   # A3c's resolve: the device's state into the generators' descriptions and the constants their
   # programs read, on a headless device.  No GPU.
   add_executable(posix_draw_resolve_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_draw_resolve.cpp)

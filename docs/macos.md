@@ -94,6 +94,12 @@ Scheduling flags alone are not a measured FPS improvement; actual gameplay
 profiling requires your original game data. No game assets are needed for the
 synthetic GPU and cross-architecture regression tests.
 
+The renderer also avoids unused vertex-constant work for engine shaders and
+uploads only changed texture mips while preserving the other levels. See the
+[M2 Max measurements](metal-performance.md) for paired timings, controls and
+reproduction commands. These targeted render workloads do not establish match
+FPS.
+
 Unchanged gamma ramps are cached without allocating or repacking their entries
 each frame. Ramp changes cycle the GPU texture, so previously submitted frames
 retain their own values. Failed uploads and submissions invalidate the cached

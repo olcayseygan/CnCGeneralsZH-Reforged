@@ -159,11 +159,15 @@ public:
 	/// Where the next Stage() would put its bytes: the stream's end, aligned as Stage aligns it.
 	uint32_t Stage_Offset_Next() const;
 	/// Room for bytes going to a GPU copy, and the uploads that take them there in the copy pass.  A
-	/// buffer or level-0 upload cycles its target, so draws already submitted keep what they read.
+	/// buffer or full-chain level-0 upload cycles its target, so submitted draws keep what they read.
 	uint8_t * Upload_Space(uint32_t size, uint32_t & offset);
+	uint64_t Pending_Upload_Bytes() const { return UploadBytes.size(); }
 	void Queue_Buffer_Upload(SDL_GPUBuffer * buffer, uint32_t upload_offset, uint32_t size);
 	void Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int level, unsigned int width, unsigned int height,
 		uint32_t upload_offset);
+	/// Partial mip updates must preserve the other levels and therefore must not cycle the texture.
+	void Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int level, unsigned int width, unsigned int height,
+		uint32_t upload_offset, bool cycle);
 	/// A constant block's bytes, for stage 0 (vertex) or 1 (pixel); the same bytes as that stage's block
 	/// before at the same slot share its offset, so the flush pushes only a change.
 	uint32_t Constants(unsigned int stage, const void * bytes, uint32_t size, unsigned int slot=0);
@@ -391,6 +395,7 @@ private:
 		SDL_GPUTexture * Texture;
 		unsigned int Level, Width, Height;
 		uint32_t Offset, Size;
+		bool CycleTexture;
 	};
 	std::vector<Command> Commands;
 	std::vector<SdlTarget> Targets;		///< this batch's, in first use order

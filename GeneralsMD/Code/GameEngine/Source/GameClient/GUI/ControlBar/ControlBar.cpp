@@ -492,40 +492,6 @@ Bool ControlBar_usesCommandWindow( Int slot, Bool spareWindows, Bool wide )
 }
 
 //-------------------------------------------------------------------------------------------------
-Int ControlBar_forceAttackSlot( const Int *types, Int count, Bool forceFires )
-{
-	enum { SLOT = 11, ABOVE = 10 };
-	if( count <= SLOT )
-		return -1;
-	Bool fights = forceFires;
-	for( Int slot = 0; slot < count && !fights; slot++ )
-		fights = types[ slot ] == GUI_COMMAND_ATTACK_MOVE;
-	if( fights && types[ SLOT ] == GUI_COMMAND_NONE )
-		return SLOT;
-	if( forceFires && types[ ABOVE ] == GUI_COMMAND_NONE )
-		return ABOVE;
-	return -1;
-}
-
-//-------------------------------------------------------------------------------------------------
-Bool ControlBar_forceFires( const Object *obj )
-{
-	if( obj->isKindOf( KINDOF_FS_BASE_DEFENSE ) )
-		return obj->isKindOf( KINDOF_CAN_ATTACK ) || obj->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS )
-			|| obj->isKindOf( KINDOF_GARRISONABLE_UNTIL_DESTROYED );
-	return obj->isKindOf( KINDOF_TRANSPORT ) && obj->isKindOf( KINDOF_CAN_ATTACK );
-}
-
-//-------------------------------------------------------------------------------------------------
-Bool ControlBar_forceFires( const ThingTemplate *thing )
-{
-	if( thing->isKindOf( KINDOF_FS_BASE_DEFENSE ) )
-		return thing->isKindOf( KINDOF_CAN_ATTACK ) || thing->isKindOf( KINDOF_SPAWNS_ARE_THE_WEAPONS )
-			|| thing->isKindOf( KINDOF_GARRISONABLE_UNTIL_DESTROYED );
-	return thing->isKindOf( KINDOF_TRANSPORT ) && thing->isKindOf( KINDOF_CAN_ATTACK );
-}
-
-//-------------------------------------------------------------------------------------------------
 void ControlBar_orderKeyPlaces( const Int *places, Int count, Bool fights, Int *keys )
 {
 	for( Int key = 0; key < ORDER_KEY_EXTRAS; key++ )

@@ -17025,10 +17025,6 @@ GUI:HotkeysPressLetter
 "Appuyez sur une lettre, ou sur Échap pour annuler"
 END
 
-GUI:HotkeysPressForceAttack
-"Appuyez sur une touche, ou sur Ctrl ou Alt seul. Maj ne peut pas servir de touche maintenue. Échap annule."
-END
-
 GUI:HotkeysPressHold
 "Appuyez sur une touche, ou sur Ctrl, Alt ou Maj seul. Échap annule."
 END
@@ -17055,10 +17051,6 @@ END
 
 GUI:HotkeysButtonMoved
 "Le jeu lui donnait la lettre d'une touche fixe, alors le lanceur l'a déplacée."
-END
-
-GUI:HotkeysForceAttack
-"Maintenez-la pour tirer sur ce qui se trouve sous le pointeur. Maj plus cette touche trace toujours un cadre de sélection. Par défaut : Ctrl."
 END
 
 GUI:HotkeysPick

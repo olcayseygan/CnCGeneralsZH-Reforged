@@ -206,7 +206,7 @@ struct HotkeyCommandRow
 	std::string category;
 	std::string label;			///< DisplayName, empty for none
 	std::string pair;				///< END_ of a BEGIN_, empty otherwise
-	Bool barOnly;						///< Force Attack's hold, set on the command bar page only
+	Bool barOnly;						///< Force Attack's hold, which the options menu's page leaves to the launcher's
 	Bool hold;							///< a BEGIN_ the shipped file puts on a modifier alone, which a modifier alone may take again
 	Bool launcherDefault;		///< a key the launcher gives a command the game leaves unbound
 };

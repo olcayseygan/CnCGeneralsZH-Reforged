@@ -16089,10 +16089,6 @@ GUI:HotkeysPressLetter
 "Bir harfe basın, vazgeçmek için Esc"
 END
 
-GUI:HotkeysPressForceAttack
-"Bir tuşa ya da tek başına Ctrl veya Alt tuşuna basın. Shift basılı tutma tuşu olamaz. Esc vazgeçer."
-END
-
 GUI:HotkeysPressHold
 "Bir tuşa ya da tek başına Ctrl, Alt veya Shift tuşuna basın. Esc vazgeçer."
 END
@@ -16119,10 +16115,6 @@ END
 
 GUI:HotkeysButtonMoved
 "Oyun ona sabit bir tuşun harfini vermişti, başlatıcı taşıdı."
-END
-
-GUI:HotkeysForceAttack
-"Basılı tutunca imlecin altındakine ateş eder. Bu tuşla Shift, birlik kutusu çizer. Varsayılan Ctrl."
 END
 
 GUI:HotkeysPick

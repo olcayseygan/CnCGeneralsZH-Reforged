@@ -1718,10 +1718,6 @@ GUI:HotkeysPressLetter
 "Press a letter, or Esc to cancel"
 END
 
-GUI:HotkeysPressForceAttack
-"Press a key, or Ctrl or Alt alone. Shift cannot be the hold. Esc cancels."
-END
-
 GUI:HotkeysPressHold
 "Press a key, or Ctrl, Alt or Shift alone. Esc cancels."
 END
@@ -1748,10 +1744,6 @@ END
 
 GUI:HotkeysButtonMoved
 "The game gave it the letter of a fixed key, so the launcher moved it."
-END
-
-GUI:HotkeysForceAttack
-"Hold to fire on whatever is under the pointer. Shift plus this key still draws a selection box. Default is Ctrl."
 END
 
 GUI:HotkeysPick

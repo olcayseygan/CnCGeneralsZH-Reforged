@@ -530,23 +530,6 @@ Bool ControlBar_needsWideCommandGrid( const Int *types, Int count );
 	* narrow bar is the only one that leaves windows out. */
 Bool ControlBar_usesCommandWindow( Int slot, Bool spareWindows, Bool wide );
 
-/** Slot 12 (0-based 11) when the set already has Attack Move and that hole is empty: left of Stop,
-	* under Attack Move. An object ControlBar_forceFires names takes 12 too, or 11 above it when 12 is
-	* taken (Gattling Cannon's mines, Stinger Site's camo net, Fire Base's Sell). -1 when neither
-	* applies, or the place is used (China CC mines, a Tunnel Network's full bar). */
-Int ControlBar_forceAttackSlot( const Int *types, Int count, Bool forceFires );
-
-/** Whether Force Attack belongs on a bar without Attack Move. A base defence (FS_BASE_DEFENSE) with its
-	* own gun (CAN_ATTACK: Patriot, Gattling Cannon, Fire Base, Tunnel Network), soldiers for a gun
-	* (SPAWNS_ARE_THE_WEAPONS: Stinger Site) or a garrison that shoots out (GARRISONABLE_UNTIL_DESTROYED:
-	* Bunker), and a transport whose riders shoot (TRANSPORT with CAN_ATTACK: Combat Chinook; the
-	* plain Chinook lacks CAN_ATTACK). A Speaker Tower is none of them. The launcher's Hotkeys page
-	* reads KindOf the same way. */
-Bool ControlBar_forceFires( const Object *obj );
-/// The same asked of a template, for the options menu's Hotkeys page, which has no object to ask.
-Bool ControlBar_forceFires( const ThingTemplate *thing );
-
-
 /** The page's keys past attack, hold position and move, which no command set has a button for either. */
 enum OrderKeyExtra
 {

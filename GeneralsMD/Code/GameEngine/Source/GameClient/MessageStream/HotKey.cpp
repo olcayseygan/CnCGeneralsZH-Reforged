@@ -994,7 +994,7 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 			}
 
 	// HOLD_COMMANDS: KEY_NONE and a modifier in the shipped file, which the rows above leave out.
-	// Force Attack's is set from its command bar button, the other two on the commands list.
+	// Force Attack's moves on the launcher's page only, the other two on the options menu's as well.
 	static const char *const HOLDS[][ 2 ] = { { "FORCEATTACK", "CTRL" }, { "WAYPOINTS", "ALT" }, { "PREFER_SELECTION", "SHIFT" } };
 	for( size_t each = 0; each < sizeof( HOLDS ) / sizeof( HOLDS[ 0 ] ); each++ )
 	{

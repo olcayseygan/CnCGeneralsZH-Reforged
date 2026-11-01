@@ -5502,56 +5502,25 @@ TEST(hotkeys_page_shows_the_wide_bar_windows_and_letters)
 	checkHotkeysPageLetters( letters, "ZZZ.....V.A.GS...." );
 }
 
-TEST(controlbar_force_attack_slot_is_under_attack_move)
+TEST(hotkeys_force_attack_button_gone_from_the_bar_still_loads_from_a_file)
 {
-	enum { SLOTS = MAX_COMMANDS_PER_SET, WINDOWS = 14 };
-	const Int N = GUI_COMMAND_NONE, U = GUI_COMMAND_OBJECT_UPGRADE, W = GUI_COMMAND_SWITCH_WEAPON;
-	Int types[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		types[ slot ] = N;
-	types[ 10 ] = GUI_COMMAND_ATTACK_MOVE;
-	types[ 12 ] = GUI_COMMAND_GUARD;
-	types[ 13 ] = GUI_COMMAND_STOP;
-	CHECK_EQ( ControlBar_forceAttackSlot( types, SLOTS, FALSE ), 11 );
-
-	types[ 11 ] = GUI_COMMAND_OBJECT_UPGRADE;
-	CHECK_EQ( ControlBar_forceAttackSlot( types, SLOTS, FALSE ), -1 );
-
-	types[ 11 ] = N;
-	types[ 10 ] = N;
-	CHECK_EQ( ControlBar_forceAttackSlot( types, SLOTS, FALSE ), -1 );
-
-	/* A base defence that shoots, or a Combat Chinook, has no Attack Move. Patriot (Stop 13, Sell 14)
-	   and the Chinook take 12; Gattling Cannon and Bunker (mines 12) take 11 above them; GLA Tunnel
-	   Network and the Infantry General's Bunker fill 1 to 14 and get none */
-	types[ 12 ] = GUI_COMMAND_STOP;
-	types[ 13 ] = GUI_COMMAND_SELL;
-	CHECK_EQ( ControlBar_forceAttackSlot( types, SLOTS, TRUE ), 11 );
-	types[ 11 ] = GUI_COMMAND_PLAYER_UPGRADE;
-	CHECK_EQ( ControlBar_forceAttackSlot( types, SLOTS, TRUE ), 10 );
-	for( Int slot = 0; slot < 14; slot++ )
-		types[ slot ] = GUI_COMMAND_EXIT_CONTAINER;
-	CHECK_EQ( ControlBar_forceAttackSlot( types, SLOTS, TRUE ), -1 );
-
-	/* Contra ranger: Attack Move in 15, slot 12 empty. Inject then fit keeps Force Attack in 12
-	   and still maps Attack Move, Guard and Stop to 11, 13 and 14 */
-	Bool windowed[ SLOTS ];
-	Int shown[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		windowed[ slot ] = slot < WINDOWS;
-	Int ranger[ SLOTS ] = { U, U, U, U, U, N, GUI_COMMAND_SPECIAL_POWER, W, N, W, N, N, N, N,
-		GUI_COMMAND_ATTACK_MOVE, N, GUI_COMMAND_GUARD, GUI_COMMAND_STOP };
-	CHECK_EQ( ControlBar_forceAttackSlot( ranger, SLOTS, FALSE ), 11 );
-	ranger[ 11 ] = GUI_COMMAND_FORCE_ATTACK;
-	ControlBar_fitCommandSlots( ranger, windowed, SLOTS, shown );
-	CHECK_EQ( shown[ 10 ], 14 );
-	CHECK_EQ( shown[ 11 ], 11 );
-	CHECK_EQ( shown[ 12 ], 16 );
-	CHECK_EQ( shown[ 13 ], 17 );
-
 	/* Force Attack is Ctrl: the English label's F stays off the button */
 	CHECK_EQ( HotKeyManager::playerButtonKey( AsciiString( "Command_ForceAttack" ), 'F',
 		GUI_COMMAND_FORCE_ATTACK ), 0 );
+
+	/* A file written while the button stood on the bar reads and writes back as it was, hold included */
+	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
+	const HotkeysFile file = Hotkeys_parse(
+		"CommandMap BEGIN_FORCEATTACK\r\n  Key = KEY_NONE\r\n  Modifiers = ALT\r\n  UseableIn = GAME\r\nEnd\r\n"
+		"CommandButtonHotKey Command_ForceAttack\r\n  Key = W\r\nEnd\r\n"
+		"CommandButtonHotKey Command_ForceAttack@12\r\n  Key = Q\r\nEnd\r\n", rows );
+	CHECK( file.commands.find( "BEGIN_FORCEATTACK" )->second == HotkeyBinding( "", "ALT" ) );
+	CHECK_STR( file.buttons.find( "Command_ForceAttack" )->second.c_str(), "W" );
+	CHECK_STR( file.buttons.find( "Command_ForceAttack@12" )->second.c_str(), "Q" );
+	const HotkeysFile again = Hotkeys_parse( Hotkeys_format( file, rows ), rows );
+	CHECK( again.commands.find( "BEGIN_FORCEATTACK" )->second == HotkeyBinding( "", "ALT" ) );
+	CHECK_STR( again.buttons.find( "Command_ForceAttack" )->second.c_str(), "W" );
+	CHECK_STR( again.buttons.find( "Command_ForceAttack@12" )->second.c_str(), "Q" );
 }
 
 /* FixedOrderKeys, Enabled = No: the keys as shipped.  The German Guard is W and its rally point U, and

@@ -16977,10 +16977,6 @@ GUI:HotkeysPressLetter
 "Нажмите букву или Esc для отмены"
 END
 
-GUI:HotkeysPressForceAttack
-"Нажмите клавишу или Ctrl либо Alt отдельно. Shift нельзя использовать для удержания. Esc отменяет."
-END
-
 GUI:HotkeysPressHold
 "Нажмите клавишу или Ctrl, Alt либо Shift отдельно. Esc отменяет."
 END
@@ -17007,10 +17003,6 @@ END
 
 GUI:HotkeysButtonMoved
 "Игра дала ей букву фиксированной клавиши, поэтому лаунчер её переместил."
-END
-
-GUI:HotkeysForceAttack
-"Удерживайте, чтобы стрелять по всему, что под курсором. Shift плюс эта клавиша по-прежнему рисует рамку выделения. По умолчанию Ctrl."
 END
 
 GUI:HotkeysPick

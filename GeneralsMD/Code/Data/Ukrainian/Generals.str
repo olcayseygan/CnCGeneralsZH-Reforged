@@ -16977,10 +16977,6 @@ GUI:HotkeysPressLetter
 "Натисніть літеру або Esc для скасування"
 END
 
-GUI:HotkeysPressForceAttack
-"Натисніть клавішу або лише Ctrl чи Alt. Shift не може бути утриманням. Esc скасовує."
-END
-
 GUI:HotkeysPressHold
 "Натисніть клавішу або лише Ctrl, Alt чи Shift. Esc скасовує."
 END
@@ -17007,10 +17003,6 @@ END
 
 GUI:HotkeysButtonMoved
 "Гра дала їй літеру фіксованої клавіші, тому лаунчер її перемістив."
-END
-
-GUI:HotkeysForceAttack
-"Утримуйте, щоб стріляти по всьому, що під курсором. Shift плюс ця клавіша, як і раніше, малює рамку виділення. За замовчуванням Ctrl."
 END
 
 GUI:HotkeysPick

@@ -15129,10 +15129,6 @@ GUI:HotkeysPressLetter
 "Drücke einen Buchstaben, oder Esc zum Abbrechen"
 END
 
-GUI:HotkeysPressForceAttack
-"Drücke eine Taste, oder Strg oder Alt allein. Umschalt kann nicht die Haltetaste sein. Esc bricht ab."
-END
-
 GUI:HotkeysPressHold
 "Drücke eine Taste, oder Strg, Alt oder Umschalt allein. Esc bricht ab."
 END
@@ -15159,10 +15155,6 @@ END
 
 GUI:HotkeysButtonMoved
 "Das Spiel gab ihr den Buchstaben einer festen Taste, deshalb hat der Launcher sie verlegt."
-END
-
-GUI:HotkeysForceAttack
-"Gedrückt halten, um auf alles unter dem Zeiger zu feuern. Umschalt plus diese Taste zieht weiterhin einen Auswahlrahmen. Standard ist Strg."
 END
 
 GUI:HotkeysPick

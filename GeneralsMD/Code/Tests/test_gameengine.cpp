@@ -21105,19 +21105,6 @@ TEST(debug_log_cut_keeps_the_head_and_the_last_whole_lines)
 	CHECK( text.compare( text.size() - ending.size(), ending.size(), ending ) == 0 );
 }
 
-// The replay's writer: appends and header patches through the queue leave the bytes the same calls
-// made straight on the FILE did, the way RecorderClass makes them.
-TEST(file_write_queue_writes_what_the_file_calls_wrote)
-{
-	const std::string queued = (std::filesystem::temp_directory_path() / "zh_fwq_queued.bin").string();
-	const std::string direct = (std::filesystem::temp_directory_path() / "zh_fwq_direct.bin").string();
-
-	FILE *d = fopen( direct.c_str(), "wb" );
-	FileWriteQueue queue;
-	FILE *q = fopen( queued.c_str(), "wb" );
-	queue.start( q );
-	const char head[] = "GENREP\0\0\0\0";
-	fwrite( head, 1, 10, d );
 #include "Common/MultiplayerSettings.h"
 #include "GameNetwork/LANAPICallbacks.h"
 
@@ -21289,6 +21276,19 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	TheWritableGlobalData = savedData;
 }
 
+// The replay's writer: appends and header patches through the queue leave the bytes the same calls
+// made straight on the FILE did, the way RecorderClass makes them.
+TEST(file_write_queue_writes_what_the_file_calls_wrote)
+{
+	const std::string queued = (std::filesystem::temp_directory_path() / "zh_fwq_queued.bin").string();
+	const std::string direct = (std::filesystem::temp_directory_path() / "zh_fwq_direct.bin").string();
+
+	FILE *d = fopen( direct.c_str(), "wb" );
+	FileWriteQueue queue;
+	FILE *q = fopen( queued.c_str(), "wb" );
+	queue.start( q );
+	const char head[] = "GENREP\0\0\0\0";
+	fwrite( head, 1, 10, d );
 	queue.write( head, 10 );
 	const UnsignedInt patch = 0x11223344;
 	long end = ftell( d );		// a patch before the first flush, as logGameStart's

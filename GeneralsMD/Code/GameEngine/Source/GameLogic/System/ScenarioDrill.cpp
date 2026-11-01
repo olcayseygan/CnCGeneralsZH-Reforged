@@ -1465,8 +1465,6 @@ static Bool executePower( const ScenarioAction &action, Player *player, const Co
 	}
 
 	if (obj->isDisabled())
-		DEBUG_LOG(("SCENARIO: frame %d power slot %d '%s' %s: logic frame %u, ready on %u\n", action.frame, action.slot,
-							 action.selector.str(), power->getPowerName().str(), TheGameLogic->getFrame(), power->getReadyFrame()));
 	{
 		// the seat's whole grid, since one building that draws more than its plants make is the usual cause
 		DEBUG_LOG(("SCENARIO: frame %d power: '%s' is disabled (underpowered %d: seat makes %d, draws %d)\n",
@@ -1485,6 +1483,8 @@ static Bool executePower( const ScenarioAction &action, Player *player, const Co
 			continue;
 		power->doSpecialPowerAtLocation( &target, INVALID_ANGLE, COMMAND_FIRED_BY_SCRIPT );
 		++fired;
+		DEBUG_LOG(("SCENARIO: frame %d power slot %d '%s' %s: logic frame %u, ready on %u\n", action.frame, action.slot,
+							 action.selector.str(), power->getPowerName().str(), TheGameLogic->getFrame(), power->getReadyFrame()));
 	}
 
 	DEBUG_LOG(("SCENARIO: frame %d power slot %d '%s' fired %d at (%.0f,%.0f)\n",

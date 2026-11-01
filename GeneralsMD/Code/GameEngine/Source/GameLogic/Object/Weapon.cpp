@@ -2097,6 +2097,10 @@ Weapon& Weapon::operator=(const Weapon& that)
 
 //-------------------------------------------------------------------------------------------------
 Weapon::~Weapon()
+{
+}
+
+//-------------------------------------------------------------------------------------------------
 // Damage that takes health off. The rest read the amount as a count or a yes, or end something outright:
 // a Kill Garrisoned of 1 at half is nobody, and healing scales on the one healed.  Sniper is here because
 // its one shot, one man is the unit; a suicide's own death is HUGE_DAMAGE_AMOUNT, past any bonus.
@@ -2129,9 +2133,6 @@ static Bool lobbyHandicapScalesDamage( DamageType type )
 	}
 }
 
-{
-}
-
 //-------------------------------------------------------------------------------------------------
 void Weapon::computeBonus(const Object *source, WeaponBonusConditionFlags extraBonusFlags, WeaponBonus& bonus) const
 {
@@ -2149,16 +2150,6 @@ void Weapon::computeBonus(const Object *source, WeaponBonusConditionFlags extraB
 	}
 
 	// a unit on a rank ladder takes its grade's rate of fire, damage and range instead of the global
-
-	// The lobby's handicap. In the bonus, so a shell or a delayed hit carries it past its firer's death.
-	// A point defense laser only shoots missiles, 100 damage at 100 health: one hit, one missile at any p.
-	const Int MISSILES_ONLY = WEAPON_ANTI_PROJECTILE | WEAPON_ANTI_SMALL_MISSILE | WEAPON_ANTI_BALLISTIC_MISSILE;
-	if (lobbyHandicapScalesDamage(m_template->getDamageType()) && (m_template->getAntiMask() & ~MISSILES_ONLY) != 0)
-	{
-		const Real handicap = source->getOwnerHandicap();
-		if (handicap != 1.0f)
-			bonus.setField(WeaponBonus::DAMAGE, bonus.getField(WeaponBonus::DAMAGE) * handicap);
-	}
 	// VETERAN, ELITE and HERO lines, and from the Veteran pin its side's own lines (China's horde)
 	const ThingTemplate* sourceTemplate = source->getTemplate();
 	const RankLadder* ladder = TheGlobalData->getRankLadder(sourceTemplate);
@@ -2206,6 +2197,16 @@ void Weapon::computeBonus(const Object *source, WeaponBonusConditionFlags extraB
 	const WeaponBonusSet* extra = m_template->getExtraBonus();
 	if (extra)
 		extra->appendBonuses(flags, bonus);
+
+	// The lobby's handicap. In the bonus, so a shell or a delayed hit carries it past its firer's death.
+	// A point defense laser only shoots missiles, 100 damage at 100 health: one hit, one missile at any p.
+	const Int MISSILES_ONLY = WEAPON_ANTI_PROJECTILE | WEAPON_ANTI_SMALL_MISSILE | WEAPON_ANTI_BALLISTIC_MISSILE;
+	if (lobbyHandicapScalesDamage(m_template->getDamageType()) && (m_template->getAntiMask() & ~MISSILES_ONLY) != 0)
+	{
+		const Real handicap = source->getOwnerHandicap();
+		if (handicap != 1.0f)
+			bonus.setField(WeaponBonus::DAMAGE, bonus.getField(WeaponBonus::DAMAGE) * handicap);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

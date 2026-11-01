@@ -46,9 +46,18 @@ Bereits abgeschlossene Schritte bleiben bei einem Abbruch erhalten.
    Quellen und Ziele nochmals angezeigt. Generals landet in `ZH_Generals/`.
    Vorhandene Datenziele werden nicht überschrieben. Symbolische Links in den
    zu kopierenden Daten werden abgelehnt; verwende eine vollständige lokale Kopie.
-6. Optional die Mac-App nach `~/Applications/` kopieren oder unter Linux einen
-   persönlichen Menüeintrag anlegen. Eine vorhandene Mac-App wird nicht ersetzt;
-   das aktuelle Paket im Build-Ordner bleibt direkt nutzbar.
+6. Optional die Mac-App für alle Benutzer nach `/Applications/` oder nur für das
+   eigene Konto nach `~/Applications/` installieren. Beide Ziele werden angezeigt;
+   ohne zusätzliche Berechtigungen beschreibbares `/Applications/` ist die Vorgabe.
+   Andernfalls erklärt der Installer die Berechtigungsgrenze und empfiehlt den
+   persönlichen Ordner. Kopieren und Ersetzen einer vorhandenen App müssen
+   ausdrücklich bestätigt werden. Zunächst wird eine temporäre Kopie erstellt;
+   ausführbare Datei, Versionsangaben und Codesignatur werden vor dem Ersetzen
+   und nochmals am endgültigen Ziel geprüft. Bei einem Fehler wird die vorherige
+   App wiederhergestellt; scheitert die Wiederherstellung, wird der aufbewahrte
+   Sicherungspfad angezeigt. Nach Erfolg erscheinen der tatsächliche Installationspfad
+   und die Build-Version. Wer die Installation ablehnt, startet ausdrücklich das
+   Paket im Build-Ordner. Unter Linux bleibt der persönliche Menüeintrag optional.
 7. Optional das Spiel starten und den gewählten Zero-Hour-Pfad übergeben. Falls
    Generals separat liegt, kann die Anwendung dessen Ordner beim Start erfragen.
 

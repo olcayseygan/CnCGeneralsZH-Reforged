@@ -43,9 +43,17 @@ Messages follow `LC_ALL`, `LC_MESSAGES` or `LANG`; override them with
    sources and the destination are shown again before copying. Generals goes into
    `ZH_Generals/`. Existing destinations are never overwritten. Symbolic links in
    the data to copy are rejected; use a complete local copy.
-6. Optionally copy the Mac app to `~/Applications/`, or add a personal menu entry
-   on Linux. An existing Mac app is not replaced; the package in the build folder
-   stays usable.
+6. Optionally install the Mac app in `/Applications/` for all users or in
+   `~/Applications/` for your account. The installer shows both destinations;
+   `/Applications/` is the default when writable without administrator rights.
+   Otherwise it explains the permission limit and recommends your personal folder.
+   Copying requires confirmation, and replacing an existing app requires explicit
+   confirmation. The app is staged and its executable, version metadata and code
+   signature are checked before replacement and again at its final destination.
+   On failure the previous app is restored; an unsuccessful recovery reports the
+   retained backup path. Success reports the actual installed path and build version.
+   Declining installation clearly selects the package in the build folder for launch.
+   On Linux, optionally add a personal application-menu entry as before.
 7. Optionally launch the game with the chosen Zero Hour path. If Generals lives
    elsewhere, the application can ask for its folder at start.
 

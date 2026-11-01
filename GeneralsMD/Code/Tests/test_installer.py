@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import plistlib
 from pathlib import Path
 import re
 import tempfile
@@ -35,6 +36,297 @@ class InstallerTests(unittest.TestCase):
         # Answers below are English; the catalog tests cover other languages.
         translator = mock.patch.object(installer, '_', i18n.Translator('en'))
         translator.start(); self.addCleanup(translator.stop)
+
+    def fake_app(self, path, commit='synthetic-new'):
+        (path / 'Contents/MacOS').mkdir(parents=True)
+        program = path / 'Contents/MacOS/generals'
+        program.write_text('#!/bin/sh\n# synthetic test fixture, never executed\n')
+        program.chmod(0o755)
+        info = {'CFBundleExecutable': 'generals', 'CFBundlePackageType': 'APPL',
+                'CFBundleShortVersionString': '3.5.1', 'CFBundleVersion': '3.5.1',
+                'ZHReforgedCommit': commit}
+        with (path / 'Contents/Info.plist').open('wb') as handle:
+            plistlib.dump(info, handle)
+        (path / 'Contents/synthetic-marker.txt').write_text(commit)
+        return path
+
+    def signature_result(self, failed=False):
+        return mock.Mock(returncode=1 if failed else 0, stderr='synthetic signature failure' if failed else '')
+
+    def test_app_destination_is_explicit_and_defaults_to_writable_global_folder(self):
+        global_apps = self.home / 'All Applications'
+        for writable, answer, expected in ((True, '', global_apps), (True, '2', self.home / 'Applications'),
+                                           (False, '', self.home / 'Applications')):
+            with self.subTest(writable=writable, answer=answer), \
+                 mock.patch.object(installer, 'SYSTEM_APPLICATIONS', global_apps), \
+                 mock.patch.object(installer.Path, 'home', return_value=self.home), \
+                 mock.patch.object(installer, 'writable_app_folder', side_effect=lambda folder: writable or folder != global_apps), \
+                 mock.patch('builtins.input', side_effect=[answer]), \
+                 contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(installer.choose_app_destination(), expected / installer.APP_NAME)
+                self.assertIn(str(global_apps), output.getvalue())
+                self.assertIn(str(self.home / 'Applications'), output.getvalue())
+                if not writable:
+                    self.assertIn('Cannot write', output.getvalue())
+
+    def test_app_destination_retries_unwritable_global_and_allows_skip(self):
+        global_apps = self.home / 'All Applications'
+        with mock.patch.object(installer, 'SYSTEM_APPLICATIONS', global_apps), \
+             mock.patch.object(installer.Path, 'home', return_value=self.home), \
+             mock.patch.object(installer, 'writable_app_folder', side_effect=lambda folder: folder != global_apps), \
+             mock.patch('builtins.input', side_effect=['invalid', '1', '0']), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertIsNone(installer.choose_app_destination())
+
+    def test_app_install_declined_keeps_existing_and_reports_build_launch_path(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        destination = self.fake_app(self.home / 'Applications' / installer.APP_NAME, 'synthetic-old')
+        with mock.patch.object(installer, 'choose_app_destination', return_value=destination), \
+             mock.patch('builtins.input', side_effect=['yes', '']), \
+             mock.patch.object(installer.subprocess, 'run') as command, \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(installer.install_macos_app(source), source)
+            command.assert_not_called()
+        self.assertIn('existing app', output.getvalue())
+        self.assertIn('installation skipped', output.getvalue())
+        self.assertIn(str(source), output.getvalue())
+        self.assertNotIn('ready and verified', output.getvalue())
+        self.assertEqual((destination / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+
+    def test_app_install_verifies_source_staging_destination_and_reports_exact_version(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        destination = self.home / 'Applications' / installer.APP_NAME
+        resources = source / 'Contents/Resources'
+        resources.mkdir()
+        (resources / 'synthetic.txt').write_text('synthetic resource')
+        (resources / 'linked.txt').symlink_to('synthetic.txt')
+        with mock.patch.object(installer, 'choose_app_destination', return_value=destination), \
+             mock.patch('builtins.input', side_effect=['yes', 'yes']), \
+             mock.patch.object(installer.subprocess, 'run', return_value=self.signature_result()) as command, \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(installer.install_macos_app(source), destination)
+        self.assertEqual(command.call_count, 3)
+        for call in command.call_args_list:
+            self.assertEqual(call.args[0][:4], ['/usr/bin/codesign', '--verify', '--deep', '--strict'])
+        self.assertEqual(Path(command.call_args_list[-1].args[0][-1]), destination)
+        self.assertIn(str(destination.resolve()), output.getvalue())
+        self.assertIn('Version 3.5.1, build synthetic-new', output.getvalue())
+        self.assertTrue((destination / 'Contents/Resources/linked.txt').is_symlink())
+        self.assertTrue(source.is_dir())
+        self.assertFalse(list(destination.parent.glob('.zhr-app-install-*')))
+
+    def test_existing_app_requires_explicit_replacement_and_can_be_updated(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        destination = self.fake_app(self.home / 'Applications' / installer.APP_NAME, 'synthetic-old')
+        with mock.patch.object(installer.subprocess, 'run', return_value=self.signature_result()) as command:
+            with self.assertRaises(ValueError):
+                installer.install_app_bundle(source, destination)
+            command.assert_not_called()
+            installed, info = installer.install_app_bundle(source, destination, replace_existing=True)
+        self.assertEqual(installed, destination)
+        self.assertEqual(info['ZHReforgedCommit'], 'synthetic-new')
+        self.assertEqual((destination / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-new')
+        self.assertFalse(list(destination.parent.glob('.zhr-app-install-*')))
+
+    def test_main_launches_the_verified_global_or_personal_installed_app(self):
+        self.fake_app(self.repo / 'build-mac' / installer.APP_NAME)
+        global_apps = self.home / 'All Applications'
+        for choice, folder in (('1', global_apps), ('2', self.home / 'Applications')):
+            with self.subTest(choice=choice), \
+                 mock.patch.object(installer.sys, 'argv', ['install.py']), \
+                 mock.patch.object(installer.sys.stdin, 'isatty', return_value=True), \
+                 mock.patch.object(installer.platform, 'system', return_value='Darwin'), \
+                 mock.patch.object(installer.Path, 'home', return_value=self.home), \
+                 mock.patch.object(installer, 'SYSTEM_APPLICATIONS', global_apps), \
+                 mock.patch.object(installer, 'prerequisites'), \
+                 mock.patch('builtins.input', side_effect=['', '', 'yes', choice, 'yes', 'yes']), \
+                 mock.patch.object(installer, 'run') as launch, \
+                 mock.patch.object(installer.subprocess, 'run', return_value=self.signature_result()), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(installer.main(), 0)
+                launch.assert_called_once_with(['open', str(folder / installer.APP_NAME)])
+
+    def test_app_created_during_confirmation_or_staging_is_not_overwritten(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        for phase in ('confirmation', 'staging'):
+            destination = self.home / phase / 'Applications' / installer.APP_NAME
+            def signature(command, **kwargs):
+                if phase == 'staging' and '.zhr-app-install-' in str(command[-1]):
+                    self.fake_app(destination, 'synthetic-concurrent')
+                return self.signature_result()
+            def confirm(message):
+                if message.startswith('Copy and verify'):
+                    self.fake_app(destination, 'synthetic-concurrent')
+                return True
+            with self.subTest(phase=phase), \
+                 mock.patch.object(installer.subprocess, 'run', side_effect=signature):
+                if phase == 'confirmation':
+                    with mock.patch.object(installer, 'choose_app_destination', return_value=destination), \
+                         mock.patch.object(installer, 'confirm', side_effect=confirm):
+                        with self.assertRaises(ValueError): installer.install_macos_app(source)
+                else:
+                    with self.assertRaises(FileExistsError): installer.install_app_bundle(source, destination)
+            self.assertEqual((destination / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-concurrent')
+            self.assertFalse(list(destination.parent.glob('.zhr-app-install-*')))
+
+    def test_app_copy_failure_does_not_touch_the_previous_app(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        destination = self.fake_app(self.home / 'Applications' / installer.APP_NAME, 'synthetic-old')
+        with mock.patch.object(installer.subprocess, 'run', return_value=self.signature_result()), \
+             mock.patch.object(installer.shutil, 'copytree', side_effect=OSError('synthetic disk full')):
+            with self.assertRaises(OSError):
+                installer.install_app_bundle(source, destination, replace_existing=True)
+        self.assertEqual((destination / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+        self.assertFalse(list(destination.parent.glob('.zhr-app-install-*')))
+
+    def test_app_verification_failures_preserve_or_restore_the_previous_app(self):
+        for failure in ('staging', 'destination'):
+            with self.subTest(failure=failure):
+                source = self.fake_app(self.home / failure / 'build' / installer.APP_NAME)
+                destination = self.fake_app(self.home / failure / 'Applications' / installer.APP_NAME, 'synthetic-old')
+                def signature(command, **kwargs):
+                    path = Path(command[-1])
+                    failed = path == destination if failure == 'destination' else '.zhr-app-install-' in str(path)
+                    return self.signature_result(failed)
+                with mock.patch.object(installer.subprocess, 'run', side_effect=signature):
+                    with self.assertRaises(ValueError):
+                        installer.install_app_bundle(source, destination, replace_existing=True)
+                self.assertEqual((destination / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+                self.assertFalse(list(destination.parent.glob('.zhr-app-install-*')))
+
+    def test_app_publish_failure_restores_previous_app_and_new_failure_leaves_no_app(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        destination = self.fake_app(self.home / 'Applications' / installer.APP_NAME, 'synthetic-old')
+        real_replace = os.replace
+        def fail_publish(before, after):
+            if Path(before).name == installer.APP_NAME and '.zhr-app-install-' in str(before):
+                raise OSError('synthetic publish failure')
+            return real_replace(before, after)
+        with mock.patch.object(installer.subprocess, 'run', return_value=self.signature_result()), \
+             mock.patch.object(installer.os, 'replace', side_effect=fail_publish):
+            with self.assertRaises(OSError):
+                installer.install_app_bundle(source, destination, replace_existing=True)
+        self.assertEqual((destination / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+        fresh = self.home / 'Fresh Applications' / installer.APP_NAME
+        with mock.patch.object(installer.subprocess, 'run', side_effect=lambda command, **kwargs: self.signature_result(Path(command[-1]) == fresh)):
+            with self.assertRaises(ValueError):
+                installer.install_app_bundle(source, fresh)
+        self.assertFalse(fresh.exists())
+        self.assertFalse(list(fresh.parent.glob('.zhr-app-install-*')))
+
+    def test_failed_app_recovery_keeps_the_backup_and_reports_its_location(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        destination = self.fake_app(self.home / 'Applications' / installer.APP_NAME, 'synthetic-old')
+        real_replace = os.replace
+        def fail_recovery(before, after):
+            if Path(before).name == 'previous.app':
+                raise OSError('synthetic recovery failure')
+            return real_replace(before, after)
+        with mock.patch.object(installer.subprocess, 'run', side_effect=lambda command, **kwargs: self.signature_result(Path(command[-1]) == destination)), \
+             mock.patch.object(installer.os, 'replace', side_effect=fail_recovery):
+            with self.assertRaisesRegex(OSError, 'Recovery files were kept') as error:
+                installer.install_app_bundle(source, destination, replace_existing=True)
+        recovery = list(destination.parent.glob('.zhr-app-install-*'))
+        self.assertEqual(len(recovery), 1)
+        self.assertIn(str(recovery[0]), str(error.exception))
+        self.assertEqual((recovery[0] / 'previous.app/Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+
+    def test_post_effect_interruptions_of_backup_publish_and_reservation_roll_back(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        for phase, existing in (('backup', True), ('publish', True), ('publish', False),
+                                ('reserve', True), ('reserve', False)):
+            with self.subTest(phase=phase, existing=existing):
+                destination = self.home / ('%s-%s' % (phase, existing)) / installer.APP_NAME
+                if existing:
+                    self.fake_app(destination, 'synthetic-old')
+                real_replace, real_mkdir = os.replace, Path.mkdir
+                interrupted = False
+                def replace(before, after):
+                    nonlocal interrupted
+                    result = real_replace(before, after)
+                    if not interrupted and ((phase == 'backup' and Path(after).name == 'previous.app')
+                            or (phase == 'publish' and Path(before).name == installer.APP_NAME
+                                and '.zhr-app-install-' in str(before))):
+                        interrupted = True
+                        raise KeyboardInterrupt('synthetic signal after rename committed')
+                    return result
+                def mkdir(path, *args, **kwargs):
+                    nonlocal interrupted
+                    result = real_mkdir(path, *args, **kwargs)
+                    if not interrupted and phase == 'reserve' and path == destination:
+                        interrupted = True
+                        raise KeyboardInterrupt('synthetic signal after mkdir committed')
+                    return result
+                with mock.patch.object(installer.subprocess, 'run', return_value=self.signature_result()), \
+                     mock.patch.object(installer.os, 'replace', side_effect=replace), \
+                     mock.patch.object(installer.Path, 'mkdir', new=mkdir):
+                    with self.assertRaises(OSError if phase == 'reserve' else KeyboardInterrupt):
+                        installer.install_app_bundle(source, destination, replace_existing=existing)
+                self.assertTrue(interrupted)
+                recovery = list(destination.parent.glob('.zhr-app-install-*'))
+                if phase == 'reserve':
+                    # The interrupted mkdir did not return an identity. Keep its unowned
+                    # destination untouched and retain the verified staging/previous app.
+                    self.assertTrue(destination.is_dir())
+                    self.assertEqual(list(destination.iterdir()), [])
+                    self.assertEqual(len(recovery), 1)
+                    self.assertTrue((recovery[0] / installer.APP_NAME).is_dir())
+                    if existing:
+                        self.assertEqual((recovery[0] / 'previous.app/Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+                elif existing:
+                    self.assertEqual((destination / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+                else:
+                    self.assertFalse(destination.exists())
+                self.assertTrue(source.is_dir())
+                if phase != 'reserve':
+                    self.assertFalse(recovery)
+
+    def test_empty_collision_after_backup_rename_is_kept_with_recovery_copy(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        destination = self.fake_app(self.home / 'Applications' / installer.APP_NAME, 'synthetic-old')
+        real_replace = os.replace
+        collision_identity = None
+        def replace(before, after):
+            nonlocal collision_identity
+            result = real_replace(before, after)
+            if Path(after).name == 'previous.app':
+                destination.mkdir() # Another process claimed the now-free path, even if empty.
+                collision_identity = destination.lstat()
+            return result
+        with mock.patch.object(installer.subprocess, 'run', return_value=self.signature_result()), \
+             mock.patch.object(installer.os, 'replace', side_effect=replace):
+            with self.assertRaisesRegex(OSError, 'Recovery files were kept'):
+                installer.install_app_bundle(source, destination, replace_existing=True)
+        current = destination.lstat()
+        self.assertEqual((current.st_dev, current.st_ino), (collision_identity.st_dev, collision_identity.st_ino))
+        self.assertEqual(list(destination.iterdir()), [])
+        recovery = list(destination.parent.glob('.zhr-app-install-*'))
+        self.assertEqual(len(recovery), 1)
+        self.assertEqual((recovery[0] / 'previous.app/Contents/synthetic-marker.txt').read_text(), 'synthetic-old')
+
+    def test_app_destination_links_and_unsafe_entry_points_are_refused(self):
+        source = self.fake_app(self.home / 'build' / installer.APP_NAME)
+        other = self.fake_app(self.home / 'other' / installer.APP_NAME, 'synthetic-other')
+        link = self.home / installer.APP_NAME
+        link.symlink_to(other, target_is_directory=True)
+        with mock.patch.object(installer.subprocess, 'run') as command:
+            with self.assertRaises(ValueError):
+                installer.install_app_bundle(source, link, replace_existing=True)
+            command.assert_not_called()
+        self.assertEqual((other / 'Contents/synthetic-marker.txt').read_text(), 'synthetic-other')
+        for index, name in enumerate(('../outside', '/bin/sh', 'nested/generals', 'nested\\generals', '')):
+            invalid = self.fake_app(self.home / ('invalid-%d' % index) / installer.APP_NAME)
+            plist = invalid / 'Contents/Info.plist'
+            info = plistlib.loads(plist.read_bytes())
+            info['CFBundleExecutable'] = name
+            plist.write_bytes(plistlib.dumps(info))
+            with mock.patch.object(installer.subprocess, 'run') as command:
+                with self.assertRaises(ValueError): installer.verify_macos_app(invalid)
+                command.assert_not_called()
+        (source / 'Contents/MacOS/generals').chmod(0o644)
+        with mock.patch.object(installer.subprocess, 'run') as command:
+            with self.assertRaises(ValueError): installer.verify_macos_app(source)
+            command.assert_not_called()
 
     def test_searches_steam_external_libraries_and_never_follows_descendant_links(self):
         steam = self.home / 'Library/Application Support/Steam'

@@ -12,6 +12,7 @@ found and fixed, EA's own, not port damage.**
 
 - MacBooks can use the full display beside the camera notch. Full-panel fullscreen is selected when a notched display is attached; native Spaces remain selectable. Only obscured score-bar and HUD widgets move below the housing, leaving the map and unobscured corners available.
 - On macOS, two-finger scrolling pans the battlefield and pinch zooms continuously. UI scrolling, physical wheels, clicks, keyboard controls and placement commands keep their behavior. Gestures cancel across focus, display and UI changes, and never become game or network commands.
+- The macOS installer explicitly selects `/Applications` or `~/Applications`, asks before replacing an existing app and verifies the copied bundle. It reports the installed path and version, keeps the previous version recoverable if an update fails and launches the selected copy instead of silently leaving an older app in place.
 
 - On the M2 Max, a synthetic engine-shader workload needs 21% less render-thread CPU time while the classic shader control remains effectively unchanged. Small mip updates upload only the changed level, preserving rendered contents and sibling levels: a 32×32 update in a 2048×2048 texture stages 4,096 bytes instead of 22,369,620. Initial uploads and all existing rendering features remain available. These are targeted measurements, not match FPS.
 

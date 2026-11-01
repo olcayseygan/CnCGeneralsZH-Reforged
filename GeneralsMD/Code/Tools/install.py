@@ -4,6 +4,7 @@
 # Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 import os
 import platform
+import plistlib
 import shlex
 import shutil
 import subprocess
@@ -15,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from install_i18n import prompt, translator as _  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
+SYSTEM_APPLICATIONS = Path('/Applications')
+APP_NAME = 'Zero Hour Reforged.app'
 
 
 def confirm(message):
@@ -191,6 +194,173 @@ def prerequisites(system):
         print(_('No supported package manager found. build-linux.sh names missing packages during the build.'))
 
 
+def writable_app_folder(folder):
+    """Check the closest existing parent without creating folders or elevating rights."""
+    while not folder.exists() and folder != folder.parent:
+        folder = folder.parent
+    return folder.is_dir() and os.access(folder, os.W_OK | os.X_OK)
+
+
+def choose_app_destination():
+    personal = Path.home() / 'Applications'
+    default = '1' if writable_app_folder(SYSTEM_APPLICATIONS) else '2'
+    if default == '2':
+        print(_('Cannot write to %s without additional permissions. The personal Applications folder is recommended; no administrator command will be run.', SYSTEM_APPLICATIONS))
+    print(_('Choose the application destination:'))
+    print(_('  1. All users: %s', SYSTEM_APPLICATIONS))
+    print(_('  2. This user only: %s', personal))
+    print(_('  0. Keep the app in the build folder'))
+    while True:
+        answer = prompt(_('Destination [Enter = %s]: ', default)).strip() or default
+        if answer == '0':
+            return None
+        if answer not in ('1', '2'):
+            print(_('Choose 1, 2 or 0.'))
+            continue
+        folder = SYSTEM_APPLICATIONS if answer == '1' else personal
+        if not writable_app_folder(folder):
+            print(_('Cannot write to %s. Choose another destination or skip installation.', folder))
+            continue
+        # Resolve the parent, not the app leaf: an existing app symlink must be refused.
+        return folder.expanduser().resolve() / APP_NAME
+
+
+def verify_macos_app(app):
+    """Validate the launch entry point and the complete bundle's existing signature."""
+    app = Path(app).resolve()
+    plist = app / 'Contents/Info.plist'
+    try:
+        if app not in plist.resolve().parents:
+            raise ValueError('external Info.plist')
+        with plist.open('rb') as handle:
+            info = plistlib.load(handle)
+        executable = info.get('CFBundleExecutable')
+        if not isinstance(executable, str) or not executable or executable in ('.', '..') \
+                or any(char in executable for char in ('/', '\\', '\0')):
+            raise ValueError('unsafe CFBundleExecutable')
+        macos = app / 'Contents/MacOS'
+        binary = macos / executable
+        if app not in macos.resolve().parents or macos.resolve() not in binary.resolve().parents \
+                or not binary.is_file() or not os.access(binary, os.X_OK):
+            raise ValueError('missing or non-executable main program')
+        if info.get('CFBundlePackageType') != 'APPL' or any(
+                not isinstance(info.get(key), str) or not info[key].strip()
+                for key in ('CFBundleShortVersionString', 'CFBundleVersion')):
+            raise ValueError('missing application version')
+    except (OSError, ValueError, AttributeError, plistlib.InvalidFileException) as error:
+        raise ValueError(_('Invalid application bundle at %s: %s', app, error)) from error
+    command = ['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)]
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode:
+        raise ValueError(_('Application signature verification failed at %s: %s', app, result.stderr.strip()))
+    return info
+
+
+def app_version(info):
+    return _('Version %s, build %s', info['CFBundleShortVersionString'],
+             info.get('ZHReforgedCommit') or info['CFBundleVersion'])
+
+
+def same_file_identity(path, previous):
+    current = path.lstat()
+    return previous is not None and (current.st_dev, current.st_ino) == (previous.st_dev, previous.st_ino)
+
+
+def install_app_bundle(source, destination, replace_existing=False):
+    """Stage on the target volume; publish by rename and restore the previous app on failure."""
+    source = Path(source).resolve()
+    destination = Path(destination)
+    destination = destination.parent.resolve() / destination.name
+    if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
+        raise ValueError(_('The app destination is a symbolic link or a file and was kept: %s', destination))
+    if source == destination:
+        return destination, verify_macos_app(destination)
+    if source in destination.parents or destination in source.parents:
+        raise ValueError(_('Source and destination folders must not contain one another.'))
+    previous = destination.lstat() if destination.exists() else None
+    if previous and not replace_existing:
+        raise ValueError(_('An application already exists at %s; explicit replacement is required.', destination))
+    expected = verify_macos_app(source)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    scratch = Path(tempfile.mkdtemp(prefix='.zhr-app-install-', dir=destination.parent))
+    backup = None
+    published = reserved = False
+    published_identity = reserved_identity = None
+    preserve = False
+    try:
+        staged = scratch / APP_NAME
+        shutil.copytree(source, staged, symlinks=True)
+        if verify_macos_app(staged) != expected:
+            raise ValueError(_('The staged application does not match the selected build.'))
+        if previous:
+            if not same_file_identity(destination, previous):
+                raise ValueError(_('The destination changed during installation and was kept: %s', destination))
+            # Record the recovery path before rename: SIGINT may arrive after the filesystem
+            # change commits but before Python executes the following assignment.
+            backup = scratch / 'previous.app'
+            os.replace(destination, backup)
+        # Exclusive reservation prevents an app that appeared while copying from being overwritten.
+        reserved = True
+        destination.mkdir()
+        reserved_identity = destination.lstat()
+        published_identity = staged.lstat()
+        published = True
+        os.replace(staged, destination)
+        installed = verify_macos_app(destination)
+        if installed != expected:
+            raise ValueError(_('The installed application does not match the selected build.'))
+        return destination.resolve(), installed
+    except BaseException as original:
+        try:
+            if published and (destination.exists() or destination.is_symlink()) \
+                    and same_file_identity(destination, published_identity):
+                os.replace(destination, scratch / 'rejected.app')
+            elif reserved and (destination.exists() or destination.is_symlink()):
+                if reserved_identity is None:
+                    # Neither an interrupted mkdir nor a collision proves that this directory
+                    # is ours. Never remove it or restore a backup over an unowned destination.
+                    if not isinstance(original, FileExistsError) or (backup is not None and backup.exists()):
+                        raise OSError('reservation ownership unknown')
+                else:
+                    if not same_file_identity(destination, reserved_identity):
+                        raise OSError('reserved destination changed')
+                    destination.rmdir()
+            if backup is not None and backup.exists():
+                os.replace(backup, destination)
+        except BaseException as recovery:
+            preserve = True
+            raise OSError(_('Application installation failed and recovery could not finish. Recovery files were kept at %s. Original error: %s', scratch, original)) from recovery
+        raise
+    finally:
+        if not preserve:
+            try:
+                shutil.rmtree(scratch)
+            except OSError:
+                print(_('Temporary application files were kept at %s; cleanup could not finish.', scratch), file=sys.stderr)
+
+
+def install_macos_app(source):
+    source = source.resolve()
+    if confirm(_('Install the built macOS app? You can choose /Applications or ~/Applications; an existing app is only replaced after a separate confirmation.')):
+        destination = choose_app_destination()
+        if destination is not None:
+            if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
+                raise ValueError(_('The app destination is a symbolic link or a file and was kept: %s', destination))
+            replace_existing = destination.exists()
+            if source == destination:
+                question = _('Verify the app already at %s?', destination)
+            elif replace_existing:
+                question = _('Copy, verify and replace the existing app at %s with this build? The previous app is restored if installation fails.', destination)
+            else:
+                question = _('Copy and verify the application now?\n%s -> %s', source, destination)
+            if confirm(question):
+                installed, info = install_app_bundle(source, destination, replace_existing=replace_existing)
+                print(_('Application ready and verified at %s\n%s', installed, app_version(info)))
+                return installed
+    print(_('App installation skipped. The build folder will be used for launch: %s', source))
+    return source
+
+
 def main():
     if len(sys.argv) > 1:
         if sys.argv[1:] == ['--help']:
@@ -264,12 +434,7 @@ def main():
     app = build / 'Zero Hour Reforged.app'
     binary = build / 'ZeroHourReforged/bin/generals'
     if system == 'Darwin' and app.is_dir():
-        destination = Path.home() / 'Applications/Zero Hour Reforged.app'
-        if confirm(_('Copy the built app to %s (no administrator rights)?', destination)):
-            if destination.exists():
-                print(_('An app already exists there and is kept. The built app can be launched directly.'))
-            else:
-                shutil.copytree(app, destination, symlinks=True); app = destination
+        app = install_macos_app(app)
         command = ['open', str(app)] + (['--args', '-root', str(selected)] if selected else [])
     elif system == 'Linux' and binary.is_file():
         menu = build / 'ZeroHourReforged/add-to-menu.sh'

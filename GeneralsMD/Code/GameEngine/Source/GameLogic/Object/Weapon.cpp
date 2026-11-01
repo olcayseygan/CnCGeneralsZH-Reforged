@@ -2151,9 +2151,11 @@ void Weapon::computeBonus(const Object *source, WeaponBonusConditionFlags extraB
 		extra->appendBonuses(flags, bonus);
 
 	// The lobby's handicap. In the bonus, so a shell or a delayed hit carries it past its firer's death.
-	// A point defense laser only shoots missiles, 100 damage at 100 health: one hit, one missile at any p.
-	const Int MISSILES_ONLY = WEAPON_ANTI_PROJECTILE | WEAPON_ANTI_SMALL_MISSILE | WEAPON_ANTI_BALLISTIC_MISSILE;
-	if (lobbyHandicapScalesDamage(m_template->getDamageType()) && (m_template->getAntiMask() & ~MISSILES_ONLY) != 0)
+	// A point defense laser stays whole: a Tomahawk has 200 health and deals 150, the laser's two hits of 100
+	// stop one, and at half they stop none.  AntiSmallMissile is the mark of those lasers alone; the mask cannot
+	// be asked for missiles only, since no laser clears the AntiGround every weapon starts with, and a Patriot's
+	// AntiBallisticMissile is on a gun that also shoots aircraft.
+	if (lobbyHandicapScalesDamage(m_template->getDamageType()) && (m_template->getAntiMask() & WEAPON_ANTI_SMALL_MISSILE) == 0)
 	{
 		const Real handicap = source->getOwnerHandicap();
 		if (handicap != 1.0f)

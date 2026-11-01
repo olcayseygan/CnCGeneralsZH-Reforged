@@ -155,12 +155,11 @@ void CashHackSpecialPower::doSpecialPowerAtObject( Object *victim, UnsignedInt c
 		{
 			//Steal the cash
 			targetMoney->withdraw( cash );
-			selfMoney->deposit( cash );
-			self->getControllingPlayer()->getScoreKeeper()->addMoneyEarned( cash );
+			const UnsignedInt earned = self->getControllingPlayer()->earnMoney( cash );
 
 			//Display cash income floating over the blacklotus
 			UnicodeString moneyString;
-			moneyString.format( TheGameText->fetch( "GUI:AddCash" ), cash );
+			moneyString.format( TheGameText->fetch( "GUI:AddCash" ), earned );
 			Coord3D pos;
 			pos.zero();
 			pos.add( self->getPosition() );

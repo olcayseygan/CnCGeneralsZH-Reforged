@@ -8,6 +8,13 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Computer players earn double
+
+- A computer player in a skirmish or a network match now earns double, on every difficulty. A truckload worth 75 banks 150, and the 1000 for capturing an oil derrick is 2000. It counts everything the computer makes by playing: supply docks, oil derricks and other tech buildings, black markets, drop zones, hackers, bounties, crates, salvage and stolen cash. On one generated map, two Easy computers earned 25,800 and 28,200 in six minutes and forty seconds and now earn 51,600 and 56,400. Two Hard ones on the same seed went from 22,800 and 24,825 to 74,800 and 81,090, because Hard spends the extra money on more income: one of them built four supply centers and two drop zones where it used to build two and one.
+- Money it gets back stays what it was. Selling a building or cancelling a queue returns the same sum as yours does, or a computer could queue and cancel its way to a fortune, and cash from a map's script or from an ally is not doubled either. The money figure floating over a computer's truck or building shows what it really banked.
+- Your own income does not change, and your cut of a computer ally's income under Share Income is the plain cut. Campaign missions and Generals' Challenge opponents earn what they always did.
+- Replays recorded before this change play out differently.
+
 ## Missions keep the time their script wrote
 
 - EA's cinematics slow the game on purpose, so the radio lines fit and the camera lands where the next shot starts. This build had stopped honouring that on 18 October. Every mission's cutscenes now run at the pace their script asks for. China's parade had 16 seconds of radio talking over itself, and has 11 now: what is left is EA's own script, which starts the tank crews' lines two thirds of a second apart.

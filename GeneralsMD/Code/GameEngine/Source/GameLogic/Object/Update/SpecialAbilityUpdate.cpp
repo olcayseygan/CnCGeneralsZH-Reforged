@@ -1564,10 +1564,7 @@ void SpecialAbilityUpdate::triggerAbilityEffect()
         {
           //Steal the cash
           targetMoney->withdraw( cash );
-          objectMoney->deposit( cash );
-          Player* controller = object->getControllingPlayer();
-          if (controller)
-            controller->getScoreKeeper()->addMoneyEarned( cash );
+          const UnsignedInt earned = object->getControllingPlayer()->earnMoney( cash );
 
           //Play the "cash stolen" EVA event if the local player is the victim!
           if( target && target->isLocallyControlled() )
@@ -1577,7 +1574,7 @@ void SpecialAbilityUpdate::triggerAbilityEffect()
 
           //Display cash income floating over the blacklotus
           UnicodeString moneyString;
-          moneyString.format( TheGameText->fetch( "GUI:AddCash" ), cash );
+          moneyString.format( TheGameText->fetch( "GUI:AddCash" ), earned );
           Coord3D pos;
           pos.set( object->getPosition() );
           pos.z += 20.0f; //add a little z to make it show up above the unit.

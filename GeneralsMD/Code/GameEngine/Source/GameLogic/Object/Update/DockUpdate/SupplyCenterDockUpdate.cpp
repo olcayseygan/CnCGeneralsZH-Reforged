@@ -120,7 +120,7 @@ Bool SupplyCenterDockUpdate::action( Object* docker, Object *drone )
 
 	if( value > 0)
 	{
-		ownerPlayer->earnIncome( value, FALSE );
+		value = ownerPlayer->earnIncome( value, FALSE );
 
 
 		if( data->m_grantTemporaryStealthFrames > 0 )

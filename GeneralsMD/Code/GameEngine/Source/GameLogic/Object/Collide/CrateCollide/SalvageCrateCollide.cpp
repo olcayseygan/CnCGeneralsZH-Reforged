@@ -251,8 +251,7 @@ void SalvageCrateCollide::doMoney( Object *other )
 
 	if( money > 0 )
 	{
-		other->getControllingPlayer()->getMoney()->deposit( money );
-		other->getControllingPlayer()->getScoreKeeper()->addMoneyEarned( money );
+		money = other->getControllingPlayer()->earnMoney( money );
 		
 		//Display cash income floating over the crate.  Position is me, everything else is them.
 		UnicodeString moneyString;

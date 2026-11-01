@@ -2777,8 +2777,7 @@ void Player::doBountyForKill(const Object* killer, const Object* victim, Real ra
 	if( bounty )
 	{
 
-		getMoney()->deposit( bounty );
-		m_scoreKeeper.addMoneyEarned( bounty );
+		bounty = earnMoney( bounty );
 
 		// Display cash income floating over the recipient - but not to an enemy of a killer it cannot see,
 		// or the number gives the stealthed unit away. Client display only, the deposit above is logic.
@@ -3592,9 +3591,23 @@ UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers )
   return sharers > 1 ? amount / sharers : 0;
 }
 
+UnsignedInt EarnedAmount( UnsignedInt amount, Bool earnerIsSkirmishAI, Bool recipientIsSkirmishAI )
+{
+  return earnerIsSkirmishAI && recipientIsSkirmishAI ? amount * 2 : amount;
+}
+
+UnsignedInt Player::earnMoney( UnsignedInt amount )
+{
+  const Bool skirmishAI = isSkirmishAIPlayer();
+  const UnsignedInt earned = EarnedAmount( amount, skirmishAI, skirmishAI );
+  m_money.deposit( earned );
+  m_scoreKeeper.addMoneyEarned( earned );
+  return earned;
+}
+
 /* An ally is a playable side still in the match that both ends call allied.  The walk is in player
    list order, which every machine holds alike, so the split is the same in a network game. */
-void Player::earnIncome( UnsignedInt amount, Bool fromTechBuilding )
+UnsignedInt Player::earnIncome( UnsignedInt amount, Bool fromTechBuilding )
 {
   Player *allies[ MAX_PLAYER_COUNT ];
   Int allyCount = 0;
@@ -3611,15 +3624,17 @@ void Player::earnIncome( UnsignedInt amount, Bool fromTechBuilding )
   }
 
   const UnsignedInt allyShare = IncomeAllyShare( amount, allyCount + 1 );
+  const Bool skirmishAI = isSkirmishAIPlayer();
+  UnsignedInt paid = 0;
   for ( Int i = 0; i < allyCount; ++i )
   {
-    allies[ i ]->getMoney()->deposit( allyShare );
-    allies[ i ]->getScoreKeeper()->addMoneyEarned( allyShare );
+    const UnsignedInt cut = EarnedAmount( allyShare, skirmishAI, allies[ i ]->isSkirmishAIPlayer() );
+    allies[ i ]->getMoney()->deposit( cut );
+    allies[ i ]->getScoreKeeper()->addMoneyEarned( cut );
+    paid += cut;
   }
 
-  const UnsignedInt ownShare = amount - allyShare * allyCount;
-  m_money.deposit( ownShare );
-  m_scoreKeeper.addMoneyEarned( ownShare );
+  return paid + earnMoney( amount - allyShare * allyCount );
 }
 
 // one object: itself if it is a unit, and whatever units it has queued, however many each entry makes

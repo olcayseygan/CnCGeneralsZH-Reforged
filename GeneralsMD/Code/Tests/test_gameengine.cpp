@@ -2316,6 +2316,19 @@ TEST(income_sharing_splits_evenly_and_keeps_the_remainder)
 	CHECK_EQ( IncomeAllyShare( 200, 1 ), 0u );
 }
 
+/* Player.cpp: a skirmish computer earns double, and the doubling stays between computers. */
+TEST(skirmish_ai_earnings_double_only_between_computers)
+{
+	/* its own supply run, or its cut going to a computer ally */
+	CHECK_EQ( EarnedAmount( 200, TRUE, TRUE ), 400u );
+	/* a human ally's cut of a computer's income */
+	CHECK_EQ( EarnedAmount( 200, TRUE, FALSE ), 200u );
+	/* a computer ally's cut of a human's income */
+	CHECK_EQ( EarnedAmount( 200, FALSE, TRUE ), 200u );
+	/* a human's own */
+	CHECK_EQ( EarnedAmount( 200, FALSE, FALSE ), 200u );
+}
+
 /* ExperienceTracker.cpp: a kill's experience split by the damage each attacker dealt. */
 TEST(kill_xp_splits_by_damage_and_the_killing_blow_keeps_the_remainder)
 {

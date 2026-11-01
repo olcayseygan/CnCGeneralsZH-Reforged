@@ -181,6 +181,13 @@ Bool SuperweaponNeedsDefenses( const AsciiString &buildingName, Bool proRules, I
 Bool IncomeSharingSplits( Int incomeSharing, Bool fromTechBuilding );
 UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers );
 
+// A skirmish computer player earns double what it earns by playing, on every rung.  What one payment
+// comes to in a recipient's bank: doubled only when a computer earned it and a computer banks it, so
+// a human ally's cut of a computer's income stays plain and a human's income never pays double.
+// Refunds, script grants and transfers between allies do not come through here: doubling a refund
+// is a queue and cancel money loop.
+UnsignedInt EarnedAmount( UnsignedInt amount, Bool earnerIsSkirmishAI, Bool recipientIsSkirmishAI );
+
 // Pro Rules, PRO-RULES.md: what every skirmish and network match refuses whoever plays it.
 // GameLogic::isProRules() says whether a match is under them; these say what they cover, by name
 // or by type, so a test can ask them without a match.
@@ -397,8 +404,10 @@ public:
 	/// return the Player's Money sub-object
 	inline Money *getMoney() { return &m_money; }
 	inline const Money *getMoney() const { return &m_money; }
-	/// steady income - a supply run, a hacker's payout, a derrick's - banked and scored, and split with the allies when the lobby's income sharing covers it
-	void earnIncome( UnsignedInt amount, Bool fromTechBuilding );
+	/// steady income - a supply run, a hacker's payout, a derrick's - banked and scored, and split with the allies when the lobby's income sharing covers it.  Returns what the payment came to, all banks together
+	UnsignedInt earnIncome( UnsignedInt amount, Bool fromTechBuilding );
+	/// money made by playing that nobody shares - a capture bonus, a crate, a bounty, stolen cash - banked and scored.  Returns what it came to
+	UnsignedInt earnMoney( UnsignedInt amount );
 
 	UnsignedInt getSupplyBoxValue();///< Many things can affect the alue of a crate, but at heart it is a GlobalData ratio.
 

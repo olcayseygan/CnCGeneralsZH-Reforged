@@ -58,8 +58,7 @@ Bool MoneyCrateCollide::executeCrateBehavior( Object *other )
 	
 	money += getUpgradedSupplyBoost(other);
 
-	other->getControllingPlayer()->getMoney()->deposit( money );
-	other->getControllingPlayer()->getScoreKeeper()->addMoneyEarned( money );
+	other->getControllingPlayer()->earnMoney( money );
 
 	//Play a crate pickup sound.
 	AudioEventRTS soundToPlay = TheAudio->getMiscAudio()->m_crateMoney;

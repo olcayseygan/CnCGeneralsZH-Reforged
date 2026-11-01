@@ -144,9 +144,10 @@ public:
 /** Three rungs of how well the AI plays.  Deliberately NOT GameDifficulty, which carries the same
 	* three values for a different reason: that enum answers "which scripts run" and is baked into
 	* every shipped map and .scb, into the campaign's stat bonus tables and into network messages.
-	* This one answers "how well does it play", and every rung of it plays by the player's rules - no
-	* income, build-rate, vision or stat handicap at any level, in either direction.  Keeping it a
-	* separate enum is what lets a rung be tuned in AI.ini without touching what a map's scripts do.
+	* This one answers "how well does it play".  No rung has a build-rate, vision or stat handicap, in
+	* either direction, and no rung's income differs from another's: every skirmish AI earns double by
+	* playing (Player::earnMoney), whatever its rung.  Keeping it a separate enum is what lets a rung be
+	* tuned in AI.ini without touching what a map's scripts do.
 	* See AI-ROADMAP.md sections D6, D7 and D10.
 	*/
 //-------------------------------------------------------------------------------------------------
@@ -215,9 +216,10 @@ AIPersonality aiPersonalityFromName( const char *name );
 /** One rung of the ladder.  Every new AI behaviour adds a field here rather than a
 	* switch(difficulty) somewhere, so the whole ladder can be read, tuned and measured in one place.
 	*
-	* Nothing in here may exceed the AI's honest baseline - the top rung IS the baseline and the
-	* lower rungs are handicaps on its *decisions*.  If a field ever appears that multiplies income,
-	* build rate, vision or unit stats, the design has drifted. */
+	* Nothing in here may exceed the AI's baseline - the top rung IS the baseline and the lower rungs
+	* are handicaps on its *decisions*.  The double earnings (Player::earnMoney) are outside this table
+	* and the same on every rung.  If a field ever appears that multiplies income, build rate, vision
+	* or unit stats per rung, the design has drifted. */
 //-------------------------------------------------------------------------------------------------
 struct AIDifficultyProfile
 {

@@ -126,14 +126,13 @@ void AutoDepositUpdate::awardInitialCaptureBonus( Player *player )
 	if(!player || !m_awardInitialCaptureBonus || getAutoDepositUpdateModuleData()->m_initialCaptureBonus <= 0)
 		return;
 
-	player->getMoney()->deposit( getAutoDepositUpdateModuleData()->m_initialCaptureBonus );
-	player->getScoreKeeper()->addMoneyEarned( getAutoDepositUpdateModuleData()->m_initialCaptureBonus );
+	const UnsignedInt earned = player->earnMoney( getAutoDepositUpdateModuleData()->m_initialCaptureBonus );
 
 	//Display cash income floating over the blacklotus
 	if(getAutoDepositUpdateModuleData()->m_initialCaptureBonus > 0)
 	{
 		UnicodeString moneyString;
-		moneyString.format( TheGameText->fetch( "GUI:AddCash" ), getAutoDepositUpdateModuleData()->m_initialCaptureBonus );
+		moneyString.format( TheGameText->fetch( "GUI:AddCash" ), earned );
 		Coord3D pos;
 		pos.set( getObject()->getPosition() );
 		pos.z += 10.0f; //add a little z to make it show up above the unit.
@@ -173,7 +172,7 @@ UpdateSleepTime AutoDepositUpdate::update( void )
 		{
 			// scores what is actually deposited: this used to score m_depositAmount only, so the
 			// upgraded supply boost never reached the end-game income total.
-			getObject()->getControllingPlayer()->earnIncome( moneyAmount, getObject()->isKindOf( KINDOF_TECH_BUILDING ) );
+			moneyAmount = getObject()->getControllingPlayer()->earnIncome( moneyAmount, getObject()->isKindOf( KINDOF_TECH_BUILDING ) );
 		}
 		
 		// OY LOOK!  I AM USING LOCAL PLAYER.  Do not put anything other than TheInGameUI->addFloatingText in the block this controls!!!

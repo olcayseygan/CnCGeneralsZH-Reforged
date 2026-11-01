@@ -2,7 +2,7 @@
 
 EA published the source of Command & Conquer: Generals and Zero Hour in February 2025. Zero Hour
 Reforged is that source worked on as a game: around sixty bugs EA shipped in 2003 fixed, a computer
-opponent that builds a base and plays without cheating, a Direct3D 11 renderer, a new interface and
+opponent that builds a base (double income, no other edge), a Direct3D 11 renderer, a new interface and
 mods that load side by side. Windows x64 players install it through a free launcher; macOS and Linux
 build it from this repository.
 
@@ -111,14 +111,15 @@ yet. [CHANGELOG.md](CHANGELOG.md) has the measurements behind every line.
 
 One wrong value kept EA's skirmish AI building only what its script marked urgent, plus a single
 power plant. It builds a base now, scouts with one cheap unit and counts only what it has seen. Easy,
-Medium and Hard differ in what the computer may decide. No level gets extra money, cheaper units,
-faster building or longer sight. In 0.0.1-alpha, over 32 headless matches with the seats swapped
-both ways, Hard beat Easy 15-0.
+Medium and Hard differ in what the computer may decide. On `main` every computer seat earns
+double the money it makes by playing, whatever its level. Prices, building speed, sight and unit
+stats are the same on every level. Measured after the doubling, over 32 headless matches on generated
+maps with the seats swapped both ways, Hard won 17, Easy 5, and 10 reached the frame cap undecided.
 
 Since 3.2.0 each computer seat in the lobby also takes a personality, which says how it plays while
 the difficulty says how well. Normal is the computer you know. The others are Attacker, Turtle,
 Economist, Air Force, Rusher, Raider, Tech, Infantry, Armor, Sneaky, Opportunist, Supporter, Counter
-and Random. No personality gets extra money, faster building or tougher units. Allies with one answer their team: an Air
+and Random. No personality earns more than another, builds faster or has tougher units. Allies with one answer their team: an Air
 Force strikes whoever hits your base, an Economist sends money to an ally who runs dry, and a beacon
 or `help`, `attack` or `money` typed in chat asks them for it.
 

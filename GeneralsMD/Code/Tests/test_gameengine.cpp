@@ -1387,6 +1387,70 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 	CHECK_EQ( lit, blocks );
 }
 
+#include "Common/MultiplayerSettings.h"
+
+/* A slot, a replay and a preference hold a colour by its place in the list, so the fork's five have
+   to follow EA's eight and leave them as they were.  EA's list is in INIZH.big, so it is copied here. */
+TEST(multiplayer_reforged_ini_appends_five_colours_after_eas_eight)
+{
+	static const struct { const char *tooltip; Int r, g, b, nightR, nightG, nightB; } colours[] =
+	{
+		{ "Color:Gold",     221, 226,  13,  221, 226,  13 },
+		{ "Color:Red",      255,   0,   0,  255,   0,   0 },
+		{ "Color:Blue",      67, 104, 254,   67, 104, 254 },
+		{ "Color:Green",     62, 209,  46,   62, 209,  46 },
+		{ "Color:Orange",   255, 160,  25,  255, 160,  25 },
+		{ "Color:SkyBlue",   50, 215, 230,   50, 215, 230 },
+		{ "Color:Purple",   150,   0, 200,  223,   0, 156 },
+		{ "Color:Pink",     255, 150, 255,  255, 130, 248 },
+		{ "Color:Crimson",  165,  15,  45,  205,  45,  80 },
+		{ "Color:Azure",      0, 165, 255,    0, 165, 255 },
+		{ "Color:Salmon",   240, 120, 135,  240, 120, 135 },
+		{ "Color:Teal",       0, 175, 140,    0, 175, 140 },
+		{ "Color:Lavender", 165, 165, 255,  165, 165, 255 },
+	};
+
+	CHECK( bootOnce() );
+
+	std::string eaList;
+	for( Int i = 0; i < 8; ++i )
+	{
+		char block[ 256 ];
+		snprintf( block, sizeof( block ),
+			"MultiplayerColor Color%s\r\n  RGBColor = R:%d G:%d B:%d\r\n  RGBNightColor = R:%d G:%d B:%d\r\n  TooltipName = %s\r\nEnd\r\n\r\n",
+			colours[ i ].tooltip + 6, colours[ i ].r, colours[ i ].g, colours[ i ].b,
+			colours[ i ].nightR, colours[ i ].nightG, colours[ i ].nightB, colours[ i ].tooltip );
+		eaList += block;
+	}
+	writeFile( TEST_INI, eaList.c_str() );
+
+	MultiplayerSettings *savedSettings = TheMultiplayerSettings;
+	TheMultiplayerSettings = NEW MultiplayerSettings;
+
+	CHECK( loadIni( TEST_INI ) );
+	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 8 );
+	CHECK( loadIni( MULTIPLAYER_REFORGED_INI ) );
+	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 13 );
+
+	for( Int i = 0; i < 13 && TheMultiplayerSettings->getNumColors() == 13; ++i )
+	{
+		MultiplayerColorDefinition *def = TheMultiplayerSettings->getColor( i );
+		const RGBColor day = def->getRGBValue();
+		const RGBColor night = def->getRGBNightValue();
+		CHECK_STR( def->getTooltipName().str(), colours[ i ].tooltip );
+		CHECK_NEAR( day.red * 255.0f, colours[ i ].r, 0.01f );
+		CHECK_NEAR( day.green * 255.0f, colours[ i ].g, 0.01f );
+		CHECK_NEAR( day.blue * 255.0f, colours[ i ].b, 0.01f );
+		CHECK_NEAR( night.red * 255.0f, colours[ i ].nightR, 0.01f );
+		CHECK_NEAR( night.green * 255.0f, colours[ i ].nightG, 0.01f );
+		CHECK_NEAR( night.blue * 255.0f, colours[ i ].nightB, 0.01f );
+	}
+
+	delete TheMultiplayerSettings;
+	TheMultiplayerSettings = savedSettings;
+	remove( TEST_INI );
+}
+
 /* ReleaseCrashInfo.txt's stack trace is the only stack this port gets - there is
    no debugger on the porting machine - and it came back empty on the first real
    crash, which is worth catching here rather than in the middle of a launch. */

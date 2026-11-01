@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Five more colours
+
+- Crimson, Azure, Salmon, Teal and Lavender join the colour box in every room. EA's list stopped at eight, so the last player into a full room took the one colour left; now he has six to pick from, and everyone's old colours stay as they were. A replay recorded before this change, with a random colour in it, plays out differently.
+
 ## A handicap for every seat
 
 - The skirmish, LAN and online rooms have a Handicap box at the end of every seat's row, from 100% down to 10%. At 50% every unit that player fields has half its health: his Crusader reads 240 where the same tank reads 480 across the map. His buildings stay at full health.

@@ -489,6 +489,26 @@ Color:Pink
 "Pembe"
 END
 
+Color:Crimson
+"Kızıl"
+END
+
+Color:Azure
+"Gök Mavisi"
+END
+
+Color:Salmon
+"Somon"
+END
+
+Color:Teal
+"Turkuaz"
+END
+
+Color:Lavender
+"Lavanta"
+END
+
 GUI:ShowBehindBuildings
 "Binaların arkasındaki ısı izi AÇIK"
 END

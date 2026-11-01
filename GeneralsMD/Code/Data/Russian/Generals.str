@@ -489,6 +489,26 @@ Color:Pink
 "Розовый"
 END
 
+Color:Crimson
+"Багровый"
+END
+
+Color:Azure
+"Лазурный"
+END
+
+Color:Salmon
+"Лососевый"
+END
+
+Color:Teal
+"Бирюзовый"
+END
+
+Color:Lavender
+"Лавандовый"
+END
+
 MSG:Testing
 "Mary had a little lamb, it's fleece as white as snow"
 END

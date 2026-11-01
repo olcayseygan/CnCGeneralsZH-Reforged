@@ -3704,6 +3704,27 @@ CONTROLBAR:Infa_ToolTipChinaScienceRedGuardTraining
 "All Mini-Gunners will be built three ranks above Veteran"
 END
 
+// the fork's player colours (MultiplayerReforged.ini); EA's eight are in the CSF
+Color:Crimson
+"Crimson"
+END
+
+Color:Azure
+"Azure"
+END
+
+Color:Salmon
+"Salmon"
+END
+
+Color:Teal
+"Teal"
+END
+
+Color:Lavender
+"Lavender"
+END
+
 // the LAN lobby's error box when the system bound the socket on another adapter; the first %ls is the
 // LAN IP chosen in Options, the second the address the system bound instead
 GUI:SocketRedirected

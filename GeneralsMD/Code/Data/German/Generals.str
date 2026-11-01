@@ -441,6 +441,26 @@ Color:Pink
 "Rosa"
 END
 
+Color:Crimson
+"Karmesin"
+END
+
+Color:Azure
+"Azur"
+END
+
+Color:Salmon
+"Lachs"
+END
+
+Color:Teal
+"Petrol"
+END
+
+Color:Lavender
+"Lavendel"
+END
+
 GUI:ShowBehindBuildings
 "Wärmesignatur hinter Gebäuden AN"
 END

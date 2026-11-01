@@ -485,6 +485,26 @@ Color:Pink
 "Rose"
 END
 
+Color:Crimson
+"Cramoisi"
+END
+
+Color:Azure
+"Azur"
+END
+
+Color:Salmon
+"Saumon"
+END
+
+Color:Teal
+"Sarcelle"
+END
+
+Color:Lavender
+"Lavande"
+END
+
 MSG:Testing
 "Mary had a little lamb, it's fleece as white as snow."
 END

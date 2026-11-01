@@ -308,10 +308,13 @@ void AutoHealBehavior::pulseHealObject( Object *obj )
 	// A single burst is one heal, not a source that could stack pulse on pulse, so it skips the
 	// one-healer-at-a-time rule.  Under it an Emergency Repair landing on vehicles an Ambulance or a
 	// Propaganda Tower was already tending healed nothing, and the burst never comes again.
+	// A flat amount, so a body the lobby's handicap shrank refills no faster. Heals that are a share of max
+	// health shrink with it by themselves and take no factor.
+	const Real amount = data->m_healingAmount * obj->getHandicapHealthFactor();
 	if ( data->m_radius == 0.0f || data->m_singleBurst )
-		obj->attemptHealing(data->m_healingAmount, getObject());
+		obj->attemptHealing(amount, getObject());
 	else
-		obj->attemptHealingFromSoleBenefactor( data->m_healingAmount, getObject(), data->m_healingDelay );
+		obj->attemptHealingFromSoleBenefactor( amount, getObject(), data->m_healingDelay );
 
 
 	if( data->m_unitHealPulseParticleSystemTmpl )

@@ -5391,7 +5391,7 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 				if( needed != SCIENCE_INVALID && (owner == NULL || !owner->hasScience( needed )) )
 					continue;
 
-				Real full = INT_TO_REAL( tmpl->getReloadTime() );
+				Real full = INT_TO_REAL( owner ? owner->getSpecialPowerReloadTime( tmpl ) : tmpl->getReloadTime() );
 				if( full <= 0.0f )
 					continue;
 

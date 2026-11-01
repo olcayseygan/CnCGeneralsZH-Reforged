@@ -195,10 +195,11 @@ static void scaleMaxHealth( Object *obj, Real factor )
 		body->setMaxHealth( body->getMaxHealth() * factor, PRESERVE_RATIO );
 }
 
-// what walks, drives or flies: a seat's missiles, mines and parachutes are not its units
+// units and structures: a seat's missiles, mines and parachutes keep what the data gives them, since a
+// mine at half health is no weaker a mine and a missile only reads its health against a laser
 static Real handicapHealthFactor( const Object *obj, const Player *owner )
 {
-	if( owner == NULL || ( !obj->isKindOf( KINDOF_INFANTRY ) && !obj->isKindOf( KINDOF_VEHICLE ) ) )
+	if( owner == NULL || ( !obj->isKindOf( KINDOF_INFANTRY ) && !obj->isKindOf( KINDOF_VEHICLE ) && !obj->isKindOf( KINDOF_STRUCTURE ) ) )
 		return 1.0f;
 	return owner->getHandicap()->getHandicap( Handicap::MAXHEALTH, obj->getTemplate() );
 }
@@ -1762,6 +1763,13 @@ Player * Object::getControllingPlayer() const
 Real Object::getHandicapHealthFactor() const
 {
 	return handicapHealthFactor( this, getControllingPlayer() );
+}
+
+//=============================================================================
+Real Object::getOwnerHandicap() const
+{
+	const Player *owner = getControllingPlayer();
+	return owner ? owner->getLobbyHandicap() : 1.0f;
 }
 
 //=============================================================================

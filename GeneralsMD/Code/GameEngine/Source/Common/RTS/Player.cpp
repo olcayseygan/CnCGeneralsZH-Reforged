@@ -4152,6 +4152,12 @@ void Player::addNewSharedSpecialPowerTimer( const SpecialPowerTemplate *temp, Un
 
 }
 
+UnsignedInt Player::getSpecialPowerReloadTime( const SpecialPowerTemplate *temp ) const
+{
+	const Real handicap = getLobbyHandicap();
+	return handicap == 1.0f ? temp->getReloadTime() : (UnsignedInt)( temp->getReloadTime() / handicap );
+}
+
 void Player::resetOrStartSpecialPowerReadyFrame( const SpecialPowerTemplate *temp )
 {
 
@@ -4165,7 +4171,7 @@ void Player::resetOrStartSpecialPowerReadyFrame( const SpecialPowerTemplate *tem
 		timer = &(*it);
 		if ( timer->m_templateID == lookupID )
 		{
-			timer->m_readyFrame = now + temp->getReloadTime();
+			timer->m_readyFrame = now + getSpecialPowerReloadTime( temp );
 			return;
 		}
 	}
@@ -4906,7 +4912,7 @@ void Player::crc( Xfer *xfer )
 	xfer->xferSnapshot( &m_money );
 
 	// The lobby's handicap, only on a seat that has one, so every other replay keeps the CRC it has.
-	Real healthHandicap = m_handicap.getGenericHandicap( Handicap::MAXHEALTH );
+	Real healthHandicap = getLobbyHandicap();
 	if( healthHandicap != 1.0f )
 		xfer->xferReal( &healthHandicap );
 

@@ -400,6 +400,10 @@ public:
 	/// return the Player's Handicap sub-object
 	inline const Handicap *getHandicap() const { return &m_handicap; }
 	inline Handicap *getHandicap() { return &m_handicap; }
+	/// the lobby's handicap as a factor, exactly 1 for a seat without one
+	inline Real getLobbyHandicap() const { return m_handicap.getGenericHandicap( Handicap::MAXHEALTH ); }
+	/// a special power's reload in frames for this seat: the template's own at no handicap
+	UnsignedInt getSpecialPowerReloadTime( const SpecialPowerTemplate *temp ) const;
 
 	/// return the Player's Money sub-object
 	inline Money *getMoney() { return &m_money; }

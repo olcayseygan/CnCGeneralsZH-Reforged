@@ -103,7 +103,7 @@ UpdateSleepTime SupplyWarehouseCripplingBehavior::update()
 	UnsignedInt now = TheGameLogic->getFrame();
 	m_nextHealingFrame = now + md->m_selfHealDelay;
 
-	getObject()->attemptHealing(md->m_selfHealAmount, NULL);
+	getObject()->attemptHealing(md->m_selfHealAmount * getObject()->getHandicapHealthFactor(), NULL);
 
 	if( getObject()->getBodyModule()->getHealth() == getObject()->getBodyModule()->getMaxHealth() )
 		return UPDATE_SLEEP_FOREVER;// this can't be in onHealing, as the healing comes from here

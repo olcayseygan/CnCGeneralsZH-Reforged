@@ -16570,7 +16570,7 @@ GUI:Handicap
 END
 
 TOOLTIP:Handicap
-"Bu oyuncunun birimlerinin en yüksek canını düşürür."
+"Bu oyuncuyu orantılı olarak zayıflatır. Yüzde 50'de birim ve binalarda can ve hasar yarıya, iyileşme yarıya iner; yapım, araştırma ve özel güç süreleri iki katına çıkar."
 END
 
 // Kişilikli bir bilgisayar oyuncusunun sohbete yazdıkları: bir dalga çıkarken (iki satır), üssü

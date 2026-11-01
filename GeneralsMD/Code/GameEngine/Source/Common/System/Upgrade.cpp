@@ -170,6 +170,9 @@ Int UpgradeTemplate::calcTimeToBuild( Player *player ) const
 	}
 
 	///@todo modify this by power state of player
+	const Real handicap = player->getHandicap()->getGenericHandicap( Handicap::BUILDTIME );
+	if( handicap != 1.0f )
+		return m_buildTime * LOGICFRAMES_PER_SECOND * handicap;
 	return m_buildTime * LOGICFRAMES_PER_SECOND;
 
 }  // end calcTimeToBuild

@@ -395,6 +395,8 @@ void NeutronMissileSlowDeathBehavior::doBlast( const BlastInfo *blastInfo, Real 
 
 			}  // end else
 					
+			damageInfo.in.m_amount *= missile->getOwnerHandicap();
+
 			// do actual damage
 			if( damageInfo.in.m_amount )
 			{

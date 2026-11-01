@@ -325,7 +325,8 @@ public:
 	void setTemporaryTeam( Team* team );	///< sets the unit's team BUT NOT its original team
 
 	Player* getControllingPlayer() const;
-	Real getHandicapHealthFactor() const;	///< what the owner's lobby handicap makes of this object's max health
+	Real getHandicapHealthFactor() const;	///< what the owner's lobby handicap makes of this object's max health and of flat healing into it
+	Real getOwnerHandicap() const;				///< the owner's lobby handicap for what this object deals, whatever it is; 1 with no owner
 	void friend_ownerChangedHandicap( const Player *oldOwner );	///< a new owner's factor, its share of health kept: no damage, no heal
 	Relationship getRelationship(const Object *that) const;
 

@@ -390,8 +390,9 @@ Real SpecialPowerModule::getPercentReady() const
 	}
 
 	// calculate the percent	
-	Real percent = 1.0f - ((readyFrame - TheGameLogic->getFrame()) / 
-												 (Real)modData->m_specialPowerTemplate->getReloadTime());
+	const Player *owner = getObject()->getControllingPlayer();
+	const UnsignedInt reload = owner ? owner->getSpecialPowerReloadTime( modData->m_specialPowerTemplate ) : modData->m_specialPowerTemplate->getReloadTime();
+	Real percent = 1.0f - ((readyFrame - TheGameLogic->getFrame()) / (Real)reload);
 
 	return percent;
 }
@@ -454,7 +455,10 @@ void SpecialPowerModule::startPowerRecharge()
 		if( modData->m_startsReady && m_availableOnFrame == 0 )
 			m_availableOnFrame = TheGameLogic->getFrame();
 		else
-			m_availableOnFrame = TheGameLogic->getFrame() + getSpecialPowerTemplate()->getReloadTime();
+		{
+			const Player *owner = getObject()->getControllingPlayer();
+			m_availableOnFrame = TheGameLogic->getFrame() + (owner ? owner->getSpecialPowerReloadTime( getSpecialPowerTemplate() ) : getSpecialPowerTemplate()->getReloadTime());
+		}
 	}
 }
 

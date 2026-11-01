@@ -14,7 +14,7 @@ found and fixed, EA's own, not port damage.**
 
 ## A handicap for every seat
 
-- The skirmish, LAN and online rooms have a Handicap box at the end of every seat's row, from 100% down to 10%. At 50% every unit that player fields has half its health: his Crusader reads 240 where the same tank reads 480 across the map. His buildings stay at full health.
+- The skirmish, LAN and online rooms have a Handicap box at the end of every seat's row, from 100% down to 10%. At 50% that player's units and buildings have half their health and his weapons and superweapons deal half their damage: his Crusader reads 240 where the same tank reads 480 across the map. Building, research and every special power's recharge take twice as long, and flat healing is halved so a smaller body refills no faster. Rate of fire, income, speed, sight and prices stay as they are. A demo truck still dies in its own blast, and a sniper's shot or a pilot kill works as ever.
 - You pick for your own seat and the host picks for the computer seats, the way colour and team already work. The pick is in the replay and the saved game, and a room that leaves the column at 100% plays and replays as it did.
 - Promotions and armour research still come on top, at the seat's share: an Elite Paladin with Composite Armor reads 364 at 50% against 728 at 100%. A vehicle stolen from a handicapped player moves to its new owner's column and keeps its share of health, so a Humvee at 80 of 120 becomes 160 of 240 with no damage dealt and no repair given.
 

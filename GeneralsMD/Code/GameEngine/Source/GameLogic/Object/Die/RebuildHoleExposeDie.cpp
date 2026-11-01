@@ -162,7 +162,7 @@ void RebuildHoleExposeDie::onDie( const DamageInfo *damageInfo )
 
 		// set the health of the hole to that defined by our data
 		BodyModuleInterface *body = hole->getBodyModule();
-		body->setMaxHealth( modData->m_holeMaxHealth );
+		body->setMaxHealth( modData->m_holeMaxHealth * hole->getHandicapHealthFactor() );
 
 		// set the information in the hole about what to build
 		RebuildHoleBehaviorInterface *rhbi = RebuildHoleBehavior::getRebuildHoleBehaviorInterfaceFromObject( hole );

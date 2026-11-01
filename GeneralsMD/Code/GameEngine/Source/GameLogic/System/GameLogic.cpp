@@ -1560,7 +1560,13 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			d.setInt(TheKey_multiplayerStartIndex, slot->getStartPos());
 			// Player's Handicap reads it; absent at full health, so such a seat's dict is the one it always was
 			if (slot->getHandicap() != HANDICAP_FULL)
-				d.setReal(TheNameKeyGenerator->nameToKey("HANDICAP_MAXHEALTH_GENERIC"), slot->getHandicap() / (Real)HANDICAP_FULL);
+			{
+				const Real handicap = slot->getHandicap() / (Real)HANDICAP_FULL;
+				d.setReal(TheNameKeyGenerator->nameToKey("HANDICAP_MAXHEALTH_GENERIC"), handicap);
+				d.setReal(TheNameKeyGenerator->nameToKey("HANDICAP_MAXHEALTH_BUILDINGS"), handicap);
+				d.setReal(TheNameKeyGenerator->nameToKey("HANDICAP_BUILDTIME_GENERIC"), 1.0f / handicap);
+				d.setReal(TheNameKeyGenerator->nameToKey("HANDICAP_BUILDTIME_BUILDINGS"), 1.0f / handicap);
+			}
 //			d.setBool(TheKey_multiplayerIsLocal, slot->isLocalPlayer());
 //			d.setBool(TheKey_multiplayerIsLocal, slot->getIP() == game->getLocalIP());
 			//

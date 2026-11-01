@@ -1,32 +1,45 @@
-# The lobby's handicap, read off the tallies with and without it. Run the same line twice, the second
-# time without -handicap, and seat 0's units read half their max health while its power plant and
-# seat 1's own stock stay the same.
+# The lobby's handicap, read off the tallies. Seat 0 at 50 against seat 1 at 100 in one run: each seat
+# owns the same things and does the same to the other, so every pair of lines is the handicap.
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
-#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 7 -maxframes 6000
+#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 7 -maxframes 8000
 #     -handicap 0 50 -scenario handicap -logPrefix handicap_
 #
-# Each seat's stock stands at its own start, out of reach of the other. Crusader: bare, then 100 more
-# from Composite Armor. Paladin: made elite first, then the same armor, whose addition carries both
-# multipliers. The Crusader spawned after the research is a new unit under a finished upgrade.
+# Health: power plant, Crusader, Paladin, Ranger. Composite Armor adds at the seat's multiplier; the Crusader spawned after the research is a new unit under a finished upgrade.
 #
-# The Humvee and the Tomahawk are the captures, staged on open ground in the east: a few Rebels wear
-# each vehicle down until a Hijacker of theirs takes it. A tally every half second shows the share of
-# health carried across the capture while the max moves to the new owner's factor.
+# Build time: Composite Armor from frame 70 and an Ambulance from frame 80; the tallies below say when
+# the Crusader's max jumps and when the Ambulance is out, in file frames (30 a second).
 #
-# The Battle Bus takes Overlord fire until its second life, an absolute max health in the data.
+# Damage: a Battlemaster shelling a Barracks for 300 file frames, on both seats. A Bomb Truck at a GLA
+# Barracks: half the blast, and the truck dies of it either way.
+#
+# Cooldown: the "power" lines log the ready frame. Burton's charges are the module's own timer, the
+# Particle Cannon a superweapon, the Command Center's Spectre a general's power on the seat's shared timer.
+#
+# Capture: a few Rebels wear a Humvee and a Tomahawk down until a Hijacker takes each. The share of
+# health crosses, the max moves to the new owner's factor. Battle Bus: second life, absolute in the data.
 
 30    spawn      0  AmericaPowerPlant     1   start0:-200:-250
 30    spawn      1  AmericaPowerPlant     1   start1:-200:-250
+30    spawn      0  AmericaPowerPlant     1   start0:-200:-400
+30    spawn      1  AmericaPowerPlant     1   start1:-200:-400
+30    spawn      0  AmericaPowerPlant     1   start0:-50:-400
+30    spawn      1  AmericaPowerPlant     1   start1:-50:-400
 30    spawn      0  AmericaStrategyCenter 1   start0:250:-250
 30    spawn      1  AmericaStrategyCenter 1   start1:250:-250
+30    spawn      0  AmericaWarFactory     1   start0:320:60
+30    spawn      1  AmericaWarFactory     1   start1:320:60
+30    spawn      0  AmericaParticleCannonUplink 1 start0:560:-250
+30    spawn      1  AmericaParticleCannonUplink 1 start1:320:-120
 30    spawn      0  AmericaTankCrusader   1   start0:0:300
 30    spawn      1  AmericaTankCrusader   1   start1:0:-300
 30    spawn      0  AmericaTankPaladin    1   start0:80:300
 30    spawn      1  AmericaTankPaladin    1   start1:80:-300
 30    spawn      0  AmericaInfantryRanger 1   start0:160:300
 30    spawn      1  AmericaInfantryRanger 1   start1:160:-300
+30    spawn      0  AmericaInfantryColonelBurton 1 start0:220:300
+30    spawn      1  AmericaInfantryColonelBurton 1 start1:220:-300
 40    tally      0  AmericaPowerPlant
 40    tally      1  AmericaPowerPlant
 40    tally      0  AmericaTankCrusader
@@ -35,12 +48,52 @@
 40    tally      1  AmericaTankPaladin
 40    tally      0  AmericaInfantryRanger
 40    tally      1  AmericaInfantryRanger
-50    rank       0  AmericaTankPaladin    elite
-50    rank       1  AmericaTankPaladin    elite
 60    tally      0  AmericaTankPaladin
 60    tally      1  AmericaTankPaladin
+
+# build time
 70    shiftupgrade 0 AmericaStrategyCenter Upgrade_AmericaCompositeArmor
 70    shiftupgrade 1 AmericaStrategyCenter Upgrade_AmericaCompositeArmor
+80    produce    0  AmericaWarFactory     AmericaVehicleMedic 1
+80    produce    1  AmericaWarFactory     AmericaVehicleMedic 1
+200   tally      0  AmericaVehicleMedic
+200   tally      1  AmericaVehicleMedic
+250   tally      0  AmericaVehicleMedic
+250   tally      1  AmericaVehicleMedic
+300   tally      0  AmericaVehicleMedic
+300   tally      1  AmericaVehicleMedic
+350   tally      0  AmericaVehicleMedic
+350   tally      1  AmericaVehicleMedic
+400   tally      0  AmericaVehicleMedic
+400   tally      1  AmericaVehicleMedic
+500   tally      0  AmericaVehicleMedic
+500   tally      1  AmericaVehicleMedic
+600   tally      0  AmericaVehicleMedic
+600   tally      1  AmericaVehicleMedic
+700   tally      0  AmericaVehicleMedic
+700   tally      1  AmericaVehicleMedic
+800   tally      0  AmericaVehicleMedic
+800   tally      1  AmericaVehicleMedic
+300   tally      0  AmericaTankCrusader
+300   tally      1  AmericaTankCrusader
+500   tally      0  AmericaTankCrusader
+500   tally      1  AmericaTankCrusader
+700   tally      0  AmericaTankCrusader
+700   tally      1  AmericaTankCrusader
+900   tally      0  AmericaTankCrusader
+900   tally      1  AmericaTankCrusader
+1100  tally      0  AmericaTankCrusader
+1100  tally      1  AmericaTankCrusader
+1300  tally      0  AmericaTankCrusader
+1300  tally      1  AmericaTankCrusader
+1500  tally      0  AmericaTankCrusader
+1500  tally      1  AmericaTankCrusader
+1700  tally      0  AmericaTankCrusader
+1700  tally      1  AmericaTankCrusader
+1900  tally      0  AmericaTankCrusader
+1900  tally      1  AmericaTankCrusader
+2100  tally      0  AmericaTankCrusader
+2100  tally      1  AmericaTankCrusader
 2500  tally      0  AmericaTankCrusader
 2500  tally      1  AmericaTankCrusader
 2500  tally      0  AmericaTankPaladin
@@ -49,21 +102,56 @@
 2510  spawn      1  AmericaTankCrusader   1   start1:0:-360
 2520  tally      0  AmericaTankCrusader
 2520  tally      1  AmericaTankCrusader
+3300  tally      0  AmericaTankCrusader
+3500  tally      0  AmericaTankCrusader
+3700  tally      0  AmericaTankCrusader
+3900  tally      0  AmericaTankCrusader
+3900  tally      0  AmericaTankPaladin
+
+# cooldowns, fired at the empty ground on the map's far side
+90    power      0  AmericaInfantryColonelBurton start0:220:360
+90    power      1  AmericaInfantryColonelBurton start1:220:-360
+90    power      0  AmericaParticleCannonUplink 2000 900
+90    power      1  AmericaParticleCannonUplink 2000 900
+90    power      0  AmericaCommandCenter  2000 900 SuperweaponSpectreGunship
+90    power      1  AmericaCommandCenter  2000 900 SuperweaponSpectreGunship
+
+# damage dealt, both ways
+100   spawn      0  ChinaTankBattleMaster 1   3050 4103
+100   spawn      1  ChinaBarracks         1   3196 4103
+100   spawn      1  ChinaTankBattleMaster 1   4510 3126
+100   spawn      0  ChinaBarracks         1   4361 3126
+110   attack     0  ChinaTankBattleMaster 1   ChinaBarracks
+110   attack     1  ChinaTankBattleMaster 0   ChinaBarracks
+110   tally      0  ChinaBarracks
+110   tally      1  ChinaBarracks
+410   tally      0  ChinaBarracks
+410   tally      1  ChinaBarracks
+
+# a Bomb Truck at a Barracks, both ways: the truck must die, at 50 too
+100   spawn      0  GLAVehicleBombTruck   1   4000 3650
+100   spawn      1  GLABarracks           1   4150 3650
+100   spawn      1  GLAVehicleBombTruck   1   4000 3100
+100   spawn      0  GLABarracks           1   4150 3100
+110   attack     0  GLAVehicleBombTruck   1   GLABarracks
+110   attack     1  GLAVehicleBombTruck   0   GLABarracks
+110   tally      0  GLABarracks
+110   tally      1  GLABarracks
+410   tally      0  GLABarracks
+410   tally      1  GLABarracks
+410   tally      0  GLAVehicleBombTruck
+410   tally      1  GLAVehicleBombTruck
 
 # seat 0's Humvee goes to seat 1
 100   spawn      0  AmericaVehicleHumvee  1   2450 3650
 100   spawn      1  GLAInfantryRebel      3   2570 3650 20
 160   spawn      1  GLAInfantryHijacker   1   2480 3650
 165   enter      1  GLAInfantryHijacker   0   AmericaVehicleHumvee
-150   tally      0  AmericaVehicleHumvee
 165   tally      0  AmericaVehicleHumvee
 180   tally      0  AmericaVehicleHumvee
 180   tally      1  AmericaVehicleHumvee
 195   tally      0  AmericaVehicleHumvee
 195   tally      1  AmericaVehicleHumvee
-210   tally      0  AmericaVehicleHumvee
-210   tally      1  AmericaVehicleHumvee
-240   tally      1  AmericaVehicleHumvee
 300   tally      1  AmericaVehicleHumvee
 
 # seat 1's Tomahawk goes to seat 0
@@ -71,33 +159,17 @@
 100   spawn      0  GLAInfantryRebel      3   3120 3650 20
 160   spawn      0  GLAInfantryHijacker   1   3030 3650
 165   enter      0  GLAInfantryHijacker   1   AmericaVehicleTomahawk
-150   tally      1  AmericaVehicleTomahawk
 165   tally      1  AmericaVehicleTomahawk
 180   tally      1  AmericaVehicleTomahawk
 180   tally      0  AmericaVehicleTomahawk
 195   tally      1  AmericaVehicleTomahawk
 195   tally      0  AmericaVehicleTomahawk
-210   tally      1  AmericaVehicleTomahawk
-210   tally      0  AmericaVehicleTomahawk
-240   tally      0  AmericaVehicleTomahawk
 300   tally      0  AmericaVehicleTomahawk
 
 # seat 0's Battle Bus, into its second life
 100   spawn      0  GLAVehicleBattleBus   1   1135 3696
 100   spawn      1  ChinaTankOverlord     1   1290 3696
-110   tally      0  GLAVehicleBattleBus*
-120   tally      0  GLAVehicleBattleBus*
-130   tally      0  GLAVehicleBattleBus*
-140   tally      0  GLAVehicleBattleBus*
-150   tally      0  GLAVehicleBattleBus*
-160   tally      0  GLAVehicleBattleBus*
-170   tally      0  GLAVehicleBattleBus*
-180   tally      0  GLAVehicleBattleBus*
-190   tally      0  GLAVehicleBattleBus*
 200   tally      0  GLAVehicleBattleBus*
-210   tally      0  GLAVehicleBattleBus*
-220   tally      0  GLAVehicleBattleBus*
 240   tally      0  GLAVehicleBattleBus*
-260   tally      0  GLAVehicleBattleBus*
 280   tally      0  GLAVehicleBattleBus*
-300   tally      0  GLAVehicleBattleBus*
+320   tally      0  GLAVehicleBattleBus*

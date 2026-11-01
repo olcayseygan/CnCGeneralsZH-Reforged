@@ -714,7 +714,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 				Real totalFiringSeconds = data->m_totalFiringFrames / LOGICFRAMES_PER_SECOND;
 				Real damagePerPulse = (Real)(totalFiringSeconds * data->m_damagePerSecond) / (Real)data->m_totalDamagePulses;
 
-				damageInfo.in.m_amount = damagePerPulse;
+				damageInfo.in.m_amount = damagePerPulse * me->getOwnerHandicap();
 				damageInfo.in.m_sourceID = me->getID();
 				damageInfo.in.m_damageType = data->m_damageType;
 				damageInfo.in.m_deathType = data->m_deathType;

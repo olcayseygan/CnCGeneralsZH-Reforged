@@ -232,7 +232,7 @@ void FirestormDynamicGeometryInfoUpdate::doDamageScan( void )
 	damageInfo.in.m_damageType = DAMAGE_FLAME;
 	damageInfo.in.m_deathType = DEATH_BURNED;
 	damageInfo.in.m_sourceID = firestorm->getID();
-	damageInfo.in.m_amount = modData->m_damageAmount;
+	damageInfo.in.m_amount = modData->m_damageAmount * firestorm->getOwnerHandicap();
 
 	// get the current bounding circle size for the firestorm
 	Real boundingCircle = firestorm->getGeometryInfo().getBoundingCircleRadius();

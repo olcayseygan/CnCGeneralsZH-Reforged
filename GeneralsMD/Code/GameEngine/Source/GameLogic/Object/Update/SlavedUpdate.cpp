@@ -514,7 +514,7 @@ void SlavedUpdate::doRepairLogic()
 		if( body )
 		{
 			//Calculate the repair rate per frame.
-			Real repairAmount = data->m_repairRatePerSecond / LOGICFRAMES_PER_SECOND;
+			Real repairAmount = data->m_repairRatePerSecond / LOGICFRAMES_PER_SECOND * master->getHandicapHealthFactor();
 			
 			DamageInfo healingInfo;
 			healingInfo.in.m_amount = repairAmount;

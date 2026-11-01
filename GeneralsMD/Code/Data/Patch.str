@@ -2179,7 +2179,7 @@ GUI:Handicap
 END
 
 TOOLTIP:Handicap
-"Lowers the maximum health of this player's units."
+"Weakens this player in proportion. At 50 percent: half the health and damage on units and buildings, half the healing, twice the build, research and special power times."
 END
 
 // What a computer player with a personality says in chat: when a wave leaves (two lines), when its

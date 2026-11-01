@@ -402,6 +402,8 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 		{
 			if( !damageInfo->in.m_kill )
 			{
+				// A healing weapon's amount is flat; the one healed takes his own handicap, never the healer's.
+				damageInfo->in.m_amount *= getObject()->getHandicapHealthFactor();
 				// Healing and Damage are separate, so this shouldn't happen
 				attemptHealing( damageInfo );
 			}

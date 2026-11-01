@@ -76,7 +76,7 @@ public:
 	{
 		BUILDCOST,
 		BUILDTIME,
-		MAXHEALTH,		// the lobby's handicap; set for GENERIC only, so a structure stays whole
+		MAXHEALTH,		// the lobby's handicap p; damage, healing and cooldowns take the same p, BUILDTIME 1/p
 
 		HANDICAP_TYPE_COUNT
 	};

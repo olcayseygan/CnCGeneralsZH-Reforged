@@ -265,7 +265,7 @@ void StickyBombUpdate::detonate()
 			
 			for (; curVictim != NULL; curVictim = iter ? iter->nextWithNumeric(&curVictimDistSqr) : NULL)
 			{
-				damageInfo.in.m_amount = (curVictimDistSqr <= primaryDamageRangeSqr) ? primaryDamage : secondaryDamage;
+				damageInfo.in.m_amount = ((curVictimDistSqr <= primaryDamageRangeSqr) ? primaryDamage : secondaryDamage) * getObject()->getOwnerHandicap();
 				curVictim->attemptDamage(&damageInfo);
 			}
 

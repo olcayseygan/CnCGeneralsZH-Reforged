@@ -56,38 +56,8 @@ RadiusDecalTemplate::RadiusDecalTemplate() :
 	m_opacityThrobTime(LOGICFRAMES_PER_SECOND),
 	m_color(0),
 	m_onlyVisibleToOwningPlayer(true),
-	m_spinTime(0),
-	m_lightReference(0.0f),
-	m_lightScaleMin(1.0f),
-	m_lightScaleMax(1.0f),
 	m_name(AsciiString::TheEmptyString)  // Added By Sadullah Nader for Init purposes
 {
-}
-
-// ------------------------------------------------------------------------------------------------
-/** How bright flat ground is lit at the map's time of day against LightReference, clamped to
-	* LightScaleMin..LightScaleMax.  An additive mark adds the same light whatever lies under it, so on a
-	* night map it reads far louder than by day; scaling by the ground's own light keeps it as quiet.
-	* The light the terrain shades a flat cell with (BaseHeightMap's doTheLight): the first light's
-	* ambient, plus each light's diffuse by how steeply it falls. */
-// ------------------------------------------------------------------------------------------------
-static Real groundLight()
-{
-	RGBColor shade = TheGlobalData->m_terrainAmbient[0];
-	for (Int i = 0; i < TheGlobalData->m_numGlobalLights; ++i)
-	{
-		const Real down = MIN(1.0f, MAX(0.0f, -TheGlobalData->m_terrainLightPos[i].z));
-		shade.red += TheGlobalData->m_terrainDiffuse[i].red * down;
-		shade.green += TheGlobalData->m_terrainDiffuse[i].green * down;
-		shade.blue += TheGlobalData->m_terrainDiffuse[i].blue * down;
-	}
-	// each channel saturates at 1 as the terrain's own vertex shade does
-	return 0.30f * MIN(1.0f, shade.red) + 0.59f * MIN(1.0f, shade.green) + 0.11f * MIN(1.0f, shade.blue);
-}
-
-Real RadiusDecalTemplate::lightScale() const
-{
-	return MIN(m_lightScaleMax, MAX(m_lightScaleMin, groundLight() / m_lightReference));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -125,8 +95,6 @@ void RadiusDecalTemplate::createRadiusDecal(const Coord3D& pos, Real radius, con
 		const ShadowType shadowType = m_shadowType;
 		const Real size = radius*2;
 		const Color color = m_color == 0 ? clientPlayerColor(owningPlayer) : m_color;
-		if (m_lightReference > 0.0f)
-			DEBUG_LOG(("AURA RING LIGHT %s ground=%.3f scale=%.2f\n", m_name.str(), groundLight(), lightScale()));
 		LogicThread::callAfterTick( [cell, name, shadowType, size, color]()
 		{
 			Shadow::ShadowTypeInfo decalInfo;
@@ -173,6 +141,10 @@ void RadiusDecalTemplate::xferRadiusDecalTemplate( Xfer *xfer )
 	xfer->xferBool(&m_onlyVisibleToOwningPlayer);
 }
 
+static void parseRetiredField( INI *, void *, void *, const void * )
+{
+}
+
 // ------------------------------------------------------------------------------------------------
 /*static*/ void RadiusDecalTemplate::parseRadiusDecalTemplate(INI* ini, void *instance, void * store, const void* /*userData*/)
 {
@@ -185,10 +157,11 @@ void RadiusDecalTemplate::xferRadiusDecalTemplate( Xfer *xfer )
 		{ "OpacityThrobTime",						INI::parseDurationUnsignedInt,NULL,							offsetof( RadiusDecalTemplate, m_opacityThrobTime ) },
 		{ "Color",											INI::parseColorInt,						NULL,							offsetof( RadiusDecalTemplate, m_color ) },
 		{ "OnlyVisibleToOwningPlayer",	INI::parseBool,								NULL,							offsetof( RadiusDecalTemplate, m_onlyVisibleToOwningPlayer ) },
-		{ "SpinTime",										INI::parseInt,								NULL,							offsetof( RadiusDecalTemplate, m_spinTime ) },
-		{ "LightReference",							INI::parseReal,								NULL,							offsetof( RadiusDecalTemplate, m_lightReference ) },
-		{ "LightScaleMin",							INI::parseReal,								NULL,							offsetof( RadiusDecalTemplate, m_lightScaleMin ) },
-		{ "LightScaleMax",							INI::parseReal,								NULL,							offsetof( RadiusDecalTemplate, m_lightScaleMax ) },
+		// the aura rings' fields; a mod written for them may name them, and an unknown field throws
+		{ "SpinTime",										parseRetiredField,						NULL,							0 },
+		{ "LightReference",							parseRetiredField,						NULL,							0 },
+		{ "LightScaleMin",							parseRetiredField,						NULL,							0 },
+		{ "LightScaleMax",							parseRetiredField,						NULL,							0 },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -270,8 +243,6 @@ void RadiusDecal::update()
 		if( TheGameLogic->getDrawIconUI() && !CinemaDirector_hidesHud() )
 		{
 			Real opacity = m_template->m_minOpacity + percent * (m_template->m_maxOpacity - m_template->m_minOpacity);
-			if (m_template->m_lightReference > 0.0f)
-				opacity *= m_template->lightScale();
 			opac = REAL_TO_INT(opacity * 255.0f);
 		}
 		else
@@ -280,14 +251,6 @@ void RadiusDecal::update()
 			opac = 0;
 		}
 		decal->setOpacity(opac);
-
-		// a turn every SpinTime, on the logic clock like the throb, so a paused game holds it still
-		if (m_template->m_spinTime != 0)
-		{
-			const UnsignedInt period = MAX(1, abs(m_template->m_spinTime) * LOGICFRAMES_PER_SECOND / 1000);
-			const Real angle = (2*PI) * (Real)(now % period) / (Real)period;
-			decal->setAngle(m_template->m_spinTime > 0 ? angle : -angle);
-		}
 	}
 }
 

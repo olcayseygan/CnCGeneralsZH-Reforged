@@ -92,7 +92,6 @@ public:
 	UnsignedInt setStatus( UnsignedInt bit );			///< set status bit
 	UnsignedInt clearStatus( UnsignedInt bit );		///< clear status bit
 	UnsignedInt getStatus( void ) const;								///< get status bits
-	Int getDisplayHeight( void ) const { return m_displayHeight; }	///< pixels to draw it high at the reference size, 0 when it fills what it is drawn in
 
 
 	// for parsing from INI
@@ -111,7 +110,6 @@ friend class ImageCollection;
 	ICoord2D m_imageSize;			///< dimensions of image
 	void *m_rawTextureData;		///< raw texture data
 	UnsignedInt m_status;			///< status bits from ImageStatus
-	Int m_displayHeight;			///< DisplayHeight: the rank insignia's own size, height kept and width following
 
 	static const FieldParse m_imageFieldParseTable[];		///< the parse table for INI definition
 

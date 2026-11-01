@@ -107,12 +107,6 @@ private:
 	UnsignedInt		m_opacityThrobTime;
 	Color					m_color;
 	Bool					m_onlyVisibleToOwningPlayer;
-	Int						m_spinTime;		///< milliseconds a turn takes, below 0 the other way; 0 stands still
-	Real					m_lightReference;	///< flat-ground light at which the opacity is as written; 0 leaves it unscaled
-	Real					m_lightScaleMin;	///< the opacity scale never falls below this (dark maps)
-	Real					m_lightScaleMax;	///< nor rises above this (bright maps)
-
-	Real lightScale() const;
 
 public:
 	RadiusDecalTemplate();

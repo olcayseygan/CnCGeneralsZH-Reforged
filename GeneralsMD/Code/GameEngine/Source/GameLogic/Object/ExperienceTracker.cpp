@@ -30,7 +30,6 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
-#include "Common/GlobalData.h"
 #include "Common/Xfer.h"
 #include "Common/ThingTemplate.h"
 #include "GameLogic/ExperienceTracker.h"
@@ -48,7 +47,6 @@
 ExperienceTracker::ExperienceTracker(Object *parent) :
 	m_parent(parent),
 	m_currentLevel(LEVEL_REGULAR),
-	m_currentGrade(0),
 	m_experienceSink(INVALID_ID),
 	m_experienceScalar( 1.0f ),
 	m_currentExperience(0), // Added By Sadullah Nader
@@ -172,14 +170,6 @@ void ExperienceTracker::setMinVeterancyLevel( VeterancyLevel newLevel )
 	// This does not check for IsTrainable, because this function is for explicit setting,
 	// so the setter is assumed to know what they are doing.  The game function
 	// of addExperiencePoints cares about Trainability.
-	const RankLadder *ladder = TheGlobalData->getRankLadder( m_parent->getTemplate() );
-	if (ladder)
-	{
-		// a ladder unit lands on the level's pin, from where it climbs on
-		if (m_currentLevel < newLevel)
-			applyExperience( ladder->threshold( RankLadder::unitValue( m_parent->getTemplate() ), ladder->m_pin[newLevel] ), TRUE );
-		return;
-	}
 	if (m_currentLevel < newLevel)
 	{
 		VeterancyLevel oldLevel = m_currentLevel;
@@ -188,7 +178,7 @@ void ExperienceTracker::setMinVeterancyLevel( VeterancyLevel newLevel )
 		if (m_parent)
 		{
 			m_currentExperience = m_parent->getTemplate()->getExperienceRequired(m_currentLevel); //Minimum for this level
-			m_parent->onRankChanged( oldLevel, newLevel, 0, 0, TRUE );
+			m_parent->onVeterancyLevelChanged( oldLevel, newLevel );
 		}
 	}
 }
@@ -199,13 +189,6 @@ void ExperienceTracker::setVeterancyLevel( VeterancyLevel newLevel, Bool provide
 	// This does not check for IsTrainable, because this function is for explicit setting,
 	// so the setter is assumed to know what they are doing.  The game function
 	// of addExperiencePoints cares about Trainability, if flagged thus.
-	const RankLadder *ladder = TheGlobalData->getRankLadder( m_parent->getTemplate() );
-	if (ladder)
-	{
-		if (m_currentLevel != newLevel)
-			applyExperience( ladder->threshold( RankLadder::unitValue( m_parent->getTemplate() ), ladder->m_pin[newLevel] ), provideFeedback );
-		return;
-	}
 	if (m_currentLevel != newLevel)
 	{
 		VeterancyLevel oldLevel = m_currentLevel;
@@ -214,32 +197,17 @@ void ExperienceTracker::setVeterancyLevel( VeterancyLevel newLevel, Bool provide
 		if (m_parent)
 		{
 			m_currentExperience = m_parent->getTemplate()->getExperienceRequired(m_currentLevel); //Minimum for this level
-			m_parent->onRankChanged( oldLevel, newLevel, 0, 0, provideFeedback );
+			m_parent->onVeterancyLevelChanged( oldLevel, newLevel, provideFeedback );
 		}
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool ExperienceTracker::gainExpForLevel(Int levelsToGain, Bool canScaleForBonus, Bool byLevel)
+Bool ExperienceTracker::gainExpForLevel(Int levelsToGain, Bool canScaleForBonus)
 {
 	Int newLevel = (Int)m_currentLevel + levelsToGain;
 	if (newLevel > LEVEL_LAST)
 		newLevel = LEVEL_LAST;
-
-	// a ladder unit is set straight onto a grade, unclipped and unscaled: a crate's grades short of the
-	// Heroic pin, or a pilot's summed level's pin
-	const RankLadder *ladder = TheGlobalData->getRankLadder( m_parent->getTemplate() );
-	if (ladder)
-	{
-		if (newLevel <= m_currentLevel)
-			return false;
-		const Int grade = byLevel ? ladder->m_pin[newLevel]
-			: MIN( m_currentGrade + levelsToGain * TheGlobalData->m_rankCrateGrades, ladder->m_pin[LEVEL_LAST] );
-		const Int experience = ladder->threshold( RankLadder::unitValue( m_parent->getTemplate() ), grade );
-		if (experience > m_currentExperience)
-			setExperienceAndLevel( experience );
-		return true;
-	}
 	// gain what levels we can, even if we can't use 'em all
 	if (newLevel > m_currentLevel)
 	{
@@ -248,19 +216,6 @@ Bool ExperienceTracker::gainExpForLevel(Int levelsToGain, Bool canScaleForBonus,
 		return true;
 	}
 	return false;
-}
-
-//-------------------------------------------------------------------------------------------------
-void ExperienceTracker::gainGrades( Int grades )
-{
-	// a unit of no side in the ladder (a mod faction, a civilian) has no grades to gain
-	const RankLadder *ladder = TheGlobalData->getRankLadder( m_parent->getTemplate() );
-	if (ladder == NULL)
-		return;
-	const Int grade = MIN( m_currentGrade + grades, ladder->m_pin[LEVEL_LAST] );
-	const Int experience = ladder->threshold( RankLadder::unitValue( m_parent->getTemplate() ), grade );
-	if (experience > m_currentExperience)
-		setExperienceAndLevel( experience );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -291,54 +246,32 @@ void ExperienceTracker::addExperiencePoints( Int experienceGain, Bool canScaleFo
 	if( !isTrainable() )
 		return; //safety
 
+	VeterancyLevel oldLevel = m_currentLevel;
+
 	Int amountToGain = experienceGain;
 	if ( canScaleForBonus )
 		amountToGain *= m_experienceScalar;
 
-	// on a rank ladder one gain, a kill or a heal, lifts one grade at most
-	const RankLadder *ladder = TheGlobalData->getRankLadder( m_parent->getTemplate() );
-	if( ladder )
-		amountToGain = ladder->clipGain( RankLadder::unitValue( m_parent->getTemplate() ), m_currentExperience, amountToGain );
 
-	applyExperience( m_currentExperience + amountToGain, TRUE );
-}
+	m_currentExperience += amountToGain;
 
-//-------------------------------------------------------------------------------------------------
-void ExperienceTracker::recomputeRank()
-{
-	const ThingTemplate *thing = m_parent->getTemplate();
-	const RankLadder *ladder = TheGlobalData->getRankLadder( thing );
-	if( ladder )
-	{
-		m_currentGrade = ladder->gradeOf( RankLadder::unitValue( thing ), m_currentExperience );
-		m_currentLevel = ladder->levelOf( m_currentGrade );
-		return;
-	}
-
-	m_currentGrade = 0;
 	Int levelIndex = 0;
 	while( ( (levelIndex + 1) < LEVEL_COUNT)
-		&&  m_currentExperience >= thing->getExperienceRequired(levelIndex + 1)
+		&&  m_currentExperience >= m_parent->getTemplate()->getExperienceRequired(levelIndex + 1)
 		)
 	{
 		// If there is a higher level to qualify for, and I qualify for it, advance the index
 		levelIndex++;
 	}
+
 	m_currentLevel = (VeterancyLevel)levelIndex;
-}
 
-//-------------------------------------------------------------------------------------------------
-void ExperienceTracker::applyExperience( Int experience, Bool provideFeedback )
-{
-	const VeterancyLevel oldLevel = m_currentLevel;
-	const Int oldGrade = m_currentGrade;
+	if( oldLevel != m_currentLevel )
+	{
+		// Edge trigger special level gain effects.
+		m_parent->onVeterancyLevelChanged( oldLevel, m_currentLevel );
+	}
 
-	m_currentExperience = experience;
-	recomputeRank();
-
-	// Edge trigger special level gain effects; a grade moving inside one level counts too.
-	if( oldLevel != m_currentLevel || oldGrade != m_currentGrade )
-		m_parent->onRankChanged( oldLevel, m_currentLevel, oldGrade, m_currentGrade, provideFeedback ); //<<== this may be a level lost
 }
 //-------------------------------------------------------------------------------------------------
 void ExperienceTracker::setExperienceAndLevel( Int experienceIn, Bool provideFeedback )
@@ -358,7 +291,27 @@ void ExperienceTracker::setExperienceAndLevel( Int experienceIn, Bool provideFee
 	if( !isTrainable() )
 		return; //safety
 
-	applyExperience( experienceIn, provideFeedback );
+	VeterancyLevel oldLevel = m_currentLevel;
+
+	m_currentExperience = experienceIn;
+
+	Int levelIndex = 0;
+	while( ( (levelIndex + 1) < LEVEL_COUNT)
+		&&  m_currentExperience >= m_parent->getTemplate()->getExperienceRequired(levelIndex + 1)
+		)
+	{
+		// If there is a level to qualify for, and I qualify for it, advance the index
+		levelIndex++;
+	}
+
+	m_currentLevel = (VeterancyLevel)levelIndex;
+
+	if( oldLevel != m_currentLevel )
+	{
+		// Edge trigger special level gain effects.
+		m_parent->onVeterancyLevelChanged( oldLevel, m_currentLevel, provideFeedback ); //<<== paradox! this may be a level lost!
+	}
+
 }
 
 //-----------------------------------------------------------------------------
@@ -405,13 +358,6 @@ void ExperienceTracker::xfer( Xfer *xfer )
 
 	// current experience
 	xfer->xferInt( &m_currentExperience );
-
-	// the grade is not saved; it follows from the experience
-	if( xfer->getXferMode() == XFER_LOAD )
-	{
-		const RankLadder *ladder = TheGlobalData->getRankLadder( m_parent->getTemplate() );
-		m_currentGrade = ladder ? ladder->gradeOf( RankLadder::unitValue( m_parent->getTemplate() ), m_currentExperience ) : 0;
-	}
 
 	// experience sink
 	xfer->xferObjectID( &m_experienceSink );

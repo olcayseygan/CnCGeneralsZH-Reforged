@@ -63,7 +63,6 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/DamageModule.h"
 #include "GameLogic/Module/DieModule.h"
-#include "GameLogic/Module/StealthUpdate.h"
 
 
 #ifdef _INTERNAL
@@ -402,9 +401,9 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 		{
 			if( !damageInfo->in.m_kill )
 			{
+				// Healing and Damage are separate, so this shouldn't happen
 				// A healing weapon's amount is flat; the one healed takes his own handicap, never the healer's.
 				damageInfo->in.m_amount *= getObject()->getHandicapHealthFactor();
-				// Healing and Damage are separate, so this shouldn't happen
 				attemptHealing( damageInfo );
 			}
 			return;
@@ -564,8 +563,6 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 			// Apply the damage scalar (extra bonuses -- like strategy center defensive battle plan)
 			// And remember not to adjust unresistable damage, just like the armor code can't.
 			amount *= m_damageScalar;
-			// a leader's guard aura, a fallen leader's rally, a rank's guard standing still
-			amount *= obj->getRankDamageTakenScalar();
 		}
 
 		// one hit kill: anything that got through the armour at all takes the whole bar
@@ -627,20 +624,7 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 		// remember which enemy took how much health off, for splitting the kill (Object::scoreTheKill)
 		if( !alreadyHandled && damageInfo->out.m_actualDamageClipped > 0.0f && damager && damager != obj
 				&& damager->getRelationship( obj ) == ENEMIES )
-		{
 			obj->getExperienceTracker()->recordDamage( damager->getID(), REAL_TO_INT_CEIL( damageInfo->out.m_actualDamageClipped ) );
-
-			// a designator's hit marks what it hurt: everyone shooting at it fires faster (GameData's
-			// TARGET_FAERIE_FIRE), and a mark that reveals shows a stealthed target for as long
-			const Real markSeconds = damager->getRankPerk( RANK_PERK_DESIGNATE );
-			if( markSeconds > 0.0f && m_currentHealth > 0.0f )
-			{
-				const UnsignedInt markFrames = REAL_TO_UNSIGNEDINT( markSeconds * LOGICFRAMES_PER_SECOND );
-				obj->doStatusDamage( OBJECT_STATUS_FAERIE_FIRE, markFrames );
-				if( obj->getStealth() && damager->getRankPerk( RANK_PERK_DESIGNATE_REVEAL ) > 0.0f )
-					obj->getStealth()->markAsDetected( markFrames );
-			}
-		}
 
 		// then copy the whole DamageInfo struct for easy lookup 
 		// (object pointer loses scope as soon as atteptdamage's caller ends)
@@ -1585,8 +1569,18 @@ void ActiveBody::onVeterancyLevelChanged( VeterancyLevel oldLevel, VeterancyLeve
 		} );
 	}
 
-	// the health bonus moves with the grade as well as the level, so Object::onRankChanged scales max
-	// health for both
+	Real oldBonus = TheGlobalData->m_healthBonus[oldLevel];
+	Real newBonus = TheGlobalData->m_healthBonus[newLevel];
+	Real mult = newBonus / oldBonus;
+
+	// get this before calling setMaxHealth, since it can clip curHealth
+	//Real newHealth = m_currentHealth * mult;
+
+	// change the max
+	setMaxHealth(m_maxHealth * mult, PRESERVE_RATIO );
+
+	// now change the cur (setMaxHealth now handles it)
+	//internalChangeHealth( newHealth - m_currentHealth );
 
 	switch (newLevel)
 	{

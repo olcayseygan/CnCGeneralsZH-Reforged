@@ -65,8 +65,7 @@ UpdateSleepTime SubdualDamageHelper::update()
 
 	DamageInfo removeSubdueDamage;
 	removeSubdueDamage.in.m_damageType = DAMAGE_SUBDUAL_UNRESISTABLE;
-	// a steady aura on it wears the subdual off 1 / (1 - steady) as fast
-	removeSubdueDamage.in.m_amount = -body->getSubdualDamageHealAmount() / ( 1.0f - getObject()->getRankAura( RANK_AURA_STEADY ) );
+	removeSubdueDamage.in.m_amount = -body->getSubdualDamageHealAmount();
 	body->attemptDamage(&removeSubdueDamage);
 
 	if( body->hasAnySubdualDamage() )

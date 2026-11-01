@@ -48,7 +48,6 @@
 #include "Common/LatchRestore.h"
 #include "Common/MapObject.h"
 #include "Common/MatchHistory.h"
-#include "Common/MiscAudio.h"
 #include "Common/MultiplayerSettings.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
@@ -72,7 +71,6 @@
 
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
-#include "GameClient/Eva.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GUICallbacks.h"
@@ -99,7 +97,6 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
-#include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/DestroyModule.h"
 #include "GameLogic/Module/OpenContain.h"
@@ -4081,120 +4078,6 @@ static void unitTimings(void)
 }
 #endif
 
-//-------------------------------------------------------------------------------------------------
-/** The rank auras (docs/plans/RANK-LADDER.md in the wrapper), each object on its own frame of the second
-	* (oncePerSecondTurn), so a late game's leaders do not all walk the object list on one frame.  A
-	* leader's turn writes its strength into the gathered slots of the friendly units within
-	* its radius, keeping the larger, so three leaders of one kind give the strongest one's and the
-	* order of the turns does not matter.  A unit's own turn takes what was gathered since its last one,
-	* every leader's once, as what it holds.  A leader never reaches itself; each kind has its own
-	* radius, and reaches units, only infantry, or units and buildings as its line says.  The DETECT perk
-	* works here too: a stealthed enemy within its radius stays detected until the leader's next turn.
-	* A unit whose sight moved looks again, one whose pace moved takes its new speed, and a drill aura
-	* teaches. */
-//-------------------------------------------------------------------------------------------------
-static void rankAuraTake( Object *obj )
-{
-	const Real sightBefore = obj->getRankSightScalar();
-	Real before[ RANK_AURA_PASSED ];
-	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-		before[ aura ] = obj->getRankAura( (RankAura)aura );
-	obj->takeGatheredRankAuras();
-
-	// a unit that came into or left a leader's reach logs what it holds now
-	Bool moved = FALSE;
-	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-		moved = moved || obj->getRankAura( (RankAura)aura ) != before[ aura ];
-	if( moved )
-		DEBUG_LOG(("RANK AURA frame=%d id=%d template=%s grade=%d rof=%.2f sight=%.2f guard=%.2f range=%.2f"
-			" mend=%.4f pace=%.2f drill=%.0f steady=%.2f capture=%.2f spoils=%.2f\n",
-			TheGameLogic->getFrame(), obj->getID(), obj->getTemplate()->getName().str(), obj->getRankGrade(),
-			obj->getRankAura( RANK_AURA_RATE_OF_FIRE ), obj->getRankAura( RANK_AURA_SIGHT ),
-			obj->getRankAura( RANK_AURA_GUARD ), obj->getRankAura( RANK_AURA_RANGE ),
-			obj->getRankAura( RANK_AURA_MEND ), obj->getRankAura( RANK_AURA_PACE ), obj->getRankAura( RANK_AURA_DRILL ),
-			obj->getRankAura( RANK_AURA_STEADY ), obj->getRankAura( RANK_AURA_CAPTURE ), obj->getRankAura( RANK_AURA_SPOILS )));
-	obj->onRankSightChanged( sightBefore );
-	if( obj->getRankAura( RANK_AURA_PACE ) != before[ RANK_AURA_PACE ] && obj->getAIUpdateInterface() )
-		obj->getAIUpdateInterface()->refreshVeterancySpeed();
-
-	// a drill aura teaches a unit of a ladder up to its cap, through the one-grade clip; one that
-	// passes its points on (a pilot's sink) learns nothing here
-	const Int drillCap = REAL_TO_INT_FLOOR( obj->getRankAura( RANK_AURA_DRILL ) );
-	const RankLadder *drillLadder = drillCap > 0 ? TheGlobalData->getRankLadder( obj->getTemplate() ) : NULL;
-	ExperienceTracker *tracker = obj->getExperienceTracker();
-	if( drillLadder && !obj->isEffectivelyDead() && tracker->isTrainable() && tracker->getExperienceSink() == INVALID_ID )
-	{
-		const Int gain = drillLadder->drillGain( RankLadder::unitValue( obj->getTemplate() ), tracker->getCurrentExperience(),
-																				drillCap, TheGlobalData->m_rankDrillRate );
-		if( gain > 0 )
-			tracker->addExperiencePoints( gain, FALSE );
-	}
-}
-
-static void rankAuraGive( Object *leader )
-{
-	const RankLadder *ladder = TheGlobalData->getRankLadder( leader->getTemplate() );
-	// a leader inside a building, a bunker or a transport leads nobody and spots nothing
-	if( ladder == NULL || leader->isEffectivelyDead() || leader->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
-			|| leader->getContainedBy() )
-		return;
-	const Int grade = leader->getRankGrade();
-	Real strength[ RANK_AURA_PASSED ], radiusSqr[ RANK_AURA_PASSED ];
-	RankReach reach[ RANK_AURA_PASSED ];
-	Bool gives = FALSE;
-	for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-	{
-		strength[ aura ] = ladder->aura( grade, (RankAura)aura );
-		const Real radius = ladder->auraRadius( grade, (RankAura)aura );
-		radiusSqr[ aura ] = radius * radius;
-		reach[ aura ] = ladder->auraReach( grade, (RankAura)aura );
-		gives = gives || strength[ aura ] > 0.0f;
-	}
-	gives = gives && leader->leadsRankAuras();
-	const Real detect = ladder->perk( grade, RANK_PERK_DETECT );
-	if( !gives && detect <= 0.0f )
-		return;
-
-	const Coord3D *at = leader->getPosition();
-	for( Object *other = TheGameLogic->getFirstObject(); other; other = other->getNextObject() )
-	{
-		if( other == leader || other->isEffectivelyDead() || other->getContainedBy() )
-			continue;
-		const Real dx = other->getPosition()->x - at->x, dy = other->getPosition()->y - at->y;
-		const Real distSqr = dx * dx + dy * dy;
-		if( detect > 0.0f && distSqr <= detect * detect && other->getStealth()
-				&& other->testStatus( OBJECT_STATUS_STEALTHED ) && leader->getRelationship( other ) == ENEMIES )
-		{
-			// a fresh find pings the leader's owner the way StealthDetectorUpdate does, after the tick
-			if( !other->testStatus( OBJECT_STATUS_DETECTED ) && ThePlayerList->getLocalPlayer() == leader->getControllingPlayer() )
-			{
-				const Coord3D found = *other->getPosition();
-				const Int playerIndex = leader->getControllingPlayer()->getPlayerIndex();
-				const EvaMessage message = other->getStealth()->getEnemyDetectionEvaEvent();
-				LogicThread::callAfterTick( [found, playerIndex, message]()
-				{
-					if( !TheRadar->tryEvent( RADAR_EVENT_STEALTH_DISCOVERED, &found ) )
-						return;
-					static AudioEventRTS discoveredSound = TheAudio->getMiscAudio()->m_stealthDiscoveredSound;
-					discoveredSound.setPlayerIndex( playerIndex );
-					TheAudio->addAudioEvent( &discoveredSound );
-					TheInGameUI->message( TheGameText->fetch( "MESSAGE:StealthDiscovered" ) );
-					if( message != EVA_Invalid && TheEva != NULL )
-						TheEva->setShouldPlay( message );
-				} );
-			}
-			other->getStealth()->markAsDetected( LOGICFRAMES_PER_SECOND + 1 );
-		}
-		if( !gives || leader->getRelationship( other ) != ALLIES )
-			continue;
-		const Bool structure = other->isKindOf( KINDOF_STRUCTURE ), infantry = other->isKindOf( KINDOF_INFANTRY );
-		for( Int aura = 0; aura < RANK_AURA_PASSED; ++aura )
-			if( strength[ aura ] > 0.0f && distSqr <= radiusSqr[ aura ]
-					&& ( structure ? reach[ aura ] == RANK_REACH_STRUCTURES : reach[ aura ] != RANK_REACH_INFANTRY || infantry ) )
-				other->raiseRankAura( (RankAura)aura, strength[ aura ] );
-	}
-}
-
 DECLARE_PERF_TIMER(GameLogic_update)
 DECLARE_PERF_TIMER(GameLogic_update_normal)
 DECLARE_PERF_TIMER(GameLogic_update_sleepy)
@@ -4792,28 +4675,6 @@ static void salvageCrateCall( Object *crate )
 	 same turns on the same frames. */
 static void oncePerSecondTurn( Object *obj )
 {
-	rankAuraTake( obj );
-	rankAuraGive( obj );
-
-	// Faction veterancy's self-repair (GLA): a ranked unit that has gone unhurt for the Veterancy
-	// block's SelfRepairDelay heals its side's share of its max health.  Healing itself earns it
-	// nothing (Object::scoreTheHeal).
-	// A grade's MEND perk is the same heal at its own rate.  A leader's mend aura heals at once, hurt
-	// recently or not, and a unit takes the larger of the two.
-	const UnsignedInt now = TheGameLogic->getFrame();
-	const Real self = MAX( TheGlobalData->getRankStat( obj->getTemplate(), obj->getRankGrade(), RANK_STAT_SELF_REPAIR ),
-												 obj->getRankPerk( RANK_PERK_MEND ) );
-	const Real aura = obj->getRankAura( RANK_AURA_MEND );
-	if( ( self > 0.0f || aura > 0.0f ) && !obj->isEffectivelyDead() )
-	{
-		const BodyModuleInterface *body = obj->getBodyModule();
-		const UnsignedInt lastHurt = body->getLastDamageTimestamp();
-		const Bool resting = !( lastHurt <= now && now - lastHurt < TheGlobalData->m_veterancySelfRepairDelay );
-		const Real share = MAX( aura, resting ? self : 0.0f );
-		if( share > 0.0f && body->getHealth() < body->getMaxHealth() )
-			obj->attemptHealing( body->getMaxHealth() * share, obj );
-	}
-
 	neutralBuildingRepair( obj );
 	salvageCrateCall( obj );
 }

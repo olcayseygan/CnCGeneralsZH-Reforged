@@ -46,7 +46,6 @@ class VeterancyGainCreateModuleData : public CreateModuleData
 public:
 	VeterancyLevel m_startingLevel;			///< Level to set Object at
 	ScienceType m_scienceRequired;			///< The science you must have to trigger this
-	Int m_startingGrades;								///< on a rank ladder, grades given in place of StartingLevel; 0 lands on the level's pin
 
 	VeterancyGainCreateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

@@ -880,7 +880,7 @@ public:
 
 	Real getCashBounty() const { return m_cashBountyPercent; }
 	void setCashBounty(Real percentage) { m_cashBountyPercent = percentage; }
-	void doBountyForKill(const Object* killer, const Object* victim, Real rankShare);	///< the bounty science's share plus the killer's rank share of the victim's cost
+	void doBountyForKill(const Object* killer, const Object* victim);
 
 	AcademyStats* getAcademyStats() { return &m_academyStats; }
 	const AcademyStats* getAcademyStats() const { return &m_academyStats; }

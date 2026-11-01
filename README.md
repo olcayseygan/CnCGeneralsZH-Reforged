@@ -50,7 +50,6 @@ to the same checksum, and a Mac and a Linux PC have played a LAN match without o
 | A tank shell on a soldier | 6 damage, 30 hits to kill a Ranger | 60 damage, three hits | 3.2.0 |
 | A Raptor's half circle at cruise | `1.7 s`, sliding sideways | `3.2 s`, banked | 3.2.0 |
 | A kill's veterancy | all of it to the last shot | a quarter to the last shot, the rest shared by damage done in the last ten seconds | 2.4.0 |
-| Ranks | three chevrons on every side | USA 28 grades, China 19, GLA 20 | `main` |
 | Maps a network room lists | 100, and 300 in skirmish | 4,096 | `main` |
 | First toxin cloud on a fresh install | a `3.5 s` freeze | no freeze, its shaders ship with the game | `main` |
 | First superweapon strike on a fresh install | a `110` to `130 ms` hitch each | none | `main` |
@@ -104,7 +103,6 @@ yet. [CHANGELOG.md](CHANGELOG.md) has the measurements behind every line.
 | A jet shot down hits for 80 where it lands, 160 for a B-52 or a cargo plane, and leaves fire for about six seconds; its owner and allies are spared | 3.2.0 |
 | A tank shell that hits a soldier does the 60 it does to a tank, where it did 6 | 3.2.0 |
 | Missiles weave a few degrees in flight, the weave fading as they close in | 3.2.0 |
-| A rank ladder for every army: 28 American grades from E-1 Private to General of the Army, 19 Chinese, 20 GLA, each with its insignia beside the health bar; the top is 120 kills of a unit like your own | `main` |
 | A hacker left without orders for ten seconds walks into an Internet Center with a free seat or opens its laptop where it stands | `main` |
 
 ### The computer opponent
@@ -480,7 +478,7 @@ them, and any source change separates them.
 - The Windows ARM64 build has not run on an ARM64 machine, and the macOS and Linux packages carry no
   upscaled art. A match between Windows and a Mac has not been played.
 - Replays and mid-match saves from before 3.0.0's 60-step battle do not load. Replays recorded before
-  the rank ladder and the other `main` changes to the battle play out differently.
+  the `main` changes to the battle play out differently.
 - SafeDisc stays stubbed.
 
 ## Help out

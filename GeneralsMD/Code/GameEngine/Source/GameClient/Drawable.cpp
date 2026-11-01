@@ -309,15 +309,6 @@ const Int MAX_ENABLED_MODULES								= 16;
 /*static*/ Int							Drawable::s_modelLockCount = 0;
 #endif
 
-/// Each ladder grade's insignia, Rank<Side>_<n> in ReforgedRanks<Side>.ini; NULL for a grade drawn bare
-/// (America's E-1)
-static const Image* s_rankInsignia[VETERANCY_SIDE_COUNT][RANK_GRADES_MAX + 1];
-
-/// An insignia drawn beside a health bar holds its DisplayHeight (12 unless its cell says otherwise)
-/// and lets its width follow, up to half again that height: wider marks made the bar look heavy
-static const Int RANK_INSIGNIA_DEFAULT_HEIGHT = 12;
-static const Real RANK_INSIGNIA_MAX_ASPECT = 1.5f;
-
 // ------------------------------------------------------------------------------------------------
 /*static*/ void Drawable::initStaticImages()
 {
@@ -328,15 +319,6 @@ static const Real RANK_INSIGNIA_MAX_ASPECT = 1.5f;
  	s_veterancyImage[1] = TheMappedImageCollection->findImageByName("SCVeter1");
 	s_veterancyImage[2] = TheMappedImageCollection->findImageByName("SCVeter2");
 	s_veterancyImage[3] = TheMappedImageCollection->findImageByName("SCVeter3");
-	for( Int side = 0; side < VETERANCY_SIDE_COUNT; ++side )
-	{
-		for( Int insignia = 0; insignia <= RANK_GRADES_MAX; ++insignia )
-		{
-			AsciiString name;
-			name.format( "Rank%s_%d", TheVeterancySideNames[ side ], insignia );
-			s_rankInsignia[ side ][ insignia ] = TheMappedImageCollection->findImageByName( name );
-		}
-	}
 
 	s_fullAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoFull");
 	s_emptyAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoEmpty");
@@ -4803,11 +4785,8 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 		return;
 	}
 
-	// a unit on a rank ladder wears its grade's insignia, a grade with no insignia nothing; anyone else
-	// EA's chevron for the level
-	const RankLadder *ladder = TheGlobalData->getRankLadder( obj->getTemplate() );
 	VeterancyLevel level = obj->getVeterancyLevel();
-	const Image* image = ( ladder && !TheGlobalData->m_classicGraphics ) ? getRankInsignia( obj ) : s_veterancyImage[level];
+	const Image* image = s_veterancyImage[level];
 	if (!image)
 		return;
 
@@ -4839,85 +4818,10 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 
 	screenCenter.x += healthBoxWidth * scale * 0.5f;
 
-	// the insignia in line with the bar, just past its right end and centred on it: the ammo and
-	// passenger pips start from the left end, and hanging under the bar it read as part of the unit
-	if( ladder && !TheGlobalData->m_classicGraphics )
-	{
-		Int left = screenCenter.x + 2;
-		Int middle = screenCenter.y;
-		if( healthBarRegion )
-		{
-			left = healthBarRegion->hi.x + 2;
-			middle = ( healthBarRegion->lo.y + healthBarRegion->hi.y ) / 2;
-		}
-		// image is the grade's insignia already (getRankInsignia), so it is drawn as drawRankInsignia would
-		Int width, height;
-		rankInsigniaSize( image, 1.0f, &width, &height );
-		const Int top = middle - height / 2;
-		TheDisplay->drawImage( image, left, top, left + width, top + height, GameMakeColor( 255, 255, 255, 255 ) );
-		return;
-	}
-
 	// draw the image
 	TheDisplay->drawImage(image, screenCenter.x + 1, screenCenter.y + 1, screenCenter.x + 1 + vetBoxWidth, screenCenter.y + 1 + vetBoxHeight);
 
 }  // end drawVeterancy
-
-// ------------------------------------------------------------------------------------------------
-/*static*/ const Image *Drawable::getRankInsignia( const ThingTemplate *thing, Int insignia )
-{
-	const VeterancySide side = GlobalData::veterancySideOf( thing );
-	if( side == VETERANCY_SIDE_NONE || insignia < 0 || insignia > RANK_GRADES_MAX )
-		return NULL;
-	return s_rankInsignia[ side ][ insignia ];
-}
-
-// ------------------------------------------------------------------------------------------------
-/** The insignia an object wears now, NULL for none: every unit starts unranked and bare, so grade 0
-	* draws nothing on any side, and neither does anything that cannot climb (a structure, or an object
-	* without a trainable tracker). The bar, the portrait and the promotion float all ask here. */
-// ------------------------------------------------------------------------------------------------
-/*static*/ const Image *Drawable::getRankInsignia( const Object *obj )
-{
-	const RankLadder *ladder = TheGlobalData->getRankLadder( obj->getTemplate() );
-	const ExperienceTracker *tracker = obj->getExperienceTracker();
-	if( ladder == NULL || tracker == NULL || !tracker->isTrainable() || obj->isKindOf( KINDOF_STRUCTURE ) || obj->getRankGrade() <= 0 )
-		return NULL;
-	return getRankInsignia( obj->getTemplate(), ladder->insigniaIndex( obj->getRankGrade(), obj->isKindOf( KINDOF_HERO ) ) );
-}
-
-// ------------------------------------------------------------------------------------------------
-/*static*/ void Drawable::rankInsigniaSize( const Image *image, Real scale, Int *width, Int *height )
-{
-	const Real high = ( image->getDisplayHeight() > 0 ? image->getDisplayHeight() : RANK_INSIGNIA_DEFAULT_HEIGHT ) * scale;
-	Real wide = high * image->getImageWidth() / image->getImageHeight();
-	Real tall = high;
-	if( wide > high * RANK_INSIGNIA_MAX_ASPECT )
-	{
-		tall = high * high * RANK_INSIGNIA_MAX_ASPECT / wide;
-		wide = high * RANK_INSIGNIA_MAX_ASPECT;
-	}
-	*width = REAL_TO_INT( wide );
-	*height = REAL_TO_INT( tall );
-}
-
-// ------------------------------------------------------------------------------------------------
-/** One grade's insignia, cropped to its ink in the atlas: drawn beside the health bar and floating up
-	* over a unit the moment it gains the grade. */
-// ------------------------------------------------------------------------------------------------
-/*static*/ Bool Drawable::drawRankInsignia( const ThingTemplate *thing, Int insignia, Int x, Int top, Bool centred, Real scale, Color color )
-{
-	const Image *image = getRankInsignia( thing, insignia );
-	if( image == NULL )
-		return FALSE;
-
-	Int width, height;
-	rankInsigniaSize( image, scale, &width, &height );
-	if( centred )
-		x -= width / 2;
-	TheDisplay->drawImage( image, x, top, x + width, top + height, color );
-	return TRUE;
-}
 
 // ------------------------------------------------------------------------------------------------
 /** The capture clock, drawn under the health bar of the building being taken.

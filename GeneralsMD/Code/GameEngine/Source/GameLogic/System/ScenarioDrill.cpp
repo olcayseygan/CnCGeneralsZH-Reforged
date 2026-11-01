@@ -252,8 +252,6 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_REPEAT;
 	else if (token == "givemoney")
 		*action = SCENARIO_ACTION_GIVEMONEY;
-	else if (token == "rank")
-		*action = SCENARIO_ACTION_RANK;
 	else if (token == "reachproof")
 		*action = SCENARIO_ACTION_REACHPROOF;
 	else if (token == "topup")
@@ -358,7 +356,6 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_PRODUCE:			return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_REPEAT:			return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_GIVEMONEY:		return SCENARIO_TOKENS_STANCE;
-		case SCENARIO_ACTION_RANK:				return SCENARIO_TOKENS_STANCE;
 		case SCENARIO_ACTION_REACHPROOF:	return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_STOP:				return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_CLICKSTOP:		return SCENARIO_TOKENS_STOP;
@@ -503,21 +500,6 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_STANCE:
 			action->name = tokens[ SCENARIO_STANCE_NAME_TOKEN ];
 			if (action->name != "aggressive" && action->name != "defensive")
-				return SCENARIO_PARSE_BAD_ACTION;
-			break;
-
-		case SCENARIO_ACTION_RANK:
-			action->name = tokens[ SCENARIO_STANCE_NAME_TOKEN ];
-			// xp N: N same-class kills of experience; grade N: the ladder's grade N
-			if (action->name == "xp" || action->name == "grade")
-			{
-				if (count <= SCENARIO_STANCE_NAME_TOKEN + 1)
-					return SCENARIO_PARSE_MISSING_ARGS;
-				if (!parseWholeNumber( tokens[ SCENARIO_STANCE_NAME_TOKEN + 1 ], &action->count ))
-					return SCENARIO_PARSE_BAD_COUNT;
-				break;
-			}
-			if (action->name != "veteran" && action->name != "elite" && action->name != "heroic")
 				return SCENARIO_PARSE_BAD_ACTION;
 			break;
 
@@ -1955,32 +1937,6 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 			DEBUG_LOG(("SCENARIO: frame %d reaim slot %d '%s' x%d at (%.0f,%.0f)\n",
 								 action.frame, action.slot, action.selector.str(), taken, dest.x, dest.y));
 			return TRUE;
-		}
-
-		case SCENARIO_ACTION_RANK:
-		{
-			const VeterancyLevel level = action.name == "veteran" ? LEVEL_VETERAN
-																 : action.name == "elite" ? LEVEL_ELITE : LEVEL_HEROIC;
-			const VecObjectID &ids = group->getAllIDs();
-			for (VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it)
-			{
-				Object *obj = TheGameLogic->findObjectByID( *it );
-				ExperienceTracker *tracker = obj->getExperienceTracker();
-				const RankLadder *ladder = TheGlobalData->getRankLadder( obj->getTemplate() );
-				const Int unitValue = RankLadder::unitValue( obj->getTemplate() );
-				if (action.name == "xp")
-					tracker->setExperienceAndLevel( action.count * unitValue );
-				else if (action.name == "grade" && ladder)
-					tracker->setExperienceAndLevel( ladder->threshold( unitValue, action.count ) );
-				else if (action.name != "grade")
-					tracker->setVeterancyLevel( level );
-				DEBUG_LOG(("SCENARIO: frame %d rank slot %d '%s' %s xp=%d grade=%d level=%d\n", action.frame, action.slot,
-									 obj->getTemplate()->getName().str(), action.name.str(), tracker->getCurrentExperience(),
-									 tracker->getGrade(), (Int)tracker->getVeterancyLevel()));
-			}
-			DEBUG_LOG(("SCENARIO: frame %d rank slot %d '%s' x%d %s %d\n",
-								 action.frame, action.slot, action.selector.str(), taken, action.name.str(), action.count));
-			break;
 		}
 
 		case SCENARIO_ACTION_STOP:

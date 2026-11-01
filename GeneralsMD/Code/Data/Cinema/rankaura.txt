@@ -1,6 +1,0 @@
-# Scenarios/rankaura.txt: the Albay Altay's two aura rings, radius 150, under a played seat 0
-# with the Altay selected by a -control click at the screen centre. hud on keeps the selection
-# and the rings. Zoom 0.55 relative put 100 world units at about 1090 px, the ring off frame.
-
-0.0   hud     on
-0.3   cut     3450 3640 1.8 0 0

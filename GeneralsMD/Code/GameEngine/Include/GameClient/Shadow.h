@@ -179,8 +179,8 @@ inline void Shadow::setOpacity(Int value)
 		{
 			Real fvalue=(Real)m_opacity/255.0f;
 			m_diffuse=REAL_TO_INT(((Real)(m_color & 0xff) * fvalue))
-					|(REAL_TO_INT(((Real)((m_color >> 8) & 0xff) * fvalue)) << 8)
-					|(REAL_TO_INT(((Real)((m_color >> 16) & 0xff) * fvalue)) << 16);
+					|REAL_TO_INT(((Real)((m_color >> 8) & 0xff) * fvalue))
+					|REAL_TO_INT(((Real)((m_color >> 16) & 0xff) * fvalue));
 		}
 	}
 }
@@ -199,8 +199,8 @@ inline void Shadow::setColor(Color value)
 		{
 			Real fvalue=(Real)m_opacity/255.0f;
 			m_diffuse=REAL_TO_INT(((Real)(m_color & 0xff) * fvalue))
-					|(REAL_TO_INT(((Real)((m_color >> 8) & 0xff) * fvalue)) << 8)
-					|(REAL_TO_INT(((Real)((m_color >> 16) & 0xff) * fvalue)) << 16);
+					|REAL_TO_INT(((Real)((m_color >> 8) & 0xff) * fvalue))
+					|REAL_TO_INT(((Real)((m_color >> 16) & 0xff) * fvalue));
 		}
 	}
 }

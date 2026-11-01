@@ -85,7 +85,6 @@ public:
 	ExperienceTracker(Object *parent);
 
 	VeterancyLevel getVeterancyLevel() const { return m_currentLevel; }			///< What level am I?
-	Int getGrade() const { return m_currentGrade; }													///< my grade on my side's rank ladder; 0 without one
 	Int getExperienceValue( const Object* killer ) const;										///< How much do give for being killed
 	Int getCurrentExperience( void ) const { return m_currentExperience; };	///< How much experience do I have at the moment?
 	Bool isTrainable() const;																						///< Can I gain experience?
@@ -94,12 +93,8 @@ public:
 	void setVeterancyLevel( VeterancyLevel newLevel, Bool provideFeedback = TRUE );						///< Set Level to this
 	void setMinVeterancyLevel( VeterancyLevel newLevel );					///< Set Level to AT LEAST this... if we are already >= this level, do nothing.
 	void addExperiencePoints( Int experienceGain, Bool canScaleForBonus = TRUE );	///< Gain this many exp.
-	/** Gain enough exp to gain a level. return false if can't gain a level.  On a rank ladder a crate
-		* gives CrateGrades grades a level, up to the Heroic pin, and byLevel (a pilot's own levels) lands
-		* on the pin of the summed level. */
-	Bool gainExpForLevel(Int levelsToGain, Bool canScaleForBonus = TRUE, Bool byLevel = FALSE );
+	Bool gainExpForLevel(Int levelsToGain, Bool canScaleForBonus = TRUE );			  ///< Gain enough exp to gain a level. return false if can't gain a level.
 	Bool canGainExpForLevel(Int levelsToGain) const;															///< return same value as gainExpForLevel, but don't change anything
-	void gainGrades( Int grades );																							///< on a rank ladder, this many grades up, never past the Heroic pin; nothing without one
 	void setExperienceAndLevel(Int experienceIn, Bool provideFeedback = TRUE );
 	void setExperienceSink( ObjectID sink );											///< My experience actually goes to this person (loose couple)
 
@@ -117,14 +112,8 @@ public:
 	void loadPostProcess( void );
 
 private:
-	/** Set the experience, derive the grade and level from it (the ladder's, or EA's thresholds), and
-		* tell the object when either moved.  Nothing clips here; addExperiencePoints does. */
-	void applyExperience( Int experience, Bool provideFeedback );
-	void recomputeRank();																			///< m_currentGrade and m_currentLevel from m_currentExperience
-
 	Object*						m_parent;														///< Object I am owned by
 	VeterancyLevel		m_currentLevel;											///< Level of experience
-	Int								m_currentGrade;											///< grade on the side's rank ladder, from m_currentExperience; not saved
 	Int								m_currentExperience;								///< Number of experience points
 	ObjectID					m_experienceSink;										///< ID of object I have pledged my experience point gains to
 	Real							m_experienceScalar;									///< Scales any experience gained by this multiplier.

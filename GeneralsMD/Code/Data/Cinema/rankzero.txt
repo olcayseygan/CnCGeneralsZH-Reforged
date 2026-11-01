@@ -1,9 +1,0 @@
-# Scenarios/rankzero.txt: the four structures and the unranked units between them, HUD on so the
-# health bars draw. Run with a -video range so this clock is the logic frame over 60; the units
-# start east at 2.0 s.
-
-0.0   hud     on
-0.5   cut     3480 3920 1.3 0 0
-4.5   shot
-4.6   cut     3520 3930 0.8 0 0
-5.2   shot

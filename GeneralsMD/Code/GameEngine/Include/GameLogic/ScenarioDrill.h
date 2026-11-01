@@ -94,7 +94,6 @@ enum ScenarioActionType
 	SCENARIO_ACTION_RESPOND,					///< respond <slot> <selector> <position>; from now, how long each unit takes to point its gun at the position, fire with it pointed there, and get closer to it
 	SCENARIO_ACTION_GUARD,						///< guard <slot> <selector> <targetSlot> <targetSelector>; a guard order on one object, as a script gives it
 	SCENARIO_ACTION_REPEAT,						///< repeat <slot> <building> <template> on|off; the Ctrl+Alt build key, as MSG_SET_REPEAT_UNIT onto the message stream
-	SCENARIO_ACTION_RANK,							///< rank <slot> <selector> veteran|elite|heroic|xp N|grade N; a level as the rank cheat sets it (a ladder's pin), N same-class kills of experience, or a ladder grade
 	SCENARIO_ACTION_GIVEMONEY,				///< givemoney <slot> <targetSlot> <amount>; the Tab screen's Send, as MSG_TRANSFER_MONEY onto the message stream
 	SCENARIO_ACTION_CLICKSTOP,				///< clickstop <slot> <selector>; the Stop key, the group idle MSG_DO_STOP gives (CMD_FROM_PLAYER)
 	SCENARIO_ACTION_REACHPROOF,				///< reachproof <slot> <selector> <targetSlot> <probe> [samples]; every matching defence's reach overlay against the logic, the probe stood on each sample point (ReachOverlay_prove)

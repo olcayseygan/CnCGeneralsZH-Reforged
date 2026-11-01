@@ -8,6 +8,13 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## EA's four ranks are back
+
+- The rank ladder is gone, every grade, perk and aura of it. A unit is Regular, Veteran, Elite or Heroic again, on the kills and the bonuses the 2003 game gave them, with EA's chevrons over the health bar and on the portrait. Six kills of its own kind make a Crusader Heroic, where an American one needed 66 on the ladder.
+- What EA built a level up is built a level up again. Red Guard Training makes a Veteran and Battlemaster Training an Elite, the Tank General's tanks and the Infantry General's men leave the factory Veteran, and the tooltips and general bios say so. A veterancy crate gives one whole level, and a hacker earns experience at EA's rate.
+- The rings under leaders went with it, and so did GLA's faster, self-mending veterans and each side's own bonus table. Turkiye, still an experiment, ranks up on EA's four levels too.
+- Replays recorded before this change play out differently.
+
 ## Five more colours
 
 - Crimson, Azure, Salmon, Teal and Lavender join the colour box in every room. EA's list stopped at eight, so the last player into a full room took the one colour left; now he has six to pick from, and everyone's old colours stay as they were. A replay recorded before this change, with a random colour in it, plays out differently.
@@ -2457,6 +2464,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
   shadow trees have now is the opposite trick, and cost about thirty lines: the batch of triangles
   the trees are already drawn from, drawn a second time with the tree laid flat on its own base and
   slid along the sun. The shape comes free because it is the same triangles and the same texture.
+- The rank ladder, 28 American grades and their like on the other sides with perks and auras, shipped in v3.3.0 and came out again in November 2026 on the owner's word. Its long climb starved everything EA hangs on the levels: the Heroic weapon sets, voices and crate rules waited for 50 to 66 kills where six used to do. The entries about it further up this page stay as the record of what it was.
 - A smoke and fire simulation was built on 28 to 30 October 2026, never reached a release and came out again. Smoke and flame ran as a moving body of air on the graphics card, and in a test fight of three nukes and a Scud Storm on an RTX 2060 the card's frame took 5.0 ms with it off, 9.9 on Low and 16.5 on High. The owner took it out for that cost, so the game keeps its sprites.
 - Search and destroy, the order on F that walked a group round a circle and left it guarding there, went out in v2.4.0 and is taken out again. An attack move and a guard do the same two halves with keys players already know, and the F place is back for the unit's own buttons. The Strategy Center's Search and Destroy battle plan is untouched.
 - Soldiers used to drop their posed shadow once the camera pulled far enough back to make each man a

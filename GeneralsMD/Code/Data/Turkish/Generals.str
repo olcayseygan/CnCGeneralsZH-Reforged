@@ -7366,7 +7366,7 @@ CONTROLBAR:ToolTipChinaScienceNukeCannon
 END
 
 CONTROLBAR:ToolTipChinaScienceRedGuardTraining
-"Tüm Kızıl Muhafızlar üç rütbe yukarıda, Onbaşı olarak üretilir"
+"Tüm Kızıl Muhafızlar kıdemli olarak üretilir"
 END
 
 CONTROLBAR:ToolTipChinaScienceClusterMines
@@ -7374,7 +7374,7 @@ CONTROLBAR:ToolTipChinaScienceClusterMines
 END
 
 CONTROLBAR:ToolTipChinaScienceARtilleryTraining
-"Nükleer Toplar ve Cehennem Topları üç rütbe yukarıda üretilir"
+"Nükleer Toplar ve Cehennem Topları kıdemli olarak üretilir"
 END
 
 CONTROLBAR:ToolTipChinaScienceArtilleryBarrage
@@ -7398,7 +7398,7 @@ CONTROLBAR:ToolTipGLaScienceMarauderTank
 END
 
 CONTROLBAR:ToolTipGLAScienceTechnicalTraining
-"Tüm Silahlı Pikaplar üç rütbe yukarıda üretilir"
+"Tüm Silahlı Pikaplar kıdemli olarak üretilir"
 END
 
 CONTROLBAR:ToolTipGLAScienceRebelAmbush
@@ -13218,7 +13218,7 @@ CONTROLBAR:ToolTipChinaScienceTankHunterTraining
 END
 
 CONTROLBAR:ToolTipChinaScienceBattlemasterTraining
-"Tüm Battlemaster'lar altı rütbe yukarıda üretilir"
+"Tüm Battlemaster'lar seçkin olarak üretilir"
 END
 
 CONTROLBAR:ToolTipChinaScienceOverlordTraining
@@ -13902,7 +13902,7 @@ SCIENCE:Infa_ChinaRedGuardTraining
 END
 
 CONTROLBAR:Infa_ToolTipChinaScienceRedGuardTraining
-"Tüm Minigun Erleri kıdemliden üç rütbe yukarıda üretilir"
+"Tüm Minigun Erleri Seçkin olarak üretilir"
 END
 
 CONTROLBAR:ToolTipChinaBuildNuclearMissileLauncherBoss
@@ -14362,7 +14362,7 @@ GUI:BioFeatures_Pos3
 END
 
 GUI:BioFeatures_Pos4
-"Emperor Tankı \n Tank İndirme \n Tüm tanklar üç rütbe yukarıda başlar \n Tanklar daha ucuz \n Hava araçları daha pahalı \n Nükleer Top ve Cehennem Topu yok"
+"Emperor Tankı \n Tank İndirme \n Tüm tanklar kıdemli başlar \n Tanklar daha ucuz \n Hava araçları daha pahalı \n Nükleer Top ve Cehennem Topu yok"
 END
 
 GUI:BioFeatures_Pos5
@@ -14374,7 +14374,7 @@ GUI:BioFeatures_Pos6
 END
 
 GUI:BioFeatures_Pos7
-"Taarruz Birlik Taşıyıcısı \n Taarruz Helix'i \n Saldırı Karakolu \n Tahkimli Sığınaklar \n Minigun Eri \n Black Lotus daha hızlı hackler \n Hacker'lar daha hızlı hackler \n Minigun Eri İndirme \n Tüm piyadeler üç rütbe yukarıda başlar"
+"Taarruz Birlik Taşıyıcısı \n Taarruz Helix'i \n Saldırı Karakolu \n Tahkimli Sığınaklar \n Minigun Eri \n Black Lotus daha hızlı hackler \n Hacker'lar daha hızlı hackler \n Minigun Eri İndirme \n Tüm piyadeler kıdemli başlar"
 END
 
 GUI:BioFeatures_Pos8
@@ -16926,402 +16926,6 @@ END
 
 GUI:GraphNoData
 "Bu maçta hiçbir şey kaydedilmedi."
-END
-
-RANK:NextRank
-"Sonraki rütbe %d/%d XP"
-END
-
-RANK:PerkSIGHT
-"Görüş +%d%%"
-END
-
-RANK:PerkSTILL_GUARD
-"Dururken %d%% daha az hasar alır"
-END
-
-RANK:PerkMEND
-"Çatışma dışında saniyede %d.%02d%% iyileşir"
-END
-
-RANK:PerkSPOTTER
-"Topçuya gözcülük yapar"
-END
-
-RANK:PerkSCATTER
-"Topçu saçılması -%d%%"
-END
-
-RANK:PerkDEATH_RALLY
-"Düştüğünde yakındaki dostlar 10 saniye %d%% daha az hasar alır"
-END
-
-RANK:PerkDETECT
-"%d içindeki gizli birimleri görür"
-END
-
-RANK:PerkAURA_RADIUS
-"Aura menzili +%d%%"
-END
-
-RANK:PerkAURA_RATE_OF_FIRE
-"Aura: atış hızı +%d%%"
-END
-
-RANK:PerkAURA_SIGHT
-"Aura: görüş +%d%%"
-END
-
-RANK:PerkAURA_GUARD
-"Aura: %d%% daha az hasar"
-END
-
-RANK:PerkAURA_RANGE
-"Aura: topçu menzili +%d%%"
-END
-
-RANK:PerkRATE_OF_FIRE
-"Atış hızı +%d%%"
-END
-
-RANK:PerkRANGE
-"Menzil +%d%%"
-END
-
-RANK:PerkHEALTH
-"Can +%d%%"
-END
-
-RANK:PerkSPEED
-"Hız +%d%%"
-END
-
-RANK:PerkLAST_STAND
-"Canı 35%%'in altındayken atış hızı +%d%%"
-END
-
-RANK:PerkSCAVENGE
-"Öldürdükleri, kurbanın bedelinin %d%%'ini öder"
-END
-
-RANK:PerkDESIGNATE
-"Vurduğunu %d saniye işaretler: herkes ona 50%% daha hızlı ateş eder"
-END
-
-RANK:PerkDESIGNATE_REVEAL
-"İşareti gizli hedefleri açığa çıkarır"
-END
-
-RANK:PerkSALVAGE_CRATE
-"Düştüğünde hurda sandığı bırakır"
-END
-
-RANK:PerkAURA_MEND
-"Aura: saniyede %d.%02d%% iyileştirir"
-END
-
-RANK:PerkAURA_PACE
-"Aura: hız +%d%%"
-END
-
-RANK:PerkAURA_DRILL
-"Aura: birimleri %d. rütbeye kadar eğitir"
-END
-
-RANK:PerkAURA_STEADY
-"Aura: felç, EMP ve bastırma %d%% daha kısa"
-END
-
-RANK:PerkAURA_CAPTURE
-"Aura: binaları %d%% daha hızlı ele geçirir"
-END
-
-RANK:PerkAURA_SPOILS
-"Aura: yakındaki öldürmeler kurbanın bedelinin %d%%'ini öder"
-END
-
-RANK:America0
-"E-1 Er"
-END
-
-RANK:America1
-"E-2 Er"
-END
-
-RANK:America2
-"E-3 Birinci Sınıf Er"
-END
-
-RANK:America3
-"E-4 Uzman Er"
-END
-
-RANK:America4
-"E-4 Onbaşı"
-END
-
-RANK:America5
-"E-5 Çavuş"
-END
-
-RANK:America6
-"E-6 Kıdemli Çavuş"
-END
-
-RANK:America7
-"E-7 Birinci Sınıf Çavuş"
-END
-
-RANK:America8
-"E-8 Usta Çavuş"
-END
-
-RANK:America9
-"E-8 Bölük Başçavuşu"
-END
-
-RANK:America10
-"E-9 Başçavuş"
-END
-
-RANK:America11
-"E-9 Komuta Başçavuşu"
-END
-
-RANK:America12
-"E-9 Kara Kuvvetleri Başçavuşu"
-END
-
-RANK:America13
-"W-1 Teknik Subay"
-END
-
-RANK:America14
-"W-2 Kıdemli Teknik Subay"
-END
-
-RANK:America15
-"W-3 Kıdemli Teknik Subay"
-END
-
-RANK:America16
-"W-4 Kıdemli Teknik Subay"
-END
-
-RANK:America17
-"W-5 Kıdemli Teknik Subay"
-END
-
-RANK:America18
-"O-1 Teğmen"
-END
-
-RANK:America19
-"O-2 Üsteğmen"
-END
-
-RANK:America20
-"O-3 Yüzbaşı"
-END
-
-RANK:America21
-"O-4 Binbaşı"
-END
-
-RANK:America22
-"O-5 Yarbay"
-END
-
-RANK:America23
-"O-6 Albay"
-END
-
-RANK:America24
-"O-7 Tuğgeneral"
-END
-
-RANK:America25
-"O-8 Tümgeneral"
-END
-
-RANK:America26
-"O-9 Korgeneral"
-END
-
-RANK:America27
-"O-10 Orgeneral"
-END
-
-RANK:America28
-"Mareşal"
-END
-
-RANK:China0
-"Rütbesiz"
-END
-
-RANK:China1
-"Er"
-END
-
-RANK:China2
-"Birinci Sınıf Er"
-END
-
-RANK:China3
-"Onbaşı"
-END
-
-RANK:China4
-"Çavuş"
-END
-
-RANK:China5
-"İkinci Sınıf Kıdemli Çavuş"
-END
-
-RANK:China6
-"Birinci Sınıf Kıdemli Çavuş"
-END
-
-RANK:China7
-"Üçüncü Sınıf Usta Çavuş"
-END
-
-RANK:China8
-"İkinci Sınıf Usta Çavuş"
-END
-
-RANK:China9
-"Birinci Sınıf Usta Çavuş"
-END
-
-RANK:China10
-"Teğmen"
-END
-
-RANK:China11
-"Üsteğmen"
-END
-
-RANK:China12
-"Yüzbaşı"
-END
-
-RANK:China13
-"Binbaşı"
-END
-
-RANK:China14
-"Yarbay"
-END
-
-RANK:China15
-"Albay"
-END
-
-RANK:China16
-"Kıdemli Albay"
-END
-
-RANK:China17
-"Tümgeneral"
-END
-
-RANK:China18
-"Korgeneral"
-END
-
-RANK:China19
-"Orgeneral"
-END
-
-RANK:GLA0
-"Rütbesiz"
-END
-
-RANK:GLA1
-"Acemi"
-END
-
-RANK:GLA2
-"Düzensiz"
-END
-
-RANK:GLA3
-"Savaşçı"
-END
-
-RANK:GLA4
-"Akıncı"
-END
-
-RANK:GLA5
-"Pişkin Akıncı"
-END
-
-RANK:GLA6
-"Tim Eri"
-END
-
-RANK:GLA7
-"Tim Lideri"
-END
-
-RANK:GLA8
-"Hücre Lideri"
-END
-
-RANK:GLA9
-"Kıdemli Hücre Lideri"
-END
-
-RANK:GLA10
-"Baskın Yüzbaşısı"
-END
-
-RANK:GLA11
-"Kol Yüzbaşısı"
-END
-
-RANK:GLA12
-"Vuruş Komutanı"
-END
-
-RANK:GLA13
-"Saha Komutanı"
-END
-
-RANK:GLA14
-"Sektör Komutanı"
-END
-
-RANK:GLA15
-"Savaş Ağası"
-END
-
-RANK:GLA16
-"Bölgesel Savaş Ağası"
-END
-
-RANK:GLA17
-"Baş Savaş Ağası"
-END
-
-RANK:GLA18
-"General"
-END
-
-RANK:GLA19
-"Büyük General"
-END
-
-RANK:GLA20
-"Yüce Kurtarıcı"
-END
-
-RANK:Turkiye0
-"Rütbesiz"
 END
 
 INI:FactionTurkiye

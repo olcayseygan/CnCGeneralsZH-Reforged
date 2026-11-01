@@ -1056,19 +1056,9 @@ Bool AIUpdateInterface::chooseLocomotorSetExplicit(LocomotorSetType wst)
 		}
 		m_locomotorSet.setSpeedScale(obj->getTemplate()->getSpeedScale());
 		m_curLocomotorSet = wst;
-		refreshVeterancySpeed();
 		return TRUE;
 	}
 	return FALSE;
-}
-
-//-------------------------------------------------------------------------------------------------
-void AIUpdateInterface::refreshVeterancySpeed()
-{
-	// the grade's speed, its own SPEED perk and a leader's pace aura, each multiplying
-	const Object* obj = getObject();
-	m_locomotorSet.setSpeedFactor(TheGlobalData->getRankStat(obj->getTemplate(), obj->getRankGrade(), RANK_STAT_SPEED)
-		* (1.0f + obj->getRankPerk(RANK_PERK_SPEED)) * (1.0f + obj->getRankAura(RANK_AURA_PACE)));
 }
 
 //-------------------------------------------------------------------------------------------------

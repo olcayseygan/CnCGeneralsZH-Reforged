@@ -361,8 +361,6 @@ public:
 		DEBUG_ASSERTCRASH(!(speed <= 0.0f && m_template->m_appearance == LOCO_THRUST), ("THRUST locos may not have zero speeds!\n")); 
 		m_maxSpeed = speed; 
 	}
-	/// the owner's rank bonus on the template's speed (GLA veterans), applied before the setMaxSpeed cap
-	inline void setSpeedFactor(Real factor) { m_speedFactor = factor; }
 	inline void setMaxAcceleration(Real accel) { m_maxAccel = accel; }
 	inline void setMaxBraking(Real braking) { m_maxBraking = braking; }
 	inline void setMaxTurnRate(Real turn) { m_maxTurnRate = turn; }
@@ -530,7 +528,6 @@ private:
 	Real				m_brakingFactor;
 	Real				m_maxLift;
 	Real				m_maxSpeed;
-	Real				m_speedFactor;
 	Real				m_speedScale;			///< multiplies the template's speeds; 1 unless the owner's template sets SpeedScale
 	Real				m_maxAccel;
 	Real				m_maxBraking;

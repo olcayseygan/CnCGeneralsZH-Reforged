@@ -1106,11 +1106,6 @@ const Image* ControlBar::calculateVeterancyOverlayForObject( const Object *obj )
 		return NULL;
 	}
 
-	// a unit on a rank ladder shows its grade's insignia, which the button draws in its corner
-	const RankLadder *ladder = TheGlobalData->getRankLadder( obj->getTemplate() );
-	if( ladder )
-		return Drawable::getRankInsignia( obj );
-
 	VeterancyLevel level = obj->getVeterancyLevel();
 
 	//Return the appropriate image (including NULL if no veterancy levels)

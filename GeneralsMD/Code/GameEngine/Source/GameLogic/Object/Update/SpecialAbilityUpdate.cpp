@@ -625,18 +625,8 @@ Bool SpecialAbilityUpdate::getCaptureProgress( ObjectID *targetID, Real *progres
 	if( total == 0 || m_prepFrames > total )
 		return FALSE;
 
-	// against the taking a seize aura shortened, which may have moved since it started
-	const UnsignedInt taking = MAX( capturePreparationFrames( getObject(), total ), 1u );
-	*progress = MAX( 0.0f, 1.0f - (Real)m_prepFrames / (Real)taking );
+	*progress = 1.0f - (Real)m_prepFrames / (Real)total;
 	return TRUE;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** A seize (capture) aura on the man taking a building cuts the taking short. */
-//-------------------------------------------------------------------------------------------------
-UnsignedInt SpecialAbilityUpdate::capturePreparationFrames( const Object *taker, UnsignedInt frames )
-{
-	return REAL_TO_UNSIGNEDINT( frames * ( 1.0f - taker->getRankAura( RANK_AURA_CAPTURE ) ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1046,9 +1036,6 @@ void SpecialAbilityUpdate::startPreparation()
 
   //Set the preparation timer
   m_prepFrames = data->m_preparationFrames;
-  if( spTemplate->getSpecialPowerType() == SPECIAL_INFANTRY_CAPTURE_BUILDING
-      || spTemplate->getSpecialPowerType() == SPECIAL_BLACKLOTUS_CAPTURE_BUILDING )
-    m_prepFrames = capturePreparationFrames( getObject(), m_prepFrames );
 
   switch( spTemplate->getSpecialPowerType() )
   {

@@ -1,9 +1,4 @@
 CMakeLists.txt
-Data/Art/Textures/ReforgedAuraGuard.tga
-Data/Art/Textures/ReforgedAuraRally.tga
-Data/Art/Textures/ReforgedAuraRange.tga
-Data/Art/Textures/ReforgedAuraRateOfFire.tga
-Data/Art/Textures/ReforgedAuraSight.tga
 Data/Art/Textures/ReforgedBarAmericaCenter.tga
 Data/Art/Textures/ReforgedBarAmericaLeft.tga
 Data/Art/Textures/ReforgedBarAmericaRight.tga
@@ -14,6 +9,7 @@ Data/Art/Textures/ReforgedBarChinaRight.tga
 Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
+Data/Art/Textures/ReforgedFactionTurkiye.tga
 Data/Art/Textures/ReforgedForceAttack.tga
 Data/Art/Textures/ReforgedGuardCentre.tga
 Data/Art/Textures/ReforgedGuardRing.tga
@@ -38,12 +34,6 @@ Data/Art/Textures/ReforgedMineGlowBlue.tga
 Data/Art/Textures/ReforgedMineGlowRed.tga
 Data/Art/Textures/ReforgedMineLedBlue.tga
 Data/Art/Textures/ReforgedMineLedRed.tga
-Data/Art/Textures/ReforgedRankBar.tga
-Data/Art/Textures/ReforgedRankSkull.tga
-Data/Art/Textures/ReforgedRanksChina.tga
-Data/Art/Textures/ReforgedRanksGLA.tga
-Data/Art/Textures/ReforgedRanksTurkiye.tga
-Data/Art/Textures/ReforgedRanksUSA.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
@@ -133,13 +123,6 @@ Data/Cinema/nohud.txt
 Data/Cinema/nukedome.txt
 Data/Cinema/nukefade.txt
 Data/Cinema/nukewarp.txt
-Data/Cinema/rankaura.txt
-Data/Cinema/rankauramaresal.txt
-Data/Cinema/rankauranight.txt
-Data/Cinema/rankaurasnow.txt
-Data/Cinema/rankladder.txt
-Data/Cinema/rankringsall.txt
-Data/Cinema/rankzero.txt
 Data/Cinema/reachhills.txt
 Data/Cinema/readme_water.txt
 Data/Cinema/rf_ai.txt
@@ -204,7 +187,6 @@ Data/Cinema/v240_hook.txt
 Data/Cinema/v240_hook2.txt
 Data/Cinema/v240_md.txt
 Data/Cinema/v240_tank.txt
-Data/Cinema/vetranks.txt
 Data/Cinema/wreckcheck.txt
 Data/French/Generals.str
 Data/German/Generals.str
@@ -232,11 +214,6 @@ Data/INI/MappedImages/HandCreated/ReforgedHudHelpbox.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsPlayerWindow.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
-Data/INI/MappedImages/HandCreated/ReforgedRankInsignia.ini
-Data/INI/MappedImages/HandCreated/ReforgedRanksChina.ini
-Data/INI/MappedImages/HandCreated/ReforgedRanksGLA.ini
-Data/INI/MappedImages/HandCreated/ReforgedRanksTurkiye.ini
-Data/INI/MappedImages/HandCreated/ReforgedRanksUSA.ini
 Data/INI/ModernWater.ini
 Data/INI/MultiplayerReforged.ini
 Data/INI/ObjectCreationListReforged.ini
@@ -386,15 +363,6 @@ Data/Scenarios/particles100k.txt
 Data/Scenarios/particles1m.txt
 Data/Scenarios/particles1m_mixed.txt
 Data/Scenarios/particles1m_smoke.txt
-Data/Scenarios/rankaura.txt
-Data/Scenarios/rankauramaresal.txt
-Data/Scenarios/rankauranight.txt
-Data/Scenarios/rankaurareplay.txt
-Data/Scenarios/rankaurasnow.txt
-Data/Scenarios/rankaurawiki.txt
-Data/Scenarios/rankladder.txt
-Data/Scenarios/rankringsall.txt
-Data/Scenarios/rankzero.txt
 Data/Scenarios/reachhills.txt
 Data/Scenarios/reachproof.txt
 Data/Scenarios/reachshot.txt
@@ -485,7 +453,6 @@ Data/Scenarios/v240_tank.txt
 Data/Scenarios/vehicleaccel.txt
 Data/Scenarios/vehiclelean.txt
 Data/Scenarios/vehicleturn.txt
-Data/Scenarios/vetranks.txt
 Data/Scenarios/vision.txt
 Data/Scenarios/wallgarrison.txt
 Data/Scenarios/wreckcheck.txt
@@ -3267,7 +3234,6 @@ Tests/test_posixlocalfilesystem_stubs.cpp
 Tests/test_posixpath.cpp
 Tests/test_premain_strings.cpp
 Tests/test_production_input.inc
-Tests/test_rank_ladder.cpp
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
 Tests/test_road_buffer.cpp
@@ -4099,7 +4065,6 @@ Tools/WorldBuilder/src/wbview3d.cpp
 Tools/asan-check.sh
 Tools/assetcull/assetcull.cpp
 Tools/assetcull/assetcull.dsp
-Tools/aura_rings.py
 Tools/bigfile.py
 Tools/build-posix.sh
 Tools/buildVersionUpdate/buildVersionUpdate.cpp
@@ -4264,12 +4229,6 @@ Tools/package-common.sh
 Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
-Tools/rank_insignia.py
-Tools/rank_insignia_cells.py
-Tools/rank_insignia_china.py
-Tools/rank_insignia_gla.py
-Tools/rank_insignia_turkiye.py
-Tools/rank_insignia_usa.py
 Tools/record-dx11-shaders.ps1
 Tools/replay-check.sh
 Tools/root-readonly-check.sh

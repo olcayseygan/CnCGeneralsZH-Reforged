@@ -1698,18 +1698,6 @@ void GameClient::preloadAssets( TimeOfDay timeOfDay )
 	for (i=0; *textureNames[i]; ++i)
 		TheDisplay->preloadTextureAssets(textureNames[i]);
 
-	// A ring's texture is otherwise read the frame the first ring of its kind lights, as much as
-	// 125 ms off a cold disk in the middle of a battle.  They are small and every match wants them.
-	for (Int kind = 0; kind < RANK_AURA_COUNT; ++kind)
-	{
-		const RadiusDecalTemplate &ring = TheGlobalData->m_rankAuraRing[kind];
-		if (!ring.valid())
-			continue;
-
-		AsciiString textureFile = ring.getTexture();
-		textureFile.concat(".tga");
-		TheDisplay->preloadTextureAssets(textureFile);
-	}
 	getPreloadMemoryStatus(after);
 
 	DEBUG_LOG(("Preloading memory dwAvailPageFile %d --> %d : %d\n",

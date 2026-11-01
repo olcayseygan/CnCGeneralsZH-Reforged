@@ -123,31 +123,6 @@ static const Real CLASSIC_KEY_BADGE_DESIGN_POINTS = 12.0f;
 	* grew away from the buttons it sits on.  At 2560x1080 the markings came out half again too big.
 	* One design size, times the bar's own scale, and a cameo looks the same on every monitor. */
 //=============================================================================
-/** EA's overlays (the chevrons) are drawn over the whole button.  An image with its own DisplayHeight,
-	* a rank insignia cropped to its ink, keeps its shape in the top left corner instead: that many
-	* forty-eighths of the button's height, as wide as its shape says, up to half again its height and
-	* half the button.  Every rank cell carries a DisplayHeight for this; one without it was stretched
-	* over the whole portrait. */
-static void drawOverlayImage( const Image *image, Int x, Int y, Int width, Int height )
-{
-	if( image->getDisplayHeight() <= 0 )
-	{
-		TheDisplay->drawImage( image, x, y, x + width, y + height );
-		return;
-	}
-	Real high = height * image->getDisplayHeight() / 48.0f;
-	Real wide = high * image->getImageWidth() / image->getImageHeight();
-	const Real widest = MIN( high * 1.5f, width * 0.5f );
-	if( wide > widest )
-	{
-		high *= widest / wide;
-		wide = widest;
-	}
-	const Int inset = 2;
-	TheDisplay->drawImage( image, x + inset, y + inset, x + inset + REAL_TO_INT( wide ), y + inset + REAL_TO_INT( high ) );
-}
-
-//=============================================================================
 static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DESIGN_POINTS )
 {
 	GameFont *font = window->winGetFont();
@@ -532,7 +507,7 @@ void W3DGadgetPushButtonDraw( GameWindow *window, WinInstanceData *instData )
 		if( pData->overlayImage )
 		{
 			//Render the overlay image now.
-			drawOverlayImage( pData->overlayImage, origin.x, origin.y, size.x, size.y );
+			TheDisplay->drawImage( pData->overlayImage, origin.x, origin.y, origin.x + size.x, origin.y + size.y );
 		}
 
 		if( pData->drawClock )
@@ -709,7 +684,7 @@ void W3DGadgetPushButtonImageDrawOne( GameWindow *window,
 		if( pData->overlayImage )
 		{
 			//Render the overlay image now.
-			drawOverlayImage( pData->overlayImage, start.x, start.y, size.x, size.y );
+			TheDisplay->drawImage( pData->overlayImage, start.x, start.y, start.x + size.x, start.y + size.y );
 		}
 		
 		if( pData->drawClock )
@@ -977,7 +952,7 @@ void W3DGadgetPushButtonImageDrawThree(GameWindow *window, WinInstanceData *inst
 		if( pData->overlayImage )
 		{
 			//Render the overlay image now.
-			drawOverlayImage( pData->overlayImage, origin.x, origin.y, size.x, size.y );
+			TheDisplay->drawImage( pData->overlayImage, origin.x, origin.y, origin.x + size.x, origin.y + size.y );
 		}
 
 		if( pData->drawClock )

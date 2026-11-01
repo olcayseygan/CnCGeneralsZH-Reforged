@@ -1,8 +1,0 @@
-# Scenarios/rankaurasnow.txt: the Maresal Altay's five rings, radius 300, on Winter Wolf's snow. The
-# first cut frames the Altay at the screen centre for a -control click (after frame 360); the
-# selection survives the later cut, which pulls back and tilts down so the whole ring fits.
-
-0.0   hud     on
-0.3   cut     900 1736 1.8 0 0
-3.0   cut     900 1736 1.8 0 0
-8.0   cut     900 1736 2.0 0 -30

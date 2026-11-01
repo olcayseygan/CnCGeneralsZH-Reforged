@@ -106,8 +106,6 @@ public:
 
 	Locomotor* findLocomotor(LocomotorSurfaceTypeMask t);
 
-	void setSpeedFactor(Real factor);	///< Locomotor::setSpeedFactor on each
-	
 	void xferSelfAndCurLocoPtr(Xfer *xfer, Locomotor** loco);
 
 	inline LocomotorSurfaceTypeMask getValidSurfaces() const { return m_validLocomotorSurfaces; }

@@ -141,7 +141,7 @@ Bool VeterancyCrateCollide::executeCrateBehavior( Object *other )
 		// do just the collider
 		if (other != NULL)
 		{
-			other->getExperienceTracker()->gainExpForLevel( levelsToGain, ( ! md->m_isPilot), md->m_isPilot );
+			other->getExperienceTracker()->gainExpForLevel( levelsToGain, ( ! md->m_isPilot) );
 		}
 	}
 	else
@@ -155,7 +155,7 @@ Bool VeterancyCrateCollide::executeCrateBehavior( Object *other )
 		for( Object *potentialObject = iter->first(); potentialObject; potentialObject = iter->next() )
 		{
 			// This function will give just enough exp for the Object to gain a level, if it can
-			potentialObject->getExperienceTracker()->gainExpForLevel( levelsToGain, ( ! md->m_isPilot), md->m_isPilot );
+			potentialObject->getExperienceTracker()->gainExpForLevel( levelsToGain, ( ! md->m_isPilot) );
 		}
 	}
 	

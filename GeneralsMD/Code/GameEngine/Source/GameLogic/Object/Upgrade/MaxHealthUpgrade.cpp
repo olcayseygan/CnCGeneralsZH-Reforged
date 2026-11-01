@@ -91,7 +91,7 @@ void MaxHealthUpgrade::upgradeImplementation( )
 		// to carry the promotion's bonus too. Without it an Elite Paladin that researched Composite
 		// Armor ended on 750 where one armored first and promoted later ended on 780.
 		// The lobby's handicap is a multiplier that is already in the max health too.
-		Real add = data->m_addMaxHealth * TheGlobalData->getRankHealthBonus( obj->getTemplate(), obj->getVeterancyLevel(), obj->getRankGrade() )
+		Real add = data->m_addMaxHealth * TheGlobalData->m_healthBonus[ obj->getVeterancyLevel() ]
 			* obj->getHandicapHealthFactor();
 		body->setMaxHealth( body->getMaxHealth() + add, data->m_maxHealthChangeType );
 	}

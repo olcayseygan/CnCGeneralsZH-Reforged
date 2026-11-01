@@ -249,7 +249,6 @@ protected:
 	//Various steps of performing any special ability. Not all special abilities will use all of them.
 	Bool approachTarget();			//Approaches the target before starting the special attack (if appropriate)
 	void startPreparation();		//Begins the preparation of ability -- like firing off a hacker attack, or laser tracer, etc.
-	static UnsignedInt capturePreparationFrames( const Object *taker, UnsignedInt frames );	///< the taking of a building under the taker's seize aura
 	Bool continuePreparation();	//Updates the preparation of ability -- like recalculating tracer lines.
 	void triggerAbilityEffect();	//After the preparation time has elapsed, this part actually triggers the desired effect of the special ability.
 	void finishAbility();

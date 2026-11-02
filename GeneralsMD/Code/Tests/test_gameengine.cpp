@@ -17960,6 +17960,27 @@ TEST(a_door_stays_open_while_another_unit_is_still_coming)
 	CHECK( !Production_shouldCloseDoorNow( 31, 30, true, true ) );
 }
 
+/* ProductionUpdate.cpp: but only a unit close behind holds it.  Any queued unit used to count, so a
+	 Command Center training an engineer with eighteen seconds still to go stood with its gate open
+	 and empty the whole time.  A unit far enough off that the door can shut and still open early for
+	 him from shut lets it close, as retail's stopwatch did. */
+extern Bool Production_isNextUnitDue( Int framesRemaining, UnsignedInt doorClosingTime, UnsignedInt doorOpeningTime );
+
+TEST(a_door_closes_on_a_unit_still_far_off)
+{
+	/* 90 frames to close and 90 to open, retail's 1.5 s each: 182 frames out he is still due. */
+	CHECK( Production_isNextUnitDue( 182, 90, 90 ) );
+	CHECK( Production_isNextUnitDue( 1, 90, 90 ) );
+
+	/* finished and waiting on the door, or a fresh entry not yet measured: due. */
+	CHECK( Production_isNextUnitDue( 0, 90, 90 ) );
+	CHECK( Production_isNextUnitDue( -5, 90, 90 ) );
+
+	/* one frame further and there is time to shut first; eighteen seconds certainly is. */
+	CHECK( !Production_isNextUnitDue( 183, 90, 90 ) );
+	CHECK( !Production_isNextUnitDue( 1080, 90, 90 ) );
+}
+
 /* ProductionUpdate.h: production repeat.  A factory keeps one unit on repeat.  Turning a second
 	 on takes the first off.  Turning the same one on again is a no-op, and off takes it out. */
 TEST(production_repeat_is_one_unit_at_a_time)

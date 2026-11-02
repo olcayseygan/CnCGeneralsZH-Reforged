@@ -590,6 +590,19 @@ Bool Production_shouldCloseDoorNow( UnsignedInt framesWaitingOpen, UnsignedInt d
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Whether the unit at the head of the queue is close enough behind to keep the door up for.  Any
+	* queued unit used to count, so an engineer with eighteen seconds still to build held the gate
+	* open the whole time with nobody in it; retail shuts after its wait and opens again for him.
+	* Closing pays only if the door can shut and still start its early opening for him from shut:
+	* the close clears one frame after its time, and the early open is checked one frame further on
+	* than this (production counts its frame after the doors are updated), hence the +2. */
+//-------------------------------------------------------------------------------------------------
+Bool Production_isNextUnitDue( Int framesRemaining, UnsignedInt doorClosingTime, UnsignedInt doorOpeningTime )
+{
+	return framesRemaining <= (Int)(doorClosingTime + doorOpeningTime) + 2;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Update the door behavior */
 //-------------------------------------------------------------------------------------------------
 void ProductionUpdate::updateDoors( Bool moreUnitsComing )
@@ -729,10 +742,13 @@ UpdateSleepTime ProductionUpdate::update( void )
 	UnsignedInt now = TheGameLogic->getFrame();
 	Object *us = getObject();
 
-	// update the door behaviors.  a unit still at the head of the queue is a unit still due out
-	// of a door, so the doors stay open for him instead of closing between the two.
+	// update the door behaviors.  a unit at the head of the queue that will be done before the door
+	// could shut and open again is still due out of it, so the doors stay open for him instead of
+	// closing between the two; one further off gets them shut and opened again on his own time.
 	if( d->m_numDoorAnimations > 0 )
-		updateDoors( production != NULL && production->getProductionType() == PRODUCTION_UNIT );
+		updateDoors( production != NULL && production->getProductionType() == PRODUCTION_UNIT &&
+								 Production_isNextUnitDue( production->m_totalProductionFrames - production->m_framesUnderConstruction,
+																					 d->m_doorClosingTime, d->m_doorOpeningTime ) );
 
 	//
 	// if we're in the construction complete state ... we need to check frame

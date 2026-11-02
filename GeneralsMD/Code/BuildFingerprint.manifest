@@ -37,6 +37,9 @@ Data/Art/Textures/ReforgedMineLedRed.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
+Data/Art/Textures/TRAltay_Tread.tga
+Data/Art/Textures/TRAltay_TreadWreck.tga
+Data/Art/Textures/TRAltay_Wreck.tga
 Data/Art/Textures/TRCmdHQ_Net.tga
 Data/Art/Textures/TRCmdHQ_Pave.tga
 Data/Art/Textures/TRCmdHQ_Plaster.tga
@@ -48,9 +51,16 @@ Data/Art/Textures/TRCmdHQ_Rubble.tga
 Data/Art/Textures/TRCmdHQ_Stone.tga
 Data/Art/Textures/TRCmdHQ_Wall.tga
 Data/Art/Textures/TRCmdHQ_WallD.tga
+Data/Art/Textures/ZHCA_TRAltay.tga
+Data/Art/Textures/ZHCA_TRAltayD.tga
 Data/Art/Textures/ZHCA_TRCmdHQ.tga
 Data/Art/Textures/ZHCA_TREngr.tga
 Data/Art/Textures/ZHCA_TRMehmet.tga
+Data/Art/W3D/TRALTAY.W3D
+Data/Art/W3D/TRALTAY_D.W3D
+Data/Art/W3D/TRALTAY_D1.W3D
+Data/Art/W3D/TRALTAY_D2.W3D
+Data/Art/W3D/TRALTAY_D3.W3D
 Data/Art/W3D/TRCMDHQ.W3D
 Data/Art/W3D/TRCMDHQ_D.W3D
 Data/Art/W3D/TRCMDHQ_DR.W3D

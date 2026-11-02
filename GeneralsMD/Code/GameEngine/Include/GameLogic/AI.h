@@ -146,7 +146,8 @@ public:
 	* every shipped map and .scb, into the campaign's stat bonus tables and into network messages.
 	* This one answers "how well does it play".  No rung has a build-rate, vision or stat handicap, in
 	* either direction.  Income is the one bonus: a skirmish AI banks its rung's IncomePercent of what it
-	* earns by playing (Player::earnMoney), 150 on every rung.  Keeping it a separate enum is what lets a rung be
+	* earns by playing (Player::earnMoney), 150 on every rung and up to 300 while it falls behind its
+	* strongest enemy (AIPlayer::stepIncomeBonus).  Keeping it a separate enum is what lets a rung be
 	* tuned in AI.ini without touching what a map's scripts do.
 	* See AI-ROADMAP.md sections D6, D7 and D10.
 	*/
@@ -304,7 +305,7 @@ struct AIDifficultyProfile
 	Real	m_expansionReach;								///< how far from home, or from one of those bases, a supply center of its own choosing may go
 
 	// Income: the one bonus on the ladder (Player::incomePercent)
-	Int		m_incomePercent;								///< what a skirmish AI banks of what it earns by playing, in percent; the score screen counts the 100
+	Int		m_incomePercent;								///< what a skirmish AI banks of what it earns by playing, in percent, before the falling-behind bonus; the score screen counts the 100
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -902,6 +903,12 @@ const UnsignedInt AI_PURCHASE_HOLD_FRAMES = 40 * LOGICFRAMES_PER_SECOND;
 
 /** How long a stretch of income is measured over before the rate is taken again. */
 const UnsignedInt AI_INCOME_WINDOW_FRAMES = 30 * LOGICFRAMES_PER_SECOND;
+
+/** The falling-behind income bonus (AIPlayer::stepIncomeBonus): how often it is weighed again, how far
+	* it moves at one weighing, and its ceiling over the rung's IncomePercent, in percentage points. */
+const UnsignedInt AI_INCOME_BONUS_FRAMES = 30 * LOGICFRAMES_PER_SECOND;
+const Int AI_INCOME_BONUS_STEP = 25;
+const Int AI_INCOME_BONUS_MAX = 150;
 
 /** The bank a computer player keeps: seconds of its income, and never under the floor. */
 Int aiBankTarget( Real incomePerSecond, Real seconds, Int floor );

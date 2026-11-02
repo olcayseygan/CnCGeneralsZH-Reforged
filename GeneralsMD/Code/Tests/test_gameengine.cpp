@@ -2404,6 +2404,26 @@ TEST(skirmish_ai_earnings_by_rung_percent)
 	CHECK_EQ( EarnedAmount( 75, 150 ), 112u );
 }
 
+/* Player.cpp: the falling-behind bonus, points over the rung's percent, and its step at one weighing. */
+TEST(skirmish_ai_earnings_bonus_when_behind)
+{
+	/* level or ahead, or no enemy left: none */
+	CHECK_EQ( IncomeBonusTarget( 1000, 1000 ), 0 );
+	CHECK_EQ( IncomeBonusTarget( 3000, 1000 ), 0 );
+	CHECK_EQ( IncomeBonusTarget( 1000, 0 ), 0 );
+	/* three quarters of the enemy: 200 percent on a 150 rung; half of it: 250 */
+	CHECK_EQ( IncomeBonusTarget( 750, 1000 ), 50 );
+	CHECK_EQ( IncomeBonusTarget( 500, 1000 ), 100 );
+	/* a quarter of it and below: the ceiling, 300 percent */
+	CHECK_EQ( IncomeBonusTarget( 250, 1000 ), 150 );
+	CHECK_EQ( IncomeBonusTarget( 0, 1000 ), 150 );
+	/* 25 points a weighing, either way, and straight onto a target that close */
+	CHECK_EQ( IncomeBonusStep( 0, 150 ), 25 );
+	CHECK_EQ( IncomeBonusStep( 140, 150 ), 150 );
+	CHECK_EQ( IncomeBonusStep( 150, 0 ), 125 );
+	CHECK_EQ( IncomeBonusStep( 5, 0 ), 0 );
+}
+
 /* ExperienceTracker.cpp: a kill's experience split by the damage each attacker dealt. */
 TEST(kill_xp_splits_by_damage_and_the_killing_blow_keeps_the_remainder)
 {

@@ -2,7 +2,7 @@
 
 EA published the source of Command & Conquer: Generals and Zero Hour in February 2025. Zero Hour
 Reforged is that source worked on as a game: around sixty bugs EA shipped in 2003 fixed, a computer
-opponent that builds a base (1.5x income, no other edge), a Direct3D 11 renderer, a new interface and
+opponent that builds a base (1.5x income, more when it falls behind, no other edge), a Direct3D 11 renderer, a new interface and
 mods that load side by side. Windows x64 players install it through a free launcher; macOS and Linux
 build it from this repository.
 

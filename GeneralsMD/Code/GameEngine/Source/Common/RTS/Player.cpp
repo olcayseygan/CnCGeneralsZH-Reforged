@@ -3596,9 +3596,26 @@ UnsignedInt EarnedAmount( UnsignedInt amount, Int percent )
   return amount * (UnsignedInt)percent / 100;
 }
 
+Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength )
+{
+  if( strongestEnemyStrength <= 0 || ownStrength >= strongestEnemyStrength )
+    return 0;
+  const Int bonus = (Int)( (Int64)4 * AI_INCOME_BONUS_MAX * ( strongestEnemyStrength - ownStrength ) / ( (Int64)3 * strongestEnemyStrength ) );
+  return bonus < AI_INCOME_BONUS_MAX ? bonus : AI_INCOME_BONUS_MAX;
+}
+
+Int IncomeBonusStep( Int bonus, Int target )
+{
+  if( target > bonus + AI_INCOME_BONUS_STEP )
+    return bonus + AI_INCOME_BONUS_STEP;
+  if( target < bonus - AI_INCOME_BONUS_STEP )
+    return bonus - AI_INCOME_BONUS_STEP;
+  return target;
+}
+
 Int Player::incomePercent( void )
 {
-  return isSkirmishAIPlayer() ? TheAI->getDifficultyProfile( getAISkillLevel() )->m_incomePercent : 100;
+  return isSkirmishAIPlayer() ? TheAI->getDifficultyProfile( getAISkillLevel() )->m_incomePercent + m_ai->getIncomeBonus() : 100;
 }
 
 UnsignedInt Player::earnMoney( UnsignedInt amount )

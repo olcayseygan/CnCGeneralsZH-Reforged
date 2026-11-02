@@ -265,6 +265,7 @@ public:
 		* independent axes: the rung says how well, the role says what.  See AI-ROADMAP.md D6/D8. */
 	AISkillLevel getAISkillLevel(void) const {return m_skillLevel;}
 	void setAISkillLevel(AISkillLevel level) {m_skillLevel = level;}
+	Int getIncomeBonus(void) const {return m_incomeBonus;}	///< points over the rung's IncomePercent while it falls behind (stepIncomeBonus)
 	AIRole getAIRole(void) const {return m_role;}
 
 	/** The third axis, how it plays: set once from the seat at the start of the match, after the role is
@@ -396,6 +397,8 @@ protected:
 	void trainFavoured(void);															///< a personality's favoured units, below the bank target as well
 	void buyPersonaTransports(void);											///< an Infantry AI's ground transports, a few by rung
 	void sendPersonaTransports(AIGroup *wave);	///< ... driven loaded to a wave's front, riders put down there
+	void stepIncomeBonus(void);														///< weigh its strength against its strongest enemy and move m_incomeBonus a step toward what that is owed
+	Int					m_incomeBonus;					///< points over the rung's IncomePercent, 0 to AI_INCOME_BONUS_MAX
 	Int					m_incomeMark;						///< money earned in all, when the income was last measured ...
 	UnsignedInt	m_incomeMarkFrame;			///< ... and the frame, 0 for never
 	Int					m_bankMark;							///< ... and the bank then

@@ -1392,7 +1392,8 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 	* late, at twenty minutes, so it is rare; Medium two from twelve; Hard every empty start from seven.
 	*
 	* inc%, 2026-11-02.  The owner: 1.5x on everything a skirmish AI earns by playing, the same on every
-	* rung, in place of the flat double it had.  Player::earnMoney and earnIncome bank it; the score
+	* rung, in place of the flat double it had, and up to 150 points more while it falls behind its
+	* strongest enemy (AIPlayer::stepIncomeBonus).  Player::earnMoney and earnIncome bank it; the score
 	* screen and its charts count the money before the bonus.
 	*
 	*                      scoutS maxSc decis  cntr  mass   ttk  indiv team infl focus save harv expand guard hoard econ micro  gate  answer massU  bankS  floor payoff upgr    nonc  share backlog push   minPow  siege  beam  strikeE strikeT swDef                     stall  lost retry  stage  spot arty    inflS fireLook word   odds   fireMem  watch watchOdds dodge  2ndS  2nd  reach    inc% */

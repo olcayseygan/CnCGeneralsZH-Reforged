@@ -399,6 +399,7 @@ m_role(AIROLE_AGGRESSIVE)
 	}
 	m_ambulanceLost = 0;
 	m_ambulancesBought = 0;
+	m_incomeBonus = 0;
 	m_incomeMark = 0;
 	m_incomeMarkFrame = 0;
 	m_bankMark = 0;
@@ -5731,6 +5732,8 @@ void AIPlayer::update( void )
 	AI_PHASE( AIP_TEAM,    doTeamBuilding() );			// See if it's time to start another team.
 	AI_PHASE( AIP_UPGRADE, doUpgradesAndSkills() );	// See if it's time to build an upgrade or buy a skill.
 	AI_PHASE( AIP_BRIDGE,  updateBridgeRepair() );	// Handle any bridge repairs.
+	if( isSkirmishAI() && TheGameLogic->getFrame() % AI_INCOME_BONUS_FRAMES == 0 )
+		stepIncomeBonus();														// Earn more while it falls behind.
 	// Everything below is the skirmish AI's own. A Challenge or mission opponent is handed its money,
 	// its base, its attacks and its superweapon by the map script, which is the whole of its difficulty:
 	// run on top of that, Kwai's $30000 stood three nuclear silos a minute into the match.  So is a
@@ -8429,6 +8432,51 @@ Bool AIPlayer::purchaseQueueOn( void )
 	return runsOwnAI() && getSkillProfile()->m_bankTargetSeconds > 0.0f;
 }
 
+static void addStandingValue( Object *obj, void *userData )
+{
+	if( !obj->isEffectivelyDead() )
+		*(Int *)userData += obj->getTemplate()->calcCostToBuild( obj->getControllingPlayer() );
+}
+
+/** What a player is worth to the income bonus: everything of its own still standing at its price, and
+	* the bank.  Logic state only, so every machine weighs the same. */
+static Int incomeStrength( Player *player )
+{
+	Int strength = (Int)player->getMoney()->countMoney();
+	player->iterateObjects( addStandingValue, &strength );
+	return strength;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The owner, 2026-11-02: a computer that starts losing earns more.  Every AI_INCOME_BONUS_FRAMES it weighs
+	* itself against the strongest enemy still in the match and moves the bonus a step toward what
+	* IncomeBonusTarget says that is owed, so the percent climbs and falls by at most AI_INCOME_BONUS_STEP
+	* points at a time.  The score screen still counts the plain amount. */
+//----------------------------------------------------------------------------------------------------------
+void AIPlayer::stepIncomeBonus( void )
+{
+	Int strongest = 0;
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	{
+		Player *other = ThePlayerList->getNthPlayer( i );
+		if( other != m_player && other->isPlayableSide() && other->isPlayerActive()
+				&& m_player->getRelationship( other->getDefaultTeam() ) == ENEMIES )
+		{
+			const Int strength = incomeStrength( other );
+			if( strength > strongest )
+				strongest = strength;
+		}
+	}
+	const Int own = incomeStrength( m_player );
+	const Int bonus = IncomeBonusStep( m_incomeBonus, IncomeBonusTarget( own, strongest ) );
+	if( bonus == m_incomeBonus )
+		return;
+	DEBUG_LOG(( "AI INCOME frame %d player %d worth %d against %d, income %d%% -> %d%%\n",
+		TheGameLogic->getFrame(), m_player->getPlayerIndex(), own, strongest,
+		m_player->incomePercent(), m_player->incomePercent() - m_incomeBonus + bonus ));
+	m_incomeBonus = bonus;
+}
+
 Int AIPlayer::bankTarget( void )
 {
 	const AIDifficultyProfile *profile = getSkillProfile();
@@ -9936,13 +9984,15 @@ void AIPlayer::doSpending( void )
 	}
 	m_producedSincePass.clear();
 
-	// the income, off what the score screen counts as earned (gathered, hacked, captured and given) with
-	// the rung's income bonus put back on, so it plans on what it banks
+	// the income, off what the score screen counts as earned (gathered, hacked, captured and given), with
+	// the income bonus it has now put back on the window so it plans on what it banks; the bonus moves
+	// once every 30 seconds, so a window rarely spans two of them
 	const Int bank = (Int)m_player->getMoney()->countMoney();
-	const Int earned = (Int)( (Int64)m_player->getScoreKeeper()->getTotalMoneyEarned() * m_player->incomePercent() / 100 );
+	const Int earned = m_player->getScoreKeeper()->getTotalMoneyEarned();
 	if( now - m_incomeMarkFrame >= AI_INCOME_WINDOW_FRAMES )
 	{
-		const Real window = INT_TO_REAL( earned - m_incomeMark ) * LOGICFRAMES_PER_SECOND / INT_TO_REAL( now - m_incomeMarkFrame );
+		const Real window = INT_TO_REAL( earned - m_incomeMark ) * INT_TO_REAL( m_player->incomePercent() ) / 100.0f
+			* LOGICFRAMES_PER_SECOND / INT_TO_REAL( now - m_incomeMarkFrame );
 		const Int bankWindowAgo = m_bankMark;
 		m_incomePerSecond = m_incomeMarkFrame == 0 ? window : 0.5f * (m_incomePerSecond + window);
 		m_incomeMark = earned;
@@ -19099,7 +19149,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 34;		// 34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 35;		// 35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -19639,6 +19689,9 @@ void AIPlayer::xfer( Xfer *xfer )
 
 	if( version >= 34 )
 		xfer->xferUnsignedInt( &m_strikeNoticeFrame );
+
+	if( version >= 35 )
+		xfer->xferInt( &m_incomeBonus );
 
 }  // end xfer
 

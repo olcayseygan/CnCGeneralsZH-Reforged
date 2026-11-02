@@ -243,7 +243,14 @@ W3DBufferManager::W3DVertexBufferSlot *W3DBufferManager::getSlot(VBM_FVF_TYPES f
 	size = (size + (MIN_SLOT_SIZE-1)) & (~(MIN_SLOT_SIZE-1));
 	Int sizeIndex = (size >> MIN_SLOT_SIZE_SHIFT)-1;
 
-	DEBUG_ASSERTCRASH(sizeIndex < MAX_VB_SIZES && size, ("Allocating too large vertex buffer slot"));
+	DEBUG_ASSERTCRASH(size, ("Allocating empty vertex buffer slot"));
+
+	// Past the table a slot has no size class to come back to, and no buffer could hold it.
+	if (sizeIndex >= MAX_VB_SIZES)
+	{
+		logShadowBudgetOnce("vertex buffer slot sizes", MAX_VB_SIZES << MIN_SLOT_SIZE_SHIFT);
+		return NULL;
+	}
 
 	if ((vbSlot=m_W3DVertexBufferSlots[fvfType][sizeIndex]) != 0)
 	{	//found a previously allocated slot matching required size
@@ -367,7 +374,13 @@ W3DBufferManager::W3DIndexBufferSlot *W3DBufferManager::getSlot(Int size)
 	size = (size + (MIN_SLOT_SIZE-1)) & (~(MIN_SLOT_SIZE-1));
 	Int sizeIndex = (size >> MIN_SLOT_SIZE_SHIFT)-1;
 
-	DEBUG_ASSERTCRASH(sizeIndex < MAX_IB_SIZES && size, ("Allocating too large index buffer slot"));
+	DEBUG_ASSERTCRASH(size, ("Allocating empty index buffer slot"));
+
+	if (sizeIndex >= MAX_IB_SIZES)
+	{
+		logShadowBudgetOnce("index buffer slot sizes", MAX_IB_SIZES << MIN_SLOT_SIZE_SHIFT);
+		return NULL;
+	}
 
 	if ((ibSlot=m_W3DIndexBufferSlots[sizeIndex]) != 0)
 	{	//found a previously allocated slot matching required size

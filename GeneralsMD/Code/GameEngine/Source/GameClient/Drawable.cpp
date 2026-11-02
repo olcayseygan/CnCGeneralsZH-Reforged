@@ -3585,6 +3585,75 @@ Bool Drawable::drawsAnyUIText( void )
 
 
 // ------------------------------------------------------------------------------------------------
+/** A thin line from an aircraft in the air straight down to the ground under it, because a plane
+	* over a ridge and a plane over your base can sit on the same pixel.  drawablePostDraw has already
+	* turned away what the local player may not see. */
+// ------------------------------------------------------------------------------------------------
+void Drawable::drawAltitudeLine( void )
+{
+	const Object *obj = getObject();
+	if( obj == NULL || obj->isEffectivelyDead() )
+		return;
+
+	// The shell map and a mission's cutscene have no interface up.  Asked of the script and not of
+	// getInputEnabled, which setGamePaused also turns off: a paused match keeps its lines.
+	if( TheGameLogic->isInShellGame() || TheScriptEngine->isInputHeldByScript() )
+		return;
+
+	// The height over terrain says nothing on a carrier's deck, which stands far above the sea bed.  The
+	// airborne flag does: a taxi locomotor has no AirborneTargetingHeight, so nothing parked ever sets
+	// it.  KINDOF_AIRCRAFT stays, because boats over deep water, drones, flares and missiles set it too.
+	if( !obj->isKindOf( KINDOF_AIRCRAFT ) || !obj->isAirborneTarget() )
+		return;
+
+	// China's artillery barrage flies a plane with no draw module at all
+	if( *getDrawModulesNonDirty() == NULL )
+		return;
+
+	const Color LINE_COLOR = GameMakeColor( 255, 255, 255, 120 );
+
+	Coord3D top = *obj->getPosition();
+	Coord3D bottom = top;
+	bottom.z = TheTerrainLogic->getLayerHeight( top.x, top.y, obj->getLayer() );
+	Real waterZ;
+	if( TheTerrainLogic->isUnderwater( top.x, top.y, &waterZ ) )
+		bottom.z = MAX( bottom.z, waterZ );		// the surface and not the sea bed; a bridge deck over it stays
+
+	ICoord2D topScreen, bottomScreen;
+	const Bool topOn = TheTacticalView->worldToScreen( &top, &topScreen );
+	const Bool bottomOn = TheTacticalView->worldToScreen( &bottom, &bottomScreen );
+	// ponytail: both ends off draws nothing, so a line taller than the screen goes at full zoom; sample along it if that shows
+	if( !topOn && !bottomOn )
+		return;
+
+	// An end off the screen has no position worth clipping: past the clip planes it projects to (0,0),
+	// and just in front of the near plane far enough to overflow ClipLine2D's Int products.  The frustum
+	// is convex and the line crosses its edge once, so halve the way there.
+	if( topOn != bottomOn )
+	{
+		Real insideZ = topOn ? top.z : bottom.z;
+		Real outsideZ = topOn ? bottom.z : top.z;
+		ICoord2D &edge = topOn ? bottomScreen : topScreen;
+		edge = topOn ? topScreen : bottomScreen;
+		for( Int i = 0; i < 10; ++i )
+		{
+			Coord3D middle = top;
+			middle.z = ( insideZ + outsideZ ) * 0.5f;
+			ICoord2D middleScreen;
+			if( TheTacticalView->worldToScreen( &middle, &middleScreen ) )
+			{
+				insideZ = middle.z;
+				edge = middleScreen;
+			}
+			else
+				outsideZ = middle.z;
+		}
+	}
+
+	TheDisplay->drawLine( topScreen.x, topScreen.y, bottomScreen.x, bottomScreen.y, 1.0f, LINE_COLOR );
+}
+
+// ------------------------------------------------------------------------------------------------
 /** This is called as part of the "post draw" phase when drawable a drawable.  It is there
 	* that we should overlay on the screen any 2D elements for purposes of user interface
 	* information (such as a heatlh bar, veterency levels, etc.) */
@@ -3622,6 +3691,8 @@ void Drawable::drawIconUI( void )
 		drawCaption( healthBarRegion );
 		drawConstructPercent( healthBarRegion );
 		drawSupplyCash( healthBarRegion );
+
+		drawAltitudeLine();		// ahead of the bail: the planes a general's power sends over are IGNORED_IN_GUI
 
 		//All Icons Below only draw on ALIVE things, so  bail here -------------------------
 		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_IGNORED_IN_GUI )) // object explicitly wants nothing to do with these icons, so...

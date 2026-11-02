@@ -964,6 +964,7 @@ private:
 	void drawEmoticon( const IRegion2D* healthBarRegion );
 	void drawHealthBar( const IRegion2D* healthBarRegion );					///< draw heath bar
 	void drawCaptureProgress( void );																///< the clock under the health bar of the building this one is taking
+	void drawAltitudeLine( void );																	///< the line from an aircraft in the air down to the ground under it
 	void drawHealing( const IRegion2D* healthBarRegion );						///< draw icons
 	void drawEnthusiastic( const IRegion2D* healthBarRegin );				///< draw icons
 #ifdef ALLOW_DEMORALIZE

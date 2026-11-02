@@ -809,6 +809,7 @@ found and fixed, EA's own, not port damage.**
 
 ## Aircraft, guards, and orders that used to be ignored
 
+- From the game's angle a Comanche over a ridge and a Comanche over your base can sit on the same spot of the screen. Aircraft in the air now hang a thin line straight down to the ground or water under them, so the foot tells you where the plane really is and the length how high. A parked one has none, and cutscenes draw none. A high plane at the very bottom edge of the screen can lose its line there, and so can one whose line would be taller than the screen.
 - Two jets on one airfield could deadlock waiting for each other; now they go.
 - Losing the airfield no longer leaves its aircraft circling rubble forever.
 - A jet looking for a new airfield no longer locks parking spaces it never uses. The search booked a space at every airfield it looked at on the way to the nearest, and each of those stayed booked for that jet until it died: an empty spot on the tarmac no other plane could land on and the airfield could not build into.

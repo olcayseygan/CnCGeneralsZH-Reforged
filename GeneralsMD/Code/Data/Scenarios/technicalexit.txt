@@ -1,0 +1,48 @@
+# A GLA Arms Dealer builds a Technical and the Technical comes out, for every dealer a seat can own.
+#
+# Seat 0 gets the plain, Toxin and Stealth Arms Dealers side by side, so the faction in seat 0 decides
+# the case: a plain GLA seat, a Toxin seat and a Stealth seat each build from their own dealer and
+# from the other two, the way a captured dealer leaves them. The dealers build one after the other,
+# three Technicals each, so a tally after each run says which chassis that dealer made.
+#
+# What a player queues is a placeholder (GLAVehicleTechnical and its Chem_ and Slth_ twins) and it
+# has to come out as a real chassis (...TechnicalChassisOne, Two or Three). The bug was findSideReskin
+# picking the placeholder itself: the bar filled, the money went and no unit stood there. A tally on
+# a placeholder name above 0, or no chassis at all, is that bug. Every produce line must say
+# "queued 3 of 3" and every spawn "1 of 1", or the tallies prove nothing. A Technical takes about
+# 500 frames, so each run gets 1500 before its tally.
+#
+#   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLA|FactionGLAToxinGeneral|FactionGLAStealthGeneral -side 1 FactionGLA
+#     -seed 7 -maxframes 9400 -scenario technicalexit -logPrefix techexit_
+#
+# Seat 0 starts at 537,3188; the spots below were accepted by the spawn check on that map.
+
+60    spawn      0  GLAArmsDealer        1  697 2868
+60    spawn      0  Chem_GLAArmsDealer   1  377 2868
+60    spawn      0  Slth_GLAArmsDealer   1  1017 2868
+
+90    produce    0  GLAArmsDealer        GLAVehicleTechnical       3
+1600  tally      0  GLAVehicleTechnical
+1600  tally      0  GLAVehicleTechnicalChassis*
+1600  tally      0  Chem_GLAVehicleTechnical
+1600  tally      0  Chem_GLAVehicleTechnicalChassis*
+1600  tally      0  Slth_GLAVehicleTechnical
+1600  tally      0  Slth_GLAVehicleTechnicalChassis*
+
+1610  produce    0  Chem_GLAArmsDealer   Chem_GLAVehicleTechnical  3
+3100  tally      0  GLAVehicleTechnical
+3100  tally      0  GLAVehicleTechnicalChassis*
+3100  tally      0  Chem_GLAVehicleTechnical
+3100  tally      0  Chem_GLAVehicleTechnicalChassis*
+3100  tally      0  Slth_GLAVehicleTechnical
+3100  tally      0  Slth_GLAVehicleTechnicalChassis*
+
+3110  produce    0  Slth_GLAArmsDealer   Slth_GLAVehicleTechnical  3
+4600  tally      0  GLAVehicleTechnical
+4600  tally      0  GLAVehicleTechnicalChassis*
+4600  tally      0  Chem_GLAVehicleTechnical
+4600  tally      0  Chem_GLAVehicleTechnicalChassis*
+4600  tally      0  Slth_GLAVehicleTechnical
+4600  tally      0  Slth_GLAVehicleTechnicalChassis*

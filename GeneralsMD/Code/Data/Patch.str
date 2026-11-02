@@ -38,6 +38,32 @@ CONTROLBAR:ToolTipForceAttack
 "The next click attacks whatever is under the pointer, the ground and your own side included. Click the button again to call it off."
 END
 
+// the idle buttons at the right end of the command grid, under EA's idle worker
+
+CONTROLBAR:IdleInfantry
+"Idle Infantry"
+END
+
+CONTROLBAR:IdleInfantryDescription
+"Click to select the next idle infantry"
+END
+
+CONTROLBAR:IdleVehicle
+"Idle Vehicle"
+END
+
+CONTROLBAR:IdleVehicleDescription
+"Click to select the next idle ground vehicle"
+END
+
+CONTROLBAR:IdleAircraft
+"Idle Aircraft"
+END
+
+CONTROLBAR:IdleAircraftDescription
+"Click to select the next idle aircraft"
+END
+
 GUI:OrderHoldPositionDescription
 "The selected units guard the spot they stand on and fight whatever comes near, without chasing it out of the area."
 END

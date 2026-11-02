@@ -40,6 +40,7 @@
 #include "GameClient/ControlBarScheme.h"
 #include "GameClient/Image.h"
 #include "GameClient/MapUtil.h"
+#include "GameClient/VideoPlayer.h"
 #include "GameLogic/GameLogic.h"
 #include "Common/LogicThread.h"
 #ifdef _INTERNAL
@@ -140,7 +141,14 @@ void W3DLeftHUDDraw( GameWindow *window, WinInstanceData *instData )
 		window->winGetScreenPosition( &pos.x, &pos.y );
 		window->winGetSize( &size.x, &size.y );
 
-		TheDisplay->drawVideoBuffer( video, pos.x, pos.y, pos.x + size.x, pos.y + size.y );
+		// the window takes the map's shape (ControlBar::fitRadarToMap) and the movie keeps its own,
+		// centred, with the frame's glass in the bands
+		const Real scale = MIN( (Real)size.x / video->width(), (Real)size.y / video->height() );
+		const Int movieWidth = REAL_TO_INT( video->width() * scale );
+		const Int movieHeight = REAL_TO_INT( video->height() * scale );
+		const Int movieX = pos.x + ( size.x - movieWidth ) / 2;
+		const Int movieY = pos.y + ( size.y - movieHeight ) / 2;
+		TheDisplay->drawVideoBuffer( video, movieX, movieY, movieX + movieWidth, movieY + movieHeight );
 	}
 	else if( TheRadar->isRadarForced() || ( TheRadar->isRadarHidden() == false && hasRadarForDraw( player ) ) )
 	{

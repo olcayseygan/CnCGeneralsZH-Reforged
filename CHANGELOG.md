@@ -8,6 +8,17 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The command bar fits the map
+
+- The radar takes the map's shape. A long map draws as a long strip in a frame of the same shape, a tall map as a tall one, and the black bands beside it are gone. A click on the radar still lands where it always did.
+- Four idle buttons stand at the right end of the command grid, top to bottom: worker, infantry, vehicle and aircraft. Each picks the next unit of its kind standing with no order and turns the camera to it, as the idle worker button always did; that button has moved there from the column on the left. A button stays dark while nothing of its kind is idle, and its tooltip names the key that does the same. The worker button used to light two to five seconds after the other three, because it waited on the worker to report itself idle; all four now look at your army on the same frame, and the worker button and its key cycle through the same workers that lit it.
+- The general's powers stand three to a row again, on the right edge above the general's tab. When the top row is short it leaves a step on the inside, and the tray's plate follows that outline.
+
+## Your queue in pictures again
+
+- What your base is building stands over the radar as pictures again, not lines of text: one row of five, the next to arrive on the left, together in one steel tray hard against the left edge of the screen, built like the tray that holds the general's powers, each picture in its cell with the coloured edge a power button wears. The seconds left sit in its corner on a dark plate, an x4 marks four of the same thing queued back to back, and a dark sweep comes off the picture as it builds. Past five, a tag sticking up from the tray says how many more are coming. Click one and the camera goes to the building making it; right-click it, or click with Ctrl held, and the newest of it comes off that building's queue, the picture turning red under Ctrl first so you see what you are about to cancel.
+- Superweapon countdowns in the top right are pictures too, yours first and then everyone else's, each soonest first, six to a row and two rows at most in a tray of their own against the right edge of the screen, a little under the info strip, with a tag hanging below it for the rest. A line under each one is its owner's colour, a dark sweep shows how far the charge has come, and once one is charged that line's colour rises up over the picture like light off a lamp, brightest at the line, breathing slowly so a ready superweapon reads at a glance. Clicking one of your own takes the camera to it.
+
 ## EA's four ranks are back
 
 - The rank ladder is gone, every grade, perk and aura of it. A unit is Regular, Veteran, Elite or Heroic again, on the kills and the bonuses the 2003 game gave them, with EA's chevrons over the health bar and on the portrait. Six kills of its own kind make a Crusader Heroic, where an American one needed 66 on the ladder.

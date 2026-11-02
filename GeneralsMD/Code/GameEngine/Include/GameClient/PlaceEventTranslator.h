@@ -38,6 +38,8 @@ class PlaceEventTranslator : public GameMessageTranslator
 {
 private:
 	UnsignedInt m_frameOfUpButton;
+	Bool m_cellClickTaken;			///< the left press went to a HUD cell, so its release, drag and click are the cell's too
+	Bool m_cellRightClickTaken;	///< the same for the right button, so a cancel never turns into a world order
 
 public:
 	PlaceEventTranslator();

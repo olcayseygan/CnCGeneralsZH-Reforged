@@ -1153,6 +1153,12 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 	{
 		if( commandButton && commandButton->getName() == "NonCommand_IdleWorker" )
 			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_IdleInfantry" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_IdleVehicle" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_IdleAircraft" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT ) );
 		GadgetStaticTextSetText(win, name);
 	}
 

@@ -1401,9 +1401,14 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 	// draw black border areas where we need map
 	Color fillColor = GameMakeColor( 0, 0, 0, 255 );
 	Color lineColor = GameMakeColor( 50, 50, 50, 255 );
-	if( m_mapExtent.width()/width >= m_mapExtent.height()/height )
+	if( ul.x == pixelX && ul.y == pixelY )
 	{
-		
+		// a window already cut to the map's shape (ControlBar::fitRadarToMap) has no bands to fill, and
+		// their edge lines would fall a pixel outside the map, on the frame
+	}
+	else if( m_mapExtent.width()/width >= m_mapExtent.height()/height )
+	{
+
 		// draw horizontal bars at top and bottom
 		TheDisplay->drawFillRect( pixelX, pixelY, width, ul.y - pixelY - 1, fillColor );
 		TheDisplay->drawFillRect( pixelX, lr.y + 1, width, pixelY + height - lr.y - 1, fillColor);

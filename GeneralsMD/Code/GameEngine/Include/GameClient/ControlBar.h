@@ -1004,9 +1004,11 @@ public:
 	const Image *getStarImage( void );
 
 	Color getBorderColor( void ){return m_commandBarBorderColor;}
-	/// the two button border colours the bar itself uses, so anything drawn outside it can match
+	/// the button border colours the bar itself uses, so anything drawn outside it can match
 	Color getBuildBorderColor( void ){return m_commandButtonBorderBuildColor;}
 	Color getUpgradeBorderColor( void ){return m_commandButtonBorderUpgradeColor;}
+	Color getActionBorderColor( void ){return m_commandButtonBorderActionColor;}
+	Color getSystemBorderColor( void ){return m_commandButtonBorderSystemColor;}
 	void updateBorderColor( Color color) {m_commandBarBorderColor = color;	}
 
 	/// set the command data into the button
@@ -1195,6 +1197,21 @@ protected:
 	void updateSpecialPowerShortcut( void );
 	void arrangeSpecialPowerShortcutGrid( void );	///< re-lay the layout's single column as rows of SPECIAL_POWER_SHORTCUT_COLS
 	Int countVisibleSpecialPowerShortcuts( void );	///< how many slots carry a power right now, which is not the command set's size
+	UnsignedInt visibleSpecialPowerShortcutMask( void );	///< the slots showing a power, one bit a slot
+	void rearrangeSpecialPowerShortcutGrid( void );	///< arrangeSpecialPowerShortcutGrid when the slots shown or the scheme's pieces changed
+	static const UnsignedInt TRAY_NOT_LAID_OUT = 0xFFFFFFFFu;	///< no mask of MAX_SPECIAL_POWER_SHORTCUTS bits is this
+	UnsignedInt m_trayLaidOutMask;								///< the slots arrangeSpecialPowerShortcutGrid stepped the tray for
+	const Image *const *m_trayLaidOutFor;				///< and the scheme pieces it used, NULL for the shipped column
+	Bool m_trayFramePlaced;												///< the frame stands at the stepped tray's box for this layout
+	enum { POWER_TRAY_FOOT_Y = 790 };							///< at 1080, where the tray stands: the top of the general's tab
+	void powerTrayMetrics( const Image *const *tray, ICoord2D *origin, ICoord2D *cell,
+												 Int *left, Int *top, Int *foot, Int *bottom );	///< see arrangeSpecialPowerShortcutGrid
+
+	void fitRadarToMap( Bool fromLayout );				///< the radar window, its frame and its blocker take the map's shape; see layoutPanels
+	Real m_radarFitWidth, m_radarFitHeight;				///< the map extent fitRadarToMap last fitted to
+	enum { RADAR_FIT_RADAR, RADAR_FIT_BLOCK, RADAR_FIT_LAMP, RADAR_FIT_COUNT };
+	IRegion2D m_radarFitBox[ RADAR_FIT_COUNT ];		///< where layoutPanels put each, against the bar's frame
+	void showIdleButtons( Bool show );						///< the idle worker, infantry, vehicle and aircraft buttons, hidden while watching
 
 	/** Where a key lands: the command slot at grid place `place`, or SLOT_NOTHING; and the tray slot
 		a shortcut key reaches with its row as it stands.  The press calls and the peek calls both go
@@ -1283,6 +1300,20 @@ protected:
 
 	WindowLayout *m_specialPowerLayout;
 	GameWindow *m_specialPowerShortcutParent;
+
+public:
+	/** Where one slot of the stepped tray draws its plate, in its own window's pixels: the cell
+		* under the power, and the thickness of each edge the tray's outline runs along it (0 where a
+		* neighbour stands).  stepRight is how much of the top edge the step above takes off its outer
+		* end; stepBelow how much of the left edge the step at its foot takes. */
+	struct TraySlot
+	{
+		IRegion2D cell;
+		Int edgeLeft, edgeTop, edgeBottom;
+		Int stepRight, stepBelow;
+	};
+protected:
+	TraySlot m_traySlot[ MAX_SPECIAL_POWER_SHORTCUTS ];
 
 	GameWindow *m_commandWindows[ MAX_COMMANDS_PER_SET ];			///< command window controls for easy access
 	Int m_commandUpgradeRank[ MAX_COMMANDS_PER_SET ];					///< each window's upgradeRank on the bar populateCommand last filled (HotKeyManager::playerButtonKey)

@@ -228,6 +228,32 @@ public:
 	ICoord2D m_powerBarUL;
 	ICoord2D m_powerBarLR;
 
+	/// where the bar's input blockers stand when the scheme's painting is not ControlBar.wnd's
+	/// (Block<Name>UL/LR); a zero LR leaves the .wnd's rectangle
+	enum { BLOCK_RADAR, BLOCK_PRODUCTION, BLOCK_MONEY, BLOCK_UPGRADES, BLOCK_GEN_POWER, BLOCK_COUNT };
+	ICoord2D m_blockUL[ BLOCK_COUNT ];
+	ICoord2D m_blockLR[ BLOCK_COUNT ];
+
+	/// the idle infantry, vehicle and aircraft buttons beside the command grid: Idle<Kind>ButtonImage
+	/// names the sheet piece, and its H, P and I copies are the other three states; Idle<Kind>UL/LR
+	/// where it stands.  A scheme without the rectangle leaves the button out.
+	enum { IDLE_INFANTRY, IDLE_VEHICLE, IDLE_AIRCRAFT, IDLE_COUNT };
+	AsciiString m_idleButtonImage[ IDLE_COUNT ];
+	ICoord2D m_idleUL[ IDLE_COUNT ];
+	ICoord2D m_idleLR[ IDLE_COUNT ];
+
+	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
+	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
+	enum { FRAME_TL, FRAME_T, FRAME_TR, FRAME_L, FRAME_C, FRAME_R, FRAME_BL, FRAME_B, FRAME_BR, FRAME_PIECE_COUNT };
+	AsciiString m_radarFrameName;
+	const Image *m_radarFrame[ FRAME_PIECE_COUNT ];		///< resolved by init; all NULL without the key
+
+	/// PowerTrayImage: the general's powers tray's pieces, <name>Cell, EdgeTop, EdgeLeft, EdgeBottom,
+	/// CornerTopLeft, CornerBottomLeft, Step; see ControlBar::arrangeSpecialPowerShortcutGrid
+	enum { TRAY_CELL, TRAY_EDGE_TOP, TRAY_EDGE_LEFT, TRAY_EDGE_BOTTOM, TRAY_CORNER_TL, TRAY_CORNER_BL, TRAY_STEP, TRAY_PIECE_COUNT };
+	AsciiString m_powerTrayName;
+	const Image *m_powerTray[ TRAY_PIECE_COUNT ];			///< resolved by init; all NULL without the key
+
 
 
 
@@ -276,6 +302,16 @@ public:
 
 	/// the bar on screen wears its scheme's own painting, ControlBar Pro's
 	Bool isCurrentSchemePainted( void ) const;
+
+	/// the radar frame's nine pieces (ControlBarScheme::FRAME_*) of the scheme on screen, or NULL
+	/// when it names none or lacks the two corners that size it; the radar then keeps its square well
+	const Image *const *getRadarFrame( void ) const;
+	/// the frame round a radar standing at 'radar' on screen: the corners' sizes, at the screen's
+	/// height over 1080, are its thickness on each side
+	static void radarFrameRect( const Image *const *frame, const IRegion2D& radar, IRegion2D *outer );
+	/// the general's powers tray's pieces (ControlBarScheme::TRAY_*) of the scheme on screen, or NULL
+	/// without a cell; the tray then keeps the shipped column
+	const Image *const *getPowerTray( void ) const;
 	/// the scheme's painting, cut at the panel seams and each piece drawn where its panel stands
 	void drawPainting( ICoord2D offset, Bool foreground );
 

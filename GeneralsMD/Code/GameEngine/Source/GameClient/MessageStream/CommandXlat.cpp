@@ -2942,8 +2942,8 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 		//-----------------------------------------------------------------------------------------
 		case GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER:
 		{
-			// same list the control bar's idle-worker button cycles; when every dozer and worker
-			// has a job the list is empty and selectNextIdleWorker returns without doing anything.
+			// the same walk the control bar's idle-worker button lights from and cycles; when every
+			// dozer and worker has a job selectNextIdleWorker finds none and does nothing.
 			TheInGameUI->selectNextIdleWorker();
 
 			disp = DESTROY_MESSAGE;
@@ -2960,15 +2960,7 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			// mass-selectable or off-map test.
 			KindOfMaskType mustBeSet;
 			KindOfMaskType mustBeClear;
-			if( t == GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT )
-				mustBeSet.set( KINDOF_AIRCRAFT );
-			else if( t == GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE )
-			{
-				mustBeSet.set( KINDOF_VEHICLE );
-				mustBeClear.set( KINDOF_AIRCRAFT );
-			}
-			else if( t == GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY )
-				mustBeSet.set( KINDOF_INFANTRY );
+			InGameUI::idleUnitKinds( t, &mustBeSet, &mustBeClear );
 
 			TheInGameUI->selectNextIdleUnit( mustBeSet, mustBeClear );
 

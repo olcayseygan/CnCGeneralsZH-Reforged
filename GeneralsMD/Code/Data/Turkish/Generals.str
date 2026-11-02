@@ -4509,6 +4509,30 @@ CONTROLBAR:IdleWorkerDescription
 "Sonraki boştaki işçiyi seçmek için tıklayın"
 END
 
+CONTROLBAR:IdleInfantry
+"Boştaki Piyade"
+END
+
+CONTROLBAR:IdleInfantryDescription
+"Sonraki boştaki piyadeyi seçmek için tıklayın"
+END
+
+CONTROLBAR:IdleVehicle
+"Boştaki Araç"
+END
+
+CONTROLBAR:IdleVehicleDescription
+"Sonraki boştaki kara aracını seçmek için tıklayın"
+END
+
+CONTROLBAR:IdleAircraft
+"Boştaki Hava Aracı"
+END
+
+CONTROLBAR:IdleAircraftDescription
+"Sonraki boştaki hava aracını seçmek için tıklayın"
+END
+
 CONTROLBAR:Beacon
 "İşaret"
 END

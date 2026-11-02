@@ -163,6 +163,29 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "MoneyUL", 		INI::parseICoord2D,				NULL, offsetof( ControlBarScheme, m_moneyUL ) },
 	{ "MoneyLR", 		INI::parseICoord2D,				NULL, offsetof( ControlBarScheme, m_moneyLR ) },
 
+	{ "BlockRadarUL",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_RADAR ] ) },
+	{ "BlockRadarLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_RADAR ] ) },
+	{ "BlockProductionUL",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_PRODUCTION ] ) },
+	{ "BlockProductionLR",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_PRODUCTION ] ) },
+	{ "BlockMoneyUL",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_MONEY ] ) },
+	{ "BlockMoneyLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_MONEY ] ) },
+	{ "BlockUpgradesUL",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_UPGRADES ] ) },
+	{ "BlockUpgradesLR",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_UPGRADES ] ) },
+	{ "BlockGenPowerUL",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_GEN_POWER ] ) },
+	{ "BlockGenPowerLR",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_GEN_POWER ] ) },
+
+	{ "IdleInfantryButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_idleButtonImage[ ControlBarScheme::IDLE_INFANTRY ] ) },
+	{ "IdleInfantryUL",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleUL[ ControlBarScheme::IDLE_INFANTRY ] ) },
+	{ "IdleInfantryLR",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleLR[ ControlBarScheme::IDLE_INFANTRY ] ) },
+	{ "IdleVehicleButtonImage",		INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_idleButtonImage[ ControlBarScheme::IDLE_VEHICLE ] ) },
+	{ "IdleVehicleUL",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleUL[ ControlBarScheme::IDLE_VEHICLE ] ) },
+	{ "IdleVehicleLR",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleLR[ ControlBarScheme::IDLE_VEHICLE ] ) },
+	{ "IdleAircraftButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_idleButtonImage[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
+	{ "IdleAircraftUL",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleUL[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
+	{ "IdleAircraftLR",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleLR[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
+	{ "RadarFrameImage",			INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_radarFrameName ) },
+	{ "PowerTrayImage",				INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_powerTrayName ) },
+
 	{ "CommandMarkerImage",		INI::parseMappedImage,				NULL, offsetof( ControlBarScheme, m_commandMarkerImage) },
 	{ "ExpBarForegroundImage",		INI::parseMappedImage,				NULL, offsetof( ControlBarScheme, m_expBarForeground) },
 	{ "PowerPurchaseImage",			INI::parseMappedImage,				NULL, offsetof( ControlBarScheme, m_powerPurchaseImage) },
@@ -427,6 +450,21 @@ ControlBarScheme::ControlBarScheme(void)
 	
 	m_moneyLR.x = 0;
 	m_moneyLR.y = 0;
+
+	for( Int i = 0; i < BLOCK_COUNT; i++ )
+	{
+		m_blockUL[ i ].x = m_blockUL[ i ].y = 0;
+		m_blockLR[ i ].x = m_blockLR[ i ].y = 0;
+	}
+	for( Int i = 0; i < IDLE_COUNT; i++ )
+	{
+		m_idleUL[ i ].x = m_idleUL[ i ].y = 0;
+		m_idleLR[ i ].x = m_idleLR[ i ].y = 0;
+	}
+	for( Int i = 0; i < FRAME_PIECE_COUNT; i++ )
+		m_radarFrame[ i ] = NULL;
+	for( Int i = 0; i < TRAY_PIECE_COUNT; i++ )
+		m_powerTray[ i ] = NULL;
 }
 
 
@@ -458,8 +496,29 @@ static void placeSchemeWindow( GameWindow *win, const ICoord2D& ul, const ICoord
 									 ( lr.y - ul.y ) * resMultiplier.y + COMMAND_BAR_SIZE_OFFSET );
 }
 
+/// <prefix><suffix> for each suffix from the mapped images; every one NULL when the scheme names no prefix
+static void findPieces( const AsciiString& prefix, const char *const *suffixes, Int count, const Image **out )
+{
+	for( Int i = 0; i < count; i++ )
+	{
+		out[ i ] = NULL;
+		if( prefix.isEmpty() )
+			continue;
+		AsciiString name = prefix;
+		name.concat( suffixes[ i ] );
+		out[ i ] = TheMappedImageCollection->findImageByName( name );
+	}
+}
+
 void ControlBarScheme::init(void)
 {
+	// before anything below lays the bar out: layoutPanels fits the radar's frame from these
+	static const char *const frameSuffixes[ FRAME_PIECE_COUNT ] = { "TL", "T", "TR", "L", "C", "R", "BL", "B", "BR" };
+	static const char *const traySuffixes[ TRAY_PIECE_COUNT ] =
+		{ "Cell", "EdgeTop", "EdgeLeft", "EdgeBottom", "CornerTopLeft", "CornerBottomLeft", "Step" };
+	findPieces( m_radarFrameName, frameSuffixes, FRAME_PIECE_COUNT, m_radarFrame );
+	findPieces( m_powerTrayName, traySuffixes, TRAY_PIECE_COUNT, m_powerTray );
+
 	if(TheControlBar)
 	{
 		TheControlBar->switchControlBarStage(CONTROL_BAR_STAGE_DEFAULT);
@@ -481,7 +540,7 @@ void ControlBarScheme::init(void)
 
 	//
 	// The eighteen-window grid (ControlBar::isCommandGridWide) stands on a plate one command column
-	// longer at each end: the painting's "<name>Wide" copy (Tools/wide_command_bar.py).  The toolbar
+	// longer at each end: the painting's "<name>Wide" copy (Tools/hud_command_bar.py).  The toolbar
 	// column moves out with the left end and the power rail runs the plate's new length.  A scheme
 	// whose painting has no wide copy, a mod's own, keeps its windows where it put them.
 	//
@@ -508,8 +567,9 @@ void ControlBarScheme::init(void)
 	ICoord2D powerBarUL = m_powerBarUL, powerBarLR = m_powerBarLR;
 	chatUL.x -= wideStep;
 	chatLR.x -= wideStep;
-	workerUL.x -= wideStep;
-	workerLR.x -= wideStep;
+	// the idle worker heads the idle column at the grid's right end, so it goes out with that end
+	workerUL.x += wideStep;
+	workerLR.x += wideStep;
 	optionsUL.x -= wideStep;
 	optionsLR.x -= wideStep;
 	beaconUL.x -= wideStep;
@@ -538,6 +598,41 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetDisabledImage(win, m_idleWorkerButtonDisabled);
 		placeSchemeWindow( win, workerUL, workerLR, resMultiplier );
 	}
+
+	//
+	// The idle infantry, vehicle and aircraft buttons stand in a column at the grid's right end and
+	// go out with it on the wide grid, the way the toolbar column goes out with the left end.  A
+	// scheme that does not place one shrinks it to nothing rather than leave it at the .wnd's 0,0.
+	//
+	static const char *const idleNames[ IDLE_COUNT ] =
+	{
+		"ControlBar.wnd:ButtonIdleInfantry",
+		"ControlBar.wnd:ButtonIdleVehicle",
+		"ControlBar.wnd:ButtonIdleAircraft",
+	};
+	for( Int i = 0; i < IDLE_COUNT; i++ )
+	{
+		win = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( idleNames[ i ] ) );
+		if( win == NULL )
+			continue;
+		if( m_idleLR[ i ].x <= m_idleUL[ i ].x )
+		{
+			win->winSetSize( 0, 0 );
+			continue;
+		}
+		static const char *const states[ 4 ] = { "", "H", "P", "I" };
+		const Image *image[ 4 ];
+		findPieces( m_idleButtonImage[ i ], states, 4, image );
+		GadgetButtonSetEnabledImage( win, image[ 0 ] );
+		GadgetButtonSetHiliteImage( win, image[ 1 ] );
+		GadgetButtonSetHiliteSelectedImage( win, image[ 2 ] );
+		GadgetButtonSetDisabledImage( win, image[ 3 ] );
+		ICoord2D ul = m_idleUL[ i ], lr = m_idleLR[ i ];
+		ul.x += wideStep;
+		lr.x += wideStep;
+		placeSchemeWindow( win, ul, lr, resMultiplier );
+	}
+
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ExpBarForeground" ) );
 	if(win)	
 	{
@@ -605,6 +700,35 @@ void ControlBarScheme::init(void)
 		win->winSetEnabledImage(0,m_powerPurchaseImage);
 		// where it stands is ControlBar Pro's GeneralsExpPoints.wnd at its pieces' scale, centred at the
 		// top (ControlBarLayoutUniform in ControlBar::initWindows), so nothing here moves it
+	}
+
+	//
+	// A painting whose plates outgrow ControlBar.wnd's input blockers names its own, so a click on
+	// the new steel does not fall through to the world.  The production blocker follows the wide
+	// plate's two extra columns the way the power rail does.
+	//
+	static const char *const blockNames[ BLOCK_COUNT ] =
+	{
+		"ControlBar.wnd:ControlBarProBlockInputRadar",
+		"ControlBar.wnd:ControlBarProBlockInputProduction",
+		"ControlBar.wnd:ControlBarProBlockInputMoney",
+		"ControlBar.wnd:ControlBarProBlockInputUpgrades",
+		"ControlBar.wnd:ControlBarProBlockInputGenPowerButton",
+	};
+	for( Int i = 0; i < BLOCK_COUNT; i++ )
+	{
+		if( m_blockLR[ i ].x <= m_blockUL[ i ].x )
+			continue;
+		win = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( blockNames[ i ] ) );
+		if( win == NULL )
+			continue;
+		ICoord2D ul = m_blockUL[ i ], lr = m_blockLR[ i ];
+		if( i == BLOCK_PRODUCTION )
+		{
+			ul.x -= wideStep;
+			lr.x += wideStep;
+		}
+		placeSchemeWindow( win, ul, lr, resMultiplier );
 	}
 
 	//
@@ -1146,6 +1270,61 @@ Bool ControlBarSchemeManager::isCurrentSchemePainted( void ) const
 	return m_currentScheme != NULL;
 }
 
+const Image *const *ControlBarSchemeManager::getRadarFrame( void ) const
+{
+	if( m_currentScheme == NULL || m_currentScheme->m_radarFrame[ ControlBarScheme::FRAME_TL ] == NULL
+			|| m_currentScheme->m_radarFrame[ ControlBarScheme::FRAME_BR ] == NULL )
+		return NULL;
+	return m_currentScheme->m_radarFrame;
+}
+
+void ControlBarSchemeManager::radarFrameRect( const Image *const *frame, const IRegion2D& radar, IRegion2D *outer )
+{
+	const Real k = TheDisplay->getHeight() / 1080.0f;
+	const Image *tl = frame[ ControlBarScheme::FRAME_TL ];
+	const Image *br = frame[ ControlBarScheme::FRAME_BR ];
+	outer->lo.x = radar.lo.x - REAL_TO_INT_CEIL( tl->getImageWidth() * k );
+	outer->lo.y = radar.lo.y - REAL_TO_INT_CEIL( tl->getImageHeight() * k );
+	outer->hi.x = radar.hi.x + REAL_TO_INT_CEIL( br->getImageWidth() * k );
+	outer->hi.y = radar.hi.y + REAL_TO_INT_CEIL( br->getImageHeight() * k );
+}
+
+const Image *const *ControlBarSchemeManager::getPowerTray( void ) const
+{
+	if( m_currentScheme == NULL || m_currentScheme->m_powerTray[ ControlBarScheme::TRAY_CELL ] == NULL )
+		return NULL;
+	return m_currentScheme->m_powerTray;
+}
+
+//-----------------------------------------------------------------------------
+/** The radar's frame, nine pieces round wherever ControlBar::fitRadarToMap stood the radar: the
+	* corners at their size, the edges stretched along the radar and the centre under it, which is
+	* what shows while the player has no radar.  Drawn after the painting and before the windows. */
+//-----------------------------------------------------------------------------
+static void drawRadarFrame( const Image *const *frame )
+{
+	static NameKeyType radarID = NAMEKEY( "ControlBar.wnd:LeftHUD" );
+	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarID );
+	if( radar == NULL || radar->winIsHidden() )
+		return;
+	IRegion2D inner, outer;
+	radar->winGetScreenPosition( &inner.lo.x, &inner.lo.y );
+	radar->winGetSize( &inner.hi.x, &inner.hi.y );
+	inner.hi.x += inner.lo.x;
+	inner.hi.y += inner.lo.y;
+	ControlBarSchemeManager::radarFrameRect( frame, inner, &outer );
+	const Int xs[ 4 ] = { outer.lo.x, inner.lo.x, inner.hi.x, outer.hi.x };
+	const Int ys[ 4 ] = { outer.lo.y, inner.lo.y, inner.hi.y, outer.hi.y };
+	for( Int piece = 0; piece < ControlBarScheme::FRAME_PIECE_COUNT; piece++ )
+	{
+		// a piece the art leaves out leaves the painting showing there
+		if( frame[ piece ] == NULL )
+			continue;
+		const Int col = piece % 3, row = piece / 3;
+		TheDisplay->drawImage( frame[ piece ], xs[ col ], ys[ row ], xs[ col + 1 ], ys[ row + 1 ] );
+	}
+}
+
 //-----------------------------------------------------------------------------
 /** ControlBar Pro's painting, cut at the seams below and each piece drawn where its panel stands
 	* (ControlBarPanelDesignToScreen).  The seams fall in the gaps of every side's art. */
@@ -1199,6 +1378,11 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 		}
 		TheDisplay->enableClipping( FALSE );
 	}
+
+	// the radar window travels with the bar, so its frame needs no offset
+	const Image *const *frame = getRadarFrame();
+	if( !foreground && frame )
+		drawRadarFrame( frame );
 }
 
 //-----------------------------------------------------------------------------
@@ -1216,7 +1400,7 @@ void ControlBarSchemeManager::setControlBarSchemeByPlayerTemplate( const PlayerT
 	// the squished bar keeps EA's pick: the side's Small scheme, and none ships, so "Default"
 	AsciiString smallSide = side;
 	smallSide.concat("Small");
-	// a side with no bar of its own (the fork's Turkiye) wears America's (findSchemeForFaction)
+	// a side with no bar of its own wears its country's or America's (findSchemeForFaction)
 	ControlBarScheme *tempScheme = useSmall ? findSchemeForSide( smallSide ) : findSchemeForFaction( side );
 	if(tempScheme)
 	{
@@ -1250,7 +1434,7 @@ void ControlBarSchemeManager::setControlBarSchemeByPlayer(Player *p)
 		side.set("Observer");
 	// picked again every time, even for the side on screen: a new resolution can want a different
 	// scheme for it (findSchemeForSide), and the multiplier below is the screen's
-	// the neutral and civilian players are of no country, and wear America's, as does Turkiye
+	// the neutral and civilian players are of no country, and wear America's
 	m_currentScheme = findSchemeForFaction( side );
 	DEBUG_LOG(("setControlBarSchemeByPlayer gave side %s the scheme of %s\n", side.str(), m_currentScheme->m_side.str()));
 	m_multiplyer.x = TheDisplay->getWidth() / (Real)m_currentScheme->m_ScreenCreationRes.x;

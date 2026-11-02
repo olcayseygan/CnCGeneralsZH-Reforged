@@ -434,6 +434,9 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 			static NameKeyType buttonLargeID = NAMEKEY("ControlBar.wnd:ButtonLarge");
 			static NameKeyType buttonOptions = NAMEKEY("ControlBar.wnd:ButtonOptions");
 			static NameKeyType buttonIdleWorker = NAMEKEY("ControlBar.wnd:ButtonIdleWorker");
+			static NameKeyType buttonIdleInfantry = NAMEKEY("ControlBar.wnd:ButtonIdleInfantry");
+			static NameKeyType buttonIdleVehicle = NAMEKEY("ControlBar.wnd:ButtonIdleVehicle");
+			static NameKeyType buttonIdleAircraft = NAMEKEY("ControlBar.wnd:ButtonIdleAircraft");
 
 			Int controlID = control->winGetWindowId();
 			if( controlID == buttonCommunicator )
@@ -487,6 +490,18 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 				Object *worker = TheInGameUI->selectNextIdleWorker();
 				if( worker )	// every worker busy: nothing was selected
 					TheTacticalView->lookAt( worker->getPosition() );
+			}
+			else if( controlID == buttonIdleInfantry || controlID == buttonIdleVehicle || controlID == buttonIdleAircraft )
+			{
+				// the Next Idle Infantry, Vehicle and Aircraft keys' cycle, with the worker button's camera
+				HideQuitMenu( );
+				KindOfMaskType mustBeSet, mustBeClear;
+				InGameUI::idleUnitKinds( controlID == buttonIdleInfantry ? GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY
+																 : controlID == buttonIdleVehicle ? GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE
+																 : GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT, &mustBeSet, &mustBeClear );
+				Object *unit = TheInGameUI->selectNextIdleUnit( mustBeSet, mustBeClear );
+				if( unit )
+					TheTacticalView->lookAt( unit->getPosition() );
 			}
 			else
 			{

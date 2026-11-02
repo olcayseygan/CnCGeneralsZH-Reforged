@@ -644,6 +644,11 @@ Int particleSmokeParticleCap( Int shippedCap, Real thickness )
 	if (shippedCap <= 0 || thickness <= 1.0f)
 		return shippedCap;
 
+	// the ceiling bounds what the switch adds, never what the player set: a cap already above it
+	// stays where the player put it
+	if (shippedCap >= CAP_CEILING)
+		return shippedCap;
+
 	Int raised = REAL_TO_INT( shippedCap * thickness );
 	return (raised > CAP_CEILING) ? CAP_CEILING : raised;
 }

@@ -4166,6 +4166,12 @@ TEST(smoke_cap_grows_with_the_thickness_and_stops_at_the_ceiling)
 	CHECK_EQ(particleSmokeParticleCap(2500, 2.0f), 5000);
 	CHECK(particleSmokeParticleCap(2500, 4.0f) > particleSmokeParticleCap(2500, 2.0f));
 	CHECK_EQ(particleSmokeParticleCap(20000, 8.0f), 20000);
+	CHECK_EQ(particleSmokeParticleCap(15000, 2.0f), 20000);
+}
+
+TEST(smoke_cap_never_lowers_a_cap_the_player_set_above_the_ceiling)
+{
+	CHECK_EQ(particleSmokeParticleCap(1000000, 2.0f), 1000000);
 }
 
 //////////////////////////////////////////////////////////////////////////////

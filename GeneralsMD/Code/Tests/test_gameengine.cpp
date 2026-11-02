@@ -15644,6 +15644,11 @@ TEST(the_difficulty_ladder_climbs_in_every_direction_it_should)
 		CHECK( upper.m_adaptiveHarvesters >= lower.m_adaptiveHarvesters );
 		CHECK( upper.m_selfTriggeredExpansion >= lower.m_selfTriggeredExpansion );
 		CHECK( upper.m_defendExpansions >= lower.m_defendExpansions );
+
+		// more of the map: another base sooner, more of them, docks further out
+		CHECK( upper.m_secondBaseSeconds < lower.m_secondBaseSeconds );
+		CHECK( upper.m_secondBases >= lower.m_secondBases );
+		CHECK( upper.m_expansionReach >= lower.m_expansionReach );
 	}
 
 	// the ends of the ladder are what they say they are: Easy ignores what it is facing and Brutal

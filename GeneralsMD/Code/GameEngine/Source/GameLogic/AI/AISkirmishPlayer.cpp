@@ -252,7 +252,10 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			// A second war factory, barracks or airfield of the plan's waits until the ones standing
 			// fall behind their queues, as an extra one would.  Only for the fork's AI: the queues are
 			// sampled by its doSpending, so EA's would wait on a sample that never comes.
-			if (runsOwnAI() && holdsExtraFactory(curPlan)) {
+			// The factory that founds a base on an empty start position is not an extra one: held here,
+			// a Hard GLA's Arms Dealer waited from frame 26175 to the end of the match behind one still
+			// going up at home.
+			if (runsOwnAI() && holdsExtraFactory(curPlan) && !(info->isPriorityBuild() && onEmptyStart(info->getLocation()))) {
 				continue;
 			}
 			// The safety check below is a range query over everything near the spot, most of a

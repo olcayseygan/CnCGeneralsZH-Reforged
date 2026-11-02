@@ -297,6 +297,11 @@ struct AIDifficultyProfile
 
 	// A superweapon going up, the word every seat hears (AIPlayer::dodgeStrike)
 	Real	m_strikeDodgeSeconds;						///< how long after that word its helicopters leave where they stand; 0 = they stay
+
+	// Taking more of the map (AIPlayer::doSecondBase, AIPlayer::findSupplyCenter)
+	Real	m_secondBaseSeconds;						///< no base away from home before this far into the match; 0 = never
+	Int		m_secondBases;									///< how many empty start positions it founds a base on, nearest first
+	Real	m_expansionReach;								///< how far from home, or from one of those bases, a supply center of its own choosing may go
 };
 
 //-------------------------------------------------------------------------------------------------

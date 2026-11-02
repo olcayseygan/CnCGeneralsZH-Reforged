@@ -45,6 +45,7 @@
 #include "Common/Recorder.h"
 #include "Common/ResourceGatheringManager.h"
 #include "Common/BuildAssistant.h"
+#include "Common/ProductionPrerequisite.h"
 #include "Common/ThingTemplate.h"
 #include "Common/TunnelTracker.h"
 #include "Common/Upgrade.h"
@@ -4114,8 +4115,8 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 /** Defenses buildBySupplies puts beside one warehouse. */
 static const Int MAX_DEFENSES_PER_WAREHOUSE = 2;
 
-/** The furthest dock from its base center a computer with a base expands to, in world units. */
-static const Real EXPANSION_MAX_DISTANCE = 2000.0f;
+/** Most bases away from home findOutposts reports: one on every start position, and a few far factories. */
+static const Int MAX_OUTPOSTS = MAX_PLAYER_COUNT + 4;
 
 struct OwnedNearCount
 {
@@ -4541,6 +4542,9 @@ Object *AIPlayer::findSupplyCenter(Int minimumCash, Bool holdableOnly)
 		getPlayerStructureBounds(&bounds, enemy->getPlayerIndex(), FALSE, m_player->getPlayerIndex());
 		enemyCenter.set( (bounds.lo.x+bounds.hi.x)*0.5f, (bounds.lo.y+bounds.hi.y)*0.5f, 0);
 	}
+	// an AI expanding on its own measures a dock from the nearest of its bases, the ones away from home included
+	Coord3D outposts[ MAX_OUTPOSTS ];
+	const Int outpostCount = holdableOnly && ownAI ? findOutposts( outposts, MAX_OUTPOSTS ) : 0;
 
 	do {
 		for( obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
@@ -4590,11 +4594,21 @@ Object *AIPlayer::findSupplyCenter(Int minimumCash, Bool holdableOnly)
 				dx = obj->getPosition()->x - m_baseCenter.x;
 				dy = obj->getPosition()->y - m_baseCenter.y;
 				Real distSqr = dx*dx + dy*dy;
-				// An AI expanding on its own takes a dock it can hold: within EXPANSION_MAX_DISTANCE of
-				// home, nearer its own base than any enemy's, and with no enemy standing at it.  The test
-				// below only knows the one enemy this AI is attacking, and lets through a dock a fifth
-				// nearer him than us.  A script's choice of dock is left as it was.
-				if (holdableOnly && (distSqr > sqr(EXPANSION_MAX_DISTANCE) || !isOurSideOfMap(obj->getPosition()) ||
+				Bool byOutpost = FALSE;
+				for (Int i = 0; i < outpostCount; ++i) {
+					const Real outpostSqr = sqr(obj->getPosition()->x - outposts[i].x) + sqr(obj->getPosition()->y - outposts[i].y);
+					if (outpostSqr < distSqr) {
+						distSqr = outpostSqr;
+						byOutpost = TRUE;
+					}
+				}
+				// An AI expanding on its own takes a dock it can hold: within the rung's reach of home or
+				// of a base of its own away from home, nearer its own base than any enemy's unless it is
+				// nearest one away from home, and with no enemy standing at it.  The test below only knows
+				// the one enemy this AI is attacking, and lets through a dock a fifth nearer him than us.
+				// A script's choice of dock is left as it was.
+				if (holdableOnly && (distSqr > sqr(getSkillProfile()->m_expansionReach) ||
+						(!byOutpost && !isOurSideOfMap(obj->getPosition())) ||
 						!isLocationSafe(obj->getPosition(), obj->getTemplate()))) {
 					continue;
 				}
@@ -5726,6 +5740,7 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_SCOUT,   doScouting() );					// Keep one unit looking at the map.
 		AI_PHASE( AIP_RETREAT, doRetreats() );					// Break off the fights we are losing.
 		AI_PHASE( AIP_EXPAND,  doExpansion() );					// Go and take the money that is lying around.
+		AI_PHASE( AIP_EXPAND,  doSecondBase() );				// ... and a base away from home, so one stroke does not finish it.
 		AI_PHASE( AIP_CAPTURE, doCapture() );						// ... and the money that is standing around.
 		AI_PHASE( AIP_CAPTURE, doHijack() );						// Take the enemy's tanks rather than shoot them.
 		AI_PHASE( AIP_ECONOMY, doEconomy() );						// ... and the money sitting in the bank.
@@ -5911,6 +5926,24 @@ static Bool hasGuardNear( Player *player, const Coord3D *pos, Real reach )
 	return FALSE;
 }
 
+/** Supply centers an AI expands to on its own, counting only those beside a pile with boxes left, by
+	* rung: Easy, Medium, Hard. */
+static const Int MAX_WORKING_CENTERS[ AISKILL_COUNT ] = { 3, 4, 6 };
+
+struct WorkingCenterCount
+{
+	Player *player;
+	Int count;
+};
+
+static void countWorkingCenter( Object *obj, void *userData )
+{
+	WorkingCenterCount *search = (WorkingCenterCount *)userData;
+	if( !obj->isEffectivelyDead() && obj->isKindOf( KINDOF_FS_SUPPLY_CENTER ) &&
+			( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || hasSuppliesNear( search->player, obj, SUPPLY_CENTER_CLOSE_DIST ) ) )
+		++search->count;
+}
+
 /** For the log only: what stopped this look at expanding. */
 static void logExpansionStop( Player *player, const char *gate )
 {
@@ -5990,6 +6023,19 @@ void AIPlayer::doExpansion( void )
 	if( tmpl == NULL )
 	{
 		logExpansionStop( m_player, "no supply center template" );
+		return;
+	}
+
+	// enough working centers already: a GLA put a stash at every pile it could reach.  One by a pile
+	// that has run dry no longer counts, and a base away from home puts its own up past this cap
+	WorkingCenterCount working;
+	working.player = m_player;
+	working.count = 0;
+	m_player->iterateObjects( countWorkingCenter, &working );
+	if( working.count >= MAX_WORKING_CENTERS[ m_skillLevel ] )
+	{
+		DEBUG_LOG(("AI EXPAND frame %d player %d stopped by %d working supply centers, cap %d\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), working.count, MAX_WORKING_CENTERS[ m_skillLevel ]));
 		return;
 	}
 
@@ -7195,12 +7241,17 @@ Int AIPlayer::personaBuildingScore( const ThingTemplate *tmpl ) const
 }
 
 /** Money units that earn in the open: what a player owns before an internet center stands, and what
-	it keeps beside the centers it has. */
-static const Int MONEY_UNITS_IN_THE_OPEN = 4;
+	it keeps beside the centers it has, by rung: Easy, Medium, Hard.  Four on every rung, and only Hard
+	ever bought any, so a China AI earned from three or four hackers all match. */
+static const Int MONEY_UNITS_IN_THE_OPEN[ AISKILL_COUNT ] = { 2, 4, 6 };
 
 /** Fighting units for every money unit past that.  The hackers share the barracks queue with the
 	infantry, and a Hard Tank General with no ratio spent two thirds of 20,000 frames on them. */
-static const Int ARMY_PER_MONEY_UNIT = 4;
+static const Int ARMY_PER_MONEY_UNIT = 3;
+
+/** What a money unit is bid up by on the purchase queue: ahead of the army's next unit (55 against an
+	economy purchase's 50), which took every pass from it, and behind a personality's liked unit. */
+static const Int MONEY_UNIT_BID = 8;
 
 /** The money units a player has standing, and the seats its finished internet centers hold for them.
 	Counted rather than tracked: a hacker dies, is captured, or walks into a transport, and a running
@@ -7229,8 +7280,9 @@ Int AIPlayer::moneyUnitRoom( void ) const
 {
 	MoneyUnitTally money = { 0, 0 };
 	m_player->iterateObjects( tallyMoneyUnit, &money );
-	const Int byArmy = max( MONEY_UNITS_IN_THE_OPEN, tallyBase( m_player ).army / ARMY_PER_MONEY_UNIT );
-	return min( byArmy, money.seats + MONEY_UNITS_IN_THE_OPEN ) - money.owned;
+	const Int open = MONEY_UNITS_IN_THE_OPEN[ m_skillLevel ];
+	const Int byArmy = max( open, tallyBase( m_player ).army / ARMY_PER_MONEY_UNIT );
+	return min( byArmy, money.seats + open ) - money.owned;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -7360,33 +7412,391 @@ void AIPlayer::doPower( void )
 }
 
 //----------------------------------------------------------------------------------------------------------
+/** How often a base away from home is looked at, founded or grown by one building. */
+static const Int SECOND_BASE_CHECK_RATE = 20 * LOGICFRAMES_PER_SECOND;
+
+/** How far from its factory a base away from home reaches: its power, guns and dock stand inside this. */
+static const Real SECOND_BASE_RADIUS = 450.0f;
+
+/** A factory further than this many base radii from home is a base of its own. */
+static const Real OUTPOST_REACH = 2.5f;
+
+/** Guns a base away from home gets. */
+static const Int SECOND_BASE_DEFENSES = 2;
+
+/** The bank past which a base under attack still founds and grows its bases away from home: four war
+	* factories' worth, so the defence is paid for first. */
+static const Int SECOND_BASE_UNDER_FIRE_BANK = 10000;
+
+struct OutpostSearch
+{
+	Coord3D home;
+	Real farSqr;
+	Coord3D *at;
+	Int max;
+	Int count;
+};
+
+static void findOutpost( Object *obj, void *userData )
+{
+	OutpostSearch *search = (OutpostSearch *)userData;
+	if( search->count >= search->max || obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_STRUCTURE ) )
+		return;
+	Bool factory = FALSE;
+	for( Int k = 0; k < PRODUCTION_KINDS; ++k )
+		factory = factory || obj->isKindOf( PRODUCTION_KIND[ k ] );
+	const Coord3D *pos = obj->getPosition();
+	if( !factory || sqr( pos->x - search->home.x ) + sqr( pos->y - search->home.y ) < search->farSqr )
+		return;
+	for( Int i = 0; i < search->count; ++i )
+		if( sqr( pos->x - search->at[ i ].x ) + sqr( pos->y - search->at[ i ].y ) < sqr( SECOND_BASE_RADIUS ) )
+			return;
+	search->at[ search->count++ ] = *pos;
+}
+
+Int AIPlayer::findOutposts( Coord3D *at, Int max )
+{
+	OutpostSearch search;
+	search.home = m_baseCenter;
+	search.farSqr = sqr( OUTPOST_REACH * m_baseRadius );
+	search.at = at;
+	search.max = max;
+	search.count = 0;
+	if( m_baseCenterSet )
+		m_player->iterateObjects( findOutpost, &search );
+	return search.count;
+}
+
+/** No player started on this start position.  Which ones are empty is in the lobby for everyone to read,
+	* so this is the game's own record and not the scouts' picture. */
+static Bool nobodyStartedOn( Int startNdx )
+{
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	{
+		Player *p = ThePlayerList->getNthPlayer( i );
+		if( p->isPlayableSide() && p->getMpStartIndex() == startNdx )
+			return FALSE;
+	}
+	return TRUE;
+}
+
+Bool AIPlayer::onEmptyStart( const Coord3D *pos ) const
+{
+	for( Int startNdx = 0; startNdx < MAX_PLAYER_COUNT; ++startNdx )
+	{
+		Coord3D there;
+		if( startPositionLoc( startNdx, &there ) && nobodyStartedOn( startNdx ) &&
+				sqr( there.x - pos->x ) + sqr( there.y - pos->y ) < sqr( 2.0f * SECOND_BASE_RADIUS ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+struct KindNearCount
+{
+	KindOfType kind;
+	Coord3D at;
+	Real radiusSqr;
+	Int count;
+};
+
+static void countKindNearObject( Object *obj, void *userData )
+{
+	KindNearCount *search = (KindNearCount *)userData;
+	if( !obj->isEffectivelyDead() && obj->isKindOf( search->kind ) &&
+			sqr( obj->getPosition()->x - search->at.x ) + sqr( obj->getPosition()->y - search->at.y ) <= search->radiusSqr )
+		++search->count;
+}
+
+/** This player's buildings of a kind within radius of a point: standing, going up, or asked for and
+	* waiting for a dozer. */
+static Int countKindNear( Player *player, KindOfType kind, const Coord3D *at, Real radius )
+{
+	KindNearCount search;
+	search.kind = kind;
+	search.at = *at;
+	search.radiusSqr = radius * radius;
+	search.count = 0;
+	player->iterateObjects( countKindNearObject, &search );
+	for( BuildListInfo *info = player->getBuildList(); info; info = info->getNext() )
+	{
+		if( !info->isPriorityBuild() || !info->isBuildable() || info->getObjectID() != INVALID_ID ||
+				sqr( info->getLocation()->x - at->x ) + sqr( info->getLocation()->y - at->y ) > search.radiusSqr )
+			continue;
+		const ThingTemplate *tmpl = TheThingFactory->findTemplate( info->getTemplateName(), FALSE );
+		if( tmpl && tmpl->isKindOf( kind ) )
+			++search.count;
+	}
+	return search.count;
+}
+
+Bool AIPlayer::queueAtOutpost( const ThingTemplate *tmpl, const Coord3D *at, Real innerRadius, Real lean, const char *why )
+{
+	Coord3D spot = *at;
+	Coord3D dir;
+	if( lean != 0.0f && enemyDirection( &dir ) )
+	{
+		spot.x += dir.x * lean;
+		spot.y += dir.y * lean;
+	}
+	if( !placeNear( tmpl, &spot, innerRadius, FALSE ) )
+	{
+		DEBUG_LOG(("AI EXPAND frame %d player %d second base at (%.0f,%.0f) has no room for '%s' (%s)\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), at->x, at->y, tmpl->getName().str(), why));
+		return FALSE;
+	}
+	DEBUG_LOG(("AI EXPAND frame %d player %d second base at (%.0f,%.0f) gets '%s' (%s), %d in the bank\n", TheGameLogic->getFrame(),
+		m_player->getPlayerIndex(), at->x, at->y, tmpl->getName().str(), why, m_player->getMoney()->countMoney()));
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** B3 proposal 3, a base away from home.  The AI kept one base, and one stroke there finished it while
+	* the rest of the map stood empty.  Past the rung's m_secondBaseSeconds it founds another: a factory
+	* on a start position no player started on, the nearest by the ground, up to the rung's m_secondBases
+	* of them.  With no empty start there is no second base.  Then, one building a look, every base away
+	* from home gets a power plant behind it, a gun in front, a supply centre at its dock and a second gun.
+	*
+	* Nothing is remembered: a base away from home is any factory of this player's standing or going up
+	* past OUTPOST_REACH base radii, so a savegame carries it with the objects and a factory the economy
+	* put beside a far expansion grows into a base the same way.  Which starts are empty is in the lobby
+	* for everyone to read; an enemy may have built on one since, so isLocationSafe still has the last
+	* word, as with every expansion. */
+//----------------------------------------------------------------------------------------------------------
+void AIPlayer::doSecondBase( void )
+{
+	const AIDifficultyProfile *profile = getSkillProfile();
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( profile->m_secondBaseSeconds <= 0.0f || now < (UnsignedInt)( profile->m_secondBaseSeconds * LOGICFRAMES_PER_SECOND ) )
+		return;
+	if( ( now + computeUpdatePhase( m_player->getPlayerIndex(), SECOND_BASE_CHECK_RATE ) ) % SECOND_BASE_CHECK_RATE != 0 )
+		return;
+	if( !m_player->getCanBuildBase() || !m_baseCenterSet )
+		return;
+	// a base being hit keeps its money for itself, unless there is far more of it than a base costs: one
+	// intruder held a Hard GLA's second base from frame 27375 to the end with 150,000 in the bank
+	if( isBaseUnderAttack() && (Int)m_player->getMoney()->countMoney() < SECOND_BASE_UNDER_FIRE_BANK )
+		return;
+	Object *dozer = NULL;
+	m_player->iterateObjects( findAnyDozer, &dozer );
+	if( dozer == NULL )
+		return;
+
+	// One placement a look, so a look costs one placeNear (two dozen legality checks at the most) like every
+	// other job's.  A base on a start position is founded first: the rung's count is of those, and a Hard
+	// AI's extra factories beside its far expansions, grown below, filled any count of every far factory on
+	// Twilight Flame before a start was taken.
+	Coord3D outposts[ MAX_OUTPOSTS ];
+	const Int count = findOutposts( outposts, MAX_OUTPOSTS );
+	Int atStarts = 0;
+	for( Int i = 0; i < count; ++i )
+		if( onEmptyStart( &outposts[ i ] ) )
+			++atStarts;
+	if( atStarts < profile->m_secondBases && foundSecondBase( dozer, outposts, count ) )
+		return;
+
+	// then grow what stands, the first base missing something.
+	// The look starts at a different base each time, so one whose next piece never fits (a USA Fire Base on
+	// Twilight Flame's start 8, every look from frame 32250) holds only its own turn.
+	// ponytail: within a base a piece that never fits still holds the pieces after it; rotate those too if that shows up
+	const ThingTemplate *power = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_POWER, TRUE );
+	if( power && power->isKindOf( KINDOF_CASH_GENERATOR ) )
+		power = NULL;		// GLA has no plant; a cash generator that also powers is not one to put out here
+	const ThingTemplate *defense = nextBaseDefense( dozer );
+	const ThingTemplate *supply = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_SUPPLY_CENTER, TRUE );
+	const Int first = count > 0 ? (Int)( ( now / SECOND_BASE_CHECK_RATE ) % count ) : 0;
+	for( Int n = 0; n < count; ++n )
+	{
+		const Coord3D *at = &outposts[ ( first + n ) % count ];
+		if( power && countKindNear( m_player, KINDOF_FS_POWER, at, SECOND_BASE_RADIUS ) == 0 )
+		{
+			queueAtOutpost( power, at, 0.0f, -0.3f * SECOND_BASE_RADIUS, "power" );
+			return;
+		}
+		const Int guns = defense ? countKindNear( m_player, KINDOF_FS_BASE_DEFENSE, at, SECOND_BASE_RADIUS ) : SECOND_BASE_DEFENSES;
+		if( guns == 0 )
+		{
+			queueAtOutpost( defense, at, 0.0f, 0.4f * SECOND_BASE_RADIUS, "first gun" );
+			return;
+		}
+		if( supply )
+		{
+			PartitionFilterAcceptByKindOf fDock( MAKE_KINDOF_MASK( KINDOF_SUPPLY_SOURCE ), KINDOFMASK_NONE );
+			PartitionFilterOnMap fOnMap;
+			PartitionFilter *filters[] = { &fDock, &fOnMap, NULL };
+			Object *dock = ThePartitionManager->getClosestObject( at, SECOND_BASE_RADIUS, FROM_BOUNDINGSPHERE_2D, filters );
+			static const NameKeyType key_warehouseUpdate = NAMEKEY( "SupplyWarehouseDockUpdate" );
+			SupplyWarehouseDockUpdate *pile = dock ? (SupplyWarehouseDockUpdate *)dock->findUpdateModule( key_warehouseUpdate ) : NULL;
+			if( pile && pile->getBoxesStored() > 0 && observerKnowsAbout( dock, knowledgeObserver() ) )
+			{
+				// as far out as placeNear's rings reach for it, so the one it placed is found next look
+				const Real dockRadius = dock->getGeometryInfo().getBoundingCircleRadius();
+				const Real reach = dockRadius + supply->getTemplateGeometryInfo().getBoundingCircleRadius() * ( 2 * PLACEMENT_RINGS + 2 );
+				if( countKindNear( m_player, KINDOF_FS_SUPPLY_CENTER, dock->getPosition(), reach ) == 0 )
+				{
+					queueAtOutpost( supply, dock->getPosition(), dockRadius, 0.0f, "supply" );
+					return;
+				}
+			}
+		}
+		if( guns < SECOND_BASE_DEFENSES )
+		{
+			queueAtOutpost( defense, at, 0.0f, 0.4f * SECOND_BASE_RADIUS, "second gun" );
+			return;
+		}
+	}
+}
+
+/** The next base away from home: a war factory, or a barracks for a side or general with none, on the
+	* nearest empty start position by the ground, or at the last held expansion.  TRUE when it spent the
+	* look's placement. */
+Bool AIPlayer::foundSecondBase( Object *dozer, const Coord3D *outposts, Int count )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const ThingTemplate *factory = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_WARFACTORY, TRUE );
+	if( factory == NULL )
+		factory = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_BARRACKS, TRUE );
+	if( factory == NULL )
+	{
+		DEBUG_LOG(("AI EXPAND frame %d player %d second base has no factory its dozer %d can build\n", now,
+			m_player->getPlayerIndex(), dozer->getID()));
+		return FALSE;
+	}
+	if( priorityBuildPending( m_player, factory ) )
+	{
+		// one asked for and not yet going up goes first, wherever it is
+		DEBUG_LOG(("AI EXPAND frame %d player %d second base waits for the '%s' already asked for\n", now,
+			m_player->getPlayerIndex(), factory->getName().str()));
+		return FALSE;
+	}
+	const Int needs = factory->calcCostToBuild( m_player ) * 2;
+	if( (Int)m_player->getMoney()->countMoney() < needs )
+	{
+		DEBUG_LOG(("AI EXPAND frame %d player %d second base waits for money, %d in the bank, needs %d\n", now,
+			m_player->getPlayerIndex(), m_player->getMoney()->countMoney(), needs));
+		return FALSE;
+	}
+
+	// Only a start position nobody started on.  Which ones those are is in the lobby for every player to
+	// read, so this is the game's own record and not the scouts' picture.  Nearest by the ground first.
+	const std::vector<UnsignedShort> &ground = groundFromBase();
+	Coord3D site = m_baseCenter;
+	Int best = AI_GROUND_UNREACHED;
+	Int siteStart = -1;
+	for( Int startNdx = 0; startNdx < MAX_PLAYER_COUNT; ++startNdx )
+	{
+		Coord3D there;
+		if( !startPositionLoc( startNdx, &there ) )
+			continue;
+		Bool taken = !nobodyStartedOn( startNdx );		// someone started here, or one of our bases already stands here
+		for( Int i = 0; i < count; ++i )
+			taken = taken || sqr( there.x - outposts[ i ].x ) + sqr( there.y - outposts[ i ].y ) < sqr( 2.0f * SECOND_BASE_RADIUS );
+		const Int distance = groundAt( ground, &there );
+		if( taken || distance >= best || spotCooling( &there ) || !isLocationSafe( &there, factory ) )
+			continue;
+		best = distance;
+		site = there;
+		siteStart = startNdx;
+	}
+	if( siteStart < 0 )
+	{
+		DEBUG_LOG(("AI EXPAND frame %d player %d second base has no empty start position\n", now, m_player->getPlayerIndex()));
+		return FALSE;
+	}
+
+	if( !placeNear( factory, &site, 0.0f, FALSE ) )
+	{
+		DEBUG_LOG(("AI EXPAND frame %d player %d second base has no room at (%.0f,%.0f)\n", now, m_player->getPlayerIndex(), site.x, site.y));
+		return TRUE;
+	}
+	DEBUG_LOG(("AI EXPAND frame %d player %d founds a second base with '%s' at start position %d (%.0f,%.0f), %.0f from home, %d in the bank\n", now,
+		m_player->getPlayerIndex(), factory->getName().str(), siteStart + 1,
+		site.x, site.y, sqrt( sqr( site.x - m_baseCenter.x ) + sqr( site.y - m_baseCenter.y ) ), m_player->getMoney()->countMoney()));
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
 /** The drop zone and the black market: what the opening buys before the army leaves home. */
 static const Int EARLY_INCOME_KINDS = 2;
 static const KindOfType EARLY_INCOME[ EARLY_INCOME_KINDS ] = { KINDOF_FS_SUPPLY_DROPZONE, KINDOF_FS_BLACK_MARKET };
+
+/** From this far into the match a player that owns no drop zone or black market puts one up, and the
+	* building it waits on first, by rung: Easy, Medium, Hard.  Before it only the opening's purchase queue
+	* bought one (buyEarlyIncome), so one lost, or one whose prerequisite never stood, was never bought. */
+static const Real FIRST_INCOME_SECONDS[ AISKILL_COUNT ] = { 600.0f, 360.0f, 180.0f };
+
+/** How many of each income building (drop zone, black market, internet center) the hoard pass buys,
+	* by rung: Easy, Medium, Hard.  Only Hard's pass buys them past the first. */
+static const Int INCOME_BUILDINGS[ AISKILL_COUNT ] = { 1, 2, 3 };
 
 /** Early in the match the first drop zone and the first black market do not wait for the hoard: they
 	* are asked for when none stands, and the purchase queue ranks them over the army and saves for them.
 	* Behind the hoard alone a Hard AI went out to fight on two gatherers before it owned either. */
 void AIPlayer::buyEarlyIncome( void )
 {
-	if( !purchaseQueueOn() || TheGameLogic->getFrame() >= AI_PURCHASE_EARLY_FRAMES || !m_player->getCanBuildBase() ||
-			!m_baseCenterSet || isBaseUnderAttack() )
+	if( !m_player->getCanBuildBase() || !m_baseCenterSet || isBaseUnderAttack() )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Bool early = purchaseQueueOn() && now < AI_PURCHASE_EARLY_FRAMES;
+	const Bool late = now >= (UnsignedInt)( FIRST_INCOME_SECONDS[ m_skillLevel ] * LOGICFRAMES_PER_SECOND );
+	if( !early && !late )
 		return;
 	Object *dozer = NULL;
 	m_player->iterateObjects( findAnyDozer, &dozer );
 	for( Int i = 0; dozer && i < EARLY_INCOME_KINDS; ++i )
 	{
-		const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, EARLY_INCOME[ i ], TRUE );
-		if( tmpl == NULL || priorityBuildPending( m_player, tmpl ) )
-			continue;
 		TechCount owned;
 		owned.kind = EARLY_INCOME[ i ];
 		owned.standing = 0;
 		owned.onTheWay = 0;
 		m_player->iterateObjects( countTechBuildings, &owned );
-		if( owned.standing + owned.onTheWay == 0 )
-			placeNear( tmpl, &m_baseCenter, 0.5f * m_baseRadius, FALSE );
+		if( owned.standing + owned.onTheWay > 0 )
+			continue;
+		const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, EARLY_INCOME[ i ], TRUE );
+		const ThingTemplate *wanted = tmpl;
+		// a USA drop zone waits on the Strategy Center, which only the superweapon job or a late script
+		// put up, so Easy and Medium seldom had one: past the rung's time the building it waits on goes up
+		if( tmpl == NULL && late )
+			tmpl = missingPrerequisite( dozer, EARLY_INCOME[ i ] );
+		if( tmpl == NULL || priorityBuildPending( m_player, tmpl ) )
+			continue;
+		if( placeNear( tmpl, &m_baseCenter, 0.5f * m_baseRadius, FALSE ) )
+			DEBUG_LOG(("AI INCOME frame %d player %d asks for '%s'%s\n", now, m_player->getPlayerIndex(), tmpl->getName().str(),
+				wanted ? "" : ", what its first income building waits on"));
 	}
+}
+
+/** The building a dozer button of this kind is waiting on: the first of its prerequisites this player
+	* has none of and this dozer can put up, money or not.  NULL when the button is missing, is not
+	* waiting on a building, or the building is already asked for. */
+const ThingTemplate *AIPlayer::missingPrerequisite( Object *dozer, KindOfType kind )
+{
+	const CommandSet *commandSet = TheCommandStore->findCommandSet( dozer->getCommandSetString() );
+	if( commandSet == NULL )
+		return NULL;
+	for( Int b = 0; b < MAX_COMMANDS_PER_SET; ++b )
+	{
+		const CommandButton *button = commandSet->getCommandButton( b );
+		const ThingTemplate *tmpl = button ? button->getThingTemplate() : NULL;
+		if( tmpl == NULL || button->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT || !tmpl->isKindOf( kind ) ||
+				TheBuildAssistant->canMakeUnit( dozer, tmpl ) != CANMAKE_NO_PREREQ )
+			continue;
+		for( Int p = 0; p < tmpl->getPrereqCount(); ++p )
+		{
+			const Int MAX_NEEDS = 8;
+			const ThingTemplate *needs[ MAX_NEEDS ];
+			const Int count = tmpl->getNthPrereq( p )->getAllPossibleBuildFacilityTemplates( needs, MAX_NEEDS );
+			for( Int n = 0; n < count; ++n )
+			{
+				Int owned = 0;
+				m_player->countObjectsByThingTemplate( 1, &needs[ n ], TRUE, &owned, FALSE );
+				const CanMakeType canMake = TheBuildAssistant->canMakeUnit( dozer, needs[ n ] );
+				if( owned == 0 && ( canMake == CANMAKE_OK || canMake == CANMAKE_NO_MONEY ) )
+					return needs[ n ];
+			}
+		}
+	}
+	return NULL;
 }
 
 /** Players said the computer attacks too early and too often.  A Hard USA on Twilight Flame sent two
@@ -7457,6 +7867,9 @@ void AIPlayer::doEconomy( void )
 	{
 		if( m_player->getEnergy()->hasSufficientPower() )
 			buyEarlyIncome();
+		// hackers pay their price back on every rung; behind the hoard pass Easy and Medium never trained one
+		if( !isBaseUnderAttack() )
+			buyMoneyUnits();
 		// the Turtle's line is its point on every rung, and the rungs below Hard buy no defences here otherwise
 		if( m_persona == AIPERSONA_TURTLE )
 			queueTurtleLine();
@@ -7499,15 +7912,18 @@ void AIPlayer::doEconomy( void )
 	if( m_persona == AIPERSONA_TURTLE )
 		queueTurtleLine();
 
-	// hackers and the buildings that pay out on a timer earn their price back, so they only wait for
-	// the hoard threshold, and each of them is bought on every pass the bank allows one ...
-	if( m_player->getMoney()->countMoney() <= profile->m_cashHoardThreshold )
-		return;
-	// ... unless the base is being hit: then the bank and the dozers are defendHome's.  A rushed China
-	// put up an Internet Center and a second barracks while sixteen rebels stood in its base.
+	// the bank and the dozers are defendHome's while the base is hit.  A rushed China put up an Internet
+	// Center and a second barracks while sixteen rebels stood in its base.
 	if( isBaseUnderAttack() )
 		return;
+	// hackers earn their price back and moneyUnitRoom holds them to the army, so they do not wait for
+	// the hoard: behind it a Hard China earned from three or four all match
 	buyMoneyUnits();
+
+	// the buildings that pay out on a timer only wait for the hoard threshold, and each is bought on
+	// every pass the bank allows one, up to the rung's count
+	if( m_player->getMoney()->countMoney() <= profile->m_cashHoardThreshold )
+		return;
 
 	if( !m_player->getCanBuildBase() || !m_baseCenterSet )
 		return;
@@ -7534,9 +7950,21 @@ void AIPlayer::doEconomy( void )
 	for( Int i = 0; i < INCOME_KINDS; ++i )
 	{
 		const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, INCOME[ i ] );
+		if( tmpl == NULL || priorityBuildPending( m_player, tmpl ) )
+			continue;
+		// up to the rung's count: one a pass with no count, a Hard GLA stood a black market every ten
+		// seconds the bank was past the hoard
+		TechCount owned;
+		owned.kind = INCOME[ i ];
+		owned.standing = 0;
+		owned.onTheWay = 0;
+		m_player->iterateObjects( countTechBuildings, &owned );
+		if( owned.standing + owned.onTheWay >= INCOME_BUILDINGS[ m_skillLevel ] )
+			continue;
 		// from half way out to the edge: placeNear keeps these inside the base (staysHome)
-		if( tmpl && !priorityBuildPending( m_player, tmpl ) )
-			placeNear( tmpl, &m_baseCenter, 0.5f * m_baseRadius, FALSE );
+		if( placeNear( tmpl, &m_baseCenter, 0.5f * m_baseRadius, FALSE ) )
+			DEBUG_LOG(("AI INCOME frame %d player %d asks for '%s', has %d of %d\n", TheGameLogic->getFrame(),
+				m_player->getPlayerIndex(), tmpl->getName().str(), owned.standing + owned.onTheWay, INCOME_BUILDINGS[ m_skillLevel ]));
 	}
 
 	// another factory is doSpending's, on every rung
@@ -8072,7 +8500,7 @@ void AIPlayer::purchased( Int key, Int cost, AIPurchaseKind kind, const AsciiStr
 	m_purchases.bought( key );
 }
 
-Bool AIPlayer::buyUnit( ProductionUpdateInterface *pu, const ThingTemplate *unit, AIPurchaseKind kind )
+Bool AIPlayer::buyUnit( ProductionUpdateInterface *pu, const ThingTemplate *unit, AIPurchaseKind kind, Int scoreOffset )
 {
 	// an airfield with every parking place taken refuses the aircraft (queueCreateUnit fails on it), so
 	// nothing is saved for one, and the refusal is what says the computer wants another airfield
@@ -8084,11 +8512,11 @@ Bool AIPlayer::buyUnit( ProductionUpdateInterface *pu, const ThingTemplate *unit
 	const Int cost = unit->calcCostToBuild( m_player );
 	// a personality's taste moves an army unit up or down the queue: the scripts' teams of a kind it
 	// does not like wait while its favoured units are saved for
-	Int offset = 0;
+	Int offset = scoreOffset;
 	if( m_persona != AIPERSONA_NORMAL && kind == AIBUY_ARMY )
 	{
 		const Real taste = unitTaste( personaKindTaste(), unit );
-		offset = taste > 0.0f ? PERSONA_LIKED_SCORE : taste < 0.0f ? PERSONA_DISLIKED_SCORE : 0;
+		offset += taste > 0.0f ? PERSONA_LIKED_SCORE : taste < 0.0f ? PERSONA_DISLIKED_SCORE : 0;
 	}
 	if( !purchaseAllowed( unit->getTemplateID(), cost, kind, pu->getProductionCount() == 0, unit->getName(), offset ) )
 		return FALSE;
@@ -8184,7 +8612,9 @@ void AIPlayer::doReadySpecialPowers( void )
 //----------------------------------------------------------------------------------------------------------
 void AIPlayer::buyMoneyUnits( void )
 {
-	const Int MAX_QUEUED_AHEAD = 1;
+	// two behind the army's: a China barracks feeding the army always had two in its queue, and one
+	// skipped it on nearly every pass
+	const Int MAX_QUEUED_AHEAD = 2;
 	Int room = moneyUnitRoom();
 	if( room <= 0 )
 		return;
@@ -8198,9 +8628,9 @@ void AIPlayer::buyMoneyUnits( void )
 		if( pu == NULL || pu->getProductionCount() > MAX_QUEUED_AHEAD )
 			continue;
 		const ThingTemplate *moneyUnit = buildableOfKind( factory, GUI_COMMAND_UNIT_BUILD, KINDOF_MONEY_HACKER );
-		if( moneyUnit && buyUnit( pu, moneyUnit, AIBUY_ECONOMY ) )
+		if( moneyUnit && buyUnit( pu, moneyUnit, AIBUY_ECONOMY, MONEY_UNIT_BID ) )
 		{
-			DEBUG_LOG(("AI ECONOMY frame %d player %d trains '%s', %d in the bank, room for %d more\n",
+			DEBUG_LOG(("AI HACKER frame %d player %d trains '%s', %d in the bank, room for %d more\n",
 				TheGameLogic->getFrame(), m_player->getPlayerIndex(), moneyUnit->getName().str(),
 				m_player->getMoney()->countMoney(), room - 1));
 			if( --room <= 0 )

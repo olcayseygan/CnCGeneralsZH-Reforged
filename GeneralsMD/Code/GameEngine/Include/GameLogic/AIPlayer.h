@@ -323,6 +323,15 @@ protected:
 		* fired - the AI never worked out for itself that it was running out of money. */
 	virtual void doExpansion(void);
 
+	/** B3 proposal 3: a base away from home - a factory on an empty start position, then power, guns and
+		* a supply centre beside it - so one stroke at home does not finish the AI. */
+	void doSecondBase(void);
+	Bool foundSecondBase(Object *dozer, const Coord3D *outposts, Int count);	///< a factory on the nearest empty start position; TRUE when it spent the look's placement
+	Int findOutposts(Coord3D *at, Int max);	///< this player's factories far from home, one per site, in object order
+	Bool onEmptyStart(const Coord3D *pos) const;	///< within reach of a start position no player started on: a second base's ground
+	const ThingTemplate *missingPrerequisite(Object *dozer, KindOfType kind);	///< the building a dozer button of this kind waits on, that this player has none of
+	Bool queueAtOutpost(const ThingTemplate *tmpl, const Coord3D *at, Real innerRadius, Real lean, const char *why);	///< placeNear round a base away from home, leant towards the enemy by lean
+
 	virtual void doRetreats(void);
 
 	/** C2: hold a finished team at the rally point until there is a force worth sending.  A string of
@@ -403,7 +412,7 @@ protected:
 	void stageDozer(Object *dozer, const Coord3D *site);		///< an idle dozer walks ahead to a site waiting on money
 	Bool purchaseAllowed(Int key, Int cost, AIPurchaseKind kind, Bool startable, const AsciiString &what, Int scoreOffset = 0);
 	void purchased(Int key, Int cost, AIPurchaseKind kind, const AsciiString &what);
-	Bool buyUnit(ProductionUpdateInterface *pu, const ThingTemplate *unit, AIPurchaseKind kind);	///< queueCreateUnit through the queue
+	Bool buyUnit(ProductionUpdateInterface *pu, const ThingTemplate *unit, AIPurchaseKind kind, Int scoreOffset = 0);	///< queueCreateUnit through the queue
 	Bool buyUpgrade(ProductionUpdateInterface *pu, const UpgradeTemplate *upgrade, Int scoreOffset = 0);	///< queueUpgrade through the queue
 	AIPurchaseKind purchaseKindOf(const ThingTemplate *tmpl) const;
 	AIPurchaseQueue	m_purchases;

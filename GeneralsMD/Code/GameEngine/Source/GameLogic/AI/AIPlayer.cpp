@@ -9936,9 +9936,10 @@ void AIPlayer::doSpending( void )
 	}
 	m_producedSincePass.clear();
 
-	// the income, off what the score screen counts as earned: gathered, hacked, captured and given
+	// the income, off what the score screen counts as earned (gathered, hacked, captured and given) with
+	// the rung's income bonus put back on, so it plans on what it banks
 	const Int bank = (Int)m_player->getMoney()->countMoney();
-	const Int earned = m_player->getScoreKeeper()->getTotalMoneyEarned();
+	const Int earned = (Int)( (Int64)m_player->getScoreKeeper()->getTotalMoneyEarned() * m_player->incomePercent() / 100 );
 	if( now - m_incomeMarkFrame >= AI_INCOME_WINDOW_FRAMES )
 	{
 		const Real window = INT_TO_REAL( earned - m_incomeMark ) * LOGICFRAMES_PER_SECOND / INT_TO_REAL( now - m_incomeMarkFrame );

@@ -3591,17 +3591,21 @@ UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers )
   return sharers > 1 ? amount / sharers : 0;
 }
 
-UnsignedInt EarnedAmount( UnsignedInt amount, Bool earnerIsSkirmishAI, Bool recipientIsSkirmishAI )
+UnsignedInt EarnedAmount( UnsignedInt amount, Int percent )
 {
-  return earnerIsSkirmishAI && recipientIsSkirmishAI ? amount * 2 : amount;
+  return amount * (UnsignedInt)percent / 100;
+}
+
+Int Player::incomePercent( void )
+{
+  return isSkirmishAIPlayer() ? TheAI->getDifficultyProfile( getAISkillLevel() )->m_incomePercent : 100;
 }
 
 UnsignedInt Player::earnMoney( UnsignedInt amount )
 {
-  const Bool skirmishAI = isSkirmishAIPlayer();
-  const UnsignedInt earned = EarnedAmount( amount, skirmishAI, skirmishAI );
+  const UnsignedInt earned = EarnedAmount( amount, incomePercent() );
   m_money.deposit( earned );
-  m_scoreKeeper.addMoneyEarned( earned );
+  m_scoreKeeper.addMoneyEarned( amount );
   return earned;
 }
 
@@ -3628,9 +3632,9 @@ UnsignedInt Player::earnIncome( UnsignedInt amount, Bool fromTechBuilding )
   UnsignedInt paid = 0;
   for ( Int i = 0; i < allyCount; ++i )
   {
-    const UnsignedInt cut = EarnedAmount( allyShare, skirmishAI, allies[ i ]->isSkirmishAIPlayer() );
+    const UnsignedInt cut = EarnedAmount( allyShare, skirmishAI ? allies[ i ]->incomePercent() : 100 );
     allies[ i ]->getMoney()->deposit( cut );
-    allies[ i ]->getScoreKeeper()->addMoneyEarned( cut );
+    allies[ i ]->getScoreKeeper()->addMoneyEarned( allyShare );
     paid += cut;
   }
 

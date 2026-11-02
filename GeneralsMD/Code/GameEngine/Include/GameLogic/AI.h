@@ -145,8 +145,8 @@ public:
 	* three values for a different reason: that enum answers "which scripts run" and is baked into
 	* every shipped map and .scb, into the campaign's stat bonus tables and into network messages.
 	* This one answers "how well does it play".  No rung has a build-rate, vision or stat handicap, in
-	* either direction, and no rung's income differs from another's: every skirmish AI earns double by
-	* playing (Player::earnMoney), whatever its rung.  Keeping it a separate enum is what lets a rung be
+	* either direction.  Income is the one bonus: a skirmish AI banks its rung's IncomePercent of what it
+	* earns by playing (Player::earnMoney), 150 on every rung.  Keeping it a separate enum is what lets a rung be
 	* tuned in AI.ini without touching what a map's scripts do.
 	* See AI-ROADMAP.md sections D6, D7 and D10.
 	*/
@@ -217,9 +217,9 @@ AIPersonality aiPersonalityFromName( const char *name );
 	* switch(difficulty) somewhere, so the whole ladder can be read, tuned and measured in one place.
 	*
 	* Nothing in here may exceed the AI's baseline - the top rung IS the baseline and the lower rungs
-	* are handicaps on its *decisions*.  The double earnings (Player::earnMoney) are outside this table
-	* and the same on every rung.  If a field ever appears that multiplies income, build rate, vision
-	* or unit stats per rung, the design has drifted. */
+	* are handicaps on its *decisions*.  m_incomePercent is the one exception, the owner's call of
+	* 2026-11-02.  If another field ever appears that multiplies income, build rate, vision or unit
+	* stats per rung, the design has drifted. */
 //-------------------------------------------------------------------------------------------------
 struct AIDifficultyProfile
 {
@@ -302,6 +302,9 @@ struct AIDifficultyProfile
 	Real	m_secondBaseSeconds;						///< no base away from home before this far into the match; 0 = never
 	Int		m_secondBases;									///< how many empty start positions it founds a base on, nearest first
 	Real	m_expansionReach;								///< how far from home, or from one of those bases, a supply center of its own choosing may go
+
+	// Income: the one bonus on the ladder (Player::incomePercent)
+	Int		m_incomePercent;								///< what a skirmish AI banks of what it earns by playing, in percent; the score screen counts the 100
 };
 
 //-------------------------------------------------------------------------------------------------

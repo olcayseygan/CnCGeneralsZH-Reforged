@@ -181,12 +181,13 @@ Bool SuperweaponNeedsDefenses( const AsciiString &buildingName, Bool proRules, I
 Bool IncomeSharingSplits( Int incomeSharing, Bool fromTechBuilding );
 UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers );
 
-// A skirmish computer player earns double what it earns by playing, on every rung.  What one payment
-// comes to in a recipient's bank: doubled only when a computer earned it and a computer banks it, so
-// a human ally's cut of a computer's income stays plain and a human's income never pays double.
-// Refunds, script grants and transfers between allies do not come through here: doubling a refund
-// is a queue and cancel money loop.
-UnsignedInt EarnedAmount( UnsignedInt amount, Bool earnerIsSkirmishAI, Bool recipientIsSkirmishAI );
+// A skirmish computer player banks its rung's IncomePercent (AIDifficultyProfile) of what it earns by
+// playing.  What one payment comes to in a recipient's bank at that percent, rounded down, integer
+// only so every machine banks the same.  The bonus applies only when a computer earned it and a
+// computer banks it, so a human ally's cut of a computer's income stays plain and a human's income
+// never gets it.  Refunds, script grants and transfers between allies do not come through here:
+// a bonus on a refund is a queue and cancel money loop.  The score keeper counts the plain amount.
+UnsignedInt EarnedAmount( UnsignedInt amount, Int percent );
 
 // Pro Rules, PRO-RULES.md: what every skirmish and network match refuses whoever plays it.
 // GameLogic::isProRules() says whether a match is under them; these say what they cover, by name
@@ -412,6 +413,8 @@ public:
 	UnsignedInt earnIncome( UnsignedInt amount, Bool fromTechBuilding );
 	/// money made by playing that nobody shares - a capture bonus, a crate, a bounty, stolen cash - banked and scored.  Returns what it came to
 	UnsignedInt earnMoney( UnsignedInt amount );
+	/// what this player banks of what it earns by playing, in percent: its rung's IncomePercent for a skirmish AI, 100 for anyone else
+	Int incomePercent( void );
 
 	UnsignedInt getSupplyBoxValue();///< Many things can affect the alue of a crate, but at heart it is a GlobalData ratio.
 

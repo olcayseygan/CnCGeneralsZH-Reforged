@@ -1986,3 +1986,168 @@ TEST(sorting_entry_tiles_come_from_the_corners_with_a_margin)
 	CHECK( sort_tiles_whole( sort_tiles_of( broken, 3, clip ) ) );
 	CHECK( sort_tiles_whole( sort_tiles_of( far_right, 3, broken_clip ) ) );
 }
+
+// ---------------------------------------------------------------------------------------
+// A raw animation's pose between two frames.  One bone, six frames:
+//   frame     0    1    2     3     4    5
+//   degrees   0   18   36   213   231   30
+//   X         0   10   20    30    40   15
+//   Y         0    0 2000  2000  2000    0
+// 0 to 1 is clean.  1 to 2 jumps on Y, the way the art parks a prop off the map.  2 to 3 hops 177 degrees.  Frame
+// 4's quaternion is written negated, the same turn on the far side of the sphere, so 3 to 4 is a clean 18 degrees.
+// Frame 5 stands close enough to the identity past its end that a blend off the last frame would not count as a cut.
+#include "assetmgr.h"
+#include "chunkio.h"
+#include "hrawanim.h"
+#include "htree.h"
+#include "matrix3d.h"
+#include "ramfile.h"
+#include "wwmath.h"
+
+static void write_pose_channel( ChunkSaveClass &csave, int type, int vector_len, const float *values )
+{
+	W3dAnimChannelStruct channel;
+	memset( &channel, 0, sizeof( channel ) );
+	channel.LastFrame = 5;
+	channel.VectorLen = (uint16)vector_len;
+	channel.Flags = (uint16)type;
+	channel.Pivot = 1;
+	channel.Data[ 0 ] = values[ 0 ];
+	csave.Begin_Chunk( W3D_CHUNK_ANIMATION_CHANNEL );
+	csave.Write( &channel, sizeof( channel ) );
+	csave.Write( values + 1, ( 6 * vector_len - 1 ) * sizeof( float ) );
+	csave.End_Chunk();
+}
+
+static void write_pose_assets( RAMFileClass &file )
+{
+	file.Open( FileClass::WRITE );
+	ChunkSaveClass csave( &file );
+
+	W3dHierarchyStruct hierarchy;
+	memset( &hierarchy, 0, sizeof( hierarchy ) );
+	hierarchy.Version = W3D_CURRENT_HTREE_VERSION;
+	strcpy( hierarchy.Name, "POSETREE" );
+	hierarchy.NumPivots = 2;
+
+	W3dPivotStruct pivots[ 2 ];
+	memset( pivots, 0, sizeof( pivots ) );
+	strcpy( pivots[ 0 ].Name, "ROOT" );
+	pivots[ 0 ].ParentIdx = 0xffffffff;
+	pivots[ 0 ].Rotation.Q[ 3 ] = 1.0f;
+	strcpy( pivots[ 1 ].Name, "BONE" );
+	pivots[ 1 ].Rotation.Q[ 3 ] = 1.0f;
+
+	csave.Begin_Chunk( W3D_CHUNK_HIERARCHY );
+	csave.Begin_Chunk( W3D_CHUNK_HIERARCHY_HEADER );
+	csave.Write( &hierarchy, sizeof( hierarchy ) );
+	csave.End_Chunk();
+	csave.Begin_Chunk( W3D_CHUNK_PIVOTS );
+	csave.Write( pivots, sizeof( pivots ) );
+	csave.End_Chunk();
+	csave.End_Chunk();
+
+	W3dAnimHeaderStruct header;
+	memset( &header, 0, sizeof( header ) );
+	header.Version = W3D_CURRENT_HANIM_VERSION;
+	strcpy( header.Name, "POSE" );
+	strcpy( header.HierarchyName, "POSETREE" );
+	header.NumFrames = 6;
+	header.FrameRate = 30;
+
+	const float x[ 6 ] = { 0.0f, 10.0f, 20.0f, 30.0f, 40.0f, 15.0f };
+	const float y[ 6 ] = { 0.0f, 0.0f, 2000.0f, 2000.0f, 2000.0f, 0.0f };
+	const float degrees[ 6 ] = { 0.0f, 18.0f, 36.0f, 213.0f, 231.0f, 30.0f };
+	float q[ 24 ];
+	for( int frame = 0; frame < 6; ++frame )
+	{
+		const float half = degrees[ frame ] * 0.5f * WWMATH_PI / 180.0f;
+		const float sign = frame == 4 ? -1.0f : 1.0f;
+		q[ frame * 4 + 0 ] = 0.0f;
+		q[ frame * 4 + 1 ] = 0.0f;
+		q[ frame * 4 + 2 ] = sign * WWMath::Sin( half );
+		q[ frame * 4 + 3 ] = sign * WWMath::Cos( half );
+	}
+
+	csave.Begin_Chunk( W3D_CHUNK_ANIMATION );
+	csave.Begin_Chunk( W3D_CHUNK_ANIMATION_HEADER );
+	csave.Write( &header, sizeof( header ) );
+	csave.End_Chunk();
+	write_pose_channel( csave, ANIM_CHANNEL_X, 1, x );
+	write_pose_channel( csave, ANIM_CHANNEL_Y, 1, y );
+	write_pose_channel( csave, ANIM_CHANNEL_Q, 4, q );
+	csave.End_Chunk();
+
+	file.Close();
+}
+
+static float pose_degrees( const Matrix3D &pose )
+{
+	return atan2f( pose[ 1 ][ 0 ], pose[ 0 ][ 0 ] ) * 180.0f / WWMATH_PI;
+}
+
+TEST(raw_anim_pose_between_two_frames_lies_between_them)
+{
+	WWMath::Init();
+
+	static char buffer[ 4096 ];
+	RAMFileClass file( buffer, sizeof( buffer ) );
+	write_pose_assets( file );
+
+	WW3DAssetManager manager;
+	FileClass &assets = file;
+	CHECK( manager.Load_3D_Assets( assets ) );
+	HTreeClass *tree = manager.Get_HTree( "POSETREE" );
+	HAnimClass *anim = manager.Get_HAnim( "POSETREE.POSE" );
+	CHECK( tree != NULL );
+	CHECK( anim != NULL );
+	if( tree == NULL || anim == NULL )
+		return;
+	CHECK_EQ( anim->Class_ID(), (int)HAnimClass::CLASSID_HRAWANIM );
+
+	const Matrix3D root( true );
+	HRawAnimClass *raw = (HRawAnimClass *)anim;
+	const int bone = tree->Get_Bone_Index( "BONE" );
+
+	/* a whole frame is that frame, to the last digit of what the channel holds */
+	tree->Anim_Update( root, raw, 2.0f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), 36.0f, 0.01f );
+	CHECK_EQ( tree->Get_Transform( bone ).Get_X_Translation(), 20.0f );
+	CHECK_EQ( tree->Get_Transform( bone ).Get_Y_Translation(), 2000.0f );
+
+	/* between frames 0 and 1 it lies between them */
+	tree->Anim_Update( root, raw, 0.5f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), 9.0f, 0.1f );
+	CHECK_NEAR( tree->Get_Transform( bone ).Get_X_Translation(), 5.0f, 0.001f );
+
+	/* a jump on Y holds all three axes on the frame nearest, or X would zigzag; the turn still blends */
+	tree->Anim_Update( root, raw, 1.25f );
+	CHECK_EQ( tree->Get_Transform( bone ).Get_X_Translation(), 10.0f );
+	CHECK_EQ( tree->Get_Transform( bone ).Get_Y_Translation(), 0.0f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), 22.5f, 0.1f );
+	tree->Anim_Update( root, raw, 1.75f );
+	CHECK_EQ( tree->Get_Transform( bone ).Get_X_Translation(), 20.0f );
+	CHECK_EQ( tree->Get_Transform( bone ).Get_Y_Translation(), 2000.0f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), 31.5f, 0.1f );
+
+	/* a hop over 90 degrees holds the frame nearest, or it would sweep the short way round; X still blends.
+	   213 degrees reads back as -147 */
+	tree->Anim_Update( root, raw, 2.25f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), 36.0f, 0.01f );
+	CHECK_NEAR( tree->Get_Transform( bone ).Get_X_Translation(), 22.5f, 0.001f );
+	tree->Anim_Update( root, raw, 2.75f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), -147.0f, 0.01f );
+	CHECK_NEAR( tree->Get_Transform( bone ).Get_X_Translation(), 27.5f, 0.001f );
+
+	/* the same small turn written as the negated quaternion is no hop: halfway from 213 to 231 is 222, or -138 */
+	tree->Anim_Update( root, raw, 3.5f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), -138.0f, 0.1f );
+
+	/* past the last frame there is nothing to blend toward: frame 5 itself, where a blend toward the channel's
+	   identity past its end would read 18 degrees and 9 units */
+	tree->Anim_Update( root, raw, 5.4f );
+	CHECK_NEAR( pose_degrees( tree->Get_Transform( bone ) ), 30.0f, 0.01f );
+	CHECK_EQ( tree->Get_Transform( bone ).Get_X_Translation(), 15.0f );
+
+	anim->Release_Ref();
+}

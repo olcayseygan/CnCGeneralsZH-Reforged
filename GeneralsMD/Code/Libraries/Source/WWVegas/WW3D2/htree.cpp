@@ -610,8 +610,37 @@ void HTreeClass::Anim_Update(const Matrix3D & root,HAnimClass * motion,float fra
 	}
 }
 								
-/*Customized version of the above which excludes interpolation and assumes HRawAnimClass
-For use by 'Generals' -MW*/
+/* A bone stepping further than this on any axis between two frames holds the nearest frame on all three, or
+	 it would zigzag.  The art parks a prop off the map by moving it 2000 units in a frame (BONE-GUN, BONE_ROCK,
+	 BONE_BOTTLE), and frames in between would draw it flying there.  The test cannot tell that from real motion
+	 this fast, PSAIRCARRIERTP's Z among it, which keeps stepping as it always did.  In the art's units; a
+	 Comanche's rotor has a radius of 26.  An infinite or NaN step fails the test too, as UISABOTR's junk does. */
+static const float RAW_ANIM_CUT_STEP = 20.0f;
+
+/* The same for a turn of more than 90 degrees between two frames, read as |dot| below cos 45.  Blending takes
+	 the short way round, so the bone in CBGWMill1_DG that hops 177 degrees would whirl backward, and a death
+	 clip's hop would smear the limb.  The largest step on a PROPELLER pivot is 40 degrees, the Scout Drone's. */
+static const float RAW_ANIM_CUT_QUAT_DOT = 0.7071f;
+
+static inline void rawAnimTranslation(const NodeMotionStruct * motion, int frame, Vector3 & trans)
+{
+	trans.Set(0.0f,0.0f,0.0f);
+	if (motion->X != NULL)
+		motion->X->Get_Vector(frame,&(trans[0]));
+	if (motion->Y != NULL)
+		motion->Y->Get_Vector(frame,&(trans[1]));
+	if (motion->Z != NULL)
+		motion->Z->Get_Vector(frame,&(trans[2]));
+}
+
+/*Customized version of the above which assumes HRawAnimClass
+For use by 'Generals' -MW
+
+EA's took the nearest whole frame, which was one new pose a picture while W3D's clock moved one frame's length
+a picture.  On the wall clock it held a rotor still for several pictures and jumped 18 degrees, so this blends
+rotation and translation, each except across a cut.  A whole frame reads exactly what it read: the pristine
+bones logic asks for are taken at one (ModelConditionInfo::validateCachedBones), and visibility stays on the
+nearest frame so a part still shows and hides when it did.*/
 void HTreeClass::Anim_Update(const Matrix3D & root,HRawAnimClass * motion,float frame)
 {
 	PivotClass *pivot,*endpivot,*lastAnimPivot;
@@ -624,8 +653,14 @@ void HTreeClass::Anim_Update(const Matrix3D & root,HRawAnimClass * motion,float 
 
 	//Get integer frame
 	int iframe=WWMath::Float_To_Long(frame);
-	if (iframe >= motion->Get_Num_Frames()) 
+	if (iframe >= motion->Get_Num_Frames())
 		iframe = 0;
+
+	// how far past a whole frame this picture is; the last frame has nothing after it to blend toward
+	const int frame0 = (int)frame;
+	float ratio = frame - (float)frame0;
+	if (frame0 >= motion->Get_Num_Frames() - 1)
+		ratio = 0.0f;
 
 	Vector3 trans;
 	Quaternion q;
@@ -649,23 +684,43 @@ void HTreeClass::Anim_Update(const Matrix3D & root,HRawAnimClass * motion,float 
 		{
 			
 			// animation
-			trans.Set(0.0f,0.0f,0.0f);
 			Matrix3D *xform=&pivot->Transform;
 
-			if (nodeMotion->X != NULL)
-				nodeMotion->X->Get_Vector(iframe,&(trans[0]));
-			if (nodeMotion->Y != NULL)
-				nodeMotion->Y->Get_Vector(iframe,&(trans[1]));
-			if (nodeMotion->Z != NULL)
-				nodeMotion->Z->Get_Vector(iframe,&(trans[2]));
+			if (ratio > 0.0f)
+			{
+				Vector3 next;
+				rawAnimTranslation(nodeMotion, frame0, trans);
+				rawAnimTranslation(nodeMotion, frame0 + 1, next);
+				if (WWMath::Fabs(next.X - trans.X) <= RAW_ANIM_CUT_STEP
+					&& WWMath::Fabs(next.Y - trans.Y) <= RAW_ANIM_CUT_STEP
+					&& WWMath::Fabs(next.Z - trans.Z) <= RAW_ANIM_CUT_STEP)
+					Vector3::Lerp(trans, next, ratio, &trans);
+				else
+					rawAnimTranslation(nodeMotion, iframe, trans);
+			}
+			else
+				rawAnimTranslation(nodeMotion, iframe, trans);
 
 			if (ScaleFactor == 1.0f)
 				xform->Translate(trans);
 			else
 				xform->Translate(trans*ScaleFactor);
 
-			if (nodeMotion->Q != NULL) 
-			{	nodeMotion->Q->Get_Vector_As_Quat(iframe, q);
+			if (nodeMotion->Q != NULL)
+			{
+				if (ratio > 0.0f)
+				{
+					Quaternion q1;
+					nodeMotion->Q->Get_Vector_As_Quat(frame0, q);
+					nodeMotion->Q->Get_Vector_As_Quat(frame0 + 1, q1);
+					const float dot = q.X * q1.X + q.Y * q1.Y + q.Z * q1.Z + q.W * q1.W;
+					if (WWMath::Fabs(dot) >= RAW_ANIM_CUT_QUAT_DOT)
+						Fast_Slerp(q, q, q1, ratio);
+					else
+						nodeMotion->Q->Get_Vector_As_Quat(iframe, q);
+				}
+				else
+					nodeMotion->Q->Get_Vector_As_Quat(iframe, q);
 #ifdef ALLOW_TEMPORARIES
 				*xform = *xform * ::Build_Matrix3D(q,mtx);
 #else

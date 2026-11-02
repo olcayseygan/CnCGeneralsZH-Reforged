@@ -3604,6 +3604,39 @@ Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength )
   return bonus < AI_INCOME_BONUS_MAX ? bonus : AI_INCOME_BONUS_MAX;
 }
 
+void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
+{
+  UnsignedInt grouped = 0;
+  *ownAverage = 0;
+  *strongestEnemyAverage = 0;
+  for( Int lead = 0; lead < count; ++lead )
+  {
+    if( grouped & ( 1u << lead ) )
+      continue;
+    // the leader's own side when it is this player or one of its allies, else the next enemy side
+    const Bool ours = lead == self || ( allies[ self ] & ( 1u << lead ) ) != 0;
+    Int64 sum = 0;
+    Int size = 0;
+    for( Int i = lead; i < count; ++i )
+    {
+      if( grouped & ( 1u << i ) )
+        continue;
+      const Bool member = ours ? ( i == self || ( allies[ self ] & ( 1u << i ) ) != 0 )
+                               : ( i == lead || ( allies[ lead ] & ( 1u << i ) ) != 0 );
+      if( !member )
+        continue;
+      grouped |= 1u << i;
+      sum += worth[ i ];
+      ++size;
+    }
+    const Int average = (Int)( sum / size );
+    if( ours )
+      *ownAverage = average;
+    else if( average > *strongestEnemyAverage )
+      *strongestEnemyAverage = average;
+  }
+}
+
 Int IncomeBonusStep( Int bonus, Int target )
 {
   if( target > bonus + AI_INCOME_BONUS_STEP )

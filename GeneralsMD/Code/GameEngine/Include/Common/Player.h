@@ -193,6 +193,11 @@ UnsignedInt EarnedAmount( UnsignedInt amount, Int percent );
 // strength against its strongest living enemy's: 0 while it holds level, rising in a line to
 // AI_INCOME_BONUS_MAX at a quarter of it and below.  Integers only.
 Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength );
+// The strengths that target is fed: of count living players in list order, worth[i] each and allies[i]
+// a bit for every player mutually allied with i, self's side (itself and its allies) a player at a
+// time, and the highest per-player average of the other sides, each a leader in list order and the
+// players still ungrouped who are its mutual allies.  Free-for-all, every enemy is a side of one.
+void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage );
 // One weighing's move from the bonus it has toward that target, at most AI_INCOME_BONUS_STEP.
 Int IncomeBonusStep( Int bonus, Int target );
 

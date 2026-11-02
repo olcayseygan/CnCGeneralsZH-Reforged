@@ -2424,6 +2424,26 @@ TEST(skirmish_ai_earnings_bonus_when_behind)
 	CHECK_EQ( IncomeBonusStep( 5, 0 ), 0 );
 }
 
+/* Player.cpp: the bonus weighs sides, a player at a time, not one seat against another. */
+TEST(skirmish_ai_earnings_bonus_weighs_sides)
+{
+	Int own = -1, enemy = -1;
+	/* four teams of two, seats 0-1, 2-3, 4-5, 6-7; the computer is seat 1 and its partner carries it */
+	const Int worth[ 8 ] = { 1000, 0, 3000, 1000, 4000, 0, 500, 500 };
+	const UnsignedInt allies[ 8 ] = { 1u << 1, 1u << 0, 1u << 3, 1u << 2, 1u << 5, 1u << 4, 1u << 7, 1u << 6 };
+	IncomeSideWorths( worth, allies, 8, 1, &own, &enemy );
+	CHECK_EQ( own, 500 );
+	CHECK_EQ( enemy, 2000 );
+	/* a quarter of the strongest side's average: the ceiling */
+	CHECK_EQ( IncomeBonusTarget( own, enemy ), 150 );
+	/* free for all: every enemy is a side of one, the richest counts */
+	const Int ffa[ 3 ] = { 300, 100, 200 };
+	const UnsignedInt none[ 3 ] = { 0, 0, 0 };
+	IncomeSideWorths( ffa, none, 3, 1, &own, &enemy );
+	CHECK_EQ( own, 100 );
+	CHECK_EQ( enemy, 300 );
+}
+
 /* ExperienceTracker.cpp: a kill's experience split by the damage each attacker dealt. */
 TEST(kill_xp_splits_by_damage_and_the_killing_blow_keeps_the_remainder)
 {

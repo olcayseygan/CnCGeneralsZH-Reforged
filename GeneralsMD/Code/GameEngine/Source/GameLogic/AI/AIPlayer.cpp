@@ -8449,29 +8449,44 @@ static Int incomeStrength( Player *player )
 
 //----------------------------------------------------------------------------------------------------------
 /** The owner, 2026-11-02: a computer that starts losing earns more.  Every AI_INCOME_BONUS_FRAMES it weighs
-	* itself against the strongest enemy still in the match and moves the bonus a step toward what
+	* its side, itself and every ally humans included, a player at a time against the strongest enemy side
+	* still in the match (IncomeSideWorths), and moves the bonus a step toward what
 	* IncomeBonusTarget says that is owed, so the percent climbs and falls by at most AI_INCOME_BONUS_STEP
 	* points at a time.  The score screen still counts the plain amount. */
 //----------------------------------------------------------------------------------------------------------
 void AIPlayer::stepIncomeBonus( void )
 {
-	Int strongest = 0;
+	// the living sides in the match that are this player, its allies or its enemies, in player list order
+	Player *seat[ MAX_PLAYER_COUNT ];
+	Int worth[ MAX_PLAYER_COUNT ];
+	Int count = 0;
+	Int self = 0;
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 	{
 		Player *other = ThePlayerList->getNthPlayer( i );
-		if( other != m_player && other->isPlayableSide() && other->isPlayerActive()
-				&& m_player->getRelationship( other->getDefaultTeam() ) == ENEMIES )
-		{
-			const Int strength = incomeStrength( other );
-			if( strength > strongest )
-				strongest = strength;
-		}
+		if( other == m_player )
+			self = count;
+		else if( !other->isPlayableSide() || !other->isPlayerActive() || m_player->getRelationship( other->getDefaultTeam() ) == NEUTRAL )
+			continue;
+		seat[ count ] = other;
+		worth[ count ] = incomeStrength( other );
+		++count;
 	}
-	const Int own = incomeStrength( m_player );
+	UnsignedInt allies[ MAX_PLAYER_COUNT ];
+	for( Int i = 0; i < count; ++i )
+	{
+		allies[ i ] = 0;
+		for( Int j = 0; j < count; ++j )
+			if( j != i && seat[ i ]->getRelationship( seat[ j ]->getDefaultTeam() ) == ALLIES
+					&& seat[ j ]->getRelationship( seat[ i ]->getDefaultTeam() ) == ALLIES )
+				allies[ i ] |= 1u << j;
+	}
+	Int own, strongest;
+	IncomeSideWorths( worth, allies, count, self, &own, &strongest );
 	const Int bonus = IncomeBonusStep( m_incomeBonus, IncomeBonusTarget( own, strongest ) );
 	if( bonus == m_incomeBonus )
 		return;
-	DEBUG_LOG(( "AI INCOME frame %d player %d worth %d against %d, income %d%% -> %d%%\n",
+	DEBUG_LOG(( "AI INCOME frame %d player %d side worth %d a player against %d, income %d%% -> %d%%\n",
 		TheGameLogic->getFrame(), m_player->getPlayerIndex(), own, strongest,
 		m_player->incomePercent(), m_player->incomePercent() - m_incomeBonus + bonus ));
 	m_incomeBonus = bonus;

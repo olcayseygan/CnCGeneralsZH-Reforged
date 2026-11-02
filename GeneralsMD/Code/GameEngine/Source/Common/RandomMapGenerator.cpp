@@ -68,9 +68,25 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 // edges, so it is scenery, not play space.
 #define RMG_BORDER_CELLS		20
 
-// Each texture class is read as the four tiles of a 2x2 sheet.
+// A texture class the sheet table (theTextureSheets) does not know is read as the four tiles of a 2x2
+// sheet, which every terrain image holds.
 #define RMG_TILES_PER_CLASS		4
 #define RMG_TILE_SHEET_WIDTH	2
+
+// The cliff mapping (rmgCliffMapping). A cliff class's cell takes one when both its edges down the fall
+// rise more than this many height bytes: WorldBuilder's limit (WHeightMapEdit::doCliffAdjustment, half
+// its STRETCH_LIMIT over HEIGHT_SCALE), past which a face drawn by its height stretches the tile no
+// more than 1.6 times.
+#define RMG_CLIFF_UV_RISE		12
+// Entries the reader holds, the default at 0 included (NUM_CLIFF_INFO in WorldHeightMap.h); a chunk
+// claiming more throws ERROR_CORRUPT_FILE_FORMAT, so the mapping keeps the steepest cells under it.
+#define RMG_NUM_CLIFF_INFO		32384
+// A cell is 32 texels of a TEXTURE_WIDTH that is 32 tiles of 64, so 1/64 of it; a height byte is a
+// sixteenth of a cell's width (MAP_HEIGHT_SCALE over MAP_XY_FACTOR), 1/1024. The mapping counts in
+// 2048ths, which keeps every coordinate it writes exact in a float, whatever the rounding mode.
+#define RMG_CLIFF_UV_UNITS		2048
+#define RMG_CLIFF_UV_CELL		32		///< RMG_CLIFF_UV_UNITS a cell across
+#define RMG_CLIFF_UV_BYTE		2		///< and a height byte up
 
 // How big a map is: a floor everybody gets, plus a share for each player. A normal two-player map
 // is 248 cells across, which is 2480 world units - about what a shipped duel map measures - and an
@@ -127,6 +143,7 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_LAKE_EDGE_RISE		30.0f	///< height bytes that slope adds at the margin itself
 #define RMG_LAKE_MIN_FILL		80		///< cells; smaller is a puddle and is thrown back
 #define RMG_RIVER_MIN_LENGTH	36		///< downhill steps before a stream counts
+#define RMG_FORD_STUB_STEPS		4.0f	///< river steps past a ford's half-width a stretch beside it must run, or it goes dry
 #define RMG_POLYGON_MAX			96		///< sides written into the water area
 
 // A start position gets a flat disc to build on, easing back into the terrain.
@@ -135,10 +152,13 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_BASE_FLAT_FLOOR		14.2f	///< cells of flat round a start on every bearing, the pathfinder's square inside it
 #define RMG_BASE_FLAT_SWING		5.5f	///< cells the flat edge wanders out past that floor
 #define RMG_BASE_BLEND_SWING	0.6f	///< share of its width the blend's outer edge wanders out by
+#define RMG_BASE_SHORE_RAMP		4.0f	///< cells past the flat's edge over which a lake takes the blend back
 #define RMG_START_MARGIN		10.0f	///< cells of playable area kept outside the blend disc
 #define RMG_START_EDGE_FRACTION	0.14f	///< and this much of the map besides, so a base has ground behind it
 #define RMG_START_STRIDE		3		///< cells between the spots the search looks at
 #define RMG_START_ROUGHNESS		2.6f	///< height bytes a base site may vary by, on average
+#define RMG_START_STRICT_SITES_EACH	4		///< dry-flat sites per seat under which the looser sites are taken too
+#define RMG_START_LOOSE_PENALTY	4.0f	///< roughness added to a site only the looser shore test passes
 #define RMG_CIRCLE_PLAYERS		6		///< this many seats and the starts sit on a ring
 #define RMG_CIRCLE_RADIUS		0.36f	///< fraction of the playable size, from the centre
 #define RMG_START_RING_TURNS	6		///< rotations of the ring tried within one seat's arc
@@ -197,7 +217,9 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_TOWN_GRADE_BLUR		9		///< cells either side the ground is averaged over
 #define RMG_TOWN_JITTER			2.0f	///< cells a building sits off its own frontage line
 #define RMG_TOWN_DRY_MARGIN		4.0f	///< cells a building or a street keeps off the water
-#define RMG_TOWN_REROLLS		6		///< plans a map with no town yet tries for its last one
+#define RMG_TOWN_REROLLS		6		///< plans a town tries, and as many small ones after for a map with no town yet
+#define RMG_TOWN_SMALL_BLOCK_MAX	22.0f	///< the widest block of a small plan
+#define RMG_TOWN_START_CLEAR	( RMG_BLEND_RADIUS + 2.0f )	///< cells round every start no building stands in
 // A street is laid a block at a time, and a block that reaches water stops at the bank.
 #define RMG_ROAD_STEP			2.0f	///< cells between two wet-or-dry samples along a block
 #define RMG_ROAD_MIN_RUN		12.0f	///< cells; a street from a crossing to the bank shorter than this is a stub
@@ -212,6 +234,8 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_CELLS_PER_ROCK		2600.0f
 #define RMG_ROCK_EDGE_CELLS		10		///< no rock this close to the playable edge
 #define RMG_PROP_STRIDE			2
+#define RMG_ROCK_ACCEPT_IN_256	67U		///< rocky cells out of 256 that get a rock, a quarter
+#define RMG_TREE_EDGE_RAGGED	1500U	///< depth units (density x 10000) a tree's place in the cap is shuffled by
 #define RMG_FOREST_FEATURES		7.0f
 #define RMG_LANE_CLEAR			7		///< cells either side of a route between bases that stay open
 #define RMG_LANE_FRAME			18		///< and out to here the woods thicken, so they line the route
@@ -705,6 +729,63 @@ static const RMGStyle theStyles[] =
 };
 static const Int RMG_STYLE_COUNT = sizeof(theStyles) / sizeof(theStyles[0]);
 
+/* How many tiles each ground image above holds and how many across, as every shipped map that uses
+	it declares it in its BlendTileData (MapsZH.big and the base game's maps.big agree on every one).
+	WorldHeightMap's readTexClass loads a width by width block of the image only when the class asks
+	for no more tiles than the image has: declared smaller, a class draws one corner of its art over
+	and over (every class here was four tiles two across, so the twilight style's cliff was a quarter
+	of CliffLargeType10 repeating every four cells), and declared bigger it draws nothing. */
+struct RMGTextureSheet
+{
+	const char *m_name;
+	Int m_tiles, m_width;
+};
+
+static const RMGTextureSheet theTextureSheets[] =
+{
+	{ "GrassType1", 4, 2 },				{ "SandLargeType1", 36, 6 },		{ "DirtType1", 4, 2 },
+	{ "RocksType1", 4, 2 },				{ "SandLargeType2", 36, 6 },		{ "SandType3wet", 4, 2 },
+	{ "DirtMediumType3", 16, 4 },		{ "RocksType3", 4, 2 },				{ "SnowType1", 4, 2 },
+	{ "DirtSnowType1", 16, 4 },			{ "SnowLargeType1", 36, 6 },		{ "RocksMediumType1Snow", 16, 4 },
+	{ "DirtMediumType8", 16, 4 },		{ "SandMediumType7Grassy", 16, 4 },	{ "DirtType2", 4, 2 },
+	{ "DirtMediumType10", 16, 4 },		{ "SandMediumType6", 16, 4 },		{ "SandMediumType10", 16, 4 },
+	{ "CliffLargeType10", 16, 4 },
+};
+
+static void rmgTextureSheet( const char *name, Int& tiles, Int& width )
+{
+	tiles = RMG_TILES_PER_CLASS;
+	width = RMG_TILE_SHEET_WIDTH;
+	for( Int i = 0; i < (Int)( sizeof(theTextureSheets) / sizeof(theTextureSheets[0]) ); i++ )
+	{
+		if( strcmp( theTextureSheets[i].m_name, name ) == 0 )
+		{
+			tiles = theTextureSheets[i].m_tiles;
+			width = theTextureSheets[i].m_width;
+		}
+	}
+}
+
+/// A class's first tile: the classes lie one after another in RMGTerrainClass order.
+static Int rmgClassFirstTile( const RMGBiome& biome, Int terrainClass )
+{
+	Int first = 0;
+	for( Int c = 0; c < terrainClass; c++ )
+	{
+		Int tiles, width;
+		rmgTextureSheet( biome.m_textures[c], tiles, width );
+		first += tiles;
+	}
+	return first;
+}
+
+static Int rmgClassWidth( const RMGBiome& biome, Int terrainClass )
+{
+	Int tiles, width;
+	rmgTextureSheet( biome.m_textures[terrainClass], tiles, width );
+	return width;
+}
+
 /// The bowl a style stands on: rolling low ground, no shelves, no water, thin woods.
 static const RMGMapTypeShape theBowlType =
 	//	amp		valley	gorge	shelf	lakes	area	river	forest	wood	massif
@@ -798,7 +879,8 @@ struct RMGTownPlan
 	Real m_downAt[RMG_TOWN_MAX_STREETS];
 	Real m_plotLength;
 	Real m_setBack;
-	Real m_radius;			///< from the middle to the far side of the outermost frontage
+	Real m_radius;			///< from the middle to the far corner of the outermost frontage
+	Real m_thinRadius;		///< what the thinning towards the edge is measured against
 };
 
 /// A hash read as a fraction of one, which is how every choice a town makes is made.
@@ -824,7 +906,7 @@ static Real snapAngle45( Real angle )
 }
 
 /// Where one direction's streets run, spaced unevenly and centred on the town. Returns the span.
-static Real rollStreetLines( Int seed, Int town, Int streets, Real *out )
+static Real rollStreetLines( Int seed, Int town, Int streets, Real blockMax, Real *out )
 {
 	Real at = 0.0f;
 	Int line;
@@ -832,7 +914,7 @@ static Real rollStreetLines( Int seed, Int town, Int streets, Real *out )
 	for( line = 0; line < streets; line++ )
 	{
 		out[line] = at;
-		at += lerpReal( RMG_TOWN_BLOCK_MIN, RMG_TOWN_BLOCK_MAX, hashUnit( seed, town, line ) );
+		at += lerpReal( RMG_TOWN_BLOCK_MIN, blockMax, hashUnit( seed, town, line ) );
 	}
 
 	Real span = out[streets - 1];
@@ -842,11 +924,13 @@ static Real rollStreetLines( Int seed, Int town, Int streets, Real *out )
 	return span;
 }
 
-static void rollTownPlan( Int seed, Int town, RMGTownPlan *plan )
+/** smallest: the fewest streets each way and the closest blocks, the plan a map tries once the
+	town it rolled has found no room anywhere. */
+static void rollTownPlan( Int seed, Int town, Bool smallest, RMGTownPlan *plan )
 {
 	plan->m_rotation = (Real)(hashCell( seed + 613, town, 0 ) % 8U) * (PI * 0.25f);
 
-	const UnsignedInt streetChoices = (UnsignedInt)(RMG_TOWN_MAX_STREETS - RMG_TOWN_MIN_STREETS + 1);
+	const UnsignedInt streetChoices = smallest ? 1U : (UnsignedInt)(RMG_TOWN_MAX_STREETS - RMG_TOWN_MIN_STREETS + 1);
 	plan->m_streetsAcross = RMG_TOWN_MIN_STREETS +
 			(Int)(hashCell( seed + 613, town, 1 ) % streetChoices);
 	plan->m_streetsDown = RMG_TOWN_MIN_STREETS +
@@ -857,11 +941,20 @@ static void rollTownPlan( Int seed, Int town, RMGTownPlan *plan )
 	plan->m_setBack = lerpReal( RMG_TOWN_SET_BACK_MIN, RMG_TOWN_SET_BACK_MAX,
 															hashUnit( seed + 613, town, 4 ) );
 
-	Real spanAcross = rollStreetLines( seed + 6131, town, plan->m_streetsAcross, plan->m_acrossAt );
-	Real spanDown = rollStreetLines( seed + 6133, town, plan->m_streetsDown, plan->m_downAt );
+	const Real blockMax = smallest ? RMG_TOWN_SMALL_BLOCK_MAX : RMG_TOWN_BLOCK_MAX;
+	Real spanAcross = rollStreetLines( seed + 6131, town, plan->m_streetsAcross, blockMax, plan->m_acrossAt );
+	Real spanDown = rollStreetLines( seed + 6133, town, plan->m_streetsDown, blockMax, plan->m_downAt );
 	Real span = (spanAcross > spanDown) ? spanAcross : spanDown;
 
-	plan->m_radius = span * 0.5f + plan->m_setBack + 4.0f;
+	/* Every clearance a town is placed with - the map's edge, the money, the starts - is this
+		radius, so it reaches the corner plot: a building stands its set-back and its jitter off the
+		outermost street, and the corner of the grid is that far out on both axes at once. Half the
+		longer side, as it was, let corner buildings stand on a supply pile or past the map's edge.
+		The thinning keeps measuring against the half side, so a town is no denser than it was. */
+	Real halfAcross = spanAcross * 0.5f + plan->m_setBack + RMG_TOWN_JITTER;
+	Real halfDown = spanDown * 0.5f + plan->m_setBack + RMG_TOWN_JITTER;
+	plan->m_radius = sqrtf( halfAcross * halfAcross + halfDown * halfDown ) + 4.0f;
+	plan->m_thinRadius = span * 0.5f + plan->m_setBack + 4.0f;
 }
 
 /// A point in the town's own coordinates, put where the map has it.
@@ -1068,7 +1161,9 @@ private:
 											 std::vector<Int>& lead );
 	Bool findSiteByWalk( const std::vector< std::vector<Int> >& walk, const std::vector<Int>& owner,
 											 const std::vector<Int>& lead, Int player, Int target, Int band, Int minLead,
-											 Int maxLead, Real bearing, Real clearance, RMGPoint *out ) const;
+											 Int maxLead, Real bearing, Real clearance, RMGPoint *out, Int rival = -1,
+											 Int rivalMaxLead = RMG_MONEY_NO_RIVAL ) const;
+	Bool placersSide( Int mapX, Int mapY, Int player, Int rival, Int maxLead ) const;
 	void lockRoute( const std::vector<Int>& walk, const RMGPoint& site );
 	void reserveSite( Real cellX, Real cellY, Real radius );
 	void addObject( const char *templateName, const char *uniqueID, Real cellX, Real cellY,
@@ -1382,6 +1477,9 @@ void RMGLayout::buildHeights( const UnsignedByte perm[512] )
 
 			if( h < 1.0f ) h = 1.0f;
 			if( h > 254.0f ) h = 254.0f;
+			// A style skips the soft floor, so its pits go below nought; a negative float cast to a
+			// byte is undefined, and on x64 it wrapped -3 to 253, a spike field in every deep pit.
+			if( eased < 1.0f ) eased = 1.0f;
 			if( eased > 254.0f ) eased = 254.0f;
 
 			m_heights[cellIndex( x, y )] = (UnsignedByte)(h + 0.5f);
@@ -1927,15 +2025,54 @@ void RMGLayout::paintRiverStretches( const std::vector<Int>& fords )
 	Int reach = (Int)( half + 0.5f );
 	Int radiusSq = (Int)( half * half + 0.5f );
 
+	std::vector<char> dry( n, 0 );
 	for( Int i = 0; i < n; i++ )
 	{
-		Bool atAFord = FALSE;
 		for( UnsignedInt ford = 0; ford < fords.size(); ford++ )
 		{
 			if( fabsf( (Real)( i - fords[ford] ) ) < fordHalf )
-				atAFord = TRUE;
+				dry[i] = 1;
 		}
-		if( atAFord )
+	}
+
+	/* A stretch cut off between a ford and the end of the river, or between two fords, that is too
+		short to read as river is a square pond capping the line: the end is already a way across and
+		a pond there serves nothing. It goes dry with the ford beside it. The length scales with the
+		ford, so a small map's real stretches stay, and the longest stretch always stays, so a river
+		map keeps its river. */
+	if( !fords.empty() )
+	{
+		const Int minRun = (Int)( fordHalf + RMG_FORD_STUB_STEPS );
+		Int longestFrom = -1, longest = 0;
+		for( Int i = 0; i < n; )
+		{
+			Int end = i;
+			while( end < n && dry[end] == dry[i] )
+				end++;
+			if( !dry[i] && end - i > longest )
+			{
+				longest = end - i;
+				longestFrom = i;
+			}
+			i = end;
+		}
+		for( Int i = 0; i < n; )
+		{
+			Int end = i;
+			while( end < n && dry[end] == dry[i] )
+				end++;
+			if( !dry[i] && i != longestFrom && end - i < minRun )
+			{
+				for( Int k = i; k < end; k++ )
+					dry[k] = 1;
+			}
+			i = end;
+		}
+	}
+
+	for( Int i = 0; i < n; i++ )
+	{
+		if( dry[i] )
 			continue;
 
 		Int cx = (Int)floorf( line[i].m_cellX + 0.5f ) + RMG_BORDER_CELLS;
@@ -2559,12 +2696,32 @@ void RMGLayout::chooseStarts( void )
 
 	std::vector<RMGStartCandidate> candidates;
 
+	/* The whole levelled flat has to be dry with a beach to spare, not just the inner disc: the
+		shore distance is city-block, which reads a diagonal half again as far as it is, and a base
+		levelled over the edge of a lake raised the lake bed under the water polygon into dry ground.
+		Sampling the flat cell by cell makes the reach a true circle. A map whose lakes leave too few
+		such sites to seat everyone with room to choose also takes the inner-disc sites, after the dry
+		ones and marked rougher, so a seat still prefers a dry flat and only a lake-crowded map ends
+		up on the looser kind. A handful of strict sites alone ran the ring search out of seats. */
+	UnsignedInt strictNext = 0;		// both passes walk the same grid in the same order
+	for( Int pass = 0; pass < 2
+		&& ( pass == 0 || (Int)candidates.size() < m_settings.m_numPlayers * RMG_START_STRICT_SITES_EACH ); pass++ )
 	for( Int y = margin; y < playable - margin; y += m_startSearchStride )
 	{
 		for( Int x = margin; x < playable - margin; x += m_startSearchStride )
 		{
 			Int mapX = x + RMG_BORDER_CELLS;
 			Int mapY = y + RMG_BORDER_CELLS;
+
+			/* A strict site passes the loose test too, and is in the list already. The strict ones
+				lead the list in walk order, so one index steps through them; once it reaches the
+				loose ones it points behind the walk and never matches again. */
+			if( pass == 1 && strictNext < candidates.size() && candidates[strictNext].m_cellX == (Real)x
+				&& candidates[strictNext].m_cellY == (Real)y )
+			{
+				strictNext++;
+				continue;
+			}
 
 			// The massif is the ground everybody climbs to, not a base: its top is level enough to
 			// pass as one, and a seat up there would own every ramp.
@@ -2579,7 +2736,8 @@ void RMGLayout::chooseStarts( void )
 				continue;
 
 			Bool discDry = TRUE;
-			Int disc = (Int)RMG_FLAT_RADIUS;
+			Int disc = pass == 0 ? (Int)( RMG_BASE_FLAT_FLOOR + RMG_BASE_FLAT_SWING ) : (Int)RMG_FLAT_RADIUS;
+			Real dryShore = pass == 0 ? RMG_PAD_SHORE_KEEP + 0.5f * RMG_LAKE_SHORE : 4.0f;
 			for( Int dy = -disc; dy <= disc && discDry; dy++ )
 			{
 				for( Int dx = -disc; dx <= disc; dx++ )
@@ -2588,7 +2746,7 @@ void RMGLayout::chooseStarts( void )
 						continue;
 					Real shore;
 					insideLake( (Real)( x + dx ), (Real)( y + dy ), &shore );
-					if( shore < 4.0f )
+					if( shore < dryShore )
 					{
 						discDry = FALSE;
 						break;
@@ -2605,7 +2763,7 @@ void RMGLayout::chooseStarts( void )
 			RMGStartCandidate candidate;
 			candidate.m_cellX = (Real)x;
 			candidate.m_cellY = (Real)y;
-			candidate.m_roughness = roughness;
+			candidate.m_roughness = pass == 0 ? roughness : roughness + RMG_START_LOOSE_PENALTY;
 			candidates.push_back( candidate );
 		}
 	}
@@ -3304,6 +3462,26 @@ void RMGLayout::shapeBases( void )
 			Real t = 0.0f;
 			if( nearest > flatR )
 				t = (nearest - flatR) / (blendR - flatR);
+
+			/* The ring keeps off the lake the way a pad does: water and its beach are never levelled,
+				and nearer the shore the ground keeps more of its own slope down to the water. The pull
+				starts at nothing on the flat's edge and comes in over a few cells, so the base's lake
+				side eases down instead of dropping off a kerb. Levelled to the start's height, the ring
+				used to raise the bed of a lake beside the base into dry ground under the water. */
+			Real shore;
+			insideLake( px, py, &shore );
+			if( shore < RMG_PAD_SHORE_KEEP )
+				continue;
+			Real shoreT = ( shore - RMG_PAD_SHORE_KEEP ) / RMG_LAKE_SHORE;
+			if( shoreT < 1.0f )
+			{
+				Real ramp = ( nearest - flatR ) / RMG_BASE_SHORE_RAMP;
+				if( ramp < 0.0f ) ramp = 0.0f;
+				if( ramp > 1.0f ) ramp = 1.0f;
+				Real want = ( 1.0f - shoreT ) * ramp;
+				if( t < want )
+					t = want;
+			}
 
 			m_baseCells.push_back( cellIndex( x, y ) );
 			m_baseBlendT.push_back( t );
@@ -4434,6 +4612,8 @@ void RMGLayout::holdMoneyWalks( void )
 					Int lead = theirs[c] - mine[c];
 					if( lead < RMG_CONTESTED_LEAD_MIN || lead > RMG_CONTESTED_LEAD_MAX )
 						continue;
+					if( !placersSide( money.m_cellX + dx, money.m_cellY + dy, player, money.m_rival, RMG_MONEY_NO_RIVAL ) )
+						continue;
 					bestX = dx;
 					bestY = dy;
 					bestOff = off;
@@ -4842,7 +5022,7 @@ void RMGLayout::buildBlends( void )
 			for( Int i = 0; i < count; i++ )
 			{
 				Bool flipped = theBlendShapes[shapes[i]].m_flip < 0 && count == 2 && flip > 0;
-				Int tile = tileIndexForCell( x, y, classes[i] * RMG_TILES_PER_CLASS, RMG_TILE_SHEET_WIDTH );
+				Int tile = tileIndexForCell( x, y, rmgClassFirstTile( *m_biome, classes[i] ), rmgClassWidth( *m_biome, classes[i] ) );
 				Short entry = blendEntryFor( tile, shapes[i], flipped );
 				if( i == 0 )
 					m_blendIndex[cellIndex( x, y )] = entry;
@@ -5615,7 +5795,8 @@ void RMGLayout::walkFromStarts( std::vector< std::vector<Int> >& walk, std::vect
 Bool RMGLayout::findSiteByWalk( const std::vector< std::vector<Int> >& walk,
 																const std::vector<Int>& owner, const std::vector<Int>& lead,
 																Int player, Int target, Int band, Int minLead, Int maxLead,
-																Real bearing, Real clearance, RMGPoint *out ) const
+																Real bearing, Real clearance, RMGPoint *out, Int rival,
+																Int rivalMaxLead ) const
 {
 	const std::vector<Int>& mine = walk[player];
 	Real startX = m_starts[player].m_cellX;
@@ -5641,7 +5822,15 @@ Bool RMGLayout::findSiteByWalk( const std::vector< std::vector<Int> >& walk,
 			Int off = mine[index] - target;
 			if( off < 0 )
 				off = -off;
-			if( off > band || lead[index] < minLead || lead[index] > maxLead )
+			/* A contested dock leads against its rival, not against whoever is second nearest: the
+				lead counted against the next seat round the other way put a dock meant for one gap in
+				the gap beside it, which then had two. */
+			Int cellLead = lead[index];
+			if( rival >= 0 )
+				cellLead = walk[rival][index] < 0 ? RMG_MONEY_NO_RIVAL : walk[rival][index] - mine[index];
+			if( off > band || cellLead < minLead || cellLead > maxLead )
+				continue;
+			if( rival >= 0 && !placersSide( x, y, player, rival, rivalMaxLead ) )
 				continue;
 
 			Real cellX = (Real)(x - RMG_BORDER_CELLS);
@@ -5686,6 +5875,27 @@ Bool RMGLayout::findSiteByWalk( const std::vector< std::vector<Int> >& walk,
 	}
 
 	return found;
+}
+
+/** The walk the flood counts is four-way, so on a ring turned off the axes a contested dock could
+	lead its placer by three steps and still stand twenty cells nearer the rival in a straight line
+	and on the game's own eight-way paths. The dock has to be on the placer's side as the crow flies
+	as well, by RMG_CONTESTED_LEAD_MIN to maxLead cells: octile distance in tenths (10 straight, 14
+	diagonal, as the pathfinder counts), integer, from the cell to each start's own cell. */
+Bool RMGLayout::placersSide( Int mapX, Int mapY, Int player, Int rival, Int maxLead ) const
+{
+	Int cellX = mapX - RMG_BORDER_CELLS;
+	Int cellY = mapY - RMG_BORDER_CELLS;
+	Int octile[2];
+	Int who[2] = { player, rival };
+	for( Int k = 0; k < 2; k++ )
+	{
+		Int dx = abs( cellX - (Int)( m_starts[who[k]].m_cellX + 0.5f ) );
+		Int dy = abs( cellY - (Int)( m_starts[who[k]].m_cellY + 0.5f ) );
+		octile[k] = dx > dy ? dx * 10 + dy * 4 : dy * 10 + dx * 4;
+	}
+	Int lead = octile[1] - octile[0];
+	return lead >= RMG_CONTESTED_LEAD_MIN * 10 && lead <= maxLead * 10;
 }
 
 /** Mark the walk from a start to its money so that no later pad - a town, a bunker on a ramp -
@@ -5874,28 +6084,59 @@ void RMGLayout::placeSupplyAndDerricks( void )
 		return;
 
 	/* The contested docks: one walk target for every seat, half the shortest walk any player has
-		to a neighbour, so no seat's fight is closer to home than another's. */
+		to its rival, so no seat's fight is closer to home than another's. With three seats or more
+		the rival is the next seat round the middle of the map, so every gap between two neighbours
+		gets one dock and every seat places one. The nearest seat by walk, as it was, ties both ring
+		neighbours on a square ring and gave the lowest index both: two docks in one gap, none in the
+		gap across from it. A next seat that cannot be walked to gives way to the nearest one. */
 	walkFromStarts( walk, owner, lead );
 	std::vector<Int> rival( players, -1 );
+	if( players >= 3 )
+	{
+		Real middle = playable * 0.5f;
+		std::vector<Real> bearing( players );
+		std::vector<Int> seatsRound;
+		for( Int i = 0; i < players; i++ )
+		{
+			bearing[i] = ATan2( m_starts[i].m_cellY - middle, m_starts[i].m_cellX - middle );
+			// by bearing, ties by index: insertion keeps it stable
+			Int at = (Int)seatsRound.size();
+			while( at > 0 && bearing[seatsRound[at - 1]] > bearing[i] )
+				at--;
+			seatsRound.insert( seatsRound.begin() + at, i );
+		}
+		for( Int k = 0; k < players; k++ )
+			rival[seatsRound[k]] = seatsRound[( k + 1 ) % players];
+	}
 	Int contestedWalk = -1;
 	for( Int i = 0; i < players; i++ )
 	{
-		Int nearestWalk = -1;
-		for( Int j = 0; j < players; j++ )
+		Int rivalWalk = -1;
+		if( rival[i] >= 0 )
 		{
-			if( j == i )
-				continue;
-			Int x = (Int)(m_starts[j].m_cellX + 0.5f) + RMG_BORDER_CELLS;
-			Int y = (Int)(m_starts[j].m_cellY + 0.5f) + RMG_BORDER_CELLS;
-			Int d = walk[i][cellIndex( x, y )];
-			if( d >= 0 && ( nearestWalk < 0 || d < nearestWalk ) )
+			Int x = (Int)(m_starts[rival[i]].m_cellX + 0.5f) + RMG_BORDER_CELLS;
+			Int y = (Int)(m_starts[rival[i]].m_cellY + 0.5f) + RMG_BORDER_CELLS;
+			rivalWalk = walk[i][cellIndex( x, y )];
+		}
+		if( rivalWalk < 0 )
+		{
+			rival[i] = -1;
+			for( Int j = 0; j < players; j++ )
 			{
-				nearestWalk = d;
-				rival[i] = j;
+				if( j == i )
+					continue;
+				Int x = (Int)(m_starts[j].m_cellX + 0.5f) + RMG_BORDER_CELLS;
+				Int y = (Int)(m_starts[j].m_cellY + 0.5f) + RMG_BORDER_CELLS;
+				Int d = walk[i][cellIndex( x, y )];
+				if( d >= 0 && ( rivalWalk < 0 || d < rivalWalk ) )
+				{
+					rivalWalk = d;
+					rival[i] = j;
+				}
 			}
 		}
-		if( nearestWalk >= 0 && ( contestedWalk < 0 || nearestWalk / 2 < contestedWalk ) )
-			contestedWalk = nearestWalk / 2;
+		if( rivalWalk >= 0 && ( contestedWalk < 0 || rivalWalk / 2 < contestedWalk ) )
+			contestedWalk = rivalWalk / 2;
 	}
 
 	static const Int theContestedBands[] = { 3, 8, 16, 1000 };
@@ -5911,12 +6152,21 @@ void RMGLayout::placeSupplyAndDerricks( void )
 		{
 			Real toward = ATan2( m_starts[rival[i]].m_cellY - sy, m_starts[rival[i]].m_cellX - sx );
 			for( Int b = 0; b < numContestedBands && !found; b++ )
+			{
 				found = findSiteByWalk( walk, owner, lead, i, contestedWalk, theContestedBands[b],
 																RMG_CONTESTED_LEAD_MIN, RMG_CONTESTED_LEAD_MAX, toward,
-																RMG_SITE_CLEARANCE, &site );
+																RMG_SITE_CLEARANCE, &site, rival[i] );
+				/* Where the four-way walk favours the placer, every spot it gives a small lead is
+					nearer the rival in a straight line, so the lead window moves to the straight line
+					instead and the walk only has to agree on who gets there first. */
+				if( !found )
+					found = findSiteByWalk( walk, owner, lead, i, contestedWalk, theContestedBands[b],
+																	RMG_CONTESTED_LEAD_MIN, RMG_MONEY_NO_RIVAL, toward,
+																	RMG_SITE_CLEARANCE, &site, rival[i], RMG_CONTESTED_LEAD_MAX );
+			}
 			if( !found )
 				found = findSiteByWalk( walk, owner, lead, i, contestedWalk, 1000, 1,
-																RMG_CONTESTED_LEAD_MAX * 2, toward, 3.0f, &site );
+																RMG_CONTESTED_LEAD_MAX * 2, toward, 3.0f, &site, rival[i] );
 			if( found )
 			{
 				RMGMoneyWalk planned;
@@ -6010,15 +6260,17 @@ void RMGLayout::placeTowns( void )
 	{
 		/* The next start along when this one's surroundings are full: a river or the money can take
 			all the room near one base and leave plenty near the next. Then the middle of the map,
-			which is between everybody by construction. A map about to end with no town at all rolls
-			the last one again, smaller or turned, until one fits. */
-		Int rolls = (town == towns - 1 && townsPlaced == 0) ? RMG_TOWN_REROLLS : 1;
+			which is between everybody by construction. A plan that fits nowhere is rolled again, and a
+			map about to end with no town at all then tries as many of the smallest plan, three streets
+			each way on the closest blocks: with one roll a town, a third of the four-seat maps ended
+			with no town, though a small one had room. */
+		Int rolls = (town == towns - 1 && townsPlaced == 0) ? 2 * RMG_TOWN_REROLLS : RMG_TOWN_REROLLS;
 		RMGTownPlan plan;
 		RMGPoint site;
 		Bool found = FALSE;
 		for( Int roll = 0; roll < rolls && !found; roll++ )
 		{
-			rollTownPlan( m_settings.m_seed, town + 16 * roll, &plan );
+			rollTownPlan( m_settings.m_seed, town + 16 * roll, roll >= RMG_TOWN_REROLLS, &plan );
 
 			// Out of everybody's base, in the ground between them, which is where a town is worth
 			// fighting through rather than one more thing in somebody's back garden.
@@ -6129,8 +6381,8 @@ void RMGLayout::placeTowns( void )
 
 						/* Built up in the middle and thinning out towards the edge, where a town turns
 							into yards and then fields, rather than the same density out to a hard line. */
-						Real outX = (buildingX - site.m_cellX) / plan.m_radius;
-						Real outY = (buildingY - site.m_cellY) / plan.m_radius;
+						Real outX = (buildingX - site.m_cellX) / plan.m_thinRadius;
+						Real outY = (buildingY - site.m_cellY) / plan.m_thinRadius;
 						UnsignedInt gap = RMG_TOWN_GAP_IN_100
 							+ (UnsignedInt)(RMG_TOWN_EDGE_GAP_IN_100 * (outX * outX + outY * outY));
 						UnsignedInt plotHash = hashCell( m_settings.m_seed + 6139,
@@ -6490,7 +6742,8 @@ void RMGLayout::placeScenery( const UnsignedByte perm[512] )
 			{
 				if( rockBudget <= 0 )
 					continue;
-				if( (hash >> 24) % 100U > 25U )
+				// a quarter of the rocky cells: the top eight bits are 0 to 255, never a hundred and more
+				if( (hash >> 24) >= RMG_ROCK_ACCEPT_IN_256 )
 					continue;
 				// The ground steepens where the playable area meets the border, and rocks set along
 				// that line stand in a ruled row round the map.
@@ -6564,6 +6817,17 @@ void RMGLayout::placeScenery( const UnsignedByte perm[512] )
 				if( chance > 0.25f )
 					chance = 0.25f;
 				chance *= 0.5f + 0.5f * m_biome->m_treeShare;
+				/* The wood's chances were tuned against the old eight-bit per-mille test, which planted
+					( floor( 1000 c ) + 1 ) / 256 of the cells: nearly all of them at the cap, a third in a
+					tuft. Read straight as a fraction under the exact test below, the same numbers left a
+					black forest a third to two thirds short of its tree count. The old rate is kept here;
+					the cap that trims the pool to the target is what thins the wood, not this. */
+				if( chance > 0.0f )
+				{
+					chance = (Real)( (Int)( chance * 1000.0f ) + 1 ) / 256.0f;
+					if( chance > 1.0f )
+						chance = 1.0f;
+				}
 			}
 			else
 			{
@@ -6580,18 +6844,25 @@ void RMGLayout::placeScenery( const UnsignedByte perm[512] )
 				if( density < clumpEdge )
 					continue;
 
-				chance = 0.05f + (density - clumpEdge) * 1.5f;
-				if( chance > 0.5f )
-					chance = 0.5f;
-				chance *= m_biome->m_treeShare;
+				/* Not scaled by the biome's tree share: the share already sets how many trees the map
+					holds (target, below), and taking it off the chance as well left a desert or a
+					Twilight wood a pool a quarter the size of the count it was calibrated to. */
+				chance = 0.08f + (density - clumpEdge) * 3.0f;
+				if( chance > 0.7f )
+					chance = 0.7f;
 			}
-			if( (Real)((hash >> 24) % 1000U) / 1000.0f > chance )
+			/* Ten bits of the hash read as a fraction of one. The eight bits this used to read as a
+				per-mille only ever came to a quarter, so every chance over that planted every cell of
+				the stride and the woods stood as a solid grid. */
+			if( (hash >> 22) >= (UnsignedInt)( chance * 1024.0f ) )
 				continue;
 
 			RMGTreeSpot spot;
 			spot.m_x = (Real)x + jitterX;
 			spot.m_y = (Real)y + jitterY;
-			spot.m_depth = (Int)( density * 10000.0f );
+			// the depth the cap trims by, ragged by a slice of the hash so the kept edge of a wood is a
+			// band rather than one contour line
+			spot.m_depth = (Int)( density * 10000.0f ) + (Int)( hashCell( m_settings.m_seed + 7723, x, y ) % RMG_TREE_EDGE_RAGGED );
 			spot.m_angle = angle;
 			spot.m_wood = hashCell( m_settings.m_seed + 40009, x / 16, y / 16 );		// the wood, not the tree, picks the species
 			spots.push_back( spot );
@@ -6868,7 +7139,16 @@ void RMGLayout::buildObjects( const UnsignedByte perm[512] )
 	// the shipped map a style comes from has neither a town nor a bunker on it, and a skeleton gets
 	// its towns and its dressing from the template
 	if( !m_style && !m_skeleton )
+	{
+		/* A town keeps out of every base's levelled ring, not only the one it is placed beside: a
+			start reserves its flat disc alone, and a building in the ring sat on a pad the base's
+			levelling then cut through. The rings are the towns' alone, so they go again after. */
+		const UnsignedInt startRings = m_sites.size();
+		for( UnsignedInt i = 0; i < m_starts.size(); i++ )
+			reserveSite( m_starts[i].m_cellX, m_starts[i].m_cellY, RMG_TOWN_START_CLEAR );
 		placeTowns();
+		m_sites.erase( m_sites.begin() + startRings, m_sites.begin() + startRings + m_starts.size() );
+	}
 	if( m_type->m_massif > 0.0f )
 		m_sites.erase( m_sites.begin() + massifSite );
 	if( m_skeleton )
@@ -7409,7 +7689,7 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 		map's own size and the other counts scale off it the way the normal size does. */
 	if( settings.m_playableCells <= 0 )
 	{
-		settings.m_playableCells = cellsFor( RANDOM_MAP_SIZE_NORMAL, settings.m_numPlayers );
+		settings.m_playableCells = cellsFor( RANDOM_MAP_SIZE_NORMAL, settings.m_numPlayers, settings.m_template );
 		if( settings.m_style > 0 )
 		{
 			const RMGStyle& style = theStyles[settings.m_style - 1];
@@ -7417,6 +7697,16 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 			if( settings.m_playableCells < rmgStyleSmallestCells( style ) )
 				settings.m_playableCells = rmgStyleSmallestCells( style );
 		}
+	}
+
+	/* A template's smallest size is the least ground its seats can be spread over. The size buttons
+		never go under it, but a typed cell count or a name read back can, and eight seats on a 64-cell
+		field came out as eight pads in a heap with a third of the objects outside play. */
+	if( !settings.m_template.isEmpty() )
+	{
+		Int tiny = cellsFor( RANDOM_MAP_SIZE_TINY, settings.m_numPlayers, settings.m_template );
+		if( settings.m_playableCells < tiny )
+			settings.m_playableCells = tiny;
 	}
 
 	if( settings.m_playableCells < MIN_CELLS ) settings.m_playableCells = MIN_CELLS;
@@ -7431,6 +7721,150 @@ Int RandomMapGenerator::styleNamed( const char *name )
 			return i + 1;
 	}
 	return 0;
+}
+
+/* The planar tiling lays a class's sheet flat over the ground, two cells a tile, so a face that rises
+	g bytes a cell shows the same 32 texels over sqrt(100 + (0.625 g)^2) world units: the twilight
+	style's rim, 29 bytes a cell at the median, drew its rock half as sharp along the fall as across
+	it, and the template's pads and canyons are steeper still. WorldHeightMap::getUVForTileIndex takes
+	a cell's coordinates out of its cliff entry instead, when it has one of its own class, so the faces
+	get one here the way WorldBuilder's doCliffAdjustment bakes them.
+
+	V is the height, as WorldBuilder has it: a byte is 1/1024 of TEXTURE_WIDTH, which is the true
+	length of a steep face and does not depend on which way it falls. Every corner a face's cells share
+	takes the same V, so a face is one piece of texture with no seam inside it. A cell's corners have
+	to lie inside its class's block of the terrain texture, 128 bytes tall for a sheet four tiles
+	across, and the sheet tiles, so V starts the block again every block's height. WorldBuilder centred
+	a face in one block and squeezed a taller one; the rim and ridge of a twilight bowl climb 166 bytes,
+	and squeezed to 128 their gentler cells came out worse than the plane. A cell that a restart height
+	runs through cannot hold both sides of it, so each face (an 8-connected patch of mapped cells of
+	one class) restarts at the heights where fewest of its cells cross, which is mostly the flat of a
+	plateau where it has none, and a cell that still crosses keeps the plane.
+
+	U runs across the fall: along y on a cell that falls more along x, along x otherwise, a whole sheet
+	period behind the cell so the four corners stay inside the block. That is the planar U itself on a
+	cell falling along y, so its seam with the flat ground beside it is in V alone.
+
+	Height alone gives an edge that does not rise no texture at all, so a cell takes the mapping only
+	when both its edges down the fall rise more than WorldBuilder's limit: then no edge down the fall
+	is drawn more than 1.6 times stretched, where the plane drew the twilight rim at 2 and more, and
+	none across it worse than the plane. WorldBuilder maps on any one steep edge and nudges flat
+	corners up afterwards (minHeightDelta), which seams a face; a rim's top and foot cells keep the
+	plane here instead. A cell whose class is no cliff keeps the planar tiling too, and so do the
+	blends of other classes drawn over a mapped cell, which the renderer matches to the entry's class. */
+void rmgCliffMapping( const std::vector<Int>& heights, Int W, Int H, const std::vector<Int>& sheetFirst,
+	const std::vector<Int>& sheetWidth, std::vector<Short>& indexOut, std::vector<RMGCliffInfo>& infoOut )
+{
+	indexOut.assign( W * H, 0 );
+	infoOut.assign( 1, RMGCliffInfo() );
+
+	// the cells that rise down both edges along their fall, and their lowest and highest corner
+	std::vector<Int> lowest( W * H, -1 ), highest( W * H, -1 );
+	for( Int y = 0; y + 1 < H; y++ )
+	{
+		for( Int x = 0; x + 1 < W; x++ )
+		{
+			const Int i = y * W + x;
+			if( sheetFirst[i] < 0 || sheetWidth[i] < 1 )
+				continue;
+			const Int h[4] = { heights[i], heights[i + 1], heights[i + W + 1], heights[i + W] };
+			const Int alongX = std::min( abs( h[0] - h[1] ), abs( h[3] - h[2] ) );
+			const Int alongY = std::min( abs( h[0] - h[3] ), abs( h[1] - h[2] ) );
+			const Bool fallsAlongX = std::max( abs( h[0] - h[1] ), abs( h[3] - h[2] ) ) >= std::max( abs( h[0] - h[3] ), abs( h[1] - h[2] ) );
+			if( ( fallsAlongX ? alongX : alongY ) <= RMG_CLIFF_UV_RISE )
+				continue;
+			lowest[i] = std::min( std::min( h[0], h[1] ), std::min( h[2], h[3] ) );
+			highest[i] = std::max( std::max( h[0], h[1] ), std::max( h[2], h[3] ) );
+		}
+	}
+
+	// the faces, flooded in raster order, and the cells of each
+	std::vector<Int> face( W * H, -1 ), faceStart, faceCells, stack;
+	for( Int seed = 0; seed < W * H; seed++ )
+	{
+		if( lowest[seed] < 0 || face[seed] >= 0 )
+			continue;
+		const Int f = (Int)faceStart.size();
+		faceStart.push_back( (Int)faceCells.size() );
+		face[seed] = f;
+		stack.push_back( seed );
+		while( !stack.empty() )
+		{
+			const Int i = stack.back(), x = i % W, y = i / W;
+			stack.pop_back();
+			faceCells.push_back( i );
+			for( Int dy = -1; dy <= 1; dy++ )
+			{
+				for( Int dx = -1; dx <= 1; dx++ )
+				{
+					const Int nx = x + dx, ny = y + dy, n = ny * W + nx;
+					if( nx < 0 || ny < 0 || nx >= W || ny >= H || lowest[n] < 0 || face[n] >= 0 || sheetFirst[n] != sheetFirst[seed] )
+						continue;
+					face[n] = f;
+					stack.push_back( n );
+				}
+			}
+		}
+	}
+	faceStart.push_back( (Int)faceCells.size() );
+
+	// each face's restart: of the heights a block apart, the lowest phase the fewest of its cells
+	// cross; a cell crosses one strictly between its lowest and highest corner
+	std::vector<Int> phase( faceStart.size() - 1, 0 ), crossing;
+	for( Int f = 0; f + 1 < (Int)faceStart.size(); f++ )
+	{
+		const Int sheetBytes = sheetWidth[faceCells[faceStart[f]]] * RMG_CLIFF_UV_CELL * 2 / RMG_CLIFF_UV_BYTE;
+		crossing.assign( sheetBytes, 0 );
+		for( Int c = faceStart[f]; c < faceStart[f + 1]; c++ )
+			for( Int t = lowest[faceCells[c]] + 1; t < highest[faceCells[c]]; t++ )
+				crossing[t % sheetBytes]++;
+		for( Int p = 1; p < sheetBytes; p++ )
+			if( crossing[p] < crossing[phase[f]] )
+				phase[f] = p;
+	}
+
+	// a cell its face's restart still runs through keeps the plane, and more cells than the reader
+	// takes keep the steepest
+	std::vector< std::pair<Int, Int> > cells;
+	std::vector<Int> restart( W * H, 0 );
+	for( Int i = 0; i < W * H; i++ )
+	{
+		if( lowest[i] < 0 )
+			continue;
+		const Int sheetBytes = sheetWidth[i] * RMG_CLIFF_UV_CELL * 2 / RMG_CLIFF_UV_BYTE, p = phase[face[i]];
+		const Int below = lowest[i] - p >= 0 ? ( lowest[i] - p ) / sheetBytes : -( ( p - lowest[i] + sheetBytes - 1 ) / sheetBytes );
+		restart[i] = p + below * sheetBytes;
+		if( highest[i] - restart[i] > sheetBytes )
+			continue;
+		cells.push_back( std::make_pair( lowest[i] - highest[i], i ) );
+	}
+	if( (Int)cells.size() > RMG_NUM_CLIFF_INFO - 1 )
+	{
+		std::sort( cells.begin(), cells.end() );
+		cells.resize( RMG_NUM_CLIFF_INFO - 1 );
+		std::sort( cells.begin(), cells.end(), []( const std::pair<Int, Int>& a, const std::pair<Int, Int>& b ) { return a.second < b.second; } );
+	}
+
+	for( size_t c = 0; c < cells.size(); c++ )
+	{
+		const Int i = cells[c].second, x = i % W, y = i / W, w = sheetWidth[i];
+		const Int h[4] = { heights[i], heights[i + 1], heights[i + W + 1], heights[i + W] };
+		const Bool fallsAlongX = std::max( abs( h[0] - h[1] ), abs( h[3] - h[2] ) ) >= std::max( abs( h[0] - h[3] ), abs( h[1] - h[2] ) );
+		const Int along = fallsAlongX ? y : x, period = 2 * w, behind = along - along % period;
+		const Int corner[4][2] = { { x, y }, { x + 1, y }, { x + 1, y + 1 }, { x, y + 1 } };
+		RMGCliffInfo info;
+		info.m_tileIndex = sheetFirst[i] << 2;
+		for( Int k = 0; k < 4; k++ )
+		{
+			const Int u = ( corner[k][fallsAlongX ? 1 : 0] - behind ) * RMG_CLIFF_UV_CELL;
+			const Int v = -( h[k] - restart[i] ) * RMG_CLIFF_UV_BYTE;
+			info.m_u[k] = (Real)u / (Real)RMG_CLIFF_UV_UNITS;
+			info.m_v[k] = (Real)v / (Real)RMG_CLIFF_UV_UNITS;
+		}
+		info.m_flip = abs( h[2] - h[0] ) >= abs( h[3] - h[1] );
+		indexOut[i] = (Short)infoOut.size();
+		infoOut.push_back( info );
+	}
 }
 
 /// The CkMp stream for a built layout.
@@ -7459,37 +7893,50 @@ static void writeLayout( const RMGLayout& layout, std::vector<char>& mapBytes )
 	// passability bits in the file, below it works them out from the heights.
 	{
 		std::vector<Short> tiles( dataSize );
-		std::vector<Short> zeroes( dataSize, 0 );
+		std::vector<Int> heights( layout.m_heights.begin(), layout.m_heights.end() );
+		std::vector<Int> sheetFirst( dataSize, -1 ), sheetWidth( dataSize, 0 );
+		const RMGBiome& biome = *layout.m_biome;
 
 		for( Int y = 0; y < height; y++ )
 		{
 			for( Int x = 0; x < width; x++ )
 			{
-				Int terrainClass = layout.m_terrain[layout.cellIndex( x, y )];
-				tiles[layout.cellIndex( x, y )] = tileIndexForCell( x, y,
-					terrainClass * RMG_TILES_PER_CLASS, RMG_TILE_SHEET_WIDTH );
+				const Int i = layout.cellIndex( x, y ), terrainClass = layout.m_terrain[i];
+				const Int first = rmgClassFirstTile( biome, terrainClass ), sheet = rmgClassWidth( biome, terrainClass );
+				tiles[i] = tileIndexForCell( x, y, first, sheet );
+				// the rock is what the generator paints its faces with
+				if( terrainClass == RMG_TERRAIN_ROCK )
+				{
+					sheetFirst[i] = first;
+					sheetWidth[i] = sheet;
+				}
 			}
 		}
+		std::vector<Short> cliffIndex;
+		std::vector<RMGCliffInfo> cliffInfo;
+		rmgCliffMapping( heights, width, height, sheetFirst, sheetWidth, cliffIndex, cliffInfo );
 
 		w.openChunk( "BlendTileData", K_BLEND_TILE_VERSION_6 );
 			w.writeInt( dataSize );
 			w.writeBytes( &tiles[0], dataSize * sizeof(Short) );
 			w.writeBytes( &layout.m_blendIndex[0], dataSize * sizeof(Short) );
 			w.writeBytes( &layout.m_extraBlendIndex[0], dataSize * sizeof(Short) );
-			w.writeBytes( &zeroes[0], dataSize * sizeof(Short) );	// cliff info
+			w.writeBytes( &cliffIndex[0], dataSize * sizeof(Short) );
 
-			w.writeInt( RMG_TERRAIN_COUNT * RMG_TILES_PER_CLASS );	// bitmap tiles
+			w.writeInt( rmgClassFirstTile( biome, RMG_TERRAIN_COUNT ) );	// bitmap tiles
 			w.writeInt( (Int)layout.m_blends.size() );
-			w.writeInt( 1 );					// cliff infos: entry 0 is the default
+			w.writeInt( (Int)cliffInfo.size() );	// entry 0 is the default and is never written
 
 			w.writeInt( RMG_TERRAIN_COUNT );
 			for( Int terrainClass = 0; terrainClass < RMG_TERRAIN_COUNT; terrainClass++ )
 			{
-				w.writeInt( terrainClass * RMG_TILES_PER_CLASS );	// first tile
-				w.writeInt( RMG_TILES_PER_CLASS );
-				w.writeInt( RMG_TILE_SHEET_WIDTH );
+				Int tilesInClass, sheet;
+				rmgTextureSheet( biome.m_textures[terrainClass], tilesInClass, sheet );
+				w.writeInt( rmgClassFirstTile( biome, terrainClass ) );
+				w.writeInt( tilesInClass );
+				w.writeInt( sheet );
 				w.writeInt( 0 );				// legacy field
-				w.writeAsciiString( layout.m_biome->m_textures[terrainClass] );
+				w.writeAsciiString( biome.m_textures[terrainClass] );
 			}
 
 			w.writeInt( 0 );					// no edge tiles
@@ -7508,6 +7955,19 @@ static void writeLayout( const RMGLayout& layout, std::vector<char>& mapBytes )
 				w.writeByte( layout.m_blends[i].m_longDiagonal );
 				w.writeInt( -1 );				// no custom blend edge class: use the alpha
 				w.writeInt( RMG_BLEND_FLAG_VALUE );
+			}
+
+			// the cliff mappings, in the order the reader takes them from version 5 on
+			for( UnsignedInt i = 1; i < cliffInfo.size(); i++ )
+			{
+				w.writeInt( cliffInfo[i].m_tileIndex );
+				for( Int k = 0; k < 4; k++ )
+				{
+					w.writeReal( cliffInfo[i].m_u[k] );
+					w.writeReal( cliffInfo[i].m_v[k] );
+				}
+				w.writeByte( cliffInfo[i].m_flip ? 1 : 0 );
+				w.writeByte( 0 );				// not a mutant: WorldBuilder's mark for a cell it gave up on
 			}
 		w.closeChunk();
 	}
@@ -7927,7 +8387,8 @@ Bool generatedMapFromWireName( const AsciiString& wire, AsciiString& folderOut )
 	}
 
 	// ponytail: the first shipped map whose letters match wins, so two folders sharing four letters
-	// leave the later one out of LAN games; a fifth letter when that ever happens
+	// leave the later one out of LAN games; a fifth letter when that ever happens, which a test over
+	// every shipped map folder says (every_shipped_map_has_wire_letters_of_its_own)
 	FilenameList maps;
 	TheFileSystem->getFileListInDirectory( AsciiString( "Maps\\" ), AsciiString( "*.map" ), maps, TRUE );
 	AsciiString token;

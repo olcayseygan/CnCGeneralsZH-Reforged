@@ -78,6 +78,11 @@ extern Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<c
 	RMGCivilianTest civilian, std::vector<char>& mapBytes, std::vector<char> *previewBytes,
 	RMGTemplateReport *report );
 
+/** The share of the height up to the lower of two copied plateau bases a cell between them is raised
+	by: sum is the cell's chamfer distances to the two (three a straight step) added, pairLeast the
+	least such sum anywhere. A pair further apart than a corridor is not joined at all. */
+extern Real rmgJoinShare( Int pairLeast, Int sum );
+
 /** RandomMapGenerator.cpp's half: the generator's map for these settings on plain open ground, with
 	no scenery, towns or bunkers. */
 extern void rmgBuildSkeleton( const RandomMapSettings& settings, std::vector<char>& mapBytes );

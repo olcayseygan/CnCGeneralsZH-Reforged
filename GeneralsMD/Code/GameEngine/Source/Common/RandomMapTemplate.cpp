@@ -81,7 +81,10 @@ const Real PAD_OPEN = 24.0f;			// the base's reach on open ground
 const Real PAD_CLIFF = 0.25f;			// of a base plateau's rim, the share that must fall away for it to be a plateau
 const Real PAD_SPACING = 0.45f;			// of the nearest two starts' distance, the most a pad's radius may be
 const Real PAD_SCALE_LEAST = 0.5f;
+const Real PAD_BEARING_SLACK = 0.05f;	// radians a seat, the misses within which bases count as facing the seats as well
 const Int PAD_CORRIDOR = 28;				// cells between two plateau bases, Twilight Flame's narrowest way from one to the next; a narrower way is filled
+const Int JOIN_FADE = 16;				// cells of the two bases' summed distance over which a filled way falls back to the ground past it: eight cells aside
+const Real PAD_SITE_LEAST = 20.0f;		// cells a dock or derrick pulled in off the map's edge keeps from its start, past the command centre
 const Real PAD_SHORE = 4.0f;			// cells a pad stays off the exemplar's water
 const Real RAMP_STEEP = 8.0f;			// bytes a cell, the steepest a cut ramp climbs
 const Int WIDE_RAMP_HALF = 16;			// cells either side of its walk, a scaled plateau's ramp: Twilight Flame's 22 and the cliffs' growth
@@ -91,8 +94,11 @@ const Int CROSS_WET = 100;				// water cells in a town's box that put the town o
 const Int CROSS_STEP = 8;				// cells between the places tried for a crossing along its river
 const Real CALM_EASE = 20.0f;			// cells over which a river's wander comes back past a crossing
 const Real BRIDGE_DECK = 4.0f;			// cells a bridge's deck takes along its river
+const Real BRIDGE_END = 4.0f;			// cells round a river bridge's end raised to its bank
 const Real CROSS_GUARD = 0.3f;			// how far into a pad's fade a crossing may reach
 const Int CROSS_LEAST = 20;				// cells a side, the least of a crossing cut down to fit: a bridge and its banks
+const Int CROSS_CROPS = 6;				// the cuts of a crossing tried, the whole of it first
+const Real CROSS_CROP[CROSS_CROPS] = { 1.0f, 0.75f, 0.55f, 0.4f, 0.3f, 0.2f };
 const Int REPAIR_ROUNDS = 4;
 const Real SLOPE_REACH = 100.0f;
 const Int PILE_FLAT = 4;
@@ -123,6 +129,17 @@ const Int ROAD_SPACING = 2;
 const Real ROAD_TOLERANCE = 1.5f;
 const Int ROAD_CLEAR = 3;
 const Real ROAD_MIN = 60.0f;
+// a road is pulled straight up to this many cells ahead, where the straight line costs no more than
+// this many thousandths of the path it replaces (so a pull never climbs what the path went round)
+const Int ROAD_PULL_REACH = 64;
+const Int ROAD_PULL_SLACK = 1100;
+// a bend kept closer than this to where two roads meet folds into the meeting point: a sliver shorter
+// than half a road's width turns the renderer's tee inside out
+const Real ROAD_JOIN_SNAP = 3.0f;
+// how far from where it was cut a road looks for the road it ran into, in cells
+const Int ROAD_JOIN_REACH = 6;
+// a copied road end flagged to join another road, with none this near, is a stub left in the open
+const Real ROAD_STUB_REACH = 3.0f;
 const Real COAST_EDGE = 0.4f;
 const Real FULL_EDGE = 0.9f;
 const Real RIVER_SLOPE = 3.0f;
@@ -131,7 +148,23 @@ const Int TOWN_STEP = 8;
 const Int TOWN_RELIEF = 50;
 const Int TOWN_LEAST = 30;				// cells a side, the least of a town cut down to fit
 const Int PATH_CELLS = 4;
+// what the quilt matches a cell on beside its height, a bit each (Exemplar::ground): the target's
+// GROUND_STRIP is a planned road's clearance, the exemplar's a road strip's texture class
+const UnsignedByte GROUND_CLIFF = 1, GROUND_WET = 2, GROUND_SHORE = 4, GROUND_STRIP = 8;
+// a mismatch's price in quarters of a cliff's: a sea laid on land's ground, bank sand off the shore,
+// and a road strip where no road runs (one way: plain ground under a new road costs nothing)
+const Int PRICE_CLIFF = 4, PRICE_WET = 4, PRICE_SHORE = 2, PRICE_STRIP = 4;
+const Int SHORE_GROUND = 4;				// cells off its water a bank's ground lies: Heartland Shield's bank sand in 2849 of 2855 cells
+const Int STRIP_LIFT = 4;				// a class this many times as common along the roads as over the map is a road's strip
+// cells round a start on a template whose bases are not raised that the quilt never copies: that
+// ground is the flattest there is, so a flat map matched it everywhere (Bombardment Beach's start dirt
+// on 43% of its maps against 12% of it); a pad brings it along. PAD_INNER: 34 left Bombardment's eight
+// seats too little of it, 9% against the template's 12%
+const Int BASE_GROUND = 24;
 const Int BRIDGE_CLEAR = 6;
+// cells from a cell of the wrong steepness to the exemplar's cell whose texture it takes instead: past
+// it a new cliff takes the exemplar's commonest cliff texture and new flat ground keeps its own
+const Int TEXTURE_REACH = 16;
 const Int CLUMP_CELLS = 5;
 const Int TREE_TRIES = 40;
 
@@ -411,6 +444,38 @@ void reach( const Mask& passable, Int W, Int H, Int start, Mask& seen )
 			if( n[k] >= 0 && passable[n[k]] && !seen[n[k]] )
 			{
 				seen[n[k]] = 1;
+				queue.push_back( n[k] );
+			}
+		}
+	}
+}
+
+/// Each cell's nearest seed's class, four-way steps and no further than reach, else -1: one flood from
+/// every seed at once, the seeds in raster order, and the first to come to a cell keeps it.
+void nearestClass( const Mask& seed, const std::vector<Int>& cls, Int W, Int H, Int reach, std::vector<Int>& out )
+{
+	out.assign( W * H, -1 );
+	std::vector<Int> steps( W * H, -1 ), queue;
+	queue.reserve( W * H );
+	for( Int i = 0; i < W * H; i++ )
+	{
+		if( !seed[i] ) continue;
+		out[i] = cls[i];
+		steps[i] = 0;
+		queue.push_back( i );
+	}
+	for( size_t head = 0; head < queue.size(); head++ )
+	{
+		Int i = queue[head];
+		if( steps[i] >= reach ) continue;
+		Int x = i % W, y = i / W;
+		const Int n[4] = { x + 1 < W ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < H ? i + W : -1, y > 0 ? i - W : -1 };
+		for( Int k = 0; k < 4; k++ )
+		{
+			if( n[k] >= 0 && steps[n[k]] < 0 )
+			{
+				steps[n[k]] = steps[i] + 1;
+				out[n[k]] = out[i];
 				queue.push_back( n[k] );
 			}
 		}
@@ -1053,7 +1118,7 @@ struct InvCanyon { Real floorDz, width, length, winding, centreShare; Bool reach
 struct InvMesa { Int area; Real radius, topDz, centreShare; Int exits; Mask near; };
 struct InvBridge { AsciiString name; Real length; Int over; Real endsDz[2]; Real centreShare; Int onMesa; Int water; };
 struct InvRoad { AsciiString name; Int segments; Real length, outsideLength, segmentLength; Int flags[2]; };
-struct InvTown { Int buildings; Real box[4]; Real centreShare; };
+struct InvTown { Int buildings; Real box[4]; Real centreShare; std::vector<YX> houses; };	///< houses: grid cells, border in
 struct InvTech { AsciiString name; Real centreShare; Int onMesa; };
 
 enum { OVER_WATER, OVER_GAP, OVER_GROUND };
@@ -1075,6 +1140,7 @@ struct Inventory
 	std::vector<AsciiString> pileCompany;	///< what stands with half the piles or more
 	Bool split;
 	Int roadExits;
+	Mask roadLines;		///< the cells every road segment's line crosses, towns' streets too
 };
 
 /// Length along the cells' main axis, mean width, and how far the centre line wanders (mapfeatures.shape).
@@ -1378,6 +1444,7 @@ void takeInventory( const SynthMap& m, const Levels& lv, CivilianTest civilian, 
 	// bridges and roads, as the engine pairs them: a POINT1 object and the POINT2 one after it
 	struct Segment { AsciiString name; Real x1, y1, x2, y2; Int f1, f2; };
 	std::vector<Segment> segments;
+	inv.roadLines.assign( W * H, 0 );
 	for( size_t k = 0; k + 1 < m.things.size(); k++ )
 	{
 		const MapThing&p = m.things[k];
@@ -1429,6 +1496,7 @@ void takeInventory( const SynthMap& m, const Levels& lv, CivilianTest civilian, 
 			s.x1 = p.x + b; s.y1 = p.y + b; s.x2 = q.x + b; s.y2 = q.y + b;
 			s.f1 = p.flags; s.f2 = q.flags;
 			segments.push_back( s );
+			lineCells( yx( s.y1, s.x1 ), yx( s.y2, s.x2 ), W, H, inv.roadLines );
 		}
 	}
 
@@ -1468,6 +1536,7 @@ void takeInventory( const SynthMap& m, const Levels& lv, CivilianTest civilian, 
 				town.box[0] = std::min( town.box[0], t.x ); town.box[1] = std::min( town.box[1], t.y );
 				town.box[2] = std::max( town.box[2], t.x ); town.box[3] = std::max( town.box[3], t.y );
 				sy += t.y + b; sx += t.x + b;
+				town.houses.push_back( yx( t.y + b, t.x + b ) );
 			}
 			places.where( sy / members[k].size(), sx / members[k].size(), &town.centreShare, NULL );
 			inv.towns.push_back( town );
@@ -1628,9 +1697,17 @@ struct Exemplar
 	std::vector<Scenery> scenery;
 	std::vector<Int> trees;				///< trees a cell
 	Real treeDensity;
-	Mask town;
+	Mask town;							///< ground the quilt never copies: towns, and the bases of a flat template
+	Mask ground;						///< GROUND_ bits a cell: cliff, water, shore, road strip
+	Bool hasWater;
 	Field detail;						///< t less its own blur: the detail the quilting copies
 	std::vector<Int> guide64, detail256;
+	std::vector<Int> blendOver;			///< cells of class c carrying a blend of class k, at c * classes + k
+	std::vector<Int> classRank;			///< a class's place by how much more often it lies over the others than under
+	Mask steep;							///< the exemplar's cliffs by its own heights, cliffOf's rule
+	Mask cliffTexture;					///< a class whose name says cliff
+	std::vector<Int> steepClass;		///< the class of the nearest steep cell painted as cliff, or the commonest such; -1 none
+	std::vector<Int> openClass;			///< the class of the nearest cell not steep, -1 past TEXTURE_REACH
 
 	Bool load( const std::vector<char>& data, CivilianTest civilian )
 	{
@@ -1702,6 +1779,60 @@ struct Exemplar
 			blendShape.push_back( (Int)( std::lower_bound( shapes.begin(), shapes.end(), key ) - shapes.begin() ) );
 		}
 
+		// which class the exemplar lays over which, for the blends blendChunk works out again: the count of
+		// each pair, and one order of all of them for the pairs the exemplar never puts side by side
+		const Int NC = std::max( (Int)m.classes.size(), 1 );
+		blendOver.assign( NC * NC, 0 );
+		for( Int i = 0; i < W * H; i++ )
+		{
+			const Short layer[2] = { m.blends[i], m.extras[i] };
+			for( Int l = 0; l < 2; l++ )
+				if( layer[l] > 0 && layer[l] < (Int)entries.size() && blendClass[layer[l]] != cls[i] )
+					blendOver[cls[i] * NC + blendClass[layer[l]]]++;
+		}
+		std::vector< std::pair<Int, Int> > net;
+		for( Int k = 0; k < NC; k++ )
+		{
+			Int over = 0;
+			for( Int c = 0; c < NC; c++ )
+				over += blendOver[c * NC + k] - blendOver[k * NC + c];
+			net.push_back( std::make_pair( over, k ) );
+		}
+		std::sort( net.begin(), net.end() );
+		classRank.assign( NC, 0 );
+		for( Int r = 0; r < NC; r++ )
+			classRank[net[r].second] = r;
+
+		// the exemplar's cliffs by its heights, the rule the new map's are found by (its cliff bits are also
+		// painted under flat sea and river beds), and for each cell the class of the nearest cliff painted
+		// as cliff and of the nearest ground that is no cliff, which blendChunk paints a cell with when the
+		// new heights made it the other one
+		spanCliff( lv.h, W, H, steep );
+		cliffTexture.assign( NC, 0 );
+		for( size_t c = 0; c < m.classes.size(); c++ )
+		{
+			AsciiString lower = m.classes[c].name;
+			lower.toLower();
+			cliffTexture[c] = strstr( lower.str(), "cliff" ) != NULL;
+		}
+		Mask rockFace( W * H ), notSteep( W * H );
+		std::vector<Int> faces( NC, 0 );
+		for( Int i = 0; i < W * H; i++ )
+		{
+			rockFace[i] = steep[i] && cliffTexture[cls[i]];
+			notSteep[i] = !steep[i];
+			faces[cls[i]] += rockFace[i];
+		}
+		Int commonest = -1;
+		for( Int c = 0; c < NC; c++ )
+			if( faces[c] > 0 && ( commonest < 0 || faces[c] > faces[commonest] ) )
+				commonest = c;
+		nearestClass( rockFace, cls, W, H, TEXTURE_REACH, steepClass );
+		nearestClass( notSteep, cls, W, H, TEXTURE_REACH, openClass );
+		for( Int i = 0; i < W * H; i++ )
+			if( steepClass[i] < 0 )
+				steepClass[i] = commonest;
+
 		// the scenery that moves with the ground, by the cell it stands on
 		static const char *const theScenery[] = { "Tree", "Rocks", "RockCluster", "Tent", "Amb_", "AmbientWind", "WoodTower", "QuonsetHut" };
 		std::vector< std::pair<Int, Int> > keyed;	// cell, thing
@@ -1764,6 +1895,39 @@ struct Exemplar
 			for( Int y = std::max( (Int)box[1] + b - TOWN_MARGIN, 0 ); y < std::min( (Int)box[3] + b + TOWN_MARGIN + 1, H ); y++ )
 				for( Int x = std::max( (Int)box[0] + b - TOWN_MARGIN, 0 ); x < std::min( (Int)box[2] + b + TOWN_MARGIN + 1, W ); x++ )
 					town[y * W + x] = 1;
+		}
+		// and a base not raised over the map goes only with its pad
+		if( lv.plateau - lv.bowl <= MIN_RELIEF )
+			for( size_t s = 0; s < lv.startY.size(); s++ )
+				for( Int y = std::max( lv.startY[s] - BASE_GROUND, 0 ); y <= std::min( lv.startY[s] + BASE_GROUND, H - 1 ); y++ )
+					for( Int x = std::max( lv.startX[s] - BASE_GROUND, 0 ); x <= std::min( lv.startX[s] + BASE_GROUND, W - 1 ); x++ )
+						if( ( y - lv.startY[s] ) * ( y - lv.startY[s] ) + ( x - lv.startX[s] ) * ( x - lv.startX[s] ) <= BASE_GROUND * BASE_GROUND )
+							town[y * W + x] = 1;
+
+		// what the quilt matches besides height. The water and its bank: a sea laid on the map takes the
+		// exemplar's sea bed, and the bank sand stays by water. The road strips: the classes far commoner
+		// along the roads than anywhere, which the quilt otherwise scattered as broken paths over open ground.
+		Mask shore, alongRoads;
+		maskGrow( wetAll, W, H, SHORE_GROUND, shore );
+		maskGrow( inv.roadLines, W, H, 1, alongRoads );
+		std::vector<Int64> along( m.classes.size() + 1, 0 ), over( m.classes.size() + 1, 0 );
+		Int64 alongAll = 0, overAll = 0;
+		hasWater = FALSE;
+		for( Int y = b; y < b + m.playY; y++ )
+			for( Int x = b; x < b + m.playX; x++ )
+			{
+				const Int i = y * W + x;
+				over[cls[i]]++;
+				overAll++;
+				along[cls[i]] += alongRoads[i];
+				alongAll += alongRoads[i];
+				hasWater = hasWater || wetAll[i];
+			}
+		ground.resize( W * H );
+		for( Int i = 0; i < W * H; i++ )
+		{
+			const Bool strip = alongAll > 0 && along[cls[i]] * overAll > STRIP_LIFT * over[cls[i]] * alongAll;
+			ground[i] = ( m.cliff[i] ? GROUND_CLIFF : 0 ) | ( wetAll[i] ? GROUND_WET : 0 ) | ( shore[i] ? GROUND_SHORE : 0 ) | ( strip ? GROUND_STRIP : 0 );
 		}
 
 		Field blur;
@@ -2072,8 +2236,20 @@ struct Composer
 	Frame f;
 	Int seed;
 	Int W, H;
-	Field keepBefore;				///< protection() before the features, which the towns keep off
+	/// protection()'s pad and site rings on the skeleton, which the towns keep off. Its slope term is
+	/// left out: the skeleton is plains, so that term marked the upper half of every gentle hill
+	/// within SLOPE_REACH of a start, a fifth of a small map, and left no ground for a town, while the
+	/// ramps it meant are the copied pads', laid over the skeleton before the towns.
+	Field padsBefore;
 	std::vector<Copy> pads;			///< the exemplar's base round every start
+
+	/// The crossing cut to one of CROSS_CROP's shares.
+	struct Crop
+	{
+		Int box[4];					///< source cells y0, x0, y1, x1, the last two past the end
+		YX pivot;					///< the river's middle in the cut, where it meets the generated line
+		Real along, across;			///< the cut's reach from the pivot along the river and across it
+	};
 
 	/// The exemplar's towns that stand on its river, as one box with the river through it.
 	struct Crossing
@@ -2085,6 +2261,7 @@ struct Composer
 		Mask wet;					///< the exemplar's water, its size
 		std::vector<Int> towns;
 		std::vector<Int> bridges;	///< the first of each pair of bridge objects inside the box
+		Crop crops[CROSS_CROPS];
 	};
 	Crossing cross;
 
@@ -2140,61 +2317,132 @@ struct Composer
 		cross.angle = 0.5f * ATan2( (Real)( 2.0 * sxy ), (Real)( sxx - syy ) );
 		cross.centre = yx( (Real)my, (Real)mx );
 		for( size_t p = 0; p + 1 < src.m.things.size(); p++ )
-			if( ( src.m.things[p].flags & FLAG_BRIDGE_POINT1 ) && ( src.m.things[p + 1].flags & FLAG_BRIDGE_POINT2 ) && bridgeIn( box, (Int)p ) )
+			if( ( src.m.things[p].flags & FLAG_BRIDGE_POINT1 ) && ( src.m.things[p + 1].flags & FLAG_BRIDGE_POINT2 ) && bridgeIn( box, (Int)p, 0 ) )
 				cross.bridges.push_back( (Int)p );
 		cross.found = TRUE;
+
+		// the river towns' houses and the water, summed over the box, for the cuts
+		const Int BW = box[3] - box[1], BH = box[2] - box[0];
+		Mask houseCells( BW * BH, 0 );
+		for( size_t k = 0; k < cross.towns.size(); k++ )
+		{
+			const std::vector<YX>& houses = src.inv.towns[cross.towns[k]].houses;
+			for( size_t j = 0; j < houses.size(); j++ )
+			{
+				Int y = (Int)houses[j].y - box[0], x = (Int)houses[j].x - box[1];
+				if( y >= 0 && y < BH && x >= 0 && x < BW ) houseCells[y * BW + x]++;
+			}
+		}
+		std::vector<Int> houseSum( ( BW + 1 ) * ( BH + 1 ), 0 ), wetSum( ( BW + 1 ) * ( BH + 1 ), 0 );
+		for( Int y = 0; y < BH; y++ )
+			for( Int x = 0; x < BW; x++ )
+			{
+				Int i = ( y + 1 ) * ( BW + 1 ) + x + 1, up = y * ( BW + 1 ) + x + 1, left = ( y + 1 ) * ( BW + 1 ) + x, both = y * ( BW + 1 ) + x;
+				houseSum[i] = houseCells[y * BW + x] + houseSum[up] + houseSum[left] - houseSum[both];
+				wetSum[i] = cross.wet[( y + box[0] ) * SW + x + box[1]] + wetSum[up] + wetSum[left] - wetSum[both];
+			}
+		for( Int at = 0; at < CROSS_CROPS; at++ )
+			cropCrossing( at, houseSum, wetSum );
 	}
 
-	/// Whether both ends of the bridge pair starting at thing p stand inside the source box.
-	Bool bridgeIn( const Int box[4], Int p ) const
+	/// Whether both ends of the bridge pair starting at thing p stand inside the source box, margin
+	/// cells or more in from its edge.
+	Bool bridgeIn( const Int box[4], Int p, Int margin ) const
 	{
 		Bool inside = TRUE;
 		for( Int g = 0; g < 2; g++ )
 		{
 			Real y = src.m.things[p + g].y + src.m.border, x = src.m.things[p + g].x + src.m.border;
-			inside = inside && box[0] <= y && y < box[2] && box[1] <= x && x < box[3];
+			inside = inside && box[0] + margin <= y && y < box[2] - margin && box[1] + margin <= x && x < box[3] - margin;
 		}
 		return inside;
 	}
 
-	/// The crossing's box cut to share of its size round the river's middle and grown over the bridge
-	/// nearest that middle, so a small cut still carries one, and its reach from that middle along the
-	/// river and across it.
-	void cropCrossing( Real share, Int out[4], Real *along, Real *across ) const
+	/** The crossing's box cut to CROSS_CROP[at] of its size: of the windows of that size with the
+		river in them, the one holding the most of the crossing's bridges whole and clear of the fade a
+		copy's edge blends over, then the most of the river towns' houses, ties to the lowest row and
+		column. A bridge end on that fade would stand on the carved bed, under the water; such a bridge
+		stays the crossing's and layCrossing raises its ends to the bank. The pivot is the middle
+		of the water in the cut, so the cut's river lies on the generated line wherever the cut sits. */
+	void cropCrossing( Int at, const std::vector<Int>& houseSum, const std::vector<Int>& wetSum )
 	{
+		const Int BW = cross.box[3] - cross.box[1], margin = (Int)COPY_FADE;
+		Crop& crop = cross.crops[at];
+		Int size[2];
 		for( Int a = 0; a < 2; a++ )
 		{
 			Int lo = cross.box[a], hi = cross.box[a + 2];
-			Int size = std::min( hi - lo, std::max( roundi( ( hi - lo ) * share ), CROSS_LEAST ) );
-			Real middle = a == 0 ? cross.centre.y : cross.centre.x;
-			Int from = clampi( roundi( middle - 0.5f * size ), lo, hi - size );
-			out[a] = from;
-			out[a + 2] = from + size;
+			size[a] = std::min( hi - lo, std::max( roundi( ( hi - lo ) * CROSS_CROP[at] ), CROSS_LEAST ) );
 		}
+		auto sum = [&]( const std::vector<Int>& s, const Int b[4] ) -> Int
+		{
+			Int y0 = b[0] - cross.box[0], x0 = b[1] - cross.box[1], y1 = b[2] - cross.box[0], x1 = b[3] - cross.box[1];
+			return s[y1 * ( BW + 1 ) + x1] - s[y0 * ( BW + 1 ) + x1] - s[y1 * ( BW + 1 ) + x0] + s[y0 * ( BW + 1 ) + x0];
+		};
+		// a bridge the window holds counts above every house: the bridges handed back to the river often
+		// find no crossing of their own clear of the sites
+		Int most = -1;
+		for( Int y = cross.box[0]; y + size[0] <= cross.box[2]; y++ )
+		{
+			for( Int x = cross.box[1]; x + size[1] <= cross.box[3]; x++ )
+			{
+				const Int window[4] = { y, x, y + size[0], x + size[1] };
+				if( sum( wetSum, window ) < CROSS_WET )
+					continue;
+				Int bridged = 0;
+				for( size_t k = 0; k < cross.bridges.size(); k++ )
+					bridged += bridgeIn( window, cross.bridges[k], margin );
+				Int worth = sum( houseSum, window ) + bridged * 0x10000;
+				if( worth <= most )
+					continue;
+				most = worth;
+				memcpy( crop.box, window, sizeof(window) );
+			}
+		}
+		if( most < 0 )
+		{
+			// no window that small holds CROSS_WET of the river: the box's middle
+			for( Int a = 0; a < 2; a++ )
+			{
+				Real middle = a == 0 ? cross.centre.y : cross.centre.x;
+				Int from = clampi( roundi( middle - 0.5f * size[a] ), cross.box[a], cross.box[a + 2] - size[a] );
+				crop.box[a] = from;
+				crop.box[a + 2] = from + size[a];
+			}
+		}
+		/* A cut too small to hold any bridge is grown over the one nearest its middle. Handed back to
+			the river, the bridges of a small map found no crossing clear of the sites and the river was
+			left with one, or none; the grown bridge's ends lie on the fade and layCrossing raises them. */
 		Int nearest = -1;
 		Real least = 1.0e9f;
+		const Real midY = 0.5f * ( crop.box[0] + crop.box[2] ), midX = 0.5f * ( crop.box[1] + crop.box[3] );
 		for( size_t k = 0; k < cross.bridges.size(); k++ )
 		{
-			if( bridgeIn( out, cross.bridges[k] ) ) { nearest = -1; break; }
+			if( bridgeIn( crop.box, cross.bridges[k], 0 ) ) { nearest = -1; break; }
 			const MapThing& one = src.m.things[cross.bridges[k]];
 			const MapThing& two = src.m.things[cross.bridges[k] + 1];
-			Real d = hypotr( 0.5f * ( one.y + two.y ) + src.m.border - cross.centre.y, 0.5f * ( one.x + two.x ) + src.m.border - cross.centre.x );
+			Real d = hypotr( 0.5f * ( one.y + two.y ) + src.m.border - midY, 0.5f * ( one.x + two.x ) + src.m.border - midX );
 			if( d < least ) { least = d; nearest = cross.bridges[k]; }
 		}
 		for( Int g = 0; nearest >= 0 && g < 2; g++ )
 		{
 			const MapThing& end = src.m.things[nearest + g];
-			out[0] = std::min( out[0], (Int)( end.y + src.m.border ) );
-			out[1] = std::min( out[1], (Int)( end.x + src.m.border ) );
-			out[2] = std::max( out[2], (Int)( end.y + src.m.border ) + 1 );
-			out[3] = std::max( out[3], (Int)( end.x + src.m.border ) + 1 );
+			crop.box[0] = std::min( crop.box[0], (Int)( end.y + src.m.border ) );
+			crop.box[1] = std::min( crop.box[1], (Int)( end.x + src.m.border ) );
+			crop.box[2] = std::max( crop.box[2], (Int)( end.y + src.m.border ) + 1 );
+			crop.box[3] = std::max( crop.box[3], (Int)( end.x + src.m.border ) + 1 );
 		}
-		*along = *across = 0.0f;
+		Int wetCells = 0, wetY = 0, wetX = 0;
+		for( Int y = crop.box[0]; y < crop.box[2]; y++ )
+			for( Int x = crop.box[1]; x < crop.box[3]; x++ )
+				if( cross.wet[y * src.m.W + x] ) { wetCells++; wetY += y; wetX += x; }
+		crop.pivot = wetCells ? yx( (Real)wetY / wetCells, (Real)wetX / wetCells ) : cross.centre;
+		crop.along = crop.across = 0.0f;
 		for( Int c = 0; c < 4; c++ )
 		{
-			Real cy = (Real)out[c < 2 ? 0 : 2] - cross.centre.y, cx = (Real)out[c % 2 ? 3 : 1] - cross.centre.x;
-			*along = std::max( *along, fabsf( cx * Cos( cross.angle ) + cy * Sin( cross.angle ) ) );
-			*across = std::max( *across, fabsf( cy * Cos( cross.angle ) - cx * Sin( cross.angle ) ) );
+			Real cy = (Real)crop.box[c < 2 ? 0 : 2] - crop.pivot.y, cx = (Real)crop.box[c % 2 ? 3 : 1] - crop.pivot.x;
+			crop.along = std::max( crop.along, fabsf( cx * Cos( cross.angle ) + cy * Sin( cross.angle ) ) );
+			crop.across = std::max( crop.across, fabsf( cy * Cos( cross.angle ) - cx * Sin( cross.angle ) ) );
 		}
 	}
 
@@ -2230,13 +2478,15 @@ struct Composer
 	/** The exemplar's plateau bases are one stretch of high ground with the basin below it; copied
 		round the skeleton's starts they stand apart, and a way between two of them narrower than
 		PAD_CORRIDOR is where Twilight Flame's armies queued. Such a way is raised to the lower
-		plateau's height, so the bases join as they do on the exemplar; a wider one stays a valley. */
+		plateau's height, so the bases join as they do on the exemplar; a wider one stays a valley.
+		The raised way falls back to the ground past it over JOIN_FADE, where a hard edge left a wall
+		of 160 bytes in one cell; the distances are a 3-4 chamfer, round rather than diamond-cornered. */
 	void joinPlateaus( Field& h ) const
 	{
-		const Int SW = src.m.W, SH = src.m.H;
+		const Int SW = src.m.W, SH = src.m.H, FAR = 0x3fffffff;
+		const Int inside = 3 * PAD_CORRIDOR, reachSum = 3 * ( PAD_CORRIDOR + JOIN_FADE );
 		std::vector< std::vector<Int> > steps( pads.size() );
 		std::vector<Real> tops( pads.size(), 0.0f );
-		std::vector<Int> queue;
 		for( size_t p = 0; p < pads.size(); p++ )
 		{
 			if( !pads[p].raised ) continue;
@@ -2245,8 +2495,7 @@ struct Composer
 			const Real half = 0.5f * ( top + c.pivot );
 			tops[p] = c.pivot + c.lift + ( top - c.pivot ) * c.heightScale;
 			std::vector<Int>& d = steps[p];
-			d.assign( W * H, -1 );
-			queue.clear();
+			d.assign( W * H, FAR );
 			Int area[4];
 			c.bounds( W, H, area );
 			for( Int y = area[0]; y <= area[2]; y++ )
@@ -2256,29 +2505,63 @@ struct Composer
 					YX s = c.toSource( (Real)y, (Real)x );
 					if( src.lv.h[clampi( roundi( s.y ), 0, SH - 1 ) * SW + clampi( roundi( s.x ), 0, SW - 1 )] < half ) continue;
 					d[y * W + x] = 0;
-					queue.push_back( y * W + x );
 				}
-			for( size_t head = 0; head < queue.size(); head++ )
-			{
-				Int i = queue[head], x = i % W, y = i / W;
-				if( d[i] >= PAD_CORRIDOR ) continue;
-				const Int n[4] = { x + 1 < W ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < H ? i + W : -1, y > 0 ? i - W : -1 };
-				for( Int j = 0; j < 4; j++ )
+			// three a straight step, four a diagonal one: a forward and a backward raster pass
+			for( Int y = 0; y < H; y++ )
+				for( Int x = 0; x < W; x++ )
 				{
-					if( n[j] < 0 || d[n[j]] >= 0 ) continue;
-					d[n[j]] = d[i] + 1;
-					queue.push_back( n[j] );
+					Int i = y * W + x, v = d[i];
+					if( x > 0 ) v = std::min( v, d[i - 1] + 3 );
+					if( y > 0 )
+					{
+						v = std::min( v, d[i - W] + 3 );
+						if( x > 0 ) v = std::min( v, d[i - W - 1] + 4 );
+						if( x + 1 < W ) v = std::min( v, d[i - W + 1] + 4 );
+					}
+					d[i] = v;
 				}
-			}
+			for( Int y = H - 1; y >= 0; y-- )
+				for( Int x = W - 1; x >= 0; x-- )
+				{
+					Int i = y * W + x, v = d[i];
+					if( x + 1 < W ) v = std::min( v, d[i + 1] + 3 );
+					if( y + 1 < H )
+					{
+						v = std::min( v, d[i + W] + 3 );
+						if( x + 1 < W ) v = std::min( v, d[i + W + 1] + 4 );
+						if( x > 0 ) v = std::min( v, d[i + W - 1] + 4 );
+					}
+					d[i] = v;
+				}
 		}
+		// each pair's least summed distance, its real gap (rmgJoinShare)
+		const size_t n = pads.size();
+		std::vector<Int> pairLeast( n * n, FAR );
 		for( Int i = 0; i < W * H; i++ )
+			for( size_t p = 0; p < n; p++ )
+			{
+				if( steps[p].empty() || steps[p][i] >= inside ) continue;
+				for( size_t q = p + 1; q < n; q++ )
+					if( !steps[q].empty() )
+						pairLeast[p * n + q] = std::min( pairLeast[p * n + q], steps[p][i] + steps[q][i] );
+			}
+		// each cell rises by the most any pair lifts it, so the order of the pairs does not matter
+		for( Int i = 0; i < W * H; i++ )
+		{
+			Real rise = 0.0f;
 			for( size_t p = 0; p < pads.size(); p++ )
 			{
-				if( steps[p].empty() || steps[p][i] < 0 ) continue;
+				if( steps[p].empty() || steps[p][i] >= reachSum ) continue;
 				for( size_t q = p + 1; q < pads.size(); q++ )
-					if( !steps[q].empty() && steps[q][i] >= 0 && steps[p][i] + steps[q][i] < PAD_CORRIDOR )
-						h[i] = std::max( h[i], std::min( tops[p], tops[q] ) );
+				{
+					if( steps[q].empty() ) continue;
+					const Real gap = std::min( tops[p], tops[q] ) - h[i];
+					if( gap <= 0.0f ) continue;
+					rise = std::max( rise, rmgJoinShare( pairLeast[p * n + q], steps[p][i] + steps[q][i] ) * gap );
+				}
 			}
+			h[i] += rise;
+		}
 	}
 
 	// The skeleton's own lakes filled to their rims: the exemplar's water takes their place.
@@ -2501,6 +2784,15 @@ struct Composer
 					h[y * W + x] = value;
 	}
 
+	// disc, raising only: ground already over the value keeps its height
+	void discAtLeast( Field& h, YX p, Real r, Real value ) const
+	{
+		for( Int y = std::max( 0, (Int)( p.y - r ) - 1 ); y <= std::min( H - 1, (Int)( p.y + r ) + 1 ); y++ )
+			for( Int x = std::max( 0, (Int)( p.x - r ) - 1 ); x <= std::min( W - 1, (Int)( p.x + r ) + 1 ); x++ )
+				if( hypotr( y - p.y, x - p.x ) <= r )
+					h[y * W + x] = std::max( h[y * W + x], value );
+	}
+
 	void discMask( Mask& m, YX p, Real r ) const
 	{
 		for( Int y = std::max( 0, (Int)( p.y - r ) - 1 ); y <= std::min( H - 1, (Int)( p.y + r ) + 1 ); y++ )
@@ -2632,8 +2924,15 @@ struct Composer
 		const Int bd = skm.border;
 		const Real y0 = (Real)bd, x0 = (Real)bd, y1 = (Real)( bd + skm.playY - 1 ), x1 = (Real)( bd + skm.playX - 1 );
 		const Real margin = SHORE_CELLS + VALLEY_CELLS;
+		/* The coast bends round the sites instead of stopping short of the nearest: every start's and
+			site's guard and a beach past it stay land whatever the width, so one pad near the edge
+			no longer takes the whole sea away. The width is then the share's worth of the cells left. */
+		Field fixedLand, fromStarts;
+		seaLand( f.padRadius + 10.0f + SHORE_CELLS, SITE_OUTER + 10.0f + SHORE_CELLS, fixedLand, fromStarts );
+		Int playCount = 0;
+		for( Int i = 0; i < W * H; i++ ) playCount += f.play[i];
 		Real bestWidth = 0.0f, bestTie = 0.0f;
-		Int bestTurn = -1;
+		Int bestTurn = -1, bestSea = 0;
 		Field bestD, d( W * H );
 		std::vector<Int> bestFull, bestWet;
 		Bool bestCorner = FALSE;
@@ -2666,8 +2965,6 @@ struct Composer
 				else corner = FALSE;
 			}
 			Real phase = hashUnit( seed, 95, turn ) * 6.283f;
-			Real cap = 1.0e9f, top = -1.0e9f;
-			Bool guarded = FALSE;
 			order.clear();
 			for( Int y = 0; y < H; y++ )
 			{
@@ -2687,23 +2984,25 @@ struct Composer
 						v = edge[wetEdges[0]];
 					v += COAST_WOBBLE * Sin( 2.0f * PI_R * ( y + x ) / 97.0f + phase );
 					d[i] = v;
-					top = std::max( top, v );
-					if( f.guarded( i ) ) { cap = std::min( cap, v ); guarded = TRUE; }
-					if( f.play[i] ) order.push_back( v );
+					// a cell is sea once the width passes its v, unless it is held land
+					if( f.play[i] && fixedLand[i] < 0.0f ) order.push_back( v );
 				}
 			}
-			cap = guarded ? cap - margin : top;
-			size_t at = std::min( (size_t)( sea.share * order.size() ), order.size() - 1 );
+			if( order.empty() )
+				continue;
+			size_t at = std::min( (size_t)( sea.share * playCount ), order.size() - 1 );
 			std::nth_element( order.begin(), order.begin() + at, order.end() );
-			Real width = std::min( order[at], cap );
+			Real width = order[at];
+			Int seaCells = (Int)at;
+			// the most sea, then the coast that bends least round the land it holds: the narrowest
 			Real tie = hashUnit( seed, 96, turn );
-			if( bestTurn < 0 || width > bestWidth || ( width == bestWidth && tie < bestTie ) )
+			if( bestTurn < 0 || seaCells > bestSea || ( seaCells == bestSea && ( width < bestWidth || ( width == bestWidth && tie < bestTie ) ) ) )
 			{
-				bestTurn = turn; bestWidth = width; bestTie = tie;
+				bestTurn = turn; bestWidth = width; bestTie = tie; bestSea = seaCells;
 				bestD = d; bestFull = full; bestWet = wetEdges; bestCorner = corner; bestCornerAt = cornerAt;
 			}
 		}
-		if( bestWidth <= 0.0f )
+		if( bestTurn < 0 || bestWidth <= 0.0f )
 		{
 			plan.note( "sea of %d cells (no coast clear of the sites)", sea.area );
 			return;
@@ -2734,45 +3033,84 @@ struct Composer
 		}
 		else
 			boxes.push_back( std::vector<YX>( strips[bestWet[0]], strips[bestWet[0]] + 4 ) );
-		for( Int i = 0; i < W * H; i++ ) bestD[i] -= bestWidth;
+		for( Int i = 0; i < W * H; i++ ) bestD[i] = std::max( bestD[i] - bestWidth, fixedLand[i] );
 		laySea( h, plan, sea, bestD, boxes );
+	}
+
+	/** Ground a sea leaves dry whatever its size, as inland cells (over 0 is land): startLand round each
+		start, siteLand round each dock and derrick and the middle, and unless the exemplar's water parts
+		the starts, a causeway from each start to the middle and from each dock and derrick to the
+		nearer of the middle and its nearest start, so nothing stands on an island of its own. fromStarts
+		is each cell's distance to the nearest start. */
+	void seaLand( Real startLand, Real siteLand, Field& fixedLand, Field& fromStarts ) const
+	{
+		fixedLand.assign( W * H, 0.0f );
+		fromStarts.assign( W * H, 0.0f );
+		const YX middle = yx( f.cy, f.cx );
+		std::vector<YX> coreSites, anchors;
+		for( size_t k = f.starts.size(); k < f.sites.size(); k++ )
+		{
+			YX p = yx( (Real)(Int)f.sites[k].y, (Real)(Int)f.sites[k].x );
+			YX to = middle;
+			Real best = hypotr( p.y - middle.y, p.x - middle.x );
+			for( size_t s = 0; s < f.starts.size(); s++ )
+			{
+				Real d = hypotr( p.y - f.starts[s].y, p.x - f.starts[s].x );
+				if( d < best ) { best = d; to = f.starts[s]; }
+			}
+			coreSites.push_back( p );
+			anchors.push_back( to );
+		}
+		const YX core = yx( (Real)(Int)f.cy, (Real)(Int)f.cx );
+		const Bool causeways = !src.inv.split;
+		for( Int y = 0; y < H; y++ )
+		{
+			for( Int x = 0; x < W; x++ )
+			{
+				Int i = y * W + x;
+				Real ds = 1.0e9f, droad = 1.0e9f;
+				for( size_t s = 0; s < f.starts.size(); s++ )
+				{
+					ds = std::min( ds, hypotr( y - f.starts[s].y, x - f.starts[s].x ) );
+					if( causeways )
+						droad = std::min( droad, segmentDistance( (Real)y, (Real)x, f.starts[s], middle ) );
+				}
+				Real dsite = hypotr( y - core.y, x - core.x );
+				for( size_t s = 0; s < coreSites.size(); s++ )
+				{
+					dsite = std::min( dsite, hypotr( y - coreSites[s].y, x - coreSites[s].x ) );
+					if( causeways )
+						droad = std::min( droad, segmentDistance( (Real)y, (Real)x, coreSites[s], anchors[s] ) );
+				}
+				fromStarts[i] = ds;
+				fixedLand[i] = std::max( std::max( siteLand - dsite, CAUSEWAY_CELLS - droad ), startLand - ds );
+			}
+		}
 	}
 
 	// An island map's sea: land round every start, dock and derrick and the middle (synthmap.carve_islands).
 	void carveIslands( Field& h, Plan& plan, Int index ) const
 	{
 		const InvWater& sea = src.inv.water[index];
-		Field fixedLand( W * H ), fromStarts( W * H );
-		std::vector<YX> sitesAndMiddle( f.sites.begin() + f.starts.size(), f.sites.end() );
-		sitesAndMiddle.push_back( yx( f.cy, f.cx ) );
-		std::vector<YX> coreSites;
-		for( size_t k = 0; k < sitesAndMiddle.size(); k++ )
-			coreSites.push_back( yx( (Real)(Int)sitesAndMiddle[k].y, (Real)(Int)sitesAndMiddle[k].x ) );
-		// a dock's ground and a beach, and every pad on land: a pad stops short of the exemplar's water
-		const Real siteLand = SITE_OUTER + 10.0f + SHORE_CELLS;
+		/* A dock's or derrick's guard on land, its beach inside the guard's fade, and the starts' land the
+			radius's: the floors are cells, not shares, so on a small map with every seat filled a
+			beach-wide margin more round every site was a third of the sea. */
+		Field fixedLand, fromStarts;
+		seaLand( 0.0f, SITE_OUTER + 10.0f, fixedLand, fromStarts );
 		Real phase = hashUnit( seed, 95, 0 ) * 6.283f;
 		for( Int y = 0; y < H; y++ )
 		{
 			for( Int x = 0; x < W; x++ )
 			{
 				Int i = y * W + x;
-				Real ds = 1.0e9f, dsite = 1.0e9f, droad = 1.0e9f;
-				for( size_t s = 0; s < f.starts.size(); s++ )
-				{
-					ds = std::min( ds, hypotr( y - f.starts[s].y, x - f.starts[s].x ) );
-					if( !src.inv.split )
-						droad = std::min( droad, segmentDistance( (Real)y, (Real)x, f.starts[s], yx( f.cy, f.cx ) ) );
-				}
-				for( size_t s = 0; s < coreSites.size(); s++ )
-					dsite = std::min( dsite, hypotr( y - coreSites[s].y, x - coreSites[s].x ) );
 				Real wobble = COAST_WOBBLE * Sin( 2.0f * PI_R * ( y + x ) / 97.0f + phase ) * Sin( 2.0f * PI_R * ( y - x ) / 131.0f );
-				fromStarts[i] = ds;
-				fixedLand[i] = std::max( siteLand - dsite, CAUSEWAY_CELLS - droad ) + wobble;
+				fixedLand[i] += wobble;
 				fromStarts[i] -= wobble;		// land = max(radius - ds, fixed - wobble) + wobble
 			}
 		}
-		// land(radius) = max(radius - fromStarts + wobble, fixedLand), as fromStarts already holds -wobble
-		Real least = std::max( PAD_OUTER, f.padRadius ) + SHORE_CELLS;
+		// land(radius) = max(radius - fromStarts + wobble, fixedLand), as fromStarts already holds -wobble;
+		// the least a beach past the pad, whatever the pad was scaled to
+		Real least = f.padRadius + SHORE_CELLS;
 		Real radius = least;
 		Int playCount = 0;
 		for( Int i = 0; i < W * H; i++ ) playCount += f.play[i];
@@ -2800,7 +3138,10 @@ struct Composer
 	// The sea where inland is under 0: its bed, a beach, higher ground cut back (synthmap.lay_sea).
 	void laySea( Field& h, Plan& plan, const InvWater& sea, const Field& inlandField, const std::vector< std::vector<YX> >& boxes ) const
 	{
-		Real surface = std::max( skel.bowl + sea.surface - src.lv.bowl, SEA_FLOOR );
+		/* The exemplar's bowl is the median of every playable height, and on an island map half of those
+			are sea bed: the bowl comes out under the land and the sea a byte or two under the skeleton's
+			ground, a coast flat at the waterline. The exemplar's own bank over its water bounds it. */
+		Real surface = std::max( std::min( skel.bowl + sea.surface - src.lv.bowl, skel.bowl - std::max( sea.bank, 4.0f ) ), SEA_FLOOR );
 		Real bed = std::max( surface - std::max( sea.depth, 6.0f ), 0.0f );
 		Mask footprint( W * H, 0 );
 		for( size_t k = 0; k < boxes.size(); k++ )
@@ -2883,6 +3224,7 @@ struct Composer
 		Real calmAt, calmReach;		///< no wander within calmReach of calmAt, where the crossing lies; 0 for none
 		Real calmWidth;				///< the crossing's reach across the river
 		Int crop[4];				///< the crossing's box as it fitted
+		Int cropAt;					///< which of the crossing's cuts that is, CROSS_CROPS for none
 	};
 
 	/// The crossing laid along the line with its middle at s, turned so its river runs the line's way,
@@ -2895,7 +3237,7 @@ struct Composer
 		best.spinBy( 0.0f );
 		best.spinBy( line.angle - best.angle( cross.angle ) );
 		best.target = Frame::point( line.angle, line.my, line.mx, s, 0.0f );
-		best.source = cross.centre;
+		best.source = cross.crops[line.cropAt].pivot;
 		best.scale = 1.0f;
 		best.radius = best.core = 0.0f;
 		best.lift = best.pivot = 0.0f;
@@ -2908,14 +3250,14 @@ struct Composer
 	}
 
 	/// The first place along the line, out from its middle, where the crossing lies clear of every
-	/// pad, dock and derrick and inside the map; the whole of it, or cut down to its middle.
+	/// pad, dock and derrick and inside the map; the whole of it, or the first of its cuts that fits.
 	Bool calmSpot( LineSpec& line ) const
 	{
-		static const Real theCrops[] = { 1.0f, 0.75f, 0.55f, 0.4f, 0.3f, 0.2f };
-		for( Int crop = 0; crop < (Int)( sizeof(theCrops) / sizeof(theCrops[0]) ); crop++ )
+		for( Int crop = 0; crop < CROSS_CROPS; crop++ )
 		{
-			Real along, across;
-			cropCrossing( theCrops[crop], line.crop, &along, &across );
+			const Crop& cut = cross.crops[crop];
+			memcpy( line.crop, cut.box, sizeof(line.crop) );
+			line.cropAt = crop;
 			for( Int step = 0; step * CROSS_STEP < f.half; step++ )
 			{
 				for( Int sign = -1; sign <= 1; sign += 2 )
@@ -2932,12 +3274,13 @@ struct Composer
 								clear = f.play[y * W + x] && f.guard[y * W + x] < CROSS_GUARD;
 					if( !clear ) continue;
 					line.calmAt = s;
-					line.calmReach = along + CALM_EASE;
-					line.calmWidth = across;
+					line.calmReach = cut.along + CALM_EASE;
+					line.calmWidth = cut.across;
 					return TRUE;
 				}
 			}
 		}
+		line.cropAt = CROSS_CROPS;
 		return FALSE;
 	}
 
@@ -2949,7 +3292,7 @@ struct Composer
 			return;
 		size_t inside = 0;
 		for( size_t k = 0; k < cross.bridges.size(); k++ )
-			inside += bridgeIn( line.crop, cross.bridges[k] );
+			inside += bridgeIn( line.crop, cross.bridges[k], 0 );
 		out.resize( out.size() - std::min( out.size(), inside ) );
 	}
 
@@ -2974,20 +3317,39 @@ struct Composer
 				plan.level[i] = cross.wet[o] ? surface : -1.0f;
 			}
 		}
+		/* Every bridge inside the cut stays the crossing's: handed back to the river it found no
+			crossing clear of the sites and was lost. One whose end falls on the fade ring would stand
+			on the carved bed there, so its ends are raised to the bank, as the river does its own. */
 		const Int sb = src.m.border;
+		const Real bank = surface + std::max( river.bank, 4.0f );
 		for( size_t k = 0; k < cross.bridges.size(); k++ )
 		{
-			if( !bridgeIn( line.crop, cross.bridges[k] ) ) continue;
+			if( !bridgeIn( line.crop, cross.bridges[k], 0 ) ) continue;
 			const MapThing& one = src.m.things[cross.bridges[k]];
 			const MapThing& two = src.m.things[cross.bridges[k] + 1];
 			PlannedBridge bridge;
 			bridge.name = one.name;
 			bridge.a = c.toTarget( one.y + sb, one.x + sb );
 			bridge.z = c.toTarget( two.y + sb, two.x + sb );
+			if( !bridgeIn( line.crop, cross.bridges[k], (Int)COPY_FADE ) )
+			{
+				discAtLeast( h, bridge.a, BRIDGE_END, bank );
+				discAtLeast( h, bridge.z, BRIDGE_END, bank );
+			}
 			plan.bridges.push_back( bridge );
 		}
+		// a river town is done whatever the cut carried: stamped again it would stand twice where the cut
+		// kept part of it, and bring its river banks onto dry ground; what the cut left is said
 		for( size_t k = 0; k < cross.towns.size(); k++ )
+		{
+			const InvTown& town = src.inv.towns[cross.towns[k]];
+			Int carried = 0;
+			for( size_t j = 0; j < town.houses.size(); j++ )
+				carried += c.carries( town.houses[j].y, town.houses[j].x );
+			if( carried < town.buildings )
+				plan.note( "town of %d buildings on the river (%d on the crossing)", town.buildings, carried );
 			plan.townDone[cross.towns[k]] = 1;
+		}
 	}
 
 	void riverBridges( Int index, std::vector<const InvBridge *>& out ) const
@@ -3012,6 +3374,7 @@ struct Composer
 		line.salt = salt;
 		line.calmAt = line.calmReach = line.calmWidth = 0.0f;
 		memset( line.crop, 0, sizeof(line.crop) );
+		line.cropAt = CROSS_CROPS;
 		if( crossing )
 			calmSpot( line );
 		return line;
@@ -3022,9 +3385,11 @@ struct Composer
 		return std::max( skel.bowl + river.surface - src.lv.bowl, river.depth + 2.0f );
 	}
 
-	// A river along line (synthmap.carve_river); meetsOut says whether its water ran onto water already there.
+	/* A river along line (synthmap.carve_river); meetsOut says whether its water ran onto water already
+		there, dammedOut how many cells of its bed a pad, dock or derrick held dry. */
 	void carveRiver( const Field& h, Plan& plan, const InvWater& river, Int index, const LineSpec& line,
-		const std::vector<const InvBridge *>& bridges, Bool hasSurface, Real givenSurface, Field& out, Bool *meetsOut ) const
+		const std::vector<const InvBridge *>& bridges, Bool hasSurface, Real givenSurface, Field& out, Bool *meetsOut,
+		Int *dammedOut = NULL ) const
 	{
 		Real surface = hasSurface ? givenSurface : riverSurface( river );
 		Real bed = surface - river.depth;
@@ -3144,6 +3509,7 @@ struct Composer
 		Real reachC = half + SHORE_CELLS + VALLEY_CELLS + ( 255.0f - bank ) / RIVER_SLOPE + amp + 2.0f;
 		out = h;
 		Bool meets = FALSE;
+		Int dammed = 0;
 		Real sFrom = anchored ? line.sLo - VALLEY_CELLS : line.sLo;
 		for( Int y = 0; y < H; y++ )
 		{
@@ -3161,6 +3527,7 @@ struct Composer
 					narrow = std::min( narrow, 1.0f - ( 1.0f - to ) * fade( ( 24.0f - fabsf( s - sites[k] ) ) / 12.0f ) );
 				}
 				Real inner = half * narrow;
+				Real edge = inner + 0.5f * SHORE_CELLS + 2.0f;		// the polygon's reach
 				Real d = fabsf( c - wander( s ) );
 				Real outside = d - inner - SHORE_CELLS - VALLEY_CELLS;
 				Real target = d < inner ? bed :
@@ -3170,19 +3537,42 @@ struct Composer
 				// a branch fades out behind its junction, in the main river's bed rather than across the map
 				Real ends = std::min( anchored ? VALLEY_CELLS + ( s - line.sLo ) : s - line.sLo, line.sHi - s );
 				Real w = fade( ends / VALLEY_CELLS ) * ( 1.0f - f.guard[i] );
+				Bool within = s >= line.sLo && s <= line.sHi;
+				// and behind it is the main river's far bank, dry ground no lower than the plane, not a trench
+				if( !within )
+					target = std::max( target, surface + 1.0f );
 				Real cut = h[i] - w * std::max( h[i] - target, 0.0f );
 				out[i] = std::min( h[i], cut );
-				Bool within = s >= line.sLo && s <= line.sHi;
+				/* Past the waterline the ground keeps over the plane, falling away at a bank's slope: a canyon
+					or low ground beside the river would sit under it outside the polygon, the water hanging
+					over dry ground. As much as the cut, so it fades where the cut does, at the river's ends
+					and into a pad's guard, rather than stop in a step. */
+				if( d >= edge && !plan.wet[i] )
+				{
+					Real levee = surface + 1.0f - RIVER_SLOPE * ( d - edge );
+					if( levee > out[i] )
+						out[i] += w * ( levee - out[i] );
+				}
+				/* The plane lies over the whole band, but the water only where the cut went under it: where a
+					pad, dock or derrick held its ground the bed is dry, and wet there would freeze a trench
+					and tell the towns and bridges there is water where there is none. The level stays, so
+					the ground under the plane is still lifted clear of it rather than left a pond. */
 				if( within && d < inner + 0.5f * SHORE_CELLS )
 				{
-					meets = meets || plan.wet[i];
-					plan.wet[i] = 1;
+					if( out[i] < surface )
+					{
+						meets = meets || plan.wet[i];
+						plan.wet[i] = 1;
+					}
+					else if( d < inner && f.guard[i] > 0.5f )
+						dammed++;
 					plan.level[i] = std::max( plan.level[i], surface );
 				}
 				if( d >= inner && out[i] < h[i] - 0.5f ) plan.gentle[i] = 1;
 			}
 		}
 		if( meetsOut ) *meetsOut = meets;
+		if( dammedOut ) *dammedOut = dammed;
 
 		// the water area: the waterline either side of the bed, every eight cells along
 		WaterPoly poly;
@@ -3214,8 +3604,8 @@ struct Composer
 		{
 			YX a, z;
 			bridgeEnds( sites[k], 0.5f * ours[k]->length, &a, &z );
-			disc( out, a, 4.0f, bank );
-			disc( out, z, 4.0f, bank );
+			disc( out, a, BRIDGE_END, bank );
+			disc( out, z, BRIDGE_END, bank );
 			discMask( plan.gentle, a, 10.0f );
 			discMask( plan.gentle, z, 10.0f );
 			PlannedBridge bridge;
@@ -3229,26 +3619,26 @@ struct Composer
 	struct RiverScore
 	{
 		Bool meets, splits;
-		Bool blocked;		///< the line runs through a pad
+		Int blocked;		///< 2 the line runs through a pad, 1 a dock, derrick or pad's edge holds part of its bed dry
 		Bool shape;			///< it reaches the edge where the exemplar's does not, or the other way
 		Bool near;
-		Bool lost;			///< the crossing found no room on it
+		Int cropAt;			///< the cut of the crossing that found room on it, CROSS_CROPS for none: the less cut, the more town
 		Real off, clear;
 		bool operator<( const RiverScore& o ) const
 		{
 			// the river whole and between the starts first; the town on it where that leaves room
 			if( meets != o.meets ) return !meets;
 			if( splits != o.splits ) return !splits;
-			if( blocked != o.blocked ) return !blocked;
+			if( blocked != o.blocked ) return blocked < o.blocked;
 			if( shape != o.shape ) return !shape;
 			if( near != o.near ) return !near;
-			if( lost != o.lost ) return !lost;
+			if( cropAt != o.cropAt ) return cropAt < o.cropAt;
 			if( off != o.off ) return off < o.off;
 			return -clear < -o.clear;
 		}
 		Bool sameHead( const RiverScore& o ) const
 		{
-			return meets == o.meets && splits == o.splits && blocked == o.blocked && shape == o.shape && near == o.near && lost == o.lost;
+			return meets == o.meets && splits == o.splits && blocked == o.blocked && shape == o.shape && near == o.near && cropAt == o.cropAt;
 		}
 	};
 
@@ -3281,24 +3671,26 @@ struct Composer
 					Plan trial = plan;
 					LineSpec line = riverLine( river, salt, sign * share * f.half, edge, crossing );
 					Bool meets = FALSE;
+					Int dammed = 0;
 					bridgesOutside( line, allBridges, outside );
-					carveRiver( h, trial, river, index, line, outside, FALSE, 0.0f, out, &meets );
+					carveRiver( h, trial, river, index, line, outside, FALSE, 0.0f, out, &meets, &dammed );
 					Real clear;
 					Bool split;
 					judge( out, trial, &clear, &split );
-					// a line through a pad leaves the river dry where the pad keeps its ground; past a dock
-					// it only narrows to a ford
-					Bool blocked = FALSE;
-					for( Real v = line.sLo; v < line.sHi && !blocked; v += 4.0f )
+					/* A line through a pad leaves the river dry where the pad keeps its ground, the worst; one
+						over a dock or derrick is dammed there right across, two pools under one plane: the bed
+						the carve could not cut is counted, the river's wander and width included. */
+					Bool throughPad = FALSE;
+					for( Real v = line.sLo; v < line.sHi && !throughPad; v += 4.0f )
 					{
 						YX p = Frame::point( line.angle, line.my, line.mx, v, 0.0f );
-						for( size_t s = 0; s < f.starts.size() && !blocked; s++ )
-							blocked = hypotr( p.y - f.starts[s].y, p.x - f.starts[s].x ) < f.padRadius + 0.5f * COPY_FADE;
+						for( size_t s = 0; s < f.starts.size() && !throughPad; s++ )
+							throughPad = hypotr( p.y - f.starts[s].y, p.x - f.starts[s].x ) < f.padRadius + 0.5f * COPY_FADE;
 					}
 					Ranked r;
-					r.score.blocked = blocked;
+					r.score.blocked = throughPad ? 2 : dammed > 0 ? 1 : 0;
 					r.score.shape = edge != river.reachesEdge;
-					r.score.lost = crossing && line.calmReach <= 0.0f;
+					r.score.cropAt = line.cropAt;
 					r.score.meets = meets;
 					r.score.splits = split && !maySplit;
 					r.score.near = clear < want;
@@ -3414,7 +3806,7 @@ struct Composer
 		} );
 		Bool have = FALSE;
 		LineSpec bestLine;
-		Int bestSplit = 0, bestNear = 0, bestNotes = 0;
+		Int bestSplit = 0, bestBridge = 0, bestNear = 0, bestNotes = 0;
 		Real bestClearness = 0.0f;
 		Field out;
 		for( Int r = 0; r < BRANCH_TRIES && r < (Int)ranked.size(); r++ )
@@ -3429,24 +3821,53 @@ struct Composer
 			line.salt = 85;
 			line.calmAt = line.calmReach = line.calmWidth = 0.0f;
 			memset( line.crop, 0, sizeof(line.crop) );
+			line.cropAt = CROSS_CROPS;
 			Plan trial = plan;
 			carveRiver( h, trial, river, index, line, bridges, TRUE, mainLine.surface, out, NULL );
 			Real clear;
 			Bool split;
 			judge( out, trial, &clear, &split );
+			/* The bridges already over the rivers have their ends raised to the bank, and a branch carved
+				after them cuts through whatever it passes: an end its cut lowers or wets anywhere on the
+				ground raised for it is a deck diving into the water. */
+			Int sBridge = 0;
+			for( size_t k = 0; k < plan.bridges.size(); k++ )
+			{
+				const YX ends[2] = { plan.bridges[k].a, plan.bridges[k].z };
+				for( Int g = 0; g < 2; g++ )
+				{
+					Bool hit = FALSE;
+					const Int ey = roundi( ends[g].y ), ex = roundi( ends[g].x ), reach = (Int)BRIDGE_END - 1;
+					for( Int dy = -reach; dy <= reach && !hit; dy++ )
+						for( Int dx = -reach; dx <= reach && !hit; dx++ )
+						{
+							Int y = ey + dy, x = ex + dx;
+							if( dy * dy + dx * dx > reach * reach || y < 0 || y >= H || x < 0 || x >= W ) continue;
+							Int i = y * W + x;
+							hit = ( trial.wet[i] && !plan.wet[i] ) || out[i] < h[i] - 0.5f;
+						}
+					sBridge += hit;
+				}
+			}
 			Int sSplit = split && !maySplit, sNear = clear < want, sNotes = (Int)trial.notes.size();
-			Bool better = !have || sSplit < bestSplit || ( sSplit == bestSplit && ( sNear < bestNear ||
-				( sNear == bestNear && ( sNotes < bestNotes || ( sNotes == bestNotes && ranked[r].clearness < bestClearness ) ) ) ) );
+			Bool better = !have || sSplit < bestSplit || ( sSplit == bestSplit && ( sBridge < bestBridge || ( sBridge == bestBridge &&
+				( sNear < bestNear || ( sNear == bestNear && ( sNotes < bestNotes || ( sNotes == bestNotes && ranked[r].clearness < bestClearness ) ) ) ) ) ) );
 			if( better )
 			{
 				have = TRUE;
 				bestLine = line;
-				bestSplit = sSplit; bestNear = sNear; bestNotes = sNotes; bestClearness = ranked[r].clearness;
+				bestSplit = sSplit; bestBridge = sBridge; bestNear = sNear; bestNotes = sNotes; bestClearness = ranked[r].clearness;
 			}
 		}
 		if( !have )
 		{
 			plan.note( "river branch of %d cells (no way off the main river clear of the sites)", river.area );
+			return;
+		}
+		// a working bridge is worth more than the branch
+		if( bestBridge > 0 )
+		{
+			plan.note( "river branch of %d cells (no way off the main river clear of its bridges)", river.area );
 			return;
 		}
 		carveRiver( h, plan, river, index, bestLine, bridges, TRUE, mainLine.surface, out, NULL );
@@ -3459,7 +3880,9 @@ struct Composer
 		const Int b = src.m.border;
 		Mask taken( W * H );
 		for( Int i = 0; i < W * H; i++ )
-			taken[i] = plan.keepout[i] || plan.wet[i] || f.guarded( i ) || !f.play[i] || keepBefore[i] > 0.05f;
+			taken[i] = plan.keepout[i] || plan.wet[i] || f.guarded( i ) || !f.play[i] || padsBefore[i] > 0.05f
+				// nor on any copy's ground, fade and all: flattened there a town would level a pad's ramps
+				|| plan.fixedWeight[i] > 0.0f;
 		std::vector<Int> order;
 		for( size_t t = 0; t < src.inv.towns.size(); t++ ) order.push_back( (Int)t );
 		std::stable_sort( order.begin(), order.end(), [&]( Int a, Int c ) { return src.inv.towns[a].buildings > src.inv.towns[c].buildings; } );
@@ -3475,14 +3898,24 @@ struct Composer
 			integral( taken, count );
 			Int spotY = -1, spotX = -1, sy = fullY, sx = fullX, rows = fullRows, cols = fullCols;
 			Real best = 0.0f;
-			// the whole town, or where there is no room for it its middle, cut down twice
+			// the whole town, or where there is no room for it the part of it with the most houses, cut down twice
 			static const Real theCrops[] = { 1.0f, 0.75f, 0.55f };
 			for( Int crop = 0; crop < 3 && spotY < 0; crop++ )
 			{
 				rows = std::min( fullRows, std::max( roundi( fullRows * theCrops[crop] ), TOWN_LEAST ) );
 				cols = std::min( fullCols, std::max( roundi( fullCols * theCrops[crop] ), TOWN_LEAST ) );
-				sy = fullY + ( fullRows - rows ) / 2;
-				sx = fullX + ( fullCols - cols ) / 2;
+				Int most = -1;
+				for( Int y = fullY; y <= fullY + fullRows - rows; y++ )
+					for( Int x = fullX; x <= fullX + fullCols - cols; x++ )
+					{
+						Int houses = 0;
+						for( size_t j = 0; j < town.houses.size(); j++ )
+							houses += y <= town.houses[j].y && town.houses[j].y < y + rows && x <= town.houses[j].x && town.houses[j].x < x + cols;
+						if( houses <= most ) continue;
+						most = houses;
+						sy = y;
+						sx = x;
+					}
 				for( Int ty = 6; ty < H - rows - 6; ty += TOWN_STEP )
 				{
 					for( Int tx = 6; tx < W - cols - 6; tx += TOWN_STEP )
@@ -3808,7 +4241,76 @@ struct Composer
 					stop[y * W + x] = 1;
 		for( size_t s = 0; s < plan.tech.size(); s++ ) discMask( stop, yx( (Real)plan.tech[s].y, (Real)plan.tech[s].x ), TECH_FLAT + 2 - 0.01f );
 		for( size_t s = 0; s < f.docks.size(); s++ ) discMask( stop, f.docks[s], SITE_INNER - 0.01f );
-		Mask used( W * H, 0 );
+		Mask used( W * H, 0 ), onRoad( W * H, 0 ), junction( W * H, 0 );
+		auto stepCost = [&]( Int i, Int j ) -> Int
+		{
+			Int step = ( cost[i] + cost[j] ) / 2;
+			return i / W != j / W && i % W != j % W ? step * 1414 / 1000 : step;
+		};
+		auto spaceOut = [&]( Int c )
+		{
+			Int y = c / W, x = c % W;
+			for( Int yy = std::max( y - ROAD_SPACING, 0 ); yy <= std::min( y + ROAD_SPACING, H - 1 ); yy++ )
+				for( Int xx = std::max( x - ROAD_SPACING, 0 ); xx <= std::min( x + ROAD_SPACING, W - 1 ); xx++ )
+					used[yy * W + xx] = 1;
+		};
+		// the cell of a laid road nearest c, nearest first then lowest index; -1 when the spacing there came from
+		// a run that laid nothing. It looks further than the spacing: the spacing is also grown round the run,
+		// and the road laid along it may have been pulled a few cells off
+		auto roadNear = [&]( Int c ) -> Int
+		{
+			Int y = c / W, x = c % W, best = -1, bestD = ROAD_JOIN_REACH + 1;
+			for( Int yy = std::max( y - ROAD_JOIN_REACH, 0 ); yy <= std::min( y + ROAD_JOIN_REACH, H - 1 ); yy++ )
+				for( Int xx = std::max( x - ROAD_JOIN_REACH, 0 ); xx <= std::min( x + ROAD_JOIN_REACH, W - 1 ); xx++ )
+				{
+					Int d = std::max( abs( yy - y ), abs( xx - x ) );
+					if( onRoad[yy * W + xx] && d < bestD ) { bestD = d; best = yy * W + xx; }
+				}
+			return best;
+		};
+		// the cells from a to z, one a step on the longer axis, rounded half away from zero
+		auto walkLine = [&]( Int a, Int z, std::vector<Int>& out )
+		{
+			Int ay = a / W, ax = a % W, dy = z / W - ay, dx = z % W - ax;
+			Int steps = std::max( abs( dy ), abs( dx ) );
+			for( Int s = 1; s <= steps; s++ )
+			{
+				Int y = ay + ( 2 * dy * s + ( dy >= 0 ? steps : -steps ) ) / ( 2 * steps );
+				Int x = ax + ( 2 * dx * s + ( dx >= 0 ? steps : -steps ) ) / ( 2 * steps );
+				out.push_back( y * W + x );
+			}
+		};
+		// Dijkstra's octilinear path pulled straight: from each kept cell to the farthest cell ahead that a
+		// straight line reaches over open ground, clear of stops and other roads, for little more than the path
+		// costs; a dogleg on even ground costs the same as its straight line, so it goes
+		auto pull = [&]( const std::vector<Int>& piece, std::vector<Int>& out )
+		{
+			std::vector<Int64> along( piece.size(), 0 );
+			for( size_t c = 1; c < piece.size(); c++ ) along[c] = along[c - 1] + stepCost( piece[c - 1], piece[c] );
+			out.assign( 1, piece[0] );
+			std::vector<Int> line;
+			for( Int k = 0; k + 1 < (Int)piece.size(); )
+			{
+				Int next = k + 1;
+				for( Int j = std::min( (Int)piece.size() - 1, k + ROAD_PULL_REACH ); j > k + 1; j-- )
+				{
+					line.clear();
+					walkLine( piece[k], piece[j], line );
+					Int64 spent = 0;
+					Bool clear = TRUE;
+					for( size_t c = 0; c < line.size() && clear; c++ )
+					{
+						spent += stepCost( c ? line[c - 1] : piece[k], line[c] );
+						clear = c + 1 == line.size() || ( open[line[c]] && !stop[line[c]] && !used[line[c]] );
+					}
+					if( clear && spent * 1000 <= ( along[j] - along[k] ) * ROAD_PULL_SLACK ) { next = j; break; }
+				}
+				line.clear();
+				walkLine( piece[k], piece[next], line );
+				out.insert( out.end(), line.begin(), line.end() );
+				k = next;
+			}
+		};
 		std::vector< std::vector<Int> > polylines;
 		Int laid = 0;
 		for( size_t k = 0; k < tree.size() && laid < wanted; k++ )
@@ -3818,29 +4320,44 @@ struct Composer
 			for( Int c = tree[k].v; c >= 0; c = previous[c] ) back.push_back( c );
 			for( Int c = (Int)back.size() - 1; c >= 0; c-- ) run.push_back( back[c] );
 			for( Int c = tree[k].u; c >= 0; c = previous[c] ) run.push_back( c );
-			std::vector<Int> piece;
+			// a piece that leaves or runs into an earlier road's spacing starts or ends on that road, so the two
+			// share a point and the renderer joins them
+			std::vector<Int> piece, pulled;
+			Int head = -1;
+			const size_t before = polylines.size();
+			auto lay = [&]( Int tail )
+			{
+				if( (Int)piece.size() > ROAD_LEAST )
+				{
+					pull( piece, pulled );
+					if( head >= 0 ) { pulled.insert( pulled.begin(), head ); junction[head] = 1; }
+					if( tail >= 0 ) { pulled.push_back( tail ); junction[tail] = 1; }
+					for( size_t c = 0; c < pulled.size(); c++ ) onRoad[pulled[c]] = 1;
+					polylines.push_back( pulled );
+				}
+				piece.clear();
+				head = -1;
+			};
 			for( size_t r = 0; r < run.size(); r++ )
 			{
 				Int y = run[r] / W, x = run[r] % W;
 				Bool jump = r > 0 && std::max( abs( y - run[r - 1] / W ), abs( x - run[r - 1] % W ) ) > 1;
 				if( stop[run[r]] || used[run[r]] || jump )
 				{
-					if( (Int)piece.size() > ROAD_LEAST ) polylines.push_back( piece );
-					piece.clear();
+					lay( !jump && !stop[run[r]] ? roadNear( run[r] ) : -1 );
 					if( !stop[run[r]] && !used[run[r]] ) piece.push_back( run[r] );
 					continue;
 				}
+				if( piece.empty() && r > 0 && used[run[r - 1]] && !stop[run[r - 1]] )
+					head = roadNear( run[r - 1] );
 				piece.push_back( run[r] );
 			}
-			if( (Int)piece.size() > ROAD_LEAST ) polylines.push_back( piece );
+			lay( -1 );
+			// the spacing round what was laid, as drawn, and round the rest of the run, which later runs share
+			for( size_t p = before; p < polylines.size(); p++ )
+				for( size_t c = 0; c < polylines[p].size(); c++ ) spaceOut( polylines[p][c] );
 			for( size_t r = 0; r < run.size(); r++ )
-			{
-				if( stop[run[r]] ) continue;
-				Int y = run[r] / W, x = run[r] % W;
-				for( Int yy = std::max( y - ROAD_SPACING, 0 ); yy <= std::min( y + ROAD_SPACING, H - 1 ); yy++ )
-					for( Int xx = std::max( x - ROAD_SPACING, 0 ); xx <= std::min( x + ROAD_SPACING, W - 1 ); xx++ )
-						used[yy * W + xx] = 1;
-			}
+				if( !stop[run[r]] ) spaceOut( run[r] );
 			laid = 0;
 			for( size_t p = 0; p < polylines.size(); p++ ) laid += (Int)polylines[p].size();
 		}
@@ -3856,15 +4373,30 @@ struct Composer
 			owed[pick] -= polylines[p].size();
 			std::vector<YX> cells;
 			for( size_t c = 0; c < polylines[p].size(); c++ ) cells.push_back( yx( (Real)( polylines[p][c] / W ), (Real)( polylines[p][c] % W ) ) );
+			// where a later road meets this one is a point of its own, simplified up to and on from, so both
+			// roads hold exactly that point; a bend that close to it folds in
 			std::vector<YX> simple;
-			simplify( cells, 0, (Int)cells.size() - 1, simple );
+			for( Int from = 0, to = 1; to < (Int)cells.size(); to++ )
+			{
+				if( to + 1 < (Int)cells.size() && !junction[polylines[p][to]] ) continue;
+				size_t first = simple.size();
+				simplify( cells, from, to, simple );
+				for( size_t s = simple.size() - 1; s > first; s-- )
+				{
+					Real toStart = hypotr( simple[s].y - cells[from].y, simple[s].x - cells[from].x );
+					Real toEnd = hypotr( simple[s].y - cells[to].y, simple[s].x - cells[to].x );
+					if( toStart < ROAD_JOIN_SNAP || toEnd < ROAD_JOIN_SNAP ) simple.erase( simple.begin() + s );
+				}
+				from = to;
+			}
 			simple.push_back( cells.back() );
 			PlannedRoad road;
 			road.name = roads[pick]->name;
 			Real step = std::max( roads[pick]->segmentLength, 1.0f );
+			// as many pieces an edge as the exemplar's mean segment fits best, not the most it fits
 			for( size_t s = 0; s + 1 < simple.size(); s++ )
 			{
-				Int pieces = std::max( (Int)ceilf( hypotr( simple[s + 1].y - simple[s].y, simple[s + 1].x - simple[s].x ) / step ), 1 );
+				Int pieces = std::max( roundi( hypotr( simple[s + 1].y - simple[s].y, simple[s + 1].x - simple[s].x ) / step ), 1 );
 				for( Int q = 0; q < pieces; q++ )
 					road.points.push_back( yx( simple[s].y + ( simple[s + 1].y - simple[s].y ) * q / pieces, simple[s].x + ( simple[s + 1].x - simple[s].x ) * q / pieces ) );
 			}
@@ -4073,7 +4605,7 @@ void positions( Int size, std::vector<Int>& out )
 /// One source cell for every target cell. The stamps go first and are never written over.
 Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const Field& keep, Int seed,
 	const std::vector<Stamp>& stamps, const std::vector<Int>& fixedSource, const Mask& treesAllowed, Int64 treeRateQ16,
-	std::vector<Int>& syMap, std::vector<Int>& sxMap )
+	const Mask& targetGround, std::vector<Int>& syMap, std::vector<Int>& sxMap )
 {
 	const Int TW = skm.W, TH = skm.H, SW = src.m.W, SH = src.m.H;
 	std::vector<Int> weight( TW * TH ), targetGuide( TW * TH );
@@ -4083,7 +4615,17 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 	{
 		weight[i] = roundi( 4.0f * ( 1.0f + 4.0f * keep[i] ) );
 		targetGuide[i] = roundi( skel.guide[i] * 64.0f );
+		targetCliff[i] |= targetGround[i];
 	}
+	// a target's ground bits against a source's, in quarters of a cliff
+	Int price[16][16];
+	for( Int t = 0; t < 16; t++ )
+		for( Int s = 0; s < 16; s++ )
+		{
+			const Int differ = s ^ t;
+			price[t][s] = PRICE_CLIFF * ( ( differ & GROUND_CLIFF ) != 0 ) + PRICE_WET * ( ( differ & GROUND_WET ) != 0 ) +
+				PRICE_SHORE * ( ( differ & GROUND_SHORE ) != 0 ) + PRICE_STRIP * ( ( s & GROUND_STRIP ) && !( t & GROUND_STRIP ) );
+		}
 
 	// source patches touching a town or reaching past the playable ground (the border is the edge
 	// cells drawn out, stripes in a quilt) are never picked
@@ -4108,7 +4650,7 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 		for( Int x = 0; x < GW; x++ )
 		{
 			coarseGuide[y * GW + x] = src.guide64[( y * COARSE ) * SW + x * COARSE];
-			coarseCliff[y * GW + x] = src.m.cliff[( y * COARSE ) * SW + x * COARSE];
+			coarseCliff[y * GW + x] = src.ground[( y * COARSE ) * SW + x * COARSE];
 		}
 	std::vector<Byte> coarseBanned( ny * nx );
 	for( Int y = 0; y < ny; y++ )
@@ -4169,7 +4711,8 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 				for( Int b = 0; b < PATCH / COARSE; b += COARSE_SKIP )
 				{
 					Int t = ( ty + a * COARSE ) * TW + tx + b * COARSE;
-					const Int g = targetGuide[t], c = targetCliff[t], w = weight[t];
+					const Int g = targetGuide[t], w = weight[t];
+					const Int *p = price[targetCliff[t]];
 					total += w;
 					for( Int cy = 0; cy < ny; cy++ )
 					{
@@ -4181,7 +4724,7 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 							Int d = g - guideRow[cx];
 							r1[cx] += w * d;
 							r2[cx] += w * d * d;
-							rc[cx] += w * ( cliffRow[cx] != c );
+							rc[cx] += w * p[cliffRow[cx]];
 						}
 					}
 				}
@@ -4190,7 +4733,7 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 			{
 				Int64 a1 = s1[k];
 				coarseCost[k] = coarseBanned[k] ? ( (Int64)1 << 62 ) :
-					( (Int64)s2[k] * 1024 - a1 * a1 * 1024 / total ) / total + ( a1 * a1 * 512 / total ) / total + (Int64)2458 * 1024 * sc[k] / total;
+					( (Int64)s2[k] * 1024 - a1 * a1 * 1024 / total ) / total + ( a1 * a1 * 512 / total ) / total + (Int64)2458 * 256 * sc[k] / total;
 				order[k] = k;
 			}
 			std::partial_sort( order.begin(), order.begin() + std::min( REFINE, ny * nx ), order.end(),
@@ -4235,7 +4778,7 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 					const UnsignedByte *tc = &targetCliff[( ty + i ) * TW + tx];
 					const Int *tw = &weight[( ty + i ) * TW + tx];
 					const Int *sg = &src.guide64[( sy + i ) * SW + sx];
-					const UnsignedByte *scl = &src.m.cliff[( sy + i ) * SW + sx];
+					const UnsignedByte *scl = &src.ground[( sy + i ) * SW + sx];
 					const UnsignedByte *have = &filled[( ty + i ) * TW + tx];
 					const UnsignedByte *allowed = &treesAllowed[( ty + i ) * TW + tx];
 					const Int *det = &src.detail256[( sy + i ) * SW + sx];
@@ -4248,7 +4791,7 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 						Int d = tg[j] - sg[j];
 						a1 += tw[j] * d;
 						a2 += tw[j] * d * d;
-						cl += tw[j] * ( scl[j] != tc[j] );
+						cl += tw[j] * price[tc[j]][scl[j]];
 						if( have[j] )
 						{
 							Int e = det[j] - out[j];
@@ -4258,7 +4801,7 @@ Int quilt( const Exemplar& src, const SynthMap& skm, const Levels& skel, const F
 							held += trees[j];
 					}
 				}
-				Int64 cost = ( a2 * 1024 - a1 * a1 * 1024 / wTotal ) / wTotal + ( a1 * a1 * 512 / wTotal ) / wTotal + 2458 * 1024 * cl / wTotal;
+				Int64 cost = ( a2 * 1024 - a1 * a1 * 1024 / wTotal ) / wTotal + ( a1 * a1 * 512 / wTotal ) / wTotal + 2458 * 256 * cl / wTotal;
 				if( haveCells )
 					cost += 2 * 1024 * over / haveCells;
 				Int64 off = held * 65536 - expected;
@@ -4415,6 +4958,7 @@ void movedObject( const SynthMap& from, Int thing, RawMap& raw, Real cy, Real cx
 	mirrored moves the corners, and the flags are those of the corners where they land. */
 enum { BLEND_HORIZONTAL, BLEND_VERTICAL, BLEND_RIGHT, BLEND_LEFT, BLEND_INVERTED, BLEND_LONG };
 const char BLEND_INVERTED_BIT = 0x1;
+const char BLEND_FLIPPED_BIT = 0x2;		// FLIPPED_MASK: a side blend cut the way the cell's diagonal blend cuts it
 
 static Int blendCorners( const char flags[6] )
 {
@@ -4463,13 +5007,50 @@ static Int turnedCorners( Int corners, Int quarterTurn )
 	return out;
 }
 
-/// BlendTileData version 8: every cell's class and blends from its source cell, the tiles worked out
-/// again for where the cell landed, the blends turned as the copy that brought them, the exemplar's
-/// texture table and the cliff bits (synthmap.blend_chunk).
-Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMap, const std::vector<Int>& sxMap,
-	const std::vector<UnsignedByte>& turns, const Mask& cliff, std::vector<char>& out )
+/// The most of these corners a blend can paint: the corners themselves when the renderer has the shape,
+/// else the largest shape inside them (two opposite corners, or all four, have none).
+static Int drawableCorners( Int corners )
 {
-	const Int SW = src.m.W;
+	static const Int theDrawn[] = { 0x6, 0x9, 0xC, 0x3, 0x4, 0x2, 0xE, 0x7, 0x8, 0x1, 0xD, 0xB };
+	Int best = 0, most = 0;
+	for( size_t k = 0; k < sizeof(theDrawn) / sizeof(theDrawn[0]); k++ )
+	{
+		const Int c = theDrawn[k], count = ( c & 1 ) + ( ( c >> 1 ) & 1 ) + ( ( c >> 2 ) & 1 ) + ( ( c >> 3 ) & 1 );
+		if( ( c & ~corners ) == 0 && count > most )
+		{
+			best = c;
+			most = count;
+		}
+	}
+	return best;
+}
+
+/** BlendTileData version 8: every cell's class and blends from its source cell, the tiles worked out
+	again for where the cell landed, the blends turned as the copy that brought them, the exemplar's
+	texture table and the cliff bits (synthmap.blend_chunk).
+
+	A blend is drawn for the cell's neighbours, so it holds only where they are the source cell's
+	neighbours. Where the quilt's seams, a pad's rim, a town stamp or a spun crossing put a cell beside
+	ground from elsewhere, the copied blend pointed at a neighbour that was gone and the new one got
+	none, a hard stair-stepped edge: 16% of the class edges on Heartland Shield's and Twilight Flame's
+	maps against 6% and 3% on the shipped ones. So a neighbour is checked by its class against the one
+	the source cell had there, turned as the copy turned, and a corner any changed neighbour touches is
+	worked out again from the classes round it now, the way the exemplar lays them: a class goes over
+	another where the exemplar more often puts it over than under, and by its rank where the two never
+	meet. A cell whose neighbours all match keeps its blends byte for byte.
+
+	And the texture follows the final heights: a cell they made a cliff whose source is not a cliff
+	painted as one takes the class of the nearest that is, and flat ground copied from a cliff face
+	takes the class of the nearest flat ground (Exemplar::steepClass, openClass). Twilight Flame's maps
+	had 59% of their steep cells in dirt, sand and grass against the exemplar's 14%.
+
+	The faces of a cliff class get their mapping from the final heights (rmgCliffMapping). The
+	exemplar's own entries are no use to copy: Twilight Flame declares 7326 and no cell points at one,
+	its faces being shallow enough for the plane, and the pads and canyons laid here are not. */
+Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMap, const std::vector<Int>& sxMap,
+	const std::vector<UnsignedByte>& turns, const Mask& cliff, const std::vector<Int>& heights, std::vector<char>& out )
+{
+	const Int SW = src.m.W, SH = src.m.H, NC = (Int)src.classRank.size();
 	// the exemplar's shapes, then each turned one the copies need, in the order the cells ask for them
 	std::vector< std::pair< std::string, Int > > shapes = src.shapes;
 	std::map< std::pair<Int, Int>, Int > turned;
@@ -4488,25 +5069,151 @@ Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMa
 		turned[key] = index;
 		return index;
 	};
-	const Int nShapes = 8 * std::max( (Int)src.shapes.size(), 1 );
+	// and a shape worked out here, by its corners, its cut and the custom edge class of the blend it replaces
+	std::map< std::pair<Int, Int>, Int > made;
+	auto shapeFor = [&]( Int corners, Bool flipped, Int custom ) -> Int
+	{
+		std::pair<Int, Int> key( corners | ( flipped ? 16 : 0 ), custom );
+		std::map< std::pair<Int, Int>, Int >::const_iterator it = made.find( key );
+		if( it != made.end() ) return it->second;
+		char flags[6] = { 0, 0, 0, 0, (char)( flipped ? BLEND_FLIPPED_BIT : 0 ), 0 };
+		blendFlagsFor( corners, flags );
+		std::pair< std::string, Int > wanted( std::string( flags, 6 ), custom );
+		Int index = (Int)( std::find( shapes.begin(), shapes.end(), wanted ) - shapes.begin() );
+		if( index == (Int)shapes.size() ) shapes.push_back( wanted );
+		made[key] = index;
+		return index;
+	};
+	// whether the exemplar lays class k over class a
+	auto liesOver = [&]( Int k, Int a ) -> Bool
+	{
+		const Int up = src.blendOver[a * NC + k], down = src.blendOver[k * NC + a];
+		return up != down ? up > down : src.classRank[k] > src.classRank[a];
+	};
+
+	// each cell's class: its source cell's, unless the heights made it a cliff the source is not or the other way round
+	std::vector<Int> ground( W * H );
+	Mask moved( W * H, 0 );
+	for( Int i = 0; i < W * H; i++ )
+	{
+		const Int o = syMap[i] * SW + sxMap[i];
+		Int c = src.cls[o];
+		const Bool rock = src.steep[o] && src.cliffTexture[c];
+		if( cliff[i] && !rock && src.steepClass[o] >= 0 ) c = src.steepClass[o];
+		else if( !cliff[i] && rock && src.openClass[o] >= 0 ) c = src.openClass[o];
+		ground[i] = c;
+		moved[i] = c != src.cls[o];
+	}
+
+	// the eight neighbours, and the corners each touches (0 (x, y), 1 (x + 1, y), 2 (x + 1, y + 1), 3 (x, y + 1))
+	static const Int theDY[8] = { -1, -1, -1, 0, 0, 1, 1, 1 }, theDX[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
+	static const Int theTouch[8] = { 0x1, 0x3, 0x2, 0x9, 0x6, 0x8, 0xC, 0x4 };
 	std::vector<Short> layer0( W * H );
-	std::vector<Int> keys[2];
-	for( Int l = 0; l < 2; l++ ) keys[l].resize( W * H );
+	std::vector<Int> tiles[2], shapeOf[2];
+	for( Int l = 0; l < 2; l++ )
+	{
+		tiles[l].assign( W * H, 0 );
+		shapeOf[l].assign( W * H, -1 );
+	}
 	for( Int y = 0; y < H; y++ )
 	{
 		for( Int x = 0; x < W; x++ )
 		{
-			Int i = y * W + x, o = syMap[i] * SW + sxMap[i];
-			layer0[i] = (Short)src.tileFor( src.cls[o], y, x );
+			const Int i = y * W + x, o = syMap[i] * SW + sxMap[i], mine = ground[i];
+			layer0[i] = (Short)src.tileFor( mine, y, x );
 			const Short entry[2] = { src.m.blends[o], src.m.extras[o] };
-			for( Int l = 0; l < 2; l++ )
+
+			// the corners a changed neighbour touches: every corner of a cell whose own class changed
+			Int loose = moved[i] ? 0xF : 0;
+			for( Int d = 0; d < 8 && loose != 0xF; d++ )
+			{
+				const Int ny = y + theDY[d], nx = x + theDX[d];
+				if( ny < 0 || nx < 0 || ny >= H || nx >= W ) continue;
+				// the neighbour's offset on the source, the copy's turn undone (Copy::toSource)
+				Int sy = theDY[d], sx = theDX[d];
+				for( Int q = 0; q < ( turns[i] & 3 ); q++ ) { Int t = sy; sy = -sx; sx = t; }
+				if( turns[i] & 4 ) sx = -sx;
+				sy += syMap[i];
+				sx += sxMap[i];
+				if( sy < 0 || sx < 0 || sy >= SH || sx >= SW || src.cls[sy * SW + sx] != ground[ny * W + nx] )
+					loose |= theTouch[d];
+			}
+			if( loose == 0 )
+			{
+				for( Int l = 0; l < 2; l++ )
+				{
+					Int e = entry[l];
+					if( e <= 0 || e >= (Int)src.entries.size() ) continue;
+					tiles[l][i] = src.tileFor( src.blendClass[e], y, x );
+					shapeOf[l][i] = shapeTurned( src.blendShape[e], turns[i] );
+				}
+				continue;
+			}
+
+			// the copied blends on the corners that still hold, and on the others whatever the classes round them lay over this one
+			struct Layer { Int cls, corners, custom; };
+			Layer layer[10];
+			Int count = 0;
+			auto add = [&]( Int k, Int corners, Int custom )
+			{
+				if( k == mine || corners == 0 ) return;
+				for( Int n = 0; n < count; n++ )
+					if( layer[n].cls == k ) { layer[n].corners |= corners; return; }
+				layer[count].cls = k;
+				layer[count].corners = corners;
+				layer[count].custom = custom;
+				count++;
+			};
+			for( Int l = 0; l < 2 && !moved[i]; l++ )
 			{
 				Int e = entry[l];
-				if( e <= 0 || e >= (Int)src.entries.size() ) { keys[l][i] = 0; continue; }
-				Int tile = src.tileFor( src.blendClass[e], y, x );
-				keys[l][i] = tile * nShapes + shapeTurned( src.blendShape[e], turns[i] ) + 1;
+				if( e <= 0 || e >= (Int)src.entries.size() ) continue;
+				const std::pair< std::string, Int >& shape = src.shapes[src.blendShape[e]];
+				char flags[6];
+				memcpy( flags, shape.first.data(), 6 );
+				add( src.blendClass[e], turnedCorners( blendCorners( flags ), turns[i] ) & ~loose, shape.second );
+			}
+			for( Int d = 0; d < 8; d++ )
+			{
+				const Int ny = y + theDY[d], nx = x + theDX[d];
+				if( ny < 0 || nx < 0 || ny >= H || nx >= W || !( theTouch[d] & loose ) ) continue;
+				const Int k = ground[ny * W + nx];
+				if( k != mine && liesOver( k, mine ) )
+					add( k, theTouch[d] & loose, -1 );
+			}
+
+			// lowest first, as the renderer stacks them; it has two, and keeps the classes on top
+			for( Int a = 1; a < count; a++ )
+				for( Int b = a; b > 0 && src.classRank[layer[b].cls] < src.classRank[layer[b - 1].cls]; b-- )
+					std::swap( layer[b], layer[b - 1] );
+			const Int first = std::max( count - 2, 0 );
+			Bool cutFlipped = FALSE;
+			for( Int n = first; n < count; n++ )
+			{
+				layer[n].corners = drawableCorners( layer[n].corners );
+				const Int c = layer[n].corners;
+				cutFlipped = cutFlipped || c == 0x1 || c == 0x4 || c == 0xB || c == 0xE;
+			}
+			// a side blend takes the cut of a diagonal it shares the cell with, as RMGLayout::buildBlends does
+			for( Int n = first; n < count; n++ )
+			{
+				const Int c = layer[n].corners;
+				if( c == 0 ) continue;
+				const Bool side = c == 0x3 || c == 0x6 || c == 0x9 || c == 0xC;
+				const Int l = n - first;
+				tiles[l][i] = src.tileFor( layer[n].cls, y, x );
+				shapeOf[l][i] = shapeFor( c, side && count - first == 2 && cutFlipped, layer[n].custom );
 			}
 		}
+	}
+	const Int nShapes = std::max( (Int)shapes.size(), 1 );
+	std::vector<Int> keys[2];
+	for( Int l = 0; l < 2; l++ )
+	{
+		keys[l].assign( W * H, 0 );
+		for( Int i = 0; i < W * H; i++ )
+			if( shapeOf[l][i] >= 0 )
+				keys[l][i] = tiles[l][i] * nShapes + shapeOf[l][i] + 1;
 	}
 	std::vector<Int> table( 1, 0 );
 	table.insert( table.end(), keys[0].begin(), keys[0].end() );
@@ -4522,13 +5229,27 @@ Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMa
 		for( Int i = 0; i < W * H; i++ )
 			layers[l][i] = (Short)( std::lower_bound( table.begin(), table.end(), keys[l][i] ) - table.begin() );
 	}
-	std::vector<Short> zeroes( W * H, 0 );
+	// the heights as the file holds them, and the cells whose class is a cliff's
+	std::vector<Int> stored( W * H ), sheetFirst( W * H, -1 ), sheetWidth( W * H, 0 );
+	for( Int i = 0; i < W * H; i++ )
+	{
+		stored[i] = (UnsignedByte)heights[i];
+		if( src.cliffTexture[ground[i]] )
+		{
+			sheetFirst[i] = src.classFirst[ground[i]];
+			sheetWidth[i] = src.classWidth[ground[i]];
+		}
+	}
+	std::vector<Short> cliffIndex;
+	std::vector<RMGCliffInfo> cliffInfo;
+	rmgCliffMapping( stored, W, H, sheetFirst, sheetWidth, cliffIndex, cliffInfo );
+
 	out.clear();
 	putInt( out, W * H );
 	putBytes( out, &layer0[0], W * H * 2 );
 	putBytes( out, &layers[0][0], W * H * 2 );
 	putBytes( out, &layers[1][0], W * H * 2 );
-	putBytes( out, &zeroes[0], W * H * 2 );
+	putBytes( out, &cliffIndex[0], W * H * 2 );
 	Int row = ( W + 7 ) / 8;
 	std::vector<UnsignedByte> bits( row * H, 0 );
 	for( Int y = 0; y < H; y++ )
@@ -4538,7 +5259,7 @@ Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMa
 	putBytes( out, &bits[0], row * H );
 	putInt( out, src.bitmapTiles );
 	putInt( out, (Int)table.size() );
-	putInt( out, 1 );
+	putInt( out, (Int)cliffInfo.size() );
 	putBytes( out, &src.tableHead[0], (Int)src.tableHead.size() );
 	for( size_t k = 1; k < table.size(); k++ )
 	{
@@ -4547,6 +5268,17 @@ Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMa
 		putBytes( out, shapes[shape].first.data(), 6 );
 		putInt( out, shapes[shape].second );
 		putInt( out, 0x7ADA0000 );
+	}
+	for( size_t k = 1; k < cliffInfo.size(); k++ )
+	{
+		putInt( out, cliffInfo[k].m_tileIndex );
+		for( Int c = 0; c < 4; c++ )
+		{
+			putReal( out, cliffInfo[k].m_u[c] );
+			putReal( out, cliffInfo[k].m_v[c] );
+		}
+		putByte( out, cliffInfo[k].m_flip ? 1 : 0 );
+		putByte( out, 0 );
 	}
 	return TRUE;
 }
@@ -4822,9 +5554,9 @@ void baseRegions( const Exemplar& src, std::vector<Field>& regions, std::vector<
 	}
 }
 
-/** The exemplar's base round every start: of its starts and the eight ways a square turns over,
-	the one that faces the middle as the start does, scaled down where the starts stand closer than
-	the bases are wide. */
+/** The exemplar's base round every start: one of its starts for all of them, and of the eight ways a
+	square turns over the one that faces the middle as the start does, scaled down where the starts
+	stand closer than the bases are wide. */
 void planPads( const Exemplar& src, const Levels& skel, Int W, Int H, Int seed, const std::vector<Field>& regions,
 	const std::vector<Real>& reaches, const std::vector<Real>& edges, const std::vector<UnsignedByte>& raised,
 	std::vector<Copy>& pads )
@@ -4841,40 +5573,86 @@ void planPads( const Exemplar& src, const Levels& skel, Int W, Int H, Int seed, 
 		for( size_t j = i + 1; j < skel.startY.size(); j++ )
 			spacing = std::min( spacing, hypotr( (Real)( skel.startY[i] - skel.startY[j] ), (Real)( skel.startX[i] - skel.startX[j] ) ) );
 	const Real scale = clampr( PAD_SPACING * spacing / reachCells, PAD_SCALE_LEAST, 1.0f );
+	std::vector<Real> bearings;
 	for( size_t s = 0; s < skel.startY.size(); s++ )
+		bearings.push_back( ATan2( skel.startY[s] - skel.cy, skel.startX[s] - skel.cx ) );
+	auto facing = [&]( const Copy& c, Int t ) -> Real
 	{
-		Real bearing = ATan2( skel.startY[s] - skel.cy, skel.startX[s] - skel.cx );
-		Copy best;
-		Real bestError = 1.0e9f;
-		UnsignedInt bestTie = 0;
-		for( size_t t = 0; t < src.lv.startY.size(); t++ )
+		return c.angle( ATan2( src.lv.startY[t] - src.lv.cy, src.lv.startX[t] - src.lv.cx ) );
+	};
+	/* One base for every seat: two of Twilight Flame's stand over ground 27 bytes apart and keep their
+		docks 30 and 48 cells out, and seats that took them turn about stood that far apart. The base
+		whose turns face every seat best, the misses summed in whole milliradians; of those within
+		PAD_BEARING_SLACK a seat of the best, the one carrying a dock nearest its start, then the lowest. */
+	const Int SW = src.m.W, sb = src.m.border;
+	Int64 leastCost = -1;
+	std::vector<Int64> costs( src.lv.startY.size(), -1 );
+	std::vector<Int> dockCells( src.lv.startY.size(), 0x7fffffff );
+	for( size_t t = 0; t < src.lv.startY.size(); t++ )
+	{
+		if( anyRaised && !raised[t] ) continue;
+		Int64 cost = 0;
+		for( size_t s = 0; s < bearings.size(); s++ )
 		{
-			if( anyRaised && !raised[t] ) continue;
-			Real from = ATan2( src.lv.startY[t] - src.lv.cy, src.lv.startX[t] - src.lv.cx );
+			Real least = 1.0e9f;
 			for( Int d = 0; d < 8; d++ )
 			{
 				Copy c;
 				c.turn = d & 3;
 				c.mirror = d >= 4;
 				c.spinBy( 0.0f );
-				Real error = turnBetween( c.angle( from ), bearing );
-				UnsignedInt tie = synthHash( seed, 140 + (Int)s, (Int)t * 8 + d );
-				if( error > bestError + 1.0e-3f || ( error > bestError - 1.0e-3f && tie >= bestTie ) )
-					continue;
-				best = c;
-				best.source = yx( (Real)src.lv.startY[t], (Real)src.lv.startX[t] );
-				best.region = &regions[t];
-				best.radius = ( reaches[t] + COPY_FADE ) * scale + 1.0f;
-				best.core = ( reaches[t] - PAD_MARGIN ) * scale + 1.0f;
-				best.lift = skel.bowl - edges[t];
-				// a plateau scaled down keeps its shape: lower by as much as it is narrower, so its
-				// ramps climb no steeper than the exemplar's
-				best.pivot = edges[t];
-				best.heightScale = raised[t] ? scale : 1.0f;
-				bestError = error;
-				bestTie = tie;
+				least = std::min( least, turnBetween( facing( c, (Int)t ), bearings[s] ) );
 			}
+			cost += roundi( least * 1000.0f );
 		}
+		costs[t] = cost;
+		if( leastCost < 0 || cost < leastCost ) leastCost = cost;
+		for( size_t k = 0; k < src.m.supplies.size(); k++ )
+		{
+			const Int y = roundi( src.m.supplies[k].y + sb ), x = roundi( src.m.supplies[k].x + sb );
+			if( y < 0 || x < 0 || y >= src.m.H || x >= SW || regions[t][y * SW + x] < 0.9f ) continue;
+			dockCells[t] = std::min( dockCells[t], roundi( hypotr( (Real)( y - src.lv.startY[t] ), (Real)( x - src.lv.startX[t] ) ) ) );
+		}
+	}
+	Int chosen = -1;
+	const Int64 slack = (Int64)roundi( PAD_BEARING_SLACK * 1000.0f ) * (Int64)bearings.size();
+	for( size_t t = 0; t < costs.size(); t++ )
+	{
+		if( costs[t] < 0 || costs[t] > leastCost + slack ) continue;
+		if( chosen < 0 || dockCells[t] < dockCells[chosen] || ( dockCells[t] == dockCells[chosen] && costs[t] < costs[chosen] ) )
+			chosen = (Int)t;
+	}
+	if( chosen < 0 )
+		return;
+	const Int t = chosen;
+	for( size_t s = 0; s < bearings.size(); s++ )
+	{
+		Copy best;
+		Real bestError = 1.0e9f;
+		UnsignedInt bestTie = 0;
+		for( Int d = 0; d < 8; d++ )
+		{
+			Copy c;
+			c.turn = d & 3;
+			c.mirror = d >= 4;
+			c.spinBy( 0.0f );
+			Real error = turnBetween( facing( c, t ), bearings[s] );
+			UnsignedInt tie = synthHash( seed, 140 + (Int)s, t * 8 + d );
+			if( error > bestError + 1.0e-3f || ( error > bestError - 1.0e-3f && tie >= bestTie ) )
+				continue;
+			best = c;
+			bestError = error;
+			bestTie = tie;
+		}
+		best.source = yx( (Real)src.lv.startY[t], (Real)src.lv.startX[t] );
+		best.region = &regions[t];
+		best.radius = ( reaches[t] + COPY_FADE ) * scale + 1.0f;
+		best.core = ( reaches[t] - PAD_MARGIN ) * scale + 1.0f;
+		best.lift = skel.bowl - edges[t];
+		// a plateau scaled down keeps its shape: lower by as much as it is narrower, so its
+		// ramps climb no steeper than the exemplar's
+		best.pivot = edges[t];
+		best.heightScale = raised[t] ? scale : 1.0f;
 		best.target = yx( (Real)skel.startY[s], (Real)skel.startX[s] );
 		best.scale = scale;
 		best.regionW = src.m.W;
@@ -4906,14 +5684,71 @@ void planPads( const Exemplar& src, const Levels& skel, Int W, Int H, Int seed, 
 	}
 }
 
-/// The docks and derricks: the skeleton's off the pads, the exemplar's the pads carry.
-void carryMoney( const Exemplar& src, const std::vector<Copy>& pads, SynthMap& skm )
+/// 0 for a supply dock, 1 for an oil derrick, -1 for anything else: SynthMap::load's two kinds of money.
+Int moneyKind( const AsciiString& name )
+{
+	AsciiString lower = name;
+	lower.toLower();
+	if( strstr( lower.str(), "supplydock" ) ) return 0;
+	return lower == "techoilderrick" ? 1 : -1;
+}
+
+/** Where an object a pad carries lands (grid cells), or FALSE when it does not come. A rigid base on a
+	start nearer the edge than the exemplar's put its dock past the map: Twilight Flame's 50 cells
+	behind its start, a 140-cell map's start 24 from the edge. Such an object is pulled back along the
+	line to the start until it stands SITE_INNER inside the playable area, and dropped when that brings
+	it within PAD_SITE_LEAST of the start or onto the exemplar's cliff. carryMoney and the objects ask
+	this one question, so the money the reach is repaired to and the money written out agree. */
+Bool padSite( const Exemplar& src, const Copy& pad, Real sy, Real sx, const SynthMap& skm, YX& at )
+{
+	if( !pad.carries( sy, sx ) )
+		return FALSE;
+	at = pad.toTarget( sy, sx );
+	const Real from[2] = { pad.target.y, pad.target.x }, to[2] = { at.y, at.x };
+	const Real lo[2] = { skm.border + SITE_INNER, skm.border + SITE_INNER };
+	const Real hi[2] = { skm.border + skm.playY - SITE_INNER, skm.border + skm.playX - SITE_INNER };
+	Real k = 1.0f;
+	for( Int a = 0; a < 2; a++ )
+	{
+		if( to[a] >= lo[a] && to[a] <= hi[a] ) continue;
+		if( from[a] < lo[a] || from[a] > hi[a] ) return FALSE;
+		k = std::min( k, ( ( to[a] < lo[a] ? lo[a] : hi[a] ) - from[a] ) / ( to[a] - from[a] ) );
+	}
+	if( k >= 1.0f )
+		return TRUE;
+	at = yx( from[0] + ( to[0] - from[0] ) * k, from[1] + ( to[1] - from[1] ) * k );
+	if( hypotr( at.y - from[0], at.x - from[1] ) < PAD_SITE_LEAST )
+		return FALSE;
+	const YX s = pad.toSource( at.y, at.x );
+	for( Int dy = -1; dy <= 1; dy++ )
+		for( Int dx = -1; dx <= 1; dx++ )
+			if( src.m.cliff[clampi( roundi( s.y ) + dy, 0, src.m.H - 1 ) * src.m.W + clampi( roundi( s.x ) + dx, 0, src.m.W - 1 )] )
+				return FALSE;
+	return TRUE;
+}
+
+/** The docks and derricks: the skeleton's off the pads, the exemplar's the pads carry. A kind some pad
+	brings none of onto the map, Twilight Flame's derricks out in its bowl or an open base's docks past
+	its reach, keeps the skeleton's under every pad instead, so no seat loses its home dock or its
+	derricks to the copy; one pad short decides for all, so the seats stay alike. The skeleton's kept
+	under a pad are listed in levelled for a flat disc on the copied ground. */
+void carryMoney( const Exemplar& src, const std::vector<Copy>& pads, SynthMap& skm, Bool fellBack[2], std::vector<YX>& levelled )
 {
 	const Int b = skm.border, sb = src.m.border;
 	std::vector<YX> *mine[2] = { &skm.supplies, &skm.derricks };
 	const std::vector<YX> *theirs[2] = { &src.m.supplies, &src.m.derricks };
 	for( Int kind = 0; kind < 2; kind++ )
 	{
+		Bool every = !pads.empty();
+		YX at;
+		for( size_t c = 0; c < pads.size() && every; c++ )
+		{
+			Bool any = FALSE;
+			for( size_t k = 0; k < theirs[kind]->size() && !any; k++ )
+				any = padSite( src, pads[c], ( *theirs[kind] )[k].y + sb, ( *theirs[kind] )[k].x + sb, skm, at );
+			every = any;
+		}
+		fellBack[kind] = !every;
 		std::vector<YX> kept;
 		for( size_t k = 0; k < mine[kind]->size(); k++ )
 		{
@@ -4921,16 +5756,16 @@ void carryMoney( const Exemplar& src, const std::vector<Copy>& pads, SynthMap& s
 			Bool covered = FALSE;
 			for( size_t c = 0; c < pads.size() && !covered; c++ )
 				covered = pads[c].weight( roundi( p.y + b ), roundi( p.x + b ), COPY_FADE ) > 0.0f;
-			if( !covered ) kept.push_back( p );
+			if( !covered || fellBack[kind] ) kept.push_back( p );
+			if( covered && fellBack[kind] ) levelled.push_back( yx( p.y + b, p.x + b ) );
 		}
-		for( size_t c = 0; c < pads.size(); c++ )
+		for( size_t c = 0; c < pads.size() && !fellBack[kind]; c++ )
 		{
 			for( size_t k = 0; k < theirs[kind]->size(); k++ )
 			{
 				const YX& p = ( *theirs[kind] )[k];
-				if( !pads[c].carries( p.y + sb, p.x + sb ) ) continue;
-				YX t = pads[c].toTarget( p.y + sb, p.x + sb );
-				kept.push_back( yx( t.y - b, t.x - b ) );
+				if( padSite( src, pads[c], p.y + sb, p.x + sb, skm, at ) )
+					kept.push_back( yx( at.y - b, at.x - b ) );
 			}
 		}
 		mine[kind]->swap( kept );
@@ -5075,9 +5910,9 @@ void widenRamps( std::vector<Int>& heights, Int W, Int H, Int border, const Plan
 }
 
 /** Where a start, dock, derrick or tech building is cut off from the first start, a ramp along the
-	cheapest way to the ground that start reaches: through a cliff at a price, never through water.
-	Returns the ramps cut. */
-Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, const Mask& decks, Int firstStart,
+	cheapest way to the ground that start reaches: through a cliff at a price, never through water nor
+	the border, which the pathfinder does not walk. Returns the ramps cut. */
+Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, const Mask& decks, const Mask& play, Int firstStart,
 	const std::vector<YX>& targets )
 {
 	const Int RAMP_HALF = 4, RAMP_BLEND = 3, CLIFF_COST = 6;
@@ -5097,7 +5932,7 @@ Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, cons
 				for( Int i = 0; i < W * H; i++ )
 				{
 					wet[i] = plan.wet[i] && heights[i] < plan.level[i] && !decks[i];
-					passable[i] = ( walk[i] && !wet[i] ) || decks[i];
+					passable[i] = ( ( walk[i] && !wet[i] ) || decks[i] ) && play[i];
 				}
 				reach( passable, W, H, firstStart, reached );
 				stale = FALSE;
@@ -5127,7 +5962,7 @@ Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, cons
 				const Int n[4] = { x + 1 < W ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < H ? i + W : -1, y > 0 ? i - W : -1 };
 				for( Int j = 0; j < 4; j++ )
 				{
-					if( n[j] < 0 || wet[n[j]] ) continue;
+					if( n[j] < 0 || wet[n[j]] || !play[n[j]] ) continue;
 					Int step = top.first + ( passable[n[j]] ? 1 : CLIFF_COST );
 					if( step >= cost[n[j]] ) continue;
 					cost[n[j]] = step;
@@ -5177,6 +6012,20 @@ Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, cons
 }
 
 }	// namespace
+
+/** How much of the way up to the lower plateau a cell between two copied plateau bases is raised
+	(Composer::joinPlateaus). sum is the cell's two 3-4 chamfer distances added, pairLeast the least
+	such sum over the map: three times the real gap between the two bases, along the line between
+	them. Whether the pair is joined at all is decided on that gap, PAD_CORRIDOR; the fade over
+	JOIN_FADE only shapes the joined way's shoulders. Fading on the sum alone also filled a valley a
+	few cells wider than PAD_CORRIDOR part way across, half its height at a gap of 36 cells. */
+Real rmgJoinShare( Int pairLeast, Int sum )
+{
+	const Int inside = 3 * PAD_CORRIDOR, reachSum = 3 * ( PAD_CORRIDOR + JOIN_FADE );
+	if( pairLeast >= inside || sum >= reachSum )
+		return 0.0f;
+	return sum < inside ? 1.0f : fade( (Real)( reachSum - sum ) / ( 3 * JOIN_FADE ) );
+}
 
 //-----------------------------------------------------------------------------
 // The synthesis
@@ -5251,14 +6100,15 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	baseRegions( src, regions, reaches, edges, raised );
 	std::vector<Copy> basePads;
 	planPads( src, skel, W, H, seed, regions, reaches, edges, raised, basePads );
-	carryMoney( src, basePads, skm );
+	Bool moneyFellBack[2];
+	std::vector<YX> levelledMoney;
+	carryMoney( src, basePads, skm, moneyFellBack, levelledMoney );
 
 	// the exemplar's large features first, then what of the skeleton keeps its own height
 	Composer composer( src, skm, skel, seed, basePads );
 	{
-		Field keepBefore, padsBefore;
-		protection( skm, skel, keepBefore, padsBefore );
-		composer.keepBefore = keepBefore;
+		Field keepBefore;
+		protection( skm, skel, keepBefore, composer.padsBefore );
 	}
 	Field h = skel.h;
 	Plan plan = composer.compose( h );
@@ -5329,8 +6179,24 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	Real treesWanted = std::max( src.treeDensity * treeGround - inTowns, 0.0f );
 	Int64 treeRateQ16 = allowedCount ? (Int64)( treesWanted * 65536.0f / allowedCount ) : 0;
 
+	// the ground the quilt matches besides height: the water that will be water (plan.wet holds dry ground
+	// a pad's guard kept, so it is the composed height under the plane), its bank, and the roads' clearance.
+	// An exemplar with no water has no bed or bank to match, and a price every patch pays alike only moves the jitter.
+	Mask targetGround( W * H, 0 );
+	{
+		Mask wetSkel( W * H, 0 ), roads( W * H, 0 ), shore, clear;
+		if( src.hasWater )
+			for( Int i = 0; i < W * H; i++ ) wetSkel[i] = plan.wet[i] && skel.h[i] < plan.level[i];
+		maskGrow( wetSkel, W, H, SHORE_GROUND, shore );
+		for( size_t k = 0; k < plan.roads.size(); k++ )
+			for( size_t p = 0; p + 1 < plan.roads[k].points.size(); p++ )
+				lineCells( plan.roads[k].points[p], plan.roads[k].points[p + 1], W, H, roads );
+		maskGrow( roads, W, H, ROAD_CLEAR, clear );
+		for( Int i = 0; i < W * H; i++ )
+			targetGround[i] = ( wetSkel[i] ? GROUND_WET : 0 ) | ( shore[i] ? GROUND_SHORE : 0 ) | ( clear[i] ? GROUND_STRIP : 0 );
+	}
 	std::vector<Int> syMap, sxMap;
-	Int patches = quilt( src, skm, skel, keep, seed, plan.stamps, plan.fixedSource, treesAllowed, treeRateQ16, syMap, sxMap );
+	Int patches = quilt( src, skm, skel, keep, seed, plan.stamps, plan.fixedSource, treesAllowed, treeRateQ16, targetGround, syMap, sxMap );
 	Mask stamped( W * H, 0 );
 	for( size_t s = 0; s < plan.stamps.size(); s++ )
 		for( Int y = plan.stamps[s].ty; y < plan.stamps[s].ty + plan.stamps[s].rows; y++ )
@@ -5370,14 +6236,18 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		heights[i] = clampi( roundi( value ), 0, 255 );
 	}
 	widenRamps( heights, W, H, b, plan, basePads, skel.bowl );
+	// the skeleton's money kept under a pad stands on the copy's ground, levelled as the skeleton levelled it
+	for( size_t k = 0; k < levelledMoney.size(); k++ )
+		levelDisc( heights, W, H, roundi( levelledMoney[k].y ), roundi( levelledMoney[k].x ), PILE_FLAT );
 	Mask cliff;
 	cliffOf( heights, W, H, cliff );
 
-	// the skeleton's money and seats stay, its dressing goes, and on a copy all but its waypoints; the piles move
-	auto underCopy = [&]( Real gy, Real gx ) -> Bool
+	// the skeleton's money and seats stay, its dressing goes, and on a copy all but its waypoints and the
+	// money a pad fell back on (carryMoney); the piles move
+	auto underCopy = [&]( Real gy, Real gx, Bool crossingsOnly ) -> Bool
 	{
 		for( size_t c = 0; c < plan.copies.size(); c++ )
-			if( plan.copies[c].weight( roundi( gy ), roundi( gx ), COPY_FADE ) > 0.0f )
+			if( ( !crossingsOnly || plan.copies[c].radius <= 0.0f ) && plan.copies[c].weight( roundi( gy ), roundi( gx ), COPY_FADE ) > 0.0f )
 				return TRUE;
 		return FALSE;
 	};
@@ -5389,7 +6259,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		if( t.name.startsWith( "Tree" ) || t.name.startsWith( "Rocks" ) || t.name.startsWith( "RockCluster" ) ||
 				t.name.startsWith( "AmbientWaves" ) || ( t.flags & FLAG_ROAD_FLAGS ) || ( civilian && !t.waypointID && civilian( t.name.str() ) ) )
 			continue;
-		if( !t.waypointID && underCopy( t.y + b, t.x + b ) )
+		const Int kind = moneyKind( t.name );
+		if( !t.waypointID && underCopy( t.y + b, t.x + b, kind >= 0 && moneyFellBack[kind] ) )
 			continue;
 		( t.name == "SupplyPileSmall" ? piles : kept ).push_back( chunk );
 	}
@@ -5401,7 +6272,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	maskGrow( lines, W, H, 1, decks );
 	Mask walk, passable( W * H ), reached, openGround( W * H );
 	walkable( cliff, W, H, walk );
-	for( Int i = 0; i < W * H; i++ ) passable[i] = ( walk[i] && !levelWet[i] ) || decks[i];
+	// the border is no ground: the pathfinder keeps to the playable area
+	for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
 	const Int firstStart = (Int)f.starts[0].y * W + (Int)f.starts[0].x;
 	reach( passable, W, H, firstStart, reached );
 	for( Int i = 0; i < W * H; i++ ) openGround[i] = passable[i] && reached[i] && !plan.keepout[i] && !levelWet[i];
@@ -5409,6 +6281,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	// the piles: where the exemplar keeps its own on high ground, a pair halfway to the next seat and a
 	// pair a third of the way, with what stands beside the exemplar's; otherwise where the skeleton put them
 	std::vector<YX> pileSites;
+	Bool everyGap = TRUE;
 	struct Added { AsciiString name; Real x, y, angle; };
 	std::vector<Added> added;
 	if( src.inv.pileCount && src.inv.pileDz >= HIGH_RISE )
@@ -5427,7 +6300,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 			Real a = bearings[seats[k]];
 			Real gap = bearings[seats[( k + 1 ) % seats.size()]] - a;
 			gap = gap - 2.0f * PI_R * floorf( gap / ( 2.0f * PI_R ) );
-			const Real shares[2] = { 0.5f, k % 2 == 0 ? 0.38f : 0.62f };
+			// halfway, and a pair nearer the seat the gap follows: one pair a seat and a half of two, whatever the count
+			const Real shares[2] = { 0.5f, 0.38f };
 			for( Int s = 0; s < 2; s++ )
 			{
 				Bool found = FALSE;
@@ -5439,7 +6313,11 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 						angle = a + ( shares[s] + theNudges[n] ) * gap;
 						found = placeOnBearing( heights, g == 0 ? high : openGround, W, H, skel.cy, skel.cx, angle, 0.6f * f.seatRing, outer, &y, &x );
 					}
-				if( !found ) continue;
+				if( !found )
+				{
+					everyGap = FALSE;
+					continue;
+				}
 				Real ty = Cos( angle ) * 4.0f, tx = -Sin( angle ) * 4.0f;
 				pileSites.push_back( yx( y + ty, x + tx ) );
 				pileSites.push_back( yx( y - ty, x - tx ) );
@@ -5455,17 +6333,17 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 			}
 		}
 	}
-	for( size_t k = 0; k < piles.size(); k++ )
+	/* A pile at every site, the skeleton's then dropped: moving the few the copies left fed only the
+		first gap or two, four piles by one seat and none by the rest. A gap with no room for its sites
+		keeps the skeleton's piles where they stood, so no gap goes bare while the next has four. */
+	Int serial = 0;
+	const Bool atSites = !pileSites.empty() && everyGap;
+	if( !atSites )
+		kept.insert( kept.end(), piles.begin(), piles.end() );
+	for( size_t k = 0; k < pileSites.size() && atSites; k++ )
 	{
-		Chunk c = piles[k];
-		if( k < pileSites.size() )
-		{
-			Real wx = ( pileSites[k].x - b ) * MAP_XY, wy = ( pileSites[k].y - b ) * MAP_XY;
-			memcpy( &c.body[0], &wx, 4 );
-			memcpy( &c.body[4], &wy, 4 );
-			levelDisc( heights, W, H, (Int)pileSites[k].y, (Int)pileSites[k].x, PILE_FLAT );
-		}
-		kept.push_back( c );
+		neutralObject( skm.raw, "SupplyPileSmall", pileSites[k].x, pileSites[k].y, b, 0.0f, ++serial, kept );
+		levelDisc( heights, W, H, (Int)pileSites[k].y, (Int)pileSites[k].x, PILE_FLAT );
 	}
 	for( size_t k = 0; k < plan.tech.size(); k++ )
 	{
@@ -5483,13 +6361,13 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	for( size_t s = 0; s < skm.supplies.size(); s++ ) mustReach.push_back( yx( skm.supplies[s].y + b, skm.supplies[s].x + b ) );
 	for( size_t s = 0; s < skm.derricks.size(); s++ ) mustReach.push_back( yx( skm.derricks[s].y + b, skm.derricks[s].x + b ) );
 	for( size_t s = 0; s < plan.tech.size(); s++ ) mustReach.push_back( yx( (Real)plan.tech[s].y, (Real)plan.tech[s].x ) );
-	const Int ramps = repairReach( heights, W, H, plan, decks, firstStart, mustReach );
+	const Int ramps = repairReach( heights, W, H, plan, decks, f.play, firstStart, mustReach );
 
 	// a waypoint or a pile the water, a new cliff or a pocket now holds goes to the nearest ground the starts share
 	cliffOf( heights, W, H, cliff );
 	walkable( cliff, W, H, walk );
 	for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
-	for( Int i = 0; i < W * H; i++ ) passable[i] = ( walk[i] && !levelWet[i] ) || decks[i];
+	for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
 	Mask ground, wetClear;
 	reach( passable, W, H, firstStart, ground );
 	maskGrow( levelWet, W, H, 3, wetClear );
@@ -5540,6 +6418,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 			Int o = syMap[i] * SW + sxMap[i];
 			if( src.sceneryFirst[o] == src.sceneryFirst[o + 1] ) continue;
 			if( !f.play[i] || pads[i] >= 0.9f || keep[i] >= 0.95f || plan.keepout[i] || wetNear[i] || stamped[i] ) continue;
+			// nothing on a wall the new ground made where the exemplar's cell was not one
+			if( cliff[i] && !src.m.cliff[o] ) continue;
 			Bool near = FALSE;
 			for( size_t s = 0; s < taken.size() && !near; s++ )
 				near = fabsf( y - taken[s].y ) < 6.0f && fabsf( x - taken[s].x ) < 6.0f;
@@ -5565,7 +6445,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	for( Int i = 0; i < W * H; i++ ) standingCount += standing[i];
 	maskGrow( standing, W, H, 1, standingNear );
 	Mask freeGround( W * H );
-	for( Int i = 0; i < W * H; i++ ) freeGround[i] = treesAllowed[i] && !standingNear[i];
+	for( Int i = 0; i < W * H; i++ ) freeGround[i] = treesAllowed[i] && !standingNear[i] && !cliff[i];
 	for( size_t s = 0; s < taken.size(); s++ )
 		for( Int y = std::max( (Int)taken[s].y - 6, 0 ); y < std::min( (Int)taken[s].y + 7, H ); y++ )
 			for( Int x = std::max( (Int)taken[s].x - 6, 0 ); x < std::min( (Int)taken[s].x + 7, W ); x++ )
@@ -5621,7 +6501,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 
 	// every object goes in neutral; no tower, hut or tent where the new ground has a cliff
 	cliffOf( heights, W, H, cliff );
-	Int serial = 0, trees = 0, scenery = 0;
+	Int trees = 0, scenery = 0;
 	for( size_t k = 0; k < added.size(); k++ )
 	{
 		const Added& a = added[k];
@@ -5668,17 +6548,99 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 			if( one.flags == road->flags[0] && two.flags == road->flags[1] ) { pair = (Int)p; break; }
 		}
 		if( pair < 0 ) continue;
+		// both ends of a road say they join: where one meets a road of its own kind the renderer counts the
+		// shared point and ignores the flag, where it meets another kind it lays the blend between them, and in
+		// the open it fades the road out instead of cutting it square
 		const std::vector<YX>& points = plan.roads[k].points;
 		for( size_t s = 0; s + 1 < points.size(); s++ )
 		{
 			movedObject( src.m, pair, skm.raw, points[s].y, points[s].x, b, ++serial, kept );
 			movedObject( src.m, pair + 1, skm.raw, points[s + 1].y, points[s + 1].x, b, ++serial, kept );
+			for( Int e = 0; e < 2; e++ )
+			{
+				if( e == 0 ? s != 0 : s + 2 != points.size() ) continue;
+				Chunk& end = kept[kept.size() - 2 + e];
+				Int flags;
+				memcpy( &flags, &end.body[16], 4 );
+				flags |= FLAG_ROAD_JOIN;
+				memcpy( &end.body[16], &flags, 4 );
+			}
 			segments++;
 		}
 	}
 
-	// the towns: every object of the exemplar inside each stamped box, moved with it; a road only with both ends inside
+	// A copy takes a road pair only with both ends on it, so an exemplar road that runs off a copy leaves the
+	// pairs it led to cut: a chain ending at the copy's edge, or a stub flagged to join a road that stayed
+	// behind. After each copy its road pairs are peeled from every such loose end back to a junction, and
+	// what is closed inside the copy stays. Shared ends are the exemplar's own points, compared exactly.
+	struct CopiedRoad { size_t at; Int thing; YX ends[2]; };
+	std::vector<CopiedRoad> copiedRoads;
+	std::vector<Int> cutRoads;
+	std::vector< std::pair<YX, YX> > emittedRoads;
+	for( size_t k = 0; k < plan.roads.size(); k++ )
+		for( size_t s = 0; s + 1 < plan.roads[k].points.size(); s++ )
+			emittedRoads.push_back( std::make_pair( plan.roads[k].points[s], plan.roads[k].points[s + 1] ) );
+	auto offRoad = []( const YX& e, const YX& a, const YX& z ) -> Real
+	{
+		Real dy = z.y - a.y, dx = z.x - a.x, span = dy * dy + dx * dx;
+		Real t = span > 0.0f ? clampr( ( ( e.y - a.y ) * dy + ( e.x - a.x ) * dx ) / span, 0.0f, 1.0f ) : 0.0f;
+		return hypotr( e.y - a.y - t * dy, e.x - a.x - t * dx );
+	};
+	auto sameSpot = [&]( Int i, Int j ) -> Bool
+	{
+		return src.m.things[i].x == src.m.things[j].x && src.m.things[i].y == src.m.things[j].y;
+	};
 	Int copied = 0;
+	auto peelCutRoads = [&]()
+	{
+		const size_t n = copiedRoads.size();
+		std::vector<Bool> loose( 2 * n, FALSE ), alive( n, TRUE );
+		for( size_t k = 0; k < n; k++ )
+			for( Int e = 0; e < 2; e++ )
+			{
+				const Int t = copiedRoads[k].thing + e;
+				for( size_t d = 0; d < cutRoads.size(); d++ )
+					loose[2 * k + e] = loose[2 * k + e] || sameSpot( t, cutRoads[d] ) || sameSpot( t, cutRoads[d] + 1 );
+				if( !( src.m.things[t].flags & FLAG_ROAD_JOIN ) ) continue;
+				Bool near = FALSE;
+				for( size_t j = 0; j < emittedRoads.size() && !near; j++ )
+					near = offRoad( copiedRoads[k].ends[e], emittedRoads[j].first, emittedRoads[j].second ) <= ROAD_STUB_REACH;
+				for( size_t j = 0; j < n && !near; j++ )
+					near = j != k && offRoad( copiedRoads[k].ends[e], copiedRoads[j].ends[0], copiedRoads[j].ends[1] ) <= ROAD_STUB_REACH;
+				loose[2 * k + e] = loose[2 * k + e] || !near;
+			}
+		for( Bool peeled = TRUE; peeled; )
+		{
+			peeled = FALSE;
+			for( size_t k = 0; k < n; k++ )
+			{
+				if( !alive[k] || !( loose[2 * k] || loose[2 * k + 1] ) ) continue;
+				// gone; the pair beyond its other end becomes the loose end, unless several meet there
+				const Int other = copiedRoads[k].thing + ( loose[2 * k] ? 1 : 0 );
+				Int meets = 0, beyond = -1;
+				for( size_t j = 0; j < n; j++ )
+					for( Int g = 0; g < 2; g++ )
+						if( j != k && alive[j] && sameSpot( other, copiedRoads[j].thing + g ) ) { meets++; beyond = 2 * (Int)j + g; }
+				alive[k] = FALSE;
+				if( meets == 1 ) loose[beyond] = TRUE;
+				peeled = TRUE;
+			}
+		}
+		for( size_t k = n; k-- > 0; )
+		{
+			if( alive[k] )
+			{
+				emittedRoads.push_back( std::make_pair( copiedRoads[k].ends[0], copiedRoads[k].ends[1] ) );
+				continue;
+			}
+			kept.erase( kept.begin() + copiedRoads[k].at, kept.begin() + copiedRoads[k].at + 2 );
+			copied -= 2;
+		}
+		copiedRoads.clear();
+		cutRoads.clear();
+	};
+
+	// the towns: every object of the exemplar inside each stamped box, moved with it; a road only with both ends inside
 	for( size_t s = 0; s < plan.stamps.size(); s++ )
 	{
 		const Stamp& st = plan.stamps[s];
@@ -5705,13 +6667,24 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 				if( inside )
 					onCliff = onCliff || cliff[clampi( (Int)cys[g], 0, H - 1 ) * W + clampi( (Int)cxs[g], 0, W - 1 )];
 			}
-			if( !inside || onCliff ) continue;
+			const Bool road = ( t.flags & FLAG_ROAD_POINT1 ) && group == 2;
+			if( !inside || onCliff )
+			{
+				if( road ) cutRoads.push_back( (Int)first );
+				continue;
+			}
+			if( road )
+			{
+				CopiedRoad one = { kept.size(), (Int)first, { yx( cys[0], cxs[0] ), yx( cys[1], cxs[1] ) } };
+				copiedRoads.push_back( one );
+			}
 			for( Int g = 0; g < group; g++ )
 			{
 				movedObject( src.m, (Int)( first + g ), skm.raw, cys[g], cxs[g], b, ++serial, kept );
 				copied++;
 			}
 		}
+		peelCutRoads();
 	}
 
 	// what stands on a copy goes with it, turned as it is: a pad brings its base's money and dressing (no
@@ -5735,20 +6708,53 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 				continue;
 			if( pad && copy.scale < 1.0f && group == 1 && !money && civilian && civilian( t.name.str() ) )
 				continue;
+			// a kind of money the pads fell back on is the skeleton's (carryMoney)
+			const Int kind = moneyKind( t.name );
+			if( kind >= 0 && moneyFellBack[kind] )
+				continue;
+			// money where padSite puts it; the rest where it fell, if it fell on the map and not on a new wall
 			Bool inside = TRUE;
+			YX ats[2];
 			for( Int g = 0; g < group && inside; g++ )
-				inside = copy.carries( src.m.things[first + g].y + sb, src.m.things[first + g].x + sb );
-			if( !inside ) continue;
+			{
+				const MapThing&u = src.m.things[first + g];
+				if( pad && money )
+				{
+					inside = padSite( src, copy, u.y + sb, u.x + sb, skm, ats[g] );
+					continue;
+				}
+				inside = copy.carries( u.y + sb, u.x + sb );
+				ats[g] = copy.toTarget( u.y + sb, u.x + sb );
+				const Int ty = roundi( ats[g].y ), tx = roundi( ats[g].x );
+				inside = inside && ty >= 0 && tx >= 0 && ty < H && tx < W;
+				if( inside && pad && group == 1 )
+				{
+					const Int o = clampi( roundi( u.y + sb ), 0, src.m.H - 1 ) * src.m.W + clampi( roundi( u.x + sb ), 0, src.m.W - 1 );
+					inside = !cliff[ty * W + tx] || src.m.cliff[o];
+				}
+			}
+			const Bool road = ( t.flags & FLAG_ROAD_POINT1 ) && group == 2;
+			if( !inside )
+			{
+				if( road ) cutRoads.push_back( (Int)first );
+				continue;
+			}
+			if( road )
+			{
+				CopiedRoad one = { kept.size(), (Int)first, { ats[0], ats[1] } };
+				copiedRoads.push_back( one );
+			}
 			for( Int g = 0; g < group; g++ )
 			{
 				const MapThing&u = src.m.things[first + g];
-				YX at = copy.toTarget( u.y + sb, u.x + sb );
+				const YX at = ats[g];
 				movedObject( src.m, (Int)( first + g ), skm.raw, at.y, at.x, b, ++serial, kept );
 				Real turned = copy.angle( u.angle );
 				memcpy( &kept.back().body[12], &turned, 4 );
 				copied++;
 			}
 		}
+		peelCutRoads();
 	}
 
 	// the chunks: heights, textures, objects, water, the exemplar's light and weather
@@ -5759,7 +6765,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	cliffOf( heights, W, H, cliff );
 	Chunk *blend = out.chunk( "BlendTileData" );
 	std::vector<char> blendBody;
-	if( !blendChunk( src, W, H, syMap, sxMap, plan.fixedTurn, cliff, blendBody ) )
+	if( !blendChunk( src, W, H, syMap, sxMap, plan.fixedTurn, cliff, heights, blendBody ) )
 	{
 		DEBUG_LOG(( "random map: '%s' needs more blends than the renderer holds\n", clamped.m_template.str() ));
 		restoreFPMode( callersFPMode );
@@ -5799,7 +6805,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	// every start walks to every other, every dock, derrick and tech building, over the bridges and round the water
 	for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
 	walkable( cliff, W, H, walk );
-	for( Int i = 0; i < W * H; i++ ) passable[i] = ( walk[i] && !levelWet[i] ) || decks[i];
+	for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
 	reach( passable, W, H, firstStart, reached );
 	auto cutOff = [&]( Real py, Real px ) -> Bool
 	{

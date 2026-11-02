@@ -34,7 +34,7 @@
 	rather than desyncing partway through it. The fingerprint test in
 	test_gameengine.cpp fails until the version and the recorded CRCs agree, so
 	the bump cannot be forgotten. */
-#define RANDOM_MAP_GENERATOR_VERSION 17
+#define RANDOM_MAP_GENERATOR_VERSION 18
 
 /** How much ground the map gives everybody, before the per-player share. Players see them as
 	Tiny, Small, Medium, Large and Extra Large. */
@@ -147,6 +147,26 @@ extern Bool generatedMapTemplate( const AsciiString& path, AsciiString& template
 	a wire name no shipped map here answers. */
 extern Bool generatedMapWireName( const AsciiString& folder, AsciiString& wireOut );
 extern Bool generatedMapFromWireName( const AsciiString& wire, AsciiString& folderOut );
+
+/** One cliff mapping of a BlendTileData chunk, in the order WorldHeightMap::ParseBlendTileData reads
+	it (version 5 on): the texture coordinates of a cell's four corners, 0 (x, y), 1 (x + 1, y),
+	2 (x + 1, y + 1), 3 (x, y + 1), in TEXTURE_WIDTH units from the class's corner in the terrain
+	texture, and a tile of the class they are for. */
+struct RMGCliffInfo
+{
+	Int m_tileIndex;
+	Real m_u[4], m_v[4];
+	Bool m_flip;
+
+	RMGCliffInfo() : m_tileIndex(0), m_flip(FALSE) { for( Int k = 0; k < 4; k++ ) m_u[k] = m_v[k] = 0.0f; }
+};
+
+/** The cliff mapping both writers bake from the final heights: a cell of a cliff class whose first
+	tile and sheet width are in sheetFirst and sheetWidth (-1 and 0 for any other cell) and that rises
+	steeply takes its texture off the face rather than off the plane. indexOut is the per-cell array
+	of the chunk, infoOut the entries with the unwritten default at 0. */
+extern void rmgCliffMapping( const std::vector<Int>& heights, Int width, Int height, const std::vector<Int>& sheetFirst,
+	const std::vector<Int>& sheetWidth, std::vector<Short>& indexOut, std::vector<RMGCliffInfo>& infoOut );
 
 /** A ChunkInputStream over a block of memory, so a generated map can be handed
 	to the same readers that parse maps off disk. */

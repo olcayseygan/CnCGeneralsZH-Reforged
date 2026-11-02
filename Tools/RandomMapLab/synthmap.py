@@ -942,7 +942,8 @@ def lay_sea(h, skel, f, plan, src, sea, inland, boxes):
     """The sea where inland (cells from the coastline, under 0 at sea) is under 0: its bed, a beach
     up from the waterline, higher ground cut back to a walkable slope, ground the plane would flood
     inside its areas raised to the beach, and the areas themselves."""
-    surface = max(skel.bowl + sea["surface_bytes"] - src.bowl, SEA_FLOOR)
+    # src.bowl on an island map is half sea bed; the exemplar's bank over its water bounds the surface
+    surface = max(min(skel.bowl + sea["surface_bytes"] - src.bowl, skel.bowl - max(sea["bank_bytes"], 4.0)), SEA_FLOOR)
     bed = max(surface - max(sea["depth_bytes"], 6.0), 0.0)
     target = np.where(inland < 0.0, surface - (surface - bed) * fade(-inland / SHORE_CELLS),
                       surface + 2.0 + RIVER_SLOPE * np.maximum(inland - 2.0, 0.0))

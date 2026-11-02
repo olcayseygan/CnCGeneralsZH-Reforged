@@ -310,6 +310,8 @@ public:
 	Bool															m_animationsRequirePower;///< Should UnderPowered disable type pause animations in this draw module?
 	Bool															m_stabilizedTurretPitch;	///< draw a pitch bone at the logic's pitch against level ground, whatever the drawn hull's tilt
 	Real															m_barrelArtPitch;					///< with that: how far the barrel's mesh is modelled above level at rest, taken off the drawn pitch
+	AsciiString												m_landingGearSubObject;		///< a sub-object shown on the ground and hidden once the object is m_landingGearUpHeight above it
+	Real															m_landingGearUpHeight;
 #ifdef CACHE_ATTACH_BONE
 	mutable Bool											m_attachToDrawableBoneOffsetValid;
 #endif

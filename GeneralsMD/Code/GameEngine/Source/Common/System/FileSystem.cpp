@@ -575,6 +575,8 @@ Bool FileSystem::isForkOwnedPath(const AsciiString& filename)
 		|| starts("art\\w3d\\traltay") || starts("art\\textures\\traltay_") || starts("art\\textures\\zhca_traltay")
 		// the Airfield's own fortress field, its four shelter doors and its scaffold
 		|| starts("art\\w3d\\trairfld") || starts("art\\textures\\trairfld") || starts("art\\textures\\zhca_trairfld")
+		// the Kizilelma's own model, its damaged and falling states, the hulk and the pieces it throws
+		|| starts("art\\w3d\\trkizilelma") || starts("art\\textures\\trkizilelma") || starts("art\\textures\\zhca_trkizilelma")
 		|| starts("window\\")
 		|| p == "install_final.bmp";
 }

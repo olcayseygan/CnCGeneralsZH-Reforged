@@ -28,6 +28,9 @@ Data/Art/Textures/ReforgedHudGlaPowers.dds
 Data/Art/Textures/ReforgedHudHelpbox.dds
 Data/Art/Textures/ReforgedHudObsCommandBar.dds
 Data/Art/Textures/ReforgedHudObsPlayerWindow.dds
+Data/Art/Textures/ReforgedHudTurkiyeCommandBar.dds
+Data/Art/Textures/ReforgedHudTurkiyeCommandBarWide.dds
+Data/Art/Textures/ReforgedHudTurkiyePowers.dds
 Data/Art/Textures/ReforgedLaserPink.tga
 Data/Art/Textures/ReforgedLobbySpot.tga
 Data/Art/Textures/ReforgedMineGlowBlue.tga
@@ -293,6 +296,8 @@ Data/INI/MappedImages/HandCreated/ReforgedHudGlaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudHelpbox.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsPlayerWindow.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyePowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
 Data/INI/ModernWater.ini
 Data/INI/MultiplayerReforged.ini
@@ -4169,6 +4174,7 @@ Tools/gdi-font-metrics.ps1
 Tools/generals-icon.py
 Tools/gentrigtables.py
 Tools/guard_marker.py
+Tools/hud_command_bar.py
 Tools/include_case_check.py
 Tools/install-guard.sh
 Tools/license-headers.py
@@ -4337,7 +4343,6 @@ Tools/versionUpdate/versionUpdate.dsp
 Tools/vfx_tune.py
 Tools/water_grid_oracle_extract.py
 Tools/water_preview.cpp
-Tools/wide_command_bar.py
 Tools/widechar_check.py
 Tools/widechar_check_allow.txt
 Tools/windows_view_diff.py

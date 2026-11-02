@@ -15385,6 +15385,14 @@ GUI:HotkeysCommandBEGIN_PREFER_SELECTION
 "Zur Auswahl hinzufügen (halten)"
 END
 
+GUI:HotkeysCommandAUTO_GARRISON
+"Gebäude in der Nähe besetzen"
+END
+
+GUI:HotkeysCommandAUTO_REPAIR
+"Reparieren oder heilen lassen"
+END
+
 GUI:MoneyTransferTitle
 "Geld senden"
 END

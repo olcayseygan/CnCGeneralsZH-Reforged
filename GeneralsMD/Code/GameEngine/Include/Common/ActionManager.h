@@ -93,6 +93,7 @@ public:
 	Bool canRepairObject( const Object *obj, const Object *objectToRepair, CommandSourceType commandSource );
 	Bool canResumeConstructionOf( const Object *obj, const Object *objectBeingConstructed, CommandSourceType commandSource );
 	Bool canEnterObject( const Object *obj, const Object *objectToEnter, CommandSourceType commandSource, CanEnterType mode );
+	Int openSeatsAsSeen( const Object *obj, const Object *building, CommandSourceType commandSource );	///< a building's free seats, by what canEnterObject judges a fogged one on
 	CanAttackResult getCanAttackObject( const Object *obj, const Object *objectToAttack, CommandSourceType commandSource, AbleToAttackType attackType );
 	Bool canConvertObjectToCarBomb( const Object *obj, const Object *objectToConvert, CommandSourceType commandSource );
 	Bool canHijackVehicle( const Object *obj, const Object *ObjectToHijack, CommandSourceType commandSource ); // LORENZEN

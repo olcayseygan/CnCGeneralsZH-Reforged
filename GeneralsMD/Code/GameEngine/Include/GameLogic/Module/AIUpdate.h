@@ -770,6 +770,8 @@ public:
 	const Coord3D *getTunnelTripGoal() const { return &m_tunnelTripGoal; }	///< where the trip ends, once out of the far mouth
 	Bool isExitingProducer() const;	///< still driving the exit path out of the structure that built it
 	TunnelTripEnd getTunnelTripEnd() const { return m_tunnelTripEnd; }	///< how the leg from the far mouth is walked
+	void startGarrisonSearch();	///< the auto garrison key: into the nearest free seat around here, and on to the next while a building turns the unit away
+	Bool isSeekingGarrison() const { return m_isSeekingGarrison; }	///< on an auto garrison search, so a building lost on the way is no target
 #if defined(_DEBUG) || defined(_INTERNAL)	
 	inline const Coord3D *friend_getRequestedDestination() const { return &m_requestedDestination; }
 	inline const Coord3D *friend_getRequestedDestination2() const { return &m_requestedDestination2; }
@@ -842,6 +844,8 @@ private:
 
 	/// TRUE when `other` gets the line and we are the one who has to do something about it
 	Bool crowdOutranksMe( Object *other ) const;
+
+	void enterNextFreeGarrison();	///< one step of startGarrisonSearch's search
 
 private:
 	UnsignedInt					m_priorWaypointID;						///< ID of the path we follwed to before the most recent one
@@ -963,6 +967,9 @@ private:
 	Coord3D			m_tunnelTripGoal;						///< Where a move order sent us before a tunnel shortened the way there.
 	Bool				m_hasTunnelTrip;						///< True from the order to enter a tunnel until the walk from the exit to m_tunnelTripGoal is ordered.
 	TunnelTripEnd	m_tunnelTripEnd;					///< How the last leg from the far mouth to m_tunnelTripGoal is walked.
+	Bool				m_isSeekingGarrison;				///< True from the auto garrison key until the unit is inside, is out of seats or is given another order.
+	Coord3D			m_garrisonSearchCenter;			///< Where the unit stood when the key was pressed; the area it searches is around this.
+	std::vector<ObjectID>	m_garrisonSearchTried;	///< The buildings this search has walked to, each only once, which is what ends it.
 
 	// Locomotors -------------------------------------------------------------------------------------------------
 	enum LocoGoalType	 // Note - written out in save/load xfer, don't change these numbers.  jba.

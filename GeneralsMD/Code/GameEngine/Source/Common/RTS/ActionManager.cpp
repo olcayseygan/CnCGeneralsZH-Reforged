@@ -869,6 +869,13 @@ Bool ActionManager::canEnterObject( const Object *obj, const Object *objectToEnt
 
 }
 
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+Int ActionManager::openSeatsAsSeen( const Object *obj, const Object *building, CommandSourceType commandSource )
+{
+	const ContainModuleInterface *contain = building->getContain();
+	return contain ? contain->getContainMax() - nonStealthOccupantsAsSeen( obj, building, commandSource, contain ) : 0;
+}
 
 // ------------------------------------------------------------------------------------------------
 /** The best answer any soldier firing out of obj gives, or ATTACKRESULT_NOT_POSSIBLE */

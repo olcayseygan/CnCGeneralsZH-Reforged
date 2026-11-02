@@ -1,0 +1,83 @@
+# The auto garrison and auto repair keys, sent as the keys' own messages.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 3000
+#     -scenario autoorders -logPrefix autoorders_
+#
+# Read the AUTO GARRISON and AUTO REPAIR lines; each paragraph below says what they should show.
+# Frames in those lines are logic frames, twice the ones here.
+#
+# findFirstMatching takes the newest object, so the Bunker the Tank Hunters are sent to is spawned last.
+
+30    spawn         0  ChinaBunker              1  620 780
+30    spawn         0  ChinaBunker              1  760 920
+30    spawn         0  ChinaBunker              1  1000 1060
+31    spawn         0  ChinaBunker              1  880 1000
+30    spawn         0  ChinaBarracks            1  900 770
+30    spawn         0  ChinaWarFactory          1  1200 860
+
+# Seven Red Guards press 90 from a Bunker with five seats: five head for it and two for the next,
+# because the walkers count against the seats.  Five Tank Hunters beside its door are sent in as well,
+# so it fills early, and each Red Guard it turns away has a "building 2 of this search" line for the
+# next one.  Every Red Guard ends "is in", none of them in the Bunker at 620 780, past the 300 radius.
+31    spawn         0  ChinaInfantryRedguard    7  950 960   20
+31    spawn         0  ChinaInfantryTankHunter  5  880 930   15
+60    autogarrison  0  ChinaInfantryRedguard
+61    clickenter    0  ChinaInfantryTankHunter  0  ChinaBunker
+400   tally         0  ChinaInfantryRedguard    7
+
+# Never in sight and neutral, a schoolhouse 270 away and a pub 250 away would both take a right click,
+# and would answer from what really stands there, so the search leaves them out: "finds no seat left
+# after 0 buildings".
+31    spawn         0  GLAInfantryRebel         1  860 1470
+60    autogarrison  0  GLAInfantryRebel
+
+# The middle of hut 206 is no cell, and from the east a man's path ends 4 units short of touching its
+# wall: he still goes in, "is in" with no "building 2".
+31    spawn         0  ChinaInfantryHacker      1  810 1140
+60    autogarrison  0  ChinaInfantryHacker
+
+# A player's order ends a search: the Ranger has one "heads for" line and no "is in".
+31    spawn         0  AmericaInfantryRanger    1  880 1100
+420   autogarrison  0  AmericaInfantryRanger
+421   clickstop     0  AmericaInfantryRanger
+
+# The enemy gets into the hut first: the Missile Defender goes on to another building, "building 2",
+# where a plain click would have him shoot at it.
+430   spawn         0  AmericaInfantryMissileDefender  1  840 1086
+430   spawn         1  GLAInfantryRebel         3  800 1086  10
+431   autogarrison  0  AmericaInfantryMissileDefender
+432   clickenter    1  GLAInfantryRebel         civilian QuonsetHut01
+
+# An enemy Pathfinder sits unseen in a pub: the man who walks in throws him out, "is in", and the
+# Pathfinder's tally at 600 reads 0 inside.
+440   spawn         1  AmericaInfantryPathfinder  1  1097 960
+441   clickenter    1  AmericaInfantryPathfinder  civilian GermanPub01
+520   tally         1  AmericaInfantryPathfinder
+520   spawn         0  GLAInfantryTunnelDefender  1  1097 930
+521   autogarrison  0  GLAInfantryTunnelDefender
+600   tally         1  AmericaInfantryPathfinder
+600   tally         0  GLAInfantryTunnelDefender
+
+# A man still on his exit path takes no order: "waits until it stands idle", then "heads for" once out.
+# The Red Guard comes out on 1041 here; the men already inside are not touched.
+440   produce       0  ChinaBarracks            ChinaInfantryRedguard 1
+1041  autogarrison  0  ChinaInfantryRedguard
+1400  tally         0  ChinaInfantryRedguard
+
+# The hurt Battle Master heads for the War Factory and the hurt Worker for the Barracks.  The unhurt
+# Gattling Tank, kept away from the fight, has no line.
+620   spawn         0  ChinaTankBattleMaster    1  1040 900
+620   spawn         0  ChinaTankGattling        1  1200 1160
+620   spawn         0  GLAInfantryWorker        1  1100 900
+620   spawn         1  AmericaTankCrusader      3  980 940  30
+620   spawn         1  AmericaInfantryRanger    1  1100 940
+625   attack        1  AmericaTankCrusader      0  ChinaTankBattleMaster
+625   attack        1  AmericaInfantryRanger    0  GLAInfantryWorker
+680   move          1  AmericaTankCrusader      1500 1400
+680   move          1  AmericaInfantryRanger    1500 1400
+700   autorepair    0  ChinaTankBattleMaster
+700   autorepair    0  ChinaTankGattling
+700   autorepair    0  GLAInfantryWorker
+701   tally         0  ChinaTankGattling

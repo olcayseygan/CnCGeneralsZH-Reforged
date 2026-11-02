@@ -384,6 +384,8 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 	m_tunnelTripGoal.zero();
 	m_hasTunnelTrip = FALSE;
 	m_tunnelTripEnd = TUNNEL_TRIP_MOVE;
+	m_isSeekingGarrison = FALSE;
+	m_garrisonSearchCenter.zero();
 	m_locomotorSet.clear();
 	m_curLocomotor = NULL;
 	m_curLocomotorSet = LOCOMOTORSET_INVALID;
@@ -1350,6 +1352,22 @@ UpdateSleepTime AIUpdateInterface::update( void )
 			else
 				privateMoveToPosition( &goal, CMD_FROM_AI );
 		}
+		stRet = STATE_CONTINUE;
+	}
+
+	// An auto garrison: idle inside means the seat is taken and the search is over; idle outside means
+	// the building turned the unit away, full, gone, taken or out of reach, and the next one gets its turn.
+	if (m_isSeekingGarrison && getAIStateType() == AI_IDLE)
+	{
+		const Object *building = getObject()->getContainedBy();
+		if (building != NULL)
+		{
+			DEBUG_LOG(("AUTO GARRISON: frame %d '%s' %d is in '%s' %d\n", TheGameLogic->getFrame(), getObject()->getTemplate()->getName().str(),
+				getObject()->getID(), building->getTemplate()->getName().str(), building->getID()));
+			m_isSeekingGarrison = FALSE;
+		}
+		else
+			enterNextFreeGarrison();
 		stRet = STATE_CONTINUE;
 	}
 
@@ -4721,6 +4739,10 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 	if (parms->m_cmdSource != CMD_FROM_AI)
 		m_hasTunnelTrip = FALSE;
 
+	// So does an auto garrison, which walks on player's enters of its own and sets itself again after each.
+	if (parms->m_cmdSource != CMD_FROM_AI)
+		m_isSeekingGarrison = FALSE;
+
 #ifdef ALLOW_SURRENDER
 	// surrendered items have very limited options, and only via AI cmds
 	if (isSurrendered())
@@ -5534,6 +5556,59 @@ void AIUpdateInterface::endTunnelTrip()
 {
 	if (getObject()->getContainedBy() == NULL)
 		m_hasTunnelTrip = FALSE;
+}
+
+/** How far from where a soldier stood when the auto garrison key was pressed he looks for a seat. */
+static const Real AUTO_GARRISON_RADIUS = 300.0f;
+
+//----------------------------------------------------------------------------------------
+void AIUpdateInterface::startGarrisonSearch()
+{
+	m_garrisonSearchCenter = *getObject()->getPosition();
+	m_garrisonSearchTried.clear();
+
+	// A man still on his exit path, or a hacker at his gear, would only have the order held for later,
+	// off everybody's seat count and with the search forgotten when it is carried out.  So he is got
+	// ready, and the search starts from update()'s idle block once he stands there.
+	const HackInternetAIInterface *hacker = getHackInternetAIInterface();
+	if (hacker != NULL && hacker->isHackingPackingOrUnpacking())
+		aiIdle( CMD_FROM_AI );
+	else if (!isExitingProducer())
+	{
+		enterNextFreeGarrison();
+		return;
+	}
+	friend_dropOrdersAfterExit();
+	m_isSeekingGarrison = TRUE;
+	DEBUG_LOG(("AUTO GARRISON: frame %d '%s' %d waits until it stands idle\n", TheGameLogic->getFrame(),
+		getObject()->getTemplate()->getName().str(), getObject()->getID()));
+}
+
+//----------------------------------------------------------------------------------------
+/**
+ * Walk to the next building with a seat, or end the search.  Uses a player's order, so a fogged building
+ * is judged as the player last saw it all the way to the door.  A building goes on the tried list whatever
+ * becomes of the walk, so a door nobody can reach costs one try and the search always ends.
+ */
+void AIUpdateInterface::enterNextFreeGarrison()
+{
+	Object *me = getObject();
+	Object *building = aiFindFreeGarrison( me, &m_garrisonSearchCenter, AUTO_GARRISON_RADIUS, m_garrisonSearchTried );
+	if (building == NULL)
+	{
+		DEBUG_LOG(("AUTO GARRISON: frame %d '%s' %d finds no seat left after %d buildings\n", TheGameLogic->getFrame(),
+			me->getTemplate()->getName().str(), me->getID(), (Int)m_garrisonSearchTried.size()));
+		m_isSeekingGarrison = FALSE;
+		return;
+	}
+
+	// a player's enter ends any search (aiDoCommand), so the search is set after it
+	aiEnter( building, CMD_FROM_PLAYER );
+	m_garrisonSearchTried.push_back( building->getID() );
+	m_isSeekingGarrison = TRUE;
+	DEBUG_LOG(("AUTO GARRISON: frame %d '%s' %d heads for '%s' %d, building %d of this search\n", TheGameLogic->getFrame(),
+		me->getTemplate()->getName().str(), me->getID(), building->getTemplate()->getName().str(), building->getID(),
+		(Int)m_garrisonSearchTried.size()));
 }
 
 //----------------------------------------------------------------------------------------
@@ -7511,12 +7586,13 @@ void AIUpdateInterface::crc( Xfer *x )
 	* 18: the target a helicopter keeps shooting while it moves away
 	* 19: the radius a player's guard order set
 	* 20: the aggressive stance
-	* 21: the player's orders held until the exit path is done */
+	* 21: the player's orders held until the exit path is done
+	* 22: the auto garrison search */
 // ------------------------------------------------------------------------------------------------
 void AIUpdateInterface::xfer( Xfer *xfer )
 {
   // version
-  const XferVersion currentVersion = 21;
+  const XferVersion currentVersion = 22;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -7864,6 +7940,14 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 		m_ordersAfterExit.resize(count);
 		for (Int i = 0; i < count; ++i)
 			m_ordersAfterExit[i].doXfer(xfer);
+	}
+
+	if (version >= 22)
+	{
+		// a save made while a soldier is on his way to a building owes him the rest of the search
+		xfer->xferBool(&m_isSeekingGarrison);
+		xfer->xferCoord3D(&m_garrisonSearchCenter);
+		xfer->xferSTLObjectIDVector(&m_garrisonSearchTried);
 	}
 
 }  // end xfer

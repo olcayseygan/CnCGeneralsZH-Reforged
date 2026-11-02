@@ -194,6 +194,8 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "TOGGLE_FORCEATTACK",											GameMessage::MSG_META_TOGGLE_FORCEATTACK },
 	{ "TOGGLE_PURCHASE_SCIENCE",								GameMessage::MSG_META_TOGGLE_PURCHASE_SCIENCE },
 	{ "HOLD_POSITION",													GameMessage::MSG_META_HOLD_POSITION },
+	{ "AUTO_GARRISON",													GameMessage::MSG_META_AUTO_GARRISON },
+	{ "AUTO_REPAIR",														GameMessage::MSG_META_AUTO_REPAIR },
 	{ "TOGGLE_GUARD",														GameMessage::MSG_META_TOGGLE_GUARD },
 	{ "TOGGLE_MOVE",														GameMessage::MSG_META_TOGGLE_MOVE },
 	{ "TOGGLE_PAUSE",														GameMessage::MSG_META_TOGGLE_PAUSE },

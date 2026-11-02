@@ -312,6 +312,8 @@ public:
 		MSG_META_TOGGLE_ATTACKMOVE,									///< enter attack-move mode
 		MSG_META_TOGGLE_FORCEATTACK,								///< arm force fire for the next order click (fork)
 		MSG_META_HOLD_POSITION,											///< hold position: guard in place, no pursuit (fork)
+		MSG_META_AUTO_GARRISON,											///< selected infantry garrison the buildings around them (fork)
+		MSG_META_AUTO_REPAIR,												///< selected units go to their own nearest building that mends them (fork)
 		MSG_META_TOGGLE_GUARD,											///< arm guard for the next order click or drag (fork)
 		MSG_META_TOGGLE_MOVE,												///< arm a plain move for the next order click or drag (fork)
 		MSG_META_TOGGLE_PAUSE,											///< pause/unpause, single player and replay only (fork)
@@ -671,6 +673,8 @@ public:
 		MSG_SET_REPEAT_UNIT,												///< (Int template ID, objectID producer, Bool on) the factory builds that unit on repeat, or stops (fork)
 		MSG_TRANSFER_MONEY,													///< (Int player index, Int amount) the sender hands that much of his money to another player (fork)
 		MSG_TEAM_REQUEST,														///< (Int AITeamRequestKind, Location) the sender asks his computer allies for help, money or to join his attack (fork)
+		MSG_DO_AUTO_GARRISON,												///< Every selected soldier looks for a free seat around where he stands (fork)
+		MSG_DO_AUTO_REPAIR,													///< Every selected unit goes to its own nearest building that mends it (fork)
 
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 

@@ -34,6 +34,7 @@
 
 #include "Lib/WideCharFns.h"
 
+#include "Common/ActionManager.h"
 #include "Common/CRCDebug.h"
 #include "Common/DrawnPath.h"
 #include "Common/GameAudio.h"
@@ -1260,6 +1261,60 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 				}
 			}
 
+			break;
+		}
+
+		//---------------------------------------------------------------------------------------------
+		//
+		// Auto garrison (fork).  Each soldier looks around the spot he stands on, in group order, so
+		// the men already sent count against the seats the next one is offered.
+		//
+		case GameMessage::MSG_DO_AUTO_GARRISON:
+		{
+			if (currentlySelectedGroup == NULL)
+				break;
+
+			const VecObjectID ids = currentlySelectedGroup->getAllIDs();
+			for (VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it)
+			{
+				Object *obj = TheGameLogic->findObjectByID( *it );
+				if (!obj || obj->getControllingPlayer() != thisPlayer || !obj->isKindOf( KINDOF_INFANTRY ) || obj->isContained() || !obj->getAIUpdateInterface())
+					continue;
+
+				obj->releaseWeaponLock( LOCKED_TEMPORARILY );	// as MSG_ENTER does
+				obj->getAIUpdateInterface()->startGarrisonSearch();
+			}
+			break;
+		}
+
+		//---------------------------------------------------------------------------------------------
+		//
+		// Auto repair (fork).  Each unit goes to its own nearest building that mends it; aiFindMender
+		// finds none for a unit at full health.
+		//
+		case GameMessage::MSG_DO_AUTO_REPAIR:
+		{
+			if (currentlySelectedGroup == NULL)
+				break;
+
+			const VecObjectID ids = currentlySelectedGroup->getAllIDs();
+			for (VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it)
+			{
+				Object *obj = TheGameLogic->findObjectByID( *it );
+				if (!obj || obj->getControllingPlayer() != thisPlayer || obj->isContained() || !obj->getAIUpdateInterface())
+					continue;
+
+				Object *mender = aiFindMender( thisPlayer, obj, CMD_FROM_PLAYER );
+				if (mender == NULL)
+					continue;
+
+				DEBUG_LOG(( "AUTO REPAIR: frame %d '%s' %d heads for '%s' %d\n", getFrame(), obj->getTemplate()->getName().str(),
+										obj->getID(), mender->getTemplate()->getName().str(), mender->getID() ));
+				if (TheActionManager->canGetRepairedAt( obj, mender, CMD_FROM_PLAYER ))
+					obj->getAIUpdateInterface()->aiGetRepaired( mender, CMD_FROM_PLAYER );
+				else
+					obj->getAIUpdateInterface()->aiGetHealed( mender, CMD_FROM_PLAYER );
+			}
 			break;
 		}
 

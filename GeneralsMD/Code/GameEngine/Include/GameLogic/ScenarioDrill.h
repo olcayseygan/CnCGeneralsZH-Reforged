@@ -96,6 +96,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_REPEAT,						///< repeat <slot> <building> <template> on|off; the Ctrl+Alt build key, as MSG_SET_REPEAT_UNIT onto the message stream
 	SCENARIO_ACTION_GIVEMONEY,				///< givemoney <slot> <targetSlot> <amount>; the Tab screen's Send, as MSG_TRANSFER_MONEY onto the message stream
 	SCENARIO_ACTION_CLICKSTOP,				///< clickstop <slot> <selector>; the Stop key, the group idle MSG_DO_STOP gives (CMD_FROM_PLAYER)
+	SCENARIO_ACTION_AUTOGARRISON,			///< autogarrison <slot> <selector>; the auto garrison key, as MSG_DO_AUTO_GARRISON
+	SCENARIO_ACTION_AUTOREPAIR,				///< autorepair <slot> <selector>; the auto repair key, as MSG_DO_AUTO_REPAIR
 	SCENARIO_ACTION_REACHPROOF,				///< reachproof <slot> <selector> <targetSlot> <probe> [samples]; every matching defence's reach overlay against the logic, the probe stood on each sample point (ReachOverlay_prove)
 	SCENARIO_ACTION_TOPUP							///< topup <slot> <template> <objects>; from now on, while the world holds fewer objects than that, this line's turn makes one on the road from the seat's start to the map's centre and attack-moves it there
 };

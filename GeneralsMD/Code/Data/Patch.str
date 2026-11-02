@@ -1958,6 +1958,14 @@ GUI:HotkeysCommandBEGIN_PREFER_SELECTION
 "Add to selection (hold)"
 END
 
+GUI:HotkeysCommandAUTO_GARRISON
+"Garrison nearby buildings"
+END
+
+GUI:HotkeysCommandAUTO_REPAIR
+"Go get repaired or healed"
+END
+
 // The match load screen (LoadScreenBoard in LoadScreen.cpp)
 GUI:LoadModeSkirmish
 "Skirmish"

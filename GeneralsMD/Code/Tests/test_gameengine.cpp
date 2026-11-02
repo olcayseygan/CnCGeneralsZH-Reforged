@@ -2166,14 +2166,18 @@ TEST(hotkeys_every_row_the_page_lists_is_a_command_the_game_knows)
 	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
 	MetaNameProbe names;
 	Int idle = 0;
+	Int autoOrders = 0;
 	for( size_t each = 0; each < rows.size(); each++ )
 	{
 		CHECK( names.findGameMessageMetaType( rows[ each ].id.c_str() ) != GameMessage::MSG_INVALID );
 		for( size_t name = 0; name < sizeof( IDLE ) / sizeof( IDLE[ 0 ] ); name++ )
 			if( rows[ each ].id == IDLE[ name ] && rows[ each ].category == "SELECTION" && rows[ each ].binding.key.empty() )
 				idle++;
+		if( ( rows[ each ].id == "AUTO_GARRISON" || rows[ each ].id == "AUTO_REPAIR" ) && rows[ each ].category == "CONTROL" && rows[ each ].binding.key.empty() )
+			autoOrders++;
 	}
 	CHECK_EQ( idle, 6 );
+	CHECK_EQ( autoOrders, 2 );
 }
 
 TEST(hotkeys_file_the_launcher_wrote_comes_back_byte_for_byte)
@@ -19722,6 +19726,14 @@ TEST(scenario_parses_the_order_lines)
 	CHECK_STR( action.name.str(), "aggressive" );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "60 stance 0 * bold", &action ), (Int)SCENARIO_PARSE_BAD_ACTION );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "60 stance 0 *", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
+
+	// the auto garrison and auto repair keys
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "60 autogarrison 0 ChinaInfantryRedguard", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_AUTOGARRISON );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "60 autorepair 0 *", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_AUTOREPAIR );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "60 autorepair 0", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
+
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "60 hunt 0 * 900 700", &action ), (Int)SCENARIO_PARSE_BAD_ACTION );
 
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "700 power 1 GLAScudStorm start0:0:300", &action ),

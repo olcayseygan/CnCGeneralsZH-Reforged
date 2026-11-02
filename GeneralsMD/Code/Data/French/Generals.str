@@ -17281,6 +17281,14 @@ GUI:HotkeysCommandBEGIN_PREFER_SELECTION
 "Ajouter à la sélection (maintenir)"
 END
 
+GUI:HotkeysCommandAUTO_GARRISON
+"Occuper les bâtiments proches"
+END
+
+GUI:HotkeysCommandAUTO_REPAIR
+"Aller se faire réparer ou soigner"
+END
+
 GUI:LoadModeSkirmish
 "Escarmouche"
 END

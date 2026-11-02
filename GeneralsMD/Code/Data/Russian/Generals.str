@@ -17233,6 +17233,14 @@ GUI:HotkeysCommandBEGIN_PREFER_SELECTION
 "Добавить к выделению (удерживать)"
 END
 
+GUI:HotkeysCommandAUTO_GARRISON
+"Занять здания поблизости"
+END
+
+GUI:HotkeysCommandAUTO_REPAIR
+"Идти на ремонт или лечение"
+END
+
 GUI:LoadModeSkirmish
 "Схватка"
 END

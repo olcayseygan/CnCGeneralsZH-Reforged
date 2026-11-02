@@ -7104,6 +7104,10 @@ void AIEnterState::onExit( StateExitType status )
 	}
 }
 
+/** How far off a house's wall the end of a man's path still counts as reaching it: a cell and a half, the
+		most the nearest free cell leaves between him and the wall. */
+static const Real GARRISON_DOOR_REACH = 1.5f * PATHFIND_CELL_SIZE_F;
+
 //----------------------------------------------------------------------------------------------------------
 /** Do the two objects' vertical extents touch at all? */
 static Bool hasVerticalOverlap( const Object* a, const Object* b )
@@ -7149,7 +7153,8 @@ StateReturnType AIEnterState::update()
 
 				Expected result: Based on test plan: Instead of just stopping when enemy units garrison building first, they should continue and attack the building.
 			*/
-			if( obj->getRelationship(goal) == ENEMIES && obj->getAI() )
+			// a soldier on an auto garrison search moves on to the next building instead (AIUpdateInterface::update)
+			if( obj->getRelationship(goal) == ENEMIES && obj->getAI() && !obj->getAI()->isSeekingGarrison() )
 			{
 				CanAttackResult result = TheActionManager->getCanAttackObject(obj, goal, obj->getAI()->getLastCommandSource(), ATTACK_NEW_TARGET);
 				if( result == ATTACKRESULT_POSSIBLE || result == ATTACKRESULT_POSSIBLE_AFTER_MOVING )
@@ -7210,12 +7215,28 @@ StateReturnType AIEnterState::update()
 					radius = goal->getGeometryInfo().getMajorRadius();
 				}
 				Bool closeEnough = dx*dx+dy*dy < sqr(radius);
-				if (closeEnough) {
+				ContainModuleInterface* contain = goal->getContain();
+				if (contain && contain->isGarrisonable())
+				{
+					// A house's middle is no cell a man can stand on, so his path ends on the nearest free cell,
+					// which can leave him a few units short of the wall with nothing to collide with: on Alpine
+					// Assault a man walking to one hut stood 4 units off its east wall, click or no click.  So
+					// this is the wall's collision, with what it does about somebody else's men inside.
+					const Real reachRadius = obj->getGeometryInfo().getBoundingCircleRadius() + GARRISON_DOOR_REACH;
+					const GeometryInfo reach( GEOMETRY_CYLINDER, FALSE, obj->getGeometryInfo().getMaxHeightAbovePosition(), reachRadius, reachRadius );
+					if (closeEnough || ThePartitionManager->geomCollidesWithGeom( obj->getPosition(), reach, obj->getOrientation(),
+							goal->getPosition(), goal->getGeometryInfo(), goal->getOrientation() ))
+					{
+						Coord3D normal;
+						normal.set( 0.0f, 0.0f, 1.0f );
+						goal->onCollide( obj, obj->getPosition(), &normal );
+					}
+				}
+				else if (closeEnough) {
 					// Grab the container and force ourselves into it.
 					// This case is primarily to handle transports on the map border for scripted setup.
 					// The partition manager doesn't generate collisions in the border area, so we have to
 					// add ourselves.  jba.
-					ContainModuleInterface* contain = goal->getContain();
 					if (obj->isKindOf(KINDOF_INFANTRY) && goal->isDisabledByType(DISABLED_UNMANNED))
 					{
 						goal->takeOverUnmanned(obj);	// a driver, not a passenger - see OpenContain::onCollide

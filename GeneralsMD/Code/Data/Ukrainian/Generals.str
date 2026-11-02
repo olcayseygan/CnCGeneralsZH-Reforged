@@ -17233,6 +17233,14 @@ GUI:HotkeysCommandBEGIN_PREFER_SELECTION
 "Додати до виділення (утримувати)"
 END
 
+GUI:HotkeysCommandAUTO_GARRISON
+"Зайняти будівлі поблизу"
+END
+
+GUI:HotkeysCommandAUTO_REPAIR
+"Іти на ремонт або лікування"
+END
+
 GUI:LoadModeSkirmish
 "Сутичка"
 END

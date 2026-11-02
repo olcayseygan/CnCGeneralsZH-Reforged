@@ -240,6 +240,7 @@ Data/Scenarios/ambulanceguard.txt
 Data/Scenarios/artillery.txt
 Data/Scenarios/aurorablast.txt
 Data/Scenarios/aurorafog.txt
+Data/Scenarios/autoorders.txt
 Data/Scenarios/avengerlasers.txt
 Data/Scenarios/baseintruder_barracks.txt
 Data/Scenarios/baseintruder_patriot.txt
@@ -423,6 +424,7 @@ Data/Scenarios/sun_cloak.txt
 Data/Scenarios/sun_trees.txt
 Data/Scenarios/swhole.txt
 Data/Scenarios/swpair.txt
+Data/Scenarios/technicalexit.txt
 Data/Scenarios/techrespawn.txt
 Data/Scenarios/towncross.txt
 Data/Scenarios/toxinslope.txt

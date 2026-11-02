@@ -11269,6 +11269,37 @@ static void addMapSeats( Player *player, const Coord3D *pos, Real radius, std::v
 			seats->push_back( b );
 }
 
+// ponytail: the order is by distance from center, not from where the soldier is by now, so a man turned
+// away at the far edge can cross the area; a nearest-to-him pass if players notice the walk
+Object *aiFindFreeGarrison( Object *unit, const Coord3D *center, Real radius, const std::vector<ObjectID> &tried )
+{
+	std::vector<ObjectID> goals;
+	unit->getControllingPlayer()->iterateObjects( collectBoardingGoals, &goals );
+	AIUpdateInterface *ai = unit->getAI();
+	const Int owner = unit->getControllingPlayer()->getPlayerIndex();
+	PartitionFilterGarrisonable filterGarrisonable( TRUE );
+	PartitionFilter *filters[] = { &filterGarrisonable, 0 };
+	MemoryPoolObjectHolder hold;
+	SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRange( center, radius, FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	hold.hold( nearby );
+	for( Object *building = nearby->first(); building; building = nearby->next() )
+	{
+		if( !building->isKindOf( KINDOF_STRUCTURE ) || std::find( tried.begin(), tried.end(), building->getID() ) != tried.end() ||
+				!TheActionManager->canEnterObject( unit, building, CMD_FROM_PLAYER, CHECK_CAPACITY ) )
+			continue;
+		// a house never in sight has no memory to read, so what really stands there would decide it, and
+		// skipping one the enemy holds would give him away
+		if( !building->friend_getPartitionData()->isInSightOf( owner ) && building->getSeenStateFor( owner ) == NULL )
+			continue;
+		// a press while he is already walking to it does not take his own seat from him
+		const Bool walkingThere = ai->getCurrentStateID() == AI_ENTER && ai->getGoalObject() == building;
+		const Int walkers = (Int)std::count( goals.begin(), goals.end(), building->getID() ) - (walkingThere ? 1 : 0);
+		if( TheActionManager->openSeatsAsSeen( unit, building, CMD_FROM_PLAYER ) > walkers )
+			return building;
+	}
+	return NULL;
+}
+
 //----------------------------------------------------------------------------------------------------------
 /** The computer built Bunkers and Fire Bases and never put a man in one, and walked past every empty
 	* farmhouse while the enemy's rebels moved in.  Our own firing buildings take the default team's
@@ -13710,8 +13741,6 @@ void AIPlayer::doAmbulances( void )
 	}
 }
 
-static Object *findMender( Player *player, Object *unit );
-
 void AIPlayer::steerAmbulance( Int slot, const std::vector<AIKnownGun> &guns )
 {
 	DutyAmbulance &duty = m_ambulance[ slot ];
@@ -13815,7 +13844,7 @@ void AIPlayer::steerAmbulance( Int slot, const std::vector<AIKnownGun> &guns )
 	// badly hurt, and out of reach now: to be repaired, riders and all, who go on healing inside
 	if( body->getHealth() < AMBULANCE_REPAIR_HEALTH * body->getMaxHealth() )
 	{
-		Object *mender = findMender( m_player, ambulance );
+		Object *mender = aiFindMender( m_player, ambulance, CMD_FROM_AI );
 		if( mender && TheActionManager->canGetRepairedAt( ambulance, mender, CMD_FROM_AI ) )
 		{
 			if( state != AI_DOCK && state != AI_ENTER && state < 1000 )
@@ -14033,9 +14062,8 @@ Bool AIRetreat_rankPullsOut( Int rank, Real healthFraction, Bool inFight, Real r
 	return inFight && healthFraction < RANK_UNHURT && ratio < min( retreatRatio * (1.0f + RANK_RATIO_STEP * rank), 1.0f );
 }
 
-/** The nearest of our own buildings that mends this unit - a repair pad for a vehicle, a heal pad for
-	* infantry - or NULL.  Ties go to the first in the object list. */
-static Object *findMender( Player *player, Object *unit )
+/** Ties go to the first in the object list. */
+Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource )
 {
 	std::vector<Object *> owned;
 	player->iterateObjects( collectOwned, &owned );
@@ -14044,7 +14072,7 @@ static Object *findMender( Player *player, Object *unit )
 	for( std::vector<Object *>::const_iterator o = owned.begin(); o != owned.end(); ++o )
 	{
 		if( !(*o)->isKindOf( KINDOF_STRUCTURE ) ||
-				!(TheActionManager->canGetRepairedAt( unit, *o, CMD_FROM_AI ) || TheActionManager->canGetHealedAt( unit, *o, CMD_FROM_AI )) )
+				!(TheActionManager->canGetRepairedAt( unit, *o, cmdSource ) || TheActionManager->canGetHealedAt( unit, *o, cmdSource )) )
 			continue;
 		const Real distSqr = sqr( (*o)->getPosition()->x - unit->getPosition()->x ) + sqr( (*o)->getPosition()->y - unit->getPosition()->y );
 		if( best == NULL || distSqr < bestSqr )
@@ -14092,7 +14120,7 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		const Real health = obj->getBodyModule()->getHealth() / obj->getBodyModule()->getMaxHealth();
 		if( !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
 			continue;
-		Object *mender = findMender( m_player, obj );
+		Object *mender = aiFindMender( m_player, obj, CMD_FROM_AI );
 		if( mender == NULL && isAtHome( obj->getPosition() ) )
 			continue;		// home already, and nothing there mends it
 		// one already walking there from an earlier pass whose row has since gone

@@ -16349,6 +16349,14 @@ GUI:HotkeysCommandBEGIN_PREFER_SELECTION
 "Seçime ekle (basılı tut)"
 END
 
+GUI:HotkeysCommandAUTO_GARRISON
+"Yakındaki binalara mevzilen"
+END
+
+GUI:HotkeysCommandAUTO_REPAIR
+"Tamir olmaya ya da iyileşmeye git"
+END
+
 // Maç yükleme ekranı (LoadScreen.cpp içindeki LoadScreenBoard)
 GUI:LoadModeSkirmish
 "Çatışma"

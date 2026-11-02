@@ -204,6 +204,10 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_STOP;
 	else if (token == "clickstop")
 		*action = SCENARIO_ACTION_CLICKSTOP;
+	else if (token == "autogarrison")
+		*action = SCENARIO_ACTION_AUTOGARRISON;
+	else if (token == "autorepair")
+		*action = SCENARIO_ACTION_AUTOREPAIR;
 	else if (token == "arrive")
 		*action = SCENARIO_ACTION_ARRIVE;
 	else if (token == "particles")
@@ -359,6 +363,8 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_REACHPROOF:	return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_STOP:				return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_CLICKSTOP:		return SCENARIO_TOKENS_STOP;
+		case SCENARIO_ACTION_AUTOGARRISON:	return SCENARIO_TOKENS_STOP;
+		case SCENARIO_ACTION_AUTOREPAIR:	return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_TALLY:				return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_PURCHASE:		return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_ARRIVE:			return SCENARIO_TOKENS_ARRIVE;
@@ -533,6 +539,8 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 
 		case SCENARIO_ACTION_STOP:
 		case SCENARIO_ACTION_CLICKSTOP:
+		case SCENARIO_ACTION_AUTOGARRISON:
+		case SCENARIO_ACTION_AUTOREPAIR:
 		case SCENARIO_ACTION_PURCHASE:
 			break;
 	}
@@ -1910,6 +1918,20 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 
 		case SCENARIO_ACTION_WEAPONAT:
 			return executeWeaponAt( action, player, dest, group, taken );		// the dispatcher again
+
+		case SCENARIO_ACTION_AUTOGARRISON:
+		case SCENARIO_ACTION_AUTOREPAIR:
+		{
+			// the key's message, through the dispatcher, which destroys the group
+			GameMessage *msg = newInstance( GameMessage )( action.action == SCENARIO_ACTION_AUTOGARRISON ? GameMessage::MSG_DO_AUTO_GARRISON : GameMessage::MSG_DO_AUTO_REPAIR );
+			msg->friend_setPlayerIndex( player->getPlayerIndex() );
+			TheGameLogic->logicMessageDispatcher( msg, group );
+			msg->deleteInstance();
+			DEBUG_LOG(("SCENARIO: frame %d %s slot %d '%s' x%d\n", action.frame,
+								 action.action == SCENARIO_ACTION_AUTOGARRISON ? "autogarrison" : "autorepair",
+								 action.slot, action.selector.str(), taken));
+			return TRUE;
+		}
 
 		case SCENARIO_ACTION_FORCEGROUND:
 		{

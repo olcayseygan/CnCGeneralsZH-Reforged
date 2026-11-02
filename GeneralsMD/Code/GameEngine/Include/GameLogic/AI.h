@@ -837,6 +837,14 @@ static const UnsignedInt AI_COOP_JOIN_FRAMES = 120 * LOGICFRAMES_PER_SECOND;
 void aiPostTeamRequest( Player *from, AITeamRequestKind kind, Int enemy, const Coord3D *pos );
 /** The enemy of this player's who owns what stands nearest pos, -1 for none within reach. */
 Int aiEnemyNear( const Player *of, const Coord3D *pos );
+/** The nearest of this player's own buildings that mends this unit, a repair pad for a vehicle, an
+	* airfield for an aircraft, a heal pad for infantry, or NULL.  A unit at full health has none. */
+Object *aiFindMender( Player *player, Object *unit, CommandSourceType cmdSource );
+/** The building within radius of center a soldier goes for next, or NULL: the one nearest center that
+	* is not in tried, that a player's order may enter, and that has a seat left after the owner's other
+	* men walking to it.  A building its owner has neither in sight nor remembers is left out, so nothing
+	* he has not seen decides the search. */
+Object *aiFindFreeGarrison( Object *unit, const Coord3D *center, Real radius, const std::vector<ObjectID> &tried );
 
 /** A skirmish AI's purchase queue, on every rung with a bank target.  Every spender asks it before it pays, with a stable key (a
 	* template id), the price, its score and whether the thing could start right now (an idle factory,

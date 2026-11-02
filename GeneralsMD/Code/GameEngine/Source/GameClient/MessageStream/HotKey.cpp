@@ -969,6 +969,8 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 	unbound.push_back( commandRow( "SIGNAL_DEFEND", "INFORMATION" ) );
 	unbound.push_back( commandRow( "SIGNAL_ATTENTION", "INFORMATION" ) );
 	unbound.push_back( commandRow( "REQUEST_MONEY", "INFORMATION" ) );
+	unbound.push_back( commandRow( "AUTO_GARRISON", "CONTROL" ) );
+	unbound.push_back( commandRow( "AUTO_REPAIR", "CONTROL" ) );
 	char name[ 32 ];
 	for( Int slot = 1; slot <= 8; slot++ )
 	{

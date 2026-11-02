@@ -374,6 +374,8 @@ Bool OrderQueue::isOrder( GameMessage::Type type )
 		case GameMessage::MSG_DO_GUARD_POSITION:
 		case GameMessage::MSG_DO_GUARD_OBJECT:
 		case GameMessage::MSG_DO_HOLD_POSITION:
+		case GameMessage::MSG_DO_AUTO_GARRISON:
+		case GameMessage::MSG_DO_AUTO_REPAIR:
 		case GameMessage::MSG_DO_STOP:
 		case GameMessage::MSG_DO_SCATTER:
 		case GameMessage::MSG_DO_FORMATION_MOVETO:

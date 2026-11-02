@@ -562,7 +562,16 @@ void pickAndPlayUnitVoiceResponse( const DrawableList *list, GameMessage::Type m
 				objectWithSound = obj;
 				skip = true;
 				break;
-			
+
+			case GameMessage::MSG_DO_AUTO_GARRISON:
+				if( obj->isKindOf( KINDOF_INFANTRY ) )
+				{
+					soundToPlayPtr = templ->getPerUnitSound( "VoiceGarrison" );
+					objectWithSound = obj;
+					skip = true;
+				}
+				break;
+
 			case GameMessage::MSG_DO_MOVETO:
 			case GameMessage::MSG_DO_ATTACKMOVETO:
 			case GameMessage::MSG_GET_REPAIRED:
@@ -3766,6 +3775,32 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			{
 				GameMessage *holdMsg = TheMessageStream->appendMessage( GameMessage::MSG_DO_HOLD_POSITION );
 				holdMsg->appendIntegerArgument( GUARDMODE_GUARD_WITHOUT_PURSUIT );
+				disp = DESTROY_MESSAGE;
+			}
+			break;
+		}
+
+		//
+		// Auto garrison and auto repair: each unit picks its own building on the logic side, from what
+		// its owner has seen, so all these carry is the key.
+		//
+		case GameMessage::MSG_META_AUTO_GARRISON:
+		{
+			if( TheInGameUI->getSelectCount() > 0 )
+			{
+				TheMessageStream->appendMessage( GameMessage::MSG_DO_AUTO_GARRISON );
+				pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_DO_AUTO_GARRISON );
+				disp = DESTROY_MESSAGE;
+			}
+			break;
+		}
+
+		case GameMessage::MSG_META_AUTO_REPAIR:
+		{
+			if( TheInGameUI->getSelectCount() > 0 )
+			{
+				TheMessageStream->appendMessage( GameMessage::MSG_DO_AUTO_REPAIR );
+				pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_GET_REPAIRED );
 				disp = DESTROY_MESSAGE;
 			}
 			break;

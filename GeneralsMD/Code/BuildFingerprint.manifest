@@ -40,6 +40,7 @@ Data/Art/Textures/ReforgedSignalLook.tga
 Data/Art/Textures/TRAltay_Tread.tga
 Data/Art/Textures/TRAltay_TreadWreck.tga
 Data/Art/Textures/TRAltay_Wreck.tga
+Data/Art/Textures/TRCmdHQ_Lead.tga
 Data/Art/Textures/TRCmdHQ_Net.tga
 Data/Art/Textures/TRCmdHQ_Pave.tga
 Data/Art/Textures/TRCmdHQ_Plaster.tga
@@ -49,6 +50,8 @@ Data/Art/Textures/TRCmdHQ_Roof.tga
 Data/Art/Textures/TRCmdHQ_RoofD.tga
 Data/Art/Textures/TRCmdHQ_Rubble.tga
 Data/Art/Textures/TRCmdHQ_Stone.tga
+Data/Art/Textures/TRCmdHQ_Tile.tga
+Data/Art/Textures/TRCmdHQ_TileD.tga
 Data/Art/Textures/TRCmdHQ_Wall.tga
 Data/Art/Textures/TRCmdHQ_WallD.tga
 Data/Art/Textures/ZHCA_TRAltay.tga

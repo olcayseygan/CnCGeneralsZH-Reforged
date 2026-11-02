@@ -573,6 +573,8 @@ Bool FileSystem::isForkOwnedPath(const AsciiString& filename)
 		|| starts("art\\w3d\\trcmdhq") || starts("art\\textures\\trcmdhq_") || p == "art\\textures\\zhca_trcmdhq.tga"
 		// the Altay's own model, its damaged state and the hulk, turret and gun it leaves
 		|| starts("art\\w3d\\traltay") || starts("art\\textures\\traltay_") || starts("art\\textures\\zhca_traltay")
+		// the Airfield's own fortress field, its four shelter doors and its scaffold
+		|| starts("art\\w3d\\trairfld") || starts("art\\textures\\trairfld") || starts("art\\textures\\zhca_trairfld")
 		|| starts("window\\")
 		|| p == "install_final.bmp";
 }

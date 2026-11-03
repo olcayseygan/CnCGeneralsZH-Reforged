@@ -1,0 +1,1257 @@
+#include "GameNetwork/GeneralsOnline/NGMP_interfaces.h"
+#include "GameNetwork/GeneralsOnline/NetworkMesh.h"
+#include "GameNetwork/GeneralsOnline/HTTP/HTTPManager.h"
+#include "../json.hpp"
+#include "GameClient/MessageBox.h"
+#include "Common/FileSystem.h"
+#include "Common/file.h"
+#include "WWLib/realcrc.h"
+#include "GameNetwork/DownloadManager.h"
+#include <ws2tcpip.h>
+#include "GameClient/DisplayStringManager.h"
+#include "GameNetwork/NetworkInterface.h"
+#include "Common/MultiplayerSettings.h"
+#include "GameNetwork/GameSpyOverlay.h"
+#include "GameClient/Display.h"
+#include "WW3D2/surfaceclass.h"
+#include "WW3D2/dx8wrapper.h"
+#include <mutex>
+#include <utility>
+
+#include "GameClient/GameText.h"
+#include <unordered_set>
+
+NGMP_OnlineServicesManager* NGMP_OnlineServicesManager::m_pOnlineServicesManager = nullptr;
+std::recursive_mutex NGMP_OnlineServicesManager::m_singletonMutex;
+
+std::thread::id NGMP_OnlineServicesManager::g_MainThreadID;
+
+
+bool NGMP_OnlineServicesManager::g_bAdvancedNetworkStats;
+
+NetworkMesh* NGMP_OnlineServicesManager::GetNetworkMesh()
+{
+	if (m_pOnlineServicesManager != nullptr)
+	{
+		NGMP_OnlineServices_LobbyInterface* pLobbyInterface = GetInterface< NGMP_OnlineServices_LobbyInterface>();
+		if (pLobbyInterface != nullptr)
+		{
+			return pLobbyInterface->GetNetworkMeshForLobby();
+		}
+	}
+
+	return nullptr;
+}
+
+
+void NGMP_OnlineServicesManager::GetAndParseServiceConfig(std::function<void(void)> cbOnDone)
+{
+	std::string strURI = NGMP_OnlineServicesManager::GetAPIEndpoint("ServiceConfig");
+	std::map<std::string, std::string> mapHeaders;
+	
+	// SECURITY FIX: Capture manager instance through GetInstance() to ensure thread-safety
+	// Lambda will check if manager still exists before accessing members
+	NGMP_OnlineServicesManager::GetInstance()->GetHTTPManager()->SendGETRequest(strURI.c_str(), EIPProtocolVersion::DONT_CARE, mapHeaders, [cbOnDone](bool bSuccess, int statusCode, std::string strBody, HTTPRequest* pReq)
+		{
+			try
+			{
+				// SECURITY FIX: Re-acquire manager pointer inside lambda to check for shutdown
+				NGMP_OnlineServicesManager* pMgr = NGMP_OnlineServicesManager::GetInstance();
+				if (pMgr == nullptr)
+				{
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Manager destroyed during service config request");
+					return;
+				}
+				
+				if (bSuccess && statusCode == 200)
+				{
+					nlohmann::json jsonObject = nlohmann::json::parse(strBody);
+					pMgr->m_ServiceConfig = jsonObject.get<ServiceConfig>();
+				}
+				else
+				{
+					// keep the last good config (defaults if there never was one); resetting would turn off retry_signalling
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Failed to get service config, keeping the current one. Status code: %d", statusCode);
+				}
+				
+			}
+			catch (...)
+			{
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Failed to parse service config, keeping the current one.");
+			}
+
+			if (cbOnDone != nullptr)
+			{
+				cbOnDone();
+			}
+		});
+}
+
+#if 0 // upstream's anticheat screenshot probe; not in this fork
+void NGMP_OnlineServicesManager::CaptureScreenshotForProbe(EScreenshotType screenshotType, std::string strURI)
+{
+	NGMP_OnlineServicesManager* pOnlineServicesMgr = NGMP_OnlineServicesManager::GetInstance();
+	if (pOnlineServicesMgr != nullptr)
+	{
+		ServiceConfig& serviceConf = pOnlineServicesMgr->GetServiceConfig();
+
+		if (serviceConf.do_probes)
+		{
+			CHECK_MAIN_THREAD;
+
+			NGMP_OnlineServices_LobbyInterface* pLobbyInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_LobbyInterface>();
+			if (pLobbyInterface != nullptr)
+			{
+				const uint64_t matchID = pLobbyInterface->GetCurrentMatchID();
+				NGMP_OnlineServicesManager::GetInstance()->CaptureScreenshot(true, [strURI = std::move(strURI), screenshotType, matchID](std::vector<uint8_t> vecData)
+					{
+						CHECK_WORKER_THREAD;
+
+						if (vecData.empty())
+						{
+							NetworkLog(ELogVerbosity::LOG_RELEASE, "Screenshot capture failed, no data");
+							return;
+						}
+
+                        // certain screenshots require caching for later upload when we have a valid match id, so we store them
+						if (screenshotType == EScreenshotType::SCREENSHOT_TYPE_LOADSCREEN)
+						{
+							NGMP_OnlineServicesManager::GetInstance()->CacheScreenshotBytes_StartMatch(vecData);
+						}
+                        else if (screenshotType == EScreenshotType::SCREENSHOT_TYPE_SCORESCREEN)
+                        {
+							NGMP_OnlineServicesManager::GetInstance()->CacheScreenshotBytes_EndMatch(matchID, std::move(vecData));
+                        }
+						else
+						{
+                            // send back to main thread for processing
+							// NOTE: we don't lock in the above cases because the called functions lock
+                            std::scoped_lock<std::mutex> ssLock(m_ScreenshotMutex);
+
+                            S3ScreenshotEntry newEntry;
+                            newEntry.vecBytes = std::move(vecData);
+                            newEntry.strSignedURI = strURI;
+                            newEntry.screenshotType = screenshotType;
+                            m_vecGuardedSSData.push_back(newEntry);
+						}
+					});
+			}
+		}
+	}
+}
+
+#endif
+
+enum class EVersionCheckResponseResult : int
+{
+	OK = 0,
+	FAILED = 1,
+	NEEDS_UPDATE = 2
+};
+
+struct VersionCheckResponse
+{
+	EVersionCheckResponseResult result;
+
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(VersionCheckResponse, result)
+};
+
+GenOnlineSettings NGMP_OnlineServicesManager::Settings;
+
+NGMP_OnlineServicesManager::NGMP_OnlineServicesManager()
+{
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Init");
+
+	m_pOnlineServicesManager = this;
+}
+
+// The repository is public and names no service: the address is the launcher's to pass in.
+std::string NGMP_OnlineServicesManager::GetAPIEndpoint(const char* szEndpoint)
+{
+	return std::format("{}/{}", getenv("ZHR_ONLINE_API"), szEndpoint);
+}
+
+#if 0 // upstream's Steam overlay load, replay and screenshot upload; not in this fork
+void NGMP_OnlineServicesManager::AttemptLoadSteam()
+{
+    // app id for ZH
+    SetEnvironmentVariableA("SteamAppId", "2732960");
+
+    // load steam 32bit dll from local dir if present
+    HMODULE steamDll = LoadLibraryA("steam_api.dll");	
+    if (!steamDll)
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "steam_api.dll not found. Running without Steam.");
+        return;
+    }
+
+	// Init func
+    typedef bool (*SteamAPI_Init_t)();
+    SteamAPI_Init_t SteamAPI_Init = (SteamAPI_Init_t)GetProcAddress(steamDll, "SteamAPI_InitSafe");
+
+    if (!SteamAPI_Init)
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "SteamAPI_Init not found in DLL.");
+        FreeLibrary(steamDll);
+        return;
+    }
+
+    // steam init
+    if (SteamAPI_Init())
+	{
+        NetworkLog(ELogVerbosity::LOG_RELEASE, "SteamAPI_Init succeeded.");
+    }
+    else
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "SteamAPI_Init failed.");
+    }
+}
+
+void NGMP_OnlineServicesManager::CommitReplay(AsciiString absoluteReplayPath)
+{
+	NGMP_OnlineServicesManager* pOnlineServicesMgr = NGMP_OnlineServicesManager::GetInstance();
+	if (pOnlineServicesMgr != nullptr)
+	{
+		ServiceConfig& serviceConf = pOnlineServicesMgr->GetServiceConfig();
+
+		if (serviceConf.do_replay_upload)
+		{
+			NGMP_OnlineServices_LobbyInterface* pLobbyInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_LobbyInterface>();
+			const uint64_t matchID = pLobbyInterface == nullptr ? 0 : pLobbyInterface->GetCurrentMatchID();
+			if (matchID == 0)
+			{
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "[MediaUpload] Cannot cache replay: match ID is unavailable");
+				return;
+			}
+			FILE* pFile = fopen(absoluteReplayPath.str(), "rb");
+
+			std::vector<unsigned char> replayData;
+			if (pFile)
+			{
+				fseek(pFile, 0, SEEK_END);
+				long fileSize = ftell(pFile);
+				fseek(pFile, 0, SEEK_SET);
+				if (fileSize > 0)
+				{
+					replayData.resize(fileSize);
+					fread(replayData.data(), 1, fileSize, pFile);
+				}
+				fclose(pFile);
+			}
+
+			// cache the data until we get an S3 URL from server
+			NGMP_OnlineServicesManager::GetInstance()->CacheReplayBytes(matchID, std::move(replayData));
+		}
+	}
+}
+
+void NGMP_OnlineServicesManager::CacheMatchUploadBytes(CachedMatchUpload& upload, uint64_t matchID, std::vector<uint8_t> data)
+{
+	if (matchID == 0)
+	{
+		return;
+	}
+
+	std::scoped_lock<std::mutex> ssLock(m_ScreenshotMutex);
+	upload.dataMatchID = matchID;
+	upload.bytes = std::move(data);
+}
+
+void NGMP_OnlineServicesManager::CacheMatchUploadURI(CachedMatchUpload& upload, uint64_t matchID, std::string uri)
+{
+	if (matchID == 0)
+	{
+		return;
+	}
+
+	std::scoped_lock<std::mutex> ssLock(m_ScreenshotMutex);
+	upload.uriMatchID = matchID;
+	upload.signedURI = std::move(uri);
+}
+
+void NGMP_OnlineServicesManager::CacheScreenshotBytes_EndMatch(uint64_t matchID, std::vector<uint8_t> data)
+{
+	CacheMatchUploadBytes(m_cachedMatchEndUpload, matchID, std::move(data));
+}
+
+void NGMP_OnlineServicesManager::CacheReplayBytes(uint64_t matchID, std::vector<uint8_t> data)
+{
+	CacheMatchUploadBytes(m_cachedReplayUpload, matchID, std::move(data));
+}
+
+void NGMP_OnlineServicesManager::SetScreenshotS3URI_EndMatch(uint64_t matchID, std::string uri)
+{
+	CacheMatchUploadURI(m_cachedMatchEndUpload, matchID, std::move(uri));
+}
+
+void NGMP_OnlineServicesManager::SetScreenshotS3URI_Replay(uint64_t matchID, std::string uri)
+{
+	CacheMatchUploadURI(m_cachedReplayUpload, matchID, std::move(uri));
+}
+
+void NGMP_OnlineServicesManager::WaitForScreenshotThreads()
+{
+	std::scoped_lock<std::mutex> lock(m_mutexScreenshotThreads);
+	
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Waiting for %d screenshot threads to complete...", (int)m_vecScreenshotThreads.size());
+	
+	for (std::thread* pThread : m_vecScreenshotThreads)
+	{
+		if (pThread != nullptr && pThread->joinable())
+		{
+			pThread->join();
+			delete pThread;
+		}
+	}
+	
+	m_vecScreenshotThreads.clear();
+	
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] All screenshot threads completed");
+}
+
+#endif
+
+void NGMP_OnlineServicesManager::Shutdown()
+{
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] OnlineServicesManager shutdown initiated");
+
+	NetworkMeshLibrary::Shutdown();
+
+	// Shutdown and completely destroy WebSocket BEFORE cleaning up HTTPManager
+	// This is critical because WebSocket has curl handles that must be freed
+	// before curl_global_cleanup() is called by HTTPManager
+	if (m_pWebSocket)
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Shutting down WebSocket...");
+		m_pWebSocket->Shutdown();
+		
+		// Reset shared_ptr to fully destroy WebSocket and free all its curl resources
+		// This must happen before HTTPManager shutdown to avoid accessing freed curl state
+		m_pWebSocket.reset();
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] WebSocket shutdown complete");
+	}
+
+	// Now safe to shutdown HTTP manager which calls curl_global_cleanup()
+	if (m_pHTTPManager != nullptr)
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Shutting down HTTPManager...");
+		m_pHTTPManager->Shutdown();
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] HTTPManager shutdown complete");
+	}
+
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] OnlineServicesManager shutdown complete");
+}
+
+void NGMP_OnlineServicesManager::StartVersionCheck(std::function<void(bool bSuccess, bool bNeedsUpdate)> fnCallback)
+{
+	std::string strURI = NGMP_OnlineServicesManager::GetAPIEndpoint("VersionCheck");
+
+	// NOTE: Generals 'CRCs' are not true CRC's, its a custom algorithm. This is fine for lobby comparisons, but its not good for patch comparisons.
+	
+	// exe crc
+	Char filePath[_MAX_PATH];
+	GetModuleFileName(NULL, filePath, sizeof(filePath));
+	std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+	std::streamsize size = file.tellg();
+
+	if (!file.is_open() || size <= 0)
+	{
+		fnCallback(false, false);
+		return;
+	}
+
+	file.seekg(0, std::ios::beg);
+	std::vector<uint8_t> buffer(size);
+	file.read((char*)buffer.data(), size);
+	uint32_t realExeCRC = CRC_Memory((unsigned char*)buffer.data(), size);
+
+	nlohmann::json j;
+	j["execrc"] = realExeCRC;
+	j["ver"] = GENERALS_ONLINE_VERSION;
+	j["netver"] = GENERALS_ONLINE_NET_VERSION;
+	j["servicesver"] = GENERALS_ONLINE_SERVICE_VERSION;
+	std::string strPostData = j.dump();
+
+	std::map<std::string, std::string> mapHeaders;
+	NGMP_OnlineServicesManager::GetInstance()->GetHTTPManager()->SendPOSTRequest(strURI.c_str(), EIPProtocolVersion::DONT_CARE, mapHeaders, strPostData.c_str(), [=](bool bSuccess, int statusCode, std::string strBody, HTTPRequest* pReq)
+		{
+			NetworkLog(ELogVerbosity::LOG_RELEASE, "Version Check: Response code was %d and body was %s", statusCode, strBody.c_str());
+			try
+			{
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "VERSION CHECK: Up To Date");
+				nlohmann::json jsonObject = nlohmann::json::parse(strBody);
+				VersionCheckResponse authResp = jsonObject.get<VersionCheckResponse>();
+
+				if (authResp.result == EVersionCheckResponseResult::OK)
+				{
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "VERSION CHECK: Up To Date");
+					fnCallback(true, false);
+				}
+				else if (authResp.result == EVersionCheckResponseResult::NEEDS_UPDATE)
+				{
+					// Their patcher replaces their client. It never runs here: the bridge tells the player and stops.
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "VERSION CHECK: Needs Update");
+					fnCallback(true, true);
+				}
+				else
+				{
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "VERSION CHECK: Failed");
+					fnCallback(false, false);
+				}
+			}
+			catch (...)
+			{
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "VERSION CHECK: Failed to parse response");
+				fnCallback(false, false);
+			}
+		}, nullptr, -1);
+}
+
+#if 0 // upstream's patcher download and screenshot capture; not in this fork
+void NGMP_OnlineServicesManager::ContinueUpdate()
+{
+	if (m_vecFilesToDownload.size() > 0 && m_pHTTPManager != nullptr) // download next
+	{
+		std::string strDownloadPath = m_vecFilesToDownload.front();
+		m_vecFilesToDownload.pop();
+
+		uint32_t downloadSize = m_vecFilesSizes.front();
+		m_vecFilesSizes.pop();
+
+		if (TheDownloadManager != nullptr)
+		{
+			TheDownloadManager->SetFileName(AsciiString(strDownloadPath.c_str()));
+			TheDownloadManager->OnStatusUpdate(DOWNLOADSTATUS_DOWNLOADING);
+		}
+
+		// this isnt a super nice way of doing this, lets make a download manager
+		std::map<std::string, std::string> mapHeaders;
+		m_pHTTPManager->SendGETRequest(strDownloadPath.c_str(), EIPProtocolVersion::DONT_CARE, mapHeaders, [=](bool bSuccess, int statusCode, std::string strBody, HTTPRequest* pReq)
+			{
+				auto fnShowUpdateFailed = []()
+					{
+						// show msg
+						ClearGSMessageBoxes();
+						MessageBoxOk(UnicodeString(L"Update Failed"), UnicodeString(L"Could not download the updater. Press below to exit."), []()
+							{
+								TheGameEngine->setQuitting(TRUE);
+							});
+						ShellExecuteA(NULL, "open", "https://www.playgenerals.online/updatefailed", NULL, NULL, SW_SHOWNORMAL);
+					};
+
+				if (statusCode != 200)
+				{
+					fnShowUpdateFailed();
+				}
+				else
+				{
+					// set done
+					if (TheDownloadManager != nullptr)
+					{
+						TheDownloadManager->OnProgressUpdate(downloadSize, downloadSize, 0, 0);
+					}
+
+					m_vecFilesDownloaded.push_back(strDownloadPath);
+
+					std::string strPatchDir = GetPatcherDirectoryPath();
+					if (strPatchDir.empty())
+						return;
+
+					// save under the validated patcher name so LaunchPatcher runs this exact file
+					std::string strOutPath = std::format("{}/{}", strPatchDir, m_patcher_name);
+
+					std::vector<uint8_t> vecBuffer = pReq->GetBuffer();
+					size_t bufSize = pReq->GetBufferSize();
+
+					std::error_code ec;
+					if (!std::filesystem::exists(strPatchDir, ec))
+					{
+						std::filesystem::create_directory(strPatchDir, ec);
+					}
+
+					// a partially written updater must not be treated as downloaded
+					bool bSaved = false;
+					FILE* pFile = fopen(strOutPath.c_str(), "wb");
+					if (pFile != nullptr) {
+						bSaved = fwrite(vecBuffer.data(), sizeof(uint8_t), bufSize, pFile) == bufSize;
+						if (fclose(pFile) != 0)
+							bSaved = false;
+					}
+
+					if (!bSaved)
+					{
+						NetworkLog(ELogVerbosity::LOG_RELEASE, "Failed to save downloaded file: %s", strOutPath.c_str());
+						fnShowUpdateFailed();
+						return;
+					}
+
+					// call continue update again, thisll check if we're done or have more work to do
+					ContinueUpdate();
+
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "GOT FILE: %s", strDownloadPath.c_str());
+				}
+			},
+			[=](size_t bytesReceived)
+			{
+				//m_bytesReceivedSoFar += bytesReceived;
+
+				if (TheDownloadManager != nullptr)
+				{
+					TheDownloadManager->OnProgressUpdate(bytesReceived, downloadSize, -1, -1);
+				}
+			},
+			30 * 60 * 1000 // the 5s default aborts any real download
+			);
+	}
+	else if (m_vecFilesToDownload.size() == 0 && m_vecFilesDownloaded.size() > 0) // nothing left but we did download something
+	{
+		if (TheDownloadManager != nullptr)
+		{
+			TheDownloadManager->SetFileName("Update is complete!");
+			TheDownloadManager->OnStatusUpdate(DOWNLOADSTATUS_FINISHING);
+		}
+
+		std::scoped_lock<std::recursive_mutex> lock(m_updateCallbackMutex);
+		if (m_updateCompleteCallback != nullptr)
+		{
+			m_updateCompleteCallback();
+		}
+	}
+	
+}
+
+
+void NGMP_OnlineServicesManager::CaptureScreenshot(bool bResizeForTransmit, std::function<void(std::vector<unsigned char>)> cbOnDataAvailable)
+{
+	CHECK_MAIN_THREAD;
+
+	bool bSucceeded = false;
+
+	// no callback, nothing to do, early out
+	if (cbOnDataAvailable == nullptr)
+	{
+		return;
+	}
+
+	SurfaceClass* surface = DX8Wrapper::_Get_DX8_Back_Buffer();
+	LPDIRECT3DSURFACE8 surf = nullptr;
+	SurfaceClass* surfaceCopy = nullptr;
+	void* pBits = nullptr;
+	IDirect3DSurface8* pDXsurf = nullptr;
+
+	if (surface != nullptr)
+	{
+		SurfaceClass::SurfaceDescription surfaceDesc;
+		surface->Get_Description(surfaceDesc);
+		
+		pDXsurf = DX8Wrapper::_Create_DX8_Surface(surfaceDesc.Width, surfaceDesc.Height, surfaceDesc.Format);
+		
+		if (pDXsurf != nullptr)
+		{
+			surfaceCopy = NEW_REF(SurfaceClass, (pDXsurf));
+
+			if (surfaceCopy != nullptr)
+			{
+				DX8Wrapper::_Copy_DX8_Rects(surface->Peek_D3D_Surface(), NULL, 0, surfaceCopy->Peek_D3D_Surface(), NULL);
+
+				HRESULT hr;
+
+				D3DDISPLAYMODE mode;
+				if (SUCCEEDED(hr = DX8Wrapper::_Get_D3D_Device8()->GetDisplayMode(&mode)))
+				{
+					if (SUCCEEDED(hr = DX8Wrapper::_Get_D3D_Device8()->CreateImageSurface(mode.Width, mode.Height,
+						D3DFMT_A8R8G8B8, &surf)))
+					{
+						if (SUCCEEDED(hr = DX8Wrapper::_Get_D3D_Device8()->GetFrontBuffer(surf)))
+						{
+							// gather all our data
+							int pitch = 0;
+							pBits = surfaceCopy->Lock(&pitch);
+
+							if (pBits != nullptr)
+							{
+								int width = surfaceDesc.Width;
+								int height = surfaceDesc.Height;
+
+								// Copy pixel data into an owned buffer before spawning the thread so
+								// the surface can be safely unlocked on the main thread immediately after.
+								std::vector<uint8_t> pixelData(height * pitch);
+								memcpy(pixelData.data(), pBits, height * pitch);
+
+								// process on thread - track the thread so we can join it during shutdown
+								std::thread* pNewThread = new std::thread([cbOnDataAvailable, width, height, pixelData = std::move(pixelData), pitch, bResizeForTransmit]()
+									{
+										CHECK_WORKER_THREAD;
+
+										unsigned char* rgbData = new unsigned char[width * height * 3];
+
+										std::vector<unsigned char> vecData;
+
+										int finalWidth = width;
+										int finalHeight = height;
+
+										for (int y = 0; y < height; ++y) {
+											const uint8_t* row = pixelData.data() + y * pitch;
+											int rowOffset = y * width * 3;
+											int srcOffset = 0;
+											for (int x = 0; x < width; ++x, srcOffset += 4)
+											{
+												int dstIndex = rowOffset + x * 3;
+												rgbData[dstIndex + 0] = row[srcOffset + 2]; // R
+												rgbData[dstIndex + 1] = row[srcOffset + 1]; // G
+												rgbData[dstIndex + 2] = row[srcOffset + 0]; // B
+											}
+										}
+
+										// resize
+										unsigned char* pBufferToWrite = rgbData;
+										if (bResizeForTransmit)
+										{
+											ServiceConfig& serviceConf = NGMP_OnlineServicesManager::GetInstance()->GetServiceConfig();
+											int new_width = serviceConf.screenshot_width;
+											int new_height = serviceConf.screenshot_height;
+											int channels = 3;
+											unsigned char* resized = new unsigned char[new_width * new_height * channels];
+
+											stbir_resize_uint8(rgbData, width, height, 0,
+												resized, new_width, new_height, 0,
+												channels
+											);
+
+											// update data
+											finalWidth = new_width;
+											finalHeight = new_height;
+											pBufferToWrite = resized;
+										}
+										// end resize
+
+										stbi_write_jpg_to_func([](void* context, void* data, int size)
+											{
+												std::vector<unsigned char>* buffer = static_cast<std::vector<unsigned char>*>(context);
+												buffer->insert(buffer->end(), (unsigned char*)data, (unsigned char*)data + size);
+											}, &vecData, finalWidth, finalHeight, 3, pBufferToWrite, bResizeForTransmit ? 0 : 90);
+
+										// cleanup
+										if (bResizeForTransmit)
+										{
+											delete[] pBufferToWrite; // This is 'resized'
+											pBufferToWrite = nullptr;
+										}
+
+										delete[] rgbData;
+										rgbData = nullptr;
+
+										// invoke cb
+										if (cbOnDataAvailable != nullptr)
+										{
+											cbOnDataAvailable(vecData);
+										}
+									}
+								);
+
+							// Store the thread so we can join it during shutdown
+							// SECURITY FIX: Capture manager pointer before spawning thread to avoid TOCTOU race
+							NGMP_OnlineServicesManager* pMgr = NGMP_OnlineServicesManager::GetInstance();
+							if (pMgr != nullptr)
+							{
+								std::scoped_lock<std::mutex> lock(pMgr->m_mutexScreenshotThreads);
+								pMgr->m_vecScreenshotThreads.push_back(pNewThread);
+							}
+							else
+							{
+								// Manager was destroyed, cannot store thread. Thread will leak but won't crash.
+								NetworkLog(ELogVerbosity::LOG_RELEASE, "[Screenshot] Manager destroyed before thread could be registered");
+							}
+
+								bSucceeded = true;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// clean everything up, whether we succeeded or not
+
+	// release the image surface
+	if (surf != nullptr)
+	{
+		surf->Release();
+		//delete surf;
+		surf = nullptr;
+	}
+
+	// unlock
+	if (surface != nullptr)
+	{
+		surface->Unlock();
+		surface->Release_Ref();
+ 		surface = nullptr;
+	}
+
+	if (surfaceCopy != nullptr)
+	{
+		surfaceCopy->Unlock();
+		surfaceCopy->Release_Ref();
+ 		surfaceCopy = nullptr;
+	}
+
+	if (pDXsurf != nullptr)
+	{
+		pDXsurf->Release();
+		pDXsurf = nullptr;
+	}
+
+	// callback if failed
+	if (!bSucceeded)
+	{
+		cbOnDataAvailable(std::vector<unsigned char>());
+	}
+}
+
+void NGMP_OnlineServicesManager::CancelUpdate()
+{
+
+}
+
+void NGMP_OnlineServicesManager::LaunchPatcher()
+{
+	char GameDir[MAX_PATH + 1] = {};
+	::GetCurrentDirectoryA(MAX_PATH + 1u, GameDir);
+
+	// Extract the filename with extension from strDownloadPath
+	std::string strPatcherDir = GetPatcherDirectoryPath();
+	std::string strPatcherPath = std::format("{}/{}", strPatcherDir, m_patcher_name);
+
+	SHELLEXECUTEINFOA shellexInfo = { sizeof(shellexInfo) };
+	shellexInfo.lpVerb = "runas"; // admin
+	shellexInfo.lpFile = strPatcherPath.c_str();
+	shellexInfo.nShow = SW_SHOWNORMAL;
+	shellexInfo.lpDirectory = GameDir;
+	//shellexInfo.lpParameters = "/VERYSILENT";
+
+	bool bPatcherExeExists = std::filesystem::exists(strPatcherPath) && std::filesystem::is_regular_file(strPatcherPath);
+	bool bPatcherDirExists = std::filesystem::exists(strPatcherDir) && std::filesystem::is_directory(strPatcherDir);
+	bool bInvalidSize = true;
+
+	// TODO_NGMP: Replace with CRC ASAP
+
+	// does the file size match?
+	if (bPatcherExeExists && bPatcherDirExists)
+	{
+		std::uintmax_t file_size = std::filesystem::file_size(strPatcherPath);
+		if (file_size == m_patcher_size)
+		{
+			bInvalidSize = false;
+		}
+	}
+
+	if (!bInvalidSize && bPatcherExeExists && bPatcherDirExists && ShellExecuteExA(&shellexInfo))
+	{
+		// Exit the application  
+		TheGameEngine->setQuitting(TRUE);
+	}
+	else
+	{
+		// show msg
+		ClearGSMessageBoxes();
+		MessageBoxOk(UnicodeString(L"Update Failed"), UnicodeString(L"Could not run the updater. Press below to exit."), []()
+			{
+				TheGameEngine->setQuitting(TRUE);
+			});
+		ShellExecuteA(NULL, "open", "https://www.playgenerals.online/updatefailed", NULL, NULL, SW_SHOWNORMAL);
+	}
+}
+
+void NGMP_OnlineServicesManager::StartDownloadUpdate(std::function<void(void)> cb)
+{
+	TheDownloadManager->SetFileName("Connecting to update service...");
+	TheDownloadManager->OnStatusUpdate(DOWNLOADSTATUS_CONNECTING);
+
+	m_vecFilesToDownload = std::queue<std::string>();
+	m_vecFilesDownloaded.clear();
+
+	// patcher
+	m_vecFilesToDownload.emplace(m_patcher_path);
+	m_vecFilesSizes.emplace(m_patcher_size);
+	
+	{
+		std::scoped_lock<std::recursive_mutex> lock(m_updateCallbackMutex);
+		m_updateCompleteCallback = cb;
+	}
+
+	// cleanup current folder
+	std::string strPatchDir = GetPatcherDirectoryPath();
+	if (std::filesystem::exists(strPatchDir) && std::filesystem::is_directory(strPatchDir))
+	{
+		for (const auto& entry : std::filesystem::directory_iterator(strPatchDir))
+		{
+			std::filesystem::remove_all(entry.path());
+		}
+	}
+
+	// start for real
+	ContinueUpdate();
+
+
+}
+
+#endif
+
+void NGMP_OnlineServicesManager::OnLogin(ELoginResult loginResult, const char* szWSAddr, std::function<void(void)> fnWebsocketConnectedCallback)
+{
+	if (loginResult == ELoginResult::Success)
+	{
+		NGMP_OnlineServices_AuthInterface* pAuthInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_AuthInterface>();
+		if (pAuthInterface != nullptr)
+		{
+			NetworkMeshLibrary::EnsureInitialized(pAuthInterface->GetUserID());
+		}
+
+		// Tear down any previous session's websocket before replacing it.
+		if (m_pWebSocket != nullptr)
+		{
+			NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] OnLogin: shutting down previous websocket before re-login");
+			m_pWebSocket->Shutdown();
+			m_pWebSocket->m_fnWebsocketConnectedCallback = nullptr;
+			m_pWebSocket->ClearConnectivityCheckCallback();
+			m_pWebSocket.reset();
+		}
+
+		// connect to WS
+		m_pWebSocket = std::make_shared<WebSocket>();
+
+        m_pWebSocket->Connect(szWSAddr, false, [=]()
+            {
+                fnWebsocketConnectedCallback();
+            });
+	}
+}
+
+void NGMP_OnlineServicesManager::Init()
+{
+	g_MainThreadID = std::this_thread::get_id();
+
+	// initialize child classes, these need the platform handle
+	m_pAuthInterface = new NGMP_OnlineServices_AuthInterface();
+	m_pLobbyInterface = new NGMP_OnlineServices_LobbyInterface();
+	m_pRoomInterface = new NGMP_OnlineServices_RoomsInterface();
+
+	m_pHTTPManager = new HTTPManager();
+	m_pHTTPManager->Initialize();
+}
+
+
+
+void NGMP_OnlineServicesManager::Tick()
+{
+#if 0 // upstream's screenshot and replay upload; not in this fork
+	// screenshots
+	{
+		// send screenshot
+		std::scoped_lock<std::mutex> ssLock(m_ScreenshotMutex);
+
+
+		// screenshot types that already have a presigned URL
+		for (S3ScreenshotEntry screenshotEntry : m_vecGuardedSSData)
+		{
+			// NOTE: Screenshot types start and end of match are captures and cached in memory until the server tells us where to upload them, so we need to wait for the upload URI
+
+			if ((screenshotEntry.screenshotType == EScreenshotType::SCREENSHOT_TYPE_LOADSCREEN || screenshotEntry.screenshotType == EScreenshotType::SCREENSHOT_TYPE_SCORESCREEN) && screenshotEntry.strSignedURI.empty())
+			{
+				continue;
+			}
+			else // we have the data we need, send away
+			{
+                std::map<std::string, std::string> mapHeaders;
+                mapHeaders["Content-Type"] = "image/jpeg";
+                NGMP_OnlineServicesManager::GetInstance()->GetHTTPManager()->SendS3PUTRequest(screenshotEntry.strSignedURI.c_str(), EIPProtocolVersion::DONT_CARE, mapHeaders, screenshotEntry.vecBytes, [=](bool bSuccess, int statusCode, std::string strBody, HTTPRequest* pReq)
+                    {
+#if _DEBUG
+                        if (statusCode != 200)
+                        {
+                            __debugbreak();
+                        }
+#endif
+                        NetworkLog(ELogVerbosity::LOG_RELEASE, "Screenshot upload, result: %d", statusCode);
+                    }, nullptr, HTTP_UPLOAD_TIMEOUT);
+			}
+            
+		}
+
+		m_vecGuardedSSData.clear();
+
+		// screenshots and replays that are cached and awaiting S3 url, and now have said URL
+		if (!m_vecCachedScreenshotBytes_MatchStart.empty()) // we have data waiting
+		{
+			if (!m_strCachedScreenshot_MatchStart_S3URI.empty()) // and we have a URL
+			{
+				// queue it
+				S3ScreenshotEntry newEntry;
+				newEntry.screenshotType = EScreenshotType::SCREENSHOT_TYPE_LOADSCREEN;
+				newEntry.vecBytes = m_vecCachedScreenshotBytes_MatchStart;
+				newEntry.strSignedURI = m_strCachedScreenshot_MatchStart_S3URI;
+				m_vecGuardedSSData.push_back(newEntry);
+
+				// clear data
+                m_vecCachedScreenshotBytes_MatchStart = std::vector<uint8_t>();
+				m_strCachedScreenshot_MatchStart_S3URI = std::string();
+			}
+		}
+
+        if (!m_cachedMatchEndUpload.bytes.empty()) // we have data waiting
+        {
+            if (m_cachedMatchEndUpload.dataMatchID == m_cachedMatchEndUpload.uriMatchID && !m_cachedMatchEndUpload.signedURI.empty()) // and we have a matching URL
+            {
+                // queue it
+                S3ScreenshotEntry newEntry;
+                newEntry.screenshotType = EScreenshotType::SCREENSHOT_TYPE_SCORESCREEN;
+                newEntry.vecBytes = std::move(m_cachedMatchEndUpload.bytes);
+                newEntry.strSignedURI = std::move(m_cachedMatchEndUpload.signedURI);
+                m_vecGuardedSSData.push_back(std::move(newEntry));
+
+                // clear data
+                m_cachedMatchEndUpload = {};
+            }
+        }
+
+        if (!m_cachedReplayUpload.bytes.empty()) // we have data waiting
+        {
+            if (m_cachedReplayUpload.dataMatchID == m_cachedReplayUpload.uriMatchID && !m_cachedReplayUpload.signedURI.empty()) // and we have a matching URL
+            {
+				// do the upload
+                std::map<std::string, std::string> mapHeaders;
+                mapHeaders["Content-Type"] = "application/octet-stream";
+                NGMP_OnlineServicesManager::GetInstance()->GetHTTPManager()->SendS3PUTRequest(m_cachedReplayUpload.signedURI.c_str(), EIPProtocolVersion::DONT_CARE, mapHeaders, m_cachedReplayUpload.bytes, [=](bool bSuccess, int statusCode, std::string strBody, HTTPRequest* pReq)
+                    {
+#if _DEBUG
+                        if (statusCode != 200)
+                        {
+                            __debugbreak();
+                        }
+#endif
+
+                        NetworkLog(ELogVerbosity::LOG_RELEASE, "Replay upload, result: %d", statusCode);
+                    }, nullptr, HTTP_UPLOAD_TIMEOUT);
+
+                // clear data
+                m_cachedReplayUpload = {};
+            }
+        }
+	}
+#endif
+
+	if (m_pWebSocket != nullptr)
+	{
+		m_pWebSocket->Tick();
+	}
+
+	if (m_pHTTPManager != nullptr)
+	{
+		m_pHTTPManager->Tick();
+	}
+
+	if (m_pAuthInterface != nullptr)
+	{
+		m_pAuthInterface->Tick();
+	}
+
+	if (m_pRoomInterface != nullptr)
+	{
+		m_pRoomInterface->Tick();
+	}
+
+	if (m_pLobbyInterface != nullptr)
+	{
+		m_pLobbyInterface->Tick();
+	}
+
+	NetworkMeshLibrary::Tick();
+}
+
+#if 0 // upstream's crash reporting to its own Sentry; this fork has its own crash reports
+void NGMP_OnlineServicesManager::InitSentry()
+{
+	// Initialize libcurl global state here, before any plugins (e.g. EasyAntiCheat) are loaded.
+	// This ensures libcurl's internal mutexes are fully initialized before the EAC plugin
+	// attempts to use them, preventing an access violation in mtx_do_lock on null mutex state.
+	curl_global_init(CURL_GLOBAL_DEFAULT);
+
+#if !_DEBUG
+	// game paths are in the process code page, sentry's char* API wants UTF-8, so hand it the wide path
+	std::wstring strDumpPath;
+	const AsciiString& strUserDataPath = TheGlobalData->getPath_UserData();
+	const int wideLen = MultiByteToWideChar(CP_ACP, 0, strUserDataPath.str(), -1, nullptr, 0);
+	if (!strUserDataPath.isEmpty() && wideLen > 1)
+	{
+		std::wstring strUserDataPathW(wideLen - 1, L'\0');
+		MultiByteToWideChar(CP_ACP, 0, strUserDataPath.str(), -1, strUserDataPathW.data(), wideLen);
+		strDumpPath = strUserDataPathW + L"GeneralsOnlineCrashData\\";
+
+		std::error_code ec;
+		std::filesystem::create_directories(strDumpPath, ec);
+	}
+
+	sentry_options_t* options = sentry_options_new();
+
+	sentry_options_set_dsn(options, "https://61750bebd112d279bcc286d617819269@o4509316925554688.ingest.us.sentry.io/4509316927586304");
+	if (!strDumpPath.empty())
+	{
+		sentry_options_set_database_pathw(options, strDumpPath.c_str());
+	}
+
+	std::string strVersionStr = std::format("generalsonline-client@{}", GENERALS_ONLINE_VERSION_STRING);
+	sentry_options_set_release(options, strVersionStr.c_str());
+
+#if defined(USE_TEST_ENV)
+	sentry_options_set_environment(options, "test");
+#else
+	sentry_options_set_environment(options, "production");
+#endif
+
+	// local player info
+	int64_t userID = -1;
+	std::string strDisplayname = "Unknown";
+	NGMP_OnlineServices_AuthInterface* pAuthInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_AuthInterface>();
+	if (pAuthInterface != nullptr)
+	{
+		userID = pAuthInterface->GetUserID();
+		strDisplayname = pAuthInterface->GetDisplayName();
+	}
+	std::string strUserID = std::format("{}", userID);
+
+
+	sentry_value_t userinfoVal = sentry_value_new_object();
+	sentry_value_set_by_key(userinfoVal, "user_id", sentry_value_new_string(strUserID.c_str()));
+	sentry_value_set_by_key(userinfoVal, "user_displayname", sentry_value_new_string(strDisplayname.c_str()));
+	sentry_set_context("user_info", userinfoVal);
+
+	sentry_set_tag("user_id", strUserID.c_str());
+	sentry_set_tag("user_displayname", strDisplayname.c_str());
+
+#if _DEBUG
+	sentry_options_set_debug(options, 1);
+	sentry_options_set_logger_level(options, SENTRY_LEVEL_DEBUG);
+
+	sentry_options_set_logger(options,	[](sentry_level_t level, const char* message, va_list args, void* userdata)
+	{
+			char buffer[1024];
+			va_start(args, message);
+			vsnprintf(buffer, 1024, message, args);
+			buffer[1024 - 1] = 0;
+			va_end(args);
+
+			NetworkLog(ELogVerbosity::LOG_RELEASE, "[Sentry] %s", buffer);
+	}, nullptr);
+#endif
+
+	sentry_init(options);
+#endif
+}
+
+void NGMP_OnlineServicesManager::ShutdownSentry()
+{
+	sentry_close();
+}
+
+
+std::string NGMP_OnlineServicesManager::GetPatcherDirectoryPath()
+{
+	if (!TheGlobalData)
+		return {};
+	std::string strPatcherDirPath = std::format("{}/GeneralsOnlineData/Update/", TheGlobalData->getPath_UserData().str());
+	return strPatcherDirPath;
+}
+#endif
+
+void WebSocket::Shutdown()
+{
+	// Return immediately if already shut down to prevent double-shutdown
+	// (e.g., NGMP_OnlineServicesManager::Shutdown() calls this before releasing the shared_ptr,
+	// and then the shared_ptr destructor also calls Shutdown() via ~WebSocket())
+	if (m_bShuttingDown)
+	{
+		return;
+	}
+
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[WebSocket] Shutdown initiated");
+	
+	// Signal that we're shutting down
+	m_bShuttingDown = true;
+	
+	// Disconnect from the websocket (handles the connected case)
+	Disconnect();
+
+	// Clean up curl easy handle if still active (e.g., mid-connection, not yet fully connected)
+	// Disconnect() returns early when m_bConnected is false, so m_pCurlWS may still be alive here
+	if (m_pCurlWS != nullptr)
+	{
+		if (m_pMulti != nullptr)
+		{
+			curl_multi_remove_handle(m_pMulti, m_pCurlWS);
+		}
+		curl_easy_cleanup(m_pCurlWS);
+		m_pCurlWS = nullptr;
+	}
+
+	// Clean up multi handle
+	if (m_pMulti != nullptr)
+	{
+		curl_multi_cleanup(m_pMulti);
+		m_pMulti = nullptr;
+	}
+
+	// Free headers (may already be freed by Disconnect, but check anyway)
+	if (m_pHeaders != nullptr)
+	{
+		curl_slist_free_all(m_pHeaders);
+		m_pHeaders = nullptr;
+	}
+	
+	// Give CURL time to process the disconnect and cease operations
+	// This ensures any background I/O threads have completed before we return
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[WebSocket] Shutdown complete");
+}
+
+void WebSocket::SendData_ChangeLobbyPassword(UnicodeString& strNewPassword)
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::LOBBY_CHANGE_PASSWORD;
+	j["new_password"] = to_utf8(strNewPassword.str());
+	std::string strBody = j.dump();
+
+	Send(strBody.c_str());
+}
+
+
+void WebSocket::SendData_RemoveLobbyPassword()
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::LOBBY_REMOVE_PASSWORD;
+	std::string strBody = j.dump();
+
+	Send(strBody.c_str());
+}
+
+void WebSocket::SendData_ChangeName(UnicodeString& strNewName)
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::PLAYER_NAME_CHANGE;
+	j["name"] = to_utf8(strNewName.str());
+	std::string strBody = j.dump();
+
+	Send(strBody.c_str());
+}
+
+
+void WebSocket::SendData_FriendMessage(UnicodeString& msg, int64_t target_user_id)
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::SOCIAL_FRIEND_CHAT_MESSAGE_CLIENT_TO_SERVER;
+	j["target_user_id"] = target_user_id;
+	j["message"] = to_utf8(msg.str());
+	std::string strBody = j.dump();
+
+	Send(strBody.c_str());
+}
+
+void WebSocket::SendData_LobbyChatMessage(UnicodeString& msg, bool bIsAction, bool bIsAnnouncement, bool bShowAnnouncementToHost)
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::LOBBY_ROOM_CHAT_FROM_CLIENT;
+	j["message"] = to_utf8(msg.str());
+	j["action"] = bIsAction;
+	j["announcement"] = bIsAnnouncement;
+	j["show_announcement_to_host"] = bShowAnnouncementToHost;
+	std::string strBody = j.dump();
+
+	Send(strBody.c_str());
+}
+
+void WebSocket::SendData_LeaveNetworkRoom()
+{
+	SendData_JoinNetworkRoom(-1);
+}
+
+
+void WebSocket::SendData_RequestSignalling(int64_t targetUserID)
+{
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[SIGNAL] SEND REQUEST SIGNALING!");
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::NETWORK_CONNECTION_CLIENT_REQUEST_SIGNALLING;
+	j["target_user_id"] = targetUserID;
+	std::string strBody = j.dump();
+	Send(strBody.c_str());
+}
+
+void WebSocket::SendData_Signalling(int64_t targetUserID, std::vector<uint8_t> vecPayload)
+{
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[SIGNAL] SEND SIGNAL!");
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::NETWORK_SIGNAL;
+	j["target_user_id"] = targetUserID;
+	j["payload"] = vecPayload;
+	std::string strBody = j.dump();
+	Send(strBody.c_str());
+}
+
+void WebSocket::SendData_StartGame()
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::START_GAME;
+	std::string strBody = j.dump();
+	Send(strBody.c_str());
+}
+
+
+void WebSocket::SendData_ACMessage(int64_t targetUserID, std::vector<uint8_t> vecPayload)
+{
+    nlohmann::json j;
+    j["msg_id"] = EWebSocketMessageID::ANTICHEAT_MESSAGE;
+    j["target_user_id"] = targetUserID;
+    j["payload"] = vecPayload;
+    std::string strBody = j.dump();
+    Send(strBody.c_str());
+}
+
+void WebSocket::SendData_SubscribeRealtimeUpdates()
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::SOCIAL_SUBSCRIBE_REALTIME_UPDATES;
+	std::string strBody = j.dump();
+	Send(strBody.c_str());
+}
+
+
+void WebSocket::SendData_UnsubscribeRealtimeUpdates()
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::SOCIAL_UNSUBSCRIBE_REALTIME_UPDATES;
+	std::string strBody = j.dump();
+	Send(strBody.c_str());
+}
+
+void WebSocket::SendData_CountdownStarted()
+{
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::START_GAME_COUNTDOWN_STARTED;
+	std::string strBody = j.dump();
+	Send(strBody.c_str());
+}
+
+
+void WebSocket::SendData_StartFullMeshConnectivityCheck(std::function<void(bool, std::list<std::pair<int64_t, int64_t>>, std::string)> cbOnConnectivityCheckComplete)
+{
+	m_cbOnConnectivityCheckComplete = cbOnConnectivityCheckComplete;
+
+	NGMP_OnlineServices_LobbyInterface* pLobbyInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_LobbyInterface>();
+	m_connectivityCheckLobbyID = pLobbyInterface != nullptr ? pLobbyInterface->GetCurrentLobby().lobbyID : -1;
+
+	nlohmann::json j;
+	j["msg_id"] = EWebSocketMessageID::FULL_MESH_CONNECTIVITY_CHECK_HOST_REQUESTS_BEGIN;
+	std::string strBody = j.dump();
+	Send(strBody.c_str());
+}

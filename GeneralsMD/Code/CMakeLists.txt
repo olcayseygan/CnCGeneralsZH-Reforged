@@ -1095,11 +1095,40 @@ endif()
 
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
 # The link list below is left exactly as it is on purpose - B6 owns it.
+# The lobby service client (GameNetwork/GeneralsOnline) needs C++20 and two libraries the plain build does not
+# fetch, so it is a library of its own and comes only when Tools/online-libs.ps1 has been run.  Without them the
+# game builds as before and its Online button does what it did.
+file(GLOB_RECURSE ZH_ONLINE_SOURCES ${GE}/Source/GameNetwork/GeneralsOnline/*.cpp)
+list(REMOVE_ITEM GAMEENGINE_SOURCES ${ZH_ONLINE_SOURCES})
+
 add_library(gameengine STATIC ${ZH_NOT_YET_PORTABLE} ${GAMEENGINE_SOURCES})
 # GameMemory.cpp asks MSVC for the engine library by the build's name (#pragma comment(lib, "GameEngineDebug")
 # under _DEBUG), so a Debug build names it that way.  Release keeps gameengine.lib, which "GameEngine" finds.
 if(MSVC)
   set_target_properties(gameengine PROPERTIES OUTPUT_NAME_DEBUG GameEngineDebug)
+endif()
+
+set(ZH_ONLINE_LIBS ${LIBSRC}/online/vcpkg_installed/x64-windows-static)
+if(ZH_PLATFORM_WINDOWS AND EXISTS ${ZH_ONLINE_LIBS}/include/steam/steamnetworkingsockets.h AND CMAKE_GENERATOR_PLATFORM STREQUAL "x64")
+  message(STATUS "Online: lobby service client on (${ZH_ONLINE_LIBS})")
+  list(APPEND CMAKE_PREFIX_PATH ${ZH_ONLINE_LIBS})
+  set(OPENSSL_ROOT_DIR ${ZH_ONLINE_LIBS})
+  set(OPENSSL_USE_STATIC_LIBS ON)
+  set(Protobuf_USE_STATIC_LIBS ON)
+  find_package(CURL CONFIG REQUIRED)
+  find_package(GameNetworkingSockets CONFIG REQUIRED)
+  add_library(zhonline STATIC ${ZH_ONLINE_SOURCES})
+  set_target_properties(zhonline PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+  target_compile_options(zhonline PRIVATE /FIPreRTS.h)
+  target_include_directories(zhonline PRIVATE
+    $<TARGET_PROPERTY:gameengine,INTERFACE_INCLUDE_DIRECTORIES>
+    ${GE}/Include/GameNetwork/GeneralsOnline)
+  target_compile_definitions(zhonline PRIVATE
+    $<TARGET_PROPERTY:gameengine,INTERFACE_COMPILE_DEFINITIONS>
+    ZH_ONLINE GENERALS_ONLINE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR CURL_STATICLIB)
+  target_link_libraries(zhonline PRIVATE CURL::libcurl GameNetworkingSockets::GameNetworkingSockets_s)
+  target_compile_definitions(gameengine PRIVATE ZH_ONLINE)
+  target_link_libraries(gameengine PUBLIC zhonline)
 endif()
 
 # N1 (decision 5): the build fingerprint GlobalData.cpp folds into m_exeCRC in place of the executable's

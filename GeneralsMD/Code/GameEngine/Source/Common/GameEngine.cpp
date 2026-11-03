@@ -140,6 +140,7 @@
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/NetworkUtil.h"
 #include "GameNetwork/GameSpy/GameResultsThread.h"
+#include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 
 #include "Common/version.h"
 
@@ -3203,6 +3204,10 @@ void GameEngine::update( void )
 			// planOverlappedTick ran these two in front of the draw on a pass that may overlap
 			if (!s_passPlanned)
 				TheMessageStream->propagateMessages();
+
+#ifdef ZH_ONLINE
+			OnlineBridge_Tick();
+#endif
 
 			if (TheNetwork != NULL && !s_passPlanned)
 			{

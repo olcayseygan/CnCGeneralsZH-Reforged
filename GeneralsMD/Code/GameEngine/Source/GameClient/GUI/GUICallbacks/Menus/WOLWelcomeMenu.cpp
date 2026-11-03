@@ -69,6 +69,7 @@
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
+#include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
 #ifdef _INTERNAL
@@ -513,13 +514,30 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	buttonLadderID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonLadder" ) );
 	buttonLadder = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonLadderID );
 
-	if (TheFirewallHelper == NULL) {
-		TheFirewallHelper = createFirewallHelper();
+	Bool serviceOnline = FALSE;
+#ifdef ZH_ONLINE
+	serviceOnline = OnlineBridge_IsConfigured();
+#endif
+	if (serviceOnline)
+	{
+		// lobbies and custom games only, and the service's connections need no firewall detection
+		if (buttonQuickMatch)
+			buttonQuickMatch->winHide(TRUE);
+		if (buttonLadder)
+			buttonLadder->winHide(TRUE);
+		if (buttonBuddies)
+			buttonBuddies->winHide(TRUE);
 	}
-	if (TheFirewallHelper->detectFirewall() == TRUE) {
-		// don't need to detect firewall, already been done.
-		delete TheFirewallHelper;
-		TheFirewallHelper = NULL;
+	else
+	{
+		if (TheFirewallHelper == NULL) {
+			TheFirewallHelper = createFirewallHelper();
+		}
+		if (TheFirewallHelper->detectFirewall() == TRUE) {
+			// don't need to detect firewall, already been done.
+			delete TheFirewallHelper;
+			TheFirewallHelper = NULL;
+		}
 	}
 	/*
 

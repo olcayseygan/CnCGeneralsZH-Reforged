@@ -302,6 +302,13 @@ extern void PartitionManager_findSightMargins( const Real *heights, Int cellRadi
 enum { SIGHT_CELL_GROUND = 0x01, SIGHT_CELL_AIR = 0x02 };
 extern UnsignedByte PartitionManager_sightCellFlags( Bool groundRevealed, Int offsetX, Int offsetY, Int flatCellRadius );
 
+/** Open the one-cell holes and streaks a tree or a bump in the ground leaves in a hill-blocked
+	sighting, side cells a side: a hidden cell with SIGHT_GAP_SEEN_NEIGHBOURS of its eight neighbours
+	in sight comes into sight. Judged on the sighting as it was, so one opened hole never opens the
+	next, and the square's border is left alone, so the sight never grows past its edge. */
+enum { SIGHT_GAP_SEEN_NEIGHBOURS = 6 };
+extern void PartitionManager_closeSightGaps( UnsignedByte *revealedCells, Int side );
+
 //=====================================
 /**
 	We sometimes need to save whether or not an area was fogged or permanently revealed through a 

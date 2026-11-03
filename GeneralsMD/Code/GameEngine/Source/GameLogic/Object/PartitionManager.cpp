@@ -4529,6 +4529,31 @@ UnsignedByte PartitionManager_sightCellFlags( Bool groundRevealed, Int offsetX, 
 }
 
 //-----------------------------------------------------------------------------
+void PartitionManager_closeSightGaps( UnsignedByte *revealedCells, Int side )
+{
+	static std::vector<UnsignedByte> before;
+	before.assign( revealedCells, revealedCells + side * side );
+
+	for( Int y = 1; y < side - 1; ++y )
+	{
+		for( Int x = 1; x < side - 1; ++x )
+		{
+			if( before[ y * side + x ] & SIGHT_CELL_GROUND )
+				continue;
+
+			Int seen = 0;
+			for( Int neighbourY = y - 1; neighbourY <= y + 1; ++neighbourY )
+				for( Int neighbourX = x - 1; neighbourX <= x + 1; ++neighbourX )
+					if( before[ neighbourY * side + neighbourX ] & SIGHT_CELL_GROUND )
+						++seen;
+
+			if( seen >= SIGHT_GAP_SEEN_NEIGHBOURS )
+				revealedCells[ y * side + x ] |= SIGHT_CELL_GROUND;
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
 static Int sightCellRadius( Real radius )
 {
 	return max( ThePartitionManager->worldToCellDist( radius ), 1 );
@@ -4716,6 +4741,9 @@ void PartitionManager::doBlockedShroudReveal( SightingInfo *sighting, const Obje
 		}
 		sighting->m_revealedCells[ cell ] = PartitionManager_sightCellFlags( revealed, offsetX, offsetY, flatCellRadius );
 	}
+
+	// the cells outside the circle are recorded hidden and never applied, so the circle's edge stays put
+	PartitionManager_closeSightGaps( &sighting->m_revealedCells[0], side );
 
 	applyRecordedReveal( sighting, TRUE );
 }

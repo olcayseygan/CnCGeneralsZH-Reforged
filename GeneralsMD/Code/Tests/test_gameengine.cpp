@@ -10275,6 +10275,42 @@ TEST(a_hill_hides_the_ground_behind_it_not_the_aircraft_over_it)
 	CHECK( PartitionManager_sightCellFlags( TRUE, 6, 0, 4 ) == SIGHT_CELL_GROUND );
 }
 
+/** A tree or a bump in the ground hid single cells and one-cell streaks inside a unit's sight, and
+	 the fog came out dotted. A hidden cell with nearly all of its neighbours in sight is in sight;
+	 a strip two cells wide, and the edge of the sight itself, stay as they were. */
+TEST(sight_has_no_one_cell_holes)
+{
+	const Int side = 7;
+	UnsignedByte cells[ side * side ];
+
+	for( Int cell = 0; cell < side * side; ++cell )
+		cells[ cell ] = SIGHT_CELL_GROUND;
+	cells[ 2 * side + 2 ] = 0;
+	for( Int x = 0; x < side; ++x )
+		cells[ 4 * side + x ] = 0;
+	PartitionManager_closeSightGaps( cells, side );
+	CHECK( cells[ 2 * side + 2 ] == SIGHT_CELL_GROUND );
+	CHECK( cells[ 4 * side + 3 ] == SIGHT_CELL_GROUND );
+	CHECK( cells[ 4 * side + 0 ] == 0 );
+
+	for( Int cell = 0; cell < side * side; ++cell )
+		cells[ cell ] = SIGHT_CELL_GROUND;
+	for( Int x = 0; x < side; ++x )
+	{
+		cells[ 3 * side + x ] = 0;
+		cells[ 4 * side + x ] = 0;
+	}
+	PartitionManager_closeSightGaps( cells, side );
+	CHECK( cells[ 3 * side + 3 ] == 0 );
+	CHECK( cells[ 4 * side + 3 ] == 0 );
+
+	// a shadow's corner keeps its shape
+	for( Int cell = 0; cell < side * side; ++cell )
+		cells[ cell ] = ( cell / side >= 3 && cell % side >= 3 ) ? 0 : SIGHT_CELL_GROUND;
+	PartitionManager_closeSightGaps( cells, side );
+	CHECK( cells[ 3 * side + 3 ] == 0 );
+}
+
 /** Since the plan reveals nothing, the fog it was placed in would swallow it - and there would be
 	 nothing left on screen to click on and cancel.  Your own plan is drawn through the fog; anything
 	 else fogged, including an enemy's, is still hidden. */

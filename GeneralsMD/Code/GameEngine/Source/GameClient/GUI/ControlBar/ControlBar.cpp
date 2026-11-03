@@ -1445,6 +1445,7 @@ ControlBar::ControlBar( void )
 	m_trayLaidOutFor = NULL;
 	m_trayFramePlaced = FALSE;
 	m_radarFitWidth = m_radarFitHeight = 0.0f;
+	m_radarColumnShift = 0;
 	for( Int fit = 0; fit < RADAR_FIT_COUNT; fit++ )
 		m_radarFitBox[ fit ].lo.x = m_radarFitBox[ fit ].lo.y = m_radarFitBox[ fit ].hi.x = m_radarFitBox[ fit ].hi.y = 0;
 
@@ -2317,6 +2318,31 @@ void ControlBar::layoutPanels( void )
 
 }  // end layoutPanels
 
+/// every place layoutPanels remembers for a window and everything under it, moved across by dx
+static void shiftPlaces( GameWindow *window, Int dx )
+{
+	ControlBarPanelPlacementMap::iterator place = theControlBarPlacement.find( window );
+	if( place != theControlBarPlacement.end() )
+		place->second.placedX += dx;
+	for( GameWindow *child = window->winGetChild(); child; child = child->winGetNext() )
+		shiftPlaces( child, dx );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A window and everything under it moved across by dx, with their remembered places, so the next
+	* layout reads them as where it left them and starts from their authored rectangles again.
+	* placeWindowAt keeps the children where they stood; this takes them along. */
+//-------------------------------------------------------------------------------------------------
+static void shiftWindowTree( GameWindow *window, Int dx )
+{
+	if( dx == 0 )
+		return;
+	Int x = 0, y = 0;
+	window->winGetPosition( &x, &y );
+	window->winSetPosition( x + dx, y );
+	shiftPlaces( window, dx );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** layoutPanels stands the radar in its square box.  A scheme with a radar frame then shrinks the
 	* window to the map's own shape inside that box, pinned to the box's bottom left where the bar
@@ -2334,11 +2360,19 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 {
 	static NameKeyType radarID = NAMEKEY( "ControlBar.wnd:LeftHUD" );
 	static NameKeyType blockID = NAMEKEY( "ControlBar.wnd:ControlBarProBlockInputRadar" );
+	static NameKeyType listID = NAMEKEY( "ControlBar.wnd:ObserverPlayerListWindow" );
+	static NameKeyType infoID = NAMEKEY( "ControlBar.wnd:ObserverPlayerInfoWindow" );
+	static NameKeyType optionsID = NAMEKEY( "ControlBar.wnd:ButtonOptions" );
+	static NameKeyType chatID = NAMEKEY( "ControlBar.wnd:PopupCommunicator" );
 	GameWindow *const windows[ RADAR_FIT_COUNT ] =
 	{
 		TheWindowManager->winGetWindowFromId( NULL, radarID ),
 		TheWindowManager->winGetWindowFromId( NULL, blockID ),
 		m_radarAttackGlowWindow,
+		TheWindowManager->winGetWindowFromId( NULL, listID ),
+		TheWindowManager->winGetWindowFromId( NULL, infoID ),
+		TheWindowManager->winGetWindowFromId( NULL, optionsID ),
+		TheWindowManager->winGetWindowFromId( NULL, chatID ),
 	};
 	GameWindow *parent = m_contextParent[ CP_MASTER ];
 	if( parent == NULL || windows[ RADAR_FIT_RADAR ] == NULL )
@@ -2348,6 +2382,8 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 
 	if( fromLayout )
 	{
+		// the layout has just put the column back where the square map has it
+		m_radarColumnShift = 0;
 		for( Int i = 0; i < RADAR_FIT_COUNT; i++ )
 		{
 			if( windows[ i ] == NULL )
@@ -2409,6 +2445,27 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 	lamp.lo.y += dy;
 	lamp.hi.y += dy;
 	placeWindowAt( windows[ RADAR_FIT_LAMP ], lamp );
+
+	//
+	// The observer's column stands against the frame's right edge, so a tall map's narrower frame
+	// takes the column, its plate (drawPainting) and everything on it left with it.  Its height is
+	// the square's and it ends at the screen's foot, so a wide map's lower frame leaves it standing:
+	// moved down it would run off the screen.  A side's Options and Chat stand in the middle plate
+	// and stay.
+	//
+	if( m_controlBarSchemeManager->getCurrentSide().compareNoCase( "Observer" ) != 0 )
+		return;
+	IRegion2D squareOuter;
+	ControlBarSchemeManager::radarFrameRect( frame, square, &squareOuter );
+	m_radarColumnShift = outer.hi.x - squareOuter.hi.x;
+	for( Int i = RADAR_FIT_COLUMN_FIRST; i < RADAR_FIT_COUNT; i++ )
+	{
+		if( windows[ i ] == NULL )
+			continue;
+		ICoord2D at;
+		windows[ i ]->winGetScreenPosition( &at.x, &at.y );
+		shiftWindowTree( windows[ i ], box[ i ].lo.x + m_radarColumnShift - at.x );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

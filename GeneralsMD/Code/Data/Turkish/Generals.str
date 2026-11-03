@@ -15681,6 +15681,66 @@ GUI:HudStatArmy
 "Ordu değeri"
 END
 
+GUI:HudNetWorth
+"Net değer"
+END
+
+GUI:HudStatCash
+"Nakit"
+END
+
+GUI:HudStatIncome
+"Dakikalık gelir"
+END
+
+GUI:HudStatKills
+"Öldürme / kayıp"
+END
+
+GUI:HudStatRank
+"General rütbesi"
+END
+
+GUI:HudStatPower
+"Elektrik"
+END
+
+GUI:HudStatIncomeValue
+"%ls/dk"
+END
+
+GUI:HudStatRankValue
+"Rütbe %d"
+END
+
+GUI:HudWatch
+"İzle"
+END
+
+GUI:HudCameraFree
+"Serbest"
+END
+
+GUI:HudCameraDirector
+"Yönetmen"
+END
+
+GUI:HudCameraPlayer
+"Oyuncu"
+END
+
+GUI:HudFog
+"Sis"
+END
+
+GUI:HudArmies
+"Ordular"
+END
+
+GUI:HudStandings
+"Sıralama"
+END
+
 GUI:CheatPanelTitle
 "Hileler"
 END

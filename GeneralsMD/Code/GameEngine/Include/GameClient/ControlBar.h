@@ -1209,8 +1209,16 @@ protected:
 
 	void fitRadarToMap( Bool fromLayout );				///< the radar window, its frame and its blocker take the map's shape; see layoutPanels
 	Real m_radarFitWidth, m_radarFitHeight;				///< the map extent fitRadarToMap last fitted to
-	enum { RADAR_FIT_RADAR, RADAR_FIT_BLOCK, RADAR_FIT_LAMP, RADAR_FIT_COUNT };
+	/// the observer's player column (its list, the watched player's panel, Options and Chat) stands
+	/// against the frame's right edge, so it is fitted with the radar
+	enum { RADAR_FIT_RADAR, RADAR_FIT_BLOCK, RADAR_FIT_LAMP, RADAR_FIT_LIST, RADAR_FIT_INFO, RADAR_FIT_OPTIONS,
+				 RADAR_FIT_CHAT, RADAR_FIT_COUNT, RADAR_FIT_COLUMN_FIRST = RADAR_FIT_LIST };
 	IRegion2D m_radarFitBox[ RADAR_FIT_COUNT ];		///< where layoutPanels put each, against the bar's frame
+	Int m_radarColumnShift;												///< how far the column stands left of where the square map has it
+public:
+	/// drawPainting moves the left piece of the painting, the column's plate, by as much
+	Int getRadarColumnShift( void ) const { return m_radarColumnShift; }
+protected:
 	void showIdleButtons( Bool show );						///< the idle worker, infantry, vehicle and aircraft buttons, hidden while watching
 
 	/** Where a key lands: the command slot at grid place `place`, or SLOT_NOTHING; and the tray slot

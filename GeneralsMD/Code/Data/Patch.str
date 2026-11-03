@@ -1234,6 +1234,77 @@ GUI:HudStatArmy
 "Army value"
 END
 
+// The spectator's rack: the stats its dial ranks every player by, the first also the broadcast's
+// list of every player's cash plus what everything he has standing cost
+GUI:HudNetWorth
+"Net worth"
+END
+
+GUI:HudStatCash
+"Cash"
+END
+
+GUI:HudStatIncome
+"Income per minute"
+END
+
+GUI:HudStatKills
+"Kills / losses"
+END
+
+GUI:HudStatRank
+"General's rank"
+END
+
+GUI:HudStatPower
+"Power"
+END
+
+// a row's number under the income stat, "$1,840/min"
+GUI:HudStatIncomeValue
+"%ls/min"
+END
+
+// a row's number under the rank stat
+GUI:HudStatRankValue
+"Rank %d"
+END
+
+// the rack's top drawer: the camera lever, the fog and the armies drawer
+GUI:HudWatch
+"Watch"
+END
+
+// the camera's own again
+GUI:HudCameraFree
+"Free"
+END
+
+// the camera goes to the biggest fight on the map by itself
+GUI:HudCameraDirector
+"Director"
+END
+
+// the camera shows what the followed player's own screen shows
+GUI:HudCameraPlayer
+"Player"
+END
+
+// the followed player's fog of war, so the spectator sees only what he sees
+GUI:HudFog
+"Fog"
+END
+
+// each player's units, most first, with how many he has
+GUI:HudArmies
+"Armies"
+END
+
+// the rack's drawer of every player ranked by the dial's stat
+GUI:HudStandings
+"Standings"
+END
+
 // The cheat panel the console's "trainer" command opens.
 GUI:CheatPanelTitle
 "Cheats"

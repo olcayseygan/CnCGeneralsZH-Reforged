@@ -156,7 +156,8 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 		case GameMessage::MSG_RAW_MOUSE_RIGHT_DOUBLE_CLICK:
 		{
 			m_cellRightClickTaken = FALSE;
-			if( TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TRUE ) )
+			if( TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, FALSE )
+					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TRUE ) )
 			{
 				m_cellRightClickTaken = TRUE;
 				return DESTROY_MESSAGE;
@@ -173,6 +174,9 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 		//
 		case GameMessage::MSG_RAW_MOUSE_WHEEL:
 		{
+			// over the spectator's rack the wheel turns the stat dial and never zooms
+			if( TheInGameUI->handleSpectatorRackWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
+				return DESTROY_MESSAGE;
 			if( TheInGameUI->getPendingPlaceType() && TheInGameUI->isPlacementAnchored() &&
 					TheInGameUI->placesRow() )
 			{
@@ -203,7 +207,8 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 			// the production and superweapon cells lie over the world, not in a window: take a press on
 			// one before placement, and long before selection makes a move order of it.  Ctrl cancels
 			m_cellClickTaken = FALSE;
-			if( TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TheKeyboard->isCtrl() ) )
+			if( TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, TRUE )
+					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TheKeyboard->isCtrl() ) )
 			{
 				m_cellClickTaken = TRUE;
 				return DESTROY_MESSAGE;

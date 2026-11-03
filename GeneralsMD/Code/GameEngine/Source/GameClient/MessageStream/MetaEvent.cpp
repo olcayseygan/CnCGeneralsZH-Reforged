@@ -488,6 +488,9 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 		MappableKeyType key = (MappableKeyType)msg->getArgument(0)->integer;
 		Int keyState = msg->getArgument(1)->integer;
 
+		if( TheInGameUI && TheInGameUI->pickSpectatorStatKey( key, keyState ) )
+			return DESTROY_MESSAGE;
+
 		// for our purposes here, we don't care to distinguish between right and left keys,
 		// so just fudge a little to simplify things.
 		Int newModState = 0;

@@ -27,7 +27,9 @@ Data/Art/Textures/ReforgedHudGlaCommandBarWide.dds
 Data/Art/Textures/ReforgedHudGlaPowers.dds
 Data/Art/Textures/ReforgedHudHelpbox.dds
 Data/Art/Textures/ReforgedHudObsCommandBar.dds
+Data/Art/Textures/ReforgedHudObsPieces.dds
 Data/Art/Textures/ReforgedHudObsPlayerWindow.dds
+Data/Art/Textures/ReforgedHudObsSpec.dds
 Data/Art/Textures/ReforgedHudTurkiyeCommandBar.dds
 Data/Art/Textures/ReforgedHudTurkiyeCommandBarWide.dds
 Data/Art/Textures/ReforgedHudTurkiyePowers.dds
@@ -295,7 +297,9 @@ Data/INI/MappedImages/HandCreated/ReforgedHudGlaCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudHelpbox.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudObsPieces.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudObsPlayerWindow.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudObsSpec.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyePowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini

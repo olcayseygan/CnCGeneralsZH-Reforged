@@ -264,6 +264,13 @@ public:
 
 	Image *m_powerPurchaseImage;
 
+	/// PowerPurchaseCloseButton*: the promotion window's close button (GeneralsExpPoints.wnd:ButtonExit)
+	/// in the side's own art; a scheme without them leaves the .wnd's images on the button
+	Image *m_powerPurchaseCloseButtonEnable;
+	Image *m_powerPurchaseCloseButtonHightlited;
+	Image *m_powerPurchaseCloseButtonPushed;
+	Image *m_powerPurchaseCloseButtonDisabled;
+
 	typedef std::list< ControlBarSchemeImage* > ControlBarSchemeImageList;
 	ControlBarSchemeImageList m_layer[MAX_CONTROL_BAR_SCHEME_IMAGE_LAYERS];
 
@@ -350,5 +357,9 @@ private:
 //-----------------------------------------------------------------------------
 /// a mod's faction, which gets our American power tray (owner's call)
 Bool ControlBarIsModFaction( const PlayerTemplate *pt );
+/// the side's emblem the observer's column, the rack and the lobbies show: SSObserver and the template's
+/// name less a leading "Faction" and a trailing "General" (SSObserverAmericaLaser), else
+/// SSObserver<USA|China|GLA|Turkiye> for the country its base side or side names, else its EnabledImage
+const Image *ControlBarSideEmblem( const PlayerTemplate *pt );
 
 #endif // __CONTROL_BAR_SCHEME_H_

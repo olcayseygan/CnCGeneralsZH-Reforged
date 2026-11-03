@@ -1040,6 +1040,16 @@ public:  // ********************************************************************
 	/// items off that building's queue; one of your own superweapons takes the camera to it
 	Bool handleHudCellClick( const ICoord2D *mouse, Bool cancel );
 
+	/// A press on the spectator's rack, at `mouse` in screen pixels: TRUE when the rack is under it,
+	/// whatever button it was; only `act`, the left button, works its controls
+	Bool handleSpectatorRackClick( const ICoord2D *mouse, Bool act );
+	/// The wheel over the rack: TRUE when the rack is under it; over the dial it steps the stat
+	Bool handleSpectatorRackWheel( const ICoord2D *mouse, Real notches );
+	/// a command bar key while watching: TRUE when it picked a stat, Q W E R T Y A as shipped
+	Bool pickSpectatorStat( Int commandSlot );
+	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's dial took it
+	Bool pickSpectatorStatKey( Int key, Int keyState );
+
 	/// Ingame video playback 
 	virtual void playMovie( const AsciiString& movieName );
 	virtual void stopMovie( void );
@@ -1498,6 +1508,33 @@ protected:
 	IRegion2D										m_superweaponTab;
 	UnsignedInt									m_hudCellPass;						///< client passes, counted by update()
 	UnsignedInt									m_hudCellDrawnPass;				///< m_hudCellPass when postDraw last laid the cells out
+
+	//
+	// The spectator's rack (drawSpectatorRack), drawers hung off the right edge under the superweapon
+	// tray while the local player watches: the camera, the fog and the armies drawer, then every
+	// player ranked by the stat on the dial.  Where the last draw put it, for the clicks.
+	//
+	enum { RACK_ROWS = 8, RACK_ARMY_UNITS = 6 };
+	enum
+	{
+		RACK_TEXT_WATCH, RACK_TEXT_STANDINGS, RACK_TEXT_STOP, RACK_TEXT_FOG = RACK_TEXT_STOP + 3, RACK_TEXT_ARMIES,
+		RACK_TEXT_KEY, RACK_TEXT_STAT = RACK_TEXT_KEY + 7, RACK_TEXT_STAT_KEY, RACK_TEXT_NAME,
+		RACK_TEXT_VALUE = RACK_TEXT_NAME + RACK_ROWS, RACK_TEXT_UNITS = RACK_TEXT_VALUE + RACK_ROWS,
+		RACK_TEXT_COUNT = RACK_TEXT_UNITS + RACK_ROWS * RACK_ARMY_UNITS
+	};
+	void drawSpectatorRack( Int plateTop );	///< plateTop: the watch drawer's plate, 8 under the superweapon tray's foot
+	/// the kept string `slot` holding text in the bold face at px pixels at 1080, a pixel smaller at a time
+	/// down to 9 until it is no wider than room (0: any width)
+	DisplayString *rackText( Int slot, const UnicodeString &text, Int px, Int room );
+	Bool												m_rackShown;							///< the last postDraw drew it
+	Int													m_rackX, m_rackY;					///< its pieces' left and the watch drawer's top
+	Int													m_rackRows;
+	Int													m_rackRowPlayer[ RACK_ROWS ];	///< the player index on each row, top down
+	Int													m_rackStat;								///< SPECTATOR_STATS index on the dial
+	Bool												m_rackArmies;							///< the armies drawer is out
+	DisplayString *							m_rackText[ RACK_TEXT_COUNT ];
+	Int													m_rackTextPx[ RACK_TEXT_COUNT ];		///< the size and room each was laid out for
+	Int													m_rackTextRoom[ RACK_TEXT_COUNT ];
 
 	Coord2D											m_superweaponPosition;
 	Real												m_superweaponFlashDuration;

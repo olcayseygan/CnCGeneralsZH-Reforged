@@ -884,7 +884,7 @@ GUI:OrderLines
 END
 
 TOOLTIP:OrderLines
-"A line from each selected unit to where it is going, and on through every point it has queued. Off, the markers on those points stay."
+"A line from each selected unit to where it is going, and on through every point it has queued. Off, a single order draws no line and no marker and a click leaves no ring on the ground; a queued route keeps its line and markers."
 END
 
 GUI:AircraftAltitudeLine

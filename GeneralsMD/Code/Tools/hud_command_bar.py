@@ -29,10 +29,11 @@ console (anodised graphite, every corner a radius, grilles, screws, the emblem's
 lamp): its bar, the watched player's panel, a sheet of pieces (toolbar buttons, the rows' rings, the
 radar frame's nine, every side's and general's emblem) and the spectator's rack (ReforgedHudObsSpec).
 
-    python Tools/hud_command_bar.py --out DIR [--side all|Observer|America|China|Gla|Turkiye] [--dds TEXTURES]
-        writes DIR/ReforgedHud<Side>CommandBar.png, ...CommandBarWide.png and ...Powers.png for each side
-        and the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces and ...ObsSpec, and
-        with --dds the same as DXT5 .dds into TEXTURES (Data/Art/Textures)
+    python Tools/hud_command_bar.py --out DIR [--side all|Observer|Lobby|America|China|Gla|Turkiye] [--dds TEXTURES]
+        writes DIR/ReforgedHud<Side>CommandBar.png, ...CommandBarWide.png and ...Powers.png for each side,
+        the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces and ...ObsSpec, and the
+        front end's ReforgedFactionEmblems (Lobby), and with --dds the same as DXT5 .dds into TEXTURES
+        (Data/Art/Textures)
 """
 import argparse
 import os
@@ -684,9 +685,9 @@ BARS = {"machined": bar_machined, "terraced": bar_terraced, "scavenged": bar_sca
 
 # ---------------------------------------------------------------------------------------------- the button sheet
 
-def read_mapped(side_name, sheet="Powers"):
-    """Every MappedImage of ReforgedHud<side><sheet>.ini: name -> (x0, y0, x1, y1)."""
-    path = os.path.join(HERE, "..", "Data", "INI", "MappedImages", "HandCreated", "ReforgedHud%s%s.ini" % (side_name, sheet))
+def read_mapped(side_name, sheet="Powers", name=None):
+    """Every MappedImage of ReforgedHud<side><sheet>.ini (or of <name>.ini): name -> (x0, y0, x1, y1)."""
+    path = os.path.join(HERE, "..", "Data", "INI", "MappedImages", "HandCreated", (name or "ReforgedHud%s%s" % (side_name, sheet)) + ".ini")
     text = open(path, encoding="latin-1").read()
     out = {}
     for m in re.finditer(r"MappedImage\s+(\S+).*?Left:(\d+)\s+Top:(\d+)\s+Right:(\d+)\s+Bottom:(\d+)", text, re.S):
@@ -1748,33 +1749,39 @@ def emblem_body(build, box):
     return shape(build, x0, y0, x1, y1, {"machined": 6, "terraced": 3, "faceted": 4}[build])
 
 
-def emblem_badge(side_name, glyph):
-    """Variant A, 45x30: the side's plate lit like the bar, its mark on an accent field and the general's
-    glyph raised in a sunk well beside it (a side alone has the mark large across the field)."""
+def emblem_badge(side_name, glyph, k=1.0):
+    """Variant A, 45x30 times k: the side's plate lit like the bar, its mark on an accent field and the
+    general's glyph raised in a sunk well beside it (a side alone has the mark large across the field).
+    Drawn in the 45x30 badge's coordinates and scaled whole, so the score screen's 60x40 (k 4/3) is the
+    same picture."""
     side = SIDES[side_name]
     b = side["build"]
-    W, H = SIDE_EMBLEM
+    W, H = round(SIDE_EMBLEM[0] * k), round(SIDE_EMBLEM[1] * k)
     pad = 8
     p = Painter(W + 2 * pad, H + 2 * pad)
 
     def o(polys):
-        return [[(x + pad, y + pad) for x, y in q] for q in polys]
+        return [[(x * k + pad, y * k + pad) for x, y in q] for q in polys]
 
-    def raise_mask(m, height, bevel, material):
+    def at(x, y):
+        return x * k + pad, y * k + pad
+
+    def raise_mask(parts, box, height, bevel, material):
+        m = glyph_mask(parts, W + 2 * pad, H + 2 * pad, (*at(*box[:2]), *at(*box[2:])), SS)
         d = ndimage.distance_transform_edt(np.pad(m, 1))[1:-1, 1:-1] / SS
-        p.h += np.clip(d / bevel, 0, 1) * m * height
+        p.h += np.clip(d / (bevel * k), 0, 1) * m * height * k
         p.mat[m] = material
 
     body = emblem_body(b, (1, 1, 44, 29))
-    sl, m, _ = p.frame(o([body]), 3.0, b, DARK, scale=0.35 if b != "scavenged" else 1.0)
+    sl, m, _ = p.frame(o([body]), 3.0 * k, b, DARK, scale=(0.35 if b != "scavenged" else 1.0) * k)
     p.limit[sl] |= m
     if b == "machined":                                 # two tiers: the satin frame on the dark flange
-        p.frame(o([shape(b, 2.6, 2.6, 42.4, 27.4, 4.8)]), 4.4, b, STEEL, scale=0.4)
+        p.frame(o([shape(b, 2.6, 2.6, 42.4, 27.4, 4.8)]), 4.4 * k, b, STEEL, scale=0.4 * k)
     elif b == "scavenged":                              # a second scrap laid over the top left, welded
-        p.frame(o([sheet(2.5, 2.5, 20, 15, -5)]), 3.8, b, STEEL)
-        p.frame(o([sheet(14, 3, 43, 27.5, 1.5)]), 3.6, b, STEEL)
+        p.frame(o([sheet(2.5, 2.5, 20, 15, -5)]), 3.8 * k, b, STEEL, scale=k)
+        p.frame(o([sheet(14, 3, 43, 27.5, 1.5)]), 3.6 * k, b, STEEL, scale=k)
     elif b == "faceted":
-        p.frame(o([shape(b, 2.4, 2.4, 42.6, 27.6, 3.2)]), 4.4, b, STEEL, scale=0.25)
+        p.frame(o([shape(b, 2.4, 2.4, 42.6, 27.6, 3.2)]), 4.4 * k, b, STEEL, scale=0.25 * k)
     else:
         p.mat[sl][m] = STEEL
     field_mat, mark_mat = (ACCENT2, ACCENT) if b == "faceted" else (ACCENT, PAPERM)
@@ -1783,27 +1790,25 @@ def emblem_badge(side_name, glyph):
         field, mark_box = shape(b, 6, 4.5, 39, 25.5, 2.6), (12, 6.5, 33, 23.5)
     else:
         field, mark_box = shape(b, 4.5, 4.5, 16, 25.5, 2.2), (6, 9, 14.5, 21)
-        p.sink(o([shape(b, 17.5, 4.5, 41, 25.5, 2.6)]), 1.8, 0.8)
+        p.sink(o([shape(b, 17.5, 4.5, 41, 25.5, 2.6)]), 1.8 * k, 0.8 * k)
     p.inlay(o([field]), field_mat, 0.3)
-    mbox = (mark_box[0] + pad, mark_box[1] + pad, mark_box[2] + pad, mark_box[3] + pad)
-    raise_mask(glyph_mask(emblem_glyph(b), W + 2 * pad, H + 2 * pad, mbox, SS), 1.0, 0.45, mark_mat)
+    raise_mask(emblem_glyph(b), mark_box, 1.0, 0.45, mark_mat)
     if glyph is not None:
-        raise_mask(glyph_mask(emblem_glyph(glyph), W + 2 * pad, H + 2 * pad, (19.5 + pad, 6.5 + pad, 39 + pad, 23.5 + pad), SS),
-                   1.0, 0.45, glyph_mat)
+        raise_mask(emblem_glyph(glyph), (19.5, 6.5, 39, 23.5), 1.0, 0.45, glyph_mat)
     if b == "machined":                                 # the second accent: a red hairline under the field
         p.inlay(o([plate(*((7, 26.2, 38, 26.9) if glyph is None else (5.5, 26.2, 15, 26.9)))]), ACCENT2, 0.2)
     elif b == "terraced":
         for x, y in ((3.6, 3.6), (41.4, 3.6), (3.6, 26.4), (41.4, 26.4)):
-            p.rivet(x + pad, y + pad, 1.1)
+            p.rivet(*at(x, y), 1.1 * k)
     elif b == "scavenged":
-        p.weld((14 + pad, 15 + pad), (20 + pad, 15.5 + pad), 5, 0.6)
-        p.bolt(41.2 + pad, 26 + pad, 1.2, 3)
+        p.weld(at(14, 15), at(20, 15.5), 5, 0.6 * k)
+        p.bolt(*at(41.2, 26), 1.2 * k, 3)
         for i in range(3):                              # hazard slashes along the top edge only
             x = 28 + 4 * i
             p.inlay(o([[(x, 1.8), (x + 1.8, 1.8), (x + 0.6, 3.8), (x - 1.2, 3.8)]]), ACCENT2 if i % 2 else INKM, 0.2)
     else:
-        p.facets(5.0, 0.05, 0.18, 41)
-        p.bolt(42 + pad, 15 + pad, 1.1, 0)
+        p.facets(5.0 * k, 0.05, 0.18 * k, 41)
+        p.bolt(*at(42, 15), 1.1 * k, 0)
     return shade(p, side, shadow=False).crop((pad, pad, pad + W, pad + H))
 
 
@@ -1876,15 +1881,16 @@ def paint_side_emblems(variant):
 
 # ---------------------------------------------------------------------------------------------- the front end's emblems
 
-# The same family where the front end shows a side (round 14's prototype, --lobby-emblems, off by
-# default): ReforgedFactionEmblems, 1024x1024.  A card, 240x240, for each army the army screen lists, the
-# Boss and the observer, which FactionPicker draws as a 100 px tile, a 96 px pool icon and the focused
-# portrait (FactionPicker<template>), and which the retail GeneralImage names (USA_Logo, USA_Laser, ...)
-# can map too, for PopupPlayerInfo's 86 px picture; and a small 48x44 side icon for the GameinfoXXX
-# names (SideIconImage, the LAN game list's 22x25).  A card is the side's plate in its build round a sunk
-# well with the general's glyph (a side alone: its mark large on the accent field), over a side plate
-# carrying the mark and the build's fittings.  Each piece stands at FACTION_EMBLEMS_AT until an INI maps
-# it.
+# The same family where the front end shows a side (round 14, approved by the owner on 2026-11-03):
+# ReforgedFactionEmblems, 1024x1024, laid out by its MappedImages/HandCreated INI.  A card, 240x240, for
+# each army the army screen lists, the Boss and the observer, which FactionPicker draws as a 100 px tile,
+# a 96 px pool icon and the focused portrait (FactionPicker<template>, in place of EA's persona faces), and
+# which the retail GeneralImage names (USA_Logo, USA_Laser, ...) map too, for PopupPlayerInfo's 86 px
+# picture; a 48x44 side icon for the GameinfoXXX names (SideIconImage, the LAN game list's 22x25); and the
+# score screen's row emblems, SSScore<suffix>, the SSObserver badges at 60x40.  A card is the side's plate
+# in its build round a sunk well with the general's glyph (a side alone: its mark large on the accent
+# field), over a side plate carrying the mark and the build's fittings.  The score screen's watermark is
+# the local player's card, which the code draws faint.
 CARD = 240
 FACTION_CARDS = [   # FactionPicker image, the side whose build it takes, glyph
     ("FactionPickerFactionAmerica", "America", None), ("FactionPickerFactionAmericaSuperWeaponGeneral", "America", "reticle"),
@@ -1905,11 +1911,9 @@ SIDE_ICON = (48, 44)
 SIDE_ICONS = [("GameinfoAMRCA", "America", None), ("GameinfoCHINA", "China", None), ("GameinfoGLA", "Gla", None),
               ("GameinfoTURKIYE", "Turkiye", None), ("GameinfoBOSS", "China", "crown"), ("GameinfoOBSRVR", "Observer", "eye"),
               ("GameinfoRANDOM", "Observer", "random")]
+SCORE_EMBLEMS = [("SSScore" + n[len("SSObserver"):], side, glyph) for n, side, glyph in SIDE_EMBLEMS]
+SCORE_EMBLEM_K = 4 / 3                          # 45x30 to 60x40
 FACTION_EMBLEMS_SIZE = (1024, 1024)
-FACTION_EMBLEMS_AT = {n: (4 + 248 * (i % 4), 4 + 248 * (i // 4), 4 + 248 * (i % 4) + CARD, 4 + 248 * (i // 4) + CARD)
-                      for i, (n, _, _) in enumerate(FACTION_CARDS)}
-FACTION_EMBLEMS_AT.update({n: (752 + 56 * (i % 4), 752 + 50 * (i // 4), 752 + 56 * (i % 4) + 48, 752 + 50 * (i // 4) + 44)
-                           for i, (n, _, _) in enumerate(SIDE_ICONS)})
 
 
 def palette_of(side_name):
@@ -2036,13 +2040,19 @@ def side_icon(side_name, glyph):
 
 
 def paint_faction_emblems():
-    """ReforgedFactionEmblems (prototype): every card and side icon at FACTION_EMBLEMS_AT."""
+    """ReforgedFactionEmblems: every card, side icon and score emblem where its INI maps it; the
+    GeneralImage names stand on their cards."""
+    M = read_mapped(None, name="ReforgedFactionEmblems")
     out = Image.new("RGBA", FACTION_EMBLEMS_SIZE, (0, 0, 0, 0))
     for name, side, glyph in FACTION_CARDS:
-        put(out, faction_card(side, glyph), FACTION_EMBLEMS_AT[name])
+        put(out, faction_card(side, glyph), M[name])
     for name, side, glyph in SIDE_ICONS:
-        put(out, side_icon(side, glyph), FACTION_EMBLEMS_AT[name])
-    check_mapped(FACTION_EMBLEMS_AT, FACTION_EMBLEMS_SIZE)
+        put(out, side_icon(side, glyph), M[name])
+    for name, side, glyph in SCORE_EMBLEMS:
+        put(out, emblem_badge(side, glyph, SCORE_EMBLEM_K), M[name])
+    for alias, template in GENERAL_IMAGE.items():
+        assert M[alias] == M["FactionPicker" + template], "%s is not on %s's card" % (alias, template)
+    check_mapped({n: r for n, r in M.items() if n not in GENERAL_IMAGE}, FACTION_EMBLEMS_SIZE)
     return out
 
 
@@ -2441,17 +2451,15 @@ def check_sheet(sheet_img, side_name, glow="B"):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--side", default="all", choices=["all", "Observer"] + sorted(SIDES))
+    ap.add_argument("--side", default="all", choices=["all", "Observer", "Lobby"] + sorted(SIDES))
     ap.add_argument("--out", required=True, help="where the PNGs go")
     ap.add_argument("--dds", help="Data/Art/Textures, to write the DXT5 textures too")
     ap.add_argument("--emblem", default=EMBLEM_SVG)
     ap.add_argument("--ready-glow", choices=("A", "B"), default="B",
                     help="a charged superweapon's light: B, the breath and a rising band (default, ships), or A, the breath alone")
-    ap.add_argument("--lobby-emblems", action="store_true",
-                    help="prototype, off by default: also write ReforgedFactionEmblems, the front end's cards and side icons")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    for side in (list(SIDES) + ["Observer"] if args.side == "all" else [args.side]) + (["Lobby"] if args.lobby_emblems else []):
+    for side in (list(SIDES) + ["Observer", "Lobby"] if args.side == "all" else [args.side]):
         made = {}
         if side == "Lobby":
             made = {"ReforgedFactionEmblems": paint_faction_emblems()}

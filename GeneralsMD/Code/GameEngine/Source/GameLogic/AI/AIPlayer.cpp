@@ -3956,11 +3956,15 @@ Bool AIPlayer::selectTeamToBuild( void )
 	// Force General built 2 jets in 983 units off the scripts alone
 	ensureDoctrine();
 	std::vector<AIVisibleEnemy> remembered;
+	Real airFloor = 0.0f;
 	if( skirmish && !m_doctrine.empty() )
+	{
 		rememberedArmy( &remembered );
+		airFloor = doctrineAirFloor();
+	}
 	const Bool doctrineSkip = skirmish && !m_doctrine.empty() && !kindPersona &&
 		(Int)m_player->getMoney()->countMoney() <= PERSONA_SKIP_BANK[ m_skillLevel ] &&
-		doctrineShare() < DOCTRINE_SHARE_TARGET[ m_skillLevel ] && doctrineMakeable( remembered );
+		doctrineShare() < DOCTRINE_SHARE_TARGET[ m_skillLevel ] && doctrineMakeable( remembered, airFloor );
 	Int doctrineSkipped = 0;
 
 	Player::PlayerTeamList candidateList;
@@ -3997,7 +4001,7 @@ Bool AIPlayer::selectTeamToBuild( void )
 		}
 		if( skirmish && !m_doctrine.empty() )
 		{
-			const Real signature = doctrineTeamShare( *t, remembered );
+			const Real signature = doctrineTeamShare( *t, remembered, airFloor );
 			if( doctrineSkip && !isDefenceTeam && signature < DOCTRINE_TEAM_SHARE )
 			{
 				++doctrineSkipped;
@@ -5826,6 +5830,7 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_TACTICS, doTransports() );				// Put the helicopters' riders down at the fight.
 		AI_PHASE( AIP_TACTICS, doShuttles() );					// Fly the wave's ground units up its road.
 		AI_PHASE( AIP_TACTICS, doHelixes() );					// Helix upgrades by the enemy army, healers, bomb raids.
+		AI_PHASE( AIP_TACTICS, steerAircraft() );				// No strike flown through the enemy's anti-air.
 		AI_PHASE( AIP_TACTICS, doAmbulances() );				// Ambulances behind the army, for the hurt and the hazards.
 	}
 
@@ -10010,21 +10015,21 @@ static const AIDoctrineUnit *doctrineEntry( const std::vector<AIDoctrineUnit> &d
 
 /** How a signature unit is favoured now (ensureDoctrine): 1 for any other, and for one the doctrine has
 	* lost its trust in or that trades badly with the enemy army this AI remembers - no jets into massed
-	* anti-air. */
+	* anti-air.  An aircraft has to clear the higher floor doctrineAirFloor hands over. */
 static const Real DOCTRINE_COUNTER_FLOOR = 0.3f;
 
 static Real doctrineFactor( const std::vector<AIDoctrineUnit> &doctrine, const ThingTemplate *tmpl, const Player *owner,
-	const std::vector<AIVisibleEnemy> &army )
+	const std::vector<AIVisibleEnemy> &army, Real airFloor )
 {
 	const AIDoctrineUnit *entry = doctrineEntry( doctrine, tmpl );
-	if( entry == NULL || entry->m_trust < DOCTRINE_TRUST_ACTIVE ||
-			( !army.empty() && armyMatchup( tmpl, owner, army ) < DOCTRINE_COUNTER_FLOOR ) )
+	const Real floor = tmpl->isKindOf( KINDOF_AIRCRAFT ) ? airFloor : DOCTRINE_COUNTER_FLOOR;
+	if( entry == NULL || entry->m_trust < DOCTRINE_TRUST_ACTIVE || armyMatchup( tmpl, owner, army ) < floor )
 		return 1.0f;
 	return 1.0f + ( entry->m_weight - 1.0f ) * entry->m_trust;
 }
 
 static const ThingTemplate *surplusUnit( Object *factory, const Player *owner, const std::vector<AIVisibleEnemy> &army, Real weight,
-																				 const AIPersonaWeights *taste = NULL, const std::vector<AIDoctrineUnit> *doctrine = NULL )
+																				 const AIPersonaWeights *taste = NULL, const std::vector<AIDoctrineUnit> *doctrine = NULL, Real airFloor = 0.0f )
 {
 	const CommandSet *commandSet = TheCommandStore->findCommandSet( factory->getCommandSetString() );
 	if( commandSet == NULL )
@@ -10044,7 +10049,7 @@ static const ThingTemplate *surplusUnit( Object *factory, const Player *owner, c
 		if( tmpl == NULL )
 			continue;
 		// a signature jet is the army too
-		const Real favoured = doctrine ? doctrineFactor( *doctrine, tmpl, owner, army ) : 1.0f;
+		const Real favoured = doctrine ? doctrineFactor( *doctrine, tmpl, owner, army, airFloor ) : 1.0f;
 		const Bool jets = tasteJets || favoured > 1.0f;
 		if( !tmpl->canPossiblyHaveAnyWeapon() || tmpl->isKindOf( KINDOF_DOZER ) || tmpl->isKindOf( KINDOF_HARVESTER ) ||
 				tmpl->isKindOf( KINDOF_MONEY_HACKER ) || (tmpl->isKindOf( KINDOF_AIRCRAFT ) && !tmpl->isKindOf( KINDOF_PRODUCED_AT_HELIPAD ) && !jets) ||
@@ -10340,6 +10345,7 @@ void AIPlayer::trainSurplus( Int budget )
 		return;
 	std::vector<AIVisibleEnemy> army;
 	rememberedArmy( &army );
+	const Real airFloor = doctrineAirFloor();
 	std::vector<Object *> factories;
 	m_player->iterateObjects( collectFactories, &factories );
 	// a personality with a taste for one kind of unit spends the surplus at the factories that make it
@@ -10358,7 +10364,7 @@ void AIPlayer::trainSurplus( Int budget )
 		std::vector<Object *> liked, plain, disliked;
 		for( std::vector<Object *>::const_iterator f = factories.begin(); f != factories.end(); ++f )
 		{
-			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, &taste, &m_doctrine );
+			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, &taste, &m_doctrine, airFloor );
 			const Real bias = unit == NULL ? 0.0f : unitTaste( taste, unit );
 			(bias > 0.0f ? liked : bias < 0.0f ? disliked : plain).push_back( *f );
 		}
@@ -10373,7 +10379,7 @@ void AIPlayer::trainSurplus( Int budget )
 		// up to the depth in one pass: one a factory a pass trained 1,600 of the 3,600 an Attacker earned
 		while( (Int)pu->getProductionCount() < depth )
 		{
-			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, persona ? &taste : NULL, &m_doctrine );
+			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, persona ? &taste : NULL, &m_doctrine, airFloor );
 			if( unit == NULL )
 				break;
 			const Int cost = unit->calcCostToBuild( m_player );
@@ -10766,7 +10772,7 @@ Real AIPlayer::doctrineShare( void ) const
 	return m_armySpent > 0 ? INT_TO_REAL( m_doctrineSpent ) / INT_TO_REAL( m_armySpent ) : 0.0f;
 }
 
-Real AIPlayer::doctrineTeamShare( const TeamPrototype *proto, const std::vector<AIVisibleEnemy> &army ) const
+Real AIPlayer::doctrineTeamShare( const TeamPrototype *proto, const std::vector<AIVisibleEnemy> &army, Real airFloor ) const
 {
 	const TeamTemplateInfo *info = proto->getTemplateInfo();
 	Real total = 0.0f;
@@ -10779,15 +10785,38 @@ Real AIPlayer::doctrineTeamShare( const TeamPrototype *proto, const std::vector<
 		const Int minUnits = info->m_unitsInfo[ i ].minUnits;
 		const Real worth = INT_TO_REAL( minUnits > 1 ? minUnits : 1 ) * INT_TO_REAL( tmpl->calcCostToBuild( m_player ) );
 		total += worth;
-		if( doctrineFactor( m_doctrine, tmpl, m_player, army ) > 1.0f )
+		if( doctrineFactor( m_doctrine, tmpl, m_player, army, airFloor ) > 1.0f )
 			signature += worth;
 	}
 	return total > 0.0f ? signature / total : 0.0f;
 }
 
+/** The matchup a signature aircraft has to clear against the remembered army, over DOCTRINE_COUNTER_FLOOR. */
+static const Real DOCTRINE_AIR_FLOOR[ AISKILL_COUNT ] = { 0.35f, 0.4f, 0.45f };
+/** Anti-air strong enough that no signature aircraft is favoured at all: this many known enemy guns that
+	* can aim at an aircraft, and this share of all the known guns.  The army ledger holds no buildings, so a
+	* ring of Stinger Sites never lowered a jet's matchup. */
+static const Int DOCTRINE_AIR_GUNS[ AISKILL_COUNT ] = { 6, 4, 3 };
+static const Real DOCTRINE_AIR_GUN_SHARE[ AISKILL_COUNT ] = { 0.5f, 0.4f, 0.3f };
+/** A floor no matchup reaches (aiMatchupScore is 0 to 1). */
+static const Real DOCTRINE_AIR_SHUT = 2.0f;
+
+Real AIPlayer::doctrineAirFloor( void ) const
+{
+	std::vector<AIKnownGun> guns;
+	collectKnownGuns( &guns );
+	Int antiAir = 0;
+	for( size_t g = 0; g < guns.size(); ++g )
+		if( guns[ g ].m_airReach > 0.0f )
+			++antiAir;
+	const Bool strong = antiAir >= DOCTRINE_AIR_GUNS[ m_skillLevel ] &&
+		INT_TO_REAL( antiAir ) >= DOCTRINE_AIR_GUN_SHARE[ m_skillLevel ] * INT_TO_REAL( (Int)guns.size() );
+	return strong ? DOCTRINE_AIR_SHUT : DOCTRINE_AIR_FLOOR[ m_skillLevel ];
+}
+
 /** The best signature unit a factory can train now, NULL for none. */
 static const ThingTemplate *doctrineUnitAt( Object *factory, const std::vector<AIDoctrineUnit> &doctrine, const Player *owner,
-	const std::vector<AIVisibleEnemy> &army )
+	const std::vector<AIVisibleEnemy> &army, Real airFloor )
 {
 	const CommandSet *commandSet = TheCommandStore->findCommandSet( factory->getCommandSetString() );
 	const ThingTemplate *best = NULL;
@@ -10798,7 +10827,7 @@ static const ThingTemplate *doctrineUnitAt( Object *factory, const std::vector<A
 		const ThingTemplate *tmpl = button && button->getCommandType() == GUI_COMMAND_UNIT_BUILD ? button->getThingTemplate() : NULL;
 		if( tmpl == NULL )
 			continue;
-		const Real factor = doctrineFactor( doctrine, tmpl, owner, army );
+		const Real factor = doctrineFactor( doctrine, tmpl, owner, army, airFloor );
 		if( factor > bestFactor && TheBuildAssistant->canMakeUnit( factory, tmpl ) == CANMAKE_OK )
 		{
 			best = tmpl;
@@ -10808,12 +10837,12 @@ static const ThingTemplate *doctrineUnitAt( Object *factory, const std::vector<A
 	return best;
 }
 
-Bool AIPlayer::doctrineMakeable( const std::vector<AIVisibleEnemy> &army ) const
+Bool AIPlayer::doctrineMakeable( const std::vector<AIVisibleEnemy> &army, Real airFloor ) const
 {
 	std::vector<Object *> factories;
 	m_player->iterateObjects( collectFactories, &factories );
 	for( std::vector<Object *>::const_iterator f = factories.begin(); f != factories.end(); ++f )
-		if( doctrineUnitAt( *f, m_doctrine, m_player, army ) )
+		if( doctrineUnitAt( *f, m_doctrine, m_player, army, airFloor ) )
 			return TRUE;
 	return FALSE;
 }
@@ -10845,6 +10874,7 @@ Int AIPlayer::trainDoctrine( Int budget )
 	const Int depth = DOCTRINE_DEPTH[ m_skillLevel ] + ( rich ? min( DOCTRINE_RICH_DEPTH[ m_skillLevel ], bank / max( target, 1 ) ) : 0 );
 	std::vector<AIVisibleEnemy> army;
 	rememberedArmy( &army );
+	const Real airFloor = doctrineAirFloor();
 	std::vector<Object *> factories;
 	m_player->iterateObjects( collectFactories, &factories );
 	Int producers = 0;
@@ -10852,7 +10882,7 @@ Int AIPlayer::trainDoctrine( Int budget )
 	Int refused = 0;
 	for( std::vector<Object *>::const_iterator f = factories.begin(); f != factories.end(); ++f )
 	{
-		const ThingTemplate *unit = doctrineUnitAt( *f, m_doctrine, m_player, army );
+		const ThingTemplate *unit = doctrineUnitAt( *f, m_doctrine, m_player, army, airFloor );
 		if( unit == NULL )
 			continue;
 		++producers;
@@ -13732,8 +13762,9 @@ static Real deepestReach( const std::vector<AIKnownGun> &guns, Real x, Real y, B
 	return deepest;
 }
 
-/** The known anti-air guns that reach a straight flight from a to b, margin included, each counted once. */
-static Int gunsOverFlight( const std::vector<AIKnownGun> &guns, Real ax, Real ay, Real bx, Real by )
+/** The known anti-air guns that reach a straight flight from a to b, margin included, each counted once,
+	* the one with the ID ignored left out. */
+static Int gunsOverFlight( const std::vector<AIKnownGun> &guns, Real ax, Real ay, Real bx, Real by, ObjectID ignored = INVALID_ID )
 {
 	const Real dx = bx - ax;
 	const Real dy = by - ay;
@@ -13741,7 +13772,7 @@ static Int gunsOverFlight( const std::vector<AIKnownGun> &guns, Real ax, Real ay
 	Int count = 0;
 	for( size_t g = 0; g < guns.size(); ++g )
 	{
-		if( guns[ g ].m_airReach <= 0.0f )
+		if( guns[ g ].m_airReach <= 0.0f || guns[ g ].m_id == ignored )
 			continue;
 		Real along = 0.0f;
 		if( lengthSqr > 0.0f )
@@ -13784,6 +13815,7 @@ void AIPlayer::collectKnownGuns( std::vector<AIKnownGun> *guns ) const
 		gun.m_y = obj->getPosition()->y;
 		gun.m_reach = 0.0f;
 		gun.m_airReach = 0.0f;
+		gun.m_id = obj->getID();
 		for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
 		{
 			const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
@@ -13797,6 +13829,159 @@ void AIPlayer::collectKnownGuns( std::vector<AIKnownGun> *guns ) const
 		}
 		if( gun.m_reach > 0.0f )
 			guns->push_back( gun );
+	}
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** How often each rung looks at its aircraft's strikes: an Easy jet is half way into a Stinger Site's
+	* reach before it turns. */
+static const UnsignedInt AIR_STEER_RATE[ AISKILL_COUNT ] = { 2 * LOGICFRAMES_PER_SECOND, LOGICFRAMES_PER_SECOND, LOGICFRAMES_PER_SECOND / 2 };
+/** A helicopter's goal this near the base centre is the way home steerAircraft sent it on. */
+static const Real AIR_HOME_SLACK = 300.0f;
+
+/** A strike of this aircraft's kills this anti-air gun: what is left in the clips it carries is enough for
+	* the gun's health (a clip that reloads in the air counts whole), or, with a weapon that never runs dry,
+	* it kills the gun faster than the gun shoots it down (templateFramesToKill).  An Aurora's bomb on a
+	* Stinger Site; never a Raptor's four missiles on a Patriot. */
+static Bool airStrikeKills( Object *aircraft, const Object *gun )
+{
+	Real clipDamage = 0.0f;
+	Bool endless = FALSE;
+	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		Weapon *weapon = aircraft->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+		if( weapon == NULL )
+			continue;
+		if( weapon->getClipSize() <= 0 )
+		{
+			endless = TRUE;
+			continue;
+		}
+		const Int shots = weapon->getAutoReloadsClip() ? weapon->getClipSize() : (Int)weapon->getRemainingAmmo();
+		clipDamage += weapon->estimateWeaponDamage( aircraft, gun ) * INT_TO_REAL( shots );
+	}
+	if( clipDamage >= gun->getBodyModule()->getHealth() )
+		return TRUE;
+	if( !endless )
+		return FALSE;
+	const Real mine = templateFramesToKill( aircraft->getTemplate(), gun->getTemplate() );
+	const Real theirs = templateFramesToKill( gun->getTemplate(), aircraft->getTemplate() );
+	return mine >= 0.0f && (theirs < 0.0f || mine < theirs);
+}
+
+/** A straight flight from the aircraft to a strike at the point crosses the reach of no known anti-air gun
+	* but the target's own, and a target that is an anti-air gun is one the strike kills (airStrikeKills). */
+static Bool airStrikeIsClear( Object *aircraft, const Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns )
+{
+	const Coord3D *pos = aircraft->getPosition();
+	const ObjectID id = target ? target->getID() : INVALID_ID;
+	if( gunsOverFlight( guns, pos->x, pos->y, at->x, at->y, id ) > 0 )
+		return FALSE;
+	for( size_t g = 0; target && g < guns.size(); ++g )
+		if( guns[ g ].m_id == id && guns[ g ].m_airReach > 0.0f )
+			return airStrikeKills( aircraft, target );
+	return TRUE;
+}
+
+/** The nearest enemy this player knows of that the aircraft can attack with a clear strike (airStrikeIsClear),
+	* the first in the object list of two as near; NULL for none. */
+static Object *pickAirTarget( const Player *player, Object *aircraft, const std::vector<AIKnownGun> &guns )
+{
+	const Int me = player->getPlayerIndex();
+	const Coord3D *pos = aircraft->getPosition();
+	Object *best = NULL;
+	Real bestSqr = 0.0f;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) || player->getRelationship( obj->getTeam() ) != ENEMIES ||
+				!observerKnowsAbout( obj, me ) )
+			continue;
+		const Real distSqr = sqr( obj->getPosition()->x - pos->x ) + sqr( obj->getPosition()->y - pos->y );
+		if( (best && distSqr >= bestSqr) ||
+				aircraft->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, obj, CMD_FROM_AI ) < ATTACKRESULT_POSSIBLE_AFTER_MOVING ||
+				!airStrikeIsClear( aircraft, obj, obj->getPosition(), guns ) )
+			continue;
+		best = obj;
+		bestSqr = distSqr;
+	}
+	return best;
+}
+
+/** Every armed jet and helicopter of ours in the air that is going for something - its victim, the enemy
+	* it was sent at, or the ground it was told to attack - has its strike checked against the anti-air guns this AI knows
+	* of (collectKnownGuns: any weapon that can aim at an aircraft, at its own range, so a Stinger Site, a
+	* Patriot, a Gattling or Quad Cannon and an Avenger come out of the data alike).  A strike whose straight
+	* flight crosses one is called off, for the nearest known enemy with a clear one (pickAirTarget), or
+	* home when there is none: a jet told to idle in the air lands by JetAIUpdate's own return, and a
+	* helicopter flies to the base centre.
+	*
+	* Left to their own handling: a power's aircraft (no JetAIUpdate), the duty helicopters (doHelixes), a
+	* transport with riders aboard, one the retreat pulled out, and a jet taking off, landing, or out of ammo. */
+void AIPlayer::steerAircraft( void )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt rate = AIR_STEER_RATE[ m_skillLevel ];
+	if( !m_baseCenterSet || (now + computeUpdatePhase( m_player->getPlayerIndex(), rate )) % rate != 0 )
+		return;
+
+	std::vector<AIKnownGun> guns;
+	Bool gunsRead = FALSE;
+	std::vector<Object *> owned;
+	m_player->iterateObjects( collectOwned, &owned );
+	for( size_t o = 0; o < owned.size(); ++o )
+	{
+		Object *aircraft = owned[ o ];
+		AIUpdateInterface *ai = aircraft->getAI();
+		// a jet or a helicopter of the army: not a power's cargo plane or gunship, whose own update flies it
+		if( !aircraft->isKindOf( KINDOF_AIRCRAFT ) || aircraft->isKindOf( KINDOF_HARVESTER ) || aircraft->isKindOf( KINDOF_DRONE ) ||
+				ai == NULL || ai->getJetAIUpdate() == NULL || aircraft->isEffectivelyDead() || !aircraft->isAirborneTarget() ||
+				!aircraft->isAbleToAttack() || isDutyHelix( aircraft ) || (aircraft->getContain() && aircraft->getContain()->getContainCount() > 0) )
+			continue;
+		const JetAIUpdate *jet = ai->getJetAIUpdate();
+		const TacticalStep *row = findTacticalStep( aircraft->getID() );
+		if( jet->isOutOfSpecialReloadAmmo() || jet->friend_isTakeoffOrLandingInProgress() ||
+				(row && (row->fallingBack || now < row->leaveAloneUntil)) )
+			continue;
+		// a helicopter on its way home shoots what it passes, and is leaving already
+		const Coord3D *goal = ai->getGoalPosition();
+		if( !jet->friend_needsRunway() && !ai->isIdle() &&
+				sqr( goal->x - m_baseCenter.x ) + sqr( goal->y - m_baseCenter.y ) <= sqr( AIR_HOME_SLACK ) )
+			continue;
+
+		// what it shoots or was sent at; the machine's goal position alone is stale once a jet turns for home
+		Object *target = ai->getCurrentVictim();
+		if( target == NULL )
+			target = ai->getGoalObject();
+		if( target && m_player->getRelationship( target->getTeam() ) != ENEMIES )
+			target = NULL;
+		const Coord3D *at = target ? target->getPosition() : ai->getCurrentVictimPos();
+		if( at == NULL )
+			continue;
+
+		if( !gunsRead )
+		{
+			collectKnownGuns( &guns );
+			gunsRead = TRUE;
+		}
+		if( airStrikeIsClear( aircraft, target, at, guns ) )
+			continue;
+
+		Object *other = pickAirTarget( m_player, aircraft, guns );
+		DEBUG_LOG(("AI AIR frame %d player %d '%s' %d calls off its strike at '%s' (%.0f,%.0f), %d known anti-air guns over it, for %s\n",
+			now, m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
+			target ? target->getTemplate()->getName().str() : "a place", at->x, at->y,
+			gunsOverFlight( guns, aircraft->getPosition()->x, aircraft->getPosition()->y, at->x, at->y, target ? target->getID() : INVALID_ID ),
+			other ? other->getTemplate()->getName().str() : "home"));
+		if( other )
+			ai->aiAttackObject( other, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		else if( jet->friend_needsRunway() )
+			ai->aiIdle( CMD_FROM_AI );
+		else
+		{
+			Coord3D home = m_baseCenter;
+			home.z = TheTerrainLogic->getGroundHeight( home.x, home.y );
+			ai->aiMoveToPosition( &home, CMD_FROM_AI );
+		}
 	}
 }
 

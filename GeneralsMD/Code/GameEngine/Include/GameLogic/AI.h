@@ -345,6 +345,7 @@ struct AIKnownGun
 	Real m_y;
 	Real m_reach;
 	Real m_airReach;		///< 0 for a gun that cannot aim at a helicopter
+	ObjectID m_id;
 };
 
 //-------------------------------------------------------------------------------------------------

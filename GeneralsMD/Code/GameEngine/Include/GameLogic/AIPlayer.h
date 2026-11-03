@@ -408,8 +408,9 @@ protected:
 	void ensureDoctrine(void);														///< work out the side's signature units from the data, once
 	AIDoctrineUnit *findDoctrine(const ThingTemplate *tmpl);		///< this side's entry for a unit, NULL when it is no signature unit
 	Real doctrineShare(void) const;												///< of the money spent on the army, the share spent on signature units
-	Real doctrineTeamShare(const TeamPrototype *proto, const std::vector<AIVisibleEnemy> &army) const;	///< a team's cost share of signature units worth building now
-	Bool doctrineMakeable(const std::vector<AIVisibleEnemy> &army) const;	///< some factory standing can train a signature unit worth building now
+	Real doctrineTeamShare(const TeamPrototype *proto, const std::vector<AIVisibleEnemy> &army, Real airFloor) const;	///< a team's cost share of signature units worth building now
+	Bool doctrineMakeable(const std::vector<AIVisibleEnemy> &army, Real airFloor) const;	///< some factory standing can train a signature unit worth building now
+	Real doctrineAirFloor(void) const;	///< the matchup a signature aircraft has to clear, out of reach when the known anti-air is strong
 	std::vector<AIDoctrineUnit>	m_doctrine;		///< the signature units, in template order; derived, only the trust is saved
 	std::vector<Real>	m_doctrineLoadedTrust;	///< the trust read from a save, put back once the doctrine is derived again
 	Bool				m_doctrineReady;				///< m_doctrine has been derived
@@ -486,6 +487,7 @@ protected:
 	Int loadShuttle(Object *ship);	///< call the attack teams' ground units at home into one Chinook; how many were called
 	Bool flightIsQuiet(const Coord3D *from, Real x, Real y) const;	///< a straight flight crosses nothing the AI has seen shoot
 	void doHelixes(void);	///< China's Helixes: the upgrade the enemy army calls for, healers behind the wave, bomb raids
+	void steerAircraft(void);	///< aircraft off strikes whose flight crosses known anti-air, onto clear ones or home
 	void buyDutyHelix(void);	///< Medium and up buy the healers and raiders their Helixes' buttons allow
 	Int helixRoleWanted(const ThingTemplate *tmpl) const;	///< the job a Helix of this kind would take now, -1 for none
 	void takeDutyHelix(Object *helix);	///< a Helix buyDutyHelix ordered comes out and takes its job

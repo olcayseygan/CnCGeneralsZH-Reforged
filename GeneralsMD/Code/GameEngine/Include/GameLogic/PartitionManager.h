@@ -1324,7 +1324,7 @@ private:
 	Bool						m_updatedSinceLastReset;	///< Used to force a return of OBJECTSHROUD_INVALID before update has been called.
 	Bool						m_cellsFromSave;					///< see isKeepingCellsFromSave
 
-	std::queue<SightingInfo *> m_pendingUndoShroudReveals;	///< Anything can queue up an Undo to happen later. This is a queue, because "later" is a constant
+	std::deque<SightingInfo *> m_pendingUndoShroudReveals;	///< Undos waiting for their frame, sorted by it: an unlook waits a constant and goes on the back, a timed reveal is inserted in order
 
 #ifdef FASTER_GCO
 	Int							m_maxGcoRadius;
@@ -1445,6 +1445,7 @@ public:
 	void doShroudReveal( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
 	void undoShroudReveal( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
 	void queueUndoShroudReveal( SightingInfo *sighting );	///< takes the sighting's recorded cells with it
+	void doTimedShroudReveal( const Coord3D *center, Real radius, PlayerMaskType playerMask, UnsignedInt frames );	///< reveal now, undone after frames
 
 	/** Reveal the circle around an eye except where a hill or a building stands between the eye and
 		the ground, and record in the sighting which cells that was. The looker never hides behind

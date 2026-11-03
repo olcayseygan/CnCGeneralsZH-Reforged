@@ -2063,6 +2063,33 @@ Bool Object::isUnknownTo( Int playerIndex ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// A shot out of the fog gives its shooter away: the victim's side sees a small circle round the
+// attacker for a moment, enough to see what hit it and not the ground around it.
+static const UnsignedInt FOG_ATTACKER_REVEAL_FRAMES = LOGICFRAMES_PER_SECOND * 5 / 2;
+static const Real FOG_ATTACKER_REVEAL_MARGIN = 15.0f;	///< past the attacker's own footprint, about a shroud cell and a half
+
+static void Object_revealAttackerInFog( const Object *victim, ObjectID attackerID )
+{
+	const Object *attacker = TheGameLogic->findObjectByID( attackerID );
+	if( attacker == NULL || victim->getRelationship( attacker ) != ENEMIES )
+		return;
+
+	// an unseen stealth unit stays unseen; the same test the reveal-to-all range makes
+	if( attacker->testStatus( OBJECT_STATUS_STEALTHED ) && !attacker->testStatus( OBJECT_STATUS_DETECTED ) &&
+			!attacker->testStatus( OBJECT_STATUS_DISGUISED ) )
+		return;
+
+	const Int victimIndex = victim->getControllingPlayer()->getPlayerIndex();
+	if( ThePartitionManager->getShroudStatusForPlayer( victimIndex, attacker->getPosition() ) == CELLSHROUD_CLEAR )
+		return;
+
+	// the victim's allies share its sight everywhere else, so they share this too
+	PlayerMaskType revealMask = ThePlayerList->getPlayersWithRelationship( victimIndex, ALLOW_SAME_PLAYER | ALLOW_ALLIES );
+	Real radius = attacker->getGeometryInfo().getBoundingCircleRadius() + FOG_ATTACKER_REVEAL_MARGIN;
+	ThePartitionManager->doTimedShroudReveal( attacker->getPosition(), radius, revealMask, FOG_ATTACKER_REVEAL_FRAMES );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Something is attempting to damage this object */
 //-------------------------------------------------------------------------------------------------
 void Object::attemptDamage( DamageInfo *damageInfo )
@@ -2126,6 +2153,11 @@ void Object::attemptDamage( DamageInfo *damageInfo )
 			m_radarData != NULL &&
 			getControllingPlayer() == ThePlayerList->getLocalPlayer() )
 		TheRadar->tryUnderAttackEvent( this );
+
+	if( damageInfo->out.m_actualDamageDealt > 0.0f &&
+			damageInfo->in.m_damageType != DAMAGE_PENALTY &&
+			damageInfo->in.m_damageType != DAMAGE_HEALING )
+		Object_revealAttackerInFog( this, damageInfo->in.m_sourceID );
 
 }
 

@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## A shot from the fog gives the shooter away
+
+- When something you cannot see hits one of your units or buildings, the fog opens around the shooter for two and a half seconds: a small circle, just wide enough to show what fired and not the ground around it. Artillery behind a ridge or a jet out of the dark shows itself the moment its shot lands. Your allies see it too, as they see everything else you see. A stealthed unit nobody has detected stays hidden, and a shot from something you can already see opens nothing. A replay recorded before this change plays out differently.
+
 ## The command bar fits the map
 
 - The radar takes the map's shape at a height that never changes: a long map widens it to the right, a tall map narrows it, and the frame's top stays level with the bar beside it. The black bands beside the map are gone; only a map too long for the room before the command buttons keeps thin ones above and below. A click on the radar still lands where it always did.

@@ -85,6 +85,7 @@
 #include "GameClient/ControlBar.h"
 #include "GameClient/ObserverCamera.h"
 
+#include <algorithm>
 #include <float.h>
 
 /* A hint that a cache line is about to be read. It reads nothing the program sees and decides
@@ -4320,7 +4321,7 @@ void PartitionManager::processPendingUndoShroudRevealQueue( Bool considerTimesta
 			undoShroudReveal( thisInfo->m_where.x, thisInfo->m_where.y, thisInfo->m_howFar, thisInfo->m_forWhom );
 
 		thisInfo->deleteInstance();
-		m_pendingUndoShroudReveals.pop();
+		m_pendingUndoShroudReveals.pop_front();
 	}
 }
 
@@ -4341,7 +4342,7 @@ void PartitionManager::resetPendingUndoShroudRevealQueue()
 	{
 		SightingInfo *thisInfo = m_pendingUndoShroudReveals.front();
 		thisInfo->deleteInstance();
-		m_pendingUndoShroudReveals.pop();
+		m_pendingUndoShroudReveals.pop_front();
 	}
 }
 
@@ -4368,6 +4369,21 @@ void PartitionManager::undoShroudReveal(Real centerX, Real centerY, Real radius,
 }
 	
 //-----------------------------------------------------------------------------
+static Bool undoFrameBefore( UnsignedInt frame, const SightingInfo *info )
+{
+	return frame < info->m_data;
+}
+
+//-----------------------------------------------------------------------------
+/** The queue is drained from the front while the front is due, so it has to stay sorted by undo
+	frame: an unlook and a timed reveal wait different times. An entry goes behind every one due on
+	the same frame, so the order is the same on every machine. */
+static void insertByUndoFrame( std::deque<SightingInfo *> &pending, SightingInfo *info )
+{
+	pending.insert( std::upper_bound( pending.begin(), pending.end(), info->m_data, undoFrameBefore ), info );
+}
+
+//-----------------------------------------------------------------------------
 void PartitionManager::queueUndoShroudReveal( SightingInfo *sighting )
 {
 	UnsignedInt now = TheGameLogic->getFrame();
@@ -4379,7 +4395,21 @@ void PartitionManager::queueUndoShroudReveal( SightingInfo *sighting )
 	newInfo->m_revealedCells.swap( sighting->m_revealedCells );
 	newInfo->m_data = now + TheGlobalData->m_unlookPersistDuration;
 
-	m_pendingUndoShroudReveals.push(newInfo);
+	insertByUndoFrame( m_pendingUndoShroudReveals, newInfo );
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager::doTimedShroudReveal( const Coord3D *center, Real radius, PlayerMaskType playerMask, UnsignedInt frames )
+{
+	doShroudReveal( center->x, center->y, radius, playerMask );
+
+	SightingInfo *newInfo = newInstance(SightingInfo);
+	newInfo->m_where = *center;
+	newInfo->m_howFar = radius;
+	newInfo->m_forWhom = playerMask;
+	newInfo->m_data = TheGameLogic->getFrame() + frames;
+
+	insertByUndoFrame( m_pendingUndoShroudReveals, newInfo );
 }
 
 //-----------------------------------------------------------------------------
@@ -5296,20 +5326,13 @@ void PartitionManager::xfer( Xfer *xfer )
 			{
 				SightingInfo *newInfo = newInstance(SightingInfo);
 				xfer->xferSnapshot(newInfo);
-				m_pendingUndoShroudReveals.push(newInfo);
+				insertByUndoFrame( m_pendingUndoShroudReveals, newInfo );
 			}
 		}
 		else
 		{
-			// And on Save, I need to loop through, but not destroy anything, so I pop-push n times, cycling through the queue once
-			// (No random access on queues, and speed not a concern in saveload)
 			for( Int infoIndex = 0; infoIndex < queueSize; infoIndex++ )
-			{
-				SightingInfo *saveInfo = m_pendingUndoShroudReveals.front();
-				xfer->xferSnapshot(saveInfo);
-				m_pendingUndoShroudReveals.pop();
-				m_pendingUndoShroudReveals.push(saveInfo);
-			}
+				xfer->xferSnapshot(m_pendingUndoShroudReveals[infoIndex]);
 		}
 
 	}

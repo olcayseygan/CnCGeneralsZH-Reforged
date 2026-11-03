@@ -72,6 +72,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CollideModule.h"
 #include "GameLogic/Module/ContainModule.h"
+#include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/AI.h"					// aiIsIncomeNotATarget - a derrick is money, not a target
@@ -5664,11 +5665,14 @@ Bool PartitionFilterRejectBuildings::allow( Object *other )
 //-----------------------------------------------------------------------------
 /** Partly in sight counts. Since hills and buildings block sight, a building hides its own back
 	cells from anyone lower than its roof and is never wholly clear, so taking only CLEAR here left
-	every unit the AI controls standing in front of an enemy base without firing a shot. */
+	every unit the AI controls standing in front of an enemy base without firing a shot.
+	A beyond-vision shooter passes its player as radar and also takes what that player's radar
+	tracks moving in the fog. */
 Bool PartitionFilterFreeOfFog::allow( Object *other )
 {
 	const ObjectShroudStatus status = other->getShroudedStatus(m_comparisonIndex);
-	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR;
+	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR
+		|| (m_radar && RadarCoverageBehavior::isTracked(m_radar, other));
 }
 
 //-----------------------------------------------------------------------------

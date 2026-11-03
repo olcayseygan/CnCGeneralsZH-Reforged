@@ -100,6 +100,7 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/DestroyModule.h"
 #include "GameLogic/Module/OpenContain.h"
+#include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/PartitionManager.h"
 #include "Common/ControlServer.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -5148,6 +5149,9 @@ void GameLogic::update( void )
 	{
 		ThePartitionManager->UPDATE();
 	}
+
+	// the radar's fogged contacts, against the shroud the partition update just settled
+	RadarCoverageBehavior::sweep();
 
 	tPartition = Clock_Ticks();
 

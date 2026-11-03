@@ -82,6 +82,7 @@ protected:
 	void initializeTextureFormats( void );				///< find format to use for the radar texture
 	void deleteResources( void );									///< delete resources used
 	void drawEvents( Int pixelX, Int pixelY, Int width, Int height);		///< draw all of the radar events
+	void drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height );	///< the Turkiye radar's fogged contacts, this sweep and the last
 	void drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, const Coord3D *pos );	//< draw a hero icon
 	void drawViewBox( Int pixelX, Int pixelY, Int width, Int height );  ///< draw view box
 	void drawBoxLines( const ICoord2D *corners );	///< a view box's lines through its four corners in pixels

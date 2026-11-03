@@ -26,12 +26,56 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/LogicThread.h"
 #include "Common/Player.h"
+#include "Common/PlayerList.h"
 #include "Common/Xfer.h"
+#include "GameClient/RadarContactMarks.h"
+#include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/RadarCoverageBehavior.h"
 
 RadarCoverageBehavior *RadarCoverageBehavior::s_first = NULL;
+
+/* How often the radar hands its contacts to the client, which draws one sweep's rings and the
+	 previous one's echoes (RadarContactLook::SweepSeconds is the same two seconds). */
+static const UnsignedInt RADAR_SWEEP_FRAMES = 2 * LOGICFRAMES_PER_SECOND;
+
+/* Horizontal speed in units a frame above which a unit counts as moving.  A tank creeping at a tenth
+	 of its pace still shows; one turning its turret on the spot does not. */
+static const Real RADAR_MOVING_SPEED = 0.05f;
+
+//-------------------------------------------------------------------------------------------------
+/** finished, alive and switched on */
+static Bool isWorking( const Object *obj )
+{
+	return !( obj->isEffectivelyDead() || obj->isDestroyed() || obj->isDisabled() || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** a radar of owner's covers for player */
+static Bool serves( const Player *owner, const Player *player )
+{
+	return owner == player || owner->getRelationship( player->getDefaultTeam() ) == ALLIES;
+}
+
+//-------------------------------------------------------------------------------------------------
+static Bool isMoving( const Object *obj )
+{
+	const PhysicsBehavior *physics = obj->getPhysics();
+	if( !physics )
+		return FALSE;
+	const Coord3D *vel = physics->getVelocity();
+	return vel->x * vel->x + vel->y * vel->y > RADAR_MOVING_SPEED * RADAR_MOVING_SPEED;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** stealthed and nobody's detector has it */
+static Bool isHidden( const Object *obj )
+{
+	return obj->testStatus( OBJECT_STATUS_STEALTHED ) && !obj->testStatus( OBJECT_STATUS_DETECTED );
+}
 
 //-------------------------------------------------------------------------------------------------
 RadarCoverageBehaviorModuleData::RadarCoverageBehaviorModuleData()
@@ -74,11 +118,7 @@ RadarCoverageBehavior::~RadarCoverageBehavior( void )
 	for( const RadarCoverageBehavior *radar = s_first; radar; radar = radar->m_next )
 	{
 		const Object *obj = radar->getObject();
-		if( obj->isEffectivelyDead() || obj->isDestroyed() || obj->isDisabled() || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
-			continue;
-
-		const Player *owner = obj->getControllingPlayer();
-		if( owner != player && owner->getRelationship( player->getDefaultTeam() ) != ALLIES )
+		if( !isWorking( obj ) || !serves( obj->getControllingPlayer(), player ) )
 			continue;
 
 		const Real radius = radar->getRadarCoverageBehaviorModuleData()->m_radius;
@@ -88,6 +128,87 @@ RadarCoverageBehavior::~RadarCoverageBehavior( void )
 			return TRUE;
 	}
 	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ Bool RadarCoverageBehavior::isTracked( const Player *player, const Object *obj )
+{
+	return !isHidden( obj ) && isMoving( obj ) && isCovered( player, obj->getPosition() );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Walks the object list in its own order and the players in index order, so every machine builds
+	* the same list, though only the client reads it: the logic keeps nothing of a sweep. */
+//-------------------------------------------------------------------------------------------------
+/*static*/ void RadarCoverageBehavior::sweep( void )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( frame % RADAR_SWEEP_FRAMES != 0 )
+		return;
+
+	// which players any working radar covers for, theirs or an ally's
+	const Int playerCount = ThePlayerList->getPlayerCount();
+	Bool covered[ MAX_PLAYER_COUNT ] = { FALSE };
+	Bool anyCovered = FALSE;
+	for( const RadarCoverageBehavior *radar = s_first; radar; radar = radar->m_next )
+	{
+		const Object *obj = radar->getObject();
+		if( !isWorking( obj ) )
+			continue;
+		for( Int i = 0; i < playerCount; ++i )
+		{
+			if( !covered[ i ] && serves( obj->getControllingPlayer(), ThePlayerList->getNthPlayer( i ) ) )
+				covered[ i ] = anyCovered = TRUE;
+		}
+	}
+
+	std::vector<RadarContact> contacts;
+	if( anyCovered )
+	{
+		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+		{
+			if( obj->isEffectivelyDead() || obj->isDestroyed() || obj->isContained() || obj->isStructure()
+					|| obj->isKindOf( KINDOF_PROJECTILE ) || isHidden( obj ) || !isMoving( obj ) )
+				continue;
+
+			for( Int i = 0; i < playerCount; ++i )
+			{
+				if( !covered[ i ] )
+					continue;
+				const Player *player = ThePlayerList->getNthPlayer( i );
+				if( player->getRelationship( obj->getTeam() ) != ENEMIES )
+					continue;
+				if( obj->getShroudedStatus( player->getPlayerIndex() ) <= OBJECTSHROUD_PARTIAL_CLEAR )
+					continue;
+				if( !isCovered( player, obj->getPosition() ) )
+					continue;
+
+				RadarContact contact;
+				contact.player = player->getPlayerIndex();
+				contact.id = obj->getID();
+				contact.pos = *obj->getPosition();
+				contacts.push_back( contact );
+			}
+		}
+
+#ifdef DEBUG_LOGGING
+		Int counts[ MAX_PLAYER_COUNT ] = { 0 };
+		for( size_t c = 0; c < contacts.size(); ++c )
+			++counts[ contacts[ c ].player ];
+		char line[ 256 ];
+		Int used = 0;
+		for( Int i = 0; i < playerCount; ++i )
+		{
+			if( covered[ i ] )
+				used += snprintf( line + used, sizeof( line ) - used, " p%d=%d", ThePlayerList->getNthPlayer( i )->getPlayerIndex(), counts[ ThePlayerList->getNthPlayer( i )->getPlayerIndex() ] );
+		}
+		line[ used ] = 0;
+		DEBUG_LOG(( "RADARSWEEP frame %u contacts%s\n", frame, line ));
+#endif
+	}
+
+	// the client draws them; logic hands over a copy and is done (LogicThread::callAfterTick)
+	LogicThread::callAfterTick( [frame, contacts]() { RadarContactMarks_publish( frame, contacts ); } );
 }
 
 //-------------------------------------------------------------------------------------------------

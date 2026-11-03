@@ -19,7 +19,8 @@
 // FILE: RadarCoverageBehavior.h /////////////////////////////////////////////////////////////////
 //
 // Turkiye's radar: a circle of Radius in which its own and its allies' radar-guided rockets keep
-// their lock (WeaponTemplate RadarBlindHitChance, Weapon.cpp).
+// their lock (WeaponTemplate RadarBlindHitChance, Weapon.cpp), and in which moving enemies hidden in
+// the fog are tracked: painted on the ground for the player, open to beyond-vision artillery.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,6 +59,15 @@ public:
 
 	/// a working radar of this player or an ally covers this point
 	static Bool isCovered( const Player *player, const Coord3D *pos );
+
+	/** The radar holds this unit for this player: it moves, stealth does not hide it, and it stands
+		* in the player's or an ally's coverage.  Says nothing of the fog or of whose side it is on;
+		* the caller asks those. */
+	static Bool isTracked( const Player *player, const Object *obj );
+
+	/** GameLogic::update, after the partition manager: every RADAR_SWEEP_FRAMES, hands the client
+		* each player's tracked enemies standing in fog (GameClient/RadarContactMarks.h).  Keeps nothing. */
+	static void sweep( void );
 
 private:
 

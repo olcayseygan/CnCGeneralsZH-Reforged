@@ -39,6 +39,8 @@ Data/Art/Textures/ReforgedMineGlowBlue.tga
 Data/Art/Textures/ReforgedMineGlowRed.tga
 Data/Art/Textures/ReforgedMineLedBlue.tga
 Data/Art/Textures/ReforgedMineLedRed.tga
+Data/Art/Textures/ReforgedRadarContact.tga
+Data/Art/Textures/ReforgedRadarRing.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
@@ -825,6 +827,7 @@ GameEngine/Include/GameClient/ParticleSys.h
 GameEngine/Include/GameClient/PlaceEventTranslator.h
 GameEngine/Include/GameClient/PlayerColorScheme.h
 GameEngine/Include/GameClient/ProcessAnimateWindow.h
+GameEngine/Include/GameClient/RadarContactMarks.h
 GameEngine/Include/GameClient/RadiusDecal.h
 GameEngine/Include/GameClient/RayEffect.h
 GameEngine/Include/GameClient/ReachOverlay.h
@@ -1478,6 +1481,7 @@ GameEngine/Source/GameClient/MessageStream/WindowXlat.cpp
 GameEngine/Source/GameClient/ObserverCamera.cpp
 GameEngine/Source/GameClient/ParabolicEase.cpp
 GameEngine/Source/GameClient/PlayerColorScheme.cpp
+GameEngine/Source/GameClient/RadarContactMarks.cpp
 GameEngine/Source/GameClient/RadiusDecal.cpp
 GameEngine/Source/GameClient/ReachOverlay.cpp
 GameEngine/Source/GameClient/SelectionInfo.cpp
@@ -4323,6 +4327,7 @@ Tools/package-common.sh
 Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
+Tools/radar_marks.py
 Tools/record-dx11-shaders.ps1
 Tools/replay-check.sh
 Tools/root-readonly-check.sh

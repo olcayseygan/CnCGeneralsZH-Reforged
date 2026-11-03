@@ -101,6 +101,7 @@
 #include "GameClient/WindowLayout.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/ParticleSys.h"
+#include "GameClient/RadarContactMarks.h"
 #include "GameClient/ReachOverlay.h"
 #include "GameClient/SelectionXlat.h"
 #include "GameClient/Shadow.h"
@@ -3323,6 +3324,7 @@ void InGameUI::update( void )
 	if( TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() )
 		watchDozers();
 	updateSignalMarks();
+	RadarContactMarks_update();	// what a Turkiye radar paints in the fog, on the ground
 	ReachOverlay_update();		// the ground a selected or sited defence hits, drawn on the terrain
 	UnsignedByte r, g, b, a;
 	Int amount;
@@ -3668,6 +3670,7 @@ void InGameUI::reset( void )
 	TheObserverCamera.reset();
 	CinemaDirector_forgetHudHidden();
 	clearSignalMarks();
+	RadarContactMarks_reset();
 	m_armedSignal = SIGNAL_KIND_COUNT;
 	m_dozerCheckFrame = 0;
 	for( Int index = 0; index < MAX_PLAYER_COUNT; index++ )
@@ -4275,8 +4278,9 @@ Bool InGameUI::getHeldAircraftOrder( const Object *obj, OrderHintKind& kind, Coo
 	onObject = ( targetID != INVALID_ID );
 	if( onObject )
 	{
+		// a target under the shroud draws nothing, as in getQueuedOrderHint
 		const Object *target = TheGameLogic->findObjectByID( targetID );
-		if( target == NULL )
+		if( target == NULL || isHiddenByShroud( target ) )
 			return FALSE;
 		to = orderTargetSpot( target );
 	}
@@ -4569,6 +4573,7 @@ void InGameUI::collectOrderHints( void )
 			const Int pathSize = ai->friend_getWaypointGoalPathSize();
 			const Int pathIndex = ai->friend_getCurrentGoalPathIndex();
 			hint.onObject = FALSE;
+			Bool goalHidden = FALSE;
 			if( goalResolved )
 			{
 				hint.to = resolvedGoal;
@@ -4594,7 +4599,9 @@ void InGameUI::collectOrderHints( void )
 				Object *goalObj = ai->getGoalObject();
 				Path *path = ai->getPath();
 				hint.onObject = ( goalObj != NULL );
-				if( goalObj )
+				if( goalObj && isHiddenByShroud( goalObj ) )
+					goalHidden = TRUE;
+				else if( goalObj )
 					hint.to = orderTargetSpot( goalObj );
 				else if( path )
 					hint.to = *path->getLastNode()->getPosition();
@@ -4602,7 +4609,13 @@ void InGameUI::collectOrderHints( void )
 					hint.to = *ai->getGoalPosition();
 			}
 
-			addOrderHint( hint, previous );
+			// a goal under the shroud - a radar contact, or a target that has driven into the fog - draws
+			// no thread: its end, or the end of the path chasing it, would trace the unit through the fog.
+			// The shift list that follows starts from the unit itself
+			if( goalHidden )
+				hint.to = hint.from;
+			else
+				addOrderHint( hint, previous );
 		}
 
 		// the rest of the unit's shift queue: every order still owed after this one, each drawn on from

@@ -1066,15 +1066,17 @@ protected:
 
 //=====================================
 /**
- * Accept if they are at least partly clear, not wholly fogged or shrouded
+ * Accept if they are at least partly clear, not wholly fogged or shrouded, or, given a radar
+ * player, if that player's radar tracks them in the fog (RadarCoverageBehavior::isTracked)
  */
 class PartitionFilterFreeOfFog : public PartitionFilter
 {
 private:
 	Int m_comparisonIndex;
+	const Player *m_radar;
 public:
-	PartitionFilterFreeOfFog(Int toWhom) : 
-			m_comparisonIndex(toWhom){}
+	PartitionFilterFreeOfFog(Int toWhom, const Player *radar = NULL) :
+			m_comparisonIndex(toWhom), m_radar(radar){}
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)

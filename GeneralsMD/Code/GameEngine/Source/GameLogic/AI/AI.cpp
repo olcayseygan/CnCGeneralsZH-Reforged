@@ -909,8 +909,9 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	// (optional) only stuff that is significant
 	PartitionFilterInsignificantBuildings filterInsignificant(true, false);
 	
-	// (optional) only stuff clear of fog
-	PartitionFilterFreeOfFog filterFogged(me->getControllingPlayer()->getPlayerIndex());
+	// (optional) only stuff clear of fog, or for a beyond-vision shooter, tracked by its player's radar
+	PartitionFilterFreeOfFog filterFogged(me->getControllingPlayer()->getPlayerIndex(),
+		me->getTemplate()->acquiresBeyondVision() ? me->getControllingPlayer() : NULL);
 
 	PartitionFilter *filters[16];
 	Int numFilters = 0;

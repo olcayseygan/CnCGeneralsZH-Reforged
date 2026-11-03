@@ -7060,7 +7060,8 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	}
 
 	// Turkiye's artillery sees 100 and shoots 600: it takes what a spotter shows its player, out to its
-	// weapon's reach.  The fog filter below is what keeps that to targets the team actually sees.
+	// weapon's reach.  The fog filter below is what keeps that to targets the team actually sees, or
+	// that a radar of its player or an ally tracks moving in the fog (RadarCoverageBehavior::isTracked).
 	const Bool beyondVision = obj->getTemplate()->acquiresBeyondVision();
 	if (beyondVision)
 		rangeToFindWithin = max(rangeToFindWithin, obj->getLargestWeaponRange());

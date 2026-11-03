@@ -64,6 +64,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GameText.h"
 #include "GameClient/ParticleSys.h"
+#include "GameClient/RadarContactMarks.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/ObserverCamera.h"
@@ -1216,9 +1217,13 @@ GameMessage::Type CommandTranslator::issueAttackCommand( Drawable *target,
 	// only make sounds if the command was for real
 	if( commandType == DO_COMMAND )
 	{
+		// a target in the fog, a radar contact, gets the ground line from whoever answers first: the air
+		// line, or the pick of a unit that can reach it, would say what the radar has not shown.  The
+		// drawable's own flag, set by the client's shroud pass, not a shroud read beside a tick
+		const Bool hidden = target->getFullyObscuredByShroud();
 		PickAndPlayInfo info;
-		info.m_air = targetObj->isUsingAirborneLocomotor();
-		info.m_drawTarget = target;
+		info.m_air = !hidden && targetObj->isUsingAirborneLocomotor();
+		info.m_drawTarget = hidden ? NULL : target;
 		pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), msgType, &info );
 	}  // end if
 
@@ -1606,10 +1611,37 @@ void CommandTranslator::finishFormationDrag( const ICoord2D& lift )
 		pickAndPlayUnitVoiceResponse( selected, GameMessage::MSG_DO_MOVETO );
 }
 
+//-------------------------------------------------------------------------------------------------
+/** The radar contact whose ring a click at pos lands on, or NULL.  The contact is hidden in the fog,
+	* so whether it can be attacked is decided from the selection alone: anything selected that can
+	* shoot at all gets the same attack on every ring.  Asking about the contact itself - in range, air
+	* or ground, hijackable - would tell the player what they cannot see.  A unit that cannot hit it
+	* takes the order and holds its fire, as in retail. */
+//-------------------------------------------------------------------------------------------------
+static Object *pickRadarContact( const Coord3D *pos )
+{
+	if( TheInGameUI->getGUICommand() || TheInGameUI->isInForceMoveToMode() || TheInGameUI->isLineOrderArmed()
+			|| !TheInGameUI->areSelectedObjectsControllable() )
+		return NULL;
 
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		// a dozer's only weapon clears mines, and a contact is never one
+		if( obj->isKindOf( KINDOF_DOZER ) || !obj->isAbleToAttack() )
+			continue;
+		for( Int i = 0; i < WEAPONSLOT_COUNT; i++ )
+		{
+			if( obj->getWeaponInWeaponSlotCommandSourceMask( (WeaponSlotType)i ) )
+				return TheGameLogic->findObjectByID( RadarContactMarks_pick( *pos ) );
+		}
+	}
+	return NULL;
+}
 
 //-------------------------------------------------------------------------------------------------
-GameMessage::Type CommandTranslator::evaluateForceAttack( Drawable *draw, const Coord3D *pos, CommandEvaluateType type )
+GameMessage::Type CommandTranslator::evaluateForceAttack(Drawable *draw, const Coord3D *pos, CommandEvaluateType type )
 {
 	// evaluateForceAttack is used to determine whether or not we can force attack the 
 	// given target, and if we can, to issue the appropriate command.
@@ -1622,15 +1654,27 @@ GameMessage::Type CommandTranslator::evaluateForceAttack( Drawable *draw, const 
 
 	const DrawableList *allSelected = TheInGameUI->getAllSelectedDrawables();
 
-	if( draw ) 
+	// the attack key over a radar contact's ring fires on the contact, decided as a plain click on it is
+	Bool ringPick = FALSE;
+	if( !draw )
+	{
+		Object *contact = pickRadarContact( pos );
+		if( contact )
+		{
+			draw = contact->getDrawable();
+			ringPick = TRUE;
+		}
+	}
+
+	if( draw )
 	{
 		Object *obj = draw ? draw->getObject() : NULL;
-		if( !obj ) 
+		if( !obj )
 		{
 			return retVal;
 		}
 
-		CanAttackResult result = canAnyForceAttack( allSelected, obj, pos );
+		CanAttackResult result = ringPick ? ATTACKRESULT_POSSIBLE : canAnyForceAttack( allSelected, obj, pos );
 
 		if( result == ATTACKRESULT_POSSIBLE || result == ATTACKRESULT_POSSIBLE_AFTER_MOVING )
 		{
@@ -1741,7 +1785,26 @@ GameMessage::Type CommandTranslator::evaluateContextCommand( Drawable *draw,
 		// if there is a location to which we should attack.
 		drawableInWay = draw;
 	}
-	
+
+	// A plain click on a radar contact's ring is an attack on the unit the radar painted, hidden in the
+	// fog as it is.  It skips every branch below, since each of them reads the target; the hint carries
+	// no id and the cursor reads the drawable under the mouse, never this one.
+	if( obj == NULL )
+	{
+		Object *contact = pickRadarContact( pos );
+		if( contact )
+		{
+			if( type == DO_HINT )
+			{
+				TheMessageStream->appendMessage( GameMessage::MSG_DO_ATTACK_OBJECT_HINT );
+				return GameMessage::MSG_DO_ATTACK_OBJECT_HINT;
+			}
+			if( TheInGameUI->isInWaypointMode() && type == DO_COMMAND )
+				TheInGameUI->markNextOrderQueued( ORDER_QUEUE_APPEND );
+			return issueAttackCommand( contact->getDrawable(), type );
+		}
+	}
+
 	GameMessage::Type msgType = GameMessage::MSG_INVALID;
 
 	// Then we should determine if the game currently prefers selection events. If it does, then return

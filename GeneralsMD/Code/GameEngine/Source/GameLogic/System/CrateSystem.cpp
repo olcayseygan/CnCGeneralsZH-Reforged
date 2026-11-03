@@ -157,9 +157,9 @@ const CrateTemplate *CrateSystem::findCrateTemplate(AsciiString name) const
 			CrateTemplateOverride overridable(m_crateTemplateVector[i]);
 			return overridable;
 		}
-		
 
-	return NULL;
+	AsciiString retailName;
+	return TheModNamespace.findRetailName(name, MODNAME_CRATE, &retailName) ? findCrateTemplate(retailName) : NULL;
 }
 
 CrateTemplate *CrateSystem::friend_findCrateTemplate(AsciiString name)

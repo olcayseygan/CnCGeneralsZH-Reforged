@@ -537,7 +537,7 @@ const char *const ModNamespace::FactionFiles[] =
 {
 	"Data\\INI\\Science.ini", "Data\\INI\\PlayerTemplate.ini", "Data\\INI\\FXList.ini", "Data\\INI\\Weapon.ini",
 	"Data\\INI\\ObjectCreationList.ini", "Data\\INI\\Locomotor.ini", "Data\\INI\\SpecialPower.ini",
-	"Data\\INI\\DamageFX.ini", "Data\\INI\\Armor.ini", "Data\\INI\\Object", "Data\\INI\\Upgrade.ini",
+	"Data\\INI\\DamageFX.ini", "Data\\INI\\Armor.ini", "Data\\INI\\Object", "Data\\INI\\Crate.ini", "Data\\INI\\Upgrade.ini",
 	"Data\\INI\\CommandButton.ini", "Data\\INI\\CommandSet.ini", "Data\\INI\\ParticleSystem.ini",
 	"Data\\INI\\MappedImages", "Data\\INI\\Music.ini",
 	"Data\\INI\\SoundEffects.ini", "Data\\INI\\Speech.ini", "Data\\INI\\Voice.ini",
@@ -558,6 +558,7 @@ static const struct { const char *keyword; ModNameType type; } ModBlockTypes[] =
 	{ "Locomotor", MODNAME_LOCOMOTOR }, { "PlayerTemplate", MODNAME_PLAYERTEMPLATE },
 	{ "MappedImage", MODNAME_MAPPEDIMAGE },
 	{ "AudioEvent", MODNAME_AUDIOEVENT }, { "DialogEvent", MODNAME_AUDIOEVENT }, { "MusicTrack", MODNAME_AUDIOEVENT },
+	{ "CrateData", MODNAME_CRATE },
 };
 
 void ModNamespace::scanMods( void )

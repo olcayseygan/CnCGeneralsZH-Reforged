@@ -477,6 +477,7 @@ found and fixed, EA's own, not port damage.**
 - A mod whose unit is switched on, held back or stripped by an upgrade the mod never defines no longer crashes the game as the map loads. The missing name is skipped and written to the log once, and the rest of the unit's upgrades work.
 - A mod or an install folder carrying an older skirmish room screen, one without the match record panel, no longer crashes the game on the way into Skirmish. The room opens without the record and plays as before.
 - A unit that leaves the factory already a veteran with Chemical Suits on no longer crashes the game (a player hit it under a mod). The suits went on before the unit had a body on screen to mark; such a unit now goes without the ground marking under it.
+- ShockWave's Supply Drop Zone pays again, +1500 a drop for every USA general. A mod's own crates (money, salvage, healing) load beside retail's.
 
 ## One interface
 

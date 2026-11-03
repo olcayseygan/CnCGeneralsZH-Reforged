@@ -1,0 +1,12 @@
+# ShockWave's Supply Drop Zone pays out: each drop is six parachuted dummies that, on landing, make a
+# 250 money crate and a structure that collects it (the crate lives in the mod's Crate.ini).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -mod D:\zhr-mods-new\ShockWave\ -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2
+#     -takeover -side 0 M1~FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 24000
+#     -scenario shw_supplydrop -logPrefix shwdrop_
+#
+# The HEADLESS PLAYER line for slot 0 gives the money earned: +1500 a drop, the first about two and
+# a half minutes in, then one every two minutes.
+
+30    spawn      0  M1~AmericaSupplyDropZone     1  start0:250:0

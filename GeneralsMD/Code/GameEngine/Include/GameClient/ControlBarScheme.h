@@ -59,7 +59,7 @@
 // FORWARD REFERENCES /////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 class AsciiString;
-class playerTemplate;
+class PlayerTemplate;
 class Image;
 enum TimeOfDay : Int;
 
@@ -357,9 +357,13 @@ private:
 //-----------------------------------------------------------------------------
 /// a mod's faction, which gets our American power tray (owner's call)
 Bool ControlBarIsModFaction( const PlayerTemplate *pt );
-/// the side's emblem the observer's column, the rack and the lobbies show: SSObserver and the template's
-/// name less a leading "Faction" and a trailing "General" (SSObserverAmericaLaser), else
-/// SSObserver<USA|China|GLA|Turkiye> for the country its base side or side names, else its EnabledImage
+/// a side's picture of one family, prefix SSObserver, SSScore, FactionPicker or Gameinfo: the prefix and
+/// the template's name (less "Faction" and "General" but for FactionPicker: SSScoreAmericaLaser,
+/// FactionPickerFactionAmericaLaserGeneral), else the prefix and the base name of the country its base
+/// side or side names (SSScoreUSA, FactionPickerFactionAmerica, GameinfoAMRCA), else NULL
+const Image *ControlBarSideImage( const PlayerTemplate *pt, const char *prefix );
+/// the side's emblem the observer's column and the rack show: ControlBarSideImage's SSObserver, else
+/// its EnabledImage
 const Image *ControlBarSideEmblem( const PlayerTemplate *pt );
 
 #endif // __CONTROL_BAR_SCHEME_H_

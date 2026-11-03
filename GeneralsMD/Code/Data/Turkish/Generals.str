@@ -15722,7 +15722,7 @@ GUI:HudCameraFree
 END
 
 GUI:HudCameraDirector
-"Yönetmen"
+"Direktör"
 END
 
 GUI:HudCameraPlayer

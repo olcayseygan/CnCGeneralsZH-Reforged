@@ -41,6 +41,7 @@
 #include "Common/ThingTemplate.h"
 #include "GameClient/CampaignManager.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
@@ -51,6 +52,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Mouse.h"
+#include "GameClient/ObserverCamera.h"
 #include "GameClient/UIStyle.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -130,6 +132,7 @@ struct GraphPlayer
 	UnicodeString side;
 	Color color;
 	Color nameColor;	///< the colour lifted where it is too dark to read as words
+	const Image *emblem;	///< the army's SSScore emblem before the name, NULL for a campaign's side
 	Bool winner;
 	Int stats[ SUMMARY_COLUMN_COUNT ];
 };
@@ -184,6 +187,7 @@ static GameFont *s_tinyFont = NULL;
 static Int s_tab = GRAPH_TAB_SUMMARY;
 static Bool s_everyBuild = FALSE;
 static std::vector< GraphPlayer > s_players;
+static const Image *s_watermark = NULL;		///< the local player's army card, faint behind the Summary's table
 static std::vector< GraphText > s_texts;
 static std::vector< GraphMark > s_marks;
 static std::vector< GraphLine > s_lines;
@@ -232,6 +236,30 @@ static Int textWidth( DisplayString *string )
 	Int width, height;
 	string->getSize( &width, &height );
 	return width;
+}
+
+/// U+2026 by number: a u"" literal is read in the machine's code page by MSVC
+static const WideChar SCORE_ELLIPSIS[] = { 0x2026, 0 };
+
+/** text as it fits widest pixels in font: whole, or as many of its first characters as fit with an
+	* ellipsis after them (ObserverCamera_fitCount), spaces before the ellipsis dropped.  A skirmish
+	* name read from the preferences, or the machine's own name standing in for one, has no length cap. */
+static UnicodeString fittedText( const UnicodeString &text, GameFont *font, Int widest )
+{
+	DisplayString *string = newText( text, font );
+	std::vector< Int > prefixWidths( text.getLength() + 1, 0 );
+	for( Int count = 1; count <= text.getLength(); count++ )
+		prefixWidths[ count ] = string->getWidth( count );
+	string->setText( UnicodeString( SCORE_ELLIPSIS ) );
+	const Int kept = ObserverCamera_fitCount( prefixWidths, textWidth( string ), widest );
+	TheDisplayStringManager->freeDisplayString( string );
+	if( kept == text.getLength() )
+		return text;
+	UnicodeString cut = text;
+	while( cut.getLength() > kept || ( cut.getLength() > 0 && cut.getCharAt( cut.getLength() - 1 ) == u' ' ) )
+		cut.removeLastChar();
+	cut.concat( SCORE_ELLIPSIS );
+	return cut;
 }
 
 /** align: 0 puts x at the text's left, 1 at its middle, 2 at its right.  Returns the text's width. */
@@ -441,7 +469,15 @@ static void layoutSummary( Int top, Int width, Int bottom, Int pad )
 	const Int line = s_bigFont->height;
 	const Int left = pad * 2;
 	const Int right = width - pad * 2;
-	const Int namesRight = left + ( right - left ) / 3;
+	const Int subTop = top + s_font->height + pad / 2;
+	const Int tableTop = subTop + smallLine + pad / 2;
+	const Int rows = max( (Int)s_players.size(), 1 );
+	const Int rowHeight = max( min( ( bottom - tableTop ) / rows, line * 2 + pad * 2 ), line + pad / 3 );
+	// the army's emblem, 60x40 at 1080, stands before the name; the names' column grows by its width
+	const Int emblemHeight = min( UIStyle::px( 40 ), rowHeight - pad );
+	const Int emblemWidth = emblemHeight * 3 / 2;
+	const Int emblemRoom = emblemWidth + pad;
+	const Int namesRight = left + emblemRoom + ( right - left - emblemRoom ) / 3;
 	const Int groupGap = pad * 2;
 	const Int column = ( right - namesRight - ( SUMMARY_GROUP_COUNT - 1 ) * groupGap ) / SUMMARY_COLUMN_COUNT;
 
@@ -450,7 +486,6 @@ static void layoutSummary( Int top, Int width, Int bottom, Int pad )
 	for( Int each = 0; each < SUMMARY_COLUMN_COUNT; each++ )
 		columnRight[ each ] = namesRight + ( each + 1 ) * column + theColumnGroup[ each ] * groupGap;
 
-	const Int subTop = top + s_font->height + pad / 2;
 	for( Int group = 0; group < SUMMARY_GROUP_COUNT; group++ )
 	{
 		Int first = SUMMARY_COLUMN_COUNT, last = 0;
@@ -468,7 +503,7 @@ static void layoutSummary( Int top, Int width, Int bottom, Int pad )
 	}
 	for( Int each = 0; each < SUMMARY_COLUMN_COUNT; each++ )
 		addText( TheGameText->fetch( theColumnLabels[ each ] ), s_smallFont, columnRight[ each ], subTop, UIStyle::MUTED, 2 );
-	Int y = subTop + smallLine + pad / 2;
+	Int y = tableTop;
 	addRule( left, y, right, y, UIStyle::FRAME );
 
 	// the row a column's best stands in, or -1 where two rows share it
@@ -491,25 +526,35 @@ static void layoutSummary( Int top, Int width, Int bottom, Int pad )
 		}
 	}
 
-	const Int rows = max( (Int)s_players.size(), 1 );
 	const Int sideLine = s_font->height;
-	const Int rowHeight = max( min( ( bottom - y ) / rows, line * 2 + pad * 2 ), line + pad / 3 );
 	// the side goes under the name where the row has room for both, beside it where not
 	const Bool sideUnder = rowHeight >= line + sideLine + pad / 2;
+	// a name and its side stop a pad short of the winner's box, or of the numbers
+	DisplayString *winnerText = newText( TheGameText->fetch( "GUI:SummaryWinner" ), s_font );
+	const Int winnerRoom = textWidth( winnerText ) + pad * 3;
+	TheDisplayStringManager->freeDisplayString( winnerText );
 	for( size_t each = 0; each < s_players.size(); each++ )
 	{
 		const GraphPlayer &player = s_players[ each ];
 		const Int nameY = y + ( rowHeight - ( sideUnder && !player.side.isEmpty() ? line + sideLine : line ) ) / 2;
 		const Int stripe = UIStyle::stripeWidth();
 		s_marks.push_back( newMark( left, y + pad / 2, stripe, rowHeight - pad, player.color, player.color ) );
-		const Int x = left + stripe + pad;
-		const Int nameWidth = addText( player.name, s_bigFont, x, nameY, player.nameColor );
+		if( player.emblem )
+		{
+			// the mark draws its picture 2 in from its box, so the box is the emblem grown by 2
+			GraphMark emblem = newMark( left + stripe + pad - 2, y + ( rowHeight - emblemHeight ) / 2 - 2, emblemWidth + 4, emblemHeight + 4, 0, 0 );
+			emblem.image = player.emblem;
+			s_marks.push_back( emblem );
+		}
+		const Int x = left + stripe + pad + emblemRoom;
+		const Int room = namesRight - ( player.winner ? winnerRoom : pad ) - x;
+		const Int nameWidth = addText( fittedText( player.name, s_bigFont, room ), s_bigFont, x, nameY, player.nameColor );
 		if( !player.side.isEmpty() )
 		{
 			if( sideUnder )
-				addText( player.side, s_font, x, nameY + line, UIStyle::MUTED );
-			else
-				addText( player.side, s_smallFont, x + nameWidth + pad, nameY + line - smallLine - 1, UIStyle::MUTED );
+				addText( fittedText( player.side, s_font, room ), s_font, x, nameY + line, UIStyle::MUTED );
+			else if( room - nameWidth - pad > 0 )
+				addText( fittedText( player.side, s_smallFont, room - nameWidth - pad ), s_smallFont, x + nameWidth + pad, nameY + line - smallLine - 1, UIStyle::MUTED );
 		}
 		if( player.winner )
 		{
@@ -903,6 +948,17 @@ static void drawPanel( GameWindow *window, WinInstanceData *instData )
 	UIStyle::wordmark( s_wordmark, ox + width - UIStyle::px( UIStyle::ROOM_INSET - UIStyle::ROOM_PANEL_LEFT ), titleMiddle - markHeight / 2 );
 	UIStyle::rule( ox, oy + s_ruleY, width );
 
+	// the local player's army card behind the Summary's table, 560 at 1080 and a tenth opaque; the
+	// colour stays, since an image drawn in grey ignores its alpha
+	if( s_watermark && s_tab == GRAPH_TAB_SUMMARY )
+	{
+		const Int top = s_tabBox[ 0 ].hi.y;
+		const Int size = min( UIStyle::px( 560 ), s_contentBottom - top );
+		const Int x = ox + ( width - size ) / 2;
+		const Int y = oy + ( top + s_contentBottom - size ) / 2;
+		TheDisplay->drawImage( s_watermark, x, y, x + size, y + size, GameMakeColor( 255, 255, 255, 26 ) );
+	}
+
 	for( Int tab = 0; tab < GRAPH_TAB_COUNT; tab++ )
 	{
 		const IRegion2D &box = s_tabBox[ tab ];
@@ -1027,6 +1083,7 @@ static WindowMsgHandledType panelInput( GameWindow *window, UnsignedInt msg, Win
 void ScoreScreenGraphsInit( GameWindow *backdrop )
 {
 	s_players.clear();
+	s_watermark = NULL;
 	s_tab = GRAPH_TAB_SUMMARY;
 	s_everyBuild = FALSE;
 	s_font = UIStyle::font( UIStyle::TEXT_STRONG );
@@ -1082,6 +1139,16 @@ void ScoreScreenGraphsAddPlayer( Player *player, const UnicodeString &name, Colo
 	entry.side = side ? side->getDisplayName() : UnicodeString::TheEmptyString;
 	entry.color = color;
 	entry.nameColor = UIStyle::readable( color );
+	entry.emblem = NULL;
+	if( side )
+	{
+		// SSScoreChinaNuke, else the country's SSScoreChina, else the observer's emblem of the same name
+		entry.emblem = ControlBarSideImage( side, "SSScore" );
+		if( entry.emblem == NULL )
+			entry.emblem = ControlBarSideEmblem( side );
+		if( player->isLocalPlayer() )
+			s_watermark = ControlBarSideImage( side, "FactionPicker" );
+	}
 	entry.winner = TheVictoryConditions->hasAchievedVictory( player );
 	entry.stats[ SUMMARY_UNITS_BUILT ] = score->getTotalUnitsBuilt();
 	entry.stats[ SUMMARY_UNITS_LOST ] = score->getTotalUnitsLost();
@@ -1102,6 +1169,7 @@ void ScoreScreenGraphsAddSide( const UnicodeString &name, Color color, Int units
 	entry.name = name;
 	entry.color = color;
 	entry.nameColor = UIStyle::readable( color );
+	entry.emblem = NULL;
 	entry.winner = FALSE;
 	entry.stats[ SUMMARY_UNITS_BUILT ] = unitsBuilt;
 	entry.stats[ SUMMARY_UNITS_LOST ] = unitsLost;

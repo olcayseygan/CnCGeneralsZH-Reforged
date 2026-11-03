@@ -1266,45 +1266,78 @@ Bool ControlBarIsModFaction( const PlayerTemplate *pt )
 }
 
 //-----------------------------------------------------------------------------
-/** The emblem is looked up by name, so a sheet that adds one for a general needs no INI edit and the
-	* player templates (in the INI checksum) stay as they are.  A mod's sub-faction or a faction built
-	* on another country's base side gets that country's. */
+/** How each family of side pictures is named.  SSObserver and SSScore take the template's name less a
+	* leading "Faction" and a trailing "General" (SSScoreAmericaLaser), FactionPicker the whole name
+	* (FactionPickerFactionAmericaLaserGeneral); the country's own picture is the retail name where
+	* retail has one (GameinfoAMRCA). */
+//-----------------------------------------------------------------------------
+struct SideImageNames
+{
+	const char *prefix;
+	Bool wholeName;
+	const char *country[ 4 ];	///< USA, China, GLA, Turkiye
+};
+static const SideImageNames theSideImageNames[] =
+{
+	{ "SSObserver", FALSE, { "USA", "China", "GLA", "Turkiye" } },
+	{ "SSScore", FALSE, { "USA", "China", "GLA", "Turkiye" } },
+	{ "FactionPicker", TRUE, { "FactionAmerica", "FactionChina", "FactionGLA", "FactionTurkiye" } },
+	{ "Gameinfo", FALSE, { "AMRCA", "CHINA", "GLA", "TURKIYE" } },
+};
+
+//-----------------------------------------------------------------------------
+/** Looked up by name, so a sheet that adds a picture for a general needs no INI edit and the player
+	* templates (in the INI checksum) stay as they are.  Names are case blind, so GameinfoTurkiye finds
+	* GameinfoTURKIYE and GameinfoBoss retail's GameinfoBOSS.  A mod's faction is named M<n>~ and never
+	* matches, so it gets the country its base side names, as does any general without a picture. */
+//-----------------------------------------------------------------------------
+const Image *ControlBarSideImage( const PlayerTemplate *pt, const char *prefix )
+{
+	const SideImageNames *names = NULL;
+	for( Int each = 0; each < ARRAY_SIZE( theSideImageNames ); each++ )
+	{
+		if( strcmp( theSideImageNames[ each ].prefix, prefix ) == 0 )
+			names = &theSideImageNames[ each ];
+	}
+	DEBUG_ASSERTCRASH( names != NULL, ( "ControlBarSideImage: no names for prefix %s", prefix ) );
+
+	static const std::string LEADING = "Faction";
+	static const std::string TRAILING = "General";
+	std::string general = pt->getName().str();
+	if( !names->wholeName )
+	{
+		if( general.compare( 0, LEADING.size(), LEADING ) == 0 )
+			general.erase( 0, LEADING.size() );
+		if( general.size() >= TRAILING.size() && general.compare( general.size() - TRAILING.size(), TRAILING.size(), TRAILING ) == 0 )
+			general.erase( general.size() - TRAILING.size() );
+	}
+	AsciiString name;
+	name.format( "%s%s", prefix, general.c_str() );
+	const Image *image = TheMappedImageCollection->findImageByName( name );
+	if( image != NULL )
+		return image;
+
+	const AsciiString side = pt->getBaseSide().isEmpty() ? pt->getSide() : pt->getBaseSide();
+	Int country = -1;
+	if( side.startsWithNoCase( "America" ) || side.startsWithNoCase( "USA" ) )
+		country = 0;
+	else if( side.startsWithNoCase( "China" ) )
+		country = 1;
+	else if( side.startsWithNoCase( "GLA" ) )
+		country = 2;
+	else if( side.startsWithNoCase( "Turkiye" ) )
+		country = 3;
+	if( country < 0 )
+		return NULL;
+	name.format( "%s%s", prefix, names->country[ country ] );
+	return TheMappedImageCollection->findImageByName( name );
+}
+
 //-----------------------------------------------------------------------------
 const Image *ControlBarSideEmblem( const PlayerTemplate *pt )
 {
-	static const char *const PREFIX = "SSObserver";
-	static const std::string LEADING = "Faction";
-	static const std::string TRAILING = "General";
-	// FactionAmericaLaserGeneral wears SSObserverAmericaLaser, FactionTurkiye SSObserverTurkiye
-	std::string general = pt->getName().str();
-	if( general.compare( 0, LEADING.size(), LEADING ) == 0 )
-		general.erase( 0, LEADING.size() );
-	if( general.size() >= TRAILING.size() && general.compare( general.size() - TRAILING.size(), TRAILING.size(), TRAILING ) == 0 )
-		general.erase( general.size() - TRAILING.size() );
-	AsciiString name;
-	name.format( "%s%s", PREFIX, general.c_str() );
-	const Image *emblem = TheMappedImageCollection->findImageByName( name );
-	if( emblem != NULL )
-		return emblem;
-
-	const AsciiString side = pt->getBaseSide().isEmpty() ? pt->getSide() : pt->getBaseSide();
-	const char *country = NULL;
-	if( side.startsWithNoCase( "America" ) || side.startsWithNoCase( "USA" ) )
-		country = "USA";
-	else if( side.startsWithNoCase( "China" ) )
-		country = "China";
-	else if( side.startsWithNoCase( "GLA" ) )
-		country = "GLA";
-	else if( side.startsWithNoCase( "Turkiye" ) )
-		country = "Turkiye";
-	if( country != NULL )
-	{
-		name.format( "%s%s", PREFIX, country );
-		emblem = TheMappedImageCollection->findImageByName( name );
-		if( emblem != NULL )
-			return emblem;
-	}
-	return pt->getEnabledImage();
+	const Image *emblem = ControlBarSideImage( pt, "SSObserver" );
+	return emblem != NULL ? emblem : pt->getEnabledImage();
 }
 
 //-----------------------------------------------------------------------------

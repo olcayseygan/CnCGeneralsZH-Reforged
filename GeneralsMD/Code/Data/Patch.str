@@ -2851,15 +2851,15 @@ CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
 END
 
 UPGRADE:TurkiyePrecisionGuidance
-"Precision Guidance"
+"Inertial Guidance"
 END
 
 CONTROLBAR:UpgradeTurkiyePrecisionGuidance
-"&Precision Guidance"
+"&Inertial Guidance"
 END
 
 CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
-"Shots at ground nobody sees spread four times less."
+"Rockets fired outside radar cover hit two shots in five, up from one."
 END
 
 UPGRADE:TurkiyeArmorPack

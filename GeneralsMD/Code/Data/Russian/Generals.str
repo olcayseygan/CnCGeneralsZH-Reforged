@@ -18074,15 +18074,15 @@ CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
 END
 
 UPGRADE:TurkiyePrecisionGuidance
-"Точное наведение"
+"Инерциальное наведение"
 END
 
 CONTROLBAR:UpgradeTurkiyePrecisionGuidance
-"&Точное наведение"
+"&Инерциальное наведение"
 END
 
 CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
-"Выстрелы по земле, которую никто не видит, разбрасывает в четыре раза меньше."
+"Ракеты, выпущенные вне зоны радаров, попадают дважды из пяти, а не один раз."
 END
 
 UPGRADE:TurkiyeArmorPack

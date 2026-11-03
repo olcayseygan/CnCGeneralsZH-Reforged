@@ -1016,6 +1016,7 @@ GameEngine/Include/GameLogic/Module/ProneUpdate.h
 GameEngine/Include/GameLogic/Module/PropagandaCenterBehavior.h
 GameEngine/Include/GameLogic/Module/PropagandaTowerBehavior.h
 GameEngine/Include/GameLogic/Module/QueueProductionExitUpdate.h
+GameEngine/Include/GameLogic/Module/RadarCoverageBehavior.h
 GameEngine/Include/GameLogic/Module/RadarJamSpecialPower.h
 GameEngine/Include/GameLogic/Module/RadarUpdate.h
 GameEngine/Include/GameLogic/Module/RadarUpgrade.h
@@ -1539,6 +1540,7 @@ GameEngine/Source/GameLogic/Object/Behavior/PoisonedBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/PrisonBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/PropagandaCenterBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/PropagandaTowerBehavior.cpp
+GameEngine/Source/GameLogic/Object/Behavior/RadarCoverageBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/RebuildHoleBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/SlowDeathBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/SpawnBehavior.cpp

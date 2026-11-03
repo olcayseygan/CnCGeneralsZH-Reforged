@@ -18122,15 +18122,15 @@ CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
 END
 
 UPGRADE:TurkiyePrecisionGuidance
-"Guidage de précision"
+"Guidage inertiel"
 END
 
 CONTROLBAR:UpgradeTurkiyePrecisionGuidance
-"Guidage de &précision"
+"Guidage &inertiel"
 END
 
 CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
-"Les tirs sur un sol que personne ne voit se dispersent quatre fois moins."
+"Les roquettes tirées hors de la couverture radar touchent deux fois sur cinq au lieu d'une."
 END
 
 UPGRADE:TurkiyeArmorPack

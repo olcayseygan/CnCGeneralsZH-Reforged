@@ -49,6 +49,7 @@
 #include "Common/Player.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
  
 #include "GameClient/Drawable.h"
@@ -77,6 +78,7 @@
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/AssistedTargetingUpdate.h"
 #include "GameLogic/Module/ProjectileStreamUpdate.h"
+#include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/TerrainLogic.h"
 
@@ -238,7 +240,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "RequestAssistRange",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_requestAssistRange) },		
 	{ "AcceptableAimDelta",				INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_aimDelta) },		
 	{ "ScatterRadius",						INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterRadius) },		
-	{ "BlindScatterRadius",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_blindScatterRadius) },
+	{ "RadarBlindHitChance",			INI::parsePercentToReal,								NULL,							offsetof(WeaponTemplate, m_radarBlindHitChance) },
+	{ "RadarBlindHitUpgrade",			INI::parseAsciiString,									NULL,							offsetof(WeaponTemplate, m_radarBlindHitUpgrade) },
+	{ "RadarBlindHitUpgradeChance",	INI::parsePercentToReal,								NULL,							offsetof(WeaponTemplate, m_radarBlindHitUpgradeChance) },
 	{ "SeeksMostValuable",				INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_seeksMostValuable) },
 	{ "ScatterTargetScalar",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterTargetScalar) },		
 	{ "ScatterRadiusVsInfantry",	INI::parseReal,													NULL,							offsetof( WeaponTemplate, m_infantryInaccuracyDist ) },
@@ -329,7 +333,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_requestAssistRange						= 0.0f;
 	m_aimDelta											= 0.0f;
 	m_scatterRadius									= 0.0f;
-	m_blindScatterRadius						= 0.0f;
+	m_radarBlindHitChance						= 1.0f;
+	m_radarBlindHitUpgradeChance		= 1.0f;
 	m_seeksMostValuable							= FALSE;
 	m_scatterTargetScalar						= 0.0f;
 	m_shockWaveAmount								= 0.0f;
@@ -1075,18 +1080,35 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 
 	Coord3D projectileDestination = *victimPos; //Need to copy this, as we have a pointer to their actual position
 	Real scatterRadius = 0.0f;
-	/* Turkiye's artillery fires past its own sight and leans on a spotter.  A shot at ground its
-		 player does not see (a force fire into the fog, a target the spotter lost) spreads by
-		 BlindScatterRadius on top.  The shroud is logic state, the same every machine reads. */
-	Real blindScatter = 0.0f;
-	if( m_blindScatterRadius > 0.0f && sourceObj && sourceObj->getControllingPlayer() &&
-			ThePartitionManager->getShroudStatusForPlayer( sourceObj->getControllingPlayer()->getPlayerIndex(), victimPos ) != CELLSHROUD_CLEAR )
-		blindScatter = m_blindScatterRadius;
-	if( m_scatterRadius > 0.0f || blindScatter > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
+	/* Turkiye's rockets fly on radar.  Aimed where no radar of the firer's player or an ally's reaches
+		 (RadarCoverageBehavior), a shot keeps its target only RadarBlindHitChance of the time, or
+		 RadarBlindHitUpgradeChance once the player has RadarBlindHitUpgrade.  The rest come down on the
+		 ground beside the target, past its edge and the blast, so they miss.  The radars, the upgrade and
+		 the roll are all logic state and the logic stream. */
+	Bool radarMiss = FALSE;
+	if( m_radarBlindHitChance < 1.0f && !isProjectileDetonation && sourceObj &&
+			!RadarCoverageBehavior::isCovered( sourceObj->getControllingPlayer(), victimPos ) )
+	{
+		Real hitChance = m_radarBlindHitChance;
+		if( m_radarBlindHitUpgrade.isNotEmpty() &&
+				sourceObj->getControllingPlayer()->hasUpgradeComplete( TheUpgradeCenter->findUpgrade( m_radarBlindHitUpgrade ) ) )
+			hitChance = m_radarBlindHitUpgradeChance;
+		radarMiss = GameLogicRandomValueReal( 0.0f, 1.0f ) >= hitChance;
+	}
+	if( radarMiss || m_scatterRadius > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
 	{
 		// This weapon scatters, so clear the victimObj, as we are no longer shooting it directly,
 		// and find a random point within the radius to shoot at as victimPos
-		scatterRadius = m_scatterRadius + blindScatter;
+		scatterRadius = m_scatterRadius;
+		Real minScatterRadius = 0.0f;
+		if( radarMiss )
+		{
+			// clear of the target's edge and of the blast, and out to as far again
+			minScatterRadius = max( getPrimaryDamageRadius( bonus ), getSecondaryDamageRadius( bonus ) );
+			if( victimObj )
+				minScatterRadius += victimObj->getGeometryInfo().getBoundingCircleRadius();
+			scatterRadius = 2.0f * minScatterRadius;
+		}
 
 		// if it's an object, aim at the center, not the ground part (srj)
 		PathfindLayerEnum targetLayer = LAYER_GROUND;
@@ -1108,7 +1130,7 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		//victimObj = NULL; // his position is already in victimPos, if he existed
 
 		//Randomize the scatter radius (sometimes it can be more accurate than others)
-		scatterRadius = GameLogicRandomValueReal( 0, scatterRadius );
+		scatterRadius = GameLogicRandomValueReal( minScatterRadius, scatterRadius );
 		Real scatterAngleRadian = GameLogicRandomValueReal( 0, 2*PI );
 
 		Coord3D firingOffset;

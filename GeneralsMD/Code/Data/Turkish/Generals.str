@@ -17229,15 +17229,15 @@ CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
 END
 
 UPGRADE:TurkiyePrecisionGuidance
-"Hassas Güdüm"
+"Atalet Güdüm"
 END
 
 CONTROLBAR:UpgradeTurkiyePrecisionGuidance
-"&Hassas Güdüm"
+"Ata&let Güdüm"
 END
 
 CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
-"Kimsenin görmediği yere atışın dağılımı dörtte birine iner."
+"Radar menzili dışına atılan roketlerin isabeti beşte birden beşte ikiye çıkar."
 END
 
 UPGRADE:TurkiyeArmorPack

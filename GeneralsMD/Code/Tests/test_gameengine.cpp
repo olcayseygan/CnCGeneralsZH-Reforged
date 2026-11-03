@@ -2141,9 +2141,9 @@ TEST(hotkeys_file_reads_the_launchers_rows_and_leaves_its_defaults_out)
 	// KEY_NONE is not a key the launcher shows, so the shipped hold comes back as its own bar-only row
 	CHECK( hold != NULL && hold->barOnly && hold->binding == HotkeyBinding( "", "CTRL" ) && hold->pair == "END_FORCEATTACK" );
 	CHECK( idle != NULL && idle->launcherDefault && idle->binding.key == "KEY_I" );
-	// the requests to the allies start on Alt and Z, X, C and V, as the launcher writes them (issue 129)
+	// the signals to the allies start on Alt and Z, X and C, as the launcher writes them (issue 129)
 	static const char *const ASKS[][ 2 ] = { { "SIGNAL_ATTACK", "KEY_Z" }, { "SIGNAL_DEFEND", "KEY_X" },
-		{ "SIGNAL_ATTENTION", "KEY_C" }, { "REQUEST_MONEY", "KEY_V" } };
+		{ "SIGNAL_ATTENTION", "KEY_C" } };
 	for( size_t ask = 0; ask < sizeof( ASKS ) / sizeof( ASKS[ 0 ] ); ask++ )
 	{
 		Bool found = FALSE;
@@ -2152,6 +2152,12 @@ TEST(hotkeys_file_reads_the_launchers_rows_and_leaves_its_defaults_out)
 				&& rows[ each ].binding == HotkeyBinding( ASKS[ ask ][ 1 ], "ALT" ) && rows[ each ].category == "INFORMATION" );
 		CHECK( found );
 	}
+	// request money has no key: Alt+V is evacuate in place
+	Bool money = FALSE;
+	for( size_t each = 0; each < rows.size(); each++ )
+		money = money || ( rows[ each ].id == "REQUEST_MONEY" && !rows[ each ].launcherDefault
+			&& rows[ each ].binding == HotkeyBinding() && rows[ each ].category == "INFORMATION" );
+	CHECK( money );
 
 	// the launcher's own defaults in the player's part are no change of his
 	const HotkeysFile mine = Hotkeys_parse(

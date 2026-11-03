@@ -17671,3 +17671,7 @@ END
 GUI:SocketRedirected
 "LAN IP adresi %ls, ama sistem oyunun bağlantısını %ls üzerine koydu. Bir VPN'in bölünmüş tüneli (split tunnel) ya da bir güvenlik duvarı bağlantıyı yönlendirdi, bu yüzden ağınızdaki kimse sizi duyamıyor. Oyun için bölünmüş tüneli kapatıp yeniden deneyin."
 END
+
+CONTROLBAR:ToolTipEvacuateAt
+"Seçtiğiniz yere gidip tüm birliklere çıkma emri verin\nAlt: burada indir"
+END

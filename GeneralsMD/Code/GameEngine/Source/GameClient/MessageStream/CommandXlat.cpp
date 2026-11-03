@@ -1890,6 +1890,15 @@ GameMessage::Type CommandTranslator::evaluateContextCommand( Drawable *draw,
 				}
 			}
 
+			// Combat Drop ropes down onto any ground: a unit, or a building nobody can rope into, under
+			// the cursor leaves the drop on the ground there instead of refusing the click
+			if( obj && command->getCommandType() == GUI_COMMAND_COMBATDROP && BitTest( command->getOptions(), NEED_TARGET_POS )
+					&& !TheInGameUI->canSelectedObjectsDoAction( InGameUI::ACTIONTYPE_COMBATDROP_INTO, obj, InGameUI::SELECTION_ANY ) )
+			{
+				draw = NULL;
+				obj = NULL;
+			}
+
 			Bool currentlyValid = FALSE;
 			ObjectID objectID = obj ? obj->getID() : INVALID_ID;
 			switch( command->getCommandType() )

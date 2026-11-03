@@ -1817,7 +1817,8 @@ public:
 	void groupEnter( Object *obj, CommandSourceType cmdSource );							///< enter the given object
 	void groupDock( Object *obj, CommandSourceType cmdSource );							///< get near given object and wait for enter clearance
 	void groupExit( Object *objectToExit, CommandSourceType cmdSource );			///< get out of this Object
-	void groupEvacuate( CommandSourceType cmdSource );												///< empty its contents
+	void groupEvacuate( CommandSourceType cmdSource, const Coord3D *at = NULL );			///< empty its contents; vehicle transports go to at first
+	static Bool unloadsWhereSent( const Object *obj );												///< a vehicle transport: Evacuate asks for a spot
 	void groupExecuteRailedTransport( CommandSourceType cmdSource );					///< execute railed transport events
 	void groupGoProne( const DamageInfo *damageInfo, CommandSourceType cmdSource );												///< life altering state change, if this AI can do it
 	void groupGuardPosition( const Coord3D *pos, GuardMode guardMode, CommandSourceType cmdSource );						///< guard the given spot

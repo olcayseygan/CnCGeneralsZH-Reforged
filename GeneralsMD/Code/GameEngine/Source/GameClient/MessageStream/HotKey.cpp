@@ -66,6 +66,7 @@
 #include "Common/GlobalData.h"
 #include "Common/INI.h"
 #include "Common/ThingTemplate.h"
+#include "GameClient/CommandXlat.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GadgetPushButton.h"
@@ -137,10 +138,21 @@ Bool HotKeyManager::strokePressesBar( Int key )
 	return !command;
 }
 
+// Alt and the Evacuate button's key empty a transport where it stands instead of asking where
+// (ControlBar::processCommandUI), so that chord is the bar's
+static Bool isEvacuateButton( GameWindow *win )
+{
+	const CommandButton *command = win ? (const CommandButton *)GadgetButtonGetData( win ) : NULL;
+	return command && command->getCommandType() == GUI_COMMAND_EVACUATE;
+}
+
 Bool HotKeyManager::barHoldsKey( Int key, Int modState )
 {
-	// the release presses a button bare or with shift (a batch); a chord with Ctrl or Alt is the command's
-	if( TheHotKeyManager == NULL || TheKeyboard == NULL || key < 0 || key >= STROKE_KEYS || ( modState & ~SHIFT ) != 0 )
+	// the release presses a button bare or with shift (a batch); a chord with Ctrl or Alt is the
+	// command's, but for Alt with the Evacuate button's key
+	const Bool alt = modState == ALT;
+	if( TheHotKeyManager == NULL || TheKeyboard == NULL || key < 0 || key >= STROKE_KEYS ||
+			( ( modState & ~SHIFT ) != 0 && !alt ) )
 		return FALSE;
 	if( TheShell && TheShell->isShellActive() )
 		return FALSE;	// the menus have no command bar, whatever the map still names
@@ -149,7 +161,7 @@ Bool HotKeyManager::barHoldsKey( Int key, Int modState )
 		return FALSE;
 	Bool pressable = FALSE;
 	GameWindow *win = TheHotKeyManager->findHotKey( nameOf( letter ), &pressable );
-	return win != NULL && !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN );
+	return win != NULL && !BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) && ( !alt || isEvacuateButton( win ) );
 }
 
 Bool HotKeyManager::commandMapHolds( const AsciiString& key )
@@ -174,6 +186,7 @@ GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage 
 	if ( t == GameMessage::MSG_RAW_KEY_UP)
 	{
 		// a press the command map took presses no button on its release, whatever the bar shows now
+		const Bool barHeld = HotKeyManager::strokeToBar( msg->getArgument(0)->integer );
 		if( !HotKeyManager::strokePressesBar( msg->getArgument(0)->integer ) )
 			return disp;
 
@@ -198,6 +211,25 @@ GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage 
 		{
 			newModState |= ALT;
 		}
+		// Alt and the Evacuate button's key (barHoldsKey), whichever was let go first: the transport
+		// empties where it stands, as an Alt-click on the button does (ControlBar::processCommandUI)
+		if( barHeld && ( keyState & ( KEY_STATE_ALT | KEY_STATE_PRESSED_WITH_CTRL_ALT ) ) && !( keyState & KEY_STATE_CONTROL ) )
+		{
+			Bool pressable = FALSE;
+			GameWindow *win = TheHotKeyManager ? TheHotKeyManager->findHotKey(
+				HotKeyManager::nameOf( typedLetter( (UnsignedByte)msg->getArgument(0)->integer ) ), &pressable ) : NULL;
+			if( pressable && isEvacuateButton( win ) )
+			{
+				TheInGameUI->setGUICommand( NULL );
+				pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_EVACUATE );
+				TheMessageStream->appendMessage( GameMessage::MSG_EVACUATE );
+				AudioEventRTS buttonClick( "GUIClick" );
+				if( TheAudio )
+					TheAudio->addAudioEvent( &buttonClick );
+				return DESTROY_MESSAGE;
+			}
+		}
+
 		// Ctrl+Alt and a build button's key puts its unit on repeat or takes it off
 		const Bool repeatChord = newModState == ( CTRL | ALT );
 		// shift is allowed through: a shift-click on a build button queues a batch of units, and
@@ -982,11 +1014,11 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 		snprintf( name, sizeof( name ), "COMMAND_SLOT%02d", slot );
 		unbound.push_back( commandRow( name, "GRID" ) );
 	}
-	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker, and Alt with Z, X, C
-	// and V, which nothing in the shipped map holds, for the requests to the allies
+	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker, and Alt with Z, X and C,
+	// which nothing in the shipped map holds, for the signals to the allies. Request money has no key:
+	// Alt+V is evacuate in place.
 	static const char *const DEFAULTS[][ 3 ] = { { "SELECT_NEXT_IDLE_WORKER", "KEY_I", "NONE" },
-		{ "SIGNAL_ATTACK", "KEY_Z", "ALT" }, { "SIGNAL_DEFEND", "KEY_X", "ALT" }, { "SIGNAL_ATTENTION", "KEY_C", "ALT" },
-		{ "REQUEST_MONEY", "KEY_V", "ALT" } };
+		{ "SIGNAL_ATTACK", "KEY_Z", "ALT" }, { "SIGNAL_DEFEND", "KEY_X", "ALT" }, { "SIGNAL_ATTENTION", "KEY_C", "ALT" } };
 	for( size_t each = 0; each < unbound.size(); each++ )
 		for( size_t row = 0; row < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); row++ )
 			if( unbound[ each ].id == DEFAULTS[ row ][ 0 ] )

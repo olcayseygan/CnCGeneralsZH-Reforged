@@ -3331,3 +3331,8 @@ END
 GUI:SocketRedirected
 "The LAN IP is %ls, but the system put the game's connection on %ls. A VPN split tunnel or a firewall redirected it, so nobody on your network can hear you. Turn split tunnelling off for the game and try again."
 END
+
+// A vehicle transport's Evacuate asks for a spot, the transport goes there and empties; Alt empties it where it stands
+CONTROLBAR:ToolTipEvacuateAt
+"Go to the chosen spot and order all units to exit\nAlt: unload here"
+END

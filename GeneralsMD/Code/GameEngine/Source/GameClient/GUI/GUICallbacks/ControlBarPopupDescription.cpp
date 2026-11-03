@@ -91,6 +91,7 @@
 #include "GameClient/MetaEvent.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameLogic/AI.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/Module/FireWeaponWhenDeadBehavior.h"
@@ -786,6 +787,11 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			Object *selectedObject = draw ? draw->getObject() : NULL;
 			if( selectedObject )
 			{
+				// a vehicle transport's Evacuate asks where, and Alt empties it on the spot
+				// (ControlBar::processCommandUI); buildings keep EA's text
+				if( commandButton->getCommandType() == GUI_COMMAND_EVACUATE && AIGroup::unloadsWhereSent( selectedObject ) )
+					descrip = TheGameText->fetch( "CONTROLBAR:ToolTipEvacuateAt" );
+
 				//Special case: Append status of overcharge on China power plant.
 				if( commandButton->getCommandType() == GUI_COMMAND_TOGGLE_OVERCHARGE )
 				{

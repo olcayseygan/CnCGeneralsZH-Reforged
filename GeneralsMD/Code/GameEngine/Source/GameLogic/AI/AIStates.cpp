@@ -3554,7 +3554,10 @@ StateReturnType AIMoveAndEvacuateState::onEnter()
 {
 	Object *obj = getMachineOwner();
 
-	getMachine()->lock("AIMoveAndEvacuateState::onEnter");		// This state is not user interruptable.
+	// A script's or the AI's drop is not user interruptable.  A player's is: a transport sent to
+	// unload across the map takes a new order on the way, as a move would.
+	if( obj->getAI()->getLastCommandSource() != CMD_FROM_PLAYER )
+		getMachine()->lock("AIMoveAndEvacuateState::onEnter");
 
 	m_origin = *obj->getPosition();
 	setAdjustsDestination(true);

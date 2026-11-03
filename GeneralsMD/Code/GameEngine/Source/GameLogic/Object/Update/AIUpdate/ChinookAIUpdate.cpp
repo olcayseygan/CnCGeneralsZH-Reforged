@@ -1362,8 +1362,9 @@ void ChinookAIUpdate::aiDoCommand(const AICommandParms* parms)
 			// the evac state below unloads the whole hold in one frame.  Only take it when the
 			// container has somebody queued to get in or out; otherwise let the standard move
 			// command through, which unloads one passenger at a time.  Never for the _AND_EXIT form a
-			// script reinforcement uses: the standard state asks to land while it is locked, is refused,
-			// and flies the Chinook home to be deleted with everyone still aboard.
+			// script reinforcement uses: the standard state, locked for a script's or the AI's order
+			// (AIMoveAndEvacuateState::onEnter), asks to land, is refused, and flies the Chinook home
+			// to be deleted with everyone still aboard.  A player's drop is not locked.
 			const ContainModuleInterface* contain = getObject()->getContain();
 			const Bool allowExit = parms->m_cmd == AICMD_MOVE_TO_POSITION_AND_EVACUATE_AND_EXIT ||
 				(contain && contain->hasObjectsWantingToEnterOrExit());

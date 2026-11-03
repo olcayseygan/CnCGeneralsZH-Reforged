@@ -18492,3 +18492,7 @@ END
 GUI:FactionPickSideNameHint
 "Cliquez sur le nom d'un camp pour jouer une armée aléatoire de ce camp."
 END
+
+CONTROLBAR:ToolTipEvacuateAt
+"Se rend à l'endroit choisi et ordonne à toutes les unités de sortir.\nAlt : débarquer ici"
+END

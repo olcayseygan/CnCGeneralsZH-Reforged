@@ -18372,3 +18372,7 @@ END
 GUI:SuperweaponTurkiyeKarguSwarm
 "Рой Kargu"
 END
+
+CONTROLBAR:ToolTipEvacuateAt
+"Отправиться в выбранную точку и приказать всем юнитам выйти\nAlt: высадить здесь"
+END

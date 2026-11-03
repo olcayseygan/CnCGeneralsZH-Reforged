@@ -15585,10 +15585,6 @@ GUI:CantBuildTooManyDerrickDefenses
 "Bu petrol kuyularının çevresinde zaten iki savunmanız var."
 END
 
-TOOLTIP:StatTime
-"Üretim süresi"
-END
-
 TOOLTIP:StatSeconds
 "%d sn"
 END
@@ -15641,28 +15637,200 @@ TOOLTIP:StatNewWeaponFigures
 "%d hasar, %d menzil"
 END
 
-TOOLTIP:StatHealthHint
-"(zırhtan sonra kaldırabileceği hasar)"
+TOOLTIP:ArmorNo
+"Yok"
 END
 
-TOOLTIP:StatDamageHint
-"(ana silah, atış başına, zırhtan önce)"
+TOOLTIP:ArmorVulnerableAll
+"Yok"
 END
 
-TOOLTIP:StatAttackSpeedHint
-"(saniyedeki atış, şarjör doldurma dahil)"
+TOOLTIP:ArmorInvulnerable
+"Hasar almaz"
 END
 
-TOOLTIP:StatDamagePerSecondHint
-"(hasar × atış hızı)"
+TOOLTIP:ArmorInvulnerableAll
+"Hasar almaz"
 END
 
-TOOLTIP:StatRangeHint
-"(10, yerleştirme ızgarasının bir karesi)"
+TOOLTIP:ArmorHuman
+"Piyade"
 END
 
-TOOLTIP:StatTimeHint
-"(şu anki enerjiniz ve fabrikalarınızla)"
+TOOLTIP:ArmorHazMatHuman
+"Piyade"
+END
+
+TOOLTIP:ArmorChemSuitHuman
+"Piyade"
+END
+
+TOOLTIP:ArmorInfGen_Human
+"Piyade"
+END
+
+TOOLTIP:ArmorChemReb_Human
+"Piyade"
+END
+
+TOOLTIP:ArmorDemoGenTerrorist
+"Piyade"
+END
+
+TOOLTIP:ArmorStingerSoldier
+"Piyade"
+END
+
+TOOLTIP:ArmorTruck
+"Araç"
+END
+
+TOOLTIP:ArmorHumvee
+"Araç"
+END
+
+TOOLTIP:ArmorDozer
+"Araç"
+END
+
+TOOLTIP:ArmorToxinTruck
+"Araç"
+END
+
+TOOLTIP:ArmorAntiAirVehicle
+"Araç"
+END
+
+TOOLTIP:ArmorQuadCannon
+"Araç"
+END
+
+TOOLTIP:ArmorAvenger
+"Araç"
+END
+
+TOOLTIP:ArmorBattleBusTruck
+"Araç"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusOne
+"Araç"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusTwo
+"Araç"
+END
+
+TOOLTIP:ArmorTank
+"Tank"
+END
+
+TOOLTIP:ArmorUpgradedTank
+"Tank"
+END
+
+TOOLTIP:ArmorDragonTank
+"Tank"
+END
+
+TOOLTIP:ArmorAssaultCrawler
+"Tank"
+END
+
+TOOLTIP:ArmorAvalanche
+"Tank"
+END
+
+TOOLTIP:ArmorAirplane
+"Uçak"
+END
+
+TOOLTIP:ArmorCountermeasuresAirplane
+"Uçak"
+END
+
+TOOLTIP:ArmorSpectreGunship
+"Uçak"
+END
+
+TOOLTIP:ArmorCountermeasuresSpectreGunship
+"Uçak"
+END
+
+TOOLTIP:ArmorComanche
+"Helikopter"
+END
+
+TOOLTIP:ArmorAFG_Comanche
+"Helikopter"
+END
+
+TOOLTIP:ArmorCountermeasuresComanche
+"Helikopter"
+END
+
+TOOLTIP:ArmorAFG_CountermeasuresComanche
+"Helikopter"
+END
+
+TOOLTIP:ArmorChinook
+"Helikopter"
+END
+
+TOOLTIP:ArmorSentryDrone
+"Dron"
+END
+
+TOOLTIP:ArmorMine
+"Mayın"
+END
+
+TOOLTIP:ArmorStructure
+"Bina"
+END
+
+TOOLTIP:ArmorStructureInternetCenter
+"Bina"
+END
+
+TOOLTIP:ArmorStructureTough
+"Tahkimli"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructure
+"Tahkimli"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructureTough
+"Tahkimli"
+END
+
+TOOLTIP:ArmorBattleBusStructureTough
+"Tahkimli"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusOne
+"Tahkimli"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusTwo
+"Tahkimli"
+END
+
+TOOLTIP:ArmorBaseDefense
+"Savunma"
+END
+
+TOOLTIP:ArmorFireBase
+"Savunma"
+END
+
+TOOLTIP:ArmorStingerSite
+"Savunma"
+END
+
+TOOLTIP:ArmorWall
+"Duvar"
 END
 
 TOOLTIP:Upgrades

@@ -178,6 +178,7 @@ void ArmorStore::reset()
 	}
 	ArmorTemplate& armorTmpl = TheArmorStore->m_armorTemplates[key];
 	armorTmpl.clear();
+	armorTmpl.m_name = c;
 	ini->initFromINI(&armorTmpl, myFieldParse);
 }
 

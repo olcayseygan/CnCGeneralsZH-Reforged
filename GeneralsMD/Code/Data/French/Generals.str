@@ -16389,10 +16389,6 @@ TOOLTIP:SupplyPileFull
 "\n Pris : la limite par réserve tient vos collecteurs à l'écart"
 END
 
-TOOLTIP:StatTime
-"Temps de construction"
-END
-
 TOOLTIP:StatSeconds
 "%ds"
 END

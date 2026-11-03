@@ -1413,8 +1413,8 @@ public:
 	/// the same with the prices and figures counted for player rather than the local one
 	void populateBuildTooltipLayout( const CommandButton *commandButton, GameWindow *tooltipWin, Player *player );
 	void repopulateBuildTooltipLayout( void );
-	/// where the popup lives, so -uidrill can read the rectangle it landed in.  The tooltip is placed
-	/// against BackgroundMarker's screen position, so it goes wherever the bar's windows went
+	/// where the popup lives, so -uidrill can read the rectangle it landed in.  The tooltip stands on
+	/// the radar's frame, so it goes wherever the bar's windows went
 	WindowLayout *getBuildTooltipLayout( void ) { return m_buildToolTipLayout; }
 private:
 
@@ -1570,6 +1570,26 @@ extern void ControlBarLayoutUniform( GameWindow *root, Real anchorFracX, Real an
 //-------------------------------------------------------------------------------------------------
 extern Int ControlBar_secondsFromFrames( Real frames );
 extern Int ControlBar_secondsFromFramesAt( Real frames, Int logicFps );	///< ...at a rate you name
+
+//-------------------------------------------------------------------------------------------------
+/** What the build card's draw (W3DCommandBarHelpPopupDraw) puts beside the .wnd's texts: the price and
+	* build time at the header's right, then a row of figure cells, each an icon and its value.  Filled by
+	* ControlBar::populateBuildTooltipLayout. */
+//-------------------------------------------------------------------------------------------------
+struct BuildTooltipFigures
+{
+	enum { MAX_CELLS = 7 };
+	/// a card with no figures wears the short top row (<prefix>TipHead*, 38 high at 1080) and its
+	/// description starts here (the generator's TIP_TEXT_HEAD)
+	enum { HEAD_HEIGHT = 36 };
+	UnicodeString cost;									///< empty when there is nothing to pay
+	Bool costIsMoney;										///< the money icon goes before it; a science's points go without
+	UnicodeString time;									///< empty for none
+	Int cellCount;											///< 0: no row, and the description moves up into it
+	Int cellIcon[ MAX_CELLS ];					///< ControlBarTooltipImages::ICON_*
+	UnicodeString cellValue[ MAX_CELLS ];
+};
+extern const BuildTooltipFigures& ControlBarBuildTooltipFigures( void );
 
 #endif  // end __CONTROLBAR_H_
 

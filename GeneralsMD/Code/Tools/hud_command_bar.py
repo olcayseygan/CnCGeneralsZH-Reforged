@@ -16,7 +16,9 @@ The button sheet is ReforgedHud<Side>Powers, 1024x1024: the general's powers win
 and tab buttons in their four states, the rank bar's frame, the shortcut tray, the radar corner's hover
 bracket, the selection window's emblem and the promotion banner, and the pieces the code lays out
 itself (the radar's frame, the powers tray and the pieces the queue's and superweapons' trays take
-mirrored or flipped, the readout plate), each where MappedImages/HandCreated/ReforgedHud<Side>Powers.ini maps it.
+mirrored or flipped, the readout plate, the build card's and the pointer tooltip's frames and the card's stat
+icons), each where MappedImages/HandCreated/ReforgedHud<Side>Powers.ini maps it.  The tooltips' console set,
+for the shell and any scheme without its own, is ReforgedHudHelpbox (written with the observer's sheets).
 
 Nothing here is traced from another painting.  Each side is built its own way (BUILDS): its own
 silhouette, how its plates stand on each other, the profile of their edges, the corners of every
@@ -31,7 +33,7 @@ radar frame's nine, every side's and general's emblem) and the spectator's rack 
 
     python Tools/hud_command_bar.py --out DIR [--side all|Observer|Lobby|America|China|Gla|Turkiye] [--dds TEXTURES]
         writes DIR/ReforgedHud<Side>CommandBar.png, ...CommandBarWide.png and ...Powers.png for each side,
-        the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces and ...ObsSpec, and the
+        the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces, ...ObsSpec and ReforgedHudHelpbox, and the
         front end's ReforgedFactionEmblems (Lobby), and with --dds the same as DXT5 .dds into TEXTURES
         (Data/Art/Textures)
 """
@@ -1441,9 +1443,333 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     pieces.update({"HudCell" + k: v for k, v in hud_cell_pieces(side_name).items()})
     pieces.update({"TrayTabDown": tray_tab(side_name), "TrayTabUp": tray_tab(side_name, up=True)})
     pieces.update(ready_glow_pieces(build, glow))
+    pieces.update(tip_pieces(side))
     for name, img in pieces.items():
         put(sheet_img, img, M.get(prefix + name, READY_GLOW_AT.get(name)))
     return sheet_img
+
+
+# ---------------------------------------------------------------------------------------------- the tooltips
+
+# Approved by the owner on 2026-11-03 (round 17).  Two pieces of nine each and nine icons, the code
+# looking them up by the scheme's TooltipImage prefix: <prefix>Tip<TL..BR>, <prefix>CursorTip<TL..BR> and
+# <prefix>TipIcon<Kind>.  The frames are cut like the radar's and stretched by the code the same way, so
+# whatever runs along an edge is even along its length and every fitting sits in a corner, mostly top right.
+#   Tip        the build card (ControlBarPopupDescription.wnd), hung on the screen's left edge, its left
+#              side open like the radar's.  Its top row holds the name slot, the stat row's well, the low
+#              rib between them and the description well's top lip, so the card grows by stretching the
+#              middle row alone.  TIP_TEXT is where the card's texts stand, from its top left (a right or
+#              bottom edge below zero is from the card's right or bottom): the name left in the slot, the
+#              price right of it (money icon and figure, clock and build time), the unit's figures as icon
+#              and value cells in the second row, the description under them.
+#   CursorTip  the pointer's tooltip (Mouse::drawTooltip): a small framed well, closed all round, the
+#              text inside it with TIP_CURSOR_PAD of glass round it.
+#   TipIcon    the stat icons, TIP_ICON square, one set of glyphs lit in each side's steel.
+# Each side draws all three in its own build on its Powers sheet; the observer's console build is the
+# default for the shell and any scheme without its own (prefix Helpbox, on ReforgedHudHelpbox).  Where
+# each piece goes is its sheet's MappedImages INI.
+TIP_EDGE = (16, 68, 48, 14)                     # left, top, right, bottom: the card's corners
+TIP_REF = (192, 146)                            # the card drawn once, its middle 128 wide and 64 high
+TIP_TEXT = dict(name=(12, 5, -190, 27), cost=(-186, 5, -46, 27), stats=(8, 31, -18, 57), description=(8, 66, -18, -14))
+# a card with no stat row (a general's power, an upgrade) takes TipHeadTL/T/TR, TIP_HEAD high, for its top row:
+# the name slot and the description well's top lip, the description from TIP_TEXT_HEAD's top
+TIP_HEAD = 38
+TIP_TEXT_HEAD = dict(TIP_TEXT, stats=None, description=(8, 36, -18, -14))
+TIP_ICON = 16                                   # every stat icon, at 1080
+TIP_ICONS = ("Money", "Time", "Health", "Armor", "Damage", "Rate", "Range", "Speed", "Power")
+TIP_CURSOR_EDGE, TIP_CURSOR_REF, TIP_CURSOR_PAD = 8, (48, 32), 6
+TIP_HELPBOX_SIZE = (512, 256)
+
+
+def tip_wells(W, H, head=False):
+    """The name slot, the stat row's well and the description well, in the reference card; the short
+    head (TipHead) has no stat well, the description well right under the name slot."""
+    if head:
+        return (6, 5, W - 40, 27), None, (4, 31, W - 14, H - 8)
+    return (6, 5, W - 40, 27), (4, 31, W - 14, 57), (4, 61, W - 14, H - 8)
+
+
+def tip_soften(p, W, H, rib, head=False):
+    """The breaks inside the card made quieter (round 16, the owner's "less conspicuous"): the wells run
+    together under the name slot and between cost and description, and a low dark rib rib texels high
+    parts them where the steel bar and its two lips stood.  The wells' ends keep their lips, in the corners."""
+    wells = [w for w in tip_wells(W, H, head) if w]
+    floor = p.h[(wells[-1][1] + 12) * SS, 100 * SS]
+    for a, b in zip(wells, wells[1:]):
+        x0, x1, y0, y1 = max(a[0], b[0]) + 4, min(a[2], b[2]) - 4, a[3] - 4, b[1] + 4
+        sl = (slice(int(y0 * SS), int(y1 * SS)), slice(int(x0 * SS), int(x1 * SS)))
+        p.h[sl], p.mat[sl] = floor, GLASS
+        mid = (a[3] + b[1]) / 2
+        p.bump([plate(x0, mid - 1, x1, mid + 1)], rib, 0.8, DARK)
+
+
+def tip_card(side, head=False):
+    """The reference card, TIP_REF, every build its own way; side is a SIDES entry or OBSERVER.  head draws
+    the short variant for a card with no stat row (a general's power, an upgrade): the name slot, then the
+    description well straight under it, TIP_HEAD high, with only the fittings that fit beside the name;
+    TipHeadTL/T/TR are its top row and join the same middle and bottom pieces."""
+    build = side["build"]
+    W, H = (TIP_REF[0], TIP_HEAD + TIP_REF[1] - TIP_EDGE[1]) if head else TIP_REF
+    p = Painter(W + 4, H + 4)                       # room right and below, so only the left side is the screen's
+    name, cost, desc = tip_wells(W, H, head)
+    wells = [w for w in (name, cost, desc) if w]
+    full = not head                                 # the stat well's rule and the fittings below the name slot
+
+    def sink(corners, depth, lip):
+        for r, c in zip((name, cost, desc), corners):
+            if r:
+                p.sink([shape(build, *r, c)], depth, lip(r) if callable(lip) else lip)
+    if build == "machined":                         # a dark flange, a satin frame on it, 45 degree cuts
+        p.silhouette([[(0, 0), (W - 16, 0), (W, 16), (W, H - 6), (W - 6, H), (0, H)]], 4.0, build, screen=True)
+        p.raise_plate([plate(0, 3, W - 4, H - 3, tr=("cut", 12), br=("cut", 4))], 7.0, 3.0, STEEL, screen=True)
+        sink((3, 4, 4), 6, 3)
+        tip_soften(p, W, H, 1.5, head)
+        vents(p, W - 38, W - 18, 9, 21)
+        if full:
+            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
+            p.inlay(chevrons(W - 9, 33, 8, n=2), ACCENT2, 0.7)
+            p.stud(W - 9, 54, 3.0)
+        p.stud(W - 9, H - 9, 2.6)
+    elif build == "terraced":                       # cast in square terraces, a heavy rim round each well
+        outline = [(0, 0), (W - 24, 0), (W - 24, 8), (W - 12, 8), (W - 12, 16), (W, 16), (W, H), (0, H)]
+        sl, m, d = p.silhouette([outline], 11.0, build, STEEL, screen=True)
+        p.mat[sl][m & (d < 6)] = DARK
+        for r in wells:
+            p.bump([shape(build, *grow(r, 3), 4)], 2.0, 1.0)
+        for r in wells:
+            p.sink([shape(build, *grow(r, 1.2), 3)], 8, 1.2)
+        tip_soften(p, W, H, 2.0, head)              # the rims' ridge there gives way to a square rib
+        if full:
+            p.inlay([plate(8, 58.2, W - 44, 59.8)], ACCENT, 0.15)
+        p.bump([plate(W - 37, 11, W - 21, 17.5)], 1.6, 0.8, ACCENT2)
+        for x in (W - 35, W - 23):
+            p.rivet(x, 23, 1.8)
+        for y in (28, 42, 56) if full else (28,):
+            p.rivet(W - 6, y, 1.9)
+        p.rivet(W - 6, H - 7, 1.9)
+    elif build == "scavenged":                      # a sheet laid on along the top and welded, bolts, a ragged corner
+        outline = [(0, 0), (W - 30, 0), (W - 22, 4), (W - 9, 1.5), (W, 13), (W, H - 9), (W - 4, H - 9), (W - 4, H), (0, H)]
+        p.silhouette([outline], 3.0, build, screen=True)
+        sl, m, _ = p.raise_plate([plate(0, 1.5, W - 26, 29.5)], 5.0, 1.2, STEEL, screen=True)
+        p.tint[sl][m] = 1.05
+        p.weld((W - 26, 3), (W - 26, 28), 151)
+        sink((4, 4, 4), 5, 2)
+        tip_soften(p, W, H, 1.2, head)
+        if full:
+            p.inlay([plate(4, 58.1, W - 46, 59.9), jitter(plate(W - 47, 57.6, W - 39, 60.4), 52, 1.0, 3)], ACCENT2, 0.12)
+        for x in (W - 22, W - 13):
+            p.inlay([[(x, 28), (x + 5, 19), (x + 9, 19), (x + 4, 28)]], ACCENT, 0.3)
+        for i, (x, y) in enumerate(((W - 19, 9), (W - 7, 45), (W - 10, H - 6))):
+            if full or y < 30 or y > H - 14:
+                p.bolt(x, y, 2.6, 90 + i)
+    elif build == "faceted":                        # composite: a 30 degree cut, one wide flat facet, tiles
+        p.silhouette([[(0, 0), (W - 34, 0), (W, 20), (W, H), (0, H)]], 4.0, "machined", screen=True)
+        p.frame([plate(0, 3, W - 5, H - 3, tr=("slant", 16), br=("cut", 4))], 9.0, build, screen=True)
+        sink((4, 5, 5), 6, lambda r: 4 if r is not name else 3)
+        tip_soften(p, W, H, 1.5, head)
+        # the tiles only on the right corners: along an edge they would smear when the code stretches it
+        h0, m0 = p.h.copy(), p.mat.copy()
+        p.facets(18, 0.06, 0.45, 23)
+        _, t, r_, b = TIP_EDGE
+        t = t if full else TIP_HEAD - 8             # the short head's tiles stop clear of its foot, so it meets TipR flat
+        flat_ = np.ones(p.h.shape, bool)
+        flat_[:t * SS, (W - r_) * SS:] = False
+        flat_[(H - b) * SS:, (W - r_) * SS:] = False
+        p.h[flat_], p.mat[flat_] = h0[flat_], m0[flat_]
+        if full:
+            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
+        p.inlay([triangle(W - 28, 15, 9, 10, "left")], ACCENT, 0.6)
+        for x, y in ((W - 10, 42), (W - 10, H - 8)) if full else ((W - 10, H - 8),):
+            p.bump([regular(x, y, 3.0, 6, np.pi / 6)], 0.8, 1.2, BRIGHT)
+    else:                                           # the console: radii, a bullnose, a grille, screws, the tally
+        p.silhouette([plate(0, 0, W, H, tr=("round", 10), br=("round", 6))], 6.0, build, STEEL, screen=True)
+        sink((4, 4, 4), 5, 2)
+        tip_soften(p, W, H, 1.5, head)
+        if full:
+            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
+            screw(p, W - 8, 44, 2.4)
+        grille(p, W - 37, 7, W - 17, 23)
+        tally(p, W - 9, 15, 2.4)
+        screw(p, W - 9, H - 7, 2.2)
+    return shade(p, side, shadow=False, falloff=False).crop((0, 0, W, H))
+
+
+def tip_cursor(side):
+    """The pointer's tooltip, TIP_CURSOR_REF: a framed well closed all round, the build's corners."""
+    build = side["build"]
+    W, H = TIP_CURSOR_REF
+    p = Painter(W + 4, H + 4)
+    o = 2                                           # off the canvas's border, so no side reads as the screen's
+    if build == "machined":
+        p.silhouette([octagon(o, o, o + W, o + H, 3.5)], 3.0, build)
+        p.raise_plate([octagon(o + 1, o + 1, o + W - 1, o + H - 1, 3)], 5.0, 1.6, STEEL)
+        p.sink([shape(build, o + 3, o + 3, o + W - 3, o + H - 3, 2)], 2.6, 1.8)
+        p.inlay([plate(o + 5, o + 1.6, o + W - 5, o + 2.1)], ACCENT, 0.15)
+    elif build == "terraced":
+        sl, m, d = p.raise_plate([shape(build, o, o, o + W, o + H, 3)], 6.0, 1.0, STEEL, "chessboard", terraces((0, 0.5), (2, 0.5)))
+        p.limit[sl] |= m
+        p.mat[sl][m & (d < 2)] = DARK
+        p.sink([shape(build, o + 4, o + 4, o + W - 4, o + H - 4, 2)], 2.6, 1.2)
+        p.inlay([plate(o + 5, o + H - 2.4, o + W - 5, o + H - 1.6)], ACCENT, 0.15)
+    elif build == "scavenged":
+        p.silhouette([shape(build, o, o, o + W, o + H, 4)], 3.0, build)
+        p.sink([shape(build, o + 3, o + 3, o + W - 3, o + H - 3, 2.5)], 2.3, 1.4)
+        p.inlay([jitter(plate(o + 1, o + H - 7, o + 6, o + H - 1), 61, 1.0, 2)], ACCENT2, 0.25)
+        p.bolt(o + W - 3.6, o + 3.6, 1.8, 3)
+    elif build == "faceted":
+        p.silhouette([shape(build, o, o, o + W, o + H, 4)], 3.0, "machined")
+        p.frame([shape(build, o + 0.5, o + 0.5, o + W - 0.5, o + H - 0.5, 4)], 5.0, build, scale=0.4)
+        p.sink([shape(build, o + 3.5, o + 3.5, o + W - 3.5, o + H - 3.5, 2.5)], 2.6, 1.8)
+        p.inlay([triangle(o + 4.6, o + H - 4.6, 3.2, 3.6, "right")], ACCENT, 0.4)
+    else:
+        p.silhouette([shape(build, o, o, o + W, o + H, 5)], 5.0, build, STEEL)
+        p.sink([shape(build, o + 3, o + 3, o + W - 3, o + H - 3, 3)], 2.6, 1.8)
+    return shade(p, side, shadow=False, falloff=False).crop((o, o, o + W, o + H))
+
+
+def tip_icon(side, kind):
+    """A stat icon, TIP_ICON square: the glyph raised in bright steel on a dark rim a texel and a half wide,
+    so it reads on the card's glass and on bright ground alike.  The same glyphs on every side, lit in the
+    side's own steel with an even grain.  No cross, no flag, nothing a nation or the Red Cross owns."""
+    n, o = TIP_ICON, 2
+    p = Painter(n + 2 * o, n + 2 * o)
+    im = Image.new("L", (p.h.shape[1], p.h.shape[0]), 0)
+    d = ImageDraw.Draw(im)
+
+    def P(x, y):
+        return ((x + o) * SS, (y + o) * SS)
+
+    def poly(pts):
+        d.polygon([P(x, y) for x, y in pts], fill=255)
+
+    def line(pts, w):
+        d.line([P(x, y) for x, y in pts], fill=255, width=int(w * SS), joint="curve")
+
+    def ring(x0, y0, x1, y1, w):
+        d.ellipse([P(x0, y0), P(x1, y1)], outline=255, width=int(w * SS))
+
+    if kind == "Money":                             # the money window's own sign
+        from PIL import ImageFont
+        f = ImageFont.truetype(os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts", "arialbd.ttf"), 17 * SS)
+        d.text(P(8, 8.4), "$", font=f, fill=255, anchor="mm")
+    elif kind == "Time":                            # a clock face, two hands
+        ring(1, 1, 15, 15, 2.2)
+        line([(8, 3.8), (8, 8), (11.6, 8)], 2.0)
+    elif kind == "Health":                          # a plus in steel, never red
+        poly(plate(5.8, 1.5, 10.2, 14.5))
+        poly(plate(1.5, 5.8, 14.5, 10.2))
+    elif kind == "Armor":                           # a plain plate shield
+        poly([(2, 1.5), (14, 1.5), (14, 8), (8, 15), (2, 8)])
+    elif kind == "Damage":                          # a crosshair
+        ring(2.2, 2.2, 13.8, 13.8, 1.9)
+        for a, b in (((8, 0), (8, 5)), ((8, 11), (8, 16)), ((0, 8), (5, 8)), ((11, 8), (16, 8))):
+            line([a, b], 1.9)
+        d.ellipse([P(6.8, 6.8), P(9.2, 9.2)], fill=255)
+    elif kind == "Rate":                            # three rounds side by side, damage a second
+        for x in (1.5, 6.5, 11.5):
+            poly([(x, 6), (x + 1.5, 2), (x + 3, 6), (x + 3, 14.5), (x, 14.5)])
+    elif kind == "Range":                           # a span with two heads
+        line([(3, 8), (13, 8)], 2.0)
+        poly([(0.5, 8), (5, 3.5), (5, 12.5)])
+        poly([(15.5, 8), (11, 3.5), (11, 12.5)])
+    elif kind == "Speed":                           # two chevrons going right
+        line([(2, 2.5), (7.5, 8), (2, 13.5)], 2.6)
+        line([(8, 2.5), (13.5, 8), (8, 13.5)], 2.6)
+    elif kind == "Power":                           # a bolt
+        poly([(9.5, 0.5), (3, 9), (7.5, 9), (5.5, 15.5), (13, 6.5), (8.5, 6.5), (11, 0.5)])
+    glyph = np.asarray(im) > 127
+    rim = ndimage.binary_dilation(glyph, iterations=int(1.5 * SS))
+    p.alpha |= rim
+    p.limit |= rim
+    p.mat[rim] = DARK
+    p.h += rim * 0.6
+    p.h += np.clip(Painter.inside(glyph) / 0.9, 0, 1) * glyph * 2.2
+    p.mat[glyph] = BRIGHT
+    return shade(p, dict(side, build="console"), shadow=False, falloff=False).crop((o, o, o + n, o + n))
+
+
+def nine(img, edge, middle=None):
+    """img cut into TL, T, TR, L, C, R, BL, B, BR at edge (left, top, right, bottom); C resized to middle."""
+    l, t, r, b = edge
+    W, H = img.size
+    xs, ys = (0, l, W - r, W), (0, t, H - b, H)
+    out = {}
+    for i, name in enumerate(("TL", "T", "TR", "L", "C", "R", "BL", "B", "BR")):
+        col, row = i % 3, i // 3
+        out[name] = img.crop((xs[col], ys[row], xs[col + 1], ys[row + 1]))
+    if middle:
+        out["C"] = out["C"].resize(middle, Image.BOX)
+    return out
+
+
+def tip_pieces(side):
+    """Both tooltips' pieces by their name without the side's prefix (TipTL, ..., CursorTipBR)."""
+    e = TIP_CURSOR_EDGE
+    l, _, r, b = TIP_EDGE
+    out = {"Tip" + k: v for k, v in nine(tip_card(side), TIP_EDGE, (64, 64)).items()}
+    out.update({"TipHead" + k: v for k, v in nine(tip_card(side, head=True), (l, TIP_HEAD, r, b)).items()
+                if k in ("TL", "T", "TR")})
+    out.update({"CursorTip" + k: v for k, v in nine(tip_cursor(side), (e, e, e, e), (16, 16)).items()})
+    out.update({"TipIcon" + k: tip_icon(side, k) for k in TIP_ICONS})
+    return out
+
+
+def tip_sizes():
+    """Each tooltip piece's size, by its name without the prefix, as the code assumes it."""
+    l, t, r, b = TIP_EDGE
+    e, n = TIP_CURSOR_EDGE, TIP_ICON
+    cw, ch = TIP_CURSOR_REF[0] - 2 * e, TIP_CURSOR_REF[1] - 2 * e
+    mw, mh = TIP_REF[0] - l - r, TIP_REF[1] - t - b
+    out = {"TipTL": (l, t), "TipT": (mw, t), "TipTR": (r, t), "TipL": (l, mh), "TipC": (64, 64), "TipR": (r, mh),
+           "TipBL": (l, b), "TipB": (mw, b), "TipBR": (r, b),
+           "TipHeadTL": (l, TIP_HEAD), "TipHeadT": (mw, TIP_HEAD), "TipHeadTR": (r, TIP_HEAD),
+           "CursorTipTL": (e, e), "CursorTipT": (cw, e), "CursorTipTR": (e, e), "CursorTipL": (e, ch),
+           "CursorTipC": (16, 16), "CursorTipR": (e, ch), "CursorTipBL": (e, e), "CursorTipB": (cw, e), "CursorTipBR": (e, e)}
+    out.update({"TipIcon" + k: (n, n) for k in TIP_ICONS})
+    return out
+
+
+def paint_helpbox():
+    """ReforgedHudHelpbox in the console build: the tooltips for the shell and any scheme without its own,
+    laid out by ReforgedHudHelpbox.ini (prefix Helpbox)."""
+    M = read_mapped(None, name="ReforgedHudHelpbox")
+    sheet_img = Image.new("RGBA", TIP_HELPBOX_SIZE, (0, 0, 0, 0))
+    for name, img in tip_pieces(OBSERVER).items():
+        put(sheet_img, img, M["Helpbox" + name])
+    return sheet_img
+
+
+def check_tip_head(sheet_img, M, pre):
+    """TipHead's bottom row is the description well's top, as TipTL/T/TR's is, so either top row meets the
+    same middle row (TipL, TipC, TipR): the head's foot no further off the middle's top than the tall top
+    row's own foot is, give or take a few levels (the middle glass is shrunk, so T is held to C by mean)."""
+    lum = np.asarray(sheet_img.convert("L"), np.float32)
+
+    def row(n, last):
+        x0, y0, x1, y1 = M[pre + n]
+        return lum[y1 - 1 if last else y0, x0:x1]
+    for k, mid in (("TL", "L"), ("T", "C"), ("TR", "R")):
+        top = row("Tip" + mid, False)
+        if k == "T":
+            off = [abs(row(n, True).mean() - top.mean()) for n in ("Tip" + k, "TipHead" + k)]
+        else:
+            off = [np.abs(row(n, True) - top).mean() for n in ("Tip" + k, "TipHead" + k)]
+        assert off[1] <= off[0] + 4, "%sTipHead%s meets %sTip%s %.1f levels off, %sTip%s %.1f" % (
+            pre, k, pre, mid, off[1], pre, k, off[0])
+
+
+def check_helpbox(sheet_img):
+    """Every tooltip piece on ReforgedHudHelpbox at its size, none overlapping another (gutter included)."""
+    M = read_mapped(None, name="ReforgedHudHelpbox")
+    assert sheet_img.size == TIP_HELPBOX_SIZE
+    for n, wh in tip_sizes().items():
+        x0, y0, x1, y1 = M["Helpbox" + n]
+        assert (x1 - x0, y1 - y0) == wh, "Helpbox%s is %s, the code wants %s" % (n, (x1 - x0, y1 - y0), wh)
+    boxes = [(n, grow(M[n], 1)) for n in ("Helpbox" + k for k in tip_sizes())]
+    for i, (n, p) in enumerate(boxes):
+        for m, q in boxes[i + 1:]:
+            assert p[2] <= q[0] or q[2] <= p[0] or p[3] <= q[1] or q[3] <= p[1], "%s and %s overlap" % (n, m)
+    check_tip_head(sheet_img, M, "Helpbox")
 
 
 # ---------------------------------------------------------------------------------------------- the observer
@@ -2409,9 +2735,11 @@ def check_sheet(sheet_img, side_name, glow="B"):
             want["Idle" + k + st] = (54, 35)
     for st in ("", "H", "I"):
         want["GenPowerClose" + st] = (60, 50)
+    want.update(tip_sizes())
     for n, wh in want.items():
         assert pre + n in M, "%s%s is not on the sheet" % (pre, n)
         assert size(n) == wh, "%s%s is %s, the code wants %s" % (pre, n, size(n), wh)
+    check_tip_head(sheet_img, M, pre)
     boxes = [(n, grow(v, 1)) for n, v in M.items() if not n.endswith("TraySmallTop")]
     for i, (n, p) in enumerate(boxes):
         for m, q in boxes[i + 1:]:
@@ -2468,6 +2796,8 @@ def main():
             check_observer(bar, panel)
             made = {"ReforgedHudObsCommandBar": bar, "ReforgedHudObsPlayerWindow": panel,
                     "ReforgedHudObsPieces": paint_observer_pieces(), "ReforgedHudObsSpec": paint_rack()}
+            made["ReforgedHudHelpbox"] = helpbox = paint_helpbox()
+            check_helpbox(helpbox)
         else:
             frame = radar_frame(side)
             for wide in (False, True):

@@ -412,6 +412,7 @@ protected:
 	UnsignedInt m_stillTime;
 	RGBAColorInt m_tooltipTextColor;
 	RGBAColorInt m_tooltipBackColor;
+	RGBAColorInt m_tooltipFrameTextColor;			///< the text's on the art's frame: the colour the caller named (a unit's owner) at full strength
 
 	Int m_eventsThisFrame;
 

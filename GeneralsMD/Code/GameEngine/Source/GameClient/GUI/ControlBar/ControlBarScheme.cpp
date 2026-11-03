@@ -185,6 +185,7 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "IdleAircraftLR",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleLR[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
 	{ "RadarFrameImage",			INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_radarFrameName ) },
 	{ "PowerTrayImage",				INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_powerTrayName ) },
+	{ "TooltipImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_tooltipName ) },
 
 	{ "CommandMarkerImage",		INI::parseMappedImage,				NULL, offsetof( ControlBarScheme, m_commandMarkerImage) },
 	{ "ExpBarForegroundImage",		INI::parseMappedImage,				NULL, offsetof( ControlBarScheme, m_expBarForeground) },
@@ -477,6 +478,7 @@ ControlBarScheme::ControlBarScheme(void)
 		m_radarFrame[ i ] = NULL;
 	for( Int i = 0; i < TRAY_PIECE_COUNT; i++ )
 		m_powerTray[ i ] = NULL;
+	m_tooltip = ControlBarTooltipImages();
 }
 
 
@@ -508,8 +510,8 @@ static void placeSchemeWindow( GameWindow *win, const ICoord2D& ul, const ICoord
 									 ( lr.y - ul.y ) * resMultiplier.y + COMMAND_BAR_SIZE_OFFSET );
 }
 
-/// <prefix><suffix> for each suffix from the mapped images; every one NULL when the scheme names no prefix
-static void findPieces( const AsciiString& prefix, const char *const *suffixes, Int count, const Image **out )
+/// <prefix><middle><suffix> for each suffix from the mapped images; every one NULL when the scheme names no prefix
+static void findPieces( const AsciiString& prefix, const char *middle, const char *const *suffixes, Int count, const Image **out )
 {
 	for( Int i = 0; i < count; i++ )
 	{
@@ -517,19 +519,33 @@ static void findPieces( const AsciiString& prefix, const char *const *suffixes, 
 		if( prefix.isEmpty() )
 			continue;
 		AsciiString name = prefix;
+		name.concat( middle );
 		name.concat( suffixes[ i ] );
 		out[ i ] = TheMappedImageCollection->findImageByName( name );
 	}
 }
 
+static const char *const theFrameSuffixes[ ControlBarScheme::FRAME_PIECE_COUNT ] = { "TL", "T", "TR", "L", "C", "R", "BL", "B", "BR" };
+
+void ControlBarTooltipImages::find( const AsciiString& prefix )
+{
+	// the generator's TIP_ICONS, in ICON_* order
+	static const char *const iconSuffixes[ ICON_COUNT ] =
+		{ "Money", "Time", "Health", "Armor", "Damage", "Rate", "Range", "Speed", "Power" };
+	findPieces( prefix, "Tip", theFrameSuffixes, ControlBarScheme::FRAME_PIECE_COUNT, card );
+	findPieces( prefix, "TipHead", theFrameSuffixes, 3, head );
+	findPieces( prefix, "CursorTip", theFrameSuffixes, ControlBarScheme::FRAME_PIECE_COUNT, cursor );
+	findPieces( prefix, "TipIcon", iconSuffixes, ICON_COUNT, icon );
+}
+
 void ControlBarScheme::init(void)
 {
 	// before anything below lays the bar out: layoutPanels fits the radar's frame from these
-	static const char *const frameSuffixes[ FRAME_PIECE_COUNT ] = { "TL", "T", "TR", "L", "C", "R", "BL", "B", "BR" };
 	static const char *const traySuffixes[ TRAY_PIECE_COUNT ] =
 		{ "Cell", "EdgeTop", "EdgeLeft", "EdgeBottom", "CornerTopLeft", "CornerBottomLeft", "Step" };
-	findPieces( m_radarFrameName, frameSuffixes, FRAME_PIECE_COUNT, m_radarFrame );
-	findPieces( m_powerTrayName, traySuffixes, TRAY_PIECE_COUNT, m_powerTray );
+	findPieces( m_radarFrameName, "", theFrameSuffixes, FRAME_PIECE_COUNT, m_radarFrame );
+	findPieces( m_powerTrayName, "", traySuffixes, TRAY_PIECE_COUNT, m_powerTray );
+	m_tooltip.find( m_tooltipName );
 
 	if(TheControlBar)
 	{
@@ -634,7 +650,7 @@ void ControlBarScheme::init(void)
 		}
 		static const char *const states[ 4 ] = { "", "H", "P", "I" };
 		const Image *image[ 4 ];
-		findPieces( m_idleButtonImage[ i ], states, 4, image );
+		findPieces( m_idleButtonImage[ i ], "", states, 4, image );
 		GadgetButtonSetEnabledImage( win, image[ 0 ] );
 		GadgetButtonSetHiliteImage( win, image[ 1 ] );
 		GadgetButtonSetHiliteSelectedImage( win, image[ 2 ] );
@@ -921,6 +937,7 @@ ControlBarSchemeManager::ControlBarSchemeManager( void )
 {
 	m_currentScheme = NULL;
 	m_loadingControlBarPro = FALSE;
+	m_consoleTooltip = ControlBarTooltipImages();
 	m_schemeList.clear();
 	m_multiplyer.x = m_multiplyer.y = 1;
 }
@@ -1129,6 +1146,7 @@ void ControlBarSchemeManager::init( void )
 	m_loadingControlBarPro = TRUE;
 	ini.load( AsciiString( "Data\\INI\\ControlBarProReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 	m_loadingControlBarPro = FALSE;
+	m_consoleTooltip.find( AsciiString( "Helpbox" ) );
 
 //	//Load the user modified control bar schemes
 //	WIN32_FIND_DATA findData;
@@ -1392,6 +1410,47 @@ const Image *const *ControlBarSchemeManager::getPowerTray( void ) const
 	return m_currentScheme->m_powerTray;
 }
 
+const ControlBarTooltipImages& ControlBarSchemeManager::getTooltipImages( void ) const
+{
+	if( m_currentScheme == NULL || m_currentScheme->m_tooltip.card[ ControlBarScheme::FRAME_TL ] == NULL )
+		return m_consoleTooltip;
+	return m_currentScheme->m_tooltip;
+}
+
+//-----------------------------------------------------------------------------
+/** Nine pieces between outer and inner: the corners, the edges stretched along inner and the centre
+	* under it.  A piece the art leaves out (drawImage takes NULL) leaves what is under it showing. */
+//-----------------------------------------------------------------------------
+static void drawNinePiece( const Image *const *pieces, const IRegion2D& outer, const IRegion2D& inner )
+{
+	const Int xs[ 4 ] = { outer.lo.x, inner.lo.x, inner.hi.x, outer.hi.x };
+	const Int ys[ 4 ] = { outer.lo.y, inner.lo.y, inner.hi.y, outer.hi.y };
+	for( Int piece = 0; piece < ControlBarScheme::FRAME_PIECE_COUNT; piece++ )
+	{
+		const Int col = piece % 3, row = piece / 3;
+		TheDisplay->drawImage( pieces[ piece ], xs[ col ], ys[ row ], xs[ col + 1 ], ys[ row + 1 ] );
+	}
+}
+
+Bool ControlBarDrawNinePieceBox( const Image *const *pieces, const IRegion2D& box, Real k )
+{
+	const Image *tl = pieces[ ControlBarScheme::FRAME_TL ];
+	const Image *br = pieces[ ControlBarScheme::FRAME_BR ];
+	if( tl == NULL || br == NULL )
+		return FALSE;
+	IRegion2D inner;
+	inner.lo.x = box.lo.x + REAL_TO_INT_CEIL( tl->getImageWidth() * k );
+	inner.lo.y = box.lo.y + REAL_TO_INT_CEIL( tl->getImageHeight() * k );
+	// a box narrower than its two corners (the pointer's tooltip opening) lets the right ones overhang
+	inner.hi.x = max( inner.lo.x, box.hi.x - REAL_TO_INT_CEIL( br->getImageWidth() * k ) );
+	inner.hi.y = max( inner.lo.y, box.hi.y - REAL_TO_INT_CEIL( br->getImageHeight() * k ) );
+	IRegion2D outer = box;
+	outer.hi.x = max( outer.hi.x, inner.hi.x + REAL_TO_INT_CEIL( br->getImageWidth() * k ) );
+	outer.hi.y = max( outer.hi.y, inner.hi.y + REAL_TO_INT_CEIL( br->getImageHeight() * k ) );
+	drawNinePiece( pieces, outer, inner );
+	return TRUE;
+}
+
 //-----------------------------------------------------------------------------
 /** The radar's frame, nine pieces round wherever ControlBar::fitRadarToMap stood the radar: the
 	* corners at their size, the edges stretched along the radar and the centre under it, which is
@@ -1409,16 +1468,7 @@ static void drawRadarFrame( const Image *const *frame )
 	inner.hi.x += inner.lo.x;
 	inner.hi.y += inner.lo.y;
 	ControlBarSchemeManager::radarFrameRect( frame, inner, &outer );
-	const Int xs[ 4 ] = { outer.lo.x, inner.lo.x, inner.hi.x, outer.hi.x };
-	const Int ys[ 4 ] = { outer.lo.y, inner.lo.y, inner.hi.y, outer.hi.y };
-	for( Int piece = 0; piece < ControlBarScheme::FRAME_PIECE_COUNT; piece++ )
-	{
-		// a piece the art leaves out leaves the painting showing there
-		if( frame[ piece ] == NULL )
-			continue;
-		const Int col = piece % 3, row = piece / 3;
-		TheDisplay->drawImage( frame[ piece ], xs[ col ], ys[ row ], xs[ col + 1 ], ys[ row + 1 ] );
-	}
+	drawNinePiece( frame, outer, inner );
 }
 
 //-----------------------------------------------------------------------------

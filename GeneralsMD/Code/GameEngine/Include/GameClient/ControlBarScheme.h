@@ -120,6 +120,21 @@ private:
 };
 
 
+/// The tooltips' art one TooltipImage prefix names (Tools/hud_command_bar.py, TIP_*): <prefix>Tip<piece> the
+/// build card's nine (ControlBarPopupDescription.wnd), <prefix>CursorTip<piece> the pointer's nine
+/// (Mouse::drawTooltip), <prefix>TipIcon<Kind> the card's figures.  NULL where the art has none.
+//-----------------------------------------------------------------------------
+struct ControlBarTooltipImages
+{
+	enum { ICON_MONEY, ICON_TIME, ICON_HEALTH, ICON_ARMOR, ICON_DAMAGE, ICON_RATE, ICON_RANGE, ICON_SPEED, ICON_POWER, ICON_COUNT };
+	const Image *card[ 9 ];					///< in ControlBarScheme::FRAME_* order
+	const Image *head[ 3 ];					///< <prefix>TipHead{TL,T,TR}: the card's top row without the figures' well, for a card with no figures
+	const Image *cursor[ 9 ];
+	const Image *icon[ ICON_COUNT ];
+
+	void find( const AsciiString& prefix );		///< every one NULL for an empty prefix
+};
+
 // Class that each scheme will have.  Contains all information about that scheme
 //-----------------------------------------------------------------------------
 class ControlBarScheme
@@ -254,6 +269,10 @@ public:
 	AsciiString m_powerTrayName;
 	const Image *m_powerTray[ TRAY_PIECE_COUNT ];			///< resolved by init; all NULL without the key
 
+	/// TooltipImage: the prefix of the tooltips' art; a scheme without it wears the console's, Helpbox
+	AsciiString m_tooltipName;
+	ControlBarTooltipImages m_tooltip;								///< resolved by init
+
 
 
 
@@ -319,6 +338,10 @@ public:
 	/// the general's powers tray's pieces (ControlBarScheme::TRAY_*) of the scheme on screen, or NULL
 	/// without a cell; the tray then keeps the shipped column
 	const Image *const *getPowerTray( void ) const;
+	/// the tooltips' art of the scheme on screen, or the console's when it has no card of its own
+	const ControlBarTooltipImages& getTooltipImages( void ) const;
+	/// the console's tooltips (Helpbox), which the shell wears
+	const ControlBarTooltipImages& getConsoleTooltipImages( void ) const { return m_consoleTooltip; }
 	/// the scheme's painting, cut at the panel seams and each piece drawn where its panel stands
 	void drawPainting( ICoord2D offset, Bool foreground );
 
@@ -341,6 +364,7 @@ private:
 
 	ControlBarScheme *m_currentScheme;													///< the current scheme that everythign uses
 	Bool m_loadingControlBarPro;														///< newControlBarScheme marks what it makes as ControlBar Pro's
+	ControlBarTooltipImages m_consoleTooltip;									///< Helpbox, resolved by init
 	Coord2D m_multiplyer;																	
 	
 	typedef std::list< ControlBarScheme* > ControlBarSchemeList;			///< list of control bar schemes
@@ -365,5 +389,9 @@ const Image *ControlBarSideImage( const PlayerTemplate *pt, const char *prefix )
 /// the side's emblem the observer's column and the rack show: ControlBarSideImage's SSObserver, else
 /// its EnabledImage
 const Image *ControlBarSideEmblem( const PlayerTemplate *pt );
+/// nine pieces (ControlBarScheme::FRAME_* order) filling box: the corners at their size times scale (the
+/// art's texels are 1080 pixels), the edges and the centre stretched between them.  FALSE, and nothing
+/// drawn, when the art lacks the two corners that size it
+Bool ControlBarDrawNinePieceBox( const Image *const *pieces, const IRegion2D& box, Real scale );
 
 #endif // __CONTROL_BAR_SCHEME_H_

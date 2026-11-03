@@ -962,10 +962,6 @@ END
 
 // The build tooltip card's figures, a label and its value each.
 
-TOOLTIP:StatTime
-"Build time"
-END
-
 TOOLTIP:StatSeconds
 "%ds"
 END
@@ -1018,33 +1014,203 @@ TOOLTIP:StatNewWeaponFigures
 "%d damage, %d range"
 END
 
-// The gloss after each figure on the card: what it counts, as the card computes it.  Damage is the
-// main weapon's primary damage a shot, the weapon that does the most a second; attack speed spreads
-// a clip's reload over its shots; range is in world units, 10 to a pathfinding cell, the square the
-// placement grid draws; build time counts the player's power and how many factories make the unit.
+// The card's armour cell: the class of the unconditioned ArmorSet's armour, TOOLTIP:Armor and the
+// Armor block's name with its first "Armor" taken out.  Short, a cell is about sixty pixels wide.
 
-TOOLTIP:StatHealthHint
-"(damage it can take after armor)"
+TOOLTIP:ArmorNo
+"None"
 END
 
-TOOLTIP:StatDamageHint
-"(main weapon, one shot, before armor)"
+TOOLTIP:ArmorVulnerableAll
+"None"
 END
 
-TOOLTIP:StatAttackSpeedHint
-"(shots a second, reloads counted)"
+TOOLTIP:ArmorInvulnerable
+"Invulnerable"
 END
 
-TOOLTIP:StatDamagePerSecondHint
-"(damage × attack speed)"
+TOOLTIP:ArmorInvulnerableAll
+"Invulnerable"
 END
 
-TOOLTIP:StatRangeHint
-"(10 is one square of the placement grid)"
+TOOLTIP:ArmorHuman
+"Infantry"
 END
 
-TOOLTIP:StatTimeHint
-"(with your power and factories now)"
+TOOLTIP:ArmorHazMatHuman
+"Infantry"
+END
+
+TOOLTIP:ArmorChemSuitHuman
+"Infantry"
+END
+
+TOOLTIP:ArmorInfGen_Human
+"Infantry"
+END
+
+TOOLTIP:ArmorChemReb_Human
+"Infantry"
+END
+
+TOOLTIP:ArmorDemoGenTerrorist
+"Infantry"
+END
+
+TOOLTIP:ArmorStingerSoldier
+"Infantry"
+END
+
+TOOLTIP:ArmorTruck
+"Vehicle"
+END
+
+TOOLTIP:ArmorHumvee
+"Vehicle"
+END
+
+TOOLTIP:ArmorDozer
+"Vehicle"
+END
+
+TOOLTIP:ArmorToxinTruck
+"Vehicle"
+END
+
+TOOLTIP:ArmorAntiAirVehicle
+"Vehicle"
+END
+
+TOOLTIP:ArmorQuadCannon
+"Vehicle"
+END
+
+TOOLTIP:ArmorAvenger
+"Vehicle"
+END
+
+TOOLTIP:ArmorBattleBusTruck
+"Vehicle"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusOne
+"Vehicle"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusTwo
+"Vehicle"
+END
+
+TOOLTIP:ArmorTank
+"Tank"
+END
+
+TOOLTIP:ArmorUpgradedTank
+"Tank"
+END
+
+TOOLTIP:ArmorDragonTank
+"Tank"
+END
+
+TOOLTIP:ArmorAssaultCrawler
+"Tank"
+END
+
+TOOLTIP:ArmorAvalanche
+"Tank"
+END
+
+TOOLTIP:ArmorAirplane
+"Aircraft"
+END
+
+TOOLTIP:ArmorCountermeasuresAirplane
+"Aircraft"
+END
+
+TOOLTIP:ArmorSpectreGunship
+"Aircraft"
+END
+
+TOOLTIP:ArmorCountermeasuresSpectreGunship
+"Aircraft"
+END
+
+TOOLTIP:ArmorComanche
+"Helicopter"
+END
+
+TOOLTIP:ArmorAFG_Comanche
+"Helicopter"
+END
+
+TOOLTIP:ArmorCountermeasuresComanche
+"Helicopter"
+END
+
+TOOLTIP:ArmorAFG_CountermeasuresComanche
+"Helicopter"
+END
+
+TOOLTIP:ArmorChinook
+"Helicopter"
+END
+
+TOOLTIP:ArmorSentryDrone
+"Drone"
+END
+
+TOOLTIP:ArmorMine
+"Mine"
+END
+
+TOOLTIP:ArmorStructure
+"Building"
+END
+
+TOOLTIP:ArmorStructureInternetCenter
+"Building"
+END
+
+TOOLTIP:ArmorStructureTough
+"Fortified"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructure
+"Fortified"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructureTough
+"Fortified"
+END
+
+TOOLTIP:ArmorBattleBusStructureTough
+"Fortified"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusOne
+"Fortified"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusTwo
+"Fortified"
+END
+
+TOOLTIP:ArmorBaseDefense
+"Defense"
+END
+
+TOOLTIP:ArmorFireBase
+"Defense"
+END
+
+TOOLTIP:ArmorStingerSite
+"Defense"
+END
+
+TOOLTIP:ArmorWall
+"Wall"
 END
 
 // Under the figures: a unit's upgrades, or on an upgrade's card the units it changes.

@@ -14625,10 +14625,6 @@ TOOLTIP:SupplyPileFull
 "\n Belegt: Das Haufenlimit hält deine Sammler fern"
 END
 
-TOOLTIP:StatTime
-"Bauzeit"
-END
-
 TOOLTIP:StatDamage
 "Schaden"
 END

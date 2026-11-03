@@ -134,6 +134,9 @@ public:
 
 	void friend_setName(const AsciiString& n) { m_name = n; }
 
+	/// the undamaged top speed, dist/frame, before the owner's SpeedScale (the build tooltip's figure)
+	Real getMaxSpeed() const { return m_maxSpeed; }
+
 	void validate();
 
 protected:

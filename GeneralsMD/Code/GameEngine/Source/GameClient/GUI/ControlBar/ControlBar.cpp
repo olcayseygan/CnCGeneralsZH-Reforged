@@ -1475,7 +1475,6 @@ ControlBar::~ControlBar( void )
 
 }  // end ~ControlBar
 void ControlBarPopupDescriptionUpdateFunc( WindowLayout *layout, void *param );
-void ControlBarPopupDescription_forgetOffset( void );
 
 //-------------------------------------------------------------------------------------------------
 // Three-panel control bar layout -----------------------------------------------------------------
@@ -2211,11 +2210,9 @@ void ControlBar_logPlacement( const char *tag, Int frame )
 		markerWin->winGetScreenPosition( &liveX, &liveY );
 
 	/* The other half of the complaint was tooltips off the screen, so put a real one up - the same
-		 call hovering a build button makes - and write down the rectangle it landed in.  This is what
-		 cleared the build popup: it is placed against BackgroundMarker's *live* screen position, and
-		 the drift never moves that window, so with the bar's children two hundred pixels high the
-		 popup was measured in exactly the same place as with them home.  Kept because it is the only
-		 thing that says so. */
+		 call hovering a build button makes - and write down the rectangle it landed in.  The popup
+		 stands on the radar's frame, so it goes wherever the drift takes the radar.  Kept because it
+		 is the only thing that says where it landed. */
 	Int tipX = -1, tipY = -1, tipW = 0, tipH = 0;
 	GameWindow *master = TheControlBar->getMasterParent();
 	GameWindow *button = master ? controlBarFirstCommandButton( master ) : NULL;
@@ -2939,7 +2936,6 @@ void ControlBar::initWindows( void )
 		if(!m_animateWindowManagerForGenShortcuts)
 			m_animateWindowManagerForGenShortcuts = NEW AnimateWindowManager;
 		m_buildToolTipLayout = TheWindowManager->winCreateLayout( "ControlBarPopupDescription.wnd" );
-		ControlBarPopupDescription_forgetOffset();
 		if(m_buildToolTipLayout)
 		{
 			m_buildToolTipLayout->hide(TRUE);

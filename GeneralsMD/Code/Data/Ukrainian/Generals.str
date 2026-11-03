@@ -16385,10 +16385,6 @@ TOOLTIP:SupplyPileFull
 "\n Зайнято: ліміт купи не пускає ваших збирачів"
 END
 
-TOOLTIP:StatTime
-"Час будівництва"
-END
-
 TOOLTIP:StatSeconds
 "%dс"
 END

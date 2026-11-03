@@ -16385,10 +16385,6 @@ TOOLTIP:SupplyPileFull
 "\n Занято: лимит на кучу не пускает ваших сборщиков"
 END
 
-TOOLTIP:StatTime
-"Время постройки"
-END
-
 TOOLTIP:StatSeconds
 "%d с"
 END

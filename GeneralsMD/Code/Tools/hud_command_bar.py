@@ -1065,8 +1065,9 @@ def promotion_banner(size):
 # map-shaped radar, so the left panel of the bar is empty.  The corners' sizes are the frame's thickness
 # (ControlBarSchemeManager::radarFrameRect): 5 at the screen's left and bottom edges, 29 over the top
 # and 45 down the right, which at the square map is exactly the old left panel, 0..372 x 724..1080.
-# The edges and the glass stretch (in practice they only ever shrink: the square is the largest the
-# radar gets), so they are drawn even along their length and every ornament sits in a corner.
+# The edges and the glass stretch: the height is fixed at the scheme's radar block, never above the
+# square, and the top and bottom grow along a long map, so they are drawn even along their length
+# and every ornament sits in a corner.
 RADAR_EDGE = (5, 29, 45, 5)                     # left, top, right, bottom
 RADAR_INSIDE = 322                              # LeftHUD's square, 5..327 x 753..1075
 RADAR_GLASS = 64                                # the centre piece, the glass, shrunk from the square

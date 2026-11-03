@@ -10,7 +10,7 @@ found and fixed, EA's own, not port damage.**
 
 ## The command bar fits the map
 
-- The radar takes the map's shape. A long map draws as a long strip in a frame of the same shape, a tall map as a tall one, and the black bands beside it are gone. A click on the radar still lands where it always did.
+- The radar takes the map's shape at a height that never changes: a long map widens it to the right, a tall map narrows it, and the frame's top stays level with the bar beside it. The black bands beside the map are gone; only a map too long for the room before the command buttons keeps thin ones above and below. A click on the radar still lands where it always did.
 - Four idle buttons stand at the right end of the command grid, top to bottom: worker, infantry, vehicle and aircraft. Each picks the next unit of its kind standing with no order and turns the camera to it, as the idle worker button always did; that button has moved there from the column on the left. A button stays dark while nothing of its kind is idle, and its tooltip names the key that does the same. The worker button used to light two to five seconds after the other three, because it waited on the worker to report itself idle; all four now look at your army on the same frame, and the worker button and its key cycle through the same workers that lit it.
 - The general's powers stand three to a row again, on the right edge above the general's tab. When the top row is short it leaves a step on the inside, and the tray's plate follows that outline.
 - The promotion window's close button is your side's own now, cut to fit the window's corner. It was the last piece of the old bar's art left on any side's screen.

@@ -2344,8 +2344,8 @@ static void shiftWindowTree( GameWindow *window, Int dx )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** layoutPanels stands the radar in its square box.  A scheme with a radar frame then shrinks the
-	* window to the map's own shape inside that box, pinned to the box's bottom left where the bar
+/** layoutPanels stands the radar in its square box.  A scheme with a radar frame then gives the
+	* window the map's own shape at a fixed height, pinned to the box's bottom left where the bar
 	* meets the corner of the screen: Radar::findDrawPositions then finds nothing to letterbox and a
 	* click maps to the world through the same arithmetic as before.  The blocker becomes the frame
 	* round it, which ControlBarSchemeManager::drawPainting draws, and the under-attack lamp at the
@@ -2420,18 +2420,42 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 		box[ i ].hi.y += origin.y;
 	}
 
+	//
+	// The radar's height never changes with the map: the frame stands on the scheme's radar block
+	// (BlockRadar, or ControlBar.wnd's blocker where the scheme names none, the observer's 740 that
+	// its column starts at), and never above the square.  The map's shape only sets the width, which
+	// grows right from the square's left edge.  It stops where what rides on its right meets the next
+	// piece of the bar: a side's frame at the command plate's blocker, the observer's player panel at
+	// the selection's.  A map wider than that room is letterboxed by Radar::findDrawPositions inside
+	// the frame instead.
+	//
 	// W3DLeftHUDDraw paints the radar a pixel inside the window, so it is the inside that takes the
 	// map's shape; rounded, so Radar::findDrawPositions finds under a pixel to letterbox and draws none
+	//
 	enum { RADAR_BEZEL = 1 };
+	static NameKeyType productionID = NAMEKEY( "ControlBar.wnd:ControlBarProBlockInputProduction" );
+	static NameKeyType upgradesID = NAMEKEY( "ControlBar.wnd:ControlBarProBlockInputUpgrades" );
+	const Bool observer = m_controlBarSchemeManager->getCurrentSide().compareNoCase( "Observer" ) == 0;
 	const IRegion2D &square = box[ RADAR_FIT_RADAR ];
-	const Int insideWidth = square.hi.x - square.lo.x - 2 * RADAR_BEZEL;
-	const Int insideHeight = square.hi.y - square.lo.y - 2 * RADAR_BEZEL;
-	const Real scale = MIN( insideWidth / m_radarFitWidth, insideHeight / m_radarFitHeight );
+	IRegion2D squareOuter;
+	ControlBarSchemeManager::radarFrameRect( frame, square, &squareOuter );
 	IRegion2D fit;
 	fit.lo.x = square.lo.x;
-	fit.hi.x = square.lo.x + REAL_TO_INT( m_radarFitWidth * scale + 0.5f ) + 2 * RADAR_BEZEL;
-	fit.lo.y = square.hi.y - REAL_TO_INT( m_radarFitHeight * scale + 0.5f ) - 2 * RADAR_BEZEL;
+	fit.lo.y = MAX( square.lo.y, box[ RADAR_FIT_BLOCK ].lo.y + square.lo.y - squareOuter.lo.y );
 	fit.hi.y = square.hi.y;
+	const Int insideHeight = fit.hi.y - fit.lo.y - 2 * RADAR_BEZEL;
+
+	Int room = 0;
+	GameWindow *next = TheWindowManager->winGetWindowFromId( NULL, observer ? upgradesID : productionID );
+	if( next != NULL && ( !observer || windows[ RADAR_FIT_INFO ] != NULL ) )
+	{
+		ICoord2D at;
+		next->winGetScreenPosition( &at.x, &at.y );
+		room = MAX( 0, at.x - ( observer ? box[ RADAR_FIT_INFO ].hi.x : squareOuter.hi.x ) );
+	}
+	const Int insideWidth = MIN( REAL_TO_INT( insideHeight * m_radarFitWidth / m_radarFitHeight + 0.5f ),
+		square.hi.x - square.lo.x - 2 * RADAR_BEZEL + room );
+	fit.hi.x = square.lo.x + insideWidth + 2 * RADAR_BEZEL;
 	placeWindowAt( windows[ RADAR_FIT_RADAR ], fit );
 
 	IRegion2D outer;
@@ -2448,15 +2472,12 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 
 	//
 	// The observer's column stands against the frame's right edge, so a tall map's narrower frame
-	// takes the column, its plate (drawPainting) and everything on it left with it.  Its height is
-	// the square's and it ends at the screen's foot, so a wide map's lower frame leaves it standing:
-	// moved down it would run off the screen.  A side's Options and Chat stand in the middle plate
-	// and stay.
+	// takes the column, its plate (drawPainting) and everything on it left with it, and a wide map's
+	// wider one right.  The frame's top is the column's, so it only ever moves across.  A side's
+	// Options and Chat stand in the middle plate and stay.
 	//
-	if( m_controlBarSchemeManager->getCurrentSide().compareNoCase( "Observer" ) != 0 )
+	if( !observer )
 		return;
-	IRegion2D squareOuter;
-	ControlBarSchemeManager::radarFrameRect( frame, square, &squareOuter );
 	m_radarColumnShift = outer.hi.x - squareOuter.hi.x;
 	for( Int i = RADAR_FIT_COLUMN_FIRST; i < RADAR_FIT_COUNT; i++ )
 	{

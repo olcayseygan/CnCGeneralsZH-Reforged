@@ -4033,9 +4033,9 @@ static Int controlBarTop( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The top of the radar's frame as it stands, fitted to this map's shape: a wide map's radar is
-	* shorter and its frame starts lower than the bar's left piece.  A scheme with no frame, or a
-	* hidden radar, gives controlBarTop. */
+/** The top of the radar's frame as it stands.  The map's shape only widens or narrows it, so this is
+	* the scheme's radar block for every map.  A scheme with no frame, or a hidden radar, gives
+	* controlBarTop. */
 //-------------------------------------------------------------------------------------------------
 static Int radarFrameTop( void )
 {

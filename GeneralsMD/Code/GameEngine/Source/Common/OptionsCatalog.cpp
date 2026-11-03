@@ -128,6 +128,7 @@ OPTION_INT_ACCESSORS( m_healthBarColors )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
+OPTION_BOOL_ACCESSORS( m_aircraftAltitudeLine )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
@@ -524,6 +525,14 @@ const OptionDef TheOptionCatalog[] =
 	{ "OrderLines",								OPT_WND( "CheckOrderLines" ), "GUI:OrderLines",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_showOrderLines, set_m_showOrderLines },
+
+	// The line from each aircraft in the air down to the ground under it.  Drawn fresh every frame, so
+	// the box takes it away at once.  On by default, unlike the rows around it: the owner wants it seen
+	// and left for the player who finds it noise to turn off.  No row in the quality table, it is not
+	// a picture setting.
+	{ "AircraftAltitudeLine",			OPT_WND( "CheckAircraftAltitudeLine" ), "GUI:AircraftAltitudeLine",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_aircraftAltitudeLine, set_m_aircraftAltitudeLine },
 
 	// The box in the top right corner: the match clock, the frame rates and, in a network game, the
 	// connection.  Off, the superweapon timers move up into the corner it leaves.  A key of its own

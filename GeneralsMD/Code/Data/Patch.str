@@ -887,6 +887,14 @@ TOOLTIP:OrderLines
 "A line from each selected unit to where it is going, and on through every point it has queued. Off, the markers on those points stay."
 END
 
+GUI:AircraftAltitudeLine
+"Aircraft Altitude Lines"
+END
+
+TOOLTIP:AircraftAltitudeLine
+"A thin line from each aircraft in the air straight down to the ground under it. Where it touches is where the plane really is, and its length is how high it flies. Parked aircraft have none."
+END
+
 GUI:PlayerColors
 "Player Colors"
 END

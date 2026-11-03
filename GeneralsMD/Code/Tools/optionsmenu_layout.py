@@ -185,6 +185,7 @@ NEW_CONTROLS = [
     (LABEL,  "LabelLanguage",          "GUI:Language"),
     (COMBO,  "ComboBoxLanguage",       None),
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
+    (CHECK,  "CheckAircraftAltitudeLine", "GUI:AircraftAltitudeLine"),
     (CHECK,  "CheckNetBox",            "GUI:NetBox"),
     (CHECK,  "CheckEmptyBuildingPips", "GUI:EmptyBuildingPips"),
     (CHECK,  "CheckZoomToCursor",      "GUI:ZoomToCursor"),
@@ -462,6 +463,7 @@ GROUP_LAYOUT = [
             setting("LabelHealthBarColors", "ComboBoxHealthBarColors"),
             setting("LabelPlayerColors", "ComboBoxPlayerColors"),
             ("check", "CheckOrderLines"),
+            ("check", "CheckAircraftAltitudeLine"),
             ("check", "CheckEmptyBuildingPips")]),
         ("GUI:OptionsGroupLanguage", [
             setting("LabelLanguage", "ComboBoxLanguage")]),

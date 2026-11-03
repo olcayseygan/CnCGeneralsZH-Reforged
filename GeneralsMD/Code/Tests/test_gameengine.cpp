@@ -19549,6 +19549,28 @@ TEST(empty_building_slots_are_a_check_box_that_starts_on)
 	delete scratch;
 }
 
+TEST(aircraft_altitude_lines_are_a_check_box_that_starts_on)
+{
+	const OptionDef *def = findOptionDef( "AircraftAltitudeLine" );
+	CHECK( def != NULL );
+	if( def == NULL )
+		return;
+	CHECK_EQ( (Int)def->kind, (Int)OPTION_BOOL );
+	CHECK_EQ( (Int)def->apply, (Int)APPLY_LIVE );
+	CHECK( strstr( def->widgetName, "CheckAircraftAltitudeLine" ) != NULL );
+
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+
+	CHECK( scratch->m_aircraftAltitudeLine );
+	def->set( 0 );
+	CHECK( !scratch->m_aircraftAltitudeLine );
+
+	TheWritableGlobalData = saved;
+	delete scratch;
+}
+
 TEST(high_static_lod_keeps_the_picture_settings)
 {
 	StaticGameLODInfo high;

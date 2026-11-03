@@ -1006,6 +1006,7 @@ GlobalData::GlobalData()
 	// the words the game shipped with until somebody picks a translation
 	m_textLanguage = TEXT_LANGUAGE_ENGLISH;
 	m_showOrderLines = FALSE;
+	m_aircraftAltitudeLine = TRUE;		// the owner's word: on until a player turns it off
 
 	m_particleEdit = FALSE;
 

@@ -3591,6 +3591,9 @@ Bool Drawable::drawsAnyUIText( void )
 // ------------------------------------------------------------------------------------------------
 void Drawable::drawAltitudeLine( void )
 {
+	if( !TheGlobalData->m_aircraftAltitudeLine )
+		return;
+
 	const Object *obj = getObject();
 	if( obj == NULL || obj->isEffectivelyDead() )
 		return;

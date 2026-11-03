@@ -15389,6 +15389,14 @@ TOOLTIP:OrderLines
 "Seçili her birimden gittiği yere, oradan da sıraya aldığı her noktaya bir çizgi çeker. Kapalıyken çizgiler gider, o noktalardaki işaretler kalır."
 END
 
+GUI:AircraftAltitudeLine
+"Uçak Yükseklik Çizgileri"
+END
+
+TOOLTIP:AircraftAltitudeLine
+"Havadaki her uçaktan altındaki yere dümdüz ince bir çizgi iner. Çizginin değdiği yer uçağın asıl yeri, boyu da ne kadar yüksekte uçtuğu. Yerde duran uçakta çizgi olmaz."
+END
+
 GUI:PlayerColors
 "Oyuncu Renkleri"
 END

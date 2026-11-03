@@ -1918,9 +1918,24 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			}
 		}
 
+		// Only the tiles the camera can see. Without this every shader pass drew every tile of the
+		// whole map, including the ones off screen.
+		const Int tileBorder = m_map ? m_map->getBorderSizeInline() : 0;
+		const Real tileCell = (Real)MAP_XY_FACTOR;
+		const Real tileWorld = tileCell * (Real)VERTEX_BUFFER_TILE_LENGTH;
+		const Real tileHalf = tileWorld * 0.5f;
+		const Real tileZ = 255.0f * (Real)MAP_HEIGHT_SCALE * 0.5f;
 		for (j=0; j<m_numVBTilesY; j++)
 			for (i=0; i<m_numVBTilesX; i++)
 			{
+				{
+					const Real x0 = ((Real)(i * VERTEX_BUFFER_TILE_LENGTH - tileBorder)) * tileCell;
+					const Real y0 = ((Real)(j * VERTEX_BUFFER_TILE_LENGTH - tileBorder)) * tileCell;
+					AABoxClass tileBox( Vector3( x0 + tileHalf, y0 + tileHalf, tileZ ),
+															Vector3( tileHalf, tileHalf, tileZ ) );
+					if( pCamera->Cull_Box( tileBox ) )
+						continue;
+				}
 				static int count = 0;
 				count++;
 				Int numPolys = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*2;
@@ -2083,9 +2098,23 @@ void HeightMapRenderObjClass::renderTerrainPass(CameraClass *pCamera)
 	
 	DX8Wrapper::Set_Index_Buffer(m_indexBuffer,0);
 
+	// Same conservative tile test as the base passes: skip tiles the camera cannot see.
+	const Int tileBorder = m_map ? m_map->getBorderSizeInline() : 0;
+	const Real tileCell = (Real)MAP_XY_FACTOR;
+	const Real tileWorld = tileCell * (Real)VERTEX_BUFFER_TILE_LENGTH;
+	const Real tileHalf = tileWorld * 0.5f;
+	const Real tileZ = 255.0f * (Real)MAP_HEIGHT_SCALE * 0.5f;
 	for (Int j=0; j<m_numVBTilesY; j++)
 		for (Int i=0; i<m_numVBTilesX; i++)
 		{
+			{
+				const Real x0 = ((Real)(i * VERTEX_BUFFER_TILE_LENGTH - tileBorder)) * tileCell;
+				const Real y0 = ((Real)(j * VERTEX_BUFFER_TILE_LENGTH - tileBorder)) * tileCell;
+				AABoxClass tileBox( Vector3( x0 + tileHalf, y0 + tileHalf, tileZ ),
+														Vector3( tileHalf, tileHalf, tileZ ) );
+				if( pCamera->Cull_Box( tileBox ) )
+					continue;
+			}
 			static int count = 0;
 			count++;
 			Int numPolys = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*2;

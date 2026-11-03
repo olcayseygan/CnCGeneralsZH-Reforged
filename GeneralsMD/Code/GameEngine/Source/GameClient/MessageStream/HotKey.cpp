@@ -741,7 +741,7 @@ void HotKeyManager::setFixedOrderKeys( Bool fixed )
 }
 
 //-----------------------------------------------------------------------------
-/** CommandButtonHotKey <button name>, Key = one letter or NONE, End.  Only the player's own
+/** CommandButtonHotKey <button name>, Key = one letter or digit, or NONE, End.  Only the player's own
 	* Hotkeys.ini carries these, and nothing in it reaches the INI CRC. */
 /*static*/ void INI::parseCommandButtonHotKeyDefinition( INI *ini )
 {
@@ -757,7 +757,7 @@ void HotKeyManager::setFixedOrderKeys( Bool fixed )
 	ini->initFromINI( &key, fields );
 
 	WideChar letter = 0;
-	if( key.getLength() == 1 && isalpha( (unsigned char)key.getCharAt( 0 ) ) )
+	if( key.getLength() == 1 && isalnum( (unsigned char)key.getCharAt( 0 ) ) )
 		letter = (WideChar)toupper( (unsigned char)key.getCharAt( 0 ) );
 	else if( key.compareNoCase( "NONE" ) != 0 )
 		throw INI_INVALID_DATA;
@@ -1003,6 +1003,12 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 	unbound.push_back( commandRow( "REQUEST_MONEY", "INFORMATION" ) );
 	unbound.push_back( commandRow( "AUTO_GARRISON", "CONTROL" ) );
 	unbound.push_back( commandRow( "AUTO_REPAIR", "CONTROL" ) );
+	// the orders the bar's fixed places press (orderAtPlace in ControlBar.cpp). Their buttons take
+	// a letter from the button's label, which a mod's CommandSet names, so without these rows a mod
+	// whose guard button sat elsewhere or had no letter left guard with no key a player could set
+	static const char *const ORDERS[] = { "TOGGLE_ATTACKMOVE", "TOGGLE_FORCEATTACK", "TOGGLE_GUARD", "TOGGLE_MOVE", "HOLD_POSITION" };
+	for( size_t each = 0; each < sizeof( ORDERS ) / sizeof( ORDERS[ 0 ] ); each++ )
+		unbound.push_back( commandRow( ORDERS[ each ], "CONTROL" ) );
 	char name[ 32 ];
 	for( Int slot = 1; slot <= 8; slot++ )
 	{
@@ -1071,7 +1077,7 @@ HotkeysFile Hotkeys_parse( const std::string& text, const std::vector< HotkeyCom
 			file.commandBarGrid = lowered( block.field( "Enabled", "no" ) ) == "yes";
 		else if( block.type == "CommandButtonHotKey" )
 		{
-			const Bool letter = key.size() == 1 && isalpha( (unsigned char)key[ 0 ] );
+			const Bool letter = key.size() == 1 && isalnum( (unsigned char)key[ 0 ] );
 			file.buttons[ block.name ] = letter ? std::string( 1, (char)toupper( (unsigned char)key[ 0 ] ) ) : std::string();
 		}
 		else if( block.type == "CommandMap" && !startsWith( block.name, "END_" ) )
@@ -1133,7 +1139,7 @@ void Hotkeys_launcherKeys( const std::string& launcherPart, std::map< std::strin
 		const HotkeyIniBlock& block = blocks[ each ];
 		const std::string key = block.field( "Key", "" );
 		if( block.type == "CommandButtonHotKey" )
-			( *buttons )[ block.name ] = ( key.size() == 1 && isalpha( (unsigned char)key[ 0 ] ) ) ? key : std::string();
+			( *buttons )[ block.name ] = ( key.size() == 1 && isalnum( (unsigned char)key[ 0 ] ) ) ? key : std::string();
 		else if( block.type == "CommandMap" && !startsWith( block.name, "END_" ) )
 			( *commands )[ block.name ] = lowered( block.field( "UseableIn", "" ) ) == "none"
 				? HotkeyBinding( "", "NONE" ) : HotkeyBinding( Hotkeys_isKeyName( key ) ? key : "", block.field( "Modifiers", "NONE" ) );

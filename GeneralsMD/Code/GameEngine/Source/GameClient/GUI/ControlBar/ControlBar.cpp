@@ -2450,7 +2450,14 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 		next->winGetScreenPosition( &at.x, &at.y );
 		room = MAX( 0, at.x - ( observer ? box[ RADAR_FIT_INFO ].hi.x : squareOuter.hi.x ) );
 	}
-	const Int insideWidth = MIN( REAL_TO_INT( insideHeight * m_radarFitWidth / m_radarFitHeight + 0.5f ),
+	//
+	// A wide map also stops at 4:3 of the inside height, room or not: a 2:1 map stretched the radar
+	// across half the bar and pushed everything riding on its right with it. Past that the map is
+	// letterboxed with black bands top and bottom, as a map wider than the room already was
+	//
+	static const Real RADAR_MAX_ASPECT = 4.0f / 3.0f;
+	const Int insideWidth = MIN( MIN( REAL_TO_INT( insideHeight * m_radarFitWidth / m_radarFitHeight + 0.5f ),
+		REAL_TO_INT( insideHeight * RADAR_MAX_ASPECT + 0.5f ) ),
 		square.hi.x - square.lo.x - 2 * RADAR_BEZEL + room );
 	fit.hi.x = square.lo.x + insideWidth + 2 * RADAR_BEZEL;
 	placeWindowAt( windows[ RADAR_FIT_RADAR ], fit );

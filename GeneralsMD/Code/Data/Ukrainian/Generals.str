@@ -17237,6 +17237,26 @@ GUI:HotkeysCommandAUTO_REPAIR
 "Іти на ремонт або лікування"
 END
 
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Атака в русі (наступний клік)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Примусова атака (наступний клік)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Охорона (наступний клік)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Рух (наступний клік)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Утримувати позицію"
+END
+
 GUI:LoadModeSkirmish
 "Сутичка"
 END

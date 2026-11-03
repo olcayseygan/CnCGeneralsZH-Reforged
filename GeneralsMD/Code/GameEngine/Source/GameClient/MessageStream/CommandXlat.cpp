@@ -1508,6 +1508,63 @@ GameMessage::Type CommandTranslator::createEnterMessage( Drawable *enter,
 
 }  // end createEnterMessage
 
+//-------------------------------------------------------------------------------------------------
+/** Enter the other way round: with a transport, a bunker or anything else that holds units
+	* selected, a click on one of your own units that would fit in it puts that unit inside.  Every
+	* selected object has to be yours and hold others, the clicked unit yours, not selected and not
+	* inside something already, and the first selected container it has a seat in takes it. */
+//-------------------------------------------------------------------------------------------------
+static Drawable *boardingContainer( const Object *passenger )
+{
+	if( passenger == NULL || !passenger->isLocallyControlled() || passenger->isContained() )
+		return NULL;
+	Drawable *container = NULL;
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		if( obj == NULL || obj == passenger || !obj->isLocallyControlled() || obj->getContain() == NULL )
+			return NULL;
+		// ponytail: the first container with a seat, not the nearest; pick by distance if a mixed selection of transports wants it
+		if( container == NULL && TheActionManager->canEnterObject( passenger, obj, CMD_FROM_PLAYER, CHECK_CAPACITY ) )
+			container = *it;
+	}
+	return container;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** MSG_ENTER orders the logic's selected group into its target (GameLogicDispatch), whatever its
+	* first argument says.  So the passenger is made the group for that one order and the selection
+	* the player is looking at goes straight back after it, all from this player and on the same
+	* frame, as any other selection change would. */
+//-------------------------------------------------------------------------------------------------
+static void boardIntoContainer( Drawable *passenger, Drawable *container )
+{
+	DrawableList rider;
+	rider.push_back( passenger );
+	PickAndPlayInfo info;
+	info.m_drawTarget = container;
+	pickAndPlayUnitVoiceResponse( &rider, GameMessage::MSG_ENTER, &info );
+
+	GameMessage *alone = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP_NO_SOUND );
+	alone->appendBooleanArgument( TRUE );
+	alone->appendObjectIDArgument( passenger->getObject()->getID() );
+	// the shift mark evaluateContextCommand put down goes to the very next message the logic reads
+	// (OrderQueue::takeMessage), which is the group above; the enter needs its own
+	if( TheInGameUI->isInWaypointMode() )
+		TheInGameUI->markNextOrderQueued( ORDER_QUEUE_APPEND );
+
+	GameMessage *enterMsg = TheMessageStream->appendMessage( GameMessage::MSG_ENTER );
+	enterMsg->appendObjectIDArgument( passenger->getObject()->getID() );
+	enterMsg->appendObjectIDArgument( container->getObject()->getID() );
+
+	GameMessage *back = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP_NO_SOUND );
+	back->appendBooleanArgument( TRUE );
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+		back->appendObjectIDArgument( (*it)->getObject()->getID() );
+}
+
 //====================================================================================
 CommandTranslator::CommandTranslator() : 
 	m_objective(0),
@@ -1829,8 +1886,9 @@ GameMessage::Type CommandTranslator::evaluateContextCommand( Drawable *draw,
 			TheInGameUI->markNextOrderQueued( ORDER_QUEUE_APPEND );
 
 		CanAttackResult result;
+		Drawable *boarding = NULL;
 
-		if(command && 
+		if(command &&
 			(command->isContextCommand() 
 				|| command->getCommandType() == GUI_COMMAND_SPECIAL_POWER
 				|| command->getCommandType() == GUI_COMMAND_SPECIAL_POWER_FROM_SHORTCUT))
@@ -2324,6 +2382,22 @@ GameMessage::Type CommandTranslator::evaluateContextCommand( Drawable *draw,
 				hintMessage = TheMessageStream->appendMessage( msgType );
 				hintMessage->appendObjectIDArgument( obj->getID() );
 			}  // end else
+
+		}  // end else if
+		// ********************************************************************************************
+		// the selection is the container and the click names the passenger (boardingContainer)
+		else if( draw && !isForceAttackTargeting() && ( boarding = boardingContainer( obj ) ) != NULL )
+		{
+
+			msgType = GameMessage::MSG_ENTER;
+			if( type == DO_COMMAND )
+				boardIntoContainer( draw, boarding );
+			else if( type != EVALUATE_ONLY )
+			{
+				msgType = GameMessage::MSG_ENTER_HINT;
+				hintMessage = TheMessageStream->appendMessage( msgType );
+				hintMessage->appendObjectIDArgument( obj->getID() );
+			}
 
 		}  // end else if
 		// ********************************************************************************************

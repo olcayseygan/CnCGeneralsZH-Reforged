@@ -2179,10 +2179,12 @@ TEST(hotkeys_every_row_the_page_lists_is_a_command_the_game_knows)
 {
 	static const char *const IDLE[] = { "SELECT_NEXT_IDLE_AIRCRAFT", "SELECT_NEXT_IDLE_VEHICLE", "SELECT_NEXT_IDLE_INFANTRY",
 		"SELECT_ALL_IDLE_UNITS", "SELECT_ALL_IDLE_AIRCRAFT", "SELECT_ALL_IDLE_VEHICLES" };
+	static const char *const ORDERS[] = { "TOGGLE_ATTACKMOVE", "TOGGLE_FORCEATTACK", "TOGGLE_GUARD", "TOGGLE_MOVE", "HOLD_POSITION" };
 	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
 	MetaNameProbe names;
 	Int idle = 0;
 	Int autoOrders = 0;
+	Int orders = 0;
 	for( size_t each = 0; each < rows.size(); each++ )
 	{
 		CHECK( names.findGameMessageMetaType( rows[ each ].id.c_str() ) != GameMessage::MSG_INVALID );
@@ -2191,9 +2193,26 @@ TEST(hotkeys_every_row_the_page_lists_is_a_command_the_game_knows)
 				idle++;
 		if( ( rows[ each ].id == "AUTO_GARRISON" || rows[ each ].id == "AUTO_REPAIR" ) && rows[ each ].category == "CONTROL" && rows[ each ].binding.key.empty() )
 			autoOrders++;
+		// the bar's fixed orders, guard among them, are keys a player sets whatever the mod's bar says
+		for( size_t name = 0; name < sizeof( ORDERS ) / sizeof( ORDERS[ 0 ] ); name++ )
+			if( rows[ each ].id == ORDERS[ name ] && rows[ each ].category == "CONTROL" && rows[ each ].binding.key.empty() && !rows[ each ].barOnly )
+				orders++;
 	}
 	CHECK_EQ( idle, 6 );
 	CHECK_EQ( autoOrders, 2 );
+	CHECK_EQ( orders, 5 );
+}
+
+/* OptionsHotkeysKey gives a bar button a digit as well as a letter, so the file has to keep one:
+   a digit read back as no key made the next write drop it. */
+TEST(hotkeys_file_keeps_a_digit_on_a_button)
+{
+	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
+	const HotkeysFile file = Hotkeys_parse( "CommandButtonHotKey Command_Guard\r\n  Key = 4\r\nEnd\r\n"
+		"CommandButtonHotKey Command_Stop\r\n  Key = ,\r\nEnd\r\n", rows );
+	CHECK_STR( file.buttons.find( "Command_Guard" )->second.c_str(), "4" );
+	CHECK_STR( file.buttons.find( "Command_Stop" )->second.c_str(), "" );
+	CHECK( Hotkeys_format( file, rows ).find( "CommandButtonHotKey Command_Guard\r\n  Key = 4\r\n" ) != std::string::npos );
 }
 
 TEST(hotkeys_file_the_launcher_wrote_comes_back_byte_for_byte)
@@ -16614,25 +16633,6 @@ TEST(a_capturable_tech_building_is_income_not_a_target)
 }
 
 
-/** C2: whether a finished wave waits at the rally point or goes now.  EA sent every team the moment
-	 it was ready, and a string of small waves is free veterancy for whoever is on the other end.
-	 Three things override the arithmetic, and each of them is a way of getting the AI stuck if it is
-	 missing. */
-TEST(massing_waits_for_a_force_but_never_waits_for_ever)
-{
-	const Real AGGRESSIVE = 0.8f;		// commits with less
-	const Real DEFENSIVE = 1.3f;		// wants more in hand first
-
-	// half of what the enemy has: not enough for either role
-	CHECK( aiShouldMass( 500.0f, 1000.0f, AGGRESSIVE, FALSE, FALSE ) );
-	CHECK( aiShouldMass( 500.0f, 1000.0f, DEFENSIVE, FALSE, FALSE ) );
-
-	// the role is the difference: at parity the aggressive one goes and the defensive one holds
-	CHECK( !aiShouldMass( 1000.0f, 1000.0f, AGGRESSIVE, FALSE, FALSE ) );
-	CHECK( aiShouldMass( 1000.0f, 1000.0f, DEFENSIVE, FALSE, FALSE ) );
-
-	// the sixty-second valve wins over everything, so a wave can never be parked for ever
-	CHECK( !aiShouldMass( 1.0f, 100000.0f, DEFENSIVE, TRUE, FALSE ) );
 /** An Aurora guarding a circle dropped its one bomb on the nearest thing in it, usually a soldier.
 	 A guarding aircraft now takes buildings, then vehicles, then infantry, nearest within a class, and
 	 the lower ObjectID on an exact tie so every machine picks the same one. */
@@ -16659,6 +16659,25 @@ TEST(a_guarding_aircraft_bombs_buildings_then_vehicles_then_infantry)
 }
 
 
+/** C2: whether a finished wave waits at the rally point or goes now.  EA sent every team the moment
+	 it was ready, and a string of small waves is free veterancy for whoever is on the other end.
+	 Three things override the arithmetic, and each of them is a way of getting the AI stuck if it is
+	 missing. */
+TEST(massing_waits_for_a_force_but_never_waits_for_ever)
+{
+	const Real AGGRESSIVE = 0.8f;		// commits with less
+	const Real DEFENSIVE = 1.3f;		// wants more in hand first
+
+	// half of what the enemy has: not enough for either role
+	CHECK( aiShouldMass( 500.0f, 1000.0f, AGGRESSIVE, FALSE, FALSE ) );
+	CHECK( aiShouldMass( 500.0f, 1000.0f, DEFENSIVE, FALSE, FALSE ) );
+
+	// the role is the difference: at parity the aggressive one goes and the defensive one holds
+	CHECK( !aiShouldMass( 1000.0f, 1000.0f, AGGRESSIVE, FALSE, FALSE ) );
+	CHECK( aiShouldMass( 1000.0f, 1000.0f, DEFENSIVE, FALSE, FALSE ) );
+
+	// the sixty-second valve wins over everything, so a wave can never be parked for ever
+	CHECK( !aiShouldMass( 1.0f, 100000.0f, DEFENSIVE, TRUE, FALSE ) );
 
 	// so does a fight at home: nothing sits at a rally point while the base is being hit
 	CHECK( !aiShouldMass( 1.0f, 100000.0f, DEFENSIVE, FALSE, TRUE ) );

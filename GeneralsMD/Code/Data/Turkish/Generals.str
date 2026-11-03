@@ -16617,6 +16617,26 @@ GUI:HotkeysCommandAUTO_REPAIR
 "Tamir olmaya ya da iyileşmeye git"
 END
 
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Saldırarak ilerle (sonraki tıklama)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Zorla saldır (sonraki tıklama)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Koru (sonraki tıklama)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Hareket et (sonraki tıklama)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Yerini koru"
+END
+
 // Maç yükleme ekranı (LoadScreen.cpp içindeki LoadScreenBoard)
 GUI:LoadModeSkirmish
 "Çatışma"

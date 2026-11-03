@@ -17237,6 +17237,26 @@ GUI:HotkeysCommandAUTO_REPAIR
 "Идти на ремонт или лечение"
 END
 
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Атака на ходу (следующий щелчок)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Принудительная атака (следующий щелчок)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Охрана (следующий щелчок)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Движение (следующий щелчок)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Удерживать позицию"
+END
+
 GUI:LoadModeSkirmish
 "Схватка"
 END

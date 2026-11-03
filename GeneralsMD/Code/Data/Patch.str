@@ -2237,6 +2237,26 @@ GUI:HotkeysCommandAUTO_REPAIR
 "Go get repaired or healed"
 END
 
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Attack move (next click)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Force Attack (next click)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Guard (next click)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Move (next click)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Hold position"
+END
+
 // The match load screen (LoadScreenBoard in LoadScreen.cpp)
 GUI:LoadModeSkirmish
 "Skirmish"

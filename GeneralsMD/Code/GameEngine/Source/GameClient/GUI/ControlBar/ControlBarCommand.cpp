@@ -997,9 +997,12 @@ void ControlBar::updateContextCommand( void )
 			win->winSetStatus( WIN_STATUS_ALWAYS_COLOR );
 		}
 
-		// the same for a unit on repeat the bank cannot pay for right now: Ctrl+Alt click has to
-		// reach the button to stop it, and a plain click only says there is not enough money
-		if( repeating && availability == COMMAND_CANT_AFFORD )
+		// the same for a unit on repeat that cannot be built right now, whatever the reason (money,
+		// a lost prerequisite, the cap, a full queue, an unpowered factory): Ctrl+Alt click has to
+		// reach the button to stop it, and a plain click is refused by the build path below with
+		// the message it already has. Build buttons come back RESTRICTED far more often than
+		// CANT_AFFORD (getCommandAvailability), so testing CANT_AFFORD alone left repeat stuck on.
+		if( repeating && ( availability == COMMAND_CANT_AFFORD || availability == COMMAND_RESTRICTED ) )
 			win->winEnable( TRUE );
 
 		//Determine by the production type of this button, whether or not the created object

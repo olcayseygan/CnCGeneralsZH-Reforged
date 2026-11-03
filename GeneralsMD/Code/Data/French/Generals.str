@@ -17285,6 +17285,26 @@ GUI:HotkeysCommandAUTO_REPAIR
 "Aller se faire réparer ou soigner"
 END
 
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Attaquer en marche (prochain clic)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Forcer l'attaque (prochain clic)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Protéger (prochain clic)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Déplacer (prochain clic)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Tenir la position"
+END
+
 GUI:LoadModeSkirmish
 "Escarmouche"
 END

@@ -15389,6 +15389,26 @@ GUI:HotkeysCommandAUTO_REPAIR
 "Reparieren oder heilen lassen"
 END
 
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Angriffsmarsch (nächster Klick)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Angriff erzwingen (nächster Klick)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Bewachen (nächster Klick)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Bewegen (nächster Klick)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Position halten"
+END
+
 GUI:MoneyTransferTitle
 "Geld senden"
 END

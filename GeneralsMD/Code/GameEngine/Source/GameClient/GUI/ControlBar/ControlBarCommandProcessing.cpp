@@ -610,10 +610,17 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 				{
 					TheInGameUI->message( "GUI:UnitMaxedOut" );
 					break;
-				} 
+				}
+				// a unit on repeat keeps its button clickable after its prerequisite is lost or its
+				// factory goes dark (ControlBar::updateContextCommand), so these reach here now. The
+				// tooltip already names what is missing; the click just does nothing
+				else if( cmt == CANMAKE_NO_PREREQ || cmt == CANMAKE_FACTORY_IS_DISABLED )
+				{
+					break;
+				}
 				else if (cmt != CANMAKE_OK)
 				{
-					DEBUG_ASSERTCRASH( 0, ("Cannot create '%s' because the factory object '%s' returns false for canMakeUnit\n", 
+					DEBUG_ASSERTCRASH( 0, ("Cannot create '%s' because the factory object '%s' returns false for canMakeUnit\n",
 																	whatToBuild->getName().str(), 
 																	factory->getTemplate()->getName().str()) );
 					break;

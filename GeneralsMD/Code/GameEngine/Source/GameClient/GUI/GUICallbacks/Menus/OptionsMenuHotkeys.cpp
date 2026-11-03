@@ -795,8 +795,10 @@ Bool OptionsHotkeysKey( UnsignedByte key, Int state )
 		return TRUE;
 	if( s_capture == CAPTURE_BUTTON )
 	{
-		// a button takes a letter and nothing else
-		if( name.size() == 5 && isalpha( (unsigned char)name[ 4 ] ) )
+		// a button takes a key that types one letter or digit, bare: the bar finds its button by the
+		// character the key types (HotKeyManager::nameOf), and a stroke with Ctrl or Alt is the
+		// command map's (barHoldsKey). A digit on a showing button takes the stroke from that team key
+		if( name.size() == 5 && isalnum( (unsigned char)name[ 4 ] ) )
 		{
 			const HotkeyBinding letter( name, "NONE" );
 			applySelected( &letter, FALSE );

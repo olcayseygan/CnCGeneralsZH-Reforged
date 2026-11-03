@@ -3246,6 +3246,8 @@ void InGameUI::handleBuildPlacements( void )
 
 }  // end handleBuildPlacements
 
+static Int radarFrameTop( void );
+
 //-------------------------------------------------------------------------------------------------
 /** Pre-draw phase of the in game ui */
 //-------------------------------------------------------------------------------------------------
@@ -3266,6 +3268,10 @@ void InGameUI::preDraw( void )
 
 	// draw the floating text first;
 	drawFloatingText();
+
+	// the SIHA recon chips and trays, and the glyphs beside classified radar rings; a tray stays
+	// clear of the command bar and the radar's frame, the highest of it
+	RadarContactMarks_draw( radarFrameTop() );
 
 	// draw world animations
 	updateAndDrawWorldAnimations();

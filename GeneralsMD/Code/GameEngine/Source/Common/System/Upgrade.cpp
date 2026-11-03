@@ -401,6 +401,19 @@ const UpgradeTemplate *UpgradeCenter::findUpgrade( const AsciiString& name ) con
 }  // end findUpgrade
 
 //-------------------------------------------------------------------------------------------------
+const UpgradeTemplate *UpgradeCenter::requireUpgrade( const AsciiString &name, const AsciiString &who ) const
+{
+	const UpgradeTemplate *upgrade = findUpgrade( name );
+	if( !upgrade )
+	{
+		AsciiString reason;
+		reason.format( "No upgrade named '%s' (%s)", name.str(), who.str() );
+		RELEASE_CRASH( reason.str() );
+	}
+	return upgrade;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Allocate a new upgrade template */
 //-------------------------------------------------------------------------------------------------
 UpgradeTemplate *UpgradeCenter::newUpgrade( const AsciiString& name )

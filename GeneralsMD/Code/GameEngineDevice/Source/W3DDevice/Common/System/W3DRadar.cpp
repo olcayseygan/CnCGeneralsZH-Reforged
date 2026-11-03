@@ -292,13 +292,16 @@ static void fillClipped( const IRegion2D &clip, Int x, Int y, Int size, Unsigned
 
 //-------------------------------------------------------------------------------------------------
 /** The radar's contacts on the minimap: this sweep's as a red square on a dark keyline with a dim
-	* ring round it, the sweep before as a small red square fading out as the next sweep comes due. */
+	* ring round it, the sweep before as a small red square fading out as the next sweep comes due.
+	* A SIHA recon area is a dashed green ring, and a contact it saw an amber square, as recon_v1 has
+	* them: amber says the type is known. */
 //-------------------------------------------------------------------------------------------------
 void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height )
 {
 	const std::vector<RadarContact> &fresh = RadarContactMarks_fresh();
 	const std::vector<RadarContact> &echoes = RadarContactMarks_echoes();
-	if( fresh.empty() && echoes.empty() )
+	const std::vector<RadarReconArea> &areas = RadarContactMarks_areas();
+	if( fresh.empty() && echoes.empty() && areas.empty() )
 		return;
 
 	IRegion2D clip;
@@ -306,6 +309,30 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 	clip.lo.y = pixelY;
 	clip.hi.x = pixelX + width;
 	clip.hi.y = pixelY + height;
+
+	const Int dashes = 48;
+	const Color areaColour = (Color)( (RadarContactLook::AreaGreen & 0x00FFFFFF) | 0xE6000000 );
+	for( size_t i = 0; i < areas.size(); ++i )
+	{
+		ICoord2D radar, centre;
+		radar.x = areas[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = areas[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &centre, pixelX, pixelY, width, height );
+		const Real rx = areas[ i ].radius * width / m_mapExtent.width();
+		const Real ry = areas[ i ].radius * height / m_mapExtent.height();
+		for( Int s = 0; s < dashes; s += 2 )
+		{
+			Real a0 = TWO_PI * s / dashes;
+			Real a1 = TWO_PI * (s + 1) / dashes;
+			ICoord2D from, to, clippedFrom, clippedTo;
+			from.x = centre.x + REAL_TO_INT( Cos( a0 ) * rx );
+			from.y = centre.y + REAL_TO_INT( Sin( a0 ) * ry );
+			to.x = centre.x + REAL_TO_INT( Cos( a1 ) * rx );
+			to.y = centre.y + REAL_TO_INT( Sin( a1 ) * ry );
+			if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &clip ) )
+				TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, 1.0f, areaColour );
+		}
+	}
 
 	// the ring is opaque, a darker shade of the contact's red: twelve translucent segments blended
 	// twice where they meet and the ring came out beaded
@@ -316,6 +343,7 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 	const Int pip = RadarContactLook::MinimapPip;
 	const Real ringRadius = RadarContactLook::MinimapRing * 0.5f;
 	const Int ringSegments = 12;
+	const Int dot = RadarContactLook::MinimapReconDot;
 
 	for( size_t i = 0; i < fresh.size(); ++i )
 	{
@@ -323,6 +351,13 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 		radar.x = fresh[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
 		radar.y = fresh[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
 		radarToPixel( &radar, &pixel, pixelX, pixelY, width, height );
+
+		if( fresh[ i ].recon )
+		{
+			fillClipped( clip, pixel.x - (dot + 2) / 2, pixel.y - (dot + 2) / 2, dot + 2, keyline );
+			fillClipped( clip, pixel.x - dot / 2, pixel.y - dot / 2, dot, RadarContactLook::Amber );
+			continue;
+		}
 
 		for( Int s = 0; s < ringSegments; ++s )
 		{
@@ -344,6 +379,8 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 	const Int echo = RadarContactLook::MinimapEcho;
 	for( size_t i = 0; i < echoes.size(); ++i )
 	{
+		if( echoes[ i ].recon )
+			continue;		// the area sees it again next sweep, as on the ground
 		ICoord2D radar, pixel;
 		radar.x = echoes[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
 		radar.y = echoes[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);

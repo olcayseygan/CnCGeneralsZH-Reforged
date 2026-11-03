@@ -9,6 +9,7 @@ Data/Art/Textures/ReforgedBarChinaRight.tga
 Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
+Data/Art/Textures/ReforgedFactionEmblems.dds
 Data/Art/Textures/ReforgedFactionTurkiye.tga
 Data/Art/Textures/ReforgedForceAttack.tga
 Data/Art/Textures/ReforgedGuardCentre.tga
@@ -41,6 +42,8 @@ Data/Art/Textures/ReforgedMineLedBlue.tga
 Data/Art/Textures/ReforgedMineLedRed.tga
 Data/Art/Textures/ReforgedRadarContact.tga
 Data/Art/Textures/ReforgedRadarRing.tga
+Data/Art/Textures/ReforgedReconArea.tga
+Data/Art/Textures/ReforgedReconHud.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
@@ -286,6 +289,7 @@ Data/INI/ControlBarSchemeReforged.ini
 Data/INI/FXListReforged.ini
 Data/INI/FixesReforged.ini
 Data/INI/MappedImages/HandCreated/ReforgedBarChinaBeacon.ini
+Data/INI/MappedImages/HandCreated/ReforgedFactionEmblems.ini
 Data/INI/MappedImages/HandCreated/ReforgedFactionPicker.ini
 Data/INI/MappedImages/HandCreated/ReforgedForceAttack.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaCommandBar.ini
@@ -305,6 +309,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudObsSpec.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyePowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
+Data/INI/MappedImages/HandCreated/ReforgedReconHud.ini
 Data/INI/ModernWater.ini
 Data/INI/MultiplayerReforged.ini
 Data/INI/ObjectCreationListReforged.ini
@@ -4328,6 +4333,7 @@ Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
 Tools/radar_marks.py
+Tools/recon_marks.py
 Tools/record-dx11-shaders.ps1
 Tools/replay-check.sh
 Tools/root-readonly-check.sh

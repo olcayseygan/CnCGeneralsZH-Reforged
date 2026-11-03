@@ -2898,7 +2898,7 @@ OBJECT:TurkiyeSiper
 END
 
 CONTROLBAR:ConstructTurkiyeSiper
-"Siper B&unker"
+"Sip&er Bunker"
 END
 
 CONTROLBAR:ToolTipTurkiyeSiper
@@ -3021,76 +3021,200 @@ CONTROLBAR:ConstructTurkiyePatriotBattery
 "H&isar Battery"
 END
 
-SCIENCE:TurkiyeMinefield
-"Minefield"
+SCIENCE:TurkiyeLaserDesignation
+"Laser Designation"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceMinefield
-"A cargo plane sows a minefield wherever you point. \n \n Deploy from: Headquarters"
+CONTROLBAR:ToolTipTurkiyeScienceLaserDesignation
+"Spotter Teams and Bayraktars paint what they attack. A painted target counts as inside radar coverage wherever it stands, so every radar-guided rocket keeps its lock on it."
 END
 
-CONTROLBAR:TurkiyeMinefield
-"Mine&field"
+UPGRADE:TurkiyeLaserDesignation
+"Laser Designation"
 END
 
-CONTROLBAR:TooltipTurkiyeMinefield
-"Minefield \n Recharge: 4:00"
+SCIENCE:TurkiyeEarlyWarning
+"Early Warning"
 END
 
-SCIENCE:TurkiyeFuelResupply
-"Fuel Resupply"
+CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
+"Every Turkiye radar reaches a quarter further: Headquarters, Radar Tower, Koral, Akinci and Mobile Radar."
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceFuelResupply
-"Bayraktar drones carry one more munition on every sortie."
+UPGRADE:TurkiyeEarlyWarning
+"Early Warning"
+END
+
+SCIENCE:TurkiyeUavRecon
+"UAV Recon"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceUavRecon
+"A UAV circles the target area for 30 seconds and reports every enemy unit in it, parked or moving, and what it is. The fog stays, but the area counts as radar coverage. \n \n Deploy from: Headquarters"
+END
+
+CONTROLBAR:TurkiyeUavRecon
+"&UAV Recon"
+END
+
+CONTROLBAR:TooltipTurkiyeUavRecon
+"UAV Recon \n Recharge: 2:00"
+END
+
+GUI:HudReconSiha
+"SIHA RECON"
+END
+
+SCIENCE:TurkiyeMobileRadar
+"Mobile Radar"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
+"The Factory builds the Mobile Radar, a radar truck that covers 900 around it while it stands still."
+END
+
+OBJECT:TurkiyeVehicleMobileRadar
+"Mobile Radar"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleMobileRadar
+"&Mobile Radar"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleMobileRadar
+"A radar on wheels: parked, it covers 900 around it; driving, it covers nothing. No weapon. \n \n Requires: Mobile Radar (rank 3)"
+END
+
+SCIENCE:TurkiyeAkinciAesa
+"Akinci AESA"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAkinciAesa
+"The Akinci's radar reaches 1000 instead of 750."
+END
+
+UPGRADE:TurkiyeAkinciAesa
+"Akinci AESA"
 END
 
 SCIENCE:TurkiyeSwarmMunition
-"Loitering Munition"
+"UAV Swarm 1"
+END
+
+SCIENCE:TurkiyeSwarmMunition2
+"UAV Swarm 2"
+END
+
+SCIENCE:TurkiyeSwarmMunition3
+"UAV Swarm 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceSwarmMunition
-"One loitering munition circles where you point and dives on the most expensive target it finds. \n \n Deploy from: Headquarters"
+"Loitering munitions circle where you point, and each dives on the most expensive target it finds: one at level 1, three at level 2, five at level 3. \n \n Deploy from: Headquarters"
 END
 
 CONTROLBAR:TurkiyeSwarmMunition
-"Loitering &Munition"
+"UAV Swa&rm"
 END
 
 CONTROLBAR:TooltipTurkiyeSwarmMunition
-"Loitering Munition \n Recharge: 3:00"
+"UAV Swarm \n Recharge: 3:00"
 END
 
 SCIENCE:TurkiyeElectronicBlinding
-"Electronic Blinding"
+"Electronic Warfare"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceElectronicBlinding
-"Every enemy with a building in the target area loses its radar for 30 seconds. \n \n Deploy from: Headquarters"
+"Every enemy with a building in the target area loses its radar for 30 seconds, and the area stays jammed as long: enemy drones and spotters in it see nothing, and guided missiles crossing it lose their lock. \n \n Deploy from: Headquarters"
 END
 
 CONTROLBAR:TurkiyeElectronicBlinding
-"Electronic &Blinding"
+"Electronic &Warfare"
 END
 
 CONTROLBAR:TooltipTurkiyeElectronicBlinding
-"Electronic Blinding \n Recharge: 4:00"
+"Electronic Warfare \n Recharge: 4:00"
 END
 
-SCIENCE:TurkiyeSwarmStrike
-"Swarm Strike"
+SCIENCE:TurkiyeSatelliteGuidance
+"Satellite Guidance"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceSwarmStrike
-"A swarm of munitions hunts down the ten most valuable targets in a wide area, one munition each. A packed base shrugs it off; a spread-out army does not. \n \n Deploy from: Headquarters"
+CONTROLBAR:ToolTipTurkiyeScienceSatelliteGuidance
+"For 45 seconds the whole map counts as Turkiye radar coverage: every radar-guided rocket keeps its lock, and moving enemies show through the fog. \n \n Deploy from: Headquarters"
 END
 
-CONTROLBAR:TurkiyeSwarmStrike
-"S&warm Strike"
+CONTROLBAR:TurkiyeSatelliteGuidance
+"Sa&tellite Guidance"
 END
 
-CONTROLBAR:TooltipTurkiyeSwarmStrike
-"Swarm Strike \n Recharge: 6:00"
+CONTROLBAR:TooltipTurkiyeSatelliteGuidance
+"Satellite Guidance \n Recharge: 5:00"
+END
+
+SCIENCE:TurkiyeTayfun
+"Tayfun Missile"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceTayfun
+"A Tayfun ballistic missile comes down on the target. Inside radar coverage it always hits; outside it lands on the point one time in five and misses wide the rest. \n \n Deploy from: Headquarters"
+END
+
+CONTROLBAR:TurkiyeTayfun
+"Tayfun &Missile"
+END
+
+CONTROLBAR:TooltipTurkiyeTayfun
+"Tayfun Missile \n Recharge: 4:00"
+END
+
+UPGRADE:TurkiyeTargetClassification
+"Target Classification"
+END
+
+CONTROLBAR:UpgradeTurkiyeTargetClassification
+"&Target Classification"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeTargetClassification
+"Radar contacts show what they are: infantry, vehicle, air defense, artillery, aircraft or a defense."
+END
+
+UPGRADE:TurkiyeAkkor
+"AKKOR Active Protection"
+END
+
+CONTROLBAR:UpgradeTurkiyeAkkor
+"AKKOR Active &Protection"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAkkor
+"Every Altay carries a hard-kill charge that bursts one incoming missile or rocket every three seconds."
+END
+
+UPGRADE:TurkiyeGokdogan
+"Gokdogan Missiles"
+END
+
+CONTROLBAR:UpgradeTurkiyeGokdogan
+"Gokdogan &Missiles"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeGokdogan
+"Kizilelma fighters fire the Gokdogan: 360 range instead of 280, 130 damage instead of 100."
+END
+
+UPGRADE:TurkiyeSiperReinforced
+"Reinforced Siper"
+END
+
+CONTROLBAR:UpgradeTurkiyeSiperReinforced
+"Rein&forced Siper"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
+"Concrete and overhead cover: every Siper takes half as much again before it falls."
 END
 
 UPGRADE:TurkiyeThermal
@@ -3129,40 +3253,28 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSwarmSoftware
 "Bayraktar munitions pick their own target: the most expensive enemy in reach."
 END
 
-UPGRADE:TurkiyeFuelResupply
-"Fuel Resupply"
+SCIENCE:TurkiyeRapidDeployment
+"Gokbey Landing 1"
 END
 
-SCIENCE:TurkiyeRapidDeployment
-"Rapid Deployment"
+SCIENCE:TurkiyeRapidDeployment2
+"Gokbey Landing 2"
+END
+
+SCIENCE:TurkiyeRapidDeployment3
+"Gokbey Landing 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceRapidDeployment
-"A cargo plane drops six Mehmetcik and two Sungur gunners wherever you point. \n \n Deploy from: Headquarters"
+"Mehmetcik riflemen and Sungur gunners parachute wherever you point: six at level 1, ten at level 2, fourteen and a Kirpi at level 3. \n \n Deploy from: Headquarters"
 END
 
 CONTROLBAR:TurkiyeRapidDeployment
-"&Rapid Deployment"
+"Gokbey &Landing"
 END
 
 CONTROLBAR:TooltipTurkiyeRapidDeployment
-"Rapid Deployment \n Recharge: 3:00"
-END
-
-SCIENCE:TurkiyeFireMission
-"Fire Mission"
-END
-
-CONTROLBAR:ToolTipTurkiyeScienceFireMission
-"Thirty-six heavy shells fall on the target from off the map. \n \n Deploy from: Headquarters"
-END
-
-CONTROLBAR:TurkiyeFireMission
-"Fire M&ission"
-END
-
-CONTROLBAR:TooltipTurkiyeFireMission
-"Fire Mission \n Recharge: 4:00"
+"Gokbey Landing \n Recharge: 3:00"
 END
 
 SCIENCE:TurkiyeCommandoRaid
@@ -3174,7 +3286,7 @@ CONTROLBAR:ToolTipTurkiyeScienceCommandoRaid
 END
 
 CONTROLBAR:TurkiyeCommandoRaid
-"&Commando Raid"
+"Comman&do Raid"
 END
 
 CONTROLBAR:TooltipTurkiyeCommandoRaid

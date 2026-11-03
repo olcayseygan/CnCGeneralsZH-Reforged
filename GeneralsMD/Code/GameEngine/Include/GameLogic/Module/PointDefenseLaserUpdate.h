@@ -38,6 +38,7 @@
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class ThingTemplate;
+class UpgradeTemplate;
 class WeaponTemplate;
 
 
@@ -52,6 +53,7 @@ public:
 	UnsignedInt			m_scanFrames;
 	Real						m_scanRange;
 	Real						m_velocityFactor;
+	AsciiString			m_requiredUpgrade;	///< idle until the owner has it
 
 	PointDefenseLaserUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -87,6 +89,7 @@ protected:
 	Int m_nextScanFrames;
 	Int m_nextShotAvailableInFrames;
 	Int m_shotsFiredFromClip;		///< against the weapon's ClipSize; EA's point defense has none and never counts
+	const UpgradeTemplate *m_requiredUpgrade;	///< the data's RequiredUpgrade, found once; derived, not saved
 };
 
 

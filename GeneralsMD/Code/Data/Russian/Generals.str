@@ -18165,76 +18165,200 @@ CONTROLBAR:ConstructTurkiyePatriotBattery
 "&Батарея Hisar"
 END
 
-SCIENCE:TurkiyeMinefield
-"Минное поле"
+SCIENCE:TurkiyeLaserDesignation
+"Лазерное целеуказание"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceMinefield
-"Транспортный самолёт засевает минами указанную вами местность. \n \n Применяется из: Штаба"
+CONTROLBAR:ToolTipTurkiyeScienceLaserDesignation
+"Группы корректировщиков и Bayraktar подсвечивают то, что атакуют. Подсвеченная цель считается в зоне радара, где бы она ни стояла, и каждая ракета с радарным наведением держит на ней захват."
 END
 
-CONTROLBAR:TurkiyeMinefield
-"&Минное поле"
+UPGRADE:TurkiyeLaserDesignation
+"Лазерное целеуказание"
 END
 
-CONTROLBAR:TooltipTurkiyeMinefield
-"Минное поле \n Перезарядка: 4:00"
+SCIENCE:TurkiyeEarlyWarning
+"Раннее оповещение"
 END
 
-SCIENCE:TurkiyeFuelResupply
-"Дозаправка"
+CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
+"Каждый радар Турции бьёт на четверть дальше: Штаб, радарная вышка, Koral, Akinci и мобильный радар."
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceFuelResupply
-"Дроны Bayraktar несут на одну боеприпасную единицу больше за вылет."
+UPGRADE:TurkiyeEarlyWarning
+"Раннее оповещение"
+END
+
+SCIENCE:TurkiyeUavRecon
+"Разведка БПЛА"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceUavRecon
+"БПЛА 30 секунд кружит над зоной и сообщает о каждом вражеском юните в ней, стоящем или движущемся, и о том, что это. Туман остаётся, но зона считается в зоне радара. \n \n Применяется из: Штаба"
+END
+
+CONTROLBAR:TurkiyeUavRecon
+"&Разведка БПЛА"
+END
+
+CONTROLBAR:TooltipTurkiyeUavRecon
+"Разведка БПЛА \n Перезарядка: 2:00"
+END
+
+GUI:HudReconSiha
+"РАЗВЕДКА БПЛА"
+END
+
+SCIENCE:TurkiyeMobileRadar
+"Мобильный радар"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
+"Завод выпускает мобильный радар: радарный грузовик, который охватывает 900 вокруг себя, пока стоит."
+END
+
+OBJECT:TurkiyeVehicleMobileRadar
+"Мобильный радар"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleMobileRadar
+"&Мобильный радар"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleMobileRadar
+"Радар на колёсах: стоя, охватывает 900 вокруг себя, в движении - ничего. Без оружия. \n \n Требуется: Мобильный радар (звание 3)"
+END
+
+SCIENCE:TurkiyeAkinciAesa
+"АФАР Akinci"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAkinciAesa
+"Радар Akinci бьёт на 1000 вместо 750."
+END
+
+UPGRADE:TurkiyeAkinciAesa
+"АФАР Akinci"
 END
 
 SCIENCE:TurkiyeSwarmMunition
-"Барражирующий боеприпас"
+"Рой БПЛА 1"
+END
+
+SCIENCE:TurkiyeSwarmMunition2
+"Рой БПЛА 2"
+END
+
+SCIENCE:TurkiyeSwarmMunition3
+"Рой БПЛА 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceSwarmMunition
-"Один барражирующий боеприпас кружит над указанным местом и пикирует на самую дорогую найденную цель. \n \n Применяется из: Штаба"
+"Барражирующие боеприпасы кружат над указанным местом, и каждый пикирует на самую дорогую найденную цель: один на уровне 1, три на уровне 2, пять на уровне 3. \n \n Применяется из: Штаба"
 END
 
 CONTROLBAR:TurkiyeSwarmMunition
-"&Барражирующий боеприпас"
+"&Рой БПЛА"
 END
 
 CONTROLBAR:TooltipTurkiyeSwarmMunition
-"Барражирующий боеприпас \n Перезарядка: 3:00"
+"Рой БПЛА \n Перезарядка: 3:00"
 END
 
 SCIENCE:TurkiyeElectronicBlinding
-"Электронное ослепление"
+"Радиоэлектронная борьба"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceElectronicBlinding
-"Каждый враг, у которого есть здание в зоне поражения, теряет радар на 30 секунд. \n \n Применяется из: Штаба"
+"Каждый враг, у которого есть здание в зоне поражения, теряет радар на 30 секунд, и всё это время зона заглушена: вражеские дроны и наводчики в ней ничего не видят, а управляемые ракеты, пролетающие через неё, теряют захват. \n \n Применяется из: Штаба"
 END
 
 CONTROLBAR:TurkiyeElectronicBlinding
-"&Электронное ослепление"
+"&Радиоэлектронная борьба"
 END
 
 CONTROLBAR:TooltipTurkiyeElectronicBlinding
-"Электронное ослепление \n Перезарядка: 4:00"
+"Радиоэлектронная борьба \n Перезарядка: 4:00"
 END
 
-SCIENCE:TurkiyeSwarmStrike
-"Удар роя"
+SCIENCE:TurkiyeSatelliteGuidance
+"Спутниковое наведение"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceSwarmStrike
-"Рой боеприпасов выслеживает десять самых ценных целей на большой площади, по одному боеприпасу на цель. Плотная база это переживёт, рассредоточенная армия - нет. \n \n Применяется из: Штаба"
+CONTROLBAR:ToolTipTurkiyeScienceSatelliteGuidance
+"45 секунд вся карта считается в зоне радара Турции: каждая ракета с радарным наведением держит захват, а движущиеся враги видны под туманом. \n \n Применяется из: Штаба"
 END
 
-CONTROLBAR:TurkiyeSwarmStrike
-"&Удар роя"
+CONTROLBAR:TurkiyeSatelliteGuidance
+"&Спутниковое наведение"
 END
 
-CONTROLBAR:TooltipTurkiyeSwarmStrike
-"Удар роя \n Перезарядка: 6:00"
+CONTROLBAR:TooltipTurkiyeSatelliteGuidance
+"Спутниковое наведение \n Перезарядка: 5:00"
+END
+
+SCIENCE:TurkiyeTayfun
+"Ракета Tayfun"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceTayfun
+"Баллистическая ракета Tayfun падает на цель. В зоне радара она всегда попадает; вне её попадает в точку один раз из пяти, а в остальных случаях ложится далеко. \n \n Применяется из: Штаба"
+END
+
+CONTROLBAR:TurkiyeTayfun
+"Ракета &Tayfun"
+END
+
+CONTROLBAR:TooltipTurkiyeTayfun
+"Ракета Tayfun \n Перезарядка: 4:00"
+END
+
+UPGRADE:TurkiyeTargetClassification
+"Классификация целей"
+END
+
+CONTROLBAR:UpgradeTurkiyeTargetClassification
+"&Классификация целей"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeTargetClassification
+"Радарные отметки показывают, что это: пехота, техника, ПВО, артиллерия, авиация или оборона."
+END
+
+UPGRADE:TurkiyeAkkor
+"Активная защита AKKOR"
+END
+
+CONTROLBAR:UpgradeTurkiyeAkkor
+"&Активная защита AKKOR"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAkkor
+"Каждый Altay несёт заряд активной защиты, который раз в три секунды подрывает подлетающую ракету или реактивный снаряд."
+END
+
+UPGRADE:TurkiyeGokdogan
+"Ракеты Gokdogan"
+END
+
+CONTROLBAR:UpgradeTurkiyeGokdogan
+"Ракеты &Gokdogan"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeGokdogan
+"Kizilelma стреляют Gokdogan: дальность 360 вместо 280, урон 130 вместо 100."
+END
+
+UPGRADE:TurkiyeSiperReinforced
+"Укреплённый Siper"
+END
+
+CONTROLBAR:UpgradeTurkiyeSiperReinforced
+"&Укреплённый Siper"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
+"Бетон и перекрытие: каждый Siper выдерживает в полтора раза больше."
 END
 
 UPGRADE:TurkiyeThermal
@@ -18273,40 +18397,28 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSwarmSoftware
 "Боеприпасы Bayraktar сами выбирают цель: самого дорогого врага в досягаемости."
 END
 
-UPGRADE:TurkiyeFuelResupply
-"Дозаправка"
+SCIENCE:TurkiyeRapidDeployment
+"Десант Gokbey 1"
 END
 
-SCIENCE:TurkiyeRapidDeployment
-"Быстрая переброска"
+SCIENCE:TurkiyeRapidDeployment2
+"Десант Gokbey 2"
+END
+
+SCIENCE:TurkiyeRapidDeployment3
+"Десант Gokbey 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceRapidDeployment
-"Транспортный самолёт сбрасывает шестерых Mehmetcik и двух ракетчиков Sungur в указанном месте. \n \n Применяется из: Штаба"
+"Стрелки Mehmetcik и ракетчики Sungur десантируются в указанном месте: шесть на уровне 1, десять на уровне 2, четырнадцать и Kirpi на уровне 3. \n \n Применяется из: Штаба"
 END
 
 CONTROLBAR:TurkiyeRapidDeployment
-"&Быстрая переброска"
+"&Десант Gokbey"
 END
 
 CONTROLBAR:TooltipTurkiyeRapidDeployment
-"Быстрая переброска \n Перезарядка: 3:00"
-END
-
-SCIENCE:TurkiyeFireMission
-"Огневая задача"
-END
-
-CONTROLBAR:ToolTipTurkiyeScienceFireMission
-"Тридцать шесть тяжёлых снарядов падают на цель из-за пределов карты. \n \n Применяется из: Штаба"
-END
-
-CONTROLBAR:TurkiyeFireMission
-"&Огневая задача"
-END
-
-CONTROLBAR:TooltipTurkiyeFireMission
-"Огневая задача \n Перезарядка: 4:00"
+"Десант Gokbey \n Перезарядка: 3:00"
 END
 
 SCIENCE:TurkiyeCommandoRaid

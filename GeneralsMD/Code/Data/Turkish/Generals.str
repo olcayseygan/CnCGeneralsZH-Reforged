@@ -17388,76 +17388,200 @@ CONTROLBAR:ConstructTurkiyePatriotBattery
 "Hisar &Bataryası"
 END
 
-SCIENCE:TurkiyeMinefield
-"Mayın Tarlası"
+SCIENCE:TurkiyeLaserDesignation
+"Lazer İşaretleme"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceMinefield
-"Bir kargo uçağı gösterdiğiniz yere mayın döşer. \n \n Çağrıldığı yer: Karargah"
+CONTROLBAR:ToolTipTurkiyeScienceLaserDesignation
+"Gözcü timleri ve Bayraktarlar saldırdıkları hedefi işaretler. İşaretli hedef nerede olursa olsun radar kapsamında sayılır, radar güdümlü her roket kilidini onda tutar."
 END
 
-CONTROLBAR:TurkiyeMinefield
-"Mayın Ta&rlası"
+UPGRADE:TurkiyeLaserDesignation
+"Lazer İşaretleme"
 END
 
-CONTROLBAR:TooltipTurkiyeMinefield
-"Mayın Tarlası \n Geri Sayım: 4:00"
+SCIENCE:TurkiyeEarlyWarning
+"Erken İhbar"
 END
 
-SCIENCE:TurkiyeFuelResupply
-"Yakıt İkmali"
+CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
+"Türkiye'nin bütün radarları dörtte bir daha uzağa erişir: Karargah, Radar Kulesi, Koral, Akıncı ve Mobil Radar."
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceFuelResupply
-"Bayraktar her uçuşta bir mühimmat fazla taşır."
+UPGRADE:TurkiyeEarlyWarning
+"Erken İhbar"
+END
+
+SCIENCE:TurkiyeUavRecon
+"SİHA Keşfi"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceUavRecon
+"Bir SİHA hedef alanın üstünde 30 saniye döner ve oradaki her düşman birimini, duran da yürüyen de, ne olduğuyla bildirir. Sis kalkmaz ama alan radar kapsamında sayılır. \n \n Kullanıldığı yer: Karargah"
+END
+
+CONTROLBAR:TurkiyeUavRecon
+"SİHA &Keşfi"
+END
+
+CONTROLBAR:TooltipTurkiyeUavRecon
+"SİHA Keşfi \n Geri Sayım: 2:00"
+END
+
+GUI:HudReconSiha
+"SİHA KEŞİF"
+END
+
+SCIENCE:TurkiyeMobileRadar
+"Mobil Radar"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
+"Fabrika Mobil Radar üretir: dururken çevresinde 900'ü kapsayan bir radar kamyonu."
+END
+
+OBJECT:TurkiyeVehicleMobileRadar
+"Mobil Radar"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleMobileRadar
+"&Mobil Radar"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleMobileRadar
+"Tekerlekli radar: park halinde çevresinde 900'ü kapsar, yürürken hiçbir şeyi. Silahı yok. \n \n Gerekenler: Mobil Radar (3. rütbe)"
+END
+
+SCIENCE:TurkiyeAkinciAesa
+"Akıncı AESA"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAkinciAesa
+"Akıncı'nın radarı 750 yerine 1000'e erişir."
+END
+
+UPGRADE:TurkiyeAkinciAesa
+"Akıncı AESA"
 END
 
 SCIENCE:TurkiyeSwarmMunition
-"Gezgin Mühimmat"
+"SİHA Sürüsü 1"
+END
+
+SCIENCE:TurkiyeSwarmMunition2
+"SİHA Sürüsü 2"
+END
+
+SCIENCE:TurkiyeSwarmMunition3
+"SİHA Sürüsü 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceSwarmMunition
-"Bir gezgin mühimmat gösterdiğin yerde döner ve bulduğu en pahalı hedefe dalar. \n \n Kullanıldığı yer: Karargah"
+"Gezgin mühimmatlar gösterdiğin yerde döner, her biri bulduğu en pahalı hedefe dalar: 1. seviyede bir, 2. seviyede üç, 3. seviyede beş. \n \n Kullanıldığı yer: Karargah"
 END
 
 CONTROLBAR:TurkiyeSwarmMunition
-"Gezgin &Mühimmat"
+"SİHA &Sürüsü"
 END
 
 CONTROLBAR:TooltipTurkiyeSwarmMunition
-"Gezgin Mühimmat \n Geri Sayım: 3:00"
+"SİHA Sürüsü \n Geri Sayım: 3:00"
 END
 
 SCIENCE:TurkiyeElectronicBlinding
-"Elektronik Körleme"
+"Elektronik Harp"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceElectronicBlinding
-"Hedef alanda binası olan her düşmanın radarı 30 saniye kapanır. \n \n Kullanıldığı yer: Karargah"
+"Hedef alanda binası olan her düşmanın radarı 30 saniye kapanır ve alan o süre karıştırılır: içindeki düşman İHA'ları ve gözcüleri hiçbir şey görmez, alandan geçen güdümlü füzeler kilidini kaybeder. \n \n Kullanıldığı yer: Karargah"
 END
 
 CONTROLBAR:TurkiyeElectronicBlinding
-"Elektronik &Körleme"
+"Elektronik &Harp"
 END
 
 CONTROLBAR:TooltipTurkiyeElectronicBlinding
-"Elektronik Körleme \n Geri Sayım: 4:00"
+"Elektronik Harp \n Geri Sayım: 4:00"
 END
 
-SCIENCE:TurkiyeSwarmStrike
-"Sürü Akını"
+SCIENCE:TurkiyeSatelliteGuidance
+"Uydu Güdüm"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceSwarmStrike
-"Bir mühimmat sürüsü geniş bir alandaki en değerli on hedefi tek tek bulur, her birine bir mühimmat. Sıkışık bir üs bunu az hisseder, dağınık bir ordu çok. \n \n Kullanıldığı yer: Karargah"
+CONTROLBAR:ToolTipTurkiyeScienceSatelliteGuidance
+"45 saniye boyunca bütün harita Türkiye'nin radar kapsamında sayılır: radar güdümlü her roket kilidini tutar, yürüyen düşmanlar sisin altında görünür. \n \n Kullanıldığı yer: Karargah"
 END
 
-CONTROLBAR:TurkiyeSwarmStrike
-"Sürü Akı&nı"
+CONTROLBAR:TurkiyeSatelliteGuidance
+"&Uydu Güdüm"
 END
 
-CONTROLBAR:TooltipTurkiyeSwarmStrike
-"Sürü Akını \n Geri Sayım: 6:00"
+CONTROLBAR:TooltipTurkiyeSatelliteGuidance
+"Uydu Güdüm \n Geri Sayım: 5:00"
+END
+
+SCIENCE:TurkiyeTayfun
+"Tayfun Füzesi"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceTayfun
+"Bir Tayfun balistik füzesi hedefe iner. Radar kapsamında her zaman vurur; kapsam dışında beşte bir noktaya düşer, kalanında geniş ıskalar. \n \n Kullanıldığı yer: Karargah"
+END
+
+CONTROLBAR:TurkiyeTayfun
+"&Tayfun Füzesi"
+END
+
+CONTROLBAR:TooltipTurkiyeTayfun
+"Tayfun Füzesi \n Geri Sayım: 4:00"
+END
+
+UPGRADE:TurkiyeTargetClassification
+"Hedef Sınıflandırma"
+END
+
+CONTROLBAR:UpgradeTurkiyeTargetClassification
+"&Hedef Sınıflandırma"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeTargetClassification
+"Radar temasları ne olduklarını gösterir: piyade, araç, hava savunma, topçu, uçak ya da savunma yapısı."
+END
+
+UPGRADE:TurkiyeAkkor
+"AKKOR Aktif Koruma"
+END
+
+CONTROLBAR:UpgradeTurkiyeAkkor
+"AKKOR Aktif &Koruma"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAkkor
+"Her Altay'daki aktif koruma, üç saniyede bir yaklaşan bir füzeyi ya da roketi havada patlatır."
+END
+
+UPGRADE:TurkiyeGokdogan
+"Gökdoğan Füzeleri"
+END
+
+CONTROLBAR:UpgradeTurkiyeGokdogan
+"&Gökdoğan Füzeleri"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeGokdogan
+"Kızılelma Gökdoğan atar: 280 yerine 360 menzil, 100 yerine 130 hasar."
+END
+
+UPGRADE:TurkiyeSiperReinforced
+"Takviyeli Siper"
+END
+
+CONTROLBAR:UpgradeTurkiyeSiperReinforced
+"&Takviyeli Siper"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
+"Beton ve üst örtü: her Siper yıkılmadan önce yarısı kadar daha fazla dayanır."
 END
 
 UPGRADE:TurkiyeThermal
@@ -17496,40 +17620,28 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSwarmSoftware
 "Bayraktar'ın mühimmatı hedefini kendi seçer: menzildeki en pahalı düşman."
 END
 
-UPGRADE:TurkiyeFuelResupply
-"Yakıt İkmali"
+SCIENCE:TurkiyeRapidDeployment
+"Gökbey İndirmesi 1"
 END
 
-SCIENCE:TurkiyeRapidDeployment
-"Hızlı İntikal"
+SCIENCE:TurkiyeRapidDeployment2
+"Gökbey İndirmesi 2"
+END
+
+SCIENCE:TurkiyeRapidDeployment3
+"Gökbey İndirmesi 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceRapidDeployment
-"Bir kargo uçağı gösterdiğin yere altı Mehmetçik ve iki Sungur nişancısı bırakır. \n \n Kullanıldığı yer: Karargah"
+"Mehmetçikler ve Sungur nişancıları gösterdiğin yere paraşütle iner: 1. seviyede altı, 2. seviyede on, 3. seviyede on dört asker ve bir Kirpi. \n \n Kullanıldığı yer: Karargah"
 END
 
 CONTROLBAR:TurkiyeRapidDeployment
-"&Hızlı İntikal"
+"&Gökbey İndirmesi"
 END
 
 CONTROLBAR:TooltipTurkiyeRapidDeployment
-"Hızlı İntikal \n Geri Sayım: 3:00"
-END
-
-SCIENCE:TurkiyeFireMission
-"Atış Desteği"
-END
-
-CONTROLBAR:ToolTipTurkiyeScienceFireMission
-"Harita dışından hedefe otuz altı ağır mermi düşer. \n \n Kullanıldığı yer: Karargah"
-END
-
-CONTROLBAR:TurkiyeFireMission
-"&Atış Desteği"
-END
-
-CONTROLBAR:TooltipTurkiyeFireMission
-"Atış Desteği \n Geri Sayım: 4:00"
+"Gökbey İndirmesi \n Geri Sayım: 3:00"
 END
 
 SCIENCE:TurkiyeCommandoRaid

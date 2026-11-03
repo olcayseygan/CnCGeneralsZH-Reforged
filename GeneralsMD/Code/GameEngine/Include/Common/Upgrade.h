@@ -257,6 +257,11 @@ public:
 
 	static void parseUpgradeDefinition( INI *ini );
 
+	/** The upgrade so named, or a fatal error naming it and who asked, in every build.  For a module
+		* whose data names an upgrade: the objects parse before the upgrades, so it holds the name and
+		* looks it up as it is made. */
+	const UpgradeTemplate *requireUpgrade( const AsciiString &name, const AsciiString &who ) const;
+
 protected:
 
 	UpgradeTemplate *findNonConstUpgradeByKey( NameKeyType key );		///< find upgrade by name key

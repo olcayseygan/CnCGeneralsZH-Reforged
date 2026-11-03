@@ -1,0 +1,17 @@
+# The auto garrison key with no building in reach: the men board a friendly transport instead.
+#
+# Six Rangers and one empty Humvee (five seats) on the open sand in the middle of the small
+# generated map guardradius.txt uses, no building within the key's 300 radius.  Expect five
+# "AUTO GARRISON: ... heads for 'AmericaVehicleHumvee'" lines and five "is in 'AmericaVehicleHumvee'",
+# and the sixth Ranger "finds no seat left after 0 buildings", because the five walking to it fill it.
+# A building in reach still comes first (autoorders.txt).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 900
+#     -scenario autoride -logPrefix autoride_
+
+30    spawn         0  AmericaVehicleHumvee   1  700 580
+30    spawn         0  AmericaInfantryRanger  6  700 500   20
+60    autogarrison  0  AmericaInfantryRanger
+400   tally         0  AmericaVehicleHumvee

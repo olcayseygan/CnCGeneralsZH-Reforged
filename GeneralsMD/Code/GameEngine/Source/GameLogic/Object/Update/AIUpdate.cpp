@@ -7156,15 +7156,11 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	}
 
 	//
-	// A caller that closes with what it finds picks the biggest threat in range instead of the
-	// nearest thing (see AI_threatScore).  Walking up to a dozer while the artillery next to it
-	// keeps firing is only sensible for a unit that cannot move to a better target - and this
-	// caller can.
+	// Every caller picks what its weapons kill best for the time it takes rather than the nearest
+	// thing (see aiTargetTier): a Humvee the Technical, a tank the tank, and whoever is shooting it
+	// before anything it would have to drive to.
 	//
-	if (allowOutOfWeaponRangeTargets)
-	{
-		flags |= AI::PREFER_HIGH_THREAT;
-	}
+	flags |= AI::PREFER_BEST_TARGET;
 
 	//
 	// ... and an aircraft only makes that long look forward - see PartitionFilterForwardArc.

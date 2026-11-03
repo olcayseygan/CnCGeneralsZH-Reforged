@@ -3221,6 +3221,13 @@ static Bool shotPatternAgainst( const WeaponTemplate *weapon, const ThingTemplat
 	else
 		out->m_damagePerShot = armor.adjustDamage( type, weapon->getPrimaryDamage( bonus ) );
 
+	aiShotTiming( weapon, bonus, out );
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void aiShotTiming( const WeaponTemplate *weapon, const WeaponBonus &bonus, AIShotPattern *out )
+{
 	const Real rateOfFire = bonus.getField( WeaponBonus::RATE_OF_FIRE );
 	const Real preAttack = INT_TO_REAL( weapon->getPreAttackDelay( bonus ) );
 	out->m_delayFrames = INT_TO_REAL( weapon->getMinDelayBetweenShots() + weapon->getMaxDelayBetweenShots() ) * 0.5f / rateOfFire;
@@ -3243,7 +3250,6 @@ static Bool shotPatternAgainst( const WeaponTemplate *weapon, const ThingTemplat
 			out->m_openingFrames = preAttack;
 			break;
 	}
-	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -12259,15 +12265,21 @@ Object *aiFindFreeGarrison( Object *unit, const Coord3D *center, Real radius, co
 	unit->getControllingPlayer()->iterateObjects( collectBoardingGoals, &goals );
 	AIUpdateInterface *ai = unit->getAI();
 	const Int owner = unit->getControllingPlayer()->getPlayerIndex();
-	PartitionFilterGarrisonable filterGarrisonable( TRUE );
-	PartitionFilter *filters[] = { &filterGarrisonable, 0 };
 	MemoryPoolObjectHolder hold;
-	SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRange( center, radius, FROM_CENTER_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRange( center, radius, FROM_CENTER_2D, NULL, ITER_SORTED_NEAR_TO_FAR );
 	hold.hold( nearby );
+	// a building beats any transport, so the nearest transport with a seat waits until no building has one
+	Object *transport = NULL;
 	for( Object *building = nearby->first(); building; building = nearby->next() )
 	{
-		if( !building->isKindOf( KINDOF_STRUCTURE ) || std::find( tried.begin(), tried.end(), building->getID() ) != tried.end() ||
-				!TheActionManager->canEnterObject( unit, building, CMD_FROM_PLAYER, CHECK_CAPACITY ) )
+		const ContainModuleInterface *contain = building->getContain();
+		if( contain == NULL || std::find( tried.begin(), tried.end(), building->getID() ) != tried.end() )
+			continue;
+		const Bool isBuilding = building->isKindOf( KINDOF_STRUCTURE );
+		if( isBuilding ? !contain->isGarrisonable() :
+				( transport != NULL || unit->getRelationship( building ) != ALLIES || building->isAirborneTarget() || contain->isRiderChangeContain() ) )
+			continue;
+		if( !TheActionManager->canEnterObject( unit, building, CMD_FROM_PLAYER, CHECK_CAPACITY ) )
 			continue;
 		// a house never in sight has no memory to read, so what really stands there would decide it, and
 		// skipping one the enemy holds would give him away
@@ -12276,10 +12288,13 @@ Object *aiFindFreeGarrison( Object *unit, const Coord3D *center, Real radius, co
 		// a press while he is already walking to it does not take his own seat from him
 		const Bool walkingThere = ai->getCurrentStateID() == AI_ENTER && ai->getGoalObject() == building;
 		const Int walkers = (Int)std::count( goals.begin(), goals.end(), building->getID() ) - (walkingThere ? 1 : 0);
-		if( TheActionManager->openSeatsAsSeen( unit, building, CMD_FROM_PLAYER ) > walkers )
+		if( TheActionManager->openSeatsAsSeen( unit, building, CMD_FROM_PLAYER ) <= walkers )
+			continue;
+		if( isBuilding )
 			return building;
+		transport = building;
 	}
-	return NULL;
+	return transport;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -15128,7 +15143,7 @@ static Real groundAttackRange( const Object *obj );
 
 /** A unit's contribution to an exchange: what it can still take, and what it can still deal.  The
 	* threat value the data already carries stands in for damage per second - it is what
-	* AI_threatScore uses for the same purpose. */
+	* aiTargetKillRate's value uses for the same purpose. */
 static void addToForce( const Object *obj, Real *health, Real *power )
 {
 	if( obj == NULL || obj->isEffectivelyDead() )

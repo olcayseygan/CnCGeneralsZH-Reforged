@@ -36,6 +36,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 #include "Common/XferCRC.h"
@@ -43,6 +44,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/SidesList.h"
@@ -358,6 +360,10 @@ AI::AI( void )
 /**
  * Initialize the AI system
  */
+/** A build variation's own template, a Technical's chassis, has no cost; the template that lists it
+	* does (AI_targetValue).  Keyed by template, so cleared with every map in AI::reset. */
+static std::map<const ThingTemplate*, const ThingTemplate*> theVariationParents;
+
 void AI::init( void )
 {
 	m_nextGroupID = 0;
@@ -396,6 +402,7 @@ void AI::reset( void )
 	}
 	m_nextGroupID = 0;
 	m_sweptGroupID = 0;
+	theVariationParents.clear();
 	m_nextFormationID = NO_FORMATION_ID;
 	getNextFormationID(); // increment once past NO_FORMATION_ID.  jba.
 	m_lastBuildingPlacementFrame = 0;
@@ -781,53 +788,223 @@ static void priorityFunc(Object *obj, void *userData)
 
 //-----------------------------------------------------------------------------
 /**
- * How much an enemy is worth shooting before the others, with no Object involved so
- * test_gameengine can link straight to it - the same trick as AIAttackMove_shouldRetaliate
- * in AIStates.cpp.
+ * What a unit choosing its own target shoots first, with no Object involved so test_gameengine
+ * can link straight to it.
  *
- * Attack move used to hand out whatever the scan found first, which is the nearest thing:
- * a group ordered through an enemy base stopped for the first dozer it passed while the
- * artillery beside it kept firing. Ranking by threat fixes the order of business.
+ * Idle units took the nearest thing and attack move the most expensive one, so a Humvee spent
+ * half a minute plinking a Battlemaster while the Technical beside it drove off. The rate is the
+ * enemy's money a unit takes off per frame it spends on a target: the target's worth over the
+ * frames its best weapon needs to kill it, through its armour and with the health it has left
+ * (aiFramesToKill, the AI's matchup arithmetic), plus the frames to drive into reach. A Humvee
+ * gun does a quarter of its damage to tank armour and a tank shell a tenth of its to a soldier,
+ * so each takes what it is built for, and a wounded enemy is a quicker kill than a fresh one.
  *
- * 'ThreatValue' is the INI field the threat map already feeds on, so a mod that sets it
- * decides this outright; the shipped Zero Hour INI never sets it (it is absent from every
- * file in INIZH.big), so build cost stands in - EA's own price is the only per-unit measure
- * of dangerousness the shipped data has, and it tracks it well enough (an Overlord costs
- * five times a Humvee).
+ * Worth is 'ThreatValue' where a mod sets it and build cost where it does not; the shipped INI
+ * sets it nowhere.
  *
- * Anything that can shoot back at *us* outranks anything that cannot, whatever it cost: a
- * Command Center is worth more than a Gattling tank and is still not what is killing us.
- * That is what AI_THREAT_ARMED_BONUS buys - it is larger than any build cost in the game, so
- * the two groups never interleave, and distance never moves a target out of its group either.
- *
- * Within a group distance does decide, because a threat we have to cross the field to reach is
- * not the one hurting us now: the worth of a target falls off with range, halving every
- * 'distanceModifier' world units away. That is the same knob the scripted attack priorities use
- * (AI INI's AttackPriorityDistanceModifier, 100.0 in the shipped data), so both notions of "worth
- * shooting" fade over the same distance. It is 0 until that INI is read - and the ctor default -
- * so a zero (or a negative, or a distance behind us) means no falloff at all rather than a
- * divide by zero.
+ * The tiers keep two old rules above the rate. Anything that can shoot back outranks anything
+ * that cannot, so a group in an enemy base does not stop for the dozer while the artillery
+ * fires. And whoever just shot us outranks everything but an armed enemy already in reach that
+ * dies within AI_QUICK_KILL_FRAMES: a far target the unit counters never keeps it from turning
+ * on its shooter, a near one it finishes in seconds does.
  */
-enum { AI_THREAT_ARMED_BONUS = 1000000 };		///< larger than any build cost in the game
-
-Int AI_threatScore( Int templateThreatValue, Int buildCost, Bool threatensMe,
-										Real dist, Real distanceModifier )
+Int aiTargetTier( Bool shotMe, Bool threatensMe, Bool inRange, Real framesToKill )
 {
-	Int score = (templateThreatValue > 0) ? templateThreatValue : buildCost;
-	if (score < 1)
-		score = 1;					// a free civilian car is still worth more than nothing at all
+	if( shotMe || ( threatensMe && inRange && framesToKill >= 0.0f && framesToKill <= INT_TO_REAL( AI_QUICK_KILL_FRAMES ) ) )
+		return 2;
+	return threatensMe ? 1 : 0;
+}
 
-	if (distanceModifier > 0.0f && dist > 0.0f)
+//-----------------------------------------------------------------------------
+Real aiTargetKillRate( Real value, Real framesToKill, Real gap, Real speed )
+{
+	if( framesToKill < 0.0f )
+		return 0.0f;
+	Real travelFrames = 0.0f;
+	if( gap > 0.0f )
 	{
-		score = REAL_TO_INT( score * distanceModifier / (distanceModifier + dist) );
-		if (score < 1)
-			score = 1;				// however far off it is, it still beats finding nothing
+		if( speed <= 0.0f )
+			return 0.0f;
+		travelFrames = gap / speed;
+	}
+	return value / ( framesToKill + travelFrames );	// aiFramesToKill is never under one frame
+}
+
+//-----------------------------------------------------------------------------
+Bool aiTargetBeats( const AITargetRating &a, const AITargetRating &b )
+{
+	if( a.m_tier != b.m_tier )
+		return a.m_tier > b.m_tier;
+	if( a.m_rate != b.m_rate )
+		return a.m_rate > b.m_rate;
+	if( a.m_distSqr != b.m_distSqr )
+		return a.m_distSqr < b.m_distSqr;
+	return a.m_id < b.m_id;
+}
+
+// AIStates.cpp; the attack move's retaliation window, which is protected on its state
+extern Bool AIAttackMove_shouldRetaliate( UnsignedInt lastDamageFrame, UnsignedInt now, Int windowFrames,
+																					Bool alreadyFightingTheAttacker, Bool canAttackTheAttacker );
+static const Int AI_SHOT_ME_FRAMES = LOGICFRAMES_PER_SECOND;
+
+/** What a target is worth: ThreatValue where a mod sets it, else what its player pays for it. */
+static Int AI_targetValue( const Object *victim )
+{
+	const ThingTemplate *tmpl = victim->getTemplate();
+	if( tmpl->getThreatValue() > 0 )
+		return tmpl->getThreatValue();
+	Int cost = tmpl->calcCostToBuild( victim->getControllingPlayer() );
+	if( cost <= 0 )
+	{
+		std::map<const ThingTemplate*, const ThingTemplate*>::iterator known = theVariationParents.find( tmpl );
+		if( known == theVariationParents.end() )
+		{
+			const ThingTemplate *parent = NULL;
+			for( const ThingTemplate *t = TheThingFactory->firstTemplate(); t != NULL && parent == NULL; t = t->friend_getNextTemplate() )
+			{
+				const std::vector<AsciiString> &variations = t->getBuildVariations();
+				if( std::find( variations.begin(), variations.end(), tmpl->getName() ) != variations.end() )
+					parent = t;
+			}
+			known = theVariationParents.insert( std::make_pair( tmpl, parent ) ).first;
+		}
+		if( known->second != NULL )
+			cost = known->second->calcCostToBuild( victim->getControllingPlayer() );
+	}
+	return cost < 1 ? 1 : cost;		// a free civilian car is still worth more than nothing at all
+}
+
+/** What me knows of victim as a target, all of it but whether victim can shoot back. */
+struct AITargetFacts
+{
+	AITargetRating m_rating;
+	Bool m_shotMe;
+	Bool m_inRange;
+	Real m_framesToKill;
+};
+
+/** What the unit choosing brings to every candidate: its weapons as they fire now, once per search
+	* rather than once per candidate. */
+struct AIShooter
+{
+	const Object *m_me;
+	Weapon *m_weapon[ WEAPONSLOT_COUNT ];		///< NULL where the slot is empty, dry, or not the unit's own to turn
+	WeaponBonus m_bonus[ WEAPONSLOT_COUNT ];
+	AIShotPattern m_timing[ WEAPONSLOT_COUNT ];
+	Real m_range[ WEAPONSLOT_COUNT ];
+	Real m_longestRange;		///< on flat ground
+	Real m_longestReach;		///< from the highest ground, the most any range check can grant
+	Real m_fastestShot;			///< the fewest frames any slot needs for its first shot, AI_CANNOT_KILL with none
+	Real m_speed;
+	ObjectID m_shooterID;		///< whoever shot the unit inside AI_SHOT_ME_FRAMES, else INVALID_ID
+};
+
+static void AI_readShooter( const Object *me, AIShooter &shooter )
+{
+	shooter.m_me = me;
+	shooter.m_longestRange = 0.0f;
+	shooter.m_longestReach = 0.0f;
+	shooter.m_fastestShot = AI_CANNOT_KILL;
+	for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		Weapon *weapon = me->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+		const UnsignedInt sources = me->getWeaponInWeaponSlotCommandSourceMask( (WeaponSlotType)slot );
+		if( weapon != NULL && ( ( weapon->getStatus() == OUT_OF_AMMO && !weapon->getAutoReloadsClip() ) ||
+				( ( sources & ( 1 << CMD_FROM_AI ) ) == 0 && ( sources & CMD_DEFAULT_SWITCH_WEAPON ) == 0 ) ) )
+			weapon = NULL;
+		shooter.m_weapon[ slot ] = weapon;
+		if( weapon == NULL )
+			continue;
+
+		weapon->computeBonus( me, 0, shooter.m_bonus[ slot ] );
+		aiShotTiming( weapon->getTemplate(), shooter.m_bonus[ slot ], &shooter.m_timing[ slot ] );
+		shooter.m_range[ slot ] = weapon->getTemplate()->getAttackRange( shooter.m_bonus[ slot ] );
+		shooter.m_longestRange = max( shooter.m_longestRange, shooter.m_range[ slot ] );
+		shooter.m_longestReach = max( shooter.m_longestReach, shooter.m_range[ slot ] + Weapon_elevationRangeBonus( shooter.m_range[ slot ], FLT_MAX ) );
+		const AIShotPattern &t = shooter.m_timing[ slot ];
+		const Real firstShot = t.m_openingFrames + ( t.m_delayFrames > 1.0f ? t.m_delayFrames : 1.0f );	// aiFramesToKill's least
+		if( shooter.m_fastestShot < 0.0f || firstShot < shooter.m_fastestShot )
+			shooter.m_fastestShot = firstShot;
 	}
 
-	if (threatensMe)
-		score += AI_THREAT_ARMED_BONUS;
+	const AIUpdateInterface *ai = me->getAI();
+	shooter.m_speed = ( ai != NULL && ai->getCurLocomotor() != NULL ) ? ai->getCurLocomotorSpeed() : 0.0f;
 
-	return score;
+	BodyModuleInterface *body = me->getBodyModule();
+	const DamageInfo *damage = body->getLastDamageInfo();		// an inactive body keeps none
+	shooter.m_shooterID = ( damage != NULL &&
+		AIAttackMove_shouldRetaliate( body->getLastDamageTimestamp(), TheGameLogic->getFrame(), AI_SHOT_ME_FRAMES, FALSE, TRUE ) )
+		? damage->in.m_sourceID : INVALID_ID;
+}
+
+/** The most victim could rate, from its distance and worth alone: in reach if anything could be,
+	* killed in one shot of the fastest weapon. aiTargetBeats on it decides whether the rest is read. */
+static Int AI_targetCeilingTier( const AIShooter &shooter, const Object *victim, Real distSqr )
+{
+	return ( victim->getID() == shooter.m_shooterID || distSqr <= sqr( shooter.m_longestReach ) ) ? 2 : 1;
+}
+
+static AITargetRating AI_targetCeiling( const AIShooter &shooter, const Object *victim, Real distSqr, Int value )
+{
+	AITargetRating r;
+	r.m_id = victim->getID();
+	r.m_distSqr = distSqr;
+	r.m_tier = AI_targetCeilingTier( shooter, victim, distSqr );
+	const Real gap = distSqr <= sqr( shooter.m_longestReach ) ? 0.0f : sqrt( distSqr ) - shooter.m_longestRange;
+	r.m_rate = aiTargetKillRate( INT_TO_REAL( value ), shooter.m_fastestShot, gap, shooter.m_speed );
+	return r;
+}
+
+static void AI_targetFacts( const AIShooter &shooter, const Object *victim, Real distSqr, Int value, AITargetFacts &facts )
+{
+	const Object *me = shooter.m_me;
+	facts.m_rating.m_id = victim->getID();
+	facts.m_rating.m_distSqr = distSqr;
+	facts.m_shotMe = victim->getID() == shooter.m_shooterID;
+
+	// the weapon that kills it soonest, of those this unit may turn on it by itself
+	const Real health = victim->getBodyModule()->getHealth();
+	const Int antiMask = WeaponSet::getVictimAntiMask( victim );
+	Int best = -1;
+	facts.m_framesToKill = AI_CANNOT_KILL;
+	for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		const Weapon *weapon = shooter.m_weapon[ slot ];
+		if( weapon == NULL || ( weapon->getAntiMask() & antiMask ) == 0 )
+			continue;
+		AIShotPattern shots = shooter.m_timing[ slot ];
+		shots.m_damagePerShot = weapon->getTemplate()->estimateWeaponTemplateDamage( me, victim, NULL, shooter.m_bonus[ slot ] );
+		const Real frames = aiFramesToKill( health, shots );
+		if( frames >= 0.0f && ( best < 0 || frames < facts.m_framesToKill ) )
+		{
+			best = slot;
+			facts.m_framesToKill = frames;
+		}
+	}
+
+	facts.m_inRange = best >= 0 && shooter.m_weapon[ best ]->isWithinAttackRange( me, victim );
+	Real gap = 0.0f;
+	if( best >= 0 && !facts.m_inRange )
+		gap = sqrt( distSqr ) - shooter.m_range[ best ];
+	facts.m_rating.m_rate = aiTargetKillRate( INT_TO_REAL( value ), facts.m_framesToKill, gap, shooter.m_speed );
+	facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, TRUE, facts.m_inRange, facts.m_framesToKill );
+}
+
+static Bool AI_threatens( Object *enemy, const Object *me )
+{
+	if( !enemy->isAbleToAttack() )		// cheap bit test, and required before the call below
+		return FALSE;
+	const CanAttackResult r = enemy->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, me, CMD_FROM_AI );
+	return r == ATTACKRESULT_POSSIBLE || r == ATTACKRESULT_POSSIBLE_AFTER_MOVING;
+}
+
+/** victim's whole rating, whether it can shoot back included. */
+static AITargetRating AI_rateFully( const AIShooter &shooter, Object *victim, Real distSqr )
+{
+	AITargetFacts facts;
+	AI_targetFacts( shooter, victim, distSqr, AI_targetValue( victim ), facts );
+	facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, AI_threatens( victim, shooter.m_me ), facts.m_inRange, facts.m_framesToKill );
+	return facts.m_rating;
 }
 
 //-----------------------------------------------------------------------------
@@ -864,6 +1041,74 @@ static Bool AI_filtersAllow( PartitionFilter **filters, Object *candidate )
 			return false;
 	}
 	return true;
+}
+
+//-----------------------------------------------------------------------------
+/**
+ * Each candidate is first rated on its distance and worth alone (AI_targetCeiling), the most it
+ * could score, so most of a crowd costs a distance; the weapons are read only for one whose
+ * ceiling beats the leader, and the expensive questions (the late filters, whether it can shoot
+ * back) only for one that then would take the lead. A near to far list sets a high bar early.
+ * The rule is a total order on ObjectID, so the pick does not depend on the order the partition
+ * hands the candidates out in.
+ */
+Object *AI::pickBestTarget( const Object *me, SimpleObjectIterator *candidates, PartitionFilter **lateFilters )
+{
+	AIShooter shooter;
+	AI_readShooter( me, shooter );
+	Object *best = NULL;
+	AITargetRating bestRating;
+	Object *nearest = NULL;		// for the -scenario line only
+	Real nearestDistSqr = 0.0f;
+	Int count = 0;
+	for( Object *other = candidates->first(); other; other = candidates->next() )
+	{
+		const Real distSqr = ThePartitionManager->getDistanceSquared( me, other, FROM_BOUNDINGSPHERE_2D );
+		++count;
+		if( nearest == NULL || distSqr < nearestDistSqr )
+		{
+			nearest = other;
+			nearestDistSqr = distSqr;
+		}
+		// the tier's ceiling is a distance and an id; the worth is a price lookup
+		if( best != NULL && AI_targetCeilingTier( shooter, other, distSqr ) < bestRating.m_tier )
+			continue;
+		const Int value = AI_targetValue( other );
+		if( best != NULL && !aiTargetBeats( AI_targetCeiling( shooter, other, distSqr, value ), bestRating ) )
+			continue;
+		AITargetFacts facts;
+		AI_targetFacts( shooter, other, distSqr, value, facts );
+		if( best != NULL && !aiTargetBeats( facts.m_rating, bestRating ) )
+			continue;
+		if( !AI_filtersAllow( lateFilters, other ) )
+			continue;
+		if( !AI_threatens( other, me ) )
+		{
+			facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, FALSE, facts.m_inRange, facts.m_framesToKill );
+			if( best != NULL && !aiTargetBeats( facts.m_rating, bestRating ) )
+				continue;
+		}
+		best = other;
+		bestRating = facts.m_rating;
+	}
+
+	// -scenario only: the pick beside the nearest candidate, which targetpick.txt reads
+	if( best != NULL && !TheGlobalData->m_scenarioFile.isEmpty() )
+	{
+		DEBUG_LOG(( "TARGET PICK: frame %d '%s' %d picks '%s' %d tier %d rate %.4f of %d, nearest '%s' %d\n",
+			TheGameLogic->getFrame(), me->getTemplate()->getName().str(), me->getID(), best->getTemplate()->getName().str(),
+			best->getID(), bestRating.m_tier, bestRating.m_rate, count, nearest->getTemplate()->getName().str(), nearest->getID() ));
+	}
+	return best;
+}
+
+//-----------------------------------------------------------------------------
+Bool AI::prefersTarget( const Object *me, Object *a, Object *b )
+{
+	AIShooter shooter;
+	AI_readShooter( me, shooter );
+	return aiTargetBeats( AI_rateFully( shooter, a, ThePartitionManager->getDistanceSquared( me, a, FROM_BOUNDINGSPHERE_2D ) ),
+												AI_rateFully( shooter, b, ThePartitionManager->getDistanceSquared( me, b, FROM_BOUNDINGSPHERE_2D ) ) );
 }
 
 Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifiers,
@@ -976,52 +1221,12 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 
 	if (info == NULL || info == TheScriptEngine->getDefaultAttackInfo())
 	{
-		if (qualifiers & PREFER_HIGH_THREAT)
+		if (qualifiers & PREFER_BEST_TARGET)
 		{
-			// Biggest threat in range wins; the iteration is sorted near to far, so a strict
-			// improvement keeps the nearest of equal threats - which is the whole priority
-			// order the caller wants: what shoots us (its own check, before we are called),
-			// then what is worth shooting, then what is closest.
-			Real distanceModifier = TheAI->getAiData()->m_attackPriorityDistanceModifier;
-			Object *bestThreat = NULL;
-			Int bestScore = 0;
-			ObjectIterator *threatIter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR, enemyPlayers);
-			MemoryPoolObjectHolder threatHolder(threatIter);
-			for (Object *theEnemy = threatIter->first(); theEnemy; theEnemy = threatIter->next())
-			{
-				Real dist = sqrt( ThePartitionManager->getDistanceSquared(me, theEnemy, FROM_BOUNDINGSPHERE_2D) );
-
-				/* Score it as if it were armed first, which is the best this candidate can possibly
-					 do: the armed bonus is the only thing getAbleToAttackSpecificObject decides here and
-					 it only ever adds. If the best it can do does not beat what we already have, the
-					 expensive question never has to be asked at all.
-
-					 Same answer as asking every time, and most of the asking gone. This is where an
-					 eight-player match spends its partition time - the list is every enemy in vision
-					 range, sorted near to far, so the first candidate sets a high bar and the far ones
-					 cannot clear it. */
-				const Int armedScore = AI_threatScore( theEnemy->getTemplate()->getThreatValue(),
-																		theEnemy->getTemplate()->calcCostToBuild( theEnemy->getControllingPlayer() ),
-																		true, dist, distanceModifier );
-				if (armedScore <= bestScore || !AI_filtersAllow(filters + numGatherFilters, theEnemy))
-					continue;
-
-				Bool threatensMe = theEnemy->isAbleToAttack();		// cheap bit test, and required before the call below
-				if (threatensMe)
-				{
-					CanAttackResult r = theEnemy->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, me, CMD_FROM_AI );
-					threatensMe = (r == ATTACKRESULT_POSSIBLE || r == ATTACKRESULT_POSSIBLE_AFTER_MOVING);
-				}
-
-				// the bonus is added last and nothing else in the score depends on it
-				const Int score = threatensMe ? armedScore : (armedScore - AI_THREAT_ARMED_BONUS);
-				if (score > bestScore)
-				{
-					bestScore = score;
-					bestThreat = theEnemy;
-				}
-			}
-			return bestThreat;
+			// gathered with the cheap filters; pickBestTarget asks the rest only of a leader
+			SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR, enemyPlayers);
+			MemoryPoolObjectHolder holder(iter);
+			return pickBestTarget(me, iter, filters + numGatherFilters);
 		}
 
 		// No additional attack info, so just return the closest one.
@@ -1033,6 +1238,17 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	Int			effectivePriority=0;
 	Int			actualPriority=0;
 	Real		bestDistSqr=0.0f;
+	// A unit choosing its own target (PREFER_BEST_TARGET) keeps the script's priorities, distance
+	// falloff included, and breaks a tie on them by aiTargetBeats instead of the nearer: a skirmish
+	// AI's teams all carry a priority set, and without this none of its units ever chose by weapon.
+	// The leader is rated only once a tie needs it, and a tied candidate by the same prune as
+	// pickBestTarget.
+	const Bool rated = (qualifiers & PREFER_BEST_TARGET) != 0;
+	AIShooter shooter;
+	if (rated)
+		AI_readShooter(me, shooter);
+	AITargetRating bestRating;
+	Bool bestRated = FALSE;
 	// unsorted, see AI_attackPriorityTakesLead; each entry carries the distance the gather measured,
 	// which is what getDistanceSquared would measure again
 	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_FASTEST, enemyPlayers);
@@ -1061,6 +1277,33 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		Int modPriority = curPriority-modifier;
 		if (modPriority < 1)
 			modPriority = 1;
+		if (rated && bestEnemy != NULL && modPriority == effectivePriority && curPriority == actualPriority)
+		{
+			if (!bestRated)
+			{
+				bestRating = AI_rateFully(shooter, bestEnemy, bestDistSqr);
+				bestRated = TRUE;
+			}
+			if (AI_targetCeilingTier(shooter, theEnemy, distSqr) < bestRating.m_tier)
+				continue;
+			const Int value = AI_targetValue(theEnemy);
+			if (!aiTargetBeats(AI_targetCeiling(shooter, theEnemy, distSqr, value), bestRating))
+				continue;
+			AITargetFacts facts;
+			AI_targetFacts(shooter, theEnemy, distSqr, value, facts);
+			if (!aiTargetBeats(facts.m_rating, bestRating) || !AI_filtersAllow(filters + numGatherFilters, theEnemy))
+				continue;
+			if (!AI_threatens(theEnemy, me))
+			{
+				facts.m_rating.m_tier = aiTargetTier(facts.m_shotMe, FALSE, facts.m_inRange, facts.m_framesToKill);
+				if (!aiTargetBeats(facts.m_rating, bestRating))
+					continue;
+			}
+			bestRating = facts.m_rating;
+			bestDistSqr = distSqr;
+			bestEnemy = theEnemy;
+			continue;
+		}
 		if (AI_attackPriorityTakesLead(modPriority, curPriority, distSqr, effectivePriority, actualPriority, bestDistSqr)
 			&& AI_filtersAllow(filters + numGatherFilters, theEnemy))
 		{
@@ -1068,8 +1311,9 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			actualPriority = curPriority;
 			bestDistSqr = distSqr;
 			bestEnemy = theEnemy;
+			bestRated = FALSE;
 		}
-	}	
+	}
 	if (bestEnemy) {
 		//DEBUG_LOG(("Find closest found %s, hunter %s, info %s\n", bestEnemy->getTemplate()->getName().str(), 
 		//	me->getTemplate()->getName().str(), info->getName().str()));
@@ -1948,6 +2192,26 @@ Real aiStartOccupiedOdds( Int unlocatedEnemies, Int uncheckedPositions )
 Bool aiIsIncomeNotATarget( Bool isTechBuilding, Bool isCapturable, Bool isTechBaseDefense )
 {
 	return isTechBuilding && isCapturable && !isTechBaseDefense;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int aiGuardAirTargetClass( Bool isStructure, Bool isVehicle, Bool isInfantry )
+{
+	if( isStructure )
+		return 0;
+	if( isVehicle )
+		return 1;
+	return isInfantry ? 2 : 3;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiGuardAirTargetBeats( Int classA, Real distSqrA, ObjectID idA, Int classB, Real distSqrB, ObjectID idB )
+{
+	if( classA != classB )
+		return classA < classB;
+	if( distSqrA != distSqrB )
+		return distSqrA < distSqrB;
+	return idA < idB;
 }
 
 //-------------------------------------------------------------------------------------------------

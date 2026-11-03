@@ -3922,15 +3922,16 @@ SimpleObjectIterator *PartitionManager::iterateObjectsInRange(
 	const Coord3D *pos, 
 	Real maxDist, 
 	DistanceCalculationType dc, 
-	PartitionFilter **filters, 
-	IterOrderType order
+	PartitionFilter **filters,
+	IterOrderType order,
+	PlayerMaskType onlyPlayers
 )
 {
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
 	iterHolder.hold(iter);
 
-	getClosestObjects(NULL, pos, maxDist, dc, filters, iter, NULL, NULL);
+	getClosestObjects(NULL, pos, maxDist, dc, filters, iter, NULL, NULL, onlyPlayers);
 
 	iter->sort(order);
 	iterHolder.release();

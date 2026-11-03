@@ -1536,11 +1536,12 @@ public:
 	);
 
 	SimpleObjectIterator *iterateObjectsInRange(
-		const Coord3D *pos, 
-		Real maxDist, 
-		DistanceCalculationType dc, 
-		PartitionFilter **filters = NULL, 
-		IterOrderType order = ITER_FASTEST
+		const Coord3D *pos,
+		Real maxDist,
+		DistanceCalculationType dc,
+		PartitionFilter **filters = NULL,
+		IterOrderType order = ITER_FASTEST,
+		PlayerMaskType onlyPlayers = PLAYERMASK_ALL	///< as for getClosestObject
 	);
 
 	SimpleObjectIterator *iterateAllObjects(PartitionFilter **filters = NULL);		

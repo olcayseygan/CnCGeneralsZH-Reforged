@@ -1013,11 +1013,29 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 	}
 
 	// where on the victim this shot lands (Weapon::randomPointOnBody); a bridge keeps its attack point.
-	// Drawn whether or not anything is drawn, as it comes from the logic stream.
+	// Drawn whether or not anything is drawn, as it comes from the logic stream. A stream weapon (the
+	// Toxin Tractor's spray, a flamethrower) is drawn as one line through all its blobs in the air, so
+	// a point of its own per blob bent that line into a zigzag: every blob of a stream goes to the
+	// victim's middle, EA's aim, and the line stays straight.
 	Coord3D aimPos;
 	const Bool aimsOnBody = victimObj != NULL && !victimObj->isKindOf( KINDOF_BRIDGE );
 	if( aimsOnBody )
-		Weapon::randomPointOnBody( victimObj, aimPos );
+	{
+		if( m_projectileStreamName.isEmpty() )
+			Weapon::randomPointOnBody( victimObj, aimPos );
+		else
+			victimObj->getGeometryInfo().getCenterPosition( *victimObj->getPosition(), aimPos );
+	}
+
+	// -scenario only: one line a shot for the streams and the aircraft, which their scenarios read
+	if( aimsOnBody && !TheGlobalData->m_scenarioFile.isEmpty() &&
+			( !m_projectileStreamName.isEmpty() || sourceObj->isKindOf( KINDOF_AIRCRAFT ) ) )
+	{
+		DEBUG_LOG(( "SCENARIO SHOT: frame %d '%s' %d '%s' at '%s' %d dist %.0f range %.0f aim (%.1f,%.1f,%.1f)\n",
+			TheGameLogic->getFrame(), sourceObj->getTemplate()->getName().str(), sourceObj->getID(), m_name.str(),
+			victimObj->getTemplate()->getName().str(), victimObj->getID(), sqrtf( distSqr ), getAttackRange( bonus ),
+			aimPos.x, aimPos.y, aimPos.z ));
+	}
 
 	// call this even if FXList is null, because this also handles stuff like Gun Barrel Recoil
 	if (sourceObj && sourceObj->getDrawable())

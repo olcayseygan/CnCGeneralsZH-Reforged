@@ -1,0 +1,21 @@
+# A Toxin Tractor spraying a power plant, for the aim of every blob in its stream. A stream weapon is
+# drawn as one line through all its blobs in the air, so each blob has to fly to the same point: the
+# power plant's middle, EA's aim. Source 22838d05 gave every shot its own point on the body, and the
+# line zigzagged over the building.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 7 -maxframes 1300
+#     -scenario toxinstream -logPrefix toxinstream_
+#
+# Read the SCENARIO SHOT lines of ToxinTruckGun: the aim (x,y,z) must be one point on every line, since
+# the power plant does not move. Before the fix each line had its own. Any other weapon at an object
+# still spreads its shots over the body; this file logs only streams and aircraft.
+#
+# Power plant spot from blastcheck.txt, the truck from its Overlord block.
+
+20    spawn      0  AmericaPowerPlant               1   1230 3640
+40    spawn      1  GLAVehicleToxinTruck            1   1150 3950
+60    attack     1  GLAVehicleToxinTruck                0 AmericaPowerPlant
+60    tally      0  AmericaPowerPlant
+600   tally      0  AmericaPowerPlant

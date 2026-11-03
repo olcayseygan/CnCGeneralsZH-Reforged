@@ -337,6 +337,7 @@ Data/Scenarios/artillery.txt
 Data/Scenarios/aurorablast.txt
 Data/Scenarios/aurorafog.txt
 Data/Scenarios/autoorders.txt
+Data/Scenarios/autoride.txt
 Data/Scenarios/avengerlasers.txt
 Data/Scenarios/baseintruder_barracks.txt
 Data/Scenarios/baseintruder_patriot.txt
@@ -385,6 +386,7 @@ Data/Scenarios/glowbase.txt
 Data/Scenarios/glowfight.txt
 Data/Scenarios/glowmicrowave.txt
 Data/Scenarios/gpu1m_battle.txt
+Data/Scenarios/guardair.txt
 Data/Scenarios/guardradius.txt
 Data/Scenarios/gunfx.txt
 Data/Scenarios/handicap.txt
@@ -411,6 +413,7 @@ Data/Scenarios/infconvoy.txt
 Data/Scenarios/inferno30.txt
 Data/Scenarios/infheadon.txt
 Data/Scenarios/infroad.txt
+Data/Scenarios/jetbreak.txt
 Data/Scenarios/jetcrash.txt
 Data/Scenarios/jetpass.txt
 Data/Scenarios/jetrunway.txt
@@ -520,10 +523,12 @@ Data/Scenarios/sun_cloak.txt
 Data/Scenarios/sun_trees.txt
 Data/Scenarios/swhole.txt
 Data/Scenarios/swpair.txt
+Data/Scenarios/targetpick.txt
 Data/Scenarios/technicalexit.txt
 Data/Scenarios/techrespawn.txt
 Data/Scenarios/towncross.txt
 Data/Scenarios/toxinslope.txt
+Data/Scenarios/toxinstream.txt
 Data/Scenarios/trailer_arrival.txt
 Data/Scenarios/trailer_chaos.txt
 Data/Scenarios/trailer_clash.txt

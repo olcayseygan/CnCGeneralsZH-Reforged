@@ -3323,53 +3323,98 @@ TEST(attack_move_still_shoots_what_it_can_already_reach)
 	CHECK(  AIAttackMove_mayTakeTarget( true, true, false, 1030, 1030 ) );
 }
 
-/* AI.cpp: on attack move the scan ranks what it finds by threat instead of handing
-   back the nearest thing. */
-extern Int AI_threatScore( Int templateThreatValue, Int buildCost, Bool threatensMe,
-													 Real dist, Real distanceModifier );
-
-TEST(attack_move_shoots_the_biggest_threat_first)
+/* AI.cpp: a unit choosing its own target takes what its weapon kills best for the time it
+   costs, not the nearest thing (idle) or the most expensive one (attack move).  The numbers are
+   the shipped INI's: HumveeGun 10 a shot every 12 frames, CrusaderTankGun 60 every 120; tank armour
+   takes a quarter of the Humvee's, truck armour half, a soldier a tenth of the tank's. */
+static AITargetRating targetRating( Int tier, Real rate, Real distSqr, ObjectID id )
 {
-	const Real MOD = 100.0f;		/* AttackPriorityDistanceModifier, shipped value */
-	const Real HERE = 0.0f;
+	AITargetRating r;
+	r.m_tier = tier;
+	r.m_rate = rate;
+	r.m_distSqr = distSqr;
+	r.m_id = id;
+	return r;
+}
 
-	/* a mod that sets ThreatValue decides outright; build cost only stands in for it. */
-	CHECK( AI_threatScore( 50, 4000, false, HERE, MOD ) > AI_threatScore( 40, 5000, false, HERE, MOD ) );
+TEST(a_unit_shoots_what_its_weapon_kills_best)
+{
+	AIShotPattern humvee;
+	humvee.m_delayFrames = 12.0f;
+	AIShotPattern tank;
+	tank.m_delayFrames = 120.0f;
+	const Real SPEED = 2.0f;
 
-	/* the shipped INI sets ThreatValue nowhere, so cost has to do the ranking:
-	   an Overlord-priced tank over a Humvee-priced one. */
-	CHECK( AI_threatScore( 0, 1200, true, HERE, MOD ) > AI_threatScore( 0, 700, true, HERE, MOD ) );
+	/* a Humvee: the Technical (500, 180 health) over the Battlemaster (800, 400), and a Red Guard
+	   (300, 120) over the Battlemaster too */
+	humvee.m_damagePerShot = 2.5f;
+	const Real humveeOnTank = aiTargetKillRate( 800.0f, aiFramesToKill( 400.0f, humvee ), 0.0f, SPEED );
+	humvee.m_damagePerShot = 5.0f;
+	const Real humveeOnTruck = aiTargetKillRate( 500.0f, aiFramesToKill( 180.0f, humvee ), 0.0f, SPEED );
+	humvee.m_damagePerShot = 10.0f;
+	const Real humveeOnSoldier = aiTargetKillRate( 300.0f, aiFramesToKill( 120.0f, humvee ), 0.0f, SPEED );
+	CHECK( humveeOnTruck > humveeOnTank );
+	CHECK( humveeOnSoldier > humveeOnTank );
 
-	/* anything that can shoot back outranks anything that cannot, whatever it cost -
-	   a Command Center is worth more than a Gattling tank and is still not what is
-	   killing us - and no distance may move a target out of its group, or a unit would
-	   walk past the artillery firing at it to reach a far off barracks. */
-	CHECK( AI_threatScore( 0, 1, true, HERE, MOD ) > AI_threatScore( 0, 5000, false, HERE, MOD ) );
-	CHECK( AI_threatScore( 1, 0, true, HERE, MOD ) > AI_threatScore( 9999, 0, false, HERE, MOD ) );
-	CHECK( AI_threatScore( 0, 1, true, 9999.0f, MOD ) > AI_threatScore( 0, 5000, false, HERE, MOD ) );
+	/* a Crusader: the Battlemaster over the Red Guard */
+	tank.m_damagePerShot = 60.0f;
+	const Real tankOnTank = aiTargetKillRate( 800.0f, aiFramesToKill( 400.0f, tank ), 0.0f, SPEED );
+	tank.m_damagePerShot = 6.0f;
+	const Real tankOnSoldier = aiTargetKillRate( 300.0f, aiFramesToKill( 120.0f, tank ), 0.0f, SPEED );
+	CHECK( tankOnTank > tankOnSoldier );
 
-	/* free civilian junk still scores, otherwise a scan that found only that would
-	   report "nothing here" and the unit would walk past what it was told to clear. */
-	CHECK( AI_threatScore( 0, 0, false, HERE, MOD ) > 0 );
-	CHECK( AI_threatScore( 0, 0, false, 9999.0f, MOD ) > 0 );
+	/* a wounded enemy is a quicker kill than a fresh one of the same kind */
+	tank.m_damagePerShot = 60.0f;
+	CHECK( aiTargetKillRate( 800.0f, aiFramesToKill( 100.0f, tank ), 0.0f, SPEED ) > tankOnTank );
 
-	/* worth halves every modifier of distance. */
-	CHECK_EQ( AI_threatScore( 0, 1000, false, MOD, MOD ), 500 );
-	CHECK_EQ( AI_threatScore( 0, 1000, false, 3.0f*MOD, MOD ), 250 );
+	/* the drive into reach counts: the same Battlemaster 600 units out of reach is worth less, and
+	   one out of reach of a unit that cannot move is worth nothing */
+	const Real tankFrames = aiFramesToKill( 400.0f, tank );
+	CHECK_NEAR( 800.0f / ( tankFrames + 300.0f ), aiTargetKillRate( 800.0f, tankFrames, 600.0f, SPEED ), 0.0001f );
+	CHECK_NEAR( 0.0f, aiTargetKillRate( 800.0f, tankFrames, 600.0f, 0.0f ), 0.0001f );
+	CHECK_NEAR( tankOnTank, aiTargetKillRate( 800.0f, tankFrames, 0.0f, 0.0f ), 0.0001f );
 
-	/* so the same unit closer up wins, and a big enough threat still outranks a cheap
-	   one underfoot: an Overlord a modifier away beats a Ranger at our feet. */
-	CHECK( AI_threatScore( 0, 1200, true, 10.0f, MOD ) > AI_threatScore( 0, 1200, true, 200.0f, MOD ) );
-	CHECK( AI_threatScore( 0, 2000, true, MOD, MOD ) > AI_threatScore( 0, 225, true, HERE, MOD ) );
+	/* nothing it can hurt rates 0, which still beats having no target: a unit with nothing it
+	   counters fires at whatever is there, the nearest first */
+	CHECK_NEAR( 0.0f, aiTargetKillRate( 800.0f, AI_CANNOT_KILL, 0.0f, SPEED ), 0.0001f );
+	CHECK( aiTargetBeats( targetRating( 1, 0.0f, 100.0f, (ObjectID)9 ), targetRating( 1, 0.0f, 400.0f, (ObjectID)2 ) ) );
 
-	/* equal threats at equal range must tie exactly: the scan is sorted near to far and
-	   keeps the first of a tie, which is how "then the closest one" gets honoured. */
-	CHECK_EQ( AI_threatScore( 0, 900, true, 50.0f, MOD ), AI_threatScore( 0, 900, true, 50.0f, MOD ) );
+	/* the tiers: whoever just shot us is 2 wherever it stands; an armed enemy in reach that dies
+	   within the quick-kill window is 2 too; any other armed one 1; one that cannot shoot back 0,
+	   however quickly it dies */
+	const Real QUICK = INT_TO_REAL( AI_QUICK_KILL_FRAMES );
+	CHECK_EQ( aiTargetTier( TRUE, TRUE, FALSE, 5000.0f ), 2 );
+	CHECK_EQ( aiTargetTier( TRUE, FALSE, FALSE, AI_CANNOT_KILL ), 2 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, QUICK ), 2 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, QUICK + 1.0f ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, FALSE, 60.0f ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, AI_CANNOT_KILL ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, FALSE, TRUE, 60.0f ), 0 );
 
-	/* the modifier is 0 until the AI INI is read, and a target can measure as behind us
-	   from a bounding sphere: neither may divide by zero or invert the ranking. */
-	CHECK_EQ( AI_threatScore( 0, 1000, false, 500.0f, 0.0f ), 1000 );
-	CHECK_EQ( AI_threatScore( 0, 1000, false, -5.0f, MOD ), 1000 );
+	/* so the Battlemaster shooting the Humvee beats a Technical it would have to drive to, and
+	   loses to one already in reach that it finishes in seconds, on the rate */
+	humvee.m_damagePerShot = 2.5f;
+	const Real humveeTankFrames = aiFramesToKill( 400.0f, humvee );
+	humvee.m_damagePerShot = 5.0f;
+	const Real humveeTruckFrames = aiFramesToKill( 180.0f, humvee );
+	CHECK_NEAR( 1920.0f, humveeTankFrames, 0.001f );
+	CHECK_NEAR( 432.0f, humveeTruckFrames, 0.001f );
+	CHECK( aiTargetBeats( targetRating( aiTargetTier( TRUE, TRUE, TRUE, humveeTankFrames ), humveeOnTank, 0.0f, (ObjectID)9 ),
+												targetRating( aiTargetTier( FALSE, TRUE, FALSE, humveeTruckFrames ), humveeOnTruck, 0.0f, (ObjectID)2 ) ) );
+	CHECK( aiTargetBeats( targetRating( aiTargetTier( FALSE, TRUE, TRUE, humveeTruckFrames ), humveeOnTruck, 0.0f, (ObjectID)9 ),
+												targetRating( aiTargetTier( TRUE, TRUE, TRUE, humveeTankFrames ), humveeOnTank, 0.0f, (ObjectID)2 ) ) );
+
+	/* armed beats unarmed whatever the rate: no stopping for the dozer under the artillery */
+	CHECK( aiTargetBeats( targetRating( 1, 0.01f, 0.0f, (ObjectID)9 ), targetRating( 0, 100.0f, 0.0f, (ObjectID)2 ) ) );
+
+	/* a total order: tier, rate, distance, then the lower ObjectID, the same whichever is asked
+	   first, so the pick never depends on the order the partition hands candidates out in */
+	const AITargetRating a = targetRating( 1, 0.5f, 100.0f, (ObjectID)2 );
+	const AITargetRating b = targetRating( 1, 0.5f, 100.0f, (ObjectID)9 );
+	CHECK( aiTargetBeats( a, b ) );
+	CHECK( !aiTargetBeats( b, a ) );
+	CHECK( !aiTargetBeats( a, a ) );
+	CHECK( aiTargetBeats( targetRating( 1, 0.6f, 900.0f, (ObjectID)9 ), a ) );
 }
 
 /* AI.cpp: the scripted-priority search a hunter runs over the whole map picks in one pass over
@@ -16588,6 +16633,32 @@ TEST(massing_waits_for_a_force_but_never_waits_for_ever)
 
 	// the sixty-second valve wins over everything, so a wave can never be parked for ever
 	CHECK( !aiShouldMass( 1.0f, 100000.0f, DEFENSIVE, TRUE, FALSE ) );
+/** An Aurora guarding a circle dropped its one bomb on the nearest thing in it, usually a soldier.
+	 A guarding aircraft now takes buildings, then vehicles, then infantry, nearest within a class, and
+	 the lower ObjectID on an exact tie so every machine picks the same one. */
+TEST(a_guarding_aircraft_bombs_buildings_then_vehicles_then_infantry)
+{
+	const Int building = aiGuardAirTargetClass( TRUE, FALSE, FALSE );
+	const Int vehicle = aiGuardAirTargetClass( FALSE, TRUE, FALSE );
+	const Int soldier = aiGuardAirTargetClass( FALSE, FALSE, TRUE );
+	const Int other = aiGuardAirTargetClass( FALSE, FALSE, FALSE );
+	CHECK( building < vehicle );
+	CHECK( vehicle < soldier );
+	CHECK( soldier < other );
+
+	// a far building beats a soldier under the plane, and a far vehicle beats him too
+	CHECK( aiGuardAirTargetBeats( building, 640000.0f, (ObjectID)9, soldier, 100.0f, (ObjectID)2 ) );
+	CHECK( aiGuardAirTargetBeats( vehicle, 640000.0f, (ObjectID)9, soldier, 100.0f, (ObjectID)2 ) );
+	CHECK( !aiGuardAirTargetBeats( soldier, 100.0f, (ObjectID)2, vehicle, 640000.0f, (ObjectID)9 ) );
+
+	// within a class the nearer one, and on an exact tie the lower id, whichever is asked first
+	CHECK( aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)9, vehicle, 400.0f, (ObjectID)2 ) );
+	CHECK( aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)2, vehicle, 100.0f, (ObjectID)9 ) );
+	CHECK( !aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)9, vehicle, 100.0f, (ObjectID)2 ) );
+	CHECK( !aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)2, vehicle, 100.0f, (ObjectID)2 ) );
+}
+
+
 
 	// so does a fight at home: nothing sits at a rally point while the base is being hit
 	CHECK( !aiShouldMass( 1.0f, 100000.0f, DEFENSIVE, FALSE, TRUE ) );

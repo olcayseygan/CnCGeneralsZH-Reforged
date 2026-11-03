@@ -3,10 +3,20 @@
 EA opened the source of Generals and Zero Hour, the game that is still on sale and still runs on
 Steam. This build is that source with the bugs the game shipped with fixed and everything below added.
 
-**126 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
+**127 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
 found and fixed, EA's own, not port damage.**
 
 ---
+
+## Computer generals play their general
+
+- A computer player now fields what its general is known for. The skirmish scripts give every general of a side the same teams, so a Hard Air Force General built 983 units in a Bot Cup match and two jets' worth of them were aircraft, while a Demolitions General hardly touched its bomb trucks.
+- Each general's signature units are worked out from the game data when the match starts. Every unit its buildings offer is set against the same unit at the other generals of its side: the price, its health, how fast it kills that copy, and whether it leaves the factory Veteran. The Air Force General gets its Raptors, Auroras, Stealth Fighters and Comanches, a quarter cheaper than America's, the Tank General its tanks, cheaper and Veteran, and the Demolitions General its bomb trucks and Rebels. A side from a mod gets its own the same way, with nothing written for it.
+- The computer spends on them first. It skips the scripts' teams with little of them in while they are under a share of its army money, 25% on Easy up to 45% on Hard, trains them at every factory that makes them, and puts up more of that factory, an airfield only holding four aircraft, when they are all busy and money is waiting. Money piled up past what it keeps goes on them too: Medium and Hard draw down a hoard they used to sit on all match.
+- It does not throw them at their counter. A signature unit that trades badly against the army it has seen is left out until that changes, and one that keeps dying without doing anything is trusted less for a few minutes. So a Raptor stack does not fly into massed Gattling tanks.
+- Fifteen minutes of Hard on Twilight Flame, two matches each: the Air Force General put 43% of its army money into aircraft against the Demolitions General where it put 18%, and 38% against the Tank General where it put 16%. The Demolitions General went from 5% to 33% and from 17% to 56% on its signature, and its bank at the end came down from 156,000 to 66,000 and from 134,000 to 84,000. The Tank General, already a tank army, went from about 70% to 82%.
+- A modder can name a side's favourites instead with `AIDoctrine = <unit> <unit> ...` in its PlayerTemplate, or turn it off with `AIDoctrine = None`. The personalities still apply on top.
+- Replays recorded before this change play out differently.
 
 ## The command bar fits the map
 

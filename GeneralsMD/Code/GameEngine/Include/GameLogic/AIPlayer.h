@@ -159,6 +159,15 @@ public:
 
 };
 
+/** One of a side's signature units (AIPlayer::ensureDoctrine): what it is worth over the same unit at
+	* the other generals of its side, and how far the AI still trusts it after the last ones died. */
+struct AIDoctrineUnit
+{
+	const ThingTemplate *m_template;
+	Real m_weight;			///< over 1; 1.25 is a quarter more fight for the money than the other generals' copies
+	Real m_trust;				///< 1 fresh; falls when one dies having done nothing, comes back with time
+};
+
 
 /**
  * The computer-controlled opponent.
@@ -395,6 +404,18 @@ protected:
 	void addProductionForQueues(void);											///< another factory of each kind whose every factory has stayed busy
 	void trainSurplus(Int budget);												///< a unit from each idle factory, within budget
 	void trainFavoured(void);															///< a personality's favoured units, below the bank target as well
+	Int trainDoctrine(Int budget);												///< the side's signature units, toward the rung's share of what it spends, or out of a budget past the bank target (-1 below it); what is left of it
+	void ensureDoctrine(void);														///< work out the side's signature units from the data, once
+	AIDoctrineUnit *findDoctrine(const ThingTemplate *tmpl);		///< this side's entry for a unit, NULL when it is no signature unit
+	Real doctrineShare(void) const;												///< of the money spent on the army, the share spent on signature units
+	Real doctrineTeamShare(const TeamPrototype *proto, const std::vector<AIVisibleEnemy> &army) const;	///< a team's cost share of signature units worth building now
+	Bool doctrineMakeable(const std::vector<AIVisibleEnemy> &army) const;	///< some factory standing can train a signature unit worth building now
+	std::vector<AIDoctrineUnit>	m_doctrine;		///< the signature units, in template order; derived, only the trust is saved
+	std::vector<Real>	m_doctrineLoadedTrust;	///< the trust read from a save, put back once the doctrine is derived again
+	Bool				m_doctrineReady;				///< m_doctrine has been derived
+	Int					m_doctrineKind;					///< the PRODUCTION_KIND most of the signature is, -1 for none
+	Int					m_doctrineSpent;				///< money spent on signature units ...
+	Int					m_armySpent;						///< ... and on the army in all
 	void buyPersonaTransports(void);											///< an Infantry AI's ground transports, a few by rung
 	void sendPersonaTransports(AIGroup *wave);	///< ... driven loaded to a wave's front, riders put down there
 	void stepIncomeBonus(void);														///< weigh its strength against its strongest enemy and move m_incomeBonus a step toward what that is owed
@@ -435,7 +456,7 @@ protected:
 	Int moneyUnitRoom(void) const;	///< how many more money units this player's army and internet centers carry
 	Bool hasEnoughMoneyUnitsFor(TeamPrototype *proto) const;	///< this team is all hackers and there is no room for more
 	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward);	///< the nearest legal, safe spot by the ground from center, queued for a dozer. walkOutward keeps searching further out as the near ground fills
-	Bool queueExtraFactory(Object *dozer, KindOfType kind);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues
+	Bool queueExtraFactory(Object *dozer, KindOfType kind, Bool doctrine = FALSE);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues; the doctrine's without waiting for that
 	Bool holdsExtraFactory(const ThingTemplate *tmpl);	///< a factory of a kind already standing or going up, while the ones standing keep up with their queues
 	const ThingTemplate *nextBaseDefense(Object *dozer);	///< the base defence off this dozer's buttons that the base has fewest of, NULL for none
 	Bool placeDefense(const ThingTemplate *defense);	///< queue it on the ring spot whose clear field of fire covers the most ground the enemy drives in over; a Turtle's round a choke first

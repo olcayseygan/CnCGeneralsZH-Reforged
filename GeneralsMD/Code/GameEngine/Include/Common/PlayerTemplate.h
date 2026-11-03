@@ -107,6 +107,9 @@ public:
 	inline const ProductionVeterancyMap& getProductionVeterancyLevels() const { return m_productionVeterancyLevels; }
 	inline Bool isObserver() const { return m_observer; }
 	inline Bool isPlayableSide() const { return m_playableSide; }
+	/// AIDoctrine: the units a computer playing this side favours, in place of the ones it works out from
+	/// the data; "None" for no favourites, empty to work them out
+	inline const std::vector<AsciiString>& getAIDoctrine() const { return m_aiDoctrine; }
 
 	inline AsciiString getScoreScreen (void ) const { return m_scoreScreenImage;	}
 	inline AsciiString getLoadScreen (void ) const { return m_loadScreenImage;	}
@@ -185,6 +188,7 @@ private:
 	AsciiString				m_tooltip;								///< The tooltip describing this player template
 	Bool							m_observer;
 	Bool							m_playableSide;
+	std::vector<AsciiString>	m_aiDoctrine;		///< AIDoctrine, empty when not given
   Bool              m_oldFaction;                       ///< Faction existed in the original Generals
 	Bool							m_randomExcluded;
 

@@ -1707,6 +1707,6 @@ void AISkirmishPlayer::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void AISkirmishPlayer::loadPostProcess( void )
 {
-
+	AIPlayer::loadPostProcess();
 }  // end loadPostProcess
 

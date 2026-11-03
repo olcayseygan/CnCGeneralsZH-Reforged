@@ -81,6 +81,8 @@
 #include "GameLogic/Module/SpecialPowerModule.h"	// ... and the module that does it
 #include "GameLogic/Module/SpecialAbilityUpdate.h"	// ending a raider's bomb run
 #include "GameLogic/Module/StealthUpdate.h"	// a unit that goes invisible from the factory
+#include "GameLogic/Module/VeterancyGainCreate.h"	// ... or veteran, the doctrine's edge
+#include "GameLogic/ExperienceTracker.h"				// ... and whether one did anything before it died
 #include "GameLogic/Module/CollideModule.h"	// ... and the collide that takes a vehicle by touching it
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/OpenContain.h"			// a seat's own shoot-out flag, asked before a rider exists
@@ -411,6 +413,10 @@ m_role(AIROLE_AGGRESSIVE)
 		m_factoryFullCount[ k ] = 0;
 	}
 	m_parkingBlockedFrame = 0;
+	m_doctrineReady = FALSE;
+	m_doctrineKind = -1;
+	m_doctrineSpent = 0;
+	m_armySpent = 0;
 	m_persona = AIPERSONA_NORMAL;
 	m_personaFromRandom = FALSE;
 	m_rushSent = FALSE;
@@ -3487,6 +3493,14 @@ void AIPlayer::logEngage( const char *cause, const std::vector<Object *> &units 
 		theirPower > 0.0f ? power / theirPower : 99.0f, armyAdvantage( mine, theirs )));
 }
 
+/** How the doctrine's trust in a signature unit moves: times DECAY for each one lost without a trade, never
+	* under FLOOR, RECOVER back a spend pass (10 s, so from the floor to whole in about four minutes), and
+	* under ACTIVE the unit is not favoured at all. */
+static const Real DOCTRINE_TRUST_DECAY = 0.85f;
+static const Real DOCTRINE_TRUST_FLOOR = 0.2f;
+static const Real DOCTRINE_TRUST_RECOVER = 0.03f;
+static const Real DOCTRINE_TRUST_ACTIVE = 0.5f;
+
 //-------------------------------------------------------------------------------------------------
 /** AI LOSS: one of a team's units died.  Straggling when two or more of its team are still alive and
 	* at most one of them stands within 300 of it: the unit that went in on its own, as against the last
@@ -3521,6 +3535,18 @@ void AIPlayer::onUnitLost( const Object *obj )
 		DEBUG_LOG(("AI DEFDEAD frame %d player %d '%s' worth %.0f to %d '%s'\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
 			obj->getTemplate()->getName().str(), aiCombatPower( obj ), gun ? gun->getID() : INVALID_ID,
 			gun ? gun->getTemplate()->getName().str() : ""));
+	}
+	// a signature unit that died with no experience past what it left the factory with did nothing for
+	// its price: the doctrine trusts that unit less until time brings it back (trainDoctrine).  Not one
+	// that blew itself up, a bomb truck's trade comes after it is gone
+	AIDoctrineUnit *signature = runsOwnAI() && killer != obj ? findDoctrine( obj->getTemplate() ) : NULL;
+	const ExperienceTracker *experience = obj->getExperienceTracker();
+	if( signature && experience &&
+			experience->getCurrentExperience() <= obj->getTemplate()->getExperienceRequired( experience->getVeterancyLevel() ) )
+	{
+		signature->m_trust = max( DOCTRINE_TRUST_FLOOR, signature->m_trust * DOCTRINE_TRUST_DECAY );
+		DEBUG_LOG(("AI DOCTRINE frame %d player %d lost '%s' without a trade, trust %.2f\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), signature->m_trust));
 	}
 	if( !runsOwnAI() || obj->isKindOf( KINDOF_STRUCTURE ) || team == NULL || team == m_player->getDefaultTeam() )
 		return;
@@ -3626,6 +3652,18 @@ static const Real PERSONA_SHARE_TARGET[ SHARE_KINDS ][ AISKILL_COUNT ] = {
 static const Real PERSONA_TEAM_KIND_SHARE = 0.5f;
 /** The bank, by rung, past which nothing is skipped: Hard's hoard, and Easy's floor where it has none. */
 static const Int PERSONA_SKIP_BANK[ AISKILL_COUNT ] = { 3000, 4000, 4000 };
+
+/** The doctrine (ensureDoctrine), by rung: the share of the money spent on the army that goes on the
+	* side's signature units before the scripts' teams short of them are built again, and the share of a
+	* team's cost in them that is not short.  An Air Force General spent 13% on aircraft off the scripts. */
+static const Real DOCTRINE_SHARE_TARGET[ AISKILL_COUNT ] = { 0.25f, 0.35f, 0.45f };
+static const Real DOCTRINE_TEAM_SHARE = 0.34f;
+/** What a team all of signature units adds to its score, in production priority. */
+static const Real DOCTRINE_TEAM_SPAN = 20.0f;
+/** The share of the bank past its target the signature units may draw on a spend pass, by rung, on top
+	* of the rung's surplus (doSpending, trainDoctrine).  None on Easy, whose hoard is its handicap: 5% of
+	* it raised an Easy army from 8-27,000 to 90,000 in fifteen minutes. */
+static const Real DOCTRINE_DRAIN[ AISKILL_COUNT ] = { 0.0f, 0.15f, 0.30f };
 
 static Bool isAirAnalogue( const ThingTemplate *tmpl );
 
@@ -3912,6 +3950,19 @@ Bool AIPlayer::selectTeamToBuild( void )
 		( favouredShare = builtKindShare( m_player, favoured ) ) < PERSONA_SHARE_TARGET[ favoured ][ m_skillLevel ];
 	Int skipped = 0;
 
+	// the side's doctrine (ensureDoctrine): a team rich in its signature units scores up, and while
+	// what it spent on them is under the rung's share, the teams with little of them wait, as an Air
+	// AI's do, as long as one of them can be trained now and is not walking into his answer.  An Air
+	// Force General built 2 jets in 983 units off the scripts alone
+	ensureDoctrine();
+	std::vector<AIVisibleEnemy> remembered;
+	if( skirmish && !m_doctrine.empty() )
+		rememberedArmy( &remembered );
+	const Bool doctrineSkip = skirmish && !m_doctrine.empty() && !kindPersona &&
+		(Int)m_player->getMoney()->countMoney() <= PERSONA_SKIP_BANK[ m_skillLevel ] &&
+		doctrineShare() < DOCTRINE_SHARE_TARGET[ m_skillLevel ] && doctrineMakeable( remembered );
+	Int doctrineSkipped = 0;
+
 	Player::PlayerTeamList candidateList;
 	Int count = 0;
 	Real bestScore = 0.0f;
@@ -3944,6 +3995,16 @@ Bool AIPlayer::selectTeamToBuild( void )
 			}
 			score += aiPersonaTeamBias( taste, isDefenceTeam, air, infantry, vehicle, stealth );
 		}
+		if( skirmish && !m_doctrine.empty() )
+		{
+			const Real signature = doctrineTeamShare( *t, remembered );
+			if( doctrineSkip && !isDefenceTeam && signature < DOCTRINE_TEAM_SHARE )
+			{
+				++doctrineSkipped;
+				continue;
+			}
+			score += DOCTRINE_TEAM_SPAN * signature;
+		}
 		if( !dominant.empty() && !isDefenceTeam && teamCapability( *t, m_player, dominant ).m_answer < HARD_COUNTERED )
 			score -= COUNTER_SPAN;
 
@@ -3964,7 +4025,10 @@ Bool AIPlayer::selectTeamToBuild( void )
 	if( skipped > 0 )
 		DEBUG_LOG(("AI PERSONA frame %d player %d skips %d teams short of its kind, %.2f of what it built is, %d teams left\n",
 			TheGameLogic->getFrame(), m_player->getPlayerIndex(), skipped, favouredShare, count));
-	if( skipOthers && count == 0 )
+	if( doctrineSkipped > 0 )
+		DEBUG_LOG(("AI DOCTRINE frame %d player %d skips %d teams short of its signature, %.2f of its army money went on it, %d teams left\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), doctrineSkipped, doctrineShare(), count));
+	if( ( skipOthers || doctrineSkip ) && count == 0 )
 		return false;
 
 	// pick a random team from the hi-priority set
@@ -8549,6 +8613,15 @@ Bool AIPlayer::purchaseAllowed( Int key, Int cost, AIPurchaseKind kind, Bool sta
 
 void AIPlayer::purchased( Int key, Int cost, AIPurchaseKind kind, const AsciiString &what )
 {
+	// what the army money went on, for the doctrine's share
+	if( kind == AIBUY_ARMY )
+	{
+		ensureDoctrine();
+		m_armySpent += cost;
+		for( size_t d = 0; d < m_doctrine.size(); ++d )
+			if( (Int)m_doctrine[ d ].m_template->getTemplateID() == key )
+				m_doctrineSpent += cost;
+	}
 	if( !purchaseQueueOn() )
 		return;
 	const UnsignedInt now = TheGameLogic->getFrame();
@@ -8581,6 +8654,10 @@ Bool AIPlayer::buyUnit( ProductionUpdateInterface *pu, const ThingTemplate *unit
 		const Real taste = unitTaste( personaKindTaste(), unit );
 		offset += taste > 0.0f ? PERSONA_LIKED_SCORE : taste < 0.0f ? PERSONA_DISLIKED_SCORE : 0;
 	}
+	// and a signature unit the doctrine still trusts goes ahead of the rest of the army
+	const AIDoctrineUnit *signature = kind == AIBUY_ARMY ? findDoctrine( unit ) : NULL;
+	if( signature && signature->m_trust >= DOCTRINE_TRUST_ACTIVE )
+		offset += PERSONA_LIKED_SCORE;
 	if( !purchaseAllowed( unit->getTemplateID(), cost, kind, pu->getProductionCount() == 0, unit->getName(), offset ) )
 		return FALSE;
 	if( !pu->queueCreateUnit( unit, pu->requestUniqueUnitID() ) )
@@ -8709,24 +8786,27 @@ void AIPlayer::buyMoneyUnits( void )
 	* and not yet up, since that one goes first, and then only when holdsExtraFactory lets it.  A plan copy
 	* the scripts have not asked for does not wait it out: they reach those at eight minutes. */
 //----------------------------------------------------------------------------------------------------------
-Bool AIPlayer::queueExtraFactory( Object *dozer, KindOfType kind )
+Bool AIPlayer::queueExtraFactory( Object *dozer, KindOfType kind, Bool doctrine )
 {
 	const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, kind );
 	if( tmpl == NULL )
 		return FALSE;
 	// a personality's favoured factory goes up to the rung's count without waiting for a backlog, one at a
-	// time, and without waiting for the build list's own, which the scripts reach at eight minutes
-	Bool favoured = FALSE;
+	// time, and without waiting for the build list's own, which the scripts reach at eight minutes; the
+	// doctrine's the same, its count checked by trainDoctrine
+	Bool favoured = doctrine && readFactoryLoad( m_player, kind ).constructing == 0;
 	if( m_persona != AIPERSONA_NORMAL )
 	{
 		const Int f = personaFavouredKind( personaTaste() );
 		if( f >= 0 && PRODUCTION_KIND[ f ] == kind )
 		{
 			const FactoryLoad load = readFactoryLoad( m_player, kind );
-			favoured = load.constructing == 0 && load.finished < PERSONA_FAVOURED_FACTORIES[ m_skillLevel ];
+			favoured = favoured || ( load.constructing == 0 && load.finished < PERSONA_FAVOURED_FACTORIES[ m_skillLevel ] );
 		}
 	}
-	if( plannedOfKind( m_player, kind, TRUE ) > 0 || ( !favoured && holdsExtraFactory( tmpl ) ) )
+	// the doctrine's does not wait on the plan's either: an Air Force General's asked-for second airfield
+	// was still not up at eight minutes with 26,000 in the bank
+	if( ( !doctrine && plannedOfKind( m_player, kind, TRUE ) > 0 ) || ( !favoured && holdsExtraFactory( tmpl ) ) )
 		return FALSE;
 
 	const Object *warehouse = TheGameLogic->findObjectByID( m_curWarehouseID );
@@ -9919,14 +9999,38 @@ static Bool isAirAnalogue( const ThingTemplate *tmpl )
 	return FALSE;
 }
 
+/** A unit's entry in a side's doctrine, NULL for none. */
+static const AIDoctrineUnit *doctrineEntry( const std::vector<AIDoctrineUnit> &doctrine, const ThingTemplate *tmpl )
+{
+	for( size_t d = 0; d < doctrine.size(); ++d )
+		if( doctrine[ d ].m_template == tmpl )
+			return &doctrine[ d ];
+	return NULL;
+}
+
+/** How a signature unit is favoured now (ensureDoctrine): 1 for any other, and for one the doctrine has
+	* lost its trust in or that trades badly with the enemy army this AI remembers - no jets into massed
+	* anti-air. */
+static const Real DOCTRINE_COUNTER_FLOOR = 0.3f;
+
+static Real doctrineFactor( const std::vector<AIDoctrineUnit> &doctrine, const ThingTemplate *tmpl, const Player *owner,
+	const std::vector<AIVisibleEnemy> &army )
+{
+	const AIDoctrineUnit *entry = doctrineEntry( doctrine, tmpl );
+	if( entry == NULL || entry->m_trust < DOCTRINE_TRUST_ACTIVE ||
+			( !army.empty() && armyMatchup( tmpl, owner, army ) < DOCTRINE_COUNTER_FLOOR ) )
+		return 1.0f;
+	return 1.0f + ( entry->m_weight - 1.0f ) * entry->m_trust;
+}
+
 static const ThingTemplate *surplusUnit( Object *factory, const Player *owner, const std::vector<AIVisibleEnemy> &army, Real weight,
-																				 const AIPersonaWeights *taste = NULL )
+																				 const AIPersonaWeights *taste = NULL, const std::vector<AIDoctrineUnit> *doctrine = NULL )
 {
 	const CommandSet *commandSet = TheCommandStore->findCommandSet( factory->getCommandSetString() );
 	if( commandSet == NULL )
 		return NULL;
 
-	const Bool jets = taste && taste->m_air > 0.0f;
+	const Bool tasteJets = taste && taste->m_air > 0.0f;
 	const ThingTemplate *best = NULL;
 	Real bestFit = 0.0f;
 	Int bestCost = 0;
@@ -9937,12 +10041,17 @@ static const ThingTemplate *surplusUnit( Object *factory, const Player *owner, c
 		if( button == NULL || button->getCommandType() != GUI_COMMAND_UNIT_BUILD )
 			continue;
 		const ThingTemplate *tmpl = button->getThingTemplate();
-		if( tmpl == NULL || !tmpl->canPossiblyHaveAnyWeapon() || tmpl->isKindOf( KINDOF_DOZER ) || tmpl->isKindOf( KINDOF_HARVESTER ) ||
+		if( tmpl == NULL )
+			continue;
+		// a signature jet is the army too
+		const Real favoured = doctrine ? doctrineFactor( *doctrine, tmpl, owner, army ) : 1.0f;
+		const Bool jets = tasteJets || favoured > 1.0f;
+		if( !tmpl->canPossiblyHaveAnyWeapon() || tmpl->isKindOf( KINDOF_DOZER ) || tmpl->isKindOf( KINDOF_HARVESTER ) ||
 				tmpl->isKindOf( KINDOF_MONEY_HACKER ) || (tmpl->isKindOf( KINDOF_AIRCRAFT ) && !tmpl->isKindOf( KINDOF_PRODUCED_AT_HELIPAD ) && !jets) ||
 				TheBuildAssistant->canMakeUnit( factory, tmpl ) != CANMAKE_OK )
 			continue;
 		const Int cost = tmpl->calcCostToBuild( owner );
-		const Real fit = aiCounterFit( armyMatchup( tmpl, owner, army ), weight );
+		const Real fit = aiCounterFit( armyMatchup( tmpl, owner, army ), weight ) * favoured;
 		const Bool liked = taste && unitTaste( *taste, tmpl ) > 0.0f;
 		if( taste && liked != bestLiked && best != NULL )
 		{
@@ -10026,7 +10135,10 @@ void AIPlayer::doSpending( void )
 	const Bool overTarget = bank > target;
 	buyUpgradesForArmy( overTarget );
 	if( !overTarget )
+	{
+		trainDoctrine( -1 );
 		return;
+	}
 	if( m_persona == AIPERSONA_ECONOMIST )
 		shareSurplusWithAllies( bank, target );
 	//
@@ -10042,7 +10154,11 @@ void AIPlayer::doSpending( void )
 	if( fortune > surplus )
 		DEBUG_LOG(("AI ECONOMY frame %d player %d spends its starting fortune, %d of it this pass, %d in the bank, %d kept\n", now,
 			m_player->getPlayerIndex(), fortune, bank, keep));
-	trainSurplus( max( surplus, fortune ) );
+	// a share of the hoard past the target goes with it, since the surplus is a share of the income and
+	// a bank already piled up never came down (Medium ended 15 minutes on Twilight Flame on 60,000 to
+	// 180,000); the doctrine has the first call on all of it and the surplus units take the rest
+	const Int budget = max( surplus, fortune );
+	trainSurplus( trainDoctrine( budget + REAL_TO_INT_FLOOR( DOCTRINE_DRAIN[ m_skillLevel ] * INT_TO_REAL( bank - target ) ) ) );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -10242,7 +10358,7 @@ void AIPlayer::trainSurplus( Int budget )
 		std::vector<Object *> liked, plain, disliked;
 		for( std::vector<Object *>::const_iterator f = factories.begin(); f != factories.end(); ++f )
 		{
-			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, &taste );
+			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, &taste, &m_doctrine );
 			const Real bias = unit == NULL ? 0.0f : unitTaste( taste, unit );
 			(bias > 0.0f ? liked : bias < 0.0f ? disliked : plain).push_back( *f );
 		}
@@ -10257,7 +10373,7 @@ void AIPlayer::trainSurplus( Int budget )
 		// up to the depth in one pass: one a factory a pass trained 1,600 of the 3,600 an Attacker earned
 		while( (Int)pu->getProductionCount() < depth )
 		{
-			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, persona ? &taste : NULL );
+			const ThingTemplate *unit = surplusUnit( *f, m_player, army, getSkillProfile()->m_counterCompositionWeight, persona ? &taste : NULL, &m_doctrine );
 			if( unit == NULL )
 				break;
 			const Int cost = unit->calcCostToBuild( m_player );
@@ -10436,6 +10552,346 @@ void AIPlayer::trainFavoured( void )
 	if( dozer && queueExtraFactory( dozer, kind ) )
 		DEBUG_LOG(("AI PERSONA frame %d player %d puts up favoured factory %d of %d, %d in the bank\n", TheGameLogic->getFrame(),
 			m_player->getPlayerIndex(), ofKind + 1, PERSONA_FAVOURED_FACTORIES[ m_skillLevel ], m_player->getMoney()->countMoney()));
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The doctrine: what a side fields that the other generals of its side do not.  The skirmish scripts'
+	* teams are written per side, and an Air Force General built 2 jets' worth of aircraft in 983 units
+	* off them, a Tank General as many soldiers as tanks.  So each side's signature units are worked out
+	* from the data, which gives a mod's new side one as well:
+	*
+	*   - the roster: every fighting unit a building of the side offers on its buttons;
+	*   - each unit against the same unit at every other general of the same BaseSide, the name behind a
+	*     short prefix (AirF_, Tank_, Demo_), or else that general's unit of the same kind nearest in price:
+	*     the price, the health, how fast each kills that copy, and the veterancy it always leaves the
+	*     factory with (doctrineEdge);
+	*   - against a general with nothing of its kind, DOCTRINE_UNIQUE_EDGE;
+	*   - the mean over those generals at DOCTRINE_SIGNATURE_EDGE or over makes a signature unit.
+	*
+	* So the Air Force General's jets and helicopters, a quarter cheaper than America's, the Tank General's
+	* tanks, cheaper and veteran, and the Demolitions General's bomb trucks.  AIDoctrine in the side's
+	* PlayerTemplate names them instead, or None. */
+//----------------------------------------------------------------------------------------------------------
+static const Int DOCTRINE_PREFIX_MAX = 5;
+static const Real DOCTRINE_SIGNATURE_EDGE = 1.12f;
+static const Real DOCTRINE_UNIQUE_EDGE = 1.5f;
+static const Real DOCTRINE_NAMED_WEIGHT = 1.5f;
+static const Real DOCTRINE_VETERANCY_EDGE = 0.2f;
+/** By rung: how deep a factory's queue of signature units goes (one more past the bank target), how many
+	* factories of the signature's kind stand without waiting for a backlog, and how many while the bank is
+	* over its target and every one is queued that deep or refuses for want of room, an airfield's parking. */
+static const Int DOCTRINE_DEPTH[ AISKILL_COUNT ] = { 1, 2, 2 };
+static const Int DOCTRINE_FACTORIES[ AISKILL_COUNT ] = { 1, 2, 2 };
+static const Int DOCTRINE_FACTORIES_MAX[ AISKILL_COUNT ] = { 2, 3, 5 };
+/** How many more deep a factory queues signature units past the bank target, at most. */
+static const Int DOCTRINE_RICH_DEPTH[ AISKILL_COUNT ] = { 1, 2, 4 };
+
+/** The kind a unit is counted in, as PRODUCTION_KIND: vehicles 0, infantry 1, aircraft 2; -1 for none. */
+static Int doctrineKindOf( const ThingTemplate *tmpl )
+{
+	if( tmpl->isKindOf( KINDOF_AIRCRAFT ) )
+		return 2;
+	if( tmpl->isKindOf( KINDOF_INFANTRY ) )
+		return 1;
+	return tmpl->isKindOf( KINDOF_VEHICLE ) ? 0 : -1;
+}
+
+/** A unit's name less a general's prefix: AirF_AmericaJetRaptor and AmericaJetRaptor are one unit. */
+static AsciiString doctrineKey( const ThingTemplate *tmpl )
+{
+	const char *name = tmpl->getName().str();
+	const char *bar = strchr( name, '_' );
+	return bar && bar - name <= DOCTRINE_PREFIX_MAX ? AsciiString( bar + 1 ) : tmpl->getName();
+}
+
+/** Every fighting unit a side's buildings offer, in template order. */
+static void doctrineRoster( const AsciiString &side, Int mod, std::vector<const ThingTemplate *> *out )
+{
+	for( const ThingTemplate *building = TheThingFactory->firstTemplate(); building; building = building->friend_getNextTemplate() )
+	{
+		if( !building->isKindOf( KINDOF_STRUCTURE ) || building->getModIndex() != mod || building->getDefaultOwningSide() != side )
+			continue;
+		const CommandSet *commandSet = TheCommandStore->findCommandSet( building->friend_getCommandSetString() );
+		for( Int i = 0; commandSet && i < MAX_COMMANDS_PER_SET; ++i )
+		{
+			const CommandButton *button = commandSet->getCommandButton( i );
+			const ThingTemplate *unit = button && button->getCommandType() == GUI_COMMAND_UNIT_BUILD ? button->getThingTemplate() : NULL;
+			if( unit == NULL || unit->friend_getBuildCost() <= 0 || doctrineKindOf( unit ) < 0 || !hasPrimaryWeapon( unit ) ||
+					unit->isKindOf( KINDOF_DOZER ) || unit->isKindOf( KINDOF_HARVESTER ) || unit->isKindOf( KINDOF_MONEY_HACKER ) ||
+					std::find( out->begin(), out->end(), unit ) != out->end() )
+				continue;
+			out->push_back( unit );
+		}
+	}
+}
+
+/** 1, or more for a unit that leaves the factory veteran whatever was bought: the Tank General's tanks. */
+static Real doctrineVeterancy( const ThingTemplate *tmpl )
+{
+	Int level = LEVEL_REGULAR;
+	const ModuleInfo &modules = tmpl->getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		if( modules.getNthName( m ).compareNoCase( "VeterancyGainCreate" ) != 0 )
+			continue;
+		const VeterancyGainCreateModuleData *data = (const VeterancyGainCreateModuleData *)modules.getNthData( m );
+		if( data->m_scienceRequired == SCIENCE_INVALID && (Int)data->m_startingLevel > level )
+			level = data->m_startingLevel;
+	}
+	return 1.0f + DOCTRINE_VETERANCY_EDGE * INT_TO_REAL( level );
+}
+
+/** How much more fight for the money one unit is than another general's copy of it: over 1 cheaper,
+	* tougher, quicker to kill that copy, or veteran from the factory. */
+static Real doctrineEdge( const ThingTemplate *mine, const ThingTemplate *theirs )
+{
+	Real edge = INT_TO_REAL( theirs->friend_getBuildCost() ) / INT_TO_REAL( mine->friend_getBuildCost() ) *
+		templateMaxHealth( mine ) / templateMaxHealth( theirs ) * doctrineVeterancy( mine ) / doctrineVeterancy( theirs );
+	const Real myKill = templateFramesToKill( mine, theirs );
+	const Real theirKill = templateFramesToKill( theirs, theirs );
+	if( myKill > 0.0f && theirKill > 0.0f )
+		edge *= theirKill / myKill;
+	return edge;
+}
+
+/** Another general's copy of a unit: the same name behind the prefix, else the nearest in price of the
+	* same kind, the first of two alike; NULL when that general has nothing of the kind. */
+static const ThingTemplate *doctrineCounterpart( const ThingTemplate *unit, const std::vector<const ThingTemplate *> &roster )
+{
+	const AsciiString key = doctrineKey( unit );
+	const ThingTemplate *nearest = NULL;
+	Int gap = 0;
+	for( size_t r = 0; r < roster.size(); ++r )
+	{
+		if( doctrineKey( roster[ r ] ) == key )
+			return roster[ r ];
+		if( doctrineKindOf( roster[ r ] ) != doctrineKindOf( unit ) )
+			continue;
+		const Int apart = abs( roster[ r ]->friend_getBuildCost() - unit->friend_getBuildCost() );
+		if( nearest == NULL || apart < gap )
+		{
+			nearest = roster[ r ];
+			gap = apart;
+		}
+	}
+	return nearest;
+}
+
+void AIPlayer::ensureDoctrine( void )
+{
+	if( m_doctrineReady )
+		return;
+	m_doctrineReady = TRUE;
+	const PlayerTemplate *faction = m_player->getPlayerTemplate();
+	if( faction == NULL || !runsOwnAI() )
+		return;
+
+	const Int mod = faction->getModIndex();
+	const std::vector<AsciiString> &named = faction->getAIDoctrine();
+	for( size_t n = 0; n < named.size(); ++n )
+	{
+		const ThingTemplate *tmpl = TheThingFactory->findTemplate( named[ n ], FALSE );
+		if( tmpl && doctrineKindOf( tmpl ) >= 0 )
+		{
+			const AIDoctrineUnit unit = { tmpl, DOCTRINE_NAMED_WEIGHT, 1.0f };
+			m_doctrine.push_back( unit );
+		}
+	}
+	if( named.empty() )
+	{
+		std::vector<const ThingTemplate *> mine;
+		doctrineRoster( faction->getSide(), mod, &mine );
+		std::vector< std::vector<const ThingTemplate *> > siblings;
+		for( Int i = 0; i < ThePlayerTemplateStore->getPlayerTemplateCount(); ++i )
+		{
+			const PlayerTemplate *other = ThePlayerTemplateStore->getNthPlayerTemplate( i );
+			if( other == faction || !other->isPlayableSide() || other->isObserver() || other->getModIndex() != mod ||
+					other->getBaseSide() != faction->getBaseSide() || other->getSide() == faction->getSide() )
+				continue;
+			std::vector<const ThingTemplate *> roster;
+			doctrineRoster( other->getSide(), mod, &roster );
+			if( !roster.empty() )
+				siblings.push_back( roster );
+		}
+		for( size_t u = 0; u < mine.size() && !siblings.empty(); ++u )
+		{
+			Real sum = 0.0f;
+			for( size_t s = 0; s < siblings.size(); ++s )
+			{
+				const ThingTemplate *theirs = doctrineCounterpart( mine[ u ], siblings[ s ] );
+				sum += theirs ? min( 2.0f, max( 0.5f, doctrineEdge( mine[ u ], theirs ) ) ) : DOCTRINE_UNIQUE_EDGE;
+			}
+			const Real weight = sum / INT_TO_REAL( (Int)siblings.size() );
+			if( weight < DOCTRINE_SIGNATURE_EDGE )
+				continue;
+			const AIDoctrineUnit unit = { mine[ u ], weight, 1.0f };
+			m_doctrine.push_back( unit );
+		}
+	}
+
+	// the kind most of it is by money, whose factories it stands more of: a Demolitions General's Rebels
+	// weigh more than its bomb trucks, and five barracks of them could not spend its income
+	Real byKind[ PRODUCTION_KINDS ] = { 0.0f, 0.0f, 0.0f };
+	for( size_t d = 0; d < m_doctrine.size(); ++d )
+		byKind[ doctrineKindOf( m_doctrine[ d ].m_template ) ] +=
+			( m_doctrine[ d ].m_weight - 1.0f ) * INT_TO_REAL( m_doctrine[ d ].m_template->friend_getBuildCost() );
+	for( Int k = 0; k < PRODUCTION_KINDS; ++k )
+		if( byKind[ k ] > 0.0f && ( m_doctrineKind < 0 || byKind[ k ] > byKind[ m_doctrineKind ] ) )
+			m_doctrineKind = k;
+
+	// a save's trust, now there is a doctrine to put it on
+	if( m_doctrineLoadedTrust.size() == m_doctrine.size() )
+		for( size_t d = 0; d < m_doctrine.size(); ++d )
+			m_doctrine[ d ].m_trust = m_doctrineLoadedTrust[ d ];
+	m_doctrineLoadedTrust.clear();
+
+	for( size_t d = 0; d < m_doctrine.size(); ++d )
+		DEBUG_LOG(("AI DOCTRINE player %d '%s' signature '%s' weight %.2f%s\n", m_player->getPlayerIndex(), faction->getSide().str(),
+			m_doctrine[ d ].m_template->getName().str(), m_doctrine[ d ].m_weight, named.empty() ? "" : ", named"));
+	DEBUG_LOG(("AI DOCTRINE player %d '%s' %d signature units, kind %d\n", m_player->getPlayerIndex(), faction->getSide().str(),
+		(Int)m_doctrine.size(), m_doctrineKind));
+}
+
+AIDoctrineUnit *AIPlayer::findDoctrine( const ThingTemplate *tmpl )
+{
+	ensureDoctrine();
+	for( size_t d = 0; d < m_doctrine.size(); ++d )
+		if( m_doctrine[ d ].m_template == tmpl )
+			return &m_doctrine[ d ];
+	return NULL;
+}
+
+Real AIPlayer::doctrineShare( void ) const
+{
+	return m_armySpent > 0 ? INT_TO_REAL( m_doctrineSpent ) / INT_TO_REAL( m_armySpent ) : 0.0f;
+}
+
+Real AIPlayer::doctrineTeamShare( const TeamPrototype *proto, const std::vector<AIVisibleEnemy> &army ) const
+{
+	const TeamTemplateInfo *info = proto->getTemplateInfo();
+	Real total = 0.0f;
+	Real signature = 0.0f;
+	for( Int i = 0; i < info->m_numUnitsInfo; ++i )
+	{
+		const ThingTemplate *tmpl = TheThingFactory->findTemplate( info->m_unitsInfo[ i ].unitThingName, FALSE );
+		if( tmpl == NULL )
+			continue;			// a map's team naming a unit this game does not have
+		const Int minUnits = info->m_unitsInfo[ i ].minUnits;
+		const Real worth = INT_TO_REAL( minUnits > 1 ? minUnits : 1 ) * INT_TO_REAL( tmpl->calcCostToBuild( m_player ) );
+		total += worth;
+		if( doctrineFactor( m_doctrine, tmpl, m_player, army ) > 1.0f )
+			signature += worth;
+	}
+	return total > 0.0f ? signature / total : 0.0f;
+}
+
+/** The best signature unit a factory can train now, NULL for none. */
+static const ThingTemplate *doctrineUnitAt( Object *factory, const std::vector<AIDoctrineUnit> &doctrine, const Player *owner,
+	const std::vector<AIVisibleEnemy> &army )
+{
+	const CommandSet *commandSet = TheCommandStore->findCommandSet( factory->getCommandSetString() );
+	const ThingTemplate *best = NULL;
+	Real bestFactor = 1.0f;
+	for( Int i = 0; commandSet && i < MAX_COMMANDS_PER_SET; ++i )
+	{
+		const CommandButton *button = commandSet->getCommandButton( i );
+		const ThingTemplate *tmpl = button && button->getCommandType() == GUI_COMMAND_UNIT_BUILD ? button->getThingTemplate() : NULL;
+		if( tmpl == NULL )
+			continue;
+		const Real factor = doctrineFactor( doctrine, tmpl, owner, army );
+		if( factor > bestFactor && TheBuildAssistant->canMakeUnit( factory, tmpl ) == CANMAKE_OK )
+		{
+			best = tmpl;
+			bestFactor = factor;
+		}
+	}
+	return best;
+}
+
+Bool AIPlayer::doctrineMakeable( const std::vector<AIVisibleEnemy> &army ) const
+{
+	std::vector<Object *> factories;
+	m_player->iterateObjects( collectFactories, &factories );
+	for( std::vector<Object *>::const_iterator f = factories.begin(); f != factories.end(); ++f )
+		if( doctrineUnitAt( *f, m_doctrine, m_player, army ) )
+			return TRUE;
+	return FALSE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The signature units off every factory that makes one, through the purchase queue like every other
+	* buy: below the bank target while the money spent on them is under the rung's share, and past it out
+	* of the budget doSpending hands over, whatever the share.  Each is the one the doctrine weighs most
+	* that does not trade badly with the enemy army this AI remembers (doctrineFactor).  The factories of
+	* the signature's kind go up to the rung's count without a backlog, and past it while the bank is over
+	* its target and every one is queued to the depth or refuses for want of room - an airfield holds four
+	* aircraft, and the refusal is the producer's own answer, whatever module keeps it. */
+//----------------------------------------------------------------------------------------------------------
+Int AIPlayer::trainDoctrine( Int budget )
+{
+	ensureDoctrine();
+	if( m_doctrine.empty() )
+		return budget;
+	for( size_t d = 0; d < m_doctrine.size(); ++d )
+		m_doctrine[ d ].m_trust = min( 1.0f, m_doctrine[ d ].m_trust + DOCTRINE_TRUST_RECOVER );
+
+	// a bank past its target queues deeper, a step for every target's worth it holds: a Demolitions
+	// General sat on 66,000 at eight minutes with its factories one unit deep
+	const Int bank = (Int)m_player->getMoney()->countMoney();
+	const Int target = bankTarget();
+	const Bool rich = budget >= 0;
+	if( !rich && doctrineShare() >= DOCTRINE_SHARE_TARGET[ m_skillLevel ] )
+		return budget;
+	const Int depth = DOCTRINE_DEPTH[ m_skillLevel ] + ( rich ? min( DOCTRINE_RICH_DEPTH[ m_skillLevel ], bank / max( target, 1 ) ) : 0 );
+	std::vector<AIVisibleEnemy> army;
+	rememberedArmy( &army );
+	std::vector<Object *> factories;
+	m_player->iterateObjects( collectFactories, &factories );
+	Int producers = 0;
+	Int full = 0;		// refused for want of room, or queued to the depth
+	Int refused = 0;
+	for( std::vector<Object *>::const_iterator f = factories.begin(); f != factories.end(); ++f )
+	{
+		const ThingTemplate *unit = doctrineUnitAt( *f, m_doctrine, m_player, army );
+		if( unit == NULL )
+			continue;
+		++producers;
+		ProductionUpdateInterface *pu = (*f)->getProductionUpdateInterface();
+		if( pu->canQueueCreateUnit( unit ) == CANMAKE_PARKING_PLACES_FULL )
+		{
+			++full;
+			++refused;
+			m_parkingBlockedFrame = TheGameLogic->getFrame();
+			continue;
+		}
+		const Int cost = unit->calcCostToBuild( m_player );
+		while( (Int)pu->getProductionCount() < depth && ( !rich || cost <= budget ) && buyUnit( pu, unit, AIBUY_ARMY ) )
+		{
+			if( rich )
+				budget -= cost;
+			DEBUG_LOG(("AI DOCTRINE frame %d player %d trains '%s' at '%s', %.2f of its army money on the signature, %d in the bank\n",
+				TheGameLogic->getFrame(), m_player->getPlayerIndex(), unit->getName().str(), (*f)->getTemplate()->getName().str(),
+				doctrineShare(), m_player->getMoney()->countMoney()));
+		}
+		if( (Int)pu->getProductionCount() >= depth )
+			++full;
+	}
+
+	if( m_doctrineKind < 0 || !m_player->getCanBuildBase() || !m_baseCenterSet )
+		return budget;
+	const KindOfType kind = PRODUCTION_KIND[ m_doctrineKind ];
+	const FactoryLoad load = readFactoryLoad( m_player, kind );
+	const Int standing = load.finished + load.constructing;
+	// the first is the plan's
+	if( load.finished == 0 || !( standing < DOCTRINE_FACTORIES[ m_skillLevel ] ||
+			( rich && producers > 0 && full == producers && standing < DOCTRINE_FACTORIES_MAX[ m_skillLevel ] ) ) )
+		return budget;
+	Object *dozer = NULL;
+	m_player->iterateObjects( findAnyDozer, &dozer );
+	if( dozer && queueExtraFactory( dozer, kind, TRUE ) )
+		DEBUG_LOG(("AI DOCTRINE frame %d player %d puts up signature factory %d, %d of %d refused for room, %d in the bank\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), standing + 1, refused, producers, m_player->getMoney()->countMoney()));
+	return budget;
 }
 
 /** The fist.  How often it is looked at; what the enemy army has to be worth before a unit is picked
@@ -19028,6 +19484,12 @@ void AIPlayer::logPersonaSummary( void )
 		m_personaShared, m_superweaponFrame, m_firstWaveFrame, chokeDefenses,
 		measured > 0 ? chokeDistance / INT_TO_REAL( measured ) : 0.0f, chokeMined, (Int)traps.size(),
 		shareKind >= 0 ? builtKindShare( m_player, shareKind ) : -1.0f, builtKindShare( m_player, SHARE_STEALTH )));
+	// the doctrine: what of the army money went on the signature units, and each with its trust at the end
+	DEBUG_LOG(("HEADLESS DOCTRINE %d: %d signature units, kind %d, %.2f of %d army money on them\n", m_player->getPlayerIndex(),
+		(Int)m_doctrine.size(), m_doctrineKind, doctrineShare(), m_armySpent));
+	for( size_t d = 0; d < m_doctrine.size(); ++d )
+		DEBUG_LOG(("HEADLESS DOCTRINE UNIT %d: %s weight %.2f trust %.2f\n", m_player->getPlayerIndex(),
+			m_doctrine[ d ].m_template->getName().str(), m_doctrine[ d ].m_weight, m_doctrine[ d ].m_trust));
 }
 
 
@@ -19164,7 +19626,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 35;		// 35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 36;		// 36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -19708,6 +20170,29 @@ void AIPlayer::xfer( Xfer *xfer )
 	if( version >= 35 )
 		xfer->xferInt( &m_incomeBonus );
 
+	// the doctrine's money and its trust in each signature unit; the units themselves are worked out again
+	if( version >= 36 )
+	{
+		xfer->xferInt( &m_doctrineSpent );
+		xfer->xferInt( &m_armySpent );
+		UnsignedShort trusted = (UnsignedShort)m_doctrine.size();
+		xfer->xferUnsignedShort( &trusted );
+		if( xfer->getXferMode() == XFER_SAVE )
+		{
+			for( size_t d = 0; d < m_doctrine.size(); ++d )
+				xfer->xferReal( &m_doctrine[ d ].m_trust );
+		}
+		else
+		{
+			m_doctrine.clear();
+			m_doctrineReady = FALSE;
+			m_doctrineKind = -1;
+			m_doctrineLoadedTrust.resize( trusted );
+			for( UnsignedShort d = 0; d < trusted; ++d )
+				xfer->xferReal( &m_doctrineLoadedTrust[ d ] );
+		}
+	}
+
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
@@ -19715,7 +20200,9 @@ void AIPlayer::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void AIPlayer::loadPostProcess( void )
 {
-
+	// the doctrine again at once, with the trust the save held, so nothing between the load and the
+	// next team pick runs without it
+	ensureDoctrine();
 }  // end loadPostProcess
 
 // ------------------------------------------------------------------------------------------------

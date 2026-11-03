@@ -95,6 +95,7 @@
 		{ "ProductionTimeChange",			PlayerTemplate::parseProductionTimeChange,			NULL, 0 },
 		{ "ProductionVeterancyLevel",	PlayerTemplate::parseProductionVeterancyLevel,	NULL, 0 },
 		{ "IntrinsicSciences",				INI::parseScienceVector,												NULL, offsetof( PlayerTemplate, m_intrinsicSciences ) },
+		{ "AIDoctrine",								INI::parseAsciiStringVector,										NULL, offsetof( PlayerTemplate, m_aiDoctrine ) },
 		{ "PurchaseScienceCommandSetRank1",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank1 ) },
 		{ "PurchaseScienceCommandSetRank3",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank3 ) },
 		{ "PurchaseScienceCommandSetRank8",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank8 ) },

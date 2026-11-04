@@ -5,7 +5,7 @@ pixel, its top row at screen y 568 (the ImagePart of ControlBarProReforged.ini, 
 MappedImages/HandCreated/ReforgedHud<Side>CommandBar.ini).  ControlBarSchemeManager::drawPainting cuts
 it at design x 182 and 616, texel 437 and 1478, and draws each piece where its panel stands, so nothing
 may be painted near those two columns.  Every opening the bar's windows draw into (the fourteen
-command cells or the wide grid's eighteen, money, power rail, selection window, rank bar, the toolbar,
+command cells, money, power rail, selection window, rank bar, the toolbar,
 the idle column and the two tabs above the right panel) is read from the same numbers ControlBar.wnd
 and the scheme use, below in layout(); the art only frames them.  The left panel is empty: the radar
 takes the map's shape, and the code draws its frame from nine pieces of the button sheet.  The plates reach past ControlBar.wnd's input
@@ -32,7 +32,7 @@ lamp): its bar, the watched player's panel, a sheet of pieces (toolbar buttons, 
 radar frame's nine, every side's and general's emblem) and the spectator's rack (ReforgedHudObsSpec).
 
     python Tools/hud_command_bar.py --out DIR [--side all|Observer|Lobby|America|China|Gla|Turkiye] [--dds TEXTURES]
-        writes DIR/ReforgedHud<Side>CommandBar.png, ...CommandBarWide.png and ...Powers.png for each side,
+        writes DIR/ReforgedHud<Side>CommandBar.png and ...Powers.png for each side,
         the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces, ...ObsSpec and ReforgedHudHelpbox, and the
         front end's ReforgedFactionEmblems (Lobby), and with --dds the same as DXT5 .dds into TEXTURES
         (Data/Art/Textures)
@@ -108,25 +108,21 @@ STEEL, GLASS, ACCENT, ACCENT2, GOLDM, INKM, BRIGHT, DARK, PAPERM, DIM, HILITE = 
 METAL = (STEEL, DARK, BRIGHT)
 
 
-def layout(wide):
+def layout():
     """The bar's windows in texels (x0, y0, x1, y1); screen y is texel y + 568 at 1920x1080."""
-    s = 92 if wide else 0                       # COMMAND_GRID_WIDE_STEP: one column more at each end
-    cols = 9 if wide else 7
-    x0 = 668 - s
     return dict(
         radar=(5, 185, 327, 507),               # LeftHUD's square, the largest the map-shaped radar gets
         uattack=(276, 172, 340, 236),
         money=(894, 311, 1026, 336),            # MoneyUL/LR
-        power=(605 - s, 338, 1313 + s, 348),    # PowerBarUL/LR
-        tools=[(609 - s, y, 663 - s, y + 35) for y in (357, 412, 468)],         # options, beacon, chat
+        power=(605, 338, 1313, 348),            # PowerBarUL/LR
+        tools=[(609, y, 663, y + 35) for y in (357, 412, 468)],                 # options, beacon, chat
         # the idle column at the grid's right end: worker, infantry, vehicle, aircraft (Idle<Kind>UL/LR)
-        idle=[(1312 + s, y, 1366 + s, y + 35) for y in (357, 394, 431, 468)],
-        cells=[(x0 + 92 * c, y, x0 + 92 * c + 88, y + 70) for c in range(cols) for y in (358, 432)],
+        idle=[(1312, y, 1366, y + 35) for y in (357, 394, 431, 468)],
+        cells=[(668 + 92 * c, y, 668 + 92 * c + 88, y + 70) for c in range(7) for y in (358, 432)],
         minmax=(1829, 234, 1920, 265),
         general=(1829, 272, 1920, 303),
         portrait=(1642, 319, 1871, 503),        # RightHUD
         exp=(1875, 319, 1911, 503),             # ExpBarForeground
-        wide=s,
     )
 
 
@@ -178,12 +174,6 @@ def shape(build, x0, y0, x1, y1, c):
 
 def grow(r, d):
     return (r[0] - d, r[1] - d, r[2] + d, r[3] + d)
-
-
-def spread(pts, s):
-    """The centre panel's outline for the wide grid: everything left of the money tab moves s left,
-    everything right of it s right."""
-    return [(x - s if x < 832 else x + s if x > 1088 else x, y) for x, y in pts]
 
 
 def jitter(poly, seed, amp=2.5, step=12):
@@ -535,11 +525,11 @@ def windows(p, L, build):
         window(p, (r[0], r[1], r[2] + 4, r[3]), 3, 2, 1, c * 0.6, STEEL, build)
 
 
-def paint_bar(side_name="America", wide=False):
+def paint_bar(side_name="America"):
     side = SIDES[side_name]
-    L = layout(wide)
+    L = layout()
     p = Painter(2048, 512)
-    BARS[side["build"]](p, L, L["wide"])
+    BARS[side["build"]](p, L)
     return shade(p, side, SEAMS)
 
 
@@ -559,14 +549,14 @@ def vents(p, x0, x1, y0, y1, pitch=7):
     p.inlay([[(x, y1), (x + t, y0), (x + t + 2.4, y0), (x + 2.4, y1)] for x in np.arange(x0, x1 - t, pitch)], INKM, 1.0)
 
 
-def bar_machined(p, L, s):
+def bar_machined(p, L):
     """America: two tiers of machined plate, a dark flange carrying the silhouette and a satin frame on
     it, every corner cut at 45 degrees, the shield's chevrons up the wings, octagon studs."""
     # the left panel is the radar's frame now (radar_frame), drawn round the map's shape
-    flanges = [spread([(560, 512), (560, 348), (592, 316), (832, 316), (862, 286), (1058, 286), (1088, 316),
-                       (1366, 316), (1383, 333), (1383, 512)], s),
+    flanges = [[(560, 512), (560, 348), (592, 316), (832, 316), (862, 286), (1058, 286), (1088, 316),
+                (1366, 316), (1383, 333), (1383, 512)],
                [(1590, 512), (1590, 322), (1622, 290), (1806, 290), (1806, 244), (1828, 222), (1920, 222), (1920, 512)]]
-    frames = [plate(592 - s, 326, 1376 + s, 512, tl=("cut", 10), tr=("cut", 10)),
+    frames = [plate(592, 326, 1376, 512, tl=("cut", 10), tr=("cut", 10)),
               plate(868, 302, 1052, 340, tl=("cut", 10), tr=("cut", 10)),
               plate(1625, 302, 1920, 512, tl=("cut", 10)), plate(1821, 228, 1920, 316, tl=("cut", 8))]
     for f in flanges:
@@ -575,22 +565,22 @@ def bar_machined(p, L, s):
     windows(p, L, "machined")
     # the shield split: the first accent's chevrons up the left wing, the second's up the right panel's;
     # the idle column fills the grid's right wing, so the second accent runs there as a hairline only
-    wing_chevrons(p, 577 - s, 370, 490, 16, ACCENT)
+    wing_chevrons(p, 577, 370, 490, 16, ACCENT)
     wing_chevrons(p, 1609, 348, 490, 18, ACCENT2)
-    p.inlay([plate(612 - s, 329, 858, 331)], ACCENT, 0.4)
-    p.inlay([plate(1062, 329, 1356 + s, 331)], ACCENT2, 0.4)
+    p.inlay([plate(612, 329, 858, 331)], ACCENT, 0.4)
+    p.inlay([plate(1062, 329, 1356, 331)], ACCENT2, 0.4)
     p.inlay([plate(1645, 305, 1810, 307)], ACCENT2, 0.4)
     vents(p, 1650, 1790, 293, 300)
-    for x, y in ((577 - s, 358), (577 - s, 500), (1609, 336), (1609, 500), (1814, 282)):
+    for x, y in ((577, 358), (577, 500), (1609, 336), (1609, 500), (1814, 282)):
         p.stud(x, y, 3.0)
 
 
-def bar_terraced(p, L, s):
+def bar_terraced(p, L):
     """China: cast armour in three square terraces that follow a stepped silhouette, a heavy rim round
     every well, rows of round rivets, and the accents as stacked ingots and painted bands."""
-    outlines = [spread([(560, 512), (560, 340), (576, 340), (576, 328), (592, 328), (592, 316), (832, 316), (832, 300),
-                        (848, 300), (848, 286), (1072, 286), (1072, 300), (1088, 300), (1088, 316), (1351, 316),
-                        (1351, 328), (1367, 328), (1367, 340), (1383, 340), (1383, 512)], s),
+    outlines = [[(560, 512), (560, 340), (576, 340), (576, 328), (592, 328), (592, 316), (832, 316), (832, 300),
+                 (848, 300), (848, 286), (1072, 286), (1072, 300), (1088, 300), (1088, 316), (1351, 316),
+                 (1351, 328), (1367, 328), (1367, 340), (1383, 340), (1383, 512)],
                 [(1590, 512), (1590, 314), (1604, 314), (1604, 302), (1618, 302), (1618, 290), (1806, 290), (1806, 236),
                  (1818, 236), (1818, 222), (1920, 222), (1920, 512)]]
     for o in outlines:
@@ -599,16 +589,16 @@ def bar_terraced(p, L, s):
     windows(p, L, "terraced")
     # ingots up the wings, the first accent left of the grid and the second up the right panel; the
     # idle column fills the grid's right wing
-    for cx, y0, y1, w, mat in ((575 - s, 360, 500, 16, ACCENT), (1610, 330, 500, 22, ACCENT2)):
+    for cx, y0, y1, w, mat in ((575, 360, 500, 16, ACCENT), (1610, 330, 500, 22, ACCENT2)):
         for y in np.arange(y0, y1 - 8, 20):
             p.bump([plate(cx - w / 2, y, cx + w / 2, y + 9)], 1.6, 0.8, mat)
     # painted bands on the outer terrace's shoulders
-    p.inlay([plate(600 - s, 318, 824, 322)], ACCENT, 0.3)
-    p.inlay([plate(1096, 318, 1343 + s, 322)], ACCENT2, 0.3)
+    p.inlay([plate(600, 318, 824, 322)], ACCENT, 0.3)
+    p.inlay([plate(1096, 318, 1343, 322)], ACCENT2, 0.3)
     p.inlay([plate(1626, 292, 1798, 296)], ACCENT2, 0.3)
     # rivet rows along the outer terrace
-    rows = [((598 - s, 320), (826, 320)), ((854, 290), (1066, 290)), ((1094, 320), (1345 + s, 320)),
-            ((564 - s, 346), (564 - s, 506)), ((1379 + s, 346), (1379 + s, 506)),
+    rows = [((598, 320), (826, 320)), ((854, 290), (1066, 290)), ((1094, 320), (1345, 320)),
+            ((564, 346), (564, 506)), ((1379, 346), (1379, 506)),
             ((1624, 294), (1800, 294)), ((1594, 320), (1594, 506)), ((1824, 226), (1914, 226)), ((1810, 242), (1810, 286))]
     for (x0, y0), (x1, y1) in rows:
         n = max(2, int(np.hypot(x1 - x0, y1 - y0) // 18) + 1)
@@ -616,20 +606,20 @@ def bar_terraced(p, L, s):
             p.rivet(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 2.2)
 
 
-def bar_scavenged(p, L, s):
+def bar_scavenged(p, L):
     """GLA: a ragged frame cut from whatever was there, scrap sheets laid over it out of square and
     welded where they meet, bolts where they would hold, and the colours sprayed on by hand.  No two
     sides of it match."""
-    outlines = [spread([(560, 512), (560, 360), (574, 330), (600, 316), (832, 316), (832, 296), (846, 286), (1070, 286),
-                        (1088, 300), (1088, 316), (1355, 316), (1355, 326), (1383, 326), (1383, 512)], s),
+    outlines = [[(560, 512), (560, 360), (574, 330), (600, 316), (832, 316), (832, 296), (846, 286), (1070, 286),
+                 (1088, 300), (1088, 316), (1355, 316), (1355, 326), (1383, 326), (1383, 512)],
                 [(1590, 512), (1590, 330), (1600, 300), (1640, 290), (1806, 290), (1810, 250), (1806, 236), (1830, 222),
                  (1920, 222), (1920, 512)]]
     for i, o in enumerate(outlines):
         p.silhouette([jitter(o, 12 + i)], 3.0, "scavenged", screen=True)
     # each sheet's edges fall between windows, never across one, or the glass would show the step
-    sheets = [((588 - s, 320, 1380 + s, 352), 0.1, 1.03),
-              ((588 - s, 352, 1034, 524), 0.3, 0.95), ((1034, 352, 1386 + s, 524), -0.25, 1.08),
-              ((838, 288, 1082, 306), -1.1, 0.90), ((1336 + s, 318, 1384 + s, 350), 2.0, 0.80),
+    sheets = [((588, 320, 1380, 352), 0.1, 1.03),
+              ((588, 352, 1034, 524), 0.3, 0.95), ((1034, 352, 1386, 524), -0.25, 1.08),
+              ((838, 288, 1082, 306), -1.1, 0.90), ((1336, 318, 1384, 350), 2.0, 0.80),
               ((1596, 296, 1930, 524), -0.3, 1.04), ((1812, 226, 1930, 314), 0.9, 0.92), ((1592, 412, 1636, 508), -2.2, 0.82)]
     for k, ((x0, y0, x1, y1), deg, tint) in enumerate(sheets):
         poly = sheet(x0, y0, x1, y1, deg)
@@ -643,42 +633,42 @@ def bar_scavenged(p, L, s):
             p.bolt(bx, by, 2.8, k + j)
     windows(p, L, "scavenged")
     # hazard slashes along the grid plate's top left shoulder, and nowhere else
-    for x in range(612 - s, 814, 16):
+    for x in range(612, 814, 16):
         p.inlay([[(x, 328), (x + 8, 319), (x + 15, 319), (x + 7, 328)]], ACCENT, 0.3)
     # colours sprayed on by hand: a ragged stripe in each wing
-    for i, (r, mat) in enumerate((((567 - s, 360, 590 - s, 470), ACCENT), ((1369 + s, 372, 1381 + s, 470), ACCENT2),
+    for i, (r, mat) in enumerate((((567, 360, 590, 470), ACCENT), ((1369, 372, 1381, 470), ACCENT2),
                                   ((1600, 324, 1632, 404), ACCENT2))):
         p.inlay([jitter(plate(*r), 41 + i, 3.0, 5)], mat, 0.25)
-    for i, (x, y) in enumerate(((1374 + s, 500), (1600, 440), (1600, 360))):
+    for i, (x, y) in enumerate(((1374, 500), (1600, 440), (1600, 360))):
         p.bolt(x, y, 3.2, 71 + i)
 
 
-def bar_faceted(p, L, s):
+def bar_faceted(p, L):
     """Turkiye: composite armour.  A silhouette cut at 30 degrees, a frame with one wide flat facet for an
     edge, its face laid in triangular tiles each tilted its own way, triangle markers pointing in from
     the wings, flush hex bolts."""
-    outlines = [spread([(560, 512), (560, 346), (612, 316), (832, 316), (832, 310), (874, 286), (1046, 286), (1088, 310),
-                        (1088, 316), (1331, 316), (1383, 346), (1383, 512)], s),
+    outlines = [[(560, 512), (560, 346), (612, 316), (832, 316), (832, 310), (874, 286), (1046, 286), (1088, 310),
+                 (1088, 316), (1331, 316), (1383, 346), (1383, 512)],
                 [(1590, 512), (1590, 320), (1642, 290), (1806, 290), (1806, 236), (1830, 222), (1920, 222), (1920, 512)]]
     for o in outlines:
         p.silhouette([o], 4.0, "machined", screen=True)
-    frames = [plate(598 - s, 326, 1376 + s, 512, tl=("slant", 14), tr=("slant", 24)),
+    frames = [plate(598, 326, 1376, 512, tl=("slant", 14), tr=("slant", 24)),
               plate(880, 298, 1040, 340, tl=("slant", 8), tr=("slant", 8)),
               plate(1630, 302, 1920, 512, tl=("slant", 14)), plate(1822, 230, 1920, 316, tl=("slant", 8))]
     p.frame(frames, 9.0, "faceted")
     windows(p, L, "faceted")
     p.facets(46, 0.06, 0.45, 23)                        # after the windows, so the glass stays flat
     # triangle markers in the wings, pointing in at the grid and the selection window
-    for cx, y0, y1, w, point, mat in ((576 - s, 362, 500, 14, "right", ACCENT), (1610, 330, 500, 18, "left", ACCENT2)):
+    for cx, y0, y1, w, point, mat in ((576, 362, 500, 14, "right", ACCENT), (1610, 330, 500, 18, "left", ACCENT2)):
         for y in np.arange(y0 + 10, y1 - 6, 26):
             p.inlay([triangle(cx, y, w, w * 1.15, point)], mat, 0.6)
     # thin lines along the frames' tops, each broken by a 30 degree kink
-    for (x0, x1, y), mat in (((640 - s, 860, 332), ACCENT), ((1060, 1320 + s, 332), ACCENT2),
+    for (x0, x1, y), mat in (((640, 860, 332), ACCENT), ((1060, 1320, 332), ACCENT2),
                              ((1660, 1800, 308), ACCENT2)):
         mid = (x0 + x1) / 2
         p.inlay([plate(x0, y, mid - 6, y + 2), [(mid - 6, y), (mid + 4, y + 6), (mid + 4, y + 8), (mid - 6, y + 2)],
                  plate(mid + 4, y + 6, x1, y + 8)], mat, 0.4)
-    for i, (x, y) in enumerate(((577 - s, 352), (577 - s, 502), (1609, 336), (1609, 502), (1814, 282))):
+    for i, (x, y) in enumerate(((577, 352), (577, 502), (1609, 336), (1609, 502), (1814, 282))):
         p.bump([regular(x, y, 3.0, 6, np.pi / 6)], 0.8, 1.2, BRIGHT)
 
 
@@ -2674,7 +2664,7 @@ def scheme_blocks(scheme="America8x6"):
     return {k: v[k + "UL"] + v[k + "LR"] for k in ("Radar", "Production", "Money", "Upgrades", "GenPower")}
 
 
-def check(img, wide, side_name="America", frame=None):
+def check(img, side_name="America", frame=None):
     """The two cuts stay clear, the left panel is empty (the radar's frame is pieces of the sheet now),
     every window the bar draws into stands on the plate, and the plates, with the radar's frame at its
     largest round the square radar, and the side's scheme's input blockers cover each other to within a
@@ -2683,10 +2673,9 @@ def check(img, wide, side_name="America", frame=None):
     for x in SEAMS:
         assert not a[:, x - 2:x + 3].any(), "art across the cut at texel %d" % x
     assert not a[:, :SEAMS[0]].any(), "art on the left panel, which is the radar's frame now"
-    L = layout(wide)
+    L = layout()
     for r in [L[n] for n in ("money", "power", "portrait", "exp", "minmax", "general")] + L["cells"] + L["tools"] + L["idle"]:
         assert (a[r[1]:r[3], r[0]:r[2]] == 255).all(), "window %s is not on the plate" % (r,)
-    s = L["wide"]
     solid = a >= 250
     if frame is not None:                       # the frame round the square radar, where the code stands it
         l, t, _, _ = RADAR_EDGE
@@ -2698,8 +2687,6 @@ def check(img, wide, side_name="America", frame=None):
         solid[fy:fy + fa.shape[0], fx:fx + fa.shape[1]] |= fa >= 250
     blocked = np.zeros(a.shape, bool)
     for name, (x0, y0, x1, y1) in scheme_blocks(SIDES[side_name]["scheme"]).items():
-        if name == "Production":
-            x0, x1 = x0 - s, x1 + s
         y0, y1 = y0 - TOP, y1 - TOP
         blocked[y0:y1, x0:x1] = True
         ys, xs = np.nonzero(solid[y0:y1, x0:x1])
@@ -2800,10 +2787,8 @@ def main():
             check_helpbox(helpbox)
         else:
             frame = radar_frame(side)
-            for wide in (False, True):
-                img = paint_bar(side, wide)
-                check(img, wide, side, frame)
-                made["ReforgedHud%sCommandBar%s" % (side, "Wide" if wide else "")] = img
+            made["ReforgedHud%sCommandBar" % side] = img = paint_bar(side)
+            check(img, side, frame)
             made["ReforgedHud%sPowers" % side] = sheet_img = paint_powers(side, args.emblem, frame, args.ready_glow)
             check_sheet(sheet_img, side, args.ready_glow)
         for name, img in made.items():

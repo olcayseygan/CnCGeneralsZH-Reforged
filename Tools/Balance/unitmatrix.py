@@ -10,28 +10,22 @@ unconditioned ArmorSet and body MaxHealth, frames to kill both ways. The page di
 can weigh them by price; the AI's aiMatchupScore is the same ratio on a log scale.
 
     python unitmatrix.py --out <page.html>
-    python unitmatrix.py --mod ShockWave --out <page.html>
-    python unitmatrix.py --all <dir>
     python unitmatrix.py --selfcheck
 
 The game data comes from Run beside the source; ZHR_RUN_DIR points it at another Run, as siege.py does.
---mod mounts one mod over it the way -mod does (a folder, or its name under the user data's Mods), and
-the sides and their units then come from that data: the lobby's PlayerTemplates and what their
-buildings build. --all writes birim-matrisi.html and one birim-matrisi-<mod>.html per installed mod,
-each page linking the others.
+The sides and their units come from that data: the lobby's PlayerTemplates and what their buildings
+build.
 """
 
 import argparse
 import collections
 import copy
-import html
 import json
 import math
 import os
 import re
 import struct
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -61,8 +55,8 @@ MODULE_KEYS = ("body", "behavior", "draw", "clientupdate")
 SHOWN_KINDS = ("INFANTRY", "VEHICLE", "AIRCRAFT")
 # the Generals Challenge copies (GC_) borrow a general's side but are never built in a skirmish
 CHALLENGE_PREFIX = "gc_"
-# the sides the game itself ships, with the page's Turkish label and tag; a mod's side keeps these only
-# while its lobby name (SIDE:<side>) is still the retail one
+# the sides the game ships, with the page's Turkish label and tag; a side keeps these only while its
+# lobby name (SIDE:<side>) is still the one written here
 VANILLA_SIDES = {
     "America": ("USA", "ABD", "ABD"),
     "AmericaAirForceGeneral": ("USA Air Force General", "ABD Hava Kuvvetleri", "HVK"),
@@ -86,7 +80,6 @@ OWN_FACTION_SIDES = {"Turkiye"}
 PATCH_FILES = ("Data/INI/BalanceReforged.ini", "Data/INI/FixesReforged.ini", "Data/INI/TurkiyeReforged.ini")
 # Object::look: a unit sees no further than half as far again as its longest weapon reaches
 SIGHT_PER_WEAPON_RANGE = 1.5
-MODS_DIR = Path(os.environ.get("ZH_USER_DATA_DIR", Path.home() / "Documents" / "Command and Conquer Generals Zero Hour Data")) / "Mods"
 
 Shots = collections.namedtuple("Shots", "damage delay clip reload opening")
 
@@ -105,44 +98,13 @@ def msec_to_frames(msec):
 
 # ---- files -----------------------------------------------------------------------------------------
 
-def is_reforged_archive(big):
-    """ArchiveFileSystem.cpp isReforgedArchiveName: the fork's upscaled art goes by its file name."""
-    return big.name.lower().startswith("reforged")
-
-
-def is_fork_owned(path):
-    """FileSystem::isForkOwnedPath: what the fork installs loose next to the exe, which no mod replaces."""
-    p = path.lower().replace("/", "\\")
-    if p.startswith("data\\ini\\") and "\\" not in p[len("data\\ini\\"):] and p.endswith("reforged.ini"):
-        return True
-    if p.startswith("data\\ini\\mappedimages\\handcreated\\reforged") and p.endswith(".ini"):
-        return True
-    return (p == "data\\patch.str" or p.startswith(("data\\turkish\\", "data\\german\\", "art\\textures\\reforged",
-                                                     "window\\")) or p == "install_final.bmp")
-
-
 class GameFiles:
-    """Data/... paths resolved like the game: Code/Data master, then loose under Run, then the archives.
+    """Data/... paths resolved like the game: Code/Data master, then loose under Run, then the archives."""
 
-    With a mod (one -mod folder): its loose file or its archive's copy goes in front of all of that
-    (FileSystem::modLooseFile), except over a path the fork ships loose; its archives go over the retail
-    ones, and the fork's Reforged*.big go back on top (ArchiveFileSystem::loadMods)."""
-
-    def __init__(self, mod=None):
+    def __init__(self):
         self.members = {}
-        self.mod = mod
-        bigs = sorted(RUN_DIR.glob("*.big"), key=lambda big: big.name.lower())
-        for big in bigs:
+        for big in sorted(RUN_DIR.glob("*.big"), key=lambda big: big.name.lower()):
             self._index(big, big.name.lower().startswith("patch"))
-        if mod:
-            # a folder's archives against FilenameList order (case-insensitive, subfolders too), each with
-            # overwrite, so the first name wins as in retail's own pass ("!!" or "00_" is the mod's patch)
-            for big in sorted(mod.rglob("*.big"), key=lambda big: str(big).lower(), reverse=True):
-                if not is_reforged_archive(big):
-                    self._index(big, True)
-            for big in bigs:
-                if is_reforged_archive(big):
-                    self._index(big, True)
 
     def _index(self, big, overwrite):
         with open(big, "rb") as f:
@@ -161,11 +123,6 @@ class GameFiles:
             return f.read(size)
 
     def read(self, path):
-        if self.mod:
-            loose = self.mod / path
-            archived = path.lower() in self.members and self.mod in self.members[path.lower()][1].parents
-            if (loose.is_file() or archived) and not (is_fork_owned(path) and self._fork_loose(path)):
-                return loose.read_bytes() if loose.is_file() else self._archived(path)
         for loose in self._fork_loose(path):
             return loose.read_bytes()
         return self._archived(path) if path.lower() in self.members else None
@@ -174,7 +131,7 @@ class GameFiles:
         """Every *.ini under a Data/... directory, sorted as INI::loadDirectory loads them."""
         found = {path for path, _, _, _ in self.members.values()
                  if path.lower().startswith(directory.lower() + "/") and path.lower().endswith(".ini")}
-        for root in (CODE_DATA / directory.split("/", 1)[1], RUN_DIR / directory) + ((self.mod / directory,) if self.mod else ()):
+        for root in (CODE_DATA / directory.split("/", 1)[1], RUN_DIR / directory):
             if root.is_dir():
                 found |= {directory + "/" + p.relative_to(root).as_posix() for p in root.rglob("*.ini")}
         # FilenameList is a case-insensitive set of backslashed paths, and the files in subfolders load last
@@ -516,13 +473,12 @@ class GameData:
                         todo.append(button["object"][0].lower())
                         if command == "UNIT_BUILD":
                             units.add(button["object"][0].lower())
-        # a button can name what this data never made: a Turkiye reskin of an object the mod dropped
+        # a button can name what this data never made
         return units & self.things.keys()
 
     def load_objects(self, text, multifile):
         # a patch of an Object, Weapon or Armor the data never built, and a reskin of a missing original,
-        # is read and dropped (ThingFactory::parseObjectDefinition, WeaponStore, ArmorStore): a mod's
-        # archives replaced EA's files
+        # is read and dropped (ThingFactory::parseObjectDefinition, WeaponStore, ArmorStore)
         for keyword, args, children in ini_blocks(text):
             keyword = keyword.lower()
             if keyword == "objectreskin":
@@ -617,26 +573,13 @@ def best_attack(data, attacker, target):
 
 # ---- the page ------------------------------------------------------------------------------------------
 
-def parse_str(table):
-    with tempfile.TemporaryDirectory() as folder:
-        path = Path(folder) / "Generals.str"
-        path.write_bytes(table)
-        return gametext.parse_str(path, strict=False)
-
-
 def game_strings(files):
-    """GameTextManager::init: Data/Generals.str when there is one, the English CSF otherwise, and
-    Data/Patch.str over it, which names the fork's own units and sides (Turkiye's among them)."""
+    """GameTextManager::init: the English CSF, and Data/Patch.str over it, which names the fork's own
+    units and sides (Turkiye's among them)."""
     names = {}
-    table = files.read("Data/Generals.str")
-    entries = gametext.read_csf(files.read("Data/English/generals.csf")) if table is None else parse_str(table)
-    for label, text in entries:
+    for label, text in gametext.read_csf(files.read("Data/English/generals.csf")):
         names.setdefault(label.lower(), text)
-    patch = files.read("Data/Patch.str")
-    overlay = {}
-    for label, text in parse_str(patch) if patch else ():
-        overlay.setdefault(label.lower(), text)
-    names.update(overlay)
+    names.update((label.lower(), text) for label, text in gametext.parse_str(CODE_DATA / "Patch.str"))
     return names
 
 
@@ -671,7 +614,7 @@ def playable_sides(files, names):
         if vanilla and vanilla[0] == lobby:
             label, tag = vanilla[1], vanilla[2]
         else:
-            # the mod's own name, tagged by the word that tells it from its faction's other sides
+            # the lobby's own name, tagged by the word that tells it from its faction's other sides
             words = [word for word in re.findall(r"\w+", lobby) if word.lower() not in ("general", faction)]
             label, tag = lobby, (words[0] if words else lobby)[:3].upper()
         if faction not in factions:
@@ -694,8 +637,7 @@ def build(files):
     sides, factions, starts = playable_sides(files, names)
 
     # what each side's buildings and dozers offer; a unit keeps its own Side when that is one of the
-    # lobby's, and takes the first side that builds it otherwise (The End of Days' Russia units say
-    # Side = Russia under the ChinaNukeGeneral template)
+    # lobby's, and takes the first side that builds it otherwise
     owner = {}
     for side in sorted(sides, key=lambda side: sides[side]["order"]):
         for name in data.reachable(starts[side]):
@@ -767,30 +709,12 @@ def selfcheck():
     assert kill_frames(480.0, Shots(0.0, 30.0, 0, 0.0, 0.0)) == CANNOT_KILL
     assert msec_to_frames(2000) == 120 and msec_to_frames(100) == 6 and msec_to_frames(1) == 1
     assert real("75.0.") == 75.0 and real("-2e1x") == -20.0 and percent("50%") == 0.5
-    assert is_fork_owned("Data/INI/BalanceReforged.ini") and is_fork_owned("Window/Menus/MainMenu.wnd")
-    assert not is_fork_owned("Data/INI/Object/Reforged.ini") and not is_fork_owned("Data/INI/Weapon.ini")
     print("unitmatrix selfcheck: ok")
 
 
-def installed_mods():
-    return sorted((folder.resolve() for folder in MODS_DIR.iterdir() if (folder / "mod.json").is_file()),
-                  key=lambda folder: folder.name.lower()) if MODS_DIR.is_dir() else []
-
-
-def page_name(mod):
-    return "birim-matrisi.html" if mod is None else "birim-matrisi-%s.html" % mod.name.lower()
-
-
-def game_title(mod):
-    if mod is None:
-        return "Zero Hour Reforged"
-    info = json.loads((mod / "mod.json").read_text(encoding="utf-8")) if (mod / "mod.json").is_file() else {}
-    return ("%s %s" % (info.get("name", mod.name), info.get("version", ""))).strip()
-
-
-def write_page(mod, out, games):
+def write_page(out):
     started = time.time()
-    files = GameFiles(mod)
+    files = GameFiles()
     if files.read("Data/INI/Weapon.ini") is None or not files.list_dir("Data/INI/Object"):
         sys.exit("unitmatrix: no game data in %s. Put a Zero Hour install's *.big there (INIZH.big carries "
                  "the INIs, EnglishZH.big the names) or point ZHR_RUN_DIR at a Run that has them." % RUN_DIR)
@@ -798,17 +722,9 @@ def write_page(mod, out, games):
         sys.exit("unitmatrix: %s has no EnglishZH.big, which carries the unit names." % RUN_DIR)
 
     page, report = build(files)
-    title = game_title(mod)
-    switcher = "".join('<a href="%s"%s>%s</a>' % (page_name(game), ' aria-current="page"' if game == mod else "",
-                                                  html.escape(game_title(game))) for game in games)
-    text = (TEMPLATE.replace("__TITLE__", "Zero Hour" if mod is None else html.escape(title))
-            .replace("__SOURCE__", "INIZH.big" if mod is None else "modun arşivleri")
-            .replace("__GAME__", html.escape(title))
-            .replace("__GAMES__", switcher)
-            .replace("__UNIT_DATA__", json.dumps(page, ensure_ascii=False)))
-    out.write_text(text, encoding="utf-8", newline="\n")
-    print("%s: %d units over %d sides, %d without a weapon that kills, %d patch blocks skipped, %s in %.1f s"
-          % (title, len(page["units"]), len({unit["side"] for unit in page["units"]}), len(page["excluded"]),
+    out.write_text(TEMPLATE.replace("__UNIT_DATA__", json.dumps(page, ensure_ascii=False)), encoding="utf-8", newline="\n")
+    print("%d units over %d sides, %d without a weapon that kills, %d patch blocks skipped, %s in %.1f s"
+          % (len(page["units"]), len({unit["side"] for unit in page["units"]}), len(page["excluded"]),
              len(report["skipped"]), out, time.time() - started))
     if report["unread"]:
         print("  no health read: " + ", ".join(report["unread"]))
@@ -817,31 +733,14 @@ def write_page(mod, out, games):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--out", type=Path, help="where to write the HTML page")
-    parser.add_argument("--mod", help="a mod folder, or its name under %s" % MODS_DIR)
-    parser.add_argument("--all", type=Path, metavar="DIR",
-                        help="write the page for Zero Hour Reforged and for every installed mod into DIR")
     parser.add_argument("--selfcheck", action="store_true", help="check the frames-to-kill arithmetic and stop")
     args = parser.parse_args()
     if args.selfcheck:
         selfcheck()
         return
-
-    games = [None] + installed_mods()
-    if args.all is not None:
-        for game in games:
-            write_page(game, args.all / page_name(game), games)
-        return
     if args.out is None:
-        parser.error("--out or --all is required")
-    mod = None
-    if args.mod:
-        mod = Path(args.mod) if Path(args.mod).is_dir() else MODS_DIR / args.mod
-        if not mod.is_dir():
-            parser.error("no mod folder %s" % mod)
-        mod = mod.resolve()
-        if mod not in games:
-            games.append(mod)
-    write_page(mod, args.out, games)
+        parser.error("--out is required")
+    write_page(args.out)
 
 
 TEMPLATE = r'''<!doctype html>
@@ -849,7 +748,7 @@ TEMPLATE = r'''<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>__TITLE__ Karşılaşma Matrisi</title>
+<title>Zero Hour Karşılaşma Matrisi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -960,11 +859,6 @@ h1 {
   text-wrap: balance;
 }
 .lede { margin: 8px 0 0; color: var(--ink-2); max-width: 68ch; }
-.games { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 10px; font-size: 13px; }
-.games a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule-strong); padding-block: 2px; }
-.games a:hover { color: var(--ink); border-color: var(--ink); }
-.games a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.games a[aria-current] { color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); }
 .readout {
   font-family: var(--font-data);
   font-size: 12px;
@@ -1264,8 +1158,7 @@ table.matrix {
 <div class="page">
   <header class="masthead">
     <div>
-      <nav class="games" aria-label="Oyun">__GAMES__</nav>
-      <p class="eyebrow">__GAME__ · __SOURCE__ ve BalanceReforged.ini · birebir çarpışma</p>
+      <p class="eyebrow">Zero Hour Reforged · INIZH.big ve BalanceReforged.ini · birebir çarpışma</p>
       <h1>Kim kime karşı</h1>
       <p class="lede">Satırdaki birim, sütundaki birimle tek başına karşılaşıyor. Hücre kaç kat üstün olunduğunu söylüyor: 2, saldıranın hedefi hedefin onu öldürdüğü sürenin yarısında öldürdüğü demek. −2 tersi, hedef saldıranı yarı sürede öldürüyor. Köşegen kendi kendine karşı, yani 1; Comanche gibi kendi türünü vuramayan birimlerde taralı.</p>
     </div>

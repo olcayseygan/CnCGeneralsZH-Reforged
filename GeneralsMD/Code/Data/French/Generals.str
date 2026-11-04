@@ -16765,14 +16765,6 @@ TOOLTIP:CloudStyle
 "Classique utilise les effets de toxine et de radiation d'origine. Volumétrique ajoute une fumée mouvante, une brume nucléaire plus sombre et une distorsion de chaleur. S'applique quand vous cliquez sur Accepter, aux nuages déjà sur le terrain aussi."
 END
 
-LAN:ErrorModMismatch
-"Cette partie utilise d'autres mods. Les mods de l'hôte : %s. Lancez le jeu avec les mêmes mods, dans le même ordre, pour la rejoindre."
-END
-
-LAN:NoMod
-"aucun"
-END
-
 GUI:SaveFromOlderGame
 "Cette sauvegarde a été faite par le jeu d'origine ou par une ancienne version de Reforged et ne peut pas être chargée. Ses sauvegardes « Début de mission » se chargent toujours et reprennent la campagne au début de cette mission, et chaque mission de la campagne peut être choisie depuis le menu de la campagne."
 END

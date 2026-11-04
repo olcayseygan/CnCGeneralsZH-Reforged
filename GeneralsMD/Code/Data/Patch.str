@@ -1631,14 +1631,6 @@ TOOLTIP:CloudStyle
 "Classic uses the original toxin and radiation effects. Volumetric adds moving smoke, darker nuclear haze and heat shimmer. Applies when you press Accept, to the clouds already on the field too."
 END
 
-LAN:ErrorModMismatch
-"This game runs different mods. The host's mods: %s. Start the game with the same mods, in the same order, to join."
-END
-
-LAN:NoMod
-"none"
-END
-
 GUI:SaveFromOlderGame
 "This save was made by the original game or by an older version of Reforged, and cannot be loaded. Its \"Mission Start\" saves still load and carry the campaign on from that mission's beginning, and every campaign mission can be picked from the campaign menu."
 END
@@ -3590,7 +3582,7 @@ GUI:FactionPickPool
 "Random picks one of the %d armies ticked on the left, out of %d. Click an army to tick it or take it out."
 END
 
-// %s is a side's name as its heading reads (USA, China, a mod's side): the pool is that side and nothing else.
+// %s is a side's name as its heading reads (USA, China, Turkiye): the pool is that side and nothing else.
 GUI:FactionPickRandomSide
 "Random %s"
 END

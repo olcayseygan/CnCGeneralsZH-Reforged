@@ -2609,14 +2609,6 @@ LAN:ErrorCRCMismatch
 "Oyun bir uyumsuzluk tespit etti. Çok oyunculu oyun, oyuncular arasındaki senkronizasyon verisini kaybetti. Rakibiniz sürümünü değiştirmiş olabilir; onu Yok Sayma Listenize eklemek isteyebilirsiniz"
 END
 
-LAN:ErrorModMismatch
-"Bu oyun başka modlarla oynanıyor. Kurucunun modları: %s. Katılmak için oyunu aynı modlarla, aynı sırayla başlatın."
-END
-
-LAN:NoMod
-"yok"
-END
-
 LAN:ErrorGameStarted
 "Üzgünüz, bu oyun zaten başladı"
 END

@@ -2,8 +2,8 @@
 
 EA published the source of Command & Conquer: Generals and Zero Hour in February 2025. Zero Hour
 Reforged is that source worked on as a game: around sixty bugs EA shipped in 2003 fixed, a computer
-opponent that builds a base (1.5x income, more when it falls behind, no other edge), a Direct3D 11 renderer, a new interface and
-mods that load side by side. Windows x64 players install it through a free launcher; macOS and Linux
+opponent that builds a base (1.5x income, more when it falls behind, no other edge), a Direct3D 11 renderer and a new
+interface. Windows x64 players install it through a free launcher; macOS and Linux
 build it from this repository.
 
 Game v3.2.0, released 2026-10-20. Launcher v1.7.0, released the same day. `main` carries work that
@@ -165,22 +165,6 @@ time reached and the whole length; click anywhere on it to jump there. Beside it
 speeds, from half to eight times the speed the match was played at. Every match is archived under its
 own date-and-time name.
 
-### Mods
-
-| What | Since |
-|:--|:--|
-| `-mod <folder>` loads a mod's archives and its loose `Data` and `Art` files; give it once per mod, and each mod's armies stand beside Zero Hour's | 3.0.0 |
-| `-modfactions` puts two total conversions in one match, each army building from its own mod's units | 3.0.0 |
-| `-modpatch <folder>` after a mod changes that mod and leaves the others alone | 3.0.0 |
-| A `mod.json` names the mod and its version, and the names go into every replay | 3.0.0 |
-| Reforged's balance, fixes, AI and menus load after the mod and win where both touch the same thing | 3.0.0 |
-| Contra and The Power of the West start and play | 3.0.0 |
-| Shockwave Chaos starts beside a second full mod | 3.2.0 |
-| Five full mods side by side (Contra, ShockWave, Shockwave Chaos, The End of Days, Tiberian Dawn Redux) | `main` |
-| Crashes fixed under Contra, The End of Days, Rise of the Reds, ShockWave, Shockwave Chaos and Reborn | `main` |
-
-The launcher's Mods page installs mods from a catalog and marks each one a patch or a full mod.
-
 ## Play it
 
 ### Windows
@@ -197,7 +181,7 @@ The launcher's Mods page installs mods from a catalog and marks each one a patch
 <sub>Launcher v1.7.0, Home page.</sub>
 
 The launcher downloads the build, checks every file against a signed list and keeps the game and
-itself up to date. Its pages are Home, Mods, Maps, Replays, Hotkeys, Options, Health and Feedback, in
+itself up to date. Its pages are Home, Maps, Replays, Hotkeys, Options, Health and Feedback, in
 English, Turkish or German. Uninstall puts back the files your game had before. When the game
 crashes, the launcher sends the report without asking you for anything.
 
@@ -258,9 +242,6 @@ Discs carry 1.00 and the engine is 1.04's, so files from a 1.04 install (Steam, 
 | `-xres <w>` `-yres <h>` | the resolution for this run |
 | `-msaa [N]` | multisampling; bare is 4x, a number asks for N from 2 to 16 |
 | `-language english\|turkish\|german` | the language for this run, over the one Options saved |
-| `-mod <folder>` | loads a mod's armies beside Zero Hour's as their own lobby entries; repeat it for several |
-| `-modpatch <folder>` | a patch for the mod given before it, or for Zero Hour's files when it comes first |
-| `-modfactions` | each mod's armies join Zero Hour's instead of replacing them |
 | `-replay <name>` | opens a replay from the replay folder, extension optional |
 | `-loadsave <name>` | opens a save game the same way |
 | `-quickstart` | skips the intro movie, the shell map and the menu animations |

@@ -1020,7 +1020,9 @@ public:  // ********************************************************************
 	// tab sticking up from the tray says "+N" for the rest.  The superweapon cameos in the top right,
 	// SUPERWEAPON_LIST_COLUMNS to a row, stop at SUPERWEAPON_LIST_CELLS with a tab hanging below.
 	//
-	enum { PRODUCTION_LIST_COLUMNS = 5, PRODUCTION_LIST_CELLS = 5 };	///< one row, over the radar's piece of the bar
+	/// one row, over the radar's piece of the bar: four cells and the tray's edge are 316 wide at 1080,
+	/// inside the side bars' 345 wide radar box
+	enum { PRODUCTION_LIST_COLUMNS = 4, PRODUCTION_LIST_CELLS = 4 };
 	enum { SUPERWEAPON_LIST_COLUMNS = 6, SUPERWEAPON_LIST_CELLS = 12 };	///< two rows at most
 	struct ProductionListSlot
 	{

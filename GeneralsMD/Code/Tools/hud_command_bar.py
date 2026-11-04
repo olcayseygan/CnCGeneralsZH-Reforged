@@ -1586,9 +1586,11 @@ def put(sheet_img, img, box):
 
 
 # Minimise and promotion stand on the bar's mount (round 18) and wear the bar's colour: a raised face
-# in the side's second accent of BAR_LOOKS with the glyph engraved in it, as the prototypes drew them.
+# in the side's second accent of BAR_LOOKS and a flat glyph on it, as the prototypes drew them.  The
+# glyph is laid on after the light, antialiased: engraved and lit at this size it came out mottled.
 MOUNT_KINDS = ("General", "Minimize", "Maximize")
-MOUNT_GLYPH = {"America": INK, "China": (60, 190, 70), "Gla": INK, "Turkiye": (64, 226, 214)}
+MOUNT_GLYPH = {"America": INK, "China": INK, "Gla": INK, "Turkiye": (64, 226, 214)}
+MOUNT_GLYPH_BUILD = {"terraced": "machined"}                    # China's minimise is the chevron and its bezel plain
 MOUNT_STATE = {"": 1.0, "H": 1.3, "P": 0.85, "I": 0.45}         # the face's brightness in each state
 
 
@@ -1597,17 +1599,26 @@ def mount_button(side_name, kind, state, w, h):
     build = look["build"]
     k = MOUNT_STATE[state]
     look["accent"] = tuple(min(255, int(c * k)) for c in look["accent2"])
-    look["accent2"] = (96, 100, 104) if state == "I" else MOUNT_GLYPH[side_name]
     o = 32                                                      # drawn on a wider canvas: shade's noise
     p = Painter(w + 2 * o, h + 2 * o)                           # fields go bad on one 31 texels high
-    p.frame([shape(build, o, o, o + w, o + h, 5)], 3.5, build, DARK, BEZEL_SCALE)
+    # China's terraces would draw a ridge across the face; its notched corners stay
+    p.frame([shape(build, o, o, o + w, o + h, 5)], 3.5, MOUNT_GLYPH_BUILD.get(build, build), DARK, BEZEL_SCALE)
     p.bump([shape(build, o + 3, o + 3, o + w - 3, o + h - 3, 3)], 1.0 if state == "P" else 2.2, 1.4, ACCENT)
-    off = o + (1 if state == "P" else 0)
-    raised, ink, *again = icon(kind, w / 2 + off, h / 2 + off, build)
-    p.inlay(raised + [q for polys in again for q in polys], ACCENT2, 0.8)
-    if ink:
-        p.inlay(ink, ACCENT, 0.0)                               # an outline glyph keeps its middle the face's
-    return shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
+    img = shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
+    off = 1 if state == "P" else 0
+    raised, ink, *again = icon(kind, w / 2 + off, h / 2 + off, MOUNT_GLYPH_BUILD.get(build, build))
+    big = 4
+    mask = Image.new("L", (w * big, h * big), 0)
+    d = ImageDraw.Draw(mask)
+    for polys, fill in ((raised, 255), (ink, 0), ([q for polys in again for q in polys], 255)):
+        for q in polys:
+            d.polygon([(x * big, y * big) for x, y in q], fill=fill)
+    mask = mask.resize((w, h), Image.BOX)
+    colour = (96, 100, 104) if state == "I" else MOUNT_GLYPH[side_name]
+    glyph = Image.new("RGBA", (w, h), colour + (255,))
+    glyph.putalpha(mask)
+    img.alpha_composite(glyph)
+    return img
 
 
 def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B"):
@@ -1726,7 +1737,7 @@ def tip_card(side, head=False):
         vents(p, W - 38, W - 18, 9, 21)
         if full:
             p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
-            p.inlay(chevrons(W - 9, 33, 8, n=2), ACCENT2, 0.7)
+            p.inlay(chevrons(W - 9, 33, 8, n=2), ACCENT, 0.7)    # blue: red there read as stray texels
             p.stud(W - 9, 54, 3.0)
         p.stud(W - 9, H - 9, 2.6)
     elif build == "terraced":                       # cast in square terraces, a heavy rim round each well
@@ -1768,9 +1779,10 @@ def tip_card(side, head=False):
         tip_soften(p, W, H, 1.5, head)
         # no tiles: on the narrow right corners their grooves read as stray crosses and broke the
         # 30 degree cut into steps (round 18's in-game shots)
+        # the rule and the marker in dark steel: no red on Turkiye's card
         if full:
-            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
-        p.inlay([triangle(W - 28, 15, 9, 10, "left")], ACCENT, 0.6)
+            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT2, 0.2)
+        p.inlay([triangle(W - 28, 15, 9, 10, "left")], ACCENT2, 0.6)
         for x, y in ((W - 10, 42), (W - 10, H - 8)) if full else ((W - 10, H - 8),):
             p.bump([regular(x, y, 3.0, 6, np.pi / 6)], 0.8, 1.2, BRIGHT)
     else:                                           # the console: radii, a bullnose, a grille, screws, the tally

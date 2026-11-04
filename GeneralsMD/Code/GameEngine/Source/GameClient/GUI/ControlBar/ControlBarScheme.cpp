@@ -63,6 +63,8 @@
 #include "Common/Recorder.h"
 #include "GameClient/ControlBarScheme.h"
 #include "GameClient/Display.h"
+#include "GameClient/GameFont.h"
+#include "GameClient/GlobalLanguage.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Image.h"
 #include "GameClient/GameWindowManager.h"
@@ -162,6 +164,8 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 
 	{ "MoneyUL", 		INI::parseICoord2D,				NULL, offsetof( ControlBarScheme, m_moneyUL ) },
 	{ "MoneyLR", 		INI::parseICoord2D,				NULL, offsetof( ControlBarScheme, m_moneyLR ) },
+	{ "MoneyFontSize",	INI::parseInt,					NULL, offsetof( ControlBarScheme, m_moneyFontSize ) },
+	{ "MoneyThousands",	INI::parseBool,					NULL, offsetof( ControlBarScheme, m_moneyThousands ) },
 
 	{ "BlockRadarUL",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_RADAR ] ) },
 	{ "BlockRadarLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_RADAR ] ) },
@@ -462,6 +466,8 @@ ControlBarScheme::ControlBarScheme(void)
 	
 	m_moneyLR.x = 0;
 	m_moneyLR.y = 0;
+	m_moneyFontSize = 0;
+	m_moneyThousands = FALSE;
 
 	for( Int i = 0; i < BLOCK_COUNT; i++ )
 	{
@@ -643,7 +649,12 @@ void ControlBarScheme::init(void)
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:MoneyDisplay" ) );
 	if(win)
+	{
 		placeSchemeWindow( win, m_moneyUL, m_moneyLR, resMultiplier );
+		if( m_moneyFontSize > 0 )
+			win->winSetFont( TheFontLibrary->getFont( win->winGetFont()->nameString,
+				TheGlobalLanguageData->adjustFontSize( m_moneyFontSize ), TRUE ) );
+	}
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:PowerWindow" ) );
 	if(win)
@@ -1334,6 +1345,11 @@ void ControlBarSchemeManager::radarFrameRect( const Image *const *frame, const I
 	outer->lo.y = radar.lo.y - REAL_TO_INT_CEIL( tl->getImageHeight() * k );
 	outer->hi.x = radar.hi.x + REAL_TO_INT_CEIL( br->getImageWidth() * k );
 	outer->hi.y = radar.hi.y + REAL_TO_INT_CEIL( br->getImageHeight() * k );
+}
+
+Bool ControlBarSchemeManager::isMoneyGrouped( void ) const
+{
+	return m_currentScheme != NULL && m_currentScheme->m_moneyThousands;
 }
 
 const Image *const *ControlBarSchemeManager::getPowerTray( void ) const

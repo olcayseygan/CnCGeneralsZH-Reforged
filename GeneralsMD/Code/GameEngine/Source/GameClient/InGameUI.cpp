@@ -255,6 +255,24 @@ static void sizeHudTray( HudTray *tray, Real scaleX, Real scaleY )
 	tray->uncoveredH = tray->uncovered ? REAL_TO_INT_CEIL( tray->uncovered->getImageHeight() * scaleY ) : 0;
 }
 
+/// text with a comma every three digits in each run of digits: "$ 10000" reads "$ 10,000"
+static UnicodeString groupThousands( const UnicodeString& text )
+{
+	struct Digit { static Bool is( WideChar c ) { return c >= u'0' && c <= u'9'; } };
+	UnicodeString out;
+	const Int length = text.getLength();
+	for( Int i = 0; i < length; i++ )
+	{
+		out.concat( text.getCharAt( i ) );
+		Int digitsAfter = 0;
+		while( i + 1 + digitsAfter < length && Digit::is( text.getCharAt( i + 1 + digitsAfter ) ) )
+			digitsAfter++;
+		if( Digit::is( text.getCharAt( i ) ) && digitsAfter > 0 && digitsAfter % 3 == 0 )
+			out.concat( (WideChar)u',' );
+	}
+	return out;
+}
+
 static HudCellStyle hudCellStyle( void )
 {
 	const AsciiString side = ThePlayerList->getLocalPlayer()->getSide();
@@ -3526,6 +3544,8 @@ void InGameUI::update( void )
 				buffer = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
 			else
 				buffer.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), currentMoney );
+			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneyGrouped() )
+				buffer = groupThousands( buffer );
 			GadgetStaticTextSetText( moneyWin, buffer );
 			m_lastMoneyDisplayed = currentMoney;
 

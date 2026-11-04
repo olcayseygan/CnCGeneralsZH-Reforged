@@ -217,6 +217,10 @@ public:
 
 	ICoord2D m_moneyUL;
 	ICoord2D m_moneyLR;
+	/// MoneyFontSize: the money readout in bold at that many of the .wnd's points (0 keeps the .wnd's
+	/// font); MoneyThousands: the amount written with a comma every three digits
+	Int m_moneyFontSize;
+	Bool m_moneyThousands;
 
 	ICoord2D m_minMaxUL;
 	ICoord2D m_minMaxLR;
@@ -337,6 +341,8 @@ public:
 	/// the general's powers tray's pieces (ControlBarScheme::TRAY_*) of the scheme on screen, or NULL
 	/// without a cell; the tray then keeps the shipped column
 	const Image *const *getPowerTray( void ) const;
+	/// the scheme on screen writes the money with thousands separators (MoneyThousands)
+	Bool isMoneyGrouped( void ) const;
 	/// the tooltips' art of the scheme on screen, or the console's when it has no card of its own
 	const ControlBarTooltipImages& getTooltipImages( void ) const;
 	/// the console's tooltips (Helpbox), which the shell wears

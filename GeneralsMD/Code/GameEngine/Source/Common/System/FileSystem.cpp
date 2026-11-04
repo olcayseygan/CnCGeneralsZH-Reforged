@@ -579,6 +579,9 @@ Bool FileSystem::isForkOwnedPath(const AsciiString& filename)
 		|| starts("art\\w3d\\trkizilelma") || starts("art\\textures\\trkizilelma") || starts("art\\textures\\zhca_trkizilelma")
 		// the Power Plant's own turbine hall, its upgraded, damaged, burning and rubble states and its scaffold
 		|| starts("art\\w3d\\trpwrplt") || starts("art\\textures\\trpwrplt") || starts("art\\textures\\zhca_trpwrplt")
+		// the defences' own models: the Siper's tabya, the Patriot's hisar, the Radar Kulesi, the mine; their earth sheets
+		|| starts("art\\w3d\\trsiper") || starts("art\\w3d\\trpatriot") || starts("art\\w3d\\trradar") || p == "art\\w3d\\trmine.w3d"
+		|| starts("art\\textures\\trdef_")
 		|| starts("window\\")
 		|| p == "install_final.bmp";
 }

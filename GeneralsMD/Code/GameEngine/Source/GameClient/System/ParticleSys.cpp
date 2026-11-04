@@ -1927,6 +1927,9 @@ const Coord3D *ParticleSystem::computeParticleVelocity( const Coord3D *pos )
 
 			switch( m_emissionVolumeType )
 			{
+				// a box is read as a cylinder: out across the ground from its centre line, and up at
+				// the other speed, so a flat box over a hull throws its debris up and out of it
+				case BOX:
 				case CYLINDER:
 					Coord2D disk;
 
@@ -1939,7 +1942,6 @@ const Coord3D *ParticleSystem::computeParticleVelocity( const Coord3D *pos )
 					newVel.z = otherSpeed;
 					break;
 
-				case BOX:				///< @todo Implement BOX OUTWARD velocity
 				case SPHERE:
 				{
 					newVel.x = pos->x - sysPos.x;
@@ -2092,7 +2094,7 @@ const Coord3D *ParticleSystem::computeParticlePosition( void )
 				// 1 is left , 4 is right
 				// 2 is front, 5 is right back
 
-				int side = GameClientRandomValue(0, 6);
+				int side = GameClientRandomValue(0, 5);
 				if (side % 3 == 0) {
 					// generate X, Y
 					newPos.x = GameClientRandomValueReal( -m_emissionVolume.box.halfSize.x, m_emissionVolume.box.halfSize.x );
@@ -2110,7 +2112,7 @@ const Coord3D *ParticleSystem::computeParticlePosition( void )
 					if (side == 1) {
 						newPos.x = -m_emissionVolume.box.halfSize.x;
 					} else {
-						newPos.x = m_emissionVolume.box.halfSize.y;
+						newPos.x = m_emissionVolume.box.halfSize.x;
 					}
 
 				} else if (side % 3 == 2) {
@@ -2127,8 +2129,8 @@ const Coord3D *ParticleSystem::computeParticlePosition( void )
 				newPos.x = GameClientRandomValueReal( -m_emissionVolume.box.halfSize.x, m_emissionVolume.box.halfSize.x );
 				newPos.y = GameClientRandomValueReal( -m_emissionVolume.box.halfSize.y, m_emissionVolume.box.halfSize.y );
 				newPos.z = GameClientRandomValueReal( -m_emissionVolume.box.halfSize.z, m_emissionVolume.box.halfSize.z );
-			break;
 			}
+			break;
 		}
 
 		case LINE:

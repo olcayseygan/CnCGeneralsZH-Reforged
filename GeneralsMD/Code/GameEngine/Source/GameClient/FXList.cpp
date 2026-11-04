@@ -95,7 +95,10 @@ void FXObjectView::take( const Object *obj )
 	transform = *obj->getTransformMatrix();
 	const Player *player = obj->getControllingPlayer();
 	playerIndex = player ? player->getPlayerIndex() : -1;
-	boundingCircleRadius = obj->getGeometryInfo().getBoundingCircleRadius();
+	const GeometryInfo &geom = obj->getGeometryInfo();
+	boundingCircleRadius = geom.getBoundingCircleRadius();
+	footprint.x = geom.getMajorRadius();
+	footprint.y = geom.getGeomType() == GEOMETRY_BOX ? geom.getMinorRadius() : geom.getMajorRadius();
 	alwaysClear = obj->isKindOf(KINDOF_ALWAYS_VISIBLE) || obj->friend_getPartitionData() == NULL;
 	drawable = obj->getDrawable();
 }
@@ -619,6 +622,7 @@ public:
 		m_useCallersRadius = FALSE;
 		m_atTarget = FALSE;
 		m_rotateX = m_rotateY = m_rotateZ = 0;
+		m_footprintBox = 0.0f;
 	}
 
 	virtual void doFXPos(const Coord3D *primary, const Matrix3D* primaryMtx, const Real /*primarySpeed*/, const Coord3D *secondary, const Real overrideRadius ) const
@@ -661,7 +665,7 @@ public:
 			else
 				// if we have an object, then adjust the offset and direction by the object's transformation
 				// matrix, so that (say) an offset of +10 in the z axis "follows" the orientation of the object.
-				reallyDoFX(&primary->position, &primary->transform, primary->id, 0.0f);
+				reallyDoFX(&primary->position, &primary->transform, primary->id, 0.0f, &primary->footprint);
 		}
 		else
 		{
@@ -688,6 +692,7 @@ public:
 			{ "CreateAtGroundHeight",	INI::parseBool,							NULL, offsetof( ParticleSystemFXNugget, m_createAtGroundHeight ) },
 			{ "UseCallersRadius",			INI::parseBool,							NULL, offsetof( ParticleSystemFXNugget, m_useCallersRadius ) },
 			{ "AtTarget",							INI::parseBool,							NULL, offsetof( ParticleSystemFXNugget, m_atTarget ) },
+			{ "FootprintBox",					INI::parseReal,							NULL, offsetof( ParticleSystemFXNugget, m_footprintBox ) },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -698,7 +703,7 @@ public:
 
 protected:
 
-	void reallyDoFX(const Coord3D *primary, const Matrix3D* mtx, ObjectID thingToAttachTo, Real overrideRadius ) const
+	void reallyDoFX(const Coord3D *primary, const Matrix3D* mtx, ObjectID thingToAttachTo, Real overrideRadius, const Coord2D *footprint = NULL ) const
 	{
 		Coord3D offset = m_offset;
 		if (mtx)
@@ -746,6 +751,20 @@ protected:
 					if (m_rotateZ != 0.0f)
 						sys->rotateLocalTransformZ(m_rotateZ);
 
+					// FootprintBox emits over the caller's hull, this fraction of its length and width, as a
+					// flat box turned to its heading, so a long vehicle blasts long.  Played at a position,
+					// with no object, the system keeps its own volume.
+					if (m_footprintBox > 0.0f && footprint)
+					{
+						Coord3D halfSize;
+						halfSize.x = footprint->x * m_footprintBox;
+						halfSize.y = footprint->y * m_footprintBox;
+						halfSize.z = 0.0f;
+						sys->setEmissionVolumeBox(halfSize);
+						if (!m_orientToObject)
+							sys->rotateLocalTransformZ(mtx->Get_Z_Rotation());
+					}
+
 					// by ID: an object the tick destroyed after asking for this is gone now, and the
 					// system lets go of it on its first update as it did of a dying one
 					if (m_attachToObject && thingToAttachTo != INVALID_ID)
@@ -783,6 +802,7 @@ private:
 	GameClientRandomVariable	m_height;
 	GameClientRandomVariable	m_delay;
 	Real						m_rotateX, m_rotateY, m_rotateZ;
+	Real						m_footprintBox;
 	Bool						m_orientToObject;
 	Bool						m_attachToObject;
 	Bool						m_createAtGroundHeight;

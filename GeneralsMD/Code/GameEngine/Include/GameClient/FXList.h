@@ -60,6 +60,9 @@ struct FXObjectView
 	Matrix3D				transform;
 	Int							playerIndex;					///< of the controlling player, -1 without one
 	Real						boundingCircleRadius;
+	/// half the hull's length along the object's +X and half its width along +Y: a BOX geometry's
+	/// major and minor radius, the radius both ways for a round one
+	Coord2D					footprint;
 	/// the object answers clear for every player: always visible, or out of the partition (garrisoned)
 	Bool						alwaysClear;
 	/// for the bones an FX reads; a drawable the tick destroyed is deleted only after the tick's FX ran

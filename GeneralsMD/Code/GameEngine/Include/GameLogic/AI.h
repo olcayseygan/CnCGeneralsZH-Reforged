@@ -396,6 +396,7 @@ void aiShotTiming( const WeaponTemplate *weapon, const WeaponBonus &bonus, AISho
 struct AITargetRating
 {
 	Int m_tier;				///< aiTargetTier
+	Real m_affinity;	///< aiArmourAffinity of our best-suited weapon against its armour
 	Real m_rate;			///< aiTargetKillRate
 	Real m_distSqr;		///< the nearer of two equal rates, for the unit that can hurt nothing there
 	ObjectID m_id;		///< the last tie, so every machine picks the same one
@@ -403,18 +404,25 @@ struct AITargetRating
 
 const Int AI_QUICK_KILL_FRAMES = 10 * LOGICFRAMES_PER_SECOND;
 
-/** 2 for whoever just shot us, and for an armed enemy already in reach that we kill within
-	* AI_QUICK_KILL_FRAMES; 1 for any other enemy that can shoot us; 0 for the rest.  So a far target
-	* we counter never keeps a unit from turning on its shooter, and one we finish in seconds does. */
-Int aiTargetTier( Bool shotMe, Bool threatensMe, Bool inRange, Real framesToKill );
+/** 2 for whoever just shot us, and while something is shooting us for an armed enemy already in
+	* reach that we kill within AI_QUICK_KILL_FRAMES; 1 for any other enemy that can shoot us; 0 for
+	* the rest.  So a far target never keeps a unit from turning on its shooter, and one in reach that
+	* its weapon is made for and that dies in seconds does. */
+Int aiTargetTier( Bool shotMe, Bool underFire, Bool threatensMe, Bool inRange, Real framesToKill );
+
+/** How much a weapon is made for an armour: what the armour lets through of its damage type over the
+	* mean of what it lets through of every combat damage type (coefficients, count of them).  Tank
+	* armour stops small arms and fire and lets a tank shell through, so the shell is made for it; a
+	* truck stops less of everything, so the same shell is less its weapon.  0 for a mean of 0. */
+Real aiArmourAffinity( Real mine, const Real *coefficients, Int count );
 
 /** What one target is worth per frame spent on it: value over the frames to kill it (aiFramesToKill
 	* with our best weapon against its armour and health) plus the frames to drive gap world units at
 	* speed into reach.  0 when we cannot hurt it, or it is out of reach of a unit that cannot move. */
 Real aiTargetKillRate( Real value, Real framesToKill, Real gap, Real speed );
 
-/** Whether a takes the pick from b: the higher tier, then the higher rate, then the nearer, then the
-	* lower ObjectID. */
+/** Whether a takes the pick from b: the higher tier, then the armour our weapon is made for (the
+	* higher affinity), then the higher rate, then the nearer, then the lower ObjectID. */
 Bool aiTargetBeats( const AITargetRating &a, const AITargetRating &b );
 
 /** One pairing as 0..1, money for money: 0.5 an even trade, 1 when my side kills sixteen times

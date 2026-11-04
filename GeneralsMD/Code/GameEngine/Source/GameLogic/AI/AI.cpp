@@ -42,6 +42,8 @@
 #include "Common/XferCRC.h"
 
 #include "GameLogic/AI.h"
+#include "GameLogic/Armor.h"
+#include "GameLogic/ArmorSet.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -364,6 +366,26 @@ AI::AI( void )
 	* does (AI_targetValue).  Keyed by template, so cleared with every map in AI::reset. */
 static std::map<const ThingTemplate*, const ThingTemplate*> theVariationParents;
 
+/** The damage types the shipped weapons fire at units, what aiArmourAffinity measures an armour
+	* against.  Healing, capture, subdual, pilot kills and the clean-up sprays are not combat. */
+static const DamageType AI_COMBAT_DAMAGE[] =
+{
+	DAMAGE_EXPLOSION, DAMAGE_CRUSH, DAMAGE_ARMOR_PIERCING, DAMAGE_SMALL_ARMS, DAMAGE_GATTLING, DAMAGE_RADIATION,
+	DAMAGE_FLAME, DAMAGE_SNIPER, DAMAGE_POISON, DAMAGE_PARTICLE_BEAM, DAMAGE_INFANTRY_MISSILE, DAMAGE_AURORA_BOMB,
+	DAMAGE_LAND_MINE, DAMAGE_JET_MISSILES, DAMAGE_STEALTHJET_MISSILES, DAMAGE_MOLOTOV_COCKTAIL, DAMAGE_COMANCHE_VULCAN
+};
+static const Int AI_COMBAT_DAMAGE_COUNT = sizeof( AI_COMBAT_DAMAGE ) / sizeof( AI_COMBAT_DAMAGE[ 0 ] );
+
+/** What a kind of unit's armour lets through of each damage type, its unconditioned ArmorSet (the
+	* unit the build menu offers), read once per template (AI_armourOf).  Keyed by template, so
+	* cleared with every map in AI::reset. */
+struct AIArmourRow
+{
+	Real m_coefficient[ DAMAGE_NUM_TYPES ];
+	Real m_combat[ AI_COMBAT_DAMAGE_COUNT ];
+};
+static std::map<const ThingTemplate*, AIArmourRow> theArmourOfTemplate;
+
 void AI::init( void )
 {
 	m_nextGroupID = 0;
@@ -403,6 +425,7 @@ void AI::reset( void )
 	m_nextGroupID = 0;
 	m_sweptGroupID = 0;
 	theVariationParents.clear();
+	theArmourOfTemplate.clear();
 	m_nextFormationID = NO_FORMATION_ID;
 	getNextFormationID(); // increment once past NO_FORMATION_ID.  jba.
 	m_lastBuildingPlacementFrame = 0;
@@ -792,27 +815,38 @@ static void priorityFunc(Object *obj, void *userData)
  * can link straight to it.
  *
  * Idle units took the nearest thing and attack move the most expensive one, so a Humvee spent
- * half a minute plinking a Battlemaster while the Technical beside it drove off. The rate is the
- * enemy's money a unit takes off per frame it spends on a target: the target's worth over the
- * frames its best weapon needs to kill it, through its armour and with the health it has left
- * (aiFramesToKill, the AI's matchup arithmetic), plus the frames to drive into reach. A Humvee
- * gun does a quarter of its damage to tank armour and a tank shell a tenth of its to a soldier,
- * so each takes what it is built for, and a wounded enemy is a quicker kill than a fresh one.
+ * half a minute plinking a Battlemaster while the Technical beside it drove off. A unit now goes
+ * for the armour its weapon is made for (aiArmourAffinity): a tank shell for tank armour, a
+ * Humvee gun for soldiers and then trucks, a rocket soldier's missile for tanks. Among targets of
+ * one armour the rate decides: the enemy's money a unit takes off per frame it spends on a target,
+ * the target's worth over the frames its best weapon needs to kill it with the health it has left
+ * (aiFramesToKill, the AI's matchup arithmetic), plus the frames to drive into reach. So a
+ * wounded enemy goes before a fresh one of its kind.
  *
  * Worth is 'ThreatValue' where a mod sets it and build cost where it does not; the shipped INI
  * sets it nowhere.
  *
- * The tiers keep two old rules above the rate. Anything that can shoot back outranks anything
+ * The tiers keep two old rules above the armour. Anything that can shoot back outranks anything
  * that cannot, so a group in an enemy base does not stop for the dozer while the artillery
- * fires. And whoever just shot us outranks everything but an armed enemy already in reach that
- * dies within AI_QUICK_KILL_FRAMES: a far target the unit counters never keeps it from turning
- * on its shooter, a near one it finishes in seconds does.
+ * fires. And whoever just shot us outranks everything but, while it shoots, an armed enemy
+ * already in reach that dies within AI_QUICK_KILL_FRAMES, which then goes by armour against the
+ * shooter: a far target never keeps a unit from turning on its shooter, and a Humvee under a
+ * tank's fire still finishes the Technical beside it first.
  */
-Int aiTargetTier( Bool shotMe, Bool threatensMe, Bool inRange, Real framesToKill )
+Int aiTargetTier( Bool shotMe, Bool underFire, Bool threatensMe, Bool inRange, Real framesToKill )
 {
-	if( shotMe || ( threatensMe && inRange && framesToKill >= 0.0f && framesToKill <= INT_TO_REAL( AI_QUICK_KILL_FRAMES ) ) )
+	if( shotMe || ( underFire && threatensMe && inRange && framesToKill >= 0.0f && framesToKill <= INT_TO_REAL( AI_QUICK_KILL_FRAMES ) ) )
 		return 2;
 	return threatensMe ? 1 : 0;
+}
+
+//-----------------------------------------------------------------------------
+Real aiArmourAffinity( Real mine, const Real *coefficients, Int count )
+{
+	Real sum = 0.0f;
+	for( Int i = 0; i < count; ++i )
+		sum += coefficients[ i ];
+	return sum > 0.0f ? mine * INT_TO_REAL( count ) / sum : 0.0f;
 }
 
 //-----------------------------------------------------------------------------
@@ -835,6 +869,8 @@ Bool aiTargetBeats( const AITargetRating &a, const AITargetRating &b )
 {
 	if( a.m_tier != b.m_tier )
 		return a.m_tier > b.m_tier;
+	if( a.m_affinity != b.m_affinity )
+		return a.m_affinity > b.m_affinity;
 	if( a.m_rate != b.m_rate )
 		return a.m_rate > b.m_rate;
 	if( a.m_distSqr != b.m_distSqr )
@@ -879,9 +915,27 @@ struct AITargetFacts
 {
 	AITargetRating m_rating;
 	Bool m_shotMe;
+	Bool m_underFire;
 	Bool m_inRange;
 	Real m_framesToKill;
 };
+
+static const AIArmourRow &AI_armourOf( const ThingTemplate *tmpl )
+{
+	std::map<const ThingTemplate*, AIArmourRow>::iterator known = theArmourOfTemplate.find( tmpl );
+	if( known == theArmourOfTemplate.end() )
+	{
+		const ArmorTemplateSet *set = tmpl->findArmorTemplateSet( ArmorSetFlags() );
+		const Armor armor( set != NULL ? set->getArmorTemplate() : NULL );
+		AIArmourRow row;
+		for( Int t = 0; t < DAMAGE_NUM_TYPES; ++t )
+			row.m_coefficient[ t ] = armor.adjustDamage( (DamageType)t, 1.0f );
+		for( Int i = 0; i < AI_COMBAT_DAMAGE_COUNT; ++i )
+			row.m_combat[ i ] = row.m_coefficient[ AI_COMBAT_DAMAGE[ i ] ];
+		known = theArmourOfTemplate.insert( std::make_pair( tmpl, row ) ).first;
+	}
+	return known->second;
+}
 
 /** What the unit choosing brings to every candidate: its weapons as they fire now, once per search
 	* rather than once per candidate. */
@@ -937,30 +991,52 @@ static void AI_readShooter( const Object *me, AIShooter &shooter )
 		? damage->in.m_sourceID : INVALID_ID;
 }
 
-/** The most victim could rate, from its distance and worth alone: in reach if anything could be,
-	* killed in one shot of the fastest weapon. aiTargetBeats on it decides whether the rest is read. */
-static Int AI_targetCeilingTier( const AIShooter &shooter, const Object *victim, Real distSqr )
+/** The best aiArmourAffinity among the weapons that may aim at victim. */
+static Real AI_armourAffinity( const AIShooter &shooter, const Object *victim )
 {
-	return ( victim->getID() == shooter.m_shooterID || distSqr <= sqr( shooter.m_longestReach ) ) ? 2 : 1;
+	const AIArmourRow &armour = AI_armourOf( victim->getTemplate() );
+	const Int antiMask = WeaponSet::getVictimAntiMask( victim );
+	Real best = 0.0f;
+	for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		const Weapon *weapon = shooter.m_weapon[ slot ];
+		if( weapon == NULL || ( weapon->getAntiMask() & antiMask ) == 0 )
+			continue;
+		best = max( best, aiArmourAffinity( armour.m_coefficient[ weapon->getDamageType() ], armour.m_combat, AI_COMBAT_DAMAGE_COUNT ) );
+	}
+	return best;
 }
 
-static AITargetRating AI_targetCeiling( const AIShooter &shooter, const Object *victim, Real distSqr, Int value )
+/** The most victim could rate, from its distance, armour and worth alone: in reach if anything
+	* could be, killed in one shot of the fastest weapon. aiTargetBeats on it decides whether the
+	* rest is read. */
+static Int AI_targetCeilingTier( const AIShooter &shooter, const Object *victim, Real distSqr )
+{
+	if( victim->getID() == shooter.m_shooterID )
+		return 2;
+	return ( shooter.m_shooterID != INVALID_ID && distSqr <= sqr( shooter.m_longestReach ) ) ? 2 : 1;
+}
+
+static AITargetRating AI_targetCeiling( const AIShooter &shooter, const Object *victim, Real distSqr, Int value, Real affinity )
 {
 	AITargetRating r;
 	r.m_id = victim->getID();
 	r.m_distSqr = distSqr;
+	r.m_affinity = affinity;
 	r.m_tier = AI_targetCeilingTier( shooter, victim, distSqr );
 	const Real gap = distSqr <= sqr( shooter.m_longestReach ) ? 0.0f : sqrt( distSqr ) - shooter.m_longestRange;
 	r.m_rate = aiTargetKillRate( INT_TO_REAL( value ), shooter.m_fastestShot, gap, shooter.m_speed );
 	return r;
 }
 
-static void AI_targetFacts( const AIShooter &shooter, const Object *victim, Real distSqr, Int value, AITargetFacts &facts )
+static void AI_targetFacts( const AIShooter &shooter, const Object *victim, Real distSqr, Int value, Real affinity, AITargetFacts &facts )
 {
 	const Object *me = shooter.m_me;
 	facts.m_rating.m_id = victim->getID();
 	facts.m_rating.m_distSqr = distSqr;
+	facts.m_rating.m_affinity = affinity;
 	facts.m_shotMe = victim->getID() == shooter.m_shooterID;
+	facts.m_underFire = shooter.m_shooterID != INVALID_ID;
 
 	// the weapon that kills it soonest, of those this unit may turn on it by itself
 	const Real health = victim->getBodyModule()->getHealth();
@@ -987,7 +1063,7 @@ static void AI_targetFacts( const AIShooter &shooter, const Object *victim, Real
 	if( best >= 0 && !facts.m_inRange )
 		gap = sqrt( distSqr ) - shooter.m_range[ best ];
 	facts.m_rating.m_rate = aiTargetKillRate( INT_TO_REAL( value ), facts.m_framesToKill, gap, shooter.m_speed );
-	facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, TRUE, facts.m_inRange, facts.m_framesToKill );
+	facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, facts.m_underFire, TRUE, facts.m_inRange, facts.m_framesToKill );
 }
 
 static Bool AI_threatens( Object *enemy, const Object *me )
@@ -1002,8 +1078,8 @@ static Bool AI_threatens( Object *enemy, const Object *me )
 static AITargetRating AI_rateFully( const AIShooter &shooter, Object *victim, Real distSqr )
 {
 	AITargetFacts facts;
-	AI_targetFacts( shooter, victim, distSqr, AI_targetValue( victim ), facts );
-	facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, AI_threatens( victim, shooter.m_me ), facts.m_inRange, facts.m_framesToKill );
+	AI_targetFacts( shooter, victim, distSqr, AI_targetValue( victim ), AI_armourAffinity( shooter, victim ), facts );
+	facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, facts.m_underFire, AI_threatens( victim, shooter.m_me ), facts.m_inRange, facts.m_framesToKill );
 	return facts.m_rating;
 }
 
@@ -1070,21 +1146,25 @@ Object *AI::pickBestTarget( const Object *me, SimpleObjectIterator *candidates, 
 			nearest = other;
 			nearestDistSqr = distSqr;
 		}
-		// the tier's ceiling is a distance and an id; the worth is a price lookup
-		if( best != NULL && AI_targetCeilingTier( shooter, other, distSqr ) < bestRating.m_tier )
+		// the tier's ceiling is a distance and an id, the armour a cached row; the worth is a price lookup
+		const Int ceilingTier = AI_targetCeilingTier( shooter, other, distSqr );
+		if( best != NULL && ceilingTier < bestRating.m_tier )
+			continue;
+		const Real affinity = AI_armourAffinity( shooter, other );
+		if( best != NULL && ceilingTier == bestRating.m_tier && affinity < bestRating.m_affinity )
 			continue;
 		const Int value = AI_targetValue( other );
-		if( best != NULL && !aiTargetBeats( AI_targetCeiling( shooter, other, distSqr, value ), bestRating ) )
+		if( best != NULL && !aiTargetBeats( AI_targetCeiling( shooter, other, distSqr, value, affinity ), bestRating ) )
 			continue;
 		AITargetFacts facts;
-		AI_targetFacts( shooter, other, distSqr, value, facts );
+		AI_targetFacts( shooter, other, distSqr, value, affinity, facts );
 		if( best != NULL && !aiTargetBeats( facts.m_rating, bestRating ) )
 			continue;
 		if( !AI_filtersAllow( lateFilters, other ) )
 			continue;
 		if( !AI_threatens( other, me ) )
 		{
-			facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, FALSE, facts.m_inRange, facts.m_framesToKill );
+			facts.m_rating.m_tier = aiTargetTier( facts.m_shotMe, facts.m_underFire, FALSE, facts.m_inRange, facts.m_framesToKill );
 			if( best != NULL && !aiTargetBeats( facts.m_rating, bestRating ) )
 				continue;
 		}
@@ -1095,9 +1175,9 @@ Object *AI::pickBestTarget( const Object *me, SimpleObjectIterator *candidates, 
 	// -scenario only: the pick beside the nearest candidate, which targetpick.txt reads
 	if( best != NULL && !TheGlobalData->m_scenarioFile.isEmpty() )
 	{
-		DEBUG_LOG(( "TARGET PICK: frame %d '%s' %d picks '%s' %d tier %d rate %.4f of %d, nearest '%s' %d\n",
+		DEBUG_LOG(( "TARGET PICK: frame %d '%s' %d picks '%s' %d tier %d armour %.2f rate %.4f of %d, nearest '%s' %d\n",
 			TheGameLogic->getFrame(), me->getTemplate()->getName().str(), me->getID(), best->getTemplate()->getName().str(),
-			best->getID(), bestRating.m_tier, bestRating.m_rate, count, nearest->getTemplate()->getName().str(), nearest->getID() ));
+			best->getID(), bestRating.m_tier, bestRating.m_affinity, bestRating.m_rate, count, nearest->getTemplate()->getName().str(), nearest->getID() ));
 	}
 	return best;
 }
@@ -1284,18 +1364,22 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 				bestRating = AI_rateFully(shooter, bestEnemy, bestDistSqr);
 				bestRated = TRUE;
 			}
-			if (AI_targetCeilingTier(shooter, theEnemy, distSqr) < bestRating.m_tier)
+			const Int ceilingTier = AI_targetCeilingTier(shooter, theEnemy, distSqr);
+			if (ceilingTier < bestRating.m_tier)
+				continue;
+			const Real affinity = AI_armourAffinity(shooter, theEnemy);
+			if (ceilingTier == bestRating.m_tier && affinity < bestRating.m_affinity)
 				continue;
 			const Int value = AI_targetValue(theEnemy);
-			if (!aiTargetBeats(AI_targetCeiling(shooter, theEnemy, distSqr, value), bestRating))
+			if (!aiTargetBeats(AI_targetCeiling(shooter, theEnemy, distSqr, value, affinity), bestRating))
 				continue;
 			AITargetFacts facts;
-			AI_targetFacts(shooter, theEnemy, distSqr, value, facts);
+			AI_targetFacts(shooter, theEnemy, distSqr, value, affinity, facts);
 			if (!aiTargetBeats(facts.m_rating, bestRating) || !AI_filtersAllow(filters + numGatherFilters, theEnemy))
 				continue;
 			if (!AI_threatens(theEnemy, me))
 			{
-				facts.m_rating.m_tier = aiTargetTier(facts.m_shotMe, FALSE, facts.m_inRange, facts.m_framesToKill);
+				facts.m_rating.m_tier = aiTargetTier(facts.m_shotMe, facts.m_underFire, FALSE, facts.m_inRange, facts.m_framesToKill);
 				if (!aiTargetBeats(facts.m_rating, bestRating))
 					continue;
 			}

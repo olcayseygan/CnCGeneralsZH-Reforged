@@ -3342,18 +3342,60 @@ TEST(attack_move_still_shoots_what_it_can_already_reach)
 	CHECK(  AIAttackMove_mayTakeTarget( true, true, false, 1030, 1030 ) );
 }
 
-/* AI.cpp: a unit choosing its own target takes what its weapon kills best for the time it
-   costs, not the nearest thing (idle) or the most expensive one (attack move).  The numbers are
-   the shipped INI's: HumveeGun 10 a shot every 12 frames, CrusaderTankGun 60 every 120; tank armour
-   takes a quarter of the Humvee's, truck armour half, a soldier a tenth of the tank's. */
-static AITargetRating targetRating( Int tier, Real rate, Real distSqr, ObjectID id )
+/* AI.cpp: a unit choosing its own target goes for the armour its weapon is made for, then for
+   what it kills best for the time it costs, not the nearest thing (idle) or the most expensive one
+   (attack move).  The numbers are the shipped INI's: HumveeGun 10 a shot every 12 frames,
+   CrusaderTankGun 60 every 120; the armour rows are Armor.ini's (HumanArmor with the fork's 30%
+   for tank shells) over AI.cpp's combat damage types: explosion, crush, armour piercing, small
+   arms, gattling, radiation, flame, sniper, poison, particle beam, infantry missile, Aurora bomb,
+   land mine, jet missiles, stealth jet missiles, molotov, Comanche vulcan. */
+static AITargetRating targetRating( Int tier, Real affinity, Real rate, Real distSqr, ObjectID id )
 {
 	AITargetRating r;
 	r.m_tier = tier;
+	r.m_affinity = affinity;
 	r.m_rate = rate;
 	r.m_distSqr = distSqr;
 	r.m_id = id;
 	return r;
+}
+
+TEST(a_unit_goes_for_the_armour_its_weapon_is_made_for)
+{
+	enum { PIERCING = 2, VULCAN = 16, MISSILE = 10, COUNT = 17 };
+	const Real HUMAN[ COUNT ] = { 1.0f, 2.0f, 0.3f, 1.0f, 1.0f, 1.0f, 1.5f, 2.0f, 1.0f, 1.5f, 0.1f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+	const Real TRUCK[ COUNT ] = { 1.0f, 0.5f, 1.0f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 0.5f, 1.0f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.5f };
+	const Real TANK[ COUNT ]  = { 1.0f, 0.5f, 1.0f, 0.25f, 0.1f, 0.5f, 0.25f, 0.0f, 0.25f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.25f };
+
+	/* a tank shell does full damage to a Technical and a Battlemaster alike, but tank armour stops
+	   most other weapons and truck armour does not: the shell is made for the tank */
+	CHECK_NEAR( 1.5315f, aiArmourAffinity( TANK[ PIERCING ], TANK, COUNT ), 0.001f );
+	CHECK_NEAR( 1.3077f, aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ), 0.001f );
+	CHECK( aiArmourAffinity( TANK[ PIERCING ], TANK, COUNT ) > aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ) );
+	CHECK( aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ) > aiArmourAffinity( HUMAN[ PIERCING ], HUMAN, COUNT ) );
+
+	/* a Humvee gun is made for soldiers, then trucks, last tanks */
+	CHECK( aiArmourAffinity( HUMAN[ VULCAN ], HUMAN, COUNT ) > aiArmourAffinity( TRUCK[ VULCAN ], TRUCK, COUNT ) );
+	CHECK( aiArmourAffinity( TRUCK[ VULCAN ], TRUCK, COUNT ) > aiArmourAffinity( TANK[ VULCAN ], TANK, COUNT ) );
+
+	/* a rocket soldier's missile is made for vehicles, tanks first */
+	CHECK( aiArmourAffinity( TANK[ MISSILE ], TANK, COUNT ) > aiArmourAffinity( TRUCK[ MISSILE ], TRUCK, COUNT ) );
+	CHECK( aiArmourAffinity( TRUCK[ MISSILE ], TRUCK, COUNT ) > aiArmourAffinity( HUMAN[ MISSILE ], HUMAN, COUNT ) );
+
+	/* an armour that lets nothing through is no weapon's */
+	const Real NOTHING[ COUNT ] = { 0.0f };
+	CHECK_NEAR( 0.0f, aiArmourAffinity( 0.0f, NOTHING, COUNT ), 0.0001f );
+
+	/* so a Crusader takes the Battlemaster over the Technical, though the Technical (3 shots) dies
+	   in less than half the Battlemaster's time (7): the armour comes before the rate */
+	AIShotPattern tank;
+	tank.m_delayFrames = 120.0f;
+	tank.m_damagePerShot = 60.0f;
+	const Real onBattlemaster = aiTargetKillRate( 800.0f, aiFramesToKill( 400.0f, tank ), 0.0f, 2.0f );
+	const Real onTechnical = aiTargetKillRate( 500.0f, aiFramesToKill( 180.0f, tank ), 0.0f, 2.0f );
+	CHECK( onTechnical > onBattlemaster );
+	CHECK( aiTargetBeats( targetRating( 1, aiArmourAffinity( TANK[ PIERCING ], TANK, COUNT ), onBattlemaster, 900.0f, (ObjectID)9 ),
+												targetRating( 1, aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ), onTechnical, 100.0f, (ObjectID)2 ) ) );
 }
 
 TEST(a_unit_shoots_what_its_weapon_kills_best)
@@ -3396,44 +3438,50 @@ TEST(a_unit_shoots_what_its_weapon_kills_best)
 	/* nothing it can hurt rates 0, which still beats having no target: a unit with nothing it
 	   counters fires at whatever is there, the nearest first */
 	CHECK_NEAR( 0.0f, aiTargetKillRate( 800.0f, AI_CANNOT_KILL, 0.0f, SPEED ), 0.0001f );
-	CHECK( aiTargetBeats( targetRating( 1, 0.0f, 100.0f, (ObjectID)9 ), targetRating( 1, 0.0f, 400.0f, (ObjectID)2 ) ) );
+	CHECK( aiTargetBeats( targetRating( 1, 1.0f, 0.0f, 100.0f, (ObjectID)9 ), targetRating( 1, 1.0f, 0.0f, 400.0f, (ObjectID)2 ) ) );
 
-	/* the tiers: whoever just shot us is 2 wherever it stands; an armed enemy in reach that dies
-	   within the quick-kill window is 2 too; any other armed one 1; one that cannot shoot back 0,
-	   however quickly it dies */
+	/* the tiers: whoever just shot us is 2 wherever it stands; while something shoots us, an armed
+	   enemy in reach that dies within the quick-kill window is 2 too; any other armed one 1; one
+	   that cannot shoot back 0, however quickly it dies.  Not under fire, a quick kill is no tier of
+	   its own, so the armour decides: a Crusader does not take a Technical for dying fast */
 	const Real QUICK = INT_TO_REAL( AI_QUICK_KILL_FRAMES );
-	CHECK_EQ( aiTargetTier( TRUE, TRUE, FALSE, 5000.0f ), 2 );
-	CHECK_EQ( aiTargetTier( TRUE, FALSE, FALSE, AI_CANNOT_KILL ), 2 );
-	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, QUICK ), 2 );
-	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, QUICK + 1.0f ), 1 );
-	CHECK_EQ( aiTargetTier( FALSE, TRUE, FALSE, 60.0f ), 1 );
-	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, AI_CANNOT_KILL ), 1 );
-	CHECK_EQ( aiTargetTier( FALSE, FALSE, TRUE, 60.0f ), 0 );
+	CHECK_EQ( aiTargetTier( TRUE, TRUE, TRUE, FALSE, 5000.0f ), 2 );
+	CHECK_EQ( aiTargetTier( TRUE, TRUE, FALSE, FALSE, AI_CANNOT_KILL ), 2 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, TRUE, QUICK ), 2 );
+	CHECK_EQ( aiTargetTier( FALSE, FALSE, TRUE, TRUE, QUICK ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, TRUE, QUICK + 1.0f ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, FALSE, 60.0f ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, TRUE, AI_CANNOT_KILL ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, FALSE, TRUE, 60.0f ), 0 );
 
 	/* so the Battlemaster shooting the Humvee beats a Technical it would have to drive to, and
-	   loses to one already in reach that it finishes in seconds, on the rate */
+	   loses to one already in reach that it finishes in seconds, whose truck armour its gun is
+	   more made for than the tank's (affinities from the armour test above) */
+	const Real HUMVEE_ON_TANK = 0.383f;
+	const Real HUMVEE_ON_TRUCK = 0.654f;
 	humvee.m_damagePerShot = 2.5f;
 	const Real humveeTankFrames = aiFramesToKill( 400.0f, humvee );
 	humvee.m_damagePerShot = 5.0f;
 	const Real humveeTruckFrames = aiFramesToKill( 180.0f, humvee );
 	CHECK_NEAR( 1920.0f, humveeTankFrames, 0.001f );
 	CHECK_NEAR( 432.0f, humveeTruckFrames, 0.001f );
-	CHECK( aiTargetBeats( targetRating( aiTargetTier( TRUE, TRUE, TRUE, humveeTankFrames ), humveeOnTank, 0.0f, (ObjectID)9 ),
-												targetRating( aiTargetTier( FALSE, TRUE, FALSE, humveeTruckFrames ), humveeOnTruck, 0.0f, (ObjectID)2 ) ) );
-	CHECK( aiTargetBeats( targetRating( aiTargetTier( FALSE, TRUE, TRUE, humveeTruckFrames ), humveeOnTruck, 0.0f, (ObjectID)9 ),
-												targetRating( aiTargetTier( TRUE, TRUE, TRUE, humveeTankFrames ), humveeOnTank, 0.0f, (ObjectID)2 ) ) );
+	CHECK( aiTargetBeats( targetRating( aiTargetTier( TRUE, TRUE, TRUE, TRUE, humveeTankFrames ), HUMVEE_ON_TANK, humveeOnTank, 0.0f, (ObjectID)9 ),
+												targetRating( aiTargetTier( FALSE, TRUE, TRUE, FALSE, humveeTruckFrames ), HUMVEE_ON_TRUCK, humveeOnTruck, 0.0f, (ObjectID)2 ) ) );
+	CHECK( aiTargetBeats( targetRating( aiTargetTier( FALSE, TRUE, TRUE, TRUE, humveeTruckFrames ), HUMVEE_ON_TRUCK, humveeOnTruck, 0.0f, (ObjectID)9 ),
+												targetRating( aiTargetTier( TRUE, TRUE, TRUE, TRUE, humveeTankFrames ), HUMVEE_ON_TANK, humveeOnTank, 0.0f, (ObjectID)2 ) ) );
 
-	/* armed beats unarmed whatever the rate: no stopping for the dozer under the artillery */
-	CHECK( aiTargetBeats( targetRating( 1, 0.01f, 0.0f, (ObjectID)9 ), targetRating( 0, 100.0f, 0.0f, (ObjectID)2 ) ) );
+	/* armed beats unarmed whatever the armour or rate: no stopping for the dozer under the artillery */
+	CHECK( aiTargetBeats( targetRating( 1, 0.1f, 0.01f, 0.0f, (ObjectID)9 ), targetRating( 0, 2.0f, 100.0f, 0.0f, (ObjectID)2 ) ) );
 
-	/* a total order: tier, rate, distance, then the lower ObjectID, the same whichever is asked
-	   first, so the pick never depends on the order the partition hands candidates out in */
-	const AITargetRating a = targetRating( 1, 0.5f, 100.0f, (ObjectID)2 );
-	const AITargetRating b = targetRating( 1, 0.5f, 100.0f, (ObjectID)9 );
+	/* a total order: tier, armour, rate, distance, then the lower ObjectID, the same whichever is
+	   asked first, so the pick never depends on the order the partition hands candidates out in */
+	const AITargetRating a = targetRating( 1, 1.0f, 0.5f, 100.0f, (ObjectID)2 );
+	const AITargetRating b = targetRating( 1, 1.0f, 0.5f, 100.0f, (ObjectID)9 );
 	CHECK( aiTargetBeats( a, b ) );
 	CHECK( !aiTargetBeats( b, a ) );
 	CHECK( !aiTargetBeats( a, a ) );
-	CHECK( aiTargetBeats( targetRating( 1, 0.6f, 900.0f, (ObjectID)9 ), a ) );
+	CHECK( aiTargetBeats( targetRating( 1, 1.0f, 0.6f, 900.0f, (ObjectID)9 ), a ) );
+	CHECK( aiTargetBeats( targetRating( 1, 1.1f, 0.1f, 900.0f, (ObjectID)9 ), a ) );
 }
 
 /* AI.cpp: the scripted-priority search a hunter runs over the whole map picks in one pass over

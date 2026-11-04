@@ -1014,7 +1014,7 @@ Real Locomotor::getMaxSpeedForCondition(BodyDamageType condition) const
 }
 
 //-------------------------------------------------------------------------------------------------
-Real Locomotor::getMaxTurnRate(BodyDamageType condition) const
+Real Locomotor::getMaxTurnRate(BodyDamageType condition, const Object* obj) const
 {
 	Real turn;
 
@@ -1023,6 +1023,24 @@ Real Locomotor::getMaxTurnRate(BodyDamageType condition) const
 	else
 		turn = m_template->m_maxTurnRateDamaged;
 
+	/* A tank, car or bike swings onto a new order half as fast again as EA's TurnRate, and a healthy
+		 one no slower than GROUND_MIN_TURN_DEG_PER_SEC: EA's 60 degrees a second left an Overlord three
+		 seconds pointing the wrong way after a reversal. One scale for both rates, taken from the healthy
+		 one, so a damaged hull still turns slower by EA's ratio. Aircraft on treads or wheels (a
+		 helicopter or jet taxiing) keep their number. */
+	const Real GROUND_TURN_RATE_FACTOR = 1.5f;
+	const Real GROUND_MIN_TURN_DEG_PER_SEC = 100.0f;
+	if (obj != NULL && isGroundDrive() && !obj->isKindOf(KINDOF_AIRCRAFT))
+	{
+		Real scale = GROUND_TURN_RATE_FACTOR;
+		Real healthy = m_template->m_maxTurnRate;
+		Real minTurn = ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(GROUND_MIN_TURN_DEG_PER_SEC);
+		if (healthy > 0.0f && healthy * scale < minTurn)
+			scale = minTurn / healthy;	// a TurnRate of 0, a hull that cannot turn, stays 0
+		turn *= scale;
+	}
+
+	// the per-instance cap (setMaxTurnRate) has the last word over the scale above
 	if (turn > m_maxTurnRate)
 		turn = m_maxTurnRate;
 
@@ -1149,7 +1167,7 @@ void Locomotor::locoUpdate_moveTowardsAngle(Object* obj, Real goalAngle)
 PhysicsTurningType Locomotor::rotateTowardsPosition(Object* obj, const Coord3D& goalPos, Real *relAngle)
 {
 	BodyDamageType bdt = obj->getBodyModule()->getDamageState();
-	Real turnRate = getMaxTurnRate(bdt);
+	Real turnRate = getMaxTurnRate(bdt, obj);
 
 	PhysicsTurningType rotating = rotateObjAroundLocoPivot(obj, goalPos, turnRate, relAngle);
 	return rotating;
@@ -1338,8 +1356,8 @@ void Locomotor::locoUpdate_moveTowardsPosition(Object* obj, const Coord3D& chase
 	if (*blocked) 
 	{
 		physics->scrubVelocity2D(desiredSpeed); // stop if we are about to run into the blocking object.
-		Real turnRate = getMaxTurnRate(obj->getBodyModule()->getDamageState());
-		if (m_template->m_wanderWidthFactor == 0.0f) 
+		Real turnRate = getMaxTurnRate(obj->getBodyModule()->getDamageState(), obj);
+		if (m_template->m_wanderWidthFactor == 0.0f)
 		{
 			*blocked = (TURN_NONE != rotateObjAroundLocoPivot(obj, goalPos, turnRate));
 		}
@@ -1510,9 +1528,21 @@ void Locomotor::moveTowardsPositionTreads(Object* obj, PhysicsBehavior *physics,
 
 	Real dx = obj->getPosition()->x - goalPos.x;
 	Real dy = obj->getPosition()->y - goalPos.y;
-	
 
-	Real goalSpeed = (1.0f - angleCoeff) * desiredSpeed;
+
+	/* EA's speed fell to nothing at 45 degrees off the heading, so a tank stopped dead and pivoted
+		 after nearly every move order. It rolls through the turn now, slower the tighter it is, and
+		 stands to pivot only past TREAD_PIVOT_ANGLE, a hairpin. A helicopter taxiing on treads keeps
+		 EA's. */
+	const Real TREAD_PIVOT_ANGLE = PI * 0.75f;
+	Real rollCoeff = angleCoeff;
+	if (!obj->isKindOf(KINDOF_AIRCRAFT))
+	{
+		rollCoeff = (Real)fabs( relAngle ) / TREAD_PIVOT_ANGLE;
+		if (rollCoeff > 1.0f)
+			rollCoeff = 1.0f;
+	}
+	Real goalSpeed = (1.0f - rollCoeff) * desiredSpeed;
 
 
 //	if (speed < m_minTurnSpeed)
@@ -1604,7 +1634,7 @@ void Locomotor::moveTowardsPositionWheels(Object* obj, PhysicsBehavior *physics,
 {
 	BodyDamageType bdt = obj->getBodyModule()->getDamageState();
 	Real maxSpeed = getMaxSpeedForCondition(bdt);
-	Real maxTurnRate = getMaxTurnRate(bdt);
+	Real maxTurnRate = getMaxTurnRate(bdt, obj);
 	Real maxAcceleration = getMaxAcceleration(bdt);
 
 	// sanity, we cannot use desired speed that is greater than our max speed we are capable of moving at

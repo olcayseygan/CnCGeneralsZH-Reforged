@@ -2353,12 +2353,6 @@ void W3DModelDraw::adjustAnimSpeedToMovementSpeed()
 }
 
 //-------------------------------------------------------------------------------------------------
-Real W3DModelDraw::getHullHeadingLag() const
-{
-	return getDrawable()->getDrawnHeadingLag();
-}
-
-//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 {
 	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
@@ -2952,9 +2946,8 @@ void W3DModelDraw::handleClientTurretPositioning()
 			if (obj)
 			{
 				const AIUpdateInterface* ai = obj->getAIUpdateInterface();
-				// a turret aims from the logic heading, which the drawn hull of a tank or car trails
-				if (ai && ai->getTurretRotAndPitch((WhichTurretType)tslot, &turretAngle, &turretPitch))
-					turretAngle -= getHullHeadingLag();
+				if (ai)
+					ai->getTurretRotAndPitch((WhichTurretType)tslot, &turretAngle, &turretPitch);
 			}
 
 			// do turret, if any

@@ -478,8 +478,6 @@ protected:
 	void stopClientParticleSystems();
 	void doHideShowSubObjs(const std::vector<ModelConditionInfo::HideShowSubObjInfo>* vec);
 	virtual void adjustTransformMtx(Matrix3D& mtx) const;
-	/// how far the hull this model is drawn on trails its logic heading, which a turret aims from
-	virtual Real getHullHeadingLag() const;
 
 	Real getCurAnimDistanceCovered() const;
 	Bool setCurAnimDurationInMsec(Real duration);

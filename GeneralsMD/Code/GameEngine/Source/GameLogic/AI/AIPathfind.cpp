@@ -5193,7 +5193,7 @@ void Pathfinder::beginFlowSearch( const Object *obj )
 		{
 			const BodyDamageType damage = obj->getBodyModule()->getDamageState();
 			const Real speed = loco->getMaxSpeedForCondition( damage );
-			const Real turn = loco->getMaxTurnRate( damage );
+			const Real turn = loco->getMaxTurnRate( damage, obj );
 			// per frame over per frame: world units of driving in the time it takes to turn a radian,
 			// which is one cost unit per world unit here
 			if (speed > 0.01f && turn > 0.0001f)

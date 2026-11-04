@@ -2823,7 +2823,7 @@ void AIUpdateInterface::updateProgress( void )
 	}
 
 	Real turnBar = STUCK_TURN_EPSILON;
-	const Real rate = m_curLocomotor->getMaxTurnRate( damage );
+	const Real rate = m_curLocomotor->getMaxTurnRate( damage, self );
 	if (rate * 0.5f > turnBar)
 		turnBar = rate * 0.5f;
 

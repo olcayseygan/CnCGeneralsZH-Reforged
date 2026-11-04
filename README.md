@@ -176,7 +176,7 @@ own date-and-time name.
 3. The launcher finds your Zero Hour folder and lists every file it is about to write before it writes
    any. Each file it replaces is backed up first. Press Install, then Play.
 
-![The launcher's Home page in English: the wordmark and the tabs Health, Maps, Replays, Hotkeys, Mods, Options and Feedback along the top, a game picture on the left, Installation Ready to play, Game v3.2.0 installed, Launcher v1.7.0, a gold Play button and Reinstall](.github/media/launcher.jpg)
+![The launcher's Home page in English: the wordmark and the page tabs along the top, a game picture on the left, Installation Ready to play, Game v3.2.0 installed, Launcher v1.7.0, a gold Play button and Reinstall](.github/media/launcher.jpg)
 
 <sub>Launcher v1.7.0, Home page.</sub>
 

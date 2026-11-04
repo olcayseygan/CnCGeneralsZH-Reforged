@@ -43,8 +43,7 @@ public:
 	UnsignedInt getVersionNumber( void );						///< Return a 4-byte integer suitable for WOLAPI
 	AsciiString getAsciiVersion( void );						///< Return a human-readable version number
 	AsciiString getReleaseVersion( void );					///< The fork's release number as the tags write it, "v2.6.0"
-	UnicodeString getUnicodeVersion( void );				///< Return a human-readable version number, with " [<mod>]" under -mod
-	UnicodeString getUnicodeModName( void );				///< TheGlobalData->m_modName as text, empty without -mod
+	UnicodeString getUnicodeVersion( void );				///< Return a human-readable version number
 	UnicodeString getFullUnicodeVersion( void );		///< Return a human-readable version number
 	AsciiString getAsciiBuildTime( void );					///< Return a formated date/time string for build time
 	UnicodeString getUnicodeBuildTime( void );			///< Return a formated date/time string for build time

@@ -1518,24 +1518,9 @@ void AISkirmishPlayer::newMap( void )
 	/* Get our proper build list. */
 	AsciiString mySide = m_player->getSide();
 	DEBUG_LOG(("AI Player side is %s\n", mySide.str()));
-	// -modfactions: a mod faction's own mod's list ("M<n>~America", its AIData.ini), retail's of the side without one
-	const PlayerTemplate *pt = m_player->getPlayerTemplate();
-	const Int mod = pt != NULL ? pt->getModIndex() : -1;	// no template: a map whose faction is gone
-	const AISideBuildList *build = TheAI->getAiData()->findBuildList( mySide, mod );
+	const AISideBuildList *build = TheAI->getAiData()->findBuildList( mySide );
 	if (build) {
 		BuildListInfo *buildList = build->m_buildList->duplicate();
-		// a mod without a list of its own gets retail's, read as the mod's own building of each name
-		// where the mod has one.  Before this its command center was torn down below and put back as
-		// retail's.
-		const Bool retailList = mod >= 0 && build->m_side == mySide;
-		for (BuildListInfo *info = buildList; retailList && info != NULL; info = info->getNext())
-		{
-			AsciiString modName;
-			modName.format("M%d~%s", mod + 1, info->getTemplateName().str());
-			const ThingTemplate *modPlan = TheThingFactory->findTemplate( modName );
-			if (modPlan != NULL)
-				info->setTemplateName( modPlan->getName() );
-		}
 		adjustBuildList(buildList); // adjust to  our start position.
 		m_player->setBuildList(buildList);
 		computeCenterAndRadiusOfBase(&m_baseCenter, &m_baseRadius);

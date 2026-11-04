@@ -688,7 +688,7 @@ void MissileAIUpdate::doKillState(void)
 	{
 		Coord3D aim;
 		Weapon::pointFromBodyOffset(getGoalObject(), m_aimOffset, aim);
-		// a missile with no locomotor (an immobile hazard a mod fires as one) gets the 1.0 the idle check below uses
+		// a missile with no locomotor (an immobile hazard fired as one) gets the 1.0 the idle check below uses
 		Real closeEnough = curLoco ? curLoco->getMaxSpeedForCondition(BODY_PRISTINE) : 1.0f;
 		const Coord3D* pos = obj->getPosition();
 		// over the point and on the body: the height the locomotor holds over a goal is its own
@@ -757,7 +757,7 @@ void MissileAIUpdate::updateChaseOffset()
 	const Real SWAY_FADE_FAR = 150.0f;
 	const Real SWAY_FADE_NEAR = 60.0f;
 
-	// a mod missile can come without a locomotor and fly on its launch force alone; nothing to steer
+	// a missile can come without a locomotor and fly on its launch force alone; nothing to steer
 	Locomotor* curLoco = getCurLocomotor();
 	if (curLoco == NULL)
 		return;

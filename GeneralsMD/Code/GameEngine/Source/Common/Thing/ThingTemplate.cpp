@@ -41,7 +41,6 @@
 #define DEFINE_BUILDABLE_STATUS_NAMES			// for BuildableStatusNames[]
 
 #include "Common/DamageFX.h"
-#include "Common/FileSystem.h"
 #include "Common/GameAudio.h"
 #include "Common/GameCommon.h"
 #include "Common/GlobalData.h"
@@ -610,9 +609,9 @@ void ThingTemplate::parseModuleName(INI* ini, void *instance, void* store, const
 			&& self->m_moduleBeingReplacedName.isNotEmpty()
 			&& self->m_moduleBeingReplacedName != tokenStr)
 	{
-		/* A tag that holds a module of another type means a mod's data numbered the object's modules
-			 differently: Shockwave's Tank_ChinaBunker ModuleTag_05 is no StructureBody, and BalanceReforged.ini's
-			 replacement of it stopped the game at start.  The module is read to its End and dropped, so the
+		/* A tag that holds a module of another type means the loaded data numbered the object's modules
+			 differently from the patch: a Tank_ChinaBunker whose ModuleTag_05 is no StructureBody stopped the
+			 game at start on BalanceReforged.ini's replacement of it.  The module is read to its End and dropped, so the
 			 parse stays in step, and parseReplaceModule puts the template back as it was before the block. */
 		DEBUG_LOG(("[LINE: %d - FILE: '%s'] ReplaceModule %s on %s holds a %s, not a %s; the block is skipped.\n",
 			ini->getLineNum(), ini->getFilename().str(), self->m_moduleBeingReplacedTag.str(), self->getName().str(),
@@ -635,7 +634,7 @@ void ThingTemplate::parseModuleName(INI* ini, void *instance, void* store, const
 	ModuleData* data = TheModuleFactory->newModuleDataFromINI(ini, tokenStr, type, moduleTagStr);
 	if (data == NULL)
 	{
-		// a module name this exe does not have, usually a mod written for another build
+		// a module name this exe does not have, usually data written for another build
 		g_LastErrorDump.format("[LINE: %d - FILE: '%s'] Unknown module '%s' (%s) on %s\n",
 			ini->getLineNum(), ini->getFilename().str(), tokenStr.str(), moduleTagStr.str(), self->getName().str());
 		DEBUG_LOG(("%s", g_LastErrorDump.str()));
@@ -645,7 +644,7 @@ void ThingTemplate::parseModuleName(INI* ini, void *instance, void* store, const
 	{
 		/* read to its End and dropped: a special power module with no template faults placing the
 			 object, and an upgrade with no list does nothing.  Inside ReplaceModule the module it was
-			 to replace comes back, so the mod's own stands. */
+			 to replace comes back, so the loaded data's own stands. */
 		DEBUG_LOG(("[LINE: %d - FILE: '%s'] %s %s on %s is skipped.\n",
 			ini->getLineNum(), ini->getFilename().str(), tokenStr.str(), moduleTagStr.str(), self->getName().str()));
 		self->m_replaceModuleSkipped = TRUE;
@@ -988,7 +987,7 @@ void ArmorTemplateSet::parseArmor( INI* ini, void *instance, void * /*store*/, c
 		return;
 	}
 	self->m_template = TheArmorStore->findArmorTemplate(name);
-	// ThingTemplate::parseArmorTemplateSet passes over a patch file's set that names an armor a mod dropped
+	// ThingTemplate::parseArmorTemplateSet passes over a patch file's set that names an armor the data lacks
 	self->m_namesMissingArmor = (self->m_template == NULL);
 }
 
@@ -1015,8 +1014,8 @@ void ThingTemplate::parseArmorTemplateSet( INI* ini, void *instance, void * /*st
 	ws.parseArmorTemplateSet(ini);
 
 	/* A patch file's set naming an armor the loaded data lacks would leave the object with no armor
-		 at all under those conditions, every hit at full damage: Contra has no ChemSuitHumanArmor, so
-		 FixesReforged.ini stripped its Rangers' Chemical Suits.  The object keeps the set it had. */
+		 at all under those conditions, every hit at full damage: on data with no ChemSuitHumanArmor,
+		 FixesReforged.ini stripped the Rangers' Chemical Suits.  The object keeps the set it had. */
 	if (ini->getLoadType() == INI_LOAD_MULTIFILE && ws.namesMissingArmor())
 	{
 		// a nameless template is ThingFactory's scratch for a patch of a missing object, logged there
@@ -1068,12 +1067,12 @@ void ThingTemplate::parseWeaponTemplateSet( INI* ini, void *instance, void * /*s
 
 	/* A patch file's set naming a weapon the loaded data lacks would arm the object with nothing in
 		 that slot: FixesReforged.ini's Toxin Tunnel Defender and Stinger sets name EA's Chem_ rockets,
-		 which Contra's Weapon.ini leaves out, so Contra's own two went unarmed.  The object keeps the
+		 and a Weapon.ini that leaves them out left those two unarmed.  The object keeps the
 		 set it had, as a patch naming a missing object or module is passed over. */
 	if (ini->getLoadType() == INI_LOAD_MULTIFILE && ws.namesMissingWeapon())
 	{
 		// a nameless template is ThingFactory's scratch for a patch of a missing object, already logged
-		// there and thrown away with everything in it (GC_Chem_GLAScudStorm under Contra)
+		// there and thrown away with everything in it
 		if (self->getName().isNotEmpty())
 			DEBUG_LOG(("[LINE: %d - FILE: '%s'] WeaponSet on %s names a weapon that is not defined; the set is skipped.\n",
 				ini->getLineNum(), ini->getFilename().str(), self->getName().str()));
@@ -1642,15 +1641,6 @@ UnsignedInt ThingTemplate::getMaxSimultaneousOfType() const
 
 
 
-
-//-------------------------------------------------------------------------------------------------
-Int ThingTemplate::getModIndex() const
-{
-	Int mod = -1;
-	AsciiString bareName;
-	FileSystem::splitModName( getName(), &mod, &bareName );
-	return mod;
-}
 
 //-------------------------------------------------------------------------------------------------
 Bool ThingTemplate::isEquivalentTo(const ThingTemplate* tt) const

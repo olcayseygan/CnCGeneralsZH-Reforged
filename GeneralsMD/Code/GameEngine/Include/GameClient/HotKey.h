@@ -161,9 +161,6 @@ public:
 	/// FixedOrderKeys in Hotkeys.ini: FALSE gives the orders their labels' letters, as shipped
 	static Bool fixedOrderKeys( void );
 	static void setFixedOrderKeys( Bool fixed );
-	/** The name Hotkeys.ini gives a button: a mod's own (-modfactions' "M<n>~") or, under a plain
-		* -mod, the last mod's as "<scope>:<button>", retail's as it is; what findPlayerKey looks up. */
-	static std::string fileButtonName( const AsciiString& button );
 
 	/// Hotkeys.ini out of the user data folder: the button letters afresh, its CommandMap blocks over
 	/// the records the MetaMap holds.  A block that will not parse ends the file there.

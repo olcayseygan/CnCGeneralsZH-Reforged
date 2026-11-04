@@ -383,9 +383,6 @@ const UpgradeTemplate *UpgradeCenter::findUpgradeByKey( NameKeyType key ) const
 		if( upgrade->getUpgradeNameKey() == key )
 			return upgrade;
 
-	NameKeyType retailKey;
-	if( TheModNamespace.findRetailKey( key, MODNAME_UPGRADE, &retailKey ) )
-		return findUpgradeByKey( retailKey );
 	// item not found
 	return NULL;
 }
@@ -418,7 +415,7 @@ const UpgradeTemplate *UpgradeCenter::requireUpgrade( const AsciiString &name, c
 //-------------------------------------------------------------------------------------------------
 UpgradeTemplate *UpgradeCenter::newUpgrade( const AsciiString& name )
 {
-	// every upgrade is one bit of UpgradeMaskType; -modfactions puts every mod's beside retail's
+	// every upgrade is one bit of UpgradeMaskType
 	if( m_nextTemplateMaskBit >= UPGRADE_MAX_COUNT )
 	{
 		DEBUG_LOG(( "Upgrade %s would be upgrade number %d, and UPGRADE_MAX_COUNT is %d\n", name.str(), m_nextTemplateMaskBit + 1, UPGRADE_MAX_COUNT ));

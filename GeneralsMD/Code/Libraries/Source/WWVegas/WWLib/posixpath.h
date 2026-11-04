@@ -84,7 +84,7 @@ std::vector<std::string> PosixPath_Overlays();
 // P1 step 2: the roots are read-only.  With this set, every zh_* call that would write a RELATIVE
 // path - create, truncate, append, update, remove, unlink, rename (either end), mkdir - is refused
 // with EROFS and logged once per path, so nothing the engine addresses relative to the install can
-// change it.  Absolute paths (the user data directory, a -mod folder, the logs) are the engine's
+// change it.  Absolute paths (the user data directory, the logs) are the engine's
 // deliberate destinations and pass.  PosixMain sets it for every run; -writableRoot turns it off, for
 // a harness's armed control only.  Reads, and the overlays, are unaffected.
 void PosixPath_Set_Root_Read_Only(bool read_only);

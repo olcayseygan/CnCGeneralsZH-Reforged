@@ -234,7 +234,7 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 	{
 		return;
 	}
-	// a mod helicopter can die with no locomotor chosen (its set names none for the current
+	// a helicopter can die with no locomotor chosen (its set names none for the current
 	// condition); nothing holds it up then, so it drops on plain gravity and the spiral still runs
 	Locomotor *locomotor = getObject()->getAIUpdateInterface()->getCurLocomotor();
 	if( locomotor )

@@ -180,7 +180,7 @@ void RefreshGameInfoWindow(GameInfo *gameInfo, UnicodeString gameName)
 		}
 		else
 		{
-			// our icon by name (GameinfoTURKIYE, a mod's its base side's), else the template's own
+			// our icon by name (GameinfoTURKIYE), else the template's own
 			const PlayerTemplate *fact = ThePlayerTemplateStore->getNthPlayerTemplate(playerTemplate);
 			const Image *icon = ControlBarSideImage(fact, "Gameinfo");
 			GadgetListBoxAddEntryImage(listBoxPlayers, icon ? icon : fact->getSideIconImage(),addedRow, 0, 22,25);

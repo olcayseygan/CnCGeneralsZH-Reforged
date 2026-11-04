@@ -62,21 +62,17 @@ public:
 	void reset();
 	void update() { }
 
-	/// mod: -modfactions, the 0-based mod whose own Rank.ini a faction climbs; -1, or a mod that ships
-	/// none, is retail's
-	Int getRankLevelCount(Int mod = -1) const;
+	Int getRankLevelCount() const;
 
 	// note that level is 1...n, NOT 0...n-1
-	const RankInfo* getRankInfo(Int level, Int mod = -1) const;
+	const RankInfo* getRankInfo(Int level) const;
 
 	static void friend_parseRankDefinition(INI* ini);
 
 private:
 
 	typedef std::vector<RankInfo*> RankInfoVec;
-	const RankInfoVec& ranksFor(Int mod) const;
 	RankInfoVec m_rankInfos;
-	std::vector<RankInfoVec> m_modRankInfos;		///< -modfactions: each mod's Rank.ini, loaded in its mod pass
 };
 
 extern RankInfoStore* TheRankInfoStore;

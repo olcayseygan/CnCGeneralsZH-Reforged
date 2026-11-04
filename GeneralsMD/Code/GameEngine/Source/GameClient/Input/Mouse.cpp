@@ -1091,7 +1091,7 @@ void Mouse::drawTooltip( void )
 		Color textColor = GMC(m_tooltipFrameTextColor);
 		if( !ControlBarDrawNinePieceBox( art.cursor, box, scale ) )
 		{
-			// no art for it (a mod's sheet): Mouse.ini's box
+			// no art for it: Mouse.ini's box
 			TheDisplay->drawFillRect(xPos, yPos, boxWidth, boxHeight, GMC(m_tooltipBackColor));
 			TheDisplay->drawOpenRect(xPos, yPos, boxWidth, boxHeight, 1.0, COLOR(Border));
 			textColor = GMC(m_tooltipTextColor);
@@ -1290,7 +1290,7 @@ void INI::parseMouseCursorDefinition( INI* ini )
 			ini->initFromINI( cursorInfo, TheMouseCursorFieldParseTable );
 
 			// every platform's cursor table holds MAX_2D_CURSOR_DIRECTIONS images a cursor, and loads as many
-			// as Directions says: more (mod data; shipped is 8) wrote past it
+			// as Directions says: more (shipped is 8) wrote past it
 			if( cursorInfo->numDirections > MAX_2D_CURSOR_DIRECTIONS )
 				cursorInfo->numDirections = MAX_2D_CURSOR_DIRECTIONS;
 		}

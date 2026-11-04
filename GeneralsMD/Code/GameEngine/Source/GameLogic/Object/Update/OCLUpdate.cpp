@@ -130,8 +130,8 @@ UpdateSleepTime OCLUpdate::update( void )
 	{
 		// push the timer back, but only once it is running: 0 means "start the first delay", and
 		// bumping it off 0 skipped that delay.  Something carried from birth (a crate in a parachute)
-		// keeps retail's bump and fires on its first free frame: ShockWave's supply crates are
-		// deleted two frames after they land, and a first delay there lost every drop's money.
+		// keeps retail's bump and fires on its first free frame: a supply crate
+		// deleted two frames after it lands, and a first delay there lost every drop's money.
 		if( m_nextCreationFrame != 0 || getObject()->isDisabledByType( DISABLED_HELD ) )
 			m_nextCreationFrame++;
 		return UPDATE_SLEEP_NONE;

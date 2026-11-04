@@ -555,7 +555,7 @@ static void putUpgradeTargets( BuildTooltipCard &card, const UpgradeTemplate *up
 //-------------------------------------------------------------------------------------------------
 /** The class of `thing`'s unconditioned armour: TOOLTIP:Armor and the Armor block's name with its first
 	* "Armor" taken out (TankArmor reads TOOLTIP:ArmorTank, StructureArmorTough TOOLTIP:ArmorStructureTough).
-	* A mod's armour the string table does not know shows that name itself.  Empty when the set wears none. */
+	* An armour the string table does not know shows that name itself.  Empty when the set wears none. */
 //-------------------------------------------------------------------------------------------------
 static UnicodeString armorClass( const ThingTemplate *thing )
 {
@@ -1267,8 +1267,8 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 		GadgetStaticTextSetText(win, name);
 	}
 
-	// the price is drawn with its icon by the card now; a mod's copy of EA's layout still has the
-	// window that used to say it, empty
+	// the price is drawn with its icon by the card now; EA's layout still has the window that used
+	// to say it, empty
 	static const NameKeyType costID = TheNameKeyGenerator->nameToKey( "ControlBarPopupDescription.wnd:StaticTextCost" );
 	win = TheWindowManager->winGetWindowFromId( m_buildToolTipLayout->getFirstWindow(), costID );
 	if( win )

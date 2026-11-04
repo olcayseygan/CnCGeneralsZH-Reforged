@@ -160,7 +160,7 @@ static void parseAllVetLevelsAsciiString( INI* ini, void* /*instance*/, void * s
 //-------------------------------------------------------------------------------------------------
 /* The laser object is looked up when the weapon fires, so a name nothing defines draws no beam.  A
 	 patch file loads after every object: one naming a laser the loaded data lacks (FixesReforged.ini's
-	 Lazr_PatriotLaserBeam under Contra) leaves the weapon the beam it had. */
+	 Lazr_PatriotLaserBeam on data without it) leaves the weapon the beam it had. */
 static void parseLaserName( INI* ini, void* /*instance*/, void * store, const void* /*userData*/ )
 {
 	AsciiString name = ini->getNextAsciiString();
@@ -1751,9 +1751,6 @@ WeaponTemplate *WeaponStore::findWeaponTemplatePrivate( NameKeyType key ) const
 	if( it != m_weaponTemplateHashMap.end() )
 		return it->second;
 
-	NameKeyType retailKey;
-	if( TheModNamespace.findRetailKey( key, MODNAME_WEAPON, &retailKey ) )
-		return findWeaponTemplatePrivate( retailKey );
 	return NULL;
 
 }
@@ -2012,8 +2009,8 @@ void WeaponStore::postProcessLoad()
 		else
 		{
 			/* The first definition stands and the block is read and dropped.  WeaponReforged.ini keeps
-				 copies of EA weapons FixesReforged.ini hands out, for a mod whose Weapon.ini leaves them out
-				 (Contra has no Demo_DestroyedWeapon); where the loaded data has the weapon, its own wins.
+				 copies of EA weapons FixesReforged.ini hands out; where the loaded data has the weapon, its
+				 own wins.
 				 This used to return mid-block, and the next field line stopped the load as an unknown block.
 				 A map.ini block lands here too, as it did in retail: EA parsed it into a copy nothing pointed
 				 at, and the campaign was tuned with those edits lost.  Applying them gave Generals USA04's
@@ -2028,7 +2025,7 @@ void WeaponStore::postProcessLoad()
 	}
 	else if (ini->getLoadType() == INI_LOAD_MULTIFILE)
 	{
-		// A mod's Weapon.ini without this weapon: the block is read into a scratch template and
+		// A Weapon.ini without this weapon: the block is read into a scratch template and
 		// dropped, as ThingFactory::parseObjectDefinition does for a missing object.
 		DEBUG_LOG(("[LINE: %d in '%s'] Weapon '%s' is patched but was never defined; the block is skipped.\n", ini->getLineNum(), ini->getFilename().str(), c));
 		WeaponTemplate *scratch = newInstance(WeaponTemplate);
@@ -3088,7 +3085,7 @@ Bool Weapon::privateFireWeapon(
 			// go through other weapons in weapon set
 			// set their m_whenWeCanFireAgain to this guy's delay
 			// set their m_status to this guy's status
-			// Only a weapon of the set itself: a FireWeaponUpdate gun is not one, and ShockWave's EMP Patriot
+			// Only a weapon of the set itself: a FireWeaponUpdate gun is not one, and a Patriot's
 			// emitter firing every 750 ms held the battery's missiles in their wait for good.
 
 			if ( sourceObj->isReloadTimeShared() && sourceObj->getWeaponInWeaponSlot( m_wslot ) == this )

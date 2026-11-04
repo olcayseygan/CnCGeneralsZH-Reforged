@@ -272,8 +272,8 @@ void ParticleUplinkCannonUpdate::onObjectCreated()
 	m_specialPowerModule = obj->getSpecialPowerModule( data->m_specialPowerTemplate );
 	if( !m_specialPowerModule )
 	{
-		// FixesReforged.ini replaces the Superweapon General's cannon module naming EA's power, and a
-		// mod that gives that cannon a power of its own name keeps it on the building's special power
+		// FixesReforged.ini replaces the Superweapon General's cannon module naming EA's power, and
+		// data that gives that cannon a power of its own name keeps it on the building's special power
 		// module. Drive the building's power of the same kind.
 		m_specialPowerModule = obj->findSpecialPowerModuleInterface( data->m_specialPowerTemplate->getSpecialPowerType() );
 	}

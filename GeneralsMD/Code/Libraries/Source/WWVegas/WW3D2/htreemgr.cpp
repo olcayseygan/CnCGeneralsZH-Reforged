@@ -52,7 +52,6 @@
 #include "chunkio.h"
 #include "wwmemlog.h"
 #include "w3dexclusionlist.h"
-#include "proto.h"
 
 
 /*********************************************************************************************** 
@@ -152,19 +151,6 @@ void HTreeManagerClass::Free_All_Trees_With_Exclusion_List(const W3DExclusionLis
 	// or copying it to the new tail index if it is excluded.
 	int new_tail = 0;
 
-	// The kept trees go back into the hash under the keys they had, taken before anything is
-	// deleted: a mod's tree is filed under the mod's prefix and its name, which the name alone
-	// does not give back.
-	DynamicVectorClass<StringClass> kept_keys;
-	DynamicVectorClass<HTreeClass *> kept_trees;
-	HashTemplateIterator<StringClass,HTreeClass*> ite(TreeHash);
-	for (ite.First(); !ite.Is_Done(); ite.Next()) {
-		if (exclusion_list.Is_Excluded(ite.Peek_Value())) {
-			kept_keys.Add(ite.Peek_Key());
-			kept_trees.Add(ite.Peek_Value());
-		}
-	}
-
 	int treeidx;
 	for (treeidx =0; treeidx < MAX_TREES; treeidx++) {
 		if (TreePtr[treeidx] != NULL) {
@@ -189,9 +175,12 @@ void HTreeManagerClass::Free_All_Trees_With_Exclusion_List(const W3DExclusionLis
 	TreeHash.Remove_All();
 
 	// Add back any trees that were not deleted
-	for (int i = 0; i < kept_trees.Count(); i++)
+	for (treeidx=0; treeidx < new_tail; treeidx++)
 	{
-		TreeHash.Insert(kept_keys[i],kept_trees[i]);
+		// Insert to hash table for fast name based search
+		StringClass lower_case_name(TreePtr[treeidx]->Get_Name(),true);
+		_strlwr(lower_case_name.Peek_Buffer());
+		TreeHash.Insert(lower_case_name,TreePtr[treeidx]);
 	}
 }
 
@@ -222,12 +211,9 @@ int HTreeManagerClass::Load_Tree(ChunkLoadClass & cload)
 		delete newtree;
 		goto Error;
 
-	} else if (Get_Tree(StringClass(WW3D_Mod_Prefix,true) + newtree->Get_Name()) != NULL) {
+	} else if (Get_Tree_ID(newtree->Get_Name()) != -1) {
 
-		// tree with this name already exists, reject it! A tree read from a mod's file is filed
-		// under the mod's prefix and its name, so only the same mod's copy counts here. The check
-		// goes by key, not Get_Tree_ID: a mod's tree carries the bare name too, and a scan by name
-		// would turn the retail tree away.
+		// tree with this name already exists, reject it!
 		delete newtree;
 		goto Error;
 
@@ -238,8 +224,7 @@ int HTreeManagerClass::Load_Tree(ChunkLoadClass & cload)
 		NumTrees++;
 
 		// Insert to hash table for fast name based search
-		StringClass lower_case_name(WW3D_Mod_Prefix,true);
-		lower_case_name += newtree->Get_Name();
+		StringClass lower_case_name(newtree->Get_Name(),true);
 		_strlwr(lower_case_name.Peek_Buffer());
 		TreeHash.Insert(lower_case_name,newtree);
 	}

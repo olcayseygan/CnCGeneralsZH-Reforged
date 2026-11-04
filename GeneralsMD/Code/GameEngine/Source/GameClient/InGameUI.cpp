@@ -221,7 +221,7 @@ struct HudTray
 	* the border alone, as its shipped column does.  What else is the side's is the plate under every
 	* readout, a piece of its own button sheet (<side>ProHudCellPlate in ReforgedHud<side>Powers).  A
 	* sheet without the plate yet gets HudReadout_draw's solid one.  A side no build is named for, an
-	* observer's or a mod's, wears America's. */
+	* observer's, wears America's. */
 //-------------------------------------------------------------------------------------------------
 struct HudCellStyle
 {
@@ -492,7 +492,7 @@ static void drawHudTab( const Image *art, const IRegion2D &tab, Int hangs, Displ
 //-------------------------------------------------------------------------------------------------
 /** The cameo a special power is fired from.  A SpecialPowerTemplate carries no art of its own -
 	* the picture lives on whichever command button launches it - so the button list is what has to
-	* be asked.  A power with no button anywhere (a scripted one, a mod's) draws as an empty box
+	* be asked.  A power with no button anywhere (a scripted one) draws as an empty box
 	* with its countdown in it, which is still the timer it was asked for. */
 //-------------------------------------------------------------------------------------------------
 static const CommandButton *powerButton( const SpecialPowerTemplate *powerTemplate )
@@ -558,7 +558,7 @@ static void drawHudCellBorder( const IRegion2D &cameo, Color border )
 	* INVALID_BUILD_PLACEMENT are two names in CursorININames[] that no shipped Mouse.ini ever
 	* defines, so asking for them left m_cursorInfo empty and drew nothing at all - the pointer
 	* simply vanished for as long as something was being placed.  Honour the build cursors when art
-	* for them does exist (a mod may add it), and otherwise fall back to cursors that are always
+	* for them does exist, and otherwise fall back to cursors that are always
 	* there: the crosshair for a spot that can be built on, the no-go pointer for one that cannot. */
 //-------------------------------------------------------------------------------------------------
 static Mouse::MouseCursor placementCursor( Bool legal )
@@ -1877,7 +1877,7 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 		// EA's guard marker is one picture, the ring with the shield in its middle, so sizing it to
 		// the wheeled radius stretched the shield too.  The two are drawn apart (Tools/guard_marker.py):
 		// the ring at the radius, the shield, half the picture's width, at the size it has unwheeled.
-		// A mod's own marker stays one picture
+		// any other marker texture stays one picture
 		m_radiusCursors[cursorType].createRadiusDecal(pos, radius, controller, m_curRadiusCursor, "ReforgedGuardRing");
 		m_radiusCursors[cursorType].createRadiusDecal(pos, unwheeled * 0.5f, controller, m_curRadiusCursorCentre, "ReforgedGuardCentre");
 	}

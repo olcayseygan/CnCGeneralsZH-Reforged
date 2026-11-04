@@ -1623,8 +1623,7 @@ const ObjectCreationList *ObjectCreationListStore::findObjectCreationList(const 
   ObjectCreationListMap::const_iterator it = m_ocls.find(NAMEKEY(name));
   if (it == m_ocls.end())
 	{
-		AsciiString retailName;
-		return TheModNamespace.findRetailName(AsciiString(name), MODNAME_OCL, &retailName) ? findObjectCreationList(retailName.str()) : NULL;
+		return NULL;
 	}
 	else
 	{

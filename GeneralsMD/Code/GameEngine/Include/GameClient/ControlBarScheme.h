@@ -81,7 +81,6 @@ public:
 	ICoord2D m_position;					///< the position we'll draw it at
 	ICoord2D m_size;							///< the size of the image needed when we draw it
 	Image *m_image;								///< the actual pointer to the mapped image
-	const Image *m_wideImage;			///< "<image>Wide", drawn while the command grid is eighteen windows wide; NULL when none is mapped
 
 	// m_layer is where the image will get drawn,  everything in layer 0-2 gets drawn during the forground draw
 	// the layers 3-5 gets drawn during the background draw
@@ -379,8 +378,6 @@ private:
 //-----------------------------------------------------------------------------
 // EXTERNALS //////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
-/// a mod's faction, which gets our American power tray (owner's call)
-Bool ControlBarIsModFaction( const PlayerTemplate *pt );
 /// a side's picture of one family, prefix SSObserver, SSScore, FactionPicker or Gameinfo: the prefix and
 /// the template's name (less "Faction" and "General" but for FactionPicker: SSScoreAmericaLaser,
 /// FactionPickerFactionAmericaLaserGeneral), else the prefix and the base name of the country its base

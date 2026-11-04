@@ -495,52 +495,28 @@ static WideChar fixedButtonKey( const AsciiString& lowerName, Int commandType )
 	return 0;
 }
 
-/** The scope Hotkeys.ini names mod `mod`'s buttons by, "<scope>:<button>": the -mod folder's name,
-	* lower case and without spaces.  The launcher's Hotkeys page uses the same (hotkeys.js, modScope). */
-static std::string modScope( Int mod )
+/** The player's key for a button, into *letter; FALSE leaves it alone. */
+static Bool findPlayerKey( const std::map< std::string, WideChar >& keys, const std::string& bare, WideChar *letter )
 {
-	std::string path( TheGlobalData->m_mods[ mod ].str() );
-	while( !path.empty() && ( path[ path.size() - 1 ] == '\\' || path[ path.size() - 1 ] == '/' ) )
-		path.erase( path.size() - 1 );
-	const size_t slash = path.find_last_of( "\\/" );
-	if( slash != std::string::npos )
-		path.erase( 0, slash + 1 );
-	std::string scope;
-	for( size_t at = 0; at < path.size(); at++ )
-		if( !isspace( (unsigned char)path[ at ] ) )
-			scope += (char)tolower( (unsigned char)path[ at ] );
-	return scope;
+	std::map< std::string, WideChar >::const_iterator it = keys.find( bare );
+	if( it == keys.end() )
+		return FALSE;
+	*letter = it->second;
+	return TRUE;
 }
-
-/** A lower case button name without the "m<n>~" -modfactions puts on a mod's own names; *mod gets
-	* that mod's index, or -1 for a name with no prefix. */
-static std::string withoutModPrefix( const char *lowerName, Int *mod )
-{
-	*mod = -1;
-	const char *tilde = strchr( lowerName, '~' );
-	if( lowerName[ 0 ] != 'm' || tilde == NULL || tilde == lowerName + 1 )
-		return lowerName;
-	for( const char *digit = lowerName + 1; digit < tilde; digit++ )
-		if( !isdigit( (unsigned char)*digit ) )
-			return lowerName;
-	*mod = atoi( lowerName + 1 ) - 1;
-	return tilde + 1;
-}
-
-static Bool findPlayerKey( const std::map< std::string, WideChar >& keys, const std::string& bare, Int ownMod, WideChar *letter );
 
 /** The player's key for a button standing in command bar slot barSlot (-1 off the bar), into *letter:
 	* his "<button>@<barSlot + 1>" there, else his "<button>".  FALSE leaves *letter alone. */
-static Bool findPlayerSlotKey( const std::map< std::string, WideChar >& keys, const std::string& bare, Int ownMod, Int barSlot, WideChar *letter )
+static Bool findPlayerSlotKey( const std::map< std::string, WideChar >& keys, const std::string& bare, Int barSlot, WideChar *letter )
 {
 	if( barSlot >= 0 )
 	{
 		char at[ 16 ];
 		snprintf( at, sizeof( at ), "@%d", barSlot + 1 );
-		if( findPlayerKey( keys, bare + at, ownMod, letter ) )
+		if( findPlayerKey( keys, bare + at, letter ) )
 			return TRUE;
 	}
-	return findPlayerKey( keys, bare, ownMod, letter );
+	return findPlayerKey( keys, bare, letter );
 }
 
 /** How strongly the command button win, in command bar slot barSlot or -1, holds key, the map's
@@ -552,43 +528,13 @@ static Int keyClaim( GameWindow *win, const AsciiString& key, Int barSlot )
 	const CommandButton *command = (const CommandButton *)GadgetButtonGetData( win );
 	AsciiString lower = command->getName();
 	lower.toLower();
-	Int mod = -1;
-	const std::string bare = withoutModPrefix( lower.str(), &mod );
 	WideChar letter = 0;
-	if( findPlayerSlotKey( s_playerButtonKeys, bare, mod, barSlot, &letter ) )
+	if( findPlayerSlotKey( s_playerButtonKeys, std::string( lower.str() ), barSlot, &letter ) )
 		return letter != 0 && HotKeyManager::nameOf( letter ) == key ? 1 : 0;
 	if( s_commandBarGrid && barSlot >= 0 )
 		return 0;
-	const WideChar fixed = fixedButtonKey( AsciiString( bare.c_str() ), command->getCommandType() );
+	const WideChar fixed = fixedButtonKey( lower, command->getCommandType() );
 	return fixed != 0 && HotKeyManager::nameOf( fixed ) == key ? 2 : 0;
-}
-
-/** The player's key for a button, into *letter; FALSE leaves it alone.  A mod's own button (ownMod,
-	* under -modfactions) takes only its mod's "<scope>:<button>" entry.  A plain name, which under a
-	* plain -mod may be any loaded mod's, takes the last loaded mod's scoped entry that exists, then
-	* the unscoped one, which is retail's. */
-static Bool findPlayerKey( const std::map< std::string, WideChar >& keys, const std::string& bare, Int ownMod, WideChar *letter )
-{
-	std::map< std::string, WideChar >::const_iterator it;
-	const Int modCount = TheGlobalData ? (Int)TheGlobalData->m_mods.size() : 0;
-	for( Int mod = modCount - 1; mod >= 0; mod-- )
-	{
-		if( ownMod >= 0 && mod != ownMod )
-			continue;
-		it = keys.find( modScope( mod ) + ":" + bare );
-		if( it != keys.end() )
-		{
-			*letter = it->second;
-			return TRUE;
-		}
-	}
-	if( ownMod >= 0 )
-		return FALSE;
-	it = keys.find( bare );
-	if( it == keys.end() )
-		return FALSE;
-	*letter = it->second;
-	return TRUE;
 }
 
 static Bool isOneOf( WideChar letter, const WideChar *letters, Int count )
@@ -643,23 +589,7 @@ WideChar HotKeyManager::fixedKey( const AsciiString& button, Int commandType )
 {
 	AsciiString lower = button;
 	lower.toLower();
-	Int ownMod = -1;
-	return fixedButtonKey( AsciiString( withoutModPrefix( lower.str(), &ownMod ).c_str() ), commandType );
-}
-
-//-----------------------------------------------------------------------------
-std::string HotKeyManager::fileButtonName( const AsciiString& button )
-{
-	AsciiString lower = button;
-	lower.toLower();
-	Int ownMod = -1;
-	withoutModPrefix( lower.str(), &ownMod );
-	std::string name( button.str() );
-	if( ownMod >= 0 )
-		return modScope( ownMod ) + ":" + name.substr( name.find( '~' ) + 1 );
-	if( !TheGlobalData->m_mods.empty() && !TheGlobalData->m_modFactions )
-		return modScope( (Int)TheGlobalData->m_mods.size() - 1 ) + ":" + name;
-	return name;
+	return fixedButtonKey( lower, commandType );
 }
 
 //-----------------------------------------------------------------------------
@@ -671,12 +601,10 @@ WideChar HotKeyManager::buttonKeyIn( const AsciiString& button, WideChar labelKe
 		return 0;
 	AsciiString lower = button;
 	lower.toLower();
-	Int ownMod = -1;
-	const std::string bare = withoutModPrefix( lower.str(), &ownMod );
 	// the player's letter first, his for this slot before his for the button, a fixed order's
 	// included: the fixed letter is only its default.  With the grid on, the bar's place is next
 	WideChar letter = labelKey;
-	const Bool chosen = findPlayerSlotKey( keys, bare, ownMod, barSlot, &letter );
+	const Bool chosen = findPlayerSlotKey( keys, std::string( lower.str() ), barSlot, &letter );
 	if( !chosen && s_commandBarGrid && barSlot >= 0 )
 	{
 		const Bool upgrade = commandType == GUI_COMMAND_PLAYER_UPGRADE || commandType == GUI_COMMAND_OBJECT_UPGRADE;
@@ -684,7 +612,7 @@ WideChar HotKeyManager::buttonKeyIn( const AsciiString& button, WideChar labelKe
 	}
 	if( !chosen )
 	{
-		const WideChar fixed = fixedButtonKey( AsciiString( bare.c_str() ), commandType );
+		const WideChar fixed = fixedButtonKey( lower, commandType );
 		if( fixed != 0 )
 			return fixed;
 	}
@@ -1004,7 +932,7 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 	unbound.push_back( commandRow( "AUTO_GARRISON", "CONTROL" ) );
 	unbound.push_back( commandRow( "AUTO_REPAIR", "CONTROL" ) );
 	// the orders the bar's fixed places press (orderAtPlace in ControlBar.cpp). Their buttons take
-	// a letter from the button's label, which a mod's CommandSet names, so without these rows a mod
+	// a letter from the button's label, which the CommandSet names, so without these rows a set
 	// whose guard button sat elsewhere or had no letter left guard with no key a player could set
 	static const char *const ORDERS[] = { "TOGGLE_ATTACKMOVE", "TOGGLE_FORCEATTACK", "TOGGLE_GUARD", "TOGGLE_MOVE", "HOLD_POSITION" };
 	for( size_t each = 0; each < sizeof( ORDERS ) / sizeof( ORDERS[ 0 ] ); each++ )

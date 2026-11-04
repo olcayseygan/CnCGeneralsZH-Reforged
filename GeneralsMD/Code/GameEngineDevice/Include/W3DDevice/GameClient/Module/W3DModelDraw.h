@@ -366,8 +366,6 @@ public:
 	virtual void doDrawModule(const Matrix3D* transformMtx);
 	virtual void buildRenderObjects( Bool madeInTick );
 
-	/// the name the render object was made from; under a mod it keeps the "M<n>~" its Get_Name drops
-	const AsciiString& getCurrentModelName() const { return m_curState->m_modelName; }
 	/// Hands the frame's lit headlights to the Direct3D 11 frame, nearest the camera first.  Once a
 	/// frame, after the smooth motion has placed every model and before anything is drawn.
 	static void lightHeadlights(const Vector3& cameraPosition);

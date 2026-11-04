@@ -49,7 +49,7 @@ public:
 	CommandStore( void );
 	virtual ~CommandStore( void );
 
-	void init( void );					///< load CommandButton.ini, CommandSet.ini, the mods' copies and CommandSetReforged.ini
+	void init( void );					///< load CommandButton.ini, CommandSet.ini and CommandSetReforged.ini
 	void reset( void );					///< remove the map's overrides
 	void update( void ) { }
 

@@ -318,7 +318,7 @@ static Bool Locomotor_projectileChasesStraight(Object* obj, const Vector3& toGoa
 //-------------------------------------------------------------------------------------------------
 // A missile that holds its cruise height until it has locked keeps EA's whole flight: level at the
 // preferred height, then the cheat straight down onto the goal. Its data can count on that.
-// ShockWave's cluster missile holds 500 until 0.01 from its goal and splits into warheads where it
+// A cluster missile that holds 500 until 0.01 from its goal and splits into warheads where it
 // passes 420 over the ground coming down. The cruise curve split it 180 to 270 short of the aim;
 // held level, the arc after the lock looped it 230 past, the goal lying almost straight under a
 // level nose. A Scud or a Tomahawk dives before its lock and keeps the curve.
@@ -686,8 +686,7 @@ LocomotorTemplate* LocomotorStore::findLocomotorTemplate(NameKeyType namekey)
   LocomotorTemplateMap::iterator it = m_locomotorTemplates.find(namekey);
   if (it == m_locomotorTemplates.end())
 	{
-		NameKeyType retailKey;
-		return TheModNamespace.findRetailKey(namekey, MODNAME_LOCOMOTOR, &retailKey) ? findLocomotorTemplate(retailKey) : NULL;
+		return NULL;
 	}
 	else
 		return (*it).second;
@@ -702,8 +701,7 @@ const LocomotorTemplate* LocomotorStore::findLocomotorTemplate(NameKeyType namek
   LocomotorTemplateMap::const_iterator it = m_locomotorTemplates.find(namekey);
   if (it == m_locomotorTemplates.end())
 	{
-		NameKeyType retailKey;
-		return TheModNamespace.findRetailKey(namekey, MODNAME_LOCOMOTOR, &retailKey) ? findLocomotorTemplate(retailKey) : NULL;
+		return NULL;
 	}
 	else
 	{

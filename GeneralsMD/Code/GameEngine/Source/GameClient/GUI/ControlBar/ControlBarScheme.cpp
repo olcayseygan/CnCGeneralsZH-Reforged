@@ -217,7 +217,6 @@ ControlBarSchemeImage::ControlBarSchemeImage( void )
 	m_position.x = m_position.y = 0;
 	m_size.x = m_size.y = 0;
 	m_image = NULL;
-	m_wideImage = NULL;
 	m_layer = 0;
 }
 
@@ -566,45 +565,6 @@ void ControlBarScheme::init(void)
 	resMultiplier.x = TheDisplay->getWidth()/INT_TO_REAL(m_ScreenCreationRes.x) ;
 	resMultiplier.y = TheDisplay->getHeight()/INT_TO_REAL(m_ScreenCreationRes.y);
 
-	//
-	// The eighteen-window grid (ControlBar::isCommandGridWide) stands on a plate one command column
-	// longer at each end: the painting's "<name>Wide" copy (Tools/hud_command_bar.py).  The toolbar
-	// column moves out with the left end and the power rail runs the plate's new length.  A scheme
-	// whose painting has no wide copy, a mod's own, keeps its windows where it put them.
-	//
-	Bool wideCopy = FALSE;
-	for( Int layer = 0; layer < MAX_CONTROL_BAR_SCHEME_IMAGE_LAYERS; layer++ )
-	{
-		for( ControlBarSchemeImageList::iterator it = m_layer[ layer ].begin(); it != m_layer[ layer ].end(); ++it )
-		{
-			ControlBarSchemeImage *schemeImage = *it;
-			schemeImage->m_wideImage = NULL;
-			if( schemeImage->m_image && TheMappedImageCollection )
-			{
-				AsciiString wideName = schemeImage->m_image->getName();
-				wideName.concat( "Wide" );
-				schemeImage->m_wideImage = TheMappedImageCollection->findImageByName( wideName );
-			}
-			wideCopy = wideCopy || schemeImage->m_wideImage != NULL;
-		}
-	}
-	const Int wideStep = ( wideCopy && TheControlBar && TheControlBar->isCommandGridWide() )
-											 ? COMMAND_GRID_WIDE_STEP * m_ScreenCreationRes.x / 1920 : 0;
-	ICoord2D chatUL = m_chatUL, chatLR = m_chatLR, workerUL = m_workerUL, workerLR = m_workerLR;
-	ICoord2D optionsUL = m_optionsUL, optionsLR = m_optionsLR, beaconUL = m_beaconUL, beaconLR = m_beaconLR;
-	ICoord2D powerBarUL = m_powerBarUL, powerBarLR = m_powerBarLR;
-	chatUL.x -= wideStep;
-	chatLR.x -= wideStep;
-	// the idle worker heads the idle column at the grid's right end, so it goes out with that end
-	workerUL.x += wideStep;
-	workerLR.x += wideStep;
-	optionsUL.x -= wideStep;
-	optionsLR.x -= wideStep;
-	beaconUL.x -= wideStep;
-	beaconLR.x -= wideStep;
-	powerBarUL.x -= wideStep;
-	powerBarLR.x += wideStep;
-
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:PopupCommunicator" ) );
 	if(win)	
 	{
@@ -615,7 +575,7 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetHiliteImage(win, m_buddyButtonHightlited);
 		GadgetButtonSetHiliteSelectedImage(win, m_buddyButtonPushed);
 		GadgetButtonSetDisabledImage(win, m_buddyButtonDisabled);
-		placeSchemeWindow( win, chatUL, chatLR, resMultiplier );
+		placeSchemeWindow( win, m_chatUL, m_chatLR, resMultiplier );
 	}
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonIdleWorker" ) );
 	if(win)	
@@ -624,12 +584,11 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetHiliteImage(win, m_idleWorkerButtonHightlited);
 		GadgetButtonSetHiliteSelectedImage(win, m_idleWorkerButtonPushed);
 		GadgetButtonSetDisabledImage(win, m_idleWorkerButtonDisabled);
-		placeSchemeWindow( win, workerUL, workerLR, resMultiplier );
+		placeSchemeWindow( win, m_workerUL, m_workerLR, resMultiplier );
 	}
 
 	//
-	// The idle infantry, vehicle and aircraft buttons stand in a column at the grid's right end and
-	// go out with it on the wide grid, the way the toolbar column goes out with the left end.  A
+	// The idle infantry, vehicle and aircraft buttons stand in a column at the grid's right end.  A
 	// scheme that does not place one shrinks it to nothing rather than leave it at the .wnd's 0,0.
 	//
 	static const char *const idleNames[ IDLE_COUNT ] =
@@ -655,10 +614,7 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetHiliteImage( win, image[ 1 ] );
 		GadgetButtonSetHiliteSelectedImage( win, image[ 2 ] );
 		GadgetButtonSetDisabledImage( win, image[ 3 ] );
-		ICoord2D ul = m_idleUL[ i ], lr = m_idleLR[ i ];
-		ul.x += wideStep;
-		lr.x += wideStep;
-		placeSchemeWindow( win, ul, lr, resMultiplier );
+		placeSchemeWindow( win, m_idleUL[ i ], m_idleLR[ i ], resMultiplier );
 	}
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ExpBarForeground" ) );
@@ -673,7 +629,7 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetHiliteImage(win, m_optionsButtonHightlited);
 		GadgetButtonSetHiliteSelectedImage(win, m_optionsButtonPushed);
 		GadgetButtonSetDisabledImage(win, m_optionsButtonDisabled);
-		placeSchemeWindow( win, optionsUL, optionsLR, resMultiplier );
+		placeSchemeWindow( win, m_optionsUL, m_optionsLR, resMultiplier );
 	}
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonPlaceBeacon" ) );
 	if(win)	
@@ -682,7 +638,7 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetHiliteImage(win, m_beaconButtonHightlited);
 		GadgetButtonSetHiliteSelectedImage(win, m_beaconButtonPushed);
 		GadgetButtonSetDisabledImage(win, m_beaconButtonDisabled);
-		placeSchemeWindow( win, beaconUL, beaconLR, resMultiplier );
+		placeSchemeWindow( win, m_beaconUL, m_beaconLR, resMultiplier );
 	}
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:MoneyDisplay" ) );
@@ -691,7 +647,7 @@ void ControlBarScheme::init(void)
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:PowerWindow" ) );
 	if(win)
-		placeSchemeWindow( win, powerBarUL, powerBarLR, resMultiplier );
+		placeSchemeWindow( win, m_powerBarUL, m_powerBarLR, resMultiplier );
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonGeneral" ) );
 	if(win)	
@@ -741,8 +697,7 @@ void ControlBarScheme::init(void)
 
 	//
 	// A painting whose plates outgrow ControlBar.wnd's input blockers names its own, so a click on
-	// the new steel does not fall through to the world.  The production blocker follows the wide
-	// plate's two extra columns the way the power rail does.
+	// the new steel does not fall through to the world.
 	//
 	static const char *const blockNames[ BLOCK_COUNT ] =
 	{
@@ -759,13 +714,7 @@ void ControlBarScheme::init(void)
 		win = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( blockNames[ i ] ) );
 		if( win == NULL )
 			continue;
-		ICoord2D ul = m_blockUL[ i ], lr = m_blockLR[ i ];
-		if( i == BLOCK_PRODUCTION )
-		{
-			ul.x -= wideStep;
-			lr.x += wideStep;
-		}
-		placeSchemeWindow( win, ul, lr, resMultiplier );
+		placeSchemeWindow( win, m_blockUL[ i ], m_blockLR[ i ], resMultiplier );
 	}
 
 	//
@@ -1139,10 +1088,9 @@ void ControlBarSchemeManager::init( void )
 	// the fork's edits to EA's schemes, each block naming only what it changes
 	ini.load( AsciiString( "Data\\INI\\ControlBarSchemeReforged.ini" ), INI_LOAD_MULTIFILE, NULL );
 	// ControlBar Pro's schemes, the bar every side wears: each replaces EA's of the same name whole,
-	// and under a single -mod the mod's of that name, so nothing above reaches it (a Debug build
-	// asserts once a scheme, newControlBarScheme).  -modfactions loads no mod's schemes at all.
-	// A scheme of a name it does not have (a mod's ChinaSpecialWeaponsGeneral) stays the mod's, so the
-	// ones read here are marked and findSchemeForFaction picks among them only.
+	// so nothing above reaches it (a Debug build asserts once a scheme, newControlBarScheme).  A
+	// scheme of a name it does not have stays EA's, so the ones read here are marked and
+	// findSchemeForFaction picks among them only.
 	m_loadingControlBarPro = TRUE;
 	ini.load( AsciiString( "Data\\INI\\ControlBarProReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 	m_loadingControlBarPro = FALSE;
@@ -1271,19 +1219,6 @@ ControlBarScheme *ControlBarSchemeManager::findSchemeForSide( const AsciiString&
 }
 
 //-----------------------------------------------------------------------------
-/** The owner's call: a mod's faction gets our American power tray, whatever .wnd the mod names.  Its
-	* buttons, cameos and portrait are still the mod's.  That is a faction with a mod index, or any
-	* faction under patches with no full -mod.  The observer is
-	* none. */
-//-----------------------------------------------------------------------------
-Bool ControlBarIsModFaction( const PlayerTemplate *pt )
-{
-	if( pt == NULL || pt->getSide().isEmpty() || pt->getSide().compareNoCase( "Observer" ) == 0 )
-		return FALSE;
-	return pt->getModIndex() >= 0 || ( !TheGlobalData->m_mods.empty() && !TheGlobalData->m_modFactions );
-}
-
-//-----------------------------------------------------------------------------
 /** How each family of side pictures is named.  SSObserver and SSScore take the template's name less a
 	* leading "Faction" and a trailing "General" (SSScoreAmericaLaser), FactionPicker the whole name
 	* (FactionPickerFactionAmericaLaserGeneral); the country's own picture is the retail name where
@@ -1306,8 +1241,8 @@ static const SideImageNames theSideImageNames[] =
 //-----------------------------------------------------------------------------
 /** Looked up by name, so a sheet that adds a picture for a general needs no INI edit and the player
 	* templates (in the INI checksum) stay as they are.  Names are case blind, so GameinfoTurkiye finds
-	* GameinfoTURKIYE and GameinfoBoss retail's GameinfoBOSS.  A mod's faction is named M<n>~ and never
-	* matches, so it gets the country its base side names, as does any general without a picture. */
+	* GameinfoTURKIYE and GameinfoBoss retail's GameinfoBOSS.  A general without a picture gets the
+	* country its base side names. */
 //-----------------------------------------------------------------------------
 const Image *ControlBarSideImage( const PlayerTemplate *pt, const char *prefix )
 {
@@ -1361,10 +1296,8 @@ const Image *ControlBarSideEmblem( const PlayerTemplate *pt )
 //-----------------------------------------------------------------------------
 /** The bar follows the country, and is always ControlBar Pro's.  A side with a ControlBar Pro scheme of
 	* its own (Boss and Observer among them) wears it; any other wears its country's by name, the way
-	* ControlBarPlateForSide reads a side, so a mod's ChinaCyberGeneral gets China's and its
-	* AmericaCyberneticGeneral America's, whatever scheme the mod itself ships for that side (ShockWave's
-	* ChinaSpecialWeaponsGeneral is EA's red China bar).  A side of no country we know (Russia, ECA, the
-	* civilians) wears America's.  The squished bar does not come here. */
+	* ControlBarPlateForSide reads a side, so a ChinaTankGeneral without one gets China's.  A side of no
+	* country we know (the civilians) wears America's.  The squished bar does not come here. */
 //-----------------------------------------------------------------------------
 ControlBarScheme *ControlBarSchemeManager::findSchemeForFaction( const AsciiString& side ) const
 {
@@ -1486,7 +1419,6 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 	const Int last = foreground ? CONTROL_BAR_SCHEME_FOREGROUND_IMAGE_LAYERS : MAX_CONTROL_BAR_SCHEME_IMAGE_LAYERS;
 	const Int width = TheDisplay->getWidth();
 	const Int height = TheDisplay->getHeight();
-	const Bool wide = TheControlBar && TheControlBar->isCommandGridWide();
 	const ICoord2D barOffset = offset;
 
 	for( Int p = 0; p < ControlBar::CB_PANEL_COUNT; p++ )
@@ -1521,8 +1453,7 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 				design.hi.x = REAL_TO_INT_CEIL( ( schemeImage->m_position.x + schemeImage->m_size.x ) * toDesignX );
 				design.hi.y = REAL_TO_INT_CEIL( ( schemeImage->m_position.y + schemeImage->m_size.y ) * toDesignY );
 				ControlBarPanelDesignToScreen( p, &design, width, height, &rect );
-				const Image *image = ( wide && schemeImage->m_wideImage ) ? schemeImage->m_wideImage : schemeImage->m_image;
-				TheDisplay->drawImage( image, rect.lo.x + offset.x, rect.lo.y + offset.y,
+				TheDisplay->drawImage( schemeImage->m_image, rect.lo.x + offset.x, rect.lo.y + offset.y,
 															 rect.hi.x + offset.x, rect.hi.y + offset.y );
 			}
 		}

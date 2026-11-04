@@ -2651,7 +2651,7 @@ void GameLogic::loadMapINI( AsciiString mapName )
 
 
 	//
-	// A map's rules file comes with the map, and a mod map with a block this game does not know
+	// A map's rules file comes with the map, and a map with a block this game does not know
 	// (a DeleteKey, say) threw out of here and took the whole game down at the loading screen.
 	// Keep what parsed up to the bad line and play on: every machine in a match has the same file,
 	// the map CRC sees to that, so each stops at the same line and the rules still agree.

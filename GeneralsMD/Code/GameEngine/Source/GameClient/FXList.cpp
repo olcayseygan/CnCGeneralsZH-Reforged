@@ -1128,8 +1128,7 @@ const FXList *FXListStore::findFXList(const char* name) const
 	// a Superweapon General's copy the fork's data names, which Classic dropped: EA's plain list is what he had
 	if (m_classicDroppedGeneralCopies && strncmp(name, "SupW_", 5) == 0)
 		return findFXList(name + 5);
-	AsciiString retailName;
-	return TheModNamespace.findRetailName(AsciiString(name), MODNAME_FXLIST, &retailName) ? findFXList(retailName.str()) : NULL;
+	return NULL;
 }
 
 //-------------------------------------------------------------------------------------------------

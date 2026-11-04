@@ -86,8 +86,8 @@ MultiplayerSettings::MultiplayerSettings()
 
   m_gotDefaultStartingMoney = false;
 
-  // The fork's starting cash choices, whatever Multiplayer.ini (retail's 5k, 10k, 20k, 50k, or a
-  // mod's) lists; the INI still names the default.
+  // The fork's starting cash choices, whatever Multiplayer.ini (retail's 5k, 10k, 20k, 50k) lists;
+  // the INI still names the default.
   static const UnsignedInt choices[] = { 10000, 25000, 50000, 100000, 500000, 1000000, Money::UNLIMITED };
   for ( size_t i = 0; i < sizeof( choices ) / sizeof( choices[0] ); ++i )
     m_startingMoneyList.push_back( Money( choices[i] ) );

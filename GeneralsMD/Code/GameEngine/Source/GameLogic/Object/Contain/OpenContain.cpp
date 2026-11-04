@@ -291,7 +291,7 @@ void OpenContain::addOrRemoveObjFromWorld(Object* obj, Bool add)
 void OpenContain::addToContain( Object *rider )
 {
 	//
-	// Only the object's own contain module may hold riders.  A mod that gives an object two contain
+	// Only the object's own contain module may hold riders.  Data that gives an object two contain
 	// modules gets both onCollide calls, and the one Object::getContain() does not name took the
 	// rider into a list nothing else looks at: the rider's exit, death and destruction all go through
 	// getContain(), so it was deleted while still on that list, and the next redeployOccupants put a

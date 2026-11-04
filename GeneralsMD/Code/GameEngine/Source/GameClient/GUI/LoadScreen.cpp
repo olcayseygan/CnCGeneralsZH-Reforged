@@ -386,8 +386,8 @@ static void fitWidth( DisplayString *string, Int widest )
 	} while( words.getLength() > 0 && string->getWidth() > widest );
 }
 
-/** The side's crest from the lobby: the three 144 pixel logos on one page.  A mod's side brings its
-	* own lobby glyph or nothing. */
+/** The side's crest from the lobby: the three 144 pixel logos on one page.  A side on none of the
+	* three brings its own lobby glyph or nothing. */
 static const Image *sideCrest( const PlayerTemplate *side )
 {
 	const AsciiString base = side->getBaseSide();
@@ -993,7 +993,7 @@ void LoadScreenBoard::drawMatch( void )
 		TheDisplay->drawImage( m_mapImage, m_mapDrawn.lo.x, m_mapDrawn.lo.y, m_mapDrawn.hi.x, m_mapDrawn.hi.y );
 	// the lobby's map preview wears a button's edge
 	UIStyle::edge( m_mapBox.lo.x - 3, m_mapBox.lo.y - 3, mapSize + 6, mapSize + 6 );
-	// the room's start spot: EA's ring (a mod's archives may leave it out), the colour in its middle
+	// the room's start spot: EA's ring (missing art draws no ring), the colour in its middle
 	const Int spot = mapSize * LOBBY_START_SPOT / LOBBY_MAP_PREVIEW;
 	const Image *ring = TheMappedImageCollection->findImageByName( "PlayerStart" );
 	for( size_t each = 0; each < m_spots.size(); each++ )

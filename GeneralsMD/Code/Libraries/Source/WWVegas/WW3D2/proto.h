@@ -44,58 +44,10 @@
 
 #include "always.h"
 #include <stdlib.h>
-#include <string.h>
 #include "w3d_file.h"
 
 class RenderObjClass;
 class ChunkLoadClass;
-
-/*
-** Mod art. With -modfactions a name from mod n's INI text reads "M<n>~name", and the file system
-** opens such a file only if mod n ships it. WW3D_Mod_Prefix is the mod the current request belongs
-** to ("" is retail): a prefixed request sets it for its own duration, so the names a mod model uses
-** inside itself (sub-objects, its tree, its textures) look in that mod first. While a file is read
-** it holds the prefix of that file, and whatever the file brings in is keyed under it.
-*/
-extern thread_local char WW3D_Mod_Prefix[8];
-
-// Length of a leading "M<n>~" on name, 0 when there is none.
-int WW3D_Mod_Prefix_Length(const char * name);
-
-// True when the mod named by the prefix on file ships that file.
-bool WW3D_Mod_Ships(const char * file);
-
-// Sets WW3D_Mod_Prefix for one scope and puts the old one back after.
-class WW3DModPrefixScope
-{
-public:
-	WW3DModPrefixScope(const char * prefix) : Changed(strcmp(WW3D_Mod_Prefix, prefix) != 0)
-	{
-		if (Changed) { strcpy(Saved, WW3D_Mod_Prefix); strcpy(WW3D_Mod_Prefix, prefix); }
-	}
-	~WW3DModPrefixScope(void)	{ if (Changed) strcpy(WW3D_Mod_Prefix, Saved); }
-
-private:
-	bool	Changed;
-	char	Saved[8];
-};
-
-// Splits a request name into its bare part and, if it carries a prefix of its own, makes that the
-// current mod for the request's duration. Active() then says whether a mod applies at all.
-class WW3DModRequest
-{
-public:
-	WW3DModRequest(const char * name);
-	~WW3DModRequest(void)		{ if (Own) strcpy(WW3D_Mod_Prefix, Saved); }
-
-	bool				Active(void) const	{ return WW3D_Mod_Prefix[0] != 0; }
-
-	const char *	Bare;
-	bool				Own;
-
-private:
-	char				Saved[8];
-};
 
 /*
 ** W3D Prototype system

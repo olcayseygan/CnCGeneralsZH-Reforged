@@ -35,7 +35,6 @@
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
-#include "Common/PlayerTemplate.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -93,33 +92,29 @@ void TAiData::addFactionBuildList(AISideBuildList *buildList)
 	m_sideBuildLists = buildList;
 }
 
-const AISideInfo *TAiData::findSideInfo( const AsciiString &side, Int modIndex ) const
+const AISideInfo *TAiData::findSideInfo( const AsciiString &side ) const
 {
-	const AsciiString own = AI::modSideKey( side, modIndex );
 	for (const AISideInfo *info = m_sideInfo; info != NULL; info = info->m_next)
 	{
-		if (info->m_side == own)
+		if (info->m_side == side)
 			return info;
 	}
-	return modIndex >= 0 ? findSideInfo( side, -1 ) : NULL;
+	return NULL;
 }
 
-const AISideBuildList *TAiData::findBuildList( const AsciiString &side, Int modIndex ) const
+const AISideBuildList *TAiData::findBuildList( const AsciiString &side ) const
 {
-	const AsciiString own = AI::modSideKey( side, modIndex );
 	for (const AISideBuildList *build = m_sideBuildLists; build != NULL; build = build->m_next)
 	{
-		if (build->m_side == own)
+		if (build->m_side == side)
 			return build;
 	}
-	return modIndex >= 0 ? findBuildList( side, -1 ) : NULL;
+	return NULL;
 }
 
 const AISideInfo *TAiData::findSideInfo( const Player *player ) const
 {
-	// a map player whose faction is gone (an obsolete map) has no template, and plays retail's side
-	const PlayerTemplate *pt = player->getPlayerTemplate();
-	return findSideInfo( player->getSide(), pt != NULL ? pt->getModIndex() : -1 );
+	return findSideInfo( player->getSide() );
 }
 
 TAiData::~TAiData()
@@ -552,65 +547,9 @@ void AI::parseAiDataDefinition( INI* ini )
 
 	}  // end if
 
-	/* -modfactions: a mod's pass (INI::loadModPasses) takes only its sides' entries, filed under
-		 "M<n>~<side>" with its names already prefixed, so its factions build and train its own things.
-		 The tuning in the rest of the block stays the fork's, mods fit the fork. */
-	const Int mod = TheModNamespace.getActive();
-	if (mod >= 0)
-	{
-		TAiData *modData = NEW TAiData;
-		// the mod's AIData.ini goes over its Default\AIData.ini: what the first filed seeds this parse, so a
-		// SideInfo field the second leaves out keeps the first's value, as retail's two files merge
-		const AsciiString prefix = modSideKey( AsciiString::TheEmptyString, mod );
-		for (AISideInfo **link = &TheAI->m_aiData->m_sideInfo; *link != NULL; )
-		{
-			AISideInfo *info = *link;
-			if (!info->m_side.startsWith( prefix ))
-			{
-				link = &info->m_next;
-				continue;
-			}
-			*link = info->m_next;
-			const AsciiString side( info->m_side.str() + prefix.getLength() );
-			info->m_side = side;
-			modData->addSideInfo( info );
-		}
-		ini->initFromINI( modData, TheAIFieldParseTable );
-		Int sides = 0;
-		while (modData->m_sideInfo != NULL)
-		{
-			AISideInfo *info = modData->m_sideInfo;
-			modData->m_sideInfo = info->m_next;
-			info->m_side = modSideKey( info->m_side, mod );
-			TheAI->m_aiData->addSideInfo( info );
-			++sides;
-		}
-		Int buildLists = 0;
-		while (modData->m_sideBuildLists != NULL)
-		{
-			AISideBuildList *build = modData->m_sideBuildLists;
-			modData->m_sideBuildLists = build->m_next;
-			build->m_side = modSideKey( build->m_side, mod );
-			TheAI->m_aiData->addFactionBuildList( build );
-			++buildLists;
-		}
-		delete modData;
-		DEBUG_LOG(( "MODNS M%d~ AIData from %s: %d sides, %d skirmish build lists\n", mod + 1, ini->getFilename().str(), sides, buildLists ));
-		return;
-	}
-
 	// parse the ini weapon definition
 	ini->initFromINI( TheAI->m_aiData, TheAIFieldParseTable );
 
-}
-
-AsciiString AI::modSideKey( const AsciiString &side, Int modIndex )
-{
-	if (modIndex < 0)
-		return side;
-	AsciiString key;
-	key.format( "M%d~%s", modIndex + 1, side.str() );
-	return key;
 }
 
 
@@ -823,7 +762,7 @@ static void priorityFunc(Object *obj, void *userData)
  * (aiFramesToKill, the AI's matchup arithmetic), plus the frames to drive into reach. So a
  * wounded enemy goes before a fresh one of its kind.
  *
- * Worth is 'ThreatValue' where a mod sets it and build cost where it does not; the shipped INI
+ * Worth is 'ThreatValue' where the data sets it and build cost where it does not; the shipped INI
  * sets it nowhere.
  *
  * The tiers keep two old rules above the armour. Anything that can shoot back outranks anything
@@ -883,7 +822,7 @@ extern Bool AIAttackMove_shouldRetaliate( UnsignedInt lastDamageFrame, UnsignedI
 																					Bool alreadyFightingTheAttacker, Bool canAttackTheAttacker );
 static const Int AI_SHOT_ME_FRAMES = LOGICFRAMES_PER_SECOND;
 
-/** What a target is worth: ThreatValue where a mod sets it, else what its player pays for it. */
+/** What a target is worth: ThreatValue where the data sets it, else what its player pays for it. */
 static Int AI_targetValue( const Object *victim )
 {
 	const ThingTemplate *tmpl = victim->getTemplate();

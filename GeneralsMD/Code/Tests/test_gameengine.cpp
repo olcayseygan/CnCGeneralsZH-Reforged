@@ -609,7 +609,7 @@ TEST(zero_hour_language_is_the_one_its_language_archive_names)
    unknown blocks, so an INI written for a newer build breaks an older one
    outright.  The throw is an INIException naming the file and the block: a
    bare INI_UNKNOWN_TOKEN reached GameEngine::init as "Uncaught Exception
-   during initialization." (v3.3.0 crash reports, a mod's Rank.ini). */
+   during initialization." (v3.3.0 crash reports, a third-party Rank.ini). */
 TEST(ini_unknown_block_aborts_the_file)
 {
 	CHECK( bootOnce() );
@@ -724,7 +724,7 @@ TEST(balance_patch_edits_a_weapon_in_place)
 	CHECK_NEAR( gun->getPrimaryDamage( noBonus ), 45.0f, 0.01f );
 	CHECK_NEAR( gun->getUnmodifiedAttackRange(), 150.0f, 0.01f );
 
-	/* a patch that names a weapon the loaded data lacks (a mod's Weapon.ini without it) is read and
+	/* a patch that names a weapon the loaded data lacks (a Weapon.ini without it) is read and
 		 dropped: no weapon is made for the name, and the block after it still applies */
 	writeFile( TEST_INI,
 		"Weapon BalancePatchProbeGunTypo\r\n"
@@ -753,11 +753,11 @@ TEST(balance_patch_edits_a_weapon_in_place)
 #include "../Stubs/NullAudioManager.h"
 
 /* The Paladin's infantry laser, the second point defense module BalanceReforged.ini gives it, once
-	 borrowed EA's WatchTowerMachineGun.  Contra's Weapon.ini leaves that weapon out, the MULTIFILE
-	 block for it was dropped as the test above wants, the module got a null template and
+	 borrowed EA's WatchTowerMachineGun.  A Weapon.ini that leaves that weapon out had the MULTIFILE
+	 block for it dropped as the test above wants, the module got a null template and
 	 PointDefenseLaserUpdate::scanClosestTarget crashed on it.  The weapon is the fork's own now, in
 	 WeaponReforged.ini, loaded the way GameEngine::init loads it: it has to come out whole from a
-	 store that holds none of EA's weapons, which is what a mod's Weapon.ini can leave. */
+	 store that holds none of EA's weapons. */
 TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 {
 	CHECK( bootOnce() );
@@ -767,7 +767,7 @@ TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 	if( TheFXListStore == NULL )
 		TheFXListStore = NEW FXListStore;
 
-	/* the fire FX the weapon names; retail has it, Contra does not, and a missing one reads as none */
+	/* the fire FX the weapon names; a missing one reads as none */
 	writeFile( TEST_INI,
 		"FXList WeaponFX_PaladinPointDefenseLaser\r\n"
 		"End\r\n" );
@@ -824,7 +824,7 @@ TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 }
 
 /* WeaponReforged.ini also keeps copies of EA weapons FixesReforged.ini hands out, under EA's names,
-	 for a mod whose Weapon.ini dropped them.  Where the weapon is already defined the copy is read and
+	 for data whose Weapon.ini dropped them.  Where the weapon is already defined the copy is read and
 	 dropped and the first definition stands; this used to return mid-block, and the next field line
 	 threw as an unknown block. */
 TEST(weapon_defined_twice_keeps_the_first_and_reads_on)
@@ -866,8 +866,8 @@ TEST(weapon_defined_twice_keeps_the_first_and_reads_on)
 #include "GameLogic/ArmorSet.h"
 
 /* FixesReforged.ini's Toxin Tunnel Defender and Stinger sets name EA's Chem_ rockets and its Ranger
-	 armor set names ChemSuitHumanArmor; Contra keeps those objects and drops the weapons and the armor.
-	 Applied anyway, the set left a null in each slot: Contra's two went unarmed and its Rangers took
+	 armor set names ChemSuitHumanArmor.  On data that keeps those objects and drops the weapons and
+	 the armor, the set applied anyway left a null in each slot: the two went unarmed and the Rangers took
 	 every hit at full damage after Chemical Suits.  A patch set naming a missing weapon or armor is
 	 skipped now and the object keeps its own; a set that names what exists still applies. */
 TEST(patch_set_naming_a_missing_weapon_or_armor_is_skipped)
@@ -962,8 +962,8 @@ TEST(patch_set_naming_a_missing_weapon_or_armor_is_skipped)
 	}
 }
 
-/* BalanceReforged.ini replaces Tank_ChinaBunker's ModuleTag_05 with a StructureBody.  Under the
-	 Shockwave mod that tag holds another module, and the type check in ThingTemplate::parseModuleName
+/* BalanceReforged.ini replaces Tank_ChinaBunker's ModuleTag_05 with a StructureBody.  Where data
+	 gives that tag another module, the type check in ThingTemplate::parseModuleName
 	 threw and stopped the game at start.  The block is skipped now: the template keeps the module it
 	 had, and the lines after the block still parse. */
 TEST(replace_module_of_another_type_is_skipped)
@@ -1048,7 +1048,7 @@ TEST(replace_module_of_another_type_is_skipped)
 	}
 }
 
-/* BalanceReforged.ini prices Nuke_ChinaGattlingCannon, and an install whose mod archives had no such
+/* BalanceReforged.ini prices Nuke_ChinaGattlingCannon, and an install whose archives had no such
 	 object threw in ThingFactory::parseObjectDefinition and stopped the game at start.  The block is
 	 read and dropped now: no template is made for the name, and the object after it is still edited. */
 TEST(patch_of_a_missing_object_is_skipped)
@@ -1110,8 +1110,8 @@ TEST(patch_of_a_missing_object_is_skipped)
 	}
 }
 
-/* FixesReforged.ini gives every China Command Center the Nuke_ and Early_ carpet bombers.  Contra has
-	 no such special powers, the module kept a NULL template, and placing the start building faulted in
+/* FixesReforged.ini gives every China Command Center the Nuke_ and Early_ carpet bombers.  With data that
+	 has no such special powers the module kept a NULL template, and placing the start building faulted in
 	 SpecialPowerModule's constructor.  A patch's module naming a missing power is read and dropped. */
 TEST(patch_module_with_a_missing_special_power_is_skipped)
 {
@@ -1174,12 +1174,12 @@ TEST(patch_module_with_a_missing_special_power_is_skipped)
 	}
 }
 
-/* Under Contra FixesReforged.ini gave the Laser Turret's anti-air weapon Zero Hour's
-	 Lazr_PatriotLaserBeam, which Contra does not have, so the beam vanished, and gave the Emperor an
-	 upgrade naming Tank_OCL_OverlordGattlingCannon, which it does not have either.  A patch naming
-	 something the loaded data lacks keeps what was there: the weapon its own beam, and a replaced
-	 module the module it replaced. */
-TEST(patch_naming_a_missing_laser_or_list_keeps_the_mods_own)
+/* FixesReforged.ini gives the Laser Turret's anti-air weapon Zero Hour's Lazr_PatriotLaserBeam;
+	 on data without it the beam vanished.  It gives the Emperor an upgrade naming
+	 Tank_OCL_OverlordGattlingCannon, which such data lacks too.  A patch naming something the loaded
+	 data lacks keeps what was there: the weapon its own beam, and a replaced module the module it
+	 replaced. */
+TEST(patch_naming_a_missing_laser_or_list_keeps_what_was_there)
 {
 	CHECK( bootOnce() );
 
@@ -1262,8 +1262,8 @@ TEST(patch_naming_a_missing_laser_or_list_keeps_the_mods_own)
 	}
 }
 
-/* The Power of the West's Armor.ini has "Armor = INFANTRY_MISSIL 100%".  EA's parse let it through,
-	 264e2180 made it throw and the mod stopped at start.  An unknown damage type skips its line; a
+/* A third-party Armor.ini had "Armor = INFANTRY_MISSIL 100%".  EA's parse let it through,
+	 264e2180 made it throw and the game stopped at start.  An unknown damage type skips its line; a
 	 line with no percentage is still a syntax error. */
 TEST(armor_skips_an_unknown_damage_type)
 {
@@ -2098,10 +2098,6 @@ static const char HOTKEYS_FROM_LAUNCHER[] =
 	"  Key = Q\r\n"
 	"End\r\n"
 	"\r\n"
-	"CommandButtonHotKey mymod:Command_Sell\r\n"
-	"  Key = K\r\n"
-	"End\r\n"
-	"\r\n"
 	"; the launcher's own keys from here on\r\n"
 	"\r\n"
 	"CommandMap SELECT_NEXT_IDLE_WORKER\r\n"
@@ -2193,7 +2189,7 @@ TEST(hotkeys_every_row_the_page_lists_is_a_command_the_game_knows)
 				idle++;
 		if( ( rows[ each ].id == "AUTO_GARRISON" || rows[ each ].id == "AUTO_REPAIR" ) && rows[ each ].category == "CONTROL" && rows[ each ].binding.key.empty() )
 			autoOrders++;
-		// the bar's fixed orders, guard among them, are keys a player sets whatever the mod's bar says
+		// the bar's fixed orders, guard among them, are keys a player sets whatever the bar says
 		for( size_t name = 0; name < sizeof( ORDERS ) / sizeof( ORDERS[ 0 ] ); name++ )
 			if( rows[ each ].id == ORDERS[ name ] && rows[ each ].category == "CONTROL" && rows[ each ].binding.key.empty() && !rows[ each ].barOnly )
 				orders++;
@@ -2224,8 +2220,7 @@ TEST(hotkeys_file_the_launcher_wrote_comes_back_byte_for_byte)
 	CHECK( file.commands.find( "VIEW_LAST_RADAR_EVENT" )->second == HotkeyBinding( "", "NONE" ) );
 	CHECK( file.commands.find( "SELECT_TEAM1" )->second == HotkeyBinding( "KEY_KP1", "SHIFT_ALT_CTRL" ) );
 	CHECK( file.commands.find( "VIEW_COMMAND_CENTER" ) == file.commands.end() );	// the launcher's, not his
-	CHECK_EQ( (Int)file.buttons.size(), 5 );
-	CHECK_STR( file.buttons.find( "mymod:Command_Sell" )->second.c_str(), "K" );
+	CHECK_EQ( (Int)file.buttons.size(), 4 );
 	CHECK_STR( file.buttons.find( "command_lowercase" )->second.c_str(), "" );
 	CHECK( Hotkeys_format( file, rows ) == std::string( HOTKEYS_FROM_LAUNCHER ) );
 
@@ -2272,7 +2267,6 @@ TEST(hotkeys_names_sort_and_chords_read_as_the_launcher_has_them)
 	// String.localeCompare: case aside, '_' before the letters, then lower case first
 	CHECK( Hotkeys_nameLess( "command_lowercase", "Command_Sell" ) );
 	CHECK( Hotkeys_nameLess( "Command_Sell", "Command_UpgradeChinaMines" ) );
-	CHECK( Hotkeys_nameLess( "Command_UpgradeChinaMines", "mymod:Command_Sell" ) );
 	CHECK( Hotkeys_nameLess( "SELECT_ALL", "SELECT_ALL_MILITARY" ) );
 	CHECK( Hotkeys_nameLess( "SELECT_ALL_MILITARY", "SELECT_TEAM1" ) );
 	CHECK( Hotkeys_nameLess( "command_sell", "Command_Sell" ) );
@@ -2938,7 +2932,7 @@ TEST(troop_crawler_scans_at_least_as_far_as_its_troops_shoot)
 	/* a rifle outranges the INI knob: look as far as the man can shoot. */
 	CHECK_NEAR( AssaultTransport_clearScanRange( 50.0f, 150.0f ), 150.0f, 0.001f );
 
-	/* the knob is the wider of the two (a modded value): honour it. */
+	/* the knob is the wider of the two (a tuned value): honour it. */
 	CHECK_NEAR( AssaultTransport_clearScanRange( 200.0f, 150.0f ), 200.0f, 0.001f );
 
 	/* no weapon at all - getLargestWeaponRange returns -1; never scan a negative radius. */
@@ -5607,140 +5601,6 @@ TEST(controlbar_command_places_go_in_rows_by_what_they_are_for)
 		CHECK_EQ( places[ slot ], manyPlaces[ slot ] );
 }
 
-TEST(controlbar_mod_slots_past_the_bar_fit_its_windows)
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET, WINDOWS = 14 };
-	const Int N = GUI_COMMAND_NONE, U = GUI_COMMAND_OBJECT_UPGRADE, W = GUI_COMMAND_SWITCH_WEAPON;
-	Bool windowed[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		windowed[ slot ] = slot < WINDOWS;
-	Int shown[ SLOTS ];
-
-	/* Contra's Cybr_AmericaInfantryRangerCommandSet: five drones, capture, two weapon switches, and
-	   attack move, guard and stop in 15, 17 and 18, which our fourteen windows lack.  The orders go to
-	   Zero Hour's 11, 13 and 14, the rest stay put */
-	const Int ranger[ SLOTS ] = { U, U, U, U, U, N, GUI_COMMAND_SPECIAL_POWER, W, N, W, N, N, N, N,
-		GUI_COMMAND_ATTACK_MOVE, N, GUI_COMMAND_GUARD, GUI_COMMAND_STOP };
-	ControlBar_fitCommandSlots( ranger, windowed, SLOTS, shown );
-	const Int rangerShown[ SLOTS ] = { 0, 1, 2, 3, 4, -1, 6, 7, -1, 9, 14, -1, 16, 17, -1, -1, -1, -1 };
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		CHECK_EQ( shown[ slot ], rangerShown[ slot ] );
-
-	/* 11 taken by the mod's own button: attack move takes the first empty window, and a stray button
-	   past the bar comes after the orders */
-	const Int busy[ SLOTS ] = { U, N, N, N, N, N, N, N, N, N, U, N, N, N, U, GUI_COMMAND_ATTACK_MOVE, N, N };
-	ControlBar_fitCommandSlots( busy, windowed, SLOTS, shown );
-	CHECK_EQ( shown[ 0 ], 0 );
-	CHECK_EQ( shown[ 10 ], 10 );
-	CHECK_EQ( shown[ 1 ], 15 );
-	CHECK_EQ( shown[ 2 ], 14 );
-
-	/* a retail set never goes past fourteen and comes back slot for slot */
-	const Int humvee[ SLOTS ] = { U, U, U, N, N, N, N, N, GUI_COMMAND_EVACUATE, N, GUI_COMMAND_ATTACK_MOVE, N,
-		GUI_COMMAND_GUARD, GUI_COMMAND_STOP, N, N, N, N };
-	ControlBar_fitCommandSlots( humvee, windowed, SLOTS, shown );
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		CHECK_EQ( shown[ slot ], humvee[ slot ] != N && slot < WINDOWS ? slot : -1 );
-}
-
-TEST(controlbar_wide_grid_only_for_a_set_past_fourteen)
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET };
-	const Int N = GUI_COMMAND_NONE, B = GUI_COMMAND_DOZER_CONSTRUCT, P = GUI_COMMAND_PURCHASE_SCIENCE;
-
-	/* Stealth's Arms Dealer: twelve buttons, one of them in 15, which the fourteen windows still hold */
-	const Int armsDealer[ SLOTS ] = { N, B, B, B, B, B, N, B, N, B, B, B, B, B, B, N, N, N };
-	CHECK( !ControlBar_needsWideCommandGrid( armsDealer, SLOTS ) );
-
-	/* a promotion screen's set has its own screen, however many slots it fills */
-	Int science[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		science[ slot ] = P;
-	CHECK( !ControlBar_needsWideCommandGrid( science, SLOTS ) );
-
-	/* fourteen fit, fifteen do not */
-	Int full[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		full[ slot ] = slot < 14 ? B : N;
-	CHECK( !ControlBar_needsWideCommandGrid( full, SLOTS ) );
-	full[ 16 ] = B;
-	CHECK( ControlBar_needsWideCommandGrid( full, SLOTS ) );
-}
-
-/* What the options menu's Hotkeys page lists for a set: each window's letter, in the steps findBars and
-   buttonKeyText take, on the windows the game's decision leaves the bar.  0 for an empty window. */
-static void hotkeysPageLetters( const Int *types, Bool spareWindows, Bool wide,
-	const std::map< std::string, WideChar >& keys, WideChar *letters )
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET };
-	Bool windowed[ SLOTS ];
-	Int shown[ SLOTS ], windowTypes[ SLOTS ], ranks[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		windowed[ slot ] = ControlBar_usesCommandWindow( slot, spareWindows, wide );
-	ControlBar_fitCommandSlots( types, windowed, SLOTS, shown );
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		windowTypes[ slot ] = shown[ slot ] >= 0 ? types[ shown[ slot ] ] : GUI_COMMAND_NONE;
-	HotKeyManager::commandBarUpgradeRanks( windowTypes, SLOTS, ranks );
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		letters[ slot ] = shown[ slot ] >= 0
-			? HotKeyManager::buttonKeyIn( AsciiString( "Command_Synthetic" ), 'Z', windowTypes[ slot ], keys, slot, ranks[ slot ] ) : 0;
-}
-
-/* The expected letters, one a window, '.' for an empty one */
-static void checkHotkeysPageLetters( const WideChar *letters, const char *expected )
-{
-	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-		CHECK_EQ( letters[ slot ], (WideChar)( expected[ slot ] == '.' ? 0 : expected[ slot ] ) );
-}
-
-/* A synthetic mod.  Its sets are made up for this test, shaped like a mod drawn for eighteen windows;
-   no mod's data is read here */
-TEST(hotkeys_page_shows_the_wide_bar_windows_and_letters)
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET };
-	const Int N = GUI_COMMAND_NONE, B = GUI_COMMAND_UNIT_BUILD, U = GUI_COMMAND_OBJECT_UPGRADE, W = GUI_COMMAND_SWITCH_WEAPON;
-	const Int A = GUI_COMMAND_ATTACK_MOVE, G = GUI_COMMAND_GUARD, S = GUI_COMMAND_STOP, P = GUI_COMMAND_SPECIAL_POWER;
-	std::map< std::string, WideChar > keys;
-	WideChar letters[ SLOTS ];
-
-	// the set that makes the bar wide: seventeen buttons, the columns' letters past fourteen
-	const Int factory[ SLOTS ] = { B, B, B, B, B, B, B, B, B, B, B, B, B, B, A, N, G, S };
-	CHECK( ControlBar_needsWideCommandGrid( factory, SLOTS ) );
-	// a bar is wide for all its sets: this one needs no wide bar and still stands on one
-	const Int soldier[ SLOTS ] = { U, U, U, U, U, N, P, W, N, W, N, N, N, N, A, N, G, S };
-	CHECK( !ControlBar_needsWideCommandGrid( soldier, SLOTS ) );
-
-	HotKeyManager::setCommandBarGrid( TRUE );
-	hotkeysPageLetters( factory, TRUE, TRUE, keys, letters );
-	checkHotkeysPageLetters( letters, "QAWSEDRFTGYHUJI.OL" );
-	hotkeysPageLetters( soldier, TRUE, TRUE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.G....I.OL" );
-
-	// the same sets on fourteen windows: the orders move, and three of the factory's seventeen have no window
-	hotkeysPageLetters( factory, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "QAWSEDRFTGYHUJ...." );
-	hotkeysPageLetters( soldier, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.GY.UJ...." );
-
-	// a mod's own ControlBar.wnd keeps all it drew, whatever the sets need
-	hotkeysPageLetters( soldier, FALSE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.G....I.OL" );
-
-	// a key for a window past fourteen counts on the wide bar alone
-	keys[ "command_synthetic@15" ] = 'M';
-	hotkeysPageLetters( soldier, TRUE, TRUE, keys, letters );
-	CHECK_EQ( letters[ 14 ], (WideChar)'M' );
-	hotkeysPageLetters( soldier, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.GY.UJ...." );
-	keys.clear();
-	HotKeyManager::setCommandBarGrid( FALSE );
-
-	// a set of Zero Hour's on its bar: every button stays in its window, the fixed letters on the orders
-	const Int humvee[ SLOTS ] = { U, U, U, N, N, N, N, N, GUI_COMMAND_EVACUATE, N, A, N, G, S, N, N, N, N };
-	hotkeysPageLetters( humvee, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "ZZZ.....V.A.GS...." );
-}
-
 TEST(hotkeys_force_attack_button_gone_from_the_bar_still_loads_from_a_file)
 {
 	/* Force Attack is Ctrl: the English label's F stays off the button */
@@ -5850,11 +5710,11 @@ TEST(hotkeys_command_bar_grid_keys_by_window_slot)
 	static const char FILE_TEXT[] =
 		"CommandBarGrid\r\n  Enabled = Yes\r\nEnd\r\n\r\n"
 		"CommandButtonHotKey Command_TransportExit@4\r\n  Key = M\r\nEnd\r\n\r\n"
-		"CommandButtonHotKey shockwave:Command_TransportExit@12\r\n  Key = NONE\r\nEnd\r\n\r\n";
+		"CommandButtonHotKey Command_TransportExit@8\r\n  Key = NONE\r\nEnd\r\n\r\n";
 	HotkeysFile file = Hotkeys_parse( FILE_TEXT, rows );
 	CHECK( file.commandBarGrid );
 	CHECK_STR( file.buttons[ "Command_TransportExit@4" ].c_str(), "M" );
-	CHECK( file.buttons.count( "shockwave:Command_TransportExit@12" ) == 1 );
+	CHECK( file.buttons.count( "Command_TransportExit@8" ) == 1 );
 	const std::string text = Hotkeys_format( file, rows );
 	CHECK( text.find( FILE_TEXT ) != std::string::npos );
 	CHECK( Hotkeys_format( Hotkeys_parse( text, rows ), rows ) == text );
@@ -20224,7 +20084,7 @@ TEST(the_pixel_past_the_last_tab_is_no_tab_at_all)
 }
 
 /** A .wnd that never set the tab size divided by it.  A .wnd that declares more tabs than the array
-	 holds indexed past it.  Both are data, and data is what a mod hands the engine. */
+	 holds indexed past it.  Both are data, and the engine takes data as it comes. */
 TEST(a_tab_control_with_no_size_or_too_many_tabs_answers_nothing)
 {
 	CHECK_EQ( GadgetTabControl_tabAtOffset( 40, 0, 3 ), -1 );
@@ -21162,7 +21022,7 @@ TEST(the_bars_windows_can_be_torn_down_twice_without_taking_the_bar_with_them)
 }
 
 /* CommandSetReforged.ini names EA's Early_Command_ChinaCarpetBomb in slot 2 of a China command center
-	 set.  Contra X Beta 2 has no such button, and CommandSet::parseCommandButton threw and stopped the
+	 set.  On data with no such button CommandSet::parseCommandButton threw and stopped the
 	 game at start.  The slot is skipped now: it stays empty and the slots after it still parse. */
 TEST(command_set_slot_naming_an_unknown_button_is_skipped)
 {
@@ -22725,447 +22585,6 @@ TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
 	CHECK_EQ(strtoulAsWindows(""), 0u);
 	CHECK_EQ(strtoulAsWindows("x1"), 0u);
 	CHECK_EQ(strtoulAsWindows("-"), 0u);
-}
-
-// No -mod replaces what the fork ships.  The set is Code/Data as the build copies it into Run, less
-// the three trees that never ship, so a new master that FileSystem::isForkOwnedPath does not cover
-// fails here instead of letting a mod quietly win over it.  Retail's own loose files stay the mod's.
-TEST(every_shipped_master_is_fork_owned_and_retail_files_are_not)
-{
-	const std::filesystem::path data = std::filesystem::path(ZH_CODE_DIR) / "Data";
-	Int masters = 0;
-	for (std::filesystem::recursive_directory_iterator it(data), end; it != end; ++it)
-	{
-		if (!it->is_regular_file())
-			continue;
-		std::string relative = std::filesystem::relative(it->path(), data).generic_string();
-		if (relative.rfind("Scenarios/", 0) == 0 || relative.rfind("Cinema/", 0) == 0 || relative == "dx11shaders.shipped")
-			continue;
-		// shipped, but the one master a mod may replace: its skirmish AI is written for its own generals
-		if (relative == "Scripts/SkirmishScripts.scb")
-			continue;
-		// the post-build copy keeps Data\ in front of these and puts the rest at the top of Run
-		const char *underData[] = { "INI/", "Scripts/", "Turkish/", "German/", "Ukrainian/", "Russian/", "French/" };
-		Bool keepsData = relative == "Patch.str";
-		for (const char *prefix : underData)
-			keepsData = keepsData || relative.rfind(prefix, 0) == 0;
-		const std::string runPath = keepsData ? "Data/" + relative : relative;
-		if (!FileSystem::isForkOwnedPath(AsciiString(runPath.c_str())))
-			printf("    not fork-owned: %s\n", runPath.c_str());
-		CHECK(FileSystem::isForkOwnedPath(AsciiString(runPath.c_str())));
-		++masters;
-	}
-	CHECK(masters > 20);
-
-	CHECK(FileSystem::isForkOwnedPath(AsciiString("Art\\Textures\\ReforgedBarGLALeft.tga")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\Scripts\\MultiplayerScripts.scb")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\Scripts\\SkirmishScripts.scb")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\Scripts\\Scripts.ini")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\INI\\GameData.ini")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\INI\\Object\\AmericaTankReforged.ini")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\English\\Movies\\EA_LOGO.bik")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Art\\Textures\\AVPaladin.tga")));
-}
-
-// -modfactions: a mod's own names get its prefix everywhere but the line's first word, a name it does
-// not define stays retail's, and a side name stays text even when the mod also calls a block that.
-TEST(modfactions_prefix_only_the_mods_own_names)
-{
-	bootOnce();
-	ModNamespace names;
-	names.scanLine( 0, "Object AmericaRanger ; the mod's own" );
-	names.scanLine( 0, "Weapon RangerGun" );
-	names.scanLine( 0, "  Weapon = PRIMARY RetailGun" );		// a field, not a definition
-	names.scanLine( 0, "CommandSet GLA CommandSet" );				// The End of Days really has this line
-	names.scanLine( 0, "  Side = GLA" );
-	names.scanLine( 0, "ObjectCreationList OCL_Mine" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 64 ];
-	strcpy( line, "Object AmericaRanger" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "Object M1~AmericaRanger" );
-	// a colon parser's keyword stays the parser's, the name after it is the mod's; a label is neither
-	strcpy( line, "  FactionOCL = Faction:GLA OCL:OCL_Mine" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  FactionOCL = Faction:GLA OCL:M1~OCL_Mine" );
-	strcpy( line, "  DisplayName = OBJECT:OCL_Mine" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  DisplayName = OBJECT:OCL_Mine" );
-	strcpy( line, "  Weapon = PRIMARY RangerGun" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Weapon = PRIMARY M1~RangerGun" );
-	strcpy( line, "  Weapon = SECONDARY RetailGun" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Weapon = SECONDARY RetailGun" );
-	strcpy( line, "  Side = GLA" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Side = GLA" );
-	strcpy( line, "RangerGun = RangerGun" );						// the first word is the field
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "RangerGun = M1~RangerGun" );
-	strcpy( line, "Object AmericaRanger" );
-	CHECK( !names.rewriteLine( line, 23 ) );						// "Object M1~AmericaRanger" needs 24
-	CHECK_STR( line, "Object AmericaRanger" );
-
-	// a finder's miss: the mod's own name stays a miss, anything else is retail's
-	AsciiString retail;
-	CHECK( !names.findRetailName( AsciiString( "M1~AmericaRanger" ), MODNAME_OBJECT, &retail ) );
-	CHECK( names.findRetailName( AsciiString( "M1~RangerGun" ), MODNAME_OBJECT, &retail ) );
-	CHECK_STR( retail.str(), "RangerGun" );
-	CHECK( !names.findRetailName( AsciiString( "M1~RangerGun" ), MODNAME_WEAPON, &retail ) );
-	CHECK( !names.findRetailName( AsciiString( "M2~AmericaRanger" ), MODNAME_OBJECT, &retail ) );	// no second mod
-	CHECK( !names.findRetailName( AsciiString( "AmericaRanger" ), MODNAME_OBJECT, &retail ) );
-	NameKeyType key;
-	CHECK( names.findRetailKey( NAMEKEY( "M1~Upgrade_Retail" ), MODNAME_UPGRADE, &key ) );
-	CHECK_EQ( key, NAMEKEY( "Upgrade_Retail" ) );
-}
-
-// Shockwave Chaos's BlackMarketTank.ini has a 1019-character BuildVariations line of 43 of its own
-// tanks. It fits the file reader, but three characters of "M2~" on each name took it past a buffer of
-// that size, and the game stopped at startup whenever Chaos ran beside another full mod.
-TEST(modfactions_prefixed_line_outgrows_the_raw_line)
-{
-	bootOnce();
-	ModNamespace names;
-	std::string line = "  BuildVariations =";
-	for (Int i = 0; i < 43; ++i)
-	{
-		char name[ 32 ];
-		snprintf( name, sizeof( name ), "ChaosVariationTank_X%02d", i );
-		names.scanLine( 1, (std::string( "Object " ) + name).c_str() );
-		line += " ";
-		line += name;
-	}
-	names.finishScan( 1 );
-	names.setActive( 1 );
-	CHECK( (Int)line.size() < INI_MAX_CHARS_PER_LINE );
-
-	char buffer[ INI_MAX_CHARS_PER_PREFIXED_LINE + 1 ];
-	strcpy( buffer, line.c_str() );
-	CHECK( !names.rewriteLine( buffer, INI_MAX_CHARS_PER_LINE + 1 ) );		// the old buffer
-	CHECK( names.rewriteLine( buffer, sizeof( buffer ) ) );
-	CHECK_EQ( (Int)strlen( buffer ), (Int)line.size() + 43 * 3 );
-	CHECK( (Int)strlen( buffer ) > INI_MAX_CHARS_PER_LINE );
-	CHECK( strstr( buffer, " M2~ChaosVariationTank_X00 " ) != NULL );
-	CHECK( strstr( buffer, " M2~ChaosVariationTank_X42" ) != NULL );
-
-	// the worst a full line can do: a one-letter name in every other character, mod 99's prefix on each
-	ModNamespace worst;
-	worst.scanLine( 98, "Object A" );
-	worst.finishScan( 98 );
-	worst.setActive( 98 );
-	std::string full = "X";
-	while ((Int)full.size() + 2 < INI_MAX_CHARS_PER_LINE)
-		full += " A";
-	strcpy( buffer, full.c_str() );
-	CHECK( worst.rewriteLine( buffer, sizeof( buffer ) ) );
-}
-
-// The Power of the West defines "FXList No", and -modfactions made every "IsGrantable = No" an
-// "M2~No" that parseBool refused: a word the parser reads for itself is never the mod's name.
-TEST(modfactions_never_prefix_a_reserved_word)
-{
-	bootOnce();
-	ModNamespace names;
-	names.scanLine( 0, "FXList No" );
-	names.scanLine( 0, "Upgrade None" );
-	names.scanLine( 0, "FXList FX_Nope" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 64 ];
-	strcpy( line, "  IsGrantable = No" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  IsGrantable = No" );
-	strcpy( line, "  PrerequisiteSciences = None" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  PrerequisiteSciences = None" );
-	strcpy( line, "  FX = FX_Nope" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  FX = M1~FX_Nope" );
-
-	// and a name it gave a block that is also an engine word ("ParticleSystem Explosion") still reads as
-	// that word where only engine words go
-	CHECK( INI::scanBool( "M2~Yes" ) );
-	CHECK_EQ( INI::scanIndexList( "M2~SMALL_ARMS", DamageTypeFlags::getBitNames() ), (Int)DAMAGE_SMALL_ARMS );
-	CHECK_STR( INI::withoutModPrefix( "M~Explosion" ), "M~Explosion" );
-	CHECK_STR( INI::withoutModPrefix( "MX2~Explosion" ), "MX2~Explosion" );
-}
-
-class ModTestArchiveFile : public ArchiveFile
-{
-public:
-	ModTestArchiveFile() { m_file = NULL; }	// the base leaves it to the device's archive to set
-	void add( const char *directory, const char *file )
-	{
-		ArchivedFileInfo info;
-		info.m_filename = file;
-		addFile( AsciiString( directory ), &info );
-	}
-	virtual Bool getFileInfo( const AsciiString&, FileInfo* ) const { return FALSE; }
-	virtual File* openFile( const Char*, Int ) { return NULL; }
-	virtual void closeAllFiles( void ) {}
-	virtual AsciiString getName( void ) { return AsciiString::TheEmptyString; }
-	virtual AsciiString getPath( void ) { return AsciiString::TheEmptyString; }
-	virtual void setSearchPriority( Int ) {}
-	virtual void close( void ) {}
-};
-
-class ModTestArchiveFileSystem : public ArchiveFileSystem
-{
-public:
-	virtual void init( void ) {}
-	virtual void update( void ) {}
-	virtual void reset( void ) {}
-	virtual void postProcessLoad( void ) {}
-	virtual ArchiveFile* openArchiveFile( const Char* ) { return NULL; }
-	virtual void closeArchiveFile( const Char* ) {}
-	virtual void closeAllArchiveFiles( void ) {}
-	virtual void closeAllFiles( void ) {}
-	virtual Bool loadBigFilesFromDirectory( AsciiString, AsciiString, Bool, Bool ) { return FALSE; }
-
-	void addRetail( ArchiveFile *archive, const char *name )
-	{
-		loadIntoDirectoryTree( archive, AsciiString( name ) );
-		m_archiveFileMap[ AsciiString( name ) ] = archive;
-	}
-	using ArchiveFileSystem::keepModsApart;
-	using ArchiveFileSystem::addModArchive;
-};
-
-// -modfactions' focus: retail sees the tree from before any -mod, a mod its own archives, nothing else
-TEST(modfactions_focus_sees_one_set_of_archives)
-{
-	bootOnce();
-	ModTestArchiveFileSystem archives;
-	ModTestArchiveFile *retail = new ModTestArchiveFile, *one = new ModTestArchiveFile, *two = new ModTestArchiveFile;
-	retail->add( "data\\ini\\", "weapon.ini" );
-	retail->add( "data\\ini\\object\\", "a.ini" );
-	one->add( "data\\ini\\", "weapon.ini" );
-	one->add( "data\\ini\\object\\", "b.ini" );
-	two->add( "data\\ini\\object\\", "c.ini" );
-	archives.addRetail( retail, "INIZH.big" );
-	archives.keepModsApart( 2 );
-	archives.addModArchive( 0, one, AsciiString( "Mods\\One\\!one.big" ) );
-	archives.addModArchive( 1, two, AsciiString( "Mods\\Two\\!two.big" ) );
-
-	const AsciiString weapon( "Data\\INI\\Weapon.ini" );
-	CHECK_STR( archives.getArchiveFilenameForFile( weapon ).str(), "INIZH.big" );	// the default view is retail's
-	archives.setFocus( FILE_FOCUS_RETAIL );
-	CHECK_STR( archives.getArchiveFilenameForFile( weapon ).str(), "INIZH.big" );
-	archives.setFocus( 0 );
-	CHECK_STR( archives.getArchiveFilenameForFile( weapon ).str(), "Mods\\One\\!one.big" );
-	archives.setFocus( 1 );
-	CHECK( !archives.doesFileExist( weapon.str() ) );
-
-	FilenameList listed;
-	archives.getFileListInDirectory( AsciiString( "" ), AsciiString( "Data\\INI\\Object\\" ), AsciiString( "*.ini" ), listed, TRUE );
-	CHECK_EQ( (Int)listed.size(), 1 );
-	CHECK( listed.begin()->endsWithNoCase( "c.ini" ) );
-	listed.clear();
-	archives.setFocus( FILE_FOCUS_RETAIL );
-	archives.getFileListInDirectory( AsciiString( "" ), AsciiString( "Data\\INI\\Object\\" ), AsciiString( "*.ini" ), listed, TRUE );
-	CHECK_EQ( (Int)listed.size(), 1 );
-	CHECK( listed.begin()->endsWithNoCase( "a.ini" ) );
-	listed.clear();
-	archives.setFocus( FILE_FOCUS_ALL );
-	archives.getFileListInDirectory( AsciiString( "" ), AsciiString( "Data\\INI\\Object\\" ), AsciiString( "*.ini" ), listed, TRUE );
-	CHECK_EQ( (Int)listed.size(), 1 );
-	CHECK( listed.begin()->endsWithNoCase( "a.ini" ) );
-
-	// a mod's own copy by index, whatever the focus: what an "M<n>~" file name asks for
-	archives.setFocus( 1 );
-	CHECK( archives.doesModFileExist( 0, weapon ) );
-	CHECK( !archives.doesModFileExist( 1, weapon ) );
-	CHECK( archives.doesModFileExist( 1, AsciiString( "Data\\INI\\Object\\c.ini" ) ) );
-	CHECK( !archives.doesModFileExist( 0, AsciiString( "Data\\INI\\Object\\a.ini" ) ) );
-	archives.setFocus( FILE_FOCUS_ALL );
-}
-
-// -modfactions: "M<n>~" on a file name's last part names mod n's copy, only with the switch and a mod n
-TEST(modfactions_split_a_mod_file_name)
-{
-	GlobalData *saved = TheWritableGlobalData;
-	TheWritableGlobalData = NEW GlobalData;
-	TheWritableGlobalData->m_mods.assign( 2, AsciiString( "Mods\\X" ) );
-	Int mod = -1;
-	AsciiString bare;
-	TheWritableGlobalData->m_modFactions = FALSE;
-	CHECK( !FileSystem::splitModName( AsciiString( "Art\\W3D\\M1~AVRanger.w3d" ), &mod, &bare ) );
-	TheWritableGlobalData->m_modFactions = TRUE;
-	CHECK( FileSystem::splitModName( AsciiString( "Art\\W3D\\M1~AVRanger.w3d" ), &mod, &bare ) );
-	CHECK_EQ( mod, 0 );
-	CHECK_STR( bare.str(), "Art\\W3D\\AVRanger.w3d" );
-	CHECK( FileSystem::splitModName( AsciiString( "m2~exsmoke.tga" ), &mod, &bare ) );
-	CHECK_EQ( mod, 1 );
-	CHECK_STR( bare.str(), "exsmoke.tga" );
-	CHECK( !FileSystem::splitModName( AsciiString( "Art\\W3D\\M3~AVRanger.w3d" ), &mod, &bare ) );	// no third mod
-	CHECK( !FileSystem::splitModName( AsciiString( "M1~Art\\W3D\\AVRanger.w3d" ), &mod, &bare ) );	// not the last part
-	CHECK( !FileSystem::splitModName( AsciiString( "Art\\W3D\\Mx~AVRanger.w3d" ), &mod, &bare ) );
-	delete TheWritableGlobalData;
-	TheWritableGlobalData = saved;
-}
-
-// -modfactions: a mod's skirmish scripts name its things as the mod's only where the mod defines that
-// kind of thing under that name
-TEST(modfactions_mod_name_by_type)
-{
-	bootOnce();
-	ModNamespace names;
-	names.scanLine( 0, "Object AmericaTankCrusader" );
-	names.scanLine( 0, "Upgrade Upgrade_AmericaTOWMissile" );
-	names.finishScan( 0 );
-	CHECK_STR( names.modName( 0, MODNAME_OBJECT, AsciiString( "AmericaTankCrusader" ) ).str(), "M1~AmericaTankCrusader" );
-	CHECK_STR( names.modName( 0, MODNAME_UPGRADE, AsciiString( "Upgrade_AmericaTOWMissile" ) ).str(), "M1~Upgrade_AmericaTOWMissile" );
-	CHECK_STR( names.modName( 0, MODNAME_UPGRADE, AsciiString( "AmericaTankCrusader" ) ).str(), "AmericaTankCrusader" );	// not an upgrade
-	CHECK_STR( names.modName( 0, MODNAME_OBJECT, AsciiString( "ChinaTankOverlord" ) ).str(), "ChinaTankOverlord" );		// retail's
-	CHECK_STR( names.modName( 1, MODNAME_OBJECT, AsciiString( "AmericaTankCrusader" ) ).str(), "AmericaTankCrusader" );	// no second mod
-}
-
-// -modfactions: an AI on a mod faction reads its own mod's AIData side, under "M<n>~<side>", and
-// retail's of the side when the mod has none; a retail AI never reads a mod's
-TEST(modfactions_ai_side_lookups_take_the_mods_own_first)
-{
-	bootOnce();
-	CHECK_STR( AI::modSideKey( AsciiString( "America" ), -1 ).str(), "America" );
-	CHECK_STR( AI::modSideKey( AsciiString( "America" ), 1 ).str(), "M2~America" );
-
-	TAiData data;
-	AISideInfo *retail = newInstance(AISideInfo);
-	retail->m_side = "America";
-	data.addSideInfo( retail );
-	AISideInfo *shockwave = newInstance(AISideInfo);
-	shockwave->m_side = AI::modSideKey( AsciiString( "America" ), 0 );
-	data.addSideInfo( shockwave );
-	CHECK( data.findSideInfo( AsciiString( "America" ), -1 ) == retail );
-	CHECK( data.findSideInfo( AsciiString( "America" ), 0 ) == shockwave );
-	CHECK( data.findSideInfo( AsciiString( "America" ), 1 ) == retail );		// a mod without its own entry
-	CHECK( data.findSideInfo( AsciiString( "Russia" ), 1 ) == NULL );
-
-	AISideBuildList *russia = newInstance(AISideBuildList)( AI::modSideKey( AsciiString( "Russia" ), 1 ) );
-	data.addFactionBuildList( russia );
-	CHECK( data.findBuildList( AsciiString( "Russia" ), 1 ) == russia );
-	CHECK( data.findBuildList( AsciiString( "Russia" ), 0 ) == NULL );			// another mod's
-	CHECK( data.findBuildList( AsciiString( "Russia" ), -1 ) == NULL );
-}
-
-// A plain Random stays with retail's armies under any mod: a mod's faction plays only when it is picked
-TEST(modfactions_stay_out_of_a_plain_random)
-{
-	PlayerTemplate faction;
-	CHECK( !faction.isRandomExcluded() );
-	faction.setModIndex( 0 );
-	CHECK( faction.isRandomExcluded() );
-}
-
-// -modfactions: which skirmish player's scripts a computer player runs.  Its own mod's of its side
-// beats retail's, retail's stands in for a mod without any, and another mod's never fits
-TEST(modfactions_skirmish_side_fit)
-{
-	const AsciiString america( "America" );
-	CHECK_EQ( SidesList::skirmishSideFit( america, -1, america, -1 ), 2 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, 0, america, 0 ), 2 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, -1, america, 0 ), 1 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, 1, america, 0 ), 0 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, 0, america, -1 ), 0 );
-	CHECK_EQ( SidesList::skirmishSideFit( AsciiString( "China" ), -1, america, -1 ), 0 );
-}
-
-// -modfactions: a word naming a model, texture or sound the mod ships gets its prefix, so WW3D and the
-// FileSystem serve the mod's copy; art it does not ship stays retail's
-TEST(modfactions_prefix_the_mods_own_art)
-{
-	bootOnce();
-	ModNamespace names;
-	names.addAsset( 0, "Art\\W3D\\AVRanger.W3D" );
-	names.addAsset( 0, "Art\\W3D\\AVRanger_STND.w3d" );
-	names.addAsset( 0, "Art\\Textures\\exsmoke.dds" );
-	names.addAsset( 0, "Data\\Audio\\Sounds\\vrange01a.wav" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 96 ];
-	strcpy( line, "  Model = avranger" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Model = M1~avranger" );
-	strcpy( line, "  Animation = AVRanger_SKL.AVRanger_STND" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Animation = M1~AVRanger_SKL.AVRanger_STND" );
-	strcpy( line, "  ParticleName = EXSmoke.tga" );		// INI says .tga, the mod ships the .dds
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  ParticleName = M1~EXSmoke.tga" );
-	strcpy( line, "  ShadowTexture = EXSmoke" );			// a decal names its texture bare, the engine adds .tga
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  ShadowTexture = M1~EXSmoke" );
-	strcpy( line, "  Sounds = vrange01a vrange01b" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Sounds = M1~vrange01a vrange01b" );
-	strcpy( line, "  Model = AVHumvee" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Model = AVHumvee" );
-	strcpy( line, "  ShowSubObject = AVRanger" );			// a sub-object, not a file
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  ShowSubObject = AVRanger" );
-
-	// a texture named like a number leaves the animation's numbers alone
-	names.addAsset( 0, "Art\\Textures\\6.dds" );
-	strcpy( line, "  IdleAnimation = AVRanger_SKL.AVRanger_STND 0 6" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  IdleAnimation = M1~AVRanger_SKL.AVRanger_STND 0 6" );
-}
-
-// -modfactions: the file in a path-shaped word is its last part, past either slash
-TEST(modfactions_last_path_part)
-{
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "x.mp3" ), 0 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "Sub\\x.mp3" ), 4 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "A\\B/x.mp3" ), 4 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "Sub\\" ), 4 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "" ), 0 );
-}
-
-// -modfactions: a MusicTrack Filename names the whole file, maybe in a subfolder; the prefix goes on the
-// last part, where FileSystem::splitModName looks for it
-TEST(modfactions_prefix_the_last_part_of_a_file_path)
-{
-	bootOnce();
-	ModNamespace names;
-	names.addAsset( 0, "Data\\Audio\\Tracks\\Sub\\Score01.mp3" );
-	names.addAsset( 0, "Data\\Audio\\Tracks\\Score02.mp3" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 96 ];
-	strcpy( line, "  Filename = Sub\\Score01.mp3" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = Sub\\M1~Score01.mp3" );
-	strcpy( line, "  Filename = Score02.mp3" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = M1~Score02.mp3" );
-	strcpy( line, "  Filename = Sub/Score02.mp3" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = Sub/M1~Score02.mp3" );
-	strcpy( line, "  Filename = Sub\\Retail.mp3" );				// not the mod's: untouched
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = Sub\\Retail.mp3" );
-	strcpy( line, "  Sounds = Score01" );						// a sound event still names the base
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Sounds = M1~Score01" );
-
-	// and the file system takes the prefix back off that part
-	GlobalData *saved = TheWritableGlobalData;
-	TheWritableGlobalData = NEW GlobalData;
-	TheWritableGlobalData->m_mods.assign( 1, AsciiString( "Mods\\X" ) );
-	TheWritableGlobalData->m_modFactions = TRUE;
-	Int mod = -1;
-	AsciiString bare;
-	CHECK( FileSystem::splitModName( AsciiString( "Data\\Audio\\Tracks\\Sub\\M1~Score01.mp3" ), &mod, &bare ) );
-	CHECK_EQ( mod, 0 );
-	CHECK_STR( bare.str(), "Data\\Audio\\Tracks\\Sub\\Score01.mp3" );
-	delete TheWritableGlobalData;
-	TheWritableGlobalData = saved;
 }
 
 #include "Common/GameState.h"

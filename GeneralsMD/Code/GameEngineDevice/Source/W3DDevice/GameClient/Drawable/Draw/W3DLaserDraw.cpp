@@ -172,7 +172,7 @@ static void markBeamSeen( DrawableID parent, DrawableID target, UnsignedInt now 
 static TextureClass *s_glowTexture = NULL;
 
 // ponytail: chosen by template name so no INI field and no checksum change; a "Glow" field in
-// W3DLaserDraw is the upgrade if a mod ever wants it per beam. Every weapon laser in ZH ends in
+// W3DLaserDraw is the upgrade if a beam ever needs it on its own. Every weapon laser in ZH ends in
 // LaserBeam; the data streams, the waypoint line and the Particle Cannon's beams do not. The
 // Avenger's target designator is a marker, not a weapon, and keeps EA's thin blue line.
 static Bool beamGlows( const Thing *thing )

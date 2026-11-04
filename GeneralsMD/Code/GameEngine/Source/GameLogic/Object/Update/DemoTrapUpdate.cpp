@@ -155,7 +155,7 @@ UpdateSleepTime DemoTrapUpdate::update()
 		return UPDATE_SLEEP_NONE;
 	}
 
-	//Get the current weapon slot -- this determines what mode we're in. A mod's trap
+	//Get the current weapon slot -- this determines what mode we're in. A trap
 	//with no weapon in its current set has no mode, so it waits for one.
 	const Weapon *currentWeapon = getObject()->getCurrentWeapon();
 	if( !currentWeapon )

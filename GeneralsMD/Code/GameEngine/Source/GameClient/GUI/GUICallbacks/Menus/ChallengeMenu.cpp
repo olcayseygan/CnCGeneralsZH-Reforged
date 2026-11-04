@@ -145,7 +145,7 @@ Int findPositionButton( Int controlID )
 
 
 //-------------------------------------------------------------------------------------------------
-// A general the loaded data cannot field: a mod's ChallengeMode.ini names a player template, a
+// A general the loaded data cannot field: a ChallengeMode.ini that names a player template, a
 // campaign, a map or an opponent its files lack, and the game found out only at the start, in a
 // crash.  The data does not change while the game runs, so each is decided and logged once.
 //-------------------------------------------------------------------------------------------------

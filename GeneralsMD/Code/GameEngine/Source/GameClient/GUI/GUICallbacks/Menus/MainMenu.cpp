@@ -285,8 +285,8 @@ static void showSelectiveButtons( Int show )
 // over the menu pops: no mission button ever moves up or down, and Back's x is theirs.
 static void showMissionMenu( const char *group )
 {
-	// a mod's Campaign.ini can leave a side's campaign out (End of Days has only the challenge ones);
-	// setCampaign found none, and that side's panel comes up with Back alone
+	// a Campaign.ini can leave a side's campaign out; setCampaign found none, and that side's panel
+	// comes up with Back alone
 	Campaign *campaign = TheCampaignManager->getCurrentCampaign();
 	Mission *mission = campaign ? campaign->getNextMission( NULL ) : NULL;
 	Int backX, backY;

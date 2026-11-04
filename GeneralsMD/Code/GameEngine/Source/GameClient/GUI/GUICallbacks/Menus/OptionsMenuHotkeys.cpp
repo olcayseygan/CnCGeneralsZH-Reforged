@@ -276,31 +276,19 @@ void findBars( void )
 			const CommandSet *set = thing ? TheControlBar->findCommandSet( thing->friend_getCommandSetString() ) : NULL;
 			if( set == NULL )
 				continue;
-			const CommandButton *slots[ MAX_COMMANDS_PER_SET ];
-			Int types[ MAX_COMMANDS_PER_SET ];
-			for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-			{
-				const CommandButton *button = set->getCommandButton( slot );
-				slots[ slot ] = ( button && !BitTest( button->getOptions(), SCRIPT_ONLY ) ) ? button : NULL;
-				types[ slot ] = slots[ slot ] ? slots[ slot ]->getCommandType() : GUI_COMMAND_NONE;
-			}
-			// the windows as the bar fills them (ControlBar::populateCommand), so a slot here is the
-			// slot a Name@slot key and the grid's letters mean: a set's button past the bar's
-			// windows moves into an empty one.  A mod's wide bar has all eighteen.
-			Bool windowed[ MAX_COMMANDS_PER_SET ];
-			Int shown[ MAX_COMMANDS_PER_SET ];
-			for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-				windowed[ slot ] = TheControlBar->hasCommandWindow( slot );
-			ControlBar_fitCommandSlots( types, windowed, MAX_COMMANDS_PER_SET, shown );
 			BarObject object;
 			object.building = thing->isKindOf( KINDOF_STRUCTURE );
 			Bool any = FALSE;
 			for( Int slot = 0; slot < BAR_SLOTS; slot++ )
 			{
-				object.slots[ slot ] = shown[ slot ] >= 0 ? slots[ shown[ slot ] ] : NULL;
+				// the windows as the bar fills them (ControlBar::populateCommand), so a slot here is the
+				// slot a Name@slot key and the grid's letters mean
+				const CommandButton *button = set->getCommandButton( slot );
+				if( !TheControlBar->hasCommandWindow( slot ) || ( button && BitTest( button->getOptions(), SCRIPT_ONLY ) ) )
+					button = NULL;
+				object.slots[ slot ] = button;
 				// a button with no picture is a blank cell on the bar that still holds its key and its
 				// place among the upgrades; it is not listed, and what only it builds is not reached
-				const CommandButton *button = object.slots[ slot ];
 				if( button == NULL || button->getButtonImage() == NULL )
 					continue;
 				any = TRUE;
@@ -446,10 +434,10 @@ void fillButtons( void )
 	}
 	const std::map< std::string, WideChar > keys = buttonKeys();
 	const std::map< KeyText, std::vector< UnicodeString > > clashes = barClashes( object );
-	// a cameo is 61 by 48 on the bar; a third of that keeps a bar's rows, eighteen on a mod's wide one, to a short scroll
+	// a cameo is 61 by 48 on the bar; a third of that keeps a bar's rows to a short scroll
 	const Int height = 22;
 	Int selectedRow = -1;
-	// the bar's own order: two rows, seven or nine across, read down each column, 1 over 2
+	// the bar's own order: two rows, seven across, read down each column, 1 over 2
 	for( Int slot = 0; slot < BAR_SLOTS; slot++ )
 	{
 		const CommandButton *button = object->slots[ slot ];
@@ -457,7 +445,7 @@ void fillButtons( void )
 			continue;
 		const UnicodeString key = buttonKeyText( object, slot, keys );
 		const Bool waiting = s_capture == CAPTURE_BUTTON && button == s_button;
-		const Bool changed = s_file.buttons.count( HotKeyManager::fileButtonName( button->getName() ) ) != 0;
+		const Bool changed = s_file.buttons.count( button->getName().str() ) != 0;
 		const Int at = GadgetListBoxAddEntryImage( s_buttonList, button->getButtonImage(), -1, 0, height, height * 61 / 48 );
 		GadgetListBoxAddEntryText( s_buttonList, buttonName( button ), changed ? CHANGED_COLOR : TEXT_COLOR, at, 1 );
 		GadgetListBoxAddEntryText( s_buttonList,
@@ -537,7 +525,7 @@ void updateNote( void )
 	else if( s_active == 1 && s_button )
 	{
 		const WideChar fixed = HotKeyManager::fixedKey( s_button->getName(), s_button->getCommandType() );
-		const std::string name = HotKeyManager::fileButtonName( s_button->getName() );
+		const std::string name = s_button->getName().str();
 		changed = s_file.buttons.count( name ) != 0;
 		canChange = TRUE;
 		if( s_capture == CAPTURE_BUTTON )
@@ -611,9 +599,9 @@ void applySelected( const HotkeyBinding *binding, Bool backToGame )
 	else if( s_active == 1 && s_button )
 	{
 		if( backToGame )
-			s_file.buttons.erase( HotKeyManager::fileButtonName( s_button->getName() ) );
+			s_file.buttons.erase( s_button->getName().str() );
 		else
-			s_file.buttons[ HotKeyManager::fileButtonName( s_button->getName() ) ] = binding->key.size() == 5 ? binding->key.substr( 4 ) : std::string();
+			s_file.buttons[ s_button->getName().str() ] = binding->key.size() == 5 ? binding->key.substr( 4 ) : std::string();
 	}
 	s_capture = CAPTURE_NONE;
 	refresh();

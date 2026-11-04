@@ -85,7 +85,7 @@ Object *IdleHackerUpdate::findInternetCenter()
 				other->isEffectivelyDead() || other->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || other->testStatus( OBJECT_STATUS_SOLD ) )
 			continue;
 		const ContainModuleInterface *contain = other->getContain();
-		if( contain == NULL || !contain->isValidContainerFor( me, TRUE ) )	// a mod's center may carry no seats
+		if( contain == NULL || !contain->isValidContainerFor( me, TRUE ) )	// a center may carry no seats
 			continue;
 		const Real distSqr = ThePartitionManager->getDistanceSquared( me, other, FROM_CENTER_2D );
 		if( best == NULL || distSqr < bestDistSqr || ( distSqr == bestDistSqr && other->getID() < best->getID() ) )

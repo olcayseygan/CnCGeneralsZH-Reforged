@@ -776,7 +776,7 @@ void W3DCommandBarBackgroundDraw( GameWindow *window, WinInstanceData *instData 
 		offset.y = now.y - TheControlBar->getPanelOrigin()->y;
 	}
 
-	// the bar is ControlBar Pro's painting, a mod faction's too, not our plates
+	// the bar is ControlBar Pro's painting, not our plates
 	if( man->isCurrentSchemePainted() )
 	{
 		man->drawPainting( offset, FALSE );
@@ -1103,7 +1103,7 @@ void W3DCommandBarHelpPopupDraw( GameWindow *window, WinInstanceData *instData )
 		return theStrings[ slot ];
 	};
 	// an icon (none for NULL) and its text after a gap, centred between top and bottom, the text cut at
-	// right: a long armour name (a mod's own, shown raw) stops at its cell's edge
+	// right: a long armour name stops at its cell's edge
 	auto figure = [&]( const Image *icon, DisplayString *value, Int gap, Int x, Int top, Int bottom, Int right, Color color )
 	{
 		const Int y = ( top + bottom - iconSize ) / 2;
@@ -1145,7 +1145,7 @@ void W3DCommandBarHelpPopupDraw( GameWindow *window, WinInstanceData *instData )
 	if( figures.cellCount == 0 )
 		return;
 	// each cell as wide as its icon and text, the room left over spread as even gaps after them; a row
-	// whose cells will not fit at all (a mod's long armour name on a narrow screen) takes even cells, cut
+	// whose cells will not fit at all (a long armour name on a narrow screen) takes even cells, cut
 	const Int rowLeft = card.lo.x + px( 10 ), rowRight = card.hi.x - px( 18 );
 	const Int rowTop = card.lo.y + px( 31 ), rowBottom = card.lo.y + px( 57 );
 	DisplayString *values[ BuildTooltipFigures::MAX_CELLS ];

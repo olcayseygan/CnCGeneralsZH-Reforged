@@ -84,7 +84,7 @@ void W3DRopeDraw::buildSegments()
 	DEBUG_ASSERTCRASH(m_segments.empty(), ("Hmmn, not empty"));
 	m_segments.clear();
 
-	// A mod's ChinookAIUpdate with RopeWobbleLen = 0 (shipped data has 10) makes this 1/0.  Windows converts
+	// A ChinookAIUpdate with RopeWobbleLen = 0 (shipped data has 10) makes this 1/0.  Windows converts
 	// the infinity to INT_MIN and draws no rope; ARM64 saturated to INT_MAX and allocated 2^31 segments.
 	// Platform/MsvcFloatCasts.h gives Windows' answer everywhere.
 	Int numSegs = floatToIntAsMsvc((float)ceil(m_maxLen / m_wobbleLen));

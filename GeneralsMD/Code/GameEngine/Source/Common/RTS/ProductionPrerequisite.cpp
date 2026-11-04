@@ -98,7 +98,7 @@ void ProductionPrerequisite::resolveNames()
  			aren't yet loaded in the world builder but will all go away later anyway etc */
 			DEBUG_ASSERTCRASH(m_prereqUnits[i].unit,("could not find prereq %s\n",m_prereqUnits[i].name.str()));
 
-			// a mod can name an Object it never defines; the name stays so a later load can still
+			// the data can name an Object it never defines; the name stays so a later load can still
 			// resolve it and the build tooltip can say what is missing. Until then the prereq is
 			// unsatisfiable: nothing a player owns matches a NULL template.
 			if( m_prereqUnits[i].unit )
@@ -230,7 +230,7 @@ void ProductionPrerequisite::addUnitPrereq( const std::vector<AsciiString>& unit
 }  // end addUnitPrereq
 
 //-------------------------------------------------------------------------------------------------
-// a prereq a mod names but never defines has no template, only its INI name (resolveNames)
+// a prereq the data names but never defines has no template, only its INI name (resolveNames)
 static UnicodeString prereqDisplayName(const ThingTemplate *unit, const AsciiString &name)
 {
 	if (unit)

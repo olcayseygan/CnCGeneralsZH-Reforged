@@ -4532,7 +4532,7 @@ void Object::crc( Xfer *xfer )
 //-------------------------------------------------------------------------------------------------
 /** One module's xfer, which names the module when it throws.  A release build compiles the
 	* DEBUG_CRASH of GameState::xferSaveData out, so without this a save, a load or a replay
-	* checkpoint that died in a mod's module said only the last "Xfer Object" line (report 1858). */
+	* checkpoint that died in a module said only the last "Xfer Object" line (report 1858). */
 //-------------------------------------------------------------------------------------------------
 static void xferModule( Xfer *xfer, BehaviorModule *module, const Object *obj )
 {

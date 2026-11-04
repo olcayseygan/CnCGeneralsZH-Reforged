@@ -255,19 +255,36 @@ static void sizeHudTray( HudTray *tray, Real scaleX, Real scaleY )
 	tray->uncoveredH = tray->uncovered ? REAL_TO_INT_CEIL( tray->uncovered->getImageHeight() * scaleY ) : 0;
 }
 
+static Bool isAsciiDigit( WideChar c )
+{
+	return c >= u'0' && c <= u'9';
+}
+
+/// the amount without the currency sign the language's text puts before it: "$ 10000" reads "10000"
+static UnicodeString amountOnly( const UnicodeString& text )
+{
+	const Int length = text.getLength();
+	Int first = 0;
+	while( first < length && !isAsciiDigit( text.getCharAt( first ) ) && text.getCharAt( first ) != u'-' )
+		first++;
+	UnicodeString out;
+	for( Int i = first; i < length; i++ )
+		out.concat( text.getCharAt( i ) );
+	return out;
+}
+
 /// text with a comma every three digits in each run of digits: "$ 10000" reads "$ 10,000"
 static UnicodeString groupThousands( const UnicodeString& text )
 {
-	struct Digit { static Bool is( WideChar c ) { return c >= u'0' && c <= u'9'; } };
 	UnicodeString out;
 	const Int length = text.getLength();
 	for( Int i = 0; i < length; i++ )
 	{
 		out.concat( text.getCharAt( i ) );
 		Int digitsAfter = 0;
-		while( i + 1 + digitsAfter < length && Digit::is( text.getCharAt( i + 1 + digitsAfter ) ) )
+		while( i + 1 + digitsAfter < length && isAsciiDigit( text.getCharAt( i + 1 + digitsAfter ) ) )
 			digitsAfter++;
-		if( Digit::is( text.getCharAt( i ) ) && digitsAfter > 0 && digitsAfter % 3 == 0 )
+		if( isAsciiDigit( text.getCharAt( i ) ) && digitsAfter > 0 && digitsAfter % 3 == 0 )
 			out.concat( (WideChar)u',' );
 	}
 	return out;
@@ -3544,6 +3561,8 @@ void InGameUI::update( void )
 				buffer = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
 			else
 				buffer.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), currentMoney );
+			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneySignPainted() )
+				buffer = amountOnly( buffer );
 			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneyGrouped() )
 				buffer = groupThousands( buffer );
 			GadgetStaticTextSetText( moneyWin, buffer );
@@ -4063,16 +4082,19 @@ static Int controlBarTop( void )
 
 //-------------------------------------------------------------------------------------------------
 /** The top of the radar's frame as it stands.  The map's shape only widens or narrows it, so this is
-	* the scheme's radar block for every map.  A scheme with no frame, or a hidden radar, gives
-	* controlBarTop. */
+	* the scheme's radar block for every map.  A scheme with no frame gives the top of its painting's
+	* radar box and ledge (its BlockRadar) where it names one, and controlBarTop otherwise, as does a
+	* hidden radar. */
 //-------------------------------------------------------------------------------------------------
 static Int radarFrameTop( void )
 {
 	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
 	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
-	if( frame == NULL || radar == NULL || radar->winIsHidden() || controlBarTop() >= TheDisplay->getHeight() )
+	if( radar == NULL || radar->winIsHidden() || controlBarTop() >= TheDisplay->getHeight() )
 		return controlBarTop();
+	if( frame == NULL )
+		return TheControlBar->getControlBarSchemeManager()->radarArtTop( controlBarTop() );
 
 	IRegion2D inner, outer;
 	radar->winGetScreenPosition( &inner.lo.x, &inner.lo.y );

@@ -1308,7 +1308,8 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 
 		// The card stands on the radar's frame, 6 above it at 1080, wherever the bar's own scale and the
 		// bar's slide or minimising put the radar: the layout's fit anchors it to the screen's bottom
-		// instead, and on 1280x1024 that sank it over the radar's top.
+		// instead, and on 1280x1024 that sank it over the radar's top.  A painting with a radar box of
+		// its own puts the card over the box's ledge (radarArtTop).
 		GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarID );
 		IRegion2D radarRect, radarOuter;
 		radar->winGetScreenPosition( &radarRect.lo.x, &radarRect.lo.y );
@@ -1319,6 +1320,8 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 		const Image *const *frame = getControlBarSchemeManager()->getRadarFrame();
 		if( frame )
 			ControlBarSchemeManager::radarFrameRect( frame, radarRect, &radarOuter );
+		else
+			radarOuter.lo.y = getControlBarSchemeManager()->radarArtTop( radarRect.lo.y );
 		parent->winSetPosition( pos.x, radarOuter.lo.y - REAL_TO_INT( 6 * k ) - cardHeight );
 
 		ICoord2D descPos;

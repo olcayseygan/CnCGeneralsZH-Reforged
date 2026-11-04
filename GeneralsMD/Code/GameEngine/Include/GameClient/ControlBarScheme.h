@@ -218,9 +218,15 @@ public:
 	ICoord2D m_moneyUL;
 	ICoord2D m_moneyLR;
 	/// MoneyFontSize: the money readout in bold at that many of the .wnd's points (0 keeps the .wnd's
-	/// font); MoneyThousands: the amount written with a comma every three digits
+	/// Arial 8); MoneyThousands: the amount written with a comma every three digits; MoneySignPainted:
+	/// the painting carries the currency sign, so the readout drops its own and stands left-aligned
 	Int m_moneyFontSize;
 	Bool m_moneyThousands;
+	Bool m_moneySignPainted;
+
+	/// RadarUL/LR: where LeftHUD, the radar, stands; a scheme without them leaves it where it is
+	ICoord2D m_radarUL;
+	ICoord2D m_radarLR;
 
 	ICoord2D m_minMaxUL;
 	ICoord2D m_minMaxLR;
@@ -343,6 +349,11 @@ public:
 	const Image *const *getPowerTray( void ) const;
 	/// the scheme on screen writes the money with thousands separators (MoneyThousands)
 	Bool isMoneyGrouped( void ) const;
+	/// the scheme on screen paints the currency sign itself (MoneySignPainted)
+	Bool isMoneySignPainted( void ) const;
+	/// the top of the radar's art on screen when the scheme names its own radar blocker (BlockRadar),
+	/// which is the bounding box of the painting's radar box and its ledge; otherwise 'fallback'
+	Int radarArtTop( Int fallback ) const;
 	/// the tooltips' art of the scheme on screen, or the console's when it has no card of its own
 	const ControlBarTooltipImages& getTooltipImages( void ) const;
 	/// the console's tooltips (Helpbox), which the shell wears

@@ -111,9 +111,9 @@ METAL = (STEEL, DARK, BRIGHT)
 def layout():
     """The bar's windows in texels (x0, y0, x1, y1); screen y is texel y + 568 at 1920x1080."""
     return dict(
-        radar=(5, 185, 327, 507),               # LeftHUD's square, sunk as the radar box's glass
-        uattack=(276, 172, 340, 236),
-        money=(899, 272, 1051, 300),            # MoneyUL/LR, in the money tab
+        radar=(5, 264, 327, 496),               # RadarUL/LR, LeftHUD, sunk as the radar box's glass
+        uattack=(276, 251, 340, 315),           # the under-attack lamp over the glass's top right corner
+        money=(924, 272, 1051, 300),            # MoneyUL/LR, in the money tab right of the painted sign
         power=(646, 320, 1304, 330),            # PowerBarUL/LR, in the rail's channel
         tools=[(579, y, 633, y + 35) for y in (354, 400, 468)],                 # options, beacon, chat
         # the idle column at the grid's right end: worker, infantry, vehicle, aircraft (Idle<Kind>UL/LR)
@@ -526,7 +526,9 @@ X0, X1 = 566, 1384                              # the centre panel
 TAB0, TAB2 = 883, 1067                          # the money tab's foot
 RIGHT_BOX = (1626, 863, 1920, 1080)
 MOUNT = (1816, 794, 1920, 878)
-RADAR_GLASS_AT = (5, 753, 327, 1075)            # LeftHUD's square on the screen
+RADAR_GLASS_AT = (5, 832, 327, 1064)            # the scheme's RadarUL/LR: LeftHUD, letterboxing the map
+MONEY_WELL = (899, 840, 1051, 868)              # the readout's glass; the painted sign at its left, MoneyUL after it
+MONEY_SIGN_AT, MONEY_SIGN_SIZE = (912, 854), 22
 SHELL_TINT, FLOOR_TINT = 0.42, 0.30
 BAR_LOOKS = {   # the bar's own steel, apart from SIDES, which the sheets, cards and emblems keep
     "America": dict(build="machined", steel=(84, 110, 142), glass=(12, 32, 40), glass_lo=(8, 21, 27),
@@ -611,7 +613,7 @@ def openings(p, kind, c):
     floor(p, plate(576, 916, 638, 1080, tl=(kind, c * 0.5), tr=(kind, c * 0.5)))     # the toolbar's own recess
     well(p, plate(646, 916, 1374, 1077, tl=(kind, c * 0.6), tr=(kind, c * 0.6)), 6, 2.5)
     well(p, plate(*grow(S(L["power"]), 2)), 5, 1.6)
-    well(p, plate(*grow(S(L["money"]), 1), tl=(kind, c), tr=(kind, c), br=(kind, c), bl=(kind, c)), 6, 2)
+    well(p, plate(*grow(MONEY_WELL, 1), tl=(kind, c), tr=(kind, c), br=(kind, c), bl=(kind, c)), 6, 2)
     floor(p, plate(RIGHT_BOX[0] + 12, RIGHT_BOX[1] + 12, 1916, 1080, tl=(kind, c * 1.5)))
     well(p, plate(*grow(S(L["portrait"]), 2)), 6, 2.5)
     well(p, plate(*S(L["exp"])), 6, 2)
@@ -620,8 +622,8 @@ def openings(p, kind, c):
 def bar_america(p):
     """Aerospace plate: 45 degree cuts, a rail whose shoulders sweep down like a wing's leading edge, blue
     chevrons swept toward the money, a ledge ending in an arrow point, panel seams, octagon studs."""
-    stack(p, [(0, 735), (317, 735), (345, 763), (345, 1080), (0, 1080)])
-    stack(p, [(0, 718), (226, 718), (262, 732), (226, 746), (0, 746)], 9, 12, 4, 2.0)
+    stack(p, [(0, 812), (317, 812), (345, 840), (345, 1080), (0, 1080)])
+    stack(p, [(0, 795), (226, 795), (262, 809), (226, 823), (0, 823)], 9, 12, 4, 2.0)
     stack(p, plate(X0, 898, X1, 1080, tl=("cut", 22), tr=("cut", 22)))
     left = [(X0, 922), (X0 + 70, 878), (TAB0 - 28, 878), (TAB0 - 4, 840), (TAB0 + 8, 830)]
     stack(p, left + mirror(left), 9, 13, 4, 2.2)
@@ -636,9 +638,9 @@ def bar_america(p):
         p.inlay([T(swept(X0 + 34 + 13 * i, 898, 914, 7, 3.2, 1)), T(swept(X1 - 34 - 13 * i, 898, 914, 7, 3.2, -1))], ACCENT, 0.7)
     seams = [plate(x, 902, x + 1, 914) for x in (TAB0 - 90, TAB0 - 180, TAB2 + 90, TAB2 + 180)]
     seams += [plate(333, y, 345, y + 1) for y in (900, 1000)] + [plate(x, 866, x + 1, 875) for x in (1700, 1780)]
-    seams += [plate(30, 721, 31, 743), plate(120, 721, 121, 743)]
+    seams += [plate(30, 798, 31, 820), plate(120, 798, 121, 820)]
     p.inlay([T(s) for s in seams], INKM, 0.8)
-    p.inlay([T(plate(40, 727, 200, 729))], ACCENT, 0.5)
+    p.inlay([T(plate(40, 804, 200, 806))], ACCENT, 0.5)
     for x, y in ((338, 1066), (1632, 1066), (1822, 870), (TAB0 + 8, 854), (TAB2 - 8, 854)):
         p.stud(x, y - TOP, 2.6)
 
@@ -646,9 +648,9 @@ def bar_america(p):
 def bar_china(p):
     """A pagoda: the money tab in two eaved steps, the rail's ends flicking up like eaves, stepped corners,
     red lacquer bands, gold studs and rows of rivets on heavy cast steel."""
-    stack(p, [(0, 735), (321, 735), (321, 745), (333, 745), (333, 755), (345, 755), (345, 1080), (0, 1080)])
-    ledge = [(0, 718), (214, 718)]
-    ledge += (curve((214, 718), (238, 718), (262, 704), 8) + curve((256, 710), (244, 738), (226, 738), 8))[1:] + [(0, 738)]
+    stack(p, [(0, 812), (321, 812), (321, 822), (333, 822), (333, 832), (345, 832), (345, 1080), (0, 1080)])
+    ledge = [(0, 795), (214, 795)]
+    ledge += (curve((214, 795), (238, 795), (262, 781), 8) + curve((256, 787), (244, 815), (226, 815), 8))[1:] + [(0, 815)]
     stack(p, ledge, 9, 12, 4, 2.0)
     stack(p, plate(X0, 898, X1, 1080, tl=("notch", 12), tr=("notch", 12)))
     left = [(X0 + 6, 922), (X0 + 12, 894)] + curve((X0 + 2, 882), (X0 - 4, 872), (X0 - 10, 862), 5)
@@ -664,7 +666,7 @@ def bar_china(p):
     L = layout()
     px0, px1 = L["power"][0], L["power"][2]
     bands = [plate(X0 + 16, 906, px0 - 6, 911), plate(px1 + 6, 906, X1 - 16, 911), plate(X0 + 30, 903, X1 - 30, 905),
-             plate(TAB0 - 36, 874, TAB2 + 36, 878), plate(10, 725, 200, 730), plate(1665, 867, 1900, 871),
+             plate(TAB0 - 36, 874, TAB2 + 36, 878), plate(10, 802, 200, 807), plate(1665, 867, 1900, 871),
              plate(1840, 798, 1910, 800)]
     p.inlay([T(b) for b in bands], ACCENT, 0.3)
     for x in range(X0 + 26, X1 - 20, 34):
@@ -674,7 +676,7 @@ def bar_china(p):
         p.rivet(x, 870 - TOP, 2.0)
     for x in range(1670, 1910, 30):
         p.rivet(x, 1076 - TOP, 2.0)
-    for y in range(760, 1070, 26):
+    for y in range(842, 1070, 26):
         p.rivet(339, y - TOP, 2.2)
     gold = [regular(x, 907 - TOP, 2.6, 12) for x in (X0 + 30, X1 - 30)]
     gold += [regular(x, 836 - TOP, 2.4, 12) for x in (TAB0 + 6, TAB2 - 6)]
@@ -685,8 +687,8 @@ def bar_china(p):
 def bar_gla(p):
     """Welded scrap: nothing square or symmetric, a bent rail, a lopsided tab, ragged edges, patch plates
     laid on out of square and welded, odd bolts.  No pipes or hoses."""
-    stack(p, jag([(0, 739), (180, 735), (296, 729), (340, 743), (349, 775), (347, 1080), (0, 1080)], 5))
-    stack(p, jag([(0, 722), (130, 718), (200, 710), (238, 714), (244, 732), (0, 740)], 7, 1.5), 9, 12, 4, 2.0)
+    stack(p, jag([(0, 816), (180, 812), (296, 806), (340, 820), (349, 852), (347, 1080), (0, 1080)], 5))
+    stack(p, jag([(0, 799), (130, 795), (200, 787), (238, 791), (244, 809), (0, 817)], 7, 1.5), 9, 12, 4, 2.0)
     stack(p, jag([(X0, 1080), (X0, 910), (X0 + 10, 898), (X1 - 4, 902), (X1, 1080)], 9))
     rail = [(X0 + 2, 920), (X0 + 16, 888), (TAB0 - 46, 884), (TAB0 - 12, 836), (TAB2 + 4, 832), (TAB2 + 50, 876),
             (X1 - 100, 878), (X1 - 34, 874), (X1, 914)]
@@ -694,15 +696,15 @@ def bar_gla(p):
     stack(p, jag([(1626, 1080), (1628, 885), (1648, 866), (1780, 863), (1920, 867), (1920, 1080)], 13))
     stack(p, jag([(1814, 878), (1818, 808), (1842, 794), (1920, 798), (1920, 878)], 17, 1.5), 9, 12, 4, 2.2)
     openings(p, "rough", 4)
-    patches = [(574, 894, 616, 914, -7), (1316, 884, 1374, 904, 4), (333, 820, 349, 880, 3), (1660, 866, 1740, 876, -2),
-               (60, 718, 120, 736, -3), (1830, 1062, 1912, 1078, 2)]
+    patches = [(574, 894, 616, 914, -7), (1316, 884, 1374, 904, 4), (333, 897, 349, 957, 3), (1660, 866, 1740, 876, -2),
+               (60, 795, 120, 813, -3), (1830, 1062, 1912, 1078, 2)]
     for i, (a, b, c, e, deg) in enumerate(patches):
         sh = sheet(a, b, c, e, deg)
         p.bump([T(sh)], 1.4, 0.8, STEEL)
         for e0, e1 in zip(sh, sh[1:] + sh[:1]):
             p.weld((e0[0], e0[1] - TOP), (e1[0], e1[1] - TOP), seed=31 + i * 7 + int(e0[0]), r=1.2)
     for i, (x, y) in enumerate(((340, 1066), (10, 1068), (X0 + 5, 1040), (X1 - 5, 1040), (1632, 1068), (1912, 1064),
-                                (1822, 866), (588, 904), (1350, 894), (90, 728))):
+                                (1822, 866), (588, 904), (1350, 894), (90, 805))):
         p.bolt(x, y - TOP, 2.6 + (i % 3) * 0.4, seed=i)
 
 
@@ -724,8 +726,8 @@ def bar_turkiye(p):
     armour panels laid over the rail with gaps and recessed fasteners, an optic housing on the ledge, range
     ticks and sensor windows, a faint pixel camouflage, and one low-contrast girih etching on the ledge and
     along the rail.  Its LED lines and lamps are bar_lights."""
-    stack(p, [(0, 735), (321, 735), (345, 759), (345, 1080), (0, 1080)])
-    stack(p, [(0, 718), (224, 718), (248, 742), (0, 744)], 9, 12, 4, 2.0)
+    stack(p, [(0, 812), (321, 812), (345, 836), (345, 1080), (0, 1080)])
+    stack(p, [(0, 795), (224, 795), (248, 819), (0, 821)], 9, 12, 4, 2.0)
     stack(p, plate(X0, 898, X1, 1080, tl=("cut", 18), tr=("cut", 18)))
     left = [(X0, 920), (X0 + 44, 880), (TAB0 - 42, 880), (TAB0 - 12, 850), (TAB0 + 8, 832)]
     stack(p, left + mirror(left), 9, 13, 4, 2.2)
@@ -737,26 +739,26 @@ def bar_turkiye(p):
               [(TAB2 + 30, 878), (TAB2 + 8, 856), (TAB2 - 2, 856), (TAB2 - 2, 878)],
               [(1640, 877), (1660, 871), (1740, 871), (1740, 877)]]
     p.bump([T(q) for q in panels], 2.2, 1.0, STEEL)
-    shell(p, plate(186, 708, 218, 728, tl=("cut", 4), tr=("cut", 6)), 9.0)
-    p.bump([T(plate(189, 710, 215, 726, tl=("cut", 3), tr=("cut", 5)))], 4.0, 1.4, STEEL)
-    well(p, regular(205, 718, 4.2, 16), 3, 1.2)
+    shell(p, plate(186, 785, 218, 805, tl=("cut", 4), tr=("cut", 6)), 9.0)
+    p.bump([T(plate(189, 787, 215, 803, tl=("cut", 3), tr=("cut", 5)))], 4.0, 1.4, STEEL)
+    well(p, regular(205, 795, 4.2, 16), 3, 1.2)
     openings(p, "cut", 5)
     for x in (X0 + 22, X1 - 40):                                     # sensor windows
         well(p, plate(x, 902, x + 18, 907), 3, 1.0)
     gaps = [plate(x, 882, x + 1, 914) for x in (X0 + 78, X1 - 79, TAB0 - 70, TAB2 + 69)]
     gaps += [plate(333, y, 345, y + 1) for y in (900, 980)] + [plate(x, 866, x + 1, 875) for x in (1760, 1840)]
-    gaps += [plate(120, 719, 121, 743)]
+    gaps += [plate(120, 796, 121, 820)]
     p.inlay([T(q) for q in gaps], INKM, 0.9)
     ticks = [plate(x, 866, x + 1, 869 if i % 5 else 872) for i, x in enumerate(range(1750, 1910, 8))]
     ticks += [plate(337, y, 340 if i % 5 else 343, y + 1) for i, y in enumerate(range(990, 1066, 8))]
     p.inlay([T(q) for q in ticks], INKM, 0.6)
     L = layout()
-    etch = [T(star8(x, 731, 5.5)) for x in range(20, 116, 16)]
-    etch += [T(q) for x in range(20, 116, 16) for q in ring(x, 731, 7.2, 0.6, 20)]
+    etch = [T(star8(x, 808, 5.5)) for x in range(20, 116, 16)]
+    etch += [T(q) for x in range(20, 116, 16) for q in ring(x, 808, 7.2, 0.6, 20)]
     etch += [T(star8(x, 907.5, 3.6)) for x in np.arange(L["power"][0] + 8, L["power"][2] - 4, 14)]
     p.inlay(etch, DARK, 0.25)
     for x, y in ((X0 + 5, 1000), (X1 - 5, 1000), (339, 1068), (1632, 1068), (X0 + 60, 910), (X1 - 60, 910),
-                 (1906, 874), (14, 739), (236, 740), (1822, 866)):
+                 (1906, 874), (14, 816), (236, 817), (1822, 866)):
         p.inlay([T(regular(x, y, 2.8, 12))], DARK, 1.0)              # a recessed fastener
         p.bump([T(regular(x, y, 1.5, 6))], 0.6, 0.6, STEEL)
     rng = np.random.default_rng(5)                                   # the plates' pixel camouflage
@@ -776,11 +778,11 @@ def bar_lights(img, p):
     lay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(lay)
     for (a, b) in (((X0 + 46, 883), (X0 + 74, 883)), ((X1 - 46, 883), (X1 - 74, 883)), ((TAB0 - 38, 877), (TAB0 - 10, 850)),
-                   ((TAB2 + 38, 877), (TAB2 + 10, 850)), ((1660, 869), (1740, 869)), ((6, 741), (110, 741)),
+                   ((TAB2 + 38, 877), (TAB2 + 10, 850)), ((1660, 869), (1740, 869)), ((6, 818), (110, 818)),
                    ((1834, 875), (1908, 875))):
         d.line([(a[0], a[1] - TOP), (b[0], b[1] - TOP)], fill=TURQ + (245,), width=1)
     for x, y, c in ((X0 + 31, 904.5, TURQ), (X1 - 31, 904.5, TURQ), (1640, 1066, AMBER), (1650, 1066, TURQ),
-                    (1822, 806, TURQ), (1822, 840, AMBER), (205, 718, TURQ)):
+                    (1822, 806, TURQ), (1822, 840, AMBER), (205, 795, TURQ)):
         d.ellipse((x - 1.8, y - TOP - 1.8, x + 1.8, y - TOP + 1.8), fill=c + (255,))
     glow = np.asarray(lay.filter(ImageFilter.GaussianBlur(3)), np.float32)
     a = np.asarray(img, np.float32)
@@ -815,11 +817,26 @@ def bar_finish(img, p, look):
     return Image.fromarray((np.dstack([rgb, al]) * 255 + 0.5).astype(np.uint8), "RGBA")
 
 
+def money_sign(img):
+    """The gold currency sign at the money well's left (the schemes' MoneySignPainted): the readout
+    is one colour, so the number is the code's white and the sign is painted."""
+    from PIL import ImageFont
+    font = ImageFont.truetype(os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts", "arialbd.ttf"), MONEY_SIGN_SIZE)
+    lay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(lay)
+    x, y = MONEY_SIGN_AT[0], MONEY_SIGN_AT[1] - TOP
+    d.text((x + 1, y + 1), "$", font=font, fill=(0, 0, 0, 200), anchor="mm")
+    d.text((x, y), "$", font=font, fill=GOLD + (255,), anchor="mm")
+    out = img.copy()
+    out.alpha_composite(lay)
+    return out
+
+
 def paint_bar(side_name="America"):
     look = BAR_LOOKS[side_name]
     p = Painter(2048, 512)
     BARS[side_name](p)
-    img = bar_finish(shade(p, look, SEAMS), p, look)
+    img = money_sign(bar_finish(shade(p, look, SEAMS), p, look))
     return BAR_POST[side_name](img, p) if side_name in BAR_POST else img
 
 
@@ -1568,6 +1585,31 @@ def put(sheet_img, img, box):
     sheet_img.paste(Image.fromarray(g), (x0 - 1, y0 - 1))
 
 
+# Minimise and promotion stand on the bar's mount (round 18) and wear the bar's colour: a raised face
+# in the side's second accent of BAR_LOOKS with the glyph engraved in it, as the prototypes drew them.
+MOUNT_KINDS = ("General", "Minimize", "Maximize")
+MOUNT_GLYPH = {"America": INK, "China": (60, 190, 70), "Gla": INK, "Turkiye": (64, 226, 214)}
+MOUNT_STATE = {"": 1.0, "H": 1.3, "P": 0.85, "I": 0.45}         # the face's brightness in each state
+
+
+def mount_button(side_name, kind, state, w, h):
+    look = dict(BAR_LOOKS[side_name])
+    build = look["build"]
+    k = MOUNT_STATE[state]
+    look["accent"] = tuple(min(255, int(c * k)) for c in look["accent2"])
+    look["accent2"] = (96, 100, 104) if state == "I" else MOUNT_GLYPH[side_name]
+    o = 32                                                      # drawn on a wider canvas: shade's noise
+    p = Painter(w + 2 * o, h + 2 * o)                           # fields go bad on one 31 texels high
+    p.frame([shape(build, o, o, o + w, o + h, 5)], 3.5, build, DARK, BEZEL_SCALE)
+    p.bump([shape(build, o + 3, o + 3, o + w - 3, o + h - 3, 3)], 1.0 if state == "P" else 2.2, 1.4, ACCENT)
+    off = o + (1 if state == "P" else 0)
+    raised, ink, *again = icon(kind, w / 2 + off, h / 2 + off, build)
+    p.inlay(raised + [q for polys in again for q in polys], ACCENT2, 0.8)
+    if ink:
+        p.inlay(ink, ACCENT, 0.0)                               # an outline glyph keeps its middle the face's
+    return shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
+
+
 def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B"):
     """The side's button sheet; frame is its radar_frame when the caller already drew it."""
     side = SIDES[side_name]
@@ -1578,8 +1620,7 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     promo_window(p, *M[prefix + "GeneralsPowerWindow"][:2], build)
     for state in ("", "H", "I"):                                # the window's close button, 60x50
         button(p, M[prefix + "GenPowerClose" + state], "Close", state, build)
-    for kind in ("Chat", "Options", "Worker", "Beacon", "General", "Minimize", "Maximize", "IdleInfantry",
-                 "IdleVehicle", "IdleAircraft"):
+    for kind in ("Chat", "Options", "Worker", "Beacon", "IdleInfantry", "IdleVehicle", "IdleAircraft"):
         for state in ("", "H", "P", "I"):
             button(p, M[prefix + kind + state], kind, state, build)
     exp_bar(p, *M[prefix + "ExpBar"][:2], build)
@@ -1598,6 +1639,10 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     pieces.update({"TrayTabDown": tray_tab(side_name), "TrayTabUp": tray_tab(side_name, up=True)})
     pieces.update(ready_glow_pieces(build, glow))
     pieces.update(tip_pieces(side))
+    for kind in MOUNT_KINDS:
+        for state in ("", "H", "P", "I"):
+            x0, y0, x1, y1 = M[prefix + kind + state]
+            pieces[kind + state] = mount_button(side_name, kind, state, x1 - x0, y1 - y0)
     for name, img in pieces.items():
         put(sheet_img, img, M.get(prefix + name, READY_GLOW_AT.get(name)))
     return sheet_img
@@ -1721,15 +1766,8 @@ def tip_card(side, head=False):
         p.frame([plate(0, 3, W - 5, H - 3, tr=("slant", 16), br=("cut", 4))], 9.0, build, screen=True)
         sink((4, 5, 5), 6, lambda r: 4 if r is not name else 3)
         tip_soften(p, W, H, 1.5, head)
-        # the tiles only on the right corners: along an edge they would smear when the code stretches it
-        h0, m0 = p.h.copy(), p.mat.copy()
-        p.facets(18, 0.06, 0.45, 23)
-        _, t, r_, b = TIP_EDGE
-        t = t if full else TIP_HEAD - 8             # the short head's tiles stop clear of its foot, so it meets TipR flat
-        flat_ = np.ones(p.h.shape, bool)
-        flat_[:t * SS, (W - r_) * SS:] = False
-        flat_[(H - b) * SS:, (W - r_) * SS:] = False
-        p.h[flat_], p.mat[flat_] = h0[flat_], m0[flat_]
+        # no tiles: on the narrow right corners their grooves read as stray crosses and broke the
+        # 30 degree cut into steps (round 18's in-game shots)
         if full:
             p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
         p.inlay([triangle(W - 28, 15, 9, 10, "left")], ACCENT, 0.6)

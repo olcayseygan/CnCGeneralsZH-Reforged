@@ -1,0 +1,16 @@
+# The Raptor's run in Scenarios/jetbreak_film.txt on Twilight Flame from the target's side: looking
+# west (heading 90) over the Overlord at the jet coming in, recorded at 120 a second for a half-speed
+# cut. It fires about 7.4 s and banks away south (left of frame) at 7.7 s before it reaches the tank;
+# the jet's height carries it up the frame, away from the tank, so the gap reads no smaller than it
+# is. A first take looking at 2120,3290 left the Overlord under the bottom edge.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -fps 120 -noFPSLimit -particlecap 2500
+#     -quickstart -noshellmap -observer -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map"
+#     -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina -seed 7
+#     -scenario jetbreak_film -cinema jetbreak_headon -recordfps 120 -video 400 620 jb_headon
+#     -wav 400 620 jb_headon -maxframes 630
+
+0.0   cut     2190 3240 0.95 90 0
+6.6   zoom    0.85 3.6
+7.4   shot
+8.0   shot

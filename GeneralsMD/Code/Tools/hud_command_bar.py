@@ -2021,8 +2021,11 @@ def check_helpbox(sheet_img):
 
 # ---------------------------------------------------------------------------------------------- the observer
 
-# The watcher's bar in the console build (OBSERVER), approved by the owner on 2026-11-03 with the rows'
-# colour lamps (round 9's A), the radar framed to the map's shape and the rack.  Every window it frames
+# The watcher's bar, its layout approved by the owner on 2026-11-03 with the rows' colour lamps (round 9's
+# A), the radar framed to the map's shape and the rack; since round 19 (2026-11-05) drawn as round 18 draws
+# the sides' bars, three tiers in the desk build (OBS_LOOK): every box flush with the screen's edges and
+# square there, its corners toward the field cut, a near-black shell, a bevelled lip, a recessed floor and
+# scanline wells, and the broadcast desk's grilles, screws, feathers and tally.  Every window it frames
 # is ControlBar.wnd's and the Observer8x6 scheme's, in screen pixels at 1920x1080; the bar stands inside
 # the .wnd's own input blockers, the scheme naming none of its own.  Its pieces are on two sheets of
 # their own, ReforgedHudObsPieces (the toolbar's buttons, the rows' hover and watched rings, the radar's
@@ -2091,71 +2094,76 @@ def paint_observer_bar():
     """The bar: the players' column on the left, a lamp beside each row, the selection window on the right
     and nothing in the middle.  The radar is the nine piece frame's (observer_radar_frame), which the
     code stands round the map's shape."""
-    b = "console"
+    b = "desk"
     p = Painter(2048, 512)
-    p.silhouette([plate(330, 172, 394, 512, tl=("round", 4), tr=("round", 16))], 4.0, b, screen=True)
-    p.frame([plate(331, 175, 393, 512, tl=("round", 3), tr=("round", 13))], 8.0, b, STEEL, screen=True)
+    # the players' column, standing on the screen's foot beside the radar, its top right cut toward the field
+    stack(p, plate(330, 740, 394, 1080, tr=("cut", 12)))
+    floor(p, plate(335, 751, 390, 1080, tr=("cut", 8)))
     for row, lamp in zip(OBS_LIST, OBS_LAMPS):
-        p.sink([shape(b, *grow(to_bar(row), 2), 4)], 4, 2)
-        lamp = to_bar(lamp)
-        p.bump([shape(b, *grow(lamp, 1.4), 3)], 1.0, 0.7, DARK)
-        p.sink([shape(b, *lamp, 3)], 1.5, 0.8)
+        well(p, shape(b, *grow(row, 2), 3), 4, 2)
+        p.bump([T(shape(b, *grow(lamp, 1.4), 2))], 1.0, 0.7, DARK)
+        well(p, shape(b, *lamp, 2), 1.5, 0.8)
     for r in (OBS_OPTIONS, OBS_CHAT):
-        p.sink([shape(b, *grow(to_bar(r), 1), 4)], 3.5, 2)
-    tally(p, 357, 180, 2.6)
-    screw(p, 340.5, 180, 2.2)
-    screw(p, 374, 180, 2.2)
+        well(p, shape(b, *grow(r, 1), 4), 3.5, 2)
+    tally(p, 357, 746 - TOP, 2.0)
+    screw(p, 341, 746 - TOP, 1.8)
+    screw(p, 373, 746 - TOP, 1.8)
 
-    p.silhouette([plate(1625, 302, 1920, 512, tl=("round", 16))], 4.0, b, screen=True)
-    p.frame([plate(1628, 305, 2048, 512, tl=("round", 13))], 8.0, b, STEEL, screen=True)
-    p.sink([shape(b, *grow(to_bar(OBS_SELECTION), 2), 8)], 8, 3)
-    p.sink([shape(b, *grow(to_bar(OBS_EXP), 1), 4)], 6, 2)
-    screw(p, 1756.5, 312.5, 2.4)
-    feathers(p, 1749, 309, 3, 48, ACCENT, left=True)
-    feathers(p, 1764, 309, 3, 48, ACCENT, left=False)
-    grille(p, 1648, 308.5, 1694, 316.5)
-    grille(p, 1819, 308.5, 1865, 316.5)
-    grille(p, 1633, 330, 1640, 496, 3.6)
-    tally(p, 1904, 312.5, 2.8)
-    return shade(p, OBSERVER, SEAMS)
+    # the selection's box, square on the screen's foot and right edge, its top left cut
+    stack(p, plate(1625, 870, 1920, 1080, tl=("cut", 24)))
+    floor(p, plate(1638, 883, 1916, 1080, tl=("cut", 16)))
+    well(p, plate(*grow(OBS_SELECTION, 2)), 6, 2.5)
+    well(p, plate(*grow(OBS_EXP, 1)), 6, 2)
+    screw(p, 1756.5, 878.5 - TOP, 2.0)
+    feathers(p, 1750, 875.5 - TOP, 2, 44, DARK, left=True, gap=2.8)
+    feathers(p, 1763, 875.5 - TOP, 2, 44, DARK, left=False, gap=2.8)
+    grille(p, 1658, 875 - TOP, 1700, 882 - TOP, 3.2)
+    grille(p, 1813, 875 - TOP, 1855, 882 - TOP, 3.2)
+    grille(p, 1630.5, 905 - TOP, 1637, 1066 - TOP, 3.2)
+    tally(p, 1904, 878.5 - TOP, 2.4)
+    p.inlay([T(plate(1880, 1072, 1912, 1073)), T(plate(1644, 1074, 1870, 1075))], INKM, 0.8)
+    return bar_finish(shade(p, OBS_LOOK, SEAMS), p, OBS_LOOK)
 
 
 def paint_observer_panel():
     """The watched player's panel (ObserverProPlayerWindow): the power rail over a header with the tally
     lit, the name and money wells, the four counts under dark label plates, and a tab down the column for
     the back button."""
-    b = "console"
+    b = "desk"
     p = Painter(512, 256)
-    main = plate(2, 56, 510, 227, tl=("round", 10), tr=("round", 14), br=("round", 14))
-    tab = plate(2, 150, 60, 254, bl=("round", 6), br=("round", 6))
-    p.silhouette([main, tab], 4.0, b)
-    p.frame([plate(4, 58, 508, 225, tl=("round", 8), tr=("round", 12), br=("round", 12)),
-             plate(4, 150, 58, 252, bl=("round", 5), br=("round", 5))], 8.0, b, STEEL)
+    # one box: the main plate over the column, its corners toward the field cut, and the tab down the column
+    # to the screen's foot, square there
+    main = plate(2, 56, 510, 227, tl=("cut", 10), tr=("cut", 18), br=("cut", 14))
+    tab = plate(2, 150, 62, 256)
+    p.tiers([main, tab], (False, True, False, False))
+    p.recess([plate(8, 84, 504, 221, br=("cut", 10)), plate(8, 84, 56, 256)], (False, True, False, False))
     p.sink([plate(*grow(to_panel(OBS_POWER), 1.5))], 3.5, 1.5)
-    grille(p, 16, 60.5, 250, 68.5, 3.2)
-    feathers(p, 486, 61, 3, 72, ACCENT, left=True, gap=2.2, t=1.2)
-    tally(p, 498, 64.5, 2.8)
-    p.sink([shape(b, *grow(to_panel(OBS_NAME), 1), 5)], 6, 3)
-    p.sink([shape(b, *grow(to_panel(OBS_MONEY), 1), 5)], 6, 3)
+    grille(p, 18, 61, 250, 69, 3.2)
+    feathers(p, 474, 61.5, 2, 60, DARK, left=True, gap=2.8)
+    tally(p, 488, 65, 2.4)
+    screw(p, 10, 65, 1.8)
+    p.sink([shape(b, *grow(to_panel(OBS_NAME), 1), 4)], 6, 2.5)
+    p.sink([shape(b, *grow(to_panel(OBS_MONEY), 1), 4)], 6, 2.5)
     for lab in OBS_LABELS:
         x0, y0, x1, y1 = to_panel(lab)
-        p.sink([shape(b, x0 + 3, y0 + 5, x1 - 3, y1 - 5, 4)], 1.4, 0.9)     # a shallow window for the white label
+        p.bump([shape(b, x0 + 2, y0 + 3, x1 - 2, y1 - 3, 3)], 2.0, 1.2, DARK)   # a dark label plate on the floor
+        p.sink([shape(b, x0 + 4, y0 + 6, x1 - 4, y1 - 6, 2)], 1.2, 0.8)
     for i, num in enumerate(OBS_NUMBERS):
         x0, y0, x1, y1 = to_panel(num)
         x0 = max(x0, 56) + 2                    # the first count stands right of the options button
-        p.sink([shape(b, x0, y0, x1 - 2, y1, 4)], 5, 2.5)
+        p.sink([shape(b, x0, y0, x1 - 2, y1, 3)], 6, 2.5)
     p.sink([shape(b, *grow(to_panel(OBS_OPTIONS), 1), 4)], 3.5, 2)
     p.sink([shape(b, *grow(to_panel(OBS_CHAT), 1), 4)], 3.5, 2)
-    feathers(p, 494, 214, 2, 120, ACCENT, left=True, gap=3.0, t=1.4)
-    screw(p, 70, 218, 2.2)
-    return shade(p, OBSERVER)
+    p.inlay([plate(70, 216, 480, 217)], INKM, 0.8)
+    screw(p, 494, 216, 1.8)
+    return bar_finish(shade(p, OBS_LOOK), p, OBS_LOOK, gloss=False)
 
 
 def paint_observer_pieces():
     """ReforgedHudObsPieces, 512x512: the toolbar's three buttons in four states, the hovered (RowH) and
     the watched (RowS) row's rings that stand 4 px round a 45x30 player button, the radar's nine and the
     sides' emblems (paint_side_emblems, variant A)."""
-    b = "console"
+    b = "desk"
     M = read_mapped("Obs", "Pieces")
     p = Painter(*OBS_PIECES_SIZE)
     for name, r in M.items():
@@ -2166,16 +2174,17 @@ def paint_observer_pieces():
         base = kind[:-1] if st else kind
         if base in ("Options", "Chat", "Back"):
             button(p, r, base, st, b)
-        else:                                   # a ring round the button, its middle open
+        else:                                   # a ring round the button, its middle open: shell and lip
             x0, y0, x1, y1 = r
-            p.frame([shape(b, x0, y0, x1, y1, 7)], 3.0, b, BRIGHT if st == "H" else STEEL)
+            sl, m, d = p.tiers([shape(b, x0, y0, x1, y1, 5)], (False,) * 4, 3.0, 5.0, 1.4, 1.0, 1.4)
             if st == "H":
+                p.mat[sl][m & (d > 1.4)] = BRIGHT
                 p.inlay([plate(x0 + 9, y1 - 2.6, x1 - 9, y1 - 1.4)], HILITE, 0.2)
             else:                               # the watched one: on air, red bars top and bottom
                 p.inlay([plate(x0 + 9, y0 + 1.4, x1 - 9, y0 + 2.6), plate(x0 + 9, y1 - 2.6, x1 - 9, y1 - 1.4)], ACCENT2, 0.2)
-            p.cut([shape(b, x0 + 4, y0 + 4, x1 - 4, y1 - 4, 3)])
+            p.cut([shape(b, x0 + 4, y0 + 4, x1 - 4, y1 - 4, 2)])
     p.limit[:] = True
-    sheet_img = shade(p, OBSERVER, shadow=False)
+    sheet_img = bar_finish(shade(p, OBS_LOOK, shadow=False), p, OBS_LOOK, scan=False, gloss=False)
     for name, img in radar_pieces(observer_radar_frame(), OBS_RADAR_EDGE).items():
         put(sheet_img, img, M["ObserverProRadar" + name])
     for name, img in paint_side_emblems("A").items():
@@ -2670,11 +2679,11 @@ def observer_radar_frame():
     W, H = l + RADAR_INSIDE + r, t + RADAR_INSIDE + b
     p = Painter(W + 8, H + 8)
     o, w = (0, 8, W, H + 8), (l, 8 + t, l + RADAR_INSIDE, 8 + t + RADAR_INSIDE)
-    p.silhouette([plate(*o, tr=("round", 5))], 4.0, "console", screen=True)
-    p.frame([plate(o[0], o[1] + 1, o[2] - 1, o[3], tr=("round", 4))], 7.0, "console", STEEL, screen=True)
+    # three tiers in five texels: a two texel shell, the lip, the glass's well; open on the left and the foot
+    p.tiers([plate(*o, tr=("cut", 6))], (False, True, True, False), 4.0, 7.0, 2.0, 1.2, 2.0)
     p.sink([plate(*grow(w, 2))], 6, 2)
-    p.inlay([plate(o[0], o[1] + 4.4, o[2] - 7, o[1] + 5.4)], ACCENT, 0.3)
-    return shade(p, OBSERVER, shadow=False).crop((0, 8, W, H + 8))
+    p.inlay([plate(o[0], o[1] + 5, o[2] - 9, o[1] + 6)], INKM, 0.6)
+    return bar_finish(shade(p, OBS_LOOK, shadow=False), p, OBS_LOOK, scan=False, gloss=False).crop((0, 8, W, H + 8))
 
 
 # ---------------------------------------------------------------------------------------------- the spectator's rack
@@ -2710,7 +2719,8 @@ def lit(w, h, draw, shadow=False, pad=24):
     p = Painter(w + 2 * pad, h + 2 * pad)
     draw(Offset(p, pad, pad))
     p.limit[:] = True
-    return shade(p, OBSERVER, shadow=shadow, falloff=False).crop((pad, pad, pad + w, pad + h))
+    img = bar_finish(shade(p, OBS_LOOK, shadow=shadow, falloff=False), p, OBS_LOOK, gloss=False)
+    return img.crop((pad, pad, pad + w, pad + h))
 
 
 def lens(p, cx, cy, r, mat=GLASS):
@@ -2744,14 +2754,15 @@ RACK_TAB_OUT = {"": 22, "H": 15, "On": 2}
 def rack_reference(rows=2, body=12):
     """A drawer with everything a slice is cut from: the cap with its label and handle, the standings'
     head with the dial's socket, rows, a plain body for the watch drawer, and the foot."""
-    b = "console"
+    b = "desk"
     H = RACK_TOP + RACK_HEAD + rows * RACK_PITCH + body + RACK_FOOT
 
     def draw(p):
-        p.silhouette([plate(6, 6, RACK_W + 20, H - 6, tl=("round", 10), bl=("round", 10))], 4.0, b)
-        p.frame([plate(7.5, 7.5, RACK_W + 20, H - 7.5, tl=("round", 8.5), bl=("round", 8.5))], 7.0, b, STEEL)
-        for x in (10, 13):                      # the runner down the drawer's side
-            p.inlay([plate(x, 16, x + 1, H - 16)], INKM, 1.0)
+        # shell and lip, the right side running on past the crop (the screen's edge), the corners toward
+        # the field cut; under the cap the standings and the watch drawer's body are one recessed floor
+        p.tiers([plate(6, 6, RACK_W + 20, H - 6, tl=("cut", 10), bl=("cut", 10))], (False,) * 4)
+        p.recess([plate(18, RACK_TOP + 1, RACK_W + 20, H - RACK_FOOT + 1, tl=("cut", 5), bl=("cut", 5))], (False,) * 4)
+        p.inlay([plate(13, 22, 14, H - 22)], INKM, 1.0)     # the runner down the drawer's side
         p.sink([shape(b, *RACK_LABEL, 3)], 2, 1.0)
         for x in (224, 284):
             p.bump([shape(b, x, 10, x + 8, 22, 2)], 1.6, 0.8, DARK)
@@ -2775,12 +2786,12 @@ def rack_reference(rows=2, body=12):
 
 def drawer_reference(rows=2):
     """The armies drawer, out to the left of the standings on two runners, its rows level with theirs."""
-    b = "console"
+    b = "desk"
     H = DRAWER_TOP + rows * RACK_PITCH + RACK_FOOT
 
     def draw(p):
-        p.silhouette([plate(6, 3, DRAWER_W + 20, H - 6, tl=("round", 6), bl=("round", 6))], 3.0, b)
-        p.frame([plate(7.5, 4.5, DRAWER_W + 20, H - 7.5, tl=("round", 4.5), bl=("round", 4.5))], 6.0, b, STEEL)
+        p.tiers([plate(6, 3, DRAWER_W + 20, H - 6, tl=("cut", 6), bl=("cut", 6))], (False,) * 4, 3.0, 6.0, 4.0, 2.0)
+        p.recess([plate(18, DRAWER_TOP - 1, DRAWER_W + 20, H - RACK_FOOT + 1)], (False,) * 4, 2.5, 1.5)
         for y in (6, H - 11):                   # the runners, a dark channel with a bright slide in it
             p.sink([plate(20, y, DRAWER_W + 20, y + 4)], 2.0, 0.6, DARK)
             p.bump([plate(28, y + 1.2, DRAWER_W + 20, y + 2.8)], 1.4, 0.5, BRIGHT)
@@ -2798,9 +2809,9 @@ def lever(position, state):
     cx = (22, 78, 134)[position]
 
     def draw(p):
-        b = "console"
-        p.frame([plate(0, 2, w, 30, ("round", 12), ("round", 12), ("round", 12), ("round", 12))], 2.5, b, STEEL)
-        p.sink([plate(6, 8, w - 6, 24, ("round", 7), ("round", 7), ("round", 7), ("round", 7))], 3.5, 1.2, GLASS)
+        c8, c5 = ("cut", 8), ("cut", 5)
+        p.tiers([plate(0, 2, w, 30, c8, c8, c8, c8)], (False,) * 4, 3.0, 5.0, 2.0, 1.2, 2.0)
+        p.sink([plate(6, 8, w - 6, 24, c5, c5, c5, c5)], 3.5, 1.2, GLASS)
         for x in (22, 78, 134):                 # a detent at each stop
             p.sink([plate(x - 2, 24, x + 2, 27.5)], 1.2, 0.5, DARK)
         if state == "H":
@@ -2816,8 +2827,8 @@ def rocker(on, state):
     hover = state == "H"
 
     def draw(p):
-        b = "console"
-        p.frame([shape(b, 0, 0, w, h, 6)], 3.0, b, BRIGHT if hover else STEEL)
+        b = "desk"
+        p.tiers([shape(b, 0, 0, w, h, 6)], (False,) * 4, 3.0, 5.0, 1.8, 1.2, 1.8, BRIGHT if hover else None)
         p.sink([shape(b, 4, 4, w - 4, h - 4, 4)], 3.0, 1.0, DARK)
         p.bump([shape(b, 7, 7, w - 7, h - 7, 3)], 2.6, 1.0, STEEL if hover else DARK)
         p.ramp([shape(b, 7, 7, w - 7, h - 7, 3)], -1.6 if on else 1.6, 1.6 if on else -1.6)
@@ -2853,8 +2864,9 @@ def index_tab(state):
     x0 = RACK_TAB_OUT[state]
 
     def draw(p):
-        b = "console"
-        p.frame([plate(x0, 1, w + 10, h - 1, tl=("round", 5), bl=("round", 5))], 3.0, b, BRIGHT if state == "H" else STEEL)
+        b = "desk"
+        p.tiers([plate(x0, 1, w + 10, h - 1, tl=("cut", 5), bl=("cut", 5))], (False,) * 4, 3.0, 5.0, 1.8, 1.2, 1.8,
+                BRIGHT if state == "H" else None)
         p.sink([shape(b, x0 + 4, 7, x0 + 9, h - 7, 1.5)], 1.5, 0.6)
         if state == "On":
             lens(p, x0 + 16, h / 2, 2.8, ACCENT2)

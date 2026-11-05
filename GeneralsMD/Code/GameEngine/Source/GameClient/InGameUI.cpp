@@ -168,7 +168,6 @@ enum
 	PRODUCTION_LIST_LIFT		= 2,		///< clearance between the queue tray's foot and the radar frame's top
 	HUD_CELL_CAMEO_W				= 39,		///< a production or superweapon cameo: the general's power shortcut's
 	HUD_CELL_CAMEO_H				= 27,
-	HUD_CELL_GAP						= 2,		///< twice the superweapon owner line's height
 	HUD_CELL_POINT_SIZE			= 7,		///< the seconds and the "xN" written in a cameo
 	HUD_CELL_TRAY_CELL_W		= 80,		///< the general's powers tray's cell piece at 1080, round its
 	HUD_CELL_TRAY_CELL_H		= 70,		///< power button; a cameo's cell keeps the same margins to scale
@@ -426,13 +425,13 @@ static void drawHudTray( const HudTray &tray, const IRegion2D *cells, Int count,
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A charged superweapon's light: its owner's colour cast up off the underline over the cameo,
-	* strongest at the line and gone by the top, breathing once every HUD_READY_GLOW_PERIOD_MS on the
+/** A charged superweapon's light: its owner's colour cast up off the foot of its ring over the
+	* cameo, strongest at the foot and gone by the top, breathing once every HUD_READY_GLOW_PERIOD_MS on the
 	* logic clock, so it holds still while the game is paused.  The piece, <side>ProHudReadyGlow, is
 	* grey light on black drawn additively: the vertex colour, the owner's scaled by the breath,
 	* multiplies it (Render2DClass draws with GRADIENT_MODULATE) and the sum brightens the cameo
 	* without hiding it.  Over it <side>ProHudReadyShimmer, a band of light as tall as the cameo and
-	* brightest along its top edge, climbs from the underline to HUD_READY_SHIMMER_RISE of the cameo
+	* brightest along its top edge, climbs from the foot to HUD_READY_SHIMMER_RISE of the cameo
 	* once a breath and fades as it goes, clipped to the cameo: Tools/hud_command_bar.py shimmer_rise,
 	* the owner's pick from the round 8 preview.  A piece the sheet lacks is left out. */
 //-------------------------------------------------------------------------------------------------
@@ -455,7 +454,7 @@ static void drawReadyGlow( const Image *glow, const Image *shimmer, const IRegio
 	if( shimmer == NULL )
 		return;
 
-	// the band's top edge stands rise of the cameo up off the underline; below the cameo it is cut
+	// the band's top edge stands rise of the cameo up off the foot; below the cameo it is cut
 	const Real rise = HUD_READY_SHIMMER_RISE / 100.0f * phase;
 	const Real fade = (Real)pow( 1.0f - phase, 0.7 );
 	const Int height = cameo.hi.y - cameo.lo.y;
@@ -586,6 +585,38 @@ static void drawHudCellBorder( const IRegion2D &cameo, Color border )
 	if( border != GAME_COLOR_UNDEFINED )
 		TheDisplay->drawOpenRect( cameo.lo.x - 1, cameo.lo.y - 1, cameo.hi.x - cameo.lo.x + 2, cameo.hi.y - cameo.lo.y + 2,
 															1, border );
+}
+
+/// a band `width` thick just inside the box lo.x, lo.y to hi.x, hi.y, on all four sides
+static void fillFrame( Int loX, Int loY, Int hiX, Int hiY, Int width, Color color )
+{
+	TheDisplay->drawFillRect( loX, loY, hiX - loX, width, color );
+	TheDisplay->drawFillRect( loX, hiY - width, hiX - loX, width, color );
+	TheDisplay->drawFillRect( loX, loY + width, width, hiY - loY - 2 * width, color );
+	TheDisplay->drawFillRect( hiX - width, loY + width, width, hiY - loY - 2 * width, color );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Whose a superweapon is, charged or not: a thick ring in its owner's colour on all four sides of
+	* the cameo, from one pixel over the picture's edge out to a keyline at the cell's side edge, light
+	* under a dark colour and dark under a light one, so a navy, an olive or a black owner reads on
+	* every side's tray.  At 1080 that is 3 pixels of colour and 1 of keyline, the owner's pick from
+	* round 19 (experiments/hud-sides-modern/superweapon/sw.py, variant A); `margin` is the cell's side
+	* margin, so it keeps its proportion at every HUD Size.  The readout stands inside it: its frame is
+	* never under a pixel. */
+//-------------------------------------------------------------------------------------------------
+static void drawOwnerRing( const IRegion2D &cameo, Color owner, Int margin )
+{
+	UnsignedByte r, g, b, a;
+	GameGetColorComponents( owner, &r, &g, &b, &a );
+	const Bool dark = 299 * r + 587 * g + 114 * b < 90 * 1000;
+	const Color keyline = dark ? GameMakeColor( 214, 216, 220, 255 ) : GameMakeColor( 10, 10, 12, 255 );
+	const Int keylineWidth = max( margin / 3, 1 );
+	const Int out = max( margin - keylineWidth, 1 );
+	fillFrame( cameo.lo.x - out - keylineWidth, cameo.lo.y - out - keylineWidth,
+						 cameo.hi.x + out + keylineWidth, cameo.hi.y + out + keylineWidth, keylineWidth, keyline );
+	fillFrame( cameo.lo.x - out, cameo.lo.y - out, cameo.hi.x + out, cameo.hi.y + out, out + 1,
+						 GameMakeColor( r, g, b, 255 ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -7506,7 +7537,7 @@ void InGameUI::postDraw( void )
 	if (TheGameLogic->getFrame() > 0 )
 	{
 		//
-		// The cameos in the top right, everybody's as EA listed them, bare, each underlined in its
+		// The cameos in the top right, everybody's as EA listed them, bare, each ringed in its
 		// owner's colour.  Everything the loop below finds is gathered first
 		// and drawn at the end of it, the charged ones and then the soonest ready at the right hand
 		// end, so the one that matters next is always in the same place however many are behind it.
@@ -7514,7 +7545,6 @@ void InGameUI::postDraw( void )
 		struct ListedSuperweapon
 		{
 			const Image *cameo;
-			Color border;				///< its power button's, as the tray draws it
 			Color owner;
 			Bool ready;
 			Int seconds;
@@ -7637,7 +7667,6 @@ void InGameUI::postDraw( void )
                                       ? owningObject->getID() : INVALID_ID;
                 const CommandButton *shortcut = powerButton( info->getSpecialPowerTemplate() );
                 ListedSuperweapon line = { shortcut ? shortcut->getButtonImage() : NULL,
-                                           shortcut ? hudCellBorder( shortcut->getCommandButtonMappedBorderType() ) : GAME_COLOR_UNDEFINED,
                                            clientColor( info->getColor() ), isReady, readySecs, percent, jump };
                 listed.push_back( line );
                 if (info->getSpecialPowerTemplate()->isSharedNSync())
@@ -7673,8 +7702,6 @@ void InGameUI::postDraw( void )
 			const HudCellStyle style = hudCellStyle();
 			const Int cameoW = style.cameoW;
 			const Int cameoH = style.cameoH;
-			const Int gap = stripPixels( HUD_CELL_GAP );
-			const Int underline = max( gap / 2, 1 );		///< whose it is, in the cell's margin under the border
 			const Int right = TheDisplay->getWidth();
 			const Int top = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP ) + style.superweapon.footH;
 			const Bool more = (Int)listed.size() > SUPERWEAPON_LIST_CELLS;
@@ -7701,7 +7728,7 @@ void InGameUI::postDraw( void )
 				if( listed[ each ].cameo != NULL )
 					TheDisplay->drawImage( listed[ each ].cameo, place[ each ].lo.x, place[ each ].lo.y,
 																 place[ each ].hi.x, place[ each ].hi.y );
-			// charging, the scrim swept off as the charge runs; charged, its owner's light rising off the line
+			// charging, the scrim swept off as the charge runs; charged, its owner's light rising off the foot
 			for( Int each = 0; each < cameos; each++ )
 			{
 				if( !listed[ each ].ready )
@@ -7710,12 +7737,10 @@ void InGameUI::postDraw( void )
 				else
 					drawReadyGlow( style.readyGlow, style.readyShimmer, place[ each ], listed[ each ].owner );
 			}
+			// a ring in its owner's colour says whose it is, charged or not: a tint on the readout's plate
+			// would leave a charged one, which wears no readout, with no owner at all
 			for( Int each = 0; each < cameos; each++ )
-				drawHudCellBorder( place[ each ], listed[ each ].border );
-			// an underline in its owner's colour says whose it is, charged or not: a tint on the readout's
-			// plate would leave a charged one, which wears no readout, with no owner at all
-			for( Int each = 0; each < cameos; each++ )
-				TheDisplay->drawFillRect( place[ each ].lo.x, place[ each ].hi.y + 1, cameoW, underline, listed[ each ].owner );
+				drawOwnerRing( place[ each ], listed[ each ].owner, style.marginX );
 			TheDisplay->endBatch2D();
 
 			// a charged one wears no number: zero seconds says nothing the glow does not

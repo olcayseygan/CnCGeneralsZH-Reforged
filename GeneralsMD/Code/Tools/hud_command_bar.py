@@ -1500,7 +1500,7 @@ def tray_tab(side_name, up=False):
 
 
 # A charged superweapon's light (InGameUI.cpp drawReadyGlow): stretched over the cameo, its foot on the
-# owner's underline, drawn additively and multiplied by the owner's colour scaled by the breath (0.55 to
+# foot of the owner's ring, drawn additively and multiplied by the owner's colour scaled by the breath (0.55 to
 # 1).  So it is grey light on black, opaque: white along the bottom row, falling off on a square curve to
 # black about 85% of the way up, faint rays rising through it (a few texels wide, unevenly spaced, each
 # 20 to 30% brighter or darker) and a faint scanline every third row.  Each build seeds its own rays.
@@ -1534,7 +1534,7 @@ def grey_light(v):
 def ready_shimmer(build):
     """Variant B's second piece: a band of light, brightest along its top edge and trailing off below it
     over 18 rows, the rest black.  It is drawn over the glow, additive and in the owner's colour like
-    it, its top edge climbing from the underline to 85% of the cameo once a breath and fading as it
+    it, its top edge climbing from the cameo's foot to 85% of the cameo once a breath and fading as it
     goes (shimmer_rise), as InGameUI.cpp drawReadyGlow draws it."""
     w, h = READY_GLOW
     seed, lo, hi = READY_RAYS[build]
@@ -1550,7 +1550,7 @@ def ready_shimmer(build):
 
 def shimmer_rise(phase):
     """Where variant B's band stands at a phase of the breath (0..1): its top edge as a share of the
-    cameo's height from the underline, and how bright it is there."""
+    cameo's height from its foot, and how bright it is there."""
     return 0.85 * phase, (1 - phase) ** 0.7
 
 

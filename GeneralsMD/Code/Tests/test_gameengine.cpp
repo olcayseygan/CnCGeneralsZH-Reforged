@@ -1389,9 +1389,9 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 
 #include "Common/MultiplayerSettings.h"
 
-/* A slot, a replay and a preference hold a colour by its place in the list, so the fork's five have
+/* A slot, a replay and a preference hold a colour by its place in the list, so the fork's eight have
    to follow EA's eight and leave them as they were.  EA's list is in INIZH.big, so it is copied here. */
-TEST(multiplayer_reforged_ini_appends_five_colours_after_eas_eight)
+TEST(multiplayer_reforged_ini_appends_eight_colours_after_eas_eight)
 {
 	static const struct { const char *tooltip; Int r, g, b, nightR, nightG, nightB; } colours[] =
 	{
@@ -1403,11 +1403,14 @@ TEST(multiplayer_reforged_ini_appends_five_colours_after_eas_eight)
 		{ "Color:SkyBlue",   50, 215, 230,   50, 215, 230 },
 		{ "Color:Purple",   150,   0, 200,  223,   0, 156 },
 		{ "Color:Pink",     255, 150, 255,  255, 130, 248 },
-		{ "Color:Crimson",  165,  15,  45,  205,  45,  80 },
-		{ "Color:Azure",      0, 165, 255,    0, 165, 255 },
-		{ "Color:Salmon",   240, 120, 135,  240, 120, 135 },
-		{ "Color:Teal",       0, 175, 140,    0, 175, 140 },
-		{ "Color:Lavender", 165, 165, 255,  165, 165, 255 },
+		{ "Color:Teal",       0, 140, 130,    0, 180, 165 },
+		{ "Color:Lime",     166, 217,   0,  166, 217,   0 },
+		{ "Color:Navy",      37,  59, 155,   70, 100, 225 },
+		{ "Color:Magenta",  201,   0, 120,  240,  30, 160 },
+		{ "Color:Brown",    164,  90,  42,  200, 120,  65 },
+		{ "Color:Lavender", 165, 139, 255,  165, 139, 255 },
+		{ "Color:Coral",    240,  90,  69,  240,  90,  69 },
+		{ "Color:Olive",    120, 140,   0,  160, 180,  20 },
 	};
 
 	CHECK( bootOnce() );
@@ -1430,9 +1433,9 @@ TEST(multiplayer_reforged_ini_appends_five_colours_after_eas_eight)
 	CHECK( loadIni( TEST_INI ) );
 	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 8 );
 	CHECK( loadIni( MULTIPLAYER_REFORGED_INI ) );
-	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 13 );
+	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 16 );
 
-	for( Int i = 0; i < 13 && TheMultiplayerSettings->getNumColors() == 13; ++i )
+	for( Int i = 0; i < 16 && TheMultiplayerSettings->getNumColors() == 16; ++i )
 	{
 		MultiplayerColorDefinition *def = TheMultiplayerSettings->getColor( i );
 		const RGBColor day = def->getRGBValue();

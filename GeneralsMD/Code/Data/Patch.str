@@ -3596,24 +3596,36 @@ GUI:FactionPickSideNameHint
 END
 
 // the fork's player colours (MultiplayerReforged.ini); EA's eight are in the CSF
-Color:Crimson
-"Crimson"
-END
-
-Color:Azure
-"Azure"
-END
-
-Color:Salmon
-"Salmon"
-END
-
 Color:Teal
 "Teal"
 END
 
+Color:Lime
+"Lime"
+END
+
+Color:Navy
+"Navy"
+END
+
+Color:Magenta
+"Magenta"
+END
+
+Color:Brown
+"Brown"
+END
+
 Color:Lavender
 "Lavender"
+END
+
+Color:Coral
+"Coral"
+END
+
+Color:Olive
+"Olive"
 END
 
 // the LAN lobby's error box when the system bound the socket on another adapter; the first %ls is the

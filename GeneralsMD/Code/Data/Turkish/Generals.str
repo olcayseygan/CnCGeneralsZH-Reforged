@@ -489,24 +489,36 @@ Color:Pink
 "Pembe"
 END
 
-Color:Crimson
-"Kızıl"
-END
-
-Color:Azure
-"Gök Mavisi"
-END
-
-Color:Salmon
-"Somon"
-END
-
 Color:Teal
 "Turkuaz"
 END
 
+Color:Lime
+"Limon Yeşili"
+END
+
+Color:Navy
+"Lacivert"
+END
+
+Color:Magenta
+"Fuşya"
+END
+
+Color:Brown
+"Kahverengi"
+END
+
 Color:Lavender
 "Lavanta"
+END
+
+Color:Coral
+"Mercan"
+END
+
+Color:Olive
+"Zeytin Yeşili"
 END
 
 GUI:ShowBehindBuildings

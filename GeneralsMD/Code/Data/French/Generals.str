@@ -485,24 +485,36 @@ Color:Pink
 "Rose"
 END
 
-Color:Crimson
-"Cramoisi"
-END
-
-Color:Azure
-"Azur"
-END
-
-Color:Salmon
-"Saumon"
-END
-
 Color:Teal
 "Sarcelle"
 END
 
+Color:Lime
+"Citron vert"
+END
+
+Color:Navy
+"Bleu marine"
+END
+
+Color:Magenta
+"Magenta"
+END
+
+Color:Brown
+"Marron"
+END
+
 Color:Lavender
 "Lavande"
+END
+
+Color:Coral
+"Corail"
+END
+
+Color:Olive
+"Olive"
 END
 
 MSG:Testing

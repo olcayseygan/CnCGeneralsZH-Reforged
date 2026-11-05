@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Modern water reflections and detail
+
+- On Linux and macOS, Modern water now offers Legacy, SSR and Hybrid reflections. Hybrid combines reflected scenery with visible screen detail, including coloured banks and ordinary models, while keeping cursors and order markers out of the water.
+- A Water tab adds scene reflections, wave detail, refraction and planar reflection detail controls. The quality slider adjusts these together, and saved choices survive switching back to Classic. Classic remains the default water style.
+
 ## A shot from the fog gives the shooter away
 
 - When something you cannot see hits one of your units or buildings, the fog opens around the shooter for two and a half seconds: a small circle, just wide enough to show what fired and not the ground around it. Artillery behind a ridge or a jet out of the dark shows itself the moment its shot lands. Your allies see it too, as they see everything else you see. A stealthed unit nobody has detected stays hidden, and a shot from something you can already see opens nothing. A replay recorded before this change plays out differently.

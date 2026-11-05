@@ -1766,6 +1766,8 @@ DECLARE_PERF_TIMER(Terrain_Render)
 void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 {
 	USE_PERF_TIMER(Terrain_Render)
+	const Bool modernFullMirror = TheWaterRenderObj && TheWaterRenderObj->isModernFullMirror();
+	const Bool drawGround = !ShaderClass::Is_Backface_Culling_Inverted() || modernFullMirror;
 	
 	Int i,j,devicePasses;
 	W3DShaderManager::ShaderTypes st;
@@ -1858,7 +1860,12 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	else
 	{
 		DX8Wrapper::Set_Material(m_vertexMaterialClass);
-		DX8Wrapper::Set_Shader(m_shaderClass);
+		// The reflected camera is below the banks. Draw both sides of the ground in Modern's
+		// coloured mirror; the water plane still clips away everything below the surface.
+		ShaderClass terrainShader(m_shaderClass);
+		if (modernFullMirror)
+			terrainShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+		DX8Wrapper::Set_Shader(terrainShader);
 
 		if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT) {
 			doCloud = false;
@@ -1867,8 +1874,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
  		st=W3DShaderManager::ST_TERRAIN_BASE; //set default shader
  		
  		//set correct shader based on current settings
- 		if (!ShaderClass::Is_Backface_Culling_Inverted())
- 		{	//not reflection pass
+		if (drawGround)
+		{	//the main view and Modern mirror use the normal lit terrain
  			if (TheGlobalData->m_useLightMap && doCloud)
  			{	st=W3DShaderManager::ST_TERRAIN_BASE_NOISE12;
  			}
@@ -1905,13 +1912,16 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	}
 
 	Int pass;
- 	for (pass=0; pass<devicePasses && !ShaderClass::Is_Backface_Culling_Inverted(); pass++) {	//a water mirror leaves the ground out, see the shorelines below
+	for (pass=0; pass<devicePasses && drawGround; pass++) {	//Classic water leaves the ground out, see the shorelines below
 #ifdef TIMING_TESTS
 #endif
 		if (!doMultiPassWireFrame)	//multi-pass wireframe doesn't use regular shaders.
 		{
  			if (m_disableTextures ) {
- 				DX8Wrapper::Set_Shader(ShaderClass::_PresetOpaque2DShader);
+				ShaderClass shader=ShaderClass::_PresetOpaque2DShader;
+				if (modernFullMirror)
+					shader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+				DX8Wrapper::Set_Shader(shader);
  				DX8Wrapper::Set_Texture(0,NULL);
    			} else {
  				W3DShaderManager::setShader(st, pass);
@@ -1960,14 +1970,17 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		if (pass)	//shader was applied at least once?
  			W3DShaderManager::resetShader(st);
 
-		// A water mirror leaves the ground out, and everything drawn onto it.  The reflection darkens
-		// water wherever anything stands in the mirror, and the banks would lay a dark band along
-		// every shore; the ground was also most of what the mirror drew.
+		// Classic water leaves the ground out: its mirror darkens the water wherever anything
+		// stands in it, so the banks would lay a dark band along every shore. Modern needs the
+		// coloured ground, including its third blend layer, but not the feather painted over water.
 		if (!ShaderClass::Is_Backface_Culling_Inverted())
 		{
 			//Draw feathered shorelines
 			renderShoreLines(&rinfo.Camera);
+		}
 
+		if (drawGround)
+		{
 			//Do additional pass over any tiles that have 3 textures blended together.
 			if (TheGlobalData->m_use3WayTerrainBlends)
 				renderExtraBlendTiles();
@@ -2031,11 +2044,17 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		if (TheTerrainTracksRenderObjClassSystem)
 			TheTerrainTracksRenderObjClassSystem->flush();
 
-		// The water a reflection lands on is shrouded already, and shrouding the ground inside the
-		// mirror as well would draw the whole terrain a second time for no visible difference.
-		if (m_shroud && rinfo.Additional_Pass_Count() && !ShaderClass::Is_Backface_Culling_Inverted())
+		// Modern reflects the ground's own shroud too. Classic leaves that ground out and the
+		// water it lands on is already shrouded, so there is no second terrain pass there.
+		if (m_shroud && rinfo.Additional_Pass_Count() && drawGround)
 		{
 			rinfo.Peek_Additional_Pass(0)->Install_Materials();
+			// The shroud installs its own culling state. Keep it on the same faces as the base.
+			if (modernFullMirror)
+			{
+				DX8Wrapper::Apply_Render_State_Changes();
+				DX8Wrapper::Set_DX8_Render_State(D3DRS_CULLMODE,D3DCULL_NONE);
+			}
 			renderTerrainPass(&rinfo.Camera);
 			rinfo.Peek_Additional_Pass(0)->UnInstall_Materials();
 		}
@@ -2046,15 +2065,16 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	else
 			m_bridgeBuffer->drawBridges(&rinfo.Camera, m_disableTextures, m_stageTwoTexture);
 
-  if ( m_waypointBuffer ) 
+  if ( m_waypointBuffer && !modernFullMirror )
 	  m_waypointBuffer->drawWaypoints(rinfo);
 
-	m_bibBuffer->renderBibs();
+	if (!modernFullMirror)
+		m_bibBuffer->renderBibs();
 
 	// the build grid goes down with the ground it describes: drawn here it is depth tested against
 	// the terrain and covered by everything drawn after it, so it reads as paint on the map rather
 	// than as a wireframe floating over the scene
-	if( TheInGameUI )
+	if( TheInGameUI && !modernFullMirror )
 	{
 		TheInGameUI->drawBuildGrid();
 
@@ -2293,7 +2313,8 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 	if (vertexCount)
 	{
 		//Check if we couldn't fit all blend tiles into vertex buffer so we can enlarge it for next frame.
-		if (vertexCount == (maxBlendTiles*4))
+		// Only the main view grows it; the mirror reuses this frame's terrain buffers.
+		if (vertexCount == (maxBlendTiles*4) && (!TheWaterRenderObj || !TheWaterRenderObj->isModernFullMirror()))
 			maxBlendTiles += 16;	//enlarge by 16 to reduce trashing.
 
 		ShaderClass::Invalidate();	//invalidate to force shader to reset since we directly changed states
@@ -2304,6 +2325,8 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 		REF_PTR_RELEASE(vmat);
 		ShaderClass shader=ShaderClass::_PresetOpaqueShader;
 		shader.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);	//disable writes to z
+		if (TheWaterRenderObj && TheWaterRenderObj->isModernFullMirror())
+			shader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
 		DX8Wrapper::Set_Shader(shader);
 
 		if (TheGlobalData->m_use3WayTerrainBlends == 2)

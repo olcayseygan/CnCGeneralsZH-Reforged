@@ -36,6 +36,7 @@
 #include "stdio.h"
 #include "Lib/Clock.h"
 #include "Platform/WaterSurfaceModel.h"
+#include "Platform/WaterPerformanceSettings.h"
 #include "Platform/ModernWaterMaterial.h"
 #include "Platform/WaterShoreOverlay.h"
 #include "Platform/WaterFoamWindow.h"
@@ -62,6 +63,9 @@
 #include "camera.h"
 #include "scene.h"
 #include "dx8wrapper.h"
+#ifndef _WIN32
+extern bool PosixWaterGpuAvailable(IDirect3DDevice9 *device);
+#endif
 #include "light.h"
 #include "d3dx9math.h"
 #include "d3d8shadertranslate.h"
@@ -498,6 +502,13 @@ Bool WaterRenderObjClass::hasModernVesselFoam(UnsignedInt objectID) const
 #endif
 }
 
+Bool WaterRenderObjClass::isModernFullMirror() const
+{
+	// Only a supported backend publishes Hybrid at the render sync point.
+	return m_renderingMirror && m_useModernWater
+		&& m_waterType == WATER_TYPE_0_TRANSLUCENT && m_waterReflectionMode == WaterScreenReflection::Hybrid;
+}
+
 #if ZH_MODERN_WATER
 void WaterRenderObjClass::takeWaterPolygonsForDraw(void)
 {
@@ -528,15 +539,14 @@ void WaterRenderObjClass::takeReadsForRender(void)
 	// Logic owns the water tables and object values; model transforms stay on the render side
 	// so the hull slice follows the same interpolated pose as the displayed vessel.
 	synchronizeWaterStyle();
+	synchronizeWaterReflection();
 	takeWaterPolygonsForDraw();
 	takeMotionReadsForRender();
 	m_modernObjectsForDraw.clear();m_modernObstacles.clear();m_modernObstacleObjectIDs.clear();
 	m_modernReadsReady=m_useModernWater && TheGameLogic && TheTerrainLogic &&
 		TheTerrainRenderObject && TheTerrainRenderObject->getMap();
-#if defined(__linux__)
-	// Windows' wave tracks still update in their own flush, as they always have.
-	if (m_waterTrackSystem) m_waterTrackSystem->takeReadsForRender();
-#endif
+	// SDL tracks use this sync point on every host; Direct3D retains its own flush boundary.
+	if (WaterScreenReflection::Supported() && m_waterTrackSystem) m_waterTrackSystem->takeReadsForRender();
 	if (!m_modernReadsReady) return;
 
 	for (const Object *object=TheGameLogic->getFirstObject();object;object=object->getNextObject()) {
@@ -937,13 +947,24 @@ bool Supported()
 #if defined(_WIN32)
 	return Direct3D11_Is_Active() && Direct3D11_Present_Is_Enabled();
 #else
-	return ZH_MODERN_WATER;
+	return PosixWaterGpuAvailable(DX8Wrapper::_Get_D3D_Device());
 #endif
 }
 
 } // namespace ModernWater
 
 #if ZH_MODERN_WATER
+namespace WaterScreenReflection {
+bool Supported()
+{
+#ifdef _WIN32
+	return false;
+#else
+	return PosixWaterGpuAvailable(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+}
+
 /** The Modern style is asked for and a device draws it.  Classic graphics is the 2003 picture, so it
 		keeps EA's water whatever WaterStyle says, as it keeps the old clouds and drops the foam.  The
 		quality slider and its presets leave WaterStyle alone: Modern is the player's own pick. */
@@ -1103,12 +1124,47 @@ void WaterRenderObjClass::synchronizeWaterStyle(void)
 #endif
 }
 
+Int WaterRenderObjClass::mapReflectionTargetSize() const
+{
+	if (m_useModernWater && WaterScreenReflection::Supported())
+		return WaterScreenReflection::MirrorSize(m_waterReflectionMode,
+			WaterPerformanceSettings::Applied().reflectionDetail);
+	return WaterScreenReflection::LegacyMirrorSize;
+}
+
+void WaterRenderObjClass::ensureMapReflectionTarget(void)
+{
+	if (m_waterType!=WATER_TYPE_0_TRANSLUCENT)
+		return;
+	if (m_useModernWater && WaterScreenReflection::Supported() && !WaterScreenReflection::UsesMirror(m_waterReflectionMode))
+		return;
+	const Int size=mapReflectionTargetSize();
+	if (m_reflectionTargetRequestSize==size)
+		return;
+	m_reflectionTargetRequestSize=size;
+
+	// Keep the old target alive until its replacement exists. A low-memory device keeps
+	// that usable reflection; initial Hybrid allocation can fall back to the original size.
+	Int fallbackSize=WaterScreenReflection::LegacyMirrorSize;
+	if(m_useModernWater && WaterScreenReflection::Supported()) fallbackSize=WaterScreenReflection::MirrorSize(WaterScreenReflection::Mirror,
+		WaterPerformanceSettings::Applied().reflectionDetail);
+	TextureClass *replacement=DX8Wrapper::Create_Render_Target(size,size);
+	if (!replacement && !m_pReflectionTexture && size!=fallbackSize)
+		replacement=DX8Wrapper::Create_Render_Target(fallbackSize,fallbackSize);
+	if (!replacement)
+		return;
+	REF_PTR_RELEASE(m_pReflectionTexture);
+	m_pReflectionTexture=replacement;
+	m_reflectionReused=TRUE; // a newly allocated target must be rendered even at a stationary camera
+}
+
 void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrection, Bool waveCage)
 {
 #if ZH_MODERN_WATER
 	if (!m_useModernWater) return;
 	updateModernWaterTextures();
-	const Bool reflection = m_pReflectionTexture && !m_renderingMirror &&
+	const Bool reflection = (!WaterScreenReflection::Supported() || WaterScreenReflection::UsesMirror(m_waterReflectionMode))
+		&& m_pReflectionTexture && !m_renderingMirror &&
 		m_reflectionAreaMax.X > m_reflectionAreaMin.X && m_reflectionAreaMax.Y > m_reflectionAreaMin.Y;
 	TextureClass *mirror = reflection ? m_pReflectionTexture : m_whiteTexture;
 	if (!mirror->Is_Initialized()) mirror->Init();
@@ -1138,6 +1194,8 @@ void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrecti
 	setModernWaterConstants(6, optics, 1);
 	D3DXVECTOR4 materialColor, materialParameters;
 	getModernWaterMaterial(&materialColor.x, &materialParameters.x);
+	if (WaterScreenReflection::Supported())
+		materialParameters.w = WaterScreenReflection::Traces(m_waterReflectionMode) ? 1.0f : 0.0f;
 	setModernWaterConstants(ModernWaterMaterial::RegisterColor, materialColor, 1);
 	setModernWaterConstants(ModernWaterMaterial::RegisterParameters, materialParameters, 1);
 	const RGBColor &ambient = TheGlobalData->m_terrainAmbient[0];
@@ -1966,6 +2024,7 @@ void WaterRenderObjClass::ReleaseResources(void)
 	REF_PTR_RELEASE(m_indexBuffer);
 
 	REF_PTR_RELEASE(m_pReflectionTexture);
+	m_reflectionTargetRequestSize = 0;
 	SAFE_RELEASE(m_vertexBufferD3D);
 	SAFE_RELEASE(m_indexBufferD3D);
 	releaseWaterTwins();
@@ -2084,7 +2143,10 @@ void WaterRenderObjClass::ReAcquireResources(void)
 	}
 
 	if (m_waterType == WATER_TYPE_0_TRANSLUCENT)
+	{
+		m_reflectionTargetRequestSize = WATER_REFLECTION_SIZE;
 		m_pReflectionTexture = DX8Wrapper::Create_Render_Target (WATER_REFLECTION_SIZE, WATER_REFLECTION_SIZE);
+	}
 
 	if (m_waterTrackSystem)
 		m_waterTrackSystem->ReAcquireResources();
@@ -2633,6 +2695,37 @@ void WaterRenderObjClass::loadSetting( Setting *setting, TimeOfDay timeOfDay )
 
 }
 
+void WaterRenderObjClass::synchronizeWaterReflection(void)
+{
+	if (!WaterScreenReflection::Supported()) return;
+	// Accept updates the preferences; only this boundary publishes them to the SDL
+	// renderer. It also runs while the options menu has paused simulation.
+	if (TheGlobalData)
+		WaterPerformanceSettings::Apply(TheGlobalData->m_waterReflectionEnabled,
+			TheGlobalData->m_waterFftResolution, TheGlobalData->m_waterRefractionQuality,
+			TheGlobalData->m_waterReflectionDetail);
+	const WaterScreenReflection::Mode mode = WaterScreenReflection::Resolve(
+		TheGlobalData ? TheGlobalData->m_waterReflection : 2,
+		WaterPerformanceSettings::Applied().sceneReflections);
+	WaterPerformanceSettings::Applied().sceneColourRequired = WaterPerformanceSettings::SceneColourRequired(
+		WaterPerformanceSettings::Applied().refraction, WaterScreenReflection::Traces(mode));
+	if (mode != m_waterReflectionMode)
+	{
+		// The mirror may have sat unused while the scene moved. Refresh it on the first
+		// frame back, even when the camera is still where the old reflection was drawn.
+		if (m_useModernWater && WaterScreenReflection::UsesMirror(mode))
+			m_reflectionReused = TRUE;
+		m_waterReflectionMode = mode;
+	}
+	if (m_useModernWater && mode==WaterScreenReflection::SkyOnly && m_waterType==WATER_TYPE_0_TRANSLUCENT)
+	{
+		REF_PTR_RELEASE(m_pReflectionTexture);
+		m_reflectionTargetRequestSize=0;
+		m_reflectionAreaMin.Set(0.0f,0.0f);
+		m_reflectionAreaMax.Set(0.0f,0.0f);
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Our water may use effects that require run-time rendered textures.  These
 	*	textures need to be updated before we start rendering to the main screen
@@ -2642,6 +2735,9 @@ void WaterRenderObjClass::updateRenderTargetTextures(CameraClass *cam)
 {
 	// This render boundary also runs while the game/options menu is paused.
 	synchronizeWaterStyle();
+#if ZH_MODERN_WATER
+	synchronizeWaterReflection();
+#endif
 	if (!cam || !TheTerrainRenderObject || !TheTerrainRenderObject->getMap())
 		return;
 
@@ -2652,8 +2748,12 @@ void WaterRenderObjClass::updateRenderTargetTextures(CameraClass *cam)
 		renderMirror(cam, m_level);	//generate texture containing reflected scene
 	}
 
-	if (m_waterType != WATER_TYPE_0_TRANSLUCENT || !m_pReflectionTexture)
-		return;
+	if (m_waterType != WATER_TYPE_0_TRANSLUCENT) return;
+	if (WaterScreenReflection::Supported()) {
+		if (m_useModernWater && !WaterScreenReflection::UsesMirror(m_waterReflectionMode)) return;
+		ensureMapReflectionTarget();
+	}
+	if (!m_pReflectionTexture) return;
 
 	// A camera that has not moved looks at the same water from the same place, so a reflection one
 	// frame old lines up with it exactly and only what moved in it is a frame late.  Such a frame

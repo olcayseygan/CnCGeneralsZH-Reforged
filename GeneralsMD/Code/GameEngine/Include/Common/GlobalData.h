@@ -219,6 +219,11 @@ public:
 	Bool m_smoothMotion;				// R1: on a display faster than the logic, models drawn between their last two logic states (W3DSmoothMotion.h); -nosmoothmotion turns it off
 	Bool m_smoothMotionAnyDisplay;	// -smoothmotion: the same whatever the display's refresh rate
 	Int m_waterStyle;					// "WaterStyle": 0 = Classic, 1 = Modern (SDL); applied between render frames
+	Int m_waterReflection;			// "WaterReflection": 0 = Legacy, 1 = SSR, 2 = Hybrid; SDL Modern water
+	Bool m_waterReflectionEnabled; // scene reflections; remembers the selected mode
+	Int m_waterFftResolution;		// 0 = Low (128), 1 = High (256)
+	Int m_waterRefractionQuality; // 0 = Full, 1 = Simple, 2 = Off
+	Int m_waterReflectionDetail; // 0 = Low, 1 = High planar resolution
 	Int m_cloudStyle;					// "CloudStyle": 0 = Classic (default), 1 = Volumetric (when supported)
 	Bool m_explosionDebrisTrails;	// "DebrisTrails": blasts throw smoke-trailing fragments and burning shrapnel
 	Int m_shadowQuality;				// "ShadowQuality": the sun's depth map at 1024, 2048 or 4096 texels a side (Direct3D 11)

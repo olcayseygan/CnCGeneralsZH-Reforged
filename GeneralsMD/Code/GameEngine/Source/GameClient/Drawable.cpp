@@ -551,6 +551,7 @@ void Drawable::takeLookForDraw( void )
 	look.hidden = isDrawableEffectivelyHidden();
 	look.fullyObscured = m_drawableFullyObscuredByShroud;
 	look.drawsInMirror = getDrawsInMirror();
+	look.noSave = testDrawableStatus( DRAWABLE_STATUS_NO_SAVE );
 	look.receivesDynamicLights = m_receivesDynamicLights;
 	look.stealthLook = m_stealthLook;
 	look.stealthDrawnLook = m_stealthDrawnLook;
@@ -654,6 +655,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_lookForDraw.hidden = FALSE;
 	m_lookForDraw.fullyObscured = FALSE;
 	m_lookForDraw.drawsInMirror = FALSE;
+	m_lookForDraw.noSave = BitTest( m_status, DRAWABLE_STATUS_NO_SAVE );
 	m_lookForDraw.receivesDynamicLights = TRUE;
 	m_lookForDraw.hasTintColor = FALSE;
 	m_lookForDraw.hasSelectionColor = FALSE;

@@ -18496,3 +18496,95 @@ END
 CONTROLBAR:ToolTipEvacuateAt
 "Вирушити у вибрану точку й наказати всім підрозділам вийти\nAlt: висадити тут"
 END
+
+GUI:OptionsTabWater
+"Вода"
+END
+
+GUI:OptionsGroupReflections
+"Відображення"
+END
+
+GUI:OptionsGroupModernWater
+"Сучасна вода"
+END
+
+GUI:WaterReflectionEnabled
+"Відображення сцени"
+END
+
+TOOLTIP:WaterReflectionEnabled
+"Відображає сцену на сучасній воді. Вимкнення підвищує продуктивність, зберігаючи колір неба й відблиски сонця. Режим відображення запам’ятовується. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterFftResolution
+"Деталізація хвиль"
+END
+
+GUI:WaterFftResolution0
+"Низька"
+END
+
+GUI:WaterFftResolution1
+"Висока"
+END
+
+TOOLTIP:WaterFftResolution
+"Визначає деталізацію хвиль сучасної води. Низька підвищує продуктивність; висока показує більше деталей. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterRefractionQuality
+"Заломлення"
+END
+
+GUI:WaterRefractionQuality0
+"Повне"
+END
+
+GUI:WaterRefractionQuality1
+"Просте"
+END
+
+GUI:WaterRefractionQuality2
+"Вимкнено"
+END
+
+TOOLTIP:WaterRefractionQuality
+"Для сучасної води. Повне заломлення спотворює вигляд під поверхнею. Просте залишає воду прозорою без спотворення. Вимкнено робить воду непрозорою й забарвленою для кращої продуктивності. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterReflectionDetail
+"Деталі відбиття"
+END
+
+GUI:WaterReflectionDetail0
+"Низька"
+END
+
+GUI:WaterReflectionDetail1
+"Висока"
+END
+
+TOOLTIP:WaterReflectionDetail
+"Керує деталізацією відображень сцени на сучасній воді. Низька настройка підвищує продуктивність. Висока забезпечує чіткіші відображення. Роздільність SSR не змінюється. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterReflection
+"Режим відображення"
+END
+
+GUI:WaterReflection0
+"Класичний"
+END
+
+GUI:WaterReflection1
+"SSR"
+END
+
+GUI:WaterReflection2
+"Гібридний"
+END
+
+TOOLTIP:WaterReflection
+"Для сучасної води з увімкненими відображеннями сцени. Класичний використовує оригінальні відображення. SSR відображає видимий на екрані вміст. Гібридний поєднує обидва варіанти й обраний за замовчуванням. Застосовується після натискання «Прийняти»."
+END

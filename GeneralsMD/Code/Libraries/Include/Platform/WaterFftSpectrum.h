@@ -10,6 +10,12 @@
 
 namespace WaterFftSpectrum {
 constexpr unsigned Resolution=256, Phases=8, Cascades=3, Maps=6;
+struct Configuration { unsigned resolution, phases, levels; };
+// Only validated tiers are accepted; unrecognised values preserve the shared default.
+constexpr Configuration ForResolution(unsigned resolution) {
+    return resolution==128 ? Configuration{128,7,8} : Configuration{256,8,9};
+}
+
 constexpr float Sizes[Cascades]={450.0f,103.0f,13.0f};
 // Sampling and spectrum construction share one reference-to-world conversion.
 constexpr float WorldScale=20.0f;
@@ -46,8 +52,8 @@ inline float Random(uint32_t &state) {
     t=(t^(t>>15))*(t|1u);t^=t+(t^(t>>7))*(t|61u);
     return float(double(t^(t>>14))/4294967296.0);
 }
-inline std::vector<float> InitialSpectrum() {
-    const unsigned n=Resolution,texels=n*n;
+inline std::vector<float> InitialSpectrum(Configuration configuration=ForResolution(Resolution)) {
+    const unsigned n=configuration.resolution,texels=n*n;
     std::vector<float> noise(texels*2),result(texels*Cascades*4);
     uint32_t seed=0;
     for(float &v:noise) v=Random(seed);
@@ -91,9 +97,10 @@ inline std::vector<float> InitialSpectrum() {
     }
     return result;
 }
-inline std::vector<float> Butterfly() {
+inline std::vector<float> Butterfly(Configuration configuration=ForResolution(Resolution)) {
+    const unsigned Resolution=configuration.resolution,Phases=configuration.phases;
     std::vector<float> result(Resolution*Phases*4);
-    auto reverse=[](unsigned v) { unsigned r=0;for(unsigned j=0;j<Phases;++j) { r=(r<<1)|(v&1);v>>=1; }return r; };
+    auto reverse=[Phases](unsigned v) { unsigned r=0;for(unsigned j=0;j<Phases;++j) { r=(r<<1)|(v&1);v>>=1; }return r; };
     for(unsigned phase=0;phase<Phases;++phase) for(unsigned i=0;i<Resolution;++i) {
         const unsigned span=1u<<phase,base=i%(span*2)<span?i:i-span;
         const double angle=2*Pi*(i*(Resolution>>(phase+1)))/Resolution;
@@ -145,7 +152,7 @@ Result main(float4 position:SV_Position) {
 )HLSL";
     return source;
 }
-inline std::string ButterflyHlsl() {
+inline std::string ButterflyHlsl(Configuration configuration = ForResolution(Resolution)) {
     std::string source=Resources(7);
     source+=R"HLSL(
 float4 butterfly(float4 a,float4 b,float2 w) {
@@ -159,6 +166,9 @@ Result main(float4 position:SV_Position) {
     a/=Parameters.x;b/=Parameters.x;Result result;
 )HLSL";
     for(unsigned i=0;i<Maps;++i) {const std::string s=std::to_string(i);source+="result.v"+s+"=butterfly(T"+s+".SampleLevel(S"+s+",a,0),T"+s+".SampleLevel(S"+s+",b,0),entry.xy);\n";}
+    const std::string divisor="/8.0,";
+    const size_t at=source.find(divisor);
+    if(at!=std::string::npos) source.replace(at,divisor.size(),"/"+std::to_string(configuration.phases)+".0,");
     return source+"return result; }\n";
 }
 inline std::string PostHlsl() {

@@ -3626,3 +3626,95 @@ END
 CONTROLBAR:ToolTipEvacuateAt
 "Go to the chosen spot and order all units to exit\nAlt: unload here"
 END
+
+GUI:OptionsTabWater
+"Water"
+END
+
+GUI:OptionsGroupReflections
+"Reflections"
+END
+
+GUI:OptionsGroupModernWater
+"Modern water"
+END
+
+GUI:WaterReflectionEnabled
+"Scene reflections"
+END
+
+TOOLTIP:WaterReflectionEnabled
+"Reflects the scene in Modern water. Turn off to improve performance while keeping sky colour and sun highlights. Your reflection mode is remembered. Applied when you Accept."
+END
+
+GUI:WaterFftResolution
+"Wave detail"
+END
+
+GUI:WaterFftResolution0
+"Low"
+END
+
+GUI:WaterFftResolution1
+"High"
+END
+
+TOOLTIP:WaterFftResolution
+"Controls fine detail in Modern water waves. Low improves performance; High shows more detail. Applied when you Accept."
+END
+
+GUI:WaterRefractionQuality
+"Refraction"
+END
+
+GUI:WaterRefractionQuality0
+"Full"
+END
+
+GUI:WaterRefractionQuality1
+"Simple"
+END
+
+GUI:WaterRefractionQuality2
+"Off"
+END
+
+TOOLTIP:WaterRefractionQuality
+"For Modern water. Full distorts the view below the surface. Simple keeps clear water without distortion. Off uses opaque tinted water for better performance. Applied when you Accept."
+END
+
+GUI:WaterReflectionDetail
+"Reflection detail"
+END
+
+GUI:WaterReflectionDetail0
+"Low"
+END
+
+GUI:WaterReflectionDetail1
+"High"
+END
+
+TOOLTIP:WaterReflectionDetail
+"Controls scene reflection detail in Modern water. Low improves performance. High gives clearer reflections. SSR resolution is unchanged. Applied when you Accept."
+END
+
+GUI:WaterReflection
+"Reflection mode"
+END
+
+GUI:WaterReflection0
+"Legacy"
+END
+
+GUI:WaterReflection1
+"SSR"
+END
+
+GUI:WaterReflection2
+"Hybrid"
+END
+
+TOOLTIP:WaterReflection
+"For Modern water when Scene reflections is on. Legacy uses the original reflections. SSR reflects visible screen content. Hybrid combines both and is the default. Applied when you Accept."
+END

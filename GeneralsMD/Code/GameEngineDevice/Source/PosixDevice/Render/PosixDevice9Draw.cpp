@@ -36,6 +36,7 @@
 #include "ffshader.h"
 #include "ffvertex.h"
 #include "Platform/WaterFftSampling.h"
+#include "Platform/WaterPerformanceSettings.h"
 #include "Platform/WaterFoamHistory.h"
 
 #include <SDL3/SDL.h>
@@ -546,6 +547,11 @@ void PosixDevice9::Build_Water_Constants(const SdlPixelConstants &pixel_constant
 			water.WorldFromClip[8 + column] = z_row;
 		}
 	}
+	// Project SSR through the inverse of the exact matrix used for depth reconstruction.
+	if (!water_inverse(water.WorldFromClip, water.ClipFromWorld)) {
+		memset(water.ClipFromWorld, 0, sizeof(water.ClipFromWorld));
+		for (unsigned i = 0; i < 4; ++i) water.ClipFromWorld[i * 5] = 1.0f;
+	}
 	water.Viewport[0] = (float)Viewport.X + 0.5f;
 	water.Viewport[1] = (float)Viewport.Y + 0.5f;
 	water.Viewport[2] = (float)Viewport.Width;
@@ -970,7 +976,9 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	const bool fft_requested = !SunActive && pixel_engine == ENGINE_SHADER_WATER_TRAPEZOID
 		&& vertex_engine == ENGINE_SHADER_NONE && !vertex.LightingEnabled
 		&& PixelShaderConstants[6][2] > 0.5f && PixelShaderConstants[6][3] > 0.5f;
-	bool fft_water = fft_requested && Gpu->Prepare_Ocean(PixelShaderConstants[1][0]*WaterFftSampling::TimeScale);
+	bool fft_water = fft_requested && Gpu->Prepare_Ocean(PixelShaderConstants[1][0]*WaterFftSampling::TimeScale,
+		WaterPerformanceSettings::Applied().requestedFftResolution);
+	if (fft_water) WaterPerformanceSettings::Applied().activeFftResolution = Gpu->Ocean_Configuration().resolution;
 	const SdlProgram *fft_vertex = fft_water ? &Programs->Water_Vertex_Program(vertex) : NULL;
 	if (fft_vertex && fft_vertex->Shader == NULL) fft_water = false;
 	const SdlProgram &vertex_program = vertex_engine != ENGINE_SHADER_NONE
@@ -1115,8 +1123,12 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	const bool stage_indices = call.Indexed && (fan || is_dynamic(index_buffer));
 	const unsigned int index_size = (call.Indexed && index_buffer->format() == D3DFMT_INDEX32) ? 4 : 2;
 	const bool water_draw = pixel_engine == ENGINE_SHADER_WATER_TRAPEZOID || pixel_engine == ENGINE_SHADER_WATER_RIVER;
-	SDL_GPUTexture *water_background = water_draw ? Gpu->Water_Background(target) : NULL;
-	SDL_GPUTexture *water_depth = water_draw ? Gpu->Scene_Depth(target) : NULL;
+	const auto &water_settings = WaterPerformanceSettings::Applied();
+	const bool ssr_colour = water_settings.sceneReflections && PixelShaderConstants[95][3] > .5f;
+	const bool water_colour = WaterPerformanceSettings::SceneColourRequired(water_settings.refraction, ssr_colour);
+	if (water_draw) Gpu->Prepare_Water_Snapshot(target, water_colour, true);
+	SDL_GPUTexture *water_background = water_draw && water_colour ? Gpu->Water_Background(target) : NULL;
+	SDL_GPUTexture *water_depth = water_draw ? Gpu->Water_Depth(target) : NULL;
 	bool water_history = water_draw && Water_Foam_History_Available();
 	draw.VertexSamplerCount = vertex_program.SamplerSlots;
 	for (unsigned int slot = 0; slot < draw.VertexSamplerCount && slot < 3; ++slot) {

@@ -36,6 +36,7 @@
 #define SDLGPUFRAME_H
 
 #include "Platform/RenderTypes.h"
+#include "Platform/WaterFftSpectrum.h"
 
 #include <stdint.h>
 #include <string>
@@ -244,7 +245,13 @@ public:
 	SDL_GPUTexture * Ready_Scene_Depth(const SdlTarget &source, uint64_t &serial) const;
 	/// Lazy, GPU-only Phillips spectrum/IFFT. Previous draws finish recording before maps change;
 	/// repeated paused times reuse the same field. Failure leaves the analytic water fallback usable.
-	bool Prepare_Ocean(float time);
+	bool Prepare_Ocean(float time, unsigned resolution = WaterFftSpectrum::Resolution);
+	WaterFftSpectrum::Configuration Ocean_Configuration() const;
+	void Fail_Next_Ocean_Rebuild_For_Test() { FailNextOceanRebuild = true; }
+	uint64_t Water_Colour_Captures() const { return WaterColourCaptures; }
+	uint64_t Water_Depth_Captures() const { return WaterDepthCaptures; }
+	void Prepare_Water_Snapshot(const SdlTarget &source, bool colour, bool depth);
+	SDL_GPUTexture *Water_Depth(const SdlTarget &source);
 	SDL_GPUTexture * Ocean_Map(unsigned int index) const;
 	SDL_GPUSampler * Ocean_Sampler() const;
 	uint64_t Ocean_Updates() const { return OceanUpdates; }
@@ -325,13 +332,14 @@ private:
 	{
 		SdlTarget Source;
 		SDL_GPUTexture *Colour, *Depth;
-		bool Ready;
+		bool ColourReady, DepthReady, Frozen;
 		uint64_t UsedFrame;
 		uint64_t CaptureSerial;
 	};
 	std::vector<WaterSnapshot> WaterSnapshots; // at most eight; replaced resources retire with their batch
 	uint64_t WaterFrame = 0;
 	uint64_t WaterCaptureSerial = 0;
+	uint64_t WaterColourCaptures = 0, WaterDepthCaptures = 0;
 	bool DepthSampleable = false;
 	SDL_GPUShader *SceneDepthVertex = NULL, *SceneDepthPixel = NULL;
 	SDL_GPUGraphicsPipeline *SceneDepthPipeline = NULL;
@@ -341,11 +349,14 @@ private:
 	bool OceanFailed = false, OceanReady = false;
 	float OceanTime = 0;
 	uint64_t OceanUpdates = 0;
-	bool Create_Ocean();
+	uint64_t OceanPrepareFrame = UINT64_MAX;
+	unsigned OceanFailedResolution = 0, OceanRequestedResolution = 0;
+	bool FailNextOceanRebuild = false;
+	bool Create_Ocean(WaterFftSpectrum::Configuration configuration);
 	void Release_Ocean();
 	bool Fail_Ocean(const char *reason);
 
-	WaterSnapshot *Water_Snapshot(const SdlTarget &source);
+	WaterSnapshot *Water_Snapshot(const SdlTarget &source, bool colour, bool depth);
 	void Invalidate_Water_Snapshots(SDL_GPUTexture *colour, SDL_GPUTexture *depth);
 	void Refresh_Water_Snapshots();
 	// The one depth-to-R32F resolve: the scene snapshots (water, hazard clouds) and the sun's

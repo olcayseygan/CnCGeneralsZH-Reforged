@@ -170,6 +170,7 @@ TEST(water_grid_unstepped_is_not_the_golden)
 }
 
 #include "Platform/WaterSurfaceModel.h"
+#include "Platform/WaterPerformanceSettings.h"
 #include "Platform/WaterProjectedMesh.h"
 #include "Platform/WaterBowRefinement.h"
 #include "WaterBowShoulderTest.h"
@@ -4782,6 +4783,14 @@ TEST(water_bow_shoulder_large_hull_scale_cap_support_and_small_boat_identity)
 #include "GameClient/Water.h"
 #include "GameLogic/PolygonTrigger.h"
 #include "../GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.h"
+#include "../GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.h"
+#include "../GameEngineDevice/Source/PosixDevice/Render/SdlResourceMirror.h"
+#include "dx8wrapper.h"
+#include "ww3d.h"
+#include "wwmath.h"
+#include "formconv.h"
+#include "texture.h"
+#include <SDL3/SDL.h>
 #include "../Libraries/Source/WWVegas/WW3D2/engineshader.h"
 
 namespace {
@@ -4789,6 +4798,13 @@ struct WaterShaderNameProbe : PosixDevice9 { using PosixDevice9::Engine_Name_Of;
 class LiveWaterStyleProbe : public WaterRenderObjClass
 {
 public:
+    void setMirrorState(bool modern, WaterType type, bool rendering) {
+        m_useModernWater=modern; m_waterType=type; m_renderingMirror=rendering;
+    }
+    void setReflectionMode(WaterScreenReflection::Mode mode) { m_waterReflectionMode=mode; }
+    TextureClass *ensureReflectionTarget() { ensureMapReflectionTarget(); return m_pReflectionTexture; }
+    void clearReflectionRefresh() { m_reflectionReused=FALSE; }
+    bool reflectionNeedsRefresh() const { return m_reflectionReused; }
     bool usesModernWater() const { return m_useModernWater; }
     const std::vector<WaterOpticalContext::Polygon> &opticalPolygonsForDraw() {
         refreshModernWaterOpticalPolygons();
@@ -4826,6 +4842,133 @@ public:
         CHECK(!m_reflectionReused); // no per-frame history reset or forced mirror refresh
     }
 };
+}
+
+TEST(water_full_mirror_admits_only_hybrid_modern_map_water)
+{
+    boot();
+    WaterTransparencySetting *saved=(WaterTransparencySetting*)TheWaterTransparency.getNonOverloadedPointer();
+    TheWaterTransparency=newInstance(WaterTransparencySetting);
+    {
+        LiveWaterStyleProbe water;
+        const WaterRenderObjClass &query=water;
+        CHECK(!query.isModernFullMirror());
+        // Every style/type/pass/mode combination uses the real render-policy query.
+        // Original reflections and Modern sea water retain the old selective mirror.
+        for(bool modern:{false,true})
+            for(int type=0;type<WaterRenderObjClass::WATER_TYPE_MAX;++type)
+                for(bool rendering:{false,true}) {
+                    water.setMirrorState(modern,(WaterRenderObjClass::WaterType)type,rendering);
+                    for (WaterScreenReflection::Mode mode : {
+                        WaterScreenReflection::Mirror, WaterScreenReflection::ScreenSpace,
+                        WaterScreenReflection::Hybrid, WaterScreenReflection::SkyOnly}) {
+                        water.setReflectionMode(mode);
+                        CHECK_EQ(bool(query.isModernFullMirror()),
+                            modern && rendering && type==WaterRenderObjClass::WATER_TYPE_0_TRANSLUCENT
+                            && mode==WaterScreenReflection::Hybrid);
+                    }
+                }
+        water.setReflectionMode(WaterScreenReflection::Hybrid);
+        water.setMirrorState(true,WaterRenderObjClass::WATER_TYPE_0_TRANSLUCENT,false);
+        CHECK(!query.isModernFullMirror()); // the main view never borrows the broader mirror rules
+    }
+    TheWaterTransparency=saved;
+}
+
+TEST(water_hybrid_target_resize_preserves_queued_reflections_and_refreshes_new_targets)
+{
+    struct RestoreQuality { WaterPerformanceSettings::Configuration saved=WaterPerformanceSettings::Applied();
+        ~RestoreQuality() { WaterPerformanceSettings::Applied()=saved; } } restoreQuality;
+    boot();
+    const bool video=SDL_InitSubSystem(SDL_INIT_VIDEO);
+    if (!video) {
+        std::printf("SKIP: reflection allocation test needs SDL video: %s\n",SDL_GetError());
+        return;
+    }
+    const char *oldFrames=SDL_GetHint("ZH_OFFSCREEN_FRAMES"), *oldHz=SDL_GetHint("ZH_OFFSCREEN_HZ");
+    const bool hadFrames=oldFrames!=NULL, hadHz=oldHz!=NULL;
+    const std::string savedFrames=oldFrames?oldFrames:"", savedHz=oldHz?oldHz:"";
+    SDL_SetHint("ZH_OFFSCREEN_FRAMES","1");
+    SDL_SetHint("ZH_OFFSCREEN_HZ","0");
+    WWMath::Init();
+    // WW3D::Init normally initializes this before DX8Wrapper. This minimal harness
+    // needs the same mapping so render-target caps recognize the display format.
+    Init_D3D_To_WW3_Conversion();
+    const bool initialized=DX8Wrapper::Init(NULL);
+    const bool ready=initialized &&
+        WW3D::Set_Render_Device(0,64,64,32,1,false,false,false)==WW3D_ERROR_OK;
+    auto *device=ready?static_cast<PosixDevice9 *>(DX8Wrapper::_Get_D3D_Device()):NULL;
+    if (device && device->Get_Gpu()) {
+        std::printf("reflection target lifecycle: GPU readback across High/Low and Legacy/Hybrid targets\n");
+        WaterTransparencySetting *savedTransparency=
+            (WaterTransparencySetting*)TheWaterTransparency.getNonOverloadedPointer();
+        TheWaterTransparency=newInstance(WaterTransparencySetting);
+        {
+            LiveWaterStyleProbe water;
+            water.setMirrorState(true,WaterRenderObjClass::WATER_TYPE_0_TRANSLUCENT,false);
+            IDirect3DSurface9 *back=NULL;
+            CHECK(device->GetBackBuffer(0,0,D3DBACKBUFFER_TYPE_MONO,&back)==D3D_OK);
+            const unsigned sizes[]={512,1024,512,256,512,1024};
+            const WaterScreenReflection::Mode modes[]={WaterScreenReflection::Mirror,WaterScreenReflection::Hybrid,
+                WaterScreenReflection::Hybrid,WaterScreenReflection::Mirror,WaterScreenReflection::Mirror,WaterScreenReflection::Hybrid};
+            const int details[]={1,1,0,0,1,1};
+            const RenderUInt32 colours[]={0xffff0000u,0xff00ff00u,0xff0000ffu,0xffffff00u,0xff00ffffu,0xffff00ffu};
+            const unsigned steps=sizeof(sizes)/sizeof(sizes[0]);
+            IDirect3DBaseTexture9 *previous=NULL; // borrowed from the bound sampler
+            for (unsigned step=0;back && step<steps;++step) {
+                WaterPerformanceSettings::Applied().reflectionDetail=details[step];
+                water.setReflectionMode(modes[step]);
+                water.clearReflectionRefresh();
+                TextureClass *target=water.ensureReflectionTarget();
+                CHECK(target && water.reflectionNeedsRefresh());
+                if (!target) break;
+                D3DSURFACE_DESC desc={};
+                CHECK(target->Peek_D3D_Texture()->GetLevelDesc(0,&desc)==D3D_OK);
+                CHECK_EQ(desc.Width,sizes[step]);CHECK_EQ(desc.Height,sizes[step]);
+                // Replacing WaterRenderObjClass's owner must not release an old texture still
+                // held by the sampler; queued GPU work will outlive both CPU owners below.
+                if (previous) {
+                    IDirect3DBaseTexture9 *bound=NULL;
+                    CHECK(device->GetTexture(1,&bound)==D3D_OK && bound==previous);
+                    if (bound) bound->Release();
+                }
+                water.clearReflectionRefresh();
+                CHECK(water.ensureReflectionTarget()==target && !water.reflectionNeedsRefresh());
+                DX8Wrapper::Set_DX8_Texture(1,target->Peek_D3D_Texture());
+                DX8Wrapper::Flush_Deferred_D3D9_State();
+                previous=target->Peek_D3D_Texture();
+                DX8Wrapper::Set_Render_Target_With_Z(target);
+                D3DVIEWPORT9 viewport={0,0,sizes[step],sizes[step],0.0f,1.0f};
+                CHECK(device->SetViewport(&viewport)==D3D_OK);
+                CHECK(device->Clear(0,NULL,D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER,colours[step],1.0f,0)==D3D_OK);
+                IDirect3DSurface9 *surface=target->Get_D3D_Surface_Level();
+                const RenderRect stripe={int(step*64/steps),0,int((step+1)*64/steps),64};
+                CHECK(surface && device->StretchRect(surface,NULL,back,&stripe,D3DTEXF_POINT)==D3D_OK);
+                if (surface) surface->Release();
+                DX8Wrapper::Set_Render_Target((IDirect3DSurface9 *)NULL);
+            }
+            // Retire old GPU copies before submitting the clears/blits which still use them.
+            // Coloured stripes prove queued references survive every mode/detail replacement.
+            DX8Wrapper::Set_DX8_Texture(1,NULL);
+            DX8Wrapper::Flush_Deferred_D3D9_State();
+            device->Get_Mirrors()->Collect_Dead();
+            std::vector<uint8_t> pixels;
+            CHECK(device->Get_Gpu()->Read_Back(device->Get_Gpu()->Back_Buffer(),64,64,pixels));
+            if (pixels.size()==64*64*4) for (unsigned step=0;step<steps;++step) {
+                const size_t at=(32*64+(step*2+1)*64/(steps*2))*4;
+                CHECK_EQ(unsigned(pixels[at]),colours[step]&255u);
+                CHECK_EQ(unsigned(pixels[at+1]),(colours[step]>>8)&255u);
+                CHECK_EQ(unsigned(pixels[at+2]),(colours[step]>>16)&255u);
+            } else CHECK(false);
+            if (back) back->Release();
+        }
+        TheWaterTransparency=savedTransparency;
+    } else std::printf("SKIP: reflection allocation test needs an offscreen GPU renderer: %s\n",SDL_GetError());
+    if (initialized) DX8Wrapper::Shutdown();
+    WWMath::Shutdown();
+    if (hadFrames) SDL_SetHint("ZH_OFFSCREEN_FRAMES",savedFrames.c_str()); else SDL_ResetHint("ZH_OFFSCREEN_FRAMES");
+    if (hadHz) SDL_SetHint("ZH_OFFSCREEN_HZ",savedHz.c_str()); else SDL_ResetHint("ZH_OFFSCREEN_HZ");
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
 TEST(water_polygon_draw_snapshot_survives_live_height_geometry_and_lifetime_changes)
@@ -4921,3 +5064,18 @@ TEST(water_style_changes_at_render_boundary_without_advancing_paused_time_or_rel
     delete scratch;TheWritableGlobalData=saved;
 }
 #endif
+
+TEST(water_quality_keeps_scene_depth_independent_of_colour_demand)
+{
+	using namespace WaterPerformanceSettings;
+	const auto saved = Applied();
+	Apply(false, 0, Off, 0);
+	CHECK(!Applied().sceneReflections && Applied().requestedFftResolution == 128);
+	CHECK(Applied().refraction == Off && Applied().reflectionDetail == 0);
+	CHECK(!SceneColourRequired(Off, false));
+	CHECK(SceneColourRequired(Off, true));
+	CHECK(SceneColourRequired(Simple, false) && SceneColourRequired(Full, false));
+	Apply(true, 1, Full, 1);
+	CHECK(Applied().sceneReflections && Applied().requestedFftResolution == 256);
+	Applied() = saved;
+}

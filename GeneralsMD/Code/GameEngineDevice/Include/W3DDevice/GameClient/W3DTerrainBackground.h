@@ -85,7 +85,7 @@ public:
 	W3DTerrainBackground(void);
 	~W3DTerrainBackground(void);
 	/// Draws the terrain.  
-	void drawVisiblePolys(RenderInfoClass & rinfo, Bool disableTextures);
+	void drawVisiblePolys(RenderInfoClass & rinfo, Bool disableTextures, Bool useMirrorCamera = FALSE);
 	void setFlip(WorldHeightMap *htMap); ///< Sets the flip bit for required vertices.
 	void doPartialUpdate(const IRegion2D &partialRange, WorldHeightMap *htMap, Bool doTextures );
 	void doTesselatedUpdate(const IRegion2D &partialRange, WorldHeightMap *htMap, Bool doTextures );

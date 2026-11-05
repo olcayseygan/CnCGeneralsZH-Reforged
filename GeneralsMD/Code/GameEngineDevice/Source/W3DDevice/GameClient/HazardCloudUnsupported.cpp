@@ -4,6 +4,7 @@
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 #include "Platform/HazardCloud.h"
 #include "Platform/ModernWaterBuild.h"
+#include "Platform/WaterScreenReflection.h"
 
 namespace HazardCloud {
 
@@ -18,3 +19,7 @@ namespace ModernWater {
 bool Supported() { return false; }
 
 } // namespace ModernWater
+
+namespace WaterScreenReflection {
+bool Supported() { return false; }
+}

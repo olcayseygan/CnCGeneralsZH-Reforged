@@ -47,6 +47,7 @@
 #include "GameLogic/WaterGridMotion.h"
 #include "Platform/RenderTypes.h"
 #include "Platform/ModernWaterBuild.h"
+#include "Platform/WaterScreenReflection.h"
 #include "Platform/WaterOpticalContext.h"
 #include "Platform/WaterProjectedMesh.h"
 #include "Platform/WaterHullVisual.h"
@@ -141,6 +142,7 @@ public:
 	void replaceSkyboxTexture(const AsciiString& oldTexName, const AsciiString& newTextName);
 	TextureClass *getSkyTexture(void) const { return m_settings[m_tod].skyTexture; }	///< the time of day's sky, as WaterSet names it
 	Bool hasModernVesselFoam(UnsignedInt objectID) const; ///< replacement was submitted for this hull in the current render frame
+	Bool isModernFullMirror() const;
 	Bool isModernWaterMirrorForOwner(UnsignedInt objectID) const; ///< owner's surface foam must not reflect back into the same water plane
 
 protected:
@@ -188,6 +190,8 @@ protected:
 	Int					m_iBumpFrame;	///<current animation frame
 	Real				m_bumpFrameAccum;	///<fractional carry, so the flipbook can run slower than one frame per tick
 	Real				m_fBumpScale;	///<scales bump map uv perturbation
+	Int m_reflectionTargetRequestSize = 0;
+	WaterScreenReflection::Mode m_waterReflectionMode = WaterScreenReflection::Mirror;
 	TextureClass * m_pReflectionTexture;	///<render target for reflection
 	Real m_reflectionLevel;	///<height of the water plane the reflection texture was rendered for
 	Vector2 m_reflectionAreaMin;	///<lower left of the screen area the reflection texture covers, -1 to 1
@@ -269,6 +273,7 @@ protected:
 	std::vector<WaterPolygonForDraw> m_waterPolygonsForDraw;
 	void takeWaterPolygonsForDraw(void);
 	void takeMotionReadsForRender(void);
+	void synchronizeWaterReflection(void);
 #endif
 	WaterObstacleIndex::Grid m_modernObstacleIndex;
 	std::vector<WaterObstacleIndex::Influence> m_modernObstacleInfluences;
@@ -365,6 +370,8 @@ protected:
 	void renderSkyBody(Matrix3D *mat);	///<draw the sky body (sun, moon, etc.)
 	void renderWaterMesh(void);			///<draw the water surface mesh (deformed 3d mesh).
 	RenderResult initBumpMap(LPDIRECT3DTEXTURE9 *pTex, TextureClass *pBumpSource);	///<copies data into bump-map format.
+	Int mapReflectionTargetSize() const;
+	void ensureMapReflectionTarget(void);
 	void renderMirror(CameraClass *cam, Real level);	///< Draw reflected scene into texture
 	void drawReflection(Int triangleCount, Int vertexCount);	///< Lay the reflection over the water just drawn
 	void drawSea(RenderInfoClass & rinfo);	///< Draw the surface of the water

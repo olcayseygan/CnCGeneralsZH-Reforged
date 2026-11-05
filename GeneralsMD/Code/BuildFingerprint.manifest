@@ -2278,7 +2278,9 @@ Libraries/Include/Platform/WaterHullVisualLayout.h
 Libraries/Include/Platform/WaterObstacleIndex.h
 Libraries/Include/Platform/WaterOpticalContext.h
 Libraries/Include/Platform/WaterOpticalModel.h
+Libraries/Include/Platform/WaterPerformanceSettings.h
 Libraries/Include/Platform/WaterProjectedMesh.h
+Libraries/Include/Platform/WaterScreenReflection.h
 Libraries/Include/Platform/WaterShoreFoam.h
 Libraries/Include/Platform/WaterShoreHistory.h
 Libraries/Include/Platform/WaterShoreOverlay.h

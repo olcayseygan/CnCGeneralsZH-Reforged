@@ -17967,3 +17967,95 @@ END
 CONTROLBAR:ToolTipEvacuateAt
 "Seçtiğiniz yere gidip tüm birliklere çıkma emri verin\nAlt: burada indir"
 END
+
+GUI:OptionsTabWater
+"Su"
+END
+
+GUI:OptionsGroupReflections
+"Yansımalar"
+END
+
+GUI:OptionsGroupModernWater
+"Modern su"
+END
+
+GUI:WaterReflectionEnabled
+"Sahne yansımaları"
+END
+
+TOOLTIP:WaterReflectionEnabled
+"Sahneyi modern suya yansıtır. Kapatmak performansı artırırken gökyüzü rengini ve güneş parıltılarını korur. Yansıma modu hatırlanır. Kabul Et'e basınca uygulanır."
+END
+
+GUI:WaterFftResolution
+"Dalga ayrıntısı"
+END
+
+GUI:WaterFftResolution0
+"Düşük"
+END
+
+GUI:WaterFftResolution1
+"Yüksek"
+END
+
+TOOLTIP:WaterFftResolution
+"Modern su dalgalarının ince ayrıntı düzeyini belirler. Düşük performansı artırır; Yüksek daha fazla ayrıntı gösterir. Kabul Et'e basınca uygulanır."
+END
+
+GUI:WaterRefractionQuality
+"Kırılma"
+END
+
+GUI:WaterRefractionQuality0
+"Tam"
+END
+
+GUI:WaterRefractionQuality1
+"Basit"
+END
+
+GUI:WaterRefractionQuality2
+"Kapalı"
+END
+
+TOOLTIP:WaterRefractionQuality
+"Modern su içindir. Tam kırılma, yüzeyin altındaki görüntüyü bozar. Basit kırılma, bozulma olmadan berrak su sunar. Kapalı seçeneği daha iyi performans için suyu opak ve renkli yapar. Kabul Et'e basınca uygulanır."
+END
+
+GUI:WaterReflectionDetail
+"Yansıma ayrıntısı"
+END
+
+GUI:WaterReflectionDetail0
+"Düşük"
+END
+
+GUI:WaterReflectionDetail1
+"Yüksek"
+END
+
+TOOLTIP:WaterReflectionDetail
+"Modern sudaki sahne yansımalarının ayrıntı düzeyini denetler. Düşük performansı artırır. Yüksek daha net yansımalar sunar. SSR çözünürlüğü değişmez. Kabul Et'e basınca uygulanır."
+END
+
+GUI:WaterReflection
+"Yansıma modu"
+END
+
+GUI:WaterReflection0
+"Klasik"
+END
+
+GUI:WaterReflection1
+"SSR"
+END
+
+GUI:WaterReflection2
+"Hibrit"
+END
+
+TOOLTIP:WaterReflection
+"Sahne yansımaları açıkken modern su içindir. Klasik, özgün yansımaları kullanır. SSR, ekranda görünen içeriği yansıtır. Hibrit ikisini birleştirir ve varsayılandır. Kabul Et'e basınca uygulanır."
+END

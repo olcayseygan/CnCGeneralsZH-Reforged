@@ -5661,6 +5661,10 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	// it has to fly in closer to fire at all, so it keeps the straight run. Only a jet with the target in
 	// its aim cone breaks off, the frame it can fire: one still turning in (a Stealth Fighter that came
 	// back round on a Scorpion 120 off its wing) broke off before the cone every pass and never fired.
+	// A clip already started is finished first, as EA's jets did: a break-off between two rounds turned
+	// the nose out of the cone before the next, and a Stealth Fighter lining up late on a moving Scorpion
+	// put one missile of two out a pass. An unlimited clip still breaks off by distance.
+	const Bool clipSpent = weapon->getClipSize() == 0 || weapon->getRemainingAmmo() == 0;
 	const Real distSqr = dx*dx + dy*dy;
 	const Real along = dx*dir->x + dy*dir->y;
 	const Real clearance = max(minRange, turnRadius);
@@ -5668,7 +5672,7 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	Real reach = weapon->getAttackRange(source) + source->getGeometryInfo().getBoundingSphereRadius();
 	if (victim)
 		reach += victim->getGeometryInfo().getBoundingSphereRadius();
-	const Bool breaksOff = !m_isRunningOut && fabs(relAngle) < aimDelta && breakOffDist < reach &&
+	const Bool breaksOff = !m_isRunningOut && clipSpent && fabs(relAngle) < aimDelta && breakOffDist < reach &&
 												 distSqr < sqr(breakOffDist);
 
 	if (breaksOff)

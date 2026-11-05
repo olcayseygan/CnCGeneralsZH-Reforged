@@ -237,6 +237,17 @@ void Direct3D11_Set_Smoke_Glow(bool glow);
 // seed in the second coordinate set (DX11BackendClass::Set_Fire_Look).  The sorting pool sets it.
 void Direct3D11_Set_Fire_Look(bool fire);
 
+// -heathaze: the flames in view as heat splats for this frame, consumed by the next
+// Direct3D11_Finish_Scene (DX11PostProcessClass::Heat_Haze_Scene).  Each splat is
+// DIRECT3D11_HEAT_SPLAT_FLOATS floats: centre x, y and half width, half height in the frame's
+// clip space; the hardware depth that hides it, its strongest shift in texture coordinates, the
+// time in seconds, 0; the near and far planes, then in world units how far behind the flame a
+// surface starts to bend and over how much further it comes up to full.  Past
+// DIRECT3D11_HEAT_SPLAT_LIMIT the rest are dropped.  A count of zero clears them.
+const unsigned DIRECT3D11_HEAT_SPLAT_FLOATS = 12;
+const unsigned DIRECT3D11_HEAT_SPLAT_LIMIT = 2048;
+void Direct3D11_Set_Heat_Splats(const float * splats, unsigned count);
+
 // The draws that follow are an Emissive particle system's billboards, which take no shadow and no
 // smoke shade (DX11BackendClass::Set_Emissive).  The sorting pool sets it.
 void Direct3D11_Set_Emissive(bool emissive);

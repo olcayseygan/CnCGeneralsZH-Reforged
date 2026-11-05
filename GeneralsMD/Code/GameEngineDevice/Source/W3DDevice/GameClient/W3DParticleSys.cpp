@@ -345,6 +345,87 @@ static void gatherFirelights( const AABoxClass &view, UnsignedInt frame, const s
 #endif
 }
 
+/** -heathaze, a prototype: each flame system in view (m_frameFires, so no new INI field) as one heat
+	* splat for the Direct3D 11 post pass (Direct3D11_Set_Heat_Splats has the layout).  The particles
+	* are summed as the Firelight sums them (sumFlames: brightness times size), and the splat is a
+	* column over their weighted centre, as wide as their spread and capped in world units, so a big
+	* explosion or a plume of grown particles cannot bend half the screen.  Its shift scales with its
+	* height on the screen and with how much flame the system holds.  Only ground well behind the
+	* flame bends (HEAT_HAZE_CLEARANCE), so a unit standing in the fire keeps its outline.  The waves
+	* themselves are in dx11post.cpp (HEAT_FREQUENCY). */
+static const Real HEAT_HAZE_MIN_RADIUS = 6.0f;		///< world units: a single flame's column half width
+static const Real HEAT_HAZE_MAX_RADIUS = 22.0f;		///< and the widest any system's gets
+static const Real HEAT_HAZE_LIFT = 1.3f;				///< the column's centre above the flames' centre, in its half widths
+static const Real HEAT_HAZE_STRETCH = 2.2f;			///< its half height over its half width
+static const Real HEAT_HAZE_AMPLITUDE = 0.18f;	///< the strongest shift, a share of the splat's half height on the screen
+static const Real HEAT_HAZE_MAX_SHIFT = 0.00525f;	///< and never more than this share of the frame; at normal zoom a column reaches it
+static const Real HEAT_HAZE_FULL = 40.0f;				///< summed brightness times size at which a system shimmers at full strength
+static const Real HEAT_HAZE_CLEARANCE = 12.0f;	///< world units behind the flames before a surface bends at all
+static const Real HEAT_HAZE_SOFTNESS = 20.0f;		///< and the further distance over which it comes up to full
+
+static std::vector<float> s_heatSplats;	///< kept so the gather does not allocate
+
+static void gatherHeatHaze( CameraClass &camera, const std::vector<ParticleSystem *> &systems, const std::vector<Real> &fades )
+{
+	s_heatSplats.clear();
+	Matrix4x4 projection;
+	camera.Get_D3D_Projection_Matrix( &projection );
+	Matrix3D view;
+	camera.Get_View_Matrix( &view );
+	float zNear, zFar;
+	camera.Get_Clip_Planes( zNear, zFar );
+	// the camera's viewport in the frame, as CameraClass::Apply sets the device's
+	const ViewportClass &viewport = camera.Get_Viewport();
+	const Real viewWidth = viewport.Max.X - viewport.Min.X;
+	const Real viewHeight = viewport.Max.Y - viewport.Min.Y;
+	const float seconds = (float)( WW3D::Get_Sync_Time() % 3600000u ) * 0.001f;
+	Int count = 0;
+	for (size_t i = 0; i < systems.size() && count < (Int)DIRECT3D11_HEAT_SPLAT_LIMIT; ++i)
+	{
+		FireLights::Flames flames;
+		sumFlames( systems[ i ], flames );
+		if (flames.w <= 0.0f)
+			continue;
+		Real strength = flames.w * fades[ i ] / HEAT_HAZE_FULL;
+		if (strength > 1.0f)
+			strength = 1.0f;
+		const Vector3 centre( flames.x / flames.w, flames.y / flames.w, flames.z / flames.w );
+		const Real spread = flames.sq / flames.w - centre.Length2();
+		Real radius = spread > 0.0f ? WWMath::Sqrt( spread ) : 0.0f;
+		radius = radius < HEAT_HAZE_MIN_RADIUS ? HEAT_HAZE_MIN_RADIUS : radius > HEAT_HAZE_MAX_RADIUS ? HEAT_HAZE_MAX_RADIUS : radius;
+
+		// the flames' own depth decides what stands in front; the column is drawn above them
+		Vector3 eye, columnEye;
+		Matrix3D::Transform_Vector( view, centre, &eye );
+		Matrix3D::Transform_Vector( view, Vector3( centre.X, centre.Y, centre.Z + radius * HEAT_HAZE_LIFT ), &columnEye );
+		if (-eye.Z <= zNear || -columnEye.Z <= zNear)
+			continue;
+		const Vector4 flameClip = projection * eye;
+		const Vector4 clip = projection * columnEye;
+		if (clip.W <= 0.0f || flameClip.W <= 0.0f)
+			continue;
+		const Real x = clip.X / clip.W;
+		const Real y = clip.Y / clip.W;
+		const Real rx = radius * projection[ 0 ][ 0 ] / clip.W;
+		const Real ry = radius * HEAT_HAZE_STRETCH * projection[ 1 ][ 1 ] / clip.W;
+		if (WWMath::Fabs( x ) - rx > 1.0f || WWMath::Fabs( y ) - ry > 1.0f)
+			continue;
+		Real shift = HEAT_HAZE_AMPLITUDE * ry * 0.5f * viewHeight;
+		if (shift > HEAT_HAZE_MAX_SHIFT)
+			shift = HEAT_HAZE_MAX_SHIFT;
+		const float splat[ DIRECT3D11_HEAT_SPLAT_FLOATS ] = {
+			// the camera's clip space into the frame's
+			(viewport.Min.X + ( x * 0.5f + 0.5f ) * viewWidth) * 2.0f - 1.0f,
+			1.0f - (viewport.Min.Y + ( 0.5f - y * 0.5f ) * viewHeight) * 2.0f,
+			rx * viewWidth, ry * viewHeight,
+			flameClip.Z / flameClip.W, shift * strength, seconds, 0.0f,
+			zNear, zFar, HEAT_HAZE_CLEARANCE, HEAT_HAZE_SOFTNESS };
+		s_heatSplats.insert( s_heatSplats.end(), splat, splat + DIRECT3D11_HEAT_SPLAT_FLOATS );
+		++count;
+	}
+	Direct3D11_Set_Heat_Splats( s_heatSplats.empty() ? NULL : &s_heatSplats[ 0 ], (unsigned)count );
+}
+
 /** The same for a GPU system, from the spawns it keeps (ParticleSystem::getGpuSample) aged in closed
 	* form to the last particle update, as a CPU particle stands then.
 	* ponytail: GPU_SPAWN_SAMPLES spawns stand in for the whole fire, so a big one weighs as a small
@@ -2217,6 +2298,8 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		s_firelightCount = 0;
 		if (TheGlobalData->m_firelight && Direct3D11_Lights_Per_Pixel())
 			gatherFirelights( bbox, m_lastLogicFrameUpdate, m_frameFires, m_frameFireFades );
+		if (TheGlobalData->m_heatHaze && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled())
+			gatherHeatHaze( rinfo.Camera, m_frameFires, m_frameFireFades );
 	}
 	// Only a CPU drawn smoke system takes a light (pickSmokeLights); with none, the walk over every
 	// fire, a GPU one's samples aged in closed form, is a third of a frame thrown away.

@@ -712,6 +712,27 @@ void Direct3D11_Set_Fire_Look(bool fire)
 	}
 }
 
+void Direct3D11_Set_Heat_Splats(const float * splats, unsigned count)
+{
+	if (!Active) {
+		return;
+	}
+	// Called every particle pass while the switch is on, fires or none, so the programs are made on
+	// the first one (the shell map, a match's first frame) and through the cache.
+	if (Post.Wants_Heat_Haze_Programs()) {
+		for (unsigned index = 0; index < DX11PostProcessClass::HEAT_HAZE_PROGRAMS; ++index) {
+			std::vector<unsigned char> code;
+			if (Backend.Compile_Program(Post.Heat_Haze_Program_Source(index), "dx11heat",
+					Post.Heat_Haze_Program_Profile(index), code) && !code.empty()) {
+				Post.Load_Heat_Haze_Program(index, &code[0], code.size());
+			} else {
+				Post.Load_Heat_Haze_Program(index, NULL, 0);
+			}
+		}
+	}
+	Post.Set_Heat_Splats(splats, count);
+}
+
 void Direct3D11_Set_Emissive(bool emissive)
 {
 	if (Active) {
@@ -988,6 +1009,9 @@ void Direct3D11_Finish_Scene()
 		// The chain's occlusion and whatever tests against the depth over the interface read it
 		// single-sampled.
 		Backend.Resolve_Scene_Depth();
+		// -heathaze bends the finished world in its own target before the chain reads it.  With no
+		// splats set (the switch off) it returns before touching anything.
+		Post.Heat_Haze_Scene(Device.Get_Depth_Texture());
 	}
 	if (Active && Post.Run_Chain()) {
 		take_the_frame_to_the_screen();

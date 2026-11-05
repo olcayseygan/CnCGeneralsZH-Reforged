@@ -85,6 +85,7 @@ unsigned Direct3D11_Shadow_Skin_Generation() { return 0; }
 void Direct3D11_Set_Scene_View(const float [16]) {}
 void Direct3D11_Set_Smoke_Glow(bool) {}
 void Direct3D11_Set_Fire_Look(bool) {}
+void Direct3D11_Set_Heat_Splats(const float *, unsigned) {}
 void Direct3D11_Set_Emissive(bool) {}
 void Direct3D11_Set_Team_Glow(bool) {}
 void Direct3D11_Set_Hemi_Ambient(bool) {}

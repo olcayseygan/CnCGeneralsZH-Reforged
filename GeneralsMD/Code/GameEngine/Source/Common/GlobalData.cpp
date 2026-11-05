@@ -800,6 +800,7 @@ GlobalData::GlobalData()
 	m_waterFoam = FALSE;
 	m_groundMarks = FALSE;
 	m_firelight = FALSE;
+	m_heatHaze = FALSE;
 	m_hemiAmbient = FALSE;
 	m_ambientOcclusion = FALSE;
 	m_weatherEffects = FALSE;

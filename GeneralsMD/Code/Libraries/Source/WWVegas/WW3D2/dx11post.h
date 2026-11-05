@@ -55,6 +55,7 @@
 #define DX11POST_H
 
 #include <d3d11.h>
+#include <vector>
 
 class DX11DeviceClass;
 
@@ -275,6 +276,23 @@ public:
 	void Compile_World_Ao_Programs();
 	static const unsigned WORLD_AO_PROGRAMS = 3;
 
+	// -heathaze, a prototype.  The flames' splats for this frame (Direct3D11_Set_Heat_Splats has the
+	// layout); Heat_Haze_Scene then draws each into a half size target of screen shifts, added up,
+	// and puts a copy of the scene back into the scene target read through them.  Once a frame,
+	// before the chain; the splats are spent either way.  With none set it returns before binding
+	// anything, so a run without the switch draws what it always drew.  False when it drew nothing.
+	void Set_Heat_Splats(const float * splats, unsigned count);
+	bool Heat_Haze_Scene(ID3D11ShaderResourceView * depth);
+	// Its three programs (a vertex one, then two pixel ones) come through the backend's cache as the
+	// haze's do, loaded the first time the switch is seen on, so no frame with a fire pays for them.
+	// The tests compile them here instead.
+	static const unsigned HEAT_HAZE_PROGRAMS = 3;
+	bool Wants_Heat_Haze_Programs() const;
+	const char * Heat_Haze_Program_Source(unsigned index) const;
+	const char * Heat_Haze_Program_Profile(unsigned index) const;
+	void Load_Heat_Haze_Program(unsigned index, const void * bytecode, SIZE_T size);
+	void Compile_Heat_Haze_Programs();
+
 	// Call once at the very top of a frame, before any scene of it (a mirror's included) begins.
 	// Arms Occlude_Scene again.
 	void Open_Frame();
@@ -411,6 +429,20 @@ private:
 	ID3D11PixelShader * WorldAoShaders[WORLD_AO_PROGRAMS];
 	float WorldAoProjection[4];
 	bool WorldAoRefused;
+	// -heathaze: the splats waiting for the next Heat_Haze_Scene, the half size shift target (made
+	// with the program, released with the other targets), the splat buffer the vertex program reads,
+	// its programs and its additive blend.  Refused once means never tried again.
+	bool Create_Heat_Haze();
+	void Release_Heat_Haze();
+	std::vector<float> HeatSplats;
+	Target HeatTarget;
+	ID3D11Buffer * HeatSplatBuffer;
+	ID3D11ShaderResourceView * HeatSplatView;
+	ID3D11VertexShader * HeatSplatVertexShader;
+	ID3D11PixelShader * HeatSplatShader;
+	ID3D11PixelShader * HeatHazeShader;
+	ID3D11BlendState * HeatBlendState;
+	bool HeatHazeRefused;
 	char Diagnostic[192];
 };
 

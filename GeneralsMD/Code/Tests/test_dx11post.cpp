@@ -35,6 +35,7 @@
 
 #include "dx11device.h"
 #include "dx11post.h"
+#include "dx11runtime.h"
 
 #include <d3d11.h>
 #include <windows.h>
@@ -370,6 +371,66 @@ TEST(dx11post_a_warp_bends_the_edge_its_ring_crosses_and_clearing_it_gives_the_f
 		CHECK_EQ(0u, differing_pixels(picture, result, pitch));
 		delete [] result;
 	}
+	delete [] picture;
+}
+
+// -heathaze: one splat in the middle of the frame over a far depth bends the diagonal under it and
+// nothing in the corners; the next frame, with no splat set, is the copy pass's exact one, and so is
+// one whose depth stands at the flame's.
+TEST(dx11post_a_heat_splat_bends_the_picture_under_it_and_none_leaves_it_alone)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+	DX11DeviceClass & device = fixture.Get_Device();
+	DX11PostProcessClass & post = fixture.Get_Post();
+
+	unsigned char * picture = new unsigned char[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
+	fill_diagonal(picture);
+	const DX11PostEffect chain[] = { DX11_POST_COPY };
+	post.Set_Chain(chain, 1);
+	CHECK(post.Wants_Heat_Haze_Programs());
+	post.Compile_Heat_Haze_Programs();
+	CHECK(!post.Wants_Heat_Haze_Programs());
+
+	// Centre, half widths, then a flame at depth a half, a shift of 5% of the frame, time 0, then
+	// planes 1 and 100, a clearance of 5 and a softness of 10: the cleared depth of 1 is the far
+	// plane, far behind it.
+	const float splat[DIRECT3D11_HEAT_SPLAT_FLOATS] = {
+		0.0f, 0.0f, 0.5f, 0.5f,
+		0.5f, 0.05f, 0.0f, 0.0f,
+		1.0f, 100.0f, 5.0f, 10.0f };
+	// Frame 2 sets the splat again over a depth of a half, the flame's own: a unit standing in the
+	// fire, which has to keep every pixel.
+	for (unsigned frame = 0; frame < 3; ++frame) {
+		post.Open_Frame();
+		post.Begin_Frame();
+		device.Set_Scene_View(post.Scene_View());
+		device.Get_Context()->ClearDepthStencilView(device.Get_Depth_Stencil_View(), D3D11_CLEAR_DEPTH,
+			(frame == 2) ? 0.5f : 1.0f, 0);
+		CHECK(write_scene(device, post, picture));
+		if (frame != 1) {
+			post.Set_Heat_Splats(splat, 1);
+		}
+		CHECK_EQ(frame != 1, post.Heat_Haze_Scene(device.Get_Depth_Texture()));
+		CHECK(post.Run_Chain());
+		unsigned pitch = 0;
+		unsigned char * result = read_back_buffer(device, pitch);
+		CHECK(result != NULL);
+		if (result != NULL) {
+			if (frame == 0) {
+				CHECK(differing_pixels(picture, result, pitch) > 8u);
+				CHECK_EQ(DARK_LEVEL, pixel_level(result, pitch, 1, SURFACE_SIZE - 2));
+				CHECK_EQ(LIGHT_LEVEL, pixel_level(result, pitch, SURFACE_SIZE - 2, 1));
+			} else {
+				CHECK_EQ(0u, differing_pixels(picture, result, pitch));
+			}
+			delete [] result;
+		}
+	}
+	device.Set_Scene_View(NULL);
 	delete [] picture;
 }
 

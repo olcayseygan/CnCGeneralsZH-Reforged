@@ -1101,6 +1101,14 @@ Int parseSmoothMotion(char *args[], int)
 	return 1;
 }
 
+/* -heathaze: the air over the FireLook flames shimmers on Direct3D 11, a prototype. Client only. */
+Int parseHeatHaze(char *args[], int)
+{
+	if (TheWritableGlobalData)
+		TheWritableGlobalData->m_heatHaze = TRUE;
+	return 1;
+}
+
 /* -nosmokefirelight: smoke left unlit by the fire beside it, for one run. */
 Int parseNoSmokeFireLight(char *args[], int)
 {
@@ -2911,6 +2919,7 @@ static CommandLineParam params[] =
 	{ "-nosmoothmotion", parseNoSmoothMotion },
 	{ "-smoothmotion", parseSmoothMotion },
 	{ "-nosmokefirelight", parseNoSmokeFireLight },
+	{ "-heathaze", parseHeatHaze },
 	{ "-lighting", parseLightingStyle },
 	{ "-quickstart", parseQuickStart },
 	/* In every build: EA kept them to Debug and Internal, so a Release run could not skip the logo or the

@@ -20,6 +20,7 @@
 
 #include "dx11device.h"
 #include "dx11resource.h"
+#include "dx11runtime.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -1002,6 +1003,111 @@ static const char * const WARP_SHADER_BODY =
 	"    return float4(Source.Sample(Sampler, input.Texture + shift).rgb, 1.0);\n"
 	"}\n";
 
+// -heathaze.  Every flame particle is a splat, six vertices made out of SV_VertexID like the full
+// screen triangle, its numbers read out of a buffer three float4 a splat (dx11runtime.h has the
+// layout).  The splat writes a shift in texture coordinates into rg and its weight into b, added up
+// over every splat that covers the pixel; the composite divides by the weight once it passes one,
+// so a stack of flames shimmers as hard as one does and only the edges fade.
+//
+// The shift is one field over the whole screen rather than per splat, so overlapping flames bend
+// the same way and add up instead of cancelling.  Its waves run up the screen with the time: heat
+// rises.  The tuning is here: HEAT_FREQUENCY is the waves across the frame's height, HEAT_RISE how
+// fast they climb, HEAT_SOFTNESS_* how a surface nearer than the flame takes the shimmer off.
+static const char * const HEAT_SPLAT_VERTEX_SOURCE =
+	"Buffer<float4> Splats : register(t0);\n"
+	"\n"
+	"struct SplatOutput\n"
+	"{\n"
+	"    float4 Position : SV_POSITION;\n"
+	"    float2 Corner : TEXCOORD0;\n"
+	"    float2 Screen : TEXCOORD1;\n"
+	"    float4 Heat : TEXCOORD2;\n"
+	"    float4 Planes : TEXCOORD3;\n"
+	"};\n"
+	"\n"
+	"static const float2 CORNERS[6] =\n"
+	"{\n"
+	"    float2(-1.0, -1.0), float2(-1.0, 1.0), float2(1.0, -1.0),\n"
+	"    float2(1.0, -1.0), float2(-1.0, 1.0), float2(1.0, 1.0)\n"
+	"};\n"
+	"\n"
+	"SplatOutput main(uint index : SV_VertexID)\n"
+	"{\n"
+	"    uint splat = index / 6;\n"
+	"    float2 corner = CORNERS[index % 6];\n"
+	"    float4 shape = Splats.Load(splat * 3);\n"
+	"    SplatOutput output;\n"
+	"    float2 clip = shape.xy + corner * shape.zw;\n"
+	"    output.Position = float4(clip, 0.0, 1.0);\n"
+	"    output.Corner = corner;\n"
+	"    output.Screen = clip * float2(0.5, -0.5) + 0.5;\n"
+	"    output.Heat = Splats.Load(splat * 3 + 1);\n"
+	"    output.Planes = Splats.Load(splat * 3 + 2);\n"
+	"    return output;\n"
+	"}\n";
+
+// Extra (t1) is the scene's depth here, read texel by texel at full size under the half size pixel.
+static const char * const HEAT_SPLAT_SHADER_BODY =
+	"struct SplatOutput\n"
+	"{\n"
+	"    float4 Position : SV_POSITION;\n"
+	"    float2 Corner : TEXCOORD0;\n"
+	"    float2 Screen : TEXCOORD1;\n"
+	"    float4 Heat : TEXCOORD2;\n"
+	"    float4 Planes : TEXCOORD3;\n"
+	"};\n"
+	"\n"
+	"static const float HEAT_FREQUENCY = 50.0;\n"
+	"static const float HEAT_RISE = 2.0;\n"
+	"\n"
+	"float linear_depth(float depth, float4 planes)\n"
+	"{\n"
+	"    return planes.x * planes.y / max(planes.y - depth * (planes.y - planes.x), 0.0001);\n"
+	"}\n"
+	"\n"
+	"float4 main(SplatOutput input) : SV_TARGET\n"
+	"{\n"
+	"    float reach = dot(input.Corner, input.Corner);\n"
+	"    if (reach >= 1.0) discard;\n"
+	"    float weight = (1.0 - reach) * (1.0 - reach) * (1.0 - reach);\n"
+	"    uint width, height;\n"
+	"    Extra.GetDimensions(width, height);\n"
+	"    int2 texel = min(int2(input.Position.xy * 2.0), int2(width - 1, height - 1));\n"
+	"    float scene = linear_depth(Extra.Load(int3(texel, 0)).r, input.Planes);\n"
+	"    float flame = linear_depth(input.Heat.x, input.Planes);\n"
+	// Only what lies well behind the flames bends: a unit standing in the fire, or in front of
+	// it, keeps its outline.
+	"    weight *= saturate((scene - flame - input.Planes.z) / max(input.Planes.w, 0.0001));\n"
+	"    if (weight <= 0.0) discard;\n"
+	"    float aspect = (float)width / (float)height;\n"
+	"    float2 p = float2(input.Screen.x * aspect, input.Screen.y) * HEAT_FREQUENCY;\n"
+	"    float t = input.Heat.z * HEAT_RISE;\n"
+	// Bands across the column climbing it, each swaying sideways a little along its length, so the
+	// air above a fire wavers left and right as it rises.
+	"    float rise = p.y + t * 3.0 + 0.8 * sin(p.x * 0.35 + t * 0.7);\n"
+	"    float2 shift;\n"
+	"    shift.x = sin(rise) + 0.3 * sin(rise * 1.9 + p.x * 0.5 - t * 1.3);\n"
+	"    shift.y = 0.25 * sin(rise * 0.6 + p.x * 0.4 - t * 0.9);\n"
+	"    return float4(shift * input.Heat.y * weight, weight, 0.0);\n"
+	"}\n";
+
+// Source is the copy of the scene, Extra the summed shifts at half size.  A pixel no splat touched
+// reads its own texel, so the frame outside the shimmer is the frame that came in.  The shift dies
+// away over the last 2% toward every edge, the warp's rule, so nothing reads past the frame.
+static const char * const HEAT_HAZE_SHADER_BODY =
+	"float4 main(VertexOutput input) : SV_TARGET\n"
+	"{\n"
+	"    float4 heat = Extra.Sample(Sampler, input.Texture);\n"
+	"    float2 shift = heat.xy / max(heat.z, 1.0);\n"
+	// Never read from a pixel the splats left alone, which is where a unit in the fire stands, so
+	// its colour is not pulled out over the ground beside it.
+	"    shift *= saturate(Extra.Sample(Sampler, input.Texture + shift).z * 4.0);\n"
+	"    float2 border = min(input.Texture, 1.0 - input.Texture);\n"
+	"    float2 settle = saturate(border / 0.02);\n"
+	"    shift *= settle.x * settle.y;\n"
+	"    return Source.Sample(Sampler, input.Texture + shift);\n"
+	"}\n";
+
 static D3DCompileFunction compiler_function()
 {
 	static D3DCompileFunction compiler = NULL;
@@ -1149,7 +1255,15 @@ DX11PostProcessClass::DX11PostProcessClass()
 	, HazeShroudView(NULL)
 	, AtmosphereRefused(false)
 	, WorldAoRefused(false)
+	, HeatSplatBuffer(NULL)
+	, HeatSplatView(NULL)
+	, HeatSplatVertexShader(NULL)
+	, HeatSplatShader(NULL)
+	, HeatHazeShader(NULL)
+	, HeatBlendState(NULL)
+	, HeatHazeRefused(false)
 {
+	memset(&HeatTarget, 0, sizeof(HeatTarget));
 	memset(HazeWorldFromClip, 0, sizeof(HazeWorldFromClip));
 	memset(WorldAoShaders, 0, sizeof(WorldAoShaders));
 	memset(AtmosphereShaders, 0, sizeof(AtmosphereShaders));
@@ -1193,6 +1307,9 @@ bool DX11PostProcessClass::Initialise(DX11DeviceClass * device)
 void DX11PostProcessClass::Shutdown()
 {
 	Release_Targets();
+	Release_Heat_Haze();
+	HeatSplats.clear();
+	HeatHazeRefused = false;
 	HazeShroudView = NULL;
 	HazeShroudSource = NULL;
 	AtmosphereSky = NULL;
@@ -1465,6 +1582,7 @@ void DX11PostProcessClass::Release_Targets()
 	Release_Target(SceneCopy);
 	Release_Target(WorldAoTargets[0]);
 	Release_Target(WorldAoTargets[1]);
+	Release_Target(HeatTarget);
 	const unsigned chain_target_count = sizeof(ChainTargets) / sizeof(ChainTargets[0]);
 	for (unsigned index = 0; index < chain_target_count; ++index) {
 		Release_Target(ChainTargets[index]);
@@ -1822,6 +1940,192 @@ bool DX11PostProcessClass::Occlude_Scene(ID3D11ShaderResourceView * depth)
 	pass.SourceHeight = Height;
 	Draw_Pass(pass);
 	Occluded = true;
+	return true;
+}
+
+void DX11PostProcessClass::Set_Heat_Splats(const float * splats, unsigned count)
+{
+	if (count > DIRECT3D11_HEAT_SPLAT_LIMIT) {
+		count = DIRECT3D11_HEAT_SPLAT_LIMIT;
+	}
+	HeatSplats.assign(splats, splats + count * DIRECT3D11_HEAT_SPLAT_FLOATS);
+}
+
+void DX11PostProcessClass::Release_Heat_Haze()
+{
+	release_interface(reinterpret_cast<IUnknown **>(&HeatBlendState));
+	release_interface(reinterpret_cast<IUnknown **>(&HeatHazeShader));
+	release_interface(reinterpret_cast<IUnknown **>(&HeatSplatShader));
+	release_interface(reinterpret_cast<IUnknown **>(&HeatSplatVertexShader));
+	release_interface(reinterpret_cast<IUnknown **>(&HeatSplatView));
+	release_interface(reinterpret_cast<IUnknown **>(&HeatSplatBuffer));
+}
+
+bool DX11PostProcessClass::Wants_Heat_Haze_Programs() const
+{
+	return ShadersReady && HeatHazeShader == NULL && !HeatHazeRefused;
+}
+
+const char * DX11PostProcessClass::Heat_Haze_Program_Source(unsigned index) const
+{
+	static const std::string sources[HEAT_HAZE_PROGRAMS] = {
+		std::string(HEAT_SPLAT_VERTEX_SOURCE),
+		std::string(PIXEL_SHADER_PROLOGUE) + HEAT_SPLAT_SHADER_BODY,
+		std::string(PIXEL_SHADER_PROLOGUE) + HEAT_HAZE_SHADER_BODY
+	};
+	return sources[index].c_str();
+}
+
+const char * DX11PostProcessClass::Heat_Haze_Program_Profile(unsigned index) const
+{
+	return (index == 0) ? VERTEX_PROFILE : PIXEL_PROFILE;
+}
+
+void DX11PostProcessClass::Load_Heat_Haze_Program(unsigned index, const void * bytecode, SIZE_T size)
+{
+	if (HeatHazeRefused) {
+		return;
+	}
+	ID3D11Device * device = Device->Get_Device();
+	HRESULT result = E_FAIL;
+	if (bytecode != NULL) {
+		result = (index == 0) ? device->CreateVertexShader(bytecode, size, NULL, &HeatSplatVertexShader)
+			: device->CreatePixelShader(bytecode, size, NULL, (index == 1) ? &HeatSplatShader : &HeatHazeShader);
+	}
+	// the last program in makes the rest of what the pass needs
+	if (FAILED(result) || (index + 1 == HEAT_HAZE_PROGRAMS && !Create_Heat_Haze())) {
+		Release_Heat_Haze();
+		HeatHazeRefused = true;
+	}
+}
+
+void DX11PostProcessClass::Compile_Heat_Haze_Programs()
+{
+	D3DCompileFunction compiler = compiler_function();
+	for (unsigned index = 0; index < HEAT_HAZE_PROGRAMS; ++index) {
+		ID3DBlob * code = NULL;
+		ID3DBlob * errors = NULL;
+		const char * source = Heat_Haze_Program_Source(index);
+		HRESULT result = (compiler == NULL) ? E_FAIL : compiler(source, strlen(source), "dx11heat", NULL, NULL,
+			ENTRY_POINT, Heat_Haze_Program_Profile(index), 0, 0, &code, &errors);
+		release_interface(reinterpret_cast<IUnknown **>(&errors));
+		const bool made = SUCCEEDED(result) && code != NULL;
+		Load_Heat_Haze_Program(index, made ? code->GetBufferPointer() : NULL, made ? code->GetBufferSize() : 0);
+		release_interface(reinterpret_cast<IUnknown **>(&code));
+	}
+}
+
+bool DX11PostProcessClass::Create_Heat_Haze()
+{
+	ID3D11Device * device = Device->Get_Device();
+	D3D11_BUFFER_DESC buffer;
+	ZeroMemory(&buffer, sizeof(buffer));
+	buffer.ByteWidth = DIRECT3D11_HEAT_SPLAT_LIMIT * DIRECT3D11_HEAT_SPLAT_FLOATS * sizeof(float);
+	buffer.Usage = D3D11_USAGE_DYNAMIC;
+	buffer.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	buffer.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	if (FAILED(device->CreateBuffer(&buffer, NULL, &HeatSplatBuffer))) {
+		return false;
+	}
+	D3D11_SHADER_RESOURCE_VIEW_DESC view;
+	ZeroMemory(&view, sizeof(view));
+	view.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	view.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	view.Buffer.FirstElement = 0;
+	view.Buffer.NumElements = DIRECT3D11_HEAT_SPLAT_LIMIT * DIRECT3D11_HEAT_SPLAT_FLOATS / 4;
+	if (FAILED(device->CreateShaderResourceView(HeatSplatBuffer, &view, &HeatSplatView))) {
+		return false;
+	}
+
+	// Every splat's shift and weight added to what the target holds.
+	D3D11_BLEND_DESC blend;
+	ZeroMemory(&blend, sizeof(blend));
+	blend.RenderTarget[0].BlendEnable = TRUE;
+	blend.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+	blend.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+	blend.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	blend.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	blend.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+	blend.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	return SUCCEEDED(device->CreateBlendState(&blend, &HeatBlendState));
+}
+
+bool DX11PostProcessClass::Heat_Haze_Scene(ID3D11ShaderResourceView * depth)
+{
+	if (HeatSplats.empty()) {
+		return false;
+	}
+	const unsigned count = static_cast<unsigned>(HeatSplats.size() / DIRECT3D11_HEAT_SPLAT_FLOATS);
+	std::vector<float> splats;
+	splats.swap(HeatSplats);	// spent whether or not this frame can draw them
+	if (Resolved || !ShadersReady || HeatHazeRefused || depth == NULL || SceneTarget.View == NULL
+			|| Device->Get_Scene_View() != SceneTarget.View) {
+		return false;
+	}
+	// loaded when the switch was first seen on (Direct3D11_Set_Heat_Splats), never on a frame's draw
+	if (HeatHazeShader == NULL || HeatBlendState == NULL) {
+		return false;
+	}
+	const unsigned half_width = (Width + 1) / 2;
+	const unsigned half_height = (Height + 1) / 2;
+	if (HeatTarget.Texture == NULL
+			&& !Create_Target(HeatTarget, half_width, half_height, DXGI_FORMAT_R16G16B16A16_FLOAT)) {
+		Release_Target(HeatTarget);
+		return false;
+	}
+	if (SceneCopy.Texture == NULL
+			&& !Create_Target(SceneCopy, Width, Height, TargetsAreFloat ? FLOAT_FORMAT : EIGHT_BIT_FORMAT)) {
+		Release_Target(SceneCopy);
+		return false;
+	}
+
+	ID3D11DeviceContext * context = Device->Get_Context();
+	D3D11_MAPPED_SUBRESOURCE mapped;
+	if (FAILED(context->Map(HeatSplatBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+		return false;
+	}
+	memcpy(mapped.pData, &splats[0], splats.size() * sizeof(float));
+	context->Unmap(HeatSplatBuffer, 0);
+
+	const float nothing[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	context->ClearRenderTargetView(HeatTarget.View, nothing);
+	context->OMSetRenderTargets(1, &HeatTarget.View, NULL);
+	D3D11_VIEWPORT viewport;
+	viewport.TopLeftX = 0.0f;
+	viewport.TopLeftY = 0.0f;
+	viewport.Width = static_cast<float>(half_width);
+	viewport.Height = static_cast<float>(half_height);
+	viewport.MinDepth = 0.0f;
+	viewport.MaxDepth = 1.0f;
+	context->RSSetViewports(1, &viewport);
+	context->OMSetBlendState(HeatBlendState, nothing, 0xffffffff);
+	context->OMSetDepthStencilState(DepthState, 0);
+	context->RSSetState(RasterizerState);
+	context->IASetInputLayout(NULL);
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->VSSetShader(HeatSplatVertexShader, NULL, 0);
+	context->VSSetShaderResources(0, 1, &HeatSplatView);
+	context->PSSetShader(HeatSplatShader, NULL, 0);
+	context->PSSetShaderResources(1, 1, &depth);
+	context->Draw(count * 6, 0);
+	ID3D11ShaderResourceView * none = NULL;
+	context->VSSetShaderResources(0, 1, &none);
+	context->PSSetShaderResources(1, 1, &none);
+
+	DX11Resource_Copy_Readable(context, SceneCopy.Texture, SceneTarget.Texture);
+
+	PassSetup pass;
+	memset(&pass, 0, sizeof(pass));
+	pass.Shader = HeatHazeShader;
+	pass.Source = SceneCopy.Resource;
+	pass.Extra = HeatTarget.Resource;
+	pass.Destination = SceneTarget.View;
+	pass.DestinationWidth = Width;
+	pass.DestinationHeight = Height;
+	pass.SourceWidth = Width;
+	pass.SourceHeight = Height;
+	Draw_Pass(pass);
 	return true;
 }
 

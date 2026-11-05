@@ -14,6 +14,7 @@ Data/Art/Textures/ReforgedFactionTurkiye.tga
 Data/Art/Textures/ReforgedForceAttack.tga
 Data/Art/Textures/ReforgedGuardCentre.tga
 Data/Art/Textures/ReforgedGuardRing.tga
+Data/Art/Textures/ReforgedGuardShield.tga
 Data/Art/Textures/ReforgedHudAmericaCommandBar.dds
 Data/Art/Textures/ReforgedHudAmericaPowers.dds
 Data/Art/Textures/ReforgedHudAmericaTabPanel.dds
@@ -347,6 +348,7 @@ Data/INI/MappedImages/HandCreated/ReforgedBarChinaBeacon.ini
 Data/INI/MappedImages/HandCreated/ReforgedFactionEmblems.ini
 Data/INI/MappedImages/HandCreated/ReforgedFactionPicker.ini
 Data/INI/MappedImages/HandCreated/ReforgedForceAttack.ini
+Data/INI/MappedImages/HandCreated/ReforgedGuardShield.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaTabPanel.ini
@@ -448,6 +450,7 @@ Data/Scenarios/glowmicrowave.txt
 Data/Scenarios/gpu1m_battle.txt
 Data/Scenarios/guardair.txt
 Data/Scenarios/guardradius.txt
+Data/Scenarios/guardshields.txt
 Data/Scenarios/gunfx.txt
 Data/Scenarios/handicap.txt
 Data/Scenarios/headlights.txt

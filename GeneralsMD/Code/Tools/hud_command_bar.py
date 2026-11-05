@@ -3296,9 +3296,99 @@ def check_sheet(sheet_img, side_name, glow="B"):
             assert g[-1, :, 0].min() >= 240, "%sHudReadyGlow's bottom row is not white" % pre
 
 
+# ---------------------------------------------------------------------------------------------- the guard shield
+
+# The shield over a guarding unit's head (W3DInGameUI::drawGuardMarkers, GitHub #165).  It used to be filled one
+# screen row at a time, three shapes of covered spans, 60 to 180 rectangles a unit a picture; now it is one
+# picture, GuardShield<h> for every whole height h the code asks for, drawn texel for pixel.  guard_shield
+# rebuilds the old fill exactly: the same rows, the same covered ends, the same colours laid on in the same
+# order, so the picture over the field is the one the rectangles made.  A sprite is 2K+1 wide round the
+# pixel column the shield is centred on (K = ceil(rim + width / 2)), h + inset high from the shield's top.
+GUARD_HEIGHTS = range(6, 41)                    # 6 x UI scale (1.0) to 10 x 4K's 3.6, rounded up
+GUARD_SHOULDER = 0.4
+GUARD_SHADOW, GUARD_EDGE, GUARD_LIT, GUARD_SHADED = 0x60000000, 0xE00C1014, 0xF0E8EEF4, 0xF0939FAC
+GUARD_SHEET = (512, 256)
+
+
+def guard_geometry(h):
+    """The shield's width, rim and inset at height h, as drawGuardMarkers works them out."""
+    width = h * 0.8
+    rim = max(1.0, h / 10.0)
+    return width, rim, int(rim)
+
+
+def guard_shield(h):
+    width, rim, inset = guard_geometry(h)
+    k = int(np.ceil(rim + width / 2))
+    w, hh = 2 * k + 1, h + inset
+    premul = np.zeros((hh, w, 4), np.float64)       # rgb times alpha, and alpha, laid on rectangle by rectangle
+
+    def fill(x, y, n, colour, alpha):
+        if alpha <= 0:
+            return
+        a = alpha / 255.0
+        rgb = np.array([(colour >> 16) & 255, (colour >> 8) & 255, colour & 255], np.float64) / 255.0
+        cell = premul[y, x:x + n]
+        cell[:, :3] = rgb * a + cell[:, :3] * (1 - a)
+        cell[:, 3] = a + cell[:, 3] * (1 - a)
+
+    def span(left, right, y, colour):                # drawCoveredSpan
+        if right <= left:
+            return
+        alpha = colour >> 24
+        first, last = int(np.floor(left)), int(np.floor(right))
+        if first == last:
+            fill(first, y, 1, colour, int(alpha * (right - left)))
+            return
+        fill(first, y, 1, colour, int(alpha * (first + 1 - left)))
+        if last > first + 1:
+            fill(first + 1, y, last - first - 1, colour, alpha)
+        if right > last:
+            fill(last, y, 1, colour, int(alpha * (right - last)))
+
+    def shape(centre, top, wd, ht, left_colour, right_colour):     # drawShieldShape
+        for row in range(ht):
+            t = (row + 0.5) / ht
+            half = wd * 0.5
+            if t > GUARD_SHOULDER:
+                half *= np.sqrt((1.0 - t) / (1.0 - GUARD_SHOULDER))
+            span(centre - half, centre, top + row, left_colour)
+            span(centre, centre + half, top + row, right_colour)
+
+    centre = k + 0.5
+    shape(centre + rim, inset, width, h, GUARD_SHADOW, GUARD_SHADOW)
+    shape(centre, 0, width, h, GUARD_EDGE, GUARD_EDGE)
+    shape(centre, inset, width - 2.0 * rim, h - 3 * inset, GUARD_LIT, GUARD_SHADED)
+    a = premul[..., 3:]
+    rgb = np.where(a > 0, premul[..., :3] / np.maximum(a, 1e-9), 0)
+    return Image.fromarray((np.concatenate([rgb, a], axis=2) * 255).round().astype(np.uint8), "RGBA")
+
+
+def guard_boxes():
+    """GuardShield<h> -> its box on the sheet, shelf-packed left to right, 4 texels apart."""
+    boxes, x, y, row = {}, 4, 4, 0
+    for h in GUARD_HEIGHTS:
+        width, rim, inset = guard_geometry(h)
+        w, hh = 2 * int(np.ceil(rim + width / 2)) + 1, h + inset
+        if x + w + 4 > GUARD_SHEET[0]:
+            x, y, row = 4, y + row + 4, 0
+        boxes["GuardShield%d" % h] = (x, y, x + w, y + hh)
+        x, row = x + w + 4, max(row, hh)
+    assert y + row + 4 <= GUARD_SHEET[1], "the guard shields overflow their sheet"
+    return boxes
+
+
+def paint_guard_shields():
+    sheet_img = Image.new("RGBA", GUARD_SHEET, (0, 0, 0, 0))
+    for name, box in guard_boxes().items():
+        put(sheet_img, guard_shield(int(name[len("GuardShield"):])), box)
+    assert read_mapped(None, name="ReforgedGuardShield") == guard_boxes(), "ReforgedGuardShield.ini is not the generator's layout"
+    return sheet_img
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--side", default="all", choices=["all", "Observer", "Lobby"] + sorted(SIDES))
+    ap.add_argument("--side", default="all", choices=["all", "Observer", "Lobby", "Guard"] + sorted(SIDES))
     ap.add_argument("--out", required=True, help="where the PNGs go")
     ap.add_argument("--dds", help="Data/Art/Textures, to write the DXT5 textures too")
     ap.add_argument("--emblem", default=EMBLEM_SVG)
@@ -3306,9 +3396,15 @@ def main():
                     help="a charged superweapon's light: B, the breath and a rising band (default, ships), or A, the breath alone")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    for side in (list(SIDES) + ["Observer", "Lobby"] if args.side == "all" else [args.side]):
+    for side in (list(SIDES) + ["Observer", "Lobby", "Guard"] if args.side == "all" else [args.side]):
         made = {}
-        if side == "Lobby":
+        if side == "Guard":                         # uncompressed: DXT5 would smear its covered edges
+            shields = paint_guard_shields()
+            shields.save(os.path.join(args.out, "ReforgedGuardShield.png"))
+            if args.dds:
+                shields.save(os.path.join(args.dds, "ReforgedGuardShield.tga"))
+            print("wrote ReforgedGuardShield")
+        elif side == "Lobby":
             made = {"ReforgedFactionEmblems": paint_faction_emblems()}
         elif side == "Observer":
             bar, panel = paint_observer_bar(), paint_observer_panel()

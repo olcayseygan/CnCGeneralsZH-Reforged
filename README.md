@@ -6,7 +6,7 @@ opponent that builds a base (1.5x income, more when it falls behind, no other ed
 interface. Windows x64 players install it through a free launcher; macOS and Linux
 build it from this repository.
 
-Game v3.2.0, released 2026-10-20. Launcher v1.7.0, released the same day. `main` carries work that
+Game v3.8.0, released 2026-11-04. Launcher v1.9.3, released the same day. `main` carries work that
 is not in a release yet; it sits at the top of [CHANGELOG.md](CHANGELOG.md) and is marked `main` in
 the tables below.
 
@@ -50,9 +50,14 @@ to the same checksum, and a Mac and a Linux PC have played a LAN match without o
 | A tank shell on a soldier | 6 damage, 30 hits to kill a Ranger | 60 damage, three hits | 3.2.0 |
 | A Raptor's half circle at cruise | `1.7 s`, sliding sideways | `3.2 s`, banked | 3.2.0 |
 | A kill's veterancy | all of it to the last shot | a quarter to the last shot, the rest shared by damage done in the last ten seconds | 2.4.0 |
-| Maps a network room lists | 100, and 300 in skirmish | 4,096 | `main` |
-| First toxin cloud on a fresh install | a `3.5 s` freeze | no freeze, its shaders ship with the game | `main` |
-| First superweapon strike on a fresh install | a `110` to `130 ms` hitch each | none | `main` |
+| Maps a network room lists | 100, and 300 in skirmish | 4,096 | 3.3.0 |
+| First toxin cloud on a fresh install | a `3.5 s` freeze | no freeze, its shaders ship with the game | 3.3.0 |
+| First superweapon strike on a fresh install | a `110` to `130 ms` hitch each | none | 3.3.0 |
+| Sun shadows in a 560-unit battle | `0.90 ms` of every frame | `0.36 ms` | 3.4.0 |
+| A Humvee sent 300 on a diagonal | `5.6 s` | `3.6 s`, EA's own movement code and numbers | 3.5.0 |
+| A Crusader's about-face | `180` degrees a second, a stop and a pivot first | `270`, rolling through the turn | 3.8.0 |
+| One frame's drawing in a late 8-player match, Classic | `9.6 ms` | `5.4 ms` | 3.6.0 |
+| A Hard computer's first oil derrick, four players on Twilight Flame | 4 min 40 s | 2 min 20 s | 3.6.0 |
 | Base game textures | Zero Hour's downscaled copies | 481 originals at four times the resolution | 0.0.1-alpha |
 
 ## What is in it
@@ -66,17 +71,21 @@ yet. [CHANGELOG.md](CHANGELOG.md) has the measurements behind every line.
 |:--|:--|
 | Direct3D 11 draws by default, `-d3d9` brings back the old renderer; with Classic Graphics off, glow and edge smoothing over the battlefield only | 1.0.0 |
 | Shadows soften and pale as the caster leaves the ground, so a helicopter's spreads as it climbs and a tank's stays hard | 2.0.0 |
-| Classic Graphics is the 2003 look and what a first start opens; untick it and the High preset fills in the Reforged picture | 2.0.0, first start `main` |
+| Classic Graphics is the 2003 look and what a first start opens, explosions and smoke included; untick it and the High preset fills in the Reforged picture | 2.0.0, first start 3.6.0 |
 | Fullscreen Fit picks stretch or bands when the resolution is not the monitor's shape | 2.6.0 |
 | The whole options screen is in the game again, every page the launcher sets | 3.1.0 |
 | The options screen restyled to match the other menus | 3.2.0 |
-| Trees cast the shadow of their crowns, gaps between the fronds included, on Direct3D 11 on Windows and Linux | `main` |
-| Linux draws the sun's shadows and the smoke shadows Windows already had | `main` |
-| Modern water, under Options > Water Style: waves that catch the sun, foam at the shore and off boat hulls; Classic stays the default | `main` |
-| Volumetric hazard clouds, under Options > Cloud Style: toxin, anthrax and nuclear fields as moving smoke at their real size and length; Classic stays the default | `main` |
-| Fire burns: 182 kinds of flame start white-hot and cool through yellow, orange and red to soot | `main` |
-| Warm Light and Haze, Team Color Glow and Water Foam, three Direct3D 11 looks, off until ticked | `main` |
-| Explosion, lit smoke and cloud shaders ship with the game, and one nobody recorded is built beside the game instead of stopping the picture | `main` |
+| Trees cast the shadow of their crowns, gaps between the fronds included, on Direct3D 11 on Windows and Linux | 3.3.0 |
+| Linux draws the sun's shadows and the smoke shadows Windows already had | 3.3.0 |
+| Modern water, under Options > Water Style: waves that catch the sun, foam at the shore and off boat hulls; Classic stays the default | 3.3.0 |
+| Volumetric hazard clouds, under Options > Cloud Style: toxin, anthrax and nuclear fields as moving smoke at their real size and length; Classic stays the default | 3.3.0 |
+| Fire burns: 182 kinds of flame start white-hot and cool through yellow, orange and red to soot | 3.3.0 |
+| Warm Light and Haze, Team Color Glow and Water Foam, three Direct3D 11 looks, off until ticked | 3.3.0 |
+| Explosion, lit smoke and cloud shaders ship with the game, and one nobody recorded is built beside the game instead of stopping the picture | 3.3.0 |
+| Smoke past the particle cap is drawn by the graphics card instead of deleted oldest first; a million particles cost about four milliseconds on Direct3D 11 | 3.4.0 |
+| Performance / Quality slider that moves every graphics box together | 3.4.0 |
+| Multisampling, 2x to 8x, with alpha-to-coverage smoothing fences and foliage; Smooth Motion blends units between steps on screens faster than 60 Hz | 3.5.0 |
+| Nine more looks, each a box in Options and off until ticked: Battle Marks, Firelight, Ambient Occlusion, Sky And Ground Light, Internal HDR Tone Mapping, Weather, Water Splashes, Atmosphere and Collapsing Buildings; the slider's upper stops switch them on | 3.6.0 |
 
 ![A night fight in a river valley under blue moonlight: an explosion and a burning patch of ground light the trees around them while an A-10 and Comanches cross overhead](.github/media/night-fire.jpg)
 
@@ -84,11 +93,11 @@ yet. [CHANGELOG.md](CHANGELOG.md) has the measurements behind every line.
 
 ![Modern water: two PT boats run up a channel between cliffs, away from a stone and timber bridge, each trailing a white foam wake; a beach at the top right, no interface on screen](.github/media/water.jpg)
 
-<sub>Modern water, from Options > Water Style: two PT boats leave foam wakes up a channel. On `main`, not in 3.2.0.</sub>
+<sub>Modern water, from Options > Water Style: two PT boats leave foam wakes up a channel. In the game since 3.3.0.</sub>
 
 ![A volumetric Anthrax Bomb cloud: purple smoke spread over a GLA and American fight on a beach with oil derricks, the bomber leaving to the left over the water, Comanches and a boat at the top right, no interface on screen](.github/media/hazard.jpg)
 
-<sub>An Anthrax Bomb cloud drawn volumetric, from Options > Cloud Style. On `main`, not in 3.2.0.</sub>
+<sub>An Anthrax Bomb cloud drawn volumetric, from Options > Cloud Style. In the game since 3.3.0.</sub>
 
 ### The battle
 
@@ -103,16 +112,35 @@ yet. [CHANGELOG.md](CHANGELOG.md) has the measurements behind every line.
 | A jet shot down hits for 80 where it lands, 160 for a B-52 or a cargo plane, and leaves fire for about six seconds; its owner and allies are spared | 3.2.0 |
 | A tank shell that hits a soldier does the 60 it does to a tank, where it did 6 | 3.2.0 |
 | Missiles weave a few degrees in flight, the weave fading as they close in | 3.2.0 |
-| A hacker left without orders for ten seconds walks into an Internet Center with a free seat or opens its laptop where it stands | `main` |
+| A hacker left without orders for ten seconds walks into an Internet Center with a free seat or opens its laptop where it stands | 3.3.0 |
+| Turkiye, a fourth side listed as experimental: an army of its own that kills from range and cannot see for itself, with rockets that hit as aimed only inside the circle of one of its radars | 3.3.0 |
+| Tanks, cars and bikes drive on EA's own movement code and numbers again, and soldiers turn and stop on their feet | 3.5.0 |
+| Vehicles swing round half as fast again and roll through a bend where they used to stop and pivot | 3.8.0 |
+| Regular, Veteran, Elite and Heroic on EA's kills and bonuses, with EA's chevrons | 3.6.0 |
+| A Handicap box on every seat, 100% down to 10%: at 50% a player's units and buildings have half the health, his weapons and superweapons half the damage, and building and recharging take twice as long | 3.6.0 |
+| A shot from something you cannot see opens the fog around the shooter for two and a half seconds | 3.7.0 |
+| A hidden square comes into sight when six of the eight around it are seen, so the pinholes a tree or a bump left in a unit's sight are gone and a ridge's shadow stays | 3.7.0 |
+| A jet empties the clip it started before it breaks off, as EA's jets did, instead of turning away between two rounds | `main` |
+| With the superweapon rule on No, a computer player builds no China silo any more; it used to put one up as a superweapon anyway | `main` |
+| The haze an Alpha Aurora's bomb leaves ends with the bomb instead of staying for the rest of the match | `main` |
 
 ### The computer opponent
 
 One wrong value kept EA's skirmish AI building only what its script marked urgent, plus a single
 power plant. It builds a base now, scouts with one cheap unit and counts only what it has seen. Easy,
-Medium and Hard differ in what the computer may decide. On `main` every computer seat earns
-double the money it makes by playing, whatever its level. Prices, building speed, sight and unit
-stats are the same on every level. Measured after the doubling, over 32 headless matches on generated
-maps with the seats swapped both ways, Hard won 17, Easy 5, and 10 reached the frame cap undecided.
+Medium and Hard differ in what the computer may decide. Since 3.6.0 every computer seat earns
+half as much again as you would from what it makes by playing, whatever its level, and more when its
+team falls behind the strongest enemy team: toward double at three quarters of that team's worth and
+triple at a quarter, a step of up to 25 points every thirty seconds. Prices, building speed, sight and
+unit stats are the same on every level. Measured with the earlier flat doubling, over 32 headless
+matches on generated maps with the seats swapped both ways, Hard won 17, Easy 5, and 10 reached the
+frame cap undecided.
+
+The computer of 3.6.0 plays its general's signature units, founds a second base on an empty
+start position, keeps its aircraft out of known anti-air and takes oil derricks and supply docks in
+its opening: the capture research starts within five seconds of the first barracks standing, and a
+Hard computer's first derrick falls at 2 minutes 20 seconds on four-player Twilight Flame where it fell at 4
+minutes 40.
 
 Since 3.2.0 each computer seat in the lobby also takes a personality, which says how it plays while
 the difficulty says how well. Normal is the computer you know. The others are Attacker, Turtle,
@@ -144,7 +172,21 @@ or `help`, `attack` or `money` typed in chat asks them for it.
 | A loading screen with a card per player and, in a network game, each player's own load bar | 3.2.0 |
 | A score screen with a Summary page, money, army and building charts sampled every five seconds, and a build-order timeline | 3.2.0 |
 | Every campaign mission open from the campaign menu | 3.2.0 |
-| Each player's ping and frame rate on the Tab diplomacy screen in a network match, turning yellow for the one slowing it down | `main` |
+| Each player's ping and frame rate on the Tab diplomacy screen in a network match, turning yellow for the one slowing it down | 3.3.0 |
+| Ukrainian and Russian, each in its own alphabet, beside English, Turkish and German; French follows in 3.4.0 | 3.3.0 |
+| A Random tab in the map list: a map in the style of a shipped one, in any size from Tiny to Extra Large, built from the room's player count | 3.4.0 |
+| An army screen in every lobby: a full-screen pick with a portrait, what the army is built to do, and a random pool | 3.4.0 |
+| Music follows the fight, calm tracks while nothing happens and harder ones as guns open up, with a Master Volume slider and a device and speaker picker | 3.4.0 |
+| Sound without the tunnel: the 2.6-second echo every map carried is gone, and Legacy Sound brings the original mix back | 3.6.0 |
+| Five more player colours, and on `main` eight new ones, Teal, Lime, Navy, Magenta, Brown, Lavender, Coral and Olive, in place of Crimson, Azure and Salmon: sixteen in all | 3.6.0, sixteen `main` |
+| Each side's command bar painted in its own style: America's plates cut like an aircraft's, China's upturned eaves in red lacquer and gold, the GLA's crooked scrap, Turkiye's armour with turquoise lights | 3.6.0 |
+| The bar redrawn in dark steel in three tiers and three boxes flush on the screen's edges, the radar in a box of its own, larger money behind a gold dollar sign | `main` |
+| Four idle buttons, worker, infantry, vehicle and aircraft, each picks the next unit standing without an order and turns the camera to it | 3.6.0 |
+| What your base is building shows as pictures over the radar, and superweapon countdowns as pictures at the right edge, soonest first, with a border in the owner's colour on `main` | 3.6.0 |
+| The card for a build button in the side's own art, with price, build time and a row of stat icons; on `main` cut from the bar's own steel | 3.7.0 |
+| Watching a match: a bar of its own, and a rack of drawers with a camera lever and a rank dial of seven numbers; its steel matches the players' bars on `main` | 3.6.0 |
+| The Tab screen painted in your side's steel, solid, with each player's row in a sunk well | `main` |
+| Rebound hotkeys are saved where Linux finds them again after a restart | `main` |
 
 ![An American base 7 minutes 24 seconds into a match against a Hard China computer player, interface in Turkish: the army drives north raising dust, the Barracks is selected, the command bar sits in the middle of the bottom edge with $22000 on its money plate, the radar at the bottom left, the portrait at the bottom right and the Ranger's build card open with its cost, strengths, health, damage, rate of fire, damage a second, range and build time](.github/media/hud-tr.jpg)
 
@@ -178,11 +220,11 @@ own date-and-time name.
 
 ![The launcher's Home page in English: the wordmark and the page tabs along the top, a game picture on the left, Installation Ready to play, Game v3.2.0 installed, Launcher v1.7.0, a gold Play button and Reinstall](.github/media/launcher.jpg)
 
-<sub>Launcher v1.7.0, Home page.</sub>
+<sub>The launcher's Home page as of launcher v1.7.0 with game v3.2.0. The current launcher is v1.9.3.</sub>
 
 The launcher downloads the build, checks every file against a signed list and keeps the game and
 itself up to date. Its pages are Home, Maps, Replays, Hotkeys, Options, Health and Feedback, in
-English, Turkish or German. Uninstall puts back the files your game had before. When the game
+English, Turkish, German, Ukrainian or Russian. Uninstall puts back the files your game had before. When the game
 crashes, the launcher sends the report without asking you for anything.
 
 ### macOS and Linux
@@ -241,7 +283,7 @@ Discs carry 1.00 and the engine is 1.04's, so files from a 1.04 install (Steam, 
 | `-win`, `-fullscreen`, `-borderless` | the window mode for this run |
 | `-xres <w>` `-yres <h>` | the resolution for this run |
 | `-msaa [N]` | multisampling; bare is 4x, a number asks for N from 2 to 16 |
-| `-language english\|turkish\|german` | the language for this run, over the one Options saved |
+| `-language english\|turkish\|german\|ukrainian\|russian\|french` | the language for this run, over the one Options saved |
 | `-replay <name>` | opens a replay from the replay folder, extension optional |
 | `-loadsave <name>` | opens a save game the same way |
 | `-quickstart` | skips the intro movie, the shell map and the menu animations |
@@ -426,8 +468,9 @@ every abstract interface the engine names, and nothing under `GameEngine/` names
 The logic and client split is the determinism boundary. `GameLogic` owns every `Object` and everything
 that has to checksum identically on every machine in a network game; `GameClient` owns drawables and
 input. Input never reaches logic directly. It becomes a message on a stream, and whatever survives the
-translators lands on the command list for the next logic frame. Since 3.2.0, outside network games,
-that frame is worked out on a thread of its own while the client draws the last one.
+translators lands on the command list for the next logic frame. On Windows, that frame is worked out
+on a thread of its own while the client draws the last one: since 3.2.0 outside network games, and
+since 3.6.0 in them.
 Objects are composed from modules declared in INI, so a new behaviour is a module class and an INI
 block rather than an edit to `Object`.
 
@@ -453,13 +496,13 @@ them, and any source change separates them.
   Reforged's own, which is still on paper. A network game needs every player on the same version.
 - A Direct3D 11 frame still costs a little more than a Direct3D 9 one, 7.6 ms against 6.3 ms on a
   screen full of Inferno Cannon fire. `-d3d9` is the way back.
-- Modern water stops the first frame on a fresh install for about ten seconds while its two shaders
-  compile. Volumetric clouds stay off by default until their cost in a big battle is measured.
+- Volumetric clouds stay off by default until their cost in a big battle is measured.
 - No gamepad, and no Direct3D 12.
 - The Windows ARM64 build has not run on an ARM64 machine, and the macOS and Linux packages carry no
   upscaled art. A match between Windows and a Mac has not been played.
 - Replays and mid-match saves from before 3.0.0's 60-step battle do not load. Replays recorded before
-  the `main` changes to the battle play out differently.
+  the battle changes of 3.5.0 to 3.8.0, or of `main`, play out differently, and a game needs every
+  player on the same version.
 - SafeDisc stays stubbed.
 
 ## Help out

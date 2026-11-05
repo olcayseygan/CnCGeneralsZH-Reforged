@@ -362,6 +362,9 @@ public:
 	const ControlBarTooltipImages& getConsoleTooltipImages( void ) const { return m_consoleTooltip; }
 	/// the Tab screen's painting of the scheme on screen, NULL when it names none (Classic keeps EA's screen)
 	const Image *getTabPanelImage( void ) const { return m_currentScheme ? m_currentScheme->m_tooltip.tabPanel : NULL; }
+	/// one of the Tab screen's buttons beside that painting, <TooltipImage>Tab<piece> ("SendH", "Mute"), NULL
+	/// under a scheme without the painting
+	const Image *getTabImage( const char *piece ) const;
 	/// the scheme's painting, cut at the panel seams and each piece drawn where its panel stands
 	void drawPainting( ICoord2D offset, Bool foreground );
 

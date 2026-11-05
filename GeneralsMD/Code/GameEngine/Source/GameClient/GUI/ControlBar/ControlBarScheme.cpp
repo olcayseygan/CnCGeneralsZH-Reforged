@@ -1407,6 +1407,16 @@ const ControlBarTooltipImages& ControlBarSchemeManager::getTooltipImages( void )
 	return m_currentScheme->m_tooltip;
 }
 
+const Image *ControlBarSchemeManager::getTabImage( const char *piece ) const
+{
+	if( getTabPanelImage() == NULL )
+		return NULL;
+	AsciiString name = m_currentScheme->m_tooltipName;
+	name.concat( "Tab" );
+	name.concat( piece );
+	return TheMappedImageCollection->findImageByName( name );
+}
+
 //-----------------------------------------------------------------------------
 /** Nine pieces between outer and inner: the corners, the edges stretched along inner and the centre
 	* under it.  A piece the art leaves out (drawImage takes NULL) leaves what is under it showing. */

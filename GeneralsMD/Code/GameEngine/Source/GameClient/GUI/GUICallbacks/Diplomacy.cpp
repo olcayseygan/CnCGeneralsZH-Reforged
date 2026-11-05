@@ -47,6 +47,7 @@
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetCheckBox.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetRadioButton.h"
@@ -368,6 +369,55 @@ void UpdateDiplomacyBriefingText(AsciiString newText, Bool clear)
 	GadgetListBoxAddEntryText(listboxSolo, translated, TheInGameUI->getMessageColor(numEntries%2), -1);
 }
 
+/// a Diplomacy.wnd button in the scheme's own pieces beside its painting, <TooltipImage>Tab<piece>{,H,P,D}:
+/// one picture stretched over the button where the layout named EA's three
+static void dressTabButton( GameWindow *button, const char *piece )
+{
+	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+	AsciiString name;
+	GadgetButtonSetEnabledImage(button, schemes->getTabImage(piece));
+	name.format("%sH", piece);
+	GadgetButtonSetHiliteImage(button, schemes->getTabImage(name.str()));
+	name.format("%sP", piece);
+	GadgetButtonSetHiliteSelectedImage(button, schemes->getTabImage(name.str()));
+	name.format("%sD", piece);
+	GadgetButtonSetDisabledImage(button, schemes->getTabImage(name.str()));
+}
+
+/// The Tab screen's controls on the scheme's painting (Tools/hud_command_bar.py tab_panel, TAB_BUTTONS): the
+/// Main Menu, mute and money buttons in the side's pieces, and the campaign's briefing list without EA's
+/// veil and blue rule, standing in the painting's glass (y 99..608 of the 714 the window is at 1080) so its
+/// lines read on the wells and not across their lips.
+static void dressForPanel( void )
+{
+	Int width, height;
+	theWindow->winGetSize(&width, &height);
+	dressTabButton(TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ButtonHide")), "Exit");
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		dressTabButton(buttonMute[i], "Mute");
+		dressTabButton(buttonUnMute[i], "Unmute");
+		dressTabButton(buttonMoneyMinus[i], "Square");
+		dressTabButton(buttonMoneyPlus[i], "Square");
+		dressTabButton(buttonMoneySend[i], "Send");
+	}
+
+	GameWindow *listboxSolo = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ListboxSolo"));
+	GadgetListBoxSetEnabledColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetEnabledBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetHiliteColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetHiliteBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetDisabledColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetDisabledBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	Int x, y, screenX, screenY, panelX, panelY, listWidth, listHeight;
+	listboxSolo->winGetPosition(&x, &y);
+	listboxSolo->winGetScreenPosition(&screenX, &screenY);
+	theWindow->winGetScreenPosition(&panelX, &panelY);
+	listboxSolo->winGetSize(&listWidth, &listHeight);
+	listboxSolo->winSetPosition(x, y + panelY + height * 99 / 714 - screenY);
+	listboxSolo->winSetSize(listWidth, height * (608 - 99) / 714);
+}
+
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 void ShowDiplomacy( Bool immediate )
@@ -461,6 +511,8 @@ void ShowDiplomacy( Bool immediate )
 
 	TheInGameUI->registerWindowLayout(theLayout);
 	grabWindowPointers();
+	if (panel)
+		dressForPanel();
 	PopulateInGameDiplomacyPopup();
 
 	if(TheGameSpyInfo && TheGameSpyInfo->getLocalProfileID() != 0)

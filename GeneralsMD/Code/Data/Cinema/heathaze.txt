@@ -1,0 +1,12 @@
+# The -heathaze prototype against no haze, on Scenarios/firelook.txt (Twilight Flame, seed 7): one
+# held frame on the firelook opening, Dragons flaming the Rangers with the barracks and the fire
+# walls burning behind. The camera does not move, so the shimmer is the only thing that bends.
+#
+#   generals.exe -borderless -msaa 0 -noFPSLimit -particlecap 2500 -quickstart -noshellmap
+#     -observer -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2
+#     -takeover -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario firelook
+#     -cinema heathaze -screenshot 840 -video 720 1200 <name> -maxframes 1220 [-heathaze]
+
+1.0   cut     660 3320 0.55 110 0
+
+21.0  end

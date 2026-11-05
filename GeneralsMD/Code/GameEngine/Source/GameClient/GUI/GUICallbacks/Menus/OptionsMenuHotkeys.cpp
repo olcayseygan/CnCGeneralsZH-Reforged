@@ -29,6 +29,7 @@
 // and unit through every build button, in the engine's own templates instead of the INI text.
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "zhio.h"
 
 #include "Common/FileSystem.h"
 #include "Common/file.h"
@@ -810,7 +811,7 @@ void OptionsHotkeysSave( void )
 		s_commandList = NULL;
 		return;
 	}
-	FILE *file = fopen( hotkeysPath().str(), "wb" );
+	FILE *file = zh_fopen( hotkeysPath().str(), "wb" );
 	if( file == NULL )
 	{
 		DEBUG_LOG(( "HOTKEYS: %s could not be written\n", hotkeysPath().str() ));

@@ -1692,7 +1692,7 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     pieces.update({"HudCell" + k: v for k, v in hud_cell_pieces(side_name).items()})
     pieces.update({"TrayTabDown": tray_tab(side_name), "TrayTabUp": tray_tab(side_name, up=True)})
     pieces.update(ready_glow_pieces(build, glow))
-    pieces.update(tip_pieces(side))
+    pieces.update(tip_pieces(side_name))
     for kind in MOUNT_KINDS:
         for state in ("", "H", "P", "I"):
             x0, y0, x1, y1 = M[prefix + kind + state]
@@ -1757,121 +1757,110 @@ def tip_soften(p, W, H, rib, head=False):
 
 
 def tip_card(side, head=False):
-    """The reference card, TIP_REF, every build its own way; side is a SIDES entry or OBSERVER.  head draws
-    the short variant for a card with no stat row (a general's power, an upgrade): the name slot, then the
-    description well straight under it, TIP_HEAD high, with only the fittings that fit beside the name;
-    TipHeadTL/T/TR are its top row and join the same middle and bottom pieces."""
-    build = side["build"]
+    """The reference card, TIP_REF, every build its own way; side is a BAR_LOOKS name (Observer for the
+    console set).  head draws the short variant for a card with no stat row (a general's power, an
+    upgrade): the name slot, then the description well straight under it, TIP_HEAD high, with only the
+    fittings that fit beside the name; TipHeadTL/T/TR are its top row and join the same middle and bottom
+    pieces."""
+    look = BAR_LOOKS[side]
+    build = look["build"]
     W, H = (TIP_REF[0], TIP_HEAD + TIP_REF[1] - TIP_EDGE[1]) if head else TIP_REF
     p = Painter(W + 4, H + 4)                       # room right and below, so only the left side is the screen's
     name, cost, desc = tip_wells(W, H, head)
-    wells = [w for w in (name, cost, desc) if w]
-    full = not head                                 # the stat well's rule and the fittings below the name slot
+    full = not head                                # the stat well's rule and the fittings below the name slot
 
     def sink(corners, depth, lip):
         for r, c in zip((name, cost, desc), corners):
             if r:
                 p.sink([shape(build, *r, c)], depth, lip(r) if callable(lip) else lip)
-    if build == "machined":                         # a dark flange, a satin frame on it, 45 degree cuts
-        p.silhouette([[(0, 0), (W - 16, 0), (W, 16), (W, H - 6), (W - 6, H), (0, H)]], 4.0, build, screen=True)
-        p.raise_plate([plate(0, 3, W - 4, H - 3, tr=("cut", 12), br=("cut", 4))], 7.0, 3.0, STEEL, screen=True)
-        sink((3, 4, 4), 6, 3)
-        tip_soften(p, W, H, 1.5, head)
-        vents(p, W - 38, W - 18, 9, 21)
+    # round 19: round 18's three tiers in a card's few texels.  The shell is 2.6 texels of near-black steel
+    # round the outline, open along the screen's edge on the left, the lip bevels up inside it, and the
+    # wells are sunk through the lip as the bar's windows are; each side's outline and fittings are its
+    # bar's.  Everything that is not plain plate stands in the top right corner, the right column or along
+    # an edge, since TL, TR, BL and BR keep their size and the rest stretches.
+    p.tiers([CARD_OUTLINES[build](W, H)], (False, False, True, False), 4.0, 7.0, 2.6, 1.6, 2.6)
+    sink((3, 4, 4), 6, 2.2)
+    tip_soften(p, W, H, 1.5, head)
+    if full:
+        p.inlay([plate(8, 58.6, W - 44, 59.4)], INKM, 0.4)
+    if build == "machined":                         # America: swept blue chevrons, a panel seam, octagon studs
+        def swept(x, y0, y1, w, t):
+            ym = (y0 + y1) / 2
+            return [(x, y0), (x - t, y0), (x - t - w, ym), (x - t, y1), (x, y1), (x - w, ym)]
+        p.inlay([swept(W - 18 - 9 * i, 9, 22, 6, 2.6) for i in range(3)], ACCENT, 0.7)
+        p.inlay([plate(W - 7, 24, W - 6, H - 16)], INKM, 0.8)
         if full:
-            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
-            p.inlay(chevrons(W - 9, 33, 8, n=2), ACCENT, 0.7)    # blue: red there read as stray texels
-            p.stud(W - 9, 54, 3.0)
-        p.stud(W - 9, H - 9, 2.6)
-    elif build == "terraced":                       # cast in square terraces, a heavy rim round each well
-        outline = [(0, 0), (W - 24, 0), (W - 24, 8), (W - 12, 8), (W - 12, 16), (W, 16), (W, H), (0, H)]
-        sl, m, d = p.silhouette([outline], 11.0, build, STEEL, screen=True)
-        p.mat[sl][m & (d < 6)] = DARK
-        for r in wells:
-            p.bump([shape(build, *grow(r, 3), 4)], 2.0, 1.0)
-        for r in wells:
-            p.sink([shape(build, *grow(r, 1.2), 3)], 8, 1.2)
-        tip_soften(p, W, H, 2.0, head)              # the rims' ridge there gives way to a square rib
+            p.stud(W - 9, 44, 2.6)
+        p.stud(W - 9, H - 9, 2.4)
+    elif build == "terraced":                       # China: a stepped corner, a red lacquer band, gold studs, rivets
+        p.inlay([plate(8, H - 3.6, W - 18, H - 2.2), plate(W - 36, 8, W - 14, 11)], ACCENT, 0.3)
+        p.bump([regular(x, 19, 2.2, 12) for x in (W - 33, W - 17)], 2.2, 1.4, GOLDM)
+        for y in (34, 46) if full else ():
+            p.rivet(W - 7, y, 1.8)
+        p.rivet(W - 7, H - 8, 1.8)
+    elif build == "scavenged":                      # the GLA: a patch sheet welded on crooked, odd bolts
+        sh = sheet(W - 38, 3, W - 12, 26, -6)
+        p.bump([sh], 1.4, 0.8, STEEL)
+        for a, b in zip(sh, sh[1:] + sh[:1]):
+            p.weld(a, b, seed=150 + int(a[0]), r=1.0)
+        p.bolt(W - 25, 14.5, 2.2, 91)
         if full:
-            p.inlay([plate(8, 58.2, W - 44, 59.8)], ACCENT, 0.15)
-        p.bump([plate(W - 37, 11, W - 21, 17.5)], 1.6, 0.8, ACCENT2)
-        for x in (W - 35, W - 23):
-            p.rivet(x, 23, 1.8)
-        for y in (28, 42, 56) if full else (28,):
-            p.rivet(W - 6, y, 1.9)
-        p.rivet(W - 6, H - 7, 1.9)
-    elif build == "scavenged":                      # a sheet laid on along the top and welded, bolts, a ragged corner
-        outline = [(0, 0), (W - 30, 0), (W - 22, 4), (W - 9, 1.5), (W, 13), (W, H - 9), (W - 4, H - 9), (W - 4, H), (0, H)]
-        p.silhouette([outline], 3.0, build, screen=True)
-        sl, m, _ = p.raise_plate([plate(0, 1.5, W - 26, 29.5)], 5.0, 1.2, STEEL, screen=True)
-        p.tint[sl][m] = 1.05
-        p.weld((W - 26, 3), (W - 26, 28), 151)
-        sink((4, 4, 4), 5, 2)
-        tip_soften(p, W, H, 1.2, head)
+            p.bolt(W - 7, 44, 2.6, 92)
+        p.bolt(W - 9, H - 6, 2.0, 93)
+    elif build == "faceted":                        # Turkiye: an armour panel with a gap, range ticks, recessed fasteners
+        p.bump([[(W - 52, 4), (W - 30, 4), (W - 14, 13), (W - 52, 13)]], 2.0, 0.9, STEEL)
+        p.inlay([plate(W - 53, 4, W - 52, 13)], INKM, 0.9)
+        p.inlay([plate(x, 23, x + 1, 26 if i % 2 else 28) for i, x in enumerate(range(W - 38, W - 13, 5))], INKM, 0.6)
+        for x, y in ((W - 8, 44), (W - 8, H - 8)) if full else ((W - 8, H - 8),):
+            p.inlay([regular(x, y, 2.6, 12)], DARK, 1.0)
+            p.bump([regular(x, y, 1.4, 6)], 0.6, 0.6, STEEL)
+    else:                                           # the observer's desk: a grille, the tally, cross-head screws
+        grille(p, W - 37, 7, W - 17, 22, 3.2)
+        tally(p, W - 9, 14, 2.2)
         if full:
-            p.inlay([plate(4, 58.1, W - 46, 59.9), jitter(plate(W - 47, 57.6, W - 39, 60.4), 52, 1.0, 3)], ACCENT2, 0.12)
-        for x in (W - 22, W - 13):
-            p.inlay([[(x, 28), (x + 5, 19), (x + 9, 19), (x + 4, 28)]], ACCENT, 0.3)
-        for i, (x, y) in enumerate(((W - 19, 9), (W - 7, 45), (W - 10, H - 6))):
-            if full or y < 30 or y > H - 14:
-                p.bolt(x, y, 2.6, 90 + i)
-    elif build == "faceted":                        # composite: a 30 degree cut, one wide flat facet, tiles
-        p.silhouette([[(0, 0), (W - 34, 0), (W, 20), (W, H), (0, H)]], 4.0, "machined", screen=True)
-        p.frame([plate(0, 3, W - 5, H - 3, tr=("slant", 16), br=("cut", 4))], 9.0, build, screen=True)
-        sink((4, 5, 5), 6, lambda r: 4 if r is not name else 3)
-        tip_soften(p, W, H, 1.5, head)
-        # no tiles: on the narrow right corners their grooves read as stray crosses and broke the
-        # 30 degree cut into steps (round 18's in-game shots)
-        # the rule and the marker in dark steel: no red on Turkiye's card
-        if full:
-            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT2, 0.2)
-        p.inlay([triangle(W - 28, 15, 9, 10, "left")], ACCENT2, 0.6)
-        for x, y in ((W - 10, 42), (W - 10, H - 8)) if full else ((W - 10, H - 8),):
-            p.bump([regular(x, y, 3.0, 6, np.pi / 6)], 0.8, 1.2, BRIGHT)
-    else:                                           # the console: radii, a bullnose, a grille, screws, the tally
-        p.silhouette([plate(0, 0, W, H, tr=("round", 10), br=("round", 6))], 6.0, build, STEEL, screen=True)
-        sink((4, 4, 4), 5, 2)
-        tip_soften(p, W, H, 1.5, head)
-        if full:
-            p.inlay([plate(8, 58.6, W - 44, 59.4)], ACCENT, 0.2)
-            screw(p, W - 8, 44, 2.4)
-        grille(p, W - 37, 7, W - 17, 23)
-        tally(p, W - 9, 15, 2.4)
-        screw(p, W - 9, H - 7, 2.2)
-    return shade(p, side, shadow=False, falloff=False).crop((0, 0, W, H))
+            screw(p, W - 8, 44, 2.0)
+        screw(p, W - 8, H - 8, 1.8)
+    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, scan=False, gloss=False)
+    if build == "faceted":                          # the LED line along the top lip and a lamp, Turkiye's turquoise
+        img = led(img, [((16, 3), (W - 60, 3))], [(W - 22, 33 if full else 18, TURQ)])
+    return img.crop((0, 0, W, H))
+
+
+# each build's card outline, the bar's silhouette at a card's size; the left side is the screen's
+CARD_OUTLINES = {
+    "machined": lambda W, H: [(0, 0), (W - 16, 0), (W, 16), (W, H - 6), (W - 6, H), (0, H)],
+    "terraced": lambda W, H: [(0, 0), (W - 20, 0), (W - 20, 6), (W - 10, 6), (W - 10, 12), (W, 12), (W, H - 6),
+                              (W - 6, H - 6), (W - 6, H), (0, H)],
+    "scavenged": lambda W, H: [(0, 0), (W - 30, 0), (W - 22, 3), (W - 9, 1.5), (W, 13), (W, H - 9), (W - 4, H - 9),
+                               (W - 4, H), (0, H)],
+    "faceted": lambda W, H: [(0, 0), (W - 34, 0), (W, 20), (W, H - 5), (W - 5, H), (0, H)],
+    "desk": lambda W, H: [(0, 0), (W - 10, 0), (W, 10), (W, H - 5), (W - 5, H), (0, H)],
+}
 
 
 def tip_cursor(side):
-    """The pointer's tooltip, TIP_CURSOR_REF: a framed well closed all round, the build's corners."""
-    build = side["build"]
+    """The pointer's tooltip, TIP_CURSOR_REF: a framed well closed all round, three tiers in eight texels
+    (a 1.6 texel shell, the lip, the glass), the build's corners and one fitting of its bar's."""
+    look = BAR_LOOKS[side]
+    build = look["build"]
     W, H = TIP_CURSOR_REF
     p = Painter(W + 4, H + 4)
     o = 2                                           # off the canvas's border, so no side reads as the screen's
+    c = {"machined": 4, "terraced": 3, "scavenged": 4, "faceted": 4, "desk": 3}[build]
+    p.tiers([shape(build, o, o, o + W, o + H, c)], (False,) * 4, 3.0, 5.0, 1.6, 1.2, 1.6)
+    p.sink([shape(build, o + 3, o + 3, o + W - 3, o + H - 3, max(c - 2, 1.5))], 2.6, 1.4)
     if build == "machined":
-        p.silhouette([octagon(o, o, o + W, o + H, 3.5)], 3.0, build)
-        p.raise_plate([octagon(o + 1, o + 1, o + W - 1, o + H - 1, 3)], 5.0, 1.6, STEEL)
-        p.sink([shape(build, o + 3, o + 3, o + W - 3, o + H - 3, 2)], 2.6, 1.8)
-        p.inlay([plate(o + 5, o + 1.6, o + W - 5, o + 2.1)], ACCENT, 0.15)
+        p.inlay([plate(o + 6, o + 1.9, o + W - 6, o + 2.5)], ACCENT, 0.15)
     elif build == "terraced":
-        sl, m, d = p.raise_plate([shape(build, o, o, o + W, o + H, 3)], 6.0, 1.0, STEEL, "chessboard", terraces((0, 0.5), (2, 0.5)))
-        p.limit[sl] |= m
-        p.mat[sl][m & (d < 2)] = DARK
-        p.sink([shape(build, o + 4, o + 4, o + W - 4, o + H - 4, 2)], 2.6, 1.2)
-        p.inlay([plate(o + 5, o + H - 2.4, o + W - 5, o + H - 1.6)], ACCENT, 0.15)
+        p.inlay([plate(o + 6, o + H - 2.5, o + W - 6, o + H - 1.9)], ACCENT, 0.15)
     elif build == "scavenged":
-        p.silhouette([shape(build, o, o, o + W, o + H, 4)], 3.0, build)
-        p.sink([shape(build, o + 3, o + 3, o + W - 3, o + H - 3, 2.5)], 2.3, 1.4)
-        p.inlay([jitter(plate(o + 1, o + H - 7, o + 6, o + H - 1), 61, 1.0, 2)], ACCENT2, 0.25)
-        p.bolt(o + W - 3.6, o + 3.6, 1.8, 3)
-    elif build == "faceted":
-        p.silhouette([shape(build, o, o, o + W, o + H, 4)], 3.0, "machined")
-        p.frame([shape(build, o + 0.5, o + 0.5, o + W - 0.5, o + H - 0.5, 4)], 5.0, build, scale=0.4)
-        p.sink([shape(build, o + 3.5, o + 3.5, o + W - 3.5, o + H - 3.5, 2.5)], 2.6, 1.8)
-        p.inlay([triangle(o + 4.6, o + H - 4.6, 3.2, 3.6, "right")], ACCENT, 0.4)
-    else:
-        p.silhouette([shape(build, o, o, o + W, o + H, 5)], 5.0, build, STEEL)
-        p.sink([shape(build, o + 3, o + 3, o + W - 3, o + H - 3, 3)], 2.6, 1.8)
-    return shade(p, side, shadow=False, falloff=False).crop((o, o, o + W, o + H))
+        p.bolt(o + W - 3.6, o + 3.6, 1.6, 3)
+    elif build == "desk":
+        tally(p, o + W - 4, o + 4, 1.2)
+    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, scan=False, gloss=False)
+    if build == "faceted":
+        img = led(img, [((o + 6, o + 2), (o + W - 6, o + 2))], [])
+    return img.crop((o, o, o + W, o + H))
 
 
 def tip_icon(side, kind):
@@ -1932,7 +1921,9 @@ def tip_icon(side, kind):
     p.h += rim * 0.6
     p.h += np.clip(Painter.inside(glyph) / 0.9, 0, 1) * glyph * 2.2
     p.mat[glyph] = BRIGHT
-    return shade(p, dict(side, build="console"), shadow=False, falloff=False).crop((o, o, o + n, o + n))
+    look = BAR_LOOKS[side]                          # the bar's steel, lifted to read on the card's glass
+    look = dict(look, build="desk", steel=tuple(min(255, int(c * 1.45)) for c in look["steel"]))
+    return shade(p, look, shadow=False, falloff=False).crop((o, o, o + n, o + n))
 
 
 def nine(img, edge, middle=None):
@@ -1977,11 +1968,11 @@ def tip_sizes():
 
 
 def paint_helpbox():
-    """ReforgedHudHelpbox in the console build: the tooltips for the shell and any scheme without its own,
-    laid out by ReforgedHudHelpbox.ini (prefix Helpbox)."""
+    """ReforgedHudHelpbox in the observer's desk build: the tooltips for the shell and any scheme without its
+    own, laid out by ReforgedHudHelpbox.ini (prefix Helpbox)."""
     M = read_mapped(None, name="ReforgedHudHelpbox")
     sheet_img = Image.new("RGBA", TIP_HELPBOX_SIZE, (0, 0, 0, 0))
-    for name, img in tip_pieces(OBSERVER).items():
+    for name, img in tip_pieces("Observer").items():
         put(sheet_img, img, M["Helpbox" + name])
     return sheet_img
 

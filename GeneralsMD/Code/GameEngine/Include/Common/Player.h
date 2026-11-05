@@ -141,11 +141,14 @@ static const char *ScienceAvailabilityNames[] =
 // at all, no superweapon at all, or a number of each type he may have standing.  It takes the
 // player template's name because the rule has one exception, the USA Superweapon General, and
 // because a name is what a test can hand it.  buildingName is the superweapon's own template: the
-// nuclear silo is the one No leaves standing, one per player, for the upgrades it sells.
+// nuclear silo is the one No leaves standing, one per human player, for the upgrades it sells; a
+// computer player builds none, since it put one up as its superweapon.  computerPlayer is
+// getPlayerType() == PLAYER_COMPUTER, every computer seat on either AI and every difficulty.
 //
 enum { SUPERWEAPON_CAP_BANNED = -1, SUPERWEAPON_CAP_UNLIMITED = 0 };
 Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName,
-                         const AsciiString &buildingName = AsciiString::TheEmptyString );
+                         const AsciiString &buildingName = AsciiString::TheEmptyString,
+                         Bool computerPlayer = FALSE );
 
 // The lobby's unit limit is this many units for the whole match, shared out evenly between the
 // players who are not watching.  UnitLimitPerPlayer is one player's share.

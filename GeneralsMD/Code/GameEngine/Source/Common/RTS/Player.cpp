@@ -3260,7 +3260,8 @@ static void countExisting( Object *obj, void *userData )
    game unrestricted rather than guessing at a number. */
 static const char theSuperweaponGeneralTemplate[] = "FactionAmericaSuperWeaponGeneral";
 
-Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName, const AsciiString &buildingName )
+Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName, const AsciiString &buildingName,
+                         Bool computerPlayer )
 {
   const Bool isSuperweaponGeneral =
       playerTemplateName.compareNoCase( theSuperweaponGeneralTemplate ) == 0;
@@ -3268,10 +3269,12 @@ Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName,
   if ( restriction == SUPERWEAPONS_LIMIT )
     return isSuperweaponGeneral ? SUPERWEAPONS_LIMIT_GENERAL : SUPERWEAPONS_LIMIT_OTHERS;
 
-  // the silo sells China's Uranium Shells, Nuclear Tanks and Neutron Shells, so under No every
-  // player still stands one and only its missile is refused (SuperweaponMissileSilenced)
+  // the silo sells China's Uranium Shells, Nuclear Tanks and Neutron Shells, so under No a human
+  // still stands one and only its missile is refused (SuperweaponMissileSilenced).  A computer
+  // player builds none: it rushed one up as its superweapon, and a player who picked No saw the
+  // AI build a superweapon.  The Superweapon General's own silo goes with it, silenced and useless.
   if ( restriction == SUPERWEAPONS_NONE && ProRulesExemptSuperweapon( buildingName ) )
-    return SUPERWEAPONS_LIMIT_OTHERS;
+    return computerPlayer ? SUPERWEAPON_CAP_BANNED : SUPERWEAPONS_LIMIT_OTHERS;
 
   if ( restriction == SUPERWEAPONS_NONE )
     return isSuperweaponGeneral ? SUPERWEAPONS_NONE_GENERAL : SUPERWEAPON_CAP_BANNED;
@@ -3739,7 +3742,8 @@ Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild, Int unitsPerO
       restriction = SUPERWEAPONS_NONE;
     const AsciiString templateName =
         getPlayerTemplate() ? getPlayerTemplate()->getName() : AsciiString::TheEmptyString;
-    const Int cap = SuperweaponBuildCap( restriction, templateName, whatToBuild->getName() );
+    const Int cap = SuperweaponBuildCap( restriction, templateName, whatToBuild->getName(),
+                                         getPlayerType() == PLAYER_COMPUTER );
     if ( cap == SUPERWEAPON_CAP_BANNED )
       return false;
 

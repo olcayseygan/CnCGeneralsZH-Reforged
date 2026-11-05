@@ -21263,6 +21263,16 @@ TEST(the_superweapon_rule_is_a_mode_with_one_exception)
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "ChinaNuclearMissileLauncher" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "Nuke_ChinaNuclearMissileLauncher" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 1 );
+	// a human's, that is: a computer player builds no silo under No, whoever its general, since
+	// it put one up as its superweapon, and Limit and Allow leave it the same silo as anybody
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_BANNED );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( "FactionChinaNukeGeneral" ), AsciiString( "Nuke_ChinaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_BANNED );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_BANNED );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), FALSE ), 1 );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), TRUE ), 1 );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_ALLOW, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_UNLIMITED );
+	// and the Superweapon General's own exception under No is unchanged for a computer
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaParticleCannonUplink" ), TRUE ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "GLAScudStorm" ) ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, laserGeneral, AsciiString( "Lazr_AmericaParticleCannonUplink" ) ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 4 );

@@ -169,8 +169,6 @@ static void markBeamSeen( DrawableID parent, DrawableID target, UnsignedInt now 
 	s_beamsSeen[ slot ].ms = now;
 }
 
-static TextureClass *s_glowTexture = NULL;
-
 // ponytail: chosen by template name so no INI field and no checksum change; a "Glow" field in
 // W3DLaserDraw is the upgrade if a beam ever needs it on its own. Every weapon laser in ZH ends in
 // LaserBeam; the data streams, the waypoint line and the Particle Cannon's beams do not. The
@@ -202,41 +200,43 @@ static Real glowTexel( Real across, Real along )
 	return glowFalloff( across ) * glowFalloff( MAX( cap, 0.0f ) );
 }
 
-// u is -1..1 across the beam, v 0..1 along it
-static TextureClass *acquireGlowTexture()
-{
-	if( !s_glowTexture )
-	{
-		s_glowTexture = MSGNEW("TextureClass") TextureClass( GLOW_TEXTURE_SIZE, GLOW_TEXTURE_SIZE, WW3D_FORMAT_A8R8G8B8, MIP_LEVELS_1 );
-		SurfaceClass *surf = s_glowTexture->Get_Surface_Level();
-		Int pitch;
-		UnsignedByte *pData = (UnsignedByte*)surf->Lock( &pitch );
-		for( Int y = 0; y < GLOW_TEXTURE_SIZE; y++ )
-		{
-			Real along = ( y + 0.5f ) / GLOW_TEXTURE_SIZE;
-			UnsignedInt *row = (UnsignedInt*)( pData + y * pitch );
-			for( Int x = 0; x < GLOW_TEXTURE_SIZE; x++ )
-			{
-				Real across = ( x + 0.5f ) / GLOW_TEXTURE_SIZE * 2.0f - 1.0f;
-				UnsignedInt c = (UnsignedInt)( glowTexel( across, along ) * 255.0f + 0.5f );
-				row[ x ] = ( c << 24 ) | ( c << 16 ) | ( c << 8 ) | c;
-			}
-		}
-		surf->Unlock();
-		REF_PTR_RELEASE( surf );
-		s_glowTexture->Get_Filter().Set_U_Addr_Mode( TextureFilterClass::TEXTURE_ADDRESS_CLAMP );
-		s_glowTexture->Get_Filter().Set_V_Addr_Mode( TextureFilterClass::TEXTURE_ADDRESS_CLAMP );
-	}
-	s_glowTexture->Add_Ref();
-	return s_glowTexture;
-}
+// The texture belongs to the asset manager, under a name no file has, which lets it go with the
+// unused textures between maps and with the rest at shutdown. Made and freed with the beams, as it
+// was, a lone turret's beam was gone before its next shot and every shot built a Direct3D 9 texture
+// and its Direct3D 11 copy again: 134 of them in a minute of two Laser Defense turrets firing.
+static const char *GLOW_TEXTURE_NAME = "zhr_laserglow";
 
-static void releaseGlowTexture()
+// u is -1..1 across the beam, v 0..1 along it; each line takes its own reference
+static TextureClass *peekGlowTexture()
 {
-	// the static pointer holds one reference of its own; the last beam takes it with it
-	s_glowTexture->Release_Ref();
-	if( s_glowTexture->Num_Refs() == 1 )
-		REF_PTR_RELEASE( s_glowTexture );
+	HashTemplateClass<StringClass,TextureClass*> &textures = WW3DAssetManager::Get_Instance()->Texture_Hash();
+	TextureClass *texture = textures.Get( GLOW_TEXTURE_NAME );
+	if( texture )
+		return texture;
+
+	// the one reference it is made with is the asset manager's
+	texture = MSGNEW("TextureClass") TextureClass( GLOW_TEXTURE_SIZE, GLOW_TEXTURE_SIZE, WW3D_FORMAT_A8R8G8B8, MIP_LEVELS_1 );
+	SurfaceClass *surf = texture->Get_Surface_Level();
+	Int pitch;
+	UnsignedByte *pData = (UnsignedByte*)surf->Lock( &pitch );
+	for( Int y = 0; y < GLOW_TEXTURE_SIZE; y++ )
+	{
+		Real along = ( y + 0.5f ) / GLOW_TEXTURE_SIZE;
+		UnsignedInt *row = (UnsignedInt*)( pData + y * pitch );
+		for( Int x = 0; x < GLOW_TEXTURE_SIZE; x++ )
+		{
+			Real across = ( x + 0.5f ) / GLOW_TEXTURE_SIZE * 2.0f - 1.0f;
+			UnsignedInt c = (UnsignedInt)( glowTexel( across, along ) * 255.0f + 0.5f );
+			row[ x ] = ( c << 24 ) | ( c << 16 ) | ( c << 8 ) | c;
+		}
+	}
+	surf->Unlock();
+	REF_PTR_RELEASE( surf );
+	texture->Get_Filter().Set_U_Addr_Mode( TextureFilterClass::TEXTURE_ADDRESS_CLAMP );
+	texture->Get_Filter().Set_V_Addr_Mode( TextureFilterClass::TEXTURE_ADDRESS_CLAMP );
+	texture->Set_Texture_Name( GLOW_TEXTURE_NAME );
+	textures.Insert( texture->Get_Texture_Name(), texture );
+	return texture;
 }
 
 // A flicker of one on average, varying by up to depth: a value per FLICKER_STEP_MS for each seed,
@@ -500,10 +500,10 @@ void W3DLaserDraw::buildRenderObjects( Bool madeInTick )
 
 	} //end segment loop
 
-	if( beamGlows( getDrawable() ) )
+	// Off (and Classic) is EA's beam alone, so a beam fired then makes none of the glow's lines
+	if( beamGlows( getDrawable() ) && glowStrength() > 0.0f )
 	{
-		// this beam's reference on the texture is given back by releaseGlowTexture in the destructor
-		TextureClass *glowTexture = acquireGlowTexture();
+		TextureClass *glowTexture = peekGlowTexture();
 
 		const Int glowCount = (Int)data->m_segments * GLOW_LAYERS;
 		m_glow3D = NEW SegmentedLineClass *[ glowCount ];
@@ -562,7 +562,6 @@ W3DLaserDraw::~W3DLaserDraw( void )
 			W3DDisplay::m_3DScene->Remove_Render_Object( m_flare3D[ f ] );
 			REF_PTR_RELEASE( m_flare3D[ f ] );
 		}
-		releaseGlowTexture();
 	}
 }
 
@@ -865,7 +864,7 @@ void W3DLaserDraw::drawGlow( Real widthScale, Real sinceArrivalMs )
 	const Real brightness = MIN( glowStrength(), 1.0f );
 	if( brightness <= 0.0f )
 	{
-		// Off: EA's beam alone, as it was
+		// Off since this beam was made: EA's beam alone, as it was
 		for( Int g = 0; g < (Int)data->m_segments * GLOW_LAYERS; g++ )
 			m_glow3D[ g ]->Set_Color( Vector3( 0.0f, 0.0f, 0.0f ) );
 		for( Int f = 0; f < FLARE_COUNT; f++ )

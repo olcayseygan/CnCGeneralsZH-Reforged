@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <algorithm>
 
 // Client-only recognition and shaping. Gameplay supplies the radius and lifetime;
 // an unrecognized effect remains on its existing particle path.
@@ -19,8 +20,30 @@ inline bool sameName(const char *a, const char *b)
     return *a == *b;
 }
 
+// Short impact splashes and model-attached leaks have no gameplay hazard owner.
+// Keep their identity, support and lifetime separate from the lingering fields.
+inline int paletteForParticleSource(const char *name)
+{
+    if (sameName(name, "ToxinPuddle") || sameName(name, "ToxinPuddleContinuous")
+        || sameName(name, "ToxinTankPuddle")) return 0;
+    if (sameName(name, "AnthraxPuddle") || sameName(name, "AnthraxPuddleContinuous")) return 2;
+    if (sameName(name, "GC_Chem_ToxinPuddle") || sameName(name, "AnthraxGammaPuddleContinuous")) return 3;
+    return -1;
+}
+
+inline float particleSourceHeight(float radius, float fringe)
+{
+    return (std::min)(18.61f, (std::max)(3.0f, (radius + fringe) * .25f));
+}
+
+inline bool attachedParticleSource(const char *name)
+{
+    return sameName(name, "ToxinPuddleContinuous") || sameName(name, "AnthraxPuddleContinuous")
+        || sameName(name, "AnthraxGammaPuddleContinuous") || sameName(name, "ToxinTankPuddle");
+}
+
 // Palette indices are shared with the approved preview: toxin, nuclear, beta, gamma.
-inline int paletteForTemplate(const char *name)
+inline int paletteForTemplate(const char *name, bool sharedClouds = true)
 {
     static const char *const names[][3] = {
         {"PoisonFieldSmall", "PoisonFieldMedium", "PoisonFieldLarge"},
@@ -32,6 +55,13 @@ inline int paletteForTemplate(const char *name)
     for (int palette = 0; palette < 4; ++palette)
         for (int size = 0; size < 3; ++size)
             if (sameName(name, names[palette][size])) return palette;
+    // Contaminate emits these ground effects while the tractor is firing. The
+    // lingering PoisonField/AnthraxField systems above only appear after it stops.
+    if (sharedClouds) {
+        if (sameName(name, "ToxinPuddleLarge")) return 0;
+        if (sameName(name, "AnthraxPuddleLarge")) return 2;
+        if (sameName(name, "AnthraxGammaPuddleLarge")) return 3;
+    }
     return sameName(name, "NukeRadiationInitial") ? 1 : -1;
 }
 
@@ -66,6 +96,16 @@ struct Buildup {
     float density;   // Multiply by the runtime's existing life/visibility fade.
     float release;
 };
+
+inline Buildup particleSourceBuildup(float age, float lifetime, float left)
+{
+    if (!std::isfinite(age) || !std::isfinite(lifetime) || !std::isfinite(left)
+        || age < 0 || lifetime <= 0 || left <= 0) return {0, 0, 0};
+    const float rise = (std::min)(.1f, lifetime * .25f);
+    const float decay = (std::min)(.35f, lifetime * .25f);
+    const float formation = smoothProgress(age, rise);
+    return {formation, formation * (std::min)(1.f, left / decay), .35f};
+}
 
 inline Buildup visualBuildup(int palette, bool largeNuclear, float ageSeconds,
     float lifetimeSeconds)

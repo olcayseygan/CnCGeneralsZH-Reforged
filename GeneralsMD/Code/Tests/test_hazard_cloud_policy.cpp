@@ -29,6 +29,60 @@ TEST(hazard_cloud_recognizes_only_known_particle_templates)
         CHECK_EQ(paletteForTemplate(name), -1);
 }
 
+TEST(hazard_cloud_recognizes_active_tractor_contamination)
+{
+    // The secondary weapon emits these before FireOCLAfterWeaponCooldownUpdate
+    // creates the lingering PoisonField owner. All three are ground-area FX.
+    CHECK_EQ(paletteForTemplate("ToxinPuddleLarge"), 0);
+    CHECK_EQ(paletteForTemplate("AnthraxPuddleLarge"), 2);
+    CHECK_EQ(paletteForTemplate("AnthraxGammaPuddleLarge"), 3);
+    CHECK_EQ(paletteForTemplate("toxinPUDDLElarge"), 0);
+    for (const char *name : {"ToxinPuddleLargeExtra", "MyAnthraxPuddleLarge",
+            "AnthraxGammaPuddle", "ToxinTankPuddle", "ToxinSpray", "AnthraxSpray"})
+        CHECK_EQ(paletteForTemplate(name), -1);
+    // Active effects have no cleanup-hazard owner until the tractor stops.
+    for (const char *name : {"ToxinPuddleLarge", "AnthraxPuddleLarge", "AnthraxGammaPuddleLarge"}) {
+        CHECK_EQ(paletteForOwner(name), -1);
+        CHECK_EQ(paletteForTemplate(name, false), -1);
+    }
+    CHECK_EQ(paletteForTemplate("PoisonFieldMedium", false), 0);
+}
+
+TEST(hazard_cloud_particle_sources_are_separate_from_gameplay_hazards)
+{
+    const struct { const char *name; int palette; bool attached; } sources[] = {
+        {"ToxinPuddle", 0, false}, {"AnthraxPuddle", 2, false}, {"GC_Chem_ToxinPuddle", 3, false},
+        {"ToxinPuddleContinuous", 0, true}, {"AnthraxPuddleContinuous", 2, true},
+        {"AnthraxGammaPuddleContinuous", 3, true}, {"ToxinTankPuddle", 0, true}
+    };
+    for (const auto &source : sources) {
+        CHECK_EQ(paletteForParticleSource(source.name), source.palette);
+        CHECK_EQ(attachedParticleSource(source.name), source.attached);
+        CHECK_EQ(paletteForTemplate(source.name), -1);
+        CHECK_EQ(paletteForOwner(source.name), -1);
+    }
+    CHECK_EQ(paletteForParticleSource("anthraXPUDDLE"), 2);
+    for (const char *name : {static_cast<const char *>(nullptr), "", "ToxinSpray", "ToxinTarget",
+            "ToxinTankPuddleExtra", "PoisonFieldMedium", "ToxinPuddleLarge", "GLAViralOutbreakClouds"})
+        CHECK_EQ(paletteForParticleSource(name), -1);
+}
+
+TEST(hazard_cloud_short_particle_sources_form_and_expire_within_their_lifetime)
+{
+    // Gamma impact: 10 retail frames, one third of a second. The generic
+    // three-second hazard buildup would consume its entire visible lifetime.
+    const float life = 1.f / 3.f;
+    CHECK(particleSourceBuildup(.05f, life, life - .05f).density > .5f);
+    CHECK_EQ(particleSourceBuildup(.1f, life, life - .1f).formation, 1.f);
+    CHECK(particleSourceBuildup(life - .01f, life, .01f).density < .2f);
+    CHECK_EQ(particleSourceBuildup(life, life, 0).density, 0.f);
+    CHECK_EQ(particleSourceBuildup(1, -1, 1).density, 0.f);
+    CHECK_EQ(particleSourceBuildup(std::numeric_limits<float>::quiet_NaN(), life, life).density, 0.f);
+    CHECK(particleSourceHeight(5, 10) < particleSourceHeight(55, 25));
+    CHECK_EQ(particleSourceHeight(55, 25), 18.61f);
+    CHECK(particleSourceHeight(1, 1) > 0);
+}
+
 TEST(hazard_cloud_matches_actual_hazard_object_names)
 {
     CHECK_EQ(paletteForOwner("PoisonFieldMedium"), 0);

@@ -717,6 +717,9 @@ public:
 
 	void setPosition( const Coord3D *pos );			///< set the position of the particle system
 	void getPosition( Coord3D *pos );				///< get the position of the particle system
+	/// Cached emission transform, resolved during the particle update; no parent reads.
+	void getWorldEmissionPosition( const Coord3D &local, Coord3D *pos ) const;
+	Bool isEmitting() const { return !m_isDestroyed && !m_isStopped && (m_isForever || m_systemLifetimeLeft > 0); }
 	void setLocalTransform( const Matrix3D *matrix );	///< set the system's local transform
 	void rotateLocalTransformX( Real x );				///< rotate local transform matrix
 	void rotateLocalTransformY( Real y );				///< rotate local transform matrix

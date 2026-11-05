@@ -12,6 +12,8 @@ found and fixed, EA's own, not port damage.**
 
 - On Linux and macOS with volumetric clouds on, more than eight toxin or radiation fields now keep their cloud look instead of turning into flat puddles. The work is spread across frames, so a crowded battle takes less out of any one frame. Classic clouds remain the default.
 
+- On Linux and macOS with volumetric clouds on, toxin splashes, tractor contamination and leaks now rise as clouds too, instead of remaining flat or appearing as sprites.
+
 ## A shot from the fog gives the shooter away
 
 - When something you cannot see hits one of your units or buildings, the fog opens around the shooter for two and a half seconds: a small circle, just wide enough to show what fired and not the ground around it. Artillery behind a ridge or a jet out of the dark shows itself the moment its shot lands. Your allies see it too, as they see everything else you see. A stealthed unit nobody has detected stays hidden, and a shot from something you can already see opens nothing. A replay recorded before this change plays out differently.

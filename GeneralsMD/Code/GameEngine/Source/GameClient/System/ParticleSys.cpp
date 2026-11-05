@@ -1791,6 +1791,14 @@ void ParticleSystem::getPosition( Coord3D *pos )
 	}
 }
 
+void ParticleSystem::getWorldEmissionPosition( const Coord3D &local, Coord3D *pos ) const
+{
+	Vector3 point(local.x, local.y, local.z), world;
+	if (m_isIdentity) world = point;
+	else Matrix3D::Transform_Vector(m_transform, point, &world);
+	pos->x = world.X; pos->y = world.Y; pos->z = world.Z;
+}
+
 // ------------------------------------------------------------------------------------------------
 /** Set the position of the particle system */
 // ------------------------------------------------------------------------------------------------

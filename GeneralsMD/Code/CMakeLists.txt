@@ -1642,7 +1642,9 @@ if(ZH_PLATFORM_POSIX)
   # the SDL GPU cloud backend and its runtime capability query.
   target_sources(w3ddevice PRIVATE
     ${ZH_POSIX_RENDER_DIR}/SdlHazardCloud.cpp
-    ${ZH_POSIX_RENDER_DIR}/SdlHazardCloudEmbers.cpp)
+    ${ZH_POSIX_RENDER_DIR}/SdlHazardCloudEmbers.cpp
+    ${ZH_POSIX_RENDER_DIR}/SdlHazardCloudShared.cpp
+    ${ZH_POSIX_RENDER_DIR}/SdlHazardCloudSharedShader.cpp)
   set_target_properties(w3ddevice PROPERTIES CXX_STANDARD 17)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main
@@ -2270,6 +2272,19 @@ target_sources(test_hazard_cloud_policy PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudFlow.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudUnsupported.cpp)
 
+add_lib_test(test_hazard_cloud_bake)
+target_include_directories(test_hazard_cloud_bake PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+add_lib_test(test_hazard_cloud_shared)
+set_target_properties(test_hazard_cloud_shared PROPERTIES CXX_STANDARD 17)
+target_include_directories(test_hazard_cloud_shared PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+target_sources(test_hazard_cloud_shared PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudSharedModel.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloud.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudCore.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudShader.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudFlow.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudUnsupported.cpp)
+
 add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
 # R1, smooth motion: W3DSmoothMotion.h's blend and verdicts, header-only over WWMath.
@@ -2726,6 +2741,9 @@ target_link_libraries(fs_oracle PRIVATE wwlib wwdebug)
 # SKIPPED for that step and says how many it did not check.
 find_program(ZH_SPIRV_VAL spirv-val)
 add_lib_test(test_shader_sdl ffvertex engineshader sdl3shadercompile)
+target_sources(test_shader_sdl PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudShader.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.cpp)
 # Reflect the Linux Modern water blocks against their CPU upload structures.
 if(ZH_PLATFORM_LINUX)
   target_link_libraries(test_shader_sdl PRIVATE spirv-cross-c)

@@ -63,6 +63,9 @@
 #include "GameClient/Drawable.h"
 #include "Platform/HazardCloudPolicy.h"
 #include "Platform/HazardCloud.h"
+#include "Platform/HazardCloudShared.h"
+#include "Platform/HazardCloudSharedModel.h"
+#include <cstdio>
 #include <array>
 #include <memory>
 #include <cmath>
@@ -866,10 +869,12 @@ static const Int	FIELD_FADE_GONE				= FIELD_FADE_OUT;	///< logic frames, a field
 // retail keys, owner choice, grace and initial delay on every platform.  Changed
 // only at the sync point (fieldCloudsSupported), never in the render, because
 // FieldKey ordering reads it and changing it while keys exist invalidates the map.
+static Int s_fieldRenderFrame = 0;
 static bool s_fieldCloudsSupported = false;
 static bool s_fieldCloudCapability = false;		///< the device's answer, asked once per device
 static bool s_fieldCloudCapabilityKnown = false;
 static bool fieldCloudsSupported();
+namespace { bool warmSharedClouds(); }
 
 static const Real	FIELD_OBJECT_REACH		= 5.0f;		///< how near the field's centre its object stands
 
@@ -909,6 +914,8 @@ struct FieldState
 	Real cloudShown, cloudFormation, cloudGoneDensity, cloudGoneFormation, cloudRevealFrom;
 	Int cloudGoneAt, cloudRevealAt;
 	Int cloudDieFrame;          ///< owner's LifetimeUpdate die frame at the last sync point, or -1
+	Real cloudTravel, cloudPeak, cloudUpdated;
+	Bool cloudHistory;          ///< source history advances even outside the camera
 	Int seen;						///< logic frame a system was last seen at it
 	ObjectID object;		///< the object whose life it fades with, or INVALID_ID
 	Int gone;						///< logic frame it began going out (fog, or its object gone), or -1
@@ -947,9 +954,11 @@ static bool fieldCloudsSupported()
 	// The programs every layer shares are built here, on the shell map or a match's first frame,
 	// or the frame the style is switched: built by the first hazard instead, a program the shader
 	// cache lacked froze that frame for three and a half seconds of FXC.
-	if (volumetric && (newDevice || !s_fieldCloudsSupported))
-		if (std::unique_ptr<HazardCloud::Layer> layer = HazardCloud::CreateLayer())
+	if (volumetric && (newDevice || !s_fieldCloudsSupported)) {
+		if (HazardCloudShared::Supported()) warmSharedClouds();
+		else if (std::unique_ptr<HazardCloud::Layer> layer = HazardCloud::CreateLayer())
 			layer->initialize();
+	}
 	// A new device, or the style switched: destroy keys before changing their
 	// comparator's mode.
 	if (volumetric != s_fieldCloudsSupported) {
@@ -1111,6 +1120,27 @@ struct CloudLayer {
 	bool terrainValid = false;
 };
 std::array<CloudLayer, MaxCloudLayers> s_cloudLayers;
+std::unique_ptr<HazardCloudShared::Renderer> s_sharedCloud;
+HazardCloudShared::Model s_sharedCloudModel;
+std::map<FieldKey, HazardCloudShared::Source> s_sharedCloudFields;
+HazardCloudShared::Bounds s_sharedCloudBounds = {};
+float s_sharedTerrainChecked = -100;
+bool s_sharedTerrainValid = false, s_sharedCloudReady = false, s_sharedCloudFailed = false;
+bool warmSharedClouds()
+{
+	if (s_sharedCloud) return true;
+	if (s_sharedCloudFailed) return false;
+	auto renderer = HazardCloudShared::CreateRenderer();
+	if (!renderer) return false;
+	std::string error;
+	if (!renderer->initialize(error)) {
+		std::fprintf(stderr, "hazard-cloud: shared renderer initialization failed: %s\n", error.c_str());
+		s_sharedCloudFailed = true;
+		return false;
+	}
+	s_sharedCloud = std::move(renderer);
+	return true;
+}
 unsigned s_cloudPass = 0, s_cloudDraws = 0;
 struct CloudWalker { Coord3D position; HazardCloud::Body body; unsigned frame; };
 std::map<ObjectID, CloudWalker> s_cloudWalkers;
@@ -1132,6 +1162,11 @@ bool modernCloudsEnabled()
 void releaseCloudLayers()
 {
 	for (auto &slot : s_cloudLayers) slot = CloudLayer{};
+	if (s_sharedCloud) s_sharedCloud->reset();
+	s_sharedCloudFields.clear();
+	s_sharedCloudReady = false;
+	s_sharedTerrainChecked = -100;
+	s_sharedTerrainValid = false;
 	s_cloudWalkers.clear();
 	s_cloudBodies.clear();
 	s_cloudBodyFrame = ~0u;
@@ -1226,21 +1261,19 @@ HazardCloud::Camera cloudCamera(CameraClass &camera)
 	return result;
 }
 
-bool drawModernCloud(const FieldKey &key, FieldState &state, float fade, float seconds, int now,
-	const HazardCloud::Camera &camera)
+bool prepareModernCloud(const FieldKey &key, FieldState &state, int now,
+	HazardCloud::FieldState &field, bool &onGround)
 {
-	if (!modernCloudsEnabled() || key.palette < 0) return false;
-	if (s_cloudDraws >= MaxCloudLayers) return false;
 	const float age = (std::max)(0.f, float(now - state.visualBorn) / LOGICFRAMES_PER_SECOND);
 	// the owner's life was read at the sync point (updateGroundFields), not beside the tick
 	const int remaining = state.cloudDieFrame >= 0 ? state.cloudDieFrame - now : state.particleEnd - now;
 	const float left = (std::max)(0.f, float(remaining) / LOGICFRAMES_PER_SECOND);
 	const float lifetime = age + left;
 	const auto buildup = HazardCloudPolicy::visualBuildup(key.palette, state.radius >= 100.f, age, lifetime);
-	HazardCloud::FieldState field = {};
+	field = {};
 	field.ground = state.centre;
-	const float ground = TheTerrainRenderObject->getHeightMapHeight(state.centre.x, state.centre.y, NULL);
-	const bool onGround = state.centre.z - ground < FIELD_ON_GROUND;
+	const float ground = TheTerrainRenderObject->getDrawHeight(state.centre.x, state.centre.y);
+	onGround = state.centre.z - ground < FIELD_ON_GROUND;
 	if (onGround) field.ground.z = ground;
 	field.radius = state.radius;
 	field.height = 18.61f; // Approved infantry-height cloud from the shared preview.
@@ -1274,6 +1307,121 @@ bool drawModernCloud(const FieldKey &key, FieldState &state, float fade, float s
 	state.cloudFormation = field.formation;
 	if (!HazardCloudPolicy::validField(field.ground.x, field.ground.y, field.ground.z, field.radius,
 		field.height, field.density, field.formation, field.fringe, key.palette)) return false;
+	return true;
+}
+
+void drawSharedClouds(const AABoxClass &view, const HazardCloud::Camera &camera, float seconds, int now)
+{
+	s_sharedCloudFields.clear();
+	s_sharedCloudReady = false;
+	if (!modernCloudsEnabled() || !HazardCloudShared::Supported()) return;
+	std::vector<HazardCloudShared::Source> sources;
+	HazardCloudShared::Bounds bounds = {};
+	bool haveBounds = false;
+	for (auto &entry : s_fieldStates) {
+		const auto &key = entry.first;
+		auto &state = entry.second;
+		if (key.palette < 0) continue;
+		HazardCloudShared::Source source;
+		bool onGround = false;
+		if (!prepareModernCloud(key, state, now, source.field, onGround)) continue;
+		if (!state.cloudHistory || seconds < state.cloudUpdated) {
+			state.cloudTravel = state.cloudPeak = 0;
+			state.cloudUpdated = seconds;
+			state.cloudHistory = TRUE;
+		}
+		state.cloudTravel += (seconds - state.cloudUpdated) * source.field.release * 22.f;
+		state.cloudUpdated = seconds;
+		state.cloudPeak = (std::max)(state.cloudPeak, source.field.density);
+		source.sourceAge = (std::max)(0.f, seconds - float(state.visualBorn) / LOGICFRAMES_PER_SECOND);
+		source.sourceTravel = state.cloudTravel;
+		source.dissipation = state.cloudPeak > .0001f ? (std::max)(0.f, 1.f - source.field.density / state.cloudPeak) : 0;
+		source.terrain = onGround;
+		source.born = float(state.visualBorn) / LOGICFRAMES_PER_SECOND;
+		source.expiry = float(state.cloudDieFrame >= 0 ? state.cloudDieFrame : state.particleEnd) / LOGICFRAMES_PER_SECOND;
+		source.active = state.lifeFade * state.stealth > 0 && source.field.density > .00001f;
+		const float reach = source.field.radius + source.field.fringe + 18.f;
+		const bool visible = std::fabs(state.centre.x - view.Center.X) <= view.Extent.X + reach
+			&& std::fabs(state.centre.y - view.Center.Y) <= view.Extent.Y + reach;
+		if (!visible || state.lifeFade * state.stealth <= 0) continue;
+		source.id = static_cast<unsigned>(sources.size());
+		s_sharedCloudFields.emplace(key, source);
+		sources.push_back(source);
+		const float x = source.field.ground.x, y = source.field.ground.y, z = source.field.ground.z;
+		if (!haveBounds) { bounds = {x - reach, y - reach, x + reach, y + reach, z, z + source.field.height * 2.6f}; haveBounds = true; }
+		else {
+			bounds.minX = (std::min)(bounds.minX, x - reach); bounds.maxX = (std::max)(bounds.maxX, x + reach);
+			bounds.minY = (std::min)(bounds.minY, y - reach); bounds.maxY = (std::max)(bounds.maxY, y + reach);
+			bounds.minZ = (std::min)(bounds.minZ, z); bounds.maxZ = (std::max)(bounds.maxZ, z + source.field.height * 2.6f);
+		}
+	}
+	if (!haveBounds) {
+		if (s_sharedCloud) s_sharedCloud->reset();
+		return;
+	}
+	if (!warmSharedClouds()) return;
+	// Quantization stabilizes the local volume and terrain grid as source
+	// positions drift. Distant offscreen clouds cannot dilute voxel resolution.
+	bounds.minX = std::floor(bounds.minX / 128.f) * 128.f;
+	bounds.minY = std::floor(bounds.minY / 128.f) * 128.f;
+	bounds.maxX = std::ceil(bounds.maxX / 128.f) * 128.f;
+	bounds.maxY = std::ceil(bounds.maxY / 128.f) * 128.f;
+	const bool domainChanged = bounds.minX != s_sharedCloudBounds.minX || bounds.minY != s_sharedCloudBounds.minY
+		|| bounds.maxX != s_sharedCloudBounds.maxX || bounds.maxY != s_sharedCloudBounds.maxY;
+	if (!s_sharedTerrainValid || domainChanged || seconds < s_sharedTerrainChecked || seconds - s_sharedTerrainChecked >= 1.f) {
+		constexpr unsigned side = HazardCloud::TerrainGridSide;
+		std::array<float, side * side> heights;
+		s_sharedTerrainValid = true;
+		for (unsigned y = 0; y < side && s_sharedTerrainValid; ++y) for (unsigned x = 0; x < side; ++x) {
+			const float z = TheTerrainRenderObject->getDrawHeight(
+				bounds.minX + (bounds.maxX - bounds.minX) * x / (side - 1),
+				bounds.minY + (bounds.maxY - bounds.minY) * y / (side - 1));
+			if (!std::isfinite(z)) { s_sharedTerrainValid = false; break; }
+			heights[y * side + x] = z;
+		}
+		if (s_sharedTerrainValid) s_sharedCloud->setTerrain(heights.data(), side);
+		s_sharedTerrainChecked = seconds;
+		s_sharedCloudBounds = bounds;
+	}
+	if (!s_sharedTerrainValid || !s_sharedCloudModel.setSources(sources, bounds)) return;
+	std::vector<HazardCloud::Body> bodies;
+	for (const auto &body : s_cloudBodies) {
+		for (const auto &source : sources) {
+			if (!source.active) continue;
+			const auto &field = source.field;
+			const float dx = body.x - field.ground.x, dy = body.y - field.ground.y;
+			const float reach = field.radius + field.fringe + body.radius;
+			if (dx * dx + dy * dy > reach * reach) continue;
+			const float ground = source.terrain ? TheTerrainRenderObject->getDrawHeight(body.x, body.y) : field.ground.z;
+			if (std::fabs(body.z - ground) < field.height) { bodies.push_back(body); break; }
+		}
+	}
+	// The wake solver retains its 32-body work bound. Moving infantry gets the
+	// allowance before stationary bodies, which do not stir the smoke.
+	std::stable_sort(bodies.begin(), bodies.end(), [](const HazardCloud::Body &a, const HazardCloud::Body &b) {
+		return a.vx * a.vx + a.vy * a.vy > b.vx * b.vx + b.vy * b.vy;
+	});
+	if (bodies.size() > 32) bodies.resize(32);
+	s_sharedCloud->setBodies(bodies.data(), static_cast<unsigned>(bodies.size()));
+	s_sharedCloud->setHeatEnabled(TheGlobalData->m_useHeatEffects != FALSE);
+	std::string error;
+	s_sharedCloudReady = s_sharedCloud->render(camera, s_sharedCloudModel, seconds, error);
+}
+
+bool drawModernCloud(const FieldKey &key, FieldState &state, float fade, float seconds, int now,
+	const HazardCloud::Camera &camera)
+{
+	if (!modernCloudsEnabled() || key.palette < 0) return false;
+	if (HazardCloudShared::Supported()) {
+		const auto entry = s_sharedCloudFields.find(key);
+		if (entry == s_sharedCloudFields.end()) return false;
+		if (entry->second.field.density <= .00001f) return true;
+		return s_sharedCloudReady;
+	}
+	if (s_cloudDraws >= MaxCloudLayers) return false;
+	HazardCloud::FieldState field = {};
+	bool onGround = false;
+	if (!prepareModernCloud(key, state, now, field, onGround)) return false;
 	// A fully faded modern field is intentionally invisible. Drawing Classic
 	// here would flash its puddle back during buildup/cleanup boundary frames.
 	if (field.density <= .00001f) return true;
@@ -1496,13 +1644,14 @@ static void updateGroundFields( const std::vector<ParticleSystem *> &systems )
 	* draws them.  Returns the puddles laid. */
 static Int collectGroundFields( const AABoxClass &view, CameraClass &sceneCamera )
 {
-	const Int now = (Int)TheGameLogic->getFrame();
+	const Int now = s_fieldRenderFrame;
 	// between the last two logic ticks, as the models are, so a pulse does not step at the logic rate
 	const Real seconds = ((Real)now + (TheSmoothMotionActive ? TheSmoothMotionAlpha : 0.0f)) / LOGICFRAMES_PER_SECOND;
 	s_fieldPuddles.clear();
 	s_fieldDraws.clear();
 	beginCloudPass(now);
 	const HazardCloud::Camera camera = cloudCamera( sceneCamera );
+	drawSharedClouds(view, camera, seconds, now);
 
 	Int laid = 0;
 	for (std::map<FieldKey, FieldState>::iterator st = s_fieldStates.begin(); st != s_fieldStates.end(); ++st)
@@ -1908,6 +2057,8 @@ void W3DParticleSystemManager::invalidateGroundFields(bool fadeIn)
 void W3DParticleSystemManager::releaseCloudResources()
 {
 	releaseCloudLayers();
+	s_sharedCloud.reset();
+	s_sharedCloudFailed = false;
 	HazardCloud::ReleaseDevice();
 	// Query the replacement device at the next sync point. The helper clears
 	// keys before changing their ordering if support changed; unchanged support
@@ -1927,6 +2078,7 @@ void W3DParticleSystemManager::releaseGpuResources()
 	* render; the render's own refreshFrameView finds the view still valid. */
 void W3DParticleSystemManager::takeReadsForRender( void )
 {
+	s_fieldRenderFrame = (Int)TheGameLogic->getFrame();
 	refreshFrameView();
 	updateGroundFields( m_fieldSystems );
 }

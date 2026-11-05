@@ -2,6 +2,7 @@
 // GPU backend records, drawn on the context between two of the backend's draws.
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 #include "Platform/HazardCloudCore.h"
+#include "Platform/HazardCloudShared.h"
 #include "Common/Debug.h"
 #include "dx11backend.h"
 #include "dx11device.h"
@@ -583,3 +584,10 @@ std::unique_ptr<Layer> CreateLayer()
 void ReleaseDevice() { releaseShared(); }
 
 } // namespace HazardCloud
+
+namespace HazardCloudShared {
+
+bool Supported() { return false; }
+std::unique_ptr<Renderer> CreateRenderer() { return nullptr; }
+
+} // namespace HazardCloudShared

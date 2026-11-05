@@ -224,6 +224,8 @@ public:
 	virtual void update( void );
 
 	virtual Bool load( AsciiString filename );
+	// Called after final map/save inputs are installed, before gameplay presentation.
+	virtual void prewarmMapRenderData( void ) {}
 
 	/// get color of texture on the terrain at location specified
 	virtual void getTerrainColorAt( Real x, Real y, RGBColor *pColor ) = 0;

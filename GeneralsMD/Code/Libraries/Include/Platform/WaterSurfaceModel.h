@@ -46,6 +46,18 @@ inline Sample Evaluate(float x, float y, float seconds) {
 #undef WATER_MODE_EVAL
     return value;
 }
+// Displacement uses exactly the same height arithmetic without retaining the outlined
+// full evaluator's slope accumulation on the release compiler.
+inline float EvaluateHeight(float x, float y, float seconds) {
+    float height=0;
+#define WATER_MODE_HEIGHT_EVAL(kx,ky,amplitude,omega,phase) { \
+    const float p = x*kx+y*ky-seconds*omega+phase; \
+    const float s = std::sin(p), c = std::cos(p); \
+    height += amplitude*(s+0.13f*2.0f*s*c); }
+    WATER_SURFACE_MODES(WATER_MODE_HEIGHT_EVAL)
+#undef WATER_MODE_HEIGHT_EVAL
+    return height;
+}
 // Open water has its own spectrum. Height energy is shared by several crossing swells rather
 // than concentrated into the old river's first two directions. A slowly evolving coordinate
 // warp bends the crests, and a bounded packet envelope breaks their uniform strength.
@@ -72,6 +84,15 @@ inline Sample Evaluate(float x, float y, float seconds) {
  X( 0.6200f, 3.3400f,0.016f,6.02f,4.07f)
 
 struct OceanSurface { float height,dx,dy,laplacian; };
+// The height-only evaluator retains the full model's warp and envelope arithmetic.
+struct OceanWarp { float q0,q1,s0,s1,px,py; };
+inline OceanWarp OceanWarpAt(float x,float y,float seconds) {
+    const float q0=x*0.0241f+y*0.0157f-seconds*0.23f+0.4f;
+    const float q1=x*-0.0173f+y*0.0299f-seconds*0.19f+2.1f;
+    const float s0=std::sin(q0),s1=std::sin(q1);
+    return {q0,q1,s0,s1,x+5.0f*s0,y+4.0f*s1};
+}
+inline float OceanEnvelope(float s0,float s1) { return 0.86f+0.14f*s0*s1; }
 template<bool Curvature,bool Slopes=true,bool SwellOnly=false> inline OceanSurface EvaluateOceanInternal(float x,float y,float seconds) {
     const float q0=x*0.0241f+y*0.0157f-seconds*0.23f+0.4f;
     const float q1=x*-0.0173f+y*0.0299f-seconds*0.19f+2.1f;
@@ -112,11 +133,19 @@ inline Sample EvaluateOcean(float x,float y,float seconds) {
     const OceanSurface value=EvaluateOceanInternal<false>(x,y,seconds);
     return {value.height,value.dx,value.dy};
 }
-// The fixed, unlit mesh vertex path does not consume ocean normals. Keep the same height
-// arithmetic while instantiating away derivatives; merely reading EvaluateOcean(...).height
-// still invokes its outlined full evaluator on the release compiler.
+// The fixed, unlit mesh vertex path does not consume ocean normals. A scalar return also
+// avoids the release compiler's spills when returning the height-only OceanSurface struct.
+// The mode accumulation, warp and envelope match the full model.
 inline float EvaluateOceanHeight(float x,float y,float seconds) {
-    return EvaluateOceanInternal<false,false>(x,y,seconds).height;
+    const OceanWarp warp=OceanWarpAt(x,y,seconds);
+    float height=0;
+#define WATER_OCEAN_HEIGHT_EVAL(kx,ky,amplitude,omega,phase) { \
+    const float p=warp.px*kx+warp.py*ky-seconds*omega+phase; \
+    const float s=std::sin(p),c=std::cos(p); \
+    height+=amplitude*(s+0.16f*s*c); }
+    WATER_OCEAN_MODES(WATER_OCEAN_HEIGHT_EVAL)
+#undef WATER_OCEAN_HEIGHT_EVAL
+    return height*OceanEnvelope(warp.s0,warp.s1);
 }
 inline Sample BlendSamples(const Sample &river,const Sample &ocean,const Sample &offshore) {
     const float blend=offshore.height<0?0:(offshore.height>1?1:offshore.height);
@@ -131,9 +160,9 @@ inline Sample EvaluateBlended(float x,float y,float seconds,const Sample &offsho
     return BlendSamples(Evaluate(x,y,seconds),EvaluateOcean(x,y,seconds),offshore);
 }
 inline float EvaluateBlendedHeight(float x,float y,float seconds,const Sample &offshore) {
-    if (offshore.height<=0 && offshore.dx==0 && offshore.dy==0) return Evaluate(x,y,seconds).height;
+    if (offshore.height<=0 && offshore.dx==0 && offshore.dy==0) return EvaluateHeight(x,y,seconds);
     if (offshore.height>=1 && offshore.dx==0 && offshore.dy==0) return EvaluateOceanHeight(x,y,seconds);
-    const float river=Evaluate(x,y,seconds).height,ocean=EvaluateOceanHeight(x,y,seconds);
+    const float river=EvaluateHeight(x,y,seconds),ocean=EvaluateOceanHeight(x,y,seconds);
     const float blend=offshore.height<0?0:(offshore.height>1?1:offshore.height);
     return river+(ocean-river)*blend;
 }

@@ -2389,6 +2389,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		}
 	}
 
+	// Saved terrain and triggers arrive later; saves prepare at postprocess load.
+	if (!loadingSaveGame && TheTerrainVisual) TheTerrainVisual->prewarmMapRenderData();
+
 	updateLoadProgress(LOAD_PROGRESS_END);
 
 	if(isInMultiplayerGame() && TheNetwork)

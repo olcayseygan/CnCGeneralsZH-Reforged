@@ -1725,6 +1725,9 @@ void GameState::gameStatePostProcessLoad( void )
 	ThePartitionManager->update();
 	ThePartitionManager->stopKeepingCellsFromSave();
 
+	// Prepare immutable presentation data after every saved map input is final.
+	if (TheTerrainVisual) TheTerrainVisual->prewarmMapRenderData();
+
 	// last, so nothing the load did can draw from the stream after it is put back
 	TheGameLogic->restoreLoadedRandomState();
 

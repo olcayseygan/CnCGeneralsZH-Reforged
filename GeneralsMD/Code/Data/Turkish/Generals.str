@@ -15033,6 +15033,34 @@ TOOLTIP:VSync
 "Görüntüyü monitöre eşler, böylece ekran yırtılmaz. Kapalıyken görüntü, bilgisayarın çizebildiği kadar hızlı akar. Kabul Et'e bastığınızda uygulanır."
 END
 
+GUI:FrameRateLimit
+"FPS Sınırı"
+END
+
+GUI:FrameRateLimit0
+"Kapalı"
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Maçta saniyede en fazla kaç kare çizileceği. Sınırı düşürürsen ekran kartın daha serin ve sessiz çalışır, oyun da yavaşlamaz. Menüler zaten 60'ta durur."
+END
+
 GUI:ClassicGraphics
 "Klasik Grafikler"
 END

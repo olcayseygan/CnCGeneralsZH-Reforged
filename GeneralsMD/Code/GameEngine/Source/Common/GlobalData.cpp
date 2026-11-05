@@ -664,6 +664,8 @@ GlobalData::GlobalData()
 	m_fullscreenScaling = FULLSCREEN_SCALING_STRETCH;	// what EA's fullscreen mode change gave on most monitors
 	m_msaaLevel = 0;
 	m_vsync = FALSE;
+	m_frameRateLimit = 0;
+	m_noFrameRateCap = FALSE;
 	m_direct3D11 = TRUE;
 	m_direct3D11DumpPath.clear();
 	// The Direct3D 11 frame gets every effect the backend has unless -dx11post names a chain of its

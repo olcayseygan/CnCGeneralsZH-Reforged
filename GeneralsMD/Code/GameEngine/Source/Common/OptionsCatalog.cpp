@@ -119,6 +119,7 @@ OPTION_INT_ACCESSORS( m_windowMode )
 OPTION_INT_ACCESSORS( m_fullscreenScaling )
 OPTION_INT_ACCESSORS( m_msaaLevel )
 OPTION_BOOL_ACCESSORS( m_vsync )
+OPTION_INT_ACCESSORS( m_frameRateLimit )
 OPTION_INT_ACCESSORS( m_waterStyle )
 OPTION_INT_ACCESSORS( m_cloudStyle )
 OPTION_BOOL_ACCESSORS( m_classicGraphics )
@@ -164,6 +165,16 @@ unsigned msaaSamplesForLevel( Int level )
 	if( level <= 0 || level >= OPTION_MSAA_LEVEL_COUNT )
 		return 0;
 	return TheMsaaSamples[ level ];
+}
+
+//-----------------------------------------------------------------------------
+static const Int TheFrameRateLimits[ FRAME_RATE_LIMIT_COUNT ] = { 0, 240, 144, 120, 60 };
+
+Int frameRateLimitForLevel( Int level )
+{
+	if( level <= 0 || level >= FRAME_RATE_LIMIT_COUNT )
+		return 0;
+	return TheFrameRateLimits[ level ];
 }
 
 //-----------------------------------------------------------------------------
@@ -474,6 +485,14 @@ const OptionDef TheOptionCatalog[] =
 	{ "VSync",										OPT_WND( "CheckVSync" ), "GUI:VSync",
 		OPTION_BOOL, APPLY_DEVICE_RESET, 0, 1,
 		get_m_vsync, set_m_vsync },
+
+	// A ceiling on the pictures a second, for a card that runs hot drawing hundreds of them (GitHub
+	// #149).  GameEngine::execute waits out the rest of each picture's time after the present; the
+	// logic is paced by its own clock and the cap never goes under the logic's rate.  Off is the
+	// uncapped picture.  The shell and its menus hold 60 whatever this says (#153).
+	{ "FrameRateLimit",						OPT_WND( "ComboBoxFrameRateLimit" ), "GUI:FrameRateLimit",
+		OPTION_ENUM, APPLY_LIVE, 0, FRAME_RATE_LIMIT_COUNT - 1,
+		get_m_frameRateLimit, set_m_frameRateLimit },
 
 	// Water selects a complete surface path, including geometry and reflections. The water
 	// object applies it at the next frame boundary, including while the options menu is paused.

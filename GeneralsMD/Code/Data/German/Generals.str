@@ -14353,6 +14353,34 @@ TOOLTIP:VSync
 "Hält das Bild am Monitor fest, damit es nicht reißt. Aus läuft das Bild so schnell, wie der Rechner zeichnet. Gilt nach Annehmen."
 END
 
+GUI:FrameRateLimit
+"Bildratenbegrenzung"
+END
+
+GUI:FrameRateLimit0
+"Aus"
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Wie viele Bilder pro Sekunde das Spiel in einer Partie höchstens zeichnet. Ein niedrigeres Limit hält die Grafikkarte kühler und leiser und bremst das Spiel nicht. Die Menüs halten immer bei 60."
+END
+
 GUI:ClassicGraphics
 "Klassische Grafik"
 END

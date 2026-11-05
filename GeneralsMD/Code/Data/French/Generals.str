@@ -16045,6 +16045,34 @@ TOOLTIP:VSync
 "Cale l'image sur le moniteur pour qu'elle ne se déchire pas. Désactivé, l'image va aussi vite que la machine la dessine. Appliqué quand vous cliquez sur Accepter."
 END
 
+GUI:FrameRateLimit
+"Limite d'images par seconde"
+END
+
+GUI:FrameRateLimit0
+"Désactivée"
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Le nombre maximal d'images par seconde que le jeu dessine en partie. Une limite plus basse garde la carte graphique plus fraîche et plus silencieuse, sans ralentir le jeu. Les menus s'arrêtent toujours à 60."
+END
+
 GUI:ClassicGraphics
 "Graphismes classiques"
 END

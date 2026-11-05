@@ -9912,6 +9912,42 @@ TEST(health_bar_colors_round_trip_through_options_ini)
 	TheWritableGlobalData = saved;
 }
 
+/** The picture cap (GitHub #149): off with no line, so Classic draws as fast as it always did, and
+	 each level the rate the combo box names. */
+TEST(frame_rate_limit_round_trips_through_options_ini)
+{
+	const OptionDef *def = findOptionDef( "FrameRateLimit" );
+	CHECK( def != NULL );
+	CHECK_EQ( (Int)def->kind, (Int)OPTION_ENUM );
+	CHECK_EQ( (Int)def->apply, (Int)APPLY_LIVE );
+	CHECK_EQ( def->hi, FRAME_RATE_LIMIT_COUNT - 1 );
+
+	CHECK_EQ( frameRateLimitForLevel( 0 ), 0 );
+	CHECK_EQ( frameRateLimitForLevel( 1 ), 240 );
+	CHECK_EQ( frameRateLimitForLevel( 2 ), 144 );
+	CHECK_EQ( frameRateLimitForLevel( 3 ), 120 );
+	CHECK_EQ( frameRateLimitForLevel( 4 ), 60 );
+	CHECK_EQ( frameRateLimitForLevel( FRAME_RATE_LIMIT_COUNT ), 0 );
+
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+
+	CHECK_EQ( TheGlobalData->m_frameRateLimit, 0 );
+	CHECK_EQ( optionDefaultValue( *def ), 0 );
+
+	UserPreferences pref;
+	pref[ AsciiString( "FrameRateLimit" ) ] = AsciiString( "4" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( frameRateLimitForLevel( TheGlobalData->m_frameRateLimit ), 60 );
+
+	pref[ AsciiString( "FrameRateLimit" ) ] = AsciiString( "9" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( TheGlobalData->m_frameRateLimit, FRAME_RATE_LIMIT_COUNT - 1 );
+
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
 TEST(player_color_scheme_round_trips_through_options_ini)
 {
 	const OptionDef *def = findOptionDef( "PlayerColors" );

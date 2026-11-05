@@ -165,6 +165,8 @@ NEW_CONTROLS = [
     (LABEL,  "LabelFullscreenScaling", "GUI:FullscreenScaling"),
     (COMBO,  "ComboBoxFullscreenScaling", None),
     (CHECK,  "CheckVSync",             "GUI:VSync"),
+    (LABEL,  "LabelFrameRateLimit",    "GUI:FrameRateLimit"),
+    (COMBO,  "ComboBoxFrameRateLimit", None),
     (CHECK,  "CheckClassicGraphics",   "GUI:ClassicGraphics"),
     (LABEL,  "LabelWaterStyle",        "GUI:WaterStyle"),
     (COMBO,  "ComboBoxWaterStyle",      None),
@@ -356,7 +358,9 @@ GROUP_LAYOUT = [
             setting("GammaLabel", "SliderGamma", "ValueGamma"),
             # every column of Graphics and Effects is full
             ("check", "CheckStructureCollapse"),
-            ("check", "CheckSmoothMotion")])]),
+            ("check", "CheckSmoothMotion"),
+            # the Screen column is full with the monitor and the resolution note
+            setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit")])]),
 
     ("PageGraphics", [
         # the particle limit went to Effects' Particles group to make room for the quality slider

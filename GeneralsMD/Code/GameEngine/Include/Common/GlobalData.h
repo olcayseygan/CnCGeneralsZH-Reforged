@@ -180,6 +180,8 @@ public:
 														///< empty is the primary.  See Common/Monitors.h.
 	Int m_msaaLevel;					///< multisampling, as an index into the levels the options menu offers
 	Bool m_vsync;						///< wait for the monitor; off is the uncapped picture the frame-rate cap removal shipped
+	Int m_frameRateLimit;			///< "FrameRateLimit": the player's picture cap as a level, frameRateLimitForLevel gives the rate
+	Bool m_noFrameRateCap;		///< -noFPSLimit: no picture cap at all, the shell's 60 included
 	Bool m_direct3D11;			///< draw and present through the Direct3D 11 backend; -d3d9 and -headless turn it off
 	AsciiString m_direct3D11DumpPath;	///< -dx11dump: where to write each generated program
 	AsciiString m_direct3D11PostChain;	///< -dx11post: the effects run over the finished D3D11 frame

@@ -519,6 +519,34 @@ TOOLTIP:VSync
 "Holds the picture to the monitor so it does not tear. Off, the picture runs as fast as the machine draws. Applied when you Accept."
 END
 
+GUI:FrameRateLimit
+"Frame Rate Limit"
+END
+
+GUI:FrameRateLimit0
+"Off"
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"The most pictures a second the game draws in a match. A lower limit keeps the graphics card cooler and quieter and does not slow the game down. The menus always stop at 60."
+END
+
 GUI:ClassicGraphics
 "Classic Graphics"
 END

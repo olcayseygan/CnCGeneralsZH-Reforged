@@ -16073,6 +16073,34 @@ TOOLTIP:VSync
 "Привязывает картинку к частоте монитора, чтобы не было разрывов. Выключено: картинка рисуется так быстро, как может компьютер. Применяется при нажатии «Принять»."
 END
 
+GUI:FrameRateLimit
+"Ограничение FPS"
+END
+
+GUI:FrameRateLimit0
+"Выкл."
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Сколько кадров в секунду игра рисует в матче, не больше. С меньшим пределом видеокарта греется и шумит меньше, а игра не замедляется. В меню всегда не больше 60."
+END
+
 GUI:ClassicGraphics
 "Классическая графика"
 END

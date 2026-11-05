@@ -1518,12 +1518,15 @@ Int parseFPSLimit(char *args[], int num)
 	 and GameEngine::execute() never sleeps for a frame budget, so rendering is already uncapped
 	 unconditionally and m_framesPerSecondLimit means game speed and nothing else.  Raising it here
 	 would just run the match in fast-forward: superweapon and build timers count real seconds off a
-	 clock ticking a thousand times too fast.  Use -fps to ask for that on purpose. */
+	 clock ticking a thousand times too fast.  Use -fps to ask for that on purpose.  Since GitHub #149
+	 there is a picture cap again, the player's FrameRateLimit and 60 in the shell, and this switch lifts
+	 both for the run: the measuring harnesses pass it to time a frame, not a wait. */
 Int parseNoFPSLimit(char *args[], int num)
 {
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_useFpsLimit = false;
+		TheWritableGlobalData->m_noFrameRateCap = TRUE;
 	}
 	return 1;
 }

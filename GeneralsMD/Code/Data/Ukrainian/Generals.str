@@ -16073,6 +16073,34 @@ TOOLTIP:VSync
 "Прив'язує картинку до монітора, щоб вона не рвалася. Вимкнена — картинка йде так швидко, як малює комп'ютер. Застосовується після Прийняти."
 END
 
+GUI:FrameRateLimit
+"Обмеження FPS"
+END
+
+GUI:FrameRateLimit0
+"Вимк."
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Скільки кадрів на секунду гра малює в матчі, не більше. З меншою межею відеокарта гріється й шумить менше, а гра не сповільнюється. У меню завжди не більше 60."
+END
+
 GUI:ClassicGraphics
 "Класична графіка"
 END

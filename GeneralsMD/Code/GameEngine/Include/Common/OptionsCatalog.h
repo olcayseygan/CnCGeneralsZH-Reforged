@@ -155,6 +155,12 @@ enum { SHADOW_QUALITY_COUNT = 3 };
 // What colours a health bar: 0 the health, green through red, 1 the owner's player colour.
 enum { HEALTH_BAR_COLORS_COUNT = 2 };
 
+// The picture cap: off, 240, 144, 120 or 60 pictures a second.  Options.ini stores the level.
+enum { FRAME_RATE_LIMIT_COUNT = 5 };
+
+/** Pictures a second for a stored FrameRateLimit level.  0 is no cap. */
+extern Int frameRateLimitForLevel( Int level );
+
 //-----------------------------------------------------------------------------
 // The Performance / Quality slider on the Graphics page.  One row per graphics setting the Graphics
 // and Effects pages carry, holding what that setting's control shows at each step of the slider:

@@ -2085,6 +2085,9 @@ GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameSunShadow.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloud.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudEmbers.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudEmbers.h
+GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudShared.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.h
 GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.cpp
@@ -2154,6 +2157,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/HazardCloud.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudCore.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudFlow.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudShader.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudSharedModel.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudUnsupported.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HeightMap.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Shaders/MotionBlur.nvv
@@ -2246,9 +2250,12 @@ Libraries/Include/Platform/D3D9PosixMath.h
 Libraries/Include/Platform/DoubleClickTime.h
 Libraries/Include/Platform/EngineShaderName.h
 Libraries/Include/Platform/HazardCloud.h
+Libraries/Include/Platform/HazardCloudBake.h
 Libraries/Include/Platform/HazardCloudCore.h
 Libraries/Include/Platform/HazardCloudFlow.h
 Libraries/Include/Platform/HazardCloudPolicy.h
+Libraries/Include/Platform/HazardCloudShared.h
+Libraries/Include/Platform/HazardCloudSharedModel.h
 Libraries/Include/Platform/IsWindows9x.h
 Libraries/Include/Platform/LoadTiming.h
 Libraries/Include/Platform/MSVCCompat.h
@@ -3405,7 +3412,9 @@ Tests/test_global_new_alignment.cpp
 Tests/test_glyph_rasteriser.cpp
 Tests/test_ground_marks.cpp
 Tests/test_harness.h
+Tests/test_hazard_cloud_bake.cpp
 Tests/test_hazard_cloud_policy.cpp
+Tests/test_hazard_cloud_shared.cpp
 Tests/test_hostile_map.inc
 Tests/test_install_guard.sh
 Tests/test_install_root.cpp

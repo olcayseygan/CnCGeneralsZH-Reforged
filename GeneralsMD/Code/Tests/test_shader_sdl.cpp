@@ -57,6 +57,7 @@
 
 #include <string>
 #include <vector>
+#include <utility>
 #include <complex>
 
 #include <SDL3/SDL.h>
@@ -1371,4 +1372,34 @@ TEST(authored_surf_wrapper_compiles_with_original_fixed_function_fog_and_alpha)
     CHECK(SDL3_Translate_SPIRV_To_MSL(spirv,false,msl,log));
     std::string bad="not a generated combiner";const std::string saved=bad;
     CHECK(!WaterShoreOverlay::WrapPixel(bad));CHECK(bad==saved);
+}
+
+// Keep BaseType.h's legacy min/max macros out of the independent shader cases above.
+#include "Platform/HazardCloudCore.h"
+#include "../GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.h"
+// Shared clouds must retain SDL descriptor bindings on Vulkan and Metal.
+TEST(shared_cloud_programs_compile_validate_and_translate)
+{
+	using HazardCloudShared::ShaderPass;
+	const char *validator = getenv("ZH_SPIRV_VAL");
+	std::vector<std::pair<std::string, bool>> programs = {
+		{HazardCloud::vertexShader(), true},
+		{HazardCloud::emberVertexShader(true), true},
+		{HazardCloud::emberPixelShader(true), false}
+	};
+	for (unsigned pass = 0; pass < 5; ++pass)
+		programs.push_back({HazardCloudShared::sharedPixelShader(static_cast<ShaderPass>(pass)), false});
+	for (const auto &program : programs) {
+		std::vector<unsigned char> spirv;
+		std::string log, msl;
+		const bool compiled = SDL3_Compile_HLSL_To_SPIRV(program.first, program.second, spirv, log);
+		CHECK(compiled);
+		if (!compiled) { printf("shared cloud shader: %s\n", log.c_str()); continue; }
+		if (validator && *validator) CHECK(validate(validator, spirv, log));
+		else printf("SKIPPED shared cloud spirv-val: validator unavailable\n");
+		CHECK(SDL3_Translate_SPIRV_To_MSL(spirv, program.second, msl, log));
+		unsigned samplers = 0, uniforms = 0;
+		SDL3_Shader_Slots(spirv, program.second, samplers, uniforms);
+		CHECK_EQ(uniforms, program.first == HazardCloud::vertexShader() ? 0u : 1u);
+	}
 }

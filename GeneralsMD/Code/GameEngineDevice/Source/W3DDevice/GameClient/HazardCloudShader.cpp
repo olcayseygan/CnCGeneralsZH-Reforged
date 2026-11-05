@@ -732,12 +732,15 @@ float emberGround(float2 world)
     uint width, height;
     TerrainHeight.GetDimensions(width, height);
     float side = float(height);
-    float2 uv = saturate((world - Field.xy) / max(Terrain.z * 2.0, 0.001) + 0.5);
+    bool sharedGrid = Terrain.y < 0.0;
+    float2 uv = sharedGrid ? saturate((world - Terrain.zw) * Scene.zw)
+        : saturate((world - Field.xy) / max(Terrain.z * 2.0, 0.001) + 0.5);
     float2 texel = uv * (side - 1.0);
     float2 lower = floor(texel), upper = min(lower + 1.0, side - 1.0);
     float2 weight = frac(texel);
-    float2 a = (lower + float2(Terrain.y * side, 0) + 0.5) / float2(width, height);
-    float2 b = (upper + float2(Terrain.y * side, 0) + 0.5) / float2(width, height);
+    float gridOffset = sharedGrid ? 0.0 : Terrain.y * side;
+    float2 a = (lower + float2(gridOffset, 0) + 0.5) / float2(width, height);
+    float2 b = (upper + float2(gridOffset, 0) + 0.5) / float2(width, height);
     float low = lerp(TerrainHeight.SampleLevel(TerrainSampler, a, 0),
         TerrainHeight.SampleLevel(TerrainSampler, float2(b.x, a.y), 0), weight.x);
     float high = lerp(TerrainHeight.SampleLevel(TerrainSampler, float2(a.x, b.y), 0),

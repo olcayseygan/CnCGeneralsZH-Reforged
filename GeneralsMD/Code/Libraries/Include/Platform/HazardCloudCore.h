@@ -70,6 +70,9 @@ unsigned emberConstants(const FieldState &field, unsigned index, bool terrain,
                         const float viewProjection[16], const float viewport[4],
                         float timeSeconds, EmberConstants &constants);
 
+// Use a shared world-space support map for SDL embers. Legacy constants stay intact.
+bool setEmberTerrainDomain(const float domain[4], EmberConstants &constants);
+
 // Row-major 4x4 product and inverse, in the device's layout (the inverse in doubles, so a camera
 // far from the origin still comes back); the reach overlay takes them too.
 void multiply(const float left[16], const float right[16], float result[16]);

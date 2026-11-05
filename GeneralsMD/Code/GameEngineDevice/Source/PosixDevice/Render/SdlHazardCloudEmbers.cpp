@@ -32,7 +32,7 @@ bool fail(const char *reason)
     return false;
 }
 
-bool makeResources(SdlGpuFrame *frame, const SdlTarget &target)
+bool makeResources(SdlGpuFrame *frame)
 {
     gpu = frame->Device();
     std::vector<unsigned char> spirv;
@@ -81,6 +81,13 @@ bool makeResources(SdlGpuFrame *frame, const SdlTarget &target)
 
 } // namespace
 
+bool initialize(SdlGpuFrame *frame)
+{
+    if (failed || !frame || !frame->Device()) return false;
+    if (!pipeline && !makeResources(frame)) return false;
+    return gpu == frame->Device() || fail("the graphics device was replaced");
+}
+
 bool prepare(SdlGpuFrame *frame, const SdlTarget &target,
              const HazardCloud::FieldState *fields, unsigned fieldCount)
 {
@@ -88,7 +95,7 @@ bool prepare(SdlGpuFrame *frame, const SdlTarget &target,
         || fieldCount > 2 || (fieldCount && !fields)) return false;
     for (unsigned i = 0; i < fieldCount; ++i) {
         if (!HazardCloud::emberField(fields[i])) continue;
-        if (!pipeline && !makeResources(frame, target)) return false;
+        if (!initialize(frame)) return false;
         if (gpu != frame->Device()) return fail("the graphics device was replaced");
     }
     return true;
@@ -97,22 +104,29 @@ bool prepare(SdlGpuFrame *frame, const SdlTarget &target,
 bool render(SdlGpuFrame *frame, const SdlTarget &target, SDL_GPUTexture *sceneDepth,
             const float viewProjection[16], const float viewport[6],
             const HazardCloud::FieldState *fields, unsigned fieldCount,
-            float timeSeconds, SDL_GPUTexture *terrainTexture, const bool *terrainEnabled)
+            float timeSeconds, SDL_GPUTexture *terrainTexture, const bool *terrainEnabled,
+            const float *terrainDomain)
 {
     if (failed) return false;
     if (!frame || !frame->Device() || !target.Colour || !target.Depth || !sceneDepth
         || !target.Width || !target.Height || !viewProjection || !viewport
         || fieldCount > 2 || (fieldCount && !fields) || !std::isfinite(timeSeconds))
         return fail("invalid rendering inputs");
+    if (terrainDomain) {
+        HazardCloud::EmberConstants check = {};
+        if (!HazardCloud::setEmberTerrainDomain(terrainDomain, check))
+            return fail("invalid shared terrain domain");
+    }
     bool active = false;
     for (unsigned i = 0; i < fieldCount; ++i) {
         if (!HazardCloud::emberField(fields[i])) continue;
-        if (!pipeline && !makeResources(frame, target)) return false;
+        if (!initialize(frame)) return false;
         if (gpu != frame->Device()) return fail("the preview graphics device was replaced");
         HazardCloud::EmberConstants constants;
         const unsigned emberCount = HazardCloud::emberConstants(fields[i], i,
             terrainTexture && terrainEnabled && terrainEnabled[i], viewProjection, viewport,
             timeSeconds, constants);
+        if (terrainDomain) HazardCloud::setEmberTerrainDomain(terrainDomain, constants);
         const float pixelConstants[4] = { 1.0f / target.Width, 1.0f / target.Height, 0, 0 };
         SdlRecordedDraw draw = {};
         draw.Pipeline = pipeline;

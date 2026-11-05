@@ -204,7 +204,8 @@ foreach ($run in $started) {
 	# blocked/stuck say whether the traffic jams it was aimed at actually got shorter
 	$pf = [pscustomobject]@{ FindMs = 0.0; Finds = 0; Expands = 0; NoPath = 0; OutOfCells = 0; Blocked = 0; Stuck = 0
 													 Wedge = 0; WedgeWorst = 0; Escapes = 0; Repaths = 0
-													 Dithers = 0; Orders = 0; Arrived = 0; Stalled = 0 }
+													 Dithers = 0; Orders = 0; Arrived = 0; Stalled = 0
+													 Queued = 0; QWait = 0.0; QLongest = 0; QLate = 0; QPeak = 0 }
 	# THREADING-ROADMAP.md section 0: the per-scope frame cost, present only in a PERF_TIMERS
 	# build (-Exe generals_perf.exe), and the job pool's own report, present in every build.
 	$perf = @{}
@@ -298,6 +299,12 @@ foreach ($run in $started) {
 			if ($report -match "escape (\d+)")            { $pf.Escapes = [int]$Matches[1] }
 			if ($report -match "repath (\d+)")            { $pf.Repaths = [int]$Matches[1] }
 			if ($report -match "dither (\d+)")            { $pf.Dithers = [int]$Matches[1] }
+			# how long a request stood in the path queue: the late-game wait players see as a unit
+			# that takes seconds to set off
+			if ($report -match "queued (\d+) wait ([\d.]+) longest (\d+) late (\d+) peak (\d+)") {
+				$pf.Queued = [int]$Matches[1]; $pf.QWait = [double]$Matches[2]; $pf.QLongest = [int]$Matches[3]
+				$pf.QLate = [int]$Matches[4]; $pf.QPeak = [int]$Matches[5]
+			}
 		}
 		elseif ($line -match "HEADLESS PLAYER (\d+) '(.*?)': (\w+) \| score (\d+) \| money (\d+) earned (\d+) spent \| units (\d+) built (\d+) lost (\d+) killed peak (\d+)(?:.*\| slot (-?\d+) team (-?\d+))?") {
 			# the lobby team is -1 for a free-for-all seat, and absent from a log an older build wrote
@@ -463,6 +470,19 @@ if ($pfRows.Count -gt 0) {
 		(& $avg { param($p) $p.Escapes }),
 		(& $avg { param($p) $p.Repaths }),
 		(& $avg { param($p) $p.Dithers }))
+
+	# the path queue: three requests a frame, so a late 4v4 backs it up and a unit stands waiting
+	$totQueued = ($pfRows | ForEach-Object { $_.Pf.Queued } | Measure-Object -Sum).Sum
+	if ($totQueued -gt 0) {
+		$totLate = ($pfRows | ForEach-Object { $_.Pf.QLate } | Measure-Object -Sum).Sum
+		Write-Host ("path queue per match: {0:n0} requests, mean wait {1:n1} frames, {2:n1}% waited over 1s | longest {3} frames ({4:n1}s), deepest {5}" -f
+			(& $avg { param($p) $p.Queued }),
+			(& $avg { param($p) $p.QWait }),
+			(100.0 * $totLate / $totQueued),
+			(($pfRows | ForEach-Object { $_.Pf.QLongest } | Measure-Object -Maximum).Maximum),
+			((($pfRows | ForEach-Object { $_.Pf.QLongest } | Measure-Object -Maximum).Maximum) / $LogicFps),
+			(($pfRows | ForEach-Object { $_.Pf.QPeak } | Measure-Object -Maximum).Maximum))
+	}
 }
 
 # Stability. A mean frame time is the statistic that hides a stutter, so this reports the tail:

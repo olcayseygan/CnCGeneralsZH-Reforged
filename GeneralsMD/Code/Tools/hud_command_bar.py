@@ -301,6 +301,37 @@ class Painter:
             self.limit[:, 1920 * SS:] = False
         return sl, m, d
 
+    def open_sides(self, sl):
+        """Which sides of a local window run off the canvas (top, bottom, left, right)."""
+        H, W = self.h.shape
+        return (sl[0].start == 0, sl[0].stop == H, sl[1].start == 0, sl[1].stop == W)
+
+    def tiers(self, polys, open4=None, shell_top=4.0, lip_top=7.0, inset=5.0, lip_bevel=2.6, shell_bevel=4.0, lip_mat=None):
+        """Round 18's first two tiers from one outline: the near-black shell, and the lip, the shell eroded
+        by inset, bevelled up (in lip_mat when given, as a hovered bezel's bright steel).  open4 (top,
+        bottom, left, right) are the sides that are the screen's edge: no rim and no bevel there, the frame
+        runs off; None takes the canvas's own border for it."""
+        sl, m = self.local(polys)
+        d = self.inside(m, "edt", self.open_sides(sl) if open4 is None else open4)
+        self.h[sl] = np.maximum(self.h[sl], np.clip(d / shell_bevel, 0, 1) * shell_top * m)
+        self.alpha[sl] |= m
+        self.limit[sl] |= m
+        self.mat[sl][m] = STEEL
+        self.tint[sl][m] = SHELL_TINT
+        ml = d > inset
+        self.h[sl] = np.where(ml, np.maximum(self.h[sl], np.clip((d - inset) / lip_bevel, 0, 1) * lip_top), self.h[sl])
+        self.tint[sl][ml] = 1.0
+        if lip_mat is not None:
+            self.mat[sl][ml] = lip_mat
+        return sl, m, d
+
+    def recess(self, polys, open4=None, depth=3.0, edge=2.0):
+        """The third tier: a recessed dark floor, its walls in shadow, open where it runs off the screen."""
+        sl, m = self.local(polys)
+        self.h[sl] -= np.clip(self.inside(m, "edt", self.open_sides(sl) if open4 is None else open4) / edge, 0, 1) * m * depth
+        self.tint[sl][m] = FLOOR_TINT
+        return sl, m
+
     def sink(self, polys, depth, lip, material=GLASS):
         sl, m = self.local(polys)
         r = np.clip(self.inside(m) / lip, 0, 1) * m
@@ -411,7 +442,7 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True):
     elif build == "scavenged":                         # mill scale and wear, no grain direction
         grain = 1.0 + 0.09 * mottle + 0.045 * fine + 0.04 * noise(3 * SS)
         spec_base, rough_base = 0.32, 18.0
-    elif build == "console":                           # anodised: even, a faint grain, semi-gloss
+    elif build in ("console", "desk"):                 # anodised: even, a faint grain, semi-gloss
         grain = 1.0 + 0.03 * mottle + 0.02 * fine
         spec_base, rough_base = 0.5, 30.0
     else:                                              # composite: matte and even
@@ -540,6 +571,14 @@ BAR_LOOKS = {   # the bar's own steel, apart from SIDES, which the sheets, cards
     "Turkiye": dict(build="faceted", steel=(100, 106, 94), glass=(8, 16, 18), glass_lo=(5, 10, 12),
                     accent=(40, 200, 190), accent2=(66, 72, 70), crest=(0.5, 1.0, 0.95), crest_k=0.3),
 }
+# The watcher's HUD and the console tooltips (round 19, 2026-11-05): no side's, so the neutral steel family,
+# round 18's three tiers in the desk build.  Plain graphite steel with no hue, square on the screen's edges and
+# small 45 degree cuts elsewhere, and what a broadcast desk carries: perforated grilles, cross-head screws, the
+# emblem's wing feathers in dark steel and a red tally lamp.  The only colour is the tally's red.
+BUILDS["desk"] = dict(metric="edt", bevel=2.0, corner="cut")
+BAR_LOOKS["Observer"] = dict(build="desk", steel=(116, 120, 127), glass=(20, 24, 30), glass_lo=(11, 14, 18),
+                             accent=(70, 76, 86), accent2=(0xb8, 0x26, 0x1f), crest=(0.85, 0.9, 1.0), crest_k=0.4)
+OBS_LOOK = BAR_LOOKS["Observer"]
 
 
 def T(poly):
@@ -564,24 +603,10 @@ def jag(poly, seed, amp=2.5, step=14):
     return [(x, y + TOP) for x, y in jitter([(min(x, 1920), y - TOP) for x, y in poly], seed, amp, step)]
 
 
-def open_sides(p, sl):
-    H, W = p.h.shape
-    return (sl[0].start == 0, sl[0].stop == H, sl[1].start == 0, sl[1].stop == W)
-
-
 def stack(p, poly, shell_top=4.0, lip_top=7.0, inset=5.0, lip_bevel=2.6):
-    """A box's first two tiers from one outline: the dark shell, and the lip, which is the shell eroded by
-    inset, except along the screen's edges, which are open (no rim, no bevel; the frame runs off)."""
-    sl, m = p.local([T(poly)])
-    d = p.inside(m, "edt", open_sides(p, sl))
-    p.h[sl] = np.maximum(p.h[sl], np.clip(d / 4.0, 0, 1) * shell_top * m)
-    p.alpha[sl] |= m
-    p.limit[sl] |= m
-    p.mat[sl][m] = STEEL
-    p.tint[sl][m] = SHELL_TINT
-    ml = d > inset
-    p.h[sl] = np.where(ml, np.maximum(p.h[sl], np.clip((d - inset) / lip_bevel, 0, 1) * lip_top), p.h[sl])
-    p.tint[sl][ml] = 1.0
+    """A box's first two tiers from one outline in screen pixels (Painter.tiers), open along the screen's
+    edges."""
+    p.tiers([T(poly)], None, shell_top, lip_top, inset, lip_bevel)
     p.limit[:, 1920 * SS:] = False
 
 
@@ -592,10 +617,8 @@ def shell(p, poly, top):
 
 
 def floor(p, poly, depth=3.0, edge=2.0):
-    """The third tier: a recessed dark floor, its walls in shadow, open where it runs off the screen."""
-    sl, m = p.local([T(poly)])
-    p.h[sl] -= np.clip(p.inside(m, "edt", open_sides(p, sl)) / edge, 0, 1) * m * depth
-    p.tint[sl][m] = FLOOR_TINT
+    """The third tier in screen pixels (Painter.recess)."""
+    p.recess([T(poly)], None, depth, edge)
 
 
 def well(p, poly, depth=6, lip=2.5):
@@ -792,23 +815,43 @@ def bar_lights(img, p):
     return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 
+def led(img, lines, lamps):
+    """Lit lines one texel wide and round lamps with a little glow kept on the plate (bar_lights' way), for
+    the pieces drawn off the bar: Turkiye's card and Tab screen."""
+    lay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(lay)
+    for a, b in lines:
+        d.line([a, b], fill=TURQ + (235,), width=1)
+    for x, y, c in lamps:
+        d.ellipse((x - 1.6, y - 1.6, x + 1.6, y + 1.6), fill=c + (255,))
+    glow = np.asarray(lay.filter(ImageFilter.GaussianBlur(2)), np.float32)
+    a = np.asarray(img, np.float32)
+    for layer, k in ((glow, 1.4), (np.asarray(lay, np.float32), 1.0)):
+        w = np.clip(layer[..., 3:4] / 255 * k, 0, 1) * (a[..., 3:4] / 255)
+        a[..., :3] = a[..., :3] * (1 - w) + layer[..., :3] * w
+    return Image.fromarray(a.astype(np.uint8), "RGBA")
+
+
 BARS = {"America": bar_america, "China": bar_china, "Gla": bar_gla, "Turkiye": bar_turkiye}
 BAR_POST = {"Turkiye": bar_lights}
 
 
-def bar_finish(img, p, look):
+def bar_finish(img, p, look, scan=True, gloss=True):
     """Retail's scanlines and a soft gloss in the glass, a glint the side's colour on the crests that face the
-    light, and the hottest highlights eased (a knee at 0.68, slope 0.6)."""
-    gm = (p.mat == GLASS).astype(np.float32).reshape(512, SS, 2048, SS).mean(axis=(1, 3))
+    light, and the hottest highlights eased (a knee at 0.68, slope 0.6).  Any painter's size; a piece the
+    code stretches goes without the scanlines, and one it tiles without the gloss, which varies down the
+    page."""
+    H, W = p.h_, p.w
+    gm = (p.mat == GLASS).astype(np.float32).reshape(H, SS, W, SS).mean(axis=(1, 3))
     hs = ndimage.gaussian_filter(p.h, 0.7 * SS)
     gy, gx = np.gradient(hs)
     crest = np.clip(-ndimage.laplace(hs) * SS * SS * 1.4, 0, 1) * np.clip((gy + gx * 0.6) * SS * 0.9, 0, 1)
-    crest = (crest * (p.mat != GLASS) * p.alpha).reshape(512, SS, 2048, SS).mean(axis=(1, 3))
+    crest = (crest * (p.mat != GLASS) * p.alpha).reshape(H, SS, W, SS).mean(axis=(1, 3))
     a = np.asarray(img, np.float32) / 255
     rgb, al = a[..., :3], a[..., 3:]
-    yy = np.arange(512)[:, None]
-    scan = np.where(yy % 2 == 0, 0.74, 1.0)[..., None]
-    gloss = (1 + 0.14 * np.exp(-(((yy - 300) % 200) / 70.0)))[..., None]
+    yy = np.arange(H)[:, None]
+    scan = np.where(yy % 2 == 0, 0.74, 1.0)[..., None] if scan else np.ones((H, 1, 1))
+    gloss = (1 + 0.14 * np.exp(-(((yy - 300) % 200) / 70.0)))[..., None] if gloss else np.ones((H, 1, 1))
     g = gm[..., None]
     rgb = rgb * (1 - g) + np.clip(rgb * scan * gloss + np.array([0.0, 0.012, 0.016]), 0, 1) * g
     rgb = np.clip(rgb + crest[..., None] * np.array(look["crest"]) * look["crest_k"], 0, 1)

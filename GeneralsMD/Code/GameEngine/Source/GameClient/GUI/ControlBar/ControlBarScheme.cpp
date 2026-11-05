@@ -548,6 +548,8 @@ void ControlBarTooltipImages::find( const AsciiString& prefix )
 	findPieces( prefix, "TipHead", theFrameSuffixes, 3, head );
 	findPieces( prefix, "CursorTip", theFrameSuffixes, ControlBarScheme::FRAME_PIECE_COUNT, cursor );
 	findPieces( prefix, "TipIcon", iconSuffixes, ICON_COUNT, icon );
+	static const char *const tabSuffix[ 1 ] = { "TabPanel" };
+	findPieces( prefix, "", tabSuffix, 1, &tabPanel );
 }
 
 void ControlBarScheme::init(void)

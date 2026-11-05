@@ -39,6 +39,8 @@
 #include "Common/PlayerTemplate.h"
 #include "Common/Recorder.h"
 #include "GameClient/AnimateWindowManager.h"
+#include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/Diplomacy.h"
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/GameWindow.h"
@@ -418,6 +420,24 @@ void ShowDiplomacy( Bool immediate )
 		}
 	}
 	theLayout->hide(FALSE);
+
+	// A scheme with a painting of its own (<TooltipImage>TabPanel, Tools/hud_command_bar.py tab_panel) wears
+	// it over the whole window, standing in the screen's top left corner, square on both edges, and the
+	// Main Menu button steps out of the cut corner into the painting's socket (TAB_HIDE, 1160,650 of the
+	// 1379x714 the window is at 1080).  A scheme without one (Classic) keeps EA's dark glass and blue rule
+	// where the layout put them.
+	const Image *panel = TheControlBar->getControlBarSchemeManager()->getTabPanelImage();
+	if (panel)
+	{
+		theWindow->winSetEnabledImage(0, panel);
+		theWindow->winSetStatus(WIN_STATUS_IMAGE);
+		theWindow->winSetPosition(0, 0);
+		Int width, height;
+		theWindow->winGetSize(&width, &height);
+		GameWindow *hide = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ButtonHide"));
+		if (hide)
+			hide->winSetPosition(width * 1160 / 1379, height * 650 / 714);
+	}
 
 	radioButtonInGame->winHide(TRUE);
 	radioButtonBuddies->winHide(TRUE);

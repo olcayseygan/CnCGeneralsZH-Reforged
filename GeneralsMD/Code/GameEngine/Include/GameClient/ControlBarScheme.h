@@ -121,7 +121,8 @@ private:
 
 /// The tooltips' art one TooltipImage prefix names (Tools/hud_command_bar.py, TIP_*): <prefix>Tip<piece> the
 /// build card's nine (ControlBarPopupDescription.wnd), <prefix>CursorTip<piece> the pointer's nine
-/// (Mouse::drawTooltip), <prefix>TipIcon<Kind> the card's figures.  NULL where the art has none.
+/// (Mouse::drawTooltip), <prefix>TipIcon<Kind> the card's figures, <prefix>TabPanel the Tab screen's painting
+/// (Diplomacy.cpp).  NULL where the art has none.
 //-----------------------------------------------------------------------------
 struct ControlBarTooltipImages
 {
@@ -130,6 +131,7 @@ struct ControlBarTooltipImages
 	const Image *head[ 3 ];					///< <prefix>TipHead{TL,T,TR}: the card's top row without the figures' well, for a card with no figures
 	const Image *cursor[ 9 ];
 	const Image *icon[ ICON_COUNT ];
+	const Image *tabPanel;
 
 	void find( const AsciiString& prefix );		///< every one NULL for an empty prefix
 };
@@ -358,6 +360,8 @@ public:
 	const ControlBarTooltipImages& getTooltipImages( void ) const;
 	/// the console's tooltips (Helpbox), which the shell wears
 	const ControlBarTooltipImages& getConsoleTooltipImages( void ) const { return m_consoleTooltip; }
+	/// the Tab screen's painting of the scheme on screen, NULL when it names none (Classic keeps EA's screen)
+	const Image *getTabPanelImage( void ) const { return m_currentScheme ? m_currentScheme->m_tooltip.tabPanel : NULL; }
 	/// the scheme's painting, cut at the panel seams and each piece drawn where its panel stands
 	void drawPainting( ICoord2D offset, Bool foreground );
 

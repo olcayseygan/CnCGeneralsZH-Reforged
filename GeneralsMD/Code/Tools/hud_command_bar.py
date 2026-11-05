@@ -27,13 +27,14 @@ at 45 degrees with the emblem's chevrons; China is cast armour in square terrace
 GLA is scrap sheet welded and bolted over a ragged frame; Turkiye is composite armour of triangular
 facets with 30 degree cuts.  The emblem in every side's selection window is the launcher's
 (launcher/ui/emblem.svg beside this checkout, or --emblem).  The observer has a build of its own, the
-console (anodised graphite, every corner a radius, grilles, screws, the emblem's feathers and a tally
-lamp): its bar, the watched player's panel, a sheet of pieces (toolbar buttons, the rows' rings, the
-radar frame's nine, every side's and general's emblem) and the spectator's rack (ReforgedHudObsSpec).
+desk (round 18's three tiers in plain graphite, grilles, screws, the emblem's feathers and a tally lamp):
+its bar, the watched player's panel, a sheet of pieces (toolbar buttons, the rows' rings, the radar
+frame's nine, every side's and general's emblem) and the spectator's rack (ReforgedHudObsSpec).  Each
+side and the observer also have a painting for the Tab screen (ReforgedHud<Side>TabPanel).
 
     python Tools/hud_command_bar.py --out DIR [--side all|Observer|Lobby|America|China|Gla|Turkiye] [--dds TEXTURES]
-        writes DIR/ReforgedHud<Side>CommandBar.png and ...Powers.png for each side,
-        the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces, ...ObsSpec and ReforgedHudHelpbox, and the
+        writes DIR/ReforgedHud<Side>CommandBar.png, ...Powers.png and ...TabPanel.png for each side,
+        the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces, ...ObsSpec, ...ObsTabPanel and ReforgedHudHelpbox, and the
         front end's ReforgedFactionEmblems (Lobby), and with --dds the same as DXT5 .dds into TEXTURES
         (Data/Art/Textures)
 """
@@ -2010,6 +2011,159 @@ def check_helpbox(sheet_img):
     check_tip_head(sheet_img, M, "Helpbox")
 
 
+# ---------------------------------------------------------------------------------------------- the Tab screen
+
+# Round 19 (2026-11-05): the Tab screen (Diplomacy.wnd) in the bar's three tiers, one painting per side and
+# the observer's (<prefix>TabPanel, the TooltipImage prefix's, on ReforgedHud<Side>TabPanel), stretched by
+# the window's default draw over Diplomacy.wnd:Parent, which Diplomacy.cpp stands at the screen's top left
+# corner when the scheme has one.  The layout is fitted (one scale, the smaller, 1.8 at 1080) and anchored
+# top left, so at 1080 the window is 1379x714 and every child sits at int(u * 1.8) - 7 of its 800x600
+# number u: the column titles' band, eight player rows 57.6 apart, the Main Menu button bottom right.  The
+# box is square on the screen's top and left edges and cut at its one corner toward the field; under the
+# lip the titles and the rows stand in scanline wells, the Main Menu button in a socket of its own.
+TAB_PANEL = (1379, 714)
+TAB_SHEET = (2048, 1024)
+TAB_ZEBRA = True                                # round 19's B: the rows' bands alternate (A: plain glass)
+
+
+def tab_u(u):
+    """A Diplomacy.wnd number in the window at 1080: fitted by 1.8, less the window's own 7."""
+    return int(u * 1.8) - 7
+
+
+TAB_TITLES = (16, tab_u(58) - 4, 1362, tab_u(88) + 3)
+TAB_ROWS = [(tab_u(94 + 32 * i), tab_u(118 + 32 * i)) for i in range(8)]
+TAB_TABLE = (16, TAB_ROWS[0][0] - 6, 1362, TAB_ROWS[-1][1] + 6)
+# the Main Menu button, which Diplomacy.wnd puts hard in the bottom right corner (1200, 659), is moved by
+# Diplomacy.cpp to TAB_HIDE's top left (as a share of the window) so the corner's cut clears its socket
+TAB_HIDE = (1160, 650, 1160 + tab_u(763) - tab_u(671), 650 + tab_u(397) - tab_u(370))
+TAB_COLUMNS = [tab_u(u) for u in (46, 178, 319, 364, 408, 460, 560)]   # between mute, player, side, ping, fps, team, status, money
+
+
+def tab_panel(side):
+    look = BAR_LOOKS[side]
+    build = look["build"]
+    W, H = TAB_PANEL
+    p = Painter(W + 9, H + 6)
+    kind = BUILDS[build]["corner"]
+    corner = {"machined": ("cut", 40), "terraced": ("notch", 22), "scavenged": ("cut", 34), "faceted": ("slant", 20),
+              "desk": ("cut", 26)}[build]
+    outline = plate(0, 0, W, H, br=corner)
+    if build == "scavenged":                        # ragged toward the field, the top kept on the screen's edge
+        outline = [(x, 0.0 if y < 3.2 else y) for x, y in jitter(outline, 23, 3.0, 16)]
+    if build == "terraced":                         # a second step inside the first
+        outline = [(0, 0), (W, 0), (W, H - 34), (W - 12, H - 34), (W - 12, H - 12), (W - 34, H - 12), (W - 34, H), (0, H)]
+    p.tiers([outline], (True, False, True, False))
+    floor_r = {"machined": ("cut", 30), "terraced": ("notch", 10), "scavenged": ("cut", 26), "faceted": ("slant", 20),
+               "desk": ("cut", 20)}[build]
+    p.recess([plate(10, 10, W - 11, H - 13, br=floor_r) if build != "terraced" else
+              [(10, 10), (W - 11, 10), (W - 11, H - 44), (W - 22, H - 44), (W - 22, H - 22), (W - 44, H - 22), (W - 44, H - 13),
+               (10, H - 13)]], (True, False, True, False))
+    c = 6 if kind != "rough" else 5
+    p.sink([shape(build, *TAB_TITLES, c)], 6, 2.5)
+    p.sink([shape(build, *TAB_TABLE, c)], 6, 2.5)
+    p.sink([shape(build, *grow(TAB_HIDE, 5), c)], 5, 2)
+    # the table's rulings: a hairline between rows and down the columns, faint in the glass
+    rule = [plate(TAB_TABLE[0] + 8, (a[1] + b[0]) / 2, TAB_TABLE[2] - 8, (a[1] + b[0]) / 2 + 1) for a, b in zip(TAB_ROWS, TAB_ROWS[1:])]
+    rule += [plate(x, TAB_TITLES[1] + 6, x + 1, TAB_TITLES[3] - 6) for x in TAB_COLUMNS]
+    p.inlay(rule, INKM, 0.3)
+    top, foot = (12, TAB_TITLES[1] - 6), (TAB_TABLE[3] + 6, H - 15)    # the plain strips above and below the wells
+    tab_fittings(p, build, W, H, top, foot)
+    img = bar_finish(shade(p, look), p, look)
+    if TAB_ZEBRA:                                   # every other row's band of glass a shade lighter
+        a = np.asarray(img).astype(np.float32)
+        for y0, y1 in TAB_ROWS[1::2]:
+            band = a[y0 - 3:y1 + 4, TAB_TABLE[0] + 6:TAB_TABLE[2] - 6, :3]
+            band[:] = np.clip(band * 1.18 + 3, 0, 255)
+        img = Image.fromarray(a.astype(np.uint8), "RGBA")
+    if build == "faceted":
+        img = led(img, [((30, 22), (330, 22)), ((W - 420, foot[0] + 9), (W - 200, foot[0] + 9))],
+                  [(344, 22, TURQ), (W - 186, foot[0] + 9, AMBER)])
+    sheet_img = Image.new("RGBA", TAB_SHEET, (0, 0, 0, 0))
+    sheet_img.paste(img.crop((0, 0, W, H)), (0, 0))
+    return sheet_img
+
+
+def tab_fittings(p, build, W, H, top, foot):
+    """Each side's bar language on the Tab screen's two plain strips; never on the glass."""
+    t0, t1 = top
+    f0, f1 = foot
+    mid = (f0 + f1) / 2
+    fx1 = TAB_HIDE[0] - 16                          # the foot strip stops short of the Main Menu socket
+    if build == "machined":
+        def swept(x, y0, y1, w, t):
+            ym = (y0 + y1) / 2
+            return [(x, y0), (x + t, y0), (x + t + w, ym), (x + t, y1), (x, y1), (x + w, ym)]
+        p.inlay([swept(30 + 16 * i, t0 + 8, t1 - 8, 9, 4) for i in range(3)], ACCENT, 0.7)
+        p.inlay([swept(W - 120 - 16 * i, f0 + 6, f1 - 6, -9, -4) for i in range(3)], ACCENT, 0.7)
+        p.inlay([plate(x, t0 + 4, x + 1, t1 - 4) for x in (420, 840, 1260)] + [plate(x, f0 + 4, x + 1, f1 - 4) for x in (380, 760)],
+                INKM, 0.8)
+        p.inlay([plate(100, mid - 1, 340, mid + 1)], ACCENT, 0.5)
+        for x, y in ((W - 16, 22), (20, f1 - 8), (fx1, mid), (W - 16, TAB_TABLE[1] + 20)):
+            p.stud(x, y, 3.0)
+    elif build == "terraced":
+        p.inlay([plate(20, t0 + 6, W - 24, t0 + 11), plate(20, f1 - 9, fx1, f1 - 4)], ACCENT, 0.3)
+        for x in range(40, W - 30, 36):
+            p.rivet(x, t1 - 7, 2.2)
+        for x in range(40, fx1, 36):
+            p.rivet(x, f0 + 8, 2.2)
+        p.bump([regular(x, t0 + 8.5, 2.6, 12) for x in (24, W - 28)] + [regular(fx1 + 2, mid, 2.6, 12)], 2.2, 1.4, GOLDM)
+    elif build == "scavenged":
+        patches = [(40, t0 + 4, 260, t1 - 4, -1.5), (W - 380, t0 + 6, W - 160, t1 - 3, 1.2), (90, f0 + 5, 330, f1 - 5, 1.0)]
+        for i, (a, b, c, e, deg) in enumerate(patches):
+            sh = sheet(a, b, c, e, deg)
+            p.bump([sh], 1.4, 0.8, STEEL)
+            for e0, e1 in zip(sh, sh[1:] + sh[:1]):
+                p.weld(e0, e1, seed=61 + i * 7 + int(e0[0]), r=1.3)
+        for i, (x, y) in enumerate(((22, 24), (300, t1 - 8), (W - 20, 30), (W - 140, t0 + 12), (60, f1 - 8), (fx1 - 6, f0 + 10),
+                                    (W - 22, TAB_TABLE[1] + 40))):
+            p.bolt(x, y, 2.6 + (i % 3) * 0.4, seed=i)
+    elif build == "faceted":
+        panels = [[(20, t0 + 4), (380, t0 + 4), (396, t1 - 4), (20, t1 - 4)],
+                  [(W - 420, t0 + 4), (W - 40, t0 + 4), (W - 24, t1 - 4), (W - 436, t1 - 4)],
+                  [(20, f0 + 4), (300, f0 + 4), (316, f1 - 4), (20, f1 - 4)]]
+        p.bump(panels, 2.2, 1.0, STEEL)
+        gaps = [plate(x, t0 + 4, x + 1, t1 - 4) for x in (400, W - 440)] + [plate(320, f0 + 4, 321, f1 - 4)]
+        p.inlay(gaps, INKM, 0.9)
+        ticks = [plate(x, f0 + 5, x + 1, f0 + (9 if i % 5 else 13)) for i, x in enumerate(range(340, fx1 - 200, 8))]
+        p.inlay(ticks, INKM, 0.6)
+        etch = [star8(x, (t0 + t1) / 2, 5.5) for x in range(W - 380, W - 80, 16)]
+        etch += [q for x in range(W - 380, W - 80, 16) for q in ring(x, (t0 + t1) / 2, 7.2, 0.6, 20)]
+        p.inlay(etch, DARK, 0.25)
+        for x, y in ((W - 14, 24), (14, f1 - 8), (fx1, mid), (W - 14, TAB_TABLE[1] + 24)):
+            p.inlay([regular(x, y, 2.8, 12)], DARK, 1.0)
+            p.bump([regular(x, y, 1.5, 6)], 0.6, 0.6, STEEL)
+        rng = np.random.default_rng(5)
+        n = ndimage.gaussian_filter(rng.standard_normal((p.h_ // 4 + 1, p.w // 4 + 1)), 1.4)
+        n /= n.std()
+        tone = np.kron(np.where(n < -0.5, 0.92, np.where(n > 0.6, 1.07, 1.0)).astype(np.float32),
+                       np.ones((4 * SS, 4 * SS), np.float32))[:p.h.shape[0], :p.h.shape[1]]
+        sel = (p.mat == STEEL) & p.alpha
+        p.tint[sel] *= tone[sel]
+    else:                                           # the observer's desk
+        grille(p, 30, t0 + 6, 330, t1 - 6, 3.4)
+        grille(p, W - 360, t0 + 6, W - 60, t1 - 6, 3.4)
+        feathers(p, W / 2 - 10, t0 + 8, 3, 120, DARK, left=True, gap=3.4, t=1.6)
+        feathers(p, W / 2 + 10, t0 + 8, 3, 120, DARK, left=False, gap=3.4, t=1.6)
+        screw(p, W / 2, t0 + 11, 2.6)
+        tally(p, W - 30, (t0 + t1) / 2, 3.0)
+        grille(p, 40, f0 + 6, 400, f1 - 6, 3.4)
+        for x, y in ((18, 22), (18, f1 - 8), (fx1, mid)):
+            screw(p, x, y, 2.4)
+
+
+def check_tab(sheet_img, side_name, prefix):
+    """The painting is mapped at the window's size, opaque along the screen's two edges it stands on, and
+    the rows, the titles and the Main Menu button stand on it."""
+    M = read_mapped(side_name, "TabPanel")
+    assert M == {prefix + "TabPanel": (0, 0) + TAB_PANEL}, "ReforgedHud%sTabPanel.ini maps %s" % (side_name, M)
+    a = np.asarray(sheet_img)[..., 3]
+    W, H = TAB_PANEL
+    assert (a[0, :W - 60] == 255).all() and (a[:H - 60, 0] == 255).all(), "the Tab screen leaves the screen's edge"
+    for x0, y0, x1, y1 in [TAB_TITLES, TAB_TABLE, TAB_HIDE]:
+        assert (a[y0:y1, x0:x1] == 255).all(), "the Tab screen has a hole under %s" % ((x0, y0, x1, y1),)
+
+
 # ---------------------------------------------------------------------------------------------- the observer
 
 # The watcher's bar, its layout approved by the owner on 2026-11-03 with the rows' colour lamps (round 9's
@@ -3055,12 +3209,16 @@ def main():
                     "ReforgedHudObsPieces": paint_observer_pieces(), "ReforgedHudObsSpec": paint_rack()}
             made["ReforgedHudHelpbox"] = helpbox = paint_helpbox()
             check_helpbox(helpbox)
+            made["ReforgedHudObsTabPanel"] = tab = tab_panel("Observer")
+            check_tab(tab, "Obs", "Helpbox")
         else:
             frame = radar_frame(side)
             made["ReforgedHud%sCommandBar" % side] = img = paint_bar(side)
             check(img, side)
             made["ReforgedHud%sPowers" % side] = sheet_img = paint_powers(side, args.emblem, frame, args.ready_glow)
             check_sheet(sheet_img, side, args.ready_glow)
+            made["ReforgedHud%sTabPanel" % side] = tab = tab_panel(side)
+            check_tab(tab, side, side + "Pro")
         for name, img in made.items():
             img.save(os.path.join(args.out, name + ".png"))
             if args.dds:

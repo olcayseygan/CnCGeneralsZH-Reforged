@@ -455,6 +455,56 @@ class OrderTests(unittest.TestCase):
         self.assertFalse(any(unit.path for unit in units))
 
 
+class CorridorTests(unittest.TestCase):
+    def two_doors(self) -> Grid:
+        """A wall across the middle with a 2-cell door on the straight line and an 8-cell door far
+           up it, more than a block clear of the corridor the straight line opens."""
+        grid = open_grid(60)
+        for y in range(60):
+            grid.block(30, y)
+            grid.block(31, y)
+        grid.open_span(30, 39, 40)
+        grid.open_span(30, 1, 8)
+        return grid
+
+    def test_a_block_split_by_a_wall_is_two_zones(self):
+        grid = open_grid(10)
+        for y in range(10):
+            grid.block(5, y)
+        zones = grid.block_zones(10)
+        self.assertNotEqual(zones[2], zones[8])
+        self.assertEqual(zones[5], 0)
+        self.assertEqual(zones[2], zones[9 * 10 + 2])
+
+    def test_the_coarse_route_steps_block_to_neighbouring_block(self):
+        grid = self.two_doors()
+        nodes, pushes = pathlab.find_block_route(grid, (5, 40), (55, 40), 10)
+        self.assertGreater(pushes, 0)
+        self.assertEqual((nodes[0], nodes[-1]), ((5, 40), (55, 40)))
+        self.assertTrue(all(grid.passable(*node) for node in nodes))
+        for first, second in zip(nodes[1:-1], nodes[2:-1]):
+            blocks = (abs(first[0] // 10 - second[0] // 10), abs(first[1] // 10 - second[1] // 10))
+            self.assertIn(blocks, ((1, 0), (0, 1)))
+
+    def test_the_hard_corridor_refuses_the_door_only_a_group_fits_through(self):
+        grid = self.two_doors()
+        for mode, is_found in (("none", True), ("hard", False), ("flat", True), ("soft", True)):
+            with pathlab.overriding(CORRIDOR=mode):
+                cells, _ = astar(grid, (5, 40), (55, 40), clearance=3)
+            self.assertEqual(bool(cells), is_found, mode)
+        with pathlab.overriding(CORRIDOR="hard"):
+            self.assertTrue(astar(grid, (5, 40), (55, 40))[0])     # a single unit gets through
+
+    def test_a_capped_search_can_hand_back_the_route_it_has(self):
+        cells, _ = astar(open_grid(41), (2, 2), (38, 38), cell_budget=5, partial=True)
+        self.assertEqual(cells[0], (2, 2))
+        self.assertNotEqual(cells[-1], (38, 38))
+
+    def test_a_soft_point_keeps_the_defaults_it_does_not_name(self):
+        point = pathlab.parse_soft("50/6")[0]
+        self.assertEqual(point, (50, 6, pathlab.SOFT_NEAR, pathlab.SOFT_BONUS))
+
+
 class SweepTests(unittest.TestCase):
     def test_cap_and_crossing_default_when_left_out(self):
         self.assertEqual(parse_sweep("5"),

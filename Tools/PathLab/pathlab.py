@@ -18,6 +18,7 @@ columns use one after the other is fine, a junction they reach together is not.
     python pathlab.py --mode flat     # ... and the same band with the pressure term off
     python pathlab.py --map open      # no chokepoint, to see lanes on open ground
     python pathlab.py --headless 6 --scenario cross --map open --units 16 --sweep 20/4/0,20/4/60
+    python pathlab.py --headless 16 --map edges --corridor all --pairs 8 --units 0 --hweight 1.5
 
 Two units are only counted as crossing when they want a cell at the same moment *and* are not
 going the same way - traffic following the same road is a queue, and a queue is what a road is
@@ -51,6 +52,7 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from fractions import Fraction
 from functools import partial
 from enum import IntEnum
 from typing import NamedTuple
@@ -75,7 +77,7 @@ PATH_CONGESTION_RANGE_NO_GROUP: int = 10000
 PATH_CONGESTION_MAX_PATHS: int = 4          # cap, so a mob cannot make a cell infinitely expensive
 GROUP_PATH_DIAMETERS: tuple[int, ...] = (6, 4, 3)   # what friend_computeGroundPath tries in order
 STRAIGHTEN_MAX_RUN: int = 16                # raycast simplify: points dropped in a row
-MAP_KINDS: tuple[str, ...] = ("choke", "open", "twogaps")
+MAP_KINDS: tuple[str, ...] = ("choke", "open", "twogaps", "maze", "edges")
 MODES: tuple[str, ...] = ("corridor", "flat", "band", "single")
 SCENARIOS: tuple[str, ...] = ("column", "cross")
 UNIT_RADIUS: float = 11.0                   # a Crusader's bounding circle, near enough
@@ -109,6 +111,31 @@ PATH_JAM_DECAY_FRAMES: int = 8              # every cell loses one this often
 PATH_JAM_MAX_CHARGED: int = 4               # cap over the floor, same reason the others have one
 PATH_JAM_RANGE: int = 10                    # cells from the start the penalty is read within
 
+# The block corridor.  Before the cell search the engine runs a coarse one over ZONE_BLOCK_SIZE
+# blocks (internal_findHierarchicalPath), and the blocks on that route plus their eight neighbours
+# (buildHierachicalPath) are the corridor the cell search is held to.  How hard it is held differs
+# by caller: findGroundPath, the group corridor, refuses a cell outside unless a block 3 cells away
+# diagonally is inside (`hard`); internalFindPath, every single unit, charges 100 cells of detour
+# per cell outside (`flat`).  `soft` is the graded alternative: free near the coarse route, a price
+# that grows with distance beyond a threshold, and a small rebate for following the route forward.
+CORRIDOR_MODES: tuple[str, ...] = ("none", "hard", "flat", "soft")
+CORRIDOR: str = "none"                      # --corridor; read inside astar like the costs above
+ZONE_BLOCK_SIZE: int = 10                   # PathfindZoneManager::ZONE_BLOCK_SIZE
+CORRIDOR_WIDEN: int = 1                     # blocks either side of each route block also open
+CORRIDOR_SLACK: int = 3                     # findGroundPath's diagonal look for an open block
+CORRIDOR_OUTSIDE_COST: int = 100 * COST_ORTHOGONAL      # internalFindPath, per cell outside
+CORRIDOR_PINCHED_COST: int = 2 * COST_ORTHOGONAL        # coarse step through a pinched edge cell
+SOFT_COST: int = 100                        # per cell of distance beyond the threshold, per cell
+SOFT_THRESHOLD: int = 10                    # cells from the coarse route that cost nothing
+SOFT_NEAR: int = 3                          # this close and moving along it forward ...
+SOFT_BONUS: int = 5                         # ... takes this off the step
+ENGINE_CELL_CAP: int = 20000                # internalFindPath's MAX_INTERNAL_CELL_COUNT
+GROUND_CELL_CAP: int = 3000                 # findGroundPath's MAX_GROUND_PATH_CELLS
+# A* estimate scale.  The sandbox has always searched at plain octile (1/1); retail scales its own
+# estimate by 3/2, which finds a route a few percent longer for far fewer cells.
+HEURISTIC_NUM: int = 1
+HEURISTIC_DEN: int = 1
+
 # Two points closer than this are the same point: a zero-length segment has no direction to take.
 EPSILON: float = 1e-3
 # Larger than any route this grid can produce, so it reads as "not reached yet" in the A* tables.
@@ -128,6 +155,21 @@ CHOKE_GAP_CELLS: int = 4                    # narrower than three lanes of tanks
 SCATTER_KEEP_CLEAR_CELLS: int = 6           # a rock this near the wall column would seal its gap
 NARROW_GAP_HALF_CELLS: int = 2
 WIDE_GAP_ROWS: tuple[int, int] = (6, 13)
+# The two layouts made for the block corridor, both larger than the rest so a search can be long
+# enough for the abstraction to matter.  A maze is passages on a lattice that does not line up with
+# the blocks, with some walls knocked out so there is more than one way; `edges` is a row of thin
+# walls standing on block boundaries, each with a narrow gap and a wide one, every gap straddling a
+# block boundary, so the coarse route (which ignores footprint) picks gaps a group cannot use.
+MAZE_SIZE: tuple[int, int] = (160, 120)
+MAZE_PITCH: int = 6                         # lattice step: a 4-cell passage and a 2-cell wall
+MAZE_PASSAGE: int = 4                       # one tank fits, two abreast do not
+MAZE_LOOPS: float = 0.15                    # share of the remaining walls knocked through
+MAZE_ROOM: tuple[int, int] = (24, 26)       # cleared in each corner, for the spawns and the goals
+EDGES_SIZE: tuple[int, int] = (128, 96)
+EDGES_WALL_EVERY: int = 2                   # a wall on every second block boundary ...
+EDGES_FIRST_WALL: int = 2                   # ... starting at this one
+EDGES_NARROW: int = 2                       # cells: a single unit passes, no group corridor does
+EDGES_WIDE: int = 8                         # cells: the 6-wide group corridor fits
 RAYCAST_STEP: float = CELL * 0.5            # isLinePassable samples twice per cell
 ROOM_CLEARANCE: int = 1                     # a clear ring one cell deep is "somewhere to dodge to"
 
@@ -229,20 +271,65 @@ class Grid:
         self.height = height
         self.blocked = bytearray(width * height)
         self._room: bytearray | None = None
+        self._zones: dict[int, list[int]] = {}
+        self._clear: dict[int, bytearray] = {}
 
     def in_bounds(self, cx: int, cy: int) -> bool:
         return 0 <= cx < self.width and 0 <= cy < self.height
 
+    def _changed(self) -> None:
+        self._room = None
+        self._zones = {}
+        self._clear = {}
+
     def block(self, cx: int, cy: int) -> None:
         self.blocked[cy * self.width + cx] = 1
-        self._room = None
+        self._changed()
+
+    def unblock(self, cx: int, cy: int) -> None:
+        self.blocked[cy * self.width + cx] = 0
+        self._changed()
+
+    def clear_cells(self, clearance: int) -> bytearray:
+        """clear_for over the whole map, once per clearance: a search asks it eight times a cell."""
+        if clearance not in self._clear:
+            self._clear[clearance] = bytearray(
+                1 if self.clear_for(x, y, clearance) else 0
+                for y in range(self.height) for x in range(self.width))
+        return self._clear[clearance]
 
     def open_span(self, cx: int, first_row: int, last_row: int) -> None:
         """Cut a two-cell-wide gap through a wall at column cx, rows first_row..last_row."""
         for y in range(first_row, last_row + 1):
-            self.blocked[y * self.width + cx] = 0
-            self.blocked[y * self.width + cx + 1] = 0
-        self._room = None
+            self.unblock(cx, y)
+            self.unblock(cx + 1, y)
+
+    def block_zones(self, size: int) -> list[int]:
+        """PathfindZoneManager's raw zones: each clear cell labelled with its 4-connected component
+           inside its own size x size block, numbered across the whole map; 0 is a wall.  A block
+           whose clear ground is split by a wall is two zones, so the coarse search never sees a
+           block as connected when its interior is not."""
+        if size in self._zones:
+            return self._zones[size]
+        zones = [0] * (self.width * self.height)
+        next_zone = 1
+        for cy in range(self.height):
+            for cx in range(self.width):
+                if zones[cy * self.width + cx] or not self.passable(cx, cy):
+                    continue
+                bx, by = cx // size, cy // size
+                zones[cy * self.width + cx] = next_zone
+                todo = [(cx, cy)]
+                while todo:
+                    x, y = todo.pop()
+                    for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                        if (nx // size == bx and ny // size == by and self.passable(nx, ny)
+                                and not zones[ny * self.width + nx]):
+                            zones[ny * self.width + nx] = next_zone
+                            todo.append((nx, ny))
+                next_zone += 1
+        self._zones[size] = zones
+        return zones
 
     def has_room(self, cx: int, cy: int) -> bool:
         """True when the whole ring around this cell is clear - somewhere to dodge to.  In a
@@ -302,9 +389,63 @@ def scatter_blocks(grid: Grid, rng: random.Random, count: int, margin: int,
                 grid.block(x, y)
 
 
+def carve_maze(grid: Grid, rng: random.Random) -> None:
+    """Fill the map and carve a lattice maze into it: depth-first, so one way through, then a share
+       of the walls left standing knocked out, so there are several and the shortest is not the
+       obvious one."""
+    for cy in range(1, grid.height - 1):
+        for cx in range(1, grid.width - 1):
+            grid.block(cx, cy)
+    columns = (grid.width - 2) // MAZE_PITCH
+    rows = (grid.height - 2) // MAZE_PITCH
+
+    def carve(x0: int, y0: int, x1: int, y1: int) -> None:
+        for cy in range(y0, y1):
+            for cx in range(x0, x1):
+                grid.unblock(cx, cy)
+
+    def origin(node: Cell) -> Cell:
+        return 2 + node[0] * MAZE_PITCH, 2 + node[1] * MAZE_PITCH
+
+    def join(first: Cell, second: Cell) -> None:
+        (ax, ay), (bx, by) = origin(first), origin(second)
+        carve(min(ax, bx), min(ay, by), max(ax, bx) + MAZE_PASSAGE, max(ay, by) + MAZE_PASSAGE)
+
+    for node in itertools.product(range(columns), range(rows)):
+        x0, y0 = origin(node)
+        carve(x0, y0, x0 + MAZE_PASSAGE, y0 + MAZE_PASSAGE)
+    seen = {(0, 0)}
+    stack = [(0, 0)]
+    walls: list[tuple[Cell, Cell]] = []
+    while stack:
+        node = stack[-1]
+        around = [(node[0] + dx, node[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                  if 0 <= node[0] + dx < columns and 0 <= node[1] + dy < rows]
+        fresh = [other for other in around if other not in seen]
+        if not fresh:
+            stack.pop()
+            continue
+        chosen = rng.choice(fresh)
+        walls.extend((node, other) for other in fresh if other != chosen)
+        join(node, chosen)
+        seen.add(chosen)
+        stack.append(chosen)
+    for first, second in walls:
+        if rng.random() < MAZE_LOOPS:
+            join(first, second)
+    room_w, room_h = MAZE_ROOM
+    for x0 in (1, grid.width - 1 - room_w):
+        for y0 in (1, grid.height - 1 - room_h):
+            carve(x0, y0, x0 + room_w, y0 + room_h)
+
+
 def make_map(kind: str, width: int = MAP_WIDTH_CELLS, height: int = MAP_HEIGHT_CELLS,
              seed: int | None = None) -> Grid:
     rng = random.Random(seed)
+    if kind == "maze":
+        width, height = MAZE_SIZE
+    elif kind == "edges":
+        width, height = EDGES_SIZE
     grid = Grid(width, height)
     for x in range(width):
         grid.block(x, 0)
@@ -336,6 +477,22 @@ def make_map(kind: str, width: int = MAP_WIDTH_CELLS, height: int = MAP_HEIGHT_C
         grid.open_span(wall, height // 2 - NARROW_GAP_HALF_CELLS,
                        height // 2 + NARROW_GAP_HALF_CELLS)
         grid.open_span(wall, *WIDE_GAP_ROWS)
+        return grid
+    if kind == "maze":
+        carve_maze(grid, rng)
+        return grid
+    if kind == "edges":
+        size = ZONE_BLOCK_SIZE
+        boundaries = range(1, (height - 1) // size)
+        for boundary in range(EDGES_FIRST_WALL, (width - 1) // size - 1, EDGES_WALL_EVERY):
+            wall = boundary * size - 1          # the last column of one block, the first of the next
+            for y in range(1, height - 1):
+                grid.block(wall, y)
+                grid.block(wall + 1, y)
+            narrow, wide = rng.sample(boundaries, 2)
+            for row, gap in ((narrow, EDGES_NARROW), (wide, EDGES_WIDE)):
+                first = row * size - gap // 2
+                grid.open_span(wall, max(1, first), min(height - 2, first + gap - 1))
         return grid
     raise ValueError(f"unknown map kind {kind!r}, expected one of {', '.join(MAP_KINDS)}")
 
@@ -620,47 +777,248 @@ STEP_LEN: dict[int, float] = {COST_ORTHOGONAL: 1.0, COST_DIAGONAL: math.sqrt(2.0
 def heuristic(start: Cell, goal: Cell) -> int:
     dx, dy = abs(start[0] - goal[0]), abs(start[1] - goal[1])
     shorter, longer = (dx, dy) if dx < dy else (dy, dx)
-    return COST_DIAGONAL * shorter + COST_ORTHOGONAL * (longer - shorter)
+    octile = COST_DIAGONAL * shorter + COST_ORTHOGONAL * (longer - shorter)
+    return octile * HEURISTIC_NUM // HEURISTIC_DEN
+
+
+def find_block_route(grid: Grid, start: Cell, goal: Cell,
+                     size: int) -> tuple[list[Cell], int] | None:
+    """Pathfinder::internal_findHierarchicalPath on the ground layer.  Returns (nodes, pushes):
+       the start, the cell each block is entered by, and the goal, plus how many entry cells the
+       search queued.  None when it finds no route, which is the engine's setAllPassable.
+
+       A node is a cell.  From the block a node is in, each of the four sides is scanned from its
+       middle outwards; a scan cell in the node's zone whose neighbour across the edge is clear
+       queues that neighbour, at most once per neighbouring zone per side unless the crossing is
+       pinched.  The step costs the straight distance between the two entry cells, so the walk
+       inside a block is never priced - that is where this route can be wrong about cost.  The
+       scan offsets are the engine's own: i>>1 alternating sides for i = 1..size, which reaches
+       one cell past the block on one end and never the first cell on the other."""
+    zones = grid.block_zones(size)
+    width = grid.width
+    start_zone = zones[start[1] * width + start[0]]
+    goal_zone = zones[goal[1] * width + goal[0]]
+    if not start_zone or not goal_zone:
+        return None
+    goal_block = (goal[0] // size, goal[1] // size)
+    blocks_x = (grid.width + size - 1) // size
+    blocks_y = (grid.height + size - 1) // size
+    cost: dict[Cell, int] = {start: 0}
+    parent: dict[Cell, Cell | None] = {start: None}
+    visited = {start}                   # on the open or the closed list, in the engine's terms
+    tie = itertools.count()
+    open_heap: list[tuple[int, int, Cell]] = [(0, next(tie), start)]
+    pushes = 0
+    while open_heap:
+        _, _, cell = heapq.heappop(open_heap)
+        zone = zones[cell[1] * width + cell[0]]
+        bx, by = cell[0] // size, cell[1] // size
+        if zone == goal_zone and (bx, by) == goal_block:
+            nodes: list[Cell] = []
+            step: Cell | None = cell
+            while step is not None:
+                nodes.append(step)
+                step = parent[step]
+            nodes.reverse()
+            if nodes[-1] != goal:
+                nodes.append(goal)
+            return nodes, pushes
+        middle = size // 2
+        sides: list[tuple[Cell, Cell, Cell]] = []       # (scan anchor, scan axis, step across)
+        if bx > 0:
+            sides.append(((bx * size, by * size + middle), (0, 1), (-1, 0)))
+        if bx < blocks_x - 1:
+            sides.append(((bx * size + size - 1, by * size + middle), (0, 1), (1, 0)))
+        if by > 0:
+            sides.append(((bx * size + middle, by * size), (1, 0), (0, -1)))
+        if by < blocks_y - 1:
+            sides.append(((bx * size + middle, by * size + size - 1), (1, 0), (0, 1)))
+        for (ax, ay), (sx, sy), (dx, dy) in sides:
+            examined: list[int] = []
+            for i in range(1, size + 1):
+                offset = -(i >> 1) if i & 1 else i >> 1
+                scan = (ax + sx * offset, ay + sy * offset)
+                if not grid.in_bounds(*scan):
+                    continue
+                scan_zone = zones[scan[1] * width + scan[0]]
+                if scan in visited:
+                    if scan_zone == zone:
+                        break                   # this side has already been left through
+                    continue
+                if scan_zone != zone:
+                    continue
+                across = (scan[0] + dx, scan[1] + dy)
+                if not grid.passable(*across) or across in visited:
+                    continue
+                across_zone = zones[across[1] * width + across[0]]
+                if across_zone in examined:
+                    continue
+                visited.add(scan)
+                visited.add(across)
+                reached = cost[cell] + int(COST_ORTHOGONAL * math.hypot(across[0] - cell[0],
+                                                                        across[1] - cell[1]) + 0.5)
+                if not (grid.has_room(*across) and grid.has_room(*scan)):
+                    reached += CORRIDOR_PINCHED_COST
+                else:
+                    examined.append(across_zone)
+                remaining = int(COST_ORTHOGONAL * math.hypot(across[0] - goal[0],
+                                                             across[1] - goal[1]) + 0.5)
+                cost[across] = reached
+                parent[across] = cell
+                heapq.heappush(open_heap, (reached + remaining, next(tie), across))
+                pushes += 1
+    return None
+
+
+class BlockCorridor:
+    """The blocks a cell search is held to, and for `soft` how far each cell is from the coarse
+       route.  The distance is taken from the route drawn as straight lines between its nodes, in
+       cells (8-way steps), walls ignored: it measures how far a cell strays, not how far it is to
+       walk back."""
+
+    def __init__(self, grid: Grid, nodes: Sequence[Cell], size: int) -> None:
+        self.size = size
+        self.nodes = list(nodes)
+        self.open: set[Cell] = set()
+        for x, y in nodes:
+            bx, by = x // size, y // size
+            for ox in range(-CORRIDOR_WIDEN, CORRIDOR_WIDEN + 1):
+                for oy in range(-CORRIDOR_WIDEN, CORRIDOR_WIDEN + 1):
+                    self.open.add((bx + ox, by + oy))
+        self.width = grid.width
+        self.distance: list[int] = []
+        self.order: list[int] = []
+        if CORRIDOR == "soft":
+            self._measure(grid)
+
+    def _measure(self, grid: Grid) -> None:
+        unreached = UNREACHABLE_COST
+        self.distance = [unreached] * (grid.width * grid.height)
+        self.order = [0] * (grid.width * grid.height)
+        frontier: list[Cell] = []
+        along = 0
+        for (ax, ay), (bx, by) in zip(self.nodes, self.nodes[1:]):
+            steps = max(abs(bx - ax), abs(by - ay), 1)
+            for step in range(steps + 1):
+                cx = ax + round((bx - ax) * step / steps)
+                cy = ay + round((by - ay) * step / steps)
+                index = cy * grid.width + cx
+                if grid.in_bounds(cx, cy) and self.distance[index] == unreached:
+                    self.distance[index] = 0
+                    self.order[index] = along
+                    frontier.append((cx, cy))
+                along += 1
+        distance = 0
+        while frontier:
+            distance += 1
+            reached: list[Cell] = []
+            for x, y in frontier:
+                source = self.order[y * grid.width + x]
+                for dx, dy, _ in NEIGHBOURS:
+                    nx, ny = x + dx, y + dy
+                    if grid.in_bounds(nx, ny) and self.distance[ny * grid.width + nx] == unreached:
+                        self.distance[ny * grid.width + nx] = distance
+                        self.order[ny * grid.width + nx] = source
+                        reached.append((nx, ny))
+            frontier = reached
+
+    def is_open(self, cell: Cell) -> bool:
+        return (cell[0] // self.size, cell[1] // self.size) in self.open
+
+    def admits(self, cell: Cell) -> bool:
+        """findGroundPath: inside an open block, or 3 cells diagonally from one."""
+        if self.is_open(cell):
+            return True
+        x, y = cell
+        slack = CORRIDOR_SLACK
+        return any(self.is_open((x + sx, y + sy))
+                   for sx, sy in ((slack, slack), (-slack, slack), (slack, -slack), (-slack, -slack)))
+
+    def soft_cost(self, current: Cell, cell: Cell) -> int:
+        index = cell[1] * self.width + cell[0]
+        distance = self.distance[index]
+        if distance > SOFT_THRESHOLD:
+            return SOFT_COST * (distance - SOFT_THRESHOLD)
+        if (distance <= SOFT_NEAR
+                and self.order[index] > self.order[current[1] * self.width + current[0]]):
+            return -SOFT_BONUS
+        return 0
+
+
+def block_corridor(grid: Grid, start: Cell, goal: Cell) -> BlockCorridor | None:
+    """The corridor findPath lays before its cell search, or None for none: the mode is off, or the
+       coarse search found no route and the engine opens every block."""
+    if CORRIDOR == "none":
+        return None
+    route = find_block_route(grid, start, goal, ZONE_BLOCK_SIZE)
+    if route is None:
+        return None
+    return BlockCorridor(grid, route[0], ZONE_BLOCK_SIZE)
 
 
 def astar(grid: Grid, start: Cell, goal: Cell, *, clearance: int = 0,
           pricing: PathPricing = NO_PRICING,
-          cell_budget: int = DEFAULT_CELL_BUDGET) -> tuple[list[Cell], int]:
+          cell_budget: int = DEFAULT_CELL_BUDGET, partial: bool = False) -> tuple[list[Cell], int]:
     """Returns (cells, expansions).  cells is [] when there is no path, or the budget ran out -
-       which is the engine's 'out of pathfind cells', the failure congestion cost can cause.
+       which is the engine's 'out of pathfind cells', the failure congestion cost can cause.  With
+       `partial` a search stopped by the budget hands back the route to the cell it got nearest
+       the goal instead, as internalFindPath does; the caller tells by the last cell.
 
        `travelled` is the cost without any penalty in it - the penalties are money, not distance,
        and a detour taken to dodge someone must not also make us think we arrive later than we
        do."""
     if not grid.passable(*goal) or not grid.passable(*start):
         return [], 0
+    corridor = block_corridor(grid, start, goal)
+    clear = grid.clear_cells(clearance) if clearance else None
     open_heap: list[tuple[int, int, int, Cell]] = [(heuristic(start, goal), 0, 0, start)]
     came_from: dict[Cell, Cell | None] = {start: None}
     best_cost: dict[Cell, int] = {start: 0}
     expansions = 0
+    closest, closest_distance = start, UNREACHABLE_COST
+
+    def route_to(cell: Cell) -> list[Cell]:
+        path: list[Cell] = []
+        step: Cell | None = cell
+        while step is not None:
+            path.append(step)
+            step = came_from[step]
+        path.reverse()
+        return path
+
     while open_heap:
         _, cost, travelled, current = heapq.heappop(open_heap)
         if cost > best_cost.get(current, UNREACHABLE_COST):
             continue
         if current == goal:
-            path: list[Cell] = []
-            step: Cell | None = current
-            while step is not None:
-                path.append(step)
-                step = came_from[step]
-            path.reverse()
-            return path, expansions
+            return route_to(current), expansions
         expansions += 1
         if expansions > cell_budget:
+            if partial and closest != start:
+                return route_to(closest), expansions
             return [], expansions
+        if partial:
+            distance = (goal[0] - current[0]) ** 2 + (goal[1] - current[1]) ** 2
+            if distance < closest_distance:
+                closest, closest_distance = current, distance
         for dx, dy, step_cost in NEIGHBOURS:
             neighbour = (current[0] + dx, current[1] + dy)
-            if clearance:
-                if not grid.clear_for(neighbour[0], neighbour[1], clearance):
+            if clear is not None:
+                if (not grid.in_bounds(*neighbour)
+                        or not clear[neighbour[1] * grid.width + neighbour[0]]):
                     continue
             elif not grid.passable(*neighbour):
                 continue
             new_cost = cost + step_cost
+            if corridor is not None:
+                if CORRIDOR == "hard":
+                    if not corridor.admits(neighbour):
+                        continue
+                elif CORRIDOR == "flat":
+                    if not corridor.is_open(neighbour):
+                        new_cost += CORRIDOR_OUTSIDE_COST
+                else:
+                    new_cost += corridor.soft_cost(current, neighbour)
             new_travel = travelled + step_cost
             if pricing.congestion_range:
                 if (abs(neighbour[0] - start[0]) < pricing.congestion_range
@@ -1197,8 +1555,10 @@ def summarise_order(stats: OrderStats, units: Sequence[Unit], traffic: TrafficMo
 
 def plan_corridor(grid: Grid, units: Sequence[Unit], goal: Point, *, traffic: TrafficModel,
                   stats: OrderStats, now: float) -> tuple[list[Cell], int]:
-    """The one search both group planners start from: a hierarchical corridor for the whole
-       selection, narrowing 6 -> 4 -> 3 before anybody falls back to solving for themselves.
+    """The one search both group planners start from: a corridor for the whole selection,
+       narrowing 6 -> 4 -> 3 before anybody falls back to solving for themselves.  It is the
+       group's lane corridor, not the block corridor: that one, when --corridor asks for it, is
+       laid by astar underneath every search including this one.
        Returns (cells, diameter), or ([], 0) when the ground carries none of the three widths."""
     cx, cy = compute_centroid(units)
     # this group is about to be re-planned, so its own old reservations must not price the corridor
@@ -1505,13 +1865,16 @@ def measure(map_kind: str, unit_count: int, seeds: int, mode: str, *,
 
 
 def print_table_head() -> None:
-    print(f"{'mode':<9} {'lane':<5} {'jam':<4} {'cost/cap/x':<11} {'waypts':>8} {'length':>8} "
+    print(f"{'corridor':<14} {'mode':<9} {'lane':<5} {'jam':<4} {'cost/cap/x':<11} {'waypts':>8} "
+          f"{'length':>8} "
           f"{'frames':>8} {'blocked':>9} {'overlap':>8} {'cross':>6} {'stuck':>7} {'cells':>8} "
           f"{'lanes':>6} {'drift':>7} {'jamcell':>8} {'priced':>7} {'round':>6}")
 
 
-def print_row(mode: str, lane: str, jam: str, label: str, result: Measurement) -> None:
-    print(f"{mode:<9} {lane:<5} {jam:<4} {label:<11} {result.waypoints:>8.1f} {result.length:>8.0f} "
+def print_row(corridor: str, mode: str, lane: str, jam: str, label: str,
+              result: Measurement) -> None:
+    print(f"{corridor:<14} {mode:<9} {lane:<5} {jam:<4} {label:<11} {result.waypoints:>8.1f} "
+          f"{result.length:>8.0f} "
           f"{result.frames:>8.0f} {result.blocked:>9.0f} {result.overlap:>8.0f} "
           f"{result.crossings:>6.0f} {result.stuck:>7d} {result.expansions:>8.0f} "
           f"{result.lanes:>6.0f} {result.drift:>7.0f} {result.jam_peak:>8.0f} "
@@ -1550,6 +1913,165 @@ def lane_changing(is_on: bool):
         LANE_CHANGE = before
 
 
+@contextmanager
+def overriding(**values: object):
+    """Set module constants for one measurement and hand them back, for the knobs that only ever
+       change together with a row of a table - the block corridor's mode, size and soft price,
+       and the A* estimate scale."""
+    module = sys.modules[__name__]
+    before = {name: getattr(module, name) for name in values}
+    for name, value in values.items():
+        setattr(module, name, value)
+    try:
+        yield
+    finally:
+        for name, value in before.items():
+            setattr(module, name, value)
+
+
+class SoftPoint(NamedTuple):
+    """One soft corridor price: per cell of distance past the threshold, the threshold, and the
+       rebate for following the route forward within `near` cells of it."""
+    cost: int
+    threshold: int
+    near: int
+    bonus: int
+
+    @property
+    def label(self) -> str:
+        return f"soft {self.cost}/{self.threshold}/{self.near}/{self.bonus}"
+
+    def settings(self) -> dict[str, object]:
+        return {"CORRIDOR": "soft", "SOFT_COST": self.cost, "SOFT_THRESHOLD": self.threshold,
+                "SOFT_NEAR": self.near, "SOFT_BONUS": self.bonus}
+
+
+def parse_soft(text: str) -> list[SoftPoint]:
+    """cost[/threshold[/near[/bonus]]], comma separated; what is left out keeps its default."""
+    points: list[SoftPoint] = []
+    defaults = (SOFT_COST, SOFT_THRESHOLD, SOFT_NEAR, SOFT_BONUS)
+    for spec in text.split(","):
+        parts = [int(part) for part in spec.split("/") if part]
+        points.append(SoftPoint(*parts, *defaults[len(parts):]))
+    return points
+
+
+def corridor_rows(mode: str, soft: Sequence[SoftPoint]) -> list[tuple[str, dict[str, object]]]:
+    """(label, constants) for each corridor a table compares; `all` is every mode and every soft
+       price asked for."""
+    modes = CORRIDOR_MODES if mode == "all" else (mode,)
+    rows: list[tuple[str, dict[str, object]]] = []
+    for name in modes:
+        if name == "soft":
+            rows.extend((point.label, point.settings()) for point in soft)
+        else:
+            rows.append((name, {"CORRIDOR": name}))
+    return rows
+
+
+def travel_cost(cells: Sequence[Cell]) -> int:
+    return sum(COST_DIAGONAL if first[0] != second[0] and first[1] != second[1]
+               else COST_ORTHOGONAL for first, second in zip(cells, cells[1:]))
+
+
+SEARCH_MIN_SPAN: float = 0.5                # a pair is at least this share of the diagonal apart
+SEARCH_DIAMETERS: tuple[int, ...] = (6, 3)  # the group corridor's widest and narrowest tries
+
+
+@dataclass
+class SearchMeasurement:
+    """One corridor's row of the search table.  `excess` is per cent over the shortest route on
+       the open map, summed over the searches that reached the goal; a partial route is not
+       compared, it is counted."""
+    found: int = 0
+    partial: int = 0
+    failed: int = 0
+    excess: float = 0.0
+    worst: float = 0.0
+    cells: int = 0
+    wide_found: list[int] = field(default_factory=lambda: [0] * len(SEARCH_DIAMETERS))
+    wide_cells: list[int] = field(default_factory=lambda: [0] * len(SEARCH_DIAMETERS))
+
+
+def pick_pairs(grid: Grid, rng: random.Random, count: int) -> list[tuple[Cell, Cell]]:
+    """`count` start/goal pairs far enough apart to cross the map's structure, both on clear ground
+       a unit can stand on.  Reachability is the caller's question."""
+    clear = [(x, y) for y in range(grid.height) for x in range(grid.width) if grid.has_room(x, y)]
+    span = SEARCH_MIN_SPAN * math.hypot(grid.width, grid.height)
+    pairs: list[tuple[Cell, Cell]] = []
+    while len(pairs) < count:
+        start, goal = rng.choice(clear), rng.choice(clear)
+        if math.hypot(goal[0] - start[0], goal[1] - start[1]) >= span:
+            pairs.append((start, goal))
+    return pairs
+
+
+def measure_searches(map_kind: str, seeds: int, pair_count: int,
+                     rows: Sequence[tuple[str, dict[str, object]]]) -> list[SearchMeasurement]:
+    """Single searches, no units: each pair once per corridor at the engine's caps.  A unit's search
+       is internalFindPath (ENGINE_CELL_CAP, partial route on the cap); a group's is findGroundPath
+       at each of SEARCH_DIAMETERS (GROUND_CELL_CAP, nothing on the cap).  The yardstick is the
+       uncapped, unrestricted, unweighted search, so `excess` is what the corridor and the
+       estimate scale cost together."""
+    results = [SearchMeasurement() for _ in rows]
+    eligible = [0] * len(SEARCH_DIAMETERS)
+    searched = 0
+    hier = 0
+    for seed in range(seeds):
+        grid = make_map(map_kind, seed=seed)
+        rng = random.Random(seed)
+        for start, goal in pick_pairs(grid, rng, pair_count):
+            with overriding(CORRIDOR="none", HEURISTIC_NUM=1, HEURISTIC_DEN=1):
+                best, _ = astar(grid, start, goal, cell_budget=UNREACHABLE_COST)
+                if not best:
+                    continue
+                wide = [bool(astar(grid, start, goal, clearance=diameter // 2,
+                                   cell_budget=UNREACHABLE_COST)[0])
+                        for diameter in SEARCH_DIAMETERS]
+            searched += 1
+            route = find_block_route(grid, start, goal, ZONE_BLOCK_SIZE)
+            hier += route[1] if route else 0
+            optimum = travel_cost(best)
+            for index, is_wide in enumerate(wide):
+                eligible[index] += is_wide
+            for result, (_, settings) in zip(results, rows):
+                with overriding(**settings):
+                    cells, expansions = astar(grid, start, goal, cell_budget=ENGINE_CELL_CAP,
+                                              partial=True)
+                    result.cells += expansions
+                    if not cells:
+                        result.failed += 1
+                    elif cells[-1] != goal:
+                        result.partial += 1
+                    else:
+                        result.found += 1
+                        excess = 100.0 * (travel_cost(cells) - optimum) / max(optimum, 1)
+                        result.excess += excess
+                        result.worst = max(result.worst, excess)
+                    for index, diameter in enumerate(SEARCH_DIAMETERS):
+                        if not wide[index]:
+                            continue
+                        cells, expansions = astar(grid, start, goal, clearance=diameter // 2,
+                                                  cell_budget=GROUND_CELL_CAP)
+                        result.wide_found[index] += bool(cells)
+                        result.wide_cells[index] += expansions
+    print(f"searches on {map_kind}: {searched} pairs over {seeds} seeds, "
+          f"blocks {ZONE_BLOCK_SIZE}, estimate {HEURISTIC_NUM}/{HEURISTIC_DEN}, "
+          f"coarse search {hier / max(searched, 1):.0f} entry cells a pair")
+    wide_head = "".join(f" {f'd{d} found/of':>13} {f'd{d} cells':>9}" for d in SEARCH_DIAMETERS)
+    print(f"{'corridor':<18} {'found':>6} {'partial':>8} {'fail':>5} {'excess%':>8} "
+          f"{'worst%':>7} {'cells':>7}{wide_head}")
+    for result, (label, _) in zip(results, rows):
+        wide_cols = "".join(
+            f" {f'{result.wide_found[i]}/{eligible[i]}':>13} "
+            f"{result.wide_cells[i] / max(eligible[i], 1):>9.0f}"
+            for i in range(len(SEARCH_DIAMETERS)))
+        print(f"{label:<18} {result.found:>6} {result.partial:>8} {result.failed:>5} "
+              f"{result.excess / max(result.found, 1):>8.2f} {result.worst:>7.1f} "
+              f"{result.cells / max(searched, 1):>7.0f}{wide_cols}")
+    return results
+
+
 class SweepPoint(NamedTuple):
     """One row of --sweep.  A crossing cost of 0 is the time dimension off."""
     cost: int
@@ -1574,34 +2096,50 @@ def run_headless(args: argparse.Namespace, sweep: Sequence[SweepPoint]) -> None:
 
        `overlap` counts cells two plans share at all, `cross` only the ones they share at the same
        moment.  A change that trades the first for the second is doing what it was asked to."""
+    rows = corridor_rows(args.corridor, parse_soft(args.soft))
+    if args.pairs:
+        measure_searches(args.map, args.headless, args.pairs, rows)
+        if not args.units:
+            return
     print(f"map {args.map}  scenario {args.scenario}  units {args.units}  "
           f"seeds {args.headless}  window {args.window} frames")
     print_table_head()
     lane_settings = (False, True) if args.lanes == "both" else (args.lanes == "on",)
     jam_settings = (False, True) if args.jam == "both" else (args.jam == "on",)
-    for mode in MODES:
-        for is_lane_changing in lane_settings:
-            lane = "on" if is_lane_changing else "off"
-            for is_jam_charged in jam_settings:
-                jam = "on" if is_jam_charged else "off"
-                with lane_changing(is_lane_changing):
-                    with tuning(congestion_cost=args.cost, congestion_cap=args.cap,
-                                crossing_cost=args.cross, crossing_window=args.window):
-                        print_row(mode, lane, jam, "off",
-                                  measure(args.map, args.units, args.headless, mode,
-                                          is_congestion_charged=False, is_crossing_charged=False,
-                                          is_jam_charged=is_jam_charged, scenario=args.scenario))
-                    for point in sweep:
-                        with tuning(congestion_cost=point.cost, congestion_cap=point.cap,
-                                    crossing_cost=point.crossing or args.cross,
-                                    crossing_window=args.window):
-                            print_row(mode, lane, jam,
-                                      f"{point.cost}/{point.cap}/{point.crossing}",
-                                      measure(args.map, args.units, args.headless, mode,
-                                              is_congestion_charged=True,
-                                              is_crossing_charged=point.crossing > 0,
-                                              is_jam_charged=is_jam_charged,
-                                              scenario=args.scenario))
+    modes = args.modes.split(",") if args.modes else MODES
+    for corridor, settings in rows:
+        with overriding(**settings):
+            for mode in modes:
+                for is_lane_changing in lane_settings:
+                    lane = "on" if is_lane_changing else "off"
+                    for is_jam_charged in jam_settings:
+                        jam = "on" if is_jam_charged else "off"
+                        run_sweep_rows(args, sweep, corridor, mode, lane, jam, is_lane_changing,
+                                       is_jam_charged)
+
+
+def run_sweep_rows(args: argparse.Namespace, sweep: Sequence[SweepPoint], corridor: str, mode: str,
+                   lane: str, jam: str, is_lane_changing: bool, is_jam_charged: bool) -> None:
+    """One mode's rows under one corridor: the costs off, then each sweep point."""
+    with lane_changing(is_lane_changing):
+        if not args.no_off:
+            with tuning(congestion_cost=args.cost, congestion_cap=args.cap,
+                        crossing_cost=args.cross, crossing_window=args.window):
+                print_row(corridor, mode, lane, jam, "off",
+                          measure(args.map, args.units, args.headless, mode,
+                                  is_congestion_charged=False, is_crossing_charged=False,
+                                  is_jam_charged=is_jam_charged, scenario=args.scenario))
+        for point in sweep:
+            with tuning(congestion_cost=point.cost, congestion_cap=point.cap,
+                        crossing_cost=point.crossing or args.cross,
+                        crossing_window=args.window):
+                print_row(corridor, mode, lane, jam,
+                          f"{point.cost}/{point.cap}/{point.crossing}",
+                          measure(args.map, args.units, args.headless, mode,
+                                  is_congestion_charged=True,
+                                  is_crossing_charged=point.crossing > 0,
+                                  is_jam_charged=is_jam_charged,
+                                  scenario=args.scenario))
 
 
 class Simulation:
@@ -1938,12 +2476,39 @@ def main() -> None:
                         help="band mode: footprints of lateral drift per frame (0 = the flat band)")
     parser.add_argument("--jam", choices=("off", "on", "both"), default="on",
                         help="charge a repath for ground somebody is stuck on; 'both' compares")
+    parser.add_argument("--corridor", choices=(*CORRIDOR_MODES, "all"), default="none",
+                        help="block corridor every search lays first; 'all' compares the four")
+    parser.add_argument("--soft", default=f"{SOFT_COST}/{SOFT_THRESHOLD}/{SOFT_NEAR}/{SOFT_BONUS}",
+                        help="soft corridor prices to compare: cost/threshold/near/bonus, ...")
+    parser.add_argument("--blocks", type=int, default=ZONE_BLOCK_SIZE,
+                        help="cells per block side for the corridor's coarse search (engine 10)")
+    parser.add_argument("--widen", type=int, default=CORRIDOR_WIDEN,
+                        help="blocks opened either side of each route block (engine 1)")
+    parser.add_argument("--hweight", type=float, default=HEURISTIC_NUM / HEURISTIC_DEN,
+                        help="A* estimate scale (sandbox 1.0, retail 1.5)")
+    parser.add_argument("--pairs", type=int, default=0,
+                        help="headless only: also time this many single searches per seed")
+    parser.add_argument("--modes", default="",
+                        help="headless only: comma list of modes for the group table (all)")
+    parser.add_argument("--no-off", action="store_true", dest="no_off",
+                        help="headless only: leave out the costs-off row")
     args = parser.parse_args()
     BAND_STEP = args.band_step
+    weight = Fraction(args.hweight).limit_denominator(16)
+    soft = parse_soft(args.soft)[0]
     sweep = parse_sweep(args.sweep)
-    if args.headless:
-        run_headless(args, sweep)
-        return
+    with overriding(ZONE_BLOCK_SIZE=args.blocks, CORRIDOR_WIDEN=args.widen,
+                    HEURISTIC_NUM=weight.numerator, HEURISTIC_DEN=weight.denominator):
+        if args.headless:
+            run_headless(args, sweep)
+            return
+        # the window runs one corridor; 'all' is a table's word and draws as none
+        corridor = args.corridor if args.corridor != "all" else "none"
+        with overriding(**(soft.settings() if corridor == "soft" else {"CORRIDOR": corridor})):
+            run_window(args)
+
+
+def run_window(args: argparse.Namespace) -> None:
     with lane_changing(args.lanes != "off"), \
             tuning(congestion_cost=args.cost, congestion_cap=args.cap, crossing_cost=args.cross,
                    crossing_window=args.window), Lab(args) as lab:

@@ -48,6 +48,7 @@
 #include "GameClient/GadgetCheckBox.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/GadgetSlider.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetRadioButton.h"
@@ -386,8 +387,8 @@ static void dressTabButton( GameWindow *button, const char *piece )
 
 /// The Tab screen's controls on the scheme's painting (Tools/hud_command_bar.py tab_panel, TAB_BUTTONS): the
 /// Main Menu, mute and money buttons in the side's pieces, and the campaign's briefing list without EA's
-/// veil and blue rule, standing in the painting's glass (y 99..608 of the 714 the window is at 1080) so its
-/// lines read on the wells and not across their lips.
+/// veil and blue rule, standing in the solo painting's one well (y 99..608 of the 714 the window is at
+/// 1080), its scroll bar's arrows, thumb and groove (TAB_TRACK) in the same pieces.
 static void dressForPanel( void )
 {
 	Int width, height;
@@ -416,6 +417,21 @@ static void dressForPanel( void )
 	listboxSolo->winGetSize(&listWidth, &listHeight);
 	listboxSolo->winSetPosition(x, y + panelY + height * 99 / 714 - screenY);
 	listboxSolo->winSetSize(listWidth, height * (608 - 99) / 714);
+
+	GameWindow *slider = GadgetListBoxGetSlider(listboxSolo);
+	dressTabButton(GadgetListBoxGetUpButton(listboxSolo), "Up");
+	dressTabButton(GadgetListBoxGetDownButton(listboxSolo), "Down");
+	dressTabButton(GadgetSliderGetThumb(slider), "Thumb");
+	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+	const Image *top = schemes->getTabImage("TrackTop");
+	const Image *bottom = schemes->getTabImage("TrackBottom");
+	const Image *center = schemes->getTabImage("TrackCenter");
+	const Image *smallCenter = schemes->getTabImage("TrackSmall");
+	GadgetSliderSetEnabledImages(slider, top, bottom, center, smallCenter);
+	GadgetSliderSetHiliteImages(slider, top, bottom, center, smallCenter);
+	GadgetSliderSetDisabledImages(slider, top, bottom, center, smallCenter);
+	// gogoGadgetSlider gives a listbox's slider the colour draw whatever its images
+	slider->winSetDrawFunc(TheWindowManager->getVerticalSliderImageDrawFunc());
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -479,7 +495,9 @@ void ShowDiplomacy( Bool immediate )
 	const Image *panel = TheControlBar->getControlBarSchemeManager()->getTabPanelImage();
 	if (panel)
 	{
-		theWindow->winSetEnabledImage(0, panel);
+		// the campaign's briefing list wants the painting without the table's rows (<TooltipImage>TabSolo)
+		const Image *solo = TheRecorder->isMultiplayer() ? NULL : TheControlBar->getControlBarSchemeManager()->getTabImage("Solo");
+		theWindow->winSetEnabledImage(0, solo ? solo : panel);
 		theWindow->winSetStatus(WIN_STATUS_IMAGE);
 		theWindow->winSetPosition(0, 0);
 		Int width, height;

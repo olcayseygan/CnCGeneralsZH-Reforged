@@ -17,15 +17,18 @@ Data/Art/Textures/ReforgedGuardRing.tga
 Data/Art/Textures/ReforgedHudAmericaCommandBar.dds
 Data/Art/Textures/ReforgedHudAmericaPowers.dds
 Data/Art/Textures/ReforgedHudAmericaTabPanel.dds
+Data/Art/Textures/ReforgedHudAmericaTabSolo.dds
 Data/Art/Textures/ReforgedHudBlankTexture.tga
 Data/Art/Textures/ReforgedHudChinaCommandBar.dds
 Data/Art/Textures/ReforgedHudChinaPowers.dds
 Data/Art/Textures/ReforgedHudChinaTabPanel.dds
+Data/Art/Textures/ReforgedHudChinaTabSolo.dds
 Data/Art/Textures/ReforgedHudControlButtons.dds
 Data/Art/Textures/ReforgedHudDisconnectWindow.dds
 Data/Art/Textures/ReforgedHudGlaCommandBar.dds
 Data/Art/Textures/ReforgedHudGlaPowers.dds
 Data/Art/Textures/ReforgedHudGlaTabPanel.dds
+Data/Art/Textures/ReforgedHudGlaTabSolo.dds
 Data/Art/Textures/ReforgedHudHelpbox.dds
 Data/Art/Textures/ReforgedHudObsCommandBar.dds
 Data/Art/Textures/ReforgedHudObsPieces.dds
@@ -35,6 +38,7 @@ Data/Art/Textures/ReforgedHudObsTabPanel.dds
 Data/Art/Textures/ReforgedHudTurkiyeCommandBar.dds
 Data/Art/Textures/ReforgedHudTurkiyePowers.dds
 Data/Art/Textures/ReforgedHudTurkiyeTabPanel.dds
+Data/Art/Textures/ReforgedHudTurkiyeTabSolo.dds
 Data/Art/Textures/ReforgedLaserPink.tga
 Data/Art/Textures/ReforgedLobbySpot.tga
 Data/Art/Textures/ReforgedMineGlowBlue.tga

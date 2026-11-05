@@ -2042,7 +2042,10 @@ TAB_HIDE = (1160, 650, 1160 + tab_u(763) - tab_u(671), 650 + tab_u(397) - tab_u(
 TAB_COLUMNS = [tab_u(u) for u in (46, 178, 319, 364, 408, 460, 560)]   # between mute, player, side, ping, fps, team, status, money
 
 
-def tab_panel(side):
+def tab_panel(side, solo=False):
+    """The Tab screen's painting on its sheet, the buttons beside it; solo is the campaign's (<prefix>TabSolo on
+    ReforgedHud<Side>TabSolo), where the briefing list stands: the titles' and the table's wells are one, with
+    no bands or rulings for its lines to fall across, and its sheet holds the painting alone."""
     look = BAR_LOOKS[side]
     build = look["build"]
     W, H = TAB_PANEL
@@ -2062,17 +2065,20 @@ def tab_panel(side):
               [(10, 10), (W - 11, 10), (W - 11, H - 44), (W - 22, H - 44), (W - 22, H - 22), (W - 44, H - 22), (W - 44, H - 13),
                (10, H - 13)]], (True, False, True, False))
     c = 6 if kind != "rough" else 5
-    p.sink([shape(build, *TAB_TITLES, c)], 6, 2.5)
-    p.sink([shape(build, *TAB_TABLE, c)], 6, 2.5)
+    if solo:
+        p.sink([shape(build, TAB_TITLES[0], TAB_TITLES[1], TAB_TITLES[2], TAB_TABLE[3], c)], 6, 2.5)
+    else:
+        p.sink([shape(build, *TAB_TITLES, c)], 6, 2.5)
+        p.sink([shape(build, *TAB_TABLE, c)], 6, 2.5)
+        # the table's rulings: a hairline between rows and down the columns, faint in the glass
+        rule = [plate(TAB_TABLE[0] + 8, (a[1] + b[0]) / 2, TAB_TABLE[2] - 8, (a[1] + b[0]) / 2 + 1) for a, b in zip(TAB_ROWS, TAB_ROWS[1:])]
+        rule += [plate(x, TAB_TITLES[1] + 6, x + 1, TAB_TITLES[3] - 6) for x in TAB_COLUMNS]
+        p.inlay(rule, INKM, 0.3)
     p.sink([shape(build, *grow(TAB_HIDE, 5), c)], 5, 2)
-    # the table's rulings: a hairline between rows and down the columns, faint in the glass
-    rule = [plate(TAB_TABLE[0] + 8, (a[1] + b[0]) / 2, TAB_TABLE[2] - 8, (a[1] + b[0]) / 2 + 1) for a, b in zip(TAB_ROWS, TAB_ROWS[1:])]
-    rule += [plate(x, TAB_TITLES[1] + 6, x + 1, TAB_TITLES[3] - 6) for x in TAB_COLUMNS]
-    p.inlay(rule, INKM, 0.3)
     top, foot = (12, TAB_TITLES[1] - 6), (TAB_TABLE[3] + 6, H - 15)    # the plain strips above and below the wells
     tab_fittings(p, build, W, H, top, foot)
     img = bar_finish(shade(p, look), p, look)
-    if TAB_ZEBRA:                                   # every other row's band of glass a shade lighter
+    if TAB_ZEBRA and not solo:                      # every other row's band of glass a shade lighter
         a = np.asarray(img).astype(np.float32)
         for y0, y1 in TAB_ROWS[1::2]:
             band = a[y0 - 3:y1 + 4, TAB_TABLE[0] + 6:TAB_TABLE[2] - 6, :3]
@@ -2083,10 +2089,14 @@ def tab_panel(side):
                   [(344, 22, TURQ), (W - 186, foot[0] + 9, AMBER)])
     sheet_img = Image.new("RGBA", TAB_SHEET, (0, 0, 0, 0))
     sheet_img.paste(img.crop((0, 0, W, H)), (0, 0))
+    if solo:
+        return sheet_img
     boxes = tab_button_boxes()
     for kind in TAB_BUTTONS:
         for state in TAB_STATES:
             put(sheet_img, tab_button(side, kind, state), boxes["Tab" + kind + state])
+    for name, piece in tab_track(side).items():
+        put(sheet_img, piece, boxes["Tab" + name])
     return sheet_img
 
 
@@ -2164,16 +2174,31 @@ def tab_fittings(p, build, W, H, top, foot):
 # be heard) and Unmute (he is muted) carry a speaker, its sound in two arcs or struck through.  D is disabled.
 TAB_BUTTONS = dict(Send=(tab_u(760) - tab_u(700), tab_u(118) - tab_u(94)), Square=(tab_u(590) - tab_u(566), tab_u(118) - tab_u(94)),
                    Mute=(tab_u(44) - tab_u(20), tab_u(118) - tab_u(94)), Unmute=(tab_u(44) - tab_u(20), tab_u(118) - tab_u(94)),
-                   Exit=(TAB_HIDE[2] - TAB_HIDE[0], TAB_HIDE[3] - TAB_HIDE[1]))
-TAB_BUTTON_X = dict(Send=1384, Square=1496, Mute=1544, Unmute=1592, Exit=1640)
+                   Exit=(TAB_HIDE[2] - TAB_HIDE[0], TAB_HIDE[3] - TAB_HIDE[1]),
+                   Up=(21, 22), Down=(21, 22), Thumb=(21, 64))
+# The campaign briefing's scroll bar (GadgetListboxCreateScrollbar: arrows 21x22 in screen pixels at every
+# resolution, the slider 21 wide): Up and Down carry an arrow, the Thumb is a bezel the code stretches along
+# the track, and the track is a groove in four pieces the slider lays end, repeats and end
+# (TAB_TRACK: Top and Bottom, Center and Small repeated between them, even down their length so they tile).
+TAB_BUTTON_X = dict(Send=1384, Square=1496, Mute=1544, Unmute=1592, Exit=1640, Up=1812, Down=1840, Thumb=1868)
 TAB_STATES = ("", "H", "P", "D")
 TAB_BUTTON_STEP = 54
+TAB_TRACK = dict(TrackTop=(21, 8), TrackBottom=(21, 8), TrackCenter=(21, 16), TrackSmall=(21, 2))
+TAB_TRACK_X = 1896
 
 
 def tab_button_boxes():
-    """Tab<kind><state> -> its box on the sheet, the states one under the other."""
-    return {"Tab" + kind + state: (TAB_BUTTON_X[kind], 4 + TAB_BUTTON_STEP * i, TAB_BUTTON_X[kind] + w, 4 + TAB_BUTTON_STEP * i + h)
-            for kind, (w, h) in TAB_BUTTONS.items() for i, state in enumerate(TAB_STATES)}
+    """Tab<kind><state> -> its box on the sheet, the states one under the other, and the track's pieces."""
+    boxes = {}
+    for kind, (w, h) in TAB_BUTTONS.items():
+        step = TAB_BUTTON_STEP if h <= TAB_BUTTON_STEP - 6 else h + 8      # the thumb's states need more
+        for i, state in enumerate(TAB_STATES):
+            boxes["Tab" + kind + state] = (TAB_BUTTON_X[kind], 4 + step * i, TAB_BUTTON_X[kind] + w, 4 + step * i + h)
+    y = 4
+    for name, (w, h) in TAB_TRACK.items():
+        boxes["Tab" + name] = (TAB_TRACK_X, y, TAB_TRACK_X + w, y + h)
+        y += h + 4
+    return boxes
 
 
 def arc(cx, cy, r, t, sweep=0.8, n=10):
@@ -2201,25 +2226,48 @@ def tab_button(side, kind, state):
     p = Painter(w + 2 * o, h + 2 * o)               # go bad on one 31 texels high
     st = "I" if state == "D" else state
     button(p, (o, o, o + w, o + h), None, st, build)
-    if kind in ("Mute", "Unmute"):
-        off = 1 if state == "P" else 0
-        p.bump(speaker(o + w / 2 + off, o + h / 2 + off, kind == "Unmute"), 1.1, 0.6,
-               {"": PAPERM, "H": GOLDM, "P": HILITE, "I": DIM}[st])
+    off = 1 if state == "P" else 0
+    cx, cy = o + w / 2 + off, o + h / 2 + off
+    glyph = {"Mute": speaker(cx, cy, False), "Unmute": speaker(cx, cy, True),
+             "Up": [[(cx, cy - 4), (cx + 4.5, cy + 3), (cx - 4.5, cy + 3)]],
+             "Down": [[(cx - 4.5, cy - 3), (cx + 4.5, cy - 3), (cx, cy + 4)]]}.get(kind)
+    if glyph:
+        p.bump(glyph, 1.1, 0.6, {"": PAPERM, "H": GOLDM, "P": HILITE, "I": DIM}[st])
     return shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
 
 
-def check_tab(sheet_img, side_name, prefix):
-    """The painting and its buttons are mapped where the generator put them, the painting opaque along the
+def tab_track(side):
+    """The scroll bar's groove: one drawn 21x64 and cut, Center and Small its middle rows averaged down the
+    length, so a repeat of them shows no seam."""
+    look = BAR_LOOKS[side]
+    build = look["build"]
+    w, h, o = 21, 64, 32
+    p = Painter(w + 2 * o, h + 2 * o)
+    p.frame([shape(build, o, o, o + w, o + h, 3)], 2.0, build, DARK, BEZEL_SCALE)
+    p.sink([plate(o + 5, o + 4, o + w - 5, o + h - 4)], 2.0, 1.0)
+    groove = shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
+    middle = np.asarray(groove)[24:40].astype(np.float32).mean(axis=0, keepdims=True).round().astype(np.uint8)
+    return {"TrackTop": groove.crop((0, 0, w, 8)), "TrackBottom": groove.crop((0, h - 8, w, h)),
+            "TrackCenter": Image.fromarray(np.repeat(middle, 16, axis=0), "RGBA"),
+            "TrackSmall": Image.fromarray(np.repeat(middle, 2, axis=0), "RGBA")}
+
+
+def check_tab(sheet_img, side_name, prefix, solo_img=None):
+    """The paintings and the buttons are mapped where the generator put them, each painting opaque along the
     screen's two edges it stands on, and the rows, the titles and the Main Menu button stand on it."""
     M = read_mapped(side_name, "TabPanel")
     want = {prefix + "TabPanel": (0, 0) + TAB_PANEL}
+    if solo_img is not None:
+        want[prefix + "TabSolo"] = (0, 0) + TAB_PANEL
     want.update({prefix + name: box for name, box in tab_button_boxes().items()})
     assert M == want, "ReforgedHud%sTabPanel.ini maps %s, the generator draws %s" % (side_name, sorted(set(M) ^ set(want)) or M, want)
-    a = np.asarray(sheet_img)[..., 3]
     W, H = TAB_PANEL
-    assert (a[0, :W - 60] == 255).all() and (a[:H - 60, 0] == 255).all(), "the Tab screen leaves the screen's edge"
-    for x0, y0, x1, y1 in [TAB_TITLES, TAB_TABLE, TAB_HIDE]:
-        assert (a[y0:y1, x0:x1] == 255).all(), "the Tab screen has a hole under %s" % ((x0, y0, x1, y1),)
+    for img in [sheet_img] + ([solo_img] if solo_img is not None else []):
+        a = np.asarray(img)[..., 3]
+        assert (a[0, :W - 60] == 255).all() and (a[:H - 60, 0] == 255).all(), "the Tab screen leaves the screen's edge"
+        for x0, y0, x1, y1 in [TAB_TITLES, TAB_TABLE, TAB_HIDE]:
+            assert (a[y0:y1, x0:x1] == 255).all(), "the Tab screen has a hole under %s" % ((x0, y0, x1, y1),)
+    a = np.asarray(sheet_img)[..., 3]
     for name, (x0, y0, x1, y1) in tab_button_boxes().items():
         assert (a[y0 + 8:y1 - 8, x0 + 8:x1 - 8] == 255).all(), "%s%s has a hole in its face" % (prefix, name)
 
@@ -3278,7 +3326,8 @@ def main():
             made["ReforgedHud%sPowers" % side] = sheet_img = paint_powers(side, args.emblem, frame, args.ready_glow)
             check_sheet(sheet_img, side, args.ready_glow)
             made["ReforgedHud%sTabPanel" % side] = tab = tab_panel(side)
-            check_tab(tab, side, side + "Pro")
+            made["ReforgedHud%sTabSolo" % side] = solo = tab_panel(side, solo=True)
+            check_tab(tab, side, side + "Pro", solo)
         for name, img in made.items():
             img.save(os.path.join(args.out, name + ".png"))
             if args.dds:

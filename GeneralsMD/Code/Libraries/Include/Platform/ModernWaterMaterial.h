@@ -7,7 +7,7 @@
 #define MODERN_WATER_MATERIAL_UNIFORMS(X) X(MaterialColor) X(MaterialParameters)
 
 namespace ModernWaterMaterial {
-enum : unsigned { RegisterColor=94, RegisterParameters=95, UniformRegisters=2 };
+enum : unsigned { RegisterColor=94, RegisterParameters=95, RegisterOptics=190, UniformRegisters=2 };
 // c94: display-space RGB, brightness. c95: tint amount, pollution amount, bubbles, reserved.
 // A zero parameter vector preserves the existing clear-water material exactly.
 inline const char *OpticalSource() {

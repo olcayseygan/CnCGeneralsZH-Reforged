@@ -10,6 +10,7 @@ found and fixed, EA's own, not port damage.**
 
 ## Modern water reflections and detail
 
+- On Linux and macOS, shallow Modern water now shows submerged ruins and seabed more clearly, while deep water keeps its opacity.
 - On Linux and macOS, Modern water now offers Legacy, SSR and Hybrid reflections. Hybrid combines reflected scenery with visible screen detail, including coloured banks and ordinary models, while keeping cursors and order markers out of the water.
 - A Water tab adds scene reflections, wave detail, refraction and planar reflection detail controls. The quality slider adjusts these together, and saved choices survive switching back to Classic. Classic remains the default water style.
 

@@ -128,7 +128,7 @@ extern OVERRIDE<WaterTransparencySetting> TheWaterTransparency;
 
 // Render-only material rules. The map's legacy settings remain owned by Classic water.
 void loadModernWaterSettings();
-void getModernWaterMaterial(Real color[4], Real parameters[4]);
+void getModernWaterMaterial(Real color[4], Real parameters[4], Real optics[4] = NULL);
 
 #endif // __WATER_H_
 

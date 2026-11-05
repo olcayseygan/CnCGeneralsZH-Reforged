@@ -912,6 +912,7 @@ float4 waterMirrorFiltered(float2 uv, int2 size)
 	hlsl += WaterSurfaceModel::ShaderSource();
 	hlsl += WaterSurfaceModel::OceanShaderSource();
 	hlsl += WaterOpticalModel::GetHlslSource();
+	if (sdl) hlsl += WaterOpticalModel::GetClarityHlslSource();
 	hlsl += ModernWaterMaterial::OpticalSource();
 	hlsl += ModernWaterMaterial::BubbleSource();
 	hlsl += WaterHullModel::GetHlslSource();
@@ -921,6 +922,35 @@ float4 waterMirrorFiltered(float2 uv, int2 size)
 	snprintf(oceanBound, sizeof(oceanBound), "static const float oceanDisplacementBound = %.9g;\n",
 		(double)WaterSurfaceModel::OceanMaxDisplacement);
 	hlsl += oceanBound;
+	if (sdl) hlsl += R"HLSL(
+float waterTerrainClarity(float2 p,float baseLevel,float terrain,float offshore)
+{
+    float terrainDepth=max(baseLevel-terrain,0.0);
+    // Campaign seas can use a flat, shallow floor even beneath full-size ships. Only
+    // raised submerged shelves qualify offshore; hulls and scene hits cannot clear it.
+    [branch] if(MaterialOptics.x<=0.0 || TerrainParameters.w<0.5
+        || terrainDepth>=WaterOpticalClarityMaximumDepth) return 0.0;
+    float surroundingDepth=terrainDepth;
+    [branch] if(offshore>0.0) {
+        static const float2 directions[8]={float2(1,0),float2(0.70710678,0.70710678),
+            float2(0,1),float2(-0.70710678,0.70710678),float2(-1,0),
+            float2(-0.70710678,-0.70710678),float2(0,-1),float2(0.70710678,-0.70710678)};
+        [unroll] for(int i=0;i<8;++i) {
+            float nearHeight=terrainHeight(p+directions[i]*80.0);
+            // A dry bank interrupts the neighborhood; do not borrow lower terrain
+            // from the far side of it. Fade across its edge to avoid a hard clarity
+            // boundary. Both scales stay fixed in map coordinates.
+            if(nearHeight<baseLevel) {
+                surroundingDepth=max(surroundingDepth,baseLevel-nearHeight);
+                float outerDepth=max(baseLevel-terrainHeight(p+directions[i]*160.0),terrainDepth);
+                float wetSupport=smoothstep(0.0,0.75,baseLevel-nearHeight);
+                surroundingDepth=max(surroundingDepth,lerp(terrainDepth,outerDepth,wetSupport));
+            }
+        }
+    }
+    return MaterialOptics.x*WaterOpticalClarityEligibility(terrainDepth,surroundingDepth,offshore);
+}
+)HLSL";
 	hlsl += R"HLSL(
 float terrainWaveAttenuation(float depth, float offshore)
 {
@@ -1370,7 +1400,12 @@ float4 main(Input input) : SV_Target
     // Campaign seas can have deliberately flat, shallow terrain beneath full-size ships. Honour
     // their authored opacity offshore, while preserving the clear optical profile at coasts and
     // in enclosed pools. Actual scene ray length still governs submerged objects and refraction.
-    float3 transmission = WaterOpticalTransmission(length(bottom-opticalWorld), WaterParameters.y,
+)HLSL";
+	if (sdl) hlsl += R"HLSL(    float terrainClarity=waterTerrainClarity(world.xy,baseLevel,surfaceTerrainHeight,offshore);
+    float3 transmission = WaterClarityTransmission(length(bottom-opticalWorld), WaterParameters.y,
+        offshore, OpticalParameters.x, OpticalParameters.y, terrainClarity);
+)HLSL";
+	else hlsl += R"HLSL(    float3 transmission = WaterOpticalTransmission(length(bottom-opticalWorld), WaterParameters.y,
         offshore, OpticalParameters.x, OpticalParameters.y);
 )HLSL";
 	if (sdl) hlsl += R"HLSL(#else
@@ -1499,7 +1534,6 @@ float4 main(Input input) : SV_Target
             freshFoam/max(historyFoam.x,0.0001)));
     }
 )HLSL";
-	hlsl += R"HLSL()HLSL";
     hlsl+=R"HLSL(    // This is foam on the additional displaced bow shoulder, not mean-plane hull wash.
     // Its height already includes F-D; the unchanged opaque scene depth hides solid hulls.
     float liftedBowFoam=fftBowLiftFoam(bowLiftField.x,fftWeight);

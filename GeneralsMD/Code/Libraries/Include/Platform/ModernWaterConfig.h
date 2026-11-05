@@ -20,6 +20,7 @@ struct Rule {
     Color replacement = {255, 255, 255};
     float brightness = 1.0f;
     float pollution = 0.0f;
+    float underwaterClarity = 0.0f;
     bool bubbles = false;
     bool enabled = true;
 };
@@ -34,7 +35,14 @@ inline Rules Defaults() {
     rule.brightness = 0.67f;
     rule.pollution = 0.80f;
     rule.bubbles = true;
-    return Rules(1, rule);
+    Rules rules(1, rule);
+    Rule clear;
+    clear.name = "ClearWater";
+    clear.colors.push_back(Color{255, 255, 255});
+    clear.textures.push_back("TWWater01.tga");
+    clear.underwaterClarity = 0.90f;
+    rules.push_back(clear);
+    return rules;
 }
 
 // Authored RGB values are stored by the engine as normalized floats. Round once
@@ -121,6 +129,7 @@ struct Material {
     Color color = {255, 255, 255};
     float brightness = 1.0f;
     float pollution = 0.0f;
+    float underwaterClarity = 0.0f;
     float tintAmount = 0.0f;
     bool bubbles = false;
     std::string ruleName;
@@ -137,7 +146,9 @@ inline Material Resolve(const Rules &rules, Color mapColor, const std::string &m
         material.color = rule->replacement;
         material.brightness = rule->brightness;
         material.pollution = rule->pollution;
-        material.tintAmount = 1.0f;
+        material.underwaterClarity = rule->underwaterClarity;
+        material.tintAmount = rule->underwaterClarity > 0.0f && rule->replacement == Color{255, 255, 255}
+            && rule->brightness == 1.0f ? 0.0f : 1.0f;
         material.bubbles = rule->bubbles;
         material.ruleName = rule->name;
     }
@@ -151,7 +162,7 @@ inline Material Resolve(const Rules &rules, Color mapColor, const std::string &m
 inline bool Parse(const std::string &text, Rules &result, std::string &error) {
     enum Section { Outside, InRule, InColors, InTextures } section = Outside;
     enum Field { Colors = 1, Textures = 2, Replacement = 4, Brightness = 8,
-                 Pollution = 16, Bubbles = 32, Enabled = 64 };
+                 Pollution = 16, Bubbles = 32, Enabled = 64, UnderwaterClarity = 128 };
     Rules parsed;
     Rule current;
     unsigned fields = 0;
@@ -223,6 +234,7 @@ inline bool Parse(const std::string &text, Rules &result, std::string &error) {
             if (key == "replacementcolor") { field = Replacement; valid = Detail::ReadColor(value, current.replacement); }
             else if (key == "brightness") { field = Brightness; valid = Detail::ReadUnit(value, 0.1f, current.brightness); }
             else if (key == "pollution") { field = Pollution; valid = Detail::ReadUnit(value, 0.0f, current.pollution); }
+            else if (key == "underwaterclarity") { field = UnderwaterClarity; valid = Detail::ReadUnit(value, 0.0f, current.underwaterClarity); }
             else if (key == "bubbles") { field = Bubbles; valid = Detail::ReadBool(value, current.bubbles); }
             else if (key == "enabled") { field = Enabled; valid = Detail::ReadBool(value, current.enabled); }
             else return Detail::Fail(error, lineNumber, "unknown field '" + key + "'");

@@ -33,8 +33,8 @@ std::string Changed(const std::string &before, const std::string &after) {
 }
 
 void CheckDefaults(const Rules &rules) {
-    CHECK_EQ(rules.size(), 1u);
-    if (rules.empty()) return;
+    CHECK_EQ(rules.size(), 2u);
+    if (rules.size() < 2) return;
     CHECK_STR(rules[0].name.c_str(), "PollutedWater");
     CHECK_EQ(rules[0].colors.size(), 1u);
     CHECK_EQ(rules[0].textures.size(), 1u);
@@ -45,6 +45,11 @@ void CheckDefaults(const Rules &rules) {
     CHECK_NEAR(rules[0].pollution, .80f, 0.00001f);
     CHECK(rules[0].bubbles);
     CHECK(rules[0].enabled);
+    CHECK_STR(rules[1].name.c_str(), "ClearWater");
+    CHECK_NEAR(rules[1].underwaterClarity, .90f, .00001f);
+    CHECK_EQ(rules[1].brightness, 1.0f);
+    CHECK_EQ(rules[1].pollution, 0.0f);
+    CHECK(!rules[1].bubbles);
 }
 }
 
@@ -103,6 +108,10 @@ TEST(modern_water_bad_edits_preserve_previous_rules_and_report_line)
         Changed("G:75", "X:75"), Changed("B:50", "B:50 extra"),
         Changed("0.67", "nan"), Changed("0.67", "inf"), Changed("0.67", "0.09"),
         Changed("0.67", "1.01"), Changed("0.80", "-0.01"), Changed("0.80", "1.01"),
+        Changed(" Bubbles = Yes", " UnderwaterClarity = -0.01"),
+        Changed(" Bubbles = Yes", " UnderwaterClarity = 1.01"),
+        Changed(" Bubbles = Yes", " UnderwaterClarity = nan"),
+        Changed(" Bubbles = Yes", " UnderwaterClarity = 0.9\n UnderwaterClarity = 0.5"),
         Changed("0.80", "0.8junk"), Changed("Bubbles = Yes", "Bubbles = Maybe"),
         Changed("Bubbles = Yes", "Enabled = Maybe"), Changed("Bubbles = Yes", "Unknown = Yes"),
         Changed(" Bubbles = Yes", " Bubbles = Yes\n Bubbles = No"),
@@ -183,6 +192,25 @@ TEST(modern_water_resolution_never_carries_pollution_to_next_map)
         CHECK(!material.bubbles);
         CHECK(material.ruleName.empty());
     }
+}
+
+TEST(modern_water_clarity_defaults_match_and_reset)
+{
+    Rules rules = Defaults();
+    Material clear = Resolve(rules, Color{255, 255, 255}, "TWWater01.tga");
+    CHECK_NEAR(clear.underwaterClarity, .90f, .00001f);
+    CHECK_EQ(clear.tintAmount, 0.0f);
+    CHECK_EQ(clear.brightness, 1.0f);
+    CHECK_EQ(clear.pollution, 0.0f);
+    CHECK(!clear.bubbles);
+    Material other = Resolve(rules, Color{255, 255, 255}, "Other.tga");
+    CHECK_EQ(other.underwaterClarity, 0.0f);
+    CHECK_EQ(other.tintAmount, 0.0f);
+    std::string error;
+    CHECK(Parse(Changed(" Bubbles = Yes", " UnderwaterClarity = 1"), rules, error));
+    CHECK_EQ(rules[0].underwaterClarity, 1.0f);
+    CHECK(Parse(Changed(" Bubbles = Yes", " UnderwaterClarity = 0"), rules, error));
+    CHECK_EQ(rules[0].underwaterClarity, 0.0f);
 }
 
 TEST(modern_water_normalized_byte_colors_round_trip_exactly)

@@ -914,7 +914,10 @@ static void check_gpu_water_optical_model(SdlGpuFrame *frame)
 		{-4, -1, -1, -1, -1, 0, 0, 0},
 		{.5f, 2, 2, 0, 2, 0, 0, 0},
 		{10, .5f, .5f, 2.7f, .75f, 0, 0, 0},
-		{1.0e20f, 0, 0, 1.0e20f, 0, 0, 0, 0}
+		{1.0e20f, 0, 0, 1.0e20f, 0, 0, 0, 0},
+		{3.2f, 0, 1, 3, 1, .9f, 0, 0},
+		{3.2f, 0, 1, 3, 1, 1, 0, 0},
+		{500, 0, 1, 3, 1, 1, 0, 0}
 	};
 	const unsigned int count = sizeof(fixtures) / sizeof(fixtures[0]);
 	const char *vertex_source =
@@ -923,9 +926,10 @@ static void check_gpu_water_optical_model(SdlGpuFrame *frame)
 	std::string pixel_source = "cbuffer Samples : register(b0, space3) { float4 Fixtures[";
 	pixel_source += std::to_string(count * 2) + "]; };\n";
 	pixel_source += WaterOpticalModel::GetHlslSource();
+	pixel_source += WaterOpticalModel::GetClarityHlslSource();
 	pixel_source += "float main(float4 position : SV_Position) : SV_Target0 {\n"
 		"uint row=(uint)position.y; float4 f=Fixtures[row*2];\n"
-		"return WaterOpticalTransmission(f.x,f.y,f.z,f.w,Fixtures[row*2+1].x)[(uint)position.x]; }\n";
+		"return WaterClarityTransmission(f.x,f.y,f.z,f.w,Fixtures[row*2+1].x,Fixtures[row*2+1].y)[(uint)position.x]; }\n";
 	std::vector<unsigned char> spirv;
 	std::string error;
 	CHECK(SDL3_Compile_HLSL_To_SPIRV(vertex_source, true, spirv, error));
@@ -971,7 +975,7 @@ static void check_gpu_water_optical_model(SdlGpuFrame *frame)
 	float max_model_error = 0;
 	for (unsigned int i=0; i<count; ++i) {
 		const WaterOpticalModel::Rgb cpu=WaterOpticalModel::Transmission(
-			fixtures[i][0],fixtures[i][1],fixtures[i][2],fixtures[i][3],fixtures[i][4]);
+			fixtures[i][0],fixtures[i][1],fixtures[i][2],fixtures[i][3],fixtures[i][4],fixtures[i][5]);
 		const float expected[3]={cpu.r,cpu.g,cpu.b};
 		for (unsigned int c=0; c<3; ++c) {
 			const float gpu=depth_at(bytes,3,c,i),difference=fabsf(gpu-expected[c]);
@@ -2227,7 +2231,7 @@ static void check_gpu_water_vertex_uniform_order(SdlGpuFrame *frame)
 	const unsigned contactRegister=offsetof(SdlWaterPixelConstants,ContactHullData)/16;
 	const unsigned lastContactRegister=contactRegister+79;
 	const unsigned fillRegister=offsetof(SdlWaterPixelConstants,FoamFillLights)/16;
-	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==190*16);
+	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==191*16);
 	std::string block="cbuffer WaterBlock : register(b1,space1) { float4 Water[";
 	block+=std::to_string(sizeof(SdlWaterPixelConstants)/16)+"]; };\n";
 	const std::string output="struct Output { float4 Position:SV_Position; [[vk::location(0)]] float4 Value:TEXCOORD0; };\n";

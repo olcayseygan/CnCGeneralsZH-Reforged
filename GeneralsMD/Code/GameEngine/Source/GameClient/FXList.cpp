@@ -765,6 +765,14 @@ protected:
 							sys->rotateLocalTransformZ(mtx->Get_Z_Rotation());
 					}
 
+					// an endless system meant to ride an object, played at a bare position, has nothing
+					// to end it and would stay all match; EA ends it with its object, so drop it here
+					if (m_attachToObject && thingToAttachTo == INVALID_ID && sys->isSystemForever())
+					{
+						sys->destroy();
+						continue;
+					}
+
 					// by ID: an object the tick destroyed after asking for this is gone now, and the
 					// system lets go of it on its first update as it did of a dying one
 					if (m_attachToObject && thingToAttachTo != INVALID_ID)

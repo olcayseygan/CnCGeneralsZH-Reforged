@@ -121,6 +121,11 @@ OPTION_INT_ACCESSORS( m_msaaLevel )
 OPTION_BOOL_ACCESSORS( m_vsync )
 OPTION_INT_ACCESSORS( m_frameRateLimit )
 OPTION_INT_ACCESSORS( m_waterStyle )
+OPTION_INT_ACCESSORS( m_waterReflection )
+OPTION_BOOL_ACCESSORS( m_waterReflectionEnabled )
+OPTION_INT_ACCESSORS( m_waterFftResolution )
+OPTION_INT_ACCESSORS( m_waterRefractionQuality )
+OPTION_INT_ACCESSORS( m_waterReflectionDetail )
 OPTION_INT_ACCESSORS( m_cloudStyle )
 OPTION_BOOL_ACCESSORS( m_classicGraphics )
 OPTION_INT_ACCESSORS( m_lightingStyle )
@@ -500,6 +505,28 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_ENUM, APPLY_LIVE, 0, WATER_STYLE_COUNT - 1,
 		get_m_waterStyle, set_m_waterStyle },
 
+	// Modern water reads the mode each frame and refreshes its reflection target on a change.
+	// Keep this independent of WaterStyle so Classic can retain a choice for a later Modern switch.
+	{ "WaterReflection", OPT_WND( "ComboBoxWaterReflection" ), "GUI:WaterReflection",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_REFLECTION_COUNT - 1,
+		get_m_waterReflection, set_m_waterReflection },
+
+	{ "WaterReflectionEnabled", OPT_WND( "CheckWaterReflectionEnabled" ), "GUI:WaterReflectionEnabled",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_waterReflectionEnabled, set_m_waterReflectionEnabled },
+
+	{ "WaterFftResolution", OPT_WND( "ComboBoxWaterFftResolution" ), "GUI:WaterFftResolution",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_FFT_RESOLUTION_COUNT - 1,
+		get_m_waterFftResolution, set_m_waterFftResolution },
+
+	{ "WaterRefractionQuality", OPT_WND( "ComboBoxWaterRefractionQuality" ), "GUI:WaterRefractionQuality",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_REFRACTION_QUALITY_COUNT - 1,
+		get_m_waterRefractionQuality, set_m_waterRefractionQuality },
+
+	{ "WaterReflectionDetail", OPT_WND( "ComboBoxWaterReflectionDetail" ), "GUI:WaterReflectionDetail",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_REFLECTION_DETAIL_COUNT - 1,
+		get_m_waterReflectionDetail, set_m_waterReflectionDetail },
+
 	// Client appearance only; hazard area, lifetime and damage remain unchanged.
 	{ "CloudStyle", OPT_WND( "ComboBoxCloudStyle" ), "GUI:CloudStyle",
 		OPTION_ENUM, APPLY_LIVE, 0, CLOUD_STYLE_COUNT - 1,
@@ -831,6 +858,11 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	{ "ParticleCapSlider",			1.6f,  {  500, 1000, 1500, 1500, 1500, 2000, 2500, 3000, 3500, 4000, 5000 } },
 	// the shadow map's whole cost: the scene 4.06 to 2.14 ms and the shadow pass 0.6 to 0
 	{ "Check3DShadows",					2.5f,  {    0,    0,    0,    0,    0,    1,    1,    1,    1,    1,    1 } },
+	// SDL water quality choices. The reflection mode remains the player's chosen look.
+	{ "CheckWaterReflectionEnabled",		0.0f, {    0,    0,    0,    0,    1,    1,    1,    1,    1,    1,    1 } },
+	{ "ComboBoxWaterRefractionQuality",	0.0f, {    2,    1,    1,    1,    1,    1,    0,    0,    0,    0,    0 } },
+	{ "ComboBoxWaterFftResolution",			0.0f, {    0,    0,    0,    0,    0,    0,    0,    1,    1,    1,    1 } },
+	{ "ComboBoxWaterReflectionDetail",	0.0f, {    0,    0,    0,    0,    0,    0,    0,    1,    1,    1,    1 } },
 };
 
 const Int TheGraphicsQualityTableCount = sizeof( TheGraphicsQualityTable ) / sizeof( TheGraphicsQualityTable[ 0 ] );
@@ -853,6 +885,16 @@ const OptionDef *findOptionDef( const char *iniKey )
 			return &TheOptionCatalog[ i ];
 
 	return NULL;
+}
+
+//-----------------------------------------------------------------------------
+Bool isModernWaterOption( const OptionDef& def )
+{
+	return strcmp( def.iniKey, "WaterReflection" ) == 0
+		|| strcmp( def.iniKey, "WaterReflectionEnabled" ) == 0
+		|| strcmp( def.iniKey, "WaterFftResolution" ) == 0
+		|| strcmp( def.iniKey, "WaterRefractionQuality" ) == 0
+		|| strcmp( def.iniKey, "WaterReflectionDetail" ) == 0;
 }
 
 //-----------------------------------------------------------------------------

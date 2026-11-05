@@ -703,6 +703,11 @@ GlobalData::GlobalData()
 	m_smoothMotion = FALSE;					//a model stands where the last logic tick left it until the box is ticked
 	m_smoothMotionAnyDisplay = FALSE;
 	m_waterStyle = 0;				// classic by default; modern water is an explicit option
+	m_waterReflection = 2;		// Hybrid once Modern is explicitly selected
+	m_waterReflectionEnabled = TRUE;
+	m_waterFftResolution = 1;
+	m_waterRefractionQuality = 0;
+	m_waterReflectionDetail = 1;
 	m_cloudStyle = 0;				// Classic by default; volumetric hazard clouds are opt-in
 	m_explosionDebrisTrails = FALSE;
 	m_shadowQuality = 1;					//medium, the 2048 map the shadows always had

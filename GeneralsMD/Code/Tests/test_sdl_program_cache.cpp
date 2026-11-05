@@ -36,6 +36,7 @@
 #include "ffvertex.h"
 #include "engineshader.h"
 #include "Platform/EngineShaderName.h"
+#include "Platform/WaterPerformanceSettings.h"
 
 #include <SDL3/SDL.h>
 
@@ -202,6 +203,25 @@ int main()
 	CHECK(refused_again.Shader == NULL && cache.Programs_Refused() == refused_before + 1);
 
 	check_live_water_style_programs(device,cache);
+    const auto savedWater=WaterPerformanceSettings::Applied();
+    const SdlProgram *tiers[12]={};unsigned tier=0;PixelPipelineDescription waterPipeline={};
+    for(unsigned resolution:{128u,256u}) for(unsigned refraction=0;refraction<3;++refraction) for(bool reflections:{false,true}) {
+        auto &settings=WaterPerformanceSettings::Applied();settings.activeFftResolution=resolution;
+        settings.refraction=WaterPerformanceSettings::Refraction(refraction);settings.sceneReflections=reflections;
+        tiers[tier]=&cache.Engine_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID,waterPipeline);
+        CHECK(tiers[tier]->Shader!=NULL);
+        for(unsigned prior=0;prior<tier;++prior) CHECK(tiers[prior]!=tiers[tier]);
+        CHECK(&cache.Engine_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID,waterPipeline)==tiers[tier]);++tier;
+    }
+    const auto builtTiers=cache.Programs_Built();tier=0;
+    for(unsigned resolution:{128u,256u}) for(unsigned refraction=0;refraction<3;++refraction) for(bool reflections:{false,true}) {
+        auto &settings=WaterPerformanceSettings::Applied();settings.activeFftResolution=resolution;
+        settings.refraction=WaterPerformanceSettings::Refraction(refraction);settings.sceneReflections=reflections;
+        CHECK(&cache.Engine_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID,waterPipeline)==tiers[tier++]);
+    }
+    CHECK(cache.Programs_Built()==builtTiers);WaterPerformanceSettings::Applied()=savedWater;
+    printf("sdl_program_cache_selfcheck: all 12 water quality variants cached and reused\n");
+
 
 	printf("sdl_program_cache_selfcheck: %s, %u programs built in %.0f ms, %u refused\n",
 		SDL_GetGPUDeviceDriver(frame->Device()), cache.Programs_Built(), cache.Milliseconds_Compiling(),

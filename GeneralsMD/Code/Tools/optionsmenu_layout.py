@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Rebuild OptionsMenu.wnd as eight tabbed pages on one grid.
+"""Rebuild OptionsMenu.wnd as tabbed pages on one grid.
 
 EA's options screen is one 800x600 panel with everything on it at once, and it was already full
 when it shipped: the language filter, the keyboard button and the four camera checkboxes are all
 still in the file, parked off the right edge with HIDDEN set, because there was nowhere left to put
 them.  Seventeen settings later there is no version of "find room" that works.
 
-So the screen becomes eight pages behind eight buttons: Display, Graphics, Effects, Audio, Controls,
+So the screen becomes nine pages behind nine buttons: Display, Graphics, Effects, Water, Audio, Controls,
 Interface, Network and Hotkeys, the last two lists rather than settings (build_hotkeys_page).  Every graphics setting is on Graphics or Effects, including the ones EA hid in
 a popup that only opened when Custom was picked from a combo box on another page.  Each page is a list
 of titled groups, sorted by what a setting does, flowed into three columns on one grid, so a heading,
@@ -48,8 +48,9 @@ from wndlayout import clone
 # and the version line all start and stop.  The frame is as tall as the tallest group column needs -
 # Effects' Shadows column and Graphics' Quality column both end 312 pixels below their heading, on the
 # page's last pixel - plus the title, the tabs and the buttons, and it is centred on the 600 line: 58
-# above it, 58 below.  A column that runs past the page is refused when the layout is built.  Eight tabs
-# still fit the inner width at 87 pixels each.
+# above it, 58 below.  A column that runs past the page is refused when the layout is built.  Nine tabs
+# share the inner width. OptionsMenu.cpp hides the SDL Water tab where unsupported and restores
+# the original eight-tab widths.
 PANEL = (20, 58, 760, 484)          # left, top, width, height
 INNER_LEFT, INNER_WIDTH = 36, 728
 TITLE = (INNER_LEFT, 64, 400, 32)
@@ -63,6 +64,7 @@ TABS = [
     ("PageDisplay",  "TabDisplay",  "GUI:OptionsTabDisplay"),
     ("PageGraphics", "TabGraphics", "GUI:OptionsTabGraphics"),
     ("PageEffects",  "TabEffects",  "GUI:OptionsTabEffects"),
+    ("PageWater",    "TabWater",    "GUI:OptionsTabWater"),
     ("PageAudio",    "TabAudio",    "GUI:OptionsTabAudio"),
     ("PageControls", "TabControls", "GUI:OptionsTabControls"),
     ("PageInterface", "TabInterface", "GUI:OptionsTabInterface"),
@@ -172,6 +174,15 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxWaterStyle",      None),
     (LABEL,  "LabelCloudStyle",        "GUI:CloudStyle"),
     (COMBO,  "ComboBoxCloudStyle",      None),
+    (LABEL,  "LabelWaterReflection",   "GUI:WaterReflection"),
+    (COMBO,  "ComboBoxWaterReflection", None),
+    (LABEL,  "LabelWaterReflectionDetail", "GUI:WaterReflectionDetail"),
+    (COMBO,  "ComboBoxWaterReflectionDetail", None),
+    (CHECK,  "CheckWaterReflectionEnabled", "GUI:WaterReflectionEnabled"),
+    (LABEL,  "LabelWaterFftResolution", "GUI:WaterFftResolution"),
+    (COMBO,  "ComboBoxWaterFftResolution", None),
+    (LABEL,  "LabelWaterRefractionQuality", "GUI:WaterRefractionQuality"),
+    (COMBO,  "ComboBoxWaterRefractionQuality", None),
     (LABEL,  "LabelMSAA",              "GUI:MSAA"),
     (COMBO,  "ComboBoxMSAA",           None),
     (LABEL,  "LabelBloom",             "GUI:Bloom"),
@@ -412,6 +423,15 @@ GROUP_LAYOUT = [
             ("check", "CheckDebrisTrails"),
             ("check", "CheckWeather"),
             ("check", "CheckWaterSplashes")])]),
+
+    ("PageWater", [
+        ("GUI:OptionsGroupModernWater", [
+            setting("LabelWaterFftResolution", "ComboBoxWaterFftResolution"),
+            setting("LabelWaterRefractionQuality", "ComboBoxWaterRefractionQuality")]),
+        ("GUI:OptionsGroupReflections", [
+            ("check", "CheckWaterReflectionEnabled"),
+            setting("LabelWaterReflection", "ComboBoxWaterReflection"),
+            setting("LabelWaterReflectionDetail", "ComboBoxWaterReflectionDetail")])]),
 
     ("PageAudio", [
         ("GUI:OptionsGroupVolume", [
@@ -705,7 +725,60 @@ def build_hotkeys_page(page, templates):
         page.children.append(button)
 
 
+def update_water_page(layout):
+    """Regenerate Water and the tab strip in an existing tabbed master."""
+    old = layout.find("OptionsMenuParentOld")
+    templates = dict((name, layout.find(name)) for name in (CHECK, LABEL, COMBO, "ButtonDefaults"))
+    templates["VideoParent"] = layout.find("PageGraphics")
+    page = make_page(templates["VideoParent"], "PageWater")
+    groups = dict(GROUP_LAYOUT)["PageWater"]
+    names = set(name for _heading, items in groups for item in items
+                for name in (item[1:3] if item[0] == "setting" else item[1:2]))
+    controls = dict((name, make_control(templates[template], name, text, 0, 0, 1, 1))
+                    for template, name, text in NEW_CONTROLS if name in names)
+    groups = dict(GROUP_LAYOUT)["PageWater"]
+    index = 0
+    for column, stack in enumerate(flow(groups)):
+        left = COLUMNS[column]
+        heading_top = HEADING_TOP
+        for heading_key, items in stack:
+            name = "GroupHeadingWater%d" % index
+            index += 1
+            heading = make_heading(templates, name, heading_key)
+            heading.place(left - TEXT_NUDGE, heading_top, COLUMN_WIDTH, ROW_HEIGHT)
+            page.children.append(heading)
+            top = heading_top + HEADING_PITCH
+            for item in items:
+                names = [(item[1], top, CHECK)] if item[0] == "check" else [
+                    (item[1], top, LABEL), (item[2], top + ROW_HEIGHT, COMBO)]
+                for name, y, template in names:
+                    control = controls.pop(name)
+                    control.place(left - TEXT_NUDGE if template == LABEL else left,
+                                  y, COLUMN_WIDTH, ROW_HEIGHT)
+                    restyle(control, templates[template])
+                    if template == LABEL:
+                        control.put_prop("STATICTEXTDATA", "CENTERED: 0")
+                    page.children.append(control)
+                top += item_height(item)
+            if top > PAGE[1] + PAGE[3]:
+                raise ValueError("Water controls extend beyond the page")
+            heading_top = top + GROUP_GAP
+    if controls:
+        raise KeyError("unplaced Water controls: %s" % ", ".join(sorted(controls)))
+    tab_names = set(tab for _page, tab, _text in TABS)
+    old.children = [child for child in old.children
+                    if short(child) not in tab_names and short(child) != "PageWater"]
+    pages = [detach(old, name) for name, _tab, _text in TABS if name != "PageWater"]
+    for index, (_page, name, text) in enumerate(TABS):
+        old.children.append(make_tab(templates["ButtonDefaults"], name, text, index))
+    for name, _tab, _text in TABS:
+        old.children.append(page if name == "PageWater" else pages.pop(0))
+    return layout
+
+
 def build(layout):
+    if layout.find("PageDisplay"):
+        return update_water_page(layout)
     old = layout.find("OptionsMenuParentOld")
     templates = dict((name, layout.find(name))
                      for name in (CHECK, LABEL, COMBO, SLIDER, "VideoParent", "ButtonDefaults",
@@ -999,18 +1072,17 @@ def selfcheck():
         for key in ("GUI:%s" % setting_of(name), "TOOLTIP:%s" % setting_of(name)):
             if key not in keys:
                 problems.append("%s needs %s in Patch.str" % (name, key))
-    # every row of the quality slider names a control on Graphics, Effects or Display, where the full
-    # columns pushed Collapsing Buildings, and has a value for every step; a row one value short still
-    # compiles, with a 0 in the last step
+    # every row of the quality slider names a control on Graphics, Effects, Display or the SDL Water page
+    # and has a value for every step; a row one value short still compiles, with a 0 in the last step
     steps = enum_count("GRAPHICS_QUALITY_STEPS")
     quality = read_quality_table()
     if len(quality) < 9:
         problems.append("only %d quality rows parsed, the regex has stopped matching" % len(quality))
-    on_pages = set(short(child) for page in ("PageGraphics", "PageEffects", "PageDisplay")
+    on_pages = set(short(child) for page in ("PageGraphics", "PageEffects", "PageDisplay", "PageWater")
                    for child in layout.find(page).children)
     for control, values in quality:
         if control not in on_pages:
-            problems.append("quality row %s is not a control on the Graphics, Effects or Display page" % control)
+            problems.append("quality row %s is not a control on the Graphics, Effects, Display or Water page" % control)
         if len(values) != steps:
             problems.append("quality row %s has %d values for %d steps" % (control, len(values), steps))
 
@@ -1019,15 +1091,43 @@ def selfcheck():
                         % (os.path.basename(LAYOUT), ADVANCED))
     problems.extend(overlaps(layout))
 
-    # Hazard appearance is a Graphics setting, independent of particle thickness.
+    # Hazard cloud style belongs directly beneath water, independent of the
+    # separate particle thickness and smoke-shadow controls on Effects.
     graphics = layout.find("PageGraphics")
+    water = layout.find("ComboBoxWaterStyle")
     cloud_label = layout.find("LabelCloudStyle")
     cloud = layout.find("ComboBoxCloudStyle")
-    if graphics and cloud_label and cloud:
+    if graphics and water and cloud_label and cloud:
         if cloud not in graphics.children or cloud_label not in graphics.children:
             problems.append("CloudStyle must be on the Graphics page")
+        if cloud.rect[0] != water.rect[0] or cloud.rect[1] != water.rect[1] + SETTING_PITCH:
+            problems.append("CloudStyle must be directly below WaterStyle in the same column")
         if cloud_label.rect[1] != cloud.rect[1] - ROW_HEIGHT:
             problems.append("CloudStyle label must sit above its combo box")
+
+    # Modern water performance controls have their own page: Effects has no room for them.
+    # Its bounds and the tab widths are checked independently of the generic overlap checks.
+    water_page = layout.find("PageWater")
+    water_controls = ["LabelWaterFftResolution", "ComboBoxWaterFftResolution",
+                      "LabelWaterRefractionQuality", "ComboBoxWaterRefractionQuality",
+                      "CheckWaterReflectionEnabled", "LabelWaterReflection", "ComboBoxWaterReflection",
+                      "LabelWaterReflectionDetail", "ComboBoxWaterReflectionDetail"]
+    for name in water_controls:
+        control = layout.find(name)
+        if not water_page or not control or control not in water_page.children:
+            problems.append("%s must be on the Water page" % name)
+        elif (control.rect[0] < PAGE[0] - TEXT_NUDGE or control.rect[1] < PAGE[1]
+              or control.rect[2] > PAGE[0] + PAGE[2] or control.rect[3] > PAGE[1] + PAGE[3]):
+            problems.append("%s extends beyond the Water page" % name)
+    for stem in ("WaterFftResolution", "WaterRefractionQuality", "WaterReflection", "WaterReflectionDetail"):
+        label, combo = layout.find("Label" + stem), layout.find("ComboBox" + stem)
+        if label and combo and (label.rect[0] != combo.rect[0] - TEXT_NUDGE
+                                or label.rect[1] != combo.rect[1] - ROW_HEIGHT):
+            problems.append("%s label must sit above its combo box" % stem)
+    for _page, tab, _text in TABS:
+        control = layout.find(tab)
+        if not control or control.rect[0] < INNER_LEFT or control.rect[2] > INNER_LEFT + INNER_WIDTH:
+            problems.append("%s extends beyond the tab strip" % tab)
 
     for problem in problems:
         print("optionsmenu: %s" % problem)
@@ -1048,7 +1148,10 @@ def main(argv):
         return 2
 
     layout = wndlayout.load(argv[1])
-    wndlayout.save(build(layout), argv[2])
+    # Validate before opening the output, including when the tracked master is also the input.
+    result = build(layout).text().replace("\r\n", "\n").encode("latin-1")
+    with open(argv[2], "wb") as output:
+        output.write(result)
     print("%s: %d windows" % (argv[2], sum(1 for _ in layout.root.walk())))
     return 0
 

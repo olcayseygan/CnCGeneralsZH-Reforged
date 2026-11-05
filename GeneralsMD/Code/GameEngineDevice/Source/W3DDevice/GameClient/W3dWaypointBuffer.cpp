@@ -206,8 +206,8 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 	RenderInfoClass localRinfo(rinfo.Camera);
 	localRinfo.light_environment=&lightEnv;
 
-	// not in the water's mirror pass: the ground is left out of the reflection, and a PASS_ALWAYS
-	// order line would lie on top of the water
+	// Not in the water's mirror pass: these are orders drawn for the player, even where Modern
+	// reflects the ground, and a PASS_ALWAYS order line would lie on top of the water.
 	const Bool mirror = ShaderClass::Is_Backface_Culling_Inverted();
 	for( std::vector<WaypointDraw>::const_iterator it = m_draws.begin(); it != m_draws.end(); ++it )
 	{

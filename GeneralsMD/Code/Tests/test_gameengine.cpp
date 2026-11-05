@@ -132,6 +132,7 @@ static int GetSystemMetrics( int which )
 }
 #endif
 #include "Common/OptionsCatalog.h"
+#include "Platform/WaterScreenReflection.h"
 #include "Common/SubsystemInterface.h"
 #include "GameClient/GameText.h"
 #include "Common/GameLOD.h"
@@ -19173,6 +19174,262 @@ TEST(water_style_defaults_to_classic_and_preserves_an_explicit_modern_choice)
     TheWritableGlobalData=saved;
 }
 
+TEST(water_reflections_default_to_hybrid_and_persist_each_mode)
+{
+    const OptionDef *reflection = findOptionDef("WaterReflection");
+    CHECK(reflection != NULL);
+    if (!reflection)
+        return;
+    CHECK_EQ(reflection->kind, OPTION_ENUM);
+    CHECK_EQ(reflection->apply, APPLY_LIVE);
+    CHECK_EQ(reflection->lo, 0);
+    CHECK_EQ(reflection->hi, 2);
+    CHECK_STR(reflection->widgetName, "OptionsMenu.wnd:ComboBoxWaterReflection");
+    CHECK_STR(reflection->labelKey, "GUI:WaterReflection");
+
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+
+    UserPreferences pref;
+    CHECK_EQ(scratch->m_waterReflection, 2);
+    // Existing preference files have no key; retain Hybrid until the player chooses a mode.
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 2);
+
+    // The choice remains available with Classic water, ready for a later switch to Modern.
+    scratch->m_waterStyle = 0;
+    static const char *const modes[] = { "0", "1", "2" };
+    for (Int mode = 0; mode < WATER_REFLECTION_COUNT; ++mode) {
+        pref["WaterReflection"] = modes[mode];
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(reflection->get(), mode);
+        saveOptionsToPreferences(pref);
+        CHECK_STR(pref["WaterReflection"].str(), modes[mode]);
+        reflection->set((mode + 1) % WATER_REFLECTION_COUNT);
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(scratch->m_waterReflection, mode);
+        CHECK_EQ(scratch->m_waterStyle, 0);
+    }
+
+    // Hand-edited out-of-range values must still resolve to a mode shown in the menu.
+    pref["WaterReflection"] = "-1";
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 0);
+    pref["WaterReflection"] = "3";
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 2);
+    pref["WaterReflection"] = "99";
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 2);
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_performance_defaults_preserve_existing_appearance)
+{
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+
+    CHECK(scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 0);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 1);
+    UserPreferences missing;
+    loadOptionsFromPreferences(missing);
+    CHECK(scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 0);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 1);
+    CHECK_EQ(scratch->m_waterReflection, 2); // existing Hybrid value is unchanged
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_performance_choices_round_trip_without_device_or_modern_style)
+{
+    // This engine-only test has no active SDL GPU device. Preferences must still load and save
+    // without one, and remain ready when Modern water becomes available again.
+    CHECK(!WaterScreenReflection::Supported());
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+    scratch->m_waterStyle = 0;
+    scratch->m_waterReflection = 2;
+
+    const char *const keys[] = { "WaterReflectionEnabled", "WaterFftResolution", "WaterRefractionQuality", "WaterReflectionDetail" };
+    const char *const widgets[] = { "OptionsMenu.wnd:CheckWaterReflectionEnabled",
+        "OptionsMenu.wnd:ComboBoxWaterFftResolution", "OptionsMenu.wnd:ComboBoxWaterRefractionQuality",
+        "OptionsMenu.wnd:ComboBoxWaterReflectionDetail" };
+    const Int maxValues[] = { 1, WATER_FFT_RESOLUTION_COUNT - 1, WATER_REFRACTION_QUALITY_COUNT - 1, WATER_REFLECTION_DETAIL_COUNT - 1 };
+    for (Int i = 0; i < (Int)(sizeof(keys) / sizeof(keys[0])); ++i) {
+        const OptionDef *def = findOptionDef(keys[i]);
+        CHECK(def != NULL);
+        if (!def) continue;
+        CHECK_EQ(def->kind, i == 0 ? OPTION_BOOL : OPTION_ENUM);
+        CHECK_EQ(def->apply, APPLY_LIVE);
+        CHECK_EQ(def->lo, 0);
+        CHECK_EQ(def->hi, maxValues[i]);
+        CHECK_STR(def->widgetName, widgets[i]);
+        CHECK(isModernWaterOption(*def));
+        for (Int value = 0; value <= maxValues[i]; ++value) {
+            UserPreferences pref;
+            def->set(value);
+            saveOptionsToPreferences(pref);
+            CHECK_STR(pref[keys[i]].str(), formatOptionValue(*def, value).str());
+            def->set((value + 1) % (maxValues[i] + 1));
+            loadOptionsFromPreferences(pref);
+            CHECK_EQ(def->get(), value);
+            CHECK_EQ(scratch->m_waterStyle, 0);
+            CHECK_EQ(scratch->m_waterReflection, 2);
+        }
+    }
+    // The same classification protects every hidden water performance widget from writeback.
+    CHECK(isModernWaterOption(*findOptionDef("WaterReflection")));
+    CHECK(!isModernWaterOption(*findOptionDef("WaterStyle")));
+    CHECK(!isModernWaterOption(*findOptionDef("CloudStyle")));
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_performance_invalid_values_are_bounded_and_console_input_is_strict)
+{
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+    const char *const keys[] = { "WaterFftResolution", "WaterRefractionQuality", "WaterReflectionDetail" };
+    for (Int i = 0; i < (Int)(sizeof(keys) / sizeof(keys[0])); ++i) {
+        const OptionDef *def = findOptionDef(keys[i]);
+        CHECK(def != NULL);
+        if (!def) continue;
+        UserPreferences pref;
+        pref[keys[i]] = "-100";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(def->get(), def->lo);
+        pref[keys[i]] = "99";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(def->get(), def->hi);
+        saveOptionsToPreferences(pref);
+        CHECK_STR(pref[keys[i]].str(), formatOptionValue(*def, def->hi).str());
+        pref[keys[i]] = "invalid";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(def->get(), 0); // same legacy invalid-number handling as the other catalog enums
+        Int value = 47;
+        CHECK(!parseOptionText(*def, "99", &value));
+        CHECK_EQ(value, 47);
+        CHECK(!parseOptionText(*def, "invalid", &value));
+        CHECK_EQ(value, 47);
+        CHECK(!parseOptionText(*def, "1.5", &value));
+        CHECK_EQ(value, 47);
+    }
+    const OptionDef *reflection = findOptionDef("WaterReflectionEnabled");
+    CHECK(reflection != NULL);
+    if (reflection) {
+        UserPreferences pref;
+        pref["WaterReflectionEnabled"] = "true";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(reflection->get(), 1);
+        pref["WaterReflectionEnabled"] = "invalid";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(reflection->get(), 0);
+        Int value = 47;
+        CHECK(!parseOptionText(*reflection, "invalid", &value));
+        CHECK_EQ(value, 47);
+    }
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+
+TEST(modern_water_reflection_detail_is_retained_while_scene_reflections_are_off)
+{
+    const OptionDef *detail = findOptionDef("WaterReflectionDetail");
+    CHECK(detail != NULL);
+    if (!detail) return;
+    CHECK_STR(detail->labelKey, "GUI:WaterReflectionDetail");
+    CHECK(findGraphicsQualityRow("ComboBoxWaterReflectionDetail") != NULL);
+
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+    scratch->m_waterStyle = 0;
+    scratch->m_waterReflectionEnabled = FALSE;
+    scratch->m_waterReflection = 2;
+    detail->set(0);
+    UserPreferences preferences;
+    saveOptionsToPreferences(preferences);
+    CHECK_STR(preferences["WaterReflectionDetail"].str(), "0");
+    detail->set(1);
+    loadOptionsFromPreferences(preferences);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 0);
+    CHECK_EQ(scratch->m_waterStyle, 0);
+    CHECK(!scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterReflection, 2);
+    UserPreferences missing;
+    loadOptionsFromPreferences(missing);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 0); // absent keys do not overwrite an existing choice
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_quality_slider_high_is_the_sdl_default_and_low_is_modern_low)
+{
+    const GraphicsQualityRow *reflections = findGraphicsQualityRow("CheckWaterReflectionEnabled");
+    const GraphicsQualityRow *refraction = findGraphicsQualityRow("ComboBoxWaterRefractionQuality");
+    const GraphicsQualityRow *waves = findGraphicsQualityRow("ComboBoxWaterFftResolution");
+    const GraphicsQualityRow *detail = findGraphicsQualityRow("ComboBoxWaterReflectionDetail");
+    CHECK(reflections && refraction && waves && detail);
+    if (!reflections || !refraction || !waves || !detail) return;
+    // The reflection mode is a look chosen independently of quality.
+    CHECK(findGraphicsQualityRow("ComboBoxWaterReflection") == NULL);
+
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+
+    const Int high = TheGraphicsQualityAnchors[STATIC_GAME_LOD_HIGH];
+    CHECK_EQ(reflections->values[high], scratch->m_waterReflectionEnabled ? 1 : 0);
+    CHECK_EQ(refraction->values[high], scratch->m_waterRefractionQuality);
+    CHECK_EQ(waves->values[high], scratch->m_waterFftResolution);
+    CHECK_EQ(detail->values[high], scratch->m_waterReflectionDetail);
+
+    const Int low = TheGraphicsQualityAnchors[STATIC_GAME_LOD_LOW];
+    CHECK_EQ(reflections->values[low], 0);
+    CHECK_EQ(refraction->values[low], 2);
+    CHECK_EQ(waves->values[low], 0);
+    CHECK_EQ(detail->values[low], 0);
+
+    // Upstream loads explicit preferences only; a preset name/slider position does not replace
+    // absent water keys. The menu writes the selected preset's water rows as explicit keys.
+    UserPreferences pref;
+    pref["StaticGameLOD"] = "Low";
+    pref["GraphicsQuality"] = "0";
+    pref["WaterFftResolution"] = "1";
+    loadOptionsFromPreferences(pref);
+    CHECK(scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 0);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 1);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    pref["WaterReflectionEnabled"] = "no";
+    pref["WaterRefractionQuality"] = "2";
+    pref["WaterReflectionDetail"] = "0";
+    loadOptionsFromPreferences(pref);
+    CHECK(!scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 2);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 0);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    CHECK_EQ(scratch->m_waterReflection, 2); // the mode is left as it was
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
 TEST(cloud_style_defaults_to_classic_and_preserves_an_explicit_volumetric_choice)
 {
     GlobalData *saved = TheWritableGlobalData;
@@ -19703,7 +19960,9 @@ TEST(graphics_quality_slider_only_ever_turns_settings_up)
 		const GraphicsQualityRow &quality = TheGraphicsQualityTable[ row ];
 		CHECK( findGraphicsQualityRow( quality.control ) == &quality );
 		for( Int step = 1; step < GRAPHICS_QUALITY_STEPS; ++step )
-			CHECK( quality.values[ step ] >= quality.values[ step - 1 ] );
+			CHECK( strcmp( quality.control, "ComboBoxWaterRefractionQuality" ) == 0
+			? quality.values[ step ] <= quality.values[ step - 1 ]
+			: quality.values[ step ] >= quality.values[ step - 1 ] );
 	}
 	// Modern water is opt-in: a preset gave it to the sea of the main menu's shell map at 11 to 45 ms a pass
 	CHECK( findGraphicsQualityRow( "ComboBoxWaterStyle" ) == NULL );

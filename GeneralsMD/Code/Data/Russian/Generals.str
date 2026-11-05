@@ -18536,3 +18536,95 @@ END
 CONTROLBAR:ToolTipEvacuateAt
 "Отправиться в выбранную точку и приказать всем юнитам выйти\nAlt: высадить здесь"
 END
+
+GUI:OptionsTabWater
+"Вода"
+END
+
+GUI:OptionsGroupReflections
+"Отражения"
+END
+
+GUI:OptionsGroupModernWater
+"Современная вода"
+END
+
+GUI:WaterReflectionEnabled
+"Отражения сцены"
+END
+
+TOOLTIP:WaterReflectionEnabled
+"Отражает сцену в современной воде. Отключение повышает производительность, сохраняя цвет неба и блики солнца. Режим отражения запоминается. Применяется после нажатия «Принять»."
+END
+
+GUI:WaterFftResolution
+"Детализация волн"
+END
+
+GUI:WaterFftResolution0
+"Низкая"
+END
+
+GUI:WaterFftResolution1
+"Высокая"
+END
+
+TOOLTIP:WaterFftResolution
+"Задаёт детализацию волн в современной воде. Низкая повышает производительность; высокая показывает больше деталей. Применяется после нажатия «Принять»."
+END
+
+GUI:WaterRefractionQuality
+"Преломление"
+END
+
+GUI:WaterRefractionQuality0
+"Полное"
+END
+
+GUI:WaterRefractionQuality1
+"Простое"
+END
+
+GUI:WaterRefractionQuality2
+"Выкл."
+END
+
+TOOLTIP:WaterRefractionQuality
+"Для современной воды. Полное преломление искажает вид под поверхностью. Простое сохраняет чистую воду без искажений. Выкл. делает воду непрозрачной и окрашенной для повышения производительности. Применяется после нажатия «Принять»."
+END
+
+GUI:WaterReflectionDetail
+"Детали отражений"
+END
+
+GUI:WaterReflectionDetail0
+"Низкая"
+END
+
+GUI:WaterReflectionDetail1
+"Высокая"
+END
+
+TOOLTIP:WaterReflectionDetail
+"Управляет детализацией отражений сцены в современной воде. Низкая настройка повышает производительность. Высокая даёт более чёткие отражения. Разрешение SSR не меняется. Применяется после нажатия «Принять»."
+END
+
+GUI:WaterReflection
+"Режим отражений"
+END
+
+GUI:WaterReflection0
+"Классический"
+END
+
+GUI:WaterReflection1
+"SSR"
+END
+
+GUI:WaterReflection2
+"Гибридный"
+END
+
+TOOLTIP:WaterReflection
+"Для современной воды при включённых отражениях сцены. Классический использует исходные отражения. SSR отражает видимое на экране. Гибридный сочетает оба варианта и выбран по умолчанию. Применяется после нажатия «Принять»."
+END

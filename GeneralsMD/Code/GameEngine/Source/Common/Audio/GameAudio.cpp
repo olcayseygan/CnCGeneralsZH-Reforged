@@ -56,6 +56,7 @@
 #include "Common/AudioSettings.h"
 #include "Common/file.h"
 #include "Common/FileSystem.h"
+#include "Common/RAMFile.h"
 #include "Common/GameEngine.h"
 #include "Common/GameMusic.h"
 #include "GameLogic/LogicRandomValue.h"
@@ -318,6 +319,10 @@ void AudioManager::postProcessLoad()
 //-------------------------------------------------------------------------------------------------
 void AudioManager::reset()
 {
+	{
+		std::lock_guard<std::mutex> lock(m_preloadedAudioMutex);
+		m_preloadedAudio.clear();
+	}
 	// Sounds, dialogue and music a map.ini redefined go back to the game's own, in place, because
 	// every AudioEventRTS that played one holds the pointer; backwards, so map.ini then solo.ini on
 	// the same event ends at the first.  A voice line's length is what a script waiting on it counts,
@@ -343,6 +348,89 @@ void AudioManager::reset()
 
 	m_disallowSpeech = FALSE;
 	m_handlesQueuedFromTick.clear();
+}
+
+//-------------------------------------------------------------------------------------------------
+namespace {
+std::string audioPreloadKey(const char *filename)
+{
+	std::string key;
+	for (const char *p = filename; *p; ++p)
+	{
+		char c = *p == '\\' ? '/' : *p;
+		if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+		if (c != '/' || key.empty() || key.back() != '/') key += c;
+	}
+	return key;
+}
+}
+
+void AudioManager::preloadAudioEvents(const std::vector<AsciiString>& events)
+{
+	// Only at the loading screen. Keep the mission's encoded audio resident, rather than merely
+	// warming the OS cache: stream service shares an engine lock with the main thread, so a later
+	// disk read can hold the picture even while the mix keeps playing. No event is played here.
+	if (!TheGlobalData->m_assetPreloading || !TheGlobalData->m_audioOn || events.empty())
+		return;
+	const size_t budget = 256u * 1024u * 1024u;
+	const Int maxFileSize = 16 * 1024 * 1024;
+	size_t bytes = 0;
+	{
+		std::lock_guard<std::mutex> lock(m_preloadedAudioMutex);
+		for (const auto& entry : m_preloadedAudio) bytes += entry.second.size();
+	}
+	for (const AsciiString& name : events)
+	{
+		AudioEventRTS event(name);
+		getInfoForAudioEvent(&event);
+		std::vector<AsciiString> filenames;
+		event.getPreloadFilenames(filenames);
+		for (const AsciiString& filename : filenames)
+		{
+			const std::string key = audioPreloadKey(filename.str());
+			{
+				std::lock_guard<std::mutex> lock(m_preloadedAudioMutex);
+				if (m_preloadedAudio.find(key) != m_preloadedAudio.end()) continue;
+			}
+			File *file = TheFileSystem->openFile(filename.str(), File::READ | File::BINARY | File::STREAMING);
+			if (!file) continue;
+			const Int size = file->size();
+			if (size <= 0 || size > maxFileSize || (size_t)size > budget - bytes)
+			{
+				file->close();
+				continue;
+			}
+			std::vector<char> data(size);
+			Int read = 0;
+			while (read < size)
+			{
+				const Int n = file->read(data.data() + read, size - read);
+				if (n <= 0) break;
+				read += n;
+			}
+			file->close();
+			if (read != size) continue;
+			std::lock_guard<std::mutex> lock(m_preloadedAudioMutex);
+			m_preloadedAudio[key].swap(data);
+			bytes += size;
+		}
+	}
+}
+
+File *AudioManager::openPreloadedAudioFile(const char *filename) const
+{
+	std::lock_guard<std::mutex> lock(m_preloadedAudioMutex);
+	const auto it = m_preloadedAudio.find(audioPreloadKey(filename));
+	if (it == m_preloadedAudio.end()) return NULL;
+	RAMFile *file = newInstance(RAMFile);
+	if (!file->openFromMemory(it->second.data(), (Int)it->second.size(), AsciiString(filename)))
+	{
+		file->close();
+		file->deleteInstance();
+		return NULL;
+	}
+	file->deleteOnClose();
+	return file;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1158,7 +1246,8 @@ Real AudioManager::getWaveFileLengthMS( AsciiString strToLoad ) const
 	if (strToLoad.isEmpty())
 		return 0.0f;
 
-	File *file = TheFileSystem->openFile( strToLoad.str(), File::READ | File::BINARY );
+	File *file = openPreloadedAudioFile(strToLoad.str());
+	if (!file) file = TheFileSystem->openFile( strToLoad.str(), File::READ | File::BINARY );
 	if (file == NULL)
 		return 0.0f;
 

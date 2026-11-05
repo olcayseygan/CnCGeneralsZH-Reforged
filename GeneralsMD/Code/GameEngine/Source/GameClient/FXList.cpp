@@ -119,6 +119,7 @@ class SoundFXNugget : public FXNugget
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(SoundFXNugget, "SoundFXNugget")		
 	
 public:
+	virtual AsciiString getAudioEventName() const { return m_soundName; }
 
 	virtual void doFXPos(const Coord3D *primary, const Matrix3D* /*primaryMtx*/, const Real /*primarySpeed*/, const Coord3D * /*secondary*/, const Real /*overrideRadius*/ ) const
 	{
@@ -1106,6 +1107,20 @@ void FXList::doFXObjNow(const FXObjectView* primary, const FXObjectView* seconda
 //-------------------------------------------------------------------------------------------------
 FXListStore::FXListStore()
 {
+}
+
+void FXList::collectAudioEvents(std::vector<AsciiString>& events) const
+{
+	for (const FXNugget *nugget : m_nuggets)
+	{
+		const AsciiString name = nugget->getAudioEventName();
+		if (!name.isEmpty()) events.push_back(name);
+	}
+}
+
+void FXListStore::collectAudioEvents(std::vector<AsciiString>& events) const
+{
+	for (const auto& entry : m_fxmap) entry.second.collectAudioEvents(events);
 }
 
 //-------------------------------------------------------------------------------------------------

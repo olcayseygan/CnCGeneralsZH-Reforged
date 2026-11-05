@@ -58,6 +58,7 @@
 #include "Common/Recorder.h"
 #include "Common/StatsCollector.h"
 #include "Common/ThingFactory.h"
+#include "Common/AudioEventInfo.h"
 #include "Common/Team.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/Water.h"
@@ -71,6 +72,7 @@
 
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/FXList.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GUICallbacks.h"
@@ -169,6 +171,77 @@ extern void externalAddTree(Coord3D location, Real scale, Real angle, AsciiStrin
 
 // I'm making this larger now that we know how big our maps are going to be. 
 enum { OBJ_HASH_SIZE	= 8192 };
+
+// Read both action branches, grouped scripts and audio-wait conditions. Inactive scripts can be
+// enabled by the cinematic later. This is a read-only walk, not script evaluation or a random pick.
+static void preloadMissionAudio()
+{
+	if (TheAudio == NULL || TheSidesList == NULL || !TheGlobalData->m_assetPreloading || !TheGlobalData->m_audioOn) return;
+	std::vector<AsciiString> events;
+	auto parameter = [&events](const Parameter *p) {
+		if (p && (p->getParameterType() == Parameter::SOUND || p->getParameterType() == Parameter::DIALOG
+				|| p->getParameterType() == Parameter::MUSIC) && !p->getString().isEmpty())
+			events.push_back(p->getString());
+	};
+	auto scripts = [&parameter](Script *first) {
+		for (Script *script = first; script; script = script->getNext())
+		{
+			ScriptAction *branches[] = { script->getAction(), script->getFalseAction() };
+			for (ScriptAction *branch : branches)
+				for (ScriptAction *action = branch; action; action = action->getNext())
+					for (Int i = 0; i < action->getNumParameters(); ++i)
+						parameter(action->getParameter(i));
+			for (OrCondition *either = script->getOrCondition(); either; either = either->getNextOrCondition())
+				for (Condition *condition = either->getFirstAndCondition(); condition; condition = condition->getNext())
+					for (Int i = 0; i < condition->getNumParameters(); ++i)
+						parameter(condition->getParameter(i));
+		}
+	};
+	for (Int side = 0; side < TheSidesList->getNumSides(); ++side)
+	{
+		ScriptList *list = TheSidesList->getSideInfo(side)->getScriptList();
+		if (!list) continue;
+		scripts(list->getScript());
+		for (ScriptGroup *group = list->getScriptGroup(); group; group = group->getNext())
+			scripts(group->getScript());
+	}
+	// Ambient loops pick another clip as the camera moves. They live on drawables, including
+	// map-specific overrides, rather than in script sound parameters.
+	for (Drawable *draw = TheGameClient->firstDrawable(); draw; draw = draw->getNextDrawable())
+	{
+		const ThingTemplate *t = draw->getTemplate();
+		t->collectVoiceEvents(events);
+		const AudioEventRTS *sounds[] = { draw->getAmbientSound(), t->getSoundAmbient(),
+			t->getSoundAmbientDamaged(), t->getSoundAmbientReallyDamaged(), t->getSoundAmbientRubble(),
+			t->getSoundMoveStart(), t->getSoundMoveLoop(), t->getSoundMoveLoopDamaged(), t->getSoundCreated() };
+		for (const AudioEventRTS *sound : sounds)
+			if (sound && !sound->getEventName().isEmpty()) events.push_back(sound->getEventName());
+	}
+	auto preload = [](std::vector<AsciiString>& names) {
+		std::sort(names.begin(), names.end(), [](const AsciiString& a, const AsciiString& b) {
+			return strcmp(a.str(), b.str()) < 0;
+		});
+		names.erase(std::unique(names.begin(), names.end()), names.end());
+		TheAudio->preloadAudioEvents(names);
+	};
+	preload(events);
+	// A unit built or reinforced later has no drawable yet. Gather every loaded template's voice
+	// slots and UnitSpecificSounds, through map overrides, before spending the rest on effects.
+	events.clear();
+	if (TheThingFactory)
+		for (const ThingTemplate *t = TheThingFactory->firstTemplate(); t; t = t->friend_getNextTemplate())
+			t->collectVoiceEvents(events);
+	// Also cover voice-tagged announcements and responses not attached to an object slot.
+	for (const auto& entry : TheAudio->getAllAudioEvents())
+		if (entry.second->m_soundType == AT_SoundEffect && BitTest(entry.second->m_type, ST_VOICE))
+			events.push_back(entry.first);
+	preload(events);
+	// Debris, impacts and explosions can be introduced by a weapon or a death module. Walk the
+	// loaded effect definitions without running any of them; mission audio gets the budget first.
+	events.clear();
+	if (TheFXListStore) TheFXListStore->collectAudioEvents(events);
+	preload(events);
+}
 
 /// The GameLogic singleton instance
 GameLogic *TheGameLogic = NULL;
@@ -2223,6 +2296,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	//
 	if( !isInShellGame() && !m_loadingWithoutScreen )
 	{
+		preloadMissionAudio();
 		if (TheGlobalData->m_preloadEverything)
 		{
 			for (Int td = TIME_OF_DAY_FIRST; td < TIME_OF_DAY_COUNT; ++td)
@@ -2232,6 +2306,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		{
 			TheGameClient->preloadAssets( TheGlobalData->m_timeOfDay );
 		}
+		if (TheGlobalData->m_assetPreloading)
+			TheDisplay->preloadRenderPipelines();
 	}
 
 	//put this here somewhat randomly.

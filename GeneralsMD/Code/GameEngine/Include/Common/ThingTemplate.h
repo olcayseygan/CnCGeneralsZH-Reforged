@@ -490,6 +490,8 @@ public:
 	Bool isEnterGuard() const{return m_enterGuard; }
 	Bool isHijackGuard() const{return m_hijackGuard; }
 
+	/// Read voice slots and special-command voices from the current map override, without playing them.
+	void collectVoiceEvents( std::vector<AsciiString>& events ) const;
 	const AudioEventRTS *getVoiceSelect() const								{ return getAudio(TTAUDIO_voiceSelect); }
 	const AudioEventRTS *getVoiceGroupSelect() const					{ return getAudio(TTAUDIO_voiceGroupSelect); }
 	const AudioEventRTS *getVoiceMove() const									{ return getAudio(TTAUDIO_voiceMove); }

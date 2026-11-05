@@ -48,6 +48,7 @@
 #include "Platform/D3D9Posix.h"
 #include "Platform/WaterShoreOverlay.h"
 #include "Platform/WaterHullVisualLayout.h"
+#include "Platform/RenderWarmup.h"
 #include <memory>
 
 #include <atomic>
@@ -207,6 +208,7 @@ public:
 	RenderResult Create_Gpu_Frame(bool offscreen = false);
 	/// -offscreen's presents, paced at hz a second (0: unpaced); SdlGpuFrame::Set_Offscreen_Presents.
 	void Present_Offscreen(unsigned int hz);
+	RenderWarmupStats Warm_Up_Render_Pipelines(bool modernWater, unsigned pipelineLimit = 192, unsigned budgetMS = 3000);
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.

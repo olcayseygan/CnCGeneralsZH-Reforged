@@ -211,6 +211,8 @@ public:
 	virtual void preloadTextureAssets( AsciiString texture ) = 0;	///< preload texture asset
 	/// preload a texture drawImage draws: one level, never reduced, the way drawImage asks for it
 	virtual void preloadImageTexture( AsciiString texture ) {}
+	/// Optional backend-only shader/pipeline creation; never draws or advances the world.
+	virtual void preloadRenderPipelines() {}
 
 	virtual void takeScreenShot(void) = 0;										///< saves screenshot to a file
 	virtual void toggleMovieCapture(void) = 0;							///< starts saving frames to an avi or frame sequence

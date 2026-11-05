@@ -99,6 +99,7 @@ static void set_m_masterVolume( Int value )
 OPTION_BOOL_ACCESSORS( m_dynamicMusic )
 OPTION_BOOL_ACCESSORS( m_legacySound )
 OPTION_BOOL_ACCESSORS( m_muteInBackground )
+OPTION_BOOL_ACCESSORS( m_assetPreloading )
 // The catalog loads before there is a game; the menu's Accept during a mission changes its speed
 // on the spot, which only the pacing reads.
 static Int get_m_turboMode( void ) { return TheGlobalData->m_turboMode ? 1 : 0; }
@@ -411,6 +412,11 @@ const OptionDef TheOptionCatalog[] =
 	{ "MenuTransitionSpeed",			OPT_WND( "SliderMenuTransitionSpeed" ), "GUI:MenuTransitionSpeed",
 		OPTION_INT, APPLY_LIVE, 25, 400,
 		get_m_menuTransitionSpeed, set_m_menuTransitionSpeed },
+
+	// Loading-screen audio cache and backend pipeline warmup; next map.
+	{ "AssetPreloading", OPT_WND( "CheckAssetPreloading" ), "GUI:AssetPreloading",
+		OPTION_BOOL, APPLY_NEXT_MAP, 0, 1,
+		get_m_assetPreloading, set_m_assetPreloading },
 
 	// 0 bilinear, 1 trilinear, 2 anisotropic. Retail shipped bilinear with point mip selection,
 	// which is a 2003 fill-rate budget and is why distant ground shimmers; 0 is the default, and 2 is

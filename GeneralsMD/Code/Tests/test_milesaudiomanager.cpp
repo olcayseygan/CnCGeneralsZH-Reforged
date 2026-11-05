@@ -52,6 +52,9 @@
 #include "Common/AudioAffect.h"
 #include "Common/AudioEventInfo.h"
 #include "Common/AudioEventRTS.h"
+#include "Common/AudioRandomValue.h"
+#include "Common/RandomValue.h"
+#include "GameLogic/LogicRandomValue.h"
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/AudioSettings.h"
 #include "Common/FileSystem.h"
@@ -133,6 +136,9 @@ void mountTheInstall( void )
 	linkArchives( std::string( data ) + "/zerohour", farm );
 	mkdir( (farm + "/Data").c_str(), 0777 );
 	linkArchives( std::string( data ) + "/zerohour/Data/INI", farm + "/Data/INI" );
+	// AudioManager also loads the fork's campaign speech definitions, absent from retail archives.
+	symlink( (std::string(ZH_CODE_DIR) + "/Data/INI/SpeechReforged.ini").c_str(),
+		(farm + "/Data/INI/SpeechReforged.ini").c_str() );
 	linkArchives( std::string( data ) + "/generals", farm + "/ZH_Generals" );
 	chmod( (farm + "/ZH_Generals").c_str(), 0555 );
 	chmod( (farm + "/Data/INI").c_str(), 0555 );
@@ -385,6 +391,8 @@ TEST(headless_makes_the_same_manager_and_never_opens_a_device)
 	// and it takes events and updates as the Windows headless run does, playing nothing
 	Pick any = pickEvent( AT_SoundEffect, ST_UI, 0, 5.0 );
 	CHECK( !any.name.isEmpty() );
+	headless->preloadAudioEvents({any.name});
+	CHECK( headless->openPreloadedAudioFile(any.file.str()) == NULL );
 	const AudioHandle handle = play( any );
 	headless->runFor( 100 );
 	CHECK( !headless->isCurrentlyPlaying( handle ) );
@@ -415,11 +423,12 @@ TEST(the_manager_opens_the_device_and_is_silent_with_nothing_playing)
 TEST(a_2d_sound_plays_ends_and_is_freed_on_the_main_threads_sweep)
 {
 	TestAudio *audio = theAudio();
-	const Pick pick = pickEvent( AT_SoundEffect, ST_UI, ST_WORLD, 1.5 );
+	const Pick pick = pickEvent( AT_SoundEffect, ST_UI | ST_VOICE, ST_WORLD, 1.5 );
 	CHECK( !pick.name.isEmpty() );
 	if (pick.name.isEmpty())
 		return;
 	printf( "  2D: %s, %s, %.2f s\n", pick.name.str(), pick.file.str(), pick.seconds );
+	audio->preloadAudioEvents({pick.name});
 	CHECK( AIL_ex_start_capture( capturePath( "2d" ).c_str() ) != 0 );
 	const AudioHandle handle = play( pick );
 	audio->runFor( 50 );		// the request is taken on the next tick
@@ -443,6 +452,7 @@ TEST(a_streamed_sound_is_heard_for_as_long_as_its_file_lasts)
 	CHECK( !pick.name.isEmpty() );
 	if (pick.name.isEmpty())
 		return;
+	audio->preloadAudioEvents({pick.name});
 	CHECK( AIL_ex_start_capture( capturePath( "stream" ).c_str() ) != 0 );
 	const AudioHandle handle = play( pick );
 	audio->runFor( (int)(pick.seconds * 1000) + 800 );
@@ -537,6 +547,11 @@ TEST(two_track_changes_in_one_update_leave_one_track_playing)
 TEST(with_sound_switched_off_nothing_is_heard)
 {
 	TestAudio *audio = theAudio();
+	// The preceding test leaves old tracks fading for a second. setOn prevents new sounds; it
+	// does not stop those tracks. Start this check silent, as when it runs by itself.
+	audio->reset();
+	// Let the null device drain the final already-mixed buffer before arming a new capture.
+	audio->runFor(100);
 	const Pick pick = pickEvent( AT_SoundEffect, ST_UI, ST_WORLD, 1.5 );
 	audio->setOn( FALSE, AudioAffect_All );
 	CHECK( AIL_ex_start_capture( capturePath( "off" ).c_str() ) != 0 );
@@ -547,6 +562,174 @@ TEST(with_sound_switched_off_nothing_is_heard)
 	const Heard h = readCapture( capturePath( "off" ) );
 	CHECK( h.ok );
 	CHECK( rms( h.left ) + rms( h.right ) < 0.0005 );
+}
+
+TEST(carrier_selection_move_and_attack_variants_are_all_available_without_disk_reads)
+{
+	TestAudio *audio = theAudio();
+	const std::vector<AsciiString> names = { "AircraftCarrierVoiceSelect", "AircraftCarrierVoiceMove", "AircraftCarrierVoiceAttack" };
+	audio->reset();
+	TheWritableGlobalData->m_assetPreloading = FALSE;
+	audio->preloadAudioEvents(names);
+	AudioEventRTS probe(names.front());
+	audio->getInfoForAudioEvent(&probe);
+	std::vector<AsciiString> probeFiles;
+	probe.getPreloadFilenames(probeFiles);
+	CHECK( !probeFiles.empty() );
+	if (!probeFiles.empty())
+	{
+		File *disabled = audio->openPreloadedAudioFile(probeFiles.front().str());
+		CHECK( disabled == NULL );
+		if (disabled) disabled->close();
+	}
+	TheWritableGlobalData->m_assetPreloading = TRUE;
+	audio->preloadAudioEvents(names);
+	Int clips = 0;
+	double longestDecodeMS = 0;
+	for (const AsciiString& name : names)
+	{
+		AudioEventRTS event(name);
+		audio->getInfoForAudioEvent(&event);
+		std::vector<AsciiString> files;
+		event.getPreloadFilenames(files);
+		CHECK( !files.empty() );
+		for (const AsciiString& filename : files)
+		{
+			File *cached = audio->openPreloadedAudioFile(filename.str());
+			CHECK( cached != NULL );
+			if (cached)
+			{
+				CHECK( cached->size() > 0 );
+				cached->close();
+				++clips;
+			}
+		}
+		// Disconnect both disk sources after preloading. A successful first decode must use the
+		// resident encoded bytes, including when the new loader performs the read on its worker.
+		event.generatePlayInfo();
+		event.generateFilename();
+		event.setNextPlayPortion(PP_Sound);
+		LocalFileSystem *savedLocal = TheLocalFileSystem;
+		ArchiveFileSystem *savedArchives = TheArchiveFileSystem;
+		TheLocalFileSystem = NULL;
+		TheArchiveFileSystem = NULL;
+		for (Int asynchronous = 0; asynchronous < 2; ++asynchronous)
+		{
+			AudioFileCache decoded;
+			decoded.setMaxSize(4 * 1024 * 1024);
+			const auto started = std::chrono::steady_clock::now();
+			if (asynchronous)
+			{
+				CHECK( !decoded.fileIsReady(&event, TRUE) );
+				decoded.waitForLoads();
+				CHECK( decoded.fileIsReady(&event, TRUE) );
+			}
+			void *sample = decoded.openFile(&event);
+			const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+			if (ms > longestDecodeMS) longestDecodeMS = ms;
+			CHECK( sample != NULL );
+			if (sample) decoded.closeFile(sample);
+		}
+		TheLocalFileSystem = savedLocal;
+		TheArchiveFileSystem = savedArchives;
+	}
+	printf("  carrier: %d command voice clips served from RAM; longest first-use sample decode %.2f ms\n", clips, longestDecodeMS);
+	CHECK( clips >= 10 );
+}
+
+TEST(preloaded_stream_warmup_never_opens_the_disk_sources)
+{
+	TestAudio *audio = theAudio();
+	audio->reset();
+	const Pick pick = pickEvent(AT_Streaming, 0, 0, 4.0);
+	CHECK(!pick.name.isEmpty());
+	if (pick.name.isEmpty()) return;
+	audio->preloadAudioEvents({pick.name});
+	File *resident = audio->openPreloadedAudioFile(pick.file.str());
+	CHECK(resident != NULL);
+	if (!resident) return;
+	resident->close();
+
+	class DiskReadProbe : public PosixLocalFileSystem
+	{
+	public:
+		std::atomic<unsigned> opens{0};
+		File *openFile(const Char *, Int = 0) override { ++opens; return NULL; }
+	} disk;
+	LocalFileSystem *savedLocal = TheLocalFileSystem;
+	ArchiveFileSystem *savedArchives = TheArchiveFileSystem;
+	TheLocalFileSystem = &disk;
+	TheArchiveFileSystem = NULL;
+	{
+		AudioFileCache cache;
+		CHECK(!cache.streamIsWarm(pick.file));
+		cache.waitForLoads();
+		CHECK(cache.streamIsWarm(pick.file));
+		cache.streamOpened(pick.file);
+	}
+	TheLocalFileSystem = savedLocal;
+	TheArchiveFileSystem = savedArchives;
+	CHECK_EQ(disk.opens.load(), 0u);
+}
+
+TEST(preloaded_audio_preserves_bytes_random_streams_and_independent_file_lifetimes)
+{
+	TestAudio *audio = theAudio();
+	const Pick pick = pickEvent( AT_Streaming, 0, 0, 4.0 );
+	CHECK( !pick.name.isEmpty() );
+	if (pick.name.isEmpty()) return;
+	AsciiString variants;
+	for (const auto& entry : audio->getAllAudioEvents())
+		if (entry.second->m_soundType == AT_SoundEffect && entry.second->m_sounds.size() > 1
+				&& BitTest(entry.second->m_control, AC_RANDOM))
+		{
+			variants = entry.first;
+			break;
+		}
+	CHECK( !variants.isEmpty() );
+	InitRandom(173);
+	const Int expectedLogic = GameLogicRandomValue(0, 1000000);
+	const Int expectedAudio = GameAudioRandomValue(0, 1000000);
+	InitRandom(173);
+	audio->preloadAudioEvents({pick.name, pick.name, variants, AsciiString("MissingPreloadEvent")});
+	CHECK_EQ( GameLogicRandomValue(0, 1000000), expectedLogic );
+	CHECK_EQ( GameAudioRandomValue(0, 1000000), expectedAudio );
+	AudioEventRTS variantEvent(variants);
+	audio->getInfoForAudioEvent(&variantEvent);
+	std::vector<AsciiString> variantFiles;
+	variantEvent.getPreloadFilenames(variantFiles);
+	Int cachedVariants = 0;
+	for (const AsciiString& name : variantFiles)
+		if (File *file = audio->openPreloadedAudioFile(name.str()))
+		{
+			++cachedVariants;
+			file->close();
+		}
+	CHECK( cachedVariants > 1 );
+	File *first = audio->openPreloadedAudioFile(pick.file.str());
+	std::string alternate = pick.file.str();
+	for (char& c : alternate) { if (c == '\\') c = '/'; else if (c >= 'a' && c <= 'z') c -= 'a' - 'A'; }
+	File *second = audio->openPreloadedAudioFile(alternate.c_str());
+	File *original = TheFileSystem->openFile(pick.file.str());
+	CHECK( first && second && original );
+	if (first && second && original)
+	{
+		const Int size = original->size();
+		CHECK_EQ( first->size(), size );
+		std::vector<char> expected(size), cached(size);
+		CHECK_EQ( original->read(expected.data(), size), size );
+		CHECK_EQ( first->read(cached.data(), size), size );
+		CHECK( expected == cached );
+		CHECK_EQ( second->position(), 0 );
+		// Clearing the next mission's cache cannot invalidate a decoder's already open file.
+		audio->AudioManager::reset();
+		CHECK( audio->openPreloadedAudioFile(pick.file.str()) == NULL );
+		CHECK_EQ( second->read(cached.data(), size), size );
+		CHECK( expected == cached );
+	}
+	if (first) first->close();
+	if (second) second->close();
+	if (original) original->close();
 }
 
 // ---- ScopedMutex off Windows keeps Windows' semantics ---------------------------------------------

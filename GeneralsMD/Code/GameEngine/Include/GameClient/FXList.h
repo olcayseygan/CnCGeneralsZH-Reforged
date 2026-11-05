@@ -119,6 +119,8 @@ public:
 	/// How wide a burn this nugget's blast asks for under Battle Marks: 0 has no say, below 0 scorches the ground itself, as wide as the value's size.
 	virtual Real blastMarkRadius() const { return 0.0f; }
 
+	virtual AsciiString getAudioEventName() const { return AsciiString::TheEmptyString; }
+
 private:
 
 };
@@ -161,6 +163,7 @@ public:
 		Toss the contents.
 	*/
 	void clear();
+	void collectAudioEvents(std::vector<AsciiString>& events) const;
 
 	/**
 		add a nugget to the list. It belongs to the FXList, who is responsible for freeing it.
@@ -256,6 +259,7 @@ public:
 		return NULL if no such FXList exists.
 	*/
 	const FXList *findFXList( const char* name ) const;
+	void collectAudioEvents(std::vector<AsciiString>& events) const;
 	
 	static void parseFXListDefinition(INI* ini);
 

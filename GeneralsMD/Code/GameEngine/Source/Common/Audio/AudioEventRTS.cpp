@@ -852,6 +852,41 @@ AsciiString AudioEventRTS::generateFilenameExtension( AudioType audioTypeToPlay 
 }
 
 //-------------------------------------------------------------------------------------------------
+void AudioEventRTS::getPreloadFilenames( std::vector<AsciiString>& filenames )
+{
+	if (m_eventInfo == NULL)
+		return;
+	const AudioType type = m_eventInfo->m_soundType;
+	const AsciiString prefix = generateFilenamePrefix(type, FALSE);
+	if (type == AT_Music || type == AT_Streaming)
+	{
+		if (!m_eventInfo->m_filename.isEmpty())
+		{
+			AsciiString filename = prefix;
+			filename.concat(m_eventInfo->m_filename);
+			adjustForLocalization(filename);
+			filenames.push_back(filename);
+		}
+		return;
+	}
+	const std::vector<AsciiString> *variants[] = {
+		&m_eventInfo->m_sounds, &m_eventInfo->m_soundsMorning, &m_eventInfo->m_soundsEvening,
+		&m_eventInfo->m_soundsNight, &m_eventInfo->m_attackSounds, &m_eventInfo->m_decaySounds
+	};
+	for (const std::vector<AsciiString> *list : variants)
+		for (const AsciiString& sound : *list)
+		{
+			if (sound.isEmpty())
+				continue;
+			AsciiString filename = prefix;
+			filename.concat(sound);
+			filename.concat(generateFilenameExtension(type));
+			adjustForLocalization(filename);
+			filenames.push_back(filename);
+		}
+}
+
+//-------------------------------------------------------------------------------------------------
 void AudioEventRTS::adjustForLocalization(AsciiString &strToAdjust)
 {
 	const char *str = strToAdjust.reverseFind('\\');

@@ -81,6 +81,7 @@ static void drawFramerateBar(void);
 #include "GameClient/Keyboard.h"		// TheKeyboard; on Windows WinMain.h brought it too
 #include "Platform/SleepMilliseconds.h"
 #if !defined(_WIN32)
+#include "Platform/RenderWarmup.h"
 #include "Platform/RendererName.h"
 #endif
 #include "GameClient/GameText.h"
@@ -5227,6 +5228,17 @@ void W3DDisplay::dumpModelAssets(const char *path)
 	}
 }
 #endif	//only include above code in debug and internal
+//-------------------------------------------------------------------------------------------------
+/** Create common renderer programs and pipelines while the loading screen is active. */
+//-------------------------------------------------------------------------------------------------
+void W3DDisplay::preloadRenderPipelines()
+{
+#if !defined(_WIN32)
+	if (!TheGlobalData->m_assetPreloading || TheGlobalData->m_noRenderDevice) return;
+	Preload_Render_Pipelines(DX8Wrapper::_Get_D3D_Device(), TheGlobalData->m_waterStyle == 1);
+#endif
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Preload using the W3D asset manager the model referenced by the string parameter */
 //-------------------------------------------------------------------------------------------------

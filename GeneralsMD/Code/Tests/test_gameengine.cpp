@@ -19169,6 +19169,34 @@ TEST(cloud_style_defaults_to_classic_and_preserves_an_explicit_volumetric_choice
     TheWritableGlobalData = saved;
 }
 
+TEST(asset_preloading_defaults_on_and_persists_both_choices_for_the_next_map)
+{
+	const OptionDef *preload = findOptionDef("AssetPreloading");
+	CHECK( preload != NULL );
+	if (!preload) return;
+	CHECK_EQ( preload->kind, OPTION_BOOL );
+	CHECK_EQ( preload->apply, APPLY_NEXT_MAP );
+	CHECK_STR( preload->widgetName, "OptionsMenu.wnd:CheckAssetPreloading" );
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+	UserPreferences pref;
+	CHECK( scratch->m_assetPreloading );
+	loadOptionsFromPreferences(pref); // an old file has no key and must retain the enabled default
+	CHECK_EQ( preload->get(), 1 );
+	for (Int value = 0; value <= 1; ++value)
+	{
+		preload->set(value);
+		saveOptionsToPreferences(pref);
+		CHECK_STR( pref["AssetPreloading"].str(), value ? "yes" : "no" );
+		preload->set(1 - value);
+		loadOptionsFromPreferences(pref);
+		CHECK_EQ( preload->get(), value );
+	}
+	delete scratch;
+	TheWritableGlobalData = saved;
+}
+
 TEST(option_catalog_round_trips_every_key_through_options_ini)
 {
 	/* Every row has to survive the trip out to Options.ini and back, at both ends of its range.
@@ -22961,4 +22989,98 @@ TEST(file_write_queue_writes_what_the_file_calls_wrote)
 	std::filesystem::remove( queued );
 	std::filesystem::remove( direct );
 	CHECK( ca == cb );
+}
+
+TEST(fxlist_audio_preload_names_follow_map_overrides_without_playing_effects)
+{
+	CHECK( bootOnce() );
+	FXListStore store;
+	FXListStore *saved = TheFXListStore;
+	TheFXListStore = &store;
+	writeFile(TEST_INI, "FXList AudioPreloadProbe\n  Sound\n    Name = PreloadOriginal\n  End\nEnd\n");
+	CHECK( loadIni(TEST_INI) );
+	const UnsignedInt seed = GetGameLogicRandomSeedCRC();
+	std::vector<AsciiString> names;
+	store.collectAudioEvents(names);
+	CHECK_EQ( names.size(), 1u );
+	if (!names.empty()) CHECK_STR( names[0].str(), "PreloadOriginal" );
+	writeFile(TEST_INI, "FXList AudioPreloadProbe\n  Sound\n    Name = PreloadReplacement\n  End\nEnd\n");
+	INI ini;
+	ini.load(AsciiString(TEST_INI), INI_LOAD_CREATE_OVERRIDES, NULL);
+	names.clear();
+	store.collectAudioEvents(names);
+	CHECK_EQ( names.size(), 1u );
+	if (!names.empty()) CHECK_STR( names[0].str(), "PreloadReplacement" );
+	store.reset();
+	names.clear();
+	store.collectAudioEvents(names);
+	CHECK_EQ( names.size(), 1u );
+	if (!names.empty()) CHECK_STR( names[0].str(), "PreloadOriginal" );
+	CHECK_EQ( GetGameLogicRandomSeedCRC(), seed );
+	TheFXListStore = saved;
+	remove(TEST_INI);
+}
+
+
+TEST(unit_voice_preload_follows_template_inheritance_map_overrides_and_reset)
+{
+	CHECK( bootOnce() );
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if (!savedGlobals) TheWritableGlobalData = NEW GlobalData;
+	AudioManager *savedAudio = TheAudio;
+	if (!savedAudio) TheAudio = NEW NullAudioManager;
+	ThingFactory *savedFactory = TheThingFactory;
+	ThingFactory factory;
+	TheThingFactory = &factory;
+	writeFile(TEST_INI,
+		"Object VoicePreloadProbe\n"
+		"  VoiceSelect = OriginalSelect\n"
+		"  VoiceCreated = OriginalCreate\n"
+		"  VoiceFear = OriginalFear\n"
+		"  VoiceAttackAir = OriginalAir\n"
+		"  VoiceGuard = OriginalGuard\n"
+		"  SoundAmbient = NotAVoice\n"
+		"  UnitSpecificSounds\n"
+		"    VoiceEnter = OriginalEnter\n"
+		"    VoiceMoveUpgraded = OriginalUpgrade\n"
+		"    VoiceEmpty = NoSound\n"
+		"    TurretMoveStart = NotAVoiceEither\n"
+		"  End\nEnd\n"
+		"ObjectReskin FutureVoicePreloadProbe VoicePreloadProbe\nEnd\n");
+	CHECK( loadIni(TEST_INI) );
+	const ThingTemplate *base = factory.findTemplate("VoicePreloadProbe");
+	const ThingTemplate *future = factory.findTemplate("FutureVoicePreloadProbe");
+	CHECK( base && future );
+	const UnsignedInt seed = GetGameLogicRandomSeedCRC();
+	std::vector<AsciiString> original, inherited;
+	base->collectVoiceEvents(original);
+	future->collectVoiceEvents(inherited);
+	CHECK_EQ( original.size(), 7u );
+	CHECK( original == inherited ); // no drawable or Object is needed for a future unit
+	writeFile(TEST_INI,
+		"Object VoicePreloadProbe\n"
+		"  VoiceSelect = MapSelect\n"
+		"  VoiceGuard = NoSound\n"
+		"  UnitSpecificSounds\n    VoiceEnter = MapEnter\n  End\nEnd\n");
+	INI ini;
+	ini.load(AsciiString(TEST_INI), INI_LOAD_CREATE_OVERRIDES, NULL);
+	std::vector<AsciiString> overridden;
+	base->collectVoiceEvents(overridden); // factory lookups return the base, not its map override
+	CHECK_EQ( overridden.size(), 5u );
+	auto contains = [](const std::vector<AsciiString>& names, const char *name) {
+		return std::find(names.begin(), names.end(), AsciiString(name)) != names.end();
+	};
+	CHECK( contains(overridden, "MapSelect") && contains(overridden, "MapEnter") );
+	CHECK( contains(overridden, "OriginalCreate") && contains(overridden, "OriginalFear") );
+	CHECK( !contains(overridden, "OriginalSelect") && !contains(overridden, "OriginalUpgrade") );
+	CHECK( !contains(overridden, "OriginalGuard") );
+	factory.reset();
+	std::vector<AsciiString> restored;
+	base->collectVoiceEvents(restored);
+	CHECK( original == restored );
+	CHECK_EQ( GetGameLogicRandomSeedCRC(), seed );
+	TheThingFactory = savedFactory;
+	if (!savedAudio) { delete TheAudio; TheAudio = NULL; }
+	if (!savedGlobals) { delete TheWritableGlobalData; TheWritableGlobalData = NULL; }
+	remove(TEST_INI);
 }

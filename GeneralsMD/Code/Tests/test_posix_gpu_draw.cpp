@@ -43,6 +43,7 @@
 #include "Platform/SunShadow.h"
 #include "Platform/SunSmoke.h"
 #include "../Libraries/Source/WWVegas/WW3D2/ffshader.h"
+#include "../Libraries/Source/WWVegas/WW3D2/ffvertex.h"
 #include "Platform/EngineShaderName.h"
 
 #include <SDL3/SDL.h>
@@ -1372,6 +1373,34 @@ static void check_quad_derivatives(PosixDevice9 *device)
 	texture->Release();
 }
 
+static void check_render_warmup(PosixDevice9 *device)
+{
+	RenderUInt32 before[256], after[256];
+	VertexPipelineDescription vertexBefore, vertexAfter;
+	for (unsigned i = 0; i < 256; ++i) device->GetRenderState((D3DRENDERSTATETYPE)i, &before[i]);
+	CHECK(device->Build_Vertex_Description(vertexBefore));
+	const unsigned draws = device->Draws_Recorded();
+	const unsigned textures = device->Get_Mirrors()->Textures_Uploaded();
+	const unsigned buffers = device->Get_Mirrors()->Buffers_Uploaded();
+	const auto cold = device->Warm_Up_Render_Pipelines(true, 16);
+	CHECK(cold.Attempts > 0 && cold.Attempts <= 16);
+	CHECK(cold.Programs > 0 && cold.Pipelines > 0 && cold.Pipelines <= 16);
+	CHECK(cold.Failed == 0);
+	const auto hot = device->Warm_Up_Render_Pipelines(true, cold.Attempts);
+	CHECK(hot.Programs == 0 && hot.Pipelines == 0 && hot.Failed == 0);
+	const auto disabled = device->Warm_Up_Render_Pipelines(true, 0);
+	CHECK(disabled.Programs == 0 && disabled.Pipelines == 0 && disabled.Attempts == 0);
+	for (unsigned i = 0; i < 256; ++i) device->GetRenderState((D3DRENDERSTATETYPE)i, &after[i]);
+	CHECK(device->Build_Vertex_Description(vertexAfter));
+	CHECK(memcmp(before, after, sizeof(before)) == 0);
+	CHECK(memcmp(&vertexBefore, &vertexAfter, sizeof(vertexBefore)) == 0);
+	CHECK(device->Draws_Recorded() == draws);
+	CHECK(device->Get_Mirrors()->Textures_Uploaded() == textures);
+	CHECK(device->Get_Mirrors()->Buffers_Uploaded() == buffers);
+	printf("render warmup: %u programs, %u pipelines in %.1f ms; cache hits on repeat, no draws/uploads\n",
+		cold.Programs, cold.Pipelines, cold.Milliseconds);
+}
+
 int main()
 {
 	IDirect3D9 *d3d = Direct3DCreate9(D3D_SDK_VERSION);
@@ -1403,6 +1432,7 @@ int main()
 		d3d->Release();
 		return failures != 0 ? 1 : 77;
 	}
+	check_render_warmup(device);
 	check_half_pixel_and_winding(device);
 	check_transformed(device);
 	check_textures(device);

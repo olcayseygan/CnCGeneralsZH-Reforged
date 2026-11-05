@@ -173,6 +173,8 @@ public:
 	// If localized is true, we'll append a language specifc directory to the end of the path.
 	AsciiString generateFilenamePrefix( AudioType audioTypeToPlay, Bool localized );
 	AsciiString generateFilenameExtension( AudioType audioTypeToPlay );
+	/// All possible files, with the same localization as playback and no random-stream changes.
+	void getPreloadFilenames( std::vector<AsciiString>& filenames );
 protected:
 	void adjustForLocalization( AsciiString &strToAdjust );
 

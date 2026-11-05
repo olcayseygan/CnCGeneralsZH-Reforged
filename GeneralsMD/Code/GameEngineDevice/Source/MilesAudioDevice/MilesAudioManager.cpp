@@ -4249,7 +4249,9 @@ U32 AILCALLBACK streamingFileOpen(char const *fileName, AILFILEHANDLE *file_hand
 {
 	// The handle is a File*, so it is pointer sized - the cast to a 32-bit U32 that used to be here
 	// threw half of every pointer away and was guarded by a debug-only crash saying as much.
-	(*file_handle) = (AILFILEHANDLE) TheFileSystem->openFile(fileName, File::READ | File::STREAMING);
+	File *file = TheAudio->openPreloadedAudioFile(fileName);
+	if (!file) file = TheFileSystem->openFile(fileName, File::READ | File::STREAMING);
+	(*file_handle) = (AILFILEHANDLE) file;
 	return ((*file_handle) != 0);
 }
 
@@ -4278,7 +4280,8 @@ U32 AILCALLBACK streamingFileRead(AILFILEHANDLE file_handle, void *buffer, U32 b
 	* other reader off the main thread makes: the archive's read has its own lock. */
 static char *readAudioFile( const char *name, unsigned *size )
 {
-	File *file = TheFileSystem->openFile(name);
+	File *file = TheAudio->openPreloadedAudioFile(name);
+	if (!file) file = TheFileSystem->openFile(name);
 	if (!file) {
 		return NULL;
 	}
@@ -4368,6 +4371,10 @@ Bool AudioFileCache::fileComesTooLate( AudioEventRTS *eventToOpenFrom )
 	* the format, and the end, where it looks for tags. */
 char *AudioFileCache::warmStreamFile( const char *name, unsigned *size )
 {
+	if (File *resident = TheAudio->openPreloadedAudioFile(name)) {
+		resident->close();
+		return NULL;
+	}
 	static const Int START_BYTES = 1024 * 1024;
 	static const Int END_BYTES = 64 * 1024;
 	File *file = TheFileSystem->openFile(name, File::READ | File::STREAMING);

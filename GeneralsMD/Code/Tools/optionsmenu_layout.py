@@ -235,6 +235,7 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxHealthBarColors", None),
     (LABEL,  "LabelMenuTransitionSpeed", "GUI:MenuTransitionSpeed"),
     (SLIDER, "SliderMenuTransitionSpeed", None),
+    (CHECK,  "CheckAssetPreloading", "GUI:AssetPreloading"),
     (CHECK,  "CheckTurboModeMissions", "GUI:TurboModeMissions"),
     (CHECK,  "CheckMapLight",          "GUI:MapLight"),
     (CHECK,  "CheckTeamGlow",          "GUI:TeamGlow"),
@@ -455,7 +456,8 @@ GROUP_LAYOUT = [
         ("GUI:OptionsGroupHud", [
             ("check", "CheckNetBox")]),
         ("GUI:OptionsGroupMenus", [
-            setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")]),
+            setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed"),
+            ("check", "CheckAssetPreloading")]),
         ("GUI:OptionsGroupSpeed", [
             ("check", "CheckTurboModeMissions")]),
         ("GUI:OptionsGroupBattlefield", [

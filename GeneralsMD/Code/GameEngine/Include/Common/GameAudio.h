@@ -50,6 +50,9 @@
 #include "Lib/BaseType.h"
 #include "Common/STLTypedefs.h"
 #include "Common/SubsystemInterface.h"
+#include <map>
+#include <mutex>
+#include <string>
 
 
 // Forward Declarations
@@ -58,6 +61,7 @@ class AsciiString;
 class AudioEventRTS;
 class DebugDisplayInterface;
 class Drawable;
+class File;
 class MusicManager;
 class Object;
 class SoundManager;
@@ -145,6 +149,11 @@ class AudioManager : public SubsystemInterface
 		// From SubsystemInterface
 		virtual void init();
 		virtual void postProcessLoad();
+
+		/// Cache loading-screen audio, without playing it or choosing random variants.
+		void preloadAudioEvents( const std::vector<AsciiString>& events );
+		/// A private RAM file per caller: streams never share a cursor or retain cache-owned pointers.
+		File *openPreloadedAudioFile( const char *filename ) const;
 		virtual void reset();
 		virtual void update();
 
@@ -367,6 +376,8 @@ class AudioManager : public SubsystemInterface
 		std::vector<AsciiString> m_musicTracks;
 
 		AudioEventInfoHash m_allAudioEventInfo;
+		mutable std::mutex m_preloadedAudioMutex;
+		std::map<std::string, std::vector<char> > m_preloadedAudio;
 		std::vector< std::pair<AudioEventInfo *, AudioEventInfo *> > m_beforeMapOverrides;	///< live event, its copy from before the map
 		AudioHandle theAudioHandlePool;
 		std::vector<AudioHandle> m_handlesQueuedFromTick;	///< minted by addAudioEvent inside a tick, not yet added

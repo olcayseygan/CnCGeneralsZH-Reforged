@@ -2055,6 +2055,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Draw.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Resources.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9SunShadow.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Timing.cpp
+GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Warmup.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDirect3D9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixImage.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixImage.h
@@ -2250,6 +2251,7 @@ Libraries/Include/Platform/PosixD3D9/d3d9.h
 Libraries/Include/Platform/PosixD3D9/d3d9caps.h
 Libraries/Include/Platform/PosixD3D9/d3d9types.h
 Libraries/Include/Platform/RenderTypes.h
+Libraries/Include/Platform/RenderWarmup.h
 Libraries/Include/Platform/RendererName.h
 Libraries/Include/Platform/SleepMilliseconds.h
 Libraries/Include/Platform/StrdupAsWindows.h

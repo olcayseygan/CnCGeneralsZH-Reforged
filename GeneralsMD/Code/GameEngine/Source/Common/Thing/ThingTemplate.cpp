@@ -1612,6 +1612,30 @@ const FXList *ThingTemplate::getPerUnitFX(const AsciiString& fxName) const
 }
 
 //-------------------------------------------------------------------------------------------------
+void ThingTemplate::collectVoiceEvents(std::vector<AsciiString>& events) const
+{
+	const ThingTemplate *current = finalOverrideOf(this);
+	const ThingTemplateAudioType voices[] = {
+		TTAUDIO_voiceSelect, TTAUDIO_voiceGroupSelect, TTAUDIO_voiceSelectElite,
+		TTAUDIO_voiceMove, TTAUDIO_voiceAttack, TTAUDIO_voiceEnter, TTAUDIO_voiceFear,
+		TTAUDIO_voiceCreated, TTAUDIO_voiceNearEnemy, TTAUDIO_voiceTaskUnable,
+		TTAUDIO_voiceTaskComplete, TTAUDIO_voiceMeetEnemy, TTAUDIO_voiceGarrison,
+#ifdef ALLOW_SURRENDER
+		TTAUDIO_voiceSurrender,
+#endif
+		TTAUDIO_voiceDefect, TTAUDIO_voiceAttackSpecial, TTAUDIO_voiceAttackAir, TTAUDIO_voiceGuard
+	};
+	auto append = [&events](const AudioEventRTS *sound) {
+		if (sound && !sound->getEventName().isEmpty() && sound->getEventName().compareNoCase("NoSound") != 0)
+			events.push_back(sound->getEventName());
+	};
+	// Creation and fear responses often lack ST_VOICE; use the actual slots, not just audio flags.
+	for (ThingTemplateAudioType voice : voices) append(current->getAudio(voice));
+	for (const auto& entry : current->m_perUnitSounds)
+		if (entry.first.startsWithNoCase("Voice")) append(&entry.second);
+}
+
+//-------------------------------------------------------------------------------------------------
 const AudioEventRTS *ThingTemplate::getPerUnitSound(const AsciiString& soundName) const
 {
 	if (soundName.isEmpty()) 

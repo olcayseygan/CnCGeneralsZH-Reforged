@@ -491,10 +491,8 @@ bool Sdl_Sampler_Description(const RenderUInt32 ss[14], void *create_info, std::
 
 SdlSamplerCache::SdlSamplerCache(SDL_GPUDevice *device) :
 	Device(device),
-	LastSampler(NULL),
-	HaveLast(false)
+	RecentSize(0), LastRecent(0), NextRecent(0), TableLookups(0)
 {
-	memset(&LastKey, 0, sizeof(LastKey));
 }
 
 SdlSamplerCache::~SdlSamplerCache()
@@ -508,27 +506,41 @@ SdlSamplerCache::~SdlSamplerCache()
 
 size_t SdlSamplerCache::KeyHash::operator()(const Key &key) const
 {
-	// FNV-1a over the bytes, as SdlProgramCache's ByBytes does.
-	const unsigned char *bytes = reinterpret_cast<const unsigned char *>(key.States);
+	// This is an in-process hash, not a persisted identifier. Mix whole state words
+	// instead of a 56-byte multiply chain; equality still checks every state bit.
 	uint64_t hash = 1469598103934665603ull;
-	for (size_t i = 0; i < sizeof(key.States); ++i) {
-		hash = (hash ^ bytes[i]) * 1099511628211ull;
+	for (RenderUInt32 state : key.States) {
+		hash = (hash ^ state) * 1099511628211ull;
 	}
 	return (size_t)hash;
+}
+
+void SdlSamplerCache::Remember(const Key &key, SDL_GPUSampler *sampler)
+{
+	Recent[NextRecent] = {key, sampler};
+	LastRecent = NextRecent;
+	NextRecent = (NextRecent + 1) % RecentCount;
+	if (RecentSize < RecentCount)
+		++RecentSize;
 }
 
 SDL_GPUSampler *SdlSamplerCache::Sampler(const RenderUInt32 sampler_states[14])
 {
 	Key key;
 	memcpy(key.States, sampler_states, sizeof(key.States));
-	if (HaveLast && key == LastKey) {
-		return LastSampler;
+	if (RecentSize && key == Recent[LastRecent].key) {
+		return Recent[LastRecent].sampler;
 	}
+	for (unsigned i = 0; i < RecentSize; ++i) {
+		if (i != LastRecent && key == Recent[i].key) {
+			LastRecent = i;
+			return Recent[i].sampler;
+		}
+	}
+	++TableLookups;
 	auto existing = Samplers.find(key);
 	if (existing != Samplers.end()) {
-		LastKey = key;
-		LastSampler = existing->second;
-		HaveLast = true;
+		Remember(key, existing->second);
 		return existing->second;
 	}
 	SDL_GPUSamplerCreateInfo info;
@@ -549,8 +561,6 @@ SDL_GPUSampler *SdlSamplerCache::Sampler(const RenderUInt32 sampler_states[14])
 		fprintf(stderr, "SdlSamplerCache: a sampler refused: %s\n", refusal.c_str());
 	}
 	Samplers[key] = sampler;
-	LastKey = key;
-	LastSampler = sampler;
-	HaveLast = true;
+	Remember(key, sampler);
 	return sampler;
 }

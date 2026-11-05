@@ -56,6 +56,7 @@
 #include "Platform/WaterObstacleIndex.h"
 #include "Platform/WaterHullModel.h"
 #include "Platform/WaterHullPoseCache.h"
+#include "Platform/WaterRenderCaches.h"
 #include "Platform/WaterVesselMotion.h"
 #include "Platform/WaterFoamHistory.h"
 #include "Platform/WaterShoreSource.h"
@@ -129,6 +130,7 @@ public:
 	void update( void ); ///< update phase of the water
 #if ZH_MODERN_WATER
 	void takeReadsForRender(void);
+	void prewarmStaticMapData(void);
 #endif
 	void enableWaterGrid(Bool state);	///< used to active custom water for special maps. (i.e DAM).  The grid is TerrainLogic's WaterGrid; this builds its buffers
 	void updateMapOverrides(void);	///< used to update any map specific map overrides for water appearance.
@@ -237,6 +239,7 @@ protected:
 	Bool m_modernProjectedCacheEnabled=TRUE;
 	struct ModernProjectedSample { Real height,damping,obstacle,hullFreeObstacle,offshore,fftDamping,exposure; };
 	std::unordered_map<WaterProjectedMesh::WorldKey,ModernProjectedSample,WaterProjectedMesh::WorldHash> m_modernProjectedSamples;
+	WaterRenderCaches::Cache<ModernProjectedSample> m_modernRenderCaches;
 	Vector3 m_modernCamera;
 	CameraClass *m_modernRenderCamera = NULL;
 	struct ModernWaterObstacle {
@@ -299,6 +302,12 @@ protected:
 	WaterShoreSource::Batch m_modernShoreSource;
 	uint64_t m_modernShoreRevision=1, m_modernShoreAttempted=0;
 	Bool m_modernShoreReady=FALSE;
+	struct ModernShorePreparation {
+		uint64_t revision=0;
+		WaterShoreHistory::BuildResult result=WaterShoreHistory::BuildResult::Invalid;
+		WaterShoreSource::Batch source;
+		WaterShoreHistory::Topology topology;
+	} m_modernShorePreparation;
 	unsigned m_modernFoamDrawFrame=~0u;
 	std::vector<UnsignedInt> m_modernFoamDrawObjectIDs;
 	struct ModernFoamTexture {
@@ -308,6 +317,9 @@ protected:
 		unsigned channels=0; // bit0 vessel RGB, bit1 coast A, bit2 second direction tile
 		unsigned textureWidth=0,textureHeight=0;
 		Bool valid=FALSE;
+		WaterShoreHistory::RasterLookup shoreLookup;
+		std::vector<float> shoreBreakup;
+		uint64_t shoreBreakupBuild=0;
 	};
 	std::vector<ModernFoamTexture> m_modernFoamTextures;
 
@@ -390,13 +402,15 @@ protected:
 	void bindModernWaterFoam(Real level,Bool river);
 	void invalidateModernWaterShore(void);
 	void updateModernWaterShore(void);
+	void prepareModernWaterShore(void);
+	void clearModernWaterRenderCaches(void);
 	Real modernHullDamping(Real x,Real y,Real level) const;
 	Bool modernHasHull(UnsignedInt objectID) const;
 	void clearModernWaterOpticalTextures(void);
 	void refreshModernWaterOpticalPolygons(void);
 	TextureClass *modernWaterOpticalTexture(Real level);
 	void drawModernWaterPatch(const Vector3 points[4], Bool river, Real riverStart = 0, Real riverEnd = 1);
-	Real modernWaterDamping(Real x, Real y, Real z, Real offshore=0.0f, Real *obstacleAttenuation=NULL, Real *terrainDepth=NULL, Real *hullFreeDamping=NULL, Real *hullFreeObstacle=NULL) const;
+	Real modernWaterDamping(Real x, Real y, Real z, Real offshore=0.0f, Real *obstacleAttenuation=NULL, Real *terrainDepth=NULL, Real *hullFreeDamping=NULL, Real *hullFreeObstacle=NULL, const Real *cachedTerrain=NULL) const;
 	Bool m_renderingMirror = FALSE; ///< prevents a water draw sampling the mirror being written
 	void cleanupJbaWaterShader(void);
 

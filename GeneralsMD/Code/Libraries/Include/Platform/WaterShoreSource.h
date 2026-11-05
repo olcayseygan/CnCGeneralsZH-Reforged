@@ -8,9 +8,54 @@
 
 namespace WaterShoreSource {
 struct Level {double level=0;const WaterOpticalContext::Field *field=nullptr;};
+// Terrain-only terms of WaterShoreFoam::Rate, immutable for one source batch.
+// Keep the original division and left-associated multiplication order at sample time.
+struct RateContext {
+    float normalX = 0, normalY = 0, depthDivisor = 0, attenuation = 0;
+    float rock = 0, steep = 0, prefix = 0, exposure = 0;
+};
+
+inline RateContext PrepareRate(const WaterShoreFoam::Context &c) {
+    using namespace WaterShoreFoam;
+    RateContext out;
+    if (!std::isfinite(c.depth) || !std::isfinite(c.shore) || !std::isfinite(c.nx) || !std::isfinite(c.ny)
+        || !std::isfinite(c.slope) || !std::isfinite(c.exposure) || !std::isfinite(c.support)
+        || c.depth <= MinDepth || c.support <= 0)
+        return out;
+    const float normalLength = std::hypot(c.nx, c.ny);
+    if (!std::isfinite(normalLength) || normalLength <= 1e-8f)
+        return out;
+    out.normalX = c.nx / normalLength;
+    out.normalY = c.ny / normalLength;
+    out.depthDivisor = (std::max)(c.depth + 0.5f, 1.0f);
+    const float attenuation = WaterSurfaceModel::ShoreDamping(c.depth);
+    out.attenuation = 1 - attenuation * attenuation;
+    out.rock = 1 - Smooth(0, RockDistance, (std::max)(0.0f, c.shore));
+    out.steep = Smooth(SlopeStart, SlopeFull, c.slope);
+    out.prefix = MaximumRate *Clamp(c.support, 0, 1) * Smooth(MinDepth, WetDepth, c.depth);
+    out.exposure = ShelteredScale + (1 - ShelteredScale) * Clamp(c.exposure, 0, 1);
+    return out;
+}
+
+inline float PreparedRate(const RateContext &c, const WaterShoreFoam::Wave &w) {
+    using namespace WaterShoreFoam;
+    if (c.prefix <= 0 || !std::isfinite(w.height) || !std::isfinite(w.dx) || !std::isfinite(w.dy)
+        || !std::isfinite(w.dt) || w.height <= 0)
+        return 0;
+    const float waveSlope = std::hypot(w.dx, w.dy);
+    if (!std::isfinite(waveSlope) || waveSlope <= 1e-8f || std::abs(w.dt) <= 1e-8f)
+        return 0;
+    const float cosine = (w.dt > 0 ? 1.0f : -1.0f) * ((w.dx / waveSlope) * c.normalX
+        + (w.dy / waveSlope) * c.normalY);
+    const float incoming = Smooth(0, IncomingCosine, cosine);
+    const float beach = Smooth(BreakStart, BreakFull, 2 * w.height / c.depthDivisor) * c.attenuation;
+    return c.prefix * incoming * c.exposure * Clamp(beach + (c.rock - beach) * c.steep, 0, 1) * Smooth(0,
+        CrestHeight, w.height);
+}
 struct SampleContext {
     WaterShoreFoam::Context coast;
     WaterShoreFoam::FrontWeights frontWeights;
+    RateContext rate;
     std::array<float,WaterShoreFoam::ModeCount> sine{},cosine{};
 };
 struct Context : SampleContext {std::array<SampleContext,4> quadrature;};
@@ -82,6 +127,7 @@ public:
                 context.coast.support=FieldSample(f.coast,width,ix,iy,fx,fy);
                 context.coast.exposure=FieldSample(f.exposure,width,ix,iy,fx,fy);
                 context.frontWeights=WaterShoreFoam::IncomingWeights(context.coast.nx,context.coast.ny);
+                context.rate = PrepareRate(context.coast);
                 const double worldX=next.grid.originX+px*spacing,worldY=next.grid.originY+py*spacing;
                 for(unsigned mode=0;mode<WaterShoreFoam::ModeCount;++mode) {
                     const auto&m=WaterShoreFoam::Modes[mode];
@@ -151,7 +197,11 @@ public:
             rates[i]=0;if(nodes[i].sourceIndex>=contexts.size())continue;
             const Context&node=contexts[nodes[i].sourceIndex];
             for(const SampleContext&context:node.quadrature) {
-                if(context.coast.support<=0)continue;
+                // Both conditions prove a zero final source for every phase;
+                // retain the original wave/front accumulation for active quads.
+                if (context.rate.prefix <= 0 || (context.frontWeights.value[0] == 0
+                    && context.frontWeights.value[1] == 0 && context.frontWeights.value[2] == 0))
+                    continue;
                 WaterShoreFoam::Wave wave;float front=0;
                 for(unsigned mode=0;mode<WaterShoreFoam::ModeCount;++mode) {
                     const auto&m=WaterShoreFoam::Modes[mode];
@@ -163,7 +213,7 @@ public:
                 }
                 // A phase-locked birth mask only removes old-source support. No new
                 // per-cell trigonometry, graph cells, upload work or time state is added.
-                rates[i]+=.25*WaterShoreFoam::Rate(context.coast,wave)*WaterShoreFoam::Clamp(front,0,1);
+                rates[i] += .25 * PreparedRate(context.rate, wave) * WaterShoreFoam::Clamp(front, 0, 1);
             }
         }
     }
@@ -182,13 +232,23 @@ inline double Noise(double x,double y) {
     double fx=x-ix,fy=y-iy;fx=fx*fx*(3-2*fx);fy=fy*fy*(3-2*fy);
     return (hash(ix,iy)*(1-fx)+hash(ix+1,iy)*fx)*(1-fy)+(hash(ix,iy+1)*(1-fx)+hash(ix+1,iy+1)*fx)*fy;
 }
-inline double Coverage(const WaterShoreHistory::State&s,double x,double y,double) {
+
+inline double SpatialBreakup(double x, double y) {
+    const double texture = Noise(x / 7, y / 7) * .7 + Noise(x / 2.3, y / 2.3) * .3;
+    return WaterShoreFoam::Smooth(.25f, .7f, float(texture));
+}
+
+inline double CoverageFromBreakup(const WaterShoreHistory::State &s, double breakup) {
     if(!(s.density>0)||!std::isfinite(s.density)||!std::isfinite(s.ageMoment))return 0;
     const double age=s.ageMoment/s.density;
-    const double texture=Noise(x/7,y/7)*.7+Noise(x/2.3,y/2.3)*.3;
-    const double breakup=WaterShoreFoam::Smooth(.25f,.7f,float(texture));
     const double aged=WaterShoreFoam::Smooth(.4f,3.0f,float(age));
     const double terminal=1-WaterShoreFoam::Smooth(8,14,float(age));
     return -std::expm1(-s.density)*(1-aged+aged*breakup)*terminal;
+}
+
+inline double Coverage(const WaterShoreHistory::State &s, double x, double y, double) {
+    if (!(s.density > 0) || !std::isfinite(s.density) || !std::isfinite(s.ageMoment))
+        return 0;
+    return CoverageFromBreakup(s, SpatialBreakup(x, y));
 }
 }

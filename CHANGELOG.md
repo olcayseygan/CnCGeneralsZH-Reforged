@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Smoother Modern water
+
+- Modern water on Linux and macOS does less repeated work, especially while panning and zooming, while keeping the same appearance.
+
 ## Modern water reflections and detail
 
 - On Linux and macOS, shallow Modern water now shows submerged ruins and seabed more clearly, while deep water keeps its opacity.

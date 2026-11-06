@@ -34,7 +34,8 @@ counter line:
 ```
 
 A leave says why: `idle` (120 seconds without a packet) or `version changed` (a HELLO carrying a
-known session with different CRCs). A two-player match moves about 290 KB a minute each way per
+known session with different CRCs) or `replaced` (the account logged in again). `setRoom` prints a
+`room vip=... from=... to=...` line. A two-player match moves about 290 KB a minute each way per
 player through it.
 
 ## Wire format
@@ -56,7 +57,20 @@ HELLO, type 1, client to relay:
 | 19 | 4 | wantVip, the address asked for, 0 for any |
 | 23 | 0..32 | player name, UTF-8, may be empty (longer is cut at 32 bytes) |
 
-WELCOME, type 2, relay to client, sent in answer to every HELLO it accepts:
+HELLO_AUTH, type 4, client to relay, refused unless the relay was given an `authorize` hook:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 2 | `ZR` |
+| 2 | 1 | 4 |
+| 3 | 4 | exeCRC |
+| 7 | 4 | iniCRC |
+| 11 | 8 | session, zeros on the first hello |
+| 19 | 4 | wantVip |
+| 23 | 16 | ticket, from the account server |
+| 39 | 0..32 | player name, as in HELLO |
+
+WELCOME, type 2, relay to client, sent in answer to every HELLO or HELLO_AUTH it accepts:
 
 | Offset | Size | Field |
 |---|---|---|
@@ -124,6 +138,46 @@ or to one that does not exist, is dropped.
 A session with no packet for 120 seconds is removed and its address can be handed out again. The
 game says HELLO every 10 seconds, but only while it pumps its network, and a map load can block
 for a while between two pumps; two minutes outlasts that.
+
+## Accounts
+
+A relay started with an `authorize` hook also takes HELLO_AUTH. Everything above holds for it: the
+rate limit, the per-IP and room caps, the endpoint check before anything is forwarded. A HELLO_AUTH
+that would open a session hands its ticket to `authorize`; a known account gets a session in the
+room `acct:<id>`, where it is alone, and an unknown ticket gets nothing back. The relay asks once per
+new session. A retry from the same endpoint before the WELCOME arrived, and any HELLO or HELLO_AUTH
+carrying the session afterwards, is answered without asking, so the server may burn a ticket on first
+use. A session-0 HELLO_AUTH from an endpoint that holds a plain session is dropped.
+
+An account holds one session. Logging in again with a fresh ticket removes the old session (`leave
+... reason=replaced`) before the new one opens. The server moves sessions between rooms with
+`setRoom`, for example into `match:<id>` at game start and back to `acct:<id>` after; broadcast and
+unicast never leave the room, so two players reach each other only once the server put them together.
+
+Plain HELLO keeps working beside the hook, in its (exeCRC, iniCRC) room, so a LAN `-relay` game runs
+on the same relay. Without the hook HELLO_AUTH is dropped and the relay behaves as it did before
+accounts.
+
+## Using it from a server
+
+`require('./relay')` exports `createRelay(opts)` and the constants `MAX_PACKET`, `IDLE_MS`,
+`NO_SESSION`, `HELLO_HEADER`, `HELLO_AUTH_HEADER`, `DATA_IN_HEADER`, `DATA_OUT_HEADER`, plus
+`vipString(vip)`. Every option is optional:
+
+| Option | |
+|---|---|
+| `authorize(ticketHex)` | returns the account id for a ticket (32 hex digits), or `null`. Synchronous. A throw counts as `null` |
+| `onAuthorized(accountId, vip)` | a session opened for that account, with its virtual address |
+| `onLeave(accountId, atMs)` | an authorised session was removed: idle, replaced or a HELLO with other CRCs. `atMs` is when it was last heard from. One sweep reports in that order, so the first call is the player who went silent first |
+| `now()` | clock in ms, `Date.now` by default |
+| `log(line)` | one line per event, console by default |
+| `rateBytesPerSec`, `burstBytes`, `maxPerIp`, `maxRoom`, `maxBuckets` | the limits above |
+
+The returned object has `start(port, host)` (resolves to the bound port), `stop()` (no `onLeave`
+for what is still open), `setRoom(accountId, room)` (false when the account holds no session; the
+room cap does not apply, the caller is trusted), `vipOf(accountId)` (`null` when none), and for tests
+`sessions`, `buckets`, `sweep()` and `report()`. Account ids are used as map keys and in room names,
+so pass strings or numbers, not objects.
 
 ## Limits
 

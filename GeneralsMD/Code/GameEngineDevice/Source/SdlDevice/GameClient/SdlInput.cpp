@@ -135,6 +135,21 @@ Bool SdlInput_dispatch( const SDL_Event &event )
 	SdlInput_install();
 	switch (event.type)
 	{
+		case SDL_EVENT_WINDOW_RESIZED:
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+		case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+		case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+		{
+			// An attached field survives native fullscreen and Retina/display changes.
+			// Recompute its rectangle in the current window's points while keeping the
+			// active input session and composition. Ignore events from other windows.
+			SDL_Window *window = SdlInput_gameWindow();
+			if (window != NULL && event.window.windowID == SDL_GetWindowID( window )
+					&& SDL_TextInputActive( window ) && theIME() != NULL)
+				theIME()->refreshTextInputArea();
+			return TRUE;
+		}
+
 		case SDL_EVENT_KEY_DOWN:
 		case SDL_EVENT_KEY_UP:
 		{

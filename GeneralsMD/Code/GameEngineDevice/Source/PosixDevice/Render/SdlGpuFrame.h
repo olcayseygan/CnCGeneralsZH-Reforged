@@ -162,6 +162,7 @@ public:
 	/// Room for bytes going to a GPU copy, and the uploads that take them there in the copy pass.  A
 	/// buffer or level-0 upload cycles its target, so draws already submitted keep what they read.
 	uint8_t * Upload_Space(uint32_t size, uint32_t & offset);
+	uint64_t Pending_Upload_Bytes() const { return UploadBytes.size(); }
 	void Queue_Buffer_Upload(SDL_GPUBuffer * buffer, uint32_t upload_offset, uint32_t size);
 	void Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int level, unsigned int width, unsigned int height,
 		uint32_t upload_offset);

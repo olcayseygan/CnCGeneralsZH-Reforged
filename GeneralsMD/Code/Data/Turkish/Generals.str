@@ -15430,7 +15430,7 @@ GUI:OrderLines
 END
 
 TOOLTIP:OrderLines
-"Seçili her birimden gittiği yere, oradan da sıraya aldığı her noktaya bir çizgi çeker. Kapalıyken tek bir emir çizgisiz ve işaretsiz kalır, tıklanan yerde halka da çıkmaz; sıraya alınmış rota çizgisini ve işaretlerini korur."
+"Seçili her birimden gittiği yere, oradan da sıraya aldığı her noktaya bir çizgi çeker. Kapalıyken tek bir emir çizgisiz kalır, ama hedefteki işaret ve tıklanan yerdeki halka yine çıkar; sıraya alınmış rota çizgisini korur."
 END
 
 GUI:AircraftAltitudeLine

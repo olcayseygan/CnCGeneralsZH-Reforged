@@ -273,14 +273,13 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			points[ 0 ].Set( it->from.x, it->from.y, max( it->from.z, TheTerrainLogic->getGroundHeight( it->from.x, it->from.y ) ) );
 			points[ 1 ].Set( it->to.x, it->to.y, max( it->to.z, TheTerrainLogic->getGroundHeight( it->to.x, it->to.y ) ) );
 
-			// Order Lines off in the options takes away a plain one-point order's line and the puck at
-			// its end, on ground or on the unit it is aimed at. A unit with more than one place to go
-			// (a shift queue, a waypoint path; step is numbered then) keeps its threads and pucks,
-			// since that list is the thing being planned
-			if( !TheGlobalData->m_showOrderLines && it->step == 0 && it->kind != InGameUI::ORDER_HINT_WAYPOINT )
-				continue;
+			// Order Lines off in the options takes away a plain one-point order's line and nothing else:
+			// the puck at its end still shows where the order lands. A unit with more than one place to
+			// go (a shift queue, a waypoint path; step is numbered then) keeps its threads, since that
+			// list is the thing being planned
+			if( TheGlobalData->m_showOrderLines || it->step > 0 || it->kind == InGameUI::ORDER_HINT_WAYPOINT )
+				record( DRAW_LINE, TRUE, 2, points );
 
-			record( DRAW_LINE, TRUE, 2, points );
 			record( DRAW_PUCK, TRUE, 1, &points[ 1 ] );		// the end wears the puck the joints between orders do
 		}
 		// the lines stay queued: the rally and placement pucks below would flush them into the

@@ -5447,10 +5447,6 @@ void InGameUI::markNextOrderQueued( OrderQueueMode mode )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::createMoveHint( const GameMessage *msg )
 {
-	// Order Lines off takes away everything drawn where an order lands, this ring included
-	if( !TheGlobalData->m_showOrderLines )
-		return;
-
 	if( getSelectCount() == 1 )
 	{
 		Drawable *draw = getFirstSelectedDrawable();

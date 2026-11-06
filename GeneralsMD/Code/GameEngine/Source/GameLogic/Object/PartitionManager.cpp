@@ -6308,8 +6308,8 @@ Bool PartitionFilterStealthedAndUndetected::allow( Object *objOther )
 		if( contain )
 		{
 			const Player* victimApparentController = contain->getApparentControllingPlayer( m_obj->getControllingPlayer() );
-			//Check if it's stealthed!
-			if( contain->getStealthUnitsContained() == contain->getContainCount() )
+			//Check if it's stealthed!  An empty container is 0 == 0, and has no first object to look at.
+			if( contain->getContainCount() > 0 && contain->getStealthUnitsContained() == contain->getContainCount() )
 			{
 				//Check if the first object inside is detected (if one is detected, all are detected).
 				ContainedItemsList::const_iterator it = contain->getContainedItemsList()->begin();

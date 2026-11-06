@@ -329,8 +329,10 @@ Bool TunnelContain::getContainerPipsToShow( Int& numTotal, Int& numFull )
 
 const ContainedItemsList* TunnelContain::getContainedItemsList() const
 {
+	// No tracker (the neutral player has no tunnel system): nobody inside.  Our own list is always empty
+	// here, since addToContainList goes to the tracker, and half the callers walk this without a NULL check.
 	TunnelTracker *tunnelTracker = getTunnelTracker();
-	return tunnelTracker ? tunnelTracker->getContainedItemsList() : NULL;
+	return tunnelTracker ? tunnelTracker->getContainedItemsList() : OpenContain::getContainedItemsList();
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -122,6 +122,19 @@ set(COMP ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/Compression)
 # headers behind it are included by name and by nobody who does not want them.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
+# Local text defaults only; an existing Options.ini takes precedence.
+set(ZH_TEXT_PERSONNEL "unchanged" CACHE STRING "Unit names: unchanged, humans or robots")
+set_property(CACHE ZH_TEXT_PERSONNEL PROPERTY STRINGS unchanged humans robots)
+set(ZH_TEXT_FACTIONS "unchanged" CACHE STRING "Faction names: unchanged, original or adapted")
+set_property(CACHE ZH_TEXT_FACTIONS PROPERTY STRINGS unchanged original adapted)
+set(_zh_personnel_choices unchanged humans robots)
+set(_zh_faction_choices unchanged original adapted)
+list(FIND _zh_personnel_choices "${ZH_TEXT_PERSONNEL}" ZH_DEFAULT_TEXT_PERSONNEL)
+list(FIND _zh_faction_choices "${ZH_TEXT_FACTIONS}" ZH_DEFAULT_TEXT_FACTIONS)
+if(ZH_DEFAULT_TEXT_PERSONNEL LESS 0 OR ZH_DEFAULT_TEXT_FACTIONS LESS 0)
+  message(FATAL_ERROR "Invalid text defaults: ZH_TEXT_PERSONNEL=unchanged|humans|robots; ZH_TEXT_FACTIONS=unchanged|original|adapted")
+endif()
+
 # The third-party sources EA stripped out, which this repository does not carry either.  build.bat
 # fetches them before it configures; say so here rather than let the generator report a missing
 # source file per library.
@@ -1102,6 +1115,9 @@ file(GLOB_RECURSE ZH_ONLINE_SOURCES ${GE}/Source/GameNetwork/GeneralsOnline/*.cp
 list(REMOVE_ITEM GAMEENGINE_SOURCES ${ZH_ONLINE_SOURCES})
 
 add_library(gameengine STATIC ${ZH_NOT_YET_PORTABLE} ${GAMEENGINE_SOURCES})
+set_property(SOURCE ${GE}/Source/Common/GlobalData.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+  ZH_DEFAULT_TEXT_PERSONNEL=${ZH_DEFAULT_TEXT_PERSONNEL}
+  ZH_DEFAULT_TEXT_FACTIONS=${ZH_DEFAULT_TEXT_FACTIONS})
 # GameMemory.cpp asks MSVC for the engine library by the build's name (#pragma comment(lib, "GameEngineDebug")
 # under _DEBUG), so a Debug build names it that way.  Release keeps gameengine.lib, which "GameEngine" finds.
 if(MSVC)
@@ -1282,7 +1298,7 @@ add_test(NAME widechar_format_selfcheck COMMAND widechar_format_selfcheck)
 # run to diff.  Needs ZH_GAME_DATA; without it the test is Skipped (77), not Passed.  Stubs are in
 # the test file.  See Tests/test_gametext_csf.cpp.
 add_executable(gametext_csf ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gametext_csf.cpp
-  ${GE}/Source/GameClient/GameText.cpp ${GE}/Source/Common/System/RAMFile.cpp
+  ${GE}/Source/GameClient/GameText.cpp ${GE}/Source/GameClient/TextTerminology.cpp ${GE}/Source/Common/System/RAMFile.cpp
   ${GE}/Source/Common/System/File.cpp ${GE}/Source/Common/System/GameMemory.cpp
   ${GE}/Source/Common/System/MemoryInit.cpp ${GE}/Source/Common/System/UnicodeString.cpp
   ${GE}/Source/Common/System/AsciiString.cpp ${GE}/Source/Common/System/WideCharFns.cpp)
@@ -2198,6 +2214,11 @@ set(TESTS ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
 # Shared runner for the micro-harness in Tests/test_harness.h; every test
 # binary links it instead of writing its own main().
 add_library(test_harness STATIC ${TESTS}/test_main.cpp)
+add_executable(test_text_terminology ${TESTS}/test_text_terminology.cpp ${GE}/Source/GameClient/TextTerminology.cpp)
+target_include_directories(test_text_terminology PRIVATE ${GE}/Include)
+set_target_properties(test_text_terminology PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_text_terminology PRIVATE test_harness)
+add_test(NAME test_text_terminology COMMAND test_text_terminology)
 target_include_directories(test_harness PUBLIC ${TESTS})
 # Off Windows, every binary that links the harness - its own main() or the runner's - refuses to start
 # without ZH_USER_DATA_DIR, which otherwise leaves the engine to use this user's real data directory.

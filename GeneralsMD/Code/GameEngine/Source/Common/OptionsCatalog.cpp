@@ -133,6 +133,8 @@ OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_healthBarColors )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
+OPTION_INT_ACCESSORS( m_textPersonnel )
+OPTION_INT_ACCESSORS( m_textFactions )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
 OPTION_BOOL_ACCESSORS( m_aircraftAltitudeLine )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
@@ -603,6 +605,15 @@ const OptionDef TheOptionCatalog[] =
 	{ "TextLanguage",							OPT_WND( "ComboBoxLanguage" ), "GUI:Language",
 		OPTION_ENUM, APPLY_RESTART, 0, TEXT_LANGUAGE_COUNT - 1,
 		get_m_textLanguage, set_m_textLanguage },
+
+	// Displayed names are independent of the text language and of the installed
+	// models, voices and gameplay. Each choice is local to this user's next launch.
+	{ "TextPersonnel",						OPT_WND( "ComboBoxTextPersonnel" ), "GUI:TextPersonnel",
+		OPTION_ENUM, APPLY_RESTART, 0, TEXT_PERSONNEL_COUNT - 1,
+		get_m_textPersonnel, set_m_textPersonnel },
+	{ "TextFactions",							OPT_WND( "ComboBoxTextFactions" ), "GUI:TextFactions",
+		OPTION_ENUM, APPLY_RESTART, 0, TEXT_FACTIONS_COUNT - 1,
+		get_m_textFactions, set_m_textFactions },
 
 	// The Effects page.  These four sat in GameData.ini with no control, all off.  Each is read when the
 	// thing that casts the shadow is made (fillShadowInfoFromTemplate, promoteSkinShadowToVolume), so a

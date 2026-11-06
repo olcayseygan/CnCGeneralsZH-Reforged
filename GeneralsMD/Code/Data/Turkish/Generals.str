@@ -15461,6 +15461,47 @@ TOOLTIP:Language
 "Menülerin, emirlerin, brifinglerin ve altyazıların dili. Sesler ve videolar kurulduğu gibi kalır. Oyun bir sonraki açılışında etkinleşir."
 END
 
+GUI:TextPersonnel
+"Birim adları"
+END
+
+GUI:TextPersonnel0
+"Değiştirme"
+END
+
+GUI:TextPersonnel1
+"İnsan adları"
+END
+
+GUI:TextPersonnel2
+"Robot adları"
+END
+
+TOOLTIP:TextPersonnel
+"Desteklenen birim adlarında insan veya robot ifadelerini seçer. Metin dilinden bağımsızdır. Modeller, sesler ve oynanış değişmez. Oyun yeniden başlatıldığında uygulanır."
+END
+
+GUI:TextFactions
+"Taraf adları"
+END
+
+GUI:TextFactions0
+"Değiştirme"
+END
+
+GUI:TextFactions1
+"Özgün adlar"
+END
+
+GUI:TextFactions2
+"Uyarlanmış adlar"
+END
+
+TOOLTIP:TextFactions
+"Ülke ve tarafların özgün veya uyarlanmış adlarını seçer. Metin dilinden bağımsızdır. Yalnızca ekrandaki adlar değişir. Oyun yeniden başlatıldığında uygulanır."
+END
+
+
 GUI:PeaceTimeOff
 "Barış Süresi Yok"
 END

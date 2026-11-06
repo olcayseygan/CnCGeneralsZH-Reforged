@@ -262,6 +262,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckAtmosphere",        "GUI:Atmosphere"),
     (CHECK,  "CheckStructureCollapse", "GUI:StructureCollapse"),
     (CHECK,  "CheckSmoothMotion",      "GUI:SmoothMotion"),
+    (CHECK,  "CheckHeatHaze",          "GUI:HeatHaze"),
     (LABEL,  "LabelGraphicsQuality",   "GUI:GraphicsQuality"),
     (SLIDER, "SliderGraphicsQuality",  None),
 ]
@@ -370,6 +371,7 @@ GROUP_LAYOUT = [
             # every column of Graphics and Effects is full
             ("check", "CheckStructureCollapse"),
             ("check", "CheckSmoothMotion"),
+            ("check", "CheckHeatHaze"),
             # the Screen column is full with the monitor and the resolution note
             setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit")])]),
 

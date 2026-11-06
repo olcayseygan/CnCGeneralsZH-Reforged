@@ -1863,6 +1863,14 @@ TOOLTIP:SmoothMotion
 "On a screen faster than 60 Hz, units are drawn between their last two positions instead of holding each one until the next. A 60 Hz screen shows no change. Only your picture changes: nothing in the game reads it, and other players see their own setting. Applies when you press Accept."
 END
 
+GUI:HeatHaze
+"Heat Haze"
+END
+
+TOOLTIP:HeatHaze
+"The air shimmers over fires, along laser beams and behind missile exhaust. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
 GUI:StructureCollapse
 "Collapsing Buildings"
 END

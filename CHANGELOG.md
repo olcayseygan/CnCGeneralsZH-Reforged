@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Air that shimmers over fire
+
+- Heat Haze, under Options, Display, is a new setting, off by default until it has been played. The air above a burning building wavers, a laser's beam bends what lies behind it, and a missile leaves a ripple behind its exhaust, the way hot air does in Command and Conquer 3. Only the ground behind the heat moves: a tank parked in the fire keeps its outline. The Performance / Quality slider turns it on one stop past High, with ambient occlusion, and you can still tick it by hand at any stop. Your opponent's setting is his own, because nothing in the game reads it. Direct3D 11 only, and off under Classic Graphics.
+
 ## EA's four ranks are back
 
 - The rank ladder is gone, every grade, perk and aura of it. A unit is Regular, Veteran, Elite or Heroic again, on the kills and the bonuses the 2003 game gave them, with EA's chevrons over the health bar and on the portrait. Six kills of its own kind make a Crusader Heroic, where an American one needed 66 on the ladder.

@@ -248,6 +248,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckAtmosphere",        "GUI:Atmosphere"),
     (CHECK,  "CheckStructureCollapse", "GUI:StructureCollapse"),
     (CHECK,  "CheckSmoothMotion",      "GUI:SmoothMotion"),
+    (CHECK,  "CheckHeatHaze",          "GUI:HeatHaze"),
     (LABEL,  "LabelGraphicsQuality",   "GUI:GraphicsQuality"),
     (SLIDER, "SliderGraphicsQuality",  None),
 ]
@@ -355,7 +356,8 @@ GROUP_LAYOUT = [
             setting("GammaLabel", "SliderGamma", "ValueGamma"),
             # every column of Graphics and Effects is full
             ("check", "CheckStructureCollapse"),
-            ("check", "CheckSmoothMotion")])]),
+            ("check", "CheckSmoothMotion"),
+            ("check", "CheckHeatHaze")])]),
 
     ("PageGraphics", [
         # the particle limit went to Effects' Particles group to make room for the quality slider

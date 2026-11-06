@@ -152,6 +152,7 @@ OPTION_BOOL_ACCESSORS( m_atmosphere )
 OPTION_BOOL_ACCESSORS( m_structureCollapse )
 OPTION_BOOL_ACCESSORS( m_smoothMotion )
 OPTION_BOOL_ACCESSORS( m_internalHdr )
+OPTION_BOOL_ACCESSORS( m_heatHaze )
 OPTION_INT_ACCESSORS( m_shadowQuality )
 OPTION_INT_ACCESSORS( m_graphicsQuality )
 
@@ -690,6 +691,14 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_internalHdr, set_m_internalHdr },
 
+	// The air over fire, along laser beams and behind missile exhaust shimmers, at the strength the
+	// HEAT_HAZE_*, HEAT_BEAM_* and HEAT_EXHAUST_* constants in W3DParticleSys.cpp give.  The particle draw
+	// reads it every frame, and no sim reads it.  Off under Classic graphics and -d3d9; -heathaze turns it
+	// on for a run.  On Options > Display, under Picture: every column of Graphics and Effects is full.
+	{ "HeatHaze",									OPT_WND( "CheckHeatHaze" ), "GUI:HeatHaze",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_heatHaze, set_m_heatHaze },
+
 	// The size of the sun's depth map.  The shadow pass asks for it every frame and the backend makes
 	// the map again when the size changes, so a new level shows on the next frame.  On Options >
 	// Effects.  Classic graphics and -d3d9 draw no map at all.
@@ -792,6 +801,9 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	{ "CheckWaterSplashes",			0.2f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckAtmosphere",				0.2f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
 	{ "ComboBoxShadowQuality",	0.25f, {    0,    0,    0,    0,    0,    0,    1,    1,    1,    2,    2 } },
+	// from the DX11 GPU frame lines at 1920x1080 with -noFPSLimit, on against off: about 0.1 ms in a
+	// normal match (0.08 to 0.13), 0.2 to 0.4 in a fire-heavy one (0.07 to 0.55 at the ends)
+	{ "CheckHeatHaze",					0.25f, {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckAmbientOcclusion",	0.3f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckMapLight",					0.35f, {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckFirelight",					0.4f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },

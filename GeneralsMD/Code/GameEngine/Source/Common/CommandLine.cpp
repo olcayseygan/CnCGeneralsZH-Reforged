@@ -1101,7 +1101,7 @@ Int parseSmoothMotion(char *args[], int)
 	return 1;
 }
 
-/* -heathaze: the air over the FireLook flames shimmers on Direct3D 11, a prototype. Client only. */
+/* -heathaze: the HeatHaze option on for one run, whatever Options.ini says. Client only. */
 Int parseHeatHaze(char *args[], int)
 {
 	if (TheWritableGlobalData)

@@ -1631,7 +1631,7 @@ void ChallengeLoadScreen::activatePieces( Int frame, const GeneralPersona *gener
 
 	AudioEventRTS eventLeftGeneral( generalPlayer->getNameSound() );
 	AudioEventRTS eventVS("Taunts_GCAnnouncer12");
-	AudioEventRTS eventRightGeneral( generalOpponent->getNameSound() );
+	AudioEventRTS eventRightGeneral( generalOpponent ? generalOpponent->getNameSound() : AsciiString::TheEmptyString );
 
 	switch (frame)
 	{
@@ -1684,9 +1684,12 @@ void ChallengeLoadScreen::activatePieces( Int frame, const GeneralPersona *gener
 		case FRAME_PORTRAITS_START:
 			
 			m_wndVideoManager->playMovie( m_portraitMovieLeft, generalPlayer->getPortraitMovieLeftName(), WINDOW_PLAY_MOVIE_SHOW_LAST_FRAME);
-			m_wndVideoManager->playMovie( m_portraitMovieRight, generalOpponent->getPortraitMovieRightName(), WINDOW_PLAY_MOVIE_SHOW_LAST_FRAME);
 			m_portraitMovieLeft->winHide(FALSE);
-			m_portraitMovieRight->winHide(FALSE);
+			if (generalOpponent)
+			{
+				m_wndVideoManager->playMovie( m_portraitMovieRight, generalOpponent->getPortraitMovieRightName(), WINDOW_PLAY_MOVIE_SHOW_LAST_FRAME);
+				m_portraitMovieRight->winHide(FALSE);
+			}
 
 			TheAudio->addAudioEvent( &eventLeftGeneral );
 			
@@ -1738,11 +1741,14 @@ void ChallengeLoadScreen::activatePieces( Int frame, const GeneralPersona *gener
 		textPosBirthplaceLeft = updateTeletypeText( 1, m_bioBirthplaceEntryLeft, TheGameText->fetch(generalPlayer->getBioRank()), textPosBirthplaceLeft);
 		textPosStrategyLeft = updateTeletypeText( 1, m_bioStrategyEntryLeft, TheGameText->fetch(generalPlayer->getBioStrategy()), textPosStrategyLeft);
 		
-		textPosNameRight = updateTeletypeText( 1, m_bioNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()), textPosNameRight);
-		textPosBigNameRight = updateTeletypeText( 1, m_bioBigNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()), textPosBigNameRight);
-//		textPosAgeRight = updateTeletypeText( 1, m_bioAgeEntryRight, TheGameText->fetch(generalOpponent->getBioDOB()), textPosAgeRight);
-		textPosBirthplaceRight = updateTeletypeText( 1, m_bioBirthplaceEntryRight, TheGameText->fetch(generalOpponent->getBioRank()), textPosBirthplaceRight);
-		textPosStrategyRight = updateTeletypeText( 1, m_bioStrategyEntryRight, TheGameText->fetch(generalOpponent->getBioStrategy()), textPosStrategyRight);
+		if (generalOpponent)
+		{
+			textPosNameRight = updateTeletypeText( 1, m_bioNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()), textPosNameRight);
+			textPosBigNameRight = updateTeletypeText( 1, m_bioBigNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()), textPosBigNameRight);
+//			textPosAgeRight = updateTeletypeText( 1, m_bioAgeEntryRight, TheGameText->fetch(generalOpponent->getBioDOB()), textPosAgeRight);
+			textPosBirthplaceRight = updateTeletypeText( 1, m_bioBirthplaceEntryRight, TheGameText->fetch(generalOpponent->getBioRank()), textPosBirthplaceRight);
+			textPosStrategyRight = updateTeletypeText( 1, m_bioStrategyEntryRight, TheGameText->fetch(generalOpponent->getBioStrategy()), textPosStrategyRight);
+		}
 	}
 }
  
@@ -1771,15 +1777,18 @@ void ChallengeLoadScreen::activatePiecesMinSpec(const GeneralPersona *generalPla
 //	m_bioAgeEntryRight->winHide(FALSE);
 	m_bioBirthplaceEntryRight->winHide(FALSE);
 	m_bioStrategyEntryRight->winHide(FALSE);
-	GadgetStaticTextSetText( m_bioBigNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()) );
-	GadgetStaticTextSetText( m_bioNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()) );
-//	GadgetStaticTextSetText( m_bioAgeEntryRight, TheGameText->fetch(generalOpponent->getBioDOB()) );
-	GadgetStaticTextSetText( m_bioBirthplaceEntryRight, TheGameText->fetch(generalOpponent->getBioRank()) );
-	GadgetStaticTextSetText( m_bioStrategyEntryRight, TheGameText->fetch(generalOpponent->getBioStrategy()) );
 	m_portraitLeft->winSetEnabledImage(0, generalPlayer->getBioPortraitLarge() );
-	m_portraitRight->winSetEnabledImage(0, generalOpponent->getBioPortraitLarge() );
 	m_portraitLeft->winHide(FALSE);
-	m_portraitRight->winHide(FALSE);
+	if (generalOpponent)
+	{
+		GadgetStaticTextSetText( m_bioBigNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()) );
+		GadgetStaticTextSetText( m_bioNameEntryRight, TheGameText->fetch(generalOpponent->getBioName()) );
+//		GadgetStaticTextSetText( m_bioAgeEntryRight, TheGameText->fetch(generalOpponent->getBioDOB()) );
+		GadgetStaticTextSetText( m_bioBirthplaceEntryRight, TheGameText->fetch(generalOpponent->getBioRank()) );
+		GadgetStaticTextSetText( m_bioStrategyEntryRight, TheGameText->fetch(generalOpponent->getBioStrategy()) );
+		m_portraitRight->winSetEnabledImage(0, generalOpponent->getBioPortraitLarge() );
+		m_portraitRight->winHide(FALSE);
+	}
 	m_overlayReticleCircleAlphaOuter->winHide(FALSE);
 	m_overlayReticleCircleAlphaInner->winHide(FALSE);
 	m_overlayVsBackdrop->winHide(FALSE);
@@ -1800,6 +1809,11 @@ void ChallengeLoadScreen::init( GameInfo *game )
 	// the opponent general is tied to the mission
 	DEBUG_ASSERTCRASH(mission->m_generalName.isNotEmpty(), ("No GeneralName associated with this mission, check Campaign.ini"));
 	const GeneralPersona* generalOpponent = TheChallengeGenerals->getGeneralByGeneralName( mission->m_generalName );
+	// A mission can name a general the challenge data does not have.  The challenge menu leaves such a
+	// general out of its list, but a saved game does not pass through that menu.  The screen then keeps its
+	// right side empty: no portrait, no bio, no voice.
+	if (generalOpponent == NULL)
+		DEBUG_LOG(("ChallengeLoadScreen: the data has no general '%s' for this mission\n", mission->m_generalName.str()));
 
 	// create the layout of the load screen
 	m_loadScreen = TheWindowManager->winCreateFromScript( AsciiString( "Menus/ChallengeLoadScreen.wnd" ) );
@@ -1998,7 +2012,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 	setFPMode();
 
 	
-	AudioEventRTS event( generalOpponent->getRandomTauntSound() );
+	AudioEventRTS event( generalOpponent ? generalOpponent->getRandomTauntSound() : AsciiString::TheEmptyString );
 	TheAudio->addAudioEvent( &event );
 
 	m_ambientLoopHandle = TheAudio->addAudioEvent(&m_ambientLoop);

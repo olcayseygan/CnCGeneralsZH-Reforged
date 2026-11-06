@@ -3359,6 +3359,7 @@ Tests/WaterWaveCageMeshReference.h
 Tests/WaterWaveCageTest.h
 Tests/arch_diff/arch_probe.cpp
 Tests/arch_diff/known_differences.txt
+Tests/arch_diff/probe_runtime.py
 Tests/arch_diff/run_arch_diff.sh
 Tests/bink_smoke.c
 Tests/binkvideo_golden.inc
@@ -3398,6 +3399,7 @@ Tests/shader_cases.h
 Tests/terrain_golden.txt
 Tests/terrain_grid.h
 Tests/terrain_oracle.cpp
+Tests/test_arch_runtime.py
 Tests/test_audio_mix_policy.cpp
 Tests/test_bigfilesystem.cpp
 Tests/test_bigfilesystem_stubs.cpp

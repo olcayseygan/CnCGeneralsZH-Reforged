@@ -89,6 +89,7 @@ mkdir -p "$work"
 
 # --- can this machine do the job at all? -----------------------------------------------------
 command -v clang++ >/dev/null 2>&1 || skip "no clang++ on PATH"
+command -v python3 >/dev/null 2>&1 || skip "no Python 3 on PATH"
 
 probe="$here/arch_probe.cpp"
 [ -e "$probe" ] || { echo "[arch-diff] ERROR: $probe is missing"; exit 1; }
@@ -102,10 +103,24 @@ clang -arch x86_64 "$work/canary_x86.c" -o "$work/canary_x86" 2>/dev/null \
   || skip "this clang cannot target x86_64 (no cross toolchain)"
 clang -arch arm64  "$work/canary_arm.c" -o "$work/canary_arm" 2>/dev/null \
   || skip "this clang cannot target arm64"
-"$work/canary_x86" >/dev/null 2>&1 \
-  || skip "x86_64 binaries do not run here (Rosetta 2 is not installed)"
-"$work/canary_arm" >/dev/null 2>&1 \
-  || skip "arm64 binaries do not run here"
+runtime_canary() {
+  local architecture="$1" binary="$2" runtime_result
+  python3 "$here/probe_runtime.py" --timeout 10 -- "$binary"
+  runtime_result=$?
+  case "$runtime_result" in
+    0) return 0 ;;
+    124)
+      if [ "$architecture" = x86_64 ]; then
+        skip "x86_64 runtime (Rosetta 2 when required) did not respond within 10 seconds"
+      fi
+      skip "$architecture runtime did not respond within 10 seconds"
+      ;;
+    125) echo "[arch-diff] ERROR: runtime-canary supervisor failed" >&2; exit 1 ;;
+    *) skip "$architecture binaries do not run here (runtime canary exit $runtime_result)" ;;
+  esac
+}
+runtime_canary x86_64 "$work/canary_x86"
+runtime_canary arm64 "$work/canary_arm"
 
 # --- what the probe can reach today ----------------------------------------------------------
 # dettrig.cpp still needs two spellings the Microsoft CRT provides and clang does not.  Both are

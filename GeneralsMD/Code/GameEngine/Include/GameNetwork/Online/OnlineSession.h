@@ -127,6 +127,7 @@ struct OnlineSession
 	std::string config;
 	UnsignedShort relayPort;
 	Bool testMode;					///< welcome.testMode: OnlineIsTestServer
+	std::string registerUrl;	///< welcome.registerUrl: OnlineGetRegisterUrl
 
 	// the account
 	Bool authed;						///< auth.ok arrived

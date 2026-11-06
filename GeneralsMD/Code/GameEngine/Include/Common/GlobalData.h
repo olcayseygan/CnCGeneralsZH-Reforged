@@ -551,7 +551,6 @@ public:
 	AsciiString m_onlineCAFile;				///< -onlineca <file>: PEM CA the service's certificate is checked against (empty = the Let's Encrypt roots)
 	AsciiString m_onlineUser;					///< -onlineuser <email>: log in with this account instead of the login screen's fields
 	AsciiString m_onlinePass;					///< -onlinepass <password>: its password (a test switch: it shows in the process list)
-	AsciiString m_onlineRegisterNick;	///< -onlineregister <nick>: create the -onlineuser account under this nick before logging in
 	AsciiString m_onlineHostGame;			///< -onlinehost <name>: host a custom game of this name once in the lobby
 	AsciiString m_onlineJoinGame;			///< -onlinejoin <name>: join the custom game of this name once it is listed
 	AsciiString m_onlineSay;					///< -onlinesay <text>: say this in the lobby and again in the staging room

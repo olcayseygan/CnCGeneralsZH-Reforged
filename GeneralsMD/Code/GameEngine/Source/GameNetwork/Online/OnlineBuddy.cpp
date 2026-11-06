@@ -84,12 +84,6 @@ void OnlineBuddyQueue::addRequest( const BuddyRequest& req )
 		s.requestAuth( m );
 		return;
 
-	case BuddyRequest::BUDDYREQUEST_LOGINNEW:
-		m.setString( "t", "register" ).setString( "email", req.arg.login.email );
-		m.setString( "nick", req.arg.login.nick ).setString( "pass", req.arg.login.password );
-		s.requestAuth( m );
-		return;
-
 	case BuddyRequest::BUDDYREQUEST_LOGOUT:
 		s.disconnect();
 		return;
@@ -101,7 +95,8 @@ void OnlineBuddyQueue::addRequest( const BuddyRequest& req )
 		return;
 
 	default:
-		return;		// buddy lists and status come later; RELOGIN has no saved password to use
+		return;		// buddy lists and status come later; RELOGIN has no saved password to use; LOGINNEW
+							// is the site's /register page now (the login screen's Create Account opens it)
 	}
 }
 

@@ -2609,7 +2609,6 @@ Int parseOnlineUser(char *args[], int num)
 	return parseOnlineText( args, num, &GlobalData::m_onlineUser );
 }
 Int parseOnlinePass(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlinePass ); }
-Int parseOnlineRegister(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineRegisterNick ); }
 Int parseOnlineHostGame(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineHostGame ); }
 Int parseOnlineJoin(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineJoinGame ); }
 /* -onlinesay is chat, kept as UTF-8 like every line the service carries.  Windows hands the switch over in
@@ -3190,7 +3189,6 @@ static CommandLineParam params[] =
 	{ "-onlineca", parseOnlineCA },
 	{ "-onlineuser", parseOnlineUser },
 	{ "-onlinepass", parseOnlinePass },
-	{ "-onlineregister", parseOnlineRegister },
 	{ "-onlinehost", parseOnlineHostGame },
 	{ "-onlinejoin", parseOnlineJoin },
 	{ "-onlinesay", parseOnlineSay },

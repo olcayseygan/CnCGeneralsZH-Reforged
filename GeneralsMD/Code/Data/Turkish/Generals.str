@@ -10529,6 +10529,10 @@ GUI:Lobby
 "Lobi"
 END
 
+GUI:OnlineLoginName
+"E-posta veya Kullanıcı Adı"
+END
+
 GUI:???
 "Rastgele"
 END

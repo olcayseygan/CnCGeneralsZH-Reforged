@@ -68,6 +68,16 @@ void OnlineDisconnect( void );						///< hangs up; the next OnlineUpdate dials a
 /* The welcome said testMode, which a server sends only when started for a test.  Only then does the
 	 -control socket run world commands in an online match: anywhere else they are a cheat. */
 Bool OnlineIsTestServer( void );
+/* welcome.registerUrl, the site's page where accounts are made (the game only logs in); empty when the
+	 server sent none, and the login screen then hides Create Account. */
+AsciiString OnlineGetRegisterUrl( void );
+/* Opens an http or https address in the player's browser; FALSE when it is not one or nothing could open
+	 it.  Windows asks the shell; elsewhere the platform layer's hook, SDL_OpenURL, set by SdlGameEngine. */
+Bool OnlineOpenURL( const char *url );
+#if !defined(_WIN32)
+typedef bool (*OnlineOpenURLHook)( const char *url );
+extern OnlineOpenURLHook TheOnlineOpenURLHook;
+#endif
 
 /* The relay.  Both are FALSE until a login succeeded (auth.ok).  The ticket goes into the UDP HELLO_AUTH,
 	 which has to be sent right after login: the peer queue answers PEERREQUEST_LOGIN only once the server

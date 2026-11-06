@@ -749,29 +749,32 @@ TEST(online_adapter_login_waits_for_the_relay)
 	CHECK_STR( rig.sentType( 1 ).c_str(), "stats.get" );		// our own stats, as GameSpy's login read them
 }
 
-TEST(online_adapter_register_and_refusal)
+TEST(online_adapter_login_refusal_and_no_register)
 {
 	AdapterRig rig;
 	BuddyRequest req;
 	memset( &req, 0, sizeof(req) );
+	// accounts are made on the site: a new-account request sends nothing
 	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGINNEW;
 	strcpy( req.arg.login.nick, "Tank" );
 	strcpy( req.arg.login.email, "tank@example.com" );
 	strcpy( req.arg.login.password, "secret" );
 	rig.buddy->addRequest( req );
-	CHECK_EQ( rig.sent.size(), (size_t)1 );
-	CHECK_STR( rig.sentType( 0 ).c_str(), "register" );
-	CHECK_STR( rig.sent[0].getString( "nick" ).c_str(), "Tank" );
-	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
-	CHECK_STR( rig.sent[0].getString( "pass" ).c_str(), "secret" );
+	CHECK_EQ( rig.sent.size(), (size_t)0 );
 
-	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"nicktaken\"}" );
+	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+	rig.buddy->addRequest( req );
+	CHECK_EQ( rig.sent.size(), (size_t)1 );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
+	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
+
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"badlogin\"}" );
 	std::vector<PeerResponse> r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)1 );
 	if (r.size() == 1)
 	{
 		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_DISCONNECT );
-		CHECK_EQ( (int)r[0].discon.reason, (int)DISCONNECT_NICKTAKEN );
+		CHECK_EQ( (int)r[0].discon.reason, (int)DISCONNECT_GP_LOGIN_BAD_PASSWORD );
 	}
 	CHECK( !rig.peer->isConnecting() );
 	UnsignedByte ticket[16];
@@ -1334,4 +1337,18 @@ TEST(online_adapter_leaves_the_chat_room_for_a_staging_room)
 	leave.peerRequestType = PeerRequest::PEERREQUEST_LEAVEGROUPROOM;
 	rig.peer->addRequest( leave );
 	CHECK_EQ( rig.sent.size(), (size_t)0 );		// already out
+}
+
+TEST(online_register_url_from_the_welcome_and_only_a_web_page_opens)
+{
+	AdapterRig rig;
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094}" );
+	CHECK( OnlineGetRegisterUrl().isEmpty() );		// none sent: Create Account hides
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"registerUrl\":\"https://example.test/register\"}" );
+	CHECK_STR( OnlineGetRegisterUrl().str(), "https://example.test/register" );
+	// a hostile server's address is refused before anything is asked to open it
+	CHECK( !OnlineOpenURL( "file:///C:/Windows/System32/calc.exe" ) );
+	CHECK( !OnlineOpenURL( "C:\\Windows\\notepad.exe" ) );
+	CHECK( !OnlineOpenURL( "" ) );
+	CHECK( !OnlineOpenURL( NULL ) );
 }

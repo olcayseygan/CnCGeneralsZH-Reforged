@@ -468,6 +468,8 @@ void EnableLoginControls( Bool state )
 //-------------------------------------------------------------------------------------------------
 /** Initialize the WOL Login Menu */
 //-------------------------------------------------------------------------------------------------
+static void onlineLoginScreen( void );
+
 void WOLLoginMenuInit( WindowLayout *layout, void *userData )
 {
 	nextScreen = NULL;
@@ -737,6 +739,7 @@ void WOLLoginMenuInit( WindowLayout *layout, void *userData )
 #endif // ALLOW_NON_PROFILED_LOGIN
 
 	EnableLoginControls(TRUE);
+	onlineLoginScreen();
 
 	// Show Menu
 	layout->hide( FALSE );
@@ -828,38 +831,65 @@ static void checkLogin( void )
 	}
 }
 
-/* -onlineuser/-onlinepass/-onlineregister: fill the fields and press the button a player would, once per
-	 process; a refusal leaves the screen to a person.  The birth date is any adult's: the service asks none. */
+/* -onlineuser/-onlinepass: fill the fields and press Login as a player would, once per process; a refusal
+	 leaves the screen to a person.  No password logs in with the token a remembered login saved. */
 static void onlineAutoLogin( void )
 {
 	static Bool s_done = FALSE;
 	if (s_done || !OnlineIsEnabled() || TheGlobalData->m_onlineUser.isEmpty() || loginAttemptTime
-		|| !comboBoxEmail || !comboBoxLoginName || !textEntryPassword || !parentWOLLogin)
+		|| !comboBoxEmail || !textEntryPassword || !parentWOLLogin || !buttonLogin)
 		return;
 	s_done = TRUE;
 
-	const Bool registering = TheGlobalData->m_onlineRegisterNick.isNotEmpty();
 	UnicodeString text;
 	text.translate( TheGlobalData->m_onlineUser );
 	GadgetComboBoxSetText( comboBoxEmail, text );
-	text.translate( registering ? TheGlobalData->m_onlineRegisterNick : TheGlobalData->m_onlineUser );
-	GadgetComboBoxSetText( comboBoxLoginName, text );
 	text.translate( TheGlobalData->m_onlinePass );
 	GadgetTextEntrySetText( textEntryPassword, text );
-	if (textEntryMonth && textEntryDay && textEntryYear)
-	{
-		GadgetTextEntrySetText( textEntryMonth, UnicodeString(u"01") );
-		GadgetTextEntrySetText( textEntryDay, UnicodeString(u"01") );
-		GadgetTextEntrySetText( textEntryYear, UnicodeString(u"1990") );
-	}
 	if (checkBoxRememberPassword)
 		GadgetCheckBoxSetChecked( checkBoxRememberPassword, TRUE );
 
-	DEBUG_LOG(("ONLINE AUTOLOGIN %s\n", registering ? "register" : "login"));
-	GameWindow *button = registering ? buttonCreateAccount : buttonLogin;
-	const NameKeyType buttonID = registering ? buttonCreateAccountID : buttonLoginID;
-	if (button)
-		TheWindowManager->winSendSystemMsg( parentWOLLogin, GBM_SELECTED, (WindowMsgData)button, buttonID );
+	DEBUG_LOG(("ONLINE AUTOLOGIN login\n"));
+	TheWindowManager->winSendSystemMsg( parentWOLLogin, GBM_SELECTED, (WindowMsgData)buttonLogin, buttonLoginID );
+}
+
+/* -online: the game only logs in, the site makes accounts (the owner's call of 2026-11-06).  One field takes
+	 the email or the nick, so the nick box and the birth date go; Create Account opens the site's register
+	 page the server named in its welcome, and goes too when it named none. */
+static void onlineLoginScreen( void )
+{
+	if (!OnlineIsEnabled())
+		return;
+	const char *hidden[] = { "GameSpyLoginProfile.wnd:WinAge", "GameSpyLoginProfile.wnd:StaticTextLoginName",
+		"GameSpyLoginProfile.wnd:ComboBoxLoginName" };
+	AsciiString shown;
+	for (Int i = 0; i < (Int)ARRAY_SIZE(hidden); ++i)
+	{
+		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( hidden[i] ) );
+		if (win)
+			win->winHide( TRUE );
+	}
+	GameWindow *emailLabel = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextEmail" ) );
+	if (emailLabel)
+		GadgetStaticTextSetText( emailLabel, TheGameText->fetch( "GUI:OnlineLoginName" ) );
+	const AsciiString url = OnlineGetRegisterUrl();
+	if (buttonCreateAccount)
+		buttonCreateAccount->winHide( url.isEmpty() );
+	// what a player can type into, for online_check.py: a window counts when neither it nor a parent is hidden
+	const struct { GameWindow *win; const char *name; } fields[] = { { comboBoxEmail, "login" }, { comboBoxLoginName, "nick" },
+		{ textEntryPassword, "password" }, { textEntryMonth, "birthdate" }, { checkBoxRememberPassword, "remember" } };
+	for (Int i = 0; i < (Int)ARRAY_SIZE(fields); ++i)
+	{
+		Bool visible = fields[i].win != NULL;
+		for (GameWindow *w = fields[i].win; w && visible; w = w->winGetParent())
+			visible = !w->winIsHidden();
+		if (!visible)
+			continue;
+		if (shown.isNotEmpty())
+			shown.concat( "," );
+		shown.concat( fields[i].name );
+	}
+	DEBUG_LOG(("ONLINE LOGINSCREEN fields=%s register=%s\n", shown.str(), url.isEmpty() ? "hidden" : url.str()));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1333,6 +1363,15 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 #endif // ALLOW_NON_PROFILED_LOGIN
 				else if ( controlID == buttonCreateAccountID )
 				{
+					// -online: accounts are made on the site; the button opens its register page.  A test server's
+					// copies only log the address, so a scripted run puts no browser on the desktop
+					if (OnlineIsEnabled())
+					{
+						const AsciiString url = OnlineGetRegisterUrl();
+						const Bool opened = url.isNotEmpty() && !OnlineIsTestServer() && OnlineOpenURL( url.str() );
+						DEBUG_LOG(("ONLINE REGISTER url=%s opened=%d\n", url.str(), (Int)opened));
+						break;
+					}
 #ifdef ALLOW_NON_PROFILED_LOGIN
 					if (GameSpyUseProfiles)
 					{
@@ -1384,9 +1423,6 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 								// -online keeps the session token instead (OnlineSaveToken at login)
 								loginPref->addLogin(email, login, OnlineIsEnabled() ? AsciiString::TheEmptyString : password, date);
 							}
-							if (OnlineIsEnabled())
-								onlineLoginSent( email, "register" );
-
 							EnableLoginControls( FALSE );
 
 							// fire off some pings
@@ -1435,8 +1471,9 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 						month.translate( GadgetTextEntryGetText(textEntryMonth) );
 						day.translate( GadgetTextEntryGetText(textEntryDay) );
 						year.translate( GadgetTextEntryGetText(textEntryYear) );
-						
-						if(!isAgeOkay(month, day, year))
+
+						// -online asks no birth date: the site's register page is where an account is made
+						if(!OnlineIsEnabled() && !isAgeOkay(month, day, year))
 						{
 							GSMessageBoxOk(TheGameText->fetch("GUI:AgeFailedTitle"), TheGameText->fetch("GUI:AgeFailed"));
 							break;
@@ -1445,6 +1482,8 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 						email.translate( GadgetComboBoxGetText(comboBoxEmail) );
 						login.translate( GadgetComboBoxGetText(comboBoxLoginName) );
 						password.translate( GadgetTextEntryGetText(textEntryPassword) );
+						if (OnlineIsEnabled())
+							login = email;		// one field, the email or the nick: the server takes either
 
 						// -online: an empty password with a remembered session token logs in with the token
 						AsciiString token;

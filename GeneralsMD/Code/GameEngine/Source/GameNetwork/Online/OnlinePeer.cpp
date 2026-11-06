@@ -38,6 +38,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(_WIN32)
+#include <shellapi.h>		// ShellExecuteA, OnlineOpenURL
+#endif
 
 // FirewallHelperClass::FIREWALL_TYPE_SIMPLE: every route goes through the relay, nothing to negotiate
 static const Int ONLINE_NAT_SIMPLE = 1;
@@ -161,6 +164,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	config.clear();
 	relayPort = 8094;
 	testMode = FALSE;
+	registerUrl.clear();
 	status = lines ? ONLINE_WELCOMED : ONLINE_OFF;
 }
 
@@ -438,6 +442,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		config = m.getString( "config" );
 		relayPort = (UnsignedShort)m.getInt( "relayPort" );
 		testMode = m.getBool( "testMode" );
+		registerUrl = m.getString( "registerUrl" );
 		status = ONLINE_WELCOMED;
 		if (hasPendingAuth)
 		{
@@ -1018,6 +1023,28 @@ Bool OnlineIsTestServer( void )
 {
 	return OnlineIsEnabled() && OnlineSession::get().testMode;
 }
+
+AsciiString OnlineGetRegisterUrl( void )
+{
+	return OnlineSession::get().registerUrl.c_str();
+}
+
+/* Only a web page: the address comes from the server, and ShellExecute would run a program path or open a
+	 file:// as readily as a page. */
+Bool OnlineOpenURL( const char *url )
+{
+	if (!url || (strncmp( url, "https://", 8 ) != 0 && strncmp( url, "http://", 7 ) != 0))
+		return FALSE;
+#if defined(_WIN32)
+	return (INT_PTR)ShellExecuteA( NULL, "open", url, NULL, NULL, SW_SHOWNORMAL ) > 32;
+#else
+	return TheOnlineOpenURLHook ? (Bool)TheOnlineOpenURLHook( url ) : FALSE;
+#endif
+}
+
+#if !defined(_WIN32)
+OnlineOpenURLHook TheOnlineOpenURLHook = NULL;
+#endif
 
 Bool OnlineGetRelayTicket( UnsignedByte out[16] )
 {

@@ -799,7 +799,6 @@ GlobalData::GlobalData()
 	m_onlineCAFile.clear();
 	m_onlineUser.clear();
 	m_onlinePass.clear();
-	m_onlineRegisterNick.clear();
 	m_onlineHostGame.clear();
 	m_onlineJoinGame.clear();
 	m_onlineSay.clear();

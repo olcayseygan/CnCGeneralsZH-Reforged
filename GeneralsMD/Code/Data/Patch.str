@@ -3253,3 +3253,8 @@ END
 GUI:???
 "Random"
 END
+
+// the online login screen's one account field: the service takes the email or the nick
+GUI:OnlineLoginName
+"Email or Nickname"
+END

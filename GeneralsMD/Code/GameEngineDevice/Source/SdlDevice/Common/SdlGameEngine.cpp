@@ -24,6 +24,7 @@
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "GameClient/ApplicationWindowTitle.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include "GameLogic/GameLogic.h"
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
@@ -243,6 +244,7 @@ void SdlGameEngine::createWindow( void )
 	s_titledWindow = m_window;
 	TheApplicationWindowTitleHook = setTitleOfWindow;
 	setSdlMessageBoxOwner( m_window );
+	TheOnlineOpenURLHook = []( const char *url ) { return SDL_OpenURL( url ); };	// the online login's Create Account
 
 	// WinMain's ApplicationHWnd, for W3DDevice: the device's window, and the calls that dress and size it
 	ApplicationHWnd = (RenderWindow)m_window;

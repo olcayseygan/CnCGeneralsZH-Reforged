@@ -803,6 +803,7 @@ GlobalData::GlobalData()
 	m_onlineJoinGame.clear();
 	m_onlineSay.clear();
 	m_onlineMap.clear();
+	m_onlineOptions.clear();
 	m_onlineStart = 0;
 	m_quickMatchOnStart = FALSE;
 	m_onlineLoginOnStart = FALSE;

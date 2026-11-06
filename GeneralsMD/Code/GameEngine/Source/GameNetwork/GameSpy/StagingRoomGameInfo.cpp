@@ -618,6 +618,9 @@ void GameSpyStagingRoom::startGame(Int gameID)
 				DEBUG_LOG(("ONLINE LAUNCH slot=%d vip=%d.%d.%d.%d\n", i, ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff));
 			}
 		}
+		// what every seat starts under, for online_check.py to set the host's line beside the guest's
+		DEBUG_LOG(("ONLINE OPTIONS prorules=%d turbo=%d unitlimit=%d stats=%d map=%s\n", (Int)getProRules(), (Int)getTurbo(),
+			(Int)getUnitLimit(), (Int)getUseStats(), getMap().str()));
 		launchGame();
 		if (TheGameSpyInfo)
 			TheGameSpyInfo->leaveStagingRoom();

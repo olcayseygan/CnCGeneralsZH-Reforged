@@ -2631,6 +2631,7 @@ Int parseOnlineSay(char *args[], int num)
 	return used;
 }
 Int parseOnlineMap(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineMap ); }
+Int parseOnlineOptions(char *args[], int num)		{ return parseOnlineText( args, num, &GlobalData::m_onlineOptions ); }
 
 /* -onlinestart N: the -onlinehost host starts the game once N players (itself included) sit in the room;
 	 bare or below 2 it is 2, the first joiner. */
@@ -3193,6 +3194,7 @@ static CommandLineParam params[] =
 	{ "-onlinejoin", parseOnlineJoin },
 	{ "-onlinesay", parseOnlineSay },
 	{ "-onlinemap", parseOnlineMap },
+	{ "-onlineoptions", parseOnlineOptions },
 	{ "-onlinestart", parseOnlineStart },
 	{ "-onlinelogin", parseOnlineLogin },
 	{ "-quickmatch", parseQuickMatch },

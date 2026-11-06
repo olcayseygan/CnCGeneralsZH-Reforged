@@ -262,34 +262,27 @@ static void onlineLobbyScript( void )
 		&& (!saying || (s_said && Clock_Milliseconds() - s_saidAt >= 3000)))
 	{
 		s_hosted = TRUE;
-		SetLobbyAttemptHostJoin( TRUE );
-		TheLobbyQueuedUTMs.clear();
-		groupRoomToJoin = TheGameSpyInfo->getCurrentGroupRoom();
-		TheGameSpyInfo->setCurrentGroupRoom(0);
-
+		/* The Host button, then the host popup's name and Create Game, as a player clicks them, so the room
+			 is made under the popup's own rules.  Building the request here once hid that the popup made
+			 every online room a stats room, with every option locked for its host. */
+		GameWindow *popupName = NULL, *popupCreate = NULL, *popup = NULL;
+		if (buttonHost)
+		{
+			TheWindowManager->winSendSystemMsg( parent, GBM_SELECTED, (WindowMsgData)buttonHost, buttonHostID );
+			popup = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "PopupHostGame.wnd:ParentHostPopUp" ) );
+			popupName = TheWindowManager->winGetWindowFromId( popup, NAMEKEY( "PopupHostGame.wnd:TextEntryGameName" ) );
+			popupCreate = TheWindowManager->winGetWindowFromId( popup, NAMEKEY( "PopupHostGame.wnd:ButtonCreateGame" ) );
+		}
+		if (!popup || !popupName || !popupCreate)
+		{
+			DEBUG_LOG(("ONLINE HOST fail popup=%d\n", popup != NULL));
+			return;
+		}
 		UnicodeString gameName;
 		gameName.translate( TheGlobalData->m_onlineHostGame );
-		PeerRequest req;
-		req.peerRequestType = PeerRequest::PEERREQUEST_CREATESTAGINGROOM;
-		req.text = gameName.str();
-		req.password = "";
-		req.stagingRoomCreation.allowObservers = FALSE;
-		req.stagingRoomCreation.useStats = FALSE;
-		req.stagingRoomCreation.exeCRC = TheGlobalData->m_exeCRC;
-		req.stagingRoomCreation.iniCRC = TheGlobalData->m_iniCRC;
-		req.stagingRoomCreation.gameVersion = TheGameSpyInfo->getInternalIP();
-		req.stagingRoomCreation.restrictGameList = TheGameSpyConfig->restrictGamesToLobby();
-		req.stagingRoomCreation.ladPort = 0;
-		req.ladderIP = "localhost";
-		req.hostPingStr = TheGameSpyInfo->getPingString().str();
-		TheGameSpyGame->setGameName( gameName );
-		TheGameSpyGame->setAllowObservers( FALSE );
-		TheGameSpyGame->setOldFactionsOnly( FALSE );
-		TheGameSpyGame->setUseStats( FALSE );
-		TheGameSpyGame->setLadderIP( req.ladderIP.c_str() );
-		TheGameSpyGame->setLadderPort( 0 );
-		TheGameSpyPeerMessageQueue->addRequest( req );
-		DEBUG_LOG(("ONLINE HOST name=%s\n", TheGlobalData->m_onlineHostGame.str()));
+		GadgetTextEntrySetText( popupName, gameName );
+		TheWindowManager->winSendSystemMsg( popupCreate->winGetOwner(), GBM_SELECTED, (WindowMsgData)popupCreate, popupCreate->winGetWindowId() );
+		DEBUG_LOG(("ONLINE HOST name=%s stats=%d\n", TheGlobalData->m_onlineHostGame.str(), (Int)TheGameSpyGame->getUseStats()));
 		return;
 	}
 

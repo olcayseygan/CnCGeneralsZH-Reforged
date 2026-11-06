@@ -55,6 +55,7 @@
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetCheckBox.h"
+#include "GameClient/GadgetRadioButton.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/EstablishConnectionsMenu.h"
 #include "GameClient/GameWindowTransitions.h"
@@ -1684,6 +1685,61 @@ static void onlineStagingScript( void )
 			DEBUG_LOG(("ONLINE ACCEPT slot=%d\n", local));
 			TheWindowManager->winSendSystemMsg( parentWOLGameSetup, GBM_SELECTED, (WindowMsgData)buttonStart, buttonStartID );
 		}
+		return;
+	}
+
+	/* -onlineoptions prorules,turbo,unitlimit,randommap: once a second seat is taken the host flips each named
+		 check box and picks a random map through the room's own controls, as clicks would, logging whether each
+		 control was live; Start waits until that is done.  A stats room left them all dead for the host. */
+	static Int s_optionStep = 0;
+	const char *wanted = TheGlobalData->m_onlineOptions.str();
+	if (TheGlobalData->m_onlineOptions.isNotEmpty() && s_optionStep >= 0)
+	{
+		if (seated < 2)
+			return;
+		if (s_optionStep == 0)
+		{
+			const struct { const char *name; GameWindow *box; } boxes[] = {
+				{ "prorules", checkBoxProRules }, { "turbo", checkBoxTurbo }, { "unitlimit", checkBoxUnitLimit } };
+			for (Int i = 0; i < (Int)ARRAY_SIZE(boxes); ++i)
+			{
+				GameWindow *box = boxes[i].box;
+				if (!strstr( wanted, boxes[i].name ) || !box)
+					continue;
+				const Bool live = box->winGetEnabled() && !box->winIsHidden();
+				if (live)
+				{
+					GadgetCheckBoxSetChecked( box, !GadgetCheckBoxIsChecked( box ) );
+					TheWindowManager->winSendSystemMsg( parentWOLGameSetup, GBM_SELECTED, (WindowMsgData)box, box->winGetWindowId() );
+				}
+				DEBUG_LOG(("ONLINE OPTION %s live=%d on=%d\n", boxes[i].name, (Int)live, (Int)GadgetCheckBoxIsChecked( box )));
+			}
+			s_optionStep = strstr( wanted, "randommap" ) ? 1 : -1;
+			return;
+		}
+		if (s_optionStep == 1)
+		{
+			const Bool live = buttonSelectMap && buttonSelectMap->winGetEnabled() && !buttonSelectMap->winIsHidden();
+			s_optionStep = live ? 2 : -1;
+			if (live)
+				TheWindowManager->winSendSystemMsg( parentWOLGameSetup, GBM_SELECTED, (WindowMsgData)buttonSelectMap, buttonSelectMapID );
+			else
+				DEBUG_LOG(("ONLINE OPTION randommap live=0 (Select Map)\n"));
+			return;
+		}
+		GameWindow *tab = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "WOLMapSelectMenu.wnd:RadioButtonRandomMaps" ) );
+		GameWindow *ok = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "WOLMapSelectMenu.wnd:ButtonOK" ) );
+		if (!tab || !ok)
+			return;		// the map list is still opening
+		const Bool live = tab->winGetEnabled() && !tab->winIsHidden();
+		if (live)
+		{
+			GadgetRadioSetSelection( tab, FALSE );
+			TheWindowManager->winSendSystemMsg( tab->winGetOwner(), GBM_SELECTED, (WindowMsgData)tab, tab->winGetWindowId() );
+			TheWindowManager->winSendSystemMsg( ok->winGetOwner(), GBM_SELECTED, (WindowMsgData)ok, ok->winGetWindowId() );
+		}
+		DEBUG_LOG(("ONLINE OPTION randommap live=%d map=%s\n", (Int)live, game->getMap().str()));
+		s_optionStep = -1;
 		return;
 	}
 

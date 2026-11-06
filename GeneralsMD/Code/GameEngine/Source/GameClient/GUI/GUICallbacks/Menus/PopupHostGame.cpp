@@ -70,6 +70,7 @@
 #include "GameNetwork/GameSpyOverlay.h"
 
 #include "GameNetwork/GameSpy/LadderDefs.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include "Common/CustomMatchPreferences.h"
 #include "Common/LadderPreferences.h"
 
@@ -357,6 +358,14 @@ void PopupHostGameInit( WindowLayout *layout, void *userData )
   checkBoxUseStatsID = TheNameKeyGenerator->nameToKey(AsciiString("PopupHostGame.wnd:CheckBoxUseStats"));
   checkBoxUseStats = TheWindowManager->winGetWindowFromId(parentPopup, checkBoxUseStatsID);
 	Bool usingStats = customPref.getUseStats();
+	/* -online: a custom game is never rated (only Quick Match is), so there is no stats game to ask for.
+		 EA's box defaults to ticked, and a stats room locks every option for its host and forces Pro Rules
+		 (WOLGameSetupMenu's hostMayEdit and its game defaults), which is what an online host met. */
+	if (OnlineIsEnabled())
+	{
+		usingStats = FALSE;
+		checkBoxUseStats->winHide( TRUE );
+	}
   GadgetCheckBoxSetChecked( checkBoxUseStats, usingStats );
 
 	// limit armies is disallowed in "use stats" games
@@ -582,7 +591,7 @@ void createGame( void )
 	CustomMatchPreferences customPref;
 	Bool aO = GadgetCheckBoxIsChecked(checkBoxAllowObservers);
   Bool limitArmies = GadgetCheckBoxIsChecked( checkBoxLimitArmies );
-  Bool useStats = GadgetCheckBoxIsChecked( checkBoxUseStats );
+  Bool useStats = !OnlineIsEnabled() && GadgetCheckBoxIsChecked( checkBoxUseStats );
 	customPref.setAllowsObserver(aO);
   customPref.setFactionsLimited( limitArmies );
   customPref.setUseStats( useStats );

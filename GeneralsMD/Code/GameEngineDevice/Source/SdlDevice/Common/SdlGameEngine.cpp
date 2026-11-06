@@ -24,6 +24,11 @@
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "GameClient/ApplicationWindowTitle.h"
+#include "GameClient/Display.h"
+#include "GameClient/DisplayCutout.h"
+#if defined(__APPLE__)
+#include "SdlDevice/Common/SdlMacWindow.h"
+#endif
 #include "GameLogic/GameLogic.h"
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
@@ -61,6 +66,29 @@ static const int INITIAL_WINDOW_HEIGHT = 600;
 
 // The window GameText's title hook names.  One window per process, as on Windows (ApplicationHWnd).
 static SDL_Window *s_titledWindow = NULL;
+
+#if defined(__APPLE__)
+static Bool displayCutoutInGamePixels( Int &x, Int &y, Int &width, Int &height )
+{
+	SDL_Rect cutout;
+	if (s_titledWindow == NULL || !SdlMacWindow_getDisplayCutout( s_titledWindow, &cutout ))
+		return FALSE;
+	Int windowWidth = 0, windowHeight = 0;
+	SDL_GetWindowSize( s_titledWindow, &windowWidth, &windowHeight );
+	const Int gameWidth = TheDisplay ? (Int)TheDisplay->getWidth() : windowWidth;
+	const Int gameHeight = TheDisplay ? (Int)TheDisplay->getHeight() : windowHeight;
+	if (windowWidth <= 0 || windowHeight <= 0 || gameWidth <= 0 || gameHeight <= 0)
+		return FALSE;
+	const double sx = (double)gameWidth / windowWidth;
+	const double sy = (double)gameHeight / windowHeight;
+	x = (Int)floor( cutout.x * sx );
+	y = (Int)floor( cutout.y * sy );
+	width = (Int)ceil( (cutout.x + cutout.w) * sx ) - x;
+	height = (Int)ceil( (cutout.y + cutout.h) * sy ) - y;
+	return width > 0 && height > 0;
+}
+#endif
+
 
 static void setTitleOfWindow( const char *utf8Title )
 {
@@ -143,6 +171,10 @@ static Bool s_pendingVideo = FALSE;
 
 SdlGameEngine::~SdlGameEngine()
 {
+#if defined(__APPLE__)
+	if (TheDisplayCutoutQuery == displayCutoutInGamePixels)
+		TheDisplayCutoutQuery = NULL;
+#endif
 	s_pendingWindow = m_window;
 	s_pendingVideo = m_sdlVideoStarted;
 	m_window = NULL;
@@ -185,6 +217,10 @@ void SdlGameEngine::createWindow( void )
 	// bottom edge - where the game scrolls the view.  SDL reads this once, when its video starts.
 	if (!m_request.windowed)
 		SDL_SetHint( SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0" );
+
+#if defined(__APPLE__)
+	SdlMacWindow_configureFullscreen();
+#endif
 
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
@@ -241,6 +277,9 @@ void SdlGameEngine::createWindow( void )
 		m_request.hidden ? ", hidden" : "" ));
 
 	s_titledWindow = m_window;
+#if defined(__APPLE__)
+	TheDisplayCutoutQuery = displayCutoutInGamePixels;
+#endif
 	TheApplicationWindowTitleHook = setTitleOfWindow;
 	setSdlMessageBoxOwner( m_window );
 
@@ -275,12 +314,20 @@ void SdlGameEngine::startOffscreen( void )
 	static const char *const NO_DISPLAY_DRIVER = "offscreen";
 #endif
 	const char *driver = "the display's";
+#if defined(__APPLE__)
+	SdlMacWindow_configureFullscreen();
+#endif
+
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
 		const AsciiString first = SDL_GetError();
 		SDL_SetHint( SDL_HINT_VIDEO_DRIVER, NO_DISPLAY_DRIVER );
 		driver = NO_DISPLAY_DRIVER;
-		if (!SDL_Init( SDL_INIT_VIDEO ))
+	#if defined(__APPLE__)
+	SdlMacWindow_configureFullscreen();
+#endif
+
+	if (!SDL_Init( SDL_INIT_VIDEO ))
 		{
 			char why[ 512 ];
 			snprintf( why, sizeof( why ), "SDL could not start its video subsystem for -offscreen: %s (then, with the "

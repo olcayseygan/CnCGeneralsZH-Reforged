@@ -1560,6 +1560,7 @@ A third pass went through the generals' powers, promotions and unit abilities.
 - Burning infantry run in every direction, not always north-east.
 - A player name long enough to fill the LAN game room no longer hangs the lobby, changing settings there no longer crashes it, and the list of LAN games keeps its place instead of jumping back to the top every time it refreshes.
 - The pointer resting on a player's name in the LAN game room when the host leaves no longer crashes the game. The game is gone the moment the host goes, the room stays on screen while it slides back to the lobby, and the name's tooltip went looking for a player in it.
+- Pressing Back in the LAN lobby with the pointer on a player's name no longer crashes the game either. Back closes the LAN connection at once while the lobby is still sliding off the screen, and the name's tooltip asked the closed connection who that player was.
 - A save that fails to load shows its error box instead of crashing. A garrisoned building read before the fault counted soldiers it had not been handed yet, and clearing away the half-loaded match asked it for the first of them.
 - Holding Ctrl while the beacon text box was open no longer leaves force-attack armed after you let go.
 - The camera stops following a unit the moment it goes stealthed or into the fog, instead of showing you where it went.

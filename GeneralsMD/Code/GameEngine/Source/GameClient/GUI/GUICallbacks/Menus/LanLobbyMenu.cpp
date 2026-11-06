@@ -330,6 +330,11 @@ static void playerTooltip(GameWindow *window,
 		return;
 	}
 
+	// Back deletes TheLAN at once and the lobby stays on screen while its exit animation plays, so the
+	// pointer can still be resting on this list.
+	if (!TheLAN)
+		return;
+
 	UnsignedInt playerIP = (UnsignedInt)(uintptr_t)GadgetListBoxGetItemData( window, row, col );
 	LANPlayer *player = TheLAN->LookupPlayer(playerIP);
 	if (!player)
@@ -557,7 +562,9 @@ void LanLobbyMenuShutdown( WindowLayout *layout, void *userData )
 	// hide menu
 	//layout->hide( TRUE );
 
-	TheLAN->RequestLobbyLeave( true );
+	// the shell can be torn down during the exit animation, when Back has already deleted TheLAN
+	if (TheLAN)
+		TheLAN->RequestLobbyLeave( true );
 
 	// Reset the LAN singleton
 	//TheLAN->reset();

@@ -110,6 +110,60 @@ static void check_live_water_style_programs(PosixDevice9 *device,SdlProgramCache
     printf("sdl_program_cache_selfcheck: 128 water style changes on the same bound shader, four distinct cached GPU programs, no recompiles on return\n");
 }
 
+static void check_shore_program_canonical_cache(SdlProgramCache &cache)
+{
+	CombinerDescription description = {};
+	description.StageCount = 1;
+	description.Stages[0].ColourOperation = D3DTOP_MODULATE;
+	description.Stages[0].ColourArgument1 = D3DTA_TEXTURE;
+	description.Stages[0].ColourArgument2 = D3DTA_DIFFUSE;
+	description.Stages[0].AlphaOperation = D3DTOP_SELECTARG1;
+	description.Stages[0].AlphaArgument1 = D3DTA_TEXTURE;
+	description.Stages[0].TextureBound = true;
+	description.PixelPipeline.AlphaFunction = D3DCMP_ALWAYS;
+	const std::string key = CombinerShader_Key(description);
+	const unsigned builtBefore = cache.Programs_Built();
+	const SdlProgram &program = cache.Shore_Pixel_Program(description);
+	SDL_GPUShader *const shader = program.Shader;
+	CHECK(shader != NULL && cache.Programs_Built() == builtBefore + 1);
+	const double compiling = cache.Milliseconds_Compiling();
+	const unsigned uses = program.Uses;
+	// These bytes differ but are outside StageCount: neither the shader nor its
+	// canonical key reads them. A byte-cache miss must reuse the existing shader.
+	for (unsigned i = 1; i <= 8; ++i) {
+		CombinerDescription varied = description;
+		varied.Stages[MAXIMUM_COMBINER_STAGES - 1].ColourArgument0 = i;
+		CHECK(CombinerShader_Key(varied) == key);
+		const SdlProgram &again = cache.Shore_Pixel_Program(varied);
+		CHECK(&again == &program && again.Shader == shader);
+		CHECK(cache.Programs_Built() == builtBefore + 1);
+		CHECK(cache.Milliseconds_Compiling() == compiling);
+	}
+	// The normal device resolver copies AlphaFunction even with alpha testing
+	// disabled. That real render-state change must not compile another program.
+	CombinerDescription alphaFunction = description;
+	alphaFunction.PixelPipeline.AlphaFunction = D3DCMP_GREATER;
+	CHECK(CombinerShader_Key(alphaFunction) == key);
+	const SdlProgram &alphaProgram = cache.Shore_Pixel_Program(alphaFunction);
+	CHECK(&alphaProgram == &program && alphaProgram.Shader == shader);
+	CHECK(cache.Programs_Built() == builtBefore + 1);
+	CHECK(cache.Milliseconds_Compiling() == compiling);
+	CHECK(cache.Shore_Pixel_Program(description).Shader == shader);
+	CHECK(program.Uses == uses + 10);
+
+	// Refusals share the canonical fallback too; do not repeatedly regenerate
+	// or recount a rejected program merely because unused state differs.
+	description.ShadowReceiving = true;
+	const unsigned refusedBefore = cache.Programs_Refused();
+	const SdlProgram &refused = cache.Shore_Pixel_Program(description);
+	CHECK(refused.Shader == NULL && cache.Programs_Refused() == refusedBefore + 1);
+	const unsigned refusedUses = refused.Uses;
+	description.Stages[MAXIMUM_COMBINER_STAGES - 1].ColourArgument0 = 99;
+	const SdlProgram &refusedAgain = cache.Shore_Pixel_Program(description);
+	CHECK(&refusedAgain == &refused && refusedAgain.Shader == NULL);
+	CHECK(cache.Programs_Refused() == refusedBefore + 1 && refusedAgain.Uses == refusedUses + 1);
+}
+
 int main()
 {
 	check_slot_lines();
@@ -222,6 +276,7 @@ int main()
     CHECK(cache.Programs_Built()==builtTiers);WaterPerformanceSettings::Applied()=savedWater;
     printf("sdl_program_cache_selfcheck: all 12 water quality variants cached and reused\n");
 
+	check_shore_program_canonical_cache(cache);
 
 	printf("sdl_program_cache_selfcheck: %s, %u programs built in %.0f ms, %u refused\n",
 		SDL_GetGPUDeviceDriver(frame->Device()), cache.Programs_Built(), cache.Milliseconds_Compiling(),

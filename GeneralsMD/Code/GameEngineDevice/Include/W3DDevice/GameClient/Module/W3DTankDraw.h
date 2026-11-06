@@ -98,12 +98,24 @@ protected:
 	TreadObjectInfo m_treads[MAX_TREADS_PER_TANK];
 	Int m_treadCount;
 
+	/// road wheels on bones WHEEL_L01..L08 then WHEEL_R01..R08; a slot whose bone the model lacks has m_bone 0
+	enum {WHEELS_PER_SIDE=8};
+	struct WheelInfo
+	{
+		Int		m_bone;		///<bone index in the current render object, 0 if absent
+		Real	m_radius;	///<from the meshes on the bone
+		Real	m_angle;	///<about the axle, kept across a model swap
+	};
+	WheelInfo m_wheels[2*WHEELS_PER_SIDE];
+	Bool m_hasWheels;
+
 	void createEmitters( void );					///< Create particle effects.
 	void tossEmitters( void );					///< Create particle effects.
 
 	void startMoveDebris( void );												///< start creating debris from the tank treads
 	void stopMoveDebris( void );												///< stop creating debris from the tank treads
 	void updateTreadObjects(void);												///< update pointers to sub-objects like treads.
+	void updateWheelBones(RenderObjClass *robj);								///< find the road wheel bones and their radii
 };
 
 #endif // _W3D_TANK_DRAW_H_

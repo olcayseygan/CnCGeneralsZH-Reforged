@@ -31,6 +31,7 @@
 #include "render2dsentence.h"
 #include "fullscreenfit.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h"
+#include "../GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h"
 
 /*
  * W3DMPO_GLUE gives every pooled class an operator new that routes through
@@ -99,6 +100,38 @@ TEST(sun_box_past_its_cap_keeps_the_ground_at_the_cameras_feet)
 	CHECK_EQ(SunBoxMiddle(-5000.0f, 500.0f, 2400.0f), -1900.0f);
 	/* with ground far past both sides it sits on the look point */
 	CHECK_EQ(SunBoxMiddle(-3000.0f, 3000.0f, 2400.0f), 0.0f);
+}
+
+/*=========================================================================
+   TankWheelAngle - a road wheel rolls over its own side's ground
+  =========================================================================*/
+
+TEST(tank_wheel_turns_by_distance_over_its_own_radius)
+{
+	/* 3 units straight ahead: a radius 6 sprocket half a radian, a radius 3 road wheel a whole one */
+	CHECK_NEAR(TankWheelAngle(0.0f, 3.0f, 0.0f, 10.0f, true, 6.0f), 0.5f, 1e-6f);
+	CHECK_NEAR(TankWheelAngle(0.0f, 3.0f, 0.0f, 10.0f, false, 3.0f), 1.0f, 1e-6f);
+	/* backing up runs it backwards, wrapped into [0, 2 pi) */
+	CHECK_NEAR(TankWheelAngle(1.0f, -3.0f, 0.0f, 10.0f, true, 3.0f), 0.0f, 1e-6f);
+	CHECK_NEAR(TankWheelAngle(0.0f, -3.0f, 0.0f, 10.0f, true, 3.0f), 6.2831853f - 1.0f, 1e-5f);
+}
+
+TEST(tank_wheel_inside_a_turn_slows_like_its_tread)
+{
+	/* a left turn of 0.1 rad with the tracks 10 apart: the left side covers 1 less, the right 1 more */
+	CHECK_NEAR(TankWheelAngle(0.0f, 3.0f, 0.1f, 10.0f, true, 1.0f), 2.0f, 1e-5f);
+	CHECK_NEAR(TankWheelAngle(0.0f, 3.0f, 0.1f, 10.0f, false, 1.0f), 4.0f, 1e-5f);
+	/* a pivot in place runs the two sides against each other */
+	CHECK_NEAR(TankWheelAngle(0.0f, 0.0f, -0.1f, 10.0f, true, 1.0f), 1.0f, 1e-5f);
+	CHECK_NEAR(TankWheelAngle(0.0f, 0.0f, -0.1f, 10.0f, false, 1.0f), 6.2831853f - 1.0f, 1e-5f);
+}
+
+TEST(tank_wheel_angle_stays_small_over_a_long_drive)
+{
+	float angle = 0.0f;
+	for (int i = 0; i < 100000; ++i)
+		angle = TankWheelAngle(angle, 0.37f, 0.0f, 10.0f, true, 2.0f);
+	CHECK(angle >= 0.0f && angle < 6.2831853f);
 }
 
 /*=========================================================================

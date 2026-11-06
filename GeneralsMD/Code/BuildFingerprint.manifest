@@ -2005,6 +2005,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTreeDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTruckDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/StructureCollapse.h
 GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h
+GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h
 GameEngineDevice/Include/W3DDevice/GameClient/TerrainTex.h
 GameEngineDevice/Include/W3DDevice/GameClient/TileData.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DAssetManager.h

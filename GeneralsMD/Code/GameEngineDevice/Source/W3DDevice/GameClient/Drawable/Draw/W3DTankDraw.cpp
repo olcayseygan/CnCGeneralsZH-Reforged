@@ -47,6 +47,7 @@
 #include "GameClient/ParticleSys.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "W3DDevice/GameClient/Module/W3DTankDraw.h"
+#include "W3DDevice/GameClient/TankWheelSpin.h"
 #include "WW3D2/matinfo.h"
 
 #ifdef _INTERNAL
@@ -101,6 +102,14 @@ W3DTankDraw::W3DTankDraw( Thing *thing, const ModuleData* moduleData )
 		m_treads[i].m_robj = NULL;
 
 	m_treadCount=0;
+
+	for (Int i=0; i<2*WHEELS_PER_SIDE; i++)
+	{
+		m_wheels[i].m_bone = 0;
+		m_wheels[i].m_radius = 0.0f;
+		m_wheels[i].m_angle = 0.0f;
+	}
+	m_hasWheels = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -275,7 +284,51 @@ void W3DTankDraw::updateTreadObjects(void)
 		}
 	}
 
+	updateWheelBones(robj);
 	m_prevRenderObj = robj;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Road wheels on bones WHEEL_L01..L08 (the hull's +Y side) and WHEEL_R01..R08 (-Y), any of them,
+	* each bone at its wheel's hub with local +Y toward the hull's +Y on both sides, so a positive
+	* Rotate_Y rolls every wheel forward, as on a truck's tyres. A wheel's
+	* radius is the larger of its meshes' X and Z half extents, every LOD's mesh on that bone counted,
+	* so a sprocket and a road wheel each turn at their own rate. No retail model has these bones. */
+//-------------------------------------------------------------------------------------------------
+void W3DTankDraw::updateWheelBones(RenderObjClass *robj)
+{
+	m_hasWheels = FALSE;
+	for (Int i=0; i<2*WHEELS_PER_SIDE; i++)
+	{
+		WheelInfo &wheel = m_wheels[i];
+		wheel.m_bone = 0;
+		if (robj == NULL)
+			continue;
+		char name[16];
+		sprintf(name, "WHEEL_%c%02d", i < WHEELS_PER_SIDE ? 'L' : 'R', i % WHEELS_PER_SIDE + 1);
+		Int bone = robj->Get_Bone_Index(name);
+		if (bone <= 0)
+			continue;
+		Real radius = 0.0f;
+		Int count = robj->Get_Num_Sub_Objects_On_Bone(bone);
+		for (Int j=0; j<count; j++)
+		{
+			RenderObjClass *mesh = robj->Get_Sub_Object_On_Bone(j, bone);
+			if (mesh)
+			{
+				AABoxClass box;
+				mesh->Get_Obj_Space_Bounding_Box(box);
+				radius = WWMath::Max(radius, WWMath::Max(box.Extent.X, box.Extent.Z));
+				REF_PTR_RELEASE(mesh);
+			}
+		}
+		if (radius > 0.0f)
+		{
+			wheel.m_bone = bone;
+			wheel.m_radius = radius;
+			m_hasWheels = TRUE;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -370,6 +423,25 @@ void W3DTankDraw::doDrawModule(const Matrix3D* transformMtx)
 			// ensure coordinates of offset are in [0, 1] range:
 			offset_u = offset_u - WWMath::Floor(offset_u);
 			pTread->m_materialSettings.customUVOffset.Set(offset_u,0);
+		}
+	}
+
+	// road wheels roll over the ground their side's tread covered, at their own radius
+	if (m_hasWheels)
+	{
+		RenderObjClass *robj = getRenderObject();
+		Real halfTrack = obj->getGeometryInfo().getMinorRadius();
+		Matrix3D wheelXfrm(1);
+		for (Int i=0; i<2*WHEELS_PER_SIDE; i++)
+		{
+			WheelInfo &wheel = m_wheels[i];
+			if (wheel.m_bone == 0)
+				continue;
+			wheel.m_angle = TankWheelAngle(wheel.m_angle, forward, turn, halfTrack, i < WHEELS_PER_SIDE, wheel.m_radius);
+			wheelXfrm.Make_Identity();
+			wheelXfrm.Rotate_Y(wheel.m_angle);
+			robj->Capture_Bone(wheel.m_bone);
+			robj->Control_Bone(wheel.m_bone, wheelXfrm);
 		}
 	}
 

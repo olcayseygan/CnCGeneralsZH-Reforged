@@ -86,6 +86,12 @@ void SdlGpuFrame::Queue_Buffer_Upload(SDL_GPUBuffer * buffer, uint32_t upload_of
 void SdlGpuFrame::Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int level, unsigned int width,
 	unsigned int height, uint32_t upload_offset)
 {
+	Queue_Texture_Upload(texture, level, width, height, upload_offset, level == 0);
+}
+
+void SdlGpuFrame::Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int level, unsigned int width,
+	unsigned int height, uint32_t upload_offset, bool cycle)
+{
 	Upload upload;
 	memset(&upload, 0, sizeof(upload));
 	upload.Texture = texture;
@@ -93,6 +99,7 @@ void SdlGpuFrame::Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int le
 	upload.Width = width;
 	upload.Height = height;
 	upload.Offset = upload_offset;
+	upload.CycleTexture = cycle;
 	Uploads.push_back(upload);
 }
 
@@ -327,8 +334,8 @@ bool SdlGpuFrame::Record_Batch(SDL_GPUCommandBuffer * commands)
 				region.w = upload.Width;
 				region.h = upload.Height;
 				region.d = 1;
-				// Level 0 cycles the texture; the levels after it follow into the same new one.
-				SDL_UploadToGPUTexture(copy, &source, &region, upload.Level == 0);
+				// Only a complete replacement may discard the old backing texture.
+				SDL_UploadToGPUTexture(copy, &source, &region, upload.CycleTexture);
 			}
 		}
 		SDL_EndGPUCopyPass(copy);

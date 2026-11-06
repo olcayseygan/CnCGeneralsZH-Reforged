@@ -95,6 +95,7 @@ public:
 	Int getNumPlayers();
 
 	UnsignedInt getPacketRouterFallbackSlot(Int packetRouterNumber);	///< Returns the slot of the given packet router number in the fallback plan.
+	Bool isCommandAuthorAllowed(NetCommandMsg *msg) const;
 	UnsignedInt getPacketRouterSlot();																///< Returns the current packet router's slot.
 	PlayerLeaveCode disconnectPlayer(Int slot);												///< Disconnect this player immediately.  This should only be called by the disconnect manager.
 	void disconnectLocalPlayer();																			///< Does whatever is necessary to get TheNetwork to realize that it should be leaving the game now.
@@ -199,6 +200,7 @@ private:
 	Transport *m_transport;
 	UnsignedInt m_localSlot;
 	Int m_lastFrameTickSent;															///< the newest frame processFrameTick has announced; its command count is final
+	UnsignedByte m_routerCommandAuthors; ///< Current/former router authors for queued synchronized commands.
 	UnsignedInt m_packetRouterSlot;
 	UnsignedInt m_packetRouterFallback[MAX_SLOTS];
 	UnsignedInt m_localAddr;
@@ -209,6 +211,9 @@ private:
 
 	/* The frame the logic is currently stuck on, and how long it has been stuck, so a frame whose
 		 FRAMEINFO was lost can be asked for again instead of waited out - see FrameResendPolicy.h. */
+	Bool receiveSourceAllowed(NetCommandRef *ref);
+	UnsignedInt m_recoveryFrame[MAX_SLOTS];
+	Bool m_recoveryPending[MAX_SLOTS];
 	UnsignedInt m_resendWatchFrame;										///< frame allCommandsReady last blocked on
 	time_t m_resendWatchSince;												///< when it started blocking
 	time_t m_resendLastRequest;												///< when we last asked for it; 0 = not asked

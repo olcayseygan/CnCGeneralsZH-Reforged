@@ -41,6 +41,7 @@ NetCommandRef::NetCommandRef(NetCommandMsg *msg, char *filename, int line)
 NetCommandRef::NetCommandRef(NetCommandMsg *msg)
 #endif
 {
+	m_sourceMask = 0;
 	m_msg = msg;
 	m_next = NULL;
 	m_prev = NULL;

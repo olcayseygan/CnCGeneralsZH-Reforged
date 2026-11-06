@@ -39,6 +39,7 @@ NetCommandWrapperListNode::NetCommandWrapperListNode(NetWrapperCommandMsg *msg)
 {
 	//Added By Sadullah Nader
 	//Initializations inserted
+	m_sourceMask = 0;
 	m_next = NULL;
 
 	//
@@ -242,6 +243,7 @@ void NetCommandWrapperList::processWrapper(NetCommandRef *ref) {
 		m_list = temp;
 	}
 
+	temp->m_sourceMask |= ref->getSourceMask();
 	temp->copyChunkData(msg);
 }
 
@@ -268,6 +270,7 @@ NetCommandList * NetCommandWrapperList::getReadyCommands()
 			if (msg != NULL) {
 				NetCommandRef *ret = retlist->addMessage(msg->getCommand());
 				ret->setRelay(msg->getRelay());
+				ret->setSourceMask(temp->m_sourceMask);
 
 				msg->deleteInstance();
 				msg = NULL;

@@ -501,3 +501,28 @@ Bool IsUsablePlayerName(const WideChar *playerName)
 
 	return sawSomethingReadable;
 }
+
+Bool NetworkCommandAuthorAllowed(NetCommandMsg *msg, UnsignedByte routerAuthors)
+{
+    if (!msg || msg->getPlayerID() >= MAX_SLOTS) return FALSE;
+    if (msg->getNetCommandType() == NETCOMMANDTYPE_PLAYERLEAVE)
+        return ((NetPlayerLeaveCommandMsg *)msg)->getLeavingPlayerID() == msg->getPlayerID();
+    if (msg->getNetCommandType() == NETCOMMANDTYPE_RUNAHEAD) {
+        NetRunAheadCommandMsg *run = (NetRunAheadCommandMsg *)msg;
+        return (routerAuthors & (1u << msg->getPlayerID())) && run->getFrameRate() > 0 &&
+            run->getRunAhead() > 0 && run->getRunAhead() < MAX_FRAMES_AHEAD;
+    }
+    return TRUE;
+}
+
+Bool NetworkCommandSourceAllowed(NetCommandMsg *msg, UnsignedInt sender, UnsignedInt router,
+    Bool requestedRecovery)
+{
+    if (!msg || sender >= MAX_SLOTS || msg->getPlayerID() >= MAX_SLOTS) return FALSE;
+    if (sender == msg->getPlayerID()) return TRUE;
+    if (CommandRequiresDirectSend(msg)) return FALSE;
+    if (sender == router) return TRUE;
+    // Wrappers are checked again after reassembly, with the physical sources retained.
+    return requestedRecovery && (msg->getNetCommandType() == NETCOMMANDTYPE_WRAPPER ||
+        msg->getNetCommandType() == NETCOMMANDTYPE_FRAMEINFO || IsCommandSynchronized(msg->getNetCommandType()));
+}

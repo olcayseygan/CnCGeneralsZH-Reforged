@@ -555,7 +555,7 @@ void Shell::showShell( Bool runInit )
 
 	/* -online with -onlineuser: what the main menu's Online button does, spent the same way.  The login
 	   screen then logs in from the switches (WOLLoginMenu.cpp). */
-	if( OnlineIsEnabled() && TheGlobalData->m_onlineUser.isNotEmpty() && !s_onlineOpened )
+	if( OnlineIsEnabled() && (TheGlobalData->m_onlineUser.isNotEmpty() || TheGlobalData->m_onlineLoginOnStart) && !s_onlineOpened )
 	{
 		s_onlineOpened = TRUE;
 		StartPatchCheck();

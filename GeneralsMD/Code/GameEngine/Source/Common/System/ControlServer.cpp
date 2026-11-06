@@ -915,8 +915,11 @@ static void handleCommand( const AsciiString &command )
 
 	/* A world command changes this machine's simulation and nobody else's.  A network match the
 		 lobby started would split on it, and a replay would stop matching its recording; a -netgame
-		 match is allowed, on the same terms -scenario is (GameLogic::startNewGame). */
-	if ((TheGameLogic->isInMultiplayerGame() && !TheGlobalData->m_netGameStarted) || TheGameLogic->isInReplayGame())
+		 match is allowed, on the same terms -scenario is (GameLogic::startNewGame).  So is an online match a
+		 copy logged into with the -onlineuser test switch, where online_check.py forces its desync: a split
+		 there ends the match unrated, which is what the check proves. */
+	const Bool scriptedOnline = TheGlobalData->m_onlineUser.isNotEmpty() && TheGlobalData->m_onlinePort != 0;
+	if ((TheGameLogic->isInMultiplayerGame() && !TheGlobalData->m_netGameStarted && !scriptedOnline) || TheGameLogic->isInReplayGame())
 	{
 		replyError( "world commands only run in a skirmish or a -netgame match" );
 		return;

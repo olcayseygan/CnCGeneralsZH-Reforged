@@ -63,6 +63,7 @@
 #include "GameNetwork/GameSpy/BuddyDefs.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PeerThread.h"
+#include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 #include "GameNetwork/GameSpyOverlay.h"
@@ -1655,12 +1656,16 @@ static void onlineStagingScript( void )
 	if (!game || !game->isInGame() || game->isGameInProgress())
 		return;
 
+	// said once a second player is seated, so somebody reads it
 	static Bool s_said = FALSE;
-	if (!s_said && TheGlobalData->m_onlineSay.isNotEmpty())
+	Int seated = 0;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+		if (game->getSlot( i ) && game->getSlot( i )->isHuman())
+			++seated;
+	if (!s_said && seated >= 2 && TheGlobalData->m_onlineSay.isNotEmpty())
 	{
 		s_said = TRUE;
-		UnicodeString line;
-		line.translate( TheGlobalData->m_onlineSay );
+		UnicodeString line( MultiByteToWideCharSingleLine( TheGlobalData->m_onlineSay.str() ).c_str() );
 		PeerRequest req;
 		req.peerRequestType = PeerRequest::PEERREQUEST_MESSAGEROOM;
 		req.text = line.str();

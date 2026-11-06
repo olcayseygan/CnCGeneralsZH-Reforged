@@ -1500,7 +1500,8 @@ UnicodeString GameTextManager::fetch( const Char *label, Bool *exists )
 			noString = noString->next;
 		}
 
-		//DEBUG_LOG(("*** MISSING:'%s' ***\n", label));
+		// once a label: the list above answers every later fetch.  online_check.py greps it
+		DEBUG_LOG(("TEXT MISSING '%s'\n", label));
 		// Remember file could have been altered at this point.
 		noString = NEW NoString;
 		noString->text = missingString;

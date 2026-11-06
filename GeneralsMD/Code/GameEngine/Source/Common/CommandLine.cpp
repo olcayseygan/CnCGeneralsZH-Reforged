@@ -2612,7 +2612,25 @@ Int parseOnlinePass(char *args[], int num)			{ return parseOnlineText( args, num
 Int parseOnlineRegister(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineRegisterNick ); }
 Int parseOnlineHostGame(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineHostGame ); }
 Int parseOnlineJoin(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineJoinGame ); }
-Int parseOnlineSay(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineSay ); }
+/* -onlinesay is chat, kept as UTF-8 like every line the service carries.  Windows hands the switch over in
+	 the ANSI code page, which on a Turkish machine made "ı" a lone 0xFD byte. */
+Int parseOnlineSay(char *args[], int num)
+{
+	const Int used = parseOnlineText( args, num, &GlobalData::m_onlineSay );
+#if defined(_WIN32)
+	if (TheWritableGlobalData && num > 1)
+	{
+		const int wideLength = MultiByteToWideChar( CP_ACP, 0, args[1], -1, NULL, 0 );
+		std::wstring wide( wideLength > 0 ? wideLength : 1, L'\0' );
+		MultiByteToWideChar( CP_ACP, 0, args[1], -1, &wide[0], wideLength );
+		const int length = WideCharToMultiByte( CP_UTF8, 0, wide.c_str(), -1, NULL, 0, NULL, NULL );
+		std::string utf8( length > 0 ? length : 1, '\0' );
+		WideCharToMultiByte( CP_UTF8, 0, wide.c_str(), -1, &utf8[0], length, NULL, NULL );
+		TheWritableGlobalData->m_onlineSay = utf8.c_str();
+	}
+#endif
+	return used;
+}
 Int parseOnlineMap(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineMap ); }
 
 /* -onlinestart N: the -onlinehost host starts the game once N players (itself included) sit in the room;
@@ -2625,6 +2643,18 @@ Int parseOnlineStart(char *args[], int num)
 	const Int players = hasNumber ? atoi( args[1] ) : 2;
 	TheWritableGlobalData->m_onlineStart = players < 2 ? 2 : (players > MAX_SLOTS ? MAX_SLOTS : players);
 	return hasNumber ? 2 : 1;
+}
+
+/* -onlinelogin: the online login screen at startup with empty fields, for a person trying the service by
+	 hand; the shell map goes off as it does for -onlineuser */
+Int parseOnlineLogin(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_onlineLoginOnStart = TRUE;
+		TheWritableGlobalData->m_shellMapOn = FALSE;
+	}
+	return 1;
 }
 
 Int parseQuickMatch(char *args[], int num)
@@ -3166,6 +3196,7 @@ static CommandLineParam params[] =
 	{ "-onlinesay", parseOnlineSay },
 	{ "-onlinemap", parseOnlineMap },
 	{ "-onlinestart", parseOnlineStart },
+	{ "-onlinelogin", parseOnlineLogin },
 	{ "-quickmatch", parseQuickMatch },
 	{ "-lanlobby", parseLanLobby },
 	{ "-skirmishlobby", parseSkirmishLobby },

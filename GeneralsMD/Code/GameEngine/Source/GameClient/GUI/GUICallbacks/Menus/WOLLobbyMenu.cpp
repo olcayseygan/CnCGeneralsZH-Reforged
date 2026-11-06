@@ -70,6 +70,7 @@
 #include "GameNetwork/GameSpy/LadderDefs.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PeerThread.h"
+#include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 #include "GameNetwork/GameSpy/LobbyUtils.h"
@@ -231,21 +232,24 @@ void SetLobbyAttemptHostJoin(Bool start)
 	s_tryingToHostOrJoin = start;
 }
 
-/* -online scripting in the lobby, once per process each: -onlinesay says its line, -onlinehost asks for a
-	 staging room the way the host popup's createGame does (no password, no observers, unrated, no ladder),
-	 -onlinejoin joins the first listed game of that name the way the Join button does. */
+/* -online scripting in the lobby, once per process each: -onlinesay says its line once somebody else is in
+	 the room to read it, -onlinehost asks for a staging room the way the host popup's createGame does (no
+	 password, no observers, unrated, no ladder) three seconds after that line so the answer still reaches
+	 the lobby, -onlinejoin joins the first listed game of that name the way the Join button does. */
 static void onlineLobbyScript( void )
 {
 	static Bool s_said = FALSE, s_hosted = FALSE, s_joined = FALSE;
+	static UnsignedInt s_saidAt = 0;
 	if (!OnlineIsEnabled() || !TheGameSpyInfo->getCurrentGroupRoom() || s_tryingToHostOrJoin)
 		return;
 
-	if (!s_said && TheGlobalData->m_onlineSay.isNotEmpty())
+	const Bool saying = TheGlobalData->m_onlineSay.isNotEmpty();
+	if (saying && !s_said && TheGameSpyInfo->getPlayerInfoMap()->size() >= 2)
 	{
 		s_said = TRUE;
+		s_saidAt = Clock_Milliseconds();
 		// straight to the queue: sendChat would drop the staging room's copy as a repeat of this one
-		UnicodeString line;
-		line.translate( TheGlobalData->m_onlineSay );
+		UnicodeString line( MultiByteToWideCharSingleLine( TheGlobalData->m_onlineSay.str() ).c_str() );
 		PeerRequest req;
 		req.peerRequestType = PeerRequest::PEERREQUEST_MESSAGEROOM;
 		req.text = line.str();
@@ -254,7 +258,8 @@ static void onlineLobbyScript( void )
 		DEBUG_LOG(("ONLINE SAY where=lobby text=%s\n", TheGlobalData->m_onlineSay.str()));
 	}
 
-	if (!s_hosted && TheGlobalData->m_onlineHostGame.isNotEmpty())
+	if (!s_hosted && TheGlobalData->m_onlineHostGame.isNotEmpty()
+		&& (!saying || (s_said && Clock_Milliseconds() - s_saidAt >= 3000)))
 	{
 		s_hosted = TRUE;
 		SetLobbyAttemptHostJoin( TRUE );

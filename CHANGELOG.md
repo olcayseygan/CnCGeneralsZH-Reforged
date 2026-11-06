@@ -29,6 +29,10 @@ found and fixed, EA's own, not port damage.**
 - You pick for your own seat and the host picks for the computer seats, the way colour and team already work. The pick is in the replay and the saved game, and a room that leaves the column at 100% plays and replays as it did.
 - Promotions and armour research still come on top, at the seat's share: an Elite Paladin with Composite Armor reads 364 at 50% against 728 at 100%. A vehicle stolen from a handicapped player moves to its new owner's column and keeps its share of health, so a Humvee at 80 of 120 becomes 160 of 240 with no damage dealt and no repair given.
 
+## Long routes in big computer matches
+
+- A unit looking for a long way across a crowded map no longer stops mid-search and gives up, and a big match no longer stalls the frame while a few units work out where to go. A search that runs out of its share of a step waits for the next one and carries on, and the limit on how much ground one search can cover is doubled. In eight Hard computer players on Twilight Flame, six matches a side, the pathfinding cost 34.9 seconds a match where it cost 42.8, with 28% fewer cells searched, and fewer units sat wedged. Replays recorded before this change play out differently.
+
 ## Computer players earn double
 
 - A computer player in a skirmish or a network match now earns double, on every difficulty. A truckload worth 75 banks 150, and the 1000 for capturing an oil derrick is 2000. It counts everything the computer makes by playing: supply docks, oil derricks and other tech buildings, black markets, drop zones, hackers, bounties, crates, salvage and stolen cash. On one generated map, two Easy computers earned 25,800 and 28,200 in six minutes and forty seconds and now earn 51,600 and 56,400. Two Hard ones on the same seed went from 22,800 and 24,825 to 74,800 and 81,090, because Hard spends the extra money on more income: one of them built four supply centers and two drop zones where it used to build two and one.

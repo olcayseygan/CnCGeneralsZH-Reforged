@@ -2249,8 +2249,16 @@ Bool AIUpdateInterface::computePath( PathfindServicesInterface *pathServices, Co
 			theNewPath = pathServices->patchPath( getObject(), m_locomotorSet, 
 				getPath(), m_isBlockedAndStuck);
 		}	else {
-			theNewPath = pathServices->findPath( getObject(), m_locomotorSet, getObject()->getPosition(), 
+			theNewPath = pathServices->findPath( getObject(), m_locomotorSet, getObject()->getPosition(),
 				destination);
+			if (theNewPath == NULL && TheAI->pathfinder()->isSearchSuspended( getObject()->getID() )) {
+				// the queue's cells for this frame ran out inside the search: still waiting, still at
+				// the head of the queue, and the search carries on from where it stopped next frame
+				TheAI->pathfinder()->setIgnoreObstacleID( INVALID_ID );
+				TheAI->pathfinder()->setIgnoreUnderConstruction( FALSE );
+				m_waitingForPath = TRUE;
+				return FALSE;
+			}
 		}
 	}
 	if (theNewPath==NULL && m_path==NULL) {

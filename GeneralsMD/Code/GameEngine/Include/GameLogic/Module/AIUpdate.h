@@ -772,8 +772,8 @@ public:
 	TunnelTripEnd getTunnelTripEnd() const { return m_tunnelTripEnd; }	///< how the leg from the far mouth is walked
 	void startGarrisonSearch();	///< the auto garrison key: into the nearest free seat around here, and on to the next while a building turns the unit away
 	Bool isSeekingGarrison() const { return m_isSeekingGarrison; }	///< on an auto garrison search, so a building lost on the way is no target
-#if defined(_DEBUG) || defined(_INTERNAL)	
 	inline const Coord3D *friend_getRequestedDestination() const { return &m_requestedDestination; }
+#if defined(_DEBUG) || defined(_INTERNAL)
 	inline const Coord3D *friend_getRequestedDestination2() const { return &m_requestedDestination2; }
 #endif
 

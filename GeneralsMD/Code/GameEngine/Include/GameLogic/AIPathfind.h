@@ -959,6 +959,8 @@ public:
 	static void bumpCrowdRepath( void );						///< a unit gave up on its route rather than steer round
 	static void bumpDither( void );									///< a unit was caught driving a long way and gaining nothing
 	void processPathfindQueue(void); ///< Process some or all of the queued pathfinds.
+	/// this unit's search ran out of the frame's cells and carries on at its next turn in the queue
+	Bool isSearchSuspended( ObjectID id ) const { return id != INVALID_ID && m_search.owner == id && !m_search.done; }
 	void forceMapRecalculation( );	///< Force pathfind map recomputation. If region is given, only that area is recomputed
 
 	/** Returns an aircraft path to the goal.  */
@@ -1102,6 +1104,10 @@ public:
 
 protected:
 	virtual Path *internalFindPath( Object *obj, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to);	///< Find a short, valid path between given locations
+	Path *continueFindPath( Object *obj, const LocomotorSet& locomotorSet, Bool mayStop );	///< internalFindPath's cell search, from wherever it last stopped
+	void settleSuspendedSearch( void );	///< finish a stopped search before another search takes the lists
+	void dropSuspendedSearch( void );		///< throw a stopped search away
+	void closeSearch( void );						///< hand back the lists of the main search that just ended
 	Path *findHierarchicalPath( Bool isHuman, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to, Bool crusher);	
 	Path *findClosestHierarchicalPath( Bool isHuman, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to, Bool crusher);	
 	Path *internal_findHierarchicalPath( Bool isHuman, const LocomotorSurfaceTypeMask locomotorSurface, const Coord3D *from, const Coord3D *to, Bool crusher, Bool closestOK);	
@@ -1293,6 +1299,36 @@ private:
 		 without walking up to 2048 slots on every request. Derived from the ring, never saved. */
 	std::vector<bool>	m_isQueuedForPath;
 	Int						m_cumulativeCellsAllocated;
+
+	/* The main cell search's state, kept here rather than on the stack so a search that runs out of
+		 the queue's cells for the frame can stop and carry on from the same cell next frame.  At most
+		 one is ever stopped: it belongs to the unit at the head of the queue, which keeps that place
+		 until the search ends, so requests are still answered in the order they came.  Its cells stay
+		 on m_openList and m_closedList, so any other search first finishes it (settleSuspendedSearch)
+		 and keeps the answer for the unit's next turn.  Never saved: a loaded game starts that unit's
+		 search over. */
+	struct ResumableSearch
+	{
+		ObjectID owner;							///< the unit a stopped search belongs to, INVALID_ID when none
+		Bool done;									///< another search finished it, and result is the answer
+		Bool claimed;								///< the owner's turn in the queue carried it on or took the answer
+		Path *result;
+		Coord3D from, rawTo, to;
+		PathfindCell *goalCell, *parentCell, *closestCell;
+		Real closestDistanceSqr;
+		ICoord2D startCellNdx, goalCellNdx;
+		Int radius;
+		Bool centerInCell, isHuman;
+		Int cellCount;							///< cells taken so far, all frames together
+		Int credited;								///< of those, already charged to earlier frames' budgets
+		Bool isTunneling, ignoreUnderConstruction, restricted;
+		ObjectID ignoreObstacleID;
+		UnsignedInt flowNow, flowNowBucket;	///< the flow clock starts when the search did, not when it resumed
+		Real startDirX, startDirY;
+		Bool startDirValid;
+	};
+	ResumableSearch m_search;
+	ObjectID			m_queueOwnerID;		///< the unit whose turn in the queue is running, INVALID_ID outside it
 
 	/* diagnostics only - never read by the simulation, so it stays out of xfer().  Records
 		 whether the cell search now running was fenced into a hierarchical corridor or was let

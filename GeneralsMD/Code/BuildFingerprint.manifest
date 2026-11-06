@@ -2108,6 +2108,7 @@ GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.h
+GameEngineDevice/Source/PosixDevice/Render/SdlPresentMode.h
 GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.h
 GameEngineDevice/Source/PosixDevice/Render/SdlRenderMatrix.h

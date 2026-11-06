@@ -847,6 +847,7 @@ GameEngine/Include/GameClient/DebugDisplay.h
 GameEngine/Include/GameClient/Diplomacy.h
 GameEngine/Include/GameClient/DisconnectMenu.h
 GameEngine/Include/GameClient/Display.h
+GameEngine/Include/GameClient/DisplayCutout.h
 GameEngine/Include/GameClient/DisplayString.h
 GameEngine/Include/GameClient/DisplayStringManager.h
 GameEngine/Include/GameClient/DrawGroupInfo.h
@@ -1454,6 +1455,7 @@ GameEngine/Source/GameClient/CinemaDirector.cpp
 GameEngine/Source/GameClient/Color.cpp
 GameEngine/Source/GameClient/Credits.cpp
 GameEngine/Source/GameClient/Display.cpp
+GameEngine/Source/GameClient/DisplayCutout.cpp
 GameEngine/Source/GameClient/DisplayString.cpp
 GameEngine/Source/GameClient/DisplayStringManager.cpp
 GameEngine/Source/GameClient/DrawGroupInfo.cpp
@@ -1958,6 +1960,7 @@ GameEngineDevice/Include/PosixDevice/Common/PosixLocalFile.h
 GameEngineDevice/Include/PosixDevice/Common/PosixLocalFileSystem.h
 GameEngineDevice/Include/SdlDevice/Common/SdlDisplays.h
 GameEngineDevice/Include/SdlDevice/Common/SdlGameEngine.h
+GameEngineDevice/Include/SdlDevice/Common/SdlMacWindow.h
 GameEngineDevice/Include/SdlDevice/Common/SdlMessageBox.h
 GameEngineDevice/Include/SdlDevice/Common/SdlPanel.h
 GameEngineDevice/Include/SdlDevice/GameClient/AniCursor.h
@@ -2116,6 +2119,7 @@ GameEngineDevice/Source/PosixDevice/Render/SdlResourceMirror.h
 GameEngineDevice/Source/PosixDevice/Render/SdlSunShadowDebug.h
 GameEngineDevice/Source/SdlDevice/Common/SdlDisplays.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlGameEngine.cpp
+GameEngineDevice/Source/SdlDevice/Common/SdlMacWindow.mm
 GameEngineDevice/Source/SdlDevice/Common/SdlMessageBox.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlPanel.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/AniCursor.cpp
@@ -3414,6 +3418,7 @@ Tests/test_d3dx_assemble_stub.cpp
 Tests/test_d3dxportable.cpp
 Tests/test_debug.cpp
 Tests/test_detround.cpp
+Tests/test_display_cutout.inc
 Tests/test_dx11backend.cpp
 Tests/test_dx11device.cpp
 Tests/test_dx11layout.cpp

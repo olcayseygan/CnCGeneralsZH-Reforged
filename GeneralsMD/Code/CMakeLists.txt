@@ -11,6 +11,9 @@ if(CMAKE_HOST_APPLE AND "${CMAKE_OSX_DEPLOYMENT_TARGET}" STREQUAL "")
 endif()
 
 project(GeneralsMD CXX C)
+if(APPLE)
+  enable_language(OBJCXX)
+endif()
 
 # Which operating system this build is for.  MSVC used to answer that question too, because for
 # twenty years there was only one answer, and this file used the two interchangeably from its first
@@ -1948,6 +1951,9 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(sdldevice PUBLIC posixdevice w3ddevice SDL3::SDL3-static milesaudiomanager sdlinput)
   if(APPLE)
+    target_sources(sdldevice PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/Common/SdlMacWindow.mm)
+    set_target_properties(sdldevice PROPERTIES OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED YES)
+    target_link_libraries(sdldevice PRIVATE "-framework AppKit")
     target_link_libraries(sdldevice PRIVATE "-framework CoreGraphics")		# SdlDisplays' panel size
   endif()
   # Linux has no icon in the executable: the window sets Generals.ico's pixels on itself (SdlGameEngine).

@@ -22653,6 +22653,7 @@ TEST(chroma_money_bar_is_a_thousand_credits_a_lamp)
 }
 
 #include "test_camera_behavior.inc"
+#include "test_display_cutout.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
 

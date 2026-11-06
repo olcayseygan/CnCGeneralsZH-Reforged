@@ -22256,6 +22256,40 @@ TEST(scenario_parses_an_arrive_line)
  *
  * RFC 6455 section 1.3 ships a worked example, which is what this checks against.
  */
+TEST(control_upgrade_preserves_native_tools_and_requires_browser_capability)
+{
+    const char *token = "synthetic-browser-capability-0123456789";
+    const std::string headers = "GET / HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nUpgrade: websocket\r\nConnection: keep-alive, Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n";
+    char key[64], protocol[160];
+    auto accepts = [&](const std::string &extra, const char *configured) {
+        const std::string request = headers+extra+"\r\n";
+        return ControlServer_validateHandshake(request.data(), (Int)request.size(), configured,
+            key, sizeof(key), protocol, sizeof(protocol));
+    };
+    CHECK(accepts("", NULL));
+    CHECK_STR(key, "dGhlIHNhbXBsZSBub25jZQ==");
+    CHECK_STR(protocol, "");
+    CHECK(!accepts("Origin: https://untrusted.invalid\r\n", NULL));
+    CHECK(!accepts("oRiGiN: null\r\n", token));
+    const std::string capability = std::string("Sec-WebSocket-Protocol: zhr-control.")+token+"\r\n";
+    CHECK(accepts("Origin: https://local-tool.invalid\r\n"+capability, token));
+    CHECK_STR(protocol, (std::string("zhr-control.")+token).c_str());
+    CHECK(accepts("oRiGiN: null\r\n"+capability, token));
+    CHECK(!accepts("Origin: null\r\n"+capability, "a-different-capability-01234567890123"));
+    CHECK(!accepts("Origin: null\r\n"+capability, "short"));
+    CHECK(!accepts("Origin: null\r\nOrigin: null\r\n"+capability, token));
+    CHECK(!accepts("Origin: null\r\n"+capability+capability, token));
+    CHECK(!accepts("X-Value: Origin: null\r\nOrigin: null\r\n", NULL));
+    CHECK(!accepts(" Origin: null\r\n", token));
+    CHECK(!accepts(std::string("X-Value: hidden")+'\0'+"Origin: null\r\n", token));
+    CHECK(!accepts("\r\nOrigin: null\r\n", token));
+    CHECK(!accepts("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n", NULL));
+    // No connection authorization survives a rejected or successful request.
+    CHECK(!accepts("Origin: null\r\n", token));
+    CHECK_STR(protocol, "");
+    CHECK(accepts("", NULL));
+}
+
 TEST(control_server_answers_the_rfc_handshake_example)
 {
 	char accept[ 64 ];

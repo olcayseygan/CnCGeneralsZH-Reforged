@@ -42,9 +42,9 @@ bool        GCALL HUFF_is(const void *compresseddata);
 
 int        GCALL HUFF_size(const void *compresseddata);
 #ifdef __cplusplus
-int        GCALL HUFF_decode(void *dest, const void *compresseddata, int *compressedsize=0);
+int        GCALL HUFF_decode(void *dest, const void *compresseddata, int *compressedsize, int capacity);
 #else
-int        GCALL HUFF_decode(void *dest, const void *compresseddata, int *compressedsize);
+int        GCALL HUFF_decode(void *dest, const void *compresseddata, int *compressedsize, int capacity);
 #endif
 
 /* Encode Functions */

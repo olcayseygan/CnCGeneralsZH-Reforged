@@ -161,7 +161,8 @@ static void activateThisApp()
 	void *activate = sel_registerName( "activate" );
 	if (((bool (*)( void *, void *, void * ))objc_msgSend)( application, sel_registerName( "respondsToSelector:" ), activate ))
 		((void (*)( void *, void * ))objc_msgSend)( application, activate );
-	((void (*)( void *, void *, bool ))objc_msgSend)( application, sel_registerName( "activateIgnoringOtherApps:" ), true );
+	else
+		((void (*)( void *, void *, bool ))objc_msgSend)( application, sel_registerName( "activateIgnoringOtherApps:" ), true );
 }
 #else
 static void activateThisApp() {}

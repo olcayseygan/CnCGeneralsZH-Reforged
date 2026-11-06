@@ -185,6 +185,16 @@ inline bool findEarlyCommandLineValue( const wchar_t *option, char *out, size_t 
 }
 #endif
 
+/** ASCII option names also work at portable call sites; Windows still reads its native wide command line. */
+template<size_t N>
+inline bool findEarlyCommandLineValue( const char (&option)[N], char *out, size_t outSize )
+{
+	wchar_t wide[N];
+	for (size_t i = 0; i < N; ++i)
+		wide[i] = (unsigned char)option[i];
+	return findEarlyCommandLineValue( wide, out, outSize );
+}
+
 /** ZH_UNATTENDED in the environment, set to anything but "" or "0": the CI scripts and the test harnesses set
 	 it for every run they start, drawing or not.  Players never do. */
 inline bool unattendedByEnvironment( void )

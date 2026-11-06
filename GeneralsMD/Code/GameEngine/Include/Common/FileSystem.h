@@ -103,8 +103,6 @@ typedef FilenameList::iterator FilenameListIter;
 #define TEST_TGA_DIR_PATH "../TestArt/"		///< .tga texture files live here
 #endif
 
-enum { FILE_FOCUS_ALL = -2, FILE_FOCUS_RETAIL = -1 };	///< FileSystem::setFocus; 0 and up is a -mod index
-
 struct FileInfo {
 	Int sizeHigh;
 	Int sizeLow;
@@ -142,34 +140,6 @@ public:
 	void getFileListInDirectory(const AsciiString& directory, const AsciiString& searchName, FilenameList &filenameList, Bool searchSubdirectories) const; ///< search the given directory for files matching the searchName (egs. *.ini, *.rep).  Possibly search subdirectories.
 	Bool getFileInfo(const AsciiString& filename, FileInfo *fileInfo) const; ///< fills in the FileInfo struct for the file given. returns TRUE if successful.
 
-	/// "<mod dir><filename>" when the last -mod that has this game path has it loose, else empty.  When
-	/// that mod has it in an archive instead, *inModArchive says so.  Either copy beats Run's loose files
-	/// and every archive that is not a mod's - except a fork-owned file the install folder holds loose,
-	/// which no mod replaces.
-	AsciiString modLooseFile(const AsciiString& filename, Bool *inModArchive = NULL) const;
-
-	/// TRUE for a game path the fork ships loose and no mod replaces (BalanceReforged.ini, Patch.str, its
-	/// .wnd layouts ...); see the definition for how the set is decided.
-	static Bool isForkOwnedPath(const AsciiString& filename);
-
-	/// TRUE for a game path that draws the game's interface (a .wnd, Language.ini's fonts, the shell's
-	/// image sheets): a merged mod never replaces it, the copy retail or the fork has wins
-	static Bool isForkUIPath(const AsciiString& filename);
-
-	/// TRUE for a game path under "Maps\": the maps are always ours, a mod's own maps are never listed or
-	/// loaded, so every machine in a match reads the same map whatever mods it runs
-	static Bool isMapPath(const AsciiString& filename);
-
-	/// -modfactions: FILE_FOCUS_RETAIL or a -mod index makes every read see that set of files alone,
-	/// so retail and each mod load their factions one after another; FILE_FOCUS_ALL is the merged view.
-	void setFocus(Int focus);
-	Int getFocus() const { return s_focus; }
-
-	/// -modfactions: a file name starting "M<n>~" ("Art\W3D\M2~AVRanger.w3d") is mod n's copy and nothing
-	/// else; the art code falls back to the plain name itself.  TRUE for such a name, with *mod the -mod
-	/// index and *bare the path without the prefix.
-	static Bool splitModName(const AsciiString& filename, Int *mod, AsciiString *bare);
-
 	Bool createDirectory(AsciiString directory); ///< create a directory of the given name.
 
 	/// language when Data\<language>\Language.ini is loose or in an archive, otherwise the first
@@ -183,15 +153,10 @@ public:
 	void loadMusicFilesFromCD();
 	void unloadMusicFilesFromCD();
 protected:
-	AsciiString focusedLooseFile(const AsciiString& filename) const;	///< the loose copy the focus sees, else empty
-	AsciiString modFolderFile(Int mod, const AsciiString& filename) const;	///< "<mod folder><filename>" when it is there, else empty
   mutable std::map<unsigned,bool> m_fileExist;
 	/// m_fileExist is asked from the main thread and from the logic thread's model loads in an overlapped
 	/// tick (and the texture loader's, if it ever runs): two inserts at once corrupt the tree and the heap
 	mutable std::mutex m_fileExistLock;
-	// static: GlobalData's constructor reads files through a TheFileSystem that a few engine tests leave
-	// NULL, and openFile has always answered NULL there without touching the object
-	static Int s_focus;
 };
 
 extern FileSystem*	TheFileSystem;

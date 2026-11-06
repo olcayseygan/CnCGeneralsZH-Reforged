@@ -36,9 +36,6 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include <stddef.h>	// for offsetof, which we don't use but everyone who includes us does
-#include <set>
-#include <string>
-#include <vector>
 #include "Common/STLTypedefs.h"
 #include "Common/AsciiString.h"
 #include "Common/GameCommon.h"
@@ -66,9 +63,6 @@ enum INILoadType
 enum
 {
 	INI_MAX_CHARS_PER_LINE = 1028,			///< max characters per line entry in any ini file
-	/// a line once -modfactions has put "M<n>~" before its names: at most one name every two characters,
-	/// four characters of prefix each up to mod 99, so a full line can triple
-	INI_MAX_CHARS_PER_PREFIXED_LINE = INI_MAX_CHARS_PER_LINE * 3,
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -171,75 +165,6 @@ typedef void (*INIBlockParse)( INI *ini );
 typedef void (*BuildMultiIniFieldProc)(MultiIniFieldParse& p);
 
 //-------------------------------------------------------------------------------------------------
-/** -modfactions: every name a mod defines is read as "M<n>~name" while that mod's files load, so two
-	* mods and retail can each have their own FactionAmerica, Ranger and Command_ConstructBarracks side
-	* by side.  A name the mod does not define stays retail's.  The rewrite is of the text, before the
-	* INI checksum sees it, so it is the same on every machine that has the same mods in the same order. */
-//-------------------------------------------------------------------------------------------------
-enum ModNameType
-{
-	MODNAME_OBJECT, MODNAME_WEAPON, MODNAME_ARMOR, MODNAME_DAMAGEFX, MODNAME_UPGRADE, MODNAME_SCIENCE,
-	MODNAME_SPECIALPOWER, MODNAME_COMMANDSET, MODNAME_COMMANDBUTTON, MODNAME_FXLIST, MODNAME_OCL,
-	MODNAME_PARTICLESYSTEM, MODNAME_LOCOMOTOR, MODNAME_PLAYERTEMPLATE, MODNAME_MAPPEDIMAGE,
-	MODNAME_AUDIOEVENT,
-	MODNAME_COUNT
-};
-
-class ModNamespace
-{
-public:
-	ModNamespace() : m_active( -1 ) {}
-
-	void scanMods( void );															///< every -mod's faction files, each under its own FileSystem focus
-	void scanLine( Int mod, const char *line );					///< a block header names one of the mod's own; "Side = X" keeps X out
-	void finishScan( Int mod );													///< drop the side names, which the engine compares as text
-	/// a file the mod ships under Art\W3D, Art\Textures or Data\Audio; a word naming it gets the prefix too,
-	/// and the FileSystem and WW3D then serve the mod's own copy
-	void addAsset( Int mod, const char *fileName );
-	void setActive( Int mod ) { m_active = mod; }				///< -1: nothing is rewritten
-	Int getActive( void ) const { return m_active; }
-	Int getNameCount( Int mod ) const { return (Int)m_mods[ mod ].all.size(); }
-
-	/// rewrite the active mod's names, and in a file field the files it ships, in a comment-free line in
-	/// place, every word but the first; FALSE when the result would not fit capacity bytes
-	Bool rewriteLine( char *line, size_t capacity ) const;
-	/// the same for the labels in the mod's own string table.  This runs after the INI checksum: the table
-	/// is the player's language, and two installs in different languages must still agree.
-	Bool rewriteLabels( char *line, size_t capacity ) const;
-	/// "M<n>~X" where mod n has no `type` called X is a reference to retail's X: TRUE and *retailName
-	/// set.  Finders ask this on a miss, so a definition of the mod's own X never falls through to retail's.
-	Bool findRetailName( const AsciiString &name, ModNameType type, AsciiString *retailName ) const;
-	Bool findRetailKey( NameKeyType key, ModNameType type, NameKeyType *retailKey ) const;
-	/// "M<n>~name" when mod n defines a `type` called name, else name: how a mod's own data that is not INI
-	/// (its SkirmishScripts.scb) names its things
-	AsciiString modName( Int mod, ModNameType type, const AsciiString &name ) const;
-	/// where the file name in a path-shaped word starts, past its last '\\' or '/': "Sub\\x.mp3" gives 4.
-	/// The prefix goes there, since FileSystem::splitModName reads it on the last part only
-	static size_t lastPathPart( const std::string &word );
-
-	static const char *const FactionFiles[];		///< what scanMods reads and the mod passes load, NULL-ended; no ".ini" is a directory
-
-private:
-	struct Names
-	{
-		std::set<std::string> all;
-		std::set<std::string> byType[ MODNAME_COUNT ];
-		std::set<std::string> sides;
-		std::set<std::string> assets;		///< lowercase: w3d and audio by base name, textures by file name
-	};
-	static Bool isAsset( const Names &names, const std::string &word );
-	static Bool isAssetField( const std::string &field );	///< a field whose value names a model, animation, texture or sound file
-	static size_t namedAfterKeyword( const std::string &word );	///< "OCL:X" gives 4, where the name starts; 0 for any other word
-	typedef Bool (ModNamespace::*WordTest)( const std::string &word, Bool assetField ) const;
-	Bool isNameOrAsset( const std::string &word, Bool assetField ) const;
-	Bool isModLabel( const std::string &word, Bool assetField ) const;
-	Bool prefixWords( char *line, size_t capacity, WordTest test ) const;
-	std::vector<Names> m_mods;
-	Int m_active;
-};
-extern ModNamespace TheModNamespace;
-
-//-------------------------------------------------------------------------------------------------
 /** INI Reader interface */
 //-------------------------------------------------------------------------------------------------
 class INI
@@ -254,8 +179,6 @@ public:
 
 	void loadDirectory( AsciiString dirName, Bool subdirs, INILoadType loadType, Xfer *pXfer );  ///< load directory of INI files
 	void load( AsciiString filename, INILoadType loadType, Xfer *pXfer );		///< load INI file
-	/// -modfactions: load path (a directory when directory) from each -mod in turn, under its focus and its names
-	static void loadModPasses( const char *path, Xfer *pXfer, Bool directory = FALSE );
 
 	static Bool isDeclarationOfType( AsciiString blockType, AsciiString blockName, char *bufferToCheck );
 	static Bool isEndOfBlock( char *bufferToCheck );
@@ -329,30 +252,17 @@ public:
 	inline INILoadType getLoadType( void ) const { return m_loadType; }
 	inline UnsignedInt getLineNum( void ) const { return m_lineNum; }
 
-	/** A map.ini is written by a map maker, often against another mod's objects, and one field
-		this game does not know used to end the match before it started. Set, an unknown field
+	/** A map.ini is written by a map maker, often against objects this game does not have, and one
+		field this game does not know used to end the match before it started. Set, an unknown field
 		name is logged and its line skipped instead of throwing. */
 	inline void setSkipUnknownFields( Bool skip ) { m_skipUnknownFields = skip; }
 
-	/** A patch INI loaded over a mod can name a special power or an object creation list the mod
-		does not have. The reference raises this, and ThingTemplate::parseModuleName drops the module
+	/** A patch INI can name a special power or an object creation list the data it lands on does
+		not have. The reference raises this, and ThingTemplate::parseModuleName drops the module
 		it was read into. */
 	inline void setMissingReference( Bool missing ) { m_missingReference = missing; }
 	inline Bool hasMissingReference( void ) const { return m_missingReference; }
 
-	/** -modfactions prefixes every word a mod names a block with, and a mod can name one after an
-		engine word: The Power of the West has a ParticleSystem "Explosion", so "DamageType = Explosion"
-		arrived as "M2~Explosion".  A fixed list of names (an enum, Yes/No) is never a mod's, so its
-		scanners read past the prefix.  No retail name holds a '~'. */
-	static const char *withoutModPrefix( const char *token )
-	{
-		const char *p = token;
-		if (*p++ != 'M' || *p < '0' || *p > '9')
-			return token;
-		while (*p >= '0' && *p <= '9')
-			++p;
-		return *p == '~' ? p + 1 : token;
-	}
 	inline const char *getSeps( void ) const { return m_seps; }
 	inline const char *getSepsPercent( void ) const { return m_sepsPercent; }
 	inline const char *getSepsColon( void ) const { return m_sepsColon; }
@@ -524,7 +434,7 @@ protected:
 	AsciiString m_filename;										///< filename of file currently loading
 	INILoadType m_loadType;										///< load time for current file
 	UnsignedInt m_lineNum;										///< current line number that's been read
-	char m_buffer[ INI_MAX_CHARS_PER_PREFIXED_LINE+1 ];///< one line of the file, room for its mod prefixes
+	char m_buffer[ INI_MAX_CHARS_PER_LINE+1 ];///< buffer to read file contents into
 	const char *m_seps;												///< for strtok parsing
 	const char *m_sepsPercent;								///< m_seps with percent delimiter as well
 	const char *m_sepsColon;									///< m_seps with colon delimiter as well
@@ -534,7 +444,7 @@ protected:
 	Bool m_skipUnknownFields;									///< log and skip an unknown field instead of throwing
 	Bool m_missingReference;									///< a patch named a special power or OCL that does not exist
 #if defined(_DEBUG) || defined(_INTERNAL)
-	char m_curBlockStart[ INI_MAX_CHARS_PER_PREFIXED_LINE+1 ];	///< first line of cur block, a copy of m_buffer
+	char m_curBlockStart[ INI_MAX_CHARS_PER_LINE+1 ];	///< first line of cur block
 #endif
 };
 

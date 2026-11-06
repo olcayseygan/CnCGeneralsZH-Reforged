@@ -1,0 +1,15 @@
+# What the guard markers cost (GitHub #165): three hundred Rangers of the local player on guard round his
+# command center, every one wearing the shield over his head, in front of the opening camera.
+#
+#   generals.exe -quickstart -noshellmap -multiInstance -map "Maps\Tournament Desert\Tournament Desert.map"
+#     -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina -seed 8 -noFPSLimit
+#     -borderless -xres 1920 -yres 1080 -msaa 0 -maxframes 3000 -scenario guardshields -logPrefix guard_
+#
+# Read HEADLESS FRAMETIME from the log; the shields are drawn from frame 61 on.
+#
+# See mobstress.txt for the line grammar.
+
+30    spawn   0  AmericaInfantryRanger  100  start0:-250:-150  18
+30    spawn   0  AmericaInfantryRanger  100  start0:0:-250     18
+30    spawn   0  AmericaInfantryRanger  100  start0:250:-150   18
+60    guard   0  AmericaInfantryRanger  0    AmericaCommandCenter

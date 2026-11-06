@@ -90,7 +90,13 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameLogic/AI.h"
+#include "GameLogic/Armor.h"
+#include "GameLogic/ArmorSet.h"
+#include "GameLogic/Locomotor.h"
+#include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/Module/FireWeaponWhenDeadBehavior.h"
@@ -173,12 +179,15 @@ struct BuildTooltipUpgrade
 struct BuildTooltipCard
 {
 	Bool hasStats;								///< a unit's card: the figures below are there
-	Int buildSeconds;
 	Int health;										///< 0 for a body that cannot be hurt
 	Int damage;										///< the main weapon's, with the upgrades the player owns; 0 for no weapon
 	Int range;
 	Real attacksPerSecond;				///< shots a second over a whole clip and its reload
 	Int damagePerSecond;
+	UnicodeString armor;					///< the unconditioned armour's class, empty for none
+	Int speed;										///< the normal locomotor's top speed a second, 0 for none
+	Int power;										///< EnergyProduction: what it adds to the base's power, negative for what it draws
+	Bool structure;
 	std::vector< BuildTooltipUpgrade > upgrades;	///< a unit's upgrades, or the units an upgrade changes
 };
 
@@ -543,6 +552,94 @@ static void putUpgradeTargets( BuildTooltipCard &card, const UpgradeTemplate *up
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+/** The class of `thing`'s unconditioned armour: TOOLTIP:Armor and the Armor block's name with its first
+	* "Armor" taken out (TankArmor reads TOOLTIP:ArmorTank, StructureArmorTough TOOLTIP:ArmorStructureTough).
+	* An armour the string table does not know shows that name itself.  Empty when the set wears none. */
+//-------------------------------------------------------------------------------------------------
+static UnicodeString armorClass( const ThingTemplate *thing )
+{
+	const ArmorTemplateSet *set = thing->findArmorTemplateSet( ArmorSetFlags() );
+	if( set == NULL || set->getArmorTemplate() == NULL )
+		return UnicodeString::TheEmptyString;
+	std::string name = set->getArmorTemplate()->getName().str();
+	const size_t armor = name.find( "Armor" );
+	if( armor != std::string::npos )
+		name.erase( armor, 5 );
+	Bool exists = FALSE;
+	UnicodeString text = TheGameText->fetch( ( "TOOLTIP:Armor" + name ).c_str(), &exists );
+	if( !exists )
+		text.translate( AsciiString( name.c_str() ) );
+	return text;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** `thing`'s top speed a second on its normal locomotors, the fastest of them, at its SpeedScale; 0 for
+	* one that does not move. */
+//-------------------------------------------------------------------------------------------------
+static Int topSpeed( const ThingTemplate *thing )
+{
+	Real fastest = 0.0f;
+	const ModuleInfo &modules = thing->getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		const ModuleData *data = modules.getNthData( m );
+		if( data == NULL || !data->isAiModuleData() )
+			continue;
+		const LocomotorTemplateVector *set = static_cast< const AIUpdateModuleData * >( data )->findLocomotorTemplateVector( LOCOMOTORSET_NORMAL );
+		for( size_t each = 0; set && each < set->size(); ++each )
+			fastest = max( fastest, ( *set )[ each ]->getMaxSpeed() );
+	}
+	return REAL_TO_INT( fastest * thing->getSpeedScale() * LOGICFRAMES_PER_SECOND );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** `text` without its lines that end in ": <figure>", and the blank lines left at its end.  EA wrote
+	* "Power Required: 1" or "Power Provided: 5" into every building's description, in every language,
+	* and the card's power cell says it now. */
+// ponytail: matched by the figure, not the words, so it holds in every language; a building whose
+// description ends another line in the same ": N" loses that line too, none of the stock ones does
+//-------------------------------------------------------------------------------------------------
+static UnicodeString withoutFigureLine( const UnicodeString &text, Int figure )
+{
+	UnicodeString tail;
+	tail.format( u": %d", figure );
+	const WideCharString end = tail.str();
+	const WideCharString whole = text.str();
+	std::vector< WideCharString > kept;
+	for( size_t from = 0; from <= whole.size(); )
+	{
+		size_t to = whole.find( u'\n', from );
+		if( to == WideCharString::npos )
+			to = whole.size();
+		const WideCharString line = whole.substr( from, to - from );
+		const size_t last = line.find_last_not_of( u' ' );
+		const WideCharString trimmed = last == WideCharString::npos ? WideCharString() : line.substr( 0, last + 1 );
+		if( trimmed.size() < end.size() || trimmed.compare( trimmed.size() - end.size(), end.size(), end ) != 0 )
+			kept.push_back( line );
+		from = to + 1;
+	}
+	while( !kept.empty() && kept.back().find_first_not_of( u' ' ) == WideCharString::npos )
+		kept.pop_back();
+
+	UnicodeString out;
+	for( size_t each = 0; each < kept.size(); ++each )
+	{
+		if( each > 0 )
+			out.concat( u"\n" );
+		out.concat( kept[ each ].c_str() );
+	}
+	return out;
+}
+
+/// what the card's draw puts beside the texts, filled by populateBuildTooltipLayout
+static BuildTooltipFigures theFigures;
+
+const BuildTooltipFigures& ControlBarBuildTooltipFigures( void )
+{
+	return theFigures;
+}
+
 void ControlBarPopupDescriptionUpdateFunc( WindowLayout *layout, void *param )
 {
 	if(TheScriptEngine->isGameEnding())
@@ -568,17 +665,6 @@ void ControlBarPopupDescriptionUpdateFunc( WindowLayout *layout, void *param )
 
 }
 
-//
-// How far the bar had travelled (minimised, or sliding in) the last time the tooltip was moved with
-// it.  It belongs to one tooltip layout: a new layout, made when the resolution changes, stands where
-// the loader put it, and carrying the old one's offset over lifted it by the whole minimised drop.
-//
-static ICoord2D theTooltipLastOffset = { 0, 0 };
-
-void ControlBarPopupDescription_forgetOffset( void )
-{
-	theTooltipLastOffset.x = theTooltipLastOffset.y = 0;
-}
 
 // ---------------------------------------------------------------------------------------
 void ControlBar::showBuildTooltipLayout( GameWindow *cmdButton )
@@ -716,7 +802,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 	if(!m_buildToolTipLayout)
 		return;
 
-	UnicodeString name, cost, descrip;
+	UnicodeString name, descrip;
 	UnicodeString requires = UnicodeString::TheEmptyString, requiresList;
 	Bool firstRequirement = true;
 	const ProductionPrerequisite *prereq;
@@ -725,6 +811,11 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 	UnicodeString cardWarning;		// why it cannot be bought right now, empty when it can
 	UnicodeString cardRequires;		// "Requires: ..." naming what is still missing
 	BuildTooltipCard card = BuildTooltipCard();
+	theFigures = BuildTooltipFigures();
+	auto putTime = [&]( Int frames )
+	{
+		theFigures.time.format( TheGameText->fetch( "TOOLTIP:StatSeconds" ), ControlBar_secondsFromFrames( (Real)frames ) );
+	};
 
 	if(commandButton)
 	{
@@ -786,6 +877,11 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			Object *selectedObject = draw ? draw->getObject() : NULL;
 			if( selectedObject )
 			{
+				// a vehicle transport's Evacuate asks where, and Alt empties it on the spot
+				// (ControlBar::processCommandUI); buildings keep EA's text
+				if( commandButton->getCommandType() == GUI_COMMAND_EVACUATE && AIGroup::unloadsWhereSent( selectedObject ) )
+					descrip = TheGameText->fetch( "CONTROLBAR:ToolTipEvacuateAt" );
+
 				//Special case: Append status of overcharge on China power plant.
 				if( commandButton->getCommandType() == GUI_COMMAND_TOGGLE_OVERCHARGE )
 				{
@@ -871,14 +967,20 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			costToBuild = thingTemplate->calcCostToBuild( player );
 			if( costToBuild > 0 )
 			{
-				cost.format( TheGameText->fetch("TOOLTIP:Cost"), costToBuild );
+				theFigures.cost.format( u"%d", costToBuild );
+				theFigures.costIsMoney = TRUE;
 			}
 
 			// retail tells you the price and nothing about what you get: the card adds the build time,
-			// health and the main weapon's figures, all read off the template, there is no Object yet
+			// the body, the main weapon's figures, the speed and the power, all read off the template,
+			// there is no Object yet
 			card.hasStats = TRUE;
-			card.buildSeconds = ControlBar_secondsFromFrames( (Real)thingTemplate->calcTimeToBuild( player ) );
+			putTime( thingTemplate->calcTimeToBuild( player ) );
 			putUnitFigures( card, thingTemplate, player );
+			card.armor = armorClass( thingTemplate );
+			card.speed = topSpeed( thingTemplate );
+			card.power = thingTemplate->getEnergyProduction();
+			card.structure = thingTemplate->isKindOf( KINDOF_STRUCTURE );
 
 			// ask each prerequisite to give us a list of the non satisfied prerequisites
 			for( Int i=0; i<thingTemplate->getPrereqCount(); i++ )
@@ -971,8 +1073,10 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 				costToBuild = upgradeTemplate->calcCostToBuild( player );
 				if( costToBuild > 0 )
 				{
-					cost.format( TheGameText->fetch("TOOLTIP:Cost"), costToBuild );
+					theFigures.cost.format( u"%d", costToBuild );
+					theFigures.costIsMoney = TRUE;
 				}
+				putTime( upgradeTemplate->calcTimeToBuild( player ) );
 
 				if( missingScience )
 					cardRequires.format( TheGameText->fetch( "CONTROLBAR:Requirements" ).str(), TheGameText->fetch( "CONTROLBAR:GeneralsPromotion" ).str() );
@@ -985,7 +1089,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			costToBuild = TheScienceStore->getSciencePurchaseCost( st );
 			if( costToBuild > 0 )
 			{
-				cost.format( TheGameText->fetch("TOOLTIP:ScienceCost"), costToBuild );
+				theFigures.cost.format( TheGameText->fetch("TOOLTIP:ScienceCost"), costToBuild );
 			}
 
 			// ask each prerequisite to give us a list of the non satisfied prerequisites
@@ -1058,47 +1162,48 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 
 	}
 
-	// the layout's one text, in the order Reforged's card had it: the description, the unit's figures
-	// counted with the upgrades the player owns, every upgrade that moves one of them and by how much
-	// (on an upgrade's own button, the units it changes), then why it cannot be bought now and what
-	// it still needs
+	// the unit's figures, counted with the upgrades the player owns, go in the card's row of icons
+	// (BuildTooltipFigures); the description keeps what an icon cannot say: every upgrade that moves a
+	// figure and by how much (on an upgrade's own button, the units it changes), then why it cannot be
+	// bought now and what it still needs
 	if( card.hasStats )
 	{
-		// each figure ends in a short gloss of what it counts, so the card reads without a manual
-		UnicodeString figures;
-		auto row = [&]( const char *label, const UnicodeString &value, const char *hint )
+		auto cell = [&]( Int icon, const UnicodeString &value )
 		{
-			figures.concat( u"\n" );
-			figures.concat( TheGameText->fetch( label ) );
-			figures.concat( u": " );
-			figures.concat( value );
-			figures.concat( u" " );
-			figures.concat( TheGameText->fetch( hint ) );
+			theFigures.cellIcon[ theFigures.cellCount ] = icon;
+			theFigures.cellValue[ theFigures.cellCount ] = value;
+			++theFigures.cellCount;
 		};
-		auto number = []( Int value )
+		auto number = []( const WideChar *format, Int value )
 		{
 			UnicodeString text;
-			text.format( u"%d", value );
+			text.format( format, value );
 			return text;
 		};
 		if( card.health > 0 )
-			row( "TOOLTIP:StatHealth", number( card.health ), "TOOLTIP:StatHealthHint" );
+			cell( ControlBarTooltipImages::ICON_HEALTH, number( u"%d", card.health ) );
+		if( !card.armor.isEmpty() )
+			cell( ControlBarTooltipImages::ICON_ARMOR, card.armor );
 		if( card.damage > 0 )
 		{
-			// a bomb that kills its carrier goes off once, so it has no rate
-			const Bool once = card.attacksPerSecond <= 0.0f;
-			row( "TOOLTIP:StatDamage", number( card.damage ), "TOOLTIP:StatDamageHint" );
-			row( "TOOLTIP:StatAttackSpeed", once ? UnicodeString( u"-" ) : UnicodeString( MultiByteToWideCharSingleLine( rateFigure( card.attacksPerSecond ).c_str() ).c_str() ),
-					 "TOOLTIP:StatAttackSpeedHint" );
-			row( "TOOLTIP:StatDamagePerSecond", once ? UnicodeString( u"-" ) : number( card.damagePerSecond ), "TOOLTIP:StatDamagePerSecondHint" );
-			row( "TOOLTIP:StatRange", number( card.range ), "TOOLTIP:StatRangeHint" );
+			// the rate cell is damage a second; a bomb that kills its carrier goes off once, so it has none
+			UnicodeString rate( u"-" );
+			if( card.attacksPerSecond > 0.0f )
+			{
+				rate = number( u"%d", card.damagePerSecond );
+				rate.concat( TheGameText->fetch( "TOOLTIP:StatPerSecond" ) );
+			}
+			cell( ControlBarTooltipImages::ICON_DAMAGE, number( u"%d", card.damage ) );
+			cell( ControlBarTooltipImages::ICON_RATE, rate );
+			cell( ControlBarTooltipImages::ICON_RANGE, number( u"%d", card.range ) );
 		}
-		UnicodeString seconds;
-		seconds.format( TheGameText->fetch( "TOOLTIP:StatSeconds" ), card.buildSeconds );
-		row( "TOOLTIP:StatTime", seconds, "TOOLTIP:StatTimeHint" );
-		if( !descrip.isEmpty() )
-			descrip.concat( u"\n" );
-		descrip.concat( figures );
+		if( !card.structure && card.speed > 0 )
+			cell( ControlBarTooltipImages::ICON_SPEED, number( u"%d", card.speed ) );
+		if( card.power != 0 )
+		{
+			cell( ControlBarTooltipImages::ICON_POWER, number( u"%+d", card.power ) );
+			descrip = withoutFigureLine( descrip, abs( card.power ) );
+		}
 	}
 	if( !card.upgrades.empty() )
 	{
@@ -1153,33 +1258,30 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 	{
 		if( commandButton && commandButton->getName() == "NonCommand_IdleWorker" )
 			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_IdleInfantry" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_IdleVehicle" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_IdleAircraft" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT ) );
 		GadgetStaticTextSetText(win, name);
 	}
 
-	win = TheWindowManager->winGetWindowFromId(m_buildToolTipLayout->getFirstWindow(), TheNameKeyGenerator->nameToKey("ControlBarPopupDescription.wnd:StaticTextCost"));
-	if(win)
-	{
-		if( costToBuild > 0 )
-		{
-			win->winHide( FALSE );
-			GadgetStaticTextSetText(win, cost);
-		}
-		else
-		{
-			win->winHide( TRUE );
-		}
-	}
+	// the price is drawn with its icon by the card now; EA's layout still has the window that used
+	// to say it, empty
+	static const NameKeyType costID = TheNameKeyGenerator->nameToKey( "ControlBarPopupDescription.wnd:StaticTextCost" );
+	win = TheWindowManager->winGetWindowFromId( m_buildToolTipLayout->getFirstWindow(), costID );
+	if( win )
+		win->winHide( TRUE );
 
 	win = TheWindowManager->winGetWindowFromId(m_buildToolTipLayout->getFirstWindow(), TheNameKeyGenerator->nameToKey("ControlBarPopupDescription.wnd:StaticTextDescription"));
 	if(win)
 	{
 
-		static NameKeyType winNamekey	= TheNameKeyGenerator->nameToKey( AsciiString( "ControlBar.wnd:BackgroundMarker" ) );
-		ICoord2D &lastOffset = theTooltipLastOffset;
+		static NameKeyType radarID = TheNameKeyGenerator->nameToKey( AsciiString( "ControlBar.wnd:LeftHUD" ) );
 
 		ICoord2D size, newSize, pos;
-		Int diffSize;
-		
+
 		DisplayString *tempDString = TheDisplayStringManager->newDisplayString();
 		win->winGetSize(&size.x, &size.y);
 		tempDString->setFont(win->winGetFont());
@@ -1188,49 +1290,47 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 		tempDString->getSize(&newSize.x, &newSize.y);
 		TheDisplayStringManager->freeDisplayString(tempDString);
 		tempDString = NULL;
-		diffSize = newSize.y - size.y;
  		GameWindow *parent = m_buildToolTipLayout->getFirstWindow();
  		if(!parent)
  			return;
-		
+
+		// the card's layout at 1080 (Tools/hud_command_bar.py, TIP_TEXT): the description from y 66 under
+		// the figures' row, right under the short top row when there is none, 14 of frame under it; never
+		// under 102 high.  The text window is as tall as its text, so its centring leaves the text at its
+		// top.  The card is 512 wide at 1080 and fitted (LAYOUT_FIT), so its width is the scale, as the
+		// draw takes it.
  		parent->winGetSize(&size.x, &size.y);
- 		if(size.y + diffSize < 102) {
-			diffSize = 102 - size.y;
-		}
-
-		parent->winSetSize(size.x, size.y + diffSize);
+		const Real k = size.x / 512.0f;
+		const Int descTop = REAL_TO_INT( ( theFigures.cellCount > 0 ? 66 : BuildTooltipFigures::HEAD_HEIGHT ) * k );
+		const Int cardHeight = max( REAL_TO_INT( 102 * k ), descTop + max( newSize.y, REAL_TO_INT( 30 * k ) ) + REAL_TO_INT( 14 * k ) );
+		parent->winSetSize(size.x, cardHeight);
  		parent->winGetPosition(&pos.x, &pos.y);
-//		if(size.y + diffSize < 102)
-//		{
-//			
-//			parent->winSetPosition(pos.x, pos.y -  (102 - (newSize.y + size.y + diffSize) ));
-//		}
-//		else
 
-//		heightChange = controlBarPos.y - m_defaultControlBarPosition.y;
+		// The card stands on the radar's frame, 6 above it at 1080, wherever the bar's own scale and the
+		// bar's slide or minimising put the radar: the layout's fit anchors it to the screen's bottom
+		// instead, and on 1280x1024 that sank it over the radar's top.  A painting with a radar box of
+		// its own puts the card over the box's ledge (radarArtTop).
+		GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarID );
+		IRegion2D radarRect, radarOuter;
+		radar->winGetScreenPosition( &radarRect.lo.x, &radarRect.lo.y );
+		radar->winGetSize( &radarRect.hi.x, &radarRect.hi.y );
+		radarRect.hi.x += radarRect.lo.x;
+		radarRect.hi.y += radarRect.lo.y;
+		radarOuter = radarRect;
+		const Image *const *frame = getControlBarSchemeManager()->getRadarFrame();
+		if( frame )
+			ControlBarSchemeManager::radarFrameRect( frame, radarRect, &radarOuter );
+		else
+			radarOuter.lo.y = getControlBarSchemeManager()->radarArtTop( radarRect.lo.y );
+		parent->winSetPosition( pos.x, radarOuter.lo.y - REAL_TO_INT( 6 * k ) - cardHeight );
 
-		GameWindow *marker =  TheWindowManager->winGetWindowFromId(NULL,winNamekey);
-		static ICoord2D basePos;
-		if(!marker)
-		{
-			return;
-		}
-		TheControlBar->getBackgroundMarkerPos(&basePos.x, &basePos.y);
-		ICoord2D curPos, offset;
-		marker->winGetScreenPosition(&curPos.x,&curPos.y);
-
-		offset.x = curPos.x - basePos.x;
-		offset.y = curPos.y - basePos.y;
-
-		parent->winSetPosition(pos.x, (pos.y - diffSize) + (offset.y - lastOffset.y));
-
-		lastOffset.x = offset.x;
-		lastOffset.y = offset.y;
-
+		ICoord2D descPos;
+		win->winGetPosition(&descPos.x, &descPos.y);
+		win->winSetPosition(descPos.x, descTop);
 		win->winGetSize(&size.x, &size.y);
- 		win->winSetSize(size.x, size.y + diffSize);
+ 		win->winSetSize(size.x, newSize.y);
 
-		GadgetStaticTextSetText(win, descrip);		
+		GadgetStaticTextSetText(win, descrip);
 	}
 	m_buildToolTipLayout->hide(FALSE);
 }

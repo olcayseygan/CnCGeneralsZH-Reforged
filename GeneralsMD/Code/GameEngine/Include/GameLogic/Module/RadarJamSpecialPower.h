@@ -31,6 +31,7 @@
 #include "GameLogic/Module/SpecialPowerModule.h"
 
 class FXList;
+class ObjectCreationList;
 
 //-------------------------------------------------------------------------------------------------
 class RadarJamSpecialPowerModuleData : public SpecialPowerModuleData
@@ -44,6 +45,7 @@ public:
 	Real m_radius;
 	UnsignedInt m_durationFrames;
 	const FXList *m_fx;
+	const ObjectCreationList *m_ocl;	///< created at the target point as the power fires
 };
 
 //-------------------------------------------------------------------------------------------------

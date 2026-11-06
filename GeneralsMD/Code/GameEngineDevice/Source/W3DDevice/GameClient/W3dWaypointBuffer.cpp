@@ -206,8 +206,8 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 	RenderInfoClass localRinfo(rinfo.Camera);
 	localRinfo.light_environment=&lightEnv;
 
-	// not in the water's mirror pass: the ground is left out of the reflection, and a PASS_ALWAYS
-	// order line would lie on top of the water
+	// Not in the water's mirror pass: these are orders drawn for the player, even where Modern
+	// reflects the ground, and a PASS_ALWAYS order line would lie on top of the water.
 	const Bool mirror = ShaderClass::Is_Backface_Culling_Inverted();
 	for( std::vector<WaypointDraw>::const_iterator it = m_draws.begin(); it != m_draws.end(); ++it )
 	{
@@ -258,8 +258,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 	// let go, so the white duplicate is gone.
 	//
 	// Every order the selection is on is drawn the way a building's rally point is drawn: this
-	// line, the puck on each point short of the end and on any unit or building it is aimed at, and
-	// the rally flag on the last bit of ground (a drawable of its own, InGameUI::updateOrderFlags).
+	// line and a puck on each of its points, on the ground or on any unit or building it is aimed at.
 	// The hints are rebuilt off the units every frame, so a puck on a target follows it.
 	{
 		const std::vector<InGameUI::OrderHint>& hints = TheInGameUI->getOrderHints();
@@ -274,18 +273,15 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			points[ 0 ].Set( it->from.x, it->from.y, max( it->from.z, TheTerrainLogic->getGroundHeight( it->from.x, it->from.y ) ) );
 			points[ 1 ].Set( it->to.x, it->to.y, max( it->to.z, TheTerrainLogic->getGroundHeight( it->to.x, it->to.y ) ) );
 
-			// Order Lines off in the options takes away the line of a plain one-point order and leaves
-			// its point. A unit with more than one place to go (a shift queue, a waypoint path; step
-			// is numbered then) keeps its threads, since that list is the thing being planned
-			const Bool lineShown = TheGlobalData->m_showOrderLines || it->step > 0
-				|| it->kind == InGameUI::ORDER_HINT_WAYPOINT;
-			if( lineShown )
-				record( DRAW_LINE, TRUE, 2, points );
+			// Order Lines off in the options takes away a plain one-point order's line and the puck at
+			// its end, on ground or on the unit it is aimed at. A unit with more than one place to go
+			// (a shift queue, a waypoint path; step is numbered then) keeps its threads and pucks,
+			// since that list is the thing being planned
+			if( !TheGlobalData->m_showOrderLines && it->step == 0 && it->kind != InGameUI::ORDER_HINT_WAYPOINT )
+				continue;
 
-			// with the line drawn, its end wears the puck the joints between orders do
-			if( it->mark == InGameUI::ORDER_MARK_JOINT
-					|| ( lineShown && it->mark == InGameUI::ORDER_MARK_FLAG ) )
-				record( DRAW_PUCK, TRUE, 1, &points[ 1 ] );
+			record( DRAW_LINE, TRUE, 2, points );
+			record( DRAW_PUCK, TRUE, 1, &points[ 1 ] );		// the end wears the puck the joints between orders do
 		}
 		// the lines stay queued: the rally and placement pucks below would flush them into the
 		// terrain pass, under the buildings (see queueLine)

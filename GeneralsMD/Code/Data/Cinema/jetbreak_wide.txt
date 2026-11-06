@@ -1,0 +1,17 @@
+# The Raptor's break-off over Scenarios/jetbreak_film.txt on Twilight Flame, side on: looking north
+# (heading 0) across its lane, so it comes in from the left, fires from range at the Overlord
+# driving south and turns away before reaching it. Side on, the jet's height moves it up the frame
+# and not along its track, so where it turns against the tank's x is true. Raptor fires about 7.4 s
+# and breaks off at 7.7 s (headless log of the same seed). A first take at 2150,3400, zoom 1.15 had
+# a ridge filling the frame and the tank under the bottom edge.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -fps 120 -noFPSLimit -particlecap 2500
+#     -quickstart -noshellmap -observer -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map"
+#     -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina -seed 7
+#     -scenario jetbreak_film -cinema jetbreak_wide -recordfps 120 -video 390 660 jb_wide
+#     -wav 390 660 jb_wide -maxframes 670
+
+0.0   cut     2180 3220 1.0 0 0
+6.5   move    2230 3180 4.5
+7.5   shot
+9.0   shot

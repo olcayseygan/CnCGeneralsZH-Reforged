@@ -166,23 +166,18 @@ public:
 	/// prepareForMP_or_Skirmish left SkirmishScripts.scb unread
 	Bool skirmishScriptsFromMap() const { return m_skirmishScriptsFromMap; }
 	/** The match is on a map the game ships, where the fork's own skirmish AI plays: one in the game's
-		* Maps folder (EA's, or a mod's in its archives) or one the random map generator made.  A player's
+		* Maps folder (EA's, loose or in its archives) or one the random map generator made.  A player's
 		* own map, downloaded or hand-made, gets EA's AI and EA's SkirmishScripts.scb.  Decided from the
 		* map's path, which every machine in the match and the replay agree on. */
 	Bool forkAIMap() const { return m_forkAIMap; }
 	static Bool isForkAIMapPath(const AsciiString& mapPath);
 
 	/** The skirmish side a computer player on pt copies its scripts from, and in *teams (when asked) the
-		* record its teams are in.  Under -modfactions a mod faction takes its own mod's side of the same
-		* Side (that mod's SkirmishScripts.scb, loadModSkirmishScripts) and retail's when the mod ships
-		* none; a retail faction takes retail's.  A faction no script was written for (Turkiye) takes its
-		* BaseSide's original faction's.  NULL when there is none. */
+		* record its teams are in.  A faction no script was written for (Turkiye) takes its BaseSide's
+		* original faction's.  NULL when there is none. */
 	SidesInfo *findSkirmishSideFor(const PlayerTemplate *pt, TeamsInfoRec **teams);
 	/// findSkirmishSideFor's search for one Side name
-	SidesInfo *findSkirmishSideNamed(const AsciiString& side, Int mod, TeamsInfoRec **teams);
-	/// how well a skirmish side of candidateSide from candidateMod (-1 retail) fits a player of side from
-	/// mod: 2 the player's own, 1 retail's standing in for a mod faction, 0 not at all
-	static Int skirmishSideFit(const AsciiString& candidateSide, Int candidateMod, const AsciiString& side, Int mod);
+	SidesInfo *findSkirmishSideNamed(const AsciiString& side, TeamsInfoRec **teams);
 
 	Int getNumTeams() { return m_teamrec.getNumTeams(); }
 	void emptyTeams();
@@ -226,11 +221,10 @@ protected:
 	Bool				m_skirmishScriptsFromMap;
 	Bool				m_forkAIMap;
 
-	/// -modfactions: each mod's SkirmishScripts.scb players and teams; and the standard file's players for
-	/// sides the map has none for.  Kept out of m_skirmishSides, which a map's own sides nearly fill
-	std::vector<SidesInfo>	m_modSkirmishSides;
-	TeamsInfoRec	m_modSkirmishTeamrec;
-	void loadModSkirmishScripts(void);
+	/// the standard file's players and teams for sides the map has none for.  Kept out of
+	/// m_skirmishSides, which a map's own sides nearly fill
+	std::vector<SidesInfo>	m_standInSkirmishSides;
+	TeamsInfoRec	m_standInSkirmishTeamrec;
 
 	Bool validateAllyEnemyList(const AsciiString& tname, AsciiString& allies);
 };

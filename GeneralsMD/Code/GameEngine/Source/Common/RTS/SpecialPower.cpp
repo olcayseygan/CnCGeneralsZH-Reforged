@@ -282,9 +282,6 @@ SpecialPowerTemplate* SpecialPowerStore::findSpecialPowerTemplatePrivate( AsciiS
 		if( m_specialPowerTemplates[ i ]->getName() == name )
 			return m_specialPowerTemplates[ i ];
 
-	AsciiString retailName;
-	if( TheModNamespace.findRetailName( name, MODNAME_SPECIALPOWER, &retailName ) )
-		return findSpecialPowerTemplatePrivate( retailName );
 	return NULL;  // not found
 
 }

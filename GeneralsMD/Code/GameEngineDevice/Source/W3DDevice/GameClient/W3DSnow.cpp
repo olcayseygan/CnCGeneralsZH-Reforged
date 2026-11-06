@@ -240,10 +240,10 @@ struct WeatherLayer
 static const WeatherLayer WEATHER_LAYERS[WEATHER_KIND_COUNT][2] =
 {
 	{ { NULL }, { NULL } },
-	{ { "EXRainDrop.tga", 6000, 180.0f, 1100.0f, 44.0f, 3.0f, 0xb8d8e4f0, 0.0f, FALSE }, { NULL } },
-	{ { "EXRainDrop.tga", 3500, 520.0f, 25.0f, 64.0f, 3.0f, 0x90ecd4a4, 150.0f, FALSE },
-		{ "EXCloud01.tga", 70, 260.0f, 4.0f, 260.0f, 260.0f, 0x1cd0ac7c, 170.0f, TRUE } },
-	{ { "EXSnowFlake1.tga", 6000, 34.0f, 46.0f, 2.4f, 2.4f, 0xd0e8eef4, 0.0f, TRUE }, { NULL } }
+	{ { "EXRainDrop.tga", 6000, 45.0f, 1100.0f, 44.0f, 3.0f, 0xb8d8e4f0, 0.0f, FALSE }, { NULL } },
+	{ { "EXRainDrop.tga", 3500, 130.0f, 25.0f, 64.0f, 3.0f, 0x90ecd4a4, 150.0f, FALSE },
+		{ "EXCloud01.tga", 70, 65.0f, 4.0f, 260.0f, 260.0f, 0x1cd0ac7c, 170.0f, TRUE } },
+	{ { "EXSnowFlake1.tga", 6000, 8.5f, 46.0f, 2.4f, 2.4f, 0xd0e8eef4, 0.0f, TRUE }, { NULL } }
 };
 
 static const Real WEATHER_WIND_STRENGTH[WEATHER_KIND_COUNT] = { 0.5f, 0.8f, 1.0f, 0.35f };

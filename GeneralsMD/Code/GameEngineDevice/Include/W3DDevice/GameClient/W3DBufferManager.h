@@ -37,14 +37,18 @@
 #include "dx8vertexbuffer.h"
 #include "dx8indexbuffer.h"
 
-#define MAX_VB_SIZES 128	//number of different sized VB slots allowed.
+// One size class per MIN_SLOT_SIZE step, up to 65504: DX8VertexBufferClass and DX8IndexBufferClass
+// take their counts as unsigned short, so a buffer, and the slot inside it, holds no more.  At 128
+// classes (4096 vertices, 4096 indices) a building whose shadow silhouette passed about 680 edges
+// indexed past both tables in getSlot.
+#define MAX_VB_SIZES ((65536 >> MIN_SLOT_SIZE_SHIFT) - 1)	//number of different sized VB slots allowed.
 #define MIN_SLOT_SIZE	32	//minimum number of vertices allocated per slot (power of 2). See also MIN_SLOT_SIZE_SHIFT.
 #define	MIN_SLOT_SIZE_SHIFT	5 //used for division by MIN_SLOT_SIZE
 #define MAX_VERTEX_BUFFERS_CREATED	32	//maximum number of D3D vertex buffers allowed to create per vertex type.
 #define DEFAULT_VERTEX_BUFFER_SIZE	8192	//this size ends up generating VB's of about 256Kbytes
 #define MAX_NUMBER_SLOTS	4096			//maximum number of slots that can be allocated.
 
-#define MAX_IB_SIZES 128 //number of different sized IB slots allowed (goes all the way up to 65536)
+#define MAX_IB_SIZES MAX_VB_SIZES //number of different sized IB slots allowed, the same unsigned short ceiling
 #define MAX_INDEX_BUFFERS_CREATED	32
 #define DEFAULT_INDEX_BUFFER_SIZE	32768	
 

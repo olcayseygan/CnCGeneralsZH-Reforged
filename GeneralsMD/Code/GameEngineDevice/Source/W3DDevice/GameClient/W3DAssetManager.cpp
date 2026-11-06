@@ -91,9 +91,6 @@ const float H_epsilon(1.0f);
 const float S_epsilon(0.01f);
 const float V_epsilon(0.01f);
 
-// A texture name past a mod's "M<n>~" prefix, for the checks that read the retail naming ("ZHC...").
-static inline const char *Mod_Bare_Name(const char *name) { return name + WW3D_Mod_Prefix_Length(name); }
-
 //---------------------------------------------------------------------
 // Externs defined somewhere in W3D.
 //---------------------------------------------------------------------
@@ -188,7 +185,7 @@ TextureClass *	W3DAssetManager::Get_Texture
 	//Just call the base implementation after adjusting reduction to deal
 	//with our special types.
 
-	if (filename && *filename && strncasecmp(Mod_Bare_Name(filename),"ZHC",3) == 0)
+	if (filename && *filename && strncasecmp(filename,"ZHC",3) == 0)
 		allow_reduction = false;	//don't allow reduction on our infantry textures.
 
 	return WW3DAssetManager::Get_Texture(	filename, 
@@ -706,7 +703,7 @@ TextureClass * W3DAssetManager::Recolor_Texture_One_Time(TextureClass *texture, 
 
 	Int psize;
 	psize=PixelSize(desc);
-	// The palette remap reads 16- and 32-bit pixels and nothing else.  A mod's house-colour texture
+	// The palette remap reads 16- and 32-bit pixels and nothing else.  A house-colour texture
 	// shipped compressed (DXT) or in another format has nothing it can remap, and Direct3D 9 refuses
 	// the scratch surface for some of them (a DXT image whose sides are not multiples of 4), which
 	// left newsurf without a surface for Copy to crash on.  The unit keeps the texture uncoloured.
@@ -727,11 +724,10 @@ TextureClass * W3DAssetManager::Recolor_Texture_One_Time(TextureClass *texture, 
 	}
 	newsurf->Copy(0,0,0,0,desc.Width,desc.Height,oldsurf);
 
-	const char *kind = Mod_Bare_Name(name) + 3;	// the letter after "ZHC"
-	if (*kind == 'D' || *kind == 'd')
+	if (*(name+3) == 'D' || *(name+3) == 'd')
 		Remap_Palette(newsurf,color, true, false );	//texture only contains a palette stored in top row.
 	else
-	if (*kind == 'A' || *kind == 'a')
+	if (*(name+3) == 'A' || *(name+3) == 'a')
 		Remap_Palette(newsurf,color, false, true );	//texture only contains a palette stored in top row.
 
 	TextureClass * newtex=NEW_REF(TextureClass,(newsurf,(MipCountType)texture->Get_Mip_Level_Count()));
@@ -833,18 +829,10 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 	WWPROFILE( "WW3DAssetManager::Create_Render_Obj" );
 	WWMEMLOG(MEM_GEOMETRY);
 
-	// Try to find a prototype: a mod's own first, then the bare name as retail. The request stays
-	// the mod's to the end, so the texture swap and recolour below find the mod's textures too.
-	WW3DModRequest mod(name);
-	Set_WW3D_Load_On_Demand(true); // Auto Load.
-	PrototypeClass * proto = mod.Active() ? Find_Mod_Prototype(mod.Bare) : NULL;
-	Bool modProto = proto != NULL;
-	if (proto == NULL)
-	{
-		name = mod.Bare;
-		proto = Find_Prototype(name);
-	}
+	// Try to find a prototype
+	PrototypeClass * proto = Find_Prototype(name);
 
+	Set_WW3D_Load_On_Demand(true); // Auto Load.
 	if (WW3D_Load_On_Demand && proto == NULL)
 	{
 		// If we didn't find one, try to load on demand
@@ -916,13 +904,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 
 		if (reallytexture)
 		{	
-			// A retail model drawn for a mod carries retail textures, so the one it replaces is
-			// looked up as retail, or it would not match the mesh's texture.
-			TextureClass *oldTex;
-			{
-				WW3DModPrefixScope retail(modProto ? WW3D_Mod_Prefix : "");
-				oldTex = Get_Texture(modProto ? oldTexture : Mod_Bare_Name(oldTexture));
-			}
+			TextureClass *oldTex = Get_Texture(oldTexture);
 			TextureClass *newTex = Get_Texture(newTexture);
 			replaceAssetTexture(rendobj,oldTex,newTex);
 			REF_PTR_RELEASE(newTex);
@@ -1008,7 +990,7 @@ int W3DAssetManager::Recolor_Mesh(RenderObjClass *robj, const int color)
 	for (i=0; i<material->Texture_Count(); i++)
 	{
 		oldtex=material->Peek_Texture(i);
-		if (strncasecmp(Mod_Bare_Name(oldtex->Get_Texture_Name()),"ZHC", 3) == 0)
+		if (strncasecmp(oldtex->Get_Texture_Name(),"ZHC", 3) == 0)
 		{	//This texture needs to be adjusted for housecolor
 			newtex=Recolor_Texture(oldtex,color);
 			if (newtex)
@@ -1275,7 +1257,7 @@ static Bool getMeshColorMethods(MeshClass *mesh, Bool &vertexColor, Bool &textur
 	MaterialInfoClass *material = mesh->Get_Material_Info();
 	if (material)
 	{	for (int j=0; j<material->Texture_Count(); j++)
-			if (strncasecmp(Mod_Bare_Name(material->Peek_Texture(j)->Get_Texture_Name()),"ZHC",3) == 0)
+			if (strncasecmp(material->Peek_Texture(j)->Get_Texture_Name(),"ZHC",3) == 0)
 			{	textureColor = true;
 				break;
 			}

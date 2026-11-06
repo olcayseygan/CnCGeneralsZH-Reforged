@@ -1,0 +1,44 @@
+# Four jets at cruise, each sent head-on at a parked ground target on its own line: the run that used
+# to end with the jet over the target. It now fires from its reach on the way in and turns away at the
+# break-off distance (AIAttackAimAtTargetState::computeAttackRunGoal), so it never flies over.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1400
+#     -scenario jetbreak -logPrefix jetbreak_
+#
+# Two log lines, both -scenario only. SCENARIO SHOT is every shot an aircraft fires: its dist is the
+# weapon's own range measure (between the bounding spheres) and range the weapon's reach, so the first
+# shot of a pass reads its distance against the reach. SCENARIO JET RUN is every frame a jet aims at a
+# ground target: dist centre to centre in 2D, reach (range plus both spheres), breakoff, the turn
+# radius, and BREAK OFF on the frame it turns away. The closest approach of a pass is the smallest dist
+# between its BREAK OFF and the next run in; before the fix it fell to tens of units, the jet over the
+# target. Done when every jet's closest approach stays near its breakoff's clearance (the larger of the
+# minimum range and the turn radius) and the tallies still show the targets hit.
+#
+# Target spots from jetpass.txt, where the spawn check accepts each.
+
+30    spawn      1  ChinaTankOverlord            1   2250 3300
+30    spawn      0  AmericaJetRaptor             1   1000 3300
+31    move       0  AmericaJetRaptor                 4400 3300
+30    spawn      1  ChinaTankBattleMaster        1   2200 3650
+30    spawn      0  ChinaJetMIG                  1   1000 3650
+31    move       0  ChinaJetMIG                      4400 3650
+30    spawn      1  AmericaTankCrusader          1   2200 4000
+30    spawn      0  AmericaJetAurora             1   1000 4000
+31    move       0  AmericaJetAurora                 4400 4000
+30    spawn      1  GLATankScorpion              1   2200 4350
+30    spawn      0  AmericaJetStealthFighter     1   1000 4350
+31    move       0  AmericaJetStealthFighter         4400 4350
+100   attack     0  AmericaJetRaptor             1  ChinaTankOverlord
+100   attack     0  ChinaJetMIG                  1  ChinaTankBattleMaster
+100   attack     0  AmericaJetAurora             1  AmericaTankCrusader
+100   attack     0  AmericaJetStealthFighter     1  GLATankScorpion
+400   tally      1  ChinaTankOverlord
+400   tally      1  ChinaTankBattleMaster
+400   tally      1  AmericaTankCrusader
+400   tally      1  GLATankScorpion
+690   tally      1  ChinaTankOverlord
+690   tally      1  ChinaTankBattleMaster
+690   tally      1  AmericaTankCrusader
+690   tally      1  GLATankScorpion

@@ -1018,3 +1018,8 @@ RenderResult PosixDevice9::SetPixelShaderConstantF(unsigned int start, const flo
 	memcpy(PixelShaderConstants[start], data, count * sizeof(PixelShaderConstants[0]));
 	return D3D_OK;
 }
+
+bool PosixWaterGpuAvailable(IDirect3DDevice9 *device)
+{
+	return device && static_cast<PosixDevice9 *>(device)->Get_Gpu();
+}

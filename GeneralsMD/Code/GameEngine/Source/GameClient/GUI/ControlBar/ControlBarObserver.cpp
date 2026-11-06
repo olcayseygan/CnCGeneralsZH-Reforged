@@ -61,6 +61,7 @@
 #include "Common/KindOf.h"
 #include "Common/Recorder.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetPushButton.h"
@@ -68,6 +69,8 @@
 #include "GameClient/GameText.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/ObserverCamera.h"
+#include "GameClient/Display.h"
+#include "GameClient/Image.h"
 #include "GameNetwork/NetworkDefs.h"
 //-----------------------------------------------------------------------------
 // DEFINES ////////////////////////////////////////////////////////////////////
@@ -100,6 +103,44 @@ static GameWindow *staticTextNumberOfUnitsKilled = NULL;
 static GameWindow *staticTextNumberOfUnitsLost = NULL;
 static GameWindow *staticTextPlayerName = NULL;
 
+static GameWinDrawFunc buttonPlayerDraw = NULL;		///< the push button's own draw, which the row draw ends with
+static const Image *rowHover = NULL;
+static const Image *rowWatched = NULL;
+
+//-------------------------------------------------------------------------------------------------
+/** A row of the observer's column: his colour's lamp on the plate beside his button, and the ring
+	* round it while the pointer is over it (ObserverProRowH) or while he is the one watched or
+	* followed (ObserverProRowS, which wins).  Numbers are the button's own at 1080, 45x30. */
+//-------------------------------------------------------------------------------------------------
+static void drawObserverRow( GameWindow *window, WinInstanceData *instData )
+{
+	enum { BUTTON_H = 30, RING_OUT = 4, RING_W = 53, RING_H = 38, LAMP_X = 49, LAMP_Y = 4, LAMP_W = 7, LAMP_H = 22,
+				 SHINE_X = 50, SHINE_Y = 6, SHINE_W = 2, SHINE_H = 18, SHINE_LIFT = 90 };
+	ICoord2D at, size;
+	window->winGetScreenPosition( &at.x, &at.y );
+	window->winGetSize( &size.x, &size.y );
+	const Real k = (Real)size.y / BUTTON_H;
+	auto px = [ k ]( Int at1080 ) { return REAL_TO_INT( at1080 * k + 0.5f ); };
+
+	const Player *player = (const Player *)GadgetButtonGetData( window );
+	const Bool watched = player == TheControlBar->getObserverLookAtPlayer()
+		|| player->getPlayerIndex() == TheObserverCamera.getFollowedPlayerIndex();
+	const Image *ring = watched ? rowWatched : ( BitTest( instData->getState(), WIN_STATE_HILITED ) ? rowHover : NULL );
+	if( ring )
+		TheDisplay->drawImage( ring, at.x - px( RING_OUT ), at.y - px( RING_OUT ),
+													 at.x - px( RING_OUT ) + px( RING_W ), at.y - px( RING_OUT ) + px( RING_H ) );
+
+	const Color colour = clientPlayerColor( player );
+	UnsignedByte r, g, b, a;
+	GameGetColorComponents( colour, &r, &g, &b, &a );
+	auto lift = []( UnsignedByte c ) { return (UnsignedByte)min( (Int)c + SHINE_LIFT, 255 ); };
+	TheDisplay->drawFillRect( at.x + px( LAMP_X ), at.y + px( LAMP_Y ), px( LAMP_W ), px( LAMP_H ), GameMakeColor( r, g, b, 255 ) );
+	TheDisplay->drawFillRect( at.x + px( SHINE_X ), at.y + px( SHINE_Y ), px( SHINE_W ), px( SHINE_H ),
+														GameMakeColor( lift( r ), lift( g ), lift( b ), 255 ) );
+
+	buttonPlayerDraw( window, instData );
+}
+
 //-----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
@@ -107,6 +148,8 @@ static GameWindow *staticTextPlayerName = NULL;
 
 void ControlBar::initObserverControls( void )
 {
+	rowHover = TheMappedImageCollection->findImageByName( "ObserverProRowH" );
+	rowWatched = TheMappedImageCollection->findImageByName( "ObserverProRowS" );
 	ObserverPlayerInfoWindow = TheWindowManager->winGetWindowFromId(NULL, TheNameKeyGenerator->nameToKey("ControlBar.wnd:ObserverPlayerInfoWindow"));
 	ObserverPlayerListWindow = TheWindowManager->winGetWindowFromId(NULL, TheNameKeyGenerator->nameToKey("ControlBar.wnd:ObserverPlayerListWindow"));
 
@@ -116,6 +159,12 @@ void ControlBar::initObserverControls( void )
 		tmpString.format("ControlBar.wnd:ButtonPlayer%d", i);
 		buttonPlayerID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonPlayer[i] = TheWindowManager->winGetWindowFromId( ObserverPlayerListWindow, buttonPlayerID[i] );
+		// the windows are made again on a new screen size, each with the button's own draw again
+		if( buttonPlayer[i]->winGetDrawFunc() != drawObserverRow )
+		{
+			buttonPlayerDraw = buttonPlayer[i]->winGetDrawFunc();
+			buttonPlayer[i]->winSetDrawFunc( drawObserverRow );
+		}
 		tmpString.format("ControlBar.wnd:StaticTextPlayer%d", i);
 		staticTextPlayerID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		staticTextPlayer[i] = TheWindowManager->winGetWindowFromId( ObserverPlayerListWindow, staticTextPlayerID[i] );
@@ -243,7 +292,7 @@ void ControlBar::populateObserverList( void )
 					continue;
 				DEBUG_ASSERTCRASH(currentButton < MAX_BUTTONS, ("ControlBar::populateObserverList trying to populate more buttons then we have"));
 				GadgetButtonSetData(buttonPlayer[currentButton], (void *)p);
-				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getEnabledImage() );
+				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], ControlBarSideEmblem( p->getPlayerTemplate() ) );
 				//GadgetButtonSetHiliteImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getHiliteImage() );
 				//GadgetButtonSetHiliteSelectedImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getPushedImage() );
 				//GadgetButtonSetDisabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getDisabledImage() );
@@ -291,7 +340,7 @@ void ControlBar::populateObserverList( void )
 			{
 				DEBUG_ASSERTCRASH(currentButton < MAX_BUTTONS, ("ControlBar::populateObserverList trying to populate more buttons then we have"));
 				GadgetButtonSetData(buttonPlayer[currentButton], (void *)p);
-				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getEnabledImage() );
+				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], ControlBarSideEmblem( p->getPlayerTemplate() ) );
 				//GadgetButtonSetHiliteImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getHiliteImage() );
 				//GadgetButtonSetHiliteSelectedImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getPushedImage() );
 				//GadgetButtonSetDisabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getDisabledImage() );

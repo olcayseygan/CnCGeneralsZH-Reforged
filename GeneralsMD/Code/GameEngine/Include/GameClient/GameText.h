@@ -88,14 +88,6 @@ class GameTextInterface : public SubsystemInterface
 		/// the letter after '&' in the English text of this label (the game's own table and Patch.str,
 		/// before any translation), or 0: Classic's command keys are the English ones in every language
 		virtual WideChar			fetchEnglishHotKey( const AsciiString& label ) { return 0; }
-
-		/// -modfactions: read mod's own string file (its CSF and its Generals.str, the STR winning a
-		/// label both carry) into a table of its own, with TheFileSystem focused on that mod.  mod is
-		/// the index into TheGlobalData->m_mods; a label "M<mod+1>~LABEL" fetches from that table first
-		/// and falls back to the bare LABEL in ours.
-		virtual void					loadModStrings( Int mod ) {}
-		/// TRUE when mod's own table carries label, compared without case like ours
-		virtual Bool					hasModLabel( Int mod, const char *label ) const { return FALSE; }
 };
 
 

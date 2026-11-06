@@ -1015,22 +1015,42 @@ public:  // ********************************************************************
 	void drawDirectorIntroPlate( void );
 
 	//
-	// The production list on the left: one line per item the local player has coming, queued in a
-	// factory or going up on the map, soonest finished first.  Past PRODUCTION_LIST_LINES the rest is
-	// one "+N more" line.  The superweapon list in the top right stops at SUPERWEAPON_LIST_LINES the
-	// same way.
+	// The production list on the left: one cameo per item the local player has coming, queued in a
+	// factory or going up on the map, soonest finished first, in one row.  Past PRODUCTION_LIST_CELLS a
+	// tab sticking up from the tray says "+N" for the rest.  The superweapon cameos in the top right,
+	// SUPERWEAPON_LIST_COLUMNS to a row, stop at SUPERWEAPON_LIST_CELLS with a tab hanging below.
 	//
-	enum { PRODUCTION_LIST_LINES = 6 };
-	enum { SUPERWEAPON_LIST_LINES = 18 };
+	/// one row, over the radar's piece of the bar: four cells and the tray's edge are 316 wide at 1080,
+	/// inside the side bars' 345 wide radar box
+	enum { PRODUCTION_LIST_COLUMNS = 4, PRODUCTION_LIST_CELLS = 4 };
+	enum { SUPERWEAPON_LIST_COLUMNS = 6, SUPERWEAPON_LIST_CELLS = 12 };	///< two rows at most
 	struct ProductionListSlot
 	{
 		ObjectID			producer;						///< the building it is queued on, or the building going up
-		Int						typeKey;						///< what the item is, so a run of the same thing is one line
+		Int						typeKey;						///< what the item is, so a run of the same thing is one cell
 		Bool					isUpgrade;
 		Int						remaining;					///< logic frames until it is done, waiting time ahead of it included
-		Int						quantity;						///< how many of the same thing the line stands for
-		UnicodeString	name;
+		Int						quantity;						///< how many of the same thing the cell stands for
+		Int						percent;						///< of its own build done; 0 while it waits behind another
+		const Image *	cameo;							///< its picture, NULL for a template that carries none
+		Int						id;									///< what a cancel names: the run's newest production ID, or the upgrade's key
+		Bool					isStructure;				///< going up on the map: a click looks at it, nothing cancels it
 	};
+
+	/// A click on a production or superweapon cell, at `mouse` in screen pixels: TRUE when a cell took it.
+	/// A production cell takes the camera to its building, or with `cancel` takes the newest of its
+	/// items off that building's queue; one of your own superweapons takes the camera to it
+	Bool handleHudCellClick( const ICoord2D *mouse, Bool cancel );
+
+	/// A press on the spectator's rack, at `mouse` in screen pixels: TRUE when the rack is under it,
+	/// whatever button it was; only `act`, the left button, works its controls
+	Bool handleSpectatorRackClick( const ICoord2D *mouse, Bool act );
+	/// The wheel over the rack: TRUE when the rack is under it; over the dial it steps the stat
+	Bool handleSpectatorRackWheel( const ICoord2D *mouse, Real notches );
+	/// a command bar key while watching: TRUE when it picked a stat, Q W E R T Y A as shipped
+	Bool pickSpectatorStat( Int commandSlot );
+	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's dial took it
+	Bool pickSpectatorStatKey( Int key, Int keyState );
 
 	/// Ingame video playback 
 	virtual void playMovie( const AsciiString& movieName );
@@ -1174,8 +1194,11 @@ public:  // ********************************************************************
 	void addIdleWorkerFor( Object *obj, Int playerIndex );	///< addIdleWorker with the owner read at the call
 	virtual void removeIdleWorker( Object *obj, Int playerNumber );
 	virtual Object *selectNextIdleWorker( void );	///< what it selected, NULL with no idle worker; never moves the camera
-	void selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear );	///< the same cycle for fighting units of those kinds standing with no order
+	Object *selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear );	///< the same cycle for fighting units of those kinds standing with no order; what it selected, or NULL
 	static Bool isIdleCombatUnit( const Object *obj );	///< the local player's fighting unit standing with no order
+	/// the kinds a MSG_META_SELECT_NEXT_IDLE_* key cycles over: vehicles are ground vehicles only
+	static void idleUnitKinds( GameMessage::Type t, KindOfMaskType *mustBeSet, KindOfMaskType *mustBeClear );
+	void updateIdleUnitButtons( void );	///< the idle infantry, vehicle, aircraft and worker buttons lit while one of their kind stands idle
 
 	virtual void recreateControlBar( void );
 	virtual void notifyResolutionChange( void );
@@ -1194,11 +1217,6 @@ public:  // ********************************************************************
 	Bool shouldMoveScrollAnchor( void ) const { return m_moveRMBScrollAnchor; }
 
 private:
-	virtual Int getIdleWorkerCount( void );
-	virtual Object *findIdleWorker( Object *obj);
-	virtual void showIdleWorkerLayout( void );
-	virtual void hideIdleWorkerLayout( void );
-	virtual void updateIdleWorker( void );
 	virtual void resetIdleWorker( void );
 
 public:
@@ -1406,7 +1424,9 @@ protected:
 	void drawHudOverlay( void );					///< the top right info strip (ShowNetBox), peace time at its end
 	Int hudStripBottom( void ) const;			///< first screen row below that strip, 0 while it is not drawn
 	void drawKickVoteBanner( void );			///< the open vote kick, top middle, while there is one
-	void drawProductionList( void );			///< the production list, lines on the left above the control bar
+	void drawProductionList( void );			///< the production list, cameos on the left above the control bar
+	DisplayString *cellString( DisplayString *&string, const UnicodeString &text );	///< a cell's kept readout string
+	void drawCellSeconds( DisplayString *&string, Int seconds, const IRegion2D &cameo, const Image *plate );	///< "45s" in a cameo's corner
 
 	SignalKind									m_armedSignal;						///< the signal the next click drops; SIGNAL_KIND_COUNT for none
 	struct SignalMark
@@ -1435,8 +1455,6 @@ protected:
 	void fadeClassicMessages( void );
 	void drawClassicMessages( void );
 	void freeClassicMessages( void );
-	void drawClassicSuperweapon( SuperweaponInfo *info, const AsciiString &templateName, Bool isReady, Int readySecs,
-															 Int x, Int *y );
 	void watchDozers( void );
 	UnsignedInt									m_dozerCheckFrame;				///< the logic frame watchDozers last looked on
 	Bool												m_hadDozer[ MAX_PLAYER_COUNT ];	///< that player had a dozer or worker then
@@ -1471,14 +1489,54 @@ protected:
 
 	//
 	// The production list: everything the local player has coming, gathered once a logic frame, and
-	// one kept string per line plus the "+N more" one, so a line is laid out again only when its text
-	// changes.  The superweapon list keeps its own "+N more" string the same way.
+	// kept strings per cell, its seconds at 2n and its "xN" at 2n + 1, so a readout is laid out again
+	// only when its text changes.  The superweapon cameos keep a seconds string each; each tray's
+	// "+N" tab has one of its own.
 	//
-	ProductionListSlot					m_productionList[ PRODUCTION_LIST_LINES ];
-	Int													m_productionListCount;		///< lines filled
-	Int													m_productionListTotal;		///< items coming, listed or not
-	DisplayString *							m_productionListText[ PRODUCTION_LIST_LINES + 1 ];
+	ProductionListSlot					m_productionList[ PRODUCTION_LIST_CELLS ];
+	Int													m_productionListCount;		///< cells filled
+	Int													m_productionListTotal;		///< items coming, shown or not
+	DisplayString *							m_productionListText[ 2 * PRODUCTION_LIST_CELLS ];
+	DisplayString *							m_productionListMoreText;
+	DisplayString *							m_superweaponCellText[ SUPERWEAPON_LIST_CELLS ];
 	DisplayString *							m_superweaponMoreText;
+	// where the last draw put the cells and the tabs, for handleHudCellClick; a tab not drawn is empty
+	IRegion2D										m_productionListPlace[ PRODUCTION_LIST_CELLS ];
+	Int													m_productionListCells;		///< cells drawn
+	IRegion2D										m_productionListTab;
+	IRegion2D										m_superweaponPlace[ SUPERWEAPON_LIST_CELLS ];
+	ObjectID										m_superweaponJump[ SUPERWEAPON_LIST_CELLS ];	///< the building a click looks at, INVALID_ID for none
+	Int													m_superweaponCells;				///< cells drawn
+	IRegion2D										m_superweaponTab;
+	UnsignedInt									m_hudCellPass;						///< client passes, counted by update()
+	UnsignedInt									m_hudCellDrawnPass;				///< m_hudCellPass when postDraw last laid the cells out
+
+	//
+	// The spectator's rack (drawSpectatorRack), drawers hung off the right edge under the superweapon
+	// tray while the local player watches: the camera, the fog and the armies drawer, then every
+	// player ranked by the stat on the dial.  Where the last draw put it, for the clicks.
+	//
+	enum { RACK_ROWS = 8, RACK_ARMY_UNITS = 6 };
+	enum
+	{
+		RACK_TEXT_WATCH, RACK_TEXT_STANDINGS, RACK_TEXT_STOP, RACK_TEXT_FOG = RACK_TEXT_STOP + 3, RACK_TEXT_ARMIES,
+		RACK_TEXT_KEY, RACK_TEXT_STAT = RACK_TEXT_KEY + 7, RACK_TEXT_STAT_KEY, RACK_TEXT_NAME,
+		RACK_TEXT_VALUE = RACK_TEXT_NAME + RACK_ROWS, RACK_TEXT_UNITS = RACK_TEXT_VALUE + RACK_ROWS,
+		RACK_TEXT_COUNT = RACK_TEXT_UNITS + RACK_ROWS * RACK_ARMY_UNITS
+	};
+	void drawSpectatorRack( Int plateTop );	///< plateTop: the watch drawer's plate, 8 under the superweapon tray's foot
+	/// the kept string `slot` holding text in the bold face at px pixels at 1080, a pixel smaller at a time
+	/// down to 9 until it is no wider than room (0: any width)
+	DisplayString *rackText( Int slot, const UnicodeString &text, Int px, Int room );
+	Bool												m_rackShown;							///< the last postDraw drew it
+	Int													m_rackX, m_rackY;					///< its pieces' left and the watch drawer's top
+	Int													m_rackRows;
+	Int													m_rackRowPlayer[ RACK_ROWS ];	///< the player index on each row, top down
+	Int													m_rackStat;								///< SPECTATOR_STATS index on the dial
+	Bool												m_rackArmies;							///< the armies drawer is out
+	DisplayString *							m_rackText[ RACK_TEXT_COUNT ];
+	Int													m_rackTextPx[ RACK_TEXT_COUNT ];		///< the size and room each was laid out for
+	Int													m_rackTextRoom[ RACK_TEXT_COUNT ];
 
 	Coord2D											m_superweaponPosition;
 	Real												m_superweaponFlashDuration;
@@ -1602,8 +1660,6 @@ protected:
 
 	// Idle worker animation
 	ObjectList									m_idleWorkers[MAX_PLAYER_COUNT];
-	GameWindow *								m_idleWorkerWin;
-	Int													m_currentIdleWorkerDisplay;
 
 	DrawableID									m_soloNexusSelectedDrawableID;  ///< The drawable of the nexus, if only one angry mob is selected, otherwise, null
 
@@ -1637,7 +1693,9 @@ enum HudReadoutCorner
 	* plate's own margins.  Text that does not fit is set a point smaller until it does. */
 extern Bool HudReadout_fits( DisplayString *text, const IRegion2D &cell );
 
-/** The plate in `corner` of `cell`'s inner rectangle and `text` on it. */
-extern void HudReadout_draw( DisplayString *text, const IRegion2D &cell, HudReadoutCorner corner, Color textColor );
+/** The plate in `corner` of `cell`'s inner rectangle and `text` on it: `plate` stretched to it when
+	* given (a sheet piece), a solid one otherwise. */
+extern void HudReadout_draw( DisplayString *text, const IRegion2D &cell, HudReadoutCorner corner, Color textColor,
+														 const Image *plate = NULL );
 
 #endif // _IN_GAME_UI_H_

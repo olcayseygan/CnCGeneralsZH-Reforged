@@ -35,7 +35,9 @@
 #include "Common/BitFlagsIO.h"
 #include "Common/RandomValue.h"
 #include "Common/Team.h"
+#include "Common/Player.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
 
 #include "GameClient/Drawable.h"
@@ -74,6 +76,7 @@ PointDefenseLaserUpdateModuleData::PointDefenseLaserUpdateModuleData()
 		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanFrames ) },
 		{ "ScanRange",						INI::parseReal,									NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanRange ) },
 		{ "PredictTargetVelocityFactor", INI::parseRetailFramesReal,					NULL, offsetof( PointDefenseLaserUpdateModuleData, m_velocityFactor ) },
+		{ "RequiredUpgrade",			INI::parseAsciiString,					NULL, offsetof( PointDefenseLaserUpdateModuleData, m_requiredUpgrade ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -87,6 +90,15 @@ PointDefenseLaserUpdate::PointDefenseLaserUpdate( Thing *thing, const ModuleData
 	m_nextShotAvailableInFrames = 0;
 	m_shotsFiredFromClip = 0;
 	m_inRange  					= false;
+	// the upgrades parse after the objects, so the data holds a name; a wrong one ends the game here; derived, not saved
+	const AsciiString &required = getPointDefenseLaserUpdateModuleData()->m_requiredUpgrade;
+	m_requiredUpgrade = NULL;
+	if( required.isNotEmpty() )
+	{
+		AsciiString who;
+		who.format( "PointDefenseLaserUpdate on %s", getObject()->getTemplate()->getName().str() );
+		m_requiredUpgrade = TheUpgradeCenter->requireUpgrade( required, who );
+	}
 	setWakeFrame(getObject(), UPDATE_SLEEP_NONE);// No starting sleep, but we want to sleep later.
 } 
 
@@ -102,7 +114,7 @@ PointDefenseLaserUpdate::~PointDefenseLaserUpdate( void )
 void PointDefenseLaserUpdate::onObjectCreated()
 {
 	const PointDefenseLaserUpdateModuleData *data = getPointDefenseLaserUpdateModuleData();
-	
+
 	//Make sure we have a weapon template
 	if( !data->m_weaponTemplate )
 	{
@@ -138,6 +150,10 @@ UpdateSleepTime PointDefenseLaserUpdate::update()
 	Object *me = getObject();
 	if( me->isEffectivelyDead() )
 		return UPDATE_SLEEP_FOREVER;//No more laser fo you.
+
+	// idle, tracking nothing, until the owner has RequiredUpgrade (Turkiye's AKKOR on the Altay)
+	if( m_requiredUpgrade && !me->getControllingPlayer()->hasUpgradeComplete( m_requiredUpgrade ) )
+		return UPDATE_SLEEP_NONE;
 
 	const PointDefenseLaserUpdateModuleData *data = getPointDefenseLaserUpdateModuleData();
 

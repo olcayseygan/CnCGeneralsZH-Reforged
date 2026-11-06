@@ -157,7 +157,7 @@ static void parseRetiredField( INI *, void *, void *, const void * )
 		{ "OpacityThrobTime",						INI::parseDurationUnsignedInt,NULL,							offsetof( RadiusDecalTemplate, m_opacityThrobTime ) },
 		{ "Color",											INI::parseColorInt,						NULL,							offsetof( RadiusDecalTemplate, m_color ) },
 		{ "OnlyVisibleToOwningPlayer",	INI::parseBool,								NULL,							offsetof( RadiusDecalTemplate, m_onlyVisibleToOwningPlayer ) },
-		// the aura rings' fields; a mod written for them may name them, and an unknown field throws
+		// the retired aura rings' fields; data written for them may still name them, and an unknown field throws
 		{ "SpinTime",										parseRetiredField,						NULL,							0 },
 		{ "LightReference",							parseRetiredField,						NULL,							0 },
 		{ "LightScaleMin",							parseRetiredField,						NULL,							0 },

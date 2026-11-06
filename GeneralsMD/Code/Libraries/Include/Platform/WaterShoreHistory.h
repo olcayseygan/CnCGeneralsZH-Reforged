@@ -204,11 +204,25 @@ public:
                         Parameters settings=Parameters()) {
         if(!ValidTime(time)||!ValidGrid(grid)||!ValidParameters(settings,grid))return BuildResult::Invalid;
         Topology candidate;const BuildResult result=candidate.Build(grid,cells);if(result!=BuildResult::Ready)return result;
+        return InstallPrepared(std::move(candidate), mapRevision, time, settings);
+    }
+    // The caller supplies a successfully built immutable topology. Its construction
+    // may run during loading; only this call establishes the live history epoch.
+    BuildResult InstallPrepared(Topology &&candidate, uint64_t mapRevision, double time,
+        Parameters settings = Parameters()) {
+        if (!ValidTime(time) || !ValidGrid(candidate.Geometry()) || !ValidParameters(settings, candidate.Geometry()))
+            return BuildResult::Invalid;
+        const size_t count = candidate.Cells().size();
         const bool reuse=installed&&revision==mapRevision&&topology.SameGeometry(candidate)
             &&settings.lifetime==parameters.lifetime&&settings.diffusivity==parameters.diffusivity&&settings.maximumRate==parameters.maximumRate;
         topology=std::move(candidate);parameters=settings;revision=mapRevision;installed=true;
         if(!reuse) {
-            committed.assign(cells.size(),{});preview.resize(cells.size());decayed.resize(cells.size());next.resize(cells.size());rates.resize(cells.size());ClearDynamic(time);
+            committed.assign(count, {});
+            preview.resize(count);
+            decayed.resize(count);
+            next.resize(count);
+            rates.resize(count);
+            ClearDynamic(time);
         }
         return BuildResult::Ready;
     }
@@ -346,6 +360,202 @@ template<class Coverage,class Support> inline bool RasterizeAlpha(const Topology
 template<class Coverage> inline bool RasterizeAlpha(const Topology&topology,const std::vector<State>&states,
     const Mapping&mapping,double level,double time,Coverage&coverage,std::vector<uint32_t>&vesselARGB) {
     return RasterizeAlpha(topology,states,mapping,level,time,coverage,vesselARGB,UnrestrictedSupport{});
+}
+
+// One bounded camera mapping. The dependency revision must change whenever the
+// topology or support geometry changes; neither density/age nor time is cached.
+// Support::At/Allows must be pure within that immutable revision.
+class RasterLookup {
+    struct Axis {
+        double world = 0, fraction = 0;
+        int64_t key = 0;
+    };
+    struct TileRange {
+        uint32_t tile = 0;
+        uint16_t x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+    };
+    std::array<Axis, 512> horizontal{}, vertical{};
+    std::vector<TileRange> ranges;
+    std::vector<uint8_t> masks;
+    const Topology *owner = nullptr;
+    const void *supportOwner = nullptr;
+    Mapping mapping;
+    double level = 0;
+    uint64_t revision = 0, builds = 0;
+    size_t sampleCount = 0;
+    static bool Same(double a, double b) {
+        return a == b && (a != 0 || std::signbit(a) == std::signbit(b));
+    }
+    static bool Valid(const Mapping &m, double l) {
+        return std::isfinite(m.originX) && std::isfinite(m.originY) && std::isfinite(m.widthWorld)
+            && std::isfinite(m.heightWorld) && m.widthWorld > 0 && m.heightWorld > 0
+            && std::isfinite(m.originX + m.widthWorld) && std::isfinite(m.originY + m.heightWorld)
+            && m.widthPixels && m.heightPixels && m.widthPixels <= 512 && m.heightPixels <= 512 && std::isfinite(l);
+    }
+public:
+    static constexpr size_t MaximumPixels = 512 * 512;
+    void Clear() {
+        *this = RasterLookup();
+    }
+    uint64_t BuildCount() const {
+        return builds;
+    }
+    size_t SampleCount() const {
+        return sampleCount;
+    }
+    size_t TileCount() const {
+        return ranges.size();
+    }
+    size_t MemoryBytes() const {
+        return sizeof(*this) + ranges.capacity() * sizeof(TileRange) + masks.capacity();
+    }
+    bool Matches(const Topology &t, const Mapping &m, double l, uint64_t dependency, const void *support) const {
+        return owner == &t && supportOwner == support && revision == dependency && revision != 0 && Same(level, l)
+            && Same(mapping.originX, m.originX) && Same(mapping.originY, m.originY)
+            && Same(mapping.widthWorld, m.widthWorld) && Same(mapping.heightWorld, m.heightWorld)
+            && mapping.widthPixels == m.widthPixels && mapping.heightPixels == m.heightPixels;
+    }
+    template <class Support> bool Prepare(const Topology &t, const Mapping &m, double l, uint64_t dependency,
+        const Support &support) {
+        if (!dependency || !Valid(m, l))
+            return false;
+        if (Matches(t, m, l, dependency, &support))
+            return true;
+        RasterLookup next;
+        next.owner = &t;
+        next.supportOwner = &support;
+        next.mapping = m;
+        next.level = l;
+        next.revision = dependency;
+        next.builds = builds + 1;
+        if (!next.builds)
+            next.builds = 1;
+        const Grid &g = t.Geometry();
+        auto axis = [](std::array<Axis, 512> &out, unsigned count, double origin, double extent,
+            double gridOrigin, double spacing) {
+            for (unsigned i = 0; i < count; ++i) {
+                Axis &a = out[i];
+                a.world = origin + (double(i) + .5) * extent / count;
+                const double p = (a.world - gridOrigin) / spacing;
+                if (!std::isfinite(p) || p < (std::numeric_limits<int32_t>::min)()
+                    || p >= (std::numeric_limits<int32_t>::max)())
+                    a.key = p < (std::numeric_limits<int32_t>::min)() ? (std::numeric_limits<int64_t>::min)() : (std::numeric_limits<int64_t>::max)();
+                else {
+                    a.key = int32_t(std::floor(p));
+                    a.fraction = p - double(a.key);
+                }
+            }
+        };
+        axis(next.horizontal, m.widthPixels, m.originX, m.widthWorld, g.originX, g.spacing);
+        axis(next.vertical, m.heightPixels, m.originY, m.heightWorld, g.originY, g.spacing);
+        auto first = [](const std::array<Axis, 512> &a, unsigned count, int64_t key) {
+            return unsigned(std::lower_bound(a.begin(), a.begin() + count, key, [](const Axis &v, int64_t k) {
+                return v.key < k;
+            }) - a.begin());
+        };
+        auto after = [](const std::array<Axis, 512> &a, unsigned count, int64_t key) {
+            return unsigned(std::upper_bound(a.begin(), a.begin() + count, key, [](int64_t k, const Axis &v) {
+                return k < v.key;
+            }) - a.begin());
+        };
+        next.masks.assign(size_t(m.widthPixels) * m.heightPixels, 0);
+        next.ranges.reserve((std::min)(t.RasterTiles().size(), next.masks.size()));
+        for (size_t i = 0; i < t.RasterTiles().size(); ++i) {
+            const RasterTile &tile = t.RasterTiles()[i];
+            if (tile.level != l || tile.x < next.horizontal[0].key || tile.x > next.horizontal[m.widthPixels - 1].key
+                || tile.y < next.vertical[0].key || tile.y > next.vertical[m.heightPixels - 1].key)
+                continue;
+            const unsigned x0 = first(next.horizontal, m.widthPixels, tile.x), x1 = after(next.horizontal,
+                m.widthPixels, tile.x);
+            if (x0 == x1)
+                continue;
+            const unsigned y0 = first(next.vertical, m.heightPixels, tile.y), y1 = after(next.vertical,
+                m.heightPixels, tile.y);
+            if (y0 == y1)
+                continue;
+            next.ranges.push_back({uint32_t(i), uint16_t(x0), uint16_t(x1), uint16_t(y0), uint16_t(y1)});
+            for (unsigned y = y0; y < y1; ++y)
+                for (unsigned x = x0; x < x1; ++x) {
+                    const double fx = next.horizontal[x].fraction, fy = next.vertical[y].fraction;
+                    const auto stencil = support.At(tile.x, tile.y, l, fx, fy);
+                    uint8_t mask = 0;
+                    for (unsigned dy = 0; dy < 2; ++dy)
+                        for (unsigned dx = 0; dx < 2; ++dx) {
+                            const unsigned corner = dy * 2 + dx;
+                            if (tile.nodes[corner] < 0)
+                                continue;
+                            const double weight = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy);
+                            if (weight > 0 && stencil.Allows(dx, dy))
+                                mask |= uint8_t(1u << corner);
+                        }
+                    next.masks[size_t(y) * m.widthPixels + x] = mask;
+                    ++next.sampleCount;
+                }
+        }
+        * this = std::move(next);
+        return true;
+    }
+    // Prepare camera-fixed caller data, e.g. shoreline spatial breakup, once
+    // per BuildCount. Pixel ownership is unique and follows the original order.
+    template <class Function> void ForEachSample(Function function) const {
+        for (const TileRange &r : ranges)
+            for (unsigned y = r.y0; y < r.y1; ++y)
+                for (unsigned x = r.x0; x < r.x1; ++x)
+                    function(size_t(y) * mapping.widthPixels + x, horizontal[x].world, vertical[y].world);
+    }
+
+    template <class Coverage> bool Rasterize(const std::vector<State> &states, double time,
+        Coverage &coverage, std::vector<uint32_t> &pixels) const {
+        if (!owner || !std::isfinite(time) || states.size() != owner->Cells().size() || pixels.size() != masks.size())
+            return false;
+        for (uint32_t &pixel : pixels)
+            pixel &= 0x00ffffffu;
+        for (const TileRange &r : ranges) {
+            const RasterTile &tile = owner->RasterTiles()[r.tile];
+            bool active = false;
+            for (int32_t node : tile.nodes)
+                if (node >= 0 && states[size_t(node)].density > 0) {
+                    active = true;
+                    break;
+                }
+            if (!active)
+                continue;
+            for (unsigned y = r.y0; y < r.y1; ++y)
+                for (unsigned x = r.x0; x < r.x1; ++x) {
+                    const double fx = horizontal[x].fraction, fy = vertical[y].fraction;
+                    State state;
+                    const size_t n = size_t(y) * mapping.widthPixels + x;
+                    const uint8_t mask = masks[n];
+                    for (unsigned dy = 0; dy < 2; ++dy)
+                        for (unsigned dx = 0; dx < 2; ++dx) {
+                            const unsigned corner = dy * 2 + dx;
+                            if (!(mask & (1u << corner)))
+                                continue;
+                            const double weight = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy);
+                            state.density += states[size_t(tile.nodes[corner])].density * weight;
+                            state.ageMoment += states[size_t(tile.nodes[corner])].ageMoment * weight;
+                        }
+                    const double value = state.density > 0 ? coverage(state, horizontal[x].world, vertical[y].world, time, n) : 0;
+                    pixels[n] = WithAlpha(pixels[n], value);
+                }
+        }
+        return true;
+    }
+};
+
+template <class Coverage, class Support> inline bool RasterizeAlphaCached(const Topology &topology,
+    const std::vector<State> &states,
+    const Mapping &mapping, double level, double time, Coverage &coverage, std::vector<uint32_t> &pixels,
+    const Support &support,
+    RasterLookup &lookup, uint64_t dependencyRevision) {
+    if (!std::isfinite(time) || states.size() != topology.Cells().size()
+        || pixels.size() != size_t(mapping.widthPixels) * mapping.heightPixels
+        || !lookup.Prepare(topology, mapping, level, dependencyRevision, support))
+        return false;
+    auto material = [&](const State &s, double x, double y, double t, size_t) {
+        return coverage(s, x, y, t);
+    };
+    return lookup.Rasterize(states, time, material, pixels);
 }
 
 }

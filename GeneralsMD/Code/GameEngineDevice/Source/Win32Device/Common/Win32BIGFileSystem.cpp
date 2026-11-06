@@ -265,8 +265,8 @@ ArchiveFile * Win32BIGFileSystem::openArchiveFile(const Char *filename) {
 	}
 
 	// Allocated after the checks above, not before them: both of those returns used to walk away
-	// from a Win32BIGFile that had just been made. A directory of files that are not archives -
-	// which is what a mod folder handed to -mod can be - leaked one per file.
+	// from a Win32BIGFile that had just been made. A directory of files that are not archives
+	// leaked one per file.
 	ArchiveFile *archiveFile = NEW Win32BIGFile;
 
 	// read in the file size.

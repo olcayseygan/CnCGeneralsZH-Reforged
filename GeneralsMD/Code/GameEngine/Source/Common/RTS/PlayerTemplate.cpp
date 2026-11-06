@@ -95,6 +95,7 @@
 		{ "ProductionTimeChange",			PlayerTemplate::parseProductionTimeChange,			NULL, 0 },
 		{ "ProductionVeterancyLevel",	PlayerTemplate::parseProductionVeterancyLevel,	NULL, 0 },
 		{ "IntrinsicSciences",				INI::parseScienceVector,												NULL, offsetof( PlayerTemplate, m_intrinsicSciences ) },
+		{ "AIDoctrine",								INI::parseAsciiStringVector,										NULL, offsetof( PlayerTemplate, m_aiDoctrine ) },
 		{ "PurchaseScienceCommandSetRank1",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank1 ) },
 		{ "PurchaseScienceCommandSetRank3",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank3 ) },
 		{ "PurchaseScienceCommandSetRank8",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank8 ) },
@@ -199,7 +200,6 @@ AsciiString PlayerTemplate::getStartingUnit( Int i ) const
 //-----------------------------------------------------------------------------
 PlayerTemplate::PlayerTemplate() : 
 	m_nameKey(NAMEKEY_INVALID),
-	m_modIndex(-1),
 	m_observer(false),
 	m_playableSide(false),
   m_oldFaction(false),
@@ -308,7 +308,7 @@ void PlayerTemplateStore::update()
 
 //-----------------------------------------------------------------------------
 /** A faction whose start building is not among the loaded objects cannot start a match: Turkiye's
-	* command center is an ObjectReskin of America's, skipped under a mod that has none, and the match
+	* command center is an ObjectReskin of America's, skipped when the data has none, and the match
 	* stopped at frame 0 placing it.  The name is emptied, as Civilian's and Observer's are, and every
 	* faction list and the Random draw already leave those out.  A missing start unit is dropped the
 	* same way.  The data alone decides it, so every machine with the same files agrees. */
@@ -343,7 +343,7 @@ Int PlayerTemplateStore::getTemplateNumByName(AsciiString name) const
 		if (m_playerTemplates[num].getName().compareNoCase(name.str()) == 0)
 			return num;
 	}
-	// a query: -side and the challenge menu ask with names a mod's data may not have
+	// a query: -side and the challenge menu ask with names the data may not have
 	return -1;
 }
 
@@ -400,8 +400,7 @@ const PlayerTemplate* PlayerTemplateStore::findPlayerTemplate(NameKeyType nameke
 		if ((*it).getNameKey() == namekey)
 			return &(*it);
 	}
-	NameKeyType retailKey;
-	return TheModNamespace.findRetailKey(namekey, MODNAME_PLAYERTEMPLATE, &retailKey) ? findPlayerTemplate(retailKey) : NULL;
+	return NULL;
 }
 
 //-----------------------------------------------------------------------------
@@ -469,7 +468,6 @@ void PlayerTemplateStore::getAllSideStrings(AsciiStringList *outStringList)
 		PlayerTemplate npt;
 		ini->initFromINI( &npt, npt.getFieldParse() );
 		npt.setNameKey(namekey);
-		npt.setModIndex(TheModNamespace.getActive());
 		ThePlayerTemplateStore->m_playerTemplates.push_back(npt);
 	}
 

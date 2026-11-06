@@ -36,22 +36,12 @@
 #include "Common/SpecialPower.h"
 #include "Common/CommandStore.h"
 #include "GameClient/ControlBar.h"
-#include "Common/StackDump.h"	// g_LastErrorDump
 
 //-------------------------------------------------------------------------------------------------
 /** Parse a command button */
 //-------------------------------------------------------------------------------------------------
 void INI::parseCommandButtonDefinition( INI *ini )
 {
-	/* A mod's Data\INI\Object\ folder is read with the objects, before TheCommandStore exists, and a
-		 CommandButton block in it (ZH 1944's zz_WW2_40_CommandSet.ini) read through a NULL store.  The
-		 block parse's catch names the file and line; this says why. */
-	if( TheCommandStore == NULL )
-	{
-		g_LastErrorDump.format( "A CommandButton block in '%s' is read before command buttons exist; it belongs in Data\\INI\\CommandButton.ini\n",
-			ini->getFilename().str() );
-		throw INI_INVALID_DATA;
-	}
 	CommandStore::parseCommandButtonDefinition(ini);
 }
 

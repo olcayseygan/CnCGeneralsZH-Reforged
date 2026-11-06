@@ -25,6 +25,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/Player.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -46,6 +47,15 @@ SwarmStrikeSpecialPowerModuleData::SwarmStrikeSpecialPowerModuleData( void )
 }
 
 // ------------------------------------------------------------------------------------------------
+static void parseUpgradeTargetCount( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
+{
+	SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount up;
+	INI::parseScience( ini, NULL, &up.m_science, NULL );
+	INI::parseInt( ini, NULL, &up.m_count, NULL );
+	((std::vector<SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount> *)store)->push_back( up );
+}
+
+// ------------------------------------------------------------------------------------------------
 /*static*/ void SwarmStrikeSpecialPowerModuleData::buildFieldParse( MultiIniFieldParse& p )
 {
 	SpecialPowerModuleData::buildFieldParse( p );
@@ -54,6 +64,7 @@ SwarmStrikeSpecialPowerModuleData::SwarmStrikeSpecialPowerModuleData( void )
 	{
 		{ "Radius",				INI::parseReal,						NULL, offsetof( SwarmStrikeSpecialPowerModuleData, m_radius ) },
 		{ "TargetCount",	INI::parseInt,						NULL, offsetof( SwarmStrikeSpecialPowerModuleData, m_targetCount ) },
+		{ "UpgradeTargetCount",	parseUpgradeTargetCount,	NULL, offsetof( SwarmStrikeSpecialPowerModuleData, m_upgradeTargetCount ) },
 		{ "RepeatTargets",	INI::parseBool,					NULL, offsetof( SwarmStrikeSpecialPowerModuleData, m_repeatTargets ) },
 		{ "Weapon",				INI::parseWeaponTemplate,	NULL, offsetof( SwarmStrikeSpecialPowerModuleData, m_weapon ) },
 		{ "TargetFX",			INI::parseFXList,					NULL, offsetof( SwarmStrikeSpecialPowerModuleData, m_targetFX ) },
@@ -104,8 +115,18 @@ void SwarmStrikeSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real
 	SpecialPowerModule::doSpecialPowerAtLocation( loc, angle, commandOptions );
 
 	const SwarmStrikeSpecialPowerModuleData *data = getSwarmStrikeSpecialPowerModuleData();
+	Int targetCount = data->m_targetCount;
+	for( size_t i = 0; i < data->m_upgradeTargetCount.size(); ++i )
+	{
+		if( getObject()->getControllingPlayer()->hasScience( data->m_upgradeTargetCount[ i ].m_science ) )
+		{
+			targetCount = data->m_upgradeTargetCount[ i ].m_count;
+			break;
+		}
+	}
+
 	std::vector<Object*> targets;
-	Weapon_findMostValuableEnemies( getObject(), loc, data->m_radius, data->m_targetCount, targets );
+	Weapon_findMostValuableEnemies( getObject(), loc, data->m_radius, targetCount, targets );
 
 	for( std::vector<Object*>::iterator it = targets.begin(); it != targets.end(); ++it )
 	{
@@ -118,10 +139,10 @@ void SwarmStrikeSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real
 		return;
 
 	// the spare shots: round the same targets again, dearest first, or at the click when none stood there
-	for( Int shot = (Int)targets.size(); shot < data->m_targetCount; ++shot )
+	for( Int shot = (Int)targets.size(); shot < targetCount; ++shot )
 		fireShot( data, getObject(), targets.empty() ? NULL : targets[ shot % targets.size() ], loc );
 	DEBUG_LOG(( "SWARM '%s' frame %d sends %d at %d targets around (%.0f,%.0f)\n", getPowerName().str(),
-		TheGameLogic->getFrame(), data->m_targetCount, (Int)targets.size(), loc->x, loc->y ));
+		TheGameLogic->getFrame(), targetCount, (Int)targets.size(), loc->x, loc->y ));
 }
 
 // ------------------------------------------------------------------------------------------------

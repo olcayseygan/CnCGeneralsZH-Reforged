@@ -289,6 +289,41 @@ int main()
 		CHECK(sampler != NULL && samplers->Sampler(sampler_states) == sampler);
 		sampler_states[D3DSAMP_ADDRESSU] = D3DTADDRESS_BORDER;
 		CHECK(samplers->Sampler(sampler_states) == NULL && !samplers->Refusal().empty());
+		// Alternating stage settings must reuse the exact sampler (or refusal) without
+		// hashing every call. Eviction only drops this shortcut, never the owned entry.
+		RenderUInt32 recent_states[4][14];
+		SDL_GPUSampler *recent_samplers[4];
+		for (unsigned i = 0; i < 4; ++i) {
+			memcpy(recent_states[i], sampler_states, sizeof(sampler_states));
+			recent_states[i][D3DSAMP_ADDRESSU] = i == 3 ? D3DTADDRESS_BORDER : D3DTADDRESS_WRAP;
+			recent_states[i][D3DSAMP_MAXMIPLEVEL] = i;
+			recent_samplers[i] = samplers->Sampler(recent_states[i]);
+			CHECK((recent_samplers[i] != NULL) == (i != 3));
+		}
+		// Settle the ring after the unrelated keys used above (hits do not change its
+		// insertion order), then a four-key working set no longer needs the table.
+		for (unsigned i = 0; i < 4; ++i)
+			CHECK(samplers->Sampler(recent_states[i]) == recent_samplers[i]);
+		const size_t populated = samplers->Table_Lookups();
+		for (unsigned round = 0; round < 16; ++round)
+			for (unsigned i = 0; i < 4; ++i)
+				CHECK(samplers->Sampler(recent_states[i]) == recent_samplers[i]);
+		CHECK(samplers->Table_Lookups() == populated);
+		for (unsigned i = 4; i < 12; ++i) {
+			recent_states[0][D3DSAMP_MAXMIPLEVEL] = i;
+			CHECK(samplers->Sampler(recent_states[0]) != NULL);
+		}
+		recent_states[0][D3DSAMP_MAXMIPLEVEL] = 0;
+		const size_t evicted = samplers->Table_Lookups();
+		CHECK(samplers->Sampler(recent_states[0]) == recent_samplers[0]);
+		CHECK(samplers->Table_Lookups() == evicted + 1);
+		// Include high bits (float-valued sampler state) in the exact cache identity.
+		recent_states[0][D3DSAMP_MIPMAPLODBIAS] = 0x3f000000u;
+		CHECK(samplers->Sampler(recent_states[0]) != NULL);
+		CHECK(samplers->Table_Lookups() == evicted + 2);
+		recent_states[0][D3DSAMP_MIPMAPLODBIAS] = 0;
+		CHECK(samplers->Sampler(recent_states[0]) == recent_samplers[0]);
+		CHECK(samplers->Table_Lookups() == evicted + 2);
 
 		printf("sdl_pipeline_state_selfcheck: %s: %u pipelines built\n", SDL_GetGPUDeviceDriver(frame->Device()),
 			pipelines->Pipelines_Built());

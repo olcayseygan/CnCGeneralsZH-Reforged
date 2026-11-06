@@ -875,8 +875,8 @@ void Player::setDefaultTeam(void) {
 	if (dt == NULL) {
 		/* A skirmish slot takes the name of the skirmish side its general's scripts are written for
 			 (initFromDict), drops its own teamplayer<n>, and gets its teams from those scripts instead.  A
-			 general the skirmish scripts have no player for - a mod's, under the fork's SkirmishScripts.scb -
-			 is left with no team at all, and the AI read the NULL on its first pass.  Every player is given
+			 general the skirmish scripts have no player for is left with no team at all, and the AI read
+			 the NULL on its first pass.  Every player is given
 			 its default team here, so the singleton validateSides would have added is made now. */
 		DEBUG_LOG(("Player::setDefaultTeam - %s had no %s, making it\n", m_playerName.str(), tname.str()));
 		Dict d;
@@ -916,7 +916,6 @@ void Player::initFromDict(const Dict* d)
 		// poorly-formed user maps might not, which would be bad, and could crash us later. so if it doesn't
 		// actually have a skirmish player defined for this side, declare it nonskirmish... the player won't
 		// really work, but it's better than crashing.
-		// -modfactions: a mod faction may have a skirmish player of its own mod's scripts, or retail's of its side
 		skirmish = pt != NULL && TheSidesList->findSkirmishSideFor(pt, NULL) != NULL;
 
 		DEBUG_ASSERTCRASH(skirmish, ("Could not find skirmish player for side %s... quietly making into nonskirmish.", getSide().str()));
@@ -975,7 +974,6 @@ void Player::initFromDict(const Dict* d)
 		AsciiString mySide = getSide();
 		Int i;
 		AsciiString  qualTemplatePlayerName;
-		// -modfactions: a mod faction runs its own mod's skirmish scripts and teams when the mod ships them
 		TeamsInfoRec *skirmishTeams = NULL;
 		SidesInfo *skirmishSide = TheSidesList->findSkirmishSideFor(getPlayerTemplate(), &skirmishTeams);
 		const Bool found = skirmishSide != NULL;
@@ -2804,14 +2802,6 @@ Bool Player::hasPrereqsForScience(ScienceType t) const
 }
 
 //=============================================================================
-/** The rank table a player climbs: under -modfactions a mod faction's is its own mod's Rank.ini, so
-	* it gets that mod's ranks, points and rank sciences ("M<n>~SCIENCE_Rank3") and nothing of retail's. */
-static Int rankMod(const Player *player)
-{
-	return player->getPlayerTemplate() ? player->getPlayerTemplate()->getModIndex() : -1;
-}
-
-//=============================================================================
 /// returns TRUE if the player gained/lost levels as a result.
 Bool Player::addSkillPoints(Int delta)
 {
@@ -2820,8 +2810,8 @@ Bool Player::addSkillPoints(Int delta)
 	if( delta == 0 )
 		return false;
 
-	Int levelCap = min( TheGameLogic->getRankLevelLimit(), TheRankInfoStore->getRankLevelCount(rankMod(this)) );
-	Int pointCap = TheRankInfoStore->getRankInfo(levelCap, rankMod(this))->m_skillPointsNeeded; // Cap at lowest point of cap level, not highest.
+	Int levelCap = min( TheGameLogic->getRankLevelLimit(), TheRankInfoStore->getRankLevelCount() );
+	Int pointCap = TheRankInfoStore->getRankInfo(levelCap)->m_skillPointsNeeded; // Cap at lowest point of cap level, not highest.
 
 	Bool levelGained = FALSE;
 	m_skillPoints = min( pointCap, (m_skillPoints + delta) );
@@ -2863,7 +2853,7 @@ void Player::resetSciences()
 
 	for (Int i = 1; i <= m_rankLevel; ++i)
 	{
-		const RankInfo* rank = TheRankInfoStore->getRankInfo(i, rankMod(this));
+		const RankInfo* rank = TheRankInfoStore->getRankInfo(i);
 		if (rank)
 		{
 			for (ScienceVec::const_iterator it = rank->m_sciencesGranted.begin(); it != rank->m_sciencesGranted.end(); ++it)
@@ -3048,12 +3038,12 @@ void Player::resetRank()
 {
 	m_rankLevel = 1;
 	m_skillPoints = 0;
-	const RankInfo* nextRank = TheRankInfoStore->getRankInfo(m_rankLevel+1, rankMod(this));
+	const RankInfo* nextRank = TheRankInfoStore->getRankInfo(m_rankLevel+1);
 	m_levelUp = nextRank ? nextRank->m_skillPointsNeeded : INT_MAX;
 	m_levelDown = 0;
 	m_sciences.clear();
 	m_sciencePurchasePoints = getPlayerTemplate() ? getPlayerTemplate()->getIntrinsicSciencePurchasePoints() : 0;
-	const RankInfo* curRank = TheRankInfoStore->getRankInfo(m_rankLevel, rankMod(this));
+	const RankInfo* curRank = TheRankInfoStore->getRankInfo(m_rankLevel);
 	m_sciencePurchasePoints += curRank ? curRank->m_sciencePurchasePointsGranted : 0;
 	m_generalName = TheGameText? TheGameText->fetch("SCIENCE:GeneralName"):UnicodeString::TheEmptyString;
 	resetSciences();
@@ -3065,8 +3055,8 @@ Bool Player::setRankLevel(Int newLevel)
 {
 	if (newLevel < 1) 
 		newLevel = 1;
-	else if (newLevel > TheRankInfoStore->getRankLevelCount(rankMod(this)))
-		newLevel = TheRankInfoStore->getRankLevelCount(rankMod(this));
+	else if (newLevel > TheRankInfoStore->getRankLevelCount())
+		newLevel = TheRankInfoStore->getRankLevelCount();
 
 	if (newLevel > TheGameLogic->getRankLevelLimit())
 		newLevel = TheGameLogic->getRankLevelLimit();
@@ -3086,7 +3076,7 @@ Bool Player::setRankLevel(Int newLevel)
 
 	for (Int i = m_rankLevel + 1; i <= newLevel; ++i)
 	{
-		const RankInfo* rank = TheRankInfoStore->getRankInfo(i, rankMod(this));
+		const RankInfo* rank = TheRankInfoStore->getRankInfo(i);
 		DEBUG_ASSERTCRASH(rank, ("rank should never be null here"));
 		if (rank)
 		{
@@ -3108,7 +3098,7 @@ Bool Player::setRankLevel(Int newLevel)
 		}
 	}
 
-	const RankInfo* nextRank = TheRankInfoStore->getRankInfo(newLevel + 1, rankMod(this));
+	const RankInfo* nextRank = TheRankInfoStore->getRankInfo(newLevel + 1);
 	m_levelUp = nextRank ? nextRank->m_skillPointsNeeded : INT_MAX;
 	m_rankLevel = newLevel;
 
@@ -3270,7 +3260,8 @@ static void countExisting( Object *obj, void *userData )
    game unrestricted rather than guessing at a number. */
 static const char theSuperweaponGeneralTemplate[] = "FactionAmericaSuperWeaponGeneral";
 
-Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName, const AsciiString &buildingName )
+Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName, const AsciiString &buildingName,
+                         Bool computerPlayer )
 {
   const Bool isSuperweaponGeneral =
       playerTemplateName.compareNoCase( theSuperweaponGeneralTemplate ) == 0;
@@ -3278,10 +3269,12 @@ Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName,
   if ( restriction == SUPERWEAPONS_LIMIT )
     return isSuperweaponGeneral ? SUPERWEAPONS_LIMIT_GENERAL : SUPERWEAPONS_LIMIT_OTHERS;
 
-  // the silo sells China's Uranium Shells, Nuclear Tanks and Neutron Shells, so under No every
-  // player still stands one and only its missile is refused (SuperweaponMissileSilenced)
+  // the silo sells China's Uranium Shells, Nuclear Tanks and Neutron Shells, so under No a human
+  // still stands one and only its missile is refused (SuperweaponMissileSilenced).  A computer
+  // player builds none: it rushed one up as its superweapon, and a player who picked No saw the
+  // AI build a superweapon.  The Superweapon General's own silo goes with it, silenced and useless.
   if ( restriction == SUPERWEAPONS_NONE && ProRulesExemptSuperweapon( buildingName ) )
-    return SUPERWEAPONS_LIMIT_OTHERS;
+    return computerPlayer ? SUPERWEAPON_CAP_BANNED : SUPERWEAPONS_LIMIT_OTHERS;
 
   if ( restriction == SUPERWEAPONS_NONE )
     return isSuperweaponGeneral ? SUPERWEAPONS_NONE_GENERAL : SUPERWEAPON_CAP_BANNED;
@@ -3591,17 +3584,71 @@ UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers )
   return sharers > 1 ? amount / sharers : 0;
 }
 
-UnsignedInt EarnedAmount( UnsignedInt amount, Bool earnerIsSkirmishAI, Bool recipientIsSkirmishAI )
+UnsignedInt EarnedAmount( UnsignedInt amount, Int percent )
 {
-  return earnerIsSkirmishAI && recipientIsSkirmishAI ? amount * 2 : amount;
+  return amount * (UnsignedInt)percent / 100;
+}
+
+Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength )
+{
+  if( strongestEnemyStrength <= 0 || ownStrength >= strongestEnemyStrength )
+    return 0;
+  const Int bonus = (Int)( (Int64)4 * AI_INCOME_BONUS_MAX * ( strongestEnemyStrength - ownStrength ) / ( (Int64)3 * strongestEnemyStrength ) );
+  return bonus < AI_INCOME_BONUS_MAX ? bonus : AI_INCOME_BONUS_MAX;
+}
+
+void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
+{
+  UnsignedInt grouped = 0;
+  *ownAverage = 0;
+  *strongestEnemyAverage = 0;
+  for( Int lead = 0; lead < count; ++lead )
+  {
+    if( grouped & ( 1u << lead ) )
+      continue;
+    // the leader's own side when it is this player or one of its allies, else the next enemy side
+    const Bool ours = lead == self || ( allies[ self ] & ( 1u << lead ) ) != 0;
+    Int64 sum = 0;
+    Int size = 0;
+    for( Int i = lead; i < count; ++i )
+    {
+      if( grouped & ( 1u << i ) )
+        continue;
+      const Bool member = ours ? ( i == self || ( allies[ self ] & ( 1u << i ) ) != 0 )
+                               : ( i == lead || ( allies[ lead ] & ( 1u << i ) ) != 0 );
+      if( !member )
+        continue;
+      grouped |= 1u << i;
+      sum += worth[ i ];
+      ++size;
+    }
+    const Int average = (Int)( sum / size );
+    if( ours )
+      *ownAverage = average;
+    else if( average > *strongestEnemyAverage )
+      *strongestEnemyAverage = average;
+  }
+}
+
+Int IncomeBonusStep( Int bonus, Int target )
+{
+  if( target > bonus + AI_INCOME_BONUS_STEP )
+    return bonus + AI_INCOME_BONUS_STEP;
+  if( target < bonus - AI_INCOME_BONUS_STEP )
+    return bonus - AI_INCOME_BONUS_STEP;
+  return target;
+}
+
+Int Player::incomePercent( void )
+{
+  return isSkirmishAIPlayer() ? TheAI->getDifficultyProfile( getAISkillLevel() )->m_incomePercent + m_ai->getIncomeBonus() : 100;
 }
 
 UnsignedInt Player::earnMoney( UnsignedInt amount )
 {
-  const Bool skirmishAI = isSkirmishAIPlayer();
-  const UnsignedInt earned = EarnedAmount( amount, skirmishAI, skirmishAI );
+  const UnsignedInt earned = EarnedAmount( amount, incomePercent() );
   m_money.deposit( earned );
-  m_scoreKeeper.addMoneyEarned( earned );
+  m_scoreKeeper.addMoneyEarned( amount );
   return earned;
 }
 
@@ -3628,9 +3675,9 @@ UnsignedInt Player::earnIncome( UnsignedInt amount, Bool fromTechBuilding )
   UnsignedInt paid = 0;
   for ( Int i = 0; i < allyCount; ++i )
   {
-    const UnsignedInt cut = EarnedAmount( allyShare, skirmishAI, allies[ i ]->isSkirmishAIPlayer() );
+    const UnsignedInt cut = EarnedAmount( allyShare, skirmishAI ? allies[ i ]->incomePercent() : 100 );
     allies[ i ]->getMoney()->deposit( cut );
-    allies[ i ]->getScoreKeeper()->addMoneyEarned( cut );
+    allies[ i ]->getScoreKeeper()->addMoneyEarned( allyShare );
     paid += cut;
   }
 
@@ -3695,7 +3742,8 @@ Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild, Int unitsPerO
       restriction = SUPERWEAPONS_NONE;
     const AsciiString templateName =
         getPlayerTemplate() ? getPlayerTemplate()->getName() : AsciiString::TheEmptyString;
-    const Int cap = SuperweaponBuildCap( restriction, templateName, whatToBuild->getName() );
+    const Int cap = SuperweaponBuildCap( restriction, templateName, whatToBuild->getName(),
+                                         getPlayerType() == PLAYER_COMPUTER );
     if ( cap == SUPERWEAPON_CAP_BANNED )
       return false;
 

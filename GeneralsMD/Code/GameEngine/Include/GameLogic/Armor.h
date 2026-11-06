@@ -63,11 +63,16 @@ public:
 
 	static void parseArmorCoefficients( INI* ini, void *instance, void* /* store */, const void* userData );
 
+	/// the Armor block's name, which the build tooltip shows as the armour's class
+	const AsciiString& getName() const { return m_name; }
+
 protected:
 
 private:
+	friend class ArmorStore;
 	Real						m_damageCoefficient[DAMAGE_NUM_TYPES];	///< modifiers to damage
-};  
+	AsciiString			m_name;
+};
 
 //-------------------------------------------------------------------------------------------------
 class Armor

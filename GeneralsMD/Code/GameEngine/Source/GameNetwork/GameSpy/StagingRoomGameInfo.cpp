@@ -604,7 +604,8 @@ void GameSpyStagingRoom::startGame(Int gameID)
 	}
 
 //#if defined(_DEBUG) || defined(_INTERNAL)
-	if (numHumans < 2)
+	// with a route there is no firewall to negotiate: the connections already stand
+	if (numHumans < 2 || TheTransportRoute != NULL)
 	{
 		launchGame();
 		if (TheGameSpyInfo)

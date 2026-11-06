@@ -159,6 +159,15 @@ public:
 
 };
 
+/** One of a side's signature units (AIPlayer::ensureDoctrine): what it is worth over the same unit at
+	* the other generals of its side, and how far the AI still trusts it after the last ones died. */
+struct AIDoctrineUnit
+{
+	const ThingTemplate *m_template;
+	Real m_weight;			///< over 1; 1.25 is a quarter more fight for the money than the other generals' copies
+	Real m_trust;				///< 1 fresh; falls when one dies having done nothing, comes back with time
+};
+
 
 /**
  * The computer-controlled opponent.
@@ -265,6 +274,7 @@ public:
 		* independent axes: the rung says how well, the role says what.  See AI-ROADMAP.md D6/D8. */
 	AISkillLevel getAISkillLevel(void) const {return m_skillLevel;}
 	void setAISkillLevel(AISkillLevel level) {m_skillLevel = level;}
+	Int getIncomeBonus(void) const {return m_incomeBonus;}	///< points over the rung's IncomePercent while it falls behind (stepIncomeBonus)
 	AIRole getAIRole(void) const {return m_role;}
 
 	/** The third axis, how it plays: set once from the seat at the start of the match, after the role is
@@ -322,6 +332,15 @@ protected:
 		* working expansion mechanism that only ever ran when the "Build supply center" script action
 		* fired - the AI never worked out for itself that it was running out of money. */
 	virtual void doExpansion(void);
+
+	/** B3 proposal 3: a base away from home - a factory on an empty start position, then power, guns and
+		* a supply centre beside it - so one stroke at home does not finish the AI. */
+	void doSecondBase(void);
+	Bool foundSecondBase(Object *dozer, const Coord3D *outposts, Int count);	///< a factory on the nearest empty start position; TRUE when it spent the look's placement
+	Int findOutposts(Coord3D *at, Int max);	///< this player's factories far from home, one per site, in object order
+	Bool onEmptyStart(const Coord3D *pos) const;	///< within reach of a start position no player started on: a second base's ground
+	const ThingTemplate *missingPrerequisite(Object *dozer, KindOfType kind);	///< the building a dozer button of this kind waits on, that this player has none of
+	Bool queueAtOutpost(const ThingTemplate *tmpl, const Coord3D *at, Real innerRadius, Real lean, const char *why);	///< placeNear round a base away from home, leant towards the enemy by lean
 
 	virtual void doRetreats(void);
 
@@ -385,8 +404,23 @@ protected:
 	void addProductionForQueues(void);											///< another factory of each kind whose every factory has stayed busy
 	void trainSurplus(Int budget);												///< a unit from each idle factory, within budget
 	void trainFavoured(void);															///< a personality's favoured units, below the bank target as well
+	Int trainDoctrine(Int budget);												///< the side's signature units, toward the rung's share of what it spends, or out of a budget past the bank target (-1 below it); what is left of it
+	void ensureDoctrine(void);														///< work out the side's signature units from the data, once
+	AIDoctrineUnit *findDoctrine(const ThingTemplate *tmpl);		///< this side's entry for a unit, NULL when it is no signature unit
+	Real doctrineShare(void) const;												///< of the money spent on the army, the share spent on signature units
+	Real doctrineTeamShare(const TeamPrototype *proto, const std::vector<AIVisibleEnemy> &army, Real airFloor) const;	///< a team's cost share of signature units worth building now
+	Bool doctrineMakeable(const std::vector<AIVisibleEnemy> &army, Real airFloor) const;	///< some factory standing can train a signature unit worth building now
+	Real doctrineAirFloor(void) const;	///< the matchup a signature aircraft has to clear, out of reach when the known anti-air is strong
+	std::vector<AIDoctrineUnit>	m_doctrine;		///< the signature units, in template order; derived, only the trust is saved
+	std::vector<Real>	m_doctrineLoadedTrust;	///< the trust read from a save, put back once the doctrine is derived again
+	Bool				m_doctrineReady;				///< m_doctrine has been derived
+	Int					m_doctrineKind;					///< the PRODUCTION_KIND most of the signature is, -1 for none
+	Int					m_doctrineSpent;				///< money spent on signature units ...
+	Int					m_armySpent;						///< ... and on the army in all
 	void buyPersonaTransports(void);											///< an Infantry AI's ground transports, a few by rung
 	void sendPersonaTransports(AIGroup *wave);	///< ... driven loaded to a wave's front, riders put down there
+	void stepIncomeBonus(void);														///< weigh its strength against its strongest enemy and move m_incomeBonus a step toward what that is owed
+	Int					m_incomeBonus;					///< points over the rung's IncomePercent, 0 to AI_INCOME_BONUS_MAX
 	Int					m_incomeMark;						///< money earned in all, when the income was last measured ...
 	UnsignedInt	m_incomeMarkFrame;			///< ... and the frame, 0 for never
 	Int					m_bankMark;							///< ... and the bank then
@@ -403,7 +437,7 @@ protected:
 	void stageDozer(Object *dozer, const Coord3D *site);		///< an idle dozer walks ahead to a site waiting on money
 	Bool purchaseAllowed(Int key, Int cost, AIPurchaseKind kind, Bool startable, const AsciiString &what, Int scoreOffset = 0);
 	void purchased(Int key, Int cost, AIPurchaseKind kind, const AsciiString &what);
-	Bool buyUnit(ProductionUpdateInterface *pu, const ThingTemplate *unit, AIPurchaseKind kind);	///< queueCreateUnit through the queue
+	Bool buyUnit(ProductionUpdateInterface *pu, const ThingTemplate *unit, AIPurchaseKind kind, Int scoreOffset = 0);	///< queueCreateUnit through the queue
 	Bool buyUpgrade(ProductionUpdateInterface *pu, const UpgradeTemplate *upgrade, Int scoreOffset = 0);	///< queueUpgrade through the queue
 	AIPurchaseKind purchaseKindOf(const ThingTemplate *tmpl) const;
 	AIPurchaseQueue	m_purchases;
@@ -423,7 +457,7 @@ protected:
 	Int moneyUnitRoom(void) const;	///< how many more money units this player's army and internet centers carry
 	Bool hasEnoughMoneyUnitsFor(TeamPrototype *proto) const;	///< this team is all hackers and there is no room for more
 	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward);	///< the nearest legal, safe spot by the ground from center, queued for a dozer. walkOutward keeps searching further out as the near ground fills
-	Bool queueExtraFactory(Object *dozer, KindOfType kind);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues
+	Bool queueExtraFactory(Object *dozer, KindOfType kind, Bool doctrine = FALSE);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues; the doctrine's without waiting for that
 	Bool holdsExtraFactory(const ThingTemplate *tmpl);	///< a factory of a kind already standing or going up, while the ones standing keep up with their queues
 	const ThingTemplate *nextBaseDefense(Object *dozer);	///< the base defence off this dozer's buttons that the base has fewest of, NULL for none
 	Bool placeDefense(const ThingTemplate *defense);	///< queue it on the ring spot whose clear field of fire covers the most ground the enemy drives in over; a Turtle's round a choke first
@@ -453,6 +487,7 @@ protected:
 	Int loadShuttle(Object *ship);	///< call the attack teams' ground units at home into one Chinook; how many were called
 	Bool flightIsQuiet(const Coord3D *from, Real x, Real y) const;	///< a straight flight crosses nothing the AI has seen shoot
 	void doHelixes(void);	///< China's Helixes: the upgrade the enemy army calls for, healers behind the wave, bomb raids
+	void steerAircraft(void);	///< aircraft off strikes whose flight crosses known anti-air, onto clear ones or home
 	void buyDutyHelix(void);	///< Medium and up buy the healers and raiders their Helixes' buttons allow
 	Int helixRoleWanted(const ThingTemplate *tmpl) const;	///< the job a Helix of this kind would take now, -1 for none
 	void takeDutyHelix(Object *helix);	///< a Helix buyDutyHelix ordered comes out and takes its job

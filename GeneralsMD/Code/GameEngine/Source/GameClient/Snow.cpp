@@ -92,10 +92,10 @@ void SnowManager::updateIniSettings(void)
 
 /* The Weather option's wind.  Strength 1 is a sandstorm.  Sway and lean are radians over the default
 	breeze's 0.055 of each, the smoke's drift is world units per particle update; a smoke column rises
-	about twice that, so it leans by some 25 degrees. */
+	about eight times that, so it leans by some 7 degrees. */
 static const Real WEATHER_SWAY = 0.11f;
 static const Real WEATHER_LEAN = 0.16f;
-static const Real WEATHER_SMOKE_DRIFT = 0.5f;
+static const Real WEATHER_SMOKE_DRIFT = 0.125f;
 static const Short WEATHER_BREEZE_PERIOD = LOGICFRAMES_PER_SECOND * 3;
 static const Short WEATHER_BREEZE_VERSION = 0x2000;	// past any count a map's scripts reach, so trees notice the switch
 static BreezeInfo s_weatherBreeze;

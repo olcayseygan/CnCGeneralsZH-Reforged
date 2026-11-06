@@ -40,6 +40,7 @@
 #include "Common/GameSpyMiscPreferences.h"
 #include "Common/FileSystem.h"
 #include "GameClient/Mouse.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/GameText.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
@@ -1075,7 +1076,9 @@ void PopulatePlayerInfoWindows( AsciiString parentWindowName )
 	win = findWindow(NULL, parentWindowName, "FactionImage");
 	if(win && pPlayerTemplate && TheRankPointValues && rankPoints)
 	{
-		win->winSetEnabledImage(0, pPlayerTemplate->getGeneralImage());
+		// our card, as the army screen shows it: Turkiye's GeneralImage is America's logo
+		const Image *card = ControlBarSideImage(pPlayerTemplate, "FactionPicker");
+		win->winSetEnabledImage(0, card ? card : pPlayerTemplate->getGeneralImage());
 //x		win->setTooltipText( sideStr );  //ex: Toxin General
 	}
 

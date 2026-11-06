@@ -312,10 +312,6 @@ public:
 	void									Remove_Prototype(const char *name);
 	PrototypeClass *					Find_Prototype(const char * name);
 
-	// The current mod's own prototype for bare, read from the mod's file when it ships one; NULL
-	// when the mod has none, and the caller goes on with bare as a retail name.
-	PrototypeClass *					Find_Mod_Prototype(const char * bare);
-
 	/*
 	** Load on Demand
 	*/

@@ -3,7 +3,7 @@
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
-#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 700
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1400
 #     -scenario jetpass -logPrefix jetpass_
 #
 # The jets reach x=2200 around frame 250. Measured 2026-10-02: before the fix the Raptor circled the
@@ -18,6 +18,13 @@
 # against 800 at 490 (the Raptor turns too wide to get all four off in one pass and is still on its
 # second at 650), Battle Master 222 at 290 against 234 at 500, Crusader 80 at 300 against 80 at 330,
 # Scorpion 170 at 330 against 170 at 430. Every jet still hits; the wide turns cost time.
+#
+# 2026-11-04, jets break off instead of flying over (jetbreak.txt): health at 650 Overlord 700 (from
+# 450), Battle Master 234, Crusader 80, Scorpion 170. A first cut broke off on distance alone and the
+# Stealth Fighter, coming back round on the Scorpion, turned away before its nose was on it every pass
+# and never fired (370 of 370); breaking off only with the target in the aim cone fixed it. Closest
+# approach, centre to centre: Raptor 142, MiG 148, Aurora 123, Stealth 111. -maxframes counts the
+# 60 Hz logic frames, so the file's 650 needs 1400.
 
 30    spawn      1  ChinaTankOverlord            1   2250 3300
 30    spawn      0  AmericaJetRaptor             1   1000 3420

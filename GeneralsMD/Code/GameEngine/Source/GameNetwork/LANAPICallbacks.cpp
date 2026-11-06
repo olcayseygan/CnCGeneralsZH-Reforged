@@ -85,7 +85,6 @@ UnicodeString LANAPIInterface::getErrorStringFromReturnType( ReturnType ret )
 		case RET_DUPLICATE_NAME:
 			return TheGameText->fetch("LAN:ErrorDuplicateName");
 		case RET_CRC_MISMATCH:
-		case RET_MOD_MISMATCH:
 			return TheGameText->fetch("LAN:ErrorCRCMismatch");
 		case RET_GAME_STARTED:
 			return TheGameText->fetch("LAN:ErrorGameStarted");
@@ -717,11 +716,6 @@ void LANAPI::OnGameJoin( ReturnType ret, LANGameInfo *theGame )
 		UnicodeString title, body;
 		title = TheGameText->fetch("LAN:JoinFailed");
 		body = getErrorStringFromReturnType(ret);
-		if (ret == RET_MOD_MISMATCH)
-		{
-			body.format(TheGameText->fetch("LAN:ErrorModMismatch").str(),
-				m_joinDeniedHostMod.isEmpty() ? TheGameText->fetch("LAN:NoMod").str() : m_joinDeniedHostMod.str());
-		}
 		MessageBoxOk(title, body, NULL);
 	}
 }

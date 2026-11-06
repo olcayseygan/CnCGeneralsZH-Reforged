@@ -811,8 +811,8 @@ void W3DProjectedShadowManager::flushDecals(W3DShadowTexture *texture, ShadowTyp
 	{
 		case SHADOW_DECAL:
 			//Multiplied onto the ground (dest * texture), as EA drew it: the blob's shape is in its
-			//colour, white where the ground is left alone.  A mod's blob need not fade its alpha at
-			//all - Contra's shadowih.dds is opaque edge to edge - so alpha blending it laid a dark
+			//colour, white where the ground is left alone.  A blob texture need not fade its alpha
+			//at all - one opaque edge to edge is valid data - so alpha blending it laid a dark
 			//square under every unit that named it.
 			DX8Wrapper::Set_Shader(ShaderClass::_PresetMultiplicativeShader);
 			break;
@@ -1537,7 +1537,7 @@ Int W3DProjectedShadowManager::renderShadows(RenderInfoClass & rinfo)
 						 with the tick's (a desync) and whose modules the tick frees beside the render.  The window
 						 is open for every picture at every -logicthread setting, so the shadow falls on the
 						 terrain alone and every setting draws the same picture.
-						 ponytail: receivers lost for mods with SHADOW_PROJECTION (the fork's INI has none); the
+						 ponytail: receivers lost for any SHADOW_PROJECTION (the fork's INI has none); the
 						 upgrade is the receivers gathered at W3DDisplay's takeReadsForRender. */
 					if (LogicThread::isInsideWindow())
 						continue;

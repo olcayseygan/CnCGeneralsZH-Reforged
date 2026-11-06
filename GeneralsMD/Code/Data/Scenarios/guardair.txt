@@ -1,0 +1,33 @@
+# What a guarding Aurora bombs first.  It used to be the nearest thing in its circle, usually a soldier;
+# now buildings, then vehicles, then infantry, nearest within each.
+#
+# Three circles, an Aurora over each, guarding with a radius.  In every circle the Red Guards stand
+# nearest the centre, so the nearest-first rule would pick them every time.
+#   A: a Barracks 60 out, a Battlemaster 85 out, Red Guards 30 out    -> the Barracks, class 0
+#   B: a Battlemaster 140 out, Red Guards on the centre               -> the Battlemaster, class 1
+#   C: Red Guards alone                                               -> a Red Guard, class 2
+# Read the first GUARD AIR line of each Aurora template.  Ground guards keep the nearest.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 1800
+#     -scenario guardair -logPrefix guardair_
+
+30    spawn       1  ChinaBarracks            1  900 770
+30    spawn       1  ChinaTankBattleMaster    1  980 860
+30    spawn       1  ChinaInfantryRedguard    2  900 860   20
+30    spawn       0  AmericaJetAurora         1  900 830
+
+30    spawn       1  ChinaTankBattleMaster    1  1190 1210
+30    spawn       1  ChinaInfantryRedguard    2  1310 1290  20
+30    spawn       0  AirF_AmericaJetAurora    1  1310 1290
+
+30    spawn       1  ChinaInfantryRedguard    2  850 1120   20
+30    spawn       0  SupW_AmericaJetAurora    1  850 1120
+
+60    shiftguard  0  AmericaJetAurora         900 830    150
+60    shiftguard  0  AirF_AmericaJetAurora    1310 1290  200
+60    shiftguard  0  SupW_AmericaJetAurora    850 1120   120
+
+61    tally       1  ChinaBarracks
+850   tally       1  ChinaBarracks

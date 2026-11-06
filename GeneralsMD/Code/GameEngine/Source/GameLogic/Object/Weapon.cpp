@@ -49,6 +49,7 @@
 #include "Common/Player.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "Common/Xfer.h"
  
 #include "GameClient/Drawable.h"
@@ -77,6 +78,7 @@
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/AssistedTargetingUpdate.h"
 #include "GameLogic/Module/ProjectileStreamUpdate.h"
+#include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/TerrainLogic.h"
 
@@ -158,7 +160,7 @@ static void parseAllVetLevelsAsciiString( INI* ini, void* /*instance*/, void * s
 //-------------------------------------------------------------------------------------------------
 /* The laser object is looked up when the weapon fires, so a name nothing defines draws no beam.  A
 	 patch file loads after every object: one naming a laser the loaded data lacks (FixesReforged.ini's
-	 Lazr_PatriotLaserBeam under Contra) leaves the weapon the beam it had. */
+	 Lazr_PatriotLaserBeam on data without it) leaves the weapon the beam it had. */
 static void parseLaserName( INI* ini, void* /*instance*/, void * store, const void* /*userData*/ )
 {
 	AsciiString name = ini->getNextAsciiString();
@@ -238,7 +240,9 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "RequestAssistRange",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_requestAssistRange) },		
 	{ "AcceptableAimDelta",				INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_aimDelta) },		
 	{ "ScatterRadius",						INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterRadius) },		
-	{ "BlindScatterRadius",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_blindScatterRadius) },
+	{ "RadarBlindHitChance",			INI::parsePercentToReal,								NULL,							offsetof(WeaponTemplate, m_radarBlindHitChance) },
+	{ "RadarBlindHitUpgrade",			INI::parseAsciiString,									NULL,							offsetof(WeaponTemplate, m_radarBlindHitUpgrade) },
+	{ "RadarBlindHitUpgradeChance",	INI::parsePercentToReal,								NULL,							offsetof(WeaponTemplate, m_radarBlindHitUpgradeChance) },
 	{ "SeeksMostValuable",				INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_seeksMostValuable) },
 	{ "ScatterTargetScalar",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_scatterTargetScalar) },		
 	{ "ScatterRadiusVsInfantry",	INI::parseReal,													NULL,							offsetof( WeaponTemplate, m_infantryInaccuracyDist ) },
@@ -329,7 +333,8 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_requestAssistRange						= 0.0f;
 	m_aimDelta											= 0.0f;
 	m_scatterRadius									= 0.0f;
-	m_blindScatterRadius						= 0.0f;
+	m_radarBlindHitChance						= 1.0f;
+	m_radarBlindHitUpgradeChance		= 1.0f;
 	m_seeksMostValuable							= FALSE;
 	m_scatterTargetScalar						= 0.0f;
 	m_shockWaveAmount								= 0.0f;
@@ -1008,11 +1013,29 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 	}
 
 	// where on the victim this shot lands (Weapon::randomPointOnBody); a bridge keeps its attack point.
-	// Drawn whether or not anything is drawn, as it comes from the logic stream.
+	// Drawn whether or not anything is drawn, as it comes from the logic stream. A stream weapon (the
+	// Toxin Tractor's spray, a flamethrower) is drawn as one line through all its blobs in the air, so
+	// a point of its own per blob bent that line into a zigzag: every blob of a stream goes to the
+	// victim's middle, EA's aim, and the line stays straight.
 	Coord3D aimPos;
 	const Bool aimsOnBody = victimObj != NULL && !victimObj->isKindOf( KINDOF_BRIDGE );
 	if( aimsOnBody )
-		Weapon::randomPointOnBody( victimObj, aimPos );
+	{
+		if( m_projectileStreamName.isEmpty() )
+			Weapon::randomPointOnBody( victimObj, aimPos );
+		else
+			victimObj->getGeometryInfo().getCenterPosition( *victimObj->getPosition(), aimPos );
+	}
+
+	// -scenario only: one line a shot for the streams and the aircraft, which their scenarios read
+	if( aimsOnBody && !TheGlobalData->m_scenarioFile.isEmpty() &&
+			( !m_projectileStreamName.isEmpty() || sourceObj->isKindOf( KINDOF_AIRCRAFT ) ) )
+	{
+		DEBUG_LOG(( "SCENARIO SHOT: frame %d '%s' %d '%s' at '%s' %d dist %.0f range %.0f aim (%.1f,%.1f,%.1f)\n",
+			TheGameLogic->getFrame(), sourceObj->getTemplate()->getName().str(), sourceObj->getID(), m_name.str(),
+			victimObj->getTemplate()->getName().str(), victimObj->getID(), sqrtf( distSqr ), getAttackRange( bonus ),
+			aimPos.x, aimPos.y, aimPos.z ));
+	}
 
 	// call this even if FXList is null, because this also handles stuff like Gun Barrel Recoil
 	if (sourceObj && sourceObj->getDrawable())
@@ -1075,18 +1098,35 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 
 	Coord3D projectileDestination = *victimPos; //Need to copy this, as we have a pointer to their actual position
 	Real scatterRadius = 0.0f;
-	/* Turkiye's artillery fires past its own sight and leans on a spotter.  A shot at ground its
-		 player does not see (a force fire into the fog, a target the spotter lost) spreads by
-		 BlindScatterRadius on top.  The shroud is logic state, the same every machine reads. */
-	Real blindScatter = 0.0f;
-	if( m_blindScatterRadius > 0.0f && sourceObj && sourceObj->getControllingPlayer() &&
-			ThePartitionManager->getShroudStatusForPlayer( sourceObj->getControllingPlayer()->getPlayerIndex(), victimPos ) != CELLSHROUD_CLEAR )
-		blindScatter = m_blindScatterRadius;
-	if( m_scatterRadius > 0.0f || blindScatter > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
+	/* Turkiye's rockets fly on radar.  Aimed where no radar of the firer's player or an ally's reaches
+		 (RadarCoverageBehavior), a shot keeps its target only RadarBlindHitChance of the time, or
+		 RadarBlindHitUpgradeChance once the player has RadarBlindHitUpgrade.  The rest come down on the
+		 ground beside the target, past its edge and the blast, so they miss.  The radars, the upgrade and
+		 the roll are all logic state and the logic stream. */
+	Bool radarMiss = FALSE;
+	if( m_radarBlindHitChance < 1.0f && !isProjectileDetonation && sourceObj &&
+			!RadarCoverageBehavior::isCovered( sourceObj->getControllingPlayer(), victimPos ) )
+	{
+		Real hitChance = m_radarBlindHitChance;
+		if( m_radarBlindHitUpgrade.isNotEmpty() &&
+				sourceObj->getControllingPlayer()->hasUpgradeComplete( TheUpgradeCenter->findUpgrade( m_radarBlindHitUpgrade ) ) )
+			hitChance = m_radarBlindHitUpgradeChance;
+		radarMiss = GameLogicRandomValueReal( 0.0f, 1.0f ) >= hitChance;
+	}
+	if( radarMiss || m_scatterRadius > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
 	{
 		// This weapon scatters, so clear the victimObj, as we are no longer shooting it directly,
 		// and find a random point within the radius to shoot at as victimPos
-		scatterRadius = m_scatterRadius + blindScatter;
+		scatterRadius = m_scatterRadius;
+		Real minScatterRadius = 0.0f;
+		if( radarMiss )
+		{
+			// clear of the target's edge and of the blast, and out to as far again
+			minScatterRadius = max( getPrimaryDamageRadius( bonus ), getSecondaryDamageRadius( bonus ) );
+			if( victimObj )
+				minScatterRadius += victimObj->getGeometryInfo().getBoundingCircleRadius();
+			scatterRadius = 2.0f * minScatterRadius;
+		}
 
 		// if it's an object, aim at the center, not the ground part (srj)
 		PathfindLayerEnum targetLayer = LAYER_GROUND;
@@ -1108,7 +1148,7 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		//victimObj = NULL; // his position is already in victimPos, if he existed
 
 		//Randomize the scatter radius (sometimes it can be more accurate than others)
-		scatterRadius = GameLogicRandomValueReal( 0, scatterRadius );
+		scatterRadius = GameLogicRandomValueReal( minScatterRadius, scatterRadius );
 		Real scatterAngleRadian = GameLogicRandomValueReal( 0, 2*PI );
 
 		Coord3D firingOffset;
@@ -1711,9 +1751,6 @@ WeaponTemplate *WeaponStore::findWeaponTemplatePrivate( NameKeyType key ) const
 	if( it != m_weaponTemplateHashMap.end() )
 		return it->second;
 
-	NameKeyType retailKey;
-	if( TheModNamespace.findRetailKey( key, MODNAME_WEAPON, &retailKey ) )
-		return findWeaponTemplatePrivate( retailKey );
 	return NULL;
 
 }
@@ -1972,8 +2009,8 @@ void WeaponStore::postProcessLoad()
 		else
 		{
 			/* The first definition stands and the block is read and dropped.  WeaponReforged.ini keeps
-				 copies of EA weapons FixesReforged.ini hands out, for a mod whose Weapon.ini leaves them out
-				 (Contra has no Demo_DestroyedWeapon); where the loaded data has the weapon, its own wins.
+				 copies of EA weapons FixesReforged.ini hands out; where the loaded data has the weapon, its
+				 own wins.
 				 This used to return mid-block, and the next field line stopped the load as an unknown block.
 				 A map.ini block lands here too, as it did in retail: EA parsed it into a copy nothing pointed
 				 at, and the campaign was tuned with those edits lost.  Applying them gave Generals USA04's
@@ -1988,7 +2025,7 @@ void WeaponStore::postProcessLoad()
 	}
 	else if (ini->getLoadType() == INI_LOAD_MULTIFILE)
 	{
-		// A mod's Weapon.ini without this weapon: the block is read into a scratch template and
+		// A Weapon.ini without this weapon: the block is read into a scratch template and
 		// dropped, as ThingFactory::parseObjectDefinition does for a missing object.
 		DEBUG_LOG(("[LINE: %d in '%s'] Weapon '%s' is patched but was never defined; the block is skipped.\n", ini->getLineNum(), ini->getFilename().str(), c));
 		WeaponTemplate *scratch = newInstance(WeaponTemplate);
@@ -3048,7 +3085,7 @@ Bool Weapon::privateFireWeapon(
 			// go through other weapons in weapon set
 			// set their m_whenWeCanFireAgain to this guy's delay
 			// set their m_status to this guy's status
-			// Only a weapon of the set itself: a FireWeaponUpdate gun is not one, and ShockWave's EMP Patriot
+			// Only a weapon of the set itself: a FireWeaponUpdate gun is not one, and a Patriot's
 			// emitter firing every 750 ms held the battery's missiles in their wait for good.
 
 			if ( sourceObj->isReloadTimeShared() && sourceObj->getWeaponInWeaponSlot( m_wslot ) == this )

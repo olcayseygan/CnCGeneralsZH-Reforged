@@ -84,7 +84,7 @@ UnsignedInt GetDefaultRandomPool( void );
 /// the templates a Random pick draws from in this game; a pool the old-factions rule empties draws as plain Random
 void GetRandomDraw( Int pick, Bool oldFactionsOnly, std::vector<Int> &draw );
 /// a pick as a preferences file keeps it, a Random pool by its armies' template names: the pool's bits
-/// count candidates, and a mod loaded or dropped since the file was written renumbers them
+/// count candidates, and a faction added or dropped since the file was written renumbers them
 AsciiString PlayerTemplatePreference( Int pick );
 Int PlayerTemplateFromPreference( const AsciiString &text );
 /// a pick as the slot string carries it: a Random pool as its mask in hex, the room's budget being 400 bytes

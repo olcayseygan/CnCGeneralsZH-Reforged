@@ -3554,7 +3554,10 @@ StateReturnType AIMoveAndEvacuateState::onEnter()
 {
 	Object *obj = getMachineOwner();
 
-	getMachine()->lock("AIMoveAndEvacuateState::onEnter");		// This state is not user interruptable.
+	// A script's or the AI's drop is not user interruptable.  A player's is: a transport sent to
+	// unload across the map takes a new order on the way, as a move would.
+	if( obj->getAI()->getLastCommandSource() != CMD_FROM_PLAYER )
+		getMachine()->lock("AIMoveAndEvacuateState::onEnter");
 
 	m_origin = *obj->getPosition();
 	setAdjustsDestination(true);
@@ -4110,13 +4113,17 @@ StateReturnType AIAttackMoveToState::update()
 		else
 		{
 			//
-			// Something is shooting us while we are busy with somebody else: turn on it instead.
+			// Something is shooting us while we are busy with somebody else: turn on it instead,
+			// unless the one we are on is in reach and nearly dead (see aiTargetTier).
 			// On our own scan clock, so a fight cannot be restarted every frame by splash damage.
 			//
 			UnsignedInt now = TheGameLogic->getFrame();
 			if (now >= m_frameToScanOn)
 			{
 				Object *shooter = findRetaliationTarget();
+				Object *victim = TheGameLogic->findObjectByID(m_victimID);
+				if (shooter && victim && TheAI->prefersTarget(owner, victim, shooter))
+					shooter = NULL;
 				if (shooter)
 				{
 					stopEngaging();
@@ -4182,11 +4189,15 @@ StateReturnType AIAttackMoveToState::update()
 			// While the approach is suspended the search is narrowed to what is already in range, so a
 			// distant high-threat target cannot crowd out the enemy standing next to us - and an empty
 			// clip means there is nothing worth stopping for at all (see canHitFromHere).
-			if (nextObjectToAttack == NULL && (mayApproach || !owner->isOutOfAmmo()))
+			// ... unless the scan finds something in reach it kills in seconds (see aiTargetTier), which
+			// is all that can beat the shooter, so with one the scan looks no further than the weapon reaches
+			if (mayApproach || !owner->isOutOfAmmo())
 			{
-				nextObjectToAttack = ai->getNextMoodTarget( true, false, true, !mayApproach );
-				if (nextObjectToAttack != NULL && !mayApproach && nextObjectToAttack->getID() == m_victimID)
-					nextObjectToAttack = NULL;		// the one we just failed on
+				Object *scanned = ai->getNextMoodTarget( true, false, true, !mayApproach || nextObjectToAttack != NULL );
+				if (scanned != NULL && !mayApproach && scanned->getID() == m_victimID)
+					scanned = NULL;		// the one we just failed on
+				if (scanned != NULL && (nextObjectToAttack == NULL || TheAI->prefersTarget(owner, scanned, nextObjectToAttack)))
+					nextObjectToAttack = scanned;
 			}
 
 			if (nextObjectToAttack != NULL)
@@ -5610,7 +5621,9 @@ Bool AIAttackAim_needsRunOut( Real relX, Real relY, Real turnRadius, Real cosAim
  * not bring it into the aim cone before it is inside the weapon's minimum range: beside the cockpit, or
  * just behind.  Turning in from there only ever ends with the target under the plane, so the jet holds its
  * heading instead until the target is the minimum range and a full turn circle away, then comes back round
- * with that much straight run left to fire in.  Aircraft against aircraft keep the straight chase.
+ * with that much straight run left to fire in.  A jet coming in on the target fires from its reach and
+ * turns away at the break-off distance rather than flying on over it.  Aircraft against aircraft keep
+ * the straight chase.
  */
 Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const Weapon *weapon, const Coord3D &targetPos,
 																												Real relAngle, Real aimDelta )
@@ -5640,19 +5653,62 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 		minRange += victim->getGeometryInfo().getBoundingSphereRadius();
 	const Real runOutDist = minRange + 2.0f*turnRadius + entryDist;
 
-	if (m_isRunningOut)
-		m_isRunningOut = dx*dx + dy*dy < sqr(runOutDist);
+	// Breaking off: a jet that flew on at its target after firing went over it and only came round on the
+	// far side. It turns away instead once it is close enough that a turn begun now (after the roll-in)
+	// still passes the target at the clearance, the larger of the minimum range and the turn radius:
+	// a circle of radius R begun at distance d from a point dead ahead passes it at sqrt(d*d + R*R) - R.
+	// The shots fly between the weapon's reach and that distance. A weapon whose reach is shorter than
+	// it has to fly in closer to fire at all, so it keeps the straight run. Only a jet with the target in
+	// its aim cone breaks off, the frame it can fire: one still turning in (a Stealth Fighter that came
+	// back round on a Scorpion 120 off its wing) broke off before the cone every pass and never fired.
+	// A clip already started is finished first, as EA's jets did: a break-off between two rounds turned
+	// the nose out of the cone before the next, and a Stealth Fighter lining up late on a moving Scorpion
+	// put one missile of two out a pass. An unlimited clip still breaks off by distance.
+	const Bool clipSpent = weapon->getClipSize() == 0 || weapon->getRemainingAmmo() == 0;
+	const Real distSqr = dx*dx + dy*dy;
+	const Real along = dx*dir->x + dy*dir->y;
+	const Real clearance = max(minRange, turnRadius);
+	const Real breakOffDist = entryDist + sqrt(clearance*clearance + 2.0f*clearance*turnRadius);
+	Real reach = weapon->getAttackRange(source) + source->getGeometryInfo().getBoundingSphereRadius();
+	if (victim)
+		reach += victim->getGeometryInfo().getBoundingSphereRadius();
+	const Bool breaksOff = !m_isRunningOut && clipSpent && fabs(relAngle) < aimDelta && breakOffDist < reach &&
+												 distSqr < sqr(breakOffDist);
+
+	if (breaksOff)
+		m_isRunningOut = TRUE;
+	else if (m_isRunningOut)
+		m_isRunningOut = distSqr < sqr(runOutDist);
 	else if (fabs(relAngle) >= aimDelta)
-		m_isRunningOut = AIAttackAim_needsRunOut(dx*dir->x + dy*dir->y - entryDist, dir->x*dy - dir->y*dx, turnRadius,
+		m_isRunningOut = AIAttackAim_needsRunOut(along - entryDist, dir->x*dy - dir->y*dx, turnRadius,
 																						 Cos(aimDelta), minRange);
+
+	// -scenario only: the run, frame by frame, which jetbreak.txt reads
+	if (!TheGlobalData->m_scenarioFile.isEmpty())
+	{
+		DEBUG_LOG(("SCENARIO JET RUN: frame %d '%s' %d dist %.0f reach %.0f breakoff %.0f turn %.0f%s%s\n",
+			TheGameLogic->getFrame(), source->getTemplate()->getName().str(), source->getID(), sqrt(distSqr), reach,
+			breakOffDist, turnRadius, m_isRunningOut ? " running out" : "", breaksOff ? " BREAK OFF" : ""));
+	}
 
 	if (!m_isRunningOut)
 		return targetPos;
 
-	Coord3D ahead = *pos;
-	ahead.x += dir->x * runOutDist;
-	ahead.y += dir->y * runOutDist;
-	return ahead;
+	// still facing the target: turn away from it, to the side it is not on; once it is behind, hold the
+	// heading until there is room to come back round
+	Coord3D goal = *pos;
+	const Real dist = sqrt(distSqr);
+	if (along > 0.0f && dist > 0.0f)
+	{
+		goal.x -= dx / dist * runOutDist;
+		goal.y -= dy / dist * runOutDist;
+	}
+	else
+	{
+		goal.x += dir->x * runOutDist;
+		goal.y += dir->y * runOutDist;
+	}
+	return goal;
 }
 
 //----------------------------------------------------------------------------------------------------------

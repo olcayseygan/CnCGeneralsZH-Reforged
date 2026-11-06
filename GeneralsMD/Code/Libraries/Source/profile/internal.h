@@ -49,7 +49,7 @@ class ProfileFastCS
   ProfileFastCS(const ProfileFastCS&);
   ProfileFastCS& operator=(const ProfileFastCS&);
 
-	std::atomic_flag m_Flag;
+	std::atomic_flag m_Flag = ATOMIC_FLAG_INIT;
 
 	/* The third copy of WWLib's "lock bts" spin (B14 did all three in one commit; the other two
 	   are WWLib/mutex.h and WWDebug/wwmemlog.cpp).  std::atomic_flag now, for the same reasons
@@ -74,8 +74,7 @@ class ProfileFastCS
 	}
 
 public:
-	ProfileFastCS(void):
-    m_Flag ATOMIC_FLAG_INIT
+	ProfileFastCS(void)
   {
   }
 

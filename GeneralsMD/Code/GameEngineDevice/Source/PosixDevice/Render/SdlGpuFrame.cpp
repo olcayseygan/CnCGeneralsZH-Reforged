@@ -22,6 +22,7 @@
 #include "SdlGpuDepthFormat.h"
 #include "sdl3shadercompile.h"
 #include "Platform/WaterFftSpectrum.h"
+#include "Platform/WaterPerformanceSettings.h"
 
 #include <SDL3/SDL.h>
 
@@ -296,6 +297,7 @@ void SdlGpuFrame::Release_Targets()
 // window dimensions: resizing scene targets keeps both its seed and paused frame unchanged.
 struct SdlGpuFrame::OceanResources
 {
+	WaterFftSpectrum::Configuration Configuration = WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution);
 	SDL_GPUTexture *Initial[3]={}, *Ping[2][6]={}, *Maps[6]={}, *Butterfly=NULL;
 	SDL_GPUShader *Vertex=NULL, *Pixels[4]={};
 	SDL_GPUGraphicsPipeline *Pipelines[4]={};
@@ -318,7 +320,7 @@ struct SdlGpuFrame::OceanResources
 		SDL_GPUTextureSamplerBinding bindings[7]={};
 		for(unsigned i=0;i<count;++i) {bindings[i].texture=source[i];bindings[i].sampler=Point;}
 		SDL_BindGPUFragmentSamplers(pass,0,bindings,count);
-		const unsigned side=which==3?WaterFftSpectrum::Resolution>>unsigned(parameters[2]):WaterFftSpectrum::Resolution;
+		const unsigned side=which==3?Configuration.resolution>>unsigned(parameters[2]):Configuration.resolution;
 		const SDL_GPUViewport viewport={0,0,float(side),float(side),0,1};
 		SDL_SetGPUViewport(pass,&viewport);
 		SDL_PushGPUFragmentUniformData(commands,0,parameters,8*sizeof(float));
@@ -365,13 +367,16 @@ bool SdlGpuFrame::Fail_Ocean(const char *reason)
 	OceanFailed=true;Release_Ocean();return false;
 }
 
-bool SdlGpuFrame::Create_Ocean()
+bool SdlGpuFrame::Create_Ocean(WaterFftSpectrum::Configuration configuration)
 {
 	using namespace WaterFftSpectrum;
+	if (FailNextOceanRebuild) { FailNextOceanRebuild = false; return Fail_Ocean("injected rebuild failure"); }
+	const unsigned Resolution = configuration.resolution, Phases = configuration.phases;
 	const SDL_GPUTextureUsageFlags usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET|SDL_GPU_TEXTUREUSAGE_SAMPLER;
 	if(!SDL_GPUTextureSupportsFormat(GpuDevice,SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT,SDL_GPU_TEXTURETYPE_2D,usage))
 		return Fail_Ocean("RGBA32F colour-target/sampler usage unsupported");
 	Ocean=new OceanResources;
+	Ocean->Configuration = configuration;
 	SDL_GPUTextureCreateInfo texture={};texture.type=SDL_GPU_TEXTURETYPE_2D;
 	texture.format=SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;texture.usage=usage;
 	texture.width=texture.height=Resolution;texture.layer_count_or_depth=texture.num_levels=1;
@@ -395,7 +400,7 @@ bool SdlGpuFrame::Create_Ocean()
 	std::vector<unsigned char> spirv;std::string error;
 	if(!SDL3_Compile_HLSL_To_SPIRV(VertexHlsl(),true,spirv,error) ||
 		!(Ocean->Vertex=SDL3_Create_Shader(GpuDevice,spirv,true,error))) return Fail_Ocean(error.c_str());
-	const std::string pixels[4]={SpectrumHlsl(),ButterflyHlsl(),PostHlsl(),Ocean_Mip_Hlsl()};
+	const std::string pixels[4]={SpectrumHlsl(),ButterflyHlsl(configuration),PostHlsl(),Ocean_Mip_Hlsl()};
 	SDL_GPUColorTargetDescription targets[6]={};
 	for(auto &target:targets) target.format=texture.format;
 	for(unsigned i=0;i<4;++i) {
@@ -408,7 +413,7 @@ bool SdlGpuFrame::Create_Ocean()
 		Ocean->Pipelines[i]=SDL_CreateGPUGraphicsPipeline(GpuDevice,&pipeline);
 		if(!Ocean->Pipelines[i]) return Fail_Ocean(SDL_GetError());
 	}
-	const std::vector<float> initial=InitialSpectrum(),butterfly=Butterfly();
+	const std::vector<float> initial=InitialSpectrum(configuration),butterfly=Butterfly(configuration);
 	const Uint32 fieldBytes=Resolution*Resolution*4*sizeof(float),butterflyBytes=Phases*Resolution*4*sizeof(float);
 	SDL_GPUTransferBufferCreateInfo transferInfo={};transferInfo.usage=SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
 	transferInfo.size=fieldBytes*3+butterflyBytes;
@@ -436,17 +441,47 @@ bool SdlGpuFrame::Create_Ocean()
 	return true;
 }
 
-bool SdlGpuFrame::Prepare_Ocean(float time)
+bool SdlGpuFrame::Prepare_Ocean(float time, unsigned resolution)
 {
-	if(!std::isfinite(time) || OceanFailed) return false;
-	if(OceanReady && time==OceanTime) return true;
-	// Do not mutate a field referenced by draws still sitting in the CPU batch. Ordering submissions
-	// is sufficient; waiting or reading the texture back would unnecessarily serialize every frame.
-	if((!Commands.empty() || !Uploads.empty()) && !Flush()) return Fail_Ocean("could not submit preceding draws");
-	if(!Ocean && !Create_Ocean()) return false;
+	if (!std::isfinite(time)) return false;
+	const auto requested = WaterFftSpectrum::ForResolution(resolution);
+	if (OceanRequestedResolution != requested.resolution) {
+		OceanFailedResolution = 0;
+		OceanRequestedResolution = requested.resolution;
+	}
+	const bool boundary = OceanPrepareFrame != WaterFrame;
+	OceanPrepareFrame = WaterFrame;
+	const bool rebuild = !Ocean || (boundary && Ocean->Configuration.resolution != requested.resolution
+		&& OceanFailedResolution != requested.resolution);
+	if (OceanFailed && !Ocean && OceanFailedResolution == requested.resolution) return false;
+	if (!rebuild && OceanReady && time == OceanTime) return true;
+	// Submit older readers before replacing resources. Keep a working field on allocation failure.
+	if ((!Commands.empty() || !Uploads.empty()) && !Flush()) return false;
+	OceanResources *previous = rebuild ? Ocean : NULL;
+	const bool previousReady = OceanReady;
+	const float previousTime = OceanTime;
+	if (rebuild) { Ocean = NULL; OceanReady = false; OceanFailed = false; }
+	auto failure = [&](const char *reason) {
+		Fail_Ocean(reason);
+		OceanFailedResolution = requested.resolution;
+		if (previous) {
+			Ocean = previous; OceanReady = previousReady; OceanTime = previousTime; OceanFailed = false;
+			return OceanReady;
+		}
+		return false;
+	};
+	if (rebuild && !Create_Ocean(requested)) {
+		OceanFailedResolution = requested.resolution;
+		if (previous) {
+			Ocean = previous; OceanReady = previousReady; OceanTime = previousTime; OceanFailed = false;
+			return OceanReady;
+		}
+		return false;
+	}
+	const unsigned Resolution = Ocean->Configuration.resolution, Phases = Ocean->Configuration.phases;
 	const Uint64 started=SDL_GetTicksNS();
 	SDL_GPUCommandBuffer *commands=SDL_AcquireGPUCommandBuffer(GpuDevice);
-	if(!commands) return Fail_Ocean(SDL_GetError());
+	if(!commands) return failure(SDL_GetError());
 	using namespace WaterFftSpectrum;
 	float parameters[8]={float(Resolution),time,0,0,Sizes[0],Sizes[1],Sizes[2],0};
 	bool ok=Ocean->Pass(commands,0,Ocean->Ping[0],Ocean->Initial,3,parameters);
@@ -470,11 +505,20 @@ bool SdlGpuFrame::Prepare_Ocean(float time)
 		}
 		SDL_EndGPUCopyPass(copy);
 	}
-	if(!ok) {SDL_CancelGPUCommandBuffer(commands);return Fail_Ocean("could not record independent FFT passes");}
+	if(!ok) {SDL_CancelGPUCommandBuffer(commands);return failure("could not record independent FFT passes");}
 	ok=SerializeSubmits?Submit(commands):Submit_Flush(commands);
 	FlushMs+=double(SDL_GetTicksNS()-started)/1.0e6;++Flushes;++FlushesTotal;
-	if(!ok) return Fail_Ocean(SDL_GetError());
+	if(!ok) return failure(SDL_GetError());
+	if (previous) {
+		OceanResources *replacement = Ocean; Ocean = previous; Release_Ocean(); Ocean = replacement;
+	}
+	if (rebuild) OceanFailedResolution = 0;
 	OceanTime=time;OceanReady=true;++OceanUpdates;return true;
+}
+
+WaterFftSpectrum::Configuration SdlGpuFrame::Ocean_Configuration() const
+{
+	return Ocean ? Ocean->Configuration : WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution);
 }
 
 SDL_GPUTexture *SdlGpuFrame::Ocean_Map(unsigned int index) const
@@ -492,7 +536,7 @@ void SdlGpuFrame::Invalidate_Water_Snapshots(SDL_GPUTexture *colour, SDL_GPUText
 	for (size_t i = 0; i < WaterSnapshots.size(); ++i) {
 		WaterSnapshot &snapshot = WaterSnapshots[i];
 		if ((colour && snapshot.Source.Colour == colour) || (depth && snapshot.Source.Depth == depth)) {
-			snapshot.Ready = false;
+			snapshot.ColourReady = snapshot.DepthReady = snapshot.Frozen = false;
 		}
 	}
 }
@@ -500,10 +544,10 @@ void SdlGpuFrame::Invalidate_Water_Snapshots(SDL_GPUTexture *colour, SDL_GPUText
 void SdlGpuFrame::Refresh_Water_Snapshots()
 {
 	++WaterFrame;
-	for (size_t i = 0; i < WaterSnapshots.size(); ++i) WaterSnapshots[i].Ready = false;
+	for (size_t i = 0; i < WaterSnapshots.size(); ++i) WaterSnapshots[i].ColourReady = WaterSnapshots[i].DepthReady = WaterSnapshots[i].Frozen = false;
 }
 
-SdlGpuFrame::WaterSnapshot *SdlGpuFrame::Water_Snapshot(const SdlTarget &source)
+SdlGpuFrame::WaterSnapshot *SdlGpuFrame::Water_Snapshot(const SdlTarget &source, bool colour, bool depth)
 {
 	if (source.Width == 0 || source.Height == 0 || !source.Colour) return NULL;
 	WaterSnapshot *snapshot = NULL;
@@ -518,20 +562,6 @@ SdlGpuFrame::WaterSnapshot *SdlGpuFrame::Water_Snapshot(const SdlTarget &source)
 	if (!snapshot) {
 		WaterSnapshot fresh = {};
 		fresh.Source = source;
-		SDL_GPUTextureCreateInfo info;
-		SDL_zero(info);
-		info.type = SDL_GPU_TEXTURETYPE_2D;
-		info.format = BACK_BUFFER_FORMAT;
-		info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
-		info.width = source.Width; info.height = source.Height;
-		info.layer_count_or_depth = 1; info.num_levels = 1;
-		info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-		fresh.Colour = SDL_CreateGPUTexture(GpuDevice, &info);
-		if (!fresh.Colour) return NULL;
-		if (source.Depth && DepthSampleable && Create_Scene_Depth_Pipeline()) {
-			info.format = SDL_GPU_TEXTUREFORMAT_R32_FLOAT;
-			fresh.Depth = SDL_CreateGPUTexture(GpuDevice, &info);
-		}
 		if (WaterSnapshots.size() == 8) {
 			// The cache is bounded even when effects continually allocate intermediate targets. Recorded
 			// draws can keep using the retired textures until this batch has been submitted.
@@ -548,41 +578,62 @@ SdlGpuFrame::WaterSnapshot *SdlGpuFrame::Water_Snapshot(const SdlTarget &source)
 			snapshot = &WaterSnapshots.back();
 		}
 	}
-	if (!snapshot->Ready) {
-		const int32_t rectangle[4] = { 0, 0, (int32_t)source.Width, (int32_t)source.Height };
-		Record_Blit(source.Colour, rectangle, snapshot->Colour, rectangle, false);
-		if (snapshot->Depth) {
-			Command command = {};
-			command.IsDepthSnapshot = true;
-			command.BlitSource = source.Depth;
-			command.BlitDestination = snapshot->Depth;
-			memcpy(command.Rect, rectangle, sizeof(rectangle));
-			Commands.push_back(command);
+	// A demand declaration freezes both channels at one pre-water point. Missing channels
+	// cannot be filled later from a source that may already contain water.
+	if (!snapshot->Frozen) {
+		SDL_GPUTextureCreateInfo info={};info.type=SDL_GPU_TEXTURETYPE_2D;
+		info.format=BACK_BUFFER_FORMAT;info.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET|SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		info.width=source.Width;info.height=source.Height;info.layer_count_or_depth=info.num_levels=1;
+		if(colour && !snapshot->Colour) snapshot->Colour=SDL_CreateGPUTexture(GpuDevice,&info);
+		if(depth && !snapshot->Depth && source.Depth && DepthSampleable && Create_Scene_Depth_Pipeline()) {
+			info.format=SDL_GPU_TEXTUREFORMAT_R32_FLOAT;snapshot->Depth=SDL_CreateGPUTexture(GpuDevice,&info);
 		}
-		snapshot->CaptureSerial = ++WaterCaptureSerial;
-		snapshot->Ready = true;
+		{
+			const int32_t rectangle[4]={0,0,(int32_t)source.Width,(int32_t)source.Height};
+			if(colour && snapshot->Colour) {
+				Record_Blit(source.Colour,rectangle,snapshot->Colour,rectangle,false);
+				snapshot->ColourReady=true;++WaterColourCaptures;
+			}
+			if(depth && snapshot->Depth) {
+				Command command={};command.IsDepthSnapshot=true;command.BlitSource=source.Depth;
+				command.BlitDestination=snapshot->Depth;memcpy(command.Rect,rectangle,sizeof(rectangle));
+				Commands.push_back(command);snapshot->DepthReady=true;++WaterDepthCaptures;
+			}
+			snapshot->CaptureSerial=++WaterCaptureSerial;snapshot->Frozen=true;
+		}
 	}
 	snapshot->UsedFrame = WaterFrame;
 	return snapshot;
 }
 
+void SdlGpuFrame::Prepare_Water_Snapshot(const SdlTarget &source, bool colour, bool depth)
+{
+	Water_Snapshot(source,colour,depth);
+}
+
 SDL_GPUTexture *SdlGpuFrame::Water_Background(const SdlTarget &source)
 {
-	WaterSnapshot *snapshot = Water_Snapshot(source);
-	return snapshot ? snapshot->Colour : NULL;
+	WaterSnapshot *snapshot = Water_Snapshot(source,true,true);
+	return snapshot && snapshot->ColourReady ? snapshot->Colour : NULL;
+}
+
+SDL_GPUTexture *SdlGpuFrame::Water_Depth(const SdlTarget &source)
+{
+	WaterSnapshot *snapshot = Water_Snapshot(source,true,true);
+	return snapshot && snapshot->DepthReady ? snapshot->Depth : NULL;
 }
 
 SDL_GPUTexture *SdlGpuFrame::Scene_Depth(const SdlTarget &source)
 {
-	WaterSnapshot *snapshot = Water_Snapshot(source);
-	return snapshot ? snapshot->Depth : NULL;
+	Prepare_Water_Snapshot(source,WaterPerformanceSettings::Applied().sceneColourRequired,true);
+	return Water_Depth(source);
 }
 
 SDL_GPUTexture *SdlGpuFrame::Ready_Scene_Depth(const SdlTarget &source, uint64_t &serial) const
 {
 	serial = 0;
 	for (const WaterSnapshot &snapshot : WaterSnapshots) {
-		if (snapshot.Ready && snapshot.Depth && snapshot.Source.Colour == source.Colour
+		if (snapshot.DepthReady && snapshot.Depth && snapshot.Source.Colour == source.Colour
 			&& snapshot.Source.Depth == source.Depth && snapshot.Source.Width == source.Width
 			&& snapshot.Source.Height == source.Height) {
 			serial = snapshot.CaptureSerial;

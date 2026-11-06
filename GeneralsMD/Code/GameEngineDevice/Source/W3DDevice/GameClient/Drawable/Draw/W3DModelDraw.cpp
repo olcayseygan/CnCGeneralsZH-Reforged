@@ -1071,6 +1071,7 @@ W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	m_animationsRequirePower(true),
 	m_stabilizedTurretPitch(false),
 	m_barrelArtPitch(0.0f),
+	m_landingGearUpHeight(0.0f),
 #ifdef CACHE_ATTACH_BONE
 	m_attachToDrawableBoneOffsetValid(false),
 #endif
@@ -1268,6 +1269,8 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "AnimationsRequirePower",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_animationsRequirePower) },
 		{ "StabilizedTurretPitch",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_stabilizedTurretPitch) },
 		{ "BarrelArtPitch",	INI::parseAngleReal, NULL, offsetof(W3DModelDrawModuleData, m_barrelArtPitch) },
+		{ "LandingGearSubObject",	INI::parseAsciiString, NULL, offsetof(W3DModelDrawModuleData, m_landingGearSubObject) },
+		{ "LandingGearUpHeight",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_landingGearUpHeight) },
 		{ "ParticlesAttachedToAnimatedBones",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_particlesAttachedToAnimatedBones) },
 		{ "MinLODRequired",		INI::parseStaticGameLODLevel,	NULL,	offsetof(W3DModelDrawModuleData, m_minLODRequired) },
 		{ "ProjectileBoneFeedbackEnabledSlots", INI::parseBitString32, TheWeaponSlotTypeNames, offsetof(W3DModelDrawModuleData, m_projectileBoneFeedbackEnabledSlots) },
@@ -2350,12 +2353,6 @@ void W3DModelDraw::adjustAnimSpeedToMovementSpeed()
 }
 
 //-------------------------------------------------------------------------------------------------
-Real W3DModelDraw::getHullHeadingLag() const
-{
-	return getDrawable()->getDrawnHeadingLag();
-}
-
-//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 {
 	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
@@ -2473,6 +2470,28 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
                                           // IT REPOSITIONS PARTICLESYSTEMS TO TSTAY IN SYNC WITH ANIMATED BONES
 
   handleClientRecoil();
+
+	// A jet's wheels are down while it is off air locomotion (parked or taxiing: a state without
+	// JETEXHAUST), and on air locomotion while it is less than LandingGearUpHeight over the ground.
+	// JETEXHAUST alone cannot say so: the logic sets it as the takeoff roll starts and keeps it through the
+	// landing rollout.  This runs inside the logic thread's window, so it reads only what the sync point
+	// fixed: the state this module last applied, the drawable's position taken for the draw, and the drawn
+	// terrain, never the object, whose altitude cache the tick is rewriting.  A model without the
+	// sub-object (the falling jet) has no gear to show.
+	if (modData->m_landingGearSubObject.isNotEmpty() && m_renderObject && m_curState)
+	{
+		RenderObjClass* gear = m_renderObject->Get_Sub_Object_By_Name(modData->m_landingGearSubObject.str());
+		if (gear)
+		{
+			Bool airLoco = FALSE;
+			for (size_t i = 0; i < m_curState->m_conditionsYesVec.size(); ++i)
+				airLoco = airLoco || m_curState->m_conditionsYesVec[i].test(MODELCONDITION_JETEXHAUST);
+			const Coord3D* pos = getDrawable()->getPositionForDraw();
+			gear->Set_Hidden(airLoco &&
+				pos->z - TheTerrainRenderObject->getHeightMapHeight(pos->x, pos->y, NULL) > modData->m_landingGearUpHeight);
+			gear->Release_Ref();
+		}
+	}
 
 	// A vehicle on a night map lights what is in front of it (lightHeadlights).  Drawable::draw has
 	// already returned for anything hidden, stealthed or under the shroud, so an enemy's lamps never
@@ -2927,9 +2946,8 @@ void W3DModelDraw::handleClientTurretPositioning()
 			if (obj)
 			{
 				const AIUpdateInterface* ai = obj->getAIUpdateInterface();
-				// a turret aims from the logic heading, which the drawn hull of a tank or car trails
-				if (ai && ai->getTurretRotAndPitch((WhichTurretType)tslot, &turretAngle, &turretPitch))
-					turretAngle -= getHullHeadingLag();
+				if (ai)
+					ai->getTurretRotAndPitch((WhichTurretType)tslot, &turretAngle, &turretPitch);
 			}
 
 			// do turret, if any

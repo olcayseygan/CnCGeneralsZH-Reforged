@@ -1600,20 +1600,14 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 //			AIGroup *group = TheAI->findGroup( *selectedGroupID );
 			if( currentlySelectedGroup )
 			{
-				//Coord3D pos;
-				//Bool hasArgs = FALSE;
-				//hasArgs = (msg->getArgumentCount() > 0);
-
-				//if (hasArgs)
-				//	pos = msg->getArgument(0)->location;
-
 				currentlySelectedGroup->releaseWeaponLockForGroup(LOCKED_TEMPORARILY);	// release any temporary locks.
 
-				// evacuate message is for the selected group
-				//if (hasArgs)
-				//	currentlySelectedGroup->groupMoveToAndEvacuate( &pos, CMD_FROM_PLAYER );
-				//else
-				currentlySelectedGroup->groupEvacuate( CMD_FROM_PLAYER );
+				// evacuate message is for the selected group.  A location is where a vehicle transport's
+				// Evacuate was pointed: those drive or fly there and unload, the rest empty where they stand
+				const Bool hasSpot = msg->getArgumentCount() > 0
+					&& msg->getArgumentDataType( 0 ) == ARGUMENTDATATYPE_LOCATION;
+				const Coord3D *at = hasSpot ? &msg->getArgument( 0 )->location : NULL;
+				currentlySelectedGroup->groupEvacuate( CMD_FROM_PLAYER, at );
 
 // no, this is bad, don't do here, do when POSTING message
 //			pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_EVACUATE );

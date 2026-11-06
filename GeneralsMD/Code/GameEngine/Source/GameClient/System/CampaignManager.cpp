@@ -466,7 +466,7 @@ void CampaignManager::xfer( Xfer *xfer )
 	if( xfer->getXferMode() == XFER_LOAD )
 	{
 		setCampaignAndMission( currentCampaign, currentMission );
-		// a save from other data (a mod's, or one since changed) names a campaign or a mission this
+		// a save from other data (one since changed) names a campaign or a mission this
 		// Campaign.ini lacks; the load fails with the error box instead of a mission that is not there
 		if( currentCampaign.isNotEmpty() && ( m_currentCampaign == NULL || ( currentMission.isNotEmpty() && m_currentMission == NULL ) ) )
 		{

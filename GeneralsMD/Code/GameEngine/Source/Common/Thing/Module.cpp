@@ -250,7 +250,7 @@ void UpgradeMuxData::performUpgradeFX(Object* obj) const
 //-------------------------------------------------------------------------------------------------
 /** The upgrade a TriggeredBy, ConflictsWith or RemovesUpgrades line names, or NULL when there is no
 	* such upgrade.  EA threw INI_INVALID_DATA here, lazily, on the first object of the template, so a
-	* mod naming an upgrade it never defines killed the map load with nothing in the crash report
+	* data naming an upgrade it never defines killed the map load with nothing in the crash report
 	* (reports 1893-1899).  The name is said in the log and skipped instead, and looked up again the
 	* next time: a map.ini can define the upgrade for one match, so a miss is never kept in the shared
 	* module data, or a machine that played a match without that map would go on without the upgrade

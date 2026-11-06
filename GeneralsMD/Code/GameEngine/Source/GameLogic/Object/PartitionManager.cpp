@@ -72,6 +72,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CollideModule.h"
 #include "GameLogic/Module/ContainModule.h"
+#include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/AI.h"					// aiIsIncomeNotATarget - a derrick is money, not a target
@@ -84,6 +85,7 @@
 #include "GameClient/ControlBar.h"
 #include "GameClient/ObserverCamera.h"
 
+#include <algorithm>
 #include <float.h>
 
 /* A hint that a cache line is about to be read. It reads nothing the program sees and decides
@@ -3920,15 +3922,16 @@ SimpleObjectIterator *PartitionManager::iterateObjectsInRange(
 	const Coord3D *pos, 
 	Real maxDist, 
 	DistanceCalculationType dc, 
-	PartitionFilter **filters, 
-	IterOrderType order
+	PartitionFilter **filters,
+	IterOrderType order,
+	PlayerMaskType onlyPlayers
 )
 {
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
 	iterHolder.hold(iter);
 
-	getClosestObjects(NULL, pos, maxDist, dc, filters, iter, NULL, NULL);
+	getClosestObjects(NULL, pos, maxDist, dc, filters, iter, NULL, NULL, onlyPlayers);
 
 	iter->sort(order);
 	iterHolder.release();
@@ -4319,7 +4322,7 @@ void PartitionManager::processPendingUndoShroudRevealQueue( Bool considerTimesta
 			undoShroudReveal( thisInfo->m_where.x, thisInfo->m_where.y, thisInfo->m_howFar, thisInfo->m_forWhom );
 
 		thisInfo->deleteInstance();
-		m_pendingUndoShroudReveals.pop();
+		m_pendingUndoShroudReveals.pop_front();
 	}
 }
 
@@ -4340,7 +4343,7 @@ void PartitionManager::resetPendingUndoShroudRevealQueue()
 	{
 		SightingInfo *thisInfo = m_pendingUndoShroudReveals.front();
 		thisInfo->deleteInstance();
-		m_pendingUndoShroudReveals.pop();
+		m_pendingUndoShroudReveals.pop_front();
 	}
 }
 
@@ -4367,6 +4370,21 @@ void PartitionManager::undoShroudReveal(Real centerX, Real centerY, Real radius,
 }
 	
 //-----------------------------------------------------------------------------
+static Bool undoFrameBefore( UnsignedInt frame, const SightingInfo *info )
+{
+	return frame < info->m_data;
+}
+
+//-----------------------------------------------------------------------------
+/** The queue is drained from the front while the front is due, so it has to stay sorted by undo
+	frame: an unlook and a timed reveal wait different times. An entry goes behind every one due on
+	the same frame, so the order is the same on every machine. */
+static void insertByUndoFrame( std::deque<SightingInfo *> &pending, SightingInfo *info )
+{
+	pending.insert( std::upper_bound( pending.begin(), pending.end(), info->m_data, undoFrameBefore ), info );
+}
+
+//-----------------------------------------------------------------------------
 void PartitionManager::queueUndoShroudReveal( SightingInfo *sighting )
 {
 	UnsignedInt now = TheGameLogic->getFrame();
@@ -4378,7 +4396,21 @@ void PartitionManager::queueUndoShroudReveal( SightingInfo *sighting )
 	newInfo->m_revealedCells.swap( sighting->m_revealedCells );
 	newInfo->m_data = now + TheGlobalData->m_unlookPersistDuration;
 
-	m_pendingUndoShroudReveals.push(newInfo);
+	insertByUndoFrame( m_pendingUndoShroudReveals, newInfo );
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager::doTimedShroudReveal( const Coord3D *center, Real radius, PlayerMaskType playerMask, UnsignedInt frames )
+{
+	doShroudReveal( center->x, center->y, radius, playerMask );
+
+	SightingInfo *newInfo = newInstance(SightingInfo);
+	newInfo->m_where = *center;
+	newInfo->m_howFar = radius;
+	newInfo->m_forWhom = playerMask;
+	newInfo->m_data = TheGameLogic->getFrame() + frames;
+
+	insertByUndoFrame( m_pendingUndoShroudReveals, newInfo );
 }
 
 //-----------------------------------------------------------------------------
@@ -4495,6 +4527,31 @@ UnsignedByte PartitionManager_sightCellFlags( Bool groundRevealed, Int offsetX, 
 	if( offsetX * offsetX + offsetY * offsetY <= flatCellRadius * ( flatCellRadius + 1 ) )
 		flags |= SIGHT_CELL_AIR;
 	return flags;
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager_closeSightGaps( UnsignedByte *revealedCells, Int side )
+{
+	static std::vector<UnsignedByte> before;
+	before.assign( revealedCells, revealedCells + side * side );
+
+	for( Int y = 1; y < side - 1; ++y )
+	{
+		for( Int x = 1; x < side - 1; ++x )
+		{
+			if( before[ y * side + x ] & SIGHT_CELL_GROUND )
+				continue;
+
+			Int seen = 0;
+			for( Int neighbourY = y - 1; neighbourY <= y + 1; ++neighbourY )
+				for( Int neighbourX = x - 1; neighbourX <= x + 1; ++neighbourX )
+					if( before[ neighbourY * side + neighbourX ] & SIGHT_CELL_GROUND )
+						++seen;
+
+			if( seen >= SIGHT_GAP_SEEN_NEIGHBOURS )
+				revealedCells[ y * side + x ] |= SIGHT_CELL_GROUND;
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -4685,6 +4742,9 @@ void PartitionManager::doBlockedShroudReveal( SightingInfo *sighting, const Obje
 		}
 		sighting->m_revealedCells[ cell ] = PartitionManager_sightCellFlags( revealed, offsetX, offsetY, flatCellRadius );
 	}
+
+	// the cells outside the circle are recorded hidden and never applied, so the circle's edge stays put
+	PartitionManager_closeSightGaps( &sighting->m_revealedCells[0], side );
 
 	applyRecordedReveal( sighting, TRUE );
 }
@@ -5295,20 +5355,13 @@ void PartitionManager::xfer( Xfer *xfer )
 			{
 				SightingInfo *newInfo = newInstance(SightingInfo);
 				xfer->xferSnapshot(newInfo);
-				m_pendingUndoShroudReveals.push(newInfo);
+				insertByUndoFrame( m_pendingUndoShroudReveals, newInfo );
 			}
 		}
 		else
 		{
-			// And on Save, I need to loop through, but not destroy anything, so I pop-push n times, cycling through the queue once
-			// (No random access on queues, and speed not a concern in saveload)
 			for( Int infoIndex = 0; infoIndex < queueSize; infoIndex++ )
-			{
-				SightingInfo *saveInfo = m_pendingUndoShroudReveals.front();
-				xfer->xferSnapshot(saveInfo);
-				m_pendingUndoShroudReveals.pop();
-				m_pendingUndoShroudReveals.push(saveInfo);
-			}
+				xfer->xferSnapshot(m_pendingUndoShroudReveals[infoIndex]);
 		}
 
 	}
@@ -5664,11 +5717,14 @@ Bool PartitionFilterRejectBuildings::allow( Object *other )
 //-----------------------------------------------------------------------------
 /** Partly in sight counts. Since hills and buildings block sight, a building hides its own back
 	cells from anyone lower than its roof and is never wholly clear, so taking only CLEAR here left
-	every unit the AI controls standing in front of an enemy base without firing a shot. */
+	every unit the AI controls standing in front of an enemy base without firing a shot.
+	A beyond-vision shooter passes its player as radar and also takes what that player's radar
+	tracks moving in the fog. */
 Bool PartitionFilterFreeOfFog::allow( Object *other )
 {
 	const ObjectShroudStatus status = other->getShroudedStatus(m_comparisonIndex);
-	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR;
+	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR
+		|| (m_radar && RadarCoverageBehavior::isTracked(m_radar, other));
 }
 
 //-----------------------------------------------------------------------------

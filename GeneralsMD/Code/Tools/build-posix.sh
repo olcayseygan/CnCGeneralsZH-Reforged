@@ -166,7 +166,13 @@ if [ -n "$TARGET" ]; then
   echo "[build] done: $TARGET in $BUILD"
   exit 0
 fi
-"$CMAKE" --build "$BUILD" || fail "build failed."
+# Without test, only what the staging below takes: the game and its overlay. A test binary that does
+# not compile on somebody's toolchain then cannot stop them getting a game; test builds everything.
+if [ -n "$RUNTESTS" ]; then
+  "$CMAKE" --build "$BUILD" || fail "build failed."
+else
+  "$CMAKE" --build "$BUILD" --target generals zh_overlay || fail "build failed."
+fi
 
 # --- tests ---
 if [ -n "$RUNTESTS" ]; then

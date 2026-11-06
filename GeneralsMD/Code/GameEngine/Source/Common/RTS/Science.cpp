@@ -96,10 +96,6 @@ ScienceType ScienceStore::getScienceFromInternalName(const AsciiString& name) co
 {
 	if (name.isEmpty())
 		return SCIENCE_INVALID;
-	// a science is its name's key, found or not, so the -modfactions retail fallback is asked every time
-	AsciiString retailName;
-	if (TheModNamespace.findRetailName(name, MODNAME_SCIENCE, &retailName))
-		return getScienceFromInternalName(retailName);
 	NameKeyType nkt = TheNameKeyGenerator->nameToKey(name);
 	ScienceType st = (ScienceType)nkt;
 	return st;

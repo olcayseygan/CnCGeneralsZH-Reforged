@@ -37,7 +37,6 @@
 
 #define DEFINE_IMAGE_STATUS_NAMES
 #include "Lib/BaseType.h"
-#include "Common/ArchiveFileSystem.h"
 #include "Common/LocalFileSystem.h"
 #include "Common/Debug.h"
 #include "Common/INI.h"
@@ -233,8 +232,7 @@ const Image *ImageCollection::findImageByName( const AsciiString& name )
   std::map<unsigned,Image *>::iterator i=m_imageMap.find(TheNameKeyGenerator->nameToLowercaseKey(name));
   if (i!=m_imageMap.end())
     return i->second;
-  AsciiString retailName;
-  return TheModNamespace.findRetailName(name, MODNAME_MAPPEDIMAGE, &retailName) ? findImageByName(retailName) : NULL;
+  return NULL;
 }  // end findImageByName
 
 //-------------------------------------------------------------------------------------------------
@@ -263,23 +261,11 @@ void ImageCollection::load( Int textureSize )
 	// construct path to the mapped images folder of the correct texture size
 	sprintf( buffer, "Data\\INI\\MappedImages\\TextureSize_%d", textureSize );
 
-	// a merged mod's own copies of our interface sheets first: the images only it has (its cameos) are
-	// read from them, and ours, loaded after, take back every name both define (FileSystem::isForkUIPath)
-	std::vector<AsciiString> modCopies;
-	TheArchiveFileSystem->getModUICopies( AsciiString( buffer ), modCopies );
-	TheArchiveFileSystem->getModUICopies( AsciiString( "Data\\INI\\MappedImages\\HandCreated" ), modCopies );
-	for (size_t i = 0; i < modCopies.size(); ++i)
-		ini.load( modCopies[ i ], INI_LOAD_OVERWRITE, NULL );
-
 	// load all the ine files in that directory
 
 	ini.loadDirectory( AsciiString( buffer ), TRUE, INI_LOAD_OVERWRITE, NULL );
 
 	ini.loadDirectory("Data\\INI\\MappedImages\\HandCreated", TRUE, INI_LOAD_OVERWRITE, NULL );
-
-	// -modfactions: each mod's cameos and HUD art under its own "M<n>~" names
-	INI::loadModPasses( buffer, NULL, TRUE );
-	INI::loadModPasses( "Data\\INI\\MappedImages\\HandCreated", NULL, TRUE );
 
 
 }  // end load

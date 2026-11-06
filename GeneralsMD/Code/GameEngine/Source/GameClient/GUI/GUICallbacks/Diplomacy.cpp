@@ -39,12 +39,16 @@
 #include "Common/PlayerTemplate.h"
 #include "Common/Recorder.h"
 #include "GameClient/AnimateWindowManager.h"
+#include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/Diplomacy.h"
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetCheckBox.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetPushButton.h"
+#include "GameClient/GadgetSlider.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetRadioButton.h"
@@ -366,6 +370,70 @@ void UpdateDiplomacyBriefingText(AsciiString newText, Bool clear)
 	GadgetListBoxAddEntryText(listboxSolo, translated, TheInGameUI->getMessageColor(numEntries%2), -1);
 }
 
+/// a Diplomacy.wnd button in the scheme's own pieces beside its painting, <TooltipImage>Tab<piece>{,H,P,D}:
+/// one picture stretched over the button where the layout named EA's three
+static void dressTabButton( GameWindow *button, const char *piece )
+{
+	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+	AsciiString name;
+	GadgetButtonSetEnabledImage(button, schemes->getTabImage(piece));
+	name.format("%sH", piece);
+	GadgetButtonSetHiliteImage(button, schemes->getTabImage(name.str()));
+	name.format("%sP", piece);
+	GadgetButtonSetHiliteSelectedImage(button, schemes->getTabImage(name.str()));
+	name.format("%sD", piece);
+	GadgetButtonSetDisabledImage(button, schemes->getTabImage(name.str()));
+}
+
+/// The Tab screen's controls on the scheme's painting (Tools/hud_command_bar.py tab_panel, TAB_BUTTONS): the
+/// Main Menu, mute and money buttons in the side's pieces, and the campaign's briefing list without EA's
+/// veil and blue rule, standing in the solo painting's one well (y 99..608 of the 714 the window is at
+/// 1080), its scroll bar's arrows, thumb and groove (TAB_TRACK) in the same pieces.
+static void dressForPanel( void )
+{
+	Int width, height;
+	theWindow->winGetSize(&width, &height);
+	dressTabButton(TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ButtonHide")), "Exit");
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		dressTabButton(buttonMute[i], "Mute");
+		dressTabButton(buttonUnMute[i], "Unmute");
+		dressTabButton(buttonMoneyMinus[i], "Square");
+		dressTabButton(buttonMoneyPlus[i], "Square");
+		dressTabButton(buttonMoneySend[i], "Send");
+	}
+
+	GameWindow *listboxSolo = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ListboxSolo"));
+	GadgetListBoxSetEnabledColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetEnabledBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetHiliteColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetHiliteBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetDisabledColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetDisabledBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
+	Int x, y, screenX, screenY, panelX, panelY, listWidth, listHeight;
+	listboxSolo->winGetPosition(&x, &y);
+	listboxSolo->winGetScreenPosition(&screenX, &screenY);
+	theWindow->winGetScreenPosition(&panelX, &panelY);
+	listboxSolo->winGetSize(&listWidth, &listHeight);
+	listboxSolo->winSetPosition(x, y + panelY + height * 99 / 714 - screenY);
+	listboxSolo->winSetSize(listWidth, height * (608 - 99) / 714);
+
+	GameWindow *slider = GadgetListBoxGetSlider(listboxSolo);
+	dressTabButton(GadgetListBoxGetUpButton(listboxSolo), "Up");
+	dressTabButton(GadgetListBoxGetDownButton(listboxSolo), "Down");
+	dressTabButton(GadgetSliderGetThumb(slider), "Thumb");
+	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+	const Image *top = schemes->getTabImage("TrackTop");
+	const Image *bottom = schemes->getTabImage("TrackBottom");
+	const Image *center = schemes->getTabImage("TrackCenter");
+	const Image *smallCenter = schemes->getTabImage("TrackSmall");
+	GadgetSliderSetEnabledImages(slider, top, bottom, center, smallCenter);
+	GadgetSliderSetHiliteImages(slider, top, bottom, center, smallCenter);
+	GadgetSliderSetDisabledImages(slider, top, bottom, center, smallCenter);
+	// gogoGadgetSlider gives a listbox's slider the colour draw whatever its images
+	slider->winSetDrawFunc(TheWindowManager->getVerticalSliderImageDrawFunc());
+}
+
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 void ShowDiplomacy( Bool immediate )
@@ -419,6 +487,26 @@ void ShowDiplomacy( Bool immediate )
 	}
 	theLayout->hide(FALSE);
 
+	// A scheme with a painting of its own (<TooltipImage>TabPanel, Tools/hud_command_bar.py tab_panel) wears
+	// it over the whole window, standing in the screen's top left corner, square on both edges, and the
+	// Main Menu button steps out of the cut corner into the painting's socket (TAB_HIDE, 1160,650 of the
+	// 1379x714 the window is at 1080).  A scheme without one (Classic) keeps EA's dark glass and blue rule
+	// where the layout put them.
+	const Image *panel = TheControlBar->getControlBarSchemeManager()->getTabPanelImage();
+	if (panel)
+	{
+		// the campaign's briefing list wants the painting without the table's rows (<TooltipImage>TabSolo)
+		const Image *solo = TheRecorder->isMultiplayer() ? NULL : TheControlBar->getControlBarSchemeManager()->getTabImage("Solo");
+		theWindow->winSetEnabledImage(0, solo ? solo : panel);
+		theWindow->winSetStatus(WIN_STATUS_IMAGE);
+		theWindow->winSetPosition(0, 0);
+		Int width, height;
+		theWindow->winGetSize(&width, &height);
+		GameWindow *hide = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ButtonHide"));
+		if (hide)
+			hide->winSetPosition(width * 1160 / 1379, height * 650 / 714);
+	}
+
 	radioButtonInGame->winHide(TRUE);
 	radioButtonBuddies->winHide(TRUE);
 	GadgetRadioSetSelection(radioButtonInGame, FALSE);
@@ -441,6 +529,8 @@ void ShowDiplomacy( Bool immediate )
 
 	TheInGameUI->registerWindowLayout(theLayout);
 	grabWindowPointers();
+	if (panel)
+		dressForPanel();
 	PopulateInGameDiplomacyPopup();
 
 	if(TheGameSpyInfo && TheGameSpyInfo->getLocalProfileID() != 0)

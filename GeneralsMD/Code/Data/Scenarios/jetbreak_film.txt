@@ -1,0 +1,25 @@
+# Scenarios/jetbreak.txt staged for the camera: the same four jets sent head-on at the same four
+# tanks, but each tank drives 300 south from the moment the jets are ordered in, the way
+# jetpass.txt moves them, so nothing in frame stands still for the camera. Cinema/jetbreak_*.txt
+# film it; the command lines are in their headers.
+
+30    spawn      1  ChinaTankOverlord            1   2250 3300
+30    spawn      0  AmericaJetRaptor             1   1000 3300
+31    move       0  AmericaJetRaptor                 4400 3300
+30    spawn      1  ChinaTankBattleMaster        1   2200 3650
+30    spawn      0  ChinaJetMIG                  1   1000 3650
+31    move       0  ChinaJetMIG                      4400 3650
+30    spawn      1  AmericaTankCrusader          1   2200 4000
+30    spawn      0  AmericaJetAurora             1   1000 4000
+31    move       0  AmericaJetAurora                 4400 4000
+30    spawn      1  GLATankScorpion              1   2200 4350
+30    spawn      0  AmericaJetStealthFighter     1   1000 4350
+31    move       0  AmericaJetStealthFighter         4400 4350
+100   attack     0  AmericaJetRaptor             1  ChinaTankOverlord
+100   move       1  ChinaTankOverlord                2250 3000
+100   attack     0  ChinaJetMIG                  1  ChinaTankBattleMaster
+100   move       1  ChinaTankBattleMaster            2200 3350
+100   attack     0  AmericaJetAurora             1  AmericaTankCrusader
+100   move       1  AmericaTankCrusader              2200 3700
+100   attack     0  AmericaJetStealthFighter     1  GLATankScorpion
+100   move       1  GLATankScorpion                  2200 4050

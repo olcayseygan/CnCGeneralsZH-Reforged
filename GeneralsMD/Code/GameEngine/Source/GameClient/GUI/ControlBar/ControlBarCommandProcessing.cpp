@@ -54,6 +54,7 @@
 #include "GameClient/Keyboard.h"
 #include "GameClient/AnimateWindowManager.h"
 
+#include "GameLogic/AI.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/ProductionUpdate.h"
@@ -609,10 +610,17 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 				{
 					TheInGameUI->message( "GUI:UnitMaxedOut" );
 					break;
-				} 
+				}
+				// a unit on repeat keeps its button clickable after its prerequisite is lost or its
+				// factory goes dark (ControlBar::updateContextCommand), so these reach here now. The
+				// tooltip already names what is missing; the click just does nothing
+				else if( cmt == CANMAKE_NO_PREREQ || cmt == CANMAKE_FACTORY_IS_DISABLED )
+				{
+					break;
+				}
 				else if (cmt != CANMAKE_OK)
 				{
-					DEBUG_ASSERTCRASH( 0, ("Cannot create '%s' because the factory object '%s' returns false for canMakeUnit\n", 
+					DEBUG_ASSERTCRASH( 0, ("Cannot create '%s' because the factory object '%s' returns false for canMakeUnit\n",
 																	whatToBuild->getName().str(), 
 																	factory->getTemplate()->getName().str()) );
 					break;
@@ -993,14 +1001,28 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 		//---------------------------------------------------------------------------------------------
 		case GUI_COMMAND_EVACUATE:
 		{
+			// A vehicle transport asks where: Command_EvacuateAt's cursor takes the spot, and the
+			// transport drives or flies there and unloads (AIGroup::groupEvacuate).  Alt held, here or
+			// with the button's key (HotKeyTranslator), empties it where it stands, as a building does
+			const CommandButton *evacuateAt = TheKeyboard->isAlt() ? NULL : findCommandButton( "Command_EvacuateAt" );
+			if( evacuateAt )
+			{
+				const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+				for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+				{
+					const Object *transport = (*it)->getObject();
+					if( transport && AIGroup::unloadsWhereSent( transport ) )
+					{
+						TheInGameUI->setGUICommand( evacuateAt );
+						return CBC_COMMAND_USED;
+					}
+				}
+			}
+
 			// Cancel GUI command mode.
 			TheInGameUI->setGUICommand( NULL );
-
-			if (BitTest(commandButton->getOptions(), NEED_TARGET_POS) == FALSE) {
-				pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_EVACUATE );
-				TheMessageStream->appendMessage( GameMessage::MSG_EVACUATE );
-			}
-			
+			pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_EVACUATE );
+			TheMessageStream->appendMessage( GameMessage::MSG_EVACUATE );
 			break;
 		}  // end evacuate
 

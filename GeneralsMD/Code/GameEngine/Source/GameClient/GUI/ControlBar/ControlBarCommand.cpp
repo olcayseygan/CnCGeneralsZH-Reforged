@@ -383,25 +383,13 @@ void ControlBar::populateCommand( Object *obj )
 	if( obj->getContain()  &&  obj->getContain()->isDisplayedOnControlBar() )
 		doTransportInventoryUI( obj, commandSet );
 
-	// what goes in each slot: the command set, slot for slot, and a button in a slot past our bar's
-	// windows into an empty one (ControlBar_fitCommandSlots)
+	// what goes in each slot: the command set, slot for slot, a script only button and a slot with
+	// no window left empty
 	const CommandButton *slot[ MAX_COMMANDS_PER_SET ];
+	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
-		const CommandButton *set[ MAX_COMMANDS_PER_SET ];
-		Int types[ MAX_COMMANDS_PER_SET ];
-		Bool windowed[ MAX_COMMANDS_PER_SET ];
-		Int shown[ MAX_COMMANDS_PER_SET ];
-		for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
-		{
-			set[ i ] = commandSet->getCommandButton( i );
-			types[ i ] = ( set[ i ] && !BitTest( set[ i ]->getOptions(), SCRIPT_ONLY ) ) ? set[ i ]->getCommandType() : GUI_COMMAND_NONE;
-			windowed[ i ] = m_commandWindows[ i ] != NULL;
-		}
-		ControlBar_fitCommandSlots( types, windowed, MAX_COMMANDS_PER_SET, shown );
-
-		// a window nothing is fitted to stays empty: its own slot is empty or script only
-		for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
-			slot[ i ] = shown[ i ] >= 0 ? set[ shown[ i ] ] : NULL;
+		const CommandButton *button = commandSet->getCommandButton( i );
+		slot[ i ] = ( m_commandWindows[ i ] && button && !BitTest( button->getOptions(), SCRIPT_ONLY ) ) ? button : NULL;
 	}
 
 	// a builder standing in for an empty selection offers its buildings, not its orders: nobody
@@ -997,9 +985,12 @@ void ControlBar::updateContextCommand( void )
 			win->winSetStatus( WIN_STATUS_ALWAYS_COLOR );
 		}
 
-		// the same for a unit on repeat the bank cannot pay for right now: Ctrl+Alt click has to
-		// reach the button to stop it, and a plain click only says there is not enough money
-		if( repeating && availability == COMMAND_CANT_AFFORD )
+		// the same for a unit on repeat that cannot be built right now, whatever the reason (money,
+		// a lost prerequisite, the cap, a full queue, an unpowered factory): Ctrl+Alt click has to
+		// reach the button to stop it, and a plain click is refused by the build path below with
+		// the message it already has. Build buttons come back RESTRICTED far more often than
+		// CANT_AFFORD (getCommandAvailability), so testing CANT_AFFORD alone left repeat stuck on.
+		if( repeating && ( availability == COMMAND_CANT_AFFORD || availability == COMMAND_RESTRICTED ) )
 			win->winEnable( TRUE );
 
 		//Determine by the production type of this button, whether or not the created object
@@ -1244,8 +1235,8 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 	if(	command->getCommandType() == GUI_COMMAND_SPECIAL_POWER_FROM_SHORTCUT 
 			|| command->getCommandType() == GUI_COMMAND_SPECIAL_POWER_CONSTRUCT_FROM_SHORTCUT )
 	{
-		// A shortcut whose SpecialPower named a power that does not exist (a mod's button, or a patch
-		// button over a mod that lacks the power, INI::parseSpecialPowerTemplate) stands for nothing:
+		// A shortcut whose SpecialPower named a power that does not exist (INI::parseSpecialPowerTemplate)
+		// stands for nothing:
 		// it is hidden like a shortcut with no building behind it.
 		if (ThePlayerList && ThePlayerList->getLocalPlayer() && command->getSpecialPowerTemplate())
 			obj = ThePlayerList->getLocalPlayer()->findMostReadyShortcutSpecialPowerOfType( command->getSpecialPowerTemplate()->getSpecialPowerType() );

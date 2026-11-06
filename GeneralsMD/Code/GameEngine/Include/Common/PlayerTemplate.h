@@ -79,9 +79,6 @@ public:
 	PlayerTemplate();
 
 	inline void setNameKey(NameKeyType namekey) { m_nameKey = namekey; }
-	/// -modfactions: the -mod this template came from, -1 for retail's own
-	inline void setModIndex(Int mod) { m_modIndex = mod; }
-	inline Int getModIndex() const { return m_modIndex; }
 
 	inline NameKeyType getNameKey() const { DEBUG_ASSERTCRASH(m_nameKey != NAMEKEY_INVALID, ("bad namekey")); return m_nameKey; }
 	inline AsciiString getName() const { return KEYNAME(m_nameKey); }
@@ -107,6 +104,9 @@ public:
 	inline const ProductionVeterancyMap& getProductionVeterancyLevels() const { return m_productionVeterancyLevels; }
 	inline Bool isObserver() const { return m_observer; }
 	inline Bool isPlayableSide() const { return m_playableSide; }
+	/// AIDoctrine: the units a computer playing this side favours, in place of the ones it works out from
+	/// the data; "None" for no favourites, empty to work them out
+	inline const std::vector<AsciiString>& getAIDoctrine() const { return m_aiDoctrine; }
 
 	inline AsciiString getScoreScreen (void ) const { return m_scoreScreenImage;	}
 	inline AsciiString getLoadScreen (void ) const { return m_loadScreenImage;	}
@@ -141,9 +141,8 @@ public:
 	AsciiString getScoreScreenMusic() const { return m_scoreScreenMusic; }
 
   inline Bool isOldFaction( void ) const { return m_oldFaction; }
-	/// a plain Random never draws it; a lobby's own pick of the Random pool may still tick it in.  A mod's
-	/// faction is always out of a plain Random: it plays only when somebody picks it.
-	inline Bool isRandomExcluded( void ) const { return m_randomExcluded || m_modIndex >= 0; }
+	/// a plain Random never draws it; a lobby's own pick of the Random pool may still tick it in
+	inline Bool isRandomExcluded( void ) const { return m_randomExcluded; }
 
 	static const FieldParse* getFieldParse();
 
@@ -161,7 +160,6 @@ private:
 	friend class PlayerTemplateStore;		///< postProcessLoad empties a start template the loaded objects lack
 
 	NameKeyType			m_nameKey;
-	Int							m_modIndex;
 	UnicodeString		m_displayName;
 	AsciiString			m_side, m_baseSide;
 	Handicap				m_handicap;						///< initial baseline for Player capabilities
@@ -185,6 +183,7 @@ private:
 	AsciiString				m_tooltip;								///< The tooltip describing this player template
 	Bool							m_observer;
 	Bool							m_playableSide;
+	std::vector<AsciiString>	m_aiDoctrine;		///< AIDoctrine, empty when not given
   Bool              m_oldFaction;                       ///< Faction existed in the original Generals
 	Bool							m_randomExcluded;
 

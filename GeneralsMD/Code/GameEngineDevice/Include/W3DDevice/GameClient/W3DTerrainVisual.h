@@ -64,6 +64,7 @@ public:
 	virtual void update( void );
 	
 	virtual Bool load( AsciiString filename );
+	virtual void prewarmMapRenderData( void );
 
 	void getTerrainColorAt( Real x, Real y, RGBColor *pColor );
 

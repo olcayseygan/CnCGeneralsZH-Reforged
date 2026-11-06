@@ -61,6 +61,7 @@
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PeerThread.h"
+#include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 
 #include "WWDownload/Registry.h"
 #include "WWDownload/urlBuilder.h"
@@ -891,6 +892,13 @@ void StopAsyncDNSCheck( void )
 
 void StartPatchCheck( void )
 {
+#ifdef ZH_ONLINE
+	if (OnlineBridge_IsConfigured())
+	{
+		OnlineBridge_BeginLogin();
+		return;
+	}
+#endif
 	checkingForPatchBeforeGameSpy = TRUE;
 	cantConnectBeforeOnline = FALSE;
 	timeThroughOnline++;

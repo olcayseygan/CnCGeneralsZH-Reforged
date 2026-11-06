@@ -208,6 +208,7 @@ public:
 	// radar options
 	void hide( Bool hide ) { m_radarHidden = hide; }				///< hide/unhide the radar
 	Bool isRadarHidden( void ) { return m_radarHidden; }		///< is radar hidden
+	const Region3D *getMapExtent( void ) const { return &m_mapExtent; }	///< the map newMap was given; the radar window takes its shape
 	// other radar option methods here like the ability to show a certain
 	// team, show buildings, show units at all, etc
 

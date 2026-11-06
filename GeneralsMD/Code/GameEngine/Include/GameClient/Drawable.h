@@ -208,11 +208,6 @@ public:
 	Real m_groundPitch;					///< a ground vehicle's chassis pitch, roll and lift from that frame, drawn until the next one
 	Real m_groundRoll;
 	Real m_groundZ;
-	Real m_headingLag;					///< a ground vehicle's drawn heading minus its logic heading, sprung back towards 0
-	Real m_headingLagRate;			///< and how fast that changes, a logic frame
-	Real m_headingLogic;				///< the logic heading on m_headingFrame
-	UnsignedInt m_headingFrame;	///< the logic frame the heading spring last stepped on
-	Bool m_headingSeeded;				///< m_headingLogic and m_headingFrame hold a real heading and frame
 	TWheelInfo m_wheelInfo;			///< Wheel offset & angle info for a wheeled type locomotor.
 
 	DrawableLocoInfo();
@@ -523,6 +518,10 @@ public:
   //	inline UnsignedByte getFullyObscuredByShroudWithCheatSpy(void) {return (UnsignedByte)m_drawableFullyObscuredByShroud | 128;}//8 looks like a zero in most fonts
 
 	Bool getDrawsInMirror() const { if( LogicThread::isInsideWindow() ) return m_lookForDraw.drawsInMirror; return BitTest(m_status, DRAWABLE_STATUS_DRAWS_IN_MIRROR) || isKindOf(KINDOF_CAN_CAST_REFLECTIONS); }
+	Bool isNoSaveForDraw() const {
+		if( LogicThread::isInsideWindow() ) return m_lookForDraw.noSave;
+		return testDrawableStatus( DRAWABLE_STATUS_NO_SAVE );
+	}
 
 	/** LOGIC-THREAD.md phase 3, step 3b.  How the drawable looks, as the render reads it: hidden, stealth,
 		* opacity, tint, the mirror and dynamic light flags.  The tick writes these fields beside the render
@@ -534,6 +533,7 @@ public:
 		Bool						hidden;
 		Bool						fullyObscured;
 		Bool						drawsInMirror;
+		Bool						noSave;
 		Bool						receivesDynamicLights;
 		Bool						hasTintColor;
 		Bool						hasSelectionColor;
@@ -631,8 +631,6 @@ public:
 	const TWheelInfo *getWheelInfo(void) const { return m_locoInfo ? &m_locoInfo->m_wheelInfo : NULL; }
 	
 	const DrawableLocoInfo *getLocoInfo() const { return m_locoInfo; }
-	/// how far the drawn hull of a tank or car trails its logic heading (calcPhysicsXformGround), 0 for anything else
-	Real getDrawnHeadingLag() const { return m_locoInfo ? m_locoInfo->m_headingLag : 0.0f; }
 
 	// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 	Bool clientOnly_getFirstRenderObjInfo(Coord3D* pos, Real* boundingSphereRadius, Matrix3D* transform);
@@ -790,9 +788,8 @@ protected:
 		Real m_totalRoll;						///< Current total roll for this frame.
 		Real m_totalYaw;						///< Current total yaw for this frame
 		Real m_totalZ;
-		Real m_headingYaw;					///< a ground vehicle's heading lag, turned before the pitch and roll
 
-		PhysicsXformInfo() : m_totalPitch(0), m_totalRoll(0), m_totalYaw(0), m_totalZ(0), m_headingYaw(0) { }
+		PhysicsXformInfo() : m_totalPitch(0), m_totalRoll(0), m_totalYaw(0), m_totalZ(0) { }
 	};
 
 	Bool calcPhysicsXform(PhysicsXformInfo& info);

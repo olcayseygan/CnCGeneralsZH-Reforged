@@ -65,7 +65,6 @@ public:
 	virtual void doDrawModule(const Matrix3D* transformMtx);
 	virtual void notifyDrawModuleDependencyCleared( );///< if you were waiting for something before you drew, it's ready now
 	virtual void adjustTransformMtx(Matrix3D& mtx) const;
-	virtual Real getHullHeadingLag() const;
 
 protected:
 	Bool m_dependencyCleared; // The thing we depend on will clear this, and we will relatch it after we draw.

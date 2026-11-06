@@ -141,86 +141,6 @@ WW3DAssetManager *		WW3DAssetManager::TheInstance = NULL;
 */
 static NullPrototypeClass _NullPrototype;
 
-thread_local char WW3D_Mod_Prefix[8] = "";
-
-int WW3D_Mod_Prefix_Length(const char * name)
-{
-	if (name[0] != 'M' && name[0] != 'm') return 0;
-	int i = 1;
-	while (name[i] >= '0' && name[i] <= '9') i++;
-	return (i > 1 && i < 7 && name[i] == '~') ? i + 1 : 0;
-}
-
-bool WW3D_Mod_Ships(const char * file)
-{
-	// Mod files do not change while the game runs, so a miss is remembered: a retail model under a
-	// mod would otherwise ask the file system again for every sub-object, tree and texture it uses.
-	// One set per thread, so no lock is needed whichever thread asks.
-	static thread_local HashTemplateClass<StringClass,bool> missing;
-	StringClass key(file,true);
-	_strlwr(key.Peek_Buffer());
-	if (missing.Exists(key)) return false;
-
-	FileClass * f = _TheFileFactory->Get_File(file);
-	bool ships = f->Is_Available();
-	_TheFileFactory->Return_File(f);
-	if (!ships) missing.Insert(key,true);
-	return ships;
-}
-
-WW3DModRequest::WW3DModRequest(const char * name) : Bare(name), Own(false)
-{
-	int len = WW3D_Mod_Prefix_Length(name);
-	if (len != 0) {
-		Own = true;
-		strcpy(Saved, WW3D_Mod_Prefix);
-		memcpy(WW3D_Mod_Prefix, name, len);
-		WW3D_Mod_Prefix[len] = 0;
-		Bare = name + len;
-	}
-}
-
-// The texture loader opens a .dds in place of whatever three letter extension a model names
-// (DDSFileClass swaps the last three characters), so a .dds of the same name counts as the mod's
-// texture: The End of Days' models name "Tunguska-main skin.psd" and the mod ships the .dds.
-static bool Mod_Texture_Ships(const char * name)
-{
-	if (WW3D_Mod_Ships(name)) return true;
-	size_t len = strlen(name);
-	if (len < 4 || name[len - 4] != '.') return false;
-	char dds[MAX_PATH];
-	snprintf(dds, sizeof(dds), "%.*sdds", (int)(len - 3), name);
-	return WW3D_Mod_Ships(dds);
-}
-
-/*
-** A prototype read from a mod's file. It is filed under the mod's prefix and the inner name, so a
-** retail or other mod's prototype of the same name stays apart, and it creates its object with the
-** mod current, so the sub-objects and tree that object names come from the same mod.
-*/
-class ModPrototypeClass : public PrototypeClass
-{
-public:
-	ModPrototypeClass(PrototypeClass * inner) : Inner(inner)
-	{
-		strcpy(Prefix, WW3D_Mod_Prefix);
-		snprintf(Name, sizeof(Name), "%s%s", Prefix, inner->Get_Name());
-	}
-
-	virtual const char *			Get_Name(void) const		{ return Name; }
-	virtual int						Get_Class_ID(void) const	{ return Inner->Get_Class_ID(); }
-	virtual RenderObjClass *	Create(void)					{ WW3DModPrefixScope mod(Prefix); return Inner->Create(); }
-	virtual void					DeleteSelf()					{ Inner->DeleteSelf(); delete this; }
-
-protected:
-	virtual ~ModPrototypeClass(void) {}
-
-private:
-	PrototypeClass *				Inner;
-	char								Prefix[8];
-	char								Name[256];
-};
-
 /*
 ** Iterator for the Render Objects in the asset manager
 */
@@ -737,16 +657,6 @@ bool WW3DAssetManager::Load_3D_Assets( const char * filename )
 	} timer(filename);
 #endif
 
-	// A prefixed file the mod does not ship is the retail file; that goes back through the virtual
-	// entry so a file already loaded is not read again. Whatever file is read, the current mod is
-	// the file's own for the read, so a retail file never takes in a mod's names.
-	WW3DModRequest mod(filename);
-	if (mod.Own && !WW3D_Mod_Ships(filename)) {
-		WW3DModPrefixScope retail("");
-		return Load_3D_Assets(mod.Bare);
-	}
-	WW3DModPrefixScope read(mod.Own ? WW3D_Mod_Prefix : "");
-
 	FileClass * file = _TheFileFactory->Get_File( filename );
 	if ( file ) {
 		if ( file->Is_Available() ) {
@@ -863,10 +773,6 @@ bool WW3DAssetManager::Load_Prototype(ChunkLoadClass & cload)
 	*/
 	if (newproto != NULL) {
 
-		if (WW3D_Mod_Prefix[0]) {
-			newproto = W3DNEW ModPrototypeClass(newproto);
-		}
-
 		if (!Render_Obj_Exists(newproto->Get_Name())) {
 				
 			/*
@@ -919,16 +825,6 @@ RenderObjClass * WW3DAssetManager::Create_Render_Obj(const char * name)
 {
 	WWPROFILE( "WW3DAssetManager::Create_Render_Obj" );
 	WWMEMLOG(MEM_GEOMETRY);
-
-	// A mod's own model first; without one the bare name goes on as retail, the mod still current.
-	WW3DModRequest mod(name);
-	if (mod.Active()) {
-		PrototypeClass * mod_proto = Find_Mod_Prototype(mod.Bare);
-		if (mod_proto != NULL) {
-			return mod_proto->Create();
-		}
-		name = mod.Bare;
-	}
 
 	// Try to find a prototype
 	PrototypeClass * proto = Find_Prototype(name);
@@ -1108,31 +1004,6 @@ HAnimClass *	WW3DAssetManager::Get_HAnim(const char * name)
 {
 	WWPROFILE( "WW3DAssetManager::Get_HAnim" );
 
-	// A mod's own animation first. A miss is put on the missing list under the prefixed name either
-	// way, so the next request for it does not ask the file system again before going to retail.
-	WW3DModRequest mod(name);
-	if (mod.Active()) {
-		char full[MAX_PATH];
-		snprintf(full, sizeof(full), "%s%s", WW3D_Mod_Prefix, mod.Bare);
-		HAnimClass * mod_anim = HAnimManager.Get_Anim(full);
-		const char * animname = strchr(mod.Bare, '.');
-		if (WW3D_Load_On_Demand && mod_anim == NULL && animname != NULL && !HAnimManager.Is_Missing(full)) {
-			char filename[MAX_PATH];
-			snprintf(filename, sizeof(filename), "%s%s.w3d", WW3D_Mod_Prefix, animname + 1);
-			if (WW3D_Mod_Ships(filename)) {
-				Load_3D_Assets(filename);
-				mod_anim = HAnimManager.Get_Anim(full);
-			}
-			if (mod_anim == NULL) {
-				HAnimManager.Register_Missing(full);
-			}
-		}
-		if (mod_anim != NULL) {
-			return mod_anim;
-		}
-		name = mod.Bare;
-	}
-
 	// Try to find the hanim
 	HAnimClass * anim = HAnimManager.Get_Anim(name);
 
@@ -1186,26 +1057,6 @@ HAnimClass *	WW3DAssetManager::Get_HAnim(const char * name)
 HTreeClass *	WW3DAssetManager::Get_HTree(const char * name)
 {
 	WWPROFILE( "WW3DAssetManager::Get_HTree" );
-
-	// A mod's own tree first, then the retail one with the mod still current.
-	WW3DModRequest mod(name);
-	if (mod.Active()) {
-		char full[MAX_PATH];
-		snprintf(full, sizeof(full), "%s%s", WW3D_Mod_Prefix, mod.Bare);
-		HTreeClass * mod_tree = HTreeManager.Get_Tree(full);
-		if (WW3D_Load_On_Demand && mod_tree == NULL) {
-			char filename[MAX_PATH];
-			snprintf(filename, sizeof(filename), "%s.w3d", full);
-			if (WW3D_Mod_Ships(filename)) {
-				Load_3D_Assets(filename);
-				mod_tree = HTreeManager.Get_Tree(full);
-			}
-		}
-		if (mod_tree != NULL) {
-			return mod_tree;
-		}
-		name = mod.Bare;
-	}
 
 	// Try to find the htree
 	HTreeClass * htree = HTreeManager.Get_Tree(name);
@@ -1272,16 +1123,6 @@ TextureClass * WW3DAssetManager::Get_Texture
 	if ((filename == NULL) || (strlen(filename) == 0)) 
 	{
 		return NULL;
-	}
-
-	// A mod's own texture is filed under its prefixed name, which is also the path the loader
-	// opens; when the mod does not ship the file the request is the retail texture.
-	WW3DModRequest mod(filename);
-	char mod_name[MAX_PATH];
-	if (mod.Active()) {
-		snprintf(mod_name, sizeof(mod_name), "%s%s", WW3D_Mod_Prefix, mod.Bare);
-		_strlwr(mod_name);
-		filename = (TextureHash.Get(StringClass(mod_name)) != NULL || Mod_Texture_Ships(mod_name)) ? mod_name : mod.Bare;
 	}
 
 	StringClass lower_case_name(filename,true);
@@ -1871,27 +1712,6 @@ PrototypeClass * WW3DAssetManager::Find_Prototype(const char * name)
 		test = test->friend_getNextHash();
 	}
 	return NULL;
-}
-
-PrototypeClass * WW3DAssetManager::Find_Mod_Prototype(const char * bare)
-{
-	char full[MAX_PATH];
-	snprintf(full, sizeof(full), "%s%s", WW3D_Mod_Prefix, bare);
-	PrototypeClass * proto = Find_Prototype(full);
-
-	if (proto == NULL && WW3D_Load_On_Demand) {
-		// The file is named by the text before the first '.', as for a retail name.
-		char filename[MAX_PATH];
-		strcpy(filename, full);
-		char * dot = strchr(filename, '.');
-		if (dot != NULL) *dot = 0;
-		strcat(filename, ".w3d");
-		if (WW3D_Mod_Ships(filename)) {
-			Load_3D_Assets(filename);
-			proto = Find_Prototype(full);
-		}
-	}
-	return proto;
 }
 
 /*

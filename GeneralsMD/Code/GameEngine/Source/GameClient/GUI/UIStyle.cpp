@@ -73,7 +73,7 @@ void shell( void )
 {
 	const Int width = TheDisplay->getWidth();
 	const Int height = TheDisplay->getHeight();
-	// both are retail art a mod's archives may leave out
+	// both are retail art an incomplete install may lack
 	const Image *still = TheMappedImageCollection->findImageByName( "MainMenuBackdrop" );
 	if( still )
 		TheDisplay->drawImage( still, 0, 0, width, height );

@@ -108,7 +108,7 @@ static Object *resolvePlacementBuilder( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-PlaceEventTranslator::PlaceEventTranslator() : m_frameOfUpButton(-1)
+PlaceEventTranslator::PlaceEventTranslator() : m_frameOfUpButton(-1), m_cellClickTaken(FALSE), m_cellRightClickTaken(FALSE)
 {
 }
 
@@ -124,8 +124,47 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 {
 	GameMessageDisposition disp = KEEP_MESSAGE;
 
+	// MetaEventTranslator runs ahead of this one and puts a logical click after the raw release: a
+	// press a HUD cell took owns both, or a cancel on a cell would also give a world order
+	const GameMessage::Type type = msg->getType();
+	if( m_cellClickTaken )
+	{
+		if( type == GameMessage::MSG_MOUSE_LEFT_CLICK || type == GameMessage::MSG_MOUSE_LEFT_DOUBLE_CLICK )
+		{
+			m_cellClickTaken = FALSE;
+			return DESTROY_MESSAGE;
+		}
+		if( type == GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP || type == GameMessage::MSG_RAW_MOUSE_LEFT_DRAG )
+			return DESTROY_MESSAGE;
+	}
+	if( m_cellRightClickTaken )
+	{
+		if( type == GameMessage::MSG_MOUSE_RIGHT_CLICK || type == GameMessage::MSG_MOUSE_RIGHT_DOUBLE_CLICK )
+		{
+			m_cellRightClickTaken = FALSE;
+			return DESTROY_MESSAGE;
+		}
+		if( type == GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP || type == GameMessage::MSG_RAW_MOUSE_RIGHT_DRAG )
+			return DESTROY_MESSAGE;
+	}
+
 	switch(msg->getType())
 	{
+		//---------------------------------------------------------------------------------------------
+		// a right press on a HUD cell cancels, as a ctrl press does
+		case GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN:
+		case GameMessage::MSG_RAW_MOUSE_RIGHT_DOUBLE_CLICK:
+		{
+			m_cellRightClickTaken = FALSE;
+			if( TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, FALSE )
+					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TRUE ) )
+			{
+				m_cellRightClickTaken = TRUE;
+				return DESTROY_MESSAGE;
+			}
+			break;
+		}
+
 		//---------------------------------------------------------------------------------------------
 		//
 		// While a shift-dragged row is on the ground, the wheel opens and closes the gap instead of
@@ -135,6 +174,9 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 		//
 		case GameMessage::MSG_RAW_MOUSE_WHEEL:
 		{
+			// over the spectator's rack the wheel turns the stat dial and never zooms
+			if( TheInGameUI->handleSpectatorRackWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
+				return DESTROY_MESSAGE;
 			if( TheInGameUI->getPendingPlaceType() && TheInGameUI->isPlacementAnchored() &&
 					TheInGameUI->placesRow() )
 			{
@@ -162,6 +204,16 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 		case GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN:
 		case GameMessage::MSG_RAW_MOUSE_LEFT_DOUBLE_CLICK:
 		{
+			// the production and superweapon cells lie over the world, not in a window: take a press on
+			// one before placement, and long before selection makes a move order of it.  Ctrl cancels
+			m_cellClickTaken = FALSE;
+			if( TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, TRUE )
+					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TheKeyboard->isCtrl() ) )
+			{
+				m_cellClickTaken = TRUE;
+				return DESTROY_MESSAGE;
+			}
+
 			// if we're in a building placement mode, do the place and send to all players
 			const ThingTemplate *build = TheInGameUI->getPendingPlaceType();
 			if( build && TheInGameUI->isPlacementAnchored() == FALSE )

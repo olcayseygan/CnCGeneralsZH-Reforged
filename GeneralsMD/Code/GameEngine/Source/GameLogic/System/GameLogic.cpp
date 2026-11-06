@@ -100,6 +100,7 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/DestroyModule.h"
 #include "GameLogic/Module/OpenContain.h"
+#include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/PartitionManager.h"
 #include "Common/ControlServer.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -2388,6 +2389,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		}
 	}
 
+	// Saved terrain and triggers arrive later; saves prepare at postprocess load.
+	if (!loadingSaveGame && TheTerrainVisual) TheTerrainVisual->prewarmMapRenderData();
+
 	updateLoadProgress(LOAD_PROGRESS_END);
 
 	if(isInMultiplayerGame() && TheNetwork)
@@ -2650,7 +2654,7 @@ void GameLogic::loadMapINI( AsciiString mapName )
 
 
 	//
-	// A map's rules file comes with the map, and a mod map with a block this game does not know
+	// A map's rules file comes with the map, and a map with a block this game does not know
 	// (a DeleteKey, say) threw out of here and took the whole game down at the loading screen.
 	// Keep what parsed up to the bad line and play on: every machine in a match has the same file,
 	// the map CRC sees to that, so each stops at the same line and the rules still agree.
@@ -5148,6 +5152,9 @@ void GameLogic::update( void )
 	{
 		ThePartitionManager->UPDATE();
 	}
+
+	// the radar's fogged contacts, against the shroud the partition update just settled
+	RadarCoverageBehavior::sweep();
 
 	tPartition = Clock_Ticks();
 

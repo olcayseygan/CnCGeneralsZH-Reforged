@@ -6060,7 +6060,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		return FALSE;
 	}
 
-	// the template is a file off the disk or a mod: bytes that end early refuse it rather than read past it
+	// the template is a file off the disk: bytes that end early refuse it rather than read past it
 	Exemplar src;
 	Bool loaded = FALSE;
 	try
@@ -6976,12 +6976,12 @@ void rmgGenerateFromTemplate( const RandomMapSettings& clamped, std::vector<char
 {
 	mapBytes.clear();
 	/* The towns are told apart by the object INI, so without it there is nothing to build: the same
-		name must never stand for two maps. Under -mod the INI may call other things a building, which
-		the join's INI checksum refuses before any map is built, so the name carries no mod. */
+		name must never stand for two maps. Another INI may call other things a building, which the
+		join's INI checksum refuses before any map is built. */
 	if( TheThingFactory == NULL )
 		return;
-	// the CRC of the bytes read now, not the one the name was checked against: a mod mounted since
-	// may have put another file under the path
+	// the CRC of the bytes read now, not the one the name was checked against: another file may have
+	// been put under the path since
 	std::vector<char> exemplar;
 	if( !readTemplate( clamped.m_template, exemplar ) || crcOfTemplate( exemplar ) != clamped.m_templateCRC )
 	{

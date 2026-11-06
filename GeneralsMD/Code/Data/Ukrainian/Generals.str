@@ -489,24 +489,36 @@ Color:Pink
 "Рожевий"
 END
 
-Color:Crimson
-"Багряний"
-END
-
-Color:Azure
-"Лазурний"
-END
-
-Color:Salmon
-"Лососевий"
-END
-
 Color:Teal
 "Бірюзовий"
 END
 
+Color:Lime
+"Лаймовий"
+END
+
+Color:Navy
+"Темно-синій"
+END
+
+Color:Magenta
+"Пурпуровий"
+END
+
+Color:Brown
+"Коричневий"
+END
+
 Color:Lavender
 "Лавандовий"
+END
+
+Color:Coral
+"Кораловий"
+END
+
+Color:Olive
+"Оливковий"
 END
 
 MSG:Testing
@@ -16061,6 +16073,34 @@ TOOLTIP:VSync
 "Прив'язує картинку до монітора, щоб вона не рвалася. Вимкнена — картинка йде так швидко, як малює комп'ютер. Застосовується після Прийняти."
 END
 
+GUI:FrameRateLimit
+"Обмеження FPS"
+END
+
+GUI:FrameRateLimit0
+"Вимк."
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Скільки кадрів на секунду гра малює в матчі, не більше. З меншою межею відеокарта гріється й шумить менше, а гра не сповільнюється. У меню завжди не більше 60."
+END
+
 GUI:ClassicGraphics
 "Класична графіка"
 END
@@ -16334,7 +16374,7 @@ GUI:OrderLines
 END
 
 TOOLTIP:OrderLines
-"Лінія від кожного вибраного підрозділу до місця призначення і далі крізь кожну точку в черзі. Вимк. — маркери на цих точках лишаються."
+"Лінія від кожного вибраного підрозділу до місця призначення і далі крізь кожну точку в черзі. Вимк. — одиночний наказ без лінії та маркера, і клік не лишає кільця на землі; маршрут у черзі зберігає і лінію, і маркери."
 END
 
 GUI:PlayerColors
@@ -16383,10 +16423,6 @@ END
 
 TOOLTIP:SupplyPileFull
 "\n Зайнято: ліміт купи не пускає ваших збирачів"
-END
-
-TOOLTIP:StatTime
-"Час будівництва"
 END
 
 TOOLTIP:StatSeconds
@@ -16747,14 +16783,6 @@ END
 
 TOOLTIP:CloudStyle
 "Класичний використовує оригінальні ефекти токсинів і радіації. Об'ємний додає рухомий дим, темнішу ядерну імлу й марево. Діє після натискання Прийняти, також на хмари, що вже є на полі."
-END
-
-LAN:ErrorModMismatch
-"Ця гра запущена з іншими модами. Моди хоста: %s. Щоб приєднатися, запустіть гру з тими ж модами в тому ж порядку."
-END
-
-LAN:NoMod
-"немає"
 END
 
 GUI:SaveFromOlderGame
@@ -17239,6 +17267,26 @@ END
 
 GUI:HotkeysCommandAUTO_REPAIR
 "Іти на ремонт або лікування"
+END
+
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Атака в русі (наступний клік)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Примусова атака (наступний клік)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Охорона (наступний клік)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Рух (наступний клік)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Утримувати позицію"
 END
 
 GUI:LoadModeSkirmish
@@ -18074,15 +18122,15 @@ CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
 END
 
 UPGRADE:TurkiyePrecisionGuidance
-"Точне наведення"
+"Інерціальне наведення"
 END
 
 CONTROLBAR:UpgradeTurkiyePrecisionGuidance
-"&Точне наведення"
+"&Інерціальне наведення"
 END
 
 CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
-"Постріли по землі, якої ніхто не бачить, розкидаються вчетверо менше."
+"Ракети, випущені поза зоною радарів, влучають двічі з п'яти, а не один раз."
 END
 
 UPGRADE:TurkiyeArmorPack
@@ -18165,76 +18213,200 @@ CONTROLBAR:ConstructTurkiyePatriotBattery
 "Батарея H&isar"
 END
 
-SCIENCE:TurkiyeMinefield
-"Мінне поле"
+SCIENCE:TurkiyeLaserDesignation
+"Лазерне цілевказання"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceMinefield
-"Транспортний літак засіває мінне поле там, куди ви вкажете. \n \n Застосування з: Штаб"
+CONTROLBAR:ToolTipTurkiyeScienceLaserDesignation
+"Групи розвідників і Bayraktar підсвічують те, що атакують. Підсвічена ціль вважається в зоні радара, де б вона не стояла, і кожна ракета з радарним наведенням тримає на ній захоплення."
 END
 
-CONTROLBAR:TurkiyeMinefield
-"&Мінне поле"
+UPGRADE:TurkiyeLaserDesignation
+"Лазерне цілевказання"
 END
 
-CONTROLBAR:TooltipTurkiyeMinefield
-"Мінне поле \n Перезарядка: 4:00"
+SCIENCE:TurkiyeEarlyWarning
+"Раннє попередження"
 END
 
-SCIENCE:TurkiyeFuelResupply
-"Дозаправлення"
+CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
+"Кожен радар Туреччини сягає на чверть далі: Штаб, радарна вежа, Koral, Akinci і мобільний радар."
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceFuelResupply
-"Дрони Bayraktar несуть на один боєприпас більше за кожен виліт."
+UPGRADE:TurkiyeEarlyWarning
+"Раннє попередження"
+END
+
+SCIENCE:TurkiyeUavRecon
+"Розвідка БПЛА"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceUavRecon
+"БПЛА 30 секунд кружляє над зоною і повідомляє про кожен ворожий підрозділ у ній, що стоїть чи рухається, і про те, що це. Туман лишається, але зона вважається в зоні радара. \n \n Застосування з: Штаб"
+END
+
+CONTROLBAR:TurkiyeUavRecon
+"&Розвідка БПЛА"
+END
+
+CONTROLBAR:TooltipTurkiyeUavRecon
+"Розвідка БПЛА \n Перезарядка: 2:00"
+END
+
+GUI:HudReconSiha
+"РОЗВІДКА БПЛА"
+END
+
+SCIENCE:TurkiyeMobileRadar
+"Мобільний радар"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
+"Завод випускає мобільний радар: радарну вантажівку, що охоплює 900 навколо себе, поки стоїть."
+END
+
+OBJECT:TurkiyeVehicleMobileRadar
+"Мобільний радар"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleMobileRadar
+"&Мобільний радар"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleMobileRadar
+"Радар на колесах: стоячи, охоплює 900 навколо себе, у русі - нічого. Без зброї. \n \n Потрібно: Мобільний радар (звання 3)"
+END
+
+SCIENCE:TurkiyeAkinciAesa
+"АФАР Akinci"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAkinciAesa
+"Радар Akinci сягає 1000 замість 750."
+END
+
+UPGRADE:TurkiyeAkinciAesa
+"АФАР Akinci"
 END
 
 SCIENCE:TurkiyeSwarmMunition
-"Блукаючий боєприпас"
+"Рій БПЛА 1"
+END
+
+SCIENCE:TurkiyeSwarmMunition2
+"Рій БПЛА 2"
+END
+
+SCIENCE:TurkiyeSwarmMunition3
+"Рій БПЛА 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceSwarmMunition
-"Один блукаючий боєприпас кружляє там, куди ви вкажете, і пікірує на найдорожчу ціль, яку знайде. \n \n Застосування з: Штаб"
+"Блукаючі боєприпаси кружляють там, куди ви вкажете, і кожен пікірує на найдорожчу ціль, яку знайде: один на рівні 1, три на рівні 2, п'ять на рівні 3. \n \n Застосування з: Штаб"
 END
 
 CONTROLBAR:TurkiyeSwarmMunition
-"Блукаючий &боєприпас"
+"&Рій БПЛА"
 END
 
 CONTROLBAR:TooltipTurkiyeSwarmMunition
-"Блукаючий боєприпас \n Перезарядка: 3:00"
+"Рій БПЛА \n Перезарядка: 3:00"
 END
 
 SCIENCE:TurkiyeElectronicBlinding
-"Електронне осліплення"
+"Радіоелектронна боротьба"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceElectronicBlinding
-"Кожен ворог із будівлею в зоні цілі втрачає радар на 30 секунд. \n \n Застосування з: Штаб"
+"Кожен ворог із будівлею в зоні цілі втрачає радар на 30 секунд, і весь цей час зона заглушена: ворожі дрони й навідники в ній нічого не бачать, а керовані ракети, що пролітають крізь неї, втрачають захоплення. \n \n Застосування з: Штаб"
 END
 
 CONTROLBAR:TurkiyeElectronicBlinding
-"Електронне &осліплення"
+"Радіоелектронна &боротьба"
 END
 
 CONTROLBAR:TooltipTurkiyeElectronicBlinding
-"Електронне осліплення \n Перезарядка: 4:00"
+"Радіоелектронна боротьба \n Перезарядка: 4:00"
 END
 
-SCIENCE:TurkiyeSwarmStrike
-"Удар рою"
+SCIENCE:TurkiyeSatelliteGuidance
+"Супутникове наведення"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceSwarmStrike
-"Рій боєприпасів полює на десять найцінніших цілей на великій площі, по одному боєприпасу на ціль. Щільній базі це байдуже, розпорошеній армії ні. \n \n Застосування з: Штаб"
+CONTROLBAR:ToolTipTurkiyeScienceSatelliteGuidance
+"45 секунд уся карта вважається в зоні радара Туреччини: кожна ракета з радарним наведенням тримає захоплення, а ворогів, що рухаються, видно під туманом. \n \n Застосування з: Штаб"
 END
 
-CONTROLBAR:TurkiyeSwarmStrike
-"&Удар рою"
+CONTROLBAR:TurkiyeSatelliteGuidance
+"&Супутникове наведення"
 END
 
-CONTROLBAR:TooltipTurkiyeSwarmStrike
-"Удар рою \n Перезарядка: 6:00"
+CONTROLBAR:TooltipTurkiyeSatelliteGuidance
+"Супутникове наведення \n Перезарядка: 5:00"
+END
+
+SCIENCE:TurkiyeTayfun
+"Ракета Tayfun"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceTayfun
+"Балістична ракета Tayfun падає на ціль. У зоні радара вона завжди влучає; поза нею влучає в точку один раз із п'яти, а решту разів лягає далеко. \n \n Застосування з: Штаб"
+END
+
+CONTROLBAR:TurkiyeTayfun
+"Ракета &Tayfun"
+END
+
+CONTROLBAR:TooltipTurkiyeTayfun
+"Ракета Tayfun \n Перезарядка: 4:00"
+END
+
+UPGRADE:TurkiyeTargetClassification
+"Класифікація цілей"
+END
+
+CONTROLBAR:UpgradeTurkiyeTargetClassification
+"&Класифікація цілей"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeTargetClassification
+"Радарні позначки показують, що це: піхота, техніка, ППО, артилерія, авіація чи оборона."
+END
+
+UPGRADE:TurkiyeAkkor
+"Активний захист AKKOR"
+END
+
+CONTROLBAR:UpgradeTurkiyeAkkor
+"&Активний захист AKKOR"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAkkor
+"Кожен Altay несе заряд активного захисту, який раз на три секунди підриває ракету чи реактивний снаряд, що підлітає."
+END
+
+UPGRADE:TurkiyeGokdogan
+"Ракети Gokdogan"
+END
+
+CONTROLBAR:UpgradeTurkiyeGokdogan
+"Ракети &Gokdogan"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeGokdogan
+"Kizilelma стріляють Gokdogan: дальність 360 замість 280, шкода 130 замість 100."
+END
+
+UPGRADE:TurkiyeSiperReinforced
+"Укріплений Siper"
+END
+
+CONTROLBAR:UpgradeTurkiyeSiperReinforced
+"&Укріплений Siper"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
+"Бетон і перекриття: кожен Siper витримує в півтора раза більше."
 END
 
 UPGRADE:TurkiyeThermal
@@ -18273,40 +18445,28 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSwarmSoftware
 "Боєприпаси Bayraktar самі обирають ціль: найдорожчого ворога в досяжності."
 END
 
-UPGRADE:TurkiyeFuelResupply
-"Дозаправлення"
+SCIENCE:TurkiyeRapidDeployment
+"Десант Gokbey 1"
 END
 
-SCIENCE:TurkiyeRapidDeployment
-"Швидке розгортання"
+SCIENCE:TurkiyeRapidDeployment2
+"Десант Gokbey 2"
+END
+
+SCIENCE:TurkiyeRapidDeployment3
+"Десант Gokbey 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceRapidDeployment
-"Транспортний літак скидає шістьох Mehmetcik і двох гранатометників Sungur там, куди ви вкажете. \n \n Застосування з: Штаб"
+"Стрільці Mehmetcik і гранатометники Sungur висаджуються з парашутами там, куди ви вкажете: шість на рівні 1, десять на рівні 2, чотирнадцять і Kirpi на рівні 3. \n \n Застосування з: Штаб"
 END
 
 CONTROLBAR:TurkiyeRapidDeployment
-"&Швидке розгортання"
+"&Десант Gokbey"
 END
 
 CONTROLBAR:TooltipTurkiyeRapidDeployment
-"Швидке розгортання \n Перезарядка: 3:00"
-END
-
-SCIENCE:TurkiyeFireMission
-"Вогнева місія"
-END
-
-CONTROLBAR:ToolTipTurkiyeScienceFireMission
-"Тридцять шість важких снарядів падають на ціль із-за меж карти. \n \n Застосування з: Штаб"
-END
-
-CONTROLBAR:TurkiyeFireMission
-"&Вогнева місія"
-END
-
-CONTROLBAR:TooltipTurkiyeFireMission
-"Вогнева місія \n Перезарядка: 4:00"
+"Десант Gokbey \n Перезарядка: 3:00"
 END
 
 SCIENCE:TurkiyeCommandoRaid
@@ -18371,4 +18531,100 @@ END
 
 GUI:SuperweaponTurkiyeKarguSwarm
 "Рій Kargu"
+END
+
+CONTROLBAR:ToolTipEvacuateAt
+"Вирушити у вибрану точку й наказати всім підрозділам вийти\nAlt: висадити тут"
+END
+
+GUI:OptionsTabWater
+"Вода"
+END
+
+GUI:OptionsGroupReflections
+"Відображення"
+END
+
+GUI:OptionsGroupModernWater
+"Сучасна вода"
+END
+
+GUI:WaterReflectionEnabled
+"Відображення сцени"
+END
+
+TOOLTIP:WaterReflectionEnabled
+"Відображає сцену на сучасній воді. Вимкнення підвищує продуктивність, зберігаючи колір неба й відблиски сонця. Режим відображення запам’ятовується. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterFftResolution
+"Деталізація хвиль"
+END
+
+GUI:WaterFftResolution0
+"Низька"
+END
+
+GUI:WaterFftResolution1
+"Висока"
+END
+
+TOOLTIP:WaterFftResolution
+"Визначає деталізацію хвиль сучасної води. Низька підвищує продуктивність; висока показує більше деталей. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterRefractionQuality
+"Заломлення"
+END
+
+GUI:WaterRefractionQuality0
+"Повне"
+END
+
+GUI:WaterRefractionQuality1
+"Просте"
+END
+
+GUI:WaterRefractionQuality2
+"Вимкнено"
+END
+
+TOOLTIP:WaterRefractionQuality
+"Для сучасної води. Повне заломлення спотворює вигляд під поверхнею. Просте залишає воду прозорою без спотворення. Вимкнено робить воду непрозорою й забарвленою для кращої продуктивності. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterReflectionDetail
+"Деталі відбиття"
+END
+
+GUI:WaterReflectionDetail0
+"Низька"
+END
+
+GUI:WaterReflectionDetail1
+"Висока"
+END
+
+TOOLTIP:WaterReflectionDetail
+"Керує деталізацією відображень сцени на сучасній воді. Низька настройка підвищує продуктивність. Висока забезпечує чіткіші відображення. Роздільність SSR не змінюється. Застосовується після натискання «Прийняти»."
+END
+
+GUI:WaterReflection
+"Режим відображення"
+END
+
+GUI:WaterReflection0
+"Класичний"
+END
+
+GUI:WaterReflection1
+"SSR"
+END
+
+GUI:WaterReflection2
+"Гібридний"
+END
+
+TOOLTIP:WaterReflection
+"Для сучасної води з увімкненими відображеннями сцени. Класичний використовує оригінальні відображення. SSR відображає видимий на екрані вміст. Гібридний поєднує обидва варіанти й обраний за замовчуванням. Застосовується після натискання «Прийняти»."
 END

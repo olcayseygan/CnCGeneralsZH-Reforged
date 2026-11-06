@@ -1257,9 +1257,8 @@ const MapMetaData *MapCache::findMap(AsciiString mapName)
 	// the start positions are dealt out, and that caller does not survive a no.  Two ways to get
 	// here: a generated map is in the cache only if something staged it this run, and a replay, a
 	// save or a game somebody else is hosting names one that nothing here has built (the name
-	// carries the settings, so it is built on the spot); and a mod's own Maps\MapCache.ini shadows
-	// the shipped one, so a shipped map the mod's file leaves out - the Generals Challenge maps
-	// under some mods - is in the archives but nowhere in the cache.
+	// carries the settings, so it is built on the spot); and a Maps\MapCache.ini that leaves a
+	// shipped map out, which is then in the archives but nowhere in the cache.
 	//
 	FileInfo fileInfo;
 	if (!TheFileSystem->getFileInfo(mapName, &fileInfo))

@@ -302,6 +302,13 @@ extern void PartitionManager_findSightMargins( const Real *heights, Int cellRadi
 enum { SIGHT_CELL_GROUND = 0x01, SIGHT_CELL_AIR = 0x02 };
 extern UnsignedByte PartitionManager_sightCellFlags( Bool groundRevealed, Int offsetX, Int offsetY, Int flatCellRadius );
 
+/** Open the one-cell holes and streaks a tree or a bump in the ground leaves in a hill-blocked
+	sighting, side cells a side: a hidden cell with SIGHT_GAP_SEEN_NEIGHBOURS of its eight neighbours
+	in sight comes into sight. Judged on the sighting as it was, so one opened hole never opens the
+	next, and the square's border is left alone, so the sight never grows past its edge. */
+enum { SIGHT_GAP_SEEN_NEIGHBOURS = 6 };
+extern void PartitionManager_closeSightGaps( UnsignedByte *revealedCells, Int side );
+
 //=====================================
 /**
 	We sometimes need to save whether or not an area was fogged or permanently revealed through a 
@@ -1066,15 +1073,17 @@ protected:
 
 //=====================================
 /**
- * Accept if they are at least partly clear, not wholly fogged or shrouded
+ * Accept if they are at least partly clear, not wholly fogged or shrouded, or, given a radar
+ * player, if that player's radar tracks them in the fog (RadarCoverageBehavior::isTracked)
  */
 class PartitionFilterFreeOfFog : public PartitionFilter
 {
 private:
 	Int m_comparisonIndex;
+	const Player *m_radar;
 public:
-	PartitionFilterFreeOfFog(Int toWhom) : 
-			m_comparisonIndex(toWhom){}
+	PartitionFilterFreeOfFog(Int toWhom, const Player *radar = NULL) :
+			m_comparisonIndex(toWhom), m_radar(radar){}
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1322,7 +1331,7 @@ private:
 	Bool						m_updatedSinceLastReset;	///< Used to force a return of OBJECTSHROUD_INVALID before update has been called.
 	Bool						m_cellsFromSave;					///< see isKeepingCellsFromSave
 
-	std::queue<SightingInfo *> m_pendingUndoShroudReveals;	///< Anything can queue up an Undo to happen later. This is a queue, because "later" is a constant
+	std::deque<SightingInfo *> m_pendingUndoShroudReveals;	///< Undos waiting for their frame, sorted by it: an unlook waits a constant and goes on the back, a timed reveal is inserted in order
 
 #ifdef FASTER_GCO
 	Int							m_maxGcoRadius;
@@ -1443,6 +1452,7 @@ public:
 	void doShroudReveal( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
 	void undoShroudReveal( Real centerX, Real centerY, Real radius, PlayerMaskType playerMask);
 	void queueUndoShroudReveal( SightingInfo *sighting );	///< takes the sighting's recorded cells with it
+	void doTimedShroudReveal( const Coord3D *center, Real radius, PlayerMaskType playerMask, UnsignedInt frames );	///< reveal now, undone after frames
 
 	/** Reveal the circle around an eye except where a hill or a building stands between the eye and
 		the ground, and record in the sighting which cells that was. The looker never hides behind
@@ -1526,11 +1536,12 @@ public:
 	);
 
 	SimpleObjectIterator *iterateObjectsInRange(
-		const Coord3D *pos, 
-		Real maxDist, 
-		DistanceCalculationType dc, 
-		PartitionFilter **filters = NULL, 
-		IterOrderType order = ITER_FASTEST
+		const Coord3D *pos,
+		Real maxDist,
+		DistanceCalculationType dc,
+		PartitionFilter **filters = NULL,
+		IterOrderType order = ITER_FASTEST,
+		PlayerMaskType onlyPlayers = PLAYERMASK_ALL	///< as for getClosestObject
 	);
 
 	SimpleObjectIterator *iterateAllObjects(PartitionFilter **filters = NULL);		

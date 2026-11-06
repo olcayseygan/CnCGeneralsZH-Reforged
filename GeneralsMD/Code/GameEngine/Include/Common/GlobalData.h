@@ -180,6 +180,8 @@ public:
 														///< empty is the primary.  See Common/Monitors.h.
 	Int m_msaaLevel;					///< multisampling, as an index into the levels the options menu offers
 	Bool m_vsync;						///< wait for the monitor; off is the uncapped picture the frame-rate cap removal shipped
+	Int m_frameRateLimit;			///< "FrameRateLimit": the player's picture cap as a level, frameRateLimitForLevel gives the rate
+	Bool m_noFrameRateCap;		///< -noFPSLimit: no picture cap at all, the shell's 60 included
 	Bool m_direct3D11;			///< draw and present through the Direct3D 11 backend; -d3d9 and -headless turn it off
 	AsciiString m_direct3D11DumpPath;	///< -dx11dump: where to write each generated program
 	AsciiString m_direct3D11PostChain;	///< -dx11post: the effects run over the finished D3D11 frame
@@ -219,6 +221,11 @@ public:
 	Bool m_smoothMotion;				// R1: on a display faster than the logic, models drawn between their last two logic states (W3DSmoothMotion.h); -nosmoothmotion turns it off
 	Bool m_smoothMotionAnyDisplay;	// -smoothmotion: the same whatever the display's refresh rate
 	Int m_waterStyle;					// "WaterStyle": 0 = Classic, 1 = Modern (SDL); applied between render frames
+	Int m_waterReflection;			// "WaterReflection": 0 = Legacy, 1 = SSR, 2 = Hybrid; SDL Modern water
+	Bool m_waterReflectionEnabled; // scene reflections; remembers the selected mode
+	Int m_waterFftResolution;		// 0 = Low (128), 1 = High (256)
+	Int m_waterRefractionQuality; // 0 = Full, 1 = Simple, 2 = Off
+	Int m_waterReflectionDetail; // 0 = Low, 1 = High planar resolution
 	Int m_cloudStyle;					// "CloudStyle": 0 = Classic (default), 1 = Volumetric (when supported)
 	Bool m_explosionDebrisTrails;	// "DebrisTrails": blasts throw smoke-trailing fragments and burning shrapnel
 	Int m_shadowQuality;				// "ShadowQuality": the sun's depth map at 1024, 2048 or 4096 texels a side (Direct3D 11)
@@ -377,6 +384,7 @@ public:
 	Int m_playerColorScheme;			///< PlayerColorSchemeType: whose colour the client draws (client only)
 	Int m_textLanguage;						///< TextLanguageType: the translation GameText lays over the CSF, read once at startup (client only)
 	Bool m_showOrderLines;				///< draw a line from each selected unit to where it is going, and its queue (client only)
+	Bool m_aircraftAltitudeLine;	///< "AircraftAltitudeLine": a line from each aircraft in the air down to the ground under it (client only)
 	Bool m_scriptDebug;						///< Should we attempt to load the script debugger window (.DLL)
 	Bool m_particleEdit;					///< Should we attempt to load the particle editor (.DLL)
 	Bool m_displayDebug;					///< Used to display display debug info
@@ -596,7 +604,6 @@ public:
 	UnsignedInt m_iniCRC;							///< CRC of important INI files
 	UnsignedInt m_exeCRC;							///< CRC of the executable
 	void computeExeCRC( void );				///< m_exeCRC from the build fingerprint, the version and the two scb as they resolve now
-	UnsignedInt m_baseExeCRC;					///< m_exeCRC before any -mod mounted: the build without its mods, for the LAN mod check
 
 	BodyDamageType m_movementPenaltyDamageState;	///< at this body damage state, we have movement penalties
 
@@ -764,13 +771,6 @@ public:
 
 	Bool				m_isBreakableMovie;							///< if we enter a breakable movie, set this flag
 	Bool				m_breakTheMovie;								///< The user has hit escape!
-	std::vector<AsciiString> m_mods;	///< every -mod in command-line order, later wins: a folder ends in '\', anything else is a .big
-	AsciiString m_modName;	///< UTF-8, each mod's "<name> <version>" from its mod.json (else the folder or archive name), joined by ", " in m_mods order; empty without -mod
-	std::vector<AsciiString> m_modNames;	///< UTF-8, each mod's mod.json "name" (else the folder or archive name), in m_mods order
-	std::vector<Bool> m_modIsPatch;	///< -modpatch: TRUE for each m_mods entry given as a patch; with no full -mod the patches stack as plain mods
-	std::vector< std::vector<AsciiString> > m_modPatches;	///< -modfactions: the -modpatch folders over each m_mods[n], later wins
-	std::vector<AsciiString> m_retailPatches;	///< -modfactions: the -modpatch folders given before any -mod, over retail's files
-	Bool m_modFactions;	///< any full -mod given: every mod's factions load beside retail's under "M<n>~" names (ModNamespace).  "-modfactions" in a comment is this; the switch is gone
 
 	//-allAdvice feature
 	//Bool m_allAdvice;

@@ -86,7 +86,7 @@ Real ArmorTemplate::adjustDamage(DamageType t, Real damage) const
 {
 	ArmorTemplate* self = (ArmorTemplate*) instance;
 
-	const char* damageName = INI::withoutModPrefix(ini->getNextToken());
+	const char* damageName = ini->getNextToken();
 	Real pct = INI::scanPercentToReal(ini->getNextToken());
 
 	if (strcasecmp(damageName, "Default") == 0)
@@ -99,7 +99,7 @@ Real ArmorTemplate::adjustDamage(DamageType t, Real damage) const
 	}
 
 	// EA's parse let a misspelt type through (The Power of the West has INFANTRY_MISSIL) and wrote it at
-	// index -1; the line is skipped instead, as a mod's data written against retail expects
+	// index -1; the line is skipped instead, as data written against retail expects
 	Int dt = DamageTypeFlags::getSingleBitFromName(damageName);
 	if (dt < 0)
 	{
@@ -131,8 +131,7 @@ const ArmorTemplate* ArmorStore::findArmorTemplate(AsciiString name) const
   ArmorTemplateMap::const_iterator it = m_armorTemplates.find(namekey);
   if (it == m_armorTemplates.end())
 	{
-		AsciiString retailName;
-		return TheModNamespace.findRetailName(name, MODNAME_ARMOR, &retailName) ? findArmorTemplate(retailName) : NULL;
+		return NULL;
 	}
 	else
 	{
@@ -170,7 +169,7 @@ void ArmorStore::reset()
 	if (ini->getLoadType() == INI_LOAD_MULTIFILE && existing == TheArmorStore->m_armorTemplates.end())
 	{
 		// BalanceReforged.ini rewrites armors objects already wear; a new name would reach nothing.
-		// A mod's Armor.ini without it: the block is read and dropped, as for a missing object.
+		// An Armor.ini without it: the block is read and dropped, as for a missing object.
 		DEBUG_LOG(("[LINE: %d in '%s'] Armor '%s' is patched but was never defined; the block is skipped.\n", ini->getLineNum(), ini->getFilename().str(), c));
 		ArmorTemplate scratch;
 		ini->initFromINI(&scratch, myFieldParse);
@@ -178,6 +177,7 @@ void ArmorStore::reset()
 	}
 	ArmorTemplate& armorTmpl = TheArmorStore->m_armorTemplates[key];
 	armorTmpl.clear();
+	armorTmpl.m_name = c;
 	ini->initFromINI(&armorTmpl, myFieldParse);
 }
 

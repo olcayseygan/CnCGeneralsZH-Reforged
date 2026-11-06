@@ -168,6 +168,8 @@ source_dir="$(cd "$(dirname "$0")/.." && pwd)"
 commit="$(git -C "$source_dir" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
 if [ "$commit" != unknown ] && ! git -C "$source_dir" diff --quiet HEAD -- . 2>/dev/null; then commit="$commit-dirty"; fi
 built="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+network_usage_en='Zero Hour Reforged uses the local network to find and host LAN games and connect to other players.'
+network_usage_de='Zero Hour Reforged verwendet das lokale Netzwerk, um LAN-Spiele zu finden, zu hosten und mit anderen Spielern zu spielen.'
 cat > "$C/Info.plist" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -187,12 +189,22 @@ cat > "$C/Info.plist" <<PLIST_EOF
 	<key>LSApplicationCategoryType</key>		<string>public.app-category.strategy-games</string>
 	<key>LSMinimumSystemVersion</key>		<string>$minos</string>
 	<key>NSHighResolutionCapable</key>		<true/>
+	<key>NSLocalNetworkUsageDescription</key>	<string>$network_usage_en</string>
 	<key>ZHReforgedBuildDate</key>			<string>$built</string>
 	<key>ZHReforgedCommit</key>			<string>$commit</string>
 </dict>
 </plist>
 PLIST_EOF
 plutil -lint "$C/Info.plist" >/dev/null || fail "Info.plist does not lint"
+# macOS 15 and later ask for local-network access when the LAN lobby uses UDP.
+# Localize that system-owned prompt; older supported macOS versions ignore the key.
+for locale in en de; do
+	case "$locale" in en) description="$network_usage_en";; de) description="$network_usage_de";; esac
+	mkdir -p "$C/Resources/$locale.lproj" || fail "cannot create the $locale localization"
+	strings="$C/Resources/$locale.lproj/InfoPlist.strings"
+	printf '"NSLocalNetworkUsageDescription" = "%s";\n' "$description" > "$strings" || fail "cannot write $strings"
+	plutil -lint "$strings" >/dev/null || fail "$strings does not lint"
+done
 printf 'APPL????' > "$C/PkgInfo"
 
 # the icon: the .ico's 48 px image scaled to every size an .icns holds

@@ -1,0 +1,5 @@
+# Scenarios/gunfx.txt held, closer than Cinema/gunfx.txt and without its orbit, on bright desert
+# ground: the tracers against sand, for the glow's wash-out. Command line as in gunfx.txt with
+# -cinema tracers_desert -video 180 720 <name> -maxframes 740.
+
+1.0   cut     1350 3850 0.7 -45 8

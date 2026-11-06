@@ -1,0 +1,32 @@
+# Rocket and missile exhaust for the -heathaze trail splats: missilespam.txt's first wave (Tank
+# Hunters and Rocket Buggies against Missile Defenders, Paladins and Overlords) on Twilight Flame,
+# with Tomahawks firing on the Overlords from the east, Raptors loosing their missiles on them, and
+# two GLA Stinger sites shooting at Comanches flying over. Seat 0 China (with GLA), seat 1 America.
+# Held side on with Cinema/rocketfx.txt:
+#
+#   generals.exe -borderless -msaa 0 -noFPSLimit -particlecap 2500 -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 7 -scenario rocketfx -cinema rocketfx
+#     -video 240 780 <name> -maxframes 800 [-heathaze]
+
+60    spawn         1  AmericaTankPaladin              4   1750 3550 40
+60    spawn         0  ChinaTankOverlord               3   1800 3650 60
+60    spawn         0  ChinaInfantryTankHunter         16  1450 3800 15
+60    spawn         0  GLAVehicleRocketBuggy           6   1450 3900 30
+60    spawn         1  AmericaInfantryMissileDefender  12  1700 3620 15
+60    spawn         1  AmericaVehicleTomahawk          3   2050 3700 40
+60    spawn         0  GLAStingerSite                  2   1500 3980 120
+60    spawn         1  AmericaJetRaptor                4   2100 3400 70
+60    spawn         1  AmericaVehicleComanche          3   1900 3450 50
+
+90    attackmove    0  ChinaInfantryTankHunter             1750 3550
+90    attackmove    0  GLAVehicleRocketBuggy               1750 3550
+90    attackmove    1  AmericaInfantryMissileDefender      1800 3650
+90    attack        1  AmericaVehicleTomahawk          0   ChinaTankOverlord
+90    attack        1  AmericaJetRaptor                0   ChinaTankOverlord
+90    attackmove    1  AmericaVehicleComanche              1450 3900
+
+90    tally         0  *
+90    tally         1  *
+380   tally         0  *
+380   tally         1  *

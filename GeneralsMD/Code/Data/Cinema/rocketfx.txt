@@ -1,0 +1,6 @@
+# Scenarios/rocketfx.txt held side on to the east-west rocket fire, low, so a -heathaze run and one
+# without it see the same frame. lsv_spam2's 1600 3700 left the fight on the top edge behind empty
+# ground; at heading 0 the frame's top is +y, so the aim is moved up to the Tank Hunters' line.
+# Command line in the scenario's header.
+
+1.0   cut     1620 3860 0.6 0 10

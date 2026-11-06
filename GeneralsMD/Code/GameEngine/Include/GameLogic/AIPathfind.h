@@ -1110,7 +1110,7 @@ protected:
 	void closeSearch( void );						///< hand back the lists of the main search that just ended
 	Path *findHierarchicalPath( Bool isHuman, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to, Bool crusher);	
 	Path *findClosestHierarchicalPath( Bool isHuman, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to, Bool crusher);	
-	Path *internal_findHierarchicalPath( Bool isHuman, const LocomotorSurfaceTypeMask locomotorSurface, const Coord3D *from, const Coord3D *to, Bool crusher, Bool closestOK);	
+	Path *internal_findHierarchicalPath( Bool isHuman, const LocomotorSurfaceTypeMask locomotorSurface, const Coord3D *from, const Coord3D *to, Bool crusher, Bool closestOK, Int cellCap = 0);	///< cellCap 0 searches every block
 	void processHierarchicalCell( const ICoord2D &scanCell, const ICoord2D &deltaPathfindCell,
 																PathfindCell *parentCell, 
 																PathfindCell *goalCell, zoneStorageType parentZone, 

@@ -171,6 +171,11 @@ static Int thePFWedgeWorst = 0;			///< and the longest one unit was left that wa
 static Int thePFEscapes = 0;				///< backing-out manoeuvres started
 static Int thePFCrowdRepaths = 0;		///< routes given up on because nothing on them could get past
 static Int thePFDithers = 0;					///< units caught driving a long way and gaining nothing
+/* The queue's budget is a count of cells, and the claim it makes is about the frame: these count the
+	 logic frames whose queue, the zone pass left out, ran past 3 and past 5 ms. The match's queue total
+	 hides the frames that blow the budget among the many that do not. */
+static Int thePFQueueOver3 = 0;
+static Int thePFQueueOver5 = 0;
 
 inline void pfBump( Int slot ) { thePFCalls[ slot ]++; }
 
@@ -5246,6 +5251,14 @@ Real Pathfinder::laneExtent( const Object *obj, const LocomotorSet& locomotorSet
 
 void Pathfinder::resetProfile( void )
 {
+	static Int64 freq = 0;
+	if( freq == 0 )
+		freq = Clock_Ticks_Per_Second();
+	const Int64 queue = thePFTicks[ PF_QUEUE ] - thePFTicks[ PF_ZONES ];
+	if( queue * 1000 > freq * 3 )
+		thePFQueueOver3++;
+	if( queue * 1000 > freq * 5 )
+		thePFQueueOver5++;
 	for( Int i = 0; i < PF_SLOTS; i++ )
 	{
 		// the frame that is ending is the only place the match totals can pick this up
@@ -5273,6 +5286,8 @@ void Pathfinder::resetMatchProfile( void )
 	thePFEscapes = 0;
 	thePFCrowdRepaths = 0;
 	thePFDithers = 0;
+	thePFQueueOver3 = 0;
+	thePFQueueOver5 = 0;
 }
 
 void Pathfinder::bumpNoPath( void )
@@ -5334,11 +5349,12 @@ const char *Pathfinder::getMatchProfileReport( void )
 		strcpy( thePFMatchReport + len, one );
 		len += oneLen;
 	}
-	if( len < (Int)sizeof( thePFMatchReport ) - 128 )
+	if( len < (Int)sizeof( thePFMatchReport ) - 192 )
 		sprintf( thePFMatchReport + len,
-						 "| nopath %d outofcells %d blocked %d stuck %d wedge %d worst %d escape %d repath %d dither %d",
+						 "| nopath %d outofcells %d blocked %d stuck %d wedge %d worst %d escape %d repath %d dither %d queueover3ms %d queueover5ms %d",
 						 thePFNoPath, thePFOutOfCells, thePFBlockedFrames, thePFStuckFrames,
-						 thePFWedgeFrames, thePFWedgeWorst, thePFEscapes, thePFCrowdRepaths, thePFDithers );
+						 thePFWedgeFrames, thePFWedgeWorst, thePFEscapes, thePFCrowdRepaths, thePFDithers,
+						 thePFQueueOver3, thePFQueueOver5 );
 	return thePFMatchReport;
 }
 
@@ -8391,18 +8407,6 @@ Path *Pathfinder::findPath( Object *obj, const LocomotorSet& locomotorSet, const
 	if (!clientSafeQuickDoesPathExist(locomotorSet, from, rawTo)) {
 		return NULL;
 	}
-	Bool isHuman = true;
-	if (obj && obj->getControllingPlayer() && (obj->getControllingPlayer()->getPlayerType()==PLAYER_COMPUTER)) {
-		isHuman = false; // computer gets to cheat.
-	}
-
-	m_zoneManager.clearPassableFlags();
-	Path *hPat = findHierarchicalPath(isHuman, locomotorSet, from, rawTo, false);
-	if (hPat) {
-		hPat->deleteInstance();
-	}	else {
-		m_zoneManager.setAllPassable();
-	}
 
 	/* the corridor the hierarchical search laid out used to get a second, unrestricted retry
 		 when the cell search failed inside it - on the grounds that the corridor can be too
@@ -8410,7 +8414,6 @@ Path *Pathfinder::findPath( Object *obj, const LocomotorSet& locomotorSet, const
 		 is what makes a logic frame take seconds: measured searches ran to 140513 cells / 285ms
 		 against a 5000-cell-per-frame budget.  A corridor that is too tight is a corridor to
 		 widen, not a reason to drop the corridor, so the retry is gone. */
-	m_lastSearchRestricted = (hPat != NULL);
 	Path *pat = internalFindPath(obj, locomotorSet, from, rawTo);
 	if (pat!=NULL) {
 		return pat;
@@ -8532,18 +8535,6 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 		return NULL;
 	}
 
-	ICoord2D pos2d;
-	worldToCell(to, &pos2d);
-	if (!goalCell->allocateInfo(pos2d)) {
-		return NULL;
-	}
-	if (parentCell!=goalCell) {
-		worldToCell(&clipFrom, &pos2d);
-		if (!parentCell->allocateInfo(pos2d)) {
-			goalCell->releaseInfo();
-			return NULL;
-		}
-	}
 	//
 	// Determine if this pathfind is "tunneling" or not.
 	// A tunneling pathfind starts from within an obstacle, and is allowed
@@ -8563,14 +8554,10 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	zone2 =  m_zoneManager.getEffectiveZone(locomotorSet.getValidSurfaces(), isCrusher, goalCell->getZone());
 
 	if (layer==LAYER_WALL && zone1 == 0) {
-		goalCell->releaseInfo();
-		parentCell->releaseInfo();
 		return NULL;
 	}
 
 	if (destinationLayer==LAYER_WALL && zone2 == 0) {
-		goalCell->releaseInfo();
-		parentCell->releaseInfo();
 		return NULL;
 	}
 
@@ -8588,17 +8575,49 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 
 	if ( zone1 != zone2) {
 		//DEBUG_LOG(("Intense Debug Info - Pathfind Zone screen failed-cannot reach desired location.\n"));
-		goalCell->releaseInfo();
-		parentCell->releaseInfo();
 		return NULL;
 	}
 
 	// sanity check - if destination is invalid, can't path there
 	if (validMovementPosition( isCrusher, destinationLayer, locomotorSet, to ) == false)	{
 		m_isTunneling = false;
-		goalCell->releaseInfo();
-		parentCell->releaseInfo();
 		return NULL;
+	}
+
+	/* The hierarchical pre-search lays the corridor the cell search keeps to, and it used to run in
+		 findPath before any of the screens above. A request one of them refuses needs no corridor, and
+		 its pre-search was the frame's dearest work: on the minute-20 window of Twilight Flame with
+		 eight Hard AIs a refused request's pre-search ran to 2.9 ms ahead of the closest-path fallback
+		 that answered it instead. Run here, it is asked only for a search that will happen. The
+		 screens read no corridor, the pre-search asks without a unit, and it clears the tunneling
+		 flag, so both are put back for the cell search. */
+	{
+		const Bool tunneling = m_isTunneling;
+		m_zoneManager.clearPassableFlags();
+		Path *hPat = findHierarchicalPath(isHuman, locomotorSet, from, rawTo, false);
+		if (hPat) {
+			hPat->deleteInstance();
+		}	else {
+			m_zoneManager.setAllPassable();
+		}
+		m_lastSearchRestricted = (hPat != NULL);
+		m_isTunneling = tunneling;
+		beginFlowSearch(obj);
+	}
+
+	ICoord2D pos2d;
+	worldToCell(to, &pos2d);
+	if (!goalCell->allocateInfo(pos2d)) {
+		m_isTunneling = false;
+		return NULL;
+	}
+	if (parentCell!=goalCell) {
+		worldToCell(&clipFrom, &pos2d);
+		if (!parentCell->allocateInfo(pos2d)) {
+			goalCell->releaseInfo();
+			m_isTunneling = false;
+			return NULL;
+		}
 	}
 
 	// sanity check - if source is invalid, we have to cheat
@@ -9687,7 +9706,17 @@ Path *Pathfinder::findHierarchicalPath( Bool isHuman, const LocomotorSet& locomo
 													 const Coord3D *to, Bool crusher)
 {
 	PathProfile pfProfile( PF_HIER );
-	return internal_findHierarchicalPath(isHuman, locomotorSet.getValidSurfaces(), from, to, crusher, FALSE);
+	/* findPath's pre-search runs ahead of the queue's cell budget and cannot stop for it, so it gets
+		 a cap of its own. Each count is a scan cell and its neighbour across the block edge, two cells
+		 on the lists, so this stops at about 5000. On Twilight Flame with eight Hard AIs, three seeds
+		 to frame 42000, no pre-search that found its corridor listed 5000 cells (the largest of the 680
+		 logged past 2500 was 4502), and every one that failed and listed more than 100 walked the whole
+		 map, 9798 to 10853, for 4 to 7 ms; most were a builder a cell from its site, whose
+		 under-construction footprint splits the block zones the search walks. A failed pre-search is a
+		 cell search on the open map, so a capped one answers the same. */
+	enum { MAX_HIERARCHICAL_CELL_COUNT = 2500 };
+	return internal_findHierarchicalPath(isHuman, locomotorSet.getValidSurfaces(), from, to, crusher, FALSE,
+		MAX_HIERARCHICAL_CELL_COUNT);
 }
 
 
@@ -9708,8 +9737,8 @@ Path *Pathfinder::findClosestHierarchicalPath( Bool isHuman, const LocomotorSet&
  * Find a short, valid path between given locations.
  * Uses A* algorithm.
  */
-Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSurfaceTypeMask locomotorSurface, const Coord3D *from, 
-													 const Coord3D *rawTo, Bool crusher, Bool closestOK)
+Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSurfaceTypeMask locomotorSurface, const Coord3D *from,
+													 const Coord3D *rawTo, Bool crusher, Bool closestOK, Int cellCap)
 {
 	//CRCDEBUG_LOG(("Pathfinder::findGroundPath()\n"));
 #if defined _DEBUG || defined _INTERNAL
@@ -9860,6 +9889,9 @@ Path *Pathfinder::internal_findHierarchicalPath( Bool isHuman, const LocomotorSu
 	//
 	while( m_openList != NULL )
 	{
+		if (cellCap > 0 && cellCount > cellCap) {
+			break;	// the lists come off in the failure path below, open list and all
+		}
 		// take head cell off of open list - it has lowest estimated total path cost
 		parentCell = m_openList;
 		m_openList = parentCell->removeFromOpenList(m_openList);

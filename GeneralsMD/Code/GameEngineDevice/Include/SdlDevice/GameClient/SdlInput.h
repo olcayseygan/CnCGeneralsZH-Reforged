@@ -37,6 +37,7 @@
 
 union SDL_Event;
 struct SDL_Window;
+struct SdlMacScroll;
 
 /// One event; TRUE when it was input and was taken
 Bool SdlInput_dispatch( const SDL_Event &event );
@@ -58,5 +59,14 @@ void SdlInput_scaleToGame( Real windowX, Real windowY, Int windowWidth, Int wind
 
 /// Drops the wheel's carried fraction (for the test; the game never needs it)
 void SdlInput_resetWheel( void );
+
+/// Main thread: install the native gesture monitor for this borrowed window; NULL removes it.
+void SdlInput_setGestureWindow( SDL_Window *window );
+/// Drop queued gestures and cancel their world ownership on focus loss or a window transition.
+void SdlInput_cancelGestures( void );
+/// Client hook after MessageStream propagation; the only place that applies queued camera changes.
+void SdlInput_applyPendingGestures( void );
+/// Native bridge entry point. Accepted movement is queued behind earlier SDL input, never applied here.
+bool SdlInput_queueTrackpadScroll( const SdlMacScroll &scroll ) noexcept;
 
 #endif // __SDLINPUT_H

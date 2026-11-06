@@ -36,6 +36,8 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
 
+#include <cmath>
+
 UnsignedInt View::m_idNext = 1;
 
 // the tactical view singleton
@@ -223,6 +225,48 @@ void View::scrollBy( Coord2D *delta )
 	// update view's world position
 	m_pos.x += delta->x;
 	m_pos.y += delta->y;
+}
+
+Bool View::isManualCameraInputAllowed( void )
+{
+	return !isCameraMoving() && !isTimeFrozen() && !isFreeCamera()
+		&& getCameraLock() == INVALID_ID && getCameraLockDrawable() == NULL;
+}
+
+Bool View::panByScreenDelta( Real x, Real y )
+{
+	if (!std::isfinite(x) || !std::isfinite(y) || getWidth() < 2 || getHeight() < 2
+			|| !isManualCameraInputAllowed())
+		return FALSE;
+	if (x == 0.0f && y == 0.0f)
+		return TRUE;
+
+	aimCamera();
+	ICoord2D centre;
+	getOrigin(&centre.x, &centre.y);
+	centre.x += getWidth() > 2 ? getWidth() / 2 : 0;
+	centre.y += getHeight() > 2 ? getHeight() / 2 : 0;
+	ICoord2D right = centre, down = centre;
+	++right.x;
+	++down.y;
+	Coord3D origin, horizontal, vertical;
+	const Real ground = getTerrainHeightUnderCamera();
+	screenToWorldAtZ(&centre, &origin, ground);
+	screenToWorldAtZ(&right, &horizontal, ground);
+	screenToWorldAtZ(&down, &vertical, ground);
+
+	// Project a one-pixel basis once and keep the incoming subpixel displacement. Rounding each
+	// event to whole pixels loses slow swipes; applying scrollBy's time factor makes their sum
+	// depend on how often the OS delivered them. The view's projection supplies angle and zoom.
+	Coord3D position = *getPosition();
+	position.x -= (horizontal.x - origin.x) * x + (vertical.x - origin.x) * y;
+	position.y -= (horizontal.y - origin.y) * x + (vertical.y - origin.y) * y;
+	if (!std::isfinite(position.x) || !std::isfinite(position.y))
+		return FALSE;
+	setPosition(&position);
+	applyCameraConstraint();
+	forceRedraw();
+	return TRUE;
 }
 
 /**

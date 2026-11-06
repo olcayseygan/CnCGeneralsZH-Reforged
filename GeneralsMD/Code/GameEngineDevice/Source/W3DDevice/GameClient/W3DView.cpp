@@ -2861,6 +2861,24 @@ void W3DView::scrollBy( Coord2D *delta )
 
 }  // end scrollBy
 
+Bool W3DView::isManualCameraInputAllowed( void )
+{
+	return View::isManualCameraInputAllowed() && !isDoingScriptedCamera() && !m_isCameraSlaved;
+}
+
+Bool W3DView::panByScreenDelta( Real x, Real y )
+{
+	if (!View::panByScreenDelta(x, y))
+		return FALSE;
+	if (x != 0.0f || y != 0.0f) {
+		// Pan only changes the look point. lookAt also aims at elevated objects and zeroes z,
+		// neither of which belongs to a displacement of the current camera.
+		stopDoingScriptedCamera();
+		m_zoomAnchorValid = false;
+	}
+	return TRUE;
+}
+
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 void W3DView::forceRedraw()

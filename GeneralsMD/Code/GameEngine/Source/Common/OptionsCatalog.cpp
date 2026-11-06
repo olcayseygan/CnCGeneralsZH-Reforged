@@ -66,6 +66,7 @@ OPTION_BOOL_ACCESSORS( m_snapBuildPlacementTo45 )
 OPTION_BOOL_ACCESSORS( m_snapBuildToNeighbour )
 OPTION_BOOL_ACCESSORS( m_nudgeBuildPlacement )
 OPTION_BOOL_ACCESSORS( m_zoomToCursor )
+OPTION_BOOL_ACCESSORS( m_macTrackpadPan )
 OPTION_INT_ACCESSORS( m_zoomSpeed )
 OPTION_BOOL_ACCESSORS( m_isometricCamera )
 OPTION_BOOL_ACCESSORS( m_cameraShake )
@@ -327,6 +328,10 @@ const OptionDef TheOptionCatalog[] =
 	{ "WheelZoomToCursor",				OPT_WND( "CheckZoomToCursor" ), "GUI:ZoomToCursor",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_zoomToCursor, set_m_zoomToCursor },
+
+	// A local macOS input preference; no change to other platforms' wheel or camera controls.
+	{ "MacTrackpadPan", "", "", OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_macTrackpadPan, set_m_macTrackpadPan },
 
 	// How far one wheel notch moves the camera, in percent of the 60 units it always moved.  The
 	// scroll speed above never touched the wheel; this is the wheel's own.  On Options > Controls.

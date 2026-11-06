@@ -39,6 +39,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/Recorder.h"
+#include "Common/LogicThread.h"
 #include "Common/StatsCollector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
@@ -58,6 +59,9 @@
 #include "GameLogic/GameLogic.h"
 
 #include "Common/GlobalData.h"			// for camera pitch angle only
+
+#include <cmath>
+#include <float.h>
 
 LookAtTranslator *TheLookAtTranslator = NULL;
 
@@ -359,6 +363,71 @@ Bool LookAtTranslator::hasMouseMovedRecently( void )
 void LookAtTranslator::setCurrentPos( const ICoord2D& pos )
 {
 	m_currentPos = pos;
+}
+
+Bool LookAtTranslator::applyCameraGesture( const ICoord2D &pixel, Real panX, Real panY, Real zoomScale )
+{
+	// A native callback can arrive while a scripted camera pumps events inside the draw. The
+	// normal client input pass is outside the overlap window and is the only owner of this view.
+	if (LogicThread::t_isLogicThread || LogicThread::isInsideWindow())
+		return FALSE;
+	if (!std::isfinite(panX) || !std::isfinite(panY) || !std::isfinite(zoomScale) || zoomScale <= 0.0f
+			|| TheGlobalData == NULL || TheInGameUI == NULL || TheTacticalView == NULL || TheGameLogic == NULL)
+		return FALSE;
+	if (!TheGameLogic->isInGame() || TheGameLogic->isInShellGame() || (TheShell && TheShell->isShellActive())
+			|| !TheInGameUI->getInputEnabled() || TheInGameUI->isSelecting()
+			|| TheInGameUI->getPendingPlaceType() != NULL || TheInGameUI->isPlacementAnchored()
+			|| TheGlobalData->m_disableCameraMovement || TheGlobalData->m_directorRecord
+			|| TheGlobalData->m_cinemaScript.isNotEmpty() || !TheTacticalView->isManualCameraInputAllowed()
+			|| (TheDisplay && (TheDisplay->isMoviePlaying() || TheDisplay->isLetterBoxed()))
+			|| m_isScrolling || m_isRotating || m_isPitching || m_rightPanArmed)
+		return FALSE;
+	if (TheWindowManager && (TheWindowManager->hasModalWindow() || TheWindowManager->winGetCapture() != NULL
+			|| TheWindowManager->winGetGrabWindow() != NULL || TheWindowManager->winGetFocus() != NULL))
+		return FALSE;
+	if (isOverWindow(pixel))
+		return FALSE;
+	Int originX, originY;
+	TheTacticalView->getOrigin(&originX, &originY);
+	const Int width = TheTacticalView->getWidth(), height = TheTacticalView->getHeight();
+	if (width < 2 || height < 2 || pixel.x < originX || pixel.y < originY
+			|| pixel.x - originX >= width || pixel.y - originY >= height)
+		return FALSE;
+
+	const Bool pan = panX != 0.0f || panY != 0.0f;
+	const Bool zoom = zoomScale != 1.0f && TheGlobalData->m_zoomSpeed != 0;
+	Real zoomHeight = TheTacticalView->getHeightAboveGround();
+	if (zoom) {
+		const double scale = std::pow((double)zoomScale, (double)TheGlobalData->m_zoomSpeed / 100.0);
+		const double height = (double)zoomHeight / scale;
+		if (!std::isfinite(height) || height <= 0.0 || height > FLT_MAX)
+			return FALSE;
+		zoomHeight = (Real)height;
+	}
+	if (!pan && !zoom)
+		return TRUE;
+
+	if (pan) {
+		if (TheGlobalData->m_useCameraConstraints && TheGlobalData->m_cameraBoundaryMargin > 0)
+			TheTacticalView->forceCameraConstraintRecalc();
+		if (!TheTacticalView->panByScreenDelta(panX, panY))
+			return FALSE;
+		// A short swipe need not cross the observer's jump-distance threshold. Hand over explicitly,
+		// so the director cannot overwrite it on the next frame. Pinch alone keeps its wheel zoom.
+		if (TheObserverCamera.getMode() != OBSERVER_CAMERA_FREE)
+			TheObserverCamera.setMode(OBSERVER_CAMERA_FREE);
+	}
+	if (zoom) {
+		if (TheGlobalData->m_zoomToCursor) {
+			TheTacticalView->aimCamera();
+			TheTacticalView->anchorZoomAt(&pixel);
+		}
+		// W3D's existing setter clamps the player's zoom range and eases the rendered height.
+		TheTacticalView->setHeightAboveGround(zoomHeight);
+	}
+	m_currentPos = pixel;
+	m_lastMouseMoveFrame = TheGameLogic->getFrame();
+	return TRUE;
 }
 
 /// how often at most a player's camera goes out to the other machines: five times a second, about
@@ -953,6 +1022,7 @@ void LookAtTranslator::resetModes()
 		stopScrolling();
 
 	m_isScrolling = FALSE;
+	m_rightPanArmed = FALSE;
 	m_isRotating = FALSE;
 	m_freeRotateAngle = 0.0f;
 	m_isPitching = FALSE;

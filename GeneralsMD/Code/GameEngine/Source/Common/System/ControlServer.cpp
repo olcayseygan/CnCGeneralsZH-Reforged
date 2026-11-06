@@ -517,14 +517,13 @@ static Bool findHeader( const char *request, const char *name, char *valueOut, I
 }
 
 /* A browser names the page that opened the socket in Origin, and any web page can open ws://127.0.0.1.
-	 So a request with an Origin is let in only from this machine's own pages (or "null", a file:// page);
-	 the project's tools (control_client.py, Node's WebSocket) send no Origin at all. */
+	 So a request with an Origin is let in only from this machine's own pages.  "null" is refused: a
+	 sandboxed iframe on any web site sends it.  The project's tools (control_client.py, Node's
+	 WebSocket) send no Origin at all. */
 Bool ControlServer_originAllowed( const char *request )
 {
 	char origin[ 256 ];
 	if (!findHeader( request, "origin:", origin, sizeof( origin ) ))
-		return TRUE;
-	if (strcmp( origin, "null" ) == 0)
 		return TRUE;
 
 	static const char *const LOCAL[] = { "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1", "http://[::1]", "https://[::1]" };

@@ -76,8 +76,8 @@ extern void ControlServer_shutdown( void );
 	  and RFC 6455 ships a worked example to test it against. */
 extern Bool ControlServer_computeAcceptKey( const char *clientKey, char *out, Int outSize );
 
-/** Whether an upgrade request may have the socket: no Origin (a script), "null", or a page on this
-	  machine.  Anything else is a web page reaching for ws://127.0.0.1 from the player's browser. */
+/** Whether an upgrade request may have the socket: no Origin (a script) or a page on this machine.
+	  Anything else, "null" included, is a web page reaching for ws://127.0.0.1 from the player's browser. */
 extern Bool ControlServer_originAllowed( const char *request );
 
 #endif // __CONTROLSERVER_H_

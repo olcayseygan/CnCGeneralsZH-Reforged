@@ -21811,7 +21811,7 @@ TEST(control_server_refuses_a_web_pages_origin)
 	request = std::string( head ) + "\r\n";
 	CHECK( ControlServer_originAllowed( request.c_str() ) );
 
-	const char *allowed[] = { "null", "http://localhost", "http://localhost:5173", "https://127.0.0.1:443", "http://[::1]:8080", "null  " };
+	const char *allowed[] = { "http://localhost", "http://localhost:5173", "https://127.0.0.1:443", "http://[::1]:8080", "http://localhost  " };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( allowed ); ++i )
 	{
 		request = std::string( head ) + "Origin: " + allowed[ i ] + "\r\n\r\n";
@@ -21821,7 +21821,7 @@ TEST(control_server_refuses_a_web_pages_origin)
 	CHECK( ControlServer_originAllowed( request.c_str() ) );
 
 	const char *refused[] = { "https://evil.example", "http://localhost.evil.example", "http://localhost:80.evil.example",
-		"http://127.0.0.1.nip.io", "http://localhost:", "", "file://", "http://LOCALHOSTX" };
+		"http://127.0.0.1.nip.io", "http://localhost:", "", "file://", "http://LOCALHOSTX", "null" };		// null: a sandboxed iframe on any site
 	for( Int i = 0; i < (Int)ARRAY_SIZE( refused ); ++i )
 	{
 		request = std::string( head ) + "Origin: " + refused[ i ] + "\r\n\r\n";

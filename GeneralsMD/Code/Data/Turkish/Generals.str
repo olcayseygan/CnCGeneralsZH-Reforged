@@ -15949,6 +15949,26 @@ GUI:HudStandings
 "Sıralama"
 END
 
+GUI:HudHighestFirst
+"en yüksek üstte"
+END
+
+GUI:HudPlayerHead
+"Oyuncu"
+END
+
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/dk"
+END
+
+GUI:HudStatUnitPower
+"fazla"
+END
+
 GUI:CheatPanelTitle
 "Hileler"
 END

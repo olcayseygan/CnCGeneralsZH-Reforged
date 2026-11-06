@@ -2127,23 +2127,25 @@ struct SpectatorStats
 	std::map< const ThingTemplate *, Int > units;	///< how many of each unit with a cameo he has standing
 };
 
-/** One stop of the rack's stat dial: the label it goes by and the number the list is ranked by when
-	* it is picked, in the order of the keys that pick them (pickSpectatorStat). */
+/** One of the rack's stat keys: the label it goes by, the unit its column head names (none where the
+	* label or the number already says it: kills and losses, "Rank 3") and the number the list is ranked by when it is picked, in the
+	* order of the keys that pick them (pickSpectatorStat). */
 struct SpectatorStat
 {
 	const char *label;
+	const char *unit;
 	Int SpectatorStats::*value;
 };
 
 static const SpectatorStat SPECTATOR_STATS[] =
 {
-	{ "GUI:HudNetWorth",		&SpectatorStats::networth },
-	{ "GUI:HudStatCash",		&SpectatorStats::cash },
-	{ "GUI:HudStatIncome",	&SpectatorStats::income },
-	{ "GUI:HudStatArmy",		&SpectatorStats::army },
-	{ "GUI:HudStatKills",		&SpectatorStats::kills },
-	{ "GUI:HudStatRank",		&SpectatorStats::rank },
-	{ "GUI:HudStatPower",		&SpectatorStats::power }
+	{ "GUI:HudNetWorth",		"GUI:HudStatUnitMoney",		&SpectatorStats::networth },
+	{ "GUI:HudStatCash",		"GUI:HudStatUnitMoney",		&SpectatorStats::cash },
+	{ "GUI:HudStatIncome",	"GUI:HudStatUnitIncome",	&SpectatorStats::income },
+	{ "GUI:HudStatArmy",		"GUI:HudStatUnitMoney",		&SpectatorStats::army },
+	{ "GUI:HudStatKills",		NULL,											&SpectatorStats::kills },
+	{ "GUI:HudStatRank",		NULL,											&SpectatorStats::rank },
+	{ "GUI:HudStatPower",		"GUI:HudStatUnitPower",		&SpectatorStats::power }
 };
 enum { SPECTATOR_STAT_COUNT = ARRAY_SIZE( SPECTATOR_STATS ) };
 
@@ -2516,7 +2518,7 @@ void InGameUI::runSpectatorAction( const std::string &action )
 // The spectator's rack: drawers hung off the right edge under the superweapon tray, cut from one
 // reference drawer (ReforgedHudObsSpec, Tools/hud_command_bar.py paint_rack, every piece named
 // ObserverPro<piece>).  A watch drawer with the camera's three-stop lever and the fog and armies
-// rockers, a standings drawer with the stat dial and a row a player, an index tab out of each row
+// rockers, a standings drawer with seven stat keys and a row a player, an index tab out of each row
 // to follow him, and the armies drawer out to the left on its runners.  Every number is a pixel at
 // 1080 (experiments/proofs/2026-11-02/hud-original/round12/SPEC.md), put through rackPx.
 //-------------------------------------------------------------------------------------------------
@@ -2537,11 +2539,15 @@ enum
 	RACK_DRAWER_TUCK			= 20,		///< the armies drawer's right end under the standings
 	RACK_DRAWER_TOP_H			= 12,
 	RACK_TAB_OUT					= 26,		///< a follow tab's left past what it hangs from
-	RACK_DIAL_X						= 56,
-	RACK_DIAL_Y						= 64,		///< the dial's centre in the standings drawer
-	RACK_DIAL_REACH				= 40,
-	RACK_DIAL_RADIUS			= 33,		///< the key letters round it
-	RACK_DIAL_HALF				= 26,
+	RACK_KEY_LEFT					= 23,		///< the first stat key in the standings drawer
+	RACK_KEY_TOP					= 31,
+	RACK_KEY_W						= 36,
+	RACK_KEY_H						= 26,
+	RACK_KEY_PITCH				= 39,
+	RACK_WELL_LEFT				= 20,		///< a standings row's well, which the hover and follow rims trace
+	RACK_WELL_RIGHT				= 296,
+	RACK_WELL_TOP					= 2,
+	RACK_WELL_BOTTOM			= 28,
 	RACK_MIN_PX						= 9,		///< the smallest a shrunk label goes
 	RACK_LEVER_WELL_LEFT	= 22,		///< the lever's well inside its bevel, which the stop words keep inside
 	RACK_LEVER_WELL_RIGHT	= 166,
@@ -2549,13 +2555,13 @@ enum
 	RACK_REFRESH_FRAMES		= LOGICFRAMES_PER_SECOND / 2
 };
 
-static const char RACK_KEYS[] = "QWERTYA";		///< the dial's stops, the letters pickSpectatorStatKey answers
+static const char RACK_KEYS[] = "QWERTYA";		///< the stat keys' letters, the ones pickSpectatorStatKey answers
 static const Int RACK_LEVER_STOPS[ 3 ] = { 38, 94, 150 };	///< Free, Director, Player, as ObserverCameraMode counts
 static const char *const RACK_LEVERS[ 3 ] = { "RackLeverFree", "RackLeverDirector", "RackLeverPlayer" };
 static const char *const RACK_LEVER_LABELS[ 3 ] = { "GUI:HudCameraFree", "GUI:HudCameraDirector", "GUI:HudCameraPlayer" };
 static const std::string *const RACK_CAMERAS[ 3 ] = { &CAMERA_FREE, &CAMERA_DIRECTOR, &CAMERA_PLAYER };
 
-static std::vector< SpectatorStats > theRackStats;		///< ranked by the dial's stat, gathered every RACK_REFRESH_FRAMES
+static std::vector< SpectatorStats > theRackStats;		///< ranked by the picked stat, gathered every RACK_REFRESH_FRAMES
 static UnsignedInt theRackStatsFrame = 0;
 static Int theRackStatsStat = -1;
 
@@ -2622,39 +2628,26 @@ static Bool rackInside( const ICoord2D &mouse, Int left, Int top, Int right, Int
 	return mouse.x >= left && mouse.x < right && mouse.y >= top && mouse.y < bottom;
 }
 
-/// the dial's key whose stop is nearest the pointer's angle round the centre, clockwise from up
-static Int rackDialKey( const ICoord2D &mouse, const ICoord2D &centre )
+/// a stat key's left edge
+static Int rackKeyLeft( const RackPlace &at, Int key )
 {
-	const Real angle = atan2f( (Real)( mouse.x - centre.x ), (Real)( centre.y - mouse.y ) ) * 180.0f / PI;
-	Int best = 0;
-	Real bestGap = 360.0f;
+	return at.x + rackPx( RACK_KEY_LEFT + RACK_KEY_PITCH * key );
+}
+
+/// the stat key under the pointer, or -1
+static Int rackKeyAt( const ICoord2D &mouse, const RackPlace &at )
+{
+	const Int top = at.standings + rackPx( RACK_KEY_TOP ), bottom = at.standings + rackPx( RACK_KEY_TOP + RACK_KEY_H );
 	for( Int key = 0; key < SPECTATOR_STAT_COUNT; key++ )
-	{
-		Real gap = fabsf( angle - ( -135.0f + 45.0f * key ) );
-		if( gap > 180.0f )
-			gap = 360.0f - gap;
-		if( gap < bestGap )
-		{
-			best = key;
-			bestGap = gap;
-		}
-	}
-	return best;
+		if( rackInside( mouse, rackKeyLeft( at, key ), top, rackKeyLeft( at, key ) + rackPx( RACK_KEY_W ), bottom ) )
+			return key;
+	return -1;
 }
 
-static ICoord2D rackDialCentre( const RackPlace &at )
+/// the standings' head, keys, heading and column heads, where the wheel steps the stat
+static Bool rackOverHead( const ICoord2D &mouse, const RackPlace &at )
 {
-	ICoord2D centre;
-	centre.x = at.x + rackPx( RACK_DIAL_X );
-	centre.y = at.standings + rackPx( RACK_DIAL_Y );
-	return centre;
-}
-
-static Bool rackOverDial( const ICoord2D &mouse, const RackPlace &at )
-{
-	const ICoord2D centre = rackDialCentre( at );
-	const Int dx = mouse.x - centre.x, dy = mouse.y - centre.y, reach = rackPx( RACK_DIAL_REACH );
-	return dx * dx + dy * dy <= reach * reach;
+	return rackInside( mouse, at.x + rackPx( RACK_WELL_LEFT ), at.standings + rackPx( RACK_HEAD_TOP ), at.right, at.rows );
 }
 
 /// the player's colour, opaque: the tint the lens, the meter and the name take
@@ -2732,7 +2725,7 @@ DisplayString *InGameUI::rackText( Int slot, const UnicodeString &text, Int px, 
 //-------------------------------------------------------------------------------------------------
 /** The rack, while the local player watches.  plateTop is where the watch drawer's plate starts:
 	* 8 under the superweapon tray's foot, or under the info strip with no superweapons up.  Every
-	* player is read at most twice a second, ranked by the dial's stat, the watcher left out.  Drawn
+	* player is read at most twice a second, ranked by the picked stat, the watcher left out.  Drawn
 	* in the order the pieces overlap: the tabs, the armies drawer, the watch drawer, the standings,
 	* then every word and number. */
 //-------------------------------------------------------------------------------------------------
@@ -2750,6 +2743,7 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	const Color WHITE = GameMakeColor( 240, 244, 246, 255 );
 	const Color LIT = GameMakeColor( 128, 149, 234, 255 );
 	const Color GOLD = GameMakeColor( 242, 194, 48, 255 );
+	const Color DIM = GameMakeColor( 92, 100, 110, 255 );
 
 	m_rackX = TheDisplay->getWidth() - rackPx( RACK_W );
 	m_rackY = plateTop - rackPx( RACK_SKIRT );
@@ -2770,6 +2764,8 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	typedef std::pair< const ThingTemplate *, Int > UnitCount;
 	std::vector< UnitCount > units[ RACK_ROWS ];
 
+	Bool rowHover[ RACK_ROWS ];
+
 	TheDisplay->beginBatch2D();
 	for( Int row = 0; row < rows; row++ )
 	{
@@ -2778,6 +2774,7 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 		m_rackRowPlayer[ row ] = player->getPlayerIndex();
 		const Bool on = m_rackRowPlayer[ row ] == followed;
 		const Bool hover = !on && rackInside( mouse, at.tabs + rackTabOut( FALSE, TRUE ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) );
+		rowHover[ row ] = hover;
 		drawRackPiece( on ? "RackTabOn" : ( hover ? "RackTabH" : "RackTab" ), at.tabs, top + rackPx( 2 ) );
 		const Color colour = rackColour( player );
 		drawRackPiece( "RackLens", at.tabs + rackTabOut( on, hover ) + rackPx( 4 ), top + rackPx( 9 ), 0, 0, colour );
@@ -2818,30 +2815,46 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	drawRackState( fog ? "RackRockerOn" : "RackRockerOff", overFog, X + rackPx( 186 ), Y + rackPx( 30 ) );
 	drawRackState( m_rackArmies ? "RackRockerOn" : "RackRockerOff", overArmies, X + rackPx( 246 ), Y + rackPx( 30 ) );
 
-	// the standings: the dial at the stat, a row a player with his emblem and his meter
-	const Bool overDial = rackOverDial( mouse, at );
-	const ICoord2D centre = rackDialCentre( at );
-	const Int hoverKey = overDial ? rackDialKey( mouse, centre ) : -1;
+	// the standings: the seven stat keys, a row a player with his colour, emblem and meter
+	const Int hoverKey = rackKeyAt( mouse, at );
 	drawRackPiece( "RackTop", X, Y2 );
 	drawRackPiece( "RackHead", X, Y2 + rackPx( RACK_HEAD_TOP ) );
 	for( Int row = 0; row < rows; row++ )
 		drawRackPiece( "RackRow", X, rowTop( row ) );
 	drawRackPiece( "RackBottom", X, rowTop( rows ) );
-	AsciiString dial;
-	dial.format( "RackDial%c", RACK_KEYS[ m_rackStat ] );
-	drawRackState( dial.str(), overDial, centre.x - rackPx( RACK_DIAL_HALF ), centre.y - rackPx( RACK_DIAL_HALF ) );
+	for( Int key = 0; key < SPECTATOR_STAT_COUNT; key++ )
+	{
+		AsciiString piece;
+		piece.format( "RackStat%c%s", RACK_KEYS[ key ], key == m_rackStat ? "On" : ( key == hoverKey ? "H" : "" ) );
+		drawRackPiece( piece.str(), rackKeyLeft( at, key ), Y2 + rackPx( RACK_KEY_TOP ) );
+	}
 	for( Int row = 0; row < rows; row++ )
 	{
 		const Int top = rowTop( row );
 		const SpectatorStats &stats = theRackStats[ row ];
+		const Color colour = rackColour( stats.player );
+		drawRackPiece( "RackMeter", X + rackPx( 22 ), top + rackPx( 4 ), rackPx( 3 ), rackPx( 22 ), colour );
 		TheDisplay->drawImage( ControlBarSideEmblem( stats.player->getPlayerTemplate() ),
-			X + rackPx( 23 ), top + rackPx( 5 ), X + rackPx( 53 ), top + rackPx( 25 ) );
+			X + rackPx( 42 ), top + rackPx( 5 ), X + rackPx( 72 ), top + rackPx( 25 ) );
 		const Real share = max( stats.*SPECTATOR_STATS[ m_rackStat ].value, 0 ) / (Real)highest;
-		const Int fill = REAL_TO_INT_FLOOR( rackPx( 234 ) * share );
+		const Int fill = REAL_TO_INT_FLOOR( rackPx( 216 ) * share );
 		if( fill > 0 )
-			drawRackPiece( "RackMeter", X + rackPx( 59 ), top + rackPx( 23 ), fill, rackPx( 2 ), rackColour( stats.player ) );
+			drawRackPiece( "RackMeter", X + rackPx( 76 ), top + rackPx( 23 ), fill, rackPx( 2 ), colour );
 	}
 	TheDisplay->endBatch2D();
+
+	// the followed row in a double lit rim round its well, the row under the pointer in a gold one
+	for( Int row = 0; row < rows; row++ )
+	{
+		const Bool on = m_rackRowPlayer[ row ] == followed;
+		if( !on && !rowHover[ row ] )
+			continue;
+		const Int left = X + rackPx( RACK_WELL_LEFT ), top = rowTop( row ) + rackPx( RACK_WELL_TOP );
+		const Int width = rackPx( RACK_WELL_RIGHT - RACK_WELL_LEFT ), height = rackPx( RACK_WELL_BOTTOM - RACK_WELL_TOP );
+		TheDisplay->drawOpenRect( left, top, width, height, 1.0f, on ? LIT : GOLD );
+		if( on )
+			TheDisplay->drawOpenRect( left + 1, top + 1, width - 2, height - 2, 1.0f, GameMakeColor( 128, 149, 234, 160 ) );
+	}
 
 	// the words, all upper case but the names and the numbers
 	drawRackText( rackText( RACK_TEXT_WATCH, UIStyle::capitals( TheGameText->fetch( "GUI:HudWatch" ) ), 12, 0 ),
@@ -2873,32 +2886,57 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 
 	drawRackText( rackText( RACK_TEXT_STANDINGS, UIStyle::capitals( TheGameText->fetch( "GUI:HudStandings" ) ), 12, 0 ),
 		X + rackPx( 24 ), Y2 + rackPx( 9 ), X + rackPx( 180 ), Y2 + rackPx( 23 ), rackPx( 8 ), RACK_ALIGN_LEFT, GREY );
+	// each key's letter small in its bottom right corner
 	for( Int key = 0; key < SPECTATOR_STAT_COUNT; key++ )
 	{
-		const Real angle = ( -135.0f + 45.0f * key ) * PI / 180.0f;
-		const Int x = centre.x + rackPx( RACK_DIAL_RADIUS * Sin( angle ) );
-		const Int y = centre.y - rackPx( RACK_DIAL_RADIUS * Cos( angle ) );
 		UnicodeString letter;
 		letter.format( u"%c", (WideChar)RACK_KEYS[ key ] );
-		drawRackText( rackText( RACK_TEXT_KEY + key, letter, 13, 0 ), x - rackPx( 8 ), y - rackPx( 8 ), x + rackPx( 8 ), y + rackPx( 8 ), 0,
-			RACK_ALIGN_CENTRE, key == m_rackStat ? LIT : ( key == hoverKey ? GOLD : GREY ) );
+		const Int right = rackKeyLeft( at, key ) + rackPx( RACK_KEY_W - 1 ), bottom = Y2 + rackPx( RACK_KEY_TOP + RACK_KEY_H - 1 );
+		drawRackText( rackText( RACK_TEXT_KEY + key, letter, 8, 0 ), right - rackPx( 8 ), bottom - rackPx( 9 ), right, bottom, 0,
+			RACK_ALIGN_CENTRE, key == m_rackStat ? GREY : DIM );
 	}
-	const Int statLeft = X + rackPx( 104 ), statTop = Y2 + rackPx( 46 ), statRight = X + rackPx( 294 ), statBottom = Y2 + rackPx( 78 );
-	drawRackText( rackText( RACK_TEXT_STAT, UIStyle::capitals( TheGameText->fetch( SPECTATOR_STATS[ m_rackStat ].label ) ), 15,
-		statRight - statLeft - rackPx( 40 ) ), statLeft, statTop, statRight, statBottom, rackPx( 10 ), RACK_ALIGN_LEFT, LIT );
-	UnicodeString statKey;
-	statKey.format( u"%c", (WideChar)RACK_KEYS[ m_rackStat ] );
-	drawRackText( rackText( RACK_TEXT_STAT_KEY, statKey, 13, 0 ), statLeft, statTop, statRight, statBottom, rackPx( 10 ), RACK_ALIGN_RIGHT, GREY );
+	// the heading: the picked stat by name; on its right the key under the pointer, or the order
+	const SpectatorStat &stat = SPECTATOR_STATS[ m_rackStat ];
+	const UnicodeString statName = UIStyle::capitals( TheGameText->fetch( stat.label ) );
+	UnicodeString hint;
+	if( hoverKey >= 0 )
+		hint.format( u"%ls (%c)", TheGameText->fetch( SPECTATOR_STATS[ hoverKey ].label ).str(), (WideChar)RACK_KEYS[ hoverKey ] );
+	else
+		hint = TheGameText->fetch( "GUI:HudHighestFirst" );
+	DisplayString *hintText = rackText( RACK_TEXT_HINT, hint, 9, rackPx( 144 ) );
+	Int hintWidth = 0, hintHeight = 0;
+	hintText->getSize( &hintWidth, &hintHeight );
+	drawRackText( hintText, X + rackPx( 150 ), Y2 + rackPx( 60 ), X + rackPx( 294 ), Y2 + rackPx( 76 ), 0, RACK_ALIGN_RIGHT,
+		hoverKey >= 0 ? GOLD : DIM );
+	drawRackText( rackText( RACK_TEXT_STAT, statName, 13,
+		rackPx( 294 - 22 - 8 ) - hintWidth ), X + rackPx( 22 ), Y2 + rackPx( 60 ), X + rackPx( 294 ), Y2 + rackPx( 76 ), 0, RACK_ALIGN_LEFT, WHITE );
+	// the column heads: place, player, and the stat with its unit over the numbers
+	UnicodeString valueHead = statName;
+	if( stat.unit != NULL )
+		valueHead.format( u"%ls (%ls)", statName.str(), TheGameText->fetch( stat.unit ).str() );
+	const Int headTop = Y2 + rackPx( 79 ), headBottom = Y2 + rackPx( 93 );
+	drawRackText( rackText( RACK_TEXT_PLACE_HEAD, UnicodeString( u"#" ), 9, 0 ), X + rackPx( 22 ), headTop, X + rackPx( 38 ), headBottom, 0,
+		RACK_ALIGN_CENTRE, DIM );
+	drawRackText( rackText( RACK_TEXT_PLAYER_HEAD, UIStyle::capitals( TheGameText->fetch( "GUI:HudPlayerHead" ) ), 9, rackPx( 60 ) ),
+		X + rackPx( 76 ), headTop, X + rackPx( 136 ), headBottom, 0, RACK_ALIGN_LEFT, DIM );
+	drawRackText( rackText( RACK_TEXT_VALUE_HEAD, valueHead, 9, rackPx( 154 ) ), X + rackPx( 140 ), headTop, X + rackPx( 294 ), headBottom, 0,
+		RACK_ALIGN_RIGHT, GREY );
 
 	for( Int row = 0; row < rows; row++ )
 	{
 		const Int top = rowTop( row );
 		const SpectatorStats &stats = theRackStats[ row ];
-		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), 13, rackPx( 118 - 12 ) ),
-			X + rackPx( 58 ), top + rackPx( 4 ), X + rackPx( 176 ), top + rackPx( 19 ), rackPx( 6 ), RACK_ALIGN_LEFT,
-			rackColour( stats.player ) );
-		drawRackText( rackText( RACK_TEXT_VALUE + row, rackValueText( m_rackStat, stats ), 14, rackPx( 114 - 12 ) ),
-			X + rackPx( 180 ), top + rackPx( 4 ), X + rackPx( 294 ), top + rackPx( 19 ), rackPx( 6 ), RACK_ALIGN_RIGHT, WHITE );
+		UnicodeString place;
+		place.format( u"%d", row + 1 );
+		drawRackText( rackText( RACK_TEXT_PLACE + row, place, 12, 0 ), X + rackPx( 26 ), top + rackPx( 2 ), X + rackPx( 40 ), top + rackPx( 28 ), 0,
+			RACK_ALIGN_CENTRE, row == 0 ? WHITE : GREY );
+		// the number first, so the name gets the room it leaves
+		DisplayString *value = rackText( RACK_TEXT_VALUE + row, rackValueText( m_rackStat, stats ), 14, rackPx( 114 - 12 ) );
+		Int valueWidth = 0, valueHeight = 0;
+		value->getSize( &valueWidth, &valueHeight );
+		drawRackText( value, X + rackPx( 180 ), top + rackPx( 2 ), X + rackPx( 294 ), top + rackPx( 22 ), rackPx( 4 ), RACK_ALIGN_RIGHT, WHITE );
+		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), 13, rackPx( 290 - 76 - 6 ) - valueWidth ),
+			X + rackPx( 76 ), top + rackPx( 2 ), X + rackPx( 190 ), top + rackPx( 22 ), 0, RACK_ALIGN_LEFT, rackColour( stats.player ) );
 
 		// each kind's count on a dark plate in its cell's bottom right
 		for( Int cell = 0; cell < (Int)units[ row ].size(); cell++ )
@@ -2967,8 +3005,9 @@ Bool InGameUI::handleSpectatorRackClick( const ICoord2D *mouse, Bool act )
 
 	if( rackInside( *mouse, X + rackPx( RACK_SKIRT ), at.standings + rackPx( RACK_SKIRT ), at.right, foot ) )
 	{
-		if( act && rackOverDial( *mouse, at ) )
-			m_rackStat = rackDialKey( *mouse, rackDialCentre( at ) );
+		const Int key = rackKeyAt( *mouse, at );
+		if( act && key >= 0 )
+			m_rackStat = key;
 		return TRUE;
 	}
 
@@ -2979,15 +3018,15 @@ Bool InGameUI::handleSpectatorRackWheel( const ICoord2D *mouse, Real notches )
 {
 	if( !handleSpectatorRackClick( mouse, FALSE ) )
 		return FALSE;
-	// down the wheel is round the dial clockwise, the next key
-	if( notches != 0.0f && rackOverDial( *mouse, rackPlace( m_rackX, m_rackY, m_rackArmies ) ) )
+	// down the wheel is the next key to the right, round to the first after the last
+	if( notches != 0.0f && rackOverHead( *mouse, rackPlace( m_rackX, m_rackY, m_rackArmies ) ) )
 		m_rackStat = ( m_rackStat + ( notches < 0.0f ? 1 : SPECTATOR_STAT_COUNT - 1 ) ) % SPECTATOR_STAT_COUNT;
 	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The command grid's first keys while the rack is up, Q W E R T Y A as shipped, pick the dial's
-	* stats in its order.  A watcher has no commands to press; anything past the last stat is left to
+/** The command grid's first keys while the rack is up, Q W E R T Y A as shipped, pick the stat
+	* keys' stats in their order.  A watcher has no commands to press; anything past the last stat is left to
 	* the command bar. */
 //-------------------------------------------------------------------------------------------------
 Bool InGameUI::pickSpectatorStat( Int commandSlot )
@@ -3000,7 +3039,7 @@ Bool InGameUI::pickSpectatorStat( Int commandSlot )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The same keys as letters, so the dial answers Q W E R T Y A with no CommandMap binding: the
+/** The same keys as letters, so the stat keys answer Q W E R T Y A with no CommandMap binding: the
 	* shipped one binds no command slot to a letter.  A plain press only, while the rack is up and the
 	* local player watches; a player's letters never come here. */
 //-------------------------------------------------------------------------------------------------

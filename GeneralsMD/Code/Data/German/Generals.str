@@ -14929,6 +14929,26 @@ GUI:HudNoWorkerLeft
 "%s hat keinen Arbeiter mehr"
 END
 
+GUI:HudHighestFirst
+"höchste zuerst"
+END
+
+GUI:HudPlayerHead
+"Spieler"
+END
+
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/Min."
+END
+
+GUI:HudStatUnitPower
+"Überschuss"
+END
+
 GUI:BarIdleWorker
 "Arbeiter"
 END

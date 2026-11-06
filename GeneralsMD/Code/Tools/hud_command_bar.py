@@ -2991,8 +2991,8 @@ def observer_radar_frame():
 
 # The spectator's controls (InGameUI's runSpectatorAction, gatherSpectatorStats), round 11's concept 2,
 # approved on 2026-11-03: drawers hung off the right edge 8 px under the superweapon tray's foot.  A watch
-# drawer with a three way camera lever and a fog rocker, a standings drawer with a rotary stat dial and
-# its rows, an index tab out of each row to follow that player, and an armies drawer sliding out left on
+# drawer with a three way camera lever and a fog rocker, a standings drawer with seven stat keys (round
+# 21, owner's pick C, in place of round 11's rotary dial) and its rows, an index tab out of each row to follow that player, and an armies drawer sliding out left on
 # two runners.  Each drawer is drawn whole round two reference rows, lit with no top to bottom falloff,
 # and cut into the slices the code stacks (a cap, a head, a row it repeats, a plain body, a foot); every
 # control is a piece of its own in each state.  The code writes every word and number and tints the
@@ -3046,13 +3046,20 @@ def white_lens(w, h):
 
 RACK_W, RACK_TOP, RACK_HEAD, RACK_PITCH, RACK_FOOT = 306, 28, 68, 30, 14
 RACK_AT = 1920 - RACK_W
-RACK_ROW = dict(emblem=(22, 4, 54, 26), name=(58, 4, 176, 19), value=(180, 4, 294, 19), meter=(58, 22, 294, 26))
-RACK_HEAD_AT = dict(dial=(56, 36), stat=(104, 18, 294, 50))
-RACK_DIAL_R, RACK_LETTER_R = 25, 33               # the dial's socket, and the radius the code writes the keys at
+# a standings row (round 21, owner's pick C): one well, the player's colour as a stripe at its left, his place,
+# emblem, name and number, a meter of his share under the name; the code paints and writes all of it
+RACK_ROW = dict(well=(20, 2, 296, 28), stripe=(22, 4, 25, 26), place=(26, 2, 40, 28), emblem=(42, 5, 72, 25),
+                name=(76, 2, 190, 22), value=(180, 2, 294, 22), meter=(76, 23, 292, 25))
+# the head: seven stat keys in a row, the picked stat's name as a heading, the column heads over a hairline
+RACK_STAT_KEYS = "QWERTYA"
+RACK_STAT_W, RACK_STAT_PITCH = 36, 39
+RACK_STAT_AT = [(23 + RACK_STAT_PITCH * i, 3, 23 + RACK_STAT_PITCH * i + RACK_STAT_W, 29) for i in range(len(RACK_STAT_KEYS))]
+RACK_HEAD_AT = dict(heading=(22, 32, 294, 48), columns=(22, 51, 294, 65), rule=(22, 65, 294, 66))
+# the code's text colours (InGameUI drawSpectatorRack), which the keys' glyphs and rims match
+RACK_GREY, RACK_WHITE, RACK_LIT, RACK_GOLD = (138, 148, 159), (240, 244, 246), (128, 149, 234), (242, 194, 48)
 RACK_LABEL = (24, 9, 180, 23)
 DRAWER_W, DRAWER_TOP = 276, 12
 DRAWER_CAMEOS = [(22 + 39 * i, 3, 58 + 39 * i, 27) for i in range(6)]   # all six clear of the standings' edge
-DIAL_ANGLES = [-135, -90, -45, 0, 45, 90, 135]  # Q W E R T Y A, clockwise from straight up
 # the follow tab: its size, and where its body starts in it by state (the rest tucks under the drawer)
 RACK_TAB = (40, 26)
 RACK_TAB_OUT = {"": 22, "H": 15, "On": 2}
@@ -3060,7 +3067,7 @@ RACK_TAB_OUT = {"": 22, "H": 15, "On": 2}
 
 def rack_reference(rows=2, body=12):
     """A drawer with everything a slice is cut from: the cap with its label, the standings' head with the
-    dial's socket, rows, a plain body for the watch drawer, and the foot.  The GLA's (round 20): the cap a
+    stat keys' wells and the column heads' rule, rows, a plain body for the watch drawer, and the foot.  The GLA's (round 20): the cap a
     ragged ledge of scrap standing out past the drawer toward the field with a patch welded on crooked, the
     drawer's corners cut unevenly, its head's edge bitten, odd bolts.  The rows and the body keep a straight
     edge, since the code repeats and stretches them."""
@@ -3084,16 +3091,14 @@ def rack_reference(rows=2, body=12):
             p.weld(a, c, seed=171 + int(a[0]), r=1.1)
         p.bolt(200, 13, 2.4, 9)
         hy = RACK_TOP
-        cx, cy = RACK_HEAD_AT["dial"]
-        p.sink([regular(cx, hy + cy, RACK_DIAL_R, 40)], 2.0, 1.2, DARK)
-        s = RACK_HEAD_AT["stat"]
-        p.sink([shape(b, s[0], hy + s[1], s[2], hy + s[3], 4)], 4, 1.6)
-        p.inlay([plate(20, hy + RACK_HEAD - 2, 296, hy + RACK_HEAD - 1)], INKM, 0.8)
+        for x0, y0, x1, y1 in RACK_STAT_AT:
+            p.sink([shape(b, x0 + 1.5, hy + y0, x1 - 1.5, hy + y1, 3)], 3, 1.2)
+        r = RACK_HEAD_AT["rule"]
+        p.inlay([plate(r[0], hy + r[1], r[2], hy + r[3])], INKM, 0.4)
         for k in range(rows):
             y0 = RACK_TOP + RACK_HEAD + k * RACK_PITCH
-            for name, depth in (("emblem", 3), ("name", 2), ("value", 4), ("meter", 2)):
-                r = RACK_ROW[name]
-                p.sink([shape(b, r[0], r[1] + y0, r[2], r[3] + y0, 3 if name != "meter" else 1.5)], depth, 1.2)
+            r = RACK_ROW["well"]
+            p.sink([shape(b, r[0], r[1] + y0, r[2], r[3] + y0, 3)], 4, 1.6)
         p.weld((60, H - 10.5), (250, H - 10.5), 181)
         p.bolt(30, H - 11, 2.6, 10)
         p.bolt(282, H - 11, 3.0, 11)
@@ -3155,24 +3160,6 @@ def rocker(on, state):
     return lit(w, h, draw)
 
 
-def dial(position, state):
-    """The stat dial: a face with seven ticks round three quarters of a turn and a knurled knob pointing
-    at one; the code writes Q W E R T Y A at the ticks' ends."""
-    w = h = 52
-    c = w / 2
-
-    def draw(p):
-        p.raise_plate([regular(c, c, RACK_DIAL_R - 2, 40)], 1.0, 0.8, DARK)
-        for i, a in enumerate(DIAL_ANGLES):
-            tick = rotated(plate(c - 0.7, c - 22, c + 0.7, c - 17.5), c, c, a)
-            p.inlay([tick], HILITE if i == position else PAPERM, 0.3)
-        p.raise_plate([regular(c, c, 15, 40)], 4.5, 1.0, BRIGHT if state == "H" else STEEL, profile=rounded(4.0))
-        notches = [rotated(plate(c - 0.8, c - 15.2, c + 0.8, c - 13.4), c, c, k * 360 / 20) for k in range(20)]
-        p.inlay(notches, INKM, 0.6)
-        p.inlay([rotated(plate(c - 1.0, c - 12, c + 1.0, c - 4), c, c, DIAL_ANGLES[position])], HILITE, 0.4)
-    return lit(w, h, draw)
-
-
 def index_tab(state):
     """A follow tab out of a row's left end, tucked under the drawer: short, longer when hovered, pulled
     right out with its lamp on air when that player is followed.  The code lights the lens in his colour."""
@@ -3187,6 +3174,49 @@ def index_tab(state):
         if state == "On":
             lens(p, x0 + 16, h / 2, 2.8, ACCENT2)
     return lit(w, h, draw)
+
+
+def stat_glyph(stat, cx, cy):
+    """A stat's mark, about 18 x 14 round (cx, cy), as polygons: net worth a stack of coins, cash a note,
+    income a rising arrow, army a tank side on, kills a reticle, rank three chevrons, power a bolt."""
+    if stat == 0:
+        return [plate(cx - 7 + i, cy + 4 - 4.5 * i, cx + 7 - i, cy + 6.5 - 4.5 * i) for i in range(3)]
+    if stat == 1:
+        return [plate(cx - 9, cy - 5, cx + 9, cy - 3), plate(cx - 9, cy + 3, cx + 9, cy + 5), plate(cx - 9, cy - 5, cx - 7, cy + 5),
+                plate(cx + 7, cy - 5, cx + 9, cy + 5), regular(cx, cy, 2.4, 10)]
+    if stat == 2:
+        return stroke([(cx - 8, cy + 5), (cx - 2, cy - 1), (cx + 2, cy + 3), (cx + 7, cy - 3)], 2.2) + [
+            [(cx + 9, cy - 6), (cx + 9, cy + 1), (cx + 2, cy - 6)]]
+    if stat == 3:
+        return [plate(cx - 9, cy + 1, cx + 9, cy + 6), plate(cx - 5, cy - 3, cx + 4, cy + 1), plate(cx + 3, cy - 2, cx + 10, cy - 1)]
+    if stat == 4:
+        return ring(cx, cy, 5.5, 1.6, 20) + [plate(cx - 9, cy - 0.8, cx - 3, cy + 0.8), plate(cx + 3, cy - 0.8, cx + 9, cy + 0.8),
+                                             plate(cx - 0.8, cy - 8, cx + 0.8, cy - 3), plate(cx - 0.8, cy + 3, cx + 0.8, cy + 8)]
+    if stat == 5:
+        return [[(cx - 7, cy - 4 + 4 * i), (cx, cy - 8 + 4 * i), (cx + 7, cy - 4 + 4 * i), (cx + 7, cy - 2 + 4 * i),
+                 (cx, cy - 6 + 4 * i), (cx - 7, cy - 2 + 4 * i)] for i in range(3)]
+    return [[(cx + 2, cy - 8), (cx - 5, cy + 1), (cx, cy + 1), (cx - 2, cy + 8), (cx + 5, cy - 1), (cx, cy - 1)]]
+
+
+def stat_key(ref, stat, state):
+    """One of the standings' seven stat keys, cut from the head where its well is so it meets the plate round
+    it, its glyph laid on flat: grey, gold under the pointer, and white in a lit rim with a lit underline when
+    it is the picked stat.  The code writes the key's letter in its bottom right corner."""
+    x0, y0, x1, y1 = RACK_STAT_AT[stat]
+    w, h = x1 - x0, y1 - y0
+    img = ref.crop((x0, RACK_TOP + y0, x1, RACK_TOP + y1))
+    ss = 4                                      # the glyph drawn 4 times over and box filtered
+    mask = Image.new("L", (w * ss, h * ss), 0)
+    d = ImageDraw.Draw(mask)
+    for poly in stat_glyph(stat, w / 2, h / 2 - 1):
+        d.polygon([(x * ss, y * ss) for x, y in poly], fill=255)
+    colour = {"": RACK_GREY, "H": RACK_GOLD, "On": RACK_WHITE}[state]
+    img.paste(Image.new("RGBA", (w, h), colour + (255,)), (0, 0), mask.resize((w, h), Image.BOX))
+    if state == "On":
+        d = ImageDraw.Draw(img)
+        d.rectangle((2, 1, w - 3, h - 2), outline=RACK_LIT + (255,))
+        d.rectangle((6, h - 4, w - 7, h - 3), fill=RACK_LIT + (255,))
+    return img
 
 
 def rack_pieces():
@@ -3207,9 +3237,9 @@ def rack_pieces():
     for on in (False, True):
         for st in ("", "H"):
             out["RackRocker%s%s" % ("On" if on else "Off", st)] = rocker(on, st)
-    for i, key in enumerate("QWERTYA"):
-        for st in ("", "H"):
-            out["RackDial%s%s" % (key, st)] = dial(i, st)
+    for i, key in enumerate(RACK_STAT_KEYS):
+        for st in ("", "H", "On"):
+            out["RackStat%s%s" % (key, st)] = stat_key(ref, i, st)
     for st in ("", "H", "On"):
         out["RackTab" + st] = index_tab(st)
 
@@ -3236,6 +3266,15 @@ def paint_rack():
     for n in RACK_TILES:
         a = np.asarray(pieces[n])[..., 3] > 127
         assert (a[0] == a[-1]).all(), "%s does not tile: its ends differ" % n
+    for left, right in zip(RACK_STAT_AT, RACK_STAT_AT[1:]):
+        assert right[0] - left[2] >= 3, "stat keys %s and %s are under 3 apart" % (left, right)
+    heading = RACK_HEAD_AT["heading"]
+    assert RACK_STAT_AT[0][0] >= heading[0] and RACK_STAT_AT[-1][2] <= heading[2], "the stat keys run past the heading's width"
+    assert max(r[3] for r in RACK_STAT_AT) <= heading[1], "the stat keys reach into the heading"
+    well = RACK_ROW["well"]
+    for name, r in RACK_ROW.items():
+        assert well[0] <= r[0] and r[2] <= well[2] and well[1] <= r[1] and r[3] <= well[3], \
+            "the row's %s %s is outside its well %s" % (name, r, well)
     return sheet_img
 
 

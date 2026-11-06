@@ -1045,11 +1045,11 @@ public:  // ********************************************************************
 	/// A press on the spectator's rack, at `mouse` in screen pixels: TRUE when the rack is under it,
 	/// whatever button it was; only `act`, the left button, works its controls
 	Bool handleSpectatorRackClick( const ICoord2D *mouse, Bool act );
-	/// The wheel over the rack: TRUE when the rack is under it; over the dial it steps the stat
+	/// The wheel over the rack: TRUE when the rack is under it; over the standings' head it steps the stat
 	Bool handleSpectatorRackWheel( const ICoord2D *mouse, Real notches );
 	/// a command bar key while watching: TRUE when it picked a stat, Q W E R T Y A as shipped
 	Bool pickSpectatorStat( Int commandSlot );
-	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's dial took it
+	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's stat keys took it
 	Bool pickSpectatorStatKey( Int key, Int keyState );
 
 	/// Ingame video playback 
@@ -1514,13 +1514,14 @@ protected:
 	//
 	// The spectator's rack (drawSpectatorRack), drawers hung off the right edge under the superweapon
 	// tray while the local player watches: the camera, the fog and the armies drawer, then every
-	// player ranked by the stat on the dial.  Where the last draw put it, for the clicks.
+	// player ranked by the stat its keys pick.  Where the last draw put it, for the clicks.
 	//
 	enum { RACK_ROWS = 8, RACK_ARMY_UNITS = 6 };
 	enum
 	{
 		RACK_TEXT_WATCH, RACK_TEXT_STANDINGS, RACK_TEXT_STOP, RACK_TEXT_FOG = RACK_TEXT_STOP + 3, RACK_TEXT_ARMIES,
-		RACK_TEXT_KEY, RACK_TEXT_STAT = RACK_TEXT_KEY + 7, RACK_TEXT_STAT_KEY, RACK_TEXT_NAME,
+		RACK_TEXT_KEY, RACK_TEXT_STAT = RACK_TEXT_KEY + 7, RACK_TEXT_HINT, RACK_TEXT_PLACE_HEAD, RACK_TEXT_PLAYER_HEAD,
+		RACK_TEXT_VALUE_HEAD, RACK_TEXT_PLACE, RACK_TEXT_NAME = RACK_TEXT_PLACE + RACK_ROWS,
 		RACK_TEXT_VALUE = RACK_TEXT_NAME + RACK_ROWS, RACK_TEXT_UNITS = RACK_TEXT_VALUE + RACK_ROWS,
 		RACK_TEXT_COUNT = RACK_TEXT_UNITS + RACK_ROWS * RACK_ARMY_UNITS
 	};
@@ -1532,7 +1533,7 @@ protected:
 	Int													m_rackX, m_rackY;					///< its pieces' left and the watch drawer's top
 	Int													m_rackRows;
 	Int													m_rackRowPlayer[ RACK_ROWS ];	///< the player index on each row, top down
-	Int													m_rackStat;								///< SPECTATOR_STATS index on the dial
+	Int													m_rackStat;								///< the picked SPECTATOR_STATS index
 	Bool												m_rackArmies;							///< the armies drawer is out
 	DisplayString *							m_rackText[ RACK_TEXT_COUNT ];
 	Int													m_rackTextPx[ RACK_TEXT_COUNT ];		///< the size and room each was laid out for

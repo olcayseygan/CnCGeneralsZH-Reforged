@@ -16733,6 +16733,26 @@ GUI:HudNoWorkerLeft
 "%s n'a plus d'ouvrier"
 END
 
+GUI:HudHighestFirst
+"du plus haut au plus bas"
+END
+
+GUI:HudPlayerHead
+"Joueur"
+END
+
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/min"
+END
+
+GUI:HudStatUnitPower
+"excédent"
+END
+
 GUI:BarIdleWorker
 "Ouvrier"
 END

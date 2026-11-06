@@ -16725,6 +16725,26 @@ GUI:HudNoWorkerLeft
 "У %s не лишилося робітників"
 END
 
+GUI:HudHighestFirst
+"за спаданням"
+END
+
+GUI:HudPlayerHead
+"Гравець"
+END
+
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/хв"
+END
+
+GUI:HudStatUnitPower
+"надлишок"
+END
+
 GUI:BarIdleWorker
 "Робітник"
 END

@@ -16725,6 +16725,26 @@ GUI:HudNoWorkerLeft
 "У %s не осталось рабочих"
 END
 
+GUI:HudHighestFirst
+"по убыванию"
+END
+
+GUI:HudPlayerHead
+"Игрок"
+END
+
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/мин"
+END
+
+GUI:HudStatUnitPower
+"излишек"
+END
+
 GUI:BarIdleWorker
 "Рабочий"
 END

@@ -1502,9 +1502,32 @@ GUI:HudArmies
 "Armies"
 END
 
-// the rack's drawer of every player ranked by the dial's stat
+// the rack's drawer of every player ranked by the picked stat
 GUI:HudStandings
 "Standings"
+END
+
+// the standings' heading when no stat key is under the pointer: the order the rows are in
+GUI:HudHighestFirst
+"highest first"
+END
+
+// the standings' column head over the names
+GUI:HudPlayerHead
+"Player"
+END
+
+// the units the standings' column head names after the stat
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/min"
+END
+
+GUI:HudStatUnitPower
+"surplus"
 END
 
 // The cheat panel the console's "trainer" command opens.

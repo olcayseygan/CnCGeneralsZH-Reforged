@@ -25,9 +25,9 @@
 // selection somewhere, take a picture, read the frame number and everybody's money back - from
 // Python, from a browser console, from anything that speaks WebSocket.
 //
-// It listens on the loopback address only.  There is no authentication and none is wanted: the
-// socket can start a match and create units, so it has to be unreachable from anywhere but this
-// machine, and binding to 127.0.0.1 is what makes that true rather than a promise.
+// It listens on loopback only. Native local tools keep their originless handshake.
+// Browser clients require ZH_CONTROL_TOKEN (32..128 URL-safe random characters),
+// passed as the WebSocket subprotocol "zhr-control.<token>". See docs/network-control.md.
 //
 // Commands are one line of text per frame, and world commands are the same grammar the scenario
 // files use, minus the leading frame number:
@@ -75,5 +75,9 @@ extern void ControlServer_shutdown( void );
 	  base64'd.  Public because it is the one piece of this file that can be tested without a socket,
 	  and RFC 6455 ships a worked example to test it against. */
 extern Bool ControlServer_computeAcceptKey( const char *clientKey, char *out, Int outSize );
+
+/** Validate a complete HTTP upgrade header, without reading a following frame. */
+extern Bool ControlServer_validateHandshake( const char *request, Int length, const char *browserToken,
+    char *keyOut, Int keySize, char *protocolOut, Int protocolSize );
 
 #endif // __CONTROLSERVER_H_

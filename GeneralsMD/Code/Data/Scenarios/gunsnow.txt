@@ -1,0 +1,31 @@
+# Machine gun tracers on snow: gunfx.txt's two lines on Winter Wolf beside seat 0's start, seat 0
+# (America with GLA Rebels and Technicals) and seat 1 (China with GLA Quad Cannons) attack-moving
+# through each other, so the tracers cross white ground. Held with Cinema/tracers_snow.txt:
+#
+#   generals.exe -borderless -msaa 0 -noFPSLimit -particlecap 2500 -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Winter Wolf\Winter Wolf.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario gunsnow -cinema tracers_snow
+#     -video 180 720 <name> -maxframes 740
+#
+# Bloom = 0 in Options.ini is Glow Off, EA's tracer box, for the other half of a pair.
+
+20    spawn      0  AmericaInfantryRanger      8  start0:200:60    16
+20    spawn      0  GLAInfantryRebel           8  start0:170:100   16
+20    spawn      0  AmericaVehicleHumvee       3  start0:230:20    34
+20    spawn      0  GLAVehicleTechnical        2  start0:150:20    34
+20    spawn      0  AmericaTankCrusader        2  start0:130:140   40
+
+20    spawn      1  ChinaInfantryRedguard     12  start0:480:60    16
+20    spawn      1  ChinaTankGattling          3  start0:520:20    36
+20    spawn      1  GLAVehicleQuadCannon       2  start0:500:110   36
+20    spawn      1  ChinaTankBattleMaster      2  start0:560:70    40
+
+40    attackmove 0  *  start0:620:60
+40    attackmove 1  *  start0:80:60
+
+30    tally      0  *
+30    tally      1  *
+200   tally      0  *
+200   tally      1  *
+360   tally      0  *
+360   tally      1  *

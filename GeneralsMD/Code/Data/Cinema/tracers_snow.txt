@@ -1,0 +1,5 @@
+# Scenarios/gunsnow.txt held on Winter Wolf between the two gun lines east of seat 0's start
+# (438,1736), looking north-east so the map's west edge stays behind the camera. Command line in the
+# scenario's header.
+
+1.0   cut     780 1800 0.7 -45 10

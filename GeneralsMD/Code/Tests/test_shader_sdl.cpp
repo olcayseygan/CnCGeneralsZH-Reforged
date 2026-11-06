@@ -1440,6 +1440,8 @@ TEST(fft_low_tier_preserves_energy_reality_and_filtering)
     CHECK(filtering.find("level,6)")!=std::string::npos);
 }
 
+#if defined(__linux__)
+// The SDL water tiers and reflections exist only where the Linux Modern water runtime draws them.
 TEST(water_performance_tiers_compile_both_materials_and_preserve_shared_defaults)
 {
     struct Restore { WaterPerformanceSettings::Configuration saved=WaterPerformanceSettings::Applied();
@@ -1510,6 +1512,7 @@ TEST(screen_reflection_modes_are_bounded_and_selected_per_draw)
 	CHECK(MirrorSize(Mirror) == 512 && MirrorSize(Hybrid) == 1024);
 	CHECK(MirrorSize(Mirror, 0) == 256 && MirrorSize(Hybrid, 0) == 512);
 }
+#endif // __linux__
 
 TEST(direct3d11_modern_water_source_matches_the_upstream_baseline)
 {

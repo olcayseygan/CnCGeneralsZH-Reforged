@@ -130,8 +130,8 @@ public:
 	void update( void ); ///< update phase of the water
 #if ZH_MODERN_WATER
 	void takeReadsForRender(void);
-	void prewarmStaticMapData(void);
 #endif
+	void prewarmStaticMapData(void);
 	void enableWaterGrid(Bool state);	///< used to active custom water for special maps. (i.e DAM).  The grid is TerrainLogic's WaterGrid; this builds its buffers
 	void updateMapOverrides(void);	///< used to update any map specific map overrides for water appearance.
 	void setTimeOfDay(TimeOfDay tod); ///<change sky/water for time of day

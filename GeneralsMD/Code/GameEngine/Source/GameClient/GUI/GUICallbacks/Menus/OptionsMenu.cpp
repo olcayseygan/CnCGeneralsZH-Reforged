@@ -295,13 +295,7 @@ Bool OptionsHotkeysKey( UnsignedByte key, Int state );
 void OptionsHotkeysSave( void );
 void OptionsHotkeysClose( void );
 
-//-------------------------------------------------------------------------------------------------
-/** Show one page and hide the rest.
-	*
-	* The page you are on is the disabled button, which is the one piece of tab feedback available
-	* without drawing new artwork: a pressed-looking tab would need a second image per button, and
-	* the buttons are cloned from one that already exists. */
-//-------------------------------------------------------------------------------------------------
+// The Water page's rows drive the SDL Modern water, which only Linux draws.
 static Bool modernWaterSettingsSupported( void )
 {
 	return WaterScreenReflection::Supported();
@@ -332,7 +326,7 @@ static void fitWaterOptionsTabCaption( GameWindow *tab )
 	TheDisplayStringManager->freeDisplayString( caption );
 }
 
-// Hide the SDL water page elsewhere and give the remaining tabs their original width. Derive
+// Hide the Water page off Linux and give the remaining tabs their original width. Derive
 // the bounds from the loaded layout so shell scaling and reopening an existing layout both work.
 static void layoutOptionsTabs( void )
 {
@@ -363,6 +357,13 @@ static void layoutOptionsTabs( void )
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+/** Show one page and hide the rest.
+	*
+	* The page you are on is the disabled button, which is the one piece of tab feedback available
+	* without drawing new artwork: a pressed-looking tab would need a second image per button, and
+	* the buttons are cloned from one that already exists. */
+//-------------------------------------------------------------------------------------------------
 static void showOptionsPage( Int which )
 {
 	if( which == OPTIONS_WATER_PAGE && !modernWaterSettingsSupported() )

@@ -1001,25 +1001,28 @@ bool Supported()
 {
 #if defined(_WIN32)
 	return Direct3D11_Is_Active() && Direct3D11_Present_Is_Enabled();
-#else
+#elif ZH_MODERN_WATER
 	return PosixWaterGpuAvailable(DX8Wrapper::_Get_D3D_Device());
+#else
+	return false;
 #endif
 }
 
 } // namespace ModernWater
 
-#if ZH_MODERN_WATER
+// The SDL water's reflections, tiers and Water page: Linux only, the one SDL host that draws Modern water.
 namespace WaterScreenReflection {
 bool Supported()
 {
-#ifdef _WIN32
-	return false;
-#else
+#if ZH_MODERN_WATER && !defined(_WIN32)
 	return PosixWaterGpuAvailable(DX8Wrapper::_Get_D3D_Device());
+#else
+	return false;
 #endif
 }
 }
 
+#if ZH_MODERN_WATER
 /** The Modern style is asked for and a device draws it.  Classic graphics is the 2003 picture, so it
 		keeps EA's water whatever WaterStyle says, as it keeps the old clouds and drops the foam.  The
 		quality slider and its presets leave WaterStyle alone: Modern is the player's own pick. */
@@ -2818,6 +2821,7 @@ void WaterRenderObjClass::loadSetting( Setting *setting, TimeOfDay timeOfDay )
 
 }
 
+#if ZH_MODERN_WATER
 void WaterRenderObjClass::synchronizeWaterReflection(void)
 {
 	if (!WaterScreenReflection::Supported()) return;
@@ -2848,6 +2852,7 @@ void WaterRenderObjClass::synchronizeWaterReflection(void)
 		m_reflectionAreaMax.Set(0.0f,0.0f);
 	}
 }
+#endif
 
 //-------------------------------------------------------------------------------------------------
 /** Our water may use effects that require run-time rendered textures.  These

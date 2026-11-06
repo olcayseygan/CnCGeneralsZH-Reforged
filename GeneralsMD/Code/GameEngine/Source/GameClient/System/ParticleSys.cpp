@@ -1466,6 +1466,7 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 
 	m_attachedToDrawableID = INVALID_DRAWABLE_ID;
 	m_attachedToObjectID = INVALID_ID;
+	m_rodeObject = FALSE;
 	m_attachedObjectDrawableForDraw = INVALID_DRAWABLE_ID;
 
 	m_isLocalIdentity = true;
@@ -1850,7 +1851,10 @@ void ParticleSystem::attachToDrawable( const Drawable *draw )
 void ParticleSystem::attachToObject( const Object *obj )
 {
 	if (obj)
+	{
 		m_attachedToObjectID = obj->getID();
+		m_rodeObject = TRUE;
+	}
 	else
 		m_attachedToObjectID = INVALID_ID;
 }
@@ -3349,6 +3353,8 @@ void ParticleSystem::xfer( Xfer *xfer )
 
 	// attached to object id
 	xfer->xferObjectID( &m_attachedToObjectID );
+	if( xfer->getXferMode() == XFER_LOAD && m_attachedToObjectID != INVALID_ID )
+		m_rodeObject = TRUE;	// not saved; a trail still riding its missile is one that rode it
 
 	// is local identity
 	xfer->xferBool( &m_isLocalIdentity );

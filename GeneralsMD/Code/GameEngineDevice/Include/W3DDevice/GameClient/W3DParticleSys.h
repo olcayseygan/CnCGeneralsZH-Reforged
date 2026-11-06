@@ -155,6 +155,8 @@ private:
 	std::vector<SystemView>		m_frameView;
 	std::vector<ParticleSystem *>	m_frameFires;			///< the additive and Emissive FireLook systems among them, for the Firelight option
 	std::vector<Real>					m_frameFireFades;		///< and their fades
+	std::vector<ParticleSystem *>	m_frameExhausts;		///< -heathaze: the additive weapon trails riding a projectile, a missile's flame
+	std::vector<Real>					m_frameExhaustFades;
 	std::vector<ParticleSystem *>	m_fieldSystems;		///< the contamination fields' systems, empty ones too
 	std::vector<SunMapCaster>	m_sunMapCasters;
 	Bool											m_frameViewValid;

@@ -39,8 +39,20 @@
 #include "GameClient/Color.h"
 #include "WWMath/vector3.h"
 
+#include <vector>
+
 class SegmentedLineClass;
 class TextureClass;
+
+/// -heathaze: a glowing beam on show, for the air round it to bend (gatherHeatHaze)
+struct LaserHeat
+{
+	Vector3 start;
+	Vector3 end;
+	Real glowWidth;		///< the halo's whole width, world units
+	Real coreRadius;	///< half the body's width: the beam a viewer sees, which must not move
+	Real light;				///< the glow's brightness with the fade, 0 to 1
+};
 
 class W3DLaserDrawModuleData : public ModuleData
 {
@@ -97,6 +109,8 @@ public:
 	virtual LaserDrawInterface* getLaserDrawInterface() { return this; }
 	virtual const LaserDrawInterface* getLaserDrawInterface() const { return this; }
 
+	static void gatherHeat( std::vector<LaserHeat> &beams );	///< every glowing beam on show, appended
+
 protected:
 
 	void drawGlow( Real widthScale, Real sinceArrivalMs );
@@ -106,6 +120,9 @@ protected:
 	SegmentedLineClass *m_flare3D[ 4 ];	///< muzzle glow and core, impact glow and core; made beside m_glow3D
 	Vector3 m_beamStart;						///< the first segment's start and the last one's end, for the flares
 	Vector3 m_beamEnd;
+	Real m_glowWidth;								///< the halo's and the body's widths as last placed, for gatherHeat
+	Real m_bodyWidth;
+	Real m_light;										///< the glow's brightness on the last draw, for gatherHeat
 	UnsignedInt m_birthFrame;				///< logic frame the lines were built on, for the fade in and out
 	UnsignedInt m_lifetimeFrames;		///< the template's LifetimeUpdate, 0 when it has none (no fade out)
 	UnsignedInt m_birthMs;					///< picture clock of the first draw, for the travel

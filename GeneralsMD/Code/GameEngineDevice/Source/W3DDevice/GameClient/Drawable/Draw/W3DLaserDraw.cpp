@@ -239,6 +239,10 @@ static void releaseGlowTexture()
 		REF_PTR_RELEASE( s_glowTexture );
 }
 
+// -heathaze: the beams gatherHeat reports, added when their glow is built and taken out with it
+// ponytail: a linear erase per beam destroyed; fine for the tens of beams a fight holds
+static std::vector<W3DLaserDraw *> s_glowingBeams;
+
 // A flicker of one on average, varying by up to depth: a value per FLICKER_STEP_MS for each seed,
 // blended into the next, so it shimmers rather than strobes. On the picture's clock, so a -video
 // recording gets the same flicker every run.
@@ -408,6 +412,9 @@ W3DLaserDraw::W3DLaserDraw( Thing *thing, const ModuleData* moduleData ) :
 	m_glow3D(NULL),
 	m_beamStart(0.0f, 0.0f, 0.0f),
 	m_beamEnd(0.0f, 0.0f, 0.0f),
+	m_glowWidth(0.0f),
+	m_bodyWidth(0.0f),
+	m_light(0.0f),
 	m_birthFrame(0),
 	m_lifetimeFrames(0),
 	m_birthMs(0),
@@ -522,6 +529,7 @@ void W3DLaserDraw::buildRenderObjects( Bool madeInTick )
 			W3DDisplay::m_3DScene->Add_Render_Object( line );
 			line->Set_Visible( 0 );
 		}
+		s_glowingBeams.push_back( this );
 		m_lifetimeFrames = beamLifetimeFrames( getDrawable() );
 		// the beam's birth, so one the camera only reaches mid-life still fades out on time
 		m_birthFrame = TheGameLogic->getFrame();
@@ -561,6 +569,15 @@ W3DLaserDraw::~W3DLaserDraw( void )
 		{
 			W3DDisplay::m_3DScene->Remove_Render_Object( m_flare3D[ f ] );
 			REF_PTR_RELEASE( m_flare3D[ f ] );
+		}
+		for( size_t b = 0; b < s_glowingBeams.size(); b++ )
+		{
+			if( s_glowingBeams[ b ] == this )
+			{
+				s_glowingBeams[ b ] = s_glowingBeams.back();
+				s_glowingBeams.pop_back();
+				break;
+			}
 		}
 		releaseGlowTexture();
 	}
@@ -819,6 +836,8 @@ void W3DLaserDraw::doDrawModule(const Matrix3D* transformMtx)
 						line->Set_Points( 2, &laserPoints[0] );
 					}
 				}
+				m_glowWidth = widths[ 0 ];
+				m_bodyWidth = widths[ 1 ];
 				if( segment == 0 )
 					m_beamStart = laserPoints[ 0 ];
 				m_beamEnd = laserPoints[ 1 ];
@@ -870,6 +889,7 @@ void W3DLaserDraw::drawGlow( Real widthScale, Real sinceArrivalMs )
 			m_glow3D[ g ]->Set_Color( Vector3( 0.0f, 0.0f, 0.0f ) );
 		for( Int f = 0; f < FLARE_COUNT; f++ )
 			m_flare3D[ f ]->Set_Color( Vector3( 0.0f, 0.0f, 0.0f ) );
+		m_light = 0.0f;
 		return;
 	}
 
@@ -888,6 +908,7 @@ void W3DLaserDraw::drawGlow( Real widthScale, Real sinceArrivalMs )
 	const Vector3 hue = glowHue( data->m_innerColor, data->m_outerColor );
 	const Vector3 white( 1.0f, 1.0f, 1.0f );
 	const Real light = brightness * fade;
+	m_light = light;
 
 	// glowHue's brightest channel is one, so no colour passes one before the flicker
 	const Vector3 colors[ GLOW_LAYERS ] =
@@ -941,6 +962,30 @@ void W3DLaserDraw::drawGlow( Real widthScale, Real sinceArrivalMs )
 		line->Set_Width( width );
 		line->Set_Points( GLOW_LINE_POINTS, flarePoints );
 		line->Set_Color( ( hue * ( 1.0f - whiten ) + white * whiten ) * MIN( light * shimmer, 1.0f ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** -heathaze: every glowing beam the viewer can see, as last placed. Read from the beams themselves
+	* rather than a list filled while drawing, because a render pass draws the drawables only when the
+	* logic clock moved and the haze is gathered on every one. The test is smoothMotionApply's. */
+//-------------------------------------------------------------------------------------------------
+void W3DLaserDraw::gatherHeat( std::vector<LaserHeat> &beams )
+{
+	for( size_t b = 0; b < s_glowingBeams.size(); b++ )
+	{
+		W3DLaserDraw *laser = s_glowingBeams[ b ];
+		Drawable *draw = laser->getDrawable();
+		if( laser->m_light <= 0.0f || ( laser->m_beamEnd - laser->m_beamStart ).Length2() <= 0.0f
+				|| draw->isDrawableEffectivelyHidden() || draw->getFullyObscuredByShroud() )
+			continue;
+		LaserHeat heat;
+		heat.start = laser->m_beamStart;
+		heat.end = laser->m_beamEnd;
+		heat.glowWidth = laser->m_glowWidth;
+		heat.coreRadius = laser->m_bodyWidth * 0.5f;
+		heat.light = laser->m_light;
+		beams.push_back( heat );
 	}
 }
 

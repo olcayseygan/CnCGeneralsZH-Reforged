@@ -731,7 +731,11 @@ public:
 
 	void attachToDrawable( const Drawable *draw );							///< attach this particle system to a Drawable
 	void attachToObject( const Object *obj );									///< attach this particle system to an Object
-	void attachToObjectID( ObjectID id ) { m_attachedToObjectID = id; }	///< the same, for an object that may be gone already
+	void attachToObjectID( ObjectID id ) { m_attachedToObjectID = id; if (id != INVALID_ID) m_rodeObject = TRUE; }	///< the same, for an object that may be gone already
+	/// attached to an Object at some point, still true once the object has died (-heathaze's missile
+	/// exhausts keep their haze while the trail fades).  Not saved; a load sets it again for a system
+	/// still attached to its object.
+	Bool hasRiddenObject( void ) const { return m_rodeObject; }
 
 	/** LOGIC-THREAD.md phase 2, M5.  A system made inside a tick is a shell until the end of the tick:
 		* its ID and everything copied from the template, so logic can place it, attach it, stop it and
@@ -933,6 +937,7 @@ protected:
 
 	DrawableID				m_attachedToDrawableID;					///< if non-zero, system is parented to this Drawable
 	ObjectID					m_attachedToObjectID;						///< if non-zero, system is parented to this Object
+	Bool							m_rodeObject;										///< hasRiddenObject
 	DrawableID				m_attachedObjectDrawableForDraw;	///< that Object's drawable at the last update, for getStealthFade inside the overlap window
 
 	Matrix3D					m_localTransform;								///< local orientation & position of system

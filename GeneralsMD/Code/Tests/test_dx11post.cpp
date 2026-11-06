@@ -401,10 +401,20 @@ TEST(dx11post_a_heat_splat_bends_the_picture_under_it_and_none_leaves_it_alone)
 	const float splat[DIRECT3D11_HEAT_SPLAT_FLOATS] = {
 		0.0f, 0.0f, 0.5f, 0.5f,
 		0.5f, 0.05f, 0.0f, 0.0f,
-		1.0f, 100.0f, 5.0f, 10.0f };
+		1.0f, 100.0f, 5.0f, 10.0f,
+		0.0f, 0.0f, 0.0f, 0.0f };
+	// A laser's splat, the same with a level beam through the middle row and a still band 6% of
+	// the frame's height either side of it (3.8 pixels), full past another 2%: the rows on the beam
+	// keep every pixel, and the diagonal still bends in rows clear of the band.
+	float beam[DIRECT3D11_HEAT_SPLAT_FLOATS];
+	memcpy(beam, splat, sizeof(beam));
+	beam[12] = 1.0f;
+	beam[14] = 0.06f;
+	beam[15] = 0.02f;
+	const unsigned middle = SURFACE_SIZE / 2;
 	// Frame 2 sets the splat again over a depth of a half, the flame's own: a unit standing in the
-	// fire, which has to keep every pixel.
-	for (unsigned frame = 0; frame < 3; ++frame) {
+	// fire, which has to keep every pixel.  Frame 3 sets the beam's.
+	for (unsigned frame = 0; frame < 4; ++frame) {
 		post.Open_Frame();
 		post.Begin_Frame();
 		device.Set_Scene_View(post.Scene_View());
@@ -412,7 +422,7 @@ TEST(dx11post_a_heat_splat_bends_the_picture_under_it_and_none_leaves_it_alone)
 			(frame == 2) ? 0.5f : 1.0f, 0);
 		CHECK(write_scene(device, post, picture));
 		if (frame != 1) {
-			post.Set_Heat_Splats(splat, 1);
+			post.Set_Heat_Splats((frame == 3) ? beam : splat, 1);
 		}
 		CHECK_EQ(frame != 1, post.Heat_Haze_Scene(device.Get_Depth_Texture()));
 		CHECK(post.Run_Chain());
@@ -424,6 +434,23 @@ TEST(dx11post_a_heat_splat_bends_the_picture_under_it_and_none_leaves_it_alone)
 				CHECK(differing_pixels(picture, result, pitch) > 8u);
 				CHECK_EQ(DARK_LEVEL, pixel_level(result, pitch, 1, SURFACE_SIZE - 2));
 				CHECK_EQ(LIGHT_LEVEL, pixel_level(result, pitch, SURFACE_SIZE - 2, 1));
+			} else if (frame == 3) {
+				unsigned on_beam = 0;
+				unsigned clear_of_it = 0;
+				for (unsigned y = 0; y < SURFACE_SIZE; ++y) {
+					for (unsigned x = 0; x < SURFACE_SIZE; ++x) {
+						if (pixel_level(picture, SURFACE_SIZE * BYTES_A_PIXEL, x, y) == pixel_level(result, pitch, x, y)) {
+							continue;
+						}
+						if (y + 2 >= middle && y <= middle + 1) {
+							++on_beam;
+						} else if (y + 6 <= middle || y >= middle + 6) {
+							++clear_of_it;
+						}
+					}
+				}
+				CHECK_EQ(0u, on_beam);
+				CHECK(clear_of_it > 2u);
 			} else {
 				CHECK_EQ(0u, differing_pixels(picture, result, pitch));
 			}

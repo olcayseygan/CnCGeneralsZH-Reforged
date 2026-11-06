@@ -1004,10 +1004,12 @@ static const char * const WARP_SHADER_BODY =
 	"}\n";
 
 // -heathaze.  Every flame particle is a splat, six vertices made out of SV_VertexID like the full
-// screen triangle, its numbers read out of a buffer three float4 a splat (dx11runtime.h has the
+// screen triangle, its numbers read out of a buffer four float4 a splat (dx11runtime.h has the
 // layout).  The splat writes a shift in texture coordinates into rg and its weight into b, added up
 // over every splat that covers the pixel; the composite divides by the weight once it passes one,
-// so a stack of flames shimmers as hard as one does and only the edges fade.
+// so a stack of flames shimmers as hard as one does and only the edges fade.  A laser's splats
+// carry the beam's direction on the screen and leave a band along it with no weight, so the air
+// round a beam bends and the beam itself, which wrote no depth to hide it, stays where it is.
 //
 // The shift is one field over the whole screen rather than per splat, so overlapping flames bend
 // the same way and add up instead of cancelling.  Its waves run up the screen with the time: heat
@@ -1023,6 +1025,8 @@ static const char * const HEAT_SPLAT_VERTEX_SOURCE =
 	"    float2 Screen : TEXCOORD1;\n"
 	"    float4 Heat : TEXCOORD2;\n"
 	"    float4 Planes : TEXCOORD3;\n"
+	"    float4 Across : TEXCOORD4;\n"
+	"    float2 Offset : TEXCOORD5;\n"
 	"};\n"
 	"\n"
 	"static const float2 CORNERS[6] =\n"
@@ -1035,14 +1039,16 @@ static const char * const HEAT_SPLAT_VERTEX_SOURCE =
 	"{\n"
 	"    uint splat = index / 6;\n"
 	"    float2 corner = CORNERS[index % 6];\n"
-	"    float4 shape = Splats.Load(splat * 3);\n"
+	"    float4 shape = Splats.Load(splat * 4);\n"
 	"    SplatOutput output;\n"
 	"    float2 clip = shape.xy + corner * shape.zw;\n"
 	"    output.Position = float4(clip, 0.0, 1.0);\n"
 	"    output.Corner = corner;\n"
 	"    output.Screen = clip * float2(0.5, -0.5) + 0.5;\n"
-	"    output.Heat = Splats.Load(splat * 3 + 1);\n"
-	"    output.Planes = Splats.Load(splat * 3 + 2);\n"
+	"    output.Heat = Splats.Load(splat * 4 + 1);\n"
+	"    output.Planes = Splats.Load(splat * 4 + 2);\n"
+	"    output.Across = Splats.Load(splat * 4 + 3);\n"
+	"    output.Offset = corner * shape.zw;\n"
 	"    return output;\n"
 	"}\n";
 
@@ -1055,6 +1061,8 @@ static const char * const HEAT_SPLAT_SHADER_BODY =
 	"    float2 Screen : TEXCOORD1;\n"
 	"    float4 Heat : TEXCOORD2;\n"
 	"    float4 Planes : TEXCOORD3;\n"
+	"    float4 Across : TEXCOORD4;\n"
+	"    float2 Offset : TEXCOORD5;\n"
 	"};\n"
 	"\n"
 	"static const float HEAT_FREQUENCY = 50.0;\n"
@@ -1078,8 +1086,21 @@ static const char * const HEAT_SPLAT_SHADER_BODY =
 	// Only what lies well behind the flames bends: a unit standing in the fire, or in front of
 	// it, keeps its outline.
 	"    weight *= saturate((scene - flame - input.Planes.z) / max(input.Planes.w, 0.0001));\n"
-	"    if (weight <= 0.0) discard;\n"
 	"    float aspect = (float)width / (float)height;\n"
+	// A beam's splat: no weight within Across.z of the beam's line, in shares of the frame's
+	// height, coming up to full over Across.w further out.  The composite reads nothing where the
+	// weight is nought, so the beam is neither moved nor smeared onto the air beside it.  Never
+	// narrower than one texel of the half size target, or its bilinear read leaks weight onto a
+	// beam seen from far off and the beam wobbles.
+	"    if (dot(input.Across.xy, input.Across.xy) > 0.0)\n"
+	"    {\n"
+	"        float2 along = normalize(input.Across.xy * float2(aspect, 1.0));\n"
+	"        float2 offset = input.Offset * float2(aspect, 1.0) * 0.5;\n"
+	"        float off = abs(offset.x * along.y - offset.y * along.x);\n"
+	"        float still = max(input.Across.z, 2.0 / (float)height);\n"
+	"        weight *= saturate((off - still) / max(input.Across.w, 0.0001));\n"
+	"    }\n"
+	"    if (weight <= 0.0) discard;\n"
 	"    float2 p = float2(input.Screen.x * aspect, input.Screen.y) * HEAT_FREQUENCY;\n"
 	"    float t = input.Heat.z * HEAT_RISE;\n"
 	// Bands across the column climbing it, each swaying sideways a little along its length, so the

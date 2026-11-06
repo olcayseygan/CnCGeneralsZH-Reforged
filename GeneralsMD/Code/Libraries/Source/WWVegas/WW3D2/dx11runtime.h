@@ -242,9 +242,12 @@ void Direct3D11_Set_Fire_Look(bool fire);
 // DIRECT3D11_HEAT_SPLAT_FLOATS floats: centre x, y and half width, half height in the frame's
 // clip space; the hardware depth that hides it, its strongest shift in texture coordinates, the
 // time in seconds, 0; the near and far planes, then in world units how far behind the flame a
-// surface starts to bend and over how much further it comes up to full.  Past
-// DIRECT3D11_HEAT_SPLAT_LIMIT the rest are dropped.  A count of zero clears them.
-const unsigned DIRECT3D11_HEAT_SPLAT_FLOATS = 12;
+// surface starts to bend and over how much further it comes up to full; last, for a laser's
+// splat, the beam's direction in the frame's clip space, then the half width of the band along it
+// left still and the width over which the bending comes up beyond it, both as shares of the
+// frame's height (all four nought for a flame).  Past DIRECT3D11_HEAT_SPLAT_LIMIT the rest are
+// dropped.  A count of zero clears them.
+const unsigned DIRECT3D11_HEAT_SPLAT_FLOATS = 16;
 const unsigned DIRECT3D11_HEAT_SPLAT_LIMIT = 2048;
 void Direct3D11_Set_Heat_Splats(const float * splats, unsigned count);
 

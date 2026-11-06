@@ -263,6 +263,7 @@ public:
 	bool Build_Vertex_Description(VertexPipelineDescription &description, std::string *refusal = NULL) const;
 	/// The two constant blocks, packed to match the descriptions above.
 	void Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants &pixel) const;
+	void Build_Pixel_Constants(SdlPixelConstants &pixel) const;
 	void Build_Water_Constants(const SdlPixelConstants &pixel, SdlWaterPixelConstants &water) const;
 	void Build_Water_Visual_Constants(const SdlWaterPixelConstants &water, SdlWaterVisualPixelConstants &visual) const;
 	bool Water_Foam_History_Available() const;

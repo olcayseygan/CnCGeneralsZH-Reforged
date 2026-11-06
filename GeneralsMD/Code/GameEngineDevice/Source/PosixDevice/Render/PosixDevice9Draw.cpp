@@ -502,6 +502,15 @@ void PosixDevice9::Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants
 	pixel.AlphaReference[0] = SunActive && RenderStates[D3DRS_ALPHABLENDENABLE] ? 8.0f : (float)(RenderStates[D3DRS_ALPHAREF] & 0xFF);
 }
 
+void PosixDevice9::Build_Pixel_Constants(SdlPixelConstants &pixel) const
+{
+	memset(&pixel, 0, sizeof(pixel));
+	colour_of(RenderStates[D3DRS_TEXTUREFACTOR], pixel.TextureFactor);
+	colour_of(RenderStates[D3DRS_FOGCOLOR], pixel.FogColour);
+	// A whole level, as D3D9 compares it: the program rounds the pixel's alpha to a level first.
+	pixel.AlphaReference[0] = SunActive && RenderStates[D3DRS_ALPHABLENDENABLE] ? 8.0f : (float)(RenderStates[D3DRS_ALPHAREF] & 0xFF);
+}
+
 bool PosixDevice9::Water_Foam_History_Available() const
 {
 	// History is an optional CPU-authored image. Never turn a stale stage binding, attachment,
@@ -1414,7 +1423,12 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	// The constants, pushed only when they change.
 	SdlVertexConstants vertex_constants;
 	SdlPixelConstants pixel_constants;
-	Build_Constants(vertex_constants, pixel_constants);
+	if (vertex_program.UniformBuffers != 0 && vertex_engine == ENGINE_SHADER_NONE) {
+		Build_Constants(vertex_constants, pixel_constants);
+	} else {
+		// Engine programs read their register bank; shaders without vertex uniforms need no block.
+		Build_Pixel_Constants(pixel_constants);
+	}
 	if (vertex_program.UniformBuffers != 0 && vertex_engine != ENGINE_SHADER_NONE) {
 		// A transcribed vertex program reads the engine's own register bank, c0 to c95, as its b0.
 		const uint32_t size = ENGINE_SHADER_CONSTANTS * sizeof(VertexShaderConstants[0]);

@@ -948,6 +948,7 @@ found and fixed, EA's own, not port damage.**
 - A desync now writes a per-object report on both machines for comparison.
 - LAN refuses to start between two machines whose game files differ.
 - A player whose name holds a comma, a colon or a control character is turned away at the door instead of scrambling the lobby's idea of who is in the room.
+- A Quick Match can no longer crash your game as it starts. A server that sent colour 999, or an army number past the end of the list, took the game down on the loading screen; now that seat reads as Random.
 - An open seat can be taken. The map's number of starting positions used to overrule the host: a four position map turned away the fifth player even with a seat left open for him, and that seat stayed open on everyone's screen.
 - A map sent to you over the network has to be a map. The other machine used to name any file it liked and fill it with anything at all, and it was written where the name pointed; now the name cannot leave the map folder, the kind has to be one a map transfer carries, and the contents have to match the kind.
 - The processor's rounding mode is reset from the right register every frame.

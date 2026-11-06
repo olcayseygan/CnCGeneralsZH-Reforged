@@ -25,12 +25,16 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/GlobalData.h"
+#include "Common/MultiplayerSettings.h"
+#include "Common/PlayerTemplate.h"
 #include "Common/UserPreferences.h"
 #include "Common/version.h"
+#include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "zhio.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,6 +87,29 @@ static PeerResponse makePeer( Int type )
 	return r;
 }
 
+Int OnlineSeatSide( long long side, Int numTemplates )
+{
+	if (side >= 0)
+		return side < numTemplates ? (Int)side : (Int)PLAYERTEMPLATE_RANDOM;
+	// below the pool marker IsValidPlayerTemplatePick reads only the mask, never the store
+	return side < PLAYERTEMPLATE_RANDOM_POOL && side >= INT_MIN && IsValidPlayerTemplatePick( (Int)side ) ? (Int)side : (Int)PLAYERTEMPLATE_RANDOM;
+}
+
+Int OnlineSeatColor( long long color, Int numColors )
+{
+	return color >= 0 && color < numColors ? (Int)color : -1;
+}
+
+static Int seatSide( long long side )
+{
+	return OnlineSeatSide( side, ThePlayerTemplateStore ? ThePlayerTemplateStore->getPlayerTemplateCount() : 0 );
+}
+
+static Int seatColor( long long color )
+{
+	return OnlineSeatColor( color, TheMultiplayerSettings ? TheMultiplayerSettings->getNumColors() : 0 );
+}
+
 //-------------------------------------------------------------------------------------------------
 // the session
 //-------------------------------------------------------------------------------------------------
@@ -94,7 +121,7 @@ OnlineSession &OnlineSession::get()
 }
 
 OnlineSession::OnlineSession() :
-	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ),
+	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ),
 	peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	forgetAccount();
@@ -133,6 +160,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	motd.clear();
 	config.clear();
 	relayPort = 8094;
+	testMode = FALSE;
 	status = lines ? ONLINE_WELCOMED : ONLINE_OFF;
 }
 
@@ -366,8 +394,8 @@ void OnlineSession::gameListEntry( const OnlineMessage &m )
 			if (i < (Int)wins.size())			r.stagingRoom.wins[i] = (Int)wins[i];
 			if (i < (Int)losses.size())		r.stagingRoom.losses[i] = (Int)losses[i];
 			if (i < (Int)pids.size())			r.stagingRoom.profileID[i] = (Int)pids[i];
-			if (i < (Int)factions.size())	r.stagingRoom.faction[i] = (Int)factions[i];
-			if (i < (Int)colors.size())		r.stagingRoom.color[i] = (Int)colors[i];
+			if (i < (Int)factions.size())	r.stagingRoom.faction[i] = seatSide( factions[i] );
+			if (i < (Int)colors.size())		r.stagingRoom.color[i] = seatColor( colors[i] );
 		}
 	}
 	peerResponse( r );
@@ -409,6 +437,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		motd = m.getString( "motd" );
 		config = m.getString( "config" );
 		relayPort = (UnsignedShort)m.getInt( "relayPort" );
+		testMode = m.getBool( "testMode" );
 		status = ONLINE_WELCOMED;
 		if (hasPendingAuth)
 		{
@@ -658,8 +687,8 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		{
 			r.stagingRoomPlayerNames[i] = nicks[i];
 			r.qmStatus.IP[i] = i < v.size() ? (UnsignedInt)v[i] : 0;		// host order, as GameSpy's matchbot sent it
-			r.qmStatus.side[i] = i < sides.size() ? (Int)sides[i] : -1;
-			r.qmStatus.color[i] = i < colors.size() ? (Int)colors[i] : -1;
+			r.qmStatus.side[i] = i < sides.size() ? seatSide( sides[i] ) : -1;
+			r.qmStatus.color[i] = i < colors.size() ? seatColor( colors[i] ) : -1;
 			r.qmStatus.nat[i] = ONLINE_NAT_SIMPLE;
 		}
 		peerResponse( r );
@@ -983,6 +1012,11 @@ AsciiString OnlineGetConfig( void )
 void OnlineDisconnect( void )
 {
 	OnlineSession::get().disconnect();
+}
+
+Bool OnlineIsTestServer( void )
+{
+	return OnlineIsEnabled() && OnlineSession::get().testMode;
 }
 
 Bool OnlineGetRelayTicket( UnsignedByte out[16] )

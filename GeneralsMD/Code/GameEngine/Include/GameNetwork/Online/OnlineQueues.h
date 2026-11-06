@@ -65,6 +65,9 @@ OnlineStatus OnlineGetStatus( void );
 AsciiString OnlineGetMOTD( void );				///< welcome.motd, for SetUpGameSpy's motdBuffer
 AsciiString OnlineGetConfig( void );			///< welcome.config (<QMMaps>), for SetUpGameSpy's configBuffer
 void OnlineDisconnect( void );						///< hangs up; the next OnlineUpdate dials again
+/* The welcome said testMode, which a server sends only when started for a test.  Only then does the
+	 -control socket run world commands in an online match: anywhere else they are a cheat. */
+Bool OnlineIsTestServer( void );
 
 /* The relay.  Both are FALSE until a login succeeded (auth.ok).  The ticket goes into the UDP HELLO_AUTH,
 	 which has to be sent right after login: the peer queue answers PEERREQUEST_LOGIN only once the server

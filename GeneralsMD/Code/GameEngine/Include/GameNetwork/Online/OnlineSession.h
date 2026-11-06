@@ -126,6 +126,7 @@ struct OnlineSession
 	std::string motd;				///< std::string, not AsciiString: this outlives the engine's allocator
 	std::string config;
 	UnsignedShort relayPort;
+	Bool testMode;					///< welcome.testMode: OnlineIsTestServer
 
 	// the account
 	Bool authed;						///< auth.ok arrived
@@ -171,5 +172,12 @@ private:
 
 /* Bytes a server line's number field holds, for vips and ids. */
 UnsignedInt OnlineHostToNet( UnsignedInt v );
+
+/* A side or colour the server hands a seat (qm.matched, the game list), as the seat may take it.  A side
+	 is a faction below numTemplates, Random or a Random pool; a colour is below numColors.  Anything else,
+	 the observer included, is Random (-1): GameLogic dereferences the template and the colour a seat
+	 names, so a hostile server's 999 was a crash at match start. */
+Int OnlineSeatSide( long long side, Int numTemplates );
+Int OnlineSeatColor( long long color, Int numColors );
 
 #endif // _ONLINE_SESSION_H_

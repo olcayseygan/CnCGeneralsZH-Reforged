@@ -21,6 +21,7 @@
 #include <map>
 #include "GameNetwork/Online/OnlineConnection.h"
 #include "GameNetwork/Online/OnlineSession.h"
+#include "GameNetwork/GameInfo.h"
 
 #include <chrono>
 #include <string>
@@ -1050,7 +1051,9 @@ TEST(online_adapter_quick_match)
 	widen.peerRequestType = PeerRequest::PEERREQUEST_WIDENQUICKMATCHSEARCH;
 	rig.peer->addRequest( widen );
 	CHECK_STR( rig.sentType( 1 ).c_str(), "qm.widen" );
-	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q1\",\"seed\":77,\"mapIdx\":1,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[167772163,167772162],\"sides\":[2,-1],\"colors\":[3,-1]}" );
+	// side -25 is a Random pool (America and Turkiye): this binary has no template store, so a pool is the
+	// one kind of side that reaches the seat unchanged here
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q1\",\"seed\":77,\"mapIdx\":1,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[167772163,167772162],\"sides\":[-25,-1],\"colors\":[3,-1]}" );
 
 	std::vector<PeerResponse> r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)3 );
@@ -1067,11 +1070,81 @@ TEST(online_adapter_quick_match)
 		CHECK_STR( r[2].stagingRoomPlayerNames[1].c_str(), "Kim" );
 		CHECK( r[2].stagingRoomPlayerNames[2].empty() );
 		CHECK_EQ( r[2].qmStatus.IP[1], 0x0A000002u );
-		CHECK_EQ( r[2].qmStatus.side[0], 2 );
+		CHECK_EQ( r[2].qmStatus.side[0], -25 );
 		CHECK_EQ( r[2].qmStatus.color[1], -1 );
 		CHECK_EQ( r[2].qmStatus.nat[0], 1 );
 	}
 	CHECK_STR( OnlineSession::get().matchId.c_str(), "q1" );
+}
+
+/* GameLogic dereferences the template and the colour a seat names (getColor(999)->getColor() was a
+	 crash at Quick Match start), so whatever the server says is clamped before a seat sees it. */
+TEST(online_seat_side_and_color_are_clamped)
+{
+	const Int TEMPLATES = 5, COLORS = 8;
+	CHECK_EQ( OnlineSeatSide( 0, TEMPLATES ), 0 );
+	CHECK_EQ( OnlineSeatSide( 4, TEMPLATES ), 4 );
+	CHECK_EQ( OnlineSeatSide( -1, TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( PLAYERTEMPLATE_RANDOM_POOL - 0x9, TEMPLATES ), PLAYERTEMPLATE_RANDOM_POOL - 0x9 );
+	CHECK_EQ( OnlineSeatSide( PLAYERTEMPLATE_RANDOM_POOL - 0x3FFFFFFF, TEMPLATES ), PLAYERTEMPLATE_RANDOM_POOL - 0x3FFFFFFF );
+	CHECK_EQ( OnlineSeatSide( 5, TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( 999, TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( PLAYERTEMPLATE_OBSERVER, TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( -3, TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( PLAYERTEMPLATE_RANDOM_POOL, TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( PLAYERTEMPLATE_RANDOM_POOL - 0x40000000LL, TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( (1LL << 32) + 2, TEMPLATES ), -1 );		// not 2 after a truncation
+	CHECK_EQ( OnlineSeatSide( -(1LL << 40), TEMPLATES ), -1 );
+	CHECK_EQ( OnlineSeatSide( 0, 0 ), -1 );
+
+	CHECK_EQ( OnlineSeatColor( 0, COLORS ), 0 );
+	CHECK_EQ( OnlineSeatColor( 7, COLORS ), 7 );
+	CHECK_EQ( OnlineSeatColor( -1, COLORS ), -1 );
+	CHECK_EQ( OnlineSeatColor( 8, COLORS ), -1 );
+	CHECK_EQ( OnlineSeatColor( 999, COLORS ), -1 );
+	CHECK_EQ( OnlineSeatColor( -2, COLORS ), -1 );
+	CHECK_EQ( OnlineSeatColor( (1LL << 32) + 3, COLORS ), -1 );
+
+	// through the adapter: a hostile qm.matched and a hostile game list line
+	AdapterRig rig;
+	rig.login();
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q9\",\"seed\":1,\"mapIdx\":-5,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[1,2],\"sides\":[999,-2],\"colors\":[999,-7]}" );
+	OnlineMessage opts;
+	opts.setInts( "factions", std::vector<long long>( 2, 999 ) ).setInts( "colors", std::vector<long long>( 2, 4294967296LL ) );
+	std::string optsLine;
+	CHECK( opts.toLine( optsLine ) );
+	OnlineMessage game;
+	game.setString( "t", "game" ).setString( "action", "add" ).setInt( "id", 3 ).setString( "host", "Kim" );
+	game.setString( "opts", optsLine.substr( 0, optsLine.size() - 1 ) );
+	rig.feed( game );
+
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)2 );
+	if (r.size() == 2)
+	{
+		CHECK_EQ( (int)r[0].qmStatus.status, (int)QM_MATCHED );
+		for (Int i = 0; i < 2; ++i)
+		{
+			CHECK_EQ( r[0].qmStatus.side[i], -1 );
+			CHECK_EQ( r[0].qmStatus.color[i], -1 );
+			CHECK_EQ( r[1].stagingRoom.faction[i], -1 );
+			CHECK_EQ( r[1].stagingRoom.color[i], -1 );
+		}
+	}
+}
+
+TEST(online_test_server_only_when_the_welcome_says_so)
+{
+	AdapterRig rig;
+	CHECK( !OnlineIsTestServer() );
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094}" );
+	CHECK( !OnlineIsTestServer() );
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"testMode\":\"yes\"}" );
+	CHECK( !OnlineIsTestServer() );		// a bool, not anything truthy
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"testMode\":true}" );
+	CHECK( OnlineIsTestServer() );
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"testMode\":false}" );
+	CHECK( !OnlineIsTestServer() );
 }
 
 TEST(online_adapter_stats_read_and_writes_dropped)

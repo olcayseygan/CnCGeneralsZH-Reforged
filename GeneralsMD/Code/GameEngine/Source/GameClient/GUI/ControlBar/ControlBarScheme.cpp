@@ -181,6 +181,8 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "BlockUpgradesLR",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_UPGRADES ] ) },
 	{ "BlockGenPowerUL",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_GEN_POWER ] ) },
 	{ "BlockGenPowerLR",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_GEN_POWER ] ) },
+	{ "BlockObserverInfoUL",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_OBSERVER_INFO ] ) },
+	{ "BlockObserverInfoLR",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_OBSERVER_INFO ] ) },
 
 	{ "IdleInfantryButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_idleButtonImage[ ControlBarScheme::IDLE_INFANTRY ] ) },
 	{ "IdleInfantryUL",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleUL[ ControlBarScheme::IDLE_INFANTRY ] ) },
@@ -739,6 +741,7 @@ void ControlBarScheme::init(void)
 		"ControlBar.wnd:ControlBarProBlockInputMoney",
 		"ControlBar.wnd:ControlBarProBlockInputUpgrades",
 		"ControlBar.wnd:ControlBarProBlockInputGenPowerButton",
+		"ControlBar.wnd:ControlBarProBlockInputObserverPlayerInfoH",
 	};
 	for( Int i = 0; i < BLOCK_COUNT; i++ )
 	{

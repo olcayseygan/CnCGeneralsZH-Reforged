@@ -255,8 +255,9 @@ public:
 	ICoord2D m_powerBarLR;
 
 	/// where the bar's input blockers stand when the scheme's painting is not ControlBar.wnd's
-	/// (Block<Name>UL/LR); a zero LR leaves the .wnd's rectangle
-	enum { BLOCK_RADAR, BLOCK_PRODUCTION, BLOCK_MONEY, BLOCK_UPGRADES, BLOCK_GEN_POWER, BLOCK_COUNT };
+	/// (Block<Name>UL/LR); a zero LR leaves the .wnd's rectangle.  ObserverInfo is the followed player's
+	/// panel's, a child of ObserverPlayerInfoWindow, so it shows, hides and moves with the panel
+	enum { BLOCK_RADAR, BLOCK_PRODUCTION, BLOCK_MONEY, BLOCK_UPGRADES, BLOCK_GEN_POWER, BLOCK_OBSERVER_INFO, BLOCK_COUNT };
 	ICoord2D m_blockUL[ BLOCK_COUNT ];
 	ICoord2D m_blockLR[ BLOCK_COUNT ];
 

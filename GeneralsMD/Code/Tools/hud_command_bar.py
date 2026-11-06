@@ -576,9 +576,17 @@ BAR_LOOKS = {   # the bar's own steel, apart from SIDES, which the sheets, cards
 # round 18's three tiers in the desk build.  Plain graphite steel with no hue, square on the screen's edges and
 # small 45 degree cuts elsewhere, and what a broadcast desk carries: perforated grilles, cross-head screws, the
 # emblem's wing feathers in dark steel and a red tally lamp.  The only colour is the tally's red.
+#
+# Round 20 (2026-11-06, the owner's pick A of experiments/hud-sides-modern/observer/round20): the watcher belongs
+# to no side, so each of his boxes is built the way one side builds, in the same neutral graphite.  The radar and
+# the players' column are America's box under an arrow-point ledge, the followed player's panel China's stepped
+# rail with its rivets and dark lacquer band, the selection box Turkiye's wide chamfer, armour panel, range
+# ticks and recessed fasteners under a mount that holds the tally, and the drawers on the right the GLA's scrap,
+# welded patches and odd bolts.  The Tab screen and the tooltips stand beside the radar box and take its build
+# (skin); the shading stays the desk's even anodising, so no side's rust or brushing comes with a build.
 BUILDS["desk"] = dict(metric="edt", bevel=2.0, corner="cut")
-BAR_LOOKS["Observer"] = dict(build="desk", steel=(116, 120, 127), glass=(20, 24, 30), glass_lo=(11, 14, 18),
-                             accent=(70, 76, 86), accent2=(0xb8, 0x26, 0x1f), crest=(0.85, 0.9, 1.0), crest_k=0.4)
+BAR_LOOKS["Observer"] = dict(build="desk", skin="machined", steel=(116, 120, 127), glass=(20, 24, 30), glass_lo=(11, 14, 18),
+                             accent=(70, 76, 86), accent2=(0xb8, 0x26, 0x1f), crest=(0.85, 0.9, 1.0), crest_k=0.5)
 OBS_LOOK = BAR_LOOKS["Observer"]
 
 
@@ -1766,7 +1774,7 @@ def tip_card(side, head=False):
     fittings that fit beside the name; TipHeadTL/T/TR are its top row and join the same middle and bottom
     pieces."""
     look = BAR_LOOKS[side]
-    build = look["build"]
+    build = look.get("skin", look["build"])
     W, H = (TIP_REF[0], TIP_HEAD + TIP_REF[1] - TIP_EDGE[1]) if head else TIP_REF
     p = Painter(W + 4, H + 4)                       # room right and below, so only the left side is the screen's
     name, cost, desc = tip_wells(W, H, head)
@@ -1845,7 +1853,7 @@ def tip_cursor(side):
     """The pointer's tooltip, TIP_CURSOR_REF: a framed well closed all round, three tiers in eight texels
     (a 1.6 texel shell, the lip, the glass), the build's corners and one fitting of its bar's."""
     look = BAR_LOOKS[side]
-    build = look["build"]
+    build = look.get("skin", look["build"])
     W, H = TIP_CURSOR_REF
     p = Painter(W + 4, H + 4)
     o = 2                                           # off the canvas's border, so no side reads as the screen's
@@ -2047,7 +2055,7 @@ def tab_panel(side, solo=False):
     ReforgedHud<Side>TabSolo), where the briefing list stands: the titles' and the table's wells are one, with
     no bands or rulings for its lines to fall across, and its sheet holds the painting alone."""
     look = BAR_LOOKS[side]
-    build = look["build"]
+    build = look.get("skin", look["build"])
     W, H = TAB_PANEL
     p = Painter(W + 9, H + 6)
     kind = BUILDS[build]["corner"]
@@ -2220,7 +2228,7 @@ def speaker(cx, cy, muted):
 
 def tab_button(side, kind, state):
     look = BAR_LOOKS[side]
-    build = look["build"]
+    build = look.get("skin", look["build"])
     w, h = TAB_BUTTONS[kind]
     o = 32                                          # a padded canvas, as mount_button's: shade's noise fields
     p = Painter(w + 2 * o, h + 2 * o)               # go bad on one 31 texels high
@@ -2240,7 +2248,7 @@ def tab_track(side):
     """The scroll bar's groove: one drawn 21x64 and cut, Center and Small its middle rows averaged down the
     length, so a repeat of them shows no seam."""
     look = BAR_LOOKS[side]
-    build = look["build"]
+    build = look.get("skin", look["build"])
     w, h, o = 21, 64, 32
     p = Painter(w + 2 * o, h + 2 * o)
     p.frame([shape(build, o, o, o + w, o + h, 3)], 2.0, build, DARK, BEZEL_SCALE)
@@ -2278,22 +2286,26 @@ def check_tab(sheet_img, side_name, prefix, solo_img=None):
 # A), the radar framed to the map's shape and the rack; since round 19 (2026-11-05) drawn as round 18 draws
 # the sides' bars, three tiers in the desk build (OBS_LOOK): every box flush with the screen's edges and
 # square there, its corners toward the field cut, a near-black shell, a bevelled lip, a recessed floor and
-# scanline wells, and the broadcast desk's grilles, screws, feathers and tally.  Every window it frames
-# is ControlBar.wnd's and the Observer8x6 scheme's, in screen pixels at 1920x1080; the bar stands inside
-# the .wnd's own input blockers, the scheme naming none of its own.  Its pieces are on two sheets of
-# their own, ReforgedHudObsPieces (the toolbar's buttons, the rows' hover and watched rings, the radar's
-# nine) and ReforgedHudObsSpec (the rack), each laid out by its MappedImages/HandCreated INI.
+# scanline wells.  Since round 20 (2026-11-06) each box is one side's build in that steel (BAR_LOOKS'
+# Observer note).  Every window it frames is ControlBar.wnd's and the Observer8x6 scheme's, in screen pixels
+# at 1920x1080; the scheme names BlockRadar for the radar box's ledge and BlockObserverInfo for the followed
+# player's panel, which runs to the screen's foot; the rest stands inside the .wnd's own blockers (the column's,
+# the selection's and, round the mount, the general's button's).  Its pieces are on two sheets of their own,
+# ReforgedHudObsPieces (the toolbar's buttons, the rows' hover and watched rings, the radar's nine) and
+# ReforgedHudObsSpec (the rack), each laid out by its MappedImages/HandCreated INI.
 OBS_LIST = [(334, 755 + 32 * i, 379, 785 + 32 * i) for i in range(8)]  # ButtonPlayer0..7, each a side's picture
 OBS_OPTIONS, OBS_CHAT = (334, 1011, 379, 1041), (334, 1043, 379, 1073)  # OptionsUL/LR, ChatUL/LR; ButtonCancel on chat
 OBS_SELECTION, OBS_EXP = (1642, 887, 1871, 1071), (1875, 887, 1911, 1071)   # RightHUD and the rank bar's place
-OBS_BLOCKS = [(332, 740, 394, 1080), (1625, 870, 1920, 1080)]   # the radar's follows its frame at runtime
+# the column's, the selection's and the general's button's (round the mount); the radar's follows its frame
+OBS_BLOCKS = [(332, 740, 394, 1080), (1625, 870, 1920, 1080), (1821, 794, 1920, 870)]
+OBS_MOUNT = (1840, 836, 1920, 878)              # the selection box's mount, the tally on it
 # ObserverPlayerInfoWindow: its picture (WinGeneralPortrait, ObserverProPlayerWindow) is 512x256 at 327,824
 OBS_PANEL_AT = (327, 824)
 OBS_POWER = (332, 895, 822, 905)                # PowerBarUL/LR
 OBS_NAME, OBS_MONEY = (334, 912, 698, 946), (700, 912, 820, 946)        # StaticTextPlayerName, MoneyUL/LR
 OBS_LABELS = [(334 + 122 * i, 948, 454 + 122 * i, 998) for i in range(4)]   # Buildings, Units, Units Lost, Units Killed
 OBS_NUMBERS = [(334, 1000, 454, 1034), (454, 1000, 574, 1034), (578, 1000, 698, 1034), (700, 1000, 820, 1034)]
-OBS_PANEL_BLOCKS = [(394, 882, 835, 1049), (332, 740, 394, 1080)]
+OBS_PANEL_BLOCKS = [(394, 879, 833, 1080), (332, 740, 394, 1080)]   # Observer8x6's BlockObserverInfo, the column's
 OBS_PIECES_SIZE, OBS_SPEC_SIZE = (512, 512), (1024, 256)
 
 
@@ -2343,72 +2355,81 @@ def tally(p, cx, cy, r):
 OBS_LAMPS = [(383, r[1] + 4, 389.5, r[3] - 4) for r in OBS_LIST]
 
 
+def fastener(p, cx, cy):
+    """Turkiye's recessed fastener: a dark cup with a hex head low in it."""
+    p.inlay([regular(cx, cy, 2.8, 12)], DARK, 1.0)
+    p.bump([regular(cx, cy, 1.5, 6)], 0.6, 0.6, STEEL)
+
+
 def paint_observer_bar():
-    """The bar: the players' column on the left, a lamp beside each row, the selection window on the right
-    and nothing in the middle.  The radar is the nine piece frame's (observer_radar_frame), which the
-    code stands round the map's shape."""
-    b = "desk"
+    """The bar: the players' column on the left, a lamp beside each row, the selection window under its mount
+    on the right and nothing in the middle.  The column is the right end of the radar's box (America's): the
+    radar's nine piece frame (observer_radar_frame) stands round the map left of it, its ledge running over
+    the radar to an arrow point on the column's top, and the column takes the box's 45 degree cut toward the
+    field.  The selection box is Turkiye's."""
+    b = "machined"
     p = Painter(2048, 512)
-    # the players' column, standing on the screen's foot beside the radar, its top right cut toward the field
-    stack(p, plate(330, 740, 394, 1080, tr=("cut", 12)))
-    floor(p, plate(335, 751, 390, 1080, tr=("cut", 8)))
+    # the column, open on its left where the frame's right edge meets it: drawn from further left and that
+    # part cut away, so its lip runs on into the frame's
+    stack(p, plate(300, 740, 394, 1080, tr=("cut", 30)))
+    floor(p, plate(300, 751, 389, 1080, tr=("cut", 22)))
     for row, lamp in zip(OBS_LIST, OBS_LAMPS):
         well(p, shape(b, *grow(row, 2), 3), 4, 2)
         p.bump([T(shape(b, *grow(lamp, 1.4), 2))], 1.0, 0.7, DARK)
         well(p, shape(b, *lamp, 2), 1.5, 0.8)
     for r in (OBS_OPTIONS, OBS_CHAT):
         well(p, shape(b, *grow(r, 1), 4), 3.5, 2)
-    tally(p, 357, 746 - TOP, 2.0)
-    screw(p, 341, 746 - TOP, 1.8)
-    screw(p, 373, 746 - TOP, 1.8)
+    p.inlay([T(plate(389, 1006, 394, 1007))], INKM, 0.8)
+    for x, y in ((342, 746), (388, 1076)):
+        p.stud(x, y - TOP, 2.2)
+    p.cut([T(plate(290, 730, 330, 1080))])
 
-    # the selection's box, square on the screen's foot and right edge, its top left cut
-    stack(p, plate(1625, 870, 1920, 1080, tl=("cut", 24)))
-    floor(p, plate(1638, 883, 1916, 1080, tl=("cut", 16)))
+    # the selection's box: Turkiye's wide chamfer, an armour panel with a gap, range ticks and recessed
+    # fasteners, and a mount above as on every side's bar, holding a grille and the tally
+    stack(p, plate(1625, 870, 1920, 1080, tl=("slant", 26)))
+    stack(p, plate(*OBS_MOUNT, tl=("slant", 12)), 9, 12, 4, 2.2)
+    floor(p, plate(1850, 846, 1920, 872))
+    grille(p, 1856, 850 - TOP, 1892, 868 - TOP, 3.2)
+    tally(p, 1906, 859 - TOP, 3.0)
+    floor(p, plate(1638, 883, 1916, 1080, tl=("slant", 14)))
     well(p, plate(*grow(OBS_SELECTION, 2)), 6, 2.5)
     well(p, plate(*grow(OBS_EXP, 1)), 6, 2)
-    screw(p, 1756.5, 878.5 - TOP, 2.0)
-    feathers(p, 1750, 875.5 - TOP, 2, 44, DARK, left=True, gap=2.8)
-    feathers(p, 1763, 875.5 - TOP, 2, 44, DARK, left=False, gap=2.8)
-    grille(p, 1658, 875 - TOP, 1700, 882 - TOP, 3.2)
-    grille(p, 1813, 875 - TOP, 1855, 882 - TOP, 3.2)
-    grille(p, 1630.5, 905 - TOP, 1637, 1066 - TOP, 3.2)
-    tally(p, 1904, 878.5 - TOP, 2.4)
-    p.inlay([T(plate(1880, 1072, 1912, 1073)), T(plate(1644, 1074, 1870, 1075))], INKM, 0.8)
+    p.bump([T([(1690, 877), (1704, 872), (1790, 872), (1790, 877)])], 2.2, 1.0, STEEL)
+    p.inlay([T(plate(1792, 871, 1793, 880))], INKM, 0.9)
+    p.inlay([T(plate(x, 873, x + 1, 876 if i % 5 else 879)) for i, x in enumerate(range(1798, 1834, 6))], INKM, 0.6)
+    for x, y in ((1632, 1070), (1912, 1070), (1680, 876)):
+        fastener(p, x, y - TOP)
     return bar_finish(shade(p, OBS_LOOK, SEAMS), p, OBS_LOOK)
 
 
 def paint_observer_panel():
-    """The watched player's panel (ObserverProPlayerWindow): the power rail over a header with the tally
-    lit, the name and money wells, the four counts under dark label plates, and a tab down the column for
-    the back button."""
-    b = "desk"
+    """The watched player's panel (ObserverProPlayerWindow), China's: a rail over it carrying the power
+    channel, stepped at its end like the pagoda's eaves, with a row of rivets and a dark lacquer band, the
+    name and money wells, the four counts' labels and numbers, and the options and back buttons where it
+    covers the column.  Square on the screen's foot, open on the left where it meets the radar's frame."""
+    b = "terraced"
     p = Painter(512, 256)
-    # one box: the main plate over the column, its corners toward the field cut, and the tab down the column
-    # to the screen's foot, square there
-    main = plate(2, 56, 510, 227, tl=("cut", 10), tr=("cut", 18), br=("cut", 14))
-    tab = plate(2, 150, 62, 256)
-    p.tiers([main, tab], (False, True, False, False))
-    p.recess([plate(8, 84, 504, 221, br=("cut", 10)), plate(8, 84, 56, 256)], (False, True, False, False))
-    p.sink([plate(*grow(to_panel(OBS_POWER), 1.5))], 3.5, 1.5)
-    grille(p, 18, 61, 250, 69, 3.2)
-    feathers(p, 474, 61.5, 2, 60, DARK, left=True, gap=2.8)
-    tally(p, 488, 65, 2.4)
-    screw(p, 10, 65, 1.8)
+    p.tiers([plate(-12, 78, 506, 256)], (False, True, True, False))
+    p.tiers([plate(-12, 55, 506, 86, tr=("step2", 14))], (False, False, True, False), 9.0, 13.0, 4.0, 2.2)
+    p.recess([plate(-12, 90, 496, 256)], (False, True, True, False))
+    p.sink([plate(*grow(to_panel(OBS_POWER), 2))], 5, 1.6)
     p.sink([shape(b, *grow(to_panel(OBS_NAME), 1), 4)], 6, 2.5)
     p.sink([shape(b, *grow(to_panel(OBS_MONEY), 1), 4)], 6, 2.5)
     for lab in OBS_LABELS:
         x0, y0, x1, y1 = to_panel(lab)
-        p.bump([shape(b, x0 + 2, y0 + 3, x1 - 2, y1 - 3, 3)], 2.0, 1.2, DARK)   # a dark label plate on the floor
-        p.sink([shape(b, x0 + 4, y0 + 6, x1 - 4, y1 - 6, 2)], 1.2, 0.8)
-    for i, num in enumerate(OBS_NUMBERS):
+        p.sink([shape(b, x0 + 3, y0 + 4, x1 - 3, y1 - 4, 3)], 3, 1.4)
+    for num in OBS_NUMBERS:
         x0, y0, x1, y1 = to_panel(num)
         x0 = max(x0, 56) + 2                    # the first count stands right of the options button
         p.sink([shape(b, x0, y0, x1 - 2, y1, 3)], 6, 2.5)
     p.sink([shape(b, *grow(to_panel(OBS_OPTIONS), 1), 4)], 3.5, 2)
     p.sink([shape(b, *grow(to_panel(OBS_CHAT), 1), 4)], 3.5, 2)
-    p.inlay([plate(70, 216, 480, 217)], INKM, 0.8)
-    screw(p, 494, 216, 1.8)
+    p.inlay([plate(30, 64.5, 470, 66.5)], DARK, 0.3)
+    for x in range(20, 480, 30):
+        p.rivet(x, 61.5, 1.7)
+    for y in range(104, 250, 26):
+        p.rivet(500.5, y, 1.8)
+    p.cut([plate(-20, 0, 2, 256)])
     return bar_finish(shade(p, OBS_LOOK), p, OBS_LOOK, gloss=False)
 
 
@@ -2416,7 +2437,7 @@ def paint_observer_pieces():
     """ReforgedHudObsPieces, 512x512: the toolbar's three buttons in four states, the hovered (RowH) and
     the watched (RowS) row's rings that stand 4 px round a 45x30 player button, the radar's nine and the
     sides' emblems (paint_side_emblems, variant A)."""
-    b = "desk"
+    b = "machined"                              # the column's, America's like the radar box it belongs to
     M = read_mapped("Obs", "Pieces")
     p = Painter(*OBS_PIECES_SIZE)
     for name, r in M.items():
@@ -2901,8 +2922,9 @@ def check_mapped(M, size):
 
 
 def check_observer(bar, panel):
-    """The cuts stay clear, every window the bar and the panel frame stands on plate, and nothing is opaque
-    more than 3 px past the .wnd's blockers (the column's; the radar's follows its frame at runtime)."""
+    """The cuts stay clear, every window the bar and the panel frame stands on plate, nothing is opaque more
+    than 3 px past its blockers (the column's, the selection's and the mount's; the radar's follows its frame
+    at runtime), and Observer8x6 names the radar frame's and the panel's."""
     a = np.asarray(bar)[..., 3]
     for x in SEAMS:
         assert not a[:, x - 2:x + 3].any(), "observer art across the cut at texel %d" % x
@@ -2918,25 +2940,51 @@ def check_observer(bar, panel):
     for r in [OBS_POWER, OBS_NAME, OBS_MONEY, OBS_OPTIONS, OBS_CHAT] + OBS_LABELS + OBS_NUMBERS:
         x0, y0, x1, y1 = to_panel(r)
         assert (pa[y0:y1, x0:x1] == 255).all(), "panel window %s is not on the plate" % (r,)
+    # Observer8x6 names the radar's frame at the square map (fitRadarToMap stands the radar on its top) and
+    # the panel's blocker, which runs to the screen's foot with the art
+    text = open(SCHEME_INI, encoding="latin-1").read()
+    body = re.search(r"ControlBarScheme Observer8x6\b(.*?)(?=\nControlBarScheme |\Z)", text, re.S).group(1)
+    named = {k + c: (int(x), int(y)) for k, c, x, y in re.findall(r"Block(\w+?)(UL|LR) X:(\d+) Y:(\d+)", body)}
+    l, t, r, b = OBS_RADAR_EDGE
+    want = {"Radar": (0, RADAR_GLASS_SQUARE[1] - t, RADAR_GLASS_SQUARE[2] + r, 1080), "ObserverInfo": OBS_PANEL_BLOCKS[0]}
+    for k, v in want.items():
+        assert named.get(k + "UL", ()) + named.get(k + "LR", ()) == v, \
+            "Observer8x6 wants Block%sUL X:%d Y:%d and Block%sLR X:%d Y:%d" % (k, v[0], v[1], k, v[2], v[3])
 
 
 # The observer's radar sized to the map like the sides' (RadarFrameImage ObserverProRadar on
-# Observer8x6), its frame thin: 5 down the left, the right and the foot and 13 over the top, so at the square map it is exactly
-# 0..332 x 740..1080 and meets the players' column at x 332 with both tops at 740.  It carries no
-# fitting at all, only a hairline along its top: every piece but the corners stretches.
-OBS_RADAR_EDGE = (5, 13, 5, 5)
+# Observer8x6): the left part of America's radar box, round 20.  5 down the left and the foot, which are the
+# screen's; 39 over the top, where the ledge runs over the box (714..742, the box itself from 731); 33 on the
+# right, where the ledge ends in its arrow point over the players' column.  Below the ledge the right edge is
+# the box's lip five texels wide and the rest of it is empty: the column (the bar's left piece) stands there,
+# open on its side, so the two read as one box.  At the square map the frame is 0..360 x 714..1080, which is
+# Observer8x6's BlockRadar (fitRadarToMap stands the radar on it, so the square keeps its place).  The ledge
+# runs the frame's whole width, so T stretches it evenly; its fittings (two swept chevrons) are in TR.  Drawn
+# on the bar's 512 rows (screen y 568..1080) with the bar's top to bottom falloff, so the ledge's lip and the
+# column's meet at the same shade.
+OBS_RADAR_EDGE = (5, 39, 33, 5)
+RADAR_GLASS_SQUARE = (5, 753, 327, 1075)       # Observer8x6's RadarUL/LR, LeftHUD's square
 
 
 def observer_radar_frame():
     l, t, r, b = OBS_RADAR_EDGE
     W, H = l + RADAR_INSIDE + r, t + RADAR_INSIDE + b
-    p = Painter(W + 8, H + 8)
-    o, w = (0, 8, W, H + 8), (l, 8 + t, l + RADAR_INSIDE, 8 + t + RADAR_INSIDE)
-    # three tiers in five texels: a two texel shell, the lip, the glass's well; open on the left and the foot
-    p.tiers([plate(*o, tr=("cut", 6))], (False, True, True, False), 4.0, 7.0, 2.0, 1.2, 2.0)
-    p.sink([plate(*grow(w, 2))], 6, 2)
-    p.inlay([plate(o[0], o[1] + 5, o[2] - 9, o[1] + 6)], INKM, 0.6)
-    return bar_finish(shade(p, OBS_LOOK, shadow=False), p, OBS_LOOK, scan=False, gloss=False).crop((0, 8, W, H + 8))
+    top, right = 1080 - H, l + RADAR_INSIDE
+    p = Painter(W + 40, 512)                    # the right side runs off the canvas, so it takes no rim
+    stack(p, plate(0, top + 17, W + 40, 1080))
+    tip = right + r - 2
+    stack(p, [(0, top), (right, top), (tip, top + 14), (right, top + 28), (0, top + 28)], 9, 12, 4, 2.0)
+    floor(p, plate(0, top + 34, W + 40, 1080))
+    well(p, plate(*grow((l, top + t, right, 1080 - b), 2)), 5, 2)
+    p.inlay([T([(right + 1, top + 8), (right + 4, top + 8), (right + 10, top + 14), (right + 4, top + 20), (right + 1, top + 20),
+                (right + 7, top + 14)])], DARK, 0.7)      # a swept chevron in the point, America's
+    edge = right + l                            # the box's lip ends here; the column stands right of it
+    rise = 14 * (edge - right) / (tip - right)  # how far the arrow's edges have closed in at the lip's end
+    p.cut([T(plate(edge, top + 28, W + 40, 1080)),
+           T([(edge, top - 2), (W + 40, top - 2), (W + 40, top + 14), (tip, top + 14), (edge, top + rise)]),
+           T([(edge, top + 28 - rise), (tip, top + 14), (W + 40, top + 14), (W + 40, top + 28), (edge, top + 28)])])
+    img = bar_finish(shade(p, OBS_LOOK, shadow=False), p, OBS_LOOK, scan=False, gloss=False)
+    return img.crop((0, top - TOP, W, 512))
 
 
 # ---------------------------------------------------------------------------------------------- the spectator's rack
@@ -2948,7 +2996,8 @@ def observer_radar_frame():
 # two runners.  Each drawer is drawn whole round two reference rows, lit with no top to bottom falloff,
 # and cut into the slices the code stacks (a cap, a head, a row it repeats, a plain body, a foot); every
 # control is a piece of its own in each state.  The code writes every word and number and tints the
-# white lenses in the player's colour.
+# white lenses in the player's colour.  Since round 20 the drawers and their controls are the GLA's scrap
+# (rack_reference), in the observer's neutral steel.
 
 
 class Offset:
@@ -2959,6 +3008,11 @@ class Offset:
 
     def __getattr__(self, name):
         method = getattr(self.painter, name)
+        if name in ("stud", "rivet", "bolt"):           # a fitting at a point
+            return lambda cx, cy, *args, **kwargs: method(cx + self.dx, cy + self.dy, *args, **kwargs)
+        if name == "weld":                              # a bead between two points
+            return lambda a, b, *args, **kwargs: method((a[0] + self.dx, a[1] + self.dy), (b[0] + self.dx, b[1] + self.dy),
+                                                        *args, **kwargs)
 
         def shifted(polys, *args, **kwargs):
             return method([[(x + self.dx, y + self.dy) for x, y in poly] for poly in polys], *args, **kwargs)
@@ -3005,22 +3059,30 @@ RACK_TAB_OUT = {"": 22, "H": 15, "On": 2}
 
 
 def rack_reference(rows=2, body=12):
-    """A drawer with everything a slice is cut from: the cap with its label and handle, the standings'
-    head with the dial's socket, rows, a plain body for the watch drawer, and the foot."""
-    b = "desk"
+    """A drawer with everything a slice is cut from: the cap with its label, the standings' head with the
+    dial's socket, rows, a plain body for the watch drawer, and the foot.  The GLA's (round 20): the cap a
+    ragged ledge of scrap standing out past the drawer toward the field with a patch welded on crooked, the
+    drawer's corners cut unevenly, its head's edge bitten, odd bolts.  The rows and the body keep a straight
+    edge, since the code repeats and stretches them."""
+    b = "scavenged"
     H = RACK_TOP + RACK_HEAD + rows * RACK_PITCH + body + RACK_FOOT
 
     def draw(p):
-        # shell and lip, the right side running on past the crop (the screen's edge), the corners toward
-        # the field cut; under the cap the standings and the watch drawer's body are one recessed floor
-        p.tiers([plate(6, 6, RACK_W + 20, H - 6, tl=("cut", 10), bl=("cut", 10))], (False,) * 4)
-        p.recess([plate(18, RACK_TOP + 1, RACK_W + 20, H - RACK_FOOT + 1, tl=("cut", 5), bl=("cut", 5))], (False,) * 4)
-        p.inlay([plate(13, 22, 14, H - 22)], INKM, 1.0)     # the runner down the drawer's side
-        p.sink([shape(b, *RACK_LABEL, 3)], 2, 1.0)
-        for x in (224, 284):
-            p.bump([shape(b, x, 10, x + 8, 22, 2)], 1.6, 0.8, DARK)
-        p.bump([shape(b, 222, 13, 294, 19, 3)], 2.6, 1.2, BRIGHT)
-        screw(p, 198, 16, 2.2)
+        # shell and lip, the right side running on past the crop (the screen's edge); under the cap the
+        # standings and the watch drawer's body are one recessed floor
+        rows_at = RACK_TOP + RACK_HEAD
+        side = [(12, H - 14), (12, rows_at)] + [(12 + bite, y) for y, bite in ((80, 1.6), (62, 0.6), (47, 2.2), (34, 0.8))]
+        p.tiers([[(12, 24), (32, 4), (RACK_W + 20, 4), (RACK_W + 20, H - 6), (20, H - 6), (14, H - 10)] + side],
+                (False,) * 4)
+        p.recess([plate(18, RACK_TOP + 1, RACK_W + 20, H - RACK_FOOT + 1)], (False,) * 4)
+        cap = jitter([(0, 5), (14, 0), (RACK_W + 20, 0), (RACK_W + 20, 26), (4, 25)], 41, 1.4, 13)
+        p.tiers([cap], (False,) * 4, 9.0, 12.0, 4.0, 2.0)
+        p.sink([shape(b, RACK_LABEL[0] - 4, RACK_LABEL[1] - 2, RACK_LABEL[2] + 2, RACK_LABEL[3] + 2, 3)], 4, 1.6)
+        sh = sheet(236, 5, 292, 21, -3)
+        p.bump([sh], 1.4, 0.8, STEEL)
+        for a, c in zip(sh, sh[1:] + sh[:1]):
+            p.weld(a, c, seed=171 + int(a[0]), r=1.1)
+        p.bolt(200, 13, 2.4, 9)
         hy = RACK_TOP
         cx, cy = RACK_HEAD_AT["dial"]
         p.sink([regular(cx, hy + cy, RACK_DIAL_R, 40)], 2.0, 1.2, DARK)
@@ -3032,18 +3094,20 @@ def rack_reference(rows=2, body=12):
             for name, depth in (("emblem", 3), ("name", 2), ("value", 4), ("meter", 2)):
                 r = RACK_ROW[name]
                 p.sink([shape(b, r[0], r[1] + y0, r[2], r[3] + y0, 3 if name != "meter" else 1.5)], depth, 1.2)
-        screw(p, 30, H - 11, 2.0)
-        grille(p, 60, H - 13.5, 290, H - 7.5, 3.0)
+        p.weld((60, H - 10.5), (250, H - 10.5), 181)
+        p.bolt(30, H - 11, 2.6, 10)
+        p.bolt(282, H - 11, 3.0, 11)
     return lit(RACK_W, H, draw, shadow=True), H
 
 
 def drawer_reference(rows=2):
-    """The armies drawer, out to the left of the standings on two runners, its rows level with theirs."""
-    b = "desk"
+    """The armies drawer, out to the left of the standings on two runners, its rows level with theirs: the
+    GLA's scrap like the rack, its corners cut unevenly."""
+    b = "scavenged"
     H = DRAWER_TOP + rows * RACK_PITCH + RACK_FOOT
 
     def draw(p):
-        p.tiers([plate(6, 3, DRAWER_W + 20, H - 6, tl=("cut", 6), bl=("cut", 6))], (False,) * 4, 3.0, 6.0, 4.0, 2.0)
+        p.tiers([plate(6, 3, DRAWER_W + 20, H - 6, tl=("cut", 8), bl=("notch", 3))], (False,) * 4, 3.0, 6.0, 4.0, 2.0)
         p.recess([plate(18, DRAWER_TOP - 1, DRAWER_W + 20, H - RACK_FOOT + 1)], (False,) * 4, 2.5, 1.5)
         for y in (6, H - 11):                   # the runners, a dark channel with a bright slide in it
             p.sink([plate(20, y, DRAWER_W + 20, y + 4)], 2.0, 0.6, DARK)
@@ -3061,10 +3125,9 @@ def lever(position, state):
     w, h = 156, 32
     cx = (22, 78, 134)[position]
 
-    def draw(p):
-        c8, c5 = ("cut", 8), ("cut", 5)
-        p.tiers([plate(0, 2, w, 30, c8, c8, c8, c8)], (False,) * 4, 3.0, 5.0, 2.0, 1.2, 2.0)
-        p.sink([plate(6, 8, w - 6, 24, c5, c5, c5, c5)], 3.5, 1.2, GLASS)
+    def draw(p):                                # the GLA's gate, every corner cut its own way
+        p.tiers([shape("scavenged", 0, 2, w, 30, 8)], (False,) * 4, 3.0, 5.0, 2.0, 1.2, 2.0)
+        p.sink([shape("scavenged", 6, 8, w - 6, 24, 5)], 3.5, 1.2, GLASS)
         for x in (22, 78, 134):                 # a detent at each stop
             p.sink([plate(x - 2, 24, x + 2, 27.5)], 1.2, 0.5, DARK)
         if state == "H":
@@ -3080,7 +3143,7 @@ def rocker(on, state):
     hover = state == "H"
 
     def draw(p):
-        b = "desk"
+        b = "scavenged"
         p.tiers([shape(b, 0, 0, w, h, 6)], (False,) * 4, 3.0, 5.0, 1.8, 1.2, 1.8, BRIGHT if hover else None)
         p.sink([shape(b, 4, 4, w - 4, h - 4, 4)], 3.0, 1.0, DARK)
         p.bump([shape(b, 7, 7, w - 7, h - 7, 3)], 2.6, 1.0, STEEL if hover else DARK)
@@ -3117,8 +3180,8 @@ def index_tab(state):
     x0 = RACK_TAB_OUT[state]
 
     def draw(p):
-        b = "desk"
-        p.tiers([plate(x0, 1, w + 10, h - 1, tl=("cut", 5), bl=("cut", 5))], (False,) * 4, 3.0, 5.0, 1.8, 1.2, 1.8,
+        b = "scavenged"
+        p.tiers([plate(x0, 1, w + 10, h - 1, tl=("cut", 6), bl=("notch", 2))], (False,) * 4, 3.0, 5.0, 1.8, 1.2, 1.8,
                 BRIGHT if state == "H" else None)
         p.sink([shape(b, x0 + 4, 7, x0 + 9, h - 7, 1.5)], 1.5, 0.6)
         if state == "On":

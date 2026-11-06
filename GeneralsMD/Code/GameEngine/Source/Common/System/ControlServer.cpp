@@ -51,6 +51,7 @@
 #include "GameLogic/ScenarioDrill.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameNetwork/GameInfo.h"		// MAX_SLOTS, for the skirmish command's player count
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include <vector>
 
@@ -480,32 +481,68 @@ static Bool takeFrame( unsigned char *opcodeOut, AsciiString *payloadOut )
 // the http upgrade
 // ------------------------------------------------------------------------------------------------
 
-/** Read the client key out of the request headers.  Case-insensitive on the header name, because
-	  RFC 7230 says header names are, and browsers and Python libraries disagree about the casing. */
-static Bool findClientKey( const char *request, char *keyOut, Int keyOutSize )
+/** Read one header's value out of the request; FALSE when the header is absent.  `name` is lower case
+	  with its colon.  Case-insensitive on the name, because RFC 7230 says header names are, and browsers
+	  and Python libraries disagree about the casing; matched only at the start of a line, so the path in
+	  the request line, which a web page chooses, cannot pass for a header. */
+static Bool findHeader( const char *request, const char *name, char *valueOut, Int valueOutSize )
 {
-	static const char *HEADER = "sec-websocket-key:";
-	const Int headerLength = (Int)strlen( HEADER );
+	const Int nameLength = (Int)strlen( name );
 
 	for( const char *at = request; *at; ++at )
 	{
-		Int i = 0;
-		while (i < headerLength && at[ i ] && tolower( (unsigned char)at[ i ] ) == HEADER[ i ])
-			++i;
-		if (i < headerLength)
+		if (at != request && at[ -1 ] != '\n')
 			continue;
 
-		const char *value = at + headerLength;
+		Int i = 0;
+		while (i < nameLength && at[ i ] && tolower( (unsigned char)at[ i ] ) == name[ i ])
+			++i;
+		if (i < nameLength)
+			continue;
+
+		const char *value = at + nameLength;
 		while (*value == ' ' || *value == '\t')
 			++value;
 
 		Int written = 0;
-		while (*value && *value != '\r' && *value != '\n' && written < keyOutSize - 1)
-			keyOut[ written++ ] = *value++;
-		keyOut[ written ] = 0;
-		return written > 0;
+		while (*value && *value != '\r' && *value != '\n' && written < valueOutSize - 1)
+			valueOut[ written++ ] = *value++;
+		while (written > 0 && (valueOut[ written - 1 ] == ' ' || valueOut[ written - 1 ] == '\t'))
+			--written;
+		valueOut[ written ] = 0;
+		return TRUE;
 	}
 
+	return FALSE;
+}
+
+/* A browser names the page that opened the socket in Origin, and any web page can open ws://127.0.0.1.
+	 So a request with an Origin is let in only from this machine's own pages (or "null", a file:// page);
+	 the project's tools (control_client.py, Node's WebSocket) send no Origin at all. */
+Bool ControlServer_originAllowed( const char *request )
+{
+	char origin[ 256 ];
+	if (!findHeader( request, "origin:", origin, sizeof( origin ) ))
+		return TRUE;
+	if (strcmp( origin, "null" ) == 0)
+		return TRUE;
+
+	static const char *const LOCAL[] = { "http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1", "http://[::1]", "https://[::1]" };
+	for( Int k = 0; k < (Int)ARRAY_SIZE( LOCAL ); ++k )
+	{
+		const size_t length = strlen( LOCAL[ k ] );
+		if (strncmp( origin, LOCAL[ k ], length ) != 0)
+			continue;
+		const char *port = origin + length;
+		if (*port == 0)
+			return TRUE;
+		if (*port++ != ':' || *port == 0)
+			continue;
+		while (*port >= '0' && *port <= '9')
+			++port;
+		if (*port == 0)
+			return TRUE;
+	}
 	return FALSE;
 }
 
@@ -520,9 +557,16 @@ static Bool tryHandshake( void )
 	if (end == NULL)
 		return FALSE;
 
+	if (!ControlServer_originAllowed( request ))
+	{
+		DEBUG_LOG(("CONTROL: a web page's request (Origin not this machine), closing\n"));
+		closeClient();
+		return FALSE;
+	}
+
 	char clientKey[ 256 ];
 	char acceptKey[ 64 ];
-	if (!findClientKey( request, clientKey, sizeof( clientKey ) )
+	if (!findHeader( request, "sec-websocket-key:", clientKey, sizeof( clientKey ) ) || clientKey[ 0 ] == 0
 			|| !ControlServer_computeAcceptKey( clientKey, acceptKey, sizeof( acceptKey ) ))
 	{
 		DEBUG_LOG(("CONTROL: not a websocket request, closing\n"));
@@ -593,9 +637,19 @@ static Int revealedPercent( const Player *player )
 
 /** frame number, whether a match is running, and what each player owns, with enough of each
 	player's state that every console cheat can be seen to have landed: tools/cheat_check.py. */
+/* A network match a lobby started, LAN or online.  This machine plays one seat of it, so a world command
+	 would split the match, and the census, tally and spectator views would read through the fog: any
+	 player can pass -control.  A -netgame match is the harnesses' own, and so is a match on an online
+	 server started for a test (OnlineIsTestServer), where online_check.py forces its desync. */
+static Bool isGuardedMatch( void )
+{
+	return TheGameLogic && TheGameLogic->isInMultiplayerGame() && !TheGlobalData->m_netGameStarted && !OnlineIsTestServer();
+}
+
 static void replyStatus( void )
 {
 	const Bool inGame = TheGameLogic && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame();
+	const Bool ownSeatOnly = isGuardedMatch();
 
 	std::vector<char> reply;
 	char piece[ 512 ];
@@ -617,7 +671,7 @@ static void replyStatus( void )
 		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 		{
 			Player *player = ThePlayerList->getNthPlayer( i );
-			if (player == NULL)
+			if (player == NULL || (ownSeatOnly && player != ThePlayerList->getLocalPlayer()))
 				continue;
 
 			Int units = 0;
@@ -850,6 +904,12 @@ static void handleCommand( const AsciiString &command )
 		 rest that InGameUI::runSpectatorAction knows. */
 	if (strncmp( command.str(), "spectator ", 10 ) == 0)
 	{
+		const Player *local = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+		if (isGuardedMatch() && (local == NULL || !local->isPlayerObserver()))
+		{
+			replyError( "a player in a network match cannot use the spectator's views" );
+			return;
+		}
 		TheInGameUI->runSpectatorAction( command.str() + 10 );
 		replyOk( "\"done\":true" );
 		return;
@@ -913,15 +973,14 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
-	/* A world command changes this machine's simulation and nobody else's.  A network match the
-		 lobby started would split on it, and a replay would stop matching its recording; a -netgame
-		 match is allowed, on the same terms -scenario is (GameLogic::startNewGame).  So is an online match a
-		 copy logged into with the -onlineuser test switch, where online_check.py forces its desync: a split
-		 there ends the match unrated, which is what the check proves. */
-	const Bool scriptedOnline = TheGlobalData->m_onlineUser.isNotEmpty() && TheGlobalData->m_onlinePort != 0;
-	if ((TheGameLogic->isInMultiplayerGame() && !TheGlobalData->m_netGameStarted && !scriptedOnline) || TheGameLogic->isInReplayGame())
+	/* A world command changes this machine's simulation and nobody else's, and tally reads through the
+		 fog.  A network match the lobby started would split on it (isGuardedMatch), and a replay would stop
+		 matching its recording; a -netgame match is allowed, on the same terms -scenario is
+		 (GameLogic::startNewGame), and so is a match on an online test server, where a split ends the match
+		 unrated, which is what online_check.py proves. */
+	if (isGuardedMatch() || TheGameLogic->isInReplayGame())
 	{
-		replyError( "world commands only run in a skirmish or a -netgame match" );
+		replyError( "world commands only run in a skirmish, a -netgame match or on an online test server" );
 		return;
 	}
 

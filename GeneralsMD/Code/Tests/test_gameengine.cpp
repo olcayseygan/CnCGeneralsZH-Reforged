@@ -21800,6 +21800,41 @@ TEST(control_server_answers_the_rfc_handshake_example)
 	CHECK( !ControlServer_computeAcceptKey( "dGhlIHNhbXBsZSBub25jZQ==", tooSmall, sizeof( tooSmall ) ) );
 }
 
+/* Any web page the player opens can try ws://127.0.0.1:<port> while -control is on, and its browser
+ * names the page in Origin.  The project's own clients send none. */
+TEST(control_server_refuses_a_web_pages_origin)
+{
+	const char *head = "GET / HTTP/1.1\r\nHost: 127.0.0.1:8931\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n";
+	std::string request;
+
+	// control_client.py and Node's WebSocket: no Origin
+	request = std::string( head ) + "\r\n";
+	CHECK( ControlServer_originAllowed( request.c_str() ) );
+
+	const char *allowed[] = { "null", "http://localhost", "http://localhost:5173", "https://127.0.0.1:443", "http://[::1]:8080", "null  " };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( allowed ); ++i )
+	{
+		request = std::string( head ) + "Origin: " + allowed[ i ] + "\r\n\r\n";
+		CHECK( ControlServer_originAllowed( request.c_str() ) );
+	}
+	request = std::string( head ) + "oRiGiN:http://localhost:1\r\n\r\n";
+	CHECK( ControlServer_originAllowed( request.c_str() ) );
+
+	const char *refused[] = { "https://evil.example", "http://localhost.evil.example", "http://localhost:80.evil.example",
+		"http://127.0.0.1.nip.io", "http://localhost:", "", "file://", "http://LOCALHOSTX" };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( refused ); ++i )
+	{
+		request = std::string( head ) + "Origin: " + refused[ i ] + "\r\n\r\n";
+		CHECK( !ControlServer_originAllowed( request.c_str() ) );
+	}
+
+	// the path is the page's to choose, and must not read as a header
+	request = "GET /x\r\norigin: null HTTP/1.1\r\nOrigin: https://evil.example\r\n\r\n";
+	CHECK( !ControlServer_originAllowed( request.c_str() ) );
+	request = "GET /?origin:null HTTP/1.1\r\nOrigin: https://evil.example\r\n\r\n";
+	CHECK( !ControlServer_originAllowed( request.c_str() ) );
+}
+
 /* Telling a click from a drag.
  *
  * Three terms, and each of them has been wrong at some point. The screen distance was compared one

@@ -70,6 +70,7 @@
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
 #ifdef _INTERNAL
@@ -514,9 +515,23 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	buttonLadderID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonLadder" ) );
 	buttonLadder = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonLadderID );
 
+	Bool serviceOnline = FALSE;
+#ifdef ZH_ONLINE
+	serviceOnline = OnlineBridge_IsConfigured();
+#endif
+	if (serviceOnline)
+	{
+		// lobbies and custom games only, and the service's connections need no firewall detection
+		if (buttonQuickMatch)
+			buttonQuickMatch->winHide(TRUE);
+		if (buttonLadder)
+			buttonLadder->winHide(TRUE);
+		if (buttonBuddies)
+			buttonBuddies->winHide(TRUE);
+	}
 	// -online: every packet goes through our relay, so EA's firewall probe (against its dead mangler
 	// servers) has nothing to find
-	if (!OnlineIsEnabled())
+	else if (!OnlineIsEnabled())
 	{
 		if (TheFirewallHelper == NULL) {
 			TheFirewallHelper = createFirewallHelper();

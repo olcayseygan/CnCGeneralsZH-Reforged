@@ -1,0 +1,47 @@
+# What a unit on attack move shoots first: the armour its weapon is made for, then what it kills
+# best for the time it costs, not the nearest thing nor the most expensive one (aiTargetTier,
+# aiArmourAffinity, aiTargetKillRate in AI.cpp).
+#
+# Four fights on Alpine Assault, each attacker spawned 190 to 225 from its whole group, outside the
+# group's reach, with the target the nearest-first rule would have picked nearest:
+#   A: a Humvee, a Battlemaster nearest and Red Guards behind it  -> a Red Guard
+#   B: a Crusader, Red Guards nearest and a Battlemaster behind   -> the Battlemaster
+#   C: a Humvee, a Battlemaster nearest and a Technical behind    -> the Technical
+#   D: a Crusader, a Technical nearest and a Battlemaster behind  -> the Battlemaster, though the
+#      Technical dies in three shots to its seven
+# Each TARGET PICK line names the pick, its tier, armour affinity and rate, how many candidates the
+# search held and the nearest of them. The attack-move scan is the line whose count holds the whole
+# group; the attackers' turrets also scan their own shorter sight and log a pick among what that
+# holds (a Crusader's 'of 2' just after the order, the Humvee's Battlemaster 'of 1' while it drives
+# to its pick). Seen 2026-11-04, each over the nearest: A frame 71 a Red Guard, B 75 the
+# Battlemaster, C 198 the Technical, D 614 the Battlemaster (armour 1.53 against the Technical's 1.31).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 1200
+#     -scenario targetpick -logPrefix targetpick_
+
+30    spawn       1  ChinaTankBattleMaster    1  950 300
+30    spawn       1  ChinaInfantryRedguard    2  985 300   25
+30    spawn       0  AmericaVehicleHumvee     1  760 300
+
+30    spawn       1  ChinaInfantryRedguard    2  950 2200   25
+30    spawn       1  ChinaTankBattleMaster    1  985 2200
+30    spawn       0  AmericaTankCrusader      1  760 2200
+
+30    spawn       1  ChinaTankBattleMaster    1  950 1060
+30    spawn       1  GLAVehicleTechnical      1  985 1060
+30    spawn       0  SupW_AmericaVehicleHumvee 1 760 1060
+
+
+32    attackmove  0  AmericaVehicleHumvee     1400 300
+
+# D comes 440 from C, inside the Humvee's search, so it arrives after C's first pick
+300   spawn       1  GLAVehicleTechnical      1  950 1500
+300   spawn       1  ChinaTankBattleMaster    1  985 1500
+300   spawn       0  SupW_AmericaTankCrusader 1  760 1500
+302   attackmove  0  SupW_AmericaTankCrusader 1400 1500
+32    attackmove  0  AmericaTankCrusader      1335 2200
+32    attackmove  0  SupW_AmericaVehicleHumvee 1400 1060
+
+500   tally       1  *

@@ -29,9 +29,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
-#include "Lib/WideCharFns.h"
 #include "GameClient/GameText.h"
-#include "Common/GlobalData.h"
 #include "Common/version.h"
 
 Version *TheVersion = NULL;	///< The Version singleton
@@ -116,23 +114,7 @@ UnicodeString Version::getUnicodeVersion( void )
 	version.concat(UnicodeString(u" Internal"));
 #endif
 
-	// The replay header carries this string and playback compares it, so a modded replay names its mod
-	// and is flagged as another version when it is opened without that mod.
-	if (TheGlobalData->m_modName.isNotEmpty())
-	{
-		version.concat(UnicodeString(u" ["));
-		version.concat(getUnicodeModName());
-		version.concat(UnicodeString(u"]"));
-	}
-
 	return version;
-}
-
-UnicodeString Version::getUnicodeModName( void )
-{
-	WideChar name[512];	// the whole -mod list; the replay header reads up to 1024 units back
-	WideCharFromUtf8( TheGlobalData->m_modName.str(), name, ARRAY_SIZE(name) );
-	return UnicodeString( name );
 }
 
 UnicodeString Version::getFullUnicodeVersion( void )

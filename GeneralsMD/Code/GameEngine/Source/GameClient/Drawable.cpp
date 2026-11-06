@@ -242,11 +242,6 @@ DrawableLocoInfo::DrawableLocoInfo()
 	m_groundPitch = 0.0f;
 	m_groundRoll = 0.0f;
 	m_groundZ = 0.0f;
-	m_headingLag = 0.0f;
-	m_headingLagRate = 0.0f;
-	m_headingLogic = 0.0f;
-	m_headingFrame = 0;
-	m_headingSeeded = FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -556,6 +551,7 @@ void Drawable::takeLookForDraw( void )
 	look.hidden = isDrawableEffectivelyHidden();
 	look.fullyObscured = m_drawableFullyObscuredByShroud;
 	look.drawsInMirror = getDrawsInMirror();
+	look.noSave = testDrawableStatus( DRAWABLE_STATUS_NO_SAVE );
 	look.receivesDynamicLights = m_receivesDynamicLights;
 	look.stealthLook = m_stealthLook;
 	look.stealthDrawnLook = m_stealthDrawnLook;
@@ -659,6 +655,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_lookForDraw.hidden = FALSE;
 	m_lookForDraw.fullyObscured = FALSE;
 	m_lookForDraw.drawsInMirror = FALSE;
+	m_lookForDraw.noSave = BitTest( m_status, DRAWABLE_STATUS_NO_SAVE );
 	m_lookForDraw.receivesDynamicLights = TRUE;
 	m_lookForDraw.hasTintColor = FALSE;
 	m_lookForDraw.hasSelectionColor = FALSE;
@@ -1766,17 +1763,11 @@ void Drawable::applyPhysicsXform(Matrix3D* mtx)
  	Bool frozen = TheTacticalView->isTimeFrozen() && !TheTacticalView->isCameraMovementFinished();
  	frozen = frozen || TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript();
 	if( !obj ||	obj->isDisabledByType( DISABLED_HELD ) || !TheGlobalData->m_showClientPhysics || frozen )
-	{
-		// drawn on its logic heading, which is what the turret is drawn against (getDrawnHeadingLag)
-		if (m_locoInfo)
-			m_locoInfo->m_headingLag = 0.0f;
 		return;
-	}
 	PhysicsXformInfo info;
 	if (calcPhysicsXform(info))
 	{
 		mtx->Translate(0.0f, 0.0f, info.m_totalZ);
-		mtx->Rotate_Z( info.m_headingYaw );
 		mtx->Rotate_Y( info.m_totalPitch );
 		mtx->Rotate_X( -info.m_totalRoll );
 		mtx->Rotate_Z( info.m_totalYaw );
@@ -1791,7 +1782,6 @@ Bool Drawable::calcPhysicsXform(PhysicsXformInfo& info)
 	const Object* obj = getObject();
 	const AIUpdateInterface *ai = obj ? obj->getAIUpdateInterface() : NULL;
 	Bool hasPhysicsXform = false;
-	Bool ground = false;
 	if (ai)
 	{
 		const Locomotor *locomotor = ai->getCurLocomotor();
@@ -1804,7 +1794,6 @@ Bool Drawable::calcPhysicsXform(PhysicsXformInfo& info)
 				case LOCO_TREADS:
 					calcPhysicsXformGround(locomotor, info);
 					hasPhysicsXform = true;
-					ground = true;
 					break;
 				case LOCO_HOVER:
 				case LOCO_WINGS:
@@ -1818,9 +1807,6 @@ Bool Drawable::calcPhysicsXform(PhysicsXformInfo& info)
 			}
 		}
 	}
-	// off its ground locomotor the hull is drawn on its logic heading, and so is its turret
-	if (!ground && m_locoInfo)
-		m_locoInfo->m_headingLag = 0.0f;
 
   if (hasPhysicsXform)
   {
@@ -2226,12 +2212,7 @@ void Drawable::calcPhysicsXformHoverOrWings( const Locomotor *locomotor, Physics
 	* has gone by about half a second, and a slower pull away leans less for longer. That one frame
 	* start is how a tank or car pulls away again (Locomotor::isGroundVehicle), so the share of top
 	* speed and of the turn is held to one: a diagonal start, at up to 1.41 times Speed, or a shove
-	* leans no further than a straight start.
-	*
-	* The drawn heading of a tank or car trails the logic one through a critically damped spring,
-	* HEADING_LAG_FRAMES behind on a steady turn, so EA's pivot, which starts and stops dead at full
-	* TurnRate, swings the hull up to speed and settles it. It is the picture only: the turret is drawn
-	* against the logic heading (W3DModelDraw::handleClientTurretPositioning). */
+	* leans no further than a straight start. */
 //-------------------------------------------------------------------------------------------------
 void Drawable::calcPhysicsXformGround( const Locomotor *locomotor, PhysicsXformInfo& info )
 {
@@ -2242,49 +2223,12 @@ void Drawable::calcPhysicsXformGround( const Locomotor *locomotor, PhysicsXformI
 	const Real LEAN_EASE_FRAMES = 3.0f;					// each of the three smoothing stages, in retail frames
 	const Real START_GAIN = 11.0f;							// a one frame start from rest to top speed peaks at tanh(1.2) of the limit
 	const Real DEFAULT_LEAN_LIMIT = 0.07f;			// 4 degrees, for a locomotor that reacts but names no limit, like the Humvee's
-	const Real HEADING_LAG_FRAMES = 5.0f;				// logic frames the drawn hull trails a steady turn by
-	const Real HEADING_MAX_LAG = PI / 4.0f;			// never further behind than this: a heading a script sets is drawn there soon
-	const UnsignedInt HEADING_CATCH_UP_FRAMES = 8;	// more logic frames than this unseen and the hull is drawn on its heading
-
-	/* The spring is stepped once a logic frame, the rate the heading itself changes at. The heading and
-		 the frame are read once: with -logicthread 1 the logic can move on between two reads. */
-	const Object *owner = getObject();
-	UnsignedInt logicFrame = TheGameLogic->getFrame();
-	Real logicAngle = getOrientation();
-	UnsignedInt gap = logicFrame - m_locoInfo->m_headingFrame;
-	if (!m_locoInfo->m_headingSeeded || gap > HEADING_CATCH_UP_FRAMES || owner->isKindOf(KINDOF_AIRCRAFT) || TheGlobalData->m_classicGraphics)
-	{
-		// first drawn, long unseen, or a taxiing jet or landed helicopter, which eases its own turn in the logic
-		m_locoInfo->m_headingLag = 0.0f;
-		m_locoInfo->m_headingLagRate = 0.0f;
-		m_locoInfo->m_headingSeeded = TRUE;
-	}
-	else if (gap != 0)
-	{
-		const Real omega = 2.0f / HEADING_LAG_FRAMES;	// a ramp's lag is 2 / omega
-		Real turned = stdAngleDiff(logicAngle, m_locoInfo->m_headingLogic) / gap;
-		for (UnsignedInt i = 0; i < gap; ++i)
-		{
-			m_locoInfo->m_headingLag -= turned;
-			m_locoInfo->m_headingLagRate += -omega * omega * m_locoInfo->m_headingLag - 2.0f * omega * m_locoInfo->m_headingLagRate;
-			m_locoInfo->m_headingLag += m_locoInfo->m_headingLagRate;
-		}
-		if (fabs(m_locoInfo->m_headingLag) > HEADING_MAX_LAG)
-		{
-			m_locoInfo->m_headingLag = (m_locoInfo->m_headingLag > 0.0f) ? HEADING_MAX_LAG : -HEADING_MAX_LAG;
-			m_locoInfo->m_headingLagRate = 0.0f;
-		}
-	}
-	m_locoInfo->m_headingLogic = logicAngle;
-	m_locoInfo->m_headingFrame = logicFrame;
-	// turned first, under the lean, so the lean tips along the hull as drawn (applyPhysicsXform)
-	info.m_headingYaw = m_locoInfo->m_headingLag;
 
 	/* Stepped on the retail clock, every second logic frame, so the springs, the locomotor's
 		 stiffness and damping and the ease frames below keep the timing they were tuned at.  Speeds are
 		 per logic frame and only ever divided by the locomotor's own top speed, which cancels; the turn
 		 rate does not, so it is taken per retail frame. */
-	UnsignedInt now = logicFrame / LOGICFRAMES_PER_RETAIL_FRAME;
+	UnsignedInt now = TheGameLogic->getFrame() / LOGICFRAMES_PER_RETAIL_FRAME;
 	UnsignedInt steps = now - m_locoInfo->m_groundFrame;
 	if (steps != 0)
 	{
@@ -2295,7 +2239,7 @@ void Drawable::calcPhysicsXformGround( const Locomotor *locomotor, PhysicsXformI
 			return;
 		BodyDamageType bdt = obj->getBodyModule()->getDamageState();
 		Real speed = physics->getForwardSpeed2D();
-		Real angle = logicAngle + m_locoInfo->m_headingLag;	// the turn as drawn
+		Real angle = getOrientation();
 		if (steps > MAX_CATCH_UP_FRAMES)
 		{
 			// long unseen, or just loaded: let the springs settle without a lurch from the gap
@@ -2318,7 +2262,7 @@ void Drawable::calcPhysicsXformGround( const Locomotor *locomotor, PhysicsXformI
 		if (locomotor->getForwardAccelCoef() != 0.0f || locomotor->getLateralAccelCoef() != 0.0f)
 		{
 			Real maxSpeed = locomotor->getMaxSpeedForCondition(bdt);
-			Real maxLateral = maxSpeed * locomotor->getMaxTurnRate(bdt) * LOGICFRAMES_PER_RETAIL_FRAME;
+			Real maxLateral = maxSpeed * locomotor->getMaxTurnRate(bdt, obj) * LOGICFRAMES_PER_RETAIL_FRAME;
 			pitchIn = maxSpeed > 0.0f ? -START_GAIN * clamp(-1.0f, forwardAccel / maxSpeed, 1.0f) : 0.0f;
 			rollIn = maxLateral > 0.0f ? -clamp(-1.0f, lateralAccel / maxLateral, 1.0f) : 0.0f;
 		}
@@ -3591,6 +3535,9 @@ Bool Drawable::drawsAnyUIText( void )
 // ------------------------------------------------------------------------------------------------
 void Drawable::drawAltitudeLine( void )
 {
+	if( !TheGlobalData->m_aircraftAltitudeLine )
+		return;
+
 	const Object *obj = getObject();
 	if( obj == NULL || obj->isEffectivelyDead() )
 		return;
@@ -5357,9 +5304,7 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 				if( sp == NULL || sp->isReady() )
 					continue;
 				const SpecialPowerTemplate *tmpl = sp->getSpecialPowerTemplate();
-				// a silo whose missile can never fire charges towards nothing
-				if( tmpl == NULL || !tmpl->hasPublicTimer()
-						|| SuperweaponMissileSilencedInMatch( tmpl->getSpecialPowerType() ) )
+				if( tmpl == NULL || !tmpl->hasPublicTimer() )
 					continue;
 
 				ScienceType needed = sp->getRequiredScience();

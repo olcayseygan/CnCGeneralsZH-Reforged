@@ -57,6 +57,7 @@
 
 #include <string>
 #include <vector>
+#include <utility>
 #include <complex>
 
 #include <SDL3/SDL.h>
@@ -73,6 +74,8 @@
 #include "Platform/WaterHullVisual.h"
 #include "Platform/WaterSurfaceModel.h"
 #include "Platform/WaterFftSampling.h"
+#include "Platform/WaterScreenReflection.h"
+#include "Platform/WaterPerformanceSettings.h"
 #include "Platform/WaterFoamEnvironment.h"
 #include "sdl3target.h"
 #include <limits>
@@ -342,7 +345,7 @@ TEST(fft_water_vertex_and_pixel_compile_with_separate_texture_bindings)
 			CHECK_EQ(samplers,0u);CHECK_EQ(buffers,1u);
 		}
 	}
-	CHECK(WaterFftSampling::WrapVertex(vertex));
+	CHECK(WaterFftSampling::WrapVertex(vertex,true));
 	CHECK(SDL3_Shader_Retarget(vertex,true));
 	const size_t swap=vertex.find("input.Diffuse = input.Diffuse.bgra");
 	CHECK(swap!=std::string::npos);
@@ -402,7 +405,8 @@ const WaterUniformMember WaterUniformMembers[] = {
     WATER_UNIFORM_MEMBER(ContactHullData),
     WATER_UNIFORM_MEMBER(FoamFillLights),
     WATER_UNIFORM_MEMBER(MaterialColor),
-    WATER_UNIFORM_MEMBER(MaterialParameters)
+    WATER_UNIFORM_MEMBER(MaterialParameters),
+    WATER_UNIFORM_MEMBER(ClipFromWorld)
 };
 #undef WATER_COMBINER_MEMBER
 #undef WATER_UNIFORM_MEMBER
@@ -498,7 +502,7 @@ TEST(modern_water_compiled_uniform_layout_matches_every_cpu_upload_field)
     }
     std::string vertex;
     const bool generated = VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D11, vertex)
-        && WaterFftSampling::WrapVertex(vertex) && SDL3_Shader_Retarget(vertex, true);
+        && WaterFftSampling::WrapVertex(vertex,true) && SDL3_Shader_Retarget(vertex, true);
     CHECK(generated);
     if (generated) checkCompiledWaterUniformLayout(vertex, true, "WaterVertexParameters", false);
 }
@@ -1371,4 +1375,155 @@ TEST(authored_surf_wrapper_compiles_with_original_fixed_function_fog_and_alpha)
     CHECK(SDL3_Translate_SPIRV_To_MSL(spirv,false,msl,log));
     std::string bad="not a generated combiner";const std::string saved=bad;
     CHECK(!WaterShoreOverlay::WrapPixel(bad));CHECK(bad==saved);
+}
+
+// Keep BaseType.h's legacy min/max macros out of the independent shader cases above.
+#include "Platform/HazardCloudCore.h"
+#include "../GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.h"
+// Shared clouds must retain SDL descriptor bindings on Vulkan and Metal.
+TEST(shared_cloud_programs_compile_validate_and_translate)
+{
+	using HazardCloudShared::ShaderPass;
+	const char *validator = getenv("ZH_SPIRV_VAL");
+	std::vector<std::pair<std::string, bool>> programs = {
+		{HazardCloud::vertexShader(), true},
+		{HazardCloud::emberVertexShader(true), true},
+		{HazardCloud::emberPixelShader(true), false}
+	};
+	for (unsigned pass = 0; pass < 5; ++pass)
+		programs.push_back({HazardCloudShared::sharedPixelShader(static_cast<ShaderPass>(pass)), false});
+	for (const auto &program : programs) {
+		std::vector<unsigned char> spirv;
+		std::string log, msl;
+		const bool compiled = SDL3_Compile_HLSL_To_SPIRV(program.first, program.second, spirv, log);
+		CHECK(compiled);
+		if (!compiled) { printf("shared cloud shader: %s\n", log.c_str()); continue; }
+		if (validator && *validator) CHECK(validate(validator, spirv, log));
+		else printf("SKIPPED shared cloud spirv-val: validator unavailable\n");
+		CHECK(SDL3_Translate_SPIRV_To_MSL(spirv, program.second, msl, log));
+		unsigned samplers = 0, uniforms = 0;
+		SDL3_Shader_Slots(spirv, program.second, samplers, uniforms);
+		CHECK_EQ(uniforms, program.first == HazardCloud::vertexShader() ? 0u : 1u);
+	}
+}
+
+TEST(fft_low_tier_preserves_energy_reality_and_filtering)
+{
+    using namespace WaterFftSpectrum;
+    const auto configuration=ForResolution(128);
+    CHECK(configuration.resolution==128 && configuration.phases==7 && configuration.levels==8);
+    CHECK(ForResolution(0).resolution==256);
+    const auto initial=InitialSpectrum(configuration),butterfly=Butterfly(configuration);
+    CHECK(initial==InitialSpectrum(configuration));
+    CHECK(initial.size()==128*128*3*4 && butterfly.size()==128*7*4);
+    const auto &variance=WaterFftFiltering::SpectrumVariance(configuration);
+    for(unsigned c=0;c<Cascades;++c) {
+        double energy=0,slope=0;const unsigned n=configuration.resolution;
+        for(unsigned y=0;y<n;++y) for(unsigned x=0;x<n;++x) {
+            const float *h=&initial[((c*n+y)*n+x)*4];
+            const float *opposite=&initial[((c*n+(n-y)%n)*n+(n-x)%n)*4];
+            CHECK(h[0]==opposite[2] && h[1]==-opposite[3]);
+            CHECK(h[2]==opposite[0] && h[3]==-opposite[1]);
+            double power=0;for(unsigned i=0;i<4;++i) {CHECK(std::isfinite(h[i]));power+=double(h[i])*h[i];}
+            if(x==0 || y==0 || (x==n/2 && y==n/2)) CHECK(power==0);
+            const double kx=2*Pi*(int(x)-int(n/2))/Sizes[c],ky=2*Pi*(int(y)-int(n/2))/Sizes[c];
+            energy+=power;slope+=power*(kx*kx+ky*ky);
+        }
+        CHECK(std::abs(std::sqrt(energy)*WorldScale-HeightRms[c])<HeightRms[c]*2e-7);
+        CHECK(std::abs(variance[7][c]-slope)<1e-10*(1+slope));
+        CHECK(variance[0][c]==0 && variance[8][c]==0);
+    }
+    CHECK(ButterflyHlsl(configuration).find("/7.0,")!=std::string::npos);
+    const std::string filtering=WaterFftFiltering::Source(configuration);
+    CHECK(filtering.find("fftLostSlopeVariance[8]")!=std::string::npos);
+    CHECK(filtering.find("*128.0/")!=std::string::npos);
+    CHECK(filtering.find("level,6)")!=std::string::npos);
+}
+
+#if defined(__linux__)
+// The SDL water tiers and reflections exist only where the Linux Modern water runtime draws them.
+TEST(water_performance_tiers_compile_both_materials_and_preserve_shared_defaults)
+{
+    struct Restore { WaterPerformanceSettings::Configuration saved=WaterPerformanceSettings::Applied();
+        ~Restore() {WaterPerformanceSettings::Applied()=saved;} } restore;
+    PixelPipelineDescription pipeline={};
+    std::string d3dBaseline;
+    CHECK(EngineShader_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID,pipeline,d3dBaseline,COMBINER_SHADER_TARGET_D3D11));
+    for(unsigned resolution:{128u,256u}) for(unsigned refraction=0;refraction<3;++refraction) for(bool reflections:{false,true}) {
+        auto &settings=WaterPerformanceSettings::Applied();settings.activeFftResolution=resolution;
+        settings.refraction=WaterPerformanceSettings::Refraction(refraction);settings.sceneReflections=reflections;
+        for(auto program:{ENGINE_SHADER_WATER_TRAPEZOID,ENGINE_SHADER_WATER_RIVER}) {
+            std::string source,error;std::vector<unsigned char> spirv;
+            CHECK(EngineShader_Pixel_Program(program,pipeline,source,COMBINER_SHADER_TARGET_SDL3_GPU));
+            const bool compiled=SDL3_Compile_HLSL_To_SPIRV(source,false,spirv,error);
+            if(!compiled) printf("water tier %u/%u/%u program%d: %s\n",resolution,refraction,reflections,program,error.c_str());
+            CHECK(compiled);
+            if (compiled) {
+                std::string msl, why; unsigned samplers = 0, buffers = 0;
+                SDL3_Shader_Slots(spirv, false, samplers, buffers);
+                CHECK(SDL3_Translate_SPIRV_To_MSL(spirv, false, msl, error));
+                // Load-only textures need no sampler in Metal's entry point. Every
+                // surviving binding still uses the slot recorded by the SDL draw.
+                for (int slot : msl_indices(msl, "texture")) CHECK(slot >= 0 && unsigned(slot) < samplers);
+                for (int slot : msl_indices(msl, "sampler")) CHECK(slot >= 0 && unsigned(slot) < samplers);
+            }
+            if(compiled && !reflections && refraction==WaterPerformanceSettings::Off) {
+                spvc_context context=NULL;CHECK(spvc_context_create(&context)==SPVC_SUCCESS);
+                if(context) {
+                    std::vector<SpvId> words(spirv.size()/sizeof(SpvId));memcpy(words.data(),spirv.data(),spirv.size());
+                    spvc_parsed_ir ir=NULL;spvc_compiler compiler=NULL;spvc_resources resources=NULL;spvc_set active=NULL;
+                    bool reflected=spvc_context_parse_spirv(context,words.data(),words.size(),&ir)==SPVC_SUCCESS
+                        && spvc_context_create_compiler(context,SPVC_BACKEND_NONE,ir,SPVC_CAPTURE_MODE_TAKE_OWNERSHIP,&compiler)==SPVC_SUCCESS
+                        && spvc_compiler_get_active_interface_variables(compiler,&active)==SPVC_SUCCESS
+                        && spvc_compiler_create_shader_resources_for_active_variables(compiler,&resources,active)==SPVC_SUCCESS;
+                    const spvc_reflected_resource *images=NULL;size_t count=0;
+                    reflected=reflected && spvc_resources_get_resource_list_for_type(resources,SPVC_RESOURCE_TYPE_SEPARATE_IMAGE,&images,&count)==SPVC_SUCCESS;
+                    CHECK(reflected);bool depth=false;
+                    if(reflected) for(size_t i=0;i<count;++i) {
+                        const std::string name=images[i].name;
+                        CHECK(name!="Texture1" && name!="Texture5" && name!="Texture7");
+                        depth|=name=="Texture6";
+                    }
+                    CHECK(depth);spvc_context_destroy(context);
+                }
+            }
+        }
+        std::string d3d;
+        CHECK(EngineShader_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID,pipeline,d3d,COMBINER_SHADER_TARGET_D3D11));
+        CHECK(d3d==d3dBaseline);
+    }
+}
+
+TEST(screen_reflection_modes_are_bounded_and_selected_per_draw)
+{
+	using namespace WaterScreenReflection;
+	CHECK(Resolve(0) == Mirror && Resolve(1) == ScreenSpace && Resolve(2) == Hybrid);
+	CHECK(Resolve(-1) == Hybrid && Resolve(99) == Hybrid);
+	for (int setting = 0; setting < 3; ++setting) CHECK(Resolve(setting, false) == SkyOnly);
+	CHECK(UsesMirror(Mirror) && UsesMirror(Hybrid) && !UsesMirror(ScreenSpace) && !UsesMirror(SkyOnly));
+	CHECK(Traces(ScreenSpace) && Traces(Hybrid) && !Traces(Mirror) && !Traces(SkyOnly));
+	for (auto program : {ENGINE_SHADER_WATER_TRAPEZOID, ENGINE_SHADER_WATER_RIVER}) {
+		PixelPipelineDescription pipeline = {}; std::string source;
+		CHECK(EngineShader_Pixel_Program(program, pipeline, source, COMBINER_SHADER_TARGET_SDL3_GPU));
+		CHECK(source.find("waterScreenReflection(world, view, environmentNormal") != std::string::npos);
+		CHECK(source.find("MaterialParameters.w>0.5") != std::string::npos);
+		CHECK(source.find("waterMirrorFiltered(reflectionUV+distortion") != std::string::npos);
+	}
+	CHECK(MirrorSize(Mirror) == 512 && MirrorSize(Hybrid) == 1024);
+	CHECK(MirrorSize(Mirror, 0) == 256 && MirrorSize(Hybrid, 0) == 512);
+}
+#endif // __linux__
+
+TEST(direct3d11_modern_water_source_matches_the_upstream_baseline)
+{
+	// FNV-1a of the complete generated v3.8.0 source, captured independently from e3e1a898.
+	const uint64_t expected[] = {2644328293701272477ull, 15503000995417316327ull};
+	unsigned index = 0;
+	for (auto program : {ENGINE_SHADER_WATER_TRAPEZOID, ENGINE_SHADER_WATER_RIVER}) {
+		PixelPipelineDescription pipeline = {}; std::string source;
+		CHECK(EngineShader_Pixel_Program(program, pipeline, source, COMBINER_SHADER_TARGET_D3D11));
+		uint64_t hash = 14695981039346656037ull;
+		for (unsigned char value : source) { hash ^= value; hash *= 1099511628211ull; }
+		CHECK(hash == expected[index++]);
+	}
 }

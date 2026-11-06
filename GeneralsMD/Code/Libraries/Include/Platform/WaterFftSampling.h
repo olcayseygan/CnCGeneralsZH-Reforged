@@ -17,7 +17,7 @@ constexpr float WorldScale=WaterFftSpectrum::WorldScale;
 constexpr float TimeScale=0.4f;
 // Both stages consume the same immutable draw snapshot. Slot zero remains the generated
 // fixed vertex block; the vessel field is water-only slot one on the vertex stage.
-inline std::string UniformSource(const char *name,unsigned slot,bool visual_hull=false) {
+inline std::string UniformSource(const char *name,unsigned slot,bool visual_hull=false,bool sdl=false) {
     std::string source=std::string("cbuffer ")+name+" : register(b"+std::to_string(slot)+R"HLSL()
 {
     float4 TextureFactor;
@@ -44,6 +44,7 @@ inline std::string UniformSource(const char *name,unsigned slot,bool visual_hull
 #define MODERN_WATER_HLSL_UNIFORM(name) "    float4 " #name ";\n"
     source+=MODERN_WATER_MATERIAL_UNIFORMS(MODERN_WATER_HLSL_UNIFORM);
 #undef MODERN_WATER_HLSL_UNIFORM
+    if(sdl) source+="    row_major float4x4 ClipFromWorld;\n";
     if(visual_hull) source+="    float4 VisualHullMeta[8];\n";
     source+="};\n";
     if(visual_hull) source+=R"HLSL(
@@ -134,14 +135,14 @@ float3 fftVertexDisplacement(float2 p) {return fftVertexDisplacement(p,WaterPara
 }
 // Add a water-only wrapper to the generated fixed vertex program. It retains the engine's
 // original projection, shroud coordinate generation and fog after moving the actual vertex.
-inline bool WrapVertex(std::string &hlsl)
+inline bool WrapVertex(std::string &hlsl,bool sdl=false)
 {
     const std::string entry="Output main(Input input)";
     const size_t at=hlsl.find(entry);
     if(at==std::string::npos || hlsl.find("float3 Normal")==std::string::npos
         || hlsl.find("float2 TexCoord1")==std::string::npos) return false;
     hlsl.replace(at,entry.size(),"Output waterFixedVertex(Input input)");
-    hlsl+=UniformSource("WaterVertexParameters",1);
+    hlsl+=UniformSource("WaterVertexParameters",1,false,sdl);
     hlsl+=VertexSource();
     hlsl+=WaterWaveCageShader::Source(true);
     hlsl+=R"HLSL(
@@ -183,9 +184,9 @@ Output main(Input input)
 )HLSL";
     return true;
 }
-inline std::string PixelSource()
+inline std::string PixelSource(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution))
 {
-    std::string source=CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+WaterFftFiltering::Source()+R"HLSL(
+    std::string source=CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+WaterFftFiltering::Source(configuration)+R"HLSL(
 struct FftSurface {
     float3 bow;
     float3 displacement;

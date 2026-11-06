@@ -34,9 +34,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-EIGHTEEN-BUTTON GRID:
-The nine-column command grid a mod with eighteen command slots gets (ButtonCommand15
-to 18, and the wider middle plate) follows Hojjat's edit of Control Bar Pro 2.1.1 for
-the Contra mod, under the same MIT License. The plate itself is cut from this bar's
-own art (Tools/wide_command_bar.py).

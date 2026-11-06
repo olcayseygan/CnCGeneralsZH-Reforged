@@ -141,7 +141,9 @@ static const char *ScienceAvailabilityNames[] =
 // at all, no superweapon at all, or a number of each type he may have standing.  It takes the
 // player template's name because the rule has one exception, the USA Superweapon General, and
 // because a name is what a test can hand it.  buildingName is the superweapon's own template: the
-// nuclear silo is the one No leaves standing, one per player, for the upgrades it sells.
+// nuclear silo is the one No leaves standing, one per player, human or computer, for the upgrades
+// it sells.  Every superweapon shares the Superweapon link key, so a cap is on all of a player's
+// superweapons together, not on each type.
 //
 enum { SUPERWEAPON_CAP_BANNED = -1, SUPERWEAPON_CAP_UNLIMITED = 0 };
 Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName,
@@ -174,6 +176,12 @@ Bool RebuildHoleHoldsSuperweapon( Bool rebuildsSuperweapon, Bool rebuildStanding
 // getPlayerType() == PLAYER_COMPUTER, which every machine and the replay hold alike.
 Bool SuperweaponNeedsDefenses( const AsciiString &buildingName, Bool proRules, Int superweaponRestriction,
                                Bool computerPlayer );
+// That silo, by name and game setup: a building with upgrades in it and nothing more, for every
+// player and every AI.  The InMatch one asks the match being played and is the test anything in
+// logic or on screen uses for "is this a superweapon": FS_SUPERWEAPON, less that silo.
+Bool SuperweaponSiloIsUpgradeBuilding( const AsciiString &buildingName, Bool proRules, Int superweaponRestriction );
+class ThingTemplate;
+Bool IsSuperweaponInMatch( const ThingTemplate *tmpl );
 
 // The lobby's income sharing, an IncomeSharing from GameInfo.h: whether a payment is split in this
 // match, and each ally's cut when it is split evenly between sharers players.  The earner keeps what
@@ -181,12 +189,25 @@ Bool SuperweaponNeedsDefenses( const AsciiString &buildingName, Bool proRules, I
 Bool IncomeSharingSplits( Int incomeSharing, Bool fromTechBuilding );
 UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers );
 
-// A skirmish computer player earns double what it earns by playing, on every rung.  What one payment
-// comes to in a recipient's bank: doubled only when a computer earned it and a computer banks it, so
-// a human ally's cut of a computer's income stays plain and a human's income never pays double.
-// Refunds, script grants and transfers between allies do not come through here: doubling a refund
-// is a queue and cancel money loop.
-UnsignedInt EarnedAmount( UnsignedInt amount, Bool earnerIsSkirmishAI, Bool recipientIsSkirmishAI );
+// A skirmish computer player banks its rung's IncomePercent (AIDifficultyProfile) of what it earns by
+// playing.  What one payment comes to in a recipient's bank at that percent, rounded down, integer
+// only so every machine banks the same.  The bonus applies only when a computer earned it and a
+// computer banks it, so a human ally's cut of a computer's income stays plain and a human's income
+// never gets it.  Refunds, script grants and transfers between allies do not come through here:
+// a bonus on a refund is a queue and cancel money loop.  The score keeper counts the plain amount.
+UnsignedInt EarnedAmount( UnsignedInt amount, Int percent );
+
+// The falling-behind bonus a skirmish computer is owed over its rung's percent, in points, with its own
+// strength against its strongest living enemy's: 0 while it holds level, rising in a line to
+// AI_INCOME_BONUS_MAX at a quarter of it and below.  Integers only.
+Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength );
+// The strengths that target is fed: of count living players in list order, worth[i] each and allies[i]
+// a bit for every player mutually allied with i, self's side (itself and its allies) a player at a
+// time, and the highest per-player average of the other sides, each a leader in list order and the
+// players still ungrouped who are its mutual allies.  Free-for-all, every enemy is a side of one.
+void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage );
+// One weighing's move from the bonus it has toward that target, at most AI_INCOME_BONUS_STEP.
+Int IncomeBonusStep( Int bonus, Int target );
 
 // Pro Rules, PRO-RULES.md: what every skirmish and network match refuses whoever plays it.
 // GameLogic::isProRules() says whether a match is under them; these say what they cover, by name
@@ -209,12 +230,11 @@ Bool ProRulesBanSpecialPower( SpecialPowerType specialPowerType, Int rankLevel )
 Bool ProRulesRefuseSpecialPower( const Player *player, SpecialPowerType specialPowerType );
 
 // The silo's missile under Pro Rules or under the lobby's No Superweapons: the silo stands for its
-// upgrades and the missile never fires, so nothing shows it as a superweapon - no countdown, no EVA,
-// no fire button, no shortcut.  Both read game setup only, the same on every machine.
+// upgrades and the missile is no special power at all (SpecialPowerModule::getSpecialPower), so it
+// is never armed, listed, counted down, announced or fired.  Both read game setup only, the same on
+// every machine.
 Bool SuperweaponMissileSilenced( SpecialPowerType specialPowerType, Bool proRules, Int superweaponRestriction );
 Bool SuperweaponMissileSilencedInMatch( SpecialPowerType specialPowerType );
-// the silo of a missile the one above silences: no banner, no feed line, announced as a building
-Bool SuperweaponSiloSilencedInMatch( const Object *structure );
 
 // Rule 9: no foundation this close to an enemy building, edge to edge.  The same 300 world units
 // the derrick cluster rules measure with, which is also more than a Patriot or a Stinger Site
@@ -412,6 +432,8 @@ public:
 	UnsignedInt earnIncome( UnsignedInt amount, Bool fromTechBuilding );
 	/// money made by playing that nobody shares - a capture bonus, a crate, a bounty, stolen cash - banked and scored.  Returns what it came to
 	UnsignedInt earnMoney( UnsignedInt amount );
+	/// what this player banks of what it earns by playing, in percent: its rung's IncomePercent plus its falling-behind bonus for a skirmish AI, 100 for anyone else
+	Int incomePercent( void );
 
 	UnsignedInt getSupplyBoxValue();///< Many things can affect the alue of a crate, but at heart it is a GlobalData ratio.
 

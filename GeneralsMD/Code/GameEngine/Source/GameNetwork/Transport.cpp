@@ -413,6 +413,8 @@ Int Transport::writeRelayed( TransportMessage &msg )
 
 //--------------------------------------------------------------------------
 
+TransportRoute *TheTransportRoute = NULL;
+
 Transport::Transport(void)
 {
 	m_winsockInit = false;
@@ -480,8 +482,14 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 	m_redirectedIP = 0;
 	if (m_udpsock)
 		delete m_udpsock;
+	m_udpsock = NULL;
+	if (TheTransportRoute)
+	{
+		m_port = port;
+		return true;
+	}
 	m_udpsock = NEW UDP();
-	
+
 	if (!m_udpsock)
 		return false;
 	
@@ -624,7 +632,7 @@ Bool Transport::update( void )
 }
 
 Bool Transport::doSend() {
-	if (!m_udpsock && !m_relayed)
+	if (!m_udpsock && !m_relayed && !TheTransportRoute)
 	{
 		DEBUG_LOG(("Transport::doSend() - m_udpSock is NULL!\n"));
 		return FALSE;
@@ -654,8 +662,10 @@ Bool Transport::doSend() {
 		{
 			int bytesSent = 0;
 			// Send this message
+			const UnsignedInt wireLen = m_outBuffer[i].length + sizeof(TransportMessageHeader);
 			if ((bytesSent = m_relayed ? writeRelayed(m_outBuffer[i])
-				: m_udpsock->Write((unsigned char *)(&m_outBuffer[i]), m_outBuffer[i].length + sizeof(TransportMessageHeader), m_outBuffer[i].addr, m_outBuffer[i].port)) > 0)
+				: m_udpsock ? m_udpsock->Write((unsigned char *)(&m_outBuffer[i]), wireLen, m_outBuffer[i].addr, m_outBuffer[i].port)
+				: TheTransportRoute->send((unsigned char *)(&m_outBuffer[i]), wireLen, m_outBuffer[i].addr, m_outBuffer[i].port)) > 0)
 			{
 				//DEBUG_LOG(("Sending %d bytes to %d:%d\n", m_outBuffer[i].length + sizeof(TransportMessageHeader), m_outBuffer[i].addr, m_outBuffer[i].port));
 				m_outgoingPackets[m_statisticsSlot]++;
@@ -773,7 +783,7 @@ Bool Transport::doRecv()
 		return TRUE;
 	}
 
-	if (!m_udpsock)
+	if (!m_udpsock && !TheTransportRoute)
 	{
 		DEBUG_LOG(("Transport::doRecv() - m_udpSock is NULL!\n"));
 		return FALSE;
@@ -788,7 +798,7 @@ Bool Transport::doRecv()
 	TransportMessage incomingMessage;
 	unsigned char *buf = (unsigned char *)&incomingMessage;
 	int len = MAX_NETWORK_MESSAGE_LEN;
-	while ( (len=m_udpsock->Read(buf, MAX_NETWORK_MESSAGE_LEN, &from)) > 0 )
+	while ( (len=(m_udpsock ? m_udpsock->Read(buf, MAX_NETWORK_MESSAGE_LEN, &from) : TheTransportRoute->recv(buf, MAX_NETWORK_MESSAGE_LEN, &from))) > 0 )
 	{
 		receivePacket( incomingMessage, len, ntohl(from.sin_addr.s_addr), ntohs(from.sin_port), now );
 	}

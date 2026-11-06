@@ -1272,50 +1272,6 @@ void W3DInGameUI::drawAttackCircle( void )
 }  // end drawAttackCircle
 
 //-------------------------------------------------------------------------------------------------
-/** One screen row from `left` to `right`, the two end pixels at the share of them the span covers,
-	* so a slanted edge fades across a pixel instead of stepping. */
-//-------------------------------------------------------------------------------------------------
-static void drawCoveredSpan( Real left, Real right, Int y, UnsignedInt color )
-{
-	if( right <= left )
-		return;
-	const UnsignedInt rgb = color & 0x00FFFFFF;
-	const Real alpha = (Real)( color >> 24 );
-	const Int first = (Int)floorf( left );
-	const Int last = (Int)floorf( right );
-	if( first == last )
-	{
-		TheDisplay->drawFillRect( first, y, 1, 1, rgb | ( REAL_TO_INT( alpha * ( right - left ) ) << 24 ) );
-		return;
-	}
-	TheDisplay->drawFillRect( first, y, 1, 1, rgb | ( REAL_TO_INT( alpha * ( first + 1 - left ) ) << 24 ) );
-	if( last > first + 1 )
-		TheDisplay->drawFillRect( first + 1, y, last - first - 1, 1, color );
-	if( right > last )
-		TheDisplay->drawFillRect( last, y, 1, 1, rgb | ( REAL_TO_INT( alpha * ( right - last ) ) << 24 ) );
-}
-
-//-------------------------------------------------------------------------------------------------
-/** A heater shield centred on `centreX`, filled one screen row at a time: straight sides for the
-	* upper part, then a curve closing to the point at the bottom.  The left half takes `leftColor`
-	* and the right half `rightColor`, which with a light and a darker steel reads as a raised
-	* centre ridge with the light from the left. */
-//-------------------------------------------------------------------------------------------------
-static void drawShieldShape( Real centreX, Int top, Real width, Int height, UnsignedInt leftColor, UnsignedInt rightColor )
-{
-	const Real SHOULDER = 0.4f;		// share of the height above the taper
-	for( Int row = 0; row < height; ++row )
-	{
-		const Real t = ( row + 0.5f ) / height;
-		Real half = width * 0.5f;
-		if( t > SHOULDER )
-			half *= sqrtf( ( 1.0f - t ) / ( 1.0f - SHOULDER ) );
-		drawCoveredSpan( centreX - half, centreX, top + row, leftColor );
-		drawCoveredSpan( centreX, centreX + half, top + row, rightColor );
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
 /** Player::iterateObjects callback: the spot over the head of one of the local player's guards, into
 	* the vector of them. */
 //-------------------------------------------------------------------------------------------------
@@ -1347,10 +1303,7 @@ void W3DInGameUI::drawGuardMarkers( void )
 	const Real MARKER_HEIGHT = 10.0f;		// at 800x600 and zoom 1, a little closer than the opening camera
 	const Real MARKER_MIN_HEIGHT = 6.0f;
 	const Real MARKER_MAX_HEIGHT = 10.0f;
-	const UnsignedInt SHADOW_COLOR = 0x60000000;		// lifts it off snow and sand alike
-	const UnsignedInt EDGE_COLOR = 0xE00C1014;
-	const UnsignedInt LIT_COLOR = 0xF0E8EEF4;		// the command bar's steel, the side facing the light
-	const UnsignedInt SHADED_COLOR = 0xF0939FAC;
+	const Int TALLEST_SHIELD = 40;		// GUARD_HEIGHTS' last, 10 x 4K's UI scale; taller ones stretch it
 
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 		return;
@@ -1358,9 +1311,20 @@ void W3DInGameUI::drawGuardMarkers( void )
 	const Real uiScale = TheUIScale();
 	const Real size = MARKER_HEIGHT * uiScale / TheTacticalView->getZoom();
 	const Int height = REAL_TO_INT( max( MARKER_MIN_HEIGHT * uiScale, min( MARKER_MAX_HEIGHT * uiScale, size ) ) );
-	const Real width = height * 0.8f;
 	const Int lift = height / 2;		// clear of the health bar's line over the model's top
-	const Real rim = max( 1.0f, height / 10.0f );
+
+	// One picture a guard, GuardShield<h> (ReforgedGuardShield, Tools/hud_command_bar.py guard_shield): the
+	// heater shield, its dark edge, lit and shaded halves and drop shadow exactly as the rows of covered spans
+	// drew them, which cost 60 to 180 rectangles a guard every picture (GitHub #165).  It is drawn texel for
+	// pixel, 2K + 1 wide round the shield's pixel column (K = ceil(rim + width / 2)) and h + inset high.
+	const Int drawn = min( height, TALLEST_SHIELD );
+	AsciiString name;
+	name.format( "GuardShield%d", drawn );
+	const Image *shield = TheMappedImageCollection->findImageByName( name );
+	const Real rim = max( 1.0f, drawn / 10.0f );
+	const Real stretch = (Real)height / drawn;
+	const Int imageWidth = REAL_TO_INT( ( 2 * (Int)ceilf( rim + drawn * 0.4f ) + 1 ) * stretch );
+	const Int imageHeight = REAL_TO_INT( ( drawn + (Int)rim ) * stretch );
 
 	// Who stands guard, and where, moves only with a tick, so the walk runs once a logic frame; it ran
 	// on every pass and was most of what this method cost.  Only the camera is this pass's, except under
@@ -1392,15 +1356,31 @@ void W3DInGameUI::drawGuardMarkers( void )
 		if( !TheTacticalView->worldToScreen( &top, &spot ) )
 			continue;
 
-		const Real centreX = spot.x + 0.5f;
+		const Int left = spot.x - imageWidth / 2;
 		const Int y = spot.y - lift - height;
-		const Int inset = REAL_TO_INT( rim );
-		drawShieldShape( centreX + rim, y + inset, width, height, SHADOW_COLOR, SHADOW_COLOR );
-		drawShieldShape( centreX, y, width, height, EDGE_COLOR, EDGE_COLOR );
-		drawShieldShape( centreX, y + inset, width - 2.0f * rim, height - 3 * inset, LIT_COLOR, SHADED_COLOR );
+		TheDisplay->drawImage( shield, left, y, left + imageWidth, y + imageHeight );
 	}
 
 }  // end drawGuardMarkers
+
+//-------------------------------------------------------------------------------------------------
+/** Models which share the world scene with units, but describe the player's orders and cursor. */
+//-------------------------------------------------------------------------------------------------
+Bool W3DInGameUI::isWorldSpaceUI( const RenderObjClass *robj, const Drawable *draw ) const
+{
+	// These live in the world scene so the ground can cover them, but are feedback for the player.
+	// A row of placement previews owns more than the single drawable under the cursor.
+	if( robj == m_buildingPlacementAnchor || robj == m_buildingPlacementArrow )
+		return TRUE;
+	for( Int i = 0; i < MAX_MOVE_HINTS; i++ )
+		if( robj == m_moveHintRenderObj[ i ] )
+			return TRUE;
+	if( draw && m_placeIcon )
+		for( Int i = 0; i < TheGlobalData->m_maxLineBuildObjects; i++ )
+			if( draw == m_placeIcon[ i ] )
+				return TRUE;
+	return FALSE;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Each live move ring aligned on logic's terrain, at the sync point: the ground and water heights

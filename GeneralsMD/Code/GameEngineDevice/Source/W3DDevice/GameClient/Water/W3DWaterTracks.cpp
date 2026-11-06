@@ -65,6 +65,7 @@
 #include "assetmgr.h"
 #include "WW3D2/dx8wrapper.h"
 #include "Platform/RenderTypes.h"
+#include "Platform/WaterScreenReflection.h"
 #if defined(__linux__)
 #include "Platform/WaterShoreOverlay.h"
 #endif
@@ -443,9 +444,8 @@ void WaterTracksObj::waveForDraw(Vector2 &waveTailOrigin,Vector2 &waveFrontOrigi
 
 Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 {
-#if defined(__linux__)
-	if (!m_drawnWaveReady) return batchStart;
-#endif
+	const Bool snapshot = WaterScreenReflection::Supported();
+	if (snapshot && !m_drawnWaveReady) return batchStart;
 	VertexFormatXYZDUV1 *vb;
 	Vector2	waveTailOrigin,waveFrontOrigin;
 	Real	waterHeight;
@@ -489,21 +489,17 @@ Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 	if (mirror)
 		vb = (VertexFormatXYZDUV1 *)mirror;
 
-#if defined(__linux__)
-	waveTailOrigin=m_drawnWaveTail;waveFrontOrigin=m_drawnWaveFront;
-	waveAlpha=m_drawnWaveAlpha;widthFrac=m_drawnWaveWidth;
-	waterHeight=m_drawnWaterHeight;
-#else
-	waveForDraw(waveTailOrigin,waveFrontOrigin,waveAlpha,widthFrac);
-#endif
+	if (snapshot) {
+		waveTailOrigin=m_drawnWaveTail;waveFrontOrigin=m_drawnWaveFront;
+		waveAlpha=m_drawnWaveAlpha;widthFrac=m_drawnWaveWidth;
+		waterHeight=m_drawnWaterHeight;
+	} else {
+		waveForDraw(waveTailOrigin,waveFrontOrigin,waveAlpha,widthFrac);
+	}
 
 	//First insert tail of wave:
 	Vector2 testPoint(waveTailOrigin);
-#if defined(__linux__)
-	const Bool hasWaterLevel=m_drawnHasWater;
-#else
-	TheTerrainLogic->isUnderwater(testPoint.X,testPoint.Y,&waterHeight);
-#endif
+	if (!snapshot) TheTerrainLogic->isUnderwater(testPoint.X,testPoint.Y,&waterHeight);
 	vb->x=	testPoint.X;
 	vb->y=	testPoint.Y;
 	vb->z=waterHeight+1.5f;
@@ -560,7 +556,7 @@ Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 	const Vector2 corners[4]={waveTailOrigin,waveTailOrigin+m_perpDir*m_waveFinalWidth*widthFrac,
 		waveFrontOrigin+m_perpDir*m_waveFinalWidth*widthFrac,waveFrontOrigin};
 	for(Int i=0;i<4;++i){shoreTrack.xy[i*2]=corners[i].X;shoreTrack.xy[i*2+1]=corners[i].Y;}
-	PosixWaterShoreTrack(DX8Wrapper::_Get_D3D_Device(),m_authoredSource && hasWaterLevel &&
+	PosixWaterShoreTrack(DX8Wrapper::_Get_D3D_Device(),m_authoredSource && m_drawnHasWater &&
 		!TheGlobalData->m_isWorldBuilder && !TheGlobalData->m_usingWaterTrackEditor?&shoreTrack:NULL);
 #endif
 	DX8Wrapper::Draw_Strip(0,idxCount-2,0,m_x*m_y);	//there are always n-2 primitives for n index strip.
@@ -966,7 +962,6 @@ void WaterTracksRenderSystem::update()
 static void TestWaterUpdate(void);	// static, as its definition is
 void setFPMode( void );
 
-#if defined(__linux__)
 void WaterTracksRenderSystem::takeReadsForRender(void)
 {
 	if (!TheGlobalData->m_showSoftWaterEdge || TheWaterTransparency->m_transparentWaterDepth==0) return;
@@ -980,7 +975,6 @@ void WaterTracksRenderSystem::takeReadsForRender(void)
 		mod->m_drawnWaveReady=TRUE;
 	}
 }
-#endif
 
 //=============================================================================
 // WaterTracksRenderSystem::flush
@@ -998,12 +992,11 @@ Try improving the fit to vertical surfaces like cliffs.
 	if (!TheGlobalData->m_showSoftWaterEdge || TheWaterTransparency->m_transparentWaterDepth ==0 )
 		return;
 
-#if !defined(__linux__)
-	if (TheGlobalData->m_usingWaterTrackEditor)
-		TestWaterUpdate();
-
-	update();	//update positions of all the tracks
-#endif
+	if (!WaterScreenReflection::Supported()) {
+		if (TheGlobalData->m_usingWaterTrackEditor)
+			TestWaterUpdate();
+		update();	// Direct3D tracks retain their original flush boundary.
+	}
 
 	rinfo.Camera.Apply();
 

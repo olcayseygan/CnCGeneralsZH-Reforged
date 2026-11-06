@@ -92,6 +92,19 @@ unsigned emberConstants(const FieldState &field, unsigned index, bool terrain,
     return count;
 }
 
+bool setEmberTerrainDomain(const float domain[4], EmberConstants &constants)
+{
+    if (!domain) return false;
+    for (unsigned i = 0; i < 4; ++i) if (!std::isfinite(domain[i])) return false;
+    const float width = domain[2] - domain[0], height = domain[3] - domain[1];
+    if (!(width > 0 && height > 0) || !std::isfinite(width) || !std::isfinite(height)
+        || !std::isfinite(1.f / width) || !std::isfinite(1.f / height)) return false;
+    constants.terrain[1] = -1;
+    constants.terrain[2] = domain[0]; constants.terrain[3] = domain[1];
+    constants.scene[2] = 1.f / width; constants.scene[3] = 1.f / height;
+    return true;
+}
+
 void LayerCore::fail(const char *reason)
 {
     if (!failed) std::fprintf(stderr, "hazard-cloud: volumetric renderer FAIL: %s\n", reason);

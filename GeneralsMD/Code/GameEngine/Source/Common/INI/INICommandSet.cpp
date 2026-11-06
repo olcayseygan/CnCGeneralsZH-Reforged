@@ -34,19 +34,11 @@
 
 #include "Common/INI.h"
 #include "Common/CommandStore.h"
-#include "Common/StackDump.h"	// g_LastErrorDump
 
 //-------------------------------------------------------------------------------------------------
 /** Parse a command set */
 //-------------------------------------------------------------------------------------------------
 void INI::parseCommandSetDefinition( INI *ini )
 {
-	// as a CommandButton block: one a mod put among its objects comes before the store exists
-	if( TheCommandStore == NULL )
-	{
-		g_LastErrorDump.format( "A CommandSet block in '%s' is read before command sets exist; it belongs in Data\\INI\\CommandSet.ini\n",
-			ini->getFilename().str() );
-		throw INI_INVALID_DATA;
-	}
 	CommandStore::parseCommandSetDefinition(ini);
 }  // end parseCommandSetDefinition

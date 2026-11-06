@@ -171,7 +171,7 @@ void MatchHistory::noteBuilt( const Player *player, const Object *thing )
 	if( tmpl->isKindOf( KINDOF_DRONE ) || tmpl->isKindOf( KINDOF_PROJECTILE ) || tmpl->isKindOf( KINDOF_MINE ) )
 		return;
 	const UnsignedInt frame = TheGameLogic->getFrame();
-	if( tmpl->isKindOf( KINDOF_FS_SUPERWEAPON ) )
+	if( IsSuperweaponInMatch( tmpl ) )
 		addEvent( frame, index, MATCH_EVENT_SUPERWEAPON_BUILT, tmpl, NULL, 0 );
 
 	std::vector< MatchBuild > &builds = m_builds[ index ];

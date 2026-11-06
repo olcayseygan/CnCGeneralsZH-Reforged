@@ -541,8 +541,7 @@ void MilesAudioManager::reset()
 	AudioManager::reset();
 	stopAllAudioImmediately();
   removeAllAudioRequests();
-	// A file read past this point would read the file system's mod list through a GlobalData that
-	// its own reset, which comes after this one, is about to free.
+	// every read still on the worker finishes before the resets that follow this one
 	m_audioCache->waitForLoads();
 	m_audioCache->logLoads();
 	m_recentShots.clear();
@@ -3434,7 +3433,7 @@ void MilesAudioManager::updateSonicPass( PlayingAudio *playing, const Coord3D *p
 		return;
 	}
 	const AudioEventInfo *info = findAudioEventInfo("Cin_SonicBoom");
-	if (info == NULL) {	// a mod's own audio data need not have it
+	if (info == NULL) {	// an audio INI that lacks it
 		return;
 	}
 	AudioEventRTS boom("Cin_SonicBoom");
@@ -3897,11 +3896,6 @@ Bool MilesAudioManager::fileIsReady( AudioEventRTS *event )
 	}
 	const AudioEventInfo *info = event->getAudioEventInfo();
 	if (info == NULL || TheGlobalData->m_wavEndFrame > 0) {
-		return TRUE;
-	}
-	// Loading a map with mod factions turns the file system's focus to each mod in turn, which would
-	// send a read on another thread into the wrong mod's files.  Nobody is watching frames then.
-	if (TheGlobalData->m_modFactions && TheGameLogic->isLoadingMap()) {
 		return TRUE;
 	}
 	if (info->m_soundType != AT_SoundEffect) {

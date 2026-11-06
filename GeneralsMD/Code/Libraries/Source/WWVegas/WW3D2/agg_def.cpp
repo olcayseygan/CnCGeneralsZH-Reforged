@@ -357,15 +357,6 @@ AggregateDefClass::Load_Assets (const char *passet_name)
 	// Param OK?
 	if (passet_name != NULL) {
 
-		// Under a mod the mod's own file comes first, as for any other name a mod model uses.
-		if (WW3D_Mod_Prefix[0]) {
-			char mod_file[MAX_PATH];
-			snprintf(mod_file, sizeof(mod_file), "%s%s.w3d", WW3D_Mod_Prefix, passet_name);
-			if (WW3D_Mod_Ships(mod_file)) {
-				return WW3DAssetManager::Get_Instance()->Load_3D_Assets(mod_file);
-			}
-		}
-
 		// Determine what the current working directory is
 		char path[MAX_PATH];
 #if defined(_WIN32)

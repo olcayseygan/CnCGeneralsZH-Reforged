@@ -57,17 +57,6 @@
 #include "wwmemlog.h"
 #include "w3dexclusionlist.h"
 #include "animatedsoundmgr.h"
-#include "proto.h"
-
-// The key a freshly read animation is filed under: its name, or the mod's prefix and its name when
-// the file being read is a mod's.
-static const char * Load_Key(HAnimClass * anim)
-{
-	if (WW3D_Mod_Prefix[0]) {
-		anim->Set_Mod_Prefix(WW3D_Mod_Prefix);
-	}
-	return anim->Get_Key();
-}
 
 
 /*********************************************************************************************** 
@@ -177,7 +166,7 @@ int HAnimManagerClass::Load_Morph_Anim(ChunkLoadClass & cload)
 		// load failed!
 		newanim->Release_Ref();
 		goto Error;
-	} else if (Peek_Anim(Load_Key(newanim)) != NULL) {
+	} else if (Peek_Anim(newanim->Get_Name()) != NULL) {
 		// duplicate exists!
 		newanim->Release_Ref();	// Release the one we just loaded
 		goto Error;
@@ -220,7 +209,7 @@ int HAnimManagerClass::Load_Raw_Anim(ChunkLoadClass & cload)
 		// load failed!
 		newanim->Release_Ref();
 		goto Error;
-	} else if (Peek_Anim(Load_Key(newanim)) != NULL) {
+	} else if (Peek_Anim(newanim->Get_Name()) != NULL) {
 		// duplicate exists!
 		newanim->Release_Ref();	// Release the one we just loaded
 		goto Error;
@@ -263,7 +252,7 @@ int HAnimManagerClass::Load_Compressed_Anim(ChunkLoadClass & cload)
 		// load failed!
 		newanim->Release_Ref();
 		goto Error;
-	} else if (Peek_Anim(Load_Key(newanim)) != NULL) {
+	} else if (Peek_Anim(newanim->Get_Name()) != NULL) {
 		// duplicate exists!
 		newanim->Release_Ref();	// Release the one we just loaded
 		goto Error;

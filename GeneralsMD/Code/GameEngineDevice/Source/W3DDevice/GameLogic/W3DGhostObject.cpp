@@ -53,7 +53,6 @@
 #include "WW3D2/hlod.h"
 #include "WW3D2/scene.h"
 #include "WW3D2/matinfo.h"
-#include "WW3D2/proto.h"
 
 
 #ifdef _INTERNAL
@@ -82,17 +81,8 @@ protected:
 	const char *m_robjName;		///<debug pointer so we know what this is a snapshot of.
 #endif
 	RenderObjClass *m_robj;		///<render object representing state at time of snapshot
-	char m_modPrefix[8] = "";	///<"M<n>~" the model was asked for under, "" for retail; the robj's own name drops it
 	W3DRenderObjectSnapshot *m_next;	///<snapshot of next render object belonging to same drawable
 };
-
-// Copies the "M<n>~" a model name starts with, or "" when it has none.
-static void copyModPrefix(char *prefix, const char *name)
-{
-	Int len = WW3D_Mod_Prefix_Length(name);
-	memcpy(prefix, name, len);
-	prefix[len] = 0;
-}
 
 //Dummy material override which we assign to all ghost objects to disable their
 //texture animation.
@@ -394,9 +384,6 @@ void W3DGhostObject::snapShot(int playerIndex)
 				}
 				else
 					snap->update(robj, &m_drawableInfo);
-
-				// the model name keeps the mod prefix the robj's name drops, so a save reloads the mod's art
-				copyModPrefix(snap->m_modPrefix, w3dDraw->getCurrentModelName().str());
 
 				//Adding and removing render objects to the scene is expensive
 				//so only do it for the real player watching the screen.  There is
@@ -725,7 +712,7 @@ void W3DGhostObject::xfer( Xfer *xfer )
 			{
 
 				// write name from render object
-				name.format( "%s%s", objectSnapshot->m_modPrefix, objectSnapshot->m_robj->Get_Name() );
+				name.set( objectSnapshot->m_robj->Get_Name() );
 				xfer->xferAsciiString( &name );
 
 				// write scale from render object
@@ -768,7 +755,6 @@ void W3DGhostObject::xfer( Xfer *xfer )
 
 				// we're loading, allocate new snapshot
 				objectSnapshot = NEW W3DRenderObjectSnapshot( renderObject, &m_drawableInfo, FALSE );
-				copyModPrefix( objectSnapshot->m_modPrefix, name.str() );
 
 				// attach to list
 				if( prevObjectSnapshot )

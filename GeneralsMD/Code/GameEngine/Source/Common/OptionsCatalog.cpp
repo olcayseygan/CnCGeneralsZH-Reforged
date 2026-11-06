@@ -119,7 +119,13 @@ OPTION_INT_ACCESSORS( m_windowMode )
 OPTION_INT_ACCESSORS( m_fullscreenScaling )
 OPTION_INT_ACCESSORS( m_msaaLevel )
 OPTION_BOOL_ACCESSORS( m_vsync )
+OPTION_INT_ACCESSORS( m_frameRateLimit )
 OPTION_INT_ACCESSORS( m_waterStyle )
+OPTION_INT_ACCESSORS( m_waterReflection )
+OPTION_BOOL_ACCESSORS( m_waterReflectionEnabled )
+OPTION_INT_ACCESSORS( m_waterFftResolution )
+OPTION_INT_ACCESSORS( m_waterRefractionQuality )
+OPTION_INT_ACCESSORS( m_waterReflectionDetail )
 OPTION_INT_ACCESSORS( m_cloudStyle )
 OPTION_BOOL_ACCESSORS( m_classicGraphics )
 OPTION_INT_ACCESSORS( m_lightingStyle )
@@ -128,6 +134,7 @@ OPTION_INT_ACCESSORS( m_healthBarColors )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
+OPTION_BOOL_ACCESSORS( m_aircraftAltitudeLine )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
@@ -164,6 +171,16 @@ unsigned msaaSamplesForLevel( Int level )
 	if( level <= 0 || level >= OPTION_MSAA_LEVEL_COUNT )
 		return 0;
 	return TheMsaaSamples[ level ];
+}
+
+//-----------------------------------------------------------------------------
+static const Int TheFrameRateLimits[ FRAME_RATE_LIMIT_COUNT ] = { 0, 240, 144, 120, 60 };
+
+Int frameRateLimitForLevel( Int level )
+{
+	if( level <= 0 || level >= FRAME_RATE_LIMIT_COUNT )
+		return 0;
+	return TheFrameRateLimits[ level ];
 }
 
 //-----------------------------------------------------------------------------
@@ -475,11 +492,41 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_DEVICE_RESET, 0, 1,
 		get_m_vsync, set_m_vsync },
 
+	// A ceiling on the pictures a second, for a card that runs hot drawing hundreds of them (GitHub
+	// #149).  GameEngine::execute waits out the rest of each picture's time after the present; the
+	// logic is paced by its own clock and the cap never goes under the logic's rate.  Off is the
+	// uncapped picture.  The shell and its menus hold 60 whatever this says (#153).
+	{ "FrameRateLimit",						OPT_WND( "ComboBoxFrameRateLimit" ), "GUI:FrameRateLimit",
+		OPTION_ENUM, APPLY_LIVE, 0, FRAME_RATE_LIMIT_COUNT - 1,
+		get_m_frameRateLimit, set_m_frameRateLimit },
+
 	// Water selects a complete surface path, including geometry and reflections. The water
 	// object applies it at the next frame boundary, including while the options menu is paused.
 	{ "WaterStyle", OPT_WND( "ComboBoxWaterStyle" ), "GUI:WaterStyle",
 		OPTION_ENUM, APPLY_LIVE, 0, WATER_STYLE_COUNT - 1,
 		get_m_waterStyle, set_m_waterStyle },
+
+	// Modern water reads the mode each frame and refreshes its reflection target on a change.
+	// Keep this independent of WaterStyle so Classic can retain a choice for a later Modern switch.
+	{ "WaterReflection", OPT_WND( "ComboBoxWaterReflection" ), "GUI:WaterReflection",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_REFLECTION_COUNT - 1,
+		get_m_waterReflection, set_m_waterReflection },
+
+	{ "WaterReflectionEnabled", OPT_WND( "CheckWaterReflectionEnabled" ), "GUI:WaterReflectionEnabled",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_waterReflectionEnabled, set_m_waterReflectionEnabled },
+
+	{ "WaterFftResolution", OPT_WND( "ComboBoxWaterFftResolution" ), "GUI:WaterFftResolution",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_FFT_RESOLUTION_COUNT - 1,
+		get_m_waterFftResolution, set_m_waterFftResolution },
+
+	{ "WaterRefractionQuality", OPT_WND( "ComboBoxWaterRefractionQuality" ), "GUI:WaterRefractionQuality",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_REFRACTION_QUALITY_COUNT - 1,
+		get_m_waterRefractionQuality, set_m_waterRefractionQuality },
+
+	{ "WaterReflectionDetail", OPT_WND( "ComboBoxWaterReflectionDetail" ), "GUI:WaterReflectionDetail",
+		OPTION_ENUM, APPLY_LIVE, 0, WATER_REFLECTION_DETAIL_COUNT - 1,
+		get_m_waterReflectionDetail, set_m_waterReflectionDetail },
 
 	// Client appearance only; hazard area, lifetime and damage remain unchanged.
 	{ "CloudStyle", OPT_WND( "ComboBoxCloudStyle" ), "GUI:CloudStyle",
@@ -525,6 +572,14 @@ const OptionDef TheOptionCatalog[] =
 	{ "OrderLines",								OPT_WND( "CheckOrderLines" ), "GUI:OrderLines",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_showOrderLines, set_m_showOrderLines },
+
+	// The line from each aircraft in the air down to the ground under it.  Drawn fresh every frame, so
+	// the box takes it away at once.  On by default, unlike the rows around it: the owner wants it seen
+	// and left for the player who finds it noise to turn off.  No row in the quality table, it is not
+	// a picture setting.
+	{ "AircraftAltitudeLine",			OPT_WND( "CheckAircraftAltitudeLine" ), "GUI:AircraftAltitudeLine",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_aircraftAltitudeLine, set_m_aircraftAltitudeLine },
 
 	// The box in the top right corner: the match clock, the frame rates and, in a network game, the
 	// connection.  Off, the superweapon timers move up into the corner it leaves.  A key of its own
@@ -815,6 +870,11 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	{ "ParticleCapSlider",			1.6f,  {  500, 1000, 1500, 1500, 1500, 2000, 2500, 3000, 3500, 4000, 5000 } },
 	// the shadow map's whole cost: the scene 4.06 to 2.14 ms and the shadow pass 0.6 to 0
 	{ "Check3DShadows",					2.5f,  {    0,    0,    0,    0,    0,    1,    1,    1,    1,    1,    1 } },
+	// SDL water quality choices. The reflection mode remains the player's chosen look.
+	{ "CheckWaterReflectionEnabled",		0.0f, {    0,    0,    0,    0,    1,    1,    1,    1,    1,    1,    1 } },
+	{ "ComboBoxWaterRefractionQuality",	0.0f, {    2,    1,    1,    1,    1,    1,    0,    0,    0,    0,    0 } },
+	{ "ComboBoxWaterFftResolution",			0.0f, {    0,    0,    0,    0,    0,    0,    0,    1,    1,    1,    1 } },
+	{ "ComboBoxWaterReflectionDetail",	0.0f, {    0,    0,    0,    0,    0,    0,    0,    1,    1,    1,    1 } },
 };
 
 const Int TheGraphicsQualityTableCount = sizeof( TheGraphicsQualityTable ) / sizeof( TheGraphicsQualityTable[ 0 ] );
@@ -837,6 +897,16 @@ const OptionDef *findOptionDef( const char *iniKey )
 			return &TheOptionCatalog[ i ];
 
 	return NULL;
+}
+
+//-----------------------------------------------------------------------------
+Bool isModernWaterOption( const OptionDef& def )
+{
+	return strcmp( def.iniKey, "WaterReflection" ) == 0
+		|| strcmp( def.iniKey, "WaterReflectionEnabled" ) == 0
+		|| strcmp( def.iniKey, "WaterFftResolution" ) == 0
+		|| strcmp( def.iniKey, "WaterRefractionQuality" ) == 0
+		|| strcmp( def.iniKey, "WaterReflectionDetail" ) == 0;
 }
 
 //-----------------------------------------------------------------------------

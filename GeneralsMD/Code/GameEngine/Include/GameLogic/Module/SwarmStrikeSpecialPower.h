@@ -45,8 +45,16 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse& p );
 
+	/// UpgradeTargetCount = <science> <count>: the first one the player owns replaces TargetCount
+	struct UpgradeTargetCount
+	{
+		ScienceType m_science;
+		Int m_count;
+	};
+
 	Real m_radius;
 	Int m_targetCount;
+	std::vector<UpgradeTargetCount> m_upgradeTargetCount;
 	Bool m_repeatTargets;
 	const WeaponTemplate *m_weapon;
 	const FXList *m_targetFX;

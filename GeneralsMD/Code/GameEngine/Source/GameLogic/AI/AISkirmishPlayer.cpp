@@ -252,7 +252,10 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			// A second war factory, barracks or airfield of the plan's waits until the ones standing
 			// fall behind their queues, as an extra one would.  Only for the fork's AI: the queues are
 			// sampled by its doSpending, so EA's would wait on a sample that never comes.
-			if (runsOwnAI() && holdsExtraFactory(curPlan)) {
+			// The factory that founds a base on an empty start position is not an extra one: held here,
+			// a Hard GLA's Arms Dealer waited from frame 26175 to the end of the match behind one still
+			// going up at home.
+			if (runsOwnAI() && holdsExtraFactory(curPlan) && !(info->isPriorityBuild() && onEmptyStart(info->getLocation()))) {
 				continue;
 			}
 			// The safety check below is a range query over everything near the spot, most of a
@@ -266,7 +269,8 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			// pass, and a tech building asked for at frame 1932 was still in that queue at 30000.
 			// A power plant jumps it as well once the margin is thin: the plant doPower asked for ahead
 			// of an outage waited 45 seconds in that queue and the base went dark before it was started.
-			const Bool rushThis = rushBigGuns && (curPlan->isKindOf(KINDOF_FS_SUPERWEAPON) || curPlan->isKindOf(KINDOF_FS_ADVANCED_TECH) ||
+			// A silo whose missile is silenced is no superweapon and is not rushed.
+			const Bool rushThis = rushBigGuns && (IsSuperweaponInMatch(curPlan) || curPlan->isKindOf(KINDOF_FS_ADVANCED_TECH) ||
 				(powerThin && curPlan->isKindOf(KINDOF_FS_POWER) && !curPlan->isKindOf(KINDOF_CASH_GENERATOR)));
 			const AIPurchaseKind planKind = purchaseKindOf(curPlan);
 			const Int planScore = byScore ? aiPurchaseScore(planKind, earlyGame) +
@@ -1515,24 +1519,9 @@ void AISkirmishPlayer::newMap( void )
 	/* Get our proper build list. */
 	AsciiString mySide = m_player->getSide();
 	DEBUG_LOG(("AI Player side is %s\n", mySide.str()));
-	// -modfactions: a mod faction's own mod's list ("M<n>~America", its AIData.ini), retail's of the side without one
-	const PlayerTemplate *pt = m_player->getPlayerTemplate();
-	const Int mod = pt != NULL ? pt->getModIndex() : -1;	// no template: a map whose faction is gone
-	const AISideBuildList *build = TheAI->getAiData()->findBuildList( mySide, mod );
+	const AISideBuildList *build = TheAI->getAiData()->findBuildList( mySide );
 	if (build) {
 		BuildListInfo *buildList = build->m_buildList->duplicate();
-		// a mod without a list of its own gets retail's, read as the mod's own building of each name
-		// where the mod has one.  Before this its command center was torn down below and put back as
-		// retail's.
-		const Bool retailList = mod >= 0 && build->m_side == mySide;
-		for (BuildListInfo *info = buildList; retailList && info != NULL; info = info->getNext())
-		{
-			AsciiString modName;
-			modName.format("M%d~%s", mod + 1, info->getTemplateName().str());
-			const ThingTemplate *modPlan = TheThingFactory->findTemplate( modName );
-			if (modPlan != NULL)
-				info->setTemplateName( modPlan->getName() );
-		}
 		adjustBuildList(buildList); // adjust to  our start position.
 		m_player->setBuildList(buildList);
 		computeCenterAndRadiusOfBase(&m_baseCenter, &m_baseRadius);
@@ -1704,6 +1693,6 @@ void AISkirmishPlayer::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void AISkirmishPlayer::loadPostProcess( void )
 {
-
+	AIPlayer::loadPostProcess();
 }  // end loadPostProcess
 

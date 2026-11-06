@@ -1,0 +1,77 @@
+# Two Laser General Laser Defense turrets (Lazr_AmericaPatriotBattery) on Winter Wolf's open snow,
+# firing at a stream of unarmed Radar Vans that drive into their reach two at a time every two
+# seconds, for the frame time of laser beams (GitHub #150, #157). glowbase.txt's ground, so the
+# structures stand, and three power plants, since each turret takes 5. Draws, so -win, with
+# Bloom = 0 or 2 in the Options.ini of a ZH_USER_DATA_DIR of its own for each run:
+#
+#   generals.exe -win -xres 1920 -yres 1080 -quickstart -noshellmap -observer -multiInstance
+#     -noFPSLimit -map "Maps\Winter Wolf\Winter Wolf.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 7 -camera 1400 1120
+#     -scenario laserdefense -maxframes 3900 -logPrefix laserdefense_
+
+20    spawn      0  AmericaPowerPlant             3   950 980   90
+20    spawn      0  Lazr_AmericaPatriotBattery    1   1320 1000
+20    spawn      0  Lazr_AmericaPatriotBattery    1   1320 1240
+60    spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+61    move       1  GLAVehicleRadarVan                1480 1120
+120   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+121   move       1  GLAVehicleRadarVan                1480 1120
+180   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+181   move       1  GLAVehicleRadarVan                1480 1120
+240   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+241   move       1  GLAVehicleRadarVan                1480 1120
+300   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+301   move       1  GLAVehicleRadarVan                1480 1120
+360   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+361   move       1  GLAVehicleRadarVan                1480 1120
+420   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+421   move       1  GLAVehicleRadarVan                1480 1120
+480   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+481   move       1  GLAVehicleRadarVan                1480 1120
+540   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+541   move       1  GLAVehicleRadarVan                1480 1120
+600   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+601   move       1  GLAVehicleRadarVan                1480 1120
+660   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+661   move       1  GLAVehicleRadarVan                1480 1120
+720   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+721   move       1  GLAVehicleRadarVan                1480 1120
+780   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+781   move       1  GLAVehicleRadarVan                1480 1120
+840   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+841   move       1  GLAVehicleRadarVan                1480 1120
+900   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+901   move       1  GLAVehicleRadarVan                1480 1120
+960   spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+961   move       1  GLAVehicleRadarVan                1480 1120
+1020  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1021  move       1  GLAVehicleRadarVan                1480 1120
+1080  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1081  move       1  GLAVehicleRadarVan                1480 1120
+1140  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1141  move       1  GLAVehicleRadarVan                1480 1120
+1200  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1201  move       1  GLAVehicleRadarVan                1480 1120
+1260  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1261  move       1  GLAVehicleRadarVan                1480 1120
+1320  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1321  move       1  GLAVehicleRadarVan                1480 1120
+1380  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1381  move       1  GLAVehicleRadarVan                1480 1120
+1440  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1441  move       1  GLAVehicleRadarVan                1480 1120
+1500  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1501  move       1  GLAVehicleRadarVan                1480 1120
+1560  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1561  move       1  GLAVehicleRadarVan                1480 1120
+1620  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1621  move       1  GLAVehicleRadarVan                1480 1120
+1680  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1681  move       1  GLAVehicleRadarVan                1480 1120
+1740  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1741  move       1  GLAVehicleRadarVan                1480 1120
+1800  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1801  move       1  GLAVehicleRadarVan                1480 1120
+1860  spawn      1  GLAVehicleRadarVan            2   1750 1120  40
+1861  move       1  GLAVehicleRadarVan                1480 1120
+1940  tally      1  GLAVehicleRadarVan

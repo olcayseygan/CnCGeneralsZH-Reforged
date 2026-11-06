@@ -40,6 +40,20 @@
  * The transport layer handles the UDP socket for the game, and will packetize and
  * de-packetize multiple ACK/CommandPacket/etc packets into larger aggregates.
  */
+/**
+ * Where a Transport sends and reads when it has no UDP socket of its own. Internet play sets this for as
+ * long as a player is signed in, and packets go over a connection the lobby service brokered. Null everywhere
+ * else: LAN, skirmish and -netgame never touch it.
+ */
+class TransportRoute
+{
+public:
+	virtual ~TransportRoute() {}
+	virtual Int send(const unsigned char *buf, UnsignedInt len, UnsignedInt ip, UnsignedShort port) = 0;
+	virtual Int recv(unsigned char *buf, UnsignedInt len, sockaddr_in *from) = 0;
+};
+extern TransportRoute *TheTransportRoute;
+
 // we only ever allocate one of there, and it is quite large, so we really DON'T want
 // it to be a MemoryPoolObject (srj)
 class Transport //: public MemoryPoolObject

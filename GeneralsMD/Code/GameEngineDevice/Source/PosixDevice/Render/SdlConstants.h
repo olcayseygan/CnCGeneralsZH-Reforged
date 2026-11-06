@@ -100,8 +100,9 @@ struct SdlWaterPixelConstants
 #define MODERN_WATER_CPP_UNIFORM(name) float name[4];
 	MODERN_WATER_MATERIAL_UNIFORMS(MODERN_WATER_CPP_UNIFORM)
 #undef MODERN_WATER_CPP_UNIFORM
+	float ClipFromWorld[16]; // inverse of depth-range-adjusted WorldFromClip for SSR
 };
-static_assert(sizeof(SdlWaterPixelConstants) == WaterHullVisualLayout::VertexCommonRegisters * 16, "water uniform packing");
+static_assert(sizeof(SdlWaterPixelConstants) == (WaterHullVisualLayout::VertexCommonRegisters + 4) * 16, "water uniform packing");
 static_assert(offsetof(SdlWaterPixelConstants,MaterialColor)==184*16
 	&& offsetof(SdlWaterPixelConstants,MaterialParameters)==185*16,"water material tail packing");
 
@@ -111,7 +112,7 @@ struct SdlWaterVisualPixelConstants
 	SdlWaterPixelConstants Water;
 	float VisualHullMeta[WaterHullVisualLayout::MaxHulls][4];
 };
-static_assert(sizeof(SdlWaterVisualPixelConstants)==WaterHullVisualLayout::FragmentCommonRegisters*16,
+static_assert(sizeof(SdlWaterVisualPixelConstants)==(WaterHullVisualLayout::FragmentCommonRegisters + 4)*16,
 	"fragment hull metadata packing");
 
 // A generator adding a block must have an explicit recording/binding path. The mesh packet

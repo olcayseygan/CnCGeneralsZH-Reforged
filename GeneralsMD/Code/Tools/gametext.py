@@ -169,10 +169,9 @@ def decode(raw):
         return raw.decode("latin-1")
 
 
-def parse_str(path, strict=True):
+def parse_str(path):
     """[(label, text)] the way GameTextManager::parseStringFile reads a .str.  Raises on anything
-    that file would silently read wrongly; strict=False reads a mod's file the way the game does,
-    keeping a label's first string."""
+    that file would silently read wrongly."""
     with open(path, "rb") as source:
         lines = decode(source.read()).splitlines()
 
@@ -195,7 +194,7 @@ def parse_str(path, strict=True):
                 break
             if not stripped.startswith('"'):
                 continue
-            if strict and len(stripped.encode("utf-8")) > MAX_LINE_BYTES:
+            if len(stripped.encode("utf-8")) > MAX_LINE_BYTES:
                 raise ValueError("%s: %s is %d bytes on one line, the game reads %d"
                                  % (path, label, len(stripped.encode("utf-8")), MAX_LINE_BYTES))
 
@@ -205,10 +204,9 @@ def parse_str(path, strict=True):
                     raise ValueError("%s: the string of %s never closes its quote" % (path, label))
                 body += " " + lines[index]
                 index += 1
-            if text is not None and strict:
+            if text is not None:
                 raise ValueError("%s: %s has two strings" % (path, label))
-            if text is None:
-                text = unescape(body[:unescaped_quote(body)])
+            text = unescape(body[:unescaped_quote(body)])
 
         entries.append((label, text if text is not None else ""))
     return entries

@@ -125,24 +125,6 @@ void W3DDependencyModelDraw::notifyDrawModuleDependencyCleared( )
 }
 
 // ------------------------------------------------------------------------------------------------
-/** Riding on a container's bone, the rider is drawn on the container's hull, so its turret trails
-	* that hull's heading as well (an Overlord's or an Emperor's Gattling Cannon). */
-Real W3DDependencyModelDraw::getHullHeadingLag() const
-{
-	Real lag = W3DModelDraw::getHullHeadingLag();
-	const Object *me = getDrawable()->getObject();
-	if( getW3DDependencyModelDrawModuleData()->m_attachToDrawableBoneInContainer.isNotEmpty()
-		&& me
-		&& me->getContainedBy()
-		&& !me->getContainedBy()->getContain()->isEnclosingContainerFor(me)
-		&& me->getContainedBy()->getDrawable() )
-	{
-		lag += me->getContainedBy()->getDrawable()->getDrawnHeadingLag();
-	}
-	return lag;
-}
-
-// ------------------------------------------------------------------------------------------------
 void W3DDependencyModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 {
 	W3DModelDraw::adjustTransformMtx(mtx);
@@ -170,7 +152,6 @@ void W3DDependencyModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 			else
 			{
         mtx = *theirDrawable->getTransformMatrix();//TransformMatrix();
-				mtx.Rotate_Z( theirDrawable->getDrawnHeadingLag() );	// the container as drawn, as its bone would be
 				DEBUG_LOG_DEV(("m_attachToDrawableBoneInContainer %s not found\n",getW3DDependencyModelDrawModuleData()->m_attachToDrawableBoneInContainer.str()));
 			}
 		}

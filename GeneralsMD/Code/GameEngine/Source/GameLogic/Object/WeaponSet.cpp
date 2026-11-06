@@ -133,7 +133,7 @@ void WeaponTemplateSet::parseWeapon(INI* ini, void *instance, void * /*store*/, 
 	WeaponSlotType wslot = (WeaponSlotType)INI::scanIndexList(ini->getNextToken(), TheWeaponSlotTypeNames);
 	const char *name = ini->getNextToken();
 	self->m_template[wslot] = TheWeaponStore->findWeaponTemplate(name);
-	// ThingTemplate::parseWeaponTemplateSet passes over a patch file's set that names a weapon a mod dropped
+	// ThingTemplate::parseWeaponTemplateSet passes over a patch file's set that names a weapon the data lacks
 	if (self->m_template[wslot] == NULL && strcasecmp(name, "None") != 0)
 		self->m_namesMissingWeapon = TRUE;
 }

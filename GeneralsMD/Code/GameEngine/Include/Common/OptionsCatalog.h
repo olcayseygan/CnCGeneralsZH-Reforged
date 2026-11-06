@@ -145,6 +145,18 @@ enum { SMOKE_LEVEL_COUNT = 3 };
 
 // Classic is the original surface; Modern is the SDL wave and optical surface.
 enum { WATER_STYLE_COUNT = 2 };
+
+// SDL Modern water reflection modes.
+enum { WATER_REFLECTION_COUNT = 3 };
+
+// SDL Modern water performance choices. Stored indices are independent of reflection mode.
+enum { WATER_FFT_RESOLUTION_COUNT = 2 }; // Low (128), High (256)
+enum { WATER_REFRACTION_QUALITY_COUNT = 3 }; // Full, Simple, Off
+enum { WATER_REFLECTION_DETAIL_COUNT = 2 }; // Low/High planar resolution; SSR unchanged
+
+/** SDL Modern water controls which must retain their preference when the device is unsupported. */
+extern Bool isModernWaterOption( const OptionDef& def );
+
 // Classic is the original hazard effect; Volumetric is the Linux toxin/radiation cloud.
 enum { CLOUD_STYLE_COUNT = 2 };
 
@@ -154,6 +166,12 @@ enum { SHADOW_QUALITY_COUNT = 3 };
 
 // What colours a health bar: 0 the health, green through red, 1 the owner's player colour.
 enum { HEALTH_BAR_COLORS_COUNT = 2 };
+
+// The picture cap: off, 240, 144, 120 or 60 pictures a second.  Options.ini stores the level.
+enum { FRAME_RATE_LIMIT_COUNT = 5 };
+
+/** Pictures a second for a stored FrameRateLimit level.  0 is no cap. */
+extern Int frameRateLimitForLevel( Int level );
 
 //-----------------------------------------------------------------------------
 // The Performance / Quality slider on the Graphics page.  One row per graphics setting the Graphics

@@ -485,24 +485,36 @@ Color:Pink
 "Rose"
 END
 
-Color:Crimson
-"Cramoisi"
-END
-
-Color:Azure
-"Azur"
-END
-
-Color:Salmon
-"Saumon"
-END
-
 Color:Teal
 "Sarcelle"
 END
 
+Color:Lime
+"Citron vert"
+END
+
+Color:Navy
+"Bleu marine"
+END
+
+Color:Magenta
+"Magenta"
+END
+
+Color:Brown
+"Marron"
+END
+
 Color:Lavender
 "Lavande"
+END
+
+Color:Coral
+"Corail"
+END
+
+Color:Olive
+"Olive"
 END
 
 MSG:Testing
@@ -16033,6 +16045,34 @@ TOOLTIP:VSync
 "Cale l'image sur le moniteur pour qu'elle ne se déchire pas. Désactivé, l'image va aussi vite que la machine la dessine. Appliqué quand vous cliquez sur Accepter."
 END
 
+GUI:FrameRateLimit
+"Limite d'images par seconde"
+END
+
+GUI:FrameRateLimit0
+"Désactivée"
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Le nombre maximal d'images par seconde que le jeu dessine en partie. Une limite plus basse garde la carte graphique plus fraîche et plus silencieuse, sans ralentir le jeu. Les menus s'arrêtent toujours à 60."
+END
+
 GUI:ClassicGraphics
 "Graphismes classiques"
 END
@@ -16389,10 +16429,6 @@ TOOLTIP:SupplyPileFull
 "\n Pris : la limite par réserve tient vos collecteurs à l'écart"
 END
 
-TOOLTIP:StatTime
-"Temps de construction"
-END
-
 TOOLTIP:StatSeconds
 "%ds"
 END
@@ -16526,7 +16562,7 @@ GUI:SuperweaponsNone
 END
 
 TOOLTIP:Superweapons
-"Combien de chaque superarme un joueur peut avoir debout. Autoriser : autant qu'il peut en payer. Limiter : une de chaque, et quatre pour le Général superarme USA. Pas de superarmes : aucune, sauf pour le Général superarme, qui en garde une. Il fait exception parce que ses trois superarmes sont ce qu'il obtient en échange d'une armée plus faible."
+"Combien de superarmes un joueur peut avoir debout. Autoriser : autant qu'il peut en payer. Limiter : une, et quatre pour le Général superarme USA. Pas de superarmes : aucune, sauf pour le Général superarme, qui en garde une. Il fait exception parce que ses superarmes sont ce qu'il obtient en échange d'une armée plus faible. Sans superarmes, chacun, l'ordinateur aussi, peut encore bâtir un silo de missile nucléaire pour y acheter les améliorations de la Chine. Il n'a pas de missile, ni bouton de tir, ni compte à rebours, ni annonce."
 END
 
 GUI:UnitLimit
@@ -16697,6 +16733,26 @@ GUI:HudNoWorkerLeft
 "%s n'a plus d'ouvrier"
 END
 
+GUI:HudHighestFirst
+"du plus haut au plus bas"
+END
+
+GUI:HudPlayerHead
+"Joueur"
+END
+
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/min"
+END
+
+GUI:HudStatUnitPower
+"excédent"
+END
+
 GUI:BarIdleWorker
 "Ouvrier"
 END
@@ -16767,14 +16823,6 @@ END
 
 TOOLTIP:CloudStyle
 "Classique utilise les effets de toxine et de radiation d'origine. Volumétrique ajoute une fumée mouvante, une brume nucléaire plus sombre et une distorsion de chaleur. S'applique quand vous cliquez sur Accepter, aux nuages déjà sur le terrain aussi."
-END
-
-LAN:ErrorModMismatch
-"Cette partie utilise d'autres mods. Les mods de l'hôte : %s. Lancez le jeu avec les mêmes mods, dans le même ordre, pour la rejoindre."
-END
-
-LAN:NoMod
-"aucun"
 END
 
 GUI:SaveFromOlderGame
@@ -17287,6 +17335,26 @@ END
 
 GUI:HotkeysCommandAUTO_REPAIR
 "Aller se faire réparer ou soigner"
+END
+
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Attaquer en marche (prochain clic)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Forcer l'attaque (prochain clic)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Protéger (prochain clic)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Déplacer (prochain clic)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Tenir la position"
 END
 
 GUI:LoadModeSkirmish
@@ -18122,15 +18190,15 @@ CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
 END
 
 UPGRADE:TurkiyePrecisionGuidance
-"Guidage de précision"
+"Guidage inertiel"
 END
 
 CONTROLBAR:UpgradeTurkiyePrecisionGuidance
-"Guidage de &précision"
+"Guidage &inertiel"
 END
 
 CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
-"Les tirs sur un sol que personne ne voit se dispersent quatre fois moins."
+"Les roquettes tirées hors de la couverture radar touchent deux fois sur cinq au lieu d'une."
 END
 
 UPGRADE:TurkiyeArmorPack
@@ -18213,76 +18281,200 @@ CONTROLBAR:ConstructTurkiyePatriotBattery
 "Batterie H&isar"
 END
 
-SCIENCE:TurkiyeMinefield
-"Champ de mines"
+SCIENCE:TurkiyeLaserDesignation
+"Désignation laser"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceMinefield
-"Un avion cargo sème un champ de mines à l'endroit désigné. \n \n Déployé depuis : Quartier général"
+CONTROLBAR:ToolTipTurkiyeScienceLaserDesignation
+"Les équipes d'observation et les Bayraktar marquent ce qu'ils attaquent. Une cible marquée compte comme couverte par le radar où qu'elle soit, et chaque roquette guidée par radar garde son verrouillage sur elle."
 END
 
-CONTROLBAR:TurkiyeMinefield
-"Champ de &mines"
+UPGRADE:TurkiyeLaserDesignation
+"Désignation laser"
 END
 
-CONTROLBAR:TooltipTurkiyeMinefield
-"Champ de mines \n Recharge : 4:00"
+SCIENCE:TurkiyeEarlyWarning
+"Alerte avancée"
 END
 
-SCIENCE:TurkiyeFuelResupply
-"Ravitaillement en carburant"
+CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
+"Chaque radar turc porte un quart plus loin : Quartier général, tour radar, Koral, Akinci et radar mobile."
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceFuelResupply
-"Les drones Bayraktar emportent une munition de plus à chaque sortie."
+UPGRADE:TurkiyeEarlyWarning
+"Alerte avancée"
+END
+
+SCIENCE:TurkiyeUavRecon
+"Reconnaissance par drone"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceUavRecon
+"Un drone tourne 30 secondes au-dessus de la zone ciblée et signale chaque unité ennemie qui s'y trouve, à l'arrêt ou en mouvement, avec sa nature. Le brouillard reste, mais la zone compte comme couverte par le radar. \n \n Déployé depuis : Quartier général"
+END
+
+CONTROLBAR:TurkiyeUavRecon
+"&Reconnaissance par drone"
+END
+
+CONTROLBAR:TooltipTurkiyeUavRecon
+"Reconnaissance par drone \n Recharge : 2:00"
+END
+
+GUI:HudReconSiha
+"RECON DRONE"
+END
+
+SCIENCE:TurkiyeMobileRadar
+"Radar mobile"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
+"L'usine produit le radar mobile, un camion radar qui couvre 900 autour de lui tant qu'il est à l'arrêt."
+END
+
+OBJECT:TurkiyeVehicleMobileRadar
+"Radar mobile"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleMobileRadar
+"Radar &mobile"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleMobileRadar
+"Un radar sur roues : à l'arrêt, il couvre 900 autour de lui ; en route, rien. Sans arme. \n \n Requiert : Radar mobile (rang 3)"
+END
+
+SCIENCE:TurkiyeAkinciAesa
+"AESA de l'Akinci"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAkinciAesa
+"Le radar de l'Akinci porte à 1000 au lieu de 750."
+END
+
+UPGRADE:TurkiyeAkinciAesa
+"AESA de l'Akinci"
 END
 
 SCIENCE:TurkiyeSwarmMunition
-"Munition rôdeuse"
+"Essaim de drones 1"
+END
+
+SCIENCE:TurkiyeSwarmMunition2
+"Essaim de drones 2"
+END
+
+SCIENCE:TurkiyeSwarmMunition3
+"Essaim de drones 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceSwarmMunition
-"Une munition rôdeuse tourne au-dessus de l'endroit désigné et plonge sur la cible la plus chère qu'elle trouve. \n \n Déployé depuis : Quartier général"
+"Des munitions rôdeuses tournent au-dessus de l'endroit désigné, et chacune plonge sur la cible la plus chère qu'elle trouve : une au niveau 1, trois au niveau 2, cinq au niveau 3. \n \n Déployé depuis : Quartier général"
 END
 
 CONTROLBAR:TurkiyeSwarmMunition
-"&Munition rôdeuse"
+"&Essaim de drones"
 END
 
 CONTROLBAR:TooltipTurkiyeSwarmMunition
-"Munition rôdeuse \n Recharge : 3:00"
+"Essaim de drones \n Recharge : 3:00"
 END
 
 SCIENCE:TurkiyeElectronicBlinding
-"Aveuglement électronique"
+"Guerre électronique"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceElectronicBlinding
-"Chaque ennemi ayant un bâtiment dans la zone ciblée perd son radar pendant 30 secondes. \n \n Déployé depuis : Quartier général"
+"Chaque ennemi ayant un bâtiment dans la zone ciblée perd son radar pendant 30 secondes, et la zone reste brouillée aussi longtemps : les drones et observateurs ennemis qui s'y trouvent ne voient plus rien, et les missiles guidés qui la traversent perdent leur verrouillage. \n \n Déployé depuis : Quartier général"
 END
 
 CONTROLBAR:TurkiyeElectronicBlinding
-"&Aveuglement électronique"
+"&Guerre électronique"
 END
 
 CONTROLBAR:TooltipTurkiyeElectronicBlinding
-"Aveuglement électronique \n Recharge : 4:00"
+"Guerre électronique \n Recharge : 4:00"
 END
 
-SCIENCE:TurkiyeSwarmStrike
-"Frappe en essaim"
+SCIENCE:TurkiyeSatelliteGuidance
+"Guidage satellite"
 END
 
-CONTROLBAR:ToolTipTurkiyeScienceSwarmStrike
-"Un essaim de munitions traque les dix cibles les plus précieuses d'une large zone, une munition chacune. Une base serrée l'encaisse sans peine ; une armée dispersée, non. \n \n Déployé depuis : Quartier général"
+CONTROLBAR:ToolTipTurkiyeScienceSatelliteGuidance
+"Pendant 45 secondes, toute la carte compte comme couverte par le radar turc : chaque roquette guidée par radar garde son verrouillage, et les ennemis en mouvement apparaissent sous le brouillard. \n \n Déployé depuis : Quartier général"
 END
 
-CONTROLBAR:TurkiyeSwarmStrike
-"Frappe en &essaim"
+CONTROLBAR:TurkiyeSatelliteGuidance
+"Guidage &satellite"
 END
 
-CONTROLBAR:TooltipTurkiyeSwarmStrike
-"Frappe en essaim \n Recharge : 6:00"
+CONTROLBAR:TooltipTurkiyeSatelliteGuidance
+"Guidage satellite \n Recharge : 5:00"
+END
+
+SCIENCE:TurkiyeTayfun
+"Missile Tayfun"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceTayfun
+"Un missile balistique Tayfun s'abat sur la cible. Sous couverture radar, il touche toujours ; hors couverture, il tombe sur le point une fois sur cinq et manque largement le reste du temps. \n \n Déployé depuis : Quartier général"
+END
+
+CONTROLBAR:TurkiyeTayfun
+"Missile &Tayfun"
+END
+
+CONTROLBAR:TooltipTurkiyeTayfun
+"Missile Tayfun \n Recharge : 4:00"
+END
+
+UPGRADE:TurkiyeTargetClassification
+"Classification des cibles"
+END
+
+CONTROLBAR:UpgradeTurkiyeTargetClassification
+"&Classification des cibles"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeTargetClassification
+"Les contacts radar montrent ce qu'ils sont : infanterie, véhicule, défense antiaérienne, artillerie, aéronef ou défense."
+END
+
+UPGRADE:TurkiyeAkkor
+"Protection active AKKOR"
+END
+
+CONTROLBAR:UpgradeTurkiyeAkkor
+"&Protection active AKKOR"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAkkor
+"Chaque Altay porte une charge de destruction qui fait exploser un missile ou une roquette en approche toutes les trois secondes."
+END
+
+UPGRADE:TurkiyeGokdogan
+"Missiles Gokdogan"
+END
+
+CONTROLBAR:UpgradeTurkiyeGokdogan
+"&Missiles Gokdogan"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeGokdogan
+"Les Kizilelma tirent le Gokdogan : portée 360 au lieu de 280, 130 dégâts au lieu de 100."
+END
+
+UPGRADE:TurkiyeSiperReinforced
+"Siper renforcé"
+END
+
+CONTROLBAR:UpgradeTurkiyeSiperReinforced
+"Siper ren&forcé"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
+"Béton et couverture : chaque Siper encaisse moitié plus avant de tomber."
 END
 
 UPGRADE:TurkiyeThermal
@@ -18321,40 +18513,28 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSwarmSoftware
 "Les munitions du Bayraktar choisissent elles-mêmes leur cible : l'ennemi le plus cher à portée."
 END
 
-UPGRADE:TurkiyeFuelResupply
-"Ravitaillement en carburant"
+SCIENCE:TurkiyeRapidDeployment
+"Débarquement Gokbey 1"
 END
 
-SCIENCE:TurkiyeRapidDeployment
-"Déploiement rapide"
+SCIENCE:TurkiyeRapidDeployment2
+"Débarquement Gokbey 2"
+END
+
+SCIENCE:TurkiyeRapidDeployment3
+"Débarquement Gokbey 3"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceRapidDeployment
-"Un avion cargo largue six Mehmetcik et deux tireurs Sungur à l'endroit désigné. \n \n Déployé depuis : Quartier général"
+"Des Mehmetcik et des tireurs Sungur sont parachutés à l'endroit désigné : six au niveau 1, dix au niveau 2, quatorze et un Kirpi au niveau 3. \n \n Déployé depuis : Quartier général"
 END
 
 CONTROLBAR:TurkiyeRapidDeployment
-"Déploiement &rapide"
+"Débarquement &Gokbey"
 END
 
 CONTROLBAR:TooltipTurkiyeRapidDeployment
-"Déploiement rapide \n Recharge : 3:00"
-END
-
-SCIENCE:TurkiyeFireMission
-"Mission de tir"
-END
-
-CONTROLBAR:ToolTipTurkiyeScienceFireMission
-"Trente-six obus lourds tombent sur la cible depuis l'extérieur de la carte. \n \n Déployé depuis : Quartier général"
-END
-
-CONTROLBAR:TurkiyeFireMission
-"M&ission de tir"
-END
-
-CONTROLBAR:TooltipTurkiyeFireMission
-"Mission de tir \n Recharge : 4:00"
+"Débarquement Gokbey \n Recharge : 3:00"
 END
 
 SCIENCE:TurkiyeCommandoRaid
@@ -18491,4 +18671,100 @@ END
 
 GUI:FactionPickSideNameHint
 "Cliquez sur le nom d'un camp pour jouer une armée aléatoire de ce camp."
+END
+
+CONTROLBAR:ToolTipEvacuateAt
+"Se rend à l'endroit choisi et ordonne à toutes les unités de sortir.\nAlt : débarquer ici"
+END
+
+GUI:OptionsTabWater
+"Eau"
+END
+
+GUI:OptionsGroupReflections
+"Reflets"
+END
+
+GUI:OptionsGroupModernWater
+"Eau moderne"
+END
+
+GUI:WaterReflectionEnabled
+"Reflets de scène"
+END
+
+TOOLTIP:WaterReflectionEnabled
+"Reflète la scène dans l’eau moderne. Désactivez cette option pour améliorer les performances tout en conservant la couleur du ciel et les éclats du soleil. Le mode de réflexion reste mémorisé. Appliqué quand vous cliquez sur Accepter."
+END
+
+GUI:WaterFftResolution
+"Détail des vagues"
+END
+
+GUI:WaterFftResolution0
+"Faible"
+END
+
+GUI:WaterFftResolution1
+"Élevé"
+END
+
+TOOLTIP:WaterFftResolution
+"Définit le niveau de détail des vagues de l’eau moderne. Faible améliore les performances ; Élevé affiche plus de détails. Appliqué quand vous cliquez sur Accepter."
+END
+
+GUI:WaterRefractionQuality
+"Réfraction"
+END
+
+GUI:WaterRefractionQuality0
+"Complète"
+END
+
+GUI:WaterRefractionQuality1
+"Simple"
+END
+
+GUI:WaterRefractionQuality2
+"Désactivée"
+END
+
+TOOLTIP:WaterRefractionQuality
+"Pour l’eau moderne. La réfraction complète déforme la vue sous la surface. La réfraction simple garde une eau claire sans déformation. Désactivée, l’eau est opaque et teintée pour améliorer les performances. Appliqué quand vous cliquez sur Accepter."
+END
+
+GUI:WaterReflectionDetail
+"Détail des reflets"
+END
+
+GUI:WaterReflectionDetail0
+"Faible"
+END
+
+GUI:WaterReflectionDetail1
+"Élevé"
+END
+
+TOOLTIP:WaterReflectionDetail
+"Contrôle le détail des reflets de scène sur l’eau moderne. Faible améliore les performances. Élevé offre des reflets plus nets. La résolution SSR reste inchangée. Appliqué quand vous cliquez sur Accepter."
+END
+
+GUI:WaterReflection
+"Mode de réflexion"
+END
+
+GUI:WaterReflection0
+"Classique"
+END
+
+GUI:WaterReflection1
+"SSR"
+END
+
+GUI:WaterReflection2
+"Hybride"
+END
+
+TOOLTIP:WaterReflection
+"Pour l’eau moderne lorsque les reflets de scène sont activés. Classique utilise les reflets d’origine. SSR reflète le contenu visible à l’écran. Hybride combine les deux et est le mode par défaut. Appliqué quand vous cliquez sur Accepter."
 END

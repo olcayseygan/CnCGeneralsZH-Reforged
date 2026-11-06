@@ -121,7 +121,7 @@ public:
 
 	AudioType m_soundType;	// This should be either Music, Streaming or SoundEffect
 
-	/// Music Follows the Fight (MusicManager) for a mod's own music: a MusicTrack with
+	/// Music Follows the Fight (MusicManager) for music outside the hand table: a MusicTrack with
 	/// `MusicMood = Calm`, `Tense` or `Battle` and `MusicSide = <playlist>` joins that playlist at that
 	/// mood, over the retail table where it names a retail track.  The playlist is whichever side's
 	/// tracks the skirmish scripts play; an untagged track (0, `None`) is left to the table or to them.

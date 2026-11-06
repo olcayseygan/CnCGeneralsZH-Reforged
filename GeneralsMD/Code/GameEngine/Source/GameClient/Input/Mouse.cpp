@@ -39,6 +39,8 @@
 #include "Common/INI.h"
 
 #include "GameClient/ClickTolerance.h"
+#include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/GameClient.h"
@@ -48,6 +50,7 @@
 #include "GameClient/Keyboard.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/Shell.h"
 
 #include "GameLogic/ScriptEngine.h"
 
@@ -544,6 +547,7 @@ Mouse::Mouse( void )
 	m_tooltipBackColor.green = 0;
 	m_tooltipBackColor.blue = 0;
 	m_tooltipBackColor.alpha = 255;
+	m_tooltipFrameTextColor = m_tooltipTextColor;
 
 }  // end Mouse
 
@@ -888,6 +892,11 @@ void Mouse::setCursorTooltip( UnicodeString tooltip, Int delay, const RGBColor *
 	}
 	if (color)
 	{
+		// Mouse.ini hands the colour to the box's fill; the art's frame has no fill, so its text wears it
+		m_tooltipFrameTextColor.red   = REAL_TO_INT(color->red   * 255.0f);
+		m_tooltipFrameTextColor.green = REAL_TO_INT(color->green * 255.0f);
+		m_tooltipFrameTextColor.blue  = REAL_TO_INT(color->blue  * 255.0f);
+		m_tooltipFrameTextColor.alpha = m_tooltipColorText.alpha;
 		if (m_useTooltipAltTextColor)
 		{
 			if (m_adjustTooltipAltColor)
@@ -925,6 +934,7 @@ void Mouse::setCursorTooltip( UnicodeString tooltip, Int delay, const RGBColor *
 	{
 		m_tooltipTextColor = m_tooltipColorText;
 		m_tooltipBackColor = m_tooltipColorBackground;
+		m_tooltipFrameTextColor = m_tooltipColorText;
 	}
 
 }  // end setCursorTooltip
@@ -1056,33 +1066,54 @@ void Mouse::drawTooltip( void )
 		Int width, xPos;
 		Int height, yPos;
 		m_tooltipDisplayString->getSize(&width,&height);
-		placeTooltip( m_currMouse.pos.x, m_currMouse.pos.y, width, height,
-									m_minX, m_minY, m_maxX, m_maxY, &xPos, &yPos );
 
-		Int boxWidth = (m_tooltipAnimateBackground)?(min(width, m_highlightPos)):width;
+		// the text in the pointer tooltip's framed well with TIP_CURSOR_PAD of glass round it
+		// (Tools/hud_command_bar.py), 6 at 1080: the local side's art in a match, the console's in the
+		// shell and wherever the scheme on screen has none of its own (the observer's)
+		const Real scale = TheDisplay->getHeight() / 1080.0f;
+		const Int pad = REAL_TO_INT( 6 * scale );
+		const Int boxHeight = height + 2 + 2 * pad;
+		placeTooltip( m_currMouse.pos.x, m_currMouse.pos.y, width + 2 + 2 * pad, boxHeight,
+									m_minX, m_minY, m_maxX, m_maxY, &xPos, &yPos );
+		const Int textX = xPos + pad + 1, textY = yPos + pad + 1;		// the same glass on every side
+
+		Int boxWidth = ((m_tooltipAnimateBackground)?(min(width, m_highlightPos)):width) + 2 + 2 * pad;
 
 #define GMC(x) GameMakeColor(x.red, x.green, x.blue, x.alpha)
 #define COLOR(x) GMC(m_tooltipColor##x)
-		TheDisplay->drawFillRect(xPos, yPos, boxWidth + 2,height + 2, GMC(m_tooltipBackColor));//GameMakeColor(0,0,0,125));
-		TheDisplay->drawOpenRect(xPos, yPos, boxWidth + 2,height + 2, 1.0, COLOR(Border));//GameMakeColor(20,20,20,255));
+		const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+		const ControlBarTooltipImages &art = TheShell->isShellActive() ? schemes->getConsoleTooltipImages() : schemes->getTooltipImages();
+		IRegion2D box;
+		box.lo.x = xPos;
+		box.lo.y = yPos;
+		box.hi.x = xPos + boxWidth;
+		box.hi.y = yPos + boxHeight;
+		Color textColor = GMC(m_tooltipFrameTextColor);
+		if( !ControlBarDrawNinePieceBox( art.cursor, box, scale ) )
+		{
+			// no art for it: Mouse.ini's box
+			TheDisplay->drawFillRect(xPos, yPos, boxWidth, boxHeight, GMC(m_tooltipBackColor));
+			TheDisplay->drawOpenRect(xPos, yPos, boxWidth, boxHeight, 1.0, COLOR(Border));
+			textColor = GMC(m_tooltipTextColor);
+		}
 
 		// build clip rect
 		IRegion2D clipRegion;
-		clipRegion.lo.x = xPos+2;
-		clipRegion.lo.y = yPos+1;
-		clipRegion.hi.x = xPos+2+m_highlightPos;
-		clipRegion.hi.y = yPos+1+height;
+		clipRegion.lo.x = textX;
+		clipRegion.lo.y = textY;
+		clipRegion.hi.x = textX+m_highlightPos;
+		clipRegion.hi.y = textY+height;
 		m_tooltipDisplayString->setClipRegion(&clipRegion);
-		m_tooltipDisplayString->draw(xPos +2, yPos +1, GMC(m_tooltipTextColor), COLOR(Shadow));//GameMakeColor(220,220,220,255),GameMakeColor(20,20,20,125));
+		m_tooltipDisplayString->draw(textX, textY, textColor, COLOR(Shadow));//GameMakeColor(220,220,220,255),GameMakeColor(20,20,20,125));
 
 		// highlight section
 		const Int HIGHLIGHT_WIDTH = 15;
-		clipRegion.lo.x = xPos+2+m_highlightPos-HIGHLIGHT_WIDTH;
-		clipRegion.lo.y = yPos+1;
-		clipRegion.hi.x = xPos+2+m_highlightPos;
-		clipRegion.hi.y = yPos+1+height;
+		clipRegion.lo.x = textX+m_highlightPos-HIGHLIGHT_WIDTH;
+		clipRegion.lo.y = textY;
+		clipRegion.hi.x = textX+m_highlightPos;
+		clipRegion.hi.y = textY+height;
 		m_tooltipDisplayString->setClipRegion(&clipRegion);
-		m_tooltipDisplayString->draw(xPos +2, yPos +1, COLOR(Highlight), COLOR(Shadow));//GameMakeColor(255,255,0,255),GameMakeColor(20,20,20,125));
+		m_tooltipDisplayString->draw(textX, textY, COLOR(Highlight), COLOR(Shadow));//GameMakeColor(255,255,0,255),GameMakeColor(20,20,20,125));
 
 		// get ready for the next part of the anim
 		if (m_highlightPos < width + HIGHLIGHT_WIDTH)
@@ -1259,7 +1290,7 @@ void INI::parseMouseCursorDefinition( INI* ini )
 			ini->initFromINI( cursorInfo, TheMouseCursorFieldParseTable );
 
 			// every platform's cursor table holds MAX_2D_CURSOR_DIRECTIONS images a cursor, and loads as many
-			// as Directions says: more (mod data; shipped is 8) wrote past it
+			// as Directions says: more (shipped is 8) wrote past it
 			if( cursorInfo->numDirections > MAX_2D_CURSOR_DIRECTIONS )
 				cursorInfo->numDirections = MAX_2D_CURSOR_DIRECTIONS;
 		}

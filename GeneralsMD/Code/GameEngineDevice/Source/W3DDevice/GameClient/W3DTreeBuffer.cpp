@@ -59,6 +59,7 @@ enum
 #include "Platform/SunShadow.h"
 #include "W3DDevice/GameClient/SunShadowCasterCull.h"
 #include "W3DDevice/GameClient/W3DTreeBuffer.h"
+#include "W3DDevice/GameClient/W3DWater.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -2223,6 +2224,8 @@ void W3DTreeBuffer::stepTrees( void )
 	if (TheGameLogic && TheGameLogic->isGamePaused()) {
 		pause = true;
 	}
+	m_breezeForDraw = weatherBreezeInfo();
+	m_pauseForDraw = pause;
 	const UnsignedInt now = TheGameClient ? TheGameClient->getFrame() : 0;
 	if (pause || now == m_lastTreeStepFrame) {
 		return;
@@ -2288,11 +2291,8 @@ void W3DTreeBuffer::drawTrees(CameraClass * camera, RefRenderObjListIterator *pD
 
 	// if breeze changes, always process the full update, even if not visible, 
 	// so that things offscreen won't 'pop' when first viewed
-	const BreezeInfo& info = weatherBreezeInfo();
-	Bool pause = TheScriptEngine->isTimeFrozenScript() || TheScriptEngine->isTimeFrozenDebug();
-	if (TheGameLogic && TheGameLogic->isGamePaused()) {
-		pause = true;
-	}
+	const BreezeInfo& info = m_breezeForDraw;
+	Bool pause = m_pauseForDraw;
 	Int i;
 	if (!pause) {
 		if (info.m_breezeVersion != m_curSwayVersion) 
@@ -2356,7 +2356,7 @@ void W3DTreeBuffer::drawTrees(CameraClass * camera, RefRenderObjListIterator *pD
 
 	// Shadows are wanted under either option: the loop used to be gated on m_useShadowDecals alone,
 	// so with volume shadows picked trees were the one thing in the scene standing on nothing.
-	Bool drawShadows = !sunCamera && !mapped && (TheGlobalData->m_useShadowDecals || TheGlobalData->m_useShadowVolumes);
+	Bool drawShadows = !sunCamera && !mapped && (!TheWaterRenderObj || !TheWaterRenderObj->isModernFullMirror()) && (TheGlobalData->m_useShadowDecals || TheGlobalData->m_useShadowVolumes);
 	Bool silhouetteShadows = drawShadows && treeSilhouetteShadows(m_dwTreeVertexShader);
 
 	// Draw tree shadows.

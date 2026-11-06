@@ -3345,9 +3345,23 @@ void AIGroup::groupExit( Object *objectToExit,  CommandSourceType cmdSource )
 }
 
 /**
- * Empty its contents
+ * A vehicle transport, on the ground or in the air: its Evacuate asks for a spot (ControlBar::
+ * processCommandUI).  Buildings, bunkers and garrisons are no VEHICLE, the Overlord's bunker is no
+ * TRANSPORT and the railed ferry, which takes no move from a player, is no VEHICLE.  One that cannot
+ * move now (a Battle Bus gone bunker, a Chinook on its ropes, an EMP) empties where it stands, since
+ * privateMoveToAndEvacuate would drop the order.
  */
-void AIGroup::groupEvacuate( CommandSourceType cmdSource )
+Bool AIGroup::unloadsWhereSent( const Object *obj )
+{
+	return obj->isKindOf( KINDOF_VEHICLE ) && obj->isKindOf( KINDOF_TRANSPORT ) && obj->getContain() != NULL
+		&& obj->isMobile();
+}
+
+/**
+ * Empty its contents.  With at, the spot the Evacuate button was pointed at: a vehicle transport
+ * drives or flies there, lands if it flies, and unloads; everything else empties where it stands.
+ */
+void AIGroup::groupEvacuate( CommandSourceType cmdSource, const Coord3D *at )
 {
 	std::list<Object *>::iterator i;
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
@@ -3355,10 +3369,11 @@ void AIGroup::groupEvacuate( CommandSourceType cmdSource )
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
 		if (ai)
 		{
-			if( (*i)->isKindOf( KINDOF_AIRCRAFT ) && (*i)->isAirborneTarget() )
+			const Bool goThere = at && unloadsWhereSent( *i );
+			if( goThere || ( (*i)->isKindOf( KINDOF_AIRCRAFT ) && (*i)->isAirborneTarget() ) )
 			{
 				//Calculate the highest point on the ground to drop off troops (chinook or other air transports)
-				Coord3D pos = *((*i)->getPosition());
+				Coord3D pos = goThere ? *at : *((*i)->getPosition());
 				PathfindLayerEnum layerAtDest = TheTerrainLogic->getHighestLayerForDestination( &pos );
 				pos.z = TheTerrainLogic->getLayerHeight( pos.x, pos.y, layerAtDest );
 				ai->aiMoveToAndEvacuate( &pos, cmdSource );

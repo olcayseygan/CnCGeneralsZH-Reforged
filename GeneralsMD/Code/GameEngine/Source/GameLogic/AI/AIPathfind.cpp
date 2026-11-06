@@ -177,6 +177,19 @@ static Int thePFDithers = 0;					///< units caught driving a long way and gainin
 static Int thePFQueueOver3 = 0;
 static Int thePFQueueOver5 = 0;
 
+/* How long a request stood in the path queue before it was answered. The frame it went in is kept
+	 beside its slot for this count alone and nothing reads it back into a decision, so it is not
+	 saved and not in the CRC. */
+static UnsignedInt theQueuedFrame[ PATHFIND_QUEUE_LEN ];
+static Int thePFQServed = 0;					///< requests taken off the queue
+static Int64 thePFQWaitSum = 0;				///< frames they waited, summed
+static Int thePFQWaitMax = 0;					///< the longest one waited
+static Int thePFQLate = 0;						///< answered more than a second after asking
+static Int thePFQPeak = 0;						///< the deepest the queue got
+static Int thePFQFull = 0;						///< refused because the queue was full
+static Int thePFQCapFrames = 0;				///< frames the request cap stopped with requests left
+static Int thePFQCellFrames = 0;			///< frames the cell budget stopped with requests left
+
 inline void pfBump( Int slot ) { thePFCalls[ slot ]++; }
 
 class PathProfile
@@ -5203,7 +5216,7 @@ void Pathfinder::beginFlowSearch( const Object *obj )
 		{
 			const BodyDamageType damage = obj->getBodyModule()->getDamageState();
 			const Real speed = loco->getMaxSpeedForCondition( damage );
-			const Real turn = loco->getMaxTurnRate( damage );
+			const Real turn = loco->getMaxTurnRate( damage, obj );
 			// per frame over per frame: world units of driving in the time it takes to turn a radian,
 			// which is one cost unit per world unit here
 			if (speed > 0.01f && turn > 0.0001f)
@@ -5288,6 +5301,14 @@ void Pathfinder::resetMatchProfile( void )
 	thePFDithers = 0;
 	thePFQueueOver3 = 0;
 	thePFQueueOver5 = 0;
+	thePFQServed = 0;
+	thePFQWaitSum = 0;
+	thePFQWaitMax = 0;
+	thePFQLate = 0;
+	thePFQPeak = 0;
+	thePFQFull = 0;
+	thePFQCapFrames = 0;
+	thePFQCellFrames = 0;
 }
 
 void Pathfinder::bumpNoPath( void )
@@ -5355,6 +5376,12 @@ const char *Pathfinder::getMatchProfileReport( void )
 						 thePFNoPath, thePFOutOfCells, thePFBlockedFrames, thePFStuckFrames,
 						 thePFWedgeFrames, thePFWedgeWorst, thePFEscapes, thePFCrowdRepaths, thePFDithers,
 						 thePFQueueOver3, thePFQueueOver5 );
+	len = strlen( thePFMatchReport );
+	if( len < (Int)sizeof( thePFMatchReport ) - 160 )
+		sprintf( thePFMatchReport + len,
+						 " | queued %d wait %.1f longest %d late %d peak %d full %d capped %d cellcapped %d",
+						 thePFQServed, thePFQServed ? (double)thePFQWaitSum / thePFQServed : 0.0, thePFQWaitMax,
+						 thePFQLate, thePFQPeak, thePFQFull, thePFQCapFrames, thePFQCellFrames );
 	return thePFMatchReport;
 }
 
@@ -7575,10 +7602,15 @@ Bool Pathfinder::queueForPath(ObjectID id)
 	}
 	if (nextSlot==m_queuePRHead) {
 		DEBUG_LOG(("PATHFIND QUEUE FULL: object %d asks again shortly\n", id));
+		thePFQFull++;
 		return false;
 	}
 	m_queuedPathfindRequests[m_queuePRTail] = id;
+	theQueuedFrame[m_queuePRTail] = TheGameLogic->getFrame();
 	m_queuePRTail = nextSlot;
+	const Int depth = (m_queuePRTail - m_queuePRHead + PATHFIND_QUEUE_LEN) % PATHFIND_QUEUE_LEN;
+	if (depth > thePFQPeak)
+		thePFQPeak = depth;
 	if ((size_t)id >= m_isQueuedForPath.size()) {
 		m_isQueuedForPath.resize( (size_t)id + 1024, false );
 	}
@@ -7845,14 +7877,33 @@ void Pathfinder::processPathfindQueue(void)
 	/* Kept at three per frame at 60 logic frames a second rather than halved: one and a half is not a
 		 count, two was measured worse, and the cap is there to clip a burst within a frame, which a
 		 frame half as long needs no less. */
-	enum { PATHFIND_REQUESTS_PER_FRAME = 3 };
+	/* "Many times the demand" stops being true twenty minutes into a 4v4 between Hard computers: a
+		 match then asks for close to three paths a frame, the cap holds 60% of all frames, the queue
+		 stands 300 to 600 deep, and a unit given an order waits up to 239 frames (4 s) for its path.
+		 So past 180 waiting, a second of draining at three, the cap rises by one for every 60 more,
+		 to six at most, and the cell budget still bounds the frame. Iron Dragon, four seeds of 90000
+		 frames on Hard: longest wait 239, 104, 164, 109 frames to 109, 88, 102, 97, blocked unit-frames
+		 per 1000 frames 3,696 to 3,355, wedged 933 to 925, p99.9 35.9 to 36.6 ms with four matches on
+		 the box (a one-frame control moved it to 34.6). Medium likewise, Easy never gets that deep.
+		 Up to twelve a frame cut the wait further and drove worse (blocked 3,814 to 5,402). The
+		 841-unit order is held by the cell budget, not by this, and leaves as it did. */
+	enum { PATHFIND_REQUESTS_PER_FRAME = 3, PATHFIND_DEEP_QUEUE = 180, PATHFIND_DEEP_STEP = 60,
+		PATHFIND_REQUESTS_PER_FRAME_DEEP = 6 };
+	Int requestCap = PATHFIND_REQUESTS_PER_FRAME;
+	const Int depth = (m_queuePRTail - m_queuePRHead + PATHFIND_QUEUE_LEN) % PATHFIND_QUEUE_LEN;
+	if (depth > PATHFIND_DEEP_QUEUE)
+		requestCap += (depth - PATHFIND_DEEP_QUEUE) / PATHFIND_DEEP_STEP;
+	if (requestCap > PATHFIND_REQUESTS_PER_FRAME_DEEP)
+		requestCap = PATHFIND_REQUESTS_PER_FRAME_DEEP;
 	Int requestsThisFrame = 0;
+	const UnsignedInt now = TheGameLogic->getFrame();
 
 	while (m_cumulativeCellsAllocated < PATHFIND_CELLS_PER_FRAME &&
-		requestsThisFrame < PATHFIND_REQUESTS_PER_FRAME &&
+		requestsThisFrame < requestCap &&
 		m_queuePRTail!=m_queuePRHead) {
 		++requestsThisFrame;
 		const ObjectID id = m_queuedPathfindRequests[m_queuePRHead];
+		const Int waited = (Int)(now - theQueuedFrame[m_queuePRHead]);
 		Object *obj = TheGameLogic->findObjectByID(id);
 		m_isQueuedForPath[id] = false;
 		m_queuedPathfindRequests[m_queuePRHead] = INVALID_ID;
@@ -7879,10 +7930,23 @@ void Pathfinder::processPathfindQueue(void)
 			m_isQueuedForPath[id] = true;
 			break;
 		}
+		// counted as it leaves the queue: a search carried over frames is one request, waiting until it ends
+		thePFQServed++;
+		thePFQWaitSum += waited;
+		if (waited > thePFQWaitMax)
+			thePFQWaitMax = waited;
+		if (waited > LOGICFRAMES_PER_SECOND)
+			thePFQLate++;
 		m_queuePRHead = m_queuePRHead+1;
 		if (m_queuePRHead >= PATHFIND_QUEUE_LEN) {
 			m_queuePRHead = 0;
 		}
+	}
+	if (m_queuePRTail != m_queuePRHead) {
+		if (m_cumulativeCellsAllocated >= PATHFIND_CELLS_PER_FRAME)
+			thePFQCellFrames++;
+		else
+			thePFQCapFrames++;
 	}
 	if (pathsFound>0) {
 #ifdef DEBUG_QPF

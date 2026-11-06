@@ -267,21 +267,8 @@ void LANAPI::handleRequestJoin( LANMessage *msg, UnsignedInt senderIP )
 					gameDataMatchName(dataMatch),
 					msg->GameToJoin.iniCRC, TheGlobalData->m_iniCRC,
 					msg->GameToJoin.exeCRC, TheGlobalData->m_exeCRC));
-				// The same build under different -mod lists: a mod changes the INI set and, with its own
-				// skirmish or multiplayer scripts, the exe CRC too (GlobalData::computeExeCRC), so the build is
-				// compared as it was before the mods mounted.  Then the player is told the host's mods rather
-				// than the bare mismatch.
-				WideChar joinerMod[g_lanModNameLength+1];
-				WideCharNCpy(joinerMod, msg->GameToJoin.modName, g_lanModNameLength);
-				joinerMod[g_lanModNameLength] = 0;
-				WideCharFromUtf8(TheGlobalData->m_modName.str(), reply.GameNotJoined.modName, ARRAY_SIZE(reply.GameNotJoined.modName));
-				const Bool modsDiffer = msg->GameToJoin.baseExeCRC == TheGlobalData->m_baseExeCRC &&
-					WideCharCmp(joinerMod, reply.GameNotJoined.modName) != 0;
-				DEBUG_LOG(("LANAPI::handleRequestJoin - mods them/us '%s'/'%s'\n",
-					WideCharAsUtf8(joinerMod).str(), TheGlobalData->m_modName.str()));
-
 				reply.LANMessageType = LANMessage::MSG_JOIN_DENY;
-				reply.GameNotJoined.reason = modsDiffer ? LANAPIInterface::RET_MOD_MISMATCH : LANAPIInterface::RET_CRC_MISMATCH;
+				reply.GameNotJoined.reason = LANAPIInterface::RET_CRC_MISMATCH;
 				reply.GameNotJoined.gameIP = m_localIP;
 				reply.GameNotJoined.playerIP = senderIP;
 				canJoin = false;
@@ -488,11 +475,6 @@ void LANAPI::handleJoinDeny( LANMessage *msg, UnsignedInt senderIP )
 	{
 		if (m_pendingAction == ACT_JOIN) // Are we trying to join?
 		{
-			if (msg->GameNotJoined.reason == RET_MOD_MISMATCH)
-			{
-				msg->GameNotJoined.modName[g_lanModNameLength] = 0;
-				m_joinDeniedHostMod = UnicodeString(msg->GameNotJoined.modName);
-			}
 			OnGameJoin(msg->GameNotJoined.reason, LookupGame(UnicodeString(msg->GameNotJoined.gameName)));
 			m_pendingAction = ACT_NONE;
 			m_expiration = 0;

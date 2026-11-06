@@ -56,11 +56,9 @@ enum UpgradeStatusType : Int
 };
 
 //The maximum number of upgrades. 
-// How many distinct upgrades the game may know about.  A mod that adds its own runs into this, and
-// the failure is silent - the mask simply has no bit left for the new one.  The mask is a bit
-// field, so raising it costs 48 bytes per player and per object that carries one.  512 ran out under
-// -modfactions with five mods (Contra, ShockWave, Shockwave Chaos, The End of Days and Tiberian Dawn
-// Redux) at The End of Days' upgrade 513, about 700 in all.
+// How many distinct upgrades the game may know about.  Data that adds more runs into this, and
+// newUpgrade refuses the one past the end.  The mask is a bit field, so raising it costs 48 bytes
+// per player and per object that carries one.
 #define UPGRADE_MAX_COUNT 1024
 
 typedef BitFlags<UPGRADE_MAX_COUNT, 6>	UpgradeMaskType;
@@ -256,6 +254,11 @@ public:
 	std::vector<AsciiString> getUpgradeNames( void ) const;	// For WorldBuilder only!!!
 
 	static void parseUpgradeDefinition( INI *ini );
+
+	/** The upgrade so named, or a fatal error naming it and who asked, in every build.  For a module
+		* whose data names an upgrade: the objects parse before the upgrades, so it holds the name and
+		* looks it up as it is made. */
+	const UpgradeTemplate *requireUpgrade( const AsciiString &name, const AsciiString &who ) const;
 
 protected:
 

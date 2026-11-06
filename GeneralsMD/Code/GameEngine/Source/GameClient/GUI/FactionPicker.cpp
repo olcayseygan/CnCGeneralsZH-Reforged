@@ -22,7 +22,7 @@
 // modal while it is up, in the front end's look (UIStyle.h): the armies on the left under their
 // sides' headings with Random All and Custom Selection over them, the focused army's portrait, name
 // and description on the right, Back and Confirm in the room's button row.  It reads the armies from
-// the seat's own box, so whatever the box lists (the generals, a mod's sides, Observer where the room
+// the seat's own box, so whatever the box lists (the sides, the generals, Observer where the room
 // has one) is what the screen offers, and it hands the pick back through the box.  Every tile is one
 // size whatever the box lists; a list taller than its place scrolls, with the wheel and a bar.
 //
@@ -41,6 +41,7 @@
 #include "Common/NameKeyGenerator.h"
 #include "Common/PlayerTemplate.h"
 #include "GameClient/ChallengeGenerals.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
@@ -85,13 +86,12 @@ static const Real SIDE_TICK = 26.0f;
 static const Real SIDE_TICK_GAP = 14.0f;
 static const Real MAX_PORTRAIT_SCALE = 4.0f;	// a 64 px side logo blown up past this is only blur
 static const Int POOL_DIM_ALPHA = 190;
-static const char *const PICKER_IMAGE_PREFIX = "FactionPicker";	// a template's own picture here, FactionPickerFactionTurkiye
 
 struct PickerCell
 {
 	Int pick;							///< the box's item data: a template or PLAYERTEMPLATE_OBSERVER
 	Int poolBit;					///< its bit in a Random pool, -1 when it cannot go in one
-	UnicodeString name;		///< the box's own line, so a mod's faction reads as the box has it
+	UnicodeString name;		///< the box's own line, so an army reads as the box has it
 	const Image *icon;
 	const Image *portrait;
 	UnicodeString strategy;
@@ -103,8 +103,6 @@ struct PickerCell
 struct PickerGroup
 {
 	AsciiString leadSide;
-	AsciiString baseSide;	///< a mod's groups only
-	Int mod;
 	UnicodeString name;
 	DisplayString *heading;
 	ICoord2D at;
@@ -311,34 +309,10 @@ static Bool canConfirm( void )
 	return s_focus >= 0 || !s_custom || tickedCount() > 0;
 }
 
-/// "Contra - USA": EA's own word for a country where there is one, the mod's BaseSide as written otherwise
-static UnicodeString modGroupName( Int mod, const AsciiString &baseSide )
-{
-	WideChar modName[ 128 ];
-	WideCharFromUtf8( TheGlobalData->m_modNames[ mod ].str(), modName, ARRAY_SIZE( modName ) );
-	UnicodeString name( modName );
-	name.concat( u" - " );
-	AsciiString label;
-	label.format( "SIDE:%s", baseSide == "USA" ? "America" : baseSide.str() );
-	Bool exists = FALSE;
-	const UnicodeString country = TheGameText->fetch( label, &exists );
-	if( exists )
-	{
-		name.concat( country );
-	}
-	else
-	{
-		UnicodeString written;
-		written.translate( baseSide );
-		name.concat( written );
-	}
-	return name;
-}
-
 //-------------------------------------------------------------------------------------------------
 /** The armies in the box, each under the first army of its side: a general's Side begins with his
 	* side's ("AmericaLaserGeneral" under "America"), so Turkiye, on America's BaseSide but a side of its
-	* own, heads its own group, and a mod's sides stay with their mod. */
+	* own, heads its own group. */
 static void buildCells( void )
 {
 	std::vector<Int> candidates;
@@ -361,38 +335,35 @@ static void buildCells( void )
 		cell.label = NULL;
 
 		AsciiString side = "Observer";
-		AsciiString baseSide;
-		Int mod = -1;
 		if( pick == PLAYERTEMPLATE_OBSERVER )
 		{
-			cell.icon = cell.portrait = TheMappedImageCollection->findImageByName( "GameinfoOBSRVR" );
+			cell.icon = TheMappedImageCollection->findImageByName( "FactionPickerObserver" );
+			if( cell.icon == NULL )
+				cell.icon = TheMappedImageCollection->findImageByName( "GameinfoOBSRVR" );
+			cell.portrait = cell.icon;
 		}
 		else
 		{
 			const PlayerTemplate *pt = ThePlayerTemplateStore->getNthPlayerTemplate( pick );
 			side = pt->getSide();
-			mod = pt->getModIndex();
 			for( size_t n = 0; n < candidates.size() && n < RANDOM_POOL_BITS; n++ )
 			{
 				if( candidates[ n ] == pick )
 					cell.poolBit = (Int)n;
 			}
-			// a retail general has the challenge screen's pictures of him; a side has its logo, unless a
-			// picture is mapped for this screen alone (Turkiye borrows America's logo everywhere else)
+			// our card for the army (FactionPickerFactionChinaNukeGeneral), a general's without one its
+			// country's; where no card is mapped, the challenge screen's pictures of a retail
+			// general, else the side's logo
+			const Image *card = ControlBarSideImage( pt, "FactionPicker" );
 			const GeneralPersona *persona = TheChallengeGenerals->getGeneralByTemplateName( pt->getName() );
-			AsciiString ownImage( PICKER_IMAGE_PREFIX );
-			ownImage.concat( pt->getName() );
-			const Image *own = TheMappedImageCollection->findImageByName( ownImage );
-			const Image *logo = own ? own : ( pt->getGeneralImage() ? pt->getGeneralImage() : pt->getSideIconImage() );
-			cell.icon = persona && persona->getBioPortraitSmall() ? persona->getBioPortraitSmall() : logo;
-			cell.portrait = persona && persona->getBioPortraitLarge() ? persona->getBioPortraitLarge() : logo;
+			const Image *logo = pt->getGeneralImage() ? pt->getGeneralImage() : pt->getSideIconImage();
+			cell.icon = card ? card : ( persona && persona->getBioPortraitSmall() ? persona->getBioPortraitSmall() : logo );
+			cell.portrait = card ? card : ( persona && persona->getBioPortraitLarge() ? persona->getBioPortraitLarge() : logo );
 			if( !pt->getTooltip().isEmpty() )
 				cell.strategy = TheGameText->fetch( pt->getTooltip() );
 			if( !pt->getGeneralFeatures().isEmpty() )
 				cell.features = TheGameText->fetch( pt->getGeneralFeatures() );
-			baseSide = pt->getBaseSide();
-			// every mod faction stays out of a plain Random, too many to name; the list of who it draws says so
-			if( pt->isRandomExcluded() && mod < 0 )
+			if( pt->isRandomExcluded() )
 			{
 				if( !s_leftOut.isEmpty() )
 					s_leftOut.concat( u", " );
@@ -405,22 +376,17 @@ static void buildCells( void )
 			cell.label->setWordWrapCentered( TRUE );
 		}
 
-		// A mod lists its generals in any order and its plain side last (Contra), so its groups go by
-		// BaseSide: one heading a country, however many generals it brings.
 		size_t group = 0;
 		for( ; group < s_groups.size(); group++ )
 		{
-			const PickerGroup &g = s_groups[ group ];
-			if( g.mod == mod && ( mod >= 0 ? g.baseSide == baseSide : side.startsWith( g.leadSide ) ) )
+			if( side.startsWith( s_groups[ group ].leadSide ) )
 				break;
 		}
 		if( group == s_groups.size() )
 		{
 			PickerGroup lead;
 			lead.leadSide = side;
-			lead.baseSide = baseSide;
-			lead.mod = mod;
-			lead.name = mod >= 0 ? modGroupName( mod, baseSide ) : cell.name;
+			lead.name = cell.name;
 			lead.heading = newText( lead.name, UIStyle::font( UIStyle::TEXT_HEADING ) );
 			lead.mask = 0;
 			s_groups.push_back( lead );
@@ -607,7 +573,7 @@ static void refresh( void )
 	UnicodeString confirm;
 	confirm.format( TheGameText->fetch( "GUI:FactionPickConfirm" ), name.str() );
 	s_confirmText->setText( UIStyle::capitals( confirm ) );
-	// "Contra - USA Air Force General" is wider than the button in the heading's letters
+	// a long general's name ("USA Superweapon General") is wider than the button in the heading's letters
 	const UIStyle::TextSize sizes[] = { UIStyle::TEXT_HEADING, UIStyle::TEXT_STRONG, UIStyle::TEXT_BODY };
 	for( size_t each = 0; each < ARRAY_SIZE( sizes ); each++ )
 	{
@@ -1110,7 +1076,7 @@ void FactionPickerAttach( GameWindow *parent, const char *layoutFilename )
 		name.format( "%s:ComboBoxPlayerTemplate%d", layoutFilename, i );
 		GameWindow *combo = TheWindowManager->winGetWindowFromId( parent, NAMEKEY( name ) );
 		if( !combo )
-			continue;	// a mod's layout with fewer seats
+			continue;	// a layout with fewer seats
 		combo->winSetInputFunc( comboInput );
 		combo->winSetSystemFunc( comboSystem );
 		if( !first )

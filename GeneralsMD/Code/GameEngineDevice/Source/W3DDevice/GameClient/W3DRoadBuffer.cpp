@@ -843,7 +843,7 @@ void W3DRoadBuffer::loadLit4PtSection(RoadSegment *pRoad, UnsignedShort *ib, Ver
 	Vector2 curVector;
 	Int uCount = roadColumnCount(roadLen);
 	// never below two rows, as the float section has it: vtx[vCount-1] is read below, and a width past
-	// the int range (mod data) converted to INT_MIN on Windows
+	// the int range (broken road data) converted to INT_MIN on Windows
 	Int vCount = floatToIntAsMsvc((2*halfHeight/MAP_XY_FACTOR)+1);
 	if (vCount<2) vCount = 2;
 

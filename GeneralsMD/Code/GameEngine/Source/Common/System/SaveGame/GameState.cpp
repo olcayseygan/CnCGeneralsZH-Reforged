@@ -745,7 +745,7 @@ Bool GameState::saveCheckpoint( AsciiString filepath )
 	}
 	catch( ... )
 	{
-		// the destructor throws away what was written; a mod object whose module cannot save
+		// the destructor throws away what was written; an object whose module cannot save
 		// costs the replay its rewind, not the whole game (report 1858)
 		DEBUG_LOG(( "GameState::saveCheckpoint - '%s' could not be written\n", filepath.str() ));
 		return FALSE;
@@ -757,7 +757,7 @@ Bool GameState::saveCheckpoint( AsciiString filepath )
 /** loadGame for a checkpoint, with the recorder's turn between the reset and the load: the reset
 	* closes the replay, and the load's new game reads the players out of it.  FALSE when the load
 	* failed part way: the half-loaded match is cleared, as a replay's end clears it, and the player
-	* is told, so a mod object whose module cannot load ends the replay rather than the game. */
+	* is told, so an object whose module cannot load ends the replay rather than the game. */
 // ------------------------------------------------------------------------------------------------
 Bool GameState::loadCheckpoint( AsciiString filepath, const std::function< void( void ) > &afterReset )
 {
@@ -1724,6 +1724,9 @@ void GameState::gameStatePostProcessLoad( void )
 	// evil... must ensure this is updated prior to the script engine running the first time.
 	ThePartitionManager->update();
 	ThePartitionManager->stopKeepingCellsFromSave();
+
+	// Prepare immutable presentation data after every saved map input is final.
+	if (TheTerrainVisual) TheTerrainVisual->prewarmMapRenderData();
 
 	// last, so nothing the load did can draw from the stream after it is put back
 	TheGameLogic->restoreLoadedRandomState();

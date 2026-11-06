@@ -441,24 +441,36 @@ Color:Pink
 "Rosa"
 END
 
-Color:Crimson
-"Karmesin"
-END
-
-Color:Azure
-"Azur"
-END
-
-Color:Salmon
-"Lachs"
-END
-
 Color:Teal
 "Petrol"
 END
 
+Color:Lime
+"Limette"
+END
+
+Color:Navy
+"Marineblau"
+END
+
+Color:Magenta
+"Magenta"
+END
+
+Color:Brown
+"Braun"
+END
+
 Color:Lavender
 "Lavendel"
+END
+
+Color:Coral
+"Koralle"
+END
+
+Color:Olive
+"Oliv"
 END
 
 GUI:ShowBehindBuildings
@@ -2750,7 +2762,7 @@ TOOLTIP:Crates
 END
 
 TOOLTIP:SuperWeapons
-"Wie viele Superwaffen jeder Art ein Spieler gleichzeitig haben darf. Erlaubt: so viele, wie er bezahlen kann. Limit: je eine, vier für den USA-Superwaffengeneral. Nein: keine, außer beim Superwaffengeneral, der eine behält. Er ist die Ausnahme, weil er mit seinen drei Superwaffen eine schwächere Armee ausgleicht."
+"Wie viele Superwaffen ein Spieler gleichzeitig haben darf. Erlaubt: so viele, wie er bezahlen kann. Limit: eine, vier für den USA-Superwaffengeneral. Nein: keine, außer beim Superwaffengeneral, der eine behält. Er ist die Ausnahme, weil er mit seinen Superwaffen eine schwächere Armee ausgleicht. Unter Nein darf jeder, auch der Computer, noch ein Atomraketensilo bauen, um darin Chinas Upgrades zu kaufen. Es hat keine Rakete: keinen Startknopf, keinen Countdown, keine Ansage."
 END
 
 DOZER:ConstructionComplete
@@ -14341,6 +14353,34 @@ TOOLTIP:VSync
 "Hält das Bild am Monitor fest, damit es nicht reißt. Aus läuft das Bild so schnell, wie der Rechner zeichnet. Gilt nach Annehmen."
 END
 
+GUI:FrameRateLimit
+"Bildratenbegrenzung"
+END
+
+GUI:FrameRateLimit0
+"Aus"
+END
+
+GUI:FrameRateLimit1
+"240 FPS"
+END
+
+GUI:FrameRateLimit2
+"144 FPS"
+END
+
+GUI:FrameRateLimit3
+"120 FPS"
+END
+
+GUI:FrameRateLimit4
+"60 FPS"
+END
+
+TOOLTIP:FrameRateLimit
+"Wie viele Bilder pro Sekunde das Spiel in einer Partie höchstens zeichnet. Ein niedrigeres Limit hält die Grafikkarte kühler und leiser und bremst das Spiel nicht. Die Menüs halten immer bei 60."
+END
+
 GUI:ClassicGraphics
 "Klassische Grafik"
 END
@@ -14625,10 +14665,6 @@ TOOLTIP:SupplyPileFull
 "\n Belegt: Das Haufenlimit hält deine Sammler fern"
 END
 
-TOOLTIP:StatTime
-"Bauzeit"
-END
-
 TOOLTIP:StatDamage
 "Schaden"
 END
@@ -14891,6 +14927,26 @@ END
 
 GUI:HudNoWorkerLeft
 "%s hat keinen Arbeiter mehr"
+END
+
+GUI:HudHighestFirst
+"höchste zuerst"
+END
+
+GUI:HudPlayerHead
+"Spieler"
+END
+
+GUI:HudStatUnitMoney
+"$"
+END
+
+GUI:HudStatUnitIncome
+"$/Min."
+END
+
+GUI:HudStatUnitPower
+"Überschuss"
 END
 
 GUI:BarIdleWorker
@@ -15393,6 +15449,26 @@ GUI:HotkeysCommandAUTO_REPAIR
 "Reparieren oder heilen lassen"
 END
 
+GUI:HotkeysCommandTOGGLE_ATTACKMOVE
+"Angriffsmarsch (nächster Klick)"
+END
+
+GUI:HotkeysCommandTOGGLE_FORCEATTACK
+"Angriff erzwingen (nächster Klick)"
+END
+
+GUI:HotkeysCommandTOGGLE_GUARD
+"Bewachen (nächster Klick)"
+END
+
+GUI:HotkeysCommandTOGGLE_MOVE
+"Bewegen (nächster Klick)"
+END
+
+GUI:HotkeysCommandHOLD_POSITION
+"Position halten"
+END
+
 GUI:MoneyTransferTitle
 "Geld senden"
 END
@@ -15435,4 +15511,96 @@ END
 
 SIDE:Turkiye
 "Türkiye (Experimentell)"
+END
+
+GUI:OptionsTabWater
+"Wasser"
+END
+
+GUI:OptionsGroupReflections
+"Reflexionen"
+END
+
+GUI:OptionsGroupModernWater
+"Modernes Wasser"
+END
+
+GUI:WaterReflectionEnabled
+"Szenenreflexionen"
+END
+
+TOOLTIP:WaterReflectionEnabled
+"Spiegelt die Szene im modernen Wasser. Ausschalten verbessert die Leistung, Himmel und Sonnenreflexe bleiben erhalten. Der Reflexionsmodus bleibt gespeichert. Wird nach Klick auf Annehmen angewendet."
+END
+
+GUI:WaterFftResolution
+"Wellendetails"
+END
+
+GUI:WaterFftResolution0
+"Niedrig"
+END
+
+GUI:WaterFftResolution1
+"Hoch"
+END
+
+TOOLTIP:WaterFftResolution
+"Steuert die feinen Details moderner Wasserwellen. Niedrig verbessert die Leistung; Hoch zeigt mehr Details. Wird nach Klick auf Annehmen angewendet."
+END
+
+GUI:WaterRefractionQuality
+"Lichtbrechung"
+END
+
+GUI:WaterRefractionQuality0
+"Voll"
+END
+
+GUI:WaterRefractionQuality1
+"Einfach"
+END
+
+GUI:WaterRefractionQuality2
+"Aus"
+END
+
+TOOLTIP:WaterRefractionQuality
+"Für modernes Wasser. Vollständige Brechung verzerrt den Blick unter der Oberfläche. Einfache Brechung zeigt klares Wasser ohne Verzerrung. Aus macht das Wasser undurchsichtig und getönt, um die Leistung zu verbessern. Wird nach Klick auf Annehmen angewendet."
+END
+
+GUI:WaterReflectionDetail
+"Reflexionsdetails"
+END
+
+GUI:WaterReflectionDetail0
+"Niedrig"
+END
+
+GUI:WaterReflectionDetail1
+"Hoch"
+END
+
+TOOLTIP:WaterReflectionDetail
+"Steuert die Details der Szenenreflexionen im modernen Wasser. Niedrig verbessert die Leistung. Hoch liefert klarere Reflexionen. Die SSR-Auflösung bleibt unverändert. Wird nach Klick auf Annehmen angewendet."
+END
+
+GUI:WaterReflection
+"Reflexionsmodus"
+END
+
+GUI:WaterReflection0
+"Klassisch"
+END
+
+GUI:WaterReflection1
+"SSR"
+END
+
+GUI:WaterReflection2
+"Hybrid"
+END
+
+TOOLTIP:WaterReflection
+"Für modernes Wasser, wenn Szenenreflexionen aktiviert sind. Klassisch nutzt die Originalreflexionen. SSR spiegelt sichtbare Bildschirminhalte. Hybrid kombiniert beides und ist die Standardeinstellung. Wird nach Klick auf Annehmen angewendet."
 END

@@ -107,7 +107,7 @@ const FieldParse MusicTrack::m_musicTrackFieldParseTable[] =
 	* rest of its own side's list: the three lowest calm, the four highest battle, the rest tense
 	* (experiments/proofs/2026-10-25/audio-music/classify.py in the wrapper).  Game_Silent is the sixty
 	* seconds the scripts leave between two tracks; it has no side and is never picked, but while our
-	* music plays it is held like the tracks are.  A mod's own tracks are not here: its Music.ini tags
+	* music plays it is held like the tracks are.  Any other track is not here: Music.ini tags
 	* them with MusicMood and MusicSide (buildTracks), and an untagged one stays the scripts'. */
 struct DynamicTrack
 {
@@ -288,7 +288,7 @@ void MusicManager::addAudioEvent( AudioEventRTS *eventToAdd )
 
 	// At calm the cycle's own next track is swapped for a calm one of its side, or a fight's music
 	// would play over a quiet base.  The scripts' sixty seconds of silence stay as they are, and so
-	// does the track of a mod's side that tagged no calm one.
+	// does the track of a side that tagged no calm one.
 	const AsciiString calm = !m_issuing && !m_inControl && track != NULL && track->side.isNotEmpty()
 		&& track->mood != MOOD_CALM && engaged() ? pickTrack( MOOD_CALM ) : AsciiString::TheEmptyString;
 	if (calm.isNotEmpty())

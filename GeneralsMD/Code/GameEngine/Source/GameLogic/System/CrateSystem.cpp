@@ -157,7 +157,6 @@ const CrateTemplate *CrateSystem::findCrateTemplate(AsciiString name) const
 			CrateTemplateOverride overridable(m_crateTemplateVector[i]);
 			return overridable;
 		}
-		
 
 	return NULL;
 }

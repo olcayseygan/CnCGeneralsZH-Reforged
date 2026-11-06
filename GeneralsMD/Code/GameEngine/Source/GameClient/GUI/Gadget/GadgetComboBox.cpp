@@ -53,9 +53,7 @@
 #include "Common/AudioEventRTS.h"
 #include "Common/GameAudio.h"
 #include "Common/Debug.h"
-#include "Common/GlobalData.h"
 #include "GameClient/DisplayStringManager.h"
-#include "GameClient/GameFont.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GameWindowManager.h"
@@ -87,34 +85,6 @@ static Int dropDownHeight( WinInstanceData *listInstData, Int lines, Bool scroll
 {
 	const Int fontHeight = TheWindowManager->winFontHeight( listInstData->getFont() );
 	return (fontHeight + (scrolls ? 1 : 2)) * lines + (scrolls ? 6 : 4);
-}
-
-// A seat's Army field was cut for "China Tank General"; a mod's name in front of that runs into the
-// arrow.  Only the picked label goes smaller, and the next short one is back at the combo's own size.
-static void fitFieldToLabel( GameWindow *combo, GameWindow *field, const UnicodeString &label )
-{
-	static const Int FIELD_MARGIN = 6;
-	static const Int SMALLEST_POINT_SIZE = 8;
-
-	if( !TheGlobalData->m_modFactions )
-		return;
-
-	Int fieldWidth, fieldHeight;
-	field->winGetSize( &fieldWidth, &fieldHeight );
-
-	GameFont *font = combo->winGetFont();
-	DisplayString *measured = TheDisplayStringManager->newDisplayString();
-	measured->setFont( font );
-	measured->setText( label );
-	while( measured->getWidth() > fieldWidth - FIELD_MARGIN && font->pointSize > SMALLEST_POINT_SIZE )
-	{
-		font = TheFontLibrary->getFont( font->nameString, font->pointSize - 1, font->bold );
-		measured->setFont( font );
-	}
-	TheDisplayStringManager->freeDisplayString( measured );
-
-	if( font != field->winGetFont() )
-		field->winSetFont( font );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -502,7 +472,6 @@ WindowMsgHandledType GadgetComboBoxSystem( GameWindow *window, UnsignedInt msg,
 									
 					GadgetTextEntrySetTextColor(comboData->editBox, color);
 
-					fitFieldToLabel(window, comboData->editBox, tempUString);
 					GadgetTextEntrySetText(comboData->editBox, tempUString);
 
 					TheWindowManager->winSendSystemMsg( window->winGetOwner(), 

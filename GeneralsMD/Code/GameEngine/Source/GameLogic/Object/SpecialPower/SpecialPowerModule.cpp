@@ -162,6 +162,12 @@ SpecialPowerModule::SpecialPowerModule( Thing *thing, const ModuleData *moduleDa
 }  // end SpecialPowerModule
 
 //-------------------------------------------------------------------------------------------------
+SpecialPowerModuleInterface* SpecialPowerModule::getSpecialPower()
+{
+	return SuperweaponMissileSilencedInMatch( getSpecialPowerTemplate()->getSpecialPowerType() ) ? NULL : this;
+}
+
+//-------------------------------------------------------------------------------------------------
 const AudioEventRTS& SpecialPowerModule::getInitiateSound() const
 {
 	return getSpecialPowerModuleData()->m_initiateSound;

@@ -226,7 +226,7 @@ void skirmishUpdateSlotList( void );
 void skirmishPositionStartSpots( void );
 static void populateSkirmishBattleHonors( void );
 // The turbo mode box, the only speed a skirmish has besides normal.  It is the fork's control, so a
-// stock or modded SkirmishGameOptionsMenu.wnd that wins over Run/Window has none and plays at normal
+// stock SkirmishGameOptionsMenu.wnd that wins over Run/Window has none and plays at normal
 // speed.  The old game speed dropdown's "FPS" preference is left in the file and never read.
 static Bool turboBoxChecked( void )
 {
@@ -1266,7 +1266,7 @@ void InitSkirmishGameGadgets( void )
 	buttonRecordCloseID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonRecordClose" );
 	recordPopover = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( "SkirmishGameOptionsMenu.wnd:RecordPopover" ) );
 	recordVeil = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( "SkirmishGameOptionsMenu.wnd:RecordVeil" ) );
-	// a layout from before the record (retail's, or a mod's in the install folder) has neither, and
+	// a layout from before the record (retail's, in the install folder) has neither, and
 	// no Record button to open them
 	if ( recordPopover )
 	{
@@ -1617,7 +1617,7 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	//updateSkirmishGameOptions();
 	//initSkirmishGameOptions();
 
-	// the turbo box, which a stock or modded layout does not have (turboBoxChecked)
+	// the turbo box, which a stock layout does not have (turboBoxChecked)
 	GameWindow *checkBoxTurbo = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxTurboID );
 	if ( checkBoxTurbo )
 		GadgetCheckBoxSetChecked( checkBoxTurbo, prefs.getInt( "TurboMode", 0 ) != 0 );

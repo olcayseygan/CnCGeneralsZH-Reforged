@@ -37,7 +37,9 @@
 #include "Common/Money.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/NameKeyGenerator.h"
 #include "GameClient/Display.h"
+#include "GameClient/GadgetListBox.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
 #include "GameClient/InGameUI.h"
@@ -760,6 +762,59 @@ static void handleCommand( const AsciiString &command )
 		LogicThread::report();
 		theQuitRequested = TRUE;
 		replyOk( "\"quitting\":true" );
+		return;
+	}
+
+	/* press, select and uitext reach a shell window by its layout name (MainMenu.wnd:ButtonOnline), so a
+		 script walks the menus without knowing where anything is on the screen.  press sends what a mouse
+		 up on a push button sends its owner, select picks a list box row, uitext reads what a window shows. */
+	if (strncmp( command.str(), "press ", 6 ) == 0 || strncmp( command.str(), "select ", 7 ) == 0 || strncmp( command.str(), "uitext ", 7 ) == 0)
+	{
+		const Bool isPress = command.str()[ 0 ] == 'p';
+		const Bool isSelect = command.str()[ 0 ] == 's';
+		AsciiString name( command.str() + (isPress ? 6 : 7) );
+		Int row = 0;
+		if (isSelect)
+		{
+			const char *space = strrchr( name.str(), ' ' );
+			if (space == NULL)
+			{
+				replyError( "select wants a window name and a row" );
+				return;
+			}
+			row = atoi( space + 1 );
+			AsciiString nameOnly;
+			nameOnly.format( "%.*s", (Int)(space - name.str()), name.str() );
+			name = nameOnly;
+		}
+		name.trim();
+
+		const NameKeyType key = TheNameKeyGenerator->nameToKey( name );
+		GameWindow *window = TheWindowManager->winGetWindowFromId( NULL, key );
+		if (window == NULL)
+		{
+			replyError( "no such window" );
+			return;
+		}
+
+		if (isPress)
+		{
+			TheWindowManager->winSendSystemMsg( window->winGetOwner(), GBM_SELECTED, (WindowMsgData)window, key );
+			replyOk( "\"pressed\":true" );
+		}
+		else if (isSelect)
+		{
+			GadgetListBoxSetSelected( window, row );
+			replyOk( "\"selected\":true" );
+		}
+		else
+		{
+			AsciiString text;
+			text.translate( window->winGetText() );
+			AsciiString field;
+			field.format( "\"text\":\"%s\"", text.str() );
+			replyOk( field.str() );
+		}
 		return;
 	}
 

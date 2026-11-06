@@ -269,12 +269,6 @@ void AudioManager::init()
 	// the original Generals campaigns' briefings and mission dialogue, which Zero Hour's files left out
 	ini.load( AsciiString( "Data\\INI\\SpeechReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 
-	// -modfactions: each mod's own events under "M<n>~" names; AudioSettings and MiscAudio stay ours
-	INI::loadModPasses( "Data\\INI\\Music.ini", NULL );
-	INI::loadModPasses( "Data\\INI\\SoundEffects.ini", NULL );
-	INI::loadModPasses( "Data\\INI\\Speech.ini", NULL );
-	INI::loadModPasses( "Data\\INI\\Voice.ini", NULL );
-
 	// do the miscellaneous sound files last so that we find the audioeventrts associated with the events.
 	ini.load( AsciiString( "Data\\INI\\MiscAudio.ini" ), INI_LOAD_OVERWRITE, NULL);
 	
@@ -1077,8 +1071,7 @@ AudioEventInfo *AudioManager::findAudioEventInfo( AsciiString eventName ) const
 	AudioEventInfoHash::const_iterator it;
 	it = m_allAudioEventInfo.find(eventName);
 	if (it == m_allAudioEventInfo.end()) {
-		AsciiString retailName;
-		return TheModNamespace.findRetailName(eventName, MODNAME_AUDIOEVENT, &retailName) ? findAudioEventInfo(retailName) : NULL;
+		return NULL;
 	}
 
 	return (*it).second;

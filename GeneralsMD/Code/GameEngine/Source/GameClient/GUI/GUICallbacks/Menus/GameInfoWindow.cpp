@@ -32,6 +32,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "GameClient/WindowLayout.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Shell.h"
 #include "GameClient/GameWindowManager.h"
@@ -179,8 +180,10 @@ void RefreshGameInfoWindow(GameInfo *gameInfo, UnicodeString gameName)
 		}
 		else
 		{
+			// our icon by name (GameinfoTURKIYE), else the template's own
 			const PlayerTemplate *fact = ThePlayerTemplateStore->getNthPlayerTemplate(playerTemplate);
-			GadgetListBoxAddEntryImage(listBoxPlayers, fact->getSideIconImage(),addedRow, 0, 22,25);
+			const Image *icon = ControlBarSideImage(fact, "Gameinfo");
+			GadgetListBoxAddEntryImage(listBoxPlayers, icon ? icon : fact->getSideIconImage(),addedRow, 0, 22,25);
 			//GadgetListBoxAddEntryText(listBoxPlayers,fact->getDisplayName(),playerColor,addedRow, 0);
 		}
 	

@@ -60,11 +60,6 @@ RankInfoStore::~RankInfoStore()
 		}
 	}
 	m_rankInfos.clear();
-
-	for (size_t mod = 0; mod < m_modRankInfos.size(); ++mod)
-		for (size_t i = 0; i < m_modRankInfos[mod].size(); ++i)
-			m_modRankInfos[mod][i]->deleteInstance();
-	m_modRankInfos.clear();
 }
 
 
@@ -101,26 +96,18 @@ void RankInfoStore::reset()
 }
 
 //-----------------------------------------------------------------------------
-const RankInfoStore::RankInfoVec& RankInfoStore::ranksFor(Int mod) const
+Int RankInfoStore::getRankLevelCount() const
 {
-	if (mod >= 0 && mod < (Int)m_modRankInfos.size() && !m_modRankInfos[mod].empty())
-		return m_modRankInfos[mod];
-	return m_rankInfos;
-}
-
-//-----------------------------------------------------------------------------
-Int RankInfoStore::getRankLevelCount(Int mod) const
-{
-	return ranksFor(mod).size();
+	return m_rankInfos.size();
 }
 
 //-----------------------------------------------------------------------------
 // note that level is 1...n, NOT 0...n-1
-const RankInfo* RankInfoStore::getRankInfo(Int level, Int mod) const
+const RankInfo* RankInfoStore::getRankInfo(Int level) const
 {
-	if (level >= 1 && level <= getRankLevelCount(mod))
+	if (level >= 1 && level <= getRankLevelCount())
 	{
-		const RankInfo* ri = ranksFor(mod)[level-1];
+		const RankInfo* ri = m_rankInfos[level-1];
 		if (ri)
 		{
 			return (const RankInfo*)ri->getFinalOverride();
@@ -176,19 +163,14 @@ void RankInfoStore::friend_parseRankDefinition( INI* ini )
 		} 
 		else
 		{
-			// a mod's pass fills that mod's own table, its sciences already under its names
-			const Int mod = TheModNamespace.getActive();
-			if (mod >= 0 && (Int)TheRankInfoStore->m_modRankInfos.size() <= mod)
-				TheRankInfoStore->m_modRankInfos.resize(mod + 1);
-			RankInfoVec& ranks = mod >= 0 ? TheRankInfoStore->m_modRankInfos[mod] : TheRankInfoStore->m_rankInfos;
-			if (rank != ranks.size() + 1)
+			if (rank != TheRankInfoStore->m_rankInfos.size() + 1)
 			{
 				DEBUG_CRASH(("Ranks must increase monotonically"));
 				throw INI_INVALID_DATA;
 			}
 			RankInfo* info = newInstance(RankInfo);
 			ini->initFromINI(info, myFieldParse);
-			ranks.push_back(info);
+			TheRankInfoStore->m_rankInfos.push_back(info);
 		}
 	}
 }

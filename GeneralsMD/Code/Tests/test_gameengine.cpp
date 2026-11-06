@@ -132,6 +132,7 @@ static int GetSystemMetrics( int which )
 }
 #endif
 #include "Common/OptionsCatalog.h"
+#include "Platform/WaterScreenReflection.h"
 #include "Common/SubsystemInterface.h"
 #include "GameClient/GameText.h"
 #include "Common/GameLOD.h"
@@ -609,7 +610,7 @@ TEST(zero_hour_language_is_the_one_its_language_archive_names)
    unknown blocks, so an INI written for a newer build breaks an older one
    outright.  The throw is an INIException naming the file and the block: a
    bare INI_UNKNOWN_TOKEN reached GameEngine::init as "Uncaught Exception
-   during initialization." (v3.3.0 crash reports, a mod's Rank.ini). */
+   during initialization." (v3.3.0 crash reports, a third-party Rank.ini). */
 TEST(ini_unknown_block_aborts_the_file)
 {
 	CHECK( bootOnce() );
@@ -724,7 +725,7 @@ TEST(balance_patch_edits_a_weapon_in_place)
 	CHECK_NEAR( gun->getPrimaryDamage( noBonus ), 45.0f, 0.01f );
 	CHECK_NEAR( gun->getUnmodifiedAttackRange(), 150.0f, 0.01f );
 
-	/* a patch that names a weapon the loaded data lacks (a mod's Weapon.ini without it) is read and
+	/* a patch that names a weapon the loaded data lacks (a Weapon.ini without it) is read and
 		 dropped: no weapon is made for the name, and the block after it still applies */
 	writeFile( TEST_INI,
 		"Weapon BalancePatchProbeGunTypo\r\n"
@@ -753,11 +754,11 @@ TEST(balance_patch_edits_a_weapon_in_place)
 #include "../Stubs/NullAudioManager.h"
 
 /* The Paladin's infantry laser, the second point defense module BalanceReforged.ini gives it, once
-	 borrowed EA's WatchTowerMachineGun.  Contra's Weapon.ini leaves that weapon out, the MULTIFILE
-	 block for it was dropped as the test above wants, the module got a null template and
+	 borrowed EA's WatchTowerMachineGun.  A Weapon.ini that leaves that weapon out had the MULTIFILE
+	 block for it dropped as the test above wants, the module got a null template and
 	 PointDefenseLaserUpdate::scanClosestTarget crashed on it.  The weapon is the fork's own now, in
 	 WeaponReforged.ini, loaded the way GameEngine::init loads it: it has to come out whole from a
-	 store that holds none of EA's weapons, which is what a mod's Weapon.ini can leave. */
+	 store that holds none of EA's weapons. */
 TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 {
 	CHECK( bootOnce() );
@@ -767,7 +768,7 @@ TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 	if( TheFXListStore == NULL )
 		TheFXListStore = NEW FXListStore;
 
-	/* the fire FX the weapon names; retail has it, Contra does not, and a missing one reads as none */
+	/* the fire FX the weapon names; a missing one reads as none */
 	writeFile( TEST_INI,
 		"FXList WeaponFX_PaladinPointDefenseLaser\r\n"
 		"End\r\n" );
@@ -824,7 +825,7 @@ TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 }
 
 /* WeaponReforged.ini also keeps copies of EA weapons FixesReforged.ini hands out, under EA's names,
-	 for a mod whose Weapon.ini dropped them.  Where the weapon is already defined the copy is read and
+	 for data whose Weapon.ini dropped them.  Where the weapon is already defined the copy is read and
 	 dropped and the first definition stands; this used to return mid-block, and the next field line
 	 threw as an unknown block. */
 TEST(weapon_defined_twice_keeps_the_first_and_reads_on)
@@ -866,8 +867,8 @@ TEST(weapon_defined_twice_keeps_the_first_and_reads_on)
 #include "GameLogic/ArmorSet.h"
 
 /* FixesReforged.ini's Toxin Tunnel Defender and Stinger sets name EA's Chem_ rockets and its Ranger
-	 armor set names ChemSuitHumanArmor; Contra keeps those objects and drops the weapons and the armor.
-	 Applied anyway, the set left a null in each slot: Contra's two went unarmed and its Rangers took
+	 armor set names ChemSuitHumanArmor.  On data that keeps those objects and drops the weapons and
+	 the armor, the set applied anyway left a null in each slot: the two went unarmed and the Rangers took
 	 every hit at full damage after Chemical Suits.  A patch set naming a missing weapon or armor is
 	 skipped now and the object keeps its own; a set that names what exists still applies. */
 TEST(patch_set_naming_a_missing_weapon_or_armor_is_skipped)
@@ -962,8 +963,8 @@ TEST(patch_set_naming_a_missing_weapon_or_armor_is_skipped)
 	}
 }
 
-/* BalanceReforged.ini replaces Tank_ChinaBunker's ModuleTag_05 with a StructureBody.  Under the
-	 Shockwave mod that tag holds another module, and the type check in ThingTemplate::parseModuleName
+/* BalanceReforged.ini replaces Tank_ChinaBunker's ModuleTag_05 with a StructureBody.  Where data
+	 gives that tag another module, the type check in ThingTemplate::parseModuleName
 	 threw and stopped the game at start.  The block is skipped now: the template keeps the module it
 	 had, and the lines after the block still parse. */
 TEST(replace_module_of_another_type_is_skipped)
@@ -1048,7 +1049,7 @@ TEST(replace_module_of_another_type_is_skipped)
 	}
 }
 
-/* BalanceReforged.ini prices Nuke_ChinaGattlingCannon, and an install whose mod archives had no such
+/* BalanceReforged.ini prices Nuke_ChinaGattlingCannon, and an install whose archives had no such
 	 object threw in ThingFactory::parseObjectDefinition and stopped the game at start.  The block is
 	 read and dropped now: no template is made for the name, and the object after it is still edited. */
 TEST(patch_of_a_missing_object_is_skipped)
@@ -1110,8 +1111,8 @@ TEST(patch_of_a_missing_object_is_skipped)
 	}
 }
 
-/* FixesReforged.ini gives every China Command Center the Nuke_ and Early_ carpet bombers.  Contra has
-	 no such special powers, the module kept a NULL template, and placing the start building faulted in
+/* FixesReforged.ini gives every China Command Center the Nuke_ and Early_ carpet bombers.  With data that
+	 has no such special powers the module kept a NULL template, and placing the start building faulted in
 	 SpecialPowerModule's constructor.  A patch's module naming a missing power is read and dropped. */
 TEST(patch_module_with_a_missing_special_power_is_skipped)
 {
@@ -1174,12 +1175,12 @@ TEST(patch_module_with_a_missing_special_power_is_skipped)
 	}
 }
 
-/* Under Contra FixesReforged.ini gave the Laser Turret's anti-air weapon Zero Hour's
-	 Lazr_PatriotLaserBeam, which Contra does not have, so the beam vanished, and gave the Emperor an
-	 upgrade naming Tank_OCL_OverlordGattlingCannon, which it does not have either.  A patch naming
-	 something the loaded data lacks keeps what was there: the weapon its own beam, and a replaced
-	 module the module it replaced. */
-TEST(patch_naming_a_missing_laser_or_list_keeps_the_mods_own)
+/* FixesReforged.ini gives the Laser Turret's anti-air weapon Zero Hour's Lazr_PatriotLaserBeam;
+	 on data without it the beam vanished.  It gives the Emperor an upgrade naming
+	 Tank_OCL_OverlordGattlingCannon, which such data lacks too.  A patch naming something the loaded
+	 data lacks keeps what was there: the weapon its own beam, and a replaced module the module it
+	 replaced. */
+TEST(patch_naming_a_missing_laser_or_list_keeps_what_was_there)
 {
 	CHECK( bootOnce() );
 
@@ -1262,8 +1263,8 @@ TEST(patch_naming_a_missing_laser_or_list_keeps_the_mods_own)
 	}
 }
 
-/* The Power of the West's Armor.ini has "Armor = INFANTRY_MISSIL 100%".  EA's parse let it through,
-	 264e2180 made it throw and the mod stopped at start.  An unknown damage type skips its line; a
+/* A third-party Armor.ini had "Armor = INFANTRY_MISSIL 100%".  EA's parse let it through,
+	 264e2180 made it throw and the game stopped at start.  An unknown damage type skips its line; a
 	 line with no percentage is still a syntax error. */
 TEST(armor_skips_an_unknown_damage_type)
 {
@@ -1389,9 +1390,9 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 
 #include "Common/MultiplayerSettings.h"
 
-/* A slot, a replay and a preference hold a colour by its place in the list, so the fork's five have
+/* A slot, a replay and a preference hold a colour by its place in the list, so the fork's eight have
    to follow EA's eight and leave them as they were.  EA's list is in INIZH.big, so it is copied here. */
-TEST(multiplayer_reforged_ini_appends_five_colours_after_eas_eight)
+TEST(multiplayer_reforged_ini_appends_eight_colours_after_eas_eight)
 {
 	static const struct { const char *tooltip; Int r, g, b, nightR, nightG, nightB; } colours[] =
 	{
@@ -1403,11 +1404,14 @@ TEST(multiplayer_reforged_ini_appends_five_colours_after_eas_eight)
 		{ "Color:SkyBlue",   50, 215, 230,   50, 215, 230 },
 		{ "Color:Purple",   150,   0, 200,  223,   0, 156 },
 		{ "Color:Pink",     255, 150, 255,  255, 130, 248 },
-		{ "Color:Crimson",  165,  15,  45,  205,  45,  80 },
-		{ "Color:Azure",      0, 165, 255,    0, 165, 255 },
-		{ "Color:Salmon",   240, 120, 135,  240, 120, 135 },
-		{ "Color:Teal",       0, 175, 140,    0, 175, 140 },
-		{ "Color:Lavender", 165, 165, 255,  165, 165, 255 },
+		{ "Color:Teal",       0, 140, 130,    0, 180, 165 },
+		{ "Color:Lime",     166, 217,   0,  166, 217,   0 },
+		{ "Color:Navy",      37,  59, 155,   70, 100, 225 },
+		{ "Color:Magenta",  201,   0, 120,  240,  30, 160 },
+		{ "Color:Brown",    164,  90,  42,  200, 120,  65 },
+		{ "Color:Lavender", 165, 139, 255,  165, 139, 255 },
+		{ "Color:Coral",    240,  90,  69,  240,  90,  69 },
+		{ "Color:Olive",    120, 140,   0,  160, 180,  20 },
 	};
 
 	CHECK( bootOnce() );
@@ -1430,9 +1434,9 @@ TEST(multiplayer_reforged_ini_appends_five_colours_after_eas_eight)
 	CHECK( loadIni( TEST_INI ) );
 	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 8 );
 	CHECK( loadIni( MULTIPLAYER_REFORGED_INI ) );
-	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 13 );
+	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 16 );
 
-	for( Int i = 0; i < 13 && TheMultiplayerSettings->getNumColors() == 13; ++i )
+	for( Int i = 0; i < 16 && TheMultiplayerSettings->getNumColors() == 16; ++i )
 	{
 		MultiplayerColorDefinition *def = TheMultiplayerSettings->getColor( i );
 		const RGBColor day = def->getRGBValue();
@@ -2098,10 +2102,6 @@ static const char HOTKEYS_FROM_LAUNCHER[] =
 	"  Key = Q\r\n"
 	"End\r\n"
 	"\r\n"
-	"CommandButtonHotKey mymod:Command_Sell\r\n"
-	"  Key = K\r\n"
-	"End\r\n"
-	"\r\n"
 	"; the launcher's own keys from here on\r\n"
 	"\r\n"
 	"CommandMap SELECT_NEXT_IDLE_WORKER\r\n"
@@ -2141,9 +2141,9 @@ TEST(hotkeys_file_reads_the_launchers_rows_and_leaves_its_defaults_out)
 	// KEY_NONE is not a key the launcher shows, so the shipped hold comes back as its own bar-only row
 	CHECK( hold != NULL && hold->barOnly && hold->binding == HotkeyBinding( "", "CTRL" ) && hold->pair == "END_FORCEATTACK" );
 	CHECK( idle != NULL && idle->launcherDefault && idle->binding.key == "KEY_I" );
-	// the requests to the allies start on Alt and Z, X, C and V, as the launcher writes them (issue 129)
+	// the signals to the allies start on Alt and Z, X and C, as the launcher writes them (issue 129)
 	static const char *const ASKS[][ 2 ] = { { "SIGNAL_ATTACK", "KEY_Z" }, { "SIGNAL_DEFEND", "KEY_X" },
-		{ "SIGNAL_ATTENTION", "KEY_C" }, { "REQUEST_MONEY", "KEY_V" } };
+		{ "SIGNAL_ATTENTION", "KEY_C" } };
 	for( size_t ask = 0; ask < sizeof( ASKS ) / sizeof( ASKS[ 0 ] ); ask++ )
 	{
 		Bool found = FALSE;
@@ -2152,6 +2152,12 @@ TEST(hotkeys_file_reads_the_launchers_rows_and_leaves_its_defaults_out)
 				&& rows[ each ].binding == HotkeyBinding( ASKS[ ask ][ 1 ], "ALT" ) && rows[ each ].category == "INFORMATION" );
 		CHECK( found );
 	}
+	// request money has no key: Alt+V is evacuate in place
+	Bool money = FALSE;
+	for( size_t each = 0; each < rows.size(); each++ )
+		money = money || ( rows[ each ].id == "REQUEST_MONEY" && !rows[ each ].launcherDefault
+			&& rows[ each ].binding == HotkeyBinding() && rows[ each ].category == "INFORMATION" );
+	CHECK( money );
 
 	// the launcher's own defaults in the player's part are no change of his
 	const HotkeysFile mine = Hotkeys_parse(
@@ -2173,10 +2179,12 @@ TEST(hotkeys_every_row_the_page_lists_is_a_command_the_game_knows)
 {
 	static const char *const IDLE[] = { "SELECT_NEXT_IDLE_AIRCRAFT", "SELECT_NEXT_IDLE_VEHICLE", "SELECT_NEXT_IDLE_INFANTRY",
 		"SELECT_ALL_IDLE_UNITS", "SELECT_ALL_IDLE_AIRCRAFT", "SELECT_ALL_IDLE_VEHICLES" };
+	static const char *const ORDERS[] = { "TOGGLE_ATTACKMOVE", "TOGGLE_FORCEATTACK", "TOGGLE_GUARD", "TOGGLE_MOVE", "HOLD_POSITION" };
 	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
 	MetaNameProbe names;
 	Int idle = 0;
 	Int autoOrders = 0;
+	Int orders = 0;
 	for( size_t each = 0; each < rows.size(); each++ )
 	{
 		CHECK( names.findGameMessageMetaType( rows[ each ].id.c_str() ) != GameMessage::MSG_INVALID );
@@ -2185,9 +2193,26 @@ TEST(hotkeys_every_row_the_page_lists_is_a_command_the_game_knows)
 				idle++;
 		if( ( rows[ each ].id == "AUTO_GARRISON" || rows[ each ].id == "AUTO_REPAIR" ) && rows[ each ].category == "CONTROL" && rows[ each ].binding.key.empty() )
 			autoOrders++;
+		// the bar's fixed orders, guard among them, are keys a player sets whatever the bar says
+		for( size_t name = 0; name < sizeof( ORDERS ) / sizeof( ORDERS[ 0 ] ); name++ )
+			if( rows[ each ].id == ORDERS[ name ] && rows[ each ].category == "CONTROL" && rows[ each ].binding.key.empty() && !rows[ each ].barOnly )
+				orders++;
 	}
 	CHECK_EQ( idle, 6 );
 	CHECK_EQ( autoOrders, 2 );
+	CHECK_EQ( orders, 5 );
+}
+
+/* OptionsHotkeysKey gives a bar button a digit as well as a letter, so the file has to keep one:
+   a digit read back as no key made the next write drop it. */
+TEST(hotkeys_file_keeps_a_digit_on_a_button)
+{
+	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );
+	const HotkeysFile file = Hotkeys_parse( "CommandButtonHotKey Command_Guard\r\n  Key = 4\r\nEnd\r\n"
+		"CommandButtonHotKey Command_Stop\r\n  Key = ,\r\nEnd\r\n", rows );
+	CHECK_STR( file.buttons.find( "Command_Guard" )->second.c_str(), "4" );
+	CHECK_STR( file.buttons.find( "Command_Stop" )->second.c_str(), "" );
+	CHECK( Hotkeys_format( file, rows ).find( "CommandButtonHotKey Command_Guard\r\n  Key = 4\r\n" ) != std::string::npos );
 }
 
 TEST(hotkeys_file_the_launcher_wrote_comes_back_byte_for_byte)
@@ -2199,8 +2224,7 @@ TEST(hotkeys_file_the_launcher_wrote_comes_back_byte_for_byte)
 	CHECK( file.commands.find( "VIEW_LAST_RADAR_EVENT" )->second == HotkeyBinding( "", "NONE" ) );
 	CHECK( file.commands.find( "SELECT_TEAM1" )->second == HotkeyBinding( "KEY_KP1", "SHIFT_ALT_CTRL" ) );
 	CHECK( file.commands.find( "VIEW_COMMAND_CENTER" ) == file.commands.end() );	// the launcher's, not his
-	CHECK_EQ( (Int)file.buttons.size(), 5 );
-	CHECK_STR( file.buttons.find( "mymod:Command_Sell" )->second.c_str(), "K" );
+	CHECK_EQ( (Int)file.buttons.size(), 4 );
 	CHECK_STR( file.buttons.find( "command_lowercase" )->second.c_str(), "" );
 	CHECK( Hotkeys_format( file, rows ) == std::string( HOTKEYS_FROM_LAUNCHER ) );
 
@@ -2247,7 +2271,6 @@ TEST(hotkeys_names_sort_and_chords_read_as_the_launcher_has_them)
 	// String.localeCompare: case aside, '_' before the letters, then lower case first
 	CHECK( Hotkeys_nameLess( "command_lowercase", "Command_Sell" ) );
 	CHECK( Hotkeys_nameLess( "Command_Sell", "Command_UpgradeChinaMines" ) );
-	CHECK( Hotkeys_nameLess( "Command_UpgradeChinaMines", "mymod:Command_Sell" ) );
 	CHECK( Hotkeys_nameLess( "SELECT_ALL", "SELECT_ALL_MILITARY" ) );
 	CHECK( Hotkeys_nameLess( "SELECT_ALL_MILITARY", "SELECT_TEAM1" ) );
 	CHECK( Hotkeys_nameLess( "command_sell", "Command_Sell" ) );
@@ -2394,17 +2417,54 @@ TEST(income_sharing_splits_evenly_and_keeps_the_remainder)
 	CHECK_EQ( IncomeAllyShare( 200, 1 ), 0u );
 }
 
-/* Player.cpp: a skirmish computer earns double, and the doubling stays between computers. */
-TEST(skirmish_ai_earnings_double_only_between_computers)
+/* Player.cpp: a skirmish computer banks its rung's income percent (150 on every rung), rounded down. */
+TEST(skirmish_ai_earnings_by_rung_percent)
 {
-	/* its own supply run, or its cut going to a computer ally */
-	CHECK_EQ( EarnedAmount( 200, TRUE, TRUE ), 400u );
-	/* a human ally's cut of a computer's income */
-	CHECK_EQ( EarnedAmount( 200, TRUE, FALSE ), 200u );
-	/* a computer ally's cut of a human's income */
-	CHECK_EQ( EarnedAmount( 200, FALSE, TRUE ), 200u );
-	/* a human's own */
-	CHECK_EQ( EarnedAmount( 200, FALSE, FALSE ), 200u );
+	/* anyone who is not a computer */
+	CHECK_EQ( EarnedAmount( 200, 100 ), 200u );
+	/* a computer: the derrick's 1000 is 1500, a truckload of 75 banks 112, the odd half dropped */
+	CHECK_EQ( EarnedAmount( 1000, 150 ), 1500u );
+	CHECK_EQ( EarnedAmount( 75, 150 ), 112u );
+}
+
+/* Player.cpp: the falling-behind bonus, points over the rung's percent, and its step at one weighing. */
+TEST(skirmish_ai_earnings_bonus_when_behind)
+{
+	/* level or ahead, or no enemy left: none */
+	CHECK_EQ( IncomeBonusTarget( 1000, 1000 ), 0 );
+	CHECK_EQ( IncomeBonusTarget( 3000, 1000 ), 0 );
+	CHECK_EQ( IncomeBonusTarget( 1000, 0 ), 0 );
+	/* three quarters of the enemy: 200 percent on a 150 rung; half of it: 250 */
+	CHECK_EQ( IncomeBonusTarget( 750, 1000 ), 50 );
+	CHECK_EQ( IncomeBonusTarget( 500, 1000 ), 100 );
+	/* a quarter of it and below: the ceiling, 300 percent */
+	CHECK_EQ( IncomeBonusTarget( 250, 1000 ), 150 );
+	CHECK_EQ( IncomeBonusTarget( 0, 1000 ), 150 );
+	/* 25 points a weighing, either way, and straight onto a target that close */
+	CHECK_EQ( IncomeBonusStep( 0, 150 ), 25 );
+	CHECK_EQ( IncomeBonusStep( 140, 150 ), 150 );
+	CHECK_EQ( IncomeBonusStep( 150, 0 ), 125 );
+	CHECK_EQ( IncomeBonusStep( 5, 0 ), 0 );
+}
+
+/* Player.cpp: the bonus weighs sides, a player at a time, not one seat against another. */
+TEST(skirmish_ai_earnings_bonus_weighs_sides)
+{
+	Int own = -1, enemy = -1;
+	/* four teams of two, seats 0-1, 2-3, 4-5, 6-7; the computer is seat 1 and its partner carries it */
+	const Int worth[ 8 ] = { 1000, 0, 3000, 1000, 4000, 0, 500, 500 };
+	const UnsignedInt allies[ 8 ] = { 1u << 1, 1u << 0, 1u << 3, 1u << 2, 1u << 5, 1u << 4, 1u << 7, 1u << 6 };
+	IncomeSideWorths( worth, allies, 8, 1, &own, &enemy );
+	CHECK_EQ( own, 500 );
+	CHECK_EQ( enemy, 2000 );
+	/* a quarter of the strongest side's average: the ceiling */
+	CHECK_EQ( IncomeBonusTarget( own, enemy ), 150 );
+	/* free for all: every enemy is a side of one, the richest counts */
+	const Int ffa[ 3 ] = { 300, 100, 200 };
+	const UnsignedInt none[ 3 ] = { 0, 0, 0 };
+	IncomeSideWorths( ffa, none, 3, 1, &own, &enemy );
+	CHECK_EQ( own, 100 );
+	CHECK_EQ( enemy, 300 );
 }
 
 /* ExperienceTracker.cpp: a kill's experience split by the damage each attacker dealt. */
@@ -2876,7 +2936,7 @@ TEST(troop_crawler_scans_at_least_as_far_as_its_troops_shoot)
 	/* a rifle outranges the INI knob: look as far as the man can shoot. */
 	CHECK_NEAR( AssaultTransport_clearScanRange( 50.0f, 150.0f ), 150.0f, 0.001f );
 
-	/* the knob is the wider of the two (a modded value): honour it. */
+	/* the knob is the wider of the two (a tuned value): honour it. */
 	CHECK_NEAR( AssaultTransport_clearScanRange( 200.0f, 150.0f ), 200.0f, 0.001f );
 
 	/* no weapon at all - getLargestWeaponRange returns -1; never scan a negative radius. */
@@ -3280,53 +3340,146 @@ TEST(attack_move_still_shoots_what_it_can_already_reach)
 	CHECK(  AIAttackMove_mayTakeTarget( true, true, false, 1030, 1030 ) );
 }
 
-/* AI.cpp: on attack move the scan ranks what it finds by threat instead of handing
-   back the nearest thing. */
-extern Int AI_threatScore( Int templateThreatValue, Int buildCost, Bool threatensMe,
-													 Real dist, Real distanceModifier );
-
-TEST(attack_move_shoots_the_biggest_threat_first)
+/* AI.cpp: a unit choosing its own target goes for the armour its weapon is made for, then for
+   what it kills best for the time it costs, not the nearest thing (idle) or the most expensive one
+   (attack move).  The numbers are the shipped INI's: HumveeGun 10 a shot every 12 frames,
+   CrusaderTankGun 60 every 120; the armour rows are Armor.ini's (HumanArmor with the fork's 30%
+   for tank shells) over AI.cpp's combat damage types: explosion, crush, armour piercing, small
+   arms, gattling, radiation, flame, sniper, poison, particle beam, infantry missile, Aurora bomb,
+   land mine, jet missiles, stealth jet missiles, molotov, Comanche vulcan. */
+static AITargetRating targetRating( Int tier, Real affinity, Real rate, Real distSqr, ObjectID id )
 {
-	const Real MOD = 100.0f;		/* AttackPriorityDistanceModifier, shipped value */
-	const Real HERE = 0.0f;
+	AITargetRating r;
+	r.m_tier = tier;
+	r.m_affinity = affinity;
+	r.m_rate = rate;
+	r.m_distSqr = distSqr;
+	r.m_id = id;
+	return r;
+}
 
-	/* a mod that sets ThreatValue decides outright; build cost only stands in for it. */
-	CHECK( AI_threatScore( 50, 4000, false, HERE, MOD ) > AI_threatScore( 40, 5000, false, HERE, MOD ) );
+TEST(a_unit_goes_for_the_armour_its_weapon_is_made_for)
+{
+	enum { PIERCING = 2, VULCAN = 16, MISSILE = 10, COUNT = 17 };
+	const Real HUMAN[ COUNT ] = { 1.0f, 2.0f, 0.3f, 1.0f, 1.0f, 1.0f, 1.5f, 2.0f, 1.0f, 1.5f, 0.1f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+	const Real TRUCK[ COUNT ] = { 1.0f, 0.5f, 1.0f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 0.5f, 1.0f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.5f };
+	const Real TANK[ COUNT ]  = { 1.0f, 0.5f, 1.0f, 0.25f, 0.1f, 0.5f, 0.25f, 0.0f, 0.25f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.25f };
 
-	/* the shipped INI sets ThreatValue nowhere, so cost has to do the ranking:
-	   an Overlord-priced tank over a Humvee-priced one. */
-	CHECK( AI_threatScore( 0, 1200, true, HERE, MOD ) > AI_threatScore( 0, 700, true, HERE, MOD ) );
+	/* a tank shell does full damage to a Technical and a Battlemaster alike, but tank armour stops
+	   most other weapons and truck armour does not: the shell is made for the tank */
+	CHECK_NEAR( 1.5315f, aiArmourAffinity( TANK[ PIERCING ], TANK, COUNT ), 0.001f );
+	CHECK_NEAR( 1.3077f, aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ), 0.001f );
+	CHECK( aiArmourAffinity( TANK[ PIERCING ], TANK, COUNT ) > aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ) );
+	CHECK( aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ) > aiArmourAffinity( HUMAN[ PIERCING ], HUMAN, COUNT ) );
 
-	/* anything that can shoot back outranks anything that cannot, whatever it cost -
-	   a Command Center is worth more than a Gattling tank and is still not what is
-	   killing us - and no distance may move a target out of its group, or a unit would
-	   walk past the artillery firing at it to reach a far off barracks. */
-	CHECK( AI_threatScore( 0, 1, true, HERE, MOD ) > AI_threatScore( 0, 5000, false, HERE, MOD ) );
-	CHECK( AI_threatScore( 1, 0, true, HERE, MOD ) > AI_threatScore( 9999, 0, false, HERE, MOD ) );
-	CHECK( AI_threatScore( 0, 1, true, 9999.0f, MOD ) > AI_threatScore( 0, 5000, false, HERE, MOD ) );
+	/* a Humvee gun is made for soldiers, then trucks, last tanks */
+	CHECK( aiArmourAffinity( HUMAN[ VULCAN ], HUMAN, COUNT ) > aiArmourAffinity( TRUCK[ VULCAN ], TRUCK, COUNT ) );
+	CHECK( aiArmourAffinity( TRUCK[ VULCAN ], TRUCK, COUNT ) > aiArmourAffinity( TANK[ VULCAN ], TANK, COUNT ) );
 
-	/* free civilian junk still scores, otherwise a scan that found only that would
-	   report "nothing here" and the unit would walk past what it was told to clear. */
-	CHECK( AI_threatScore( 0, 0, false, HERE, MOD ) > 0 );
-	CHECK( AI_threatScore( 0, 0, false, 9999.0f, MOD ) > 0 );
+	/* a rocket soldier's missile is made for vehicles, tanks first */
+	CHECK( aiArmourAffinity( TANK[ MISSILE ], TANK, COUNT ) > aiArmourAffinity( TRUCK[ MISSILE ], TRUCK, COUNT ) );
+	CHECK( aiArmourAffinity( TRUCK[ MISSILE ], TRUCK, COUNT ) > aiArmourAffinity( HUMAN[ MISSILE ], HUMAN, COUNT ) );
 
-	/* worth halves every modifier of distance. */
-	CHECK_EQ( AI_threatScore( 0, 1000, false, MOD, MOD ), 500 );
-	CHECK_EQ( AI_threatScore( 0, 1000, false, 3.0f*MOD, MOD ), 250 );
+	/* an armour that lets nothing through is no weapon's */
+	const Real NOTHING[ COUNT ] = { 0.0f };
+	CHECK_NEAR( 0.0f, aiArmourAffinity( 0.0f, NOTHING, COUNT ), 0.0001f );
 
-	/* so the same unit closer up wins, and a big enough threat still outranks a cheap
-	   one underfoot: an Overlord a modifier away beats a Ranger at our feet. */
-	CHECK( AI_threatScore( 0, 1200, true, 10.0f, MOD ) > AI_threatScore( 0, 1200, true, 200.0f, MOD ) );
-	CHECK( AI_threatScore( 0, 2000, true, MOD, MOD ) > AI_threatScore( 0, 225, true, HERE, MOD ) );
+	/* so a Crusader takes the Battlemaster over the Technical, though the Technical (3 shots) dies
+	   in less than half the Battlemaster's time (7): the armour comes before the rate */
+	AIShotPattern tank;
+	tank.m_delayFrames = 120.0f;
+	tank.m_damagePerShot = 60.0f;
+	const Real onBattlemaster = aiTargetKillRate( 800.0f, aiFramesToKill( 400.0f, tank ), 0.0f, 2.0f );
+	const Real onTechnical = aiTargetKillRate( 500.0f, aiFramesToKill( 180.0f, tank ), 0.0f, 2.0f );
+	CHECK( onTechnical > onBattlemaster );
+	CHECK( aiTargetBeats( targetRating( 1, aiArmourAffinity( TANK[ PIERCING ], TANK, COUNT ), onBattlemaster, 900.0f, (ObjectID)9 ),
+												targetRating( 1, aiArmourAffinity( TRUCK[ PIERCING ], TRUCK, COUNT ), onTechnical, 100.0f, (ObjectID)2 ) ) );
+}
 
-	/* equal threats at equal range must tie exactly: the scan is sorted near to far and
-	   keeps the first of a tie, which is how "then the closest one" gets honoured. */
-	CHECK_EQ( AI_threatScore( 0, 900, true, 50.0f, MOD ), AI_threatScore( 0, 900, true, 50.0f, MOD ) );
+TEST(a_unit_shoots_what_its_weapon_kills_best)
+{
+	AIShotPattern humvee;
+	humvee.m_delayFrames = 12.0f;
+	AIShotPattern tank;
+	tank.m_delayFrames = 120.0f;
+	const Real SPEED = 2.0f;
 
-	/* the modifier is 0 until the AI INI is read, and a target can measure as behind us
-	   from a bounding sphere: neither may divide by zero or invert the ranking. */
-	CHECK_EQ( AI_threatScore( 0, 1000, false, 500.0f, 0.0f ), 1000 );
-	CHECK_EQ( AI_threatScore( 0, 1000, false, -5.0f, MOD ), 1000 );
+	/* a Humvee: the Technical (500, 180 health) over the Battlemaster (800, 400), and a Red Guard
+	   (300, 120) over the Battlemaster too */
+	humvee.m_damagePerShot = 2.5f;
+	const Real humveeOnTank = aiTargetKillRate( 800.0f, aiFramesToKill( 400.0f, humvee ), 0.0f, SPEED );
+	humvee.m_damagePerShot = 5.0f;
+	const Real humveeOnTruck = aiTargetKillRate( 500.0f, aiFramesToKill( 180.0f, humvee ), 0.0f, SPEED );
+	humvee.m_damagePerShot = 10.0f;
+	const Real humveeOnSoldier = aiTargetKillRate( 300.0f, aiFramesToKill( 120.0f, humvee ), 0.0f, SPEED );
+	CHECK( humveeOnTruck > humveeOnTank );
+	CHECK( humveeOnSoldier > humveeOnTank );
+
+	/* a Crusader: the Battlemaster over the Red Guard */
+	tank.m_damagePerShot = 60.0f;
+	const Real tankOnTank = aiTargetKillRate( 800.0f, aiFramesToKill( 400.0f, tank ), 0.0f, SPEED );
+	tank.m_damagePerShot = 6.0f;
+	const Real tankOnSoldier = aiTargetKillRate( 300.0f, aiFramesToKill( 120.0f, tank ), 0.0f, SPEED );
+	CHECK( tankOnTank > tankOnSoldier );
+
+	/* a wounded enemy is a quicker kill than a fresh one of the same kind */
+	tank.m_damagePerShot = 60.0f;
+	CHECK( aiTargetKillRate( 800.0f, aiFramesToKill( 100.0f, tank ), 0.0f, SPEED ) > tankOnTank );
+
+	/* the drive into reach counts: the same Battlemaster 600 units out of reach is worth less, and
+	   one out of reach of a unit that cannot move is worth nothing */
+	const Real tankFrames = aiFramesToKill( 400.0f, tank );
+	CHECK_NEAR( 800.0f / ( tankFrames + 300.0f ), aiTargetKillRate( 800.0f, tankFrames, 600.0f, SPEED ), 0.0001f );
+	CHECK_NEAR( 0.0f, aiTargetKillRate( 800.0f, tankFrames, 600.0f, 0.0f ), 0.0001f );
+	CHECK_NEAR( tankOnTank, aiTargetKillRate( 800.0f, tankFrames, 0.0f, 0.0f ), 0.0001f );
+
+	/* nothing it can hurt rates 0, which still beats having no target: a unit with nothing it
+	   counters fires at whatever is there, the nearest first */
+	CHECK_NEAR( 0.0f, aiTargetKillRate( 800.0f, AI_CANNOT_KILL, 0.0f, SPEED ), 0.0001f );
+	CHECK( aiTargetBeats( targetRating( 1, 1.0f, 0.0f, 100.0f, (ObjectID)9 ), targetRating( 1, 1.0f, 0.0f, 400.0f, (ObjectID)2 ) ) );
+
+	/* the tiers: whoever just shot us is 2 wherever it stands; while something shoots us, an armed
+	   enemy in reach that dies within the quick-kill window is 2 too; any other armed one 1; one
+	   that cannot shoot back 0, however quickly it dies.  Not under fire, a quick kill is no tier of
+	   its own, so the armour decides: a Crusader does not take a Technical for dying fast */
+	const Real QUICK = INT_TO_REAL( AI_QUICK_KILL_FRAMES );
+	CHECK_EQ( aiTargetTier( TRUE, TRUE, TRUE, FALSE, 5000.0f ), 2 );
+	CHECK_EQ( aiTargetTier( TRUE, TRUE, FALSE, FALSE, AI_CANNOT_KILL ), 2 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, TRUE, QUICK ), 2 );
+	CHECK_EQ( aiTargetTier( FALSE, FALSE, TRUE, TRUE, QUICK ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, TRUE, QUICK + 1.0f ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, FALSE, 60.0f ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, TRUE, TRUE, AI_CANNOT_KILL ), 1 );
+	CHECK_EQ( aiTargetTier( FALSE, TRUE, FALSE, TRUE, 60.0f ), 0 );
+
+	/* so the Battlemaster shooting the Humvee beats a Technical it would have to drive to, and
+	   loses to one already in reach that it finishes in seconds, whose truck armour its gun is
+	   more made for than the tank's (affinities from the armour test above) */
+	const Real HUMVEE_ON_TANK = 0.383f;
+	const Real HUMVEE_ON_TRUCK = 0.654f;
+	humvee.m_damagePerShot = 2.5f;
+	const Real humveeTankFrames = aiFramesToKill( 400.0f, humvee );
+	humvee.m_damagePerShot = 5.0f;
+	const Real humveeTruckFrames = aiFramesToKill( 180.0f, humvee );
+	CHECK_NEAR( 1920.0f, humveeTankFrames, 0.001f );
+	CHECK_NEAR( 432.0f, humveeTruckFrames, 0.001f );
+	CHECK( aiTargetBeats( targetRating( aiTargetTier( TRUE, TRUE, TRUE, TRUE, humveeTankFrames ), HUMVEE_ON_TANK, humveeOnTank, 0.0f, (ObjectID)9 ),
+												targetRating( aiTargetTier( FALSE, TRUE, TRUE, FALSE, humveeTruckFrames ), HUMVEE_ON_TRUCK, humveeOnTruck, 0.0f, (ObjectID)2 ) ) );
+	CHECK( aiTargetBeats( targetRating( aiTargetTier( FALSE, TRUE, TRUE, TRUE, humveeTruckFrames ), HUMVEE_ON_TRUCK, humveeOnTruck, 0.0f, (ObjectID)9 ),
+												targetRating( aiTargetTier( TRUE, TRUE, TRUE, TRUE, humveeTankFrames ), HUMVEE_ON_TANK, humveeOnTank, 0.0f, (ObjectID)2 ) ) );
+
+	/* armed beats unarmed whatever the armour or rate: no stopping for the dozer under the artillery */
+	CHECK( aiTargetBeats( targetRating( 1, 0.1f, 0.01f, 0.0f, (ObjectID)9 ), targetRating( 0, 2.0f, 100.0f, 0.0f, (ObjectID)2 ) ) );
+
+	/* a total order: tier, armour, rate, distance, then the lower ObjectID, the same whichever is
+	   asked first, so the pick never depends on the order the partition hands candidates out in */
+	const AITargetRating a = targetRating( 1, 1.0f, 0.5f, 100.0f, (ObjectID)2 );
+	const AITargetRating b = targetRating( 1, 1.0f, 0.5f, 100.0f, (ObjectID)9 );
+	CHECK( aiTargetBeats( a, b ) );
+	CHECK( !aiTargetBeats( b, a ) );
+	CHECK( !aiTargetBeats( a, a ) );
+	CHECK( aiTargetBeats( targetRating( 1, 1.0f, 0.6f, 900.0f, (ObjectID)9 ), a ) );
+	CHECK( aiTargetBeats( targetRating( 1, 1.1f, 0.1f, 900.0f, (ObjectID)9 ), a ) );
 }
 
 /* AI.cpp: the scripted-priority search a hunter runs over the whole map picks in one pass over
@@ -4129,6 +4282,12 @@ TEST(smoke_cap_grows_with_the_thickness_and_stops_at_the_ceiling)
 	CHECK_EQ(particleSmokeParticleCap(2500, 2.0f), 5000);
 	CHECK(particleSmokeParticleCap(2500, 4.0f) > particleSmokeParticleCap(2500, 2.0f));
 	CHECK_EQ(particleSmokeParticleCap(20000, 8.0f), 20000);
+	CHECK_EQ(particleSmokeParticleCap(15000, 2.0f), 20000);
+}
+
+TEST(smoke_cap_never_lowers_a_cap_the_player_set_above_the_ceiling)
+{
+	CHECK_EQ(particleSmokeParticleCap(1000000, 2.0f), 1000000);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -5446,140 +5605,6 @@ TEST(controlbar_command_places_go_in_rows_by_what_they_are_for)
 		CHECK_EQ( places[ slot ], manyPlaces[ slot ] );
 }
 
-TEST(controlbar_mod_slots_past_the_bar_fit_its_windows)
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET, WINDOWS = 14 };
-	const Int N = GUI_COMMAND_NONE, U = GUI_COMMAND_OBJECT_UPGRADE, W = GUI_COMMAND_SWITCH_WEAPON;
-	Bool windowed[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		windowed[ slot ] = slot < WINDOWS;
-	Int shown[ SLOTS ];
-
-	/* Contra's Cybr_AmericaInfantryRangerCommandSet: five drones, capture, two weapon switches, and
-	   attack move, guard and stop in 15, 17 and 18, which our fourteen windows lack.  The orders go to
-	   Zero Hour's 11, 13 and 14, the rest stay put */
-	const Int ranger[ SLOTS ] = { U, U, U, U, U, N, GUI_COMMAND_SPECIAL_POWER, W, N, W, N, N, N, N,
-		GUI_COMMAND_ATTACK_MOVE, N, GUI_COMMAND_GUARD, GUI_COMMAND_STOP };
-	ControlBar_fitCommandSlots( ranger, windowed, SLOTS, shown );
-	const Int rangerShown[ SLOTS ] = { 0, 1, 2, 3, 4, -1, 6, 7, -1, 9, 14, -1, 16, 17, -1, -1, -1, -1 };
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		CHECK_EQ( shown[ slot ], rangerShown[ slot ] );
-
-	/* 11 taken by the mod's own button: attack move takes the first empty window, and a stray button
-	   past the bar comes after the orders */
-	const Int busy[ SLOTS ] = { U, N, N, N, N, N, N, N, N, N, U, N, N, N, U, GUI_COMMAND_ATTACK_MOVE, N, N };
-	ControlBar_fitCommandSlots( busy, windowed, SLOTS, shown );
-	CHECK_EQ( shown[ 0 ], 0 );
-	CHECK_EQ( shown[ 10 ], 10 );
-	CHECK_EQ( shown[ 1 ], 15 );
-	CHECK_EQ( shown[ 2 ], 14 );
-
-	/* a retail set never goes past fourteen and comes back slot for slot */
-	const Int humvee[ SLOTS ] = { U, U, U, N, N, N, N, N, GUI_COMMAND_EVACUATE, N, GUI_COMMAND_ATTACK_MOVE, N,
-		GUI_COMMAND_GUARD, GUI_COMMAND_STOP, N, N, N, N };
-	ControlBar_fitCommandSlots( humvee, windowed, SLOTS, shown );
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		CHECK_EQ( shown[ slot ], humvee[ slot ] != N && slot < WINDOWS ? slot : -1 );
-}
-
-TEST(controlbar_wide_grid_only_for_a_set_past_fourteen)
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET };
-	const Int N = GUI_COMMAND_NONE, B = GUI_COMMAND_DOZER_CONSTRUCT, P = GUI_COMMAND_PURCHASE_SCIENCE;
-
-	/* Stealth's Arms Dealer: twelve buttons, one of them in 15, which the fourteen windows still hold */
-	const Int armsDealer[ SLOTS ] = { N, B, B, B, B, B, N, B, N, B, B, B, B, B, B, N, N, N };
-	CHECK( !ControlBar_needsWideCommandGrid( armsDealer, SLOTS ) );
-
-	/* a promotion screen's set has its own screen, however many slots it fills */
-	Int science[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		science[ slot ] = P;
-	CHECK( !ControlBar_needsWideCommandGrid( science, SLOTS ) );
-
-	/* fourteen fit, fifteen do not */
-	Int full[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		full[ slot ] = slot < 14 ? B : N;
-	CHECK( !ControlBar_needsWideCommandGrid( full, SLOTS ) );
-	full[ 16 ] = B;
-	CHECK( ControlBar_needsWideCommandGrid( full, SLOTS ) );
-}
-
-/* What the options menu's Hotkeys page lists for a set: each window's letter, in the steps findBars and
-   buttonKeyText take, on the windows the game's decision leaves the bar.  0 for an empty window. */
-static void hotkeysPageLetters( const Int *types, Bool spareWindows, Bool wide,
-	const std::map< std::string, WideChar >& keys, WideChar *letters )
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET };
-	Bool windowed[ SLOTS ];
-	Int shown[ SLOTS ], windowTypes[ SLOTS ], ranks[ SLOTS ];
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		windowed[ slot ] = ControlBar_usesCommandWindow( slot, spareWindows, wide );
-	ControlBar_fitCommandSlots( types, windowed, SLOTS, shown );
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		windowTypes[ slot ] = shown[ slot ] >= 0 ? types[ shown[ slot ] ] : GUI_COMMAND_NONE;
-	HotKeyManager::commandBarUpgradeRanks( windowTypes, SLOTS, ranks );
-	for( Int slot = 0; slot < SLOTS; slot++ )
-		letters[ slot ] = shown[ slot ] >= 0
-			? HotKeyManager::buttonKeyIn( AsciiString( "Command_Synthetic" ), 'Z', windowTypes[ slot ], keys, slot, ranks[ slot ] ) : 0;
-}
-
-/* The expected letters, one a window, '.' for an empty one */
-static void checkHotkeysPageLetters( const WideChar *letters, const char *expected )
-{
-	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-		CHECK_EQ( letters[ slot ], (WideChar)( expected[ slot ] == '.' ? 0 : expected[ slot ] ) );
-}
-
-/* A synthetic mod.  Its sets are made up for this test, shaped like a mod drawn for eighteen windows;
-   no mod's data is read here */
-TEST(hotkeys_page_shows_the_wide_bar_windows_and_letters)
-{
-	enum { SLOTS = MAX_COMMANDS_PER_SET };
-	const Int N = GUI_COMMAND_NONE, B = GUI_COMMAND_UNIT_BUILD, U = GUI_COMMAND_OBJECT_UPGRADE, W = GUI_COMMAND_SWITCH_WEAPON;
-	const Int A = GUI_COMMAND_ATTACK_MOVE, G = GUI_COMMAND_GUARD, S = GUI_COMMAND_STOP, P = GUI_COMMAND_SPECIAL_POWER;
-	std::map< std::string, WideChar > keys;
-	WideChar letters[ SLOTS ];
-
-	// the set that makes the bar wide: seventeen buttons, the columns' letters past fourteen
-	const Int factory[ SLOTS ] = { B, B, B, B, B, B, B, B, B, B, B, B, B, B, A, N, G, S };
-	CHECK( ControlBar_needsWideCommandGrid( factory, SLOTS ) );
-	// a bar is wide for all its sets: this one needs no wide bar and still stands on one
-	const Int soldier[ SLOTS ] = { U, U, U, U, U, N, P, W, N, W, N, N, N, N, A, N, G, S };
-	CHECK( !ControlBar_needsWideCommandGrid( soldier, SLOTS ) );
-
-	HotKeyManager::setCommandBarGrid( TRUE );
-	hotkeysPageLetters( factory, TRUE, TRUE, keys, letters );
-	checkHotkeysPageLetters( letters, "QAWSEDRFTGYHUJI.OL" );
-	hotkeysPageLetters( soldier, TRUE, TRUE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.G....I.OL" );
-
-	// the same sets on fourteen windows: the orders move, and three of the factory's seventeen have no window
-	hotkeysPageLetters( factory, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "QAWSEDRFTGYHUJ...." );
-	hotkeysPageLetters( soldier, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.GY.UJ...." );
-
-	// a mod's own ControlBar.wnd keeps all it drew, whatever the sets need
-	hotkeysPageLetters( soldier, FALSE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.G....I.OL" );
-
-	// a key for a window past fourteen counts on the wide bar alone
-	keys[ "command_synthetic@15" ] = 'M';
-	hotkeysPageLetters( soldier, TRUE, TRUE, keys, letters );
-	CHECK_EQ( letters[ 14 ], (WideChar)'M' );
-	hotkeysPageLetters( soldier, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "XCVBN.RF.GY.UJ...." );
-	keys.clear();
-	HotKeyManager::setCommandBarGrid( FALSE );
-
-	// a set of Zero Hour's on its bar: every button stays in its window, the fixed letters on the orders
-	const Int humvee[ SLOTS ] = { U, U, U, N, N, N, N, N, GUI_COMMAND_EVACUATE, N, A, N, G, S, N, N, N, N };
-	hotkeysPageLetters( humvee, TRUE, FALSE, keys, letters );
-	checkHotkeysPageLetters( letters, "ZZZ.....V.A.GS...." );
-}
-
 TEST(hotkeys_force_attack_button_gone_from_the_bar_still_loads_from_a_file)
 {
 	/* Force Attack is Ctrl: the English label's F stays off the button */
@@ -5689,11 +5714,11 @@ TEST(hotkeys_command_bar_grid_keys_by_window_slot)
 	static const char FILE_TEXT[] =
 		"CommandBarGrid\r\n  Enabled = Yes\r\nEnd\r\n\r\n"
 		"CommandButtonHotKey Command_TransportExit@4\r\n  Key = M\r\nEnd\r\n\r\n"
-		"CommandButtonHotKey shockwave:Command_TransportExit@12\r\n  Key = NONE\r\nEnd\r\n\r\n";
+		"CommandButtonHotKey Command_TransportExit@8\r\n  Key = NONE\r\nEnd\r\n\r\n";
 	HotkeysFile file = Hotkeys_parse( FILE_TEXT, rows );
 	CHECK( file.commandBarGrid );
 	CHECK_STR( file.buttons[ "Command_TransportExit@4" ].c_str(), "M" );
-	CHECK( file.buttons.count( "shockwave:Command_TransportExit@12" ) == 1 );
+	CHECK( file.buttons.count( "Command_TransportExit@8" ) == 1 );
 	const std::string text = Hotkeys_format( file, rows );
 	CHECK( text.find( FILE_TEXT ) != std::string::npos );
 	CHECK( Hotkeys_format( Hotkeys_parse( text, rows ), rows ) == text );
@@ -9888,6 +9913,42 @@ TEST(health_bar_colors_round_trip_through_options_ini)
 	TheWritableGlobalData = saved;
 }
 
+/** The picture cap (GitHub #149): off with no line, so Classic draws as fast as it always did, and
+	 each level the rate the combo box names. */
+TEST(frame_rate_limit_round_trips_through_options_ini)
+{
+	const OptionDef *def = findOptionDef( "FrameRateLimit" );
+	CHECK( def != NULL );
+	CHECK_EQ( (Int)def->kind, (Int)OPTION_ENUM );
+	CHECK_EQ( (Int)def->apply, (Int)APPLY_LIVE );
+	CHECK_EQ( def->hi, FRAME_RATE_LIMIT_COUNT - 1 );
+
+	CHECK_EQ( frameRateLimitForLevel( 0 ), 0 );
+	CHECK_EQ( frameRateLimitForLevel( 1 ), 240 );
+	CHECK_EQ( frameRateLimitForLevel( 2 ), 144 );
+	CHECK_EQ( frameRateLimitForLevel( 3 ), 120 );
+	CHECK_EQ( frameRateLimitForLevel( 4 ), 60 );
+	CHECK_EQ( frameRateLimitForLevel( FRAME_RATE_LIMIT_COUNT ), 0 );
+
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+
+	CHECK_EQ( TheGlobalData->m_frameRateLimit, 0 );
+	CHECK_EQ( optionDefaultValue( *def ), 0 );
+
+	UserPreferences pref;
+	pref[ AsciiString( "FrameRateLimit" ) ] = AsciiString( "4" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( frameRateLimitForLevel( TheGlobalData->m_frameRateLimit ), 60 );
+
+	pref[ AsciiString( "FrameRateLimit" ) ] = AsciiString( "9" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( TheGlobalData->m_frameRateLimit, FRAME_RATE_LIMIT_COUNT - 1 );
+
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
 TEST(player_color_scheme_round_trips_through_options_ini)
 {
 	const OptionDef *def = findOptionDef( "PlayerColors" );
@@ -10224,6 +10285,42 @@ TEST(a_hill_hides_the_ground_behind_it_not_the_aircraft_over_it)
 
 	// high ground stretches the ground sight past the flat range; the air stays at the flat range
 	CHECK( PartitionManager_sightCellFlags( TRUE, 6, 0, 4 ) == SIGHT_CELL_GROUND );
+}
+
+/** A tree or a bump in the ground hid single cells and one-cell streaks inside a unit's sight, and
+	 the fog came out dotted. A hidden cell with nearly all of its neighbours in sight is in sight;
+	 a strip two cells wide, and the edge of the sight itself, stay as they were. */
+TEST(sight_has_no_one_cell_holes)
+{
+	const Int side = 7;
+	UnsignedByte cells[ side * side ];
+
+	for( Int cell = 0; cell < side * side; ++cell )
+		cells[ cell ] = SIGHT_CELL_GROUND;
+	cells[ 2 * side + 2 ] = 0;
+	for( Int x = 0; x < side; ++x )
+		cells[ 4 * side + x ] = 0;
+	PartitionManager_closeSightGaps( cells, side );
+	CHECK( cells[ 2 * side + 2 ] == SIGHT_CELL_GROUND );
+	CHECK( cells[ 4 * side + 3 ] == SIGHT_CELL_GROUND );
+	CHECK( cells[ 4 * side + 0 ] == 0 );
+
+	for( Int cell = 0; cell < side * side; ++cell )
+		cells[ cell ] = SIGHT_CELL_GROUND;
+	for( Int x = 0; x < side; ++x )
+	{
+		cells[ 3 * side + x ] = 0;
+		cells[ 4 * side + x ] = 0;
+	}
+	PartitionManager_closeSightGaps( cells, side );
+	CHECK( cells[ 3 * side + 3 ] == 0 );
+	CHECK( cells[ 4 * side + 3 ] == 0 );
+
+	// a shadow's corner keeps its shape
+	for( Int cell = 0; cell < side * side; ++cell )
+		cells[ cell ] = ( cell / side >= 3 && cell % side >= 3 ) ? 0 : SIGHT_CELL_GROUND;
+	PartitionManager_closeSightGaps( cells, side );
+	CHECK( cells[ 3 * side + 3 ] == 0 );
 }
 
 /** Since the plan reveals nothing, the fog it was placed in would swallow it - and there would be
@@ -14759,6 +14856,8 @@ TEST(every_shipped_map_has_wire_letters_of_its_own)
 	names a file of town building names, one a line, standing in for the object INI. Run as
 	test_gameengine.exe write_the_maps_RMG_TEMPLATE_DUMP_names. */
 //-------------------------------------------------------------------------------------------------
+#include "Lib/Clock.h"
+
 TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
 {
 	const char *dump = getenv( "RMG_TEMPLATE_DUMP" );
@@ -14798,11 +14897,9 @@ TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
 		RandomMapGenerator::clampSettings( settings );
 		std::vector<char> map, preview;
 		RMGTemplateReport report;
-		LARGE_INTEGER frequency, before, after;
-		QueryPerformanceFrequency( &frequency );
-		QueryPerformanceCounter( &before );
+		const long long before = Clock_Ticks();
 		Bool built = rmgSynthesise( settings, exemplar, civilians ? isListedCivilian : NULL, map, &preview, &report );
-		QueryPerformanceCounter( &after );
+		const long long after = Clock_Ticks();
 		CHECK( built );
 		if( !built )
 			continue;
@@ -14822,7 +14919,7 @@ TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
 		fclose( out );
 		printf( "  wrote %s.map (%d bytes) in %.2f s: %d pads, %d ramps cut, %d patches, %d bridges, %d rivers, %d towns, %d tech, %d road "
 			"segments, %d trees, %d scenery; cut off %d starts, %d sites, %d tech\n%s",
-			name, (Int)map.size(), (double)( after.QuadPart - before.QuadPart ) / (double)frequency.QuadPart,
+			name, (Int)map.size(), (double)( after - before ) / (double)Clock_Ticks_Per_Second(),
 			report.m_pads, report.m_ramps, report.m_patches, report.m_bridges, report.m_rivers, report.m_towns, report.m_tech,
 			report.m_roads, report.m_trees, report.m_scenery, report.m_cutOffStarts, report.m_cutOffSites, report.m_cutOffTech,
 			report.m_notes.str() );
@@ -15644,6 +15741,11 @@ TEST(the_difficulty_ladder_climbs_in_every_direction_it_should)
 		CHECK( upper.m_adaptiveHarvesters >= lower.m_adaptiveHarvesters );
 		CHECK( upper.m_selfTriggeredExpansion >= lower.m_selfTriggeredExpansion );
 		CHECK( upper.m_defendExpansions >= lower.m_defendExpansions );
+
+		// more of the map: another base sooner, more of them, docks further out
+		CHECK( upper.m_secondBaseSeconds < lower.m_secondBaseSeconds );
+		CHECK( upper.m_secondBases >= lower.m_secondBases );
+		CHECK( upper.m_expansionReach >= lower.m_expansionReach );
 	}
 
 	// the ends of the ladder are what they say they are: Easy ignores what it is facing and Brutal
@@ -16476,6 +16578,32 @@ TEST(a_capturable_tech_building_is_income_not_a_target)
 	// everything else is untouched: this rule is about tech buildings and nothing else
 	CHECK( !aiIsIncomeNotATarget( FALSE, TRUE, FALSE ) );
 	CHECK( !aiIsIncomeNotATarget( FALSE, FALSE, FALSE ) );
+}
+
+
+/** An Aurora guarding a circle dropped its one bomb on the nearest thing in it, usually a soldier.
+	 A guarding aircraft now takes buildings, then vehicles, then infantry, nearest within a class, and
+	 the lower ObjectID on an exact tie so every machine picks the same one. */
+TEST(a_guarding_aircraft_bombs_buildings_then_vehicles_then_infantry)
+{
+	const Int building = aiGuardAirTargetClass( TRUE, FALSE, FALSE );
+	const Int vehicle = aiGuardAirTargetClass( FALSE, TRUE, FALSE );
+	const Int soldier = aiGuardAirTargetClass( FALSE, FALSE, TRUE );
+	const Int other = aiGuardAirTargetClass( FALSE, FALSE, FALSE );
+	CHECK( building < vehicle );
+	CHECK( vehicle < soldier );
+	CHECK( soldier < other );
+
+	// a far building beats a soldier under the plane, and a far vehicle beats him too
+	CHECK( aiGuardAirTargetBeats( building, 640000.0f, (ObjectID)9, soldier, 100.0f, (ObjectID)2 ) );
+	CHECK( aiGuardAirTargetBeats( vehicle, 640000.0f, (ObjectID)9, soldier, 100.0f, (ObjectID)2 ) );
+	CHECK( !aiGuardAirTargetBeats( soldier, 100.0f, (ObjectID)2, vehicle, 640000.0f, (ObjectID)9 ) );
+
+	// within a class the nearer one, and on an exact tie the lower id, whichever is asked first
+	CHECK( aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)9, vehicle, 400.0f, (ObjectID)2 ) );
+	CHECK( aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)2, vehicle, 100.0f, (ObjectID)9 ) );
+	CHECK( !aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)9, vehicle, 100.0f, (ObjectID)2 ) );
+	CHECK( !aiGuardAirTargetBeats( vehicle, 100.0f, (ObjectID)2, vehicle, 100.0f, (ObjectID)2 ) );
 }
 
 
@@ -17960,6 +18088,27 @@ TEST(a_door_stays_open_while_another_unit_is_still_coming)
 	CHECK( !Production_shouldCloseDoorNow( 31, 30, true, true ) );
 }
 
+/* ProductionUpdate.cpp: but only a unit close behind holds it.  Any queued unit used to count, so a
+	 Command Center training an engineer with eighteen seconds still to go stood with its gate open
+	 and empty the whole time.  A unit far enough off that the door can shut and still open early for
+	 him from shut lets it close, as retail's stopwatch did. */
+extern Bool Production_isNextUnitDue( Int framesRemaining, UnsignedInt doorClosingTime, UnsignedInt doorOpeningTime );
+
+TEST(a_door_closes_on_a_unit_still_far_off)
+{
+	/* 90 frames to close and 90 to open, retail's 1.5 s each: 182 frames out he is still due. */
+	CHECK( Production_isNextUnitDue( 182, 90, 90 ) );
+	CHECK( Production_isNextUnitDue( 1, 90, 90 ) );
+
+	/* finished and waiting on the door, or a fresh entry not yet measured: due. */
+	CHECK( Production_isNextUnitDue( 0, 90, 90 ) );
+	CHECK( Production_isNextUnitDue( -5, 90, 90 ) );
+
+	/* one frame further and there is time to shut first; eighteen seconds certainly is. */
+	CHECK( !Production_isNextUnitDue( 183, 90, 90 ) );
+	CHECK( !Production_isNextUnitDue( 1080, 90, 90 ) );
+}
+
 /* ProductionUpdate.h: production repeat.  A factory keeps one unit on repeat.  Turning a second
 	 on takes the first off.  Turning the same one on again is a no-op, and off takes it out. */
 TEST(production_repeat_is_one_unit_at_a_time)
@@ -19025,6 +19174,262 @@ TEST(water_style_defaults_to_classic_and_preserves_an_explicit_modern_choice)
     TheWritableGlobalData=saved;
 }
 
+TEST(water_reflections_default_to_hybrid_and_persist_each_mode)
+{
+    const OptionDef *reflection = findOptionDef("WaterReflection");
+    CHECK(reflection != NULL);
+    if (!reflection)
+        return;
+    CHECK_EQ(reflection->kind, OPTION_ENUM);
+    CHECK_EQ(reflection->apply, APPLY_LIVE);
+    CHECK_EQ(reflection->lo, 0);
+    CHECK_EQ(reflection->hi, 2);
+    CHECK_STR(reflection->widgetName, "OptionsMenu.wnd:ComboBoxWaterReflection");
+    CHECK_STR(reflection->labelKey, "GUI:WaterReflection");
+
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+
+    UserPreferences pref;
+    CHECK_EQ(scratch->m_waterReflection, 2);
+    // Existing preference files have no key; retain Hybrid until the player chooses a mode.
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 2);
+
+    // The choice remains available with Classic water, ready for a later switch to Modern.
+    scratch->m_waterStyle = 0;
+    static const char *const modes[] = { "0", "1", "2" };
+    for (Int mode = 0; mode < WATER_REFLECTION_COUNT; ++mode) {
+        pref["WaterReflection"] = modes[mode];
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(reflection->get(), mode);
+        saveOptionsToPreferences(pref);
+        CHECK_STR(pref["WaterReflection"].str(), modes[mode]);
+        reflection->set((mode + 1) % WATER_REFLECTION_COUNT);
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(scratch->m_waterReflection, mode);
+        CHECK_EQ(scratch->m_waterStyle, 0);
+    }
+
+    // Hand-edited out-of-range values must still resolve to a mode shown in the menu.
+    pref["WaterReflection"] = "-1";
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 0);
+    pref["WaterReflection"] = "3";
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 2);
+    pref["WaterReflection"] = "99";
+    loadOptionsFromPreferences(pref);
+    CHECK_EQ(reflection->get(), 2);
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_performance_defaults_preserve_existing_appearance)
+{
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+
+    CHECK(scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 0);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 1);
+    UserPreferences missing;
+    loadOptionsFromPreferences(missing);
+    CHECK(scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 0);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 1);
+    CHECK_EQ(scratch->m_waterReflection, 2); // existing Hybrid value is unchanged
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_performance_choices_round_trip_without_device_or_modern_style)
+{
+    // This engine-only test has no active SDL GPU device. Preferences must still load and save
+    // without one, and remain ready when Modern water becomes available again.
+    CHECK(!WaterScreenReflection::Supported());
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+    scratch->m_waterStyle = 0;
+    scratch->m_waterReflection = 2;
+
+    const char *const keys[] = { "WaterReflectionEnabled", "WaterFftResolution", "WaterRefractionQuality", "WaterReflectionDetail" };
+    const char *const widgets[] = { "OptionsMenu.wnd:CheckWaterReflectionEnabled",
+        "OptionsMenu.wnd:ComboBoxWaterFftResolution", "OptionsMenu.wnd:ComboBoxWaterRefractionQuality",
+        "OptionsMenu.wnd:ComboBoxWaterReflectionDetail" };
+    const Int maxValues[] = { 1, WATER_FFT_RESOLUTION_COUNT - 1, WATER_REFRACTION_QUALITY_COUNT - 1, WATER_REFLECTION_DETAIL_COUNT - 1 };
+    for (Int i = 0; i < (Int)(sizeof(keys) / sizeof(keys[0])); ++i) {
+        const OptionDef *def = findOptionDef(keys[i]);
+        CHECK(def != NULL);
+        if (!def) continue;
+        CHECK_EQ(def->kind, i == 0 ? OPTION_BOOL : OPTION_ENUM);
+        CHECK_EQ(def->apply, APPLY_LIVE);
+        CHECK_EQ(def->lo, 0);
+        CHECK_EQ(def->hi, maxValues[i]);
+        CHECK_STR(def->widgetName, widgets[i]);
+        CHECK(isModernWaterOption(*def));
+        for (Int value = 0; value <= maxValues[i]; ++value) {
+            UserPreferences pref;
+            def->set(value);
+            saveOptionsToPreferences(pref);
+            CHECK_STR(pref[keys[i]].str(), formatOptionValue(*def, value).str());
+            def->set((value + 1) % (maxValues[i] + 1));
+            loadOptionsFromPreferences(pref);
+            CHECK_EQ(def->get(), value);
+            CHECK_EQ(scratch->m_waterStyle, 0);
+            CHECK_EQ(scratch->m_waterReflection, 2);
+        }
+    }
+    // The same classification protects every hidden water performance widget from writeback.
+    CHECK(isModernWaterOption(*findOptionDef("WaterReflection")));
+    CHECK(!isModernWaterOption(*findOptionDef("WaterStyle")));
+    CHECK(!isModernWaterOption(*findOptionDef("CloudStyle")));
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_performance_invalid_values_are_bounded_and_console_input_is_strict)
+{
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+    const char *const keys[] = { "WaterFftResolution", "WaterRefractionQuality", "WaterReflectionDetail" };
+    for (Int i = 0; i < (Int)(sizeof(keys) / sizeof(keys[0])); ++i) {
+        const OptionDef *def = findOptionDef(keys[i]);
+        CHECK(def != NULL);
+        if (!def) continue;
+        UserPreferences pref;
+        pref[keys[i]] = "-100";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(def->get(), def->lo);
+        pref[keys[i]] = "99";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(def->get(), def->hi);
+        saveOptionsToPreferences(pref);
+        CHECK_STR(pref[keys[i]].str(), formatOptionValue(*def, def->hi).str());
+        pref[keys[i]] = "invalid";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(def->get(), 0); // same legacy invalid-number handling as the other catalog enums
+        Int value = 47;
+        CHECK(!parseOptionText(*def, "99", &value));
+        CHECK_EQ(value, 47);
+        CHECK(!parseOptionText(*def, "invalid", &value));
+        CHECK_EQ(value, 47);
+        CHECK(!parseOptionText(*def, "1.5", &value));
+        CHECK_EQ(value, 47);
+    }
+    const OptionDef *reflection = findOptionDef("WaterReflectionEnabled");
+    CHECK(reflection != NULL);
+    if (reflection) {
+        UserPreferences pref;
+        pref["WaterReflectionEnabled"] = "true";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(reflection->get(), 1);
+        pref["WaterReflectionEnabled"] = "invalid";
+        loadOptionsFromPreferences(pref);
+        CHECK_EQ(reflection->get(), 0);
+        Int value = 47;
+        CHECK(!parseOptionText(*reflection, "invalid", &value));
+        CHECK_EQ(value, 47);
+    }
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+
+TEST(modern_water_reflection_detail_is_retained_while_scene_reflections_are_off)
+{
+    const OptionDef *detail = findOptionDef("WaterReflectionDetail");
+    CHECK(detail != NULL);
+    if (!detail) return;
+    CHECK_STR(detail->labelKey, "GUI:WaterReflectionDetail");
+    CHECK(findGraphicsQualityRow("ComboBoxWaterReflectionDetail") != NULL);
+
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+    scratch->m_waterStyle = 0;
+    scratch->m_waterReflectionEnabled = FALSE;
+    scratch->m_waterReflection = 2;
+    detail->set(0);
+    UserPreferences preferences;
+    saveOptionsToPreferences(preferences);
+    CHECK_STR(preferences["WaterReflectionDetail"].str(), "0");
+    detail->set(1);
+    loadOptionsFromPreferences(preferences);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 0);
+    CHECK_EQ(scratch->m_waterStyle, 0);
+    CHECK(!scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterReflection, 2);
+    UserPreferences missing;
+    loadOptionsFromPreferences(missing);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 0); // absent keys do not overwrite an existing choice
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
+TEST(modern_water_quality_slider_high_is_the_sdl_default_and_low_is_modern_low)
+{
+    const GraphicsQualityRow *reflections = findGraphicsQualityRow("CheckWaterReflectionEnabled");
+    const GraphicsQualityRow *refraction = findGraphicsQualityRow("ComboBoxWaterRefractionQuality");
+    const GraphicsQualityRow *waves = findGraphicsQualityRow("ComboBoxWaterFftResolution");
+    const GraphicsQualityRow *detail = findGraphicsQualityRow("ComboBoxWaterReflectionDetail");
+    CHECK(reflections && refraction && waves && detail);
+    if (!reflections || !refraction || !waves || !detail) return;
+    // The reflection mode is a look chosen independently of quality.
+    CHECK(findGraphicsQualityRow("ComboBoxWaterReflection") == NULL);
+
+    GlobalData *saved = TheWritableGlobalData;
+    GlobalData *scratch = NEW GlobalData;
+    TheWritableGlobalData = scratch;
+
+    const Int high = TheGraphicsQualityAnchors[STATIC_GAME_LOD_HIGH];
+    CHECK_EQ(reflections->values[high], scratch->m_waterReflectionEnabled ? 1 : 0);
+    CHECK_EQ(refraction->values[high], scratch->m_waterRefractionQuality);
+    CHECK_EQ(waves->values[high], scratch->m_waterFftResolution);
+    CHECK_EQ(detail->values[high], scratch->m_waterReflectionDetail);
+
+    const Int low = TheGraphicsQualityAnchors[STATIC_GAME_LOD_LOW];
+    CHECK_EQ(reflections->values[low], 0);
+    CHECK_EQ(refraction->values[low], 2);
+    CHECK_EQ(waves->values[low], 0);
+    CHECK_EQ(detail->values[low], 0);
+
+    // Upstream loads explicit preferences only; a preset name/slider position does not replace
+    // absent water keys. The menu writes the selected preset's water rows as explicit keys.
+    UserPreferences pref;
+    pref["StaticGameLOD"] = "Low";
+    pref["GraphicsQuality"] = "0";
+    pref["WaterFftResolution"] = "1";
+    loadOptionsFromPreferences(pref);
+    CHECK(scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 0);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 1);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    pref["WaterReflectionEnabled"] = "no";
+    pref["WaterRefractionQuality"] = "2";
+    pref["WaterReflectionDetail"] = "0";
+    loadOptionsFromPreferences(pref);
+    CHECK(!scratch->m_waterReflectionEnabled);
+    CHECK_EQ(scratch->m_waterRefractionQuality, 2);
+    CHECK_EQ(scratch->m_waterReflectionDetail, 0);
+    CHECK_EQ(scratch->m_waterFftResolution, 1);
+    CHECK_EQ(scratch->m_waterReflection, 2); // the mode is left as it was
+
+    delete scratch;
+    TheWritableGlobalData = saved;
+}
+
 TEST(cloud_style_defaults_to_classic_and_preserves_an_explicit_volumetric_choice)
 {
     GlobalData *saved = TheWritableGlobalData;
@@ -19480,6 +19885,28 @@ TEST(empty_building_slots_are_a_check_box_that_starts_on)
 	delete scratch;
 }
 
+TEST(aircraft_altitude_lines_are_a_check_box_that_starts_on)
+{
+	const OptionDef *def = findOptionDef( "AircraftAltitudeLine" );
+	CHECK( def != NULL );
+	if( def == NULL )
+		return;
+	CHECK_EQ( (Int)def->kind, (Int)OPTION_BOOL );
+	CHECK_EQ( (Int)def->apply, (Int)APPLY_LIVE );
+	CHECK( strstr( def->widgetName, "CheckAircraftAltitudeLine" ) != NULL );
+
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+
+	CHECK( scratch->m_aircraftAltitudeLine );
+	def->set( 0 );
+	CHECK( !scratch->m_aircraftAltitudeLine );
+
+	TheWritableGlobalData = saved;
+	delete scratch;
+}
+
 TEST(high_static_lod_keeps_the_picture_settings)
 {
 	StaticGameLODInfo high;
@@ -19533,7 +19960,9 @@ TEST(graphics_quality_slider_only_ever_turns_settings_up)
 		const GraphicsQualityRow &quality = TheGraphicsQualityTable[ row ];
 		CHECK( findGraphicsQualityRow( quality.control ) == &quality );
 		for( Int step = 1; step < GRAPHICS_QUALITY_STEPS; ++step )
-			CHECK( quality.values[ step ] >= quality.values[ step - 1 ] );
+			CHECK( strcmp( quality.control, "ComboBoxWaterRefractionQuality" ) == 0
+			? quality.values[ step ] <= quality.values[ step - 1 ]
+			: quality.values[ step ] >= quality.values[ step - 1 ] );
 	}
 	// Modern water is opt-in: a preset gave it to the sea of the main menu's shell map at 11 to 45 ms a pass
 	CHECK( findGraphicsQualityRow( "ComboBoxWaterStyle" ) == NULL );
@@ -19953,7 +20382,7 @@ TEST(the_pixel_past_the_last_tab_is_no_tab_at_all)
 }
 
 /** A .wnd that never set the tab size divided by it.  A .wnd that declares more tabs than the array
-	 holds indexed past it.  Both are data, and data is what a mod hands the engine. */
+	 holds indexed past it.  Both are data, and the engine takes data as it comes. */
 TEST(a_tab_control_with_no_size_or_too_many_tabs_answers_nothing)
 {
 	CHECK_EQ( GadgetTabControl_tabAtOffset( 40, 0, 3 ), -1 );
@@ -20891,7 +21320,7 @@ TEST(the_bars_windows_can_be_torn_down_twice_without_taking_the_bar_with_them)
 }
 
 /* CommandSetReforged.ini names EA's Early_Command_ChinaCarpetBomb in slot 2 of a China command center
-	 set.  Contra X Beta 2 has no such button, and CommandSet::parseCommandButton threw and stopped the
+	 set.  On data with no such button CommandSet::parseCommandButton threw and stopped the
 	 game at start.  The slot is skipped now: it stays empty and the slots after it still parse. */
 TEST(command_set_slot_naming_an_unknown_button_is_skipped)
 {
@@ -21129,6 +21558,53 @@ TEST(the_superweapon_rule_is_a_mode_with_one_exception)
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "ChinaNuclearMissileLauncher" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "Nuke_ChinaNuclearMissileLauncher" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 1 );
+	// the same one silo for every China general, a computer as much as a human: the cap has no say
+	// in who plays the seat
+	const char *const chinaGenerals[][ 2 ] =
+	{
+		{ "FactionChina", "ChinaNuclearMissileLauncher" },
+		{ "FactionChinaNukeGeneral", "Nuke_ChinaNuclearMissileLauncher" },
+		{ "FactionChinaTankGeneral", "Tank_ChinaNuclearMissileLauncher" },
+		{ "FactionChinaInfantryGeneral", "Infa_ChinaNuclearMissileLauncher" }
+	};
+	for ( Int g = 0; g < ARRAY_SIZE( chinaGenerals ); ++g )
+	{
+		const AsciiString general( chinaGenerals[ g ][ 0 ] ), silo( chinaGenerals[ g ][ 1 ] );
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, general, silo ), 1 );
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, general, silo ), 1 );
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_ALLOW, general, silo ), (Int)SUPERWEAPON_CAP_UNLIMITED );
+		// and under No, or Pro Rules, it is an upgrade building and no superweapon of anybody's
+		CHECK( SuperweaponSiloIsUpgradeBuilding( silo, FALSE, SUPERWEAPONS_NONE ) );
+		CHECK( SuperweaponSiloIsUpgradeBuilding( silo, TRUE, SUPERWEAPONS_ALLOW ) );
+		CHECK( !SuperweaponSiloIsUpgradeBuilding( silo, FALSE, SUPERWEAPONS_LIMIT ) );
+		CHECK( !SuperweaponSiloIsUpgradeBuilding( silo, FALSE, SUPERWEAPONS_ALLOW ) );
+	}
+
+	// Under No the whole matrix: every other superweapon of every side and general is barred, the
+	// Superweapon General's one cannon aside.  The cap counts every superweapon a player has together
+	// (the Superweapon link key), so 1 is one superweapon in all, not one of each.
+	struct NoRow { const char *general; const char *superweapon; Int cap; };
+	const NoRow noRows[] =
+	{
+		{ "FactionAmerica", "AmericaParticleCannonUplink", SUPERWEAPON_CAP_BANNED },
+		{ "FactionAmericaLaserGeneral", "Lazr_AmericaParticleCannonUplink", SUPERWEAPON_CAP_BANNED },
+		{ "FactionAmericaAirForceGeneral", "AirF_AmericaParticleCannonUplink", SUPERWEAPON_CAP_BANNED },
+		{ "FactionAmericaSuperWeaponGeneral", "SupW_AmericaParticleCannonUplink", 1 },
+		{ "FactionGLA", "GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionGLAToxinGeneral", "Chem_GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionGLADemolitionGeneral", "Demo_GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionGLAStealthGeneral", "Slth_GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionTurkiye", "TurkiyeKarguBase", SUPERWEAPON_CAP_BANNED }
+	};
+	for ( Int r = 0; r < ARRAY_SIZE( noRows ); ++r )
+	{
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( noRows[ r ].general ), AsciiString( noRows[ r ].superweapon ) ), noRows[ r ].cap );
+		CHECK( !SuperweaponSiloIsUpgradeBuilding( AsciiString( noRows[ r ].superweapon ), FALSE, SUPERWEAPONS_NONE ) );
+	}
+	// the exception is the general, not the building: another general's cannon under his name is
+	// still his one, and his cannon under anybody else's is barred
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "SupW_AmericaParticleCannonUplink" ) ), (Int)SUPERWEAPON_CAP_BANNED );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "GLAScudStorm" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "GLAScudStorm" ) ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, laserGeneral, AsciiString( "Lazr_AmericaParticleCannonUplink" ) ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 4 );
@@ -22489,447 +22965,6 @@ TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
 	CHECK_EQ(strtoulAsWindows(""), 0u);
 	CHECK_EQ(strtoulAsWindows("x1"), 0u);
 	CHECK_EQ(strtoulAsWindows("-"), 0u);
-}
-
-// No -mod replaces what the fork ships.  The set is Code/Data as the build copies it into Run, less
-// the three trees that never ship, so a new master that FileSystem::isForkOwnedPath does not cover
-// fails here instead of letting a mod quietly win over it.  Retail's own loose files stay the mod's.
-TEST(every_shipped_master_is_fork_owned_and_retail_files_are_not)
-{
-	const std::filesystem::path data = std::filesystem::path(ZH_CODE_DIR) / "Data";
-	Int masters = 0;
-	for (std::filesystem::recursive_directory_iterator it(data), end; it != end; ++it)
-	{
-		if (!it->is_regular_file())
-			continue;
-		std::string relative = std::filesystem::relative(it->path(), data).generic_string();
-		if (relative.rfind("Scenarios/", 0) == 0 || relative.rfind("Cinema/", 0) == 0 || relative == "dx11shaders.shipped")
-			continue;
-		// shipped, but the one master a mod may replace: its skirmish AI is written for its own generals
-		if (relative == "Scripts/SkirmishScripts.scb")
-			continue;
-		// the post-build copy keeps Data\ in front of these and puts the rest at the top of Run
-		const char *underData[] = { "INI/", "Scripts/", "Turkish/", "German/", "Ukrainian/", "Russian/", "French/" };
-		Bool keepsData = relative == "Patch.str";
-		for (const char *prefix : underData)
-			keepsData = keepsData || relative.rfind(prefix, 0) == 0;
-		const std::string runPath = keepsData ? "Data/" + relative : relative;
-		if (!FileSystem::isForkOwnedPath(AsciiString(runPath.c_str())))
-			printf("    not fork-owned: %s\n", runPath.c_str());
-		CHECK(FileSystem::isForkOwnedPath(AsciiString(runPath.c_str())));
-		++masters;
-	}
-	CHECK(masters > 20);
-
-	CHECK(FileSystem::isForkOwnedPath(AsciiString("Art\\Textures\\ReforgedBarGLALeft.tga")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\Scripts\\MultiplayerScripts.scb")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\Scripts\\SkirmishScripts.scb")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\Scripts\\Scripts.ini")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\INI\\GameData.ini")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\INI\\Object\\AmericaTankReforged.ini")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Data\\English\\Movies\\EA_LOGO.bik")));
-	CHECK(!FileSystem::isForkOwnedPath(AsciiString("Art\\Textures\\AVPaladin.tga")));
-}
-
-// -modfactions: a mod's own names get its prefix everywhere but the line's first word, a name it does
-// not define stays retail's, and a side name stays text even when the mod also calls a block that.
-TEST(modfactions_prefix_only_the_mods_own_names)
-{
-	bootOnce();
-	ModNamespace names;
-	names.scanLine( 0, "Object AmericaRanger ; the mod's own" );
-	names.scanLine( 0, "Weapon RangerGun" );
-	names.scanLine( 0, "  Weapon = PRIMARY RetailGun" );		// a field, not a definition
-	names.scanLine( 0, "CommandSet GLA CommandSet" );				// The End of Days really has this line
-	names.scanLine( 0, "  Side = GLA" );
-	names.scanLine( 0, "ObjectCreationList OCL_Mine" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 64 ];
-	strcpy( line, "Object AmericaRanger" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "Object M1~AmericaRanger" );
-	// a colon parser's keyword stays the parser's, the name after it is the mod's; a label is neither
-	strcpy( line, "  FactionOCL = Faction:GLA OCL:OCL_Mine" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  FactionOCL = Faction:GLA OCL:M1~OCL_Mine" );
-	strcpy( line, "  DisplayName = OBJECT:OCL_Mine" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  DisplayName = OBJECT:OCL_Mine" );
-	strcpy( line, "  Weapon = PRIMARY RangerGun" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Weapon = PRIMARY M1~RangerGun" );
-	strcpy( line, "  Weapon = SECONDARY RetailGun" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Weapon = SECONDARY RetailGun" );
-	strcpy( line, "  Side = GLA" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Side = GLA" );
-	strcpy( line, "RangerGun = RangerGun" );						// the first word is the field
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "RangerGun = M1~RangerGun" );
-	strcpy( line, "Object AmericaRanger" );
-	CHECK( !names.rewriteLine( line, 23 ) );						// "Object M1~AmericaRanger" needs 24
-	CHECK_STR( line, "Object AmericaRanger" );
-
-	// a finder's miss: the mod's own name stays a miss, anything else is retail's
-	AsciiString retail;
-	CHECK( !names.findRetailName( AsciiString( "M1~AmericaRanger" ), MODNAME_OBJECT, &retail ) );
-	CHECK( names.findRetailName( AsciiString( "M1~RangerGun" ), MODNAME_OBJECT, &retail ) );
-	CHECK_STR( retail.str(), "RangerGun" );
-	CHECK( !names.findRetailName( AsciiString( "M1~RangerGun" ), MODNAME_WEAPON, &retail ) );
-	CHECK( !names.findRetailName( AsciiString( "M2~AmericaRanger" ), MODNAME_OBJECT, &retail ) );	// no second mod
-	CHECK( !names.findRetailName( AsciiString( "AmericaRanger" ), MODNAME_OBJECT, &retail ) );
-	NameKeyType key;
-	CHECK( names.findRetailKey( NAMEKEY( "M1~Upgrade_Retail" ), MODNAME_UPGRADE, &key ) );
-	CHECK_EQ( key, NAMEKEY( "Upgrade_Retail" ) );
-}
-
-// Shockwave Chaos's BlackMarketTank.ini has a 1019-character BuildVariations line of 43 of its own
-// tanks. It fits the file reader, but three characters of "M2~" on each name took it past a buffer of
-// that size, and the game stopped at startup whenever Chaos ran beside another full mod.
-TEST(modfactions_prefixed_line_outgrows_the_raw_line)
-{
-	bootOnce();
-	ModNamespace names;
-	std::string line = "  BuildVariations =";
-	for (Int i = 0; i < 43; ++i)
-	{
-		char name[ 32 ];
-		snprintf( name, sizeof( name ), "ChaosVariationTank_X%02d", i );
-		names.scanLine( 1, (std::string( "Object " ) + name).c_str() );
-		line += " ";
-		line += name;
-	}
-	names.finishScan( 1 );
-	names.setActive( 1 );
-	CHECK( (Int)line.size() < INI_MAX_CHARS_PER_LINE );
-
-	char buffer[ INI_MAX_CHARS_PER_PREFIXED_LINE + 1 ];
-	strcpy( buffer, line.c_str() );
-	CHECK( !names.rewriteLine( buffer, INI_MAX_CHARS_PER_LINE + 1 ) );		// the old buffer
-	CHECK( names.rewriteLine( buffer, sizeof( buffer ) ) );
-	CHECK_EQ( (Int)strlen( buffer ), (Int)line.size() + 43 * 3 );
-	CHECK( (Int)strlen( buffer ) > INI_MAX_CHARS_PER_LINE );
-	CHECK( strstr( buffer, " M2~ChaosVariationTank_X00 " ) != NULL );
-	CHECK( strstr( buffer, " M2~ChaosVariationTank_X42" ) != NULL );
-
-	// the worst a full line can do: a one-letter name in every other character, mod 99's prefix on each
-	ModNamespace worst;
-	worst.scanLine( 98, "Object A" );
-	worst.finishScan( 98 );
-	worst.setActive( 98 );
-	std::string full = "X";
-	while ((Int)full.size() + 2 < INI_MAX_CHARS_PER_LINE)
-		full += " A";
-	strcpy( buffer, full.c_str() );
-	CHECK( worst.rewriteLine( buffer, sizeof( buffer ) ) );
-}
-
-// The Power of the West defines "FXList No", and -modfactions made every "IsGrantable = No" an
-// "M2~No" that parseBool refused: a word the parser reads for itself is never the mod's name.
-TEST(modfactions_never_prefix_a_reserved_word)
-{
-	bootOnce();
-	ModNamespace names;
-	names.scanLine( 0, "FXList No" );
-	names.scanLine( 0, "Upgrade None" );
-	names.scanLine( 0, "FXList FX_Nope" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 64 ];
-	strcpy( line, "  IsGrantable = No" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  IsGrantable = No" );
-	strcpy( line, "  PrerequisiteSciences = None" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  PrerequisiteSciences = None" );
-	strcpy( line, "  FX = FX_Nope" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  FX = M1~FX_Nope" );
-
-	// and a name it gave a block that is also an engine word ("ParticleSystem Explosion") still reads as
-	// that word where only engine words go
-	CHECK( INI::scanBool( "M2~Yes" ) );
-	CHECK_EQ( INI::scanIndexList( "M2~SMALL_ARMS", DamageTypeFlags::getBitNames() ), (Int)DAMAGE_SMALL_ARMS );
-	CHECK_STR( INI::withoutModPrefix( "M~Explosion" ), "M~Explosion" );
-	CHECK_STR( INI::withoutModPrefix( "MX2~Explosion" ), "MX2~Explosion" );
-}
-
-class ModTestArchiveFile : public ArchiveFile
-{
-public:
-	ModTestArchiveFile() { m_file = NULL; }	// the base leaves it to the device's archive to set
-	void add( const char *directory, const char *file )
-	{
-		ArchivedFileInfo info;
-		info.m_filename = file;
-		addFile( AsciiString( directory ), &info );
-	}
-	virtual Bool getFileInfo( const AsciiString&, FileInfo* ) const { return FALSE; }
-	virtual File* openFile( const Char*, Int ) { return NULL; }
-	virtual void closeAllFiles( void ) {}
-	virtual AsciiString getName( void ) { return AsciiString::TheEmptyString; }
-	virtual AsciiString getPath( void ) { return AsciiString::TheEmptyString; }
-	virtual void setSearchPriority( Int ) {}
-	virtual void close( void ) {}
-};
-
-class ModTestArchiveFileSystem : public ArchiveFileSystem
-{
-public:
-	virtual void init( void ) {}
-	virtual void update( void ) {}
-	virtual void reset( void ) {}
-	virtual void postProcessLoad( void ) {}
-	virtual ArchiveFile* openArchiveFile( const Char* ) { return NULL; }
-	virtual void closeArchiveFile( const Char* ) {}
-	virtual void closeAllArchiveFiles( void ) {}
-	virtual void closeAllFiles( void ) {}
-	virtual Bool loadBigFilesFromDirectory( AsciiString, AsciiString, Bool, Bool ) { return FALSE; }
-
-	void addRetail( ArchiveFile *archive, const char *name )
-	{
-		loadIntoDirectoryTree( archive, AsciiString( name ) );
-		m_archiveFileMap[ AsciiString( name ) ] = archive;
-	}
-	using ArchiveFileSystem::keepModsApart;
-	using ArchiveFileSystem::addModArchive;
-};
-
-// -modfactions' focus: retail sees the tree from before any -mod, a mod its own archives, nothing else
-TEST(modfactions_focus_sees_one_set_of_archives)
-{
-	bootOnce();
-	ModTestArchiveFileSystem archives;
-	ModTestArchiveFile *retail = new ModTestArchiveFile, *one = new ModTestArchiveFile, *two = new ModTestArchiveFile;
-	retail->add( "data\\ini\\", "weapon.ini" );
-	retail->add( "data\\ini\\object\\", "a.ini" );
-	one->add( "data\\ini\\", "weapon.ini" );
-	one->add( "data\\ini\\object\\", "b.ini" );
-	two->add( "data\\ini\\object\\", "c.ini" );
-	archives.addRetail( retail, "INIZH.big" );
-	archives.keepModsApart( 2 );
-	archives.addModArchive( 0, one, AsciiString( "Mods\\One\\!one.big" ) );
-	archives.addModArchive( 1, two, AsciiString( "Mods\\Two\\!two.big" ) );
-
-	const AsciiString weapon( "Data\\INI\\Weapon.ini" );
-	CHECK_STR( archives.getArchiveFilenameForFile( weapon ).str(), "INIZH.big" );	// the default view is retail's
-	archives.setFocus( FILE_FOCUS_RETAIL );
-	CHECK_STR( archives.getArchiveFilenameForFile( weapon ).str(), "INIZH.big" );
-	archives.setFocus( 0 );
-	CHECK_STR( archives.getArchiveFilenameForFile( weapon ).str(), "Mods\\One\\!one.big" );
-	archives.setFocus( 1 );
-	CHECK( !archives.doesFileExist( weapon.str() ) );
-
-	FilenameList listed;
-	archives.getFileListInDirectory( AsciiString( "" ), AsciiString( "Data\\INI\\Object\\" ), AsciiString( "*.ini" ), listed, TRUE );
-	CHECK_EQ( (Int)listed.size(), 1 );
-	CHECK( listed.begin()->endsWithNoCase( "c.ini" ) );
-	listed.clear();
-	archives.setFocus( FILE_FOCUS_RETAIL );
-	archives.getFileListInDirectory( AsciiString( "" ), AsciiString( "Data\\INI\\Object\\" ), AsciiString( "*.ini" ), listed, TRUE );
-	CHECK_EQ( (Int)listed.size(), 1 );
-	CHECK( listed.begin()->endsWithNoCase( "a.ini" ) );
-	listed.clear();
-	archives.setFocus( FILE_FOCUS_ALL );
-	archives.getFileListInDirectory( AsciiString( "" ), AsciiString( "Data\\INI\\Object\\" ), AsciiString( "*.ini" ), listed, TRUE );
-	CHECK_EQ( (Int)listed.size(), 1 );
-	CHECK( listed.begin()->endsWithNoCase( "a.ini" ) );
-
-	// a mod's own copy by index, whatever the focus: what an "M<n>~" file name asks for
-	archives.setFocus( 1 );
-	CHECK( archives.doesModFileExist( 0, weapon ) );
-	CHECK( !archives.doesModFileExist( 1, weapon ) );
-	CHECK( archives.doesModFileExist( 1, AsciiString( "Data\\INI\\Object\\c.ini" ) ) );
-	CHECK( !archives.doesModFileExist( 0, AsciiString( "Data\\INI\\Object\\a.ini" ) ) );
-	archives.setFocus( FILE_FOCUS_ALL );
-}
-
-// -modfactions: "M<n>~" on a file name's last part names mod n's copy, only with the switch and a mod n
-TEST(modfactions_split_a_mod_file_name)
-{
-	GlobalData *saved = TheWritableGlobalData;
-	TheWritableGlobalData = NEW GlobalData;
-	TheWritableGlobalData->m_mods.assign( 2, AsciiString( "Mods\\X" ) );
-	Int mod = -1;
-	AsciiString bare;
-	TheWritableGlobalData->m_modFactions = FALSE;
-	CHECK( !FileSystem::splitModName( AsciiString( "Art\\W3D\\M1~AVRanger.w3d" ), &mod, &bare ) );
-	TheWritableGlobalData->m_modFactions = TRUE;
-	CHECK( FileSystem::splitModName( AsciiString( "Art\\W3D\\M1~AVRanger.w3d" ), &mod, &bare ) );
-	CHECK_EQ( mod, 0 );
-	CHECK_STR( bare.str(), "Art\\W3D\\AVRanger.w3d" );
-	CHECK( FileSystem::splitModName( AsciiString( "m2~exsmoke.tga" ), &mod, &bare ) );
-	CHECK_EQ( mod, 1 );
-	CHECK_STR( bare.str(), "exsmoke.tga" );
-	CHECK( !FileSystem::splitModName( AsciiString( "Art\\W3D\\M3~AVRanger.w3d" ), &mod, &bare ) );	// no third mod
-	CHECK( !FileSystem::splitModName( AsciiString( "M1~Art\\W3D\\AVRanger.w3d" ), &mod, &bare ) );	// not the last part
-	CHECK( !FileSystem::splitModName( AsciiString( "Art\\W3D\\Mx~AVRanger.w3d" ), &mod, &bare ) );
-	delete TheWritableGlobalData;
-	TheWritableGlobalData = saved;
-}
-
-// -modfactions: a mod's skirmish scripts name its things as the mod's only where the mod defines that
-// kind of thing under that name
-TEST(modfactions_mod_name_by_type)
-{
-	bootOnce();
-	ModNamespace names;
-	names.scanLine( 0, "Object AmericaTankCrusader" );
-	names.scanLine( 0, "Upgrade Upgrade_AmericaTOWMissile" );
-	names.finishScan( 0 );
-	CHECK_STR( names.modName( 0, MODNAME_OBJECT, AsciiString( "AmericaTankCrusader" ) ).str(), "M1~AmericaTankCrusader" );
-	CHECK_STR( names.modName( 0, MODNAME_UPGRADE, AsciiString( "Upgrade_AmericaTOWMissile" ) ).str(), "M1~Upgrade_AmericaTOWMissile" );
-	CHECK_STR( names.modName( 0, MODNAME_UPGRADE, AsciiString( "AmericaTankCrusader" ) ).str(), "AmericaTankCrusader" );	// not an upgrade
-	CHECK_STR( names.modName( 0, MODNAME_OBJECT, AsciiString( "ChinaTankOverlord" ) ).str(), "ChinaTankOverlord" );		// retail's
-	CHECK_STR( names.modName( 1, MODNAME_OBJECT, AsciiString( "AmericaTankCrusader" ) ).str(), "AmericaTankCrusader" );	// no second mod
-}
-
-// -modfactions: an AI on a mod faction reads its own mod's AIData side, under "M<n>~<side>", and
-// retail's of the side when the mod has none; a retail AI never reads a mod's
-TEST(modfactions_ai_side_lookups_take_the_mods_own_first)
-{
-	bootOnce();
-	CHECK_STR( AI::modSideKey( AsciiString( "America" ), -1 ).str(), "America" );
-	CHECK_STR( AI::modSideKey( AsciiString( "America" ), 1 ).str(), "M2~America" );
-
-	TAiData data;
-	AISideInfo *retail = newInstance(AISideInfo);
-	retail->m_side = "America";
-	data.addSideInfo( retail );
-	AISideInfo *shockwave = newInstance(AISideInfo);
-	shockwave->m_side = AI::modSideKey( AsciiString( "America" ), 0 );
-	data.addSideInfo( shockwave );
-	CHECK( data.findSideInfo( AsciiString( "America" ), -1 ) == retail );
-	CHECK( data.findSideInfo( AsciiString( "America" ), 0 ) == shockwave );
-	CHECK( data.findSideInfo( AsciiString( "America" ), 1 ) == retail );		// a mod without its own entry
-	CHECK( data.findSideInfo( AsciiString( "Russia" ), 1 ) == NULL );
-
-	AISideBuildList *russia = newInstance(AISideBuildList)( AI::modSideKey( AsciiString( "Russia" ), 1 ) );
-	data.addFactionBuildList( russia );
-	CHECK( data.findBuildList( AsciiString( "Russia" ), 1 ) == russia );
-	CHECK( data.findBuildList( AsciiString( "Russia" ), 0 ) == NULL );			// another mod's
-	CHECK( data.findBuildList( AsciiString( "Russia" ), -1 ) == NULL );
-}
-
-// A plain Random stays with retail's armies under any mod: a mod's faction plays only when it is picked
-TEST(modfactions_stay_out_of_a_plain_random)
-{
-	PlayerTemplate faction;
-	CHECK( !faction.isRandomExcluded() );
-	faction.setModIndex( 0 );
-	CHECK( faction.isRandomExcluded() );
-}
-
-// -modfactions: which skirmish player's scripts a computer player runs.  Its own mod's of its side
-// beats retail's, retail's stands in for a mod without any, and another mod's never fits
-TEST(modfactions_skirmish_side_fit)
-{
-	const AsciiString america( "America" );
-	CHECK_EQ( SidesList::skirmishSideFit( america, -1, america, -1 ), 2 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, 0, america, 0 ), 2 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, -1, america, 0 ), 1 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, 1, america, 0 ), 0 );
-	CHECK_EQ( SidesList::skirmishSideFit( america, 0, america, -1 ), 0 );
-	CHECK_EQ( SidesList::skirmishSideFit( AsciiString( "China" ), -1, america, -1 ), 0 );
-}
-
-// -modfactions: a word naming a model, texture or sound the mod ships gets its prefix, so WW3D and the
-// FileSystem serve the mod's copy; art it does not ship stays retail's
-TEST(modfactions_prefix_the_mods_own_art)
-{
-	bootOnce();
-	ModNamespace names;
-	names.addAsset( 0, "Art\\W3D\\AVRanger.W3D" );
-	names.addAsset( 0, "Art\\W3D\\AVRanger_STND.w3d" );
-	names.addAsset( 0, "Art\\Textures\\exsmoke.dds" );
-	names.addAsset( 0, "Data\\Audio\\Sounds\\vrange01a.wav" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 96 ];
-	strcpy( line, "  Model = avranger" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Model = M1~avranger" );
-	strcpy( line, "  Animation = AVRanger_SKL.AVRanger_STND" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Animation = M1~AVRanger_SKL.AVRanger_STND" );
-	strcpy( line, "  ParticleName = EXSmoke.tga" );		// INI says .tga, the mod ships the .dds
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  ParticleName = M1~EXSmoke.tga" );
-	strcpy( line, "  ShadowTexture = EXSmoke" );			// a decal names its texture bare, the engine adds .tga
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  ShadowTexture = M1~EXSmoke" );
-	strcpy( line, "  Sounds = vrange01a vrange01b" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Sounds = M1~vrange01a vrange01b" );
-	strcpy( line, "  Model = AVHumvee" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Model = AVHumvee" );
-	strcpy( line, "  ShowSubObject = AVRanger" );			// a sub-object, not a file
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  ShowSubObject = AVRanger" );
-
-	// a texture named like a number leaves the animation's numbers alone
-	names.addAsset( 0, "Art\\Textures\\6.dds" );
-	strcpy( line, "  IdleAnimation = AVRanger_SKL.AVRanger_STND 0 6" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  IdleAnimation = M1~AVRanger_SKL.AVRanger_STND 0 6" );
-}
-
-// -modfactions: the file in a path-shaped word is its last part, past either slash
-TEST(modfactions_last_path_part)
-{
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "x.mp3" ), 0 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "Sub\\x.mp3" ), 4 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "A\\B/x.mp3" ), 4 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "Sub\\" ), 4 );
-	CHECK_EQ( (Int)ModNamespace::lastPathPart( "" ), 0 );
-}
-
-// -modfactions: a MusicTrack Filename names the whole file, maybe in a subfolder; the prefix goes on the
-// last part, where FileSystem::splitModName looks for it
-TEST(modfactions_prefix_the_last_part_of_a_file_path)
-{
-	bootOnce();
-	ModNamespace names;
-	names.addAsset( 0, "Data\\Audio\\Tracks\\Sub\\Score01.mp3" );
-	names.addAsset( 0, "Data\\Audio\\Tracks\\Score02.mp3" );
-	names.finishScan( 0 );
-	names.setActive( 0 );
-
-	char line[ 96 ];
-	strcpy( line, "  Filename = Sub\\Score01.mp3" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = Sub\\M1~Score01.mp3" );
-	strcpy( line, "  Filename = Score02.mp3" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = M1~Score02.mp3" );
-	strcpy( line, "  Filename = Sub/Score02.mp3" );
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = Sub/M1~Score02.mp3" );
-	strcpy( line, "  Filename = Sub\\Retail.mp3" );				// not the mod's: untouched
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Filename = Sub\\Retail.mp3" );
-	strcpy( line, "  Sounds = Score01" );						// a sound event still names the base
-	CHECK( names.rewriteLine( line, sizeof( line ) ) );
-	CHECK_STR( line, "  Sounds = M1~Score01" );
-
-	// and the file system takes the prefix back off that part
-	GlobalData *saved = TheWritableGlobalData;
-	TheWritableGlobalData = NEW GlobalData;
-	TheWritableGlobalData->m_mods.assign( 1, AsciiString( "Mods\\X" ) );
-	TheWritableGlobalData->m_modFactions = TRUE;
-	Int mod = -1;
-	AsciiString bare;
-	CHECK( FileSystem::splitModName( AsciiString( "Data\\Audio\\Tracks\\Sub\\M1~Score01.mp3" ), &mod, &bare ) );
-	CHECK_EQ( mod, 0 );
-	CHECK_STR( bare.str(), "Data\\Audio\\Tracks\\Sub\\Score01.mp3" );
-	delete TheWritableGlobalData;
-	TheWritableGlobalData = saved;
 }
 
 #include "Common/GameState.h"

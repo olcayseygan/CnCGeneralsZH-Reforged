@@ -51,6 +51,7 @@
 #include "GameClient/Line2D.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/PlayerColorScheme.h"
+#include "GameClient/RadarContactMarks.h"
 #include "GameClient/TerrainVisual.h"
 #include "GameClient/Water.h"
 #include "W3DDevice/Common/W3DRadar.h"
@@ -272,6 +273,119 @@ void W3DRadar::drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, cons
 
 		// draw the icon
 		TheDisplay->drawImage( image, offsetScreen.x , offsetScreen.y, offsetScreen.x + iconWidth, offsetScreen.y + iconHeight );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A filled square cut to the radar's picture: drawFillRect clips to nothing, and a contact at the
+	* map's edge would otherwise spill onto the frame. */
+//-------------------------------------------------------------------------------------------------
+static void fillClipped( const IRegion2D &clip, Int x, Int y, Int size, UnsignedInt colour )
+{
+	Int x0 = max( x, clip.lo.x );
+	Int y0 = max( y, clip.lo.y );
+	Int x1 = min( x + size, clip.hi.x );
+	Int y1 = min( y + size, clip.hi.y );
+	if( x1 > x0 && y1 > y0 )
+		TheDisplay->drawFillRect( x0, y0, x1 - x0, y1 - y0, colour );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The radar's contacts on the minimap: this sweep's as a red square on a dark keyline with a dim
+	* ring round it, the sweep before as a small red square fading out as the next sweep comes due.
+	* A SIHA recon area is a dashed green ring, and a contact it saw an amber square, as recon_v1 has
+	* them: amber says the type is known. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height )
+{
+	const std::vector<RadarContact> &fresh = RadarContactMarks_fresh();
+	const std::vector<RadarContact> &echoes = RadarContactMarks_echoes();
+	const std::vector<RadarReconArea> &areas = RadarContactMarks_areas();
+	if( fresh.empty() && echoes.empty() && areas.empty() )
+		return;
+
+	IRegion2D clip;
+	clip.lo.x = pixelX;
+	clip.lo.y = pixelY;
+	clip.hi.x = pixelX + width;
+	clip.hi.y = pixelY + height;
+
+	const Int dashes = 48;
+	const Color areaColour = (Color)( (RadarContactLook::AreaGreen & 0x00FFFFFF) | 0xE6000000 );
+	for( size_t i = 0; i < areas.size(); ++i )
+	{
+		ICoord2D radar, centre;
+		radar.x = areas[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = areas[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &centre, pixelX, pixelY, width, height );
+		const Real rx = areas[ i ].radius * width / m_mapExtent.width();
+		const Real ry = areas[ i ].radius * height / m_mapExtent.height();
+		for( Int s = 0; s < dashes; s += 2 )
+		{
+			Real a0 = TWO_PI * s / dashes;
+			Real a1 = TWO_PI * (s + 1) / dashes;
+			ICoord2D from, to, clippedFrom, clippedTo;
+			from.x = centre.x + REAL_TO_INT( Cos( a0 ) * rx );
+			from.y = centre.y + REAL_TO_INT( Sin( a0 ) * ry );
+			to.x = centre.x + REAL_TO_INT( Cos( a1 ) * rx );
+			to.y = centre.y + REAL_TO_INT( Sin( a1 ) * ry );
+			if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &clip ) )
+				TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, 1.0f, areaColour );
+		}
+	}
+
+	// the ring is opaque, a darker shade of the contact's red: twelve translucent segments blended
+	// twice where they meet and the ring came out beaded
+	const UnsignedInt red = RadarContactLook::Colour & 0x00FFFFFF;
+	const Color ringColour = GameMakeColor( (UnsignedByte)(((red >> 16) & 0xFF) * 3 / 5), (UnsignedByte)(((red >> 8) & 0xFF) * 3 / 5),
+																					(UnsignedByte)((red & 0xFF) * 3 / 5), 255 );
+	const Color keyline = GameMakeColor( 8, 10, 8, 200 );
+	const Int pip = RadarContactLook::MinimapPip;
+	const Real ringRadius = RadarContactLook::MinimapRing * 0.5f;
+	const Int ringSegments = 12;
+	const Int dot = RadarContactLook::MinimapReconDot;
+
+	for( size_t i = 0; i < fresh.size(); ++i )
+	{
+		ICoord2D radar, pixel;
+		radar.x = fresh[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = fresh[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &pixel, pixelX, pixelY, width, height );
+
+		if( fresh[ i ].recon )
+		{
+			fillClipped( clip, pixel.x - (dot + 2) / 2, pixel.y - (dot + 2) / 2, dot + 2, keyline );
+			fillClipped( clip, pixel.x - dot / 2, pixel.y - dot / 2, dot, RadarContactLook::Amber );
+			continue;
+		}
+
+		for( Int s = 0; s < ringSegments; ++s )
+		{
+			Real a0 = TWO_PI * s / ringSegments;
+			Real a1 = TWO_PI * (s + 1) / ringSegments;
+			ICoord2D from, to, clippedFrom, clippedTo;
+			from.x = pixel.x + REAL_TO_INT( Cos( a0 ) * ringRadius );
+			from.y = pixel.y + REAL_TO_INT( Sin( a0 ) * ringRadius );
+			to.x = pixel.x + REAL_TO_INT( Cos( a1 ) * ringRadius );
+			to.y = pixel.y + REAL_TO_INT( Sin( a1 ) * ringRadius );
+			if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &clip ) )
+				TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, 1.0f, ringColour );
+		}
+		fillClipped( clip, pixel.x - (pip + 2) / 2, pixel.y - (pip + 2) / 2, pip + 2, keyline );
+		fillClipped( clip, pixel.x - pip / 2, pixel.y - pip / 2, pip, RadarContactLook::Colour );
+	}
+
+	const UnsignedInt echoAlpha = REAL_TO_UNSIGNEDBYTE( 255.0f * (1.0f - RadarContactMarks_sweepAge()) );
+	const Int echo = RadarContactLook::MinimapEcho;
+	for( size_t i = 0; i < echoes.size(); ++i )
+	{
+		if( echoes[ i ].recon )
+			continue;		// the area sees it again next sweep, as on the ground
+		ICoord2D radar, pixel;
+		radar.x = echoes[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = echoes[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &pixel, pixelX, pixelY, width, height );
+		fillClipped( clip, pixel.x - echo / 2, pixel.y - echo / 2, echo, red | (echoAlpha << 24) );
 	}
 }
 
@@ -1401,9 +1515,14 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 	// draw black border areas where we need map
 	Color fillColor = GameMakeColor( 0, 0, 0, 255 );
 	Color lineColor = GameMakeColor( 50, 50, 50, 255 );
-	if( m_mapExtent.width()/width >= m_mapExtent.height()/height )
+	if( ul.x == pixelX && ul.y == pixelY )
 	{
-		
+		// a window already cut to the map's shape (ControlBar::fitRadarToMap) has no bands to fill, and
+		// their edge lines would fall a pixel outside the map, on the frame
+	}
+	else if( m_mapExtent.width()/width >= m_mapExtent.height()/height )
+	{
+
 		// draw horizontal bars at top and bottom
 		TheDisplay->drawFillRect( pixelX, pixelY, width, ul.y - pixelY - 1, fillColor );
 		TheDisplay->drawFillRect( pixelX, lr.y + 1, width, pixelY + height - lr.y - 1, fillColor);
@@ -1451,6 +1570,12 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 
 		TheDisplay->drawImage( m_shroudImage, ul.x, ul.y, lr.x, lr.y );
 	}
+
+	// the radar's contacts go over the shroud, which would dim them in the fog and black them out in
+	// the shroud, and so over the unit dots of the overlay as well.  A contact is only ever a unit the
+	// shown player cannot see, so it never covers its own dot; it can cover a neighbour's.  The icons
+	// still go on top
+	drawRadarContacts( ul.x, ul.y, scaledWidth, scaledHeight );
 
 	// draw any icons
 	drawIcons( ul.x, ul.y, scaledWidth, scaledHeight );

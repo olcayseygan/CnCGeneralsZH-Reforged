@@ -464,6 +464,7 @@ DECLARE_PERF_TIMER(Terrain_Render_Flat)
 void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 {
 	USE_PERF_TIMER(Terrain_Render_Flat)
+	const Bool modernFullMirror = TheWaterRenderObj && TheWaterRenderObj->isModernFullMirror();
 	
 	Int devicePasses;
 	W3DShaderManager::ShaderTypes st;
@@ -500,7 +501,11 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 
 	
 	DX8Wrapper::Set_Material(m_vertexMaterialClass);
-	DX8Wrapper::Set_Shader(m_shaderClass);
+	// The mirror camera looks up at the banks; both sides belong in Modern's coloured mirror.
+	ShaderClass terrainShader(m_shaderClass);
+	if (modernFullMirror)
+		terrainShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+	DX8Wrapper::Set_Shader(terrainShader);
 
 	if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT) {
 		doCloud = false;
@@ -531,9 +536,9 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
  	if (m_disableTextures)
  		devicePasses=1;	//force to 1 lighting-only pass
 
-	// A water mirror leaves the ground out: the reflection darkens water wherever anything stands in
-	// the mirror, and the banks would lay a dark band along every shore.
-	if (ShaderClass::Is_Backface_Culling_Inverted())
+	// Classic's mirror darkens water wherever anything stands in it, so reflected banks would
+	// lay a dark band along every shore. Modern uses the ground's colour instead.
+	if (ShaderClass::Is_Backface_Culling_Inverted() && !modernFullMirror)
 		devicePasses=0;
 
  	//Specify all textures that this shader may need.
@@ -559,7 +564,10 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
  	for (pass=0; pass<devicePasses; pass++) {
 		Bool disableTex = m_disableTextures;
 		if (m_disableTextures ) {
-			DX8Wrapper::Set_Shader(ShaderClass::_PresetOpaque2DShader);
+			ShaderClass shader=ShaderClass::_PresetOpaque2DShader;
+			if (modernFullMirror)
+				shader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+			DX8Wrapper::Set_Shader(shader);
 			DX8Wrapper::Set_Texture(0,NULL);
 		} else {
 			W3DShaderManager::setShader(st, pass);
@@ -572,8 +580,10 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 				if (pass>0) {
 					disableTex = TRUE; // doing cloud/noise
 				}
-				if (!tile->isCulled()) {
-					tile->drawVisiblePolys(rinfo, disableTex);
+				// Do not updateCenter for the mirror: it changes the main view's texture/LOD state.
+				// The tile tests the reflected frustum without changing that cached visibility.
+				if (modernFullMirror || !tile->isCulled()) {
+					tile->drawVisiblePolys(rinfo, disableTex, modernFullMirror);
 					if (i*CELLS_PER_TILE<xCoordMin) {
 						xCoordMin = i*CELLS_PER_TILE;
 					}
@@ -640,9 +650,11 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	ShaderClass::Invalidate();
 	DX8Wrapper::Apply_Render_State_Changes();
 
-	m_waypointBuffer->drawWaypoints(rinfo);
+	if (!modernFullMirror)
+		m_waypointBuffer->drawWaypoints(rinfo);
 
-	m_bibBuffer->renderBibs();
+	if (!modernFullMirror)
+		m_bibBuffer->renderBibs();
 #endif
 	// We do some custom blending, so tell the shader class to reset everything.
 	DX8Wrapper::Set_Texture(0,NULL);

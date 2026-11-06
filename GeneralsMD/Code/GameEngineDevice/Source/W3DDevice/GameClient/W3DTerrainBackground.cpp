@@ -47,6 +47,8 @@
 //         Includes                                                      
 //-----------------------------------------------------------------------------
 #include "W3DDevice/GameClient/W3DTerrainBackground.h"
+#include "WW3D2/rinfo.h"
+#include "WW3D2/camera.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -760,13 +762,13 @@ void W3DTerrainBackground::updateTexture(void)
 // W3DTerrainBackground::renderTerrain
 //=============================================================================
 //=============================================================================
-void W3DTerrainBackground::drawVisiblePolys(RenderInfoClass & rinfo, Bool disableTextures)
+void W3DTerrainBackground::drawVisiblePolys(RenderInfoClass & rinfo, Bool disableTextures, Bool useMirrorCamera)
 {
 #if 1
 	if (m_curNumTerrainIndices == 0) {
 		return;
 	}
-	if (m_cullStatus==CULL_STATUS_INVISIBLE) {
+	if (useMirrorCamera ? rinfo.Camera.Cull_Box(m_bounds) : m_cullStatus==CULL_STATUS_INVISIBLE) {
 		return;
 	}
 	// Setup the vertex buffer, shader & texture.
@@ -786,7 +788,7 @@ void W3DTerrainBackground::drawVisiblePolys(RenderInfoClass & rinfo, Bool disabl
 	if (m_curNumTerrainIndices == 0) {
 		return;
 	}
-	if (m_cullStatus==CULL_STATUS_INVISIBLE) {
+	if (useMirrorCamera ? rinfo.Camera.Cull_Box(m_bounds) : m_cullStatus==CULL_STATUS_INVISIBLE) {
 		return;
 	}
 	// Setup the vertex buffer, shader & texture.

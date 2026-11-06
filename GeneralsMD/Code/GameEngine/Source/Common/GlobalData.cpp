@@ -45,7 +45,6 @@
 #include "BuildFingerprint.h"		// ZH_BUILD_FINGERPRINT, generated at build time (N1)
 #include "Common/EarlyOptions.h"	// findUserDataDirectory
 #include "Common/file.h"
-#include "Common/ArchiveFileSystem.h"
 #include "Common/FileSystem.h"
 #include "Common/GameAudio.h"
 #include "Common/GameLOD.h"	// STATIC_GAME_LOD_HIGH, whose step on the quality slider is the slider's default
@@ -665,6 +664,8 @@ GlobalData::GlobalData()
 	m_fullscreenScaling = FULLSCREEN_SCALING_STRETCH;	// what EA's fullscreen mode change gave on most monitors
 	m_msaaLevel = 0;
 	m_vsync = FALSE;
+	m_frameRateLimit = 0;
+	m_noFrameRateCap = FALSE;
 	m_direct3D11 = TRUE;
 	m_direct3D11DumpPath.clear();
 	// The Direct3D 11 frame gets every effect the backend has unless -dx11post names a chain of its
@@ -702,6 +703,11 @@ GlobalData::GlobalData()
 	m_smoothMotion = FALSE;					//a model stands where the last logic tick left it until the box is ticked
 	m_smoothMotionAnyDisplay = FALSE;
 	m_waterStyle = 0;				// classic by default; modern water is an explicit option
+	m_waterReflection = 2;		// Hybrid once Modern is explicitly selected
+	m_waterReflectionEnabled = TRUE;
+	m_waterFftResolution = 1;
+	m_waterRefractionQuality = 0;
+	m_waterReflectionDetail = 1;
 	m_cloudStyle = 0;				// Classic by default; volumetric hazard clouds are opt-in
 	m_explosionDebrisTrails = FALSE;
 	m_shadowQuality = 1;					//medium, the 2048 map the shadows always had
@@ -1022,6 +1028,7 @@ GlobalData::GlobalData()
 	// the words the game shipped with until somebody picks a translation
 	m_textLanguage = TEXT_LANGUAGE_ENGLISH;
 	m_showOrderLines = FALSE;
+	m_aircraftAltitudeLine = TRUE;		// the owner's word: on until a player turns it off
 
 	m_particleEdit = FALSE;
 
@@ -1159,7 +1166,6 @@ GlobalData::GlobalData()
 
 	m_isBreakableMovie = FALSE;
 	m_breakTheMovie = FALSE;
-	m_modFactions = FALSE;
 
 	setTimeOfDay( m_timeOfDay );
 
@@ -1308,7 +1314,6 @@ GlobalData::GlobalData()
 	m_useAlternateMouse = FALSE;
 
 	computeExeCRC();
-	m_baseExeCRC = m_exeCRC;
 
 }  // end GlobalData
 
@@ -1460,10 +1465,7 @@ GlobalData *GlobalData::newOverride( void )
 }  // end newOveride
 
 //-------------------------------------------------------------------------------------------------
-/** The build fingerprint, the version and the two multiplayer scripts as they resolve now: once at
-	* construction, and again after -mod mounts its archives (parseCommandLine), since a mod's
-	* SkirmishScripts.scb or MultiplayerScripts.scb is the one the match runs.  Without -mod it runs once
-	* and the value is what it always was. */
+/** The build fingerprint, the version and the multiplayer scripts, once at construction. */
 //-------------------------------------------------------------------------------------------------
 void GlobalData::computeExeCRC( void )
 {
@@ -1476,29 +1478,13 @@ void GlobalData::computeExeCRC( void )
 		UnsignedInt version = TheVersion->getVersionNumber();
 		exeCRC.computeCRC( &version, sizeof(UnsignedInt) );
 	}
-	// Add in MP scripts to the EXE CRC, since the game will go out of sync if they change
-	// -modfactions: then each mod's own SkirmishScripts.scb, which its factions' computer players run
-	// (SidesList::loadModSkirmishScripts)
+	// Add in MP scripts to the EXE CRC, since the game will go out of sync if they change,
 	// and EA's own SkirmishScripts.scb, which a player's own map runs (SidesList::prepareForMP_or_Skirmish)
-	std::vector<Int> focus( 3, FILE_FOCUS_ALL );
-	for (Int mod = 0; m_modFactions && mod < (Int)m_mods.size(); ++mod)
-		focus.push_back( mod );
-	for (size_t s = 0; s < focus.size(); ++s)
+	const char *scripts[] = { "Data\\Scripts\\SkirmishScripts.scb", "Data\\Scripts\\MultiplayerScripts.scb",
+		"Data\\Scripts\\SkirmishScriptsRetail.scb" };
+	for (size_t s = 0; s < ARRAY_SIZE( scripts ); ++s)
 	{
-		const char *script = s == 1 ? "Data\\Scripts\\MultiplayerScripts.scb"
-											 : s == 2 ? "Data\\Scripts\\SkirmishScriptsRetail.scb" : "Data\\Scripts\\SkirmishScripts.scb";
-		File *fp = NULL;
-		if (focus[s] == FILE_FOCUS_ALL)
-		{
-			fp = TheFileSystem->openFile( script, File::READ | File::BINARY );
-		}
-		else
-		{
-			TheFileSystem->setFocus( focus[s] );
-			if (TheFileSystem->doesFileExist( script ))
-				fp = TheFileSystem->openFile( script, File::READ | File::BINARY );
-			TheFileSystem->setFocus( FILE_FOCUS_ALL );
-		}
+		File *fp = TheFileSystem->openFile( scripts[s], File::READ | File::BINARY );
 		if (fp == NULL)
 			continue;
 		unsigned char crcBlock[blockSize];
@@ -1510,38 +1496,18 @@ void GlobalData::computeExeCRC( void )
 		fp->close();
 	}
 
-	// Two facts SidesList::prepareForMP_or_Skirmish reads that the files above may not show, hashed only
+	// A fact SidesList::prepareForMP_or_Skirmish reads that the files above do not show, hashed only
 	// when set so an ordinary machine's value is the one it always was.  With no user data folder a
-	// player's own map reads as one of the game's and gets the fork's AI; and a mod can ship a copy of
-	// the fork's SkirmishScripts.scb byte for byte, which keeps EA's off a player's own map.
+	// player's own map reads as one of the game's and gets the fork's AI.
 	const Bool noUserDataDir = m_userDataDir.isEmpty();
 	if (noUserDataDir)
 	{
 		const UnsignedInt noUserData = 0x4E4F5544;	// "NOUD"
 		exeCRC.computeCRC( &noUserData, sizeof( noUserData ) );
 	}
-	Bool modScripts = FALSE;
-	if (TheFileSystem && TheArchiveFileSystem)
-	{
-		Bool inModArchive = FALSE;
-		modScripts = TheFileSystem->modLooseFile( AsciiString( "data\\Scripts\\SkirmishScripts.scb" ), &inModArchive ).isNotEmpty() || inModArchive;
-		if (modScripts)
-		{
-			const UnsignedInt modScriptsMark = 0x4D4F4453;	// "MODS"
-			exeCRC.computeCRC( &modScriptsMark, sizeof( modScriptsMark ) );
-		}
-
-		// A mod's CommandSet.ini keeps its sets from the fork's corrections (CommandStore), and a copy
-		// byte for byte of EA's would hash the same as no copy at all.
-		if( TheFileSystem->modLooseFile( AsciiString( "Data\\INI\\CommandSet.ini" ), &inModArchive ).isNotEmpty() || inModArchive )
-		{
-			const UnsignedInt modSetsMark = 0x4D4F4443;	// "MODC"
-			exeCRC.computeCRC( &modSetsMark, sizeof( modSetsMark ) );
-		}
-	}
 
 	m_exeCRC = exeCRC.get();
-	DEBUG_LOG(("EXE CRC: 0x%8.8X (no user data folder %d, a mod's skirmish scripts %d)\n", m_exeCRC, noUserDataDir, modScripts));
+	DEBUG_LOG(("EXE CRC: 0x%8.8X (no user data folder %d)\n", m_exeCRC, noUserDataDir));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1618,7 +1584,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	TheWritableGlobalData->m_windowMode = TheWritableGlobalData->m_windowed
 			? WINDOW_MODE_WINDOWED : WINDOW_MODE_FULLSCREEN;
 
-	// These are loop bounds into fixed arrays, allocation sizes and divisors, and a mod's GameData
+	// These are loop bounds into fixed arrays, allocation sizes and divisors, and a GameData.ini
 	// can hold anything.  The road buffers index with 16 bits and allocate four past the maximum.
 	const Int maxRoadBufferSize = 65535 - 4;
 	GlobalData *data = TheWritableGlobalData;

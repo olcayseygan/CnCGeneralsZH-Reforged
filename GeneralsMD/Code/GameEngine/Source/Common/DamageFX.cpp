@@ -280,8 +280,7 @@ const DamageFX *DamageFXStore::findDamageFX(AsciiString name) const
   DamageFXMap::const_iterator it = m_dfxmap.find(namekey);
   if (it == m_dfxmap.end())
 	{
-		AsciiString retailName;
-		return TheModNamespace.findRetailName(name, MODNAME_DAMAGEFX, &retailName) ? findDamageFX(retailName) : NULL;
+		return NULL;
 	}
 	else
 	{

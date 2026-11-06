@@ -73,6 +73,7 @@
 #include "GameNetwork/NAT.h"
 #include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
+#include "GameNetwork/Transport.h"
 
 void WOLDisplaySlotList( void );
 
@@ -2116,7 +2117,9 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 
 		Bool isHosting = TheGameSpyInfo->amIHost(); // only while in game setup screen
 		isHosting = isHosting || (TheGameSpyGame && TheGameSpyGame->isInGame() && TheGameSpyGame->amIHost()); // while in game
-		if (!isHosting && !lastSlotlistTime && Clock_Milliseconds() > enterTime + 10000)
+		// the first slot list comes over a player-to-player connection when a route is set, and at 300 ms of
+		// ping that connection can still be coming up after ten seconds
+		if (!isHosting && !lastSlotlistTime && Clock_Milliseconds() > enterTime + (TheTransportRoute ? 30000 : 10000))
 		{
 			// don't do this if we're disconnected
 			if (TheGameSpyPeerMessageQueue->isConnected())

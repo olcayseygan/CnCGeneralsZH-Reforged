@@ -114,14 +114,6 @@ struct StringLookUp
 	StringInfo		*info;
 };
 
-/// one -modfactions mod's own labels: info owns the strings, lut is sorted by compareLUT
-struct ModStringTable
-{
-	StringInfo		*info;
-	StringLookUp	*lut;
-	Int						count;
-};
-
 //===============================
 // CSFHeader 
 //===============================
@@ -170,20 +162,8 @@ class GameTextManager : public GameTextInterface
 
 		virtual void					initMapStringFile( const AsciiString& filename );
 		virtual WideChar			fetchEnglishHotKey( const AsciiString& label );
-		virtual void					loadModStrings( Int mod );
-		virtual Bool					hasModLabel( Int mod, const char *label ) const;
 
 	protected:
-
-		/// -modfactions: each mod's own labels (English CSF and STR), by mod index; empty with no full -mod
-		std::vector< ModStringTable > m_modStrings;
-		/// each mod's CSF in the player's language, text only: never consulted for the label set
-		std::vector< ModStringTable > m_modLangStrings;
-		/// the mod index of a "M<n>~" label with a loaded table, or -1
-		Int							modLabelIndex( const char *label ) const;
-		void						readModTable( ModStringTable &table, const char *csf, const char *str );
-		/// the mod's text for label: its language's CSF first, then its English CSF and STR
-		StringLookUp		*findModText( Int mod, const char *label ) const;
 
 		/// label (lower case) -> its English hotkey letter, filled once the table is read
 		std::map< std::string, WideChar > m_englishHotKeys;
@@ -230,15 +210,6 @@ class GameTextManager : public GameTextInterface
 };
 
 static int _cdecl			compareLUT ( const void *,  const void*);
-
-static StringLookUp *findModLabel( const ModStringTable &table, const char *label )
-{
-	AsciiString lb = label;
-	StringLookUp key;
-	key.info = NULL;
-	key.label = &lb;
-	return (StringLookUp *) bsearch( &key, (void*) table.lut, table.count, sizeof(StringLookUp), compareLUT );
-}
 //----------------------------------------------------------------------------
 //         Private Data                                                     
 //----------------------------------------------------------------------------
@@ -563,16 +534,6 @@ void GameTextManager::deinit( void )
 	}
 
 	m_textCount = 0;
-
-	for ( size_t mod = 0; mod < m_modStrings.size(); ++mod )
-	{
-		delete [] m_modStrings[ mod ].info;
-		delete [] m_modStrings[ mod ].lut;
-		delete [] m_modLangStrings[ mod ].info;
-		delete [] m_modLangStrings[ mod ].lut;
-	}
-	m_modStrings.clear();
-	m_modLangStrings.clear();
 
 	NoString *noString = m_noStringList;
 
@@ -1448,23 +1409,6 @@ UnicodeString GameTextManager::fetch( const Char *label, Bool *exists )
 		return m_failed;
 	}
 
-	// -modfactions: "M<n>~LABEL" is mod n-1's own LABEL, and ours when that mod has none
-	if ( label[0] == 'M' && !m_modStrings.empty() )
-	{
-		Int mod = modLabelIndex( label );
-		if ( mod >= 0 )
-		{
-			label += 3;
-			StringLookUp *own = findModText( mod, label );
-			if ( own )
-			{
-				if( exists )
-					*exists = TRUE;
-				return own->info->text;
-			}
-		}
-	}
-
 	StringLookUp *lookUp;
 	StringLookUp key;
 	AsciiString lb;
@@ -1524,142 +1468,11 @@ UnicodeString GameTextManager::fetch( AsciiString label, Bool *exists )
 }
 
 //============================================================================
-// GameTextManager::modLabelIndex
-//============================================================================
-
-Int GameTextManager::modLabelIndex( const char *label ) const
-{
-	if ( label[0] != 'M' || label[1] < '1' || label[1] > '9' || label[2] != '~' )
-		return -1;
-	Int mod = label[1] - '1';
-	return mod < (Int)m_modStrings.size() && m_modStrings[ mod ].lut != NULL ? mod : -1;
-}
-
-//============================================================================
-// GameTextManager::loadModStrings
-//============================================================================
-
-void GameTextManager::loadModStrings( Int mod )
-{
-	if ( (Int)m_modStrings.size() <= mod )
-	{
-		ModStringTable none = { NULL, NULL, 0 };
-		m_modStrings.resize( mod + 1, none );
-		m_modLangStrings.resize( mod + 1, none );
-	}
-
-	// The label set decides which INI words get "M<n>~", so it may not depend on the player's
-	// language: the English CSF and the STR only.  The language's CSF is text alone, read first.
-	AsciiString csfFile;
-	csfFile.format(g_csfFile, "English");
-	readModTable( m_modStrings[ mod ], csfFile.str(), g_strFile );
-	AsciiString language = GetRegistryLanguage();
-	csfFile.format(g_csfFile, language.str());
-	readModTable( m_modLangStrings[ mod ], language.compareNoCase( "English" ) ? csfFile.str() : NULL, NULL );
-
-	DEBUG_LOG(("MODNS M%d~ strings: %d labels\n", mod + 1, m_modStrings[ mod ].count));
-}
-
-//============================================================================
-// GameTextManager::readModTable
-//============================================================================
-
-void GameTextManager::readModTable( ModStringTable &table, const char *csf, const char *str )
-{
-	// getCSFInfo sizes through our own count and language; keep ours
-	Int ourCount = m_textCount;
-	LanguageID ourLanguage = m_language;
-	Int csfCount = csf && getCSFInfo( csf ) ? m_textCount : 0;
-	m_textCount = ourCount;
-	m_language = ourLanguage;
-	Int strCount = 0;
-	if ( str )
-		getStringCount( str, strCount );
-
-	table.info = NEW StringInfo[ csfCount + strCount ];
-
-	// the parsers fill m_stringInfo from index 0: point it at the mod's table, the STR after the CSF
-	StringInfo *ours = m_stringInfo;
-	m_stringInfo = table.info;
-	if ( csfCount )
-		parseCSF( csf );
-	m_stringInfo = table.info + csfCount;
-	if ( strCount )
-		parseStringFile( str );
-	m_stringInfo = ours;
-
-	// the STR's padding leaves empty entries behind; they are no label
-	table.lut = NEW StringLookUp[ csfCount + strCount ];
-	table.count = 0;
-	for ( Int i = 0; i < csfCount + strCount; i++ )
-	{
-		if ( table.info[ i ].label.isEmpty() )
-			continue;
-		table.lut[ table.count ].info = &table.info[ i ];
-		table.lut[ table.count ].label = &table.info[ i ].label;
-		table.count++;
-	}
-	qsort( table.lut, table.count, sizeof(StringLookUp), compareLUT );
-
-	// a label in both files: the entry further along, the STR's, wins, as the overlays do in init
-	if ( table.count > 1 )
-	{
-		Int kept = 1;
-		for ( Int i = 1; i < table.count; i++ )
-		{
-			if ( table.lut[i].label->compareNoCase( table.lut[kept - 1].label->str() ) == 0 )
-			{
-				if ( table.lut[i].info > table.lut[kept - 1].info )
-					table.lut[kept - 1] = table.lut[i];
-				continue;
-			}
-			table.lut[kept] = table.lut[i];
-			kept++;
-		}
-		table.count = kept;
-	}
-}
-
-//============================================================================
-// GameTextManager::findModText
-//============================================================================
-
-StringLookUp *GameTextManager::findModText( Int mod, const char *label ) const
-{
-	StringLookUp *own = findModLabel( m_modLangStrings[ mod ], label );
-	return own ? own : findModLabel( m_modStrings[ mod ], label );
-}
-
-//============================================================================
-// GameTextManager::hasModLabel
-//============================================================================
-
-Bool GameTextManager::hasModLabel( Int mod, const char *label ) const
-{
-	return findModLabel( m_modStrings[ mod ], label ) != NULL;
-}
-
-//============================================================================
 // GameTextManager::fetchEnglishHotKey
 //============================================================================
 
 WideChar GameTextManager::fetchEnglishHotKey( const AsciiString& label )
 {
-	// a mod's own label: the letter after '&' in the mod's text, which is the mod's own key
-	Int mod = m_modStrings.empty() ? -1 : modLabelIndex( label.str() );
-	if ( mod >= 0 )
-	{
-		StringLookUp *own = findModText( mod, label.str() + 3 );
-		if ( own )
-		{
-			const WideChar *amp = own->info->text.str();
-			while ( *amp && *amp != u'&' )
-				amp++;
-			return ( *amp && amp[ 1 ] > u' ' ) ? amp[ 1 ] : 0;
-		}
-		return fetchEnglishHotKey( AsciiString( label.str() + 3 ) );
-	}
-
 	AsciiString key = label;
 	key.toLower();
 	std::map< std::string, WideChar >::const_iterator it = m_englishHotKeys.find( key.str() );

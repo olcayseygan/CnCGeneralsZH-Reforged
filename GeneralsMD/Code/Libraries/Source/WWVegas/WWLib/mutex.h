@@ -189,10 +189,10 @@ public:
 */
 class FastCriticalSectionClass
 {
-	std::atomic_flag Flag;
+	std::atomic_flag Flag = ATOMIC_FLAG_INIT;
 
 public:
-	FastCriticalSectionClass() : Flag ATOMIC_FLAG_INIT {}
+	FastCriticalSectionClass() {}
 
 	class LockClass
 	{

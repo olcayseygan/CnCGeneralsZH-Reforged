@@ -324,8 +324,52 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 // just ask for that; the above has to find ALL objects in range, but we ignore all 
 // but the first (closest).
 //
-	Object* target = ThePartitionManager->getClosestObject(&pos, visionRange, FROM_CENTER_2D, filters, NULL, NULL, searchPlayers);
-	if (target) 
+	Object* target = NULL;
+	if (owner->isKindOf(KINDOF_AIRCRAFT) && !owner->getTemplate()->isEnterGuard())
+	{
+		// A plane's one bomb went on the nearest thing in the circle, usually a soldier, and it flew home
+		// to rearm with the factory beside him standing: buildings first, then vehicles, then infantry.
+		SimpleObjectIterator* iter = ThePartitionManager->iterateObjectsInRange(&pos, visionRange, FROM_CENTER_2D, filters, ITER_FASTEST);
+		MemoryPoolObjectHolder hold(iter);
+		Int bestClass = 0;
+		Real bestDistSqr = 0.0f;
+		Real distSqr;
+		for (Object* other = iter->firstWithNumeric(&distSqr); other; other = iter->nextWithNumeric(&distSqr))
+		{
+			Int otherClass = aiGuardAirTargetClass(other->isKindOf(KINDOF_STRUCTURE), other->isKindOf(KINDOF_VEHICLE), other->isKindOf(KINDOF_INFANTRY));
+			if (target == NULL || aiGuardAirTargetBeats(otherClass, distSqr, other->getID(), bestClass, bestDistSqr, target->getID()))
+			{
+				target = other;
+				bestClass = otherClass;
+				bestDistSqr = distSqr;
+			}
+		}
+		if (target)
+			DEBUG_LOG(("GUARD AIR: frame %d '%s' %d picks '%s' %d, class %d\n", TheGameLogic->getFrame(),
+				owner->getTemplate()->getName().str(), owner->getID(), target->getTemplate()->getName().str(), target->getID(), bestClass));
+	}
+	else if (!owner->getTemplate()->isEnterGuard())
+	{
+		// what its weapons kill best in the circle, the way every other unit picks its own target:
+		// gathered from enemy cells with the cheap filters, and the attack and fog questions asked
+		// only of a candidate that would take the lead (as findClosestEnemy does)
+		PartitionFilter* gather[8];
+		Int g = 0;
+		gather[g++] = &f1;
+		gather[g++] = &filterMapStatus;
+		if (area)
+			gather[g++] = &f3;
+		if (getGuardMode() == GUARDMODE_GUARD_FLYING_UNITS_ONLY)
+			gather[g++] = &f4;
+		gather[g] = NULL;
+		PartitionFilter* late[] = { &f2, &filterFogged, NULL };
+		SimpleObjectIterator* iter = ThePartitionManager->iterateObjectsInRange(&pos, visionRange, FROM_CENTER_2D, gather, ITER_FASTEST, searchPlayers);
+		MemoryPoolObjectHolder hold(iter);
+		target = TheAI->pickBestTarget(owner, iter, late);
+	}
+	else
+		target = ThePartitionManager->getClosestObject(&pos, visionRange, FROM_CENTER_2D, filters, NULL, NULL, searchPlayers);
+	if (target)
 	{
 		setNemesisID(target->getID());	
 		return true;	// Transitions to AIGuardInnerState.

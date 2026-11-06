@@ -28,14 +28,8 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "zhio.h"
 
-#include <algorithm>
-#include <string>
-
-#include "Common/ArchiveFileSystem.h"
 #include "Common/CommandLine.h"
 #include "Common/CRCDebug.h"
-#include "Common/file.h"
-#include "Common/LocalFileSystem.h"
 #include "Common/OptionsCatalog.h"
 #include "Common/version.h"
 #include "GameClient/TerrainVisual.h" // for TERRAIN_LOD_MIN definition
@@ -1532,12 +1526,15 @@ Int parseFPSLimit(char *args[], int num)
 	 and GameEngine::execute() never sleeps for a frame budget, so rendering is already uncapped
 	 unconditionally and m_framesPerSecondLimit means game speed and nothing else.  Raising it here
 	 would just run the match in fast-forward: superweapon and build timers count real seconds off a
-	 clock ticking a thousand times too fast.  Use -fps to ask for that on purpose. */
+	 clock ticking a thousand times too fast.  Use -fps to ask for that on purpose.  Since GitHub #149
+	 there is a picture cap again, the player's FrameRateLimit and 60 in the shell, and this switch lifts
+	 both for the run: the measuring harnesses pass it to time a frame, not a wait. */
 Int parseNoFPSLimit(char *args[], int num)
 {
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_useFpsLimit = false;
+		TheWritableGlobalData->m_noFrameRateCap = TRUE;
 	}
 	return 1;
 }
@@ -2813,188 +2810,6 @@ Int parseUpdateImages(char *args[], int num)
 	return 1;
 }
 
-/** The string value of "key" in mod.json, or empty.  ponytail: a flat object of string values is
-	* all the launcher writes, so this finds the key and reads to the closing quote, honouring only a
-	* backslash escape; a real parser is for the day mod.json grows nesting. */
-static AsciiString modJsonString( const std::string &json, const char *key )
-{
-	const char *space = " \t\r\n";
-	std::string quoted = std::string( "\"" ) + key + "\"";
-	size_t at = std::string::npos;
-	// the key is the quoted name followed by a colon; the same text as somebody's value is not
-	for (size_t found = json.find( quoted ); found != std::string::npos; found = json.find( quoted, found + 1 ))
-	{
-		size_t colon = json.find_first_not_of( space, found + quoted.size() );
-		if (colon != std::string::npos && json[colon] == ':')
-		{
-			at = json.find_first_not_of( space, colon + 1 );
-			break;
-		}
-	}
-	// a number or anything else that is not a string is no name
-	if (at == std::string::npos || json[at] != '"')
-		return AsciiString();
-
-	AsciiString value;
-	for (++at; at < json.size() && json[at] != '"'; ++at)
-	{
-		if (json[at] == '\\' && at + 1 < json.size())
-			++at;
-		value.concat( json[at] );
-	}
-	return value;
-}
-
-/** What the mod is called on the version line, in the replay and in a refused join: "<name> <version>"
-	* from the folder's mod.json, else the folder's or the archive's own name.  *bareName is the same
-	* without the version, which is what -modfactions puts in front of a faction. */
-static AsciiString modIdentity( const AsciiString &modPath, Bool isDir, AsciiString *bareName )
-{
-	AsciiString name;
-	if (isDir)
-	{
-		AsciiString jsonPath = modPath;
-		jsonPath.concat( "mod.json" );
-		File *file = TheLocalFileSystem->openFile( jsonPath.str(), File::READ | File::BINARY );
-		if (file != NULL)
-		{
-			Int size = file->size();
-			char *contents = file->readEntireAndClose();
-			std::string json( contents, size );
-			delete [] contents;
-
-			name = modJsonString( json, "name" );
-			*bareName = name;
-			AsciiString version = modJsonString( json, "version" );
-			if (name.isNotEmpty() && version.isNotEmpty())
-			{
-				name.concat( ' ' );
-				name.concat( version );
-			}
-		}
-	}
-	if (name.isEmpty())
-	{
-		// the last path component, without the trailing separator a folder was given and without ".big"
-		std::string path( modPath.str() );
-		while (!path.empty() && (path.back() == '\\' || path.back() == '/'))
-			path.pop_back();
-		size_t slash = path.find_last_of( "\\/" );
-		if (slash != std::string::npos)
-			path.erase( 0, slash + 1 );
-		if (!isDir && path.size() > 4 && strcasecmp( path.c_str() + path.size() - 4, ".big" ) == 0)
-			path.erase( path.size() - 4 );
-		name = path.c_str();
-		*bareName = name;
-	}
-	return name;
-}
-
-static Int addMod(char *args[], Int num, Bool isPatch)
-{
-	if (TheWritableGlobalData && num > 1)
-	{
-		AsciiString modPath = args[1];
-		// "." or ".." as a part would let a relative -mod climb out of the user folder, and give one
-		// folder two names that the file system's prefix and archive checks read as two mods
-		std::string parts( modPath.str() );
-		std::replace( parts.begin(), parts.end(), '/', '\\' );
-		parts = "\\" + parts + "\\";
-		if (parts.find( "\\.\\" ) != std::string::npos || parts.find( "\\..\\" ) != std::string::npos)
-		{
-			DEBUG_LOG(("Mod path '%s' is refused: it holds a '.' or '..' part.\n", modPath.str()));
-			return 2;
-		}
-		if (strchr(modPath.str(), ':') || modPath.startsWith("/") || modPath.startsWith("\\"))
-		{
-			// full path passed in.  Don't append base path.
-		}
-		else
-		{
-			modPath.format("%s%s", TheGlobalData->getPath_UserData().str(), args[1]);
-		}
-		DEBUG_LOG(("Looking for mod '%s'\n", modPath.str()));
-
-		if (!TheLocalFileSystem->doesFileExist(modPath.str()))
-		{
-			DEBUG_LOG(("Mod does not exist.\n"));
-			return 2; // no such file/dir.
-		}
-
-		// now check for dir-ness
-		struct stat statBuf;
-		if (zh_stat(modPath.str(), &statBuf) != 0)
-		{
-			DEBUG_LOG(("Could not _stat() mod.\n"));
-			return 2; // could not stat the file/dir.
-		}
-
-		if (statBuf.st_mode & S_IFDIR)
-		{
-			if (!modPath.endsWith("\\") && !modPath.endsWith("/"))
-				modPath.concat('\\');
-			DEBUG_LOG(("Mod dir is '%s'.\n", modPath.str()));
-		}
-		else
-		{
-			DEBUG_LOG(("Mod file is '%s'.\n", modPath.str()));
-		}
-		// repeatable: each -mod goes after the ones before it and wins over them (loadMods, FileSystem::modLooseFile)
-		TheWritableGlobalData->m_mods.push_back( modPath );
-		TheWritableGlobalData->m_modIsPatch.push_back( isPatch );
-
-		AsciiString bareName;
-		AsciiString name = modIdentity( modPath, (statBuf.st_mode & S_IFDIR) != 0, &bareName );
-		TheWritableGlobalData->m_modNames.push_back( bareName );
-		// a patch reads "ShockWave 1.201 + Tweak 1.0" in the version line, a replay and a refused join
-		if (TheGlobalData->m_modName.isNotEmpty())
-			TheWritableGlobalData->m_modName.concat( isPatch ? " + " : ", " );
-		TheWritableGlobalData->m_modName.concat( name );
-		DEBUG_LOG(("MOD %d name='%s' path='%s'%s\n", (Int)TheGlobalData->m_mods.size(), name.str(), modPath.str(), isPatch ? " patch" : ""));
-
-		return 2;
-	}
-	return 1;
-}
-
-Int parseMod(char *args[], Int num)
-{
-	return addMod( args, num, FALSE );
-}
-
-/** -modpatch <folder>: a mod that changes the one given before it file by file rather than bringing
-	* armies of its own, or retail's files when it comes first.  With no full -mod at all it is a plain -mod. */
-Int parseModPatch(char *args[], Int num)
-{
-	return addMod( args, num, TRUE );
-}
-
-/** A mod's factions load beside retail's, each full mod's files apart, so a patch joins the full mod before it (retail's
-	* files when none is) and the full mods alone are the faction sets, M1, M2 and so on. */
-static void foldModPatches()
-{
-	GlobalData *data = TheWritableGlobalData;
-	std::vector<AsciiString> mods;
-	std::vector<AsciiString> names;
-	for (size_t i = 0; i < data->m_mods.size(); ++i)
-	{
-		if (!data->m_modIsPatch[i])
-		{
-			mods.push_back( data->m_mods[i] );
-			names.push_back( data->m_modNames[i] );
-			data->m_modPatches.push_back( std::vector<AsciiString>() );
-			continue;
-		}
-		if (mods.empty())
-			data->m_retailPatches.push_back( data->m_mods[i] );
-		else
-			data->m_modPatches.back().push_back( data->m_mods[i] );
-		DEBUG_LOG(("MODPATCH '%s' over %s\n", data->m_modNames[i].str(), mods.empty() ? "retail" : names.back().str()));
-	}
-	data->m_mods = mods;
-	data->m_modNames = names;
-}
-
 static CommandLineParam params[] =
 {
 	{ "-noshellmap", parseNoShellMap },
@@ -3007,8 +2822,6 @@ static CommandLineParam params[] =
 	{	"-particleEdit", parseParticleEdit },
 	{ "-scriptDebug", parseScriptDebug },
 	{ "-playStats", parsePlayStats },
-	{ "-mod", parseMod },
-	{ "-modpatch", parseModPatch },
 	{ "-noshaders", parseNoShaders },
 	{ "-particlebounce", parseParticleBounce },
 	{ "-smoke", parseSmoke },
@@ -3256,24 +3069,6 @@ void parseCommandLine(int argc, char *argv[])
 		{
 			arg++;
 		}
-	}
-
-	// Any full -mod's factions stand beside retail's, one mod or five; never merged over them.  With no
-	// full -mod there is nothing to keep apart, and the retail focus would have no tree to read; patches
-	// alone then stack as plain mods.
-	const std::vector<Bool> &isPatch = TheGlobalData->m_modIsPatch;
-	TheWritableGlobalData->m_modFactions = std::find( isPatch.begin(), isPatch.end(), FALSE ) != isPatch.end();
-	if (TheGlobalData->m_modFactions)
-		foldModPatches();
-	TheArchiveFileSystem->loadMods();
-
-	// GameData.ini and the language check have already asked about files the mod may now supply
-	if (TheGlobalData->m_modName.isNotEmpty())
-	{
-		DEBUG_LOG(("MODS %d loaded, last wins: %s\n", (Int)TheGlobalData->m_mods.size(), TheGlobalData->m_modName.str()));
-		TheFileSystem->reset();
-		// the mod's skirmish and multiplayer scripts are the ones the match runs, so they are the ones the join compares
-		TheWritableGlobalData->computeExeCRC();
 	}
 }
 

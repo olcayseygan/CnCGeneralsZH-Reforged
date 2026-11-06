@@ -35,11 +35,14 @@
 #include "W3DDevice/GameClient/W3DGameWindow.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayStringManager.h"
+#include "GameClient/GameFont.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/ControlBarScheme.h"
 #include "GameClient/Image.h"
 #include "GameClient/MapUtil.h"
+#include "GameClient/VideoPlayer.h"
 #include "GameLogic/GameLogic.h"
 #include "Common/LogicThread.h"
 #ifdef _INTERNAL
@@ -140,7 +143,14 @@ void W3DLeftHUDDraw( GameWindow *window, WinInstanceData *instData )
 		window->winGetScreenPosition( &pos.x, &pos.y );
 		window->winGetSize( &size.x, &size.y );
 
-		TheDisplay->drawVideoBuffer( video, pos.x, pos.y, pos.x + size.x, pos.y + size.y );
+		// the window takes the map's shape (ControlBar::fitRadarToMap) and the movie keeps its own,
+		// centred, with the frame's glass in the bands
+		const Real scale = MIN( (Real)size.x / video->width(), (Real)size.y / video->height() );
+		const Int movieWidth = REAL_TO_INT( video->width() * scale );
+		const Int movieHeight = REAL_TO_INT( video->height() * scale );
+		const Int movieX = pos.x + ( size.x - movieWidth ) / 2;
+		const Int movieY = pos.y + ( size.y - movieHeight ) / 2;
+		TheDisplay->drawVideoBuffer( video, movieX, movieY, movieX + movieWidth, movieY + movieHeight );
 	}
 	else if( TheRadar->isRadarForced() || ( TheRadar->isRadarHidden() == false && hasRadarForDraw( player ) ) )
 	{
@@ -766,7 +776,7 @@ void W3DCommandBarBackgroundDraw( GameWindow *window, WinInstanceData *instData 
 		offset.y = now.y - TheControlBar->getPanelOrigin()->y;
 	}
 
-	// the bar is ControlBar Pro's painting, a mod faction's too, not our plates
+	// the bar is ControlBar Pro's painting, not our plates
 	if( man->isCurrentSchemePainted() )
 	{
 		man->drawPainting( offset, FALSE );
@@ -1045,115 +1055,117 @@ void drawSkinnyBorder( Int x, Int y, Int width, Int height)
 }
 
 
+//-------------------------------------------------------------------------------------------------
+/** The build card (ControlBarPopupDescription.wnd): the scheme's nine pieces round the window, then
+	* what BuildTooltipFigures holds beside the .wnd's texts, laid out as Tools/hud_command_bar.py's
+	* TIP_TEXT at 1080: the money icon and price, the clock and build time, right-aligned in x -186..-46 of
+	* the header (y 5..27); then the figures, a cell each, icon and value, in x 8..-18, y 31..57. */
+//-------------------------------------------------------------------------------------------------
 void W3DCommandBarHelpPopupDraw( GameWindow *window, WinInstanceData *instData )
 {
-	
-	static const Image *endBar = TheMappedImageCollection->findImageByName("Helpbox-top");
-	static const Image *beginBar = TheMappedImageCollection->findImageByName("Helpbox-bottom");
-	static const Image *centerBar = TheMappedImageCollection->findImageByName("Helpbox-middle");
-	
-	ICoord2D pos, size;
-	window->winGetScreenPosition( &pos.x, &pos.y );
-	window->winGetSize( &size.x, &size.y );
+	const ControlBarTooltipImages &art = TheControlBar->getControlBarSchemeManager()->getTooltipImages();
+	IRegion2D card;
+	window->winGetScreenPosition( &card.lo.x, &card.lo.y );
+	window->winGetSize( &card.hi.x, &card.hi.y );
+	card.hi.x += card.lo.x;
+	card.hi.y += card.lo.y;
+	// the card is 512 wide at 1080 and the layout fits it (LAYOUT_FIT), so its width is its scale
+	const Real k = ( card.hi.x - card.lo.x ) / 512.0f;
+	const BuildTooltipFigures &figures = ControlBarBuildTooltipFigures();
+	// a card with no figures (a power, a generic window) takes the top row without the figures' well
+	const Image *pieces[ ControlBarScheme::FRAME_PIECE_COUNT ];
+	for( Int piece = 0; piece < ControlBarScheme::FRAME_PIECE_COUNT; ++piece )
+		pieces[ piece ] = art.card[ piece ];
+	if( figures.cellCount == 0 && art.head[ 0 ] )
+		for( Int piece = ControlBarScheme::FRAME_TL; piece <= ControlBarScheme::FRAME_TR; ++piece )
+			pieces[ piece ] = art.head[ piece ];
+	ControlBarDrawNinePieceBox( pieces, card, k );
 
+	auto px = [k]( Int at1080 ) { return REAL_TO_INT( at1080 * k ); };
+	const Int iconSize = px( 16 );
+	const Color white = GameMakeColor( 254, 254, 254, 255 );
+	const Color dim = GameMakeColor( 200, 204, 212, 255 );
+	const Color shadow = GameMakeColor( 0, 0, 0, 255 );
 
+	static NameKeyType nameID = NAMEKEY( "ControlBarPopupDescription.wnd:StaticTextName" );
+	GameFont *font = TheWindowManager->winGetWindowFromId( window, nameID )->winGetFont();
+	GameFont *bold = TheFontLibrary->getFont( font->nameString, font->pointSize, TRUE );
 
-	if( !endBar || !beginBar || !centerBar)
-		return;
-	
-
-//	Int range;
-//	range = size.y;
-
-
-	// get image sizes for the ends
-	ICoord2D topSize, bottomSize, start, end;
-	bottomSize.x = beginBar->getImageWidth();
-	bottomSize.y = beginBar->getImageHeight();
-	topSize.x = endBar->getImageWidth();
-	topSize.y = endBar->getImageHeight();
-
-	// get two key points used in the end drawing
-	ICoord2D bottomEnd, topStart;
-	bottomEnd.x = pos.x + size.x;
-	bottomEnd.y = pos.y + size.y - bottomSize.y;
-	topStart.x = pos.x;
-	topStart.y = pos.y +size.y - topSize.y;
-
-	// draw the center repeating bar
-	Int centerWidth, pieces;
-
-	// get width we have to draw our repeating center in
-	centerWidth = size.y - topSize.y - bottomSize.y;
-	
-	if( centerWidth <= 0)
+	// one string a slot, so each keeps the texture of its text from frame to frame
+	enum { SLOT_COST, SLOT_TIME, SLOT_CELL };
+	static DisplayString *theStrings[ SLOT_CELL + BuildTooltipFigures::MAX_CELLS ] = { NULL };
+	auto text = [&]( Int slot, const UnicodeString &value, GameFont *withFont )
 	{
-		// draw left end
-		start.x = pos.x;
-		start.y = pos.y + size.y - bottomSize.y;
-		end.y = pos.y + size.y;
-		end.x = pos.x + size.x;
-		TheWindowManager->winDrawImage(beginBar, start.x, start.y, end.x, end.y);
-
-		// draw right end
-		start.y = pos.y + size.y - bottomSize.y - topSize.y;
-		start.x = pos.x;
-		end.x = pos.x + size.x;
-		end.y = start.y + topSize.y;
-		TheWindowManager->winDrawImage(endBar, start.x, start.y, end.x, end.y);
-	}
-	else
+		if( theStrings[ slot ] == NULL )
+			theStrings[ slot ] = TheDisplayStringManager->newDisplayString();
+		theStrings[ slot ]->setFont( withFont );
+		theStrings[ slot ]->setText( value );
+		return theStrings[ slot ];
+	};
+	// an icon (none for NULL) and its text after a gap, centred between top and bottom, the text cut at
+	// right: a long armour name stops at its cell's edge
+	auto figure = [&]( const Image *icon, DisplayString *value, Int gap, Int x, Int top, Int bottom, Int right, Color color )
 	{
-		
-		// how many whole repeating pieces will fit in that width
-		pieces = centerWidth / centerBar->getImageHeight();
-
-		// draw the pieces
-		start.x = pos.x;
-		start.y = pos.y + topSize.y ;
-		end.x = start.x + size.x; //centerImage->getImageHeight() + yOffset;
-		for( Int i = 0; i < pieces; i++ )
+		const Int y = ( top + bottom - iconSize ) / 2;
+		if( icon )
 		{
-
-			end.y = start.y + centerBar->getImageHeight();
-			TheWindowManager->winDrawImage( centerBar, 
-																			start.x, start.y,
-																			end.x, end.y );
-			start.y += centerBar->getImageHeight();
-
-		}  // end for i
-
-		// we will draw the image but clip the parts we don't want to show
-		IRegion2D reg;
-		reg.lo.x = start.x;
-		reg.lo.y = start.y;
-		reg.hi.x = pos.x + size.x;
-		reg.hi.y = pos.y + size.y - bottomSize.y;
-		centerWidth = pos.y + size.y - bottomSize.y - start.y;
-		if( centerWidth > 0)
-		{
-			TheDisplay->setClipRegion(&reg);
-			end.y = start.y + centerBar->getImageHeight();
-			TheWindowManager->winDrawImage( centerBar,
-																			start.x, start.y,
-																			end.x, end.y );
-			TheDisplay->enableClipping(FALSE);
+			TheDisplay->drawImage( icon, x, y, x + iconSize, y + iconSize );
+			x += iconSize + gap;
 		}
+		Int width, height;
+		value->getSize( &width, &height );
+		IRegion2D clip;
+		clip.lo.x = x;
+		clip.lo.y = top;
+		clip.hi.x = right;
+		clip.hi.y = bottom;
+		value->setClipRegion( &clip );
+		value->draw( x, ( top + bottom - height ) / 2, color, shadow );
+	};
+	auto widthOf = [&]( const Image *icon, DisplayString *value, Int gap )
+	{
+		return ( icon ? iconSize + gap : 0 ) + value->getWidth();
+	};
 
-		// draw left end
-		end.x = pos.x + size.x;
-		end.y = pos.y + size.y;
-		start.x = pos.x;
-		start.y = pos.y + size.y - bottomSize.y;
-		TheWindowManager->winDrawImage(beginBar, start.x, start.y, end.x, end.y);
-
-		// draw right end
-		start.x = pos.x;
-		start.y = pos.y ;
-		end.x = pos.x + size.x;
-		end.y = pos.y + topSize.y;
-		TheWindowManager->winDrawImage(endBar, start.x, start.y, end.x, end.y);
+	const Int headerTop = card.lo.y + px( 5 ), headerBottom = card.lo.y + px( 27 );
+	const Image *money = figures.costIsMoney ? art.icon[ ControlBarTooltipImages::ICON_MONEY ] : NULL;
+	const Image *clock = art.icon[ ControlBarTooltipImages::ICON_TIME ];
+	DisplayString *cost = figures.cost.isEmpty() ? NULL : text( SLOT_COST, figures.cost, bold );
+	DisplayString *time = figures.time.isEmpty() ? NULL : text( SLOT_TIME, figures.time, font );
+	Int x = card.hi.x - px( 46 ) - ( cost ? widthOf( money, cost, px( 4 ) ) : 0 ) - ( cost && time ? px( 12 ) : 0 )
+					- ( time ? widthOf( clock, time, px( 4 ) ) : 0 );
+	if( cost )
+	{
+		figure( money, cost, px( 4 ), x, headerTop, headerBottom, card.hi.x, white );
+		x += widthOf( money, cost, px( 4 ) ) + px( 12 );
 	}
-	
+	if( time )
+		figure( clock, time, px( 4 ), x, headerTop, headerBottom, card.hi.x, dim );
 
+	if( figures.cellCount == 0 )
+		return;
+	// each cell as wide as its icon and text, the room left over spread as even gaps after them; a row
+	// whose cells will not fit at all (a long armour name on a narrow screen) takes even cells, cut
+	const Int rowLeft = card.lo.x + px( 10 ), rowRight = card.hi.x - px( 18 );
+	const Int rowTop = card.lo.y + px( 31 ), rowBottom = card.lo.y + px( 57 );
+	DisplayString *values[ BuildTooltipFigures::MAX_CELLS ];
+	Int widths[ BuildTooltipFigures::MAX_CELLS ];
+	Int total = 0;
+	for( Int cell = 0; cell < figures.cellCount; ++cell )
+	{
+		values[ cell ] = text( SLOT_CELL + cell, figures.cellValue[ cell ], font );
+		widths[ cell ] = widthOf( art.icon[ figures.cellIcon[ cell ] ], values[ cell ], px( 5 ) );
+		total += widths[ cell ];
+	}
+	const Int room = rowRight - rowLeft;
+	const Bool fits = total <= room;
+	const Int gap = fits ? ( room - total ) / figures.cellCount : 0;
+	x = rowLeft;
+	for( Int cell = 0; cell < figures.cellCount; ++cell )
+	{
+		const Int span = fits ? widths[ cell ] + gap : room / figures.cellCount;
+		figure( art.icon[ figures.cellIcon[ cell ] ], values[ cell ], px( 5 ), x, rowTop, rowBottom, x + span - ( fits ? 0 : px( 2 ) ), white );
+		x += span;
+	}
 }
+

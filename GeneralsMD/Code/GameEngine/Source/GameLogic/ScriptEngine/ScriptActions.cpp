@@ -38,7 +38,6 @@
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
-#include "Common/INI.h"
 #include "Common/LogicThread.h"
 #include "Common/MapObject.h"							// For MAP_XY_FACTOR
 #include "Common/PartitionSolver.h"
@@ -3411,19 +3410,12 @@ void ScriptActions::doMusicTrackChange(const AsciiString& newTrackName, Bool fad
 		TheAudio->removeAudioEvent(AHSV_StopTheMusic);
 	}
 
-	// The scripts a human runs are retail's and name retail's tracks; on a mod's faction he hears that
-	// mod's track of the name.  Only this machine's music player reads the answer.
-	const PlayerTemplate *localFaction = ThePlayerList->getLocalPlayer()->getPlayerTemplate();
-	const AsciiString track = localFaction != NULL && localFaction->getModIndex() >= 0
-		? TheModNamespace.modName(localFaction->getModIndex(), MODNAME_AUDIOEVENT, newTrackName) : newTrackName;
-	DEBUG_LOG(("MUSIC track %s\n", track.str()));
-
-	AudioEventRTS event(track);
+	AudioEventRTS event(newTrackName);
 	event.setShouldFade(fadein);
 	event.setPlayerIndex(ThePlayerList->getLocalPlayer()->getPlayerIndex());
 	TheAudio->addAudioEvent(&event);
 
-	TheScriptEngine->setCurrentTrackName(track);
+	TheScriptEngine->setCurrentTrackName(newTrackName);
 }
 
 //-------------------------------------------------------------------------------------------------

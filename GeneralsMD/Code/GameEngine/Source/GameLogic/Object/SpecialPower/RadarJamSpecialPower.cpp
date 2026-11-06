@@ -31,6 +31,7 @@
 #include "GameClient/FXList.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/RadarJamSpecialPower.h"
 
@@ -40,6 +41,7 @@ RadarJamSpecialPowerModuleData::RadarJamSpecialPowerModuleData( void )
 	m_radius = 0.0f;
 	m_durationFrames = 0;
 	m_fx = NULL;
+	m_ocl = NULL;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -52,6 +54,7 @@ RadarJamSpecialPowerModuleData::RadarJamSpecialPowerModuleData( void )
 		{ "Radius",		INI::parseReal,									NULL, offsetof( RadarJamSpecialPowerModuleData, m_radius ) },
 		{ "Duration",	INI::parseDurationUnsignedInt,	NULL, offsetof( RadarJamSpecialPowerModuleData, m_durationFrames ) },
 		{ "FX",				INI::parseFXList,								NULL, offsetof( RadarJamSpecialPowerModuleData, m_fx ) },
+		{ "OCL",			INI::parseObjectCreationList,		NULL, offsetof( RadarJamSpecialPowerModuleData, m_ocl ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add( dataFieldParse );
@@ -94,6 +97,7 @@ void RadarJamSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real an
 	}
 
 	FXList::doFXPos( data->m_fx, loc );
+	ObjectCreationList::create( data->m_ocl, getObject(), loc, loc, (Bool)FALSE );	// a jammer marker, say; none without OCL
 }
 
 // ------------------------------------------------------------------------------------------------

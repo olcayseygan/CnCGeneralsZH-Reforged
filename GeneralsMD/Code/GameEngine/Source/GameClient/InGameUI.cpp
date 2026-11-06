@@ -101,10 +101,12 @@
 #include "GameClient/WindowLayout.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/ParticleSys.h"
+#include "GameClient/RadarContactMarks.h"
 #include "GameClient/ReachOverlay.h"
 #include "GameClient/SelectionXlat.h"
 #include "GameClient/Shadow.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/UIStyle.h"
 
 #include "GameNetwork/NetworkInterface.h"
 
@@ -131,6 +133,7 @@
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/StealthUpdate.h"
+#include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/MobMemberSlavedUpdate.h"//ML
 #include "GameLogic/Module/SpawnBehavior.h"
@@ -162,7 +165,22 @@ static const RGBColor illegalBuildColor = { 1.0, 0.0, 0.0 };
 // ------------------------------------------------------------------------------------------------
 enum
 {
-	PRODUCTION_LIST_LIFT		= 24		///< clearance between the list's last line and the control bar
+	PRODUCTION_LIST_LIFT		= 2,		///< clearance between the queue tray's foot and the radar frame's top
+	HUD_CELL_CAMEO_W				= 39,		///< a production or superweapon cameo: the general's power shortcut's
+	HUD_CELL_CAMEO_H				= 27,
+	HUD_CELL_POINT_SIZE			= 7,		///< the seconds and the "xN" written in a cameo
+	HUD_CELL_TRAY_CELL_W		= 80,		///< the general's powers tray's cell piece at 1080, round its
+	HUD_CELL_TRAY_CELL_H		= 70,		///< power button; a cameo's cell keeps the same margins to scale
+	HUD_CELL_TRAY_BUTTON_W	= 75,
+	HUD_CELL_TRAY_BUTTON_H	= 60,
+	HUD_TRAY_TAB_W					= 40,		///< the "+N" tab's picture at 1080, see hudTab
+	HUD_TRAY_TAB_H					= 28,
+	HUD_TRAY_TAB_JOIN				= 6,		///< its rows lying over the tray's outer edge
+	HUD_TRAY_TAB_TEXT_INSET_X	= 4,	///< the text's room inside the rest of it
+	HUD_TRAY_TAB_TEXT_INSET_Y	= 2,
+	SUPERWEAPON_TRAY_DROP		= 4,		///< between the info strip's foot and the superweapon tray's top
+	HUD_READY_GLOW_PERIOD_MS	= 1400,	///< one breath of a charged superweapon's glow
+	HUD_READY_SHIMMER_RISE	= 85		///< percent of the cameo the shimmer's top edge climbs in a breath
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -176,9 +194,339 @@ static Int stripPixels( Int nominal )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** One strip's tray, the general's powers tray's outline laid round a group of cells that stands
+	* against another edge of the screen or grows the other way.  The roles are the powers tray's own,
+	* named from the screen edge out: the edge down the open side of each row's innermost cell, the
+	* foot outside row 0, the edge over a cell no row beyond covers, the open side's two corners, and
+	* the step filling the notch where a short row ends on a longer one. */
+//-------------------------------------------------------------------------------------------------
+struct HudTray
+{
+	const Image *cell;							///< under every cell, NULL with no tray: then nothing is drawn round them
+	const Image *open;							///< down the open side
+	const Image *foot;							///< outside row 0
+	const Image *uncovered;					///< over the far side of a cell no row covers
+	const Image *cornerFoot;				///< the open side's corner at the foot
+	const Image *cornerUncovered;		///< the open side's corner at the far side
+	const Image *step;							///< open side by far side, in a short row's cell where it meets the longer
+	Int openW, footH, uncoveredH;		///< each edge's thickness at the cells' scale
+};
+
+//-------------------------------------------------------------------------------------------------
+/** The local player's build of the command bar for the cameos drawn over the battlefield, the
+	* production ones and the superweapon ones.  The cameos sit together in one tray the way the
+	* general's powers do, each in the tray's cell piece with the margins round a power button scaled
+	* to the cameo, and inside the button's 1-pixel border.  A scheme with no tray, Classic's, leaves
+	* the border alone, as its shipped column does.  What else is the side's is the plate under every
+	* readout, a piece of its own button sheet (<side>ProHudCellPlate in ReforgedHud<side>Powers).  A
+	* sheet without the plate yet gets HudReadout_draw's solid one.  A side no build is named for, an
+	* observer's, wears America's. */
+//-------------------------------------------------------------------------------------------------
+struct HudCellStyle
+{
+	const Image *plate;			///< under a readout, stretched to its text
+	Int cameoW, cameoH;			///< the cameo, the size of the general's power shortcut's
+	Int marginX, marginY;		///< from the cell's edge to the cameo's, each side
+	Int cellW, cellH;				///< a cell, and the step from one to the next: cells touch, as the tray's do
+	const Image *tabUp;			///< the queue's "+N" tab, NULL until the sheet has one
+	const Image *tabDown;		///< the superweapons' "+N" tab
+	const Image *readyGlow;	///< a charged superweapon's light, NULL until the sheet has one
+	const Image *readyShimmer;	///< the band climbing through it
+	HudTray production;			///< against the screen's left edge, one row
+	HudTray superweapon;		///< against the right edge, rows going down
+};
+
+/// a tray piece the powers tray has no use for, the mirror of one it has; until a sheet draws it the
+/// unmirrored one stands in, its light on the wrong side
+static const Image *mirroredTrayPiece( const char *prefix, const char *piece, const Image *standIn )
+{
+	AsciiString name;
+	name.format( "%sProTray%s", prefix, piece );
+	const Image *image = TheMappedImageCollection->findImageByName( name );
+	return image != NULL ? image : standIn;
+}
+
+/// the edges as thick, against the cell, as the powers tray's are against its cell
+static void sizeHudTray( HudTray *tray, Real scaleX, Real scaleY )
+{
+	tray->openW = tray->open ? REAL_TO_INT_CEIL( tray->open->getImageWidth() * scaleX ) : 0;
+	tray->footH = tray->foot ? REAL_TO_INT_CEIL( tray->foot->getImageHeight() * scaleY ) : 0;
+	tray->uncoveredH = tray->uncovered ? REAL_TO_INT_CEIL( tray->uncovered->getImageHeight() * scaleY ) : 0;
+}
+
+static Bool isAsciiDigit( WideChar c )
+{
+	return c >= u'0' && c <= u'9';
+}
+
+/// the amount without the currency sign the language's text puts before it: "$ 10000" reads "10000"
+static UnicodeString amountOnly( const UnicodeString& text )
+{
+	const Int length = text.getLength();
+	Int first = 0;
+	while( first < length && !isAsciiDigit( text.getCharAt( first ) ) && text.getCharAt( first ) != u'-' )
+		first++;
+	UnicodeString out;
+	for( Int i = first; i < length; i++ )
+		out.concat( text.getCharAt( i ) );
+	return out;
+}
+
+/// text with a comma every three digits in each run of digits: "$ 10000" reads "$ 10,000"
+static UnicodeString groupThousands( const UnicodeString& text )
+{
+	UnicodeString out;
+	const Int length = text.getLength();
+	for( Int i = 0; i < length; i++ )
+	{
+		out.concat( text.getCharAt( i ) );
+		Int digitsAfter = 0;
+		while( i + 1 + digitsAfter < length && isAsciiDigit( text.getCharAt( i + 1 + digitsAfter ) ) )
+			digitsAfter++;
+		if( isAsciiDigit( text.getCharAt( i ) ) && digitsAfter > 0 && digitsAfter % 3 == 0 )
+			out.concat( (WideChar)u',' );
+	}
+	return out;
+}
+
+static HudCellStyle hudCellStyle( void )
+{
+	const AsciiString side = ThePlayerList->getLocalPlayer()->getSide();
+	HudCellStyle style;
+	style.cameoW = stripPixels( HUD_CELL_CAMEO_W );
+	style.cameoH = stripPixels( HUD_CELL_CAMEO_H );
+	style.marginX = REAL_TO_INT_CEIL( style.cameoW * ( HUD_CELL_TRAY_CELL_W - HUD_CELL_TRAY_BUTTON_W ) / ( 2.0f * HUD_CELL_TRAY_BUTTON_W ) );
+	style.marginY = REAL_TO_INT_CEIL( style.cameoH * ( HUD_CELL_TRAY_CELL_H - HUD_CELL_TRAY_BUTTON_H ) / ( 2.0f * HUD_CELL_TRAY_BUTTON_H ) );
+	style.cellW = style.cameoW + 2 * style.marginX;
+	style.cellH = style.cameoH + 2 * style.marginY;
+
+	const char *prefix = "America";
+	if( side.startsWith( "China" ) || side.startsWith( "Boss" ) )
+		prefix = "China";
+	else if( side.startsWith( "GLA" ) )
+		prefix = "Gla";
+	else if( side.startsWith( "Turkiye" ) )
+		prefix = "Turkiye";
+
+	AsciiString name;
+	name.format( "%sProHudCellPlate", prefix );
+	style.plate = TheMappedImageCollection->findImageByName( name );
+	name.format( "%sProTrayTabUp", prefix );
+	style.tabUp = TheMappedImageCollection->findImageByName( name );
+	name.format( "%sProTrayTabDown", prefix );
+	style.tabDown = TheMappedImageCollection->findImageByName( name );
+	name.format( "%sProHudReadyGlow", prefix );
+	style.readyGlow = TheMappedImageCollection->findImageByName( name );
+	name.format( "%sProHudReadyShimmer", prefix );
+	style.readyShimmer = TheMappedImageCollection->findImageByName( name );
+
+	// the production tray is the powers tray mirrored left for right, the superweapon tray the same
+	// tray turned top for bottom, which leaves every one of its pieces the right way up but the step
+	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
+	const HudTray none = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
+	style.production = none;
+	style.superweapon = none;
+	if( tray == NULL )
+		return style;
+
+	const Image *cell = tray[ ControlBarScheme::TRAY_CELL ];
+	const HudTray production =
+	{
+		cell,
+		mirroredTrayPiece( prefix, "EdgeRight", tray[ ControlBarScheme::TRAY_EDGE_LEFT ] ),
+		tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ],
+		tray[ ControlBarScheme::TRAY_EDGE_TOP ],
+		mirroredTrayPiece( prefix, "CornerBottomRight", tray[ ControlBarScheme::TRAY_CORNER_BL ] ),
+		mirroredTrayPiece( prefix, "CornerTopRight", tray[ ControlBarScheme::TRAY_CORNER_TL ] ),
+		mirroredTrayPiece( prefix, "StepRight", tray[ ControlBarScheme::TRAY_STEP ] ),
+		0, 0, 0
+	};
+	const HudTray superweapon =
+	{
+		cell,
+		tray[ ControlBarScheme::TRAY_EDGE_LEFT ],
+		tray[ ControlBarScheme::TRAY_EDGE_TOP ],
+		tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ],
+		tray[ ControlBarScheme::TRAY_CORNER_TL ],
+		tray[ ControlBarScheme::TRAY_CORNER_BL ],
+		mirroredTrayPiece( prefix, "StepDown", tray[ ControlBarScheme::TRAY_STEP ] ),
+		0, 0, 0
+	};
+	style.production = production;
+	style.superweapon = superweapon;
+	const Real scaleX = (Real)style.cellW / cell->getImageWidth();
+	const Real scaleY = (Real)style.cellH / cell->getImageHeight();
+	sizeHudTray( &style.production, scaleX, scaleY );
+	sizeHudTray( &style.superweapon, scaleX, scaleY );
+	return style;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A strip's cells and the tray round them, drawn piece by piece as drawPowerTraySlot draws a
+	* power's slot.  Cell i is row i / columns, place i % columns counted in from the screen edge;
+	* `openSide` is +1 when the open side, away from the screen edge, is the right one and -1 when it
+	* is the left, `footSide` +1 when row 0's outer edge is below the cells and -1 above.  The screen
+	* edge's side gets no edge, as the powers tray's right side has none. */
+//-------------------------------------------------------------------------------------------------
+static void drawHudTray( const HudTray &tray, const IRegion2D *cells, Int count, Int columns, Int openSide, Int footSide )
+{
+	if( tray.cell == NULL || count == 0 )
+		return;
+
+	const Int rows = ( count + columns - 1 ) / columns;
+	auto rowLength = [ & ]( Int row ) { return row >= 0 && row < rows ? MIN( columns, count - row * columns ) : 0; };
+	auto piece = []( const Image *image, Int lx, Int ly, Int hx, Int hy )
+	{
+		// a piece the art leaves out leaves the battlefield showing there
+		if( image != NULL && hx > lx && hy > ly )
+			TheDisplay->drawImage( image, lx, ly, hx, hy );
+	};
+
+	for( Int each = 0; each < count; each++ )
+	{
+		const IRegion2D &c = cells[ each ];
+		const Int row = each / columns, place = each % columns;
+		const Bool innermost = place == rowLength( row ) - 1;
+		const Bool covered = place < rowLength( row + 1 );
+		// this short row's innermost cell stands on a longer row: the step fills the notch
+		const Bool stepHere = innermost && row > 0 && place + 1 < rowLength( row - 1 );
+		// the short row beyond ends over this cell's screen-side neighbour: the step closes that corner
+		const Bool stepBeside = !covered && place > 0 && place - 1 < rowLength( row + 1 );
+
+		const Int openLo = openSide > 0 ? c.hi.x : c.lo.x - tray.openW;
+		const Int openHi = openLo + tray.openW;
+		const Int footLo = footSide > 0 ? c.hi.y : c.lo.y - tray.footH;
+		const Int footHi = footLo + tray.footH;
+		const Int farLo = footSide > 0 ? c.lo.y - tray.uncoveredH : c.hi.y;
+		const Int farHi = farLo + tray.uncoveredH;
+		const Int stepLo = footSide > 0 ? c.hi.y - tray.uncoveredH : c.lo.y;
+		const Int stepHi = stepLo + tray.uncoveredH;
+		const Int notch = stepHere ? tray.uncoveredH : 0;
+		const Int shorten = stepBeside ? tray.openW : 0;
+
+		piece( tray.cell, c.lo.x, c.lo.y, c.hi.x, c.hi.y );
+		if( !covered )
+			piece( tray.uncovered, c.lo.x + ( openSide > 0 ? shorten : 0 ), farLo, c.hi.x - ( openSide > 0 ? 0 : shorten ), farHi );
+		if( innermost )
+		{
+			piece( tray.open, openLo, c.lo.y + ( footSide > 0 ? 0 : notch ), openHi, c.hi.y - ( footSide > 0 ? notch : 0 ) );
+			if( stepHere )
+				piece( tray.step, openLo, stepLo, openHi, stepHi );
+			if( !covered )
+				piece( tray.cornerUncovered, openLo, farLo, openHi, farHi );
+		}
+		if( row == 0 )
+		{
+			piece( tray.foot, c.lo.x, footLo, c.hi.x, footHi );
+			if( innermost )
+				piece( tray.cornerFoot, openLo, footLo, openHi, footHi );
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A charged superweapon's light: its owner's colour cast up off the foot of its ring over the
+	* cameo, strongest at the foot and gone by the top, breathing once every HUD_READY_GLOW_PERIOD_MS on the
+	* logic clock, so it holds still while the game is paused.  The piece, <side>ProHudReadyGlow, is
+	* grey light on black drawn additively: the vertex colour, the owner's scaled by the breath,
+	* multiplies it (Render2DClass draws with GRADIENT_MODULATE) and the sum brightens the cameo
+	* without hiding it.  Over it <side>ProHudReadyShimmer, a band of light as tall as the cameo and
+	* brightest along its top edge, climbs from the foot to HUD_READY_SHIMMER_RISE of the cameo
+	* once a breath and fades as it goes, clipped to the cameo: Tools/hud_command_bar.py shimmer_rise,
+	* the owner's pick from the round 8 preview.  A piece the sheet lacks is left out. */
+//-------------------------------------------------------------------------------------------------
+static void drawReadyGlow( const Image *glow, const Image *shimmer, const IRegion2D &cameo, Color owner )
+{
+	const Int period = LOGICFRAMES_PER_SECOND * HUD_READY_GLOW_PERIOD_MS / 1000;
+	const Real phase = (Real)( TheGameLogic->getFrame() % period ) / period;
+	const Real breath = 0.55f + 0.45f * ( 0.5f - 0.5f * Cos( 2.0f * PI * phase ) );
+
+	UnsignedByte r, g, b, a;
+	GameGetColorComponents( owner, &r, &g, &b, &a );
+	auto tint = [ r, g, b ]( Real light )
+	{
+		return GameMakeColor( REAL_TO_INT( r * light ), REAL_TO_INT( g * light ), REAL_TO_INT( b * light ), 255 );
+	};
+
+	if( glow != NULL )
+		TheDisplay->drawImage( glow, cameo.lo.x, cameo.lo.y, cameo.hi.x, cameo.hi.y, tint( breath ),
+													 Display::DRAW_IMAGE_ADDITIVE );
+	if( shimmer == NULL )
+		return;
+
+	// the band's top edge stands rise of the cameo up off the foot; below the cameo it is cut
+	const Real rise = HUD_READY_SHIMMER_RISE / 100.0f * phase;
+	const Real fade = (Real)pow( 1.0f - phase, 0.7 );
+	const Int height = cameo.hi.y - cameo.lo.y;
+	const Int top = cameo.lo.y + REAL_TO_INT( floor( height * ( 1.0f - rise ) + 0.5f ) ) - 1;
+	IRegion2D clip = cameo;
+	TheDisplay->setClipRegion( &clip );
+	TheDisplay->drawImage( shimmer, cameo.lo.x, top, cameo.hi.x, top + height, tint( fade * breath ),
+												 Display::DRAW_IMAGE_ADDITIVE );
+	TheDisplay->enableClipping( FALSE );
+}
+
+/// no tab: the cells all fit
+static IRegion2D noHudTab( void )
+{
+	IRegion2D none;
+	none.lo.x = none.lo.y = none.hi.x = none.hi.y = 0;
+	return none;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A full tray's "+N" tab, a tag of its own pinned to the tray's far side at the screen edge: the
+	* superweapons' hangs from the tray's bottom against the right edge (<side>ProTrayTabDown), the
+	* queue's sticks up from its top against the left edge (<side>ProTrayTabUp).  Each is one fixed
+	* picture, HUD_TRAY_TAB_W by HUD_TRAY_TAB_H at 1080 and scaled as the powers tray is, whose
+	* HUD_TRAY_TAB_JOIN rows nearest the tray lie over the tray's own outer edge so the art can draw
+	* the pin there.  `screenSide` is +1 for the right edge and -1 for the left, `tray` the tray's
+	* outer line on its far side, `hangs` +1 for a tab below that line and -1 above.  The text is
+	* centred in the rest, inset HUD_TRAY_TAB_TEXT_INSET_X and HUD_TRAY_TAB_TEXT_INSET_Y.  A sheet
+	* without the piece yet gets a dark slab. */
+//-------------------------------------------------------------------------------------------------
+static IRegion2D hudTab( Int screenSide, Int tray, Int hangs )
+{
+	const Real k = TheDisplay->getHeight() / 1080.0f;
+	const Int width = REAL_TO_INT_CEIL( HUD_TRAY_TAB_W * k );
+	const Int height = REAL_TO_INT_CEIL( HUD_TRAY_TAB_H * k );
+	const Int join = REAL_TO_INT_CEIL( HUD_TRAY_TAB_JOIN * k );
+	IRegion2D tab;
+	tab.lo.x = screenSide > 0 ? TheDisplay->getWidth() - width : 0;
+	tab.hi.x = tab.lo.x + width;
+	tab.lo.y = hangs > 0 ? tray - join : tray + join - height;
+	tab.hi.y = tab.lo.y + height;
+	return tab;
+}
+
+static void drawHudTab( const Image *art, const IRegion2D &tab, Int hangs, DisplayString *text )
+{
+	if( art != NULL )
+		TheDisplay->drawImage( art, tab.lo.x, tab.lo.y, tab.hi.x, tab.hi.y );
+	else
+		TheDisplay->drawFillRect( tab.lo.x, tab.lo.y, tab.hi.x - tab.lo.x, tab.hi.y - tab.lo.y, GameMakeColor( 2, 4, 5, 230 ) );
+
+	const Real k = TheDisplay->getHeight() / 1080.0f;
+	const Int join = REAL_TO_INT_CEIL( HUD_TRAY_TAB_JOIN * k );
+	const Int insetX = REAL_TO_INT_CEIL( HUD_TRAY_TAB_TEXT_INSET_X * k );
+	const Int insetY = REAL_TO_INT_CEIL( HUD_TRAY_TAB_TEXT_INSET_Y * k );
+	IRegion2D room;
+	room.lo.x = tab.lo.x + insetX;
+	room.hi.x = tab.hi.x - insetX;
+	room.lo.y = tab.lo.y + insetY + ( hangs > 0 ? join : 0 );
+	room.hi.y = tab.hi.y - insetY - ( hangs > 0 ? 0 : join );
+
+	Int textWidth = 0, textHeight = 0;
+	text->getSize( &textWidth, &textHeight );
+	text->setClipRegion( &room );
+	text->draw( ( room.lo.x + room.hi.x - textWidth ) / 2, ( room.lo.y + room.hi.y - textHeight ) / 2,
+							GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The cameo a special power is fired from.  A SpecialPowerTemplate carries no art of its own -
 	* the picture lives on whichever command button launches it - so the button list is what has to
-	* be asked.  A power with no button anywhere (a scripted one, a mod's) draws as an empty box
+	* be asked.  A power with no button anywhere (a scripted one) draws as an empty box
 	* with its countdown in it, which is still the timer it was asked for. */
 //-------------------------------------------------------------------------------------------------
 static const CommandButton *powerButton( const SpecialPowerTemplate *powerTemplate )
@@ -203,11 +551,80 @@ static const Image *superweaponCameo( const SpecialPowerTemplate *powerTemplate 
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The border a command button of `type` wears on the bar and in the tray, the scheme's
+	* ButtonBorder* colour through setCommandBarBorder; GAME_COLOR_UNDEFINED draws none, as
+	* W3DPushButton draws none. */
+//-------------------------------------------------------------------------------------------------
+static Color hudCellBorder( CommandButtonMappedBorderType type )
+{
+	if( type == COMMAND_BUTTON_BORDER_BUILD )
+		return TheControlBar->getBuildBorderColor();
+	if( type == COMMAND_BUTTON_BORDER_UPGRADE )
+		return TheControlBar->getUpgradeBorderColor();
+	if( type == COMMAND_BUTTON_BORDER_ACTION )
+		return TheControlBar->getActionBorderColor();
+	if( type == COMMAND_BUTTON_BORDER_SYSTEM )
+		return TheControlBar->getSystemBorderColor();
+	return GAME_COLOR_UNDEFINED;
+}
+
+/// the cell round a cameo's box: the tray's cell piece, and what a click on the cameo takes
+static IRegion2D hudCellBox( const HudCellStyle &style, const IRegion2D &cameo )
+{
+	IRegion2D box;
+	box.lo.x = cameo.lo.x - style.marginX;
+	box.lo.y = cameo.lo.y - style.marginY;
+	box.hi.x = cameo.hi.x + style.marginX;
+	box.hi.y = cameo.hi.y + style.marginY;
+	return box;
+}
+
+/// the button's own 1-pixel border, just outside the cameo, the way W3DPushButton draws it
+static void drawHudCellBorder( const IRegion2D &cameo, Color border )
+{
+	if( border != GAME_COLOR_UNDEFINED )
+		TheDisplay->drawOpenRect( cameo.lo.x - 1, cameo.lo.y - 1, cameo.hi.x - cameo.lo.x + 2, cameo.hi.y - cameo.lo.y + 2,
+															1, border );
+}
+
+/// a band `width` thick just inside the box lo.x, lo.y to hi.x, hi.y, on all four sides
+static void fillFrame( Int loX, Int loY, Int hiX, Int hiY, Int width, Color color )
+{
+	TheDisplay->drawFillRect( loX, loY, hiX - loX, width, color );
+	TheDisplay->drawFillRect( loX, hiY - width, hiX - loX, width, color );
+	TheDisplay->drawFillRect( loX, loY + width, width, hiY - loY - 2 * width, color );
+	TheDisplay->drawFillRect( hiX - width, loY + width, width, hiY - loY - 2 * width, color );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Whose a superweapon is, charged or not: a thick ring in its owner's colour on all four sides of
+	* the cameo, from one pixel over the picture's edge out to a keyline at the cell's side edge, light
+	* under a dark colour and dark under a light one, so a navy, an olive or a black owner reads on
+	* every side's tray.  At 1080 that is 3 pixels of colour and 1 of keyline, the owner's pick from
+	* round 19 (experiments/hud-sides-modern/superweapon/sw.py, variant A); `margin` is the cell's side
+	* margin, so it keeps its proportion at every HUD Size.  The readout stands inside it: its frame is
+	* never under a pixel. */
+//-------------------------------------------------------------------------------------------------
+static void drawOwnerRing( const IRegion2D &cameo, Color owner, Int margin )
+{
+	UnsignedByte r, g, b, a;
+	GameGetColorComponents( owner, &r, &g, &b, &a );
+	const Bool dark = 299 * r + 587 * g + 114 * b < 90 * 1000;
+	const Color keyline = dark ? GameMakeColor( 214, 216, 220, 255 ) : GameMakeColor( 10, 10, 12, 255 );
+	const Int keylineWidth = max( margin / 3, 1 );
+	const Int out = max( margin - keylineWidth, 1 );
+	fillFrame( cameo.lo.x - out - keylineWidth, cameo.lo.y - out - keylineWidth,
+						 cameo.hi.x + out + keylineWidth, cameo.hi.y + out + keylineWidth, keylineWidth, keyline );
+	fillFrame( cameo.lo.x - out, cameo.lo.y - out, cameo.hi.x + out, cameo.hi.y + out, out + 1,
+						 GameMakeColor( r, g, b, 255 ) );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Pointer to show while a structure rides the cursor.  Mouse::BUILD_PLACEMENT and
 	* INVALID_BUILD_PLACEMENT are two names in CursorININames[] that no shipped Mouse.ini ever
 	* defines, so asking for them left m_cursorInfo empty and drew nothing at all - the pointer
 	* simply vanished for as long as something was being placed.  Honour the build cursors when art
-	* for them does exist (a mod may add it), and otherwise fall back to cursors that are always
+	* for them does exist, and otherwise fall back to cursors that are always
 	* there: the crosshair for a spot that can be built on, the no-go pointer for one that cannot. */
 //-------------------------------------------------------------------------------------------------
 static Mouse::MouseCursor placementCursor( Bool legal )
@@ -1192,9 +1609,28 @@ InGameUI::InGameUI()
 	m_hudLastDrawMs = 0;
 	m_productionListCount = 0;
 	m_productionListTotal = 0;
-	for( Int line = 0; line <= PRODUCTION_LIST_LINES; line++ )
-		m_productionListText[ line ] = NULL;
+	for( Int text = 0; text < 2 * PRODUCTION_LIST_CELLS; text++ )
+		m_productionListText[ text ] = NULL;
+	for( Int text = 0; text < SUPERWEAPON_LIST_CELLS; text++ )
+		m_superweaponCellText[ text ] = NULL;
 	m_superweaponMoreText = NULL;
+	m_productionListMoreText = NULL;
+	m_productionListCells = 0;
+	m_productionListTab = noHudTab();
+	m_superweaponCells = 0;
+	m_superweaponTab = noHudTab();
+	m_hudCellPass = 0;
+	m_hudCellDrawnPass = 0;
+	m_rackShown = FALSE;
+	m_rackX = m_rackY = 0;
+	m_rackRows = 0;
+	m_rackStat = 0;
+	m_rackArmies = FALSE;
+	for( Int text = 0; text < RACK_TEXT_COUNT; text++ )
+	{
+		m_rackText[ text ] = NULL;
+		m_rackTextPx[ text ] = m_rackTextRoom[ text ] = 0;
+	}
 
 	m_superweaponPosition.x = 0.7f;
 	m_superweaponPosition.y = 0.7f;
@@ -1241,9 +1677,6 @@ InGameUI::InGameUI()
 	m_drawRMBScrollAnchor = FALSE;
 	m_moveRMBScrollAnchor = FALSE;
 	m_displayedMaxWarning = FALSE; 
-
-	m_idleWorkerWin = NULL;
-	m_currentIdleWorkerDisplay = -1;
 
 	m_waypointMode			= false;
 	m_forceAttackMode		= false;
@@ -1298,9 +1731,14 @@ InGameUI::~InGameUI()
 	for( std::map< std::string, DisplayString * >::iterator text = m_broadcastTexts.begin(); text != m_broadcastTexts.end(); ++text )
 		TheDisplayStringManager->freeDisplayString( text->second );
 	m_broadcastTexts.clear();
-	for( Int line = 0; line <= PRODUCTION_LIST_LINES; line++ )
-		TheDisplayStringManager->freeDisplayString( m_productionListText[ line ] );
+	for( Int text = 0; text < 2 * PRODUCTION_LIST_CELLS; text++ )
+		TheDisplayStringManager->freeDisplayString( m_productionListText[ text ] );
+	for( Int text = 0; text < SUPERWEAPON_LIST_CELLS; text++ )
+		TheDisplayStringManager->freeDisplayString( m_superweaponCellText[ text ] );
 	TheDisplayStringManager->freeDisplayString( m_superweaponMoreText );
+	TheDisplayStringManager->freeDisplayString( m_productionListMoreText );
+	for( Int text = 0; text < RACK_TEXT_COUNT; text++ )
+		TheDisplayStringManager->freeDisplayString( m_rackText[ text ] );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1505,7 +1943,7 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 		// EA's guard marker is one picture, the ring with the shield in its middle, so sizing it to
 		// the wheeled radius stretched the shield too.  The two are drawn apart (Tools/guard_marker.py):
 		// the ring at the radius, the shield, half the picture's width, at the size it has unwheeled.
-		// A mod's own marker stays one picture
+		// any other marker texture stays one picture
 		m_radiusCursors[cursorType].createRadiusDecal(pos, radius, controller, m_curRadiusCursor, "ReforgedGuardRing");
 		m_radiusCursors[cursorType].createRadiusDecal(pos, unwheeled * 0.5f, controller, m_curRadiusCursorCentre, "ReforgedGuardCentre");
 	}
@@ -1689,16 +2127,27 @@ struct SpectatorStats
 	std::map< const ThingTemplate *, Int > units;	///< how many of each unit with a cameo he has standing
 };
 
-/** The number a list of players is ranked by. */
+/** One of the rack's stat keys: the label it goes by, the unit its column head names (none where the
+	* label or the number already says it: kills and losses, "Rank 3") and the number the list is ranked by when it is picked, in the
+	* order of the keys that pick them (pickSpectatorStat). */
 struct SpectatorStat
 {
+	const char *label;
+	const char *unit;
 	Int SpectatorStats::*value;
 };
 
 static const SpectatorStat SPECTATOR_STATS[] =
 {
-	{ &SpectatorStats::networth }
+	{ "GUI:HudNetWorth",		"GUI:HudStatUnitMoney",		&SpectatorStats::networth },
+	{ "GUI:HudStatCash",		"GUI:HudStatUnitMoney",		&SpectatorStats::cash },
+	{ "GUI:HudStatIncome",	"GUI:HudStatUnitIncome",	&SpectatorStats::income },
+	{ "GUI:HudStatArmy",		"GUI:HudStatUnitMoney",		&SpectatorStats::army },
+	{ "GUI:HudStatKills",		NULL,											&SpectatorStats::kills },
+	{ "GUI:HudStatRank",		NULL,											&SpectatorStats::rank },
+	{ "GUI:HudStatPower",		"GUI:HudStatUnitPower",		&SpectatorStats::power }
 };
+enum { SPECTATOR_STAT_COUNT = ARRAY_SIZE( SPECTATOR_STATS ) };
 
 static void addObjectStats( Object *obj, void *userData )
 {
@@ -1718,11 +2167,31 @@ static void addObjectStats( Object *obj, void *userData )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A lobby seat the observer bar lists, player0 to player7 and not an observer: the Boss general sits
+	* in one but is no playable side.  Outside a multiplayer match the playable sides stand in. */
+//-------------------------------------------------------------------------------------------------
+static Bool isObserverSeat( const Player *player )
+{
+	if( !TheRecorder->isMultiplayer() )
+		return player->isPlayableSide();
+	if( player->isPlayerObserver() )
+		return FALSE;
+	for( Int slot = 0; slot < MAX_SLOTS; slot++ )
+	{
+		AsciiString name;
+		name.format( "player%d", slot );
+		if( TheNameKeyGenerator->nameToKey( name ) == player->getPlayerNameKey() )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Everyone still in the match but leftOut with his numbers, ranked by `stat`, and the players in kept
 	* who have lost.  Allies both ways share a team number, counted in the order the teams first appear
-	* in the player list. */
+	* in the player list.  seats takes the observer bar's players instead of the playable sides. */
 //-------------------------------------------------------------------------------------------------
-static std::vector< SpectatorStats > gatherSpectatorStats( const SpectatorStat &stat, const Player *leftOut, PlayerMaskType kept = 0 )
+static std::vector< SpectatorStats > gatherSpectatorStats( const SpectatorStat &stat, const Player *leftOut, PlayerMaskType kept = 0, Bool seats = FALSE )
 {
 	std::vector< SpectatorStats > players;
 	const UnsignedInt frame = TheGameLogic->getFrame();
@@ -1730,7 +2199,7 @@ static std::vector< SpectatorStats > gatherSpectatorStats( const SpectatorStat &
 	for( Int index = 0; index < ThePlayerList->getPlayerCount(); index++ )
 	{
 		Player *player = ThePlayerList->getNthPlayer( index );
-		if( player == NULL || player == leftOut || !player->isPlayableSide() )
+		if( player == NULL || player == leftOut || !( seats ? isObserverSeat( player ) : player->isPlayableSide() ) )
 			continue;
 		if( !player->isPlayerActive() && ( player->getPlayerMask() & kept ) == 0 )
 			continue;
@@ -2045,6 +2514,551 @@ void InGameUI::runSpectatorAction( const std::string &action )
 		TheGameEngine->setFramesPerSecondLimit( atoi( action.substr( REPLAY_SPEED.size() ).c_str() ) * replayNormalFramesPerSecond() / PERCENT );
 }
 
+//-------------------------------------------------------------------------------------------------
+// The spectator's rack: drawers hung off the right edge under the superweapon tray, cut from one
+// reference drawer (ReforgedHudObsSpec, Tools/hud_command_bar.py paint_rack, every piece named
+// ObserverPro<piece>).  A watch drawer with the camera's three-stop lever and the fog and armies
+// rockers, a standings drawer with seven stat keys and a row a player, an index tab out of each row
+// to follow him, and the armies drawer out to the left on its runners.  Every number is a pixel at
+// 1080 (experiments/proofs/2026-11-02/hud-original/round12/SPEC.md), put through rackPx.
+//-------------------------------------------------------------------------------------------------
+enum
+{
+	RACK_W								= 306,	///< every rack piece; its right side is the screen's edge
+	RACK_SKIRT						= 6,		///< a drawer's shadow over and left of its plate
+	RACK_TRAY_GAP					= 8,		///< the superweapon tray's foot to the watch drawer's plate
+	RACK_NO_TRAY_DROP			= 4,		///< the info strip's foot to the plate, no superweapons up
+	RACK_TOP_H						= 28,
+	RACK_BODY_H						= 50,		///< the watch drawer's plain plate, RackBody stretched
+	RACK_WATCH_H					= 86,		///< the watch drawer's plate ends this far under its top; the standings start there
+	RACK_HEAD_TOP					= 28,
+	RACK_ROWS_TOP					= 96,		///< the standings' first row under their top
+	RACK_ROW_H						= 30,
+	RACK_FOOT_SOLID				= 8,		///< RackBottom's rows above its shadow skirt
+	RACK_DRAWER_W					= 276,
+	RACK_DRAWER_TUCK			= 20,		///< the armies drawer's right end under the standings
+	RACK_DRAWER_TOP_H			= 12,
+	RACK_TAB_OUT					= 26,		///< a follow tab's left past what it hangs from
+	RACK_KEY_LEFT					= 23,		///< the first stat key in the standings drawer
+	RACK_KEY_TOP					= 31,
+	RACK_KEY_W						= 36,
+	RACK_KEY_H						= 26,
+	RACK_KEY_PITCH				= 39,
+	RACK_WELL_LEFT				= 20,		///< a standings row's well, which the hover and follow rims trace
+	RACK_WELL_RIGHT				= 296,
+	RACK_WELL_TOP					= 2,
+	RACK_WELL_BOTTOM			= 28,
+	RACK_MIN_PX						= 9,		///< the smallest a shrunk label goes
+	RACK_LEVER_WELL_LEFT	= 22,		///< the lever's well inside its bevel, which the stop words keep inside
+	RACK_LEVER_WELL_RIGHT	= 166,
+	RACK_STOP_PAD					= 3,		///< a stop word's clearance each side in its share of the well
+	RACK_REFRESH_FRAMES		= LOGICFRAMES_PER_SECOND / 2
+};
+
+static const char RACK_KEYS[] = "QWERTYA";		///< the stat keys' letters, the ones pickSpectatorStatKey answers
+static const Int RACK_LEVER_STOPS[ 3 ] = { 38, 94, 150 };	///< Free, Director, Player, as ObserverCameraMode counts
+static const char *const RACK_LEVERS[ 3 ] = { "RackLeverFree", "RackLeverDirector", "RackLeverPlayer" };
+static const char *const RACK_LEVER_LABELS[ 3 ] = { "GUI:HudCameraFree", "GUI:HudCameraDirector", "GUI:HudCameraPlayer" };
+static const std::string *const RACK_CAMERAS[ 3 ] = { &CAMERA_FREE, &CAMERA_DIRECTOR, &CAMERA_PLAYER };
+
+static std::vector< SpectatorStats > theRackStats;		///< ranked by the picked stat, gathered every RACK_REFRESH_FRAMES
+static UnsignedInt theRackStatsFrame = 0;
+static Int theRackStatsStat = -1;
+
+static UnicodeString broadcastNumber( const char *prefix, Int value );
+
+/// a rack length at 1080, on this screen: the HUD's own scale, the one stripPixels uses
+static Int rackPx( Real at1080 )
+{
+	return REAL_TO_INT_FLOOR( at1080 * ControlBarHudPageScale() / 1.8f + 0.5f );
+}
+
+static const Image *rackPiece( const char *name )
+{
+	AsciiString full;
+	full.format( "ObserverPro%s", name );
+	return TheMappedImageCollection->findImageByName( full );
+}
+
+/// a piece at its own size, or stretched to width by height; tinted by colour
+static void drawRackPiece( const char *name, Int x, Int y, Int width = 0, Int height = 0, Color colour = 0xFFFFFFFF )
+{
+	const Image *piece = rackPiece( name );
+	if( width == 0 )
+		width = rackPx( piece->getImageWidth() );
+	if( height == 0 )
+		height = rackPx( piece->getImageHeight() );
+	TheDisplay->drawImage( piece, x, y, x + width, y + height, colour );
+}
+
+/// the "H" state of a piece while the pointer is over it
+static void drawRackState( const char *name, Bool hover, Int x, Int y )
+{
+	AsciiString state;
+	state.format( "%s%s", name, hover ? "H" : "" );
+	drawRackPiece( state.str(), x, y );
+}
+
+/// where the rack's drawers stand, from the pieces' left and the watch drawer's top
+struct RackPlace
+{
+	Int x, y;					///< the watch drawer
+	Int standings;		///< the standings drawer's top
+	Int rows;					///< its first row's top
+	Int drawer;				///< the armies drawer's left
+	Int tabs;					///< the follow tabs' left
+	Int right;
+};
+
+static RackPlace rackPlace( Int x, Int y, Bool armies )
+{
+	RackPlace at;
+	at.x = x;
+	at.y = y;
+	at.standings = y + rackPx( RACK_WATCH_H );
+	at.rows = at.standings + rackPx( RACK_ROWS_TOP );
+	at.drawer = x - rackPx( RACK_DRAWER_W - RACK_DRAWER_TUCK );
+	at.tabs = ( armies ? at.drawer : x ) - rackPx( RACK_TAB_OUT );
+	at.right = TheDisplay->getWidth();
+	return at;
+}
+
+static Bool rackInside( const ICoord2D &mouse, Int left, Int top, Int right, Int bottom )
+{
+	return mouse.x >= left && mouse.x < right && mouse.y >= top && mouse.y < bottom;
+}
+
+/// a stat key's left edge
+static Int rackKeyLeft( const RackPlace &at, Int key )
+{
+	return at.x + rackPx( RACK_KEY_LEFT + RACK_KEY_PITCH * key );
+}
+
+/// the stat key under the pointer, or -1
+static Int rackKeyAt( const ICoord2D &mouse, const RackPlace &at )
+{
+	const Int top = at.standings + rackPx( RACK_KEY_TOP ), bottom = at.standings + rackPx( RACK_KEY_TOP + RACK_KEY_H );
+	for( Int key = 0; key < SPECTATOR_STAT_COUNT; key++ )
+		if( rackInside( mouse, rackKeyLeft( at, key ), top, rackKeyLeft( at, key ) + rackPx( RACK_KEY_W ), bottom ) )
+			return key;
+	return -1;
+}
+
+/// the standings' head, keys, heading and column heads, where the wheel steps the stat
+static Bool rackOverHead( const ICoord2D &mouse, const RackPlace &at )
+{
+	return rackInside( mouse, at.x + rackPx( RACK_WELL_LEFT ), at.standings + rackPx( RACK_HEAD_TOP ), at.right, at.rows );
+}
+
+/// the player's colour, opaque: the tint the lens, the meter and the name take
+static Color rackColour( const Player *player )
+{
+	UnsignedByte red, green, blue, alpha;
+	GameGetColorComponents( clientPlayerColor( player ), &red, &green, &blue, &alpha );
+	return GameMakeColor( red, green, blue, 255 );
+}
+
+/// where a follow tab's visible body starts, by its state: idle, the pointer over it, followed
+static Int rackTabOut( Bool followed, Bool hover )
+{
+	return rackPx( followed ? 2 : ( hover ? 15 : 22 ) );
+}
+
+/// a row's number as the standings write it
+static UnicodeString rackValueText( Int stat, const SpectatorStats &stats )
+{
+	const Int SpectatorStats::*field = SPECTATOR_STATS[ stat ].value;
+	const Int value = stats.*field;
+	UnicodeString text;
+	if( field == &SpectatorStats::cash && stats.unlimited )
+		text = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
+	else if( field == &SpectatorStats::income )
+		text.format( TheGameText->fetch( "GUI:HudStatIncomeValue" ), broadcastNumber( "$", value ).str() );
+	else if( field == &SpectatorStats::kills )
+		text.format( u"%d / %d", stats.kills, stats.losses );
+	else if( field == &SpectatorStats::rank )
+		text.format( TheGameText->fetch( "GUI:HudStatRankValue" ), value );
+	else if( field == &SpectatorStats::power )
+		text.format( u"%+d", value );
+	else
+		text = broadcastNumber( "$", value );
+	return text;
+}
+
+enum RackAlign { RACK_ALIGN_LEFT, RACK_ALIGN_CENTRE, RACK_ALIGN_RIGHT };
+
+/// bold, its shadow a pixel down and right, in the box left..right top..bottom, middled in height
+static void drawRackText( DisplayString *text, Int left, Int top, Int right, Int bottom, Int pad, RackAlign align, Color colour )
+{
+	Int width = 0, height = 0;
+	text->getSize( &width, &height );
+	Int x = left + pad;
+	if( align == RACK_ALIGN_CENTRE )
+		x = ( left + right - width ) / 2;
+	else if( align == RACK_ALIGN_RIGHT )
+		x = right - pad - width;
+	text->draw( x, ( top + bottom - height ) / 2, colour, GameMakeColor( 0, 0, 0, 255 ) );
+}
+
+DisplayString *InGameUI::rackText( Int slot, const UnicodeString &text, Int px, Int room )
+{
+	DisplayString *&string = m_rackText[ slot ];
+	if( string == NULL )
+		string = TheDisplayStringManager->newDisplayString();
+	else if( m_rackTextPx[ slot ] == px && m_rackTextRoom[ slot ] == room && string->getText().compare( text ) == 0 )
+		return string;
+	m_rackTextPx[ slot ] = px;
+	m_rackTextRoom[ slot ] = room;
+	string->setText( text );
+	// the face's em is its point size at 96 dots an inch
+	for( Int size = px; ; size-- )
+	{
+		string->setFont( TheFontLibrary->getFont( m_superweaponNormalFont, max( rackPx( size * 0.75f ), 1 ), TRUE ) );
+		Int width = 0, height = 0;
+		string->getSize( &width, &height );
+		if( room <= 0 || width <= room || size <= RACK_MIN_PX )
+			break;
+	}
+	return string;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The rack, while the local player watches.  plateTop is where the watch drawer's plate starts:
+	* 8 under the superweapon tray's foot, or under the info strip with no superweapons up.  Every
+	* player is read at most twice a second, ranked by the picked stat, the watcher left out.  Drawn
+	* in the order the pieces overlap: the tabs, the armies drawer, the watch drawer, the standings,
+	* then every word and number. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawSpectatorRack( Int plateTop )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( theRackStatsStat != m_rackStat || frame < theRackStatsFrame || frame >= theRackStatsFrame + RACK_REFRESH_FRAMES )
+	{
+		theRackStats = gatherSpectatorStats( SPECTATOR_STATS[ m_rackStat ], ThePlayerList->getLocalPlayer(), PLAYERMASK_ALL, TRUE );
+		theRackStatsFrame = frame;
+		theRackStatsStat = m_rackStat;
+	}
+
+	const Color GREY = GameMakeColor( 138, 148, 159, 255 );
+	const Color WHITE = GameMakeColor( 240, 244, 246, 255 );
+	const Color LIT = GameMakeColor( 128, 149, 234, 255 );
+	const Color GOLD = GameMakeColor( 242, 194, 48, 255 );
+	const Color DIM = GameMakeColor( 92, 100, 110, 255 );
+
+	m_rackX = TheDisplay->getWidth() - rackPx( RACK_W );
+	m_rackY = plateTop - rackPx( RACK_SKIRT );
+	m_rackRows = min( (Int)theRackStats.size(), (Int)RACK_ROWS );
+	const RackPlace at = rackPlace( m_rackX, m_rackY, m_rackArmies );
+	const Int X = at.x, Y = at.y, Y2 = at.standings, rows = m_rackRows;
+	const ICoord2D mouse = TheMouse->getMouseStatus()->pos;
+	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
+	auto rowTop = [ &at ]( Int row ) { return at.rows + rackPx( RACK_ROW_H * row ); };
+
+	// the most a stat's number is, which the meters are a share of
+	Int highest = 0;
+	for( Int row = 0; row < rows; row++ )
+		highest = max( highest, theRackStats[ row ].*SPECTATOR_STATS[ m_rackStat ].value );
+	if( highest <= 0 )
+		highest = 1;
+
+	typedef std::pair< const ThingTemplate *, Int > UnitCount;
+	std::vector< UnitCount > units[ RACK_ROWS ];
+
+	Bool rowHover[ RACK_ROWS ];
+
+	TheDisplay->beginBatch2D();
+	for( Int row = 0; row < rows; row++ )
+	{
+		const Int top = rowTop( row );
+		const Player *player = theRackStats[ row ].player;
+		m_rackRowPlayer[ row ] = player->getPlayerIndex();
+		const Bool on = m_rackRowPlayer[ row ] == followed;
+		const Bool hover = !on && rackInside( mouse, at.tabs + rackTabOut( FALSE, TRUE ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) );
+		rowHover[ row ] = hover;
+		drawRackPiece( on ? "RackTabOn" : ( hover ? "RackTabH" : "RackTab" ), at.tabs, top + rackPx( 2 ) );
+		const Color colour = rackColour( player );
+		drawRackPiece( "RackLens", at.tabs + rackTabOut( on, hover ) + rackPx( 4 ), top + rackPx( 9 ), 0, 0, colour );
+	}
+
+	if( m_rackArmies )
+	{
+		drawRackPiece( "DrawerTop", at.drawer, at.rows - rackPx( RACK_DRAWER_TOP_H ) );
+		for( Int row = 0; row < rows; row++ )
+			drawRackPiece( "DrawerRow", at.drawer, rowTop( row ) );
+		drawRackPiece( "DrawerBottom", at.drawer, rowTop( rows ) );
+		for( Int row = 0; row < rows; row++ )
+		{
+			std::vector< UnitCount > &kinds = units[ row ];
+			kinds.assign( theRackStats[ row ].units.begin(), theRackStats[ row ].units.end() );
+			std::stable_sort( kinds.begin(), kinds.end(), []( const UnitCount &a, const UnitCount &b ) { return a.second > b.second; } );
+			if( kinds.size() > RACK_ARMY_UNITS )
+				kinds.resize( RACK_ARMY_UNITS );
+			const Int top = rowTop( row );
+			for( Int cell = 0; cell < (Int)kinds.size(); cell++ )
+				TheDisplay->drawImage( kinds[ cell ].first->getButtonImage(),
+					at.drawer + rackPx( 22 + 39 * cell ) + 1, top + rackPx( 3 ) + 1,
+					at.drawer + rackPx( 58 + 39 * cell ) - 1, top + rackPx( 27 ) - 1 );
+		}
+	}
+
+	// the watch drawer: the lever at the camera's stop, the fog's and the armies drawer's rockers
+	const Int camera = (Int)TheObserverCamera.getMode();
+	const Bool overLever = rackInside( mouse, X + rackPx( 16 ), Y + rackPx( 30 ), X + rackPx( 172 ), Y + rackPx( 62 ) );
+	const Bool overFog = rackInside( mouse, X + rackPx( 186 ), Y + rackPx( 30 ), X + rackPx( 232 ), Y + rackPx( 62 ) );
+	const Bool overArmies = rackInside( mouse, X + rackPx( 246 ), Y + rackPx( 30 ), X + rackPx( 292 ), Y + rackPx( 62 ) );
+	const Bool fog = TheObserverCamera.isFogOn();
+	drawRackPiece( "RackTop", X, Y );
+	drawRackPiece( "RackBody", X, Y + rackPx( RACK_TOP_H ), rackPx( RACK_W ), rackPx( RACK_BODY_H ) );
+	drawRackPiece( "RackBottom", X, Y + rackPx( RACK_TOP_H + RACK_BODY_H ) );
+	drawRackPiece( "RackTally", X + rackPx( 160 ), Y + rackPx( 9 ) );
+	drawRackState( RACK_LEVERS[ camera ], overLever, X + rackPx( 16 ), Y + rackPx( 30 ) );
+	drawRackState( fog ? "RackRockerOn" : "RackRockerOff", overFog, X + rackPx( 186 ), Y + rackPx( 30 ) );
+	drawRackState( m_rackArmies ? "RackRockerOn" : "RackRockerOff", overArmies, X + rackPx( 246 ), Y + rackPx( 30 ) );
+
+	// the standings: the seven stat keys, a row a player with his colour, emblem and meter
+	const Int hoverKey = rackKeyAt( mouse, at );
+	drawRackPiece( "RackTop", X, Y2 );
+	drawRackPiece( "RackHead", X, Y2 + rackPx( RACK_HEAD_TOP ) );
+	for( Int row = 0; row < rows; row++ )
+		drawRackPiece( "RackRow", X, rowTop( row ) );
+	drawRackPiece( "RackBottom", X, rowTop( rows ) );
+	for( Int key = 0; key < SPECTATOR_STAT_COUNT; key++ )
+	{
+		AsciiString piece;
+		piece.format( "RackStat%c%s", RACK_KEYS[ key ], key == m_rackStat ? "On" : ( key == hoverKey ? "H" : "" ) );
+		drawRackPiece( piece.str(), rackKeyLeft( at, key ), Y2 + rackPx( RACK_KEY_TOP ) );
+	}
+	for( Int row = 0; row < rows; row++ )
+	{
+		const Int top = rowTop( row );
+		const SpectatorStats &stats = theRackStats[ row ];
+		const Color colour = rackColour( stats.player );
+		drawRackPiece( "RackMeter", X + rackPx( 22 ), top + rackPx( 4 ), rackPx( 3 ), rackPx( 22 ), colour );
+		TheDisplay->drawImage( ControlBarSideEmblem( stats.player->getPlayerTemplate() ),
+			X + rackPx( 42 ), top + rackPx( 5 ), X + rackPx( 72 ), top + rackPx( 25 ) );
+		const Real share = max( stats.*SPECTATOR_STATS[ m_rackStat ].value, 0 ) / (Real)highest;
+		const Int fill = REAL_TO_INT_FLOOR( rackPx( 216 ) * share );
+		if( fill > 0 )
+			drawRackPiece( "RackMeter", X + rackPx( 76 ), top + rackPx( 23 ), fill, rackPx( 2 ), colour );
+	}
+	TheDisplay->endBatch2D();
+
+	// the followed row in a double lit rim round its well, the row under the pointer in a gold one
+	for( Int row = 0; row < rows; row++ )
+	{
+		const Bool on = m_rackRowPlayer[ row ] == followed;
+		if( !on && !rowHover[ row ] )
+			continue;
+		const Int left = X + rackPx( RACK_WELL_LEFT ), top = rowTop( row ) + rackPx( RACK_WELL_TOP );
+		const Int width = rackPx( RACK_WELL_RIGHT - RACK_WELL_LEFT ), height = rackPx( RACK_WELL_BOTTOM - RACK_WELL_TOP );
+		TheDisplay->drawOpenRect( left, top, width, height, 1.0f, on ? LIT : GOLD );
+		if( on )
+			TheDisplay->drawOpenRect( left + 1, top + 1, width - 2, height - 2, 1.0f, GameMakeColor( 128, 149, 234, 160 ) );
+	}
+
+	// the words, all upper case but the names and the numbers
+	drawRackText( rackText( RACK_TEXT_WATCH, UIStyle::capitals( TheGameText->fetch( "GUI:HudWatch" ) ), 12, 0 ),
+		X + rackPx( 24 ), Y + rackPx( 9 ), X + rackPx( 180 ), Y + rackPx( 23 ), rackPx( 8 ), RACK_ALIGN_LEFT, GREY );
+	// each stop's word in its share of the well, split halfway between the stops, all three one size
+	DisplayString *stopWords[ 3 ];
+	Int stopLefts[ 3 ], stopRights[ 3 ];
+	GameFont *stopFont = NULL;
+	for( Int stop = 0; stop < 3; stop++ )
+	{
+		stopLefts[ stop ] = X + rackPx( stop == 0 ? RACK_LEVER_WELL_LEFT : ( RACK_LEVER_STOPS[ stop - 1 ] + RACK_LEVER_STOPS[ stop ] ) / 2 );
+		stopRights[ stop ] = X + rackPx( stop == 2 ? RACK_LEVER_WELL_RIGHT : ( RACK_LEVER_STOPS[ stop ] + RACK_LEVER_STOPS[ stop + 1 ] ) / 2 );
+		stopWords[ stop ] = rackText( RACK_TEXT_STOP + stop, UIStyle::capitals( TheGameText->fetch( RACK_LEVER_LABELS[ stop ] ) ), 11,
+			stopRights[ stop ] - stopLefts[ stop ] - 2 * rackPx( RACK_STOP_PAD ) );
+		if( stopFont == NULL || stopWords[ stop ]->getFont()->pointSize < stopFont->pointSize )
+			stopFont = stopWords[ stop ]->getFont();
+	}
+	for( Int stop = 0; stop < 3; stop++ )
+	{
+		if( stopWords[ stop ]->getFont() != stopFont )
+			stopWords[ stop ]->setFont( stopFont );
+		drawRackText( stopWords[ stop ], stopLefts[ stop ], Y + rackPx( 61 ), stopRights[ stop ], Y + rackPx( 74 ), 0, RACK_ALIGN_CENTRE,
+			stop == camera ? LIT : GREY );
+	}
+	drawRackText( rackText( RACK_TEXT_FOG, UIStyle::capitals( TheGameText->fetch( "GUI:HudFog" ) ), 11, rackPx( 58 ) ),
+		X + rackPx( 180 ), Y + rackPx( 61 ), X + rackPx( 238 ), Y + rackPx( 74 ), 0, RACK_ALIGN_CENTRE, fog ? LIT : GREY );
+	drawRackText( rackText( RACK_TEXT_ARMIES, UIStyle::capitals( TheGameText->fetch( "GUI:HudArmies" ) ), 11, rackPx( 58 ) ),
+		X + rackPx( 240 ), Y + rackPx( 61 ), X + rackPx( 298 ), Y + rackPx( 74 ), 0, RACK_ALIGN_CENTRE, m_rackArmies ? LIT : GREY );
+
+	drawRackText( rackText( RACK_TEXT_STANDINGS, UIStyle::capitals( TheGameText->fetch( "GUI:HudStandings" ) ), 12, 0 ),
+		X + rackPx( 24 ), Y2 + rackPx( 9 ), X + rackPx( 180 ), Y2 + rackPx( 23 ), rackPx( 8 ), RACK_ALIGN_LEFT, GREY );
+	// each key's letter small in its bottom right corner
+	for( Int key = 0; key < SPECTATOR_STAT_COUNT; key++ )
+	{
+		UnicodeString letter;
+		letter.format( u"%c", (WideChar)RACK_KEYS[ key ] );
+		const Int right = rackKeyLeft( at, key ) + rackPx( RACK_KEY_W - 1 ), bottom = Y2 + rackPx( RACK_KEY_TOP + RACK_KEY_H - 1 );
+		drawRackText( rackText( RACK_TEXT_KEY + key, letter, 8, 0 ), right - rackPx( 8 ), bottom - rackPx( 9 ), right, bottom, 0,
+			RACK_ALIGN_CENTRE, key == m_rackStat ? GREY : DIM );
+	}
+	// the heading: the picked stat by name; on its right the key under the pointer, or the order
+	const SpectatorStat &stat = SPECTATOR_STATS[ m_rackStat ];
+	const UnicodeString statName = UIStyle::capitals( TheGameText->fetch( stat.label ) );
+	UnicodeString hint;
+	if( hoverKey >= 0 )
+		hint.format( u"%ls (%c)", TheGameText->fetch( SPECTATOR_STATS[ hoverKey ].label ).str(), (WideChar)RACK_KEYS[ hoverKey ] );
+	else
+		hint = TheGameText->fetch( "GUI:HudHighestFirst" );
+	DisplayString *hintText = rackText( RACK_TEXT_HINT, hint, 9, rackPx( 144 ) );
+	Int hintWidth = 0, hintHeight = 0;
+	hintText->getSize( &hintWidth, &hintHeight );
+	drawRackText( hintText, X + rackPx( 150 ), Y2 + rackPx( 60 ), X + rackPx( 294 ), Y2 + rackPx( 76 ), 0, RACK_ALIGN_RIGHT,
+		hoverKey >= 0 ? GOLD : DIM );
+	drawRackText( rackText( RACK_TEXT_STAT, statName, 13,
+		rackPx( 294 - 22 - 8 ) - hintWidth ), X + rackPx( 22 ), Y2 + rackPx( 60 ), X + rackPx( 294 ), Y2 + rackPx( 76 ), 0, RACK_ALIGN_LEFT, WHITE );
+	// the column heads: place, player, and the stat with its unit over the numbers
+	UnicodeString valueHead = statName;
+	if( stat.unit != NULL )
+		valueHead.format( u"%ls (%ls)", statName.str(), TheGameText->fetch( stat.unit ).str() );
+	const Int headTop = Y2 + rackPx( 79 ), headBottom = Y2 + rackPx( 93 );
+	drawRackText( rackText( RACK_TEXT_PLACE_HEAD, UnicodeString( u"#" ), 9, 0 ), X + rackPx( 22 ), headTop, X + rackPx( 38 ), headBottom, 0,
+		RACK_ALIGN_CENTRE, DIM );
+	drawRackText( rackText( RACK_TEXT_PLAYER_HEAD, UIStyle::capitals( TheGameText->fetch( "GUI:HudPlayerHead" ) ), 9, rackPx( 60 ) ),
+		X + rackPx( 76 ), headTop, X + rackPx( 136 ), headBottom, 0, RACK_ALIGN_LEFT, DIM );
+	drawRackText( rackText( RACK_TEXT_VALUE_HEAD, valueHead, 9, rackPx( 154 ) ), X + rackPx( 140 ), headTop, X + rackPx( 294 ), headBottom, 0,
+		RACK_ALIGN_RIGHT, GREY );
+
+	for( Int row = 0; row < rows; row++ )
+	{
+		const Int top = rowTop( row );
+		const SpectatorStats &stats = theRackStats[ row ];
+		UnicodeString place;
+		place.format( u"%d", row + 1 );
+		drawRackText( rackText( RACK_TEXT_PLACE + row, place, 12, 0 ), X + rackPx( 26 ), top + rackPx( 2 ), X + rackPx( 40 ), top + rackPx( 28 ), 0,
+			RACK_ALIGN_CENTRE, row == 0 ? WHITE : GREY );
+		// the number first, so the name gets the room it leaves
+		DisplayString *value = rackText( RACK_TEXT_VALUE + row, rackValueText( m_rackStat, stats ), 14, rackPx( 114 - 12 ) );
+		Int valueWidth = 0, valueHeight = 0;
+		value->getSize( &valueWidth, &valueHeight );
+		drawRackText( value, X + rackPx( 180 ), top + rackPx( 2 ), X + rackPx( 294 ), top + rackPx( 22 ), rackPx( 4 ), RACK_ALIGN_RIGHT, WHITE );
+		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), 13, rackPx( 290 - 76 - 6 ) - valueWidth ),
+			X + rackPx( 76 ), top + rackPx( 2 ), X + rackPx( 190 ), top + rackPx( 22 ), 0, RACK_ALIGN_LEFT, rackColour( stats.player ) );
+
+		// each kind's count on a dark plate in its cell's bottom right
+		for( Int cell = 0; cell < (Int)units[ row ].size(); cell++ )
+		{
+			UnicodeString count;
+			count.format( u"%d", units[ row ][ cell ].second );
+			DisplayString *text = rackText( RACK_TEXT_UNITS + row * RACK_ARMY_UNITS + cell, count, 10, 0 );
+			Int width = 0, height = 0;
+			text->getSize( &width, &height );
+			const Int cellRight = at.drawer + rackPx( 58 + 39 * cell ), cellBottom = top + rackPx( 27 );
+			const Int plateLeft = cellRight - width - rackPx( 5 ), plateTopY = cellBottom - rackPx( 12 );
+			TheDisplay->drawFillRect( plateLeft, plateTopY, cellRight - rackPx( 2 ) - plateLeft, rackPx( 10 ), GameMakeColor( 6, 9, 15, 230 ) );
+			drawRackText( text, plateLeft, plateTopY, cellRight - rackPx( 3 ), plateTopY + rackPx( 10 ), 0, RACK_ALIGN_RIGHT, WHITE );
+		}
+	}
+	m_rackShown = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The rack is drawn over the world rather than in a window, so a press anywhere on its plates, a
+	* follow tab or the armies drawer is its own, as on a HUD cell; between the watch drawer and the
+	* standings the world shows, and takes the click.  The boxes are the last draw's, under the same
+	* pass stamp as the cells (handleHudCellClick). */
+//-------------------------------------------------------------------------------------------------
+Bool InGameUI::handleSpectatorRackClick( const ICoord2D *mouse, Bool act )
+{
+	if( !m_rackShown || m_hudCellDrawnPass + 1 != m_hudCellPass )
+		return FALSE;
+
+	const RackPlace at = rackPlace( m_rackX, m_rackY, m_rackArmies );
+	const Int X = at.x, Y = at.y;
+	const Int foot = at.rows + rackPx( RACK_ROW_H * m_rackRows + RACK_FOOT_SOLID );
+	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
+
+	// a row's tab with the whole row: follow him, or nobody when he already is
+	for( Int row = 0; row < m_rackRows; row++ )
+	{
+		const Int top = at.rows + rackPx( RACK_ROW_H * row );
+		const Bool on = m_rackRowPlayer[ row ] == followed;
+		if( !rackInside( *mouse, at.tabs + rackTabOut( on, !on ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) ) )
+			continue;
+		if( act )
+			runSpectatorAction( on ? FOLLOW_ACTION + FOLLOW_NOBODY : FOLLOW_ACTION + std::to_string( m_rackRowPlayer[ row ] ) );
+		return TRUE;
+	}
+
+	if( rackInside( *mouse, X + rackPx( RACK_SKIRT ), Y + rackPx( RACK_SKIRT ), at.right, Y + rackPx( RACK_WATCH_H ) ) )
+	{
+		if( !act )
+			return TRUE;
+		if( rackInside( *mouse, X + rackPx( 16 ), Y + rackPx( 30 ), X + rackPx( 172 ), Y + rackPx( 62 ) ) )
+		{
+			// the stop nearest the pointer
+			Int stop = 0;
+			for( Int each = 1; each < 3; each++ )
+				if( abs( mouse->x - X - rackPx( RACK_LEVER_STOPS[ each ] ) ) < abs( mouse->x - X - rackPx( RACK_LEVER_STOPS[ stop ] ) ) )
+					stop = each;
+			runSpectatorAction( CAMERA_ACTION + *RACK_CAMERAS[ stop ] );
+		}
+		else if( rackInside( *mouse, X + rackPx( 186 ), Y + rackPx( 30 ), X + rackPx( 232 ), Y + rackPx( 62 ) ) )
+			runSpectatorAction( FOG_ACTION );
+		else if( rackInside( *mouse, X + rackPx( 246 ), Y + rackPx( 30 ), X + rackPx( 292 ), Y + rackPx( 62 ) ) )
+			m_rackArmies = !m_rackArmies;
+		return TRUE;
+	}
+
+	if( rackInside( *mouse, X + rackPx( RACK_SKIRT ), at.standings + rackPx( RACK_SKIRT ), at.right, foot ) )
+	{
+		const Int key = rackKeyAt( *mouse, at );
+		if( act && key >= 0 )
+			m_rackStat = key;
+		return TRUE;
+	}
+
+	return m_rackArmies && rackInside( *mouse, at.drawer + rackPx( RACK_SKIRT ), at.rows - rackPx( 9 ), X + rackPx( RACK_SKIRT ), foot );
+}
+
+Bool InGameUI::handleSpectatorRackWheel( const ICoord2D *mouse, Real notches )
+{
+	if( !handleSpectatorRackClick( mouse, FALSE ) )
+		return FALSE;
+	// down the wheel is the next key to the right, round to the first after the last
+	if( notches != 0.0f && rackOverHead( *mouse, rackPlace( m_rackX, m_rackY, m_rackArmies ) ) )
+		m_rackStat = ( m_rackStat + ( notches < 0.0f ? 1 : SPECTATOR_STAT_COUNT - 1 ) ) % SPECTATOR_STAT_COUNT;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The command grid's first keys while the rack is up, Q W E R T Y A as shipped, pick the stat
+	* keys' stats in their order.  A watcher has no commands to press; anything past the last stat is left to
+	* the command bar. */
+//-------------------------------------------------------------------------------------------------
+Bool InGameUI::pickSpectatorStat( Int commandSlot )
+{
+	// the last draw's flag outlives a pass that drew nothing, a load screen's; the watch is asked again
+	if( !m_rackShown || !localPlayerWatching() || commandSlot >= SPECTATOR_STAT_COUNT )
+		return FALSE;
+	m_rackStat = commandSlot;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The same keys as letters, so the stat keys answer Q W E R T Y A with no CommandMap binding: the
+	* shipped one binds no command slot to a letter.  A plain press only, while the rack is up and the
+	* local player watches; a player's letters never come here. */
+//-------------------------------------------------------------------------------------------------
+Bool InGameUI::pickSpectatorStatKey( Int key, Int keyState )
+{
+	static const Int KEYS[ SPECTATOR_STAT_COUNT ] = { KEY_Q, KEY_W, KEY_E, KEY_R, KEY_T, KEY_Y, KEY_A };
+	if( !m_rackShown || !localPlayerWatching() || ( keyState & ( KEY_STATE_CONTROL | KEY_STATE_SHIFT | KEY_STATE_ALT ) ) )
+		return FALSE;
+	for( Int stat = 0; stat < SPECTATOR_STAT_COUNT; stat++ )
+	{
+		if( KEYS[ stat ] != key )
+			continue;
+		if( keyState & KEY_STATE_DOWN )
+			m_rackStat = stat;
+		return TRUE;
+	}
+	return FALSE;
+}
+
 void InGameUI::handleBuildPlacements( void )
 {
 
@@ -2337,6 +3351,8 @@ void InGameUI::handleBuildPlacements( void )
 
 }  // end handleBuildPlacements
 
+static Int radarFrameTop( void );
+
 //-------------------------------------------------------------------------------------------------
 /** Pre-draw phase of the in game ui */
 //-------------------------------------------------------------------------------------------------
@@ -2358,6 +3374,10 @@ void InGameUI::preDraw( void )
 	// draw the floating text first;
 	drawFloatingText();
 
+	// the SIHA recon chips and trays, and the glyphs beside classified radar rings; a tray stays
+	// clear of the command bar and the radar's frame, the highest of it
+	RadarContactMarks_draw( radarFrameTop() );
+
 	// draw world animations
 	updateAndDrawWorldAnimations();
 
@@ -2370,6 +3390,10 @@ DECLARE_PERF_TIMER(InGameUI_update)
 void InGameUI::update( void )
 {
 	USE_PERF_TIMER(InGameUI_update)
+
+	// a client pass draws (GameClient::update's DRAW) before it gets here; the clicks after it may use
+	// the HUD cells' boxes only if that draw put them there.  See handleHudCellClick
+	m_hudCellPass++;
 
 	updateReplaySeek();
 
@@ -2411,6 +3435,7 @@ void InGameUI::update( void )
 	if( TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() )
 		watchDozers();
 	updateSignalMarks();
+	RadarContactMarks_update();	// what a Turkiye radar paints in the fog, on the ground
 	ReachOverlay_update();		// the ground a selected or sited defence hits, drawn on the terrain
 	UnsignedByte r, g, b, a;
 	Int amount;
@@ -2606,6 +3631,10 @@ void InGameUI::update( void )
 				buffer = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
 			else
 				buffer.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), currentMoney );
+			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneySignPainted() )
+				buffer = amountOnly( buffer );
+			if( !unlimited && TheControlBar->getControlBarSchemeManager()->isMoneyGrouped() )
+				buffer = groupThousands( buffer );
 			GadgetStaticTextSetText( moneyWin, buffer );
 			m_lastMoneyDisplayed = currentMoney;
 
@@ -2628,7 +3657,7 @@ void InGameUI::update( void )
 	// update the control bar
 	TheControlBar->update();
 
-	updateIdleWorker();
+	updateIdleUnitButtons();
 
 	// update any random window layout that so requests
 	for (std::list<WindowLayout *>::iterator it = m_windowLayouts.begin(); it != m_windowLayouts.end(); ++it)
@@ -2756,6 +3785,7 @@ void InGameUI::reset( void )
 	TheObserverCamera.reset();
 	CinemaDirector_forgetHudHidden();
 	clearSignalMarks();
+	RadarContactMarks_reset();
 	m_armedSignal = SIGNAL_KIND_COUNT;
 	m_dozerCheckFrame = 0;
 	for( Int index = 0; index < MAX_PLAYER_COUNT; index++ )
@@ -2969,48 +3999,6 @@ void InGameUI::drawClassicMessages( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** EA's countdown line: the power's name right-aligned to x and its clock after it, in its owner's
-	* colour, the ready one bold and flashing.  The text is only set again when the second, the
-	* readiness or a forced refresh changes it. */
-//-------------------------------------------------------------------------------------------------
-void InGameUI::drawClassicSuperweapon( SuperweaponInfo *info, const AsciiString &templateName, Bool isReady,
-																			 Int readySecs, Int x, Int *y )
-{
-	if( readySecs != (Int)info->m_timestamp || isReady != info->m_ready || info->m_forceUpdateText )
-	{
-		if( isReady )
-			info->setFont( m_superweaponReadyFont, m_superweaponReadyPointSize, m_superweaponReadyBold );
-		else if( info->m_timestamp == 0 )
-			info->setFont( m_superweaponNormalFont, m_superweaponNormalPointSize, TRUE );
-		info->m_forceUpdateText = false;
-		info->m_ready = isReady;
-		info->m_timestamp = readySecs;
-		AsciiString label;
-		label.format( "GUI:%s", templateName.str() );
-		UnicodeString name, time;
-		name.format( u"%ls: ", TheGameText->fetch( label.str() ).str() );
-		time.format( u"%d:%2.2d", readySecs / 60, readySecs % 60 );
-		info->setText( name, time );
-	}
-
-	// 0 draws in the owner's colour, flashing to EA's flash colour once ready
-	Color color = 0;
-	if( isReady && m_superweaponFlashDuration != 0.0f )
-	{
-		if( TheGameLogic->getFrame() >= m_superweaponLastFlashFrame + (Int)m_superweaponFlashDuration )
-		{
-			m_superweaponUsedFlashColor = !m_superweaponUsedFlashColor;
-			m_superweaponLastFlashFrame = TheGameLogic->getFrame();
-		}
-		color = m_superweaponUsedFlashColor ? 0 : m_superweaponFlashColor;
-	}
-	const Color drop = GameMakeColor( 0, 0, 0, 255 );
-	info->drawName( x, *y, color, drop );
-	info->drawTime( x, *y, color, drop );
-	*y += REAL_TO_INT( info->getHeight() );
-}
-
-//-------------------------------------------------------------------------------------------------
 /** Same as the unicode message method, but this takes an ascii string which is assumed
 	* to me a string manager label */
 //-------------------------------------------------------------------------------------------------
@@ -3160,6 +4148,31 @@ static Int controlBarTop( void )
 	ICoord2D barPos;
 	bar->winGetScreenPosition( &barPos.x, &barPos.y );
 	return TheControlBar->getPanelRect( ControlBar::CB_PANEL_LEFT )->lo.y + barPos.y - TheControlBar->getPanelOrigin()->y;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The top of the radar's frame as it stands.  The map's shape only widens or narrows it, so this is
+	* the scheme's radar block for every map.  A scheme with no frame gives the top of its painting's
+	* radar box and ledge (its BlockRadar) where it names one, and controlBarTop otherwise, as does a
+	* hidden radar. */
+//-------------------------------------------------------------------------------------------------
+static Int radarFrameTop( void )
+{
+	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
+	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
+	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
+	if( radar == NULL || radar->winIsHidden() || controlBarTop() >= TheDisplay->getHeight() )
+		return controlBarTop();
+	if( frame == NULL )
+		return TheControlBar->getControlBarSchemeManager()->radarArtTop( controlBarTop() );
+
+	IRegion2D inner, outer;
+	radar->winGetScreenPosition( &inner.lo.x, &inner.lo.y );
+	radar->winGetSize( &inner.hi.x, &inner.hi.y );
+	inner.hi.x += inner.lo.x;
+	inner.hi.y += inner.lo.y;
+	ControlBarSchemeManager::radarFrameRect( frame, inner, &outer );
+	return outer.lo.y;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3383,8 +4396,9 @@ Bool InGameUI::getHeldAircraftOrder( const Object *obj, OrderHintKind& kind, Coo
 	onObject = ( targetID != INVALID_ID );
 	if( onObject )
 	{
+		// a target under the shroud draws nothing, as in getQueuedOrderHint
 		const Object *target = TheGameLogic->findObjectByID( targetID );
-		if( target == NULL )
+		if( target == NULL || isHiddenByShroud( target ) )
 			return FALSE;
 		to = orderTargetSpot( target );
 	}
@@ -3677,6 +4691,7 @@ void InGameUI::collectOrderHints( void )
 			const Int pathSize = ai->friend_getWaypointGoalPathSize();
 			const Int pathIndex = ai->friend_getCurrentGoalPathIndex();
 			hint.onObject = FALSE;
+			Bool goalHidden = FALSE;
 			if( goalResolved )
 			{
 				hint.to = resolvedGoal;
@@ -3702,7 +4717,9 @@ void InGameUI::collectOrderHints( void )
 				Object *goalObj = ai->getGoalObject();
 				Path *path = ai->getPath();
 				hint.onObject = ( goalObj != NULL );
-				if( goalObj )
+				if( goalObj && isHiddenByShroud( goalObj ) )
+					goalHidden = TRUE;
+				else if( goalObj )
 					hint.to = orderTargetSpot( goalObj );
 				else if( path )
 					hint.to = *path->getLastNode()->getPosition();
@@ -3710,7 +4727,13 @@ void InGameUI::collectOrderHints( void )
 					hint.to = *ai->getGoalPosition();
 			}
 
-			addOrderHint( hint, previous );
+			// a goal under the shroud - a radar contact, or a target that has driven into the fog - draws
+			// no thread: its end, or the end of the path chasing it, would trace the unit through the fog.
+			// The shift list that follows starts from the unit itself
+			if( goalHidden )
+				hint.to = hint.from;
+			else
+				addOrderHint( hint, previous );
 		}
 
 		// the rest of the unit's shift queue: every order still owed after this one, each drawn on from
@@ -4424,6 +5447,10 @@ void InGameUI::markNextOrderQueued( OrderQueueMode mode )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::createMoveHint( const GameMessage *msg )
 {
+	// Order Lines off takes away everything drawn where an order lands, this ring included
+	if( !TheGlobalData->m_showOrderLines )
+		return;
+
 	if( getSelectCount() == 1 )
 	{
 		Drawable *draw = getFirstSelectedDrawable();
@@ -6508,6 +7535,7 @@ void InGameUI::disregardDrawable( Drawable *draw )
 void InGameUI::postDraw( void )
 {
 	// drawHudOverlay is NOT called here - it goes on top of everything, see W3DInGameUI::draw
+	m_hudCellDrawnPass = m_hudCellPass;
 	drawProductionList();
 	drawClassicMessages();
 
@@ -6541,19 +7569,26 @@ void InGameUI::postDraw( void )
   // Also responsible for Eva saying "Superweapon is ready for launch"
   //  IMPORTANT: Don't bail out of this block early just because you don't 
   //  want to display the timers -- Eva still needs to be checked
+	m_superweaponCells = 0;		// nothing drawn is nothing to click
+	m_superweaponTab = noHudTab();
+	// the spectator's rack hangs under the superweapon tray when there is one
+	Int rackPlateTop = max( hudStripBottom(), TheUIRect().y ) + stripPixels( RACK_NO_TRAY_DROP );
 	if (TheGameLogic->getFrame() > 0 )
 	{
 		//
-		// EA's column of names and clocks in the top right.  Everything the loop below finds is
-		// gathered first and written at the end of it, the soonest ready at the top, so the one that
-		// matters next is always the first line however many are behind it.
+		// The cameos in the top right, everybody's as EA listed them, bare, each ringed in its
+		// owner's colour.  Everything the loop below finds is gathered first
+		// and drawn at the end of it, the charged ones and then the soonest ready at the right hand
+		// end, so the one that matters next is always in the same place however many are behind it.
 		//
 		struct ListedSuperweapon
 		{
-			SuperweaponInfo *info;
-			const AsciiString *templateName;
+			const Image *cameo;
+			Color owner;
 			Bool ready;
 			Int seconds;
+			Int percent;				///< of the charge done, for the sweep
+			ObjectID jump;			///< the local player's own building, which a click looks at; INVALID_ID otherwise
 		};
 		std::vector< ListedSuperweapon > listed;
 
@@ -6659,7 +7694,19 @@ void InGameUI::postDraw( void )
                     info->m_evaReadyPlayed = false; // Reset Eva for next time
                 }
               
-                ListedSuperweapon line = { info, &mapIt->first, isReady, readySecs };
+                // how far through the charge it is: the frame it comes ready on against a whole charge
+                const UnsignedInt reload = info->getSpecialPowerTemplate()->getReloadTime();
+                const UnsignedInt left = module->getReadyFrame() > TheGameLogic->getFrame()
+                                         ? module->getReadyFrame() - TheGameLogic->getFrame() : 0;
+                Int percent = 100;
+                if( !isReady && reload > 0 )
+                  percent = left >= reload ? 0 : REAL_TO_INT( 100.0f * (Real)( reload - left ) / (Real)reload );
+
+                const ObjectID jump = owningObject->getControllingPlayer() == ThePlayerList->getLocalPlayer()
+                                      ? owningObject->getID() : INVALID_ID;
+                const CommandButton *shortcut = powerButton( info->getSpecialPowerTemplate() );
+                ListedSuperweapon line = { shortcut ? shortcut->getButtonImage() : NULL,
+                                           clientColor( info->getColor() ), isReady, readySecs, percent, jump };
                 listed.push_back( line );
                 if (info->getSpecialPowerTemplate()->isSharedNSync())
                   break; // Wow, it is almost too easy!
@@ -6675,39 +7722,84 @@ void InGameUI::postDraw( void )
 			}
 		}
 
-		if( !m_superweaponHiddenByScript )
+		if( !m_superweaponHiddenByScript && !listed.empty() )
 		{
+			// the local player's own first, then everyone else's, each soonest first: twelve cells and a
+			// "+N" must never leave your own nuke behind the tag
 			std::stable_sort( listed.begin(), listed.end(), []( const ListedSuperweapon &a, const ListedSuperweapon &b )
-				{ return a.ready != b.ready ? a.ready : a.seconds < b.seconds; } );
-
-			const Int screenH = TheDisplay->getHeight();
-			const Int x = hudEdgeX( m_superweaponPosition.x );
-			// under the info strip whenever it is up: the strip is drawn last and would cover them
-			Int y = max( REAL_TO_INT( m_superweaponPosition.y * screenH ), hudStripBottom() );
-			const Int bottom = REAL_TO_INT( screenH * 0.8f * 0.82f );	// EA's: the view above its bar
-			size_t drawn = 0;
-			for( ; drawn < listed.size() && drawn < SUPERWEAPON_LIST_LINES && y < bottom; drawn++ )
-				drawClassicSuperweapon( listed[ drawn ].info, *listed[ drawn ].templateName, listed[ drawn ].ready,
-																listed[ drawn ].seconds, x, &y );
-
-			// the rest as one line, right-aligned to the names over it
-			if( drawn < listed.size() )
-			{
-				UnicodeString more;
-				more.format( TheGameText->fetch( "GUI:ListMore" ), (Int)( listed.size() - drawn ) );
-				if( m_superweaponMoreText == NULL )
 				{
-					m_superweaponMoreText = TheDisplayStringManager->newDisplayString();
-					m_superweaponMoreText->setFont( TheFontLibrary->getFont( m_superweaponNormalFont,
-						TheGlobalLanguageData->adjustFontSize( m_superweaponNormalPointSize ), TRUE ) );
-				}
-				if( m_superweaponMoreText->getText().compare( more ) != 0 )
-					m_superweaponMoreText->setText( more );
-				m_superweaponMoreText->draw( x - m_superweaponMoreText->getWidth(), y, GameMakeColor( 255, 255, 255, 255 ),
-																		 GameMakeColor( 0, 0, 0, 255 ) );
+					const Bool ownA = a.jump != INVALID_ID, ownB = b.jump != INVALID_ID;
+					if( ownA != ownB )
+						return ownA;
+					return a.ready != b.ready ? a.ready : a.seconds < b.seconds;
+				} );
+
+			// rows of SUPERWEAPON_LIST_COLUMNS in one tray hard against the screen's right edge, a row
+			// under a row, the tray's top a little under the info strip's foot whenever it is up (the
+			// strip is drawn last and would cover them), the top of the screen otherwise.  Two rows at
+			// most, the last the short one; past SUPERWEAPON_LIST_CELLS a "+N" tab hangs from the tray
+			const HudCellStyle style = hudCellStyle();
+			const Int cameoW = style.cameoW;
+			const Int cameoH = style.cameoH;
+			const Int right = TheDisplay->getWidth();
+			const Int top = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP ) + style.superweapon.footH;
+			const Bool more = (Int)listed.size() > SUPERWEAPON_LIST_CELLS;
+			const Int cameos = more ? SUPERWEAPON_LIST_CELLS : (Int)listed.size();
+			IRegion2D place[ SUPERWEAPON_LIST_CELLS ];
+			for( Int each = 0; each < cameos; each++ )
+			{
+				place[ each ].hi.x = right - each % SUPERWEAPON_LIST_COLUMNS * style.cellW - style.marginX;
+				place[ each ].lo.y = top + each / SUPERWEAPON_LIST_COLUMNS * style.cellH + style.marginY;
+				place[ each ].lo.x = place[ each ].hi.x - cameoW;
+				place[ each ].hi.y = place[ each ].lo.y + cameoH;
+				m_superweaponPlace[ each ] = hudCellBox( style, place[ each ] );
+				m_superweaponJump[ each ] = listed[ each ].jump;
+			}
+			m_superweaponCells = cameos;
+			// under the last row's cell at the screen edge, below the tray's own bottom edge
+			const IRegion2D &lastRow = m_superweaponPlace[ ( cameos - 1 ) / SUPERWEAPON_LIST_COLUMNS * SUPERWEAPON_LIST_COLUMNS ];
+			m_superweaponTab = more ? hudTab( 1, lastRow.hi.y + style.superweapon.uncoveredH, 1 ) : noHudTab();
+			rackPlateTop = max( lastRow.hi.y + style.superweapon.uncoveredH, m_superweaponTab.hi.y ) + rackPx( RACK_TRAY_GAP );
+
+			TheDisplay->beginBatch2D();
+			drawHudTray( style.superweapon, m_superweaponPlace, cameos, SUPERWEAPON_LIST_COLUMNS, -1, -1 );
+			for( Int each = 0; each < cameos; each++ )
+				if( listed[ each ].cameo != NULL )
+					TheDisplay->drawImage( listed[ each ].cameo, place[ each ].lo.x, place[ each ].lo.y,
+																 place[ each ].hi.x, place[ each ].hi.y );
+			// charging, the scrim swept off as the charge runs; charged, its owner's light rising off the foot
+			for( Int each = 0; each < cameos; each++ )
+			{
+				if( !listed[ each ].ready )
+					TheDisplay->drawRemainingRectClock( place[ each ].lo.x, place[ each ].lo.y, cameoW, cameoH,
+																							listed[ each ].percent, GameMakeColor( 0, 0, 0, 130 ) );
+				else
+					drawReadyGlow( style.readyGlow, style.readyShimmer, place[ each ], listed[ each ].owner );
+			}
+			// a ring in its owner's colour says whose it is, charged or not: a tint on the readout's plate
+			// would leave a charged one, which wears no readout, with no owner at all
+			for( Int each = 0; each < cameos; each++ )
+				drawOwnerRing( place[ each ], listed[ each ].owner, style.marginX );
+			TheDisplay->endBatch2D();
+
+			// a charged one wears no number: zero seconds says nothing the glow does not
+			for( Int each = 0; each < cameos; each++ )
+				if( !listed[ each ].ready )
+					drawCellSeconds( m_superweaponCellText[ each ], listed[ each ].seconds, place[ each ], style.plate );
+			if( more )
+			{
+				UnicodeString rest;
+				rest.format( u"+%d", (Int)listed.size() - cameos );
+				drawHudTab( style.tabDown, m_superweaponTab, 1, cellString( m_superweaponMoreText, rest ) );
 			}
 		}
 	}
+
+	// the spectator's own controls and standings, only while watching: the other side's worth is not
+	// a player's to know
+	m_rackShown = FALSE;
+	if( TheGameLogic->getFrame() > 0 && !TheGameLogic->isInShellGame() && localPlayerWatching() )
+		drawSpectatorRack( rackPlateTop );
 
 	// draw named timers
 	if (TheGameLogic->getFrame() > 0 && m_showNamedTimers)
@@ -9616,7 +10708,7 @@ static Int productionListPlace( const InGameUI::ProductionListSlot *slots, Int c
 //-------------------------------------------------------------------------------------------------
 /** Append everything this object has queued, units and upgrades alike, into a list kept sorted by
 	* how long each item still has to wait - soonest first. Everything is counted in *total; only
-	* the PRODUCTION_LIST_LINES items that finish first get a line, whatever order they were met in.
+	* the PRODUCTION_LIST_CELLS items that finish first get a cell, whatever order they were met in.
 	*
 	* The wait is cumulative down a producer's queue: an entry only starts once everything ahead of
 	* it has popped, so its remaining time is the time left on the entry in front plus its own build
@@ -9640,20 +10732,20 @@ static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slot
 		Int typeKey = 0;
 		Bool isUpgrade = FALSE;
 		Int buildFrames = 0;
-		UnicodeString name;
+		const Image *cameo = NULL;
 
 		if( p->getProductionType() == PRODUCTION_UNIT && p->getProductionObject() )
 		{
 			buildFrames = p->getProductionObject()->calcTimeToBuild( owner );
 			typeKey = (Int)p->getProductionObject()->getTemplateID();
-			name = p->getProductionObject()->getDisplayName();
+			cameo = p->getProductionObject()->getButtonImage();
 		}
 		else if( p->getProductionType() == PRODUCTION_UPGRADE && p->getProductionUpgrade() )
 		{
 			isUpgrade = TRUE;
 			typeKey = (Int)p->getProductionUpgrade()->getUpgradeNameKey();
 			buildFrames = p->getProductionUpgrade()->calcTimeToBuild( owner );
-			name = TheGameText->fetch( p->getProductionUpgrade()->getDisplayNameLabel().str() );
+			cameo = p->getProductionUpgrade()->getButtonImage();
 		}
 		else
 			continue;
@@ -9668,12 +10760,15 @@ static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slot
 		// Guard pair is one order, paid for once and cancelled once
 		(*total)++;
 
-		// a run of the same thing queued back to back in one producer folds into the line the run
+		// a run of the same thing queued back to back in one producer folds into the cell the run
 		// started, which wears an "xN" and the time the next of them arrives
+		const Int id = isUpgrade ? typeKey : (Int)p->getProductionID();
 		if( runAt >= 0 && runAt < *count && slots[ runAt ].typeKey == typeKey
 				&& slots[ runAt ].isUpgrade == isUpgrade && slots[ runAt ].producer == obj->getID() )
 		{
+			// a cancel takes the newest of the run off, as the command bar's does
 			slots[ runAt ].quantity++;
+			slots[ runAt ].id = id;
 			continue;
 		}
 
@@ -9682,10 +10777,10 @@ static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slot
 		// something else has come between: whatever this producer queues next starts a new run
 		runAt = -1;
 
-		if( at >= InGameUI::PRODUCTION_LIST_LINES )
+		if( at >= InGameUI::PRODUCTION_LIST_CELLS )
 			continue;						// everything already kept finishes sooner: counted, but not drawn
 
-		if( *count < InGameUI::PRODUCTION_LIST_LINES )
+		if( *count < InGameUI::PRODUCTION_LIST_CELLS )
 			(*count)++;
 
 		for( Int j = *count - 1; j > at; j-- )
@@ -9699,7 +10794,11 @@ static void appendProducerQueue( Object *obj, InGameUI::ProductionListSlot *slot
 		slot->isUpgrade = isUpgrade;
 		slot->remaining = remaining;
 		slot->quantity = 1;
-		slot->name = name;
+		// only the head of a queue is being built; the rest wait at 0
+		slot->percent = REAL_TO_INT( p->getPercentComplete() );
+		slot->cameo = cameo;
+		slot->id = id;
+		slot->isStructure = FALSE;
 	}
 }
 
@@ -9724,23 +10823,26 @@ static void appendStructureUnderConstruction( Object *obj, InGameUI::ProductionL
 	(*total)++;
 
 	const Int at = productionListPlace( slots, *count, remaining );
-	if( at >= InGameUI::PRODUCTION_LIST_LINES )
+	if( at >= InGameUI::PRODUCTION_LIST_CELLS )
 		return;
 
-	if( *count < InGameUI::PRODUCTION_LIST_LINES )
+	if( *count < InGameUI::PRODUCTION_LIST_CELLS )
 		(*count)++;
 
 	for( Int j = *count - 1; j > at; j-- )
 		slots[ j ] = slots[ j - 1 ];
 
-	// each site is its own place on the map, so two of the same building stay two lines
+	// each site is its own place on the map, so two of the same building stay two cells
 	InGameUI::ProductionListSlot *slot = &slots[ at ];
 	slot->producer = obj->getID();
 	slot->typeKey = 0;
 	slot->isUpgrade = FALSE;
 	slot->remaining = remaining;
 	slot->quantity = 1;
-	slot->name = obj->getTemplate()->getDisplayName();
+	slot->percent = REAL_TO_INT( percent );
+	slot->cameo = obj->getTemplate()->getButtonImage();
+	slot->id = 0;
+	slot->isStructure = TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -9810,7 +10912,8 @@ Bool HudReadout_fits( DisplayString *text, const IRegion2D &cell )
 }
 
 //-------------------------------------------------------------------------------------------------
-void HudReadout_draw( DisplayString *text, const IRegion2D &cell, HudReadoutCorner corner, Color textColor )
+void HudReadout_draw( DisplayString *text, const IRegion2D &cell, HudReadoutCorner corner, Color textColor,
+											const Image *plate )
 {
 	Int textWidth = 0, textHeight = 0;
 	text->getSize( &textWidth, &textHeight );
@@ -9832,11 +10935,14 @@ void HudReadout_draw( DisplayString *text, const IRegion2D &cell, HudReadoutCorn
 		top = ( cell.lo.y + cell.hi.y - textHeight ) / 2;
 	}
 
-	// solid, the colour of a cell's own hole: the text is read against the plate at every HUD Size,
-	// whatever picture is under it
-	TheDisplay->drawFillRect( left, top, plateWidth, textHeight, GameMakeColor( 2, 4, 5, 255 ) );
-	IRegion2D plate = { { left, top }, { left + plateWidth, top + textHeight } };
-	text->setClipRegion( &plate );
+	// the side's plate when the sheet has one, or solid, the colour of a cell's own hole: the text is
+	// read against the plate at every HUD Size, whatever picture is under it
+	if( plate != NULL )
+		TheDisplay->drawImage( plate, left, top, left + plateWidth, top + textHeight );
+	else
+		TheDisplay->drawFillRect( left, top, plateWidth, textHeight, GameMakeColor( 2, 4, 5, 255 ) );
+	IRegion2D plateBox = { { left, top }, { left + plateWidth, top + textHeight } };
+	text->setClipRegion( &plateBox );
 	text->draw( left + HUD_READOUT_PAD, top, textColor, GameMakeColor( 0, 0, 0, 255 ) );
 }
 
@@ -9868,15 +10974,20 @@ void InGameUI_numberBuildPlans( std::vector<BuildPlanNumber>& plans )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Everything the local player has coming, as lines of text down the left side over the control
-	* bar: every producer's queue and every building a dozer or a worker has going up, soonest to
-	* finish first, in the superweapon countdown's font and the player's colour.  PRODUCTION_LIST_LINES
-	* of them, and one more saying how many did not fit.  The sweep reads the logic, which only moves
-	* on a logic frame, so it is taken once a frame and the render passes between two frames draw what
-	* it found; a script can change a queue while time is frozen, so a frozen pass sweeps every time. */
+/** Everything the local player has coming, as bare cameos on the left over the
+	* control bar: every producer's queue and every building a dozer or a worker has going up, soonest
+	* to finish at the left, in one row.  Each wears its seconds in the bottom left corner, an "xN" in
+	* the top right for a run of the same thing, and a scrim swept off as its own build runs.
+	* PRODUCTION_LIST_CELLS cells, and a "+N" tab sticking up from the tray when more is coming than
+	* they show.  The sweep reads the logic, which only moves on a logic frame, so
+	* it is taken once a frame and the render passes between two frames draw what it found; a script can
+	* change a queue while time is frozen, so a frozen pass sweeps every time. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::drawProductionList( void )
 {
+	// nothing drawn is nothing to click
+	m_productionListCells = 0;
+	m_productionListTab = noHudTab();
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 		return;
 
@@ -9902,47 +11013,195 @@ void InGameUI::drawProductionList( void )
 	if( m_productionListCount == 0 )
 		return;
 
-	// a line wearing an "x5" stands for five, and the last line counts what no line shows
+	// a cell wearing an "x5" stands for five.  Only a full list leaves anything out, and the tab
+	// counts everything no cameo shows
 	Int shown = 0;
 	for( Int each = 0; each < m_productionListCount; each++ )
 		shown += m_productionList[ each ].quantity;
-	const Int hidden = m_productionListTotal - shown;
-	const Int lines = m_productionListCount + ( hidden > 0 ? 1 : 0 );
+	const Bool more = m_productionListTotal > shown;
+	const Int cameos = m_productionListCount;
 
-	// left-aligned under the messages' column, the last line standing just clear of the control bar,
-	// white and bold so it reads on any ground
-	GameFont *font = TheFontLibrary->getFont( m_superweaponNormalFont,
-		TheGlobalLanguageData->adjustFontSize( m_superweaponNormalPointSize ), TRUE );
-	const Int x = m_messagePosition.x;
-	Int y = controlBarTop() - stripPixels( PRODUCTION_LIST_LIFT ) - lines * font->height;
-	const Color color = GameMakeColor( 255, 255, 255, 255 );
-	const Color drop = GameMakeColor( 0, 0, 0, 255 );
-	for( Int line = 0; line < lines; line++ )
+	// one row in a tray hard against the screen's left edge, the powers tray mirrored, its foot
+	// standing just clear of the radar's frame
+	const HudCellStyle style = hudCellStyle();
+	const Int cameoW = style.cameoW;
+	const Int cameoH = style.cameoH;
+	const Int left = 0;
+	const Int foot = radarFrameTop() - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
+	IRegion2D place[ PRODUCTION_LIST_CELLS ];
+	for( Int each = 0; each < cameos; each++ )
 	{
-		UnicodeString text;
-		if( line < m_productionListCount )
+		place[ each ].lo.x = left + each * style.cellW + style.marginX;
+		place[ each ].hi.y = foot - style.marginY;
+		place[ each ].hi.x = place[ each ].lo.x + cameoW;
+		place[ each ].lo.y = place[ each ].hi.y - cameoH;
+		m_productionListPlace[ each ] = hudCellBox( style, place[ each ] );
+	}
+	m_productionListCells = cameos;
+	// over the first cell, above the tray's own top edge
+	if( more )
+		m_productionListTab = hudTab( -1, m_productionListPlace[ 0 ].lo.y - style.production.uncoveredH, -1 );
+
+	// ctrl is the cells' cancel key, so while it is held the cameo a click would cancel says so: it goes
+	// red and wears a minus.  An accidental cancel costs the whole item
+	Int cancelHover = -1;
+	if( TheKeyboard->isCtrl() )
+	{
+		const MouseIO *io = TheMouse->getMouseStatus();
+		for( Int each = 0; each < cameos; each++ )
 		{
-			const ProductionListSlot &slot = m_productionList[ line ];
-			const Int seconds = ControlBar_secondsFromFrames( (Real)slot.remaining );
-			if( slot.quantity > 1 )
-				text.format( u"%ls x%d: %d:%2.2d", slot.name.str(), slot.quantity, seconds / 60, seconds % 60 );
-			else
-				text.format( u"%ls: %d:%2.2d", slot.name.str(), seconds / 60, seconds % 60 );
+			const Object *producer = TheGameLogic->findObjectByID( m_productionList[ each ].producer );
+			const IRegion2D &box = m_productionListPlace[ each ];
+			if( !m_productionList[ each ].isStructure && producer != NULL && producer->isLocallyControlled()
+					&& io->pos.x >= box.lo.x && io->pos.x < box.hi.x && io->pos.y >= box.lo.y && io->pos.y < box.hi.y )
+				cancelHover = each;
+		}
+	}
+
+	// a piece at a time over every cell, so a run of the same piece is one draw call; see beginBatch2D
+	TheDisplay->beginBatch2D();
+	drawHudTray( style.production, m_productionListPlace, cameos, PRODUCTION_LIST_COLUMNS, 1, 1 );
+	for( Int each = 0; each < cameos; each++ )
+		if( m_productionList[ each ].cameo != NULL )
+			TheDisplay->drawImage( m_productionList[ each ].cameo, place[ each ].lo.x, place[ each ].lo.y,
+														 place[ each ].hi.x, place[ each ].hi.y );
+	// swept off the way the command bar's own clock is; an item still waiting wears all of it
+	for( Int each = 0; each < cameos; each++ )
+		TheDisplay->drawRemainingRectClock( place[ each ].lo.x, place[ each ].lo.y, cameoW, cameoH,
+																				m_productionList[ each ].percent, GameMakeColor( 0, 0, 0, 100 ) );
+	// the command bar's own: build for a unit or a structure, upgrade for an upgrade
+	for( Int each = 0; each < cameos; each++ )
+		drawHudCellBorder( place[ each ], hudCellBorder( m_productionList[ each ].isUpgrade ? COMMAND_BUTTON_BORDER_UPGRADE
+																																										: COMMAND_BUTTON_BORDER_BUILD ) );
+	if( cancelHover >= 0 )
+	{
+		const IRegion2D &box = place[ cancelHover ];
+		const Int barInset = cameoW / 4;
+		const Int barHeight = stripPixels( 4 );
+		TheDisplay->drawFillRect( box.lo.x, box.lo.y, cameoW, cameoH, GameMakeColor( 190, 0, 0, 120 ) );
+		TheDisplay->drawFillRect( box.lo.x + barInset, box.lo.y + ( cameoH - barHeight ) / 2, cameoW - 2 * barInset, barHeight,
+															GameMakeColor( 255, 255, 255, 255 ) );
+	}
+	TheDisplay->endBatch2D();
+
+	const Color white = GameMakeColor( 255, 255, 255, 255 );
+	for( Int each = 0; each < cameos; each++ )
+	{
+		const ProductionListSlot &slot = m_productionList[ each ];
+		drawCellSeconds( m_productionListText[ 2 * each ], ControlBar_secondsFromFrames( (Real)slot.remaining ),
+										 place[ each ], style.plate );
+		if( slot.quantity > 1 )
+		{
+			UnicodeString count;
+			count.format( u"x%d", slot.quantity );
+			HudReadout_draw( cellString( m_productionListText[ 2 * each + 1 ], count ), place[ each ],
+											 HUD_READOUT_TOP_RIGHT, white, style.plate );
+		}
+	}
+	if( more )
+	{
+		UnicodeString rest;
+		rest.format( u"+%d", m_productionListTotal - shown );
+		drawHudTab( style.tabUp, m_productionListTab, -1, cellString( m_productionListMoreText, rest ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A cell's readout string, made the first time in the superweapon countdown's face, bold, and set
+	* to `text` only when it holds something else: a string laid out again builds its texture again. */
+//-------------------------------------------------------------------------------------------------
+DisplayString *InGameUI::cellString( DisplayString *&string, const UnicodeString &text )
+{
+	if( string == NULL )
+	{
+		string = TheDisplayStringManager->newDisplayString();
+		string->setFont( TheFontLibrary->getFont( m_superweaponNormalFont,
+			TheGlobalLanguageData->adjustFontSize( HUD_CELL_POINT_SIZE ), TRUE ) );
+	}
+	if( string->getText().compare( text ) != 0 )
+		string->setText( text );
+	return string;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A countdown in a cameo's bottom left corner, in bare seconds with the unit on it, "45s": the
+	* picture's middle is what it is there to show, and m:ss is a number to convert first.  A number
+	* too wide for the cameo with its s goes without it, and stays without until the number changes,
+	* so the string is not laid out twice a frame. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawCellSeconds( DisplayString *&string, Int seconds, const IRegion2D &cameo, const Image *plate )
+{
+	UnicodeString bare, unit;
+	bare.format( u"%d", seconds > 0 ? seconds : 0 );
+	unit.format( u"%ds", seconds > 0 ? seconds : 0 );
+	DisplayString *text = NULL;
+	if( string != NULL && string->getText().compare( bare ) == 0 )
+		text = string;
+	else
+	{
+		text = cellString( string, unit );
+		if( !HudReadout_fits( text, cameo ) )
+			text = cellString( string, bare );
+	}
+	HudReadout_draw( text, cameo, HUD_READOUT_BOTTOM_LEFT, GameMakeColor( 245, 245, 245, 255 ), plate );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The cells lie over the world rather than in a window, so nothing ahead of PlaceEventTranslator has
+	* claimed a click on them; it asks here first, before placement and selection turn the click into
+	* an order.  A cell is its cell piece, cameo, border and margin, and a "+N" tab is its picture; the
+	* tray's edges round the group stay the world's.  A cancel is the command bar's own
+	* message with the producer on it, which the logic checks is the sender's. */
+//-------------------------------------------------------------------------------------------------
+Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
+{
+	// the boxes are the last pass's draw, and only if that pass drew: a click comes after the pass's
+	// update (logic thread 0) or at the start of the next pass ahead of its draw (1 and 2), and either
+	// way update() has counted the drawing pass once since.  A pass that drew nothing over the world
+	// (-cinema, the load screen, -headless, TiVO's skipped frames) leaves the stamp behind
+	if( m_hudCellDrawnPass + 1 != m_hudCellPass )
+		return FALSE;
+
+	auto inside = [ mouse ]( const IRegion2D &box )
+	{
+		return mouse->x >= box.lo.x && mouse->x < box.hi.x && mouse->y >= box.lo.y && mouse->y < box.hi.y;
+	};
+
+	// a "+N" tab stands for no one item
+	if( inside( m_productionListTab ) || inside( m_superweaponTab ) )
+		return TRUE;
+
+	for( Int each = 0; each < m_productionListCells; each++ )
+	{
+		if( !inside( m_productionListPlace[ each ] ) )
+			continue;
+		const ProductionListSlot &slot = m_productionList[ each ];
+		Object *producer = TheGameLogic->findObjectByID( slot.producer );
+		if( producer == NULL )
+			return TRUE;				// gone since the draw: the click is still the cell's
+		if( cancel && !slot.isStructure && producer->isLocallyControlled() )
+		{
+			GameMessage *msg = TheMessageStream->appendMessage( slot.isUpgrade ? GameMessage::MSG_CANCEL_UPGRADE
+																																				 : GameMessage::MSG_CANCEL_UNIT_CREATE );
+			msg->appendIntegerArgument( slot.id );
+			msg->appendObjectIDArgument( slot.producer );
 		}
 		else
-			text.format( TheGameText->fetch( "GUI:ListMore" ), hidden );
-
-		DisplayString *&string = m_productionListText[ line ];
-		if( string == NULL )
-		{
-			string = TheDisplayStringManager->newDisplayString();
-			string->setFont( font );
-		}
-		if( string->getText().compare( text ) != 0 )
-			string->setText( text );
-		string->draw( x, y, color, drop );
-		y += font->height;
+			TheTacticalView->lookAt( producer->getPosition() );
+		return TRUE;
 	}
+
+	for( Int each = 0; each < m_superweaponCells; each++ )
+	{
+		if( !inside( m_superweaponPlace[ each ] ) )
+			continue;
+		Object *building = TheGameLogic->findObjectByID( m_superweaponJump[ each ] );
+		if( building != NULL )
+			TheTacticalView->lookAt( building->getPosition() );
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 void InGameUI::drawFloatingText( void )
@@ -10302,29 +11561,6 @@ void InGameUI::updateAndDrawWorldAnimations( void )
 }  // end updateAndDrawWorldAnimations
 
 
-Object *InGameUI::findIdleWorker( Object *obj)
-{
-	if(!obj)
-		return NULL;
-	
-	Int index = obj->getControllingPlayer()->getPlayerIndex();	
-	if(m_idleWorkers[index].empty())
-		return NULL;
-
-	ObjectListIt it = m_idleWorkers[index].begin();
-	while(it != m_idleWorkers[index].end())
-	{
-		Object *itObj = *it;
-		if(itObj == obj)
-		{
-			return itObj;
-			break;
-		}
-		++it;
-	}
-	return NULL;
-}
-
 void InGameUI::addIdleWorker( Object *obj )
 {
 	if(!obj)
@@ -10375,73 +11611,10 @@ void InGameUI::removeIdleWorker( Object *obj, Int playerNumber )
 // The camera stays put; the idle worker buttons look at what this returns, the hotkey does not.
 Object *InGameUI::selectNextIdleWorker( void )
 {
-	Int index = ThePlayerList->getLocalPlayer()->getPlayerIndex();
-	if(m_idleWorkers[index].empty())
-	{
-		DEBUG_ASSERTCRASH(FALSE, ("InGameUI::selectNextIdleWorker We're trying to select a worker when our list is empty for player %s", WideCharAsUtf8( ThePlayerList->getLocalPlayer()->getPlayerDisplayName().str() ).str()));
-		return NULL;
-	}
-	Object *selectThisObject = NULL;
-	
-	if(getSelectCount() == 0 || getSelectCount() > 1)
-	{
-		selectThisObject = *m_idleWorkers[index].begin();
-	}
-	else
-	{
-		Drawable *selectedDrawable = TheInGameUI->getFirstSelectedDrawable();	
-		
-		ObjectListIt it = m_idleWorkers[index].begin();
-		while(it != m_idleWorkers[index].end())
-		{
-			Object *itObj = *it;
-			if(itObj == selectedDrawable->getObject())
-			{
-				++it;
-				if(it != m_idleWorkers[index].end())
-					selectThisObject = *it;
-				else
-					selectThisObject = *m_idleWorkers[index].begin();
-				break;
-			}
-			++it;
-		}
-		// if we had something selected that wasn't a worker, we'll get here
-		if(!selectThisObject)
-			selectThisObject = *m_idleWorkers[index].begin();
-
-	}
-	DEBUG_ASSERTCRASH(selectThisObject, ("InGameUI::selectNextIdleWorker Could not select the next IDLE worker"));
-	if(selectThisObject)
-	{	
-		
-		//If our idle worker is contained by anything, we need to select the container instead.
-		Object *containedBy = selectThisObject->getContainedBy();
-		if( containedBy )
-		{
-			selectThisObject = containedBy;
-		}
-
-		deselectAllDrawables();
-		GameMessage *teamMsg = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP );
-
-
-		//New group or add to group? Passed in value is true if we are creating a new group.
-		teamMsg->appendBooleanArgument( TRUE );
-
-		teamMsg->appendObjectIDArgument( selectThisObject->getID() );
-		
-		selectDrawable( selectThisObject->getDrawable() );
-
-		/*// removed becuase we're already playing a select sound... left in, just in case i"m wrong.
-		// play the units sound
-				const AudioEventRTS *soundEvent = selectThisObject->getTemplate()->getVoiceSelect();
-				if (soundEvent)
-				{
-					TheAudio->addAudioEvent( soundEvent );
-				}*/
-	}
-	return selectThisObject;
+	// the same walk the button's light comes from, so a lit button always has a worker to give
+	KindOfMaskType mustBeSet, mustBeClear;
+	idleUnitKinds( GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER, &mustBeSet, &mustBeClear );
+	return selectNextIdleUnit( mustBeSet, mustBeClear );
 }
 
 // A unit of the local player's that is standing on the field with no order: not a dozer, a worker
@@ -10462,11 +11635,108 @@ Bool InGameUI::isIdleCombatUnit( const Object *obj )
 	return ai && ai->isIdle();
 }
 
-void InGameUI::selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear )
+// A dozer or worker of the local player's with no order, riding in something or not: the idle
+// worker button selects what carries it.  A Worker out on a supply run is busy even on the frames
+// its AI stands idle between two docks.  Read here every pass, where the list the dozers keep
+// themselves fills only when their sleeping idle state wakes, seconds late.
+static Bool isIdleWorker( const Object *obj )
 {
-	// Nothing keeps a list of these the way the dozers keep m_idleWorkers, so the key walks the
-	// object list, which is in creation order and stays put between presses.  A lone selected unit
-	// is the place to carry on from; with nothing or a group selected the walk starts over.
+	if( !obj->isLocallyControlled() || obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_DOZER ) )
+		return FALSE;
+
+	const AIUpdateInterface *ai = obj->getAI();
+	if( ai == NULL || !ai->isIdle() )
+		return FALSE;
+
+	const SupplyTruckAIInterface *truck = ai->getSupplyTruckAIInterface();
+	return truck == NULL || !truck->isCurrentlyFerryingSupplies();
+}
+
+// what an idle key of the kinds idleUnitKinds gave cycles over
+static Bool isIdleOfKinds( const Object *obj, const KindOfMaskType &mustBeSet, const KindOfMaskType &mustBeClear )
+{
+	if( mustBeSet.test( KINDOF_DOZER ) )
+		return isIdleWorker( obj );
+	return InGameUI::isIdleCombatUnit( obj ) && obj->isKindOfMulti( mustBeSet, mustBeClear );
+}
+
+void InGameUI::idleUnitKinds( GameMessage::Type t, KindOfMaskType *mustBeSet, KindOfMaskType *mustBeClear )
+{
+	if( t == GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER )
+		mustBeSet->set( KINDOF_DOZER );
+	else if( t == GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT )
+		mustBeSet->set( KINDOF_AIRCRAFT );
+	else if( t == GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE )
+	{
+		mustBeSet->set( KINDOF_VEHICLE );
+		mustBeClear->set( KINDOF_AIRCRAFT );
+	}
+	else if( t == GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY )
+		mustBeSet->set( KINDOF_INFANTRY );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One walk of the object list a frame lights each idle button whose kind has a unit standing
+	* idle, so a dim one never answers a click with nothing.  The worker button is one of them: the
+	* four light on the same pass, and each cycles over what lit it. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::updateIdleUnitButtons( void )
+{
+	enum { IDLE_BUTTON_COUNT = 4 };
+	static const GameMessage::Type keys[ IDLE_BUTTON_COUNT ] =
+	{
+		GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY,
+		GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE,
+		GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT,
+		GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER,
+	};
+	static const NameKeyType ids[ IDLE_BUTTON_COUNT ] =
+	{
+		NAMEKEY( "ControlBar.wnd:ButtonIdleInfantry" ),
+		NAMEKEY( "ControlBar.wnd:ButtonIdleVehicle" ),
+		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
+		NAMEKEY( "ControlBar.wnd:ButtonIdleWorker" ),
+	};
+	GameWindow *win[ IDLE_BUTTON_COUNT ];
+	KindOfMaskType mustBeSet[ IDLE_BUTTON_COUNT ], mustBeClear[ IDLE_BUTTON_COUNT ];
+	Bool idle[ IDLE_BUTTON_COUNT ] = { FALSE, FALSE, FALSE, FALSE };
+	Int i;
+	for( i = 0; i < IDLE_BUTTON_COUNT; i++ )
+	{
+		win[ i ] = TheWindowManager->winGetWindowFromId( NULL, ids[ i ] );
+		idleUnitKinds( keys[ i ], &mustBeSet[ i ], &mustBeClear[ i ] );
+	}
+	if( win[ 0 ] == NULL || !getInputEnabled() || !TheGameLogic->isInGame() )
+	{
+		for( i = 0; i < IDLE_BUTTON_COUNT; i++ )
+			if( win[ i ] )
+				win[ i ]->winEnable( FALSE );
+		return;
+	}
+
+	// ponytail: the whole object list every render frame; keep a list per kind if it shows in a profile
+	Int lit = 0;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj && lit < IDLE_BUTTON_COUNT; obj = obj->getNextObject() )
+	{
+		if( !obj->isLocallyControlled() )
+			continue;
+		for( i = 0; i < IDLE_BUTTON_COUNT; i++ )
+			if( !idle[ i ] && isIdleOfKinds( obj, mustBeSet[ i ], mustBeClear[ i ] ) )
+			{
+				idle[ i ] = TRUE;
+				lit++;
+			}
+	}
+	for( i = 0; i < IDLE_BUTTON_COUNT; i++ )
+		if( win[ i ] )
+			win[ i ]->winEnable( idle[ i ] );
+}
+
+Object *InGameUI::selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear )
+{
+	// The key walks the object list, the one updateIdleUnitButtons lights the buttons from, which is
+	// in creation order and stays put between presses.  A lone selected unit is the place to carry
+	// on from; with nothing or a group selected the walk starts over.
 	const Object *current = getSelectCount() == 1 ? getFirstSelectedDrawable()->getObject() : NULL;
 	Object *first = NULL;
 	Object *selectThisObject = NULL;
@@ -10474,7 +11744,7 @@ void InGameUI::selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType must
 
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
-		if( isIdleCombatUnit( obj ) && obj->isKindOfMulti( mustBeSet, mustBeClear ) )
+		if( isIdleOfKinds( obj, mustBeSet, mustBeClear ) )
 		{
 			if( passedCurrent )
 			{
@@ -10492,7 +11762,11 @@ void InGameUI::selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType must
 	if( !selectThisObject )
 		selectThisObject = first;
 	if( !selectThisObject )
-		return;
+		return NULL;
+
+	// a worker riding in a tunnel or a transport is selected by what carries it
+	if( selectThisObject->getContainedBy() )
+		selectThisObject = selectThisObject->getContainedBy();
 
 	deselectAllDrawables();
 	GameMessage *teamMsg = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP );
@@ -10501,65 +11775,13 @@ void InGameUI::selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType must
 	teamMsg->appendBooleanArgument( TRUE );
 	teamMsg->appendObjectIDArgument( selectThisObject->getID() );
 
-	// the camera stays where the player has it
+	// the camera stays where the player has it; the idle buttons move it themselves
 	selectDrawable( selectThisObject->getDrawable() );
-}
-
-Int InGameUI::getIdleWorkerCount( void )
-{
-	Int index = ThePlayerList->getLocalPlayer()->getPlayerIndex();
-	return m_idleWorkers[index].size();
-}
-
-void InGameUI::showIdleWorkerLayout( void )
-{
-	if (!m_idleWorkerWin)
-	{
-		m_idleWorkerWin = TheWindowManager->winGetWindowFromId(NULL, TheNameKeyGenerator->nameToKey("ControlBar.wnd:ButtonIdleWorker"));
-		DEBUG_ASSERTCRASH(m_idleWorkerWin, ("InGameUI::showIdleWorkerLayout could not find IdleWorker.wnd to load "));
-		return;
-	}
-
-	m_idleWorkerWin->winEnable(TRUE);
-
-	m_currentIdleWorkerDisplay = getIdleWorkerCount();
-	
-//	if(m_currentIdleWorkerDisplay < 1)
-//		GadgetButtonSetText(m_idleWorkerWin, UnicodeString::TheEmptyString);
-//	else
-//	{
-//		UnicodeString number;
-//		number.format(L"%d",m_currentIdleWorkerDisplay);
-//		GadgetButtonSetText(m_idleWorkerWin, number);
-//	}
-}
-void InGameUI::hideIdleWorkerLayout( void )
-{
-	if(!m_idleWorkerWin)
-		return;
-	GadgetButtonSetText(m_idleWorkerWin, UnicodeString::TheEmptyString);
-	m_idleWorkerWin->winEnable(FALSE);
-	m_currentIdleWorkerDisplay = -1;
-}
-
-void InGameUI::updateIdleWorker( void )
-{
-	Int idleCount = getIdleWorkerCount();
-
-	if(idleCount > 0 && m_currentIdleWorkerDisplay != idleCount && getInputEnabled())
-		showIdleWorkerLayout();
-
-	if((idleCount <= 0 && m_idleWorkerWin) || !getInputEnabled())
-		hideIdleWorkerLayout();
+	return selectThisObject;
 }
 
 void InGameUI::resetIdleWorker( void )
 {
-	if(m_idleWorkerWin)
-	{
-		GadgetButtonSetText(m_idleWorkerWin, UnicodeString::TheEmptyString);
-	}
-	m_currentIdleWorkerDisplay = -1;
 	for(Int i = 0; i < MAX_PLAYER_COUNT; ++i)
 	{
 		m_idleWorkers[i].clear();
@@ -10605,8 +11827,6 @@ void InGameUI::recreateControlBar( void )
 		if( window->winGetWindowId() == controlBarRootID )
 			TheWindowManager->winDestroy( window );
 	}
-
-	m_idleWorkerWin = NULL;
 
 	// the money gadget goes with those windows, and the new one carries whatever text its .wnd
 	// ships with until update() is told the amount it is showing is not the amount the player has

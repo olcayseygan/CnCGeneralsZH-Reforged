@@ -1,0 +1,14 @@
+# The MiG's run in Scenarios/jetbreak_film.txt on Twilight Flame, followed from the rear quarter
+# (heading -45) so its napalm missiles at 8.05 and 8.4 s and the Battle Master ahead are in one
+# frame, then the turn away.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -fps 120 -noFPSLimit -particlecap 2500
+#     -quickstart -noshellmap -observer -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map"
+#     -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina -seed 7
+#     -scenario jetbreak_film -cinema jetbreak_mig -recordfps 120 -video 360 780 jb_mig
+#     -wav 360 780 jb_mig -maxframes 790
+
+0.0   cut     1000 3650 0.75 -45 0
+1.2   follow  ChinaJetMIG
+8.1   shot
+8.8   shot

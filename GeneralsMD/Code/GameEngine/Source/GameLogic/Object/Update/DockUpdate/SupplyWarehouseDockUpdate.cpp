@@ -59,7 +59,7 @@ SupplyWarehouseDockUpdateModuleData::SupplyWarehouseDockUpdateModuleData( void )
 	//
 	// Forty seconds a box standing on its own, and every cash building inside 250 feet takes a
 	// share off that: one supply centre next to it halves the wait, two thirds it.  The numbers are
-	// module data rather than constants so a mod can turn the whole thing off with RegenDelay = 0,
+	// module data rather than constants so an INI can turn the whole thing off with RegenDelay = 0,
 	// and the defaults apply to every warehouse the game already ships without touching one INI
 	// file - which matters, because the INI files are in the multiplayer checksum.
 	//

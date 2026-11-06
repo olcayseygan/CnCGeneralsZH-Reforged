@@ -54,7 +54,6 @@ static const Int g_lanMaxChatLength = 100;
 static const Int m_lanMaxOptionsLength = MAX_LANAPI_PACKET_SIZE - ( 8 + (g_lanGameNameLength+1)*2 + 4 + (g_lanPlayerNameLength+1)*2
 																														+ (g_lanLoginNameLength+1) + (g_lanHostNameLength+1) );
 static const Int g_maxSerialLength = 23; // including the trailing '\0'
-static const Int g_lanModNameLength = 150; // the -mod list in a join request and its refusal; longer lists are cut
 
 //
 // Whether to put this machine's Windows login and computer name on the wire.  EA cut the
@@ -124,7 +123,6 @@ public:
 		RET_GAME_GONE,			// OnGameJoin
 		RET_BUSY,						// OnGameCreate/Join/etc if another action is in progress
 		RET_UNKNOWN,				// Default message for oddity
-		RET_MOD_MISMATCH,		// OnGameJoin: the INI CRCs differ and so do the two -mod names
 		RET_MAX
 	};
 	UnicodeString getErrorStringFromReturnType( ReturnType ret );
@@ -257,7 +255,6 @@ protected:
 	PendingActionType		m_pendingAction;	///< What action are we performing?
 	UnsignedInt					m_expiration;						///< When should we give up on our action?
 	UnsignedInt					m_actionTimeout;
-	UnicodeString				m_joinDeniedHostMod;		///< The host's mod from the last RET_MOD_MISMATCH, empty for none
 	UnsignedInt					m_directConnectRemoteIP;///< The IP address of the game we are direct connecting to.
 
 	// Resend timer ---------------------------------------------------------------------------
@@ -396,9 +393,6 @@ struct LANMessage
 			UnsignedInt exeCRC;
 			UnsignedInt iniCRC;
 			char serial[g_maxSerialLength];
-			char modNamePad;													///< puts modName on an even offset, 70
-			WideChar modName[g_lanModNameLength+1];	///< the joiner's -mod list, empty for none
-			UnsignedInt baseExeCRC;										///< the joiner's exe CRC before its mods mounted; older builds leave junk in both
 		} GameToJoin;
 
 		// GameJoined is sent with JOIN_ACCEPT
@@ -417,7 +411,6 @@ struct LANMessage
 			UnsignedInt gameIP;
 			UnsignedInt playerIP;
 			LANAPIInterface::ReturnType reason;
-			WideChar modName[g_lanModNameLength+1];	///< the host's -mod name with RET_MOD_MISMATCH, empty for none
 		} GameNotJoined;
 
 		// Accept is sent with SET_ACCEPT
@@ -474,9 +467,6 @@ static_assert(offsetof(LANMessage, PlayerInfo.playerName) == 38, "LANMessage::Pl
 static_assert(offsetof(LANMessage, GameToJoin.exeCRC) == 38, "LANMessage::GameToJoin.exeCRC");
 static_assert(offsetof(LANMessage, GameToJoin.iniCRC) == 42, "LANMessage::GameToJoin.iniCRC");
 static_assert(offsetof(LANMessage, GameToJoin.serial) == 46, "LANMessage::GameToJoin.serial");
-static_assert(offsetof(LANMessage, GameToJoin.modName) == 70, "LANMessage::GameToJoin.modName");
-static_assert(offsetof(LANMessage, GameToJoin.baseExeCRC) == 372, "LANMessage::GameToJoin.baseExeCRC");
-static_assert(offsetof(LANMessage, GameNotJoined.modName) == 80, "LANMessage::GameNotJoined.modName");
 static_assert(offsetof(LANMessage, GameJoined.slotPosition) == 76, "LANMessage::GameJoined.slotPosition");
 static_assert(offsetof(LANMessage, GameNotJoined.reason) == 76, "LANMessage::GameNotJoined.reason");
 static_assert(offsetof(LANMessage, Accept.isAccepted) == 68, "LANMessage::Accept.isAccepted");

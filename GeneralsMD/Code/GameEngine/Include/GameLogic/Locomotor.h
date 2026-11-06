@@ -134,6 +134,9 @@ public:
 
 	void friend_setName(const AsciiString& n) { m_name = n; }
 
+	/// the undamaged top speed, dist/frame, before the owner's SpeedScale (the build tooltip's figure)
+	Real getMaxSpeed() const { return m_maxSpeed; }
+
 	void validate();
 
 protected:
@@ -250,7 +253,8 @@ public:
 	Bool locoUpdate_maintainCurrentPosition(Object* obj); 
 
 	Real getMaxSpeedForCondition(BodyDamageType condition) const;  ///< get max speed given condition
-	Real getMaxTurnRate(BodyDamageType condition) const;  ///< get max turning rate given condition
+	/// get max turning rate given condition; given its owner, a tank, car or bike turns faster than its TurnRate
+	Real getMaxTurnRate(BodyDamageType condition, const Object* obj = NULL) const;
 	Real getMaxAcceleration(BodyDamageType condition) const;  ///< get acceleration given condition
 	Real getMaxLift(BodyDamageType condition) const;  ///< get acceleration given condition
 	Real getBraking() const;  ///< get braking given condition

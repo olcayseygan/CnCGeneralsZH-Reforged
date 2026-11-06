@@ -544,7 +544,7 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 	//
 	// The curve is sampled where a retail (30 Hz) frame put the shell, and the frames in between fly the
 	// straight line to the next sample, so a path looks and lasts as it did. Sampled at every frame, a
-	// fast shot met points of the curve retail never visited: mods give an instant tracer FirstHeight 300
+	// fast shot met points of the curve retail never visited: an instant tracer with FirstHeight 300
 	// and WeaponSpeed 9999, which retail sampled at its two ends only, and at 60 Hz the third of four
 	// samples flew it 200 into the air.
 	BezierSegment flightCurve( controlPoints );
@@ -562,7 +562,7 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 	{
 		retailSegments = m_flightPathSegments > 1 ? (m_flightPathSegments - 1) / LOGICFRAMES_PER_RETAIL_FRAME + 1 : m_flightPathSegments;
 	}
-	// A speed of zero or next to it (every crash report of this ran End of Days) asks for a flight of hundreds of
+	// A speed of zero or next to it asks for a flight of hundreds of
 	// millions of frames, or an infinite one that comes back as INT_MIN. The path that size needs is
 	// gigabytes, and a request past 2 GB came back from the allocator short and was written past its
 	// end. Ten minutes of flight is more than any shell flies; past that the path is as wrong as one

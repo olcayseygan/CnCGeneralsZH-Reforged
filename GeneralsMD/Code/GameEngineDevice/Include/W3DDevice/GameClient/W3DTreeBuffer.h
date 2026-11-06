@@ -64,6 +64,7 @@
 #include "Common/GameType.h"
 #include "Common/AsciiString.h"
 #include "Common/GlobalData.h"
+#include "GameLogic/ScriptEngine.h"
 #include <vector>
 
 //-----------------------------------------------------------------------------
@@ -310,6 +311,8 @@ private:
 	Real		m_curSwayOffset[MAX_SWAY_TYPES];
 	UnsignedInt	m_lastSwayFrame;		///< last logic frame the sway was stepped on (drawTrees runs per render frame)
 	UnsignedInt	m_lastTreeStepFrame;	///< last logic frame stepTrees moved the toppling and pushed trees on
+	BreezeInfo m_breezeForDraw{};
+	Bool m_pauseForDraw = FALSE;
 	Real		m_curSwayStep[MAX_SWAY_TYPES];
 	Real		m_curSwayFactor[MAX_SWAY_TYPES];
 

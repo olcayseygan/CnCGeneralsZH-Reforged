@@ -67,10 +67,6 @@ void CommandStore::init( void )
 	ini.load( AsciiString( "Data\\INI\\CommandButton.ini" ), INI_LOAD_OVERWRITE, NULL );
 	ini.load( AsciiString( "Data\\INI\\CommandSet.ini" ), INI_LOAD_OVERWRITE, NULL );
 
-	// -modfactions: each mod's buttons and sets after retail's, under its names
-	INI::loadModPasses( "Data\\INI\\CommandButton.ini", NULL );
-	INI::loadModPasses( "Data\\INI\\CommandSet.ini", NULL );
-
 	// the fork's corrections to EA's buttons and sets, edited in place
 	ini.load( AsciiString( "Data\\INI\\CommandSetReforged.ini" ), INI_LOAD_MULTIFILE, NULL );
 
@@ -120,9 +116,6 @@ CommandButton *CommandStore::findNonConstCommandButton( const AsciiString& name 
 		if( command->getName() == name )
 			return const_cast<CommandButton*>((const CommandButton*)command->getFinalOverride());
 
-	AsciiString retailName;
-	if( TheModNamespace.findRetailName( name, MODNAME_COMMANDBUTTON, &retailName ) )
-		return findNonConstCommandButton( retailName );
 	return NULL;  // not found
 }
 
@@ -135,9 +128,6 @@ CommandSet* CommandStore::findNonConstCommandSet( const AsciiString& name )
 		if( set->getName() == name )
 			return const_cast<CommandSet*>((const CommandSet *) set);
 
-	AsciiString retailName;
-	if( TheModNamespace.findRetailName( name, MODNAME_COMMANDSET, &retailName ) )
-		return findNonConstCommandSet( retailName );
 	return NULL;  // set not found
 }
 
@@ -248,27 +238,7 @@ CommandSet *CommandStore::newCommandSetOverride( CommandSet *setToOverride )
 	}  // end if
 	else if( ini->getLoadType() == INI_LOAD_MULTIFILE )
 	{
-		// The fork's sets are EA's with corrections.  A mod that ships its own CommandSet.ini fills the
-		// same names with its own buttons, and a set replaced whole took Contra's Demolitions General
-		// his power tray and left its Air Force General two columns of promotions.  The mod's set stays.
-		Bool inModArchive = FALSE;
-		if( TheFileSystem->modLooseFile( AsciiString( "Data\\INI\\CommandSet.ini" ), &inModArchive ).isNotEmpty() || inModArchive )
-		{
-			CommandSet *unused = newInstance(CommandSet)( name );
-			ini->initFromINI( unused, unused->friend_getFieldParse() );
-			unused->deleteInstance();
-			return;
-		}
-
 		// a patch file's set replaces the set whole, in place, so every pointer to it stays good
-		commandSet->friend_clearCommands();
-	}
-	else if( ini->getLoadType() == INI_LOAD_OVERWRITE )
-	{
-		// two mods under -modfactions can both name a set "CommandSet GLA" once their Side names are
-		// stripped; the later one wins, as a patch file's does, instead of refusing the whole load
-		DEBUG_LOG(( "[LINE: %d in '%s'] commandset %s defined again, the later one replaces it\n",
-			ini->getLineNum(), ini->getFilename().str(), name.str() ));
 		commandSet->friend_clearCommands();
 	}
 	else if( ini->getLoadType() != INI_LOAD_CREATE_OVERRIDES )

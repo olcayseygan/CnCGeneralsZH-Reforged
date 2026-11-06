@@ -59,7 +59,7 @@ void VeterancyGainCreateModuleData::buildFieldParse(MultiIniFieldParse& p)
 	{
 		{ "StartingLevel",		INI::parseIndexList,	TheVeterancyNames,	offsetof( VeterancyGainCreateModuleData, m_startingLevel ) },
 		{ "ScienceRequired",	INI::parseScience,		NULL,								offsetof( VeterancyGainCreateModuleData, m_scienceRequired ) },
-		{ "StartingGrades",		parseRetiredField,		NULL,								0 },	// a mod written for the rank ladder may name it; an unknown field throws
+		{ "StartingGrades",		parseRetiredField,		NULL,								0 },	// data written for the rank ladder may name it; an unknown field throws
 		{ 0, 0, 0, 0 }
 	};
 

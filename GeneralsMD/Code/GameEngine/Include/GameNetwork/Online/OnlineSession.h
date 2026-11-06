@@ -151,6 +151,7 @@ struct OnlineSession
 	std::map<long long, UnsignedInt> vips;		///< account id -> relay address, as the server tells them
 	std::string matchId;		///< the last game.start or qm.matched
 	std::string reportedMatch;
+	std::string resultLine;	///< the last ONLINE RATED / ONLINE UNRATED line logged
 
 	OnlinePeerQueue *peer;
 	OnlineBuddyQueue *buddy;

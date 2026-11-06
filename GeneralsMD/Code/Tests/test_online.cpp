@@ -792,9 +792,9 @@ TEST(online_adapter_room_and_chat)
 	join.groupRoom.id = 1;
 	rig.peer->addRequest( join );
 	CHECK_STR( rig.sentType( 0 ).c_str(), "room.join" );
-	CHECK_STR( rig.sent[0].getString( "id" ).c_str(), "1" );
+	CHECK_STR( rig.sent[0].getString( "id" ).c_str(), "lobby1" );
 
-	rig.feed( "{\"t\":\"room\",\"id\":\"1\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"]}" );
+	rig.feed( "{\"t\":\"room\",\"id\":\"lobby1\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"],\"vips\":[167772163,167772162]}" );
 	std::vector<PeerResponse> r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)3 );
 	if (r.size() == 3)
@@ -806,6 +806,7 @@ TEST(online_adapter_room_and_chat)
 		CHECK_STR( r[2].nick.c_str(), "Kim" );
 		CHECK_EQ( r[2].player.profileID, 9 );
 		CHECK_EQ( (int)r[2].player.roomType, (int)GroupRoom );
+		CHECK_EQ( r[2].player.IP, OnlineHostToNet( 0x0A000002 ) );		// GameSpy's player IP, network order
 	}
 
 	PeerRequest say;
@@ -814,11 +815,11 @@ TEST(online_adapter_room_and_chat)
 	say.message.isAction = FALSE;
 	rig.peer->addRequest( say );
 	CHECK_STR( rig.sentType( 1 ).c_str(), "say" );
-	CHECK_STR( rig.sent[1].getString( "room" ).c_str(), "1" );
+	CHECK_STR( rig.sent[1].getString( "room" ).c_str(), "lobby1" );
 	CHECK_STR( rig.sent[1].getString( "text" ).c_str(), "merhaba \xc4\x9f" );
 
-	rig.feed( "{\"t\":\"said\",\"room\":\"1\",\"from\":9,\"nick\":\"Kim\",\"text\":\"selam \xc4\x9f\",\"action\":0}" );
-	rig.feed( "{\"t\":\"said\",\"room\":\"2\",\"from\":9,\"nick\":\"Kim\",\"text\":\"elsewhere\",\"action\":0}" );
+	rig.feed( "{\"t\":\"said\",\"room\":\"lobby1\",\"from\":9,\"nick\":\"Kim\",\"text\":\"selam \xc4\x9f\",\"action\":0}" );
+	rig.feed( "{\"t\":\"said\",\"room\":\"lobby2\",\"from\":9,\"nick\":\"Kim\",\"text\":\"elsewhere\",\"action\":0}" );
 	rig.feed( "{\"t\":\"said\",\"to\":\"Tank\",\"from\":9,\"nick\":\"Kim\",\"text\":\"psst\",\"action\":1}" );
 	r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)2 );
@@ -833,7 +834,7 @@ TEST(online_adapter_room_and_chat)
 		CHECK( r[1].message.isAction );
 	}
 
-	rig.feed( "{\"t\":\"player.left\",\"room\":\"1\",\"id\":9,\"nick\":\"Kim\"}" );
+	rig.feed( "{\"t\":\"player.left\",\"room\":\"lobby1\",\"id\":9,\"nick\":\"Kim\"}" );
 	r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)1 );
 	if (r.size() == 1)
@@ -886,7 +887,7 @@ TEST(online_adapter_game_list_round_trips_the_host_options)
 	rig.peer->addRequest( opts );
 	CHECK_STR( rig.sentType( 1 ).c_str(), "game.opts" );
 	CHECK_STR( rig.sentType( 2 ).c_str(), "utm" );
-	CHECK_STR( rig.sent[2].getString( "room" ).c_str(), "6" );
+	CHECK_EQ( rig.sent[2].getInt( "room" ), 6 );		// a staging room is its game id, a number
 	CHECK_STR( rig.sent[2].getString( "cmd" ).c_str(), "SL/" );
 	CHECK_STR( rig.sent[2].getString( "opts" ).c_str(), "M=maps/a.map;S=Tank,0,0" );
 
@@ -950,9 +951,9 @@ TEST(online_adapter_join_utm_and_start)
 	CHECK_STR( rig.sentType( 1 ).c_str(), "stats.get" );		// the host's stats, as GameSpy's join read them
 	CHECK_EQ( rig.sent[1].getInt( "id" ), 9 );
 
-	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"SL/\",\"opts\":\"M=maps/a.map\",\"room\":\"5\"}" );
+	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"SL/\",\"opts\":\"M=maps/a.map\",\"room\":5}" );
 	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"KICK/\",\"opts\":\"GameFull\",\"to\":\"Tank\"}" );
-	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"X\",\"opts\":\"\",\"room\":\"1\"}" );		// a chat room's: dropped
+	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"X\",\"opts\":\"\",\"room\":\"lobby1\"}" );		// a chat room's: dropped
 	r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)2 );
 	if (r.size() == 2)
@@ -1136,4 +1137,93 @@ TEST(online_adapter_report_goes_once_a_match)
 	rig.feed( "{\"t\":\"game.start\",\"match\":\"m2\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"],\"vips\":[1,2]}" );
 	OnlineSendReport( report );
 	CHECK_EQ( rig.sent.size(), (size_t)2 );
+}
+
+/* Tank in the lobby's chat room, then hosting game 1 (the server keeps him in the chat room too). */
+static void hostGameOne( AdapterRig &rig )
+{
+	rig.login();
+	PeerRequest join;
+	join.peerRequestType = PeerRequest::PEERREQUEST_JOINGROUPROOM;
+	join.groupRoom.id = 1;
+	rig.peer->addRequest( join );
+	rig.feed( "{\"t\":\"room\",\"id\":\"lobby1\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
+	PeerRequest create;
+	create.peerRequestType = PeerRequest::PEERREQUEST_CREATESTAGINGROOM;
+	create.text = u"g";
+	create.stagingRoomCreation.exeCRC = 1;
+	create.stagingRoomCreation.iniCRC = 2;
+	create.stagingRoomCreation.gameVersion = 3;
+	create.stagingRoomCreation.allowObservers = FALSE;
+	create.stagingRoomCreation.useStats = TRUE;
+	create.stagingRoomCreation.ladPort = 0;
+	rig.peer->addRequest( create );
+	rig.feed( "{\"t\":\"game.joined\",\"action\":\"joined\",\"id\":1,\"name\":\"g\",\"map\":\"\",\"maxp\":8,\"host\":\"Tank\",\"hostId\":7,\"count\":1,\"opts\":\"\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
+	rig.peerResponses();
+	rig.sent.clear();
+}
+
+TEST(online_adapter_host_seats_a_joiner_at_its_relay_address)
+{
+	AdapterRig rig;
+	hostGameOne( rig );
+
+	// what the WOL staging room seats a joiner from: PLAYERJOIN, StagingRoom, the IP in network order
+	rig.feed( "{\"t\":\"player\",\"game\":1,\"id\":9,\"nick\":\"Kim\",\"vip\":167772162}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)1 );
+	if (r.size() == 1)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERJOIN );
+		CHECK_EQ( (int)r[0].player.roomType, (int)StagingRoom );
+		CHECK_STR( r[0].nick.c_str(), "Kim" );
+		CHECK_EQ( r[0].player.profileID, 9 );
+		CHECK_EQ( r[0].player.IP, OnlineHostToNet( 0x0A000002 ) );
+	}
+
+	// and leaving carries it too
+	rig.feed( "{\"t\":\"player.left\",\"game\":1,\"id\":9,\"nick\":\"Kim\"}" );
+	r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)1 );
+	if (r.size() == 1)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERLEFT );
+		CHECK_EQ( r[0].player.IP, OnlineHostToNet( 0x0A000002 ) );
+	}
+}
+
+TEST(online_adapter_staging_chat_arrives_once)
+{
+	AdapterRig rig;
+	hostGameOne( rig );
+
+	// staging chat names the game by number; the chat room's line for "lobby1" is not the staging room's
+	PeerRequest say;
+	say.peerRequestType = PeerRequest::PEERREQUEST_MESSAGEROOM;
+	say.text = u"gl hf";
+	say.message.isAction = FALSE;
+	rig.peer->addRequest( say );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "say" );
+	CHECK_EQ( rig.sent[0].getInt( "room" ), 1 );
+
+	rig.feed( "{\"t\":\"said\",\"room\":\"lobby1\",\"from\":9,\"nick\":\"Kim\",\"text\":\"hi\",\"action\":0}" );
+	rig.feed( "{\"t\":\"said\",\"room\":1,\"from\":9,\"nick\":\"Kim\",\"text\":\"hi\",\"action\":0}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)1 );
+	if (r.size() == 1)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_MESSAGE );
+		CHECK( r[0].text == WideCharString( u"hi" ) );
+	}
+}
+
+TEST(online_adapter_logs_the_rating_result)
+{
+	AdapterRig rig;
+	rig.login();
+	rig.feed( "{\"t\":\"rated\",\"match\":\"q1\",\"delta\":1.25,\"rating\":-3.5}" );
+	CHECK_STR( OnlineSession::get().resultLine.c_str(), "ONLINE RATED delta=1.25 rating=-3.5" );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "stats.get" );		// our own numbers again
+	rig.feed( "{\"t\":\"unrated\",\"match\":\"m2\",\"reason\":\"custom\"}" );
+	CHECK_STR( OnlineSession::get().resultLine.c_str(), "ONLINE UNRATED reason=custom" );
 }

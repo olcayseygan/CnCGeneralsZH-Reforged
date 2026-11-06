@@ -46,11 +46,32 @@ UnsignedInt OnlineHostToNet( UnsignedInt v )
 	return ((v & 0xFF) << 24) | ((v & 0xFF00) << 8) | ((v >> 8) & 0xFF00) | (v >> 24);
 }
 
-static std::string decimal( long long v )
+/* Chat rooms and staging rooms share the server's "room" field, and both kinds of id start at 1.  So a
+	 chat room goes out as the text "lobby<N>" and a staging room as its game id, a number: a lobby line
+	 never reads as the staging room's, the way room "1" and game 1 used to. */
+static std::string chatRoomName( Int room )
 {
 	char buf[32];
-	snprintf( buf, sizeof(buf), "%lld", v );
+	snprintf( buf, sizeof(buf), "lobby%d", room );
 	return buf;
+}
+
+static Int chatRoomNumber( const std::string &name )
+{
+	return name.compare( 0, 5, "lobby" ) == 0 ? atoi( name.c_str() + 5 ) : 0;
+}
+
+/* Whether a line's "room" is this staging room (a number) or this chat room (lobby<N> text). */
+static Bool namesGame( const OnlineMessage &m, long long game )
+{
+	const OnlineValue *v = m.find( "room" );
+	return game && v && v->kind == OnlineValue::NUMBER && atoll( v->text.c_str() ) == game;
+}
+
+static Bool namesChatRoom( const OnlineMessage &m, Int room )
+{
+	const OnlineValue *v = m.find( "room" );
+	return room && v && v->kind == OnlineValue::STRING && chatRoomNumber( v->text ) == room;
 }
 
 static PeerResponse makePeer( Int type )
@@ -108,6 +129,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	capture = lines;
 	matchId.clear();
 	reportedMatch.clear();
+	resultLine.clear();
 	motd.clear();
 	config.clear();
 	relayPort = 8094;
@@ -477,7 +499,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	}
 	else if (t == "room")
 	{
-		groupRoom = atoi( m.getString( "id" ).c_str() );
+		groupRoom = chatRoomNumber( m.getString( "id" ) );
 		rememberVips( *this, m );
 		PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_JOINGROUPROOM );
 		r.joinGroupRoom.id = groupRoom;
@@ -494,7 +516,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		const Int type = t == "player" ? PeerResponse::PEERRESPONSE_PLAYERJOIN : PeerResponse::PEERRESPONSE_PLAYERLEFT;
 		if (m.has( "game" ) && gameId && m.getInt( "game" ) == gameId)
 			playerResponse( *this, type, StagingRoom, m.getInt( "id" ), m.getString( "nick" ) );
-		else if (m.has( "room" ) && groupRoom && atoi( m.getString( "room" ).c_str() ) == groupRoom)
+		else if (namesChatRoom( m, groupRoom ))
 			playerResponse( *this, type, GroupRoom, m.getInt( "id" ), m.getString( "nick" ) );
 	}
 	else if (t == "said")
@@ -504,11 +526,10 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		r.text = MultiByteToWideCharSingleLine( m.getString( "text" ).c_str() );
 		r.message.isAction = m.getInt( "action" ) != 0 || m.getBool( "action" );
 		r.message.profileID = (Int)m.getInt( "from" );
-		const std::string room = m.getString( "room" );
 		if (m.has( "to" ))
 			r.message.isPrivate = TRUE;
-		else if (!((gameId && room == decimal( gameId )) || (groupRoom && atoi( room.c_str() ) == groupRoom)))
-			return;		// a room this player has left
+		else if (!namesGame( m, gameId ) && !namesChatRoom( m, groupRoom ))
+			return;		// a room this player has left (the server keeps a staging player in its chat room)
 		peerResponse( r );
 	}
 	else if (t == "game")
@@ -583,7 +604,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		r.commandOptions = m.getString( "opts" );
 		if (!m.has( "to" ))
 		{
-			if (!gameId || m.getString( "room" ) != decimal( gameId ))
+			if (!namesGame( m, gameId ))
 				return;		// GameSpy's room UTMs only ever reached a staging room
 			r.peerResponseType = PeerResponse::PEERRESPONSE_ROOMUTM;
 		}
@@ -641,7 +662,13 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	}
 	else if (t == "rated" || t == "unrated")
 	{
-		DEBUG_LOG(("online: match %s %s (%s)\n", m.getString( "match" ).c_str(), t.c_str(), m.getString( "reason" ).c_str()));
+		// what the end-to-end check greps; the numbers as the server spelled them
+		const OnlineValue *delta = m.find( "delta" ), *rating = m.find( "rating" );
+		if (t == "rated")
+			resultLine = "ONLINE RATED delta=" + (delta ? delta->text : std::string()) + " rating=" + (rating ? rating->text : std::string());
+		else
+			resultLine = "ONLINE UNRATED reason=" + m.getString( "reason" );
+		DEBUG_LOG(("%s match=%s\n", resultLine.c_str(), m.getString( "match" ).c_str()));
 		if (authed)
 		{
 			OnlineMessage stats;
@@ -735,9 +762,9 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 	case PeerRequest::PEERREQUEST_MESSAGEROOM:
 		m.setString( "t", "say" );
 		if (s.gameId)
-			m.setString( "room", decimal( s.gameId ) );
+			m.setInt( "room", s.gameId );
 		else if (s.groupRoom)
-			m.setString( "room", decimal( s.groupRoom ) );
+			m.setString( "room", chatRoomName( s.groupRoom ) );
 		else
 			return;
 		break;
@@ -745,7 +772,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 	case PeerRequest::PEERREQUEST_JOINGROUPROOM:
 		leaveGame( s );
 		s.groupRoom = req.groupRoom.id;
-		m.setString( "t", "room.join" ).setString( "id", decimal( req.groupRoom.id ) );
+		m.setString( "t", "room.join" ).setString( "id", chatRoomName( req.groupRoom.id ) );
 		s.send( m );
 		return;
 
@@ -816,7 +843,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 			}
 			// and the slot list to the room, as GameSpy's SL/ UTM
 			OnlineMessage sl;
-			sl.setString( "t", "utm" ).setString( "room", decimal( s.gameId ) ).setString( "cmd", "SL/" ).setString( "opts", req.options );
+			sl.setString( "t", "utm" ).setInt( "room", s.gameId ).setString( "cmd", "SL/" ).setString( "opts", req.options );
 			s.send( sl );
 		}
 		return;
@@ -841,7 +868,11 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		return;
 
 	case PeerRequest::PEERREQUEST_UTMROOM:
-		m.setString( "t", "utm" ).setString( "room", decimal( req.UTM.isStagingRoom ? s.gameId : s.groupRoom ) );
+		m.setString( "t", "utm" );
+		if (req.UTM.isStagingRoom)
+			m.setInt( "room", s.gameId );
+		else
+			m.setString( "room", chatRoomName( s.groupRoom ) );
 		m.setString( "cmd", req.id ).setString( "opts", req.options );
 		s.send( m );
 		return;

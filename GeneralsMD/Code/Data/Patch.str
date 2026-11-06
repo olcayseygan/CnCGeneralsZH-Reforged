@@ -3234,3 +3234,22 @@ END
 GUI:SocketRedirected
 "The LAN IP is %ls, but the system put the game's connection on %ls. A VPN split tunnel or a firewall redirected it, so nobody on your network can hear you. Turn split tunnelling off for the game and try again."
 END
+
+// the online service's one chat room; the lobby's room box shows GUI:<room name>
+GUI:Lobby
+"Lobby"
+END
+
+// EA's oldFactionsOnly box, read by players as a unit cap and mixed up with Unit Limit
+GUI:LimitArmies
+"Original Armies Only"
+END
+
+TOOLTIP:LimitArmies
+"Only the original USA, China and GLA armies can be picked, no generals' armies"
+END
+
+// a seat's colour left to chance; EA's label for it was "???"
+GUI:???
+"Random"
+END

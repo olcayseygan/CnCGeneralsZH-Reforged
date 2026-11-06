@@ -10518,11 +10518,19 @@ TOOLTIP:MapMaxBrutalSuccess
 END
 
 GUI:LimitArmies
-"Orduları Sınırla"
+"Sadece Ana Ordular"
 END
 
 TOOLTIP:LimitArmies
-"Orduları geleneksel ABD, GLA ve Çin taraflarıyla sınırlamak ve general ordularını kapatmak için işaretleyin"
+"Yalnızca ana ABD, Çin ve GLA orduları seçilebilir, generallerin orduları seçilemez"
+END
+
+GUI:Lobby
+"Lobi"
+END
+
+GUI:???
+"Rastgele"
 END
 
 GUI:UseStats

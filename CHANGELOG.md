@@ -31,7 +31,7 @@ found and fixed, EA's own, not port damage.**
 
 ## Long routes in big computer matches
 
-- A unit looking for a long way across a crowded map no longer stops mid-search and gives up, and a big match no longer stalls the frame while a few units work out where to go. A search that runs out of its share of a step waits for the next one and carries on, and the limit on how much ground one search can cover is doubled. In eight Hard computer players on Twilight Flame, six matches a side, the pathfinding cost 34.9 seconds a match where it cost 42.8, with 28% fewer cells searched, and fewer units sat wedged. Replays recorded before this change play out differently.
+- A unit looking for a long way across a crowded map no longer stops mid-search and gives up. A search that runs out of its share of a step waits for the next one and carries on, and the limit on how much ground one search can cover is doubled. In eight Hard computer players on Twilight Flame, six matches a side, the pathfinding cost 34.9 seconds a match where it cost 42.8, with 28% fewer cells searched, and fewer units sat wedged. The worst frames of those matches did not get measurably shorter. Replays recorded before this change play out differently.
 
 ## Computer players earn double
 

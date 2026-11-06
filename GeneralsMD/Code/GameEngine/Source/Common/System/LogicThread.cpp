@@ -532,7 +532,7 @@ void LogicThread::init( void )
 #else
 	char value[ 32 ] = "0";
 #endif
-	findEarlyCommandLineValue( L"-logicthread", value, sizeof(value) );
+	findEarlyCommandLineValue( "-logicthread", value, sizeof(value) );
 	if( atoi( value ) == 0 )
 		return;
 

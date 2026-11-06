@@ -1104,6 +1104,8 @@ GameEngine/Include/GameNetwork/NetworkDefs.h
 GameEngine/Include/GameNetwork/NetworkInterface.h
 GameEngine/Include/GameNetwork/NetworkUtil.h
 GameEngine/Include/GameNetwork/Online/OnlineConnection.h
+GameEngine/Include/GameNetwork/Online/OnlineQueues.h
+GameEngine/Include/GameNetwork/Online/OnlineSession.h
 GameEngine/Include/GameNetwork/RankPointValue.h
 GameEngine/Include/GameNetwork/StallJudgement.h
 GameEngine/Include/GameNetwork/Transport.h

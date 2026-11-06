@@ -2310,7 +2310,21 @@ add_lib_test(test_compression compression)
 
 # The online service's connection: the JSON line reader and writer, and a TLS loopback against a server
 # inside the test, verified against a CA the test makes on the spot (no key or certificate is committed).
-add_lib_test(test_online onlineconnection mbedtls)
+# Then the adapters (OnlinePeer, OnlineBuddy, OnlineStats) fed scripted server lines, which are engine
+# code: so it links gameengine the way test_water_grid does.
+add_lib_test(test_online gameengine onlineconnection mbedtls)
+target_sources(test_online PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+set_target_properties(test_online PROPERTIES CXX_STANDARD 17)
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(test_online PRIVATE posixdevice w3ddevice)
+else()
+  target_sources(test_online PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudUnsupported.cpp)
+endif()
+if(MSVC)
+  target_sources(test_online PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/debug_build_stubs.cpp)
+  target_compile_definitions(test_online PRIVATE ZH_DEBUG_STUBS_ENGINE)
+endif()
 
 # .w3d on-disk layout pins.  Deliberately OUTSIDE the ZH_PLATFORM_WINDOWS guard
 # below: it is header-only, asserts sizeof/offsetof and links nothing but the

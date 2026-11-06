@@ -6,11 +6,21 @@
  * in this process.  The server's certificate is signed by a CA the test makes on the spot, so nothing
  * secret is committed and nothing expires: the client has to accept it against that CA and refuse it
  * against another.
+ *
+ * Last the adapters (OnlinePeer, OnlineBuddy, OnlineStats): the GameSpy queue interfaces fed the
+ * server's lines as online/server.js writes them, checked for the responses EA's WOL screens read and
+ * for the lines the screens' requests send.
  */
 
 #include "test_harness.h"
 
+#include "Lib/BaseType.h"
+#include "Common/AsciiString.h"
+#include "Common/GameMemory.h"
+#include "Lib/WideCharFns.h"
+#include <map>
 #include "GameNetwork/Online/OnlineConnection.h"
+#include "GameNetwork/Online/OnlineSession.h"
 
 #include <chrono>
 #include <string>
@@ -614,4 +624,516 @@ TEST(online_connect_refuses_bad_arguments)
 		++count;
 	CHECK_EQ( count, 2 );
 	mbedtls_x509_crt_free( &roots );
+}
+
+//-------------------------------------------------------------------------------------------------
+// the adapters, fed scripted server lines
+//-------------------------------------------------------------------------------------------------
+
+/* The three queues over a session that sends into `sent` and dials nothing.  feed() is one server line. */
+struct AdapterRig
+{
+	std::vector<OnlineMessage> sent;
+	OnlinePeerQueue *peer;
+	OnlineBuddyQueue *buddy;
+	OnlinePSQueue *ps;
+
+	AdapterRig()
+	{
+		static bool booted = false;
+		if (!booted)
+		{
+			initMemoryManager();
+			booted = true;
+		}
+		OnlineSession::get().beginTest( &sent );
+		peer = new OnlinePeerQueue;
+		buddy = new OnlineBuddyQueue;
+		ps = new OnlinePSQueue;
+	}
+	~AdapterRig()
+	{
+		delete ps;
+		delete buddy;
+		delete peer;
+		OnlineSession::get().beginTest( NULL );
+	}
+
+	void feed( const OnlineMessage &m ) { OnlineSession::get().dispatch( m ); }
+	void feed( const char *json )
+	{
+		OnlineMessage m;
+		CHECK( parseText( json, m ) );
+		feed( m );
+	}
+	std::vector<PeerResponse> peerResponses()
+	{
+		std::vector<PeerResponse> out;
+		PeerResponse r;
+		while (peer->getResponse( r ))
+			out.push_back( r );
+		return out;
+	}
+	std::string sentType( size_t i ) const { return i < sent.size() ? sent[i].type() : std::string(); }
+
+	/* Logged in as Tank, id 7, at 10.0.0.3, with the login's answers read and the sent lines cleared. */
+	void login()
+	{
+		BuddyRequest req;
+		memset( &req, 0, sizeof(req) );
+		req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+		strcpy( req.arg.login.email, "tank@example.com" );
+		strcpy( req.arg.login.password, "secret" );
+		buddy->addRequest( req );
+		feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"ticket\":\"00112233445566778899aabbccddeeff\"}" );
+		feed( "{\"t\":\"relay.ok\",\"vip\":167772163}" );
+		peerResponses();
+		BuddyResponse b;
+		while (buddy->getResponse( b )) {}
+		sent.clear();
+	}
+};
+
+TEST(online_adapter_login_waits_for_the_relay)
+{
+	AdapterRig rig;
+	BuddyRequest req;
+	memset( &req, 0, sizeof(req) );
+	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+	strcpy( req.arg.login.nick, "Tank" );
+	strcpy( req.arg.login.email, "tank@example.com" );
+	strcpy( req.arg.login.password, "secret" );
+	rig.buddy->addRequest( req );
+
+	CHECK_EQ( rig.sent.size(), (size_t)1 );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
+	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
+	CHECK_STR( rig.sent[0].getString( "pass" ).c_str(), "secret" );
+	CHECK( rig.peer->isConnecting() );
+	CHECK( !rig.peer->isConnected() );
+
+	rig.feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"ticket\":\"00112233445566778899aabbccddeeff\"}" );
+	BuddyResponse b;
+	CHECK( rig.buddy->getResponse( b ) );
+	CHECK_EQ( (int)b.buddyResponseType, (int)BuddyResponse::BUDDYRESPONSE_LOGIN );
+	CHECK_EQ( b.profile, 7 );
+	CHECK_EQ( rig.buddy->getLocalProfileID(), 7 );
+
+	// the ticket is out for HELLO_AUTH, but the game's login waits for the relay's answer
+	UnsignedByte ticket[16];
+	CHECK( OnlineGetRelayTicket( ticket ) );
+	CHECK_EQ( ticket[0], 0x00 );
+	CHECK_EQ( ticket[1], 0x11 );
+	CHECK_EQ( ticket[15], 0xff );
+	CHECK_STR( OnlineGetSessionToken().str(), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" );
+	CHECK( rig.peerResponses().empty() );
+
+	rig.feed( "{\"t\":\"relay.ok\",\"vip\":167772163}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)3 );
+	if (r.size() == 3)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_LOGIN );
+		CHECK_STR( r[0].nick.c_str(), "Tank" );
+		CHECK_EQ( r[0].player.profileID, 7 );
+		CHECK_EQ( r[0].player.internalIP, 0x0A000003u );
+		CHECK_EQ( r[0].player.externalIP, 0x0A000003u );
+		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_GROUPROOM );
+		CHECK_EQ( r[1].groupRoom.id, 1 );
+		CHECK_EQ( (int)r[2].peerResponseType, (int)PeerResponse::PEERRESPONSE_GROUPROOM );
+		CHECK_EQ( r[2].groupRoom.id, 0 );		// the end of the list
+	}
+	CHECK( rig.peer->isConnected() );
+	CHECK_EQ( OnlineGetRelayVip(), 0x0A000003u );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "stats.get" );		// our own stats, as GameSpy's login read them
+}
+
+TEST(online_adapter_register_and_refusal)
+{
+	AdapterRig rig;
+	BuddyRequest req;
+	memset( &req, 0, sizeof(req) );
+	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGINNEW;
+	strcpy( req.arg.login.nick, "Tank" );
+	strcpy( req.arg.login.email, "tank@example.com" );
+	strcpy( req.arg.login.password, "secret" );
+	rig.buddy->addRequest( req );
+	CHECK_EQ( rig.sent.size(), (size_t)1 );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "register" );
+	CHECK_STR( rig.sent[0].getString( "nick" ).c_str(), "Tank" );
+	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
+	CHECK_STR( rig.sent[0].getString( "pass" ).c_str(), "secret" );
+
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"nicktaken\"}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)1 );
+	if (r.size() == 1)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_DISCONNECT );
+		CHECK_EQ( (int)r[0].discon.reason, (int)DISCONNECT_NICKTAKEN );
+	}
+	CHECK( !rig.peer->isConnecting() );
+	UnsignedByte ticket[16];
+	CHECK( !OnlineGetRelayTicket( ticket ) );
+
+	// a resume with a saved token is the same login
+	OnlineResume( "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "resume" );
+	CHECK_EQ( rig.sent[1].getString( "token" ).size(), (size_t)64 );
+}
+
+TEST(online_adapter_room_and_chat)
+{
+	AdapterRig rig;
+	rig.login();
+
+	PeerRequest join;
+	join.peerRequestType = PeerRequest::PEERREQUEST_JOINGROUPROOM;
+	join.groupRoom.id = 1;
+	rig.peer->addRequest( join );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "room.join" );
+	CHECK_STR( rig.sent[0].getString( "id" ).c_str(), "1" );
+
+	rig.feed( "{\"t\":\"room\",\"id\":\"1\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"]}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)3 );
+	if (r.size() == 3)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_JOINGROUPROOM );
+		CHECK_EQ( r[0].joinGroupRoom.id, 1 );
+		CHECK( r[0].joinGroupRoom.ok );
+		CHECK_EQ( (int)r[2].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERJOIN );
+		CHECK_STR( r[2].nick.c_str(), "Kim" );
+		CHECK_EQ( r[2].player.profileID, 9 );
+		CHECK_EQ( (int)r[2].player.roomType, (int)GroupRoom );
+	}
+
+	PeerRequest say;
+	say.peerRequestType = PeerRequest::PEERREQUEST_MESSAGEROOM;
+	say.text = WideCharString( u"merhaba " ) + (WideChar)0x011F;		// g with breve: UTF-8 c4 9f
+	say.message.isAction = FALSE;
+	rig.peer->addRequest( say );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "say" );
+	CHECK_STR( rig.sent[1].getString( "room" ).c_str(), "1" );
+	CHECK_STR( rig.sent[1].getString( "text" ).c_str(), "merhaba \xc4\x9f" );
+
+	rig.feed( "{\"t\":\"said\",\"room\":\"1\",\"from\":9,\"nick\":\"Kim\",\"text\":\"selam \xc4\x9f\",\"action\":0}" );
+	rig.feed( "{\"t\":\"said\",\"room\":\"2\",\"from\":9,\"nick\":\"Kim\",\"text\":\"elsewhere\",\"action\":0}" );
+	rig.feed( "{\"t\":\"said\",\"to\":\"Tank\",\"from\":9,\"nick\":\"Kim\",\"text\":\"psst\",\"action\":1}" );
+	r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)2 );
+	if (r.size() == 2)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_MESSAGE );
+		CHECK_STR( r[0].nick.c_str(), "Kim" );
+		CHECK( r[0].text == WideCharString( u"selam " ) + (WideChar)0x011F );
+		CHECK( !r[0].message.isPrivate );
+		CHECK_EQ( r[0].message.profileID, 9 );
+		CHECK( r[1].message.isPrivate );
+		CHECK( r[1].message.isAction );
+	}
+
+	rig.feed( "{\"t\":\"player.left\",\"room\":\"1\",\"id\":9,\"nick\":\"Kim\"}" );
+	r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)1 );
+	if (r.size() == 1)
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERLEFT );
+}
+
+TEST(online_adapter_game_list_round_trips_the_host_options)
+{
+	AdapterRig rig;
+	rig.login();
+
+	// host: the CRCs given at creation travel in every game.opts
+	PeerRequest create;
+	create.peerRequestType = PeerRequest::PEERREQUEST_CREATESTAGINGROOM;
+	create.text = u"fun game";
+	create.stagingRoomCreation.exeCRC = 0x12345678;
+	create.stagingRoomCreation.iniCRC = 0x9abcdef0;
+	create.stagingRoomCreation.gameVersion = 3;
+	create.stagingRoomCreation.allowObservers = TRUE;
+	create.stagingRoomCreation.useStats = TRUE;
+	create.stagingRoomCreation.ladPort = 0;
+	create.stagingRoomCreation.restrictGameList = FALSE;
+	rig.peer->addRequest( create );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "game.host" );
+	CHECK_STR( rig.sent[0].getString( "name" ).c_str(), "fun game" );
+
+	rig.feed( "{\"t\":\"game.joined\",\"action\":\"joined\",\"id\":6,\"name\":\"fun game\",\"map\":\"-\",\"maxp\":8,\"host\":\"Tank\",\"hostId\":7,\"count\":1,\"opts\":\"\",\"ids\":[7],\"nicks\":[\"Tank\"]}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)1 );
+	if (r.size() == 1)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_CREATESTAGINGROOM );
+		CHECK_EQ( r[0].createStagingRoom.result, (Int)PEERJoinSuccess );
+	}
+
+	PeerRequest opts;
+	opts.peerRequestType = PeerRequest::PEERREQUEST_SETGAMEOPTIONS;
+	opts.options = "M=maps/a.map;S=Tank,0,0";
+	opts.gameOptsMapName = "maps/a/a.map";
+	opts.gameOptsPlayerNames[0] = "Tank";
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		opts.gameOptions.wins[i] = opts.gameOptions.losses[i] = opts.gameOptions.profileID[i] = 0;
+		opts.gameOptions.faction[i] = opts.gameOptions.color[i] = 0;
+	}
+	opts.gameOptions.wins[0] = 4;
+	opts.gameOptions.numPlayers = 1;
+	opts.gameOptions.numObservers = 0;
+	opts.gameOptions.maxPlayers = 2;
+	rig.peer->addRequest( opts );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "game.opts" );
+	CHECK_STR( rig.sentType( 2 ).c_str(), "utm" );
+	CHECK_STR( rig.sent[2].getString( "room" ).c_str(), "6" );
+	CHECK_STR( rig.sent[2].getString( "cmd" ).c_str(), "SL/" );
+	CHECK_STR( rig.sent[2].getString( "opts" ).c_str(), "M=maps/a.map;S=Tank,0,0" );
+
+	// the list as another player sees it, from the server's game line carrying those opts
+	OnlineMessage game;
+	game.setString( "t", "game" ).setString( "action", "add" ).setInt( "id", 6 ).setString( "name", "fun game" );
+	game.setString( "map", "-" ).setInt( "maxp", 8 ).setString( "host", "Tank" ).setInt( "hostId", 7 ).setInt( "count", 1 );
+	game.setString( "opts", rig.sent.size() > 1 ? rig.sent[1].getString( "opts" ) : std::string() );
+
+	PeerRequest list;
+	list.peerRequestType = PeerRequest::PEERREQUEST_STARTGAMELIST;
+	list.gameList.restrictGameList = FALSE;
+	rig.peer->addRequest( list );
+	CHECK_STR( rig.sentType( 3 ).c_str(), "games.watch" );
+	rig.feed( game );
+	r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)3 );
+	if (r.size() == 3)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_STAGINGROOM );
+		CHECK_EQ( r[0].stagingRoom.action, PEER_CLEAR );
+		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_STAGINGROOMLISTCOMPLETE );
+		CHECK_EQ( r[2].stagingRoom.action, PEER_ADD );
+		CHECK_EQ( r[2].stagingRoom.id, 6 );
+		CHECK( r[2].stagingServerName == WideCharString( u"fun game" ) );
+		CHECK_EQ( r[2].stagingRoom.exeCRC, 0x12345678u );
+		CHECK_EQ( r[2].stagingRoom.iniCRC, 0x9abcdef0u );
+		CHECK_EQ( r[2].stagingRoom.version, 3u );
+		CHECK( r[2].stagingRoom.allowObservers );
+		CHECK_STR( r[2].stagingRoomMapName.c_str(), "maps/a/a.map" );
+		CHECK_STR( r[2].stagingRoomPlayerNames[0].c_str(), "Tank" );
+		CHECK_EQ( r[2].stagingRoom.wins[0], 4 );
+		CHECK_EQ( r[2].stagingRoom.maxPlayers, 2 );
+	}
+}
+
+TEST(online_adapter_join_utm_and_start)
+{
+	AdapterRig rig;
+	rig.login();
+
+	PeerRequest join;
+	join.peerRequestType = PeerRequest::PEERREQUEST_JOINSTAGINGROOM;
+	join.stagingRoom.id = 5;
+	rig.peer->addRequest( join );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "game.join" );
+	CHECK_EQ( rig.sent[0].getInt( "id" ), 5 );
+
+	rig.feed( "{\"t\":\"game.joined\",\"action\":\"joined\",\"id\":5,\"name\":\"g\",\"map\":\"-\",\"maxp\":8,\"host\":\"Kim\",\"hostId\":9,\"count\":2,\"opts\":\"\",\"ids\":[9,7],\"nicks\":[\"Kim\",\"Tank\"]}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)1 );
+	if (r.size() == 1)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_JOINSTAGINGROOM );
+		CHECK( r[0].joinStagingRoom.ok );
+		CHECK_EQ( r[0].joinStagingRoom.id, 5 );
+		CHECK( r[0].joinStagingRoom.isHostPresent );
+		CHECK_STR( r[0].stagingRoomPlayerNames[0].c_str(), "Kim" );
+		CHECK_STR( r[0].stagingRoomPlayerNames[1].c_str(), "Tank" );
+	}
+	CHECK_STR( rig.sentType( 1 ).c_str(), "stats.get" );		// the host's stats, as GameSpy's join read them
+	CHECK_EQ( rig.sent[1].getInt( "id" ), 9 );
+
+	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"SL/\",\"opts\":\"M=maps/a.map\",\"room\":\"5\"}" );
+	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"KICK/\",\"opts\":\"GameFull\",\"to\":\"Tank\"}" );
+	rig.feed( "{\"t\":\"utm\",\"from\":9,\"nick\":\"Kim\",\"cmd\":\"X\",\"opts\":\"\",\"room\":\"1\"}" );		// a chat room's: dropped
+	r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)2 );
+	if (r.size() == 2)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_ROOMUTM );
+		CHECK_STR( r[0].nick.c_str(), "Kim" );
+		CHECK_STR( r[0].command.c_str(), "SL/" );
+		CHECK_STR( r[0].commandOptions.c_str(), "M=maps/a.map" );
+		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERUTM );
+		CHECK_STR( r[1].command.c_str(), "KICK/" );
+	}
+
+	PeerRequest utm;
+	utm.peerRequestType = PeerRequest::PEERREQUEST_UTMPLAYER;
+	utm.nick = "Kim";
+	utm.id = "REQ/";
+	utm.options = "accept";
+	rig.peer->addRequest( utm );
+	CHECK_STR( rig.sentType( 2 ).c_str(), "utm" );
+	CHECK_STR( rig.sent[2].getString( "to" ).c_str(), "Kim" );
+	CHECK_STR( rig.sent[2].getString( "cmd" ).c_str(), "REQ/" );
+
+	// the server removes a started game from the list before it says game.start: no "host left"
+	rig.feed( "{\"t\":\"game\",\"action\":\"remove\",\"id\":5}" );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m1\",\"ids\":[9,7],\"nicks\":[\"Kim\",\"Tank\"],\"vips\":[167772162,167772163]}" );
+	r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)2 );
+	if (r.size() == 2)
+	{
+		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_STAGINGROOM );
+		CHECK_EQ( r[0].stagingRoom.action, PEER_REMOVE );
+		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_GAMESTART );
+	}
+	CHECK_STR( OnlineSession::get().matchId.c_str(), "m1" );
+}
+
+TEST(online_adapter_host_leaving_reads_as_player_left)
+{
+	AdapterRig rig;
+	rig.login();
+	PeerRequest join;
+	join.peerRequestType = PeerRequest::PEERREQUEST_JOINSTAGINGROOM;
+	join.stagingRoom.id = 5;
+	rig.peer->addRequest( join );
+	rig.feed( "{\"t\":\"game.joined\",\"action\":\"joined\",\"id\":5,\"name\":\"g\",\"map\":\"-\",\"maxp\":8,\"host\":\"Kim\",\"hostId\":9,\"count\":2,\"opts\":\"\",\"ids\":[9,7],\"nicks\":[\"Kim\",\"Tank\"]}" );
+	rig.peerResponses();
+
+	rig.feed( "{\"t\":\"game\",\"action\":\"remove\",\"id\":5}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)2 );
+	if (r.size() == 2)
+	{
+		CHECK_EQ( r[0].stagingRoom.action, PEER_REMOVE );
+		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERLEFT );
+		CHECK_STR( r[1].nick.c_str(), "Kim" );
+		CHECK_EQ( (int)r[1].player.roomType, (int)StagingRoom );
+	}
+}
+
+TEST(online_adapter_quick_match)
+{
+	AdapterRig rig;
+	rig.login();
+
+	PeerRequest qm;
+	qm.peerRequestType = PeerRequest::PEERREQUEST_STARTQUICKMATCH;
+	qm.qmMaps.push_back( true );
+	qm.qmMaps.push_back( false );
+	qm.qmMaps.push_back( true );
+	qm.QM.side = 2;
+	qm.QM.color = 3;
+	rig.peer->addRequest( qm );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "qm.join" );
+	if (!rig.sent.empty())
+	{
+		const std::vector<long long> maps = rig.sent[0].getInts( "maps" );
+		CHECK_EQ( maps.size(), (size_t)2 );
+		CHECK( maps.size() == 2 && maps[0] == 0 && maps[1] == 2 );
+		CHECK_EQ( rig.sent[0].getInt( "side" ), 2 );
+		CHECK_EQ( rig.sent[0].getInt( "color" ), 3 );
+	}
+
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"searching\",\"pool\":4}" );
+	PeerRequest widen;
+	widen.peerRequestType = PeerRequest::PEERREQUEST_WIDENQUICKMATCHSEARCH;
+	rig.peer->addRequest( widen );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "qm.widen" );
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q1\",\"seed\":77,\"mapIdx\":1,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[167772163,167772162],\"sides\":[2,-1],\"colors\":[3,-1]}" );
+
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK_EQ( r.size(), (size_t)3 );
+	if (r.size() == 3)
+	{
+		CHECK_EQ( (int)r[0].qmStatus.status, (int)QM_WORKING );
+		CHECK_EQ( r[0].qmStatus.poolSize, 4 );
+		CHECK_EQ( (int)r[1].qmStatus.status, (int)QM_WIDENINGSEARCH );
+		CHECK_EQ( (int)r[2].peerResponseType, (int)PeerResponse::PEERRESPONSE_QUICKMATCHSTATUS );
+		CHECK_EQ( (int)r[2].qmStatus.status, (int)QM_MATCHED );
+		CHECK_EQ( r[2].qmStatus.seed, 77 );
+		CHECK_EQ( r[2].qmStatus.mapIdx, 1 );
+		CHECK_STR( r[2].stagingRoomPlayerNames[0].c_str(), "Tank" );
+		CHECK_STR( r[2].stagingRoomPlayerNames[1].c_str(), "Kim" );
+		CHECK( r[2].stagingRoomPlayerNames[2].empty() );
+		CHECK_EQ( r[2].qmStatus.IP[1], 0x0A000002u );
+		CHECK_EQ( r[2].qmStatus.side[0], 2 );
+		CHECK_EQ( r[2].qmStatus.color[1], -1 );
+		CHECK_EQ( r[2].qmStatus.nat[0], 1 );
+	}
+	CHECK_STR( OnlineSession::get().matchId.c_str(), "q1" );
+}
+
+TEST(online_adapter_stats_read_and_writes_dropped)
+{
+	AdapterRig rig;
+	rig.login();
+
+	PSRequest read;
+	read.requestType = PSRequest::PSREQUEST_READPLAYERSTATS;
+	read.player.id = 9;
+	rig.ps->addRequest( read );
+	PSRequest write;
+	write.requestType = PSRequest::PSREQUEST_UPDATEPLAYERSTATS;
+	write.player.id = 7;
+	write.player.wins[3] = 1000;
+	rig.ps->addRequest( write );
+	CHECK_EQ( rig.sent.size(), (size_t)1 );		// the write never leaves
+	CHECK_STR( rig.sentType( 0 ).c_str(), "stats.get" );
+	CHECK_EQ( rig.sent[0].getInt( "id" ), 9 );
+
+	rig.feed( "{\"t\":\"stats\",\"id\":9,\"kv\":\"\\\\nick\\\\Kim\\\\wins\\\\5\\\\losses\\\\2\\\\games\\\\7\\\\rating\\\\31\"}" );
+	PSResponse resp;
+	CHECK( rig.ps->getResponse( resp ) );
+	CHECK_EQ( (int)resp.responseType, (int)PSResponse::PSRESPONSE_PLAYERSTATS );
+	CHECK_EQ( resp.player.id, 9 );
+	CHECK_EQ( (int)resp.player.wins[0], 5 );
+	CHECK_EQ( (int)resp.player.losses[0], 2 );
+	CHECK_EQ( (int)resp.player.games[0], 7 );
+	CHECK_EQ( (int)rig.ps->findPlayerStatsByID( 9 ).wins[0], 5 );
+	CHECK_EQ( rig.ps->findPlayerStatsByID( 12 ).id, 0 );
+}
+
+TEST(online_adapter_report_goes_once_a_match)
+{
+	AdapterRig rig;
+	rig.login();
+
+	OnlineReport report;
+	report.seed = 77;
+	report.endFrame = 9000;
+	report.duration = 9000;
+	report.winningTeam = 1;
+	report.sawGameEnd = TRUE;
+	report.surrendered = TRUE;
+	report.numPlayers = 2;
+	report.side[0] = "America";
+	report.side[1] = "China";
+	report.discon[1] = TRUE;
+
+	OnlineSendReport( report );
+	CHECK( rig.sent.empty() );		// no match yet
+
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q1\",\"seed\":77,\"mapIdx\":0,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[1,2],\"sides\":[0,0],\"colors\":[0,1]}" );
+	OnlineSendReport( report );
+	OnlineSendReport( report );		// the score screen's second call
+	CHECK_EQ( rig.sent.size(), (size_t)1 );
+	if (rig.sent.size() == 1)
+	{
+		const OnlineMessage &m = rig.sent[0];
+		CHECK_STR( m.type().c_str(), "report" );
+		CHECK_STR( m.getString( "match" ).c_str(), "q1" );
+		CHECK_EQ( m.getInt( "seed" ), 77 );
+		CHECK_EQ( m.getInt( "endFrame" ), 9000 );
+		CHECK_EQ( m.getInt( "winningTeam" ), 1 );
+		CHECK( m.getBool( "surrendered" ) );
+		CHECK( !m.getBool( "sawDesync" ) );
+		CHECK( m.getInts( "discon" ).size() == 2 && m.getInts( "discon" )[1] == 1 );
+		CHECK( m.getStrings( "side" ).size() == 2 && m.getStrings( "side" )[1] == "China" );
+	}
+
+	// the next match reports again
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m2\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"],\"vips\":[1,2]}" );
+	OnlineSendReport( report );
+	CHECK_EQ( rig.sent.size(), (size_t)2 );
 }

@@ -141,14 +141,13 @@ static const char *ScienceAvailabilityNames[] =
 // at all, no superweapon at all, or a number of each type he may have standing.  It takes the
 // player template's name because the rule has one exception, the USA Superweapon General, and
 // because a name is what a test can hand it.  buildingName is the superweapon's own template: the
-// nuclear silo is the one No leaves standing, one per human player, for the upgrades it sells; a
-// computer player builds none, since it put one up as its superweapon.  computerPlayer is
-// getPlayerType() == PLAYER_COMPUTER, every computer seat on either AI and every difficulty.
+// nuclear silo is the one No leaves standing, one per player, human or computer, for the upgrades
+// it sells.  Every superweapon shares the Superweapon link key, so a cap is on all of a player's
+// superweapons together, not on each type.
 //
 enum { SUPERWEAPON_CAP_BANNED = -1, SUPERWEAPON_CAP_UNLIMITED = 0 };
 Int SuperweaponBuildCap( Int restriction, const AsciiString &playerTemplateName,
-                         const AsciiString &buildingName = AsciiString::TheEmptyString,
-                         Bool computerPlayer = FALSE );
+                         const AsciiString &buildingName = AsciiString::TheEmptyString );
 
 // The lobby's unit limit is this many units for the whole match, shared out evenly between the
 // players who are not watching.  UnitLimitPerPlayer is one player's share.
@@ -177,6 +176,12 @@ Bool RebuildHoleHoldsSuperweapon( Bool rebuildsSuperweapon, Bool rebuildStanding
 // getPlayerType() == PLAYER_COMPUTER, which every machine and the replay hold alike.
 Bool SuperweaponNeedsDefenses( const AsciiString &buildingName, Bool proRules, Int superweaponRestriction,
                                Bool computerPlayer );
+// That silo, by name and game setup: a building with upgrades in it and nothing more, for every
+// player and every AI.  The InMatch one asks the match being played and is the test anything in
+// logic or on screen uses for "is this a superweapon": FS_SUPERWEAPON, less that silo.
+Bool SuperweaponSiloIsUpgradeBuilding( const AsciiString &buildingName, Bool proRules, Int superweaponRestriction );
+class ThingTemplate;
+Bool IsSuperweaponInMatch( const ThingTemplate *tmpl );
 
 // The lobby's income sharing, an IncomeSharing from GameInfo.h: whether a payment is split in this
 // match, and each ally's cut when it is split evenly between sharers players.  The earner keeps what
@@ -225,12 +230,11 @@ Bool ProRulesBanSpecialPower( SpecialPowerType specialPowerType, Int rankLevel )
 Bool ProRulesRefuseSpecialPower( const Player *player, SpecialPowerType specialPowerType );
 
 // The silo's missile under Pro Rules or under the lobby's No Superweapons: the silo stands for its
-// upgrades and the missile never fires, so nothing shows it as a superweapon - no countdown, no EVA,
-// no fire button, no shortcut.  Both read game setup only, the same on every machine.
+// upgrades and the missile is no special power at all (SpecialPowerModule::getSpecialPower), so it
+// is never armed, listed, counted down, announced or fired.  Both read game setup only, the same on
+// every machine.
 Bool SuperweaponMissileSilenced( SpecialPowerType specialPowerType, Bool proRules, Int superweaponRestriction );
 Bool SuperweaponMissileSilencedInMatch( SpecialPowerType specialPowerType );
-// the silo of a missile the one above silences: no banner, no feed line, announced as a building
-Bool SuperweaponSiloSilencedInMatch( const Object *structure );
 
 // Rule 9: no foundation this close to an enemy building, edge to edge.  The same 300 world units
 // the derrick cluster rules measure with, which is also more than a Patriot or a Stinger Site

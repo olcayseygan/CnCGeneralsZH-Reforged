@@ -1335,7 +1335,7 @@ GUI:SuperweaponsNone
 END
 
 TOOLTIP:Superweapons
-"How many of each superweapon a player may have standing. Allow: as many as he can pay for. Limit: one each, and four for the USA Superweapon General. No: none at all, except the Superweapon General, who keeps one. He is the exception because his three superweapons are what he pays for a weaker army with. Under No a player may still put up one Nuclear Missile silo for China's upgrades, but it never fires, and computer players build none."
+"How many superweapons a player may have standing. Allow: as many as he can pay for. Limit: one, and four for the USA Superweapon General. No: none at all, except the Superweapon General, who keeps one. He is the exception because his superweapons are what he pays for a weaker army with. Under No anyone, computer players too, may still put up one Nuclear Missile silo to buy China's upgrades in. It has no missile: no launch button, no countdown, no announcement."
 END
 
 GUI:UnitLimit

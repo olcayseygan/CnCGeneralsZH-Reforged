@@ -110,7 +110,9 @@ public:
 	static Int getInterfaceMask() { return MODULEINTERFACE_SPECIAL_POWER; }
 
 	// BehaviorModule
-	virtual SpecialPowerModuleInterface* getSpecialPower() { return this; }
+	// NULL for a silo whose missile the match silences (SuperweaponMissileSilencedInMatch, game setup
+	// only): nothing finds the power, so nothing arms, lists, counts down, announces or fires it
+	virtual SpecialPowerModuleInterface* getSpecialPower();
 
 	Bool isModuleForPower( const SpecialPowerTemplate *specialPowerTemplate ) const;	///< is this module for the specified special power
 	Bool isReady( void ) const; 						///< is this special power available now

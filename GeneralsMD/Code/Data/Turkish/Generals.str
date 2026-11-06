@@ -2878,7 +2878,7 @@ TOOLTIP:Crates
 END
 
 TOOLTIP:SuperWeapons
-"Bir oyuncunun aynı anda ayakta tutabileceği süper silah sayısı. İzin Ver: parası yettiği kadar. Sınırla: her birinden bir tane, ABD Süper Silah Generali için dört. Yok: hiç yok, yalnızca Süper Silah Generali bir tane tutar. İstisna odur, çünkü zayıf ordusunun bedelini bu üç süper silahla öder. Yok seçiliyken bir oyuncu Çin'in geliştirmeleri için yine de bir Nükleer Füze silosu kurabilir ama silo asla ateşlemez; bilgisayar oyuncuları hiç kurmaz."
+"Bir oyuncunun aynı anda kaç süper silahı olabilir. İzin Ver: parası neye yetiyorsa. Sınırla: bir tane, ABD Süper Silah Generali'ne dört. Yok: hiç yok, bir tek Süper Silah Generali bir tane tutar. Onun istisna olması şundan: zayıf ordusunun bedelini süper silahlarıyla ödüyor. Yok seçiliyse herkes, bilgisayar da, Çin'in geliştirmelerini almak için bir Nükleer Füze silosu kurabilir. Siloda füze yok: ateşleme düğmesi yok, geri sayım yok, anons yok."
 END
 
 DOZER:ConstructionComplete

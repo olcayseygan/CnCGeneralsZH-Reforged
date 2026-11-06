@@ -2762,7 +2762,7 @@ TOOLTIP:Crates
 END
 
 TOOLTIP:SuperWeapons
-"Wie viele Superwaffen jeder Art ein Spieler gleichzeitig haben darf. Erlaubt: so viele, wie er bezahlen kann. Limit: je eine, vier für den USA-Superwaffengeneral. Nein: keine, außer beim Superwaffengeneral, der eine behält. Er ist die Ausnahme, weil er mit seinen drei Superwaffen eine schwächere Armee ausgleicht."
+"Wie viele Superwaffen ein Spieler gleichzeitig haben darf. Erlaubt: so viele, wie er bezahlen kann. Limit: eine, vier für den USA-Superwaffengeneral. Nein: keine, außer beim Superwaffengeneral, der eine behält. Er ist die Ausnahme, weil er mit seinen Superwaffen eine schwächere Armee ausgleicht. Unter Nein darf jeder, auch der Computer, noch ein Atomraketensilo bauen, um darin Chinas Upgrades zu kaufen. Es hat keine Rakete: keinen Startknopf, keinen Countdown, keine Ansage."
 END
 
 DOZER:ConstructionComplete

@@ -242,14 +242,17 @@ UpdateSleepTime MissileLauncherBuildingUpdate::update( void )
 	if( getObject()->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) )
 		return UPDATE_SLEEP_NONE;
 
+	// a silenced missile is no special power at all: the doors stay shut for the whole match
+	if (SuperweaponMissileSilencedInMatch(d->m_specialPowerTemplate->getSpecialPowerType()))
+		return UPDATE_SLEEP_FOREVER;
+
 	if (!m_specialPowerModule)
 	{
 		m_specialPowerModule = getObject()->getSpecialPowerModule(d->m_specialPowerTemplate);
 		DEBUG_ASSERTCRASH(m_specialPowerModule, ("Missing special power"));
 	}
-	
-	// a missile that can never fire is never shown ready: the doors stay shut
-	if (m_specialPowerModule && !SuperweaponMissileSilencedInMatch(m_specialPowerModule->getSpecialPowerTemplate()->getSpecialPowerType()))
+
+	if (m_specialPowerModule)
 	{
 		UnsignedInt readyFrame = m_specialPowerModule->getReadyFrame();
 		UnsignedInt whenToStartOpening = (readyFrame >= d->m_doorOpenTime) ? (readyFrame - d->m_doorOpenTime) : 0;

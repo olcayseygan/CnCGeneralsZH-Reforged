@@ -3059,7 +3059,7 @@ void ObserverCamera::scout( void )
 		hit.position.x = obj->getPosition()->x;
 		hit.position.y = obj->getPosition()->y;
 		hit.weight = ObserverCamera_hitWeight( obj->getTemplate()->friend_getBuildCost(), obj->isEffectivelyDead(),
-			obj->isKindOf( KINDOF_FS_SUPERWEAPON ), obj->isKindOf( KINDOF_INFANTRY ) );
+			IsSuperweaponInMatch( obj->getTemplate() ), obj->isKindOf( KINDOF_INFANTRY ) );
 		hits.push_back( hit );
 	}
 	ObserverCamera_markLandings( m_scouted, hits, frame );
@@ -3189,7 +3189,7 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 	for( Object *obj = TheGameLogic->getFirstObject(); obj != NULL; obj = obj->getNextObject() )
 	{
 		const Int cost = obj->getTemplate()->friend_getBuildCost();
-		const Bool superweapon = obj->isKindOf( KINDOF_FS_SUPERWEAPON );
+		const Bool superweapon = IsSuperweaponInMatch( obj->getTemplate() );
 		const Bool mine = narrowTo == NULL || obj->getControllingPlayer() == narrowTo;
 		DirectorHeat heat;
 		heat.position.x = obj->getPosition()->x;

@@ -682,8 +682,10 @@ Module *ModuleFactory::newModule( Thing *thing, const AsciiString& name, const M
 			DEBUG_ASSERTCRASH(
 				((mt->m_whichInterfaces & (MODULEINTERFACE_DIE)) != 0) == (bm->getDie() != NULL), 
 				("getInterfaceMask bad for MODULE_DIE (%s)\n",name.str()));
+			// a silenced silo's power answers NULL on purpose (SpecialPowerModule::getSpecialPower), so
+			// only a module that is no special power must never answer one
 			DEBUG_ASSERTCRASH(
-				((mt->m_whichInterfaces & (MODULEINTERFACE_SPECIAL_POWER)) != 0) == (bm->getSpecialPower() != NULL), 
+				((mt->m_whichInterfaces & (MODULEINTERFACE_SPECIAL_POWER)) != 0) || (bm->getSpecialPower() == NULL),
 				("getInterfaceMask bad for MODULE_SPECIAL_POWER (%s)\n",name.str()));
 			DEBUG_ASSERTCRASH(
 				((mt->m_whichInterfaces & (MODULEINTERFACE_UPDATE)) != 0) == (bm->getUpdate() != NULL), 

@@ -269,7 +269,8 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			// pass, and a tech building asked for at frame 1932 was still in that queue at 30000.
 			// A power plant jumps it as well once the margin is thin: the plant doPower asked for ahead
 			// of an outage waited 45 seconds in that queue and the base went dark before it was started.
-			const Bool rushThis = rushBigGuns && (curPlan->isKindOf(KINDOF_FS_SUPERWEAPON) || curPlan->isKindOf(KINDOF_FS_ADVANCED_TECH) ||
+			// A silo whose missile is silenced is no superweapon and is not rushed.
+			const Bool rushThis = rushBigGuns && (IsSuperweaponInMatch(curPlan) || curPlan->isKindOf(KINDOF_FS_ADVANCED_TECH) ||
 				(powerThin && curPlan->isKindOf(KINDOF_FS_POWER) && !curPlan->isKindOf(KINDOF_CASH_GENERATOR)));
 			const AIPurchaseKind planKind = purchaseKindOf(curPlan);
 			const Int planScore = byScore ? aiPurchaseScore(planKind, earlyGame) +

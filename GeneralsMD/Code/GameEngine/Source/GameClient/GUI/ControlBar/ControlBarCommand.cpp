@@ -1638,6 +1638,11 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 			// sanity
 			DEBUG_ASSERTCRASH( command->getSpecialPowerTemplate() != NULL,
 												 ("The special power in the command '%s' is NULL\n", command->getName().str()) );
+
+			// a silo whose missile is silenced has no such power at all, and no fire button
+			if( SuperweaponMissileSilencedInMatch( command->getSpecialPowerTemplate()->getSpecialPowerType() ) )
+				return COMMAND_HIDDEN;
+
 			// get special power module from the object to execute it
 			SpecialPowerModuleInterface *mod = obj->getSpecialPowerModule( command->getSpecialPowerTemplate() );
 
@@ -1653,10 +1658,6 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 				// perform was drawn ready to fire. There is nothing behind it, so hide it.
 				return COMMAND_HIDDEN;
 			}
-
-			// a silo whose missile can never fire has no fire button at all
-			if( SuperweaponMissileSilencedInMatch( command->getSpecialPowerTemplate()->getSpecialPowerType() ) )
-				return COMMAND_HIDDEN;
 
 			// Pro Rules: the power is there and the button stays dead
 			if( ProRulesRefuseSpecialPower( obj->getControllingPlayer(), command->getSpecialPowerTemplate()->getSpecialPowerType() ) )

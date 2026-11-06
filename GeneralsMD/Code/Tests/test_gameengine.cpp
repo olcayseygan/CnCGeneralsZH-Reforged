@@ -21558,16 +21558,53 @@ TEST(the_superweapon_rule_is_a_mode_with_one_exception)
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "ChinaNuclearMissileLauncher" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "Nuke_ChinaNuclearMissileLauncher" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 1 );
-	// a human's, that is: a computer player builds no silo under No, whoever its general, since
-	// it put one up as its superweapon, and Limit and Allow leave it the same silo as anybody
-	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_BANNED );
-	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( "FactionChinaNukeGeneral" ), AsciiString( "Nuke_ChinaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_BANNED );
-	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_BANNED );
-	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), FALSE ), 1 );
-	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), TRUE ), 1 );
-	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_ALLOW, AsciiString( "FactionChina" ), AsciiString( "ChinaNuclearMissileLauncher" ), TRUE ), (Int)SUPERWEAPON_CAP_UNLIMITED );
-	// and the Superweapon General's own exception under No is unchanged for a computer
-	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaParticleCannonUplink" ), TRUE ), 1 );
+	// the same one silo for every China general, a computer as much as a human: the cap has no say
+	// in who plays the seat
+	const char *const chinaGenerals[][ 2 ] =
+	{
+		{ "FactionChina", "ChinaNuclearMissileLauncher" },
+		{ "FactionChinaNukeGeneral", "Nuke_ChinaNuclearMissileLauncher" },
+		{ "FactionChinaTankGeneral", "Tank_ChinaNuclearMissileLauncher" },
+		{ "FactionChinaInfantryGeneral", "Infa_ChinaNuclearMissileLauncher" }
+	};
+	for ( Int g = 0; g < ARRAY_SIZE( chinaGenerals ); ++g )
+	{
+		const AsciiString general( chinaGenerals[ g ][ 0 ] ), silo( chinaGenerals[ g ][ 1 ] );
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, general, silo ), 1 );
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, general, silo ), 1 );
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_ALLOW, general, silo ), (Int)SUPERWEAPON_CAP_UNLIMITED );
+		// and under No, or Pro Rules, it is an upgrade building and no superweapon of anybody's
+		CHECK( SuperweaponSiloIsUpgradeBuilding( silo, FALSE, SUPERWEAPONS_NONE ) );
+		CHECK( SuperweaponSiloIsUpgradeBuilding( silo, TRUE, SUPERWEAPONS_ALLOW ) );
+		CHECK( !SuperweaponSiloIsUpgradeBuilding( silo, FALSE, SUPERWEAPONS_LIMIT ) );
+		CHECK( !SuperweaponSiloIsUpgradeBuilding( silo, FALSE, SUPERWEAPONS_ALLOW ) );
+	}
+
+	// Under No the whole matrix: every other superweapon of every side and general is barred, the
+	// Superweapon General's one cannon aside.  The cap counts every superweapon a player has together
+	// (the Superweapon link key), so 1 is one superweapon in all, not one of each.
+	struct NoRow { const char *general; const char *superweapon; Int cap; };
+	const NoRow noRows[] =
+	{
+		{ "FactionAmerica", "AmericaParticleCannonUplink", SUPERWEAPON_CAP_BANNED },
+		{ "FactionAmericaLaserGeneral", "Lazr_AmericaParticleCannonUplink", SUPERWEAPON_CAP_BANNED },
+		{ "FactionAmericaAirForceGeneral", "AirF_AmericaParticleCannonUplink", SUPERWEAPON_CAP_BANNED },
+		{ "FactionAmericaSuperWeaponGeneral", "SupW_AmericaParticleCannonUplink", 1 },
+		{ "FactionGLA", "GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionGLAToxinGeneral", "Chem_GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionGLADemolitionGeneral", "Demo_GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionGLAStealthGeneral", "Slth_GLAScudStorm", SUPERWEAPON_CAP_BANNED },
+		{ "FactionTurkiye", "TurkiyeKarguBase", SUPERWEAPON_CAP_BANNED }
+	};
+	for ( Int r = 0; r < ARRAY_SIZE( noRows ); ++r )
+	{
+		CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString( noRows[ r ].general ), AsciiString( noRows[ r ].superweapon ) ), noRows[ r ].cap );
+		CHECK( !SuperweaponSiloIsUpgradeBuilding( AsciiString( noRows[ r ].superweapon ), FALSE, SUPERWEAPONS_NONE ) );
+	}
+	// the exception is the general, not the building: another general's cannon under his name is
+	// still his one, and his cannon under anybody else's is barred
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "SupW_AmericaParticleCannonUplink" ) ), (Int)SUPERWEAPON_CAP_BANNED );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "GLAScudStorm" ) ), 1 );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "GLAScudStorm" ) ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, laserGeneral, AsciiString( "Lazr_AmericaParticleCannonUplink" ) ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 4 );

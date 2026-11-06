@@ -1155,8 +1155,7 @@ static void chromaVisitObject( Object *obj, void *userData )
 		for( BehaviorModule **module = obj->getBehaviorModules(); module && *module; ++module )
 		{
 			SpecialPowerModuleInterface *power = (*module)->getSpecialPower();
-			if( power == NULL || power->isScriptOnly()
-					|| SuperweaponMissileSilencedInMatch( power->getSpecialPowerTemplate()->getSpecialPowerType() ) )
+			if( power == NULL || power->isScriptOnly() )
 				continue;
 
 			const Real charge = power->getPercentReady();

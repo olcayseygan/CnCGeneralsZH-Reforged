@@ -16562,7 +16562,7 @@ GUI:SuperweaponsNone
 END
 
 TOOLTIP:Superweapons
-"Combien de chaque superarme un joueur peut avoir debout. Autoriser : autant qu'il peut en payer. Limiter : une de chaque, et quatre pour le Général superarme USA. Pas de superarmes : aucune, sauf pour le Général superarme, qui en garde une. Il fait exception parce que ses trois superarmes sont ce qu'il obtient en échange d'une armée plus faible."
+"Combien de superarmes un joueur peut avoir debout. Autoriser : autant qu'il peut en payer. Limiter : une, et quatre pour le Général superarme USA. Pas de superarmes : aucune, sauf pour le Général superarme, qui en garde une. Il fait exception parce que ses superarmes sont ce qu'il obtient en échange d'une armée plus faible. Sans superarmes, chacun, l'ordinateur aussi, peut encore bâtir un silo de missile nucléaire pour y acheter les améliorations de la Chine. Il n'a pas de missile, ni bouton de tir, ni compte à rebours, ni annonce."
 END
 
 GUI:UnitLimit

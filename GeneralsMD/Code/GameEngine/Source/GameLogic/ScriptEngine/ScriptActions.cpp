@@ -31,6 +31,9 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Lib/Clock.h"
+#include <string>
+#include <errno.h>
+#include <limits.h>
 
 #include "Lib/WideCharFns.h"
 
@@ -2646,6 +2649,32 @@ void ScriptActions::doInGamePopupMessage( const AsciiString& message, Int x, Int
 //-------------------------------------------------------------------------------------------------
 /** doDisplayCinematicText */
 //-------------------------------------------------------------------------------------------------
+// WorldBuilder writes: <family> - Size: <points> [Bold]. Parse within the string,
+// including multi-word font families, before asking the font library to allocate anything.
+Bool ScriptActions_parseCinematicFont(const AsciiString &description, AsciiString &name, Int &size, Bool &bold)
+{
+	const std::string text(description.str());
+	const std::string marker(" - Size:");
+	if (text.size() > 1024) return FALSE;
+	const size_t split = text.rfind(marker);
+	if (split == std::string::npos || split == 0 || split > 255) return FALSE;
+	std::string number = text.substr(split + marker.size());
+	const std::string suffix(" [Bold]");
+	const bool isBold = number.size() >= suffix.size()
+		&& number.compare(number.size() - suffix.size(), suffix.size(), suffix) == 0;
+	if (isBold) number.erase(number.size() - suffix.size());
+	char *end = NULL;
+	errno = 0;
+	const long points = strtol(number.c_str(), &end, 10);
+	if (end == number.c_str() || errno == ERANGE || points < 1 || points > 512) return FALSE;
+	while (*end == ' ' || *end == '\t') ++end;
+	if (*end != 0) return FALSE;
+	name = text.substr(0, split).c_str();
+	size = (Int)points;
+	bold = isBold;
+	return TRUE;
+}
+
 void ScriptActions::doDisplayCinematicText(const AsciiString& displayText, const AsciiString& fontType, Int timeInSeconds)
 {
 	VIEW_AFTER_TICK( [=]() { doDisplayCinematicText( displayText, fontType, timeInSeconds ); } );
@@ -2655,48 +2684,10 @@ void ScriptActions::doDisplayCinematicText(const AsciiString& displayText, const
 	aStr.translate( uStr );
 	TheDisplay->setCinematicText( aStr );
 
-	// Gets the font info from parsing through fontType
-
-	// get the font name
-	AsciiString fontName = AsciiString::TheEmptyString;
-	char buf[256];
-	char *c;
-	strcpy(buf, fontType.str());
-	/* KNOWN DEFECT, kept on purpose (port defect 8, found in the shipping game): this
-		 compared the pointer with '\0', which MSVC read as a null pointer constant, so the test is
-		 `c != NULL` and always true.  The loop ends only on a ' ' or '-'; without one it reads past
-		 the string, and it advances c twice a pass.  Spelled as MSVC compiled it, so every platform
-		 behaves as Windows does; the rewrite needs its own test. */
-	for( c = buf; c != NULL; *c++ )
-	{
-		if( *c != ' ' && *c++ != '-' ) 
-			fontName.concat(c);
-		else
-			break;
-	}
-	while( *c != ':' )
-		*c++;
-	*c++;  // eat through " - Size:"
-
-	// get font size
-	AsciiString fontSize = AsciiString::TheEmptyString;
-	for( ; *c != '\0'; *c++ )
-	{
-		if( *c != '\0' && *c != ' ' )
-		{
-			fontSize.concat( *c );
-		}
-		else
-		{
-			break;
-		}
-	}
-	Int size = atoi( fontSize.str() );
-
-	// get font fold
+	AsciiString fontName;
+	Int size = 0;
 	Bool bold = FALSE;
-	if( fontType.endsWith( "[Bold]" ) )
-		bold = TRUE;
+	if (!ScriptActions_parseCinematicFont(fontType, fontName, size, bold)) return;
 
 	// phew, now set as new font
 	GameFont *font = TheFontLibrary->getFont( fontName, 
@@ -2704,7 +2695,9 @@ void ScriptActions::doDisplayCinematicText(const AsciiString& displayText, const
 	TheDisplay->setCinematicFont( font );
 
 	// set time
-	Int frames = LOGICFRAMES_PER_SECOND * timeInSeconds;
+	Int frames = timeInSeconds > 0
+		? (timeInSeconds > INT_MAX / LOGICFRAMES_PER_SECOND ? INT_MAX : LOGICFRAMES_PER_SECOND * timeInSeconds)
+		: 0;
 	TheDisplay->setCinematicTextFrames( frames );
 }
 //-------------------------------------------------------------------------------------------------

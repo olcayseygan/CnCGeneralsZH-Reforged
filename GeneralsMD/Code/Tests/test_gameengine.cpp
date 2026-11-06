@@ -175,6 +175,7 @@ static int GetSystemMetrics( int which )
 #include "GameLogic/CrowdModel.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Scripts.h"
+#include "GameLogic/ScriptActions.h"
 #include "GameLogic/SidesList.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -22274,6 +22275,56 @@ TEST(control_server_answers_the_rfc_handshake_example)
 	// a buffer too small to hold the 28 characters and the terminator is refused, not overrun
 	char tooSmall[ 8 ];
 	CHECK( !ControlServer_computeAcceptKey( "dGhlIHNhbXBsZSBub25jZQ==", tooSmall, sizeof( tooSmall ) ) );
+}
+
+TEST(cinematic_font_descriptions_are_bounded_and_keep_multiword_names)
+{
+	CHECK(bootOnce());
+	AsciiString name;
+	Int size = 0;
+	Bool bold = FALSE;
+	CHECK(ScriptActions_parseCinematicFont("Times New Roman - Size: 18 [Bold]", name, size, bold));
+	CHECK_STR(name.str(), "Times New Roman"); CHECK_EQ(size, 18); CHECK(bold);
+	CHECK(ScriptActions_parseCinematicFont("Arial - Size: 12", name, size, bold));
+	CHECK_STR(name.str(), "Arial"); CHECK_EQ(size, 12); CHECK(!bold);
+	const char *bad[] = {"", "Arial", "Arial - Size:", "Arial - Size: 0", "Arial - Size: -1",
+		"Arial - Size: 999999999999999999999", "Arial - Size: 18junk", " - Size: 12", "Arial - Size: 513"};
+	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i)
+		CHECK(!ScriptActions_parseCinematicFont(bad[i], name, size, bold));
+	CHECK(!ScriptActions_parseCinematicFont((std::string(300, 'a') + " - Size: 12").c_str(), name, size, bold));
+}
+
+TEST(script_parameter_counts_are_rejected_before_allocating_or_reading_parameters)
+{
+	CHECK(bootOnce());
+	// A minimal chunk with enough serialized parameter bytes to pass the file-size check.
+	// The fixed-array capacity must be checked independently of the available input bytes.
+	const Int counts[] = {-1, MAX_PARMS + 1, 0x7fffffff};
+	for (size_t c = 0; c < sizeof(counts) / sizeof(counts[0]); ++c) {
+		for (int action = 0; action < 2; ++action) {
+			std::string bytes("CkMp\0\0\0\0", 8);
+			const Int id = 0, type = 0, dataSize = 8 + (MAX_PARMS + 1) * 14;
+			const unsigned short version = 1;
+			bytes.append((const char *)&id, sizeof(id));
+			bytes.append((const char *)&version, sizeof(version));
+			bytes.append((const char *)&dataSize, sizeof(dataSize));
+			bytes.append((const char *)&type, sizeof(type));
+			bytes.append((const char *)&counts[c], sizeof(counts[c]));
+			bytes.append((MAX_PARMS + 1) * 14, '\0');
+			MemoryChunkInputStream stream(bytes.data(), (Int)bytes.size());
+			DataChunkInput input(&stream);
+			DataChunkVersionType readVersion;
+			input.openDataChunk(&readVersion);
+			DataChunkInfo info;
+			info.version = version;
+			Bool rejected = FALSE;
+			try {
+				if (action) ScriptAction::ParseActionDataChunk(input, &info, NULL);
+				else Condition::ParseConditionDataChunk(input, &info, NULL);
+			} catch (ErrorCode error) { rejected = error == ERROR_CORRUPT_FILE_FORMAT; }
+			CHECK(rejected);
+		}
+	}
 }
 
 /* Telling a click from a drag.

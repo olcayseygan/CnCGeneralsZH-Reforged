@@ -33,6 +33,9 @@
 #ifndef __SCRIPTACTIONS_H_
 #define __SCRIPTACTIONS_H_
 
+// Bounded parser shared with the synthetic regression tests.
+Bool ScriptActions_parseCinematicFont(const AsciiString &description, AsciiString &name, Int &size, Bool &bold);
+
 class ScriptAction;
 class GameWindow;
 class	Team;

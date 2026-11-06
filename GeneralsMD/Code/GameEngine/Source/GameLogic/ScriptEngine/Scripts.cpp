@@ -1694,12 +1694,15 @@ void Condition::WriteConditionDataChunk(DataChunkOutput &chunkWriter, Condition	
 */
 Bool Condition::ParseConditionDataChunk(DataChunkInput &file, DataChunkInfo *info, void *userData)
 {
-	Condition	*pCondition = newInstance(Condition);
+	const ConditionType type = (ConditionType)file.readInt();
+	const NameKeyType key = info->version >= K_SCRIPT_CONDITION_VERSION_4 ? file.readNameKey() : NAMEKEY_INVALID;
+	const Int conditionCount = file.readCount(14);
+	if (conditionCount > MAX_PARMS) throw ERROR_CORRUPT_FILE_FORMAT;
+	Condition *pCondition = newInstance(Condition);
 	OrCondition *pOr = (OrCondition *)userData;
-	pCondition->m_conditionType = (enum ConditionType)file.readInt();
+	pCondition->m_conditionType = type;
 	const ConditionTemplate* ct = TheScriptEngine->getConditionTemplate(pCondition->m_conditionType);
 	if (info->version >= K_SCRIPT_CONDITION_VERSION_4) {
-		NameKeyType key = file.readNameKey();
 		Bool match = false;
 		if (ct && ct->m_internalNameKey == key) {
 			match = TRUE; // All good. jba. [3/20/2003]
@@ -1724,16 +1727,24 @@ Bool Condition::ParseConditionDataChunk(DataChunkInput &file, DataChunkInfo *inf
 			pCondition->m_numParms = 0;
 		}
 	}
-	pCondition->m_numParms =file.readInt();
 	Int i;
-	for (i=0; i<pCondition->m_numParms; i++) 
-	{
-		pCondition->m_parms[i] = Parameter::ReadParameter(file);
+	try {
+		for (i = 0; i < conditionCount; ++i) {
+			pCondition->m_parms[i] = Parameter::ReadParameter(file);
+			++pCondition->m_numParms;
+		}
+	} catch (...) {
+		pCondition->deleteInstance();
+		throw;
 	}
 	
 	if (file.getChunkVersion() < K_SCRIPT_CONDITION_VERSION_2) {
 		for (int j = 0; ParameterChangesVer2[j] != -1; ++j) {
 			if (pCondition->m_conditionType == ParameterChangesVer2[j]) {
+				if (pCondition->m_numParms != 2) {
+					pCondition->deleteInstance();
+					throw ERROR_CORRUPT_FILE_FORMAT;
+				}
 				pCondition->m_parms[pCondition->m_numParms] = newInstance(Parameter)(Parameter::SURFACES_ALLOWED, 3);
 				pCondition->m_numParms = 3;
 			}
@@ -2454,13 +2465,15 @@ void ScriptAction::WriteActionDataChunk(DataChunkOutput &chunkWriter, ScriptActi
 */
 ScriptAction *ScriptAction::ParseAction(DataChunkInput &file, DataChunkInfo *info, void *userData)
 {
-	ScriptAction	*pScriptAction = newInstance(ScriptAction);
-
-	pScriptAction->m_actionType = (enum ScriptActionType)file.readInt();
+	const ScriptActionType type = (ScriptActionType)file.readInt();
+	const NameKeyType key = info->version >= K_SCRIPT_ACTION_VERSION_2 ? file.readNameKey() : NAMEKEY_INVALID;
+	const Int actionCount = file.readCount(14);
+	if (actionCount > MAX_PARMS) throw ERROR_CORRUPT_FILE_FORMAT;
+	ScriptAction *pScriptAction = newInstance(ScriptAction);
+	pScriptAction->m_actionType = type;
 
 	const ActionTemplate* at = TheScriptEngine->getActionTemplate(pScriptAction->m_actionType);
 	if (info->version >= K_SCRIPT_ACTION_VERSION_2) {
-		NameKeyType key = file.readNameKey();
 		Bool match = false;
 		if (at && at->m_internalNameKey == key) {
 			match = TRUE; // All good. jba. [3/20/2003]
@@ -2496,11 +2509,15 @@ ScriptAction *ScriptAction::ParseAction(DataChunkInput &file, DataChunkInfo *inf
 	at2->m_numTimesUsed++;
 	at2->m_firstMapUsed = TheGlobalData->m_mapName;
 #endif
-	pScriptAction->m_numParms =file.readInt();
 	Int i;
-	for (i=0; i<pScriptAction->m_numParms; i++) 
-	{
-		pScriptAction->m_parms[i] = Parameter::ReadParameter(file);
+	try {
+		for (i = 0; i < actionCount; ++i) {
+			pScriptAction->m_parms[i] = Parameter::ReadParameter(file);
+			++pScriptAction->m_numParms;
+		}
+	} catch (...) {
+		pScriptAction->deleteInstance();
+		throw;
 	}
 
 	// heal old files.

@@ -1,0 +1,10 @@
+# Summary video, the closing shot on Scenarios/summaryclose.txt: wide on the fight in front of the
+# base at start 0 on Twilight Flame, then a slow orbit closing in, the Laser General's tanks firing
+# into the Dragons' fire walls with the barracks and power plants burning behind. Command line in the
+# scenario's header, -video 600 1170.
+
+9.8   cut     660 3300 0.95 80 -4
+9.9   zoom    0.75 9.6
+9.9   orbit   25 9.6
+
+19.6  end

@@ -1,0 +1,51 @@
+# Summary video, the closing shot: firelook.txt's Chinese attack on the American base round start 0
+# on Twilight Flame, met by the Laser General's tanks, so flame walls, burning buildings and laser
+# beams share one frame. Seat 0 America, seat 1 China, nothing thinks but this file. Filmed with
+# Cinema/summary_close.txt:
+#
+#   generals.exe -borderless -msaa 0 -noFPSLimit -particlecap 2500 -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario summaryclose
+#     -cinema summary_close -recordfps 120 -video 600 1170 <name> -maxframes 1190 -heathaze
+
+# the base round the command centre (firelook's spots)
+10    spawn       0  AmericaPowerPlant            1   start0:-240:160
+10    spawn       0  AmericaPowerPlant            1   start0:300:-280
+10    spawn       0  AmericaWarFactory            1   start0:40:-340
+10    spawn       0  AmericaBarracks              1   start0:60:320
+10    spawn       0  AmericaSupplyCenter          1   start0:-260:440
+
+# defenders: Rangers and the Laser General's armour
+20    spawn       0  AmericaInfantryRanger       12   start0:200:120   20
+20    spawn       0  Lazr_AmericaTankCrusader     4   start0:160:-120  45
+20    spawn       0  Lazr_AmericaTankPaladin      2   start0:100:-40   45
+20    spawn       0  Lazr_AmericaTankAvenger      1   start0:120:40
+40    attackmove  0  AmericaInfantryRanger            start0:420:100
+40    attackmove  0  Lazr_AmericaTankCrusader         start0:440:-100
+40    attackmove  0  Lazr_AmericaTankPaladin          start0:440:-100
+40    attackmove  0  Lazr_AmericaTankAvenger          start0:380:0
+
+# the attack from the east
+20    spawn       1  ChinaTankDragon              6   start0:420:100   40
+20    spawn       1  ChinaTankBattleMaster        5   start0:440:-120  45
+20    spawn       1  ChinaTankOverlord            2   start0:520:-40   60
+20    spawn       1  ChinaVehicleInfernoCannon    6   start0:380:360   40
+20    spawn       1  ChinaVehicleHelix            2   start0:520:60    60
+40    attackmove  1  ChinaTankDragon                  start0:60:140
+40    attackmove  1  ChinaTankBattleMaster            start0:0:-120
+40    attackmove  1  ChinaTankOverlord                start0:0:-120
+40    attackmove  1  ChinaVehicleHelix                start0:100:0
+40    attack      1  ChinaVehicleInfernoCannon        0 AmericaBarracks
+
+# a fire wall across the base, a second wave, and the cannons moved onto the command centre
+200   weaponat    1  ChinaTankDragon                  start0:120:120 secondary
+300   spawn       0  Lazr_AmericaTankCrusader     3   start0:-60:200   45
+300   spawn       1  ChinaTankDragon              3   start0:420:160   40
+315   attackmove  0  Lazr_AmericaTankCrusader         start0:300:100
+315   attackmove  1  ChinaTankDragon                  start0:0:150
+330   attack      1  ChinaVehicleInfernoCannon        0 AmericaCommandCenter
+
+300   tally       0  *
+300   tally       1  *
+580   tally       0  *
+580   tally       1  *

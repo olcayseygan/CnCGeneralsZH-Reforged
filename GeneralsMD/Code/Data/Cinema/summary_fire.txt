@@ -1,0 +1,17 @@
+# Summary video, the fire takes, on Scenarios/firelook.txt (Twilight Flame, seed 7). Two parts in one
+# recording, so a -heathaze run and a run without it give the same pair of takes:
+#   4.5 to 11.5 s  a slow push-in on the barracks burning under the Inferno Cannons; it falls about
+#                  frame 562 (9.4 s), whole in frame
+#   11.6 to 21 s   the held heathaze.txt frame, Dragons and fire walls over the dead Rangers
+#
+#   generals.exe -borderless -msaa 0 -noFPSLimit -particlecap 2500 -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario firelook -cinema summary_fire
+#     -recordfps 120 -video 270 1260 <name> -wav 270 1260 <name> -maxframes 1280 [-heathaze]
+
+4.5   cut     597 3470 0.8 90 -2
+4.6   zoom    0.6 6.8
+
+11.6  cut     660 3320 0.55 110 0
+
+21.0  end

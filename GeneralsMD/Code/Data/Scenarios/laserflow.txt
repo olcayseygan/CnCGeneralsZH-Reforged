@@ -1,0 +1,30 @@
+# The laser energy line and the beam heat haze (-heathaze), on laserlook.txt's ground and freecam:
+# four Laser Crusaders and a Laser Paladin firing north into three Overlords and four Battlemasters
+# that hold out for the clip, a Laser Avenger on two Helixes, and Rocket Buggies whose missiles the
+# Paladin's point defence burns. Seat 0 America, seat 1 China, -takeover so only these fire. The
+# beams run up the y axis and the freecam west of them sees each whole. Draws:
+#
+#   generals.exe -borderless -msaa 0 -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -particlecap 2500 -cinema nohud -freecam 3170 3790 270 0 -36
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario laserflow
+#     -screenshot 400 -video 180 660 <name> -maxframes 680 [-heathaze]
+
+30    spawn      0  Lazr_AmericaTankCrusader      4   3300 3740  40
+30    spawn      0  Lazr_AmericaTankPaladin       1   3420 3740
+30    spawn      0  Lazr_AmericaTankAvenger       1   3360 3690
+30    spawn      1  ChinaTankOverlord             3   3330 3890  60
+30    spawn      1  ChinaTankBattleMaster         4   3330 3850  40
+30    spawn      1  ChinaVehicleHelix             2   3330 3950  60
+30    spawn      1  GLAVehicleRocketBuggy         4   3440 4060  30
+
+60    attack     0  Lazr_AmericaTankCrusader      1  ChinaTankOverlord
+60    attack     0  Lazr_AmericaTankPaladin       1  ChinaTankBattleMaster
+60    attack     0  Lazr_AmericaTankAvenger       1  ChinaVehicleHelix
+60    move       1  ChinaVehicleHelix                 3360 3880
+60    attack     1  ChinaTankOverlord             0  Lazr_AmericaTankCrusader
+60    attack     1  ChinaTankBattleMaster         0  Lazr_AmericaTankPaladin
+60    attack     1  GLAVehicleRocketBuggy         0  Lazr_AmericaTankPaladin
+
+200   tally      1  *
+330   tally      1  *

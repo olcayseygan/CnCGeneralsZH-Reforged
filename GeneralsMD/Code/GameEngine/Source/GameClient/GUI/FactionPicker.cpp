@@ -41,7 +41,6 @@
 #include "Common/NameKeyGenerator.h"
 #include "Common/PlayerTemplate.h"
 #include "GameClient/ChallengeGenerals.h"
-#include "GameClient/ControlBarScheme.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
@@ -86,6 +85,7 @@ static const Real SIDE_TICK = 26.0f;
 static const Real SIDE_TICK_GAP = 14.0f;
 static const Real MAX_PORTRAIT_SCALE = 4.0f;	// a 64 px side logo blown up past this is only blur
 static const Int POOL_DIM_ALPHA = 190;
+static const char *const PICKER_IMAGE_PREFIX = "FactionPicker";	// a template's own picture here, FactionPickerFactionTurkiye
 
 struct PickerCell
 {
@@ -337,10 +337,7 @@ static void buildCells( void )
 		AsciiString side = "Observer";
 		if( pick == PLAYERTEMPLATE_OBSERVER )
 		{
-			cell.icon = TheMappedImageCollection->findImageByName( "FactionPickerObserver" );
-			if( cell.icon == NULL )
-				cell.icon = TheMappedImageCollection->findImageByName( "GameinfoOBSRVR" );
-			cell.portrait = cell.icon;
+			cell.icon = cell.portrait = TheMappedImageCollection->findImageByName( "GameinfoOBSRVR" );
 		}
 		else
 		{
@@ -351,14 +348,15 @@ static void buildCells( void )
 				if( candidates[ n ] == pick )
 					cell.poolBit = (Int)n;
 			}
-			// our card for the army (FactionPickerFactionChinaNukeGeneral), a general's without one its
-			// country's; where no card is mapped, the challenge screen's pictures of a retail
-			// general, else the side's logo
-			const Image *card = ControlBarSideImage( pt, "FactionPicker" );
+			// a retail general has the challenge screen's pictures of him; a side has its logo, unless a
+			// picture is mapped for this screen alone (Turkiye borrows America's logo everywhere else)
 			const GeneralPersona *persona = TheChallengeGenerals->getGeneralByTemplateName( pt->getName() );
-			const Image *logo = pt->getGeneralImage() ? pt->getGeneralImage() : pt->getSideIconImage();
-			cell.icon = card ? card : ( persona && persona->getBioPortraitSmall() ? persona->getBioPortraitSmall() : logo );
-			cell.portrait = card ? card : ( persona && persona->getBioPortraitLarge() ? persona->getBioPortraitLarge() : logo );
+			AsciiString ownImage( PICKER_IMAGE_PREFIX );
+			ownImage.concat( pt->getName() );
+			const Image *own = TheMappedImageCollection->findImageByName( ownImage );
+			const Image *logo = own ? own : ( pt->getGeneralImage() ? pt->getGeneralImage() : pt->getSideIconImage() );
+			cell.icon = persona && persona->getBioPortraitSmall() ? persona->getBioPortraitSmall() : logo;
+			cell.portrait = persona && persona->getBioPortraitLarge() ? persona->getBioPortraitLarge() : logo;
 			if( !pt->getTooltip().isEmpty() )
 				cell.strategy = TheGameText->fetch( pt->getTooltip() );
 			if( !pt->getGeneralFeatures().isEmpty() )

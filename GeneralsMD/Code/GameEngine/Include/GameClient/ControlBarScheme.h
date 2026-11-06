@@ -403,13 +403,9 @@ private:
 //-----------------------------------------------------------------------------
 // EXTERNALS //////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
-/// a side's picture of one family, prefix SSObserver, SSScore, FactionPicker or Gameinfo: the prefix and
-/// the template's name (less "Faction" and "General" but for FactionPicker: SSScoreAmericaLaser,
-/// FactionPickerFactionAmericaLaserGeneral), else the prefix and the base name of the country its base
-/// side or side names (SSScoreUSA, FactionPickerFactionAmerica, GameinfoAMRCA), else NULL
-const Image *ControlBarSideImage( const PlayerTemplate *pt, const char *prefix );
-/// the side's emblem the observer's column and the rack show: ControlBarSideImage's SSObserver, else
-/// its EnabledImage
+/// the side's emblem the observer's column and the rack show: SSObserver and the template's name less a
+/// leading "Faction" and a trailing "General" (SSObserverAmericaLaser), else SSObserver<USA|China|GLA|Turkiye>
+/// for the country its base side or side names, else its EnabledImage
 const Image *ControlBarSideEmblem( const PlayerTemplate *pt );
 /// nine pieces (ControlBarScheme::FRAME_* order) filling box: the corners at their size times scale (the
 /// art's texels are 1080 pixels), the edges and the centre stretched between them.  FALSE, and nothing

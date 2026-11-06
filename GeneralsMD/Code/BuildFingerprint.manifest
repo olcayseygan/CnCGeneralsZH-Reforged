@@ -9,7 +9,6 @@ Data/Art/Textures/ReforgedBarChinaRight.tga
 Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
-Data/Art/Textures/ReforgedFactionEmblems.dds
 Data/Art/Textures/ReforgedFactionTurkiye.tga
 Data/Art/Textures/ReforgedForceAttack.tga
 Data/Art/Textures/ReforgedGuardCentre.tga
@@ -351,7 +350,6 @@ Data/INI/ControlBarSchemeReforged.ini
 Data/INI/FXListReforged.ini
 Data/INI/FixesReforged.ini
 Data/INI/MappedImages/HandCreated/ReforgedBarChinaBeacon.ini
-Data/INI/MappedImages/HandCreated/ReforgedFactionEmblems.ini
 Data/INI/MappedImages/HandCreated/ReforgedFactionPicker.ini
 Data/INI/MappedImages/HandCreated/ReforgedForceAttack.ini
 Data/INI/MappedImages/HandCreated/ReforgedGuardShield.ini

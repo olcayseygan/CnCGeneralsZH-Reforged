@@ -32,11 +32,10 @@ its bar, the watched player's panel, a sheet of pieces (toolbar buttons, the row
 frame's nine, every side's and general's emblem) and the spectator's rack (ReforgedHudObsSpec).  Each
 side and the observer also have a painting for the Tab screen (ReforgedHud<Side>TabPanel).
 
-    python Tools/hud_command_bar.py --out DIR [--side all|Observer|Lobby|America|China|Gla|Turkiye] [--dds TEXTURES]
+    python Tools/hud_command_bar.py --out DIR [--side all|Observer|Guard|America|China|Gla|Turkiye] [--dds TEXTURES]
         writes DIR/ReforgedHud<Side>CommandBar.png, ...Powers.png and ...TabPanel.png for each side,
-        the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces, ...ObsSpec, ...ObsTabPanel and ReforgedHudHelpbox, and the
-        front end's ReforgedFactionEmblems (Lobby), and with --dds the same as DXT5 .dds into TEXTURES
-        (Data/Art/Textures)
+        the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces, ...ObsSpec, ...ObsTabPanel and ReforgedHudHelpbox,
+        and with --dds the same as DXT5 .dds into TEXTURES (Data/Art/Textures)
 """
 import argparse
 import os
@@ -96,13 +95,6 @@ def rounded(r):
         return np.sqrt(np.clip(1 - (1 - np.clip(d / (r * scale), 0, 1)) ** 2, 0, 1))
     return profile
 
-
-# The observer's console (round 9 prototype, --observer): no side's build, a broadcast desk in the same
-# steel.  Every corner a radius, every edge a bullnose, anodised graphite with perforated grilles, cross
-# head screws, the emblem's wing feathers and a red tally lamp.  Not in SIDES, so nothing ships with it.
-BUILDS["console"] = dict(metric="edt", profile=rounded(5.0), corner="round")
-OBSERVER = dict(build="console", steel=(112, 118, 128), glass=(6, 9, 15), glass_lo=(12, 16, 24),
-                accent=BLUE, accent2=RED, scheme="Observer8x6")
 
 # materials
 STEEL, GLASS, ACCENT, ACCENT2, GOLDM, INKM, BRIGHT, DARK, PAPERM, DIM, HILITE = range(11)
@@ -443,7 +435,7 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True):
     elif build == "scavenged":                         # mill scale and wear, no grain direction
         grain = 1.0 + 0.09 * mottle + 0.045 * fine + 0.04 * noise(3 * SS)
         spec_base, rough_base = 0.32, 18.0
-    elif build in ("console", "desk"):                 # anodised: even, a faint grain, semi-gloss
+    elif build == "desk":                              # anodised: even, a faint grain, semi-gloss
         grain = 1.0 + 0.03 * mottle + 0.02 * fine
         spec_base, rough_base = 0.5, 30.0
     else:                                              # composite: matte and even
@@ -2605,39 +2597,37 @@ def emblem_body(build, box):
     return shape(build, x0, y0, x1, y1, {"machined": 6, "terraced": 3, "faceted": 4}[build])
 
 
-def emblem_badge(side_name, glyph, k=1.0):
-    """Variant A, 45x30 times k: the side's plate lit like the bar, its mark on an accent field and the
-    general's glyph raised in a sunk well beside it (a side alone has the mark large across the field).
-    Drawn in the 45x30 badge's coordinates and scaled whole, so the score screen's 60x40 (k 4/3) is the
-    same picture."""
+def emblem_badge(side_name, glyph):
+    """Variant A, 45x30: the side's plate lit like the bar, its mark on an accent field and the general's
+    glyph raised in a sunk well beside it (a side alone has the mark large across the field)."""
     side = SIDES[side_name]
     b = side["build"]
-    W, H = round(SIDE_EMBLEM[0] * k), round(SIDE_EMBLEM[1] * k)
+    W, H = SIDE_EMBLEM
     pad = 8
     p = Painter(W + 2 * pad, H + 2 * pad)
 
     def o(polys):
-        return [[(x * k + pad, y * k + pad) for x, y in q] for q in polys]
+        return [[(x + pad, y + pad) for x, y in q] for q in polys]
 
     def at(x, y):
-        return x * k + pad, y * k + pad
+        return x + pad, y + pad
 
     def raise_mask(parts, box, height, bevel, material):
         m = glyph_mask(parts, W + 2 * pad, H + 2 * pad, (*at(*box[:2]), *at(*box[2:])), SS)
         d = ndimage.distance_transform_edt(np.pad(m, 1))[1:-1, 1:-1] / SS
-        p.h += np.clip(d / (bevel * k), 0, 1) * m * height * k
+        p.h += np.clip(d / bevel, 0, 1) * m * height
         p.mat[m] = material
 
     body = emblem_body(b, (1, 1, 44, 29))
-    sl, m, _ = p.frame(o([body]), 3.0 * k, b, DARK, scale=(0.35 if b != "scavenged" else 1.0) * k)
+    sl, m, _ = p.frame(o([body]), 3.0, b, DARK, scale=0.35 if b != "scavenged" else 1.0)
     p.limit[sl] |= m
     if b == "machined":                                 # two tiers: the satin frame on the dark flange
-        p.frame(o([shape(b, 2.6, 2.6, 42.4, 27.4, 4.8)]), 4.4 * k, b, STEEL, scale=0.4 * k)
+        p.frame(o([shape(b, 2.6, 2.6, 42.4, 27.4, 4.8)]), 4.4, b, STEEL, scale=0.4)
     elif b == "scavenged":                              # a second scrap laid over the top left, welded
-        p.frame(o([sheet(2.5, 2.5, 20, 15, -5)]), 3.8 * k, b, STEEL, scale=k)
-        p.frame(o([sheet(14, 3, 43, 27.5, 1.5)]), 3.6 * k, b, STEEL, scale=k)
+        p.frame(o([sheet(2.5, 2.5, 20, 15, -5)]), 3.8, b, STEEL)
+        p.frame(o([sheet(14, 3, 43, 27.5, 1.5)]), 3.6, b, STEEL)
     elif b == "faceted":
-        p.frame(o([shape(b, 2.4, 2.4, 42.6, 27.6, 3.2)]), 4.4 * k, b, STEEL, scale=0.25 * k)
+        p.frame(o([shape(b, 2.4, 2.4, 42.6, 27.6, 3.2)]), 4.4, b, STEEL, scale=0.25)
     else:
         p.mat[sl][m] = STEEL
     field_mat, mark_mat = (ACCENT2, ACCENT) if b == "faceted" else (ACCENT, PAPERM)
@@ -2646,7 +2636,7 @@ def emblem_badge(side_name, glyph, k=1.0):
         field, mark_box = shape(b, 6, 4.5, 39, 25.5, 2.6), (12, 6.5, 33, 23.5)
     else:
         field, mark_box = shape(b, 4.5, 4.5, 16, 25.5, 2.2), (6, 9, 14.5, 21)
-        p.sink(o([shape(b, 17.5, 4.5, 41, 25.5, 2.6)]), 1.8 * k, 0.8 * k)
+        p.sink(o([shape(b, 17.5, 4.5, 41, 25.5, 2.6)]), 1.8, 0.8)
     p.inlay(o([field]), field_mat, 0.3)
     raise_mask(emblem_glyph(b), mark_box, 1.0, 0.45, mark_mat)
     if glyph is not None:
@@ -2655,16 +2645,16 @@ def emblem_badge(side_name, glyph, k=1.0):
         p.inlay(o([plate(*((7, 26.2, 38, 26.9) if glyph is None else (5.5, 26.2, 15, 26.9)))]), ACCENT2, 0.2)
     elif b == "terraced":
         for x, y in ((3.6, 3.6), (41.4, 3.6), (3.6, 26.4), (41.4, 26.4)):
-            p.rivet(*at(x, y), 1.1 * k)
+            p.rivet(*at(x, y), 1.1)
     elif b == "scavenged":
-        p.weld(at(14, 15), at(20, 15.5), 5, 0.6 * k)
-        p.bolt(*at(41.2, 26), 1.2 * k, 3)
+        p.weld(at(14, 15), at(20, 15.5), 5, 0.6)
+        p.bolt(*at(41.2, 26), 1.2, 3)
         for i in range(3):                              # hazard slashes along the top edge only
             x = 28 + 4 * i
             p.inlay(o([[(x, 1.8), (x + 1.8, 1.8), (x + 0.6, 3.8), (x - 1.2, 3.8)]]), ACCENT2 if i % 2 else INKM, 0.2)
     else:
-        p.facets(5.0 * k, 0.05, 0.18 * k, 41)
-        p.bolt(*at(42, 15), 1.1 * k, 0)
+        p.facets(5.0, 0.05, 0.18, 41)
+        p.bolt(*at(42, 15), 1.1, 0)
     return shade(p, side, shadow=False).crop((pad, pad, pad + W, pad + H))
 
 
@@ -2733,183 +2723,6 @@ def paint_side_emblems(variant):
     """Every side's and general's emblem in variant A or B: MappedImage name -> 45x30 piece."""
     draw = emblem_badge if variant == "A" else emblem_flat
     return {name: draw(side, glyph) for name, side, glyph in SIDE_EMBLEMS}
-
-
-# ---------------------------------------------------------------------------------------------- the front end's emblems
-
-# The same family where the front end shows a side (round 14, approved by the owner on 2026-11-03):
-# ReforgedFactionEmblems, 1024x1024, laid out by its MappedImages/HandCreated INI.  A card, 240x240, for
-# each army the army screen lists, the Boss and the observer, which FactionPicker draws as a 100 px tile,
-# a 96 px pool icon and the focused portrait (FactionPicker<template>, in place of EA's persona faces), and
-# which the retail GeneralImage names (USA_Logo, USA_Laser, ...) map too, for PopupPlayerInfo's 86 px
-# picture; a 48x44 side icon for the GameinfoXXX names (SideIconImage, the LAN game list's 22x25); and the
-# score screen's row emblems, SSScore<suffix>, the SSObserver badges at 60x40.  A card is the side's plate
-# in its build round a sunk well with the general's glyph (a side alone: its mark large on the accent
-# field), over a side plate carrying the mark and the build's fittings.  The score screen's watermark is
-# the local player's card, which the code draws faint.
-CARD = 240
-FACTION_CARDS = [   # FactionPicker image, the side whose build it takes, glyph
-    ("FactionPickerFactionAmerica", "America", None), ("FactionPickerFactionAmericaSuperWeaponGeneral", "America", "reticle"),
-    ("FactionPickerFactionAmericaLaserGeneral", "America", "laser"), ("FactionPickerFactionAmericaAirForceGeneral", "America", "jet"),
-    ("FactionPickerFactionChina", "China", None), ("FactionPickerFactionChinaTankGeneral", "China", "tread"),
-    ("FactionPickerFactionChinaInfantryGeneral", "China", "helmet"), ("FactionPickerFactionChinaNukeGeneral", "China", "atom"),
-    ("FactionPickerFactionBossGeneral", "China", "crown"), ("FactionPickerFactionGLA", "Gla", None),
-    ("FactionPickerFactionGLAToxinGeneral", "Gla", "trefoil"), ("FactionPickerFactionGLADemolitionGeneral", "Gla", "charge"),
-    ("FactionPickerFactionGLAStealthGeneral", "Gla", "shroud"), ("FactionPickerFactionTurkiye", "Turkiye", None),
-    ("FactionPickerObserver", "Observer", "eye"),
-]
-# the retail GeneralImage names the same cards can stand for
-GENERAL_IMAGE = {"USA_Logo": "FactionAmerica", "USA_Superweapon": "FactionAmericaSuperWeaponGeneral", "USA_Laser": "FactionAmericaLaserGeneral",
-                 "USA_Air": "FactionAmericaAirForceGeneral", "China_Logo": "FactionChina", "China_Tank": "FactionChinaTankGeneral",
-                 "China_Infantry": "FactionChinaInfantryGeneral", "China_Nuke": "FactionChinaNukeGeneral", "GLA_Logo": "FactionGLA",
-                 "GLA_Toxin": "FactionGLAToxinGeneral", "GLA_Demo": "FactionGLADemolitionGeneral", "GLA_Stealth": "FactionGLAStealthGeneral"}
-SIDE_ICON = (48, 44)
-SIDE_ICONS = [("GameinfoAMRCA", "America", None), ("GameinfoCHINA", "China", None), ("GameinfoGLA", "Gla", None),
-              ("GameinfoTURKIYE", "Turkiye", None), ("GameinfoBOSS", "China", "crown"), ("GameinfoOBSRVR", "Observer", "eye"),
-              ("GameinfoRANDOM", "Observer", "random")]
-SCORE_EMBLEMS = [("SSScore" + n[len("SSObserver"):], side, glyph) for n, side, glyph in SIDE_EMBLEMS]
-SCORE_EMBLEM_K = 4 / 3                          # 45x30 to 60x40
-FACTION_EMBLEMS_SIZE = (1024, 1024)
-
-
-def palette_of(side_name):
-    return OBSERVER if side_name == "Observer" else SIDES[side_name]
-
-
-def mark_of(build):
-    """The side mark a build carries: the observer's console has the eye."""
-    return "eye" if build == "console" else build
-
-
-def faction_card(side_name, glyph):
-    """A 240x240 card: the side's plate in its build, the glyph raised in a sunk well (a side alone: its
-    mark on the accent field), and a side plate under it with the mark and the build's fittings."""
-    side = palette_of(side_name)
-    b = side["build"]
-    pad = 16
-    p = Painter(CARD + 2 * pad, CARD + 2 * pad)
-
-    def o(polys):
-        return [[(x + pad, y + pad) for x, y in q] for q in polys]
-
-    def raise_mask(parts, box, height, bevel, material):
-        m = glyph_mask(parts, CARD + 2 * pad, CARD + 2 * pad, (box[0] + pad, box[1] + pad, box[2] + pad, box[3] + pad), SS)
-        d = ndimage.distance_transform_edt(np.pad(m, 1))[1:-1, 1:-1] / SS
-        p.h += np.clip(d / bevel, 0, 1) * m * height
-        p.mat[m] = material
-
-    c = {"machined": 30, "terraced": 12, "scavenged": 16, "faceted": 18, "console": 18}[b]
-    if b == "scavenged":
-        body = jitter(shape(b, 6, 6, 234, 234, c), 29, amp=3.0, step=16)
-    else:
-        body = shape(b, 4, 4, 236, 236, c)
-    sl, m, _ = p.frame(o([body]), 9.0, b, DARK)
-    p.limit[sl] |= m
-    if b == "machined":                                 # the satin frame on the dark flange
-        p.frame(o([shape(b, 12, 12, 228, 228, 24)]), 13.0, b, STEEL)
-    elif b == "scavenged":                              # scrap sheets laid on out of square
-        for poly in (sheet(12, 12, 150, 126, -2.5), sheet(96, 16, 228, 150, 2.0), sheet(14, 116, 226, 226, -1.2)):
-            p.frame(o([poly]), 12.0, b, STEEL)
-    elif b in ("faceted", "console"):
-        p.frame(o([shape(b, 12, 12, 228, 228, c - 6)]), 13.0, b, STEEL)
-    else:
-        p.mat[sl][m] = STEEL
-    field_mat, mark_mat = (ACCENT2, ACCENT) if b == "faceted" else (ACCENT, PAPERM)
-    glyph_mat = BRIGHT if b == "faceted" else PAPERM
-    well = (26, 24, 214, 170)
-    wsl, wm = p.local(o([shape(b, *grow(well, 3), 12)]))   # no sheet's or terrace's step reaches the glass
-    p.h[wsl][wm] = 12.0
-    if glyph is None:
-        p.inlay(o([shape(b, *well, 10)]), field_mat, 0.8)
-        raise_mask(emblem_glyph(mark_of(b)), (60, 36, 180, 158), 3.0, 1.4, mark_mat)
-    else:
-        p.sink(o([shape(b, *well, 10)]), 6.0, 3.0)
-        raise_mask(emblem_glyph(glyph), (52, 36, 188, 158), 3.0, 1.4, glyph_mat)
-    plate_r = (26, 180, 214, 216)                       # the side plate: the mark on a chip, then the fittings
-    p.inlay(o([shape(b, *plate_r, 6)]), field_mat if b != "console" else DARK, 0.6)
-    p.frame(o([shape(b, 30, 183, 62, 213, 4)]), 11.0, b, STEEL)
-    raise_mask(emblem_glyph(mark_of(b)), (34, 187, 58, 209), 1.6, 0.8, mark_mat if b != "console" else PAPERM)
-    if b == "machined":
-        for i in range(4):
-            p.inlay(o(chevrons(84 + 34 * i, 189, 22, n=1, up=True)), PAPERM, 0.3)
-        for x, y in ((40, 18), (200, 18), (40, 222), (200, 222)):
-            p.stud(x + pad, y + pad, 3.4)
-    elif b == "terraced":
-        for i in range(4):                              # stacked ingots
-            x = 88 + 32 * i
-            p.bump(o([plate(x, 186, x + 22, 196), plate(x + 4, 198, x + 18, 208)]), 1.6, 0.8, BRIGHT)
-        for x in range(36, 210, 24):
-            p.rivet(x + pad, 10 + pad, 2.0)
-            p.rivet(x + pad, 230 + pad, 2.0)
-    elif b == "scavenged":
-        for i in range(7):                              # hazard slashes along the side plate
-            x = 80 + 18 * i
-            p.inlay(o([[(x, 182), (x + 9, 182), (x + 2, 214), (x - 7, 214)]]), INKM if i % 2 else ACCENT2, 0.3)
-        p.weld((97 + pad, 13 + pad), (97 + pad, 21 + pad), 3, 1.6)       # welds in the margins, off the glass
-        p.weld((14 + pad, 117 + pad), (23 + pad, 117 + pad), 4, 1.6)
-        p.weld((217 + pad, 116 + pad), (226 + pad, 116 + pad), 5, 1.6)
-        for x, y, s in ((20, 20, 1), (222, 24, 2), (18, 222, 3), (220, 224, 4)):
-            p.bolt(x + pad, y + pad, 3.6, s)
-    elif b == "faceted":
-        for i in range(4):                              # triangle markers pointing in along the plate
-            p.inlay(o([triangle(92 + 30 * i, 198, 16, 22, "right")]), ACCENT, 0.3)
-        for x, y in ((20, 120), (220, 120)):
-            p.inlay(o([triangle(x, y, 10, 18, "right" if x < 120 else "left")]), ACCENT, 0.3)
-        p.facets(22.0, 0.035, 0.5, 43)
-        for x, y in ((40, 18), (200, 222)):
-            p.bolt(x + pad, y + pad, 3.2, 0)
-    else:                                               # the console: a grille, screws and the tally lamp
-        p.raise_plate(o([plate(78, 188, 190, 208)]), 0.5, 0.5, DARK)
-        for x in np.arange(84, 186, 6.5):
-            for y in (193, 203):
-                p.sink(o([regular(x, y, 1.6, 8)]), 1.5, 0.6, INKM)
-        for x, y in ((24, 18), (216, 18), (24, 222), (216, 222)):
-            screw(p, x + pad, y + pad, 3.0)
-        p.raise_plate(o([regular(202, 198, 5, 16)]), 15.0, 1.0, ACCENT2)
-    return shade(p, side, shadow=False).crop((pad, pad, pad + CARD, pad + CARD))
-
-
-def side_icon(side_name, glyph):
-    """A 48x44 side icon: the badge's plate in the build, the accent field and the mark (or the glyph)."""
-    side = palette_of(side_name)
-    b = side["build"]
-    W, H = SIDE_ICON
-    pad = 8
-    p = Painter(W + 2 * pad, H + 2 * pad)
-
-    def o(polys):
-        return [[(x + pad, y + pad) for x, y in q] for q in polys]
-
-    body = emblem_body(b, (1, 1, 47, 43)) if b != "console" else shape(b, 1, 1, 47, 43, 6)
-    sl, m, _ = p.frame(o([body]), 3.0, b, DARK, scale=0.4 if b != "scavenged" else 1.0)
-    p.limit[sl] |= m
-    p.frame(o([shape(b, 3, 3, 45, 41, 4)]), 4.4, b, STEEL, scale=0.35)
-    field_mat, mark_mat = (ACCENT2, ACCENT) if b == "faceted" else (DARK, PAPERM) if b == "console" else (ACCENT, PAPERM)
-    p.inlay(o([shape(b, 6, 5.5, 42, 38.5, 3)]), field_mat, 0.3)
-    mk = glyph_mask(emblem_glyph(glyph or mark_of(b)), W + 2 * pad, H + 2 * pad, (11 + pad, 8.5 + pad, 37 + pad, 35.5 + pad), SS)
-    d = ndimage.distance_transform_edt(np.pad(mk, 1))[1:-1, 1:-1] / SS
-    p.h += np.clip(d / 0.5, 0, 1) * mk * 1.1
-    p.mat[mk] = mark_mat
-    if b == "faceted":
-        p.facets(6.0, 0.05, 0.2, 47)
-    return shade(p, side, shadow=False).crop((pad, pad, pad + W, pad + H))
-
-
-def paint_faction_emblems():
-    """ReforgedFactionEmblems: every card, side icon and score emblem where its INI maps it; the
-    GeneralImage names stand on their cards."""
-    M = read_mapped(None, name="ReforgedFactionEmblems")
-    out = Image.new("RGBA", FACTION_EMBLEMS_SIZE, (0, 0, 0, 0))
-    for name, side, glyph in FACTION_CARDS:
-        put(out, faction_card(side, glyph), M[name])
-    for name, side, glyph in SIDE_ICONS:
-        put(out, side_icon(side, glyph), M[name])
-    for name, side, glyph in SCORE_EMBLEMS:
-        put(out, emblem_badge(side, glyph, SCORE_EMBLEM_K), M[name])
-    for alias, template in GENERAL_IMAGE.items():
-        assert M[alias] == M["FactionPicker" + template], "%s is not on %s's card" % (alias, template)
-    check_mapped({n: r for n, r in M.items() if n not in GENERAL_IMAGE}, FACTION_EMBLEMS_SIZE)
-    return out
 
 
 def check_mapped(M, size):
@@ -3490,7 +3303,7 @@ def paint_guard_shields():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--side", default="all", choices=["all", "Observer", "Lobby", "Guard"] + sorted(SIDES))
+    ap.add_argument("--side", default="all", choices=["all", "Observer", "Guard"] + sorted(SIDES))
     ap.add_argument("--out", required=True, help="where the PNGs go")
     ap.add_argument("--dds", help="Data/Art/Textures, to write the DXT5 textures too")
     ap.add_argument("--emblem", default=EMBLEM_SVG)
@@ -3498,7 +3311,7 @@ def main():
                     help="a charged superweapon's light: B, the breath and a rising band (default, ships), or A, the breath alone")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    for side in (list(SIDES) + ["Observer", "Lobby", "Guard"] if args.side == "all" else [args.side]):
+    for side in (list(SIDES) + ["Observer", "Guard"] if args.side == "all" else [args.side]):
         made = {}
         if side == "Guard":                         # uncompressed: DXT5 would smear its covered edges
             shields = paint_guard_shields()
@@ -3506,8 +3319,6 @@ def main():
             if args.dds:
                 shields.save(os.path.join(args.dds, "ReforgedGuardShield.tga"))
             print("wrote ReforgedGuardShield")
-        elif side == "Lobby":
-            made = {"ReforgedFactionEmblems": paint_faction_emblems()}
         elif side == "Observer":
             bar, panel = paint_observer_bar(), paint_observer_panel()
             check_observer(bar, panel)

@@ -2066,7 +2066,8 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 	}
 
 	GameSpyStagingRoom *room = TheGameSpyInfo->getCurrentStagingRoom();
-	if (room && !room->isGameInProgress())
+	// the shutdown clears the gadgets before its exit animation plays, and this runs through that animation
+	if (parentWOLGameSetup && room && !room->isGameInProgress())
 		fitRandomMapToRoom(room);
 
 	if (TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)

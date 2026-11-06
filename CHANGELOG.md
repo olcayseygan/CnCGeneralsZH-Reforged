@@ -182,6 +182,7 @@ found and fixed, EA's own, not port damage.**
 - In a LAN or online room the other players do not download anything: the map's name carries its recipe, and their own game builds the same map from it and checks it against yours. A room that records stats keeps to the official list.
 - Random maps used to be reachable only by a hidden command-line switch that added five rows to the skirmish list.
 - Leaving the skirmish room for the main menu no longer crashes the game. In 3.4.0 it did every time, whatever map was picked: the room went on refitting its random map to the seats for a moment after Back had already thrown the seats away.
+- A LAN match on a random map no longer crashes the host as it starts. The room waits behind the battle with its window taken down, and it went on refitting its map to the seats there: one host's game rebuilt a two-player map for three on the match's first frame and died. The online room had the same habit while it slid shut.
 - Back from a match on a random map, the skirmish room still has that map picked. It used to show some other map, usually the first of your own downloaded ones, because the room wrote the map's name down in a way it could not read back. The room also picks up a random map remembered from your last session, building it again from its name.
 
 ## An army screen in every lobby

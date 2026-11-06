@@ -1370,7 +1370,9 @@ void LanGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 {
 	if(LANisShuttingDown && TheShell->isAnimFinished() && TheTransitionHandler->isFinished())
 		shutdownComplete(layout);
-	else if (!LANisShuttingDown && TheLAN->AmIHost() && FitRandomMapToRoom(TheLAN->GetMyGame()))
+	// hideShell leaves this layout on the stack with its gadgets gone, and the shell goes on updating it
+	// under the match it launched until showShell runs its init again.  There is no room to fit a map to.
+	else if (parentLanGameOptions && !LANisShuttingDown && TheLAN->AmIHost() && FitRandomMapToRoom(TheLAN->GetMyGame()))
 		PostToLanGameOptions(SEND_GAME_OPTS);
 	//TheLAN->update(); // this is handled in the lobby
 }// void LanGameOptionsMenuUpdate( WindowLayout * layout, void *userData)

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 // Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -36,6 +37,8 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "Common/DrawModule.h"
 #include "WW3D2/line3d.h"
+
+class SegmentedLineClass;
 
 //-------------------------------------------------------------------------------------------------
 /** W3D tracer draw */
@@ -66,7 +69,13 @@ public:
 
 protected:
 
+	void createTracer( const Matrix3D &mtx );
+	void shapeTracer( void );												///< length, width and colour onto the tracer and its halo
+	void lightTracer( void );												///< the opacity onto them
+	void placeTracer( const Matrix3D &mtx );
+
 	Line3DClass *m_theTracer;			///< the tracer render object in the W3D scene
+	SegmentedLineClass *m_glow;		///< the Glow option's halo round it, NULL with the option off
 	Real m_length;								///< length of tracer
 	Real m_width;									///< width of tracer
 	RGBColor m_color;							///< color of tracer

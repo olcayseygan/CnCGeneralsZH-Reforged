@@ -7793,12 +7793,29 @@ void Pathfinder::processPathfindQueue(void)
 	/* Kept at three per frame at 60 logic frames a second rather than halved: one and a half is not a
 		 count, two was measured worse, and the cap is there to clip a burst within a frame, which a
 		 frame half as long needs no less. */
-	enum { PATHFIND_REQUESTS_PER_FRAME = 3 };
+	/* "Many times the demand" stops being true twenty minutes into a 4v4 between Hard computers: a
+		 match then asks for close to three paths a frame, the cap holds 60% of all frames, the queue
+		 stands 300 to 600 deep, and a unit given an order waits up to 239 frames (4 s) for its path.
+		 So past 180 waiting, a second of draining at three, the cap rises by one for every 60 more,
+		 to six at most, and the cell budget still bounds the frame. Iron Dragon, four seeds of 90000
+		 frames on Hard: longest wait 239, 104, 164, 109 frames to 109, 88, 102, 97, blocked unit-frames
+		 per 1000 frames 3,696 to 3,355, wedged 933 to 925, p99.9 35.9 to 36.6 ms with four matches on
+		 the box (a one-frame control moved it to 34.6). Medium likewise, Easy never gets that deep.
+		 Up to twelve a frame cut the wait further and drove worse (blocked 3,814 to 5,402). The
+		 841-unit order is held by the cell budget, not by this, and leaves as it did. */
+	enum { PATHFIND_REQUESTS_PER_FRAME = 3, PATHFIND_DEEP_QUEUE = 180, PATHFIND_DEEP_STEP = 60,
+		PATHFIND_REQUESTS_PER_FRAME_DEEP = 6 };
+	Int requestCap = PATHFIND_REQUESTS_PER_FRAME;
+	const Int depth = (m_queuePRTail - m_queuePRHead + PATHFIND_QUEUE_LEN) % PATHFIND_QUEUE_LEN;
+	if (depth > PATHFIND_DEEP_QUEUE)
+		requestCap += (depth - PATHFIND_DEEP_QUEUE) / PATHFIND_DEEP_STEP;
+	if (requestCap > PATHFIND_REQUESTS_PER_FRAME_DEEP)
+		requestCap = PATHFIND_REQUESTS_PER_FRAME_DEEP;
 	Int requestsThisFrame = 0;
 	const UnsignedInt now = TheGameLogic->getFrame();
 
 	while (m_cumulativeCellsAllocated < PATHFIND_CELLS_PER_FRAME &&
-		requestsThisFrame < PATHFIND_REQUESTS_PER_FRAME &&
+		requestsThisFrame < requestCap &&
 		m_queuePRTail!=m_queuePRHead) {
 		++requestsThisFrame;
 		const Int waited = (Int)(now - theQueuedFrame[m_queuePRHead]);

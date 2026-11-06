@@ -2257,9 +2257,13 @@ Bool W3DVolumetricShadow::poseSkinMesh(W3DShadowGeometryMesh *geomMesh, MeshClas
 
 	//The polygon indices were welded against this exact vertex array.  If the mesh we are being asked
 	//to pose is a different one (a different LOD, say) the indices would run off the end of the
-	//scratch, so bail instead of corrupting memory.
-	if (mesh->Peek_Model() == NULL || mesh->Peek_Model()->Get_Vertex_Count() != numVerts)
-	{	DEBUG_ASSERTCRASH(0, ("shadow skin vertex count changed under us"));
+	//scratch, so bail instead of corrupting memory.  Class_ID first: updateVolumes casts whatever sits
+	//at the index, and a box's name lies where a mesh keeps its Model.
+	//A rigid mesh has no bone links for Get_Deformed_Vertices to read.
+	if (mesh->Class_ID() != RenderObjClass::CLASSID_MESH || mesh->Peek_Model() == NULL || !mesh->Peek_Model()->Get_Flag(MeshGeometryClass::SKIN) || mesh->Peek_Model()->Get_Vertex_Count() != numVerts)
+	{	static Bool reported = FALSE;	//the same mismatch comes back every frame
+		DEBUG_ASSERTCRASH(reported, ("shadow skin mesh at this index is not the one the geometry was built from"));
+		reported = TRUE;
 		return FALSE;
 	}
 

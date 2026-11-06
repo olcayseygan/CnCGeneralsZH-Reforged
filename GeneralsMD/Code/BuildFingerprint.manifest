@@ -3387,6 +3387,7 @@ Tests/lan_broadcast_probe.cpp
 Tests/miles_listen.cpp
 Tests/miles_smoke.cpp
 Tests/replay_wide_oracle.cpp
+Tests/require_test_summary.cmake
 Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
 Tests/run_ini_crlf_check.sh
@@ -3488,6 +3489,7 @@ Tests/test_sdl_program_cache.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp
 Tests/test_smooth_motion.cpp
+Tests/test_summary_guard.cmake
 Tests/test_sun_shadow_sorting.cpp
 Tests/test_supply_center_save.inc
 Tests/test_support.cpp

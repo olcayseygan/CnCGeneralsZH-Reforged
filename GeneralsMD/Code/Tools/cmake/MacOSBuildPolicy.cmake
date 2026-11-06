@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+
+include_guard(GLOBAL)
+
+# Keep CMake's chosen target, including explicit Intel builds under Rosetta.
+# FFmpeg's configure runs outside CMake and must receive that same architecture.
+function(zh_macos_target_arch osx_arch system_processor out_arch out_ffmpeg_arch)
+  if(NOT "${osx_arch}" STREQUAL "")
+    list(LENGTH osx_arch arch_count)
+    if(NOT arch_count EQUAL 1)
+      message(FATAL_ERROR "FFmpeg builds one architecture at a time; CMAKE_OSX_ARCHITECTURES is '${osx_arch}'.")
+    endif()
+    set(target_arch "${osx_arch}")
+  else()
+    set(target_arch "${system_processor}")
+  endif()
+  if(target_arch STREQUAL "arm64" OR target_arch STREQUAL "aarch64")
+    set(target_arch "arm64")
+    set(ffmpeg_arch "aarch64")
+  elseif(target_arch STREQUAL "x86_64")
+    set(ffmpeg_arch "x86_64")
+  else()
+    message(FATAL_ERROR "Unsupported macOS target architecture '${target_arch}'; select arm64 or x86_64 in CMAKE_OSX_ARCHITECTURES.")
+  endif()
+  set(${out_arch} "${target_arch}" PARENT_SCOPE)
+  set(${out_ffmpeg_arch} "${ffmpeg_arch}" PARENT_SCOPE)
+endfunction()
+
+function(zh_macos_validate_tuning requested)
+  if(NOT requested MATCHES "^(auto|generic|apple-m[1-5])$")
+    message(FATAL_ERROR "Invalid ZH_MACOS_CPU_TUNING: ${requested}")
+  endif()
+endfunction()
+
+# This selects scheduling only. Never infer the target ISA from the build host.
+function(zh_macos_tuning_candidate requested target_arch cpu_brand cross_compiling out)
+  zh_macos_validate_tuning("${requested}")
+  set(candidate "generic")
+  if(target_arch STREQUAL "arm64")
+    if(requested STREQUAL "auto")
+      if(NOT cross_compiling AND cpu_brand MATCHES "^Apple M([1-5])($|[ \t])")
+        set(candidate "apple-m${CMAKE_MATCH_1}")
+      endif()
+    else()
+      set(candidate "${requested}")
+    endif()
+  endif()
+  set(${out} "${candidate}" PARENT_SCOPE)
+endfunction()
+
+# The option is used by C++, C dependencies and FFmpeg's C compiler alike.
+function(zh_macos_checked_tuning requested candidate c_supported cxx_supported out)
+  if(NOT candidate STREQUAL "generic" AND (NOT c_supported OR NOT cxx_supported))
+    if(requested STREQUAL "auto")
+      set(candidate "generic")
+    else()
+      message(FATAL_ERROR "Both C and C++ compilers must support -mtune=${candidate}; use generic or a newer Clang toolchain.")
+    endif()
+  endif()
+  set(${out} "${candidate}" PARENT_SCOPE)
+endfunction()

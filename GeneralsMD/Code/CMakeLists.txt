@@ -171,6 +171,43 @@ if(NOT _zh_lzhl_patched)
   message(FATAL_ERROR "LZH-Light lacks lzhl-clear-history.patch. ${VENDOR_HINT}")
 endif()
 
+# Tune scheduling without enabling a newer instruction set. An app built on a
+# recent Apple chip therefore keeps the portable arm64 instruction baseline.
+include(${CMAKE_CURRENT_SOURCE_DIR}/Tools/cmake/MacOSBuildPolicy.cmake)
+set(ZH_MACOS_CPU_TUNING "auto" CACHE STRING "Apple arm64 CPU scheduling: auto, generic, apple-m1 through apple-m5")
+set_property(CACHE ZH_MACOS_CPU_TUNING PROPERTY STRINGS auto generic apple-m1 apple-m2 apple-m3 apple-m4 apple-m5)
+zh_macos_validate_tuning("${ZH_MACOS_CPU_TUNING}")
+set(ZH_MACOS_EFFECTIVE_CPU_TUNING "generic")
+if(APPLE)
+  zh_macos_target_arch("${CMAKE_OSX_ARCHITECTURES}" "${CMAKE_SYSTEM_PROCESSOR}"
+    ZH_MACOS_TARGET_ARCH ZH_MACOS_FFMPEG_ARCH)
+  if(ZH_MACOS_TARGET_ARCH STREQUAL "arm64")
+    set(_zh_cpu_brand "")
+    if(ZH_MACOS_CPU_TUNING STREQUAL "auto" AND NOT CMAKE_CROSSCOMPILING)
+      execute_process(COMMAND /usr/sbin/sysctl -n machdep.cpu.brand_string
+        OUTPUT_VARIABLE _zh_cpu_brand OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    endif()
+    zh_macos_tuning_candidate("${ZH_MACOS_CPU_TUNING}" "${ZH_MACOS_TARGET_ARCH}"
+      "${_zh_cpu_brand}" "${CMAKE_CROSSCOMPILING}" _zh_tune_candidate)
+    if(NOT _zh_tune_candidate STREQUAL "generic")
+      include(CheckCCompilerFlag)
+      include(CheckCXXCompilerFlag)
+      string(MAKE_C_IDENTIFIER "ZH_HAS_C_${_zh_tune_candidate}_TUNING" _zh_c_tune_check)
+      string(MAKE_C_IDENTIFIER "ZH_HAS_CXX_${_zh_tune_candidate}_TUNING" _zh_cxx_tune_check)
+      check_c_compiler_flag("-mtune=${_zh_tune_candidate}" ${_zh_c_tune_check})
+      check_cxx_compiler_flag("-mtune=${_zh_tune_candidate}" ${_zh_cxx_tune_check})
+      zh_macos_checked_tuning("${ZH_MACOS_CPU_TUNING}" "${_zh_tune_candidate}"
+        "${${_zh_c_tune_check}}" "${${_zh_cxx_tune_check}}" ZH_MACOS_EFFECTIVE_CPU_TUNING)
+      if(ZH_MACOS_EFFECTIVE_CPU_TUNING STREQUAL "generic")
+        message(STATUS "Toolchain has no shared ${_zh_tune_candidate} tuning; retaining portable arm64 scheduling")
+      else()
+        add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:-mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}>")
+      endif()
+    endif()
+    message(STATUS "macOS arm64 CPU scheduling: ${ZH_MACOS_EFFECTIVE_CPU_TUNING}; instruction baseline unchanged")
+  endif()
+endif()
+
 # The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
 # written against.  They mean nothing to any other compiler and cost nothing there, so they stay
 # unconditional.  WIN32 and _WINDOWS are statements about the operating system, and most of the
@@ -1591,6 +1628,9 @@ if(ZH_PLATFORM_POSIX)
   if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
     set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
+  if(APPLE AND NOT ZH_MACOS_EFFECTIVE_CPU_TUNING STREQUAL "generic")
+    string(APPEND FFMPEG_POSIX_CFLAGS " -mtune=${ZH_MACOS_EFFECTIVE_CPU_TUNING}")
+  endif()
   # The SDK CMake gives our own targets.  Only /usr/bin/cc, the xcrun shim, finds one by itself; CMake may
   # choose the toolchain's own cc (/Library/Developer/CommandLineTools/usr/bin/cc, as on one build Mac here),
   # and FFmpeg's configure then cannot link its test program ("library 'System' not found") nor compile its
@@ -1603,17 +1643,9 @@ if(ZH_PLATFORM_POSIX)
   # FFmpeg's own configure picks the host's architecture, so a build for another one (x86_64 on Apple
   # Silicon, run under Rosetta: E1's architecture axis) names it.  One at a time: configure builds one.
   set(FFMPEG_POSIX_ARCH "")
-  if(APPLE AND CMAKE_OSX_ARCHITECTURES)
-    list(LENGTH CMAKE_OSX_ARCHITECTURES FFMPEG_ARCH_COUNT)
-    if(NOT FFMPEG_ARCH_COUNT EQUAL 1)
-      message(FATAL_ERROR "FFmpeg builds one architecture at a time; CMAKE_OSX_ARCHITECTURES is '${CMAKE_OSX_ARCHITECTURES}'.")
-    endif()
-    string(STRIP "${FFMPEG_POSIX_CFLAGS} -arch ${CMAKE_OSX_ARCHITECTURES}" FFMPEG_POSIX_CFLAGS)
-    if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
-      set(FFMPEG_POSIX_ARCH aarch64)
-    else()
-      set(FFMPEG_POSIX_ARCH ${CMAKE_OSX_ARCHITECTURES})
-    endif()
+  if(APPLE)
+    string(STRIP "${FFMPEG_POSIX_CFLAGS} -arch ${ZH_MACOS_TARGET_ARCH}" FFMPEG_POSIX_CFLAGS)
+    set(FFMPEG_POSIX_ARCH "${ZH_MACOS_FFMPEG_ARCH}")
   endif()
   add_custom_command(
     OUTPUT ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h
@@ -2835,6 +2867,8 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/unix_define_check.py
                      ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
   endif()
+  add_test(NAME macos_build_policy_selfcheck
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_macos_build.py)
   add_test(NAME bigfile_selfcheck
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/bigfile.py selfcheck)
   # Tools/vfx_tune.py rewrites those INIs in place; its selfcheck runs both rule sets over a

@@ -156,6 +156,10 @@ ConnectionManager::ConnectionManager(void)
 	m_netCommandWrapperList = NULL;
 	m_localUser = NULL;
 	m_localUser = newInstance(User);
+	for (UnsignedInt slot = 0; slot < MAX_SLOTS; ++slot) {
+		m_recoveryFrame[slot] = 0; m_recoveryPending[slot] = FALSE;
+	}
+	m_routerCommandAuthors = 0;
 	m_resendWatchFrame = 0;
 	m_resendWatchSince = 0;
 	m_resendLastRequest = 0;
@@ -179,6 +183,10 @@ void ConnectionManager::init()
 
 	/* A fresh game means nothing is stuck yet; leaving the old stamps behind would make the
 		 first blocking frame of the new match look like it had been waiting since the last one. */
+	for (UnsignedInt slot = 0; slot < MAX_SLOTS; ++slot) {
+		m_recoveryFrame[slot] = 0; m_recoveryPending[slot] = FALSE;
+	}
+	m_routerCommandAuthors = 0;
 	m_resendWatchFrame = 0;
 	m_resendWatchSince = 0;
 	m_resendLastRequest = 0;
@@ -306,6 +314,7 @@ void ConnectionManager::reset()
 #ifdef MEMORYPOOL_DEBUG
 	TheMemoryPoolFactory->debugSetInitFillerIndex(m_localSlot);
 #endif
+	m_routerCommandAuthors = 0;
 	m_packetRouterSlot = -1;
 
 	for (i = 0; i < TheGlobalData->m_networkFPSHistoryLength; ++i) {
@@ -382,6 +391,39 @@ void ConnectionManager::destroyGameMessages() {
 	}
 }
 
+Bool ConnectionManager::isCommandAuthorAllowed(NetCommandMsg *msg) const
+{
+    UnsignedByte roles = m_routerCommandAuthors;
+    if (m_packetRouterSlot < MAX_SLOTS) roles |= (UnsignedByte)(1u << m_packetRouterSlot);
+    return NetworkCommandAuthorAllowed(msg, roles);
+}
+
+Bool ConnectionManager::receiveSourceAllowed(NetCommandRef *ref)
+{
+    NetCommandMsg *msg = ref->getCommand();
+    const UnsignedInt author = msg->getPlayerID();
+    if (!isCommandAuthorAllowed(msg) || (author != m_localSlot && !m_connections[author])) return FALSE;
+    const UnsignedByte sources = ref->getSourceMask();
+    if (!sources) return FALSE;
+    for (UnsignedInt sender = 0; sender < MAX_SLOTS; ++sender) {
+        if (!(sources & (1u << sender))) continue;
+        if (!m_connections[sender]) return FALSE;
+        if (m_connections[sender]->isQuitting()) {
+            const NetCommandType type = msg->getNetCommandType();
+            if (sender != author || (type != NETCOMMANDTYPE_ACKSTAGE1 &&
+                type != NETCOMMANDTYPE_ACKSTAGE2 && type != NETCOMMANDTYPE_ACKBOTH)) return FALSE;
+        }
+        // MAX_FRAMES_AHEAD is also the retained ring size. No unsolicited recovery,
+        // authority-bearing direct controls or frames outside that request window.
+        const Bool recovery = m_recoveryPending[sender] &&
+            (msg->getNetCommandType() == NETCOMMANDTYPE_WRAPPER ||
+             (msg->getExecutionFrame() >= m_recoveryFrame[sender] &&
+              msg->getExecutionFrame()-m_recoveryFrame[sender] < MAX_FRAMES_AHEAD));
+        if (!NetworkCommandSourceAllowed(msg, sender, m_packetRouterSlot, recovery)) return FALSE;
+    }
+    return TRUE;
+}
+
 /**
  * ConnectionManager::doRelay()
  * Queries the transport for commands that need to be relayed to another client.
@@ -395,41 +437,31 @@ void ConnectionManager::doRelay() {
 		if (m_transport->m_inBuffer[i].length != 0) {
 			// This transport buffer has yet to be processed.
 
-			// make a NetPacket out of this data so it can be broken up into individual commands.
+			// Resolve the real endpoint before parsing commands or changing any state.
+			UnsignedInt senderSlot = MAX_SLOTS;
+			for (Int slot = 0; slot < MAX_SLOTS; ++slot) {
+				if (m_connections[slot] &&
+					m_connections[slot]->getUser()->GetIPAddr() == m_transport->m_inBuffer[i].addr &&
+					m_connections[slot]->getUser()->GetPort() == m_transport->m_inBuffer[i].port) {
+					senderSlot = slot; break;
+				}
+			}
+			if (senderSlot == MAX_SLOTS) {
+				m_transport->m_inBuffer[i].length = 0;
+				continue;
+			}
 			packet = newInstance(NetPacket)(&(m_transport->m_inBuffer[i]));
-
-			//DEBUG_LOG(("ConnectionManager::doRelay() - got a packet with %d commands\n", packet->getNumCommands()));
-			//LOGBUFFER( packet->getData(), packet->getLength() );
-
-			// Get the command list from the packet.
 			NetCommandList *cmdList = packet->getCommandList();
 			NetCommandRef *cmd = cmdList->getFirstMessage();
 
-			/* Who put this packet on the wire, as opposed to who wrote the commands in it.  An ack has
-				 to reach the queue that keeps resending the copy, and that queue is the sender's.  A
-				 packet from an address no connection owns leaves it MAX_SLOTS, and ackCommand then routes
-				 the way it always did. */
-			UnsignedInt senderSlot = MAX_SLOTS;
-			for (Int s = 0; s < MAX_SLOTS; ++s) {
-				if ((m_connections[s] != NULL) &&
-						(m_connections[s]->getUser()->GetIPAddr() == m_transport->m_inBuffer[i].addr) &&
-						(m_connections[s]->getUser()->GetPort() == m_transport->m_inBuffer[i].port)) {
-					senderSlot = s;
-					break;
-				}
-			}
-
 			// Iterate through the commands in this packet and send them to the proper connections.
 			while (cmd != NULL) {
-				//DEBUG_LOG(("ConnectionManager::doRelay() - Looking at a command of type %s\n",
-					//GetAsciiNetCommandType(cmd->getCommand()->getNetCommandType()).str()));
-
-				/* Note that we have heard from whoever originated this, relayed or not.  Any command
-					 will do - the point is only that the player still exists.  See StallJudgement.h. */
-				UnsignedInt fromSlot = cmd->getCommand()->getPlayerID();
-				if (fromSlot < MAX_SLOTS) {
-					m_lastHeardFrom[fromSlot] = Clock_Milliseconds();
-				}
+				cmd->setSourceMask((UnsignedByte)(1u << senderSlot));
+				if (!receiveSourceAllowed(cmd)) { cmd = cmd->getNext(); continue; }
+				// A recovered historical command proves the responder is present, not its author.
+				m_lastHeardFrom[senderSlot] = Clock_Milliseconds();
+				UnsignedInt author = cmd->getCommand()->getPlayerID();
+				if (senderSlot == m_packetRouterSlot) m_lastHeardFrom[author] = Clock_Milliseconds();
 
 				if (CommandRequiresAck(cmd->getCommand())) {
 					ackCommand(cmd, m_localSlot, senderSlot);
@@ -455,6 +487,8 @@ void ConnectionManager::doRelay() {
 	NetCommandList *cmdList = m_netCommandWrapperList->getReadyCommands();
 	NetCommandRef *cmd = cmdList->getFirstMessage();
 	while (cmd != NULL) {
+		// Reassembly must not turn a relayed wrapper into a direct host command.
+		if (!receiveSourceAllowed(cmd)) { cmd = cmd->getNext(); continue; }
 		if (CommandRequiresAck(cmd->getCommand())) {
 			ackCommand(cmd, m_localSlot);
 		}
@@ -1050,6 +1084,7 @@ void ConnectionManager::processAck(NetCommandMsg *msg) {
  * If we are leaving and are also the packet router, it will return the PLAYERLEAVECODE_LOCAL return code.
  */
 PlayerLeaveCode ConnectionManager::processPlayerLeave(NetPlayerLeaveCommandMsg *msg) {
+	if (!isCommandAuthorAllowed(msg)) return PLAYERLEAVECODE_UNKNOWN;
 	UnsignedByte playerID = msg->getLeavingPlayerID();
 	if ((playerID != m_localSlot) && (m_connections[playerID] != NULL)) {
 		DEBUG_LOG(("ConnectionManager::processPlayerLeave() - setQuitting() on player %d on frame %d\n", playerID, TheGameLogic->getFrame()));
@@ -1960,6 +1995,7 @@ PlayerLeaveCode ConnectionManager::disconnectPlayer(Int slot) {
 		// The same walk as getNextPacketRouterSlot, and it used to run off the end of the plan in the
 		// same way - see nextPacketRouterSlot in CushionMetrics.cpp.  MAX_SLOTS out means the plan is
 		// exhausted, which every reader of m_packetRouterSlot already tests for.
+		if (m_packetRouterSlot < MAX_SLOTS) m_routerCommandAuthors |= (UnsignedByte)(1u << m_packetRouterSlot);
 		m_packetRouterSlot = nextPacketRouterSlot(m_packetRouterFallback, MAX_SLOTS, m_packetRouterSlot);
 		DEBUG_LOG(("Packet router left.  New packet router is slot %d\n", m_packetRouterSlot));
 		retval = PLAYERLEAVECODE_PACKETROUTER;
@@ -2124,6 +2160,7 @@ void ConnectionManager::parseUserList(const GameInfo *game)
 	// and the first succession then walked a plan the router was not in.  Built from the shared slot
 	// list, so every machine computes the same head without exchanging anything.
 	m_packetRouterSlot = m_packetRouterFallback[0];
+	m_routerCommandAuthors = m_packetRouterSlot < MAX_SLOTS ? (UnsignedByte)(1u << m_packetRouterSlot) : 0;
 #ifdef MEMORYPOOL_DEBUG
 	TheMemoryPoolFactory->debugSetInitFillerIndex(m_localSlot);
 #endif
@@ -2740,6 +2777,8 @@ void ConnectionManager::requestFrameDataResend(Int playerID, UnsignedInt frame) 
 	}
 
 	if (playerID < MAX_SLOTS) {
+		m_recoveryPending[playerID] = TRUE;
+		m_recoveryFrame[playerID] = frame;
 		sendLocalCommandDirect(msg, 1 << playerID);
 	}
 

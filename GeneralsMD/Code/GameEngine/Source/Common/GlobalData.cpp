@@ -794,6 +794,18 @@ GlobalData::GlobalData()
 	m_lanPlayerName.clear(); // the lobby name comes out of the preferences unless -lanname says otherwise
 	m_relayHost.clear(); // a real LAN unless -relay names a relay
 	m_relayPort = 0;
+	m_onlineHost.clear(); // no online service unless -online names one, and none of the -online* scripting
+	m_onlinePort = 0;
+	m_onlineCAFile.clear();
+	m_onlineUser.clear();
+	m_onlinePass.clear();
+	m_onlineRegisterNick.clear();
+	m_onlineHostGame.clear();
+	m_onlineJoinGame.clear();
+	m_onlineSay.clear();
+	m_onlineMap.clear();
+	m_onlineStart = FALSE;
+	m_quickMatchOnStart = FALSE;
 	m_lanLobbyOnStart = FALSE;
 	m_skirmishLobbyOnStart = FALSE;
 	m_optionsMenuOnStart = FALSE;

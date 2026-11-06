@@ -37,7 +37,7 @@ function Expand-Source($archive, $name) {
   if (Test-Path $target) { Remove-Item -Recurse -Force $target }
   New-Item -ItemType Directory -Force -Path $target | Out-Null
   Step "unpacking $name"
-  if ($archive.EndsWith('.tar.gz')) {
+  if ($archive -match '\.tar\.(gz|bz2)$') {
     tar -xf $archive -C $target
   } else {
     Expand-Archive -Path $archive -DestinationPath $target -Force
@@ -152,6 +152,33 @@ function Install-Miniaudio {
   Step "miniaudio 0.11.25 -> Libraries\Source\miniaudio"
 }
 
+# --- mbedTLS 3.6.7 (Apache-2.0), the long-term-support line: the TLS under the online service's lobby
+# connection (GameNetwork\Online), the same pin as vendor.sh. The tarball is checked against the sha256
+# the release publishes beside it. Only include\, library\ and the licence are copied; CMakeLists.txt
+# compiles library\*.c itself, so upstream's build, programs and tests stay out.
+function Install-Mbedtls {
+  $destination = Join-Path $libraries 'Source\mbedtls'
+  $versionHeader = Join-Path $destination 'include\mbedtls\build_info.h'
+  if ((Test-Path $versionHeader) -and -not $Force -and
+      (Select-String -LiteralPath $versionHeader -Pattern 'MBEDTLS_VERSION_STRING         "3.6.7"' -SimpleMatch -Quiet)) { return }
+  $sha = 'A7E8BCBEC0E6F761B4AF24F25677626B35F762F68EEF79C08677A363212D11F6'
+  $archive = Get-File 'https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2' (Join-Path $work 'mbedtls-3.6.7.tar.bz2')
+  $hash = (Get-FileHash $archive -Algorithm SHA256).Hash
+  if ($hash -ne $sha) {
+    Remove-Item $archive -ErrorAction SilentlyContinue
+    throw "mbedtls-3.6.7.tar.bz2 downloaded with hash $hash, and the release was published as $sha"
+  }
+  $source = Expand-Source $archive 'mbedtls'
+  # folder by folder, so the committed .gitignore stays
+  foreach ($name in @('include', 'library')) {
+    $target = Join-Path $destination $name
+    if (Test-Path $target) { Remove-Item -Recurse -Force $target }
+    Copy-Item (Join-Path $source $name) $target -Recurse -Force
+  }
+  Copy-Item (Join-Path $source 'LICENSE') (Join-Path $destination 'LICENSE') -Force
+  Step "mbedTLS 3.6.7 -> Libraries\Source\mbedtls"
+}
+
 # --- The fork's own upscaled art: every 3D texture at twice its size, and the ground. Not in git -
 # ReforgedTextures.big alone is a gigabyte, ten times
 # what GitHub takes in a file, and LFS in a fork is billed to the parent repository.
@@ -259,6 +286,7 @@ Install-LzhlPatch
 Install-DirectX
 Install-GameSpy
 Install-Miniaudio
+Install-Mbedtls
 # SDL3 is the platform layer for everything that is not Windows (decision 3 in PORTING.md). Windows
 # keeps Win32Device, so it is not fetched here; vendor.sh fetches it, and says it skips DirectX the
 # same way. The same holds for SDL3's Metal patch, Libraries\Source\sdl3-metal-windowless.patch:

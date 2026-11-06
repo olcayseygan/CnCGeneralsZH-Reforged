@@ -129,7 +129,9 @@ set(VENDORED
     ${COMP}/ZLib/deflate.c
     ${COMP}/LZHCompress/CompLibSource/Lzhl.cpp
     # The GameSpy SDK is built everywhere since B6 (see "gamespy" below).
-    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/GameSpy/CMakeLists.txt)
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/GameSpy/CMakeLists.txt
+    # mbedTLS, the online service's TLS, everywhere too (see "mbedtls" below).
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/mbedtls/library/ssl_tls.c)
 # The DirectX 8 headers are only read by targets this file does not define on macOS, and A2 decides
 # what a Mac fetch pulls down.  Demanding them here would stop a Mac configure over files nothing
 # portable includes.
@@ -864,6 +866,19 @@ set(GS_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
 set(GS_INCLUDE_VOICE    OFF CACHE BOOL "" FORCE)
 add_subdirectory(${LIBSRC}/GameSpy ${CMAKE_CURRENT_BINARY_DIR}/gamespy)
 
+# ---- mbedtls --------------------------------------------------------------
+# mbedTLS 3.6.7 (Apache-2.0), fetched by both vendor scripts: the TLS under the online service's lobby
+# connection (onlineconnection below), on every platform, since WinHTTP would leave macOS and Linux out.
+# Upstream's CMakeLists builds programs and tests and wants Python for files the release tarball already
+# carries, so library/*.c is compiled here with the stock mbedtls_config.h.  Windows' entropy source is
+# BCryptGenRandom, and net_sockets.c is Winsock there.
+file(GLOB MBEDTLS_SOURCES ${LIBSRC}/mbedtls/library/*.c)
+add_library(mbedtls STATIC ${MBEDTLS_SOURCES})
+target_include_directories(mbedtls PUBLIC ${LIBSRC}/mbedtls/include PRIVATE ${LIBSRC}/mbedtls/library)
+if(ZH_PLATFORM_WINDOWS)
+  target_link_libraries(mbedtls PUBLIC ws2_32 bcrypt)
+endif()
+
 # ---- SDL3 and miniaudio: the platform layer off Windows (decision 3) -------------------------------
 # Both are fetched by Tools/vendor.sh and neither is fetched on Windows, which keeps Win32Device and
 # Miles.  Nothing links either yet: C2/C3 take SDL3's window and events, D4 its GPU API, C4 miniaudio.
@@ -1053,6 +1068,17 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 # includer - the live code went to GameNetwork/GameSpy/ instead.
 list(REMOVE_ITEM GAMEENGINE_SOURCES
   ${GE}/Source/GameNetwork/GameSpyGameInfo.cpp)
+# The online service's connection (TLS line, JSON reader and writer) knows nothing of the engine and is a
+# library of its own, so test_online links it without the game.  The adapters beside it stay in gameengine.
+list(REMOVE_ITEM GAMEENGINE_SOURCES
+  ${GE}/Source/GameNetwork/Online/OnlineConnection.cpp)
+add_library(onlineconnection STATIC ${GE}/Source/GameNetwork/Online/OnlineConnection.cpp)
+target_include_directories(onlineconnection PUBLIC ${GE}/Include)
+target_link_libraries(onlineconnection PRIVATE mbedtls)
+set_target_properties(onlineconnection PROPERTIES CXX_STANDARD 17)
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(onlineconnection PUBLIC Threads::Threads)
+endif()
 # Platform bodies of one interface: each side's file is left out of the other's build, so Windows
 # gets exactly the sources it had.  B5, bucket (c).
 #  - StackDump.cpp: dbghelp symbol lookup and a structured-exception context walk, Windows only.
@@ -1204,7 +1230,7 @@ if(ZH_PLATFORM_WINDOWS)
 endif()
 target_link_libraries(gameengine PUBLIC
   ${ZH_GAMEENGINE_WW3D2} wwlib wwmath wwsaveload wwdebug wwutil compression ${ZH_GAMEENGINE_DEBUGLIB} ${ZH_GAMEENGINE_WWDOWNLOAD}
-  benchmark ${ZH_GAMEENGINE_EABROWSERDISPATCH} ${ZH_GAMEENGINE_PROFILE} gamespy
+  benchmark ${ZH_GAMEENGINE_EABROWSERDISPATCH} ${ZH_GAMEENGINE_PROFILE} gamespy onlineconnection
   ${ZH_GAMEENGINE_DINPUT8} ${ZH_GAMEENGINE_WIN32_SDK_LIBS})
 
 # B1's gate: the bytes a UnicodeString puts into the replay and network CRC, before and after
@@ -2281,6 +2307,10 @@ if(ZH_PLATFORM_WINDOWS)
 endif()
 
 add_lib_test(test_compression compression)
+
+# The online service's connection: the JSON line reader and writer, and a TLS loopback against a server
+# inside the test, verified against a CA the test makes on the spot (no key or certificate is committed).
+add_lib_test(test_online onlineconnection mbedtls)
 
 # .w3d on-disk layout pins.  Deliberately OUTSIDE the ZH_PLATFORM_WINDOWS guard
 # below: it is header-only, asserts sizeof/offsetof and links nothing but the

@@ -81,6 +81,7 @@ Data/Cinema/geproto_oasis.txt
 Data/Cinema/gpu1m_battle.txt
 Data/Cinema/gunfx.txt
 Data/Cinema/headlights.txt
+Data/Cinema/heathaze.txt
 Data/Cinema/hero_loop.txt
 Data/Cinema/hero_loop_01.txt
 Data/Cinema/hero_loop_02.txt
@@ -156,6 +157,7 @@ Data/Cinema/rf_thumb_fa.txt
 Data/Cinema/rf_thumb_fe.txt
 Data/Cinema/rf_town.txt
 Data/Cinema/rf_watch.txt
+Data/Cinema/rocketfx.txt
 Data/Cinema/s240_beach.txt
 Data/Cinema/s240_bridge.txt
 Data/Cinema/s240_heli.txt
@@ -170,6 +172,8 @@ Data/Cinema/scudlaunch_film.txt
 Data/Cinema/shadowfar.txt
 Data/Cinema/shadowpan.txt
 Data/Cinema/spectre_reshoot.txt
+Data/Cinema/summary_close.txt
+Data/Cinema/summary_fire.txt
 Data/Cinema/swpair_nuke.txt
 Data/Cinema/swpair_scud.txt
 Data/Cinema/thumb_chaos_a.txt
@@ -182,6 +186,8 @@ Data/Cinema/tr_oasis.txt
 Data/Cinema/tr_open.txt
 Data/Cinema/tr_palms.txt
 Data/Cinema/tr_watch.txt
+Data/Cinema/tracers_desert.txt
+Data/Cinema/tracers_snow.txt
 Data/Cinema/v240_heli.txt
 Data/Cinema/v240_hook.txt
 Data/Cinema/v240_hook2.txt
@@ -291,6 +297,7 @@ Data/Scenarios/glowmicrowave.txt
 Data/Scenarios/gpu1m_battle.txt
 Data/Scenarios/guardradius.txt
 Data/Scenarios/gunfx.txt
+Data/Scenarios/gunsnow.txt
 Data/Scenarios/handicap.txt
 Data/Scenarios/headlights.txt
 Data/Scenarios/helislide.txt
@@ -321,6 +328,7 @@ Data/Scenarios/jetrunway.txt
 Data/Scenarios/jetsturn.txt
 Data/Scenarios/jetturn.txt
 Data/Scenarios/kargu.txt
+Data/Scenarios/laserflow.txt
 Data/Scenarios/laserglow.txt
 Data/Scenarios/laserlook.txt
 Data/Scenarios/leadinfantry.txt
@@ -391,6 +399,7 @@ Data/Scenarios/rf_t2_wall.txt
 Data/Scenarios/rf_t2_wolf.txt
 Data/Scenarios/rf_thumb_fa.txt
 Data/Scenarios/rf_thumb_fe.txt
+Data/Scenarios/rocketfx.txt
 Data/Scenarios/rocketglow.txt
 Data/Scenarios/s240_beach.txt
 Data/Scenarios/s240_bridge.txt
@@ -420,6 +429,7 @@ Data/Scenarios/strikeair_nuke.txt
 Data/Scenarios/strikeair_nukehelix.txt
 Data/Scenarios/strikeair_particle.txt
 Data/Scenarios/strikeair_scud.txt
+Data/Scenarios/summaryclose.txt
 Data/Scenarios/sun_cloak.txt
 Data/Scenarios/sun_trees.txt
 Data/Scenarios/swhole.txt
@@ -1093,6 +1103,7 @@ GameEngine/Include/GameNetwork/NetPacket.h
 GameEngine/Include/GameNetwork/NetworkDefs.h
 GameEngine/Include/GameNetwork/NetworkInterface.h
 GameEngine/Include/GameNetwork/NetworkUtil.h
+GameEngine/Include/GameNetwork/Online/OnlineConnection.h
 GameEngine/Include/GameNetwork/RankPointValue.h
 GameEngine/Include/GameNetwork/StallJudgement.h
 GameEngine/Include/GameNetwork/Transport.h
@@ -1728,6 +1739,10 @@ GameEngine/Source/GameNetwork/NetMessageStream.cpp
 GameEngine/Source/GameNetwork/NetPacket.cpp
 GameEngine/Source/GameNetwork/Network.cpp
 GameEngine/Source/GameNetwork/NetworkUtil.cpp
+GameEngine/Source/GameNetwork/Online/OnlineBuddy.cpp
+GameEngine/Source/GameNetwork/Online/OnlineConnection.cpp
+GameEngine/Source/GameNetwork/Online/OnlinePeer.cpp
+GameEngine/Source/GameNetwork/Online/OnlineStats.cpp
 GameEngine/Source/GameNetwork/StallJudgement.cpp
 GameEngine/Source/GameNetwork/Transport.cpp
 GameEngine/Source/GameNetwork/User.cpp
@@ -3078,6 +3093,7 @@ Libraries/Source/gamespy-strlwr-c-only.patch
 Libraries/Source/glslang/.gitignore
 Libraries/Source/lzhl-clear-history.patch
 Libraries/Source/max4sdk/.gitignore
+Libraries/Source/mbedtls/.gitignore
 Libraries/Source/miniaudio/.gitignore
 Libraries/Source/profile/_pch.cpp
 Libraries/Source/profile/_pch.h
@@ -3226,6 +3242,7 @@ Tests/test_minimap_input.inc
 Tests/test_modern_water_config.cpp
 Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc
+Tests/test_online.cpp
 Tests/test_pixelcentre.cpp
 Tests/test_posix_draw_resolve.cpp
 Tests/test_posix_gpu_draw.cpp
@@ -4232,6 +4249,9 @@ Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
 Tools/record-dx11-shaders.ps1
+Tools/relay/README.md
+Tools/relay/relay.js
+Tools/relay/test.js
 Tools/replay-check.sh
 Tools/root-readonly-check.sh
 Tools/signal_marks.py

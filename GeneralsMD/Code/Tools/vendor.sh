@@ -89,7 +89,7 @@ expand_source() { # archive name -> prints the unpacked root
   mkdir -p "$target"
   step "unpacking $name"
   case "$archive" in
-    *.tar.gz) tar -xf "$archive" -C "$target" || { echo "[vendor] ERROR: could not unpack $archive" >&2; return 1; } ;;
+    *.tar.gz|*.tar.bz2) tar -xf "$archive" -C "$target" || { echo "[vendor] ERROR: could not unpack $archive" >&2; return 1; } ;;
     *)        unzip -qo "$archive" -d "$target" || { echo "[vendor] ERROR: could not unpack $archive" >&2; return 1; } ;;
   esac
   local entry count=0 only=
@@ -615,6 +615,28 @@ install_ffmpeg() {
   step "FFmpeg 8.1.2 (source tarball) -> Libraries/Source/FFmpeg"
 }
 
+# --- mbedTLS 3.6.7 (Apache-2.0), the long-term-support line: the TLS under the online service's lobby
+# connection (GameNetwork/Online), the same pin as vendor.ps1, on every platform. The tarball is checked
+# against the sha256 the release publishes beside it. Only include/, library/ and the licence are copied;
+# CMakeLists.txt compiles library/*.c itself, so upstream's build, programs and tests stay out.
+install_mbedtls() {
+  local destination="$libraries/Source/mbedtls"
+  if [ -e "$destination/include/mbedtls/build_info.h" ] && [ -z "$force" ] \
+     && grep -q 'MBEDTLS_VERSION_STRING         "3.6.7"' "$destination/include/mbedtls/build_info.h"; then return 0; fi
+  local sha='a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6'
+  local archive source hash
+  archive=$(get_file 'https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2' "$work/mbedtls-3.6.7.tar.bz2")
+  hash=$(sha256_of "$archive")
+  if [ "$hash" != "$sha" ]; then
+    rm -f "$archive"
+    echo "[vendor] ERROR: mbedtls-3.6.7.tar.bz2 has hash $hash, and the release was published as $sha" >&2
+    exit 1
+  fi
+  source=$(expand_source "$archive" 'mbedtls')
+  copy_entries "$source" "$destination" include library LICENSE
+  step "mbedTLS 3.6.7 -> Libraries/Source/mbedtls"
+}
+
 get_channel_url() {
   if [ -n "${ZHR_CHANNEL_URL:-}" ]; then printf '%s/\n' "${ZHR_CHANNEL_URL%/}"; return 0; fi
   local launcher
@@ -728,5 +750,6 @@ install_spirv_cross
 install_shadercross
 install_freetype
 install_ffmpeg
+install_mbedtls
 install_art
 step 'everything the build needs is in place'

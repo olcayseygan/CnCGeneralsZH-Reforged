@@ -2561,23 +2561,65 @@ Int parseLanName(char *args[], int num)
 /* -relay <host:port> puts the LAN lobby and its games through a UDP relay instead of the local network,
 	 so two homes behind NAT can play (Transport.cpp has the envelope).  The host is resolved when the
 	 lobby opens; a missing port is kept as 0, which the lobby reports as a socket error. */
+static void splitHostPort( const char *arg, AsciiString &host, UnsignedShort &port )
+{
+	host = arg;
+	port = 0;
+	const char *colon = strrchr( arg, ':' );
+	if (colon)
+	{
+		host = std::string( arg, colon - arg ).c_str();
+		const Int number = atoi( colon + 1 );
+		port = (number >= 1 && number <= 65535) ? (UnsignedShort)number : 0;
+	}
+}
+
 Int parseRelay(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1)
-	{
-		AsciiString host = args[1];
-		const char *colon = strrchr( args[1], ':' );
-		UnsignedShort port = 0;
-		if (colon)
-		{
-			host = std::string( args[1], colon - args[1] ).c_str();
-			const Int number = atoi( colon + 1 );
-			port = (number >= 1 && number <= 65535) ? (UnsignedShort)number : 0;
-		}
-		TheWritableGlobalData->m_relayHost = host;
-		TheWritableGlobalData->m_relayPort = port;
-	}
+		splitHostPort( args[1], TheWritableGlobalData->m_relayHost, TheWritableGlobalData->m_relayPort );
 	return 2;
+}
+
+/* -online <host:port> logs in to the online service there (GameNetwork/Online) instead of GameSpy, and the
+	 rest drive it from a script the way -lanlobby and -netgame drive the LAN (docs: ONLINE-SERVICE.md's Tests
+	 section in the owner's workspace).  Each only fills a GlobalData field; the online screens read them.
+	 Without -online none of them does anything. */
+Int parseOnline(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+		splitHostPort( args[1], TheWritableGlobalData->m_onlineHost, TheWritableGlobalData->m_onlinePort );
+	return 2;
+}
+
+static Int parseOnlineText( char *args[], int num, AsciiString GlobalData::*field )
+{
+	if (TheWritableGlobalData && num > 1)
+		TheWritableGlobalData->*field = args[1];
+	return 2;
+}
+
+Int parseOnlineCA(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineCAFile ); }
+Int parseOnlineUser(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineUser ); }
+Int parseOnlinePass(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlinePass ); }
+Int parseOnlineRegister(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineRegisterNick ); }
+Int parseOnlineHostGame(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineHostGame ); }
+Int parseOnlineJoin(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineJoinGame ); }
+Int parseOnlineSay(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineSay ); }
+Int parseOnlineMap(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineMap ); }
+
+Int parseOnlineStart(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+		TheWritableGlobalData->m_onlineStart = TRUE;
+	return 1;
+}
+
+Int parseQuickMatch(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+		TheWritableGlobalData->m_quickMatchOnStart = TRUE;
+	return 1;
 }
 
 /* -lanlobby starts on the LAN screen rather than the main menu.  Two copies on one machine are
@@ -3102,6 +3144,17 @@ static CommandLineParam params[] =
 	{ "-lanip", parseLanIP },
 	{ "-lanname", parseLanName },
 	{ "-relay", parseRelay },
+	{ "-online", parseOnline },
+	{ "-onlineca", parseOnlineCA },
+	{ "-onlineuser", parseOnlineUser },
+	{ "-onlinepass", parseOnlinePass },
+	{ "-onlineregister", parseOnlineRegister },
+	{ "-onlinehost", parseOnlineHostGame },
+	{ "-onlinejoin", parseOnlineJoin },
+	{ "-onlinesay", parseOnlineSay },
+	{ "-onlinemap", parseOnlineMap },
+	{ "-onlinestart", parseOnlineStart },
+	{ "-quickmatch", parseQuickMatch },
 	{ "-lanlobby", parseLanLobby },
 	{ "-skirmishlobby", parseSkirmishLobby },
 	{ "-factionpicker", parseFactionPicker },

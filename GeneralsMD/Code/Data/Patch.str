@@ -982,6 +982,47 @@ TOOLTIP:Language
 "The language of menus, orders, briefings and subtitles. Voices and videos stay as installed. Takes effect the next time the game starts."
 END
 
+GUI:TextPersonnel
+"Unit names"
+END
+
+GUI:TextPersonnel0
+"Unchanged"
+END
+
+GUI:TextPersonnel1
+"Human names"
+END
+
+GUI:TextPersonnel2
+"Robot names"
+END
+
+TOOLTIP:TextPersonnel
+"Choose human or robot wording for supported unit names, independently of text language. Models, voices and gameplay stay as installed. Applies after restarting the game."
+END
+
+GUI:TextFactions
+"Faction names"
+END
+
+GUI:TextFactions0
+"Unchanged"
+END
+
+GUI:TextFactions1
+"Original names"
+END
+
+GUI:TextFactions2
+"Adapted names"
+END
+
+TOOLTIP:TextFactions
+"Choose original country and faction names or adapted names, independently of text language. Only displayed names change. Applies after restarting the game."
+END
+
+
 // The line under it when the lobby's Pile Limit has the pile closed to the player looking at it.
 
 TOOLTIP:SupplyPileFull

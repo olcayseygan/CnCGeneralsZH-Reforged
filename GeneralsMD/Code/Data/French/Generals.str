@@ -16425,6 +16425,47 @@ TOOLTIP:Language
 "La langue des menus, des ordres, des briefings et des sous-titres. Les voix et les vidéos restent celles de l'installation. Prend effet au prochain lancement du jeu."
 END
 
+GUI:TextPersonnel
+"Noms des unités"
+END
+
+GUI:TextPersonnel0
+"Inchangés"
+END
+
+GUI:TextPersonnel1
+"Noms humains"
+END
+
+GUI:TextPersonnel2
+"Noms de robots"
+END
+
+TOOLTIP:TextPersonnel
+"Choisit des noms humains ou robotiques pour les unités prises en charge, indépendamment de la langue du texte. Les modèles, les voix et le jeu restent inchangés. Prend effet au prochain démarrage du jeu."
+END
+
+GUI:TextFactions
+"Noms des factions"
+END
+
+GUI:TextFactions0
+"Inchangés"
+END
+
+GUI:TextFactions1
+"Noms d'origine"
+END
+
+GUI:TextFactions2
+"Noms adaptés"
+END
+
+TOOLTIP:TextFactions
+"Choisit les noms de pays et de factions originaux ou adaptés, indépendamment de la langue du texte. Seuls les noms affichés changent. Prend effet au prochain démarrage du jeu."
+END
+
+
 TOOLTIP:SupplyPileFull
 "\n Pris : la limite par réserve tient vos collecteurs à l'écart"
 END

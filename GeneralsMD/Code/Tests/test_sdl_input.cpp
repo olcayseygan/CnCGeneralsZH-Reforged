@@ -48,6 +48,7 @@
 
 #include "PreRTS.h"
 #include "Common/GameMemory.h"
+#include "Common/GameEngine.h"
 #include "GameClient/IMEManagerPosix.h"
 #include "GameClient/KeyDefs.h"
 #include "Platform/DoubleClickTime.h"
@@ -56,6 +57,7 @@
 #include "SdlDevice/GameClient/SdlKeyTable.h"
 #include "SdlDevice/GameClient/SdlKeyboard.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
+#include "SdlDevice/GameClient/SdlMacGesture.h"
 #include "Common/FileSystem.h"
 #include "PosixDevice/Common/PosixLocalFileSystem.h"
 
@@ -67,6 +69,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <map>
+#include <limits>
 #include <set>
 #include <string>
 #include <vector>
@@ -585,6 +588,151 @@ std::vector<MouseIO> mouseEvents( OpenMouse *mouse )
 }
 
 }  // namespace
+
+TEST(trackpad_pan_pins_the_start_target_through_momentum)
+{
+	using Phase = SdlGesturePhase;
+	using Decision = SdlScrollGestureTarget::Decision;
+	SdlScrollGestureTarget target;
+	CHECK(target.advance(Phase::Begin, Phase::None, false, false) == Decision::PassThrough);
+	CHECK(target.advance(Phase::Update, Phase::None, true, true) == Decision::PassThrough);
+	CHECK(target.advance(Phase::End, Phase::None, true, false) == Decision::PassThrough);
+	CHECK(target.advance(Phase::None, Phase::Begin, true, true) == Decision::PassThrough);
+	CHECK(target.advance(Phase::None, Phase::End, true, false) == Decision::PassThrough);
+	CHECK(target.advance(Phase::Begin, Phase::None, true, false) == Decision::Consume);
+	CHECK(target.advance(Phase::Update, Phase::None, true, true) == Decision::Apply);
+	CHECK(target.advance(Phase::End, Phase::None, true, false) == Decision::Consume);
+	CHECK(target.advance(Phase::None, Phase::Begin, true, true) == Decision::Apply);
+	CHECK(target.advance(Phase::None, Phase::Update, true, true) == Decision::Apply);
+	CHECK(target.advance(Phase::None, Phase::End, true, false) == Decision::Consume);
+	CHECK(target.advance(Phase::None, Phase::Update, true, true) == Decision::PassThrough);
+}
+
+TEST(trackpad_pan_cancels_world_ownership_without_leaking_wheel_input)
+{
+	using Phase = SdlGesturePhase;
+	using Decision = SdlScrollGestureTarget::Decision;
+	SdlScrollGestureTarget target;
+	CHECK(target.advance(Phase::Begin, Phase::None, true, true) == Decision::Apply);
+	CHECK(target.advance(Phase::Update, Phase::None, false, true) == Decision::Consume);
+	CHECK(target.advance(Phase::Update, Phase::None, true, true) == Decision::Consume);
+	CHECK(target.advance(Phase::End, Phase::None, true, false) == Decision::Consume);
+	CHECK(target.advance(Phase::None, Phase::Begin, true, true) == Decision::Consume);
+	CHECK(target.advance(Phase::None, Phase::End, true, false) == Decision::Consume);
+	CHECK(target.advance(Phase::Begin, Phase::None, true, false) == Decision::Consume);
+	target.cancel(); // Focus was lost after BEGIN, before queued movements were dispatched.
+	CHECK(target.advance(Phase::Update, Phase::None, true, true) == Decision::Consume);
+	CHECK(target.advance(Phase::Cancel, Phase::None, true, false) == Decision::Consume);
+	CHECK(target.advance(Phase::None, Phase::Update, true, true) == Decision::Consume);
+	CHECK(target.advance(Phase::Begin, Phase::None, true, true) == Decision::Apply);
+	// A high-resolution wheel without a native gesture lifecycle remains an ordinary wheel.
+	CHECK(target.advance(Phase::None, Phase::None, true, true) == Decision::PassThrough);
+	target.reset();
+	CHECK(target.advance(Phase::Update, Phase::None, true, true) == Decision::PassThrough);
+}
+
+TEST(trackpad_event_payloads_are_bounded_and_reject_stale_slot_generations)
+{
+	SdlScrollGestureQueue queue;
+	SdlMacScroll scroll = {};
+	scroll.windowID = 42;
+	scroll.deltaX = 0.125f;
+	scroll.deltaY = -0.25f;
+	uint32_t codes[SdlScrollGestureQueue::Capacity];
+	for (unsigned i = 0; i < SdlScrollGestureQueue::Capacity; ++i)
+		CHECK(queue.push(scroll, i + 1, codes[i]));
+	uint32_t code = 0;
+	CHECK(!queue.push(scroll, 999, code));
+	SdlScrollGestureQueue::Payload payload;
+	CHECK(queue.pop(codes[0], payload));
+	CHECK(payload.sequence == 1 && payload.scroll.windowID == 42);
+	CHECK(payload.scroll.deltaX == 0.125f && payload.scroll.deltaY == -0.25f);
+	CHECK(queue.push(scroll, 1000, code));
+	CHECK(code != codes[0] && (code & 255) == (codes[0] & 255));
+	CHECK(!queue.pop(codes[0], payload));
+	CHECK(queue.pop(code, payload) && payload.sequence == 1000);
+	CHECK(!queue.pop(code, payload));
+	queue.clear();
+	for (unsigned i = 1; i < SdlScrollGestureQueue::Capacity; ++i)
+		CHECK(!queue.pop(codes[i], payload));
+	CHECK(queue.push(scroll, 1001, code));
+	CHECK(queue.pop(code, payload) && payload.sequence == 1001);
+}
+
+TEST(camera_gestures_wait_until_after_messages_and_discard_ui_rejections)
+{
+	SdlPendingCameraGestures pending;
+	const SdlResolvedCameraGesture first = { 1, 100, 200, 0.25f, -0.5f, 1, true };
+	const SdlResolvedCameraGesture second = { 1, 300, 400, 0, 0, 1.1f, false };
+	Int checked = 0, applied = 0;
+	bool eligible = true;
+	std::vector<Int> order;
+	const auto afterMessages = [&](const SdlResolvedCameraGesture &gesture) {
+		++checked;
+		if (!eligible) return false;
+		++applied;
+		order.push_back(gesture.x);
+		return true;
+	};
+	CHECK(pending.push(first));
+	CHECK(pending.push(second));
+	CHECK(checked == 0 && applied == 0); // SDL dispatch has queued input, with no camera effect.
+	eligible = false; // Earlier keyboard/mouse messages opened UI before the drain hook.
+	CHECK(!pending.drain(afterMessages));
+	CHECK(checked == 1 && applied == 0);
+	eligible = true;
+	CHECK(pending.drain(afterMessages));
+	CHECK(checked == 1 && applied == 0); // The refused tail cannot reappear in a later game context.
+	CHECK(pending.push(first));
+	CHECK(pending.push(second));
+	CHECK(pending.drain(afterMessages));
+	CHECK(applied == 2 && order.size() == 2 && order[0] == 100 && order[1] == 300);
+	CHECK(pending.push(first));
+	pending.clear(); // Focus/geometry cancellation before MessageStream completion.
+	CHECK(pending.drain(afterMessages));
+	CHECK(applied == 2);
+}
+
+TEST(camera_gesture_pending_overflow_discards_the_complete_waiting_batch)
+{
+	SdlPendingCameraGestures pending;
+	const SdlResolvedCameraGesture gesture = { 1, 100, 200, 0.25f, -0.5f, 1, true };
+	for (unsigned i = 0; i < SdlPendingCameraGestures::Capacity; ++i) CHECK(pending.push(gesture));
+	CHECK(!pending.push(gesture));
+	Int applied = 0;
+	CHECK(pending.drain([&](const SdlResolvedCameraGesture &) { ++applied; return true; }));
+	CHECK(applied == 0);
+	SdlInput_install();
+	CHECK(TheClientInputAfterMessagesHook == SdlInput_applyPendingGestures);
+}
+
+TEST(pinch_lifecycle_without_a_focused_camera_does_not_synthesize_mouse_input)
+{
+	CHECK(start());
+	OpenMouse *mouse = theMouse();
+	SdlInput_cancelGestures();
+	SDL_Event event;
+	SDL_zero(event);
+	event.type = SDL_EVENT_PINCH_BEGIN;
+	event.pinch.windowID = 0; // SDL Cocoa does not attach its native pinch events to a window.
+	event.pinch.scale = 0;
+	CHECK(SdlInput_dispatch(event));
+	event.type = SDL_EVENT_PINCH_UPDATE;
+	event.pinch.scale = 1.1f;
+	CHECK(SdlInput_dispatch(event));
+	event.pinch.scale = std::numeric_limits<float>::quiet_NaN();
+	CHECK(SdlInput_dispatch(event));
+	event.pinch.scale = 0;
+	CHECK(SdlInput_dispatch(event));
+	event.pinch.windowID = SDL_GetWindowID(theWindow) + 1;
+	event.pinch.scale = 1.1f;
+	CHECK(SdlInput_dispatch(event));
+	event.type = SDL_EVENT_PINCH_END;
+	event.pinch.windowID = 0;
+	event.pinch.scale = 0;
+	CHECK(SdlInput_dispatch(event));
+	CHECK(mouseEvents(mouse).empty());
+}
 
 TEST(window_points_scale_to_the_games_pixels_and_hold_to_its_screen)
 {

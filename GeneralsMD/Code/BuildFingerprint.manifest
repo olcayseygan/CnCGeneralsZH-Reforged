@@ -1964,6 +1964,7 @@ GameEngineDevice/Include/SdlDevice/GameClient/AniCursor.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlInput.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyTable.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyboard.h
+GameEngineDevice/Include/SdlDevice/GameClient/SdlMacGesture.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlMouse.h
 GameEngineDevice/Include/VideoDevice/Bink/BinkVideoPlayer.h
 GameEngineDevice/Include/W3DDevice/Common/W3DConvert.h
@@ -2122,6 +2123,7 @@ GameEngineDevice/Source/SdlDevice/GameClient/AniCursor.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlInput.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyTable.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyboard.cpp
+GameEngineDevice/Source/SdlDevice/GameClient/SdlMacGesture.mm
 GameEngineDevice/Source/SdlDevice/GameClient/SdlMouse.cpp
 GameEngineDevice/Source/VideoDevice/Bink/BinkVideoPlayer.cpp
 GameEngineDevice/Source/W3DDevice/Common/System/W3DFunctionLexicon.cpp
@@ -3403,6 +3405,7 @@ Tests/test_bigfilesystem.cpp
 Tests/test_bigfilesystem_stubs.cpp
 Tests/test_binkvideo.cpp
 Tests/test_camera_behavior.inc
+Tests/test_camera_gestures.inc
 Tests/test_cinema.inc
 Tests/test_clock.cpp
 Tests/test_compression.cpp

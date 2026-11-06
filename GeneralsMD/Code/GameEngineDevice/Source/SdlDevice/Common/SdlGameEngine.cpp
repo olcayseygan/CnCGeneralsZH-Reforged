@@ -143,6 +143,7 @@ static Bool s_pendingVideo = FALSE;
 
 SdlGameEngine::~SdlGameEngine()
 {
+	SdlInput_setGestureWindow( NULL );
 	s_pendingWindow = m_window;
 	s_pendingVideo = m_sdlVideoStarted;
 	m_window = NULL;
@@ -225,6 +226,7 @@ void SdlGameEngine::createWindow( void )
 		RELEASE_CRASH( why );
 		return;
 	}
+	SdlInput_setGestureWindow( m_window );
 #ifdef ZH_WINDOW_ICON
 	// a Linux executable carries no icon, so the window brings its own for the taskbar and alt-tab;
 	// GNOME on Wayland ignores it and takes zero-hour-reforged.desktop's, by the app id (PosixMain.cpp)
@@ -354,11 +356,18 @@ void SdlGameEngine::serviceWindowsOS( void )
 				break;
 
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
+				SdlInput_cancelGestures();
 				// WinMain's WM_ACTIVATE rule: silent behind another window unless MuteInBackground is
 				// off, and never in a -wav run.  Once a loss, since loseFocus keeps one set of volumes.
 				if (TheAudio && isActive() && TheGlobalData->m_wavEndFrame <= 0 && TheGlobalData->m_muteInBackground)
 					TheAudio->loseFocus();
 				setIsActive( FALSE );
+				break;
+
+			case SDL_EVENT_WINDOW_HIDDEN:
+			case SDL_EVENT_WINDOW_MINIMIZED:
+				SdlInput_cancelGestures();
+				SdlInput_dispatch( event );
 				break;
 
 			default:

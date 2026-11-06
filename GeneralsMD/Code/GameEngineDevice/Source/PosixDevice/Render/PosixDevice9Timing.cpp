@@ -25,8 +25,8 @@
 //   - device flush: mid-frame flushes (a full batch, a read-back) recording and submitting the batch;
 //   - device present: Present recording and submitting the frame's last batch, and the gamma pass,
 //     including the swapchain wait;
-//   - swapchain wait: SDL_WaitAndAcquireGPUSwapchainTexture's, which is the display's pacing (a hidden
-//     window still waits for vsync), and work: the frame without it - what the frame costs;
+//   - swapchain wait: SDL_WaitAndAcquireGPUSwapchainTexture's, which includes display pacing when VSync
+//     is on and GPU backpressure in either mode; work: the frame without that wait;
 //   - not paced: frames presented to a window SDL called hidden, occluded or minimised, and frames whose
 //     swapchain gave no drawable.  macOS hands a hidden or occluded window drawables and does not wait for
 //     vsync, so a run full of them measures the game unpaced - a -hiddenwindow run, and a MacBook Air's

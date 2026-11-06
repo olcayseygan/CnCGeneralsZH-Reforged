@@ -34,6 +34,7 @@
 #include "Common/GameState.h"
 #include "GameClient/MapUtil.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/RankPointValue.h"
 
 #ifdef _INTERNAL
@@ -333,12 +334,18 @@ m_qmChannel(0)
 		{
 			line.toLower();
 			AsciiString mapName;
-			mapName.format("%s\\%s\\%s.map", TheMapCache->getMapDir().str(), line.str(), line.str());
+			// EA's file named a map by its folder; the online service's pool is the whole path
+			if (line.endsWith(".map"))
+				mapName = line;
+			else
+				mapName.format("%s\\%s\\%s.map", TheMapCache->getMapDir().str(), line.str(), line.str());
 			mapName = TheGameState->portableMapPathToRealMapPath(TheGameState->realMapPathToPortableMapPath(mapName));
 			mapName.toLower();
 
+			/* -online: the service's mapIdx and qm.join indices count its whole pool, so a map not
+				 installed here keeps its place; the screens that list the pool skip it themselves */
 			const MapMetaData *md = TheMapCache->findMap(mapName);
-			if (md)
+			if (md || OnlineIsEnabled())
 			{
 				m_qmMaps.push_back(mapName);
 			}

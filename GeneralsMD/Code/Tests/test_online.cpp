@@ -863,11 +863,15 @@ TEST(online_adapter_game_list_round_trips_the_host_options)
 
 	rig.feed( "{\"t\":\"game.joined\",\"action\":\"joined\",\"id\":6,\"name\":\"fun game\",\"map\":\"-\",\"maxp\":8,\"host\":\"Tank\",\"hostId\":7,\"count\":1,\"opts\":\"\",\"ids\":[7],\"nicks\":[\"Tank\"]}" );
 	std::vector<PeerResponse> r = rig.peerResponses();
-	CHECK_EQ( r.size(), (size_t)1 );
-	if (r.size() == 1)
+	CHECK_EQ( r.size(), (size_t)2 );
+	if (r.size() == 2)
 	{
 		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_CREATESTAGINGROOM );
 		CHECK_EQ( r[0].createStagingRoom.result, (Int)PEERJoinSuccess );
+		// the host itself on the staging room's player list, so its own chat lines show
+		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERINFO );
+		CHECK_STR( r[1].nick.c_str(), "Tank" );
+		CHECK_EQ( (int)r[1].player.roomType, (int)StagingRoom );
 	}
 
 	PeerRequest opts;
@@ -938,8 +942,8 @@ TEST(online_adapter_join_utm_and_start)
 
 	rig.feed( "{\"t\":\"game.joined\",\"action\":\"joined\",\"id\":5,\"name\":\"g\",\"map\":\"-\",\"maxp\":8,\"host\":\"Kim\",\"hostId\":9,\"count\":2,\"opts\":\"\",\"ids\":[9,7],\"nicks\":[\"Kim\",\"Tank\"]}" );
 	std::vector<PeerResponse> r = rig.peerResponses();
-	CHECK_EQ( r.size(), (size_t)1 );
-	if (r.size() == 1)
+	CHECK_EQ( r.size(), (size_t)3 );
+	if (r.size() == 3)
 	{
 		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_JOINSTAGINGROOM );
 		CHECK( r[0].joinStagingRoom.ok );
@@ -947,6 +951,11 @@ TEST(online_adapter_join_utm_and_start)
 		CHECK( r[0].joinStagingRoom.isHostPresent );
 		CHECK_STR( r[0].stagingRoomPlayerNames[0].c_str(), "Kim" );
 		CHECK_STR( r[0].stagingRoomPlayerNames[1].c_str(), "Tank" );
+		// both on the staging room's player list, the host's chat lines need it
+		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERINFO );
+		CHECK_STR( r[1].nick.c_str(), "Kim" );
+		CHECK_EQ( r[1].player.profileID, 9 );
+		CHECK_STR( r[2].nick.c_str(), "Tank" );
 	}
 	CHECK_STR( rig.sentType( 1 ).c_str(), "stats.get" );		// the host's stats, as GameSpy's join read them
 	CHECK_EQ( rig.sent[1].getInt( "id" ), 9 );
@@ -960,10 +969,10 @@ TEST(online_adapter_join_utm_and_start)
 	{
 		CHECK_EQ( (int)r[0].peerResponseType, (int)PeerResponse::PEERRESPONSE_ROOMUTM );
 		CHECK_STR( r[0].nick.c_str(), "Kim" );
-		CHECK_STR( r[0].command.c_str(), "SL/" );
+		CHECK_STR( r[0].command.c_str(), "SL" );		// the screens compare without GameSpy's slash
 		CHECK_STR( r[0].commandOptions.c_str(), "M=maps/a.map" );
 		CHECK_EQ( (int)r[1].peerResponseType, (int)PeerResponse::PEERRESPONSE_PLAYERUTM );
-		CHECK_STR( r[1].command.c_str(), "KICK/" );
+		CHECK_STR( r[1].command.c_str(), "KICK" );
 	}
 
 	PeerRequest utm;
@@ -1226,4 +1235,30 @@ TEST(online_adapter_logs_the_rating_result)
 	CHECK_STR( rig.sentType( 0 ).c_str(), "stats.get" );		// our own numbers again
 	rig.feed( "{\"t\":\"unrated\",\"match\":\"m2\",\"reason\":\"custom\"}" );
 	CHECK_STR( OnlineSession::get().resultLine.c_str(), "ONLINE UNRATED reason=custom" );
+}
+
+TEST(online_adapter_leaves_the_chat_room_for_a_staging_room)
+{
+	AdapterRig rig;
+	rig.login();
+	PeerRequest join;
+	join.peerRequestType = PeerRequest::PEERREQUEST_JOINGROUPROOM;
+	join.groupRoom.id = 1;
+	rig.peer->addRequest( join );
+	rig.feed( "{\"t\":\"room\",\"id\":\"lobby1\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
+	rig.peerResponses();
+	rig.sent.clear();
+
+	PeerRequest create;
+	create.peerRequestType = PeerRequest::PEERREQUEST_CREATESTAGINGROOM;
+	create.text = u"fun game";
+	rig.peer->addRequest( create );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "room.leave" );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "game.host" );
+
+	rig.sent.clear();
+	PeerRequest leave;
+	leave.peerRequestType = PeerRequest::PEERREQUEST_LEAVEGROUPROOM;
+	rig.peer->addRequest( leave );
+	CHECK_EQ( rig.sent.size(), (size_t)0 );		// already out
 }

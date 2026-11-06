@@ -529,7 +529,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		if (m.has( "to" ))
 			r.message.isPrivate = TRUE;
 		else if (!namesGame( m, gameId ) && !namesChatRoom( m, groupRoom ))
-			return;		// a room this player has left (the server keeps a staging player in its chat room)
+			return;		// a room this player has left, said before the server took the room.leave
 		peerResponse( r );
 	}
 	else if (t == "game")
@@ -587,6 +587,11 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			}
 			peerResponse( r );
 		}
+		/* Everyone in the room, ourselves included, into the screen's player list, which GameSpy filled from
+			 each room's player keys.  Staging chat is shown only from a nick on that list, and the lobby's list
+			 has lost the host by now (its room.leave), so without this the staging chat box stayed empty. */
+		for (size_t i = 0; i < ids.size() && i < nicks.size(); ++i)
+			playerResponse( *this, PeerResponse::PEERRESPONSE_PLAYERINFO, StagingRoom, ids[i], nicks[i] );
 		for (size_t i = 0; i < ids.size(); ++i)
 		{
 			if (ids[i] == id)
@@ -601,6 +606,10 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_PLAYERUTM );
 		r.nick = m.getString( "nick" );
 		r.command = m.getString( "cmd" );
+		// the screens send "SL/", "REQ/", "KICK/" and compare "SL", "REQ", "KICK": GameSpy's peer SDK
+		// dropped the slash on the way, so a joiner never read the host's slot list and left after a minute
+		if (!r.command.empty() && r.command[r.command.size() - 1] == '/')
+			r.command.erase( r.command.size() - 1 );
 		r.commandOptions = m.getString( "opts" );
 		if (!m.has( "to" ))
 		{
@@ -739,6 +748,19 @@ static void leaveGame( OnlineSession &s )
 	s.hostLeftGame = 0;
 }
 
+/* Out of the chat room on the server too, as GameSpy left the group room for a staging room or Quick Match:
+	 the lobby's other players then stop listing somebody who no longer reads it. */
+static void leaveChatRoom( OnlineSession &s )
+{
+	if (s.groupRoom)
+	{
+		OnlineMessage m;
+		m.setString( "t", "room.leave" );
+		s.send( m );
+	}
+	s.groupRoom = 0;
+}
+
 void OnlinePeerQueue::addRequest( const PeerRequest& req )
 {
 	OnlineSession &s = OnlineSession::get();
@@ -777,7 +799,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		return;
 
 	case PeerRequest::PEERREQUEST_LEAVEGROUPROOM:
-		s.groupRoom = 0;		// the server has no leave; the room's lines are dropped from here on
+		leaveChatRoom( s );
 		return;
 
 	case PeerRequest::PEERREQUEST_STARTGAMELIST:
@@ -795,7 +817,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 
 	case PeerRequest::PEERREQUEST_CREATESTAGINGROOM:
 		leaveGame( s );
-		s.groupRoom = 0;
+		leaveChatRoom( s );
 		s.hosting = TRUE;
 		s.hostInfo.clear();
 		s.hostInfo.setInt( "exe", req.stagingRoomCreation.exeCRC );
@@ -850,7 +872,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 
 	case PeerRequest::PEERREQUEST_JOINSTAGINGROOM:
 		leaveGame( s );
-		s.groupRoom = 0;
+		leaveChatRoom( s );
 		s.joiningGame = req.stagingRoom.id;
 		m.setString( "t", "game.join" ).setInt( "id", req.stagingRoom.id );
 		s.send( m );
@@ -885,7 +907,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 	case PeerRequest::PEERREQUEST_STARTQUICKMATCH:
 		{
 			leaveGame( s );
-			s.groupRoom = 0;
+			leaveChatRoom( s );
 			std::vector<long long> maps;
 			for (size_t i = 0; i < req.qmMaps.size(); ++i)
 				if (req.qmMaps[i])

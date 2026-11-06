@@ -792,6 +792,8 @@ GlobalData::GlobalData()
 	m_netGameLocalSlot = 0;
 	m_netGameAISlots = 0;
 	m_lanPlayerName.clear(); // the lobby name comes out of the preferences unless -lanname says otherwise
+	m_relayHost.clear(); // a real LAN unless -relay names a relay
+	m_relayPort = 0;
 	m_lanLobbyOnStart = FALSE;
 	m_skirmishLobbyOnStart = FALSE;
 	m_optionsMenuOnStart = FALSE;

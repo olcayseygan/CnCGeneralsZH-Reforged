@@ -32,6 +32,10 @@
 #include "GameNetwork/LinkSimulation.h"
 #include "GameNetwork/Transport.h"
 #include "GameNetwork/NetworkInterface.h"
+#include "Common/UserPreferences.h"
+
+#include <chrono>
+#include <thread>
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -75,12 +79,276 @@ static inline void decryptBuf( unsigned char *buf, Int len )
 }
 
 //--------------------------------------------------------------------------
+/* -relay host:port.  Two homes behind NAT cannot reach each other, so in relay mode no Transport owns a
+	 socket: the process has one, bound to an ephemeral port, and everything goes through the relay in
+	 a small envelope (big-endian, every packet opens 'Z','R',type):
+		 HELLO   1  us -> relay: exeCRC u32, iniCRC u32, session 8 bytes (0 the first time), wantVip u32 (0 = any),
+								name UTF-8 <= 32 bytes
+		 WELCOME 2  relay -> us: session 8 bytes, vip u32 - our virtual 10.x.y.z address
+		 DATA    3  us -> relay: session 8 bytes, dstVip u32, dstPort u16, srcPort u16, payload
+		 DATA    3  relay -> us: srcVip u32, srcPort u16, dstPort u16, payload
+	 The relay puts a machine in the room of its (exeCRC, iniCRC) and forgets a session idle for 120 s,
+	 and a HELLO with our session goes out every 10 s whenever a Transport is pumped (the multiplayer load
+	 screen pumps it too).  The relay forwards nothing to us until a packet carrying the session it sent
+	 comes back, so a second HELLO answers the first WELCOME at once.  Every WELCOME carries the session
+	 to use from then on: the relay hands out a new one when NAT moves our port.  wantVip is the address
+	 the first init() was handed when it is in 10.0.0.0/8, so a -netgame slot list of 10.x addresses gets
+	 each copy the slot it names, and after the first WELCOME it is the vip we have, so a relay that
+	 restarted or forgot us gives it back.  The lobby asks for nothing at first, because LANAPI::init runs
+	 with no address before SetLocalIP picks one.  The ports are the logical ones (the lobby's 8086,
+	 the game's 8088): a received DATA is handed to whichever Transport holds dstPort, with the sender's
+	 vip and port as its address, so LANAPI and ConnectionManager see a LAN where every machine is a
+	 vip and a broadcast is dstVip 255.255.255.255.  Nothing here touches the game logic. */
+namespace
+{
+	enum { RELAY_HELLO = 1, RELAY_WELCOME = 2, RELAY_DATA = 3 };
+	const Int RELAY_MAX_PACKET = 1400;
+	const Int RELAY_SESSION_BYTES = 8;
+	const Int RELAY_HELLO_HEADER = 23;					///< 'ZR', type, exeCRC, iniCRC, session, wantVip
+	const Int RELAY_WELCOME_SIZE = 15;					///< 'ZR', type, session, vip
+	const Int RELAY_DATA_OUT_HEADER = 19;				///< 'ZR', type, session, dstVip, dstPort, srcPort
+	const Int RELAY_DATA_IN_HEADER = 11;				///< 'ZR', type, srcVip, srcPort, dstPort
+	const Int RELAY_NAME_BYTES = 32;
+	const UnsignedInt RELAY_KEEPALIVE_MS = 10000;
+	const Int RELAY_HELLO_TRIES = 10;					///< one HELLO every 500 ms: five seconds, then a socket error
+	const UnsignedInt RELAY_RETRY_AFTER_MS = 10000;	///< a failed handshake is not tried again for this long
+	const Int RELAY_MAX_TRANSPORTS = 4;
+
+	struct RelayLink
+	{
+		UDP *sock;
+		UnsignedInt ip;
+		UnsignedShort port;
+		unsigned char session[RELAY_SESSION_BYTES];	///< opaque, as the relay sent it; zero before the first WELCOME
+		UnsignedInt wantVip;
+		UnsignedInt vip;
+		UnsignedInt lastHello;
+		UnsignedInt failedAt;
+		Bool wsaStarted;
+		Int nameLength;
+		unsigned char name[RELAY_NAME_BYTES];
+		Transport *users[RELAY_MAX_TRANSPORTS];
+	};
+	RelayLink s_relay;	// zero
+
+	void put32( unsigned char *p, UnsignedInt v ) { p[0] = (unsigned char)(v >> 24); p[1] = (unsigned char)(v >> 16); p[2] = (unsigned char)(v >> 8); p[3] = (unsigned char)v; }
+	void put16( unsigned char *p, UnsignedShort v ) { p[0] = (unsigned char)(v >> 8); p[1] = (unsigned char)v; }
+	UnsignedInt get32( const unsigned char *p ) { return ((UnsignedInt)p[0] << 24) | ((UnsignedInt)p[1] << 16) | ((UnsignedInt)p[2] << 8) | p[3]; }
+	UnsignedShort get16( const unsigned char *p ) { return (UnsignedShort)((p[0] << 8) | p[1]); }
+
+	/// The lobby name, UTF-8, cut at a whole character before RELAY_NAME_BYTES; the relay only shows it
+	void relayTakeName( void )
+	{
+		UnicodeString name;
+		if (TheGlobalData->m_lanPlayerName.isNotEmpty())
+			name.translate( TheGlobalData->m_lanPlayerName );
+		else
+			name = LANPreferences().getUserName();
+		Int n = 0;
+		for (Int i = 0; i < name.getLength(); ++i)
+		{
+			const UnsignedInt c = (UnsignedInt)name.getCharAt(i);
+			const Int size = c < 0x80 ? 1 : (c < 0x800 ? 2 : 3);
+			if (n + size > RELAY_NAME_BYTES)
+				break;
+			if (size == 1)
+				s_relay.name[n] = (unsigned char)c;
+			else if (size == 2)
+			{
+				s_relay.name[n] = (unsigned char)(0xC0 | (c >> 6));
+				s_relay.name[n + 1] = (unsigned char)(0x80 | (c & 0x3F));
+			}
+			else
+			{
+				s_relay.name[n] = (unsigned char)(0xE0 | (c >> 12));
+				s_relay.name[n + 1] = (unsigned char)(0x80 | ((c >> 6) & 0x3F));
+				s_relay.name[n + 2] = (unsigned char)(0x80 | (c & 0x3F));
+			}
+			n += size;
+		}
+		s_relay.nameLength = n;
+	}
+
+	void relaySendHello( void )
+	{
+		unsigned char buf[RELAY_HELLO_HEADER + RELAY_NAME_BYTES];
+		buf[0] = 'Z'; buf[1] = 'R'; buf[2] = RELAY_HELLO;
+		put32( buf + 3, TheGlobalData->m_exeCRC );
+		put32( buf + 7, TheGlobalData->m_iniCRC );
+		memcpy( buf + 11, s_relay.session, RELAY_SESSION_BYTES );
+		put32( buf + 19, s_relay.wantVip );
+		memcpy( buf + RELAY_HELLO_HEADER, s_relay.name, s_relay.nameLength );
+		s_relay.sock->Write( buf, RELAY_HELLO_HEADER + s_relay.nameLength, s_relay.ip, s_relay.port );
+		s_relay.lastHello = Clock_Milliseconds();
+	}
+}
+
+UnsignedInt Transport::getRelayIP( void )
+{
+	return s_relay.vip;
+}
+
+/// Reads everything the relay socket holds: WELCOMEs set the session, DATA goes to the Transport on its dstPort
+void Transport::pumpRelay( void )
+{
+	if (!s_relay.sock)
+		return;
+	const UnsignedInt now = Clock_Milliseconds();
+	if (s_relay.vip && now - s_relay.lastHello >= RELAY_KEEPALIVE_MS)
+		relaySendHello();
+
+	unsigned char buf[RELAY_MAX_PACKET];
+	sockaddr_in from;
+	Int len;
+	while ((len = s_relay.sock->Read( buf, sizeof(buf), &from )) > 0)
+	{
+		if (ntohl(from.sin_addr.s_addr) != s_relay.ip || ntohs(from.sin_port) != s_relay.port
+			|| len < 3 || buf[0] != 'Z' || buf[1] != 'R')
+			continue;
+		if (buf[2] == RELAY_WELCOME && len >= RELAY_WELCOME_SIZE)
+		{
+			const UnsignedInt vip = get32( buf + 11 );
+			memcpy( s_relay.session, buf + 3, RELAY_SESSION_BYTES );
+			// The lobby already announced the first one; a relay that forgot us and had given it away moves us
+			DEBUG_ASSERTLOG( !s_relay.vip || vip == s_relay.vip, ("Transport: the relay moved us from %d.%d.%d.%d to %d.%d.%d.%d, peers will not find us\n",
+				s_relay.vip >> 24, (s_relay.vip >> 16) & 0xff, (s_relay.vip >> 8) & 0xff, s_relay.vip & 0xff,
+				vip >> 24, (vip >> 16) & 0xff, (vip >> 8) & 0xff, vip & 0xff) );
+			if (!s_relay.vip)
+			{
+				s_relay.vip = vip;
+				s_relay.wantVip = vip;	// every later HELLO asks for it back
+			}
+		}
+		else if (buf[2] == RELAY_DATA && len > RELAY_DATA_IN_HEADER && len - RELAY_DATA_IN_HEADER <= MAX_NETWORK_MESSAGE_LEN)
+		{
+			const UnsignedShort dstPort = get16( buf + 9 );
+			for (Int u = 0; u < RELAY_MAX_TRANSPORTS; ++u)
+			{
+				Transport *t = s_relay.users[u];
+				if (t && t->m_port == dstPort)
+				{
+					TransportMessage msg;
+					memcpy( &msg, buf + RELAY_DATA_IN_HEADER, len - RELAY_DATA_IN_HEADER );
+					t->receivePacket( msg, len - RELAY_DATA_IN_HEADER, get32( buf + 3 ), get16( buf + 7 ), now );
+					break;
+				}
+			}
+		}
+	}
+}
+
+/// Joins the relay socket, opening it and waiting for a WELCOME (at most five seconds) the first time
+Bool Transport::initRelayed( UnsignedInt ip, UnsignedShort port )
+{
+	if (!s_relay.vip)
+	{
+		s_relay.wantVip = (ip >> 24) == 10 ? ip : 0;
+		if (s_relay.failedAt && Clock_Milliseconds() - s_relay.failedAt < RELAY_RETRY_AFTER_MS)
+			return false;
+#if defined(_WIN32)
+		// the relay socket outlives every Transport, so it keeps winsock up by itself
+		if (!s_relay.wsaStarted)
+		{
+			WSADATA wsadata;
+			if (WSAStartup( MAKEWORD(2, 2), &wsadata ) != 0)
+				return false;
+			s_relay.wsaStarted = true;
+		}
+#endif
+		s_relay.ip = ResolveIP( TheGlobalData->m_relayHost );
+		s_relay.port = TheGlobalData->m_relayPort;
+		if (s_relay.ip == 0 || s_relay.ip == INADDR_NONE || s_relay.port == 0)
+		{
+			DEBUG_LOG(("Transport: -relay %s:%d does not resolve to an address and port\n", TheGlobalData->m_relayHost.str(), TheGlobalData->m_relayPort));
+			s_relay.failedAt = Clock_Milliseconds();
+			return false;
+		}
+		if (!s_relay.sock)
+		{
+			s_relay.sock = NEW UDP();
+			if (s_relay.sock->Bind( (UnsignedInt)INADDR_ANY, 0 ) != 0)
+			{
+				DEBUG_LOG(("Transport: no socket for the relay (error %d)\n", lastSocketError()));
+				delete s_relay.sock;
+				s_relay.sock = NULL;
+				s_relay.failedAt = Clock_Milliseconds();
+				return false;
+			}
+		}
+		relayTakeName();
+		const UnsignedInt asked = s_relay.wantVip;
+		for (Int tries = 0; tries < RELAY_HELLO_TRIES && !s_relay.vip; ++tries)
+		{
+			relaySendHello();
+			for (Int wait = 0; wait < 10 && !s_relay.vip; ++wait)
+			{
+				std::this_thread::sleep_for( std::chrono::milliseconds( 50 ) );
+				pumpRelay();
+			}
+		}
+		if (!s_relay.vip)
+		{
+			DEBUG_LOG(("Transport: no WELCOME from the relay at %d.%d.%d.%d:%d in five seconds\n",
+				s_relay.ip >> 24, (s_relay.ip >> 16) & 0xff, (s_relay.ip >> 8) & 0xff, s_relay.ip & 0xff, s_relay.port));
+			s_relay.failedAt = Clock_Milliseconds();
+			return false;
+		}
+		relaySendHello();	// answers the WELCOME with its session, after which the relay forwards to us
+		DEBUG_LOG(("Transport: the relay calls us %d.%d.%d.%d\n",
+			s_relay.vip >> 24, (s_relay.vip >> 16) & 0xff, (s_relay.vip >> 8) & 0xff, s_relay.vip & 0xff));
+		// a -netgame slot that did not get its address hears nobody, and the match never starts
+		DEBUG_ASSERTLOG( !asked || s_relay.vip == asked, ("Transport: asked the relay for %d.%d.%d.%d, which another session holds\n",
+			asked >> 24, (asked >> 16) & 0xff, (asked >> 8) & 0xff, asked & 0xff) );
+	}
+
+	for (Int u = 0; u < RELAY_MAX_TRANSPORTS; ++u)
+	{
+		if (!s_relay.users[u])
+		{
+			s_relay.users[u] = this;
+			m_relayed = true;
+			resetQueues( port );
+			return true;
+		}
+	}
+	DEBUG_CRASH(("Transport: more than %d transports on the relay\n", RELAY_MAX_TRANSPORTS));
+	return false;
+}
+
+void Transport::detachRelay( void )
+{
+	for (Int u = 0; u < RELAY_MAX_TRANSPORTS; ++u)
+	{
+		if (s_relay.users[u] == this)
+			s_relay.users[u] = NULL;
+	}
+	m_relayed = false;
+}
+
+/// One queued message into a DATA envelope; returns what Write returns
+Int Transport::writeRelayed( TransportMessage &msg )
+{
+	if (!s_relay.sock)
+		return -1;
+	const Int len = msg.length + sizeof(TransportMessageHeader);
+	unsigned char buf[RELAY_DATA_OUT_HEADER + MAX_NETWORK_MESSAGE_LEN];
+	buf[0] = 'Z'; buf[1] = 'R'; buf[2] = RELAY_DATA;
+	memcpy( buf + 3, s_relay.session, RELAY_SESSION_BYTES );
+	put32( buf + 11, msg.addr );
+	put16( buf + 15, msg.port );
+	put16( buf + 17, m_port );
+	memcpy( buf + RELAY_DATA_OUT_HEADER, &msg, len );
+	return s_relay.sock->Write( buf, RELAY_DATA_OUT_HEADER + len, s_relay.ip, s_relay.port );
+}
+
+//--------------------------------------------------------------------------
 
 Transport::Transport(void)
 {
 	m_winsockInit = false;
 	m_udpsock = NULL;
 	m_redirectedIP = 0;
+	m_relayed = false;
 	// EA never initialized these two.  It did not bite because everything that read them was
 	// compiled out of the shipping build; now that the simulator is built in every configuration,
 	// a Transport that is used before init() would have run on whatever was on the heap.
@@ -104,6 +372,18 @@ Bool Transport::init( AsciiString ip, UnsignedShort port )
 
 Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 {
+	detachRelay();
+	if (TheGlobalData->m_relayHost.isNotEmpty())
+	{
+		m_redirectedIP = 0;
+		if (m_udpsock)
+		{
+			delete m_udpsock;
+			m_udpsock = NULL;
+		}
+		return initRelayed( ip, port );
+	}
+
 	// ----- Initialize Winsock -----
 	// (Windows only: POSIX sockets need no start-up, so m_winsockInit stays false there.)
 #if defined(_WIN32)
@@ -173,6 +453,12 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 		return false;
 	}
 
+	resetQueues( port );
+	return true;
+}
+
+void Transport::resetQueues( UnsignedShort port )
+{
 	// ------- Clear buffers --------
 	// i is used after the loop; VC6 for-scope let it escape.
 	int i;
@@ -206,8 +492,6 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 		("Transport: simulating a link with %d ms latency (amp %d, period %d, noise %d) and %d%% packet loss\n",
 		TheGlobalData->m_latencyAverage, TheGlobalData->m_latencyAmplitude,
 		TheGlobalData->m_latencyPeriod, TheGlobalData->m_latencyNoise, TheGlobalData->m_packetLoss));
-
-	return true;
 }
 
 #if !defined(_WIN32)
@@ -236,6 +520,7 @@ void Transport::moveReceivedInto( Transport &inbox )
 
 void Transport::reset( void )
 {
+	detachRelay();
 	if (m_udpsock)
 	{
 		delete m_udpsock;
@@ -268,7 +553,7 @@ Bool Transport::update( void )
 }
 
 Bool Transport::doSend() {
-	if (!m_udpsock)
+	if (!m_udpsock && !m_relayed)
 	{
 		DEBUG_LOG(("Transport::doSend() - m_udpSock is NULL!\n"));
 		return FALSE;
@@ -298,7 +583,8 @@ Bool Transport::doSend() {
 		{
 			int bytesSent = 0;
 			// Send this message
-			if ((bytesSent = m_udpsock->Write((unsigned char *)(&m_outBuffer[i]), m_outBuffer[i].length + sizeof(TransportMessageHeader), m_outBuffer[i].addr, m_outBuffer[i].port)) > 0)
+			if ((bytesSent = m_relayed ? writeRelayed(m_outBuffer[i])
+				: m_udpsock->Write((unsigned char *)(&m_outBuffer[i]), m_outBuffer[i].length + sizeof(TransportMessageHeader), m_outBuffer[i].addr, m_outBuffer[i].port)) > 0)
 			{
 				//DEBUG_LOG(("Sending %d bytes to %d:%d\n", m_outBuffer[i].length + sizeof(TransportMessageHeader), m_outBuffer[i].addr, m_outBuffer[i].port));
 				m_outgoingPackets[m_statisticsSlot]++;
@@ -343,8 +629,79 @@ Bool Transport::doSend() {
 	return retval;
 }
 
-Bool Transport::doRecv() 
+/// One datagram of len bytes in incomingMessage, from addr:port, into the inbox (or the latency simulator's)
+void Transport::receivePacket( TransportMessage &incomingMessage, Int len, UnsignedInt addr, UnsignedShort port, UnsignedInt now )
 {
+	unsigned char *buf = (unsigned char *)&incomingMessage;
+
+	// Packet loss simulation
+	if (m_usePacketLoss)
+	{
+		if ( linkSimPacketIsLost( TheGlobalData->m_packetLoss, GameClientRandomValue(1, 100) ) )
+		{
+			return;
+		}
+	}
+
+	// Decrypt the packet
+	decryptBuf(buf, len);
+
+	incomingMessage.length = len - sizeof(TransportMessageHeader);
+
+	if (len <= sizeof(TransportMessageHeader) || !isGeneralsPacket( &incomingMessage ))
+	{
+		m_unknownPackets[m_statisticsSlot]++;
+		m_unknownBytes[m_statisticsSlot] += len;
+		return;
+	}
+
+	// Something there; stick it somewhere
+	m_incomingPackets[m_statisticsSlot]++;
+	m_incomingBytes[m_statisticsSlot] += len;
+
+	for (int i=0; i<MAX_MESSAGES; ++i)
+	{
+		// Latency simulation
+		if (m_useLatency)
+		{
+			if (m_delayedInBuffer[i].message.length == 0)
+			{
+				// Empty slot; use it
+				m_delayedInBuffer[i].deliveryTime = linkSimDeliveryTime( now,
+					TheGlobalData->m_latencyAverage, TheGlobalData->m_latencyAmplitude,
+					TheGlobalData->m_latencyPeriod,
+					GameClientRandomValue(-TheGlobalData->m_latencyNoise, TheGlobalData->m_latencyNoise) );
+				m_delayedInBuffer[i].message.length = incomingMessage.length;
+				m_delayedInBuffer[i].message.addr = addr;
+				m_delayedInBuffer[i].message.port = port;
+				memcpy(&m_delayedInBuffer[i].message, buf, len);
+				break;
+			}
+		}
+		else
+		{
+			if (m_inBuffer[i].length == 0)
+			{
+				// Empty slot; use it
+				m_inBuffer[i].length = incomingMessage.length;
+				m_inBuffer[i].addr = addr;
+				m_inBuffer[i].port = port;
+				memcpy(&m_inBuffer[i], buf, len);
+				break;
+			}
+		}
+	}
+	//DEBUG_ASSERTCRASH(i<MAX_MESSAGES, ("Message lost!"));
+}
+
+Bool Transport::doRecv()
+{
+	if (m_relayed)
+	{
+		pumpRelay();
+		return TRUE;
+	}
+
 	if (!m_udpsock)
 	{
 		DEBUG_LOG(("Transport::doRecv() - m_udpSock is NULL!\n"));
@@ -360,74 +717,9 @@ Bool Transport::doRecv()
 	TransportMessage incomingMessage;
 	unsigned char *buf = (unsigned char *)&incomingMessage;
 	int len = MAX_NETWORK_MESSAGE_LEN;
-//	DEBUG_LOG(("Transport::doRecv - checking\n"));
 	while ( (len=m_udpsock->Read(buf, MAX_NETWORK_MESSAGE_LEN, &from)) > 0 )
 	{
-		// Packet loss simulation
-		if (m_usePacketLoss)
-		{
-			if ( linkSimPacketIsLost( TheGlobalData->m_packetLoss, GameClientRandomValue(1, 100) ) )
-			{
-				continue;
-			}
-		}
-
-//		DEBUG_LOG(("Transport::doRecv - Got something! len = %d\n", len));
-		// Decrypt the packet
-//		DEBUG_LOG(("buffer = "));
-//		for (Int munkee = 0; munkee < len; ++munkee) {
-//			DEBUG_LOG(("%02x", *(buf + munkee)));
-//		}
-//		DEBUG_LOG(("\n"));
-		decryptBuf(buf, len);
-
-		incomingMessage.length = len - sizeof(TransportMessageHeader);
-
-		if (len <= sizeof(TransportMessageHeader) || !isGeneralsPacket( &incomingMessage ))
-		{
-			m_unknownPackets[m_statisticsSlot]++;
-			m_unknownBytes[m_statisticsSlot] += len;
-			continue;
-		}
-
-		// Something there; stick it somewhere
-//		DEBUG_LOG(("Saw %d bytes from %d:%d\n", len, ntohl(from.sin_addr.s_addr), ntohs(from.sin_port)));
-		m_incomingPackets[m_statisticsSlot]++;
-		m_incomingBytes[m_statisticsSlot] += len;
-
-		for (int i=0; i<MAX_MESSAGES; ++i)
-		{
-			// Latency simulation
-			if (m_useLatency)
-			{
-				if (m_delayedInBuffer[i].message.length == 0)
-				{
-					// Empty slot; use it
-					m_delayedInBuffer[i].deliveryTime = linkSimDeliveryTime( now,
-						TheGlobalData->m_latencyAverage, TheGlobalData->m_latencyAmplitude,
-						TheGlobalData->m_latencyPeriod,
-						GameClientRandomValue(-TheGlobalData->m_latencyNoise, TheGlobalData->m_latencyNoise) );
-					m_delayedInBuffer[i].message.length = incomingMessage.length;
-					m_delayedInBuffer[i].message.addr = ntohl(from.sin_addr.s_addr);
-					m_delayedInBuffer[i].message.port = ntohs(from.sin_port);
-					memcpy(&m_delayedInBuffer[i].message, buf, len);
-					break;
-				}
-			}
-			else
-			{
-				if (m_inBuffer[i].length == 0)
-				{
-					// Empty slot; use it
-					m_inBuffer[i].length = incomingMessage.length;
-					m_inBuffer[i].addr = ntohl(from.sin_addr.s_addr);
-					m_inBuffer[i].port = ntohs(from.sin_port);
-					memcpy(&m_inBuffer[i], buf, len);
-					break;
-				}
-			}
-		}
-		//DEBUG_ASSERTCRASH(i<MAX_MESSAGES, ("Message lost!"));
+		receivePacket( incomingMessage, len, ntohl(from.sin_addr.s_addr), ntohs(from.sin_port), now );
 	}
 
 	if (len == -1) {

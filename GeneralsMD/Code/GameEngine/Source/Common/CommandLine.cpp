@@ -2558,6 +2558,28 @@ Int parseLanName(char *args[], int num)
 	return 2;
 }
 
+/* -relay <host:port> puts the LAN lobby and its games through a UDP relay instead of the local network,
+	 so two homes behind NAT can play (Transport.cpp has the envelope).  The host is resolved when the
+	 lobby opens; a missing port is kept as 0, which the lobby reports as a socket error. */
+Int parseRelay(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+	{
+		AsciiString host = args[1];
+		const char *colon = strrchr( args[1], ':' );
+		UnsignedShort port = 0;
+		if (colon)
+		{
+			host = std::string( args[1], colon - args[1] ).c_str();
+			const Int number = atoi( colon + 1 );
+			port = (number >= 1 && number <= 65535) ? (UnsignedShort)number : 0;
+		}
+		TheWritableGlobalData->m_relayHost = host;
+		TheWritableGlobalData->m_relayPort = port;
+	}
+	return 2;
+}
+
 /* -lanlobby starts on the LAN screen rather than the main menu.  Two copies on one machine are
    started by a script and the first thing both of them do is the same four clicks; this is those
    clicks.  It turns the shell map off with it: Shell::showShell only puts the main menu on the
@@ -3079,6 +3101,7 @@ static CommandLineParam params[] =
 	{ "-netai", parseNetAI },
 	{ "-lanip", parseLanIP },
 	{ "-lanname", parseLanName },
+	{ "-relay", parseRelay },
 	{ "-lanlobby", parseLanLobby },
 	{ "-skirmishlobby", parseSkirmishLobby },
 	{ "-factionpicker", parseFactionPicker },

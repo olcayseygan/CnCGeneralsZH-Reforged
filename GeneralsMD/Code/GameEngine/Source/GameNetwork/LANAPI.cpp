@@ -1364,6 +1364,8 @@ void LANAPI::listenForBroadcasts( void )
 		 itself, and a second wildcard socket would take each one twice. */
 	if (m_localIP == 0 || m_localIP == INADDR_ANY)
 		return;
+	if (TheGlobalData->m_relayHost.isNotEmpty())		// the relay delivers broadcasts on the lobby's own transport
+		return;
 	if (!m_broadcastListener->initBroadcastListener(lobbyPort))
 	{
 		DEBUG_LOG(("LANAPI::listenForBroadcasts - no broadcast listener on port %d (error %d): other hosts' games will not be listed\n",
@@ -1391,6 +1393,9 @@ Bool LANAPI::SetLocalIP( UnsignedInt localIP )
 #if !defined(_WIN32)
 	listenForBroadcasts();
 #endif
+	// -relay: this machine is the address the relay handed out, whichever card the menu picked
+	if (retval && TheGlobalData->m_relayHost.isNotEmpty())
+		m_localIP = Transport::getRelayIP();
 
 	return retval;
 }

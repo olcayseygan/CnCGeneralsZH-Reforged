@@ -66,6 +66,8 @@
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 #include "GameNetwork/GameSpyOverlay.h"
+#include "GameNetwork/Online/OnlineQueues.h"
+#include "Lib/WideCharFns.h"
 #include "GameNetwork/NAT.h"
 #include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
@@ -1624,6 +1626,82 @@ static Bool initDone = false;
 UnsignedInt lastSlotlistTime = 0;
 UnsignedInt enterTime = 0;
 Bool initialAcceptEnable = FALSE;
+
+/// -onlinemap: the map the -onlinehost host opens its room on, a cache path or a folder name under Maps
+static AsciiString onlineScriptMap( const AsciiString &otherwise )
+{
+	if (!OnlineIsEnabled() || TheGlobalData->m_onlineMap.isEmpty() || TheGlobalData->m_onlineHostGame.isEmpty())
+		return otherwise;
+	AsciiString name = TheGlobalData->m_onlineMap;
+	if (!TheMapCache->findMap( name ))
+		name.format( "maps\\%s\\%s.map", TheGlobalData->m_onlineMap.str(), TheGlobalData->m_onlineMap.str() );
+	if (!TheMapCache->findMap( name ))
+	{
+		DEBUG_LOG(("ONLINE MAP missing name=%s\n", TheGlobalData->m_onlineMap.str()));
+		return otherwise;
+	}
+	DEBUG_LOG(("ONLINE MAP name=%s\n", name.str()));
+	return name;
+}
+
+/* -online scripting in the staging room: -onlinesay says its line once; a -onlinejoin joiner accepts
+	 whenever the Accept button is live and it has not; the -onlinehost host with -onlinestart N presses
+	 Start once N players sit in the room and every one of them has accepted. */
+static void onlineStagingScript( void )
+{
+	if (!OnlineIsEnabled() || !parentWOLGameSetup)
+		return;
+	GameSpyStagingRoom *game = TheGameSpyInfo->getCurrentStagingRoom();
+	if (!game || !game->isInGame() || game->isGameInProgress())
+		return;
+
+	static Bool s_said = FALSE;
+	if (!s_said && TheGlobalData->m_onlineSay.isNotEmpty())
+	{
+		s_said = TRUE;
+		UnicodeString line;
+		line.translate( TheGlobalData->m_onlineSay );
+		PeerRequest req;
+		req.peerRequestType = PeerRequest::PEERREQUEST_MESSAGEROOM;
+		req.text = line.str();
+		req.message.isAction = FALSE;
+		TheGameSpyPeerMessageQueue->addRequest( req );
+		DEBUG_LOG(("ONLINE SAY where=staging text=%s\n", TheGlobalData->m_onlineSay.str()));
+	}
+
+	if (!TheGameSpyInfo->amIHost())
+	{
+		const Int local = game->getLocalSlotNum();
+		GameSlot *slot = local >= 0 ? game->getSlot( local ) : NULL;
+		if (TheGlobalData->m_onlineJoinGame.isNotEmpty() && slot && !slot->isAccepted()
+			&& buttonStart && buttonStart->winGetEnabled())
+		{
+			DEBUG_LOG(("ONLINE ACCEPT slot=%d\n", local));
+			TheWindowManager->winSendSystemMsg( parentWOLGameSetup, GBM_SELECTED, (WindowMsgData)buttonStart, buttonStartID );
+		}
+		return;
+	}
+
+	static Bool s_started = FALSE;
+	if (s_started || TheGlobalData->m_onlineStart < 2 || TheGlobalData->m_onlineHostGame.isEmpty())
+		return;
+	Int humans = 0;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		GameSlot *slot = game->getSlot( i );
+		if (!slot || !slot->isHuman())
+			continue;
+		if (!slot->isAccepted())
+			return;
+		++humans;
+	}
+	if (humans < TheGlobalData->m_onlineStart)
+		return;
+	s_started = TRUE;
+	DEBUG_LOG(("ONLINE START players=%d\n", humans));
+	StartPressed();
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Initialize the Lan Game Options Menu */
 //-------------------------------------------------------------------------------------------------
@@ -1692,7 +1770,8 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		hostSlot->setPlayerTemplate( customPref.getPreferredFaction() );
 		hostSlot->setNATBehavior((FirewallHelperClass::FirewallBehaviorType)natPref.getFirewallBehavior());
 		hostSlot->setPingString(TheGameSpyInfo->getPingString());
-		game->setMap(customPref.getPreferredMap());
+		const AsciiString hostMap = onlineScriptMap( customPref.getPreferredMap() );
+		game->setMap(hostMap);
 
 		// Recorded stats games can never limit superweapons, limit armies, or have inflated starting cash.
 		// This should probably be enforced at the gamespy level as well, to prevent expoits.
@@ -1728,7 +1807,7 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 			slot->setState( SLOT_OPEN );
 		}
 
-		AsciiString lowerMap = customPref.getPreferredMap();
+		AsciiString lowerMap = hostMap;
 		lowerMap.toLower();
 		std::map<AsciiString, MapMetaData>::iterator it = TheMapCache->find(lowerMap);
 		if (it != TheMapCache->end())
@@ -2025,6 +2104,8 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 			}
 		}
 
+		onlineStagingScript();
+
 		PeerResponse resp;
 
 		Int allowedMessages = TheGameSpyInfo->getMaxMessagesPerUpdate();
@@ -2250,6 +2331,8 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 
 			case PeerResponse::PEERRESPONSE_MESSAGE:
 				{
+					if (OnlineIsEnabled())
+						DEBUG_LOG(("ONLINE CHAT where=staging from=%s text=%s\n", resp.nick.c_str(), WideCharAsUtf8( resp.text.c_str() ).str()));
 					TheGameSpyInfo->addChat(resp.nick.c_str(), resp.message.profileID,
 						UnicodeString(resp.text.c_str()), !resp.message.isPrivate, resp.message.isAction, listboxGameSetupChat);
 				}

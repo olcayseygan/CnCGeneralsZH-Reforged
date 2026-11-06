@@ -140,6 +140,7 @@ public:
 
 	AsciiString generateGameSpyGameResultsPacket( void );
 	AsciiString generateLadderGameResultsPacket( void );
+	void sendOnlineReport( const char *from );							///< -online: the ladder packet's fields to OnlineSendReport
 	void markGameAsQM( void ) { m_isQM = TRUE; }
 	Bool isQMGame( void ) { return m_isQM; }
 

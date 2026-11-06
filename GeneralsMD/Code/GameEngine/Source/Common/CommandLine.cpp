@@ -2600,7 +2600,14 @@ static Int parseOnlineText( char *args[], int num, AsciiString GlobalData::*fiel
 }
 
 Int parseOnlineCA(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineCAFile ); }
-Int parseOnlineUser(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlineUser ); }
+/* -onlineuser also opens the online screens at startup (Shell::showShell), on top of a main menu, so it
+	 turns the shell map off the way -lanlobby does */
+Int parseOnlineUser(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+		TheWritableGlobalData->m_shellMapOn = FALSE;
+	return parseOnlineText( args, num, &GlobalData::m_onlineUser );
+}
 Int parseOnlinePass(char *args[], int num)			{ return parseOnlineText( args, num, &GlobalData::m_onlinePass ); }
 Int parseOnlineRegister(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineRegisterNick ); }
 Int parseOnlineHostGame(char *args[], int num)	{ return parseOnlineText( args, num, &GlobalData::m_onlineHostGame ); }
@@ -2608,11 +2615,16 @@ Int parseOnlineJoin(char *args[], int num)			{ return parseOnlineText( args, num
 Int parseOnlineSay(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineSay ); }
 Int parseOnlineMap(char *args[], int num)				{ return parseOnlineText( args, num, &GlobalData::m_onlineMap ); }
 
+/* -onlinestart N: the -onlinehost host starts the game once N players (itself included) sit in the room;
+	 bare or below 2 it is 2, the first joiner. */
 Int parseOnlineStart(char *args[], int num)
 {
-	if (TheWritableGlobalData)
-		TheWritableGlobalData->m_onlineStart = TRUE;
-	return 1;
+	if (!TheWritableGlobalData)
+		return 1;
+	const Bool hasNumber = num > 1 && args[1][0] >= '0' && args[1][0] <= '9';
+	const Int players = hasNumber ? atoi( args[1] ) : 2;
+	TheWritableGlobalData->m_onlineStart = players < 2 ? 2 : (players > MAX_SLOTS ? MAX_SLOTS : players);
+	return hasNumber ? 2 : 1;
 }
 
 Int parseQuickMatch(char *args[], int num)

@@ -99,6 +99,7 @@
 #include "GameNetwork/NetworkDefs.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/GameSpyOverlay.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 #include "GameClient/InGameUI.h"
@@ -1579,8 +1580,13 @@ void populatePlayerInfo( Player *player, Int pos)
 						return;
 					}
 
-					// send ladder results (even if we end the game in the first N seconds)
-					if (TheGameSpyGame->getLadderPort() && TheGameSpyGame->getLadderIP().isNotEmpty())
+					// send ladder results (even if we end the game in the first N seconds).  -online has no
+					// ladder address: the service takes every match's report and decides what is rated.
+					if (OnlineIsEnabled())
+					{
+						TheGameSpyGame->sendOnlineReport( "score" );
+					}
+					else if (TheGameSpyGame->getLadderPort() && TheGameSpyGame->getLadderIP().isNotEmpty())
 					{
 						GameResultsRequest gameResReq;
 						gameResReq.hostname = TheGameSpyGame->getLadderIP().str();

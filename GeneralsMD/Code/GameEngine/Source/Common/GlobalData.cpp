@@ -804,7 +804,7 @@ GlobalData::GlobalData()
 	m_onlineJoinGame.clear();
 	m_onlineSay.clear();
 	m_onlineMap.clear();
-	m_onlineStart = FALSE;
+	m_onlineStart = 0;
 	m_quickMatchOnStart = FALSE;
 	m_lanLobbyOnStart = FALSE;
 	m_skirmishLobbyOnStart = FALSE;

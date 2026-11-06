@@ -33,6 +33,7 @@
 #include "GameNetwork/Transport.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "Common/UserPreferences.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include <chrono>
 #include <thread>
@@ -98,12 +99,19 @@ static inline void decryptBuf( unsigned char *buf, Int len )
 	 with no address before SetLocalIP picks one.  The ports are the logical ones (the lobby's 8086,
 	 the game's 8088): a received DATA is handed to whichever Transport holds dstPort, with the sender's
 	 vip and port as its address, so LANAPI and ConnectionManager see a LAN where every machine is a
-	 vip and a broadcast is dstVip 255.255.255.255.  Nothing here touches the game logic. */
+	 vip and a broadcast is dstVip 255.255.255.255.  Nothing here touches the game logic.
+
+	 -online uses the same socket with HELLO_AUTH (type 4) in place of HELLO: the header above, then the
+	 16-byte ticket the service handed out at login, then the name (left empty: the service knows the
+	 account).  openOnlineRelay() makes the handshake right after login, against OnlineGetRelayEndpoint,
+	 so the vip exists before any Transport does; keepOnlineRelay() sends the keepalive while the lobby
+	 has no Transport to pump. */
 namespace
 {
-	enum { RELAY_HELLO = 1, RELAY_WELCOME = 2, RELAY_DATA = 3 };
+	enum { RELAY_HELLO = 1, RELAY_WELCOME = 2, RELAY_DATA = 3, RELAY_HELLO_AUTH = 4 };
 	const Int RELAY_MAX_PACKET = 1400;
 	const Int RELAY_SESSION_BYTES = 8;
+	const Int RELAY_TICKET_BYTES = 16;
 	const Int RELAY_HELLO_HEADER = 23;					///< 'ZR', type, exeCRC, iniCRC, session, wantVip
 	const Int RELAY_WELCOME_SIZE = 15;					///< 'ZR', type, session, vip
 	const Int RELAY_DATA_OUT_HEADER = 19;				///< 'ZR', type, session, dstVip, dstPort, srcPort
@@ -125,6 +133,8 @@ namespace
 		UnsignedInt lastHello;
 		UnsignedInt failedAt;
 		Bool wsaStarted;
+		Bool authed;																///< -online: every hello is a HELLO_AUTH carrying ticket
+		unsigned char ticket[RELAY_TICKET_BYTES];
 		Int nameLength;
 		unsigned char name[RELAY_NAME_BYTES];
 		Transport *users[RELAY_MAX_TRANSPORTS];
@@ -171,14 +181,21 @@ namespace
 
 	void relaySendHello( void )
 	{
-		unsigned char buf[RELAY_HELLO_HEADER + RELAY_NAME_BYTES];
-		buf[0] = 'Z'; buf[1] = 'R'; buf[2] = RELAY_HELLO;
+		unsigned char buf[RELAY_HELLO_HEADER + RELAY_TICKET_BYTES + RELAY_NAME_BYTES];
+		buf[0] = 'Z'; buf[1] = 'R'; buf[2] = s_relay.authed ? RELAY_HELLO_AUTH : RELAY_HELLO;
 		put32( buf + 3, TheGlobalData->m_exeCRC );
 		put32( buf + 7, TheGlobalData->m_iniCRC );
 		memcpy( buf + 11, s_relay.session, RELAY_SESSION_BYTES );
 		put32( buf + 19, s_relay.wantVip );
-		memcpy( buf + RELAY_HELLO_HEADER, s_relay.name, s_relay.nameLength );
-		s_relay.sock->Write( buf, RELAY_HELLO_HEADER + s_relay.nameLength, s_relay.ip, s_relay.port );
+		Int len = RELAY_HELLO_HEADER;
+		if (s_relay.authed)
+		{
+			memcpy( buf + len, s_relay.ticket, RELAY_TICKET_BYTES );
+			len += RELAY_TICKET_BYTES;
+		}
+		memcpy( buf + len, s_relay.name, s_relay.nameLength );
+		len += s_relay.nameLength;
+		s_relay.sock->Write( buf, len, s_relay.ip, s_relay.port );
 		s_relay.lastHello = Clock_Milliseconds();
 	}
 }
@@ -237,68 +254,121 @@ void Transport::pumpRelay( void )
 	}
 }
 
+/// Opens the relay socket and waits for a WELCOME (at most five seconds); s_relay.wantVip and authed are the caller's
+Bool Transport::connectRelay( const AsciiString &host, UnsignedShort relayPort )
+{
+	if (s_relay.failedAt && Clock_Milliseconds() - s_relay.failedAt < RELAY_RETRY_AFTER_MS)
+		return false;
+#if defined(_WIN32)
+	// the relay socket outlives every Transport, so it keeps winsock up by itself
+	if (!s_relay.wsaStarted)
+	{
+		WSADATA wsadata;
+		if (WSAStartup( MAKEWORD(2, 2), &wsadata ) != 0)
+			return false;
+		s_relay.wsaStarted = true;
+	}
+#endif
+	s_relay.ip = ResolveIP( host );
+	s_relay.port = relayPort;
+	if (s_relay.ip == 0 || s_relay.ip == INADDR_NONE || s_relay.port == 0)
+	{
+		DEBUG_LOG(("Transport: relay %s:%d does not resolve to an address and port\n", host.str(), relayPort));
+		s_relay.failedAt = Clock_Milliseconds();
+		return false;
+	}
+	if (!s_relay.sock)
+	{
+		s_relay.sock = NEW UDP();
+		if (s_relay.sock->Bind( (UnsignedInt)INADDR_ANY, 0 ) != 0)
+		{
+			DEBUG_LOG(("Transport: no socket for the relay (error %d)\n", lastSocketError()));
+			delete s_relay.sock;
+			s_relay.sock = NULL;
+			s_relay.failedAt = Clock_Milliseconds();
+			return false;
+		}
+	}
+	const UnsignedInt asked = s_relay.wantVip;
+	for (Int tries = 0; tries < RELAY_HELLO_TRIES && !s_relay.vip; ++tries)
+	{
+		relaySendHello();
+		for (Int wait = 0; wait < 10 && !s_relay.vip; ++wait)
+		{
+			std::this_thread::sleep_for( std::chrono::milliseconds( 50 ) );
+			pumpRelay();
+		}
+	}
+	if (!s_relay.vip)
+	{
+		DEBUG_LOG(("Transport: no WELCOME from the relay at %d.%d.%d.%d:%d in five seconds\n",
+			s_relay.ip >> 24, (s_relay.ip >> 16) & 0xff, (s_relay.ip >> 8) & 0xff, s_relay.ip & 0xff, s_relay.port));
+		s_relay.failedAt = Clock_Milliseconds();
+		return false;
+	}
+	relaySendHello();	// answers the WELCOME with its session, after which the relay forwards to us
+	DEBUG_LOG(("Transport: the relay calls us %d.%d.%d.%d\n",
+		s_relay.vip >> 24, (s_relay.vip >> 16) & 0xff, (s_relay.vip >> 8) & 0xff, s_relay.vip & 0xff));
+	// a -netgame slot that did not get its address hears nobody, and the match never starts
+	DEBUG_ASSERTLOG( !asked || s_relay.vip == asked, ("Transport: asked the relay for %d.%d.%d.%d, which another session holds\n",
+		asked >> 24, (asked >> 16) & 0xff, (asked >> 8) & 0xff, asked & 0xff) );
+	return true;
+}
+
+/// -online: the HELLO_AUTH handshake with the ticket of the login that just succeeded
+Bool Transport::openOnlineRelay( void )
+{
+	AsciiString host;
+	UnsignedShort relayPort = 0;
+	if (!OnlineGetRelayTicket( s_relay.ticket ) || !OnlineGetRelayEndpoint( host, relayPort ))
+		return false;
+	closeOnlineRelay();		// a second login gets a new session from a new ticket
+	s_relay.authed = true;
+	s_relay.wantVip = 0;
+	s_relay.failedAt = 0;	// a login is a person asking; do not hold the last failure against it
+	s_relay.nameLength = 0;
+	return connectRelay( host, relayPort );
+}
+
+/// -online: the relay keepalive while the lobby and staging room have no Transport to pump it
+void Transport::keepOnlineRelay( void )
+{
+	if (s_relay.authed)
+		pumpRelay();
+}
+
+/// -online: forgets the session, so the next login starts clean.  Transports still attached keep their slot.
+void Transport::closeOnlineRelay( void )
+{
+	if (!s_relay.authed)
+		return;
+	for (Int u = 0; u < RELAY_MAX_TRANSPORTS; ++u)
+	{
+		if (s_relay.users[u])
+			return;		// a match still runs on it
+	}
+	if (s_relay.sock)
+	{
+		delete s_relay.sock;
+		s_relay.sock = NULL;
+	}
+	memset( s_relay.session, 0, RELAY_SESSION_BYTES );
+	s_relay.vip = 0;
+	s_relay.wantVip = 0;
+	s_relay.authed = false;
+}
+
 /// Joins the relay socket, opening it and waiting for a WELCOME (at most five seconds) the first time
 Bool Transport::initRelayed( UnsignedInt ip, UnsignedShort port )
 {
 	if (!s_relay.vip)
 	{
+		if (s_relay.authed)
+			return false;		// -online: the login's handshake failed or the session was closed
 		s_relay.wantVip = (ip >> 24) == 10 ? ip : 0;
-		if (s_relay.failedAt && Clock_Milliseconds() - s_relay.failedAt < RELAY_RETRY_AFTER_MS)
-			return false;
-#if defined(_WIN32)
-		// the relay socket outlives every Transport, so it keeps winsock up by itself
-		if (!s_relay.wsaStarted)
-		{
-			WSADATA wsadata;
-			if (WSAStartup( MAKEWORD(2, 2), &wsadata ) != 0)
-				return false;
-			s_relay.wsaStarted = true;
-		}
-#endif
-		s_relay.ip = ResolveIP( TheGlobalData->m_relayHost );
-		s_relay.port = TheGlobalData->m_relayPort;
-		if (s_relay.ip == 0 || s_relay.ip == INADDR_NONE || s_relay.port == 0)
-		{
-			DEBUG_LOG(("Transport: -relay %s:%d does not resolve to an address and port\n", TheGlobalData->m_relayHost.str(), TheGlobalData->m_relayPort));
-			s_relay.failedAt = Clock_Milliseconds();
-			return false;
-		}
-		if (!s_relay.sock)
-		{
-			s_relay.sock = NEW UDP();
-			if (s_relay.sock->Bind( (UnsignedInt)INADDR_ANY, 0 ) != 0)
-			{
-				DEBUG_LOG(("Transport: no socket for the relay (error %d)\n", lastSocketError()));
-				delete s_relay.sock;
-				s_relay.sock = NULL;
-				s_relay.failedAt = Clock_Milliseconds();
-				return false;
-			}
-		}
 		relayTakeName();
-		const UnsignedInt asked = s_relay.wantVip;
-		for (Int tries = 0; tries < RELAY_HELLO_TRIES && !s_relay.vip; ++tries)
-		{
-			relaySendHello();
-			for (Int wait = 0; wait < 10 && !s_relay.vip; ++wait)
-			{
-				std::this_thread::sleep_for( std::chrono::milliseconds( 50 ) );
-				pumpRelay();
-			}
-		}
-		if (!s_relay.vip)
-		{
-			DEBUG_LOG(("Transport: no WELCOME from the relay at %d.%d.%d.%d:%d in five seconds\n",
-				s_relay.ip >> 24, (s_relay.ip >> 16) & 0xff, (s_relay.ip >> 8) & 0xff, s_relay.ip & 0xff, s_relay.port));
-			s_relay.failedAt = Clock_Milliseconds();
+		if (!connectRelay( TheGlobalData->m_relayHost, TheGlobalData->m_relayPort ))
 			return false;
-		}
-		relaySendHello();	// answers the WELCOME with its session, after which the relay forwards to us
-		DEBUG_LOG(("Transport: the relay calls us %d.%d.%d.%d\n",
-			s_relay.vip >> 24, (s_relay.vip >> 16) & 0xff, (s_relay.vip >> 8) & 0xff, s_relay.vip & 0xff));
-		// a -netgame slot that did not get its address hears nobody, and the match never starts
-		DEBUG_ASSERTLOG( !asked || s_relay.vip == asked, ("Transport: asked the relay for %d.%d.%d.%d, which another session holds\n",
-			asked >> 24, (asked >> 16) & 0xff, (asked >> 8) & 0xff, asked & 0xff) );
 	}
 
 	for (Int u = 0; u < RELAY_MAX_TRANSPORTS; ++u)
@@ -373,7 +443,8 @@ Bool Transport::init( AsciiString ip, UnsignedShort port )
 Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 {
 	detachRelay();
-	if (TheGlobalData->m_relayHost.isNotEmpty())
+	// -relay, or an -online login whose relay handshake went through (openOnlineRelay)
+	if (TheGlobalData->m_relayHost.isNotEmpty() || s_relay.authed)
 	{
 		m_redirectedIP = 0;
 		if (m_udpsock)

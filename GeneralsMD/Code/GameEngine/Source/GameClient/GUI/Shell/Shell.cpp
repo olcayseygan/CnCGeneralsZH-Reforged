@@ -45,6 +45,10 @@
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/PeerDefsImplementation.h"
+#include "GameNetwork/GameSpy/MainMenuUtils.h"
+#include "GameNetwork/Online/OnlineQueues.h"
+
+static Bool s_onlineOpened = FALSE;		///< -onlineuser opened the online screens once, at the first showShell
 
 #include <rts/profile.h>
 
@@ -547,6 +551,14 @@ void Shell::showShell( Bool runInit )
 	{
 		TheWritableGlobalData->m_lanLobbyOnStart = FALSE;
 		TheShell->push( AsciiString("Menus/LanLobbyMenu.wnd") );
+	}
+
+	/* -online with -onlineuser: what the main menu's Online button does, spent the same way.  The login
+	   screen then logs in from the switches (WOLLoginMenu.cpp). */
+	if( OnlineIsEnabled() && TheGlobalData->m_onlineUser.isNotEmpty() && !s_onlineOpened )
+	{
+		s_onlineOpened = TRUE;
+		StartPatchCheck();
 	}
 
 	// -skirmishlobby: the same trick for the single-player staging room, spent the same way.

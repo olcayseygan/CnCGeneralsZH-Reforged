@@ -69,6 +69,7 @@
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
 #ifdef _INTERNAL
@@ -513,13 +514,18 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	buttonLadderID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonLadder" ) );
 	buttonLadder = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonLadderID );
 
-	if (TheFirewallHelper == NULL) {
-		TheFirewallHelper = createFirewallHelper();
-	}
-	if (TheFirewallHelper->detectFirewall() == TRUE) {
-		// don't need to detect firewall, already been done.
-		delete TheFirewallHelper;
-		TheFirewallHelper = NULL;
+	// -online: every packet goes through our relay, so EA's firewall probe (against its dead mangler
+	// servers) has nothing to find
+	if (!OnlineIsEnabled())
+	{
+		if (TheFirewallHelper == NULL) {
+			TheFirewallHelper = createFirewallHelper();
+		}
+		if (TheFirewallHelper->detectFirewall() == TRUE) {
+			// don't need to detect firewall, already been done.
+			delete TheFirewallHelper;
+			TheFirewallHelper = NULL;
+		}
 	}
 	/*
 
@@ -670,6 +676,8 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 					{
 						//buttonPushed = TRUE;
 						TheGameSpyInfo->setCurrentGroupRoom(resp.joinGroupRoom.id);
+						if (OnlineIsEnabled())
+							DEBUG_LOG(("ONLINE LOBBY joined room=%d\n", resp.joinGroupRoom.id));
 						//GSMessageBoxOk( TheGameText->fetch("GUI:GSErrorTitle"), TheGameText->fetch("GUI:GSGroupRoomJoinOK") );
 
 						buttonPushed = TRUE;
@@ -696,6 +704,28 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 					TheShell->pop();
 				}
 				break;
+			}
+		}
+
+		// -online scripting: once per process, the click a player would make next.  -quickmatch opens Quick
+		// Match; -onlinehost, -onlinejoin and -onlinesay go to the lobby, which carries them on.
+		static Bool s_onlineAutoDone = FALSE;
+		if (OnlineIsEnabled() && !s_onlineAutoDone && !buttonPushed && TheGameSpyInfo->gotGroupRoomList())
+		{
+			s_onlineAutoDone = TRUE;
+			if (TheGlobalData->m_quickMatchOnStart)
+			{
+				DEBUG_LOG(("ONLINE WELCOME to=quickmatch\n"));
+				buttonPushed = TRUE;
+				nextScreen = "Menus/WOLQuickMatchMenu.wnd";
+				TheShell->pop();
+			}
+			else if (TheGlobalData->m_onlineHostGame.isNotEmpty() || TheGlobalData->m_onlineJoinGame.isNotEmpty()
+				|| TheGlobalData->m_onlineSay.isNotEmpty())
+			{
+				DEBUG_LOG(("ONLINE WELCOME to=lobby\n"));
+				TheGameSpyInfo->joinBestGroupRoom();
+				enableControls( FALSE );
 			}
 		}
 	}

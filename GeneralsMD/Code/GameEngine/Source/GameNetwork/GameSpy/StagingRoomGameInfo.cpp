@@ -50,6 +50,7 @@
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/NAT.h"
 #include "GameNetwork/NetworkInterface.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -603,6 +604,26 @@ void GameSpyStagingRoom::startGame(Int gameID)
 		}
 	}
 
+	/* -online: every machine is a relay vip already (the login's relay.ok gave ours, the server's player
+		 records gave the others'), so there is no path to negotiate.  Every copy uses the game's own
+		 logical port, the one launchGame binds without a NAT. */
+	if (OnlineIsEnabled())
+	{
+		for (Int i=0; i<MAX_SLOTS; ++i)
+		{
+			if (m_GameSpySlot[i].isHuman())
+			{
+				m_GameSpySlot[i].setPort(8888);
+				const UnsignedInt ip = m_GameSpySlot[i].getIP();
+				DEBUG_LOG(("ONLINE LAUNCH slot=%d vip=%d.%d.%d.%d\n", i, ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff));
+			}
+		}
+		launchGame();
+		if (TheGameSpyInfo)
+			TheGameSpyInfo->leaveStagingRoom();
+		return;
+	}
+
 //#if defined(_DEBUG) || defined(_INTERNAL)
 	if (numHumans < 2)
 	{
@@ -751,9 +772,10 @@ AsciiString GameSpyStagingRoom::generateLadderGameResultsPacket( void )
 	}
 
 	AsciiString results;
-	results.format("seed=%d,slotNum=%d,sawDesync=%d,sawGameEnd=%d,winningTeam=%d,disconEnd=%d,duration=%d,numPlayers=%d,isQM=%d,map=%s",
+	// endFrame is duration again under its own name: the online service compares it across reports
+	results.format("seed=%d,slotNum=%d,sawDesync=%d,sawGameEnd=%d,winningTeam=%d,disconEnd=%d,duration=%d,endFrame=%d,numPlayers=%d,isQM=%d,map=%s",
 		getSeed(), localSlotNum, TheNetwork->sawCRCMismatch(), sawGameEnd, winningTeam, (numTeamsAtGameEnd < 2),
-		endFrame, numPlayers, m_isQM, TheGameState->realMapPathToPortableMapPath(getMap()).str());
+		endFrame, endFrame, numPlayers, m_isQM, TheGameState->realMapPathToPortableMapPath(getMap()).str());
 
 	AsciiString tempStr;
 	tempStr.format("ladderIP=%s,ladderPort=%d", getLadderIP().str(), getLadderPort());
@@ -808,6 +830,49 @@ AsciiString GameSpyStagingRoom::generateLadderGameResultsPacket( void )
 	results.concat(tail);
 
 	return results;
+}
+
+/* -online: the ladder packet's fields as OnlineSendReport takes them.  The players are the human seats in
+	 slot order, which is the match's player order on the server (a Quick Match seats the matched ids in
+	 order), so winningTeam is the winner's index among them rather than EA's team number.  The service sends
+	 a match's report once however often this runs; `from` only names the caller in the log. */
+void GameSpyStagingRoom::sendOnlineReport( const char *from )
+{
+	if (!OnlineIsEnabled() || !TheVictoryConditions || !TheNetwork)
+		return;
+	OnlineReport report;
+	report.seed = getSeed();
+	report.endFrame = (Int)TheVictoryConditions->getEndFrame();
+	report.duration = report.endFrame;
+	report.sawGameEnd = report.endFrame > 0;
+	report.sawDesync = TheNetwork->sawCRCMismatch();
+	report.surrendered = FALSE;		// a surrender is a defeat here, and the winner already says so
+	report.winningTeam = -1;
+	report.numPlayers = 0;
+	Int teamsLeft = 0;
+	Int lastTeam = -1;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		AsciiString playerName;
+		playerName.format("player%d", i);
+		Player *p = ThePlayerList->findPlayerWithNameKey(NAMEKEY(playerName));
+		if (!p || !m_GameSpySlot[i].isHuman())
+			continue;
+		const Int n = report.numPlayers++;
+		if (report.winningTeam < 0 && TheVictoryConditions->hasAchievedVictory(p))
+			report.winningTeam = n;
+		report.discon[n] = m_GameSpySlot[i].disconnected();
+		report.side[n] = p->getPlayerTemplate()->getSide();
+		if (!report.discon[n] && (teamsLeft == 0 || m_GameSpySlot[i].getTeamNumber() != lastTeam))
+		{
+			lastTeam = m_GameSpySlot[i].getTeamNumber();
+			++teamsLeft;
+		}
+	}
+	report.disconEnd = teamsLeft < 2;
+	OnlineSendReport( report );
+	DEBUG_LOG(("ONLINE REPORT sent from=%s seed=%d endFrame=%d winner=%d desync=%d\n", from, report.seed,
+		report.endFrame, report.winningTeam, (Int)report.sawDesync));
 }
 
 void GameSpyStagingRoom::launchGame( void )

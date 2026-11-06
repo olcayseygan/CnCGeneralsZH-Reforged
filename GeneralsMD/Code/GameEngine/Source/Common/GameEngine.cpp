@@ -140,6 +140,7 @@
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/NetworkUtil.h"
 #include "GameNetwork/GameSpy/GameResultsThread.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include "Common/version.h"
 
@@ -1336,7 +1337,9 @@ void GameEngine::init( int argc, char *argv[] )
 		initSubsystem(TheGameState,"TheGameState", MSGNEW("GameEngineSubsystem") GameState, NULL, NULL, NULL );
 
 		// Create the interface for sending game results
-		initSubsystem(TheGameResultsQueue,"TheGameResultsQueue", GameResultsInterface::createNewGameResultsInterface(), NULL, NULL, NULL, NULL);
+		// -online rates from OnlineSendReport, so its queue drops EA's results
+		initSubsystem(TheGameResultsQueue,"TheGameResultsQueue",
+			OnlineIsEnabled() ? OnlineCreateGameResults() : GameResultsInterface::createNewGameResultsInterface(), NULL, NULL, NULL, NULL);
 
 
 	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////

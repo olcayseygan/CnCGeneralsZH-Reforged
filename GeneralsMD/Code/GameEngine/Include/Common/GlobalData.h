@@ -556,7 +556,7 @@ public:
 	AsciiString m_onlineJoinGame;			///< -onlinejoin <name>: join the custom game of this name once it is listed
 	AsciiString m_onlineSay;					///< -onlinesay <text>: say this in the lobby and again in the staging room
 	AsciiString m_onlineMap;					///< -onlinemap <map>: the map -onlinehost sets
-	Bool m_onlineStart;								///< -onlinestart: the -onlinehost host starts the game once someone has joined
+	Int m_onlineStart;								///< -onlinestart [N]: the -onlinehost host starts the game at N players (0 = never, bare = 2)
 	Bool m_quickMatchOnStart;					///< -quickmatch: go into the Quick Match queue once logged in
 	Bool m_lanLobbyOnStart;						///< -lanlobby: open the LAN lobby instead of stopping at the main menu
 	Bool m_skirmishLobbyOnStart;			///< -skirmishlobby: open the skirmish staging room instead of stopping at the main menu

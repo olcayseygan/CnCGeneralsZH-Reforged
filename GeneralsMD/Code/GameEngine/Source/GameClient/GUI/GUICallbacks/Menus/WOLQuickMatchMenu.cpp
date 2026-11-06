@@ -62,6 +62,7 @@
 
 #include "GameNetwork/NAT.h"
 #include "GameNetwork/GameSpyOverlay.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include "GameNetwork/GameSpy/BuddyDefs.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
@@ -1103,6 +1104,16 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 			}
 		}
 
+		// -quickmatch: press Start once per process, the queue's own button and settings
+		static Bool s_onlineQueued = FALSE;
+		if (OnlineIsEnabled() && TheGlobalData->m_quickMatchOnStart && !s_onlineQueued && !s_inQM
+			&& buttonStart && !buttonStart->winIsHidden() && buttonStart->winGetEnabled())
+		{
+			s_onlineQueued = TRUE;
+			DEBUG_LOG(("ONLINE QUEUE start\n"));
+			TheWindowManager->winSendSystemMsg( parentWOLQuickMatch, GBM_SELECTED, (WindowMsgData)buttonStart, buttonStartID );
+		}
+
 #ifdef PERF_TEST
 		UnsignedInt start = Clock_Milliseconds();
 		UnsignedInt end = Clock_Milliseconds();
@@ -1356,6 +1367,19 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 							}
 
 							std::list<AsciiString> maps = TheGameSpyConfig->getQMMaps();
+							if (OnlineIsEnabled())
+							{
+								// -online: mapIdx counts the service's whole pool, installed here or not
+								for (std::list<AsciiString>::const_iterator it = maps.begin(); it != maps.end(); ++it)
+								{
+									if (resp.qmStatus.mapIdx-- == 0)
+									{
+										TheGameSpyGame->setMap(*it);
+										break;
+									}
+								}
+								maps.clear();
+							}
 							for (std::list<AsciiString>::const_iterator it = maps.begin(); it != maps.end(); ++it)
 							{
 								AsciiString theMap = *it;
@@ -1399,6 +1423,8 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 							}
 
 							DEBUG_LOG(("Starting a QM game: options=[%s]\n", GameInfoToAsciiString(TheGameSpyGame).str()));
+							if (OnlineIsEnabled())
+								DEBUG_LOG(("ONLINE MATCHED seed=%d players=%d map=%s\n", resp.qmStatus.seed, numPlayers, TheGameSpyGame->getMap().str()));
 							SendStatsToOtherPlayers(TheGameSpyGame);
 							TheGameSpyGame->startGame(0);
 							GameWindow *buttonBuddies = TheWindowManager->winGetWindowFromId(NULL, buttonBuddiesID);
@@ -1652,9 +1678,32 @@ WindowMsgHandledType WOLQuickMatchMenuSystem( GameWindow *window, UnsignedInt ms
 					req.peerRequestType = PeerRequest::PEERREQUEST_STARTQUICKMATCH;
 					req.qmMaps.clear();
 					Int numMaps = GadgetListBoxGetNumEntries(listboxMapSelect);
-					for ( Int i=0; i<numMaps; ++i )
+					if (OnlineIsEnabled())
 					{
-						req.qmMaps.push_back(GadgetListBoxGetItemData(listboxMapSelect, i, 0));
+						// the service's qm.join maps index its whole pool, the welcome's <QMMaps>; a pool map
+						// this machine does not list (not installed, too few seats) is a veto
+						std::list<AsciiString> pool = TheGameSpyConfig->getQMMaps();
+						for (std::list<AsciiString>::const_iterator it = pool.begin(); it != pool.end(); ++it)
+						{
+							Bool ticked = FALSE;
+							for ( Int i=0; i<numMaps; ++i )
+							{
+								const MapMetaData *md = (const MapMetaData *)GadgetListBoxGetItemData(listboxMapSelect, i, 1);
+								if (md && md->m_fileName.compareNoCase(*it) == 0)
+								{
+									ticked = GadgetListBoxGetItemData(listboxMapSelect, i, 0) != NULL;
+									break;
+								}
+							}
+							req.qmMaps.push_back(ticked);
+						}
+					}
+					else
+					{
+						for ( Int i=0; i<numMaps; ++i )
+						{
+							req.qmMaps.push_back(GadgetListBoxGetItemData(listboxMapSelect, i, 0));
+						}
 					}
 					UnicodeString u;
 					AsciiString a;

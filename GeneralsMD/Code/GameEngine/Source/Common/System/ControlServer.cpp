@@ -38,6 +38,8 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "GameClient/Display.h"
+#include "GameClient/GameWindowManager.h"
+#include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/Shell.h"
@@ -787,6 +789,55 @@ static void handleCommand( const AsciiString &command )
 			return;
 		}
 		replyOk( "\"saved\":true" );
+		return;
+	}
+
+	/* quitmenu surrender|exit: open the in-match quit menu, press its Surrender or Exit and answer Yes in
+		 the confirmation box, each through the window's own callback, so QuitMenu.cpp's surrenderQuitMenu or
+		 exitQuitMenu runs as it does for a player's clicks.  Surrender keeps the player in the match, defeated,
+		 which "leave" never did; online_check.py's case 2 needs exactly that. */
+	if (strncmp( command.str(), "quitmenu ", 9 ) == 0)
+	{
+		AsciiString which( command.str() + 9 );
+		which.trim();
+		const char *button = which == "surrender" ? "ButtonRestart" : (which == "exit" ? "ButtonExit" : NULL);
+		if (button == NULL)
+		{
+			replyError( "quitmenu wants surrender or exit" );
+			return;
+		}
+		if (TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() || TheInGameUI == NULL)
+		{
+			replyError( "quitmenu needs a match in progress" );
+			return;
+		}
+		if (!TheInGameUI->isQuitMenuVisible())
+			ToggleQuitMenu();
+		GameWindow *pressed = NULL;
+		const char *const layouts[] = { "QuitNoSave.wnd", "QuitMenu.wnd" };
+		for (Int i = 0; i < 2 && (pressed == NULL || pressed->winIsHidden()); ++i)
+		{
+			AsciiString name;
+			name.format( "%s:%s", layouts[ i ], button );
+			pressed = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( name ) );
+		}
+		if (pressed == NULL || pressed->winIsHidden() || !pressed->winGetEnabled())
+		{
+			replyError( "the quit menu's button is not there or not live" );
+			return;
+		}
+		TheWindowManager->winSendSystemMsg( pressed->winGetOwner(), GBM_SELECTED, (WindowMsgData)pressed, pressed->winGetWindowId() );
+		GameWindow *yes = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "QuitMessageBox.wnd:ButtonYes" ) );
+		if (yes == NULL)
+			yes = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "MessageBox.wnd:ButtonYes" ) );
+		if (yes == NULL)
+		{
+			replyError( "no confirmation box came up" );
+			return;
+		}
+		TheWindowManager->winSendSystemMsg( yes->winGetOwner(), GBM_SELECTED, (WindowMsgData)yes, yes->winGetWindowId() );
+		DEBUG_LOG(( "CONTROL: quit menu %s, confirmed\n", which.str() ));
+		replyOk( "\"confirmed\":true" );
 		return;
 	}
 

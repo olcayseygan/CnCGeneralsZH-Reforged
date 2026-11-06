@@ -534,6 +534,170 @@ static void check_render_targets(PosixDevice9 *device)
 	target_texture->Release();
 }
 
+// Keep an encoded copy alive when requested: SDL must then preserve that backing texture if a
+// later upload cycles it. This makes accidental cycling of a partial mip update observable.
+struct MipReadback
+{
+	SDL_GPUDevice *device;
+	SDL_GPUTransferBuffer *transfer;
+	SDL_GPUCommandBuffer *commands;
+	unsigned bytes;
+
+	MipReadback(SDL_GPUDevice *gpu, SDL_GPUTexture *texture, unsigned level, unsigned edge)
+		: device(gpu), transfer(NULL), commands(NULL), bytes(edge * edge * 4)
+	{
+		SDL_GPUTransferBufferCreateInfo info = {};
+		info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+		info.size = bytes;
+		transfer = SDL_CreateGPUTransferBuffer(device, &info);
+		if (!transfer) return;
+		commands = SDL_AcquireGPUCommandBuffer(device);
+		if (!commands) return;
+		SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass(commands);
+		if (!pass) { SDL_CancelGPUCommandBuffer(commands); commands = NULL; return; }
+		SDL_GPUTextureRegion source = {};
+		source.texture = texture; source.mip_level = level;
+		source.w = edge; source.h = edge; source.d = 1;
+		SDL_GPUTextureTransferInfo destination = {};
+		destination.transfer_buffer = transfer;
+		destination.pixels_per_row = edge; destination.rows_per_layer = edge;
+		SDL_DownloadFromGPUTexture(pass, &source, &destination);
+		SDL_EndGPUCopyPass(pass);
+	}
+
+	~MipReadback()
+	{
+		if (commands) SDL_CancelGPUCommandBuffer(commands);
+		if (transfer) SDL_ReleaseGPUTransferBuffer(device, transfer);
+	}
+
+	bool Ready() const { return commands != NULL; }
+
+	bool Has_Colour(uint32_t expected)
+	{
+		if (!Ready()) return false;
+		SDL_GPUFence *fence = SDL_SubmitGPUCommandBufferAndAcquireFence(commands);
+		commands = NULL;
+		const bool finished = fence && SDL_WaitForGPUFences(device, true, &fence, 1);
+		if (fence) SDL_ReleaseGPUFence(device, fence);
+		if (!finished) return false;
+		const uint32_t *pixels = static_cast<const uint32_t *>(SDL_MapGPUTransferBuffer(device, transfer, false));
+		if (!pixels) return false;
+		bool matches = true;
+		for (unsigned pixel = 0; pixel < bytes / 4; ++pixel) matches = matches && pixels[pixel] == expected;
+		SDL_UnmapGPUTransferBuffer(device, transfer);
+		return matches;
+	}
+};
+
+static void fill_mip(IDirect3DTexture9 *texture, unsigned level, unsigned edge, uint32_t colour)
+{
+	D3DLOCKED_RECT locked;
+	const RenderResult result = texture->LockRect(level, &locked, NULL, 0);
+	CHECK(result == D3D_OK);
+	if (result != D3D_OK) return;
+	for (unsigned y = 0; y < edge; ++y) {
+		uint32_t *row = reinterpret_cast<uint32_t *>(static_cast<uint8_t *>(locked.pBits) + y * locked.Pitch);
+		for (unsigned x = 0; x < edge; ++x) row[x] = colour;
+	}
+	CHECK(texture->UnlockRect(level) == D3D_OK);
+}
+
+static void check_mip_colours(SdlGpuFrame *frame, SDL_GPUTexture *texture, const uint32_t *colours, unsigned levels)
+{
+	for (unsigned level = 0; level < levels; ++level) {
+		MipReadback readback(frame->Device(), texture, level, 16u >> level);
+		if (!readback.Has_Colour(colours[level])) {
+			++failures;
+			printf("FAIL dirty mip upload: level %u did not retain colour %08x\n", level, colours[level]);
+		}
+	}
+}
+
+static void check_dirty_mips(PosixDevice9 *device)
+{
+	SdlGpuFrame *frame = device->Get_Gpu();
+	SdlResourceMirrors *mirrors = device->Get_Mirrors();
+	CHECK(frame->Flush());
+	std::string error;
+	IDirect3DTexture9 *texture = NULL;
+	CHECK(device->CreateTexture(16, 16, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL) == D3D_OK);
+	if (!texture) return;
+	const unsigned levels = 5;
+	uint32_t colours[levels] = { RED, GREEN, BLUE, YELLOW, WHITE };
+	for (unsigned level = 0; level < levels; ++level) fill_mip(texture, level, 16u >> level, colours[level]);
+	SDL_GPUTexture *gpuTexture = mirrors->Texture(texture, error);
+	CHECK(gpuTexture != NULL);
+	CHECK(frame->Pending_Upload_Bytes() == 1364); // 16x16 through 1x1, four bytes per pixel.
+	CHECK(frame->Flush());
+	if (gpuTexture) {
+		check_mip_colours(frame, gpuTexture, colours, levels);
+
+		colours[2] = 0xff00ffff;
+		fill_mip(texture, 2, 4, colours[2]);
+		CHECK(mirrors->Texture(texture, error) == gpuTexture);
+		CHECK(frame->Pending_Upload_Bytes() == 64);
+		CHECK(frame->Flush());
+		check_mip_colours(frame, gpuTexture, colours, levels);
+
+		{
+			MipReadback held(frame->Device(), gpuTexture, 1, 8);
+			CHECK(held.Ready());
+			colours[0] = 0xffff00ff;
+			fill_mip(texture, 0, 16, colours[0]);
+			CHECK(mirrors->Texture(texture, error) == gpuTexture);
+			CHECK(frame->Pending_Upload_Bytes() == 1024);
+			CHECK(frame->Flush());
+			CHECK(held.Has_Colour(colours[1]));
+			check_mip_colours(frame, gpuTexture, colours, levels);
+		}
+
+		for (unsigned level = 0; level < levels; ++level) {
+			colours[level] ^= 0x00010101;
+			fill_mip(texture, level, 16u >> level, colours[level]);
+		}
+		CHECK(mirrors->Texture(texture, error) == gpuTexture);
+		CHECK(frame->Pending_Upload_Bytes() == 1364);
+		CHECK(frame->Flush());
+		check_mip_colours(frame, gpuTexture, colours, levels);
+	}
+	texture->Release();
+
+	// Even levels never locked (version zero) need their initial zero-filled CPU image uploaded.
+	CHECK(device->CreateTexture(16, 16, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL) == D3D_OK);
+	if (!texture) return;
+	gpuTexture = mirrors->Texture(texture, error);
+	CHECK(gpuTexture != NULL);
+	CHECK(frame->Pending_Upload_Bytes() == 1364);
+	CHECK(frame->Flush());
+	const uint32_t zeroes[levels] = {};
+	if (gpuTexture) check_mip_colours(frame, gpuTexture, zeroes, levels);
+	texture->Release();
+
+	// The POSIX backend also accepts CPU writes to render-target texture mips. Preserve that existing
+	// interop: updating a sibling must not replace the GPU-rendered base with its stale CPU image.
+	CHECK(device->CreateTexture(16, 16, 2, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8,
+		D3DPOOL_DEFAULT, &texture, NULL) == D3D_OK);
+	if (!texture) return;
+	IDirect3DSurface9 *target = NULL, *back = NULL;
+	CHECK(texture->GetSurfaceLevel(0, &target) == D3D_OK);
+	CHECK(device->GetRenderTarget(0, &back) == D3D_OK);
+	CHECK(device->SetRenderTarget(0, target) == D3D_OK);
+	CHECK(device->Clear(0, NULL, D3DCLEAR_TARGET, RED, 1.0f, 0) == D3D_OK);
+	CHECK(frame->Flush());
+	CHECK(device->SetRenderTarget(0, back) == D3D_OK);
+	fill_mip(texture, 1, 8, GREEN);
+	gpuTexture = mirrors->Texture(texture, error);
+	CHECK(gpuTexture != NULL);
+	CHECK(frame->Pending_Upload_Bytes() == 256);
+	CHECK(frame->Flush());
+	const uint32_t rendered[2] = { RED, GREEN };
+	if (gpuTexture) check_mip_colours(frame, gpuTexture, rendered, 2);
+	target->Release();
+	back->Release();
+	texture->Release();
+}
+
 #if defined(__linux__)
 // Runtime sun capture and diagnostic mode overrides are enabled only on Linux.
 static void check_sun_capture(PosixDevice9 *device)
@@ -1410,6 +1574,7 @@ int main()
 	check_min_vertex(device);
 	check_clears_and_depth(device);
 	check_render_targets(device);
+	check_dirty_mips(device);
 #if defined(__linux__)
 	check_sun_capture(device);
 	check_sun_receivers(device);

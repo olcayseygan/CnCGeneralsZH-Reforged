@@ -2949,22 +2949,7 @@ Bool ParticleSystem::shouldCastGroundShadow( void ) const
 // ------------------------------------------------------------------------------------------------
 Real ParticleSystem::getStealthFade( void ) const
 {
-	const ParticleSystem *sys = this;
-	while (sys->m_masterSystem)
-		sys = sys->m_masterSystem;
-
-	const Drawable *draw = NULL;
-	if (sys->m_attachedToDrawableID != INVALID_DRAWABLE_ID)
-		draw = TheGameClient->findDrawableByID( sys->m_attachedToDrawableID );
-	else if (LogicThread::isInsideWindow())
-		draw = TheGameClient->findDrawableByID( sys->m_attachedObjectDrawableForDraw );
-	else if (sys->m_attachedToObjectID != INVALID_ID)
-	{
-		// gone since the last particle update, which then destroys the system
-		const Object *obj = TheGameLogic->findObjectByID( sys->m_attachedToObjectID );
-		if (obj)
-			draw = obj->getDrawable();
-	}
+	const Drawable *draw = findAttachedDrawable();
 	if (draw == NULL)
 		return 1.0f;
 
@@ -2990,6 +2975,41 @@ Real ParticleSystem::getStealthFade( void ) const
 		default:
 			return 1.0f;
 	}
+}
+
+// ------------------------------------------------------------------------------------------------
+/** The drawable this system rides on, through its master if it is a slave; NULL for a free one. */
+// ------------------------------------------------------------------------------------------------
+const Drawable *ParticleSystem::findAttachedDrawable( void ) const
+{
+	const ParticleSystem *sys = this;
+	while (sys->m_masterSystem)
+		sys = sys->m_masterSystem;
+
+	if (sys->m_attachedToDrawableID != INVALID_DRAWABLE_ID)
+		return TheGameClient->findDrawableByID( sys->m_attachedToDrawableID );
+	if (LogicThread::isInsideWindow())
+		return TheGameClient->findDrawableByID( sys->m_attachedObjectDrawableForDraw );
+	if (sys->m_attachedToObjectID != INVALID_ID)
+	{
+		// gone since the last particle update, which then destroys the system
+		const Object *obj = TheGameLogic->findObjectByID( sys->m_attachedToObjectID );
+		if (obj)
+			return obj->getDrawable();
+	}
+	return NULL;
+}
+
+// ------------------------------------------------------------------------------------------------
+/** A China mine field's flares sit on their bones at ground height.  The Direct3D 11 soft particle
+ * fade thins a sprite wherever the ground is closer behind it than its half width, which took EA's
+ * flare away entire; W3DParticleSys hands these to the sorting renderer hard edged, as -d3d9 draws
+ * them.  Client drawing only. */
+// ------------------------------------------------------------------------------------------------
+Bool ParticleSystem::isAttachedToMine( void ) const
+{
+	const Drawable *draw = findAttachedDrawable();
+	return draw != NULL && draw->isKindOf( KINDOF_MINE );
 }
 
 // ------------------------------------------------------------------------------------------------

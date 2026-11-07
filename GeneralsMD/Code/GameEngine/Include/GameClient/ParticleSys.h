@@ -869,6 +869,10 @@ public:
 	/// How much of this system the local player sees, for the stealth of what it is attached to.
 	Real getStealthFade( void ) const;
 
+	/// TRUE if this system (or its master) hangs off a mine: EA's flare sits on the ground and takes
+	/// no soft particle fade.
+	Bool isAttachedToMine( void ) const;
+
 	/** The GPU particle path (docs/plans/GPU-PARTICLES.md).  An eligible system hands each spawn to
 		* the manager's spawnGpuParticle, which keeps it as a spawn record the vertex shader ages in
 		* closed form; no Particle is made and nothing on the CPU touches it again.  The system keeps
@@ -908,6 +912,8 @@ protected:
 	const Coord3D *computeParticlePosition( void );		///< compute a position based on emission properties
 	const Coord3D *computeParticleVelocity( const Coord3D *pos );	///< compute a velocity vector based on emission properties
 	const Coord3D *computePointOnUnitSphere( void );	///< compute a random point on a unit sphere
+
+	const Drawable *findAttachedDrawable( void ) const;	///< what getStealthFade and isAttachedToMine read
 
 protected:
 	/// refresh (or release) the one decal that shades the ground under this system's particles

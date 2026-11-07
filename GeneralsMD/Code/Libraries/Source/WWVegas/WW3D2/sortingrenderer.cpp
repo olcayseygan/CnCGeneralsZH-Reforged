@@ -154,6 +154,7 @@ public:
 	bool glow;									// the normals hold a fire's glow (Insert_Quads)
 	bool fire;									// a fire system's quads, age and seed in v2 (Insert_Quads)
 	bool emissive;							// an Emissive system's quads: no shadow, no smoke shade (Insert_Quads)
+	bool hard_edge;							// quads with no soft particle fade, a mine's flare (Insert_Quads)
 	// The object's Direct3D 11 look (RTS3DScene::renderOneObject) as the mesh renderer had it set
 	// when a sorted mesh queued its triangles; its draws come later, after the look is put back.
 	unsigned draw_effect;
@@ -261,6 +262,7 @@ void SortingRendererClass::Insert_Triangles(
 	state->glow=false;
 	state->fire=false;
 	state->emissive=false;
+	state->hard_edge=false;
 	state->draw_effect=Direct3D11_Requested_Draw_Effect(state->draw_effect_parameters);
 
 	SortingVertexBufferClass* vertex_buffer=static_cast<SortingVertexBufferClass*>(state->sorting_state.vertex_buffers[0]);
@@ -350,7 +352,8 @@ void SortingRendererClass::Insert_Quads(
 	unsigned short vertex_count,
 	bool glow,
 	bool fire,
-	bool emissive)
+	bool emissive,
+	bool hard_edge)
 {
 	const unsigned short polygon_count=quad_count*2;
 	if (!WW3D::Is_Sorting_Enabled()) {
@@ -379,6 +382,7 @@ void SortingRendererClass::Insert_Quads(
 	state->glow=glow;
 	state->fire=fire;
 	state->emissive=emissive;
+	state->hard_edge=hard_edge;
 	No_Draw_Effect(state);
 	state->transformed_center=Vector3(0.0f,0.0f,0.0f);
 	unsorted_list.Add_Tail(state);
@@ -723,7 +727,10 @@ static void Copy_Batch_Vertices(int chunk,void* context)
 			const float dx=quad[1].x-quad[0].x;
 			const float dy=quad[1].y-quad[0].y;
 			const float dz=quad[1].z-quad[0].z;
-			const float half_width=0.5f*sqrtf(dx*dx+dy*dy+dz*dz);
+			// A hard edged node's quads (a mine's flare on the ground) fade over a thousandth of a
+			// unit, which is the plain depth test -d3d9 draws them with.
+			const float half_width=overlapping_nodes[entry.idx]->hard_edge
+				? 0.001f : 0.5f*sqrtf(dx*dx+dy*dy+dz*dz);
 			dest_verts[0].u2=half_width;
 			dest_verts[1].u2=half_width;
 			dest_verts[2].u2=half_width;
@@ -1412,6 +1419,7 @@ void SortingRendererClass::Insert_VolumeParticle(
 	state->glow=false;
 	state->fire=false;
 	state->emissive=false;
+	state->hard_edge=false;
 	No_Draw_Effect(state);
 
 	SortingVertexBufferClass* vertex_buffer=static_cast<SortingVertexBufferClass*>(state->sorting_state.vertex_buffers[0]);

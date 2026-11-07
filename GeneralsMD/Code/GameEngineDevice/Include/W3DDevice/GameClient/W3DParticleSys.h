@@ -115,6 +115,7 @@ public:
 		UnsignedInt															pastLimit;				///< written by the job: on-screen particles past capacity
 		Bool																		glow;							///< written by the job: the fire's glow is in the normals, not the colour
 		Bool																		fire;							///< the template's FireLook: each particle's age and seed go in v2
+		Bool																		hardEdge;					///< ParticleSystem::isAttachedToMine: no soft particle fade (Insert_Sorted_Billboards)
 	};
 
 	/// One particle the sun's smoke map can take, as the last particle update left it.

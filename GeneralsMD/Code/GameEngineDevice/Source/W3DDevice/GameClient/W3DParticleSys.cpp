@@ -2538,6 +2538,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fill.pastLimit = 0;
 		fill.glow = FALSE;
 		fill.fire = sys->getTemplate()->isFireLook();
+		fill.hardEdge = sys->isAttachedToMine();
 		fill.texture =W3DDisplay::m_assetManager->Get_Texture( sys->getParticleTypeName().str() );
 		PointGroupClass::Reserve_Sorted_Billboards( fill.capacity, &fill.range );
 		m_billboardFills.push_back( fill );
@@ -2636,7 +2637,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		{
 			BillboardFill &fill = m_billboardFills[ nextFill++ ];
 			PointGroupClass::Insert_Sorted_Billboards( &fill.range, fill.drawn, fill.texture, fill.shader, fill.glow != FALSE, fill.fire != FALSE,
-				sys->getTemplate()->isEmissive() != FALSE );
+				sys->getTemplate()->isEmissive() != FALSE, fill.hardEdge != FALSE );
 			fill.texture->Release_Ref();	// the draw state took its own reference
 			m_fieldParticleCount += fill.fieldIncrement * fill.drawn;
 			m_onScreenParticleCount += fill.drawn;

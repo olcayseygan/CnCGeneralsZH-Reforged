@@ -8,6 +8,9 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## A cursor for every order
+- The mouse pointer says which order a click will give. Guard used to show the red crosshair of an attack and now shows a shield standing over the ground it will hold; unloading a transport at a spot borrowed the move arrows and now shows three arrows fanning out of a hull. Garrisoning a building and boarding a transport each have a picture of their own, where both showed EA's three green chevrons, and hijacking, sabotage and making a car bomb stopped sharing the red ones. Placing a building shows a yellow footprint instead of a crosshair. The set is drawn at 48 pixels for a 1080p screen, half again EA's 32, in EA's colours: green for moving your own units, red for anything hostile, blue for superweapons and bare steel for tools, each one lit metal inside the 2003 set's one-pixel black line. The arrows that animated still do.
+
 ## A shot from the fog gives the shooter away
 
 - When something you cannot see hits one of your units or buildings, the fog opens around the shooter for two and a half seconds: a small circle, just wide enough to show what fired and not the ground around it. Artillery behind a ridge or a jet out of the dark shows itself the moment its shot lands. Your allies see it too, as they see everything else you see. A stealthed unit nobody has detected stays hidden, and a shot from something you can already see opens nothing. A replay recorded before this change plays out differently.

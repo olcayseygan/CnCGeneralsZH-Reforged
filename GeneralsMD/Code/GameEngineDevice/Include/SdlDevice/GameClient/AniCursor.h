@@ -23,8 +23,9 @@
 // a RIFF "ACON" file with an 'anih' header, optional 'rate' (per-step durations, in jiffies of 1/60 s)
 // and 'seq ' (per-step frame indices) chunks, and a LIST 'fram' of 'icon' chunks, each a whole .CUR or
 // .ICO file holding a device-independent bitmap: a BITMAPINFOHEADER, a palette at 8 bits or fewer, the
-// colour (XOR) rows and a 1-bit AND mask, both bottom-up.  Every frame the game ships is a 32 x 32
-// .CUR at 4 bits; this reads 1, 4, 8, 24 and 32 bits.  No SDL here: bytes in, pixels out.
+// colour (XOR) rows and a 1-bit AND mask, both bottom-up.  EA's frames are 32 x 32 at 4 bits; the
+// Reforged ones (Tools/cursors.py) hold a 48 x 48 at 32 bits first and a 32 x 32 after it, and the
+// first image is the one read.  This reads 1, 4, 8, 24 and 32 bits.  No SDL here: bytes in, pixels out.
 //
 // What a bitmap cursor cannot become: an AND bit set over a non-black colour inverts the screen under
 // it on Windows.  There is no such pixel in an SDL colour cursor; it is made transparent, and counted.

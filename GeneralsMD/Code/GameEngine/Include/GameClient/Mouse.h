@@ -238,6 +238,14 @@ public:  // enumerations and types
 		PLACE_CHARGE_INVALID,
 		HACK,
 		PARTICLE_UPLINK_CANNON,
+		// the fork's orders that shared one of EA's cursors; appended so every older index keeps its meaning
+		GUARD,
+		GARRISON,
+		BOARD,
+		UNLOAD,
+		HIJACK,
+		SABOTAGE,
+		CAR_BOMB,
 
 
 		// ***** dont forget to update CursorININames[] *****

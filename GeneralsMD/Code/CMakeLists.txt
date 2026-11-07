@@ -1862,6 +1862,11 @@ add_custom_command(TARGET generals POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           ${CMAKE_CURRENT_SOURCE_DIR}/Data/Patch.str
           ${CMAKE_CURRENT_SOURCE_DIR}/../Run/Data/
+  # The Reforged cursors (Tools/cursors.py), the .ani files the Mouse.ini master above names.
+  # Win32Mouse and SdlMouse open them loose from Data/Cursors; they are in no checksum.
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          ${CMAKE_CURRENT_SOURCE_DIR}/Data/Cursors
+          ${CMAKE_CURRENT_SOURCE_DIR}/../Run/Data/Cursors
   # The skirmish AI's scripts with the USA Hard opening rewritten by Tools/ScbTool/opening.py.  The
   # file is in the multiplayer checksum (GlobalData.cpp), so it ships with the exe like the INIs.
   COMMAND ${CMAKE_COMMAND} -E copy_directory

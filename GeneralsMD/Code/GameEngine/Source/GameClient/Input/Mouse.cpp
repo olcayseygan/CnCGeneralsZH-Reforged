@@ -1223,6 +1223,13 @@ Int Mouse::getCursorIndex(const AsciiString& name)
 		"PlaceChargeInvalid",
 		"Hack",
 		"ParticleUplinkCannon",
+		"Guard",
+		"Garrison",
+		"Board",
+		"Unload",
+		"Hijack",
+		"Sabotage",
+		"CarBomb",
 
 	};
 

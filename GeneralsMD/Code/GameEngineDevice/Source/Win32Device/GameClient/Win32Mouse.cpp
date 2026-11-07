@@ -525,7 +525,10 @@ void Win32Mouse::initCursorResources(void)
 				else
 					snprintf(resourcePath, ARRAY_SIZE(resourcePath), "data\\cursors\\%s.ANI",m_cursorInfo[cursor].textureName.str());
 
-				cursorResources[cursor][direction]=LoadCursorFromFile(resourcePath);
+				// LoadCursorFromFile scales every frame to SM_CXCURSOR, 32 at 100 % DPI.  LoadImage with no
+				// size keeps the file's first image as drawn, hotspot included: the Reforged cursors put a
+				// 48x48 first for 1080p, EA's are 32 and load as before.
+				cursorResources[cursor][direction]=(HCURSOR)LoadImageA(NULL, resourcePath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
 				DEBUG_ASSERTCRASH(cursorResources[cursor][direction], ("MissingCursor %s\n",resourcePath));
 			}
 		}

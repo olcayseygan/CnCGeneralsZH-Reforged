@@ -639,6 +639,31 @@ static Mouse::MouseCursor placementCursor( Bool legal )
 }  // end placementCursor
 
 //-------------------------------------------------------------------------------------------------
+/** The friendly enter hint names the object under the pointer, and the cursor follows what will
+	* hold the unit: a building that takes a garrison gets the garrison cursor, anything else that is
+	* not a structure the board one (a transport), and the rest, tunnels and the like, the plain enter.
+	* A target that holds nothing is a passenger the selection is about to pick up (CommandXlat's
+	* boardingContainer), so the selection's first container decides instead. */
+//-------------------------------------------------------------------------------------------------
+static Mouse::MouseCursor enterCursor( const Object *target )
+{
+	const Object *holder = target;
+	if( holder != NULL && holder->getContain() == NULL )
+	{
+		const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+		holder = selected->empty() ? NULL : selected->front()->getObject();
+	}
+	if( holder == NULL || holder->getContain() == NULL )
+		return Mouse::ENTER_FRIENDLY;
+	if( holder->getContain()->isGarrisonable() )
+		return Mouse::GARRISON;
+	if( !holder->isKindOf( KINDOF_STRUCTURE ) )
+		return Mouse::BOARD;
+	return Mouse::ENTER_FRIENDLY;
+
+}  // end enterCursor
+
+//-------------------------------------------------------------------------------------------------
 /// The InGameUI singleton instance.
 InGameUI *TheInGameUI = NULL;
 
@@ -5941,7 +5966,7 @@ void InGameUI::createCommandHint( const GameMessage *msg )
 										 ThePlayerList->getLocalPlayer()->hasRadar() == FALSE) )
 							setMouseCursor( Mouse::ARROW );
 						else if( isGuardArmed() )
-							setMouseCursor( Mouse::CROSS );	// the targeting cross, the cursor EA's own guard button arms
+							setMouseCursor( Mouse::GUARD );	// the guard buttons' own cursor (CommandSetReforged.ini)
 						else
 							setMouseCursor( Mouse::MOVETO );
 						break;
@@ -5983,12 +6008,16 @@ void InGameUI::createCommandHint( const GameMessage *msg )
 						setMouseCursor( Mouse::RESUME_CONSTRUCTION );
 						break;				
 					case GameMessage::MSG_ENTER_HINT:
-						setMouseCursor( Mouse::ENTER_FRIENDLY );
+						setMouseCursor( enterCursor( obj ) );
 						break;
 					case GameMessage::MSG_CONVERT_TO_CARBOMB_HINT:
+						setMouseCursor( Mouse::CAR_BOMB );
+						break;
 					case GameMessage::MSG_HIJACK_HINT:
+						setMouseCursor( Mouse::HIJACK );
+						break;
 					case GameMessage::MSG_SABOTAGE_HINT:
-						setMouseCursor( Mouse::ENTER_AGGRESSIVELY );
+						setMouseCursor( Mouse::SABOTAGE );
 						break;
 					case GameMessage::MSG_DEFECTOR_HINT:
 						setMouseCursor( Mouse::DEFECTOR );

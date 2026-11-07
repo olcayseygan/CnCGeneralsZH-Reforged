@@ -3471,6 +3471,18 @@ TEST(a_unit_shoots_what_its_weapon_kills_best)
 	/* armed beats unarmed whatever the armour or rate: no stopping for the dozer under the artillery */
 	CHECK( aiTargetBeats( targetRating( 1, 0.1f, 0.01f, 0.0f, (ObjectID)9 ), targetRating( 0, 2.0f, 100.0f, 0.0f, (ObjectID)2 ) ) );
 
+	/* ... but only among what it can hurt from where it can get.  A Patriot picked the Tomahawk
+	   launcher outside its ground range, armed and shooting it (tier 2, rate 0), over the incoming
+	   missile it could shoot down (tier 0, an unarmed projectile), and never fired at all */
+	const Real patriotOnMissile = aiTargetKillRate( 1.0f, 30.0f, 0.0f, 0.0f );
+	const Real patriotOnLauncher = aiTargetKillRate( 1200.0f, 90.0f, 75.0f, 0.0f );
+	CHECK( patriotOnMissile > 0.0f );
+	CHECK_NEAR( 0.0f, patriotOnLauncher, 0.0001f );
+	const AITargetRating missile = targetRating( aiTargetTier( FALSE, TRUE, FALSE, TRUE, 30.0f ), 1.0f, patriotOnMissile, 250000.0f, (ObjectID)9 );
+	const AITargetRating launcher = targetRating( aiTargetTier( TRUE, TRUE, TRUE, FALSE, 90.0f ), 1.31f, patriotOnLauncher, 90000.0f, (ObjectID)2 );
+	CHECK( aiTargetBeats( missile, launcher ) );
+	CHECK( !aiTargetBeats( launcher, missile ) );
+
 	/* a total order: tier, armour, rate, distance, then the lower ObjectID, the same whichever is
 	   asked first, so the pick never depends on the order the partition hands candidates out in */
 	const AITargetRating a = targetRating( 1, 1.0f, 0.5f, 100.0f, (ObjectID)2 );

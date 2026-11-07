@@ -806,6 +806,13 @@ Real aiTargetKillRate( Real value, Real framesToKill, Real gap, Real speed )
 //-----------------------------------------------------------------------------
 Bool aiTargetBeats( const AITargetRating &a, const AITargetRating &b )
 {
+	/* A target this unit can hurt from where it can get beats one it cannot, before the tiers. A rate
+		 of zero is a target no weapon may turn on, or one out of reach of a unit that cannot move. A
+		 Patriot picked the Tomahawk launcher out of its ground range (tier 1, and 2 once hit) over the
+		 incoming missile (tier 0, it shoots nothing back), could fire at neither the launcher nor
+		 anything else, and picked it again every scan, so it never shot a missile down. */
+	if( ( a.m_rate > 0.0f ) != ( b.m_rate > 0.0f ) )
+		return a.m_rate > 0.0f;
 	if( a.m_tier != b.m_tier )
 		return a.m_tier > b.m_tier;
 	if( a.m_affinity != b.m_affinity )
@@ -1085,12 +1092,13 @@ Object *AI::pickBestTarget( const Object *me, SimpleObjectIterator *candidates, 
 			nearest = other;
 			nearestDistSqr = distSqr;
 		}
-		// the tier's ceiling is a distance and an id, the armour a cached row; the worth is a price lookup
+		// the tier's ceiling is a distance and an id, the armour a cached row; the worth is a price lookup.
+		// A leader this unit cannot hurt prunes nothing: any candidate it can hurt beats it (aiTargetBeats).
 		const Int ceilingTier = AI_targetCeilingTier( shooter, other, distSqr );
-		if( best != NULL && ceilingTier < bestRating.m_tier )
+		if( best != NULL && bestRating.m_rate > 0.0f && ceilingTier < bestRating.m_tier )
 			continue;
 		const Real affinity = AI_armourAffinity( shooter, other );
-		if( best != NULL && ceilingTier == bestRating.m_tier && affinity < bestRating.m_affinity )
+		if( best != NULL && bestRating.m_rate > 0.0f && ceilingTier == bestRating.m_tier && affinity < bestRating.m_affinity )
 			continue;
 		const Int value = AI_targetValue( other );
 		if( best != NULL && !aiTargetBeats( AI_targetCeiling( shooter, other, distSqr, value, affinity ), bestRating ) )
@@ -1304,10 +1312,10 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 				bestRated = TRUE;
 			}
 			const Int ceilingTier = AI_targetCeilingTier(shooter, theEnemy, distSqr);
-			if (ceilingTier < bestRating.m_tier)
+			if (bestRating.m_rate > 0.0f && ceilingTier < bestRating.m_tier)
 				continue;
 			const Real affinity = AI_armourAffinity(shooter, theEnemy);
-			if (ceilingTier == bestRating.m_tier && affinity < bestRating.m_affinity)
+			if (bestRating.m_rate > 0.0f && ceilingTier == bestRating.m_tier && affinity < bestRating.m_affinity)
 				continue;
 			const Int value = AI_targetValue(theEnemy);
 			if (!aiTargetBeats(AI_targetCeiling(shooter, theEnemy, distSqr, value, affinity), bestRating))

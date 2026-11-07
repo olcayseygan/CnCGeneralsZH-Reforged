@@ -421,8 +421,9 @@ Real aiArmourAffinity( Real mine, const Real *coefficients, Int count );
 	* speed into reach.  0 when we cannot hurt it, or it is out of reach of a unit that cannot move. */
 Real aiTargetKillRate( Real value, Real framesToKill, Real gap, Real speed );
 
-/** Whether a takes the pick from b: the higher tier, then the armour our weapon is made for (the
-	* higher affinity), then the higher rate, then the nearer, then the lower ObjectID. */
+/** Whether a takes the pick from b: one we can hurt from where we can get (rate above 0) over one we
+	* cannot, then the higher tier, then the armour our weapon is made for (the higher affinity), then
+	* the higher rate, then the nearer, then the lower ObjectID. */
 Bool aiTargetBeats( const AITargetRating &a, const AITargetRating &b );
 
 /** One pairing as 0..1, money for money: 0.5 an even trade, 1 when my side kills sixteen times

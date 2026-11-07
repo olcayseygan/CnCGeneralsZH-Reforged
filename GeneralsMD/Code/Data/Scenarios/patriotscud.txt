@@ -1,0 +1,21 @@
+# One Patriot battery, powered, under two SCUD launchers parked 300 south.  Count the KILLXP lines
+# whose victim is SCUDMissile; patriottomahawk.txt says why the battery used to fire at nothing.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 3700
+#     -scenario patriotscud -logPrefix patriotscud_
+#
+# Measured 2026-11-07, seed 1: before the fix 0 SCUDs downed and the battery dead on frame 1110,
+# after it 4 downed and dead on frame 2369.
+
+30    spawn      1  AmericaPatriotBattery     1   2200 3900
+30    spawn      1  ChinaPowerPlant           1   1800 3600
+30    spawn      0  GLAVehicleScudLauncher    2   2200 4200  40
+60    attack     0  GLAVehicleScudLauncher    1  AmericaPatriotBattery
+60    tally      1  AmericaPatriotBattery
+300   tally      1  AmericaPatriotBattery
+600   tally      1  AmericaPatriotBattery
+900   tally      1  AmericaPatriotBattery
+1200  tally      1  AmericaPatriotBattery
+1800  tally      1  AmericaPatriotBattery

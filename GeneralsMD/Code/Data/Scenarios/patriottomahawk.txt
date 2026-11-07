@@ -1,0 +1,26 @@
+# Three Patriot batteries, powered, under two Tomahawk launchers parked 300 south: does the battery
+# shoot the missiles down?  Count the KILLXP lines whose victim is TomahawkMissile.
+#
+# From 3.7.0 to this fix a Patriot picked the launcher (out of its ground missile's 225, inside its
+# assist weapon's 450, tier 1 and then 2 once hit) over the incoming missile (tier 0, unarmed), could
+# fire at neither and picked it again on every scan, so it never fired.  pickBestTarget now puts a
+# target the shooter can hurt (rate above 0) over one it cannot.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 3700
+#     -scenario patriottomahawk -logPrefix patriottomahawk_
+#
+# Measured 2026-11-07, seed 1: before the fix 0 missiles downed, the first battery dead on frame
+# 1684; after it 8 downed, the first battery dead on frame 3430.  One battery alone downs none either
+# way: a clip of four does 80 to a Tomahawk's 200, as in EA's data.
+
+30    spawn      1  AmericaPatriotBattery     3   2140 3900  60
+30    spawn      1  ChinaPowerPlant           1   1800 3600
+30    spawn      0  AmericaVehicleTomahawk    2   2200 4200  40
+60    attack     0  AmericaVehicleTomahawk    1  AmericaPatriotBattery
+60    tally      1  AmericaPatriotBattery
+600   tally      1  AmericaPatriotBattery
+900   tally      1  AmericaPatriotBattery
+1200  tally      1  AmericaPatriotBattery
+1800  tally      1  AmericaPatriotBattery

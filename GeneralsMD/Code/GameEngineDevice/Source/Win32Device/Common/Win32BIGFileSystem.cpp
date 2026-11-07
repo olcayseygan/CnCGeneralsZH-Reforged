@@ -138,6 +138,10 @@ static Bool theClassicGraphics = FALSE;
 // Options > Detailed Models: the batches of rebuilt models, every Reforged*.big but the base art.
 // Off, they stay shut and the game draws retail's models over the upscaled textures.
 static Bool theDetailedModels = TRUE;
+// Options > HD Textures: the base art, ReforgedTextures (the 2x upscale), ReforgedTerrain and
+// ReforgedNormals. Off, they stay shut and retail's own textures and ground tiles are drawn; the
+// batches' own sheets are theirs, and those that replace a base art name replace retail's as well.
+static Bool theHDTextures = TRUE;
 static const char REFORGED_ARCHIVE_PREFIX[] = "Reforged";
 
 static Bool isReforgedArchive(const AsciiString &path)
@@ -155,6 +159,7 @@ void Win32BIGFileSystem::init() {
 
 	theClassicGraphics = getEarlyOptionBool("ClassicGraphics", true);
 	theDetailedModels = getEarlyOptionBool("DetailedModels", true);
+	theHDTextures = getEarlyOptionBool("HDTextures", true);
 	m_reforgedArt.clear();
 
 	//
@@ -416,13 +421,14 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 		}
 		if (isReforgedArchive(*it)) {
 			// Classic draws retail and leaves all of them shut; Detailed Models off leaves the batches
-			// shut.  The rest wait for the end of init, which mounts them over everything retail.  None of
-			// them reaches the INI CRC either way, so which a player has decides only what he sees.
-			const Bool wanted = !theClassicGraphics && (theDetailedModels || ArchiveFileSystem::isReforgedBaseArt(*it));
+			// shut and HD Textures off the base art.  The rest wait for the end of init, which mounts them
+			// over everything retail.  None of them reaches the INI CRC either way, so which a player has
+			// decides only what he sees.
+			const Bool wanted = !theClassicGraphics && (ArchiveFileSystem::isReforgedBaseArt(*it) ? theHDTextures : theDetailedModels);
 			if (wanted && std::find(m_reforgedArt.begin(), m_reforgedArt.end(), *it) == m_reforgedArt.end()) {
 				m_reforgedArt.push_back(*it);
 			}
-			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s %s.\n", (*it).str(), wanted ? "goes in after the retail archives" : "left out (Classic Graphics or Detailed Models off)"));
+			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s %s.\n", (*it).str(), wanted ? "goes in after the retail archives" : "left out (Classic Graphics, Detailed Models or HD Textures off)"));
 			it++;
 			continue;
 		}

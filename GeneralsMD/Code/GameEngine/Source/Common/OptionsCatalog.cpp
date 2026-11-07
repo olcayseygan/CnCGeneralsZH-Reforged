@@ -129,6 +129,7 @@ OPTION_INT_ACCESSORS( m_waterReflectionDetail )
 OPTION_INT_ACCESSORS( m_cloudStyle )
 OPTION_BOOL_ACCESSORS( m_classicGraphics )
 OPTION_BOOL_ACCESSORS( m_detailedModels )
+OPTION_BOOL_ACCESSORS( m_hdTextures )
 OPTION_INT_ACCESSORS( m_lightingStyle )
 OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_healthBarColors )
@@ -553,6 +554,15 @@ const OptionDef TheOptionCatalog[] =
 	{ "DetailedModels",						OPT_WND( "CheckDetailedModels" ), "GUI:DetailedModels",
 		OPTION_BOOL, APPLY_RESTART, 0, 1,
 		get_m_detailedModels, set_m_detailedModels },
+
+	// The base art: ReforgedTextures (EA's textures upscaled twice), ReforgedTerrain (the ground tiles
+	// at twice the size) and ReforgedNormals, which nothing has read since the normal maps went on
+	// 2026-10-06.  An optional download like the models and out of the INI CRC the same way: no
+	// texture is in it.  Off, retail's own textures and tiles are drawn under the Reforged look; the
+	// model batches keep their own sheets.  Read before GlobalData exists, as DetailedModels is.
+	{ "HDTextures",								OPT_WND( "CheckHDTextures" ), "GUI:HDTextures",
+		OPTION_BOOL, APPLY_RESTART, 0, 1,
+		get_m_hdTextures, set_m_hdTextures },
 
 	// Who wears a health bar: everyone, everyone hurt, only the selection, or nobody.  Read every
 	// frame by the drawable that is about to draw one, so changing it shows immediately.

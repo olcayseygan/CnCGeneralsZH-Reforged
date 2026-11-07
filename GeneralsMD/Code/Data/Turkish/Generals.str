@@ -15089,6 +15089,14 @@ TOOLTIP:DetailedModels
 "Yeniden yapılan birlikler ve binalar, Reforged görüntüsü için, indirdiyseniz. Yalnızca gördüğünüzü değiştirirler: onlara sahip olsun olmasın herkesle oynarsınız. Büyük savaşlarda daha yüksek kare hızı için işareti kaldırın. Oyun bir sonraki açılışında geçerli olur."
 END
 
+GUI:HDTextures
+"HD Dokular"
+END
+
+TOOLTIP:HDTextures
+"Bütün dokular ve zemin karoları iki kat ayrıntılı, Reforged görüntüsü için, indirdiyseniz. Yalnızca gördüğünüzü değiştirirler: onlara sahip olsun olmasın herkesle oynarsınız. Ekran kartının belleği yetmiyorsa işareti kaldırın. Oyun bir sonraki açılışında geçerli olur."
+END
+
 GUI:InfantryShadows
 "Piyade Gölgeleri"
 END

@@ -20091,6 +20091,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 
 	CHECK_EQ( findOptionDef( "ClassicGraphics" )->get(), 1 );
 	CHECK_EQ( findOptionDef( "DetailedModels" )->get(), 1 );		// mounts nothing under Classic, and only what was downloaded
+	CHECK_EQ( findOptionDef( "HDTextures" )->get(), 1 );
 	CHECK_EQ( findOptionDef( "LegacySound" )->get(), 1 );
 	CHECK_EQ( findOptionDef( "HealthBars" )->get(), (Int)HEALTH_BAR_SELECTION );
 	CHECK_EQ( findOptionDef( "AmbientVolume" )->get(), 80 );

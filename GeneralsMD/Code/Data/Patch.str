@@ -567,6 +567,14 @@ TOOLTIP:DetailedModels
 "The rebuilt units and buildings, for the Reforged picture, when you downloaded them. They change only what you see: you play with anyone, whether they have them or not. Untick it for a higher frame rate in big battles. Takes effect the next time the game starts."
 END
 
+GUI:HDTextures
+"HD Textures"
+END
+
+TOOLTIP:HDTextures
+"Every texture and ground tile at twice the detail, for the Reforged picture, when you downloaded them. They change only what you see: you play with anyone, whether they have them or not. Untick it on a card short of video memory. Takes effect the next time the game starts."
+END
+
 GUI:InfantryShadows
 "Infantry Shadows"
 END

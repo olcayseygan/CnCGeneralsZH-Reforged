@@ -665,17 +665,23 @@ get_art_from_channel() {
     step 'the release channel is not reachable'
     return 0
   fi
+  # every art archive is an add-on now (addons[].files, optional.models in the first split release);
+  # a developer gets them all unless ZHR_NO_ADDONS=1, as vendor.ps1 -NoAddons
   printf '%s' "$versions" | python3 -c '
 import json, re, sys
-channel, pattern = sys.argv[1], re.compile(sys.argv[2])
+channel, pattern, addons = sys.argv[1], re.compile(sys.argv[2]), sys.argv[3] != "1"
 release = json.load(sys.stdin)["game"][0]
-for f in release["files"]:
+files = list(release["files"])
+if addons:
+    files += [f for a in release.get("addons") or [] for f in a.get("files", [])]
+    files += [f for group in (release.get("optional") or {}).values() for f in group]
+for f in files:
     if pattern.search(f["path"]):
         path = f["path"].replace("\\", "/")
         name = path.rsplit("/", 1)[-1]
         print("\t".join([name, channel + release["folder"] + "/" + path,
                          str(f["size"]), f["sha256"]]))
-' "$channel_url" "$art_pattern"
+' "$channel_url" "$art_pattern" "${ZHR_NO_ADDONS:-0}"
 }
 
 get_art_from_release() {

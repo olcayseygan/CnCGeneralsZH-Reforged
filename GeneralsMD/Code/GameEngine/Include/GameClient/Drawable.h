@@ -89,6 +89,10 @@ extern Real Drawable_effectiveOpacity( Real explicitOpacity, Real stealthOpacity
 extern Bool Drawable_structureShowsHealthBar( Bool isBridge, Bool isUnowned, Bool isGarrisonable,
 																							Bool isCapturable );
 
+///< whether an object of these kinds hangs an altitude line while it flies: a real aircraft, never
+///< the Artillery Barrage's invisible guns, a shell, a missile or a parachute
+extern Bool Drawable_kindWearsAltitudeLine( const KindOfMaskType& kinds );
+
 ///< whether an object of these kinds is a thing that wears a health bar at all
 extern Bool Drawable_kindShowsHealthBar( const KindOfMaskType& kinds );
 

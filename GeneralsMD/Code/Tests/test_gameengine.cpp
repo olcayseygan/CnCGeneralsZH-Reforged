@@ -9753,6 +9753,19 @@ TEST(a_toxin_or_fire_death_puppet_wears_no_health_bar)
 	CHECK( Drawable_kindShowsHealthBar( healthBarKinds( KINDOF_PROJECTILE, KINDOF_SELECTABLE ) ) == FALSE );
 }
 
+/** The Artillery Barrage's guns are AIRCRAFT UNATTACKABLE IGNORED_IN_GUI with no model, and each
+	 hung an altitude line and ring in the sky. Real planes keep theirs, the power planes included. */
+TEST(artillery_barrage_guns_hang_no_altitude_line)
+{
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_UNATTACKABLE, KINDOF_IGNORED_IN_GUI ) ) == FALSE );
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_SELECTABLE ) ) == TRUE );
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_TRANSPORT, KINDOF_IGNORED_IN_GUI ) ) == TRUE );
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_PROJECTILE ) ) == FALSE );
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_PARACHUTE ) ) == FALSE );
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_SMALL_MISSILE ) ) == FALSE );
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_VEHICLE ) ) == FALSE );
+}
+
 /** The Spy Drone is VEHICLE DRONE SELECTABLE INERT NO_SELECT. INERT kept the toxin fields bare and
 	 took the drone's bar with them, so its owner never saw its health. A field stays bare. */
 TEST(the_spy_drone_wears_a_health_bar_and_a_toxin_field_does_not)

@@ -448,6 +448,24 @@ Bool Drawable_structureShowsHealthBar( Bool isBridge, Bool isUnowned, Bool isGar
 	* KindOf.h as "you can mouse over it to see its health (drones!)". So a NO_SELECT object keeps
 	* its bar whatever else it is; without that the owner never saw his drone's health at all. */
 //-------------------------------------------------------------------------------------------------
+/** China's Artillery Barrage flies twelve invisible AIRCRAFT over the target, one per shell, and each
+	* hung a line and a ring in the sky. What marks them is UNATTACKABLE: nothing that can really be
+	* shot down carries it. Shells, missiles, bombs and parachutes are out by kind as well, so a mod
+	* that calls one of them an aircraft does not grow a line on every round. */
+//-------------------------------------------------------------------------------------------------
+Bool Drawable_kindWearsAltitudeLine( const KindOfMaskType& kinds )
+{
+	if( !TEST_KINDOFMASK( kinds, KINDOF_AIRCRAFT ) )
+		return FALSE;
+
+	return !( TEST_KINDOFMASK( kinds, KINDOF_UNATTACKABLE ) ||
+						TEST_KINDOFMASK( kinds, KINDOF_PROJECTILE ) ||
+						TEST_KINDOFMASK( kinds, KINDOF_SMALL_MISSILE ) ||
+						TEST_KINDOFMASK( kinds, KINDOF_BALLISTIC_MISSILE ) ||
+						TEST_KINDOFMASK( kinds, KINDOF_PARACHUTE ) );
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool Drawable_kindShowsHealthBar( const KindOfMaskType& kinds )
 {
 	if( TEST_KINDOFMASK( kinds, KINDOF_INERT ) && !TEST_KINDOFMASK( kinds, KINDOF_NO_SELECT ) )
@@ -3541,14 +3559,8 @@ void Drawable::drawAltitudeLine( void )
 	// The height over terrain says nothing on a carrier's deck, which stands far above the sea bed.  The
 	// airborne flag does: a taxi locomotor has no AirborneTargetingHeight, so nothing parked ever sets
 	// it.  KINDOF_AIRCRAFT stays, because boats over deep water, drones, flares and missiles set it too.
-	if( !obj->isKindOf( KINDOF_AIRCRAFT ) || !obj->isAirborneTarget() )
+	if( !Drawable_kindWearsAltitudeLine( obj->getTemplate()->getKindOfMask() ) || !obj->isAirborneTarget() )
 		return;
-
-	// China's artillery barrage flies a plane with no draw module at all
-	if( *getDrawModulesNonDirty() == NULL )
-		return;
-
-	const Color LINE_COLOR = GameMakeColor( 255, 255, 255, 120 );
 
 	Coord3D top = *obj->getPosition();
 	Coord3D bottom = top;
@@ -3588,7 +3600,98 @@ void Drawable::drawAltitudeLine( void )
 		}
 	}
 
-	TheDisplay->drawLine( topScreen.x, topScreen.y, bottomScreen.x, bottomScreen.y, 1.0f, LINE_COLOR );
+	//
+	// The line is overlay and the plane is scene, so a line drawn from the plane's pivot ran across its
+	// own fuselage. It starts outside the plane instead: the bounding sphere is put on the screen, and
+	// the stretch of line inside that disc is not drawn. A plane straight over its foot from a steep
+	// camera can have no line left at all, and then only the ring shows.
+	//
+	Real startX = topScreen.x, startY = topScreen.y;
+	const Real dx = bottomScreen.x - topScreen.x, dy = bottomScreen.y - topScreen.y;
+	const Real length = sqrtf( dx * dx + dy * dy );
+	Real lineLength = length;
+	if( topOn && length > 0.0f )
+	{
+		const GeometryInfo &geom = obj->getGeometryInfo();
+		const Real radius = geom.getBoundingSphereRadius();
+		Coord3D center, alongX, alongY;
+		geom.getCenterPosition( top, center );
+		alongX = center;
+		alongX.x += radius;
+		alongY = center;
+		alongY.y += radius;
+		ICoord2D centerScreen, xScreen, yScreen;
+		if( TheTacticalView->worldToScreen( &center, &centerScreen ) &&
+				TheTacticalView->worldToScreen( &alongX, &xScreen ) &&
+				TheTacticalView->worldToScreen( &alongY, &yScreen ) )
+		{
+			// a horizontal radius projects somewhere between its full length and less, so the two
+			// together never come out smaller than the disc the sphere covers
+			const Real ax = xScreen.x - centerScreen.x, ay = xScreen.y - centerScreen.y;
+			const Real bx = yScreen.x - centerScreen.x, by = yScreen.y - centerScreen.y;
+			const Real cx = centerScreen.x - topScreen.x, cy = centerScreen.y - topScreen.y;
+			const Real trim = sqrtf( ax * ax + ay * ay + bx * bx + by * by ) + sqrtf( cx * cx + cy * cy );
+			lineLength = length - trim;
+			startX = topScreen.x + dx * ( trim / length );
+			startY = topScreen.y + dy * ( trim / length );
+		}
+	}
+
+	// faint where it leaves the plane, firm where it meets the ground: the foot is the answer, the
+	// top is only where the question came from
+	const Int SEGMENTS = 8;
+	if( lineLength > 2.0f )
+	{
+		const Real sx = ( bottomScreen.x - startX ) / SEGMENTS, sy = ( bottomScreen.y - startY ) / SEGMENTS;
+		for( Int i = 0; i < SEGMENTS; ++i )
+		{
+			const UnsignedByte alpha = (UnsignedByte)( 40 + ( 150 - 40 ) * ( i + 1 ) / SEGMENTS );
+			TheDisplay->drawLine( REAL_TO_INT( startX + sx * i ), REAL_TO_INT( startY + sy * i ),
+														REAL_TO_INT( startX + sx * ( i + 1 ) ), REAL_TO_INT( startY + sy * ( i + 1 ) ),
+														1.0f, GameMakeColor( 255, 255, 255, alpha ) );
+		}
+	}
+
+	//
+	// A ring on the ground at the foot, in the owner's colour, so whose plane is over this spot reads
+	// from the ground as well as from the sky. It lies flat on the terrain, so the camera squashes it
+	// to an ellipse exactly as it does the ground, and a black ring under it keeps it on any terrain.
+	//
+	if( !bottomOn )
+		return;
+
+	Color ringColor = GameMakeColor( 255, 255, 255, 220 );
+	const Player *owner = obj->getControllingPlayer();
+	if( owner != NULL && owner->getPlayerColor() != 0 )
+	{
+		UnsignedByte r, g, b, a;
+		GameGetColorComponents( clientPlayerColor( owner ), &r, &g, &b, &a );
+		ringColor = GameMakeColor( r, g, b, 220 );
+	}
+
+	const Real ringRadius = MAX( 6.0f, MIN( 18.0f, obj->getGeometryInfo().getMajorRadius() * 0.6f ) );
+	const Int RING_POINTS = 20;
+	ICoord2D ring[ RING_POINTS ];
+	for( Int i = 0; i < RING_POINTS; ++i )
+	{
+		const Real angle = 2.0f * PI * i / RING_POINTS;
+		Coord3D p = bottom;
+		p.x += ringRadius * Cos( angle );
+		p.y += ringRadius * Sin( angle );
+		if( !TheTacticalView->worldToScreen( &p, &ring[ i ] ) )
+			return;
+	}
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		const Real width = pass == 0 ? 3.0f : 1.0f;
+		const Color color = pass == 0 ? GameMakeColor( 0, 0, 0, 110 ) : ringColor;
+		for( Int i = 0; i < RING_POINTS; ++i )
+		{
+			const ICoord2D &a = ring[ i ];
+			const ICoord2D &b = ring[ ( i + 1 ) % RING_POINTS ];
+			TheDisplay->drawLine( a.x, a.y, b.x, b.y, width, color );
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

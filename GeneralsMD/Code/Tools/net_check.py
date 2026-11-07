@@ -10,7 +10,7 @@ desync and show the check is looking.
     python net_check.py --copies 3 --teams 2
     python net_check.py --each "-latAvg 120 -latNoise 60 -packetloss 5"
     python net_check.py --slot-args 1 "-drawdelay 100"    # one slow renderer
-    python net_check.py --slot-run 1 C:\other\Run         # copy 1 plays from another install
+    python net_check.py --slot-run 1 C:/other/Run         # copy 1 plays from another install
     python net_check.py --prove                           # must report a mismatch
     python net_check.py --each "-scenario netstance" --keys "KEY_A CTRL,KEY_H"   # the stance key, both ways
     python net_check.py --relay 8094 --each "-latAvg 90 -latNoise 30"           # through a local relay

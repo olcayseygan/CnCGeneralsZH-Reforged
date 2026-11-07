@@ -554,6 +554,18 @@ private:
 	Bool													m_pauseAnimation;
 	Int														m_animationMode;
 	SmoothMotionTrack							m_smoothMotion;										///< R1: the render object's last two logic transforms
+	struct ProjectileShown
+	{
+		const ModelConditionInfo*		state;							///< NULL: nothing applied since the last hide/show from elsewhere
+		const RenderObjClass*				robj;
+		UnsignedInt									showCount;
+		UnsignedInt									maxCount;
+		UnsignedInt									askedFrame;					///< the logic frame of this slot's last ask
+	};
+	ProjectileShown								m_projectileShown[WEAPONSLOT_COUNT];	///< what doHideShowProjectileObjects last applied to each slot
+	void applyHideShowSubObjs(const std::vector<ModelConditionInfo::HideShowSubObjInfo>* vec);
+	void applySubObjectVec();
+	void forgetProjectileShown();
 
 	void adjustAnimation(const ModelConditionInfo* prevState, Real prevAnimFraction);
 	Real getCurrentAnimFraction() const;

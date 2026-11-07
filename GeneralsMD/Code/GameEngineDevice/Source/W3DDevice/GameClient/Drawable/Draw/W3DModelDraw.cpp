@@ -1394,6 +1394,9 @@ void W3DModelDraw::showSubObject( const AsciiString& name, Bool show )
 			info.hide = !show;
 			m_subObjectVec.push_back( info );
 		}
+		// a caller that never calls updateSubObjects (a payload carrier's shown parts) had the next
+		// projectile apply put this order on the model, and still does
+		forgetProjectileShown();
 	}
 }
 
@@ -1795,6 +1798,7 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_headlightPass = 0;
 	m_pauseAnimation = false;
 	m_curState = NULL;
+	forgetProjectileShown();
 	m_hexColor = 0;
 	m_renderObject = NULL;
 	m_shadow = NULL;
@@ -2928,6 +2932,21 @@ void ModelConditionInfo::WeaponBarrelInfo::setMuzzleFlashHidden(RenderObjClass *
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::doHideShowSubObjs(const std::vector<ModelConditionInfo::HideShowSubObjInfo>* vec)
 {
+	// a state's own hide/show can take in the projectile parts, so they are shown again after it
+	forgetProjectileShown();
+	applyHideShowSubObjs(vec);
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DModelDraw::forgetProjectileShown()
+{
+	for (Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot)
+		m_projectileShown[slot].state = NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DModelDraw::applyHideShowSubObjs(const std::vector<ModelConditionInfo::HideShowSubObjInfo>* vec)
+{
 	if (!m_renderObject)
 		return;
 
@@ -2947,7 +2966,7 @@ void W3DModelDraw::doHideShowSubObjs(const std::vector<ModelConditionInfo::HideS
 	//September 2002 -- now used by the UpgradeSubObject system.
 	if( !m_subObjectVec.empty() )
 	{
-		updateSubObjects();
+		applySubObjectVec();
 	}
 }
 
@@ -4790,6 +4809,30 @@ void W3DModelDraw::doHideShowProjectileObjects( UnsignedInt showCount, UnsignedI
 	}
 	Int hideCount = maxCount - showCount;
 
+	/* Every armed drawable with projectile bones asks every frame, and the answer is nearly always
+		 the one it already shows.  Each name is a search of every part by name and then a walk of
+		 every part's bones below each copy of it, which on a model with four levels of detail of about
+		 fifty parts was a tenth of the drawn frame in an eight-AI battle.  So the same count on the
+		 same state and render object is not applied again.  Every other hide/show of this module's
+		 parts forgets it: a model state, which is also every new render object (doHideShowSubObjs),
+		 and another module's sub-object orders or a load (updateSubObjects). */
+	ProjectileShown &shown = m_projectileShown[slot];
+	// a later slot that stopped asking (its weapon gone from the set) no longer has the last word on
+	// a part it shares with this one, so this one applies again, as it did when every ask applied
+	const UnsignedInt now = TheGameLogic->getFrame();
+	for (Int later = slot + 1; later < WEAPONSLOT_COUNT; ++later)
+	{
+		if (m_projectileShown[later].state != NULL && m_projectileShown[later].askedFrame + 1 < now)
+		{
+			m_projectileShown[later].state = NULL;
+			shown.state = NULL;
+		}
+	}
+	shown.askedFrame = now;
+	if (shown.state != NULL && shown.state == m_curState && shown.robj == m_renderObject
+			&& shown.showCount == showCount && shown.maxCount == maxCount)
+		return;
+
 	std::vector<ModelConditionInfo::HideShowSubObjInfo> showHideVector;
 	ModelConditionInfo::HideShowSubObjInfo oneEntry;
 	if (m_curState->m_weaponProjectileHideShowName[slot].isEmpty())
@@ -4809,11 +4852,28 @@ void W3DModelDraw::doHideShowProjectileObjects( UnsignedInt showCount, UnsignedI
 	}
 
 	// Rather than duplicate recursive utility stuff, I will build a vector like those used by the main ShowHide setting
-	doHideShowSubObjs(&showHideVector);
+	applyHideShowSubObjs(&showHideVector);
+	shown.state = m_curState;
+	shown.robj = m_renderObject;
+	shown.showCount = showCount;
+	shown.maxCount = maxCount;
+	// the slots after this one ask after it each tick and used to have the last word on a part they
+	// share with it (the Scud Launcher's one missile on both slots), so they apply again
+	for (Int later = slot + 1; later < WEAPONSLOT_COUNT; ++later)
+		m_projectileShown[later].state = NULL;
 }
 
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::updateSubObjects()
+{
+	// another module's hide/show (an upgrade's pods, a horde's flags, a payload, a load) can take in
+	// the projectile parts or the bones under them, so they are applied again after it
+	forgetProjectileShown();
+	applySubObjectVec();
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DModelDraw::applySubObjectVec()
 {
 	if (!m_renderObject)
 		return;

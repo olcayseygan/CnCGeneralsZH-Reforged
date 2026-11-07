@@ -496,6 +496,11 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 
 					for( size_t i = 0; i < placements.size(); i++ )
 					{
+						// shift: the builder puts it up when its list gets there, after the ones before it
+						// (OrderQueue::queueConstruction).  A wall goes up at once and has nothing to queue
+						if( !isLineBuild && TheInGameUI->isInWaypointMode() )
+							TheInGameUI->markNextOrderQueued( ORDER_QUEUE_APPEND );
+
 						// create the right kind of message
 						if( isLineBuild )
 							placeMsg = TheMessageStream->appendMessage( GameMessage::MSG_DOZER_CONSTRUCT_LINE );

@@ -335,8 +335,9 @@ void BuildAssistant::xferTheSellList( Xfer *xfer )
 //-------------------------------------------------------------------------------------------------
 /** Nice little method to wrap up creating an object from a build */
 //-------------------------------------------------------------------------------------------------
-Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTemplate *what, 
-																			  const Coord3D *pos, Real angle, Player *owningPlayer )
+Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTemplate *what,
+																			  const Coord3D *pos, Real angle, Player *owningPlayer,
+																				Bool takeJob )
 {
 
 	// sanity
@@ -391,7 +392,12 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 			DozerAIInterface *dozer = ai->getDozerAIInterface();
 			Bool keepsCurrentJob = owningPlayer->getPlayerType() == PLAYER_HUMAN &&
 														 dozer && dozer->isTaskPending( DOZER_TASK_BUILD );
-			if( ai->isExitingProducer() )
+			if( !takeJob )
+			{
+				// a plan placed with shift: the builder carries on with what it is doing, and its order
+				// queue sends it to this one in turn (OrderQueue::queueConstruction)
+			}
+			else if( ai->isExitingProducer() )
 			{
 				// a builder still leaving the structure that made it finishes leaving before it takes up
 				// the job (DozerAIUpdate::update); idling it here dropped the exit path and it walked to
@@ -405,7 +411,7 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 				ai->endTunnelTrip();
 				ai->aiIdle(CMD_FROM_AI); // stop any current behavior.
 			}
-			return ai->construct( what, pos, angle, owningPlayer, FALSE );
+			return ai->construct( what, pos, angle, owningPlayer, FALSE, takeJob );
 		}
 		return NULL;
 

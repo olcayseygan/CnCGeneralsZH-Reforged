@@ -4954,8 +4954,23 @@ Bool InGameUI::getQueuedOrderHint( const QueuedOrder& order, OrderHint& hint ) c
 			break;
 
 		case GameMessage::MSG_DO_REPAIR:
+		case GameMessage::MSG_RESUME_CONSTRUCTION:		// a building placed with shift, or a right click on one standing unfinished
 			hint.kind = ORDER_HINT_DO_REPAIR;
 			break;
+
+		case GameMessage::MSG_EVACUATE:
+			// pointed at a spot, the transport drives there to unload; otherwise it unloads where the
+			// step before leaves it, like an ability
+			hint.kind = ORDER_HINT_MOVE;
+			if( order.getDestination( &hint.to ) )
+				return TRUE;
+			hint.kind = ORDER_HINT_ABILITY;
+			return TRUE;
+
+		case GameMessage::MSG_EXIT:
+			// the object it names is the passenger, inside: one climbs out where the step before ends
+			hint.kind = ORDER_HINT_ABILITY;
+			return TRUE;
 
 		case GameMessage::MSG_DO_SPECIAL_POWER_AT_OBJECT:
 		{

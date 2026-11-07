@@ -1,0 +1,28 @@
+# Two buildings placed with shift held, one dozer: it has to put them up one after the other, in the
+# order they were placed, and not drop the first for the second.  The barracks is placed first and
+# far from the dozer, the power plant second and on its doorstep, so a dozer that went for the newest
+# plan, or the nearest, would build the power plant first.
+#
+# shiftconstruct is the placement click with the shift mark in front of it, both messages on the
+# stream, so the replay this run leaves plays back to the same HEADLESS CRC with -replay and no
+# -scenario.  Nothing is selected, so the logic picks the idle builder nearest the site, the starting
+# dozer, and the second plan goes on that dozer's list.
+#
+#   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 6400
+#     -scenario shiftbuild -logPrefix shiftbuild_
+#
+# Both plans go down and are paid for at once: money 8600 from the first tally on.  At 1500 the
+# barracks is most of the way up and the power plant still a plan at 1 health.  The log's one
+# "order queue: ... next order out, on MSG_RESUME_CONSTRUCTION" line is the dozer leaving the
+# finished barracks for the power plant.  At the end both stand at full health.
+
+120   shiftconstruct  0  AmericaBarracks     560 650
+121   shiftconstruct  0  AmericaPowerPlant   1200 600
+300   tally           0  AmericaPowerPlant
+300   tally           0  AmericaBarracks
+1500  tally           0  AmericaPowerPlant
+1500  tally           0  AmericaBarracks
+3190  tally           0  AmericaPowerPlant
+3190  tally           0  AmericaBarracks

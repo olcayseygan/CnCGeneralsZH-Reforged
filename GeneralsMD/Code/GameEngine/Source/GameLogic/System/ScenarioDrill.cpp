@@ -236,6 +236,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_SHIFTUPGRADE;
 	else if (token == "construct")
 		*action = SCENARIO_ACTION_CONSTRUCT;
+	else if (token == "shiftconstruct")
+		*action = SCENARIO_ACTION_SHIFTCONSTRUCT;
 	else if (token == "stance")
 		*action = SCENARIO_ACTION_STANCE;
 	else if (token == "forceattack")
@@ -342,6 +344,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_SHIFTATTACKMOVE:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_SHIFTGUARD:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_CONSTRUCT:		return SCENARIO_TOKENS_MOVE;
+		case SCENARIO_ACTION_SHIFTCONSTRUCT:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_WEAPONAT:		return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_FORCEGROUND:	return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_REAIM:				return SCENARIO_TOKENS_MOVE;
@@ -444,6 +447,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_SHIFTATTACKMOVE:
 		case SCENARIO_ACTION_SHIFTGUARD:
 		case SCENARIO_ACTION_CONSTRUCT:
+		case SCENARIO_ACTION_SHIFTCONSTRUCT:
 		case SCENARIO_ACTION_WEAPONAT:
 		case SCENARIO_ACTION_FORCEGROUND:
 		case SCENARIO_ACTION_REAIM:
@@ -2047,13 +2051,21 @@ static Bool executeConstruct( const ScenarioAction &action, Player *player, cons
 		return FALSE;
 	}
 
+	// shiftconstruct: the mark PlaceEventTranslator puts in front of a placement made with shift held
+	const Bool shift = action.action == SCENARIO_ACTION_SHIFTCONSTRUCT;
+	if (shift)
+	{
+		GameMessage *mark = TheMessageStream->appendMessage( GameMessage::MSG_QUEUE_NEXT_ORDER );
+		mark->appendIntegerArgument( ORDER_QUEUE_APPEND );
+	}
+
 	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DOZER_CONSTRUCT );
 	msg->appendIntegerArgument( build->getTemplateID() );
 	msg->appendLocationArgument( dest );
 	msg->appendRealArgument( 0.0f );
 
-	DEBUG_LOG(("SCENARIO: frame %d construct slot %d '%s' at (%.0f,%.0f)\n",
-						 action.frame, action.slot, action.selector.str(), dest.x, dest.y));
+	DEBUG_LOG(("SCENARIO: frame %d %s slot %d '%s' at (%.0f,%.0f)\n",
+						 action.frame, shift ? "shiftconstruct" : "construct", action.slot, action.selector.str(), dest.x, dest.y));
 	return TRUE;
 }
 
@@ -2162,7 +2174,7 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 	if (action.action == SCENARIO_ACTION_PURCHASE)
 		return executePurchase( action, player );
 
-	if (action.action == SCENARIO_ACTION_CONSTRUCT)
+	if (action.action == SCENARIO_ACTION_CONSTRUCT || action.action == SCENARIO_ACTION_SHIFTCONSTRUCT)
 		return executeConstruct( action, player, position );
 
 	return executeOrder( action, player, position );

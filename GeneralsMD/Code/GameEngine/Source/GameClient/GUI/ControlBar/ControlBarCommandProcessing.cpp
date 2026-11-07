@@ -990,7 +990,9 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 
       //what if container is subdued... assert a logic failure, perhaps?
 
-			// send message to exit
+			// send message to exit; with shift, once the transport has done what is on its list
+			if( TheInGameUI->isInWaypointMode() )
+				TheInGameUI->markNextOrderQueued( ORDER_QUEUE_APPEND );
 			GameMessage *exitMsg = TheMessageStream->appendMessage( GameMessage::MSG_EXIT );
 			exitMsg->appendObjectIDArgument( objWantingExit->getID() ); // 0 is the thing inside coming out
 
@@ -1022,6 +1024,9 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 			// Cancel GUI command mode.
 			TheInGameUI->setGUICommand( NULL );
 			pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_EVACUATE );
+			// shift: unload where its list ends, after the moves before it
+			if( TheInGameUI->isInWaypointMode() )
+				TheInGameUI->markNextOrderQueued( ORDER_QUEUE_APPEND );
 			TheMessageStream->appendMessage( GameMessage::MSG_EVACUATE );
 			break;
 		}  // end evacuate

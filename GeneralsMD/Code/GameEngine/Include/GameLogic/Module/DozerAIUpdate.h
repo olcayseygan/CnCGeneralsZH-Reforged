@@ -122,7 +122,8 @@ public:
 	virtual Object *construct( const ThingTemplate *what, 
 														 const Coord3D *pos, Real angle, 
 														 Player *owningPlayer,
-														 Bool isRebuild ) = 0;
+														 Bool isRebuild,
+														 Bool takeJob = TRUE ) = 0;	///< takeJob FALSE lays the plan and leaves the builder to it
 
 
 	// get task information
@@ -224,7 +225,8 @@ public:
 	virtual Object* construct( const ThingTemplate *what, 
 														 const Coord3D *pos, Real angle, 
 														 Player *owningPlayer,
-														 Bool isRebuild );								///< construct an object
+														 Bool isRebuild,
+														 Bool takeJob = TRUE );								///< construct an object
 
 
 	// get task information

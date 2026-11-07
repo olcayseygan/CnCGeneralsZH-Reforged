@@ -22031,6 +22031,29 @@ TEST(order_queue_kinds_nest)
 
 	// buying an upgrade without shift must not throw away the list of the unit it is for
 	CHECK( !OrderQueue::isOrder( GameMessage::MSG_QUEUE_UPGRADE ) );
+
+	// going to build an unfinished structure, and unloading a transport, wait their turn too and are
+	// no post: the list goes on once the building stands or the last passenger is out
+	CHECK( OrderQueue::isQueueable( GameMessage::MSG_RESUME_CONSTRUCTION ) );
+	CHECK( OrderQueue::isQueueable( GameMessage::MSG_EVACUATE ) );
+	CHECK( OrderQueue::isQueueable( GameMessage::MSG_EXIT ) );
+	CHECK( !OrderQueue::isTerminal( GameMessage::MSG_RESUME_CONSTRUCTION ) );
+	CHECK( !OrderQueue::isTerminal( GameMessage::MSG_EVACUATE ) );
+
+	// a placement is no order to the selection: the dispatcher picks its builder and queues the
+	// building on that one (OrderQueue::queueConstruction), so the queue reads the mark for it
+	CHECK( !OrderQueue::isOrder( GameMessage::MSG_DOZER_CONSTRUCT ) );
+	CHECK( !OrderQueue::isOrder( GameMessage::MSG_DOZER_CONSTRUCT_LINE ) );
+}
+
+// The mark a placement reads for itself is used up by the read, so a placement refused on the ground
+// does not hand the mark to the player's next click.
+TEST(order_queue_mark_is_used_once)
+{
+	OrderQueue queue;
+	queue.setNextOrderMode( ORDER_QUEUE_APPEND );
+	CHECK_EQ( queue.takeNextOrderMode(), (Int)ORDER_QUEUE_APPEND );
+	CHECK_EQ( queue.takeNextOrderMode(), (Int)ORDER_QUEUE_NONE );
 }
 
 TEST(scenario_parses_the_order_lines)
@@ -22111,6 +22134,12 @@ TEST(scenario_parses_the_order_lines)
 						(Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_SHIFTUPGRADE );
 	CHECK_STR( action.name.str(), "Upgrade_ChinaOverlordGattlingCannon" );
+
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "120 shiftconstruct 0 AmericaPowerPlant 720 550", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_SHIFTCONSTRUCT );
+	CHECK_STR( action.selector.str(), "AmericaPowerPlant" );
+	CHECK_NEAR( action.at.y, 550.0f, 0.01f );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "120 shiftconstruct 0 AmericaPowerPlant 720", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
 
 	// a line read after one that named something must not carry that name
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "200 shiftmove 0 * 900 700", &action ), (Int)SCENARIO_PARSE_OK );

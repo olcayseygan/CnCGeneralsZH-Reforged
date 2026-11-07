@@ -35,7 +35,9 @@
 // order until everyone left alive is done with this one, so an army does not string out across the
 // map behind its fastest unit.  Selecting part of a chain and adding to it splits that part off with
 // a copy of the list.  An order given without shift ends the list for the units it went to.  An
-// upgrade bought with shift is a step as well, paid for when the chain reaches it.
+// upgrade bought with shift is a step as well, paid for when the chain reaches it.  A structure placed
+// with shift is the other way round: it goes on the ground and is paid for at once, and the builder's
+// step is to go and put it up when its list gets there.
 //
 // Everything here is logic state: it is saved with the player, and a replay rebuilds it from the
 // recorded messages.
@@ -52,6 +54,7 @@
 #include <vector>
 
 class AIGroup;
+class Object;
 class Player;
 class Xfer;
 
@@ -129,6 +132,12 @@ public:
 
 	/// A MSG_QUEUE_NEXT_ORDER with no order behind it in the same frame is forgotten, not carried over.
 	void forgetNextOrderMode( void ) { m_nextOrderMode = ORDER_QUEUE_NONE; }
+
+	/// The mark the last MSG_QUEUE_NEXT_ORDER left, used up.  A placement reads it for itself.
+	Int takeNextOrderMode( void ) { const Int mode = m_nextOrderMode; m_nextOrderMode = ORDER_QUEUE_NONE; return mode; }
+
+	/// A placement made with shift: site goes up when builder's list gets to it
+	void queueConstruction( const Object *site, Object *builder, Player *owner );
 
 	void update( Player *owner );		///< once a logic frame: hand out the next order to every chain that is done
 

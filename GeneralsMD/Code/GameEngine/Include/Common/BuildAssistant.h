@@ -174,9 +174,11 @@ public:
 												 IterateFootprintFunc func,
 												 void *funcUserData );
 
-	/// create object from a build and put it in the world now
-	virtual Object *buildObjectNow( Object *constructorObject, const ThingTemplate *what, 
-																	const Coord3D *pos, Real angle, Player *owningPlayer );
+	/// create object from a build and put it in the world now; takeJob FALSE lays a builder's plan
+	/// without sending the builder to it (a placement made with shift, which its order queue sends)
+	virtual Object *buildObjectNow( Object *constructorObject, const ThingTemplate *what,
+																	const Coord3D *pos, Real angle, Player *owningPlayer,
+																	Bool takeJob = TRUE );
 
 	/// using the "line placement" for objects (like walls etc) create that line of objects line
 	virtual void buildObjectLineNow( Object *constructorObject, const ThingTemplate *what, 

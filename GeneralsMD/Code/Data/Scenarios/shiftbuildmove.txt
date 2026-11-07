@@ -1,0 +1,24 @@
+# A building placed with shift, then a shift move for the same dozer: the move waits for the
+# building.  A dozer at work stands idle in its AI while it drives to the site and while it builds,
+# so the order queue used to read it as done, send the move at once and take it off the job, and the
+# barracks stayed a plan at 1 health.  Now the dozer task counts as work: the barracks goes up, then
+# the dozer drives off, and the arrive line comes after the barracks is finished.
+#
+# Measured 2026-11-07: HEADLESS ARRIVE after 64.8 s, the move's "order queue: frame 3185 ... next
+# order out, on MSG_DO_MOVETO" line on the frame the barracks is done, and the barracks at 852 of
+# 1000 at file frame 1500.  With the dozer task not counted as work: arrive after 22.4 s and the
+# barracks at 91, put up later by the idle builder's own pick-up.
+#
+# shiftmove goes straight to the order queue and is in no command stream, so unlike shiftbuild.txt
+# this run is not replayable.
+#
+#   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 5000
+#     -scenario shiftbuildmove -logPrefix shiftbuildmove_
+
+120   shiftconstruct  0  AmericaBarracks       560 650
+130   shiftmove       0  AmericaVehicleDozer   900 800
+140   arrive          0  AmericaVehicleDozer   900 800 100
+1500  tally           0  AmericaBarracks
+2490  tally           0  AmericaBarracks

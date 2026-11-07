@@ -2088,6 +2088,10 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		case GameMessage::MSG_DOZER_CONSTRUCT:
 		case GameMessage::MSG_DOZER_CONSTRUCT_LINE:
 		{
+			// shift on the placement: the builder goes when its list gets there (read before any break,
+			// so a refused placement does not leave the mark for the next message)
+			const Bool queued = thisPlayer->getOrderQueue()->takeNextOrderMode() != ORDER_QUEUE_NONE;
+
 			const ThingTemplate *place;
 			Coord3D loc;
 			Real angle;
@@ -2153,8 +2157,16 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			if( msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT )
 			{
 
-				TheBuildAssistant->buildObjectNow( constructorObject, place, &loc, angle, 
-																					 constructorObject->getControllingPlayer() );
+				//
+				// With shift the plan still goes down and is paid for now, so the spot is held, but the
+				// builder is not taken off what it is doing: its order queue gets a step to go and put
+				// this one up, after whatever is on its list.  Several placed in a row are built one after
+				// the other in the order they were placed, instead of the newest pulling it away.
+				//
+				Object *site = TheBuildAssistant->buildObjectNow( constructorObject, place, &loc, angle,
+																													constructorObject->getControllingPlayer(), !queued );
+				if( queued && site != NULL && site->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+					thisPlayer->getOrderQueue()->queueConstruction( site, constructorObject, thisPlayer );
 
 			}  // end if
 			else

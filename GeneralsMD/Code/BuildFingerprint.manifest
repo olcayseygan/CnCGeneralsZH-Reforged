@@ -576,6 +576,8 @@ Data/Scenarios/scudstorm.txt
 Data/Scenarios/sentryattack.txt
 Data/Scenarios/sentrydrone.txt
 Data/Scenarios/shellpaths.txt
+Data/Scenarios/shiftbuild.txt
+Data/Scenarios/shiftbuildmove.txt
 Data/Scenarios/shiftorders.txt
 Data/Scenarios/shiftqueue.txt
 Data/Scenarios/spectre_reaim.txt

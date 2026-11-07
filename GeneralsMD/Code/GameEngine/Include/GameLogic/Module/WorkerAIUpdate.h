@@ -147,7 +147,8 @@ public:
 	virtual Object *construct( const ThingTemplate *what, 
 														 const Coord3D *pos, Real angle, 
 														 Player *owningPlayer,
-														 Bool isRebuild );			///< construct a building
+														 Bool isRebuild,
+														 Bool takeJob = TRUE );			///< construct a building
 
 	// get task information
 	virtual DozerTask getMostRecentCommand( void );				///< return task that was most recently issued

@@ -350,7 +350,8 @@ Object *WorkerAIUpdate::construct( const ThingTemplate *what,
 																	 const Coord3D *pos, 
 																	 Real angle, 
 																	 Player *owningPlayer,
-																	 Bool isRebuild )
+																	 Bool isRebuild,
+																	 Bool takeJob )
 {
 
 	// !!! NOTE: If you modify this you must modify the dozer too !!!
@@ -485,8 +486,9 @@ Object *WorkerAIUpdate::construct( const ThingTemplate *what,
 
 	// we have a construction pending - unless a human player's worker is already building
 	// something, in which case the new structure waits at 0% for the next free builder
-	// (see BuildAssistant::buildObjectNow / DozerPrimaryIdleState)
-	if( !( isTaskPending( DOZER_TASK_BUILD ) && owningPlayer->getPlayerType() == PLAYER_HUMAN ) )
+	// (see BuildAssistant::buildObjectNow / DozerPrimaryIdleState).  A plan placed with shift is
+	// left alone too: the worker's order queue sends it there when its list gets that far.
+	if( takeJob && !( isTaskPending( DOZER_TASK_BUILD ) && owningPlayer->getPlayerType() == PLAYER_HUMAN ) )
 		newTask( DOZER_TASK_BUILD, obj );
 
 	return obj;

@@ -8012,7 +8012,9 @@ TEST(random_pool_round_trips_and_plain_random_leaves_out_turkiye)
 	CHECK( candidates == std::vector<Int>( four, four + 4 ) );
 	CHECK_EQ( GetDefaultRandomPool(), 0x7u );
 
-	// plain Random never lands on Turkiye, and the old-factions rule narrows it further
+	// plain Random never lands on Turkiye, and the old-factions rule narrows it further; the plain
+	// draw is also Quick Match's army list, so Turkiye is not offered there
+	// (populateQMSideComboBox in WOLQuickMatchMenu.cpp)
 	const Int three[] = { 1, 2, 3 };
 	const Int old[] = { 1, 3 };
 	CHECK( drawIs( PLAYERTEMPLATE_RANDOM, FALSE, std::vector<Int>( three, three + 3 ) ) );

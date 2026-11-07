@@ -60,6 +60,7 @@
 
 #include "GameLogic/GameLogic.h"
 
+#include "GameNetwork/GameInfo.h"
 #include "GameNetwork/NAT.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -292,8 +293,11 @@ static void populateQMColorComboBox(QuickMatchPreferences& pref)
 
 static void populateQMSideComboBox(Int favSide, const LadderInfo *li = NULL)
 {
-	Int numPlayerTemplates = ThePlayerTemplateStore->getPlayerTemplateCount();
-	UnicodeString playerTemplateName;
+	// Quick Match offers the armies a plain Random draws from: playable, not a locked general, not
+	// RandomExcluded (Turkiye), which the server also turns back into Random.  A saved pick that is
+	// not listed selects Random.
+	std::vector<Int> templates;
+	GetRandomDraw(PLAYERTEMPLATE_RANDOM, FALSE, templates);
 
 	GadgetComboBoxReset(comboBoxSide);
 
@@ -305,14 +309,10 @@ static void populateQMSideComboBox(Int favSide, const LadderInfo *li = NULL)
 	
 	Int entryToSelect = 0; // select Random by default
 
-	for (Int c=0; c<numPlayerTemplates; ++c)
+	for (size_t t=0; t<templates.size(); ++t)
 	{
+		const Int c = templates[t];
 		const PlayerTemplate *fac = ThePlayerTemplateStore->getNthPlayerTemplate(c);
-		if (!fac)
-			continue;
-
-		if (fac->getStartingBuilding().isEmpty())
-			continue;
 
 		AsciiString side;
 		side.format("SIDE:%s", fac->getSide().str());
@@ -324,15 +324,6 @@ static void populateQMSideComboBox(Int favSide, const LadderInfo *li = NULL)
 			if (std::find(li->validFactions.begin(), li->validFactions.end(), fac->getSide()) == li->validFactions.end())
 				continue; // ladder doesn't allow it.
 		}
-
-		// Remove disallowed generals from the choice list.
-		// This is also enforced at GUI setup (GUIUtil.cpp and UserPreferences.cpp).
-		// @todo: unlock these when something rad happens
-		Bool disallowLockedGenerals = TRUE;
-		const GeneralPersona *general = TheChallengeGenerals->getGeneralByTemplateName(fac->getName());
-		Bool startsLocked = general ? !general->isStartingEnabled() : FALSE;
-		if (disallowLockedGenerals && startsLocked)
-			continue;
 
 		seenSides.insert(side);
 
@@ -1765,43 +1756,16 @@ WindowMsgHandledType WOLQuickMatchMenuSystem( GameWindow *window, UnsignedInt ms
 					if (selected >= 0)
 						index = (Int)(intptr_t)GadgetComboBoxGetItemData( comboBoxSide, selected );
 					req.QM.side = index;
-					if (ladderInfo && ladderInfo->randomFactions)
+					if( index == PLAYERTEMPLATE_RANDOM || (ladderInfo && ladderInfo->randomFactions) )
 					{
-						Int sideNum = GameClientRandomValue(0, ladderInfo->validFactions.size()-1);
-						DEBUG_LOG(("Looking for %d out of %d random sides\n", sideNum, ladderInfo->validFactions.size()));
-						AsciiStringListConstIterator cit = ladderInfo->validFactions.begin();
-						while (sideNum)
-						{
-							++cit;
-							--sideNum;
-						}
-						if (cit != ladderInfo->validFactions.end())
-						{
-							Int numPlayerTemplates = ThePlayerTemplateStore->getPlayerTemplateCount();
-							AsciiString sideStr = *cit;
-							DEBUG_LOG(("Chose %s as our side... finding\n", sideStr.str()));
-							for (Int c=0; c<numPlayerTemplates; ++c)
-							{
-								const PlayerTemplate *fac = ThePlayerTemplateStore->getNthPlayerTemplate(c);
-								if (fac && fac->getSide() == sideStr)
-								{
-									DEBUG_LOG(("Found %s in index %d\n", sideStr.str(), c));
-									req.QM.side = c;
-									break;
-								}
-							}
-						}
-					}
-					else if( index == PLAYERTEMPLATE_RANDOM )
-					{
-						// If not a forced random ladder, then we need to resolve our pick of random right now anyway, or else
-						// we will get the same pick every darn time.
-						// from the listed factions a plain Random may land on, as populateRandomSideAndColor draws
+						// Resolve Random now, or else we will get the same pick every darn time.  A forced-random
+						// ladder draws too; either way from the listed armies, which are the ladder's valid
+						// factions that Quick Match offers, so neither can land on Turkiye.
 						std::vector<Int> sides;
 						for( Int entry = 0; entry < GadgetComboBoxGetLength(comboBoxSide); ++entry )
 						{
 							const Int side = (Int)(intptr_t)GadgetComboBoxGetItemData( comboBoxSide, entry );
-							if( side >= 0 && !ThePlayerTemplateStore->getNthPlayerTemplate(side)->isRandomExcluded() )
+							if( side >= 0 )
 								sides.push_back( side );
 						}
 						if( !sides.empty() )

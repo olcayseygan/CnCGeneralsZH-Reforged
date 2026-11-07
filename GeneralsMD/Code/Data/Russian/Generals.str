@@ -4706,7 +4706,31 @@ CONTROLBAR:IdleWorker
 END
 
 CONTROLBAR:IdleWorkerDescription
-"Нажмите, чтобы выбрать следующего свободного рабочего"
+"Нажмите, чтобы выбрать следующего свободного рабочего. Shift-щелчок выбирает всех."
+END
+
+CONTROLBAR:IdleInfantry
+"Свободная пехота"
+END
+
+CONTROLBAR:IdleInfantryDescription
+"Нажмите, чтобы выбрать следующего свободного пехотинца. Shift-щелчок выбирает всех."
+END
+
+CONTROLBAR:IdleVehicle
+"Свободная техника"
+END
+
+CONTROLBAR:IdleVehicleDescription
+"Нажмите, чтобы выбрать следующую свободную наземную технику. Shift-щелчок выбирает всю."
+END
+
+CONTROLBAR:IdleAircraft
+"Свободная авиация"
+END
+
+CONTROLBAR:IdleAircraftDescription
+"Нажмите, чтобы выбрать следующий свободный самолёт. Shift-щелчок выбирает все."
 END
 
 CONTROLBAR:Beacon

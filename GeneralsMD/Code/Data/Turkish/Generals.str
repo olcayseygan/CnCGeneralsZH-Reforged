@@ -4510,7 +4510,7 @@ CONTROLBAR:IdleWorker
 END
 
 CONTROLBAR:IdleWorkerDescription
-"Sonraki boştaki işçiyi seçmek için tıklayın"
+"Sonraki boştaki işçiyi seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir."
 END
 
 CONTROLBAR:IdleInfantry
@@ -4518,7 +4518,7 @@ CONTROLBAR:IdleInfantry
 END
 
 CONTROLBAR:IdleInfantryDescription
-"Sonraki boştaki piyadeyi seçmek için tıklayın"
+"Sonraki boştaki piyadeyi seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir."
 END
 
 CONTROLBAR:IdleVehicle
@@ -4526,7 +4526,7 @@ CONTROLBAR:IdleVehicle
 END
 
 CONTROLBAR:IdleVehicleDescription
-"Sonraki boştaki kara aracını seçmek için tıklayın"
+"Sonraki boştaki kara aracını seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir."
 END
 
 CONTROLBAR:IdleAircraft
@@ -4534,7 +4534,7 @@ CONTROLBAR:IdleAircraft
 END
 
 CONTROLBAR:IdleAircraftDescription
-"Sonraki boştaki hava aracını seçmek için tıklayın"
+"Sonraki boştaki hava aracını seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir."
 END
 
 CONTROLBAR:Beacon

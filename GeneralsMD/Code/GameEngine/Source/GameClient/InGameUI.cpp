@@ -11655,7 +11655,7 @@ void InGameUI::removeIdleWorker( Object *obj, Int playerNumber )
 	return;
 }
 
-// The camera stays put; the idle worker buttons look at what this returns, the hotkey does not.
+// The camera stays put, for the hotkey and the idle buttons alike.
 Object *InGameUI::selectNextIdleWorker( void )
 {
 	// the same walk the button's light comes from, so a lit button always has a worker to give
@@ -11822,9 +11822,38 @@ Object *InGameUI::selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType m
 	teamMsg->appendBooleanArgument( TRUE );
 	teamMsg->appendObjectIDArgument( selectThisObject->getID() );
 
-	// the camera stays where the player has it; the idle buttons move it themselves
+	// the camera stays where the player has it
 	selectDrawable( selectThisObject->getDrawable() );
 	return selectThisObject;
+}
+
+// Shift on an idle button: every one the button's cycle would visit, as one new selection, across
+// the map and with the camera left alone.  A worker riding in something brings what carries it.
+Int InGameUI::selectAllIdleUnits( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear )
+{
+	GameMessage *teamMsg = NULL;
+	Int count = 0;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( !isIdleOfKinds( obj, mustBeSet, mustBeClear ) )
+			continue;
+		Object *pick = obj->getContainedBy() ? obj->getContainedBy() : obj;
+		Drawable *draw = pick->getDrawable();
+		if( draw == NULL || draw->isSelected() )
+			continue;
+		if( getMaxSelectCount() > 0 && getSelectCount() >= getMaxSelectCount() )
+			break;
+		if( teamMsg == NULL )
+		{
+			deselectAllDrawables();
+			teamMsg = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP );
+			teamMsg->appendBooleanArgument( TRUE );
+		}
+		teamMsg->appendObjectIDArgument( pick->getID() );
+		selectDrawable( draw );
+		count++;
+	}
+	return count;
 }
 
 void InGameUI::resetIdleWorker( void )
@@ -11971,9 +12000,13 @@ WindowMsgHandledType IdleWorkerSystem( GameWindow *window, UnsignedInt msg,
 			static NameKeyType buttonSelectID = NAMEKEY( "IdleWorker.wnd:ButtonSelectNextIdleWorker" );
 			if (control && control->winGetWindowId() == buttonSelectID)
 			{
-				Object *worker = TheInGameUI->selectNextIdleWorker( );
-				if( worker )	// every worker busy: nothing was selected
-					TheTacticalView->lookAt( worker->getPosition() );
+				// the same as the control bar's worker button: camera left alone, Shift for every idle worker
+				KindOfMaskType mustBeSet, mustBeClear;
+				InGameUI::idleUnitKinds( GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER, &mustBeSet, &mustBeClear );
+				if( TheKeyboard->isShift() )
+					TheInGameUI->selectAllIdleUnits( mustBeSet, mustBeClear );
+				else
+					TheInGameUI->selectNextIdleUnit( mustBeSet, mustBeClear );
 			}
 			break;
 

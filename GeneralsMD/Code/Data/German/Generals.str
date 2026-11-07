@@ -4350,7 +4350,7 @@ CONTROLBAR:IdleWorker
 END
 
 CONTROLBAR:IdleWorkerDescription
-"Klicke, um den nächsten untätigen Arbeiter auszuwählen"
+"Klicke, um den nächsten untätigen Arbeiter auszuwählen. Mit Shift-Klick wählst du alle."
 END
 
 CONTROLBAR:Beacon

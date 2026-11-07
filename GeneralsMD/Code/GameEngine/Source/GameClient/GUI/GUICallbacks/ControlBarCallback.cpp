@@ -48,6 +48,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/Keyboard.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/LanguageFilter.h"
@@ -484,24 +485,19 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 			{
 				ToggleQuitMenu();
 			}
-			else if( controlID == buttonIdleWorker)
+			else if( controlID == buttonIdleWorker || controlID == buttonIdleInfantry || controlID == buttonIdleVehicle || controlID == buttonIdleAircraft )
 			{
-				HideQuitMenu( );
-				Object *worker = TheInGameUI->selectNextIdleWorker();
-				if( worker )	// every worker busy: nothing was selected
-					TheTacticalView->lookAt( worker->getPosition() );
-			}
-			else if( controlID == buttonIdleInfantry || controlID == buttonIdleVehicle || controlID == buttonIdleAircraft )
-			{
-				// the Next Idle Infantry, Vehicle and Aircraft keys' cycle, with the worker button's camera
+				// the Next Idle keys' cycle, camera left alone; Shift takes every idle one of the kind
 				HideQuitMenu( );
 				KindOfMaskType mustBeSet, mustBeClear;
-				InGameUI::idleUnitKinds( controlID == buttonIdleInfantry ? GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY
+				InGameUI::idleUnitKinds( controlID == buttonIdleWorker ? GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER
+																 : controlID == buttonIdleInfantry ? GameMessage::MSG_META_SELECT_NEXT_IDLE_INFANTRY
 																 : controlID == buttonIdleVehicle ? GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE
 																 : GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT, &mustBeSet, &mustBeClear );
-				Object *unit = TheInGameUI->selectNextIdleUnit( mustBeSet, mustBeClear );
-				if( unit )
-					TheTacticalView->lookAt( unit->getPosition() );
+				if( TheKeyboard->isShift() )
+					TheInGameUI->selectAllIdleUnits( mustBeSet, mustBeClear );
+				else
+					TheInGameUI->selectNextIdleUnit( mustBeSet, mustBeClear );
 			}
 			else
 			{

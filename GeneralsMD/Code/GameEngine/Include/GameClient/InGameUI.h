@@ -1195,6 +1195,7 @@ public:  // ********************************************************************
 	virtual void removeIdleWorker( Object *obj, Int playerNumber );
 	virtual Object *selectNextIdleWorker( void );	///< what it selected, NULL with no idle worker; never moves the camera
 	Object *selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear );	///< the same cycle for fighting units of those kinds standing with no order; what it selected, or NULL
+	Int selectAllIdleUnits( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear );	///< every one that cycle visits at once, the camera left alone; how many
 	static Bool isIdleCombatUnit( const Object *obj );	///< the local player's fighting unit standing with no order
 	/// the kinds a MSG_META_SELECT_NEXT_IDLE_* key cycles over: vehicles are ground vehicles only
 	static void idleUnitKinds( GameMessage::Type t, KindOfMaskType *mustBeSet, KindOfMaskType *mustBeClear );

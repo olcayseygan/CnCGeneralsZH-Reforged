@@ -45,7 +45,7 @@ CONTROLBAR:IdleInfantry
 END
 
 CONTROLBAR:IdleInfantryDescription
-"Click to select the next idle infantry"
+"Click to select the next idle infantry. Shift-click selects all of them."
 END
 
 CONTROLBAR:IdleVehicle
@@ -53,7 +53,7 @@ CONTROLBAR:IdleVehicle
 END
 
 CONTROLBAR:IdleVehicleDescription
-"Click to select the next idle ground vehicle"
+"Click to select the next idle ground vehicle. Shift-click selects all of them."
 END
 
 CONTROLBAR:IdleAircraft
@@ -61,7 +61,11 @@ CONTROLBAR:IdleAircraft
 END
 
 CONTROLBAR:IdleAircraftDescription
-"Click to select the next idle aircraft"
+"Click to select the next idle aircraft. Shift-click selects all of them."
+END
+
+CONTROLBAR:IdleWorkerDescription
+"Click to select the next idle worker. Shift-click selects all of them."
 END
 
 GUI:OrderHoldPositionDescription

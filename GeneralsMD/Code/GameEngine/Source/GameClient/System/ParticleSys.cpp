@@ -2974,6 +2974,10 @@ Real ParticleSystem::getStealthFade( void ) const
 			return 0.0f;
 		case STEALTHLOOK_VISIBLE_FRIENDLY:
 		case STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED:
+			// A mine's opacity is pinned at zero (StealthUpdate's mine special case), and a China mine
+			// field has no mesh: its bone lights are all its owner sees of it, at full strength as in 2003.
+			if (draw->isKindOf( KINDOF_MINE ))
+				return 1.0f;
 			// Alpha tested particles take no fade (less alpha only cuts holes in them), and a
 			// multiplying one half faded is a grey smear, so those draw whole and not at all.
 			switch (m_shaderType)

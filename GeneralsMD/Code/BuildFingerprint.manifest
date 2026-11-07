@@ -41,10 +41,6 @@ Data/Art/Textures/ReforgedHudTurkiyeTabPanel.dds
 Data/Art/Textures/ReforgedHudTurkiyeTabSolo.dds
 Data/Art/Textures/ReforgedLaserPink.tga
 Data/Art/Textures/ReforgedLobbySpot.tga
-Data/Art/Textures/ReforgedMineGlowBlue.tga
-Data/Art/Textures/ReforgedMineGlowRed.tga
-Data/Art/Textures/ReforgedMineLedBlue.tga
-Data/Art/Textures/ReforgedMineLedRed.tga
 Data/Art/Textures/ReforgedRadarContact.tga
 Data/Art/Textures/ReforgedRadarRing.tga
 Data/Art/Textures/ReforgedReconArea.tga
@@ -4530,7 +4526,6 @@ Tools/matchbot/wnet/tcp.cpp
 Tools/matchbot/wnet/tcp.h
 Tools/matchbot/wnet/udp.cpp
 Tools/matchbot/wnet/udp.h
-Tools/mine_marks.py
 Tools/net-check.sh
 Tools/net_check.py
 Tools/online-libs.ps1

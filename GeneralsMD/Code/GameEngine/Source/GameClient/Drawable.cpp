@@ -297,8 +297,6 @@ const Int MAX_ENABLED_MODULES								= 16;
 /*static*/ const Image*			Drawable::s_veterancyImage[LEVEL_COUNT]	= { NULL };
 /*static*/ const Image*			Drawable::s_fullAmmo = NULL;
 /*static*/ const Image*			Drawable::s_emptyAmmo = NULL;
-/*static*/ const Image*			Drawable::s_fullContainer = NULL;
-/*static*/ const Image*			Drawable::s_emptyContainer = NULL;
 /*static*/ Anim2DTemplate**	Drawable::s_animationTemplates = NULL;
 #ifdef DIRTY_CONDITION_FLAGS
 /*static*/ Int							Drawable::s_modelLockCount = 0;
@@ -317,8 +315,6 @@ const Int MAX_ENABLED_MODULES								= 16;
 
 	s_fullAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoFull");
 	s_emptyAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoEmpty");
-	s_fullContainer	= TheMappedImageCollection->findImageByName("SCPPipFull");
-	s_emptyContainer	= TheMappedImageCollection->findImageByName("SCPPipEmpty");
 	
 	s_animationTemplates = NEW Anim2DTemplate* [ MAX_ICONS ];
 
@@ -3891,10 +3887,6 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 #else
 	Real scale = 1.0f;
 #endif
-	Int boxWidth  = REAL_TO_INT(s_emptyContainer->getImageWidth() * scale);
-	Int boxHeight = REAL_TO_INT(s_emptyContainer->getImageHeight() * scale);
-	const Int SPACING = 1;
-	//Int totalWidth = (boxWidth+SPACING)*numTotal;
 
 	ICoord2D screenCenter;
 	Coord3D pos = *obj->getPosition();
@@ -3912,16 +3904,24 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 	Int posx = healthBarRegion->lo.x;
 	Int posy = screenCenter.y + REAL_TO_INT(TheGlobalData->m_containerPipScreenOffset.y*bounding);
 
+	//
+	// One square a seat, cut like the queue squares over a factory's bar (drawHealthBar): as thick as
+	// the health bar plus its outline, neighbours sharing one black edge so they stay apart on any
+	// ground, a new row down when the bar runs out. A seat taken by infantry is green and one taken
+	// by anything else blue, EA's two colours; an empty seat is the black frame round dark glass.
+	//
+	const Int barWidth = healthBarRegion->hi.x - healthBarRegion->lo.x;
+	const Int side = max( 3, (Int)(healthBarRegion->hi.y - healthBarRegion->lo.y) ) + 2;
+	const Int pitch = side - 1;
+	const Int perRow = max( 1, (barWidth - 1) / pitch );
 	for (Int i = 0; i < numTotal; ++i)
 	{
-		const Color INFANTRY_COLOR = GameMakeColor(0, 255, 0, 255);
-		const Color NON_INFANTRY_COLOR = GameMakeColor(0, 0, 255, 255);
-		if (i < numFull)
-			TheDisplay->drawImage(s_fullContainer, posx, posy, posx + boxWidth, posy + boxHeight, 
-				(i < numInfantry) ? INFANTRY_COLOR : NON_INFANTRY_COLOR);
-		else
-			TheDisplay->drawImage(s_emptyContainer, posx, posy + 1, posx + boxWidth, posy + 1 + boxHeight);
-		posx += boxWidth + SPACING;
+		const Int x = posx + (i % perRow) * pitch;
+		const Int y = posy + (i / perRow) * pitch;
+		const Color fill = i >= numFull ? GameMakeColor( 0, 0, 0, 110 )
+			: i < numInfantry ? GameMakeColor( 0, 255, 0, 255 ) : GameMakeColor( 0, 0, 255, 255 );
+		TheDisplay->drawOpenRect( x, y, side, side, 1.0f, GameMakeColor( 0, 0, 0, 255 ) );
+		TheDisplay->drawFillRect( x + 1, y + 1, side - 2, side - 2, fill );
 	}
 }
 

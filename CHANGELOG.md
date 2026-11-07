@@ -346,6 +346,7 @@ found and fixed, EA's own, not port damage.**
 - The bars over units are a third thinner, so a big fight no longer looks like a sheet of red and green stripes over the units underneath.
 - Health a unit has lost now shows as a dark stretch at the end of its bar. It used to be bare ground, so a red bar over red ground, or any team colour over the wrong terrain, looked full when it was half gone.
 - A factory's white bar now says how much is waiting behind it. One small square sits over the bar's right end for each order in line, so a barracks with four on order wears three and one on its last wears none, and a glance across the base shows which factory is busy for the next minute. The seconds written on the bar are gone; the build button and the queue still count them down.
+- The boxes that count who is inside a garrisoned building or a loaded transport are cut the same way now: one square a seat under the health bar, as thick as the bar, green for a soldier and blue for a vehicle, with an empty seat left as a black frame you can see the ground through. EA's were little pictures of one fixed size in one long row; the squares grow with the bar and start a new row where it ends.
 
 ## Jets fly like jets
 

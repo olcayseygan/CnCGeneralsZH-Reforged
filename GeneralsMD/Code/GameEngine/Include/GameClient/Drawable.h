@@ -992,8 +992,6 @@ private:
 	static const Image*			s_veterancyImage[LEVEL_COUNT];
 	static const Image*			s_fullAmmo;
 	static const Image*			s_emptyAmmo;
-	static const Image*			s_fullContainer;
-	static const Image*			s_emptyContainer;
 	static Anim2DTemplate**	s_animationTemplates;
 
 #ifdef DIRTY_CONDITION_FLAGS

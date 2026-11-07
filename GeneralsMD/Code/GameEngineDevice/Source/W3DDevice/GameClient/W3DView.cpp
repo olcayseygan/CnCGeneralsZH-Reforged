@@ -317,6 +317,54 @@ static Vector3 viewDirectionThrough( const CameraClass& camera, Real logicalX, R
 }
 
 //-------------------------------------------------------------------------------------------------
+// How far the drawn terrain, border ring included, reaches from an eye: its box's furthest corner.
+// The box's top is the ground's, so a far plane set by it gets this much more for whatever stands
+// on the edge or flies beyond it.
+static const Real TERRAIN_REACH_MARGIN = 1000.0f;
+static Real drawnTerrainReach( const Vector3& eye, Real *lowestGround )
+{
+	Region3D extent;
+	TheTerrainRenderObject->getDrawnExtent( &extent );
+	Real farthest = 0.0f;
+	for (Int corner = 0; corner < 8; ++corner)
+	{
+		const Vector3 at( (corner & 1) ? extent.hi.x : extent.lo.x, (corner & 2) ? extent.hi.y : extent.lo.y,
+			(corner & 4) ? extent.hi.z : extent.lo.z );
+		farthest = WWMath::Max( farthest, (at - eye).Length() );
+	}
+	*lowestGround = extent.lo.z;
+	return farthest;
+}
+
+//-------------------------------------------------------------------------------------------------
+// The depth along the camera's sight of the furthest ground its frame can show.  Over flat ground
+// the deepest point under a rectangle of screen is under a corner, and ground higher than the
+// lowest is met nearer, so it is where the corner rays meet the lowest drawn ground.  A corner
+// that looks over the horizon, or meets that ground past the terrain's reach, can see the whole
+// terrain, and a distance is never less than a depth.  0 with no map loaded (the shell).
+static Real frameGroundDepth( const CameraClass& camera )
+{
+	if (TheTerrainRenderObject == NULL || TheTerrainRenderObject->getMap() == NULL)
+		return 0.0f;
+	const Vector3 eye = camera.Get_Position();
+	Real lowest;
+	const Real reach = drawnTerrainReach( eye, &lowest );
+	const Vector3 sight = -camera.Get_Transform().Get_Z_Vector();
+	const Real drop = eye.Z - lowest;
+	Real deepest = 0.0f;
+	for (Int corner = 0; corner < 4; ++corner)
+	{
+		const Vector3 ray = viewDirectionThrough( camera, (corner & 1) ? 1.0f : -1.0f, (corner & 2) ? 1.0f : -1.0f );
+		const Real down = -ray.Z;
+		if (down > 0.0f && drop < reach * down)
+			deepest = WWMath::Max( deepest, drop / down * Vector3::Dot_Product( ray, sight ) + MAP_XY_FACTOR );
+		else
+			return reach + TERRAIN_REACH_MARGIN;
+	}
+	return deepest;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Sets the width of the viewport, while maintaining original camera perspective. */
 //-------------------------------------------------------------------------------------------------
 void W3DView::setWidth(Int width)
@@ -979,18 +1027,11 @@ void W3DView::aimCamera( void )
 	// 1200 was a number, not a distance: at the stock ceiling and pitch the far plane already cuts
 	// the terrain the game means to draw, and this fork zooms further out than the stock game did.
 	// Take the distance the terrain is actually drawn over instead, and open it with the height -
-	// at twice the height you see twice as far.  -directorrecord's panes set the zoom outright with
-	// the height's settling held off, so there the eye's own height opens it as well: a pane twice
-	// as high as the held height cut the far ground off in a black band.  A -cinema list holds the
-	// settling off and sets the zoom outright the same way, and a pulled-back shot lost the ground
-	// past the ridge to the same band.  Only those two, so every other camera keeps the far plane
-	// it had.
+	// at twice the height you see twice as far.  That is a floor: once the camera is built, the far
+	// plane is opened to the ground the frame's corners reach, below.
 	static const Real VIEW_DEFAULT_MAX_HEIGHT_ABOVE_TERRAIN = 310.0f;
 	farZ = (WorldHeightMap::NORMAL_DRAW_WIDTH * 1.08f) * MAP_XY_FACTOR;
-	Real height = m_heightAboveGround;
-	if ((TheGlobalData->m_directorRecord || TheGlobalData->m_cinemaScript.isNotEmpty()) && !m_okToAdjustHeight)
-		height = max(height, m_cameraOffset.z * getZoom() - m_groundLevel);
-	const Real heightMultiplier = height / VIEW_DEFAULT_MAX_HEIGHT_ABOVE_TERRAIN;
+	const Real heightMultiplier = m_heightAboveGround / VIEW_DEFAULT_MAX_HEIGHT_ABOVE_TERRAIN;
 	if (heightMultiplier > 1.0f)
 		farZ *= heightMultiplier;
 
@@ -1049,6 +1090,15 @@ void W3DView::aimCamera( void )
 	}
 
 	m_3DCamera->Set_Transform( cameraTransform );
+
+	// Never short of the ground the frame shows: the height above says how far the player asked to
+	// be, not where this camera stands or how it is tilted.
+	if (!m_isometricApplied)
+	{
+		const Real reach = frameGroundDepth(*m_3DCamera);
+		if (reach > farZ)
+			m_3DCamera->Set_Clip_Planes(nearZ, reach);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1059,8 +1109,6 @@ static const Real FREECAM_FAST = 4.0f;
 static const Real FREECAM_TURN_PER_PIXEL = 0.0025f;				///< radians of heading or tilt per pixel of mouse
 // Look_At has no up straight up or straight down; half a degree short of either is the only limit
 static const Real FREECAM_STEEPEST = DEG_TO_RADF( 89.5f );
-// past the far corner of the map, for whatever stands on the edge or flies beyond it
-static const Real FREECAM_FAR_MARGIN = 1000.0f;
 
 static Real freeCameraTilt( Real tilt )
 {
@@ -1188,18 +1236,10 @@ void W3DView::setFreeCameraTransform( void )
 	transform.Look_At( m_freeCameraEye, m_freeCameraEye + freeCameraForward( m_freeCameraHeading, m_freeCameraTilt ), 0.0f );
 
 	Real farthest = 0.0f;
+	Real lowest;
 	if (TheTerrainRenderObject)
-	{
-		Region3D extent;
-		TheTerrainRenderObject->getDrawnExtent( &extent );
-		for (Int corner = 0; corner < 8; ++corner)
-		{
-			const Vector3 at( (corner & 1) ? extent.hi.x : extent.lo.x, (corner & 2) ? extent.hi.y : extent.lo.y,
-				(corner & 4) ? extent.hi.z : extent.lo.z );
-			farthest = WWMath::Max( farthest, (at - m_freeCameraEye).Length() );
-		}
-	}
-	m_3DCamera->Set_Clip_Planes( MAP_XY_FACTOR, farthest + FREECAM_FAR_MARGIN );
+		farthest = drawnTerrainReach( m_freeCameraEye, &lowest );
+	m_3DCamera->Set_Clip_Planes( MAP_XY_FACTOR, farthest + TERRAIN_REACH_MARGIN );
 	m_3DCamera->Set_View_Plane( perspectiveHorizontalFov( getWidth() ), -1 );
 	m_isometricApplied = false;
 	m_3DCamera->Set_Transform( transform );

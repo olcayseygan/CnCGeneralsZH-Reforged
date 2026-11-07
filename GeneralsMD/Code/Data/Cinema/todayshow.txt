@@ -1,0 +1,25 @@
+# Camera for Scenarios/todayshow.txt, interface on so the seat squares and order lines draw and
+# the pointer stays. Seat squares close (hut, Humvee, Chinook, ambulance) and wide, then the base's
+# three shift plans from 48 s, then back to the player's own view at 95 s for the cursor grabs.
+#
+# No shot lines: a shot prints "Screen Captured to ..." across the top left of the next desktop
+# grabs, and the pictures are taken from the desktop (experiments/cursors/cur.ps1) for the cursor.
+# The last cut holds the camera for the rest of the match; a minimap click does not move it.
+#
+# Measured 2026-11-07: follow AmericaVehicleHumvee at 0.35 (20 s) and AmericaVehicleChinook at 0.5
+# (34 s) hold their units with the seat squares under the bar; the Chinook's bar sits on the top
+# edge at 30 s. follow AmericaInfantryRanger framed a dozer instead of the hut, and the ambulance at
+# 41 s was behind a roof, so both are cuts now, not yet looked at.
+
+0     hud on
+0     cut 780 900 1 0 0
+4     cut 775 1080 0.4 0 0
+15    follow AmericaVehicleHumvee
+15    zoom 0.35 1
+23    follow AmericaVehicleChinook
+23    zoom 0.5 1
+36    unfollow
+36    cut 900 960 0.45 0 0
+44    cut 900 930 1.25 0 0
+48    cut 1640 1966 1.1 0 0
+95    cut 780 900 1 0 0

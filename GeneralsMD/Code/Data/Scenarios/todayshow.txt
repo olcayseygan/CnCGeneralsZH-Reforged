@@ -1,0 +1,60 @@
+# Today's client work in one seated match (2026-11-07, source 6e60e9fe): seat squares over a
+# garrison and three transports, a dozer with three shift-placed plans, and the BuildInvalid and
+# capture cursors. Seat 0 is played by hand for the cursors (experiments/cursors/cur.ps1); the camera
+# is Cinema/todayshow.txt with the interface on.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -quickstart -noshellmap -multiInstance
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -noshroud -camera 780 900
+#     -control 8790 -scenario todayshow -cinema todayshow -logPrefix todayshow_
+#
+# Every selector is the template, so each job gets its own: Rangers fill the hut, Missile Defenders
+# the Humvee, a Pathfinder pair and a Tomahawk the Chinook, the ambulance stays empty. The three
+# plans go down at 1500 with nothing selected, so the logic hands them to the base's own dozer.
+#
+# Run it with BuildWithoutWorker = no in Options.ini: reforged-look.ini has it on, and then the
+# three plans build themselves in about 11 s with no dozer queue line to show (2026-11-07). The
+# spawned dozer gets no move: a move on AmericaVehicleDozer also took the base's dozer away.
+# ChinaBarracks at 1120,1060 is refused (LBC_OBJECTS_IN_THE_WAY). At the player's view a power plant
+# ghost is legal at screen 660-1020 x 560-720 and illegal left of 420 and along y 790 left of 780.
+
+30    spawn      0  AmericaPowerPlant              1  620 780
+30    spawn      0  AmericaBarracks                1  900 770
+30    spawn      0  AmericaVehicleDozer            1  700 860
+30    spawn      0  AmericaInfantryRanger          4  880 1000 14
+30    spawn      0  AmericaVehicleHumvee           1  980 960
+30    spawn      0  AmericaInfantryMissileDefender 2  960 905 14
+30    spawn      0  AmericaVehicleChinook          1  1100 880
+30    spawn      0  AmericaInfantryPathfinder      2  1040 860 14
+30    spawn      0  AmericaVehicleTomahawk         1  1060 920
+30    spawn      0  AmericaVehicleMedic            1  1200 1160
+30    spawn      0  ChinaInfantryBlackLotus        1  830 950
+
+30    spawn      1  ChinaPowerPlant                1  900 860
+
+40    enter      0  AmericaInfantryRanger          civilian QuonsetHut01
+40    enter      0  AmericaInfantryMissileDefender 0  AmericaVehicleHumvee
+45    enter      0  AmericaInfantryPathfinder      0  AmericaVehicleChinook
+45    enter      0  AmericaVehicleTomahawk         0  AmericaVehicleChinook
+40    move       0  AmericaVehicleMedic            900 960
+40    move       0  ChinaInfantryBlackLotus        850 975
+
+360   move       0  AmericaVehicleHumvee           1060 1000
+600   move       0  AmericaVehicleChinook          860 980
+600   move       0  AmericaVehicleHumvee           960 960
+840   move       0  AmericaVehicleHumvee           1060 1000
+900   move       0  AmericaVehicleChinook          1000 1000
+1080  move       0  AmericaVehicleMedic            1150 1100
+1080  move       0  AmericaVehicleHumvee           960 960
+1200  move       0  AmericaVehicleChinook          860 980
+1300  move       0  AmericaVehicleMedic            900 960
+
+1500  shiftconstruct  0  AmericaPowerPlant         start0:180:0
+1501  shiftconstruct  0  AmericaBarracks           start0:320:0
+1502  shiftconstruct  0  AmericaSupplyCenter       start0:480:0
+1500  tally           0  AmericaPowerPlant
+2400  tally           0  AmericaPowerPlant
+2400  tally           0  AmericaBarracks
+2400  tally           0  AmericaSupplyCenter
+
+2700  move       0  ChinaInfantryBlackLotus        830 950

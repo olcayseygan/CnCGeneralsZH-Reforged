@@ -256,9 +256,12 @@ private:
 				// the camera moves and the set changes.  One buffer is 30000 vertices, about 730
 				// trees, and a zoomed-out camera over dense woodland goes through that.  The fill,
 				// the push-aside update and the draw were all written to walk a list of buffers and
-				// then left at one; four costs about 4MB and takes the wall four times further away.
+				// then left at one.  Eight, because the rebuilt tree models carry about twice the
+				// vertices and a full zoom-out over Manic Aggression, USA03 or NorthAmerica wants up
+				// to 129440 of them, past four's 120000.  A buffer is about 1.2MB (1.08MB of vertices,
+				// 0.12MB of indices) in each copy the devices keep; an empty one is never locked or drawn.
 				//
-				MAX_BUFFERS = 4,
+				MAX_BUFFERS = 8,
 				SORT_ITERATIONS_PER_FRAME=10};
 	enum {PARTITION_WIDTH_HEIGHT = 100};
 	enum {MAX_MODEL_SHADOWS = 1024,		///< object trees on a map; Golden Oasis has 278 palms

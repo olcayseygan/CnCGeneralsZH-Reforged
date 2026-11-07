@@ -20054,6 +20054,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 		CHECK_EQ( findOptionDef( off[ i ] )->get(), 0 );
 
 	CHECK_EQ( findOptionDef( "ClassicGraphics" )->get(), 1 );
+	CHECK_EQ( findOptionDef( "DetailedModels" )->get(), 1 );		// mounts nothing under Classic, and only what was downloaded
 	CHECK_EQ( findOptionDef( "LegacySound" )->get(), 1 );
 	CHECK_EQ( findOptionDef( "HealthBars" )->get(), (Int)HEALTH_BAR_SELECTION );
 	CHECK_EQ( findOptionDef( "AmbientVolume" )->get(), 80 );
@@ -23400,4 +23401,75 @@ TEST(reforged_archives_mount_base_art_first_then_batches_by_name)
 	// the folder does not move an archive's place, only its name does
 	CHECK( ArchiveFileSystem::reforgedMountsBefore( AsciiString( "C:\\Run\\ReforgedTerrain.big" ), AsciiString( "ReforgedChina.big" ) ) );
 	CHECK( !ArchiveFileSystem::reforgedMountsBefore( AsciiString( "ReforgedUSA.big" ), AsciiString( "C:\\Run\\ReforgedGLA.big" ) ) );
+	CHECK( ArchiveFileSystem::isReforgedBaseArt( AsciiString( "C:\\Run\\reforgedterrain.big" ) ) );
+	CHECK( !ArchiveFileSystem::isReforgedBaseArt( AsciiString( "ReforgedNeutralA.big" ) ) );
+}
+
+namespace {
+	// an archive that lists names and opens nothing: all mountOverRetail reads is the listing
+	class ListingOnlyArchive : public ArchiveFile
+	{
+	public:
+		explicit ListingOnlyArchive( const char *const *paths )
+		{
+			m_file = NULL;		// ArchiveFile's constructor leaves it, and its destructor closes it
+			for( ; *paths != NULL; ++paths )
+			{
+				const char *slash = strrchr( *paths, '\\' );
+				ArchivedFileInfo info;
+				info.m_filename = slash + 1;
+				info.m_filename.toLower();
+				addFile( AsciiString( std::string( *paths, slash + 1 ).c_str() ), &info );
+			}
+		}
+		virtual Bool getFileInfo( const AsciiString&, FileInfo * ) const { return FALSE; }
+		virtual File* openFile( const Char *, Int ) { return NULL; }
+		virtual void closeAllFiles( void ) {}
+		virtual AsciiString getName( void ) { return AsciiString::TheEmptyString; }
+		virtual AsciiString getPath( void ) { return AsciiString::TheEmptyString; }
+		virtual void setSearchPriority( Int ) {}
+		virtual void close( void ) {}
+	};
+
+	class MountOrderFileSystem : public ArchiveFileSystem
+	{
+	public:
+		virtual void init( void ) {}
+		virtual void update( void ) {}
+		virtual void reset( void ) {}
+		virtual void postProcessLoad( void ) {}
+		virtual ArchiveFile* openArchiveFile( const Char * ) { return NULL; }
+		virtual void closeArchiveFile( const Char * ) {}
+		virtual void closeAllArchiveFiles( void ) {}
+		virtual void closeAllFiles( void ) {}
+		virtual Bool loadBigFilesFromDirectory( AsciiString, AsciiString, Bool, Bool ) { return FALSE; }
+		void mountRetail( ArchiveFile *art, const char *name, Bool overwrite )
+		{
+			loadIntoDirectoryTree( art, AsciiString( name ), overwrite );
+			m_archiveFileMap[ AsciiString( name ) ] = art;
+		}
+		void mountReforged( ArchiveFile *art, const char *name ) { mountOverRetail( art, AsciiString( name ) ); }
+	};
+}
+
+/* The INI CRC hashes each model as retail resolves it, so a player with the rebuilt models and one
+	 without agree.  The tree answers the batch, the retail lookup the archive it covered; a name no
+	 retail archive holds has no retail answer at all, and a second batch over the first still finds retail. */
+TEST(model_batches_leave_the_crc_its_retail_copy)
+{
+	static const char *const w3dzh[] = { "Art\\W3D\\AVTank.w3d", "Art\\W3D\\NBGattling.w3d", NULL };
+	static const char *const patch[] = { "Art\\W3D\\AVTank.w3d", NULL };
+	static const char *const usa[] = { "Art\\W3D\\AVTank.w3d", "Art\\W3D\\AVNew.w3d", "Art\\Textures\\AVTank.dds", NULL };
+	static const char *const neutral[] = { "Art\\W3D\\AVTank.w3d", NULL };
+	MountOrderFileSystem fs;
+	fs.mountRetail( new ListingOnlyArchive( w3dzh ), "W3DZH.big", FALSE );
+	fs.mountRetail( new ListingOnlyArchive( patch ), "PatchZH.big", TRUE );		// the patch pass overwrites
+	fs.mountReforged( new ListingOnlyArchive( usa ), "ReforgedUSA.big" );
+	fs.mountReforged( new ListingOnlyArchive( neutral ), "ReforgedNeutralA.big" );
+
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\w3d\\avtank.w3d" ) ).str(), "ReforgedNeutralA.big" );
+	CHECK_STR( fs.getRetailArchiveFilenameForFile( AsciiString( "Art\\W3D\\AVTank.w3d" ) ).str(), "PatchZH.big" );
+	CHECK_STR( fs.getRetailArchiveFilenameForFile( AsciiString( "art\\w3d\\nbgattling.w3d" ) ).str(), "W3DZH.big" );
+	CHECK_STR( fs.getRetailArchiveFilenameForFile( AsciiString( "art\\w3d\\avnew.w3d" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\w3d\\avnew.w3d" ) ).str(), "ReforgedUSA.big" );
 }

@@ -178,25 +178,28 @@ class ArchiveFileSystem : public SubsystemInterface
 	/// beside the exe or nowhere.  The base campaign movies are loose files in its Data\Movies.
 	AsciiString						m_baseGameDirectory;
 
-	/// The fork's art archives that Classic Graphics leaves out of the tree but that still hold models.
-	/// The INI CRC hashes their models under both looks, so a Classic and a Reforged player match and
-	/// a player with other art does not; nothing else reads them.
-	void					getUnmountedArtFileList(const AsciiString& directory, const AsciiString& searchName, FilenameList &filenameList) const;
-	AsciiString		getUnmountedArtFilenameForFile(const AsciiString& filename) const;	///< the archive's name, empty when none holds it
-	File*					openUnmountedArtFile(const AsciiString& filename);
+	/// Where a model resolved before any Reforged*.big went over it: the retail archive that holds it,
+	/// or empty when no archive but a Reforged one does.  The INI CRC hashes models from here, so a
+	/// player with the rebuilt models, one without them and one under Classic Graphics agree.
+	AsciiString		getRetailArchiveFilenameForFile(const AsciiString& filename) const;
+	File*					openRetailFile(const AsciiString& filename);
 
 	/// The order the fork's Reforged*.big go into the tree, each over the ones before it: the base art
 	/// (ReforgedTextures, ReforgedNormals, ReforgedTerrain, in that order) first, then every other one
-	/// in name order, case ignored.  The Classic lookup above takes the same order, so a model resolves
-	/// to the same archive under both looks.
+	/// in name order, case ignored.
 	static Bool		reforgedMountsBefore(const AsciiString& a, const AsciiString& b);
+	/// One of those three; any other Reforged*.big is a batch of rebuilt models, which Detailed Models
+	/// in Options can leave out.
+	static Bool		isReforgedBaseArt(const AsciiString& path);
 
 protected:
 	virtual void					loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite = FALSE );	///< load the archive file's header information and apply it to the global archive directory tree.
 	void									prioritizeLargerFiles(const AsciiString& directory, const char *inferiorArchive, const char *superiorArchive);	///< where two archives claim the same file in this directory, keep the bigger copy.
+	/// Over everything already in the tree, remembering for each model it takes which archive held it.
+	void									mountOverRetail(ArchiveFile *archiveFile, const AsciiString& archiveFilename);
 
 	ArchiveFileMap m_archiveFileMap;
-	ArchiveFileMap m_unmountedArt;		///< see getUnmountedArtFileList; never in m_archiveFileMap or the tree
+	ArchivedFileLocationMap m_retailModels;	///< lower-cased model path -> its archive before mountOverRetail, empty for none
 	ArchivedDirectoryInfo m_rootDirectory;
 };
 

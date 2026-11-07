@@ -1265,6 +1265,7 @@ static void fillCatalogWidgets( void )
 	// the choice for the next start, which is the file's: GlobalData holds what this run started with
 	const Bool classicNextStart = getEarlyOptionBool( "ClassicGraphics", true );
 	GadgetCheckBoxSetChecked( findOptionWidget( *findOptionDef( "ClassicGraphics" ) ), classicNextStart );
+	GadgetCheckBoxSetChecked( findOptionWidget( *findOptionDef( "DetailedModels" ) ), getEarlyOptionBool( "DetailedModels", true ) );
 
 	// A Classic run holds these two forced in memory, and a Reforged next start reads them from the
 	// file.  Shown as forced they read Custom beside the High the player just saved, and Accept saves that.
@@ -1334,7 +1335,7 @@ static void readCatalogWidgets( OptionPreferences &out )
 
 		// Only the file moves.  This run keeps the archives, the tile and the shadow pass it started with,
 		// and everything that asks GlobalData has to go on agreeing with them until the next start.
-		if( strcmp( def.iniKey, "ClassicGraphics" ) == 0 )
+		if( strcmp( def.iniKey, "ClassicGraphics" ) == 0 || strcmp( def.iniKey, "DetailedModels" ) == 0 )
 		{
 			if( ( value != 0 ) != getEarlyOptionBool( def.iniKey, true ) )
 				out[ AsciiString( def.iniKey ) ] = formatOptionValue( def, value );

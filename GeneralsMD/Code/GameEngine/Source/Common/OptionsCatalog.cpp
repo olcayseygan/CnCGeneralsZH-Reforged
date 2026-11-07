@@ -128,6 +128,7 @@ OPTION_INT_ACCESSORS( m_waterRefractionQuality )
 OPTION_INT_ACCESSORS( m_waterReflectionDetail )
 OPTION_INT_ACCESSORS( m_cloudStyle )
 OPTION_BOOL_ACCESSORS( m_classicGraphics )
+OPTION_BOOL_ACCESSORS( m_detailedModels )
 OPTION_INT_ACCESSORS( m_lightingStyle )
 OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_healthBarColors )
@@ -542,6 +543,16 @@ const OptionDef TheOptionCatalog[] =
 	{ "ClassicGraphics",					OPT_WND( "CheckClassicGraphics" ), "GUI:ClassicGraphics",
 		OPTION_BOOL, APPLY_RESTART, 0, 1,
 		get_m_classicGraphics, set_m_classicGraphics },
+
+	// The rebuilt models, the Reforged*.big beside the exe other than the base art (textures, normals,
+	// terrain).  An optional download: none of them is in the INI CRC, which hashes the retail copy
+	// each one covers, so a player with them plays a player without.  Mounted before GlobalData
+	// exists, so Win32BIGFileSystem reads the key itself, and the menu treats it as it treats
+	// ClassicGraphics: the box shows the file and Accept writes only the file.  On, so a player who
+	// took the download sees it; Classic never mounts them whatever this says.
+	{ "DetailedModels",						OPT_WND( "CheckDetailedModels" ), "GUI:DetailedModels",
+		OPTION_BOOL, APPLY_RESTART, 0, 1,
+		get_m_detailedModels, set_m_detailedModels },
 
 	// Who wears a health bar: everyone, everyone hurt, only the selection, or nobody.  Read every
 	// frame by the drawable that is about to draw one, so changing it shows immediately.

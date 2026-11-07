@@ -715,6 +715,7 @@ GlobalData::GlobalData()
 	// The owner's rule of 2026-10-31: the game opens in Classic with everything the fork added off, and
 	// whoever wants the Reforged picture turns it on in Options.  Options.ini wins over all of this.
 	m_classicGraphics = TRUE;
+	m_detailedModels = TRUE;			//on, as the download was asked for: only a player who has the archives sees it, and only off Classic
 	m_lightingStyle = LIGHTING_STYLE_CLASSIC;
 	m_shadowMap = TRUE;						//the sun's own shadows, once ClassicGraphics is off; parseGameDataDefinition takes them back while it is on
 	m_shadowMapOnly = TRUE;				//and they replace the stencil volumes rather than joining them

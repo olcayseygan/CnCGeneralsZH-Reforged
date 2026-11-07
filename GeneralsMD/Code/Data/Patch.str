@@ -559,6 +559,14 @@ TOOLTIP:ClassicGraphics
 "The game as it looked in 2003: its own textures and ground, the old hard shadows, no bump detail and no glow or sharpening. The game opens this way. Untick it for the Reforged picture: the High preset fills in the boxes, and you can move the slider from there. Takes effect the next time the game starts."
 END
 
+GUI:DetailedModels
+"Detailed Models"
+END
+
+TOOLTIP:DetailedModels
+"The rebuilt units and buildings, for the Reforged picture, when you downloaded them. They change only what you see: you play with anyone, whether they have them or not. Untick it for a higher frame rate in big battles. Takes effect the next time the game starts."
+END
+
 GUI:InfantryShadows
 "Infantry Shadows"
 END

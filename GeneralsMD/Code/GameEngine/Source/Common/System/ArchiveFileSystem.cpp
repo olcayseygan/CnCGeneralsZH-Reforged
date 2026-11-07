@@ -123,16 +123,6 @@ ArchiveFileSystem::~ArchiveFileSystem()
 		}
 		iter++;
 	}
-	for (iter = m_unmountedArt.begin(); iter != m_unmountedArt.end(); ++iter) {
-		delete iter->second;
-	}
-}
-
-void ArchiveFileSystem::getUnmountedArtFileList(const AsciiString& directory, const AsciiString& searchName, FilenameList &filenameList) const
-{
-	for (ArchiveFileMap::const_iterator it = m_unmountedArt.begin(); it != m_unmountedArt.end(); ++it) {
-		it->second->getFileListInDirectory(AsciiString(""), directory, searchName, filenameList, TRUE);
-	}
 }
 
 static const char *archiveBaseName(const AsciiString &path)
@@ -171,26 +161,39 @@ Bool ArchiveFileSystem::reforgedMountsBefore(const AsciiString& a, const AsciiSt
 	return strcmp(a.str(), b.str()) < 0;	// the same name in two folders: still one fixed order
 }
 
-// The one the mount would have kept: the last holder in reforgedMountsBefore order.
-AsciiString ArchiveFileSystem::getUnmountedArtFilenameForFile(const AsciiString& filename) const
+Bool ArchiveFileSystem::isReforgedBaseArt(const AsciiString& path)
 {
-	AsciiString found;
-	FileInfo info;
-	for (ArchiveFileMap::const_iterator it = m_unmountedArt.begin(); it != m_unmountedArt.end(); ++it) {
-		if ((found.isEmpty() || reforgedMountsBefore(found, it->first)) && it->second->getFileInfo(filename, &info)) {
-			found = it->first;
-		}
-	}
-	return found;
+	return reforgedMountRank(path) < reforgedMountRank(AsciiString::TheEmptyString);
 }
 
-File * ArchiveFileSystem::openUnmountedArtFile(const AsciiString& filename)
+void ArchiveFileSystem::mountOverRetail(ArchiveFile *archiveFile, const AsciiString& archiveFilename)
 {
-	AsciiString archiveFilename = getUnmountedArtFilenameForFile(filename);
-	if (archiveFilename.isEmpty()) {
-		return NULL;
+	FilenameList models;
+	archiveFile->getFileListInDirectory(AsciiString(""), AsciiString(""), AsciiString("*.w3d"), models, TRUE);
+	for (FilenameListIter it = models.begin(); it != models.end(); ++it) {
+		AsciiString model = *it;
+		model.toLower();
+		if (m_retailModels.find(model) == m_retailModels.end()) {
+			m_retailModels[model] = getArchiveFilenameForFile(model);		// the first Reforged holder's view is retail's
+		}
 	}
-	return m_unmountedArt[archiveFilename]->openFile(filename.str(), File::READ);
+	loadIntoDirectoryTree(archiveFile, archiveFilename, TRUE);
+	m_archiveFileMap[archiveFilename] = archiveFile;
+}
+
+AsciiString ArchiveFileSystem::getRetailArchiveFilenameForFile(const AsciiString& filename) const
+{
+	AsciiString model = filename;
+	model.toLower();
+	ArchivedFileLocationMap::const_iterator it = m_retailModels.find(model);
+	return it != m_retailModels.end() ? it->second : getArchiveFilenameForFile(filename);
+}
+
+File * ArchiveFileSystem::openRetailFile(const AsciiString& filename)
+{
+	const AsciiString archiveFilename = getRetailArchiveFilenameForFile(filename);
+	ArchiveFileMap::iterator it = m_archiveFileMap.find(archiveFilename);
+	return it != m_archiveFileMap.end() ? it->second->openFile(filename.str(), File::READ) : NULL;
 }
 
 void ArchiveFileSystem::loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite)

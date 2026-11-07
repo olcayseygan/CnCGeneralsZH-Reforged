@@ -170,7 +170,8 @@ NEW_CONTROLS = [
     (LABEL,  "LabelFrameRateLimit",    "GUI:FrameRateLimit"),
     (COMBO,  "ComboBoxFrameRateLimit", None),
     (CHECK,  "CheckClassicGraphics",   "GUI:ClassicGraphics"),
-    (LABEL,  "LabelWaterStyle",        "GUI:WaterStyle"),
+    (CHECK,  "CheckDetailedModels",    "GUI:DetailedModels"),
+    (LABEL,  "LabelWaterStyle",       "GUI:WaterStyle"),
     (COMBO,  "ComboBoxWaterStyle",      None),
     (LABEL,  "LabelCloudStyle",        "GUI:CloudStyle"),
     (COMBO,  "ComboBoxCloudStyle",      None),
@@ -372,6 +373,8 @@ GROUP_LAYOUT = [
             ("check", "CheckStructureCollapse"),
             ("check", "CheckSmoothMotion"),
             ("check", "CheckHeatHaze"),
+            # beside Classic Graphics on the Graphics page if there were room
+            ("check", "CheckDetailedModels"),
             # the Screen column is full with the monitor and the resolution note
             setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit")])]),
 

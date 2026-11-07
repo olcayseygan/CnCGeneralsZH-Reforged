@@ -311,10 +311,12 @@ static Bool isSameFile( const FileInfo &left, const FileInfo &right )
 //-------------------------------------------------------------------------------------------------
 /** Every model's bones place fire points, turret pivots and dock positions in logic, so a model
 	* that differs between two machines splits their match.  Each model's bytes go into the checksum
-	* as it resolved: a loose model beats every archive, and a later patch archive beats an earlier
-	* one.  A model in the fork's art archives counts under Classic Graphics too, which draws retail's
-	* copy, so the two looks keep one checksum; Tools/artpack.py only packs a model that keeps every
-	* retail bone where retail has it, so the logic is the same under both.
+	* as retail resolves it: a loose model beats every archive, and a later patch archive beats an
+	* earlier one, but a model in the fork's Reforged*.big counts as the retail copy it covers.  So
+	* the rebuilt models are a download a player may skip or switch off (Options > Detailed Models)
+	* and Classic Graphics, which mounts none of them, keeps the same checksum.  That holds because
+	* Tools/artpack.py only packs a model that keeps every retail bone where retail has it: what the
+	* logic reads of a model is its bones, never its meshes.
 	* Reading all of them is about 375 MB, so what a model hashed to is kept in the user folder
 	* against the size and write time of the file it came from, and read again only when that file
 	* changes. */
@@ -323,12 +325,10 @@ static void checksumModels( XferCRC &xferCRC )
 {
 	FilenameList models;
 	TheFileSystem->getFileListInDirectory( AsciiString( "Art\\W3D\\" ), AsciiString( "*.w3d" ), models, TRUE );
-	// Classic Graphics leaves the fork's art archives unmounted; their models count as if it had not
-	TheArchiveFileSystem->getUnmountedArtFileList( AsciiString( "Art\\W3D\\" ), AsciiString( "*.w3d" ), models );
 
 	const ModelChecksumMap cache = readModelChecksumCache();
 	ModelChecksumMap current;
-	Int modelsRead = 0;
+	Int modelsRead = 0, modelsCounted = 0;
 
 	for( FilenameListIter it = models.begin(); it != models.end(); ++it )
 	{
@@ -336,9 +336,10 @@ static void checksumModels( XferCRC &xferCRC )
 		model.toLower();
 
 		const Bool loose = TheLocalFileSystem->doesFileExist( model.str() );
-		const AsciiString unmountedArt = loose ? AsciiString::TheEmptyString : TheArchiveFileSystem->getUnmountedArtFilenameForFile( model );
-		AsciiString source = loose ? model
-			: !unmountedArt.isEmpty() ? unmountedArt : TheArchiveFileSystem->getArchiveFilenameForFile( model );
+		AsciiString source = loose ? model : TheArchiveFileSystem->getRetailArchiveFilenameForFile( model );
+		if (source.isEmpty())
+			continue;		// only a Reforged archive has it, so a player without one has nothing to hash
+		++modelsCounted;
 
 		ModelChecksum entry;
 		const Bool sourceKnown = TheLocalFileSystem->getFileInfo( source, &entry.source );
@@ -354,8 +355,7 @@ static void checksumModels( XferCRC &xferCRC )
 		}
 		else
 		{
-			File *file = !unmountedArt.isEmpty() ? TheArchiveFileSystem->openUnmountedArtFile( model )
-				: TheFileSystem->openFile( model.str(), File::READ );
+			File *file = loose ? TheFileSystem->openFile( model.str(), File::READ ) : TheArchiveFileSystem->openRetailFile( model );
 			Int fileSize = file->size();
 			char *contents = file->readEntireAndClose();
 			CRC modelCRC;
@@ -373,7 +373,7 @@ static void checksumModels( XferCRC &xferCRC )
 
 	if (modelsRead > 0)
 		writeModelChecksumCache( current );
-	DEBUG_LOG(( "INI CRC covers %d models, %d of them read this start\n", (Int)models.size(), modelsRead ));
+	DEBUG_LOG(( "INI CRC covers %d models, %d of them read this start\n", modelsCounted, modelsRead ));
 }
 
 Int GameEngine::getFramesPerSecondLimit( void )

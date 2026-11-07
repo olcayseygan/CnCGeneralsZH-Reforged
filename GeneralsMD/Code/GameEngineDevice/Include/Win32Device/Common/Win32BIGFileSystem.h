@@ -34,6 +34,8 @@
 
 #include "Common/ArchiveFileSystem.h"
 
+#include <vector>
+
 class Win32BIGFileSystem : public ArchiveFileSystem
 {
 public:
@@ -55,6 +57,7 @@ public:
 
 	virtual Bool loadBigFilesFromDirectory(AsciiString dir, AsciiString fileMask, Bool overwrite = FALSE, Bool searchSubdirectories = TRUE);
 protected:
+	std::vector<AsciiString> m_reforgedArt;		///< the Reforged*.big beside the exe this run mounts, held for the end of init
 
 };
 

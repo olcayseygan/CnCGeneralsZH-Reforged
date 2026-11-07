@@ -10,6 +10,7 @@ desync and show the check is looking.
     python net_check.py --copies 3 --teams 2
     python net_check.py --each "-latAvg 120 -latNoise 60 -packetloss 5"
     python net_check.py --slot-args 1 "-drawdelay 100"    # one slow renderer
+    python net_check.py --slot-run 1 C:\other\Run         # copy 1 plays from another install
     python net_check.py --prove                           # must report a mismatch
     python net_check.py --each "-scenario netstance" --keys "KEY_A CTRL,KEY_H"   # the stance key, both ways
     python net_check.py --relay 8094 --each "-latAvg 90 -latNoise 30"           # through a local relay
@@ -60,6 +61,8 @@ def parse_arguments() -> argparse.Namespace:
                         help="extra switches for one copy, repeatable")
     parser.add_argument("--slot-options", nargs=2, action="append", default=[], metavar=("SLOT", "FOLDER"),
                         help="one copy's ZH_USER_DATA_DIR, for a match between two setups, repeatable")
+    parser.add_argument("--slot-run", nargs=2, action="append", default=[], metavar=("SLOT", "FOLDER"),
+                        help="one copy's game folder (its exe, archives and log), for a match between two installs, repeatable")
     parser.add_argument("--tag", default="net", help="log prefix; copy n logs to Run/<tag><n>_DebugLogFile.txt")
     parser.add_argument("--prove", action="store_true", help="spawn on copy 0 alone at frame %d" % PROVE_FRAME)
     parser.add_argument("--prove-at", default="2192 3537", help="map position for --prove")
@@ -70,10 +73,15 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def run_directory(arguments: argparse.Namespace, slot: int) -> str:
+    folders = {int(target): folder for target, folder in arguments.slot_run}
+    return os.path.abspath(folders[slot]) if slot in folders else RUN_DIRECTORY
+
+
 def command_line(arguments: argparse.Namespace, slot: int) -> list:
     network = "10.0.0.%d" if arguments.relay else "127.0.0.%d"
     hosts = ",".join(network % (index + 1) for index in range(arguments.copies))
-    line = [os.path.join(RUN_DIRECTORY, EXE_NAME), "-multiInstance", "-quickstart", "-win",
+    line = [os.path.join(run_directory(arguments, slot), EXE_NAME), "-multiInstance", "-quickstart", "-win",
             "-xres", "800", "-yres", "600", "-msaa", "0", "-noFPSLimit",
             "-netgame", hosts, "-netslot", str(slot), "-control", str(FIRST_CONTROL_PORT + slot),
             "-map", arguments.map, "-seed", str(arguments.seed),
@@ -172,7 +180,7 @@ def main() -> int:
         time.sleep(1.0)
         if relay.poll() is not None:
             raise SystemExit("relay.js exited at once: " + open(relay_log).read())
-    processes = [subprocess.Popen(command_line(arguments, slot), cwd=RUN_DIRECTORY,
+    processes = [subprocess.Popen(command_line(arguments, slot), cwd=run_directory(arguments, slot),
                                   env=dict(os.environ, ZH_USER_DATA_DIR=folders[slot]) if slot in folders else None)
                  for slot in range(arguments.copies)]
     games = []
@@ -209,7 +217,7 @@ def main() -> int:
     total = 0
     reads = 0
     for slot, (first, last, seconds) in enumerate(results):
-        log_path = os.path.join(RUN_DIRECTORY, "%s%d_DebugLogFile.txt" % (arguments.tag, slot))
+        log_path = os.path.join(run_directory(arguments, slot), "%s%d_DebugLogFile.txt" % (arguments.tag, slot))
         mismatches = count_mismatches(log_path)
         total += max(mismatches, 0)
         print("NET CHECK slot %d: frame %d, %.1f logic fps, %s mismatches, %s"

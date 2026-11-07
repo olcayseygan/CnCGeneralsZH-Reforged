@@ -9863,6 +9863,25 @@ TEST(health_bar_smart_mode_marks_the_hurt)
 	CHECK( Drawable_healthBarModeShows( HEALTH_BAR_SMART, FALSE, TRUE, FALSE ) == TRUE );
 }
 
+/** The ammo and seat trays: every lamp at least two pixels with one between, the row ending on the
+	 tray's edge, and a continuous fill once the bar is too short for that. */
+TEST(lamp_tray_cells_fill_the_bar_or_merge)
+{
+	// ten seats over a 58 pixel tray: lamps of 4 or 5, the last one ending on the edge
+	for( Int i = 0; i < 10; ++i )
+	{
+		const Int width = Drawable_lampCellLeft( 58, 10, i + 1 ) - 1 - Drawable_lampCellLeft( 58, 10, i );
+		CHECK( width >= 4 && width <= 5 );
+	}
+	CHECK_EQ( Drawable_lampCellLeft( 58, 10, 0 ), 0 );
+	CHECK_EQ( Drawable_lampCellLeft( 58, 10, 10 ) - 1, 58 );
+
+	// exactly three pixels a lamp still cuts; one fewer merges, and so does nothing to count
+	CHECK( Drawable_lampCellLeft( 29, 10, 0 ) == 0 );
+	CHECK( Drawable_lampCellLeft( 28, 10, 0 ) == -1 );
+	CHECK( Drawable_lampCellLeft( 58, 0, 0 ) == -1 );
+}
+
 /** The setting is stored, clamped and read back like every other catalog row, and its default is
 	 what this fork has always done - nobody's game changes until they change it. */
 TEST(health_bar_mode_round_trips_through_options_ini)

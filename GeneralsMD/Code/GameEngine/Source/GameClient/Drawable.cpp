@@ -295,8 +295,6 @@ const Int MAX_ENABLED_MODULES								= 16;
 
 /*static*/ Bool							Drawable::s_staticImagesInited = false;
 /*static*/ const Image*			Drawable::s_veterancyImage[LEVEL_COUNT]	= { NULL };
-/*static*/ const Image*			Drawable::s_fullAmmo = NULL;
-/*static*/ const Image*			Drawable::s_emptyAmmo = NULL;
 /*static*/ Anim2DTemplate**	Drawable::s_animationTemplates = NULL;
 #ifdef DIRTY_CONDITION_FLAGS
 /*static*/ Int							Drawable::s_modelLockCount = 0;
@@ -313,9 +311,6 @@ const Int MAX_ENABLED_MODULES								= 16;
 	s_veterancyImage[2] = TheMappedImageCollection->findImageByName("SCVeter2");
 	s_veterancyImage[3] = TheMappedImageCollection->findImageByName("SCVeter3");
 
-	s_fullAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoFull");
-	s_emptyAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoEmpty");
-	
 	s_animationTemplates = NEW Anim2DTemplate* [ MAX_ICONS ];
 
 	s_animationTemplates[ICON_DEFAULT_HEAL]			= TheAnim2DCollection->findTemplate(TheDrawableIconNames[ICON_DEFAULT_HEAL]);
@@ -3657,8 +3652,11 @@ void Drawable::drawIconUI( void )
 #endif
 		drawDisabled( healthBarRegion );
 
-		drawAmmo( healthBarRegion );                
-		drawContained( healthBarRegion ); 
+		// the rounds and the seats hang under the health bar, one lamp tray each, rounds on top;
+		// two rows down from the bar leave the selection frame's row and one clear
+		Int trayY = healthBarRegion ? healthBarRegion->lo.y + max( 3, (Int)(healthBarRegion->hi.y - healthBarRegion->lo.y) ) + 2 : 0;
+		drawAmmo( healthBarRegion, trayY );
+		drawContained( healthBarRegion, trayY );
 
 		//Moved this to last so that it shows up over contained and ammo icons.
 		drawVeterancy( healthBarRegion ); 
@@ -3746,10 +3744,104 @@ void Drawable::drawEmoticon( const IRegion2D *healthBarRegion )
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-void Drawable::drawAmmo( const IRegion2D *healthBarRegion )
+Int Drawable_lampCellLeft( Int innerWidth, Int capacity, Int index )
 {
-	// the pips are left-justified on the health bar, as drawContained's are.  EA only drew them for a
-	// selected or moused-over unit, which has a bar; an aircraft that shows them always may have none.
+	// a lamp and its gap need three pixels, or the row is a striped smear nobody can count
+	if( capacity <= 0 || innerWidth + 1 < capacity * 3 )
+		return -1;
+
+	// the leftover pixels go one each to lamps spread along the row, so the last lamp ends on the
+	// tray's edge and no two lamps differ by more than a pixel
+	return index * (innerWidth + 1) / capacity;
+}
+
+namespace
+{
+	struct LampTone
+	{
+		Color top, body, shade;
+	};
+
+	LampTone makeLampTone( Int r, Int g, Int b, Int topR, Int topG, Int topB, Int shadeR, Int shadeG, Int shadeB )
+	{
+		LampTone t;
+		t.top = GameMakeColor( topR, topG, topB, 255 );
+		t.body = GameMakeColor( r, g, b, 255 );
+		t.shade = GameMakeColor( shadeR, shadeG, shadeB, 255 );
+		return t;
+	}
+
+	// a lamp lit from above: a light line along its top, the body, a darker line underneath when the
+	// tray is tall enough to spare one - what makes a row read as the panel lamps of the control bar
+	// rather than flat paint
+	void drawLamp( Int x, Int y, Int w, Int h, const LampTone &tone )
+	{
+		if( w <= 0 || h <= 0 )
+			return;
+		TheDisplay->drawFillRect( x, y, w, 1, tone.top );
+		const Int bodyHeight = h >= 3 ? h - 2 : h - 1;
+		if( bodyHeight > 0 )
+			TheDisplay->drawFillRect( x, y + 1, w, bodyHeight, tone.body );
+		if( h >= 3 )
+			TheDisplay->drawFillRect( x, y + h - 1, w, 1, tone.shade );
+	}
+
+	//
+	// The tray the rounds and the seats are counted in: a black glass strip the health bar's width,
+	// two pixels thicker than the bar so a lamp inside has a top, a body and a shade, cut into one
+	// lamp per round or seat with a one pixel black gap between neighbours. The first litA lamps burn
+	// in toneA, the next litB in toneB, the rest are dark glass. When the bar is too short to give
+	// every lamp two pixels (a far zoom, a big load) the lamps merge into one continuous fill with each
+	// tone's share of it, and a single occupant still keeps a pixel of its own. Returns where the next
+	// tray down starts.
+	//
+	Int drawLampTray( const IRegion2D *bar, Int y, Int capacity, Int litA, const LampTone &toneA,
+										Int litB, const LampTone &toneB )
+	{
+		const Int x = bar->lo.x;
+		const Int width = bar->hi.x - bar->lo.x;
+		const Int height = max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
+		const Int innerWidth = width - 2;
+		const Int innerHeight = height - 2;
+		if( capacity <= 0 || innerWidth <= 0 )
+			return y;
+
+		litA = max( 0, min( litA, capacity ) );
+		litB = max( 0, min( litB, capacity - litA ) );
+
+		const LampTone dark = makeLampTone( 28, 31, 30,  56, 60, 58,  20, 22, 21 );
+
+		TheDisplay->drawFillRect( x, y, width, height, GameMakeColor( 0, 0, 0, 220 ) );
+
+		if( Drawable_lampCellLeft( innerWidth, capacity, 0 ) >= 0 )
+		{
+			for( Int i = 0; i < capacity; ++i )
+			{
+				const Int left = Drawable_lampCellLeft( innerWidth, capacity, i );
+				const Int right = Drawable_lampCellLeft( innerWidth, capacity, i + 1 ) - 1;
+				const LampTone &tone = i < litA ? toneA : i < litA + litB ? toneB : dark;
+				drawLamp( x + 1 + left, y + 1, right - left, innerHeight, tone );
+			}
+		}
+		else
+		{
+			Int endA = litA > 0 ? max( 1, innerWidth * litA / capacity ) : 0;
+			Int endB = litB > 0 ? max( endA + 1, innerWidth * (litA + litB) / capacity ) : endA;
+			endA = min( endA, innerWidth );
+			endB = min( endB, innerWidth );
+			drawLamp( x + 1, y + 1, endA, innerHeight, toneA );
+			drawLamp( x + 1 + endA, y + 1, endB - endA, innerHeight, toneB );
+			drawLamp( x + 1 + endB, y + 1, innerWidth - endB, innerHeight, dark );
+		}
+
+		return y + height + 2;
+	}
+}
+
+void Drawable::drawAmmo( const IRegion2D *healthBarRegion, Int &trayY )
+{
+	// the tray hangs under the health bar.  EA only drew the pips for a selected or moused-over unit,
+	// which has a bar; an aircraft that shows them always may have none.
 	if (!healthBarRegion)
 		return;
 
@@ -3774,47 +3866,17 @@ void Drawable::drawAmmo( const IRegion2D *healthBarRegion )
 	if (!obj->getAmmoPipShowingInfo(numTotal, numFull))
 		return;
 
-	if (!s_fullAmmo || !s_emptyAmmo)
-		return;
-
-
-	
-#ifdef SCALE_ICONS_WITH_ZOOM_ML
-	Real scale = TheGlobalData->m_ammoPipScaleFactor / CLAMP_ICON_ZOOM_FACTOR( TheTacticalView->getZoom() );
-#else
-	Real scale = 1.0f;
-#endif
-
-	Int boxWidth  = REAL_TO_INT(s_emptyAmmo->getImageWidth() * scale);
-	Int boxHeight = REAL_TO_INT(s_emptyAmmo->getImageHeight() * scale);
-	const Int SPACING = 1;
-	//Int totalWidth = (boxWidth+SPACING)*numTotal;
-
-	ICoord2D screenCenter;
-	Coord3D pos = *obj->getPosition();
-	pos.x += TheGlobalData->m_ammoPipWorldOffset.x;
-	pos.y += TheGlobalData->m_ammoPipWorldOffset.y;
-	pos.z += TheGlobalData->m_ammoPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
-	if( !TheTacticalView->worldToScreen( &pos, &screenCenter ) )
-		return;
-
-	Real bounding = obj->getGeometryInfo().getBoundingSphereRadius() * scale;
-	//Int posx = screenCenter.x + REAL_TO_INT(TheGlobalData->m_ammoPipScreenOffset.x*bounding) - totalWidth;
-	//**CHANGING CODE: Left justify with health bar min
-	Int posx = healthBarRegion->lo.x;
-	Int posy = screenCenter.y + REAL_TO_INT(TheGlobalData->m_ammoPipScreenOffset.y*bounding);
-	for (Int i = 0; i < numTotal; ++i)
-	{
-		TheDisplay->drawImage(i < numFull ? s_fullAmmo : s_emptyAmmo, posx, posy + 1, posx + boxWidth, posy + 1 + boxHeight);
-		posx += boxWidth + SPACING;
-	}
+	// rounds burn the reload bar's amber, so a Comanche's rockets and the wait for the next salvo read
+	// as one family; a spent round is dark glass
+	const LampTone ROUND = makeLampTone( 255, 190, 40,  255, 232, 150,  176, 118, 16 );
+	trayY = drawLampTray( healthBarRegion, trayY, numTotal, numFull, ROUND, 0, ROUND );
 }
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-void Drawable::drawContained( const IRegion2D *healthBarRegion )
+void Drawable::drawContained( const IRegion2D *healthBarRegion, Int &trayY )
 {
-	// the pips are left-justified on the health bar, and this is the only thing that reads it -
+	// the tray hangs under the health bar, and this is the only thing that reads it -
 	// an object with no health region (off screen, or ignored in the GUI) would deref a NULL below
 	if (!healthBarRegion)
 		return;
@@ -3862,14 +3924,10 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 	if (numFull == 0 && !TheGlobalData->m_showEmptyBuildingPips && obj->isKindOf( KINDOF_STRUCTURE ))
 		return;
 
-	// a garrisonable building draws only its occupied slots: a city full of empty rows over every
-	// house is clutter, and an empty one draws nothing at all. Vehicles keep their empty boxes.
-	if (obj->isKindOf( KINDOF_STRUCTURE ) && container->isGarrisonable())
-	{
-		if (numFull == 0)
-			return;
-		numTotal = numFull;
-	}
+	// an empty garrisonable building draws nothing at all: a city with an empty tray over every house
+	// is clutter. Once someone is in, the tray counts them against every window it has.
+	if (numFull == 0 && obj->isKindOf( KINDOF_STRUCTURE ) && container->isGarrisonable())
+		return;
 
 	Int numInfantry = 0;
 	const ContainedItemsList* contained = container->getContainedItemsList();
@@ -3882,47 +3940,15 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 		}
 	}
 
-#ifdef SCALE_ICONS_WITH_ZOOM_ML
-	Real scale = TheGlobalData->m_ammoPipScaleFactor / CLAMP_ICON_ZOOM_FACTOR( TheTacticalView->getZoom() );
-#else
-	Real scale = 1.0f;
-#endif
-
-	ICoord2D screenCenter;
-	Coord3D pos = *obj->getPosition();
-	pos.x += TheGlobalData->m_containerPipWorldOffset.x;
-	pos.y += TheGlobalData->m_containerPipWorldOffset.y;
-	pos.z += TheGlobalData->m_containerPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
-	pos.z += healthBarArtLift( obj );	// the pips ride at the bar's height, see computeHealthRegion
-	if( !TheTacticalView->worldToScreen( &pos, &screenCenter ) )
-		return;
-
-	Real bounding = obj->getGeometryInfo().getBoundingSphereRadius() * scale;
-	
-	//Int posx = screenCenter.x + REAL_TO_INT(TheGlobalData->m_containerPipScreenOffset.x*bounding) - totalWidth;
-	//**CHANGING CODE: Left justify with health bar min
-	Int posx = healthBarRegion->lo.x;
-	Int posy = screenCenter.y + REAL_TO_INT(TheGlobalData->m_containerPipScreenOffset.y*bounding);
-
 	//
-	// One square a seat, cut like the queue squares over a factory's bar (drawHealthBar): as thick as
-	// the health bar plus its outline, neighbours sharing one black edge so they stay apart on any
-	// ground, a new row down when the bar runs out. A seat taken by infantry is green and one taken
-	// by anything else blue, EA's two colours; an empty seat is the black frame round dark glass.
+	// Infantry first, then everything else, against the seats there are. EA's pure green and pure
+	// blue are kept as the meaning and toned down to sit with the steel of the HUD: a field green for
+	// soldiers, a steel blue for vehicles and anything else aboard.
 	//
-	const Int barWidth = healthBarRegion->hi.x - healthBarRegion->lo.x;
-	const Int side = max( 3, (Int)(healthBarRegion->hi.y - healthBarRegion->lo.y) ) + 2;
-	const Int pitch = side - 1;
-	const Int perRow = max( 1, (barWidth - 1) / pitch );
-	for (Int i = 0; i < numTotal; ++i)
-	{
-		const Int x = posx + (i % perRow) * pitch;
-		const Int y = posy + (i / perRow) * pitch;
-		const Color fill = i >= numFull ? GameMakeColor( 0, 0, 0, 110 )
-			: i < numInfantry ? GameMakeColor( 0, 255, 0, 255 ) : GameMakeColor( 0, 0, 255, 255 );
-		TheDisplay->drawOpenRect( x, y, side, side, 1.0f, GameMakeColor( 0, 0, 0, 255 ) );
-		TheDisplay->drawFillRect( x + 1, y + 1, side - 2, side - 2, fill );
-	}
+	const Int infantry = min( numInfantry, numFull );
+	const LampTone INFANTRY = makeLampTone( 120, 196, 64,  196, 240, 140,  66, 118, 34 );
+	const LampTone VEHICLE = makeLampTone( 86, 148, 214,  176, 214, 250,  44, 86, 138 );
+	trayY = drawLampTray( healthBarRegion, trayY, numTotal, infantry, INFANTRY, numFull - infantry, VEHICLE );
 }
 
 //-------------------------------------------------------------------------------------------------

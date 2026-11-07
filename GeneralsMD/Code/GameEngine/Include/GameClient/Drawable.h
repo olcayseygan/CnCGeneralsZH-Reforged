@@ -103,6 +103,10 @@ extern Real Drawable_reloadBarFraction( UnsignedInt now, UnsignedInt started, Un
 extern Bool Drawable_healthBarModeShows( Int healthBarMode, Bool isSelected, Bool isMousedOver,
 																				 Bool isDamaged );
 
+///< where lamp `index` of `capacity` starts across a tray `innerWidth` pixels wide, one pixel between
+///< lamps; -1 when a lamp would come out under two pixels wide and the tray is one continuous fill
+extern Int Drawable_lampCellLeft( Int innerWidth, Int capacity, Int index );
+
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
 
@@ -954,8 +958,8 @@ private:
 	void drawConstructPercent( const IRegion2D *healthBarRegion );  ///< display % construction complete
 	void drawSupplyCash( const IRegion2D *healthBarRegion );				///< display the cash left in a supply pile
 	void drawCaption( const IRegion2D *healthBarRegion );						///< draw caption
-	void drawAmmo( const IRegion2D *healthBarRegion );							///< draw icons
-	void drawContained( const IRegion2D *healthBarRegion );					///< draw icons
+	void drawAmmo( const IRegion2D *healthBarRegion, Int &trayY );			///< rounds left, a lamp tray under the bar; moves trayY down past it
+	void drawContained( const IRegion2D *healthBarRegion, Int &trayY );	///< seats taken, a lamp tray under the bar; moves trayY down past it
 	void drawVeterancy( const IRegion2D *healthBarRegion );					///< draw veterency information
 
 	void drawEmoticon( const IRegion2D* healthBarRegion );
@@ -990,8 +994,6 @@ private:
 
 	static Bool							s_staticImagesInited;
 	static const Image*			s_veterancyImage[LEVEL_COUNT];
-	static const Image*			s_fullAmmo;
-	static const Image*			s_emptyAmmo;
 	static Anim2DTemplate**	s_animationTemplates;
 
 #ifdef DIRTY_CONDITION_FLAGS

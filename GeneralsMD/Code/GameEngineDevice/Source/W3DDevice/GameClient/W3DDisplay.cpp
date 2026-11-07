@@ -1173,8 +1173,14 @@ void W3DDisplay::init( void )
 	// map.  The menu says the setting waits for the next launch.
 	// Before any map is read: every tile and the atlas are sized by it.  A headless run draws no
 	// ground, so it keeps EA's tile and the memory, and classic graphics keeps EA's tile to look it.
-	TheTilePixelExtent = (TheGlobalData->m_headless || TheGlobalData->m_classicGraphics)
+	// Nor is there a bigger tile to draw without the HD ground (HD Textures off, or the add-on not
+	// installed): the shipped tile stretched to twice its size wraps at its own edge and lines every
+	// tile border, for four times the atlas memory.
+	FilenameList hdTiles;
+	TheFileSystem->getFileListInDirectory( AsciiString( TERRAIN_HD_TGA_DIR_PATH ), AsciiString( "*.tga" ), hdTiles, FALSE );
+	TheTilePixelExtent = (TheGlobalData->m_headless || TheGlobalData->m_classicGraphics || hdTiles.empty())
 		? SOURCE_TILE_PIXEL_EXTENT : MAX_TILE_PIXEL_EXTENT;
+	DEBUG_LOG(( "W3DDisplay::init - ground tiles %d pixels, %d HD tiles to draw them from\n", TheTilePixelExtent, (Int)hdTiles.size() ));
 
 	// Same problem, same answer: the filter table is built the moment the device exists and WW3D2
 	// cannot see GlobalData, so the player's texture filtering goes in here. Nothing in the game

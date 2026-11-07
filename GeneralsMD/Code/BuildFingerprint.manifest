@@ -323,6 +323,7 @@ Data/Cinema/swpair_nuke.txt
 Data/Cinema/swpair_scud.txt
 Data/Cinema/thumb_chaos_a.txt
 Data/Cinema/thumb_chaos_b.txt
+Data/Cinema/todayshow.txt
 Data/Cinema/tr_arrival.txt
 Data/Cinema/tr_chaos.txt
 Data/Cinema/tr_clash.txt
@@ -654,6 +655,7 @@ Data/Scenarios/swpair.txt
 Data/Scenarios/targetpick.txt
 Data/Scenarios/technicalexit.txt
 Data/Scenarios/techrespawn.txt
+Data/Scenarios/todayshow.txt
 Data/Scenarios/towncross.txt
 Data/Scenarios/toxinslope.txt
 Data/Scenarios/toxinstream.txt

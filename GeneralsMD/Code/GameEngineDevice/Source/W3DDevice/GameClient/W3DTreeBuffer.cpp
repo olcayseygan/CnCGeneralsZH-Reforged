@@ -1836,16 +1836,19 @@ Bool W3DTreeBuffer::addModelShadow(DrawableID id, RenderObjClass *robj)
 	ms.numMesh = 0;
 	ms.visible = false;
 
-	// LOD 0 is the model as it stands closest to the camera, which is the shape worth casting
+	// the top LOD is the model as it stands closest to the camera, which is the shape worth casting
+	// (W3D keeps its levels coarsest first)
 	Int subCount = 1;
+	Int top = 0;
 	Bool isHLod = robj->Class_ID() == RenderObjClass::CLASSID_HLOD;
 	if (isHLod) {
-		subCount = ((HLodClass *)robj)->Get_Lod_Model_Count(0);
+		top = ((HLodClass *)robj)->Get_LOD_Count() - 1;
+		subCount = ((HLodClass *)robj)->Get_Lod_Model_Count(top);
 	}
 
 	Int i;
 	for (i=0; i<subCount && ms.numMesh<4; i++) {
-		RenderObjClass *sub = isHLod ? ((HLodClass *)robj)->Peek_Lod_Model(0, i) : robj;
+		RenderObjClass *sub = isHLod ? ((HLodClass *)robj)->Peek_Lod_Model(top, i) : robj;
 		if (sub == NULL || sub->Class_ID() != RenderObjClass::CLASSID_MESH) {
 			continue;
 		}

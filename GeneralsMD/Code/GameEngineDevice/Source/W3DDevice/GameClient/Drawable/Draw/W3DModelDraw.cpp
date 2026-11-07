@@ -1962,18 +1962,19 @@ void W3DModelDraw::releaseShadows(void)	///< frees all shadow resources used by 
 }
 
 /** Does this model contain any skinned (bone-deformed) geometry?  Infantry and other animated
-characters do; vehicles and structures are built from rigid sub-meshes.  Only LOD 0 is checked - that
-is the LOD the shadow system fetches its live meshes from. */
+characters do; vehicles and structures are built from rigid sub-meshes.  Only the top LOD, the full
+model, is checked - that is the LOD the shadow system fetches its live meshes from. */
 static Bool hasSkinnedGeometry(RenderObjClass *robj)
 {
 	if (robj == NULL || robj->Class_ID() != RenderObjClass::CLASSID_HLOD)
 		return FALSE;
 
 	HLodClass *hlod=(HLodClass *)robj;
+	const Int top = hlod->Get_LOD_Count()-1;
 
-	for (Int i=0; i<hlod->Get_Lod_Model_Count(0); i++)
+	for (Int i=0; i<hlod->Get_Lod_Model_Count(top); i++)
 	{
-		RenderObjClass *lodModel=hlod->Peek_Lod_Model(0,i);
+		RenderObjClass *lodModel=hlod->Peek_Lod_Model(top,i);
 
 		if (lodModel && lodModel->Class_ID() == RenderObjClass::CLASSID_MESH &&
 				((MeshClass *)lodModel)->Peek_Model()->Get_Flag(MeshGeometryClass::SKIN))
@@ -2843,6 +2844,27 @@ void ModelConditionInfo::WeaponBarrelInfo::setMuzzleFlashHidden(RenderObjClass *
 {
 	if (fullObject)
 	{
+		/* A model with levels of detail can carry the flash at more than one of them, and the first
+			 part on the bone overall is the coarsest level's: the top one's would keep the state it loaded
+			 with.  So the first part on the bone in each level, which for a model of one level, every
+			 retail one, is the same part as below. */
+		if (fullObject->Class_ID() == RenderObjClass::CLASSID_HLOD && ((HLodClass *)fullObject)->Get_LOD_Count() > 1)
+		{
+			HLodClass *hlod = (HLodClass *)fullObject;
+			for (Int lod = 0; lod < hlod->Get_LOD_Count(); ++lod)
+			{
+				for (Int i = 0; i < hlod->Get_Lod_Model_Count(lod); ++i)
+				{
+					if (hlod->Get_Lod_Model_Bone(lod, i) == m_muzzleFlashBone)
+					{
+						hlod->Peek_Lod_Model(lod, i)->Set_Hidden(hide);
+						break;
+					}
+				}
+			}
+			return;
+		}
+
 		RenderObjClass* childObject = fullObject->Get_Sub_Object_On_Bone(0, m_muzzleFlashBone);
 		if (childObject)
 		{

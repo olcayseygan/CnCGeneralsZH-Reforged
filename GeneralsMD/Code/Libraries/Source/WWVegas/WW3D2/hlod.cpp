@@ -2161,6 +2161,33 @@ void HLodClass::Render(RenderInfoClass & rinfo)
 			Lod[CurLod][i].Model->Render(rinfo);
 	}
 
+	/*
+	** A part of the full model on a bone no coarser level dresses draws at every level.  That is a
+	** muzzle flash: the game shows and hides it by its bone, and a level drawn without it would fire
+	** with no flash.  Hidden, as a flash is but for a few frames, it costs one test.  So art that
+	** drops a part from its coarse levels has to keep it on a bone they dress, or it draws at all.
+	** ponytail: the bone scan runs per draw; cache the list per model if many multi-level
+	** models ever stand at a coarse level at once.
+	*/
+	if (CurLod != LodCount - 1) {
+		const ModelArrayClass & top = Lod[LodCount - 1];
+		for (i = 0; i < top.Count(); i++) {
+			RenderObjClass * model = top[i].Model;
+			if (model->Is_Not_Hidden_At_All() == false || model->Class_ID() == CLASSID_OBBOX) {
+				continue;
+			}
+			bool dressed = false;
+			for (int lod = 0; lod < LodCount - 1 && !dressed; lod++) {
+				for (int j = 0; j < Lod[lod].Count() && !dressed; j++) {
+					dressed = (Lod[lod][j].BoneIndex == top[i].BoneIndex);
+				}
+			}
+			if (!dressed) {
+				model->Render(rinfo);
+			}
+		}
+	}
+
 	if (Is_Sub_Objects_Match_LOD_Enabled()) {
 		for (i = 0; i < AdditionalModels.Count(); i++) {
 			AdditionalModels[i].Model->Set_LOD_Level(Get_LOD_Level());
@@ -2552,9 +2579,23 @@ int HLodClass::Get_Sub_Object_Bone_Index(RenderObjClass * subobj) const
 }
 
 //Custom version of above function for cases where we know the lod/model index. -MW
+// Every caller passes lod 0 and a Get_Sub_Object index, which counts through all the lods and then
+// the additional models, so the index walks on past lod 0 the same way.  Read as Lod[0][index] it
+// ran off a coarse lod's array on a model with more than one: the hide/show walks read past it, and
+// a pristine bone W3DModelDraw finds by its sub-object's name (findSingleSubObj), which the logic
+// reads, came out of whatever lay there.
 int HLodClass::Get_Sub_Object_Bone_Index(int LodIndex, int ModelIndex)	const
 {
-	return Lod[LodIndex][ModelIndex].BoneIndex;
+	for (int lod = LodIndex; lod < LodCount; lod++) {
+		if (ModelIndex < Lod[lod].Count()) {
+			return Lod[lod][ModelIndex].BoneIndex;
+		}
+		ModelIndex -= Lod[lod].Count();
+	}
+	if (ModelIndex < AdditionalModels.Count()) {
+		return AdditionalModels[ModelIndex].BoneIndex;
+	}
+	return 0;
 }
 
 /***********************************************************************************************

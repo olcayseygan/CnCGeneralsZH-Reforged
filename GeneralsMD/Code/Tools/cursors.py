@@ -8,11 +8,11 @@ drew in the 4-bit palette, each shape lit on one half and dark on the other insi
 line; this draws the same hues as painted and brushed metal under a light from the top left, with
 weathered paint on the edges, and only lamps, screens and beams glow.
 
-Each frame is a .CUR holding two 32-bit images, 48x48 first and 32x32 second:
+Each frame is a .CUR holding two 32-bit images, 48x48 first and 32x32 second. The game draws
+the one nearest the system's cursor size, so 32 at 100 % DPI and 48 from about 150 %:
 
-    SDL (AniCursor.h)            reads the first entry only, so it gets 48
-    LoadCursorFromFile           scales to SM_CXCURSOR, which picks the 32 entry at 100 % DPI
-    LoadImage(.., 0, 0, LR_LOADFROMFILE)   keeps the first entry's size, 48
+    Win32Mouse   LoadImage(.., 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE), nearest SM_CXCURSOR
+    SdlMouse     AniCursor_decode(.., 32 x the display's content scale), nearest that width
 
 Hotspots are in the 48 frame; the 32 entry's are scaled with it. Reticles and area orders put the
 hotspot in the middle of the mark, pointers and tools on their tip, pins and flags on their foot.

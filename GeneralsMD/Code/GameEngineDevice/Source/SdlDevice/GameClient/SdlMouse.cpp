@@ -326,6 +326,10 @@ void SdlMouse::initCursorResources( void )
 		 DEBUG_ASSERTCRASH in a debug build.  A headless run has no pointer to dress (C3b). */
 	if (!SDL_WasInit( SDL_INIT_VIDEO ))
 		return;
+	// Win32's SM_CXCURSOR: 32 at a content scale of 1 (macOS's Retina included, its scale lives in the
+	// pixel density), more where the desktop is scaled up.  The Reforged files carry a 48 and a 32.
+	const float scale = SDL_GetDisplayContentScale( SDL_GetPrimaryDisplay() );
+	const Int wanted = (Int)( 32.0f * (scale > 0.0f ? scale : 1.0f) + 0.5f );
 	for (Int cursor = FIRST_CURSOR; cursor < NUM_MOUSE_CURSORS; cursor++)
 	{
 		for (Int direction = 0; direction < m_cursorInfo[cursor].numDirections; direction++)
@@ -340,7 +344,7 @@ void SdlMouse::initCursorResources( void )
 			std::vector<UnsignedByte> bytes;
 			AniCursor decoded;
 			std::string why;
-			if (readWholeFile( path, bytes ) && AniCursor_decode( &bytes[0], bytes.size(), decoded, &why ))
+			if (readWholeFile( path, bytes ) && AniCursor_decode( &bytes[0], bytes.size(), decoded, &why, wanted ))
 				theCursors[cursor][direction] = createCursor( decoded );
 			DEBUG_ASSERTCRASH( theCursors[cursor][direction], ("MissingCursor %s %s\n", path, why.c_str()) );
 		}

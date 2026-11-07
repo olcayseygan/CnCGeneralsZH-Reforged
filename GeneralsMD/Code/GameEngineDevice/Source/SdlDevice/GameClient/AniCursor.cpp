@@ -22,6 +22,7 @@
 
 #include "SdlDevice/GameClient/AniCursor.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 namespace {
@@ -40,15 +41,22 @@ enum { ANIH_SIZE = 36, AF_ICON = 0x1, AF_SEQUENCE = 0x2 };
 
 }  // namespace
 
-Bool AniCursor_decodeCursorFile( const UnsignedByte *data, size_t size, AniCursorFrame &out, std::string *why )
+Bool AniCursor_decodeCursorFile( const UnsignedByte *data, size_t size, AniCursorFrame &out, std::string *why, Int preferredSize )
 {
-	// ICONDIR, then its first entry: the only one a cursor frame has
+	// ICONDIR, then the entry wanted: the first, or the one whose width is nearest preferredSize
 	if (size < 6 + 16)
 		return fail( why, "shorter than an icon directory" );
-	const UnsignedInt type = le16( data + 2 );
-	if (le16( data ) != 0 || (type != 1 && type != 2) || le16( data + 4 ) == 0)
+	const UnsignedInt type = le16( data + 2 ), count = le16( data + 4 );
+	if (le16( data ) != 0 || (type != 1 && type != 2) || count == 0)
 		return fail( why, "not an .ICO or .CUR directory" );
 	const UnsignedByte *entry = data + 6;
+	for (UnsignedInt i = 1; preferredSize > 0 && i < count && 6 + 16 * (size_t)(i + 1) <= size; ++i)
+	{
+		const UnsignedByte *other = data + 6 + 16 * i;
+		const Int best = entry[0] ? entry[0] : 256, width = other[0] ? other[0] : 256;		// 0 is 256
+		if (abs( width - preferredSize ) < abs( best - preferredSize ))
+			entry = other;
+	}
 	const UnsignedInt imageSize = le32( entry + 8 ), imageOffset = le32( entry + 12 );
 	if (imageOffset > size || imageSize > size - imageOffset || imageSize < 40)
 		return fail( why, "the image lies outside the file" );
@@ -123,7 +131,7 @@ Bool AniCursor_decodeCursorFile( const UnsignedByte *data, size_t size, AniCurso
 	return TRUE;
 }
 
-Bool AniCursor_decode( const UnsignedByte *data, size_t size, AniCursor &out, std::string *why )
+Bool AniCursor_decode( const UnsignedByte *data, size_t size, AniCursor &out, std::string *why, Int preferredSize )
 {
 	out.frames.clear();
 	out.steps.clear();
@@ -167,7 +175,7 @@ Bool AniCursor_decode( const UnsignedByte *data, size_t size, AniCursor &out, st
 				{
 					AniCursorFrame frame;
 					std::string reason;
-					if (!AniCursor_decodeCursorFile( sub + 8, subLength, frame, &reason ))
+					if (!AniCursor_decodeCursorFile( sub + 8, subLength, frame, &reason, preferredSize ))
 						return fail( why, ("frame: " + reason).c_str() );
 					out.frames.push_back( frame );
 				}

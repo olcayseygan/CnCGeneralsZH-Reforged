@@ -971,6 +971,12 @@ TEST(every_install_cursor_decodes_as_this_tests_own_parse_says)
 			CHECK_EQ( a.invertedPixels, b.invertedPixels );
 			inverted += a.invertedPixels;
 		}
+		// what SdlMouse asks for at a content scale of 1: every file carries a 32, EA's alone or the
+		// Reforged 48's second, and that one comes back rather than the first
+		AniCursor small;
+		CHECK( AniCursor_decode( &bytes[0], bytes.size(), small, &why, 32 ) );
+		for (size_t i = 0; i < small.frames.size(); ++i)
+			CHECK( small.frames[i].width == 32 && small.frames[i].height == 32 );
 		for (size_t i = 0; i < decoded.steps.size() && i < expected.steps.size(); ++i)
 			CHECK( decoded.steps[i].frame == expected.steps[i].first && decoded.steps[i].durationMs == expected.steps[i].second );
 		frames += (int)decoded.frames.size();

@@ -18,14 +18,15 @@
 
 // AniCursor.h: Windows animated cursor files (.ANI) decoded to RGBA frames (C3).
 //
-// Win32Mouse gives the game its default cursors (RM_WINDOWS) with LoadCursorFromFile over the 52
+// Win32Mouse gives the game its default cursors (RM_WINDOWS) with LoadImage over the 52
 // Data/Cursors/*.ANI files.  Off Windows SdlMouse makes SDL cursors from what this decodes.  The format:
 // a RIFF "ACON" file with an 'anih' header, optional 'rate' (per-step durations, in jiffies of 1/60 s)
 // and 'seq ' (per-step frame indices) chunks, and a LIST 'fram' of 'icon' chunks, each a whole .CUR or
 // .ICO file holding a device-independent bitmap: a BITMAPINFOHEADER, a palette at 8 bits or fewer, the
 // colour (XOR) rows and a 1-bit AND mask, both bottom-up.  EA's frames are 32 x 32 at 4 bits; the
-// Reforged ones (Tools/cursors.py) hold a 48 x 48 at 32 bits first and a 32 x 32 after it, and the
-// first image is the one read.  This reads 1, 4, 8, 24 and 32 bits.  No SDL here: bytes in, pixels out.
+// Reforged ones (Tools/cursors.py) hold a 48 x 48 at 32 bits first and a 32 x 32 after it, and SdlMouse
+// asks for the one nearest the system's cursor size, as Win32Mouse's LR_DEFAULTSIZE does.  This reads 1,
+// 4, 8, 24 and 32 bits.  No SDL here: bytes in, pixels out.
 //
 // What a bitmap cursor cannot become: an AND bit set over a non-black colour inverts the screen under
 // it on Windows.  There is no such pixel in an SDL colour cursor; it is made transparent, and counted.
@@ -63,11 +64,12 @@ struct AniCursor
 	std::vector<AniCursorStep> steps;		///< the animation, in order: 'seq ' and 'rate' applied
 };
 
-/// Decodes a whole .ANI file; FALSE, with the reason in why, when it is not one this can read
-Bool AniCursor_decode( const UnsignedByte *data, size_t size, AniCursor &out, std::string *why = NULL );
+/// Decodes a whole .ANI file; FALSE, with the reason in why, when it is not one this can read.
+/// preferredSize 0 reads each frame's first image, above 0 the one whose width is nearest it.
+Bool AniCursor_decode( const UnsignedByte *data, size_t size, AniCursor &out, std::string *why = NULL, Int preferredSize = 0 );
 
-/// One .CUR or .ICO file's first image; the hotspot is 0,0 for an .ICO
-Bool AniCursor_decodeCursorFile( const UnsignedByte *data, size_t size, AniCursorFrame &out, std::string *why = NULL );
+/// One .CUR or .ICO file's image (as above); the hotspot is 0,0 for an .ICO
+Bool AniCursor_decodeCursorFile( const UnsignedByte *data, size_t size, AniCursorFrame &out, std::string *why = NULL, Int preferredSize = 0 );
 
 /// A jiffy count, 1/60 s each, in milliseconds as SDL's frame durations take them
 inline UnsignedInt AniCursor_jiffiesToMs( UnsignedInt jiffies ) { return (jiffies * 1000u + 30u) / 60u; }

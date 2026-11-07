@@ -2240,11 +2240,13 @@ Particle *ParticleSystem::createParticle( const ParticleInfo *info,
 }
 
 // ------------------------------------------------------------------------------------------------
-/** One spawn to the manager's GPU path, kept in the sample ring if it takes it. */
+/** One spawn to the manager's GPU path, kept in the sample ring if it takes it.  A mine's glint
+ * stays on the CPU: the GPU ring draws every particle soft, and the glint needs the hard edge the
+ * sorted billboards give it (isAttachedToMine). */
 // ------------------------------------------------------------------------------------------------
 Bool ParticleSystem::spawnOnGpu( const ParticleInfo *info )
 {
-	if (info->m_lifetime == 0 || !TheParticleSystemManager->spawnGpuParticle( this, info ))
+	if (info->m_lifetime == 0 || isAttachedToMine() || !TheParticleSystemManager->spawnGpuParticle( this, info ))
 		return FALSE;
 
 	const UnsignedInt birth = ParticleSystemManager::getParticleFrame();

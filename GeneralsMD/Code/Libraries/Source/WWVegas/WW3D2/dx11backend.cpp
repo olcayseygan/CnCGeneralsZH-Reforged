@@ -786,8 +786,9 @@ static const float SMOKE_SELF_SHADOW_CURVE = 16.0f;
 // on the smoothstep (SOFT_PARTICLE_SAMPLING) is smooth in both and keeps the toxin carpet whole; the
 // islands once blamed on twelve were the straight ramp's creases, which the smoothstep took away.
 // Twenty starts to thin the carpet.  It is the longest fade and not the only one: a sprite fades
-// over its own half width where that is shorter, so a mine's flare a few units across, hanging
-// under one unit above the ground, is not faded away entire.
+// over its own half width where that is shorter, so a small spark close to the ground keeps its
+// light.  A mine's flare, which sits on the ground, takes no fade at all (hard_edge in the sorting
+// renderer).
 static const float SOFT_PARTICLE_FADE_UNITS = 12.0f;
 
 // Each caster is a disc facing the sun, drawn as a four corner strip whose corners come from the

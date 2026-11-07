@@ -470,8 +470,9 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 // w = SoftParticleDepth.x / (z * SoftParticleDepth.y - SoftParticleDepth.z), which is the same
 // matrix the world was drawn with; .w is one over the longest distance the fade takes, in world
 // units.  A sprite never fades over more than its own half width, which the vertex half hands on in
-// the specular alpha (VertexPipelineDescription::SoftParticle): a mine's flare hangs under a unit
-// above the ground, and twelve units erased it whole.  The ramp is a smoothstep: a straight one
+// the specular alpha (VertexPipelineDescription::SoftParticle), so a small sprite near the ground
+// keeps its middle; a mine's flare sits on the ground and is handed a width of a thousandth, the
+// plain depth test (SortingRendererClass::Insert_Quads, hard_edge).  The ramp is a smoothstep: a straight one
 // left a crease at both ends of every sprite's fade, and a toxin cloud is hundreds of sprites lying
 // on the ground, whose creases stacked into contour lines.
 #define SOFT_PARTICLE_SAMPLING \

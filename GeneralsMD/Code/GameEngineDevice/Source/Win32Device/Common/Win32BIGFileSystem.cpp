@@ -51,6 +51,8 @@
 #include "Common/EarlyCommandLine.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
+#include <vector>
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -167,11 +169,20 @@ void Win32BIGFileSystem::init() {
 	loadBigFilesFromDirectory("", "Patch*.big", TRUE, FALSE);
 
 	// The fork's art beats the patch archives as well: PatchZH.big holds the 1.04 Avenger, and a
-	// rebuilt model under a retail name has to win wherever retail keeps that name.
+	// rebuilt model under a retail name has to win wherever retail keeps that name.  This pass alone
+	// decides which Reforged archive holds a name several of them carry, in one fixed order: the base
+	// art (the 2x textures, the normals, the terrain) first, then the model batches over it, so a
+	// rebuilt bridge's texture beats the upscale of the retail one.
+	std::vector<AsciiString> reforged;
 	for (ArchiveFileMap::iterator art = m_archiveFileMap.begin(); art != m_archiveFileMap.end(); ++art) {
 		if (isReforgedArchive(art->first)) {
-			loadIntoDirectoryTree(art->second, art->first, TRUE);
+			reforged.push_back(art->first);
 		}
+	}
+	std::sort(reforged.begin(), reforged.end(), ArchiveFileSystem::reforgedMountsBefore);
+	for (size_t i = 0; i < reforged.size(); ++i) {
+		DEBUG_LOG(("Win32BIGFileSystem::init - Reforged art %d: %s\n", (Int)i, reforged[i].str()));
+		loadIntoDirectoryTree(m_archiveFileMap[reforged[i]], reforged[i], TRUE);
 	}
 
     // Zero Hour is not standalone: the base game's bigs carry most of the art, the sound effects
@@ -387,6 +398,13 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 	Bool actuallyAdded = FALSE;
 	FilenameListIter it = filenameList.begin();
 	while (it != filenameList.end()) {
+		if (!dir.isEmpty() && isReforgedArchive(*it)) {
+			// The fork's art lives beside the exe only.  One in the base game's folder would come in after
+			// init's ordered pass and outrank it under Reforged while Classic ranked it by name.
+			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s is not beside the exe, left out.\n", (*it).str()));
+			it++;
+			continue;
+		}
 		if (theClassicGraphics && isReforgedArchive(*it)) {
 			// Out of the tree, so Classic draws retail. One that holds models stays open for the INI CRC
 			// alone: their bones are in the logic, and Classic has to match Reforged on them.

@@ -23383,3 +23383,21 @@ TEST(file_write_queue_writes_what_the_file_calls_wrote)
 	std::filesystem::remove( direct );
 	CHECK( ca == cb );
 }
+
+/* The Reforged archives go into the tree each over the ones before it, base art first, then the
+	 model batches by name, case ignored.  A rebuilt bridge's texture in ReforgedNeutral.big has to beat
+	 the 2x upscale ReforgedTextures.big holds under the same name, which plain name order lost. */
+TEST(reforged_archives_mount_base_art_first_then_batches_by_name)
+{
+	const char *const names[] = { "ReforgedUSA.big", "reforgedterrain.big", "ReforgedNeutral.big", "ReforgedTextures.big",
+		"ReforgedChina.big", "ReforgedNormals.big", "ReforgedGLA.big", "ReforgedUI.big" };
+	const char *const mounted[] = { "ReforgedTextures.big", "ReforgedNormals.big", "reforgedterrain.big", "ReforgedChina.big",
+		"ReforgedGLA.big", "ReforgedNeutral.big", "ReforgedUI.big", "ReforgedUSA.big" };
+	std::vector<AsciiString> order( names, names + 8 );
+	std::sort( order.begin(), order.end(), ArchiveFileSystem::reforgedMountsBefore );
+	for( Int i = 0; i < 8; ++i )
+		CHECK_STR( order[i].str(), mounted[i] );
+	// the folder does not move an archive's place, only its name does
+	CHECK( ArchiveFileSystem::reforgedMountsBefore( AsciiString( "C:\\Run\\ReforgedTerrain.big" ), AsciiString( "ReforgedChina.big" ) ) );
+	CHECK( !ArchiveFileSystem::reforgedMountsBefore( AsciiString( "ReforgedUSA.big" ), AsciiString( "C:\\Run\\ReforgedGLA.big" ) ) );
+}

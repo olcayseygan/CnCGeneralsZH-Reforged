@@ -135,13 +135,49 @@ void ArchiveFileSystem::getUnmountedArtFileList(const AsciiString& directory, co
 	}
 }
 
-// The last one in name order, as the mount would have kept it: the fork's art archives overwrite.
+static const char *archiveBaseName(const AsciiString &path)
+{
+	const char *name = path.str();
+	for (const char *c = name; *c; ++c) {
+		if (*c == '\\' || *c == '/') {
+			name = c + 1;
+		}
+	}
+	return name;
+}
+
+static Int reforgedMountRank(const AsciiString &path)
+{
+	static const char *const baseArt[] = { "ReforgedTextures.big", "ReforgedNormals.big", "ReforgedTerrain.big" };
+	const char *name = archiveBaseName(path);
+	for (Int i = 0; i < (Int)(sizeof(baseArt) / sizeof(baseArt[0])); ++i) {
+		if (strcasecmp(name, baseArt[i]) == 0) {
+			return i;
+		}
+	}
+	return (Int)(sizeof(baseArt) / sizeof(baseArt[0]));
+}
+
+Bool ArchiveFileSystem::reforgedMountsBefore(const AsciiString& a, const AsciiString& b)
+{
+	const Int ra = reforgedMountRank(a), rb = reforgedMountRank(b);
+	if (ra != rb) {
+		return ra < rb;
+	}
+	const Int byName = strcasecmp(archiveBaseName(a), archiveBaseName(b));
+	if (byName != 0) {
+		return byName < 0;
+	}
+	return strcmp(a.str(), b.str()) < 0;	// the same name in two folders: still one fixed order
+}
+
+// The one the mount would have kept: the last holder in reforgedMountsBefore order.
 AsciiString ArchiveFileSystem::getUnmountedArtFilenameForFile(const AsciiString& filename) const
 {
 	AsciiString found;
 	FileInfo info;
 	for (ArchiveFileMap::const_iterator it = m_unmountedArt.begin(); it != m_unmountedArt.end(); ++it) {
-		if (it->second->getFileInfo(filename, &info)) {
+		if ((found.isEmpty() || reforgedMountsBefore(found, it->first)) && it->second->getFileInfo(filename, &info)) {
 			found = it->first;
 		}
 	}

@@ -2,6 +2,7 @@
 """Pack a staged tree of rebuilt art into one of the fork's art archives.
 
     python artpack.py <staged Art folder> [<staged Data folder>] <Run\\Reforged<Name>.big> [--base <base game folder>]
+                      [--override-base <folder, list file or comma list>]
     python artpack.py selfcheck
 
 The staged Art folder holds W3D\\ and Textures\\ the way Run\\Art does; every file goes into the
@@ -24,6 +25,13 @@ Refused outright: a staged name another Reforged*.big beside the output already 
 archive would win silently) and one a loose file under Run\\Art shadows (the archive would never be
 read). The retail archives are read from the output's folder (Patch*.big first, then the rest in
 name order) and from the base game folder, ZH_Generals beside it by default.
+
+The one exception is the base art, ReforgedTextures, ReforgedNormals and ReforgedTerrain: the game
+mounts those first and every batch over them (ArchiveFileSystem::reforgedMountsBefore), so a batch
+may replace a name they hold when it says so. --override-base names those paths: a folder (each file
+by its path from the Art or Data folder above it, so the staged Art\\Textures folder itself will do),
+a text file with one path a line, or paths separated by commas. A clash with the base art that is not
+named is still refused, and every name overridden is printed.
 """
 
 import os
@@ -115,11 +123,40 @@ def shadowed(members, retail):
     return sorted((path, other) for path in members for other in lang.get(path, []) if other not in members)
 
 
-def pack(staged, output, base):
+BASE_ART = ("reforgedtextures.big", "reforgednormals.big", "reforgedterrain.big")
+
+
+def override_paths(spec):
+    """The archive paths --override-base names, lower case: a folder's files by their path from the
+    Art or Data folder above them, a list file's lines, or a comma list."""
+    if os.path.isdir(spec):
+        parts = os.path.normpath(os.path.abspath(spec)).split(os.sep)
+        tops = [i for i, p in enumerate(parts) if p.lower() in ("art", "data")]
+        if not tops:
+            sys.exit("%s: no Art or Data folder above it to name its files from" % spec)
+        top = tops[-1]
+        if top >= 2 and parts[top].lower() == "art" and parts[top - 2].lower() == "data":
+            top -= 2                                       # Data\<Language>\Art\...
+        if top < 2:
+            sys.exit("%s: its Art or Data folder sits at the top of the drive; stage it one folder down" % spec)
+        root = os.sep.join(parts[:top])
+        return {os.path.relpath(os.path.join(folder, f), root).replace(os.sep, SEP).lower()
+                for folder, _dirs, files in os.walk(spec) for f in files}
+    items = open(spec).read().splitlines() if os.path.isfile(spec) else spec.split(",")
+    return {i.strip().replace("/", SEP).lower() for i in items if i.strip()}
+
+
+def base_clashes(members, held, allowed):
+    """(overridden, refused) of the staged paths a base art archive holds, split by --override-base."""
+    clash = sorted(set(held) & set(members))
+    return [p for p in clash if p in allowed], [p for p in clash if p not in allowed]
+
+
+def pack(staged, output, base, allowed=frozenset()):
     run = os.path.dirname(os.path.abspath(output))
     name = os.path.basename(output)
-    if not name.lower().startswith("reforged") or name.lower().startswith("reforgednormals"):
-        sys.exit("%s: the archive's name has to start with Reforged (and not ReforgedNormals)" % name)
+    if not name.lower().startswith("reforged") or name.lower() in BASE_ART:
+        sys.exit("%s: the archive's name has to start with Reforged (and not name the base art, %s)" % (name, ", ".join(BASE_ART)))
 
     members, spelled = {}, {}
     for root in staged:
@@ -147,9 +184,15 @@ def pack(staged, output, base):
         for path, where in index_of(os.path.join(base, n)).items():
             retail.setdefault(path, where)
 
-    clashes = []
+    clashes, overridden = [], []
     for n in bigs(run):
-        if n.lower().startswith("reforged") and n.lower() != name.lower() and not n.lower().startswith("reforgednormals"):
+        if not n.lower().startswith("reforged") or n.lower() == name.lower():
+            continue
+        if n.lower() in BASE_ART:
+            over, refused_here = base_clashes(members, index_of(os.path.join(run, n)), allowed)
+            overridden += ["%s (over %s)" % (p, n) for p in over]
+            clashes += ["%s (in %s; name it in --override-base to replace it)" % (p, n) for p in refused_here]
+        else:
             clashes += ["%s (in %s)" % (p, n) for p in sorted(set(index_of(os.path.join(run, n))) & set(members))]
     clashes += ["%s (loose in Run)" % p for p in sorted(members) if os.path.exists(os.path.join(run, p.replace(SEP, os.sep)))]
     clashes += ["%s (%s is read first: stage it at that path)" % (p, o) for p, o in shadowed(members, retail)]
@@ -174,6 +217,8 @@ def pack(staged, output, base):
         w3d, replaced - len(refused), w3d - replaced + len(refused), len(kept) - w3d))
     for path in sorted(refused):
         print("left out %s: %s" % (path, "; ".join(refused[path])))
+    for line in overridden:
+        print("overrides %s" % line)
 
 
 def selfcheck():
@@ -205,6 +250,22 @@ def selfcheck():
     assert shadowed({"art\\w3d\\uitrst_sknp.w3d": ""}, retail_paths) == [("art\\w3d\\uitrst_sknp.w3d", english)]
     assert shadowed({"art\\w3d\\uitrst_sknp.w3d": "", english: ""}, retail_paths) == []
     assert shadowed({english: "", "art\\w3d\\uirtoxf_skn.w3d": ""}, retail_paths) == []
+
+    bridge, wall = "art\\textures\\cbbridge.dds", "art\\textures\\cbwall.dds"
+    held = {bridge: None, wall: None, "art\\textures\\other.dds": None}
+    assert base_clashes({bridge: "", wall: ""}, held, set()) == ([], [bridge, wall])
+    assert base_clashes({bridge: "", wall: ""}, held, {bridge}) == ([bridge], [wall])
+    assert override_paths("Art/Textures/CBBridge.dds, art\\textures\\cbwall.dds") == {bridge, wall}
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = os.path.join(tmp, "stage", "Art", "Textures")
+        os.makedirs(folder)
+        open(os.path.join(folder, "CBBridge.dds"), "wb").close()
+        assert override_paths(folder) == {bridge}
+        lang = os.path.join(tmp, "stage", "Data", "English", "Art", "Textures")
+        os.makedirs(lang)
+        open(os.path.join(lang, "CBBridge.dds"), "wb").close()
+        assert override_paths(lang) == {"data\\english\\" + bridge}
     print("artpack selfcheck OK")
 
 
@@ -218,11 +279,16 @@ def main(argv):
         i = args.index("--base")
         base = args[i + 1]
         del args[i:i + 2]
+    allowed = frozenset()
+    if "--override-base" in args:
+        i = args.index("--override-base")
+        allowed = frozenset(override_paths(args[i + 1]))
+        del args[i:i + 2]
     if len(args) not in (2, 3):
         print(__doc__.strip())
         return 2
     staged, output = args[:-1], args[-1]
-    pack(staged, output, base or os.path.join(os.path.dirname(os.path.abspath(output)), "ZH_Generals"))
+    pack(staged, output, base or os.path.join(os.path.dirname(os.path.abspath(output)), "ZH_Generals"), allowed)
     return 0
 
 

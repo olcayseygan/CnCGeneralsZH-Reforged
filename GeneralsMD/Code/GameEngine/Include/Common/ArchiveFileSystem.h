@@ -185,6 +185,12 @@ class ArchiveFileSystem : public SubsystemInterface
 	AsciiString		getUnmountedArtFilenameForFile(const AsciiString& filename) const;	///< the archive's name, empty when none holds it
 	File*					openUnmountedArtFile(const AsciiString& filename);
 
+	/// The order the fork's Reforged*.big go into the tree, each over the ones before it: the base art
+	/// (ReforgedTextures, ReforgedNormals, ReforgedTerrain, in that order) first, then every other one
+	/// in name order, case ignored.  The Classic lookup above takes the same order, so a model resolves
+	/// to the same archive under both looks.
+	static Bool		reforgedMountsBefore(const AsciiString& a, const AsciiString& b);
+
 protected:
 	virtual void					loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite = FALSE );	///< load the archive file's header information and apply it to the global archive directory tree.
 	void									prioritizeLargerFiles(const AsciiString& directory, const char *inferiorArchive, const char *superiorArchive);	///< where two archives claim the same file in this directory, keep the bigger copy.

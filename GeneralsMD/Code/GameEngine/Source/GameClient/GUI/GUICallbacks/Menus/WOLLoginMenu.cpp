@@ -132,10 +132,11 @@ static AsciiString obfuscate( AsciiString in )
 	{
 		if (!*c2)
 			c2 = xorKey;
+		// EA wrote `*c = *c++ ^ *c2++`, unsequenced: VC6 stored to the old c, VS2022 x64 to the new one,
+		// which overwrote the terminator and ran on through the heap until the login screen crashed.
 		if (*c != *c2)
-			*c = *c++ ^ *c2++;
-		else
-			c++, c2++;
+			*c ^= *c2;
+		c++, c2++;
 	}
 	AsciiString out = buf;
 	delete[] buf;		// NEW char[] above; `delete buf` was a mismatch both CRTs tolerated

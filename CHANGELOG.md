@@ -982,6 +982,7 @@ found and fixed, EA's own, not port damage.**
 - A desync now writes a per-object report on both machines for comparison.
 - LAN refuses to start between two machines whose game files differ.
 - A player whose name holds a comma, a colon or a control character is turned away at the door instead of scrambling the lobby's idea of who is in the room.
+- Opening the online login screen no longer crashes the game when it remembers a password. EA's line that unscrambles a saved password left it to the compiler which letter to change, and today's compiler picked the next one, wrote past the end and kept going through memory until something fell over; a GameSpy login saved by the 2003 game was enough.
 - A Quick Match can no longer crash your game as it starts. A server that sent colour 999, or an army number past the end of the list, took the game down on the loading screen; now that seat reads as Random.
 - The scripting socket our test tools drive the game through is no cheat online. In an online match it refuses to spawn units or count the enemy's army through the fog, and a web page open in your browser cannot reach it at all.
 - An open seat can be taken. The map's number of starting positions used to overrule the host: a four position map turned away the fifth player even with a seat left open for him, and that seat stayed open on everyone's screen.

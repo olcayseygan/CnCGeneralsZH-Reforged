@@ -424,6 +424,7 @@ Int W3DBridge::getModelVertices(VertexFormatXYZNDUV1 *destination_vb, Int curVer
 
 	// If we happen to have too many bridges, stop.
 	if (curVertex+numVertex+2>= W3DBridgeBuffer::MAX_BRIDGE_VERTEX) {
+		DEBUG_LOG(("BRIDGEBUDGET full at %d vertices, a piece of %d not drawn\n", curVertex, numVertex));
 		return(0);
 	}
 
@@ -648,6 +649,7 @@ Int W3DBridge::getModelIndices(UnsignedShort *destination_ib, Int curIndex, Int 
 	Int numPoly = pMesh->Peek_Model()->Get_Polygon_Count();
 	const TriIndex *pPoly =pMesh->Peek_Model()->Get_Polygon_Array();
 	if (curIndex+3*numPoly+6 >= W3DBridgeBuffer::MAX_BRIDGE_INDEX) {
+		DEBUG_LOG(("BRIDGEBUDGET full at %d indices, a piece of %d not drawn\n", curIndex, 3*numPoly));
 		return(0);
 	}
 	UnsignedShort *curIb = destination_ib+curIndex;
@@ -698,6 +700,11 @@ void W3DBridgeBuffer::loadBridgesInVertexAndIndexBuffers(RefRenderObjListIterato
 	}
 	m_curNumBridgeVertices = 0;
 	m_curNumBridgeIndices = 0;
+	// Most maps have no bridge, so the count stays at zero and updateCenter asks for a fill on every
+	// camera move; on Direct3D 11 a whole-buffer lock copies all 1.3MB twice, however little is written.
+	if (m_numBridges == 0) {
+		return;
+	}
 	VertexFormatXYZNDUV1 *vb;
 	UnsignedShort *ib;
 	// Lock the buffers.

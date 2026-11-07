@@ -169,7 +169,11 @@ public:
 	void loadBridges(W3DTerrainLogic *pTerrainLogic, Bool saveGame); ///< Loads the bridges from the map objects list.
 	void worldBuilderUpdateBridgeTowers( W3DAssetManager *assetManager, SimpleSceneClass *scene );			///< for the editor and showing visual bridge towers
 	void updateCenter(CameraClass *camera, RefRenderObjListIterator *pLightsIterator);
-	enum { MAX_BRIDGE_VERTEX=12000, //make sure it stays under 65535
+	// Every bridge on the map goes into these, and a piece that does not fit is not drawn (a
+	// BRIDGEBUDGET line says so).  EA's 12000 was already short on MD_USA02 and its two intros
+	// (13678 and 12432), and the rebuilt bridges want about 28800 there; they run near half a
+	// triangle a vertex, so the indices stay well inside 64000.  The pair is about 1.3MB.
+	enum { MAX_BRIDGE_VERTEX=32000, //make sure it stays under 65535
 					MAX_BRIDGE_INDEX=2*MAX_BRIDGE_VERTEX,	//make sure it stays under 65535 
 					MAX_BRIDGES=200};
 protected:

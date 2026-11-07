@@ -77,15 +77,16 @@ def cstr(raw):
 
 
 def parse(data):
-    """What the logic can read of a model: its hierarchy (name, pivots in file order as name, parent
-    index, translation bytes, rotation bytes), the HLOD's name, skeleton and sub-objects (short name ->
-    bone index), and its animation chunks whole."""
-    w3d = {"hierarchy": None, "pivots": [], "hlod": None, "subs": {}, "anims": []}
+    """What the logic can read of a model: its hierarchy (name, header version and pivot count, pivots
+    in file order as name, parent index, translation bytes, rotation bytes), the HLOD's name, skeleton
+    and sub-objects (full name, bone index, in file order), and its animation chunks whole."""
+    w3d = {"hierarchy": None, "header": None, "pivots": [], "hlod": None, "subs": [], "anims": []}
     for kind, a, b in chunks(data, 0, len(data)):
         if kind == W3D_HIERARCHY:
             for kind2, a2, b2 in chunks(data, a, b):
                 if kind2 == W3D_HIERARCHY_HEADER:
                     w3d["hierarchy"] = cstr(data[a2 + 4:a2 + 20])
+                    w3d["header"] = struct.unpack_from("<I", data, a2)[0], struct.unpack_from("<I", data, a2 + 20)[0]
                 elif kind2 == W3D_PIVOTS:
                     for at in range(a2, b2 - PIVOT_SIZE + 1, PIVOT_SIZE):
                         w3d["pivots"].append((cstr(data[at:at + 16]), struct.unpack_from("<i", data, at + 16)[0],
@@ -99,7 +100,7 @@ def parse(data):
                     for kind3, a3, b3 in chunks(data, a2, b2):
                         if kind3 == W3D_HLOD_SUB_OBJECT:
                             bone, = struct.unpack_from("<I", data, a3)
-                            w3d["subs"].setdefault(cstr(data[a3 + 4:a3 + 36]).split(".")[-1], bone)
+                            w3d["subs"].append((cstr(data[a3 + 4:a3 + 36]), bone))
         elif kind in W3D_ANIMATIONS:
             w3d["anims"].append((kind, data[a:b]))
     return w3d
@@ -148,6 +149,21 @@ def same_turn(new, old):
     return new == old or struct.pack("<4f", *[-x for x in struct.unpack("<4f", new)]) == old
 
 
+def sub_object(subs, name):
+    """The bone index of the sub-object RenderObjClass::Get_Sub_Object_By_Name finds for a name: a
+    whole name first, then the part after the first '.', each in order; None when none."""
+    for full, bone in subs:
+        if full == name:
+            return bone
+    for full, bone in subs:
+        if full.partition(".")[2 if "." in full else 0] == name:
+            return bone
+    return None
+
+
+W3D_VERSION_3 = 3 << 16                                    # W3D_MAKE_VERSION(3,0): older ones gain a root
+
+
 def lookup_name(name, lookups):
     """The logic can ask for this name: an INI or the code names it, alone or as a numbered run."""
     return name in lookups or (re.fullmatch(r".*\d\d", name) is not None and name[:-2] in lookups)
@@ -169,6 +185,11 @@ def model_problems(new, old, stem, lookups=frozenset()):
         problems.append("skeleton %s is not retail's %s" % (n["hlod"][1] if n["hlod"] else "missing", o["hlod"][1]))
     elif o["hlod"] is None and n["hlod"] is not None and n["hlod"][1] != (n["hierarchy"] or "") and n["hlod"][1] != stem:
         problems.append("points at skeleton %s, which a bare mesh did not have" % n["hlod"][1])
+
+    # HTreeClass::Load_W3D reads as many pivots as the header says, and before 3.0 puts a root in front
+    # of them, which moves every bone by one
+    if n["header"] is not None and (n["header"][0] < W3D_VERSION_3 or n["header"][1] != len(n["pivots"])):
+        problems.append("hierarchy header version %#x with %d pivots for %d" % (n["header"][0], n["header"][1], len(n["pivots"])))
 
     po, pn = o["pivots"], n["pivots"]
     names = [p[0] for p in pn]
@@ -193,11 +214,14 @@ def model_problems(new, old, stem, lookups=frozenset()):
     if odd:
         problems.append("adds bone %s" % ", ".join(odd))
 
-    def bound(w3d, piv):
-        return {s: (piv[i][0] if i < len(piv) else i) for s, i in w3d["subs"].items()}
-    so, sn = bound(o, po), bound(n, pn)
-    changed = sorted(s for s in set(so) | set(sn)
-                     if s not in old_names and lookup_name(s, lookups) and so.get(s) != sn.get(s))
+    # A name falls through to the sub-objects when no pivot past the first answers it (pivot 0 never
+    # does), so a retail pivot from the second on shields its name and nothing else does.
+    def bone_of(w3d, piv, name):
+        i = sub_object(w3d["subs"], name)
+        return None if i is None else piv[i][0] if i < len(piv) else i
+    asked = {part for full, _ in o["subs"] + n["subs"] for part in (full, full.partition(".")[2] or full)}
+    changed = sorted(s for s in asked if s not in old_names[1:] and lookup_name(s, lookups)
+                     and bone_of(o, po, s) != bone_of(n, pn, s))
     if changed:
         problems.append("changes sub-object %s, a name the logic asks for" % ", ".join(changed))
 
@@ -346,7 +370,8 @@ def pack(staged, output, base, allowed=frozenset()):
 
     if not any(n.lower() == "inizh.big" for n in root):
         sys.exit("no INIZH.big beside %s: the bone names the INIs ask for come from it" % output)
-    lookups = ini_lookups([os.path.join(run, n) for n in root],
+    # a user's own map.ini can name a bone too; that is the one source left out
+    lookups = ini_lookups([os.path.join(run, n) for n in root] + [os.path.join(base, n) for n in base_bigs],
                           [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Data", "INI"),
                            os.path.join(run, "Data", "INI")])
     refused = {}
@@ -380,17 +405,19 @@ def selfcheck():
     def chunk(kind, body, sub=False):
         return struct.pack("<II", kind, len(body) | (0x80000000 if sub else 0)) + body
 
-    def model(bones, hierarchy="AVTANK", skeleton="AVTANK", subs=(), anim=None, q=(0, 0, 0, 1)):
+    def model(bones, hierarchy="AVTANK", skeleton="AVTANK", subs=(), anim=None, q=(0, 0, 0, 1), version=0x40001, count=None):
         names = [b[0] for b in bones]
         records = b"".join(name.encode().ljust(16, b"\0") + struct.pack("<i", names.index(parent) if parent else -1)
                            + struct.pack("<3f", *t) + struct.pack("<3f", 0, 0, 0) + struct.pack("<4f", *q)
                            for name, parent, t in bones)
         out = b""
         if hierarchy is not None:
-            out += chunk(W3D_HIERARCHY, chunk(W3D_HIERARCHY_HEADER, struct.pack("<I", 0) + hierarchy.encode().ljust(16, b"\0")
-                                              + struct.pack("<I3f", len(bones), 0, 0, 0)) + chunk(W3D_PIVOTS, records), True)
+            header = struct.pack("<I", version) + hierarchy.encode().ljust(16, b"\0") \
+                + struct.pack("<I3f", len(bones) if count is None else count, 0, 0, 0)
+            out += chunk(W3D_HIERARCHY, chunk(W3D_HIERARCHY_HEADER, header) + chunk(W3D_PIVOTS, records), True)
         if skeleton is not None:
-            entries = b"".join(chunk(W3D_HLOD_SUB_OBJECT, struct.pack("<I", names.index(bone)) + ("AVTANK." + s).encode().ljust(32, b"\0"))
+            entries = b"".join(chunk(W3D_HLOD_SUB_OBJECT, struct.pack("<I", names.index(bone))
+                                     + (s[1:] if s[0] == "=" else s if "." in s else "AVTANK." + s).encode().ljust(32, b"\0"))
                                for s, bone in subs)
             out += chunk(W3D_HLOD, chunk(W3D_HLOD_HEADER, struct.pack("<II", 0, 1) + b"AVTANK".ljust(16, b"\0")
                                          + skeleton.encode().ljust(16, b"\0")) + chunk(0x702, entries, True), True)
@@ -427,6 +454,20 @@ def selfcheck():
         ["adds bone FIREPOINT02"]
     assert check(model(bones + [("MUZZLE", "TURRET", (3, 1, 0))], subs=[("BARREL", "TURRET")], anim=curve + nan)) == \
         ["adds bone MUZZLE"]
+    # the header the engine reads: before 3.0 a root goes in front, and only the counted pivots load
+    assert check(model(bones, subs=[("BARREL", "TURRET")], anim=curve + nan, version=0x20000)) == \
+        ["hierarchy header version 0x20000 with 3 pivots for 3"]
+    assert check(model(bones, subs=[("BARREL", "TURRET")], anim=curve + nan, count=2)) == \
+        ["hierarchy header version 0x40001 with 2 pivots for 3"]
+    # pivot 0 answers no name, so a sub-object under its name is what the logic finds
+    assert check(model(bones, subs=[("BARREL", "TURRET"), ("ROOT", "TURRET")], anim=curve + nan),
+                 model(bones, subs=[("BARREL", "TURRET")], anim=curve + nan)) == []
+    assert model_problems(model(bones, subs=[("BARREL", "TURRET"), ("ROOTTRANSFORM", "TURRET")], anim=curve + nan), retail,
+                          "AVTANK", lookups) == ["changes sub-object ROOTTRANSFORM, a name the logic asks for"]
+    # a whole name beats a suffix, as Get_Sub_Object_By_Name looks
+    assert check(model(bones, subs=[("BARREL", "TURRET"), ("=BARREL", "ROOT")], anim=curve + nan)) == \
+        ["changes sub-object BARREL, a name the logic asks for"]
+    assert check(model(bones, subs=[("BARREL", "TURRET"), ("OTHER.BARREL", "ROOT")], anim=curve + nan)) == []
     # an INI asks for RootTransform: as pivot 0 it answers nothing, anywhere else it would
     assert check(model(bones + [("ROOTTRANSFORM", "ROOT", (0, 0, 0))], subs=[("BARREL", "TURRET")], anim=curve + nan)) == \
         ["adds bone ROOTTRANSFORM"]

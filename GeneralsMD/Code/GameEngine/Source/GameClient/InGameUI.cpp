@@ -5833,7 +5833,14 @@ void InGameUI::createMouseoverHint( const GameMessage *msg )
 			setMouseCursor(Mouse::ARROW);
 		}
 	}
-	else if (m_mouseMode != MOUSEMODE_DEFAULT && m_mouseMode != MOUSEMODE_BUILD_PLACE )
+	else if( m_mouseMode == MOUSEMODE_BUILD_PLACE )
+	{
+		// Over something no order can be given to (a dozer over an enemy power plant) no command
+		// hint comes, only this one, so the pointer kept the build cursor the last spot of open
+		// ground left while the ghost had turned red.  It follows the ghost's legality here as well.
+		setMouseCursor( placementCursor( m_placementLegal ) );
+	}
+	else if (m_mouseMode != MOUSEMODE_DEFAULT)
 	{
 		setMouseCursor((Mouse::MouseCursor)m_mouseModeCursor);
 	}

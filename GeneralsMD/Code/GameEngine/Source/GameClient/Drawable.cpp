@@ -449,16 +449,17 @@ Bool Drawable_structureShowsHealthBar( Bool isBridge, Bool isUnowned, Bool isGar
 	* its bar whatever else it is; without that the owner never saw his drone's health at all. */
 //-------------------------------------------------------------------------------------------------
 /** China's Artillery Barrage flies twelve invisible AIRCRAFT over the target, one per shell, and each
-	* hung a line and a ring in the sky. What marks them is UNATTACKABLE: nothing that can really be
-	* shot down carries it. Shells, missiles, bombs and parachutes are out by kind as well, so a mod
-	* that calls one of them an aircraft does not grow a line on every round. */
+	* hung a line and a ring in the sky. What marks them is UNATTACKABLE and IGNORED_IN_GUI together:
+	* either alone is a real plane, the Turkish Kargu drone carrying the first and every general's power
+	* plane the second. Shells, missiles, bombs and parachutes are out by kind as well, so a mod that
+	* calls one of them an aircraft does not grow a line on every round. */
 //-------------------------------------------------------------------------------------------------
 Bool Drawable_kindWearsAltitudeLine( const KindOfMaskType& kinds )
 {
 	if( !TEST_KINDOFMASK( kinds, KINDOF_AIRCRAFT ) )
 		return FALSE;
 
-	return !( TEST_KINDOFMASK( kinds, KINDOF_UNATTACKABLE ) ||
+	return !( ( TEST_KINDOFMASK( kinds, KINDOF_UNATTACKABLE ) && TEST_KINDOFMASK( kinds, KINDOF_IGNORED_IN_GUI ) ) ||
 						TEST_KINDOFMASK( kinds, KINDOF_PROJECTILE ) ||
 						TEST_KINDOFMASK( kinds, KINDOF_SMALL_MISSILE ) ||
 						TEST_KINDOFMASK( kinds, KINDOF_BALLISTIC_MISSILE ) ||
@@ -3562,6 +3563,12 @@ void Drawable::drawAltitudeLine( void )
 	if( !Drawable_kindWearsAltitudeLine( obj->getTemplate()->getKindOfMask() ) || !obj->isAirborneTarget() )
 		return;
 
+	// An enemy stealth plane cloaking again fades out over a moment on Direct3D 11 and is not hidden
+	// until it is gone. The line and its ring in the owner's colour would hang on at full strength
+	// and give away where it went, so they go the moment it starts to vanish.
+	if( m_stealthLook == STEALTHLOOK_INVISIBLE )
+		return;
+
 	Coord3D top = *obj->getPosition();
 	Coord3D bottom = top;
 	bottom.z = TheTerrainLogic->getLayerHeight( top.x, top.y, obj->getLayer() );
@@ -3602,9 +3609,12 @@ void Drawable::drawAltitudeLine( void )
 
 	//
 	// The line is overlay and the plane is scene, so a line drawn from the plane's pivot ran across its
-	// own fuselage. It starts outside the plane instead: the bounding sphere is put on the screen, and
-	// the stretch of line inside that disc is not drawn. A plane straight over its foot from a steep
-	// camera can have no line left at all, and then only the ring shows.
+	// own fuselage. The pivot sits at the belly, and what lies over the line on the screen is the part
+	// of the hull nearer the camera. So the footprint, a circle the plane's length across at the
+	// pivot's height, is put on the screen and the line starts where it leaves that circle: under the
+	// nose of a plane flying at the camera, right at the belly of one flying across. The rotor is up
+	// in the air and never comes into it, which the bounding sphere used before did, leaving a
+	// Comanche's line hanging a rotor's length under the hull.
 	//
 	Real startX = topScreen.x, startY = topScreen.y;
 	const Real dx = bottomScreen.x - topScreen.x, dy = bottomScreen.y - topScreen.y;
@@ -3613,83 +3623,124 @@ void Drawable::drawAltitudeLine( void )
 	if( topOn && length > 0.0f )
 	{
 		const GeometryInfo &geom = obj->getGeometryInfo();
-		const Real radius = geom.getBoundingSphereRadius();
-		Coord3D center, alongX, alongY;
-		geom.getCenterPosition( top, center );
-		alongX = center;
-		alongX.x += radius;
-		alongY = center;
-		alongY.y += radius;
-		ICoord2D centerScreen, xScreen, yScreen;
-		if( TheTacticalView->worldToScreen( &center, &centerScreen ) &&
-				TheTacticalView->worldToScreen( &alongX, &xScreen ) &&
-				TheTacticalView->worldToScreen( &alongY, &yScreen ) )
+		const Real footprint = MAX( geom.getMajorRadius(), geom.getMinorRadius() ) * 0.85f;
+		Real trim = 0.0f;
+		const Int FOOTPRINT_POINTS = 12;
+		for( Int i = 0; i < FOOTPRINT_POINTS; ++i )
 		{
-			// a horizontal radius projects somewhere between its full length and less, so the two
-			// together never come out smaller than the disc the sphere covers
-			const Real ax = xScreen.x - centerScreen.x, ay = xScreen.y - centerScreen.y;
-			const Real bx = yScreen.x - centerScreen.x, by = yScreen.y - centerScreen.y;
-			const Real cx = centerScreen.x - topScreen.x, cy = centerScreen.y - topScreen.y;
-			const Real trim = sqrtf( ax * ax + ay * ay + bx * bx + by * by ) + sqrtf( cx * cx + cy * cy );
-			lineLength = length - trim;
-			startX = topScreen.x + dx * ( trim / length );
-			startY = topScreen.y + dy * ( trim / length );
+			const Real angle = 2.0f * PI * i / FOOTPRINT_POINTS;
+			Coord3D p = top;
+			p.x += footprint * Cos( angle );
+			p.y += footprint * Sin( angle );
+			ICoord2D s;
+			if( !TheTacticalView->worldToScreen( &p, &s ) )
+				continue;		// at the screen's edge the points still on it stand in for the rest
+			const Real along = ( ( s.x - topScreen.x ) * dx + ( s.y - topScreen.y ) * dy ) / length;
+			trim = MAX( trim, along );
 		}
+		lineLength = length - trim;
+		startX = topScreen.x + dx * ( trim / length );
+		startY = topScreen.y + dy * ( trim / length );
 	}
 
-	// faint where it leaves the plane, firm where it meets the ground: the foot is the answer, the
-	// top is only where the question came from
+	// The owner's colour on the line, the ring and the disc inside it, so whose plane is over this
+	// spot reads from the ground as well as from the sky. Civilians and anything without a colour
+	// borrow the old white.
+	UnsignedByte ownerR = 255, ownerG = 255, ownerB = 255;
+	const Player *owner = obj->getControllingPlayer();
+	if( owner != NULL && owner->getPlayerColor() != 0 )
+	{
+		UnsignedByte a;
+		GameGetColorComponents( clientPlayerColor( owner ), &ownerR, &ownerG, &ownerB, &a );
+	}
+
+	//
+	// One pixel of the owner's colour inside three of near black, so it holds on snow and sand alike.
+	// Faint where it leaves the plane, firm where it meets the ground: the foot is the answer, the
+	// top is only where the question came from.
+	//
 	const Int SEGMENTS = 8;
 	if( lineLength > 2.0f )
 	{
 		const Real sx = ( bottomScreen.x - startX ) / SEGMENTS, sy = ( bottomScreen.y - startY ) / SEGMENTS;
-		for( Int i = 0; i < SEGMENTS; ++i )
+		for( Int pass = 0; pass < 2; ++pass )
 		{
-			const UnsignedByte alpha = (UnsignedByte)( 40 + ( 150 - 40 ) * ( i + 1 ) / SEGMENTS );
-			TheDisplay->drawLine( REAL_TO_INT( startX + sx * i ), REAL_TO_INT( startY + sy * i ),
-														REAL_TO_INT( startX + sx * ( i + 1 ) ), REAL_TO_INT( startY + sy * ( i + 1 ) ),
-														1.0f, GameMakeColor( 255, 255, 255, alpha ) );
+			for( Int i = 0; i < SEGMENTS; ++i )
+			{
+				const Int step = i + 1;
+				const Color color = pass == 0
+					? GameMakeColor( 0, 0, 0, (UnsignedByte)( 20 + ( 120 - 20 ) * step / SEGMENTS ) )
+					: GameMakeColor( ownerR, ownerG, ownerB, (UnsignedByte)( 50 + ( 220 - 50 ) * step / SEGMENTS ) );
+				TheDisplay->drawLine( REAL_TO_INT( startX + sx * i ), REAL_TO_INT( startY + sy * i ),
+															REAL_TO_INT( startX + sx * step ), REAL_TO_INT( startY + sy * step ),
+															pass == 0 ? 3.0f : 1.0f, color );
+			}
 		}
 	}
 
 	//
-	// A ring on the ground at the foot, in the owner's colour, so whose plane is over this spot reads
-	// from the ground as well as from the sky. It lies flat on the terrain, so the camera squashes it
-	// to an ellipse exactly as it does the ground, and a black ring under it keeps it on any terrain.
+	// A ring lying on the ground at the foot. It is flat on the terrain, so the camera squashes it to
+	// an ellipse exactly as it does the ground: a faint disc of the owner's colour, then a two pixel
+	// ring of it inside a dark one a pixel wider on each side.
 	//
 	if( !bottomOn )
 		return;
 
-	Color ringColor = GameMakeColor( 255, 255, 255, 220 );
-	const Player *owner = obj->getControllingPlayer();
-	if( owner != NULL && owner->getPlayerColor() != 0 )
-	{
-		UnsignedByte r, g, b, a;
-		GameGetColorComponents( clientPlayerColor( owner ), &r, &g, &b, &a );
-		ringColor = GameMakeColor( r, g, b, 220 );
-	}
-
 	const Real ringRadius = MAX( 6.0f, MIN( 18.0f, obj->getGeometryInfo().getMajorRadius() * 0.6f ) );
 	const Int RING_POINTS = 20;
 	ICoord2D ring[ RING_POINTS ];
+	Bool ringOn[ RING_POINTS ];
+	Bool allOn = TRUE;
 	for( Int i = 0; i < RING_POINTS; ++i )
 	{
 		const Real angle = 2.0f * PI * i / RING_POINTS;
 		Coord3D p = bottom;
 		p.x += ringRadius * Cos( angle );
 		p.y += ringRadius * Sin( angle );
-		if( !TheTacticalView->worldToScreen( &p, &ring[ i ] ) )
-			return;
+		ringOn[ i ] = TheTacticalView->worldToScreen( &p, &ring[ i ] );
+		allOn = allOn && ringOn[ i ];
 	}
+
+	// the disc, one screen row at a time across the ellipse; it is convex, so each row is one span
+	if( allOn )
+	{
+		Int minY = ring[ 0 ].y, maxY = ring[ 0 ].y;
+		for( Int i = 1; i < RING_POINTS; ++i )
+		{
+			minY = MIN( minY, ring[ i ].y );
+			maxY = MAX( maxY, ring[ i ].y );
+		}
+		const Color discColor = GameMakeColor( ownerR, ownerG, ownerB, 45 );
+		for( Int y = minY; y <= maxY; ++y )
+		{
+			const Real rowY = y + 0.5f;
+			Real left = 1e9f, right = -1e9f;
+			for( Int i = 0; i < RING_POINTS; ++i )
+			{
+				const ICoord2D &a = ring[ i ];
+				const ICoord2D &b = ring[ ( i + 1 ) % RING_POINTS ];
+				if( a.y == b.y || rowY < MIN( a.y, b.y ) || rowY > MAX( a.y, b.y ) )
+					continue;
+				const Real x = a.x + ( rowY - a.y ) * ( b.x - a.x ) / (Real)( b.y - a.y );
+				left = MIN( left, x );
+				right = MAX( right, x );
+			}
+			if( right > left )
+				TheDisplay->drawFillRect( REAL_TO_INT( left ), y, REAL_TO_INT( right - left ), 1, discColor );
+		}
+	}
+
+	// a foot at the screen's edge keeps the part of its ring still on the screen
 	for( Int pass = 0; pass < 2; ++pass )
 	{
-		const Real width = pass == 0 ? 3.0f : 1.0f;
-		const Color color = pass == 0 ? GameMakeColor( 0, 0, 0, 110 ) : ringColor;
+		const Real width = pass == 0 ? 4.0f : 2.0f;
+		const Color color = pass == 0 ? GameMakeColor( 0, 0, 0, 150 ) : GameMakeColor( ownerR, ownerG, ownerB, 230 );
 		for( Int i = 0; i < RING_POINTS; ++i )
 		{
-			const ICoord2D &a = ring[ i ];
-			const ICoord2D &b = ring[ ( i + 1 ) % RING_POINTS ];
-			TheDisplay->drawLine( a.x, a.y, b.x, b.y, width, color );
+			const Int j = ( i + 1 ) % RING_POINTS;
+			if( !ringOn[ i ] || !ringOn[ j ] )
+				continue;
+			TheDisplay->drawLine( ring[ i ].x, ring[ i ].y, ring[ j ].x, ring[ j ].y, width, color );
 		}
 	}
 }
@@ -4984,6 +5035,20 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 
 	Real vetBoxWidth  = image->getImageWidth()*objScale;
 	Real vetBoxHeight = image->getImageHeight()*objScale;
+
+	//
+	// With a bar, the chevrons stand just past its right end, centred on it. EA hung them from the
+	// bar's middle over its right end, which is where the ammo and seat trays now run: an amber
+	// chevron on the last amber round. Beside the bar nothing else is drawn.
+	//
+	if( healthBarRegion )
+	{
+		const Int barHeight = max( 3, (Int)(healthBarRegion->hi.y - healthBarRegion->lo.y) );
+		const Int x = healthBarRegion->hi.x + 2;
+		const Int y = healthBarRegion->lo.y + barHeight / 2 - REAL_TO_INT( vetBoxHeight * 0.5f );
+		TheDisplay->drawImage( image, x, y, x + REAL_TO_INT( vetBoxWidth ), y + REAL_TO_INT( vetBoxHeight ) );
+		return;
+	}
 
 	//
 	// take the center position of the object, go down to it's bottom extent, and project

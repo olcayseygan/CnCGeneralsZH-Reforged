@@ -9760,6 +9760,8 @@ TEST(artillery_barrage_guns_hang_no_altitude_line)
 	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_UNATTACKABLE, KINDOF_IGNORED_IN_GUI ) ) == FALSE );
 	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_SELECTABLE ) ) == TRUE );
 	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_TRANSPORT, KINDOF_IGNORED_IN_GUI ) ) == TRUE );
+	// the Kargu drone is UNATTACKABLE and a real, drawn aircraft
+	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_VEHICLE, KINDOF_AIRCRAFT, KINDOF_UNATTACKABLE ) ) == TRUE );
 	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_PROJECTILE ) ) == FALSE );
 	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_PARACHUTE ) ) == FALSE );
 	CHECK( Drawable_kindWearsAltitudeLine( healthBarKinds( KINDOF_AIRCRAFT, KINDOF_SMALL_MISSILE ) ) == FALSE );

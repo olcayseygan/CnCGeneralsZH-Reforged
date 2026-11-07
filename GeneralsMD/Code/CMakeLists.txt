@@ -2886,6 +2886,10 @@ if(Python3_Interpreter_FOUND)
   endif()
   add_test(NAME bigfile_selfcheck
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/bigfile.py selfcheck)
+  # Tools/artpack.py is the only guard on a rebuilt model batch, which the INI checksum no longer
+  # covers; its selfcheck builds a model that breaks each rule and checks it is refused.
+  add_test(NAME artpack_selfcheck
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/artpack.py selfcheck)
   # Tools/vfx_tune.py rewrites those INIs in place; its selfcheck runs both rule sets over a
   # synthetic one and checks the block parser did not eat an End or duplicate a key.
   add_test(NAME vfx_tune_selfcheck

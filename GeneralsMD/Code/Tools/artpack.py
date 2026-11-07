@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Pack a staged tree of rebuilt art into one of the fork's art archives.
 
-    python artpack.py <staged Art folder> <Run\\Reforged<Name>.big> [--base <base game folder>]
+    python artpack.py <staged Art folder> [<staged Data folder>] <Run\\Reforged<Name>.big> [--base <base game folder>]
     python artpack.py selfcheck
 
-The staged folder holds W3D\\ and Textures\\ the way Run\\Art does; every file goes into the archive
-under Art\\. The archive's name has to start with "Reforged": that is what makes it beat every
+The staged Art folder holds W3D\\ and Textures\\ the way Run\\Art does; every file goes into the
+archive under Art\\. A staged Data folder holds <Language>\\Art\\W3D\\ (or Textures\\) and goes in
+under Data\\: the game opens Data\\<Language>\\Art\\... before Art\\ (GameFileClass::Set_Name), so a
+name a language archive holds there (W3DEnglishZH.big's UITRST_SKNP.W3D) has to ship at that path,
+and an Art\\ copy alone is refused, since the language copy would shadow it.
+The archive's name has to start with "Reforged": that is what makes it beat every
 retail archive (Win32BIGFileSystem::init), what Classic Graphics leaves out, what Tools/vendor.ps1
-fetches and what the launcher ships. One archive per batch, ReforgedUSA.big, ReforgedChina.big.
+fetches and what the launcher ships. One archive per batch, ReforgedUSA.big, ReforgedChina.big, ReforgedGLA.big.
 
 A model goes in only when it keeps every bone of the retail model it replaces: same name, same
 parent, same place, and no new bone that extends a numbered retail run (FIREPOINT03 after
@@ -100,17 +104,33 @@ def read_member(where):
         return f.read(size)
 
 
+def shadowed(members, retail):
+    """Staged Art\\W3D or Art\\Textures paths a language folder's copy (Data\\<Language>\\Art\\...) in
+    retail shadows, with that copy's path, when the staged set does not hold that path too."""
+    lang = {}
+    for path in retail:
+        p = path.split(SEP)
+        if len(p) == 5 and p[0] == "data" and p[2] == "art":
+            lang.setdefault(SEP.join(p[2:]), []).append(path)
+    return sorted((path, other) for path in members for other in lang.get(path, []) if other not in members)
+
+
 def pack(staged, output, base):
     run = os.path.dirname(os.path.abspath(output))
     name = os.path.basename(output)
     if not name.lower().startswith("reforged") or name.lower().startswith("reforgednormals"):
         sys.exit("%s: the archive's name has to start with Reforged (and not ReforgedNormals)" % name)
 
-    members = {}
-    for folder, _dirs, files in os.walk(staged):
-        for f in files:
-            full = os.path.join(folder, f)
-            members[("art" + SEP + os.path.relpath(full, staged).replace(os.sep, SEP)).lower()] = full
+    members, spelled = {}, {}
+    for root in staged:
+        top = os.path.basename(os.path.normpath(root))
+        if top.lower() not in ("art", "data"):
+            sys.exit("%s: a staged folder is named Art or Data, as its files go into the archive under that name" % root)
+        for folder, _dirs, files in os.walk(root):
+            for f in files:
+                full = os.path.join(folder, f)
+                path = top + SEP + os.path.relpath(full, root).replace(os.sep, SEP)
+                members[path.lower()], spelled[path.lower()] = full, path
 
     # retail as the game resolves it: the patch archives overwrite (last in name order wins), the
     # rest of the root keeps its first claim, the base game fills what is left
@@ -132,6 +152,7 @@ def pack(staged, output, base):
         if n.lower().startswith("reforged") and n.lower() != name.lower() and not n.lower().startswith("reforgednormals"):
             clashes += ["%s (in %s)" % (p, n) for p in sorted(set(index_of(os.path.join(run, n))) & set(members))]
     clashes += ["%s (loose in Run)" % p for p in sorted(members) if os.path.exists(os.path.join(run, p.replace(SEP, os.sep)))]
+    clashes += ["%s (%s is read first: stage it at that path)" % (p, o) for p, o in shadowed(members, retail)]
     if clashes:
         sys.exit("refused, these names are already somewhere that wins or loses against this archive:\n  " + "\n  ".join(clashes))
 
@@ -146,7 +167,7 @@ def pack(staged, output, base):
         if problems:
             refused[path] = problems
 
-    kept = [("Art" + SEP + os.path.relpath(full, staged).replace(os.sep, SEP), full) for path, full in members.items() if path not in refused]
+    kept = [(spelled[path], full) for path, full in members.items() if path not in refused]
     bigfile.write_archive(output, kept)
     w3d = sum(p.lower().endswith(".w3d") for p, _ in kept)
     print("%d models (%d replace a retail one, %d new), %d other files" % (
@@ -178,6 +199,12 @@ def selfcheck():
     assert bone_problems(model([("ROOT", None, (0, 0, 0)), ("TURRET", "ROOT", (1, 0, 2)), ("FIREPOINT01", "TURRET", (3, 0, 0)),
                                 ("FIREPOINT02", "TURRET", (3, 1, 0))]), retail) == ["extends a retail run with FIREPOINT02"]
     assert pivots(b"") == {}
+
+    english = "data\\english\\art\\w3d\\uitrst_sknp.w3d"
+    retail_paths = {english: None, "art\\w3d\\uirtoxf_skn.w3d": None}
+    assert shadowed({"art\\w3d\\uitrst_sknp.w3d": ""}, retail_paths) == [("art\\w3d\\uitrst_sknp.w3d", english)]
+    assert shadowed({"art\\w3d\\uitrst_sknp.w3d": "", english: ""}, retail_paths) == []
+    assert shadowed({english: "", "art\\w3d\\uirtoxf_skn.w3d": ""}, retail_paths) == []
     print("artpack selfcheck OK")
 
 
@@ -191,10 +218,10 @@ def main(argv):
         i = args.index("--base")
         base = args[i + 1]
         del args[i:i + 2]
-    if len(args) != 2:
+    if len(args) not in (2, 3):
         print(__doc__.strip())
         return 2
-    staged, output = args
+    staged, output = args[:-1], args[-1]
     pack(staged, output, base or os.path.join(os.path.dirname(os.path.abspath(output)), "ZH_Generals"))
     return 0
 

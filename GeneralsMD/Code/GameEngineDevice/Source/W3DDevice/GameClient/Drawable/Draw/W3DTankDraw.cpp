@@ -49,6 +49,7 @@
 #include "W3DDevice/GameClient/Module/W3DTankDraw.h"
 #include "W3DDevice/GameClient/TankWheelSpin.h"
 #include "WW3D2/matinfo.h"
+#include "WW3D2/hlod.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -98,7 +99,7 @@ W3DTankDraw::W3DTankDraw( Thing *thing, const ModuleData* moduleData )
 	m_treadDebrisLeft = NULL;
 	m_treadDebrisRight = NULL;
 
-	for (Int i=0; i<MAX_TREADS_PER_TANK; i++)
+	for (Int i=0; i<MAX_TREAD_SLOTS; i++)
 		m_treads[i].m_robj = NULL;
 
 	m_treadCount=0;
@@ -175,7 +176,7 @@ void W3DTankDraw::createEmitters( void )
 //-------------------------------------------------------------------------------------------------
 W3DTankDraw::~W3DTankDraw()
 {
-	for (Int i=0; i<MAX_TREADS_PER_TANK; i++)
+	for (Int i=0; i<MAX_TREAD_SLOTS; i++)
 		if (m_treads[i].m_robj)
 			REF_PTR_RELEASE(m_treads[i].m_robj);
 }
@@ -242,8 +243,13 @@ void W3DTankDraw::updateTreadObjects(void)
 
 	//Make sure this object has defined a speed for tread scrolling.
 	if (getW3DTankDrawModuleData() && getW3DTankDrawModuleData()->m_treadAnimationRate && robj)
-	{	
-		for (Int i=0; i < robj->Get_Num_Sub_Objects() && m_treadCount < MAX_TREADS_PER_TANK; i++)
+	{
+		// four belts a level, so a model with levels of detail scrolls the full model's belts as well
+		// as the coarse ones the walk meets first; a model of one level, every retail one, keeps four
+		Int levels = robj->Class_ID() == RenderObjClass::CLASSID_HLOD ? ((HLodClass *)robj)->Get_LOD_Count() : 1;
+		levels = levels < 1 ? 1 : (levels > MAX_TREAD_LODS ? MAX_TREAD_LODS : levels);
+		const Int slots = MAX_TREADS_PER_TANK * levels;
+		for (Int i=0; i < robj->Get_Num_Sub_Objects() && m_treadCount < slots; i++)
 		{
 			RenderObjClass *subObj=robj->Get_Sub_Object(i);
 			const char *meshName;
@@ -254,7 +260,7 @@ void W3DTankDraw::updateTreadObjects(void)
 			{	//check if sub-object has the correct material to do texture scrolling.
 				MaterialInfoClass *mat=subObj->Get_Material_Info();
 				if (mat)
-				{	for (Int j=0; j<mat->Vertex_Material_Count(); j++)
+				{	for (Int j=0; j<mat->Vertex_Material_Count() && m_treadCount < slots; j++)
 					{
 						VertexMaterialClass *vmaterial=mat->Peek_Vertex_Material(j);
 						LinearOffsetTextureMapperClass *mapper=(LinearOffsetTextureMapperClass *)vmaterial->Peek_Mapper();

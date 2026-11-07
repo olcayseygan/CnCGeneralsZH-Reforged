@@ -2488,9 +2488,21 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 			for (size_t i = 0; i < m_curState->m_conditionsYesVec.size(); ++i)
 				airLoco = airLoco || m_curState->m_conditionsYesVec[i].test(MODELCONDITION_JETEXHAUST);
 			const Coord3D* pos = getDrawable()->getPositionForDraw();
-			gear->Set_Hidden(airLoco &&
-				pos->z - TheTerrainRenderObject->getHeightMapHeight(pos->x, pos->y, NULL) > modData->m_landingGearUpHeight);
+			const Bool up = airLoco &&
+				pos->z - TheTerrainRenderObject->getHeightMapHeight(pos->x, pos->y, NULL) > modData->m_landingGearUpHeight;
+			gear->Set_Hidden(up);
 			gear->Release_Ref();
+			// every level's gear on a model with levels of detail, as hideShowSubObject does
+			if (m_renderObject->Class_ID() == RenderObjClass::CLASSID_HLOD && ((HLodClass *)m_renderObject)->Get_LOD_Count() > 1)
+			{
+				for (Int i = 0; i < m_renderObject->Get_Num_Sub_Objects(); ++i)
+				{
+					RenderObjClass* part = m_renderObject->Get_Sub_Object(i);
+					if (HLodClass::Is_Part_Or_LOD_Copy(part->Get_Name(), modData->m_landingGearSubObject.str()))
+						part->Set_Hidden(up);
+					part->Release_Ref();
+				}
+			}
 		}
 	}
 
@@ -2840,6 +2852,41 @@ static void doHideShowBoneSubObjs(Bool state, Int numSubObjects, Int boneIdx, Re
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Hide or show the sub-object a ShowSubObject or HideSubObject line names, with everything on the
+	bones below its own.  The part is the first sub-object of that name, as Get_Sub_Object_By_Name finds
+	it, and on a model of one level, every retail one, that is all.  A model with levels of detail
+	carries the part once a level, and the first copy is the coarsest level's, so every copy takes the
+	order there, or an upgrade's pods would come and go as the camera zooms.  FALSE when nothing has
+	the name. */
+static Bool hideShowSubObject(RenderObjClass *fullObject, const char *name, Bool hide)
+{
+	Int objIndex;
+	RenderObjClass *subObj = fullObject->Get_Sub_Object_By_Name(name, &objIndex);
+	if (subObj == NULL)
+		return FALSE;
+	subObj->Release_Ref();
+
+	const Bool everyLevel = fullObject->Class_ID() == RenderObjClass::CLASSID_HLOD
+		&& ((HLodClass *)fullObject)->Get_LOD_Count() > 1;
+	const Int numSubObjects = fullObject->Get_Num_Sub_Objects();
+	const HTreeClass *htree = fullObject->Get_HTree();
+	for (Int i = everyLevel ? 0 : objIndex; i < (everyLevel ? numSubObjects : objIndex + 1); ++i)
+	{
+		subObj = fullObject->Get_Sub_Object(i);
+		if (i == objIndex || HLodClass::Is_Part_Or_LOD_Copy(subObj->Get_Name(), name))
+		{
+			subObj->Set_Hidden(hide);
+			//get the bone of this subobject so we can hide all other child objects that use this bone
+			//as a parent.
+			if (htree)
+				doHideShowBoneSubObjs(hide, numSubObjects, fullObject->Get_Sub_Object_Bone_Index(0, i), fullObject, htree);
+		}
+		subObj->Release_Ref();
+	}
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void ModelConditionInfo::WeaponBarrelInfo::setMuzzleFlashHidden(RenderObjClass *fullObject, Bool hide) const
 {
 	if (fullObject)
@@ -2888,31 +2935,14 @@ void W3DModelDraw::doHideShowSubObjs(const std::vector<ModelConditionInfo::HideS
 	{
 		for (std::vector<ModelConditionInfo::HideShowSubObjInfo>::const_iterator it = vec->begin(); it != vec->end(); ++it)
 		{
-			Int objIndex;
-			RenderObjClass* subObj;
-
-			if ((subObj = m_renderObject->Get_Sub_Object_By_Name(it->subObjName.str(), &objIndex)) != NULL)
-			{
-				subObj->Set_Hidden(it->hide);
-
-				const HTreeClass *htree = m_renderObject->Get_HTree();
-				if (htree)
-				{	
-					//get the bone of this subobject so we can hide all other child objects that use this bone
-					//as a parent.
-					Int boneIdx = m_renderObject->Get_Sub_Object_Bone_Index(0, objIndex);
-					doHideShowBoneSubObjs(it->hide, m_renderObject->Get_Num_Sub_Objects(), boneIdx, m_renderObject, htree);
-				}
-				subObj->Release_Ref();
-			}
-			else
+			if (!hideShowSubObject(m_renderObject, it->subObjName.str(), it->hide))
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: SubObject %s not found (%s)!\n",it->subObjName.str(),getDrawable()->getTemplate()->getName().str()));
 			}
 		}
 	}
 
-	//Kris (added Aug 2002) 
+	//Kris (added Aug 2002)
 	//This is really important as it allows a person to override modelcondition show/hide objects. Used by the A10 strike
 	//September 2002 -- now used by the UpgradeSubObject system.
 	if( !m_subObjectVec.empty() )
@@ -3397,23 +3427,7 @@ void W3DModelDraw::hideGarrisonFlags(Bool hide)
 	if (!m_renderObject)
 		return;
 
-	Int objIndex;
-	RenderObjClass* subObj;
-
-	if ((subObj = m_renderObject->Get_Sub_Object_By_Name("POLE", &objIndex)) != NULL)
-	{
-		subObj->Set_Hidden(hide);
-
-		const HTreeClass *htree = m_renderObject->Get_HTree();
-		if (htree)
-		{	
-			//get the bone of this subobject so we can hide all other child objects that use this bone
-			//as a parent.
-			Int boneIdx = m_renderObject->Get_Sub_Object_Bone_Index(0, objIndex);
-			doHideShowBoneSubObjs(hide, m_renderObject->Get_Num_Sub_Objects(), boneIdx, m_renderObject, htree);
-		}
-		subObj->Release_Ref();
-	}
+	hideShowSubObject(m_renderObject, "POLE", hide);
 }
 #endif
 
@@ -4808,24 +4822,7 @@ void W3DModelDraw::updateSubObjects()
 	{
 		for (std::vector<ModelConditionInfo::HideShowSubObjInfo>::const_iterator it = m_subObjectVec.begin(); it != m_subObjectVec.end(); ++it)
 		{
-			Int objIndex;
-			RenderObjClass* subObj;
-
-			if ((subObj = m_renderObject->Get_Sub_Object_By_Name(it->subObjName.str(), &objIndex)) != NULL)
-			{
-				subObj->Set_Hidden(it->hide);
-
-				const HTreeClass *htree = m_renderObject->Get_HTree();
-				if (htree)
-				{	
-					//get the bone of this subobject so we can hide all other child objects that use this bone
-					//as a parent.
-					Int boneIdx = m_renderObject->Get_Sub_Object_Bone_Index(0, objIndex);
-					doHideShowBoneSubObjs( it->hide, m_renderObject->Get_Num_Sub_Objects(), boneIdx, m_renderObject, htree);
-				}
-				subObj->Release_Ref();
-			}
-			else
+			if (!hideShowSubObject(m_renderObject, it->subObjName.str(), it->hide))
 			{
 				DEBUG_CRASH(("*** ASSET ERROR: SubObject %s not found (%s)!\n",it->subObjName.str(),getDrawable()->getTemplate()->getName().str()));
 			}

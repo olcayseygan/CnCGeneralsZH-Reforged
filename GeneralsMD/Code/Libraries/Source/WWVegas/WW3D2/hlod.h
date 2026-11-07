@@ -194,6 +194,22 @@ public:
 	virtual int						Calculate_Cost_Value_Arrays(float screen_area, float *values, float *costs) const;
 	virtual RenderObjClass *	Get_Current_LOD(void);
 
+	// Whether a sub-object's name, past its model's prefix, is the named part or that part's copy at
+	// another level: the name followed by _L or -L and one digit, the way the modelers name a level's
+	// own mesh (CHASSIS_L1, AIRNGR-SKN-L2).  One digit, since two are a side's numbering (WHEEL_L01).
+	static bool						Is_Part_Or_LOD_Copy(const char * subobj_name, const char * part)
+	{
+		if (subobj_name == NULL || part == NULL) return false;
+		if (strcasecmp(subobj_name, part) == 0) return true;
+		const char * s = strchr(subobj_name, '.');
+		s = s ? s + 1 : subobj_name;
+		const size_t length = strlen(part);
+		if (strncasecmp(s, part, length) != 0) return false;
+		s += length;
+		if (*s == 0) return true;
+		return (s[0] == '_' || s[0] == '-') && (s[1] == 'L' || s[1] == 'l') && s[2] >= '0' && s[2] <= '9' && s[3] == 0;
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Render Object Interface - Bounding Volumes
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////

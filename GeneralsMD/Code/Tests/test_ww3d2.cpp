@@ -30,6 +30,7 @@
 #include "quat.h"
 #include "render2dsentence.h"
 #include "fullscreenfit.h"
+#include "hlod.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h"
 
@@ -132,6 +133,31 @@ TEST(tank_wheel_angle_stays_small_over_a_long_drive)
 	for (int i = 0; i < 100000; ++i)
 		angle = TankWheelAngle(angle, 0.37f, 0.0f, 10.0f, true, 2.0f);
 	CHECK(angle >= 0.0f && angle < 6.2831853f);
+}
+
+/*=========================================================================
+   HLodClass::Is_Part_Or_LOD_Copy - which sub-objects a ShowSubObject line
+   means on a model with levels of detail
+  =========================================================================*/
+
+TEST(lod_copy_name_takes_the_part_and_its_levels)
+{
+	CHECK(HLodClass::Is_Part_Or_LOD_Copy("AVTOMAHAWK.MISSILE01", "MISSILE01"));
+	CHECK(HLodClass::Is_Part_Or_LOD_Copy("AVTOMAHAWK.MISSILE01_L1", "MISSILE01"));
+	CHECK(HLodClass::Is_Part_Or_LOD_Copy("AIRNGR_SKN.AIRNGR-SKN-L2", "AIRNGR-SKN"));
+	CHECK(HLodClass::Is_Part_Or_LOD_Copy("avtomahawk.missile01_l3", "MISSILE01"));
+	CHECK(HLodClass::Is_Part_Or_LOD_Copy("AVTOMAHAWK.MISSILE01", "AVTOMAHAWK.MISSILE01"));
+}
+
+TEST(lod_copy_name_refuses_other_parts)
+{
+	CHECK(!HLodClass::Is_Part_Or_LOD_Copy("AVLEOPARD.TURRETKIT", "TURRET"));
+	CHECK(!HLodClass::Is_Part_Or_LOD_Copy("AVTOMAHAWK.MISSILE10", "MISSILE01"));
+	CHECK(!HLodClass::Is_Part_Or_LOD_Copy("AVTOMAHAWK.MISSILE01_L", "MISSILE01"));
+	CHECK(!HLodClass::Is_Part_Or_LOD_Copy("AVTOMAHAWK.MISSILE01_X1", "MISSILE01"));
+	/* two digits are a side's numbering: the Crusader's left wheels are not copies of a WHEEL */
+	CHECK(!HLodClass::Is_Part_Or_LOD_Copy("AVLEOPARD.WHEEL_L01", "WHEEL"));
+	CHECK(!HLodClass::Is_Part_Or_LOD_Copy(NULL, "WHEEL"));
 }
 
 /*=========================================================================

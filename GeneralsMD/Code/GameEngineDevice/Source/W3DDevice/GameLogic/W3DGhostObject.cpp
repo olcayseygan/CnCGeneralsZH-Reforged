@@ -243,8 +243,20 @@ void W3DRenderObjectSnapshot::xfer( Xfer *xfer )
 			// read sub object name
 			xfer->xferAsciiString( &subObjectName );
 
-			// find this sub object on the object
-			subObject = m_robj->Get_Sub_Object_By_Name( subObjectName.str() );
+			// find this sub object on the object.  A model with levels of detail carries one part's name
+			// once a level and the search by name finds the first copy every time, so there the one at
+			// the same place is taken when it has the name; otherwise by name, for art changed since
+			// the save, and always by name for a model of one level, every retail one
+			subObject = NULL;
+			if( m_robj->Class_ID() == RenderObjClass::CLASSID_HLOD && ((HLodClass *)m_robj)->Get_LOD_Count() > 1
+					&& i < m_robj->Get_Num_Sub_Objects() )
+			{
+				subObject = m_robj->Get_Sub_Object( i );
+				if( subObject && strcasecmp( subObject->Get_Name(), subObjectName.str() ) != 0 )
+					REF_PTR_RELEASE( subObject );
+			}
+			if( subObject == NULL )
+				subObject = m_robj->Get_Sub_Object_By_Name( subObjectName.str() );
 
 		}  // end else load
 

@@ -958,8 +958,10 @@ private:
 	void drawConstructPercent( const IRegion2D *healthBarRegion );  ///< display % construction complete
 	void drawSupplyCash( const IRegion2D *healthBarRegion );				///< display the cash left in a supply pile
 	void drawCaption( const IRegion2D *healthBarRegion );						///< draw caption
-	void drawAmmo( const IRegion2D *healthBarRegion, Int &trayY );			///< rounds left, a lamp tray under the bar; moves trayY down past it
-	void drawContained( const IRegion2D *healthBarRegion, Int &trayY );	///< seats taken, a lamp tray under the bar; moves trayY down past it
+	void drawTrays( const IRegion2D *healthBarRegion );							///< rounds left and seats taken, lamp trays under the bar
+	Int trayStackBottom( const IRegion2D *healthBarRegion ) const;	///< first free row under the bar and its trays
+	Bool ammoTrayCounts( Int &numTotal, Int &numFull ) const;				///< whether the rounds tray shows, and its counts
+	Bool seatTrayCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const;	///< whether the seat tray shows, and its counts
 	void drawVeterancy( const IRegion2D *healthBarRegion );					///< draw veterency information
 
 	void drawEmoticon( const IRegion2D* healthBarRegion );

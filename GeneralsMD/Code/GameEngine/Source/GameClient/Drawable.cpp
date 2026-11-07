@@ -3652,11 +3652,7 @@ void Drawable::drawIconUI( void )
 #endif
 		drawDisabled( healthBarRegion );
 
-		// the rounds and the seats hang under the health bar, one lamp tray each, rounds on top;
-		// two rows down from the bar leave the selection frame's row and one clear
-		Int trayY = healthBarRegion ? healthBarRegion->lo.y + max( 3, (Int)(healthBarRegion->hi.y - healthBarRegion->lo.y) ) + 2 : 0;
-		drawAmmo( healthBarRegion, trayY );
-		drawContained( healthBarRegion, trayY );
+		drawTrays( healthBarRegion );
 
 		//Moved this to last so that it shows up over contained and ammo icons.
 		drawVeterancy( healthBarRegion ); 
@@ -3792,19 +3788,35 @@ namespace
 	// lamp per round or seat with a one pixel black gap between neighbours. The first litA lamps burn
 	// in toneA, the next litB in toneB, the rest are dark glass. When the bar is too short to give
 	// every lamp two pixels (a far zoom, a big load) the lamps merge into one continuous fill with each
-	// tone's share of it, and a single occupant still keeps a pixel of its own. Returns where the next
-	// tray down starts.
+	// tone's share of it, and a single occupant still keeps a pixel of its own.
 	//
-	Int drawLampTray( const IRegion2D *bar, Int y, Int capacity, Int litA, const LampTone &toneA,
-										Int litB, const LampTone &toneB )
+	Int trayHeight( const IRegion2D *bar )
+	{
+		return max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
+	}
+
+	// the first tray's top: two rows under the bar, the selection frame's row and one clear
+	Int trayStackTop( const IRegion2D *bar )
+	{
+		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
+	}
+
+	// a tray and the two clear rows under it
+	Int traySpan( const IRegion2D *bar )
+	{
+		return trayHeight( bar ) + 2;
+	}
+
+	void drawLampTray( const IRegion2D *bar, Int y, Int capacity, Int litA, const LampTone &toneA,
+										 Int litB, const LampTone &toneB )
 	{
 		const Int x = bar->lo.x;
 		const Int width = bar->hi.x - bar->lo.x;
-		const Int height = max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
+		const Int height = trayHeight( bar );
 		const Int innerWidth = width - 2;
 		const Int innerHeight = height - 2;
 		if( capacity <= 0 || innerWidth <= 0 )
-			return y;
+			return;
 
 		litA = max( 0, min( litA, capacity ) );
 		litB = max( 0, min( litB, capacity - litA ) );
@@ -3833,18 +3845,66 @@ namespace
 			drawLamp( x + 1 + endA, y + 1, endB - endA, innerHeight, toneB );
 			drawLamp( x + 1 + endB, y + 1, innerWidth - endB, innerHeight, dark );
 		}
-
-		return y + height + 2;
 	}
 }
 
-void Drawable::drawAmmo( const IRegion2D *healthBarRegion, Int &trayY )
+// ------------------------------------------------------------------------------------------------
+/** The rounds and the seats hang under the health bar, one lamp tray each, rounds on top. EA only
+	* drew the ammo pips for a selected or moused-over unit, which has a bar; an aircraft that shows
+	* them always may have none, and then nothing is drawn. */
+// ------------------------------------------------------------------------------------------------
+void Drawable::drawTrays( const IRegion2D *healthBarRegion )
 {
-	// the tray hangs under the health bar.  EA only drew the pips for a selected or moused-over unit,
-	// which has a bar; an aircraft that shows them always may have none.
-	if (!healthBarRegion)
+	if( !healthBarRegion )
 		return;
 
+	Int y = trayStackTop( healthBarRegion );
+	Int total, full, infantry;
+
+	// rounds burn the reload bar's amber, so a Comanche's rockets and the wait for the next salvo read
+	// as one family; a spent round is dark glass
+	if( ammoTrayCounts( total, full ) )
+	{
+		const LampTone ROUND = makeLampTone( 255, 190, 40,  255, 232, 150,  176, 118, 16 );
+		drawLampTray( healthBarRegion, y, total, full, ROUND, 0, ROUND );
+		y += traySpan( healthBarRegion );
+	}
+
+	//
+	// Infantry first, then everything else, against the seats there are. EA's pure green and pure
+	// blue are kept as the meaning and toned down to sit with the steel of the HUD: a field green for
+	// soldiers, a steel blue for vehicles and anything else aboard.
+	//
+	if( seatTrayCounts( total, infantry, full ) )
+	{
+		const LampTone INFANTRY = makeLampTone( 120, 196, 64,  196, 240, 140,  66, 118, 34 );
+		const LampTone VEHICLE = makeLampTone( 86, 148, 214,  176, 214, 250,  44, 86, 138 );
+		drawLampTray( healthBarRegion, y, total, infantry, INFANTRY, full - infantry, VEHICLE );
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+/** The first free row under this drawable's bar and whatever trays drawTrays hangs from it, for
+	* anything else that draws under the bar: the capture clock, the enthusiasm icon. */
+// ------------------------------------------------------------------------------------------------
+Int Drawable::trayStackBottom( const IRegion2D *healthBarRegion ) const
+{
+	Int y = trayStackTop( healthBarRegion );
+	const Object *obj = getObject();
+	if( obj == NULL || obj->isEffectivelyDead() || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )
+		return y;		// drawIconUI bails before the trays for these
+
+	Int total, full, infantry;
+	if( ammoTrayCounts( total, full ) )
+		y += traySpan( healthBarRegion );
+	if( seatTrayCounts( total, infantry, full ) )
+		y += traySpan( healthBarRegion );
+	return y;
+}
+
+// ------------------------------------------------------------------------------------------------
+Bool Drawable::ammoTrayCounts( Int &numTotal, Int &numFull ) const
+{
 	const Object *obj = getObject();
 
 	//
@@ -3859,41 +3919,27 @@ void Drawable::drawAmmo( const IRegion2D *healthBarRegion, Int &trayY )
 				(alwaysShow || isSelected() || (TheInGameUI && (TheInGameUI->getMousedOverDrawableID() == getID()))) &&
 				obj->getControllingPlayer() == ThePlayerList->getLocalPlayer()
 			))
-		return;
+		return FALSE;
 
-	Int numTotal;
-	Int numFull;
-	if (!obj->getAmmoPipShowingInfo(numTotal, numFull))
-		return;
-
-	// rounds burn the reload bar's amber, so a Comanche's rockets and the wait for the next salvo read
-	// as one family; a spent round is dark glass
-	const LampTone ROUND = makeLampTone( 255, 190, 40,  255, 232, 150,  176, 118, 16 );
-	trayY = drawLampTray( healthBarRegion, trayY, numTotal, numFull, ROUND, 0, ROUND );
+	return obj->getAmmoPipShowingInfo(numTotal, numFull) && numTotal > 0;
 }
 
 // ------------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------------------------
-void Drawable::drawContained( const IRegion2D *healthBarRegion, Int &trayY )
+Bool Drawable::seatTrayCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const
 {
-	// the tray hangs under the health bar, and this is the only thing that reads it -
-	// an object with no health region (off screen, or ignored in the GUI) would deref a NULL below
-	if (!healthBarRegion)
-		return;
-
-	const Object *obj = getObject();			
+	const Object *obj = getObject();
 
 	ContainModuleInterface* container = obj->getContain();
 	if (!container)
-		return;
+		return FALSE;
 
 	// a building being put up cannot hold anyone yet, so its (empty) pips are just noise
 	if (obj->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ))
-		return;
+		return FALSE;
 
 	// container pips are always on for own objects (was: only when selected or moused over)
 	if (!TheGlobalData->m_showObjectHealth)
-		return;
+		return FALSE;
 
 	//
 	// ...and a building you can garrison shows them whoever holds it. How many are occupied is the
@@ -3903,7 +3949,7 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion, Int &trayY )
 	//
 	if (obj->getControllingPlayer() != ThePlayerList->getLocalPlayer() &&
 			!(obj->isKindOf( KINDOF_STRUCTURE ) && container->isGarrisonable()))
-		return;
+		return FALSE;
 
 	//
 	// a unit nobody can select carries a load nobody can unload: the plane a Supply Drop Zone or a
@@ -3912,24 +3958,22 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion, Int &trayY )
 	// exempt, since a civilian house holds a garrison without being selectable.
 	//
 	if (!obj->isKindOf( KINDOF_STRUCTURE ) && !obj->isKindOf( KINDOF_SELECTABLE ))
-		return;
+		return FALSE;
 
-	Int numTotal;
-	Int numFull;
-	if (!container->getContainerPipsToShow(numTotal, numFull))
-		return;
+	if (!container->getContainerPipsToShow(numTotal, numFull) || numTotal <= 0)
+		return FALSE;
 
 	// empty containers still show their (empty) pips, unless the player switched that off for
 	// buildings: a Barracks wears ten empty boxes for the whole match otherwise
 	if (numFull == 0 && !TheGlobalData->m_showEmptyBuildingPips && obj->isKindOf( KINDOF_STRUCTURE ))
-		return;
+		return FALSE;
 
 	// an empty garrisonable building draws nothing at all: a city with an empty tray over every house
 	// is clutter. Once someone is in, the tray counts them against every window it has.
 	if (numFull == 0 && obj->isKindOf( KINDOF_STRUCTURE ) && container->isGarrisonable())
-		return;
+		return FALSE;
 
-	Int numInfantry = 0;
+	numInfantry = 0;
 	const ContainedItemsList* contained = container->getContainedItemsList();
 	if (contained)
 	{
@@ -3939,16 +3983,8 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion, Int &trayY )
 				++numInfantry;
 		}
 	}
-
-	//
-	// Infantry first, then everything else, against the seats there are. EA's pure green and pure
-	// blue are kept as the meaning and toned down to sit with the steel of the HUD: a field green for
-	// soldiers, a steel blue for vehicles and anything else aboard.
-	//
-	const Int infantry = min( numInfantry, numFull );
-	const LampTone INFANTRY = makeLampTone( 120, 196, 64,  196, 240, 140,  66, 118, 34 );
-	const LampTone VEHICLE = makeLampTone( 86, 148, 214,  176, 214, 250,  44, 86, 138 );
-	trayY = drawLampTray( healthBarRegion, trayY, numTotal, infantry, INFANTRY, numFull - infantry, VEHICLE );
+	numInfantry = min( numInfantry, numFull );
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4325,7 +4361,8 @@ void Drawable::drawEnthusiastic(const IRegion2D* healthBarRegion)
 			// given our scaled width and height we need to find the bottom left point to draw the image at
 			ICoord2D screen;
 			screen.x = REAL_TO_INT( healthBarRegion->lo.x + (barWidth * 0.25f) - (frameWidth * 0.5f) );
-			screen.y = healthBarRegion->hi.y + (frameHeight * 0.25);
+			screen.y = REAL_TO_INT( healthBarRegion->hi.y + (frameHeight * 0.25) );
+			screen.y = max( (Int)screen.y, trayStackBottom( healthBarRegion ) );	// under a Troop Crawler's seats, not over them
 			getIconInfo()->m_icon[ iconIndex ]->draw( screen.x, screen.y, frameWidth, frameHeight );
 							
 		}	
@@ -4903,7 +4940,9 @@ void Drawable::drawCaptureProgress( void )
 
 	const Real barWidth = healthBarRegion.hi.x - healthBarRegion.lo.x;
 	const Real barHeight = max( 3, healthBarRegion.hi.y - healthBarRegion.lo.y );
-	const Real barTop = healthBarRegion.hi.y + 2;		// clear of the health bar, and of its outline
+	// clear of the health bar and its outline, and of the ammo and seat trays under it: a Bunker or a
+	// garrisoned house being taken wears both
+	const Real barTop = max( (Int)healthBarRegion.hi.y + 2, targetDraw->trayStackBottom( &healthBarRegion ) );
 
 	Color fillColor = GameMakeColor( 255, 255, 255, 255 );
 	const Player *owner = obj->getControllingPlayer();

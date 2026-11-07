@@ -179,7 +179,8 @@ function Install-Mbedtls {
   Step "mbedTLS 3.6.7 -> Libraries\Source\mbedtls"
 }
 
-# --- The fork's own upscaled art: every 3D texture at twice its size, and the ground. Not in git -
+# --- The fork's own upscaled art: every 3D texture at twice its size, and the ground, and the
+# rebuilt models, one Reforged<Side>.big per side that Tools\artpack.py packs. Not in git -
 # ReforgedTextures.big alone is a gigabyte, ten times
 # what GitHub takes in a file, and LFS in a fork is billed to the parent repository.
 #

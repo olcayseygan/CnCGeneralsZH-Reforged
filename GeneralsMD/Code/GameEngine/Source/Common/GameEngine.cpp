@@ -312,7 +312,10 @@ static Bool isSameFile( const FileInfo &left, const FileInfo &right )
 /** Every model's bones place fire points, turret pivots and dock positions in logic, so a model
 	* that differs between two machines splits their match.  Each model's bytes go into the checksum
 	* as it resolved: a loose model beats every archive, and a later patch archive beats an earlier
-	* one.  Reading all of them is about 375 MB, so what a model hashed to is kept in the user folder
+	* one.  A model in the fork's art archives counts under Classic Graphics too, which draws retail's
+	* copy, so the two looks keep one checksum; Tools/artpack.py only packs a model that keeps every
+	* retail bone where retail has it, so the logic is the same under both.
+	* Reading all of them is about 375 MB, so what a model hashed to is kept in the user folder
 	* against the size and write time of the file it came from, and read again only when that file
 	* changes. */
 //-------------------------------------------------------------------------------------------------
@@ -320,6 +323,8 @@ static void checksumModels( XferCRC &xferCRC )
 {
 	FilenameList models;
 	TheFileSystem->getFileListInDirectory( AsciiString( "Art\\W3D\\" ), AsciiString( "*.w3d" ), models, TRUE );
+	// Classic Graphics leaves the fork's art archives unmounted; their models count as if it had not
+	TheArchiveFileSystem->getUnmountedArtFileList( AsciiString( "Art\\W3D\\" ), AsciiString( "*.w3d" ), models );
 
 	const ModelChecksumMap cache = readModelChecksumCache();
 	ModelChecksumMap current;
@@ -330,8 +335,10 @@ static void checksumModels( XferCRC &xferCRC )
 		AsciiString model = *it;
 		model.toLower();
 
-		AsciiString source = TheLocalFileSystem->doesFileExist( model.str() )
-			? model : TheArchiveFileSystem->getArchiveFilenameForFile( model );
+		const Bool loose = TheLocalFileSystem->doesFileExist( model.str() );
+		const AsciiString unmountedArt = loose ? AsciiString::TheEmptyString : TheArchiveFileSystem->getUnmountedArtFilenameForFile( model );
+		AsciiString source = loose ? model
+			: !unmountedArt.isEmpty() ? unmountedArt : TheArchiveFileSystem->getArchiveFilenameForFile( model );
 
 		ModelChecksum entry;
 		const Bool sourceKnown = TheLocalFileSystem->getFileInfo( source, &entry.source );
@@ -347,7 +354,8 @@ static void checksumModels( XferCRC &xferCRC )
 		}
 		else
 		{
-			File *file = TheFileSystem->openFile( model.str(), File::READ );
+			File *file = !unmountedArt.isEmpty() ? TheArchiveFileSystem->openUnmountedArtFile( model )
+				: TheFileSystem->openFile( model.str(), File::READ );
 			Int fileSize = file->size();
 			char *contents = file->readEntireAndClose();
 			CRC modelCRC;

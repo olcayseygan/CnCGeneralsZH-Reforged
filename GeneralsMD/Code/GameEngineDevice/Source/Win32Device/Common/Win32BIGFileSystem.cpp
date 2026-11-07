@@ -166,6 +166,14 @@ void Win32BIGFileSystem::init() {
 	// unreachable.  Re-load the patch archives with overwrite so they win, like retail.
 	loadBigFilesFromDirectory("", "Patch*.big", TRUE, FALSE);
 
+	// The fork's art beats the patch archives as well: PatchZH.big holds the 1.04 Avenger, and a
+	// rebuilt model under a retail name has to win wherever retail keeps that name.
+	for (ArchiveFileMap::iterator art = m_archiveFileMap.begin(); art != m_archiveFileMap.end(); ++art) {
+		if (isReforgedArchive(art->first)) {
+			loadIntoDirectoryTree(art->second, art->first, TRUE);
+		}
+	}
+
     // Zero Hour is not standalone: the base game's bigs carry most of the art, the sound effects
     // and the music.  A retail install registers the key below and Steam registers nothing, so a
     // folder that holds Textures.big is what this looks for rather than a key that exists.  The
@@ -380,7 +388,19 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 	FilenameListIter it = filenameList.begin();
 	while (it != filenameList.end()) {
 		if (theClassicGraphics && isReforgedArchive(*it)) {
-			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - classic graphics, leaving %s out.\n", (*it).str()));
+			// Out of the tree, so Classic draws retail. One that holds models stays open for the INI CRC
+			// alone: their bones are in the logic, and Classic has to match Reforged on them.
+			ArchiveFile *art = openArchiveFile((*it).str());
+			FilenameList models;
+			if (art != NULL) {
+				art->getFileListInDirectory(AsciiString(""), AsciiString("Art\\W3D\\"), AsciiString("*.w3d"), models, TRUE);
+			}
+			if (!models.empty()) {
+				m_unmountedArt[(*it)] = art;
+			} else {
+				delete art;
+			}
+			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - classic graphics, leaving %s out (%d models kept for the INI CRC).\n", (*it).str(), (Int)models.size()));
 			it++;
 			continue;
 		}

@@ -50,6 +50,7 @@
 #include "Common/ArchiveFile.h"
 #include "Common/ArchiveFileSystem.h"
 #include "Common/AsciiString.h"
+#include "Common/file.h"
 #include "Common/PerfTimer.h"
 
 #ifdef _INTERNAL
@@ -122,6 +123,38 @@ ArchiveFileSystem::~ArchiveFileSystem()
 		}
 		iter++;
 	}
+	for (iter = m_unmountedArt.begin(); iter != m_unmountedArt.end(); ++iter) {
+		delete iter->second;
+	}
+}
+
+void ArchiveFileSystem::getUnmountedArtFileList(const AsciiString& directory, const AsciiString& searchName, FilenameList &filenameList) const
+{
+	for (ArchiveFileMap::const_iterator it = m_unmountedArt.begin(); it != m_unmountedArt.end(); ++it) {
+		it->second->getFileListInDirectory(AsciiString(""), directory, searchName, filenameList, TRUE);
+	}
+}
+
+// The last one in name order, as the mount would have kept it: the fork's art archives overwrite.
+AsciiString ArchiveFileSystem::getUnmountedArtFilenameForFile(const AsciiString& filename) const
+{
+	AsciiString found;
+	FileInfo info;
+	for (ArchiveFileMap::const_iterator it = m_unmountedArt.begin(); it != m_unmountedArt.end(); ++it) {
+		if (it->second->getFileInfo(filename, &info)) {
+			found = it->first;
+		}
+	}
+	return found;
+}
+
+File * ArchiveFileSystem::openUnmountedArtFile(const AsciiString& filename)
+{
+	AsciiString archiveFilename = getUnmountedArtFilenameForFile(filename);
+	if (archiveFilename.isEmpty()) {
+		return NULL;
+	}
+	return m_unmountedArt[archiveFilename]->openFile(filename.str(), File::READ);
 }
 
 void ArchiveFileSystem::loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite)

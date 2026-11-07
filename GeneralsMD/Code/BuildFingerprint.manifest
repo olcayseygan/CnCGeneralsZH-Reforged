@@ -4367,6 +4367,7 @@ Tools/WorldBuilder/src/propedit.cpp
 Tools/WorldBuilder/src/teamsdialog.cpp
 Tools/WorldBuilder/src/wbview.cpp
 Tools/WorldBuilder/src/wbview3d.cpp
+Tools/artpack.py
 Tools/asan-check.sh
 Tools/assetcull/assetcull.cpp
 Tools/assetcull/assetcull.dsp

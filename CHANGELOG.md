@@ -3,10 +3,17 @@
 EA opened the source of Generals and Zero Hour, the game that is still on sale and still runs on
 Steam. This build is that source with the bugs the game shipped with fixed and everything below added.
 
-**126 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
+**127 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
 found and fixed, EA's own, not port damage.**
 
 ---
+
+## America, built again
+
+- Every American unit and building has been modelled again on EA's own shape: the same silhouette, the same footprint, the turret and the barrels where they always were, with the detail modelled in where the 2003 boxes had it painted on. Each one comes in four levels of detail, the full model up close and lighter ones as the camera pulls away. A tank's road wheels turn with its tracks; EA's stood still. The campaign's own infantry are not done yet.
+- It is the Reforged picture. Classic Graphics keeps EA's 2003 models, and a Classic player and a Reforged player still share a match: every bone a weapon fires from or a turret turns on sits exactly where EA put it, which we checked on all 508 models before they went in, so both looks play the same game.
+- The models download with the game. Anyone joining needs the same copy, and a game folder with other models is turned away at the join, the way a changed rules file is.
+- The Avenger is the one that waits. Its new model was built from the copy EA shipped before the 1.04 patch and lacks the turret a GLA Bomb Truck shows when it disguises itself as one, so it keeps EA's patched model until that is fixed.
 
 ## A cursor for every order
 - The mouse pointer says which order a click will give. Guard used to show the red crosshair of an attack and now shows a shield standing over the ground it will hold; unloading a transport at a spot borrowed the move arrows and now shows three arrows fanning out of a hull. Garrisoning a building and boarding a transport each have a picture of their own, where both showed EA's three green chevrons, and hijacking, sabotage and making a car bomb stopped sharing the red ones. Placing a building shows a yellow footprint instead of a crosshair. The set is drawn at 48 pixels for a 1080p screen, half again EA's 32, in EA's colours: green for moving your own units, red for anything hostile, blue for superweapons and bare steel for tools, each one lit metal inside the 2003 set's one-pixel black line. The arrows that animated still do.

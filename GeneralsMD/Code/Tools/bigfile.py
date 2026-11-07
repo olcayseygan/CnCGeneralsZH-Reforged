@@ -106,7 +106,12 @@ def cmd_pack(archive, indir):
             full = os.path.join(root, name)
             stored = os.path.relpath(full, indir).replace(os.sep, "\\")
             members.append((stored, full))
-    members.sort(key=lambda m: m[0].lower())
+    write_archive(archive, members)
+
+
+def write_archive(archive, members):
+    """members: (stored path, file on disk). Sorted here, so the same members give the same bytes."""
+    members = sorted(members, key=lambda m: m[0].lower())
 
     # index size first: the data offsets depend on it
     index_size = 0x10 + sum(8 + len(s.encode("latin-1")) + 1 for s, _ in members)

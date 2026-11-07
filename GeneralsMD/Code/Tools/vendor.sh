@@ -402,7 +402,8 @@ install_gamespy_unix_patch() {
 # pin a choice that C4 has not made, and M1 is a headless build that links neither binkvideo nor
 # milesaudio, so nothing before M2 needs it.
 
-# --- The fork's own upscaled art: every 3D texture at twice its size, and the ground. Not in git -
+# --- The fork's own upscaled art: every 3D texture at twice its size, and the ground, and the
+# rebuilt models, one Reforged<Side>.big per side that Tools/artpack.py packs. Not in git -
 # ReforgedTextures.big alone is a gigabyte, ten times
 # what GitHub takes in a file, and LFS in a fork is billed to the parent repository.
 #

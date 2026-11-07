@@ -178,11 +178,19 @@ class ArchiveFileSystem : public SubsystemInterface
 	/// beside the exe or nowhere.  The base campaign movies are loose files in its Data\Movies.
 	AsciiString						m_baseGameDirectory;
 
+	/// The fork's art archives that Classic Graphics leaves out of the tree but that still hold models.
+	/// The INI CRC hashes their models under both looks, so a Classic and a Reforged player match and
+	/// a player with other art does not; nothing else reads them.
+	void					getUnmountedArtFileList(const AsciiString& directory, const AsciiString& searchName, FilenameList &filenameList) const;
+	AsciiString		getUnmountedArtFilenameForFile(const AsciiString& filename) const;	///< the archive's name, empty when none holds it
+	File*					openUnmountedArtFile(const AsciiString& filename);
+
 protected:
 	virtual void					loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite = FALSE );	///< load the archive file's header information and apply it to the global archive directory tree.
 	void									prioritizeLargerFiles(const AsciiString& directory, const char *inferiorArchive, const char *superiorArchive);	///< where two archives claim the same file in this directory, keep the bigger copy.
 
 	ArchiveFileMap m_archiveFileMap;
+	ArchiveFileMap m_unmountedArt;		///< see getUnmountedArtFileList; never in m_archiveFileMap or the tree
 	ArchivedDirectoryInfo m_rootDirectory;
 };
 

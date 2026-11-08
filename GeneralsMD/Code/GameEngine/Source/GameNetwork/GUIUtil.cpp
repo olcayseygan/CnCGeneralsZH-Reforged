@@ -1160,12 +1160,14 @@ void DrawMapListTab(GameWindow *window, WinInstanceData *instData)
 	Int x, y, width, height;
 	window->winGetScreenPosition(&x, &y);
 	window->winGetSize(&width, &height);
-	UIStyle::tab(x, y, width, height);
+	// the radio button keeps WIN_STATE_HILITED while the mouse is on it, as a layout button lights
+	const Bool enabled = BitTest(window->winGetStatus(), WIN_STATUS_ENABLED);
+	UIStyle::tab(x, y, width, height, enabled && BitTest(instData->getState(), WIN_STATE_HILITED));
 	DisplayString *text = instData->getTextDisplayString();
 	if (text->getFont() != window->winGetFont())
 		text->setFont(window->winGetFont());
 	Color color = UIStyle::INK;
-	if (!BitTest(window->winGetStatus(), WIN_STATUS_ENABLED))
+	if (!enabled)
 		color = UIStyle::MUTED;
 	else if (BitTest(instData->getState(), WIN_STATE_SELECTED))
 		color = UIStyle::ACTIVE;

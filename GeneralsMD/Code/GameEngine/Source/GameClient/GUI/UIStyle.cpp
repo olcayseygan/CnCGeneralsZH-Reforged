@@ -44,6 +44,7 @@ const Color GRID = GameMakeColor( 0x2f, 0x37, 0xa8, 90 );
 const Color EDGE = GameMakeColor( 0x25, 0x34, 0xff, 255 );
 const Color EDGE_LIT = GameMakeColor( 0x00, 0xe3, 0xff, 255 );
 const Color TAB_EDGE = GameMakeColor( 0x85, 0x88, 0xb9, 255 );
+const Color HOVER = GameMakeColor( 0x00, 0xe3, 0xff, 48 );
 const Color INK = GameMakeColor( 0xff, 0xff, 0xff, 255 );
 const Color MUTED = GameMakeColor( 0xa4, 0xaa, 0xbe, 255 );
 const Color ACTIVE = GameMakeColor( 0xba, 0xff, 0x0c, 255 );
@@ -106,9 +107,11 @@ void rule( Int x, Int y, Int width )
 	TheDisplay->drawFillRect( x, y, width, max( 1, px( 2 ) ), FRAME );
 }
 
-void button( Int x, Int y, Int width, Int height )
+void button( Int x, Int y, Int width, Int height, Bool lit )
 {
 	TheDisplay->drawFillRect( x, y, width, height, PANEL );
+	if( lit )
+		TheDisplay->drawFillRect( x, y, width, height, HOVER );
 	edge( x, y, width, height );
 }
 
@@ -119,10 +122,12 @@ void edge( Int x, Int y, Int width, Int height )
 	TheDisplay->drawOpenRect( x + 2, y + 2, width - 4, height - 4, 1.0f, EDGE );
 }
 
-void tab( Int x, Int y, Int width, Int height )
+void tab( Int x, Int y, Int width, Int height, Bool lit )
 {
 	TheDisplay->drawFillRect( x, y, width, height, PANEL );
-	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, TAB_EDGE );
+	if( lit )
+		TheDisplay->drawFillRect( x, y, width, height, HOVER );
+	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, lit ? EDGE_LIT : TAB_EDGE );
 }
 
 void stripe( Int x, Int y, Int height, Color player )

@@ -57,6 +57,7 @@ namespace UIStyle
 	extern const Color GRID;						///< faint rules: a chart's grid, between rows, a bar's track
 	extern const Color EDGE;						///< a button's edge, a progress bar, a selection
 	extern const Color EDGE_LIT;				///< the bright middle line of a button's edge, a hover
+	extern const Color HOVER;						///< EDGE_LIT see-through, washed over a button or a tile under the mouse
 	extern const Color TAB_EDGE;				///< a tab's box
 	extern const Color INK;							///< words and numbers
 	extern const Color MUTED;						///< what is secondary
@@ -100,12 +101,12 @@ namespace UIStyle
 	void panel( Int x, Int y, Int width, Int height, Color fill );
 	/// the two-pixel rule under a header and over a foot
 	void rule( Int x, Int y, Int width );
-	/// a layout button's box: the panel's black under a blue, cyan, blue edge
-	void button( Int x, Int y, Int width, Int height );
+	/// a layout button's box: the panel's black under a blue, cyan, blue edge; lit under the mouse
+	void button( Int x, Int y, Int width, Int height, Bool lit = FALSE );
 	/// that blue, cyan, blue edge alone, round a map preview or a progress bar
 	void edge( Int x, Int y, Int width, Int height );
-	/// a tab's box; the label in it is ACTIVE when the tab is open, INK when not
-	void tab( Int x, Int y, Int width, Int height );
+	/// a tab's box; the label in it is ACTIVE when the tab is open, INK when not; lit under the mouse
+	void tab( Int x, Int y, Int width, Int height, Bool lit = FALSE );
 	/// the player's colour down the edge of his row or card, stripeWidth() wide
 	void stripe( Int x, Int y, Int height, Color player );
 	Int stripeWidth( void );

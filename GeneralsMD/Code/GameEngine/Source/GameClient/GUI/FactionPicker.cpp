@@ -690,16 +690,17 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 	s_title->draw( UIStyle::boardX( UIStyle::ROOM_TITLE_LEFT ), UIStyle::boardY( UIStyle::ROOM_TITLE_MIDDLE ) - height / 2, UIStyle::INK, UIStyle::SHADOW );
 	UIStyle::rule( s_panelBox.lo.x, UIStyle::boardY( UIStyle::ROOM_HEADER_LINE ), boxWidth( s_panelBox ) );
 
+	// everything that takes a click lights under the mouse, as the layouts' buttons do
+	const ICoord2D mouse = TheMouse->getMouseStatus()->pos;
+	const Bool mouseInGrid = isInside( s_gridBox, mouse.x, mouse.y );
 	const Bool tabOn[ 2 ] = { s_focus < 0 && !s_custom, s_custom };
 	for( Int tab = 0; tab < 2; tab++ )
 	{
 		const IRegion2D &box = s_tabBox[ tab ];
-		UIStyle::tab( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ) );
+		UIStyle::tab( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), isInside( box, mouse.x, mouse.y ) );
 		drawCentred( s_tabText[ tab ], box, tabOn[ tab ] ? UIStyle::ACTIVE : UIStyle::INK );
 	}
 
-	const ICoord2D mouse = TheMouse->getMouseStatus()->pos;
-	const Bool mouseInGrid = isInside( s_gridBox, mouse.x, mouse.y );
 	for( size_t group = 0; group < s_groups.size(); group++ )
 	{
 		// the name is a button (that side alone), lit under the mouse; the box is Custom Selection's
@@ -709,7 +710,11 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 		g.heading->draw( g.at.x, g.at.y, hovered ? UIStyle::EDGE_LIT : UIStyle::ACTIVE, UIStyle::SHADOW );
 		clipIfCut( g.tickBox );
 		if( s_custom && narrows )
+		{
 			drawTickBox( g.tickBox.lo.x, g.tickBox.lo.y, boxWidth( g.tickBox ), FactionPickerSideTicked( s_mask, g.mask ) );
+			if( mouseInGrid && isInside( g.tickBox, mouse.x, mouse.y ) )
+				TheDisplay->drawOpenRect( g.tickBox.lo.x, g.tickBox.lo.y, boxWidth( g.tickBox ), boxHeight( g.tickBox ), 1.0f, UIStyle::EDGE_LIT );
+		}
 	}
 	for( size_t each = 0; each < s_cells.size(); each++ )
 	{
@@ -734,9 +739,13 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 				drawTickBox( box.hi.x - size - inset, box.lo.y + inset, size, isTicked( cell ) );
 			}
 		}
+		// a one-pixel cyan line over the card's own frame did not read as a hover, so the tile washes too
+		const Bool hovered = mouseInGrid && isInside( box, mouse.x, mouse.y );
+		if( hovered )
+			fillInGrid( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), UIStyle::HOVER );
 		if( (Int)each == s_focus )
 			UIStyle::edge( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ) );
-		else if( mouseInGrid && isInside( box, mouse.x, mouse.y ) )
+		else if( hovered )
 			TheDisplay->drawOpenRect( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), 1.0f, UIStyle::EDGE_LIT );
 	}
 	TheDisplay->enableClipping( FALSE );
@@ -744,7 +753,8 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 	{
 		UIStyle::panel( s_barBox.lo.x, s_barBox.lo.y, boxWidth( s_barBox ), boxHeight( s_barBox ), UIStyle::CARD );
 		const Int top = s_barBox.lo.y + FactionPickerThumbTop( s_scroll, s_scrollMax, boxHeight( s_barBox ), thumbHeight() );
-		UIStyle::button( s_barBox.lo.x, top, boxWidth( s_barBox ), thumbHeight() );
+		const Bool onThumb = isInside( s_barBox, mouse.x, mouse.y ) && mouse.y >= top && mouse.y < top + thumbHeight();
+		UIStyle::button( s_barBox.lo.x, top, boxWidth( s_barBox ), thumbHeight(), onThumb || s_thumbGrab >= 0 );
 	}
 
 	UIStyle::panel( s_portraitBox.lo.x, s_portraitBox.lo.y, boxWidth( s_portraitBox ), boxHeight( s_portraitBox ), UIStyle::CARD );
@@ -783,9 +793,10 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 		y += height;
 	}
 
-	UIStyle::button( s_backBox.lo.x, s_backBox.lo.y, boxWidth( s_backBox ), boxHeight( s_backBox ) );
+	UIStyle::button( s_backBox.lo.x, s_backBox.lo.y, boxWidth( s_backBox ), boxHeight( s_backBox ), isInside( s_backBox, mouse.x, mouse.y ) );
 	drawCentred( s_backText, s_backBox, UIStyle::INK );
-	UIStyle::button( s_confirmBox.lo.x, s_confirmBox.lo.y, boxWidth( s_confirmBox ), boxHeight( s_confirmBox ) );
+	UIStyle::button( s_confirmBox.lo.x, s_confirmBox.lo.y, boxWidth( s_confirmBox ), boxHeight( s_confirmBox ),
+		canConfirm() && isInside( s_confirmBox, mouse.x, mouse.y ) );
 	drawCentred( s_confirmText, s_confirmBox, canConfirm() ? UIStyle::INK : UIStyle::MUTED );
 }
 

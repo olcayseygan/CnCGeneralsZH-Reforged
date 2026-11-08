@@ -23,6 +23,7 @@
 // what they hand out and answer D3DERR_NOTFOUND for an empty slot, and setting render target 0 resets
 // the viewport to it.  See PosixDevice9.h for who owns what.
 
+#include <stdlib.h>
 #include "PosixDevice9.h"
 #include "PosixD3D9Caps.h"
 #include "PosixImageOps.h"

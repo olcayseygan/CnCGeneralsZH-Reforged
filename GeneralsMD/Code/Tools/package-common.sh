@@ -82,6 +82,7 @@ license_entry() {
 		zlib)		# zlib's licence is the comment that opens zlib.h
 			awk 'NR == 1 && !/^\/\*/ { exit 1 } { print } /\*\// { exit }' "$s/Compression/ZLib/zlib.h" > "$L/zlib-LICENSE.txt" &&
 			grep -q "This notice may not be removed" "$L/zlib-LICENSE.txt";;
+		mbedtls) cp "$s/mbedtls/LICENSE" "$L/mbedTLS-LICENSE.txt";;
 		*) echo "no license_entry named $1" >&2; return 1;;
 	esac
 }

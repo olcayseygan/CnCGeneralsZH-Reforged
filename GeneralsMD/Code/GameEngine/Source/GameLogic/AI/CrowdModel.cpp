@@ -195,19 +195,15 @@ Bool CrowdCorridor::build( const Object *obj, const LocomotorSet& locomotorSet, 
 
 	/* Smooth the two width curves.  A single sample that happened to land beside a rock reports a
 		 metre of road in the middle of a field, and a lane clamped to that one sample jerks sideways
-		 and back again over two frames.  Two [1 2 1] passes, which is what the sandbox settled on.
-		 Never across a change of deck: the riverbank either side of a bridge is a field, and averaged
-		 into the deck it widens the first cells of the bridge by half a field. */
+		 and back again over two frames.  Two [1 2 1] passes, which is what the sandbox settled on. */
 	const Int n = (Int)m_samples.size();
 	std::vector<Real> tmpL( n ), tmpR( n );
 	for (Int pass = 0; pass < 2; pass++)
 	{
 		for (Int i = 0; i < n; i++)
 		{
-			Int p = (i > 0) ? i - 1 : 0;
-			Int q = (i < n - 1) ? i + 1 : n - 1;
-			if (m_samples[ p ].layer != m_samples[ i ].layer) p = i;
-			if (m_samples[ q ].layer != m_samples[ i ].layer) q = i;
+			const Int p = (i > 0) ? i - 1 : 0;
+			const Int q = (i < n - 1) ? i + 1 : n - 1;
 			tmpL[ i ] = (m_samples[ p ].left + 2.0f * m_samples[ i ].left + m_samples[ q ].left) * 0.25f;
 			tmpR[ i ] = (m_samples[ p ].right + 2.0f * m_samples[ i ].right + m_samples[ q ].right) * 0.25f;
 		}
@@ -224,16 +220,23 @@ Bool CrowdCorridor::build( const Object *obj, const LocomotorSet& locomotorSet, 
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The ground each side of a bridge is no wider than the bridge.
+/** A bridge has no band, and neither does the ground each side of one.
 
-		The deck keeps the band its own layer measured: a bridge is a road, and the Kandahar bridge on
-		Golden Oasis carries three Crusaders abreast.  It used to be sealed to the centre line, which
-		put a whole group through it in single file.  What does matter is the approach.  The bank
-		either side of the ramp is open field, and a unit holding a lane a field's width off the
-		centre rolls up beside the entrance rather than onto it and stops against the abutment, with
-		every unit behind it queueing on the bank.  So for CROWD_BRIDGE_SEAL samples before the deck
-		starts and after it ends the band is held to the deck's own width at that end, and the lanes
-		come onto the ramp already the width of the road they are about to drive. */
+		Probing the right deck already reports a bridge as narrow, but narrow is not the same as
+		single file: half a lane of drift is enough to put a tank over the railing, and the roadway is
+		a different width from the pathfind cells that carry it.  The approach matters as much as the
+		deck.  A unit holding a lane a body width off centre while it rolls up to a bridge arrives
+		beside the entrance rather than at it, stops against the abutment, and every unit behind it
+		queues on the bank - which is the not getting onto the bridge at all.  So the band closes
+		CROWD_BRIDGE_SEAL samples before the deck starts and opens the same distance after it ends,
+		and inside that stretch every unit drives the centre line exactly the way retail does.
+
+		Letting the deck keep the width its own layer measures, with the approach held to that width
+		instead of to nothing, was tried and shipped for a while, and it lost on both counts.  At the
+		same vehicle speed twenty Crusaders over the Kandahar bridge on Golden Oasis got their last tank
+		across 7.5 seconds later on seed 1 (44.1 against 36.6), and over the long bridge the two tanks
+		on the outside lane came down the bank beside the ramp instead of onto it, pressed against its
+		side and stood there for the rest of the match, on every seed tried. */
 //-------------------------------------------------------------------------------------------------
 void CrowdCorridor::sealBridges( void )
 {
@@ -244,35 +247,15 @@ void CrowdCorridor::sealBridges( void )
 		if (m_samples[ i ].layer <= LAYER_GROUND)
 			continue;
 
-		// only the ends of a run of deck samples have an approach, and it runs outward from them
-		const Bool first = i == 0 || m_samples[ i - 1 ].layer != m_samples[ i ].layer;
-		const Bool last = i == n - 1 || m_samples[ i + 1 ].layer != m_samples[ i ].layer;
-		if (first)
-			holdApproach( i, -1 );
-		if (last)
-			holdApproach( i, 1 );
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The approach to one end of a deck, from the deck end at sample `end` outward in `step`:
-		CROWD_BRIDGE_SEAL samples held to the deck's own width at the ramp.
-
-		A funnel instead, opening back from the ramp as fast as a unit may slide sideways, was tried
-		and measured worse: it squeezed the group into the deck's width a long way out, and twenty
-		Crusaders over the Kandahar bridge took longer and were blocked more than with this. */
-//-------------------------------------------------------------------------------------------------
-void CrowdCorridor::holdApproach( Int end, Int step )
-{
-	const Int n = (Int)m_samples.size();
-	const Sample& deck = m_samples[ end ];
-	for (Int k = 1; k <= CROWD_BRIDGE_SEAL; k++)
-	{
-		const Int j = end + k * step;
-		if (j < 0 || j >= n || m_samples[ j ].layer > LAYER_GROUND)
-			break;
-		if (m_samples[ j ].left > deck.left) m_samples[ j ].left = deck.left;
-		if (m_samples[ j ].right > deck.right) m_samples[ j ].right = deck.right;
+		Int lo = i - CROWD_BRIDGE_SEAL;
+		Int hi = i + CROWD_BRIDGE_SEAL;
+		if (lo < 0) lo = 0;
+		if (hi > n - 1) hi = n - 1;
+		for (Int j = lo; j <= hi; j++)
+		{
+			m_samples[ j ].left = 0.0f;
+			m_samples[ j ].right = 0.0f;
+		}
 	}
 }
 

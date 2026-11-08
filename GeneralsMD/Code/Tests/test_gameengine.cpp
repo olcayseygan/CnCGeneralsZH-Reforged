@@ -20798,58 +20798,54 @@ TEST(crowd_corridor_steering_point_slides_instead_of_hopping)
 	CHECK_NEAR( ends.x, pts[ 5 ].x, 0.001f );
 }
 
-TEST(a_bridge_keeps_its_width_and_its_approach_funnels_onto_it)
+TEST(crowd_corridor_has_no_band_on_a_bridge_or_at_its_approaches)
 {
-	/* A deck is a road: the band on it is what its own layer measured, so a group goes over three
-		 abreast where the bridge carries three.  The riverbank either side of the ramp is a field, and a
-		 lane held a field's width off the centre arrives beside the entrance, against the end of the
-		 railing.  So for CROWD_BRIDGE_SEAL samples before and after the deck the ground is held to
-		 the deck's width at the ramp. */
+	/* A bridge deck is not road with room either side of it, and the ground beside a bridge is a
+		 riverbank.  A lane held across either one drives the unit off the side, and a lane held on the
+		 approach arrives beside the abutment instead of at the entrance - which is a unit that never
+		 gets onto the bridge and a queue behind it that never gets anywhere.  The band closes over the
+		 deck and for CROWD_BRIDGE_SEAL samples each side of it.  A deck that kept its own width was
+		 tried and lost time over the Kandahar bridge and tanks over the long one (CrowdCorridor::sealBridges). */
 	Coord3D pts[ 20 ];
 	PathfindLayerEnum layers[ 20 ];
-	Real width[ 20 ];
 	for (Int k = 0; k < 20; k++)
 	{
 		pts[ k ].x = (Real)k * 10.0f;
 		pts[ k ].y = 0.0f;
 		pts[ k ].z = 0.0f;
 		layers[ k ] = LAYER_GROUND;
-		width[ k ] = 60.0f;					// open bank
 	}
-	for (Int k = 10; k <= 12; k++)
-	{
-		layers[ k ] = (PathfindLayerEnum)2;		// the deck: three samples of it, out over the water
-		width[ k ] = 10.0f;
-	}
-	width[ 8 ] = 5.0f;						// and a rock on the bank, narrower than the deck
+	layers[ 10 ] = (PathfindLayerEnum)2;		// the deck: three samples of it, out over the water
+	layers[ 11 ] = (PathfindLayerEnum)2;
+	layers[ 12 ] = (PathfindLayerEnum)2;
 
 	CrowdCorridor corr;
-	corr.buildForTest( pts, 20, 0.0f, layers, width );
+	corr.buildForTest( pts, 20, 15.0f, layers );
+	CHECK_EQ( corr.count(), 20 );
+
+	// open road, far from the bridge either side: the band is what it was built with
+	CHECK_NEAR( corr.at( 0 ).left, 15.0f, 0.001f );
+	CHECK_NEAR( corr.at( 5 ).right, 15.0f, 0.001f );
+	CHECK_NEAR( corr.at( 19 ).left, 15.0f, 0.001f );
+
 	corr.sealBridges();
 
-	// the deck keeps its own width
-	for (Int k = 10; k <= 12; k++)
-	{
-		CHECK_NEAR( corr.at( k ).left, 10.0f, 0.001f );
-		CHECK_NEAR( corr.at( k ).right, 10.0f, 0.001f );
-	}
-
-	// the approach at both ends is the deck's width, and a lane on it is cut to that
 	const Int sealLo = 10 - (Int)CROWD_BRIDGE_SEAL;
 	const Int sealHi = 12 + (Int)CROWD_BRIDGE_SEAL;
-	for (Int k = sealLo; k < 10; k++)
-	{
-		if (k != 8)
-			CHECK_NEAR( corr.at( k ).left, 10.0f, 0.001f );
-	}
-	for (Int k = 13; k <= sealHi; k++)
-		CHECK_NEAR( corr.at( k ).right, 10.0f, 0.001f );
-	CHECK_NEAR( corr.clampLat( 9, 40.0f ), 10.0f, 0.001f );
 
-	// it never widens anything, and the bank past the approach keeps its own band
-	CHECK_NEAR( corr.at( 8 ).left, 5.0f, 0.001f );
-	CHECK_NEAR( corr.at( sealLo - 1 ).left, 60.0f, 0.001f );
-	CHECK_NEAR( corr.at( sealHi + 1 ).right, 60.0f, 0.001f );
+	// the deck itself, and the sealed samples each side of it
+	for (Int k = sealLo; k <= sealHi; k++)
+	{
+		CHECK_NEAR( corr.at( k ).left, 0.0f, 0.001f );
+		CHECK_NEAR( corr.at( k ).right, 0.0f, 0.001f );
+		CHECK_NEAR( corr.clampLat( k, 12.0f ), 0.0f, 0.001f );
+		CHECK_NEAR( corr.clampLatAt( corr.at( k ).along, -12.0f ), 0.0f, 0.001f );
+	}
+
+	// and the road on either side of that stretch keeps its band
+	CHECK_NEAR( corr.at( sealLo - 1 ).left, 15.0f, 0.001f );
+	CHECK_NEAR( corr.at( sealHi + 1 ).right, 15.0f, 0.001f );
+	CHECK_NEAR( corr.clampLat( sealLo - 1, 12.0f ), 12.0f, 0.001f );
 
 	// a route with no bridge on it is untouched
 	CrowdCorridor plain;

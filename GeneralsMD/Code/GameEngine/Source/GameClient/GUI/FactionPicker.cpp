@@ -679,6 +679,15 @@ static void drawPoolPreview( const IRegion2D &area )
 	}
 }
 
+/** A layout button under the mouse letters its label in its HILITE colour, the green ACTIVE is, over
+	* a lit box; one that cannot be pressed stays MUTED and does not answer, as a disabled one does. */
+static void drawButton( const IRegion2D &box, DisplayString *text, Bool enabled, const ICoord2D &mouse )
+{
+	const Bool lit = enabled && isInside( box, mouse.x, mouse.y );
+	UIStyle::button( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), lit );
+	drawCentred( text, box, !enabled ? UIStyle::MUTED : ( lit ? UIStyle::ACTIVE : UIStyle::INK ) );
+}
+
 static void drawPicker( GameWindow *window, WinInstanceData *instData )
 {
 	// the room stays up underneath for its updates, so the screen paints over every pixel of it
@@ -793,11 +802,8 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 		y += height;
 	}
 
-	UIStyle::button( s_backBox.lo.x, s_backBox.lo.y, boxWidth( s_backBox ), boxHeight( s_backBox ), isInside( s_backBox, mouse.x, mouse.y ) );
-	drawCentred( s_backText, s_backBox, UIStyle::INK );
-	UIStyle::button( s_confirmBox.lo.x, s_confirmBox.lo.y, boxWidth( s_confirmBox ), boxHeight( s_confirmBox ),
-		canConfirm() && isInside( s_confirmBox, mouse.x, mouse.y ) );
-	drawCentred( s_confirmText, s_confirmBox, canConfirm() ? UIStyle::INK : UIStyle::MUTED );
+	drawButton( s_backBox, s_backText, TRUE, mouse );
+	drawButton( s_confirmBox, s_confirmText, canConfirm(), mouse );
 }
 
 //-------------------------------------------------------------------------------------------------

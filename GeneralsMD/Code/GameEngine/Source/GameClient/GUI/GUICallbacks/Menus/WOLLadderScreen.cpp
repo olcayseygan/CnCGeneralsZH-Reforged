@@ -40,6 +40,8 @@
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameText.h"
+#include "GameClient/GadgetStaticText.h"
+#include "GameClient/Display.h"
 #include "GameClient/Image.h"
 #include "GameClient/UIStyle.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
@@ -65,6 +67,8 @@ enum { LADDER_PAGE = 20, LADDER_COLUMNS = 6 };
 static GameWindow *listboxLadder = NULL;
 static GameWindow *buttonPrev = NULL;
 static GameWindow *buttonNext = NULL;
+static GameWindow *titleText = NULL;
+static GameWindow *headerRule = NULL;
 static Int s_ladderOffset = 0;
 static Int s_ladderShown = -1;			///< the OnlineLadderState last drawn, -1 to draw again
 
@@ -120,14 +124,14 @@ static void retailListLook( GameWindow *list )
 	const Color none = GameMakeColor( 255, 255, 255, 0 );
 	const Color white = GameMakeColor( 254, 254, 254, 255 );
 	const Color green = GameMakeColor( 0, 128, 0, 255 );
-	setLook( list, LOOK_ENABLED, 0, NULL, UIStyle::PANEL, UIStyle::FRAME );
+	setLook( list, LOOK_ENABLED, 0, NULL, GameMakeColor( 255, 4, 0, 0 ), GameMakeColor( 49, 55, 168, 255 ) );
 	setLook( list, LOOK_ENABLED, 1, "ListBoxHiliteItemLeftEnd", GameMakeColor( 255, 255, 0, 255 ), white );
 	setLook( list, LOOK_ENABLED, 2, "ListBoxHiliteItemRightEnd", none, none );
 	setLook( list, LOOK_ENABLED, 3, "ListBoxHiliteItemRepeatingCenter", none, none );
 	setLook( list, LOOK_ENABLED, 4, "ListBoxHiliteItemSmallRepeatingCenter", none, none );
-	setLook( list, LOOK_DISABLED, 0, NULL, UIStyle::PANEL, UIStyle::FRAME );
+	setLook( list, LOOK_DISABLED, 0, NULL, GameMakeColor( 255, 4, 0, 0 ), GameMakeColor( 49, 55, 168, 255 ) );
 	setLook( list, LOOK_DISABLED, 1, NULL, GameMakeColor( 192, 192, 192, 255 ), white );
-	setLook( list, LOOK_HILITE, 0, NULL, UIStyle::PANEL, UIStyle::FRAME );
+	setLook( list, LOOK_HILITE, 0, NULL, GameMakeColor( 255, 4, 0, 0 ), GameMakeColor( 49, 55, 168, 255 ) );
 	setLook( list, LOOK_HILITE, 1, "ListBoxHiliteSelectedItemLeftEnd", white, green );
 	setLook( list, LOOK_HILITE, 2, "ListBoxHiliteSelectedItemRightEnd", none, none );
 	setLook( list, LOOK_HILITE, 3, "ListBoxHiliteSelectedItemRepeatingCenter", none, none );
@@ -168,28 +172,70 @@ static void createLadderGadgets( void )
 {
 	if (!parentWindow || !windowLadder)
 		return;
-	Int px, py, lx, ly, lw, lh;
-	parentWindow->winGetScreenPosition( &px, &py );
-	windowLadder->winGetScreenPosition( &lx, &ly );
-	windowLadder->winGetSize( &lw, &lh );
-	lx -= px;
-	ly -= py;
 
-	Int bx = lx + lw - 160, by = ly + lh + 8, bw = 160, bh = 44;
-	if (buttonBack)
+	/* The hub's frame (WOLWelcomeMenu.wnd, authored at 800x600): MainMenuRuler over the whole screen
+		 where this layout fills it with flat navy, the GadgetParent panel at 41,41 to 759,560, a "Generals"
+		 20 title in its top band with a rule under it at y 80, and its buttons in "Generals" 15 at the
+		 panel's foot (Back at 560,520 to 732,556).  This layout's own Back is in Times New Roman. */
+	const Real sx = TheDisplay->getWidth() / 800.0f, sy = TheDisplay->getHeight() / 600.0f;
+	#define LADDER_X( v ) ((Int)((v) * sx))
+	#define LADDER_Y( v ) ((Int)((v) * sy))
+	parentWindow->winSetStatus( WIN_STATUS_IMAGE );
+	parentWindow->winSetEnabledImage( 0, TheMappedImageCollection->findImageByName( "MainMenuRuler" ) );
+	parentWindow->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 255 ) );
+
+	windowLadder->winSetPosition( LADDER_X( 41 ), LADDER_Y( 41 ) );
+	windowLadder->winSetSize( LADDER_X( 759 ) - LADDER_X( 41 ), LADDER_Y( 560 ) - LADDER_Y( 41 ) );
+	windowLadder->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 190 ) );
+	windowLadder->winSetEnabledBorderColor( 0, GameMakeColor( 47, 55, 168, 255 ) );
+
+	WinInstanceData ruleInst;
+	ruleInst.init();
+	BitSet( ruleInst.m_style, GWS_USER_WINDOW );
+	headerRule = TheWindowManager->winCreate( parentWindow, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT,
+		LADDER_X( 41 ), LADDER_Y( 80 ), LADDER_X( 759 ) - LADDER_X( 41 ), max( 1, LADDER_Y( 81 ) - LADDER_Y( 80 ) ), NULL, &ruleInst );
+	if (headerRule)
 	{
-		buttonBack->winGetScreenPosition( &bx, &by );
-		buttonBack->winGetSize( &bw, &bh );
-		bx -= px;
-		by -= py;
+		headerRule->winSetEnabledColor( 0, GameMakeColor( 0, 0, 0, 255 ) );
+		headerRule->winSetEnabledBorderColor( 0, GameMakeColor( 47, 55, 168, 255 ) );
 	}
 
-	// a framed panel in the middle of the board, above the button row: about the lobby's game list
-	const Int gap = UIStyle::px( 16.0f );
-	const Int width = min( lw, UIStyle::px( 1200.0f ) );
-	const Int left = UIStyle::boardX( 960.0f ) - px - width / 2;
-	const Int top = max( ly, UIStyle::boardY( 140.0f ) - py );
-	const Int height = max( UIStyle::px( 200.0f ), by - gap - top );
+	WinInstanceData titleInst;
+	titleInst.init();
+	BitSet( titleInst.m_style, GWS_STATIC_TEXT );
+	TextData titleData;
+	memset( &titleData, 0, sizeof(titleData) );
+	titleData.centeredVertically = TRUE;
+	titleData.leftMargin = LADDER_X( 8 );
+	titleText = TheWindowManager->gogoGadgetStaticText( parentWindow, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT,
+		LADDER_X( 44 ), LADDER_Y( 41 ), LADDER_X( 752 ) - LADDER_X( 44 ), LADDER_Y( 80 ) - LADDER_Y( 41 ),
+		&titleInst, &titleData, UIStyle::titleFont( 20 ), FALSE );
+	if (titleText)
+	{
+		titleText->winSetEnabledTextColors( GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		titleText->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 0 ) );
+		titleText->winSetEnabledBorderColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
+		GadgetStaticTextSetText( titleText, TheGameText->fetch( "GUI:OnlineLadderButton" ) );
+	}
+
+	const Int bw = LADDER_X( 732 ) - LADDER_X( 560 ), bh = LADDER_Y( 556 ) - LADDER_Y( 520 );
+	const Int bx = LADDER_X( 560 ), by = LADDER_Y( 520 );
+	if (buttonBack)
+	{
+		buttonBack->winSetPosition( bx, by );
+		buttonBack->winSetSize( bw, bh );
+		buttonBack->winSetFont( UIStyle::titleFont( 15 ) );
+		buttonBack->winBringToTop();
+	}
+
+	// the list fills the panel between the rule and the button row
+	const Int gap = LADDER_Y( 8 );
+	const Int left = LADDER_X( 56 );
+	const Int width = LADDER_X( 744 ) - left;
+	const Int top = LADDER_Y( 81 ) + gap;
+	const Int height = by - gap - top;
+	#undef LADDER_X
+	#undef LADDER_Y
 
 	WinInstanceData inst;
 	inst.init();
@@ -209,17 +255,18 @@ static void createLadderGadgets( void )
 	retailListLook( listboxLadder );
 
 	// Previous and Next on the Back button's row, to its left
-	buttonNext = makeButtonLike( buttonBack, bx - bw - gap, by, bw, bh, "GUI:OnlineLadderNext" );
-	buttonPrev = makeButtonLike( buttonBack, bx - 2 * (bw + gap), by, bw, bh, "GUI:OnlineLadderPrev" );
+	const Int buttonGap = UIStyle::px( 16.0f );
+	buttonNext = makeButtonLike( buttonBack, bx - bw - buttonGap, by, bw, bh, "GUI:OnlineLadderNext" );
+	buttonPrev = makeButtonLike( buttonBack, bx - 2 * (bw + buttonGap), by, bw, bh, "GUI:OnlineLadderPrev" );
 }
 
 static void destroyLadderGadgets( void )
 {
-	GameWindow *made[] = { listboxLadder, buttonPrev, buttonNext };
+	GameWindow *made[] = { listboxLadder, buttonPrev, buttonNext, titleText, headerRule };
 	for (size_t i = 0; i < sizeof(made) / sizeof(made[0]); ++i)
 		if (made[i])
 			TheWindowManager->winDestroy( made[i] );
-	listboxLadder = buttonPrev = buttonNext = NULL;
+	listboxLadder = buttonPrev = buttonNext = titleText = headerRule = NULL;
 }
 
 static void addLadderRow( const OnlineLadderRow &r, Color color )

@@ -56,9 +56,7 @@ namespace UIStyle
 	extern const Color FRAME;						///< a panel's and a card's edge, the header rule
 	extern const Color GRID;						///< faint rules: a chart's grid, between rows, a bar's track
 	extern const Color EDGE;						///< a button's edge, a progress bar, a selection
-	extern const Color EDGE_LIT;				///< the bright middle line of a button's edge, a hover
-	extern const Color HOVER;						///< EDGE_LIT see-through, washed over a button or a tile under the mouse
-	extern const Color TAB_EDGE;				///< a tab's box
+	extern const Color EDGE_LIT;				///< the bright middle line of a button's edge, a hover	extern const Color TAB_EDGE;				///< a tab's box
 	extern const Color INK;							///< words and numbers
 	extern const Color MUTED;						///< what is secondary
 	extern const Color ACTIVE;					///< the layouts' green: section headings, the open tab, chip labels
@@ -101,12 +99,19 @@ namespace UIStyle
 	void panel( Int x, Int y, Int width, Int height, Color fill );
 	/// the two-pixel rule under a header and over a foot
 	void rule( Int x, Int y, Int width );
-	/// a layout button's box: the panel's black under a blue, cyan, blue edge; lit under the mouse
-	void button( Int x, Int y, Int width, Int height, Bool lit = FALSE );
+	/// a layout button's box: the panel's black under a blue, cyan, blue edge
+	void button( Int x, Int y, Int width, Int height );
+	enum ButtonLook { BUTTON_IDLE, BUTTON_LIT, BUTTON_PUSHED, BUTTON_DISABLED };
+	/// a layout push button's own art, EA's three pieces, in one of its states; its label is ACTIVE
+	/// when lit or pushed, as the layouts' HILITE text colour; button() where the art is missing
+	void pushButton( Int x, Int y, Int width, Int height, ButtonLook look );
 	/// that blue, cyan, blue edge alone, round a map preview or a progress bar
 	void edge( Int x, Int y, Int width, Int height );
-	/// a tab's box; the label in it is ACTIVE when the tab is open, INK when not; lit under the mouse
-	void tab( Int x, Int y, Int width, Int height, Bool lit = FALSE );
+	/// a tab's box; the label in it is ACTIVE when the tab is open, INK when not
+	void tab( Int x, Int y, Int width, Int height );
+	/// a tab that answers the mouse: under it, a lit push button (pushed when the tab is open);
+	/// returns its label's colour
+	Color tab( Int x, Int y, Int width, Int height, Bool enabled, Bool open, Bool hovered );
 	/// the player's colour down the edge of his row or card, stripeWidth() wide
 	void stripe( Int x, Int y, Int height, Color player );
 	Int stripeWidth( void );

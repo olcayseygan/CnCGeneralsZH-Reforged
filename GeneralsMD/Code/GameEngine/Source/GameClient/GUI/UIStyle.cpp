@@ -44,7 +44,6 @@ const Color GRID = GameMakeColor( 0x2f, 0x37, 0xa8, 90 );
 const Color EDGE = GameMakeColor( 0x25, 0x34, 0xff, 255 );
 const Color EDGE_LIT = GameMakeColor( 0x00, 0xe3, 0xff, 255 );
 const Color TAB_EDGE = GameMakeColor( 0x85, 0x88, 0xb9, 255 );
-const Color HOVER = GameMakeColor( 0x00, 0xe3, 0xff, 72 );
 const Color INK = GameMakeColor( 0xff, 0xff, 0xff, 255 );
 const Color MUTED = GameMakeColor( 0xa4, 0xaa, 0xbe, 255 );
 const Color ACTIVE = GameMakeColor( 0xba, 0xff, 0x0c, 255 );
@@ -107,12 +106,55 @@ void rule( Int x, Int y, Int width )
 	TheDisplay->drawFillRect( x, y, width, max( 1, px( 2 ) ), FRAME );
 }
 
-void button( Int x, Int y, Int width, Int height, Bool lit )
+void button( Int x, Int y, Int width, Int height )
 {
 	TheDisplay->drawFillRect( x, y, width, height, PANEL );
-	if( lit )
-		TheDisplay->drawFillRect( x, y, width, height, HOVER );
 	edge( x, y, width, height );
+}
+
+void pushButton( Int x, Int y, Int width, Int height, ButtonLook look )
+{
+	// the names every layout's MainButton draws with in its four states
+	static const char *const PREFIX[] = { "Buttons-", "Buttons-HiLite-", "Buttons-Pushed-", "Buttons-Disabled-" };
+	AsciiString name;
+	name.format( "%sLeft", PREFIX[ look ] );
+	const Image *left = TheMappedImageCollection->findImageByName( name );
+	name.format( "%sMiddle", PREFIX[ look ] );
+	const Image *middle = TheMappedImageCollection->findImageByName( name );
+	name.format( "%sRight", PREFIX[ look ] );
+	const Image *right = TheMappedImageCollection->findImageByName( name );
+	if( !left || !middle || !right )
+	{
+		button( x, y, width, height );	// retail art an incomplete install may lack
+		return;
+	}
+
+	// laid out as W3DGadgetPushButtonImageDrawThree lays a layout's button out
+	const Int leftEnd = x + left->getImageWidth();
+	const Int rightStart = x + width - right->getImageWidth();
+	if( rightStart <= leftEnd )
+	{
+		TheDisplay->drawImage( left, x, y, x + width / 2, y + height );
+		TheDisplay->drawImage( right, x + width / 2, y, x + width, y + height );
+		return;
+	}
+	const Int piece = middle->getImageWidth();
+	Int at = leftEnd;
+	for( ; at + piece <= rightStart; at += piece )
+		TheDisplay->drawImage( middle, at, y, at + piece, y + height );
+	if( at < rightStart )
+	{
+		IRegion2D rest;
+		rest.lo.x = at;
+		rest.lo.y = y;
+		rest.hi.x = rightStart;
+		rest.hi.y = y + height;
+		TheDisplay->setClipRegion( &rest );
+		TheDisplay->drawImage( middle, at, y, at + piece, y + height );
+		TheDisplay->enableClipping( FALSE );
+	}
+	TheDisplay->drawImage( left, x, y, leftEnd, y + height );
+	TheDisplay->drawImage( right, rightStart, y, x + width, y + height );
 }
 
 void edge( Int x, Int y, Int width, Int height )
@@ -122,12 +164,26 @@ void edge( Int x, Int y, Int width, Int height )
 	TheDisplay->drawOpenRect( x + 2, y + 2, width - 4, height - 4, 1.0f, EDGE );
 }
 
-void tab( Int x, Int y, Int width, Int height, Bool lit )
+void tab( Int x, Int y, Int width, Int height )
 {
 	TheDisplay->drawFillRect( x, y, width, height, PANEL );
-	if( lit )
-		TheDisplay->drawFillRect( x, y, width, height, HOVER );
-	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, lit ? EDGE_LIT : TAB_EDGE );
+	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, TAB_EDGE );
+}
+
+Color tab( Int x, Int y, Int width, Int height, Bool enabled, Bool open, Bool hovered )
+{
+	if( !enabled )
+	{
+		tab( x, y, width, height );
+		return MUTED;
+	}
+	if( hovered )
+	{
+		pushButton( x, y, width, height, open ? BUTTON_PUSHED : BUTTON_LIT );
+		return ACTIVE;
+	}
+	tab( x, y, width, height );
+	return open ? ACTIVE : INK;
 }
 
 void stripe( Int x, Int y, Int height, Color player )

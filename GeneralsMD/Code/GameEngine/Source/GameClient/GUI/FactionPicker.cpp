@@ -85,6 +85,7 @@ static const Real SIDE_TICK = 26.0f;
 static const Real SIDE_TICK_GAP = 14.0f;
 static const Real MAX_PORTRAIT_SCALE = 4.0f;	// a 64 px side logo blown up past this is only blur
 static const Int POOL_DIM_ALPHA = 190;
+static const Int HOVER_ALPHA = 80;				///< the EDGE blue over a tile or the scroll thumb under the mouse
 static const char *const PICKER_IMAGE_PREFIX = "FactionPicker";	// a template's own picture here, FactionPickerFactionTurkiye
 
 struct PickerCell
@@ -679,12 +680,13 @@ static void drawPoolPreview( const IRegion2D &area )
 	}
 }
 
-/** A layout button under the mouse letters its label in its HILITE colour, the green ACTIVE is, over
-	* a lit box; one that cannot be pressed stays MUTED and does not answer, as a disabled one does. */
+/** Back and Confirm in the art of the room's own buttons beside them: lit and lettered green under the
+	* mouse, and one that cannot be pressed in the disabled art, MUTED, answering nothing. */
 static void drawButton( const IRegion2D &box, DisplayString *text, Bool enabled, const ICoord2D &mouse )
 {
 	const Bool lit = enabled && isInside( box, mouse.x, mouse.y );
-	UIStyle::button( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), lit );
+	UIStyle::pushButton( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ),
+		!enabled ? UIStyle::BUTTON_DISABLED : ( lit ? UIStyle::BUTTON_LIT : UIStyle::BUTTON_IDLE ) );
 	drawCentred( text, box, !enabled ? UIStyle::MUTED : ( lit ? UIStyle::ACTIVE : UIStyle::INK ) );
 }
 
@@ -706,8 +708,8 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 	for( Int tab = 0; tab < 2; tab++ )
 	{
 		const IRegion2D &box = s_tabBox[ tab ];
-		UIStyle::tab( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), isInside( box, mouse.x, mouse.y ) );
-		drawCentred( s_tabText[ tab ], box, tabOn[ tab ] ? UIStyle::ACTIVE : UIStyle::INK );
+		const Color ink = UIStyle::tab( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), TRUE, tabOn[ tab ], isInside( box, mouse.x, mouse.y ) );
+		drawCentred( s_tabText[ tab ], box, ink );
 	}
 
 	for( size_t group = 0; group < s_groups.size(); group++ )
@@ -748,10 +750,11 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 				drawTickBox( box.hi.x - size - inset, box.lo.y + inset, size, isTicked( cell ) );
 			}
 		}
-		// a one-pixel cyan line over the card's own frame did not read as a hover, so the tile washes too
+		// a one-pixel cyan line over the card's own frame did not read as a hover, so the tile takes the
+		// blue of a lit button's art too
 		const Bool hovered = mouseInGrid && isInside( box, mouse.x, mouse.y );
 		if( hovered )
-			fillInGrid( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), UIStyle::HOVER );
+			fillInGrid( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ), UIStyle::withAlpha( UIStyle::EDGE, HOVER_ALPHA ) );
 		if( (Int)each == s_focus )
 			UIStyle::edge( box.lo.x, box.lo.y, boxWidth( box ), boxHeight( box ) );
 		else if( hovered )
@@ -763,7 +766,9 @@ static void drawPicker( GameWindow *window, WinInstanceData *instData )
 		UIStyle::panel( s_barBox.lo.x, s_barBox.lo.y, boxWidth( s_barBox ), boxHeight( s_barBox ), UIStyle::CARD );
 		const Int top = s_barBox.lo.y + FactionPickerThumbTop( s_scroll, s_scrollMax, boxHeight( s_barBox ), thumbHeight() );
 		const Bool onThumb = isInside( s_barBox, mouse.x, mouse.y ) && mouse.y >= top && mouse.y < top + thumbHeight();
-		UIStyle::button( s_barBox.lo.x, top, boxWidth( s_barBox ), thumbHeight(), onThumb || s_thumbGrab >= 0 );
+		UIStyle::button( s_barBox.lo.x, top, boxWidth( s_barBox ), thumbHeight() );
+		if( onThumb || s_thumbGrab >= 0 )
+			TheDisplay->drawFillRect( s_barBox.lo.x, top, boxWidth( s_barBox ), thumbHeight(), UIStyle::withAlpha( UIStyle::EDGE, HOVER_ALPHA ) );
 	}
 
 	UIStyle::panel( s_portraitBox.lo.x, s_portraitBox.lo.y, boxWidth( s_portraitBox ), boxHeight( s_portraitBox ), UIStyle::CARD );

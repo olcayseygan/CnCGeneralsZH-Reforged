@@ -161,7 +161,7 @@ void OnlineSendReport( const OnlineReport &report )
 
 OnlinePlayerInfo::OnlinePlayerInfo() :
 	ping( -1 ), hasRating( FALSE ), rating( 0 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
-	notOnline( FALSE ), hasStats( FALSE )
+	notOnline( FALSE ), hasStats( FALSE ), serial( 0 )
 {
 }
 
@@ -173,10 +173,11 @@ Bool OnlineGetPlayerInfo( const AsciiString &nick, OnlinePlayerInfo &out )
 {
 	out = OnlinePlayerInfo();
 	const std::map<std::string, OnlineCard> &cards = OnlineSession::get().cards;
-	std::map<std::string, OnlineCard>::const_iterator it = cards.find( nick.str() );
+	std::map<std::string, OnlineCard>::const_iterator it = cards.find( OnlineNickKey( nick.str() ) );
 	if (it == cards.end())
 		return FALSE;
 	const OnlineCard &c = it->second;
+	out.serial = c.serial;
 	out.ping = (Int)c.ping;
 	out.hasRating = c.hasRating;
 	out.rating = (Int)c.rating;
@@ -198,7 +199,7 @@ void OnlineRequestStats( const AsciiString &nick )
 	OnlineMessage m;
 	m.setString( "t", "stats" ).setString( "nick", nick.str() );
 	s.send( m );
-	s.statsAsked.push_back( nick.str() );
+	s.statsAsked.push_back( OnlineNickKey( nick.str() ) );
 }
 
 UnsignedInt OnlinePlayerInfoSerial( void )

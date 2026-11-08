@@ -18197,7 +18197,7 @@ GUI:OnlineRatingTier
 END
 
 GUI:OnlineLadderPlace
-"sıralamada %d."
+"ligde %d."
 END
 
 GUI:OnlinePlayerNotOnline
@@ -18269,15 +18269,15 @@ GUI:OnlineLadderLosses
 END
 
 GUI:OnlineLadderLoading
-"Sıralama yükleniyor..."
+"Lig yükleniyor..."
 END
 
 GUI:OnlineLadderUnavailable
-"Sıralama şu an açılmıyor. Bi dakka sonra tekrar dene."
+"Lig şu an açılmıyor. Bi dakka sonra tekrar dene."
 END
 
 GUI:OnlineLadderEmpty
-"Bu sayfada sıralamaya girmiş oyuncu yok."
+"Bu sayfada ligde oyuncu yok."
 END
 
 GUI:OnlineRatedResult

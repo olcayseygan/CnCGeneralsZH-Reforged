@@ -48,6 +48,8 @@ static const Int ONLINE_NAT_SIMPLE = 1;
 // The one chat room the login lists.  Its name is looked up as GUI:<name> for the lobby's combo box.
 static const Int ONLINE_LOBBY_ROOM = 1;
 static const char *ONLINE_LOBBY_NAME = "Lobby";
+// the protocol version login and resume announce
+static const Int ONLINE_PROTO = 2;
 
 UnsignedInt OnlineHostToNet( UnsignedInt v )
 {
@@ -240,8 +242,12 @@ void OnlineSession::disconnect()
 	forgetAccount();
 }
 
-void OnlineSession::requestAuth( const OnlineMessage &m )
+void OnlineSession::requestAuth( const OnlineMessage &line )
 {
+	// proto 2: this exe reads object values (room.players, opponents, ladder rows) and answers ping;
+	// a server sends neither to an exe that does not say so
+	OnlineMessage m = line;
+	m.setInt( "proto", ONLINE_PROTO );
 	authWaiting = TRUE;
 	if (status == ONLINE_WELCOMED)
 	{
@@ -440,12 +446,22 @@ static void rememberVips( OnlineSession &s, const OnlineMessage &m )
 
 /* A field the line carries replaces what the card had; null clears it; a field the line leaves out
 	 (an older server, a player the site has no record for) leaves it alone. */
+std::string OnlineNickKey( const std::string &nick )
+{
+	std::string key = nick;
+	for (size_t i = 0; i < key.size(); ++i)
+		if (key[i] >= 'A' && key[i] <= 'Z')
+			key[i] = (char)(key[i] - 'A' + 'a');
+	return key;
+}
+
 void OnlineSession::noteCard( const OnlineMessage &m )
 {
 	const std::string who = m.getString( "nick" );
 	if (who.empty())
 		return;
-	OnlineCard &c = cards[who];
+	OnlineCard &c = cards[OnlineNickKey( who )];
+	const OnlineCard before = c;
 	const OnlineValue *v;
 	if ((v = m.find( "ping" )) != NULL)
 		c.ping = v->kind == OnlineValue::NUMBER ? m.getInt( "ping" ) : -1;
@@ -469,7 +485,11 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 		c.hasStats = TRUE;
 		c.notOnline = FALSE;
 	}
-	++cardSerial;
+	// the serial moves only on a real change: a screen redraws on it, and the same ping again is no news
+	if (c.ping != before.ping || c.rating != before.rating || c.games != before.games || c.wins != before.wins
+		|| c.losses != before.losses || c.rank != before.rank || c.hasRating != before.hasRating
+		|| c.notOnline != before.notOnline || c.hasStats != before.hasStats || c.tier != before.tier || !before.serial)
+		c.serial = ++cardSerial;
 }
 
 void OnlineSession::matched( const OnlineMessage &m )
@@ -611,7 +631,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			statsAsked.pop_front();
 			c.notOnline = code == "noplayer";
 			c.hasStats = FALSE;
-			++cardSerial;
+			c.serial = ++cardSerial;
 		}
 		else if (what == "ladder")
 		{
@@ -630,6 +650,10 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		const std::vector<std::string> nicks = m.getStrings( "nicks" );
 		present.clear();
 		present.insert( ids.begin(), ids.end() );
+		// every member's ping and rating, as a `player` event would carry them (proto 2)
+		const std::vector<OnlineMessage> players = m.getObjects( "players" );
+		for (size_t i = 0; i < players.size(); ++i)
+			noteCard( players[i] );
 		for (size_t i = 0; i < ids.size() && i < nicks.size(); ++i)
 			playerResponse( *this, PeerResponse::PEERRESPONSE_PLAYERJOIN, GroupRoom, ids[i], nicks[i] );
 	}
@@ -705,6 +729,9 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		const std::vector<std::string> nicks = m.getStrings( "nicks" );
 		present.clear();
 		present.insert( ids.begin(), ids.end() );
+		const std::vector<OnlineMessage> players = m.getObjects( "players" );
+		for (size_t i = 0; i < players.size(); ++i)
+			noteCard( players[i] );
 		if (hosting)
 		{
 			PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_CREATESTAGINGROOM );
@@ -827,7 +854,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		{
 			for (std::deque<std::string>::iterator it = statsAsked.begin(); it != statsAsked.end(); ++it)
 			{
-				if (*it == who)
+				if (*it == OnlineNickKey( who ))
 				{
 					statsAsked.erase( it );
 					break;
@@ -1104,6 +1131,8 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		return;
 
 	case PeerRequest::PEERREQUEST_STOPQUICKMATCH:
+		// a reveal ends with our leaving, whatever the server's qm.status says on its way back
+		s.revealing = FALSE;
 		m.setString( "t", "qm.leave" );
 		s.send( m );
 		return;

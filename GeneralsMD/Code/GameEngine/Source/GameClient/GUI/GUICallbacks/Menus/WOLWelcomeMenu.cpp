@@ -70,6 +70,7 @@
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
@@ -387,6 +388,16 @@ static void updateOverallStats(void)
 	if( s_totalWinPercent <= 0 )
 		s_totalWinPercent = 1;  //prevent divide by zero
 
+	// No figures came (-online has no GameSpy stats page): the twelve boxes would show their raw
+	// "%d%%" label, so the community panel goes instead
+	if (s_winStats.empty())
+	{
+		GameWindow *community = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY("WOLWelcomeMenu.wnd:CommunityInfoParent") );
+		if (community)
+			community->winHide(TRUE);
+		return;
+	}
+
 	std::map<AsciiString,float>::iterator it;
 	for( it = s_winStats.begin();  it != s_winStats.end();  ++it )
 	{
@@ -533,8 +544,10 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	// servers) has nothing to find.  Quick Match and the ladder are the service's; buddies are not.
 	else if (OnlineIsEnabled())
 	{
+		// retail's hub has no Ladder button (EA reached its web ladder elsewhere), and nothing answers
+		// Buddies here: that slot becomes Ladder
 		if (buttonBuddies)
-			buttonBuddies->winHide(TRUE);
+			GadgetButtonSetText(buttonBuddies, TheGameText->fetch("GUI:Ladder"));
 		OnlineRequestStats(TheGameSpyInfo->getLocalName());
 	}
 	else
@@ -586,8 +599,9 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 
 	UpdateLocalPlayerStats();
 
+	// -online keeps no locale and shows none, so it does not ask for one
 	GameSpyMiscPreferences cPref;
-	if (cPref.getLocale() < LOC_MIN || cPref.getLocale() > LOC_MAX)
+	if ((cPref.getLocale() < LOC_MIN || cPref.getLocale() > LOC_MAX) && !OnlineIsEnabled())
 	{
 		GameSpyOpenOverlay(GSOVERLAY_LOCALESELECT);
 	}
@@ -732,9 +746,11 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 		// Match; -onlinehost, -onlinejoin and -onlinesay go to the lobby, which carries them on.
 		// -online: our own rating, tier and record arrive after the screen drew (auth.ok, stats)
 		static UnsignedInt s_onlineInfoSerial = 0;
-		if (OnlineIsEnabled() && !buttonPushed && OnlinePlayerInfoSerial() != s_onlineInfoSerial)
+		OnlinePlayerInfo card;
+		if (OnlineIsEnabled() && !buttonPushed && OnlineGetPlayerInfo(TheGameSpyInfo->getLocalName(), card)
+			&& card.serial != s_onlineInfoSerial)
 		{
-			s_onlineInfoSerial = OnlinePlayerInfoSerial();
+			s_onlineInfoSerial = card.serial;
 			UpdateLocalPlayerStats();
 		}
 
@@ -926,6 +942,10 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 					TheWOL->addCommand( WOL::WOLCOMMAND_REFRESH_CHANNELS );
 					*/
 				}// else if
+				else if (controlID == buttonBuddiesID && OnlineIsEnabled())
+				{
+					TheShell->push(AsciiString("Menus/WOLLadderScreen.wnd"));
+				}
 				else if (controlID == buttonBuddiesID)
 				{
 					GameSpyToggleOverlay( GSOVERLAY_BUDDY );

@@ -137,10 +137,11 @@ struct OnlinePlayerInfo
 	Int rank;									///< ladder position, 0 for none
 	Bool notOnline;						///< the last stats asked for this nick came back noplayer
 	Bool hasStats;						///< a stats answer for this nick arrived (wins and losses are then known)
+	UnsignedInt serial;				///< moves on whenever this player's numbers change: redraw on it, not on everyone's
 
 	OnlinePlayerInfo();
 };
-Bool OnlineGetPlayerInfo( const AsciiString &nick, OnlinePlayerInfo &out );		///< FALSE: nothing heard about the nick
+Bool OnlineGetPlayerInfo( const AsciiString &nick, OnlinePlayerInfo &out );		///< FALSE: nothing heard about the nick (any case)
 void OnlineRequestStats( const AsciiString &nick );		///< stats{nick}; the answer lands in OnlineGetPlayerInfo
 UnsignedInt OnlinePlayerInfoSerial( void );						///< moves on whenever a player's numbers change
 UnicodeString OnlineTierName( const AsciiString &tier );		///< GUI:OnlineTier_<key>, or the key itself

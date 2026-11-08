@@ -114,10 +114,15 @@ struct OnlineCard
 	long long ping, rating, games, wins, losses, rank;
 	Bool hasRating, notOnline, hasStats;
 	std::string tier;
+	UnsignedInt serial;		///< the session's cardSerial when this card last changed
 
 	OnlineCard() : ping( -1 ), rating( 0 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
-		hasRating( FALSE ), notOnline( FALSE ), hasStats( FALSE ) {}
+		hasRating( FALSE ), notOnline( FALSE ), hasStats( FALSE ), serial( 0 ) {}
 };
+
+/* The key cards are kept under: the nick in lower case.  The server finds a nick without regard to
+	 case and answers with the spelling it stored. */
+std::string OnlineNickKey( const std::string &nick );
 
 struct OnlineSession
 {
@@ -169,9 +174,9 @@ struct OnlineSession
 	OnlineMessage result;		///< the last rated or unrated line itself
 
 	// what the server says about players, and who is in the room the screens show
-	std::map<std::string, OnlineCard> cards;		///< by nick
+	std::map<std::string, OnlineCard> cards;		///< by OnlineNickKey
 	UnsignedInt cardSerial;
-	std::deque<std::string> statsAsked;		///< stats{nick} sent, oldest first: an error{for:stats} names none
+	std::deque<std::string> statsAsked;		///< OnlineNickKey of each stats{nick} sent, oldest first: an error{for:stats} names none
 	std::set<long long> present;		///< ids in the current chat or staging room: a `player` for one is an update, not a join
 
 	// the ladder's last answer

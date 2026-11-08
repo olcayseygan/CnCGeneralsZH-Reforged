@@ -1263,6 +1263,55 @@ TEST(online_adapter_ping_ratings_stats_and_ladder)
 	CHECK_NEAR( rating, 18.5f, 0.001f );
 }
 
+/* proto 2 on login, the room snapshot's cards, nicks in any case, Stop ending a reveal at once. */
+TEST(online_adapter_proto2_room_cards_and_case)
+{
+	AdapterRig rig;
+	BuddyRequest req;
+	memset( &req, 0, sizeof(req) );
+	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+	strcpy( req.arg.login.email, "tank@example.com" );
+	strcpy( req.arg.login.password, "secret" );
+	rig.buddy->addRequest( req );
+	CHECK( !rig.sent.empty() && rig.sent.back().getInt( "proto" ) == 2 );
+	rig.login();
+
+	rig.feed( "{\"t\":\"room\",\"id\":\"lobby1\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"],"
+		"\"players\":[{\"id\":7,\"nick\":\"Tank\",\"ping\":20},{\"id\":9,\"nick\":\"Kim\",\"ping\":45,\"rating\":31,\"tier\":\"major\"}]}" );
+	rig.peerResponses();
+	OnlinePlayerInfo kim;
+	CHECK( OnlineGetPlayerInfo( "kim", kim ) );		// any case
+	CHECK_EQ( kim.ping, 45 );
+	CHECK( kim.hasRating && kim.rating == 31 );
+	const UnsignedInt serial = kim.serial;
+	rig.feed( "{\"t\":\"player\",\"room\":\"lobby1\",\"id\":9,\"nick\":\"Kim\",\"ping\":45}" );
+	CHECK( OnlineGetPlayerInfo( "Kim", kim ) );
+	CHECK_EQ( kim.serial, serial );		// the same ping again changes nothing
+	rig.feed( "{\"t\":\"player\",\"room\":\"lobby1\",\"id\":9,\"nick\":\"Kim\",\"ping\":60}" );
+	CHECK( OnlineGetPlayerInfo( "Kim", kim ) );
+	CHECK( kim.serial != serial );
+
+	// asked as KIM, answered as Kim; the next noplayer then belongs to Ghost, not Kim
+	OnlineRequestStats( "KIM" );
+	OnlineRequestStats( "Ghost" );
+	rig.feed( "{\"t\":\"stats\",\"id\":9,\"nick\":\"Kim\",\"wins\":5,\"losses\":2,\"rank\":3}" );
+	rig.feed( "{\"t\":\"error\",\"for\":\"stats\",\"code\":\"noplayer\"}" );
+	CHECK( OnlineGetPlayerInfo( "Kim", kim ) );
+	CHECK( kim.hasStats && !kim.notOnline && kim.rank == 3 );
+	OnlinePlayerInfo ghost;
+	CHECK( OnlineGetPlayerInfo( "ghost", ghost ) && ghost.notOnline );
+
+	// Stop during a reveal ends it before the server's qm.status comes back
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q3\",\"seed\":1,\"mapIdx\":0,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"revealMs\":3000}" );
+	OnlineMatchReveal rev;
+	CHECK( OnlineGetMatchReveal( rev ) );
+	PeerRequest stop;
+	stop.peerRequestType = PeerRequest::PEERREQUEST_STOPQUICKMATCH;
+	rig.peer->addRequest( stop );
+	CHECK( !OnlineGetMatchReveal( rev ) );
+	CHECK_STR( rig.sent.back().type().c_str(), "qm.leave" );
+}
+
 /* GameLogic dereferences the template and the colour a seat names (getColor(999)->getColor() was a
 	 crash at Quick Match start), so whatever the server says is clamped before a seat sees it. */
 TEST(online_seat_side_and_color_are_clamped)

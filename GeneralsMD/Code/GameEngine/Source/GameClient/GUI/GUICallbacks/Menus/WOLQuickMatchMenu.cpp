@@ -181,7 +181,8 @@ static void onlineQuickMatchTick( void )
 {
 	const UnsignedInt now = Clock_Milliseconds();
 	OnlineMatchReveal reveal;
-	if (OnlineGetMatchReveal( reveal ) && (!s_revealShown || reveal.serial != s_revealSerial))
+	// each reveal is announced once: one already shown and then stopped or cancelled is not shown again
+	if (OnlineGetMatchReveal( reveal ) && reveal.serial != s_revealSerial)
 	{
 		s_revealShown = TRUE;
 		s_revealSerial = reveal.serial;
@@ -231,9 +232,10 @@ static void onlineQuickMatchTick( void )
 
 	// our own rating, tier and record, as they arrive
 	static UnsignedInt s_infoSerial = 0;
-	if (OnlinePlayerInfoSerial() != s_infoSerial)
+	OnlinePlayerInfo card;
+	if (OnlineGetPlayerInfo( TheGameSpyInfo->getLocalName(), card ) && card.serial != s_infoSerial)
 	{
-		s_infoSerial = OnlinePlayerInfoSerial();
+		s_infoSerial = card.serial;
 		UpdateLocalPlayerStats();
 	}
 }
@@ -1442,18 +1444,25 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 								TheGameSpyInfo->addText(TheGameText->fetch("GUI:QMOpponentLeft"), GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
 							}
 							s_poolSize = resp.qmStatus.poolSize;
-							UnicodeString s;
-							s.format(TheGameText->fetch("QM:WORKING"), resp.qmStatus.poolSize);
-							TheGameSpyInfo->addText(s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
+							// -online says the pool in the Matching Progress heading, beside the clock
+							if (!OnlineIsEnabled())
+							{
+								UnicodeString s;
+								s.format(TheGameText->fetch("QM:WORKING"), resp.qmStatus.poolSize);
+								TheGameSpyInfo->addText(s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
+							}
 						}
 						buttonWiden->winEnable( TRUE );
 						break;
 					case QM_POOLSIZE:
 						{
 							s_poolSize = resp.qmStatus.poolSize;
-							UnicodeString s;
-							s.format(TheGameText->fetch("QM:POOLSIZE"), resp.qmStatus.poolSize);
-							TheGameSpyInfo->addText(s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
+							if (!OnlineIsEnabled())
+							{
+								UnicodeString s;
+								s.format(TheGameText->fetch("QM:POOLSIZE"), resp.qmStatus.poolSize);
+								TheGameSpyInfo->addText(s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
+							}
 						}
 						break;
 					case QM_WIDENINGSEARCH:
@@ -1975,6 +1984,15 @@ WindowMsgHandledType WOLQuickMatchMenuSystem( GameWindow *window, UnsignedInt ms
 				}
 				else if ( controlID == buttonBackID )
 				{
+					// -online: leaving the screen leaves the queue, or the server pairs us and the opponent
+					// loads against nobody
+					if (OnlineIsEnabled() && (s_searchSince || s_revealShown))
+					{
+						PeerRequest req;
+						req.peerRequestType = PeerRequest::PEERREQUEST_STOPQUICKMATCH;
+						TheGameSpyPeerMessageQueue->addRequest(req);
+						onlineSearchStopped();
+					}
 					buttonPushed = true;
 					TheGameSpyInfo->leaveGroupRoom();
 					nextScreen = "Menus/WOLWelcomeMenu.wnd";

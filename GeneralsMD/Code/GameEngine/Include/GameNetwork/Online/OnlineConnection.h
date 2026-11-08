@@ -31,19 +31,22 @@
 
 /* The lobby protocol (docs/plans/ONLINE-SERVICE.md in the owner's workspace) sends one JSON object per
 	 line, at most ONLINE_MAX_LINE bytes before the newline, its type in "t".  A value is a scalar (string,
-	 number, true, false, null) or an array of scalars; nothing nests further, which is what keeps this
-	 reader a page long.  Nothing in this file or its .cpp knows the engine: it builds as a library of its
-	 own, so test_online drives it without linking the game. */
+	 number, true, false, null), an array of scalars, or one level of object: a top-level value may be an
+	 object of scalars and scalar arrays, or an array holding such objects (a ladder's rows, a match's
+	 opponents).  Nothing nests deeper, which is what keeps this reader a page long.  Nothing in this file
+	 or its .cpp knows the engine: it builds as a library of its own, so test_online drives it without
+	 linking the game. */
 
 enum { ONLINE_MAX_LINE = 8192 };
 
 struct OnlineValue
 {
-	enum Kind { NUL, BOOLEAN, NUMBER, STRING, ARRAY };
+	enum Kind { NUL, BOOLEAN, NUMBER, STRING, ARRAY, OBJECT };
 	Kind kind;
 	bool boolean;
 	std::string text;									///< a STRING's UTF-8, or a NUMBER's JSON spelling (kept as text, so a 64-bit id survives)
-	std::vector<OnlineValue> items;		///< an ARRAY's scalars
+	std::vector<OnlineValue> items;		///< an ARRAY's items, or an OBJECT's values
+	std::vector<std::string> keys;		///< an OBJECT's keys, one per item
 
 	OnlineValue() : kind( NUL ), boolean( false ) {}
 };
@@ -60,6 +63,8 @@ public:
 	bool getBool( const char *key, bool otherwise = false ) const;
 	std::vector<std::string> getStrings( const char *key ) const;		///< an array's strings; other items are skipped
 	std::vector<long long> getInts( const char *key ) const;				///< an array's numbers as integers
+	bool getObject( const char *key, OnlineMessage &out ) const;		///< an object value as a message of its own
+	std::vector<OnlineMessage> getObjects( const char *key ) const;	///< an array's objects; other items are skipped
 	std::string type() const { return getString( "t" ); }
 
 	/* Writing.  Setting a key that is there replaces it; keys keep the order they were first set in. */
@@ -76,13 +81,15 @@ public:
 	size_t size() const { return m_fields.size(); }
 	const std::vector< std::pair<std::string, OnlineValue> > &fields() const { return m_fields; }
 
-	/* The object as one line, newline included.  False when a string is not valid UTF-8 or the line would
-		 be longer than ONLINE_MAX_LINE; out is left empty then. */
+	/* The object as one line, newline included.  False when a string is not valid UTF-8, a value is an
+		 object (the client never sends one), or the line would be longer than ONLINE_MAX_LINE; out is left
+		 empty then. */
 	bool toLine( std::string &out ) const;
 
-	/* One line, without its newline (a trailing CR is allowed).  False on anything but a flat object of
-		 scalars and arrays of scalars in valid UTF-8: a nested object or array, a duplicate key, a bad
-		 escape, a lone surrogate, \u0000, a raw control character, trailing text.  out is cleared first. */
+	/* One line, without its newline (a trailing CR is allowed).  False on anything but an object of the
+		 shape the comment at the top allows, in valid UTF-8: an array in an array, an object in an object,
+		 a duplicate key, a bad escape, a lone surrogate, \u0000, a raw control character, trailing text.
+		 out is cleared first. */
 	static bool parse( const char *line, size_t length, OnlineMessage &out );
 
 private:
@@ -140,7 +147,7 @@ public:
 
 	State state() const;
 	std::string error() const;			///< why the connection ended or failed to start; empty while it is fine
-	unsigned droppedLines() const;	///< received lines that were oversize or not a flat JSON object
+	unsigned droppedLines() const;	///< received lines that were oversize or not a JSON object parse() takes
 
 	/* ISRG Root X1 and X2, the roots Let's Encrypt chains to, as PEM. */
 	static const char *defaultRoots();

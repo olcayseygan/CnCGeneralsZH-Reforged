@@ -315,8 +315,13 @@ static bool parseScalar( Cursor &c, OnlineValue &out )
 	}
 }
 
-static bool parseValue( Cursor &c, OnlineValue &out )
+static bool parseObject( Cursor &c, OnlineValue &out, bool inner );
+
+/* inner: inside an object that is itself a value, where only scalars and scalar arrays may sit */
+static bool parseValue( Cursor &c, OnlineValue &out, bool inner )
 {
+	if (!c.atEnd() && *c.p == '{' && !inner)
+		return parseObject( c, out, true );
 	if (c.atEnd() || *c.p != '[')
 		return parseScalar( c, out );
 	out.kind = OnlineValue::ARRAY;
@@ -330,7 +335,8 @@ static bool parseValue( Cursor &c, OnlineValue &out )
 	for (;;)
 	{
 		OnlineValue item;
-		if (!parseScalar( c, item ))
+		const bool ok = (!c.atEnd() && *c.p == '{' && !inner) ? parseObject( c, item, true ) : parseScalar( c, item );
+		if (!ok)
 			return false;
 		out.items.push_back( item );
 		skipSpace( c );
@@ -345,6 +351,47 @@ static bool parseValue( Cursor &c, OnlineValue &out )
 	}
 }
 
+/* An object at the cursor into out (kind OBJECT, keys beside items).  inner as parseValue's, for its values. */
+static bool parseObject( Cursor &c, OnlineValue &out, bool inner )
+{
+	out.kind = OnlineValue::OBJECT;
+	if (c.atEnd() || *c.p++ != '{')
+		return false;
+	skipSpace( c );
+	if (!c.atEnd() && *c.p == '}')
+	{
+		++c.p;
+		return true;
+	}
+	for (;;)
+	{
+		std::string key;
+		OnlineValue value;
+		if (!parseString( c, key ))
+			return false;
+		for (size_t i = 0; i < out.keys.size(); ++i)
+			if (out.keys[ i ] == key)
+				return false;		// a duplicate key
+		skipSpace( c );
+		if (c.atEnd() || *c.p++ != ':')
+			return false;
+		skipSpace( c );
+		if (!parseValue( c, value, inner ))
+			return false;
+		out.keys.push_back( key );
+		out.items.push_back( value );
+		skipSpace( c );
+		if (c.atEnd())
+			return false;
+		const char ch = *c.p++;
+		if (ch == '}')
+			return true;
+		if (ch != ',')
+			return false;
+		skipSpace( c );
+	}
+}
+
 bool OnlineMessage::parse( const char *line, size_t length, OnlineMessage &out )
 {
 	out.clear();
@@ -352,50 +399,14 @@ bool OnlineMessage::parse( const char *line, size_t length, OnlineMessage &out )
 		return false;
 	Cursor c = { line, line + length };
 	skipSpace( c );
-	if (c.atEnd() || *c.p++ != '{')
+	OnlineValue top;
+	if (!parseObject( c, top, false ))
 		return false;
 	skipSpace( c );
-	bool ok = false;
-	if (!c.atEnd() && *c.p == '}')
-	{
-		++c.p;
-		ok = true;
-	}
-	else
-	{
-		for (;;)
-		{
-			std::string key;
-			OnlineValue value;
-			if (!parseString( c, key ) || out.has( key.c_str() ))
-				break;
-			skipSpace( c );
-			if (c.atEnd() || *c.p++ != ':')
-				break;
-			skipSpace( c );
-			if (!parseValue( c, value ))
-				break;
-			out.m_fields.push_back( std::make_pair( key, value ) );
-			skipSpace( c );
-			if (c.atEnd())
-				break;
-			const char ch = *c.p++;
-			if (ch == '}')
-			{
-				ok = true;
-				break;
-			}
-			if (ch != ',')
-				break;
-			skipSpace( c );
-		}
-	}
-	skipSpace( c );
-	if (!ok || !c.atEnd())
-	{
-		out.clear();
+	if (!c.atEnd())
 		return false;
-	}
+	for (size_t i = 0; i < top.keys.size(); ++i)
+		out.m_fields.push_back( std::make_pair( top.keys[ i ], top.items[ i ] ) );
 	return true;
 }
 
@@ -545,6 +556,37 @@ std::vector<std::string> OnlineMessage::getStrings( const char *key ) const
 		for (size_t i = 0; i < v->items.size(); ++i)
 			if (v->items[ i ].kind == OnlineValue::STRING)
 				result.push_back( v->items[ i ].text );
+	return result;
+}
+
+static void objectToMessage( const OnlineValue &v, OnlineMessage &out )
+{
+	out.clear();
+	for (size_t i = 0; i < v.keys.size() && i < v.items.size(); ++i)
+		out.set( v.keys[ i ].c_str(), v.items[ i ] );
+}
+
+bool OnlineMessage::getObject( const char *key, OnlineMessage &out ) const
+{
+	out.clear();
+	const OnlineValue *v = find( key );
+	if (!v || v->kind != OnlineValue::OBJECT)
+		return false;
+	objectToMessage( *v, out );
+	return true;
+}
+
+std::vector<OnlineMessage> OnlineMessage::getObjects( const char *key ) const
+{
+	std::vector<OnlineMessage> result;
+	const OnlineValue *v = find( key );
+	if (v && v->kind == OnlineValue::ARRAY)
+		for (size_t i = 0; i < v->items.size(); ++i)
+			if (v->items[ i ].kind == OnlineValue::OBJECT)
+			{
+				result.push_back( OnlineMessage() );
+				objectToMessage( v->items[ i ], result.back() );
+			}
 	return result;
 }
 

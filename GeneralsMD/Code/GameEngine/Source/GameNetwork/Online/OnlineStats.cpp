@@ -24,8 +24,11 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "GameClient/GameText.h"
 #include "GameNetwork/Online/OnlineSession.h"
 
+#include <ctype.h>
+#include <math.h>
 #include <stdlib.h>
 
 OnlinePSQueue::OnlinePSQueue() : m_running( FALSE )
@@ -150,4 +153,168 @@ void OnlineSendReport( const OnlineReport &report )
 	}
 	m.setInts( "discon", discon ).setStrings( "side", side );
 	s.send( m );
+}
+
+//-------------------------------------------------------------------------------------------------
+// ratings, the ladder, the reveal and the verdict, for the screens
+//-------------------------------------------------------------------------------------------------
+
+OnlinePlayerInfo::OnlinePlayerInfo() :
+	ping( -1 ), hasRating( FALSE ), rating( 0 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
+	notOnline( FALSE ), hasStats( FALSE )
+{
+}
+
+OnlineLadderRow::OnlineLadderRow() : rank( 0 ), hasRating( FALSE ), rating( 0 ), wins( 0 ), losses( 0 )
+{
+}
+
+Bool OnlineGetPlayerInfo( const AsciiString &nick, OnlinePlayerInfo &out )
+{
+	out = OnlinePlayerInfo();
+	const std::map<std::string, OnlineCard> &cards = OnlineSession::get().cards;
+	std::map<std::string, OnlineCard>::const_iterator it = cards.find( nick.str() );
+	if (it == cards.end())
+		return FALSE;
+	const OnlineCard &c = it->second;
+	out.ping = (Int)c.ping;
+	out.hasRating = c.hasRating;
+	out.rating = (Int)c.rating;
+	out.tier = c.tier.c_str();
+	out.games = (Int)c.games;
+	out.wins = (Int)c.wins;
+	out.losses = (Int)c.losses;
+	out.rank = (Int)c.rank;
+	out.notOnline = c.notOnline;
+	out.hasStats = c.hasStats;
+	return TRUE;
+}
+
+void OnlineRequestStats( const AsciiString &nick )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (nick.isEmpty() || !s.authed)
+		return;
+	OnlineMessage m;
+	m.setString( "t", "stats" ).setString( "nick", nick.str() );
+	s.send( m );
+	s.statsAsked.push_back( nick.str() );
+}
+
+UnsignedInt OnlinePlayerInfoSerial( void )
+{
+	return OnlineSession::get().cardSerial;
+}
+
+UnicodeString OnlineTierName( const AsciiString &tier )
+{
+	if (tier.isEmpty())
+		return UnicodeString::TheEmptyString;
+	if (TheGameText)
+	{
+		AsciiString label;
+		label.format( "GUI:OnlineTier_%s", tier.str() );
+		Bool exists = FALSE;
+		UnicodeString name = TheGameText->fetch( label, &exists );
+		if (exists)
+			return name;
+	}
+	// a tier this build has no words for: the key itself, capitalised
+	std::string shown = tier.str();
+	shown[0] = (char)toupper( (unsigned char)shown[0] );
+	UnicodeString name;
+	name.translate( AsciiString( shown.c_str() ) );
+	return name;
+}
+
+UnicodeString OnlineRatingText( const OnlinePlayerInfo &info )
+{
+	UnicodeString text;
+	if (!TheGameText)
+		return text;
+	if (info.hasRating && info.tier.isNotEmpty())
+		text.format( TheGameText->fetch( "GUI:OnlineRatingTier" ), OnlineTierName( info.tier ).str(), info.rating );
+	else if (info.hasRating)
+		text.format( TheGameText->fetch( "GUI:OnlineRating" ), info.rating );
+	else if (info.tier.isNotEmpty())
+		text = OnlineTierName( info.tier );
+	return text;
+}
+
+void OnlineRequestLadder( Int offset )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!s.authed)
+	{
+		s.ladderState = ONLINE_LADDER_FAILED;
+		return;
+	}
+	s.ladderState = ONLINE_LADDER_WAITING;
+	OnlineMessage m;
+	m.setString( "t", "ladder" ).setInt( "offset", offset < 0 ? 0 : offset );
+	s.send( m );
+}
+
+static OnlineLadderRow ladderRow( const OnlineMessage &m )
+{
+	OnlineLadderRow r;
+	r.rank = (Int)m.getInt( "rank", 0 );
+	r.nick = m.getString( "nick" ).c_str();
+	const OnlineValue *rating = m.find( "rating" );
+	r.hasRating = rating && rating->kind == OnlineValue::NUMBER;
+	r.rating = r.hasRating ? (Int)floor( m.getNumber( "rating" ) + 0.5 ) : 0;
+	r.tier = m.getString( "tier" ).c_str();
+	r.wins = (Int)m.getInt( "wins", 0 );
+	r.losses = (Int)m.getInt( "losses", 0 );
+	return r;
+}
+
+OnlineLadderState OnlineGetLadder( Int &offset, std::vector<OnlineLadderRow> &rows, OnlineLadderRow &me, Bool &hasMe )
+{
+	const OnlineSession &s = OnlineSession::get();
+	rows.clear();
+	me = OnlineLadderRow();
+	hasMe = FALSE;
+	offset = (Int)s.ladder.getInt( "offset", 0 );
+	if (s.ladderState != ONLINE_LADDER_READY)
+		return (OnlineLadderState)s.ladderState;
+	const std::vector<OnlineMessage> got = s.ladder.getObjects( "rows" );
+	for (size_t i = 0; i < got.size(); ++i)
+		rows.push_back( ladderRow( got[i] ) );
+	OnlineMessage mine;
+	if (s.ladder.getObject( "me", mine ))
+	{
+		me = ladderRow( mine );
+		hasMe = TRUE;
+	}
+	return ONLINE_LADDER_READY;
+}
+
+Bool OnlineGetMatchReveal( OnlineMatchReveal &out )
+{
+	const OnlineSession &s = OnlineSession::get();
+	out.opponents.clear();
+	out.server.clear();
+	out.revealMs = 0;
+	out.serial = s.revealSerial;
+	if (!s.revealing)
+		return FALSE;
+	const std::vector<OnlineMessage> got = s.reveal.getObjects( "opponents" );
+	for (size_t i = 0; i < got.size(); ++i)
+		out.opponents.push_back( ladderRow( got[i] ) );
+	out.server = s.reveal.getString( "server" ).c_str();
+	out.revealMs = (Int)s.reveal.getInt( "revealMs", 0 );
+	return TRUE;
+}
+
+Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason )
+{
+	const OnlineSession &s = OnlineSession::get();
+	if (!s.result.size() || s.matchId.empty() || s.result.getString( "match" ) != s.matchId)
+		return FALSE;
+	rated = s.result.type() == "rated";
+	delta = (Real)s.result.getNumber( "delta" );
+	rating = (Real)s.result.getNumber( "rating" );
+	reason = s.result.getString( "reason" ).c_str();
+	return TRUE;
 }

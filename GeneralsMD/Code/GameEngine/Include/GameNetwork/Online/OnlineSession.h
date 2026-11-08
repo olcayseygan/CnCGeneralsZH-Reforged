@@ -28,6 +28,7 @@
 
 #include <deque>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -107,6 +108,17 @@ private:
 	Bool m_running;
 };
 
+/* OnlinePlayerInfo in std::string, which outlives the engine's allocator the way the session does. */
+struct OnlineCard
+{
+	long long ping, rating, games, wins, losses, rank;
+	Bool hasRating, notOnline, hasStats;
+	std::string tier;
+
+	OnlineCard() : ping( -1 ), rating( 0 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
+		hasRating( FALSE ), notOnline( FALSE ), hasStats( FALSE ) {}
+};
+
 struct OnlineSession
 {
 	static OnlineSession &get();
@@ -154,6 +166,22 @@ struct OnlineSession
 	std::string matchId;		///< the last game.start or qm.matched
 	std::string reportedMatch;
 	std::string resultLine;	///< the last ONLINE RATED / ONLINE UNRATED line logged
+	OnlineMessage result;		///< the last rated or unrated line itself
+
+	// what the server says about players, and who is in the room the screens show
+	std::map<std::string, OnlineCard> cards;		///< by nick
+	UnsignedInt cardSerial;
+	std::deque<std::string> statsAsked;		///< stats{nick} sent, oldest first: an error{for:stats} names none
+	std::set<long long> present;		///< ids in the current chat or staging room: a `player` for one is an update, not a join
+
+	// the ladder's last answer
+	Int ladderState;				///< OnlineLadderState
+	OnlineMessage ladder;
+
+	// a Quick Match between qm.matched and its game.start
+	OnlineMessage reveal;
+	Bool revealing;
+	UnsignedInt revealSerial;
 
 	OnlinePeerQueue *peer;
 	OnlineBuddyQueue *buddy;
@@ -166,6 +194,8 @@ struct OnlineSession
 	void loginFailed( DisconnectReason reason );
 	void gameListEntry( const OnlineMessage &m );
 	void resolveHostLeft();
+	void noteCard( const OnlineMessage &m );			///< a line's rating, tier, games and ping under its nick
+	void matched( const OnlineMessage &m );			///< qm.matched as QM_MATCHED
 
 private:
 	OnlineSession();

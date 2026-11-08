@@ -669,9 +669,11 @@ public:
 		return NULL;
 	}
 
+	virtual Bool movesPrimary() const { return TRUE; }
+
 	static void parse(INI *ini, void *instance, void* /*store*/, const void* /*userData*/)
 	{
-		static const FieldParse myFieldParse[] = 
+		static const FieldParse myFieldParse[] =
 		{
 			{ "SpinRate",					INI::parseAngularVelocityReal,	NULL, offsetof(ApplyRandomForceNugget, m_spinRate) },
 			{ "MinForceMagnitude",	INI::parseRetailPerFrameReal,	NULL, offsetof(ApplyRandomForceNugget, m_minMag) },
@@ -788,6 +790,33 @@ public:
 		// Change Made by Sadullah Nader
 		// for init purposes, easier to read
 		m_offset.zero(); 
+	}
+
+	/// an object thrown at 50 or more (retail force units): the Rocket Buggy's and the Combat Bike's
+	/// whole-vehicle debris copies go at 100 to 200, a hull or a hulk at none
+	virtual Bool launchesBody() const
+	{
+		const Real LAUNCH_FORCE = ConvertRetailPerFrameRate(50.0f);
+		return m_nameAreObjects && (m_disposition & RANDOM_FORCE) != 0 && m_maxMag >= LAUNCH_FORCE;
+	}
+
+	/// debris, or hulks only, neither carrying the primary's speed nor put inside it; a soldier
+	/// thrown clear or anything else that lives on is not wreckage
+	virtual Bool isWreckage() const
+	{
+		if ((m_disposition & INHERIT_VELOCITY) != 0 || m_containInsideSourceObject)
+			return FALSE;
+		if (!m_nameAreObjects)
+			return TRUE;
+		if (m_names.empty())
+			return FALSE;
+		for (std::vector<AsciiString>::const_iterator it = m_names.begin(); it != m_names.end(); ++it)
+		{
+			const ThingTemplate* tmpl = TheThingFactory->findTemplate(*it, FALSE);
+			if (tmpl == NULL || !tmpl->isKindOf(KINDOF_HULK))
+				return FALSE;
+		}
+		return TRUE;
 	}
 
 	virtual Object* create(const Object* primary, const Object* secondary, UnsignedInt lifetimeFrames = 0 ) const
@@ -1547,6 +1576,41 @@ void ObjectCreationList::addObjectCreationNugget(ObjectCreationNugget* nugget)
 {
 	m_nuggets.push_back(nugget);
 	TheObjectCreationListStore->addObjectCreationNugget(nugget);
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ObjectCreationList::movesPrimary() const
+{
+	for (ObjectCreationNuggetVector::const_iterator i = m_nuggets.begin(); i != m_nuggets.end(); ++i)
+	{
+		if ((*i)->movesPrimary())
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ObjectCreationList::launchesBody() const
+{
+	for (ObjectCreationNuggetVector::const_iterator i = m_nuggets.begin(); i != m_nuggets.end(); ++i)
+	{
+		if ((*i)->launchesBody())
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ObjectCreationList::isWreckageOnly() const
+{
+	if (m_nuggets.empty())
+		return FALSE;
+	for (ObjectCreationNuggetVector::const_iterator i = m_nuggets.begin(); i != m_nuggets.end(); ++i)
+	{
+		if (!(*i)->isWreckage())
+			return FALSE;
+	}
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------

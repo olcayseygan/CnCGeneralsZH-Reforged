@@ -98,7 +98,16 @@ public:
 		object, or using the existing one.
 	*/
 	virtual Object* create( const Object* primaryObj, const Coord3D *primary, const Coord3D *secondary, Bool createOwner, UnsignedInt lifetimeFrames = 0 ) const;
-};  
+
+	/// true if this nugget throws the primary object itself around (ApplyRandomForce) rather than creating something
+	virtual Bool movesPrimary() const { return FALSE; }
+
+	/// true if all it leaves is wreckage - debris, or a hulk - placed where it is run and not carrying the primary's speed
+	virtual Bool isWreckage() const { return FALSE; }
+
+	/// true if it launches a created object hard, the way a whole-vehicle debris copy is thrown (the Rocket Buggy's)
+	virtual Bool launchesBody() const { return FALSE; }
+};
 EMPTY_DTOR(ObjectCreationNugget)
 
 //-------------------------------------------------------------------------------------------------
@@ -135,6 +144,15 @@ public:
 	void clear();
 
 	void addObjectCreationNugget(ObjectCreationNugget* nugget);
+
+	/// true if running this list throws the primary object itself (a death that flings the body)
+	Bool movesPrimary() const;
+
+	/// true if all this list leaves is wreckage (isWreckage on every nugget), so it may be run later elsewhere
+	Bool isWreckageOnly() const;
+
+	/// true if some nugget launches a created object hard (launchesBody)
+	Bool launchesBody() const;
 
 	// Kris: August 23, 2003
 	// All OCLs return the first object that is created (or NULL if not applicable).

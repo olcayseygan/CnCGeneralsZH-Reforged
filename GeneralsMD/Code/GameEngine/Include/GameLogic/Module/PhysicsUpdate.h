@@ -139,7 +139,6 @@ public:
 	Real getMass() const;
 	void setMass( Real mass ) { m_mass = mass; }
 	Real getCenterOfMassOffset() const { return getPhysicsBehaviorModuleData()->m_centerOfMassOffset; }
-
 	const Coord3D *getAcceleration() const { return &m_prevAccel; }		///< get last frame's acceleration
 	const Coord3D *getVelocity() const { return &m_vel; }			///< get current velocity
 	Real getVelocityMagnitude() const;																		///< return velocity magnitude (speed)
@@ -213,6 +212,8 @@ public:
 	void setMotiveSteersSideways(Bool steers) { setFlag(MOTIVE_STEERS_SIDEWAYS, steers); }
 	void setImmuneToFallingDamage(Bool allow) { setFlag(IMMUNE_TO_FALLING_DAMAGE, allow); }
 	void setStunned(Bool allow) { setFlag(IS_STUNNED, allow); }
+	/// coming down on a structure bounces off it instead of firing the crash weapon and vanishing (a SlowDeath momentum toss)
+	void setNoStructureCrash(Bool noCrash) { setFlag(NO_STRUCTURE_CRASH, noCrash); }
 
 	Bool getAllowToFall() const { return getFlag(ALLOW_TO_FALL); }
 
@@ -289,6 +290,7 @@ private:
 		IS_IN_UPDATE										= 0x0400,
 		IS_STUNNED											= 0x0800,
 		MOTIVE_STEERS_SIDEWAYS					= 0x1000,
+		NO_STRUCTURE_CRASH							= 0x2000,
 	};
 
 	/*

@@ -81,6 +81,7 @@ JetSlowDeathBehaviorModuleData::JetSlowDeathBehaviorModuleData( void )
 	m_rollRateDelta = 1.0f;
 	m_pitchRate = 0.0f;
 	m_fallHowFast = 0.0f;
+	m_momentumGlide = 1.0f;
 
 }  // end JetSlowDeathBehaviorModuleData
 
@@ -117,6 +118,7 @@ JetSlowDeathBehaviorModuleData::JetSlowDeathBehaviorModuleData( void )
 		{ "RollRateDelta", INI::parsePercentToReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_rollRateDelta ) },
 		{ "PitchRate", INI::parseRetailPerFrameReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_pitchRate ) },
 		{ "FallHowFast", INI::parsePercentToReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_fallHowFast ) },
+		{ "DeathMomentumGlide", INI::parseReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_momentumGlide ) },
 
 		{ 0, 0, 0, 0 }
 
@@ -140,6 +142,7 @@ JetSlowDeathBehavior::JetSlowDeathBehavior( Thing *thing, const ModuleData *modu
 	m_timerOnGroundFrame = 0;
 	m_fallDeadlineFrame = 0;
 	m_rollRate = 0.0f;
+	m_glideSupport = 1.0f;
 
 }  // end JetSlowDeathBehavior
 
@@ -225,7 +228,27 @@ void JetSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 		 which is the one thing a plane cannot do. It keeps its lift here and gives it up over the
 		 next couple of seconds in update(), so it carries on forward first and noses over after. */
 	Locomotor *locomotor = us->getAIUpdateInterface()->getCurLocomotor();
-	locomotor->setMaxLift( -TheGlobalData->m_gravity );
+
+	/* How much it keeps goes with how fast it was going, since a wing's lift goes with the square of
+		 its speed. The dead engine used to brake the plane back to its stall speed over the fall, so a
+		 jet shot down at full tilt came down nearly as close as one shot down on a slow pass; the crash
+		 site grew only in step with the speed at most. Now the engine neither pushes nor brakes, the
+		 plane keeps the speed it died at, and its wings carry the square of its share of top speed and
+		 give it up more slowly the faster it was: at full speed it holds its height a moment and comes
+		 down a long way on, at stall speed it drops nearly where it was hit. */
+	m_glideSupport = 1.0f;
+	PhysicsBehavior *physics = us->getPhysics();
+	if( modData->m_deathMomentum && modData->m_momentumGlide > 0.0f && physics )
+	{
+		const Coord3D *vel = physics->getVelocity();
+		const Real speed = sqrtf( vel->x * vel->x + vel->y * vel->y );
+		const Real topSpeed = locomotor->getMaxSpeedForCondition( BODY_PRISTINE );
+		const Real share = (topSpeed > 0.0f) ? min( speed / topSpeed, 1.0f ) : 1.0f;
+		m_glideSupport = share * share;
+		locomotor->setMaxAcceleration( 0.0f );
+		locomotor->setMaxBraking( 0.0f );
+	}
+	locomotor->setMaxLift( -TheGlobalData->m_gravity * m_glideSupport );
 
 	// do not allow the jet to turn anymore
 	locomotor->setMaxTurnRate( 0.0f );
@@ -274,12 +297,18 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 		Locomotor *locomotor = ai ? ai->getCurLocomotor() : NULL;
 		if( locomotor )
 		{
+			/* With DeathMomentum the target and the pace both go with the speed it died at
+				 (m_glideSupport, 1 at top speed): at top speed the bleed runs at a quarter of the pace,
+				 at stall speed the wings hardly carried it to begin with. */
 			const Real LIFT_BLEED_PER_FRAME = 1.0f - ConvertRetailPerFrameFactor( 1.0f - 0.1f );
+			const Real GLIDE_HOLD = 3.0f;
 			const Real MIN_FALL_FRACTION = 0.5f;
+			const Real glide = modData->m_deathMomentum ? modData->m_momentumGlide : 0.0f;
+			const Real bleed = LIFT_BLEED_PER_FRAME / (1.0f + GLIDE_HOLD * max( glide, 0.0f ) * m_glideSupport);
 			const Real fallFraction = max( MIN_FALL_FRACTION, modData->m_fallHowFast );
-			const Real fallingLift = -TheGlobalData->m_gravity * (1.0f - fallFraction);
+			const Real fallingLift = -TheGlobalData->m_gravity * (1.0f - fallFraction) * m_glideSupport;
 			const Real currentLift = locomotor->getMaxLift( us->getBodyModule()->getDamageState() );
-			locomotor->setMaxLift( currentLift + (fallingLift - currentLift) * LIFT_BLEED_PER_FRAME );
+			locomotor->setMaxLift( currentLift + (fallingLift - currentLift) * bleed );
 
 			/* Ultra-accurate flying may take three times the lift, which is still more than gravity,
 				 and a delivery plane flies it all the way off the map once its load is down; a jet on
@@ -287,6 +316,13 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 				 cruising height. Its AI keeps running while it falls and can switch the mode back on,
 				 so it goes off every frame. */
 			locomotor->setUltraAccurate( FALSE );
+
+			// the same goes for the dead engine: a locomotor the AI swaps in comes with its brakes back
+			if( modData->m_deathMomentum && modData->m_momentumGlide > 0.0f )
+			{
+				locomotor->setMaxAcceleration( 0.0f );
+				locomotor->setMaxBraking( 0.0f );
+			}
 		}
 
 		/* And the explosion waits for the ground. The base class destroys the object on a timer
@@ -371,6 +407,14 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 	}  // end if
 	else
 	{
+		// with no brakes left on the engine nothing else slows the wreckage: it skids to a stop in a second or so
+		if( physics && modData->m_deathMomentum && modData->m_momentumGlide > 0.0f )
+		{
+			const Real SKID_FACTOR = ConvertRetailPerFrameFactor( 0.93f );
+			const Coord3D *vel = physics->getVelocity();
+			physics->scrubVelocity2D( sqrtf( vel->x * vel->x + vel->y * vel->y ) * SKID_FACTOR );
+		}
+
 		// we are on the ground, pay attention to the final explosion timers
 		if( TheGameLogic->getFrame() - m_timerOnGroundFrame >= modData->m_delayFinalBlowUpFromHitGround )
 		{
@@ -405,13 +449,14 @@ void JetSlowDeathBehavior::crc( Xfer *xfer )
 /** Xfer method
 	* Version Info:
 	* 1: Initial version
-	* 2: the deadline the fall may hold the explosion back to */
+	* 2: the deadline the fall may hold the explosion back to
+	* 3: the share of its weight the wings carried at the speed it died at */
 // ------------------------------------------------------------------------------------------------
 void JetSlowDeathBehavior::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -431,6 +476,10 @@ void JetSlowDeathBehavior::xfer( Xfer *xfer )
 	// a plane loaded in mid-fall blows up on the timer it was saved with
 	if( version >= 2 )
 		xfer->xferUnsignedInt( &m_fallDeadlineFrame );
+
+	// an older save falls the way it did then, on full support
+	if( version >= 3 )
+		xfer->xferReal( &m_glideSupport );
 
 }  // end xfer
 

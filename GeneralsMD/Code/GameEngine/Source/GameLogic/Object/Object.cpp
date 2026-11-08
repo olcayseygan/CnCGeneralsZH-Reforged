@@ -1233,10 +1233,17 @@ Bool Object::canCrushOrSquish(Object *otherObj, CrushSquishTestType testType ) c
 {
 	DEBUG_ASSERTCRASH(this, ("null this in canCrushOrSquish"));
 
-	if( !otherObj ) 
+	if( !otherObj )
 	{
 		//Can't crush anything.
-		return false;  
+		return false;
+	}
+
+	// A wreck still sliding or tumbling on from the speed it died at (SlowDeathBehavior's momentum)
+	// is not driving over anything: it bumps, it does not crush.
+	if( isEffectivelyDead() )
+	{
+		return false;
 	}
 
 	if( isDisabledByType( DISABLED_UNMANNED ) )

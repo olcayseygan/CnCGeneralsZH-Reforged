@@ -170,6 +170,8 @@ HelicopterSlowDeathBehavior::HelicopterSlowDeathBehavior( Thing *thing, const Mo
 	m_lastSelfSpinUpdateFrame = 0;
 	m_bladeFlyOffFrame = 0;
 	m_hitGroundFrame = 0;
+	m_driftX = 0.0f;
+	m_driftY = 0.0f;
 
 }  // end HelicopterSlowDeathBehavior
 
@@ -228,6 +230,31 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 	
 	// we will start off changing the self spin towards the MaxSelfSpin
 	m_selfSpinTowardsMax = TRUE;
+
+	/* A helicopter shot at speed used to brake to a hover at MaxBraking within half a second and
+		 spiral down nearly where it was hit, as if it had been hovering. Its speed is taken off the
+		 physics here, so the spiral starts from rest exactly as it always did, and carried instead as
+		 a drift that moves the whole spiral along - its own speed plus a push away from the shot,
+		 kept whole all the way down, since nothing in the fall takes it off. A hovering one only gets
+		 the push. DeathMomentum = No keeps EA's. */
+	PhysicsBehavior *deathPhysics = getObject()->getPhysics();
+	if( modData->m_deathMomentum && deathPhysics )
+	{
+		const Coord3D *vel = deathPhysics->getVelocity();
+		m_driftX = vel->x;
+		m_driftY = vel->y;
+		Real hitX, hitY;
+		if( calcHitDirection( getObject(), damageInfo, hitX, hitY ) )
+		{
+			m_driftX += hitX * modData->m_momentumPushSpeed;
+			m_driftY += hitY * modData->m_momentumPushSpeed;
+		}
+		Coord3D stop;
+		stop.x = -vel->x;
+		stop.y = -vel->y;
+		stop.z = 0.0f;
+		deathPhysics->addVelocityTo( &stop );
+	}
 
 	// the fall of the helicopter
 	if( !getObject()->getAIUpdateInterface() )
@@ -385,6 +412,34 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 		// adjust our forward spiral orbit by the damping factor specified
 		m_forwardSpeed *= modData->m_spiralOrbitForwardSpeedDamping;
 
+		// the drift carries the whole spiral along the way it was flying, undiminished until it lands
+		if( m_driftX != 0.0f || m_driftY != 0.0f )
+		{
+			Coord3D drifted = *copter->getPosition();
+			drifted.x += m_driftX;
+			drifted.y += m_driftY;
+
+			// moved by hand, so nothing else keeps it on the map or out of a hillside: it stops at the
+			// map's edge, and rising ground in its way is where it comes down
+			Region3D extent;
+			TheTerrainLogic->getExtent( &extent );
+			if( drifted.x < extent.lo.x || drifted.x > extent.hi.x || drifted.y < extent.lo.y || drifted.y > extent.hi.y )
+			{
+				drifted.x = min( max( drifted.x, extent.lo.x ), extent.hi.x );
+				drifted.y = min( max( drifted.y, extent.lo.y ), extent.hi.y );
+				m_driftX = 0.0f;
+				m_driftY = 0.0f;
+			}
+			const Real groundZ = TheTerrainLogic->getLayerHeight( drifted.x, drifted.y, copter->getLayer() );
+			if( drifted.z < groundZ )
+			{
+				drifted.z = groundZ;
+				m_driftX = 0.0f;
+				m_driftY = 0.0f;
+			}
+			copter->setPosition( &drifted );
+		}
+
 		// is it time to have the blade fly off
 		if( m_bladeFlyOffFrame > 0 )
 		{
@@ -531,13 +586,14 @@ void HelicopterSlowDeathBehavior::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: the drift the wreck carries on with */
 // ------------------------------------------------------------------------------------------------
 void HelicopterSlowDeathBehavior::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -567,6 +623,13 @@ void HelicopterSlowDeathBehavior::xfer( Xfer *xfer )
 
 	// hit ground frame
 	xfer->xferUnsignedInt( &m_hitGroundFrame );
+
+	// the drift; an older save has none, and its wreck falls as it did then
+	if( version >= 2 )
+	{
+		xfer->xferReal( &m_driftX );
+		xfer->xferReal( &m_driftY );
+	}
 
 }  // end xfer
 

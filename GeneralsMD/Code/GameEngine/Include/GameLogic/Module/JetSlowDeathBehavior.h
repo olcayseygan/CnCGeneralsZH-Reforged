@@ -73,6 +73,7 @@ public:
 	Real m_rollRateDelta;													///< how our roll rate changes over time
 	Real m_pitchRate;															///< spin speed on another axis after hitting the ground
 	Real m_fallHowFast;														///< a fraction of gravity we use to modify the jet locmotor lift
+	Real m_momentumGlide;													///< how much longer a fast plane's wings hold it up (DeathMomentum on)
 
 	AudioEventRTS m_deathLoopSound;								///< looping death sound
 
@@ -103,6 +104,7 @@ protected:
 	UnsignedInt m_fallDeadlineFrame;				///< how long the fall may hold the explosion back for
 
 	Real m_rollRate;												///< our roll rate
+	Real m_glideSupport;										///< share of its weight the wings carried at the speed it died at: 1 at top speed
 
 	AudioEventRTS m_deathLoopSound;					///< death loop sound
 

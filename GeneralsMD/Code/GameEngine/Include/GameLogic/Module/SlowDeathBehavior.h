@@ -90,8 +90,16 @@ public:
 	Real							m_flingForceVariance;
 	Real							m_flingPitch;
 	Real							m_flingPitchVariance;
+	Bool							m_deathMomentum;				///< a ground vehicle dying on the move carries on: wheels hop and tumble, treads slide
+	Real							m_momentumMinSpeed;			///< share of its top speed below which a death is a parked one
+	Real							m_momentumTossSpeed;		///< upward kick a wheeled vehicle at top speed gets, per frame (varies 75% to 125%)
+	Real							m_momentumSpinRate;			///< its tumble at top speed, radians a frame (varies 85% to 115%)
+	Real							m_momentumPushSpeed;		///< push away from the killing shot a wheeled vehicle gets at full strength, per frame
+	Real							m_momentumTreadPushSpeed;	///< the shove a tracked one gets, per frame
+	UnsignedInt				m_momentumTreadSlideTime;	///< the longest a tracked wreck's slide may take
+	Real							m_momentumTreadSlideLength;	///< how far a tracked wreck slides from top speed, as a share of its hull length
 
-	enum 
+	enum
 	{
 		//flags used by m_maskOfLoadedEffects
 		HAS_FX							= 1,
@@ -160,7 +168,13 @@ public:
 
 protected:
 
-	void doPhaseStuff(SlowDeathPhaseType sdphase);
+	/// what = SlowDeathBehaviorModuleData::HAS_FX / HAS_OCL / HAS_WEAPON, the lists of the phase to run
+	void doPhaseStuff(SlowDeathPhaseType sdphase, Int what = SlowDeathBehaviorModuleData::HAS_FX | SlowDeathBehaviorModuleData::HAS_NON_LOD_EFFECTS);
+	/// level unit direction the killing shot pushes obj, away from its source; FALSE for damage that pushes nothing
+	static Bool calcHitDirection(const Object* obj, const DamageInfo* damageInfo, Real& dirX, Real& dirY);
+	Bool beginMomentum(const DamageInfo* damageInfo);	///< true if the death carries on from its speed and the shot's push
+	Bool updateMomentum();	///< true while the destruction has to wait for it
+	void endMomentum(Bool stopSpin = TRUE);	///< it has come to rest, or something else took it over
 	inline Bool isSlowDeathActivated() const { return (m_flags & (1<<SLOW_DEATH_ACTIVATED)) != 0; }
 	inline UnsignedInt getDestructionFrame() const { return m_destructionFrame; }
 
@@ -175,14 +189,26 @@ private:
 		SLOW_DEATH_ACTIVATED,
 		MIDPOINT_EXECUTED,
 		FLUNG_INTO_AIR,
-		BOUNCED
+		BOUNCED,
+		MOMENTUM_ACTIVE,		///< still carrying on from the speed it died at; holds the destruction back
+		MOMENTUM_SLIDING,		///< its ground speed is still being run down along the profile
+		MOMENTUM_TUMBLING,	///< wheels: spinning through the first hop
+		MOMENTUM_LEFT_GROUND,	///< wheels: the first hop has got off the ground
+		MOMENTUM_CHECKED		///< the first frame after the death has been looked at for a throw it did not make itself
 	};
 
 	UnsignedInt m_sinkFrame;							///< Frame to be sunken into the ground on
 	UnsignedInt m_midpointFrame;					///< The midpoint is between .25 through life and .75 through life (eg)
-	UnsignedInt m_destructionFrame;	
+	UnsignedInt m_destructionFrame;
 	Real				m_acceleratedTimeScale;		///<used to speedup deaths when needed to improve game performance.
 	UnsignedInt	m_flags;
+	Real				m_momentumVelX;						///< ground velocity it died at
+	Real				m_momentumVelY;
+	Real				m_momentumHopSpeed;				///< the upward speed the hop gave it
+	UnsignedInt	m_momentumStartFrame;
+	UnsignedInt	m_momentumEndFrame;				///< when the slide reaches a standstill; moves on while it is in the air
+	UnsignedInt	m_momentumDeadlineFrame;	///< the latest the momentum may hold the destruction back to
+	Int					m_deferredOCL;						///< the INITIAL OCL (a burnt hull) waiting for where the wreck stops; -1 for none
 };
 
 #endif // __SlowDeathBehavior_H_

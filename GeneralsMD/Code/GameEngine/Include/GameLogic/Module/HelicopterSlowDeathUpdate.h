@@ -108,6 +108,8 @@ protected:
 	UnsignedInt m_lastSelfSpinUpdateFrame;	///< frame we last updated the self spin on
 	UnsignedInt m_bladeFlyOffFrame;		///< frame we throw the blade off at
 	UnsignedInt m_hitGroundFrame;			///< frame we hit the ground on
+	Real m_driftX;										///< ground speed the wreck carries on with, per frame: its own when it was hit plus the shot's push
+	Real m_driftY;
 
 	// @todo propagate this up to SlowDeathBehavior. I don't wanna do it today, cause its 4/3. jkmcd
 	AudioEventRTS m_deathSound;						///< Sound played during death sequence.

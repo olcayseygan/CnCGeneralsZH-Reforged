@@ -94,7 +94,9 @@ void SquishCollide::onCollide( Object *other, const Coord3D *loc, const Coord3D 
 	}
 
 	// order matters: we want to know if IT considers ME to be an ally (a reversal of the usual situation)
-	if( other->getCrusherLevel() > 0 && other->getRelationship(getObject()) != ALLIES)
+	// This reads the crusher level itself rather than asking Object::canCrushOrSquish, so it needs the
+	// same word on dead crushers: a wreck sliding on (SlowDeathBehavior's momentum) squishes nobody.
+	if( other->getCrusherLevel() > 0 && !other->isEffectivelyDead() && other->getRelationship(getObject()) != ALLIES)
 	{
 		PhysicsBehavior *otherPhysics = other->getPhysics();
 		if (otherPhysics == NULL)

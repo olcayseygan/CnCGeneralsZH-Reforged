@@ -1416,7 +1416,8 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 			factor = -mag * getMass() * stiffness;
 			
 			// if we are moving down, we may want to blow ourselves into smithereens....
-			if (delta.z < 0.0f && 
+			// (not a wreck SlowDeathBehavior tossed: its hull and its blast wait for where it lands)
+			if (delta.z < 0.0f && !getFlag(NO_STRUCTURE_CRASH) &&
 					obj->getPosition()->z >= TheGlobalData->m_defaultStructureRubbleHeight)
 			{
 				if (other->isKindOf(KINDOF_STRUCTURE))

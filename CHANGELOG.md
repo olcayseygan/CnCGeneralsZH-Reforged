@@ -8,6 +8,16 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Wrecks keep the speed they died at
+
+- Vehicles, tanks, jets and helicopters die with their momentum. Anything killed on the move used to stop on the spot where the shot found it, and even a jet lost its speed on the way down: the dead engine braked it back to a stall, so a jet shot down at full tilt crashed nearly as close as one caught on a slow pass. Now a fast jet holds its height a moment, glides on and comes down far ahead of where it was hit. A slow one drops close.
+- A car or truck killed while driving is thrown up and tumbles the way the hit pushed it. Shot from behind it flips forward over its nose; shot from the side it rolls away from the gun. It explodes where it lands. A parked one caught by a blast tips over away from it.
+- A tank killed on the move keeps sliding and brakes to a stop before it goes up, and a hit from behind sends it further.
+- A helicopter shot in flight keeps its speed all the way down, spinning on along the line it was flying instead of dropping under the spot it was hit.
+- The Technical, the Rocket Buggy and the Combat Bike had death throws of their own already, and keep them.
+- A wreck sliding or flying through a crowd no longer crushes the soldiers and vehicles in its way.
+- A replay recorded on an earlier version will not play back on this one.
+
 ## America, built again
 
 - Every American unit and building has been modelled again on EA's own shape: the same silhouette, the same footprint, the turret and the barrels where they always were, with the detail modelled in where the 2003 boxes had it painted on. Each one comes in four levels of detail, the full model up close and lighter ones as the camera pulls away. A tank's road wheels turn with its tracks; EA's stood still. The campaign's own infantry are not done yet.

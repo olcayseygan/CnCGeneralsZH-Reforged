@@ -139,6 +139,8 @@ public:
 	Real getMass() const;
 	void setMass( Real mass ) { m_mass = mass; }
 	Real getCenterOfMassOffset() const { return getPhysicsBehaviorModuleData()->m_centerOfMassOffset; }
+	/// what update() multiplies the pitch, roll and yaw rates by before turning the body
+	Real getPitchRollYawFactor() const { return getPhysicsBehaviorModuleData()->m_pitchRollYawFactor; }
 	const Coord3D *getAcceleration() const { return &m_prevAccel; }		///< get last frame's acceleration
 	const Coord3D *getVelocity() const { return &m_vel; }			///< get current velocity
 	Real getVelocityMagnitude() const;																		///< return velocity magnitude (speed)

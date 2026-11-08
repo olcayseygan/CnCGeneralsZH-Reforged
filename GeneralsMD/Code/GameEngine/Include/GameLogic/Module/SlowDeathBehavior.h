@@ -93,7 +93,7 @@ public:
 	Bool							m_deathMomentum;				///< a ground vehicle dying on the move carries on: wheels hop and tumble, treads slide
 	Real							m_momentumMinSpeed;			///< share of its top speed below which a death is a parked one
 	Real							m_momentumTossSpeed;		///< upward kick a wheeled vehicle at top speed gets, per frame (varies 75% to 125%)
-	Real							m_momentumSpinRate;			///< its tumble at top speed, radians a frame (varies 85% to 115%)
+	Real							m_momentumImpulseReach;	///< where the shot's impulse acts, as a share of the way from the body's centre to the face it hits
 	Real							m_momentumPushSpeed;		///< push away from the killing shot a wheeled vehicle gets at full strength, per frame
 	Real							m_momentumTreadPushSpeed;	///< the shove a tracked one gets, per frame
 	UnsignedInt				m_momentumTreadSlideTime;	///< the longest a tracked wreck's slide may take

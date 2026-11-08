@@ -84,8 +84,8 @@ SlowDeathBehaviorModuleData::SlowDeathBehaviorModuleData()
 	m_flingPitchVariance = 0;
 	m_deathMomentum = TRUE;
 	m_momentumMinSpeed = 0.25f;
-	m_momentumTossSpeed = ConvertVelocityInSecsToFrames(60.0f);	// OCL_TechnicalAirDeathStart's average kick
-	m_momentumSpinRate = ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(120.0f);	// and its SpinRate
+	m_momentumTossSpeed = ConvertVelocityInSecsToFrames(32.0f);	// a second in the air at full strength
+	m_momentumImpulseReach = 0.35f;
 	m_momentumPushSpeed = ConvertVelocityInSecsToFrames(20.0f);
 	m_momentumTreadPushSpeed = ConvertVelocityInSecsToFrames(10.0f);
 	m_momentumTreadSlideTime = 3 * LOGICFRAMES_PER_SECOND;
@@ -163,7 +163,7 @@ static void parseWeapon( INI* ini, void *instance, void * /*store*/, const void*
 		{ "DeathMomentum",										INI::parseBool,										NULL, offsetof( SlowDeathBehaviorModuleData, m_deathMomentum) },
 		{ "DeathMomentumMinSpeed",						INI::parsePercentToReal,					NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumMinSpeed) },
 		{ "DeathMomentumTossSpeed",						INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumTossSpeed) },
-		{ "DeathMomentumSpinRate",						INI::parseAngularVelocityReal,		NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumSpinRate) },
+		{ "DeathMomentumImpulseReach",				INI::parsePercentToReal,					NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumImpulseReach) },
 		{ "DeathMomentumPushSpeed",						INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumPushSpeed) },
 		{ "DeathMomentumTreadPushSpeed",			INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumTreadPushSpeed) },
 		{ "DeathMomentumTreadSlideTime",			INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumTreadSlideTime) },
@@ -420,7 +420,8 @@ Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 	m_momentumHopSpeed = 0.0f;
 	m_momentumStartFrame = now;
 
-	if (!wheels)
+	// a car with no shot to throw it - poison, fire, a script - rolls on and slides to a stop as a tank does
+	if (!wheels || !hit)
 	{
 		// its own speed and a modest shove away from the shot; the slide is set by the two together
 		const Real push = hit ? d->m_momentumTreadPushSpeed : 0.0f;
@@ -457,23 +458,28 @@ Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 		return TRUE;
 	}
 
-	/* A wheeled one goes the way the Technical's own death (OCL_TechnicalAirDeathStart) throws it:
-		 ApplyRandomForce at 60 to 100 against its Mass of 40, pitched 70 to 90 degrees, is an upward
-		 kick of about 45 to 75 a second, and SpinRate 120 sets each of yaw, roll and pitch at up to
-		 120 degrees a second (240 once physics doubles it): a toss about 28 high on the average,
-		 nearly two seconds in the air, a tumble or two.  Here the strength goes with the share of top
-		 speed it died at (a parked car hit by a shot gets a third of it), the ground speed is its own
-		 plus the push away from the shot, and the spin is not at random: it turns about the level axis
-		 square to where it is going, top first, as a car tripped at speed goes over.  Physics flies
-		 it, nothing steers it, and it blows when it comes down. */
+	/* A wheeled one hit by a shot is thrown, and flown by physics from there: its own speed plus what
+		 the shot gives it, gravity, and nothing steering it. It blows when it comes down. The
+		 Technical's own death throw (OCL_TechnicalAirDeathStart) kicks it up 45 to 75 a second and
+		 spins it at random, nearly two seconds in the air; a toss built the same way read as staged
+		 and floaty, so this one is worked out from the hit instead. */
 	if (gravity <= 0.0f || d->m_momentumTossSpeed <= 0.0f)
 		return FALSE;
+
+	/* The shot is an impulse J on a rigid box. Its strength goes with the share of top speed the car
+		 died at (a parked one hit by a shot gets a third of it), the spread on it is a tenth either
+		 way, and it is set for a body of Mass 50, so a lighter one goes further and a heavier one less
+		 (held between half and one and a half). At full strength a Mass 50 car gets 32 a second up,
+		 about a second in the air, and the push away from the shot level. */
 	const Real PARKED_STRENGTH = 0.35f;
-	const Real strength = hit ? max(share, PARKED_STRENGTH) : share;
-	const Real push = hit ? d->m_momentumPushSpeed * strength : 0.0f;
+	const Real REFERENCE_MASS = 50.0f;
+	const Real mass = physics->getMass();
+	const Real massScale = (mass > 0.0f) ? min(max(REFERENCE_MASS / mass, 0.5f), 1.5f) : 1.0f;
+	const Real strength = max(share, PARKED_STRENGTH) * massScale * GameLogicRandomValueReal(0.9f, 1.1f);
+	const Real push = d->m_momentumPushSpeed * strength;					// level part of J/m, along the hit
+	const Real tossSpeed = d->m_momentumTossSpeed * strength;			// vertical part of J/m
 	const Real vx = vel->x + hitX * push;
 	const Real vy = vel->y + hitY * push;
-	const Real tossSpeed = d->m_momentumTossSpeed * strength * GameLogicRandomValueReal(0.85f, 1.15f);
 	// clamped as a float before the cast, as the slide above is; a minute in the air is past any data
 	const Real MAX_AIR_FRAMES = 60.0f * LOGICFRAMES_PER_SECOND;
 	const Real airFrames = min(max(2.0f * tossSpeed / gravity, 1.0f), MAX_AIR_FRAMES);
@@ -495,27 +501,51 @@ Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 	physics->setNoStructureCrash(TRUE);
 	physics->addVelocityTo(&toss);
 
-	/* The tumble axis is level and square to the way it is going, A = up x D, and turning about it
-		 brings the top over towards D. In the body's own terms, with f its nose and l its left side,
-		 that is pitch at rate x (D.f) - nose over forwards - and roll at rate x -(D.l) - top over to
-		 the right.  Hit from behind, D is the nose: a flip end over end.  Hit from the side when
-		 parked, D is the side away from the shot: a roll away from it.  A small turn on the heading
-		 and a spread on the rate are all that is left to chance. */
+	/* The spin is what that impulse does to a solid box, nothing more: dw = I^-1 (r x J), with the box
+		 GeometryMajorRadius a long, MinorRadius b wide and Height h tall, in the body's own axes (x the
+		 nose, y the left side, z up; the car is upright when it dies).  I is a solid box's about its
+		 centre: Ixx = m((2b)^2 + h^2)/12, Iyy = m((2a)^2 + h^2)/12, Izz = m((2a)^2 + (2b)^2)/12.  J acts
+		 on the face towards the shot at a quarter of the height, low on the hull, a tenth of the
+		 height either way. A blast spreads over that face, so the point its push comes through sits
+		 inward of the edge, ImpulseReach (35%) of the way from the centre.  Driving speed adds no turn:
+		 no torque.  Hit from behind at the lower rear, the lift under the tail beats the push below the
+		 centre and the nose dips; from the side the near side rises and it leans away; head on it rears
+		 back.  Physics doubles a rate before turning the body (PitchRollYawFactor), so it is halved
+		 here. */
+	const GeometryInfo& geom = obj->getGeometryInfo();
+	const Real halfLength = geom.getMajorRadius();
+	const Real halfWidth = (geom.getGeomType() == GEOMETRY_BOX) ? geom.getMinorRadius() : halfLength;
+	const Real height = geom.getMaxHeightAbovePosition();
 	const Coord3D* nose = obj->getUnitDirectionVector2D();
-	Real dirX = nose->x;
-	Real dirY = nose->y;
-	const Real groundSpeed = sqrtf(vx*vx + vy*vy);
-	if (groundSpeed > ConvertRetailPerFrameRate(0.01f))
+	const Real hitFwd = hitX * nose->x + hitY * nose->y;			// push direction in body axes
+	const Real hitLeft = hitX * -nose->y + hitY * nose->x;
+	// the point on the face towards the shot, which is behind the push direction
+	Real reach = 1.0e9f;
+	if (fabs(hitFwd) > 0.001f)
+		reach = halfLength / fabs(hitFwd);
+	if (fabs(hitLeft) > 0.001f)
+		reach = min(reach, halfWidth / fabs(hitLeft));
+	reach *= d->m_momentumImpulseReach;
+	const Real rx = -hitFwd * reach;
+	const Real ry = -hitLeft * reach;
+	const Real rz = -height * 0.25f + height * GameLogicRandomValueReal(-0.1f, 0.1f);	// from the centre, h/2 up
+	const Real jx = hitFwd * push;		// J/m in body axes; the mass cancels against I
+	const Real jy = hitLeft * push;
+	const Real jz = tossSpeed;
+	const Real ixx = ((2.0f * halfWidth) * (2.0f * halfWidth) + height * height) / 12.0f;
+	const Real iyy = ((2.0f * halfLength) * (2.0f * halfLength) + height * height) / 12.0f;
+	const Real izz = ((2.0f * halfLength) * (2.0f * halfLength) + (2.0f * halfWidth) * (2.0f * halfWidth)) / 12.0f;
+	const Real factor = physics->getPitchRollYawFactor();
+	if (factor > 0.0f && ixx > 0.0f && iyy > 0.0f && izz > 0.0f)
 	{
-		dirX = vx / groundSpeed;
-		dirY = vy / groundSpeed;
+		// r x J, then each part over its moment of inertia
+		const Real wx = (ry * jz - rz * jy) / ixx;
+		const Real wy = (rz * jx - rx * jz) / iyy;
+		const Real wz = (rx * jy - ry * jx) / izz;
+		physics->setRollRate(wx / factor);
+		physics->setPitchRate(wy / factor);
+		physics->setYawRate(wz / factor);
 	}
-	const Real rate = d->m_momentumSpinRate * strength * GameLogicRandomValueReal(0.85f, 1.15f);
-	const Real alongNose = dirX * nose->x + dirY * nose->y;
-	const Real alongLeft = dirX * -nose->y + dirY * nose->x;
-	physics->setPitchRate(rate * alongNose);
-	physics->setRollRate(-rate * alongLeft);
-	physics->setYawRate(rate * GameLogicRandomValueReal(-0.1f, 0.1f));
 	return TRUE;
 }
 

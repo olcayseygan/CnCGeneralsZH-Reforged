@@ -392,9 +392,14 @@ static void updateOverallStats(void)
 	// "%d%%" label, so the community panel goes instead
 	if (s_winStats.empty())
 	{
-		GameWindow *community = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY("WOLWelcomeMenu.wnd:CommunityInfoParent") );
-		if (community)
-			community->winHide(TRUE);
+		// the panel and its "Daily Army Win Percentages" heading, which stands outside it
+		static const char *community[] = { "WOLWelcomeMenu.wnd:CommunityInfoParent", "WOLWelcomeMenu.wnd:StaticTextCommunity" };
+		for (size_t i = 0; i < sizeof(community) / sizeof(community[0]); ++i)
+		{
+			GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY(community[i]) );
+			if (win)
+				win->winHide(TRUE);
+		}
 		return;
 	}
 
@@ -547,7 +552,7 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 		// retail's hub has no Ladder button (EA reached its web ladder elsewhere), and nothing answers
 		// Buddies here: that slot becomes Ladder
 		if (buttonBuddies)
-			GadgetButtonSetText(buttonBuddies, TheGameText->fetch("GUI:Ladder"));
+			GadgetButtonSetText(buttonBuddies, TheGameText->fetch("GUI:OnlineLadderButton"));		// capitals, as the hub's other buttons
 		OnlineRequestStats(TheGameSpyInfo->getLocalName());
 	}
 	else

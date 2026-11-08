@@ -3916,11 +3916,15 @@ GUI:OnlineTier_general
 END
 
 GUI:OnlineLadderPrev
-"Previous"
+"PREVIOUS"
 END
 
 GUI:OnlineLadderNext
-"Next"
+"NEXT"
+END
+
+GUI:OnlineLadderButton
+"LADDER"
 END
 
 GUI:OnlineLadderRank

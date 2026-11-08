@@ -18237,11 +18237,15 @@ GUI:OnlineTier_general
 END
 
 GUI:OnlineLadderPrev
-"Önceki"
+"ÖNCEKİ"
 END
 
 GUI:OnlineLadderNext
-"Sonraki"
+"SONRAKİ"
+END
+
+GUI:OnlineLadderButton
+"LİG"
 END
 
 GUI:OnlineLadderRank

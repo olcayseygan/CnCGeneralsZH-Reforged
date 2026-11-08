@@ -520,7 +520,7 @@ public:
 	void allocateShadows(void); ///< create shadow resources if not already present. Used by Options screen.
 
 	void setFullyObscuredByShroud(Bool fullyObscured);
-	inline Bool getFullyObscuredByShroud(void) { return LogicThread::isInsideWindow() ? m_lookForDraw.fullyObscured : m_drawableFullyObscuredByShroud; }
+	inline Bool getFullyObscuredByShroud(void) const { return LogicThread::isInsideWindow() ? m_lookForDraw.fullyObscured : m_drawableFullyObscuredByShroud; }
 
   // Put on ice until later... M Lorenzen
   //	inline UnsignedByte getFullyObscuredByShroudWithCheatSpy(void) {return (UnsignedByte)m_drawableFullyObscuredByShroud | 128;}//8 looks like a zero in most fonts

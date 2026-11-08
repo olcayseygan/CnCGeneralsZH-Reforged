@@ -561,6 +561,23 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 
 			rubble->setTransformMatrix( copter->getTransformMatrix() );
 
+			/* The hull is new, and new in the fog it would be hidden at once while the wreck it replaces
+				 was still in sight under the client's grace for the dead: carried on by its momentum, a
+				 helicopter came down out where only its air sight had kept it seen, and the hull never
+				 appeared. A wreck still on the screen as it blows hands the hull that grace, counted from
+				 the blast. After the tick, on the client: the wreck's drawable lasts until the tick's
+				 effects have run. */
+			Drawable *wreckDraw = copter->getDrawable();
+			if( wreckDraw )
+			{
+				const ObjectID rubbleID = rubble->getID();
+				LogicThread::callAfterTick( [wreckDraw, rubbleID]() {
+					Object *hull = TheGameLogic->findObjectByID( rubbleID );
+					if( hull && hull->getDrawable() && !wreckDraw->getFullyObscuredByShroud() )
+						hull->getDrawable()->setShroudClearFrame( TheGameLogic->getFrame() );
+				} );
+			}
+
 		}  // end if
 
 		// destroy the copter finally

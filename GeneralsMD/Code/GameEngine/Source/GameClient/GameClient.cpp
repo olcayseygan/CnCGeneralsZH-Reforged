@@ -917,6 +917,12 @@ void GameClient::update( void )
 							object->getShroudedStatus(*playerIndex);
 					}
 					ObjectShroudStatus ss=object->getShroudedStatus(localPlayerIndex);
+					// EA's grace for the dead below never ran here: nothing recorded when the player last saw
+					// a drawable clear, so a shot-down aircraft or a wreck that carried on into the fog was
+					// hidden or blew up unseen there. Recorded for the dead only, so the living leave sight
+					// at once as they do now.
+					if (ss < OBJECTSHROUD_FOGGED && object->isEffectivelyDead())
+						draw->setShroudClearFrame(TheGameLogic->getFrame());
 					if (ss >= OBJECTSHROUD_FOGGED && draw->getShroudClearFrame()!=0) {
 						UnsignedInt limit = 2*LOGICFRAMES_PER_SECOND;
 						if (object->isEffectivelyDead()) {

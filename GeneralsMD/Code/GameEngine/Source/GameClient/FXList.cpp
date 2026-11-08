@@ -1087,6 +1087,13 @@ void FXList::doFXObjNow(const FXObjectView* primary, const FXObjectView* seconda
 			const Drawable *draw = primaryObject->getDrawable();
 			hidden = draw && draw->getStealthLook() == STEALTHLOOK_INVISIBLE;
 		}
+		// A wreck still on the screen gets its blast. The dead stay drawn a while after they pass into the
+		// fog (GameClient's grace, so a shot-down aircraft is seen to crash), and a wreck that carried on
+		// from the speed it died at often blows up out there: destroyed in the same tick, it left only
+		// its fogged cells to answer, and a helicopter lying in plain view vanished without its explosion.
+		if (hidden && primary->drawable && !primary->drawable->getFullyObscuredByShroud() &&
+				(primaryObject == NULL || primaryObject->isEffectivelyDead()))
+			hidden = FALSE;
 		if (hidden)
 			return;	//the primary object is fogged, shrouded or unseen stealth so don't bother with the effect.
 	}

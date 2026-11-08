@@ -60,6 +60,7 @@
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include "WWDownload/Registry.h"
 
@@ -96,6 +97,7 @@ static Bool isOverlayActive = false;
 static Bool raiseMessageBox = false;
 static Int lookAtPlayerID = 0;
 static std::string lookAtPlayerName;
+static UnsignedInt s_onlineInfoSerial = 0;		///< OnlinePlayerInfoSerial when the popup last drew
 
 
 static const char *rankNames[] = {
@@ -1106,6 +1108,56 @@ void PopulatePlayerInfoWindows( AsciiString parentWindowName )
 	{
 		populateBattleHonors(stats, stats.battleHonors,stats.gamesInRowWithLastGeneral,stats.lastGeneral,stats.challengeMedals, win);
 	}
+
+	// -online: the site's numbers over EA's.  The rank line says tier, rating and ladder place instead
+	// of EA's rank-point title, and the record is the site's.
+	if (OnlineIsEnabled())
+	{
+		AsciiString nick = (parentWindowName == "PopupPlayerInfo.wnd") ? AsciiString(lookAtPlayerName.c_str()) : TheGameSpyInfo->getLocalName();
+		OnlinePlayerInfo card;
+		if (OnlineGetPlayerInfo(nick, card))
+		{
+			if (card.hasStats && card.wins >= 0 && card.losses >= 0)
+			{
+				const Int games = card.games >= 0 ? card.games : card.wins + card.losses;
+				if ((win = findWindow(NULL, parentWindowName, "StaticTextWinsValue")) != NULL)
+				{
+					uStr.format(u"%d", card.wins);
+					GadgetStaticTextSetText(win, uStr);
+				}
+				if ((win = findWindow(NULL, parentWindowName, "StaticTextLossesValue")) != NULL)
+				{
+					uStr.format(u"%d", card.losses);
+					GadgetStaticTextSetText(win, uStr);
+				}
+				if ((win = findWindow(NULL, parentWindowName, "StaticTextGamesPlayedValue")) != NULL)
+				{
+					uStr.format(u"%d", games);
+					GadgetStaticTextSetText(win, uStr);
+				}
+				if ((win = findWindow(NULL, parentWindowName, "StaticTextWinPercentValue")) != NULL)
+				{
+					uStr.format(TheGameText->fetch("GUI:WinPercent"), games > 0 ? REAL_TO_INT(card.wins / (Real)games * 100.0f) : 0);
+					GadgetStaticTextSetText(win, uStr);
+				}
+			}
+			UnicodeString rating = OnlineRatingText(card);
+			if (card.rank > 0)
+			{
+				UnicodeString place;
+				place.format(TheGameText->fetch("GUI:OnlineLadderPlace"), card.rank);
+				if (!rating.isEmpty())
+					rating.concat(u", ");
+				rating.concat(place);
+			}
+			if (card.notOnline)
+				rating = TheGameText->fetch("GUI:OnlinePlayerNotOnline");
+			if (!rating.isEmpty() && (win = findWindow(NULL, parentWindowName, "StaticTextRank")) != NULL)
+				GadgetStaticTextSetText(win, rating);
+			if (card.hasStats && (win = findWindow(NULL, parentWindowName, "StaticTextInProgress")) != NULL)
+				win->winHide(TRUE);
+		}
+	}
 }
 
 
@@ -1304,6 +1356,11 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 
 	GameSpyCloseOverlay(GSOVERLAY_BUDDY);
 	raiseMessageBox = true;
+	if (OnlineIsEnabled())
+	{
+		OnlineRequestStats(AsciiString(lookAtPlayerName.c_str()));
+		s_onlineInfoSerial = OnlinePlayerInfoSerial();
+	}
 	PopulatePlayerInfoWindows("PopupPlayerInfo.wnd");
 
 	// we're on the myinfo screen
@@ -1363,6 +1420,13 @@ void GameSpyPlayerInfoOverlayUpdate( WindowLayout * layout, void *userData)
 	if (raiseMessageBox)
 		RaiseGSMessageBox();
 	raiseMessageBox = false;
+
+	// -online: the stats{nick} answer (or its noplayer) lands in the session, not the PS queue
+	if (OnlineIsEnabled() && isOverlayActive && OnlinePlayerInfoSerial() != s_onlineInfoSerial)
+	{
+		s_onlineInfoSerial = OnlinePlayerInfoSerial();
+		PopulatePlayerInfoWindows("PopupPlayerInfo.wnd");
+	}
 }// GameSpyPlayerInfoOverlayUpdate
 
 //-------------------------------------------------------------------------------------------------

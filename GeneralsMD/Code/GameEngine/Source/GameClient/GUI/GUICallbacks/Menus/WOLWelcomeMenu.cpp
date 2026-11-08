@@ -530,8 +530,14 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 			buttonBuddies->winHide(TRUE);
 	}
 	// -online: every packet goes through our relay, so EA's firewall probe (against its dead mangler
-	// servers) has nothing to find
-	else if (!OnlineIsEnabled())
+	// servers) has nothing to find.  Quick Match and the ladder are the service's; buddies are not.
+	else if (OnlineIsEnabled())
+	{
+		if (buttonBuddies)
+			buttonBuddies->winHide(TRUE);
+		OnlineRequestStats(TheGameSpyInfo->getLocalName());
+	}
+	else
 	{
 		if (TheFirewallHelper == NULL) {
 			TheFirewallHelper = createFirewallHelper();
@@ -724,6 +730,14 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 
 		// -online scripting: once per process, the click a player would make next.  -quickmatch opens Quick
 		// Match; -onlinehost, -onlinejoin and -onlinesay go to the lobby, which carries them on.
+		// -online: our own rating, tier and record arrive after the screen drew (auth.ok, stats)
+		static UnsignedInt s_onlineInfoSerial = 0;
+		if (OnlineIsEnabled() && !buttonPushed && OnlinePlayerInfoSerial() != s_onlineInfoSerial)
+		{
+			s_onlineInfoSerial = OnlinePlayerInfoSerial();
+			UpdateLocalPlayerStats();
+		}
+
 		static Bool s_onlineAutoDone = FALSE;
 		if (OnlineIsEnabled() && !s_onlineAutoDone && !buttonPushed && TheGameSpyInfo->gotGroupRoomList())
 		{

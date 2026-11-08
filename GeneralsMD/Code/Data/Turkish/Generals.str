@@ -18159,3 +18159,171 @@ END
 TOOLTIP:WaterReflection
 "Sahne Yansıması açıkken Modern su için. Orijinal, oyunun eski yansımasını kullanır. SSR ekranda gördüğün her şeyi yansıtır. Hibrit ikisini birleştirir, varsayılan da bu. Kabul Et'e basınca uygulanır."
 END
+
+GUI:QMSearchTime
+"Rakip aranıyor: %d:%02d"
+END
+
+GUI:QMSearchTimePool
+"Rakip aranıyor: %d:%02d, sırada %d kişi var"
+END
+
+GUI:QMStartsIn
+"Maç %d saniyeye başlıyor"
+END
+
+GUI:QMOpponentFound
+"Rakip bulundu: %ls"
+END
+
+GUI:QMAnOpponent
+"bilinmeyen oyuncu"
+END
+
+GUI:QMOpponentLeft
+"Rakibin maç başlamadan çıktı. Tekrar sıradasın."
+END
+
+GUI:OnlinePingMs
+"%d ms"
+END
+
+GUI:OnlineRating
+"Puan %d"
+END
+
+GUI:OnlineRatingTier
+"%ls, puan %d"
+END
+
+GUI:OnlineLadderPlace
+"sıralamada %d."
+END
+
+GUI:OnlinePlayerNotOnline
+"Şu an çevrim içi değil"
+END
+
+GUI:OnlineTier_unranked
+"Derecesiz"
+END
+
+GUI:OnlineTier_private
+"Er"
+END
+
+GUI:OnlineTier_sergeant
+"Çavuş"
+END
+
+GUI:OnlineTier_lieutenant
+"Teğmen"
+END
+
+GUI:OnlineTier_captain
+"Yüzbaşı"
+END
+
+GUI:OnlineTier_major
+"Binbaşı"
+END
+
+GUI:OnlineTier_colonel
+"Albay"
+END
+
+GUI:OnlineTier_general
+"General"
+END
+
+GUI:OnlineLadderPrev
+"Önceki"
+END
+
+GUI:OnlineLadderNext
+"Sonraki"
+END
+
+GUI:OnlineLadderRank
+"#"
+END
+
+GUI:OnlineLadderPlayer
+"Oyuncu"
+END
+
+GUI:OnlineLadderRating
+"Puan"
+END
+
+GUI:OnlineLadderTier
+"Rütbe"
+END
+
+GUI:OnlineLadderWins
+"Galibiyet"
+END
+
+GUI:OnlineLadderLosses
+"Mağlubiyet"
+END
+
+GUI:OnlineLadderLoading
+"Sıralama yükleniyor..."
+END
+
+GUI:OnlineLadderUnavailable
+"Sıralama şu an açılmıyor. Bi dakka sonra tekrar dene."
+END
+
+GUI:OnlineLadderEmpty
+"Bu sayfada sıralamaya girmiş oyuncu yok."
+END
+
+GUI:OnlineRatedResult
+"Puan %+.1f -> %d"
+END
+
+GUI:OnlineUnrated
+"Bu maç puana sayılmadı."
+END
+
+GUI:OnlineUnrated_custom
+"Özel oyunlar puana sayılmıyor."
+END
+
+GUI:OnlineUnrated_desync
+"Puana sayılmadı: oyun senkrondan çıktı."
+END
+
+GUI:OnlineUnrated_grace
+"Puana sayılmadı: bi oyuncu daha başta çıktı."
+END
+
+GUI:OnlineUnrated_nowinner
+"Puana sayılmadı: kazanan çıkmadı."
+END
+
+GUI:OnlineUnrated_unconfirmed
+"Puana sayılmadı: sonuç doğrulanamadı."
+END
+
+GUI:OnlineUnrated_stalled
+"Puana sayılmadı: sonuç doğrulanamadı."
+END
+
+GUI:OnlineUnrated_seed
+"Puana sayılmadı: iki taraf farklı sonuç bildirdi."
+END
+
+GUI:OnlineUnrated_endframe
+"Puana sayılmadı: iki taraf farklı sonuç bildirdi."
+END
+
+GUI:OnlineUnrated_winners
+"Puana sayılmadı: iki taraf farklı sonuç bildirdi."
+END
+
+GUI:OnlineUnrated_cancelled
+"Puana sayılmadı: maç iptal oldu."
+END

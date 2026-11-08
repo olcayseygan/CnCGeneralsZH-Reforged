@@ -318,6 +318,16 @@ static void onlineLobbyScript( void )
 
 // Tooltips -------------------------------------------------------------------------------
 
+/* The nick a player-list row shows.  -online writes the rating and the ping after it, and a nick has no
+	 spaces, so the first word is the nick either way. */
+static AsciiString nickInRow( GameWindow *listbox, Int row )
+{
+	AsciiString full, nick;		// nextToken leaves nick empty on an empty row
+	full.translate( GadgetListBoxGetText( listbox, row, COLUMN_PLAYERNAME ) );
+	full.nextToken( &nick, " " );
+	return nick;
+}
+
 static void playerTooltip(GameWindow *window,
 													WinInstanceData *instData,
 													UnsignedInt mouse)
@@ -334,11 +344,16 @@ static void playerTooltip(GameWindow *window,
 		return;
 	}
 
-	UnicodeString uName = GadgetListBoxGetText(window, row, COLUMN_PLAYERNAME);
-	AsciiString aName;
-	aName.translate(uName);
+	AsciiString aName = nickInRow(window, row);
+	UnicodeString uName;
+	uName.translate(aName);
 
 	PlayerInfoMap::iterator it = TheGameSpyInfo->getPlayerInfoMap()->find(aName);
+	if (it == TheGameSpyInfo->getPlayerInfoMap()->end())
+	{
+		TheMouse->setCursorTooltip( UnicodeString::TheEmptyString );
+		return;
+	}
 	PlayerInfo *info = &(it->second);
 	Bool isLocalPlayer = (TheGameSpyInfo->getLocalName().compareNoCase(info->m_name) == 0);
 
@@ -416,6 +431,17 @@ static void playerTooltip(GameWindow *window,
 	UnicodeString tmp;
 	tmp.format(u"\n%ls %ls", TheGameText->fetch(sideName).str(), TheGameText->fetch(rankName).str());
 	tooltip.concat(tmp);
+
+	OnlinePlayerInfo card;
+	if (OnlineIsEnabled() && OnlineGetPlayerInfo(aName, card))
+	{
+		tmp = OnlineRatingText(card);
+		if (!tmp.isEmpty())
+		{
+			tooltip.concat(u"\n");
+			tooltip.concat(tmp);
+		}
+	}
 
 	TheMouse->setCursorTooltip( tooltip, -1, NULL, 1.5f ); // the text and width are the only params used.  the others are the default values.
 }
@@ -557,6 +583,24 @@ static Int insertPlayerInListbox(const PlayerInfo& info, Color color)
 
 	const Image *rankImg = LookupSmallRankImage(currentSide, currentRank);
 
+	// -online: the rating and the round trip to the server after the nick (nickInRow reads it back)
+	OnlinePlayerInfo card;
+	if (OnlineIsEnabled() && OnlineGetPlayerInfo(info.m_name, card))
+	{
+		UnicodeString extra;
+		if (card.hasRating)
+		{
+			extra.format(u"  %d", card.rating);
+			uStr.concat(extra);
+		}
+		if (card.ping >= 0)
+		{
+			extra.format(TheGameText->fetch("GUI:OnlinePingMs"), card.ping);
+			uStr.concat(u"  ");
+			uStr.concat(extra);
+		}
+	}
+
 #if 0  //Officer's Club (preorder image) no longer used in Zero Hour
 	Int index = GadgetListBoxAddEntryImage(listboxLobbyPlayers, preorderImg, -1, 0, w, h);
 	GadgetListBoxAddEntryImage(listboxLobbyPlayers, rankImg, index, 1, w, h);
@@ -598,9 +642,7 @@ void PopulateLobbyPlayerListbox(void)
 				break;
 			}
 			++numSelected;
-			AsciiString selectedName;
-			uStr = GadgetListBoxGetText(listboxLobbyPlayers, selectedIndices[i], COLUMN_PLAYERNAME);
-			selectedName.translate(uStr);
+			AsciiString selectedName = nickInRow(listboxLobbyPlayers, selectedIndices[i]);
 			selectedNames.insert(selectedName);
 			DEBUG_LOG(("Saving off old selection %d (%s)\n", selectedIndices[i], selectedName.str()));
 		}
@@ -1818,8 +1860,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					}
 
 					GPProfile profileID = 0;
-					AsciiString aName;
-					aName.translate(GadgetListBoxGetText(control, rc->pos, COLUMN_PLAYERNAME));
+					AsciiString aName = nickInRow(control, rc->pos);
 					PlayerInfoMap::iterator it = TheGameSpyInfo->getPlayerInfoMap()->find(aName);
 					if (it != TheGameSpyInfo->getPlayerInfoMap()->end())
 						profileID = it->second.m_profileID;

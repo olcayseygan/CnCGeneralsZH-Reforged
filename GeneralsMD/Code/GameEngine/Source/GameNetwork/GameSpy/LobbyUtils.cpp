@@ -62,6 +62,7 @@
 #include "GameNetwork/GameSpy/PeerThread.h"
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include "Common/STLTypedefs.h"
 
@@ -650,9 +651,21 @@ static Int insertGame( GameWindow *win, GameSpyStagingRoom *game, Bool showMap )
     
   }
   
-	s.format(u"%d", game->getPingAsInt());
-	GadgetListBoxAddEntryText(win, s, gameColor, index, COLUMN_PING);
 	Int ping = game->getPingAsInt();
+	// -online: every route runs through the relay, so the pinger's figure means nothing; the host's own
+	// round trip to the server, as the server last reported it, is the part of the lag a game list can tell
+	if (OnlineIsEnabled())
+	{
+		GameSlot *host = game->getSlot(0);
+		OnlinePlayerInfo card;
+		AsciiString hostNick;
+		if (host && host->isHuman())
+			hostNick.translate(host->getName());
+		if (hostNick.isNotEmpty() && OnlineGetPlayerInfo(hostNick, card) && card.ping >= 0)
+			ping = card.ping;
+	}
+	s.format(u"%d", ping);
+	GadgetListBoxAddEntryText(win, s, gameColor, index, COLUMN_PING);
 	Int width = 10, height = 10;
 	if (pingImages[0])
 	{

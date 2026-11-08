@@ -149,6 +149,114 @@ static Int minPoints = 0;
 
 static const LadderInfo * getLadderInfo( void );
 
+//-------------------------------------------------------------------------------------------------
+// -online: the search clock and the "opponent found" countdown, in the Matching Progress heading
+//-------------------------------------------------------------------------------------------------
+static UnsignedInt s_searchSince = 0;		///< Clock_Milliseconds when Start was pressed; 0 when not searching
+static Int s_poolSize = -1;							///< the last qm.status pool, -1 before one
+static Bool s_revealShown = FALSE;			///< an opponent was announced and game.start has not come
+static UnsignedInt s_revealSerial = 0;
+static UnsignedInt s_revealEnds = 0;		///< when the server's game.start is due
+static UnicodeString s_progressText;
+
+static void setMatchingProgress( const UnicodeString &text )
+{
+	if (text.compare( s_progressText ) == 0)
+		return;
+	s_progressText = text;
+	static NameKeyType progressID = NAMEKEY( "WOLQuickMatchMenu.wnd:StaticTextMatchingProgress" );
+	GameWindow *progress = TheWindowManager->winGetWindowFromId( parentWOLQuickMatch, progressID );
+	if (progress)
+		GadgetStaticTextSetText( progress, text.isEmpty() ? TheGameText->fetch( "GUI:MatchingProgress" ) : text );
+}
+
+static void onlineSearchStopped( void )
+{
+	s_searchSince = 0;
+	s_revealShown = FALSE;
+	setMatchingProgress( UnicodeString::TheEmptyString );
+}
+
+static void onlineQuickMatchTick( void )
+{
+	const UnsignedInt now = Clock_Milliseconds();
+	OnlineMatchReveal reveal;
+	if (OnlineGetMatchReveal( reveal ) && (!s_revealShown || reveal.serial != s_revealSerial))
+	{
+		s_revealShown = TRUE;
+		s_revealSerial = reveal.serial;
+		s_revealEnds = now + (UnsignedInt)max( 0, reveal.revealMs );
+		UnicodeString who, piece;
+		for (size_t i = 0; i < reveal.opponents.size(); ++i)
+		{
+			const OnlineLadderRow &o = reveal.opponents[i];
+			if (o.hasRating)
+				piece.format( u"%hs (%d)", o.nick.str(), o.rating );
+			else
+				piece.format( u"%hs", o.nick.str() );
+			if (!who.isEmpty())
+				who.concat( u", " );
+			who.concat( piece );
+		}
+		if (who.isEmpty())
+			who = TheGameText->fetch( "GUI:QMAnOpponent" );
+		if (reveal.server.isNotEmpty())
+		{
+			piece.format( u" - %hs", reveal.server.str() );
+			who.concat( piece );
+		}
+		UnicodeString line;
+		line.format( TheGameText->fetch( "GUI:QMOpponentFound" ), who.str() );
+		TheGameSpyInfo->addText( line, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow );
+		DEBUG_LOG(("ONLINE REVEAL shown opponents=%d\n", (Int)reveal.opponents.size()));
+	}
+
+	UnicodeString text;
+	if (s_revealShown)
+	{
+		// counts down to the server's game.start; at zero it waits on it
+		const Int left = (Int)(s_revealEnds - now);
+		const Int seconds = (s_revealEnds > now) ? (left + 999) / 1000 : 0;
+		text.format( TheGameText->fetch( "GUI:QMStartsIn" ), seconds );
+	}
+	else if (s_searchSince)
+	{
+		const Int elapsed = (Int)((now - s_searchSince) / 1000);
+		if (s_poolSize >= 0)
+			text.format( TheGameText->fetch( "GUI:QMSearchTimePool" ), elapsed / 60, elapsed % 60, s_poolSize );
+		else
+			text.format( TheGameText->fetch( "GUI:QMSearchTime" ), elapsed / 60, elapsed % 60 );
+	}
+	setMatchingProgress( text );
+
+	// our own rating, tier and record, as they arrive
+	static UnsignedInt s_infoSerial = 0;
+	if (OnlinePlayerInfoSerial() != s_infoSerial)
+	{
+		s_infoSerial = OnlinePlayerInfoSerial();
+		UpdateLocalPlayerStats();
+	}
+}
+
+/* Quick Match settings this service never reads: it matches one on one from the ticked maps, the
+	 army and the colour alone. */
+static void hideUnusedQuickMatchOptions( void )
+{
+	static const char *unused[] = {
+		"WOLQuickMatchMenu.wnd:ComboBoxNumPlayers", "WOLQuickMatchMenu.wnd:StaticTextNumPlayers",
+		"WOLQuickMatchMenu.wnd:ComboBoxMaxPing", "WOLQuickMatchMenu.wnd:StaticTextMaxPing",
+		"WOLQuickMatchMenu.wnd:ComboBoxMaxDisconnects", "WOLQuickMatchMenu.wnd:StaticTextMaxDisconnects",
+		"WOLQuickMatchMenu.wnd:ComboBoxLadder", "WOLQuickMatchMenu.wnd:StaticTextLadder",
+		"WOLQuickMatchMenu.wnd:ButtonBuddies",
+	};
+	for (size_t i = 0; i < sizeof(unused) / sizeof(unused[0]); ++i)
+	{
+		GameWindow *win = TheWindowManager->winGetWindowFromId( parentWOLQuickMatch, NAMEKEY( unused[i] ) );
+		if (win)
+			win->winHide( TRUE );
+	}
+}
+
 static Bool isInfoShown(void)
 {
 	static NameKeyType parentStatsID = NAMEKEY("WOLQuickMatchMenu.wnd:ParentStats");
@@ -189,6 +297,8 @@ static void hideOptionsGadgets(Bool doIt)
 			comboBoxMaxPing->winHide(doIt);
 		if (comboBoxMaxDisconnects)
 			comboBoxMaxDisconnects->winHide(doIt);
+		if (!doIt && OnlineIsEnabled())
+			hideUnusedQuickMatchOptions();
 	}
 }
 
@@ -197,6 +307,14 @@ static void enableOptionsGadgets(Bool doIt)
 #ifdef PERF_TEST
 	s_inQM = !doIt;
 #endif // PERF_TEST
+	// the options lock exactly while a search runs: Start locks them, Stop and every failure free them
+	if (doIt)
+		onlineSearchStopped();
+	else if (OnlineIsEnabled())
+	{
+		s_searchSince = max( 1u, Clock_Milliseconds() );
+		s_poolSize = -1;
+	}
 	static NameKeyType parentOptionsID = NAMEKEY("WOLQuickMatchMenu.wnd:ParentOptions");
 	GameWindow *parentOptions = TheWindowManager->winGetWindowFromId( parentWOLQuickMatch, parentOptionsID );
 	const LadderInfo *li = getLadderInfo();
@@ -894,6 +1012,10 @@ void WOLQuickMatchMenuInit( WindowLayout *layout, void *userData )
 
 	UpdateLocalPlayerStats();
 	UpdateStartButton();
+	s_progressText.clear();
+	onlineSearchStopped();
+	if (OnlineIsEnabled())
+		hideUnusedQuickMatchOptions();
 	TheTransitionHandler->setGroup("WOLQuickMatchMenuFade");
 	isInInit= FALSE;
 } // WOLQuickMatchMenuInit
@@ -1105,6 +1227,9 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 			TheWindowManager->winSendSystemMsg( parentWOLQuickMatch, GBM_SELECTED, (WindowMsgData)buttonStart, buttonStartID );
 		}
 
+		if (OnlineIsEnabled())
+			onlineQuickMatchTick();
+
 #ifdef PERF_TEST
 		UnsignedInt start = Clock_Milliseconds();
 		UnsignedInt end = Clock_Milliseconds();
@@ -1310,6 +1435,13 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 						break;
 					case QM_WORKING:
 						{
+							if (s_revealShown)
+							{
+								// searching again after a reveal: the opponent left before the match started
+								s_revealShown = FALSE;
+								TheGameSpyInfo->addText(TheGameText->fetch("GUI:QMOpponentLeft"), GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
+							}
+							s_poolSize = resp.qmStatus.poolSize;
 							UnicodeString s;
 							s.format(TheGameText->fetch("QM:WORKING"), resp.qmStatus.poolSize);
 							TheGameSpyInfo->addText(s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
@@ -1318,6 +1450,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 						break;
 					case QM_POOLSIZE:
 						{
+							s_poolSize = resp.qmStatus.poolSize;
 							UnicodeString s;
 							s.format(TheGameText->fetch("QM:POOLSIZE"), resp.qmStatus.poolSize);
 							TheGameSpyInfo->addText(s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
@@ -1329,6 +1462,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 						break;
 					case QM_MATCHED:
 						{
+							onlineSearchStopped();
 							TheGameSpyInfo->addText(TheGameText->fetch("QM:MATCHED"), GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
 							buttonWiden->winEnable( FALSE );
 

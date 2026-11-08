@@ -175,7 +175,10 @@ Bool GameSpyInfo::sendChat( UnicodeString message, Bool isAction, GameWindow *pl
 			{
 				if (selections[i] != -1)
 				{
-					aStr.translate(GadgetListBoxGetText(playerListbox, selections[i], GadgetListBoxGetNumColumns(playerListbox)-1));
+					AsciiString row;
+					row.translate(GadgetListBoxGetText(playerListbox, selections[i], GadgetListBoxGetNumColumns(playerListbox)-1));
+					aStr.clear();
+					row.nextToken(&aStr, " ");		// -online's lobby writes rating and ping after the nick, which has no spaces
 					if (aStr.compareNoCase(TheGameSpyInfo->getLocalName()))
 					{
 						tmp.format(",%s", aStr.str());

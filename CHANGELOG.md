@@ -3,10 +3,19 @@
 EA opened the source of Generals and Zero Hour, the game that is still on sale and still runs on
 Steam. This build is that source with the bugs the game shipped with fixed and everything below added.
 
-**127 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
+**128 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
 found and fixed, EA's own, not port damage.**
 
 ---
+
+## Ratings, a ladder and your opponent's name before the map loads
+
+- Quick Match and Ladder are back on the online hub. Buddies stays hidden, because nothing answers it yet.
+- Quick Match counts your search up next to the queue: "Searching for an opponent: 1:23, 4 in the queue". Once you are paired, the opponent's name, rating and server stand on screen for three seconds before the map loads. If he drops out in those seconds you go back into the queue instead of into an empty match. The settings this service never read are off the screen: number of players, maximum ping, disconnects and ladder.
+- The online lobby lists each player's rating and round trip to the server after the name, and the tooltip names his rank. The game list's ping column shows the host's own round trip. It used to say 1 ms for every game.
+- The player card shows the site's wins and losses, rank, rating and place on the ladder, and says so when the player is not online right now.
+- The Ladder screen lists 20 players a page with rank, rating, wins and losses, your own row underneath, and Previous and Next to page through. It was an empty frame where EA's web page used to load.
+- After a Quick Match the score screen's chat box tells you how your rating moved, "Rating +1.3 -> 22", or why the match did not count: a custom game, a desync, a player gone in the first moments, two reports that disagree.
 
 ## Wrecks keep the speed they died at
 

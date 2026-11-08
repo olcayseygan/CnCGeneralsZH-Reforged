@@ -3838,3 +3838,171 @@ END
 TOOLTIP:WaterReflection
 "For Modern water when Scene reflections is on. Legacy uses the original reflections. SSR reflects visible screen content. Hybrid combines both and is the default. Applied when you Accept."
 END
+
+GUI:QMSearchTime
+"Searching for an opponent: %d:%02d"
+END
+
+GUI:QMSearchTimePool
+"Searching for an opponent: %d:%02d, %d in the queue"
+END
+
+GUI:QMStartsIn
+"Match starts in %d"
+END
+
+GUI:QMOpponentFound
+"Opponent found: %ls"
+END
+
+GUI:QMAnOpponent
+"unknown player"
+END
+
+GUI:QMOpponentLeft
+"Your opponent left before the match started. You are back in the queue."
+END
+
+GUI:OnlinePingMs
+"%d ms"
+END
+
+GUI:OnlineRating
+"Rating %d"
+END
+
+GUI:OnlineRatingTier
+"%ls, rating %d"
+END
+
+GUI:OnlineLadderPlace
+"#%d on the ladder"
+END
+
+GUI:OnlinePlayerNotOnline
+"Not online right now"
+END
+
+GUI:OnlineTier_unranked
+"Unranked"
+END
+
+GUI:OnlineTier_private
+"Private"
+END
+
+GUI:OnlineTier_sergeant
+"Sergeant"
+END
+
+GUI:OnlineTier_lieutenant
+"Lieutenant"
+END
+
+GUI:OnlineTier_captain
+"Captain"
+END
+
+GUI:OnlineTier_major
+"Major"
+END
+
+GUI:OnlineTier_colonel
+"Colonel"
+END
+
+GUI:OnlineTier_general
+"General"
+END
+
+GUI:OnlineLadderPrev
+"Previous"
+END
+
+GUI:OnlineLadderNext
+"Next"
+END
+
+GUI:OnlineLadderRank
+"#"
+END
+
+GUI:OnlineLadderPlayer
+"Player"
+END
+
+GUI:OnlineLadderRating
+"Rating"
+END
+
+GUI:OnlineLadderTier
+"Rank"
+END
+
+GUI:OnlineLadderWins
+"Wins"
+END
+
+GUI:OnlineLadderLosses
+"Losses"
+END
+
+GUI:OnlineLadderLoading
+"Loading the ladder..."
+END
+
+GUI:OnlineLadderUnavailable
+"The ladder is not available right now. Try again in a minute."
+END
+
+GUI:OnlineLadderEmpty
+"No ranked players on this page."
+END
+
+GUI:OnlineRatedResult
+"Rating %+.1f -> %d"
+END
+
+GUI:OnlineUnrated
+"This match was not rated."
+END
+
+GUI:OnlineUnrated_custom
+"Custom games are not rated."
+END
+
+GUI:OnlineUnrated_desync
+"Not rated: the game went out of sync."
+END
+
+GUI:OnlineUnrated_grace
+"Not rated: a player left right at the start."
+END
+
+GUI:OnlineUnrated_nowinner
+"Not rated: nobody won."
+END
+
+GUI:OnlineUnrated_unconfirmed
+"Not rated: the result could not be confirmed."
+END
+
+GUI:OnlineUnrated_stalled
+"Not rated: the result could not be confirmed."
+END
+
+GUI:OnlineUnrated_seed
+"Not rated: the two sides reported different results."
+END
+
+GUI:OnlineUnrated_endframe
+"Not rated: the two sides reported different results."
+END
+
+GUI:OnlineUnrated_winners
+"Not rated: the two sides reported different results."
+END
+
+GUI:OnlineUnrated_cancelled
+"Not rated: the match was called off."
+END

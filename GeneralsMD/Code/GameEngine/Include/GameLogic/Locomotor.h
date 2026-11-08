@@ -335,6 +335,8 @@ public:
 		EA's estimate, a speed halfway down to MinSpeed at TurnRate, and no entry.
 	*/
 	Real calcTurnCircle(const Object* obj, Real* entryDist) const;
+	/// which way a jet turns to break off from a target relX ahead of it and relY to its left: +1 left, -1 right (Locomotor_jetBreakOffSide)
+	Real calcJetBreakOffSide(const Object* obj, Real relX, Real relY) const;
 
 	/**
 		A live aircraft on a hovering air locomotor: Comanche, Chinook, Helix and every general's copy.

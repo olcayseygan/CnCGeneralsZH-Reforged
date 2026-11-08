@@ -25,6 +25,15 @@
 # and never fired (370 of 370); breaking off only with the target in the aim cone fixed it. Closest
 # approach, centre to centre: Raptor 142, MiG 148, Aurora 123, Stealth 111. -maxframes counts the
 # 60 Hz logic frames, so the file's 650 needs 1400.
+#
+# 2026-11-08: those break-off numbers stopped holding with f4d0e85b, which waited for a spent clip
+# that an empty jet never stayed in the attack to see: 0 BREAK OFF lines, and the Raptor went over
+# the Overlord at 11 and fired its fourth missile on a second pass, at logic frame 1211. With the
+# break-off flown after the last round and the approach ending at the reach, closest approach over
+# the pass is Raptor 11 -> 137, MiG 130 -> 209, Aurora 59 -> 65, Stealth 51 -> 50 (its reach is the
+# shortest, the second missile goes at 115), and the Raptor's four land by frame 903. Same rounds,
+# same damage: the MiG's 166 to 179 on the Battle Master is the seed's draw on both builds, mean 169.5
+# against 169.4 over 13 seeds.
 
 30    spawn      1  ChinaTankOverlord            1   2250 3300
 30    spawn      0  AmericaJetRaptor             1   1000 3420

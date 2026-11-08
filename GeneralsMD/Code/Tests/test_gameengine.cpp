@@ -3014,6 +3014,32 @@ TEST(jet_runs_out_from_a_target_it_cannot_turn_onto)
 	CHECK( !AIAttackAim_needsRunOut( 60.0f,   60.0f, R, 0.7071068f, 0.0f ) );
 }
 
+/* Locomotor.cpp: a jet that has spent its last round breaks off to the side whose turn, flown from
+   the bank it is already in, passes the target wider. */
+extern Real Locomotor_jetBreakOffSide( Real relX, Real relY, Real speed, Real yawRate, Real maxRate, Real yawAccel );
+
+TEST(jet_breaks_off_to_the_side_that_passes_the_target_wider)
+{
+	/* 4.5 a frame on a 72 circle, rolling into the full bank over half a second */
+	const Real SPEED = 4.5f;
+	const Real RATE = SPEED / 72.0f;
+	const Real ACCEL = RATE / 30.0f;
+
+	/* wings level, target nearly dead ahead: away from it, 92 clear where the other way is 87 */
+	CHECK_EQ( Locomotor_jetBreakOffSide( 200.0f,   5.0f, SPEED, 0.0f, RATE, ACCEL ), -1.0f );
+	CHECK_EQ( Locomotor_jetBreakOffSide( 200.0f,  -5.0f, SPEED, 0.0f, RATE, ACCEL ),  1.0f );
+
+	/* the target ahead and to the right of the nose, wings level: away from it, left, 130 clear */
+	CHECK_EQ( Locomotor_jetBreakOffSide( 121.0f, -113.0f, SPEED, 0.0f, RATE, ACCEL ), 1.0f );
+
+	/* the same target with the jet banked hard right onto it, the bomb just gone: rolling through to
+	   the left carries it over the target (12 clear), carrying on round passes it at 58 */
+	CHECK_EQ( Locomotor_jetBreakOffSide( 121.0f, -113.0f, SPEED, -RATE, RATE, ACCEL ), -1.0f );
+
+	/* no turn to fly: away from it */
+	CHECK_EQ( Locomotor_jetBreakOffSide( 121.0f, -113.0f, SPEED, 0.0f, 0.0f, ACCEL ), 1.0f );
+}
+
 /* JetAIUpdate.cpp: the glide down to a touchdown and the climb from a liftoff are one shape, a
    straight slope that rounds out to level at the runway and stops at the approach height. */
 extern Real JetRunway_slopeHeight( Real dist, Real maxHeight, Real slope, Real roundDist );

@@ -16,6 +16,14 @@
 # target. Done when every jet's closest approach stays near its breakoff's clearance (the larger of the
 # minimum range and the turn radius) and the tallies still show the targets hit.
 #
+# 2026-11-08: from f4d0e85b (finish the clip first) until this date BREAK OFF never printed. The jets
+# empty their racks with the last round, and an empty jet left the attack on that frame, before any
+# frame with the clip spent. Now the attack stays on to fly the break-off, the approach ends at the
+# reach, and every jet prints one BREAK OFF a pass. Closest approach over the pass, centre to centre,
+# seeds 7, 11 and 23 alike: Raptor 67 -> 123, MiG 113 -> 166, Aurora 47 -> 108, Stealth 67 -> 99,
+# first shots from 311, 311, 289 and 211 where they were 236, 249, 224 and 171, same rounds, same
+# tallies (a temporary per-frame trace; -maxframes 1500).
+#
 # Target spots from jetpass.txt, where the spawn check accepts each.
 
 30    spawn      1  ChinaTankOverlord            1   2250 3300

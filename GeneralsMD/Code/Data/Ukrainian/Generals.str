@@ -16673,6 +16673,10 @@ GUI:CantBuildTooManyDerrickDefenses
 "Ви вже маєте дві оборонні споруди навколо цих нафтових вишок."
 END
 
+TOOLTIP:TooltipProRulesBanUpgrade
+"Заборонено про-правилами"
+END
+
 GUI:HudStatArmy
 "Вартість армії"
 END

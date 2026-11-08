@@ -945,6 +945,12 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 						{
 							cardWarning = TheGameText->fetch( "TOOLTIP:TooltipCannotPurchaseBecauseQueueFull" );
 						}
+						// canAffordUpgrade also refuses a Pro Rules ban, and the card read that as money: Neutron
+						// Shells sat greyed on the silo saying "Not enough money" with ten thousand in the bank
+						else if( TheGameLogic->isProRules() && ProRulesBanUpgrade( upgradeTemplate->getUpgradeName() ) )
+						{
+							cardWarning = TheGameText->fetch( "TOOLTIP:TooltipProRulesBanUpgrade" );
+						}
 						else if( !TheUpgradeCenter->canAffordUpgrade( ThePlayerList->getLocalPlayer(), upgradeTemplate, FALSE ) )
 						{
 							cardWarning = TheGameText->fetch( "TOOLTIP:TooltipNotEnoughMoneyToBuild" );

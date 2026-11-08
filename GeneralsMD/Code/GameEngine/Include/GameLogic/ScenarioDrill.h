@@ -90,6 +90,7 @@ enum ScenarioActionType
 	SCENARIO_ACTION_FORCEATTACK,			///< forceattack <slot> <selector> <targetSlot> <targetSelector>; the attack key's click on one unit, as MSG_DO_FORCE_ATTACK_OBJECT
 	SCENARIO_ACTION_CLICKENTER,				///< clickenter <slot> <selector> <targetSlot> <targetSelector>; a player's click into a building or transport, as MSG_ENTER
 	SCENARIO_ACTION_WEAPONAT,					///< weaponat <slot> <selector> <position> [primary|secondary|tertiary]; a FIRE_WEAPON button's click on the ground, as MSG_DO_WEAPON_AT_LOCATION; tertiary when left out
+	SCENARIO_ACTION_SWITCHWEAPON,			///< switchweapon <slot> <selector> primary|secondary|tertiary; a SWITCH_WEAPON button (the Nuke Cannon's Neutron Shells), as MSG_SWITCH_WEAPONS
 	SCENARIO_ACTION_FORCEGROUND,			///< forceground <slot> <selector> <position>; the attack key's click on the ground, as MSG_DO_FORCE_ATTACK_GROUND
 	SCENARIO_ACTION_REAIM,						///< reaim <slot> <selector> <position>; a right click that moves a running power's aim (the Spectre Gunship's), as MSG_DO_SPECIAL_POWER_OVERRIDE_DESTINATION
 	SCENARIO_ACTION_RESPOND,					///< respond <slot> <selector> <position>; from now, how long each unit takes to point its gun at the position, fire with it pointed there, and get closer to it

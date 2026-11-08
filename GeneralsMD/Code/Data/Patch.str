@@ -1452,6 +1452,11 @@ GUI:CantBuildTooManyDerrickDefenses
 "You already have two defenses round these oil derricks."
 END
 
+// Pro Rules, rules 6 and 12 to 14: the upgrade's card says why its button is grey
+TOOLTIP:TooltipProRulesBanUpgrade
+"Banned under Pro Rules"
+END
+
 GUI:HudStatArmy
 "Army value"
 END

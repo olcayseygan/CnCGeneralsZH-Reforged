@@ -246,6 +246,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_CLICKENTER;
 	else if (token == "weaponat")
 		*action = SCENARIO_ACTION_WEAPONAT;
+	else if (token == "switchweapon")
+		*action = SCENARIO_ACTION_SWITCHWEAPON;
 	else if (token == "forceground")
 		*action = SCENARIO_ACTION_FORCEGROUND;
 	else if (token == "reaim")
@@ -350,6 +352,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_REAIM:				return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_RESPOND:			return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_STANCE:			return SCENARIO_TOKENS_STANCE;
+		case SCENARIO_ACTION_SWITCHWEAPON:	return SCENARIO_TOKENS_STANCE;
 		case SCENARIO_ACTION_SHIFTATTACK:	return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_FORCEATTACK:	return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_CLICKENTER:	return SCENARIO_TOKENS_ATTACK;
@@ -510,6 +513,12 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_STANCE:
 			action->name = tokens[ SCENARIO_STANCE_NAME_TOKEN ];
 			if (action->name != "aggressive" && action->name != "defensive")
+				return SCENARIO_PARSE_BAD_ACTION;
+			break;
+
+		case SCENARIO_ACTION_SWITCHWEAPON:
+			action->name = tokens[ SCENARIO_STANCE_NAME_TOKEN ];
+			if (action->name != "primary" && action->name != "secondary" && action->name != "tertiary")
 				return SCENARIO_PARSE_BAD_ACTION;
 			break;
 
@@ -1783,6 +1792,37 @@ static Bool executeWeaponAt( const ScenarioAction &action, Player *player, const
 	return TRUE;
 }
 
+/** A SWITCH_WEAPON button (the Nuke Cannon's Neutron Shells): MSG_SWITCH_WEAPONS with the slot, handed
+	  to the dispatcher with the matching units as the selection.  The log line counts the units whose
+	  current weapon is that slot afterwards, so a switch the logic refused reads as 0.  The dispatcher
+	  destroys the group, so the units are counted from the player's objects. */
+static Bool executeSwitchWeapon( const ScenarioAction &action, Player *player, AIGroup *group, Int taken )
+{
+	const WeaponSlotType weaponSlot = (action.name == "primary") ? PRIMARY_WEAPON
+																	: (action.name == "secondary") ? SECONDARY_WEAPON : TERTIARY_WEAPON;
+	std::vector<ObjectID> members;
+	const VecObjectID &ids = group->getAllIDs();
+	members.assign( ids.begin(), ids.end() );
+
+	GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_SWITCH_WEAPONS );
+	msg->friend_setPlayerIndex( player->getPlayerIndex() );
+	msg->appendIntegerArgument( weaponSlot );
+	TheGameLogic->logicMessageDispatcher( msg, group );
+	msg->deleteInstance();
+
+	Int switched = 0;
+	for (std::vector<ObjectID>::const_iterator it = members.begin(); it != members.end(); ++it)
+	{
+		const Object *obj = TheGameLogic->findObjectByID( *it );
+		if (obj && obj->getCurrentWeapon() && obj->getCurrentWeapon()->getWeaponSlot() == weaponSlot)
+			++switched;
+	}
+
+	DEBUG_LOG(("SCENARIO: frame %d switchweapon slot %d '%s' x%d %s: %d on that weapon\n",
+						 action.frame, action.slot, action.selector.str(), taken, action.name.str(), switched));
+	return TRUE;
+}
+
 /** The rank tree's button: the player is raised to the rank the science asks for and given the points
 	  it costs, and then MSG_PURCHASE_SCIENCE goes to the dispatcher as the control bar sends it, so the
 	  purchase itself is the one a click makes. */
@@ -1922,6 +1962,9 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 
 		case SCENARIO_ACTION_WEAPONAT:
 			return executeWeaponAt( action, player, dest, group, taken );		// the dispatcher again
+
+		case SCENARIO_ACTION_SWITCHWEAPON:
+			return executeSwitchWeapon( action, player, group, taken );		// the dispatcher again
 
 		case SCENARIO_ACTION_AUTOGARRISON:
 		case SCENARIO_ACTION_AUTOREPAIR:

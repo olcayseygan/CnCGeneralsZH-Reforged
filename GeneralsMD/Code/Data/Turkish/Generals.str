@@ -15645,6 +15645,10 @@ GUI:CantBuildTooManyDerrickDefenses
 "Bu petrol kuyularının çevresinde zaten iki savunmanız var."
 END
 
+TOOLTIP:TooltipProRulesBanUpgrade
+"Pro Kurallarında yasak"
+END
+
 TOOLTIP:StatSeconds
 "%d sn"
 END

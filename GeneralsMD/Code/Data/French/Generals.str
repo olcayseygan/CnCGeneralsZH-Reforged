@@ -16657,6 +16657,10 @@ GUI:CantBuildTooManyDerrickDefenses
 "Vous avez déjà deux défenses autour de ces derricks."
 END
 
+TOOLTIP:TooltipProRulesBanUpgrade
+"Interdit par les règles pro"
+END
+
 GUI:HudStatArmy
 "Valeur de l'armée"
 END

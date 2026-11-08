@@ -1,0 +1,40 @@
+# Do Neutron Shells work? The silo buys Upgrade_ChinaNeutronShells, the plain, Nuke General's and
+# Infantry General's Nuke Cannon each press the Neutron Shells button (MSG_SWITCH_WEAPONS, slot
+# secondary) once before the upgrade and once after, then all three fire at three Crusaders.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 4800
+#     -scenario neutronshells -logPrefix neutronshells_
+#
+# Pass is each switchweapon line after the upgrade counting every cannon it took on that weapon
+# (the ones before it say 0: no secondary yet), and the Crusaders' crews dead with their hulls
+# whole: slot 1 has none left at the end and its HEADLESS PLAYER line says 0 lost. A cannon still
+# firing its normal shell leaves wrecks, counted as lost.
+#
+# Measured 2026-11-08: 0, 0, 0 before, 1, 2, 1 after, slot 1 "units 1 built 0 lost". The same file
+# with the silo refused (no upgrade) says 0 after as well and the Crusaders die to normal shells.
+
+30    spawn         0  ChinaNuclearMissileLauncher     1   990 3560
+30    spawn         0  ChinaPowerPlant                 1   1100 2900
+30    spawn         0  ChinaPowerPlant                 1   1100 3120
+30    spawn         0  ChinaPowerPlant                 1   1100 3340
+30    spawn         0  ChinaVehicleNukeLauncher        1   1200 3640
+30    spawn         0  Nuke_ChinaVehicleNukeLauncher   1   1200 3700
+30    spawn         0  Infa_ChinaVehicleNukeLauncher   1   1200 3760
+30    spawn         1  AmericaTankCrusader             3   1480 3700 30
+40    shiftupgrade  0  ChinaNuclearMissileLauncher     Upgrade_ChinaNeutronShells
+50    switchweapon  0  ChinaVehicleNukeLauncher        secondary
+50    switchweapon  0  Nuke_ChinaVehicleNukeLauncher   secondary
+50    switchweapon  0  Infa_ChinaVehicleNukeLauncher   secondary
+
+# a cannon made after the upgrade finished takes it at birth: the Nuke_ line below counts x2
+1950  spawn         0  Nuke_ChinaVehicleNukeLauncher   1   1200 3820
+2000  switchweapon  0  ChinaVehicleNukeLauncher        secondary
+2000  switchweapon  0  Nuke_ChinaVehicleNukeLauncher   secondary
+2000  switchweapon  0  Infa_ChinaVehicleNukeLauncher   secondary
+2010  tally         1  AmericaTankCrusader
+2010  attack        0  ChinaVehicleNukeLauncher        1  AmericaTankCrusader
+2010  attack        0  Nuke_ChinaVehicleNukeLauncher   1  AmericaTankCrusader
+2010  attack        0  Infa_ChinaVehicleNukeLauncher   1  AmericaTankCrusader
+2300  tally         1  AmericaTankCrusader

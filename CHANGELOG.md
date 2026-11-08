@@ -1674,6 +1674,7 @@ A third pass went through the generals' powers, promotions and unit abilities.
 - The computer opponent is held to the same list, because it asks the same question your build buttons ask before it spends a dollar.
 - With these rules on, the superweapon dropdown above decides one thing: how many Nuclear Missile silos a player may have standing. No Superweapons means one.
 - No suicide bomb upgrade for the Demolition General, no Neutron Shells and no Stealth Comanche. The Carpet Bomb stays grey until its owner reaches three stars, which holds back the Air Force General, who can buy his at one.
+- A banned upgrade's card says "Banned under Pro Rules". It used to say "Not enough money" whatever you had in the bank, so Neutron Shells looked broken: a player with ten thousand on hand saw the silo's button grey and blamed the upgrade. Outside Pro Rules it never was: the plain, Nuke and Infantry Generals' Nuke Cannons, the ones on the field when it finishes and the ones built after, all switch to neutron shells, and three Crusaders hit by them are left standing with no crew instead of being blown up.
 - Two towers per oil derrick. Your Patriot batteries, Gattling Cannons and Stinger Sites near a derrick count against it, and derricks standing together on the map share one allowance, so the pair 250 apart on Tournament Plains is one derrick for this. The third tower's placement ghost goes red and says why. Your ally's towers do not use up your two, and tunnels are not limited.
 
 ## Two windows, one machine, a real LAN game

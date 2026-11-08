@@ -14865,6 +14865,10 @@ GUI:CantBuildTooManyDerrickDefenses
 "Du hast schon zwei Verteidigungen an diesen Ölbohrtürmen."
 END
 
+TOOLTIP:TooltipProRulesBanUpgrade
+"Nach den Profiregeln verboten"
+END
+
 GUI:HudStatArmy
 "Armeewert"
 END

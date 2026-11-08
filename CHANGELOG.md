@@ -23,6 +23,7 @@ found and fixed, EA's own, not port damage.**
 - A car or truck killed while driving is thrown up and tumbles the way the hit pushed it. Shot from behind it flips forward over its nose; shot from the side it rolls away from the gun. It explodes where it lands. A parked one caught by a blast tips over away from it.
 - A tank killed on the move keeps sliding and brakes to a stop before it goes up, and a hit from behind sends it further.
 - A helicopter shot in flight keeps its speed all the way down, spinning on along the line it was flying instead of dropping under the spot it was hit.
+- A wreck hits the ground as hard as it fell. A helicopter that dropped off its hover used to raise the same small puff as a jet going in at full speed; now the dust and the shake follow the speed of the impact. A soft landing kicks up a little dirt, a car thrown at speed or a slow jet throws a dust cloud and debris, and a helicopter or a jet shot down flying fast sends up a wall of dust with a ring rolling out from it and shakes the screen. A helicopter that came in fast also ploughs on along the ground about its own length before it stops. If you can see a wreck lying in the fog, you now see it blow up too, and the hull it leaves.
 - The Technical, the Rocket Buggy and the Combat Bike had death throws of their own already, and keep them.
 - A wreck sliding or flying through a crowd no longer crushes the soldiers and vehicles in its way.
 - A replay recorded on an earlier version will not play back on this one.

@@ -381,6 +381,13 @@ UpdateSleepTime JetSlowDeathBehavior::update( void )
 			FXList::doFXObj( modData->m_fxHitGround, us );
 			ObjectCreationList::create( modData->m_oclHitGround, us, NULL );
 
+			// and the dust and shake of how hard it went in
+			if( physics )
+			{
+				const Coord3D *impactVel = physics->getVelocity();
+				doImpactFX( us, sqrtf( impactVel->x * impactVel->x + impactVel->y * impactVel->y + impactVel->z * impactVel->z ) );
+			}
+
 			// we are now on the ground
 			m_timerOnGroundFrame = TheGameLogic->getFrame();
 

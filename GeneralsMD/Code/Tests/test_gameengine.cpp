@@ -1335,8 +1335,10 @@ TEST(water_splashes_take_blasts_by_name_and_every_list_that_scorches)
 	 The gunfire pass added 13 of EA's gun FXLists, wider tracers and AtTarget impacts, all of
 	 which already had a muzzle light, and the faster tracers six more, each with EA's own light.
 	 The smoke-trail fragments added two of EA's blasts, the jet missile with its own light and the
-	 Particle Cannon's ground hit with one of the fork's. */
+	 Particle Cannon's ground hit with one of the fork's.  The three wreck impacts, dust and a
+	 shake by how hard an aircraft hits the ground, are dust and carry no light either. */
 static const char *const s_unlitReforgedFXList = "FXList SupW_FX_ParticleUplinkDeathInitial";
+static const char *const s_unlitReforgedImpacts = "FXList FX_Reforged_Impact";
 
 TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 {
@@ -1352,6 +1354,10 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 	CHECK( TheFXListStore->findFXList( "ScudStormMissileDetonation" ) != NULL );
 	CHECK( TheFXListStore->findFXList( "FX_BombExplosion" ) != NULL );
 	CHECK( TheFXListStore->findFXList( "NoSuchFXListIsDeclaredAnywhere" ) == NULL );
+	/* SlowDeathBehavior::doImpactFX looks these three up by name */
+	CHECK( TheFXListStore->findFXList( "FX_Reforged_ImpactLight" ) != NULL );
+	CHECK( TheFXListStore->findFXList( "FX_Reforged_ImpactMedium" ) != NULL );
+	CHECK( TheFXListStore->findFXList( "FX_Reforged_ImpactHeavy" ) != NULL );
 
 	/* and every block in the file still carries the light it exists for */
 	FILE *fp = fopen( FXLIST_REFORGED_INI, "rb" );
@@ -1361,7 +1367,8 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 	char line[ 512 ];
 	while( fgets( line, sizeof( line ), fp ) != NULL )
 	{
-		if( strncmp( line, s_unlitReforgedFXList, strlen( s_unlitReforgedFXList ) ) == 0 )
+		if( strncmp( line, s_unlitReforgedFXList, strlen( s_unlitReforgedFXList ) ) == 0 ||
+				strncmp( line, s_unlitReforgedImpacts, strlen( s_unlitReforgedImpacts ) ) == 0 )
 		{
 			open = 0;
 		}

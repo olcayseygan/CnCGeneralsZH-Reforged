@@ -346,6 +346,23 @@ static Bool dataFlingsBody(const SlowDeathBehaviorModuleData* d, Bool wheels)
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A wreck coming down raised the same small puff whether it dropped off a hover or went in at full
+	* speed. Three lists in FXListReforged.ini, picked by the speed it hits the ground at: a hovering
+	* helicopter falling off its lift lands light (about 40 a second), a car tossed at speed or a slow
+	* jet medium, a helicopter or a jet shot down at speed heavy. Effects only; the client plays them. */
+/*static*/ void SlowDeathBehavior::doImpactFX(const Object* obj, Real impactSpeed)
+{
+	const Real MEDIUM_IMPACT = ConvertVelocityInSecsToFrames(50.0f);
+	const Real HEAVY_IMPACT = ConvertVelocityInSecsToFrames(110.0f);
+	const char* name = "FX_Reforged_ImpactLight";
+	if (impactSpeed >= HEAVY_IMPACT)
+		name = "FX_Reforged_ImpactHeavy";
+	else if (impactSpeed >= MEDIUM_IMPACT)
+		name = "FX_Reforged_ImpactMedium";
+	FXList::doFXObj(TheFXListStore->findFXList(name), obj);
+}
+
+//-------------------------------------------------------------------------------------------------
 /** A ground vehicle killed on the move used to stop where it was hit: dead, nothing drives it, and
 	* ground friction takes a car from full speed to nothing in a third of a second.  It carries on
 	* now, and the shot that killed it pushes it on top of that, away from where it came from.  A
@@ -596,6 +613,7 @@ Bool SlowDeathBehavior::updateMomentum()
 			if (fabs(m[2][0]) > 0.95f && (m_momentumVelX != 0.0f || m_momentumVelY != 0.0f))
 				heading = ATan2(m_momentumVelY, m_momentumVelX);
 			physics->setAngles(heading, 0.0f, 0.0f);
+			doImpactFX(obj, sqrtf(vel->x*vel->x + vel->y*vel->y + vel->z*vel->z));
 			endMomentum();
 			return FALSE;
 		}

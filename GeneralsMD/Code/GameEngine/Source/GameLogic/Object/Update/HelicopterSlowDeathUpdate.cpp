@@ -530,7 +530,17 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 			FXList::doFXObj( modData->m_fxHitGround, copter );
 			ObjectCreationList::create( modData->m_oclHitGround, copter, NULL );
 
-			// hold the copter in place now
+			// and the dust and shake of how hard it hit: its fall and spiral, and the drift it carried
+			PhysicsBehavior *impactPhysics = copter->getPhysics();
+			if( impactPhysics )
+			{
+				const Coord3D *impactVel = impactPhysics->getVelocity();
+				const Real ix = impactVel->x + m_driftX;
+				const Real iy = impactVel->y + m_driftY;
+				doImpactFX( copter, sqrtf( ix * ix + iy * iy + impactVel->z * impactVel->z ) );
+			}
+
+			// hold the copter in place now; what is left of its drift ploughs it on along the ground below
 			copter->setDisabled( DISABLED_HELD );
 
 			// special damage state ... has the blades no on anymore
@@ -542,6 +552,41 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 			TheAudio->removeAudioEvent(m_deathSound.getPlayingHandle());
 
 		}  // end if
+	}
+
+	/* Down, a wreck that came in fast ploughs on along the ground a little and stops, rather than
+		 stopping dead where it touched: the drift, held to the ground, losing a fifth of itself every
+		 retail frame - about 20 more for a Comanche shot down at full speed. It stops at the map's edge
+		 and at ground that climbs more than a little in its way. */
+	else if( m_driftX != 0.0f || m_driftY != 0.0f )
+	{
+		Coord3D ploughed = *copter->getPosition();
+		ploughed.x += m_driftX;
+		ploughed.y += m_driftY;
+		Region3D extent;
+		TheTerrainLogic->getExtent( &extent );
+		const Real groundZ = TheTerrainLogic->getLayerHeight( ploughed.x, ploughed.y, copter->getLayer() );
+		const Real MAX_CLIMB = 2.0f;
+		if( ploughed.x < extent.lo.x || ploughed.x > extent.hi.x || ploughed.y < extent.lo.y || ploughed.y > extent.hi.y ||
+				groundZ > copter->getPosition()->z + MAX_CLIMB )
+		{
+			m_driftX = 0.0f;
+			m_driftY = 0.0f;
+		}
+		else
+		{
+			ploughed.z = groundZ;
+			copter->setPosition( &ploughed );
+			const Real PLOUGH_DECAY = ConvertRetailPerFrameFactor( 0.8f );
+			const Real STOPPED = ConvertVelocityInSecsToFrames( 1.0f );
+			m_driftX *= PLOUGH_DECAY;
+			m_driftY *= PLOUGH_DECAY;
+			if( fabs( m_driftX ) < STOPPED && fabs( m_driftY ) < STOPPED )
+			{
+				m_driftX = 0.0f;
+				m_driftY = 0.0f;
+			}
+		}
 	}
 
 	// if we're on the ground, see if it's time for our final boom

@@ -172,6 +172,8 @@ protected:
 	void doPhaseStuff(SlowDeathPhaseType sdphase, Int what = SlowDeathBehaviorModuleData::HAS_FX | SlowDeathBehaviorModuleData::HAS_NON_LOD_EFFECTS);
 	/// level unit direction the killing shot pushes obj, away from its source; FALSE for damage that pushes nothing
 	static Bool calcHitDirection(const Object* obj, const DamageInfo* damageInfo, Real& dirX, Real& dirY);
+	/// the dust, debris and shake of a wreck hitting the ground, by its speed (per frame) at impact
+	static void doImpactFX(const Object* obj, Real impactSpeed);
 	Bool beginMomentum(const DamageInfo* damageInfo);	///< true if the death carries on from its speed and the shot's push
 	Bool updateMomentum();	///< true while the destruction has to wait for it
 	void endMomentum(Bool stopSpin = TRUE);	///< it has come to rest, or something else took it over

@@ -153,7 +153,7 @@ inline Real ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(Real degPerSec)
 
 // ----------------------------------------------------------------------------------------------
 // Every Player takes a seat: the neutral player at 0, the map's own sides (civilian and the like),
-// one per occupied game slot (MAX_SLOTS, 36) and the replay observer.  48 leaves the map ten sides
+// one per occupied game slot (MAX_SLOTS, 32) and the replay observer.  48 leaves the map fourteen sides
 // beside a full lobby.  Every per-player array in logic is this long, a PartitionCell's among them,
 // so it is not free; PlayerMaskType below caps it at 64.
 enum

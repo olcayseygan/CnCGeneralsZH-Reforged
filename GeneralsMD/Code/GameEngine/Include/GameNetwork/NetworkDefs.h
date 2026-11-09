@@ -49,7 +49,7 @@ extern Int FRAME_DATA_LENGTH;
 extern Int FRAMES_TO_KEEP;
 
 /// The seats in a network game, and the one place that number is set.  EA's was 8.
-static const Int MAX_SLOTS = 36;
+static const Int MAX_SLOTS = 32;
 
 enum ConnectionNumbers
 {
@@ -58,10 +58,11 @@ enum ConnectionNumbers
 };
 
 /* A set of slots, one bit each: the relay a command still has to reach, a chat's or a file's
-	 recipients.  EA's was a byte, which held eight.  On the wire it is all eight bytes of this. */
-typedef UnsignedInt64 SlotMask;
+	 recipients.  EA's was a byte, which held eight.  On the wire it is all four bytes of this. */
+typedef UnsignedInt SlotMask;
 static_assert(MAX_SLOTS <= (Int)(sizeof(SlotMask) * 8), "SlotMask needs a bit for every slot");
-static const SlotMask SLOTMASK_ALL = (MAX_SLOTS == 64) ? ~(SlotMask)0 : (((SlotMask)1 << MAX_SLOTS) - 1);
+// shifted down from all ones, so a mask exactly as wide as MAX_SLOTS never shifts by its own width
+static const SlotMask SLOTMASK_ALL = ~(SlotMask)0 >> (sizeof(SlotMask) * 8 - MAX_SLOTS);
 inline SlotMask slotBit(Int slot) { return (SlotMask)1 << slot; }
 /// every slot but this one: what EA wrote as 0xff ^ (1 << slot)
 inline SlotMask allSlotsBut(Int slot) { return SLOTMASK_ALL & ~slotBit(slot); }
@@ -105,7 +106,7 @@ static const Int MAX_NETWORK_MESSAGE_LEN = MAX_UDP_PAYLOAD_SIZE;
 static const Int MAX_PACKET_SIZE = MAX_UDP_PAYLOAD_SIZE - sizeof(TransportMessageHeader);
 
 // The LAN lobby's own broadcast is a fixed struct read at fixed offsets, one datagram each.  EA's was
-// 476; a 36-seat room's options need several times that, so it takes the whole payload and the
+// 476; a 32-seat room's options need several times that, so it takes the whole payload and the
 // options go out in parts (LANAPI.h).
 static const Int MAX_LANAPI_PACKET_SIZE = MAX_PACKET_SIZE;
 
@@ -234,8 +235,8 @@ enum PlayerLeaveCode {
 
 // Magic number for identifying a Generals packet.  It is the protocol version too: a packet with
 // another one is dropped as noise, so a build whose wire format differs never reads the other's.
-// 0xF00D was EA's, with a one-byte relay mask and eight slots; 0xF036 has the 64-bit SlotMask and 36.
-static const UnsignedShort GENERALS_MAGIC_NUMBER = 0xF036;
+// 0xF00D was EA's, with a one-byte relay mask and eight slots; 0xF032 has the 32-bit SlotMask and 32.
+static const UnsignedShort GENERALS_MAGIC_NUMBER = 0xF032;
 
 // The number of fps history entries.
 //static const Int NETWORK_FPS_HISTORY_LENGTH = 30;

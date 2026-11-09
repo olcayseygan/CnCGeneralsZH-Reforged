@@ -223,7 +223,7 @@ void LANAPI::sendMessage(LANMessage *msg, UnsignedInt ip /* = 0 */)
 	}
 }
 
-/* The options of a 36-seat room do not fit one message, so they go out in numbered parts, each a
+/* The options of a 32-seat room do not fit one message, so they go out in numbered parts, each a
 	 whole LANMessage with the rest of its fields repeated.  A room that fits sends one part, as
 	 before. */
 void LANAPI::sendOptions(LANMessage *msg, const AsciiString& options, UnsignedInt ip /* = 0 */)

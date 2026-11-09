@@ -569,10 +569,6 @@ Color:Rust
 "Pas"
 END
 
-Color:Sand
-"Kum"
-END
-
 Color:SeaGreen
 "Deniz Yeşili"
 END
@@ -585,20 +581,8 @@ Color:Orchid
 "Orkide"
 END
 
-Color:Bronze
-"Bronz"
-END
-
-Color:Ochre
-"Hardal"
-END
-
 Color:Chocolate
 "Çikolata"
-END
-
-Color:Moss
-"Yosun Yeşili"
 END
 
 GUI:ShowBehindBuildings

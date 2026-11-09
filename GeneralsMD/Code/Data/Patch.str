@@ -3760,10 +3760,6 @@ Color:Rust
 "Rust"
 END
 
-Color:Sand
-"Sand"
-END
-
 Color:SeaGreen
 "Sea Green"
 END
@@ -3776,20 +3772,8 @@ Color:Orchid
 "Orchid"
 END
 
-Color:Bronze
-"Bronze"
-END
-
-Color:Ochre
-"Ochre"
-END
-
 Color:Chocolate
 "Chocolate"
-END
-
-Color:Moss
-"Moss"
 END
 
 // lobby team numbers past EA's four: the team box offers one team per two slots (PopulateTeamComboBox)
@@ -3839,14 +3823,6 @@ END
 
 Team:16
 "16"
-END
-
-Team:17
-"17"
-END
-
-Team:18
-"18"
 END
 
 // the LAN lobby's error box when the system bound the socket on another adapter; the first %ls is the

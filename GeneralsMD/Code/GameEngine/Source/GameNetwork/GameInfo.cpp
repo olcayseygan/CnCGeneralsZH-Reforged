@@ -2096,7 +2096,7 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 	xfer->xferBool(&m_surrendered);
 	xfer->xferInt(&m_gameID);
 
-	/* The save says how many slots it holds.  One from before the 36-slot room holds EA's 8, and the
+	/* The save says how many slots it holds.  One from before the 32-slot room holds EA's 8, and the
 		 seats past those load closed; more than this build has is a save it cannot read. */
 	Int numSavedSlots = MAX_SLOTS;
 	xfer->xferInt(&numSavedSlots);

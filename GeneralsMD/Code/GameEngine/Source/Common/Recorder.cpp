@@ -1295,7 +1295,7 @@ UnicodeString RecorderClass::readUnicodeString() {
  */
 AsciiString RecorderClass::readAsciiString() {
 	/* Read to the terminator.  EA's buffer stopped at 1023 bytes and left the rest of a longer string
-		 to be read as the next field, and a 36-seat room's slot list runs well past that. */
+		 to be read as the next field, and a 32-seat room's slot list runs well past that. */
 	std::string str;
 	Int c;
 	while ((c = fgetc(m_file)) != EOF && c != 0)

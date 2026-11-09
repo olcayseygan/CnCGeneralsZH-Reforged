@@ -14,7 +14,7 @@ desync and show the check is looking.
     python net_check.py --prove                           # must report a mismatch
     python net_check.py --each "-scenario netstance" --keys "KEY_A CTRL,KEY_H"   # the stance key, both ways
     python net_check.py --relay 8094 --each "-latAvg 90 -latNoise 30"           # through a local relay
-    python net_check.py --copies 36 --map <a 36-spot map> --each "-headless"     # a full room, nothing drawn
+    python net_check.py --copies 32 --map <a 32-spot map> --each "-headless"     # a full room, nothing drawn
 
 --relay starts `node relay/relay.js` on that UDP port, gives the copies 10.0.0.x slot addresses and
 -relay 127.0.0.1:port, and prints the relay's join and stats lines (one a minute) at the end.
@@ -36,7 +36,7 @@ from control_client import Control, ControlError
 RUN_DIRECTORY = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "Run"))
 EXE_NAME = "generals.exe"
 FIRST_CONTROL_PORT = 8787
-MAXIMUM_COPIES = 36  # MAX_SLOTS in NetworkDefs.h; the map needs a start spot per copy (Iron Dragon has 8)
+MAXIMUM_COPIES = 32  # MAX_SLOTS in NetworkDefs.h; the map needs a start spot per copy (Iron Dragon has 8)
 CONNECT_TIMEOUT_SECONDS = 120.0
 MATCH_START_TIMEOUT_SECONDS = 180.0
 SECONDS_PER_EXTRA_COPY = 10.0  # copies load side by side on one machine, so a big room takes longer to come up

@@ -61,7 +61,7 @@ public:
 	UnsignedInt m_CRC;
 
 	Coord3D m_waypoints[MAX_SLOTS];
-	static_assert( MAX_SLOTS == 36, "one START_SPOT per slot in m_mapFieldParseTable" );
+	static_assert( MAX_SLOTS == 32, "one START_SPOT per slot in m_mapFieldParseTable" );
 	Coord3D m_initialCameraPosition;
 	Coord3DList m_supplyPositions;
 	Coord3DList m_techPositions;
@@ -113,7 +113,7 @@ const FieldParse MapMetaDataReader::m_mapFieldParseTable[] =
 	START_SPOT( 13 ), START_SPOT( 14 ), START_SPOT( 15 ), START_SPOT( 16 ), START_SPOT( 17 ), START_SPOT( 18 ),
 	START_SPOT( 19 ), START_SPOT( 20 ), START_SPOT( 21 ), START_SPOT( 22 ), START_SPOT( 23 ), START_SPOT( 24 ),
 	START_SPOT( 25 ), START_SPOT( 26 ), START_SPOT( 27 ), START_SPOT( 28 ), START_SPOT( 29 ), START_SPOT( 30 ),
-	START_SPOT( 31 ), START_SPOT( 32 ), START_SPOT( 33 ), START_SPOT( 34 ), START_SPOT( 35 ), START_SPOT( 36 ),
+	START_SPOT( 31 ), START_SPOT( 32 ),
 #undef START_SPOT
 
 	{ "InitialCameraPosition",	INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_initialCameraPosition ) },

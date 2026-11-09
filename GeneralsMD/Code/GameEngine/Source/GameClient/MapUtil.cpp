@@ -391,12 +391,13 @@ void WaypointMap::update( void )
 }
 
 const char * MapCache::m_mapCacheName = "MapCache.ini";
-/* A build from before 36 slots read and wrote only Player_1..8_Start, so its user cache says 8 for a
+/* A build from before 32 slots read and wrote only Player_1..8_Start, so its user cache says 8 for a
 	 map with more starts, and addMap trusts an entry whose file size still matches.  populateRandom-
 	 StartPosition deals starts over that count, so one machine with an old cache and one with a fresh
 	 one began the same match on different starts.  A file of a new name is never one an old build
-	 wrote: every user map parses again once, and the old file is left for the old build. */
-const char * MapCache::m_userMapCacheName = "MapCache36.ini";
+	 wrote: every user map parses again once, and the old file is left for the old build.  The
+	 36-slot test build's MapCache36.ini names starts past 32, which this reader does not know. */
+const char * MapCache::m_userMapCacheName = "MapCache32.ini";
 
 AsciiString MapCache::getMapDir() const 
 { 

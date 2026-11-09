@@ -2787,7 +2787,7 @@ void RMGLayout::chooseStarts( void )
 	/* Past eight seats nothing below is tuned for it, and a ring leaves the middle of a big map
 		empty. The furthest-from-the-rest search spreads them over the whole start box instead, put in
 		order round the centre so connectStarts joins each seat to a neighbour, not to one across the
-		map. Nor are the layouts walked: twelve layouts of 36 floods each bought nothing a fair duel
+		map. Nor are the layouts walked: twelve layouts of 32 floods each bought nothing a fair duel
 		needs. */
 	if( m_settings.m_numPlayers > RandomMapGenerator::DEFAULT_PLAYERS )
 	{
@@ -7008,7 +7008,7 @@ void RMGLayout::addApproachPaths( Int *waypointID )
 		{
 			if( from == target )
 				continue;
-			/* Every pair of 36 seats is 3780 paths and some 100k waypoints, and
+			/* Every pair of 32 seats is 2976 paths and some 80k waypoints, and
 				TerrainLogic::addWaypointLink walks every waypoint to find a link's two ends. Past eight
 				seats a target takes its paths from its seven nearest, everybody on an eight-seat map;
 				a wave from further off joins the path at its nearest waypoint as it always did. */

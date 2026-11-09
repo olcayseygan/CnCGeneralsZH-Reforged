@@ -29,9 +29,9 @@ found and fixed, EA's own, not port damage.**
 - A wreck sliding or flying through a crowd no longer crushes the soldiers and vehicles in its way.
 - A replay recorded on an earlier version will not play back on this one.
 
-## Matches up to 36 players
+## Matches up to 32 players
 
-- A match holds up to 36 players now, up from EA's eight, in skirmish, on a LAN and online. Generated maps grow with the number of players, so thirty-six start positions get room instead of a crowd on an eight-player map. Saves and replays from earlier versions do not load in this build, and it cannot play online with an older version.
+- A match holds up to 32 players now, up from EA's eight, in skirmish, on a LAN and online. Generated maps grow with the number of players, so thirty-two start positions get room instead of a crowd on an eight-player map. Saves and replays from earlier versions do not load in this build, and it cannot play online with an older version.
 
 ## America, built again
 

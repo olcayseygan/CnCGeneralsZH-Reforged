@@ -52,7 +52,7 @@ static const Int g_lanHostNameLength = 1;
 static const Int g_lanGameNameLength = 16; // reduced length because of game option length
 static const Int g_lanGameNameReservedLength = 16; // save N wchars for ID info
 static const Int g_lanMaxChatLength = 100;
-/* The game options go out in parts: a 36-seat room's string is several times what one datagram
+/* The game options go out in parts: a 32-seat room's string is several times what one datagram
 	 holds.  g_lanOptionsPartLength is what one LANMessage carries (its fixed fields and the two part
 	 bytes come off the packet), m_lanMaxOptionsLength the whole string, g_lanOptionsParts of those. */
 static const Int g_lanOptionsPartLength = MAX_LANAPI_PACKET_SIZE - ( 8 + (g_lanGameNameLength+1)*2 + 4 + (g_lanPlayerNameLength+1)*2

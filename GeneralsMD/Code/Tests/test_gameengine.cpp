@@ -1434,14 +1434,10 @@ TEST(multiplayer_reforged_ini_appends_its_colours_after_eas_eight)
 		{ "Color:Rose",     255,  90, 140,  255,  90, 140 },
 		{ "Color:Plum",     130,  50, 100,  175,  80, 140 },
 		{ "Color:Rust",     175,  65,  15,  210,  90,  40 },
-		{ "Color:Sand",     215, 195, 135,  215, 195, 135 },
 		{ "Color:SeaGreen",  40, 150,  95,   60, 180, 120 },
 		{ "Color:Lemon",    250, 245, 130,  250, 245, 130 },
 		{ "Color:Orchid",   215, 110, 215,  215, 110, 215 },
-		{ "Color:Bronze",   150, 115,  40,  185, 145,  60 },
-		{ "Color:Ochre",    205, 125,  35,  205, 125,  35 },
 		{ "Color:Chocolate", 90,  50,  20,  140,  85,  45 },
-		{ "Color:Moss",     100, 120,  60,  135, 160,  80 },
 	};
 	const Int total = (Int)( sizeof( colours ) / sizeof( colours[ 0 ] ) );
 	CHECK_EQ( total, MAX_SLOTS );
@@ -8741,12 +8737,13 @@ TEST(a_datagram_is_one_udp_payload_and_the_payload_is_what_a_packet_holds)
 }
 
 /* The relay and a chat's recipients were a byte and an Int, one bit per slot, which held eight
-	 slots and thirty-two.  Both are a SlotMask now, all eight bytes on the wire: a slot past either
-	 old width has to come back out of a packet as it went in. */
-TEST(a_relay_and_a_chat_mask_past_slot_31_survive_the_packet)
+	 slots and thirty-two.  Both are a SlotMask now, all four bytes on the wire: a slot past the byte,
+	 and the top one, 31, the sign bit of EA's Int, have to come back out of a packet as they went in. */
+TEST(a_relay_and_a_chat_mask_up_to_slot_31_survive_the_packet)
 {
-	const SlotMask recipients = slotBit( 0 ) | slotBit( 31 ) | slotBit( MAX_SLOTS - 1 );
-	const SlotMask relay = slotBit( 32 ) | slotBit( MAX_SLOTS - 1 );
+	CHECK_EQ( MAX_SLOTS - 1, 31 );
+	const SlotMask recipients = slotBit( 0 ) | slotBit( 8 ) | slotBit( MAX_SLOTS - 1 );
+	const SlotMask relay = slotBit( 9 ) | slotBit( MAX_SLOTS - 1 );
 	CHECK( allSlotsBut( 3 ) == ( SLOTMASK_ALL & ~slotBit( 3 ) ) );
 	CHECK( ( SLOTMASK_ALL >> ( MAX_SLOTS - 1 ) ) == 1 );		// one bit per slot, no more
 
@@ -8789,7 +8786,7 @@ TEST(a_relay_and_a_chat_mask_past_slot_31_survive_the_packet)
 /* NAT negotiation pairs the players off in rounds, so each round's connections are made at once.
 	 EA wrote the schedule out by hand for 2 to 8 nodes; it is generated now.  Every pair has to meet
 	 exactly once, both ends of a pairing have to agree on it, and the rounds are as many as EA's. */
-TEST(nat_rounds_pair_every_two_nodes_exactly_once_for_2_to_36)
+TEST(nat_rounds_pair_every_two_nodes_exactly_once_for_2_to_32)
 {
 	for( Int n = 2; n <= MAX_SLOTS; ++n )
 	{
@@ -8824,7 +8821,7 @@ TEST(nat_rounds_pair_every_two_nodes_exactly_once_for_2_to_36)
 	CHECK_EQ( NAT::connectionPartner( 1, 0, 0 ), -1 );
 }
 
-/* A 36-seat room's game options are several times what one LAN datagram holds, so they go out in
+/* A 32-seat room's game options are several times what one LAN datagram holds, so they go out in
 	 numbered parts and the receiver puts them back together.  The probe sends through a Transport
 	 with no socket, which only queues; what it queued is read back the way it would arrive. */
 struct LANOptionsProbe : public LANAPI
@@ -8957,7 +8954,7 @@ TEST(lan_options_go_out_in_parts_and_come_back_whole)
 
 	// the whole budget fits the parts
 	CHECK_EQ( m_lanMaxOptionsLength, g_lanOptionsParts * g_lanOptionsPartLength );
-	CHECK( m_lanMaxOptionsLength >= 3000 );		// a 36-seat room of human players with full names
+	CHECK( m_lanMaxOptionsLength >= 3000 );		// a 32-seat room of human players with full names
 
 	delete host;
 	delete guest;
@@ -9156,7 +9153,7 @@ TEST(a_player_index_from_outside_this_machine_is_bounded_before_use)
 	CHECK( acceptedOnlyTheList );
 }
 
-/* 36 slots need more than 32 players, and EA's 1 << playerIndex in an Int is undefined from 32 on:
+/* 32 slots need more than 32 players, and EA's 1 << playerIndex in an Int is undefined from 32 on:
 	 x64 masks the shift to five bits, so player 32 came out as player 0. */
 TEST(every_player_index_has_its_own_mask_bit)
 {
@@ -12932,7 +12929,7 @@ TEST(map_size_is_chosen_and_then_grows_with_the_players)
 	// past eight every player keeps an eight-player map's ground: the area grows as players / 8
 	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 8 ), 416 );
 	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 16 ), 588 );		// 416 * sqrt(2)
-	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 36 ), 882 );		// 416 * sqrt(4.5)
+	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 32 ), 832 );		// 416 * sqrt(4)
 
 	// A count nobody asked for is the normal size for that many players, and the clamp says so
 	// rather than generating a map the caller cannot describe.
@@ -12951,10 +12948,10 @@ TEST(map_size_is_chosen_and_then_grows_with_the_players)
 	CHECK_EQ( theRMGParse.m_boundaryX, settings.m_playableCells );
 }
 
-/* The headless benchmark seats up to 36 AIs on a generated map: every one needs its own start, apart
+/* The headless benchmark seats up to 32 AIs on a generated map: every one needs its own start, apart
 	from the others, and the approach paths may not grow with the square of the seats, since the
 	engine links each path waypoint by walking every waypoint on the map. */
-TEST(a_generated_map_seats_thirty_six)
+TEST(a_generated_map_seats_thirty_two)
 {
 	CHECK( bootOnce() );
 
@@ -12963,8 +12960,8 @@ TEST(a_generated_map_seats_thirty_six)
 	settings.m_numPlayers = RandomMapGenerator::MAX_PLAYERS;
 	settings.m_playableCells = 0;
 	RandomMapGenerator::clampSettings( settings );
-	CHECK_EQ( settings.m_numPlayers, 36 );
-	CHECK_EQ( settings.m_playableCells, 882 );
+	CHECK_EQ( settings.m_numPlayers, 32 );
+	CHECK_EQ( settings.m_playableCells, 832 );
 
 	std::vector<char> bytes;
 	RandomMapGenerator::generate( settings, bytes );
@@ -12993,7 +12990,7 @@ TEST(a_generated_map_seats_thirty_six)
 		}
 	CHECK( closest >= 32.0f * MAP_XY_FACTOR );
 
-	// seven sources a target, three lanes: an eight-seat map's count per seat, not 35 sources
+	// seven sources a target, three lanes: an eight-seat map's count per seat, not 31 sources
 	CHECK( !theRMGParse.m_pathWaypointNames.empty() );
 	CHECK( (Int)theRMGParse.m_pathWaypointNames.size() < settings.m_numPlayers * 7 * 3 * 120 );
 }
@@ -13050,7 +13047,7 @@ TEST(the_cell_cap_grows_only_past_eight_players)
 	CHECK_EQ( settings.m_playableCells, 900 );
 
 	settings = RandomMapSettings();
-	settings.m_numPlayers = 36;
+	settings.m_numPlayers = 32;
 	settings.m_playableCells = 2000;
 	RandomMapGenerator::clampSettings( settings );
 	CHECK_EQ( settings.m_playableCells, 984 );
@@ -23757,7 +23754,7 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	CHECK_EQ( asker->getHandicap(), 60 );
 
 	/* A room full of humans and fixed fields.  The LAN budget is m_lanMaxOptionsLength, four packets'
-		 worth since the 36-seat room, and a full room of 36 takes every pick inside it.  Where the
+		 worth since the 32-seat room, and a full room of 32 takes every pick inside it.  Where the
 		 budget does run out, the names shrink to their first letter before the string gives up, and
 		 one byte less than that is an empty string, which ApplyHandicapRequest takes as a pick that
 		 does not stand. */

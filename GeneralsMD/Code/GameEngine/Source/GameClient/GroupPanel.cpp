@@ -7,7 +7,7 @@
 // left corner (pressed and lit while the squad is the one the tray is up for), "xN" in its bottom
 // right, a soft "+N" in its top right for the units still being built for it or walking to it, and
 // the squad's health in the power bar's colours along the cell's foot.  A squad whose units shot or
-// were hit in the last few seconds has its cell blink red, a translucent fill on and off.
+// were hit in the last few seconds has its picture blink red inside the rim, a translucent fill.
 //
 // On the right, while a squad picked by its number is still the selection, a tray between the
 // superweapons and the general's powers: the powers tray's own stepped body at 1.2 (four buttons a
@@ -150,7 +150,7 @@ namespace
 	const Color KEY_DIGIT			= GameMakeColor( 255, 210, 60, 255 );	///< the bar's hotkey letters' yellow
 	const Color KEY_DIGIT_LIT	= GameMakeColor( 8, 14, 30, 255 );		///< dark on the pressed, lit key
 	const Color HEALTH_TRACK	= GameMakeColor( 4, 8, 10, 255 );
-	const Color COMBAT_FILL		= GameMakeColor( 225, 20, 10, 120 );	///< over a fighting squad's cell, on its blink
+	const Color COMBAT_FILL		= GameMakeColor( 225, 20, 10, 120 );	///< over a fighting squad's picture, on its blink
 	const Color CHIP_TEXT			= GameMakeColor( 255, 255, 255, 255 );
 	const Color SOFT_TEXT			= GameMakeColor( 165, 172, 180, 255 );
 
@@ -828,7 +828,7 @@ static Bool chosenSquadSelected( Player *player )
 	*   |========= health =========| |
 	*   +--------------------------+-+
 	*
-	* A fighting squad's cell takes a translucent red fill over its picture, on for COMBAT_BLINK_MS and
+	* A fighting squad's picture takes a translucent red fill inside its rim, on for COMBAT_BLINK_MS and
 	* off for as long, timed by the wall clock where the picture is drawn (atDrawTime). */
 //-------------------------------------------------------------------------------------------------
 static void drawList( void )
@@ -948,11 +948,15 @@ static void drawList( void )
 			TheDisplay->drawFillRect( picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, HEALTH_TRACK );
 		TheDisplay->endBatch2D();
 
-		// a fighting squad's cell blinks red over its picture, under the rim, the bar and the text; the
-		// fill is the cell itself, so nothing of it lands outside
+		// a fighting squad's picture blinks red inside its blue rim, under the key and the counts; the
+		// steel round it and the health bar stay as they are
 		if( row.fighting )
 		{
-			const IRegion2D at = c;
+			IRegion2D at = picture;
+			at.lo.x++;
+			at.lo.y++;
+			at.hi.x--;
+			at.hi.y--;
 			atDrawTime( [ at ]()
 			{
 				if( ( Clock_Milliseconds() / COMBAT_BLINK_MS ) % 2 == 0 )

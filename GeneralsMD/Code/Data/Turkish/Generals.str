@@ -10601,6 +10601,14 @@ GUI:OnlineSigningIn
 "Giriş yapılıyor..."
 END
 
+GUI:OnlineConnecting
+"Sunucuya bağlanılıyor..."
+END
+
+GUI:OnlineCannotReachServer
+"Sunucuya ulaşılamıyor. Bağlantını kontrol et, sonra tekrar denemek için Giriş'e bas."
+END
+
 GUI:OnlineOpenedInBrowser
 "Tarayıcında açıldı."
 END

@@ -841,7 +841,7 @@ static void checkLogin( void )
 static void onlineAutoLogin( void )
 {
 	static Bool s_done = FALSE;
-	if (s_done || !OnlineIsEnabled() || TheGlobalData->m_onlineUser.isEmpty() || loginAttemptTime
+	if (s_done || !OnlineIsEnabled() || OnlineGetStatus() != ONLINE_WELCOMED || TheGlobalData->m_onlineUser.isEmpty() || loginAttemptTime
 		|| !comboBoxEmail || !textEntryPassword || !parentWOLLogin || !buttonLogin)
 		return;
 	s_done = TRUE;
@@ -862,6 +862,7 @@ static void onlineAutoLogin( void )
 	 layout is EA's, read from the retail archive.  Both die with the layout. */
 static GameWindow *s_onlineStatus = NULL;
 static GameWindow *s_onlineHelp = NULL;
+static Bool s_onlineAwaitWelcome = FALSE;		///< the screen dialled and waits for the service's welcome
 static Color s_onlineInk = 0;
 static Color s_onlineInkBorder = 0;
 
@@ -923,7 +924,7 @@ static void onlineStatus( const UnicodeString &text, Bool error = FALSE )
 /// an empty password with a token saved for this login signs in with the token: say so
 static void onlineSavedLoginHint( void )
 {
-	if (!OnlineIsEnabled() || !s_onlineStatus || loginAttemptTime || !comboBoxEmail || !textEntryPassword)
+	if (!OnlineIsEnabled() || !s_onlineStatus || loginAttemptTime || s_onlineAwaitWelcome || !comboBoxEmail || !textEntryPassword)
 		return;
 	AsciiString email;
 	email.translate( GadgetComboBoxGetText( comboBoxEmail ) );
@@ -983,6 +984,44 @@ static void onlineLoginFailed( Int reason )
 	onlineStatus( text, TRUE );
 }
 
+/* -online: the screen opens at once and dials the service itself; Sign In waits for the welcome.  EA put a
+	 "Checking for Updates" box in front of this, which here only hid the same wait. */
+static UnsignedInt s_onlineAwaitSince = 0;
+static const UnsignedInt ONLINE_WELCOME_TIMEOUT_MS = 15000;
+static void onlineWelcomed( Bool reload );
+
+static void onlineStartConnect( void )
+{
+	s_onlineAwaitWelcome = TRUE;
+	s_onlineAwaitSince = Clock_Milliseconds();
+	if (OnlineGetStatus() == ONLINE_FAILED)
+		OnlineDisconnect();		// the next update dials again
+	OnlineUpdate();
+	if (buttonLogin)
+		buttonLogin->winEnable( FALSE );
+	onlineStatus( TheGameText->fetch( "GUI:OnlineConnecting" ) );
+}
+
+/// every update while the screen waits: the welcome, or a server that cannot be reached (Sign In retries)
+static void onlineAwaitWelcome( void )
+{
+	OnlineUpdate();
+	const OnlineStatus status = OnlineGetStatus();
+	if (status == ONLINE_WELCOMED)
+	{
+		onlineWelcomed( TRUE );
+		return;
+	}
+	if (status != ONLINE_FAILED && status != ONLINE_OFF && Clock_Milliseconds() - s_onlineAwaitSince <= ONLINE_WELCOME_TIMEOUT_MS)
+		return;
+	s_onlineAwaitWelcome = FALSE;
+	OnlineDisconnect();
+	DEBUG_LOG(("ONLINE CONNECT fail status=%d\n", (Int)status));
+	if (buttonLogin)
+		buttonLogin->winEnable( TRUE );
+	onlineStatus( TheGameText->fetch( "GUI:OnlineCannotReachServer" ), TRUE );
+}
+
 /* -online: the game only logs in, the site makes accounts (the owner's call of 2026-11-06).  One field takes
 	 the email or the nick, so the nick box and the birth date go and the rows under them close up; Create
 	 Account and Forgot Password open the site's pages the server named in its welcome, and go when it named
@@ -991,11 +1030,11 @@ static void onlineLoginScreen( void )
 {
 	s_onlineStatus = NULL;
 	s_onlineHelp = NULL;
+	s_onlineAwaitWelcome = FALSE;
 	if (!OnlineIsEnabled())
 		return;
 	const char *hidden[] = { "GameSpyLoginProfile.wnd:WinAge", "GameSpyLoginProfile.wnd:StaticTextLoginName",
 		"GameSpyLoginProfile.wnd:ComboBoxLoginName", "GameSpyLoginProfile.wnd:ParentESRB" };
-	AsciiString shown;
 	for (Int i = 0; i < (Int)ARRAY_SIZE(hidden); ++i)
 	{
 		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( hidden[i] ) );
@@ -1055,7 +1094,6 @@ static void onlineLoginScreen( void )
 	if (buttonLogin && buttonLogin->winGetParent())
 		onlineResize( buttonLogin->winGetParent(), 111, 114, 683, 395 );		// the panel, a window with no name
 
-	const AsciiString resetUrl = OnlineGetResetUrl();
 	if (buttonTOS)
 	{
 		// on the checkbox's row, its right edge on the password field's
@@ -1063,16 +1101,41 @@ static void onlineLoginScreen( void )
 		onlineResize( buttonTOS, 270, 290, 396, 315 );
 		buttonTOS->winSetFont( UIStyle::titleFont( 13 ) );
 		GadgetButtonSetText( buttonTOS, TheGameText->fetch( "GUI:OnlineForgotPassword" ) );
-		buttonTOS->winHide( resetUrl.isEmpty() );
 	}
-
-	const AsciiString url = OnlineGetRegisterUrl();
-	if (buttonCreateAccount)
-		buttonCreateAccount->winHide( url.isEmpty() );
 
 	s_onlineInk = passwordLabel ? passwordLabel->winGetEnabledTextColor() : GameMakeColor( 255, 255, 255, 255 );
 	s_onlineInkBorder = passwordLabel ? passwordLabel->winGetEnabledTextBorderColor() : GameMakeColor( 0, 0, 0, 255 );
 	s_onlineHelp = onlineText( gadgetParent, 456, 168, 669, 318, UIStyle::font( UIStyle::TEXT_STRONG ), FALSE );
+	// the status line in the labels' face, over the busy shell map on their black drop shadow
+	s_onlineStatus = onlineText( gadgetParent, 127, 319, 671, 349, labelFont ? labelFont : UIStyle::font( UIStyle::TEXT_HEADING ), TRUE );
+
+	if (OnlineGetStatus() == ONLINE_WELCOMED)
+		onlineWelcomed( FALSE );
+	else
+		onlineStartConnect();
+}
+
+/* The service's welcome is in: Create Account and Forgot Password show when it named their pages, the help
+	 text says what they do, Sign In wakes up.  reload remakes the queues with the welcome's MOTD and config,
+	 which the screen opened without. */
+static void onlineWelcomed( Bool reload )
+{
+	s_onlineAwaitWelcome = FALSE;
+	if (reload)
+	{
+		TearDownGameSpy();
+		SetUpGameSpy( OnlineGetMOTD().str(), OnlineGetConfig().str() );
+	}
+	DEBUG_LOG(("ONLINE CONNECT ok\n"));
+
+	const AsciiString resetUrl = OnlineGetResetUrl();
+	if (buttonTOS)
+		buttonTOS->winHide( resetUrl.isEmpty() );
+	const AsciiString url = OnlineGetRegisterUrl();
+	if (buttonCreateAccount)
+		buttonCreateAccount->winHide( url.isEmpty() );
+	if (buttonLogin)
+		buttonLogin->winEnable( TRUE );
 	if (s_onlineHelp)
 	{
 		UnicodeString help = TheGameText->fetch( "GUI:OnlineLoginHelp" );
@@ -1088,11 +1151,10 @@ static void onlineLoginScreen( void )
 		}
 		GadgetStaticTextSetText( s_onlineHelp, help );
 	}
-	// the status line in the labels' face, over the busy shell map on their black drop shadow
-	s_onlineStatus = onlineText( gadgetParent, 127, 319, 671, 349, labelFont ? labelFont : UIStyle::font( UIStyle::TEXT_HEADING ), TRUE );
-	onlineSavedLoginHint();
+	onlineSavedLoginHint();		// replaces "Connecting..."
 
 	// what a player can type into, for online_check.py: a window counts when neither it nor a parent is hidden
+	AsciiString shown;
 	const struct { GameWindow *win; const char *name; } fields[] = { { comboBoxEmail, "login" }, { comboBoxLoginName, "nick" },
 		{ textEntryPassword, "password" }, { textEntryMonth, "birthdate" }, { checkBoxRememberPassword, "remember" } };
 	for (Int i = 0; i < (Int)ARRAY_SIZE(fields); ++i)
@@ -1118,6 +1180,9 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 	// We'll only be successful if we've requested to
 	if(isShuttingDown && TheShell->isAnimFinished() && TheTransitionHandler->isFinished())
 		shutdownComplete(layout);
+
+	if (s_onlineAwaitWelcome && !buttonPushed && !isShuttingDown)
+		onlineAwaitWelcome();
 
 	if (TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)
 	{
@@ -1699,6 +1764,12 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 				} //if ( controlID == buttonCreateAccount )
 				else if ( controlID == buttonLoginID )
 				{
+					// -online: Sign In wakes up again after a failed connect, and then dials before anything else
+					if (OnlineIsEnabled() && OnlineGetStatus() != ONLINE_WELCOMED)
+					{
+						onlineStartConnect();
+						break;
+					}
 					AsciiString login, password, email;
 
 #ifdef ALLOW_NON_PROFILED_LOGIN

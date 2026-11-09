@@ -3783,6 +3783,14 @@ GUI:OnlineSigningIn
 "Signing in..."
 END
 
+GUI:OnlineConnecting
+"Connecting to the server..."
+END
+
+GUI:OnlineCannotReachServer
+"The server cannot be reached. Check your connection, then press Sign In to try again."
+END
+
 GUI:OnlineOpenedInBrowser
 "Opened in your browser."
 END

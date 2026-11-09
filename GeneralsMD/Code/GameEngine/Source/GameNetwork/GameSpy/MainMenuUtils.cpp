@@ -112,12 +112,6 @@ enum {
 static void startOnline( void );
 static void reallyStartPatchCheck( void );
 
-/* -online: no patch check and none of EA's HTTP.  StartPatchCheck dials the service and HTTPThinkWrapper
-	 waits for its welcome, whose config (<QMMaps>) and MOTD stand in for the two files EA fetched. */
-static Bool s_onlineWelcomeWait = FALSE;
-static UnsignedInt s_onlineWelcomeSince = 0;
-static const UnsignedInt ONLINE_WELCOME_TIMEOUT_MS = 15000;
-
 ///////////////////////////////////////////////////////////////////////////////////////
 
 // someone has hit a button allowing downloads to start
@@ -642,11 +636,6 @@ void CancelPatchCheckCallbackAndReopenDropdown( void )
 
 void CancelPatchCheckCallback( void )
 {
-	if (s_onlineWelcomeWait)
-	{
-		s_onlineWelcomeWait = FALSE;
-		OnlineDisconnect();
-	}
 	s_asyncDNSLookupInProgress = FALSE;
 	if (availableCheckInProgress)
 	{
@@ -824,55 +813,18 @@ int asyncGethostbyname(char * szName)
 // time out) but at least we'll live.
 static Bool isHttpOk = TRUE;
 
-/// -online: the welcome arrived, so the queues can be made and the login screen pushed
+/* -online: the queues are made and the login screen pushed at once.  The MOTD and config are the last
+	 welcome's, empty before the first; the login screen remakes the queues with them once it arrives. */
 static void startOnlineService( void )
 {
 	checkingForPatchBeforeGameSpy = FALSE;
-	if (onlineCancelWindow)
-	{
-		TheWindowManager->winDestroy(onlineCancelWindow);
-		onlineCancelWindow = NULL;
-	}
 	TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_ONLINE_SELECTED]);
 	SetUpGameSpy( OnlineGetMOTD().str(), OnlineGetConfig().str() );
-	DEBUG_LOG(("ONLINE CONNECT ok\n"));
 	TheShell->push( AsciiString("Menus/GameSpyLoginProfile.wnd") );
-}
-
-static void onlineCannotConnect( void )
-{
-	HandleCanceledDownload();
 }
 
 void HTTPThinkWrapper( void )
 {
-	if (s_onlineWelcomeWait)
-	{
-		OnlineUpdate();
-		const OnlineStatus status = OnlineGetStatus();
-		if (status == ONLINE_WELCOMED)
-		{
-			s_onlineWelcomeWait = FALSE;
-			startOnlineService();
-		}
-		else if (status == ONLINE_FAILED || status == ONLINE_OFF
-			|| Clock_Milliseconds() - s_onlineWelcomeSince > ONLINE_WELCOME_TIMEOUT_MS)
-		{
-			s_onlineWelcomeWait = FALSE;
-			checkingForPatchBeforeGameSpy = FALSE;
-			OnlineDisconnect();
-			if (onlineCancelWindow)
-			{
-				TheWindowManager->winDestroy(onlineCancelWindow);
-				onlineCancelWindow = NULL;
-			}
-			DEBUG_LOG(("ONLINE CONNECT fail status=%d\n", (Int)status));
-			MessageBoxOk(TheGameText->fetch("GUI:CannotConnectToServservTitle"),
-				TheGameText->fetch("GUI:CannotConnectToServserv"), onlineCannotConnect);
-		}
-		return;
-	}
-
 	if (s_asyncDNSLookupInProgress)
 	{
 		Int ret = asyncGethostbyname("servserv.generals.ea.com");
@@ -959,6 +911,15 @@ void StartPatchCheck( void )
 		return;
 	}
 #endif
+	// -online: no patch check (the launcher did that) and no box: the login screen dials the service and
+	// says "Connecting..." until its welcome arrives
+	if (OnlineIsEnabled())
+	{
+		OnlineUpdate();
+		startOnlineService();
+		return;
+	}
+
 	checkingForPatchBeforeGameSpy = TRUE;
 	cantConnectBeforeOnline = FALSE;
 	timeThroughOnline++;
@@ -966,15 +927,6 @@ void StartPatchCheck( void )
 
 	onlineCancelWindow = MessageBoxCancel(TheGameText->fetch("GUI:CheckingForPatches"),
 		TheGameText->fetch("GUI:CheckingForPatches"), CancelPatchCheckCallbackAndReopenDropdown);
-
-	// -online: dial our service instead of EA's patch, config and MOTD servers (HTTPThinkWrapper waits)
-	if (OnlineIsEnabled())
-	{
-		s_onlineWelcomeWait = TRUE;
-		s_onlineWelcomeSince = Clock_Milliseconds();
-		OnlineUpdate();
-		return;
-	}
 
 	s_asyncDNSLookupInProgress = TRUE;
 	Int ret = asyncGethostbyname("servserv.generals.ea.com");

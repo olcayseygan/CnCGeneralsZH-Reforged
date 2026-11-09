@@ -3771,6 +3771,10 @@ GUI:OnlineLoginHelpRegister
 "No account yet? Create Account opens the sign-up page in your browser."
 END
 
+GUI:OnlineLoginHelpReset
+"Forgot your password? Forgot Password opens the reset page in your browser."
+END
+
 GUI:OnlineLoginSavedToken
 "Your saved sign-in will be used. No password needed."
 END

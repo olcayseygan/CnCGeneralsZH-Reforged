@@ -915,7 +915,7 @@ static void onlineStatus( const UnicodeString &text, Bool error = FALSE )
 {
 	if (!s_onlineStatus)
 		return;
-	s_onlineStatus->winSetEnabledTextColors( error ? GameMakeColor( 255, 64, 64, 255 ) : s_onlineInk, s_onlineInkBorder );
+	s_onlineStatus->winSetEnabledTextColors( error ? GameMakeColor( 255, 96, 96, 255 ) : s_onlineInk, GameMakeColor( 0, 0, 0, 255 ) );
 	GadgetStaticTextSetText( s_onlineStatus, text );
 	DEBUG_LOG(("ONLINE LOGINSTATUS error=%d %s\n", (Int)error, WideCharAsUtf8( text.str() ).str()));
 }
@@ -979,6 +979,7 @@ static void onlineLoginFailed( Int reason )
 		OnlineSaveToken( s_onlineLoginEmail, AsciiString::TheEmptyString );
 	GadgetTextEntrySetText( textEntryPassword, UnicodeString::TheEmptyString );
 	TheWindowManager->winSetFocus( textEntryPassword );
+	DEBUG_LOG(("ONLINE LOGINFOCUS password=%d\n", (Int)(textEntryPassword && TheWindowManager->winGetFocus() == textEntryPassword)));
 	onlineStatus( text, TRUE );
 }
 
@@ -1019,14 +1020,34 @@ static void onlineLoginScreen( void )
 	GameWindow *gadgetParent = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:GadgetParent" ) );
 	onlineMove( passwordLabel, 125, 228 );
 	onlineMove( textEntryPassword, 128, 258 );
+	GameFont *labelFont = passwordLabel ? passwordLabel->winGetFont() : NULL;
+	if (labelFont)
+	{
+		// what is typed in the labels' face; EA set the fields in Arial 10
+		if (comboBoxEmail)
+			comboBoxEmail->winSetFont( labelFont );
+		if (textEntryPassword)
+			textEntryPassword->winSetFont( labelFont );
+	}
+	// a fresh profile has no remembered logins: no arrow over an empty list, the field takes its room
+	GameWindow *dropDown = comboBoxEmail ? GadgetComboBoxGetDropDownButton( comboBoxEmail ) : NULL;
+	GameWindow *emailBox = comboBoxEmail ? GadgetComboBoxGetEditBox( comboBoxEmail ) : NULL;
+	if (dropDown && emailBox && GadgetComboBoxGetLength( comboBoxEmail ) == 0)
+	{
+		Int width, height, boxWidth, boxHeight;
+		comboBoxEmail->winGetSize( &width, &height );
+		emailBox->winGetSize( &boxWidth, &boxHeight );
+		dropDown->winHide( TRUE );
+		emailBox->winSetSize( width, boxHeight );
+	}
 	if (checkBoxRememberPassword)
 	{
 		onlineMove( checkBoxRememberPassword, 128, 290 );
-		onlineResize( checkBoxRememberPassword, 128, 290, 396, 315 );
+		onlineResize( checkBoxRememberPassword, 128, 290, 266, 315 );		// Forgot Password shares the row
 		GadgetCheckBoxSetText( checkBoxRememberPassword, TheGameText->fetch( "GUI:OnlineKeepSignedIn" ) );
 		checkBoxRememberPassword->winSetTooltip( TheGameText->fetch( "TOOLTIP:OnlineKeepSignedIn" ) );
-		if (passwordLabel)
-			checkBoxRememberPassword->winSetFont( passwordLabel->winGetFont() );
+		if (labelFont)
+			checkBoxRememberPassword->winSetFont( labelFont );
 	}
 	onlineMove( buttonLogin, 127, 351 );
 	onlineMove( buttonCreateAccount, 319, 351 );
@@ -1037,7 +1058,10 @@ static void onlineLoginScreen( void )
 	const AsciiString resetUrl = OnlineGetResetUrl();
 	if (buttonTOS)
 	{
-		onlineMove( buttonTOS, 511, 283 );
+		// on the checkbox's row, its right edge on the password field's
+		onlineMove( buttonTOS, 270, 290 );
+		onlineResize( buttonTOS, 270, 290, 396, 315 );
+		buttonTOS->winSetFont( UIStyle::titleFont( 13 ) );
 		GadgetButtonSetText( buttonTOS, TheGameText->fetch( "GUI:OnlineForgotPassword" ) );
 		buttonTOS->winHide( resetUrl.isEmpty() );
 	}
@@ -1048,7 +1072,7 @@ static void onlineLoginScreen( void )
 
 	s_onlineInk = passwordLabel ? passwordLabel->winGetEnabledTextColor() : GameMakeColor( 255, 255, 255, 255 );
 	s_onlineInkBorder = passwordLabel ? passwordLabel->winGetEnabledTextBorderColor() : GameMakeColor( 0, 0, 0, 255 );
-	s_onlineHelp = onlineText( gadgetParent, 456, 168, 669, 278, UIStyle::font( UIStyle::TEXT_STRONG ), FALSE );
+	s_onlineHelp = onlineText( gadgetParent, 456, 168, 669, 318, UIStyle::font( UIStyle::TEXT_STRONG ), FALSE );
 	if (s_onlineHelp)
 	{
 		UnicodeString help = TheGameText->fetch( "GUI:OnlineLoginHelp" );
@@ -1057,9 +1081,15 @@ static void onlineLoginScreen( void )
 			help.concat( u"\n\n" );
 			help.concat( TheGameText->fetch( "GUI:OnlineLoginHelpRegister" ) );
 		}
+		if (resetUrl.isNotEmpty())
+		{
+			help.concat( u"\n\n" );
+			help.concat( TheGameText->fetch( "GUI:OnlineLoginHelpReset" ) );
+		}
 		GadgetStaticTextSetText( s_onlineHelp, help );
 	}
-	s_onlineStatus = onlineText( gadgetParent, 127, 321, 671, 347, UIStyle::font( UIStyle::TEXT_STRONG ), TRUE );
+	// the status line in the labels' face, over the busy shell map on their black drop shadow
+	s_onlineStatus = onlineText( gadgetParent, 127, 319, 671, 349, labelFont ? labelFont : UIStyle::font( UIStyle::TEXT_HEADING ), TRUE );
 	onlineSavedLoginHint();
 
 	// what a player can type into, for online_check.py: a window counts when neither it nor a parent is hidden

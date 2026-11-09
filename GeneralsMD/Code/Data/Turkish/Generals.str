@@ -10589,6 +10589,10 @@ GUI:OnlineLoginHelpRegister
 "Hesabın yok mu? Hesap Oluştur kayıt sayfasını tarayıcında açar."
 END
 
+GUI:OnlineLoginHelpReset
+"Şifreni mi unuttun? Şifremi Unuttum sıfırlama sayfasını tarayıcında açar."
+END
+
 GUI:OnlineLoginSavedToken
 "Kayıtlı oturumun kullanılacak, şifre gerekmiyor."
 END

@@ -1309,6 +1309,7 @@ GameEngine/Include/GameNetwork/GameSpyGP.h
 GameEngine/Include/GameNetwork/GameSpyGameInfo.h
 GameEngine/Include/GameNetwork/GameSpyOverlay.h
 GameEngine/Include/GameNetwork/GameSpyThread.h
+GameEngine/Include/GameNetwork/GameSpyTitleConfig.h
 GameEngine/Include/GameNetwork/GeneralsOnline/GeneralsOnline_Settings.h
 GameEngine/Include/GameNetwork/GeneralsOnline/HTTP/HTTPManager.h
 GameEngine/Include/GameNetwork/GeneralsOnline/HTTP/HTTPRequest.h
@@ -3505,6 +3506,7 @@ Tests/test_fpucontrol.cpp
 Tests/test_game_results.inc
 Tests/test_gameengine.cpp
 Tests/test_gameengine_stubs.cpp
+Tests/test_gamespy_title_config.cpp
 Tests/test_gametext_csf.cpp
 Tests/test_global_new_alignment.cpp
 Tests/test_glyph_rasteriser.cpp

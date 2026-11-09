@@ -690,6 +690,8 @@ public:
 		return true;
 	}
 
+	virtual Bool isReadOnly() const { return TRUE; }
+
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterLiveMapEnemies"; }
 #endif

@@ -673,6 +673,13 @@ class PartitionFilter
 {
 public:
 	virtual Bool allow(Object *objOther) = 0;
+	/** TRUE when allow() only reads: it writes no member, cache, counter or Object, allocates nothing and
+		draws no random number, along every path. A gather whose filters all say so splits its walk across
+		the logic thread's job pool (LOGIC-PARALLEL.md), where allow() runs on several threads at once and
+		may be asked twice of one Object. A worker is not the logic thread: anything keyed on
+		LogicThread::t_isLogicThread or GameLogic::isInGameLogicUpdate answers differently there, so a
+		filter that reaches one stays FALSE. FALSE, the default, keeps the walk on one thread. */
+	virtual Bool isReadOnly() const { return FALSE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() = 0;
 #endif
@@ -745,6 +752,7 @@ public:
 	};
 	PartitionFilterRelationship(const Object *obj, Int flags) : m_obj(obj), m_flags(flags) { }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterRelationship"; }
 #endif
@@ -888,6 +896,7 @@ private:
 public:
 	PartitionFilterAcceptByObjectStatus( ObjectStatusMaskType mustBeSet, ObjectStatusMaskType mustBeClear) : m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) { }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterAcceptByObjectStatus"; }
 #endif
@@ -904,10 +913,11 @@ private:
 	ObjectStatusMaskType m_mustBeSet, m_mustBeClear;
 public:
 	PartitionFilterRejectByObjectStatus( ObjectStatusMaskType mustBeSet, ObjectStatusMaskType mustBeClear ) 
-		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) 
-	{ 
+		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear)
+	{
 	}
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterRejectByObjectStatus"; }
 #endif
@@ -923,8 +933,9 @@ private:
 	const Object *m_obj;
 	Bool m_allow;
 public:
-	PartitionFilterStealthedAndUndetected( const Object *obj, Bool allow ) { m_obj = obj; m_allow = allow; } 
+	PartitionFilterStealthedAndUndetected( const Object *obj, Bool allow ) { m_obj = obj; m_allow = allow; }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterStealthedAndUndetected"; }
 #endif
@@ -941,6 +952,7 @@ private:
 public:
 	PartitionFilterAcceptByKindOf(const KindOfMaskType& mustBeSet, const KindOfMaskType& mustBeClear) : m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) { }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterAcceptByKindOf"; }
 #endif
@@ -957,10 +969,11 @@ private:
 	KindOfMaskType m_mustBeSet, m_mustBeClear;
 public:
 	PartitionFilterRejectByKindOf(const KindOfMaskType& mustBeSet, const KindOfMaskType& mustBeClear) 
-		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) 
-	{ 
+		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear)
+	{
 	}
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterRejectByKindOf"; }
 #endif
@@ -991,6 +1004,7 @@ class PartitionFilterAlive : public PartitionFilter
 {
 public:
 	PartitionFilterAlive(void) { }
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow(Object *objOther);
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1009,6 +1023,7 @@ private:
 	const Object *m_obj;
 public:
 	PartitionFilterSameMapStatus(const Object *obj) : m_obj(obj) { }
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow(Object *objOther);
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1024,6 +1039,7 @@ class PartitionFilterOnMap : public PartitionFilter
 {
 public:
 	PartitionFilterOnMap() { }
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow(Object *objOther);
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1044,6 +1060,7 @@ private:
 	Bool m_acquireEnemies;
 public:
 	PartitionFilterRejectBuildings(const Object *o);
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1064,6 +1081,7 @@ private:
 public:
 	PartitionFilterInsignificantBuildings(Bool allowNonBuildings, Bool allowInsignificant) : 
 			m_allowNonBuildings(allowNonBuildings), m_allowInsignificant(allowInsignificant) {}
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1336,6 +1354,8 @@ private:
 #ifdef FASTER_GCO
 	Int							m_maxGcoRadius;
 	RadiusVec				m_radiusVec;
+	OffsetVec				m_ringOffsets;		///< m_radiusVec end to end, the ring walk's order, so a gather can split it
+	std::vector<Int>	m_ringStart;			///< where each radius starts in m_ringOffsets, one past the last at the end
 #endif
 
 protected:

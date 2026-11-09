@@ -55,6 +55,8 @@
 #include "Common/DiscreteCircle.h"
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
+#include "Common/JobSystem.h"
+#include "Common/LogicThread.h"
 #include "Common/MessageStream.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/PerfTimer.h"
@@ -86,6 +88,7 @@
 #include "GameClient/ObserverCamera.h"
 
 #include <algorithm>
+#include <chrono>
 #include <float.h>
 
 /* A hint that a cache line is about to be read. It reads nothing the program sees and decides
@@ -2921,6 +2924,8 @@ void PartitionManager::shutdown()
 
 #ifdef FASTER_GCO
 	m_radiusVec.clear();
+	m_ringOffsets.clear();
+	m_ringStart.clear();
 #endif
 
 	resetPendingUndoShroudRevealQueue();
@@ -3424,8 +3429,300 @@ void PartitionManager::calcRadiusVec()
 	DEBUG_ASSERTCRASH(total == (cx*2-1)*(cy*2-1),("expected %d, got %d\n",(cx*2-1)*(cy*2-1),total));
 #endif
 
+	m_ringOffsets.clear();
+	m_ringStart.clear();
+	m_ringStart.reserve(m_maxGcoRadius+2);
+	for (Int i = 0; i <= m_maxGcoRadius; ++i)
+	{
+		m_ringStart.push_back((Int)m_ringOffsets.size());
+		m_ringOffsets.insert(m_ringOffsets.end(), m_radiusVec[i].begin(), m_radiusVec[i].end());
+	}
+	m_ringStart.push_back((Int)m_ringOffsets.size());
 }
 #endif
+
+//-----------------------------------------------------------------------------
+/* LOGIC-PARALLEL.md, the first parallel pass: a gathering range query split across the logic
+	 thread's job pool, giving the answer it gives on one thread.
+
+	 The walk, ring offsets or the master module list, is cut into chunks in its own order. Each chunk
+	 measures and filters its share on whatever thread takes it and keeps what passes, in order, in a
+	 block of its own; it writes nothing else, not even a module's done flag. Then the calling thread
+	 goes through the chunks in order and inserts. An Object that touches several cells can pass in
+	 several chunks; the first of those in walk order is the cell the serial walk met it in first,
+	 because whether it passes does not depend on which of its cells it was met in, and the done flag,
+	 set here on one thread, drops the others. The iterator ends up with the same Objects, the same
+	 distances and the same order as the serial walk, at any number of threads. A chunk that fills its
+	 block stops at the cell or module that did not fit, and the calling thread walks the rest of that
+	 chunk itself the serial way. */
+namespace
+{
+	enum
+	{
+		GATHER_CHUNKS = 64,					///< items of one fork, four a thread at sixteen threads
+		GATHER_CHUNK_HITS = 1024,		///< what one chunk keeps before it hands the rest back
+		GATHER_MIN_CHUNK = 256,			///< ring offsets or modules a chunk takes at least
+		GATHER_MIN_RINGS = 4096,		///< ring offsets below which the fork costs more than it saves
+		GATHER_MIN_MODULES = 1024		///< likewise for the master list
+	};
+
+	struct GatherHit
+	{
+		PartitionData *mod;
+		Real distSqr;
+	};
+
+	struct GatherJob
+	{
+		// the query
+		const Coord3D *objPos;
+		const Object *objToUse;
+		const Object *self;
+		DistCalcProc distProc;
+		Real maxDistSqr;
+		PartitionFilter **filters;
+		PlayerMaskType onlyPlayers;
+		// the walk: ring offsets around a cell, or the master list flattened
+		PartitionManager *mgr;
+		Int cellCenterX, cellCenterY;
+		const ICoord2D *offsets;
+		PartitionData *const *modules;
+		Int itemCount;
+		Int chunkCount;
+		Int chunkSize;
+		// each chunk's own; nothing else is written inside the fork
+		GatherHit *hits;
+		Int hitCount[ GATHER_CHUNKS ];
+		Int stoppedAt[ GATHER_CHUNKS ];		///< the item the chunk had no room for, or its end
+		Int visited[ GATHER_CHUNKS ];
+	};
+
+	// sized on the logic thread before a fork, never inside one (JobSystem.h rule 1)
+	std::vector<GatherHit> s_gatherHits;
+	std::vector<PartitionData *> s_gatherModules;
+
+	// since the process started, for HEADLESS JOBS: gathers split, chunks that handed a tail back, and
+	// the wall time in the fork and in the merge after it (a log line only; nothing decides on it)
+	Int s_gathersSplit = 0;
+	Int s_gatherTailsHandedBack = 0;
+	Real s_gatherForkMS = 0.0f;
+	Real s_gatherMergeMS = 0.0f;
+
+	Bool filtersAreReadOnly( PartitionFilter **filters )
+	{
+		for (PartitionFilter **fp = filters; fp && *fp; ++fp)
+		{
+			if (!(*fp)->isReadOnly())
+				return FALSE;
+		}
+		return TRUE;
+	}
+
+	Int gatherChunkEnd( const GatherJob &job, Int chunk )
+	{
+		return minInt( (chunk + 1) * job.chunkSize, job.itemCount );
+	}
+
+	void gatherRingChunk( Int chunk, void *context )
+	{
+		GatherJob &job = *(GatherJob *)context;
+		const Int end = gatherChunkEnd( job, chunk );
+		GatherHit *hits = &job.hits[ chunk * GATHER_CHUNK_HITS ];
+		Int kept = 0;
+		Int visited = 0;
+		Int i = chunk * job.chunkSize;
+		for ( ; i < end; ++i )
+		{
+			PartitionCell *cell = job.mgr->getCellAt( job.cellCenterX + job.offsets[ i ].x, job.cellCenterY + job.offsets[ i ].y );
+			if (cell == NULL)
+				continue;
+			if (job.onlyPlayers != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( job.onlyPlayers ))
+				continue;
+
+			const Int keptBefore = kept;
+			const Int visitedBefore = visited;
+			Bool full = FALSE;
+			for (CellAndObjectIntersection *coi = cell->getFirstCoiInCell(); coi; coi = coi->getNextCoi())
+			{
+				PartitionData *mod = coi->getModule();
+				Object *obj = mod->getObject();
+				++visited;
+				if (obj == job.self || obj == NULL)
+					continue;
+
+				Real distSqr;
+				Coord3D distVec;
+				if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
+					continue;
+				if (!filtersAllow( job.filters, obj ))
+					continue;
+
+				if (kept == GATHER_CHUNK_HITS)
+				{
+					full = TRUE;
+					break;
+				}
+				hits[ kept ].mod = mod;
+				hits[ kept ].distSqr = distSqr;
+				++kept;
+			}
+			if (full)
+			{
+				// the cell goes back whole, so the serial walk of the rest meets it as it would have
+				kept = keptBefore;
+				visited = visitedBefore;
+				break;
+			}
+		}
+		job.hitCount[ chunk ] = kept;
+		job.stoppedAt[ chunk ] = i;
+		job.visited[ chunk ] = visited;
+	}
+
+	void gatherModuleChunk( Int chunk, void *context )
+	{
+		GatherJob &job = *(GatherJob *)context;
+		const Int end = gatherChunkEnd( job, chunk );
+		GatherHit *hits = &job.hits[ chunk * GATHER_CHUNK_HITS ];
+		Int kept = 0;
+		Int i = chunk * job.chunkSize;
+		for ( ; i < end; ++i )
+		{
+			PartitionData *mod = job.modules[ i ];
+			Object *obj = mod->getObject();
+			if (obj == job.self || obj == NULL)
+				continue;
+
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
+				continue;
+			if (!filtersAllow( job.filters, obj ))
+				continue;
+
+			if (kept == GATHER_CHUNK_HITS)
+				break;
+			hits[ kept ].mod = mod;
+			hits[ kept ].distSqr = distSqr;
+			++kept;
+		}
+		job.hitCount[ chunk ] = kept;
+		job.stoppedAt[ chunk ] = i;
+		job.visited[ chunk ] = i - chunk * job.chunkSize;		// every flattened module touches a cell
+	}
+
+	/** The serial ring walk's body for one offset, for what a full chunk handed back. */
+	Int gatherRingSerially( const GatherJob &job, Int i, Int iterFlag, SimpleObjectIterator *iter )
+	{
+		PartitionCell *cell = job.mgr->getCellAt( job.cellCenterX + job.offsets[ i ].x, job.cellCenterY + job.offsets[ i ].y );
+		if (cell == NULL)
+			return 0;
+		if (job.onlyPlayers != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( job.onlyPlayers ))
+			return 0;
+
+		Int visited = 0;
+		for (CellAndObjectIntersection *coi = cell->getFirstCoiInCell(); coi; coi = coi->getNextCoi())
+		{
+			PartitionData *mod = coi->getModule();
+			Object *obj = mod->getObject();
+			++visited;
+			if (obj == job.self || obj == NULL)
+				continue;
+			if (mod->friend_getDoneFlag() == iterFlag)
+				continue;
+			mod->friend_setDoneFlag( iterFlag );
+
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
+				continue;
+			if (!filtersAllow( job.filters, obj ))
+				continue;
+			iter->insert( obj, distSqr );
+		}
+		return visited;
+	}
+
+	/** Likewise for one module of the master list. */
+	Int gatherModuleSerially( const GatherJob &job, Int i, SimpleObjectIterator *iter )
+	{
+		PartitionData *mod = job.modules[ i ];
+		Object *obj = mod->getObject();
+		if (obj == job.self || obj == NULL)
+			return 1;
+
+		Real distSqr;
+		Coord3D distVec;
+		if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
+			return 1;
+		if (filtersAllow( job.filters, obj ))
+			iter->insert( obj, distSqr );
+		return 1;
+	}
+
+	/** Fork the chunks, then insert their hits in walk order on this thread. Returns the coi visits,
+		* for the query counter. */
+	Int runGather( GatherJob &job, Bool ring, Int iterFlag, SimpleObjectIterator *iter )
+	{
+		if (s_gatherHits.empty())
+			s_gatherHits.resize( GATHER_CHUNKS * GATHER_CHUNK_HITS );
+		job.hits = &s_gatherHits[ 0 ];
+		job.chunkCount = minInt( (Int)GATHER_CHUNKS, (job.itemCount + GATHER_MIN_CHUNK - 1) / GATHER_MIN_CHUNK );
+		job.chunkSize = (job.itemCount + job.chunkCount - 1) / job.chunkCount;
+
+		const std::chrono::steady_clock::time_point forkStart = std::chrono::steady_clock::now();
+		JobSystem::parallel_for( job.chunkCount, 1, ring ? gatherRingChunk : gatherModuleChunk, &job );
+		const std::chrono::steady_clock::time_point mergeStart = std::chrono::steady_clock::now();
+		++s_gathersSplit;
+
+		Int visited = 0;
+		for (Int c = 0; c < job.chunkCount; ++c)
+		{
+			const GatherHit *hits = &job.hits[ c * GATHER_CHUNK_HITS ];
+			for (Int k = 0; k < job.hitCount[ c ]; ++k)
+			{
+				PartitionData *mod = hits[ k ].mod;
+				if (ring)
+				{
+					if (mod->friend_getDoneFlag() == iterFlag)
+						continue;
+					mod->friend_setDoneFlag( iterFlag );
+				}
+				iter->insert( mod->getObject(), hits[ k ].distSqr );
+			}
+			visited += job.visited[ c ];
+
+			const Int end = gatherChunkEnd( job, c );
+			if (job.stoppedAt[ c ] < end)
+				++s_gatherTailsHandedBack;
+			for (Int i = job.stoppedAt[ c ]; i < end; ++i)
+				visited += ring ? gatherRingSerially( job, i, iterFlag, iter ) : gatherModuleSerially( job, i, iter );
+		}
+
+		const std::chrono::steady_clock::time_point mergeEnd = std::chrono::steady_clock::now();
+		s_gatherForkMS += std::chrono::duration<Real, std::milli>( mergeStart - forkStart ).count();
+		s_gatherMergeMS += std::chrono::duration<Real, std::milli>( mergeEnd - mergeStart ).count();
+		return visited;
+	}
+
+	/** Whether this gather may fork: on the tick's own thread (or the main thread at -logicthread 0),
+		* never from the render's window, whose reads must not touch these buffers, never from inside a
+		* job, and only with filters that only read. */
+	Bool mayGatherInParallel( PartitionFilter **filters )
+	{
+		return !LogicThread::isInsideWindow() && !JobSystem::isInsideJob() && filtersAreReadOnly( filters );
+	}
+}
+
+/** For the HEADLESS JOBS line (GameEngine.cpp): how many gathers were split, how many chunks handed a
+	* tail back, and the milliseconds spent forking them and merging what they found. */
+void PartitionManager_splitGatherCounts( Int &split, Int &tailsHandedBack, Real &forkMS, Real &mergeMS )
+{
+	split = s_gathersSplit;
+	tailsHandedBack = s_gatherTailsHandedBack;
+	forkMS = s_gatherForkMS;
+	mergeMS = s_gatherMergeMS;
+}
 
 //-----------------------------------------------------------------------------
 //DECLARE_PERF_TIMER(getClosestObjects)
@@ -3529,7 +3826,42 @@ Object *PartitionManager::getClosestObjects(
 		 cell offset either side of the centre, four times the map's cells and most of them off it: a
 		 hunting unit's whole-map search spent 15-33ms there to find 3,600 objects. The master module
 		 list holds exactly the objects that sit in cells, so walking it gathers the same set. */
-	if ((iterArg || (anyWillDo && walkAsGather)) && maxRadius >= m_maxGcoRadius)
+	GatherJob gather;
+	if (iterArg)
+	{
+		gather.objPos = objPos;
+		gather.objToUse = objToUse;
+		gather.self = obj;
+		gather.distProc = distProc;
+		gather.maxDistSqr = closestDistSqr;
+		gather.filters = filters;
+		gather.onlyPlayers = onlyPlayers;
+		gather.mgr = this;
+		gather.cellCenterX = cellCenterX;
+		gather.cellCenterY = cellCenterY;
+		gather.offsets = NULL;
+		gather.modules = NULL;
+		gather.itemCount = 0;
+	}
+
+	if (iterArg && maxRadius >= m_maxGcoRadius && mayGatherInParallel(filters))
+	{
+		s_gatherModules.clear();
+		for (PartitionData *thisMod = m_moduleList; thisMod; thisMod = thisMod->getNext())
+		{
+			if (thisMod->friend_getCoiInUseCount() != 0)
+				s_gatherModules.push_back(thisMod);
+		}
+		if ((Int)s_gatherModules.size() >= GATHER_MIN_MODULES)
+		{
+			gather.modules = &s_gatherModules[0];
+			gather.itemCount = (Int)s_gatherModules.size();
+			thePartitionQueryObjects += runGather(gather, FALSE, theIterFlag, iterArg);
+			maxRadiusLimit = -1;	// nothing left for the ring walk to find
+		}
+	}
+
+	if ((iterArg || (anyWillDo && walkAsGather)) && maxRadius >= m_maxGcoRadius && maxRadiusLimit >= 0)
 	{
 		/* Every module's Object lies somewhere else in memory, and the distance test waited on a miss for
 			 its position and geometry, one object after the next. A cursor a few modules ahead asks for
@@ -3593,6 +3925,16 @@ Object *PartitionManager::getClosestObjects(
 	farthestOnMap.y = maxInt(cellCenterY, m_cellCountY - 1 - cellCenterY);
 	if (maxRadiusLimit >= maxInt(farthestOnMap.x, farthestOnMap.y))
 		maxRadiusLimit = minInt(maxRadiusLimit, calcMinRadius(farthestOnMap));
+
+	// a gather walks every ring to the limit whatever it finds, so the rings can be split
+	if (iterArg && maxRadiusLimit >= 0 && maxRadiusLimit + 1 < (Int)m_ringStart.size()
+			&& m_ringStart[maxRadiusLimit + 1] >= GATHER_MIN_RINGS && mayGatherInParallel(filters))
+	{
+		gather.offsets = &m_ringOffsets[0];
+		gather.itemCount = m_ringStart[maxRadiusLimit + 1];
+		thePartitionQueryObjects += runGather(gather, TRUE, theIterFlag, iterArg);
+		maxRadiusLimit = -1;
+	}
 
 	/*
 		m_radiusVec[curRadius] contains a list of the cells (foo) that could

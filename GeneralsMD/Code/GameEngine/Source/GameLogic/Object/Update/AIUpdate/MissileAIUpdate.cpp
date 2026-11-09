@@ -154,6 +154,7 @@ MissileAIUpdate::MissileAIUpdate( Thing *thing, const ModuleData* moduleData ) :
 	m_framesTillDecoyed = 0;
 	m_noDamage = FALSE;
 	m_isJammed = FALSE;
+	m_isSpent = FALSE;
 } 
 
 //-------------------------------------------------------------------------------------------------
@@ -604,6 +605,28 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 			curLoco->setMaxTurnRate(0);
 		}
 		lightenExhaust();
+
+		// A spent missile coasts on and gravity bends it down. Air drag takes its speed off, so the arc
+		// steepens as it goes and it lands within speed / drag of where it lost the target, and its
+		// nose follows the path. EA's own fuel-outs keep their flight: some are coasting rockets whose
+		// range is that coast.
+		PhysicsBehavior* physics = getObject()->getPhysics();
+		if (m_isSpent && physics && physics->getVelocityMagnitude() > 0.0f)
+		{
+			const Real SPENT_DRAG = 0.25f / LOGICFRAMES_PER_SECOND;	// of the velocity, each frame
+			const Coord3D* vel = physics->getVelocity();
+			Real dragMass = -SPENT_DRAG * physics->getMass();
+			Coord3D drag;
+			drag.set(vel->x * dragMass, vel->y * dragMass, vel->z * dragMass);
+			physics->applyMotiveForce(&drag);
+
+			Vector3 dir(vel->x, vel->y, vel->z);
+			dir.Normalize();
+			const Coord3D* pos = getObject()->getPosition();
+			Matrix3D xform;
+			xform.buildTransformMatrix(Vector3(pos->x, pos->y, pos->z), dir);
+			getObject()->setTransformMatrix(&xform);
+		}
 	}
 	else
 	{
@@ -964,15 +987,15 @@ Also determines whether objects are blocked, and if so, if they are stuck.  jba.
 
 //-------------------------------------------------------------------------------------------------
 // EA ran the missile out of fuel here and its kill-self state destroyed it on the spot with no blast,
-// so a Stinger whose jet blew up first vanished in mid-air. It flies on along its nose instead, to a
-// point on the ground half a second of its flight ahead, or as far ahead as it is high if that is
-// further, and goes off there like any shot at the ground. Its fuel is cut to a few seconds, so one
-// with endless fuel that misses the point still runs dry and falls.
+// so a Stinger whose jet blew up first vanished in mid-air. Its fuel is cut instead and it falls like
+// a spent rocket (the fuel-out branch of doAttackState), and goes off where it lands like any shot at
+// the ground. Steered at a point on the ground ahead, it hooked straight down in a few frames. The
+// move goal stays that point, half a second of its flight ahead or as far as it is high, for the
+// checks that read one; with no thrust nothing steers it there.
 //-------------------------------------------------------------------------------------------------
 void MissileAIUpdate::airborneTargetGone()
 {
 	const Real AHEAD_FRAMES = LOGICFRAMES_PER_SECOND * 0.5f;
-	const UnsignedInt FUEL_LEFT = LOGICFRAMES_PER_SECOND * 3;
 
 	Object *obj = getObject();
 	const Coord3D *pos = obj->getPosition();
@@ -1000,8 +1023,9 @@ void MissileAIUpdate::airborneTargetGone()
 	m_victimID = INVALID_ID;
 
 	UnsignedInt now = TheGameLogic->getFrame();
-	if (m_fuelExpirationDate > now + FUEL_LEFT)
-		m_fuelExpirationDate = now + FUEL_LEFT;
+	if (m_fuelExpirationDate > now)
+		m_fuelExpirationDate = now;
+	m_isSpent = TRUE;
 	lightenExhaust();
 	if (m_state == KILL)
 		switchToState(ATTACK);
@@ -1070,7 +1094,8 @@ void MissileAIUpdate::xfer( Xfer *xfer )
 {
   // version
   // 7: m_aimOffset
-  const XferVersion currentVersion = 7;
+  // 8: m_isSpent
+  const XferVersion currentVersion = 8;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -1137,6 +1162,9 @@ void MissileAIUpdate::xfer( Xfer *xfer )
 
 	if( version >= 7 )
 		xfer->xferCoord3D( &m_aimOffset );
+
+	if( version >= 8 )
+		xfer->xferBool( &m_isSpent );
 
 }  // end xfer
 

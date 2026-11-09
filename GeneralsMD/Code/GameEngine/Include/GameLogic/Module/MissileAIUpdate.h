@@ -138,6 +138,7 @@ private:
 	Bool									m_isArmed;								///< if true, missile will explode on contact
 	Bool									m_noDamage;								///< if true, missile will not cause damage when it detonates. (Used for flares).
 	Bool									m_isJammed;								///< No target, just shooting at a scattered position
+	Bool									m_isSpent;								///< its target went before it, and it falls with no thrust (airborneTargetGone)
 	
 	void doPrelaunchState();
 	void doLaunchState();

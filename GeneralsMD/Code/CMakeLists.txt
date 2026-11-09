@@ -2760,19 +2760,22 @@ endif()
 # owning archive against an independent reading of the mount order, and the bytes of a sample against
 # an independent parser.  Built from the real sources, as test_posixlocalfilesystem is.  Needs
 # ZH_GAME_DATA; without it the test is Skipped (77).
-add_executable(test_bigfilesystem ${TESTS}/test_bigfilesystem.cpp ${TESTS}/test_bigfilesystem_stubs.cpp
+set(ZH_BIGFILESYSTEM_TEST_SOURCES ${TESTS}/test_bigfilesystem_stubs.cpp
   ${ZH_POSIXLFS_SOURCES_NO_MAIN}
   ${GE}/Source/Common/System/ArchiveFileSystem.cpp ${GE}/Source/Common/System/ArchiveFile.cpp
   ${GE}/Source/Common/System/StreamingArchiveFile.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/Win32Device/Common/Win32BIGFile.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/Win32Device/Common/Win32BIGFileSystem.cpp)
-target_include_directories(test_bigfilesystem PRIVATE
-  $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
-target_compile_definitions(test_bigfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
-  ZH_EAGER_VTABLE_STUB_NO_POOL)
-set_target_properties(test_bigfilesystem PROPERTIES CXX_STANDARD 17)
-target_link_libraries(test_bigfilesystem PRIVATE test_harness wwlib wwdebug)
-add_test(NAME test_bigfilesystem COMMAND test_bigfilesystem)
+foreach(name test_bigfilesystem test_bigarchive)
+  add_executable(${name} ${TESTS}/${name}.cpp ${ZH_BIGFILESYSTEM_TEST_SOURCES})
+  target_include_directories(${name} PRIVATE
+    $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+  target_compile_definitions(${name} PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+    ZH_EAGER_VTABLE_STUB_NO_POOL)
+  set_target_properties(${name} PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(${name} PRIVATE test_harness wwlib wwdebug)
+  add_test(NAME ${name} COMMAND ${name})
+endforeach()
 set_tests_properties(test_bigfilesystem PROPERTIES SKIP_RETURN_CODE 77)
 if(ZH_GAME_DATA)
   set_tests_properties(test_bigfilesystem PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")

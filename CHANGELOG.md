@@ -398,6 +398,7 @@ found and fixed, EA's own, not port damage.**
 - The wreck leaves fire burning for about 6 seconds, and the fire sets infantry alight. A big plane leaves a line of fires along the length of the wreck.
 - The blast and the fire spare the plane's owner and allies, and still hurt enemies and neutral buildings. A Supply Drop plane shot down over your own base used to wreck it; in a test the same crash that cost your own side 10 men and 136 health off two power plants now leaves them untouched, while the enemy beside them loses the same 10 men.
 - Bombers and cargo planes no longer vanish silently when they hit the ground. A jet destroyed while it sits parked is unchanged.
+- A missile whose target dies before it arrives flies on and blows up where it comes down. A Stinger chasing a jet that another shot brought down used to wink out in mid-air, with no blast and no damage; it now carries on along its heading, dives into the ground ahead and goes off there, hurting whatever stands on that spot. A missile that runs out of fuel falls and goes off where it lands, where it used to vanish the same way.
 
 ## A tank shell hurts the man it hits
 

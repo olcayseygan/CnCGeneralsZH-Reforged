@@ -374,7 +374,8 @@ Bool MissileAIUpdate::projectileHandleCollision( Object *other )
 		delta.x = pos.x-goal.x;
 		delta.y = pos.y-goal.y;
 		delta.z = pos.z-goal.z;
-		if (delta.z > PATHFIND_CELL_SIZE_F) {
+		// a missile out of fuel is falling, and goes off wherever it lands
+		if (delta.z > PATHFIND_CELL_SIZE_F && TheGameLogic->getFrame() < m_fuelExpirationDate) {
 			// we're above our target goal.
 			if (delta.length() > 3*PATHFIND_CELL_SIZE_F) {
 				// we're somewhere else.
@@ -569,7 +570,9 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 	const MissileAIUpdateModuleData* d = getMissileAIUpdateModuleData();
 	if (TheGameLogic->getFrame() >= m_fuelExpirationDate)
 	{
-		if( d->m_detonateOnNoFuel )
+		// Out of fuel on the ground: a landing the collision check let pass (a ridge far above its goal)
+		// never comes again, and nothing else would end it.
+		if( d->m_detonateOnNoFuel || !getObject()->isAboveTerrain() )
 		{
 			detonate();
 			return;
@@ -614,7 +617,8 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 	if (curLoco)
 		curLoco->setDiveDistance(d->m_diveDistance < effectiveLockDistance ? d->m_diveDistance : 0.0f);
 
-	if (d->m_lockDistance > 0)
+	// Out of fuel it only falls. The lock put it in the kill state, whose fuel check ended it in mid-air.
+	if (d->m_lockDistance > 0 && TheGameLogic->getFrame() < m_fuelExpirationDate)
 	{
 		Real lockDistanceSquared = d->m_lockDistance;
 		Real distanceToTargetSquared;
@@ -663,6 +667,14 @@ void MissileAIUpdate::doKillState(void)
 		}
 
 		// srj sez: killstate missiles should not be allowed to live forever.
+		airborneTargetGone();
+		return;
+	}
+
+	// If I was fired at a flyer and have lost target (most likely they died), then I need to do something better
+	// than cloverleaf around their last spot. Before the idle check below, which set it off in mid-air.
+	if( m_isTrackingTarget && (getGoalObject() == NULL) )
+	{
 		airborneTargetGone();
 		return;
 	}
@@ -723,10 +735,6 @@ void MissileAIUpdate::doKillState(void)
 			detonate();
 		}
 	}
-	// If I was fired at a flyer and have lost target (most likely they died), then I need to do something better
-	// than cloverleaf around their last spot.
-	if( m_isTrackingTarget && (getGoalObject() == NULL) )
-		airborneTargetGone();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -935,12 +943,47 @@ Also determines whether objects are blocked, and if so, if they are stuck.  jba.
 }
 
 //-------------------------------------------------------------------------------------------------
+// EA ran the missile out of fuel here and its kill-self state destroyed it on the spot with no blast,
+// so a Stinger whose jet blew up first vanished in mid-air. It flies on along its nose instead, to a
+// point on the ground half a second of its flight ahead, or as far ahead as it is high if that is
+// further, and goes off there like any shot at the ground. Its fuel is cut to a few seconds, so one
+// with endless fuel that misses the point still runs dry and falls.
+//-------------------------------------------------------------------------------------------------
 void MissileAIUpdate::airborneTargetGone()
 {
-	// I would really love it if this could retarget, but all of the targeting and legality is done
-	// by the Weapon that fired me.  The safest thing for me to do in this state is to just run out of gas.
-	m_fuelExpirationDate = TheGameLogic->getFrame();
-	switchToState(KILL_SELF);
+	const Real AHEAD_FRAMES = LOGICFRAMES_PER_SECOND * 0.5f;
+	const UnsignedInt FUEL_LEFT = LOGICFRAMES_PER_SECOND * 3;
+
+	Object *obj = getObject();
+	const Coord3D *pos = obj->getPosition();
+	Vector3 nose = obj->getTransformMatrix()->Get_X_Vector();
+	Real nose2D = sqrtf(nose.X * nose.X + nose.Y * nose.Y);
+	Real ahead = obj->getPhysics() ? obj->getPhysics()->getVelocityMagnitude() * AHEAD_FRAMES : 0.0f;
+	Real height = pos->z - TheTerrainLogic->getGroundHeight(pos->x, pos->y);
+	if (ahead < height)
+		ahead = height;
+
+	Coord3D groundPoint = *pos;
+	if (nose2D > 0.001f)
+	{
+		groundPoint.x += nose.X / nose2D * ahead;
+		groundPoint.y += nose.Y / nose2D * ahead;
+	}
+	groundPoint.z = TheTerrainLogic->getLayerHeight(groundPoint.x, groundPoint.y, TheTerrainLogic->getHighestLayerForDestination(&groundPoint));
+
+	// the lock's cheat move ignores physics; the flight on is a real one
+	obj->clearStatus(MAKE_OBJECT_STATUS_MASK(OBJECT_STATUS_BRAKING));
+	getStateMachine()->setGoalObject(NULL);
+	aiMoveToPosition(&groundPoint, CMD_FROM_AI);
+	m_isTrackingTarget = FALSE;
+	m_originalTargetPos = groundPoint;
+	m_victimID = INVALID_ID;
+
+	UnsignedInt now = TheGameLogic->getFrame();
+	if (m_fuelExpirationDate > now + FUEL_LEFT)
+		m_fuelExpirationDate = now + FUEL_LEFT;
+	if (m_state == KILL)
+		switchToState(ATTACK);
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -37,6 +37,7 @@
 #define __W3DRADAR_H_
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
+#include <vector>
 #include "Common/Radar.h"
 #include "Common/RadarShroudCache.h"
 #include "GameClient/ObserverCamera.h"
@@ -84,6 +85,7 @@ protected:
 	void drawEvents( Int pixelX, Int pixelY, Int width, Int height);		///< draw all of the radar events
 	void drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height );	///< the Turkiye radar's fogged contacts, this sweep and the last
 	void drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, const Coord3D *pos );	//< draw a hero icon
+	void drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int height );	///< a line from each unit walking to its squad to where it walks
 	void drawViewBox( Int pixelX, Int pixelY, Int width, Int height );  ///< draw view box
 	void drawBoxLines( const ICoord2D *corners );	///< a view box's lines through its four corners in pixels
 	void buildTerrainTexture( TerrainLogic *terrain );	 ///< create the terrain texture of the radar
@@ -131,6 +133,11 @@ protected:
 	// frames and read on every one of them, so a hero killed in between left a pointer into a
 	// deleted Object for the icon pass to read.
 	std::list<Coord3D> m_cachedHeroPosList;					//< cache of hero positions for drawing icons in radar overlay
+
+	// The local player's units walking to their hotkey squad, where each is and where it walks, copied
+	// with the hero positions at the sync point for the same reason
+	struct ReinforcementLine { Coord3D from; Coord3D to; Color color; };
+	std::vector<ReinforcementLine> m_cachedReinforcementLines;
 };
 
 

@@ -277,6 +277,33 @@ void W3DRadar::drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, cons
 }
 
 //-------------------------------------------------------------------------------------------------
+/** One thin line from each of the local player's units walking to its hotkey squad to where it
+	* walks, from the copy update took at the sync point: draw runs beside the tick. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int height )
+{
+	IRegion2D clip;
+	clip.lo.x = pixelX;
+	clip.lo.y = pixelY;
+	clip.hi.x = pixelX + width;
+	clip.hi.y = pixelY + height;
+
+	for( size_t i = 0; i < m_cachedReinforcementLines.size(); ++i )
+	{
+		const ReinforcementLine &line = m_cachedReinforcementLines[ i ];
+		ICoord2D radar, from, to, clippedFrom, clippedTo;
+		radar.x = line.from.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = line.from.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &from, pixelX, pixelY, width, height );
+		radar.x = line.to.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = line.to.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &to, pixelX, pixelY, width, height );
+		if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &clip ) )
+			TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, 1.0f, line.color );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** A filled square cut to the radar's picture: drawFillRect clips to nothing, and a contact at the
 	* map's edge would otherwise spill onto the frame. */
 //-------------------------------------------------------------------------------------------------
@@ -754,6 +781,21 @@ void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *text
 		{
 			m_cachedHeroPosList.push_back(*obj->getPosition());
 		}
+
+		// the local list is the local player's own units, so no shroud to ask: a unit walking to its
+		// hotkey squad gets its line, in its blip's colour turned down
+		if( calcHero && obj->getReinforcementSquad() >= 0 )
+		{
+			const Coord3D *dest = obj->getReinforcementDestination();
+			if( dest )
+			{
+				ReinforcementLine line;
+				line.from = *obj->getPosition();
+				line.to = *dest;
+				line.color = (Color)( (clientColor( rObj->getColor() ) & 0x00FFFFFF) | 0x8C000000 );
+				m_cachedReinforcementLines.push_back( line );
+			}
+		}
     Bool skip = FALSE;
 
 		// check for shrouded status
@@ -1084,6 +1126,7 @@ void W3DRadar::reset( void )
 
 	// the objects those positions belonged to are gone with the match that had them
 	m_cachedHeroPosList.clear();
+	m_cachedReinforcementLines.clear();
 
 	// don't call Clear(); that wips to transparent. do this instead.
 	//gs Dude, it's called CLEARshroud.  It needs to clear the shroud.
@@ -1136,7 +1179,9 @@ void W3DRadar::update( void )
 		surface->Clear();
 		REF_PTR_RELEASE(surface);
 
-		// rebuild the object overlay
+		// rebuild the object overlay; the local list's pass refills the lines, and an empty list returns
+		// before it would have cleared them
+		m_cachedReinforcementLines.clear();
 		renderObjectList( getObjectList(), m_overlayTexture );
 		renderObjectList( getLocalObjectList(), m_overlayTexture, TRUE );
 
@@ -1570,6 +1615,9 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 
 		TheDisplay->drawImage( m_shroudImage, ul.x, ul.y, lr.x, lr.y );
 	}
+
+	// over the shroud: the destination is the player's own order, and it may lie in the dark
+	drawReinforcementLines( ul.x, ul.y, scaledWidth, scaledHeight );
 
 	// the radar's contacts go over the shroud, which would dim them in the fog and black them out in
 	// the shroud, and so over the unit dots of the overlay as well.  A contact is only ever a unit the

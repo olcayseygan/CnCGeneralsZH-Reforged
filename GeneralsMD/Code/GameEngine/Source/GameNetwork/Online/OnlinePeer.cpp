@@ -128,7 +128,7 @@ OnlineSession &OnlineSession::get()
 
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ),
-	cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), revealing( FALSE ), revealSerial( 0 ),
+	cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), revealing( FALSE ), revealSerial( 0 ),
 	peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	forgetAccount();
@@ -161,6 +161,8 @@ void OnlineSession::forgetAccount()
 	++cardSerial;
 	ladderState = ONLINE_LADDER_FAILED;
 	ladder.clear();
+	armiesState = ONLINE_LADDER_FAILED;
+	armies.clear();
 	revealing = FALSE;
 }
 
@@ -637,6 +639,10 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		{
 			ladderState = ONLINE_LADDER_FAILED;
 		}
+		else if (what == "armies")
+		{
+			armiesState = ONLINE_LADDER_FAILED;
+		}
 	}
 	else if (t == "room")
 	{
@@ -867,6 +873,11 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	{
 		ladder = m;
 		ladderState = ONLINE_LADDER_READY;
+	}
+	else if (t == "armies")
+	{
+		armies = m;
+		armiesState = ONLINE_LADDER_READY;
 	}
 	else if (t == "rated" || t == "unrated")
 	{

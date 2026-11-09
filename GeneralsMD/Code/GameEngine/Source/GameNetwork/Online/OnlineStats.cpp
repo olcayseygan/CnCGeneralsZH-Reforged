@@ -291,6 +291,38 @@ OnlineLadderState OnlineGetLadder( Int &offset, std::vector<OnlineLadderRow> &ro
 	return ONLINE_LADDER_READY;
 }
 
+void OnlineRequestArmies( void )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!s.authed)
+	{
+		s.armiesState = ONLINE_LADDER_FAILED;
+		return;
+	}
+	s.armiesState = ONLINE_LADDER_WAITING;
+	OnlineMessage m;
+	m.setString( "t", "armies" );
+	s.send( m );
+}
+
+OnlineLadderState OnlineGetArmies( std::vector<OnlineArmyRow> &rows )
+{
+	const OnlineSession &s = OnlineSession::get();
+	rows.clear();
+	if (s.armiesState != ONLINE_LADDER_READY)
+		return (OnlineLadderState)s.armiesState;
+	const std::vector<OnlineMessage> got = s.armies.getObjects( "sides" );
+	for (size_t i = 0; i < got.size(); ++i)
+	{
+		OnlineArmyRow r;
+		r.side = got[i].getString( "side" ).c_str();
+		r.games = (Int)got[i].getInt( "games", 0 );
+		r.wins = (Int)got[i].getInt( "wins", 0 );
+		rows.push_back( r );
+	}
+	return ONLINE_LADDER_READY;
+}
+
 Bool OnlineGetMatchReveal( OnlineMatchReveal &out )
 {
 	const OnlineSession &s = OnlineSession::get();

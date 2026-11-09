@@ -169,6 +169,17 @@ enum OnlineLadderState
 void OnlineRequestLadder( Int offset );
 OnlineLadderState OnlineGetLadder( Int &offset, std::vector<OnlineLadderRow> &rows, OnlineLadderRow &me, Bool &hasMe );
 
+/* Games and wins per army, for the hub's win percentages: OnlineRequestArmies asks, OnlineGetArmies reads
+	 the last answer, in the ladder's three states.  side is the PlayerTemplate side ("America"). */
+struct OnlineArmyRow
+{
+	AsciiString side;
+	Int games;
+	Int wins;
+};
+void OnlineRequestArmies( void );
+OnlineLadderState OnlineGetArmies( std::vector<OnlineArmyRow> &rows );
+
 /* A Quick Match found, between qm.matched and the game.start that launches it (revealMs apart).  A
 	 qm.status that follows instead (the opponent dropped, or we left) ends it.  serial tells one reveal from
 	 the next. */

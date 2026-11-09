@@ -183,6 +183,10 @@ struct OnlineSession
 	Int ladderState;				///< OnlineLadderState
 	OnlineMessage ladder;
 
+	// the armies' last answer
+	Int armiesState;				///< OnlineLadderState
+	OnlineMessage armies;
+
 	// a Quick Match between qm.matched and its game.start
 	OnlineMessage reveal;
 	Bool revealing;

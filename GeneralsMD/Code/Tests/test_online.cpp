@@ -1249,6 +1249,21 @@ TEST(online_adapter_ping_ratings_stats_and_ladder)
 	rig.feed( "{\"t\":\"error\",\"for\":\"ladder\",\"code\":\"unavailable\"}" );
 	CHECK_EQ( (int)OnlineGetLadder( offset, rows, me, hasMe ), (int)ONLINE_LADDER_FAILED );
 
+	// the armies' win percentages
+	rig.sent.clear();
+	OnlineRequestArmies();
+	CHECK_STR( rig.sentType( 0 ).c_str(), "armies" );
+	std::vector<OnlineArmyRow> armies;
+	CHECK_EQ( (int)OnlineGetArmies( armies ), (int)ONLINE_LADDER_WAITING );
+	rig.feed( "{\"t\":\"armies\",\"sides\":[{\"side\":\"America\",\"games\":12,\"wins\":7},{\"side\":\"GLA\",\"games\":3,\"wins\":0}]}" );
+	CHECK_EQ( (int)OnlineGetArmies( armies ), (int)ONLINE_LADDER_READY );
+	CHECK( armies.size() == 2 && armies[0].side == "America" && armies[0].games == 12 && armies[0].wins == 7 );
+	CHECK( armies.size() == 2 && armies[1].side == "GLA" && armies[1].wins == 0 );
+	OnlineRequestArmies();
+	rig.feed( "{\"t\":\"error\",\"for\":\"armies\",\"code\":\"unavailable\"}" );
+	CHECK_EQ( (int)OnlineGetArmies( armies ), (int)ONLINE_LADDER_FAILED );
+	CHECK( armies.empty() );
+
 	// the verdict, for the match just played only
 	Bool rated = FALSE;
 	Real delta = 0, rating = 0;

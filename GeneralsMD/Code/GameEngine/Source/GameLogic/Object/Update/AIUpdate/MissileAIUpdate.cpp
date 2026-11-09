@@ -148,6 +148,7 @@ MissileAIUpdate::MissileAIUpdate( Thing *thing, const ModuleData* moduleData ) :
 	m_exhaustSysTmpl = NULL;
 	m_isTrackingTarget = FALSE;
 	m_exhaustID = INVALID_PARTICLE_SYSTEM_ID;
+	m_exhaustLightened = FALSE;
 	m_extraBonusFlags = 0;
 	m_originalTargetPos.zero();
 	m_framesTillDecoyed = 0;
@@ -182,6 +183,25 @@ void MissileAIUpdate::tossExhaust()
 		TheParticleSystemManager->destroyParticleSystemByID(m_exhaustID);
 		m_exhaustID = INVALID_PARTICLE_SYSTEM_ID;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// A missile with no target or no fuel left kept EA's answer, which pulled its exhaust off at once, so
+// it flew or fell its last seconds with no trail. It keeps the trail at half size: the fire line,
+// its flare (a slave, scaled by its master too, so a quarter) and the smoke ribbon chained behind
+// the flare. Only writes to the client's particles, never reads them, and after the tick like the
+// exhaust's destroy (LOGIC-THREAD.md M5). Sent once; the fuel-out branch calls it every frame.
+//-------------------------------------------------------------------------------------------------
+void MissileAIUpdate::lightenExhaust()
+{
+	if (m_exhaustLightened || m_exhaustID == INVALID_PARTICLE_SYSTEM_ID)
+		return;
+	m_exhaustLightened = TRUE;
+	TheParticleSystemManager->withSystem(m_exhaustID, []( ParticleSystem *exhaust ) {
+		const Real LIGHT_TRAIL_SIZE = 0.5f;
+		for (ParticleSystem *sys = exhaust; sys; sys = sys->getSlave())
+			sys->setSizeMultiplier(LIGHT_TRAIL_SIZE);
+	});
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -583,7 +603,7 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 			curLoco->setMaxAcceleration(0);
 			curLoco->setMaxTurnRate(0);
 		}
-		tossExhaust();
+		lightenExhaust();
 	}
 	else
 	{
@@ -982,6 +1002,7 @@ void MissileAIUpdate::airborneTargetGone()
 	UnsignedInt now = TheGameLogic->getFrame();
 	if (m_fuelExpirationDate > now + FUEL_LEFT)
 		m_fuelExpirationDate = now + FUEL_LEFT;
+	lightenExhaust();
 	if (m_state == KILL)
 		switchToState(ATTACK);
 }

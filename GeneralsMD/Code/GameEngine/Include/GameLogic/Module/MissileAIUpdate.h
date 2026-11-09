@@ -132,6 +132,7 @@ private:
 	const WeaponTemplate*	m_detonationWeaponTmpl;		///< weapon to fire at end (or null)
 	const ParticleSystemTemplate* m_exhaustSysTmpl;
 	ParticleSystemID			m_exhaustID;								///< our exhaust particle system (if any)
+	Bool									m_exhaustLightened;				///< lightenExhaust() has sent its change; client only, not saved (a load sends it once more, harmlessly)
 	UnsignedInt						m_framesTillDecoyed;			///< Number of frames before missile will get distracted by decoy countermeasures.
 	Bool									m_isTrackingTarget;				///< Was I originally shot at a moving object?
 	Bool									m_isArmed;								///< if true, missile will explode on contact
@@ -149,6 +150,7 @@ private:
 	void airborneTargetGone();											///< My airborne target has died, so I have to do something cool to make up for that
 
 	void tossExhaust();
+	void lightenExhaust();
 	void switchToState(MissileStateType s);
 
 

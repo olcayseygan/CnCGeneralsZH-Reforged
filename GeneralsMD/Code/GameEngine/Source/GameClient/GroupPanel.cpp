@@ -1,16 +1,20 @@
-// The group panel (GroupPanel.h).  On the left, every hotkey squad the local player has made, one
-// plate each against the screen's left edge between the message lines and the radar: the squad's
-// most numerous unit as its picture with the squad's size on it, the squad's health summed under it,
-// a soft "+N" for the units still being built for it or walking to it, and an edge that burns red
-// while any member fights.  No squad numbers: the picture is the squad.  On the right, while a squad
-// picked by its number is still the selection, a tray between the superweapons and the general's
-// powers with one build button for every unit any of the player's factories offers, whose units come
-// out into that squad; a handle on its open side folds it away and out again, once for the match.
+// The group panel (GroupPanel.h), as the owner picked it from the hud-artist's mockups on 2026-11-09
+// (experiments/group-panel/mockups: list C2, tray A2).
 //
-// Both panels wear one plate of their own, drawn in the HUD's language (BRAND.md, "The in-game
-// HUD"): a dark flange, graphite steel with a brushed upper half, lit from the top left, 45 degree
-// cuts on the corners away from the screen edge, and the side's colour as a stripe along the edge it
-// is mounted on.
+// On the left, one box against the screen's left edge (<S>ProSquadList, a 9-slice) with a row for
+// every hotkey squad the local player has made: the squad's most numerous unit as its picture, "xN"
+// in the picture's bottom right corner and a soft "+N" in its top left for the units still being
+// built for it or walking to it; beside the picture a sunk socket holding a keycap with the squad's
+// key, the key pressed and lit while the squad is the one the tray is up for, and under the socket
+// an upright rail with the squad's health.
+//
+// On the right, while a squad picked by its number is still the selection, a tray between the
+// superweapons and the general's powers: the powers tray's own stepped body at 1.2 (four buttons a
+// row, flush right, a short last row stepping in at the foot) holding one build button for every
+// unit any of the player's factories offers, whose units come out into that squad.  Over it a long
+// ledge (<S>ProBuildLedge) ending in a point on the left, the point being the fold button
+// (<S>ProBuildFold, folded <S>ProBuildUnfold); the ledge's right end carries the squad's keycap and
+// "xN".  Folded, the ledge alone stays.  A piece the sheet does not have yet is drawn as a flat fill.
 //
 // Thread: LOGIC-THREAD.md.  Everything here that reads the logic runs at the render's sync point:
 // GroupPanel_draw from InGameUI::postDraw, which W3DInGameUI::recordDraw runs before the overlap
@@ -20,7 +24,8 @@
 // never getLiveObjects or getAllObjects: those prune the logic's list, and doing it on one machine
 // only would make the squads differ between machines.
 //
-// radarFrameTop and controlBarTop are copies of InGameUI.cpp's statics.
+// The stepped tray drawing, radarFrameTop and controlBarTop are copies of InGameUI.cpp's statics
+// (drawHudTray and the rest).
 // ponytail: copies, not shared; fold them into one header when InGameUI.cpp is free to change.
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 
@@ -50,41 +55,68 @@
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/Keyboard.h"
+#include "GameClient/Mouse.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Squad.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 
-#include <algorithm>
-#include <math.h>
+#include <string.h>
 #include <vector>
 
 namespace
 {
-	// lengths at 800x600, through stripPixels
-	enum
-	{
-		PICTURE_W					= 46,		///< a squad's picture, a little over a HUD cell's cameo (39x27)
-		PICTURE_H					= 32,
-		PLATE_PAD					= 3,		///< from the plate's edge to what it holds
-		PLATE_CUT					= 7,		///< a 45 degree corner cut
-		PLATE_ACCENT			= 2,		///< the side's stripe along the mounted edge
-		ROW_GAP						= 3,		///< between two squads
-		BUTTON_GAP				= 3,		///< between two build buttons
-		HANDLE_W					= 10,		///< the tray's fold handle
-		HANDLE_H					= 34,
-		FLOOR_GAP					= 8,		///< kept clear above the general's powers and their frame
-		PRODUCTION_LIFT		= 2,		///< InGameUI.cpp's PRODUCTION_LIST_LIFT: the production list stands under the squads
-		PRODUCTION_TAB_H	= 28,		///< and its "+N" tab over it, at 1080 (HUD_TRAY_TAB_H)
-	};
+	// Lengths in pixels at 1080 from experiments/group-panel/pieces.md, put through the screen's height
+	// (and the list's shrink).  Where a piece of the sheet exists its own size wins over these.
+	const Real LIST_W					= 116.0f;	///< the box: slices 4 + 86 + 26
+	const Real LIST_MARGIN		= 12.0f;	///< from the box's top and foot to the first and last row
+	const Real ROW_H					= 54.0f;
+	const Real ROW_GAP				= 6.0f;
+	const Real PIC_X					= 5.0f;		///< the picture, row-local 5,1 to 81,53, a dark rim round it
+	const Real PIC_W					= 76.0f;
+	const Real SOCKET_X				= 84.0f;	///< the socket, row-local 84,0, 24 by the row: key well over rail well
+	const Real SOCKET_W				= 24.0f;
+	const Real KEYCAP_X				= 2.0f;		///< the key, socket-local
+	const Real KEYCAP_Y				= 2.0f;
+	const Real KEYCAP_W				= 20.0f;
+	const Real KEYCAP_H				= 18.0f;
+	const Real RAIL_X					= 10.0f;	///< the rail's glass, socket-local 10,26 to 14,52
+	const Real RAIL_Y					= 26.0f;
+	const Real RAIL_W					= 4.0f;
+	const Real RAIL_H					= 26.0f;
+	const Real KEY_POINTS			= 9.0f;		///< the key's digit, about 12 px
+	const Real CHIP_POINTS		= 9.0f;		///< "xN" and "+N" on the pictures
+	const Real LEDGE_POINTS		= 8.0f;		///< "xN" on the ledge, about 11 px
+
+	const Real TRAY_SCALE			= 1.2f;		///< the powers tray's pieces at 1.2: 96x84 cells
+	const Real CELL_W					= 96.0f;	///< when the scheme has no tray
+	const Real CELL_H					= 84.0f;
+	const Real BUTTON_INSET_X	= 3.0f;		///< a 90x72 build button inside its cell
+	const Real BUTTON_INSET_Y	= 6.0f;
+	const Real LEDGE_LENGTH		= 292.0f;	///< L, the run, R: 1628..1920 in the mockup
+	const Real LEDGE_H				= 44.0f;	///< the plate's 40 rows and its 4-row shadow
+	const Real LEDGE_L_W			= 92.0f;
+	const Real LEDGE_R_W			= 64.0f;
+	const Real LEDGE_BODY_Y		= 36.0f;	///< the body's top edge starts here, under the ledge's foot
+	const Real FOLD_X					= 13.0f;	///< the fold button's face, L-local
+	const Real FOLD_Y					= 6.0f;
+	const Real FOLD_W					= 28.0f;
+	const Real LEDGE_KEY_X		= 7.0f;		///< the key in R's well, R-local
+	const Real LEDGE_KEY_Y		= 11.0f;
+	const Real LEDGE_COUNT_X	= 31.0f;	///< "xN" left-aligned from here, R-local, centred on LEDGE_COUNT_Y
+	const Real LEDGE_COUNT_Y	= 20.0f;
+
+	const Real PRODUCTION_ROOM	= 39.0f;	///< the production list's row over the radar, at 800x600 (InGameUI.cpp)
+	const Real PRODUCTION_LIFT	= 2.0f;
+	const Real PRODUCTION_TAB_H	= 28.0f;	///< its "+N" tab, at 1080
+	const Real FLOOR_GAP			= 8.0f;		///< kept clear over the general's powers, at 800x600
 
 	enum
 	{
-		PANEL_COLUMNS			= 4,		///< the tray's width in buttons, widened only when its rows would not fit
-		PANEL_MAX_COLUMNS	= 8,
+		TRAY_COLUMNS			= 4,		///< the tray's width in buttons, widened only when its rows would not fit
+		TRAY_MAX_COLUMNS	= 6,
 		MAX_BUTTONS				= 40,		///< build buttons the tray holds
-		COMBAT_SECONDS		= 3,		///< a member hit or firing this recently puts its squad in combat
 	};
 
 	/// the list's room starts this far down the screen, under the six message lines in the top left
@@ -97,17 +129,40 @@ namespace
 	/// the rows in key order, 1 to 9 and then 0
 	const Int KEY_ORDER[ NUM_HOTKEY_SQUADS ] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
 
-	// the plate's steel
-	const Color PLATE_FILL		= GameMakeColor( 30, 35, 41, 235 );
-	const Color PLATE_SHEEN		= GameMakeColor( 255, 255, 255, 12 );	///< the brushed upper half
-	const Color KEYLINE				= GameMakeColor( 5, 7, 9, 255 );
+	// flat stand-ins until the sheet has the pieces, and what no piece draws
+	const Color STEEL					= GameMakeColor( 44, 52, 60, 240 );
 	const Color STEEL_LIT			= GameMakeColor( 140, 152, 166, 255 );
-	const Color STEEL_SHADE		= GameMakeColor( 14, 16, 19, 255 );
-	const Color WELL					= GameMakeColor( 6, 8, 10, 255 );		///< sunk round a picture or a button
+	const Color KEYLINE				= GameMakeColor( 5, 7, 9, 255 );
+	const Color WELL					= GameMakeColor( 6, 8, 10, 255 );
+	const Color KEY_FACE			= GameMakeColor( 20, 26, 32, 255 );
+	const Color KEY_FACE_LIT	= GameMakeColor( 70, 92, 150, 255 );
+	const Color FOLD_FACE			= GameMakeColor( 40, 120, 92, 255 );
+	const Color FOLD_GLYPH		= GameMakeColor( 14, 40, 32, 255 );
+	const Color KEY_DIGIT			= GameMakeColor( 255, 210, 60, 255 );	///< the bar's hotkey letters' yellow
+	const Color KEY_DIGIT_LIT	= GameMakeColor( 8, 14, 30, 255 );		///< dark on the pressed, lit key
+	const Color PICTURE_RIM		= GameMakeColor( 6, 8, 10, 255 );
+	const Color CHIP_TEXT			= GameMakeColor( 255, 255, 255, 255 );
+	const Color SOFT_TEXT			= GameMakeColor( 165, 172, 180, 255 );
 
-	struct Cuts
+	enum { SLICE_TL, SLICE_T, SLICE_TR, SLICE_L, SLICE_C, SLICE_R, SLICE_BL, SLICE_B, SLICE_BR, SLICE_COUNT };
+	enum { STATE_UP, STATE_HOVER, STATE_PUSHED, STATE_COUNT };
+
+	/// the side's pieces, looked up once a prefix
+	struct Pieces
 	{
-		Int tl, tr, bl, br;
+		AsciiString prefix;
+		const Image *list[ SLICE_COUNT ];
+		const Image *socket, *key, *keyPressed;
+		const Image *ledgeL, *ledgeT, *ledgeR;
+		const Image *fold[ STATE_COUNT ], *unfold[ STATE_COUNT ];
+		const Image *stepDown;	///< <S>ProTrayStepDown, the tray's short row
+	};
+
+	/// the powers tray's outline, as InGameUI.cpp's HudTray
+	struct Tray
+	{
+		const Image *cell, *open, *foot, *uncovered, *cornerFoot, *cornerUncovered, *step;
+		Int openW, footH, uncoveredH;
 	};
 
 	struct SquadRow
@@ -116,9 +171,8 @@ namespace
 		const ThingTemplate *main;	///< the most numerous unit type, the squad's picture
 		Int members;
 		Real health, maxHealth;
-		Bool fighting;
 		Int coming;									///< Player::countGroupReinforcements
-		IRegion2D box;							///< the whole plate, set by the draw, taken by a click
+		IRegion2D box;							///< the row, set by the draw, taken by a click
 	};
 
 	struct Buildable
@@ -128,9 +182,11 @@ namespace
 		CommandAvailability best;			///< over every factory that offers it
 	};
 
+	Pieces s_pieces;
 	SquadRow s_rows[ NUM_HOTKEY_SQUADS ];
 	Int s_rowCount = 0;
 	Int s_rowsBoxed = 0;					///< rows the last draw put a box on
+	IRegion2D s_listBox;					///< the whole box, so a click between rows stays off the ground
 	std::vector< Buildable > s_buildables;
 	Bool s_gathered = FALSE;
 	UnsignedInt s_gatherFrame = 0;
@@ -139,128 +195,213 @@ namespace
 	Int s_chosenSquad = -1;				///< the squad a number key picked, -1 once the selection left it
 	UnsignedInt s_chosenFrame = 0;
 	Int s_shownSquad = -1;				///< the squad the tray is up for
-	Bool s_trayOpen = TRUE;				///< folded by its handle; the match remembers it
-	Bool s_handleShown = FALSE;
-	IRegion2D s_handleBox;
+	Bool s_trayOpen = TRUE;				///< folded by the point; the match remembers it
+	Bool s_ledgeShown = FALSE;
+	IRegion2D s_ledgeBox;					///< the whole ledge, point included
+	IRegion2D s_foldBox;					///< the point
 
 	GameWindow *s_panel = NULL;
 	GameWindow *s_buttons[ MAX_BUTTONS ];
 
+	DisplayString *s_keyText[ NUM_HOTKEY_SQUADS ];
 	DisplayString *s_sizeText[ NUM_HOTKEY_SQUADS ];
 	DisplayString *s_comingText[ NUM_HOTKEY_SQUADS ];
+	DisplayString *s_ledgeKeyText = NULL;
+	DisplayString *s_ledgeSizeText = NULL;
 }
 
 //-------------------------------------------------------------------------------------------------
-/** An 800x600 length at the command bar's scale, InGameUI.cpp's stripPixels; never under `least`. */
+/** An 800x600 length at the command bar's scale, InGameUI.cpp's stripPixels. */
 //-------------------------------------------------------------------------------------------------
-static Int stripPixels( Real nominal, Int least = 1 )
+static Int stripPixels( Real nominal )
 {
-	return max( REAL_TO_INT_CEIL( nominal * ControlBarHudPageScale() ), least );
+	return REAL_TO_INT_CEIL( nominal * ControlBarHudPageScale() );
 }
 
-/// the side's colour for the plate's stripe: Generals blue, red, the GLA's sprayed ochre, Turkiye's team red
-static Color sideAccent( void )
+/// a length at 1080 on this screen, times `scale`; never under `least`
+static Int px( Real at1080, Real scale = 1.0f, Int least = 1 )
 {
+	return max( REAL_TO_INT( at1080 * scale * TheDisplay->getHeight() / 1080.0f + 0.5f ), least );
+}
+
+/// an image's own width or height at 1080 on this screen, times `scale`, or `standIn` without one
+static Int pieceW( const Image *image, Real standIn, Real scale = 1.0f )
+{
+	return px( image != NULL ? (Real)image->getImageWidth() : standIn, scale );
+}
+
+static Int pieceH( const Image *image, Real standIn, Real scale = 1.0f )
+{
+	return px( image != NULL ? (Real)image->getImageHeight() : standIn, scale );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The side's prefix for the "Pro" pieces, the one the scheme's power tray was found under
+	* (ControlBarProReforged.ini's PowerTrayImage, "AmericaProTray"): the bar's own pick for this
+	* player's template.  With no tray, the side's name as InGameUI.cpp's hudCellStyle reads it. */
+//-------------------------------------------------------------------------------------------------
+static AsciiString sidePrefix( void )
+{
+	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
+	if( tray != NULL && tray[ ControlBarScheme::TRAY_CELL ] != NULL )
+	{
+		const AsciiString name = tray[ ControlBarScheme::TRAY_CELL ]->getName();
+		const char *at = strstr( name.str(), "ProTray" );
+		if( at != NULL && at > name.str() )
+		{
+			char prefix[ 64 ];
+			const size_t length = min( (size_t)( at - name.str() ), sizeof( prefix ) - 1 );
+			memcpy( prefix, name.str(), length );
+			prefix[ length ] = 0;
+			return AsciiString( prefix );
+		}
+	}
+
 	const AsciiString side = ThePlayerList->getLocalPlayer()->getSide();
 	if( side.startsWith( "China" ) || side.startsWith( "Boss" ) )
-		return GameMakeColor( 184, 38, 31, 255 );
+		return AsciiString( "China" );
 	if( side.startsWith( "GLA" ) )
-		return GameMakeColor( 176, 140, 62, 255 );
+		return AsciiString( "Gla" );
 	if( side.startsWith( "Turkiye" ) )
-		return GameMakeColor( 190, 32, 40, 255 );
-	return GameMakeColor( 68, 89, 182, 255 );
+		return AsciiString( "Turkiye" );
+	return AsciiString( "America" );
 }
 
-/// halfway from `color` to white: the accent as a lit edge
-static Color litFrom( Color color )
+static const Image *findPiece( const AsciiString &prefix, const char *piece )
 {
-	UnsignedByte r, g, b, a;
-	GameGetColorComponents( color, &r, &g, &b, &a );
-	return GameMakeColor( ( r + 255 ) / 2, ( g + 255 ) / 2, ( b + 255 ) / 2, 255 );
+	AsciiString name;
+	name.format( "%s%s", prefix.str(), piece );
+	return TheMappedImageCollection->findImageByName( name );
+}
+
+static const Pieces &pieces( void )
+{
+	const AsciiString prefix = sidePrefix();
+	if( s_pieces.prefix == prefix && s_pieces.prefix.isNotEmpty() )
+		return s_pieces;
+
+	static const char *const SLICES[ SLICE_COUNT ] = { "TL", "T", "TR", "L", "C", "R", "BL", "B", "BR" };
+	static const char *const STATES[ STATE_COUNT ] = { "", "H", "P" };
+	s_pieces.prefix = prefix;
+	AsciiString name;
+	for( Int i = 0; i < SLICE_COUNT; i++ )
+	{
+		name.format( "ProSquadList%s", SLICES[ i ] );
+		s_pieces.list[ i ] = findPiece( prefix, name.str() );
+	}
+	s_pieces.socket = findPiece( prefix, "ProSquadSocket" );
+	s_pieces.key = findPiece( prefix, "ProSquadKey" );
+	s_pieces.keyPressed = findPiece( prefix, "ProSquadKeyP" );
+	s_pieces.ledgeL = findPiece( prefix, "ProBuildLedgeL" );
+	s_pieces.ledgeT = findPiece( prefix, "ProBuildLedgeT" );
+	s_pieces.ledgeR = findPiece( prefix, "ProBuildLedgeR" );
+	for( Int i = 0; i < STATE_COUNT; i++ )
+	{
+		name.format( "ProBuildFold%s", STATES[ i ] );
+		s_pieces.fold[ i ] = findPiece( prefix, name.str() );
+		name.format( "ProBuildUnfold%s", STATES[ i ] );
+		s_pieces.unfold[ i ] = findPiece( prefix, name.str() );
+	}
+	s_pieces.stepDown = findPiece( prefix, "ProTrayStepDown" );
+	return s_pieces;
 }
 
 //-------------------------------------------------------------------------------------------------
-// The plate.  `r` is its box; each corner of `cut` is the length of that corner's 45 degree cut,
-// 0 for a square one.  Filled a pixel row at a time through the cuts and in one piece between them.
+// Drawing helpers.  A missing piece is a flat fill, so the panel runs before its art lands.
 //-------------------------------------------------------------------------------------------------
-static void fillPlate( const IRegion2D &r, const Cuts &cut, Color fill )
+static void drawPiece( const Image *image, Int lx, Int ly, Int hx, Int hy )
+{
+	if( image != NULL && hx > lx && hy > ly )
+		TheDisplay->drawImage( image, lx, ly, hx, hy );
+}
+
+static void drawSteel( const IRegion2D &r )
 {
 	const Int w = r.hi.x - r.lo.x, h = r.hi.y - r.lo.y;
-	const Int topCut = max( cut.tl, cut.tr ), footCut = max( cut.bl, cut.br );
-	if( w <= 0 || h <= topCut + footCut )
+	if( w <= 2 || h <= 2 )
 		return;
-	for( Int y = 0; y < topCut; y++ )
-	{
-		const Int left = max( cut.tl - y, 0 ), right = max( cut.tr - y, 0 );
-		TheDisplay->drawFillRect( r.lo.x + left, r.lo.y + y, w - left - right, 1, fill );
-	}
-	TheDisplay->drawFillRect( r.lo.x, r.lo.y + topCut, w, h - topCut - footCut, fill );
-	for( Int y = 0; y < footCut; y++ )
-	{
-		const Int left = max( cut.bl - y, 0 ), right = max( cut.br - y, 0 );
-		TheDisplay->drawFillRect( r.lo.x + left, r.hi.y - 1 - y, w - left - right, 1, fill );
-	}
+	TheDisplay->drawFillRect( r.lo.x, r.lo.y, w, h, STEEL );
+	TheDisplay->drawFillRect( r.lo.x + 1, r.lo.y + 1, w - 2, 1, STEEL_LIT );
+	TheDisplay->drawOpenRect( r.lo.x, r.lo.y, w, h, 1.0f, KEYLINE );
 }
 
-/// the plate's outline `width` thick inside its box: the edges facing up or left in `lit`, the rest in `shade`
-static void edgePlate( const IRegion2D &r, const Cuts &cut, Int width, Color lit, Color shade )
+static void drawWell( const IRegion2D &r )
 {
-	const Int x0 = r.lo.x, y0 = r.lo.y, x1 = r.hi.x - 1, y1 = r.hi.y - 1;
-	if( x1 <= x0 || y1 <= y0 )
-		return;
-	// clockwise from the top left: top, top right cut, right, bottom right cut, bottom, bottom left cut, left, top left cut
-	const ICoord2D p[ 8 ] =
-	{
-		{ x0 + cut.tl, y0 }, { x1 - cut.tr, y0 }, { x1, y0 + cut.tr }, { x1, y1 - cut.br },
-		{ x1 - cut.br, y1 }, { x0 + cut.bl, y1 }, { x0, y1 - cut.bl }, { x0, y0 + cut.tl }
-	};
-	for( Int i = 0; i < 8; i++ )
-	{
-		const ICoord2D &a = p[ i ];
-		const ICoord2D &b = p[ ( i + 1 ) % 8 ];
-		if( a.x == b.x && a.y == b.y )
-			continue;
-		const Color color = ( i == 0 || i == 1 || i == 6 || i == 7 ) ? lit : shade;
-		if( a.y == b.y )
-			TheDisplay->drawFillRect( min( a.x, b.x ), i == 0 ? a.y : a.y - width + 1, ( a.x > b.x ? a.x - b.x : b.x - a.x ) + 1, width, color );
-		else if( a.x == b.x )
-			TheDisplay->drawFillRect( i == 6 ? a.x : a.x - width + 1, min( a.y, b.y ), width, ( a.y > b.y ? a.y - b.y : b.y - a.y ) + 1, color );
-		else
-			TheDisplay->drawLine( a.x, a.y, b.x, b.y, (Real)width, color );
-	}
+	TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, WELL );
+}
+
+/// `slice` laid as a 9-slice over `r`: corners and edges at their own size on this screen times
+/// `scale`, the middle and the edges stretched.  Any piece missing and the whole box is a flat fill
+static void drawNineSlice( const Image *const *slice, const IRegion2D &r, Real scale )
+{
+	for( Int i = 0; i < SLICE_COUNT; i++ )
+		if( slice[ i ] == NULL )
+		{
+			drawSteel( r );
+			return;
+		}
+
+	const Int left = min( pieceW( slice[ SLICE_TL ], 0, scale ), ( r.hi.x - r.lo.x ) / 2 );
+	const Int right = min( pieceW( slice[ SLICE_TR ], 0, scale ), ( r.hi.x - r.lo.x ) / 2 );
+	const Int top = min( pieceH( slice[ SLICE_TL ], 0, scale ), ( r.hi.y - r.lo.y ) / 2 );
+	const Int foot = min( pieceH( slice[ SLICE_BL ], 0, scale ), ( r.hi.y - r.lo.y ) / 2 );
+	const Int x[ 4 ] = { r.lo.x, r.lo.x + left, r.hi.x - right, r.hi.x };
+	const Int y[ 4 ] = { r.lo.y, r.lo.y + top, r.hi.y - foot, r.hi.y };
+	for( Int row = 0; row < 3; row++ )
+		for( Int col = 0; col < 3; col++ )
+			drawPiece( slice[ row * 3 + col ], x[ col ], y[ row ], x[ col + 1 ], y[ row + 1 ] );
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A whole plate: steel, the brushed upper half, the side's stripe down the mounted edge
-	* (`mounted` -1 the left, +1 the right), the dark flange and inside it the lit and shaded edge. */
+/** InGameUI.cpp's drawHudTray: cell i is row i / columns, place i % columns in from the screen edge;
+	* `openSide` +1 puts the open side on the right, `footSide` +1 puts row 0's outer edge below. */
 //-------------------------------------------------------------------------------------------------
-static void drawPlate( const IRegion2D &r, const Cuts &cut, Int mounted, Color accent, Color lit )
+static void drawStepTray( const Tray &tray, const IRegion2D *cells, Int count, Int columns, Int openSide, Int footSide )
 {
-	fillPlate( r, cut, PLATE_FILL );
-	IRegion2D upper = r;
-	upper.hi.y = r.lo.y + ( r.hi.y - r.lo.y ) / 2;
-	const Cuts upperCut = { cut.tl, cut.tr, 0, 0 };
-	fillPlate( upper, upperCut, PLATE_SHEEN );
+	if( tray.cell == NULL || count == 0 )
+		return;
 
-	const Int stripe = stripPixels( PLATE_ACCENT, 2 );
-	if( mounted < 0 )
-		TheDisplay->drawFillRect( r.lo.x, r.lo.y + cut.tl, stripe, r.hi.y - r.lo.y - cut.tl - cut.bl, accent );
-	else
-		TheDisplay->drawFillRect( r.hi.x - stripe, r.lo.y + cut.tr, stripe, r.hi.y - r.lo.y - cut.tr - cut.br, accent );
+	const Int rows = ( count + columns - 1 ) / columns;
+	auto rowLength = [ & ]( Int row ) { return row >= 0 && row < rows ? min( columns, count - row * columns ) : 0; };
 
-	edgePlate( r, cut, 1, KEYLINE, KEYLINE );
-	IRegion2D inner = r;
-	inner.lo.x++;
-	inner.lo.y++;
-	inner.hi.x--;
-	inner.hi.y--;
-	edgePlate( inner, cut, 1, lit, STEEL_SHADE );
-}
+	for( Int each = 0; each < count; each++ )
+	{
+		const IRegion2D &c = cells[ each ];
+		const Int row = each / columns, place = each % columns;
+		const Bool innermost = place == rowLength( row ) - 1;
+		const Bool covered = place < rowLength( row + 1 );
+		const Bool stepHere = innermost && row > 0 && place + 1 < rowLength( row - 1 );
+		const Bool stepBeside = !covered && place > 0 && place - 1 < rowLength( row + 1 );
 
-/// a well sunk round a picture: black behind it, the flange round it
-static void drawWell( Int x, Int y, Int w, Int h )
-{
-	TheDisplay->drawFillRect( x - 1, y - 1, w + 2, h + 2, WELL );
+		const Int openLo = openSide > 0 ? c.hi.x : c.lo.x - tray.openW;
+		const Int openHi = openLo + tray.openW;
+		const Int footLo = footSide > 0 ? c.hi.y : c.lo.y - tray.footH;
+		const Int footHi = footLo + tray.footH;
+		const Int farLo = footSide > 0 ? c.lo.y - tray.uncoveredH : c.hi.y;
+		const Int farHi = farLo + tray.uncoveredH;
+		const Int stepLo = footSide > 0 ? c.hi.y - tray.uncoveredH : c.lo.y;
+		const Int stepHi = stepLo + tray.uncoveredH;
+		const Int notch = stepHere ? tray.uncoveredH : 0;
+		const Int shorten = stepBeside ? tray.openW : 0;
+
+		drawPiece( tray.cell, c.lo.x, c.lo.y, c.hi.x, c.hi.y );
+		if( !covered )
+			drawPiece( tray.uncovered, c.lo.x + ( openSide > 0 ? shorten : 0 ), farLo, c.hi.x - ( openSide > 0 ? 0 : shorten ), farHi );
+		if( innermost )
+		{
+			drawPiece( tray.open, openLo, c.lo.y + ( footSide > 0 ? 0 : notch ), openHi, c.hi.y - ( footSide > 0 ? notch : 0 ) );
+			if( stepHere )
+				drawPiece( tray.step, openLo, stepLo, openHi, stepHi );
+			if( !covered )
+				drawPiece( tray.cornerUncovered, openLo, farLo, openHi, farHi );
+		}
+		if( row == 0 )
+		{
+			drawPiece( tray.foot, c.lo.x, footLo, c.hi.x, footHi );
+			if( innermost )
+				drawPiece( tray.cornerFoot, openLo, footLo, openHi, footHi );
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -364,13 +505,6 @@ static DisplayString *keptString( DisplayString *&string, const UnicodeString &t
 	return string;
 }
 
-static void drawCentred( DisplayString *text, const IRegion2D &box, Color color )
-{
-	Int width = 0, height = 0;
-	text->getSize( &width, &height );
-	text->draw( ( box.lo.x + box.hi.x - width ) / 2, ( box.lo.y + box.hi.y - height ) / 2, color, GameMakeColor( 0, 0, 0, 255 ) );
-}
-
 static const Image *pictureOf( const ThingTemplate *thing )
 {
 	if( thing == NULL )
@@ -378,15 +512,37 @@ static const Image *pictureOf( const ThingTemplate *thing )
 	return thing->getButtonImage() ? thing->getButtonImage() : thing->getSelectedPortraitImage();
 }
 
+/// a keycap with the squad's key on it at `r`, pressed and lit for the squad the tray is up for
+static void drawKeycap( const IRegion2D &r, DisplayString *digit, Bool pressed )
+{
+	const Pieces &p = pieces();
+	const Image *cap = pressed && p.keyPressed != NULL ? p.keyPressed : p.key;
+	if( cap != NULL )
+		drawPiece( cap, r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+	else
+	{
+		TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, pressed ? KEY_FACE_LIT : KEY_FACE );
+		TheDisplay->drawOpenRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, 1.0f, STEEL_LIT );
+	}
+	TheDisplay->flushBatch2D();
+
+	// yellow with a black shadow at rest, as the bar's build-button letters; dark, no shadow and a pixel
+	// right and down on the pressed key
+	Int width = 0, height = 0;
+	digit->getSize( &width, &height );
+	const Int x = ( r.lo.x + r.hi.x - width ) / 2 + ( pressed ? 1 : 0 );
+	const Int y = ( r.lo.y + r.hi.y - height ) / 2 + ( pressed ? 1 : 0 );
+	if( pressed )
+		digit->draw( x, y, KEY_DIGIT_LIT, KEY_DIGIT_LIT, 0, 0 );
+	else
+		digit->draw( x, y, KEY_DIGIT, GameMakeColor( 0, 0, 0, 255 ) );
+}
+
 //-------------------------------------------------------------------------------------------------
-/** Each squad's live members, its main type, health and fight, read from the logic's own list. */
+/** Each squad's live members, its main type and health, read from the logic's own list. */
 //-------------------------------------------------------------------------------------------------
 static void gatherSquads( Player *player )
 {
-	const UnsignedInt now = TheGameLogic->getFrame();
-	const UnsignedInt fight = COMBAT_SECONDS * LOGICFRAMES_PER_SECOND;
-	auto recent = [ now, fight ]( UnsignedInt frame ) { return frame != 0 && frame <= now && now - frame <= fight; };
-
 	s_rowCount = 0;
 	std::vector< std::pair< const ThingTemplate *, Int > > types;
 	for( Int k = 0; k < NUM_HOTKEY_SQUADS; k++ )
@@ -402,7 +558,6 @@ static void gatherSquads( Player *player )
 		row.members = 0;
 		row.health = 0.0f;
 		row.maxHealth = 0.0f;
-		row.fighting = FALSE;
 		row.coming = 0;
 		row.box.lo.x = row.box.lo.y = row.box.hi.x = row.box.hi.y = 0;
 
@@ -411,7 +566,7 @@ static void gatherSquads( Player *player )
 		for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
 		{
 			const Object *obj = TheGameLogic->findObjectByID( *it );
-			// one on its way from the factory is the plate's "+N", not one of its members yet
+			// one on its way from the factory is the row's "+N", not one of its members yet
 			if( obj == NULL || obj->isEffectivelyDead() || obj->getReinforcementSquad() >= 0 )
 				continue;
 
@@ -429,11 +584,7 @@ static void gatherSquads( Player *player )
 			{
 				row.health += body->getHealth();
 				row.maxHealth += body->getMaxHealth();
-				if( recent( body->getLastDamageTimestamp() ) )
-					row.fighting = TRUE;
 			}
-			if( recent( obj->getLastShotFiredFrame() ) )
-				row.fighting = TRUE;
 		}
 		// a squad with nobody left standing is not listed
 		if( row.members == 0 )
@@ -555,9 +706,9 @@ static void queueForSquad( const ThingTemplate *thing, Int squad )
 }
 
 //-------------------------------------------------------------------------------------------------
-// The tray's windows: a parent over the plate that takes the clicks between the buttons and hears
-// the buttons' presses, and MAX_BUTTONS push buttons in it drawn as the command bar draws its own
-// (the cameo, the build border, greyed when the bar would grey it) with the bar's build tooltip.
+// The tray's windows: a parent over the tray's body that takes the clicks between the buttons and
+// hears the buttons' presses, and MAX_BUTTONS push buttons in it drawn as the command bar draws its
+// own (the cameo, the build border, greyed when the bar would grey it) with the bar's build tooltip.
 // They are made on first use and again whenever the window manager has destroyed them.
 //-------------------------------------------------------------------------------------------------
 static Int panelId( void )
@@ -631,7 +782,7 @@ static void hideTrayWindows( void )
 static void hidePanel( void )
 {
 	s_shownSquad = -1;
-	s_handleShown = FALSE;
+	s_ledgeShown = FALSE;
 	hideTrayWindows();
 }
 
@@ -663,253 +814,318 @@ static Bool chosenSquadSelected( Player *player )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The squad list: a plate per squad against the left edge, centred in the room between the message
-	* lines and the production list over the radar.  Plates that do not fit shrink together.
+/** The squad list (mockup C2): one box against the left edge, centred in the room between the
+	* message lines and the production list over the radar; ten rows that do not fit shrink together.
 	*
-	*   | stripe | picture "xN" |  "+N"  \
-	*   |        | health bar   |        /
+	*   +--------------------------+-----+
+	*   | "+N"                     | key |
+	*   |        picture           |  |  |   the rail fills from its foot
+	*   |                     "xN" |  |  |
+	*   +--------------------------+-----+
 	*/
 //-------------------------------------------------------------------------------------------------
-static void drawList( Color accent )
+static void drawList( void )
 {
+	s_listBox.lo.x = s_listBox.lo.y = s_listBox.hi.x = s_listBox.hi.y = 0;
 	if( s_rowCount == 0 )
 		return;
 
-	const Int pad = stripPixels( PLATE_PAD, 2 );
-	const Int cut = stripPixels( PLATE_CUT, 4 );
-	const Int stripe = stripPixels( PLATE_ACCENT, 2 );
-	const Int gap = stripPixels( ROW_GAP, 2 );
+	const Pieces &p = pieces();
 	const Int screenH = (Int)TheDisplay->getHeight();
 	const Int top = REAL_TO_INT( screenH * LIST_TOP_SHARE );
-	const Int baseW = stripPixels( PICTURE_W ), baseH = stripPixels( PICTURE_H );
-	auto barOf = []( Int picH ) { return max( picH / 8, 3 ); };
-	auto rowOf = [ pad, barOf ]( Int picH ) { return pad + picH + pad + barOf( picH ) + pad; };
-	const Int bottom = radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( 39 )
-										 - REAL_TO_INT_CEIL( PRODUCTION_TAB_H * screenH / 1080.0f ) - gap;
+	const Int bottom = radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
+										 - px( PRODUCTION_TAB_H ) - px( ROW_GAP );
 	const Int room = max( bottom - top, 1 );
+	auto boxH = [ & ]( Real s ) { return px( LIST_MARGIN, s ) * 2 + s_rowCount * px( ROW_H, s ) + ( s_rowCount - 1 ) * px( ROW_GAP, s ); };
+	Real s = 1.0f;
+	while( boxH( s ) > room && s > 0.41f )
+		s = max( s * 0.95f, 0.4f );
 
-	Int picW = baseW, picH = baseH;
-	Int total = s_rowCount * ( rowOf( picH ) + gap ) - gap;
-	for( Real scale = 1.0f; total > room && scale > 0.41f; )
-	{
-		scale = max( scale * min( (Real)room / total, 0.95f ), 0.4f );
-		picW = REAL_TO_INT_FLOOR( baseW * scale );
-		picH = REAL_TO_INT_FLOOR( baseH * scale );
-		total = s_rowCount * ( rowOf( picH ) + gap ) - gap;
-	}
+	const Int height = boxH( s );
+	const Int rowH = px( ROW_H, s ), gap = px( ROW_GAP, s );
+	s_listBox.lo.x = 0;
+	s_listBox.hi.x = px( LIST_W, s );
+	s_listBox.lo.y = top + max( ( room - height ) / 2, 0 );
+	s_listBox.hi.y = s_listBox.lo.y + height;
 
-	const Int tailW = max( picW * 9 / 20, stripPixels( 14 ) );
-	const Int plateW = stripe + pad + picW + pad + tailW + cut / 2;
-	const Int firstTop = top + max( ( room - total ) / 2, 0 );
-	const Int countPoints = max( REAL_TO_INT( picH * 0.3f ), 7 );
-	const Color white = GameMakeColor( 245, 245, 245, 255 );
-	const Color soft = GameMakeColor( 165, 172, 180, 255 );
-	const Color chosenLit = litFrom( accent );
-	const Real phase = (Real)( TheGameLogic->getFrame() % LOGICFRAMES_PER_SECOND ) / LOGICFRAMES_PER_SECOND;
-	const Int fightAlpha = REAL_TO_INT( 150.0f + 105.0f * ( 0.5f + 0.5f * cosf( 2.0f * PI * phase ) ) );
-	const Cuts cuts = { 0, cut, 0, cut };
+	const Int keyPoints = max( REAL_TO_INT( KEY_POINTS * s * screenH / 1080.0f ), 7 );
+	const Int chipPoints = max( REAL_TO_INT( CHIP_POINTS * s * screenH / 1080.0f ), 7 );
+	const Int keyW = pieceW( p.key, KEYCAP_W, s ), keyH = pieceH( p.key, KEYCAP_H, s );
+
+	TheDisplay->beginBatch2D();
+	drawNineSlice( p.list, s_listBox, s );
+	TheDisplay->endBatch2D();
 
 	for( Int r = 0; r < s_rowCount; r++ )
 	{
 		SquadRow &row = s_rows[ r ];
-		const Bool chosen = row.squad == s_shownSquad;
+		const Int y = s_listBox.lo.y + px( LIST_MARGIN, s ) + r * ( rowH + gap );
 		row.box.lo.x = 0;
-		row.box.lo.y = firstTop + r * ( rowOf( picH ) + gap );
-		row.box.hi.x = plateW;
-		row.box.hi.y = row.box.lo.y + rowOf( picH );
+		row.box.hi.x = s_listBox.hi.x;
+		row.box.lo.y = y;
+		row.box.hi.y = y + rowH;
 
-		IRegion2D picture;
-		picture.lo.x = stripe + pad;
-		picture.lo.y = row.box.lo.y + pad;
-		picture.hi.x = picture.lo.x + picW;
-		picture.hi.y = picture.lo.y + picH;
-		IRegion2D tail;
-		tail.lo.x = picture.hi.x + pad;
-		tail.hi.x = tail.lo.x + tailW;
-		tail.lo.y = picture.lo.y;
-		tail.hi.y = picture.hi.y;
+		IRegion2D picture = { { px( PIC_X, s ), y + 1 }, { px( PIC_X, s ) + px( PIC_W, s ), y + rowH - 1 } };
+		const Int socketX = px( SOCKET_X, s );
+		IRegion2D socket = { { socketX, y }, { socketX + pieceW( p.socket, SOCKET_W, s ), y + rowH } };
+		IRegion2D key;
+		key.lo.x = socketX + px( KEYCAP_X, s );
+		key.lo.y = y + px( KEYCAP_Y, s );
+		key.hi.x = key.lo.x + keyW;
+		key.hi.y = key.lo.y + keyH;
+		IRegion2D rail;
+		rail.lo.x = socketX + px( RAIL_X, s );
+		rail.hi.x = rail.lo.x + px( RAIL_W, s, 2 );
+		rail.lo.y = y + px( RAIL_Y, s );
+		rail.hi.y = rail.lo.y + px( RAIL_H, s, 4 );
 
 		TheDisplay->beginBatch2D();
-		drawPlate( row.box, cuts, -1, chosen ? chosenLit : accent, chosen ? chosenLit : STEEL_LIT );
-		drawWell( picture.lo.x, picture.lo.y, picW, picH );
+		// the picture on the box's dark floor, a pixel of rim round it
+		TheDisplay->drawFillRect( picture.lo.x - 1, picture.lo.y - 1, picture.hi.x - picture.lo.x + 2, picture.hi.y - picture.lo.y + 2,
+															PICTURE_RIM );
 		const Image *image = pictureOf( row.main );
 		if( image != NULL )
-			TheDisplay->drawImage( image, picture.lo.x, picture.lo.y, picture.hi.x, picture.hi.y );
+			drawPiece( image, picture.lo.x, picture.lo.y, picture.hi.x, picture.hi.y );
+		if( p.socket != NULL )
+			drawPiece( p.socket, socket.lo.x, socket.lo.y, socket.hi.x, socket.hi.y );
+		else
+		{
+			IRegion2D keyWell = { { key.lo.x - 1, key.lo.y - 1 }, { key.hi.x + 1, key.hi.y + 1 } };
+			IRegion2D railWell = { { rail.lo.x - 1, rail.lo.y - 1 }, { rail.hi.x + 1, rail.hi.y + 1 } };
+			drawWell( keyWell );
+			drawWell( railWell );
+		}
 
-		// the squad's health, summed, under its picture
-		const Int barH = barOf( picH );
-		const Int barTop = picture.hi.y + pad / 2 + 1;
-		TheDisplay->drawFillRect( picture.lo.x, barTop, picW, barH, WELL );
+		// the health rail's glass fills from its foot, in the power bar's colours
 		if( row.maxHealth > 0.0f )
 		{
 			const Real share = max( min( row.health / row.maxHealth, 1.0f ), 0.0f );
+			const Int filled = REAL_TO_INT_CEIL( ( rail.hi.y - rail.lo.y ) * share );
 			const Color fill = share > 0.5f ? GameMakeColor( 70, 200, 60, 255 )
 											 : ( share > 0.25f ? GameMakeColor( 230, 200, 40, 255 ) : GameMakeColor( 225, 45, 30, 255 ) );
-			const Int filled = REAL_TO_INT_CEIL( ( picW - 2 ) * share );
 			if( filled > 0 )
-				TheDisplay->drawFillRect( picture.lo.x + 1, barTop + 1, filled, max( barH - 2, 1 ), fill );
-		}
-
-		// a member hit or firing: the flange burns red, breathing on the logic clock
-		if( row.fighting )
-		{
-			const Color red = GameMakeColor( 230, 40, 30, (UnsignedByte)fightAlpha );
-			edgePlate( row.box, cuts, 2, red, red );
+				TheDisplay->drawFillRect( rail.lo.x, rail.hi.y - filled, rail.hi.x - rail.lo.x, filled, fill );
 		}
 		TheDisplay->endBatch2D();
 
 		UnicodeString text;
+		text.format( u"%d", row.squad );
+		drawKeycap( key, keptString( s_keyText[ row.squad ], text, keyPoints ), row.squad == s_shownSquad );
 		text.format( u"x%d", row.members );
-		HudReadout_draw( keptString( s_sizeText[ row.squad ], text, countPoints ), picture, HUD_READOUT_TOP_RIGHT, white );
+		HudReadout_draw( keptString( s_sizeText[ row.squad ], text, chipPoints ), picture, HUD_READOUT_BOTTOM_RIGHT, CHIP_TEXT );
 		if( row.coming > 0 )
 		{
 			text.format( u"+%d", row.coming );
-			drawCentred( keptString( s_comingText[ row.squad ], text, countPoints ), tail, soft );
+			HudReadout_draw( keptString( s_comingText[ row.squad ], text, chipPoints ), picture, HUD_READOUT_TOP_LEFT, SOFT_TEXT );
 		}
 	}
 	s_rowsBoxed = s_rowCount;
 }
 
-/// the fold handle's chevron, pointing right (`right` TRUE) or left
-static void drawChevron( const IRegion2D &box, Bool right, Color color )
+//-------------------------------------------------------------------------------------------------
+/** The ledge over the tray (mockup A2, tray C's ledge), a 3-slice flush with the screen's edge: L holds
+	* the point, where the fold button's face sits, the run stretches, and R's well carries the squad's
+	* keycap and "xN". */
+//-------------------------------------------------------------------------------------------------
+static void drawLedge( Int top, const SquadRow *row )
 {
-	const Int cx = ( box.lo.x + box.hi.x ) / 2, cy = ( box.lo.y + box.hi.y ) / 2;
-	const Int half = max( ( box.hi.x - box.lo.x ) / 4, 2 );
-	const Int tipX = right ? cx + half : cx - half;
-	const Int backX = right ? cx - half : cx + half;
-	TheDisplay->drawLine( backX, cy - 2 * half, tipX, cy, 2.0f, color );
-	TheDisplay->drawLine( tipX, cy, backX, cy + 2 * half, 2.0f, color );
+	const Pieces &p = pieces();
+	const Int right = (Int)TheDisplay->getWidth();
+	const Int height = pieceH( p.ledgeT, LEDGE_H );
+	const Int length = px( LEDGE_LENGTH );
+	const Int leftW = pieceW( p.ledgeL, LEDGE_L_W );
+	const Int rightW = pieceW( p.ledgeR, LEDGE_R_W );
+	const Int foldSize = pieceW( s_trayOpen ? p.fold[ STATE_UP ] : p.unfold[ STATE_UP ], FOLD_W );
+
+	s_ledgeBox.lo.x = right - length;
+	s_ledgeBox.hi.x = right;
+	s_ledgeBox.lo.y = top;
+	s_ledgeBox.hi.y = top + height;
+	s_foldBox.lo.x = s_ledgeBox.lo.x + px( FOLD_X );
+	s_foldBox.lo.y = top + px( FOLD_Y );
+	s_foldBox.hi.x = s_foldBox.lo.x + foldSize;
+	s_foldBox.hi.y = s_foldBox.lo.y + foldSize;
+	s_ledgeShown = TRUE;
+
+	// the point's state: lit under the pointer, pushed while the left button holds it
+	const MouseIO *mouse = TheMouse->getMouseStatus();
+	const Bool over = mouse->pos.x >= s_foldBox.lo.x && mouse->pos.x < s_foldBox.hi.x
+		&& mouse->pos.y >= s_foldBox.lo.y && mouse->pos.y < s_foldBox.hi.y;
+	const Int state = over ? ( mouse->leftState != MBS_Up ? STATE_PUSHED : STATE_HOVER ) : STATE_UP;
+	const Image *const *point = s_trayOpen ? p.fold : p.unfold;
+	const Image *button = point[ state ] != NULL ? point[ state ] : point[ STATE_UP ];
+
+	TheDisplay->beginBatch2D();
+	const Int runLo = s_ledgeBox.lo.x + leftW, runHi = right - rightW;
+	if( p.ledgeL != NULL && p.ledgeT != NULL && p.ledgeR != NULL )
+	{
+		drawPiece( p.ledgeL, s_ledgeBox.lo.x, top, runLo, top + height );
+		drawPiece( p.ledgeT, runLo, top, runHi, top + height );
+		drawPiece( p.ledgeR, runHi, top, right, top + height );
+	}
+	else
+	{
+		IRegion2D plate = s_ledgeBox;
+		plate.hi.y = top + px( LEDGE_BODY_Y + 4.0f );	// the plate's 40 rows, no shadow
+		drawSteel( plate );
+		IRegion2D well = { { runHi + px( 4.0f ), top + px( 6.0f ) }, { runHi + px( 58.0f ), top + px( 34.0f ) } };
+		drawWell( well );
+	}
+	if( button != NULL )
+		drawPiece( button, s_foldBox.lo.x, s_foldBox.lo.y, s_foldBox.hi.x, s_foldBox.hi.y );
+	else
+	{
+		// a chevron on the point: right to fold the tray toward the edge, left to bring it out
+		TheDisplay->drawFillRect( s_foldBox.lo.x, s_foldBox.lo.y, foldSize, foldSize, FOLD_FACE );
+		TheDisplay->drawOpenRect( s_foldBox.lo.x, s_foldBox.lo.y, foldSize, foldSize, 1.0f, KEYLINE );
+		const Int cx = ( s_foldBox.lo.x + s_foldBox.hi.x ) / 2, cy = ( s_foldBox.lo.y + s_foldBox.hi.y ) / 2;
+		const Int half = max( foldSize / 6, 2 );
+		const Int tip = s_trayOpen ? cx + half : cx - half, back = s_trayOpen ? cx - half : cx + half;
+		TheDisplay->drawLine( back, cy - 2 * half, tip, cy, 2.0f, FOLD_GLYPH );
+		TheDisplay->drawLine( tip, cy, back, cy + 2 * half, 2.0f, FOLD_GLYPH );
+	}
+	TheDisplay->endBatch2D();
+
+	// R's well: the squad's key, pressed (the tray is always the chosen squad's), and its size
+	if( row == NULL )
+		return;
+	IRegion2D key;
+	key.lo.x = runHi + px( LEDGE_KEY_X );
+	key.lo.y = top + px( LEDGE_KEY_Y );
+	key.hi.x = key.lo.x + pieceW( p.key, KEYCAP_W );
+	key.hi.y = key.lo.y + pieceH( p.key, KEYCAP_H );
+	UnicodeString text;
+	text.format( u"%d", row->squad );
+	drawKeycap( key, keptString( s_ledgeKeyText, text, max( REAL_TO_INT( KEY_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 ) ), TRUE );
+
+	text.format( u"x%d", row->members );
+	DisplayString *size = keptString( s_ledgeSizeText, text, max( REAL_TO_INT( LEDGE_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 ) );
+	Int sizeW = 0, sizeH = 0;
+	size->getSize( &sizeW, &sizeH );
+	size->draw( runHi + px( LEDGE_COUNT_X ), top + px( LEDGE_COUNT_Y ) - sizeH / 2, CHIP_TEXT, GameMakeColor( 0, 0, 0, 255 ) );
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The build tray under the superweapons and over the general's powers, on the plate the squad
-	* list wears: the squad's picture in a strip along its top, a button for each unit under it, as big
-	* as the command bar's own buttons when they fit.  Its handle hangs off the open side and folds it
-	* away against the right edge. */
+/** The tray (mockup A2): the powers tray's stepped body at 1.2 under the ledge, four buttons a row
+	* flush right, a short last row stepping in at the foot; folded, the ledge alone. */
 //-------------------------------------------------------------------------------------------------
-static void drawTray( Int top, Color accent )
+static void drawTray( Int top )
 {
-	s_handleShown = FALSE;
+	s_ledgeShown = FALSE;
 	if( !isValidHotkeySquadIndex( s_shownSquad ) || s_buildables.empty() )
 	{
 		hideTrayWindows();
 		return;
 	}
 
-	const Int right = (Int)TheDisplay->getWidth();
-	const Int pad = stripPixels( PLATE_PAD, 2 );
-	const Int cut = stripPixels( PLATE_CUT, 4 );
-	const Int stripe = stripPixels( PLATE_ACCENT, 2 );
-	const Int gap = stripPixels( BUTTON_GAP, 2 );
-	const Int handleW = stripPixels( HANDLE_W, 8 );
-	const Int handleH = stripPixels( HANDLE_H, 20 );
-	const Int floor = rightTrayFloor();
-
-	const ThingTemplate *main = NULL;
+	const SquadRow *row = NULL;
 	for( Int r = 0; r < s_rowCount; r++ )
 		if( s_rows[ r ].squad == s_shownSquad )
-			main = s_rows[ r ].main;
+			row = &s_rows[ r ];
 
-	// the handle, alone against the edge while the tray is folded
 	if( !s_trayOpen )
 	{
 		hideTrayWindows();
-		s_handleBox.lo.x = right - handleW - stripe;
-		s_handleBox.hi.x = right;
-		s_handleBox.lo.y = top;
-		s_handleBox.hi.y = top + handleH;
-		const Cuts handleCuts = { handleW / 2, 0, handleW / 2, 0 };
-		TheDisplay->beginBatch2D();
-		drawPlate( s_handleBox, handleCuts, 1, accent, STEEL_LIT );
-		IRegion2D mark = s_handleBox;
-		mark.hi.x -= stripe;
-		drawChevron( mark, FALSE, STEEL_LIT );
-		TheDisplay->endBatch2D();
-		s_handleShown = TRUE;
+		drawLedge( top, row );
 		return;
 	}
-
 	GameWindow *panel = panelWindow();
 	if( panel == NULL )
 		return;
 
-	Int buttonW = stripPixels( 39 ), buttonH = stripPixels( 27 );
+	// the body: the scheme's powers tray, laid as the superweapons' (foot on top, open side left) with
+	// the side's StepDown where the short last row steps in
+	const Pieces &p = pieces();
+	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
+	Tray body = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
+	if( tray != NULL && tray[ ControlBarScheme::TRAY_CELL ] != NULL )
+	{
+		const Tray pieced =
+		{
+			tray[ ControlBarScheme::TRAY_CELL ],
+			tray[ ControlBarScheme::TRAY_EDGE_LEFT ],
+			tray[ ControlBarScheme::TRAY_EDGE_TOP ],
+			tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ],
+			tray[ ControlBarScheme::TRAY_CORNER_TL ],
+			tray[ ControlBarScheme::TRAY_CORNER_BL ],
+			p.stepDown != NULL ? p.stepDown : tray[ ControlBarScheme::TRAY_STEP ],
+			0, 0, 0
+		};
+		body = pieced;
+	}
+
+	const Int right = (Int)TheDisplay->getWidth();
+	const Int shown = min( (Int)s_buildables.size(), (Int)MAX_BUTTONS );
+	const Int floor = rightTrayFloor();
+	const Int bodyTop = top + px( LEDGE_BODY_Y );	// the body's top edge, under the ledge's foot
+
+	Int barW = 0, barH = 0;
 	static NameKeyType barButtonKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonCommand01" );
 	GameWindow *barButton = TheWindowManager->winGetWindowFromId( NULL, barButtonKey );
 	if( barButton != NULL )
-	{
-		Int w = 0, h = 0;
-		barButton->winGetSize( &w, &h );
-		if( w > 0 && h > 0 )
-		{
-			buttonW = w;
-			buttonH = h;
-		}
-	}
+		barButton->winGetSize( &barW, &barH );
 
-	const Int shown = min( (Int)s_buildables.size(), (Int)MAX_BUTTONS );
-	auto stripH = []( Int bH ) { return max( bH * 3 / 5, 12 ); };
-	auto plateH = [ & ]( Int columns, Int bH )
+	// rows of four; wider when they would reach the powers, then smaller
+	Int columns = min( (Int)TRAY_COLUMNS, shown );
+	Real scale = TRAY_SCALE;
+	Int cellW = 0, cellH = 0;
+	auto measure = [ & ]()
 	{
+		cellW = pieceW( body.cell, CELL_W / TRAY_SCALE, scale );
+		cellH = pieceH( body.cell, CELL_H / TRAY_SCALE, scale );
+		body.openW = body.open ? pieceW( body.open, 0, scale ) : 0;
+		body.footH = body.foot ? pieceH( body.foot, 0, scale ) : 0;
+		body.uncoveredH = body.uncovered ? pieceH( body.uncovered, 0, scale ) : 0;
 		const Int rows = ( shown + columns - 1 ) / columns;
-		return pad + stripH( bH ) + pad + rows * bH + ( rows - 1 ) * gap + pad;
+		return bodyTop + body.footH + rows * cellH + body.uncoveredH;
 	};
-	// wider first, then smaller buttons, down to half the bar's
-	Int columns = min( (Int)PANEL_COLUMNS, shown );
-	while( columns < min( (Int)PANEL_MAX_COLUMNS, shown ) && top + plateH( columns, buttonH ) > floor )
+	while( measure() > floor && columns < min( (Int)TRAY_MAX_COLUMNS, shown ) )
 		columns++;
-	for( Real scale = 1.0f; top + plateH( columns, buttonH ) > floor && scale > 0.51f; )
+	while( measure() > floor && scale > TRAY_SCALE * 0.6f )
+		scale *= 0.92f;
+	const Int bodyBottom = measure();
+
+	// cells in the tray's order (place counted in from the edge); a row reads left to right, flush right
+	IRegion2D cells[ MAX_BUTTONS ];
+	Int cellOf[ MAX_BUTTONS ];
+	for( Int i = 0; i < shown; i++ )
 	{
-		scale = max( scale * 0.92f, 0.5f );
-		buttonW = REAL_TO_INT_FLOOR( buttonW * 0.92f );
-		buttonH = REAL_TO_INT_FLOOR( buttonH * 0.92f );
+		const Int rowIndex = i / columns, inRow = i % columns;
+		const Int rowLength = min( columns, shown - rowIndex * columns );
+		const Int each = rowIndex * columns + ( rowLength - 1 - inRow );
+		cellOf[ i ] = each;
+		cells[ each ].hi.x = right - ( rowLength - 1 - inRow ) * cellW;
+		cells[ each ].lo.x = cells[ each ].hi.x - cellW;
+		cells[ each ].lo.y = bodyTop + body.footH + rowIndex * cellH;
+		cells[ each ].hi.y = cells[ each ].lo.y + cellH;
 	}
-
-	const Int gridW = columns * buttonW + ( columns - 1 ) * gap;
-	IRegion2D plate;
-	plate.hi.x = right;
-	plate.lo.x = right - stripe - pad - gridW - pad - cut / 2;
-	plate.lo.y = top;
-	plate.hi.y = top + plateH( columns, buttonH );
-	const Cuts plateCuts = { cut, 0, cut, 0 };
-
-	s_handleBox.hi.x = plate.lo.x + 1;
-	s_handleBox.lo.x = s_handleBox.hi.x - handleW;
-	s_handleBox.lo.y = plate.lo.y + cut;
-	s_handleBox.hi.y = s_handleBox.lo.y + handleH;
-	s_handleShown = TRUE;
-	const Cuts handleCuts = { handleW / 2, 0, handleW / 2, 0 };
-
-	const Int gridX = right - stripe - pad - gridW;
-	const Int gridY = top + pad + stripH( buttonH ) + pad;
 
 	TheDisplay->beginBatch2D();
-	drawPlate( s_handleBox, handleCuts, 1, STEEL_SHADE, STEEL_LIT );
-	drawChevron( s_handleBox, TRUE, STEEL_LIT );
-	drawPlate( plate, plateCuts, 1, accent, STEEL_LIT );
-
-	// the strip along the top: the squad's picture against the stripe, a groove under it
-	const Image *image = pictureOf( main );
-	const Int picH = stripH( buttonH ) - 2;
-	const Int picW = picH * buttonW / max( buttonH, 1 );
-	const Int picX = right - stripe - pad - picW, picY = top + pad + 1;
-	if( image != NULL )
+	if( body.cell != NULL )
+		drawStepTray( body, cells, shown, columns, -1, -1 );
+	else
 	{
-		drawWell( picX, picY, picW, picH );
-		TheDisplay->drawImage( image, picX, picY, picX + picW, picY + picH );
+		IRegion2D plate = { { right - columns * cellW, bodyTop }, { right, bodyBottom } };
+		drawSteel( plate );
 	}
-	const Int grooveY = gridY - pad / 2 - 1;
-	TheDisplay->drawFillRect( plate.lo.x + cut, grooveY, right - stripe - plate.lo.x - cut, 1, KEYLINE );
-	TheDisplay->drawFillRect( plate.lo.x + cut, grooveY + 1, right - stripe - plate.lo.x - cut, 1, STEEL_LIT );
-
-	// a well under each button, the buttons themselves are windows drawn over the plate
-	for( Int i = 0; i < shown; i++ )
-		drawWell( gridX + ( columns - 1 - i % columns ) * ( buttonW + gap ), gridY + i / columns * ( buttonH + gap ), buttonW, buttonH );
 	TheDisplay->endBatch2D();
+	// the ledge over the body's top edge
+	drawLedge( top, row );
 
-	// the parent covers the plate, so a click between the buttons stays off the ground
-	panel->winSetPosition( plate.lo.x, plate.lo.y );
-	panel->winSetSize( plate.hi.x - plate.lo.x, plate.hi.y - plate.lo.y );
+	// the parent covers the body, so a click between the buttons stays off the ground
+	// ponytail: the notch the short row leaves blocks the ground too; a second parent if anyone clicks there
+	const Int bodyLeft = right - columns * cellW - body.openW;
+	panel->winSetPosition( bodyLeft, bodyTop );
+	panel->winSetSize( right - bodyLeft, bodyBottom - bodyTop );
+
+	// a button inside its cell as the mockup has it, no bigger than the bar's own
+	Int buttonW = cellW - 2 * px( BUTTON_INSET_X, scale / TRAY_SCALE );
+	Int buttonH = cellH - 2 * px( BUTTON_INSET_Y, scale / TRAY_SCALE );
+	if( barW > 0 && barH > 0 )
+	{
+		buttonW = min( buttonW, barW );
+		buttonH = min( buttonH, barH );
+	}
 	for( Int i = 0; i < MAX_BUTTONS; i++ )
 	{
 		GameWindow *button = s_buttons[ i ];
@@ -921,11 +1137,9 @@ static void drawTray( Int top, Color accent )
 			continue;
 		}
 
-		// filled from the right edge in, as the superweapons are
 		const Buildable &entry = s_buildables[ i ];
-		const Int x = gridX + ( columns - 1 - i % columns ) * ( buttonW + gap );
-		const Int y = gridY + i / columns * ( buttonH + gap );
-		button->winSetPosition( x - plate.lo.x, y - plate.lo.y );
+		const IRegion2D &cell = cells[ cellOf[ i ] ];
+		button->winSetPosition( ( cell.lo.x + cell.hi.x - buttonW ) / 2 - bodyLeft, ( cell.lo.y + cell.hi.y - buttonH ) / 2 - bodyTop );
 		button->winSetSize( buttonW, buttonH );
 		if( GadgetButtonGetData( button ) != (void *)entry.button )
 		{
@@ -963,6 +1177,7 @@ static void drawTray( Int top, Color accent )
 void GroupPanel_draw( Int rightTop )
 {
 	s_rowsBoxed = 0;
+	s_listBox.lo.x = s_listBox.lo.y = s_listBox.hi.x = s_listBox.hi.y = 0;
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 	{
 		s_chosenSquad = -1;
@@ -999,9 +1214,8 @@ void GroupPanel_draw( Int rightTop )
 	if( s_shownSquad < 0 )
 		s_chosenSquad = -1;
 
-	const Color accent = sideAccent();
-	drawList( accent );
-	drawTray( rightTop, accent );
+	drawList();
+	drawTray( rightTop );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1012,10 +1226,10 @@ Bool GroupPanel_click( const ICoord2D *mouse, Bool cancel )
 		return mouse->x >= box.lo.x && mouse->x < box.hi.x && mouse->y >= box.lo.y && mouse->y < box.hi.y;
 	};
 
-	// the tray's handle folds it away or brings it out; a right press on it does nothing
-	if( s_handleShown && inside( s_handleBox ) )
+	// the ledge's point folds the tray away or brings it out; the rest of the ledge is only steel
+	if( s_ledgeShown && inside( s_ledgeBox ) )
 	{
-		if( !cancel || TheKeyboard->isCtrl() )
+		if( inside( s_foldBox ) && ( !cancel || TheKeyboard->isCtrl() ) )
 			s_trayOpen = !s_trayOpen;
 		return TRUE;
 	}
@@ -1026,7 +1240,7 @@ Bool GroupPanel_click( const ICoord2D *mouse, Bool cancel )
 			continue;
 
 		// a right press is the list's and does nothing, so no order lands on the ground under it; while
-		// the promotion screen is up the number keys are its columns, and a plate must not buy a science
+		// the promotion screen is up the number keys are its columns, and a row must not buy a science
 		if( ( cancel && !TheKeyboard->isCtrl() ) || TheControlBar->isPurchaseScienceVisible() )
 			return TRUE;
 
@@ -1035,7 +1249,9 @@ Bool GroupPanel_click( const ICoord2D *mouse, Bool cancel )
 		TheMessageStream->appendMessage( (GameMessage::Type)( GameMessage::MSG_META_SELECT_TEAM0 + s_rows[ r ].squad ) );
 		return TRUE;
 	}
-	return FALSE;
+
+	// between the rows, the box is still the list's
+	return s_rowsBoxed > 0 && inside( s_listBox );
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -253,6 +253,12 @@ static void updateNumPlayersOnline(void)
 		//Removed number of players from string, and removed the argument. The number is incorrect anyways...
 		//This was a Harvard initiated fix.
 		headingStr.format(TheGameText->fetch("MOTD:NumPlayersHeading"));
+		// -online: the server's MOTD alone, without EA's "Welcome to Generals Zero Hour Online." over it;
+		// a line of our own when the server sent none
+		AsciiString trimmedMotd = aMotd;
+		trimmedMotd.trim();
+		if (OnlineIsEnabled())
+			headingStr = trimmedMotd.isEmpty() ? TheGameText->fetch("GUI:OnlineHubWelcome") : UnicodeString::TheEmptyString;
 
 		while (headingStr.nextToken(&line, UnicodeString(u"\n")))
 		{
@@ -268,7 +274,8 @@ static void updateNumPlayersOnline(void)
 
 			GadgetListBoxAddEntryText(listboxInfo, line, GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
 		}
-		GadgetListBoxAddEntryText(listboxInfo, UnicodeString(u" "), GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
+		if (!OnlineIsEnabled())
+			GadgetListBoxAddEntryText(listboxInfo, UnicodeString(u" "), GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
 
 		while (aMotd.nextToken(&aLine, "\n"))
 		{
@@ -589,6 +596,15 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 		s_winStats.clear();
 		s_onlineArmiesShown = FALSE;
 		OnlineRequestArmies();
+		// EA's "Win percentages for each army..." tooltip covered the whole panel and popped wherever the
+		// cursor rested; each army's box keeps its own name
+		static const char *panel[] = { "WOLWelcomeMenu.wnd:CommunityInfoParent", "WOLWelcomeMenu.wnd:StaticTextCommunity" };
+		for (size_t i = 0; i < sizeof(panel) / sizeof(panel[0]); ++i)
+		{
+			GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY(panel[i]) );
+			if (win)
+				win->winSetTooltip( UnicodeString::TheEmptyString );
+		}
 	}
 	else
 	{

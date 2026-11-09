@@ -51,6 +51,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/UIStyle.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetStaticText.h"
@@ -933,6 +934,27 @@ void WOLQuickMatchMenuInit( WindowLayout *layout, void *userData )
 		UnicodeString tmp;
 		tmp.format(TheGameText->fetch("GUI:QuickMatchTitle"), TheGameSpyInfo->getLocalName().str());
 		GadgetStaticTextSetText(staticTextTitle, tmp);
+	}
+
+	if (OnlineIsEnabled())
+	{
+		/* The buttons in the "Generals" 15 capitals of the other online screens (EA set these in Arial 10,
+			 and its "Stop" in lower case), and no tooltip over the status list, where it covered the
+			 opponent-found reveal wherever the cursor rested. */
+		const struct { const char *name; const char *label; } buttons[] = {
+			{ "WOLQuickMatchMenu.wnd:ButtonBack", "GUI:Back" }, { "WOLQuickMatchMenu.wnd:ButtonOptions", "GUI:Setup" },
+			{ "WOLQuickMatchMenu.wnd:ButtonWiden", "GUI:WidenSearch" }, { "WOLQuickMatchMenu.wnd:ButtonStop", "GUI:Stop" },
+			{ "WOLQuickMatchMenu.wnd:ButtonStart", "GUI:Start" } };
+		for (size_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); ++i)
+		{
+			GameWindow *button = TheWindowManager->winGetWindowFromId( parentWOLQuickMatch, NAMEKEY( buttons[i].name ) );
+			if (!button)
+				continue;
+			button->winSetFont( UIStyle::titleFont( 15 ) );
+			GadgetButtonSetText( button, UIStyle::capitals( TheGameText->fetch( buttons[i].label ) ) );
+		}
+		if (quickmatchTextWindow)
+			quickmatchTextWindow->winSetTooltip( UnicodeString::TheEmptyString );
 	}
 
 	// QM is not going yet, so disable the Widen Search button

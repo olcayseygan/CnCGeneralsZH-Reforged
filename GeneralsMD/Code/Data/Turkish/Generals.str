@@ -10657,6 +10657,10 @@ TOOLTIP:OnlinePlayerInfo
 "\n %d galibiyet/%d mağlubiyet"
 END
 
+GUI:OnlineHubWelcome
+"Zero Hour Reforged çevrimiçine hoş geldin."
+END
+
 TOOLTIP:OnlineStagingPlayerInfo
 "\n Ping: %d ms \n %d galibiyet/%d mağlubiyet \n %d bağlantı kopması \n Favori ordu: %ls"
 END

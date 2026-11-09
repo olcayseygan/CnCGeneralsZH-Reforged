@@ -1,0 +1,45 @@
+# Camouflaged units revealing themselves and waking the idle enemies that can see them: StealthUpdate's
+# markAsDetected under OrderIdleEnemiesToAttackMeUponReveal. A Stealth General Stinger Site, hidden
+# from the start, fires on two Raptors flying passes; every volley reveals the site's soldiers, and
+# every reveal wakes the idle Rangers and Crusaders parked within their own sight of a soldier (100
+# and 150). Hidden Rebels stand beside the site. On the west side two Pathfinders and Burton, also
+# hidden, shoot into an idle GLA picket, and each shot wakes the Rebels near enough to see them.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 7 -maxframes 6000
+#     -scenario stealthreveal -logPrefix stealthreveal_
+#
+# A change to the reveal that leaves play alone gives the same HEADLESS CRC and the same tallies from
+# the build before it and the build after.
+
+30    spawn      1  Slth_GLAStingerSite           1   2400 3000
+30    spawn      1  Slth_GLAInfantryRebel         8   2500 3200  25
+
+30    spawn      0  AirF_AmericaJetRaptor         2   1700 3000  40
+60    move       0  AirF_AmericaJetRaptor             3500 3000
+60    shiftmove  0  AirF_AmericaJetRaptor             1700 3000
+60    shiftmove  0  AirF_AmericaJetRaptor             3500 3000
+60    shiftmove  0  AirF_AmericaJetRaptor             1700 3000
+60    shiftmove  0  AirF_AmericaJetRaptor             3500 3000
+60    shiftmove  0  AirF_AmericaJetRaptor             1700 3000
+
+30    spawn      0  AmericaInfantryRanger         6   2400 3100  20
+30    spawn      0  AmericaTankCrusader           4   2600 2880  40
+
+30    spawn      0  AmericaInfantryPathfinder     2   1300 3700  30
+30    spawn      0  AmericaInfantryColonelBurton  1   1300 3780
+30    spawn      1  GLAInfantryRebel              8   1300 3560  25
+
+60    tally      0  AmericaInfantryRanger
+60    tally      0  AmericaTankCrusader
+60    tally      1  Slth_GLAStingerSite
+60    tally      1  GLAInfantryRebel
+2900  tally      0  AmericaInfantryRanger
+2900  tally      0  AmericaTankCrusader
+2900  tally      0  AirF_AmericaJetRaptor
+2900  tally      0  AmericaInfantryPathfinder
+2900  tally      0  AmericaInfantryColonelBurton
+2900  tally      1  Slth_GLAStingerSite
+2900  tally      1  Slth_GLAInfantryRebel
+2900  tally      1  GLAInfantryRebel

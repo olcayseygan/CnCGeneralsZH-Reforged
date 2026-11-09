@@ -184,6 +184,28 @@ private:
 
 };
 
+//-------------------------------------------------------------------------------------------------
+/** A reveal under OrderIdleEnemiesToAttackMeUponReveal wakes every idle enemy that has the revealed
+	* object in sight. A wake writes two constants into the woken unit and reads nothing another wake
+	* writes, so only the set woken matters, never the order or a second visit. The walk EA wrote took
+	* that set from every object of every enemy player, 31 times about 140 at 32 players, and a firing
+	* Stinger Site reveals its three soldiers every frame. This grid gives the same set from the cells
+	* around the reveal.
+	*
+	* It holds the objects with an AI, since only those can be woken, filled from the players' teams at
+	* the first reveal of a match. From then on Object reports every move, team change, change of
+	* sight and new AI, and a load throws the grid away. A report only adds an entry, so entries can be
+	* stale or doubled; each is put through the walk's own test. */
+//-------------------------------------------------------------------------------------------------
+class RevealWakeGrid
+{
+public:
+	static void noteObject( Object *obj );									///< joined a team, got its AI or changed its sight
+	static void noteMove( Object *obj, const Coord3D *oldPos );	///< moved from oldPos
+	static void forget();																		///< the next reveal fills the grid again
+	static void wakeIdleEnemiesInSight( Object *victim, const Bool *isEnemyByPlayerIndex );
+};
+
 
 #endif 
 

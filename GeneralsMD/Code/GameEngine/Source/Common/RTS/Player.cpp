@@ -109,6 +109,7 @@
 
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"		// the SUPERWEAPONS_ modes the lobby sends
+#include "Lib/Clock.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -759,11 +760,54 @@ void Player::addToPriorityBuildList(AsciiString templateName, Coord3D *pos, Real
 	m_pBuildList = newInfo;
 } 
 
+#ifdef DEBUG_LOGGING
+/* The slow-frame report's "players" was AIPlayer::update's phases plus everything else Player::update
+	 does, and the everything else had no timer.  Summed over every player, reset on a new logic frame.
+	 "generic" is each team's generic scripts, the one that grew in a 32-player game. */
+enum { PLU_AI, PLU_GENERIC, PLU_TUNNEL, PLU_ORDERS, PLU_ACADEMY, PLU_OTHER, PLU_COUNT };
+static const char *thePLUName[ PLU_COUNT ] = { "ai", "generic", "tunnel", "orders", "academy", "other" };
+static Real thePLUMS[ PLU_COUNT ];
+static UnsignedInt thePLUFrame = 0xffffffff;
+
+static Real playerElapsedMS( Int64 from, Int64 to )
+{
+	static Int64 freq = 0;
+	if( freq == 0 )
+		freq = Clock_Ticks_Per_Second();
+	return freq > 0 ? (Real)( (double)( to - from ) * 1000.0 / (double)freq ) : 0.0f;
+}
+
+/*static*/ const char *Player::getUpdateProfileReport( void )
+{
+	static char report[ 128 ];
+	Int used = 0;
+	report[ 0 ] = 0;
+	for( Int i = 0; i < PLU_COUNT; ++i )
+		used += sprintf( report + used, "%s%s %.1f", i ? " " : "", thePLUName[ i ], thePLUMS[ i ] );
+	return report;
+}
+
+#define PLU_MARK( phase )	do { const Int64 t = Clock_Ticks(); thePLUMS[ phase ] += playerElapsedMS( pluMark, t ); pluMark = t; } while(0)
+#else
+/*static*/ const char *Player::getUpdateProfileReport( void ) { return ""; }
+#define PLU_MARK( phase )	do { } while(0)
+#endif
+
 //=============================================================================
 void Player::update()
 {
+#ifdef DEBUG_LOGGING
+	if( TheGameLogic->getFrame() != thePLUFrame )
+	{
+		thePLUFrame = TheGameLogic->getFrame();
+		for( Int i = 0; i < PLU_COUNT; ++i )
+			thePLUMS[ i ] = 0.0f;
+	}
+	Int64 pluMark = Clock_Ticks();
+#endif
 	if (m_ai)
 		m_ai->update();
+	PLU_MARK( PLU_AI );
 
 	// Allow the teams this player owns to update themselves.
 	for( PlayerTeamList::iterator it = m_playerTeamPrototypes.begin(); it != m_playerTeamPrototypes.end(); ++it ) 
@@ -778,6 +822,7 @@ void Player::update()
 			team->updateGenericScripts();
 		}
 	}
+	PLU_MARK( PLU_GENERIC );
 
 	if( m_energy.getPowerSabotagedTillFrame() != 0 && TheGameLogic->getFrame() > m_energy.getPowerSabotagedTillFrame() )
 	{
@@ -788,8 +833,10 @@ void Player::update()
 	// heal what is inside the tunnel network, once for the whole network
 	if( m_tunnelSystem )
 		m_tunnelSystem->healObjects();
+	PLU_MARK( PLU_TUNNEL );
 
 	m_orderQueue.update( this );
+	PLU_MARK( PLU_ORDERS );
 
 	// A trickle of income that does not come from a supply line. `MoneyPerMinute` in GameData.ini,
 	// zero and therefore absent unless somebody asks for it. Paid on the minute rather than spread
@@ -806,6 +853,7 @@ void Player::update()
 
 	//Update the academy stats (this only checks applicable things that require a polling method)
 	getAcademyStats()->update();
+	PLU_MARK( PLU_ACADEMY );
 
 	//Kris: August 25, 2003 (DAY OF CODE LOCK -- NO NEW FEATURES, REALLY!)
 	if( ThePlayerList->getLocalPlayer() == this )
@@ -832,6 +880,7 @@ void Player::update()
 			}
 		}
 	}
+	PLU_MARK( PLU_OTHER );
 }
 
 //=============================================================================

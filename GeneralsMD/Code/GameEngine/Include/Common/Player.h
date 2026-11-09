@@ -403,6 +403,8 @@ public:
 	virtual ~Player();
 
 	void update();			///< player update opportunity
+	/// The slow-frame report's split of the last frame's Player::update calls; empty outside DEBUG_LOGGING.
+	static const char *getUpdateProfileReport( void );
 	
 	void newMap();			///< player after map loaded opportunity
 	

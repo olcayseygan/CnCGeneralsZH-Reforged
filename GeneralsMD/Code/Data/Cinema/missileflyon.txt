@@ -1,0 +1,10 @@
+# Scenarios/missileflyon.txt on Twilight Flame: two MiGs crossing a GLA air defence west to east,
+# Stingers chasing them from behind, Quad Cannons at x 2950 finishing them. One locked-off frame
+# looking north over the lane, about x 2600 to 3400, so the Stinger Sites sit at the left edge, the
+# kills and the wrecks' landing in the middle and right, and a Stinger flying on past the crash and
+# its burst on the ground stay in the picture. Diagnostic: the frame does not move.
+#
+#   ...the scenario's switches minus -headless... -win -borderless -xres 1920 -yres 1080 -msaa 0
+#     -cinema missileflyon -recordfps 120 -video 500 1100 missileflyon -maxframes 1110
+
+4.5   cut     3000 3020 1.6 0 0

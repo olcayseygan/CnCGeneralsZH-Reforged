@@ -1,0 +1,39 @@
+# Stingers whose jet dies first: they fly on along their heading and go off on the ground (d59c7544).
+# Two MiGs, seven seconds apart, cross a GLA air defence west to east. Stinger Sites and Tunnel
+# Defenders at x 2300-2650 fire at their backs as they pass and fly away; Quad Cannons further on at
+# x 2950 finish them, so each MiG dies with Stingers still chasing it from behind. The wreck is a
+# target until it hits the ground and is removed, and a Stinger still in the air then has no target.
+# Before the fix it vanished in mid-air; now it flies on and bursts on the ground past the crash.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionGLA -seed 7 -maxframes 1200
+#     -scenario missileflyon -logPrefix missileflyon_
+
+30    spawn      1  GLAStingerSite                1   2400 3000
+30    spawn      1  GLAStingerSite                1   2650 2750
+30    spawn      1  GLAInfantryTunnelDefender     6   2450 3050  20
+30    spawn      1  GLAInfantryTunnelDefender     6   2550 2950  20
+30    spawn      1  GLAVehicleQuadCannon          3   2950 2990  40
+
+30    spawn      0  ChinaJetMIG                   1   1300 3000
+30    spawn      0  ChinaJetMIG                   1    300 3000
+31    move       0  ChinaJetMIG                       4200 3000
+
+150   tally      0  ChinaJetMIG
+170   tally      0  ChinaJetMIG
+190   tally      0  ChinaJetMIG
+210   tally      0  ChinaJetMIG
+230   tally      0  ChinaJetMIG
+250   tally      0  ChinaJetMIG
+270   tally      0  ChinaJetMIG
+290   tally      0  ChinaJetMIG
+310   tally      0  ChinaJetMIG
+330   tally      0  ChinaJetMIG
+350   tally      0  ChinaJetMIG
+370   tally      0  ChinaJetMIG
+390   tally      0  ChinaJetMIG
+410   tally      0  ChinaJetMIG
+430   tally      0  ChinaJetMIG
+450   tally      0  ChinaJetMIG
+500   tally      0  ChinaJetMIG

@@ -233,7 +233,8 @@ def selfcheck():
             problems.append("%s.wnd: %d windows not authored at 1920x1080, %s first" % (menu, len(stale), stale[0]))
         try:
             rebuilt = build(wndlayout.parse(tracked), load_room(menu)).text()
-            if rebuilt != tracked:
+            # WND writers use CRLF; Git checkouts may use LF. Compare all content, including final newlines.
+            if rebuilt.replace("\r\n", "\n") != tracked.replace("\r\n", "\n"):
                 problems.append("%s.wnd is not what mapselect_layout.py writes from %s.wnd; regenerate it"
                                 % (menu, PICKERS[menu]))
         except (KeyError, ValueError) as error:

@@ -6837,6 +6837,42 @@ TEST(crcagreement_two_players_who_are_both_here_and_disagree_is_a_mismatch)
 	CHECK_EQ( crcAgreement( reported, crc, connected, 4, 3 ), CRC_AGREEMENT_AGREE );
 }
 
+TEST(crcoddones_names_whoever_a_strict_majority_outvotes_and_nobody_without_one)
+{
+	Bool reported[4]  = { TRUE, TRUE, TRUE, TRUE };
+	Bool connected[4] = { TRUE, TRUE, TRUE, TRUE };
+	UnsignedInt crc[4] = { 0x1111u, 0x2222u, 0x1111u, 0x1111u };
+	Bool odd[4];
+
+	CHECK_EQ( crcOddOnes( reported, crc, connected, 4, odd ), 1 );
+	CHECK( !odd[0] ); CHECK( odd[1] ); CHECK( !odd[2] ); CHECK( !odd[3] );
+
+	// the majority found wherever it sits, the first reporter being the odd one included
+	crc[0] = 0x3333u; crc[1] = 0x1111u;
+	CHECK_EQ( crcOddOnes( reported, crc, connected, 4, odd ), 1 );
+	CHECK( odd[0] ); CHECK( !odd[1] );
+
+	// two against two: nothing says which pair is wrong
+	crc[0] = 0x2222u; crc[1] = 0x2222u;
+	CHECK_EQ( crcOddOnes( reported, crc, connected, 4, odd ), 0 );
+	CHECK( !odd[0] && !odd[1] && !odd[2] && !odd[3] );
+
+	// a 1v1 never names anyone
+	CHECK_EQ( crcOddOnes( reported, crc, connected, 2, odd ), 0 );
+
+	// three different CRCs among three: no majority either
+	UnsignedInt three[3] = { 1u, 2u, 3u };
+	CHECK_EQ( crcOddOnes( reported, three, connected, 3, odd ), 0 );
+
+	// somebody gone, or silent, is neither the majority nor odd
+	crc[0] = 0x9999u; crc[1] = 0x1111u; crc[2] = 0x1111u; crc[3] = 0x5555u;
+	connected[3] = FALSE;
+	CHECK_EQ( crcOddOnes( reported, crc, connected, 4, odd ), 1 );
+	CHECK( odd[0] ); CHECK( !odd[3] );
+	reported[0] = FALSE;
+	CHECK_EQ( crcOddOnes( reported, crc, connected, 4, odd ), 0 );
+}
+
 TEST(crcagreement_a_room_with_nobody_left_in_it_is_not_a_mismatch)
 {
 	Bool reported[2]  = { FALSE, FALSE };

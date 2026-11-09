@@ -1,0 +1,35 @@
+# The cheat witness's blind order count: orders at enemies the issuer sees, at one driving out of its
+# sight, and at one parked across the map where it has nothing looking.
+#
+# It needs a network match: a skirmish seat with nobody driving it shares its eyes with the keyboard
+# player (the single-player hook in Object's look), so there every seat sees everything.
+#
+#   python net_check.py --copies 2 --frames 700 --tag cw --each "-scenario cheatwitness"
+#
+# Measured 2026-11-09, both logs alike: two "CHEATWITNESS:" lines, frame 180 (the Paladin's order
+# at the Quad Cannon) and frame 300 (the Ranger's click at the Technical). The Technical left the
+# Ranger's sight between logic frames 210 and 240; the clicks at 240 and 270 are inside the second a
+# run-ahead can hold a click made while it was in sight, so they count as seen, and the one at 300
+# is past it. The Scorpion order and the clicks up to 210 are in plain sight and count nothing.
+
+30    spawn        0  AmericaTankCrusader     1  start0:150:0
+30    spawn        0  AmericaTankPaladin      1  start0:150:80
+30    spawn        1  GLATankScorpion         1  start0:300:0
+30    spawn        1  GLAVehicleQuadCannon    1  start1:150:0
+30    spawn        0  AmericaInfantryRanger   1  start0:-150:0
+30    spawn        1  GLAVehicleTechnical     1  start0:-250:0
+# in sight: the Scorpion stands 150 off the Crusader's nose
+60    forceattack  0  AmericaTankCrusader     1  GLATankScorpion
+# out of sight: the Quad Cannon sits beside slot 1's command center across the map
+90    forceattack  0  AmericaTankPaladin      1  GLAVehicleQuadCannon
+# leaving sight: a Technical drives off from a Ranger, who clicks it every half second as it goes
+# (the enter click, which leaves him standing)
+40    move         1  GLAVehicleTechnical*       start1
+45    clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*
+60    clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*
+75    clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*
+90    clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*
+105   clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*
+120   clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*
+135   clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*
+150   clickenter   0  AmericaInfantryRanger   1  GLAVehicleTechnical*

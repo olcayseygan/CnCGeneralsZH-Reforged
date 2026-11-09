@@ -2782,6 +2782,18 @@ static void updateHeadlessRun( void )
 		 refreshed on frames a network game asks for it, and a skirmish never asks. */
 	DEBUG_LOG(("HEADLESS CRC: 0x%08X at frame %d\n", TheGameLogic->getCRC( CRC_RECALC ), frame));
 
+	// the cheat witness's counts by player index, which an honest match leaves at 0 for everyone
+	{
+		AsciiString witness;
+		for( Int p = 0; p < ThePlayerList->getPlayerCount(); ++p )
+		{
+			AsciiString one;
+			one.format( " p%d=%d", p, TheGameLogic->getBlindOrderCount( p ) );
+			witness.concat( one );
+		}
+		DEBUG_LOG(("HEADLESS CHEATWITNESS: blind%s, crcOdd %d\n", witness.str(), (Int)TheGameLogic->getCrcOddPlayers().size()));
+	}
+
 	// What the pathfinder did over the whole match, not just the one frame that ran over budget.
 	// A pathing change is argued with these: search count and time say what it cost, `nopath` and
 	// `outofcells` say whether it broke anything, `blocked`/`stuck` say whether it actually

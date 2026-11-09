@@ -539,6 +539,102 @@ static void makeObjectHeroic( Object *obj, void *userData )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** How long before its execution frame an order may have been clicked: the run-ahead, which a
+	* playable link keeps well under a second. */
+static const Int BLIND_ORDER_CLICK_WINDOW_FRAMES = LOGICFRAMES_PER_SECOND;
+
+/** Could the issuer have seen the target when the order was clicked?  The order executes a run-ahead
+	* after the click, and in that time the target can have walked out of sight.  So any cell the issuer
+	* has in sight within the distance the target covers in BLIND_ORDER_CLICK_WINDOW_FRAMES, plus a
+	* cell, counts as seen. */
+static Bool BlindOrder_targetWasInReach( const Object *target, Int playerIndex )
+{
+	Real speed = 0.0f;
+	const AIUpdateInterface *ai = target->getAI();
+	if( ai && ai->getCurLocomotor() )
+		speed = ai->getCurLocomotor()->getMaxSpeedForCondition( BODY_PRISTINE );		// distance a frame
+
+	const Real cellSize = ThePartitionManager->getCellSize();
+	const Real reach = cellSize + speed * (Real)BLIND_ORDER_CLICK_WINDOW_FRAMES;
+	const Int cells = (Int)ceilf( reach / cellSize );
+	Int cx, cy;
+	ThePartitionManager->worldToCell( target->getPosition()->x, target->getPosition()->y, &cx, &cy );
+	for( Int dy = -cells; dy <= cells; ++dy )
+	{
+		for( Int dx = -cells; dx <= cells; ++dx )
+		{
+			if( dx * dx + dy * dy > cells * cells )
+				continue;
+			if( ThePartitionManager->getShroudStatusForPlayer( playerIndex, cx + dx, cy + dy ) == CELLSHROUD_CLEAR )
+				return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The cheat witness's half of an order: one that names an enemy object the issuer could not have
+	* seen when clicking it.  The client draws an enemy only while it is in sight or, for a structure,
+	* remembered from the last time it was, so an honest click can only name one of those; a map hack
+	* draws the rest and its clicks name them too.
+	*
+	* Fogged ground is not enough.  A network match opens fogged for everyone, every cell already
+	* "seen", so the shroud alone (never seen) is never there to test: the first build of this read 0
+	* on an order at a tank parked beside the enemy's command centre, across a map nobody had scouted.
+	* What it asks is Object::isUnknownTo, the logic's own "neither in sight nor remembered" (ally
+	* sight and reveals included, a passenger never unknown), and then whether the target can have
+	* been in sight a run-ahead earlier.  Never getShroudedStatus, whose "ever seen" each machine's
+	* drawing notes differently.  Detection only: it decides nothing and is no part of the CRC.
+	* ponytail: a target with no sight anywhere near it, so the hack it catches shows armies and bases
+	* across the map, not a unit a screen past the edge of sight. */
+//-------------------------------------------------------------------------------------------------
+void GameLogic::witnessBlindOrder( const GameMessage *msg, const Player *issuer )
+{
+	Int targetArg;
+	switch( msg->getType() )
+	{
+		case GameMessage::MSG_DO_ATTACK_OBJECT:
+		case GameMessage::MSG_DO_FORCE_ATTACK_OBJECT:
+		case GameMessage::MSG_DO_GUARD_OBJECT:
+		case GameMessage::MSG_COMBATDROP_AT_OBJECT:		targetArg = 0; break;
+		case GameMessage::MSG_DO_WEAPON_AT_OBJECT:
+		case GameMessage::MSG_DO_SPECIAL_POWER_AT_OBJECT:
+		case GameMessage::MSG_ENTER:									targetArg = 1; break;
+		default:																			return;
+	}
+	if( msg->getArgumentCount() <= targetArg || msg->getArgumentDataType( targetArg ) != ARGUMENTDATATYPE_OBJECTID )
+		return;
+
+	const Object *target = findObjectByID( msg->getArgument( targetArg )->objectID );
+	// with no cells at all an object reads as unknown, which is no evidence of anything
+	if( target == NULL || target->friend_getPartitionData() == NULL
+			|| target->friend_getPartitionData()->friend_getCoiInUseCount() == 0 )
+		return;
+
+	const Int index = issuer->getPlayerIndex();
+	if( index < 0 || index >= MAX_PLAYER_COUNT || issuer->getRelationship( target->getTeam() ) != ENEMIES )
+		return;
+
+	// A tech or civilian building taken in the fog still shows its neutral face, there from the first
+	// frame, and an honest click on it names what is now an enemy's.
+	if( target->isKindOf( KINDOF_CAPTURABLE ) || target->isKindOf( KINDOF_TECH_BUILDING )
+			|| ( target->getContain() && target->getContain()->isGarrisonable() ) )
+		return;
+
+	if( target->isUnknownTo( index ) && !BlindOrder_targetWasInReach( target, index ) )
+	{
+		++m_blindOrders[ index ];
+		DEBUG_LOG(( "CHEATWITNESS: frame %d, player %d ordered %s at object %d, out of its sight\n", m_frame, index,
+			GameMessage::getCommandTypeAsAsciiString( msg->getType() ).str(), (Int)target->getID() ));
+	}
+}
+
+Int GameLogic::getBlindOrderCount( Int playerIndex ) const
+{
+	return ( playerIndex >= 0 && playerIndex < MAX_PLAYER_COUNT ) ? m_blindOrders[ playerIndex ] : 0;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** This message handles dispatches object command messages to the
   * appropriate objects.
 	* @todo Rename this to "CommandProcessor", or similiar. */
@@ -631,6 +727,10 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 	// the units it went to.  An order already coming round from the queue is not looked at again.
 	// See OrderQueue.h.
 	//
+	// counted once, when the player gives the order, never when the queue hands it on
+	if( !OrderQueue_isDispatching() )
+		witnessBlindOrder( msg, thisPlayer );
+
 	if( orderedGroup == NULL && msgType != GameMessage::MSG_QUEUE_NEXT_ORDER
 			&& thisPlayer->getOrderQueue()->takeMessage( msg, currentlySelectedGroup, thisPlayer ) )
 		return;		// the queue destroyed the group

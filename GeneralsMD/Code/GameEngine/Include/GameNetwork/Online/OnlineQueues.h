@@ -123,6 +123,9 @@ struct OnlineReport
 	Int numPlayers;						///< how many of discon[] and side[] are filled
 	Bool discon[MAX_SLOTS];
 	AsciiString side[MAX_SLOTS];
+	Int blind[MAX_SLOTS];					///< orders player n gave at enemy objects it never saw, by this machine's game
+	Int crcOdd[MAX_SLOTS];				///< players (indexed as side[]) off the strict majority's CRC at the first mismatch
+	Int numCrcOdd;								///< how many of crcOdd[] are filled; 0 with no mismatch or no majority
 
 	OnlineReport();
 };

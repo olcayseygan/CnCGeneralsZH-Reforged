@@ -94,4 +94,49 @@ inline CrcAgreement crcAgreement( const Bool *reported, const UnsignedInt *crc, 
 	return disagreed ? CRC_AGREEMENT_MISMATCH : CRC_AGREEMENT_AGREE;
 }
 
+/**
+	Who is off the majority at a mismatch, for the cheat witness.  A strict majority of the connected
+	players that reported agree on one CRC, and odd[i] marks every other connected reporter.  Without
+	a strict majority (two players, or an even split) nobody is named, since nothing says which side
+	is wrong.  Returns how many are marked.  Same arrays as crcAgreement; odd has slotCount entries.
+*/
+inline Int crcOddOnes( const Bool *reported, const UnsignedInt *crc, const Bool *connected,
+											 Int slotCount, Bool *odd )
+{
+	Int heard = 0;
+	for (Int i = 0; i < slotCount; ++i)
+	{
+		odd[i] = FALSE;
+		if (reported[i] && connected[i])
+			++heard;
+	}
+
+	// sixteen players at most, so counting each value against every other is nothing
+	for (Int i = 0; i < slotCount; ++i)
+	{
+		if (!reported[i] || !connected[i])
+			continue;
+		Int same = 0;
+		for (Int j = 0; j < slotCount; ++j)
+		{
+			if (reported[j] && connected[j] && crc[j] == crc[i])
+				++same;
+		}
+		if (same * 2 <= heard)
+			continue;
+
+		Int marked = 0;
+		for (Int j = 0; j < slotCount; ++j)
+		{
+			if (reported[j] && connected[j] && crc[j] != crc[i])
+			{
+				odd[j] = TRUE;
+				++marked;
+			}
+		}
+		return marked;
+	}
+	return 0;
+}
+
 #endif // _CRC_AGREEMENT_H_

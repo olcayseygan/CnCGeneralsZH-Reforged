@@ -855,18 +855,22 @@ void GameSpyStagingRoom::sendOnlineReport( const char *from )
 	report.numPlayers = 0;
 	Int teamsLeft = 0;
 	Int lastTeam = -1;
+	Int reportIndexOfSlot[MAX_SLOTS];
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
+		reportIndexOfSlot[i] = -1;
 		AsciiString playerName;
 		playerName.format("player%d", i);
 		Player *p = ThePlayerList->findPlayerWithNameKey(NAMEKEY(playerName));
 		if (!p || !m_GameSpySlot[i].isHuman())
 			continue;
 		const Int n = report.numPlayers++;
+		reportIndexOfSlot[i] = n;
 		if (report.winningTeam < 0 && TheVictoryConditions->hasAchievedVictory(p))
 			report.winningTeam = n;
 		report.discon[n] = m_GameSpySlot[i].disconnected();
 		report.side[n] = p->getPlayerTemplate()->getSide();
+		report.blind[n] = TheGameLogic->getBlindOrderCount(p->getPlayerIndex());
 		if (!report.discon[n] && (teamsLeft == 0 || m_GameSpySlot[i].getTeamNumber() != lastTeam))
 		{
 			lastTeam = m_GameSpySlot[i].getTeamNumber();
@@ -874,9 +878,17 @@ void GameSpyStagingRoom::sendOnlineReport( const char *from )
 		}
 	}
 	report.disconEnd = teamsLeft < 2;
+	// the odd players come as player indices; the report names players by their place among the humans
+	const std::vector<Int> &odd = TheGameLogic->getCrcOddPlayers();
+	for (size_t k = 0; k < odd.size() && report.numCrcOdd < MAX_SLOTS; ++k)
+	{
+		const Int slot = ThePlayerList->getSlotIndex(odd[k]);
+		if (slot >= 0 && slot < MAX_SLOTS && reportIndexOfSlot[slot] >= 0)
+			report.crcOdd[report.numCrcOdd++] = reportIndexOfSlot[slot];
+	}
 	OnlineSendReport( report );
-	DEBUG_LOG(("ONLINE REPORT sent from=%s seed=%d endFrame=%d winner=%d desync=%d\n", from, report.seed,
-		report.endFrame, report.winningTeam, (Int)report.sawDesync));
+	DEBUG_LOG(("ONLINE REPORT sent from=%s seed=%d endFrame=%d winner=%d desync=%d crcOdd=%d\n", from, report.seed,
+		report.endFrame, report.winningTeam, (Int)report.sawDesync, report.numCrcOdd));
 }
 
 void GameSpyStagingRoom::launchGame( void )

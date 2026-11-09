@@ -266,6 +266,8 @@ GameLogic::GameLogic( void )
 	m_kickVoteTarget = -1;
 	m_kickVoteEndFrame = 0;
 	m_kickVoteYesMask = 0;
+	for( Int i = 0; i < MAX_PLAYER_COUNT; ++i )
+		m_blindOrders[ i ] = 0;
 	m_unitCap = 0;
 	m_proRules = FALSE;
 	m_incomeSharing = INCOME_SHARING_OFF;
@@ -1179,6 +1181,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	m_kickVoteTarget = -1;
 	m_kickVoteEndFrame = 0;
 	m_kickVoteYesMask = 0;
+
+	// so is the cheat witness, which the report of the match just ended has already read
+	for( Int i = 0; i < MAX_PLAYER_COUNT; ++i )
+		m_blindOrders[ i ] = 0;
+	m_crcOddPlayers.clear();
 
 	#ifdef DUMP_PERF_STATS
 	__int64 startTime64;
@@ -2930,10 +2937,25 @@ void GameLogic::processCommandList( CommandList *list )
 						break;
 
 					case CRC_AGREEMENT_MISMATCH:
+					{
 						DEBUG_CRASH(("CRC mismatch!"));
 						sawCRCMismatch = TRUE;
 						mismatchFrame = frameIt->first;
+						// the cheat witness: whoever the majority outvotes, for the match report; this is the first mismatch,
+						// since none is looked for after it
+						Bool odd[MAX_PLAYER_COUNT];
+						crcOddOnes( reported, crcs, connected, MAX_PLAYER_COUNT, odd );
+						m_crcOddPlayers.clear();
+						for (Int p = 0; p < MAX_PLAYER_COUNT; ++p)
+						{
+							if (odd[p])
+							{
+								m_crcOddPlayers.push_back( p );
+								DEBUG_LOG(("CHEATWITNESS: player %d is off the majority's CRC of frame %d\n", p, mismatchFrame));
+							}
+						}
 						break;
+					}
 
 					case CRC_AGREEMENT_AGREE:
 						break;

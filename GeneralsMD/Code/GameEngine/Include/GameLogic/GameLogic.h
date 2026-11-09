@@ -290,6 +290,14 @@ public:
 	Int countKickVoters( void ) const;										///< the players whose yes the open vote needs
 	Int countKickVotes( void ) const;											///< how many of them have given it
 
+	/** The cheat witness, read by the online match report and never by logic.  A blind order is one a
+			player gave at an enemy object that player could not have seen when clicking it, which only a
+			map hack draws (witnessBlindOrder); the odd players are those whose CRC differed from a strict
+			majority at the first mismatch.  Counted on the logic frame on every machine alike, kept out of xfer and the
+			CRC, cleared by startNewGame. */
+	Int getBlindOrderCount( Int playerIndex ) const;
+	const std::vector<Int>& getCrcOddPlayers( void ) const { return m_crcOddPlayers; }	///< player indices
+
 	/** Each player's share of the lobby's unit limit, the same number for everybody.  0 when the
 			limit is off, which is every campaign mission and every game it was not ticked for. */
 	UnsignedInt getUnitCap( void ) const { return m_unitCap; }
@@ -449,6 +457,9 @@ private:
 	UnsignedInt m_kickVoteYesMask;		///< player indices that have voted yes in it
 	void expireKickVote( void );			///< closes the vote once its 30 seconds are up
 	void endKickVote( const char *label );
+	Int m_blindOrders[MAX_PLAYER_COUNT];	///< blind orders by issuing player index, see getBlindOrderCount
+	std::vector<Int> m_crcOddPlayers;			///< the first mismatch's odd players, see getCrcOddPlayers
+	void witnessBlindOrder( const GameMessage *msg, const Player *issuer );
 	UnsignedInt m_unitCap;						///< units each player may have standing and queued, 0 = no limit
 	Bool m_proRules;									///< this match refuses what PRO-RULES.md bans
 	Int m_incomeSharing;							///< which earnings allies split, an IncomeSharing

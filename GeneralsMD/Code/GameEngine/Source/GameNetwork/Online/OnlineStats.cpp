@@ -125,10 +125,14 @@ GameSpyPSMessageQueueInterface *OnlineCreatePSQueue( void )
 
 OnlineReport::OnlineReport() :
 	seed( 0 ), endFrame( 0 ), winningTeam( -1 ), sawDesync( FALSE ), sawGameEnd( FALSE ), disconEnd( FALSE ),
-	surrendered( FALSE ), duration( 0 ), numPlayers( 0 )
+	surrendered( FALSE ), duration( 0 ), numPlayers( 0 ), numCrcOdd( 0 )
 {
 	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
 		discon[i] = FALSE;
+		blind[i] = 0;
+		crcOdd[i] = 0;
+	}
 }
 
 void OnlineSendReport( const OnlineReport &report )
@@ -146,12 +150,18 @@ void OnlineSendReport( const OnlineReport &report )
 	m.setInt( "duration", report.duration );
 	std::vector<long long> discon;
 	std::vector<std::string> side;
+	std::vector<long long> blind;
 	for (Int i = 0; i < report.numPlayers && i < MAX_SLOTS; ++i)
 	{
 		discon.push_back( report.discon[i] ? 1 : 0 );
 		side.push_back( report.side[i].str() );
+		blind.push_back( report.blind[i] );
 	}
+	std::vector<long long> crcOdd;
+	for (Int i = 0; i < report.numCrcOdd && i < MAX_SLOTS; ++i)
+		crcOdd.push_back( report.crcOdd[i] );
 	m.setInts( "discon", discon ).setStrings( "side", side );
+	m.setInts( "blind", blind ).setInts( "crcOdd", crcOdd );
 	s.send( m );
 }
 

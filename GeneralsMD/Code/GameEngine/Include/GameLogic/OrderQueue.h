@@ -164,4 +164,8 @@ private:
 	Int							m_nextOrderMode;		///< an OrderQueueMode, set by MSG_QUEUE_NEXT_ORDER for the message after it
 };
 
+/** TRUE while the queue is handing an order to its units: the dispatcher has already seen that order
+	* once, when the player gave it, and the cheat witness counts it then. */
+Bool OrderQueue_isDispatching( void );
+
 #endif // __ORDERQUEUE_H__

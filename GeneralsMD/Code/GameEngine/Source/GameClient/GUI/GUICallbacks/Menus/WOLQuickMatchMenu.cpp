@@ -933,7 +933,8 @@ void WOLQuickMatchMenuInit( WindowLayout *layout, void *userData )
 	{
 		UnicodeString tmp;
 		tmp.format(TheGameText->fetch("GUI:QuickMatchTitle"), TheGameSpyInfo->getLocalName().str());
-		GadgetStaticTextSetText(staticTextTitle, tmp);
+		// -online: capitals, as the hub's QUICKMATCH button and the ladder's title
+		GadgetStaticTextSetText(staticTextTitle, OnlineIsEnabled() ? UIStyle::capitals(tmp) : tmp);
 	}
 
 	if (OnlineIsEnabled())

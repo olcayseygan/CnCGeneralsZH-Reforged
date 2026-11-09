@@ -7,7 +7,7 @@
 // left corner (pressed and lit while the squad is the one the tray is up for), "xN" in its bottom
 // right, a soft "+N" in its top right for the units still being built for it or walking to it, and
 // the squad's health in the power bar's colours along the cell's foot.  A squad whose units shot or
-// were hit in the last few seconds has its cell's steel glow red and its rim turn red, both pulsing.
+// were hit in the last few seconds has its cell blink red, a translucent fill on and off.
 //
 // On the right, while a squad picked by its number is still the selection, a tray between the
 // superweapons and the general's powers: the powers tray's own stepped body at 1.2 (four buttons a
@@ -23,7 +23,7 @@
 // which runs at the sync point too.  The build buttons are windows whose state is set there and only
 // drawn inside the window.  Squad members are read through Squad::getObjectIDs and findObjectByID,
 // never getLiveObjects or getAllObjects: those prune the logic's list, and doing it on one machine
-// only would make the squads differ between machines.  The combat pulse is the one part worked out
+// only would make the squads differ between machines.  The combat blink is the one part worked out
 // inside the window, from the wall clock alone, so a picture drawn again beside the tick keeps it
 // moving.
 //
@@ -131,8 +131,9 @@ namespace
 
 	/// a squad is fighting while one of its units fired or was hit this recently
 	const UnsignedInt COMBAT_WINDOW = 3 * LOGICFRAMES_PER_SECOND;
-	/// one pulse of a fighting squad's cell, on the wall clock
-	const UnsignedInt COMBAT_PULSE_MS = 700;
+	/// a fighting squad's cell is red this long, then plain this long, on the wall clock, so it keeps
+	/// blinking while paused
+	const UnsignedInt COMBAT_BLINK_MS = 400;
 
 	/// the rows in key order, 1 to 9 and then 0
 	const Int KEY_ORDER[ NUM_HOTKEY_SQUADS ] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
@@ -149,6 +150,7 @@ namespace
 	const Color KEY_DIGIT			= GameMakeColor( 255, 210, 60, 255 );	///< the bar's hotkey letters' yellow
 	const Color KEY_DIGIT_LIT	= GameMakeColor( 8, 14, 30, 255 );		///< dark on the pressed, lit key
 	const Color HEALTH_TRACK	= GameMakeColor( 4, 8, 10, 255 );
+	const Color COMBAT_FILL		= GameMakeColor( 225, 20, 10, 120 );	///< over a fighting squad's cell, on its blink
 	const Color CHIP_TEXT			= GameMakeColor( 255, 255, 255, 255 );
 	const Color SOFT_TEXT			= GameMakeColor( 165, 172, 180, 255 );
 
@@ -344,12 +346,6 @@ static void atDrawTime( const std::function<void()> &draw )
 		draw();
 }
 
-/// 0 to 1 and back once every COMBAT_PULSE_MS on the wall clock, so it keeps pulsing while paused
-static Real combatPulse( void )
-{
-	const Real phase = (Real)( Clock_Milliseconds() % COMBAT_PULSE_MS ) / COMBAT_PULSE_MS;
-	return 0.5f - 0.5f * Cos( 2.0f * PI * phase );
-}
 
 //-------------------------------------------------------------------------------------------------
 /** InGameUI.cpp's drawHudTray: cell i is row i / columns, place i % columns in from the screen edge;
@@ -832,8 +828,8 @@ static Bool chosenSquadSelected( Player *player )
 	*   |========= health =========| |
 	*   +--------------------------+-+
 	*
-	* A fighting squad's cell is drawn a second time over itself, added in red, and its picture's rim
-	* turns red, both pulsing on the wall clock (atDrawTime). */
+	* A fighting squad's cell takes a translucent red fill over its picture, on for COMBAT_BLINK_MS and
+	* off for as long, timed by the wall clock where the picture is drawn (atDrawTime). */
 //-------------------------------------------------------------------------------------------------
 static void drawList( void )
 {
@@ -919,37 +915,9 @@ static void drawList( void )
 		drawSteel( s_listBox );
 	TheDisplay->endBatch2D();
 
-	// a fighting squad's steel glows: its cell and its stretch of the open edge again, added in pure red
-	// under the picture, never quite dark, and cut to the row so none of it reaches the tray's foot
-	const Image *cellPiece = body.cell, *openPiece = body.open;
-	for( Int r = 0; r < s_rowCount; r++ )
-	{
-		if( !s_rows[ r ].fighting )
-			continue;
-		const IRegion2D c = cells[ r ];
-		const IRegion2D row = s_rows[ r ].box;
-		atDrawTime( [ c, row, cellPiece, openPiece ]()
-		{
-			const Real light = 0.25f + 0.75f * combatPulse();
-			const Color glow = GameMakeColor( REAL_TO_INT( 255 * light ), REAL_TO_INT( 6 * light ), 0, 255 );
-			if( cellPiece == NULL )
-			{
-				TheDisplay->drawOpenRect( row.lo.x + 1, row.lo.y + 1, row.hi.x - row.lo.x - 2, row.hi.y - row.lo.y - 2, 2.0f, glow );
-				return;
-			}
-			IRegion2D clip = row;
-			TheDisplay->setClipRegion( &clip );
-			TheDisplay->drawImage( cellPiece, c.lo.x, c.lo.y, c.hi.x, c.hi.y, glow, Display::DRAW_IMAGE_ADDITIVE );
-			if( openPiece != NULL && row.hi.x > c.hi.x )
-				TheDisplay->drawImage( openPiece, c.hi.x, c.lo.y, row.hi.x, c.hi.y, glow, Display::DRAW_IMAGE_ADDITIVE );
-			TheDisplay->enableClipping( FALSE );
-		} );
-	}
-
 	const Int keyPoints = max( REAL_TO_INT( KEY_POINTS * s * screenH / 1080.0f ), 7 );
 	const Int chipPoints = max( REAL_TO_INT( CHIP_POINTS * s * screenH / 1080.0f ), 7 );
 	const Int keyW = pieceW( p.key, KEYCAP_W, s ), keyH = pieceH( p.key, KEYCAP_H, s );
-	const Int rimThick = px( 2.0f, s );
 	const Color rim = TheControlBar->getBuildBorderColor();
 
 	for( Int r = 0; r < s_rowCount; r++ )
@@ -978,8 +946,22 @@ static void drawList( void )
 			drawPiece( image, picture.lo.x, picture.lo.y, picture.hi.x, picture.hi.y );
 		else
 			TheDisplay->drawFillRect( picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, HEALTH_TRACK );
-		if( !row.fighting )
-			TheDisplay->drawOpenRect( picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, 1.0f, rim );
+		TheDisplay->endBatch2D();
+
+		// a fighting squad's cell blinks red over its picture, under the rim, the bar and the text; the
+		// fill is the cell itself, so nothing of it lands outside
+		if( row.fighting )
+		{
+			const IRegion2D at = c;
+			atDrawTime( [ at ]()
+			{
+				if( ( Clock_Milliseconds() / COMBAT_BLINK_MS ) % 2 == 0 )
+					TheDisplay->drawFillRect( at.lo.x, at.lo.y, at.hi.x - at.lo.x, at.hi.y - at.lo.y, COMBAT_FILL );
+			} );
+		}
+
+		TheDisplay->beginBatch2D();
+		TheDisplay->drawOpenRect( picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, 1.0f, rim );
 
 		// the health bar: the power bar's colours on a black track, its top row lit
 		TheDisplay->drawFillRect( health.lo.x, health.lo.y, health.hi.x - health.lo.x, health.hi.y - health.lo.y, HEALTH_TRACK );
@@ -999,19 +981,6 @@ static void drawList( void )
 			}
 		}
 		TheDisplay->endBatch2D();
-
-		// a fighting squad's rim, red and pulsing, a pixel wider than the blue one
-		if( row.fighting )
-		{
-			const IRegion2D at = picture;
-			atDrawTime( [ at, rimThick ]()
-			{
-				const Real light = 0.55f + 0.45f * combatPulse();
-				const Color red = GameMakeColor( REAL_TO_INT( 255 * light ), REAL_TO_INT( 46 * light ), REAL_TO_INT( 30 * light ), 255 );
-				for( Int t = 0; t < rimThick; t++ )
-					TheDisplay->drawOpenRect( at.lo.x - t, at.lo.y - t, at.hi.x - at.lo.x + 2 * t, at.hi.y - at.lo.y + 2 * t, 1.0f, red );
-			} );
-		}
 
 		UnicodeString text;
 		text.format( u"%d", row.squad );

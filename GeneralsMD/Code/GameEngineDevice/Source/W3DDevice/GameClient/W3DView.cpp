@@ -1145,6 +1145,9 @@ void W3DView::setFreeCamera( Bool on )
 	}
 
 	m_freeCamera = on;
+	// landing ends whatever flew it; a shot list that wants it again says so after taking off
+	if (!on)
+		m_freeCameraScripted = FALSE;
 	m_freeCameraKeys = 0;
 	m_freeCameraMouseValid = FALSE;
 	m_freeCameraLastStep = Clock_Milliseconds();

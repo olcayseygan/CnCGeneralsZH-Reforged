@@ -29,14 +29,42 @@ counter line:
 
 ```
 2026-11-06T08:50:00.000Z join room=1a2b3c4d:5e6f7a8b vip=10.0.0.3 name="Tank Girl"
-2026-11-06T08:51:00.000Z stats sessions=4 in=5120p/880213B out=9877p/1702260B dropped=3p
-2026-11-06T08:52:10.000Z leave room=1a2b3c4d:5e6f7a8b vip=10.0.0.3 reason=idle
+2026-11-06T08:51:00.000Z stats sessions=4 in=5120p/880213B out=9877p/1702260B dropped=3p bad=0 hello=1 rate=0 nosession=2 endpoint=0 notarget=0 room=0 unverified=0 alone=14
+2026-11-06T08:52:10.000Z leave room=1a2b3c4d:5e6f7a8b vip=10.0.0.3 in=812p/90214B out=790p lastData=118020ms seen=120004ms drop.unverified=3 reason=idle
+2026-11-06T08:53:00.000Z room vip=10.0.0.5 from=match:4f1c to=acct:17 in=6911p/1201554B out=6890p lastData=40ms seen=40ms
+2026-11-06T08:53:00.000Z empty room=match:4f1c
 ```
 
 A leave says why: `idle` (120 seconds without a packet) or `version changed` (a HELLO carrying a
 known session with different CRCs) or `replaced` (the account logged in again). `setRoom` prints a
-`room vip=... from=... to=...` line. A two-player match moves about 290 KB a minute each way per
-player through it.
+`room vip=... from=... to=...` line. Both carry what the session did in the room it is leaving:
+`in` is every DATA that carried its id, packets and bytes, and `out` the DATA copies sent to it.
+`lastData` is the time since its last DATA was accepted, `never` if none was, and `seen` the time
+since anything came from it, so a client that only keeps its HELLO alive shows a small `seen`
+beside a large `lastData`. The counters start again from zero when `setRoom` moves the session.
+`empty` is printed when the last session leaves a room it was moved into; the rooms sessions open in
+(the CRC rooms, `acct:<id>`) empty without a line. A two-player match moves about 290 KB a minute
+each way per player through it.
+
+Every datagram that goes nowhere is counted under one cause, in the stats line and on the sessions
+involved. `drop.<cause>=n` on a leave or room line is the session as sender, `to.<cause>=n` as
+target, and only causes above zero are printed. The causes:
+
+| Cause | Sender | Target | What happened |
+|---|---|---|---|
+| `bad` | by endpoint | | wrong magic, an unknown type, too short or over 1400 bytes; a HELLO_AUTH with no `authorize` hook |
+| `hello` | | | a HELLO or HELLO_AUTH refused: other CRCs from a held endpoint, a move onto an endpoint another session holds, a bad ticket, a cap |
+| `rate` | yes | yes | over the source IP's bucket; every listener of a refused broadcast gets a `to.rate` |
+| `nosession` | by endpoint | | a session id the relay does not hold, such as the old id after a NAT move or a replace |
+| `endpoint` | yes | | a held id arriving from an endpoint that is not its own |
+| `notarget` | yes | | a unicast to an address nobody holds, or to the sender itself |
+| `room` | yes | yes | a unicast to a session in another room |
+| `unverified` | yes | yes | the target has not answered its WELCOME with its id yet; a broadcast that skips such a member counts `to.unverified` on it alone |
+| `alone` | yes | | a broadcast nobody in the room could take |
+
+"By endpoint" means the session holding the source address, when there is one. `dropped` sums every
+cause but `alone`: a player alone in a lobby broadcasts the whole time and that is not a fault.
+Inside a match room, though, `alone` and `to.unverified` are the two to read first.
 
 ## Wire format
 
@@ -175,8 +203,17 @@ accounts.
 
 The returned object has `start(port, host)` (resolves to the bound port), `stop()` (no `onLeave`
 for what is still open), `setRoom(accountId, room)` (false when the account holds no session; the
-room cap does not apply, the caller is trusted), `vipOf(accountId)` (`null` when none), and for tests
-`sessions`, `buckets`, `sweep()` and `report()`. Account ids are used as map keys and in room names,
+room cap does not apply, the caller is trusted), `vipOf(accountId)` (`null` when none),
+`sessionStats(accountIdOrVip)` and for tests `sessions`, `buckets`, `sweep()` and `report()`.
+
+`sessionStats` looks the key up as an account first, then as a virtual address (the number, not the
+dotted string), and returns `null` when no session matches. Otherwise it returns the counters since
+the session entered its room: `{ vip, room, at, inP, inB, outP, lastDataMs, seenMs, drop, dropTo,
+last }`. `vip` is dotted, `at` is the clock at the call, `lastDataMs` is `null` before the first
+DATA, and `drop` and `dropTo` hold every cause in the table above. `last` is the same object, minus
+`last`, taken when `setRoom` last moved it, so after a match the counters for the match room are
+still there. It is `null` before the first move. A removed session has no stats, so a server
+stamping a match report reads them before the session goes idle or is replaced. Account ids are used as map keys and in room names,
 so pass strings or numbers, not objects.
 
 ## Limits

@@ -215,27 +215,6 @@ Bool IsCommandSynchronized(NetCommandType type) {
 	return FALSE;
 }
 
-/**
- * Returns true if this type of network command requires the ack to be sent directly to the player
- * rather than going through the packet router.  This should really only be used by commands
- * used on the disconnect screen.
- */
-Bool CommandRequiresDirectSend(NetCommandMsg *msg) {
-	if ((msg->getNetCommandType() == NETCOMMANDTYPE_DISCONNECTVOTE) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_DISCONNECTPLAYER) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_LOADCOMPLETE) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_TIMEOUTSTART) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_FILE) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_FILEANNOUNCE) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_FILEPROGRESS) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_DISCONNECTFRAME) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_DISCONNECTSCREENOFF) ||
-			(msg->getNetCommandType() == NETCOMMANDTYPE_FRAMERESENDREQUEST)) {
-		return TRUE;
-	}
-	return FALSE;
-}
-
 AsciiString GetAsciiNetCommandType(NetCommandType type) {
 	AsciiString s;
 	if (type == NETCOMMANDTYPE_FRAMEINFO) {

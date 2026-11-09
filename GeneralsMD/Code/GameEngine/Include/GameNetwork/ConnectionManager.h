@@ -67,8 +67,8 @@ public:
 	void parseUserList(const GameInfo *game);
 	void sendChat(UnicodeString text, Int playerMask, UnsignedInt executionFrame);
 	void sendDisconnectChat(UnicodeString text);
-	void sendLocalCommand(NetCommandMsg *msg, UnsignedByte relay = 0xff);		///< Send command to the players specified in the relay, goes through packet router.
-	void sendLocalCommandDirect(NetCommandMsg *msg, UnsignedByte relay);		///< Send command directly to the players specified, doesn't go through packet router.
+	void sendLocalCommand(NetCommandMsg *msg, UnsignedByte relay = 0xff) { sendLocalCommandDirect(msg, relay); }	///< Every command goes straight to each player now; see sendLocalCommandDirect.
+	void sendLocalCommandDirect(NetCommandMsg *msg, UnsignedByte relay);		///< Send command straight to each player in the relay, and file it locally when our bit is set.
 	void sendLocalGameMessage(GameMessage *msg, UnsignedInt frame);
 	void sendCommand(NetCommandMsg *msg);
 	Bool allCommandsReady(UnsignedInt frame, Bool justTesting = FALSE);
@@ -101,8 +101,6 @@ public:
 	void quitGame();																									///< Disconnect from the game RIGHT NOW!!  Tell everyone else we are disconnecting.
 
 	void voteForPlayerDisconnect(Int slot);														///< Register a vote for a player to be disconnected.
-
-	void resendPendingCommands();																			///< Resend the pending commands to the packet router.
 
 	void setFrameGrouping(time_t frameGrouping);				///< Set the number of frames that are grouped together into packets.
 
@@ -170,7 +168,6 @@ private:
 
 	Bool processNetCommand(NetCommandRef *ref);
 	void processAckStage1(NetCommandMsg *msg);
-	void processAckStage2(NetCommandMsg *msg);
 	void processAck(NetCommandMsg *msg);
 	void processFrameInfo(NetFrameCommandMsg *msg);
 	void processRunAheadMetrics(NetRunAheadMetricsCommandMsg *msg);
@@ -187,7 +184,7 @@ private:
 
 	//	void doPerFrameMetrics(UnsignedInt frame);
 	void getMinimumFps(Int &minFps, Int &minFpsPlayer);			///< Returns the smallest FPS in the m_fpsAverages list.
-	Real getMaximumLatency(); ///< This actually sums the two biggest latencies in the m_latencyAverages list.
+	Real getMaximumLatency(); ///< The worst round trip any connected player reported, seconds (roomWorstLatency).
 
 	void requestFrameDataResend(Int playerID, UnsignedInt frame); ///< request of this player that he send the specified frame's data.
 
@@ -214,9 +211,6 @@ private:
 	time_t m_resendLastRequest;												///< when we last asked for it; 0 = not asked
 
 	FrameDataManager *m_frameData[MAX_SLOTS];
-
-	NetCommandList *m_pendingCommands;
-	NetCommandList *m_relayedCommands;
 
 	FrameMetrics m_frameMetrics;
 

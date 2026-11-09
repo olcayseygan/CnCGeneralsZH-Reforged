@@ -7361,7 +7361,7 @@ TEST(selfslug_threshold_has_a_floor_the_shipped_run_ahead_cannot_undercut)
 TEST(the_run_ahead_covers_the_trip_it_is_sized_for)
 {
 	/* The one thing a run-ahead must never do is come out shorter than the wire.  getMaximumLatency
-		 sums the two worst average round trips, so the trip a command has to survive is half of it,
+		 is the worst round trip in the room, so the trip a command has to survive is half of it,
 		 and the window has to cover that at the rate the room is running.  EA truncated the division:
 		 a 150 ms round trip is 2.25 frames of wire at 30 Hz and truncates to 2 - 66 ms of window for
 		 75 ms of travel, which arrives late every single time. */
@@ -7378,25 +7378,27 @@ TEST(the_run_ahead_covers_the_trip_it_is_sized_for)
 	}
 }
 
-TEST(the_router_is_not_a_leg_of_any_trip)
+TEST(every_trip_is_one_hop_over_the_worst_link)
 {
-	/* Two players, slot 0 the router: both measure the same 0.22 s round trip.  The one trip in the
-		 room is guest to router, half of it.  EA summed both and gave the room a whole round trip. */
+	/* Two players both measure the same 0.22 s round trip.  The one trip in the room is one player
+		 to the other, half of it.  EA summed both and gave the room a whole round trip. */
 	Real two[2] = { 0.22f, 0.22f };
 	Bool twoConnected[2] = { TRUE, TRUE };
-	CHECK_NEAR( roomLatencySum( two, twoConnected, 2, 0 ), 0.22f, 0.0001f );
-	CHECK( computeRunAhead( roomLatencySum( two, twoConnected, 2, 0 ), 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 )
+	CHECK_NEAR( roomWorstLatency( two, twoConnected, 2 ), 0.22f, 0.0001f );
+	CHECK( computeRunAhead( roomWorstLatency( two, twoConnected, 2 ), 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 )
 				 < computeRunAhead( 0.44f, 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );
 
-	/* Three: the worst trip is the two guests through the router, both of their legs.  The router's
-		 own figure is left out even when it is the largest. */
-	Real three[3] = { 0.50f, 0.30f, 0.20f };
+	/* Three: commands go straight from author to player, so the worst trip is the single worst
+		 link, never two of them added.  Slot 0, the router, counts like anybody when it is the worst. */
+	Real three[3] = { 0.30f, 0.50f, 0.20f };
 	Bool threeConnected[3] = { TRUE, TRUE, TRUE };
-	CHECK_NEAR( roomLatencySum( three, threeConnected, 3, 0 ), 0.50f, 0.0001f );
+	CHECK_NEAR( roomWorstLatency( three, threeConnected, 3 ), 0.50f, 0.0001f );
+	three[0] = 0.60f;
+	CHECK_NEAR( roomWorstLatency( three, threeConnected, 3 ), 0.60f, 0.0001f );
 
-	/* a guest who has left is not a leg either */
-	threeConnected[1] = FALSE;
-	CHECK_NEAR( roomLatencySum( three, threeConnected, 3, 0 ), 0.20f, 0.0001f );
+	/* a player who has left is no link at all */
+	threeConnected[0] = FALSE;
+	CHECK_NEAR( roomWorstLatency( three, threeConnected, 3 ), 0.50f, 0.0001f );
 }
 
 /* Measured in a real LAN match: the host lost one FRAMEINFO packet, sat on the frame for twenty

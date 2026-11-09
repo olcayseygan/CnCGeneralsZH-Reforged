@@ -360,8 +360,7 @@ void DisconnectManager::processPacketRouterAck(NetCommandMsg *msg, ConnectionMan
 		}
 		DEBUG_ASSERTCRASH((currentPacketRouterIndex < MAX_SLOTS), ("Invalid packet router index"));
 
-		DEBUG_LOG(("DisconnectManager::processPacketRouterAck - New packet router confirmed, resending pending commands\n"));
-		conMgr->resendPendingCommands();
+		DEBUG_LOG(("DisconnectManager::processPacketRouterAck - New packet router confirmed\n"));
 		m_currentPacketRouterIndex = currentPacketRouterIndex;
 		DEBUG_LOG(("DisconnectManager::processPacketRouterAck - Setting disconnect state to screen on.\n"));
 		m_disconnectState = DISCONNECTSTATETYPE_SCREENON; ///< set it to screen on so that the next call to AllCommandsReady can set up everything for the next frame properly.
@@ -616,8 +615,6 @@ void DisconnectManager::disconnectPlayer(Int slot, ConnectionManager *conMgr) {
 
 		if (retcode == PLAYERLEAVECODE_PACKETROUTER) {
 			DEBUG_LOG(("DisconnectManager::disconnectPlayer - disconnecting player was packet router.\n"));
-
-			conMgr->resendPendingCommands();
 		}
 	}
 }

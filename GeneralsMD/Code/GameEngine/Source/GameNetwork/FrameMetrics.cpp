@@ -51,7 +51,6 @@ FrameMetrics::FrameMetrics()
 	//Initializations missing and needed
 	m_matchFps = LOGICFRAMES_PER_SECOND;
 	m_averageFps = 0.0f;
-	m_averageLatency = 0.0f;
 	m_cushionIndex = 0;
 	m_fpsListIndex = 0;
 	m_lastFpsTimeThing = 0;
@@ -59,30 +58,14 @@ FrameMetrics::FrameMetrics()
 	m_fpsStallMS = 0;
 	m_minimumCushion = 0;
 
-	m_pendingLatencies = NEW time_t[MAX_FRAMES_AHEAD];
-	for(Int i = 0; i < MAX_FRAMES_AHEAD; i++)
-		m_pendingLatencies[i] = 0;
-	//
 	m_fpsList = NEW Real[TheGlobalData->m_networkFPSHistoryLength];
-	m_latencyList = NEW Real[TheGlobalData->m_networkLatencyHistoryLength];
 }
 
 FrameMetrics::~FrameMetrics() {
-	// both are NEW Real[...]; EA freed them with scalar delete, which is a different operator
+	// NEW Real[...]; EA freed it with scalar delete, which is a different operator
 	if (m_fpsList != NULL) {
 		delete[] m_fpsList;
 		m_fpsList = NULL;
-	}
-
-	if (m_latencyList != NULL) {
-		delete[] m_latencyList;
-		m_latencyList = NULL;
-	}
-
-	if (m_pendingLatencies)
-	{
-		delete[] m_pendingLatencies;
-		m_pendingLatencies = NULL;
 	}
 }
 
@@ -90,7 +73,6 @@ void FrameMetrics::init() {
 	// Full of the match's own speed: thirty seconds of history seeded at normal speed held a turbo
 	// room near normal speed for most of a minute.
 	m_averageFps = (Real)m_matchFps;
-	m_averageLatency = (Real)0.2;
 	m_minimumCushion = -1;
 
 	// i is used after the loop; VC6 for-scope let it escape.
@@ -105,9 +87,6 @@ void FrameMetrics::init() {
 	m_lastFpsTimeThing = Clock_Milliseconds();
 	m_fpsStartingFrame = 0;
 	m_fpsStallMS = 0;
-	for (i = 0; i < TheGlobalData->m_networkLatencyHistoryLength; ++i) {
-		m_latencyList[i] = (Real)0.2;
-	}
 	m_cushionIndex = 0;
 }
 
@@ -164,28 +143,6 @@ void FrameMetrics::doPerFrameMetrics(UnsignedInt frame) {
 		m_lastFpsTimeThing = curTime;
 		m_fpsStartingFrame = frame;
 	}
-
-	Int pendingLatenciesIndex = frame % MAX_FRAMES_AHEAD;
-	m_pendingLatencies[pendingLatenciesIndex] = curTime;
-
-}
-
-void FrameMetrics::processLatencyResponse(UnsignedInt frame) {
-	time_t curTime = Clock_Milliseconds();
-	Int pendingIndex = frame % MAX_FRAMES_AHEAD;
-	time_t timeDiff = curTime - m_pendingLatencies[pendingIndex];
-
-	Int latencyListIndex = frame % TheGlobalData->m_networkLatencyHistoryLength;
-	m_averageLatency -= m_latencyList[latencyListIndex] / TheGlobalData->m_networkLatencyHistoryLength;
-	/* A stalled frame keeps this stopwatch running long after the packet landed, and the number
-		 comes back as round trip time.  See sanitizeLatencySample in CushionMetrics.h. */
-	m_latencyList[latencyListIndex] = sanitizeLatencySample( (Real)timeDiff / (Real)1000,
-		MAX_PLAUSIBLE_LATENCY_SECONDS );
-	m_averageLatency += m_latencyList[latencyListIndex] / TheGlobalData->m_networkLatencyHistoryLength;
-
-	if (frame % 16 == 0) {
-//		DEBUG_LOG(("ConnectionManager::processFrameInfoAck - average latency = %f\n", m_averageLatency));
-	}
 }
 
 void FrameMetrics::addCushion(Int cushion) {
@@ -201,10 +158,6 @@ void FrameMetrics::addCushion(Int cushion) {
 
 Int FrameMetrics::getAverageFPS() {
 	return (Int)m_averageFps;
-}
-
-Real FrameMetrics::getAverageLatency() {
-	return m_averageLatency;
 }
 
 void FrameMetrics::addNetworkStall(time_t ms) {

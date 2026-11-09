@@ -72,7 +72,7 @@ enum
 		 the links that need the window get more of it than the old flat floor of ten ever gave them,
 		 and the links that do not stop paying for it.
 
-		 Three since the router stopped being counted as a leg of the trip (roomLatencySum).  The
+		 Three since the router stopped being counted as a leg of the trip (now roomWorstLatency).  The
 		 window that came out of that was the honest one, and at 200 to 300 ms of ping with 30 to 60 ms
 		 of jitter two frames of allowance let the tail through: two players at 200 ms fell from 29
 		 logic frames a second to 26 on a 5-frame window.  A LAN still sits on MIN_RUNAHEAD.  Three
@@ -95,21 +95,18 @@ enum
 	 packet that is still in flight, too large and every click is answered late.  The packet router
 	 computes this for the whole room and broadcasts it, so it is one number everybody obeys. */
 
-/* Every command travels through the packet router, so the longest trip in the room is from the
-	 worst-connected player to the router and on to the second worst: half of each of their round
-	 trips.  The router's own figure is not a leg of any trip.  EA's getMaximumLatency said as much
-	 ("the latency for the packet router is always 0") and then summed it anyway, and the router
-	 measures a real round trip like everybody else.  Three players never showed it, because the two
-	 worst are usually the other two.  Two players always did: the router's round trip plus the
-	 guest's, which is the same trip twice, so the run-ahead covered a whole round trip where half
-	 of one was the wire - 9 frames against 6 at a 200 ms ping.
+/* Every command goes straight from its author to each other player, so the longest trip in the
+	 room is one hop over the worst link in it: half of the worst round trip.  Each player reports
+	 its worst round trip to anyone, and the room's figure is the largest report, the router's own
+	 included.  When every command went through the packet router the trip was two hops, worst
+	 player to router and on to the second worst, and EA summed two round trips for it.
 
-	 latencies and connected are indexed by slot; routerSlot is left out. */
-Real roomLatencySum( const Real latencies[], const Bool connected[], Int numSlots, Int routerSlot );
+	 latencies and connected are indexed by slot. */
+Real roomWorstLatency( const Real latencies[], const Bool connected[], Int numSlots );
 
-/** The run-ahead, in frames.  latencySumSeconds is roomLatencySum's, fps the rate the room has
+/** The run-ahead, in frames.  roundTripSeconds is roomWorstLatency's, fps the rate the room has
 	  settled on. */
-Int computeRunAhead( Real latencySumSeconds, Int fps, UnsignedInt slackPercent,
+Int computeRunAhead( Real roundTripSeconds, Int fps, UnsignedInt slackPercent,
 										 Int minRunAhead, Int maxRunAhead );
 
 /* A latency sample is the wall time between sending a frame's commands and the ack coming back, so

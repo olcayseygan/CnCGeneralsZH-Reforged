@@ -50,7 +50,6 @@ inline Bool IsLoopbackIP(UnsignedInt hostOrderIP) { return (hostOrderIP & 0xFF00
 UnsignedShort GenerateNextCommandID();
 Bool DoesCommandRequireACommandID(NetCommandType type);
 Bool CommandRequiresAck(NetCommandMsg *msg);
-Bool CommandRequiresDirectSend(NetCommandMsg *msg);
 Bool IsCommandSynchronized(NetCommandType type);
 AsciiString GetAsciiNetCommandType(NetCommandType type);
 

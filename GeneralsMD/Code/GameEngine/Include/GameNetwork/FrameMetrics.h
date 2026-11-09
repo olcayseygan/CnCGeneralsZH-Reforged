@@ -46,11 +46,9 @@ public:
 	Int getMatchFps() const { return m_matchFps; }
 
 	void doPerFrameMetrics(UnsignedInt frame);
-	void processLatencyResponse(UnsignedInt frame);
 	void addCushion(Int cushion);
 	void addNetworkStall(time_t ms);	///< wall time spent waiting on another machine's commands, not computing
 
-	Real getAverageLatency();
 	Int getAverageFPS();
 	Int getMinimumCushion();
 
@@ -64,16 +62,10 @@ protected:
 	time_t m_fpsStallMS;																			///< Network stall inside the current fps window; see doPerFrameMetrics.
 	UnsignedInt m_fpsStartingFrame;														///< The logic frame the window above opened on, so the sample is a logic rate.
 	Int m_fpsListIndex;																				///< Index into the array of the current fps list entry being measured.
-	Real m_averageFps;																				///< The current average logic fps, computed just like m_averageLatency below but with the fps numbers.
+	Real m_averageFps;																				///< The current average logic fps: the oldest sample is subtracted out as each new one is added in.
 
-	// round trip time to packet router variables.
-	// The lists are indexed off the frame number of the frame info packet they are associated with.
-	// The index used should be the frame number mod the array length.
-	Real *m_latencyList;				///< A record of the round trip latencies of the frame info packets to the packet router.  Values in seconds.
-	time_t *m_pendingLatencies;																///< The latencies of frame info packets that are "in the air."
-	Real m_averageLatency;																		///< The current average latency, this is used to save calculation time.
-																														///< When a new latency value is received, the old one is subtracted out and the new
-																														///< one is added in.
+	// The round trip the run-ahead is sized on is no longer here: it is each Connection's own srtt
+	// (ConnectionManager::updateRunAhead), since commands stopped going through the packet router.
 
 	// packet arrival cushion variables.
 	// Keeps track of the cushion for the incoming commands.

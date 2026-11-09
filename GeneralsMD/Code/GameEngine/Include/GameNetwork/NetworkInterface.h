@@ -110,7 +110,7 @@ public:
 
 	virtual Int getAverageFPS() = 0;
 	virtual Int getSlotAverageFPS(Int slot) = 0;
-	virtual Real getSlotAverageLatency(Int slot) = 0;		///< seconds, round trip to the packet router
+	virtual Real getSlotAverageLatency(Int slot) = 0;		///< seconds, that player's worst round trip to any other player
 	virtual Int getSlowestSlot( void ) = 0;							///< the slot holding the room under the match's speed, or -1
 
 	virtual void attachTransport(Transport *transport) = 0;

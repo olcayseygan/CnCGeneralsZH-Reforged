@@ -145,6 +145,8 @@ public:
 	UnsignedInt getRetryTimeMS( void ) const { return (UnsignedInt)m_retryTime; }
 	/** FALSE while the retry timeout is still the unmeasured ceiling. */
 	Bool hasLatencySample( void ) const { return m_smoothedLatency >= 0.0f; }
+	/** This link's smoothed round trip (srtt), in milliseconds; negative while hasLatencySample is FALSE. */
+	Real getSmoothedLatencyMS( void ) const { return m_smoothedLatency; }
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 	void debugPrintCommands();

@@ -83,43 +83,32 @@ Int selfSlugThreshold( Int runAhead, UnsignedInt slackPercent )
 	return threshold;
 }
 
-Real roomLatencySum( const Real latencies[], const Bool connected[], Int numSlots, Int routerSlot )
+Real roomWorstLatency( const Real latencies[], const Bool connected[], Int numSlots )
 {
 	Real worst = 0.0f;
-	Real secondWorst = 0.0f;
 	for( Int slot = 0; slot < numSlots; ++slot )
 	{
-		if( slot == routerSlot || !connected[slot] )
-			continue;
-
-		if( latencies[slot] > worst )
-		{
-			secondWorst = worst;
+		if( connected[slot] && latencies[slot] > worst )
 			worst = latencies[slot];
-		}
-		else if( latencies[slot] > secondWorst )
-		{
-			secondWorst = latencies[slot];
-		}
 	}
-	return worst + secondWorst;
+	return worst;
 }
 
-Int computeRunAhead( Real latencySumSeconds, Int fps, UnsignedInt slackPercent,
+Int computeRunAhead( Real roundTripSeconds, Int fps, UnsignedInt slackPercent,
 										 Int minRunAhead, Int maxRunAhead )
 {
-	if( latencySumSeconds < 0.0f )
-		latencySumSeconds = 0.0f;
+	if( roundTripSeconds < 0.0f )
+		roundTripSeconds = 0.0f;
 	if( fps < 1 )
 		fps = 1;			// the room rate is floored long before it gets here, but the division below is real
 
-	/* roomLatencySum() sums the two worst average round trips, so half of it is the one-way trip
+	/* roomWorstLatency() is the worst round trip in the room, so half of it is the one-way trip
 		 a command has to survive.  Rounded up, where EA truncated: a 150 ms round trip truncates to
 		 two frames - 66 ms - to cover 75 ms of wire, and a run-ahead shorter than the trip itself is
 		 not a tight window, it is a stall on every command that uses it.  Nobody ever saw that
 		 because the old floor of ten frames was larger than the formula's answer on every link
 		 anyone plays on; lowering the floor is what makes the arithmetic underneath it matter. */
-	Int frames = (Int)ceilf( (latencySumSeconds / 2.0f) * (Real)fps );
+	Int frames = (Int)ceilf( (roundTripSeconds / 2.0f) * (Real)fps );
 
 	// EA's proportional slack, and then the fixed allowance an average and a percentage cannot give
 	frames += (Int)((frames * (Int)slackPercent) / 100);

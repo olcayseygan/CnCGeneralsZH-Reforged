@@ -18564,6 +18564,84 @@ TEST(an_allocation_inside_a_job_is_counted)
 	JobSystem::shutdown();
 }
 
+/* LOGIC-PARALLEL.md: the logic thread forks on a pool of its own, so a tick running beside the render
+	 forks while the render does, and a job the tick hands out reads what the tick reads, not the
+	 render's copies (LogicThread::isInsideWindow, which answers getFrame among others). */
+enum { JOB_LANE_ITEMS = 512 };
+static Int s_laneMainSeen[ JOB_LANE_ITEMS ];		// 1 read live, 2 read the copies, +4 on a worker, 0 outside a job
+static Int s_laneLogicSeen[ JOB_LANE_ITEMS ];
+static std::atomic<Int> s_lanesIn( 0 );
+
+static void jobLaneRecord( Int *seen, Int index )
+{
+	// both forks hold their first items until the other has begun, so they really overlap, and every
+	// item takes a little while, so the workers are awake before the forking thread has done them all
+	if( index == 0 )
+		s_lanesIn.fetch_add( 1 );
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds( 500 );
+	while( s_lanesIn.load() < 2 && std::chrono::steady_clock::now() < deadline )
+		std::this_thread::yield();
+	const auto busy = std::chrono::steady_clock::now() + std::chrono::microseconds( 50 );
+	while( std::chrono::steady_clock::now() < busy )
+		;
+
+	Int v = LogicThread::isInsideWindow() ? 2 : 1;
+	if( JobSystem::isWorkerThread() )
+		v += 4;
+	if( !JobSystem::isInsideJob() )
+		v = 0;
+	seen[ index ] += v;
+}
+
+static void jobLaneMain( Int index, void * ) { jobLaneRecord( s_laneMainSeen, index ); }
+static void jobLaneLogic( Int index, void * ) { jobLaneRecord( s_laneLogicSeen, index ); }
+
+TEST(the_logic_thread_forks_on_its_own_pool_and_reads_live_state)
+{
+	JobSystem::shutdown();
+	JobSystem::init( 4 );
+	for( Int i = 0; i < JOB_LANE_ITEMS; ++i )
+	{
+		s_laneMainSeen[ i ] = 0;
+		s_laneLogicSeen[ i ] = 0;
+	}
+	s_lanesIn.store( 0 );
+
+	LogicThread::g_windowOpen.store( 1 );
+	std::thread logic( []
+	{
+		LogicThread::t_isLogicThread = TRUE;
+		JobSystem::parallel_for( JOB_LANE_ITEMS, 1, jobLaneLogic, NULL );
+	} );
+	JobSystem::parallel_for( JOB_LANE_ITEMS, 1, jobLaneMain, NULL );
+	logic.join();
+	LogicThread::g_windowOpen.store( 0 );
+
+	Int mainOnWorker = 0, logicOnWorker = 0;
+	for( Int i = 0; i < JOB_LANE_ITEMS; ++i )
+	{
+		// once each, inside a job, and on its own side of the window
+		CHECK_EQ( 2, s_laneMainSeen[ i ] & ~4 );
+		CHECK_EQ( 1, s_laneLogicSeen[ i ] & ~4 );
+		mainOnWorker += ( s_laneMainSeen[ i ] & 4 ) ? 1 : 0;
+		logicOnWorker += ( s_laneLogicSeen[ i ] & 4 ) ? 1 : 0;
+	}
+	CHECK( mainOnWorker > 0 );
+	CHECK( logicOnWorker > 0 );
+	CHECK( !JobSystem::isInsideJob() );
+
+	// with no workers the inline loop is still a job
+	JobSystem::shutdown();
+	JobSystem::init( 0 );
+	s_lanesIn.store( 2 );
+	s_laneMainSeen[ 0 ] = 0;
+	JobSystem::parallel_for( 1, 1, jobLaneMain, NULL );
+	CHECK_EQ( 1, s_laneMainSeen[ 0 ] );
+	CHECK( !JobSystem::isInsideJob() );
+
+	JobSystem::shutdown();
+}
+
 /* Crash report 2655: a block freed twice linked to itself and every later allocation of that size got
 	 that one block.  ReleaseCrash ends the process unless TheGlobalData is gone, as at shutdown, so with
 	 it gone the real path runs and comes back, and what the free list hands out next says whether the

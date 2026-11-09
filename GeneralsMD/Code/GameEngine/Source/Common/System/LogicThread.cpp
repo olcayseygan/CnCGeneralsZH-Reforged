@@ -136,7 +136,7 @@ namespace
 	{
 		"drawable", "modelcondition", "audio", "ingameui", "controlbar", "tacticalview", "radar",
 		"fxlist", "terrainvisual", "particles", "gameclient", "eva", "newdrawable", "clientrandom",
-		"ghost", "messagestream", "display", "jobs", "ondemandflush", "observerlookat",
+		"ghost", "messagestream", "display", "ondemandflush", "observerlookat",
 		"drawablepush", "destroydrawable", "audioread", "clientread", "assetload", "assetloadinwindow",
 		"livemodellock"
 	};

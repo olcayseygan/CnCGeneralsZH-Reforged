@@ -73,7 +73,6 @@ namespace LogicThread
 		CENSUS_GHOST,						///< GhostObjectManager add/remove
 		CENSUS_MESSAGESTREAM,		///< MessageStream::appendMessage
 		CENSUS_DISPLAY,					///< TheDisplay shroud levels
-		CENSUS_JOBS,						///< JobSystem::parallel_for
 		CENSUS_ON_DEMAND_FLUSH,	///< Drawable::getDrawModulesFlushed applying deferred work inside the tick
 		CENSUS_OBSERVER_LOOKAT,	///< ControlBar::getObserverLookAtPlayer, a logic read of client state (M7)
 		CENSUS_DRAWABLE_PUSH,		///< Drawable::doClientWork run inside the tick: hidden, colour, decal, shadows, sub-objects, ambient sound, caption
@@ -89,6 +88,11 @@ namespace LogicThread
 	/** TRUE on the logic thread, FALSE everywhere else.  Constant-initialised, so a read is one
 		* thread-local load. */
 	extern thread_local Bool t_isLogicThread;
+
+	/** TRUE on a worker of the logic thread's job pool (JobSystem.cpp, which owns it): a job the tick
+		* hands out reads what the tick reads, never the render's copies.  It is not t_isLogicThread, so a
+		* worker takes no census, no live-model lock and nothing else that is the tick's alone. */
+	extern thread_local Bool t_isLogicWorker;
 
 	void noteCensus( Channel channel );
 
@@ -127,10 +131,11 @@ namespace LogicThread
 	extern std::atomic<Int> g_windowOpen;
 	void noteWindow( WindowRead read );
 
-	/** TRUE on the main thread inside the window, where a read has to come from a copy. */
+	/** TRUE on the main thread inside the window, and on the main pool's workers it forks there, where a
+		* read has to come from a copy.  The logic thread and its own pool's workers read the live state. */
 	inline Bool isInsideWindow( void )
 	{
-		return g_windowOpen.load( std::memory_order_relaxed ) && !t_isLogicThread;
+		return g_windowOpen.load( std::memory_order_relaxed ) && !t_isLogicThread && !t_isLogicWorker;
 	}
 
 	inline void windowRead( WindowRead read )

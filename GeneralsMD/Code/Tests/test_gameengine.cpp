@@ -23544,6 +23544,7 @@ TEST(save_older_than_60hz_loads_only_as_mission_save)
 #include "test_game_results.inc"
 #include "test_map_ini_rollback.inc"
 #include "test_hostile_map.inc"
+#include "test_pathfind_slicing.inc"
 
 #include "GameClient/Snow.h"
 

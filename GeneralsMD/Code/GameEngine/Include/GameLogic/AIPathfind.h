@@ -458,8 +458,16 @@ public:
 	Bool allocateInfo(const ICoord2D &pos);
 	void releaseInfo(void);
 	Bool hasInfo(void) const {return m_info!=NULL;}
-	zoneStorageType getZone(void) const {return m_zone;}
-	void setZone(zoneStorageType zone) {m_zone = zone;}
+	/* Two zones, read through the slot PathfindZoneManager says is current.  The full zone pass
+		 writes the other slot over several frames and flips s_zoneSlot when it is done, so every query
+		 until then reads the zones it read before the pass began. */
+	zoneStorageType getZone(void) const {return m_zone[s_zoneSlot];}
+	void setZone(zoneStorageType zone) {m_zone[s_zoneSlot] = zone;}
+	zoneStorageType getZoneIn(Int slot) const {return m_zone[slot];}
+	void setZoneIn(Int slot, zoneStorageType zone) {m_zone[slot] = zone;}
+	/// a structure went up or came down here: neither the zones in use nor the pass being built know it
+	void clearZone(void) {m_zone[0] = m_zone[1] = 0;}
+	static Int s_zoneSlot;					///< which of m_zone the game reads
 	void setGoalUnit(ObjectID unit, const ICoord2D &pos );
 	void setGoalAircraft(ObjectID unit, const ICoord2D &pos );
 	void setPosUnit(ObjectID unit, const ICoord2D &pos );
@@ -492,8 +500,9 @@ private:
 	UnsignedInt m_pinched:1; //< This cell is surrounded by obstacle cells.
 	/* All sixteen bits now, the two flags having moved up into the word above, so the cell is no
 		 bigger.  It was fourteen, which capped the raw zones calculateZones hands out at 16383; a
-		 thousand-cell map can need more. */
-	zoneStorageType m_zone;			///< Zone. Each zone is a set of adjacent terrain type.  If from & to in the same zone, you can successfully pathfind.  If not,
+		 thousand-cell map can need more.  Two of them since the zone pass was spread over frames, which
+		 costs nothing: they fill the two bytes of padding the cell had. */
+	zoneStorageType m_zone[2];			///< Zone. Each zone is a set of adjacent terrain type.  If from & to in the same zone, you can successfully pathfind.  If not,
 														// you still may be able to if you can cross multiple terrain types.
 	UnsignedByte m_type:4;			///< what type of cell terrain this is.  
 	UnsignedByte m_flags:4;			///< what type of units are in or moving through this cell.
@@ -570,6 +579,80 @@ private:
 // units left 329 of them waiting for a path that was never queued.
 enum { PATHFIND_QUEUE_LEN=2048};
 
+/* One line of units waiting for a path.  The pathfinder keeps two, human players' units and
+	 computer players', so that a person's order is never answered after a computer army's hundreds
+	 of repaths (Pathfinder_servePathQueues). */
+struct PathRequestRing
+{
+	ObjectID ids[ PATHFIND_QUEUE_LEN ];
+	/* The frame each request went in, for the wait the match report prints.  Nothing reads it back
+		 into a decision, so it is not saved and not in the CRC. */
+	UnsignedInt queuedFrame[ PATHFIND_QUEUE_LEN ];
+	Int head;		///< the next one to answer
+	Int tail;		///< the first free slot
+
+	void clear( void )
+	{
+		for( Int i = 0; i < PATHFIND_QUEUE_LEN; ++i )
+			ids[ i ] = INVALID_ID;
+		head = tail = 0;
+	}
+	Int depth( void ) const { return ( tail - head + PATHFIND_QUEUE_LEN ) % PATHFIND_QUEUE_LEN; }
+	Bool isEmpty( void ) const { return head == tail; }
+	ObjectID front( void ) const { return ids[ head ]; }
+	/// FALSE when full: one slot always stays empty, so that head == tail means empty
+	Bool push( ObjectID id, UnsignedInt frame )
+	{
+		const Int next = ( tail + 1 ) % PATHFIND_QUEUE_LEN;
+		if( next == head )
+			return FALSE;
+		ids[ tail ] = id;
+		queuedFrame[ tail ] = frame;
+		tail = next;
+		return TRUE;
+	}
+	void pop( void )
+	{
+		ids[ head ] = INVALID_ID;
+		head = ( head + 1 ) % PATHFIND_QUEUE_LEN;
+	}
+};
+
+/* The order one frame answers path requests in.  A search the frame's cells ran out on holds the
+	 open lists, so its unit goes first and nobody else searches until it ends; if it stops again,
+	 that is the frame.  Then human players' units, then computer players' with what is left: the
+	 computer does not need its answer this frame, and a person who clicked does.  The cap counts the
+	 requests started from both lines together.  Server::hasBudget() says whether the frame has cells
+	 left, and Server::serve( ring ) answers ring.front() and returns FALSE when that search stopped,
+	 which leaves the unit at the head.  Which line a unit is in is its player's type, game setup that
+	 every machine and the replay hold alike.  Returns the requests started. */
+template <class Server>
+Int Pathfinder_servePathQueues( PathRequestRing &human, PathRequestRing &computer, ObjectID stoppedOwner,
+	Int cap, Server &server )
+{
+	Int started = 0;
+	if( stoppedOwner != INVALID_ID && !computer.isEmpty() && computer.front() == stoppedOwner )
+	{
+		if( cap <= 0 || !server.hasBudget() )
+			return 0;
+		++started;
+		if( !server.serve( computer ) )
+			return started;
+		computer.pop();
+	}
+	while( started < cap && server.hasBudget() )
+	{
+		PathRequestRing &ring = human.isEmpty() ? computer : human;
+		if( ring.isEmpty() )
+			break;
+		++started;
+		if( !server.serve( ring ) )
+			break;
+		ring.pop();
+	}
+	return started;
+}
+
 struct TCheckMovementInfo;
 
 /** 
@@ -585,7 +668,7 @@ public:
 	ZoneBlock();
 	~ZoneBlock();  // not virtual, please don't override without making virtual.  jba.
 
-	void blockCalculateZones(	PathfindCell **map, PathfindLayer layers[], const IRegion2D &bounds);	///< Does zone calculations.  
+	void blockCalculateZones(	PathfindCell **map, PathfindLayer layers[], const IRegion2D &bounds, Int slot);	///< Does zone calculations on the cells' zones in slot.
 	zoneStorageType getEffectiveZone(LocomotorSurfaceTypeMask acceptableSurfaces, Bool crusher, zoneStorageType zone) const;
 
 	void clearMarkedPassable(void) {m_markedPassable = false;}
@@ -641,7 +724,16 @@ public:
 	Bool needToCalculateZones(void) const {return m_nextFrameToCalculateZones <= TheGameLogic->getFrame() ;} ///< Returns true if the zones need to be recalculated.
  	void markZonesDirty( Bool insert ) ; ///< Called when the zones need to be recalculated.
  	void updateZonesForModify( PathfindCell **map,  PathfindLayer layers[], const IRegion2D &structureBounds, const IRegion2D &globalBounds ) ; ///< Called to recalculate an area when a structure has been removed.
-	void calculateZones(	PathfindCell **map, PathfindLayer layers[], const IRegion2D &bounds);	///< Does zone calculations.  
+	void calculateZones(	PathfindCell **map, PathfindLayer layers[], const IRegion2D &bounds);	///< Does zone calculations, all of it now.
+
+	/* The same pass over several frames.  beginRebuild takes the map; stepRebuild does about
+		 cellBudget cells of the pass and answers TRUE on the call that puts the new zones in place of
+		 the old.  Every query until then reads the zones from before the pass. */
+	enum { REBUILD_CELLS_PER_FRAME = 4 * 65536 };	///< four passes over 65536 cells: a 256x256 map in one frame
+	void beginRebuild( PathfindCell **map, PathfindLayer layers[], const IRegion2D &bounds );
+	Bool stepRebuild( Int cellBudget );
+	Bool isRebuilding( void ) const { return m_build.phase != BUILD_IDLE; }
+
 	zoneStorageType getEffectiveZone(LocomotorSurfaceTypeMask acceptableSurfaces, Bool crusher, zoneStorageType zone) const;
 	zoneStorageType getEffectiveTerrainZone(zoneStorageType zone) const;
 
@@ -662,13 +754,55 @@ public:
 
 	void setAllPassable(void);
 
-	void setBridge(Int cellX, Int cellY, Bool bridge);
-	Bool interactsWithBridge(Int cellX, Int cellY) const; 
+	Bool interactsWithBridge(Int cellX, Int cellY) const;
 
 private:
-	void allocateZones(void);
 	void freeZones(void);
 	void freeBlocks(void);
+
+	enum BuildPhase { BUILD_IDLE, BUILD_RAW, BUILD_COLLAPSE, BUILD_BLOCKS, BUILD_HIERARCHY };
+	Int rawZonesForBlockColumn( Int xBlock );		///< returns the cells it did
+	void collapseRawZones( void );
+	void hierarchyForColumn( Int x );
+	void finishRebuild( void );
+	void allocateBuildZones( void );
+	void freeBuildZones( void );
+
+	/* Everything the pass in progress writes, apart from the cells' other zone slot: its own tables
+		 and zone blocks, swapped with the ones in use when it is done.  Never saved; a loaded game
+		 classifies the map and does the whole pass at once. */
+	struct Rebuild
+	{
+		BuildPhase phase;
+		Int slot;											///< the cells' zone slot it writes
+		PathfindCell **map;
+		PathfindLayer *layers;
+		IRegion2D bounds;
+		Int xCount, yCount;						///< zone blocks across and down
+		Int cursor;										///< the block column or cell column next in this phase
+		UnsignedInt maxZone;
+		UnsignedInt zonesAllocated;
+		zoneStorageType *groundCliffZones;
+		zoneStorageType *groundWaterZones;
+		zoneStorageType *groundRubbleZones;
+		zoneStorageType *terrainZones;
+		zoneStorageType *crusherZones;
+		zoneStorageType *hierarchicalZones;
+		ZoneBlock *blockOfZoneBlocks;
+		ZoneBlock **zoneBlocks;
+		Int layerZone[ LAYER_LAST + 1 ];
+		std::vector<zoneStorageType> equivalency;	///< the raw zones' union-find
+		std::vector<Int> collapsed;								///< raw zone to collapsed zone
+		/* Structures that went up or came down while the pass ran.  Their cells hold zone 0 in both
+			 slots, which the rest of the pass steps round, and the swap fills them the way it fills
+			 them today, with updateZonesForModify.  Past MAX_CHANGED the last box grows to hold them. */
+		enum { MAX_CHANGED = 32 };
+		IRegion2D changed[ MAX_CHANGED ];
+		Int numChanged;
+		Int frames;										///< diagnostics: calls the pass took
+		Int64 ticks, worstTicks;			///< diagnostics: its time, and the longest call
+	};
+	Rebuild m_build;
 
 private:
 	ZoneBlock			*m_blockOfZoneBlocks;			///< Zone blocks - Info for hierarchical pathfinding at a "blocky" level.
@@ -1118,6 +1252,8 @@ protected:
 	void settleSuspendedSearch( void );	///< finish a stopped search before another search takes the lists
 	void dropSuspendedSearch( void );		///< throw a stopped search away
 	void closeSearch( void );						///< hand back the lists of the main search that just ended
+	struct QueueServer;									///< processPathfindQueue's side of Pathfinder_servePathQueues
+	Bool serveQueuedRequest( PathRequestRing &ring, UnsignedInt now );	///< answer ring.front(); FALSE when its search stopped
 	Path *findHierarchicalPath( Bool isHuman, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to, Bool crusher);	
 	Path *findClosestHierarchicalPath( Bool isHuman, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to, Bool crusher);	
 	Path *internal_findHierarchicalPath( Bool isHuman, const LocomotorSurfaceTypeMask locomotorSurface, const Coord3D *from, const Coord3D *to, Bool crusher, Bool closestOK, Int cellCap = 0);	///< cellCap 0 searches every block
@@ -1301,12 +1437,11 @@ private:
 	Int						m_moveAlliesDepth;
 
 
-	// Pathfind queue
-	ObjectID			m_queuedPathfindRequests[PATHFIND_QUEUE_LEN];
-	Int						m_queuePRHead;
-	Int						m_queuePRTail;
-	/* Which ids sit between head and tail, by ObjectID, so queueForPath answers "already queued"
-		 without walking up to 2048 slots on every request. Derived from the ring, never saved. */
+	// Pathfind queue, in two lines: human players' units are answered first (Pathfinder_servePathQueues)
+	PathRequestRing	m_humanQueue;
+	PathRequestRing	m_computerQueue;
+	/* Which ids sit in either line, by ObjectID, so queueForPath answers "already queued" without
+		 walking up to 2048 slots on every request. Derived from the rings, never saved. */
 	std::vector<bool>	m_isQueuedForPath;
 	Int						m_cumulativeCellsAllocated;
 

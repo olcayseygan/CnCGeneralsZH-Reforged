@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Your orders go before the computer's
+
+- Your units get their routes before any computer player's. The game works out a few routes a frame and used to take requests in the order they came, so late in a big match against several computer players a move you gave could wait a second or more behind hundreds of the computer's own. Now a human player's units are answered first and the computer takes what is left of the frame.
+- On large maps a building going up or coming down no longer stalls the game for a frame. The map's areas are worked out again over a few frames instead of all at once. Small maps still do it in one frame, as before.
+- A replay recorded on an earlier version will not play back on this one.
+
 ## Ratings, a ladder and your opponent's name before the map loads
 
 - The online hub has a Ladder button where Buddies stood. EA's hub never had one, and nothing answers Buddies on this service. The hub stops asking a new profile for its locale, the player card stops saying "from Unknown" under every name and loses its Set Locale button and Asian text boxes, the lobby and room tooltips drop their "Region: Unknown" line, and the twelve generals' win percentages, which read "%d%%" for want of figures, now come from games played on this service, worked out the way EA's hub worked them out. A day with no figures leaves the panel off the screen. EA's yellow "Welcome to Generals Zero Hour Online." no longer sits over the server's own message, and the panel's tooltip no longer pops up wherever the cursor rests, nor does Quick Match's over the opponent you were just paired with. Quick Match's buttons are lettered in capitals like every other online screen; Stop was the one in small letters.

@@ -1511,6 +1511,9 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
  */
 void AISkirmishPlayer::newMap( void )
 {
+	// the last match's objects, which AIPlayer::newMap would have let go of had this called it
+	forgetStampTurns();
+	m_knownGunsFrame = 0;
 	// what the setup handed out over the default, which doSpending spends as it would a hoard
 	m_startFortune = (Int)m_player->getMoney()->countMoney() - (Int)TheGlobalData->m_defaultStartingCash.countMoney();
 	if( m_startFortune < 0 )

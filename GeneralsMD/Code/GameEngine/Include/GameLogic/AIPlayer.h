@@ -495,6 +495,9 @@ protected:
 	void steerAmbulance(Int slot, const std::vector<AIKnownGun> &guns);	///< one Ambulance's job this pass
 	void upgradeHelix(Object *helix, Int role, AIEnemyComposition *enemy, Bool *enemyRead);	///< the upgrade this Helix's job or the enemy army calls for
 	void collectKnownGuns(std::vector<AIKnownGun> *guns) const;	///< every enemy gun this AI knows of, in object list order
+	void readKnownGuns(std::vector<AIKnownGun> *guns) const;	///< ... read off the objects; collectKnownGuns keeps it for the frame
+	mutable std::vector<AIKnownGun> m_knownGuns;	///< collectKnownGuns' answer, for the rest of the frame it was read on
+	mutable UnsignedInt m_knownGunsFrame;					///< the frame of it, plus one; 0 for none
 	void steerHealer(Int slot, const std::vector<AIKnownGun> &guns);	///< a healer over our hurt behind the line, clear of every known gun
 	void flyRaid(Int slot, const std::vector<AIKnownGun> &guns);	///< a raider's bomb run on an enemy building, in and out the quiet side
 	Bool pickRaidTarget(const Object *raider, const std::vector<AIKnownGun> &guns, Object **target, Coord3D *entry, Int *gunsOnRun) const;
@@ -559,6 +562,7 @@ public:
 		how often, and it is a function of the player index alone - the simulation stays deterministic.
 	*/
 	static Int computeUpdatePhase( Int playerIndex, Int cycleFrames );
+	static void forgetStampTurns( void );	///< a new match or a load: the shared influence turns name the last one's objects
 
 	Bool isGunshipChinook( const Object *obj ) const;	///< a Chinook this AI bought to carry riders, not to gather
 	Bool isGunshipAircraft( const Object *obj ) const;	///< a helicopter, or one of those Chinooks
@@ -877,12 +881,12 @@ protected:
 
 	/** What this player knows can shoot at each patch of the map, and what it has there itself. */
 	AIInfluenceMap	m_influence;
-	AIInfluenceMap	m_influenceNext;		///< Hard's: what this round's objects have stamped so far; it becomes m_influence when the round ends
-	void updateInfluence(void);										///< Hard's map, one share of the objects a frame
+	AIInfluenceMap	m_influenceNext;		///< what this round's objects have stamped so far; it becomes m_influence when the round ends
+	void updateInfluence(void);										///< the map, one share of the objects a frame
 	void rebuildInfluence(void);									///< the whole map on one frame
 	void stampInfluence(AIInfluenceMap &map, const Object *obj);
 	void stampFireReports(AIInfluenceMap &map);
-	void ensureInfluence(void);										///< the map, no older than this rung reads it; below Hard this is what draws it
+	void ensureInfluence(void);										///< the map, no older than this rung reads it, for a player that does not stamp it
 	Bool hasTacticalMap(void) const;							///< Hard's map, for the reads the rungs below it do not make
 	Bool quietGround(const Coord3D *from, const Real *gun, Coord3D *spot);	///< where to go from here to be off the map's guns and clear of this one (x, y, reach, or NULL); FALSE when no way gets out
 

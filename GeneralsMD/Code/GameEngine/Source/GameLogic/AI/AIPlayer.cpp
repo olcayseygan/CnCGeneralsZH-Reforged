@@ -349,6 +349,7 @@ m_expandTimer(1),
 m_skillLevel(AISKILL_BRUTAL),
 m_role(AIROLE_AGGRESSIVE)
 {
+	m_knownGunsFrame = 0;
 	for (Int scoutSlot = 0; scoutSlot < MAX_AI_SCOUTS; ++scoutSlot) {
 		m_scoutID[scoutSlot] = INVALID_ID;
 		m_scoutTargetFor[scoutSlot] = -1;	// nothing looked at yet; the score picks the first target
@@ -5241,14 +5242,26 @@ Int AIPlayer::hoardThreshold( void )
 //----------------------------------------------------------------------------------------------------------
 /**
  * Where in a repeating check's cycle this player sits.  A player's slot is its index alone, so the
- * answer is the same on every machine and survives a save/load.
+ * answer is the same on every machine and survives a save/load.  The index is bit-reversed first:
+ * index times cycle over MAX_PLAYER_COUNT put 32 seats in the first two thirds of every cycle and left
+ * the last third with no AI on it, where reversed the first 2, 4, 8 or 32 seats halve the gaps again
+ * and again, and any number of seats fills the cycle evenly.
  */
 Int AIPlayer::computeUpdatePhase( Int playerIndex, Int cycleFrames )
 {
 	if (playerIndex < 0 || cycleFrames < 1) {
 		return 0;
 	}
-	return ((playerIndex % MAX_PLAYER_COUNT) * cycleFrames) / MAX_PLAYER_COUNT;
+	enum { PHASE_BITS = 6 };
+	static_assert( MAX_PLAYER_COUNT <= (1 << PHASE_BITS), "every player needs its own reversed slot" );
+	const Int index = playerIndex % MAX_PLAYER_COUNT;
+	Int reversed = 0;
+	for (Int bit = 0; bit < PHASE_BITS; ++bit) {
+		if (index & (1 << bit)) {
+			reversed |= 1 << (PHASE_BITS - 1 - bit);
+		}
+	}
+	return (reversed * cycleFrames) >> PHASE_BITS;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -5846,6 +5859,8 @@ void AIPlayer::update( void )
  */
 void AIPlayer::newMap( void )
 {
+	forgetStampTurns();
+	m_knownGunsFrame = 0;
 	BuildListInfo *info = m_player->getBuildList();
 	// Add any factories placed to the build list.
 	Object *obj;
@@ -9057,7 +9072,7 @@ struct KnownDefence
 //----------------------------------------------------------------------------------------------------------
 /** Every enemy building this player knows of that shoots the ground, its garrison's guns included, in the
 	* order of the object list.  What a spot on the map scores is the guns among them that reach it.  A
-	* list and not a layer of the influence map: that map is drawn on demand below Hard, its enemy layer
+	* list and not a layer of the influence map: that map is up to two stamping rounds old, its enemy layer
 	* mixes the armies in, and every layer of it goes into a save; a match has a few dozen of these at most.
 	* Not a superweapon, whose gun reaches the whole map. */
 //----------------------------------------------------------------------------------------------------------
@@ -13846,7 +13861,21 @@ static Bool raidAheadIsHot( const std::vector<AIKnownGun> &guns, const Coord3D *
 	return left <= RAID_LOOKAHEAD && gunsOverFlight( guns, entry->x, entry->y, target->x, target->y ) > RAID_MAX_GUNS_ON_RUN;
 }
 
+/** A walk of every object, so it is taken once a frame: the healers and the Ambulances look on the same
+	* frame, and the team pick and the training ask for it twice in one pass. */
 void AIPlayer::collectKnownGuns( std::vector<AIKnownGun> *guns ) const
+{
+	const UnsignedInt stamp = TheGameLogic->getFrame() + 1;
+	if( m_knownGunsFrame != stamp )
+	{
+		m_knownGuns.clear();
+		readKnownGuns( &m_knownGuns );
+		m_knownGunsFrame = stamp;
+	}
+	guns->insert( guns->end(), m_knownGuns.begin(), m_knownGuns.end() );
+}
+
+void AIPlayer::readKnownGuns( std::vector<AIKnownGun> *guns ) const
 {
 	const Int me = m_player->getPlayerIndex();
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
@@ -13929,19 +13958,26 @@ static Bool airStrikeIsClear( Object *aircraft, const Object *target, const Coor
 	return TRUE;
 }
 
-/** The nearest enemy this player knows of that the aircraft can attack with a clear strike (airStrikeIsClear),
-	* the first in the object list of two as near; NULL for none. */
-static Object *pickAirTarget( const Player *player, Object *aircraft, const std::vector<AIKnownGun> &guns )
+/** Every enemy this player knows of, in object list order: read once a steering pass, not once an aircraft. */
+static void collectKnownEnemies( const Player *player, std::vector<Object *> *known )
 {
 	const Int me = player->getPlayerIndex();
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+		if( !obj->isEffectivelyDead() && !obj->isKindOf( KINDOF_PROJECTILE ) && player->getRelationship( obj->getTeam() ) == ENEMIES &&
+				observerKnowsAbout( obj, me ) )
+			known->push_back( obj );
+}
+
+/** The nearest of the known enemies that the aircraft can attack with a clear strike (airStrikeIsClear), the
+	* first in the object list of two as near; NULL for none. */
+static Object *pickAirTarget( Object *aircraft, const std::vector<Object *> &known, const std::vector<AIKnownGun> &guns )
+{
 	const Coord3D *pos = aircraft->getPosition();
 	Object *best = NULL;
 	Real bestSqr = 0.0f;
-	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	for( size_t k = 0; k < known.size(); ++k )
 	{
-		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) || player->getRelationship( obj->getTeam() ) != ENEMIES ||
-				!observerKnowsAbout( obj, me ) )
-			continue;
+		Object *obj = known[ k ];
 		const Real distSqr = sqr( obj->getPosition()->x - pos->x ) + sqr( obj->getPosition()->y - pos->y );
 		if( (best && distSqr >= bestSqr) ||
 				aircraft->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, obj, CMD_FROM_AI ) < ATTACKRESULT_POSSIBLE_AFTER_MOVING ||
@@ -13972,6 +14008,8 @@ void AIPlayer::steerAircraft( void )
 
 	std::vector<AIKnownGun> guns;
 	Bool gunsRead = FALSE;
+	std::vector<Object *> known;
+	Bool knownRead = FALSE;
 	std::vector<Object *> owned;
 	m_player->iterateObjects( collectOwned, &owned );
 	for( size_t o = 0; o < owned.size(); ++o )
@@ -14012,7 +14050,12 @@ void AIPlayer::steerAircraft( void )
 		if( airStrikeIsClear( aircraft, target, at, guns ) )
 			continue;
 
-		Object *other = pickAirTarget( m_player, aircraft, guns );
+		if( !knownRead )
+		{
+			collectKnownEnemies( m_player, &known );
+			knownRead = TRUE;
+		}
+		Object *other = pickAirTarget( aircraft, known, guns );
 		DEBUG_LOG(("AI AIR frame %d player %d '%s' %d calls off its strike at '%s' (%.0f,%.0f), %d known anti-air guns over it, for %s\n",
 			now, m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
 			target ? target->getTemplate()->getName().str() : "a place", at->x, at->y,
@@ -16375,10 +16418,73 @@ void AIPlayer::stampFireReports( AIInfluenceMap &map )
 	}
 }
 
+/** The objects whose ID comes up on this frame of a round of that many frames, in object list order.  Every
+	* seat stamping on rounds of one length reads the same share, so the list is walked once a frame for all of
+	* them, where 32 seats each walked all of it for a sixtieth: 137000 steps a frame at minute 9.  IDs and not
+	* pointers, let go of with the match (forgetStampTurns); an object made after the frame's first reader waits
+	* for its next turn. */
+struct StampTurn
+{
+	UnsignedInt frame;	///< the frame read, plus one; 0 for never
+	Int round;
+	std::vector<ObjectID> ids;
+};
+// a round is the rung's alone (influenceRound), so one frame asks for at most AISKILL_COUNT; something that
+// gave two seats of one rung different rounds would need a slot for each
+enum { STAMP_TURN_SLOTS = AISKILL_COUNT + 1 };
+static StampTurn theStampTurns[ STAMP_TURN_SLOTS ];
+
+static const std::vector<ObjectID> &stampTurn( Int round )
+{
+	StampTurn *turn = &theStampTurns[ 0 ];
+	for( Int i = 0; i < STAMP_TURN_SLOTS; ++i )
+	{
+		if( theStampTurns[ i ].round == round )
+		{
+			turn = &theStampTurns[ i ];
+			break;
+		}
+		if( theStampTurns[ i ].frame < turn->frame )
+			turn = &theStampTurns[ i ];
+	}
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( turn->frame != now + 1 || turn->round != round )
+	{
+		turn->ids.clear();
+		const UnsignedInt share = now % (UnsignedInt)round;
+		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+			if( (UnsignedInt)obj->getID() % (UnsignedInt)round == share )
+				turn->ids.push_back( obj->getID() );
+		turn->frame = now + 1;
+		turn->round = round;
+	}
+	return turn->ids;
+}
+
+/*static*/ void AIPlayer::forgetStampTurns( void )
+{
+	for( Int i = 0; i < STAMP_TURN_SLOTS; ++i )
+	{
+		theStampTurns[ i ].frame = 0;
+		theStampTurns[ i ].round = 0;
+		theStampTurns[ i ].ids.clear();
+	}
+}
+
+/** Frames in one of the player's stamping rounds.  Hard reads a map up to two rounds old (updateInfluence);
+	* the rungs below it drew theirs whole once it was older than m_influenceSeconds, so they stamp in rounds of
+	* half that and read no staler a map than they did. */
+static Int influenceRound( const AIDifficultyProfile *profile )
+{
+	const Int frames = rungFrames( profile->m_influenceSeconds );
+	return profile->m_tacticalMicro ? frames : max<Int>( 1, frames / 2 );
+}
+
 /** Stamping the whole map in one frame was 2 to 6 ms a player a second at minute 30, the largest of the
-	* burst frames the AI owned.  So on Hard's clock each object stamps once a round on the frame its ID falls
-	* on, into a map nobody reads, and that map takes over when the player's round ends: the map read is
-	* whole, its oldest stamp up to two rounds old where it used to be one. */
+	* burst frames the AI owned.  So each object stamps once a round on the frame its ID falls on, into a map
+	* nobody reads, and that map takes over when the player's round ends: the map read is whole, its oldest
+	* stamp up to two rounds old where it used to be one.  Every rung, from doTactics: below Hard the whole
+	* draw on the frame something asked (ensureInfluence) was the same burst, a few seconds apart. */
 void AIPlayer::updateInfluence( void )
 {
 	// the first look takes everything at once, so nothing reads a map that is not whole
@@ -16394,13 +16500,14 @@ void AIPlayer::updateInfluence( void )
 	}
 
 	const UnsignedInt now = TheGameLogic->getFrame();
-	const Int round = rungFrames( getSkillProfile()->m_influenceSeconds );
-	const UnsignedInt turn = now % (UnsignedInt)round;
-	// ponytail: one walk of every object a player a frame, about 10000 ID tests at minute 30; one
-	// shared list a frame if that ever shows beside the stamps
-	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
-		if( (UnsignedInt)obj->getID() % (UnsignedInt)round == turn )
+	const Int round = influenceRound( getSkillProfile() );
+	const std::vector<ObjectID> &turn = stampTurn( round );
+	for( size_t i = 0; i < turn.size(); ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( turn[ i ] );
+		if( obj )
 			stampInfluence( m_influenceNext, obj );
+	}
 
 	if( (now + computeUpdatePhase( m_player->getPlayerIndex(), round )) % round == 0 )
 	{
@@ -16415,7 +16522,7 @@ void AIPlayer::updateInfluence( void )
 	}
 }
 
-/** The whole map on one frame: Hard's first look, and every draw below Hard. */
+/** The whole map on one frame: the first look, and ensureInfluence's draw. */
 void AIPlayer::rebuildInfluence( void )
 {
 	if( !m_influence.isSized() )
@@ -16441,16 +16548,14 @@ void AIPlayer::rebuildInfluence( void )
 	m_influence.markBuilt( TheGameLogic->getFrame() );
 }
 
-/** Hard stamps its map over the frames of its clock (updateInfluence), and everything below Hard draws it
-	* here, when it has something to read it for and it is older than the rung's m_influenceSeconds: a whole
-	* draw costs 2 to 6 ms late in a match, and a quiet match has nothing to read it for.  -notactics stays off
-	* the map altogether, and every read of one never drawn is nothing there. */
+/** Every rung stamps its map over the frames of its clock (updateInfluence), so this draws it whole only for
+	* a player whose doTactics does not run, or one whose rounds have not yet handed over a map, when it is older
+	* than the rung's m_influenceSeconds.  -notactics stays off the map altogether, and every read of one never
+	* drawn is nothing there. */
 void AIPlayer::ensureInfluence( void )
 {
 	if( measuringWithoutTactics() )
 		return;
-	// ponytail: below Hard one whole walk of the objects on one frame, every two or four seconds at most while
-	// something asks.  Stamp it over frames as Hard's if that ever shows in a tail
 	const AIDifficultyProfile *profile = getSkillProfile();
 	if( m_influence.isBuilt() && (profile->m_tacticalMicro ||
 			TheGameLogic->getFrame() - m_influence.getBuiltFrame() < (UnsignedInt)rungFrames( profile->m_influenceSeconds )) )
@@ -16667,8 +16772,7 @@ void AIPlayer::doTactics( void )
 	const Int me = m_player->getPlayerIndex();
 	const Bool tactics = getSkillProfile()->m_tacticalMicro;
 
-	if( tactics )
-		updateInfluence();
+	updateInfluence();
 
 	answerFire();
 
@@ -20074,7 +20178,7 @@ void AIPlayer::xfer( Xfer *xfer )
 	}
 	// the units part way through a tactical step, above all the mood each was calmed from: a game saved
 	// in the middle of a kite would otherwise load a unit that stays calm for the rest of the match.  And
-	// the influence map as it stands, since the next rebuild can be seconds off below Hard and everything
+	// the influence map as it stands, since the next round hands one over seconds later and everything
 	// that picks where to stand reads it before then.
 	if( version >= 9 )
 	{
@@ -20434,6 +20538,9 @@ void AIPlayer::loadPostProcess( void )
 	// the doctrine again at once, with the trust the save held, so nothing between the load and the
 	// next team pick runs without it
 	ensureDoctrine();
+	// what was read on a frame of the game before the load names that game's objects
+	m_knownGunsFrame = 0;
+	forgetStampTurns();
 }  // end loadPostProcess
 
 // ------------------------------------------------------------------------------------------------

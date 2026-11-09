@@ -4806,6 +4806,14 @@ TEST(ai_players_do_not_all_check_in_on_the_same_frame)
 		for (j = i + 1; j < MAX_PLAYER_COUNT; j++)
 			CHECK_NE(seen[i], seen[j]);
 
+	/* And a full lobby fills the cycle: index times cycle over MAX_PLAYER_COUNT sat 32 seats in its
+	 * first two thirds, and the last third of every cycle ran no AI at all. */
+	Int latest = 0;
+	for (i = 1; i <= 32; i++)
+		if (seen[i] > latest)
+			latest = seen[i];
+	CHECK(latest >= cycle * 15 / 16);
+
 	/* It is a function of the player index and nothing else - no clock, no random - or the
 	 * lockstep simulation would desync the moment two machines disagreed. */
 	CHECK_EQ(AIPlayer::computeUpdatePhase(3, cycle), AIPlayer::computeUpdatePhase(3, cycle));

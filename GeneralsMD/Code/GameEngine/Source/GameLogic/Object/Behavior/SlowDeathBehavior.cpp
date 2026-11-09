@@ -615,33 +615,49 @@ Bool SlowDeathBehavior::updateMomentum()
 
 	const Bool airborne = heightAboveFloor(obj) > MOMENTUM_AIRBORNE_HEIGHT;
 
-	/* The toss ends the frame the body first touches the ground coming down - any corner of it,
-		 since a car tumbling nose down has its bonnet in the dirt while its base is still up in the
-		 air - and the death ends there with it: blast, hull and all on that one frame, before it can
-		 dig in and roll about on the ground.  A slow car's toss can be lower than the airborne height
-		 above, so leaving the ground is watched against a floor of its own; one that never got off at
-		 all ends when it should have landed. */
+	/* The toss ends when the body is down on the ground.  A car tumbling nose down has its bonnet in
+		 the dirt while its base is still up in the air: from the frame any corner of it touches, it tips
+		 back onto its wheels about that corner as the rest of it comes down, its tilt shrinking with
+		 the height its base has left, so it neither digs in nor rolls about on the ground.  The death
+		 ends the frame the base lands: blast, hull and all, level, where the car is.  Ending it at the
+		 first corner put the hull down on the ground under a car still drawn several units up in the
+		 air (the Humvee's selection box reaches 14 ahead of its base).  A slow car's toss can be lower
+		 than the airborne height above, so leaving the ground is watched against a floor of its own;
+		 one that never got off at all ends when it should have landed. */
 	if ((m_flags & (1<<MOMENTUM_TUMBLING)) != 0 && now > m_momentumStartFrame)
 	{
 		const Real height = heightAboveFloor(obj);
 		const Bool leftGround = (m_flags & (1<<MOMENTUM_LEFT_GROUND)) != 0;
-		const Bool bodyDown = leftGround && vel->z <= 0.0f && height - bodyReachBelow(obj) <= MOMENTUM_LIFTOFF_HEIGHT;
-		if (bodyDown || (!leftGround && height <= MOMENTUM_LIFTOFF_HEIGHT && now >= m_momentumEndFrame))
+		const Real reach = bodyReachBelow(obj);
+		const Bool bodyDown = leftGround && vel->z <= 0.0f && height - reach <= MOMENTUM_LIFTOFF_HEIGHT;
+		// the nose gives the heading, unless it points nearly straight up or down mid-flip: then the
+		// way it was flying does
+		const Matrix3D& m = *obj->getTransformMatrix();
+		const Bool noseUpright = fabs(m[2][0]) > 0.95f && (m_momentumVelX != 0.0f || m_momentumVelY != 0.0f);
+		const Real heading = noseUpright ? ATan2(m_momentumVelY, m_momentumVelX) : m.Get_Z_Rotation();
+		if (bodyDown && height > MOMENTUM_LIFTOFF_HEIGHT)
 		{
-			// the base can still be up where the bonnet hit: the hull and the blast go on the ground under it
-			// and righted on its heading, as a bounce would: one that blows later sits on its wheels
+			/* Physics turns a body yaw, then pitch, then roll the other way, so the z row of its matrix
+				 is (-sin p, -cos p sin r, cos p cos r).  Both angles shrink by the share of the reach the
+				 base still has to come down, which keeps the low corner about on the ground. */
+			const Real keep = (reach > height) ? height / reach : 1.0f;
+			const Real pitch = ASin(min(max(-m[2][0], -1.0f), 1.0f));
+			const Real roll = noseUpright ? 0.0f : ATan2(-m[2][1], m[2][2]);
+			physics->setYawRate(0.0f);
+			physics->setRollRate(0.0f);
+			physics->setPitchRate(0.0f);
+			physics->setAngles(heading, pitch * keep, roll * keep);
+		}
+		else if (bodyDown || (!leftGround && height <= MOMENTUM_LIFTOFF_HEIGHT && now >= m_momentumEndFrame))
+		{
+			// the last of the base's height, under the liftoff floor, and level on its heading as a bounce
+			// would leave it: one that blows later sits on its wheels
 			if (height > 0.0f)
 			{
 				Coord3D pos = *obj->getPosition();
 				pos.z -= height;
 				obj->setPosition(&pos);
 			}
-			// the nose gives the heading, unless it points nearly straight up or down mid-flip: then the
-			// way it was flying does
-			const Matrix3D& m = *obj->getTransformMatrix();
-			Real heading = m.Get_Z_Rotation();
-			if (fabs(m[2][0]) > 0.95f && (m_momentumVelX != 0.0f || m_momentumVelY != 0.0f))
-				heading = ATan2(m_momentumVelY, m_momentumVelX);
 			physics->setAngles(heading, 0.0f, 0.0f);
 			doImpactFX(obj, sqrtf(vel->x*vel->x + vel->y*vel->y + vel->z*vel->z));
 			endMomentum();

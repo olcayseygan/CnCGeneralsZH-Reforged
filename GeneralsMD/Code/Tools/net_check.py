@@ -70,6 +70,9 @@ def parse_arguments() -> argparse.Namespace:
                         help="the presses, comma separated, each as the control socket's key command takes it")
     parser.add_argument("--relay", type=int, default=0, metavar="PORT",
                         help="play through a local relay.js on this UDP port instead of loopback")
+    parser.add_argument("--capped", action="store_true",
+                        help="leave out -noFPSLimit, so each copy keeps its Options.ini FrameRateLimit "
+                             "(give one with --slot-options); players run capped, and the cap's wait is time the network sits")
     return parser.parse_args()
 
 
@@ -82,7 +85,7 @@ def command_line(arguments: argparse.Namespace, slot: int) -> list:
     network = "10.0.0.%d" if arguments.relay else "127.0.0.%d"
     hosts = ",".join(network % (index + 1) for index in range(arguments.copies))
     line = [os.path.join(run_directory(arguments, slot), EXE_NAME), "-multiInstance", "-quickstart", "-win",
-            "-xres", "800", "-yres", "600", "-msaa", "0", "-noFPSLimit",
+            "-xres", "800", "-yres", "600", "-msaa", "0"] + ([] if arguments.capped else ["-noFPSLimit"]) + [
             "-netgame", hosts, "-netslot", str(slot), "-control", str(FIRST_CONTROL_PORT + slot),
             "-map", arguments.map, "-seed", str(arguments.seed),
             "-logPrefix", "%s%d_" % (arguments.tag, slot)]

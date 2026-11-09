@@ -120,6 +120,7 @@ public:
 	void reset( void );																				///< Reinitialize the network
 	void update( void );																			///< Process command list
 	void liteupdate( void );																	///< Do a lightweight update to send packets and pass messages.
+	void serviceSockets( void );															///< Between passes: announce finished frames, read and write the socket.
 	Bool deinit( void );																			///< Shutdown connections, release memory
 
 	void setLocalAddress(UnsignedInt ip, UnsignedInt port);
@@ -826,6 +827,27 @@ void Network::liteupdate() {
 			m_conMgr->update(TRUE);
 		}
 	}
+}
+
+/**
+ * GameEngine::execute calls this while the picture cap waits, between two passes.  The frames the
+ * last tick finished are announced and the socket is read and written, acks included, so nothing
+ * sits there for the rest of a capped picture.  Nothing goes on or comes off TheCommandList and no
+ * frame of the network clock is spent: when a frame runs and with which commands is still update()'s
+ * alone.  The tick is not running here, since the pass flushed it before it returned, and the logic
+ * frame cannot move until the next pass, so what update() stamps next is what it would have stamped.
+ */
+void Network::serviceSockets() {
+#if defined(_DEBUG) || defined(_INTERNAL)
+	if (m_networkOn == FALSE) {
+		return;
+	}
+#endif
+	if (m_conMgr == NULL || m_localStatus != NETLOCALSTATUS_INGAME) {
+		return;
+	}
+	noteLogicFrameAdvance();
+	liteupdate();
 }
 
 void Network::endOfGameCheck() {

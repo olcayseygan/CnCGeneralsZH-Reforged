@@ -66,6 +66,7 @@ public:
 	virtual void reset( void ) = 0;																		///< Re-initialize the network
 	virtual void update( void ) = 0;																	///< Updates the network
 	virtual void liteupdate( void ) = 0;															///< does a lightweight update for passing messages around.
+	virtual void serviceSockets( void ) = 0;													///< Between passes: announce finished frames, read and write the socket; spends no frame.
 
 	virtual void setLocalAddress(UnsignedInt ip, UnsignedInt port) = 0;	///< Tell the network what local ip and port to bind to.
 	virtual Bool isFrameDataReady( void ) = 0;												///< Are the commands for the next frame available?

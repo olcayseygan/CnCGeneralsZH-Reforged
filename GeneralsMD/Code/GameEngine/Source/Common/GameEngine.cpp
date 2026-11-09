@@ -3484,10 +3484,9 @@ static Int renderCapFramesPerSecond( Int logicFps )
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
 #endif
 
-static void waitForTicks( Int64 deadline )
+static void sleepForTicks( Int64 sleepTicks )
 {
 	const Int64 perSecond = Clock_Ticks_Per_Second();
-	const Int64 sleepTicks = deadline - Clock_Ticks() - perSecond / 1000;
 	if (sleepTicks > 0)
 	{
 #if defined(_WIN32)
@@ -3504,6 +3503,11 @@ static void waitForTicks( Int64 deadline )
 		std::this_thread::sleep_for( std::chrono::nanoseconds( sleepTicks * 1000000000 / perSecond ) );
 #endif
 	}
+}
+
+static void waitForTicks( Int64 deadline )
+{
+	sleepForTicks( deadline - Clock_Ticks() - Clock_Ticks_Per_Second() / 1000 );
 	while (Clock_Ticks() < deadline)
 		std::this_thread::yield();
 }
@@ -3531,7 +3535,23 @@ static void waitForRenderCap( Int logicFps )
 	if (s_nextPicture == 0 || now - s_nextPicture > period)
 		s_nextPicture = now;
 	else if (now < s_nextPicture)
+	{
+		/* A network game read and wrote its socket once a pass, so the cap's wait held every packet,
+			 acks too, for what was left of the picture: up to 17 ms a hop at 60, in the srtt and so in
+			 the run-ahead, and never seen by a -noFPSLimit measurement.  The wait goes in millisecond
+			 slices with the socket serviced between them (Network::serviceSockets), the first one as
+			 the wait begins, which announces the frame the pass just ran. */
+		if (TheNetwork != NULL)
+		{
+			const Int64 ms = Clock_Ticks_Per_Second() / 1000;
+			for (Int64 t = now; s_nextPicture - t > 2 * ms; t = Clock_Ticks())
+			{
+				TheNetwork->serviceSockets();
+				sleepForTicks( ms );
+			}
+		}
 		waitForTicks( s_nextPicture );
+	}
 	s_nextPicture += period;
 }
 

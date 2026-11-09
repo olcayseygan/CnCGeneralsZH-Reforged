@@ -21334,6 +21334,51 @@ TEST(the_rescue_ladder_never_runs_out_of_rungs)
 	}
 }
 
+TEST(the_crowd_scan_stagger_never_delays_the_first_look_after_an_order)
+{
+	/* A route or an order leaves the unit with no scan, and then it looks on that very frame, on
+		 every frame number and for every id: no order waits for its turn in the stagger. */
+	for (UnsignedInt id = 1; id < 64; id++)
+		for (UnsignedInt f = 0; f < 64; f++)
+			CHECK( AIUpdate_crowdScanDue( FALSE, f, id ) );
+
+	/* Between orders it looks again on a fixed period, never left blind past a sixth of a second
+		 (ten logic frames), and the same for every id, so no player's units see more often than
+		 another's. */
+	UnsignedInt period = 0;
+	for (UnsignedInt id = 1; id < 64; id++)
+	{
+		UnsignedInt last = 0, gaps = 0, gap = 0;
+		for (UnsignedInt f = 1000; f < 1200; f++)
+		{
+			if (!AIUpdate_crowdScanDue( TRUE, f, id ))
+				continue;
+			if (last != 0)
+			{
+				gap = f - last;
+				if (gaps == 0 && period == 0)
+					period = gap;
+				CHECK_EQ( gap, period );
+				++gaps;
+			}
+			last = f;
+		}
+		CHECK( gaps > 0 );
+		CHECK( period >= 1 && period <= 10 );
+	}
+
+	/* And a group spreads out over the period: of any run of `period` consecutive ids, one looks on
+		 any given frame. */
+	for (UnsignedInt f = 0; f < 32; f++)
+	{
+		UnsignedInt due = 0;
+		for (UnsignedInt id = 100; id < 100 + period; id++)
+			if (AIUpdate_crowdScanDue( TRUE, f, id ))
+				++due;
+		CHECK_EQ( due, (UnsignedInt)1 );
+	}
+}
+
 TEST(driving_a_long_way_and_gaining_nothing_is_not_the_same_as_being_slow)
 {
 	const Real body = 24.0f;			// a tank

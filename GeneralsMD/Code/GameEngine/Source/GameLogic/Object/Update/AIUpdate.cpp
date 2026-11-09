@@ -353,6 +353,7 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 	m_crowdCapValid = FALSE;
 	m_crowdAim = 0.0f;
 	m_crowdAimValid = FALSE;
+	m_crowdScan.valid = FALSE;
 	m_noProgress = 0;
 	m_headOnFrames = 0;
 	m_headOnSeen = FALSE;
@@ -1860,6 +1861,7 @@ static const Real STUCK_DITHER_RATIO	= 0.3f;	///< gained less than this much of 
 static const Int  CROWD_MERGE_FRAMES	= ConvertRetailFrames(45);		///< a second and a half: how far ahead a merge is worth noticing
 static const Int  CROWD_TTC_FRAMES	= ConvertRetailFrames(21);			///< closing this fast on somebody counts as being in our way, wherever it sits
 static const Int  CROWD_REPATH_QUEUE	= ConvertRetailFrames(24);		///< queued behind traffic this long: stop steering round it and ask for a new route
+static const UnsignedInt CROWD_SCAN_FRAMES	= 4;		///< a vehicle asks who is round it once in this many frames, staggered by id
 
 //-------------------------------------------------------------------------------------------------
 /* Returns TRUE if the physics collide should apply the force.  Normally not.
@@ -2630,6 +2632,7 @@ void AIUpdateInterface::crowdReleaseCorridor( void )
 	m_crowdCap = 0.0f;
 	m_crowdCapValid = FALSE;
 	m_crowdAimValid = FALSE;
+	m_crowdScan.valid = FALSE;			// a new route looks at its neighbours on its first frame
 	/* The backing-out manoeuvre survives the route.  Being wedged is the one thing a new route does
 		 not cure - the new one starts in the same hole - and a unit that repaths every second while
 		 stuck would throw away the only rule that gets it out, once a second, forever. */
@@ -2943,6 +2946,13 @@ void AIUpdateInterface::updateProgress( void )
 		m_ditherFrom = *myPos;
 		m_ditherTravel = 0.0f;
 	}
+}
+
+Bool AIUpdate_crowdScanDue( Bool haveScan, UnsignedInt frame, UnsignedInt id )
+{
+	if (!haveScan)
+		return TRUE;		// a new route or a new order: look now, whatever the frame
+	return ((frame + id) % CROWD_SCAN_FRAMES) == 0;
 }
 
 Bool AIUpdate_isDithering( Real net, Real travelled, Real bodySize )
@@ -3280,12 +3290,22 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 	const Real scanRange = PATHFIND_CELL_SIZE_F * 4.0f + myR;
 	const Real lookAhead = PATHFIND_CELL_SIZE_F * (Real)CROWD_LOOKAHEAD_CELLS + myR;
 
+	/* Who is round us is asked every CROWD_SCAN_FRAMES frames, not every frame, offset by id so a
+		 group does not all ask on the same one.  The scan was half of what a driving vehicle cost in an
+		 840-unit right click.  Everything the rules below do with the answer still runs every frame, so
+		 every filter and rate keeps its timing, and the one neighbour that can stop us, the blocker, is
+		 re-read live each frame: only which unit it is may be a few frames old.  A new route or a new
+		 order always looks on its first frame, so no order waits for the stagger, and a unit that is
+		 getting nowhere looks every frame, because a jam is where a stale answer costs. */
+	const Bool scanNow = foot || pressing
+		|| AIUpdate_crowdScanDue( m_crowdScan.valid, now, (UnsignedInt)self->getID() );
+
 	PartitionFilterRelationship		fRel( self, PartitionFilterRelationship::ALLOW_ALLIES );
 	PartitionFilterAlive					fAlive;
 	PartitionFilterSameMapStatus	fMap( self );
 	PartitionFilter *filters[] = { &fRel, &fAlive, &fMap, NULL };
 	// a foot soldier reads nobody: he has no lane to hold and nothing on the road is his traffic
-	SimpleObjectIterator *iter = foot ? NULL
+	SimpleObjectIterator *iter = (foot || !scanNow) ? NULL
 		: ThePartitionManager->iterateObjectsInRange( self, scanRange, FROM_CENTER_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 
@@ -3310,7 +3330,7 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 		 whatever is standing beside that unit, and in a pack six wide every such slot is taken: the
 		 unit picks one, gets shoved back out of it by the collision push, and queues in the middle of
 		 its own group instead of going round the outside of it. */
-	enum { CROWD_NEAR_MAX = 16 };
+	enum { CROWD_NEAR_MAX = CROWD_SCAN_NEAR_MAX };
 	Real nearLat[CROWD_NEAR_MAX];		// each neighbour's line across the road
 	Real nearR[CROWD_NEAR_MAX];
 	Int nearCount = 0;
@@ -3482,23 +3502,100 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 			if (blocker == NULL || fwd < blockerFwd)
 			{
 				blocker = o;
-				blockerFwd = fwd;
-				blockerGap = gap;
-				blockerSpeed = 0.0f;
-				blockerMoving = hisMoving;
-				if (hisPhys != NULL)
-				{
-					const Coord3D *v = hisPhys->getVelocity();
-					blockerSpeed = v->x * here.tan.x + v->y * here.tan.y;		// his speed our way, not his speed
-					if (blockerSpeed < 0.0f)
-						blockerSpeed = 0.0f;
-				}
+				blockerFwd = fwd;		// the rest of what we know about him is read below, every frame
 			}
 		}
 
 		// our place in the queue, which is how far out we fan when it stops moving
 		if (gap < comfort * 2.0f && crowdOutranksMe( o ))
 			++rank;
+	}
+
+	if (scanNow)
+	{
+		m_crowdScan.valid = TRUE;
+		m_crowdScan.sep = sep;
+		m_crowdScan.blocker = (blocker != NULL) ? blocker->getID() : INVALID_ID;
+		m_crowdScan.joiner = (joiner != NULL) ? joiner->getID() : INVALID_ID;
+		m_crowdScan.joinerSide = joinerSide;
+		m_crowdScan.joinerR = joinerR;
+		m_crowdScan.giveWay = giveWay;
+		m_crowdScan.giveWayLat = giveWayLat;
+		m_crowdScan.rank = rank;
+		m_crowdScan.touching = touching;
+		m_crowdScan.crossing = crossing;
+		m_crowdScan.nearCount = nearCount;
+		for (Int n = 0; n < nearCount; n++)
+		{
+			m_crowdScan.nearLat[n] = nearLat[n];
+			m_crowdScan.nearR[n] = nearR[n];
+		}
+		m_crowdScan.packAny = packAny;
+		m_crowdScan.packLo = packLo;
+		m_crowdScan.packHi = packHi;
+	}
+	else
+	{
+		sep = m_crowdScan.sep;
+		joinerSide = m_crowdScan.joinerSide;
+		joinerR = m_crowdScan.joinerR;
+		giveWay = m_crowdScan.giveWay;
+		giveWayLat = m_crowdScan.giveWayLat;
+		rank = m_crowdScan.rank;
+		touching = m_crowdScan.touching;
+		crossing = m_crowdScan.crossing;
+		nearCount = m_crowdScan.nearCount;
+		for (Int n = 0; n < nearCount; n++)
+		{
+			nearLat[n] = m_crowdScan.nearLat[n];
+			nearR[n] = m_crowdScan.nearR[n];
+		}
+		packAny = m_crowdScan.packAny;
+		packLo = m_crowdScan.packLo;
+		packHi = m_crowdScan.packHi;
+
+		// one that has died since the scan is nobody's traffic
+		if (m_crowdScan.blocker != INVALID_ID)
+		{
+			blocker = TheGameLogic->findObjectByID( m_crowdScan.blocker );
+			if (blocker != NULL && blocker->isEffectivelyDead())
+				blocker = NULL;
+		}
+		if (m_crowdScan.joiner != INVALID_ID)
+		{
+			joiner = TheGameLogic->findObjectByID( m_crowdScan.joiner );
+			if (joiner != NULL && joiner->isEffectivelyDead())
+				joiner = NULL;
+		}
+	}
+
+	// the blocker as he is this frame, which is what the brake and the pass are priced against; one
+	// that has left our lane since the scan is not in the way any more
+	if (blocker != NULL)
+	{
+		const Coord3D *hp = blocker->getPosition();
+		const Real dx = hp->x - myPos->x;
+		const Real dy = hp->y - myPos->y;
+		const Real hisR = blocker->getGeometryInfo().getBoundingCircleRadius();
+		blockerFwd = dx * here.tan.x + dy * here.tan.y;
+		const Real side = -dx * here.tan.y + dy * here.tan.x;
+		blockerGap = (Real)sqrt( dx * dx + dy * dy ) - myR - hisR;
+		if (!(blockerFwd > 0.0f && blockerFwd < lookAhead + hisR && fabs( side ) < myR + hisR + 1.0f))
+			blocker = NULL;
+	}
+	if (blocker != NULL)
+	{
+		AIUpdateInterface *ai = blocker->getAI();
+		PhysicsBehavior *hisPhys = blocker->getPhysics();
+		blockerMoving = ai != NULL && ai->isMoving() && hisPhys != NULL && hisPhys->getVelocityMagnitude() > ConvertRetailPerFrameRate(0.05f);
+		blockerSpeed = 0.0f;
+		if (hisPhys != NULL)
+		{
+			const Coord3D *v = hisPhys->getVelocity();
+			blockerSpeed = v->x * here.tan.x + v->y * here.tan.y;		// his speed our way, not his speed
+			if (blockerSpeed < 0.0f)
+				blockerSpeed = 0.0f;
+		}
 	}
 
 	//--- the rules, in order -----------------------------------------------------------------------
@@ -4745,6 +4842,9 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 {
 	if (!isAllowedToRespondToAiCommands(parms))
 		return;
+
+	// the crowd scan is staggered, never the first look after an order: see crowdSteer
+	m_crowdScan.valid = FALSE;
 
 	// Any order at all replaces the trip to the producer's rally point - except the exit path itself,
 	// which is the leg that precedes it.

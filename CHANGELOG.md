@@ -12,6 +12,7 @@ found and fixed, EA's own, not port damage.**
 
 - Your units get their routes before any computer player's. The game works out a few routes a frame and used to take requests in the order they came, so late in a big match against several computer players a move you gave could wait a second or more behind hundreds of the computer's own. Now a human player's units are answered first and the computer takes what is left of the frame.
 - On large maps a building going up or coming down no longer stalls the game for a frame. The map's areas are worked out again over a few frames instead of all at once. Small maps still do it in one frame, as before.
+- A big right click costs the game less. A tank in a group used to look round at every neighbour on every frame to keep its place on the road; now it looks fifteen times a second, every frame while it is stuck, and at once when it is given a new order. Five hundred and seventy tanks and soldiers sent across a large map in one order took 2.9 ms of game time a frame instead of 3.2, and over twenty staged marches, jams and bridge crossings the column arrived within 2% of the old times.
 - A replay recorded on an earlier version will not play back on this one.
 
 ## Ratings, a ladder and your opponent's name before the map loads

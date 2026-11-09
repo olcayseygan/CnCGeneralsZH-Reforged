@@ -922,6 +922,31 @@ private:
 	Bool				m_crowdCapValid;						///< FALSE until there is a held cap to ramp up from.
 	Real				m_crowdAim;									///< low-passeddirection the steering point is taken in, radians.
 	Bool				m_crowdAimValid;						///< FALSEuntil the filter has something to start from.
+	/* What crowdSteer's neighbour scan saw, kept for the frames between scans.  The scan runs every
+		 CROWD_SCAN_FRAMES frames, staggered by object id, and on the first crowd frame of every route
+		 and after every order; the rules read this copy in between. */
+	enum { CROWD_SCAN_NEAR_MAX = 16 };
+	struct CrowdScan
+	{
+		Bool			valid;
+		Real			sep;
+		ObjectID	blocker;
+		ObjectID	joiner;
+		Real			joinerSide;
+		Real			joinerR;
+		Bool			giveWay;
+		Real			giveWayLat;
+		Int				rank;
+		Bool			touching;
+		Bool			crossing;
+		Int				nearCount;
+		Real			nearLat[CROWD_SCAN_NEAR_MAX];
+		Real			nearR[CROWD_SCAN_NEAR_MAX];
+		Bool			packAny;
+		Real			packLo;
+		Real			packHi;
+	};
+	CrowdScan		m_crowdScan;
 	/* Being stuck, and getting out of it.  None of this is part of the crowd model: a unit that has
 			stopped without a collision to show for it is not a crowd problem, it is the problem, and
 			until this was pulled out of the crowd model it was only ever asked about units that happened
@@ -1049,6 +1074,13 @@ extern Int AIUpdate_stuckRung( Int noProgressFrames, Int stageDone );
 		several body lengths and a net of almost nothing.  The body-size floor is what keeps a unit
 		that is simply slow, or stopped, out of it: those are the other test's business. */
 extern Bool AIUpdate_isDithering( Real net, Real travelled, Real bodySize );
+
+/** Does crowdSteer ask who is round it this frame, or read what it saw last time?
+
+		`haveScan` is FALSE on the first crowd frame of a route and after any order, and then the answer
+		is always yes: the stagger never delays the first look after a command.  Otherwise once every
+		few frames, offset by object id so a group spreads its scans over the frames. */
+extern Bool AIUpdate_crowdScanDue( Bool haveScan, UnsignedInt frame, UnsignedInt id );
 
 //------------------------------------------------------------------------------------------------------------
 // Inlines

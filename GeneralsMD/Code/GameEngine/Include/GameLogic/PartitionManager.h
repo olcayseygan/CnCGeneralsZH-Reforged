@@ -449,6 +449,7 @@ private:
 	GhostObject										*m_ghostObject;							///< Temporary object used when real object is gone but player thinks it's there because of fog.
 	PartitionData								*m_next;									///< next module in master list
 	PartitionData								*m_prev;									///< prev module in master list
+	Int													m_moduleIndex;						///< its slot in PartitionManager's m_moduleArray
 	PartitionData								*m_nextDirty;
 	PartitionData								*m_prevDirty;
 
@@ -630,6 +631,10 @@ public:
 	// (note, if we ever use other bits in this, smarten this up...)
 	Int friend_getDoneFlag() { return m_doneFlag; }
 	void friend_setDoneFlag(Int i) { m_doneFlag = i; }
+
+	// these are only for use by PartitionManager's module array
+	Int friend_getModuleIndex() const { return m_moduleIndex; }
+	void friend_setModuleIndex(Int i) { m_moduleIndex = i; }
 
 	inline Bool isInListDirtyModules(PartitionData* const* pListHead) const
 	{
@@ -1337,6 +1342,14 @@ private:
 #endif
 
 	PartitionData		*m_moduleList;		///< master partition module list
+
+	/** m_moduleList again as an array, oldest first, with NULL where a module left: walked from the back
+		it is the list's order. The whole-map walk reads it, so it waits on independent loads instead of on
+		each m_next in turn (most of a hunt scan's time), and can split it across threads. */
+	std::vector<PartitionData *>	m_moduleArray;
+	Int							m_moduleArrayHoles;
+	void addToModuleArray( PartitionData *mod );
+	void removeFromModuleArray( PartitionData *mod );
 
 	Region3D				m_worldExtents;		///< should be same as TheTerrainLogic->getExtents()
 	Real						m_cellSize;				///< edge size of each cell, in world coord space

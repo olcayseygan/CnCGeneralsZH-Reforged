@@ -1659,6 +1659,7 @@ PartitionData::PartitionData()
 	//DEBUG_LOG(("create pd %08lx\n",this));
 	m_next = NULL;
 	m_prev = NULL;
+	m_moduleIndex = -1;
 	m_nextDirty = NULL;
 	m_prevDirty = NULL;
 	m_object = NULL;
@@ -2765,6 +2766,7 @@ void PartitionContactList::processContactList()
 PartitionManager::PartitionManager()
 {
 	m_moduleList = NULL;
+	m_moduleArrayHoles = 0;
 	m_cellSize = m_cellSizeInv = 0.0f;
 	m_cellCountX = 0;
 	m_cellCountY = 0;
@@ -3089,10 +3091,45 @@ void PartitionManager::registerObject( Object* object )
 	if( m_moduleList )
 		m_moduleList->setPrev( mod );
 	m_moduleList = mod;
+	addToModuleArray( mod );
 
 	// add module to object
 	mod->attachToObject( object );
 
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::addToModuleArray( PartitionData *mod )
+{
+	// the list takes a new module at its head, so the array takes it at its back
+	mod->friend_setModuleIndex( (Int)m_moduleArray.size() );
+	m_moduleArray.push_back( mod );
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::removeFromModuleArray( PartitionData *mod )
+{
+	const Int index = mod->friend_getModuleIndex();
+	DEBUG_ASSERTCRASH( index >= 0 && index < (Int)m_moduleArray.size() && m_moduleArray[ index ] == mod, ("module array out of step with the list") );
+	m_moduleArray[ index ] = NULL;
+	mod->friend_setModuleIndex( -1 );
+	++m_moduleArrayHoles;
+
+	// close the holes once they are half of it, or all of it, keeping the order: the walk's order is the list's
+	const Int size = (Int)m_moduleArray.size();
+	if( m_moduleArrayHoles < size && ( size < 256 || m_moduleArrayHoles * 2 < size ) )
+		return;
+	Int kept = 0;
+	for( Int i = 0; i < size; ++i )
+	{
+		PartitionData *m = m_moduleArray[ i ];
+		if( m == NULL )
+			continue;
+		m->friend_setModuleIndex( kept );
+		m_moduleArray[ kept++ ] = m;
+	}
+	m_moduleArray.resize( kept );
+	m_moduleArrayHoles = 0;
 }
 
 //------------------------------------------------------------------------------
@@ -3134,6 +3171,7 @@ void PartitionManager::unRegisterObject( Object* object )
 		prev->setNext( next );
 	else
 		m_moduleList = next;
+	removeFromModuleArray( mod );
 
 	// delete module
 	mod->deleteInstance();
@@ -3163,6 +3201,7 @@ void PartitionManager::registerGhostObject( GhostObject* object)
 	if( m_moduleList )
 		m_moduleList->setPrev( mod );
 	m_moduleList = mod;
+	addToModuleArray( mod );
 
 	// add module to object
 	mod->attachToGhostObject( object);
@@ -3192,6 +3231,7 @@ void PartitionManager::unRegisterGhostObject( GhostObject* object )
 		prev->setNext( next );
 	else
 		m_moduleList = next;
+	removeFromModuleArray( mod );
 
 	// delete module
 	mod->deleteInstance();
@@ -3499,7 +3539,6 @@ namespace
 
 	// sized on the logic thread before a fork, never inside one (JobSystem.h rule 1)
 	std::vector<GatherHit> s_gatherHits;
-	std::vector<PartitionData *> s_gatherModules;
 
 	// since the process started, for HEADLESS JOBS: gathers split, chunks that handed a tail back, and
 	// the wall time in the fork and in the merge after it (a log line only; nothing decides on it)
@@ -3579,36 +3618,59 @@ namespace
 		job.visited[ chunk ] = visited;
 	}
 
+	/** Item i of the master-list walk: the module array from the back, the list's order. NULL for a hole. */
+	inline PartitionData *gatherModuleAt( const GatherJob &job, Int i )
+	{
+		return job.modules[ job.itemCount - 1 - i ];
+	}
+
 	void gatherModuleChunk( Int chunk, void *context )
 	{
 		GatherJob &job = *(GatherJob *)context;
 		const Int end = gatherChunkEnd( job, chunk );
 		GatherHit *hits = &job.hits[ chunk * GATHER_CHUNK_HITS ];
 		Int kept = 0;
+		Int visited = 0;
 		Int i = chunk * job.chunkSize;
 		for ( ; i < end; ++i )
 		{
-			PartitionData *mod = job.modules[ i ];
+			// the serial walk's two cursors (getClosestObjects): the module further on, then its Object
+			if (i + 16 < end && gatherModuleAt( job, i + 16 ))
+				PM_PREFETCH( gatherModuleAt( job, i + 16 ) );
+			if (i + 8 < end && gatherModuleAt( job, i + 8 ))
+			{
+				const Object *aheadObj = gatherModuleAt( job, i + 8 )->getObject();
+				if (aheadObj)
+				{
+					PM_PREFETCH( aheadObj->getPosition() );
+					PM_PREFETCH( &aheadObj->getGeometryInfo() );
+				}
+			}
+
+			PartitionData *mod = gatherModuleAt( job, i );
+			if (mod == NULL || mod->friend_getCoiInUseCount() == 0)
+				continue;
+
 			Object *obj = mod->getObject();
-			if (obj == job.self || obj == NULL)
-				continue;
-
-			Real distSqr;
-			Coord3D distVec;
-			if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
-				continue;
-			if (!filtersAllow( job.filters, obj ))
-				continue;
-
-			if (kept == GATHER_CHUNK_HITS)
-				break;
-			hits[ kept ].mod = mod;
-			hits[ kept ].distSqr = distSqr;
-			++kept;
+			if (obj != job.self && obj != NULL)
+			{
+				Real distSqr;
+				Coord3D distVec;
+				if ((*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr )
+						&& filtersAllow( job.filters, obj ))
+				{
+					if (kept == GATHER_CHUNK_HITS)
+						break;		// this module goes back with the rest
+					hits[ kept ].mod = mod;
+					hits[ kept ].distSqr = distSqr;
+					++kept;
+				}
+			}
+			++visited;
 		}
 		job.hitCount[ chunk ] = kept;
 		job.stoppedAt[ chunk ] = i;
-		job.visited[ chunk ] = i - chunk * job.chunkSize;		// every flattened module touches a cell
+		job.visited[ chunk ] = visited;
 	}
 
 	/** The serial ring walk's body for one offset, for what a full chunk handed back. */
@@ -3646,7 +3708,9 @@ namespace
 	/** Likewise for one module of the master list. */
 	Int gatherModuleSerially( const GatherJob &job, Int i, SimpleObjectIterator *iter )
 	{
-		PartitionData *mod = job.modules[ i ];
+		PartitionData *mod = gatherModuleAt( job, i );
+		if (mod == NULL || mod->friend_getCoiInUseCount() == 0)
+			return 0;
 		Object *obj = mod->getObject();
 		if (obj == job.self || obj == NULL)
 			return 1;
@@ -3844,49 +3908,42 @@ Object *PartitionManager::getClosestObjects(
 		gather.itemCount = 0;
 	}
 
-	if (iterArg && maxRadius >= m_maxGcoRadius && mayGatherInParallel(filters))
+	// The array's size counts holes, and the client's ghosts come and go per machine, so one machine may
+	// split a gather another walks whole; both give the same Objects in the same order.
+	if (iterArg && maxRadius >= m_maxGcoRadius && (Int)m_moduleArray.size() >= GATHER_MIN_MODULES && mayGatherInParallel(filters))
 	{
-		s_gatherModules.clear();
-		for (PartitionData *thisMod = m_moduleList; thisMod; thisMod = thisMod->getNext())
-		{
-			if (thisMod->friend_getCoiInUseCount() != 0)
-				s_gatherModules.push_back(thisMod);
-		}
-		if ((Int)s_gatherModules.size() >= GATHER_MIN_MODULES)
-		{
-			gather.modules = &s_gatherModules[0];
-			gather.itemCount = (Int)s_gatherModules.size();
-			thePartitionQueryObjects += runGather(gather, FALSE, theIterFlag, iterArg);
-			maxRadiusLimit = -1;	// nothing left for the ring walk to find
-		}
+		gather.modules = &m_moduleArray[0];
+		gather.itemCount = (Int)m_moduleArray.size();
+		thePartitionQueryObjects += runGather(gather, FALSE, theIterFlag, iterArg);
+		maxRadiusLimit = -1;	// nothing left for the ring walk to find
 	}
 
 	if ((iterArg || (anyWillDo && walkAsGather)) && maxRadius >= m_maxGcoRadius && maxRadiusLimit >= 0)
 	{
 		/* Every module's Object lies somewhere else in memory, and the distance test waited on a miss for
-			 its position and geometry, one object after the next. A cursor a few modules ahead asks for
-			 those lines early; in a 32-player hunt scan the distance test's samples fell by a third. The
-			 walk still waits on the module chain itself, most of a hunt scan's time. The cursor only reads,
-			 so the walk, its order and what it finds are unchanged. */
-		const Int WALK_PREFETCH_AHEAD = 8;
-		PartitionData *ahead = m_moduleList;
-		for (Int i = 0; i < WALK_PREFETCH_AHEAD && ahead; ++i)
-			ahead = ahead->getNext();
-
-		for (PartitionData *thisMod = m_moduleList; thisMod; thisMod = thisMod->getNext())
+			 its position and geometry, one object after the next. The walk used to wait on each module's
+			 m_next too, most of a hunt scan's time; the module array has them side by side, so the module a
+			 few places on and its Object's lines are asked for early, two cursors deep. It is walked from the
+			 back, which is the list's order, so the walk, its order and what it finds are unchanged. */
+		const Int WALK_PREFETCH_MODULE = 16;
+		const Int WALK_PREFETCH_OBJECT = 8;
+		PartitionData *const *modules = m_moduleArray.empty() ? NULL : &m_moduleArray[0];
+		for (Int i = (Int)m_moduleArray.size() - 1; i >= 0; --i)
 		{
-			if (ahead)
+			if (i >= WALK_PREFETCH_MODULE && modules[i - WALK_PREFETCH_MODULE])
+				PM_PREFETCH(modules[i - WALK_PREFETCH_MODULE]);
+			if (i >= WALK_PREFETCH_OBJECT && modules[i - WALK_PREFETCH_OBJECT])
 			{
-				const Object *aheadObj = ahead->getObject();
+				const Object *aheadObj = modules[i - WALK_PREFETCH_OBJECT]->getObject();
 				if (aheadObj)
 				{
 					PM_PREFETCH(aheadObj->getPosition());
 					PM_PREFETCH(&aheadObj->getGeometryInfo());
 				}
-				ahead = ahead->getNext();
 			}
 
-			if (thisMod->friend_getCoiInUseCount() == 0)
+			PartitionData *thisMod = modules[i];
+			if (thisMod == NULL || thisMod->friend_getCoiInUseCount() == 0)
 				continue;
 
 			Object *thisObj = thisMod->getObject();

@@ -1371,6 +1371,16 @@ UpdateSleepTime AIUpdateInterface::update( void )
 		stRet = STATE_CONTINUE;
 	}
 
+	// A group panel reinforcement (Player::sendReinforcementToSquad) that went idle with no other trip
+	// of its own still pending has reached the squad, or as near as it gets: the player re-sends it
+	// once if the squad moved off meanwhile, and otherwise it is an ordinary member from here on.
+	if (getObject()->getReinforcementSquad() >= 0 && getAIStateType() == AI_IDLE && !m_hasExitProductionRallyPoint
+			&& !m_hasTunnelTrip && !m_hasSalvageReturnPosition && !m_isSeekingGarrison)
+	{
+		getObject()->getControllingPlayer()->onReinforcementIdle( getObject() );
+		stRet = STATE_CONTINUE;
+	}
+
 	if (IS_STATE_SLEEP(stRet))
 	{
 		Int frames = GET_STATE_SLEEP_FRAMES(stRet);
@@ -4754,6 +4764,10 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 	// So does an auto garrison, which walks on player's enters of its own and sets itself again after each.
 	if (parms->m_cmdSource != CMD_FROM_AI)
 		m_isSeekingGarrison = FALSE;
+
+	// And a group panel reinforcement's walk to its squad: the player (or a script) has taken it over.
+	if (parms->m_cmdSource != CMD_FROM_AI)
+		getObject()->setReinforcement( -1, NULL, FALSE );
 
 #ifdef ALLOW_SURRENDER
 	// surrendered items have very limited options, and only via AI cmds

@@ -245,6 +245,14 @@ public:
 	ObjectID getBuilderID() const { return m_builderID; }
 	void setBuilder( const Object *obj );
 
+	/// group panel reinforcement: the hotkey squad 0-9 this unit is walking to, or -1
+	Int getReinforcementSquad() const { return m_reinforcementSquad; }
+	/// where it was sent; NULL when it is not walking to a squad
+	const Coord3D* getReinforcementDestination() const { return m_reinforcementSquad >= 0 ? &m_reinforcementDestination : NULL; }
+	Bool isReinforcementRetargeted() const { return m_reinforcementRetargeted; }
+	/// squad -1 (or any invalid one) clears it; retargeted marks the one re-issue on arrival as spent
+	void setReinforcement( Int squad, const Coord3D *destination, Bool retargeted );
+
 	void enterGroup( AIGroup *group );							///< become a member of the AIGroup
 	void leaveGroup( void );												///< leave our current AIGroup
 	AIGroup *getGroup(void);
@@ -771,6 +779,9 @@ private:
 	ObjectID			m_id;												///< this object's unique ID
 	ObjectID			m_producerID;								///< object that produced us, if any
 	ObjectID			m_builderID;								///< object that is building or has built us (dozers or workers are builders)
+	Int						m_reinforcementSquad;				///< hotkey squad this unit walks to after the group panel ordered it, -1 for none
+	Coord3D				m_reinforcementDestination;	///< the squad's centre when it was sent there
+	Bool					m_reinforcementRetargeted;	///< the one re-issue on arrival has been used
 	Drawable*			m_drawable;									///< drawable (if any) for this object
 	AsciiString		m_name;										///< internal name
 

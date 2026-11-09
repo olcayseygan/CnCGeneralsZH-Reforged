@@ -4733,6 +4733,215 @@ void Player::removeObjectFromHotkeySquad(Object *objToRemove)
 }
 
 //-------------------------------------------------------------------------------------------------
+// Group panel (fork).  MSG_QUEUE_UNIT_FOR_GROUP queues a unit tagged with a hotkey squad, and what
+// follows carries it from the factory to the squad.  All of it reads logic only - squad lists,
+// positions, production queues - and every walk is in list order with ObjectID breaking ties.
+//-------------------------------------------------------------------------------------------------
+
+/// how far the squad's centre may move before an arrived reinforcement is sent on once more
+static const Real REINFORCEMENT_RETARGET_DISTANCE = 5.0f * PATHFIND_CELL_SIZE_F;
+
+//-------------------------------------------------------------------------------------------------
+Bool Player::getHotkeySquadCentroid( Int squad, Coord3D *centroid )
+{
+	if( !isValidHotkeySquadIndex( squad ) || m_squads[ squad ] == NULL || centroid == NULL )
+		return FALSE;
+
+	// reinforcements still on the road are left out, or the centre drifts back toward the factory
+	const VecObjectPtr &members = m_squads[ squad ]->getLiveObjects();
+	Coord3D sum;
+	sum.zero();
+	Int count = 0;
+	for( VecObjectPtr::const_iterator it = members.begin(); it != members.end(); ++it )
+	{
+		if( (*it)->getReinforcementSquad() >= 0 )
+			continue;
+		const Coord3D *pos = (*it)->getPosition();
+		sum.x += pos->x;
+		sum.y += pos->y;
+		sum.z += pos->z;
+		++count;
+	}
+	if( count == 0 )
+		return FALSE;
+
+	centroid->x = sum.x / (Real)count;
+	centroid->y = sum.y / (Real)count;
+	centroid->z = sum.z / (Real)count;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+struct GroupFactorySearch
+{
+	const ThingTemplate *unit;
+	const Coord3D *centre;
+	const Player *owner;
+	Object *best;
+	UnsignedInt bestQueue;
+	Real bestDistSqr;
+};
+
+static void findGroupFactory( Object *obj, void *userData )
+{
+	GroupFactorySearch *s = (GroupFactorySearch *)userData;
+	if( obj->getControllingPlayer() != s->owner || obj->isEffectivelyDead() )
+		return;
+
+	// canMakeUnit is the build button's own test: prerequisites, the unit cap, money, a finished and
+	// powered factory, a free queue slot and parking
+	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+	if( pu == NULL || TheBuildAssistant->canMakeUnit( obj, s->unit ) != CANMAKE_OK )
+		return;
+
+	const UnsignedInt queue = pu->getProductionCount();
+	const Real dx = obj->getPosition()->x - s->centre->x;
+	const Real dy = obj->getPosition()->y - s->centre->y;
+	const Real distSqr = dx * dx + dy * dy;
+	if( s->best != NULL )
+	{
+		if( queue != s->bestQueue )
+		{
+			if( queue > s->bestQueue )
+				return;
+		}
+		else if( distSqr != s->bestDistSqr )
+		{
+			if( distSqr > s->bestDistSqr )
+				return;
+		}
+		else if( obj->getID() > s->best->getID() )
+			return;
+	}
+	s->best = obj;
+	s->bestQueue = queue;
+	s->bestDistSqr = distSqr;
+}
+
+Object *Player::findFactoryForGroupUnit( const ThingTemplate *unit, const Coord3D *squadCentre ) const
+{
+	if( unit == NULL || squadCentre == NULL )
+		return NULL;
+
+	GroupFactorySearch search;
+	search.unit = unit;
+	search.centre = squadCentre;
+	search.owner = this;
+	search.best = NULL;
+	search.bestQueue = 0;
+	search.bestDistSqr = 0.0f;
+	iterateObjects( findGroupFactory, &search );
+	return search.best;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Send a reinforcement to dest.  One still on its exit path out of the factory takes it as its
+	* rally point, so it finishes the step out of the door first and gets the rally point's attack move
+	* (a plain move for one with nothing to fight with, a tunnel when that is shorter); anything else
+	* attack moves now. */
+//-------------------------------------------------------------------------------------------------
+static void orderReinforcement( Object *unit, Int squad, Coord3D dest, Bool retargeted )
+{
+	AIUpdateInterface *ai = unit->getAIUpdateInterface();
+	if( ai == NULL )
+	{
+		unit->setReinforcement( -1, NULL, FALSE );
+		return;
+	}
+
+	if( ai->isDoingGroundMovement() )
+		TheAI->pathfinder()->adjustDestination( unit, ai->getLocomotorSet(), &dest );
+
+	// set before the order: an order from the computer does not clear it, anyone else's does
+	unit->setReinforcement( squad, &dest, retargeted );
+	if( ai->isExitingProducer() )
+		ai->friend_setExitProductionRallyPoint( &dest );
+	else
+		ai->aiAttackMoveToPosition( &dest, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+}
+
+//-------------------------------------------------------------------------------------------------
+void Player::sendReinforcementToSquad( Object *unit, Int squad )
+{
+	if( unit == NULL || unit->isEffectivelyDead() )
+		return;
+
+	// the squad died or was broken up while this was being built: a normal unit, rally point and all
+	Coord3D centre;
+	if( !getHotkeySquadCentroid( squad, &centre ) )
+		return;
+
+	removeObjectFromHotkeySquad( unit );
+	m_squads[ squad ]->addObject( unit );
+	orderReinforcement( unit, squad, centre, FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+void Player::onReinforcementIdle( Object *unit )
+{
+	const Int squad = unit->getReinforcementSquad();
+	if( !isValidHotkeySquadIndex( squad ) )
+		return;
+
+	// once only: the second idle is the end of the walk, however far the squad has gone since
+	Coord3D centre;
+	const Coord3D sentTo = *unit->getReinforcementDestination();
+	if( unit->isReinforcementRetargeted() || m_squads[ squad ] == NULL || !m_squads[ squad ]->isOnSquad( unit )
+			|| !getHotkeySquadCentroid( squad, &centre ) )
+	{
+		unit->setReinforcement( -1, NULL, FALSE );
+		return;
+	}
+
+	const Real dx = centre.x - sentTo.x;
+	const Real dy = centre.y - sentTo.y;
+	if( dx * dx + dy * dy > REINFORCEMENT_RETARGET_DISTANCE * REINFORCEMENT_RETARGET_DISTANCE )
+		orderReinforcement( unit, squad, centre, TRUE );
+	else
+		unit->setReinforcement( -1, NULL, FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+struct GroupReinforcementCount
+{
+	Int squad;
+	Int count;
+};
+
+static void countQueuedForSquad( Object *obj, void *userData )
+{
+	GroupReinforcementCount *c = (GroupReinforcementCount *)userData;
+	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+	if( pu == NULL )
+		return;
+	for( const ProductionEntry *p = pu->firstProduction(); p; p = pu->nextProduction( p ) )
+		if( p->getProductionType() == PRODUCTION_UNIT && p->getReinforcementSquad() == c->squad )
+			c->count += p->getProductionQuantityRemaining();
+}
+
+Int Player::countGroupReinforcements( Int squad ) const
+{
+	if( !isValidHotkeySquadIndex( squad ) || m_squads[ squad ] == NULL )
+		return 0;
+
+	// walking: they joined the squad on the way out, so its own list holds them
+	GroupReinforcementCount c;
+	c.squad = squad;
+	c.count = 0;
+	const VecObjectID &ids = m_squads[ squad ]->getObjectIDs();
+	for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( *it );
+		if( obj && !obj->isEffectivelyDead() && obj->getReinforcementSquad() == squad )
+			++c.count;
+	}
+
+	// queued: ponytail: walks every object of this player; a per-player tally if the panel shows up in a profile
+	iterateObjects( countQueuedForSquad, &c );
+	return c.count;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Select a hotkey team based on this GameMessage */
 //-------------------------------------------------------------------------------------------------
 void Player::addAIGroupToCurrentSelection(AIGroup *group) {

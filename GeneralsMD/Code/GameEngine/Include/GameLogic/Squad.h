@@ -85,6 +85,7 @@ public:
 	const VecObjectPtr& getLiveObjects(void);					// get all objects that pass "isEffectivelyDead" test
 	Int getSizeOfGroup(void) const;										// get the current number of objects, including dead objects
 	Bool isOnSquad(const Object *objToTest) const;		// returns true if the object is on this squad, otherwise false
+	const VecObjectID& getObjectIDs(void) const { return m_objectIDs; }	// the members in the order they joined, dead ones included
 
 	// convenience function to fill this squad with members of a team
 	// There SHOULD NOT be a TeamFromSquad Function. See comments in Squad.cpp for details

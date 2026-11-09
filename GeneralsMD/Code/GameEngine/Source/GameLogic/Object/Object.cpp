@@ -309,6 +309,9 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_id = INVALID_ID;
 	m_producerID = INVALID_ID;
 	m_builderID = INVALID_ID;
+	m_reinforcementSquad = -1;
+	m_reinforcementDestination.zero();
+	m_reinforcementRetargeted = FALSE;
 
 	m_status = objectStatusMask;
 	m_layer = LAYER_GROUND;
@@ -1798,6 +1801,21 @@ void Object::setBuilder( const Object *obj )
 
   m_builderID = obj ? obj->getID() : INVALID_ID;
 
+}
+
+//=============================================================================
+void Object::setReinforcement( Int squad, const Coord3D *destination, Bool retargeted )
+{
+	if( !isValidHotkeySquadIndex( squad ) || destination == NULL )
+	{
+		m_reinforcementSquad = -1;
+		m_reinforcementDestination.zero();
+		m_reinforcementRetargeted = FALSE;
+		return;
+	}
+	m_reinforcementSquad = squad;
+	m_reinforcementDestination = *destination;
+	m_reinforcementRetargeted = retargeted;
 }
 
 //=============================================================================
@@ -4576,13 +4594,14 @@ static void xferModule( Xfer *xfer, BehaviorModule *module, const Object *obj )
 	* 15: the six aura kinds mend, pace, drill, steady, capture and spoils
 	* 16: the auras gathered since its last turn of the once-a-second pass
 	* 17: the rank auras gone; versions 14 to 16 are read and thrown away
+	* 18: the hotkey squad a group panel reinforcement is walking to
 	*/
 //-------------------------------------------------------------------------------------------------
 void Object::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 17;
+	const XferVersion currentVersion = 18;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5058,6 +5077,14 @@ void Object::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt( &discardFrame );
 		for( Int i = ( version == 14 ? 5 : 11 ); i < savedAuras; ++i )
 			xfer->xferReal( &discardAura );
+	}
+
+	// an older save has nobody walking to a squad; the constructor left it -1
+	if( version >= 18 )
+	{
+		xfer->xferInt( &m_reinforcementSquad );
+		xfer->xferCoord3D( &m_reinforcementDestination );
+		xfer->xferBool( &m_reinforcementRetargeted );
 	}
 
 }  // end xfer

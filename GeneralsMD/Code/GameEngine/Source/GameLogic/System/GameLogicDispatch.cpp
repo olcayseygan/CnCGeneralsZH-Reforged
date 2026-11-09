@@ -2017,6 +2017,37 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		}  // end GameMessage::MSG_QUEUE_UNIT_CREATE
 
 		//-------------------------------------------------------------------------------------------------
+		// Group panel (fork): (Int template ID, Int squad 0-9).  No factory travels with it: the logic
+		// picks one among the sender's that can queue the unit now (Player::findFactoryForGroupUnit),
+		// and the unit joins that hotkey squad when it comes out.  A squad with nobody in it takes
+		// nothing.  The arguments came over the network, so their shape is checked.
+		case GameMessage::MSG_QUEUE_UNIT_FOR_GROUP:
+		{
+			if( thisPlayer == NULL || msg->getArgumentCount() < 2
+					|| msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_INTEGER
+					|| msg->getArgumentDataType( 1 ) != ARGUMENTDATATYPE_INTEGER )
+				break;
+
+			const ThingTemplate *whatToCreate = TheThingFactory->findByTemplateID( msg->getArgument( 0 )->integer );
+			const Int squad = msg->getArgument( 1 )->integer;
+			if( whatToCreate == NULL || whatToCreate->isKindOf( KINDOF_STRUCTURE ) || !isValidHotkeySquadIndex( squad ) )
+				break;
+
+			Coord3D centre;
+			if( !thisPlayer->getHotkeySquadCentroid( squad, &centre ) )
+				break;
+
+			Object *factory = thisPlayer->findFactoryForGroupUnit( whatToCreate, &centre );
+			if( factory == NULL )
+				break;
+
+			ProductionUpdateInterface *pu = factory->getProductionUpdateInterface();
+			pu->queueCreateUnit( whatToCreate, pu->requestUniqueUnitID(), squad );
+			break;
+
+		}  // end GameMessage::MSG_QUEUE_UNIT_FOR_GROUP
+
+		//-------------------------------------------------------------------------------------------------
 		case GameMessage::MSG_CANCEL_UNIT_CREATE:
 		{
 			Object *producer = NULL;

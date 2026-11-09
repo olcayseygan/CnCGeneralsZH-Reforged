@@ -895,7 +895,21 @@ public:
 	
 	// remove an object from any hotkey squads that its in.
 	void removeObjectFromHotkeySquad(Object *objToRemove);
-	
+
+	// group panel (fork).  The centre of a hotkey squad's live members, reinforcements still walking
+	// to it left out; FALSE when nobody else is left in it.
+	Bool getHotkeySquadCentroid( Int squad, Coord3D *centroid );
+	// this player's finished factory that can queue the unit now: shortest queue, then nearest to
+	// squadCentre, then lowest ObjectID.  NULL when none can.
+	Object *findFactoryForGroupUnit( const ThingTemplate *unit, const Coord3D *squadCentre ) const;
+	// a unit the group panel ordered just came out: it joins the squad and attack moves to its
+	// centre.  An empty squad leaves it on the factory's rally point.
+	void sendReinforcementToSquad( Object *unit, Int squad );
+	// a reinforcement went idle: re-sent once if the squad moved off, otherwise it has arrived
+	void onReinforcementIdle( Object *unit );
+	// units queued for the squad in this player's factories plus those walking to it
+	Int countGroupReinforcements( Int squad ) const;
+
 	void setAttackedBy( Int playerNdx );
 	Bool getAttackedBy( Int playerNdx ) const;
 	UnsignedInt getAttackedFrame(void) {return m_attackedFrame;}  // Return last frame attacked.

@@ -173,6 +173,7 @@ ProductionEntry::ProductionEntry( void )
 	m_productionQuantityTotal = 0;
 	//
 	m_costPaid = 0;
+	m_reinforcementSquad = -1;
 }  // end ProductionEntry
 
 //-------------------------------------------------------------------------------------------------
@@ -427,7 +428,7 @@ Int ProductionUpdate::getQuantityPerOrder( const ThingTemplate *unitType ) const
 /** Queue the prodcution of a unit.  Returns TRUE if unit was added to queue, FALSE if it
 	* was not */
 //-------------------------------------------------------------------------------------------------
-Bool ProductionUpdate::queueCreateUnit( const ThingTemplate *unitType, ProductionID productionID )
+Bool ProductionUpdate::queueCreateUnit( const ThingTemplate *unitType, ProductionID productionID, Int reinforcementSquad )
 {
 	// if we can't create the unit do nothing
 	if( TheBuildAssistant->canMakeUnit( getObject(), unitType ) != CANMAKE_OK )
@@ -488,6 +489,7 @@ Bool ProductionUpdate::queueCreateUnit( const ThingTemplate *unitType, Productio
 	production->m_objectToProduce = unitType;
 	production->m_productionID = productionID;
 	production->m_exitDoor = exitDoor;
+	production->m_reinforcementSquad = isValidHotkeySquadIndex( reinforcementSquad ) ? reinforcementSquad : -1;
 
 	// tie to the end of the production queue
 	addToProductionQueue( production );
@@ -1000,6 +1002,11 @@ UpdateSleepTime ProductionUpdate::update( void )
 								create->onBuildComplete();
 							}
 
+							// ordered from the group panel: joins its hotkey squad and walks to it,
+							// or keeps the rally point when that squad has nobody left
+							if( production->getReinforcementSquad() >= 0 )
+								creationBuilding->getControllingPlayer()->sendReinforcementToSquad( newObj, production->getReinforcementSquad() );
+
 							if( production->getProductionQuantity() == production->getProductionQuantityRemaining() )
 							{
 								//Call the voice created for the 1st object -- because it's possible to create multiple objects like redguards!
@@ -1303,7 +1310,12 @@ void ProductionUpdate::onDie( const DamageInfo *damageInfo )
 void ProductionUpdate::onCapture( Player *oldOwner, Player *newOwner )
 {
 	if( oldOwner != newOwner )
+	{
 		m_repeat.clear();
+		// the squad numbers were the old owner's; whatever is still queued comes out as a plain unit
+		for( ProductionEntry *p = m_productionQueue; p; p = p->m_next )
+			p->m_reinforcementSquad = -1;
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1465,7 +1477,8 @@ void ProductionUpdate::xfer( Xfer *xfer )
 	// 2: each entry carries what was paid for it
 	// 3: each entry carries the build time its frame count was measured against
 	// 4: the units on repeat and whose turn it is
-	XferVersion currentVersion = 4;
+	// 5: each entry carries the hotkey squad its unit joins on exit
+	XferVersion currentVersion = 5;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1521,6 +1534,9 @@ void ProductionUpdate::xfer( Xfer *xfer )
 
 			// build time the frame count was measured against
 			xfer->xferInt( &production->m_totalProductionFrames );
+
+			// hotkey squad the unit joins on exit
+			xfer->xferInt( &production->m_reinforcementSquad );
 
 		}  // end for
 
@@ -1622,6 +1638,10 @@ void ProductionUpdate::xfer( Xfer *xfer )
 			// an older save leaves it 0, and the first update measures against whatever it finds
 			if( version >= 3 )
 				xfer->xferInt( &production->m_totalProductionFrames );
+
+			// an older save has no squad tags; the constructor left it -1
+			if( version >= 5 )
+				xfer->xferInt( &production->m_reinforcementSquad );
 
 		}  // end for, i
 

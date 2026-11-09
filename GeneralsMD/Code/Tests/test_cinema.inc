@@ -48,6 +48,11 @@ TEST(cinema_parses_a_route_follow_and_switches)
 	CHECK_EQ( (Int)shot.verb, (Int)CINEMA_VERB_HUD );
 	CHECK( shot.on );
 
+	CHECK( CinemaDirector_parseLine( "0 hud map", &shot, &isShot, &reason ) );
+	CHECK_EQ( (Int)shot.verb, (Int)CINEMA_VERB_HUD );
+	CHECK( !shot.on );
+	CHECK_STR( shot.name.str(), "map" );
+
 	CHECK( CinemaDirector_parseLine( "4 filter blur", &shot, &isShot, &reason ) );
 	CHECK_EQ( (Int)shot.verb, (Int)CINEMA_VERB_FILTER );
 	CHECK_STR( shot.name.str(), "blur" );

@@ -270,8 +270,11 @@ Bool CinemaDirector_parseLine( const char *line, CinemaShot *shot, Bool *isShot,
 	else if (verb == "hud" || verb == "letterbox")
 	{
 		shot->verb = (verb == "hud") ? CINEMA_VERB_HUD : CINEMA_VERB_LETTERBOX;
-		if (args != 1 || !parseCinemaSwitch( tokens[ 2 ], &shot->on ))
-			return refuseCinemaLine( reason, "hud and letterbox take on or off" );
+		// hud map: the interface off with the radar left in the corner, the console's hidehud showmap=true
+		if (verb == "hud" && args == 1 && tokens[ 2 ] == "map")
+			shot->name = tokens[ 2 ];
+		else if (args != 1 || !parseCinemaSwitch( tokens[ 2 ], &shot->on ))
+			return refuseCinemaLine( reason, "hud takes on, off or map, letterbox on or off" );
 	}
 	else if (verb == "filter")
 	{
@@ -1223,7 +1226,7 @@ static void runShot( const CinemaShot &shot )
 			break;
 
 		case CINEMA_VERB_HUD:
-			cinemaSetHud( !shot.on );
+			CinemaDirector_setHudHidden( !shot.on, shot.name == "map" );
 			break;
 
 		case CINEMA_VERB_LETTERBOX:

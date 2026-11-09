@@ -528,6 +528,7 @@ UnsignedInt NetPacket::GetRunAheadMetricsCommandSize(NetCommandMsg *msg) {
 
 	++msglen;										// the 'D'
 	msglen += sizeof(Real);							// average latency
+	msglen += sizeof(Real);							// latency jitter
 	msglen += sizeof(UnsignedShort);				// average fps - the writer sends a short, and
 													// this counted a byte, so the buffer was a
 													// byte short of what got written into it
@@ -1250,6 +1251,10 @@ void NetPacket::FillBufferWithRunAheadMetricsCommand(UnsignedByte *buffer, NetCo
 	Real averageLatency = cmdMsg->getAverageLatency();
 	memcpy(buffer + offset, &averageLatency, sizeof(averageLatency));
 	offset += sizeof(averageLatency);
+	// write the latency jitter
+	Real latencyJitter = cmdMsg->getLatencyJitter();
+	memcpy(buffer + offset, &latencyJitter, sizeof(latencyJitter));
+	offset += sizeof(latencyJitter);
 	// write the average fps
 	UnsignedShort averageFps = (UnsignedShort)(cmdMsg->getAverageFps());
 	memcpy(buffer + offset, &averageFps, sizeof(averageFps));
@@ -4303,6 +4308,10 @@ Bool NetPacket::addRunAheadMetricsCommand(NetCommandRef *msg) {
 		Real averageLatency = cmdMsg->getAverageLatency();
 		memcpy(m_packet + m_packetLen, &averageLatency, sizeof(averageLatency));
 		m_packetLen += sizeof(averageLatency);
+		// write the latency jitter
+		Real latencyJitter = cmdMsg->getLatencyJitter();
+		memcpy(m_packet + m_packetLen, &latencyJitter, sizeof(latencyJitter));
+		m_packetLen += sizeof(latencyJitter);
 		// write the average fps
 		UnsignedShort averageFps = (UnsignedShort)(cmdMsg->getAverageFps());
 		memcpy(m_packet + m_packetLen, &averageFps, sizeof(averageFps));
@@ -4347,6 +4356,7 @@ Bool NetPacket::isRoomForRunAheadMetricsMessage(NetCommandRef *msg) {
 	++len; // 'D'
 	len += sizeof(UnsignedShort);
 	len += sizeof(Real);
+	len += sizeof(Real);		// latency jitter
 	if ((len + m_packetLen) > MAX_PACKET_SIZE) {
 		return FALSE;
 	}
@@ -5569,6 +5579,10 @@ NetCommandMsg * NetPacket::readRunAheadMetricsMessage(UnsignedByte *data, Int &i
 
 	readBytes(&averageLatency, data, i, sizeof(Real));
 	msg->setAverageLatency(averageLatency);
+
+	Real latencyJitter = 0.0f;
+	readBytes(&latencyJitter, data, i, sizeof(Real));
+	msg->setLatencyJitter(latencyJitter);
 
 	readBytes(&averageFps, data, i, sizeof(UnsignedShort));
 	msg->setAverageFps((Int)averageFps);

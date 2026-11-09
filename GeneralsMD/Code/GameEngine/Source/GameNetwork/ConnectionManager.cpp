@@ -204,8 +204,10 @@ void ConnectionManager::init()
 	}
 	for (i = 0; i < MAX_SLOTS; ++i) {
 		m_latencyAverages[i] = 0.0; // using zero since all floating point standards should be able to specify 0.0 accurately.
+		m_latencyJitters[i] = 0.0;
 	}
 	m_smallestPacketArrivalCushion = -1;
+	m_lastCushionFrame = 0;
 
 	m_frameMetrics.init();
 
@@ -594,6 +596,7 @@ void ConnectionManager::processRunAheadMetrics(NetRunAheadMetricsCommandMsg *msg
 	if ((player >= 0) && (player < MAX_SLOTS) && (isPlayerConnected(player))) {
 		// a figure off the wire, and the router sizes everyone's run-ahead on it: held to what a link can be
 		m_latencyAverages[player] = sanitizeLatencySample(msg->getAverageLatency(), MAX_PLAUSIBLE_LATENCY_SECONDS);
+		m_latencyJitters[player] = sanitizeLatencySample(msg->getLatencyJitter(), MAX_PLAUSIBLE_JITTER_SECONDS);
 		m_fpsAverages[player] = msg->getAverageFps();
 		//DEBUG_LOG(("ConnectionManager::processRunAheadMetrics - player %d, fps = %d, latency = %f\n", player, msg->getAverageFps(), msg->getAverageLatency()));
 		if (m_fpsAverages[player] > ConvertRetailFrames(100)) {
@@ -1045,10 +1048,17 @@ void ConnectionManager::sendRemoteCommand(NetCommandRef *msg) {
 		}
 	}
 
-	// Do some metrics to find the minimum packet arrival cushion.
-	if (IsCommandSynchronized(msg->getCommand()->getNetCommandType())) {
+	/* Do some metrics to find the minimum packet arrival cushion: how early the frame became ready,
+		 measured once, by the arrival that completed it.  EA measured every arrival for a frame that
+		 was already ready, and every synchronized command goes out twice more, 30 ms apart, until it is
+		 acked (CONNECTION_REDUNDANT_COPIES).  On a 200 ms link the ack is far behind both copies, so
+		 the last copy, 60 ms - four frames - after the frame was complete, set the minimum, and the
+		 self-slug read that as the margin running out. */
+	const UnsignedInt cushionFrame = msg->getCommand()->getExecutionFrame();
+	if (IsCommandSynchronized(msg->getCommand()->getNetCommandType()) && ((Int)(cushionFrame - m_lastCushionFrame) > 0)) {
 //		DEBUG_LOG(("ConnectionManager::sendRemoteCommand - about to call allCommandsReady\n"));
-		if (allCommandsReady(msg->getCommand()->getExecutionFrame(), TRUE)) {
+		if (allCommandsReady(cushionFrame, TRUE)) {
+			m_lastCushionFrame = cushionFrame;
 			Int cushion = frameCushion(msg->getCommand()->getExecutionFrame(), TheGameLogic->getFrame());
 			if (((UnsignedInt)cushion < m_smallestPacketArrivalCushion) || (m_smallestPacketArrivalCushion == -1)) {
 				m_smallestPacketArrivalCushion = cushion;
@@ -1134,18 +1144,29 @@ void ConnectionManager::updateRunAhead(Int oldRunAhead, Int frameRate, Bool didS
 			 or one fast link measured early would speak for a slow one still unmeasured. */
 		const Real UNMEASURED_LINK_SECONDS = 0.2f;
 		Real worst = 0.0f;
+		/* And our worst rttvar, which sizes the run-ahead's jitter margin (computeRunAhead).  An
+			 unmeasured link gets what Jacobson/Karels seeds a first sample with, half the round trip. */
+		Real worstJitter = 0.0f;
 		for (Int i = 0; i < MAX_SLOTS; ++i) {
 			if ((m_connections[i] == NULL) || m_connections[i]->isQuitting()) {
 				continue;
 			}
-			Real seconds = m_connections[i]->hasLatencySample()
+			Bool measured = m_connections[i]->hasLatencySample();
+			Real seconds = measured
 				? sanitizeLatencySample(m_connections[i]->getSmoothedLatencyMS() / 1000.0f, MAX_PLAUSIBLE_LATENCY_SECONDS)
 				: UNMEASURED_LINK_SECONDS;
 			if (seconds > worst) {
 				worst = seconds;
 			}
+			Real jitter = measured
+				? sanitizeLatencySample(m_connections[i]->getLatencyVarianceMS() / 1000.0f, MAX_PLAUSIBLE_JITTER_SECONDS)
+				: sanitizeLatencySample(UNMEASURED_LINK_SECONDS / 2.0f, MAX_PLAUSIBLE_JITTER_SECONDS);
+			if (jitter > worstJitter) {
+				worstJitter = jitter;
+			}
 		}
 		m_latencyAverages[m_localSlot] = worst;
+		m_latencyJitters[m_localSlot] = worstJitter;
 
 		// FrameMetrics measures the logic frame rate again (it briefly measured the display rate,
 		// see FrameMetrics::doPerFrameMetrics), so EA's original rule applies once more: a
@@ -1167,6 +1188,7 @@ void ConnectionManager::updateRunAhead(Int oldRunAhead, Int frameRate, Bool didS
 		metrics->setPlayerID(m_localSlot);
 		metrics->setID(GenerateNextCommandID());
 		metrics->setAverageLatency(m_latencyAverages[m_localSlot]);
+		metrics->setLatencyJitter(m_latencyJitters[m_localSlot]);
 		metrics->setAverageFps(m_fpsAverages[m_localSlot]);
 		sendLocalCommand(metrics, 0xff ^ (1 << m_localSlot));
 		metrics->detach();
@@ -1176,7 +1198,7 @@ void ConnectionManager::updateRunAhead(Int oldRunAhead, Int frameRate, Bool didS
 			Int minFps;
 			Int minFpsPlayer;
 			getMinimumFps(minFps, minFpsPlayer);
-			DEBUG_LOG(("ConnectionManager::updateRunAhead - max latency = %f, min fps = %d, min fps player = %d old FPS = %d\n", getMaximumLatency(), minFps, minFpsPlayer, frameRate));
+			DEBUG_LOG(("ConnectionManager::updateRunAhead - max latency = %f, max jitter = %f, min fps = %d, min fps player = %d old FPS = %d\n", getMaximumLatency(), getMaximumJitter(), minFps, minFpsPlayer, frameRate));
 			/* EA kept the current rate whenever the reported minimum was within 10 % below it, to stop
 				 the measurement's own rounding from ratcheting the room down a frame at a time.  The
 				 probe below does that job (a reported 29 is probed straight back to 30) and the two
@@ -1197,7 +1219,7 @@ void ConnectionManager::updateRunAhead(Int oldRunAhead, Int frameRate, Bool didS
 			// the rate crosses the wire as an UnsignedByte, and -fps is in logic frames now (twice retail)
 			if (commandedFps > UCHAR_MAX)
 				commandedFps = UCHAR_MAX;
-			Int newRunAhead = computeRunAhead(getMaximumLatency(), minFps,
+			Int newRunAhead = computeRunAhead(getMaximumLatency(), getMaximumJitter(), minFps,
 				TheGlobalData->m_networkRunAheadSlack, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2);
 
 			NetRunAheadCommandMsg *msg = newInstance(NetRunAheadCommandMsg);
@@ -1278,6 +1300,14 @@ Real ConnectionManager::getMaximumLatency() {
 		connected[i] = isPlayerConnected(i);
 	}
 	return roomWorstLatency(m_latencyAverages, connected, MAX_SLOTS);
+}
+
+Real ConnectionManager::getMaximumJitter() {
+	Bool connected[MAX_SLOTS];
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		connected[i] = isPlayerConnected(i);
+	}
+	return roomWorstLatency(m_latencyJitters, connected, MAX_SLOTS);
 }
 
 void ConnectionManager::getMinimumFps(Int &minFps, Int &minFpsPlayer) {

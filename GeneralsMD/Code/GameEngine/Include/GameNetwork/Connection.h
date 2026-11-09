@@ -147,6 +147,8 @@ public:
 	Bool hasLatencySample( void ) const { return m_smoothedLatency >= 0.0f; }
 	/** This link's smoothed round trip (srtt), in milliseconds; negative while hasLatencySample is FALSE. */
 	Real getSmoothedLatencyMS( void ) const { return m_smoothedLatency; }
+	/** This link's rttvar, the mean deviation of its round trip, in milliseconds; meaningful once hasLatencySample. */
+	Real getLatencyVarianceMS( void ) const { return m_latencyVariance; }
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 	void debugPrintCommands();

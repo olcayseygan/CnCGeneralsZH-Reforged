@@ -38,8 +38,8 @@ Int MAX_FRAMES_AHEAD = ConvertRetailFrames(128);
 	 shipped ten frames - a third of a second on every link, LAN included - and because the formula
 	 in computeRunAhead does not clear ten until the two worst average round trips add up to about
 	 600 ms, ten frames is what every game anyone actually played ran at.  The window can come down
-	 this far because computeRunAhead now rounds the trip up rather than down and carries a fixed
-	 jitter allowance on top (RUNAHEAD_JITTER_FRAMES), so a link that genuinely needs a wide window
+	 this far because computeRunAhead now rounds the trip up rather than down and carries a margin
+	 sized from the link's measured jitter on top, so a link that genuinely needs a wide window
 	 is given a wider one than the old floor ever gave it, and a link that does not stops paying. */
 Int MIN_RUNAHEAD = ConvertRetailFrames(4);
 Int FRAME_DATA_LENGTH = (MAX_FRAMES_AHEAD+1)*2;

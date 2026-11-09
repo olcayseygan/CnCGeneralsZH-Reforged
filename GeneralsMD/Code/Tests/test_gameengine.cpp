@@ -7370,7 +7370,8 @@ TEST(the_run_ahead_covers_the_trip_it_is_sized_for)
 		Real latency = (Real)ms / 1000.0f;
 		for( Int fps = 5; fps <= LOGICFRAMES_PER_SECOND; fps += 5 )
 		{
-			Int runAhead = computeRunAhead( latency, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+			// no jitter at all is the smallest margin the formula gives, so the tightest case
+			Int runAhead = computeRunAhead( latency, 0.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
 
 			// the window, in seconds, against the one-way trip it has to cover
 			CHECK( (Real)runAhead / (Real)fps >= (latency / 2.0f) );
@@ -7385,8 +7386,8 @@ TEST(every_trip_is_one_hop_over_the_worst_link)
 	Real two[2] = { 0.22f, 0.22f };
 	Bool twoConnected[2] = { TRUE, TRUE };
 	CHECK_NEAR( roomWorstLatency( two, twoConnected, 2 ), 0.22f, 0.0001f );
-	CHECK( computeRunAhead( roomWorstLatency( two, twoConnected, 2 ), 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 )
-				 < computeRunAhead( 0.44f, 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );
+	CHECK( computeRunAhead( roomWorstLatency( two, twoConnected, 2 ), 0.02f, 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 )
+				 < computeRunAhead( 0.44f, 0.02f, 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );
 
 	/* Three: commands go straight from author to player, so the worst trip is the single worst
 		 link, never two of them added.  Slot 0, the router, counts like anybody when it is the worst. */
@@ -7433,15 +7434,22 @@ TEST(a_stalled_frame_is_not_filed_as_round_trip_time)
 	Real clamped = sanitizeLatencySample( 7.636834f, MAX_PLAUSIBLE_LATENCY_SECONDS )
 								 + sanitizeLatencySample( 1.785224f, MAX_PLAUSIBLE_LATENCY_SECONDS );
 	const Int fps = LOGICFRAMES_PER_SECOND;
-	Int runAhead = computeRunAhead( clamped, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+
+	/* The same stall moves rttvar by a quarter of the sample: 450 ms of "jitter" off the 1.79 s one,
+		 which the jitter ceiling holds to what a playable link can show. */
+	Real stalledJitter = sanitizeLatencySample( 1.785224f / 4.0f, MAX_PLAUSIBLE_JITTER_SECONDS );
+	CHECK_NEAR( stalledJitter, MAX_PLAUSIBLE_JITTER_SECONDS, 0.0001f );
+
+	Int runAhead = computeRunAhead( clamped, stalledJitter, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
 	CHECK( runAhead < ConvertRetailFrames( 64 ) );
-	CHECK( runAhead <= 58 );			// 0.97 s at 60 Hz, and only with both players at the ceiling
-	CHECK( runAhead <= (Int)(MAX_PLAUSIBLE_LATENCY_SECONDS * (Real)fps * 1.2f) + RUNAHEAD_JITTER_FRAMES );
+	CHECK( runAhead <= 69 );			// 1.15 s at 60 Hz, and only with both players and the jitter at the ceilings
+	CHECK( runAhead <= (Int)(MAX_PLAUSIBLE_LATENCY_SECONDS * (Real)fps * 1.2f) + SELFSLUG_MIN_THRESHOLD_FRAMES
+											+ (Int)ceilf( RUNAHEAD_JITTER_DEVIATIONS * MAX_PLAUSIBLE_JITTER_SECONDS * (Real)fps ) );
 
 	/* a LAN is untouched by any of this */
 	CHECK_EQ( computeRunAhead( sanitizeLatencySample( 0.051f, MAX_PLAUSIBLE_LATENCY_SECONDS ) * 2.0f,
-														 fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
-						computeRunAhead( 0.102f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );
+														 0.004f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
+						computeRunAhead( 0.102f, 0.004f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );
 }
 
 /* The other half of that match: nothing ever asked for the lost frame.  FrameData escalates to
@@ -7479,21 +7487,76 @@ TEST(a_missing_frame_is_asked_for_again_once_the_wire_has_had_its_chance)
 	CHECK( wait < 1000 );
 }
 
-TEST(the_run_ahead_carries_a_margin_the_percentage_alone_cannot_give)
+TEST(a_packet_that_arrives_on_time_never_trips_the_self_slug)
 {
-	/* An average round trip is exceeded half the time, so a window sized to exactly the average is
-		 wrong half the time.  The proportional slack was meant to be that margin and cannot be: 10 %
-		 of a four frame window is zero frames, 10 % of a ten frame window is one.  The fixed
-		 allowance is what actually covers the jitter, and it is what makes a low floor safe. */
+	/* The brake fires when the cushion - window minus trip - drops below selfSlugThreshold.  A
+		 margin no bigger than that has the room running 10 % slow on a link that never drops or delays
+		 a packet.  So whatever the latency and the jitter, a packet that takes exactly the average trip
+		 arrives with the brake still off. */
 	for( Int ms = 0; ms <= 800; ms += 5 )
 	{
 		Real latency = (Real)ms / 1000.0f;
-		Int runAhead = computeRunAhead( latency, LOGICFRAMES_PER_SECOND, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+		Int tripFrames = (Int)ceilf( ( latency / 2.0f ) * LOGICFRAMES_PER_SECONDS_REAL );
+		for( Int jitterMS = 0; jitterMS <= 100; jitterMS += 5 )
+		{
+			Int runAhead = computeRunAhead( latency, (Real)jitterMS / 1000.0f, LOGICFRAMES_PER_SECOND, 10,
+																			MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+			Int cushion = runAhead - tripFrames;
+			CHECK( !shouldSelfSlug( cushion, runAhead, 10 ) );
 
-		// at least RUNAHEAD_JITTER_FRAMES of room beyond the trip itself, at every latency
-		Real slackSeconds = ( (Real)runAhead / LOGICFRAMES_PER_SECONDS_REAL ) - ( latency / 2.0f );
-		CHECK( slackSeconds >= ( (Real)RUNAHEAD_JITTER_FRAMES / LOGICFRAMES_PER_SECONDS_REAL ) - 0.0005f );
+			// and a packet late by as many deviations as the margin is sized for does not trip it either
+			Int lateFrames = (Int)ceilf( RUNAHEAD_JITTER_DEVIATIONS * ( (Real)jitterMS / 1000.0f ) * LOGICFRAMES_PER_SECONDS_REAL );
+			CHECK( !shouldSelfSlug( cushion - lateFrames, runAhead, 10 ) );
+		}
 	}
+}
+
+TEST(the_jitter_margin_follows_the_measured_jitter)
+{
+	const Int fps = LOGICFRAMES_PER_SECOND;
+	const Int oldFixedMargin = 6;				// the RUNAHEAD_JITTER_FRAMES this replaced, 100 ms at 60 Hz
+	const Real ping = 0.215f;						// -latAvg 100 each way plus the game's own share, as measured
+
+	/* What each window was under the flat margin: trip + 10 % + 6.  At a 215 ms round trip that is
+		 7 + 0 + 6 = 13 frames whatever the link is doing. */
+	Int tripFrames = (Int)ceilf( ( ping / 2.0f ) * (Real)fps );
+	CHECK_EQ( tripFrames, 7 );
+	Int oldWindow = tripFrames + oldFixedMargin;
+
+	// a steady link, rttvar a few milliseconds, gets a shorter window than the flat margin gave it
+	Int steady = computeRunAhead( ping, 0.004f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+	CHECK_EQ( steady, tripFrames + SELFSLUG_MIN_THRESHOLD_FRAMES + 1 );
+	CHECK( steady < oldWindow );
+
+	// a jittery one, rttvar 20 to 35 ms as -latNoise 30 measures, keeps more
+	Int jittery = computeRunAhead( ping, 0.024f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+	CHECK_EQ( jittery, tripFrames + SELFSLUG_MIN_THRESHOLD_FRAMES + 3 );		// ceil(1.5 * 24 ms * 60) = 3
+	CHECK( jittery > oldWindow );
+	CHECK( computeRunAhead( ping, 0.035f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) > jittery );
+
+	// more jitter never shortens the window
+	Int previous = 0;
+	for( Int jitterMS = 0; jitterMS <= 100; ++jitterMS )
+	{
+		Int runAhead = computeRunAhead( ping, (Real)jitterMS / 1000.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+		CHECK( runAhead >= previous );
+		previous = runAhead;
+	}
+
+	/* No jitter is still a frame of it: the game's send grouping and socket reads spread every link
+		 by up to a frame, loopback included. */
+	CHECK_EQ( computeRunAhead( ping, 0.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
+						tripFrames + SELFSLUG_MIN_THRESHOLD_FRAMES + RUNAHEAD_JITTER_MIN_FRAMES );
+
+	/* A figure off the wire that is not a number, negative or absurd must neither shrink the window
+		 nor walk it out of the buffers. */
+	volatile Real zero = 0.0f;
+	CHECK_EQ( computeRunAhead( ping, zero / zero, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
+						computeRunAhead( ping, 0.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );
+	CHECK_EQ( computeRunAhead( ping, -1.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
+						computeRunAhead( ping, 0.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );
+	CHECK_EQ( computeRunAhead( ping, 1.0e30f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ), MAX_FRAMES_AHEAD / 2 );
+	CHECK_NEAR( sanitizeLatencySample( 5.0f, MAX_PLAUSIBLE_JITTER_SECONDS ), MAX_PLAUSIBLE_JITTER_SECONDS, 0.0001f );
 }
 
 TEST(the_run_ahead_is_shorter_than_the_shipped_floor_on_the_links_that_do_not_need_it)
@@ -7504,19 +7567,21 @@ TEST(the_run_ahead_is_shorter_than_the_shipped_floor_on_the_links_that_do_not_ne
 	const Int shippedFloor = ConvertRetailFrames( 10 );	// EA's MIN_RUNAHEAD, 333 ms of input delay
 	const Int fps = LOGICFRAMES_PER_SECOND;
 
-	CHECK( computeRunAhead( 0.000f, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// LAN
-	CHECK( computeRunAhead( 0.040f, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// 40 ms
-	CHECK( computeRunAhead( 0.100f, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// 100 ms
-	CHECK( computeRunAhead( 0.160f, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// 160 ms
+	// jitter as loopback and a good broadband link measure it, a few milliseconds of rttvar
+	const Real jitter = 0.008f;
+	CHECK( computeRunAhead( 0.000f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// LAN
+	CHECK( computeRunAhead( 0.040f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// 40 ms
+	CHECK( computeRunAhead( 0.100f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// 100 ms
+	CHECK( computeRunAhead( 0.160f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) < shippedFloor );		// 160 ms
 
 	// and the shortest of them is the floor itself, not something under it
-	CHECK_EQ( computeRunAhead( 0.000f, fps, 10, MIN_RUNAHEAD, 64 ), MIN_RUNAHEAD );
+	CHECK_EQ( computeRunAhead( 0.000f, jitter, fps, 10, MIN_RUNAHEAD, 64 ), MIN_RUNAHEAD );
 
 	/* And what it is not: the links that were relying on the floor get more window than the floor
 		 gave them, not less.  600 ms summed round trip is where EA's formula finally reached ten. */
-	CHECK( computeRunAhead( 0.300f, fps, 10, MIN_RUNAHEAD, 64 ) >= ConvertRetailFrames( 7 ) );
-	CHECK( computeRunAhead( 0.600f, fps, 10, MIN_RUNAHEAD, 64 ) > shippedFloor );
-	CHECK( computeRunAhead( 1.000f, fps, 10, MIN_RUNAHEAD, 64 ) > ConvertRetailFrames( 16 ) );
+	CHECK( computeRunAhead( 0.300f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) >= ConvertRetailFrames( 7 ) );
+	CHECK( computeRunAhead( 0.600f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > shippedFloor );
+	CHECK( computeRunAhead( 1.000f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > ConvertRetailFrames( 16 ) );
 }
 
 TEST(the_run_ahead_stays_inside_the_bounds_the_network_buffers_are_built_for)
@@ -7524,14 +7589,17 @@ TEST(the_run_ahead_stays_inside_the_bounds_the_network_buffers_are_built_for)
 	// the window indexes frame buffers sized from MAX_FRAMES_AHEAD; it may not walk out of them
 	for( Int ms = 0; ms <= 20000; ms += 25 )
 	{
-		Int runAhead = computeRunAhead( (Real)ms / 1000.0f, 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-		CHECK( runAhead >= MIN_RUNAHEAD );
-		CHECK( runAhead <= MAX_FRAMES_AHEAD / 2 );
+		for( Int jitterMS = 0; jitterMS <= 2000; jitterMS += 250 )
+		{
+			Int runAhead = computeRunAhead( (Real)ms / 1000.0f, (Real)jitterMS / 1000.0f, 30, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+			CHECK( runAhead >= MIN_RUNAHEAD );
+			CHECK( runAhead <= MAX_FRAMES_AHEAD / 2 );
+		}
 	}
 
 	// a rate of zero is not a division by zero, and a negative latency is not a negative window
-	CHECK_EQ( computeRunAhead( 0.0f, 0, 10, MIN_RUNAHEAD, 64 ), MIN_RUNAHEAD );
-	CHECK_EQ( computeRunAhead( -1.0f, 30, 10, MIN_RUNAHEAD, 64 ), MIN_RUNAHEAD );
+	CHECK_EQ( computeRunAhead( 0.0f, 0.0f, 0, 10, MIN_RUNAHEAD, 64 ), MIN_RUNAHEAD );
+	CHECK_EQ( computeRunAhead( -1.0f, 0.0f, 30, 10, MIN_RUNAHEAD, 64 ), MIN_RUNAHEAD );
 }
 
 TEST(the_shipped_run_ahead_floor_leaves_the_self_slug_brake_room_to_work)
@@ -8493,6 +8561,7 @@ TEST(a_commands_advertised_size_covers_what_its_writer_puts_in_the_buffer)
 
 	NetRunAheadMetricsCommandMsg *metrics = newInstance( NetRunAheadMetricsCommandMsg );
 	metrics->setAverageLatency( 0.125f );
+	metrics->setLatencyJitter( 0.021f );
 	metrics->setAverageFps( 300 );					// wider than a byte, which is the point
 	NetCommandRef *metricsRef = wrapForSend( metrics, NETCOMMANDTYPE_RUNAHEADMETRICS );
 	CHECK( bytesActuallyWritten( metricsRef, &advertised ) <= advertised );
@@ -8507,6 +8576,37 @@ TEST(a_commands_advertised_size_covers_what_its_writer_puts_in_the_buffer)
 	NetCommandRef *timeoutRef = wrapForSend( timeout, NETCOMMANDTYPE_TIMEOUTSTART );
 	CHECK( bytesActuallyWritten( timeoutRef, &advertised ) <= advertised );
 	timeoutRef->deleteInstance();
+}
+
+/* The router sizes the room's jitter margin on what each player reports, so the jitter has to come
+	 out of the packet as it went in, and the frame rate behind it still where the reader looks. */
+TEST(run_ahead_metrics_carry_the_jitter_across_the_wire)
+{
+	NetRunAheadMetricsCommandMsg *metrics = newInstance( NetRunAheadMetricsCommandMsg );
+	metrics->setAverageLatency( 0.215f );
+	metrics->setLatencyJitter( 0.027f );
+	metrics->setAverageFps( 58 );
+	NetCommandRef *ref = wrapForSend( metrics, NETCOMMANDTYPE_RUNAHEADMETRICS );
+
+	NetPacket *packet = newInstance( NetPacket );
+	packet->init();
+	CHECK( packet->addCommand( ref ) );
+
+	NetCommandList *list = packet->getCommandList();
+	NetCommandRef *first = list->getFirstMessage();
+	CHECK( first != NULL );
+	if( first != NULL )
+	{
+		CHECK_EQ( (Int)first->getCommand()->getNetCommandType(), (Int)NETCOMMANDTYPE_RUNAHEADMETRICS );
+		NetRunAheadMetricsCommandMsg *read = (NetRunAheadMetricsCommandMsg *)first->getCommand();
+		CHECK_NEAR( read->getAverageLatency(), 0.215f, 0.00001f );
+		CHECK_NEAR( read->getLatencyJitter(), 0.027f, 0.00001f );
+		CHECK_EQ( read->getAverageFps(), 58 );
+	}
+
+	list->deleteInstance();
+	packet->deleteInstance();
+	ref->deleteInstance();
 }
 
 /* The size of nothing is nothing.  This one hands back a byte count, but its guard against a null

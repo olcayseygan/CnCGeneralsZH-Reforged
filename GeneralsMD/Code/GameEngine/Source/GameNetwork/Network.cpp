@@ -218,6 +218,11 @@ protected:
 	Int m_lastFrameCompleted;
 	Bool m_didSelfSlug;
 	time_t m_stallStart;																			///< When the frame we are waiting on stopped being ready; 0 when not waiting.
+	Int m_framesRun;																					///< Logic frames released since the last pacing line in the log.
+	Int m_framesSlugged;																			///< How many of those the self-slug held back.
+	Int m_longStalls;																					///< Waits on somebody else's commands of 300 ms or more, same window.
+	Int m_cushionSum;																					///< The self-slug's cushion reading, summed over the frames of the same window.
+	Int m_cushionSamples;
 	Int64 m_perfCountFreq;														///< The frequency of the performance counter.
 
 	Int64 m_nextFrameTime;														///< When did we execute the last frame?  For slugging the GameLogic...
@@ -285,6 +290,11 @@ Network::Network()
 	m_checkCRCsThisFrame = FALSE;
 	m_didSelfSlug = FALSE;
 	m_stallStart = 0;
+	m_framesRun = 0;
+	m_framesSlugged = 0;
+	m_longStalls = 0;
+	m_cushionSum = 0;
+	m_cushionSamples = 0;
 	m_frameDataReady = FALSE;
 	m_sawCRCMismatch = FALSE;
 	//
@@ -353,6 +363,11 @@ void Network::init()
 	m_frameDataReady = FALSE;
 	m_didSelfSlug = FALSE;
 	m_stallStart = 0;
+	m_framesRun = 0;
+	m_framesSlugged = 0;
+	m_longStalls = 0;
+	m_cushionSum = 0;
+	m_cushionSamples = 0;
 
 	m_localStatus = NETLOCALSTATUS_PREGAME;
 
@@ -766,7 +781,11 @@ void Network::update( void )
 		if (!ready && m_stallStart == 0) {
 			m_stallStart = Clock_Milliseconds();
 		} else if (ready && m_stallStart != 0) {
-			m_conMgr->addNetworkStall(Clock_Milliseconds() - m_stallStart);
+			time_t stalledMS = Clock_Milliseconds() - m_stallStart;
+			m_conMgr->addNetworkStall(stalledMS);
+			if (stalledMS >= 300) {
+				++m_longStalls;
+			}
 			m_stallStart = 0;
 		}
 	}
@@ -777,6 +796,29 @@ void Network::update( void )
 		if (timeForNewFrame()) { // This needs to come after any other pre-frame execution checks as this changes the timing variables.
 			RelayCommandsToCommandList(TheGameLogic->getFrame());	// Put the commands for the next frame on TheCommandList.
 			m_frameDataReady = TRUE; // Tell the GameEngine to run the commands for the new frame.
+
+			/* How the room is actually paced, one line every ten seconds of logic: the frames the
+				 self-slug held back are the run-ahead's margin running out without a stall, the long
+				 waits are it running out with one.  Both say whether the window fits the link. */
+			++m_framesRun;
+			if (m_didSelfSlug) {
+				++m_framesSlugged;
+			}
+			Int cushion = m_conMgr->getMinimumCushion();
+			if (cushion >= 0) {
+				m_cushionSum += cushion;
+				++m_cushionSamples;
+			}
+			if (m_framesRun >= 10 * LOGICFRAMES_PER_SECOND) {
+				DEBUG_LOG(("Network::update - frame %d: %d of the last %d frames self-slugged, %d stalls of 300 ms or more, run ahead %d, mean cushion %.2f\n",
+					TheGameLogic->getFrame(), m_framesSlugged, m_framesRun, m_longStalls, m_runAhead,
+					m_cushionSamples ? (Real)m_cushionSum / (Real)m_cushionSamples : -1.0f));
+				m_framesRun = 0;
+				m_framesSlugged = 0;
+				m_longStalls = 0;
+				m_cushionSum = 0;
+				m_cushionSamples = 0;
+			}
 		}
 	}
 }

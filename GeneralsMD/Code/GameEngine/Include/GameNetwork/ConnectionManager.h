@@ -184,6 +184,7 @@ private:
 	//	void doPerFrameMetrics(UnsignedInt frame);
 	void getMinimumFps(Int &minFps, Int &minFpsPlayer);			///< Returns the smallest FPS in the m_fpsAverages list.
 	Real getMaximumLatency(); ///< The worst round trip any connected player reported, seconds (roomWorstLatency).
+	Real getMaximumJitter();  ///< The worst rttvar any connected player reported, seconds.
 
 	void requestFrameDataResend(Int playerID, UnsignedInt frame); ///< request of this player that he send the specified frame's data.
 
@@ -218,6 +219,7 @@ private:
 	// These variables are used to keep track of the other players' average fps and latency.
 	// yup.
 	Real m_latencyAverages[MAX_SLOTS];
+	Real m_latencyJitters[MAX_SLOTS];		///< seconds, each player's worst rttvar; the run-ahead's jitter margin is sized on the largest
 	Int  m_fpsAverages[MAX_SLOTS];
 
 	/* Wall clock of the last thing we heard from each player, zero for "nothing yet". */
@@ -230,6 +232,7 @@ private:
 	Int  m_minFpsPlayer;
 	Int  m_minFps;
 	UnsignedInt m_smallestPacketArrivalCushion;
+	UnsignedInt m_lastCushionFrame;		///< The newest frame whose arrival cushion was measured; each frame is measured once, when it completes.
 	Bool m_didSelfSlug;
 
 	// -----------------------------------------------------------------------------

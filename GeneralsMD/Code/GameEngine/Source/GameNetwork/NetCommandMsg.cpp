@@ -474,6 +474,7 @@ void NetPlayerLeaveCommandMsg::setLeavingPlayerID(UnsignedByte id) {
  */
 NetRunAheadMetricsCommandMsg::NetRunAheadMetricsCommandMsg() : NetCommandMsg() {
 	m_averageLatency = 0.0;
+	m_latencyJitter = 0.0;
 	m_averageFps = 0;
 	m_commandType = NETCOMMANDTYPE_RUNAHEADMETRICS;
 }

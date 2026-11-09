@@ -209,11 +209,14 @@ public:
 
 	Real getAverageLatency();
 	void setAverageLatency(Real avgLat);
+	Real getLatencyJitter() { return m_latencyJitter; }			///< seconds, the worst rttvar of the sender's links
+	void setLatencyJitter(Real jitter) { m_latencyJitter = jitter; }
 	Int  getAverageFps();
 	void setAverageFps(Int fps);
 
 protected:
 	Real m_averageLatency;
+	Real m_latencyJitter;
 	Int  m_averageFps;
 };
 

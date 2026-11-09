@@ -94,11 +94,13 @@ Real roomWorstLatency( const Real latencies[], const Bool connected[], Int numSl
 	return worst;
 }
 
-Int computeRunAhead( Real roundTripSeconds, Int fps, UnsignedInt slackPercent,
+Int computeRunAhead( Real roundTripSeconds, Real jitterSeconds, Int fps, UnsignedInt slackPercent,
 										 Int minRunAhead, Int maxRunAhead )
 {
 	if( roundTripSeconds < 0.0f )
 		roundTripSeconds = 0.0f;
+	if( !(jitterSeconds >= 0.0f) )
+		jitterSeconds = 0.0f;
 	if( fps < 1 )
 		fps = 1;			// the room rate is floored long before it gets here, but the division below is real
 
@@ -110,9 +112,15 @@ Int computeRunAhead( Real roundTripSeconds, Int fps, UnsignedInt slackPercent,
 		 anyone plays on; lowering the floor is what makes the arithmetic underneath it matter. */
 	Int frames = (Int)ceilf( (roundTripSeconds / 2.0f) * (Real)fps );
 
-	// EA's proportional slack, and then the fixed allowance an average and a percentage cannot give
+	// EA's proportional slack, then the brake's room and the link's own jitter - see the header
 	frames += (Int)((frames * (Int)slackPercent) / 100);
-	frames += RUNAHEAD_JITTER_FRAMES;
+
+	Real jitterRaw = ceilf( (Real)RUNAHEAD_JITTER_DEVIATIONS * jitterSeconds * (Real)fps );
+	Int jitterFrames = ( jitterRaw > (Real)maxRunAhead ) ? maxRunAhead : (Int)jitterRaw;	// no float-to-int overflow
+	if( jitterFrames < RUNAHEAD_JITTER_MIN_FRAMES )
+		jitterFrames = RUNAHEAD_JITTER_MIN_FRAMES;
+
+	frames += selfSlugThreshold( frames, slackPercent ) + jitterFrames;
 
 	if( frames < minRunAhead )
 		frames = minRunAhead;

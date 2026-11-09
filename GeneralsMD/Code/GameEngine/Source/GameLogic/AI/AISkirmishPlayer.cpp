@@ -1548,6 +1548,11 @@ void AISkirmishPlayer::newMap( void )
 			info->incrementNumRebuilds(); // the initial build in the normal build list consumes a rebuild, so add one.
 		}
 	}
+
+	// the first building's placement floods the whole map from the base: done on the loading screen, which
+	// the pathfinder is ready for by now, rather than on a frame of the match each seat's first build lands on
+	if (m_baseCenterSet)
+		groundFromBase();
 }
 
 //----------------------------------------------------------------------------------------------------------

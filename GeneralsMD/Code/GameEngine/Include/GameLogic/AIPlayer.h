@@ -168,6 +168,36 @@ struct AIDoctrineUnit
 	Real m_trust;				///< 1 fresh; falls when one dies having done nothing, comes back with time
 };
 
+/** AIGroundFlood run to the end over the whole grid, quicker and in pieces.  Every cell's walkability is set
+	* before the first step, and step() hands cells out to a budget; the field it ends with is AIGroundFlood's
+	* on the same walkability whatever the budgets, since each cell's ground distance has one value whichever
+	* order its ties come out in.  The callback-per-cell flood took 60 to 100 ms of one frame on a 32-player
+	* map's 692,000 cells.  A grid padded by one unwalkable cell all round, so no neighbour needs a bounds test. */
+class AIGroundField
+{
+public:
+	AIGroundField();
+	void start( Int width, Int height );			///< forget everything; every cell unwalkable and unreached
+	void setWalkable( Int x, Int y ) { m_walk[ ( y + 1 ) * m_pitch + x + 1 ] = 1; }
+	void addSource( Int x, Int y );						///< as AIGroundFlood::addSource, every one before the first step
+	Bool step( Int *budget );									///< hands out cells while *budget lasts, less what it spent; TRUE once the field is final
+	void takeField( std::vector<UnsignedShort> &field );	///< y * width + x, and lets go of the grid
+	void release( void );											///< lets go of the grid unfinished
+	Int getWidth( void ) const { return m_width; }
+	Int getHeight( void ) const { return m_height; }
+
+private:
+	Int m_width;
+	Int m_height;
+	Int m_pitch;
+	std::vector<UnsignedShort> m_dist;
+	std::vector<UnsignedByte> m_walk;
+	std::vector<Int> m_bucket[ 4 ];
+	Int m_at;
+	Int m_cursor;
+	Int m_pending;
+};
+
 
 /**
  * The computer-controlled opponent.
@@ -293,7 +323,7 @@ public:
 
 	/// What a seat that predates the ladder (an old save, a replay, a script) plays at.
 	static AISkillLevel skillLevelForDifficulty(GameDifficulty difficulty);
-	void buildBySupplies(Int minimumCash, const AsciiString &thingName, Bool holdableOnly = FALSE ); ///< Builds a building by supplies. holdableOnly is the AI's own expansion: see findSupplyCenter, and no room beside the dock means no building
+	void buildBySupplies(Int minimumCash, const AsciiString &thingName, Bool holdableOnly = FALSE, Object *dock = NULL ); ///< Builds a building by supplies. holdableOnly is the AI's own expansion: see findSupplyCenter, and no room beside the dock means no building.  dock: what findSupplyCenter with the same two said this frame
 	void buildSpecificBuildingNearestTeam( const AsciiString &thingName, const Team *team );
 	void buildUpgrade(const AsciiString &upgrade ); ///< Builds an upgrade.
 	/// A team is about to be destroyed.
@@ -472,6 +502,11 @@ protected:
 	void fortifyChokes(Object *dozer);	///< a Turtle's mines on the guns at its chokes and demo traps in front of them
 	const std::vector<UnsignedShort> &groundFromBase(void);	///< AIGroundFlood distance of every pathfind cell from the base center, cached until the center moves
 	const std::vector<UnsignedShort> &groundFromThreats(const Coord3D *threats, Int count);	///< the same from the nearest of these, cached until they change
+	Bool groundThreatsMatch(const Coord3D *threats, Int count, UnsignedInt bridges) const;
+	void stepGroundFields(void);			///< floods the field the next ask will want over frames, ahead of it
+	void beginGroundFlood(Int kind, const Coord3D *from, Int count, UnsignedInt bridges);
+	Int workGroundFlood(Int budget);	///< works the flood under way, delivering it when done; what is left of budget
+	void dropGroundFlood(Int kind);		///< a flood under way of that kind is for a point no longer wanted
 	Bool reachableFromBase(const Coord3D *pos);	///< a vehicle at the base center could drive there; TRUE before the base is placed
 	Real knownFirepowerAlongPath(Waypoint *way);	///< what this AI has seen that can shoot, along an approach
 	AsciiString secondApproachLabel(const Coord3D *from, const AsciiString &taken, Int pathSuffix);	///< the quietest other road, or empty
@@ -664,6 +699,10 @@ protected:
 	Bool			m_startOccupied[ MAX_PLAYER_COUNT ];	///< ... and which of those turned out to hold an enemy
 	Int				m_playerStartNdx[ MAX_PLAYER_COUNT ];	///< the start position each player is known to be at; -1 == not found yet
 	UnsignedInt m_startIntelFrame;			///< frame the above was last brought up to date
+	/* The map's start waypoints, read once (startAt): a pure function of the map, not xferred. */
+	mutable Coord3D			m_startAtPos[ MAX_PLAYER_COUNT ];
+	mutable UnsignedByte	m_startAtState[ MAX_PLAYER_COUNT ];	///< 0 not read yet, 1 there, 2 the map has none
+	Bool startAt( Int startNdx, Coord3D *pos ) const;	///< startPositionLoc, kept
 	ObjectID	m_capturerID;						///< the unit currently out taking tech buildings for us
 	ObjectID	m_ferryID;							///< the helicopter flying the capturer to its target, INVALID_ID for none
 	std::vector<ObjectID>	m_droppedRiders;	///< infantry a helicopter is putting down at a fight, sent on once out
@@ -779,6 +818,14 @@ protected:
 	std::vector<UnsignedShort> m_groundFromThreats;
 	std::vector<Coord3D> m_groundThreatsAt;
 	UnsignedInt m_groundThreatsBridges;
+	/* One of those two flooding over frames before anything asks for it (stepGroundFields), finished on the
+		 spot if something does.  Not xferred either: a load floods again when asked. */
+	AIGroundField m_groundFlood;
+	Int m_groundFloodKind;						///< GROUND_FLOOD_NONE, _BASE or _THREATS
+	Int m_groundFloodColumn;					///< walkability read up to this column; -1 before the grid is allocated
+	std::vector<Coord3D> m_groundFloodFrom;
+	UnsignedInt m_groundFloodBridges;
+	UnsignedInt m_groundFloodBegun;
 
 	/* The Turtle's chokes (turtleChokes), not xferred for the same reason: a pure function of the
 		 map, the bridges, the base center and the enemy addresses, recomputed when one of them moves. */
@@ -917,7 +964,11 @@ protected:
 		UnsignedInt	frame;
 	};
 	std::vector<GunReading>	m_gunReadings;
-	void answerFire(void);
+	/** The player's objects whose ID comes up this frame, in the order Player::iterateObjects gives them, for
+		* doTactics and, when its look is the same length, answerFire; held so a frame allocates nothing. */
+	std::vector<Object *>	m_lookTurn;
+	std::vector<Object *>	m_fireTurn;
+	void answerFire(const std::vector<Object *> *turn);	///< turn: this frame's look already collected, or NULL
 	AIFireAnswer answerHit(Object *obj, Object *shooter, Object *gun);	///< decided and ordered
 	const GunReading &readGun(const Object *obj, const Object *gun);
 	void fightersNear(const Coord3D *at, Real radius, std::vector<Object *> *fighters);	///< our own who take orders here, in ObjectID order

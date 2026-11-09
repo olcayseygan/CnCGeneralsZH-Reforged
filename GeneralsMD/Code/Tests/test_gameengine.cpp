@@ -17317,6 +17317,62 @@ TEST(ground_flood_goes_round_the_wall_nearest_first)
 	CHECK_EQ( count, 3 );		// the source and its two side neighbours
 }
 
+/** Seven cells in ten open, scattered by a fixed LCG. */
+enum { FIELD_TEST_WIDTH = 61, FIELD_TEST_HEIGHT = 47 };
+static UnsignedByte theFieldTestWalk[ FIELD_TEST_WIDTH * FIELD_TEST_HEIGHT ];
+static Bool fieldTestWalkable( Int x, Int y, void * )
+{
+	return theFieldTestWalk[ y * FIELD_TEST_WIDTH + x ] != 0;
+}
+
+/** The whole-grid field worked in pieces ends with the ground flood's field on the same ground, whatever the
+	 pieces: a source on a wall, one off the grid and one given twice included. */
+TEST(ground_field_matches_the_ground_flood_in_any_pieces)
+{
+	UnsignedInt seed = 12345u;
+	for( Int i = 0; i < FIELD_TEST_WIDTH * FIELD_TEST_HEIGHT; ++i )
+	{
+		seed = seed * 1103515245u + 12345u;
+		theFieldTestWalk[ i ] = ( ( seed >> 16 ) % 100 ) < 70 ? 1 : 0;
+	}
+	theFieldTestWalk[ 0 ] = 0;
+	const Int SOURCES = 5;
+	const Int sources[ SOURCES ][ 2 ] = { { 0, 0 }, { 40, 30 }, { 60, 46 }, { 40, 30 }, { 61, 3 } };
+
+	AIGroundFlood flood( FIELD_TEST_WIDTH, FIELD_TEST_HEIGHT, fieldTestWalkable, NULL );
+	for( Int s = 0; s < SOURCES; ++s )
+		flood.addSource( sources[ s ][ 0 ], sources[ s ][ 1 ] );
+	Int x, y, d;
+	while( flood.next( &x, &y, &d ) )
+		;
+
+	const Int budgets[ 3 ] = { 1, 37, 0x7FFFFFFF };
+	for( Int b = 0; b < 3; ++b )
+	{
+		AIGroundField field;
+		field.start( FIELD_TEST_WIDTH, FIELD_TEST_HEIGHT );
+		for( Int cy = 0; cy < FIELD_TEST_HEIGHT; ++cy )
+			for( Int cx = 0; cx < FIELD_TEST_WIDTH; ++cx )
+				if( fieldTestWalkable( cx, cy, NULL ) )
+					field.setWalkable( cx, cy );
+		for( Int s = 0; s < SOURCES; ++s )
+			field.addSource( sources[ s ][ 0 ], sources[ s ][ 1 ] );
+		Int pieces = 0;
+		for( ;; )
+		{
+			Int budget = budgets[ b ];
+			if( field.step( &budget ) )
+				break;
+			++pieces;
+		}
+		std::vector<UnsignedShort> out;
+		field.takeField( out );
+		CHECK( out == flood.field() );
+		if( budgets[ b ] == 1 )
+			CHECK( pieces > 1000 );
+	}
+}
+
 /** Another factory only when every one standing has stayed busy for the rung's backlog, with no cap on
 	 how many. */
 TEST(extra_factory_follows_the_queue)

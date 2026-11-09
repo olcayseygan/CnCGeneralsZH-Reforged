@@ -73,15 +73,18 @@ Int selfSlugThreshold( Int runAhead, UnsignedInt slackPercent );
 enum
 {
 	/* The brake needs room to work.  NetworkRunAheadSlack is 10 %, and the run-ahead it is a
-		 percentage of is small: MIN_RUNAHEAD is four frames, and computeRunAhead only clears that on
-		 links slower than about 240 ms round trip.  Ten percent of four is nothing, and a brake that
-		 engages with less than a frame of margin left is not a brake, it is the stall it was meant
-		 to prevent.  Two frames was 66 ms at 30 Hz; logic runs at 60 now, so the same 66 ms is four.
-		 Every frame count in this enum is doubled from its 30 Hz value for that reason. */
-	SELFSLUG_MIN_THRESHOLD_FRAMES = 4,
+		 percentage of is small, so ten percent of it is nothing, and a brake that engages with less
+		 than a frame of margin left is not a brake, it is the stall it was meant to prevent.  So two
+		 frames, 33 ms.  It was four, the 66 ms that two frames were at 30 Hz, and every frame of it is
+		 a frame of run-ahead, which is input delay.  Measured on three copies against four, both
+		 without send grouping: a 50 ms ping self-slugged on 0 to 2 % of frames against 0 to 3 %, a
+		 100 ms ping on 2 to 3 % against 1 %, a 200 ms ping on 1 to 1.5 % against 3 % (four with the
+		 grouping), and nothing stalled.  Every other frame count in this enum is doubled from its
+		 30 Hz value. */
+	SELFSLUG_MIN_THRESHOLD_FRAMES = 2,
 
-	/* The least jitter margin computeRunAhead gives, however steady the link: the game's own send
-		 grouping and socket reads put up to a frame of spread on every link, loopback included. */
+	/* The least jitter margin computeRunAhead gives, however steady the link: the socket is read once
+		 a pass, so every link has up to a frame of spread, loopback included. */
 	RUNAHEAD_JITTER_MIN_FRAMES = 1,
 
 	/* A frame's FRAMEINFO leaves a tick after its commands: at frame f a player can still issue orders

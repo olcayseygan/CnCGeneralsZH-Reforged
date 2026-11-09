@@ -7322,8 +7322,8 @@ TEST(selfslug_fires_once_the_margin_eats_into_the_slack)
 
 TEST(selfslug_threshold_has_a_floor_the_shipped_run_ahead_cannot_undercut)
 {
-	/* The run-ahead a real room plays on is a handful of frames - MIN_RUNAHEAD is eight, and
-		 computeRunAhead only clears that above about 240 ms round trip - so NetworkRunAheadSlack's
+	/* The run-ahead a real room plays on is a handful of frames - MIN_RUNAHEAD is four, and a
+		 300 ms round trip is still only fifteen - so NetworkRunAheadSlack's
 		 10 % of it is worth well under a frame.  A brake that waits until less than one frame of
 		 margin is left has already lost: at 60 Hz that is under 17 ms of warning for a hitch that
 		 takes longer than that to signal, let alone correct.  Hence the floor. */
@@ -7332,7 +7332,7 @@ TEST(selfslug_threshold_has_a_floor_the_shipped_run_ahead_cannot_undercut)
 	// the floor holds wherever the arithmetic would land under it, including at zero slack
 	CHECK_EQ( selfSlugThreshold( 10, 0 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
 	CHECK_EQ( selfSlugThreshold( 1, 10 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
-	CHECK_EQ( selfSlugThreshold( 39, 10 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
+	CHECK_EQ( selfSlugThreshold( 29, 10 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
 
 	// and gets out of the way as soon as the configured slack is worth more than it
 	CHECK_EQ( selfSlugThreshold( 60, 10 ), 6 );
@@ -7524,16 +7524,17 @@ TEST(the_jitter_margin_follows_the_measured_jitter)
 	CHECK_EQ( tripFrames, 7 );
 	Int oldWindow = tripFrames + oldFixedMargin;
 
-	/* A steady link, rttvar a few milliseconds, gets the window the flat margin gave it: the six frames
-		 were the FRAMEINFO lag, the brake's four and one frame of spread, which is all a steady link needs. */
+	/* A steady link, rttvar a few milliseconds, gets the FRAMEINFO lag, the brake's frames and one frame
+		 of spread over the trip, which is all a steady link needs.  The flat margin's six frames were
+		 that with a brake of four; the brake is two now, so the steady window is two frames shorter. */
 	Int steady = computeRunAhead( ping, 0.004f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
 	CHECK_EQ( steady, tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + 1 );
-	CHECK_EQ( steady, oldWindow );
+	CHECK_EQ( steady, oldWindow - 2 );
 
 	// a jittery one, rttvar 20 to 35 ms as -latNoise 30 measures, waits longer
 	Int jittery = computeRunAhead( ping, 0.024f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
 	CHECK_EQ( jittery, tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + 2 );		// ceil(24 ms * 60) = 2
-	CHECK( jittery > oldWindow );
+	CHECK( jittery > steady );
 	CHECK( computeRunAhead( ping, 0.035f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) > jittery );
 
 	// more jitter never shortens the window
@@ -7631,7 +7632,8 @@ TEST(the_run_ahead_is_shorter_than_the_shipped_floor_on_the_links_that_do_not_ne
 
 	/* And what it is not: the links that were relying on the floor get more window than the floor
 		 gave them, not less.  600 ms summed round trip is where EA's formula finally reached ten. */
-	CHECK( computeRunAhead( 0.300f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) >= ConvertRetailFrames( 7 ) );
+	CHECK( computeRunAhead( 0.300f, jitter, fps, 10, MIN_RUNAHEAD, 64 )
+				 >= 9 + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + RUNAHEAD_JITTER_MIN_FRAMES );	// 150 ms is 9 frames
 	CHECK( computeRunAhead( 0.600f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > shippedFloor );
 	CHECK( computeRunAhead( 1.000f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > ConvertRetailFrames( 16 ) );
 }

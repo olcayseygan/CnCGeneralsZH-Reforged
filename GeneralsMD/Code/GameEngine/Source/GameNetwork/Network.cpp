@@ -694,26 +694,14 @@ void Network::processFrameSynchronizedNetCommand(NetCommandRef *msg) {
 void Network::processRunAheadCommand(NetRunAheadCommandMsg *msg) {
 	m_runAhead = msg->getRunAhead();
 	m_frameRate = msg->getFrameRate();
-	time_t frameGrouping = (1000 * m_runAhead) / m_frameRate; // number of miliseconds between packet sends
-	frameGrouping = frameGrouping / 2; // since we only want the latency for one way to be a factor.
-	/* No longer than one logic frame.  Every send waits out the grouping, acks included, so every
-		 round trip the game measures carries up to two of them - and the measured round trip is what
-		 sizes the run-ahead, which sizes the grouping.  On a 50 ms link losing 2% of its packets
-		 three seats measured 0.95 s, the retry timeout grew to 832 ms and the room fell from 30 frames
-		 a second to 12.  EA's half a run-ahead was for a 2003 modem; a frame's orders fit one
-		 datagram now, and one per frame per peer is nothing. */
-	const time_t oneLogicFrameMS = 1000 / m_frameRate;
-	if (frameGrouping > oneLogicFrameMS) {
-		frameGrouping = oneLogicFrameMS;
-	}
-//	DEBUG_LOG(("Network::processRunAheadCommand - trying to set frame grouping to %d.  run ahead = %d, m_frameRate = %d\n", frameGrouping, m_runAhead, m_frameRate));
-	if (frameGrouping < 1) {
-		frameGrouping = 1; // Having a value less than 1 doesn't make sense.
-	}
-	if (frameGrouping > 500) {
-		frameGrouping = 500; // Max of a half a second.
-	}
-	m_conMgr->setFrameGrouping(frameGrouping);
+	/* No send grouping: whatever is queued goes out on the pass that queued it.  EA held every send
+		 for half a run-ahead, later capped at one logic frame, and acks waited it out too, so each
+		 round trip the game measured carried up to two frames of its own waiting on top of the wire.
+		 The measured round trip sizes the run-ahead, so that waiting was input delay: loopback measured
+		 14 to 18 ms of srtt with nothing on the wire and 5 to 7 ms without it, a 50 ms ping 79 ms and
+		 65 ms.  It costs packets: three seats through the relay went from 56 to 131 a second a seat,
+		 66 to each peer, 18 KB a second into the relay for the whole room. */
+	m_conMgr->setFrameGrouping(1);
 }
 
 void Network::processDestroyPlayerCommand(NetDestroyPlayerCommandMsg *msg)

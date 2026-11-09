@@ -7032,6 +7032,75 @@ TEST(scriptengine_finds_a_script_by_name_wherever_it_lives)
 	TheSidesList = savedSides;
 }
 
+// A skirmish AI's flags and counters carry its player's number, so a 32-player match wants several
+// hundred of each.  At 256 the table ran out near 15 AIs and every later name got slot 0 - all of
+// them the same flag, and _LAUNCH_ATTACK stuck on for the whole back half of the lobby.
+class ScriptVariableTestEngine : public ScriptEngine
+{
+public:
+	using ScriptEngine::allocateFlag;
+	using ScriptEngine::allocateCounter;
+	Bool flag( Int ndx ) const { return m_flags[ ndx ].value; }
+	void raiseFlag( Int ndx ) { m_flags[ ndx ].value = TRUE; }
+};
+
+TEST(scriptengine_gives_every_flag_and_counter_its_own_slot_past_256)
+{
+	SidesList sides;
+	SidesList *savedSides = TheSidesList;
+	TheSidesList = &sides;
+
+	ScriptVariableTestEngine *engine = new ScriptVariableTestEngine;	// the tables are large for a stack
+	engine->newMap();
+
+	// 32 seats' worth, well past the old 256: each name its own slot, in order, and asking again
+	// answers the same slot
+	const Int wanted = 600;
+	Bool allDistinct = TRUE;
+	for( Int i = 0; i < wanted; ++i )
+	{
+		AsciiString name;
+		name.format( "Var%d", i );
+		if( engine->allocateFlag( name ) != i + 1 || engine->allocateCounter( name ) != i + 1 )
+			allDistinct = FALSE;
+	}
+	CHECK( allDistinct );
+	CHECK( engine->allocateFlag( AsciiString( "Var299" ) ) == 300 );
+	CHECK( engine->allocateCounter( AsciiString( "Var599" ) ) == 600 );
+	CHECK( engine->getCounter( AsciiString( "Var599" ) ) != NULL );
+	CHECK( engine->getCounter( AsciiString( "NeverMade" ) ) == NULL );
+
+	// clearTeamFlags clears a team flag for every player number, and nothing else
+	const Int teamFlag = engine->allocateFlag( AsciiString( "GLA Team is Building17" ) );
+	engine->raiseFlag( teamFlag );
+	engine->raiseFlag( 5 );
+	engine->clearTeamFlags();
+	CHECK( !engine->flag( teamFlag ) );
+	CHECK( engine->flag( 5 ) );
+
+	// a full table hands out 0, which no name owns, and says so once per name rather than aliasing
+	for( Int i = wanted; i < ScriptEngine::MAX_FLAGS + ScriptEngine::MAX_COUNTERS; ++i )
+	{
+		AsciiString name;
+		name.format( "Var%d", i );
+		engine->allocateFlag( name );
+		engine->allocateCounter( name );
+	}
+	CHECK( engine->allocateFlag( AsciiString( "Overflow" ) ) == 0 );
+	CHECK( engine->allocateFlag( AsciiString( "Overflow" ) ) == 0 );
+	CHECK( engine->allocateCounter( AsciiString( "Overflow" ) ) == 0 );
+	CHECK( engine->getCounter( AsciiString( "Overflow" ) ) == NULL );
+	CHECK( engine->allocateFlag( AsciiString( "Var0" ) ) == 1 );
+
+	// a new map empties the tables and their index
+	engine->newMap();
+	CHECK( engine->allocateFlag( AsciiString( "Fresh" ) ) == 1 );
+	CHECK( engine->getCounter( AsciiString( "Var0" ) ) == NULL );
+
+	delete engine;
+	TheSidesList = savedSides;
+}
+
 // ---------------------------------------------------------------------------------------------
 // The particle system manager's bookkeeping.  Finding a system by id, and unlinking a dead one,
 // both used to be linear walks of every live system - on paths the renderer and the logic take

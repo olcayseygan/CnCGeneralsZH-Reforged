@@ -39,6 +39,7 @@ found and fixed, EA's own, not port damage.**
 ## Matches up to 32 players
 
 - A match holds up to 32 players now, up from EA's eight, in skirmish, on a LAN and online. Generated maps grow with the number of players, so thirty-two start positions get room instead of a crowd on an eight-player map. Saves and replays from earlier versions do not load in this build, and it cannot play online with an older version.
+- A lobby full of computer players no longer grinds down as the match goes on. Past about fifteen computers, the later ones shared a single set of the notes their scripts keep, so every one of them believed an attack was under way, all the time, and kept stacking up attack orders: a 32-computer match ran at 19 logic frames a second by its tenth minute. Each computer keeps its own notes now.
 
 ## America, built again
 

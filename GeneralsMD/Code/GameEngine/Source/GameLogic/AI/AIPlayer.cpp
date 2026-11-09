@@ -13111,7 +13111,7 @@ void AIPlayer::sendIdleUnitsHunting( void )
 				// an attack team's members at home are sendIdleAttackTeams' to call up together
 				if( attacks ? (state != AI_IDLE || atHome) : (state != AI_IDLE && state != AI_GUARD && state != AI_GUARD_RETALIATE) )
 					continue;
-				if( TheAI->findClosestEnemy( obj, HUNT_REACH, AI::CAN_ATTACK, obj->getAI()->getAttackInfo() ) == NULL )
+				if( TheAI->findClosestEnemy( obj, HUNT_REACH, AI::CAN_ATTACK | AI::ANY_WILL_DO, obj->getAI()->getAttackInfo() ) == NULL )
 					continue;
 				obj->getAI()->aiHunt( CMD_FROM_AI );
 				++hunters;

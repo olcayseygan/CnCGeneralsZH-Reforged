@@ -11632,6 +11632,9 @@ struct ViewAttackBlockedStruct
 	const PathfindCell *victimCell;
 	Int		skipCount;
 	ObjectID standingIn;	///< with no obj: a building whose cells the shooter would stand in, not in its way
+	Bool slaversKnown;		///< the two below are looked up on the first cell that needs them
+	ObjectID victimSlaver;
+	ObjectID objSlaver;
 };
 
 /*static*/ Int Pathfinder::attackBlockedByObstacleCallback(Pathfinder* pathfinder, PathfindCell* from, PathfindCell* to, Int to_x, Int to_y, void* userData)
@@ -11644,6 +11647,10 @@ struct ViewAttackBlockedStruct
 	}
 	if (to != NULL && (to->getType() == PathfindCell::CELL_OBSTACLE))
 	{
+		// Every test below excuses the cell, so their order is free. The slaver lookups, a walk of both
+		// objects' modules, go last and happen once a line: they used to run on every obstacle cell that
+		// was not the shooter's or the target's own, 6% of a 32-player match's unit AI.
+
 		// we never block our own view!  No obj is a shooter not standing yet (isGroundViewBlockedByObstacle),
 		// which has no cells, container or slaver of its own.
 		if (d->obj && to->isObstaclePresent(d->obj->getID()))
@@ -11651,14 +11658,9 @@ struct ViewAttackBlockedStruct
 		if (!d->obj && d->standingIn != INVALID_ID && to->isObstaclePresent(d->standingIn))
 			return 0;
 
-		if (d->victim) {
-			// nor does the object we're trying to attack!
-			if (to->isObstaclePresent(d->victim->getID()))
-				return 0;
-			// if the obstacle is the item to which objOther is slaved, ignore it as an obstacle.				
-			if (to->isObstaclePresent(getSlaverID(d->victim)))
-				return 0;
-		}
+		// nor does the object we're trying to attack!
+		if (d->victim && to->isObstaclePresent(d->victim->getID()))
+			return 0;
 
 		// if the obstacle is our container, ignore it as an obstacle.
 		if (to->isObstaclePresent(getContainerID(d->obj)))
@@ -11666,25 +11668,70 @@ struct ViewAttackBlockedStruct
 
 		// @todo: if the obstacle is objOther's container, AND it's a "visible" container, ignore it.
 
-		// if the obstacle is the item to which we are slaved, ignore it as an obstacle.
-		if (d->obj && to->isObstaclePresent(getSlaverID(d->obj)))
-			return 0;
-
 		if (to->isObstacleTransparent())
 			return 0;
-		//Kris: Added the check for victimCell because in China01 -- after the intro, NW of your 
-		//base is a cream colored building that lies in a negative coord. When you order units to 
+		//Kris: Added the check for victimCell because in China01 -- after the intro, NW of your
+		//base is a cream colored building that lies in a negative coord. When you order units to
 		//force attack it, it crashes.
-		if( d->victimCell && to->isObstaclePresent( d->victimCell->getObstacleID() ) ) 
+		if( d->victimCell && to->isObstaclePresent( d->victimCell->getObstacleID() ) )
 		{
-			// Victim is inside the bounds of another object.  We don't let this block us, 
+			// Victim is inside the bounds of another object.  We don't let this block us,
 			// as usually it is on the edge and it looks like we should be able to shoot it. jba.
 			return 0;
 		}
+
+		if (!d->slaversKnown)
+		{
+			d->victimSlaver = d->victim ? getSlaverID(d->victim) : INVALID_ID;
+			d->objSlaver = d->obj ? getSlaverID(d->obj) : INVALID_ID;
+			d->slaversKnown = TRUE;
+		}
+		// if the obstacle is the item to which objOther is slaved, ignore it as an obstacle.
+		if (to->isObstaclePresent(d->victimSlaver))
+			return 0;
+		// if the obstacle is the item to which we are slaved, ignore it as an obstacle.
+		if (to->isObstaclePresent(d->objSlaver))
+			return 0;
+
 		return 1;	// bail early
 	}
 
 	return 0;	// keep going
+}
+
+// srj sez: this is a good start at taking terrain into account for attacks, but findAttackPath needs to be smartened also
+#define LOS_TERRAIN
+
+//-----------------------------------------------------------------------------
+/** The weapon isAttackViewBlockedByObstacle looks across the terrain with, NULL for none. */
+static const Weapon* terrainSightWeapon(const Object* attacker)
+{
+#ifdef LOS_TERRAIN
+	// Don't take terrain blockage into account for an immobile shooter, since we can't move around it. jba.
+	return attacker->isKindOf(KINDOF_IMMOBILE) ? NULL : attacker->getCurrentWeapon();
+#else
+	return NULL;
+#endif
+}
+
+//-----------------------------------------------------------------------------
+/** Whether isViewBlockedByObstacle(obj, objOther) walks the terrain from obj's eyes to objOther's centre.
+	* PartitionFilterLineOfSight walks from the same eyes to objOther's top first, through the same cells.
+	* Where the centre is no higher than the top, every step of the walk to the centre is no higher than
+	* the same step to the top, so wherever the lower line is clear the upper one is too, and the filter
+	* leaves its own walk to this one. */
+Bool Pathfinder::isViewTerrainWalked(const Object* obj, const Object* objOther) const
+{
+	if (!TheAI->getAiData()->m_attackUsesLineOfSight || !obj->isKindOf(KINDOF_ATTACK_NEEDS_LINE_OF_SIGHT) ||
+			objOther->isSignificantlyAboveTerrain())
+		return false;
+
+	const Weapon* w = terrainSightWeapon(obj);
+	if (w == NULL || w->isContactWeapon())
+		return false;
+
+	const GeometryInfo& geom = objOther->getGeometryInfo();
+	return geom.getZDeltaToCenterPosition() <= geom.getMaxHeightAbovePosition();
 }
 
 //-----------------------------------------------------------------------------
@@ -11739,14 +11786,8 @@ Bool Pathfinder::isAttackViewBlockedByObstacle(const Object* attacker, const Coo
 	if (victim && victim->isSignificantlyAboveTerrain())
 		return false;
 
-// srj sez: this is a good start at taking terrain into account for attacks, but findAttackPath needs to be smartened also
-#define LOS_TERRAIN
 #ifdef LOS_TERRAIN
-	const Weapon* w = attacker->getCurrentWeapon();
-	if (attacker->isKindOf(KINDOF_IMMOBILE)) {
-		// Don't take terrain blockage into account, since we can't move around it. jba.
-		w = NULL;
-	}
+	const Weapon* w = terrainSightWeapon(attacker);
 	if (w)
 	{
 		// A contact weapon needs no line of sight: a suicide bomber pressed against a building's
@@ -11787,6 +11828,7 @@ Bool Pathfinder::isAttackViewBlockedByObstacle(const Object* attacker, const Coo
 	}
 	info.victimCell = getCell(layer, &victimPos);
 	info.standingIn = INVALID_ID;
+	info.slaversKnown = FALSE;
 
 	info.skipCount = 0;
 	if (attacker->getLayer() != LAYER_GROUND)
@@ -11819,6 +11861,7 @@ Bool Pathfinder::isGroundViewBlockedByObstacle(const Coord3D& attackerPos, const
 	info.victimCell = getCell(LAYER_GROUND, &victimPos);
 	info.skipCount = 0;
 	info.standingIn = standingIn;
+	info.slaversKnown = FALSE;
 	return iterateCellsAlongLine(attackerPos, victimPos, LAYER_GROUND, attackBlockedByObstacleCallback, &info) != 0;
 }
 

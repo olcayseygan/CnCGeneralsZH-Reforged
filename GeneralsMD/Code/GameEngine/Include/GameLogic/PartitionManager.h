@@ -1353,7 +1353,9 @@ protected:
 		SimpleObjectIterator *iter,	// if nonnull, append ALL satisfactory objects to the iterator (not just the single closest)
 		Real *closestDistArg,
 		Coord3D *closestVecArg,
-		PlayerMaskType onlyPlayers = PLAYERMASK_ALL
+		PlayerMaskType onlyPlayers = PLAYERMASK_ALL,
+		Bool anyWillDo = false,	// stop at the first satisfactory object, whichever it is
+		Bool walkAsGather = false	// with anyWillDo: walk the way a gathering query (iter) would
 	);
 
 	void shutdown( void );
@@ -1499,6 +1501,17 @@ public:
 		Real *closestDist = NULL,
 		Coord3D *closestDistVec = NULL,
 		PlayerMaskType onlyPlayers = PLAYERMASK_ALL
+	);
+	/** Some object within maxDist that the filters pass, NULL exactly when getClosestObject's answer is
+		(asGathered: when iterateObjectsInRange's is empty): the first one that search meets, walking the
+		way it walks, so a caller that only asks whether there is one stops there. */
+	Object *getAnyObject(
+		const Object *obj,
+		Real maxDist,
+		DistanceCalculationType dc,
+		PartitionFilter **filters,
+		PlayerMaskType onlyPlayers,
+		Bool asGathered
 	);
 
 	Real getRelativeAngle2D( const Object *obj, const Object *otherObj );

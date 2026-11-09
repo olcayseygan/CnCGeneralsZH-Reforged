@@ -1178,7 +1178,8 @@ public:
 		ATTACK_BUILDINGS									= 1 << 3,
 		WITHIN_ATTACK_RANGE								= 1 << 4,
 		UNFOGGED													= 1 << 5,
-		PREFER_BEST_TARGET								= 1 << 6		///< pick by pickBestTarget, not the nearest thing
+		PREFER_BEST_TARGET								= 1 << 6,		///< pick by pickBestTarget, not the nearest thing
+		ANY_WILL_DO												= 1 << 7		///< some enemy the search would accept, not the one it picks: only for asking whether the answer is NULL
 	};
 	Object *findClosestEnemy( const Object *me, Real range, UnsignedInt qualifiers,
 		const AttackPriorityInfo *info=NULL, PartitionFilter *optionalFilter=NULL);

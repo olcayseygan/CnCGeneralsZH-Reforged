@@ -3438,7 +3438,9 @@ Object *PartitionManager::getClosestObjects(
 	SimpleObjectIterator *iterArg,	// if nonnull, append ALL satisfactory objects to the iterator (not just the single closest)
 	Real *closestDistArg,
 	Coord3D *closestVecArg,
-	PlayerMaskType onlyPlayers
+	PlayerMaskType onlyPlayers,
+	Bool anyWillDo,
+	Bool walkAsGather
 )
 {
 	//USE_PERF_TIMER(getClosestObjects)
@@ -3527,10 +3529,31 @@ Object *PartitionManager::getClosestObjects(
 		 cell offset either side of the centre, four times the map's cells and most of them off it: a
 		 hunting unit's whole-map search spent 15-33ms there to find 3,600 objects. The master module
 		 list holds exactly the objects that sit in cells, so walking it gathers the same set. */
-	if (iterArg && maxRadius >= m_maxGcoRadius)
+	if ((iterArg || (anyWillDo && walkAsGather)) && maxRadius >= m_maxGcoRadius)
 	{
+		/* Every module's Object lies somewhere else in memory, and the distance test waited on a miss for
+			 its position and geometry, one object after the next. A cursor a few modules ahead asks for
+			 those lines early; in a 32-player hunt scan the distance test's samples fell by a third. The
+			 walk still waits on the module chain itself, most of a hunt scan's time. The cursor only reads,
+			 so the walk, its order and what it finds are unchanged. */
+		const Int WALK_PREFETCH_AHEAD = 8;
+		PartitionData *ahead = m_moduleList;
+		for (Int i = 0; i < WALK_PREFETCH_AHEAD && ahead; ++i)
+			ahead = ahead->getNext();
+
 		for (PartitionData *thisMod = m_moduleList; thisMod; thisMod = thisMod->getNext())
 		{
+			if (ahead)
+			{
+				const Object *aheadObj = ahead->getObject();
+				if (aheadObj)
+				{
+					PM_PREFETCH(aheadObj->getPosition());
+					PM_PREFETCH(&aheadObj->getGeometryInfo());
+				}
+				ahead = ahead->getNext();
+			}
+
 			if (thisMod->friend_getCoiInUseCount() == 0)
 				continue;
 
@@ -3546,6 +3569,14 @@ Object *PartitionManager::getClosestObjects(
 
 			if (!filtersAllow(filters, thisObj))
 				continue;
+
+			if (anyWillDo)
+			{
+				closestObj = thisObj;
+				closestDistSqr = thisDistSqr;
+				closestVec = distVec;
+				break;
+			}
 
 			iterArg->insert(thisObj, thisDistSqr);
 		}
@@ -3641,9 +3672,13 @@ Object *PartitionManager::getClosestObjects(
 						maxRadiusLimit = curRadius;
 					}
 					foundAny = true;
+					if (anyWillDo)
+						break;
 				}
 
 			} // next coi
+			if (anyWillDo && foundAny)
+				break;
 		}	// next cell in this radius
   } // next radius
 
@@ -3773,6 +3808,19 @@ Object *PartitionManager::getClosestObject(
 )
 {
 	return getClosestObjects(NULL, pos, maxDist, dc, filters, NULL, closestDist, closestDistVec, onlyPlayers);
+}
+
+//-----------------------------------------------------------------------------
+Object *PartitionManager::getAnyObject(
+	const Object *obj,
+	Real maxDist,
+	DistanceCalculationType dc,
+	PartitionFilter **filters,
+	PlayerMaskType onlyPlayers,
+	Bool asGathered
+)
+{
+	return getClosestObjects(obj, NULL, maxDist, dc, filters, NULL, NULL, NULL, onlyPlayers, true, asGathered);
 }
 
 //-----------------------------------------------------------------------------
@@ -6089,7 +6137,10 @@ Bool PartitionFilterLineOfSight::allow(Object *objOther)
 	if (objOther->isSignificantlyAboveTerrain())
 		return true;
 
-	if (!ThePartitionManager->isClearLineOfSightTerrain(m_obj, *m_obj->getPosition(), objOther, *objOther->getPosition()))
+	// the obstacle test below walks the terrain to objOther's centre from the same eyes when it walks it at
+	// all, and that line is clear only where this one to the top is (Pathfinder::isViewTerrainWalked)
+	const Bool terrainWalkedBelow = TheAI && TheAI->pathfinder()->isViewTerrainWalked(m_obj, objOther);
+	if (!terrainWalkedBelow && !ThePartitionManager->isClearLineOfSightTerrain(m_obj, *m_obj->getPosition(), objOther, *objOther->getPosition()))
 		return false;
 
 	if (TheAI && TheAI->pathfinder()->isViewBlockedByObstacle(m_obj, objOther))

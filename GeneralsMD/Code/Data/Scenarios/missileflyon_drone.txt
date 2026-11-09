@@ -1,0 +1,44 @@
+# Stingers whose target dies first fly on along their heading and burst on the ground (d59c7544), and
+# keep a thin trail while they do (94eb8d07). missileflyon's MiG wrecks stay a target until they land,
+# so this one sends six American drones with no master through the same GLA air defence. A free drone
+# is removed the frame it dies, and every other Stinger chasing it is left with no target at once.
+# The drones come from the west along y 3000 and die over x 2100 to 2400.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionGLA -seed 7 -maxframes 1200
+#     -scenario missileflyon_drone -logPrefix mfodrone_
+
+30    spawn      1  GLAStingerSite                1   2400 3000
+30    spawn      1  GLAStingerSite                1   2650 2750
+30    spawn      1  GLAInfantryTunnelDefender     6   2450 3050  20
+30    spawn      1  GLAInfantryTunnelDefender     6   2550 2950  20
+30    spawn      1  GLAVehicleQuadCannon          3   2950 2990  40
+
+30    spawn      0  AmericaVehicleBattleDrone     3   1800 2950  30
+30    spawn      0  AmericaVehicleHellfireDrone   3   1800 3050  30
+31    move       0  AmericaVehicleBattleDrone         3200 2950
+31    move       0  AmericaVehicleHellfireDrone       3200 3050
+
+60    tally      0  AmericaVehicleBattleDrone
+60    tally      0  AmericaVehicleHellfireDrone
+90    tally      0  AmericaVehicleBattleDrone
+90    tally      0  AmericaVehicleHellfireDrone
+120   tally      0  AmericaVehicleBattleDrone
+120   tally      0  AmericaVehicleHellfireDrone
+150   tally      0  AmericaVehicleBattleDrone
+150   tally      0  AmericaVehicleHellfireDrone
+180   tally      0  AmericaVehicleBattleDrone
+180   tally      0  AmericaVehicleHellfireDrone
+210   tally      0  AmericaVehicleBattleDrone
+210   tally      0  AmericaVehicleHellfireDrone
+240   tally      0  AmericaVehicleBattleDrone
+240   tally      0  AmericaVehicleHellfireDrone
+270   tally      0  AmericaVehicleBattleDrone
+270   tally      0  AmericaVehicleHellfireDrone
+300   tally      0  AmericaVehicleBattleDrone
+300   tally      0  AmericaVehicleHellfireDrone
+360   tally      0  AmericaVehicleBattleDrone
+360   tally      0  AmericaVehicleHellfireDrone
+450   tally      0  AmericaVehicleBattleDrone
+450   tally      0  AmericaVehicleHellfireDrone

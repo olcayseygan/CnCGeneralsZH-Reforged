@@ -524,6 +524,9 @@ void W3DInGameUI::recordDraw( void )
 	m_dragBoxDraw.clear();
 	m_postDrawCalls.clear();
 	m_hudOverlayDraw.clear();
+	m_orderRingPoints.clear();
+	m_orderRingColors.clear();
+	m_orderRingBornMs.clear();
 	takeMoveHintTransforms();
 	if( CinemaDirector_hidesHud() )
 		return;
@@ -538,6 +541,7 @@ void W3DInGameUI::recordDraw( void )
 	TheDisplay->beginRecording( &m_overWorldDraw );
 	preDraw();
 	takeBuildGrid();	// after preDraw, which puts the ghost where the patch is centred
+	takeOrderRings();	// after preDraw, which places them (updateOrderHints)
 
 	// draw the formation line if one is being dragged out
 	if( m_isFormationDragging )
@@ -1121,6 +1125,88 @@ void W3DInGameUI::drawAttackCircleFill( void )
 	quads.flush();
 
 }  // end drawAttackCircleFill
+
+enum { ORDER_RING_SEGMENTS = 32 };
+
+//-------------------------------------------------------------------------------------------------
+/** The order rings' ground, at the sync point: the terrain heights are logic's, and drawOrderRings
+	* runs in the terrain pass beside the tick.  Each rim is sampled at its own vertex, so a ring on a
+	* slope lies on it; one on a bridge is flat at the deck's height.
+	* ponytail: every ring's ground is sampled again each frame of its fade, 66 heights a ring; keep
+	* the points of a settled ring if a few hundred at once ever show */
+//-------------------------------------------------------------------------------------------------
+void W3DInGameUI::takeOrderRings( void )
+{
+	const Real RING_LIFT = 0.35f;			// the build grid's: out of the dirt, not floating
+	const UnsignedInt now = Clock_Milliseconds();
+
+	const std::vector<OrderRing>& rings = getOrderRings();
+	for( std::vector<OrderRing>::const_iterator ring = rings.begin(); ring != rings.end(); ++ring )
+	{
+		if( ring->bornMs == 0 || now - ring->bornMs >= (UnsignedInt)ORDER_RING_MS )
+			continue;
+
+		// the order's colour: a move green, an attack move the attack pink, a guard the shield's gold
+		UnsignedInt rgb = 0x0040E060;
+		if( ring->kind == ORDER_HINT_ATTACK_MOVE )
+			rgb = 0x00FF5AA0;
+		else if( ring->kind == ORDER_HINT_GUARD )
+			rgb = 0x00F2C230;
+		m_orderRingColors.push_back( rgb );
+		m_orderRingBornMs.push_back( ring->bornMs );
+
+		// a fifth of the footprint wide, so an infantryman's ring is a line and a tank's a band
+		const Real outer = ring->radius;
+		const Real inner = outer - max( 1.0f, min( 3.0f, outer * 0.2f ) );
+		for( Int s = 0; s <= ORDER_RING_SEGMENTS; ++s )
+		{
+			const Real angle = 2.0f * PI * (Real)s / (Real)ORDER_RING_SEGMENTS;
+			const Real c = (Real)cos( angle );
+			const Real n = (Real)sin( angle );
+			const Real ix = ring->at.x + inner * c, iy = ring->at.y + inner * n;
+			const Real ox = ring->at.x + outer * c, oy = ring->at.y + outer * n;
+			const Real iz = ring->onGround ? TheTerrainLogic->getGroundHeight( ix, iy ) : ring->at.z;
+			const Real oz = ring->onGround ? TheTerrainLogic->getGroundHeight( ox, oy ) : ring->at.z;
+			m_orderRingPoints.push_back( Vector3( ix, iy, iz + RING_LIFT ) );
+			m_orderRingPoints.push_back( Vector3( ox, oy, oz + RING_LIFT ) );
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One ring under each unit where its order really ends, painted on the ground in the terrain pass
+	* like the attack circle's wash, so the unit standing in it is drawn over it. */
+//-------------------------------------------------------------------------------------------------
+void W3DInGameUI::drawOrderRings( void )
+{
+	if( m_orderRingColors.empty() )
+		return;
+
+	setGroundOverlayState();
+
+	// the fade is worked out here, from this picture's clock: a picture drawn again beside the tick
+	// (phase 4) takes nothing new at the sync point, and a fade baked in there froze, then jumped
+	const Real RING_ALPHA = 0xD0;
+	const UnsignedInt now = Clock_Milliseconds();
+	GroundOverlayQuads &quads = theGroundOverlayQuads;
+	const Int pairs = ORDER_RING_SEGMENTS + 1;
+	for( size_t r = 0; r < m_orderRingColors.size(); ++r )
+	{
+		const UnsignedInt age = now - m_orderRingBornMs[ r ];
+		if( age >= (UnsignedInt)ORDER_RING_MS )
+			continue;
+		const UnsignedInt color = overlayColor( m_orderRingColors[ r ], RING_ALPHA * ( 1.0f - (Real)age / (Real)ORDER_RING_MS ) );
+		const Vector3 *p = &m_orderRingPoints[ r * pairs * 2 ];
+		for( Int s = 0; s < ORDER_RING_SEGMENTS; ++s )
+		{
+			quads.add( p[ s * 2 ], p[ s * 2 + 1 ], p[ s * 2 + 3 ], p[ s * 2 + 2 ],
+								 color, color, color, color );
+		}
+	}
+
+	quads.flush();
+
+}  // end drawOrderRings
 
 //-------------------------------------------------------------------------------------------------
 /** draw 2d selection region on screen */

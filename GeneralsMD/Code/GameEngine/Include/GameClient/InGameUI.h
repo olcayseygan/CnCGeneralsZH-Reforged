@@ -509,6 +509,25 @@ public:  // ********************************************************************
 	};
 	const std::vector<OrderHint>& getOrderHints( void ) const { return m_drawnOrderHints; }
 
+	// One ring a unit on the ground where the local player's last move-type order really sends it,
+	// read off the unit once logic has run the order (the flood's cell, the formation station, the
+	// end of the unit's own path), sized to the unit and faded out over ORDER_RING_MS.
+	enum { ORDER_RING_MS = 1500, ORDER_RING_WAIT_MS = 3000 };
+	struct OrderRing
+	{
+		ObjectID owner;
+		OrderHintKind kind;			///< ORDER_HINT_MOVE, _ATTACK_MOVE, _GUARD, or _WAYPOINT for a shift point
+		Coord3D at;							///< where logic sends it, at the height of its layer
+		Real radius;						///< the unit's footprint
+		Bool onGround;					///< FALSE on a bridge: drawn flat at 'at'
+		Bool settled;						///< 'at' is final (a path planned after the order, a waypoint, a tunnel exit)
+		UnsignedInt dueFrame;		///< logic has run the order once its frame is past this
+		UnsignedInt armedMs;		///< when the order was given
+		UnsignedInt bornMs;			///< when the ring was first placed, 0 until then
+	};
+	void armOrderRings( OrderHintKind kind );		///< HintSpy: the selection was just given a move-type order
+	const std::vector<OrderRing>& getOrderRings( void ) const { return m_orderRings; }
+
 	// A circle dragged out with the left button while the attack key is armed or Ctrl is held.  The
 	// enemies inside it are shared across the units that can shoot, in the order both sides stand
 	// around the circle, and each unit works down its own share.
@@ -1316,6 +1335,9 @@ public:
 		* up stand on top of it instead of being painted over. */
 	virtual void drawAttackCircleFill( void ) { }
 
+	/** The order rings (getOrderRings), on the ground with the terrain so the units stand on them. */
+	virtual void drawOrderRings( void ) { }
+
 	/// the control socket's "spectator" verb: the camera, the followed player, the fog, and replay
 	/// pause, seek and speed
 	void runSpectatorAction( const std::string &action );
@@ -1359,6 +1381,9 @@ protected:
 	Int													m_formationDragSpacing;												///< pixels a new point has to earn, doubled each time the curve fills up
 	std::vector<OrderHint>			m_orderHints;																	///< who is going where, one per unit and queued point
 	std::vector<OrderHint>			m_drawnOrderHints;														///< the same, units headed the same way bunched into one
+	std::vector<OrderRing>			m_orderRings;																	///< armed or fading, one per unit
+	void updateOrderRings( void );															///< place armed rings once logic ran the order, drop faded ones
+	Bool placeOrderRing( OrderRing& ring );											///< read where logic sends the unit, FALSE to drop the ring
 
 	Bool												m_isAttackCircling;														///< TRUE while an attack circle is being dragged (fork)
 	ICoord2D										m_attackCircleAnchor;													///< where the circle was started, in pixels

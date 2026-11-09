@@ -3805,6 +3805,7 @@ void InGameUI::reset( void )
 		m_moveHint[ i ].frame = 0;
 	}
 	m_nextMoveHint = 0;
+	m_orderRings.clear();
 
 	m_isQuitMenuVisible = FALSE;
 	TheObserverCamera.reset();
@@ -4493,6 +4494,141 @@ void InGameUI::updateOrderHints( void )
 		markOrderHints();
 		bunchOrderHints();
 	}
+	updateOrderRings();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The local player has just given the selection a move-type order (HintSpy).  Each unit it will
+	* move gets a ring waiting for logic to run the order: in a network game that is the order's
+	* execution frame, run-ahead later, and in a game on this machine the next tick. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::armOrderRings( OrderHintKind kind )
+{
+	UnsignedInt due = TheGameLogic->getFrame();
+	if( TheNetwork != NULL && TheNetwork->getExecutionFrame() > (Int)due )
+		due = (UnsignedInt)TheNetwork->getExecutionFrame();
+
+	const Player *local = ThePlayerList->getLocalPlayer();
+	for( DrawableList::const_iterator it = m_selectedDrawables.begin(); it != m_selectedDrawables.end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		if( !obj || obj->getControllingPlayer() != local || obj->getAI() == NULL )
+			continue;
+		if( obj->isKindOf( KINDOF_IMMOBILE ) || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )
+			continue;
+
+		// the new order replaces whatever ring the last one left on this unit
+		for( size_t i = 0; i < m_orderRings.size(); ++i )
+		{
+			if( m_orderRings[ i ].owner == obj->getID() )
+			{
+				m_orderRings.erase( m_orderRings.begin() + i );
+				break;
+			}
+		}
+
+		OrderRing ring;
+		ring.owner = obj->getID();
+		ring.kind = kind;
+		ring.at.zero();
+		ring.radius = max( 3.0f, obj->getGeometryInfo().getBoundingCircleRadius() );
+		ring.onGround = TRUE;
+		ring.settled = FALSE;
+		ring.dueFrame = due;
+		ring.armedMs = Clock_Milliseconds();
+		ring.bornMs = 0;
+		m_orderRings.push_back( ring );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Once a frame at the sync point, beside the order hints.  A ring is placed the first frame logic
+	* is past its order and keeps following the unit's destination until that is final, so a group
+	* move shows the goal logic's flood gave each member at once and moves to the path's real end the
+	* frame the path comes back. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::updateOrderRings( void )
+{
+	const UnsignedInt now = Clock_Milliseconds();
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	size_t kept = 0;
+	for( size_t i = 0; i < m_orderRings.size(); ++i )
+	{
+		OrderRing ring = m_orderRings[ i ];
+		Bool keep = ( ring.bornMs != 0 ) ? ( now - ring.bornMs < (UnsignedInt)ORDER_RING_MS ) : ( now - ring.armedMs < (UnsignedInt)ORDER_RING_WAIT_MS );
+		if( keep && !ring.settled && frame > ring.dueFrame )
+			keep = placeOrderRing( ring );
+		if( keep )
+			m_orderRings[ kept++ ] = ring;
+	}
+	m_orderRings.resize( kept );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Where logic is sending the ring's unit.  A path planned since the order ran ends where the unit
+	* will stand; before it comes back, a move's goal position is already the unit's own (the flood's
+	* cell for a click, the station on a formation line), while an attack move's is the click shared by
+	* the whole group, so that ring waits for the path.  FALSE drops the ring. */
+//-------------------------------------------------------------------------------------------------
+Bool InGameUI::placeOrderRing( OrderRing& ring )
+{
+	Object *obj = TheGameLogic->findObjectByID( ring.owner );
+	AIUpdateInterface *ai = obj ? obj->getAIUpdateInterface() : NULL;
+	if( ai == NULL || obj->isEffectivelyDead() )
+		return FALSE;
+
+	Coord3D to;
+	Bool found = FALSE;
+	const Int pathSize = ai->friend_getWaypointGoalPathSize();
+	const Int pathIndex = ai->friend_getCurrentGoalPathIndex();
+	Path *path = ai->getPath();
+	const Bool freshPath = path != NULL && !ai->isWaitingForPath() &&
+												 TheGameLogic->getFrame() - ai->getPathAge() >= ring.dueFrame;
+
+	if( ring.kind == ORDER_HINT_WAYPOINT && pathSize > 0 && pathIndex >= 0 && pathIndex < pathSize )
+	{
+		to = *ai->friend_getGoalPathPosition( pathSize - 1 );		// the point just added ends the list
+		ring.settled = found = TRUE;
+	}
+	else if( ai->hasTunnelTrip() )
+	{
+		to = *ai->getTunnelTripGoal();
+		ring.settled = found = TRUE;
+	}
+	else if( freshPath )
+	{
+		to = *path->getLastNode()->getPosition();
+		ring.settled = found = TRUE;
+	}
+	else if( ring.kind == ORDER_HINT_GUARD )
+	{
+		Bool onObject;
+		found = getGuardedSpot( ai, to, onObject ) && !onObject;
+	}
+	else if( ring.kind != ORDER_HINT_ATTACK_MOVE )
+	{
+		const StateID state = ai->getCurrentStateID();
+		if( state == AI_MOVE_TO || state == AI_FOLLOW_PATH || state == AI_MOVE_AND_TIGHTEN )
+		{
+			to = *ai->getGoalPosition();
+			found = TRUE;
+		}
+	}
+
+	if( !found )
+	{
+		// placed once and now unreadable (arrived, or stopped to fight): it stays where it was
+		ring.settled = ( ring.bornMs != 0 );
+		return TRUE;
+	}
+
+	const PathfindLayerEnum layer = TheTerrainLogic->getLayerForDestination( &to );
+	ring.onGround = ( layer == LAYER_GROUND );
+	ring.at = to;
+	ring.at.z = ring.onGround ? TheTerrainLogic->getGroundHeight( to.x, to.y ) : TheTerrainLogic->getLayerHeight( to.x, to.y, layer );
+	if( ring.bornMs == 0 )
+		ring.bornMs = Clock_Milliseconds();
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------

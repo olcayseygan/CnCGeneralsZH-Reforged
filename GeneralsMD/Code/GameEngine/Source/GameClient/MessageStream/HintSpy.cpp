@@ -40,9 +40,16 @@
  * This message handler displays UI "hints" (ie: a rectangle for drag selection) based
  * upon the messages that pass through it.
  */
+// The message before this one was MSG_QUEUE_NEXT_ORDER: the order goes into the units' list and runs
+// later, from wherever they are then, so it lays no order rings.  The mark is appended right in front
+// of its order.
+static Bool s_lastWasQueueMark = FALSE;
+
 GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage *msg)
 {
 	GameMessageDisposition disp = KEEP_MESSAGE;
+	const Bool queued = s_lastWasQueueMark;
+	s_lastWasQueueMark = ( msg->getType() == GameMessage::MSG_QUEUE_NEXT_ORDER );
 
 	/// @todo Create an automated way to associate method callbacks with messages
 	switch( msg->getType() )
@@ -137,6 +144,26 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 		case GameMessage::MSG_DO_FORCEMOVETO:
 		case GameMessage::MSG_ADD_WAYPOINT:
 			TheInGameUI->createMoveHint( msg );
+			if( !queued )
+				TheInGameUI->armOrderRings( msg->getType() == GameMessage::MSG_DO_ATTACKMOVETO ? InGameUI::ORDER_HINT_ATTACK_MOVE
+																		: msg->getType() == GameMessage::MSG_ADD_WAYPOINT ? InGameUI::ORDER_HINT_WAYPOINT
+																		: InGameUI::ORDER_HINT_MOVE );
+			break;
+
+		//-----------------------------------------------------------------------------
+		// a ring under each unit where the order really sends it (InGameUI::armOrderRings)
+		case GameMessage::MSG_DO_FORMATION_MOVETO:
+			if( !queued )
+				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_MOVE );
+			break;
+		case GameMessage::MSG_DO_FORMATION_ATTACKMOVETO:
+			if( !queued )
+				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_ATTACK_MOVE );
+			break;
+		case GameMessage::MSG_DO_GUARD_POSITION:
+		case GameMessage::MSG_DO_FORMATION_GUARD:
+			if( !queued )
+				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_GUARD );
 			break;
 
 	}	

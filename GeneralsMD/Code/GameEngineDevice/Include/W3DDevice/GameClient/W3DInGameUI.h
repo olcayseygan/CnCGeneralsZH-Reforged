@@ -83,6 +83,11 @@ protected:
 	virtual void drawPlaceAngle( View *view ); 		///< draw place building angle if needed
 	virtual void drawBuildGrid( void );						///< the pathfinder's build grid under a pending structure
 	virtual void drawAttackCircleFill( void );		///< the wash on the ground inside an attack circle
+	virtual void drawOrderRings( void );					///< the ring under each unit's destination, in the terrain pass
+	void takeOrderRings( void );									///< their ground and fade, read at the sync point (recordDraw)
+	std::vector< Vector3 > m_orderRingPoints;			///< inner and outer rim, ORDER_RING_SEGMENTS + 1 pairs a ring
+	std::vector< UnsignedInt > m_orderRingColors;	///< one a ring, the order's rgb; the fade is the draw's own clock
+	std::vector< UnsignedInt > m_orderRingBornMs;	///< one a ring, when it was placed
 	virtual void drawFormationLine( void );				///< the line an armed left drag is spreading the selection along
 	virtual void drawAttackCircle( void );				///< the circle a left drag is sweeping targets out of
 	void drawGuardMarkers( void );								///< the shield over each of the local player's guarding units

@@ -3528,6 +3528,7 @@ Tests/test_milesaudiomanager.cpp
 Tests/test_minimap_input.inc
 Tests/test_modern_water_config.cpp
 Tests/test_msvc_float_casts.cpp
+Tests/test_network_sources.cpp
 Tests/test_observer_camera.inc
 Tests/test_online.cpp
 Tests/test_pixelcentre.cpp

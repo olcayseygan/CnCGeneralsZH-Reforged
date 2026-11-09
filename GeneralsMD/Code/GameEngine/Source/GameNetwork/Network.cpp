@@ -677,6 +677,8 @@ void Network::processFrameSynchronizedNetCommand(NetCommandRef *msg) {
 }
 
 void Network::processRunAheadCommand(NetRunAheadCommandMsg *msg) {
+	// Validate role and payload at execution too, before either division below.
+	if (!m_conMgr || !m_conMgr->isCommandAuthorAllowed(msg)) return;
 	m_runAhead = msg->getRunAhead();
 	m_frameRate = msg->getFrameRate();
 	time_t frameGrouping = (1000 * m_runAhead) / m_frameRate; // number of miliseconds between packet sends

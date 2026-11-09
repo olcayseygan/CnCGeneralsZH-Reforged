@@ -60,6 +60,8 @@ public:
 	void setNext(NetCommandRef *next);
 	void setPrev(NetCommandRef *prev);
 
+	void setSourceMask(UnsignedByte mask) { m_sourceMask = mask; }
+	UnsignedByte getSourceMask() const { return m_sourceMask; }
 	void setRelay(UnsignedByte relay);
 	UnsignedByte getRelay() const;
 
@@ -77,6 +79,7 @@ protected:
 	NetCommandMsg *m_msg;
 	NetCommandRef *m_next;
 	NetCommandRef *m_prev;
+	UnsignedByte m_sourceMask; ///< Local receive provenance; never serialized or trusted from the wire.
 	UnsignedByte m_relay; ///< Need this in the command reference since the relay value will be different depending on where this particular reference is being sent.
 	time_t m_timeLastSent;
 	Int m_numTimesSent;		///< How many times this reference has gone out.  An ack for a command sent more than once cannot be timed (which send is it acking?), so it is not used as a latency sample - Karn's rule.

@@ -396,7 +396,7 @@ async function main() {
 	// the last one out of a room it was moved into says so; home rooms empty silently
 	assert.strictEqual(logLines[replaced + 1], 'empty room=match:1');
 	assert.ok(!lineOf('empty room=acct:'), 'a home room reported empty');
-	assert.ok(!authed.sessions.has(P1.session), 'replaced session still held');
+	assert.ok(!authed.sessions.has(parseInt(P1.session, 16)), 'replaced session still held');
 	assert.strictEqual(authed.sessionStats('u1').inP, 0, 'the new session inherited counters');
 
 	// idle: onLeave in the order the sessions went silent, not the order they joined; plain ones fire nothing
@@ -418,6 +418,42 @@ async function main() {
 	assert.ok(await welcome(m1, helloAuth(9, 9, T1)));
 	assert.strictEqual(await welcome(m2, helloAuth(9, 9, T2)), null, 'per-IP cap skipped by HELLO_AUTH');
 	authCap.stop();
+
+	// in a thread: the same callbacks by message, vipOf and setRoom from the host's copy
+	const tAuthorized = [], tLeaves = [], tLog = [];
+	const threaded = createRelay({
+		thread: true,
+		log: (l) => tLog.push(l),
+		authorize: (t) => tickets.get(t) ?? null,
+		onAuthorized: (id, vip) => tAuthorized.push([id, vip]),
+		onLeave: (id, at) => tLeaves.push([id, at]),
+	});
+	const threadPort = await threaded.start(0, '127.0.0.1');
+	const [r1, r2, r3, r4] = await Promise.all([...Array(4)].map((_, i) => client(threadPort, `127.0.2.${i + 1}`)));
+	assert.strictEqual(await welcome(r3, helloAuth(9, 9, BAD)), null, 'thread: bad ticket answered');
+	const Q1 = await authMember(r1, T1, 'One');
+	const Q2 = await authMember(r2, T2, 'Two');
+	const Q3 = await authMember(r4, T3, 'Three');
+	assert.deepStrictEqual(tAuthorized, [['u1', Q1.vip], ['u2', Q2.vip], ['u3', Q3.vip]]);
+	assert.strictEqual(threaded.vipOf('u1'), Q1.vip);
+	assert.strictEqual(threaded.vipOf('nobody'), null);
+	assert.strictEqual(threaded.setRoom('u1', 'match:t'), true);
+	assert.strictEqual(threaded.setRoom('u2', 'match:t'), true);
+	assert.strictEqual(threaded.setRoom('u3', 'match:t'), true);
+	assert.strictEqual(threaded.setRoom('nobody', 'match:t'), false);
+	r1.send(data(Q1.session, Q2.vip, 8086, 8087, 'threaded'));
+	assert.deepStrictEqual(parseData(await r2.next()), { srcVip: Q1.vip, srcPort: 8087, dstPort: 8086, payload: 'threaded' });
+	// one datagram rewritten in place and sent to two
+	r1.send(data(Q1.session, 0xffffffff, 8086, 8086, 'both'));
+	assert.deepStrictEqual([parseData(await r2.next()).payload, parseData(await r4.next()).payload], ['both', 'both']);
+	await threaded.report();
+	assert.ok(/^stats sessions=3 .* hello=1 /.test(tLog[tLog.length - 1]), tLog[tLog.length - 1]);
+	// replaced from another endpoint: onLeave reaches the host, vipOf follows the new session
+	const Q1b = await authMember(r3, T1, 'Again');
+	await threaded.report();  // every message the thread sent before this answer has been handled
+	assert.deepStrictEqual(tLeaves.map((l) => l[0]), ['u1']);
+	assert.strictEqual(threaded.vipOf('u1'), Q1b.vip);
+	await threaded.stop();
 
 	for (const s of sockets) s.close();
 	console.log('relay test: all checks passed');

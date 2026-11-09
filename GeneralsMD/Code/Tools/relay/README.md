@@ -71,7 +71,8 @@ Inside a match room, though, `alone` and `to.unverified` are the two to read fir
 UDP, one message per datagram. Integers are big-endian. Every packet starts with the two bytes
 `Z` `R` (0x5A 0x52) and a type byte. No datagram may exceed 1400 bytes; larger ones are dropped,
 which leaves 1381 bytes of payload in a client's DATA. A session is 8 opaque bytes the relay picks
-at random; all zeros means none.
+at random; all zeros means none. The relay only hands out ids under 2^53 (53 random bits), so it
+keys its sessions by a plain number; to the client they are still 8 opaque bytes.
 
 HELLO, type 1, client to relay:
 
@@ -194,7 +195,8 @@ accounts.
 
 | Option | |
 |---|---|
-| `authorize(ticketHex)` | returns the account id for a ticket (32 hex digits), or `null`. Synchronous. A throw counts as `null` |
+| `authorize(ticketHex)` | returns the account id for a ticket (32 hex digits), `null`, or a promise of either. A throw or a rejection counts as `null`; HELLO_AUTH retries from that endpoint are ignored while a promise is out, so a ticket is still asked once |
+| `thread` | `true` runs the relay in a worker thread, below |
 | `onAuthorized(accountId, vip)` | a session opened for that account, with its virtual address |
 | `onLeave(accountId, atMs)` | an authorised session was removed: idle, replaced or a HELLO with other CRCs. `atMs` is when it was last heard from. One sweep reports in that order, so the first call is the player who went silent first |
 | `now()` | clock in ms, `Date.now` by default |
@@ -215,6 +217,17 @@ DATA, and `drop` and `dropTo` hold every cause in the table above. `last` is the
 still there. It is `null` before the first move. A removed session has no stats, so a server
 stamping a match report reads them before the session goes idle or is replaced. Account ids are used as map keys and in room names,
 so pass strings or numbers, not objects.
+
+With `thread: true` the socket, the sessions and the forwarding run in a `worker_threads` worker, so
+a packet never waits behind the host's own work: a lobby tick, a TLS handshake, a collection of the
+host's heap. Nothing on the forwarding path crosses the thread boundary. The callbacks still run in
+the host: the worker asks `authorize` by message and holds that HELLO_AUTH until the answer comes, and
+`onAuthorized` and `onLeave` arrive in the order the worker called them. `vipOf` answers from a copy
+the host keeps from those two, `setRoom` is posted to the worker and answers from the same copy, and
+`report()` returns a promise that resolves once its stats line is logged. The worker uses the wall
+clock (`now` is not passed in), and `sessions`, `buckets`, `sweep()` and `sessionStats` are not
+offered. `stop()` resolves when the worker has exited; a worker that dies otherwise throws in the host,
+so a supervisor restarts both.
 
 ## Limits
 

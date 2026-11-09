@@ -1351,7 +1351,7 @@ endif()
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
 # The global operator new against the alignment the ABI promises for it, on Linux, where it is also the
 # one Mesa's libLLVM gets.  See Tests/test_global_new_alignment.cpp.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_executable(test_global_new_alignment ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_global_new_alignment.cpp
     ${GE}/Source/Common/System/GameMemory.cpp ${GE}/Source/Common/System/MemoryInit.cpp
     ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp

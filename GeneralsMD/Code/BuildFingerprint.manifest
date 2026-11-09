@@ -3462,6 +3462,7 @@ Tests/test_hostile_map.inc
 Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
+Tests/test_installer.py
 Tests/test_lan_broadcast.cpp
 Tests/test_linux_portable.sh
 Tests/test_macos_app.sh
@@ -4341,6 +4342,10 @@ Tools/guard_marker.py
 Tools/hud_command_bar.py
 Tools/include_case_check.py
 Tools/install-guard.sh
+Tools/install-posix.sh
+Tools/install.py
+Tools/install_i18n.py
+Tools/installer_locales/de.json
 Tools/license-headers.py
 Tools/linux-check.sh
 Tools/linux-menu-entry.sh

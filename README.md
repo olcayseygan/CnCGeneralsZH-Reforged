@@ -342,6 +342,8 @@ transport can each have their own key.
 
 ## Build it
 
+On macOS and Linux, `make install` starts an optional guided setup for checking prerequisites, building, locating owned game data and installing or launching the result. It asks before each action; see [guided setup](docs/guided-setup.md).
+
 Each platform builds from a fresh clone with one command. It fetches what EA stripped and what GitHub
 will not hold, configures, builds Release and leaves a game you can start. Put `test` after the
 configuration to run the tests too, as in `./build-linux.sh Release test`.

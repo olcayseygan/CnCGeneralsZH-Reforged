@@ -276,18 +276,25 @@ void W3DRadar::drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, cons
 	}
 }
 
+static void fillClipped( const IRegion2D &clip, Int x, Int y, Int size, UnsignedInt colour );
+
 //-------------------------------------------------------------------------------------------------
 /** A dashed white line from each of the local player's units walking to its hotkey squad to where
-	* it walks, from the copy update took at the sync point: draw runs beside the tick.  The dashes are
-	* laid from the unit's end, so as the line shortens they stay put under the unit and the last one
-	* at the destination is the one that changes. */
+	* it walks, and a white dot where it walks to, from the copy update took at the sync point: draw
+	* runs beside the tick.  Each dash and the dot sit on a dark keyline a pixel wider all round, so
+	* they read on snow and on dark ground alike.  The dashes are laid from the unit's end, so as the
+	* line shortens they stay put under the unit and the last one at the destination is the one that
+	* changes. */
 //-------------------------------------------------------------------------------------------------
 void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int height )
 {
-	const Real dashOn = 4.0f;
-	const Real dashOff = 3.0f;
-	const Real lineWidth = 2.0f;
-	const Color lineColor = GameMakeColor( 255, 255, 255, 230 );
+	const Real dashOn = 6.0f;
+	const Real dashOff = 4.0f;
+	const Real lineWidth = 3.0f;
+	const Real keylineWidth = lineWidth + 2.0f;
+	const Int dot = 5;
+	const Color lineColor = GameMakeColor( 255, 255, 255, 255 );
+	const Color keylineColor = GameMakeColor( 12, 12, 12, 255 );
 
 	IRegion2D clip;
 	clip.lo.x = pixelX;
@@ -309,22 +316,36 @@ void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int he
 		const Real dx = INT_TO_REAL( to.x - from.x );
 		const Real dy = INT_TO_REAL( to.y - from.y );
 		const Real length = sqrtf( dx * dx + dy * dy );
-		if( length < 1.0f )
-			continue;
-		const Real ux = dx / length;
-		const Real uy = dy / length;
-
-		for( Real along = 0.0f; along < length; along += dashOn + dashOff )
+		if( length >= 1.0f )
 		{
-			const Real end = min( along + dashOn, length );
-			ICoord2D dashFrom, dashTo, clippedFrom, clippedTo;
-			dashFrom.x = from.x + REAL_TO_INT( ux * along );
-			dashFrom.y = from.y + REAL_TO_INT( uy * along );
-			dashTo.x = from.x + REAL_TO_INT( ux * end );
-			dashTo.y = from.y + REAL_TO_INT( uy * end );
-			if( ClipLine2D( &dashFrom, &dashTo, &clippedFrom, &clippedTo, &clip ) )
-				TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, lineWidth, lineColor );
+			const Real ux = dx / length;
+			const Real uy = dy / length;
+
+			for( Real along = 0.0f; along < length; along += dashOn + dashOff )
+			{
+				const Real end = min( along + dashOn, length );
+				ICoord2D dashFrom, dashTo, clippedFrom, clippedTo;
+
+				// the keyline runs a pixel past each end of the dash, as well as to either side of it
+				dashFrom.x = from.x + REAL_TO_INT( ux * (along - 1.0f) );
+				dashFrom.y = from.y + REAL_TO_INT( uy * (along - 1.0f) );
+				dashTo.x = from.x + REAL_TO_INT( ux * (end + 1.0f) );
+				dashTo.y = from.y + REAL_TO_INT( uy * (end + 1.0f) );
+				if( ClipLine2D( &dashFrom, &dashTo, &clippedFrom, &clippedTo, &clip ) )
+					TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, keylineWidth, keylineColor );
+
+				dashFrom.x = from.x + REAL_TO_INT( ux * along );
+				dashFrom.y = from.y + REAL_TO_INT( uy * along );
+				dashTo.x = from.x + REAL_TO_INT( ux * end );
+				dashTo.y = from.y + REAL_TO_INT( uy * end );
+				if( ClipLine2D( &dashFrom, &dashTo, &clippedFrom, &clippedTo, &clip ) )
+					TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, lineWidth, lineColor );
+			}
 		}
+
+		// the destination, on top of the last dash
+		fillClipped( clip, to.x - (dot + 2) / 2, to.y - (dot + 2) / 2, dot + 2, keylineColor );
+		fillClipped( clip, to.x - dot / 2, to.y - dot / 2, dot, lineColor );
 	}
 }
 

@@ -3827,6 +3827,15 @@ GUI:OnlineLoginElsewhere
 "This account signed in from another computer."
 END
 
+// EA's lobby and staging-room player tooltips without "Region:", which -online never knows
+TOOLTIP:OnlinePlayerInfo
+"\n %d wins/%d losses"
+END
+
+TOOLTIP:OnlineStagingPlayerInfo
+"\n Ping: %d ms \n %d wins/%d losses \n %d disconnects \n Favorite army: %ls"
+END
+
 // A vehicle transport's Evacuate asks for a spot, the transport goes there and empties; Alt empties it where it stands
 CONTROLBAR:ToolTipEvacuateAt
 "Go to the chosen spot and order all units to exit\nAlt: unload here"

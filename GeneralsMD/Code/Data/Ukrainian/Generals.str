@@ -8785,6 +8785,14 @@ TOOLTIP:StagingPlayerInfo
 "\n Регіон: %ls \n Пінг: %d мс \n %d перемог/%d поразок \n %d відключень \n Улюблена армія: %ls"
 END
 
+TOOLTIP:OnlineStagingPlayerInfo
+"\n Пінг: %d мс \n %d перемог/%d поразок \n %d відключень \n Улюблена армія: %ls"
+END
+
+TOOLTIP:OnlinePlayerInfo
+"\n перемог: %d / поразок: %d"
+END
+
 GUI:CantBuildTooCloseToSupplies
 "Тут будувати не можна: надто близько до джерела постачання"
 END

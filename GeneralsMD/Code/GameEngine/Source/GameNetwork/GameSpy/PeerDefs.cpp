@@ -654,9 +654,10 @@ void SetUpGameSpy( const char *motdBuffer, const char *configBuffer )
 	TheGameSpyInfo->setMOTD(motdBuffer);
 	TheGameSpyInfo->setConfig(configBuffer);
 
+	// -online hides EA's Asian / Non-Asian text boxes, so a choice saved for GameSpy filters no game list here
 	CustomMatchPreferences pref;
-	TheGameSpyInfo->setDisallowAsianText(pref.getDisallowAsianText());
-	TheGameSpyInfo->setDisallowNonAsianText( pref.getDisallowNonAsianText());
+	TheGameSpyInfo->setDisallowAsianText(pref.getDisallowAsianText() && !OnlineIsEnabled());
+	TheGameSpyInfo->setDisallowNonAsianText( pref.getDisallowNonAsianText() && !OnlineIsEnabled());
 	
 
 	TheGameSpyConfig = GameSpyConfigInterface::create(configBuffer);

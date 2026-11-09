@@ -1376,8 +1376,8 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 	}
 	PopulatePlayerInfoWindows("PopupPlayerInfo.wnd");
 
-	// we're on the myinfo screen
-	if(lookAtPlayerID == TheGameSpyInfo->getLocalProfileID())
+	// we're on the myinfo screen; -online has no locale to set and filters no alphabet
+	if(lookAtPlayerID == TheGameSpyInfo->getLocalProfileID() && !OnlineIsEnabled())
 	{
 		//buttonbuttonOptions->winHide(FALSE);
 		buttonSetLocale->winHide(FALSE);

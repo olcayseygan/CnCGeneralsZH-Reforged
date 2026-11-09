@@ -499,11 +499,17 @@ static void playerTooltip(GameWindow *window,
 		}
 	}
 
-	playerInfo.format(TheGameText->fetch("TOOLTIP:StagingPlayerInfo"),
-		TheGameText->fetch(localeIdentifier).str(),
-		slot->getPingAsInt(),
-		totalWins, totalLosses, totalDiscons,
-		favoriteSide.str());
+	if (OnlineIsEnabled())		// no locale on this service: EA's "Region: Unknown" goes
+		playerInfo.format(TheGameText->fetch("TOOLTIP:OnlineStagingPlayerInfo"),
+			slot->getPingAsInt(),
+			totalWins, totalLosses, totalDiscons,
+			favoriteSide.str());
+	else
+		playerInfo.format(TheGameText->fetch("TOOLTIP:StagingPlayerInfo"),
+			TheGameText->fetch(localeIdentifier).str(),
+			slot->getPingAsInt(),
+			totalWins, totalLosses, totalDiscons,
+			favoriteSide.str());
 
 	UnicodeString tooltip = UnicodeString::TheEmptyString;
 	if (isLocalPlayer)

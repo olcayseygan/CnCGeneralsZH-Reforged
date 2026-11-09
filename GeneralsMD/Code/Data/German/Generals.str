@@ -8157,6 +8157,14 @@ TOOLTIP:StagingPlayerInfo
 "\n Region: %ls \n Ping: %d ms \n %d Siege/%d Niederlagen \n %d Verbindungsabbrüche \n Lieblingsarmee: %ls"
 END
 
+TOOLTIP:OnlineStagingPlayerInfo
+"\n Ping: %d ms \n %d Siege/%d Niederlagen \n %d Verbindungsabbrüche \n Lieblingsarmee: %ls"
+END
+
+TOOLTIP:OnlinePlayerInfo
+"\n %d Siege/%d Niederlagen"
+END
+
 GUI:CantBuildTooCloseToSupplies
 "Hier kannst du nicht bauen, es ist zu nah an einer Nachschubquelle"
 END

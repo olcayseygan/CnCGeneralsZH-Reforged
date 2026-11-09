@@ -10645,6 +10645,14 @@ GUI:OnlineLoginElsewhere
 "Bu hesapla başka bir bilgisayardan giriş yapıldı."
 END
 
+TOOLTIP:OnlinePlayerInfo
+"\n %d galibiyet/%d mağlubiyet"
+END
+
+TOOLTIP:OnlineStagingPlayerInfo
+"\n Ping: %d ms \n %d galibiyet/%d mağlubiyet \n %d bağlantı kopması \n Favori ordu: %ls"
+END
+
 GUI:???
 "Rastgele"
 END

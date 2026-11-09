@@ -40,6 +40,7 @@
 #include "GameNetwork/GameSpyOverlay.h"
 //#include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/BuddyThread.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 void deleteNotificationBox( void );
 static void raiseOverlays( void );
@@ -193,6 +194,9 @@ static void buddyTryReconnect( void )
 
 void GameSpyOpenOverlay( GSOverlayType overlay )
 {
+	// -online: the launcher picked the server, and the service keeps no locale; EA's country list never opens
+	if (overlay == GSOVERLAY_LOCALESELECT && OnlineIsEnabled())
+		return;
 	if (overlay == GSOVERLAY_BUDDY)
 	{
 		if (!TheGameSpyBuddyMessageQueue->isConnected())

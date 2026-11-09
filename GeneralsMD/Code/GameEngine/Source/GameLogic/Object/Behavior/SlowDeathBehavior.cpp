@@ -295,8 +295,11 @@ static Bool dataFlingsBody(const SlowDeathBehaviorModuleData* d, Bool wheels)
 //-------------------------------------------------------------------------------------------------
 /** The level direction the killing shot pushes the body, away from where it came from: the
 	* weapon's shockwave vector if it has one, else from the source object to us.  Only for damage
-	* that hits like a blow - shells, bullets, missiles, bombs, mines, beams; poison, radiation, fire,
-	* microwaves and the rest push nothing, and neither does a source that is gone. */
+	* that goes off on impact: tank shells (ARMOR_PIERCING), rockets and missiles, bombs, mines,
+	* artillery and demolition charges.  Gunfire pushes nothing - rifles, machine guns, gattlings, the
+	* Humvee's and the Comanche's guns, snipers - and neither do knives, beams, poison, radiation,
+	* fire, microwaves and the rest, or a source that is gone.  A vehicle shot to death keeps its own
+	* speed and no more. */
 /*static*/ Bool SlowDeathBehavior::calcHitDirection(const Object* obj, const DamageInfo* damageInfo, Real& dirX, Real& dirY)
 {
 	if (damageInfo == NULL)
@@ -305,17 +308,11 @@ static Bool dataFlingsBody(const SlowDeathBehaviorModuleData* d, Bool wheels)
 	{
 		case DAMAGE_EXPLOSION:
 		case DAMAGE_ARMOR_PIERCING:
-		case DAMAGE_SMALL_ARMS:
-		case DAMAGE_GATTLING:
-		case DAMAGE_SNIPER:
-		case DAMAGE_MELEE:
-		case DAMAGE_PARTICLE_BEAM:
 		case DAMAGE_INFANTRY_MISSILE:
 		case DAMAGE_AURORA_BOMB:
 		case DAMAGE_LAND_MINE:
 		case DAMAGE_JET_MISSILES:
 		case DAMAGE_STEALTHJET_MISSILES:
-		case DAMAGE_COMANCHE_VULCAN:
 			break;
 		default:
 			return FALSE;
@@ -372,7 +369,7 @@ static Bool dataFlingsBody(const SlowDeathBehaviorModuleData* d, Bool wheels)
 	* it comes down.  The destruction waits for it, and so does the INITIAL OCL when that is only
 	* the burnt hull or debris, which would otherwise be left lying where it was hit.  A parked one
 	* only gets the push: a tank shoved a little, a car hopped and tipped away from the blast.  With
-	* no push to go on either - a parked one killed by poison, by fire, by a script - it dies as it
+	* no push to go on either - a parked one killed by gunfire, poison, fire, a script - it dies as it
 	* always did. Aircraft, soldiers and deaths the data already flings keep theirs. */
 Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 {
@@ -420,7 +417,7 @@ Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 	m_momentumHopSpeed = 0.0f;
 	m_momentumStartFrame = now;
 
-	// a car with no shot to throw it - poison, fire, a script - rolls on and slides to a stop as a tank does
+	// a car with no blast to throw it - gunfire, poison, fire, a script - rolls on and slides to a stop as a tank does
 	if (!wheels || !hit)
 	{
 		// its own speed and a modest shove away from the shot; the slide is set by the two together

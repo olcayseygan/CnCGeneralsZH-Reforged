@@ -919,21 +919,30 @@ static void drawList( void )
 		drawSteel( s_listBox );
 	TheDisplay->endBatch2D();
 
-	// a fighting squad's steel glows: its cell again, added in red, under the picture
-	const Image *cellPiece = body.cell;
+	// a fighting squad's steel glows: its cell and its stretch of the open edge again, added in pure red
+	// under the picture, never quite dark, and cut to the row so none of it reaches the tray's foot
+	const Image *cellPiece = body.cell, *openPiece = body.open;
 	for( Int r = 0; r < s_rowCount; r++ )
 	{
 		if( !s_rows[ r ].fighting )
 			continue;
 		const IRegion2D c = cells[ r ];
-		atDrawTime( [ c, cellPiece ]()
+		const IRegion2D row = s_rows[ r ].box;
+		atDrawTime( [ c, row, cellPiece, openPiece ]()
 		{
-			const Real pulse = combatPulse();
-			const Color glow = GameMakeColor( REAL_TO_INT( 255 * pulse ), REAL_TO_INT( 40 * pulse ), REAL_TO_INT( 24 * pulse ), 255 );
-			if( cellPiece != NULL )
-				TheDisplay->drawImage( cellPiece, c.lo.x, c.lo.y, c.hi.x, c.hi.y, glow, Display::DRAW_IMAGE_ADDITIVE );
-			else
-				TheDisplay->drawOpenRect( c.lo.x + 1, c.lo.y + 1, c.hi.x - c.lo.x - 2, c.hi.y - c.lo.y - 2, 2.0f, glow );
+			const Real light = 0.25f + 0.75f * combatPulse();
+			const Color glow = GameMakeColor( REAL_TO_INT( 255 * light ), REAL_TO_INT( 6 * light ), 0, 255 );
+			if( cellPiece == NULL )
+			{
+				TheDisplay->drawOpenRect( row.lo.x + 1, row.lo.y + 1, row.hi.x - row.lo.x - 2, row.hi.y - row.lo.y - 2, 2.0f, glow );
+				return;
+			}
+			IRegion2D clip = row;
+			TheDisplay->setClipRegion( &clip );
+			TheDisplay->drawImage( cellPiece, c.lo.x, c.lo.y, c.hi.x, c.hi.y, glow, Display::DRAW_IMAGE_ADDITIVE );
+			if( openPiece != NULL && row.hi.x > c.hi.x )
+				TheDisplay->drawImage( openPiece, c.hi.x, c.lo.y, row.hi.x, c.hi.y, glow, Display::DRAW_IMAGE_ADDITIVE );
+			TheDisplay->enableClipping( FALSE );
 		} );
 	}
 

@@ -2777,8 +2777,10 @@ void Locomotor::moveTowardsPositionJet(Object* obj, PhysicsBehavior *physics, co
 			error = 0.0f;
 	}
 
+	// An attack run's goal is the target, not a place to arrive at: easing down to MinSpeed for it
+	// braked an Aurora from 390 to 250 on the straight in to its bomb, over whatever AA was there.
 	Real goalSpeed = desiredSpeed;
-	if (!getFlag(NO_SLOW_DOWN_AS_APPROACHING_DEST))
+	if (!getFlag(NO_SLOW_DOWN_AS_APPROACHING_DEST) && !obj->testStatus(OBJECT_STATUS_IS_ATTACKING))
 	{
 		Real slowDownDist = calcSlowDownDist(speed, m_template->m_minSpeed, getJetBraking(bdt));
 		if (onPathDistToGoal < slowDownDist && goalSpeed > m_template->m_minSpeed)
@@ -2813,8 +2815,15 @@ void Locomotor::flyJet(Object* obj, PhysicsBehavior *physics, Real headingError,
 		physics->setTurning(TURN_NONE);
 	}
 
+	// Above this locomotor's top speed the jet is coasting down from a faster one, an Aurora after its
+	// supersonic run: it sheds that at its own Braking, turning or not, as EA's jets did (the Aurora's
+	// return locomotor says "not much braking, so we go supersonic->sluggish slowly"). The airbrake
+	// and the pull of a turn took 480 down to 160 in a second and left it crawling over the target.
+	Bool healthy = IS_CONDITION_BETTER( bdt, TheGlobalData->m_movementPenaltyDamageState );
+	const Bool coasting = speed > (healthy ? m_template->m_maxSpeed : m_template->m_maxSpeedDamaged);
+
 	Real minSpeed = m_template->m_minSpeed;
-	Real decel = getJetBraking(bdt);
+	Real decel = coasting ? getBraking() : getJetBraking(bdt);
 	if (rate != 0.0f && maxRate > 0.0f)
 	{
 		Real share = fabs(rate) / maxRate;
@@ -2826,7 +2835,7 @@ void Locomotor::flyJet(Object* obj, PhysicsBehavior *physics, Real headingError,
 		if (turnSpeed < goalSpeed)
 			goalSpeed = turnSpeed;
 		Real pull = speed * fabs(rate);
-		if (decel < pull)
+		if (decel < pull && !coasting)
 			decel = pull;
 	}
 

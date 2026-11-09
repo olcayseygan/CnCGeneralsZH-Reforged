@@ -4317,6 +4317,7 @@ Tools/asan-check.sh
 Tools/assetcull/assetcull.cpp
 Tools/assetcull/assetcull.dsp
 Tools/bigfile.py
+Tools/build-jobs.sh
 Tools/build-posix.sh
 Tools/buildVersionUpdate/buildVersionUpdate.cpp
 Tools/buildVersionUpdate/buildVersionUpdate.dsp

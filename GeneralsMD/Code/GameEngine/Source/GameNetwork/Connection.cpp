@@ -502,12 +502,6 @@ NetCommandRef * Connection::processAck(UnsignedShort commandID, UnsignedByte ori
 	}
 #endif
 
-	Int index = temp->getCommand()->getID() % CONNECTION_LATENCY_HISTORY_LENGTH;
-	m_averageLatency -= ((Real)(m_latencies[index])) / CONNECTION_LATENCY_HISTORY_LENGTH;
-	Real lat = Clock_Milliseconds() - temp->getTimeLastSent();
-	m_averageLatency += lat / CONNECTION_LATENCY_HISTORY_LENGTH;
-	m_latencies[index] = lat;
-
 	// Karn's rule: an ack for a command that went out more than once cannot be timed, because
 	// there is no way to tell which of the sends it is acking.  Timing it against the last send
 	// reads far too short and would drag the timeout down exactly when the link is losing packets.
@@ -515,8 +509,24 @@ NetCommandRef * Connection::processAck(UnsignedShort commandID, UnsignedByte ori
 	// its network again, seconds later, so it times the other machine's load and not the link.  Two
 	// seats that are not the packet router send each other nothing else before the match, so that
 	// one sample was the whole estimate and pinned their link at the 2000ms ceiling.
-	if ((temp->getNumTimesSent() <= 1) && (temp->getCommand()->getNetCommandType() != NETCOMMANDTYPE_LOADCOMPLETE)) {
-		Connection_updateRetryTimeout(lat, m_smoothedLatency, m_latencyVariance, m_retryTime);
+	//
+	// And a command this queue never put on the wire has nothing to time at all.  The likely way in:
+	// a frame resend answer queues commands the other machine already acked once, and a late ack for
+	// one of the earlier copies (each redundant copy is acked too) lands before the new one goes out.
+	// Its send time is still -1, so the sample was the clock itself: 2528656.8 ms of average latency in a relay
+	// match, an srtt of seconds that decayed over a hundred acks, and a 0.8 s room latency (the
+	// plausible ceiling) that pushed the run-ahead to 30 frames.  The entry is still removed below:
+	// the other machine has the command.
+	if (temp->getNumTimesSent() >= 1) {
+		Int index = temp->getCommand()->getID() % CONNECTION_LATENCY_HISTORY_LENGTH;
+		m_averageLatency -= ((Real)(m_latencies[index])) / CONNECTION_LATENCY_HISTORY_LENGTH;
+		Real lat = (Real)(Clock_Milliseconds() - temp->getTimeLastSent());
+		m_averageLatency += lat / CONNECTION_LATENCY_HISTORY_LENGTH;
+		m_latencies[index] = lat;
+
+		if ((temp->getNumTimesSent() == 1) && (temp->getCommand()->getNetCommandType() != NETCOMMANDTYPE_LOADCOMPLETE)) {
+			Connection_updateRetryTimeout(lat, m_smoothedLatency, m_latencyVariance, m_retryTime);
+		}
 	}
 
 #if defined(_DEBUG) || defined(_INTERNAL)

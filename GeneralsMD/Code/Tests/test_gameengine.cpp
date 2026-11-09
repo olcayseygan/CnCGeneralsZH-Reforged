@@ -7424,6 +7424,10 @@ TEST(a_stalled_frame_is_not_filed_as_round_trip_time)
 	/* a clock that ran backwards says nothing; it must not read as a zero-latency link */
 	CHECK_NEAR( sanitizeLatencySample( -3.0f, MAX_PLAUSIBLE_LATENCY_SECONDS ), 0.0f, 0.0001f );
 
+	/* a peer's run-ahead metrics are read off the wire and go through here; a NaN is no link either */
+	volatile Real zero = 0.0f;
+	CHECK_NEAR( sanitizeLatencySample( zero / zero, MAX_PLAUSIBLE_LATENCY_SECONDS ), 0.0f, 0.0001f );
+
 	/* and the point of all of it: what the run-ahead does with the clamped numbers.  Two players at
 		 the ceiling still cost far less than the 2.1 s the raw samples bought. */
 	Real clamped = sanitizeLatencySample( 7.636834f, MAX_PLAUSIBLE_LATENCY_SECONDS )

@@ -90,10 +90,6 @@ void FrameMetrics::init() {
 	m_cushionIndex = 0;
 }
 
-void FrameMetrics::reset() {
-	init();
-}
-
 void FrameMetrics::setMatchFps(Int fps) {
 	m_matchFps = fps;
 	init();

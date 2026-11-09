@@ -128,8 +128,8 @@ Real sanitizeLatencySample( Real seconds, Real ceilingSeconds )
 	if( ceilingSeconds < 0.0f )
 		ceilingSeconds = 0.0f;
 
-	if( seconds < 0.0f )
-		return 0.0f;						// the clock went backwards; no information, not a fast link
+	if( !(seconds >= 0.0f) )
+		return 0.0f;						// the clock went backwards, or a NaN off the wire; no information, not a fast link
 
 	if( seconds > ceilingSeconds )
 		return ceilingSeconds;

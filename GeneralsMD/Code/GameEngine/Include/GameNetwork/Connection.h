@@ -88,8 +88,8 @@ time_t Connection_retryDelayFor( time_t baseRetryMS, Int numTimesSent );
  * Redundant sends.  A synchronized command (orders, frame info, run-ahead) that is still unacked
  * goes out again in the next packets this many times, each copy at least the spacing after the
  * last time it was on the wire, before any retry timer runs out.  On a lossy link the retry is
- * what the room waits for: the timeout is a full round trip through the packet router and more,
- * 600 to 800ms at 120ms and 5% loss, and the run-ahead covers only the one-way trip, so every lost
+ * what the room waits for: the timeout is a full round trip and more (600 to 800ms at 120ms and
+ * 5% loss when it was measured, through the packet router), and the run-ahead covers only the one-way trip, so every lost
  * packet was a stall.  A copy 30ms behind the original costs a few bytes and gets there before the
  * run-ahead runs out.  Only synchronized commands are copied because their receiving end drops a
  * duplicate by itself (FrameData::addCommand, and the old-frame test in processNetCommand); chat,

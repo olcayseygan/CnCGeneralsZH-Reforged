@@ -228,64 +228,6 @@ void ConnectionManager::init()
 	}
 }
 
-/**
- * Reset the connection manager and any subsystems.
- */
-void ConnectionManager::reset() 
-{
-//	if (m_transport == NULL) {
-//		m_transport = new Transport;
-//	}
-//	m_transport->reset();
-	if (m_transport != NULL) {
-		delete m_transport;
-		m_transport = NULL;
-	}
-
-	// i is used after the loop; VC6 for-scope let it escape.
-	Int i;
-	for (i = 0; i < NUM_CONNECTIONS; ++i) {
-		if (m_connections[i] != NULL) {
-			m_connections[i]->deleteInstance();
-			m_connections[i] = NULL;
-		}
-	}
-
-	for (i=0; i<MAX_SLOTS; ++i)
-	{
-		if (m_frameData[i] != NULL) {
-			m_frameData[i]->deleteInstance();
-			m_frameData[i] = NULL;
-		}
-	}
-
-	if (m_netCommandWrapperList == NULL) {
-		m_netCommandWrapperList = newInstance(NetCommandWrapperList);
-		m_netCommandWrapperList->init();
-	}
-	m_netCommandWrapperList->reset();
-
-	m_localSlot = -1;
-	m_lastFrameTickSent = -1;
-#ifdef MEMORYPOOL_DEBUG
-	TheMemoryPoolFactory->debugSetInitFillerIndex(m_localSlot);
-#endif
-	m_packetRouterSlot = -1;
-
-	for (i = 0; i < TheGlobalData->m_networkFPSHistoryLength; ++i) {
-		m_fpsAverages[i] = -1;
-	}
-	for (i = 0; i < TheGlobalData->m_networkLatencyHistoryLength; ++i) {
-		m_latencyAverages[i] = 0.0;
-	}
-
-	for (i = 0; i < MAX_SLOTS; ++i) {
-		m_packetRouterFallback[i] = -1;
-	}
-
-	m_frameMetrics.reset();
-}
-
 UnsignedInt ConnectionManager::getPingFrame()
 {
 	return (m_disconnectManager)?m_disconnectManager->getPingFrame():0;
@@ -370,15 +312,32 @@ void ConnectionManager::doRelay() {
 
 			/* Who put this packet on the wire, as opposed to who wrote the commands in it.  An ack has
 				 to reach the queue that keeps resending the copy, and that queue is the sender's.  A
-				 packet from an address no connection owns leaves it MAX_SLOTS, and ackCommand then routes
-				 the way it always did. */
+				 router that remapped the sender's port still leaves its address, so when exactly one
+				 connection has that address it is the sender.  Otherwise it stays MAX_SLOTS: ackCommand
+				 then acks each command's author, and nobody is counted as heard from. */
 			UnsignedInt senderSlot = MAX_SLOTS;
+			UnsignedInt addressSlot = MAX_SLOTS;
+			Int addressMatches = 0;
 			for (Int s = 0; s < MAX_SLOTS; ++s) {
-				if ((m_connections[s] != NULL) &&
-						(m_connections[s]->getUser()->GetIPAddr() == m_transport->m_inBuffer[i].addr) &&
-						(m_connections[s]->getUser()->GetPort() == m_transport->m_inBuffer[i].port)) {
+				if ((m_connections[s] == NULL) || (m_connections[s]->getUser()->GetIPAddr() != m_transport->m_inBuffer[i].addr)) {
+					continue;
+				}
+				if (m_connections[s]->getUser()->GetPort() == m_transport->m_inBuffer[i].port) {
 					senderSlot = s;
 					break;
+				}
+				addressSlot = s;
+				++addressMatches;
+			}
+			if ((senderSlot == MAX_SLOTS) && (addressMatches == 1)) {
+				senderSlot = addressSlot;
+			}
+			if (senderSlot == MAX_SLOTS) {
+				static Bool s_reportedUnknownSender = FALSE;
+				if (!s_reportedUnknownSender) {
+					s_reportedUnknownSender = TRUE;
+					DEBUG_LOG(("ConnectionManager::doRelay - a packet from %X:%d matches no player, acking its commands to their authors\n",
+						m_transport->m_inBuffer[i].addr, m_transport->m_inBuffer[i].port));
 				}
 			}
 
@@ -388,12 +347,11 @@ void ConnectionManager::doRelay() {
 					//GetAsciiNetCommandType(cmd->getCommand()->getNetCommandType()).str()));
 
 				/* Note that we have heard from whoever put this on the wire.  Any command will do - the
-					 point is only that the player still exists.  See StallJudgement.h.  The author stands in
-					 for a packet from an address no connection owns; a resend answer carries other slots'
-					 commands, and those prove nothing about their authors. */
-				UnsignedInt fromSlot = (senderSlot < MAX_SLOTS) ? senderSlot : (UnsignedInt)cmd->getCommand()->getPlayerID();
-				if (fromSlot < MAX_SLOTS) {
-					m_lastHeardFrom[fromSlot] = Clock_Milliseconds();
+					 point is only that the player still exists.  See StallJudgement.h.  Not the authors: a
+					 resend answer carries other slots' commands, and those prove nothing about them, so a
+					 packet whose sender is unknown counts for nobody. */
+				if (senderSlot < MAX_SLOTS) {
+					m_lastHeardFrom[senderSlot] = Clock_Milliseconds();
 				}
 
 				/* Only our own bit: a relay mask naming anyone else is a peer asking us to forward for it,
@@ -634,7 +592,8 @@ void ConnectionManager::processRunAheadMetrics(NetRunAheadMetricsCommandMsg *msg
 {
 	UnsignedInt player = msg->getPlayerID();
 	if ((player >= 0) && (player < MAX_SLOTS) && (isPlayerConnected(player))) {
-		m_latencyAverages[player] = msg->getAverageLatency();
+		// a figure off the wire, and the router sizes everyone's run-ahead on it: held to what a link can be
+		m_latencyAverages[player] = sanitizeLatencySample(msg->getAverageLatency(), MAX_PLAUSIBLE_LATENCY_SECONDS);
 		m_fpsAverages[player] = msg->getAverageFps();
 		//DEBUG_LOG(("ConnectionManager::processRunAheadMetrics - player %d, fps = %d, latency = %f\n", player, msg->getAverageFps(), msg->getAverageLatency()));
 		if (m_fpsAverages[player] > ConvertRetailFrames(100)) {
@@ -1171,16 +1130,22 @@ void ConnectionManager::updateRunAhead(Int oldRunAhead, Int frameRate, Bool didS
 			 every player, so our slowest link is the longest trip any of our commands makes, and the
 			 router takes the worst of everybody's (getMaximumLatency).  The connections' own srtt,
 			 which skips acks for copies sent twice; the FrameMetrics figure it replaces timed only the
-			 trip to the router.  Until any link has a sample, the 0.2 s that figure started from. */
-		Real worstMS = -1.0f;
+			 trip to the router.  A link with no sample yet counts as the 0.2 s that figure started from,
+			 or one fast link measured early would speak for a slow one still unmeasured. */
+		const Real UNMEASURED_LINK_SECONDS = 0.2f;
+		Real worst = 0.0f;
 		for (Int i = 0; i < MAX_SLOTS; ++i) {
-			if ((m_connections[i] != NULL) && !m_connections[i]->isQuitting() && m_connections[i]->hasLatencySample() &&
-					(m_connections[i]->getSmoothedLatencyMS() > worstMS)) {
-				worstMS = m_connections[i]->getSmoothedLatencyMS();
+			if ((m_connections[i] == NULL) || m_connections[i]->isQuitting()) {
+				continue;
+			}
+			Real seconds = m_connections[i]->hasLatencySample()
+				? sanitizeLatencySample(m_connections[i]->getSmoothedLatencyMS() / 1000.0f, MAX_PLAUSIBLE_LATENCY_SECONDS)
+				: UNMEASURED_LINK_SECONDS;
+			if (seconds > worst) {
+				worst = seconds;
 			}
 		}
-		m_latencyAverages[m_localSlot] = (worstMS < 0.0f) ? 0.2f :
-			sanitizeLatencySample(worstMS / 1000.0f, MAX_PLAUSIBLE_LATENCY_SECONDS);
+		m_latencyAverages[m_localSlot] = worst;
 
 		// FrameMetrics measures the logic frame rate again (it briefly measured the display rate,
 		// see FrameMetrics::doPerFrameMetrics), so EA's original rule applies once more: a

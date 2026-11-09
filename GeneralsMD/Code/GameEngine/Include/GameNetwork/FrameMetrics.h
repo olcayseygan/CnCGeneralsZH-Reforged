@@ -39,7 +39,6 @@ public:
 	virtual ~FrameMetrics();
 
 	void init();
-	void reset();
 	/// The match's logic frames a second, turbo mode included: the history starts full of it and no
 	/// sample reads above it.  Starts again as init() does.
 	void setMatchFps(Int fps);

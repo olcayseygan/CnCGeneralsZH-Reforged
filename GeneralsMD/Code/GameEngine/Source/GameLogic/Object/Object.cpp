@@ -95,6 +95,7 @@
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Module/StatusDamageHelper.h"
+#include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
 #include "GameLogic/Module/SubdualDamageHelper.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
@@ -481,6 +482,8 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 				DEBUG_ASSERTCRASH( m_ai == NULL, ("%s has more than one AI module. This is illegal!\n", getTemplate()->getName().str()) );
 			}
 			m_ai = ai;
+			// the reveal grid holds only objects with an AI, and the team was set above
+			RevealWakeGrid::noteObject( this );
 		}
 
 		static NameKeyType key_PhysicsUpdate = NAMEKEY("PhysicsBehavior");
@@ -992,6 +995,8 @@ void Object::setOrRestoreTeam( Team* team, Bool restoring )
 	// the partition counts every cell's objects per player; move ours before anything searches
 	if (m_partitionData)
 		m_partitionData->refreshCountedPlayer();
+	// a reveal looks for its enemies on the teams, so the reveal grid has to hear of us
+	RevealWakeGrid::noteObject( this );
 
 	// After Switch //////////////////////////
 	if (m_team)
@@ -1961,6 +1966,7 @@ void Object::reactToTurretChange( WhichTurretType turret, Real oldRotation, Real
 void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle)
 {
 	//USE_PERF_TIMER(Object_reactToTransformChange)
+	RevealWakeGrid::noteMove( this, oldPos );
 	if(_isnan(getPosition()->x) || _isnan(getPosition()->y) || _isnan(getPosition()->z)) {
 		DEBUG_CRASH(("Object pos is nan."));
 		TheGameLogic->destroyObject(this);
@@ -4097,6 +4103,7 @@ void Object::updateObjValuesFromMapProperties(Dict* properties)
 		if (valInt < 0)
 			valInt = 0;
 		m_visionRange = INT_TO_REAL(valInt);
+		RevealWakeGrid::noteObject( this );
 	}
 
 	// adjust the shroud clearing distance of this object, overriding its default distance
@@ -4609,6 +4616,10 @@ void Object::xfer( Xfer *xfer )
 	const XferVersion currentVersion = 18;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
+
+	// a load writes fields behind the reveal grid's back, the sight range among them
+	if( xfer->getXferMode() == XFER_LOAD )
+		RevealWakeGrid::forget();
 
 	// object ID
 	ObjectID id = getID();
@@ -5889,6 +5900,7 @@ Real Object::getVisionRange() const
 void Object::setVisionRange( Real newVisionRange )
 {
 	m_visionRange = newVisionRange;
+	RevealWakeGrid::noteObject( this );
 }
 
 //-------------------------------------------------------------------------------------------------

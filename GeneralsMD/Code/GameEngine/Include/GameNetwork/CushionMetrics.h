@@ -90,7 +90,7 @@ enum
 	 Past the margin a late packet only engages the brake, whose four frames are still in the window,
 	 and the brake costs a few tenths of a frame a second while a frame of window costs every click
 	 17 ms.  Measured on three copies at 200 ms of ping: with the flat six frames, 30 ms of jitter
-	 engaged the brake on 6 to 9 % of frames and 5 ms on none; two deviations bought it down to 1 to
+	 engaged the brake on 6 to 9 % of frames and 5 ms on none; two deviations bought it down to 0 to
 	 3 % for two to three more frames of delay, which is the wrong price. */
 const Real RUNAHEAD_JITTER_DEVIATIONS = 1.5f;
 

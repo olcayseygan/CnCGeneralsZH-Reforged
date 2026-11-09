@@ -2470,14 +2470,21 @@ Int parseTurboMode(char *args[], int num)
 	 subsystem's cost is a different search - the question is not "which frames were terrible" but
 	 "which frames did this cost anything at all" - and for that the bar wants to be a few
 	 milliseconds. Every frame over it writes a line and a flush, so a low bar on a long run is a
-	 large log and a slower run; it is a measuring tool, not a setting. */
+	 large log and a slower run; it is a measuring tool, not a setting.
+
+	 It is also what turns the profile on: two clock reads around every update module and every
+	 script, about a millisecond a frame at 32 players, and the module table every 600 frames.
+	 Without it the logic carries none of that and the default bar logs at most one frame a second. */
 Int parseSlowFrame(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1 && args[1])
 	{
 		const Real ms = (Real)atof(args[1]);
 		if (ms > 0.0f)
+		{
 			TheWritableGlobalData->m_slowFrameMS = ms;
+			TheWritableGlobalData->m_logicProfile = TRUE;
+		}
 		return 2;
 	}
 	return 1;

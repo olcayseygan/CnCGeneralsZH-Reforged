@@ -15937,15 +15937,21 @@ TEST(the_slow_frame_bar_moves_only_for_a_positive_number)
 	TheWritableGlobalData = NEW GlobalData;
 
 	CHECK_NEAR( TheGlobalData->m_slowFrameMS, 20.0f, 0.001f );
+	CHECK( !TheGlobalData->m_logicProfile );	// a player's build carries no per-module clock
 	char exe[] = "generals.exe";
 	char slowFrame[] = "-slowframe";
+	char nonsense[] = "later";
+	char *argvBad[] = { exe, slowFrame, nonsense };
+	parseCommandLine( 3, argvBad );
+	CHECK_NEAR( TheGlobalData->m_slowFrameMS, 20.0f, 0.001f );
+	CHECK( !TheGlobalData->m_logicProfile );
+
 	char three[] = "3";
 	char *argvSlow[] = { exe, slowFrame, three };
 	parseCommandLine( 3, argvSlow );
 	CHECK_NEAR( TheGlobalData->m_slowFrameMS, 3.0f, 0.001f );
+	CHECK( TheGlobalData->m_logicProfile );		// and the hunt switch turns the profile on
 
-	char nonsense[] = "later";
-	char *argvBad[] = { exe, slowFrame, nonsense };
 	parseCommandLine( 3, argvBad );
 	CHECK_NEAR( TheGlobalData->m_slowFrameMS, 3.0f, 0.001f );
 

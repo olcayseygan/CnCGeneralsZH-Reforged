@@ -5543,13 +5543,40 @@ void ScriptEngine::newMap( void )
 DECLARE_PERF_TIMER(ScriptEngine)
 #ifdef DEBUG_LOGGING
 //
-// The frame's worst script.  Filled in by executeScript, read by GameLogic when a frame runs over
-// budget, cleared at the top of every update.
+// The frame's three worst scripts.  Filled in by executeScript, read by GameLogic when a frame runs
+// over budget, cleared at the top of every update.  Only -slowframe times them (theScriptsTimed):
+// a 32-player match's eval spikes ran to 74ms with nothing in the log to name the script, and a
+// clock around every script is not something a player's build should carry for that.  A skirmish
+// AI's scripts carry the same names in every seat, so the seat goes with the name.  A script's time
+// includes the subroutines it calls.
 //
-static Real theWorstScriptMS = 0.0f;
-static AsciiString theWorstScriptName;
+enum { WORST_SCRIPTS = 3 };
+static Bool theScriptsTimed = FALSE;
+static Real theWorstScriptMS[ WORST_SCRIPTS ];
+static AsciiString theWorstScriptName[ WORST_SCRIPTS ];
+static Int theWorstScriptSeat[ WORST_SCRIPTS ];
 static Real theScriptTotalMS = 0.0f;
 static Int theScriptRunCount = 0;
+
+static void noteScriptTime( const AsciiString &name, Int seat, Real ms )
+{
+	theScriptRunCount++;
+	theScriptTotalMS += ms;
+	Int at = WORST_SCRIPTS;
+	while( at > 0 && ms > theWorstScriptMS[ at - 1 ] )
+		--at;
+	if( at == WORST_SCRIPTS )
+		return;
+	for( Int down = WORST_SCRIPTS - 1; down > at; --down )
+	{
+		theWorstScriptMS[ down ] = theWorstScriptMS[ down - 1 ];
+		theWorstScriptName[ down ] = theWorstScriptName[ down - 1 ];
+		theWorstScriptSeat[ down ] = theWorstScriptSeat[ down - 1 ];
+	}
+	theWorstScriptMS[ at ] = ms;
+	theWorstScriptName[ at ] = name;
+	theWorstScriptSeat[ at ] = seat;
+}
 
 //
 // update() is billed as "scripts" by GameLogic's slow-frame line, but only a part of it is scripts:
@@ -5612,9 +5639,22 @@ static void scriptPhaseEnd( Int phase )
 
 const char *ScriptEngine::getProfileReport( void )
 {
-	static char report[ 512 ];
-	Int used = sprintf( report, "%d scripts/%.1fms worst '%s' %.1fms |", theScriptRunCount, theScriptTotalMS,
-				 theWorstScriptName.isEmpty() ? "<none>" : theWorstScriptName.str(), theWorstScriptMS );
+	static char report[ 768 ];
+	Int used = 0;
+	if( !theScriptsTimed && theScriptRunCount == 0 )
+		used = sprintf( report, "scripts not timed (-slowframe times them) |" );
+	else
+	{
+		used = sprintf( report, "%d scripts/%.1fms worst", theScriptRunCount, theScriptTotalMS );
+		for( Int rank = 0; rank < WORST_SCRIPTS && !theWorstScriptName[ rank ].isEmpty(); rank++ )
+		{
+			// a script name is out of a map file and may be long; the three of them stay in 128 apiece
+			const Int wrote = snprintf( report + used, 128, " '%s' p%d %.1fms", theWorstScriptName[ rank ].str(),
+																	theWorstScriptSeat[ rank ], theWorstScriptMS[ rank ] );
+			used += wrote < 0 ? 0 : ( wrote > 127 ? 127 : wrote );
+		}
+		used += sprintf( report + used, " |" );
+	}
 	for( Int phase = 0; phase < SCRIPT_PHASE_COUNT; phase++ )
 		used += sprintf( report + used, " %s %.1f", theScriptPhaseName[phase], theScriptPhaseMS[phase] );
 	sprintf( report + used, " | seqlist %d iters %d grp %dx/%.1f (%d members) act %dx/%.1f worstact %d/%.1f",
@@ -5654,8 +5694,12 @@ void ScriptEngine::update( void )
 #endif
 #endif
 #ifdef DEBUG_LOGGING
-	theWorstScriptMS = 0.0f;
-	theWorstScriptName.clear();
+	theScriptsTimed = TheGlobalData && TheGlobalData->m_logicProfile;
+	for( Int rank = 0; rank < WORST_SCRIPTS; rank++ )
+	{
+		theWorstScriptMS[ rank ] = 0.0f;
+		theWorstScriptName[ rank ].clear();
+	}
 	theScriptTotalMS = 0.0f;
 	theScriptRunCount = 0;
 	for( Int phase = 0; phase < SCRIPT_PHASE_COUNT; phase++ )
@@ -7162,12 +7206,14 @@ void ScriptEngine::executeScript( Script *pScript )
 	}
 #ifdef DEBUG_LOGGING
 #ifdef SPECIAL_SCRIPT_PROFILING
-	Int64 startTime64;
-	Real timeToEvaluate=0.0f;
-	Int64 endTime64,freq64;
-	freq64 = Clock_Ticks_Per_Second();
-	startTime64 = Clock_Ticks();
+	const Bool scriptTimed = TRUE;
+#else
+	const Bool scriptTimed = theScriptsTimed;
 #endif
+	Int64 startTime64 = 0;
+	const Int scriptSeat = scriptTimed && m_currentPlayer ? m_currentPlayer->getPlayerIndex() : -1;
+	if( scriptTimed )
+		startTime64 = Clock_Ticks();
 #endif
 
 	Team *pSavConditionTeam = m_conditionTeam;
@@ -7229,21 +7275,15 @@ void ScriptEngine::executeScript( Script *pScript )
 		}
 	}
 #ifdef DEBUG_LOGGING
-#ifdef SPECIAL_SCRIPT_PROFILING
-	endTime64 = Clock_Ticks();
-	timeToEvaluate = ((Real)(endTime64-startTime64) / (Real)(freq64));
-	pScript->setCurTime(timeToEvaluate);
+	if( scriptTimed )
 	{
-		const Real scriptMS = timeToEvaluate * 1000.0f;
-		theScriptRunCount++;
-		theScriptTotalMS += scriptMS;
-		if( scriptMS > theWorstScriptMS )
-		{
-			theWorstScriptMS = scriptMS;
-			theWorstScriptName = pScript->getName();
-		}
-	}
+		const Int64 freq64 = Clock_Ticks_Per_Second();
+		const Real timeToEvaluate = freq64 > 0 ? (Real)((double)(Clock_Ticks() - startTime64) / (double)freq64) : 0.0f;
+#ifdef SPECIAL_SCRIPT_PROFILING
+		pScript->setCurTime(timeToEvaluate);
 #endif
+		noteScriptTime( pScript->getName(), scriptSeat, timeToEvaluate * 1000.0f );
+	}
 #endif
 
 	m_conditionTeam = pSavConditionTeam;
@@ -7788,7 +7828,9 @@ Bool ScriptEngine::evaluateConditions( Script *pScript, Team *thisTeam, Player *
 	OrCondition *pConditionHead = pScript->getOrCondition();
 	Bool testValue = false;
 
-#ifdef DEBUG_LOGGING
+// only the script statistics dump at newMap reads these, and it is SPECIAL_SCRIPT_PROFILING's; a
+// Release build with its debug log paid two clock reads per script evaluation for nobody
+#if defined(DEBUG_LOGGING) && defined(SPECIAL_SCRIPT_PROFILING)
 #define COLLECT_CONDITION_EVAL_TIMES
 #endif
 #ifdef COLLECT_CONDITION_EVAL_TIMES

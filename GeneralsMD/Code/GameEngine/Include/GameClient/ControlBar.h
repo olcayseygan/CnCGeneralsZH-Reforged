@@ -1144,6 +1144,9 @@ public:
 		}
 	}
 
+	/// getCommandAvailability for a button on no bar window: the group panel's build tray (GroupPanel.cpp)
+	CommandAvailability getButtonAvailability( const CommandButton *command, Object *obj ) const { return getCommandAvailability( command, obj, NULL ); }
+
 protected:
 	/** The same question asked of a whole multi-selection: a command one of the selected buildings
 		* can carry out is offered, not greyed out because the group's representative happens to have

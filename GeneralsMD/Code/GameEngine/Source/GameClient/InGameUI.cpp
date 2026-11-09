@@ -106,6 +106,7 @@
 #include "GameClient/SelectionXlat.h"
 #include "GameClient/Shadow.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/GroupPanel.h"
 #include "GameClient/UIStyle.h"
 
 #include "GameNetwork/NetworkInterface.h"
@@ -7984,6 +7985,9 @@ void InGameUI::postDraw( void )
 	if( TheGameLogic->getFrame() > 0 && !TheGameLogic->isInShellGame() && localPlayerWatching() )
 		drawSpectatorRack( rackPlateTop );
 
+	// a player's squad list on the left, and the picked squad's build tray where a watcher's rack hangs
+	GroupPanel_draw( rackPlateTop );
+
 	// draw named timers
 	if (TheGameLogic->getFrame() > 0 && m_showNamedTimers)
 	{
@@ -11352,6 +11356,9 @@ Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
 
 	// a "+N" tab stands for no one item
 	if( inside( m_productionListTab ) || inside( m_superweaponTab ) )
+		return TRUE;
+
+	if( GroupPanel_click( mouse, cancel ) )
 		return TRUE;
 
 	for( Int each = 0; each < m_productionListCells; each++ )

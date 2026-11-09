@@ -53,6 +53,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/GroupPanel.h"
 #include "GameClient/Keyboard.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/SelectionInfo.h"
@@ -1361,6 +1362,7 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 			if ( isValidHotkeySquadIndex( group ) )
 			{
 				DEBUG_LOG(("META: select team %d\n",group));
+				GroupPanel_squadChosen( group );	// the group panel's build tray opens for a squad picked by its number
 
 				UnsignedInt now = TheGameLogic->getFrame();
 				if ( m_lastGroupSelTime == 0 )

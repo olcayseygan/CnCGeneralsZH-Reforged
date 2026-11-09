@@ -938,6 +938,7 @@ GameEngine/Include/GameClient/GameWindowManager.h
 GameEngine/Include/GameClient/GameWindowTransitions.h
 GameEngine/Include/GameClient/GlobalLanguage.h
 GameEngine/Include/GameClient/GraphDraw.h
+GameEngine/Include/GameClient/GroupPanel.h
 GameEngine/Include/GameClient/HeaderTemplate.h
 GameEngine/Include/GameClient/HintSpy.h
 GameEngine/Include/GameClient/HotKey.h
@@ -1624,6 +1625,7 @@ GameEngine/Source/GameClient/GameConsole.cpp
 GameEngine/Source/GameClient/GameText.cpp
 GameEngine/Source/GameClient/GlobalLanguage.cpp
 GameEngine/Source/GameClient/GraphDraw.cpp
+GameEngine/Source/GameClient/GroupPanel.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp

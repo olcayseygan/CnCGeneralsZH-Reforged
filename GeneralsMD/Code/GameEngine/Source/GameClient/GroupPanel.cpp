@@ -1,12 +1,13 @@
 // The group panel (GroupPanel.h), as the owner picked it from the hud-artist's mockups on 2026-11-09
-// (experiments/group-panel/mockups: list C2, tray A2).
+// (experiments/group-panel/mockups: list A2+, tray A2).
 //
-// On the left, one box against the screen's left edge (<S>ProSquadList, a 9-slice) with a row for
-// every hotkey squad the local player has made: the squad's most numerous unit as its picture, "xN"
-// in the picture's bottom right corner and a soft "+N" in its top left for the units still being
-// built for it or walking to it; beside the picture a sunk socket holding a keycap with the squad's
-// key, the key pressed and lit while the squad is the one the tray is up for, and under the socket
-// an upright rail with the squad's health.
+// On the left, the production tray's own body against the screen's left edge, one cell for every
+// hotkey squad the local player has made, top to bottom in key order: the squad's most numerous unit
+// as its picture in the build buttons' blue rim, a keycap with the squad's key over the picture's top
+// left corner (pressed and lit while the squad is the one the tray is up for), "xN" in its bottom
+// right, a soft "+N" in its top right for the units still being built for it or walking to it, and
+// the squad's health in the power bar's colours along the cell's foot.  A squad whose units shot or
+// were hit in the last few seconds has its cell's steel glow red and its rim turn red, both pulsing.
 //
 // On the right, while a squad picked by its number is still the selection, a tray between the
 // superweapons and the general's powers: the powers tray's own stepped body at 1.2 (four buttons a
@@ -22,7 +23,9 @@
 // which runs at the sync point too.  The build buttons are windows whose state is set there and only
 // drawn inside the window.  Squad members are read through Squad::getObjectIDs and findObjectByID,
 // never getLiveObjects or getAllObjects: those prune the logic's list, and doing it on one machine
-// only would make the squads differ between machines.
+// only would make the squads differ between machines.  The combat pulse is the one part worked out
+// inside the window, from the wall clock alone, so a picture drawn again beside the tick keeps it
+// moving.
 //
 // The stepped tray drawing, radarFrameTop and controlBarTop are copies of InGameUI.cpp's statics
 // (drawHudTray and the rest).
@@ -61,6 +64,7 @@
 #include "GameLogic/Squad.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
+#include "Lib/Clock.h"
 
 #include <string.h>
 #include <vector>
@@ -69,22 +73,21 @@ namespace
 {
 	// Lengths in pixels at 1080 from experiments/group-panel/pieces.md, put through the screen's height
 	// (and the list's shrink).  Where a piece of the sheet exists its own size wins over these.
-	const Real LIST_W					= 116.0f;	///< the box: slices 4 + 86 + 26
-	const Real LIST_MARGIN		= 12.0f;	///< from the box's top and foot to the first and last row
-	const Real ROW_H					= 54.0f;
-	const Real ROW_GAP				= 6.0f;
-	const Real PIC_X					= 5.0f;		///< the picture, row-local 5,1 to 81,53, a dark rim round it
-	const Real PIC_W					= 76.0f;
-	const Real SOCKET_X				= 84.0f;	///< the socket, row-local 84,0, 24 by the row: key well over rail well
-	const Real SOCKET_W				= 24.0f;
-	const Real KEYCAP_X				= 2.0f;		///< the key, socket-local
-	const Real KEYCAP_Y				= 2.0f;
+	const Real LIST_CELL_W		= 77.0f;	///< a squad's cell: the tray's cell piece drawn 77 by 59
+	const Real LIST_CELL_H		= 59.0f;
+	const Real LIST_EDGE_W		= 8.0f;		///< the tray's edges, when the scheme has no tray
+	const Real LIST_FOOT_H		= 7.0f;
+	const Real LIST_CLEARANCE	= 6.0f;		///< kept clear over the production list's "+N" tab
+	const Real PIC_X					= 3.0f;		///< the picture, cell-local 3,4 to 74,51
+	const Real PIC_Y					= 4.0f;
+	const Real PIC_W					= 71.0f;
+	const Real PIC_H					= 47.0f;
+	const Real KEYCAP_X				= 1.0f;		///< the key, picture-local
+	const Real KEYCAP_Y				= 1.0f;
 	const Real KEYCAP_W				= 20.0f;
 	const Real KEYCAP_H				= 18.0f;
-	const Real RAIL_X					= 10.0f;	///< the rail's glass, socket-local 10,26 to 14,52
-	const Real RAIL_Y					= 26.0f;
-	const Real RAIL_W					= 4.0f;
-	const Real RAIL_H					= 26.0f;
+	const Real HEALTH_Y				= 52.0f;	///< the health bar, cell-local, as wide as the picture
+	const Real HEALTH_H				= 4.0f;
 	const Real KEY_POINTS			= 9.0f;		///< the key's digit, about 12 px
 	const Real CHIP_POINTS		= 9.0f;		///< "xN" and "+N" on the pictures
 	const Real LEDGE_POINTS		= 8.0f;		///< "xN" on the ledge, about 11 px
@@ -126,6 +129,11 @@ namespace
 	/// it: a squad a key made a moment ago reaches the logic a frame, or a network delay, later
 	const UnsignedInt CHOSEN_GRACE = LOGICFRAMES_PER_SECOND;
 
+	/// a squad is fighting while one of its units fired or was hit this recently
+	const UnsignedInt COMBAT_WINDOW = 3 * LOGICFRAMES_PER_SECOND;
+	/// one pulse of a fighting squad's cell, on the wall clock
+	const UnsignedInt COMBAT_PULSE_MS = 700;
+
 	/// the rows in key order, 1 to 9 and then 0
 	const Int KEY_ORDER[ NUM_HOTKEY_SQUADS ] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
 
@@ -140,19 +148,18 @@ namespace
 	const Color FOLD_GLYPH		= GameMakeColor( 14, 40, 32, 255 );
 	const Color KEY_DIGIT			= GameMakeColor( 255, 210, 60, 255 );	///< the bar's hotkey letters' yellow
 	const Color KEY_DIGIT_LIT	= GameMakeColor( 8, 14, 30, 255 );		///< dark on the pressed, lit key
-	const Color PICTURE_RIM		= GameMakeColor( 6, 8, 10, 255 );
+	const Color HEALTH_TRACK	= GameMakeColor( 4, 8, 10, 255 );
 	const Color CHIP_TEXT			= GameMakeColor( 255, 255, 255, 255 );
 	const Color SOFT_TEXT			= GameMakeColor( 165, 172, 180, 255 );
 
-	enum { SLICE_TL, SLICE_T, SLICE_TR, SLICE_L, SLICE_C, SLICE_R, SLICE_BL, SLICE_B, SLICE_BR, SLICE_COUNT };
 	enum { STATE_UP, STATE_HOVER, STATE_PUSHED, STATE_COUNT };
 
 	/// the side's pieces, looked up once a prefix
 	struct Pieces
 	{
 		AsciiString prefix;
-		const Image *list[ SLICE_COUNT ];
-		const Image *socket, *key, *keyPressed;
+		const Image *edgeRight, *cornerTopRight, *cornerBottomRight;	///< the production tray's, <S>ProTray*
+		const Image *key, *keyPressed;
 		const Image *ledgeL, *ledgeT, *ledgeR;
 		const Image *fold[ STATE_COUNT ], *unfold[ STATE_COUNT ];
 		const Image *stepDown;	///< <S>ProTrayStepDown, the tray's short row
@@ -172,6 +179,7 @@ namespace
 		Int members;
 		Real health, maxHealth;
 		Int coming;									///< Player::countGroupReinforcements
+		Bool fighting;							///< a member fired or was hit inside COMBAT_WINDOW
 		IRegion2D box;							///< the row, set by the draw, taken by a click
 	};
 
@@ -280,16 +288,12 @@ static const Pieces &pieces( void )
 	if( s_pieces.prefix == prefix && s_pieces.prefix.isNotEmpty() )
 		return s_pieces;
 
-	static const char *const SLICES[ SLICE_COUNT ] = { "TL", "T", "TR", "L", "C", "R", "BL", "B", "BR" };
 	static const char *const STATES[ STATE_COUNT ] = { "", "H", "P" };
 	s_pieces.prefix = prefix;
 	AsciiString name;
-	for( Int i = 0; i < SLICE_COUNT; i++ )
-	{
-		name.format( "ProSquadList%s", SLICES[ i ] );
-		s_pieces.list[ i ] = findPiece( prefix, name.str() );
-	}
-	s_pieces.socket = findPiece( prefix, "ProSquadSocket" );
+	s_pieces.edgeRight = findPiece( prefix, "ProTrayEdgeRight" );
+	s_pieces.cornerTopRight = findPiece( prefix, "ProTrayCornerTopRight" );
+	s_pieces.cornerBottomRight = findPiece( prefix, "ProTrayCornerBottomRight" );
 	s_pieces.key = findPiece( prefix, "ProSquadKey" );
 	s_pieces.keyPressed = findPiece( prefix, "ProSquadKeyP" );
 	s_pieces.ledgeL = findPiece( prefix, "ProBuildLedgeL" );
@@ -330,26 +334,21 @@ static void drawWell( const IRegion2D &r )
 	TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, WELL );
 }
 
-/// `slice` laid as a 9-slice over `r`: corners and edges at their own size on this screen times
-/// `scale`, the middle and the edges stretched.  Any piece missing and the whole box is a flat fill
-static void drawNineSlice( const Image *const *slice, const IRegion2D &r, Real scale )
+/// `draw` run where the picture is drawn: recorded as one call while the sync point records, so what
+/// it works out from the wall clock is worked out again by every replay
+static void atDrawTime( const std::function<void()> &draw )
 {
-	for( Int i = 0; i < SLICE_COUNT; i++ )
-		if( slice[ i ] == NULL )
-		{
-			drawSteel( r );
-			return;
-		}
+	if( TheDisplay->isRecording() )
+		TheDisplay->record( draw );
+	else
+		draw();
+}
 
-	const Int left = min( pieceW( slice[ SLICE_TL ], 0, scale ), ( r.hi.x - r.lo.x ) / 2 );
-	const Int right = min( pieceW( slice[ SLICE_TR ], 0, scale ), ( r.hi.x - r.lo.x ) / 2 );
-	const Int top = min( pieceH( slice[ SLICE_TL ], 0, scale ), ( r.hi.y - r.lo.y ) / 2 );
-	const Int foot = min( pieceH( slice[ SLICE_BL ], 0, scale ), ( r.hi.y - r.lo.y ) / 2 );
-	const Int x[ 4 ] = { r.lo.x, r.lo.x + left, r.hi.x - right, r.hi.x };
-	const Int y[ 4 ] = { r.lo.y, r.lo.y + top, r.hi.y - foot, r.hi.y };
-	for( Int row = 0; row < 3; row++ )
-		for( Int col = 0; col < 3; col++ )
-			drawPiece( slice[ row * 3 + col ], x[ col ], y[ row ], x[ col + 1 ], y[ row + 1 ] );
+/// 0 to 1 and back once every COMBAT_PULSE_MS on the wall clock, so it keeps pulsing while paused
+static Real combatPulse( void )
+{
+	const Real phase = (Real)( Clock_Milliseconds() % COMBAT_PULSE_MS ) / COMBAT_PULSE_MS;
+	return 0.5f - 0.5f * Cos( 2.0f * PI * phase );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -545,6 +544,10 @@ static void gatherSquads( Player *player )
 {
 	s_rowCount = 0;
 	std::vector< std::pair< const ThingTemplate *, Int > > types;
+
+	// a frame inside the combat window; a weapon that never fired says 0, a body never hit the future
+	const UnsignedInt now = TheGameLogic->getFrame();
+	auto recent = [ now ]( UnsignedInt at ) { return at != 0 && at <= now && now - at < COMBAT_WINDOW; };
 	for( Int k = 0; k < NUM_HOTKEY_SQUADS; k++ )
 	{
 		const Int squad = KEY_ORDER[ k ];
@@ -559,6 +562,7 @@ static void gatherSquads( Player *player )
 		row.health = 0.0f;
 		row.maxHealth = 0.0f;
 		row.coming = 0;
+		row.fighting = FALSE;
 		row.box.lo.x = row.box.lo.y = row.box.hi.x = row.box.hi.y = 0;
 
 		types.clear();
@@ -585,6 +589,8 @@ static void gatherSquads( Player *player )
 				row.health += body->getHealth();
 				row.maxHealth += body->getMaxHealth();
 			}
+			if( !row.fighting )
+				row.fighting = recent( obj->getLastShotFiredFrame() ) || ( body != NULL && recent( body->getLastDamageTimestamp() ) );
 		}
 		// a squad with nobody left standing is not listed
 		if( row.members == 0 )
@@ -814,15 +820,20 @@ static Bool chosenSquadSelected( Player *player )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The squad list (mockup C2): one box against the left edge, centred in the room between the
-	* message lines and the production list over the radar; ten rows that do not fit shrink together.
+/** The squad list (mockup A2+): the production tray's body against the left edge, one cell a squad
+	* going down, centred in the room between the message lines and the production list over the
+	* radar; ten cells that do not fit shrink together.
 	*
-	*   +--------------------------+-----+
-	*   | "+N"                     | key |
-	*   |        picture           |  |  |   the rail fills from its foot
-	*   |                     "xN" |  |  |
-	*   +--------------------------+-----+
-	*/
+	*   +-----+--------------------+-+
+	*   | key |              "+N"  | |
+	*   +-----+     picture        | |   the tray's open edge on the right
+	*   |                    "xN"  | |
+	*   +--------------------------+ |
+	*   |========= health =========| |
+	*   +--------------------------+-+
+	*
+	* A fighting squad's cell is drawn a second time over itself, added in red, and its picture's rim
+	* turns red, both pulsing on the wall clock (atDrawTime). */
 //-------------------------------------------------------------------------------------------------
 static void drawList( void )
 {
@@ -834,79 +845,164 @@ static void drawList( void )
 	const Int screenH = (Int)TheDisplay->getHeight();
 	const Int top = REAL_TO_INT( screenH * LIST_TOP_SHARE );
 	const Int bottom = radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
-										 - px( PRODUCTION_TAB_H ) - px( ROW_GAP );
+										 - px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
 	const Int room = max( bottom - top, 1 );
-	auto boxH = [ & ]( Real s ) { return px( LIST_MARGIN, s ) * 2 + s_rowCount * px( ROW_H, s ) + ( s_rowCount - 1 ) * px( ROW_GAP, s ); };
+
+	// the production tray's pieces (InGameUI.cpp hudCellStyle) laid going down, as the superweapons'
+	// are: the powers tray's top edge over the first cell, its foot under the last, the open side right
+	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
+	Tray body = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
+	if( tray != NULL && tray[ ControlBarScheme::TRAY_CELL ] != NULL )
+	{
+		const Tray pieced =
+		{
+			tray[ ControlBarScheme::TRAY_CELL ],
+			p.edgeRight != NULL ? p.edgeRight : tray[ ControlBarScheme::TRAY_EDGE_LEFT ],
+			tray[ ControlBarScheme::TRAY_EDGE_TOP ],
+			tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ],
+			p.cornerTopRight != NULL ? p.cornerTopRight : tray[ ControlBarScheme::TRAY_CORNER_TL ],
+			p.cornerBottomRight != NULL ? p.cornerBottomRight : tray[ ControlBarScheme::TRAY_CORNER_BL ],
+			NULL,	// one column: no row steps in
+			0, 0, 0
+		};
+		body = pieced;
+	}
+
+	// the cell at `s`, and the edges as thick against it as the tray's are against its cell piece
+	Int cellW = 0, cellH = 0;
+	auto measure = [ & ]( Real s )
+	{
+		cellW = px( LIST_CELL_W, s );
+		cellH = px( LIST_CELL_H, s );
+		if( body.cell != NULL )
+		{
+			const Real kx = (Real)cellW / body.cell->getImageWidth(), ky = (Real)cellH / body.cell->getImageHeight();
+			body.openW = body.open != NULL ? REAL_TO_INT_CEIL( body.open->getImageWidth() * kx ) : 0;
+			body.footH = body.foot != NULL ? REAL_TO_INT_CEIL( body.foot->getImageHeight() * ky ) : 0;
+			body.uncoveredH = body.uncovered != NULL ? REAL_TO_INT_CEIL( body.uncovered->getImageHeight() * ky ) : 0;
+		}
+		else
+		{
+			body.openW = px( LIST_EDGE_W, s );
+			body.footH = body.uncoveredH = px( LIST_FOOT_H, s );
+		}
+		return body.footH + s_rowCount * cellH + body.uncoveredH;
+	};
 	Real s = 1.0f;
-	while( boxH( s ) > room && s > 0.41f )
+	while( measure( s ) > room && s > 0.41f )
 		s = max( s * 0.95f, 0.4f );
 
-	const Int height = boxH( s );
-	const Int rowH = px( ROW_H, s ), gap = px( ROW_GAP, s );
+	const Int height = measure( s );
 	s_listBox.lo.x = 0;
-	s_listBox.hi.x = px( LIST_W, s );
+	s_listBox.hi.x = cellW + body.openW;
 	s_listBox.lo.y = top + max( ( room - height ) / 2, 0 );
 	s_listBox.hi.y = s_listBox.lo.y + height;
+
+	IRegion2D cells[ NUM_HOTKEY_SQUADS ];
+	for( Int r = 0; r < s_rowCount; r++ )
+	{
+		IRegion2D &c = cells[ r ];
+		c.lo.x = 0;
+		c.hi.x = cellW;
+		c.lo.y = s_listBox.lo.y + body.footH + r * cellH;
+		c.hi.y = c.lo.y + cellH;
+		s_rows[ r ].box.lo.x = 0;
+		s_rows[ r ].box.hi.x = s_listBox.hi.x;
+		s_rows[ r ].box.lo.y = c.lo.y;
+		s_rows[ r ].box.hi.y = c.hi.y;
+	}
+
+	TheDisplay->beginBatch2D();
+	if( body.cell != NULL )
+		drawStepTray( body, cells, s_rowCount, 1, 1, -1 );
+	else
+		drawSteel( s_listBox );
+	TheDisplay->endBatch2D();
+
+	// a fighting squad's steel glows: its cell again, added in red, under the picture
+	const Image *cellPiece = body.cell;
+	for( Int r = 0; r < s_rowCount; r++ )
+	{
+		if( !s_rows[ r ].fighting )
+			continue;
+		const IRegion2D c = cells[ r ];
+		atDrawTime( [ c, cellPiece ]()
+		{
+			const Real pulse = combatPulse();
+			const Color glow = GameMakeColor( REAL_TO_INT( 255 * pulse ), REAL_TO_INT( 40 * pulse ), REAL_TO_INT( 24 * pulse ), 255 );
+			if( cellPiece != NULL )
+				TheDisplay->drawImage( cellPiece, c.lo.x, c.lo.y, c.hi.x, c.hi.y, glow, Display::DRAW_IMAGE_ADDITIVE );
+			else
+				TheDisplay->drawOpenRect( c.lo.x + 1, c.lo.y + 1, c.hi.x - c.lo.x - 2, c.hi.y - c.lo.y - 2, 2.0f, glow );
+		} );
+	}
 
 	const Int keyPoints = max( REAL_TO_INT( KEY_POINTS * s * screenH / 1080.0f ), 7 );
 	const Int chipPoints = max( REAL_TO_INT( CHIP_POINTS * s * screenH / 1080.0f ), 7 );
 	const Int keyW = pieceW( p.key, KEYCAP_W, s ), keyH = pieceH( p.key, KEYCAP_H, s );
-
-	TheDisplay->beginBatch2D();
-	drawNineSlice( p.list, s_listBox, s );
-	TheDisplay->endBatch2D();
+	const Int rimThick = px( 2.0f, s );
+	const Color rim = TheControlBar->getBuildBorderColor();
 
 	for( Int r = 0; r < s_rowCount; r++ )
 	{
-		SquadRow &row = s_rows[ r ];
-		const Int y = s_listBox.lo.y + px( LIST_MARGIN, s ) + r * ( rowH + gap );
-		row.box.lo.x = 0;
-		row.box.hi.x = s_listBox.hi.x;
-		row.box.lo.y = y;
-		row.box.hi.y = y + rowH;
-
-		IRegion2D picture = { { px( PIC_X, s ), y + 1 }, { px( PIC_X, s ) + px( PIC_W, s ), y + rowH - 1 } };
-		const Int socketX = px( SOCKET_X, s );
-		IRegion2D socket = { { socketX, y }, { socketX + pieceW( p.socket, SOCKET_W, s ), y + rowH } };
+		const SquadRow &row = s_rows[ r ];
+		const IRegion2D &c = cells[ r ];
+		IRegion2D picture;
+		picture.lo.x = c.lo.x + px( PIC_X, s );
+		picture.lo.y = c.lo.y + px( PIC_Y, s );
+		picture.hi.x = picture.lo.x + px( PIC_W, s );
+		picture.hi.y = picture.lo.y + px( PIC_H, s );
+		IRegion2D health;
+		health.lo.x = picture.lo.x;
+		health.hi.x = picture.hi.x;
+		health.lo.y = c.lo.y + px( HEALTH_Y, s );
+		health.hi.y = min( health.lo.y + px( HEALTH_H, s, 3 ), c.hi.y );
 		IRegion2D key;
-		key.lo.x = socketX + px( KEYCAP_X, s );
-		key.lo.y = y + px( KEYCAP_Y, s );
+		key.lo.x = picture.lo.x + px( KEYCAP_X, s );
+		key.lo.y = picture.lo.y + px( KEYCAP_Y, s );
 		key.hi.x = key.lo.x + keyW;
 		key.hi.y = key.lo.y + keyH;
-		IRegion2D rail;
-		rail.lo.x = socketX + px( RAIL_X, s );
-		rail.hi.x = rail.lo.x + px( RAIL_W, s, 2 );
-		rail.lo.y = y + px( RAIL_Y, s );
-		rail.hi.y = rail.lo.y + px( RAIL_H, s, 4 );
 
 		TheDisplay->beginBatch2D();
-		// the picture on the box's dark floor, a pixel of rim round it
-		TheDisplay->drawFillRect( picture.lo.x - 1, picture.lo.y - 1, picture.hi.x - picture.lo.x + 2, picture.hi.y - picture.lo.y + 2,
-															PICTURE_RIM );
 		const Image *image = pictureOf( row.main );
 		if( image != NULL )
 			drawPiece( image, picture.lo.x, picture.lo.y, picture.hi.x, picture.hi.y );
-		if( p.socket != NULL )
-			drawPiece( p.socket, socket.lo.x, socket.lo.y, socket.hi.x, socket.hi.y );
 		else
-		{
-			IRegion2D keyWell = { { key.lo.x - 1, key.lo.y - 1 }, { key.hi.x + 1, key.hi.y + 1 } };
-			IRegion2D railWell = { { rail.lo.x - 1, rail.lo.y - 1 }, { rail.hi.x + 1, rail.hi.y + 1 } };
-			drawWell( keyWell );
-			drawWell( railWell );
-		}
+			TheDisplay->drawFillRect( picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, HEALTH_TRACK );
+		if( !row.fighting )
+			TheDisplay->drawOpenRect( picture.lo.x, picture.lo.y, picture.hi.x - picture.lo.x, picture.hi.y - picture.lo.y, 1.0f, rim );
 
-		// the health rail's glass fills from its foot, in the power bar's colours
+		// the health bar: the power bar's colours on a black track, its top row lit
+		TheDisplay->drawFillRect( health.lo.x, health.lo.y, health.hi.x - health.lo.x, health.hi.y - health.lo.y, HEALTH_TRACK );
 		if( row.maxHealth > 0.0f )
 		{
 			const Real share = max( min( row.health / row.maxHealth, 1.0f ), 0.0f );
-			const Int filled = REAL_TO_INT_CEIL( ( rail.hi.y - rail.lo.y ) * share );
-			const Color fill = share > 0.5f ? GameMakeColor( 70, 200, 60, 255 )
-											 : ( share > 0.25f ? GameMakeColor( 230, 200, 40, 255 ) : GameMakeColor( 225, 45, 30, 255 ) );
-			if( filled > 0 )
-				TheDisplay->drawFillRect( rail.lo.x, rail.hi.y - filled, rail.hi.x - rail.lo.x, filled, fill );
+			const Int innerW = health.hi.x - health.lo.x - 2, innerH = health.hi.y - health.lo.y - 2;
+			const Int filled = REAL_TO_INT_CEIL( innerW * share );
+			const Bool high = share > 0.5f, middle = share > 0.25f;
+			const Color fill = high ? GameMakeColor( 16, 228, 2, 255 ) : ( middle ? GameMakeColor( 235, 200, 30, 255 ) : GameMakeColor( 230, 40, 30, 255 ) );
+			const Color lit = high ? GameMakeColor( 152, 255, 104, 255 ) : ( middle ? GameMakeColor( 255, 240, 120, 255 ) : GameMakeColor( 255, 120, 100, 255 ) );
+			if( filled > 0 && innerH > 0 )
+			{
+				TheDisplay->drawFillRect( health.lo.x + 1, health.lo.y + 1, filled, innerH, fill );
+				if( innerH > 1 )
+					TheDisplay->drawFillRect( health.lo.x + 1, health.lo.y + 1, filled, 1, lit );
+			}
 		}
 		TheDisplay->endBatch2D();
+
+		// a fighting squad's rim, red and pulsing, a pixel wider than the blue one
+		if( row.fighting )
+		{
+			const IRegion2D at = picture;
+			atDrawTime( [ at, rimThick ]()
+			{
+				const Real light = 0.55f + 0.45f * combatPulse();
+				const Color red = GameMakeColor( REAL_TO_INT( 255 * light ), REAL_TO_INT( 46 * light ), REAL_TO_INT( 30 * light ), 255 );
+				for( Int t = 0; t < rimThick; t++ )
+					TheDisplay->drawOpenRect( at.lo.x - t, at.lo.y - t, at.hi.x - at.lo.x + 2 * t, at.hi.y - at.lo.y + 2 * t, 1.0f, red );
+			} );
+		}
 
 		UnicodeString text;
 		text.format( u"%d", row.squad );
@@ -916,7 +1012,7 @@ static void drawList( void )
 		if( row.coming > 0 )
 		{
 			text.format( u"+%d", row.coming );
-			HudReadout_draw( keptString( s_comingText[ row.squad ], text, chipPoints ), picture, HUD_READOUT_TOP_LEFT, SOFT_TEXT );
+			HudReadout_draw( keptString( s_comingText[ row.squad ], text, chipPoints ), picture, HUD_READOUT_TOP_RIGHT, SOFT_TEXT );
 		}
 	}
 	s_rowsBoxed = s_rowCount;

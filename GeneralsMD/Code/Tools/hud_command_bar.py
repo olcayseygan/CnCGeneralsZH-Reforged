@@ -1670,82 +1670,19 @@ def mount_button(side_name, kind, state, w, h):
 # ---------------------------------------------------------------------------------------------- the group panel
 
 # The hotkey squads' list and the build tray (GroupPanel.cpp), the owner's picks of 2026-11-09
-# (experiments/group-panel/mockups: list C2, tray A2 with the squad's key on the ledge).  Every size below is
-# in experiments/group-panel/pieces.md for the code.
-#   SquadList   the list's box, a 9-slice in round 18's three tiers: square on the screen's left edge, its
-#               corners toward the field in the side's cut, a dark floor the code lays the rows on.  Drawn
-#               SQUAD_W wide, so only its middle row stretches; fittings sit in the corners.
-#   SquadSocket a row's right column: the key's well over the upright health rail's, transparent round them.
+# (experiments/group-panel/mockups: list A2+, tray A2 with the squad's key on the ledge).  Every size below is
+# in experiments/group-panel/pieces.md for the code.  The list is the production tray's own pieces, a cell
+# a squad, so it has no piece of its own but the key.
 #   SquadKey    the hotkey as a key: the toolbar buttons' bezel round a dark face, the code writes the digit;
 #               KeyP is the chosen squad's, pressed and its face lit.  The ledge's well wears the same key.
 #   BuildLedge  the tray's head, a 3-slice cut from one ledge drawn whole: the side's point (L), plain lip that
 #               stretches (T), the right end with a well for the squad's key and count (R).
 #   BuildFold   the point's raised face in the bar's second accent with a chevron, Fold toward the edge and
 #               Unfold back, each lit from the top left (drawn again, never flipped).
-SQUAD_W, SQUAD_EDGE, SQUAD_MID = 116, (4, 24, 26, 24), 16
-SQUAD_SOCKET, SQUAD_KEY = (24, 54), (20, 18)
+SQUAD_KEY = (20, 18)
 LEDGE_H, LEDGE_PLATE, LEDGE_W = 44, 40, (92, 8, 64)        # rows 40..43 are the plate's shadow; L, T, R widths
 LEDGE_WELL = (4, 6, 58, 34)                                 # in R
 FOLD, FOLD_AT = (28, 28), (13, 6)                           # the face, and where it stands in L
-GROUP_FLOOR_CUT = {"machined": ("cut", 8), "terraced": ("notch", 5), "scavenged": ("cut", 6), "faceted": ("slant", 5)}
-
-
-def squad_outline(build, W, H):
-    """The list box, its left side the screen's; the corners toward the field are the side's."""
-    if build == "terraced":
-        return [(0, 0), (W - 16, 0), (W - 16, 6), (W - 8, 6), (W - 8, 12), (W, 12), (W, H - 12), (W - 8, H - 12),
-                (W - 8, H - 6), (W - 16, H - 6), (W - 16, H), (0, H)]
-    if build == "scavenged":
-        return [(0, 0), (30, 0.8), (W - 30, 0), (W - 22, 3), (W - 9, 1.5), (W, 13), (W, H - 9), (W - 4, H - 9),
-                (W - 4, H), (W - 40, H - 1), (0, H)]
-    if build == "faceted":
-        return [(0, 0), (W - 26, 0), (W, 15), (W, H - 6), (W - 6, H), (0, H)]
-    return plate(0, 0, W, H, tr=("cut", 14), br=("cut", 14))
-
-
-def squad_box(side_name):
-    """The list's box drawn once SQUAD_W wide and cut in nine; the middle row is a slice of plain lip and floor."""
-    look = BAR_LOOKS[side_name]
-    build = look["build"]
-    l, t, r, b = SQUAD_EDGE
-    W, H = SQUAD_W, t + SQUAD_MID + b
-    p = Painter(W + 4, H + 4)
-    p.tiers([squad_outline(build, W, H)], (False, False, True, False), 4.0, 7.0, 4.0, 2.2, 3.0)
-    k, c = GROUP_FLOOR_CUT[build]
-    p.recess([plate(0, 6, W - 8, H - 6, tr=(k, c), br=(k, c))], (False, False, True, False), 3.0, 2.0)
-    if build == "machined":                         # octagon studs on the lip, a seam between them
-        for y in (19, H - 19):
-            p.stud(W - 4, y, 2.2)
-        p.inlay([plate(W - 1.5, 24, W - 0.8, H - 24)], INKM, 0.6)
-    elif build == "terraced":                       # gold studs, rivets, a red lacquer band along the foot
-        p.bump([regular(W - 4, y, 2.2, 12) for y in (19, H - 19)], 2.2, 1.4, GOLDM)
-        for x in (W - 22, W - 14):
-            p.rivet(x, 9.5, 1.5)
-            p.rivet(x, H - 9.5, 1.5)
-        p.inlay([plate(4, H - 3.4, W - 26, H - 2.2)], ACCENT, 0.3)
-    elif build == "scavenged":                      # a patch welded on crooked, odd bolts
-        sh = sheet(W - 24, 4, W - 6, 20, -7)
-        p.bump([sh], 1.4, 0.8, STEEL)
-        for a_, b_ in zip(sh, sh[1:] + sh[:1]):
-            p.weld(a_, b_, seed=170 + int(a_[0] + a_[1]), r=0.9)
-        p.bolt(W - 15, 12, 1.9, 7)
-        p.bolt(W - 4, H - 17, 2.1, 9)
-    else:                                           # recessed fasteners and range ticks
-        for y in (20, H - 16):
-            p.inlay([regular(W - 4, y, 2.3, 12)], DARK, 1.0)
-            p.bump([regular(W - 4, y, 1.2, 6)], 0.6, 0.6, STEEL)
-        p.inlay([plate(x, H - 4.5, x + 0.8, H - 2.5 if i % 2 else H - 1.5) for i, x in enumerate(range(W - 24, W - 9, 4))], INKM, 0.6)
-    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, scan=False, gloss=False)
-    if build == "faceted":                          # an LED line down the lip
-        img = led(img, [((W - 1.5, 24), (W - 1.5, H - 14))], [])
-    img = img.crop((0, 0, W, H))
-    xs, ys = (0, l, W - r, W), (0, t, t + SQUAD_MID, H)
-    out = {}
-    for i, name in enumerate(("TL", "T", "TR", "L", "C", "R", "BL", "B", "BR")):
-        col, row = i % 3, i // 3
-        piece = img.crop((xs[col], ys[row], xs[col + 1], ys[row + 1]))
-        out["SquadList" + name] = even(piece, 0) if row == 1 else piece
-    return out
 
 
 def even(piece, axis):
@@ -1754,29 +1691,6 @@ def even(piece, axis):
     a = np.asarray(piece, np.float32)
     m = a.mean(axis=axis, keepdims=True)
     return Image.fromarray((np.broadcast_to(m, a.shape) + 0.5).astype(np.uint8), "RGBA")
-
-
-def squad_socket(side_name):
-    """The key's well over the rail's, sunk in the box's floor; only the wells and a texel round them are kept."""
-    look = BAR_LOOKS[side_name]
-    build = look["build"]
-    w, h = SQUAD_SOCKET
-    o = 32                                          # padded: shade's noise goes bad on a small canvas
-    p = Painter(w + 2 * o, h + 2 * o)
-    sl, m, _ = p.raise_plate([plate(o - 6, o - 6, o + w + 6, o + h + 6)], 4.0, 0.1, STEEL)
-    p.tint[sl][m] = FLOOR_TINT
-    key = shape(build, o, o, o + w, o + 22, 2.5)
-    rail = plate(o + 8, o + 25, o + 16, o + h - 1)
-    p.sink([key], 4.0, 1.4)
-    p.sink([rail], 5.0, 1.5)
-    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, scan=False, gloss=False).crop((o, o, o + w, o + h))
-    mask = Image.new("L", (w * 4, h * 4), 0)
-    d = ImageDraw.Draw(mask)
-    for q in (key, rail):
-        d.polygon([((x - o) * 4, (y - o) * 4) for x, y in q], fill=255)
-    mask = mask.filter(ImageFilter.MaxFilter(9)).resize((w, h), Image.BOX)
-    img.putalpha(mask)
-    return img
 
 
 def squad_key(side_name, pressed):
@@ -1886,9 +1800,7 @@ def build_fold(side_name, unfold, state):
 
 
 def group_pieces(side_name):
-    out = squad_box(side_name)
-    out["SquadSocket"] = squad_socket(side_name)
-    out["SquadKey"], out["SquadKeyP"] = squad_key(side_name, False), squad_key(side_name, True)
+    out = {"SquadKey": squad_key(side_name, False), "SquadKeyP": squad_key(side_name, True)}
     out.update(build_ledge(side_name))
     for unfold, kind in ((False, "Fold"), (True, "Unfold")):
         for state in ("", "H", "P"):
@@ -1898,12 +1810,7 @@ def group_pieces(side_name):
 
 def group_sizes():
     """Each group panel piece's size, by its name without the prefix, as pieces.md gives it to the code."""
-    l, t, r, b = SQUAD_EDGE
-    mid = SQUAD_W - l - r
-    out = {}
-    for i, name in enumerate(("TL", "T", "TR", "L", "C", "R", "BL", "B", "BR")):
-        out["SquadList" + name] = ((l, mid, r)[i % 3], (t, SQUAD_MID, b)[i // 3])
-    out.update({"SquadSocket": SQUAD_SOCKET, "SquadKey": SQUAD_KEY, "SquadKeyP": SQUAD_KEY})
+    out = {"SquadKey": SQUAD_KEY, "SquadKeyP": SQUAD_KEY}
     out.update({"BuildLedge" + k: (w, LEDGE_H) for k, w in zip("LTR", LEDGE_W)})
     out.update({"Build" + k + s: FOLD for k in ("Fold", "Unfold") for s in ("", "H", "P")})
     return out

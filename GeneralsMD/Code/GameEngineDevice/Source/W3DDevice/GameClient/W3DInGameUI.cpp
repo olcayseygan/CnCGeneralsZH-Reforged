@@ -1126,13 +1126,13 @@ void W3DInGameUI::drawAttackCircleFill( void )
 
 }  // end drawAttackCircleFill
 
-enum { ORDER_RING_SEGMENTS = 32 };
+enum { ORDER_RING_SEGMENTS = 48 };		// a thin line shows the facets 32 left
 
 //-------------------------------------------------------------------------------------------------
 /** The order rings' ground, at the sync point: the terrain heights are logic's, and drawOrderRings
 	* runs in the terrain pass beside the tick.  Each rim is sampled at its own vertex, so a ring on a
 	* slope lies on it; one on a bridge is flat at the deck's height.
-	* ponytail: every ring's ground is sampled again each frame of its fade, 66 heights a ring; keep
+	* ponytail: every ring's ground is sampled again each frame of its fade, 98 heights a ring; keep
 	* the points of a settled ring if a few hundred at once ever show */
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::takeOrderRings( void )
@@ -1155,9 +1155,11 @@ void W3DInGameUI::takeOrderRings( void )
 		m_orderRingColors.push_back( rgb );
 		m_orderRingBornMs.push_back( ring->bornMs );
 
-		// a fifth of the footprint wide, so an infantryman's ring is a line and a tank's a band
+		// a line, not a band: the same width under an infantryman and a tank, about two pixels at the
+		// opening zoom, so a group's rings overlap as thin circles
+		const Real RING_WIDTH = 0.8f;
 		const Real outer = ring->radius;
-		const Real inner = outer - max( 1.0f, min( 3.0f, outer * 0.2f ) );
+		const Real inner = outer - RING_WIDTH;
 		for( Int s = 0; s <= ORDER_RING_SEGMENTS; ++s )
 		{
 			const Real angle = 2.0f * PI * (Real)s / (Real)ORDER_RING_SEGMENTS;
@@ -1186,7 +1188,7 @@ void W3DInGameUI::drawOrderRings( void )
 
 	// the fade is worked out here, from this picture's clock: a picture drawn again beside the tick
 	// (phase 4) takes nothing new at the sync point, and a fade baked in there froze, then jumped
-	const Real RING_ALPHA = 0xD0;
+	const Real RING_ALPHA = 0x90;
 	const UnsignedInt now = Clock_Milliseconds();
 	GroundOverlayQuads &quads = theGroundOverlayQuads;
 	const Int pairs = ORDER_RING_SEGMENTS + 1;

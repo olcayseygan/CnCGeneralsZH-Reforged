@@ -4532,7 +4532,12 @@ void InGameUI::armOrderRings( OrderHintKind kind )
 		ring.owner = obj->getID();
 		ring.kind = kind;
 		ring.at.zero();
-		ring.radius = max( 3.0f, obj->getGeometryInfo().getBoundingCircleRadius() );
+		// the body, not the bounding circle: a box's corner and a gun barrel sweep one half again as
+		// wide as the hull, and a ring that size under every tank of a group ran into one band
+		const GeometryInfo& geom = obj->getGeometryInfo();
+		const Real body = ( geom.getGeomType() == GEOMETRY_BOX ) ? ( geom.getMajorRadius() + geom.getMinorRadius() ) * 0.5f
+																														: geom.getMajorRadius();
+		ring.radius = max( 3.0f, body );
 		ring.onGround = TRUE;
 		ring.settled = FALSE;
 		ring.dueFrame = due;

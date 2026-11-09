@@ -175,27 +175,29 @@ void ScriptConditions::update( void )
 
 
 //-------------------------------------------------------------------------------------------------
-/** Finds the player by the name in the parameter, and if found caches the player mask in the
-parameter so we don't have to do a name search.  May return null if the player doesn't exist.*/
+/** Finds the player by the name in the parameter, and if found caches the player in the
+parameter so we don't have to do a name search.  May return null if the player doesn't exist.
+The cache is the player index plus one, -1 for nobody, 0 for not looked up yet: EA kept the
+player mask there, which no longer fits an Int.*/
 //-------------------------------------------------------------------------------------------------
 Player *ScriptConditions::playerFromParam(Parameter *pSideParm)
 {
 	DEBUG_ASSERTCRASH(Parameter::SIDE == pSideParm->getParameterType(), ("Wrong parameter type."));
 	Player *pPlayer=NULL;
-	UnsignedInt mask = (UnsignedInt)pSideParm->getInt();
-	if (mask) {
-		pPlayer = ThePlayerList->getPlayerFromMask(mask);
-	} else {
+	Int cached = pSideParm->getInt();
+	if (cached > 0) {
+		pPlayer = ThePlayerList->getNthPlayer(cached - 1);
+	} else if (cached == 0) {
 		pPlayer = TheScriptEngine->getPlayerFromAsciiString(pSideParm->getString());
 		if (pPlayer) {
-			// Enemy player can change dynamically, so don't cache the player mask.  jba.
+			// Enemy player can change dynamically, so don't cache the player.  jba.
 			if (pSideParm->getString()!=THIS_PLAYER_ENEMY) {
-				mask = pPlayer->getPlayerMask();
+				cached = pPlayer->getPlayerIndex() + 1;
 			}
 		} else {
-			mask = 0xFFFF0000;
+			cached = -1;
 		}
-		pSideParm->friend_setInt((Int)mask);
+		pSideParm->friend_setInt(cached);
 	}
 	DEBUG_ASSERTCRASH(pPlayer, ("Couldn't find player %s", pSideParm->getString().str()));
 	return pPlayer;

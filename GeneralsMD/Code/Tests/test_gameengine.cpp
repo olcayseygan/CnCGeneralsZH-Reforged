@@ -148,6 +148,8 @@ static int GetSystemMetrics( int which )
 #include "GameNetwork/NetCommandList.h"
 #include "GameNetwork/NetCommandWrapperList.h"
 #include "GameNetwork/LANAPI.h"
+#include "GameNetwork/NAT.h"
+#include "GameClient/MapUtil.h"
 #include "GameNetwork/NetPacket.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"
@@ -1397,9 +1399,10 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 
 #include "Common/MultiplayerSettings.h"
 
-/* A slot, a replay and a preference hold a colour by its place in the list, so the fork's eight have
-   to follow EA's eight and leave them as they were.  EA's list is in INIZH.big, so it is copied here. */
-TEST(multiplayer_reforged_ini_appends_eight_colours_after_eas_eight)
+/* A slot, a replay and a preference hold a colour by its place in the list, so the fork's colours have
+   to follow EA's eight and leave them as they were.  EA's list is in INIZH.big, so it is copied here.
+   There is one colour per slot: a random colour is drawn until it is one nobody holds. */
+TEST(multiplayer_reforged_ini_appends_its_colours_after_eas_eight)
 {
 	static const struct { const char *tooltip; Int r, g, b, nightR, nightG, nightB; } colours[] =
 	{
@@ -1419,7 +1422,29 @@ TEST(multiplayer_reforged_ini_appends_eight_colours_after_eas_eight)
 		{ "Color:Lavender", 165, 139, 255,  165, 139, 255 },
 		{ "Color:Coral",    240,  90,  69,  240,  90,  69 },
 		{ "Color:Olive",    120, 140,   0,  160, 180,  20 },
+		{ "Color:Maroon",   128,   0,  32,  180,  30,  60 },
+		{ "Color:Mint",     120, 240, 170,  120, 240, 170 },
+		{ "Color:White",    235, 235, 235,  235, 235, 235 },
+		{ "Color:Charcoal",  64,  64,  64,  110, 110, 110 },
+		{ "Color:Silver",   160, 160, 170,  160, 160, 170 },
+		{ "Color:Steel",     90, 120, 160,  120, 150, 195 },
+		{ "Color:Indigo",    75,   0, 130,  125,  60, 210 },
+		{ "Color:Peach",    255, 195, 145,  255, 195, 145 },
+		{ "Color:Forest",    30, 100,  40,   55, 150,  65 },
+		{ "Color:Rose",     255,  90, 140,  255,  90, 140 },
+		{ "Color:Plum",     130,  50, 100,  175,  80, 140 },
+		{ "Color:Rust",     175,  65,  15,  210,  90,  40 },
+		{ "Color:Sand",     215, 195, 135,  215, 195, 135 },
+		{ "Color:SeaGreen",  40, 150,  95,   60, 180, 120 },
+		{ "Color:Lemon",    250, 245, 130,  250, 245, 130 },
+		{ "Color:Orchid",   215, 110, 215,  215, 110, 215 },
+		{ "Color:Bronze",   150, 115,  40,  185, 145,  60 },
+		{ "Color:Ochre",    205, 125,  35,  205, 125,  35 },
+		{ "Color:Chocolate", 90,  50,  20,  140,  85,  45 },
+		{ "Color:Moss",     100, 120,  60,  135, 160,  80 },
 	};
+	const Int total = (Int)( sizeof( colours ) / sizeof( colours[ 0 ] ) );
+	CHECK_EQ( total, MAX_SLOTS );
 
 	CHECK( bootOnce() );
 
@@ -1441,9 +1466,9 @@ TEST(multiplayer_reforged_ini_appends_eight_colours_after_eas_eight)
 	CHECK( loadIni( TEST_INI ) );
 	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 8 );
 	CHECK( loadIni( MULTIPLAYER_REFORGED_INI ) );
-	CHECK_EQ( TheMultiplayerSettings->getNumColors(), 16 );
+	CHECK_EQ( TheMultiplayerSettings->getNumColors(), total );
 
-	for( Int i = 0; i < 16 && TheMultiplayerSettings->getNumColors() == 16; ++i )
+	for( Int i = 0; i < total && TheMultiplayerSettings->getNumColors() == total; ++i )
 	{
 		MultiplayerColorDefinition *def = TheMultiplayerSettings->getColor( i );
 		const RGBColor day = def->getRGBValue();
@@ -2460,7 +2485,7 @@ TEST(skirmish_ai_earnings_bonus_weighs_sides)
 	Int own = -1, enemy = -1;
 	/* four teams of two, seats 0-1, 2-3, 4-5, 6-7; the computer is seat 1 and its partner carries it */
 	const Int worth[ 8 ] = { 1000, 0, 3000, 1000, 4000, 0, 500, 500 };
-	const UnsignedInt allies[ 8 ] = { 1u << 1, 1u << 0, 1u << 3, 1u << 2, 1u << 5, 1u << 4, 1u << 7, 1u << 6 };
+	const PlayerMaskType allies[ 8 ] = { 1u << 1, 1u << 0, 1u << 3, 1u << 2, 1u << 5, 1u << 4, 1u << 7, 1u << 6 };
 	IncomeSideWorths( worth, allies, 8, 1, &own, &enemy );
 	CHECK_EQ( own, 500 );
 	CHECK_EQ( enemy, 2000 );
@@ -2468,10 +2493,26 @@ TEST(skirmish_ai_earnings_bonus_weighs_sides)
 	CHECK_EQ( IncomeBonusTarget( own, enemy ), 150 );
 	/* free for all: every enemy is a side of one, the richest counts */
 	const Int ffa[ 3 ] = { 300, 100, 200 };
-	const UnsignedInt none[ 3 ] = { 0, 0, 0 };
+	const PlayerMaskType none[ 3 ] = { 0, 0, 0 };
 	IncomeSideWorths( ffa, none, 3, 1, &own, &enemy );
 	CHECK_EQ( own, 100 );
 	CHECK_EQ( enemy, 300 );
+	/* past seat 31: seat 33 and seat 39 are a side, every other seat is a side of one. With a
+	   32-bit mask 1u << 33 was seat 1's bit, and seat 33 counted seat 1 as its partner. */
+	Int wide[ 40 ];
+	PlayerMaskType wideAllies[ 40 ];
+	for( Int i = 0; i < 40; ++i )
+	{
+		wide[ i ] = 100;
+		wideAllies[ i ] = 0;
+	}
+	wide[ 1 ] = 5000;
+	wide[ 39 ] = 300;
+	wideAllies[ 33 ] = playerIndexToMask( 39 );
+	wideAllies[ 39 ] = playerIndexToMask( 33 );
+	IncomeSideWorths( wide, wideAllies, 40, 33, &own, &enemy );
+	CHECK_EQ( own, 200 );
+	CHECK_EQ( enemy, 5000 );
 }
 
 /* ExperienceTracker.cpp: a kill's experience split by the damage each attacker dealt. */
@@ -8547,7 +8588,7 @@ TEST(an_overlong_transfer_filename_is_truncated_instead_of_overflowing)
 TEST(an_overlong_announced_filename_is_truncated_instead_of_overflowing)
 {
 	static const Int NAME_LEN = 400;
-	UnsignedByte buf[3 + NAME_LEN + 1 + sizeof(UnsignedShort) + sizeof(UnsignedByte)];
+	UnsignedByte buf[3 + NAME_LEN + 1 + sizeof(UnsignedShort) + sizeof(SlotMask)];
 	Int at = 0;
 	buf[at++] = 'T';
 	buf[at++] = NETCOMMANDTYPE_FILEANNOUNCE;
@@ -8560,14 +8601,19 @@ TEST(an_overlong_announced_filename_is_truncated_instead_of_overflowing)
 	UnsignedShort fileID = 0x1234;
 	memcpy( buf + at, &fileID, sizeof(fileID) );
 	at += sizeof(fileID);
-	buf[at++] = 0x5A;									// player mask
+	const SlotMask mask = slotBit( 1 ) | slotBit( MAX_SLOTS - 1 );	// the mask is a SlotMask on the wire, past what a byte held
+	memcpy( buf + at, &mask, sizeof(mask) );
+	at += sizeof(mask);
 
 	NetCommandRef *ref = NetPacket::ConstructNetCommandMsgFromRawData( buf, (UnsignedInt)at );
+	CHECK( ref != NULL );
+	if( ref == NULL )
+		return;
 	NetFileAnnounceCommandMsg *announce = (NetFileAnnounceCommandMsg *)ref->getCommand();
 
 	CHECK_EQ( announce->getPortableFilename().getLength(), _MAX_PATH - 1 );
 	CHECK_EQ( (Int)announce->getFileID(), 0x1234 );
-	CHECK_EQ( (Int)announce->getPlayerMask(), 0x5A );
+	CHECK( announce->getPlayerMask() == mask );
 
 	ref->deleteInstance();
 }
@@ -8692,6 +8738,229 @@ TEST(a_datagram_is_one_udp_payload_and_the_payload_is_what_a_packet_holds)
 	CHECK( (Int)sizeof(CommandPacket) <= MAX_PACKET_SIZE );
 	CHECK( (Int)sizeof(LANMessage) <= MAX_LANAPI_PACKET_SIZE );
 	CHECK( MAX_LANAPI_PACKET_SIZE <= MAX_PACKET_SIZE );
+}
+
+/* The relay and a chat's recipients were a byte and an Int, one bit per slot, which held eight
+	 slots and thirty-two.  Both are a SlotMask now, all eight bytes on the wire: a slot past either
+	 old width has to come back out of a packet as it went in. */
+TEST(a_relay_and_a_chat_mask_past_slot_31_survive_the_packet)
+{
+	const SlotMask recipients = slotBit( 0 ) | slotBit( 31 ) | slotBit( MAX_SLOTS - 1 );
+	const SlotMask relay = slotBit( 32 ) | slotBit( MAX_SLOTS - 1 );
+	CHECK( allSlotsBut( 3 ) == ( SLOTMASK_ALL & ~slotBit( 3 ) ) );
+	CHECK( ( SLOTMASK_ALL >> ( MAX_SLOTS - 1 ) ) == 1 );		// one bit per slot, no more
+
+	NetChatCommandMsg *chat = newInstance( NetChatCommandMsg );
+	chat->setText( UnicodeString( u"hi" ) );
+	chat->setPlayerMask( recipients );
+	chat->setPlayerID( MAX_SLOTS - 1 );
+	chat->setID( 1 );
+	chat->setExecutionFrame( 0 );
+	chat->setNetCommandType( NETCOMMANDTYPE_CHAT );
+	NetCommandRef *ref = newInstance( NetCommandRef )( chat );
+	ref->setRelay( relay );
+	chat->detach();
+
+	NetPacket *packet = newInstance( NetPacket );
+	packet->init();
+	CHECK( packet->addCommand( ref ) );
+
+	TransportMessage wire;
+	memset( &wire, 0, sizeof(wire) );
+	wire.length = packet->getLength();
+	memcpy( wire.data, packet->getData(), wire.length );
+	NetPacket *received = newInstance( NetPacket )( &wire );
+	NetCommandList *list = received->getCommandList();
+	NetCommandRef *back = list->getFirstMessage();
+	CHECK( back != NULL );
+	if( back != NULL )
+	{
+		CHECK( back->getRelay() == relay );
+		CHECK_EQ( (Int)back->getCommand()->getPlayerID(), MAX_SLOTS - 1 );
+		CHECK( ((NetChatCommandMsg *)back->getCommand())->getPlayerMask() == recipients );
+	}
+
+	list->deleteInstance();
+	received->deleteInstance();
+	packet->deleteInstance();
+	ref->deleteInstance();
+}
+
+/* NAT negotiation pairs the players off in rounds, so each round's connections are made at once.
+	 EA wrote the schedule out by hand for 2 to 8 nodes; it is generated now.  Every pair has to meet
+	 exactly once, both ends of a pairing have to agree on it, and the rounds are as many as EA's. */
+TEST(nat_rounds_pair_every_two_nodes_exactly_once_for_2_to_36)
+{
+	for( Int n = 2; n <= MAX_SLOTS; ++n )
+	{
+		const Int rounds = NAT::connectionRounds( n );
+		CHECK_EQ( rounds, ( n % 2 == 0 ) ? n - 1 : n );		// EA's table: 2->1, 3->3, 4->3 ... 8->7
+
+		Int met[MAX_SLOTS][MAX_SLOTS];
+		memset( met, 0, sizeof(met) );
+		for( Int r = 0; r < rounds; ++r )
+		{
+			for( Int x = 0; x < n; ++x )
+			{
+				const Int y = NAT::connectionPartner( n, r, x );
+				if( y == -1 )
+					continue;			// a bye, in an odd room
+				CHECK( y >= 0 && y < n && y != x );
+				if( y < 0 || y >= n )
+					continue;
+				CHECK_EQ( NAT::connectionPartner( n, r, y ), x );
+				++met[x][y];
+			}
+		}
+		for( Int x = 0; x < n; ++x )
+			for( Int y = 0; y < n; ++y )
+				CHECK_EQ( met[x][y], x == y ? 0 : 1 );
+
+		// past the schedule, and outside the room, nobody
+		CHECK_EQ( NAT::connectionPartner( n, rounds, 0 ), -1 );
+		CHECK_EQ( NAT::connectionPartner( n, 0, n ), -1 );
+		CHECK_EQ( NAT::connectionPartner( n, -1, 0 ), -1 );
+	}
+	CHECK_EQ( NAT::connectionPartner( 1, 0, 0 ), -1 );
+}
+
+/* A 36-seat room's game options are several times what one LAN datagram holds, so they go out in
+	 numbered parts and the receiver puts them back together.  The probe sends through a Transport
+	 with no socket, which only queues; what it queued is read back the way it would arrive. */
+struct LANOptionsProbe : public LANAPI
+{
+	using LANAPI::sendOptions;
+	using LANAPI::assembleOptions;
+	using LANAPI::m_assembledOptions;
+	Transport *transport() { return m_transport; }
+};
+
+// Transport's xor over whole words (decryptBuf in Transport.cpp), applied to what queueSend left
+static void unXorTransportMessage( TransportMessage &m )
+{
+	UnsignedInt mask = 0x0000Fade;
+	UnsignedInt *word = (UnsignedInt *)&m;
+	const Int words = ( m.length + (Int)sizeof(TransportMessageHeader) ) / 4;
+	for( Int i = 0; i < words; ++i )
+	{
+		const UnsignedInt v = word[i];
+		word[i] = ( ( v >> 24 ) | ( ( v >> 8 ) & 0xFF00 ) | ( ( v << 8 ) & 0xFF0000 ) | ( v << 24 ) ) ^ mask;
+		mask += 0x00000321;
+	}
+}
+
+static std::vector<LANMessage> takeQueuedLANMessages( Transport *transport )
+{
+	std::vector<LANMessage> sent;
+	for( Int i = 0; i < MAX_MESSAGES; ++i )
+	{
+		if( transport->m_outBuffer[i].length <= 0 )
+			continue;
+		TransportMessage m = transport->m_outBuffer[i];
+		const Int length = m.length;	// the xor covers the payload, not the bookkeeping after it
+		unXorTransportMessage( m );
+		LANMessage msg;
+		memset( &msg, 0, sizeof(msg) );
+		memcpy( &msg, m.data, min( length, (Int)sizeof(msg) ) );
+		sent.push_back( msg );
+		transport->m_outBuffer[i].length = 0;
+	}
+	return sent;
+}
+
+TEST(lan_options_go_out_in_parts_and_come_back_whole)
+{
+	LANOptionsProbe *host = new LANOptionsProbe;
+	LANOptionsProbe *guest = new LANOptionsProbe;
+	for( Int i = 0; i < MAX_MESSAGES; ++i )
+	{
+		host->transport()->m_outBuffer[i].length = 0;		// a Transport before init has never cleared them
+		guest->transport()->m_outBuffer[i].length = 0;
+	}
+
+	AsciiString options;
+	for( Int k = 0; k < 2 * g_lanOptionsPartLength + 300; ++k )
+		options.concat( (char)( 'a' + ( k % 26 ) ) );
+	const UnsignedInt hostIP = 0x0A000001, otherIP = 0x0A000002;
+
+	LANMessage announce;
+	memset( &announce, 0, sizeof(announce) );
+	announce.LANMessageType = LANMessage::MSG_GAME_ANNOUNCE;
+	host->sendOptions( &announce, options, hostIP );
+	std::vector<LANMessage> parts = takeQueuedLANMessages( host->transport() );
+	CHECK_EQ( (Int)parts.size(), 3 );
+	if( parts.size() != 3 )
+	{
+		delete host;
+		delete guest;
+		return;
+	}
+	for( Int p = 0; p < 3; ++p )
+	{
+		CHECK_EQ( (Int)parts[p].GameInfo.optionsPart, p );
+		CHECK_EQ( (Int)parts[p].GameInfo.optionsParts, 3 );
+	}
+
+	// in order: the last part completes it, and the string is the one that went out
+	CHECK( !guest->assembleOptions( &parts[0], hostIP ) );
+	CHECK( !guest->assembleOptions( &parts[1], hostIP ) );
+	CHECK( guest->assembleOptions( &parts[2], hostIP ) );
+	CHECK( guest->m_assembledOptions == options );
+
+	// a part lost: the set is dropped, and the next whole send still comes through
+	CHECK( !guest->assembleOptions( &parts[0], hostIP ) );
+	CHECK( !guest->assembleOptions( &parts[2], hostIP ) );
+	CHECK( !guest->assembleOptions( &parts[1], hostIP ) );		// a stray, not the rest of a set
+	CHECK( !guest->assembleOptions( &parts[0], hostIP ) );
+	CHECK( !guest->assembleOptions( &parts[1], hostIP ) );
+	CHECK( guest->assembleOptions( &parts[2], hostIP ) );
+	CHECK( guest->m_assembledOptions == options );
+
+	// out of order: a later part first is nothing, and the set it lands in is spoiled
+	guest->m_assembledOptions.clear();
+	CHECK( !guest->assembleOptions( &parts[1], hostIP ) );
+	CHECK( !guest->assembleOptions( &parts[0], hostIP ) );
+	CHECK( !guest->assembleOptions( &parts[2], hostIP ) );
+	CHECK( guest->m_assembledOptions.isEmpty() );
+
+	// two senders interleaved each get their own set
+	CHECK( !guest->assembleOptions( &parts[0], hostIP ) );
+	CHECK( !guest->assembleOptions( &parts[0], otherIP ) );
+	CHECK( !guest->assembleOptions( &parts[1], otherIP ) );
+	CHECK( !guest->assembleOptions( &parts[1], hostIP ) );
+	CHECK( guest->assembleOptions( &parts[2], hostIP ) );
+	CHECK( guest->m_assembledOptions == options );
+	CHECK( guest->assembleOptions( &parts[2], otherIP ) );
+	CHECK( guest->m_assembledOptions == options );
+
+	// a room that fits is one part, as before, and a GAME_OPTIONS goes the same way
+	LANMessage request;
+	memset( &request, 0, sizeof(request) );
+	request.LANMessageType = LANMessage::MSG_GAME_OPTIONS;
+	host->sendOptions( &request, AsciiString( "Color=3" ), hostIP );
+	parts = takeQueuedLANMessages( host->transport() );
+	CHECK_EQ( (Int)parts.size(), 1 );
+	if( parts.size() == 1 )
+	{
+		CHECK_EQ( (Int)parts[0].GameOptions.optionsParts, 1 );
+		CHECK( guest->assembleOptions( &parts[0], hostIP ) );
+		CHECK( guest->m_assembledOptions == AsciiString( "Color=3" ) );
+	}
+
+	// a part count that no sender writes is refused
+	parts.clear();
+	LANMessage forged = announce;
+	forged.GameInfo.optionsPart = 0;
+	forged.GameInfo.optionsParts = g_lanOptionsParts + 1;
+	forged.GameInfo.options[0] = 0;
+	CHECK( !guest->assembleOptions( &forged, hostIP ) );
+
+	// the whole budget fits the parts
+	CHECK_EQ( m_lanMaxOptionsLength, g_lanOptionsParts * g_lanOptionsPartLength );
+	CHECK( m_lanMaxOptionsLength >= 3000 );		// a 36-seat room of human players with full names
+
+	delete host;
+	delete guest;
 }
 
 /* A chat message's length goes on the wire in one byte, and every site that packed or measured one
@@ -8885,6 +9154,24 @@ TEST(a_player_index_from_outside_this_machine_is_bounded_before_use)
 		if( isValidPlayerIndex( i ) != (i >= 0 && i < MAX_PLAYER_COUNT) )
 			acceptedOnlyTheList = FALSE;
 	CHECK( acceptedOnlyTheList );
+}
+
+/* 36 slots need more than 32 players, and EA's 1 << playerIndex in an Int is undefined from 32 on:
+	 x64 masks the shift to five bits, so player 32 came out as player 0. */
+TEST(every_player_index_has_its_own_mask_bit)
+{
+	PlayerMaskType all = PLAYERMASK_NONE;
+	Bool distinct = TRUE;
+	for( Int i = 0; i < MAX_PLAYER_COUNT; ++i )
+	{
+		const PlayerMaskType bit = playerIndexToMask( i );
+		if( bit == 0 || ( all & bit ) != 0 || ( bit & ( bit - 1 ) ) != 0 )
+			distinct = FALSE;
+		all |= bit;
+	}
+	CHECK( distinct );
+	CHECK( ( all & PLAYERMASK_ALL ) == all );
+	CHECK( playerIndexToMask( 32 ) != playerIndexToMask( 0 ) );
 }
 
 /* Starting a game used to seed only the logic stream.  The client and audio streams kept the
@@ -12611,13 +12898,15 @@ TEST(map_size_is_chosen_and_then_grows_with_the_players)
 
 	Int size, players;
 
+	// strictly bigger, unless the bigger one has hit the largest map there is
+	#define RMG_GROWS( a, b ) ( (a) < (b) || ( (a) == (b) && (b) == RandomMapGenerator::MAX_CELLS ) )
 	for( size = 0; size < RANDOM_MAP_SIZE_COUNT; size++ )
 	{
 		for( players = RandomMapGenerator::MIN_PLAYERS;
 				 players < RandomMapGenerator::MAX_PLAYERS; players++ )
 		{
-			CHECK( RandomMapGenerator::cellsFor( (RandomMapSize)size, players ) <
-						 RandomMapGenerator::cellsFor( (RandomMapSize)size, players + 1 ) );
+			CHECK( RMG_GROWS( RandomMapGenerator::cellsFor( (RandomMapSize)size, players ),
+						 RandomMapGenerator::cellsFor( (RandomMapSize)size, players + 1 ) ) );
 		}
 	}
 
@@ -12631,13 +12920,19 @@ TEST(map_size_is_chosen_and_then_grows_with_the_players)
 		Int tinyCells = RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_TINY, players );
 		Int hugeCells = RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_HUGE, players );
 
-		CHECK( tinyCells < smallCells );
-		CHECK( smallCells < normalCells );
-		CHECK( normalCells < largeCells );
-		CHECK( largeCells < hugeCells );
+		CHECK( RMG_GROWS( tinyCells, smallCells ) );
+		CHECK( RMG_GROWS( smallCells, normalCells ) );
+		CHECK( RMG_GROWS( normalCells, largeCells ) );
+		CHECK( RMG_GROWS( largeCells, hugeCells ) );
 		CHECK( tinyCells >= RandomMapGenerator::MIN_CELLS );
 		CHECK( hugeCells <= RandomMapGenerator::MAX_CELLS );
 	}
+	#undef RMG_GROWS
+
+	// past eight every player keeps an eight-player map's ground: the area grows as players / 8
+	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 8 ), 416 );
+	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 16 ), 588 );		// 416 * sqrt(2)
+	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 36 ), 882 );		// 416 * sqrt(4.5)
 
 	// A count nobody asked for is the normal size for that many players, and the clamp says so
 	// rather than generating a map the caller cannot describe.
@@ -12656,6 +12951,53 @@ TEST(map_size_is_chosen_and_then_grows_with_the_players)
 	CHECK_EQ( theRMGParse.m_boundaryX, settings.m_playableCells );
 }
 
+/* The headless benchmark seats up to 36 AIs on a generated map: every one needs its own start, apart
+	from the others, and the approach paths may not grow with the square of the seats, since the
+	engine links each path waypoint by walking every waypoint on the map. */
+TEST(a_generated_map_seats_thirty_six)
+{
+	CHECK( bootOnce() );
+
+	RandomMapSettings settings;
+	settings.m_seed = 7;
+	settings.m_numPlayers = RandomMapGenerator::MAX_PLAYERS;
+	settings.m_playableCells = 0;
+	RandomMapGenerator::clampSettings( settings );
+	CHECK_EQ( settings.m_numPlayers, 36 );
+	CHECK_EQ( settings.m_playableCells, 882 );
+
+	std::vector<char> bytes;
+	RandomMapGenerator::generate( settings, bytes );
+	parseGeneratedMap( bytes );
+
+	std::vector<Coord3D> starts( settings.m_numPlayers );
+	Int found = 0;
+	for( size_t i = 0; i < theRMGParse.m_waypointNames.size(); i++ )
+	{
+		Int seat = 0;
+		if( sscanf( theRMGParse.m_waypointNames[i].str(), "Player_%d_Start", &seat ) == 1 && seat >= 1 && seat <= settings.m_numPlayers )
+		{
+			starts[seat - 1] = theRMGParse.m_waypointPositions[i];
+			found++;
+		}
+	}
+	CHECK_EQ( found, settings.m_numPlayers );
+
+	// two bases' levelled discs never meet: 2 * 13 cells + 6, ten world units a cell
+	Real closest = 1.0e9f;
+	for( Int a = 0; a < found; a++ )
+		for( Int b = a + 1; b < found; b++ )
+		{
+			Real dx = starts[a].x - starts[b].x, dy = starts[a].y - starts[b].y;
+			closest = std::min( closest, sqrtf( dx * dx + dy * dy ) );
+		}
+	CHECK( closest >= 32.0f * MAP_XY_FACTOR );
+
+	// seven sources a target, three lanes: an eight-seat map's count per seat, not 35 sources
+	CHECK( !theRMGParse.m_pathWaypointNames.empty() );
+	CHECK( (Int)theRMGParse.m_pathWaypointNames.size() < settings.m_numPlayers * 7 * 3 * 120 );
+}
+
 TEST(a_template_map_gives_each_player_the_ground_a_seat_has_on_the_template)
 {
 	// Twilight Flame: 486 by 469 playable, eight seats
@@ -12670,12 +13012,100 @@ TEST(a_template_map_gives_each_player_the_ground_a_seat_has_on_the_template)
 		RandomMapGenerator::cellsForTemplate( RANDOM_MAP_SIZE_NORMAL, 4, TEMPLATE_X, TEMPLATE_Y, 4 ) );
 	for( Int size = 0; size + 1 < RANDOM_MAP_SIZE_COUNT; size++ )
 		for( Int players = RandomMapGenerator::MIN_PLAYERS; players <= RandomMapGenerator::MAX_PLAYERS; players++ )
-			CHECK( RandomMapGenerator::cellsForTemplate( (RandomMapSize)size, players, TEMPLATE_X, TEMPLATE_Y, TEMPLATE_SEATS ) <
-				RandomMapGenerator::cellsForTemplate( (RandomMapSize)( size + 1 ), players, TEMPLATE_X, TEMPLATE_Y, TEMPLATE_SEATS ) );
+		{
+			Int smaller = RandomMapGenerator::cellsForTemplate( (RandomMapSize)size, players, TEMPLATE_X, TEMPLATE_Y, TEMPLATE_SEATS );
+			Int bigger = RandomMapGenerator::cellsForTemplate( (RandomMapSize)( size + 1 ), players, TEMPLATE_X, TEMPLATE_Y, TEMPLATE_SEATS );
+			CHECK( smaller < bigger || ( smaller == bigger && bigger == RandomMapGenerator::MAX_CELLS ) );
+		}
 
 	// no template, or one this machine does not have, is the plain table
 	CHECK_EQ( RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_LARGE, 6, AsciiString::TheEmptyString ),
 		RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_LARGE, 6 ) );
+}
+
+/* The cell cap stays the 768 it always was for eight players or fewer, so no map an eight-seat room
+	 already played changes; only a room past eight may grow to 984. */
+TEST(the_cell_cap_grows_only_past_eight_players)
+{
+	CHECK( bootOnce() );
+
+	CHECK_EQ( RandomMapGenerator::maxCellsFor( 8 ), 768 );
+	CHECK_EQ( RandomMapGenerator::maxCellsFor( 9 ), 984 );
+
+	CHECK_EQ( RandomMapGenerator::cellsForTemplate( RANDOM_MAP_SIZE_HUGE, 8, 550, 550, 8 ), 768 );
+	const Int nine = RandomMapGenerator::cellsForTemplate( RANDOM_MAP_SIZE_HUGE, 9, 550, 550, 8 );
+	CHECK( nine > 768 );
+	CHECK( nine <= 984 );
+
+	RandomMapSettings settings;
+	settings.m_numPlayers = 8;
+	settings.m_playableCells = 900;
+	RandomMapGenerator::clampSettings( settings );
+	CHECK_EQ( settings.m_playableCells, 768 );
+
+	settings = RandomMapSettings();
+	settings.m_numPlayers = 9;
+	settings.m_playableCells = 900;
+	RandomMapGenerator::clampSettings( settings );
+	CHECK_EQ( settings.m_playableCells, 900 );
+
+	settings = RandomMapSettings();
+	settings.m_numPlayers = 36;
+	settings.m_playableCells = 2000;
+	RandomMapGenerator::clampSettings( settings );
+	CHECK_EQ( settings.m_playableCells, 984 );
+}
+
+/* A map cache entry names one Player_N_Start line per start spot.  The reader knew eight, so a
+	 twelve-player map threw on Player_9_Start and the whole cache file failed to load. */
+TEST(a_map_cache_entry_reads_twelve_start_spots)
+{
+	CHECK( bootOnce() );
+
+	AsciiString text( "MapCache maps\\twelve\\twelve.map\r\n"
+		"  isOfficial = No\r\n"
+		"  isMultiplayer = Yes\r\n"
+		"  extentMin = X:0.00 Y:0.00 Z:0.00\r\n"
+		"  extentMax = X:4000.00 Y:4000.00 Z:100.00\r\n"
+		"  numPlayers = 12\r\n"
+		"  fileSize = 1234\r\n"
+		"  fileCRC = 5678\r\n" );
+	for( Int n = 1; n <= 12; ++n )
+	{
+		AsciiString line;
+		line.format( "  Player_%d_Start = X:%d.00 Y:%d.00 Z:0.00\r\n", n, n * 100, n * 10 );
+		text.concat( line );
+	}
+	text.concat( "End\r\n" );
+	writeFile( TEST_INI, text.str() );
+
+	MapCache *savedCache = TheMapCache;
+	TheMapCache = NEW MapCache;
+	CHECK( loadIni( TEST_INI ) );
+
+	MapCache::iterator it = TheMapCache->find( AsciiString( "maps\\twelve\\twelve.map" ) );
+	CHECK( it != TheMapCache->end() );
+	if( it != TheMapCache->end() )
+	{
+		const MapMetaData &md = it->second;
+		CHECK_EQ( md.m_numPlayers, 12 );
+		for( Int n = 1; n <= 12; ++n )
+		{
+			AsciiString name;
+			name.format( "Player_%d_Start", n );
+			WaypointMap::const_iterator spot = md.m_waypoints.find( name );
+			CHECK( spot != md.m_waypoints.end() );
+			if( spot != md.m_waypoints.end() )
+			{
+				CHECK_NEAR( spot->second.x, n * 100.0f, 0.01f );
+				CHECK_NEAR( spot->second.y, n * 10.0f, 0.01f );
+			}
+		}
+	}
+
+	delete TheMapCache;
+	TheMapCache = savedCache;
+	remove( TEST_INI );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -21912,6 +22342,11 @@ TEST(supply_pile_limit_starts_off_clamps_and_closes_a_full_pile)
 	CHECK( !SupplyPileLimitCloses( 2, 1u << 2, 3 ) );
 	CHECK(  SupplyPileLimitCloses( 2, ( 1u << 2 ) | ( 1u << 3 ), 4 ) );
 	CHECK( !SupplyPileLimitCloses( 2, ( 1u << 2 ) | ( 1u << 3 ), 3 ) );
+
+	/* a player past index 31 holds the pile like any other */
+	CHECK(  SupplyPileLimitCloses( 1, playerIndexToMask( 40 ), 3 ) );
+	CHECK( !SupplyPileLimitCloses( 1, playerIndexToMask( 40 ), 40 ) );
+	CHECK(  SupplyPileLimitCloses( 1, playerIndexToMask( 40 ), 8 ) );	// 1u << 40 wrapped to player 8's bit
 }
 
 #include "Common/SpecialPowerType.h"
@@ -23082,8 +23517,10 @@ TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
 TEST(save_older_than_60hz_loads_only_as_mission_save)
 {
 	SaveGameInfo info;
-	info.version = 4;
+	info.version = 5;
 	CHECK( info.isLoadable() );
+	info.version = 4;		// 16 players a side of every per-player array
+	CHECK( !info.isLoadable() );
 	info.version = 3;
 	CHECK( !info.isLoadable() );
 	info.saveFileType = SAVE_FILE_TYPE_MISSION;
@@ -23300,8 +23737,11 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 		CHECK_EQ( guest.getSlot( i )->getHandicap(), (Int)HANDICAP_FULL );
 	CHECK_EQ( guest.getSlot( 2 )->getAIPersonality(), (Int)AIPERSONA_TURTLE );
 	AsciiString odd;
-	odd.format( "US=0;M=00save/test;MC=0;MS=0;SD=7;C=100;SR=0;SC=0;O=N;S=HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,77:CH,-1,-1,-1,-1,0,120:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:CM,-1,-1,-1,-1:;",
+	odd.format( "US=0;M=00save/test;MC=0;MS=0;SD=7;C=100;SR=0;SC=0;O=N;S=HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,77:CH,-1,-1,-1,-1,0,120:",
 		(Int)slot->getNATBehavior() );
+	for( Int i = 2; i < MAX_SLOTS; ++i )	// the slot list names every seat, MAX_SLOTS of them
+		odd.concat( "CM,-1,-1,-1,-1:" );
+	odd.concat( ';' );
 	CHECK( ParseAsciiStringToGameInfo( &guest, odd ) );
 	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );
 	CHECK_EQ( guest.getSlot( 1 )->getHandicap(), (Int)HANDICAP_FULL );
@@ -23316,8 +23756,11 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	CHECK( !ApplyHandicapRequest( &host, asker, 110 ) );
 	CHECK_EQ( asker->getHandicap(), 60 );
 
-	// a room so full of fixed fields that its last few picks have no room: those do not stand, the
-	// string never empties, and the list still goes round so the guest's box comes back
+	/* A room full of humans and fixed fields.  The LAN budget is m_lanMaxOptionsLength, four packets'
+		 worth since the 36-seat room, and a full room of 36 takes every pick inside it.  Where the
+		 budget does run out, the names shrink to their first letter before the string gives up, and
+		 one byte less than that is an empty string, which ApplyHandicapRequest takes as a pick that
+		 does not stand. */
 	host.setPeaceTime( 30 );
 	host.setIncomeSharing( INCOME_SHARING_ALL );
 	host.setTechRespawn( 300 );
@@ -23343,9 +23786,13 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 			++stood;
 	}
 	printf( "    a full room took %d of %d picks\n", stood, MAX_SLOTS );
-	CHECK( stood > 0 );
-	CHECK( stood < MAX_SLOTS );
+	CHECK_EQ( stood, MAX_SLOTS );
 	TheLAN = savedLAN;
+	const Int whole = GameInfoOptionsString( &host, mapPath, 0 ).getLength();
+	const Int shortest = whole - MAX_SLOTS * ( playerName.getLength() - 1 );
+	CHECK( whole <= m_lanMaxOptionsLength );
+	CHECK( !GameInfoOptionsString( &host, mapPath, shortest ).isEmpty() );
+	CHECK( GameInfoOptionsString( &host, mapPath, shortest - 1 ).isEmpty() );
 
 	delete ThePlayerTemplateStore;
 	ThePlayerTemplateStore = savedStore;

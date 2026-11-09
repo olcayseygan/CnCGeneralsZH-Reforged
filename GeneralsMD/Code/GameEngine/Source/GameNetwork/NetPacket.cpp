@@ -112,7 +112,7 @@ static Bool canReadString(const UnsignedByte *data, Int i)
 	return !s_readBad;
 }
 
-// The slot numbers a command names index arrays of MAX_SLOTS, and shift a byte mask, wherever it
+// The slot numbers a command names index arrays of MAX_SLOTS, and shift a SlotMask, wherever it
 // is handled.  One out of range is a forged command; refuse it here, before any of them sees it.
 static Bool namesValidSlots(NetCommandMsg *msg)
 {
@@ -146,7 +146,7 @@ NetCommandRef * NetPacket::ConstructNetCommandMsgFromRawData(UnsignedByte *data,
 	UnsignedShort commandID = 0;
 	UnsignedInt frame = 0;
 	UnsignedByte playerID = 0;
-	UnsignedByte relay = 0;
+	SlotMask relay = 0;
 
 	Int offset = 0;
 	Bool notDone = TRUE;
@@ -160,7 +160,7 @@ NetCommandRef * NetPacket::ConstructNetCommandMsgFromRawData(UnsignedByte *data,
 			readBytes(&commandType, data, offset, sizeof(UnsignedByte));
 		} else if (data[offset] == 'R') {
 			++offset;
-			readBytes(&relay, data, offset, sizeof(UnsignedByte));
+			readBytes(&relay, data, offset, sizeof(SlotMask));
 		} else if (data[offset] == 'P') {
 			++offset;
 			readBytes(&playerID, data, offset, sizeof(UnsignedByte));
@@ -419,7 +419,7 @@ UnsignedInt NetPacket::GetGameCommandSize(NetCommandMsg *msg) {
 	UnsignedShort msglen = 0;
 	msglen += sizeof(UnsignedInt) + sizeof(UnsignedByte); // frame number
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // player ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask); // relay
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // command type
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte); // command ID
 	msglen += sizeof(UnsignedByte); // the 'D' for the data section.
@@ -488,7 +488,7 @@ UnsignedInt NetPacket::GetFrameCommandSize(NetCommandMsg *msg) {
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedInt) + sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte);
@@ -504,7 +504,7 @@ UnsignedInt NetPacket::GetPlayerLeaveCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	msglen += sizeof(UnsignedInt) + sizeof(UnsignedByte);
 	++msglen;
 	msglen += sizeof(UnsignedByte);
@@ -521,7 +521,7 @@ UnsignedInt NetPacket::GetRunAheadMetricsCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte);
@@ -540,7 +540,7 @@ UnsignedInt NetPacket::GetRunAheadCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	msglen += sizeof(UnsignedInt) + sizeof(UnsignedByte);
 	++msglen;
 	msglen += sizeof(UnsignedByte);
@@ -558,7 +558,7 @@ UnsignedInt NetPacket::GetDestroyPlayerCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	msglen += sizeof(UnsignedInt) + sizeof(UnsignedByte);
 	++msglen;
 	msglen += sizeof(UnsignedByte);
@@ -575,7 +575,7 @@ UnsignedInt NetPacket::GetKeepAliveCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 
@@ -589,7 +589,7 @@ UnsignedInt NetPacket::GetDisconnectKeepAliveCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 
@@ -603,7 +603,7 @@ UnsignedInt NetPacket::GetDisconnectPlayerCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte);
@@ -620,7 +620,7 @@ UnsignedInt NetPacket::GetPacketRouterQueryCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 
@@ -634,7 +634,7 @@ UnsignedInt NetPacket::GetPacketRouterAckCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 
@@ -649,7 +649,7 @@ UnsignedInt NetPacket::GetDisconnectChatCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 
@@ -666,7 +666,7 @@ UnsignedInt NetPacket::GetDisconnectVoteCommandSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte);
@@ -685,7 +685,7 @@ UnsignedInt NetPacket::GetChatCommandSize(NetCommandMsg *msg) {
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedInt) + sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte);
@@ -694,7 +694,7 @@ UnsignedInt NetPacket::GetChatCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte); // string msglength
 	UnsignedByte textmsglen = usableChatTextLength(cmdMsg->getText());
 	msglen += textmsglen * sizeof(WideChar);
-	msglen += sizeof(Int); // playerMask
+	msglen += sizeof(SlotMask); // playerMask
 
 	return msglen;
 }
@@ -704,7 +704,7 @@ UnsignedInt NetPacket::GetProgressMessageSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 
@@ -719,7 +719,7 @@ UnsignedInt NetPacket::GetLoadCompleteMessageSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte);	// the 'C' and the command id, which
@@ -736,7 +736,7 @@ UnsignedInt NetPacket::GetTimeOutGameStartMessageSize(NetCommandMsg *msg) {
 
 	++msglen;
 	msglen += sizeof(UnsignedByte);
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 	++msglen;
 	msglen += sizeof(UnsignedByte);
 	msglen += sizeof(UnsignedShort) + sizeof(UnsignedByte);	// the 'C' and the command id, as above
@@ -754,7 +754,7 @@ UnsignedInt NetPacket::GetWrapperCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte); // command type
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'P' and player ID
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedShort); // 'C' and command ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'R' and relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask); // 'R' and relay
 	++msglen; // 'D'
 
 	msglen += sizeof(UnsignedShort); // m_wrappedCommandID
@@ -773,7 +773,7 @@ UnsignedInt NetPacket::GetFileCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'T' and command type
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'P' and player ID
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedShort); // 'C' and command ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'R' and relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask); // 'R' and relay
 
 	++msglen; // 'D'
 
@@ -790,13 +790,13 @@ UnsignedInt NetPacket::GetFileAnnounceCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'T' and command type
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'P' and player ID
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedShort); // 'C' and command ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'R' and relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask); // 'R' and relay
 
 	++msglen; // 'D'
 
 	msglen += filemsg->getPortableFilename().getLength() + 1; // PORTABLE filename and the terminating 0
 	msglen += sizeof(UnsignedShort); // m_fileID
-	msglen += sizeof(UnsignedByte); // m_playerMask
+	msglen += sizeof(SlotMask); // m_playerMask
 
 	return msglen;
 }
@@ -806,7 +806,7 @@ UnsignedInt NetPacket::GetFileProgressCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'T' and command type
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'P' and player ID
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedShort); // 'C' and command ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte); // 'R' and relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask); // 'R' and relay
 
 	++msglen; // 'D'
 
@@ -821,7 +821,7 @@ UnsignedInt NetPacket::GetDisconnectFrameCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'T' and command type
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'P' and player ID
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedShort); // 'C' and command ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'R' and relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 
 	++msglen; // 'D'
 	msglen += sizeof(UnsignedInt); // disconnect frame
@@ -834,7 +834,7 @@ UnsignedInt NetPacket::GetDisconnectScreenOffCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'T' and command type
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'P' and player ID
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedShort); // 'C' and command ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'R' and relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 
 	++msglen; // 'D'
 	msglen += sizeof(UnsignedInt); // new frame
@@ -847,7 +847,7 @@ UnsignedInt NetPacket::GetFrameResendRequestCommandSize(NetCommandMsg *msg) {
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'T' and command type
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'P' and player ID
 	msglen += sizeof(UnsignedByte) + sizeof(UnsignedShort); // 'C' and command ID
-	msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);	// 'R' and relay
+	msglen += sizeof(UnsignedByte) + sizeof(SlotMask);	// 'R' and relay
 
 	++msglen; // 'D'
 	msglen += sizeof(UnsignedInt); // frame to resend
@@ -965,9 +965,9 @@ void NetPacket::FillBufferWithGameCommand(UnsignedByte *buffer, NetCommandRef *m
 	// If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// If necessary, put the playerID into the packet.
 	buffer[offset] = 'P';
@@ -1126,9 +1126,9 @@ void NetPacket::FillBufferWithFrameCommand(UnsignedByte *buffer, NetCommandRef *
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 
@@ -1172,9 +1172,9 @@ void NetPacket::FillBufferWithPlayerLeaveCommand(UnsignedByte *buffer, NetComman
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 // If necessary, put the execution frame into the packet.
 	buffer[offset] = 'F';
@@ -1222,9 +1222,9 @@ void NetPacket::FillBufferWithRunAheadMetricsCommand(UnsignedByte *buffer, NetCo
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 
@@ -1270,9 +1270,9 @@ void NetPacket::FillBufferWithRunAheadCommand(UnsignedByte *buffer, NetCommandRe
 	// If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// If necessary, put the execution frame into the packet.
 	buffer[offset] = 'F';
@@ -1326,9 +1326,9 @@ void NetPacket::FillBufferWithDestroyPlayerCommand(UnsignedByte *buffer, NetComm
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 // If necessary, put the execution frame into the packet.
 	buffer[offset] = 'F';
@@ -1375,9 +1375,9 @@ void NetPacket::FillBufferWithKeepAliveCommand(UnsignedByte *buffer, NetCommandR
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	buffer[offset] = 'P';
 	++offset;
@@ -1401,9 +1401,9 @@ void NetPacket::FillBufferWithDisconnectKeepAliveCommand(UnsignedByte *buffer, N
 	// Put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 	
 	// Put the player ID into the packet.
 	buffer[offset] = 'P';
@@ -1429,9 +1429,9 @@ void NetPacket::FillBufferWithDisconnectPlayerCommand(UnsignedByte *buffer, NetC
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 
@@ -1476,9 +1476,9 @@ void NetPacket::FillBufferWithPacketRouterQueryCommand(UnsignedByte *buffer, Net
 	// If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 	buffer[offset] = 'P';
@@ -1506,9 +1506,9 @@ void NetPacket::FillBufferWithPacketRouterAckCommand(UnsignedByte *buffer, NetCo
 	// If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 
@@ -1537,9 +1537,9 @@ void NetPacket::FillBufferWithDisconnectChatCommand(UnsignedByte *buffer, NetCom
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 
@@ -1575,9 +1575,9 @@ void NetPacket::FillBufferWithDisconnectVoteCommand(UnsignedByte *buffer, NetCom
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 
@@ -1629,9 +1629,9 @@ void NetPacket::FillBufferWithChatCommand(UnsignedByte *buffer, NetCommandRef *m
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 //		DEBUG_LOG(("relay = %d, ", m_lastRelay));
 
@@ -1655,15 +1655,15 @@ void NetPacket::FillBufferWithChatCommand(UnsignedByte *buffer, NetCommandRef *m
 	++offset;
 	UnicodeString unitext = cmdMsg->getText();
 	UnsignedByte length = usableChatTextLength(unitext);
-	Int playerMask = cmdMsg->getPlayerMask();
+	SlotMask playerMask = cmdMsg->getPlayerMask();
 	memcpy(buffer + offset, &length, sizeof(UnsignedByte));
 	offset += sizeof(UnsignedByte);
 
 	memcpy(buffer + offset, unitext.str(), length * sizeof(WideChar));
 	offset += length * sizeof(WideChar);
 
-	memcpy(buffer + offset, &playerMask, sizeof(Int));
-	offset += sizeof(Int);
+	memcpy(buffer + offset, &playerMask, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 }
 
 void NetPacket::FillBufferWithProgressMessage(UnsignedByte *buffer, NetCommandRef *msg) {
@@ -1679,9 +1679,9 @@ void NetPacket::FillBufferWithProgressMessage(UnsignedByte *buffer, NetCommandRe
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 // Put the player ID into the packet.
 	buffer[offset] = 'P';
@@ -1709,9 +1709,9 @@ void NetPacket::FillBufferWithLoadCompleteMessage(UnsignedByte *buffer, NetComma
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	buffer[offset] = 'P';
 	++offset;
@@ -1742,9 +1742,9 @@ void NetPacket::FillBufferWithTimeOutGameStartMessage(UnsignedByte *buffer, NetC
 // If necessary, put the relay into the packet.
 	buffer[offset] = 'R';
 	++offset;
-	UnsignedByte newRelay = msg->getRelay();
-	memcpy(buffer+offset, &newRelay, sizeof(UnsignedByte));
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer+offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 	buffer[offset] = 'P';
 	++offset;
 	buffer[offset] = cmdMsg->getPlayerID();
@@ -1774,8 +1774,9 @@ void NetPacket::FillBufferWithFileMessage(UnsignedByte *buffer, NetCommandRef *m
 	// relay
 	buffer[offset] = 'R';
 	++offset;
-	buffer[offset] = msg->getRelay();
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer + offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// player ID
 	buffer[offset] = 'P';
@@ -1823,8 +1824,9 @@ void NetPacket::FillBufferWithFileAnnounceMessage(UnsignedByte *buffer, NetComma
 	// relay
 	buffer[offset] = 'R';
 	++offset;
-	buffer[offset] = msg->getRelay();
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer + offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// player ID
 	buffer[offset] = 'P';
@@ -1855,7 +1857,7 @@ void NetPacket::FillBufferWithFileAnnounceMessage(UnsignedByte *buffer, NetComma
 	memcpy(buffer + offset, &fileID, sizeof(fileID));
 	offset += sizeof(fileID);
 
-	UnsignedByte playerMask = cmdMsg->getPlayerMask();
+	SlotMask playerMask = cmdMsg->getPlayerMask();
 	memcpy(buffer + offset, &playerMask, sizeof(playerMask));
 	offset += sizeof(playerMask);
 }
@@ -1873,8 +1875,9 @@ void NetPacket::FillBufferWithFileProgressMessage(UnsignedByte *buffer, NetComma
 	// relay
 	buffer[offset] = 'R';
 	++offset;
-	buffer[offset] = msg->getRelay();
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer + offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// player ID
 	buffer[offset] = 'P';
@@ -1915,8 +1918,9 @@ void NetPacket::FillBufferWithDisconnectFrameMessage(UnsignedByte *buffer, NetCo
 	// relay
 	buffer[offset] = 'R';
 	++offset;
-	buffer[offset] = msg->getRelay();
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer + offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// player ID
 	buffer[offset] = 'P';
@@ -1953,8 +1957,9 @@ void NetPacket::FillBufferWithDisconnectScreenOffMessage(UnsignedByte *buffer, N
 	// relay
 	buffer[offset] = 'R';
 	++offset;
-	buffer[offset] = msg->getRelay();
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer + offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// player ID
 	buffer[offset] = 'P';
@@ -1991,8 +1996,9 @@ void NetPacket::FillBufferWithFrameResendRequestMessage(UnsignedByte *buffer, Ne
 	// relay
 	buffer[offset] = 'R';
 	++offset;
-	buffer[offset] = msg->getRelay();
-	offset += sizeof(UnsignedByte);
+	SlotMask newRelay = msg->getRelay();
+	memcpy(buffer + offset, &newRelay, sizeof(SlotMask));
+	offset += sizeof(SlotMask);
 
 	// player ID
 	buffer[offset] = 'P';
@@ -2199,9 +2205,9 @@ Bool NetPacket::addFrameResendRequestCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet + m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet + m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -2258,7 +2264,7 @@ Bool NetPacket::isRoomForFrameResendRequestMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastFrame != cmdMsg->getExecutionFrame()) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
@@ -2310,9 +2316,9 @@ Bool NetPacket::addDisconnectScreenOffCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet + m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet + m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -2369,7 +2375,7 @@ Bool NetPacket::isRoomForDisconnectScreenOffMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastFrame != cmdMsg->getExecutionFrame()) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
@@ -2421,9 +2427,9 @@ Bool NetPacket::addDisconnectFrameCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet + m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet + m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -2480,7 +2486,7 @@ Bool NetPacket::isRoomForDisconnectFrameMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastFrame != cmdMsg->getExecutionFrame()) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
@@ -2521,9 +2527,9 @@ Bool NetPacket::addFileCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet + m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet + m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -2584,7 +2590,7 @@ Bool NetPacket::isRoomForFileMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
@@ -2625,9 +2631,9 @@ Bool NetPacket::addFileAnnounceCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet + m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet + m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -2665,7 +2671,7 @@ Bool NetPacket::addFileAnnounceCommand(NetCommandRef *msg) {
 		memcpy(m_packet + m_packetLen, &fileID, sizeof(fileID));
 		m_packetLen += sizeof(fileID);
 
-		UnsignedByte playerMask = cmdMsg->getPlayerMask();
+		SlotMask playerMask = cmdMsg->getPlayerMask();
 		memcpy(m_packet + m_packetLen, &playerMask, sizeof(playerMask));
 		m_packetLen += sizeof(playerMask);
 
@@ -2693,7 +2699,7 @@ Bool NetPacket::isRoomForFileAnnounceMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
@@ -2706,7 +2712,7 @@ Bool NetPacket::isRoomForFileAnnounceMessage(NetCommandRef *msg) {
 	++len; // 'D'
 	len += cmdMsg->getPortableFilename().getLength() + 1; // PORTABLE filename + the terminating 0
 	len += sizeof(UnsignedShort); // m_fileID
-	len += sizeof(UnsignedByte); // m_playerMask
+	len += sizeof(SlotMask); // m_playerMask
 
 	if ((len + m_packetLen) > MAX_PACKET_SIZE) {
 		return FALSE;
@@ -2734,9 +2740,9 @@ Bool NetPacket::addFileProgressCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet + m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet + m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -2795,7 +2801,7 @@ Bool NetPacket::isRoomForFileProgressMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
@@ -2835,9 +2841,9 @@ Bool NetPacket::addWrapperCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet + m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet + m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -2927,7 +2933,7 @@ Bool NetPacket::isRoomForWrapperMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
@@ -2975,9 +2981,9 @@ Bool NetPacket::addTimeOutGameStartMessage(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3031,7 +3037,7 @@ Bool NetPacket::isRoomForTimeOutGameStartMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3069,9 +3075,9 @@ Bool NetPacket::addLoadCompleteMessage(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3125,7 +3131,7 @@ Bool NetPacket::isRoomForLoadCompleteMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3163,9 +3169,9 @@ Bool NetPacket::addProgressMessage(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3211,7 +3217,7 @@ Bool NetPacket::isRoomForProgressMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3251,9 +3257,9 @@ Bool NetPacket::addDisconnectVoteCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3320,7 +3326,7 @@ Bool NetPacket::isRoomForDisconnectVoteMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3363,9 +3369,9 @@ Bool NetPacket::addDisconnectChatCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3415,7 +3421,7 @@ Bool NetPacket::isRoomForDisconnectChatMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3463,9 +3469,9 @@ Bool NetPacket::addChatCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3500,15 +3506,15 @@ Bool NetPacket::addChatCommand(NetCommandRef *msg) {
 		++m_packetLen;
 		UnicodeString unitext = cmdMsg->getText();
 		UnsignedByte length = usableChatTextLength(unitext);
-		Int playerMask = cmdMsg->getPlayerMask();
+		SlotMask playerMask = cmdMsg->getPlayerMask();
 		memcpy(m_packet + m_packetLen, &length, sizeof(UnsignedByte));
 		m_packetLen += sizeof(UnsignedByte);
 
 		memcpy(m_packet + m_packetLen, unitext.str(), length * sizeof(WideChar));
 		m_packetLen += length * sizeof(WideChar);
 
-		memcpy(m_packet + m_packetLen, &playerMask, sizeof(Int));
-		m_packetLen += sizeof(Int);
+		memcpy(m_packet + m_packetLen, &playerMask, sizeof(SlotMask));
+		m_packetLen += sizeof(SlotMask);
 
 //		DEBUG_LOG(("NetPacket - added chat command\n"));
 
@@ -3536,7 +3542,7 @@ Bool NetPacket::isRoomForChatMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3551,7 +3557,7 @@ Bool NetPacket::isRoomForChatMessage(NetCommandRef *msg) {
 	len += sizeof(UnsignedByte); // string length
 	UnsignedByte textLen = usableChatTextLength(cmdMsg->getText());
 	len += textLen * sizeof(WideChar);
-	len += sizeof(Int); // playerMask
+	len += sizeof(SlotMask); // playerMask
 	if ((len + m_packetLen) > MAX_PACKET_SIZE) {
 		return FALSE;
 	}
@@ -3578,9 +3584,9 @@ Bool NetPacket::addPacketRouterAckCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3626,7 +3632,7 @@ Bool NetPacket::isRoomForPacketRouterAckMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3660,9 +3666,9 @@ Bool NetPacket::addPacketRouterQueryCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3708,7 +3714,7 @@ Bool NetPacket::isRoomForPacketRouterQueryMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3745,9 +3751,9 @@ Bool NetPacket::addDisconnectPlayerCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3814,7 +3820,7 @@ Bool NetPacket::isRoomForDisconnectPlayerMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3856,9 +3862,9 @@ Bool NetPacket::addDisconnectKeepAliveCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3901,7 +3907,7 @@ Bool NetPacket::isRoomForDisconnectKeepAliveMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -3936,9 +3942,9 @@ Bool NetPacket::addKeepAliveCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -3981,7 +3987,7 @@ Bool NetPacket::isRoomForKeepAliveMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -4018,9 +4024,9 @@ Bool NetPacket::addRunAheadCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -4098,7 +4104,7 @@ Bool NetPacket::isRoomForRunAheadMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastFrame != cmdMsg->getExecutionFrame()) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
@@ -4143,9 +4149,9 @@ Bool NetPacket::addDestroyPlayerCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -4219,7 +4225,7 @@ Bool NetPacket::isRoomForDestroyPlayerMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastFrame != cmdMsg->getExecutionFrame()) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
@@ -4264,9 +4270,9 @@ Bool NetPacket::addRunAheadMetricsCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -4333,7 +4339,7 @@ Bool NetPacket::isRoomForRunAheadMetricsMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -4377,9 +4383,9 @@ Bool NetPacket::addPlayerLeaveCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -4452,7 +4458,7 @@ Bool NetPacket::isRoomForPlayerLeaveMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastFrame != cmdMsg->getExecutionFrame()) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
@@ -4524,9 +4530,9 @@ Bool NetPacket::addFrameCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -4594,7 +4600,7 @@ Bool NetPacket::isRoomForFrameMessage(NetCommandRef *msg) {
 		len += sizeof(UnsignedInt) + sizeof(UnsignedByte);
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		len += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		len += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastPlayerID != cmdMsg->getPlayerID()) {
 		++len;
@@ -4852,9 +4858,9 @@ Bool NetPacket::addGameCommand(NetCommandRef *msg) {
 		if (m_lastRelay != msg->getRelay()) {
 			m_packet[m_packetLen] = 'R';
 			++m_packetLen;
-			UnsignedByte newRelay = msg->getRelay();
-			memcpy(m_packet+m_packetLen, &newRelay, sizeof(UnsignedByte));
-			m_packetLen += sizeof(UnsignedByte);
+			SlotMask newRelay = msg->getRelay();
+			memcpy(m_packet+m_packetLen, &newRelay, sizeof(SlotMask));
+			m_packetLen += sizeof(SlotMask);
 
 			m_lastRelay = newRelay;
 		}
@@ -4996,7 +5002,7 @@ Bool NetPacket::isRoomForGameMessage(NetCommandRef *msg, GameMessage *gmsg) {
 		needNewCommandID = TRUE;
 	}
 	if (m_lastRelay != msg->getRelay()) {
-		msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
+		msglen += sizeof(UnsignedByte) + sizeof(SlotMask);
 	}
 	if (m_lastCommandType != cmdMsg->getNetCommandType()) {
 		msglen += sizeof(UnsignedByte) + sizeof(UnsignedByte);
@@ -5064,7 +5070,7 @@ NetCommandList * NetPacket::getCommandList() {
 	UnsignedInt frame = 0;
 	UnsignedShort commandID = 1; // The first command is going to be
 	UnsignedByte commandType = 0;
-	UnsignedByte relay = 0;
+	SlotMask relay = 0;
 	NetCommandRef *lastCommand = NULL;
 
 	Int i = 0;
@@ -5082,7 +5088,7 @@ NetCommandList * NetPacket::getCommandList() {
 			readBytes(&playerID, m_packet, i, sizeof(UnsignedByte));
 		} else if (m_packet[i] == 'R') {
 			++i;
-			readBytes(&relay, m_packet, i, sizeof(UnsignedByte));
+			readBytes(&relay, m_packet, i, sizeof(SlotMask));
 		} else if (m_packet[i] == 'C') {
 			++i;
 			readBytes(&commandID, m_packet, i, sizeof(UnsignedShort));
@@ -5111,7 +5117,7 @@ NetCommandList * NetPacket::getCommandList() {
 			case NETCOMMANDTYPE_FRAMEINFO:
 				msg = readFrameMessage(m_packet, i);
 				// frameinfodebug
-				DEBUG_LOG_DEV(("read frame %d from player %d, command count = %d, relay = 0x%X\n", frame, playerID, ((NetFrameCommandMsg *)msg)->getCommandCount(), relay));
+				DEBUG_LOG_DEV(("read frame %d from player %d, command count = %d, relay = 0x%llX\n", frame, playerID, ((NetFrameCommandMsg *)msg)->getCommandCount(), (unsigned long long)relay));
 				break;
 			case NETCOMMANDTYPE_PLAYERLEAVE:
 				msg = readPlayerLeaveMessage(m_packet, i);
@@ -5698,13 +5704,13 @@ NetCommandMsg * NetPacket::readChatMessage(UnsignedByte *data, Int &i) {
 	// sizeof(WideChar) now, and WideChar is two bytes by static_assert (B1).
 	WideChar text[256];
 	UnsignedByte length = 0;
-	Int playerMask = 0;
+	SlotMask playerMask = 0;
 	readBytes(&length, data, i, sizeof(UnsignedByte));
 	if (!canRead(i, length * sizeof(WideChar)))
 		length = 0;
 	readBytes(text, data, i, length * sizeof(WideChar));
 	text[length] = 0;
-	readBytes(&playerMask, data, i, sizeof(Int));
+	readBytes(&playerMask, data, i, sizeof(SlotMask));
 
 
 	UnicodeString unitext;
@@ -5852,7 +5858,7 @@ NetCommandMsg * NetPacket::readFileAnnounceMessage(UnsignedByte *data, Int &i) {
 	readBytes(&fileID, data, i, sizeof(fileID));
 	msg->setFileID(fileID);
 
-	UnsignedByte playerMask = 0;
+	SlotMask playerMask = 0;
 	readBytes(&playerMask, data, i, sizeof(playerMask));
 	msg->setPlayerMask(playerMask);
 

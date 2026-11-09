@@ -1007,14 +1007,14 @@ void updateMapStartSpots( GameInfo *myGame, GameWindow *buttonMapStartPositions[
 	}
 	for( Int i = 0; i < MAX_SLOTS; ++i)
 	{
-    if ( buttonMapStartPositions[i] == NULL )
-      continue;
-
 		GameSlot *gs =myGame->getSlot(i);
 		// a taken spot is filled with its team's colour, or the player's without a team; the number
 		// stays for whoever cannot tell the colours apart
 		const Int spot = onLoadScreen ? gs->getApparentStartPos() : gs->getStartPos();
-		if (spot >= 0 && spot < mmd.m_numPlayers && gs->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
+		// every seat may hold a spot; it is the spot's button the layout may not have
+		if (spot < 0 || spot >= MAX_SLOTS || buttonMapStartPositions[spot] == NULL)
+			continue;
+		if (spot < mmd.m_numPlayers && gs->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
 			startSpotFill(buttonMapStartPositions[spot])->fill =
 				gs->getTeamNumber() >= 0 ? LobbyTeamColor(gs->getTeamNumber()) : LobbySeatColor(gs);
 		if(onLoadScreen)
@@ -1342,21 +1342,25 @@ void InitSkirmishGameGadgets( void )
 		tmpString.format("SkirmishGameOptionsMenu.wnd:ComboBoxColor%d", i);
 		comboBoxColorID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxColor[i] = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxColorID[i] );
-		DEBUG_ASSERTCRASH(comboBoxColor[i], ("Could not find the comboBoxColor[%d]",i ));
-		
+		// seats past the layout's rows have no controls: ids are still made, windows stay NULL
+		DEBUG_ASSERTCRASH(comboBoxColor[i] || (i > 0 && !comboBoxPlayer[i]), ("Could not find the comboBoxColor[%d]",i ));
+
 		tmpString.format("SkirmishGameOptionsMenu.wnd:ComboBoxPlayerTemplate%d", i);
 		comboBoxPlayerTemplateID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxPlayerTemplate[i] = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxPlayerTemplateID[i] );
-		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i], ("Could not find the comboBoxPlayerTemplate[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i] || !comboBoxColor[i], ("Could not find the comboBoxPlayerTemplate[%d]",i ));
 
 		// add tooltips to the player template combobox and listbox
-		comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
-		GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		if (comboBoxPlayerTemplate[i])
+		{
+			comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
+			GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		}
 
 		tmpString.format("SkirmishGameOptionsMenu.wnd:ComboBoxTeam%d", i);
 		comboBoxTeamID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxTeam[i] = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxTeamID[i] );
-		DEBUG_ASSERTCRASH(comboBoxTeam[i], ("Could not find the comboBoxTeam[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxTeam[i] || !comboBoxColor[i], ("Could not find the comboBoxTeam[%d]",i ));
 		
 
 //		tmpString.format("SkirmishGameOptionsMenu.wnd:ButtonStartPosition%d", i);
@@ -1367,7 +1371,7 @@ void InitSkirmishGameGadgets( void )
 		tmpString.format("SkirmishGameOptionsMenu.wnd:ButtonMapStartPosition%d", i);
 		buttonMapStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, buttonMapStartPositionID[i] );
-		DEBUG_ASSERTCRASH(buttonMapStartPosition[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
+		DEBUG_ASSERTCRASH(buttonMapStartPosition[i] || !comboBoxColor[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
 	}
    
 	for (Int i = 0; i < MAX_SLOTS; ++i)
@@ -1629,6 +1633,8 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
+		if (!comboBoxColor[i])
+			continue;
 		comboBoxColor[i]->winEnable(TRUE);
 		comboBoxPlayerTemplate[i]->winEnable(TRUE);
 		comboBoxTeam[i]->winEnable(TRUE);

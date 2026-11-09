@@ -2194,11 +2194,11 @@ static void reportFrameTimeStats( void )
  */
 enum { AUTOCAM_GRID = 16 };
 static Int s_autoCamUnits[ AUTOCAM_GRID * AUTOCAM_GRID ];
-static UnsignedInt s_autoCamSides[ AUTOCAM_GRID * AUTOCAM_GRID ];
+static PlayerMaskType s_autoCamSides[ AUTOCAM_GRID * AUTOCAM_GRID ];
 
 struct AutoCamTally
 {
-	UnsignedInt sideBit;
+	PlayerMaskType sideBit;
 	Real originX, originY, spanX, spanY;
 };
 
@@ -2225,7 +2225,7 @@ static void autoCameraTallyObject( Object *obj, void *userData )
 	s_autoCamSides[ cell ] |= t->sideBit;
 }
 
-static Int autoCameraCountBits( UnsignedInt v )
+static Int autoCameraCountBits( PlayerMaskType v )
 {
 	Int n = 0;
 	while( v ) { n += (v & 1); v >>= 1; }
@@ -2467,7 +2467,7 @@ static void updateAutoCamera( void )
 		Player *player = ThePlayerList->getNthPlayer( p );
 		if( !player->isPlayableSide() || player->isPlayerObserver() )
 			continue;
-		tally.sideBit = (UnsignedInt)1 << p;
+		tally.sideBit = player->getPlayerMask();
 		player->iterateObjects( autoCameraTallyObject, &tally );
 	}
 

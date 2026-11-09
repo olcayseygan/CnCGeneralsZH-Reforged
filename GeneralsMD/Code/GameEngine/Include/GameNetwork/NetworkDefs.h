@@ -48,14 +48,23 @@ extern Int MIN_RUNAHEAD;
 extern Int FRAME_DATA_LENGTH;
 extern Int FRAMES_TO_KEEP;
 
-// This is the connection numbering: 1-8 are for players, 9 is a broadcast con.
+/// The seats in a network game, and the one place that number is set.  EA's was 8.
+static const Int MAX_SLOTS = 36;
+
 enum ConnectionNumbers
 {
-	MAX_PLAYER = 7,			// The index of the highest possible player number.  This is 0 based, so the most players allowed in a game is MAX_PLAYER+1.
+	MAX_PLAYER = MAX_SLOTS - 1,			// The index of the highest possible player number.  This is 0 based, so the most players allowed in a game is MAX_PLAYER+1.
 	NUM_CONNECTIONS
 };
 
-static const Int MAX_SLOTS = MAX_PLAYER+1;
+/* A set of slots, one bit each: the relay a command still has to reach, a chat's or a file's
+	 recipients.  EA's was a byte, which held eight.  On the wire it is all eight bytes of this. */
+typedef UnsignedInt64 SlotMask;
+static_assert(MAX_SLOTS <= (Int)(sizeof(SlotMask) * 8), "SlotMask needs a bit for every slot");
+static const SlotMask SLOTMASK_ALL = (MAX_SLOTS == 64) ? ~(SlotMask)0 : (((SlotMask)1 << MAX_SLOTS) - 1);
+inline SlotMask slotBit(Int slot) { return (SlotMask)1 << slot; }
+/// every slot but this one: what EA wrote as 0xff ^ (1 << slot)
+inline SlotMask allSlotsBut(Int slot) { return SLOTMASK_ALL & ~slotBit(slot); }
 
 #pragma pack(push, 1)
 struct TransportMessageHeader
@@ -95,8 +104,10 @@ static const Int MAX_UDP_PAYLOAD_SIZE = 1100;
 static const Int MAX_NETWORK_MESSAGE_LEN = MAX_UDP_PAYLOAD_SIZE;
 static const Int MAX_PACKET_SIZE = MAX_UDP_PAYLOAD_SIZE - sizeof(TransportMessageHeader);
 
-// The LAN lobby's own broadcast is a fixed struct read at fixed offsets, and it stays where it was.
-static const Int MAX_LANAPI_PACKET_SIZE = 476;
+// The LAN lobby's own broadcast is a fixed struct read at fixed offsets, one datagram each.  EA's was
+// 476; a 36-seat room's options need several times that, so it takes the whole payload and the
+// options go out in parts (LANAPI.h).
+static const Int MAX_LANAPI_PACKET_SIZE = MAX_PACKET_SIZE;
 
 /**
  * Command packet - contains frame #, total # of commands, and each command.  This is what gets sent
@@ -221,8 +232,10 @@ enum PlayerLeaveCode {
 	PLAYERLEAVECODE_UNKNOWN
 };
 
-// Magic number for identifying a Generals packet.
-static const UnsignedShort GENERALS_MAGIC_NUMBER = 0xF00D;
+// Magic number for identifying a Generals packet.  It is the protocol version too: a packet with
+// another one is dropped as noise, so a build whose wire format differs never reads the other's.
+// 0xF00D was EA's, with a one-byte relay mask and eight slots; 0xF036 has the 64-bit SlotMask and 36.
+static const UnsignedShort GENERALS_MAGIC_NUMBER = 0xF036;
 
 // The number of fps history entries.
 //static const Int NETWORK_FPS_HISTORY_LENGTH = 30;

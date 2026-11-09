@@ -344,7 +344,7 @@ Bool FirewallHelperClass::sendToManglerFromPort(UnsignedInt address, UnsignedSho
 	} else {
 		packet.data.BlitzMe = 0;
 	}
-	packet.data.magic = GENERALS_MAGIC_NUMBER;
+	packet.data.magic = 0xF00D;	// the mangler server's protocol, not ours: EA's magic, not GENERALS_MAGIC_NUMBER
 	packet.data.OriginalPortNumber = port;
 /*
 	DEBUG_LOG(("Pre-Adjust Buffer = "));

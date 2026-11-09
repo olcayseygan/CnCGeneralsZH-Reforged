@@ -203,7 +203,7 @@ static void tellAllies( const UnicodeString &line )
 		TheInGameUI->playerMessage( localPlayer, line );
 		return;
 	}
-	Int playerMask = 0;
+	SlotMask playerMask = 0;
 	for( Int i = 0; i < MAX_SLOTS; ++i )
 	{
 		AsciiString playerName;
@@ -211,7 +211,7 @@ static void tellAllies( const UnicodeString &line )
 		const Player *player = ThePlayerList->findPlayerWithNameKey( TheNameKeyGenerator->nameToKey( playerName ) );
 		if( player && ( player == localPlayer || ( player->getRelationship( localPlayer->getDefaultTeam() ) == ALLIES &&
 				localPlayer->getRelationship( player->getDefaultTeam() ) == ALLIES ) ) )
-			playerMask |= ( 1 << i );
+			playerMask |= slotBit( i );
 	}
 	TheNetwork->sendChat( line, playerMask );
 }

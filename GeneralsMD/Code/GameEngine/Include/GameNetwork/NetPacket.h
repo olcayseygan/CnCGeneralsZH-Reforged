@@ -235,7 +235,7 @@ protected:
 	UnsignedShort		m_lastCommandID;
 	UnsignedByte		m_lastPlayerID;
 	UnsignedByte		m_lastCommandType;
-	UnsignedByte		m_lastRelay;
+	SlotMask				m_lastRelay;
 };
 
 #endif // __NETPACKET_H

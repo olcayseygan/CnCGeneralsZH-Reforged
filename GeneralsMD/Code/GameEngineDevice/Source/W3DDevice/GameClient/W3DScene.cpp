@@ -1656,6 +1656,7 @@ assigned in left-right binary flipped fashion so as not to occupy lower bits unl
 necessary.  This is used because lower bits are free for use by stencil shadow
 rendering*/
 #define NUMBER_PLAYER_COLOR_BITS 4	//need 4 bits to encode 8 players because indices start at 1 (not 0).
+#define MAX_OCCLUDED_COLOR_INDEX ((1 << NUMBER_PLAYER_COLOR_BITS) - 1)	//the most visible player colors those bits hold
 Int playerIndexToColorIndex(Int playerIndex)
 {
 	Int tmp=playerIndex;
@@ -1784,7 +1785,8 @@ void RTS3DScene::flushOccludedObjectsIntoStencil(RenderInfoClass & rinfo)
 {
 	RenderObjClass *robj;
 	Drawable *draw;
-	RenderObjClass *playerObjects[MAX_PLAYER_COUNT][MAX_VISIBLE_OCCLUDED_PLAYER_OBJECTS];
+	// static: at MAX_PLAYER_COUNT 48 this is 192 KB, too much for the stack of a draw call
+	static RenderObjClass *playerObjects[MAX_PLAYER_COUNT][MAX_VISIBLE_OCCLUDED_PLAYER_OBJECTS];
 	RenderObjClass **lastPlayerObject[MAX_PLAYER_COUNT];
 	Int playerColorIndex[MAX_PLAYER_COUNT];
 	Int visiblePlayerColors[MAX_PLAYER_COUNT];	///<color assigned to each of the visible players
@@ -1848,6 +1850,11 @@ void RTS3DScene::flushOccludedObjectsIntoStencil(RenderInfoClass & rinfo)
 			if ((numObjects=lastPlayerObject[i]-&playerObjects[i][0]) != 0)
 			{	
 				//this player has some objects so draw them using his color index.
+				// The stencil holds 4 bits of color index, 1 to 15.  From the 16th player on, each shares
+				// the 15th silhouette color.  The old code wrapped the 16th to 0 (stencilRef 0x80), which
+				// tinted buildings.
+				if (playerColorIndex[i]==-1 && usedPlayerColorIndex > MAX_OCCLUDED_COLOR_INDEX)
+					playerColorIndex[i]=playerIndexToColorIndex(MAX_OCCLUDED_COLOR_INDEX);
 				if (playerColorIndex[i]==-1)	//color index not assigned yet?
 				{	//assign a new color index to this player
 					playerColorIndex[i]=playerIndexToColorIndex(usedPlayerColorIndex++);

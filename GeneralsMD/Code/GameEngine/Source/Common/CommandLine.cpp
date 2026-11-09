@@ -476,9 +476,10 @@ Int parseRandomMap(char *args[], int num)
 
 	RandomMapSettings settings;
 	settings.m_seed = atoi( args[1] );
-	// Generate all the start positions the map is allowed to hold, so any -autoskirmish count
-	// fits regardless of which of the two options came first on the command line.
-	settings.m_numPlayers = RandomMapGenerator::MAX_PLAYERS;
+	// No count given: DEFAULT_PLAYERS starts, or as many as an -autoskirmish already read asks for.
+	// MAX_PLAYERS would build a 36-start map, near a thousand cells a side, for every bare seed; an
+	// -autoskirmish past eight that comes after this option needs the count spelled out.
+	settings.m_numPlayers = max( (Int)RandomMapGenerator::DEFAULT_PLAYERS, TheWritableGlobalData->m_autoSkirmishPlayers );
 
 	// players and size are optional and positional, so only eat what still looks like one.
 	Int eaten = 2;

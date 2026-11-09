@@ -195,7 +195,9 @@ enum
 	LOAD_PROGRESS_POST_PATHFINDER_NEW_MAP = LOAD_PROGRESS_POST_BRIDGE_LOAD + 1,
 
 	LOAD_PROGRESS_LOOP_ALL_THE_FREAKN_OBJECTS = LOAD_PROGRESS_POST_BRIDGE_LOAD + 1,
-	LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS = 80,// THE END OF THE BIG ASS PROGRESS PAUSE
+	// THE END OF THE BIG ASS PROGRESS PAUSE: 80, or lower when MAX_SLOTS steps for the network
+	// buildings and the four after them would otherwise run the bar past 100
+	LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS = ( 100 - MAX_SLOTS - 6 < 80 ) ? 100 - MAX_SLOTS - 6 : 80,
 
 	LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS = LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS + 1,  // Increment the next one by at least MAX_SLOTS
 	LOAD_PROGRESS_POST_INITIAL_NETWORK_BUILDINGS = LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS + MAX_SLOTS + 1,
@@ -205,6 +207,8 @@ enum
 	LOAD_PROGRESS_POST_STARTING_CAMERA_2 = LOAD_PROGRESS_POST_STARTING_CAMERA + 1,
 	LOAD_PROGRESS_END = 100,
 };
+static_assert( LOAD_PROGRESS_LOOP_ALL_THE_FREAKN_OBJECTS < LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS &&
+							 LOAD_PROGRESS_POST_STARTING_CAMERA_2 <= LOAD_PROGRESS_END, "load progress steps fit 0..100" );
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -825,10 +829,15 @@ static void populateRandomSideAndColor( GameInfo *game )
 		if (colorIdx < 0 || colorIdx >= TheMultiplayerSettings->getNumColors())
 		{
 			DEBUG_ASSERTCRASH(colorIdx == -1, ("Non-random bad color %d in slot %d\n", colorIdx, i));
+			// More seats than colours: once every colour is taken the draw would never end, so the
+			// rest share one.  While a colour is free this draws exactly what it always drew.
+			Bool anyColorFree = FALSE;
+			for (Int c = 0; c < TheMultiplayerSettings->getNumColors() && !anyColorFree; ++c)
+				anyColorFree = !game->isColorTaken(c);
 			while (colorIdx == -1)
 			{
 				colorIdx = GameLogicRandomValue(0, TheMultiplayerSettings->getNumColors()-1);
-				if (game->isColorTaken(colorIdx))
+				if (anyColorFree && game->isColorTaken(colorIdx))
 					colorIdx = -1;
 			}
 			DEBUG_LOG(("Setting color %d to %d\n", i, colorIdx));
@@ -857,7 +866,7 @@ static void populateRandomStartPosition( GameInfo *game )
 		throw ERROR_CORRUPT_FILE_FORMAT;
 	}
 	if (md)
-		numPlayers = md->m_numPlayers;
+		numPlayers = min(md->m_numPlayers, (Int)MAX_SLOTS);	// every array below is MAX_SLOTS long
 	else
 		DEBUG_LOG(("populateRandomStartPosition: no map %s, start spots are dealt without distances\n", game->getMap().str()));
 
@@ -4319,7 +4328,7 @@ Int GameLogic::countKickVotes( void ) const
 {
 	Int votes = 0;
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
-		if( ( m_kickVoteYesMask & ( 1u << i ) ) && mayVoteToKick( ThePlayerList->getNthPlayer( i ), m_kickVoteTarget ) )
+		if( ( m_kickVoteYesMask & playerIndexToMask( i ) ) && mayVoteToKick( ThePlayerList->getNthPlayer( i ), m_kickVoteTarget ) )
 			++votes;
 	return votes;
 }
@@ -4362,7 +4371,7 @@ void GameLogic::processKickVote( Player *voter, Int targetIndex, Bool yes )
 			return;
 		}
 		m_kickVoteEndFrame = m_frame + KICK_VOTE_SECONDS * LOGICFRAMES_PER_SECOND;
-		m_kickVoteYesMask = 1u << voter->getPlayerIndex();
+		m_kickVoteYesMask = voter->getPlayerMask();
 		if( TheInGameUI )
 			TheInGameUI->message( "GUI:KickVoteStarted", voter->getPlayerDisplayName().str(), target->getPlayerDisplayName().str() );
 		return;
@@ -4378,7 +4387,7 @@ void GameLogic::processKickVote( Player *voter, Int targetIndex, Bool yes )
 		return;
 	}
 
-	m_kickVoteYesMask |= 1u << voter->getPlayerIndex();
+	m_kickVoteYesMask |= voter->getPlayerMask();
 	if( kickVoteAgreed( countKickVotes(), countKickVoters() ) )
 	{
 		ThePlayerList->getNthPlayer( m_kickVoteTarget )->killPlayer();

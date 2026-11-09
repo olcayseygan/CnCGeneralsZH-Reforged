@@ -337,7 +337,7 @@ struct ShroudStatusStoreRestore
 class PartitionCell : public Snapshot	// not MPO: allocated in an array
 {
 private:
-	// A cell is near 300 bytes and the walks over cells - range queries, collision passes, sight
+	// A cell is near 800 bytes (16 a player) and the walks over cells - range queries, collision passes, sight
 	// tests, moving an Object's coverage - read only these first few fields of each, so they sit
 	// together at the front where one cache line holds them; the per-player arrays follow.
 	CellAndObjectIntersection*		m_firstCoiInCell;	///< list of COIs in this cell (may be null).

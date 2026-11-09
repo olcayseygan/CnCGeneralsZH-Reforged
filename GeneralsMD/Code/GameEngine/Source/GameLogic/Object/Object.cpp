@@ -6089,9 +6089,9 @@ void Object::setVisionSpied(Bool setting, Int byWhom)
 		for (Int i = 0; i < MAX_PLAYER_COUNT; ++i) 
 		{
 			if( m_visionSpiedBy[i] > 0 )
-				BitSet( workingMask, ( 1 << i ) );
+				BitSet( workingMask, playerIndexToMask( i ) );
 			else
-				BitClear( workingMask, ( 1 << i ) );
+				BitClear( workingMask, playerIndexToMask( i ) );
 		}
 
 		m_visionSpiedMask = workingMask;

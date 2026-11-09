@@ -435,8 +435,12 @@ public:
 	inline UnsignedInt getTotalCost(void) const {return m_info->m_totalCost;}
 	inline UnsignedInt getTravelSoFar(void) const {return m_info->m_travelSoFar;}
 
-	inline void setCostSoFar(UnsignedInt cost) { if( m_info ) m_info->m_costSoFar = cost;}
-	inline void setTotalCost(UnsignedInt cost) { if( m_info ) m_info->m_totalCost = cost;}
+	/* Both saturate too.  The open list has one bucket per 16-bit cost, and a long route on a
+		 thousand-cell map can run past 65535: wrapped, a far cell came back cheap and the search went
+		 to it first.  Below 65535 nothing changes. */
+	static inline UnsignedShort clampCost(UnsignedInt cost) { return (UnsignedShort)(cost > 0xFFFF ? 0xFFFF : cost); }
+	inline void setCostSoFar(UnsignedInt cost) { if( m_info ) m_info->m_costSoFar = clampCost(cost);}
+	inline void setTotalCost(UnsignedInt cost) { if( m_info ) m_info->m_totalCost = clampCost(cost);}
 	/* Saturates rather than wrapping.  Sixteen bits is 6553 cells of route, which no map here can
 		 hold, but a search that wanders can still get there - and a wrapped distance turns into an
 		 arrival time in the wrong half-minute, which prices a crossing that is not there. */
@@ -484,10 +488,13 @@ private:
 	UnsignedInt m_blockedByAlly:1;				///< True if this cell is blocked by an allied unit.
 	UnsignedInt m_obstacleIsFence:1;			///< True if occupied by a fence.
 	UnsignedInt m_obstacleIsTransparent:1;///< True if obstacle is transparent (undefined if obstacleid is invalid)
-	zoneStorageType m_zone:14;			///< Zone. Each zone is a set of adjacent terrain type.  If from & to in the same zone, you can successfully pathfind.  If not,
+	UnsignedInt m_aircraftGoal:1; //< This is an aircraft goal cell.
+	UnsignedInt m_pinched:1; //< This cell is surrounded by obstacle cells.
+	/* All sixteen bits now, the two flags having moved up into the word above, so the cell is no
+		 bigger.  It was fourteen, which capped the raw zones calculateZones hands out at 16383; a
+		 thousand-cell map can need more. */
+	zoneStorageType m_zone;			///< Zone. Each zone is a set of adjacent terrain type.  If from & to in the same zone, you can successfully pathfind.  If not,
 														// you still may be able to if you can cross multiple terrain types.
-	UnsignedShort m_aircraftGoal:1; //< This is an aircraft goal cell.
-	UnsignedShort m_pinched:1; //< This cell is surrounded by obstacle cells.
 	UnsignedByte m_type:4;			///< what type of cell terrain this is.  
 	UnsignedByte m_flags:4;			///< what type of units are in or moving through this cell.
 	UnsignedByte m_connectsToLayer:4;	///< This cell can pathfind onto this layer, if > LAYER_TOP.
@@ -624,6 +631,7 @@ public:
 	enum {INITIAL_ZONES = 256};
 	enum {ZONE_BLOCK_SIZE = 10};	// Zones are calculated in blocks of 20x20.  This way, the raw zone numbers can be used to 
 	enum {UNINITIALIZED_ZONE = 0};
+	enum {MAX_RAW_ZONES = 65536};	// every id a zoneStorageType can name, zone 0 being the flag
 																// compute hierarchically between the 20x20 blocks of cells. jba.
 	PathfindZoneManager();
 	~PathfindZoneManager();
@@ -667,9 +675,11 @@ private:
 	ZoneBlock			**m_zoneBlocks;						///< Zone blocks as a matrix - contains matrix indexing into the map.
 	ICoord2D			m_zoneBlockExtent;				///< Zone block extents. Not the same scale as the pathfind extents.
 
-	UnsignedShort m_maxZone;								///< Max zone used.
+	// Both wider than a zone: allocateZones doubles m_zonesAllocated past m_maxZone, and as an
+	// UnsignedShort 32768 doubled to 0 and the loop never ended.
+	UnsignedInt		m_maxZone;								///< Max zone used.
 	UnsignedInt		m_nextFrameToCalculateZones;		///< WHen should I recalculate, next?.
-	UnsignedShort m_zonesAllocated;
+	UnsignedInt		m_zonesAllocated;
 	zoneStorageType *m_groundCliffZones;
 	zoneStorageType *m_groundWaterZones;
 	zoneStorageType *m_groundRubbleZones;

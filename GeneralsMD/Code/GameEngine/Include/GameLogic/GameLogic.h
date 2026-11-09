@@ -446,7 +446,7 @@ private:
 	UnsignedInt m_peaceTimeEndFrame;	///< logic frame the lobby's peace time runs out on, 0 = no peace time
 	Int m_kickVoteTarget;							///< player index an open vote kick is about, -1 = none
 	UnsignedInt m_kickVoteEndFrame;		///< frame that vote runs out on
-	UnsignedInt m_kickVoteYesMask;		///< player indices that have voted yes in it
+	PlayerMaskType m_kickVoteYesMask;	///< player indices that have voted yes in it
 	void expireKickVote( void );			///< closes the vote once its 30 seconds are up
 	void endKickVote( const char *label );
 	UnsignedInt m_unitCap;						///< units each player may have standing and queued, 0 = no limit

@@ -35,6 +35,7 @@
 
 
 #include <stddef.h>	// offsetof, for the wire-layout asserts (B4)
+#include <map>
 #include "GameNetwork/Transport.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/NetworkDefs.h"
@@ -51,8 +52,13 @@ static const Int g_lanHostNameLength = 1;
 static const Int g_lanGameNameLength = 16; // reduced length because of game option length
 static const Int g_lanGameNameReservedLength = 16; // save N wchars for ID info
 static const Int g_lanMaxChatLength = 100;
-static const Int m_lanMaxOptionsLength = MAX_LANAPI_PACKET_SIZE - ( 8 + (g_lanGameNameLength+1)*2 + 4 + (g_lanPlayerNameLength+1)*2
-																														+ (g_lanLoginNameLength+1) + (g_lanHostNameLength+1) );
+/* The game options go out in parts: a 36-seat room's string is several times what one datagram
+	 holds.  g_lanOptionsPartLength is what one LANMessage carries (its fixed fields and the two part
+	 bytes come off the packet), m_lanMaxOptionsLength the whole string, g_lanOptionsParts of those. */
+static const Int g_lanOptionsPartLength = MAX_LANAPI_PACKET_SIZE - ( 8 + (g_lanGameNameLength+1)*2 + 4 + (g_lanPlayerNameLength+1)*2
+																														+ (g_lanLoginNameLength+1) + (g_lanHostNameLength+1) ) - 2;
+static const Int g_lanOptionsParts = 4;
+static const Int m_lanMaxOptionsLength = g_lanOptionsParts * g_lanOptionsPartLength;
 static const Int g_maxSerialLength = 23; // including the trailing '\0'
 
 //
@@ -284,8 +290,20 @@ protected:
 
 	Bool								m_isActive;			///< is the game currently active?
 
+	/// A GAME_ANNOUNCE or GAME_OPTIONS whose options came in parts, gathered per sender and type.
+	struct OptionsAssembly
+	{
+		Int nextPart;
+		AsciiString text;
+		OptionsAssembly() : nextPart(0) {}
+	};
+	std::map<UnsignedInt64, OptionsAssembly>	m_optionsAssembly;
+	AsciiString					m_assembledOptions;	///< the whole options string of the message being handled
+
 protected:
 	void sendMessage(LANMessage *msg, UnsignedInt ip = 0); // Convenience function
+	void sendOptions(LANMessage *msg, const AsciiString& options, UnsignedInt ip = 0);	///< a GAME_ANNOUNCE or GAME_OPTIONS, the options in as many parts as they take
+	Bool assembleOptions(LANMessage *msg, UnsignedInt senderIP);	///< TRUE when msg completes an options string, left in m_assembledOptions
 	void removePlayer(LANPlayer *player);
 	void removeGame(LANGameInfo *game);
 	void addPlayer(LANPlayer *player);
@@ -370,12 +388,14 @@ struct LANMessage
 			WideChar gameName[g_lanGameNameLength+1];
 		} GameToLeave;
 
-		// GameInfo if sent with GAME_ANNOUNCE
+		// GameInfo if sent with GAME_ANNOUNCE; options is part optionsPart of optionsParts (sendOptions)
 		struct
 		{
 			WideChar gameName[g_lanGameNameLength+1];
 			Bool inProgress;
-			char options[m_lanMaxOptionsLength+1];
+			UnsignedByte optionsPart;
+			UnsignedByte optionsParts;
+			char options[g_lanOptionsPartLength+1];
 			Bool isDirectConnect;
 		} GameInfo;
 
@@ -436,10 +456,12 @@ struct LANMessage
 			WideChar message[g_lanMaxChatLength+1];
 		} Chat;
 
-		// GameOptions is sent with GAME_OPTIONS
+		// GameOptions is sent with GAME_OPTIONS, in parts like GameInfo's
 		struct
 		{
-			char options[m_lanMaxOptionsLength+1];
+			UnsignedByte optionsPart;
+			UnsignedByte optionsParts;
+			char options[g_lanOptionsPartLength+1];
 		} GameOptions;
 
 	};
@@ -450,19 +472,23 @@ struct LANMessage
 static_assert(sizeof(LANMessage) <= MAX_LANAPI_PACKET_SIZE,
 	"LANMessage must fit in a single LAN datagram");
 // And its layout is the wire format, shared with every other build of the game (see NetworkDefs.h).
-static_assert(sizeof(LANMessage) == 471, "LANMessage is 471 bytes on the wire");
+// EA's was 471 bytes with a 401-byte options field in one piece; this one is 1089, options in parts.
+static_assert(sizeof(LANMessage) == 73 + g_lanOptionsPartLength, "LANMessage is 1089 bytes on the wire");
+static_assert(g_lanOptionsPartLength == 1016, "LANMessage carries 1016 bytes of the options string a part");
 /* And where the handlers read each field (B4), from the definition at pack(1): the 4-byte type, name
 	 (13 WideChars), userName (2), hostName (2), then the union at 34.  Every arm starts there; the fields
 	 after each arm's gameName (17 WideChars, 34 bytes) start at 68.  GameInfo is the longest arm and
-	 fills the struct: 34 + 34 + inProgress (1) + options (401) + isDirectConnect (1) = 471. */
+	 fills the struct: 34 + 34 + inProgress (1) + part (1) + parts (1) + options (1017) + isDirectConnect (1) = 1089. */
 static_assert(offsetof(LANMessage, name) == 4, "LANMessage: name follows the type");
 static_assert(offsetof(LANMessage, userName) == 30, "LANMessage: userName follows name");
 static_assert(offsetof(LANMessage, hostName) == 32, "LANMessage: hostName follows userName");
 static_assert(offsetof(LANMessage, StartTimer.seconds) == 34, "LANMessage: the union starts at 34");
 static_assert(offsetof(LANMessage, GameToLeave.gameName) == 34, "LANMessage::GameToLeave");
 static_assert(offsetof(LANMessage, GameInfo.inProgress) == 68, "LANMessage::GameInfo.inProgress");
-static_assert(offsetof(LANMessage, GameInfo.options) == 69, "LANMessage::GameInfo.options");
-static_assert(offsetof(LANMessage, GameInfo.isDirectConnect) == 470, "LANMessage::GameInfo.isDirectConnect is the last byte");
+static_assert(offsetof(LANMessage, GameInfo.optionsPart) == 69, "LANMessage::GameInfo.optionsPart");
+static_assert(offsetof(LANMessage, GameInfo.optionsParts) == 70, "LANMessage::GameInfo.optionsParts");
+static_assert(offsetof(LANMessage, GameInfo.options) == 71, "LANMessage::GameInfo.options");
+static_assert(offsetof(LANMessage, GameInfo.isDirectConnect) == 1088, "LANMessage::GameInfo.isDirectConnect is the last byte");
 static_assert(offsetof(LANMessage, PlayerInfo.playerName) == 38, "LANMessage::PlayerInfo.playerName");
 static_assert(offsetof(LANMessage, GameToJoin.exeCRC) == 38, "LANMessage::GameToJoin.exeCRC");
 static_assert(offsetof(LANMessage, GameToJoin.iniCRC) == 42, "LANMessage::GameToJoin.iniCRC");
@@ -473,7 +499,9 @@ static_assert(offsetof(LANMessage, Accept.isAccepted) == 68, "LANMessage::Accept
 static_assert(offsetof(LANMessage, MapStatus.hasMap) == 72, "LANMessage::MapStatus.hasMap");
 static_assert(offsetof(LANMessage, Chat.chatType) == 68, "LANMessage::Chat.chatType");
 static_assert(offsetof(LANMessage, Chat.message) == 72, "LANMessage::Chat.message");
-static_assert(offsetof(LANMessage, GameOptions.options) == 34, "LANMessage::GameOptions.options");
+static_assert(offsetof(LANMessage, GameOptions.optionsPart) == 34, "LANMessage::GameOptions.optionsPart");
+static_assert(offsetof(LANMessage, GameOptions.options) == 36, "LANMessage::GameOptions.options");
+static_assert(g_lanOptionsParts <= 255, "LANMessage counts the options parts in a byte");
 
 
 #endif // _LANAPI_H_

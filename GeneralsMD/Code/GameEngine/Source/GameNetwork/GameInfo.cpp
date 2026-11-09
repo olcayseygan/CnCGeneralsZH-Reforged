@@ -575,14 +575,14 @@ void GameInfo::reset( void )
 Bool GameInfo::isPlayerPreorder(Int index)
 {
 	if (index >= 0 && index < MAX_SLOTS)
-		return ((m_preorderMask & (1 << index)) != 0);
+		return ((m_preorderMask & slotBit(index)) != 0);
 	return FALSE;
 }
 
 void GameInfo::markPlayerAsPreorder(Int index)
 {
 	if (index >= 0 && index < MAX_SLOTS)
-		m_preorderMask |= 1 << index;
+		m_preorderMask |= slotBit(index);
 }
 
 
@@ -2073,23 +2073,46 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 12;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap
+	const XferVersion currentVersion = 13;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
 
-	xfer->xferInt(&m_preorderMask);
+	if (version >= 13)
+	{
+		Int64 preorder = (Int64)m_preorderMask;
+		xfer->xferInt64(&preorder);
+		m_preorderMask = (SlotMask)preorder;
+	}
+	else
+	{
+		Int preorder = (Int)m_preorderMask;
+		xfer->xferInt(&preorder);
+		m_preorderMask = (SlotMask)(UnsignedInt)preorder;
+	}
 	xfer->xferInt(&m_crcInterval);
 	xfer->xferBool(&m_inGame);
 	xfer->xferBool(&m_inProgress);
 	xfer->xferBool(&m_surrendered);
 	xfer->xferInt(&m_gameID);
 
-	Int slot = MAX_SLOTS;
-	xfer->xferInt(&slot);
-	DEBUG_ASSERTCRASH(slot==MAX_SLOTS, ("MAX_SLOTS changed, need to change version. jba."));
+	/* The save says how many slots it holds.  One from before the 36-slot room holds EA's 8, and the
+		 seats past those load closed; more than this build has is a save it cannot read. */
+	Int numSavedSlots = MAX_SLOTS;
+	xfer->xferInt(&numSavedSlots);
+	if (numSavedSlots < 0 || numSavedSlots > MAX_SLOTS)
+	{
+		DEBUG_CRASH(("SkirmishGameInfo::xfer - the save holds %d slots, this build %d", numSavedSlots, MAX_SLOTS));
+		throw XFER_INVALID_VERSION;
+	}
+	if (xfer->getXferMode() == XFER_LOAD)
+	{
+		for (Int closed = numSavedSlots; closed < MAX_SLOTS; ++closed)
+			m_slot[closed]->setState(SLOT_CLOSED);
+	}
 
-	for (slot = 0; slot < MAX_SLOTS; slot++) 
+	Int slot;
+	for (slot = 0; slot < numSavedSlots; slot++)
 	{
 		Int state = m_slot[slot]->getState();
 		xfer->xferInt(&state);

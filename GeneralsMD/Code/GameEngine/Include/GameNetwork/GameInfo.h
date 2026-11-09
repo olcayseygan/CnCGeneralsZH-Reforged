@@ -342,7 +342,7 @@ public:
   Bool hasAIPlayers( void ) const;									///< is any slot held by a computer player?
 
 protected:
-	Int m_preorderMask;
+	SlotMask m_preorderMask;
 	Int m_crcInterval;
 	Bool m_inGame;
 	Bool m_inProgress;

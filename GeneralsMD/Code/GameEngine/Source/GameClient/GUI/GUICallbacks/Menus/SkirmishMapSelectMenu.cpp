@@ -219,7 +219,8 @@ void SkirmishMapSelectMenuInit( WindowLayout *layout, void *userData )
 		tmpString.format("SkirmishMapSelectMenu.wnd:ButtonMapStartPosition%d", i);
 		buttonMapStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( winMapPreview, buttonMapStartPositionID[i] );
-		DEBUG_ASSERTCRASH(buttonMapStartPosition[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
+		if (!buttonMapStartPosition[i])
+			continue;	// the layout has fewer start spot buttons than MAX_SLOTS
 		buttonMapStartPosition[i]->winHide(TRUE);
 		buttonMapStartPosition[i]->winEnable(FALSE);
 	}

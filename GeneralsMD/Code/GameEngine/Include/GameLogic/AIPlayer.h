@@ -644,7 +644,7 @@ protected:
 	ObjectID			m_raider[ MAX_PERSONA_RAIDERS ];	///< the Raider's own raiders, which no wave or defence takes
 	UnsignedInt		m_shareFrame;					///< the last Economist share
 	UnsignedInt		m_chatFrame;					///< the last line of chat, 0 for none yet
-	Int						m_beatenMask;					///< enemies seen eliminated, by player index, for the chat
+	PlayerMaskType	m_beatenMask;				///< enemies seen eliminated, by player index, for the chat
 	// counters for logPersonaSummary, written and never read by a decision
 	Int						m_personaWaves;
 	UnsignedInt		m_firstWaveFrame;

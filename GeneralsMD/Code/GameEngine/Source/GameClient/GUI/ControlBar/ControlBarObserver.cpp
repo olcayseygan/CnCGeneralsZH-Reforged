@@ -281,7 +281,8 @@ void ControlBar::populateObserverList( void )
 	if(TheRecorder->isMultiplayer())
 	{
 	
-		for (i = 0; i < MAX_SLOTS; ++i)
+		// ponytail: the bar has MAX_BUTTONS rows; players past them are not listed
+		for (i = 0; i < MAX_SLOTS && currentButton < MAX_BUTTONS; ++i)
 		{
 			AsciiString name;
 			name.format("player%d", i);

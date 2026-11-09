@@ -1750,7 +1750,7 @@ Bool PathfindCell::startPathfind( PathfindCell *goalCell  )
 	m_info->m_totalCost = 0;
 	m_info->m_travelSoFar = 0;	// and no ground covered, which is a different number
 	if (goalCell) {
-		m_info->m_totalCost = costToGoal( goalCell );
+		m_info->m_totalCost = clampCost( costToGoal( goalCell ) );
 	}
 	// the caller assigns this cell to m_openList by hand rather than linking it in, so it
 	// is not really on a list; saying it is only makes releaseInfo() refuse to free it
@@ -3067,8 +3067,15 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 
 
 	m_maxZone = 1;	// we start using zone 0 as a flag.
-	const Int maxZones=24000;
-	zoneStorageType zoneEquivalency[maxZones];
+	/* One entry per id a zone can have, and static: EA's 24000 sat on the stack with the overflow
+		 check commented out, so a map past it wrote over the frame.  A raw zone is a run of one terrain
+		 type inside a ZONE_BLOCK_SIZE block, so the count grows with the blocks; the layers take up to
+		 LAYER_LAST+1 more after the collapse.  A map that still runs out stops here, the same way on
+		 every machine, rather than pathing on wrapped zone numbers. */
+	const Int maxZones = MAX_RAW_ZONES;
+	const UnsignedInt lastRawZone = MAX_RAW_ZONES - 1 - (LAYER_LAST + 1);
+	static_assert( MAX_RAW_ZONES == 1 << ( 8 * sizeof( zoneStorageType ) ), "one entry per zone id" );
+	static zoneStorageType zoneEquivalency[maxZones];
 	Int i, j;
 	for (i=0; i<maxZones; i++) {
 		zoneEquivalency[i] = i;
@@ -3115,12 +3122,12 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 						}
 					}
 					if (cell->getZone()==0) {
+						if (m_maxZone > lastRawZone) {
+							DEBUG_LOG(("calculateZones: out of pathfind zones at cell %d,%d of %d,%d\n", i, j, globalBounds.hi.x, globalBounds.hi.y));
+							RELEASE_CRASH("Ran out of pathfind zones: the map has more separate patches of terrain than the pathfinder can number.");
+						}
 						cell->setZone(m_maxZone);
 						m_maxZone++;
-//						if (m_maxZone>= maxZones) {
-//							DEBUG_CRASH(("Ran out of pathfind zones.  SERIOUS ERROR! jba."));
-//							break;
-//						}
 					}
 					if (cell->getConnectLayer() > LAYER_GROUND) {
  						m_zoneBlocks[xBlock][yBlock].setInteractsWithBridge(true);
@@ -3142,7 +3149,7 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 
 	// Collapse the zones into a 1,2,3... sequence, removing collapsed zones.
 	m_maxZone = 1;
-	Int collapsedZones[maxZones];
+	static Int collapsedZones[maxZones];
 	collapsedZones[0] = 0;
 
   i = 1;

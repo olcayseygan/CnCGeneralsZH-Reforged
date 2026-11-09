@@ -132,11 +132,11 @@ public:
 	void parseUserList( const GameInfo *game );
 	void startGame(void);																			///< Sets the network game frame counter to -1
 
-	void sendChat(UnicodeString text, Int playerMask);
+	void sendChat(UnicodeString text, SlotMask playerMask);
 	void sendDisconnectChat(UnicodeString text);
 
-	void sendFile(AsciiString path, UnsignedByte playerMask, UnsignedShort commandID);
-	UnsignedShort sendFileAnnounce(AsciiString path, UnsignedByte playerMask);
+	void sendFile(AsciiString path, SlotMask playerMask, UnsignedShort commandID);
+	UnsignedShort sendFileAnnounce(AsciiString path, SlotMask playerMask);
 	Int getFileTransferProgress(Int playerID, AsciiString path);
 	Bool areAllQueuesEmpty(void);
 
@@ -962,7 +962,7 @@ UnsignedInt Network::getPacketArrivalCushion( void )
 /**
  * Sends a line of chat to the other players
  */
-void Network::sendChat(UnicodeString text, Int playerMask) {
+void Network::sendChat(UnicodeString text, SlotMask playerMask) {
 	Int executionFrame = getExecutionFrame();
 	m_conMgr->sendChat(text, playerMask, executionFrame);
 }
@@ -975,13 +975,13 @@ void Network::sendDisconnectChat(UnicodeString text) {
 }
 
 // send a file.  woohoo.
-void Network::sendFile(AsciiString path, UnsignedByte playerMask, UnsignedShort commandID)
+void Network::sendFile(AsciiString path, SlotMask playerMask, UnsignedShort commandID)
 {
 	m_conMgr->sendFile(path, playerMask, commandID);
 }
 
 // send a file.  woohoo.
-UnsignedShort Network::sendFileAnnounce(AsciiString path, UnsignedByte playerMask)
+UnsignedShort Network::sendFileAnnounce(AsciiString path, SlotMask playerMask)
 {
 	return m_conMgr->sendFileAnnounce(path, playerMask);
 }

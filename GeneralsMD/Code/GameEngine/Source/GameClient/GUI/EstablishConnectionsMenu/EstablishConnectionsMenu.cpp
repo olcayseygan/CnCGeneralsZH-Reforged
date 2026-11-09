@@ -106,6 +106,8 @@ void EstablishConnectionsMenu::abortGame() {
 
 // the slot number passed in is the index we are to use for the menu.
 void EstablishConnectionsMenu::setPlayerName(Int slot, UnicodeString name) {
+	if (m_playerNameControlNames[slot] == NULL)
+		return; // the layout has 7 rows; players past them are not shown
 	NameKeyType controlID = TheNameKeyGenerator->nameToKey(m_playerNameControlNames[slot]);
 	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, controlID);
 
@@ -117,6 +119,8 @@ void EstablishConnectionsMenu::setPlayerName(Int slot, UnicodeString name) {
 }
 
 void EstablishConnectionsMenu::setPlayerStatus(Int slot, NATConnectionState state) {
+	if (m_playerStatusControlNames[slot] == NULL)
+		return;
 	NameKeyType controlID = TheNameKeyGenerator->nameToKey(m_playerStatusControlNames[slot]);
 	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, controlID);
 

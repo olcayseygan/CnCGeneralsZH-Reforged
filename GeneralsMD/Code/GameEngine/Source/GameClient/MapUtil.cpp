@@ -391,6 +391,12 @@ void WaypointMap::update( void )
 }
 
 const char * MapCache::m_mapCacheName = "MapCache.ini";
+/* A build from before 36 slots read and wrote only Player_1..8_Start, so its user cache says 8 for a
+	 map with more starts, and addMap trusts an entry whose file size still matches.  populateRandom-
+	 StartPosition deals starts over that count, so one machine with an old cache and one with a fresh
+	 one began the same match on different starts.  A file of a new name is never one an old build
+	 wrote: every user map parses again once, and the old file is left for the old build. */
+const char * MapCache::m_userMapCacheName = "MapCache36.ini";
 
 AsciiString MapCache::getMapDir() const 
 { 
@@ -412,6 +418,7 @@ AsciiString MapCache::getMapExtension() const
 void MapCache::writeCacheINI( Bool userDir )
 {
 	AsciiString mapDir;
+	const char *cacheName = m_mapCacheName;
 	if (!userDir || TheGlobalData->m_buildMapCache)
 	{
 		mapDir = getMapDir();
@@ -419,6 +426,7 @@ void MapCache::writeCacheINI( Bool userDir )
 	else
 	{
 		mapDir = getUserMapDir();
+		cacheName = m_userMapCacheName;
 	}
 
 	AsciiString filepath = mapDir;
@@ -426,7 +434,7 @@ void MapCache::writeCacheINI( Bool userDir )
 
 	TheFileSystem->createDirectory(mapDir);
 
-	filepath.concat(m_mapCacheName);
+	filepath.concat(cacheName);
 	FILE *fp = zh_fopen(filepath.str(), "w");
 	DEBUG_ASSERTCRASH(fp != NULL, ("Failed to create %s", filepath.str()));
 	if (fp == NULL) {
@@ -594,7 +602,7 @@ Bool MapCache::loadUserMaps()
 
 			INI ini;
 			AsciiString fname;
-			fname.format("%s\\%s", mapDir.str(), m_mapCacheName);
+			fname.format("%s\\%s", mapDir.str(), m_userMapCacheName);
 			File *fp = TheFileSystem->openFile(fname.str(), File::READ);
 			if (fp)
 			{

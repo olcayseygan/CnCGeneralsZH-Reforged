@@ -8536,14 +8536,14 @@ void AIPlayer::stepIncomeBonus( void )
 		worth[ count ] = incomeStrength( other );
 		++count;
 	}
-	UnsignedInt allies[ MAX_PLAYER_COUNT ];
+	PlayerMaskType allies[ MAX_PLAYER_COUNT ];
 	for( Int i = 0; i < count; ++i )
 	{
 		allies[ i ] = 0;
 		for( Int j = 0; j < count; ++j )
 			if( j != i && seat[ i ]->getRelationship( seat[ j ]->getDefaultTeam() ) == ALLIES
 					&& seat[ j ]->getRelationship( seat[ i ]->getDefaultTeam() ) == ALLIES )
-				allies[ i ] |= 1u << j;
+				allies[ i ] |= playerIndexToMask( j );
 	}
 	Int own, strongest;
 	IncomeSideWorths( worth, allies, count, self, &own, &strongest );
@@ -19107,13 +19107,13 @@ void AIPlayer::notePersonaProgress( void )
 		DEBUG_LOG(("AI PERSONA frame %d player %d has its superweapon up and plays on as Normal\n", TheGameLogic->getFrame(),
 			m_player->getPlayerIndex()));
 	}
-	for( Int i = 0; i < ThePlayerList->getPlayerCount() && i < 32; ++i )
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 	{
 		Player *other = ThePlayerList->getNthPlayer( i );
-		if( (m_beatenMask & (1 << i)) != 0 || other == m_player || !other->isPlayableSide() ||
+		if( (m_beatenMask & other->getPlayerMask()) != 0 || other == m_player || !other->isPlayableSide() ||
 				m_player->getRelationship( other->getDefaultTeam() ) != ENEMIES || other->hasAnyUnits() || other->hasAnyBuildFacility() )
 			continue;
-		m_beatenMask |= 1 << i;
+		m_beatenMask |= other->getPlayerMask();
 		personaChat( "Win" );
 	}
 }
@@ -20296,7 +20296,7 @@ void AIPlayer::xfer( Xfer *xfer )
 		xfer->xferUser( m_raider, sizeof( m_raider ) );
 		xfer->xferUnsignedInt( &m_shareFrame );
 		xfer->xferUnsignedInt( &m_chatFrame );
-		xfer->xferInt( &m_beatenMask );
+		xfer->xferUser( &m_beatenMask, sizeof( m_beatenMask ) );
 		xfer->xferInt( &m_personaWaves );
 		xfer->xferUnsignedInt( &m_firstWaveFrame );
 		xfer->xferInt( &m_personaShared );

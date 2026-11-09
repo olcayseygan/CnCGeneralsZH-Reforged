@@ -83,8 +83,10 @@ static const Int MAX_SAVE_FILE_NUMBER  =  99999999;
 // The GameState block's version.  4 adds nothing to the block: it marks the build where logic went
 // to 60 ticks a second, and a file written before that cannot load in this one (a mission save
 // aside: SaveGameInfo::isLoadable).  The original
-// game's files are 2, as were this fork's until 3 added the game speed.
-static const XferVersion GAME_STATE_VERSION = 4;
+// game's files are 2, as were this fork's until 3 added the game speed.  5 is the same kind of mark:
+// MAX_PLAYER_COUNT went from 16 to 48, and every per-player array in the file, a PartitionCell's
+// shroud and a mask now 64 bits wide among them, is written at the new length.
+static const XferVersion GAME_STATE_VERSION = 5;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #define GAME_STATE_BLOCK_STRING "CHUNK_GameState"  // block of save game data with game info data
@@ -1739,7 +1741,8 @@ void GameState::gameStatePostProcessLoad( void )
 	* 1: Initial version 
 	* 2: Added save file type and mission map name (regular save vs automatic mission save)
 	* 3: Added the game speed
-	* 4: Nothing new in the block; see GAME_STATE_VERSION */
+	* 4: Nothing new in the block; see GAME_STATE_VERSION
+	* 5: Nothing new in the block either; 48 players, see GAME_STATE_VERSION */
 // ------------------------------------------------------------------------------------------------
 void GameState::xfer( Xfer *xfer )
 {

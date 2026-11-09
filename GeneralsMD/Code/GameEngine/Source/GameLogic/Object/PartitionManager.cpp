@@ -1571,7 +1571,7 @@ void PartitionCell::addPlayerCoi(Int playerIndex)
 	if (playerIndex < 0)
 		return;
 	if (m_playerCoiCount[playerIndex]++ == 0)
-		m_playerCoiMask |= (PlayerMaskType)(1 << playerIndex);
+		m_playerCoiMask |= playerIndexToMask( playerIndex );
 }
 
 //-----------------------------------------------------------------------------
@@ -1581,7 +1581,7 @@ void PartitionCell::removePlayerCoi(Int playerIndex)
 		return;
 	DEBUG_ASSERTCRASH(m_playerCoiCount[playerIndex] > 0, ("player coi count underflow"));
 	if (--m_playerCoiCount[playerIndex] == 0)
-		m_playerCoiMask &= (PlayerMaskType)~(1 << playerIndex);
+		m_playerCoiMask &= ~playerIndexToMask( playerIndex );
 }
 
 //-----------------------------------------------------------------------------

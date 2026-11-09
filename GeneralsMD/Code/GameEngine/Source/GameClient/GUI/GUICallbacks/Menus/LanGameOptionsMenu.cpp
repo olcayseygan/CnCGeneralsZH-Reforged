@@ -464,6 +464,8 @@ void LANDisableButtons()
 
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
+		if (!comboBoxPlayer[i])
+			continue;
 		comboBoxPlayer[i]->winEnable(false);
 		comboBoxColor[i]->winEnable(false);
 		comboBoxPlayerTemplate[i]->winEnable(false);
@@ -1007,7 +1009,9 @@ void InitLanGameGadgets( void )
 		comboBoxPlayerID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxPlayer[i] = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxPlayerID[i] );
 		GadgetComboBoxReset(comboBoxPlayer[i]);
-		GadgetComboBoxGetEditBox(comboBoxPlayer[i])->winSetTooltipFunc(playerTooltip);
+		// seats past the layout's rows have no controls: ids are still made, windows stay NULL
+		if (comboBoxPlayer[i])
+			GadgetComboBoxGetEditBox(comboBoxPlayer[i])->winSetTooltipFunc(playerTooltip);
 
 		if(localSlotNum == i)
 		{
@@ -1027,33 +1031,37 @@ void InitLanGameGadgets( void )
 		tmpString.format("LanGameOptionsMenu.wnd:ComboBoxColor%d", i);
 		comboBoxColorID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxColor[i] = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxColorID[i] );
-		DEBUG_ASSERTCRASH(comboBoxColor[i], ("Could not find the comboBoxColor[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxColor[i] || !comboBoxPlayer[i], ("Could not find the comboBoxColor[%d]",i ));
 		PopulateColorComboBox(i, comboBoxColor, TheLAN->GetMyGame());
 		GadgetComboBoxSetSelectedPos(comboBoxColor[i], 0);
 		
 		tmpString.format("LanGameOptionsMenu.wnd:ComboBoxPlayerTemplate%d", i);
 		comboBoxPlayerTemplateID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxPlayerTemplate[i] = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxPlayerTemplateID[i] );
-		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i], ("Could not find the comboBoxPlayerTemplate[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i] || !comboBoxPlayer[i], ("Could not find the comboBoxPlayerTemplate[%d]",i ));
 		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, TheLAN->GetMyGame(), TRUE);
 
 		// add tooltips to the player template combobox and listbox
-		comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
-		GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		if (comboBoxPlayerTemplate[i])
+		{
+			comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
+			GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		}
 
 		tmpString.format("LanGameOptionsMenu.wnd:ComboBoxTeam%d", i);
 		comboBoxTeamID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxTeam[i] = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxTeamID[i] );
-		DEBUG_ASSERTCRASH(comboBoxTeam[i], ("Could not find the comboBoxTeam[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxTeam[i] || !comboBoxPlayer[i], ("Could not find the comboBoxTeam[%d]",i ));
 		PopulateTeamComboBox(i, comboBoxTeam, TheLAN->GetMyGame());
 
 		tmpString.clear();
 		tmpString.format("LanGameOptionsMenu.wnd:ButtonAccept%d", i); 
 		buttonAcceptID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonAccept[i] = TheWindowManager->winGetWindowFromId( parentLanGameOptions, buttonAcceptID[i] );
-		DEBUG_ASSERTCRASH(buttonAccept[i], ("Could not find the buttonAccept[%d]",i ));
+		DEBUG_ASSERTCRASH(buttonAccept[i] || !comboBoxPlayer[i], ("Could not find the buttonAccept[%d]",i ));
 		//Added by Saad for the tooltips on the MultiPlayer icons
-		buttonAccept[i]->winSetTooltipFunc(gameAcceptTooltip);
+		if (buttonAccept[i])
+			buttonAccept[i]->winSetTooltipFunc(gameAcceptTooltip);
 //		
 //		tmpString.format("LanGameOptionsMenu.wnd:ButtonStartPosition%d", i);
 //		buttonStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );
@@ -1063,7 +1071,7 @@ void InitLanGameGadgets( void )
 		tmpString.format("LanGameOptionsMenu.wnd:ButtonMapStartPosition%d", i);
 		buttonMapStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( parentLanGameOptions, buttonMapStartPositionID[i] );
-		DEBUG_ASSERTCRASH(buttonMapStartPosition[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
+		DEBUG_ASSERTCRASH(buttonMapStartPosition[i] || !comboBoxPlayer[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
 
 		if(i !=0 && buttonAccept[i])
 			buttonAccept[i]->winHide(TRUE);
@@ -1197,6 +1205,8 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	}
 	for (Int i = start; i < MAX_SLOTS; ++i)
 	{
+		if (!comboBoxPlayer[i])
+			continue;
 		//I'm a client, disable the controls I can't touch.
 		if (!TheLAN->AmIHost())
 			comboBoxPlayer[i]->winEnable(FALSE);

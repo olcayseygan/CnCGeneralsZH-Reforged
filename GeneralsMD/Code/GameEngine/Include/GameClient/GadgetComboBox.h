@@ -166,7 +166,7 @@ inline Color	GadgetComboBoxGetHiliteSelectedItemBorderColor( GameWindow *g )			{
 
 inline GameWindow *GadgetComboBoxGetDropDownButton( GameWindow *g )
 {
-	ComboBoxData *comboBoxData = (ComboBoxData *)g->winGetUserData();
+	ComboBoxData *comboBoxData = g ? (ComboBoxData *)g->winGetUserData() : NULL;
 
 	if( comboBoxData && comboBoxData->dropDownButton )
 		return comboBoxData->dropDownButton;
@@ -174,7 +174,7 @@ inline GameWindow *GadgetComboBoxGetDropDownButton( GameWindow *g )
 }
 inline GameWindow *GadgetComboBoxGetListBox( GameWindow *g )
 {
-	ComboBoxData *comboBoxData = (ComboBoxData *)g->winGetUserData();
+	ComboBoxData *comboBoxData = g ? (ComboBoxData *)g->winGetUserData() : NULL;
 
 	if( comboBoxData && comboBoxData->listBox)
 		return comboBoxData->listBox;
@@ -184,7 +184,7 @@ inline GameWindow *GadgetComboBoxGetListBox( GameWindow *g )
 
 inline GameWindow *GadgetComboBoxGetEditBox( GameWindow *g )
 {
-	ComboBoxData *comboBoxData = (ComboBoxData *)g->winGetUserData();
+	ComboBoxData *comboBoxData = g ? (ComboBoxData *)g->winGetUserData() : NULL;
 
 	if( comboBoxData && comboBoxData->editBox)
 		return comboBoxData->editBox;

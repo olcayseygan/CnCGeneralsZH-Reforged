@@ -3598,28 +3598,28 @@ Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength )
   return bonus < AI_INCOME_BONUS_MAX ? bonus : AI_INCOME_BONUS_MAX;
 }
 
-void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
+void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
 {
-  UnsignedInt grouped = 0;
+  PlayerMaskType grouped = 0;
   *ownAverage = 0;
   *strongestEnemyAverage = 0;
   for( Int lead = 0; lead < count; ++lead )
   {
-    if( grouped & ( 1u << lead ) )
+    if( grouped & playerIndexToMask( lead ) )
       continue;
     // the leader's own side when it is this player or one of its allies, else the next enemy side
-    const Bool ours = lead == self || ( allies[ self ] & ( 1u << lead ) ) != 0;
+    const Bool ours = lead == self || ( allies[ self ] & playerIndexToMask( lead ) ) != 0;
     Int64 sum = 0;
     Int size = 0;
     for( Int i = lead; i < count; ++i )
     {
-      if( grouped & ( 1u << i ) )
+      if( grouped & playerIndexToMask( i ) )
         continue;
-      const Bool member = ours ? ( i == self || ( allies[ self ] & ( 1u << i ) ) != 0 )
-                               : ( i == lead || ( allies[ lead ] & ( 1u << i ) ) != 0 );
+      const Bool member = ours ? ( i == self || ( allies[ self ] & playerIndexToMask( i ) ) != 0 )
+                               : ( i == lead || ( allies[ lead ] & playerIndexToMask( i ) ) != 0 );
       if( !member )
         continue;
-      grouped |= 1u << i;
+      grouped |= playerIndexToMask( i );
       sum += worth[ i ];
       ++size;
     }

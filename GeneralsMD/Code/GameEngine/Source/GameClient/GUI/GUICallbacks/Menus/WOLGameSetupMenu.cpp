@@ -588,6 +588,8 @@ NameKeyType listboxGameSetupChatID = NAMEKEY_INVALID;
 static void handleColorSelection(int index)
 {
 	GameWindow *combo = comboBoxColor[index];
+	if (!combo)
+		return;	// a seat the layout has no row for: nothing was picked
 	Int color, selIndex;
 	GadgetComboBoxGetSelectedPos(combo, &selIndex);
 	color = (Int)(intptr_t)GadgetComboBoxGetItemData(combo, selIndex);
@@ -651,6 +653,8 @@ static void handleColorSelection(int index)
 static void handlePlayerTemplateSelection(int index)
 {
 	GameWindow *combo = comboBoxPlayerTemplate[index];
+	if (!combo)
+		return;	// a seat the layout has no row for: nothing was picked
 	Int playerTemplate, selIndex;
 	GadgetComboBoxGetSelectedPos(combo, &selIndex);
 	playerTemplate = (Int)(intptr_t)GadgetComboBoxGetItemData(combo, selIndex);
@@ -776,6 +780,8 @@ static void handleStartPositionSelection(Int player, int startPos)
 static void handleTeamSelection(int index)
 {
 	GameWindow *combo = comboBoxTeam[index];
+	if (!combo)
+		return;	// a seat the layout has no row for: nothing was picked
 	Int team, selIndex;
 	GadgetComboBoxGetSelectedPos(combo, &selIndex);
 	team = (Int)(intptr_t)GadgetComboBoxGetItemData(combo, selIndex);
@@ -1501,14 +1507,20 @@ void InitWOLGameGadgets( void )
 		comboBoxPlayerID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxPlayer[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxPlayerID[i] );
 		GadgetComboBoxReset(comboBoxPlayer[i]);
-		comboBoxPlayer[i]->winSetTooltipFunc(playerTooltip);
+		// seats past the layout's rows have no controls: ids are still named, nothing is drawn
+		const Bool hasRow = comboBoxPlayer[i] != NULL;
+		if (hasRow)
+			comboBoxPlayer[i]->winSetTooltipFunc(playerTooltip);
 
 		tmpString.format("GameSpyGameOptionsMenu.wnd:StaticTextPlayer%d", i);
 		staticTextPlayerID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		staticTextPlayer[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, staticTextPlayerID[i] );
-		staticTextPlayer[i]->winSetTooltipFunc(playerTooltip);
-		if (TheGameSpyInfo->amIHost())
-			staticTextPlayer[i]->winHide(TRUE);
+		if (staticTextPlayer[i])
+		{
+			staticTextPlayer[i]->winSetTooltipFunc(playerTooltip);
+			if (TheGameSpyInfo->amIHost())
+				staticTextPlayer[i]->winHide(TRUE);
+		}
 
 		if(i==0 && TheGameSpyInfo->amIHost())
 		{
@@ -1525,37 +1537,42 @@ void InitWOLGameGadgets( void )
 		tmpString.format("GameSpyGameOptionsMenu.wnd:ComboBoxColor%d", i);
 		comboBoxColorID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxColor[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxColorID[i] );
-		DEBUG_ASSERTCRASH(comboBoxColor[i], ("Could not find the comboBoxColor[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxColor[i] || !hasRow, ("Could not find the comboBoxColor[%d]",i ));
 		PopulateColorComboBox(i, comboBoxColor, theGameInfo);
 		GadgetComboBoxSetSelectedPos(comboBoxColor[i], 0);
-		
+
 		tmpString.format("GameSpyGameOptionsMenu.wnd:ComboBoxPlayerTemplate%d", i);
 		comboBoxPlayerTemplateID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxPlayerTemplate[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxPlayerTemplateID[i] );
-		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i], ("Could not find the comboBoxPlayerTemplate[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i] || !hasRow, ("Could not find the comboBoxPlayerTemplate[%d]",i ));
 		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, theGameInfo, theGameInfo->getAllowObservers() );
 
 		// add tooltips to the player template combobox and listbox
-		comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
-		GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		if (comboBoxPlayerTemplate[i])
+		{
+			comboBoxPlayerTemplate[i]->winSetTooltipFunc(playerTemplateComboBoxTooltip);
+			GadgetComboBoxGetListBox(comboBoxPlayerTemplate[i])->winSetTooltipFunc(playerTemplateListBoxTooltip);
+		}
 
 		tmpString.format("GameSpyGameOptionsMenu.wnd:ComboBoxTeam%d", i);
 		comboBoxTeamID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxTeam[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxTeamID[i] );
-		DEBUG_ASSERTCRASH(comboBoxTeam[i], ("Could not find the comboBoxTeam[%d]",i ));
+		DEBUG_ASSERTCRASH(comboBoxTeam[i] || !hasRow, ("Could not find the comboBoxTeam[%d]",i ));
 		PopulateTeamComboBox(i, comboBoxTeam, theGameInfo);
 
-		tmpString.format("GameSpyGameOptionsMenu.wnd:ButtonAccept%d", i); 
+		tmpString.format("GameSpyGameOptionsMenu.wnd:ButtonAccept%d", i);
 		buttonAcceptID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonAccept[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, buttonAcceptID[i] );
-		DEBUG_ASSERTCRASH(buttonAccept[i], ("Could not find the buttonAccept[%d]",i ));
-		buttonAccept[i]->winSetTooltipFunc(gameAcceptTooltip);
+		DEBUG_ASSERTCRASH(buttonAccept[i] || !hasRow, ("Could not find the buttonAccept[%d]",i ));
+		if (buttonAccept[i])
+			buttonAccept[i]->winSetTooltipFunc(gameAcceptTooltip);
 
-		tmpString.format("GameSpyGameOptionsMenu.wnd:GenericPing%d", i); 
+		tmpString.format("GameSpyGameOptionsMenu.wnd:GenericPing%d", i);
 		genericPingWindowID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		genericPingWindow[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, genericPingWindowID[i] );
-		DEBUG_ASSERTCRASH(genericPingWindow[i], ("Could not find the genericPingWindow[%d]",i ));
-		genericPingWindow[i]->winSetTooltipFunc(pingTooltip);
+		DEBUG_ASSERTCRASH(genericPingWindow[i] || !hasRow, ("Could not find the genericPingWindow[%d]",i ));
+		if (genericPingWindow[i])
+			genericPingWindow[i]->winSetTooltipFunc(pingTooltip);
 
 //		tmpString.format("GameSpyGameOptionsMenu.wnd:ButtonStartPosition%d", i);
 //		buttonStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );
@@ -1565,7 +1582,7 @@ void InitWOLGameGadgets( void )
 		tmpString.format("GameSpyGameOptionsMenu.wnd:ButtonMapStartPosition%d", i);
 		buttonMapStartPositionID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		buttonMapStartPosition[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, buttonMapStartPositionID[i] );
-		DEBUG_ASSERTCRASH(buttonMapStartPosition[i], ("Could not find the ButtonMapStartPosition[%d]",i ));
+		DEBUG_ASSERTCRASH(buttonMapStartPosition[i] || !hasRow, ("Could not find the ButtonMapStartPosition[%d]",i ));
 
 //		if (buttonStartPosition[i])
 //			buttonStartPosition[i]->winHide(TRUE);
@@ -1923,6 +1940,8 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		for (Int i = 0; i < MAX_SLOTS; ++i)
 		{
 			//I'm a client, disable the controls I can't touch.
+			if (!comboBoxPlayer[i])
+				continue;
 			comboBoxPlayer[i]->winEnable(FALSE);
 
 			comboBoxColor[i]->winEnable(FALSE);

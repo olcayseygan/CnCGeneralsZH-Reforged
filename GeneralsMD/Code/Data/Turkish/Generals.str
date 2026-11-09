@@ -521,6 +521,86 @@ Color:Olive
 "Zeytin Yeşili"
 END
 
+Color:Maroon
+"Bordo"
+END
+
+Color:Mint
+"Nane Yeşili"
+END
+
+Color:White
+"Beyaz"
+END
+
+Color:Charcoal
+"Kömür Grisi"
+END
+
+Color:Silver
+"Gümüş"
+END
+
+Color:Steel
+"Çelik Mavisi"
+END
+
+Color:Indigo
+"Çivit"
+END
+
+Color:Peach
+"Şeftali"
+END
+
+Color:Forest
+"Orman Yeşili"
+END
+
+Color:Rose
+"Gül"
+END
+
+Color:Plum
+"Erik"
+END
+
+Color:Rust
+"Pas"
+END
+
+Color:Sand
+"Kum"
+END
+
+Color:SeaGreen
+"Deniz Yeşili"
+END
+
+Color:Lemon
+"Limon Sarısı"
+END
+
+Color:Orchid
+"Orkide"
+END
+
+Color:Bronze
+"Bronz"
+END
+
+Color:Ochre
+"Hardal"
+END
+
+Color:Chocolate
+"Çikolata"
+END
+
+Color:Moss
+"Yosun Yeşili"
+END
+
 GUI:ShowBehindBuildings
 "Binaların arkasındaki ısı izi AÇIK"
 END

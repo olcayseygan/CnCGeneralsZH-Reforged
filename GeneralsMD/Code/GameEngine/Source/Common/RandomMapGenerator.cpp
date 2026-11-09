@@ -1084,6 +1084,7 @@ private:
 	void buildLakeMask( void );
 	void chooseStarts( void );
 	void searchStarts( const std::vector<RMGStartCandidate>& candidates );
+	void sortStartsRoundCentre( void );
 	void ringStarts( const std::vector<RMGStartCandidate>& candidates, Real angle, Real ring, Real edgeRing );
 	void startWalks( const std::vector<Int>& cost, std::vector<Int>& walks ) const;
 	static Real walkSpread( const std::vector<Int>& walks, Int *nearLowOut );
@@ -2783,6 +2784,18 @@ void RMGLayout::chooseStarts( void )
 		return;
 	}
 
+	/* Past eight seats nothing below is tuned for it, and a ring leaves the middle of a big map
+		empty. The furthest-from-the-rest search spreads them over the whole start box instead, put in
+		order round the centre so connectStarts joins each seat to a neighbour, not to one across the
+		map. Nor are the layouts walked: twelve layouts of 36 floods each bought nothing a fair duel
+		needs. */
+	if( m_settings.m_numPlayers > RandomMapGenerator::DEFAULT_PLAYERS )
+	{
+		searchStarts( candidates );
+		sortStartsRoundCentre();
+		return;
+	}
+
 	/* A river map with an even count sits on a ring, turned half a seat off the river's line,
 		so every seat has a mirror image on the far bank and the same walk to it. Left to the search,
 		the river's dead band pushed one seat of four out on its own, twice as far from a fight as
@@ -3270,6 +3283,28 @@ void RMGLayout::searchStarts( const std::vector<RMGStartCandidate>& candidates )
 		start.m_cellY = candidates[bestCandidate].m_cellY;
 		m_starts.push_back( start );
 	}
+}
+
+/** A point's bearing from (centre, centre) as a diamond angle, 0 to 4 round the turn: plain
+	arithmetic, so every machine orders the same. */
+static Real rmgDiamondBearing( const RMGPoint& p, Real centre )
+{
+	const Real dx = p.m_cellX - centre, dy = p.m_cellY - centre;
+	const Real sum = fabsf( dx ) + fabsf( dy );
+	if( sum <= 0.0f )
+		return 0.0f;
+	const Real turn = dy / sum;
+	return dx >= 0.0f ? ( turn < 0.0f ? 4.0f + turn : turn ) : 2.0f - turn;
+}
+
+/// The starts in order of their bearing from the map's centre; ties keep search order.
+void RMGLayout::sortStartsRoundCentre( void )
+{
+	const Real centre = (Real)m_settings.m_playableCells * 0.5f;
+	std::stable_sort( m_starts.begin(), m_starts.end(), [centre]( const RMGPoint& a, const RMGPoint& b )
+	{
+		return rmgDiamondBearing( a, centre ) < rmgDiamondBearing( b, centre );
+	} );
 }
 
 /// Flatten a disc under each start so a base can be laid out on it.
@@ -6930,6 +6965,26 @@ void RMGLayout::addApproachWaypoint( const char *lane, Int targetStart, Int from
 	paths from every other start. The centre one walks the ground route the flood fill finds; the other
 	two bow out to either side of the straight line, each point moved onto the nearest ground a unit
 	can reach from the target. */
+/// Is start from among the count starts nearest target in a straight line? Ties go to the lower index.
+static Bool rmgAmongNearestStarts( const std::vector<RMGPoint>& starts, UnsignedInt target, UnsignedInt from, Int count )
+{
+	const Real fx = starts[from].m_cellX - starts[target].m_cellX;
+	const Real fy = starts[from].m_cellY - starts[target].m_cellY;
+	const Real reach = fx * fx + fy * fy;
+	Int nearer = 0;
+	for( UnsignedInt i = 0; i < starts.size(); i++ )
+	{
+		if( i == target || i == from )
+			continue;
+		const Real dx = starts[i].m_cellX - starts[target].m_cellX;
+		const Real dy = starts[i].m_cellY - starts[target].m_cellY;
+		const Real d = dx * dx + dy * dy;
+		if( d < reach || ( d == reach && i < from ) )
+			nearer++;
+	}
+	return nearer < count;
+}
+
 void RMGLayout::addApproachPaths( Int *waypointID )
 {
 	m_waypointLinks.clear();
@@ -6952,6 +7007,13 @@ void RMGLayout::addApproachPaths( Int *waypointID )
 		for( UnsignedInt from = 0; from < m_starts.size(); from++ )
 		{
 			if( from == target )
+				continue;
+			/* Every pair of 36 seats is 3780 paths and some 100k waypoints, and
+				TerrainLogic::addWaypointLink walks every waypoint to find a link's two ends. Past eight
+				seats a target takes its paths from its seven nearest, everybody on an eight-seat map;
+				a wave from further off joins the path at its nearest waypoint as it always did. */
+			if( m_starts.size() > RandomMapGenerator::DEFAULT_PLAYERS
+				&& !rmgAmongNearestStarts( m_starts, target, from, RandomMapGenerator::DEFAULT_PLAYERS - 1 ) )
 				continue;
 			const Real fromX = m_starts[from].m_cellX;
 			const Real fromY = m_starts[from].m_cellY;
@@ -7602,28 +7664,33 @@ Int RandomMapGenerator::cellsFor( RandomMapSize size, Int numPlayers )
 	if( numPlayers < MIN_PLAYERS ) numPlayers = MIN_PLAYERS;
 	if( numPlayers > MAX_PLAYERS ) numPlayers = MAX_PLAYERS;
 
+	// the table stops at eight; past it the area grows as players / 8, so every player keeps the
+	// ground a seat has on an eight-player map of this size
+	const Int tablePlayers = numPlayers < DEFAULT_PLAYERS ? numPlayers : DEFAULT_PLAYERS;
 	Int cells;
 	switch( size )
 	{
 		case RANDOM_MAP_SIZE_TINY:
-			cells = RMG_TINY_FLOOR + RMG_TINY_PER_PLAYER * numPlayers;
+			cells = RMG_TINY_FLOOR + RMG_TINY_PER_PLAYER * tablePlayers;
 			break;
 		case RANDOM_MAP_SIZE_SMALL:
-			cells = RMG_SMALL_FLOOR + RMG_SMALL_PER_PLAYER * numPlayers;
+			cells = RMG_SMALL_FLOOR + RMG_SMALL_PER_PLAYER * tablePlayers;
 			break;
 		case RANDOM_MAP_SIZE_LARGE:
-			cells = RMG_LARGE_FLOOR + RMG_LARGE_PER_PLAYER * numPlayers;
+			cells = RMG_LARGE_FLOOR + RMG_LARGE_PER_PLAYER * tablePlayers;
 			break;
 		case RANDOM_MAP_SIZE_HUGE:
-			cells = RMG_HUGE_FLOOR + RMG_HUGE_PER_PLAYER * numPlayers;
+			cells = RMG_HUGE_FLOOR + RMG_HUGE_PER_PLAYER * tablePlayers;
 			break;
 		default:
-			cells = RMG_NORMAL_FLOOR + RMG_NORMAL_PER_PLAYER * numPlayers;
+			cells = RMG_NORMAL_FLOOR + RMG_NORMAL_PER_PLAYER * tablePlayers;
 			break;
 	}
+	if( numPlayers > DEFAULT_PLAYERS )
+		cells = (Int)sqrt( (double)cells * cells * numPlayers / DEFAULT_PLAYERS );
 
 	if( cells < MIN_CELLS ) cells = MIN_CELLS;
-	if( cells > MAX_CELLS ) cells = MAX_CELLS;
+	if( cells > maxCellsFor( numPlayers ) ) cells = maxCellsFor( numPlayers );
 	return cells;
 }
 
@@ -7641,7 +7708,7 @@ Int RandomMapGenerator::cellsForTemplate( RandomMapSize size, Int numPlayers, In
 	double area = (double)cellsX * cellsY * seatsFilled * AREA_PERCENT[size] / ( (double)seats * PERCENT );
 	Int cells = (Int)sqrt( area );
 	if( cells < MIN_CELLS ) cells = MIN_CELLS;
-	if( cells > MAX_CELLS ) cells = MAX_CELLS;
+	if( cells > maxCellsFor( numPlayers ) ) cells = maxCellsFor( numPlayers );
 	return cells;
 }
 
@@ -7693,7 +7760,7 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 		if( settings.m_style > 0 )
 		{
 			const RMGStyle& style = theStyles[settings.m_style - 1];
-			settings.m_playableCells = settings.m_playableCells * style.m_cells / cellsFor( RANDOM_MAP_SIZE_NORMAL, MAX_PLAYERS );
+			settings.m_playableCells = settings.m_playableCells * style.m_cells / cellsFor( RANDOM_MAP_SIZE_NORMAL, DEFAULT_PLAYERS );
 			if( settings.m_playableCells < rmgStyleSmallestCells( style ) )
 				settings.m_playableCells = rmgStyleSmallestCells( style );
 		}
@@ -7710,7 +7777,7 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 	}
 
 	if( settings.m_playableCells < MIN_CELLS ) settings.m_playableCells = MIN_CELLS;
-	if( settings.m_playableCells > MAX_CELLS ) settings.m_playableCells = MAX_CELLS;
+	if( settings.m_playableCells > maxCellsFor( settings.m_numPlayers ) ) settings.m_playableCells = maxCellsFor( settings.m_numPlayers );
 }
 
 Int RandomMapGenerator::styleNamed( const char *name )

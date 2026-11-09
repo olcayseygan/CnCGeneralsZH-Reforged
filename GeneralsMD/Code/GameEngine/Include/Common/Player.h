@@ -205,7 +205,7 @@ Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength );
 // a bit for every player mutually allied with i, self's side (itself and its allies) a player at a
 // time, and the highest per-player average of the other sides, each a leader in list order and the
 // players still ungrouped who are its mutual allies.  Free-for-all, every enemy is a side of one.
-void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage );
+void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage );
 // One weighing's move from the bonus it has toward that target, at most AI_INCOME_BONUS_STEP.
 Int IncomeBonusStep( Int bonus, Int target );
 
@@ -456,7 +456,7 @@ public:
 	inline PlayerIndex getPlayerIndex() const { return m_playerIndex; }
 
 	/// return a bitmask that is unique to this player.
-	inline PlayerMaskType getPlayerMask() const { return 1 << m_playerIndex; }
+	inline PlayerMaskType getPlayerMask() const { return playerIndexToMask( m_playerIndex ); }
 	
 	/// a convenience function to test the ThingTemplate against the players canBuild flags
 	/// called by canBuild

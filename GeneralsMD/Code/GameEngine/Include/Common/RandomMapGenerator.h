@@ -67,11 +67,17 @@ struct RandomMapSettings
 class RandomMapGenerator
 {
 public:
-	enum { MIN_PLAYERS = 2, MAX_PLAYERS = 8 };
-	/** 768 plus the 20-cell border each side is 808 across: past the largest shipped map (Death
-		Valley, 550 playable, 710 with its border) and inside the 1024 the shroud texture and the
-		terrain assume (DEFAULT_TERRAIN_SIZE in W3DShroud.cpp). */
-	enum { MIN_CELLS = 64, MAX_CELLS = 768 };
+	/** MAX_PLAYERS is MAX_SLOTS (NetworkDefs.h), kept a literal so this header needs no network
+		include. The size table and the start search are tuned for up to DEFAULT_PLAYERS; past it each
+		player adds an eight-player map's share of ground and the starts are spread by the plain search.
+		DEFAULT_PLAYERS is also what -randommap generates when it is given no count. */
+	enum { MIN_PLAYERS = 2, DEFAULT_PLAYERS = 8, MAX_PLAYERS = 36 };
+	/** 984 plus the 20-cell border each side is 1024 across, the size the shroud texture and the
+		terrain assume (DEFAULT_TERRAIN_SIZE in W3DShroud.cpp). Death Valley, the largest shipped
+		map, is 550 playable. A Medium map for 36 is 882. Up to DEFAULT_PLAYERS the cap stays the
+		768 it always was, so no map for eight or fewer changes; maxCellsFor says which applies. */
+	enum { MIN_CELLS = 64, MAX_CELLS_UP_TO_DEFAULT = 768, MAX_CELLS = 984 };
+	static Int maxCellsFor( Int numPlayers ) { return numPlayers > DEFAULT_PLAYERS ? MAX_CELLS : MAX_CELLS_UP_TO_DEFAULT; }
 	enum { PREVIEW_PIXELS = 128 };		///< what getMapPreviewImage expects of the tga
 
 	/// Build an uncompressed CkMp map image. Deterministic in the settings alone.

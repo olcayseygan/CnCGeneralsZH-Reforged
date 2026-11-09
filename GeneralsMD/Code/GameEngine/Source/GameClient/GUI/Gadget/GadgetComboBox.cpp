@@ -1028,10 +1028,10 @@ void GadgetComboBoxSetEnabledTextColors(GameWindow *comboBox, Color color, Color
 //=============================================================================
 void GadgetComboBoxSetDisabledTextColors(GameWindow *comboBox, Color color, Color borderColor )
 {
-	ComboBoxData *comboBoxData = (ComboBoxData *)comboBox->winGetUserData();
 	// sanity
 	if( comboBox == NULL )
 		return;
+	ComboBoxData *comboBoxData = (ComboBoxData *)comboBox->winGetUserData();
 
 	if(comboBoxData->listBox)
 		comboBoxData->listBox->winSetDisabledTextColors( color,borderColor);
@@ -1076,9 +1076,13 @@ void GadgetComboBoxSetIMECompositeTextColors(GameWindow *comboBox, Color color, 
 //=============================================================================
 void GadgetComboBoxGetSelectedPos( GameWindow *comboBox, Int *selectedIndex )
 {
-	// sanity
+	// sanity: a seat row the layout does not have reads as nothing selected
 	if( comboBox == NULL )
+	{
+		if( selectedIndex )
+			*selectedIndex = -1;
 		return;
+	}
 
 	// get selected indeces via system message
 	TheWindowManager->winSendSystemMsg( comboBox, GCM_GET_SELECTION, 0, (WindowMsgData)selectedIndex );
@@ -1126,7 +1130,7 @@ void *GadgetComboBoxGetItemData( GameWindow *comboBox, Int index )
 //=============================================================================
 Int GadgetComboBoxGetLength( GameWindow *combobox )
 {
-	ComboBoxData *comboboxData = (ComboBoxData *)combobox->winGetUserData();
+	ComboBoxData *comboboxData = combobox ? (ComboBoxData *)combobox->winGetUserData() : NULL;
 	if (comboboxData)
 		return comboboxData->entryCount;
 

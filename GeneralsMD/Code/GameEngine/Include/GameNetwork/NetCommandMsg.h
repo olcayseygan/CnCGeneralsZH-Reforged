@@ -332,12 +332,12 @@ public:
 	UnicodeString getText();
 	void setText(UnicodeString text);
 
-	Int getPlayerMask( void );
-	void setPlayerMask( Int playerMask );
+	SlotMask getPlayerMask( void );
+	void setPlayerMask( SlotMask playerMask );
 
 protected:
 	UnicodeString m_text;
-	Int m_playerMask;
+	SlotMask m_playerMask;	///< the slots that see it
 };
 
 //-----------------------------------------------------------------------------
@@ -455,13 +455,13 @@ public:
 	UnsignedShort getFileID();
 	void setFileID(UnsignedShort fileID);
 
-	UnsignedByte getPlayerMask(void);
-	void setPlayerMask(UnsignedByte playerMask);
+	SlotMask getPlayerMask(void);
+	void setPlayerMask(SlotMask playerMask);
 
 protected:
 	AsciiString m_portableFilename;
 	UnsignedShort m_fileID;
-	UnsignedByte m_playerMask;
+	SlotMask m_playerMask;
 };
 
 //-----------------------------------------------------------------------------

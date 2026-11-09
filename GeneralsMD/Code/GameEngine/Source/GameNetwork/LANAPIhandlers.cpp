@@ -69,14 +69,14 @@ void LANAPI::handleRequestLocations( LANMessage *msg, UnsignedInt senderIP )
 				fillInLANMessage( &reply );
 				reply.LANMessageType = LANMessage::MSG_GAME_ANNOUNCE;
 				AsciiString gameOpts = GenerateGameOptionsString();
-				strlcpy(reply.GameInfo.options,gameOpts.str(),ARRAY_SIZE(reply.GameInfo.options));
 				WideCharNCpy(reply.GameInfo.gameName, m_currentGame->getName().str(), g_lanGameNameLength);
 				reply.GameInfo.gameName[g_lanGameNameLength] = 0;
 				reply.GameInfo.inProgress = m_currentGame->isGameInProgress();
+				reply.GameInfo.isDirectConnect = m_currentGame->getIsDirectConnect();
 
 				// Empty when the room's options cannot fit the packet at all; announce nothing then.
 				if (!gameOpts.isEmpty())
-					sendMessage(&reply);
+					sendOptions(&reply, gameOpts);
 			}
 			else
 			{
@@ -127,7 +127,7 @@ void LANAPI::handleGameAnnounce( LANMessage *msg, UnsignedInt senderIP )
 				game->setName(UnicodeString(msg->GameInfo.gameName));
 				addGame(game);
 			}
-			Bool success = ParseGameOptionsString(game,AsciiString(msg->GameInfo.options));
+			Bool success = ParseGameOptionsString(game,m_assembledOptions);
 			game->setGameInProgress(msg->GameInfo.inProgress);
 			game->setIsDirectConnect(msg->GameInfo.isDirectConnect);
 			game->setLastHeard(Clock_Milliseconds());
@@ -159,7 +159,7 @@ void LANAPI::handleGameAnnounce( LANMessage *msg, UnsignedInt senderIP )
 			game->setName(UnicodeString(msg->GameInfo.gameName));
 			addGame(game);
 		}
-		Bool success = ParseGameOptionsString(game,AsciiString(msg->GameInfo.options));
+		Bool success = ParseGameOptionsString(game,m_assembledOptions);
 		game->setGameInProgress(msg->GameInfo.inProgress);
 		game->setIsDirectConnect(msg->GameInfo.isDirectConnect);
 		game->setLastHeard(Clock_Milliseconds());
@@ -213,13 +213,12 @@ void LANAPI::handleRequestGameInfo( LANMessage *msg, UnsignedInt senderIP )
 			AsciiString gameOpts = GameInfoToAsciiString(m_currentGame);
 			if (gameOpts.isEmpty())
 				return;
-			strlcpy(reply.GameInfo.options,gameOpts.str(),ARRAY_SIZE(reply.GameInfo.options));
 			WideCharNCpy(reply.GameInfo.gameName, m_currentGame->getName().str(), g_lanGameNameLength);
 			reply.GameInfo.gameName[g_lanGameNameLength] = 0;
 			reply.GameInfo.inProgress = m_currentGame->isGameInProgress();
 			reply.GameInfo.isDirectConnect = m_currentGame->getIsDirectConnect();
 
-			sendMessage(&reply, senderIP);
+			sendOptions(&reply, gameOpts, senderIP);
 		}
 	}
 }
@@ -674,7 +673,7 @@ void LANAPI::handleGameOptions( LANMessage *msg, UnsignedInt senderIP )
 		{
 			if (m_currentGame->getIP(player) == senderIP)
 			{
-				OnGameOptions(senderIP, player, AsciiString(msg->GameOptions.options));
+				OnGameOptions(senderIP, player, m_assembledOptions);
 				break;
 			}
 		}

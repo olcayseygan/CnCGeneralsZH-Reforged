@@ -309,7 +309,7 @@ void ToggleInGameChat( Bool immediate )
 				{
 					const Player *localPlayer = ThePlayerList->getLocalPlayer();
 					AsciiString playerName;
-					Int playerMask = 0;
+					SlotMask playerMask = 0;
 
 					for (Int i=0; i<MAX_SLOTS; ++i)
 					{
@@ -321,16 +321,16 @@ void ToggleInGameChat( Bool immediate )
 							{
 							case INGAME_CHAT_EVERYONE:
 								if (!TheGameInfo->getConstSlot(i)->isMuted())
-									playerMask |= (1<<i);
+									playerMask |= slotBit(i);
 								break;
 							case INGAME_CHAT_ALLIES:
 								if ( (player->getRelationship(localPlayer->getDefaultTeam()) == ALLIES &&
 									localPlayer->getRelationship(player->getDefaultTeam()) == ALLIES) || player==localPlayer )
-									playerMask |= (1<<i);
+									playerMask |= slotBit(i);
 								break;
 							case INGAME_CHAT_PLAYERS:
 								if ( player == localPlayer )
-									playerMask |= (1<<i);
+									playerMask |= slotBit(i);
 								break;
 							}
 						}

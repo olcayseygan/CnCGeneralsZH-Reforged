@@ -982,6 +982,7 @@ GameEngine/Include/GameClient/Snow.h
 GameEngine/Include/GameClient/Statistics.h
 GameEngine/Include/GameClient/TerrainRoads.h
 GameEngine/Include/GameClient/TerrainVisual.h
+GameEngine/Include/GameClient/TextTerminology.h
 GameEngine/Include/GameClient/UIStyle.h
 GameEngine/Include/GameClient/UiAnimClock.h
 GameEngine/Include/GameClient/VideoPlayer.h
@@ -1658,6 +1659,7 @@ GameEngine/Source/GameClient/System/RayEffect.cpp
 GameEngine/Source/GameClient/System/Smudge.cpp
 GameEngine/Source/GameClient/Terrain/TerrainRoads.cpp
 GameEngine/Source/GameClient/Terrain/TerrainVisual.cpp
+GameEngine/Source/GameClient/TextTerminology.cpp
 GameEngine/Source/GameClient/VideoPlayer.cpp
 GameEngine/Source/GameClient/VideoStream.cpp
 GameEngine/Source/GameClient/View.cpp
@@ -3556,6 +3558,7 @@ Tests/test_sun_shadow_sorting.cpp
 Tests/test_supply_center_save.inc
 Tests/test_support.cpp
 Tests/test_terrain_golden.cpp
+Tests/test_text_terminology.cpp
 Tests/test_user_data_guard.cpp
 Tests/test_userfolders.cpp
 Tests/test_w3dlayout.cpp

@@ -14669,6 +14669,47 @@ TOOLTIP:Language
 "Die Sprache von Menüs, Befehlen, Einsatzbesprechungen und Untertiteln. Sprachausgabe und Videos bleiben wie installiert. Gilt ab dem nächsten Spielstart."
 END
 
+GUI:TextPersonnel
+"Einheitennamen"
+END
+
+GUI:TextPersonnel0
+"Unverändert"
+END
+
+GUI:TextPersonnel1
+"Menschen"
+END
+
+GUI:TextPersonnel2
+"Roboter"
+END
+
+TOOLTIP:TextPersonnel
+"Wählt für unterstützte Einheitennamen menschliche oder robotische Bezeichnungen, unabhängig von der Textsprache. Modelle, Stimmen und Spielablauf bleiben wie installiert. Gilt nach einem Neustart des Spiels."
+END
+
+GUI:TextFactions
+"Fraktionsnamen"
+END
+
+GUI:TextFactions0
+"Unverändert"
+END
+
+GUI:TextFactions1
+"Originale Namen"
+END
+
+GUI:TextFactions2
+"Angepasste Namen"
+END
+
+TOOLTIP:TextFactions
+"Wählt originale Länder- und Fraktionsnamen oder angepasste Namen, unabhängig von der Textsprache. Nur die angezeigten Namen ändern sich. Gilt nach einem Neustart des Spiels."
+END
+
+
 TOOLTIP:SupplyPileFull
 "\n Belegt: Das Haufenlimit hält deine Sammler fern"
 END

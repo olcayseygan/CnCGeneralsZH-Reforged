@@ -96,6 +96,22 @@ enum TextLanguageType
 	TEXT_LANGUAGE_COUNT		= 6,
 };
 
+enum TextPersonnelType
+{
+	TEXT_PERSONNEL_UNCHANGED = 0,
+	TEXT_PERSONNEL_HUMANS = 1,
+	TEXT_PERSONNEL_ROBOTS = 2,
+	TEXT_PERSONNEL_COUNT = 3,
+};
+
+enum TextFactionsType
+{
+	TEXT_FACTIONS_UNCHANGED = 0,
+	TEXT_FACTIONS_ORIGINAL = 1,
+	TEXT_FACTIONS_ADAPTED = 2,
+	TEXT_FACTIONS_COUNT = 3,
+};
+
 /** The LightingStyle option.  Classic draws a map's lights as the map gives them; Reforged takes
 	* the same lights and moves weight from the flat ambient and the fill lights to the sun, warms the
 	* sun and cools the ambient (reforgeLighting), deepens the sun's shadow to match, and grades the
@@ -387,6 +403,8 @@ public:
 	Bool rightButtonOrders() const { return !leftButtonOrders(); }
 	Int m_playerColorScheme;			///< PlayerColorSchemeType: whose colour the client draws (client only)
 	Int m_textLanguage;						///< TextLanguageType: the translation GameText lays over the CSF, read once at startup (client only)
+	Int m_textPersonnel;					///< TextPersonnelType: names only; client-side, independent of language
+	Int m_textFactions;					///< TextFactionsType: names only; client-side, independent of language
 	Bool m_showOrderLines;				///< draw a line from each selected unit to where it is going, and its queue (client only)
 	Bool m_aircraftAltitudeLine;	///< "AircraftAltitudeLine": a line from each aircraft in the air down to the ground under it (client only)
 	Bool m_scriptDebug;						///< Should we attempt to load the script debugger window (.DLL)

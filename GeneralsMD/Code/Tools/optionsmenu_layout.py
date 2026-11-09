@@ -199,6 +199,10 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxPlayerColors",   None),
     (LABEL,  "LabelLanguage",          "GUI:Language"),
     (COMBO,  "ComboBoxLanguage",       None),
+    (LABEL,  "LabelTextPersonnel",     "GUI:TextPersonnel"),
+    (COMBO,  "ComboBoxTextPersonnel",  None),
+    (LABEL,  "LabelTextFactions",      "GUI:TextFactions"),
+    (COMBO,  "ComboBoxTextFactions",   None),
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
     (CHECK,  "CheckAircraftAltitudeLine", "GUI:AircraftAltitudeLine"),
     (CHECK,  "CheckNetBox",            "GUI:NetBox"),
@@ -497,7 +501,9 @@ GROUP_LAYOUT = [
             ("check", "CheckAircraftAltitudeLine"),
             ("check", "CheckEmptyBuildingPips")]),
         ("GUI:OptionsGroupLanguage", [
-            setting("LabelLanguage", "ComboBoxLanguage")]),
+            setting("LabelLanguage", "ComboBoxLanguage"),
+            setting("LabelTextPersonnel", "ComboBoxTextPersonnel"),
+            setting("LabelTextFactions", "ComboBoxTextFactions")]),
         ("GUI:OptionsGroupReplays", [
             ("check", "CheckBoxSaveCamera"),
             ("check", "CheckBoxUseCamera")])]),
@@ -1135,6 +1141,15 @@ def selfcheck():
         control = layout.find(tab)
         if not control or control.rect[0] < INNER_LEFT or control.rect[2] > INNER_LEFT + INNER_WIDTH:
             problems.append("%s extends beyond the tab strip" % tab)
+    # Wording choices belong beside the language choice, independently of graphics.
+    interface = layout.find("PageInterface")
+    for name in ("Language", "TextPersonnel", "TextFactions"):
+        label, combo = layout.find("Label" + name), layout.find("ComboBox" + name)
+        if interface and label and combo:
+            if label not in interface.children or combo not in interface.children:
+                problems.append("%s must be on the Interface page" % name)
+            if label.rect[1] != combo.rect[1] - ROW_HEIGHT:
+                problems.append("%s label must sit above its combo box" % name)
 
     for problem in problems:
         print("optionsmenu: %s" % problem)

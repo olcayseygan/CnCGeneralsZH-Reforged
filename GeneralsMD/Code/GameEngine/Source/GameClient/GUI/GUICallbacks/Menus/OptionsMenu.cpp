@@ -2576,7 +2576,10 @@ static void showClassicGraphicsChoice( void )
 	* the reason setDefaults leaves the resolution.  The slider's row follows the preset. */
 static Bool defaultsKeepsRow( const OptionDef& def )
 {
-	static const char *const kept[] = { "TextLanguage", "WindowMode", "FullscreenScaling", "VSync", "GraphicsQuality" };
+	static const char *const kept[] = {
+		"TextLanguage", "TextPersonnel", "TextFactions",
+		"WindowMode", "FullscreenScaling", "VSync", "GraphicsQuality"
+	};
 	for( Int i = 0; i < ARRAY_SIZE( kept ); ++i )
 		if( strcmp( def.iniKey, kept[ i ] ) == 0 )
 			return TRUE;

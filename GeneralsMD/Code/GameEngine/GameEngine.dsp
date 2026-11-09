@@ -2411,6 +2411,10 @@ SOURCE=.\Source\GameClient\GameText.cpp
 # End Source File
 # Begin Source File
 
+SOURCE=.\Source\GameClient\TextTerminology.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=.\Source\GameClient\GlobalLanguage.cpp
 # End Source File
 # Begin Source File
@@ -4605,6 +4609,10 @@ SOURCE=.\Include\GameClient\GameInfoWindow.h
 # Begin Source File
 
 SOURCE=.\Include\GameClient\GameText.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\Include\GameClient\TextTerminology.h
 # End Source File
 # Begin Source File
 

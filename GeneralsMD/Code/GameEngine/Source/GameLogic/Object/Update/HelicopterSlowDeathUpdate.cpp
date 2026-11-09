@@ -99,6 +99,7 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 	m_oclFinalBlowUp = NULL;
 	m_delayFromGroundToFinalDeath = 0;
 	m_maxBraking = 99999.0f;
+	m_momentumDriftShare = 0.6f;
 
 }  // end HelicopterSlowDeathBehaviorModuleData
 
@@ -136,6 +137,7 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 		{ "FinalRubbleObject", INI::parseAsciiString, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_finalRubbleObject ) },
 		{ "SoundDeathLoop", INI::parseAudioEventRTS, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_deathSound) },
 		{ "MaxBraking", INI::parseAccelerationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_maxBraking) },
+		{ "DeathMomentumDriftShare", INI::parsePercentToReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_momentumDriftShare) },
 
 		{ 0, 0, 0, 0 }
 
@@ -235,8 +237,10 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 		 spiral down nearly where it was hit, as if it had been hovering. Its speed is taken off the
 		 physics here, so the spiral starts from rest exactly as it always did, and carried instead as
 		 a drift that moves the whole spiral along - its own speed plus a push away from the shot,
-		 kept whole all the way down, since nothing in the fall takes it off. A hovering one only gets
-		 the push. DeathMomentum = No keeps EA's. */
+		 steady all the way down, since nothing in the fall takes it off. The rotor that held it up
+		 has failed, so only DeathMomentumDriftShare of that (60%) carries on: kept whole, a Comanche
+		 shot at full speed came down 630 on from the hit. A hovering one only gets the push.
+		 DeathMomentum = No keeps EA's. */
 	PhysicsBehavior *deathPhysics = getObject()->getPhysics();
 	if( modData->m_deathMomentum && deathPhysics )
 	{
@@ -249,6 +253,8 @@ void HelicopterSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 			m_driftX += hitX * modData->m_momentumPushSpeed;
 			m_driftY += hitY * modData->m_momentumPushSpeed;
 		}
+		m_driftX *= modData->m_momentumDriftShare;
+		m_driftY *= modData->m_momentumDriftShare;
 		Coord3D stop;
 		stop.x = -vel->x;
 		stop.y = -vel->y;
@@ -556,7 +562,7 @@ UpdateSleepTime HelicopterSlowDeathBehavior::update( void )
 
 	/* Down, a wreck that came in fast ploughs on along the ground a little and stops, rather than
 		 stopping dead where it touched: the drift, held to the ground, losing a fifth of itself every
-		 retail frame - about 20 more for a Comanche shot down at full speed. It stops at the map's edge
+		 retail frame - about 11 more for a Comanche shot down at full speed. It stops at the map's edge
 		 and at ground that climbs more than a little in its way. */
 	else if( m_driftX != 0.0f || m_driftY != 0.0f )
 	{

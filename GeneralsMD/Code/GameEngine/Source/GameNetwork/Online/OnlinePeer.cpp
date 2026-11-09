@@ -127,7 +127,7 @@ OnlineSession &OnlineSession::get()
 }
 
 OnlineSession::OnlineSession() :
-	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ),
+	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
 	cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), revealing( FALSE ), revealSerial( 0 ),
 	peer( NULL ), buddy( NULL ), ps( NULL )
 {
@@ -179,6 +179,9 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	relayPort = 8094;
 	testMode = FALSE;
 	registerUrl.clear();
+	resetUrl.clear();
+	failCode.clear();
+	failRetry = 0;
 	status = lines ? ONLINE_WELCOMED : ONLINE_OFF;
 }
 
@@ -251,6 +254,8 @@ void OnlineSession::requestAuth( const OnlineMessage &line )
 	OnlineMessage m = line;
 	m.setInt( "proto", ONLINE_PROTO );
 	authWaiting = TRUE;
+	failCode.clear();
+	failRetry = 0;
 	if (status == ONLINE_WELCOMED)
 	{
 		send( m );
@@ -539,6 +544,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		relayPort = (UnsignedShort)m.getInt( "relayPort" );
 		testMode = m.getBool( "testMode" );
 		registerUrl = m.getString( "registerUrl" );
+		resetUrl = m.getString( "resetUrl" );
 		status = ONLINE_WELCOMED;
 		if (hasPendingAuth)
 		{
@@ -575,6 +581,8 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		DEBUG_LOG(("online: auth.fail %s\n", code.c_str()));
 		if (code == "already")
 			return;
+		failCode = code;
+		failRetry = (Int)m.getInt( "retry" );
 		Bool wasIn = authed;
 		forgetAccount();
 		if (code == "elsewhere" || wasIn)
@@ -1208,6 +1216,19 @@ Bool OnlineIsTestServer( void )
 AsciiString OnlineGetRegisterUrl( void )
 {
 	return OnlineSession::get().registerUrl.c_str();
+}
+
+AsciiString OnlineGetResetUrl( void )
+{
+	return OnlineSession::get().resetUrl.c_str();
+}
+
+AsciiString OnlineGetLoginFailure( Int *retrySeconds )
+{
+	const OnlineSession &s = OnlineSession::get();
+	if (retrySeconds)
+		*retrySeconds = s.failRetry > 0 ? s.failRetry : 0;
+	return s.failCode.c_str();
 }
 
 /* Only a web page: the address comes from the server, and ShellExecute would run a program path or open a

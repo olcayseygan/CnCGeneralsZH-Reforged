@@ -10561,6 +10561,86 @@ GUI:OnlineLoginName
 "E-posta veya Kullanıcı Adı"
 END
 
+GUI:OnlineLoginTitle
+"ZERO HOUR REFORGED ÇEVRİMİÇİ"
+END
+
+GUI:OnlineSignIn
+"GİRİŞ"
+END
+
+GUI:OnlineForgotPassword
+"ŞİFREMİ UNUTTUM"
+END
+
+GUI:OnlineKeepSignedIn
+"Oturumum açık kalsın"
+END
+
+TOOLTIP:OnlineKeepSignedIn
+"Bu bilgisayarda oturumun açık kalır. Şifren hiçbir yere kaydedilmez"
+END
+
+GUI:OnlineLoginHelp
+"zerohour.gg hesabınla giriş yap: e-postan ya da kullanıcı adın, bir de şifren."
+END
+
+GUI:OnlineLoginHelpRegister
+"Hesabın yok mu? Hesap Oluştur kayıt sayfasını tarayıcında açar."
+END
+
+GUI:OnlineLoginSavedToken
+"Kayıtlı oturumun kullanılacak, şifre gerekmiyor."
+END
+
+GUI:OnlineSigningIn
+"Giriş yapılıyor..."
+END
+
+GUI:OnlineOpenedInBrowser
+"Tarayıcında açıldı."
+END
+
+GUI:OnlineBrowserTestServer
+"Test sunucusu: tarayıcı açılmaz."
+END
+
+GUI:OnlineBrowserFailed
+"Tarayıcın açılamadı."
+END
+
+GUI:OnlineLoginEmpty
+"E-postanı ya da kullanıcı adını ve şifreni gir."
+END
+
+GUI:OnlineLoginBadLogin
+"E-posta, kullanıcı adı ya da şifre yanlış."
+END
+
+GUI:OnlineLoginThrottled
+"Çok fazla deneme oldu. %d saniye bekle, sonra tekrar dene."
+END
+
+GUI:OnlineLoginThrottledNoRetry
+"Çok fazla deneme oldu. Bi dakka bekle, sonra tekrar dene."
+END
+
+GUI:OnlineLoginUnavailable
+"Hesap servisine ulaşılamıyor. Birazdan tekrar dene."
+END
+
+GUI:OnlineLoginExpired
+"Şifren değişmiş. Yeniden gir."
+END
+
+GUI:OnlineLoginBanned
+"Bu hesap yasaklı."
+END
+
+GUI:OnlineLoginElsewhere
+"Bu hesapla başka bir bilgisayardan giriş yapıldı."
+END
+
 GUI:???
 "Rastgele"
 END

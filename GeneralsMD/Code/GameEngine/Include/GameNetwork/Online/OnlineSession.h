@@ -145,6 +145,9 @@ struct OnlineSession
 	UnsignedShort relayPort;
 	Bool testMode;					///< welcome.testMode: OnlineIsTestServer
 	std::string registerUrl;	///< welcome.registerUrl: OnlineGetRegisterUrl
+	std::string resetUrl;		///< welcome.resetUrl: OnlineGetResetUrl
+	std::string failCode;		///< the last auth.fail's code, cleared by the next requestAuth: OnlineGetLoginFailure
+	Int failRetry;					///< its retry, in seconds; 0 when it gave none
 
 	// the account
 	Bool authed;						///< auth.ok arrived

@@ -3742,6 +3742,87 @@ GUI:OnlineLoginName
 "Email or Nickname"
 END
 
+// the online login screen under -online: its title, buttons, help text and status line
+GUI:OnlineLoginTitle
+"ZERO HOUR REFORGED ONLINE"
+END
+
+GUI:OnlineSignIn
+"SIGN IN"
+END
+
+GUI:OnlineForgotPassword
+"FORGOT PASSWORD"
+END
+
+GUI:OnlineKeepSignedIn
+"Keep me signed in"
+END
+
+TOOLTIP:OnlineKeepSignedIn
+"Stays signed in on this computer. Your password is never stored"
+END
+
+GUI:OnlineLoginHelp
+"Sign in with your zerohour.gg account: your email or your nickname, and your password."
+END
+
+GUI:OnlineLoginHelpRegister
+"No account yet? Create Account opens the sign-up page in your browser."
+END
+
+GUI:OnlineLoginSavedToken
+"Your saved sign-in will be used. No password needed."
+END
+
+GUI:OnlineSigningIn
+"Signing in..."
+END
+
+GUI:OnlineOpenedInBrowser
+"Opened in your browser."
+END
+
+GUI:OnlineBrowserTestServer
+"Test server: no browser is opened."
+END
+
+GUI:OnlineBrowserFailed
+"Your browser could not be opened."
+END
+
+GUI:OnlineLoginEmpty
+"Enter your email or nickname and your password."
+END
+
+GUI:OnlineLoginBadLogin
+"Wrong email, nickname or password."
+END
+
+GUI:OnlineLoginThrottled
+"Too many attempts. Wait %d seconds and try again."
+END
+
+GUI:OnlineLoginThrottledNoRetry
+"Too many attempts. Wait a minute and try again."
+END
+
+GUI:OnlineLoginUnavailable
+"The account service cannot be reached. Try again shortly."
+END
+
+GUI:OnlineLoginExpired
+"Your password has changed. Enter it again."
+END
+
+GUI:OnlineLoginBanned
+"This account is banned."
+END
+
+GUI:OnlineLoginElsewhere
+"This account signed in from another computer."
+END
+
 // A vehicle transport's Evacuate asks for a spot, the transport goes there and empties; Alt empties it where it stands
 CONTROLBAR:ToolTipEvacuateAt
 "Go to the chosen spot and order all units to exit\nAlt: unload here"

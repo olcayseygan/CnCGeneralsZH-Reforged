@@ -74,6 +74,13 @@ Bool OnlineIsTestServer( void );
 /* welcome.registerUrl, the site's page where accounts are made (the game only logs in); empty when the
 	 server sent none, and the login screen then hides Create Account. */
 AsciiString OnlineGetRegisterUrl( void );
+/* welcome.resetUrl, the site's forgotten-password page; empty when the server sent none, and the login
+	 screen then hides Forgot Password. */
+AsciiString OnlineGetResetUrl( void );
+/* The code of the last login the server refused (auth.fail: badlogin, throttled, expired...), and its
+	 retry in seconds, 0 when it gave none.  Empty when the last login never reached a refusal (the
+	 connection failed), and cleared by the next login. */
+AsciiString OnlineGetLoginFailure( Int *retrySeconds );
 /* Opens an http or https address in the player's browser; FALSE when it is not one or nothing could open
 	 it.  Windows asks the shell; elsewhere the platform layer's hook, SDL_OpenURL, set by SdlGameEngine. */
 Bool OnlineOpenURL( const char *url );

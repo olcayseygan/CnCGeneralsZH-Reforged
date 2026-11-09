@@ -58,6 +58,9 @@
 #include "GameClient/GadgetCheckBox.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetTextEntry.h"
+#include "GameClient/GadgetPushButton.h"
+#include "GameClient/Display.h"
+#include "GameClient/UIStyle.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/ShellHooks.h"
 #include "GameClient/GameWindowTransitions.h"
@@ -749,8 +752,9 @@ void WOLLoginMenuInit( WindowLayout *layout, void *userData )
 	
 	RaiseGSMessageBox();
 
+	// -online has no terms screen: that button is Forgot Password there
 	OptionPreferences optionPref;
-	if (!optionPref.getBool("SawTOS", TRUE))
+	if (!OnlineIsEnabled() && !optionPref.getBool("SawTOS", TRUE))
 	{
 		TheWindowManager->winSendSystemMsg( parentWOLLogin, GBM_SELECTED, 
 																			(WindowMsgData)buttonTOS, buttonTOSID );
@@ -854,15 +858,142 @@ static void onlineAutoLogin( void )
 	TheWindowManager->winSendSystemMsg( parentWOLLogin, GBM_SELECTED, (WindowMsgData)buttonLogin, buttonLoginID );
 }
 
+/* -online's status line under the fields and the help text in the panel's right half, made in code: the
+	 layout is EA's, read from the retail archive.  Both die with the layout. */
+static GameWindow *s_onlineStatus = NULL;
+static GameWindow *s_onlineHelp = NULL;
+static Color s_onlineInk = 0;
+static Color s_onlineInkBorder = 0;
+
+static Int onlineLayoutX( Int v ) { return (Int)(v * (TheDisplay->getWidth() / 800.0f)); }
+static Int onlineLayoutY( Int v ) { return (Int)(v * (TheDisplay->getHeight() / 600.0f)); }
+
+/// a retail gadget moved to a point of the layout's own 800x600 page; its size stays
+static void onlineMove( GameWindow *win, Int x, Int y )
+{
+	if (!win)
+		return;
+	Int px = 0, py = 0;
+	if (win->winGetParent())
+		win->winGetParent()->winGetScreenPosition( &px, &py );
+	win->winSetPosition( onlineLayoutX( x ) - px, onlineLayoutY( y ) - py );
+}
+
+static void onlineResize( GameWindow *win, Int x0, Int y0, Int x1, Int y1 )
+{
+	if (win)
+		win->winSetSize( onlineLayoutX( x1 ) - onlineLayoutX( x0 ), onlineLayoutY( y1 ) - onlineLayoutY( y0 ) );
+}
+
+/// a static text on the layout's page, in the labels' colours, see-through
+static GameWindow *onlineText( GameWindow *parent, Int x0, Int y0, Int x1, Int y1, GameFont *font, Bool middle )
+{
+	if (!parent)
+		return NULL;
+	WinInstanceData inst;
+	inst.init();
+	BitSet( inst.m_style, GWS_STATIC_TEXT );
+	TextData data;
+	memset( &data, 0, sizeof(data) );
+	data.centeredVertically = middle;
+	Int px = 0, py = 0;
+	parent->winGetScreenPosition( &px, &py );
+	GameWindow *win = TheWindowManager->gogoGadgetStaticText( parent, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT,
+		onlineLayoutX( x0 ) - px, onlineLayoutY( y0 ) - py, onlineLayoutX( x1 ) - onlineLayoutX( x0 ), onlineLayoutY( y1 ) - onlineLayoutY( y0 ),
+		&inst, &data, font, FALSE );
+	if (win)
+	{
+		win->winSetEnabledTextColors( s_onlineInk, s_onlineInkBorder );
+		win->winSetEnabledColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
+		win->winSetEnabledBorderColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
+	}
+	return win;
+}
+
+/// the status line: what the screen is doing, or what went wrong in red
+static void onlineStatus( const UnicodeString &text, Bool error = FALSE )
+{
+	if (!s_onlineStatus)
+		return;
+	s_onlineStatus->winSetEnabledTextColors( error ? GameMakeColor( 255, 64, 64, 255 ) : s_onlineInk, s_onlineInkBorder );
+	GadgetStaticTextSetText( s_onlineStatus, text );
+	DEBUG_LOG(("ONLINE LOGINSTATUS error=%d %s\n", (Int)error, WideCharAsUtf8( text.str() ).str()));
+}
+
+/// an empty password with a token saved for this login signs in with the token: say so
+static void onlineSavedLoginHint( void )
+{
+	if (!OnlineIsEnabled() || !s_onlineStatus || loginAttemptTime || !comboBoxEmail || !textEntryPassword)
+		return;
+	AsciiString email;
+	email.translate( GadgetComboBoxGetText( comboBoxEmail ) );
+	const Bool saved = email.isNotEmpty() && GadgetTextEntryGetText( textEntryPassword ).isEmpty()
+		&& OnlineGetSavedToken( email ).isNotEmpty();
+	onlineStatus( saved ? TheGameText->fetch( "GUI:OnlineLoginSavedToken" ) : UnicodeString::TheEmptyString );
+}
+
+/// Create Account and Forgot Password: the site's page in the player's browser.  A test server's copies
+/// only log the address, so a scripted run puts no browser on the desktop, and the line says so.
+static void onlineOpenPage( const AsciiString &url, const char *what )
+{
+	const Bool test = OnlineIsTestServer();
+	const Bool opened = url.isNotEmpty() && !test && OnlineOpenURL( url.str() );
+	DEBUG_LOG(("ONLINE %s url=%s opened=%d\n", what, url.str(), (Int)opened));
+	if (opened)
+		onlineStatus( TheGameText->fetch( "GUI:OnlineOpenedInBrowser" ) );
+	else if (test)
+		onlineStatus( TheGameText->fetch( "GUI:OnlineBrowserTestServer" ) );
+	else
+		onlineStatus( TheGameText->fetch( "GUI:OnlineBrowserFailed" ), TRUE );
+}
+
+/* A refused or failed sign-in, in the status line: the server's code worded honestly (a wrong password
+	 and an unknown login read the same), EA's disconnect text when no refusal arrived.  The password is
+	 cleared and focused for the next try; a token the server no longer takes is forgotten. */
+static void onlineLoginFailed( Int reason )
+{
+	Int retry = 0;
+	const AsciiString code = OnlineGetLoginFailure( &retry );
+	UnicodeString text;
+	if (code == "badlogin" || code == "badtoken")
+		text = TheGameText->fetch( "GUI:OnlineLoginBadLogin" );
+	else if (code == "throttled" && retry > 0)
+		text.format( TheGameText->fetch( "GUI:OnlineLoginThrottled" ), retry );
+	else if (code == "throttled")
+		text = TheGameText->fetch( "GUI:OnlineLoginThrottledNoRetry" );
+	else if (code == "unavailable")
+		text = TheGameText->fetch( "GUI:OnlineLoginUnavailable" );
+	else if (code == "expired")
+		text = TheGameText->fetch( "GUI:OnlineLoginExpired" );
+	else if (code == "banned")
+		text = TheGameText->fetch( "GUI:OnlineLoginBanned" );
+	else if (code == "elsewhere")
+		text = TheGameText->fetch( "GUI:OnlineLoginElsewhere" );
+	else
+	{
+		AsciiString key;
+		key.format( "GUI:GSDisconReason%d", reason );
+		text = TheGameText->fetch( key );
+	}
+	if (code == "expired" || code == "badtoken")
+		OnlineSaveToken( s_onlineLoginEmail, AsciiString::TheEmptyString );
+	GadgetTextEntrySetText( textEntryPassword, UnicodeString::TheEmptyString );
+	TheWindowManager->winSetFocus( textEntryPassword );
+	onlineStatus( text, TRUE );
+}
+
 /* -online: the game only logs in, the site makes accounts (the owner's call of 2026-11-06).  One field takes
-	 the email or the nick, so the nick box and the birth date go; Create Account opens the site's register
-	 page the server named in its welcome, and goes too when it named none. */
+	 the email or the nick, so the nick box and the birth date go and the rows under them close up; Create
+	 Account and Forgot Password open the site's pages the server named in its welcome, and go when it named
+	 none.  The right half explains the account, the status line says what is happening. */
 static void onlineLoginScreen( void )
 {
+	s_onlineStatus = NULL;
+	s_onlineHelp = NULL;
 	if (!OnlineIsEnabled())
 		return;
 	const char *hidden[] = { "GameSpyLoginProfile.wnd:WinAge", "GameSpyLoginProfile.wnd:StaticTextLoginName",
-		"GameSpyLoginProfile.wnd:ComboBoxLoginName" };
+		"GameSpyLoginProfile.wnd:ComboBoxLoginName", "GameSpyLoginProfile.wnd:ParentESRB" };
 	AsciiString shown;
 	for (Int i = 0; i < (Int)ARRAY_SIZE(hidden); ++i)
 	{
@@ -873,9 +1004,64 @@ static void onlineLoginScreen( void )
 	GameWindow *emailLabel = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextEmail" ) );
 	if (emailLabel)
 		GadgetStaticTextSetText( emailLabel, TheGameText->fetch( "GUI:OnlineLoginName" ) );
+	GameWindow *title = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextTitle" ) );
+	if (title)
+	{
+		onlineResize( title, 113, 114, 680, 158 );
+		GadgetStaticTextSetText( title, TheGameText->fetch( "GUI:OnlineLoginTitle" ) );
+	}
+	if (buttonLogin)
+		GadgetButtonSetText( buttonLogin, TheGameText->fetch( "GUI:OnlineSignIn" ) );
+
+	/* The layout's page is 800x600.  Password, its label and the checkbox move up into the nick's rows, the
+		 status line takes the next, the buttons follow and the panel ends 12 under them, as EA's did. */
+	GameWindow *passwordLabel = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextPassword" ) );
+	GameWindow *gadgetParent = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:GadgetParent" ) );
+	onlineMove( passwordLabel, 125, 228 );
+	onlineMove( textEntryPassword, 128, 258 );
+	if (checkBoxRememberPassword)
+	{
+		onlineMove( checkBoxRememberPassword, 128, 290 );
+		onlineResize( checkBoxRememberPassword, 128, 290, 396, 315 );
+		GadgetCheckBoxSetText( checkBoxRememberPassword, TheGameText->fetch( "GUI:OnlineKeepSignedIn" ) );
+		checkBoxRememberPassword->winSetTooltip( TheGameText->fetch( "TOOLTIP:OnlineKeepSignedIn" ) );
+		if (passwordLabel)
+			checkBoxRememberPassword->winSetFont( passwordLabel->winGetFont() );
+	}
+	onlineMove( buttonLogin, 127, 351 );
+	onlineMove( buttonCreateAccount, 319, 351 );
+	onlineMove( buttonBack, 511, 351 );
+	if (buttonLogin && buttonLogin->winGetParent())
+		onlineResize( buttonLogin->winGetParent(), 111, 114, 683, 395 );		// the panel, a window with no name
+
+	const AsciiString resetUrl = OnlineGetResetUrl();
+	if (buttonTOS)
+	{
+		onlineMove( buttonTOS, 511, 283 );
+		GadgetButtonSetText( buttonTOS, TheGameText->fetch( "GUI:OnlineForgotPassword" ) );
+		buttonTOS->winHide( resetUrl.isEmpty() );
+	}
+
 	const AsciiString url = OnlineGetRegisterUrl();
 	if (buttonCreateAccount)
 		buttonCreateAccount->winHide( url.isEmpty() );
+
+	s_onlineInk = passwordLabel ? passwordLabel->winGetEnabledTextColor() : GameMakeColor( 255, 255, 255, 255 );
+	s_onlineInkBorder = passwordLabel ? passwordLabel->winGetEnabledTextBorderColor() : GameMakeColor( 0, 0, 0, 255 );
+	s_onlineHelp = onlineText( gadgetParent, 456, 168, 669, 278, UIStyle::font( UIStyle::TEXT_STRONG ), FALSE );
+	if (s_onlineHelp)
+	{
+		UnicodeString help = TheGameText->fetch( "GUI:OnlineLoginHelp" );
+		if (url.isNotEmpty())
+		{
+			help.concat( u"\n\n" );
+			help.concat( TheGameText->fetch( "GUI:OnlineLoginHelpRegister" ) );
+		}
+		GadgetStaticTextSetText( s_onlineHelp, help );
+	}
+	s_onlineStatus = onlineText( gadgetParent, 127, 321, 671, 347, UIStyle::font( UIStyle::TEXT_STRONG ), TRUE );
+	onlineSavedLoginHint();
+
 	// what a player can type into, for online_check.py: a window counts when neither it nor a parent is hidden
 	const struct { GameWindow *win; const char *name; } fields[] = { { comboBoxEmail, "login" }, { comboBoxLoginName, "nick" },
 		{ textEntryPassword, "password" }, { textEntryMonth, "birthdate" }, { checkBoxRememberPassword, "remember" } };
@@ -967,13 +1153,22 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 						DEBUG_LOG(("ONLINE LOGIN fail reason=%d\n", resp.discon.reason));
 					}
 					loginAttemptTime = 0;
-					UnicodeString title, body;
-					AsciiString disconMunkee;
-					disconMunkee.format("GUI:GSDisconReason%d", resp.discon.reason);
-					title = TheGameText->fetch( "GUI:GSErrorTitle" );
-					body = TheGameText->fetch( disconMunkee );
-					GSMessageBoxOk( title, body );
-					EnableLoginControls( TRUE );
+					if (OnlineIsEnabled())
+					{
+						// the status line, not EA's box; read before the teardown below
+						EnableLoginControls( TRUE );
+						onlineLoginFailed( resp.discon.reason );
+					}
+					else
+					{
+						UnicodeString title, body;
+						AsciiString disconMunkee;
+						disconMunkee.format("GUI:GSDisconReason%d", resp.discon.reason);
+						title = TheGameText->fetch( "GUI:GSErrorTitle" );
+						body = TheGameText->fetch( disconMunkee );
+						GSMessageBoxOk( title, body );
+						EnableLoginControls( TRUE );
+					}
 
 					// kill & restart the threads
 					AsciiString motd = TheGameSpyInfo->getMOTD();
@@ -997,14 +1192,19 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 		{
 			s_onlineLoginPending = FALSE;
 			DEBUG_LOG(("ONLINE LOGIN fail reason=timeout\n"));
+			EnableLoginControls( TRUE );
+			onlineLoginFailed( DISCONNECT_COULDNOTCONNECT );
 		}
-		UnicodeString title, body;
-		AsciiString disconMunkee;
-		disconMunkee.format("GUI:GSDisconReason4");	// ("could not connect to server")
-		title = TheGameText->fetch( "GUI:GSErrorTitle" );
-		body = TheGameText->fetch( disconMunkee );
-		GSMessageBoxOk( title, body );
-		EnableLoginControls( TRUE );
+		else
+		{
+			UnicodeString title, body;
+			AsciiString disconMunkee;
+			disconMunkee.format("GUI:GSDisconReason4");	// ("could not connect to server")
+			title = TheGameText->fetch( "GUI:GSErrorTitle" );
+			body = TheGameText->fetch( disconMunkee );
+			GSMessageBoxOk( title, body );
+			EnableLoginControls( TRUE );
+		}
 
 		// kill & restart the threads
 		AsciiString motd = TheGameSpyInfo->getMOTD();
@@ -1261,12 +1461,21 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 						GadgetTextEntrySetText(textEntryYear, UnicodeString::TheEmptyString);
 
 					}
+					onlineSavedLoginHint();
 				}
 				else if (controlID == comboBoxLoginNameID)
 				{
 					// they typed a new login name.  Email & pass shouldn't change
 				}
 
+				break;
+			}
+
+		// -online: typing a password drops the saved sign-in's line, emptying it brings it back
+		case GEM_UPDATE_TEXT:
+			{
+				if (!buttonPushed && (GameWindow *)mData1 == textEntryPassword)
+					onlineSavedLoginHint();
 				break;
 			}
 
@@ -1323,6 +1532,7 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 						GadgetTextEntrySetText(textEntryDay, UnicodeString::TheEmptyString);
 						GadgetTextEntrySetText(textEntryYear, UnicodeString::TheEmptyString);
 					}
+					onlineSavedLoginHint();
 
 				}
 				else if (controlID == comboBoxLoginNameID)
@@ -1364,13 +1574,10 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 #endif // ALLOW_NON_PROFILED_LOGIN
 				else if ( controlID == buttonCreateAccountID )
 				{
-					// -online: accounts are made on the site; the button opens its register page.  A test server's
-					// copies only log the address, so a scripted run puts no browser on the desktop
+					// -online: accounts are made on the site; the button opens its register page
 					if (OnlineIsEnabled())
 					{
-						const AsciiString url = OnlineGetRegisterUrl();
-						const Bool opened = url.isNotEmpty() && !OnlineIsTestServer() && OnlineOpenURL( url.str() );
-						DEBUG_LOG(("ONLINE REGISTER url=%s opened=%d\n", url.str(), (Int)opened));
+						onlineOpenPage( OnlineGetRegisterUrl(), "REGISTER" );
 						break;
 					}
 #ifdef ALLOW_NON_PROFILED_LOGIN
@@ -1532,7 +1739,10 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 								loginPref->forgetLogin(email);
 							}
 							if (OnlineIsEnabled())
+							{
 								onlineLoginSent( email, token.isNotEmpty() ? "resume" : "login" );
+								onlineStatus( TheGameText->fetch( "GUI:OnlineSigningIn" ) );
+							}
 							EnableLoginControls( FALSE );
 
 							// fire off some pings
@@ -1540,8 +1750,13 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 						}
 						else
 						{
-							// user didn't fill in all info.  prompt him.
-							if(email.isEmpty() && login.isEmpty() && password.isEmpty())
+							// user didn't fill in all info.  prompt him.  -online has two fields, and says so in the status line
+							if (OnlineIsEnabled())
+							{
+								onlineStatus( TheGameText->fetch( "GUI:OnlineLoginEmpty" ), TRUE );
+								TheWindowManager->winSetFocus( email.isEmpty() ? comboBoxEmail : textEntryPassword );
+							}
+							else if(email.isEmpty() && login.isEmpty() && password.isEmpty())
 								GSMessageBoxOk(TheGameText->fetch("GUI:GSErrorTitle"), TheGameText->fetch("GUI:GSNoLoginInfoAll"));
 							else if( email.isEmpty() && login.isEmpty())
 								GSMessageBoxOk(TheGameText->fetch("GUI:GSErrorTitle"), TheGameText->fetch("GUI:GSNoLoginInfoEmailNickname"));
@@ -1585,6 +1800,11 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 #endif // ALLOW_NON_PROFILED_LOGIN
 
 				} //if ( controlID == buttonLogin )
+				else if ( controlID == buttonTOSID && OnlineIsEnabled() )
+				{
+					// -online: that button is Forgot Password, the site's reset page
+					onlineOpenPage( OnlineGetResetUrl(), "RESET" );
+				}
 				else if ( controlID == buttonTOSID )
 				{
 					parentTOS->winHide(FALSE);

@@ -807,7 +807,11 @@ TEST(online_adapter_login_refusal_and_no_register)
 	CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
 	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
 
+	Int retry = -1;
+	CHECK( OnlineGetLoginFailure( &retry ).isEmpty() );
 	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"badlogin\"}" );
+	CHECK_STR( OnlineGetLoginFailure( &retry ).str(), "badlogin" );		// the login screen words it
+	CHECK_EQ( retry, 0 );
 	std::vector<PeerResponse> r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)1 );
 	if (r.size() == 1)
@@ -823,6 +827,11 @@ TEST(online_adapter_login_refusal_and_no_register)
 	OnlineResume( "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" );
 	CHECK_STR( rig.sentType( 1 ).c_str(), "resume" );
 	CHECK_EQ( rig.sent[1].getString( "token" ).size(), (size_t)64 );
+	CHECK( OnlineGetLoginFailure( &retry ).isEmpty() );		// a new login forgets the last refusal
+
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"throttled\",\"retry\":42}" );
+	CHECK_STR( OnlineGetLoginFailure( &retry ).str(), "throttled" );
+	CHECK_EQ( retry, 42 );
 }
 
 TEST(online_adapter_room_and_chat)
@@ -1591,8 +1600,11 @@ TEST(online_register_url_from_the_welcome_and_only_a_web_page_opens)
 	AdapterRig rig;
 	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094}" );
 	CHECK( OnlineGetRegisterUrl().isEmpty() );		// none sent: Create Account hides
-	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"registerUrl\":\"https://example.test/register\"}" );
+	CHECK( OnlineGetResetUrl().isEmpty() );				// and Forgot Password
+	rig.feed( "{\"t\":\"welcome\",\"config\":\"\",\"motd\":\"\",\"relayPort\":8094,\"registerUrl\":\"https://example.test/register\","
+		"\"resetUrl\":\"https://example.test/forgot\"}" );
 	CHECK_STR( OnlineGetRegisterUrl().str(), "https://example.test/register" );
+	CHECK_STR( OnlineGetResetUrl().str(), "https://example.test/forgot" );
 	// a hostile server's address is refused before anything is asked to open it
 	CHECK( !OnlineOpenURL( "file:///C:/Windows/System32/calc.exe" ) );
 	CHECK( !OnlineOpenURL( "C:\\Windows\\notepad.exe" ) );

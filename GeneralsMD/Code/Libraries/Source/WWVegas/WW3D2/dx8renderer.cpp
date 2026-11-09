@@ -52,6 +52,7 @@
 #include "dx8caps.h"
 #include "dx8rendererdebugger.h"
 #include "dx11runtime.h"
+#include "ffshader.h"
 #include "wwdebug.h"
 #include "wwprofile.h"
 #include "wwmemlog.h"
@@ -1925,8 +1926,14 @@ void DX8TextureCategoryClass::Render(void)
 		// The object's look on the Direct3D 11 frame (RTS3DScene::renderOneObject picks it), for this
 		// mesh's draws only.  A sorted mesh draws later, from the sorting pool, which keeps the look
 		// with its triangles (SortingRendererClass::Insert_Triangles), and on Linux its sun shadow
-		// coverage too.
-		const unsigned draw_effect = mesh->Get_Draw_Effect();
+		// coverage too.  The cloak writes alpha 1 (effect_cloak), so a mesh that blends by its own
+		// alpha (the Stealth General's yard emblem, a campfire card, a well's water) would come out
+		// as a solid quad; it draws without the look, as under -d3d9.  The whole mesh goes: one that
+		// mixes opaque polygons with a blended card loses the glass on its opaque ones too.
+		unsigned draw_effect = mesh->Get_Draw_Effect();
+		if (draw_effect == DRAW_EFFECT_CLOAK && mesh->Is_Alpha()) {
+			draw_effect = DRAW_EFFECT_NONE;
+		}
 		if (draw_effect != 0) {
 			SunShadow::SetCasterEffect(DX8Wrapper::_Get_D3D_Device(),draw_effect, mesh->Get_Draw_Effect_Parameters());
 		}

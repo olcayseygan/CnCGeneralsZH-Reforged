@@ -37,6 +37,14 @@ const STATS_MS = 60000;
 const vipString = (v) => `${v >>> 24}.${(v >>> 16) & 255}.${(v >>> 8) & 255}.${v & 255}`;
 const hex = (n) => n.toString(16).padStart(8, '0');
 
+/* Why a datagram went nowhere. bad: wrong magic, type or length. hello: a HELLO refused. rate: over the
+	 sender's bucket. nosession: an id the relay does not hold (a stale one after a NAT move or a replace).
+	 endpoint: a held id from an endpoint that is not its own. notarget: no session on that address.
+	 room: the target is in another room. unverified: the target has not answered its WELCOME yet.
+	 alone: a broadcast nobody in the room could take; not counted in `dropped`, a lone lobby does it. */
+const discards = () => ({ bad: 0, hello: 0, rate: 0, nosession: 0, endpoint: 0, notarget: 0, room: 0, unverified: 0, alone: 0 });
+const CAUSES = Object.keys(discards());
+
 function createRelay(opts = {}) {
 	const now = opts.now || Date.now;
 	const log = opts.log || ((line) => console.log(`${new Date().toISOString()} ${line}`));
@@ -58,7 +66,7 @@ function createRelay(opts = {}) {
 	const accounts = new Map();   // account id -> its one session
 	const perIp = new Map();      // ip that opened them -> session count
 	const buckets = new Map();    // source ip -> { tokens, at }
-	const stats = { pktIn: 0, bytesIn: 0, pktOut: 0, bytesOut: 0, dropped: 0 };
+	const stats = { pktIn: 0, bytesIn: 0, pktOut: 0, bytesOut: 0, drop: discards() };
 	let nextVip = 1;
 	let timers = [];
 
@@ -106,20 +114,44 @@ function createRelay(opts = {}) {
 		sock.send(buf, s.port, s.address);
 	}
 
+	// s sent it, t was its target; either may be unknown
+	function drop(cause, s, t) {
+		stats.drop[cause]++;
+		if (s) s.drop[cause]++;
+		if (t) t.dropTo[cause]++;
+	}
+
+	// a session's counters since it entered its room, for the leave and room lines
+	function tally(s, t) {
+		let line = ` in=${s.inP}p/${s.inB}B out=${s.outP}p lastData=${s.lastData ? `${t - s.lastData}ms` : 'never'} seen=${t - s.seen}ms`;
+		for (const c of CAUSES) if (s.drop[c]) line += ` drop.${c}=${s.drop[c]}`;
+		for (const c of CAUSES) if (s.dropTo[c]) line += ` to.${c}=${s.dropTo[c]}`;
+		return line;
+	}
+
+	function snapshot(s, t) {
+		return {
+			vip: vipString(s.vip), room: s.room, at: t, inP: s.inP, inB: s.inB, outP: s.outP,
+			lastDataMs: s.lastData ? t - s.lastData : null, seenMs: t - s.seen, drop: { ...s.drop }, dropTo: { ...s.dropTo },
+		};
+	}
+
 	function leaveRoom(s) {
 		const members = rooms.get(s.room);
 		members.delete(s);
-		if (!members.size) rooms.delete(s.room);
+		if (members.size) return;
+		rooms.delete(s.room);
+		if (s.room !== s.home) log(`empty room=${s.room}`);
 	}
 
 	function remove(s, reason) {
+		log(`leave room=${s.room} vip=${vipString(s.vip)}${tally(s, now())} reason=${reason}`);
 		sessions.delete(s.id);
 		byVip.delete(s.vip);
 		if (byEndpoint.get(s.key) === s) byEndpoint.delete(s.key);
 		leaveRoom(s);
 		const n = perIp.get(s.ip) - 1;
 		if (n) perIp.set(s.ip, n); else perIp.delete(s.ip);
-		log(`leave room=${s.room} vip=${vipString(s.vip)} reason=${reason}`);
 		if (s.account !== null) {
 			if (accounts.get(s.account) === s) accounts.delete(s.account);
 			onLeave(s.account, s.seen);
@@ -139,7 +171,10 @@ function createRelay(opts = {}) {
 		if (sessions.size >= MAX_SESSIONS || (perIp.get(rinfo.address) || 0) >= maxPerIp || members.size >= maxRoom) return null;
 		const vip = allocVip(want);
 		if (!vip) return null;
-		const s = { id: newSessionId(), vip, exe, ini, room, name, ip: rinfo.address, key: null, seen: 0, verified: false, account: null };
+		const s = {
+			id: newSessionId(), vip, exe, ini, room, home: room, name, ip: rinfo.address, key: null, seen: 0, verified: false, account: null,
+			lastData: 0, inP: 0, inB: 0, outP: 0, drop: discards(), dropTo: discards(), last: null,
+		};
 		sessions.set(s.id, s);
 		byVip.set(vip, s);
 		rooms.set(room, members.add(s));
@@ -219,20 +254,33 @@ function createRelay(opts = {}) {
 
 	function data(msg, ip, key) {
 		const s = sessions.get(msg.toString('hex', 3, 11));
-		if (!s || s.key !== key) return false;  // only a HELLO moves a session to another endpoint
+		if (!s) return drop('nosession', byEndpoint.get(key));
+		s.inP++;
+		s.inB += msg.length;
+		if (s.key !== key) return drop('endpoint', s);  // only a HELLO moves a session to another endpoint
 		s.verified = true;
-		s.seen = now();
+		s.lastData = s.seen = now();
 		const dst = msg.readUInt32BE(11);
 		const targets = [];
 		if (dst === BROADCAST) {
-			for (const t of rooms.get(s.room)) if (t !== s && t.verified) targets.push(t);
+			for (const t of rooms.get(s.room)) {
+				if (t === s) continue;
+				if (t.verified) targets.push(t);
+				else t.dropTo.unverified++;  // its copy only; the others still get theirs
+			}
 		} else {
 			const t = byVip.get(dst);
-			if (!t || t === s || t.room !== s.room || !t.verified) return false;
+			if (!t || t === s) return drop('notarget', s);
+			if (t.room !== s.room) return drop('room', s, t);
+			if (!t.verified) return drop('unverified', s, t);
 			targets.push(t);
 		}
 		// the sender pays for every copy, so a broadcast is no cheaper than sending each one itself
-		if (!allow(ip, Math.max(msg.length, PACKET_COST_MIN) * Math.max(targets.length, 1))) return false;
+		if (!allow(ip, Math.max(msg.length, PACKET_COST_MIN) * Math.max(targets.length, 1))) {
+			for (const t of targets) t.dropTo.rate++;
+			return drop('rate', s);
+		}
+		if (!targets.length) return drop('alone', s);
 		const out = Buffer.allocUnsafe(msg.length - DATA_IN_HEADER + DATA_OUT_HEADER);
 		out[0] = MAGIC0;
 		out[1] = MAGIC1;
@@ -241,21 +289,23 @@ function createRelay(opts = {}) {
 		out.writeUInt16BE(msg.readUInt16BE(17), 7);  // srcPort
 		out.writeUInt16BE(msg.readUInt16BE(15), 9);  // dstPort
 		msg.copy(out, DATA_OUT_HEADER, DATA_IN_HEADER);
-		for (const t of targets) send(out, t);
-		return true;
+		for (const t of targets) {
+			t.outP++;
+			send(out, t);
+		}
 	}
 
 	function onMessage(msg, rinfo) {
 		stats.pktIn++;
 		stats.bytesIn += msg.length;
 		const key = `${rinfo.address}:${rinfo.port}`;
-		let ok = false;
-		if (msg.length >= 3 && msg.length <= MAX_PACKET && msg[0] === MAGIC0 && msg[1] === MAGIC1) {
-			if (msg[2] === T_HELLO && msg.length >= HELLO_HEADER) ok = allow(rinfo.address, Math.max(msg.length, PACKET_COST_MIN)) && hello(msg, rinfo, key, false);
-			else if (msg[2] === T_HELLO_AUTH && msg.length >= HELLO_AUTH_HEADER && authorize) ok = allow(rinfo.address, Math.max(msg.length, PACKET_COST_MIN)) && hello(msg, rinfo, key, true);
-			else if (msg[2] === T_DATA && msg.length >= DATA_IN_HEADER) ok = data(msg, rinfo.address, key);
-		}
-		if (!ok) stats.dropped++;
+		if (msg.length < 3 || msg.length > MAX_PACKET || msg[0] !== MAGIC0 || msg[1] !== MAGIC1) return drop('bad', byEndpoint.get(key));
+		const type = msg[2];
+		if (type === T_DATA && msg.length >= DATA_IN_HEADER) return data(msg, rinfo.address, key);
+		const auth = type === T_HELLO_AUTH && msg.length >= HELLO_AUTH_HEADER && !!authorize;
+		if (!auth && !(type === T_HELLO && msg.length >= HELLO_HEADER)) return drop('bad', byEndpoint.get(key));
+		if (!allow(rinfo.address, Math.max(msg.length, PACKET_COST_MIN))) return drop('rate');
+		if (!hello(msg, rinfo, key, auth)) drop('hello');
 	}
 
 	function sweep() {
@@ -267,8 +317,15 @@ function createRelay(opts = {}) {
 	}
 
 	function report() {
-		log(`stats sessions=${sessions.size} in=${stats.pktIn}p/${stats.bytesIn}B out=${stats.pktOut}p/${stats.bytesOut}B dropped=${stats.dropped}p`);
-		for (const k of Object.keys(stats)) stats[k] = 0;
+		let dropped = 0;
+		let causes = '';
+		for (const c of CAUSES) {
+			if (c !== 'alone') dropped += stats.drop[c];
+			causes += ` ${c}=${stats.drop[c]}`;
+		}
+		log(`stats sessions=${sessions.size} in=${stats.pktIn}p/${stats.bytesIn}B out=${stats.pktOut}p/${stats.bytesOut}B dropped=${dropped}p${causes}`);
+		stats.pktIn = stats.bytesIn = stats.pktOut = stats.bytesOut = 0;
+		stats.drop = discards();
 	}
 
 	sock.on('message', onMessage);
@@ -280,17 +337,30 @@ function createRelay(opts = {}) {
 		sweep,
 		report,
 		// Moves an authorised session to another room; unicast and broadcast stay inside it. The caller is
-		// trusted, so the room cap does not apply. False when the account holds no session.
+		// trusted, so the room cap does not apply. False when the account holds no session. The session's
+		// counters are logged for the room it leaves and start again from zero in the new one.
 		setRoom(account, room) {
 			const s = accounts.get(account);
 			if (!s) return false;
-			log(`room vip=${vipString(s.vip)} from=${s.room} to=${room}`);
+			if (s.room === room) return true;
+			const t = now();
+			log(`room vip=${vipString(s.vip)} from=${s.room} to=${room}${tally(s, t)}`);
+			s.last = snapshot(s, t);
+			s.inP = s.inB = s.outP = 0;
+			s.drop = discards();
+			s.dropTo = discards();
 			leaveRoom(s);
 			s.room = room;
 			rooms.set(room, (rooms.get(room) || new Set()).add(s));
 			return true;
 		},
 		vipOf: (account) => accounts.get(account)?.vip ?? null,
+		// Counters of the session an account (or a vip number) holds, since it entered its room, and `last`
+		// for the room before; null when there is no such session.
+		sessionStats(key) {
+			const s = accounts.get(key) ?? byVip.get(key);
+			return s ? { ...snapshot(s, now()), last: s.last } : null;
+		},
 		start(port = DEFAULT_PORT, host) {
 			return new Promise((resolve, reject) => {
 				sock.once('error', reject);

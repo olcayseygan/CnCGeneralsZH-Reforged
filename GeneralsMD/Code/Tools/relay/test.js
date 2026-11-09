@@ -3,7 +3,7 @@
 
 const assert = require('assert');
 const dgram = require('dgram');
-const { createRelay, IDLE_MS, MAX_PACKET, NO_SESSION, HELLO_HEADER, HELLO_AUTH_HEADER, DATA_IN_HEADER } = require('./relay');
+const { createRelay, IDLE_MS, MAX_PACKET, NO_SESSION, HELLO_HEADER, HELLO_AUTH_HEADER, DATA_IN_HEADER, vipString } = require('./relay');
 
 let clock = 1000000;
 const logLines = [];
@@ -91,6 +91,17 @@ async function member(c, exe, ini, name = '', want = 0) {
 	return s;
 }
 
+// the relay's per-minute line as numbers, which also starts its counters again
+function stats(relay) {
+	relay.report();
+	const line = logLines[logLines.length - 1];
+	assert.ok(/^stats sessions=\d+ in=\d+p\/\d+B out=\d+p\/\d+B dropped=\d+p bad=\d+ hello=\d+ rate=\d+ nosession=\d+ endpoint=\d+ notarget=\d+ room=\d+ unverified=\d+ alone=\d+$/.test(line), line);
+	return Object.fromEntries(line.split(' ').slice(1).map((kv) => kv.split('=')).map(([k, v]) => [k, parseInt(v, 10)]));
+}
+
+const LEAVE = /^leave room=\S+ vip=\S+ in=\d+p\/\d+B out=\d+p lastData=(\d+ms|never) seen=\d+ms( (drop|to)\.[a-z]+=\d+)* reason=.+$/;
+const lineOf = (prefix) => logLines.find((l) => l.startsWith(prefix));
+
 function parseData(m) {
 	assert.ok(m, 'expected DATA, got nothing');
 	assert.strictEqual(m.toString('latin1', 0, 2), 'ZR');
@@ -111,11 +122,21 @@ async function main() {
 	assert.notStrictEqual(A.vip, B.vip);
 	assert.notStrictEqual(A.session, B.session);
 	assert.ok(logLines.some((l) => l.startsWith('join room=00001111:00002222') && l.includes('"Alpha"')));
+	relay.report();
 
 	// nothing is forwarded to an endpoint until it answers with its id: a forged hello reflects nothing
 	a.send(data(A.session, 0xffffffff, 8086, 8086, 'early'));
 	a.send(data(A.session, B.vip, 8086, 8086, 'early'));
 	assert.strictEqual(await b.next(150), null, 'forwarded to an unverified session');
+	// counted: the broadcast found nobody it could reach, the unicast an unverified target
+	let st = relay.sessionStats(A.vip);
+	assert.strictEqual(st.inP, 2);
+	assert.strictEqual(st.drop.alone, 1);
+	assert.strictEqual(st.drop.unverified, 1);
+	assert.strictEqual(st.lastDataMs, 0);
+	assert.strictEqual(relay.sessionStats(B.vip).dropTo.unverified, 2, 'skipped broadcast copy and unicast not charged to the target');
+	assert.strictEqual(relay.sessionStats(B.vip).lastDataMs, null);
+	assert.strictEqual(relay.sessionStats(0x0a7f7f7f), null);
 	assert.deepStrictEqual(await join(b, 0x1111, 0x2222, B.session), B);
 
 	// unicast carries src vip, both ports and the payload
@@ -130,7 +151,14 @@ async function main() {
 
 	// unicast into another room is dropped
 	a.send(data(A.session, C.vip, 8086, 8086, 'nope'));
+	// and to an address nobody holds
+	a.send(data(A.session, 0x0a7f7f7f, 8086, 8086, 'nobody'));
 	assert.strictEqual(await c.next(150), null, 'unicast crossed rooms');
+	st = relay.sessionStats(A.vip);
+	assert.strictEqual(st.drop.room, 1);
+	assert.strictEqual(st.drop.notarget, 1);
+	assert.strictEqual(relay.sessionStats(C.vip).dropTo.room, 1);
+	assert.strictEqual(relay.sessionStats(B.vip).outP, 2);
 
 	// unknown session, bad magic and oversize packets are dropped
 	b.send(data('deadbeefdeadbeef', A.vip, 8086, 8086, 'forged'));
@@ -139,6 +167,13 @@ async function main() {
 	b.send(bad);
 	b.send(data(B.session, A.vip, 8086, 8086, Buffer.alloc(MAX_PACKET - DATA_IN_HEADER + 1)));
 	assert.strictEqual(await a.next(150), null, 'bad packet forwarded');
+	// charged to the session that holds the sending endpoint
+	st = relay.sessionStats(B.vip);
+	assert.strictEqual(st.drop.nosession, 1);
+	assert.strictEqual(st.drop.bad, 2);
+	assert.strictEqual(st.inP, 0, 'a packet without its id counted as its DATA');
+	let sum = stats(relay);
+	assert.deepStrictEqual([sum.bad, sum.nosession, sum.room, sum.notarget, sum.unverified, sum.alone, sum.dropped], [2, 1, 1, 1, 1, 1, 6]);
 
 	// largest legal packet goes through
 	b.send(data(B.session, A.vip, 8086, 8086, Buffer.alloc(MAX_PACKET - DATA_IN_HEADER, 0x61)));
@@ -161,6 +196,9 @@ async function main() {
 	assert.strictEqual(await b.next(150), null, 'moved a session onto a held endpoint');
 	b.send(data(B.session, A.vip, 8086, 8086, 'b still b'));
 	assert.strictEqual(parseData(await a.next()).payload, 'b still b');
+	assert.strictEqual(relay.sessionStats(A.vip).drop.endpoint, 1, 'DATA from a foreign endpoint not counted');
+	sum = stats(relay);
+	assert.deepStrictEqual([sum.endpoint, sum.hello, sum.dropped], [1, 2, 3]);
 
 	// NAT rebinding: a hello with the id from a new endpoint moves the session there under a new id that
 	// only the new endpoint has seen, and it is served once it answers with that id
@@ -192,6 +230,15 @@ async function main() {
 	relay.sweep();
 	assert.strictEqual(relay.sessions.size, 1);
 	assert.ok(logLines.some((l) => l.startsWith('leave room=00001111:00003333') && l.endsWith('reason=idle')));
+	// the leave line carries the counters; the HELLO keepalive does not count as DATA
+	const aLeave = lineOf(`leave room=00001111:00002222 vip=${vipString(A.vip)} `);
+	assert.ok(LEAVE.test(aLeave), aLeave);
+	for (const part of [' drop.endpoint=1 ', ' drop.notarget=1 ', ' drop.room=1 ', ' drop.unverified=1 ', ' drop.alone=1 ', ' to.unverified=1 ']) assert.ok(aLeave.includes(part), `${aLeave} lacks${part}`);
+	assert.ok(LEAVE.test(lineOf(`leave room=00001111:00002222 vip=${vipString(G.vip)} `)));
+	assert.ok(lineOf(`leave room=00001111:00002222 vip=${vipString(G.vip)} `).includes(' lastData=never '));
+	st = relay.sessionStats(B.vip);
+	assert.strictEqual(st.seenMs, 15000);
+	assert.ok(st.lastDataMs >= IDLE_MS, 'keepalive moved lastData');
 	b.send(data(B.session, A.vip, 8086, 8086, 'gone?'));
 	assert.strictEqual(await a2.next(150), null, 'expired vip still delivered');
 	// the game's keepalive asks for the address it had, so a forgotten session comes back on it
@@ -203,8 +250,7 @@ async function main() {
 	const h = await client(port);
 	assert.strictEqual(await welcome(h, helloAuth(0x1111, 0x2222, 'aa'.repeat(16))), null, 'HELLO_AUTH answered with no hook');
 
-	relay.report();
-	assert.ok(/^stats sessions=\d+ in=\d+p\/\d+B out=\d+p\/\d+B dropped=\d+p$/.test(logLines[logLines.length - 1]));
+	stats(relay);
 	relay.stop();
 
 	// caps: sessions per source IP and per room
@@ -235,13 +281,22 @@ async function main() {
 	const limitPort = await limited.start(0, '127.0.0.1');
 	const [x, y, z] = await Promise.all([client(limitPort, '127.0.0.4'), client(limitPort, '127.0.0.5'), client(limitPort, '127.0.0.5')]);
 	const X = await member(x, 7, 7);
-	await member(y, 7, 7);
+	const Y = await member(y, 7, 7);
 	await member(z, 7, 7);
+	limited.report();
 	const big = data(X.session, 0xffffffff, 1, 1, Buffer.alloc(1000));
 	for (let i = 0; i < 80; i++) x.send(big);
 	let got = 0;
 	while (await y.next(200)) got++;
 	assert.ok(got >= 25 && got <= 40, `two listeners: rate limit let ${got} of 80 through to each`);
+	// every packet that reached the relay (loopback may lose some of 80 sent at once) is either out to
+	// each listener or counted as a rate drop on both sides
+	const sx = limited.sessionStats(X.vip), sy = limited.sessionStats(Y.vip);
+	assert.ok(sx.inP > 40 && sx.inP <= 80, `relay saw ${sx.inP} of 80`);
+	assert.ok(sx.drop.rate > 0, 'rate drops not counted');
+	assert.strictEqual(sx.drop.rate + sy.outP, sx.inP);
+	assert.strictEqual(sy.dropTo.rate, sx.drop.rate);
+	assert.strictEqual(stats(limited).rate, sx.drop.rate);
 	limited.stop();
 
 	// HELLO_AUTH: tickets name accounts, each account starts alone in acct:<id>
@@ -318,6 +373,16 @@ async function main() {
 	authed.setRoom('u2', 'acct:u2');
 	p1.send(data(P1.session, P2.vip, 8086, 8086, 'gone'));
 	assert.strictEqual(await p2.next(150), null, 'setRoom back left the session in the match');
+	// each room line carries what the session did in the room it leaves; the counters start again
+	const into = lineOf(`room vip=${vipString(P1.vip)} from=acct:u1 to=match:1 `);
+	assert.ok(into && into.endsWith(' drop.room=1 drop.alone=1'), into);
+	const back = lineOf(`room vip=${vipString(P2.vip)} from=match:1 to=acct:u2 `);
+	assert.ok(/ in=1p\/\d+B out=1p lastData=\d+ms seen=\d+ms$/.test(back), back);
+	st = authed.sessionStats('u1');
+	assert.deepStrictEqual([st.room, st.inP, st.outP, st.drop.room, st.last.room, st.last.drop.alone], ['match:1', 4, 1, 3, 'acct:u1', 1]);
+	assert.strictEqual(authed.sessionStats('u3').dropTo.room, 1);
+	assert.strictEqual(authed.sessionStats('nobody'), null);
+	assert.ok(!lineOf('empty room=match:1'), 'room called empty while u1 is in it');
 
 	// logging in again replaces: the old session leaves, the account moves to the new one
 	clock += 1000;
@@ -325,8 +390,14 @@ async function main() {
 	assert.notStrictEqual(P1b.session, P1.session);
 	assert.strictEqual(authed.vipOf('u1'), P1b.vip);
 	assert.deepStrictEqual(leaves.map((l) => l[0]), ['u1'], 'replace did not fire onLeave');
-	assert.ok(logLines.some((l) => l.startsWith('leave room=match:1 ') && l.endsWith('reason=replaced')));
+	const replaced = logLines.findIndex((l) => l.startsWith('leave room=match:1 ') && l.endsWith('reason=replaced'));
+	assert.ok(replaced >= 0);
+	assert.ok(LEAVE.test(logLines[replaced]) && logLines[replaced].includes(' in=4p/') && logLines[replaced].includes(' drop.room=3 '), logLines[replaced]);
+	// the last one out of a room it was moved into says so; home rooms empty silently
+	assert.strictEqual(logLines[replaced + 1], 'empty room=match:1');
+	assert.ok(!lineOf('empty room=acct:'), 'a home room reported empty');
 	assert.ok(!authed.sessions.has(P1.session), 'replaced session still held');
+	assert.strictEqual(authed.sessionStats('u1').inP, 0, 'the new session inherited counters');
 
 	// idle: onLeave in the order the sessions went silent, not the order they joined; plain ones fire nothing
 	const t0 = clock;

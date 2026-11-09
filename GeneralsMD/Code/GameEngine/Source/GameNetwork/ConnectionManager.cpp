@@ -207,7 +207,7 @@ void ConnectionManager::init()
 		m_latencyJitters[i] = 0.0;
 	}
 	m_smallestPacketArrivalCushion = -1;
-	m_lastCushionFrame = 0;
+	memset(m_cushionMeasured, 0, sizeof(m_cushionMeasured));		// frame 0 is never measured, every other frame reads unmeasured
 
 	m_frameMetrics.init();
 
@@ -1049,16 +1049,16 @@ void ConnectionManager::sendRemoteCommand(NetCommandRef *msg) {
 	}
 
 	/* Do some metrics to find the minimum packet arrival cushion: how early the frame became ready,
-		 measured once, by the arrival that completed it.  EA measured every arrival for a frame that
-		 was already ready, and every synchronized command goes out twice more, 30 ms apart, until it is
-		 acked (CONNECTION_REDUNDANT_COPIES).  On a 200 ms link the ack is far behind both copies, so
-		 the last copy, 60 ms - four frames - after the frame was complete, set the minimum, and the
-		 self-slug read that as the margin running out. */
+		 measured once, by the arrival that completed it - see arrivalMeasuresCushion for why once.  A
+		 remote arrival is always what completes a frame: our own frame data counts itself complete on
+		 every add (FrameDataManager::addNetCommandMsg and resetFrame), so our own frame tick never is.
+		 Bounded before allCommandsReady, which resets a frame it finds over-full. */
 	const UnsignedInt cushionFrame = msg->getCommand()->getExecutionFrame();
-	if (IsCommandSynchronized(msg->getCommand()->getNetCommandType()) && ((Int)(cushionFrame - m_lastCushionFrame) > 0)) {
+	if (IsCommandSynchronized(msg->getCommand()->getNetCommandType()) &&
+			arrivalMeasuresCushion(m_cushionMeasured, cushionFrame, TheGameLogic->getFrame(), MAX_FRAMES_AHEAD)) {
 //		DEBUG_LOG(("ConnectionManager::sendRemoteCommand - about to call allCommandsReady\n"));
 		if (allCommandsReady(cushionFrame, TRUE)) {
-			m_lastCushionFrame = cushionFrame;
+			markCushionMeasured(m_cushionMeasured, cushionFrame);
 			Int cushion = frameCushion(msg->getCommand()->getExecutionFrame(), TheGameLogic->getFrame());
 			if (((UnsignedInt)cushion < m_smallestPacketArrivalCushion) || (m_smallestPacketArrivalCushion == -1)) {
 				m_smallestPacketArrivalCushion = cushion;

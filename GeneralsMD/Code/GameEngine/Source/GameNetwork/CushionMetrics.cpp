@@ -55,6 +55,25 @@ Bool frameIsTooOldToResend( UnsignedInt currentFrame, UnsignedInt requestedFrame
 	return age > framesToKeep;
 }
 
+Bool arrivalMeasuresCushion( const UnsignedInt measured[CUSHION_RING_FRAMES], UnsignedInt frame,
+														 UnsignedInt currentFrame, Int maxAhead )
+{
+	// a ring slot must not be shared by two frames in flight
+	if( maxAhead > CUSHION_RING_FRAMES - 1 )
+		maxAhead = CUSHION_RING_FRAMES - 1;
+
+	Int ahead = (Int)(frame - currentFrame);		// signed difference, wraparound-safe
+	if( ahead < 0 || ahead > maxAhead )
+		return FALSE;
+
+	return measured[frame % CUSHION_RING_FRAMES] != frame;
+}
+
+void markCushionMeasured( UnsignedInt measured[CUSHION_RING_FRAMES], UnsignedInt frame )
+{
+	measured[frame % CUSHION_RING_FRAMES] = frame;
+}
+
 Bool shouldSelfSlug( Int minimumCushion, Int runAhead, UnsignedInt slackPercent )
 {
 	/* Negative is FrameMetrics' "nothing measured yet", set by init() and never produced by a real
@@ -112,8 +131,9 @@ Int computeRunAhead( Real roundTripSeconds, Real jitterSeconds, Int fps, Unsigne
 		 anyone plays on; lowering the floor is what makes the arithmetic underneath it matter. */
 	Int frames = (Int)ceilf( (roundTripSeconds / 2.0f) * (Real)fps );
 
-	// EA's proportional slack, then the brake's room and the link's own jitter - see the header
+	// EA's proportional slack, then the FRAMEINFO lag, the brake's room and the link's own jitter - see the header
 	frames += (Int)((frames * (Int)slackPercent) / 100);
+	frames += RUNAHEAD_FRAMEINFO_LAG_FRAMES;
 
 	Real jitterRaw = ceilf( (Real)RUNAHEAD_JITTER_DEVIATIONS * jitterSeconds * (Real)fps );
 	Int jitterFrames = ( jitterRaw > (Real)maxRunAhead ) ? maxRunAhead : (Int)jitterRaw;	// no float-to-int overflow

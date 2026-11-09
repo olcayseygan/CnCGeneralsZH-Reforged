@@ -7489,10 +7489,11 @@ TEST(a_missing_frame_is_asked_for_again_once_the_wire_has_had_its_chance)
 
 TEST(a_packet_that_arrives_on_time_never_trips_the_self_slug)
 {
-	/* The brake fires when the cushion - window minus trip - drops below selfSlugThreshold.  A
-		 margin no bigger than that has the room running 10 % slow on a link that never drops or delays
-		 a packet.  So whatever the latency and the jitter, a packet that takes exactly the average trip
-		 arrives with the brake still off. */
+	/* The brake fires when the cushion drops below selfSlugThreshold.  The cushion of a packet that
+		 takes exactly the average trip is the window minus the trip minus the frame its FRAMEINFO waits
+		 to be sent (RUNAHEAD_FRAMEINFO_LAG_FRAMES).  A margin no bigger than the threshold has the room
+		 running 10 % slow on a link that never drops or delays a packet.  So whatever the latency and
+		 the jitter, that packet arrives with the brake still off. */
 	for( Int ms = 0; ms <= 800; ms += 5 )
 	{
 		Real latency = (Real)ms / 1000.0f;
@@ -7501,7 +7502,7 @@ TEST(a_packet_that_arrives_on_time_never_trips_the_self_slug)
 		{
 			Int runAhead = computeRunAhead( latency, (Real)jitterMS / 1000.0f, LOGICFRAMES_PER_SECOND, 10,
 																			MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-			Int cushion = runAhead - tripFrames;
+			Int cushion = runAhead - tripFrames - RUNAHEAD_FRAMEINFO_LAG_FRAMES;
 			CHECK( !shouldSelfSlug( cushion, runAhead, 10 ) );
 
 			// and a packet late by as many deviations as the margin is sized for does not trip it either
@@ -7523,14 +7524,15 @@ TEST(the_jitter_margin_follows_the_measured_jitter)
 	CHECK_EQ( tripFrames, 7 );
 	Int oldWindow = tripFrames + oldFixedMargin;
 
-	// a steady link, rttvar a few milliseconds, gets a shorter window than the flat margin gave it
+	/* A steady link, rttvar a few milliseconds, gets the window the flat margin gave it: the six frames
+		 were the FRAMEINFO lag, the brake's four and one frame of spread, which is all a steady link needs. */
 	Int steady = computeRunAhead( ping, 0.004f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-	CHECK_EQ( steady, tripFrames + SELFSLUG_MIN_THRESHOLD_FRAMES + 1 );
-	CHECK( steady < oldWindow );
+	CHECK_EQ( steady, tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + 1 );
+	CHECK_EQ( steady, oldWindow );
 
-	// a jittery one, rttvar 20 to 35 ms as -latNoise 30 measures, keeps more
+	// a jittery one, rttvar 20 to 35 ms as -latNoise 30 measures, waits longer
 	Int jittery = computeRunAhead( ping, 0.024f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-	CHECK_EQ( jittery, tripFrames + SELFSLUG_MIN_THRESHOLD_FRAMES + 3 );		// ceil(1.5 * 24 ms * 60) = 3
+	CHECK_EQ( jittery, tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + 2 );		// ceil(24 ms * 60) = 2
 	CHECK( jittery > oldWindow );
 	CHECK( computeRunAhead( ping, 0.035f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) > jittery );
 
@@ -7546,10 +7548,60 @@ TEST(the_jitter_margin_follows_the_measured_jitter)
 	/* No jitter is still a frame of it: the game's send grouping and socket reads spread every link
 		 by up to a frame, loopback included. */
 	CHECK_EQ( computeRunAhead( ping, 0.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
-						tripFrames + SELFSLUG_MIN_THRESHOLD_FRAMES + RUNAHEAD_JITTER_MIN_FRAMES );
+						tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + RUNAHEAD_JITTER_MIN_FRAMES );
+}
 
-	/* A figure off the wire that is not a number, negative or absurd must neither shrink the window
-		 nor walk it out of the buffers. */
+/* Each frame's cushion is measured once, by the arrival that completes it (arrivalMeasuresCushion).
+	 Three copies at 200 ms of ping ran self-slugged on 80 % of their frames while every redundant copy
+	 of an order, landing 30 and 60 ms after the frame was complete, was measured as well. */
+TEST(each_frame_measures_its_cushion_once_on_completion)
+{
+	static UnsignedInt measured[CUSHION_RING_FRAMES];
+	memset( measured, 0, sizeof(measured) );
+	const Int maxAhead = 256;
+
+	// the arrival that completes frame 1000 measures it; the redundant copies after it do not
+	CHECK( arrivalMeasuresCushion( measured, 1000, 990, maxAhead ) );
+	markCushionMeasured( measured, 1000 );
+	CHECK( !arrivalMeasuresCushion( measured, 1000, 992, maxAhead ) );
+	CHECK( !arrivalMeasuresCushion( measured, 1000, 1000, maxAhead ) );
+
+	/* Out of order: frame 1001 completes first, then 1000's FRAMEINFO arrives late by the second copy
+		 or a resend answer.  The late one is the sample the brake exists for, and it is still taken. */
+	CHECK( arrivalMeasuresCushion( measured, 1101, 1090, maxAhead ) );
+	markCushionMeasured( measured, 1101 );
+	CHECK( arrivalMeasuresCushion( measured, 1100, 1099, maxAhead ) );
+	CHECK( arrivalMeasuresCushion( measured, 1100, 1100, maxAhead ) );		// arriving on its own frame, cushion 0
+
+	// a frame already run is not measured, and neither is one past the window
+	CHECK( !arrivalMeasuresCushion( measured, 1100, 1101, maxAhead ) );
+	CHECK( !arrivalMeasuresCushion( measured, 1100 + maxAhead + 1, 1100, maxAhead ) );
+	CHECK( arrivalMeasuresCushion( measured, 1100 + maxAhead, 1100, maxAhead ) );
+
+	/* A peer's far-future frame aliases a frame in flight: 1200 + CUSHION_RING_FRAMES shares 1200's
+		 slot.  Refused, so it cannot mark 1200 measured, and the window never reaches past the ring. */
+	CHECK( !arrivalMeasuresCushion( measured, 1200 + CUSHION_RING_FRAMES, 1200, 100000 ) );
+	CHECK( arrivalMeasuresCushion( measured, 1200 + CUSHION_RING_FRAMES - 1, 1200, 100000 ) );
+	CHECK( arrivalMeasuresCushion( measured, 1200, 1199, maxAhead ) );
+
+	// a slot reused a whole ring later is a new frame
+	markCushionMeasured( measured, 1300 );
+	CHECK( arrivalMeasuresCushion( measured, 1300 + CUSHION_RING_FRAMES, 1300 + CUSHION_RING_FRAMES - 5, maxAhead ) );
+
+	// the frame counter wrapping changes nothing
+	const UnsignedInt nearWrap = 0xFFFFFFF0u;
+	CHECK( arrivalMeasuresCushion( measured, 5, nearWrap, maxAhead ) );
+	markCushionMeasured( measured, 5 );
+	CHECK( !arrivalMeasuresCushion( measured, 5, nearWrap + 2, maxAhead ) );
+	CHECK( !arrivalMeasuresCushion( measured, nearWrap, 5, maxAhead ) );		// behind us across the wrap
+}
+
+TEST(a_jitter_figure_off_the_wire_cannot_break_the_window)
+{
+	/* A figure that is not a number, negative or absurd must neither shrink the window nor walk it
+		 out of the buffers. */
+	const Int fps = LOGICFRAMES_PER_SECOND;
+	const Real ping = 0.215f;
 	volatile Real zero = 0.0f;
 	CHECK_EQ( computeRunAhead( ping, zero / zero, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
 						computeRunAhead( ping, 0.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) );

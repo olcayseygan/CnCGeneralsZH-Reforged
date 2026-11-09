@@ -40,6 +40,7 @@
 #include "GameNetwork/FrameMetrics.h"
 #include "GameNetwork/NetworkDefs.h"
 #include "GameNetwork/DisconnectManager.h"
+#include "GameNetwork/CushionMetrics.h"
 
 class GameInfo;
 class NetCommandWrapperList;
@@ -232,7 +233,7 @@ private:
 	Int  m_minFpsPlayer;
 	Int  m_minFps;
 	UnsignedInt m_smallestPacketArrivalCushion;
-	UnsignedInt m_lastCushionFrame;		///< The newest frame whose arrival cushion was measured; each frame is measured once, when it completes.
+	UnsignedInt m_cushionMeasured[CUSHION_RING_FRAMES];		///< Per frame in flight, the frame number whose arrival cushion was measured (arrivalMeasuresCushion).
 	Bool m_didSelfSlug;
 
 	// -----------------------------------------------------------------------------

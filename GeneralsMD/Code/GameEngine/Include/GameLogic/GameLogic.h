@@ -336,6 +336,9 @@ public:
 	// this should be called only by UpdateModule, thanks.
 	void friend_awakenUpdateModule(Object* obj, UpdateModulePtr update, UnsignedInt whenToWakeUp);
 
+	/// Object::setDisabledUntil has just set a disabled bit: the end-of-frame check looks at this one from now on
+	void watchDisabled( const Object *obj );
+
 protected:
 
 	// snapshot methods
@@ -409,6 +412,23 @@ private:
 	Object* m_objList;																			///< All of the objects in the world.
 //	ObjectPtrHash m_objHash;																///< Used for ObjectID lookups
 	ObjectPtrVector m_objVector;
+
+	/* The end-of-frame pass (disabledAndSecondTurns) calls checkDisabledStatus on every disabled
+		 object and oncePerSecondTurn on every object whose ID % 60 is this frame's, in object list order.
+		 It walked the whole list for it, 0.3ms a frame at 4,000 objects.  These name the few it touches.
+		 The list is newest first and only ever grows at its head, so the order a stamp counts objects
+		 in is the list's turned round.  Kept by registerObject and watchDisabled, rebuilt from the list
+		 after a reset or a load (m_objIndexStale), when IDs are taken from the save. */
+	std::vector<ObjectID> m_secondTurnIDs[ LOGICFRAMES_PER_SECOND ];	///< by ID % 60, oldest first; the dead go on that ID's next turn
+	std::vector<ObjectID> m_disabledWatch;		///< every object seen disabled or given a disable since; repeats allowed
+	std::vector<UnsignedInt> m_listStamp;			///< by ID: when it joined the list; the list runs in falling stamp order
+	UnsignedInt m_nextListStamp = 0;
+	Bool m_objIndexStale = TRUE;
+	std::vector<ObjectID> m_watchScratch;			///< the pass's working copies, kept to spare the allocation
+	std::vector<Object*> m_disabledScratch;
+	void rebuildObjectIndex( void );
+	void disabledAndSecondTurns( void );
+	UnsignedInt countIndexedObjects( void ) const;	///< the live objects plus at most a second of the dead; the profile's yardstick
 
 	// this is a vector, but is maintained as a priority queue.
 	// never modify it directly; please use the proper access methods.

@@ -2429,6 +2429,9 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 		
 		m_disabledTillFrame[ type ] = frame;
 		m_disabledMask.set( type, frame > TheGameLogic->getFrame() );
+		// the end-of-frame check walks only the objects it was told about (GameLogic::disabledAndSecondTurns)
+		if( m_disabledMask.test( type ) )
+			TheGameLogic->watchDisabled( this );
 
 		// A building's AI does not run while it is EMPed, hacked, subdued or out of power, so the attack it
 		// was in never exited and kept its look: a Gattling Cannon spun its barrels through the whole EMP.
@@ -2659,6 +2662,8 @@ Bool Object::clearDisabled( DisabledType type )
 
 //-------------------------------------------------------------------------------------------------
 //Checks any timers and clears disabled statii that have expired.
+// Only expired ones: GameLogic::disabledAndSecondTurns skips an object disabled during its own pass
+// because a bit set this frame has not expired, so this would do nothing to it.
 //-------------------------------------------------------------------------------------------------
 void Object::checkDisabledStatus()
 {

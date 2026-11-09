@@ -277,11 +277,18 @@ void W3DRadar::drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, cons
 }
 
 //-------------------------------------------------------------------------------------------------
-/** One thin line from each of the local player's units walking to its hotkey squad to where it
-	* walks, from the copy update took at the sync point: draw runs beside the tick. */
+/** A dashed white line from each of the local player's units walking to its hotkey squad to where
+	* it walks, from the copy update took at the sync point: draw runs beside the tick.  The dashes are
+	* laid from the unit's end, so as the line shortens they stay put under the unit and the last one
+	* at the destination is the one that changes. */
 //-------------------------------------------------------------------------------------------------
 void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int height )
 {
+	const Real dashOn = 4.0f;
+	const Real dashOff = 3.0f;
+	const Real lineWidth = 2.0f;
+	const Color lineColor = GameMakeColor( 255, 255, 255, 230 );
+
 	IRegion2D clip;
 	clip.lo.x = pixelX;
 	clip.lo.y = pixelY;
@@ -291,15 +298,33 @@ void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int he
 	for( size_t i = 0; i < m_cachedReinforcementLines.size(); ++i )
 	{
 		const ReinforcementLine &line = m_cachedReinforcementLines[ i ];
-		ICoord2D radar, from, to, clippedFrom, clippedTo;
+		ICoord2D radar, from, to;
 		radar.x = line.from.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
 		radar.y = line.from.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
 		radarToPixel( &radar, &from, pixelX, pixelY, width, height );
 		radar.x = line.to.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
 		radar.y = line.to.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
 		radarToPixel( &radar, &to, pixelX, pixelY, width, height );
-		if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &clip ) )
-			TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, 1.0f, line.color );
+
+		const Real dx = INT_TO_REAL( to.x - from.x );
+		const Real dy = INT_TO_REAL( to.y - from.y );
+		const Real length = sqrtf( dx * dx + dy * dy );
+		if( length < 1.0f )
+			continue;
+		const Real ux = dx / length;
+		const Real uy = dy / length;
+
+		for( Real along = 0.0f; along < length; along += dashOn + dashOff )
+		{
+			const Real end = min( along + dashOn, length );
+			ICoord2D dashFrom, dashTo, clippedFrom, clippedTo;
+			dashFrom.x = from.x + REAL_TO_INT( ux * along );
+			dashFrom.y = from.y + REAL_TO_INT( uy * along );
+			dashTo.x = from.x + REAL_TO_INT( ux * end );
+			dashTo.y = from.y + REAL_TO_INT( uy * end );
+			if( ClipLine2D( &dashFrom, &dashTo, &clippedFrom, &clippedTo, &clip ) )
+				TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, lineWidth, lineColor );
+		}
 	}
 }
 
@@ -783,7 +808,7 @@ void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *text
 		}
 
 		// the local list is the local player's own units, so no shroud to ask: a unit walking to its
-		// hotkey squad gets its line, in its blip's colour turned down
+		// hotkey squad gets its line
 		if( calcHero && obj->getReinforcementSquad() >= 0 )
 		{
 			const Coord3D *dest = obj->getReinforcementDestination();
@@ -792,7 +817,6 @@ void W3DRadar::renderObjectList( const RadarObject *listHead, TextureClass *text
 				ReinforcementLine line;
 				line.from = *obj->getPosition();
 				line.to = *dest;
-				line.color = (Color)( (clientColor( rObj->getColor() ) & 0x00FFFFFF) | 0x8C000000 );
 				m_cachedReinforcementLines.push_back( line );
 			}
 		}

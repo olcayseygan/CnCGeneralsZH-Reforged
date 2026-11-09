@@ -136,7 +136,7 @@ protected:
 
 	// The local player's units walking to their hotkey squad, where each is and where it walks, copied
 	// with the hero positions at the sync point for the same reason
-	struct ReinforcementLine { Coord3D from; Coord3D to; Color color; };
+	struct ReinforcementLine { Coord3D from; Coord3D to; };
 	std::vector<ReinforcementLine> m_cachedReinforcementLines;
 };
 

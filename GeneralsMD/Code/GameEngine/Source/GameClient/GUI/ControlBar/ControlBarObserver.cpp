@@ -61,7 +61,6 @@
 #include "Common/KindOf.h"
 #include "Common/Recorder.h"
 #include "GameClient/ControlBar.h"
-#include "GameClient/ControlBarScheme.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetPushButton.h"
@@ -292,7 +291,7 @@ void ControlBar::populateObserverList( void )
 					continue;
 				DEBUG_ASSERTCRASH(currentButton < MAX_BUTTONS, ("ControlBar::populateObserverList trying to populate more buttons then we have"));
 				GadgetButtonSetData(buttonPlayer[currentButton], (void *)p);
-				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], ControlBarSideEmblem( p->getPlayerTemplate() ) );
+				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getEnabledImage() );
 				//GadgetButtonSetHiliteImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getHiliteImage() );
 				//GadgetButtonSetHiliteSelectedImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getPushedImage() );
 				//GadgetButtonSetDisabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getDisabledImage() );
@@ -340,7 +339,7 @@ void ControlBar::populateObserverList( void )
 			{
 				DEBUG_ASSERTCRASH(currentButton < MAX_BUTTONS, ("ControlBar::populateObserverList trying to populate more buttons then we have"));
 				GadgetButtonSetData(buttonPlayer[currentButton], (void *)p);
-				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], ControlBarSideEmblem( p->getPlayerTemplate() ) );
+				GadgetButtonSetEnabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getEnabledImage() );
 				//GadgetButtonSetHiliteImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getHiliteImage() );
 				//GadgetButtonSetHiliteSelectedImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getPushedImage() );
 				//GadgetButtonSetDisabledImage( buttonPlayer[currentButton], p->getPlayerTemplate()->getDisabledImage() );

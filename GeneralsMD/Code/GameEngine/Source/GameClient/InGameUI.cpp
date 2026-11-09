@@ -2860,7 +2860,7 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 		const SpectatorStats &stats = theRackStats[ row ];
 		const Color colour = rackColour( stats.player );
 		drawRackPiece( "RackMeter", X + rackPx( 22 ), top + rackPx( 4 ), rackPx( 3 ), rackPx( 22 ), colour );
-		TheDisplay->drawImage( ControlBarSideEmblem( stats.player->getPlayerTemplate() ),
+		TheDisplay->drawImage( stats.player->getPlayerTemplate()->getEnabledImage(),
 			X + rackPx( 42 ), top + rackPx( 5 ), X + rackPx( 72 ), top + rackPx( 25 ) );
 		const Real share = max( stats.*SPECTATOR_STATS[ m_rackStat ].value, 0 ) / (Real)highest;
 		const Int fill = REAL_TO_INT_FLOOR( rackPx( 216 ) * share );

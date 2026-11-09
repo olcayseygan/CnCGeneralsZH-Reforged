@@ -1255,48 +1255,6 @@ ControlBarScheme *ControlBarSchemeManager::findSchemeForSide( const AsciiString&
 }
 
 //-----------------------------------------------------------------------------
-/** The emblem is looked up by name, so a sheet that adds one for a general needs no INI edit and the
-	* player templates (in the INI checksum) stay as they are.  A general without one, or a faction built
-	* on another country's base side, gets that country's. */
-//-----------------------------------------------------------------------------
-const Image *ControlBarSideEmblem( const PlayerTemplate *pt )
-{
-	static const char *const PREFIX = "SSObserver";
-	static const std::string LEADING = "Faction";
-	static const std::string TRAILING = "General";
-	// FactionAmericaLaserGeneral wears SSObserverAmericaLaser, FactionTurkiye SSObserverTurkiye
-	std::string general = pt->getName().str();
-	if( general.compare( 0, LEADING.size(), LEADING ) == 0 )
-		general.erase( 0, LEADING.size() );
-	if( general.size() >= TRAILING.size() && general.compare( general.size() - TRAILING.size(), TRAILING.size(), TRAILING ) == 0 )
-		general.erase( general.size() - TRAILING.size() );
-	AsciiString name;
-	name.format( "%s%s", PREFIX, general.c_str() );
-	const Image *emblem = TheMappedImageCollection->findImageByName( name );
-	if( emblem != NULL )
-		return emblem;
-
-	const AsciiString side = pt->getBaseSide().isEmpty() ? pt->getSide() : pt->getBaseSide();
-	const char *country = NULL;
-	if( side.startsWithNoCase( "America" ) || side.startsWithNoCase( "USA" ) )
-		country = "USA";
-	else if( side.startsWithNoCase( "China" ) )
-		country = "China";
-	else if( side.startsWithNoCase( "GLA" ) )
-		country = "GLA";
-	else if( side.startsWithNoCase( "Turkiye" ) )
-		country = "Turkiye";
-	if( country != NULL )
-	{
-		name.format( "%s%s", PREFIX, country );
-		emblem = TheMappedImageCollection->findImageByName( name );
-		if( emblem != NULL )
-			return emblem;
-	}
-	return pt->getEnabledImage();
-}
-
-//-----------------------------------------------------------------------------
 /** The bar follows the country, and is always ControlBar Pro's.  A side with a ControlBar Pro scheme of
 	* its own (Boss and Observer among them) wears it; any other wears its country's by name, the way
 	* ControlBarPlateForSide reads a side, so a ChinaTankGeneral without one gets China's.  A side of no

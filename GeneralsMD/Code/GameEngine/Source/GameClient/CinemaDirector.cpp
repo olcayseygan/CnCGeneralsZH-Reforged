@@ -63,7 +63,10 @@
 static const char *CINEMA_DIRECTORY = "Cinema\\";
 static const char *CINEMA_EXTENSION = ".txt";
 static const char CINEMA_COMMENT_CHAR = '#';
-enum { CINEMA_MAX_TOKENS = 3 + 2 * CINEMA_MAX_ROUTE_POINTS };
+enum { CINEMA_DRONE_SETTING_WORDS = 10 };	///< look, tilt, clear, bank and sway, each with its value
+enum { CINEMA_MAX_TOKENS = 3 + 3 * CINEMA_MAX_ROUTE_POINTS + CINEMA_DRONE_SETTING_WORDS };
+static const Real CINEMA_DRONE_TILT = -10.0f;					///< degrees: a drone camera looks a little down at where it is going
+static const Real CINEMA_DRONE_CLEARANCE = 25.0f;			///< world units over the ground; a tank's turret is about 20 up
 static const Real CINEMA_PITCH_LIMIT_DEGREES = 36.0f;	///< View::setPitch clamps to PI/5 either way
 static const Real CINEMA_FOLLOW_RATE = 4.0f;						///< how fast a follow catches up, per second
 static const Real CINEMA_CENTRE_GAIN = 0.5f;						///< share of the framing error taken out each frame
@@ -172,6 +175,13 @@ Bool CinemaDirector_parseLine( const char *line, CinemaShot *shot, Bool *isShot,
 	shot->routePoints = 0;
 	shot->name.clear();
 	shot->on = FALSE;
+	shot->drone.look = CINEMA_DRONE_LOOK_AHEAD;
+	shot->drone.lookX = 0.0f;
+	shot->drone.lookY = 0.0f;
+	shot->drone.tilt = CINEMA_DRONE_TILT;
+	shot->drone.clearance = CINEMA_DRONE_CLEARANCE;
+	shot->drone.bank = 1.0f;
+	shot->drone.sway = 1.0f;
 
 	const AsciiString &verb = tokens[ 1 ];
 	const Int args = count - 2;
@@ -270,6 +280,73 @@ Bool CinemaDirector_parseLine( const char *line, CinemaShot *shot, Bool *isShot,
 			return refuseCinemaLine( reason, "filter takes bw, blur or off" );
 		shot->name = tokens[ 2 ];
 	}
+	else if (verb == "drone")
+	{
+		shot->verb = CINEMA_VERB_DRONE;
+		static const char *usage = "drone <seconds> <x> <y> <height> <x> <y> <height> [...] [look ahead|<x> <y>|<template>] [tilt <degrees>] [clear <units>] [bank <factor>] [sway <factor>]";
+		if (args < 7 || !parseCinemaNumber( tokens[ 2 ], &shot->seconds ) || shot->seconds <= 0.0f)
+			return refuseCinemaLine( reason, usage );
+		// the points run until the first word that is not a number; the settings follow them
+		Int at = 3;
+		Real numbers[ 3 * CINEMA_MAX_ROUTE_POINTS ];
+		Int found = 0;
+		while (at < count && found < 3 * CINEMA_MAX_ROUTE_POINTS && parseCinemaNumber( tokens[ at ], &numbers[ found ] ))
+		{
+			++found;
+			++at;
+		}
+		if (found % 3 != 0 || found < 6)
+			return refuseCinemaLine( reason, "drone points are <x> <y> <height>, at least two of them" );
+		shot->routePoints = found / 3;
+		for (Int i = 0; i < shot->routePoints; ++i)
+		{
+			shot->routeX[ i ] = numbers[ 3 * i ];
+			shot->routeY[ i ] = numbers[ 3 * i + 1 ];
+			shot->routeZ[ i ] = numbers[ 3 * i + 2 ];
+		}
+		while (at < count)
+		{
+			const AsciiString &setting = tokens[ at++ ];
+			if (at >= count)
+				return refuseCinemaLine( reason, "a drone setting needs its value" );
+			if (setting == "look")
+			{
+				Real lookX = 0.0f;
+				if (tokens[ at ] == "ahead")
+				{
+					shot->drone.look = CINEMA_DRONE_LOOK_AHEAD;
+					++at;
+				}
+				else if (parseCinemaNumber( tokens[ at ], &lookX ))
+				{
+					if (at + 1 >= count || !parseCinemaNumber( tokens[ at + 1 ], &shot->drone.lookY ))
+						return refuseCinemaLine( reason, "look <x> <y> takes two numbers" );
+					shot->drone.look = CINEMA_DRONE_LOOK_POINT;
+					shot->drone.lookX = lookX;
+					at += 2;
+				}
+				else
+				{
+					shot->drone.look = CINEMA_DRONE_LOOK_OBJECT;
+					shot->name = tokens[ at++ ];
+				}
+				continue;
+			}
+			Real amount = 0.0f;
+			if (!parseCinemaNumber( tokens[ at++ ], &amount ))
+				return refuseCinemaLine( reason, "tilt, clear, bank and sway take a number" );
+			if (setting == "tilt" && fabs( amount ) < 89.0f)
+				shot->drone.tilt = amount;
+			else if (setting == "clear" && amount >= 0.0f)
+				shot->drone.clearance = amount;
+			else if (setting == "bank" && amount >= 0.0f)
+				shot->drone.bank = amount;
+			else if (setting == "sway" && amount >= 0.0f)
+				shot->drone.sway = amount;
+			else
+				return refuseCinemaLine( reason, "drone settings are look, tilt (-89 to 89), clear, bank and sway (0 or more)" );
+		}
+	}
 	else
 	{
 		return refuseCinemaLine( reason, "unknown verb" );
@@ -327,6 +404,268 @@ void CinemaDirector_routePoint( const Real *xs, const Real *ys, Int count, Real 
 }
 
 // ------------------------------------------------------------------------------------------------
+// the drone
+// ------------------------------------------------------------------------------------------------
+//
+// A drone shot flies the eye itself, through the console's freecam, rather than sliding the point
+// the player's camera looks at. The curve through the points is measured once into equal steps of
+// distance, so the speed is the speed written and not whatever the spacing of the points made it.
+// Every step's eye height is fixed then too: the height asked for over the ground averaged round
+// it, raised wherever that would come within the clearance of the ground, water or a roof, on a
+// curve that starts climbing early enough for the speed. After that the pose is a pure function of
+// the time into the flight.
+
+static const Int CINEMA_DRONE_FINE_STEPS = 4096;						///< curve samples the path is measured over
+static const Real CINEMA_DRONE_BODY = 20.0f;								///< the ground is sampled this far round the eye, so a slope beside it counts
+static const Real CINEMA_DRONE_SMOOTH = 120.0f;							///< the height rides the ground averaged this far either way
+static const Real CINEMA_DRONE_RAMP = 1.5f;									///< seconds to reach cruise, and to stop from it
+static const Real CINEMA_DRONE_CLIMB = 150.0f;							///< world units a second squared up or down: how early it climbs over a rise
+static const Real CINEMA_DRONE_MIN_BEND = 60.0f;						///< the tightest vertical bend, for a slow flight
+static const Real CINEMA_DRONE_LEAD_SECONDS = 0.8f;					///< looking ahead: at where it will be this much later
+static const Real CINEMA_DRONE_LEAD_MIN = 60.0f;
+static const Real CINEMA_DRONE_GRAVITY = 400.0f;						///< tuned, not measured: 250 a second round a 300 bend banks 27 degrees
+static const Real CINEMA_DRONE_BANK_LIMIT = 40.0f * PI / 180.0f;
+static const Real CINEMA_DRONE_BANK_SPAN = 40.0f;						///< the turn is measured over at least this far either side
+static const Real CINEMA_DRONE_BANK_SPAN_SECONDS = 0.3f;		///< and this long either side, so the bank leads into a turn and lingers out of it
+static const Real CINEMA_DRONE_SWAY_SIDE = 3.0f;						///< world units
+static const Real CINEMA_DRONE_SWAY_RISE = 2.0f;						///< world units, only ever up so it never eats into the clearance
+static const Real CINEMA_DRONE_SWAY_ROLL = 1.0f * PI / 180.0f;
+static const Real CINEMA_DRONE_SWAY_TILT = 0.5f * PI / 180.0f;
+
+static Real wrapCinemaAngle( Real angle )
+{
+	while (angle > PI)
+		angle -= 2.0f * PI;
+	while (angle < -PI)
+		angle += 2.0f * PI;
+	return angle;
+}
+
+/** The path at a distance along it. Past either end it carries on straight and level, so a look
+		ahead at the end of the flight still has somewhere to look. */
+static void droneTrack( const CinemaDroneFlight &f, Real d, Real *x, Real *y, Real *z )
+{
+	const Real spacing = f.length / (Real)CINEMA_DRONE_STATIONS;
+	if (spacing <= 0.0f)
+	{
+		*x = f.xs[ 0 ];
+		*y = f.ys[ 0 ];
+		*z = f.z[ 0 ];
+		return;
+	}
+	Real over = 0.0f;
+	if (d < 0.0f)
+	{
+		over = d;
+		d = 0.0f;
+	}
+	else if (d > f.length)
+	{
+		over = d - f.length;
+		d = f.length;
+	}
+	const Real station = d / spacing;
+	Int i = (Int)station;
+	if (i > CINEMA_DRONE_STATIONS - 1)
+		i = CINEMA_DRONE_STATIONS - 1;
+	const Real u = station - (Real)i;
+	CinemaDirector_routePoint( f.xs, f.ys, f.points, f.param[ i ] + (f.param[ i + 1 ] - f.param[ i ]) * u, x, y );
+	*z = f.z[ i ] + (f.z[ i + 1 ] - f.z[ i ]) * u;
+	if (over != 0.0f)
+	{
+		const Int a = (over < 0.0f) ? 0 : CINEMA_DRONE_STATIONS - 1;
+		Real ax, ay, bx, by;
+		CinemaDirector_routePoint( f.xs, f.ys, f.points, f.param[ a ], &ax, &ay );
+		CinemaDirector_routePoint( f.xs, f.ys, f.points, f.param[ a + 1 ], &bx, &by );
+		*x += (bx - ax) / spacing * over;
+		*y += (by - ay) / spacing * over;
+	}
+}
+
+/// which way the path runs at a distance along it
+static Real droneCourse( const CinemaDroneFlight &f, Real d )
+{
+	Real ax, ay, az, bx, by, bz;
+	droneTrack( f, d - 1.0f, &ax, &ay, &az );
+	droneTrack( f, d + 1.0f, &bx, &by, &bz );
+	return (Real)atan2( by - ay, bx - ax );
+}
+
+void CinemaDrone_plan( CinemaDroneFlight *flight, const CinemaShot &shot, CinemaGroundFn ground, void *context )
+{
+	CinemaDroneFlight &f = *flight;
+	f.points = shot.routePoints;
+	for (Int i = 0; i < f.points; ++i)
+	{
+		f.xs[ i ] = shot.routeX[ i ];
+		f.ys[ i ] = shot.routeY[ i ];
+		f.heights[ i ] = shot.routeZ[ i ];
+	}
+	f.seconds = shot.seconds;
+	f.settings = shot.drone;
+
+	// the length, measured finely, then the curve parameter at every equal step of it
+	std::vector<Real> lengthAt( CINEMA_DRONE_FINE_STEPS + 1 );
+	Real lastX, lastY;
+	CinemaDirector_routePoint( f.xs, f.ys, f.points, 0.0f, &lastX, &lastY );
+	lengthAt[ 0 ] = 0.0f;
+	for (Int s = 1; s <= CINEMA_DRONE_FINE_STEPS; ++s)
+	{
+		Real x, y;
+		CinemaDirector_routePoint( f.xs, f.ys, f.points, (Real)s / (Real)CINEMA_DRONE_FINE_STEPS, &x, &y );
+		lengthAt[ s ] = lengthAt[ s - 1 ] + (Real)sqrt( (x - lastX) * (x - lastX) + (y - lastY) * (y - lastY) );
+		lastX = x;
+		lastY = y;
+	}
+	f.length = lengthAt[ CINEMA_DRONE_FINE_STEPS ];
+	Int s = 0;
+	for (Int i = 0; i < CINEMA_DRONE_STATIONS; ++i)
+	{
+		const Real wanted = f.length * (Real)i / (Real)CINEMA_DRONE_STATIONS;
+		while (s < CINEMA_DRONE_FINE_STEPS - 1 && lengthAt[ s + 1 ] < wanted)
+			++s;
+		const Real span = lengthAt[ s + 1 ] - lengthAt[ s ];
+		Real u = (span > 0.0f) ? (wanted - lengthAt[ s ]) / span : 0.0f;
+		u = (u < 0.0f) ? 0.0f : ((u > 1.0f) ? 1.0f : u);
+		f.param[ i ] = ((Real)s + u) / (Real)CINEMA_DRONE_FINE_STEPS;
+	}
+	f.param[ CINEMA_DRONE_STATIONS ] = 1.0f;
+
+	// what is under every step, and the height asked for there
+	const Int stations = CINEMA_DRONE_STATIONS + 1;
+	std::vector<Real> top( stations );
+	std::vector<Real> asked( stations );
+	for (Int i = 0; i < stations; ++i)
+	{
+		Real x, y, height, unused;
+		CinemaDirector_routePoint( f.xs, f.ys, f.points, f.param[ i ], &x, &y );
+		CinemaDirector_routePoint( f.heights, f.heights, f.points, f.param[ i ], &height, &unused );
+		Real highest = ground( context, x, y );
+		const Real around[ 4 ][ 2 ] = { { CINEMA_DRONE_BODY, 0.0f }, { -CINEMA_DRONE_BODY, 0.0f }, { 0.0f, CINEMA_DRONE_BODY }, { 0.0f, -CINEMA_DRONE_BODY } };
+		for (Int k = 0; k < 4; ++k)
+		{
+			const Real there = ground( context, x + around[ k ][ 0 ], y + around[ k ][ 1 ] );
+			if (there > highest)
+				highest = there;
+		}
+		top[ i ] = highest;
+		asked[ i ] = height;
+	}
+
+	f.ramp = (f.seconds / 3.0f < CINEMA_DRONE_RAMP) ? f.seconds / 3.0f : CINEMA_DRONE_RAMP;
+	f.cruise = (f.seconds > f.ramp) ? f.length / (f.seconds - f.ramp) : 0.0f;
+
+	const Real spacing = f.length / (Real)CINEMA_DRONE_STATIONS;
+	Int reach = (spacing > 0.0f) ? (Int)(CINEMA_DRONE_SMOOTH / spacing) : 0;
+	if (reach > CINEMA_DRONE_STATIONS)
+		reach = CINEMA_DRONE_STATIONS;
+	Real bend = f.cruise * f.cruise / CINEMA_DRONE_CLIMB;
+	if (bend < CINEMA_DRONE_MIN_BEND)
+		bend = CINEMA_DRONE_MIN_BEND;
+	const Real clearance = f.settings.clearance;
+	for (Int i = 0; i < stations; ++i)
+	{
+		Real sum = 0.0f;
+		Int counted = 0;
+		for (Int j = i - reach; j <= i + reach; ++j)
+		{
+			if (j < 0 || j >= stations)
+				continue;
+			sum += top[ j ];
+			++counted;
+		}
+		const Real riding = sum / (Real)counted + asked[ i ];
+		// every step's ground plus the clearance, falling away on a parabola either side of it: the
+		// highest of those is the lowest the eye may be here, reached on a bend the speed can fly
+		Real floor = top[ i ] + clearance;
+		for (Int j = 0; j < stations; ++j)
+		{
+			const Real apart = (Real)(i - j) * spacing;
+			const Real needed = top[ j ] + clearance - apart * apart / (2.0f * bend);
+			if (needed > floor)
+				floor = needed;
+		}
+		f.z[ i ] = (riding > floor) ? riding : floor;
+	}
+}
+
+Real CinemaDrone_distance( const CinemaDroneFlight &f, Real t, Real *speed )
+{
+	// smoothstep speed over each ramp, whose integral is r * (u^3 - u^4 / 2): half a ramp's worth
+	// of cruise is lost at each end, which is why the cruise is the length over (seconds - ramp)
+	const Real v = f.cruise;
+	const Real r = f.ramp;
+	*speed = 0.0f;
+	if (t <= 0.0f || r <= 0.0f)
+		return 0.0f;
+	if (t >= f.seconds)
+		return f.length;
+	if (t < r)
+	{
+		const Real u = t / r;
+		*speed = v * u * u * (3.0f - 2.0f * u);
+		return v * r * (u * u * u - 0.5f * u * u * u * u);
+	}
+	if (t > f.seconds - r)
+	{
+		const Real u = (f.seconds - t) / r;
+		*speed = v * u * u * (3.0f - 2.0f * u);
+		return f.length - v * r * (u * u * u - 0.5f * u * u * u * u);
+	}
+	*speed = v;
+	return 0.5f * v * r + v * (t - r);
+}
+
+void CinemaDrone_pose( const CinemaDroneFlight &f, Real t, const Coord3D *target, CinemaDronePose *pose )
+{
+	Real speed = 0.0f;
+	const Real d = CinemaDrone_distance( f, t, &speed );
+	droneTrack( f, d, &pose->eye.x, &pose->eye.y, &pose->eye.z );
+	pose->speed = speed;
+
+	Coord3D aim;
+	Real lift = 0.0f;
+	if (target != NULL)
+	{
+		aim = *target;
+	}
+	else
+	{
+		const Real lead = (speed * CINEMA_DRONE_LEAD_SECONDS > CINEMA_DRONE_LEAD_MIN) ? speed * CINEMA_DRONE_LEAD_SECONDS : CINEMA_DRONE_LEAD_MIN;
+		droneTrack( f, d + lead, &aim.x, &aim.y, &aim.z );
+		lift = f.settings.tilt * PI / 180.0f;
+	}
+	const Real dx = aim.x - pose->eye.x;
+	const Real dy = aim.y - pose->eye.y;
+	const Real across = (Real)sqrt( dx * dx + dy * dy );
+	pose->heading = (across > 0.01f) ? (Real)atan2( dy, dx ) : droneCourse( f, d );
+	pose->tilt = (Real)atan2( aim.z - pose->eye.z, across ) + lift;
+
+	// a real one leans into a turn as far as the turn pulls it sideways: tan(bank) = v^2 k / g
+	const Real span = (speed * CINEMA_DRONE_BANK_SPAN_SECONDS > CINEMA_DRONE_BANK_SPAN) ? speed * CINEMA_DRONE_BANK_SPAN_SECONDS : CINEMA_DRONE_BANK_SPAN;
+	const Real curvature = wrapCinemaAngle( droneCourse( f, d + span ) - droneCourse( f, d - span ) ) / (2.0f * span);
+	// a left turn (the course winding anticlockwise) drops the left side, which is a negative roll
+	Real roll = -(Real)atan( speed * speed * curvature / CINEMA_DRONE_GRAVITY ) * f.settings.bank;
+	if (roll > CINEMA_DRONE_BANK_LIMIT)
+		roll = CINEMA_DRONE_BANK_LIMIT;
+	if (roll < -CINEMA_DRONE_BANK_LIMIT)
+		roll = -CINEMA_DRONE_BANK_LIMIT;
+	pose->roll = roll;
+
+	// the drift of a hand on the sticks: sines at frequencies that never line up
+	const Real sway = f.settings.sway;
+	if (sway > 0.0f)
+	{
+		const Real side = CINEMA_DRONE_SWAY_SIDE * sway * (0.6f * (Real)sin( t * 2.3f + 0.4f ) + 0.4f * (Real)sin( t * 3.7f + 1.9f ));
+		pose->eye.x -= (Real)sin( pose->heading ) * side;
+		pose->eye.y += (Real)cos( pose->heading ) * side;
+		pose->eye.z += CINEMA_DRONE_SWAY_RISE * sway * 0.5f * (1.0f + (Real)sin( t * 1.9f + 2.6f ));
+		pose->roll += CINEMA_DRONE_SWAY_ROLL * sway * (Real)sin( t * 2.9f + 0.7f );
+		pose->tilt += CINEMA_DRONE_SWAY_TILT * sway * (Real)sin( t * 2.1f + 3.1f );
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // the camera
 // ------------------------------------------------------------------------------------------------
 
@@ -365,7 +704,8 @@ enum CinemaPlaceMode
 {
 	CINEMA_PLACE_STILL,
 	CINEMA_PLACE_ROUTE,
-	CINEMA_PLACE_FOLLOW
+	CINEMA_PLACE_FOLLOW,
+	CINEMA_PLACE_DRONE
 };
 
 static Bool theCinemaLoaded = FALSE;
@@ -397,6 +737,12 @@ static UnsignedInt theCinemaSeenFrameAt = 0;
 static Bool theCinemaClockStarted = FALSE;
 static Real theCinemaClock = 0.0f;
 static UnsignedInt theCinemaClockWall = 0;
+static CinemaDroneFlight theCinemaDrone;
+static Real theCinemaDroneStart = 0.0f;
+static ObjectID theCinemaDroneTargetID = INVALID_ID;
+static Bool theCinemaDroneHasTarget = FALSE;
+static Coord3D theCinemaDroneTarget;							///< the chased point a tracked object is looked at through
+static const Real CINEMA_DRONE_AIM_RISE = 10.0f;		///< a tracked object is looked at this far above its feet
 
 static Bool cinemaShotIsEarlier( const CinemaShot &left, const CinemaShot &right )
 {
@@ -566,6 +912,150 @@ static Object *findNearestOfTemplate( const AsciiString &name, Real x, Real y )
 	return best;
 }
 
+/** A structure as the drone sees it: a footprint and a roof. Taken once when the flight is planned;
+		a building that goes up or comes down during the flight is not seen. */
+struct CinemaSolid
+{
+	Real x;
+	Real y;
+	Real cosAngle;
+	Real sinAngle;
+	Real major;
+	Real minor;
+	Real top;
+	Bool box;
+};
+
+static Real cinemaSolidTop( void *context, Real x, Real y )
+{
+	Real top = TheTerrainLogic->getGroundHeight( x, y );
+	Real water = 0.0f;
+	if (TheTerrainLogic->isUnderwater( x, y, &water ) && water > top)
+		top = water;
+	const std::vector<CinemaSolid> &solids = *(const std::vector<CinemaSolid> *)context;
+	for (size_t i = 0; i < solids.size(); ++i)
+	{
+		const CinemaSolid &solid = solids[ i ];
+		if (solid.top <= top)
+			continue;
+		const Real dx = x - solid.x;
+		const Real dy = y - solid.y;
+		Bool inside;
+		if (solid.box)
+		{
+			const Real along = dx * solid.cosAngle + dy * solid.sinAngle;
+			const Real side = -dx * solid.sinAngle + dy * solid.cosAngle;
+			inside = fabs( along ) <= solid.major && fabs( side ) <= solid.minor;
+		}
+		else
+		{
+			inside = dx * dx + dy * dy <= solid.major * solid.major;
+		}
+		if (inside)
+			top = solid.top;
+	}
+	return top;
+}
+
+/// the drone has the camera no longer; the player's camera comes back looking where the drone was
+static void cinemaLeaveDrone( void )
+{
+	if (theCinemaPlaceMode != CINEMA_PLACE_DRONE)
+		return;
+	theCinemaPlaceMode = CINEMA_PLACE_STILL;
+	TheTacticalView->setFreeCameraScripted( FALSE );
+	TheTacticalView->setFreeCamera( FALSE );
+}
+
+static void cinemaLaunchDrone( const CinemaShot &shot )
+{
+	std::vector<CinemaSolid> solids;
+	for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
+	{
+		if (!obj->isKindOf( KINDOF_STRUCTURE ) || obj->isEffectivelyDead())
+			continue;
+		const GeometryInfo &geometry = obj->getGeometryInfo();
+		CinemaSolid solid;
+		solid.x = obj->getPosition()->x;
+		solid.y = obj->getPosition()->y;
+		solid.cosAngle = (Real)cos( obj->getOrientation() );
+		solid.sinAngle = (Real)sin( obj->getOrientation() );
+		solid.major = geometry.getMajorRadius();
+		solid.minor = geometry.getMinorRadius();
+		solid.top = obj->getPosition()->z + geometry.getMaxHeightAbovePosition();
+		solid.box = geometry.getGeomType() == GEOMETRY_BOX;
+		solids.push_back( solid );
+	}
+	CinemaDrone_plan( &theCinemaDrone, shot, cinemaSolidTop, &solids );
+	theCinemaDroneStart = shot.at;
+
+	theCinemaDroneTargetID = INVALID_ID;
+	theCinemaDroneHasTarget = FALSE;
+	if (shot.drone.look == CINEMA_DRONE_LOOK_OBJECT)
+	{
+		Real middleX, middleY;
+		CinemaDirector_routePoint( theCinemaDrone.xs, theCinemaDrone.ys, theCinemaDrone.points,
+			theCinemaDrone.param[ CINEMA_DRONE_STATIONS / 2 ], &middleX, &middleY );
+		Object *obj = findNearestOfTemplate( shot.name, middleX, middleY );
+		if (obj != NULL)
+		{
+			theCinemaDroneTargetID = obj->getID();
+			theCinemaDroneHasTarget = TRUE;
+			theCinemaDroneTarget = *obj->getPosition();
+			theCinemaDroneTarget.z += CINEMA_DRONE_AIM_RISE;
+		}
+		else
+		{
+			DEBUG_LOG(("CINEMA: drone: no '%s' on the map, looking ahead instead\n", shot.name.str()));
+		}
+	}
+
+	TheTacticalView->setFreeCamera( TRUE );
+	TheTacticalView->setFreeCameraScripted( TRUE );
+	theCinemaPlaceMode = CINEMA_PLACE_DRONE;
+	DEBUG_LOG(("CINEMA: drone over %.0f units at %.0f a second, %d structures in its way, %d points\n",
+		theCinemaDrone.length, theCinemaDrone.cruise, (Int)solids.size(), theCinemaDrone.points));
+}
+
+static void cinemaFlyDrone( Real now )
+{
+	Coord3D target;
+	const Coord3D *aim = NULL;
+	const CinemaDroneSettings &settings = theCinemaDrone.settings;
+	if (settings.look == CINEMA_DRONE_LOOK_POINT)
+	{
+		target.set( settings.lookX, settings.lookY, TheTerrainLogic->getGroundHeight( settings.lookX, settings.lookY ) );
+		aim = &target;
+	}
+	else if (theCinemaDroneHasTarget)
+	{
+		// chased like follow's unit, so its 60Hz steps and jinks stay out of the picture; a dead one
+		// leaves the drone looking where it fell
+		Object *obj = TheGameLogic->findObjectByID( theCinemaDroneTargetID );
+		const Real elapsed = now - theCinemaLastNow;
+		if (obj != NULL && !obj->isEffectivelyDead() && elapsed > 0.0f)
+		{
+			const Real share = 1.0f - (Real)exp( -CINEMA_FOLLOW_RATE * elapsed );
+			theCinemaDroneTarget.x += (obj->getPosition()->x - theCinemaDroneTarget.x) * share;
+			theCinemaDroneTarget.y += (obj->getPosition()->y - theCinemaDroneTarget.y) * share;
+			theCinemaDroneTarget.z += (obj->getPosition()->z + CINEMA_DRONE_AIM_RISE - theCinemaDroneTarget.z) * share;
+		}
+		aim = &theCinemaDroneTarget;
+	}
+
+	CinemaDronePose pose;
+	CinemaDrone_pose( theCinemaDrone, now - theCinemaDroneStart, aim, &pose );
+
+	// the look point rides under the eye: the sound is heard from there, and a move after the flight
+	// starts from there
+	theCinemaStillX = pose.eye.x;
+	theCinemaStillY = pose.eye.y;
+	Coord3D under;
+	under.set( pose.eye.x, pose.eye.y, TheTerrainLogic->getGroundHeight( pose.eye.x, pose.eye.y ) );
+	TheTacticalView->lookAt( &under );
+	TheTacticalView->setFreeCameraPose( &pose.eye, pose.heading, pose.tilt, pose.roll );
+}
+
 static void cinemaEndTheMatch( void )
 {
 	// the same teardown an unattended run finishes with, and for the same reasons (updateHeadlessRun)
@@ -629,8 +1119,30 @@ static void runShot( const CinemaShot &shot )
 	const Real now = shot.at;
 	DEBUG_LOG(("CINEMA: %.2fs verb %d over %.2fs\n", now, (Int)shot.verb, shot.seconds));
 
+	// a verb that says where the camera looks takes it back from a drone; zoom, angle and pitch
+	// wait underneath for the flight to end
 	switch (shot.verb)
 	{
+		case CINEMA_VERB_CUT:
+		case CINEMA_VERB_MOVE:
+		case CINEMA_VERB_ROUTE:
+		case CINEMA_VERB_FOLLOW:
+		case CINEMA_VERB_UNFOLLOW:
+		case CINEMA_VERB_DRONE:
+			cinemaLeaveDrone();
+			break;
+		default:
+			break;
+	}
+
+	switch (shot.verb)
+	{
+		case CINEMA_VERB_DRONE:
+			cinemaTakeTheCamera();
+			theCinemaFollowID = INVALID_ID;
+			cinemaLaunchDrone( shot );
+			break;
+
 		case CINEMA_VERB_CUT:
 			cinemaTakeTheCamera();
 			theCinemaPlaceMode = CINEMA_PLACE_STILL;
@@ -863,7 +1375,11 @@ void CinemaDirector_update( void )
 
 	cinemaHoldTheFrame();
 
-	if (theCinemaFlying)
+	if (theCinemaFlying && theCinemaPlaceMode == CINEMA_PLACE_DRONE)
+	{
+		cinemaFlyDrone( now );
+	}
+	else if (theCinemaFlying)
 	{
 		if (theCinemaPlaceMode == CINEMA_PLACE_FOLLOW)
 			cinemaChase( now );

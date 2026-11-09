@@ -259,7 +259,8 @@ public:
 
 	virtual void setFreeCamera( Bool on );
 	virtual Bool isFreeCamera( void ) const { return m_freeCamera; }
-	virtual void setFreeCameraPose( const Coord3D *eye, Real heading, Real tilt );
+	virtual void setFreeCameraPose( const Coord3D *eye, Real heading, Real tilt, Real roll = 0.0f );
+	virtual void setFreeCameraScripted( Bool scripted ) { m_freeCameraScripted = scripted; }
 	virtual void getFreeCameraPose( Coord3D *eye, Real *heading, Real *tilt ) const;
 	virtual void setFreeCameraKeys( UnsignedInt keys ) { m_freeCameraKeys = keys; }
 
@@ -272,6 +273,8 @@ private:
 	Vector3 m_freeCameraEye;
 	Real m_freeCameraHeading;												///< radians, 0 looks along +x
 	Real m_freeCameraTilt;													///< radians, 0 is level, up positive
+	Real m_freeCameraRoll;													///< radians, positive drops the right side of the picture
+	Bool m_freeCameraScripted;											///< a shot list flies it; keys and mouse do nothing
 	UnsignedInt m_freeCameraKeys;										///< View::FreeCameraKeys held
 	UnsignedInt m_freeCameraLastStep;								///< Clock_Milliseconds of the last flight step
 	ICoord2D m_freeCameraMouse;											///< where the pointer was left after the last step

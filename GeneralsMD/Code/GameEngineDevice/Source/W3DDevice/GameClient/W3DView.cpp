@@ -256,6 +256,8 @@ W3DView::W3DView()
 	m_freeCameraEye.Set( 0.0f, 0.0f, 0.0f );
 	m_freeCameraHeading = 0.0f;
 	m_freeCameraTilt = 0.0f;
+	m_freeCameraRoll = 0.0f;
+	m_freeCameraScripted = FALSE;
 	m_freeCameraKeys = 0;
 	m_freeCameraLastStep = 0;
 	m_freeCameraMouse.x = m_freeCameraMouse.y = 0;
@@ -1135,6 +1137,7 @@ void W3DView::setFreeCamera( Bool on )
 		m_freeCameraEye = transform.Get_Translation();
 		m_freeCameraHeading = atan2( forward.Y, forward.X );
 		m_freeCameraTilt = freeCameraTilt( asin( WWMath::Clamp( forward.Z, -1.0f, 1.0f ) ) );
+		m_freeCameraRoll = 0.0f;
 	}
 	else if (TheMouse)
 	{
@@ -1150,11 +1153,12 @@ void W3DView::setFreeCamera( Bool on )
 }
 
 //-------------------------------------------------------------------------------------------------
-void W3DView::setFreeCameraPose( const Coord3D *eye, Real heading, Real tilt )
+void W3DView::setFreeCameraPose( const Coord3D *eye, Real heading, Real tilt, Real roll )
 {
 	m_freeCameraEye.Set( eye->x, eye->y, eye->z );
 	m_freeCameraHeading = heading;
 	m_freeCameraTilt = freeCameraTilt( tilt );
+	m_freeCameraRoll = roll;
 	if (m_freeCamera)
 		setFreeCameraTransform();
 }
@@ -1233,7 +1237,7 @@ void W3DView::stepFreeCamera( void )
 void W3DView::setFreeCameraTransform( void )
 {
 	Matrix3D transform( 1 );
-	transform.Look_At( m_freeCameraEye, m_freeCameraEye + freeCameraForward( m_freeCameraHeading, m_freeCameraTilt ), 0.0f );
+	transform.Look_At( m_freeCameraEye, m_freeCameraEye + freeCameraForward( m_freeCameraHeading, m_freeCameraTilt ), m_freeCameraRoll );
 
 	Real farthest = 0.0f;
 	Real lowest;
@@ -1314,6 +1318,8 @@ void W3DView::reset( void )
 	if (m_freeCamera)
 	{
 		m_freeCamera = FALSE;
+		m_freeCameraScripted = FALSE;
+		m_freeCameraRoll = 0.0f;
 		m_freeCameraKeys = 0;
 		if (TheMouse)
 			TheMouse->setVisibility( TRUE );
@@ -1861,7 +1867,8 @@ void W3DView::update(void)
 		 the player's frame, because the freecam can see the whole map at once. */
 	if (m_freeCamera)
 	{
-		stepFreeCamera();
+		if (!m_freeCameraScripted)
+			stepFreeCamera();
 		setFreeCameraTransform();
 		m_recalcCamera = false;
 		if (TheScriptEngine->isTimeFast() || TheTerrainRenderObject == NULL)

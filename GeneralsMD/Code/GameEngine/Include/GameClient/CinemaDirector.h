@@ -44,11 +44,30 @@ enum CinemaVerb
 	CINEMA_VERB_FILTER,			///< filter bw|blur|off: a map script's black and white view or motion blur zoom
 	CINEMA_VERB_SHOT,				///< shot: one screenshot
 	CINEMA_VERB_END,				///< end: quit the game
+	CINEMA_VERB_DRONE,			///< drone <seconds> <x> <y> <height> ... [look ...] [tilt d] [clear u] [bank f] [sway f]: fly low through the points
 
 	CINEMA_VERB_COUNT
 };
 
 enum { CINEMA_MAX_ROUTE_POINTS = 16 };
+
+enum CinemaDroneLook
+{
+	CINEMA_DRONE_LOOK_AHEAD,		///< along the path, into the turns
+	CINEMA_DRONE_LOOK_POINT,		///< at a ground point the whole flight
+	CINEMA_DRONE_LOOK_OBJECT		///< at the one of the template nearest the middle of the path, tracked
+};
+
+struct CinemaDroneSettings
+{
+	Int look;										///< CinemaDroneLook
+	Real lookX;
+	Real lookY;
+	Real tilt;									///< degrees added to the look ahead, below 0 looks down
+	Real clearance;							///< world units kept between the eye and the ground, water or a roof under it
+	Real bank;									///< share of the bank a real turn would give, 0 flies level
+	Real sway;									///< share of the hand-held drift, 0 holds steady
+};
 
 struct CinemaShot
 {
@@ -59,10 +78,51 @@ struct CinemaShot
 	Int values;									///< how many of value[] the line gave
 	Real routeX[ CINEMA_MAX_ROUTE_POINTS ];
 	Real routeY[ CINEMA_MAX_ROUTE_POINTS ];
+	Real routeZ[ CINEMA_MAX_ROUTE_POINTS ];	///< drone: height above the ground at each point
 	Int routePoints;
-	AsciiString name;						///< follow's template, filter's bw, blur or off
+	AsciiString name;						///< follow's template, filter's bw, blur or off, drone's look template
 	Bool on;										///< hud and letterbox
+	CinemaDroneSettings drone;
 };
+
+// ------------------------------------------------------------------------------------------------
+// the drone: a flight planned once when its shot fires, then a pure function of the time into it,
+// so the same list frames the same picture on every run
+
+enum { CINEMA_DRONE_STATIONS = 512 };
+
+struct CinemaDroneFlight
+{
+	Real xs[ CINEMA_MAX_ROUTE_POINTS ];
+	Real ys[ CINEMA_MAX_ROUTE_POINTS ];
+	Real heights[ CINEMA_MAX_ROUTE_POINTS ];
+	Int points;
+	Real seconds;
+	Real length;								///< world units along the path
+	Real cruise;								///< speed between the run-up and the slow-down
+	Real ramp;									///< seconds of each
+	Real param[ CINEMA_DRONE_STATIONS + 1 ];	///< curve parameter at equal distances along the path
+	Real z[ CINEMA_DRONE_STATIONS + 1 ];			///< eye height at each, clear of whatever is under it
+	CinemaDroneSettings settings;
+};
+
+struct CinemaDronePose
+{
+	Coord3D eye;
+	Real heading;								///< radians, 0 looks along +x
+	Real tilt;									///< radians, up positive
+	Real roll;									///< radians, positive drops the right side (View::setFreeCameraPose)
+	Real speed;									///< world units a second along the path
+};
+
+/// the top of whatever is at (x, y): ground, water or a roof
+typedef Real (*CinemaGroundFn)( void *context, Real x, Real y );
+
+void CinemaDrone_plan( CinemaDroneFlight *flight, const CinemaShot &shot, CinemaGroundFn ground, void *context );
+/// how far along the path at t seconds into the flight: a smooth run-up, a cruise, a smooth stop
+Real CinemaDrone_distance( const CinemaDroneFlight &flight, Real t, Real *speed );
+/// where the eye is and how it faces at t; target is what it looks at, NULL to look ahead
+void CinemaDrone_pose( const CinemaDroneFlight &flight, Real t, const Coord3D *target, CinemaDronePose *pose );
 
 /// parse one line of a shot list; FALSE with a reason for a line that is neither a shot nor blank
 Bool CinemaDirector_parseLine( const char *line, CinemaShot *shot, Bool *isShot, AsciiString *reason );

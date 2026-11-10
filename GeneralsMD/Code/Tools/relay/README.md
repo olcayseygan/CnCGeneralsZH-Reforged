@@ -197,6 +197,7 @@ accounts.
 |---|---|
 | `authorize(ticketHex)` | returns the account id for a ticket (32 hex digits), `null`, or a promise of either. A throw or a rejection counts as `null`; HELLO_AUTH retries from that endpoint are ignored while a promise is out, so a ticket is still asked once |
 | `thread` | `true` runs the relay in a worker thread, below |
+| `process` | `true` runs it in a child process instead, below |
 | `onAuthorized(accountId, vip)` | a session opened for that account, with its virtual address |
 | `onLeave(accountId, atMs)` | an authorised session was removed: idle, replaced or a HELLO with other CRCs. `atMs` is when it was last heard from. One sweep reports in that order, so the first call is the player who went silent first |
 | `now()` | clock in ms, `Date.now` by default |
@@ -228,6 +229,19 @@ the host keeps from those two, `setRoom` is posted to the worker and answers fro
 clock (`now` is not passed in), and `sessions`, `buckets`, `sweep()` and `sessionStats` are not
 offered. `stop()` resolves when the worker has exited; a worker that dies otherwise throws in the host,
 so a supervisor restarts both.
+
+`process: true` is the same contract with a child process (`child_process.fork` of this file) in
+place of the worker, and the returned object's `pid` is that child's. Messages cross as JSON, so
+account ids stay strings or numbers. The child exits when the host goes, killed or not, since it
+loses the IPC channel. A `setRoom` and the next DATA take different paths (the channel and the
+socket), so a caller that sends match traffic the instant it moves players awaits `report()` first;
+a server moving players at game start is long done before the first packet.
+
+A process is there for one core. A worker shares the host's scheduling priority on every system
+where a host cannot set one per thread, and on one core it then waits out the host's work as long as
+the inline relay does. A child has a priority of its own: a host that lowers itself below it (on Linux
+`os.setPriority` on each of its threads, since nice is per thread there; raising a nice value needs no
+privilege) has its work cut short by the scheduler whenever a datagram wakes the relay.
 
 ## Limits
 

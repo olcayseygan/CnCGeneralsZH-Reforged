@@ -419,10 +419,11 @@ async function main() {
 	assert.strictEqual(await welcome(m2, helloAuth(9, 9, T2)), null, 'per-IP cap skipped by HELLO_AUTH');
 	authCap.stop();
 
-	// in a thread: the same callbacks by message, vipOf and setRoom from the host's copy
+	// in a thread or a child process: the same callbacks by message, vipOf and setRoom from the host's copy
+	for (const apart of ['thread', 'process']) {
 	const tAuthorized = [], tLeaves = [], tLog = [];
 	const threaded = createRelay({
-		thread: true,
+		[apart]: true,
 		log: (l) => tLog.push(l),
 		authorize: (t) => tickets.get(t) ?? null,
 		onAuthorized: (id, vip) => tAuthorized.push([id, vip]),
@@ -441,19 +442,21 @@ async function main() {
 	assert.strictEqual(threaded.setRoom('u2', 'match:t'), true);
 	assert.strictEqual(threaded.setRoom('u3', 'match:t'), true);
 	assert.strictEqual(threaded.setRoom('nobody', 'match:t'), false);
+	await threaded.report();  // also puts the setRoom messages in before the DATA, which takes the socket and not the channel
+	assert.ok(/^stats sessions=3 .* hello=1 /.test(tLog[tLog.length - 1]), tLog[tLog.length - 1]);
 	r1.send(data(Q1.session, Q2.vip, 8086, 8087, 'threaded'));
 	assert.deepStrictEqual(parseData(await r2.next()), { srcVip: Q1.vip, srcPort: 8087, dstPort: 8086, payload: 'threaded' });
 	// one datagram rewritten in place and sent to two
 	r1.send(data(Q1.session, 0xffffffff, 8086, 8086, 'both'));
 	assert.deepStrictEqual([parseData(await r2.next()).payload, parseData(await r4.next()).payload], ['both', 'both']);
-	await threaded.report();
-	assert.ok(/^stats sessions=3 .* hello=1 /.test(tLog[tLog.length - 1]), tLog[tLog.length - 1]);
 	// replaced from another endpoint: onLeave reaches the host, vipOf follows the new session
 	const Q1b = await authMember(r3, T1, 'Again');
 	await threaded.report();  // every message the thread sent before this answer has been handled
 	assert.deepStrictEqual(tLeaves.map((l) => l[0]), ['u1']);
 	assert.strictEqual(threaded.vipOf('u1'), Q1b.vip);
+	assert.strictEqual(threaded.pid === undefined, apart === 'thread', `${apart}: pid`);
 	await threaded.stop();
+	}
 
 	for (const s of sockets) s.close();
 	console.log('relay test: all checks passed');

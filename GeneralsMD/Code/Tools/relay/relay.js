@@ -5,6 +5,7 @@
 
 const dgram = require('dgram');
 const crypto = require('crypto');
+const { fork } = require('child_process');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
 const MAGIC0 = 0x5a; // 'Z'
@@ -54,7 +55,7 @@ const discards = () => ({ bad: 0, hello: 0, rate: 0, nosession: 0, endpoint: 0, 
 const CAUSES = Object.keys(discards());
 
 function createRelay(opts = {}) {
-	if (opts.thread) return createRelayThread(opts);
+	if (opts.thread || opts.process) return createRelayThread(opts);
 	const now = opts.now || Date.now;
 	const log = opts.log || defaultLog;
 	const rate = opts.rateBytesPerSec ?? RATE_BYTES_PER_SEC;
@@ -428,24 +429,29 @@ function createRelay(opts = {}) {
 	 order the thread called them. vipOf answers from a copy kept from those two; setRoom is sent over and
 	 answers whether that copy holds the account. report() resolves once its stats line is logged. The
 	 thread keeps the wall clock: `now` is not passed in, and sessions, buckets, sweep and sessionStats
-	 are not offered. */
+	 are not offered.
+	 createRelay({ process: true, ... }) is the same with a child process in place of the thread, `pid`
+	 its process id. A thread shares the host's scheduling priority wherever the host cannot set one per
+	 thread (Windows); a process has its own, so a host that lowers its own priority below the relay's
+	 has the scheduler cut its work short whenever a packet arrives, which is what one core needs. */
 function createRelayThread(opts) {
 	const log = opts.log || defaultLog;
 	const authorize = opts.authorize;
 	const onAuthorized = opts.onAuthorized || (() => {});
 	const onLeave = opts.onLeave || (() => {});
 	const plain = {};
-	for (const [k, v] of Object.entries(opts)) if (typeof v !== 'function' && k !== 'thread') plain[k] = v;
+	for (const [k, v] of Object.entries(opts)) if (typeof v !== 'function' && k !== 'thread' && k !== 'process') plain[k] = v;
 	plain.authorize = !!authorize;
 	const vips = new Map();  // account -> vip, from the thread's authorized and leave
 	const waits = new Map(); // request id -> { resolve, reject }
 	let nextWait = 0;
-	let worker = null;
+	let worker = null;       // the Worker or the ChildProcess
 	let stopping = false;
+	const post = (m) => (opts.process ? worker?.connected && worker.send(m) : worker?.postMessage(m));
 
 	const ask = (m) => new Promise((resolve, reject) => {
 		waits.set(++nextWait, { resolve, reject });
-		worker.postMessage({ ...m, id: nextWait });
+		post({ ...m, id: nextWait });
 	});
 	const settle = (id, fn) => {
 		const w = waits.get(id);
@@ -459,7 +465,7 @@ function createRelayThread(opts) {
 			Promise.resolve()
 				.then(() => authorize(m.ticket))
 				.then((a) => a ?? null, (e) => { log(`authorize threw ${e.message}`); return null; })
-				.then((account) => worker?.postMessage({ t: 'account', id: m.id, account }));
+				.then((account) => post({ t: 'account', id: m.id, account }));
 		} else if (m.t === 'authorized') {
 			vips.set(m.account, m.vip);
 			onAuthorized(m.account, m.vip);
@@ -472,13 +478,16 @@ function createRelayThread(opts) {
 
 	return {
 		setRoom(account, room) {
-			worker?.postMessage({ t: 'setRoom', account, room });
+			post({ t: 'setRoom', account, room });
 			return vips.has(account);
 		},
 		vipOf: (account) => vips.get(account) ?? null,
 		report: () => (worker ? ask({ t: 'report' }) : Promise.resolve()),
+		get pid() { return worker?.pid; },
 		start(port = DEFAULT_PORT, host) {
-			worker = new Worker(__filename, { workerData: { zrRelay: plain } });
+			worker = opts.process
+				? fork(__filename, [], { execArgv: [], env: { ...process.env, ZR_RELAY: JSON.stringify(plain) } })
+				: new Worker(__filename, { workerData: { zrRelay: plain } });
 			worker.on('message', onMessage);
 			// a relay that died takes the host with it, so a supervisor restarts both
 			worker.on('error', (e) => {
@@ -486,7 +495,7 @@ function createRelayThread(opts) {
 				for (const id of [...waits.keys()]) settle(id, (w) => w.reject(e));
 			});
 			worker.on('exit', (code) => {
-				if (!stopping) throw new Error(`relay thread exited with code ${code}`);
+				if (!stopping) throw new Error(`relay ${opts.process ? 'process' : 'thread'} exited with code ${code}`);
 			});
 			return ask({ t: 'start', port, host });
 		},
@@ -494,15 +503,18 @@ function createRelayThread(opts) {
 			stopping = true;
 			if (!worker) return Promise.resolve();
 			const exited = new Promise((r) => worker.once('exit', r));
-			worker.postMessage({ t: 'stop' });
+			post({ t: 'stop' });
 			return exited;
 		},
 	};
 }
 
-// The thread's side of createRelayThread.
-function runThread(o) {
-	const post = (m) => parentPort.postMessage(m);
+// The thread's or the child process's side of createRelayThread. A child whose host is gone (killed,
+// crashed) loses the IPC channel and exits with it.
+function runThread(o, child) {
+	const post = child ? (m) => process.send(m) : (m) => parentPort.postMessage(m);
+	const port = child ? process : parentPort;
+	if (child) process.on('disconnect', () => process.exit(0));
 	const asked = new Map();  // request id -> resolve of an authorize promise
 	let nextAsk = 0;
 	const relay = createRelay({
@@ -515,7 +527,7 @@ function runThread(o) {
 		onAuthorized: (account, vip) => post({ t: 'authorized', account, vip }),
 		onLeave: (account, at) => post({ t: 'leave', account, at }),
 	});
-	parentPort.on('message', (m) => {
+	port.on('message', (m) => {
 		if (m.t === 'account') {
 			asked.get(m.id)?.(m.account);
 			asked.delete(m.id);
@@ -527,14 +539,15 @@ function runThread(o) {
 			relay.start(m.port, m.host).then((value) => post({ t: 'done', id: m.id, value }), (e) => post({ t: 'failed', id: m.id, message: e.message }));
 		} else if (m.t === 'stop') {
 			relay.stop();
-			parentPort.close();
+			if (child) process.disconnect(); else parentPort.close();
 		}
 	});
 }
 
 module.exports = { createRelay, MAX_PACKET, IDLE_MS, NO_SESSION, HELLO_HEADER, HELLO_AUTH_HEADER, DATA_IN_HEADER, DATA_OUT_HEADER, vipString };
 
-if (!isMainThread && workerData && workerData.zrRelay) runThread(workerData.zrRelay);
+if (!isMainThread && workerData && workerData.zrRelay) runThread(workerData.zrRelay, false);
+else if (require.main === module && process.send && process.env.ZR_RELAY) runThread(JSON.parse(process.env.ZR_RELAY), true);
 else if (require.main === module) {
 	const port = Number(process.env.RELAY_PORT) || DEFAULT_PORT;
 	createRelay()

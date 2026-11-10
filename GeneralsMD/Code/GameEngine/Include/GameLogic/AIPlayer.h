@@ -322,6 +322,7 @@ public:
 
 	/// This rung's knobs, for any behaviour that has a difficulty-dependent decision to make.
 	const AIDifficultyProfile *getSkillProfile(void) const;
+	Bool knobsOffHere(void) const;		///< -aiknobsoff reaches this slot; its mask says which knobs
 
 	/// What a seat that predates the ladder (an old save, a replay, a script) plays at.
 	static AISkillLevel skillLevelForDifficulty(GameDifficulty difficulty);

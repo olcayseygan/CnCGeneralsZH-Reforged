@@ -841,6 +841,19 @@ Player *AISkirmishPlayer::getAiEnemy(void)
 */
 void AISkirmishPlayer::buildAIBaseDefense(Bool flank)
 {
+	// The fork's AI scores 96 spots against the map for each gun (placeDefense), and a script pass asking for
+	// three put three of those on one frame, 20 to 40 ms of it at 32 seats: the requests wait in order and one
+	// is placed a frame (update), a frame or two later than asked.  EA's AI only rings the base, at once.
+	// -aiknobsoff ... defensequeue places them on the frame asked, to measure the one against the other.
+	if (runsOwnAI() && !(knobsOffHere() && (TheGlobalData->m_aiKnobsOffMask & AIKNOB_DEFENSE_QUEUE))) {
+		m_defenseRequests.push_back(flank);
+		return;
+	}
+	buildAIBaseDefenseNow(flank);
+}
+
+void AISkirmishPlayer::buildAIBaseDefenseNow(Bool flank)
+{
 	const AISideInfo *resInfo = TheAI->getAiData()->findSideInfo( m_player );
 	AsciiString defenseTemplateName;
 	if (resInfo) {
@@ -1271,6 +1284,11 @@ void AISkirmishPlayer::doTeamBuilding( void )
  */
 void AISkirmishPlayer::update( void )
 {
+	if (!m_defenseRequests.empty()) {
+		const Bool flank = m_defenseRequests.front();
+		m_defenseRequests.erase(m_defenseRequests.begin());
+		buildAIBaseDefenseNow(flank);
+	}
 	AIPlayer::update();
 	doSurrender();
 }
@@ -1648,7 +1666,8 @@ void AISkirmishPlayer::xfer( Xfer *xfer )
 	// 2: the current enemy and the frame to look for one again.  Without them a loaded game picked
 	//    its enemy afresh on the first frame and played on differently from the one that was saved.
 	// 3: the surrender clock.
-	XferVersion currentVersion = 3;
+	// 4: the base defences the scripts asked for and not yet placed.
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1668,6 +1687,20 @@ void AISkirmishPlayer::xfer( Xfer *xfer )
 	{
 		xfer->xferUnsignedInt( &m_hopelessSinceFrame );
 		xfer->xferUnsignedInt( &m_surrenderFrame );
+	}
+
+	if( version >= 4 )
+	{
+		UnsignedShort waiting = (UnsignedShort)m_defenseRequests.size();
+		xfer->xferUnsignedShort( &waiting );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_defenseRequests.assign( waiting, FALSE );
+		for( UnsignedShort i = 0; i < waiting; ++i )
+		{
+			Bool flank = m_defenseRequests[ i ];
+			xfer->xferBool( &flank );
+			m_defenseRequests[ i ] = flank;
+		}
 	}
 
 	// front base defense

@@ -1342,7 +1342,7 @@ Int parseNoTactics(char *args[], int num)
 	return 2;
 }
 
-/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge: those slots keep their rung with these knobs
+/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue: those slots keep their rung with these knobs
 	* of its profile off, so a batch can play Hard against Hard without them, or a scenario against the AI
 	* as it was.  A measuring aid like -notactics: read only in a single-player skirmish, never in a
 	* network game, and a replay made with it is played back with it given again. */
@@ -1360,6 +1360,7 @@ Int parseAIKnobsOff(char *args[], int num)
 		if (strstr(names.str(), "massunit")) mask |= AIKNOB_MASS_UNIT;
 		if (strstr(names.str(), "basewatch")) mask |= AIKNOB_BASE_WATCH;
 		if (strstr(names.str(), "strikedodge")) mask |= AIKNOB_STRIKE_DODGE;
+		if (strstr(names.str(), "defensequeue")) mask |= AIKNOB_DEFENSE_QUEUE;
 		TheWritableGlobalData->m_aiKnobsOffMask = mask;
 	}
 	return 3;

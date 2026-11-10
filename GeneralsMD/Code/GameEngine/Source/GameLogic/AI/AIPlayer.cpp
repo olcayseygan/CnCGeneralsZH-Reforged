@@ -19923,19 +19923,23 @@ AISkillLevel AIPlayer::skillLevelForDifficulty( GameDifficulty difficulty )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** -aiknobsoff reaches this slot: a skirmish, or the playback of one given the switch again, as -notactics
+	* reads it, and the slot's side of the parity. */
+Bool AIPlayer::knobsOffHere( void ) const
+{
+	const Int parity = TheGlobalData->m_aiKnobsOffParity;
+	if( parity < 0 )
+		return FALSE;
+	const Int originalMode = (TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK)
+												 ? TheRecorder->getGameMode() : TheGameLogic->getGameMode();
+	return originalMode == GAME_SKIRMISH &&
+				 (parity == 2 || (ThePlayerList->getSlotIndex( m_player->getPlayerIndex() ) & 1) == parity);
+}
+
 const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
 {
 	const AIDifficultyProfile *profile = TheAI->getDifficultyProfile( m_skillLevel );
-	const Int parity = TheGlobalData->m_aiKnobsOffParity;
-	Bool knobsOff = FALSE;
-	if( parity >= 0 )
-	{
-		// -aiknobsoff: a skirmish, or the playback of one given the switch again, as -notactics reads it
-		const Int originalMode = (TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK)
-													 ? TheRecorder->getGameMode() : TheGameLogic->getGameMode();
-		knobsOff = originalMode == GAME_SKIRMISH &&
-							 (parity == 2 || (ThePlayerList->getSlotIndex( m_player->getPlayerIndex() ) & 1) == parity);
-	}
+	const Bool knobsOff = knobsOffHere();
 	if( !knobsOff && m_persona == AIPERSONA_NORMAL )
 		return profile;
 	m_measuredProfile = *profile;

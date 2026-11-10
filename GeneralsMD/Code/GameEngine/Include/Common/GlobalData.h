@@ -116,6 +116,7 @@ enum
 	AIKNOB_MASS_UNIT		= 4,
 	AIKNOB_BASE_WATCH		= 8,
 	AIKNOB_STRIKE_DODGE	= 16,
+	AIKNOB_DEFENSE_QUEUE	= 32,	///< the scripts' base defences go down on the frame they are asked for, as before they queued
 };
 
 //-------------------------------------------------------------------------------------------------

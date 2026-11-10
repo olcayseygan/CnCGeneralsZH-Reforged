@@ -70,6 +70,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/InGameUI.h"
 
+#include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/TerrainLogic.h"
 
@@ -78,12 +79,15 @@
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/HeightMap.h"
 
+#include "Platform/SunShadow.h"
+
 #include "WW3D2/camera.h"
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/dx8renderer.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
 #include "WW3D2/segline.h"
+#include "WW3D2/sortingrenderer.h"
 
 
 #define MAX_DISPLAY_NODES 512
@@ -137,17 +141,41 @@ W3DWaypointBuffer::~W3DWaypointBuffer(void)
 // coming out of the door. So each line gets its own object and they are rendered together
 // after the last puck, so they all stay deferred.
 //=============================================================================
-void W3DWaypointBuffer::queueLine( Int numPoints, Vector3 *points )
+void W3DWaypointBuffer::queueLine( Int numPoints, Vector3 *points, DrawKind kind )
 {
 	if( m_linesUsed >= (Int)m_linePool.size() )
-		m_linePool.push_back( new SegmentedLineClass( *m_line ) );	// copies texture, shader, width, color
-	m_linePool[ m_linesUsed++ ]->Set_Points( numPoints, points );
+	{
+		m_linePool.push_back( new SegmentedLineClass( *m_line ) );
+		m_linePoolKinds.push_back( DRAW_LINE );
+	}
+	m_linePoolKinds[ m_linesUsed ] = kind;
+	SegmentedLineClass *line = m_linePool[ m_linesUsed++ ];
+	setLineStyle( line, kind );		// a pooled line may have been an outline last frame
+	line->Set_Points( numPoints, points );
 }
 
 void W3DWaypointBuffer::renderQueuedLines( RenderInfoClass &rinfo )
 {
+	auto isOutline = [this]( Int i ) { return m_linePoolKinds[ i ] == DRAW_OUTLINE_WHITE || m_linePoolKinds[ i ] == DRAW_OUTLINE_RED; };
+
 	for( Int i = 0; i < m_linesUsed; ++i )
-		m_linePool[ i ]->Render( rinfo );
+		if( !isOutline( i ) )
+			m_linePool[ i ]->Render( rinfo );
+
+	// A building's outline is a blended draw, and a receiving program would shade it with the
+	// building's shadow, the smoke and the headlights where -d3d9 does not: grey white and brick red
+	// on the shadow side.  It is paint for the player and takes no light.  Each guard covers one
+	// backend and the sorted node keeps both from the moment it is inserted: the emissive flag is
+	// what the Direct3D 11 backend reads (Shadow_Receiving), the receiver exclusion what SDL3 reads,
+	// and on Direct3D 11 the exclusion is a stub
+	{
+		SunShadow::ReceiverExclusion sunReceivers( DX8Wrapper::_Get_D3D_Device() );
+		SortingRendererClass::_Set_Insert_Emissive( true );
+		for( Int i = 0; i < m_linesUsed; ++i )
+			if( isOutline( i ) )
+				m_linePool[ i ]->Render( rinfo );
+		SortingRendererClass::_Set_Insert_Emissive( false );
+	}
 	m_linesUsed = 0;
 }
 
@@ -163,16 +191,34 @@ void W3DWaypointBuffer::freeWaypointBuffers()
 
 void W3DWaypointBuffer::setDefaultLineStyle( void )
 {
-	if( m_texture )
+	setLineStyle( m_line, DRAW_LINE );
+}
+
+void W3DWaypointBuffer::setLineStyle( SegmentedLineClass *line, DrawKind kind )
+{
+	if( kind == DRAW_OUTLINE_WHITE || kind == DRAW_OUTLINE_RED )
 	{
-		m_line->Set_Texture( m_texture );
+		// A building's outline is solid paint, not the order line's additive laser: added to sand, red
+		// came out a pale orange.  It is depth tested like anything else on the ground, so the building
+		// hides the far side of its own outline, and it rides the terrain (traceStructureOutline) so a
+		// hill does not swallow it.  Alpha blended to land on the sorted list, after the ground decals
+		// round a building's base that would otherwise darken it
+		line->Set_Texture( NULL );
+		line->Set_Shader( ShaderClass::_PresetAlphaShader );
+		line->Set_Width( 2.0f );
+		line->Set_Color( ( kind == DRAW_OUTLINE_RED ) ? Vector3( 0.95f, 0.1f, 0.05f ) : Vector3( 1.0f, 1.0f, 1.0f ) );
+		line->Set_Opacity( 0.9f );
+		return;
 	}
+
+	line->Set_Texture( m_texture );
 	ShaderClass lineShader=ShaderClass::_PresetAdditiveShader;
 	lineShader.Set_Depth_Compare(ShaderClass::PASS_ALWAYS);
-	m_line->Set_Shader( lineShader );	//pick the alpha blending mode you want - see shader.h for others.
-	m_line->Set_Width( 1.5f );
-	m_line->Set_Color( Vector3( 0.25f, 0.5f, 1.0f ) );
-	m_line->Set_Texture_Mapping_Mode( SegLineRendererClass::TILED_TEXTURE_MAP );	//this tiles the texture across the line
+	line->Set_Shader( lineShader );	//pick the alpha blending mode you want - see shader.h for others.
+	line->Set_Width( 1.5f );
+	line->Set_Color( Vector3( 0.25f, 0.5f, 1.0f ) );
+	line->Set_Opacity( 1.0f );
+	line->Set_Texture_Mapping_Mode( SegLineRendererClass::TILED_TEXTURE_MAP );	//this tiles the texture across the line
 }
 
 
@@ -225,7 +271,9 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 				WW3D::Render( *m_waypointNodeRobj, localRinfo );		// the little hockey puck
 				break;
 			case DRAW_LINE:
-				queueLine( it->count, points );
+			case DRAW_OUTLINE_WHITE:
+			case DRAW_OUTLINE_RED:
+				queueLine( it->count, points, it->kind );
 				break;
 			case DRAW_OUTPOST_LINE:
 				m_line->Set_Color( Vector3( 0.95f, 0.5f, 0.0f ) );
@@ -284,6 +332,29 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 		}
 		// the lines stay queued: the rally and placement pucks below would flush them into the
 		// terrain pass, under the buildings (see queueLine)
+	}
+
+	// The outline round each selected building, and the red one round each building a selected unit
+	// is attacking (InGameUI::updateStructureOutlines decides which, and when a red one blinks)
+	{
+		std::vector<Coord3D>& outline = m_outlineTrace;
+		std::vector<Vector3>& points = m_outlinePoints;
+		const std::vector<InGameUI::StructureOutline>& outlines = TheInGameUI->getStructureOutlines();
+		for( std::vector<InGameUI::StructureOutline>::const_iterator it = outlines.begin(); it != outlines.end(); ++it )
+		{
+			if( it->color == InGameUI::OUTLINE_HIDDEN )
+				continue;
+			const Object *obj = TheGameLogic->findObjectByID( it->id );
+			if( obj == NULL )
+				continue;
+			InGameUI::traceStructureOutline( obj, outline );
+			if( outline.size() < 2 )
+				continue;
+			points.resize( outline.size() );
+			for( size_t i = 0; i < outline.size(); ++i )
+				points[ i ].Set( outline[ i ].x, outline[ i ].y, outline[ i ].z );
+			record( ( it->color == InGameUI::OUTLINE_RED ) ? DRAW_OUTLINE_RED : DRAW_OUTLINE_WHITE, TRUE, (Int)points.size(), &points[ 0 ] );
+		}
 	}
 
 	// Rally points, drawn whenever we are not actively laying down waypoints. This used to be the

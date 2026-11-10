@@ -4374,7 +4374,232 @@ static Coord3D orderTargetSpot( const Object *target )
 	return spot;
 }
 
-Bool InGameUI::getHeldAircraftOrder( const Object *obj, OrderHintKind& kind, Coord3D& to, Bool& onObject ) const
+//-------------------------------------------------------------------------------------------------
+/** A building's outline is its footprint grown by a margin, so it clears the walls, and it lies on
+	* the ground rather than at the building's base height: each point takes the terrain under it, so
+	* the line rides over a hill instead of cutting into it.  The lift keeps the ribbon, which faces
+	* the camera, out of the ground it lies on. */
+//-------------------------------------------------------------------------------------------------
+static const Real OUTLINE_MARGIN = 6.0f;
+static const Real OUTLINE_LIFT = 2.0f;
+static const Real OUTLINE_STEP = 8.0f;		///< longest stretch between two points that take the ground's height
+
+static Real outlineHeight( Real x, Real y )
+{
+	return TheTerrainLogic->getGroundHeight( x, y ) + OUTLINE_LIFT;
+}
+
+/** Where an order aimed at an outlined building ends: on the outline, at its point nearest 'from'. */
+static Coord3D nearestOutlinePoint( const Object *obj, const Coord3D& from )
+{
+	const GeometryInfo& geom = obj->getGeometryInfo();
+	const Coord3D *ctr = obj->getPosition();
+	const Real dx = from.x - ctr->x;
+	const Real dy = from.y - ctr->y;
+
+	Coord3D spot;
+	if( geom.getGeomType() == GEOMETRY_BOX )
+	{
+		// into the building's own frame, x along its major axis, clamped onto the rectangle
+		const Real c = (Real)Cos( obj->getOrientation() );
+		const Real s = (Real)Sin( obj->getOrientation() );
+		const Real a = geom.getMajorRadius() + OUTLINE_MARGIN;
+		const Real b = geom.getMinorRadius() + OUTLINE_MARGIN;
+		Real lx = clamp( -a, dx * c + dy * s, a );
+		Real ly = clamp( -b, dy * c - dx * s, b );
+
+		// from inside it, out to the nearest side
+		if( fabs( lx ) < a && fabs( ly ) < b )
+		{
+			if( a - fabs( lx ) < b - fabs( ly ) )
+				lx = ( lx < 0.0f ) ? -a : a;
+			else
+				ly = ( ly < 0.0f ) ? -b : b;
+		}
+		spot.x = ctr->x + lx * c - ly * s;
+		spot.y = ctr->y + lx * s + ly * c;
+	}
+	else
+	{
+		const Real r = geom.getMajorRadius() + OUTLINE_MARGIN;
+		const Real len = (Real)sqrt( dx * dx + dy * dy );
+		spot.x = ctr->x + ( ( len > 0.01f ) ? dx * r / len : r );
+		spot.y = ctr->y + ( ( len > 0.01f ) ? dy * r / len : 0.0f );
+	}
+	spot.z = outlineHeight( spot.x, spot.y );
+	return spot;
+}
+
+void InGameUI::traceStructureOutline( const Object *obj, std::vector<Coord3D>& points )
+{
+	points.clear();
+	const GeometryInfo& geom = obj->getGeometryInfo();
+	const Coord3D *ctr = obj->getPosition();
+
+	if( geom.getGeomType() == GEOMETRY_BOX )
+	{
+		// the rally line's corner arithmetic (W3DWaypointBuffer), on the grown rectangle.  The loop
+		// starts and ends halfway along the first side: a ribbon's two ends meeting on a corner leave
+		// a notch there, and on a straight run they close up
+		const Real c = (Real)Cos( obj->getOrientation() );
+		const Real s = (Real)Sin( obj->getOrientation() );
+		const Real a = geom.getMajorRadius() + OUTLINE_MARGIN;
+		const Real b = geom.getMinorRadius() + OUTLINE_MARGIN;
+		const Real signX[ 4 ] = { -1.0f, 1.0f, 1.0f, -1.0f };
+		const Real signY[ 4 ] = { 1.0f, 1.0f, -1.0f, -1.0f };
+		Coord2D corners[ 4 ];
+		for( Int i = 0; i < 4; ++i )
+		{
+			corners[ i ].x = ctr->x + signX[ i ] * a * c - signY[ i ] * b * s;
+			corners[ i ].y = ctr->y + signX[ i ] * a * s + signY[ i ] * b * c;
+		}
+
+		Coord2D path[ 6 ];
+		path[ 0 ].x = ( corners[ 0 ].x + corners[ 1 ].x ) * 0.5f;
+		path[ 0 ].y = ( corners[ 0 ].y + corners[ 1 ].y ) * 0.5f;
+		path[ 1 ] = corners[ 1 ];
+		path[ 2 ] = corners[ 2 ];
+		path[ 3 ] = corners[ 3 ];
+		path[ 4 ] = corners[ 0 ];
+		path[ 5 ] = path[ 0 ];
+
+		for( Int i = 0; i < 5; ++i )
+		{
+			const Coord2D& p = path[ i ];
+			const Coord2D& q = path[ i + 1 ];
+			const Real ex = q.x - p.x;
+			const Real ey = q.y - p.y;
+			const Int pieces = max( 1, (Int)ceil( sqrt( ex * ex + ey * ey ) / OUTLINE_STEP ) );
+			for( Int k = 0; k < pieces; ++k )
+			{
+				Coord3D pt;
+				pt.x = p.x + ex * k / pieces;
+				pt.y = p.y + ey * k / pieces;
+				pt.z = outlineHeight( pt.x, pt.y );
+				points.push_back( pt );
+			}
+		}
+	}
+	else
+	{
+		const Real r = geom.getMajorRadius() + OUTLINE_MARGIN;
+		const Int pieces = max( 16, (Int)ceil( 2.0f * PI * r / OUTLINE_STEP ) );
+		for( Int k = 0; k < pieces; ++k )
+		{
+			const Real angle = 2.0f * PI * k / pieces;
+			Coord3D pt;
+			pt.x = ctr->x + r * (Real)Cos( angle );
+			pt.y = ctr->y + r * (Real)Sin( angle );
+			pt.z = outlineHeight( pt.x, pt.y );
+			points.push_back( pt );
+		}
+	}
+
+	// closed
+	if( !points.empty() )
+		points.push_back( points.front() );
+}
+
+static Bool isAttackOrderHint( InGameUI::OrderHintKind kind )
+{
+	return kind == InGameUI::ORDER_HINT_ATTACK || kind == InGameUI::ORDER_HINT_FORCE_ATTACK;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A drawn hint that ends on an outlined building ends on the outline, nearest where it comes from,
+	* and a later leg of a shift list that starts from one leaves the outline nearest where it goes.
+	* Run after the bunching, so a knot's averaged end is put back on the line too. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::snapOrderHintsToOutlines( void )
+{
+	if( m_structureOutlines.empty() )
+		return;
+
+	auto outlined = [this]( ObjectID id ) -> const Object *
+	{
+		if( id == INVALID_ID )
+			return NULL;
+		// a red outline in the dark half of a blink has no line to end on, so the hint keeps its
+		// spot over the roof for those frames: from and to stay together across the blink
+		for( std::vector<StructureOutline>::const_iterator it = m_structureOutlines.begin(); it != m_structureOutlines.end(); ++it )
+			if( it->id == id )
+				return ( it->color == OUTLINE_HIDDEN ) ? NULL : TheGameLogic->findObjectByID( id );
+		return NULL;
+	};
+
+	for( std::vector<OrderHint>::iterator hint = m_drawnOrderHints.begin(); hint != m_drawnOrderHints.end(); ++hint )
+	{
+		if( const Object *from = outlined( hint->fromTarget ) )
+			hint->from = nearestOutlinePoint( from, hint->to );
+		if( const Object *to = outlined( hint->target ) )
+			hint->to = nearestOutlinePoint( to, hint->from );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Rebuilt every frame from the selection and its order hints.  An attack keeps the time it was first
+	* seen across rebuilds, so the blink runs once per attack rather than once per frame. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::updateStructureOutlines( void )
+{
+	const UnsignedInt BLINK_HALF_MS = 150;	// lit, then dark, for this long each
+	const UnsignedInt BLINKS = 3;
+	const UnsignedInt now = Clock_Milliseconds();
+
+	m_previousStructureOutlines.swap( m_structureOutlines );
+	m_structureOutlines.clear();
+	const std::vector<StructureOutline>& previous = m_previousStructureOutlines;
+
+	auto outlineFor = [this]( ObjectID id ) -> StructureOutline&
+	{
+		for( std::vector<StructureOutline>::iterator it = m_structureOutlines.begin(); it != m_structureOutlines.end(); ++it )
+			if( it->id == id )
+				return *it;
+		StructureOutline fresh;
+		fresh.id = id;
+		fresh.selected = FALSE;
+		fresh.attacked = FALSE;
+		fresh.attackedSinceMs = 0;
+		fresh.color = OUTLINE_HIDDEN;
+		m_structureOutlines.push_back( fresh );
+		return m_structureOutlines.back();
+	};
+
+	for( std::vector<OrderHint>::const_iterator hint = m_orderHints.begin(); hint != m_orderHints.end(); ++hint )
+	{
+		if( !isAttackOrderHint( hint->kind ) || hint->target == INVALID_ID )
+			continue;
+		const Object *target = TheGameLogic->findObjectByID( hint->target );
+		if( target == NULL || !target->isKindOf( KINDOF_STRUCTURE ) )
+			continue;
+
+		StructureOutline& outline = outlineFor( hint->target );
+		if( outline.attacked )
+			continue;
+		outline.attacked = TRUE;
+		outline.attackedSinceMs = now;
+		for( std::vector<StructureOutline>::const_iterator old = previous.begin(); old != previous.end(); ++old )
+			if( old->id == hint->target && old->attacked )
+				outline.attackedSinceMs = old->attackedSinceMs;
+	}
+
+	for( DrawableList::const_iterator it = m_selectedDrawables.begin(); it != m_selectedDrawables.end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		// an enemy building selected and then fogged over would trace its live footprint in the fog
+		if( obj && obj->isKindOf( KINDOF_STRUCTURE ) && !obj->isEffectivelyDead() && !isHiddenByShroud( obj ) )
+			outlineFor( obj->getID() ).selected = TRUE;
+	}
+
+	for( std::vector<StructureOutline>::iterator it = m_structureOutlines.begin(); it != m_structureOutlines.end(); ++it )
+	{
+		const UnsignedInt age = now - it->attackedSinceMs;
+		const Bool dark = it->attacked && age < 2 * BLINKS * BLINK_HALF_MS && ( age / BLINK_HALF_MS ) % 2 == 1;
+		it->color = ( it->attacked && !dark ) ? OUTLINE_RED : it->selected ? OUTLINE_WHITE : OUTLINE_HIDDEN;
+	}
+}
+
+Bool InGameUI::getHeldAircraftOrder( const Object *obj, OrderHintKind& kind, Coord3D& to, Bool& onObject, ObjectID& target ) const
 {
 	const AIUpdateInterface *ai = obj->getAIUpdateInterface();
 	const JetAIUpdate *jet = ai->getJetAIUpdate();
@@ -4423,13 +4648,14 @@ Bool InGameUI::getHeldAircraftOrder( const Object *obj, OrderHintKind& kind, Coo
 	}
 
 	onObject = ( targetID != INVALID_ID );
+	target = targetID;
 	if( onObject )
 	{
 		// a target under the shroud draws nothing, as in getQueuedOrderHint
-		const Object *target = TheGameLogic->findObjectByID( targetID );
-		if( target == NULL || isHiddenByShroud( target ) )
+		const Object *targetObj = TheGameLogic->findObjectByID( targetID );
+		if( targetObj == NULL || isHiddenByShroud( targetObj ) )
 			return FALSE;
-		to = orderTargetSpot( target );
+		to = orderTargetSpot( targetObj );
 	}
 	else
 	{
@@ -4444,9 +4670,10 @@ Bool InGameUI::getHeldAircraftOrder( const Object *obj, OrderHintKind& kind, Coo
 	* so the machine's goal position is the origin and reading it drew every guard marker in the
 	* bottom left corner of the map.  What the unit is guarding is kept on the AI itself. */
 //-------------------------------------------------------------------------------------------------
-static Bool getGuardedSpot( const AIUpdateInterface *ai, Coord3D& spot, Bool& onObject )
+static Bool getGuardedSpot( const AIUpdateInterface *ai, Coord3D& spot, Bool& onObject, ObjectID& target )
 {
 	onObject = ( ai->getGuardTargetType() == GUARDTARGET_OBJECT );
+	target = onObject ? ai->getGuardObject() : INVALID_ID;
 	switch( ai->getGuardTargetType() )
 	{
 		case GUARDTARGET_LOCATION:
@@ -4499,6 +4726,8 @@ void InGameUI::updateOrderHints( void )
 		markOrderHints();
 		bunchOrderHints();
 	}
+	updateStructureOutlines();
+	snapOrderHintsToOutlines();
 	updateOrderRings();
 }
 
@@ -4622,7 +4851,8 @@ Bool InGameUI::placeOrderRing( OrderRing& ring )
 	else if( ring.kind == ORDER_HINT_GUARD )
 	{
 		Bool onObject;
-		found = getGuardedSpot( ai, to, onObject ) && !onObject;
+		ObjectID target;
+		found = getGuardedSpot( ai, to, onObject, target ) && !onObject;
 	}
 	else if( ring.kind != ORDER_HINT_ATTACK_MOVE )
 	{
@@ -4881,6 +5111,7 @@ void InGameUI::collectOrderHints( void )
 		Coord3D resolvedGoal;
 		Bool goalResolved = FALSE;
 		Bool resolvedOnObject = FALSE;		// the resolved goal is a unit or building, not ground
+		ObjectID resolvedTarget = INVALID_ID;
 		Bool legsDrawn = FALSE;		// the order drew its own threads, and the shift list follows on from them
 
 		// a capture walks its man to the door with a plain move of its own and then stands him idle
@@ -4960,12 +5191,14 @@ void InGameUI::collectOrderHints( void )
 					hint.from = *obj->getPosition();
 					hint.to = orderTargetSpot( entrance );
 					hint.onObject = TRUE;
+					hint.target = entrance->getID();
 					addOrderHint( hint, previous );
 
 					const Object *exit = local->getTunnelSystem()->findTunnelNear( ai->getTunnelTripGoal(), obj );
 					hint.from = ( exit != NULL ) ? *exit->getPosition() : hint.to;
 					hint.to = *ai->getTunnelTripGoal();
 					hint.onObject = FALSE;
+					hint.target = INVALID_ID;
 					addOrderHint( hint, previous );
 					legsDrawn = TRUE;
 					break;
@@ -4999,7 +5232,7 @@ void InGameUI::collectOrderHints( void )
 				// behind is the origin - and the marker landed in the bottom left corner of the map
 				// every time.  The spot being guarded lives on the AI itself, so ask it there.
 				hint.kind = ORDER_HINT_GUARD;
-				if( !getGuardedSpot( ai, resolvedGoal, resolvedOnObject ) )
+				if( !getGuardedSpot( ai, resolvedGoal, resolvedOnObject, resolvedTarget ) )
 					continue;
 				goalResolved = TRUE;
 				break;
@@ -5010,7 +5243,7 @@ void InGameUI::collectOrderHints( void )
 				// gave it, and that order is held out of reach of the goal until the wheels are up.
 				// Ask for it, or an air strike shows nothing at all during the seconds the plane spends
 				// taxiing, which is exactly when the player wants to see where it is going
-				if( captured == NULL && !getHeldAircraftOrder( obj, hint.kind, resolvedGoal, resolvedOnObject ) )
+				if( captured == NULL && !getHeldAircraftOrder( obj, hint.kind, resolvedGoal, resolvedOnObject, resolvedTarget ) )
 					continue;
 				goalResolved = TRUE;
 				break;
@@ -5022,6 +5255,7 @@ void InGameUI::collectOrderHints( void )
 			resolvedGoal = orderTargetSpot( captured );
 			goalResolved = TRUE;
 			resolvedOnObject = TRUE;
+			resolvedTarget = captured->getID();
 		}
 
 		if( !legsDrawn )
@@ -5034,11 +5268,13 @@ void InGameUI::collectOrderHints( void )
 			const Int pathSize = ai->friend_getWaypointGoalPathSize();
 			const Int pathIndex = ai->friend_getCurrentGoalPathIndex();
 			hint.onObject = FALSE;
+			hint.target = INVALID_ID;
 			Bool goalHidden = FALSE;
 			if( goalResolved )
 			{
 				hint.to = resolvedGoal;
 				hint.onObject = resolvedOnObject;
+				hint.target = resolvedOnObject ? resolvedTarget : INVALID_ID;
 			}
 			else if( pathSize > 0 && pathIndex >= 0 && pathIndex < pathSize )
 			{
@@ -5063,7 +5299,10 @@ void InGameUI::collectOrderHints( void )
 				if( goalObj && isHiddenByShroud( goalObj ) )
 					goalHidden = TRUE;
 				else if( goalObj )
+				{
 					hint.to = orderTargetSpot( goalObj );
+					hint.target = goalObj->getID();
+				}
 				else if( path )
 					hint.to = *path->getLastNode()->getPosition();
 				else
@@ -5216,15 +5455,22 @@ void InGameUI::bunchOrderHints( void )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::addQueuedOrderTail( OrderHint& hint, const OrderChain& chain, const std::vector<OrderHint>& previous )
 {
+	// what each leg starts from, so snapOrderHintsToOutlines can put that end on an outline too.  An
+	// upgrade or ability is used where the step before ends and passes that step's target on
+	ObjectID fromTarget = hint.target;
 	for( std::vector<QueuedOrder>::const_iterator order = chain.m_pending.begin();
 			 order != chain.m_pending.end(); ++order )
 	{
 		if( !getQueuedOrderHint( *order, hint ) )
 			continue;
 
+		hint.fromTarget = fromTarget;
 		addOrderHint( hint, previous );
 		hint.from = hint.to;
+		if( hint.kind != ORDER_HINT_ABILITY && hint.kind != ORDER_HINT_UPGRADE )
+			fromTarget = hint.target;
 	}
+	hint.fromTarget = INVALID_ID;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5241,6 +5487,7 @@ Bool InGameUI::getQueuedOrderHint( const QueuedOrder& order, OrderHint& hint ) c
 {
 	hint.icon = NULL;
 	hint.onObject = FALSE;
+	hint.target = INVALID_ID;
 
 	switch( order.getType() )
 	{
@@ -5368,6 +5615,7 @@ Bool InGameUI::getQueuedOrderHint( const QueuedOrder& order, OrderHint& hint ) c
 
 	hint.to = orderTargetSpot( target );
 	hint.onObject = TRUE;
+	hint.target = targetID;
 	return TRUE;
 }
 

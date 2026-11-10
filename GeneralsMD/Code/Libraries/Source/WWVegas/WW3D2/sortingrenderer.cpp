@@ -62,6 +62,7 @@
 #endif
 
 bool SortingRendererClass::_EnableTriangleDraw=true;
+bool SortingRendererClass::_InsertEmissive=false;
 static unsigned DEFAULT_SORTING_POLY_COUNT = 16384;	// (count * 3) must be less than 65536
 static unsigned DEFAULT_SORTING_VERTEX_COUNT = 32768;	// count must be less than 65536
 
@@ -261,7 +262,7 @@ void SortingRendererClass::Insert_Triangles(
 	state->quads=false;
 	state->glow=false;
 	state->fire=false;
-	state->emissive=false;
+	state->emissive=_InsertEmissive;
 	state->hard_edge=false;
 	state->draw_effect=Direct3D11_Requested_Draw_Effect(state->draw_effect_parameters);
 

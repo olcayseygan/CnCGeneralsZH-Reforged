@@ -85,7 +85,7 @@ public:
 
 
 private:
-	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE };
+	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE, DRAW_OUTLINE_WHITE, DRAW_OUTLINE_RED };
 	struct WaypointDraw
 	{
 		DrawKind kind;
@@ -99,13 +99,17 @@ private:
 	std::vector<Vector3> m_drawPoints;
 
   void setDefaultLineStyle();
-	void queueLine( Int numPoints, Vector3 *points );				///< hand the points to a pooled line object (not rendered yet)
+	void setLineStyle( SegmentedLineClass *line, DrawKind kind );	///< an order line's laser, or a building outline's solid colour
+	void queueLine( Int numPoints, Vector3 *points, DrawKind kind );	///< hand the points to a pooled line object (not rendered yet)
 	void renderQueuedLines( RenderInfoClass &rinfo );			///< render every queued line; all stay deferred on the static sort list together
 
 	RenderObjClass *m_waypointNodeRobj;
 	SegmentedLineClass *m_line;
 	TextureClass *m_texture;
 	std::vector<SegmentedLineClass *> m_linePool;				///< one line object per line drawn this frame, grown on demand
+	std::vector<DrawKind> m_linePoolKinds;							///< what each pooled line is this frame; outlines render under the sun receiver exclusion
+	std::vector<Coord3D> m_outlineTrace;								///< a building outline's points, reused frame to frame
+	std::vector<Vector3> m_outlinePoints;
 	Int m_linesUsed;
 };
 

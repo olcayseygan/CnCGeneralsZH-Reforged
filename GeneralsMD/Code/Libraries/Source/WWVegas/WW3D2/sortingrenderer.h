@@ -33,6 +33,7 @@ class SphereClass;
 class SortingRendererClass
 {
 	static bool _EnableTriangleDraw;
+	static bool _InsertEmissive;
 
 	static void Flush_Sorting_Pool();
 	static void Insert_To_Sorting_Pool(SortingNodeStruct* state);
@@ -125,6 +126,10 @@ public:
 	static unsigned _Group_Runs(const unsigned short* states, const SortTiles* tiles, unsigned count,
 		unsigned* order);
 
+	/// Triangles inserted while this is on take no shadow and no smoke shade, as emissive quads do
+	/// (Direct3D11_Set_Emissive); the node keeps it.  Turn it on only around the draws that want it
+	/// and off again: the building outlines (W3DWaypointBuffer::renderQueuedLines).
+	static void _Set_Insert_Emissive(bool emissive) { _InsertEmissive=emissive; }
 	static void _Enable_Triangle_Draw(bool enable) { _EnableTriangleDraw=enable; }
 	static bool _Is_Triangle_Draw_Enabled() { return _EnableTriangleDraw; }
 };

@@ -1,0 +1,20 @@
+# The radar feature stills (2026-11-10), driven over -control by
+# experiments/minimap-sharp/shoot_features.py.  Seat 0 is the player at this machine, America;
+# seat 1 a computer ally on seat 0's team, seat 2 a computer China on the other.  Seat 0 gets a
+# base, a captured oil derrick and a reinforcement pad (landmarks), Crusaders with two queued legs
+# (waypoint lines once selected) and Humvees raiding seat 2.  China Battlemasters come at the
+# Crusaders so there is red on the radar inside seat 0's sight.
+
+10    spawn      0  AmericaPowerPlant      1   start0:-260:-120
+10    spawn      0  AmericaBarracks        1   start0:260:-160
+10    spawn      0  AmericaWarFactory      1   start0:0:320
+10    spawn      0  TechOilDerrick         1   start0:520:260
+10    spawn      0  TechReinforcementPad   1   start0:-420:420
+20    spawn      0  AmericaTankCrusader    8   start0:200:200
+20    spawn      0  AmericaVehicleHumvee   4   start0:-150:200
+40    move       0  AmericaTankCrusader    start0:900:-300
+41    shiftmove  0  AmericaTankCrusader    start0:1600:-900
+42    shiftmove  0  AmericaTankCrusader    start0:1600:-1800
+40    attackmove 0  AmericaVehicleHumvee   start2
+900   spawn      2  ChinaTankBattleMaster  5   start0:1500:-700
+910   attackmove 2  ChinaTankBattleMaster  start0

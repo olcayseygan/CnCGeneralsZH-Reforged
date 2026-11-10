@@ -3888,6 +3888,10 @@ TOOLTIP:OnlineKeepSignedIn
 "Stays signed in on this computer. Your password is never stored"
 END
 
+TOOLTIP:OnlineNeedsLauncher
+"Online play starts from the launcher: open Online there and press Play online"
+END
+
 GUI:OnlineLoginHelp
 "Sign in with your zerohour.gg account: your email or your nickname, and your password."
 END

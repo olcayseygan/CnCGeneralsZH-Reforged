@@ -39,6 +39,8 @@ found and fixed, EA's own, not port damage.**
 - The Ladder screen lists 20 players a page with rank, rating, wins and losses, your own row underneath, and Previous and Next to page through. It was an empty frame where EA's web page used to load.
 - After a Quick Match the score screen's chat box tells you how your rating moved, "Rating +1.3 -> 22", or why the match did not count: a custom game, a desync, a player gone in the first moments, two reports that disagree.
 
+- Started from the launcher's Play or straight from the exe, the main menu's Online button used to open a screen that only said it could not reach the server. It is now greyed out, and hovering it tells you to go online through the launcher's Online page instead.
+
 ## Wrecks keep the speed they died at
 
 - Vehicles, tanks, jets and helicopters die with their momentum. Anything killed on the move used to stop on the spot where the shot found it, and even a jet lost its speed on the way down: the dead engine braked it back to a stall, so a jet shot down at full tilt crashed nearly as close as one caught on a slow pass. Now a fast jet holds its height a moment, glides on and comes down far ahead of where it was hit. A slow one drops close.

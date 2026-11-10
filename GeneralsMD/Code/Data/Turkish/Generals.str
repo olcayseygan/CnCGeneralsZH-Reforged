@@ -10645,6 +10645,10 @@ TOOLTIP:OnlineKeepSignedIn
 "Bu bilgisayarda oturumun açık kalır. Şifren hiçbir yere kaydedilmez"
 END
 
+TOOLTIP:OnlineNeedsLauncher
+"Çevrimiçi oyun başlatıcıdan açılır: orada Çevrimiçi'ye girip Çevrimiçi oyna'ya basın"
+END
+
 GUI:OnlineLoginHelp
 "zerohour.gg hesabınla giriş yap: e-postan ya da kullanıcı adın, bir de şifren."
 END

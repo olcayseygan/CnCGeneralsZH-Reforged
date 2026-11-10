@@ -35,6 +35,9 @@
 void HTTPThinkWrapper( void );
 void StopAsyncDNSCheck( void );
 void StartPatchCheck( void );
+/// Whether StartPatchCheck has a service to dial: -online host:port, or ZHR_ONLINE_API in a ZH_ONLINE build.
+/// Without either it would fall through to EA's dead servers, so the main menu greys its Online button.
+Bool CanGoOnline( void );
 void CancelPatchCheckCallback( void );
 void StartDownloadingPatches( void );
 void HandleCanceledDownload( Bool resetDropDown = TRUE );

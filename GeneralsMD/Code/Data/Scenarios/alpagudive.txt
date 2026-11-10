@@ -1,0 +1,42 @@
+# Does the Alpagu's drone land on what it was sent at, near and far, still and walking?
+#
+# One operator with a spotter beside him for eyes (he sees 200, the spotter 500). A worker is put
+# down only just before each order, so he cannot pick it up on his own first: at 110, 180, 270 and
+# 360 centre to centre, which his weapon reads edge to edge as about 93 and 343, each a different
+# general's worker so each tally counts one target, then a pilot walking
+# across him at about 250. Each tally comes 10 s after its order, before the reload lets a second
+# drone go, so it counts the first drone only. Pass is five EXPECT lines with 0 alive. The targets'
+# seat is China, which starts with no worker of its own to spoil the count.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 normal -autoskirmish 2 -takeover
+#     -side 0 FactionTurkiye -side 1 FactionChina -seed 1 -maxframes 5000
+#     -scenario alpagudive -logPrefix alpagudive_
+#
+# See mobstress.txt for the line grammar.
+
+30    spawn   0  TurkiyeInfantryAlpagu   1  1000 1000
+30    spawn   0  TurkiyeInfantrySpotter  1  1000 1030
+
+56    spawn   1  GLAInfantryWorker       1  1110 1000
+60    attack  0  TurkiyeInfantryAlpagu   1  GLAInfantryWorker
+360   tally   1  GLAInfantryWorker       0
+
+506   spawn   1  Chem_GLAInfantryWorker  1  1000 1180
+510   attack  0  TurkiyeInfantryAlpagu   1  Chem_GLAInfantryWorker
+810   tally   1  Chem_GLAInfantryWorker  0
+
+956   spawn   1  Demo_GLAInfantryWorker  1  730 1000
+960   attack  0  TurkiyeInfantryAlpagu   1  Demo_GLAInfantryWorker
+1260  tally   1  Demo_GLAInfantryWorker  0
+
+1406  spawn   1  Slth_GLAInfantryWorker  1  1000 640
+1410  attack  0  TurkiyeInfantryAlpagu   1  Slth_GLAInfantryWorker
+1710  tally   1  Slth_GLAInfantryWorker  0
+
+1850  spawn   1  AmericaInfantryPilot    1  1180 1180
+1852  move    1  AmericaInfantryPilot       1180 820
+1860  attack  0  TurkiyeInfantryAlpagu   1  AmericaInfantryPilot
+2160  tally   1  AmericaInfantryPilot    0
+
+2200  tally   0  TurkiyeInfantryAlpagu   1

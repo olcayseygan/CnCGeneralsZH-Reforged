@@ -317,6 +317,7 @@ public:
 	Real															m_quadTiltDrag;				///< per second: a steady speed tilts it as far as that speed times this as an acceleration
 	Real															m_quadTiltTime;				///< logic frames the speed and the tilt take to follow
 	Real															m_quadYawTime;				///< logic frames the nose takes to come round to the heading
+	Real															m_quadMaxDiveTilt;		///< radians; above zero, a descending quad's nose follows its path down, up to this
 #ifdef CACHE_ATTACH_BONE
 	mutable Bool											m_attachToDrawableBoneOffsetValid;
 #endif
@@ -547,7 +548,7 @@ private:
 	{
 		UnsignedInt	frame;		///< the logic frame last stepped on, 0 before the first
 		Coord3D			pos;			///< where the drawable was then
-		Real				velX, velY;	///< smoothed horizontal velocity, per second
+		Real				velX, velY, velZ;	///< smoothed velocity, per second
 		Real				leanX, leanY;	///< smoothed tilt toward world x and y, radians
 		Real				yaw;
 		Bool				velKnown;	///< velX and velY hold a measured speed

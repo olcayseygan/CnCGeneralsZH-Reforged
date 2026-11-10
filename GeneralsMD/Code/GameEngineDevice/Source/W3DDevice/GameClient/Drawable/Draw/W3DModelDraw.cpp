@@ -1077,6 +1077,7 @@ W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	m_quadTiltDrag(1.0f),
 	m_quadTiltTime(ConvertDurationFromMsecsToFrames(120.0f)),
 	m_quadYawTime(ConvertDurationFromMsecsToFrames(300.0f)),
+	m_quadMaxDiveTilt(0.0f),
 #ifdef CACHE_ATTACH_BONE
 	m_attachToDrawableBoneOffsetValid(false),
 #endif
@@ -1281,6 +1282,7 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "QuadTiltDrag",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltDrag) },
 		{ "QuadTiltTime",	INI::parseDurationReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltTime) },
 		{ "QuadYawTime",	INI::parseDurationReal, NULL, offsetof(W3DModelDrawModuleData, m_quadYawTime) },
+		{ "QuadMaxDiveTilt",	INI::parseAngleReal, NULL, offsetof(W3DModelDrawModuleData, m_quadMaxDiveTilt) },
 		{ "ParticlesAttachedToAnimatedBones",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_particlesAttachedToAnimatedBones) },
 		{ "MinLODRequired",		INI::parseStaticGameLODLevel,	NULL,	offsetof(W3DModelDrawModuleData, m_minLODRequired) },
 		{ "ProjectileBoneFeedbackEnabledSlots", INI::parseBitString32, TheWeaponSlotTypeNames, offsetof(W3DModelDrawModuleData, m_projectileBoneFeedbackEnabledSlots) },
@@ -2814,8 +2816,8 @@ UnsignedInt W3DModelDraw::stepGroundMotion(Real& forward, Real& turn)
 	* A quad holds itself up by tilting its rotors' push: the body leans toward the horizontal push it
 	* needs, which is the acceleration plus what holds the speed against the air (QuadTiltDrag times
 	* the speed), set against the pull that keeps it up (QuadTiltGravity), and clamped at QuadMaxTilt.
-	* So it dips its nose as it sets off, keeps it down at speed, lifts it braking over the target and
-	* banks into a sideways pull. The nose turns to the heading while the drone moves sideways at all,
+	* So it dips its nose as it sets off, keeps it down at speed, lifts it braking and banks into a
+	* sideways pull; diving, the nose follows the path down (QuadMaxDiveTilt). The nose turns to the heading while the drone moves sideways at all,
 	* and holds the last heading on a climb or a drop straight down. Speed, tilt and heading each ease
 	* in over their time, which is what keeps the shell's path, a straight line between 30 Hz samples,
 	* from reading as a snap. The tilt is worked out in the world and read in the body's frame, so a
@@ -2835,7 +2837,7 @@ void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
 		if (m_quad.frame == 0)
 		{
 			// first sight: no motion known yet, so level and facing the way the logic left it
-			m_quad.velX = m_quad.velY = 0.0f;
+			m_quad.velX = m_quad.velY = m_quad.velZ = 0.0f;
 			m_quad.leanX = m_quad.leanY = 0.0f;
 			m_quad.yaw = mtx.Get_Z_Rotation();
 			m_quad.velKnown = false;
@@ -2846,6 +2848,7 @@ void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
 			const Real ease = d->m_quadTiltTime > (Real)frames ? (Real)frames / d->m_quadTiltTime : 1.0f;
 			const Real rawX = (pos->x - m_quad.pos.x) * perSecond;
 			const Real rawY = (pos->y - m_quad.pos.y) * perSecond;
+			const Real rawZ = (pos->z - m_quad.pos.z) * perSecond;
 			Real velX, velY, pushX, pushY;
 			if (!m_quad.velKnown || frames > MAX_GAP)
 			{
@@ -2853,6 +2856,7 @@ void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
 				// counted as one frame's change would dip the nose to the limit for nothing
 				velX = rawX;
 				velY = rawY;
+				m_quad.velZ = rawZ;
 				pushX = d->m_quadTiltDrag * velX;
 				pushY = d->m_quadTiltDrag * velY;
 				m_quad.velKnown = true;
@@ -2861,6 +2865,7 @@ void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
 			{
 				velX = m_quad.velX + (rawX - m_quad.velX) * ease;
 				velY = m_quad.velY + (rawY - m_quad.velY) * ease;
+				m_quad.velZ += (rawZ - m_quad.velZ) * ease;
 				pushX = (velX - m_quad.velX) * perSecond + d->m_quadTiltDrag * velX;
 				pushY = (velY - m_quad.velY) * perSecond + d->m_quadTiltDrag * velY;
 			}
@@ -2878,10 +2883,35 @@ void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
 				tiltX = pushX * tilt / push;
 				tiltY = pushY * tilt / push;
 			}
+
+			// Coming down, the nose points down the path, a kamikaze's dive and not a hover's: the lean
+			// along the nose is raised to the path's angle under level, up to QuadMaxDiveTilt. It only
+			// ever raises it, so braking in a dive never lifts the nose. It fades in with the speed
+			// over the first MIN_HEADING_SPEED, so a drone all but standing still does not tip over,
+			// and has no gate on the sideways speed, which would drop the nose's lean in one step
+			// as a steep dive slowed through it.
+			const Real speed = sqrtf(velX * velX + velY * velY);
+			if (d->m_quadMaxDiveTilt > 0.0f && m_quad.velZ < 0.0f)
+			{
+				Real dive = atan2f(-m_quad.velZ, speed);
+				if (dive > d->m_quadMaxDiveTilt)
+					dive = d->m_quadMaxDiveTilt;
+				const Real fade = sqrtf(speed * speed + m_quad.velZ * m_quad.velZ) / MIN_HEADING_SPEED;
+				if (fade < 1.0f)
+					dive *= fade;
+				const Real noseX = cosf(m_quad.yaw);
+				const Real noseY = sinf(m_quad.yaw);
+				const Real along = tiltX * noseX + tiltY * noseY;
+				if (along < dive)
+				{
+					tiltX += (dive - along) * noseX;
+					tiltY += (dive - along) * noseY;
+				}
+			}
 			m_quad.leanX += (tiltX - m_quad.leanX) * ease;
 			m_quad.leanY += (tiltY - m_quad.leanY) * ease;
 
-			if (velX * velX + velY * velY > MIN_HEADING_SPEED * MIN_HEADING_SPEED)
+			if (speed > MIN_HEADING_SPEED)
 			{
 				const Real yawEase = d->m_quadYawTime > (Real)frames ? (Real)frames / d->m_quadYawTime : 1.0f;
 				m_quad.yaw = normalizeAngle(m_quad.yaw + stdAngleDiff(atan2f(velY, velX), m_quad.yaw) * yawEase);

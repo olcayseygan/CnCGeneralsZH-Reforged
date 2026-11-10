@@ -305,7 +305,7 @@ public:
 
 	virtual void cancelAndRefundAllProduction( void );									///< cancel and refund anything in the production queue
 
-	virtual void setRepeatUnit( const ThingTemplate *unitType, Bool on ) { m_repeat.set( unitType, on ); }
+	virtual void setRepeatUnit( const ThingTemplate *unitType, Bool on ) { m_repeat.set( unitType, on ); wakeIfResting(); }
 	virtual Bool isRepeatUnit( const ThingTemplate *unitType ) const { return m_repeat.has( unitType ); }
 
 	virtual UnsignedInt getProductionCount( void ) const { return m_productionCount; }    ///< return # of things in the production queue
@@ -332,6 +332,8 @@ public:
 protected:
 
 	void queueRepeatUnit( void );										///< an empty queue takes the repeated unit whose turn it is
+	Bool isResting( void ) const;										///< the next update would change nothing until wakeIfResting
+	void wakeIfResting( void );											///< something is queued, on repeat or at a door
 
 
 	void addToProductionQueue( ProductionEntry *production );				///< add to *END* of production queue list

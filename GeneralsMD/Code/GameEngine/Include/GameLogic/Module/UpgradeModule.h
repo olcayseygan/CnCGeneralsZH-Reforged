@@ -60,6 +60,7 @@ public:
 	virtual Bool isSubObjectsUpgrade() = 0;
 	virtual void forceRefreshUpgrade() = 0;
 	virtual Bool testUpgradeConditions( UpgradeMaskType keyMask ) const = 0;
+	virtual void onObjectUpgradesChanged() {}	///< Object::giveUpgrade or removeUpgrade changed the object's own upgrades, whatever this module made of it
 
 };
 

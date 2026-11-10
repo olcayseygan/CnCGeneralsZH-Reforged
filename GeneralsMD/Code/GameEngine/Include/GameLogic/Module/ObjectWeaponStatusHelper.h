@@ -76,9 +76,16 @@ public:
 
 	virtual UpdateSleepTime update()
 	{
-		getObject()->adjustModelConditionForWeaponStatus();
-		// unlike other helpers, this one must run every frame.
-		return UPDATE_SLEEP_NONE; 
+		// unlike other helpers, this one runs every frame, except while a run changes nothing: then it
+		// sleeps until an attack, a shot or a new drawable (Object::setStatus, wakeWeaponStatusHelper,
+		// friend_bindToDrawable) could change what the next run does
+		return getObject()->adjustModelConditionForWeaponStatus() ? UPDATE_SLEEP_FOREVER : UPDATE_SLEEP_NONE;
+	}
+
+	void wakeIfResting()
+	{
+		if (friend_getNextCallFrame() == UPDATE_SLEEP_FOREVER)
+			wakeExactly();
 	}
 };
 

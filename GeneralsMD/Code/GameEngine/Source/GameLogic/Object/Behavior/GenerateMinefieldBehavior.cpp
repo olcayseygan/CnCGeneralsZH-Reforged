@@ -381,6 +381,7 @@ void GenerateMinefieldBehavior::placeMines()
 		return;
 
 	m_generated = true;
+	onObjectUpgradesChanged();	// what update checks for, an upgrade of these mines, can come now
 
 	const Object* obj = getObject();
 	const GenerateMinefieldBehaviorModuleData* d = getGenerateMinefieldBehaviorModuleData();
@@ -494,11 +495,19 @@ UpdateSleepTime GenerateMinefieldBehavior::update()
 				}
 			}
 		}
-
-		return UPDATE_SLEEP_NONE;
 	}
 
+	// a run reads nothing but m_generated, m_upgraded and the object's own upgrades, so a run that
+	// upgraded nothing is followed by runs that upgrade nothing until placeMines or
+	// onObjectUpgradesChanged wakes it
 	return UPDATE_SLEEP_FOREVER;
+}
+
+//-------------------------------------------------------------------------------------------------
+void GenerateMinefieldBehavior::onObjectUpgradesChanged()
+{
+	if (friend_getNextCallFrame() == UPDATE_SLEEP_FOREVER)
+		wakeExactly();
 }
 
 // ------------------------------------------------------------------------------------------------

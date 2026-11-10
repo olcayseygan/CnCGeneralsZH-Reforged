@@ -89,6 +89,13 @@ void UpdateModule::setWakeFrame(Object* obj, UpdateSleepTime wakeDelay)
 }
 
 // ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void UpdateModule::wakeExactly()
+{
+	TheGameLogic->friend_awakenUpdateModule(getObject(), this, TheGameLogic->friend_frameToWakeExactly(this));
+}
+
+// ------------------------------------------------------------------------------------------------
 /** CRC */
 // ------------------------------------------------------------------------------------------------
 void UpdateModule::crc( Xfer *xfer )

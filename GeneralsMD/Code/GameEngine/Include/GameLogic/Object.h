@@ -569,7 +569,8 @@ public:
 	Weapon* getCurrentWeapon(WeaponSlotType* wslot = NULL);
 	const Weapon* getCurrentWeapon(WeaponSlotType* wslot = NULL) const;
 	void setFiringConditionForCurrentWeapon() const;
-	void adjustModelConditionForWeaponStatus();	///< Check to see if I should change my model condition. 
+	Bool adjustModelConditionForWeaponStatus();	///< Check to see if I should change my model condition; TRUE when the next check would change nothing until an attack, a shot or a new drawable
+	void wakeWeaponStatusHelper() const;	///< one of my weapons fired: the weapon status helper shows it
 	void fireCurrentWeapon(Object *target);
 	void fireCurrentWeapon(const Coord3D* pos);
 	void preFireCurrentWeapon( const Object *victim );
@@ -725,6 +726,7 @@ protected:
 	void setOrRestoreTeam( Team* team, Bool restoring );
 
 	void onDisabledEdge(Bool becomingDisabled);
+	void notifyObjectUpgradesChanged();	///< UpgradeModuleInterface::onObjectUpgradesChanged on each upgrade module
 	// All of our cheating for radars and power go here.
 
 

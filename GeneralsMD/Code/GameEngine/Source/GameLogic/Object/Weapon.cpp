@@ -3049,6 +3049,7 @@ Bool Weapon::privateFireWeapon(
 		}
 		
 		m_lastFireFrame = now;
+		sourceObj->wakeWeaponStatusHelper();
 		--m_ammoInClip;
 		--m_maxShotCount;
 		--m_numShotsForCurBarrel;

@@ -55,6 +55,8 @@ public:
 	*/
 	Real m_firstHeight;					///< The first airborne control point will be this high above the highest intervening terrain
 	Real m_secondHeight;				///< And the second, this.
+	Real m_heightScaleDistance;	///< Above zero, both heights are scaled by the shot's ground run over this, never past 1
+	Real m_heightScaleMinimum;	///< and never under this share
 	Real m_firstPercentIndent;	///< The first point will be this percent along the target line
 	Real m_secondPercentIndent;	///< And the second, this.
 	Bool m_straightWhenClear;		///< Fly the straight line instead when no terrain rises into it (direct-fire shells)

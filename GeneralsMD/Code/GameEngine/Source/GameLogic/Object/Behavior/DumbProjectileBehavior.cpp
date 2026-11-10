@@ -79,6 +79,8 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_tumbleRandomly(FALSE),
 	m_firstHeight(0.0f),
 	m_secondHeight(0.0f),
+	m_heightScaleDistance(0.0f),
+	m_heightScaleMinimum(0.0f),
 	m_firstPercentIndent(0.0f),
 	m_secondPercentIndent(0.0f),
 	m_straightWhenClear(FALSE),
@@ -102,6 +104,8 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 		{ "FirstHeight",					INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_firstHeight ) },
 		{ "SecondHeight",					INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_secondHeight ) },
+		{ "HeightScaleDistance",	INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_heightScaleDistance ) },
+		{ "HeightScaleMinimum",		INI::parsePercentToReal,	NULL, offsetof( DumbProjectileBehaviorModuleData, m_heightScaleMinimum ) },
 		{ "FirstPercentIndent",		INI::parsePercentToReal,	NULL, offsetof( DumbProjectileBehaviorModuleData, m_firstPercentIndent ) },
 		{ "SecondPercentIndent",	INI::parsePercentToReal,	NULL, offsetof( DumbProjectileBehaviorModuleData, m_secondPercentIndent ) },
 		{ "StraightWhenClear",		INI::parseBool,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_straightWhenClear ) },
@@ -508,8 +512,20 @@ Bool DumbProjectileBehavior::calcFlightPath(Bool recalcNumSegments)
 	// Z's are determined using the highest intervening height so they won't hit hills, low end bounded by current Zs
 	highestInterveningTerrain = max( highestInterveningTerrain, controlPoints[0].z );
 	highestInterveningTerrain = max( highestInterveningTerrain, controlPoints[3].z );
-	controlPoints[1].z = highestInterveningTerrain + d->m_firstHeight;
-	controlPoints[2].z = highestInterveningTerrain + d->m_secondHeight;
+	// A path whose heights are fixed is a tall lob close in and a flat one far out. HeightScaleDistance
+	// scales both with the shot's run along the ground, so a near shot climbs less and comes down at
+	// about the angle a far one does (the Alpagu's drone); HeightScaleMinimum keeps some climb point
+	// blank. Off at zero, and then the heights are used exactly as written.
+	Real firstHeight = d->m_firstHeight;
+	Real secondHeight = d->m_secondHeight;
+	if( d->m_heightScaleDistance > 0.0f )
+	{
+		Real heightScale = clamp( d->m_heightScaleMinimum, targetRun / d->m_heightScaleDistance, 1.0f );
+		firstHeight *= heightScale;
+		secondHeight *= heightScale;
+	}
+	controlPoints[1].z = highestInterveningTerrain + firstHeight;
+	controlPoints[2].z = highestInterveningTerrain + secondHeight;
 
 	if( d->m_straightWhenClear && m_launchSlope < max( targetSlope, 0.0f ) + STRAIGHT_SHOT_MAX_BARREL_SLOPE
 		&& ThePartitionManager->isClearLineOfSightTerrain( NULL, controlPoints[0], NULL, controlPoints[3] ) )

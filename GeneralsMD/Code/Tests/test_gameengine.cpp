@@ -80,6 +80,7 @@
 #include "GameClient/ClientRandomValue.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
+#include "GameLogic/ObjectTypes.h"
 #include "Common/ModuleFactory.h"
 #include "Common/SpecialPower.h"
 #include "GameLogic/Armor.h"
@@ -1255,6 +1256,69 @@ TEST(patch_naming_a_missing_laser_or_list_keeps_what_was_there)
 			CHECK( modules.getNthName( 0 ) == "DestroyDie" );
 		}
 		CHECK_EQ( probe->friend_getBuildCost(), 700 );
+	}
+
+	remove( TEST_INI );
+	if( savedGlobals == NULL )
+	{
+		delete TheWritableGlobalData;
+		TheWritableGlobalData = NULL;
+	}
+}
+
+/* The skirmish scripts ask how many Tanks or Infantry a player owns, lists of forty and fifty names,
+	 and each answer copied the list, looked every name up again and tested every type the player held
+	 against all of them.  A list keeps its templates and its answers now, so it has to forget them the
+	 moment a name goes in or out, and a build variation still counts as the thing it varies. */
+TEST(object_list_keeps_its_templates_until_a_name_changes)
+{
+	CHECK( bootOnce() );
+
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if( savedGlobals == NULL )
+		TheWritableGlobalData = NEW GlobalData;
+	if( TheModuleFactory == NULL )
+	{
+		TheModuleFactory = NEW ModuleFactory;
+		TheModuleFactory->init();
+	}
+	if( TheThingFactory == NULL )
+		TheThingFactory = NEW ThingFactory;
+
+	writeFile( TEST_INI,
+		"Object ListProbeTank\r\n"
+		"End\r\n"
+		"Object ListProbeTankVariant\r\n"
+		"  BuildVariations = ListProbeTank\r\n"
+		"End\r\n"
+		"Object ListProbeJeep\r\n"
+		"End\r\n" );
+	CHECK( loadIni( TEST_INI ) );
+
+	const ThingTemplate *tank = TheThingFactory->findTemplate( "ListProbeTank" );
+	const ThingTemplate *variant = TheThingFactory->findTemplate( "ListProbeTankVariant" );
+	const ThingTemplate *jeep = TheThingFactory->findTemplate( "ListProbeJeep" );
+	CHECK( tank != NULL && variant != NULL && jeep != NULL );
+	if( tank != NULL && variant != NULL && jeep != NULL )
+	{
+		ObjectTypes *list = newInstance(ObjectTypes)( AsciiString( "ListProbe" ) );
+		list->addObjectType( "ListProbeTank" );
+		list->addObjectType( "ListProbeNothing" );
+		CHECK_EQ( (Int)list->getTemplates().size(), 1 );
+		CHECK( list->hasEquivalent( tank ) );
+		CHECK( list->hasEquivalent( variant ) );
+		CHECK( !list->hasEquivalent( jeep ) );
+
+		list->addObjectType( "ListProbeJeep" );
+		CHECK_EQ( (Int)list->getTemplates().size(), 2 );
+		CHECK( list->hasEquivalent( jeep ) );
+
+		list->removeObjectType( "ListProbeTank" );
+		CHECK_EQ( (Int)list->getTemplates().size(), 1 );
+		CHECK( !list->hasEquivalent( tank ) );
+		CHECK( !list->hasEquivalent( variant ) );
+		CHECK( list->hasEquivalent( jeep ) );
+		list->deleteInstance();
 	}
 
 	remove( TEST_INI );

@@ -37,13 +37,13 @@
 #include "Common/Xfer.h"
 
 //-------------------------------------------------------------------------------------------------
-ObjectTypes::ObjectTypes()
+ObjectTypes::ObjectTypes() : m_templatesValid(FALSE)
 {
 	// Nada
 }
 
 //-------------------------------------------------------------------------------------------------
-ObjectTypes::ObjectTypes(const AsciiString& listName) : m_listName(listName)
+ObjectTypes::ObjectTypes(const AsciiString& listName) : m_listName(listName), m_templatesValid(FALSE)
 {
 	// Nada
 }
@@ -56,6 +56,7 @@ void ObjectTypes::addObjectType(const AsciiString &objectType)
 	}
 
 	m_objectTypes.push_back(objectType);
+	m_templatesValid = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -69,6 +70,7 @@ void ObjectTypes::removeObjectType(const AsciiString &objectType)
 	AsciiStringVec::iterator it = std::find(m_objectTypes.begin(), m_objectTypes.end(), objectType);
 
 	m_objectTypes.erase(it);
+	m_templatesValid = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -101,20 +103,38 @@ Bool ObjectTypes::isInSet(const ThingTemplate* objectType) const
 }
 
 //-------------------------------------------------------------------------------------------------
-Int ObjectTypes::prepForPlayerCounting( std::vector<const ThingTemplate *>& templates, std::vector<Int>& counts)
+const std::vector<const ThingTemplate *>& ObjectTypes::getTemplates() const
 {
-	AsciiStringVecIt it;
-	for (it = m_objectTypes.begin(); it != m_objectTypes.end(); ++it) {
-		const ThingTemplate *templ = TheThingFactory->findTemplate(*it);
-		if (templ) {
-			templates.push_back(templ);
+	if (!m_templatesValid)
+	{
+		m_templates.clear();
+		m_equivalentByID.clear();
+		for (AsciiStringVec::const_iterator it = m_objectTypes.begin(); it != m_objectTypes.end(); ++it)
+		{
+			const ThingTemplate *templ = TheThingFactory->findTemplate(*it);
+			if (templ)
+				m_templates.push_back(templ);
 		}
+		m_templatesValid = TRUE;
 	}
+	return m_templates;
+}
 
-	Int retVal = templates.size();
-	counts.resize(retVal);
-
-	return retVal;
+//-------------------------------------------------------------------------------------------------
+Bool ObjectTypes::hasEquivalent(const ThingTemplate *tmpl) const
+{
+	const std::vector<const ThingTemplate *> &templates = getTemplates();
+	const UnsignedShort id = tmpl->getTemplateID();
+	if (id >= m_equivalentByID.size())
+		m_equivalentByID.resize(id + 1, 0);
+	if (m_equivalentByID[id] == 0)
+	{
+		Bool equivalent = FALSE;
+		for (size_t i = 0; i < templates.size() && !equivalent; ++i)
+			equivalent = tmpl->isEquivalentTo(templates[i]);
+		m_equivalentByID[id] = equivalent ? 1 : -1;
+	}
+	return m_equivalentByID[id] > 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -196,6 +216,7 @@ void ObjectTypes::xfer(Xfer *xfer)
 			m_objectTypes.push_back( typeName );
 
 		}  // end for, i
+		m_templatesValid = FALSE;
 
 	}  // end else, load
 

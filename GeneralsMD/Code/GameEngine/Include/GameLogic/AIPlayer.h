@@ -46,6 +46,7 @@ class BuildListInfo;
 class TeamPrototype;
 class TeamTemplateInfo;
 class ProductionUpdateInterface;
+class ObjectIterator;
 
 /// the skirmish scripts send this team at the enemy at some point, rather than keeping it home on guard
 Bool aiTeamAttacks(const TeamTemplateInfo *info);
@@ -1023,7 +1024,28 @@ protected:
 	void doTransports(void);	///< helicopters put riders who cannot shoot out down at the fight
 	Bool measuringWithoutTactics(void) const;	///< -notactics has this slot fight the old way
 	Bool fightsOnItsOwn(Object *obj);		///< armed, on the ground, and with no job of its own or base to guard: the tactics' and the answers' to order
-	void tacticsFor(Object *obj);
+	/** What tacticsFor's kite scan found around one unit: the nearest enemy closing on it that it outranges, and
+		* the nearest armed one in its reach that it can shoot.  look() works it out for each unit of m_lookTurn
+		* from where the unit stood then (scanTactics); tacticsFor takes it while the unit still stands there with
+		* the same reach and speed, and scans again otherwise. */
+	struct KiteScan
+	{
+		Bool done;
+		Bool deferred;		///< the job could not gather it; asked on the logic thread before any seat acts
+		Coord3D pos;
+		Real myRange;
+		Real mySpeed;
+		ObjectID closing;
+		Real closingRange;
+		Real closingDistSqr;
+		ObjectID nearestArmed;
+		Real nearestArmedDistSqr;
+	};
+	std::vector<KiteScan> m_kiteScans;		///< one to an m_lookTurn entry, this frame's when m_lookTurnFrame is
+	void kiteScan(const Object *obj, const Coord3D *pos, Real myRange, ObjectIterator *iter, KiteScan *out) const;
+	void scanTactics(void);								///< look's part: each unit of the turn's kite scan on this thread's own gather
+	void finishTacticsScans(void);				///< ... and the ones that gather could not take, on the logic thread after the join
+	void tacticsFor(Object *obj, const KiteScan *scan);
 	struct TacticalStep
 	{
 		ObjectID		unit;

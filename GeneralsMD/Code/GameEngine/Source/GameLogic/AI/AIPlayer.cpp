@@ -17648,8 +17648,9 @@ void AIPlayer::doTactics( void )
 #ifdef DEBUG_LOGGING
 		aiTacBegin();
 #endif
+		const Bool scanned = m_lookTurnFrame == now + 1 && m_kiteScans.size() == m_lookTurn.size();
 		for( size_t i = 0; i < m_lookTurn.size(); ++i )
-			tacticsFor( m_lookTurn[ i ] );
+			tacticsFor( m_lookTurn[ i ], scanned ? &m_kiteScans[ i ] : NULL );
 #ifdef DEBUG_LOGGING
 		aiTacEnd( TAC_UNITS );
 #endif
@@ -17729,6 +17730,7 @@ void AIPlayer::look( void )
 		if( getSkillProfile()->m_tacticalMicro && m_baseCenterSet )
 		{
 			collectLookTurn( m_player, TACTICS_RATE, &m_lookTurn );
+			scanTactics();
 			m_lookTurnFrame = now + 1;
 		}
 	}
@@ -17739,6 +17741,106 @@ void AIPlayer::look( void )
 		m_lookDefencesFrame = now + 1;
 	}
 	m_lookFrame = now + 1;
+}
+
+/** The kite scans' gathers, a set to a thread slot of the pool the looks fork on, sized on the logic thread
+	* before the fork.  A gather that finds more than this hands its scan to the logic thread after the join. */
+enum { KITE_GATHER_SLOTS = 32, KITE_GATHER_CAPACITY = 4096 };
+struct KiteGatherSlot
+{
+	std::vector<Object *> objects;
+	std::vector<Real> distSqr;
+	SimpleObjectIterator *iterator;
+};
+static KiteGatherSlot theKiteGather[ KITE_GATHER_SLOTS ];
+
+static void prepareKiteGathers( void )
+{
+	ThePartitionManager->prepareJobGathers();
+	const Int slots = min<Int>( JobSystem::workerCount() + 1, KITE_GATHER_SLOTS );
+	for( Int s = 0; s < slots; ++s )
+	{
+		if( (Int)theKiteGather[ s ].objects.size() < KITE_GATHER_CAPACITY )
+		{
+			theKiteGather[ s ].objects.resize( KITE_GATHER_CAPACITY );
+			theKiteGather[ s ].distSqr.resize( KITE_GATHER_CAPACITY );
+		}
+		// ponytail: one iterator a slot for the life of the process, as the mood searches keep theirs
+		if( theKiteGather[ s ].iterator == NULL )
+			theKiteGather[ s ].iterator = newInstance( SimpleObjectIterator );
+	}
+}
+
+/** look's part of tacticsFor: each unit of the turn that tacticsFor may weigh against what closes on it gets the
+	* kite scan, on this thread's own gather.  Its walk is the serial one's minus the affiliation filter, whose
+	* own objects and allies kiteScan drops anyway, and its order is the serial iterator's.  What the gather
+	* or the guard refuses waits for finishTacticsScans. */
+void AIPlayer::scanTactics( void )
+{
+	m_kiteScans.resize( m_lookTurn.size() );
+	const Int slot = JobSystem::threadSlot();
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &alive, NULL };
+	for( size_t i = 0; i < m_lookTurn.size(); ++i )
+	{
+		KiteScan &scan = m_kiteScans[ i ];
+		scan.done = FALSE;
+		scan.deferred = FALSE;
+		const Object *obj = m_lookTurn[ i ];
+		const AIUpdateInterface *ai = obj->getAI();
+		if( ai == NULL || obj->isEffectivelyDead() || obj->getTemplate()->hasSpotterSight() )
+			continue;
+		const Real myRange = groundAttackRange( obj );
+		const Coord3D *pos = obj->getPosition();
+		if( myRange <= 0.0f || (m_influence.enemyAt( pos->x, pos->y ) <= 0.0f && ai->getCurrentVictim() == NULL) )
+			continue;
+		scan.deferred = TRUE;
+		if( slot >= KITE_GATHER_SLOTS || theKiteGather[ slot ].iterator == NULL )
+			continue;
+		KiteGatherSlot &gatherSlot = theKiteGather[ slot ];
+		PartitionManager::JobQueryGuard guard;
+		Thing::CachePeek peek;
+		PartitionManager::JobGather gather;
+		gather.objects = &gatherSlot.objects[ 0 ];
+		gather.distSqr = &gatherSlot.distSqr[ 0 ];
+		gather.capacity = KITE_GATHER_CAPACITY;
+		if( !ThePartitionManager->gatherFromJob( obj, myRange, FROM_CENTER_2D, filters, PLAYERMASK_ALL, gather ) || gather.overflowed )
+			continue;
+		SimpleObjectIterator *iter = gatherSlot.iterator;
+		iter->recycle();
+		for( Int k = 0; k < gather.count; ++k )
+			iter->insert( gather.objects[ k ], gather.distSqr[ k ] );
+		iter->sort( ITER_FASTEST );
+		kiteScan( obj, pos, myRange, iter, &scan );
+		if( guard.refused() )
+		{
+			scan.done = FALSE;
+			scan.deferred = TRUE;
+		}
+	}
+}
+
+/** ... and the scans look could not take, on the logic thread before any seat acts, so they see the world the
+	* jobs saw whatever the pool. */
+void AIPlayer::finishTacticsScans( void )
+{
+	if( m_lookTurnFrame != TheGameLogic->getFrame() + 1 )
+		return;
+	for( size_t i = 0; i < m_kiteScans.size(); ++i )
+	{
+		KiteScan &scan = m_kiteScans[ i ];
+		if( !scan.deferred )
+			continue;
+		const Object *obj = m_lookTurn[ i ];
+		const Coord3D *pos = obj->getPosition();
+		const Real myRange = groundAttackRange( obj );
+		PartitionFilterPlayerAffiliation enemies( m_player, ALLOW_ENEMIES, true );
+		PartitionFilterAlive alive;
+		PartitionFilter *filters[] = { &enemies, &alive, NULL };
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, myRange, FROM_CENTER_2D, filters );
+		MemoryPoolObjectHolder hold( iter );
+		kiteScan( obj, pos, myRange, iter, &scan );
+	}
 }
 
 /*static*/ void AIPlayer::lookJob( Int index, void *context )
@@ -17761,7 +17863,10 @@ void AIPlayer::look( void )
 		ai->prepareLook();
 		seats[ count++ ] = ai;
 	}
+	prepareKiteGathers();
 	JobSystem::parallel_for( count, 1, lookJob, seats );
+	for( Int s = 0; s < count; ++s )
+		seats[ s ]->finishTacticsScans();
 #ifdef DEBUG_LOGGING
 	aiPhaseEnd( AIP_LOOK );
 #endif
@@ -18046,7 +18151,79 @@ Bool AIPlayer::fightsOnItsOwn( Object *obj )
 }
 
 //----------------------------------------------------------------------------------------------------------
-void AIPlayer::tacticsFor( Object *obj )
+/** The kite scan's walk over what iter hands out around obj standing at pos: in iter's order, the nearest wins
+	* and the first of two as near. */
+void AIPlayer::kiteScan( const Object *obj, const Coord3D *pos, Real myRange, ObjectIterator *iter, KiteScan *out ) const
+{
+	const AIUpdateInterface *ai = obj->getAI();
+	const Real mySpeed = ai->getCurLocomotorSpeed();
+	out->done = TRUE;
+	out->deferred = FALSE;
+	out->pos = *pos;
+	out->myRange = myRange;
+	out->mySpeed = mySpeed;
+	out->closing = INVALID_ID;
+	out->closingRange = 0.0f;
+	out->closingDistSqr = 0.0f;
+	out->nearestArmed = INVALID_ID;
+	out->nearestArmedDistSqr = 0.0f;
+	for( Object *enemy = iter->first(); enemy; enemy = iter->next() )
+	{
+		// the affiliation filter lets the player's own objects through whatever it is asked for
+		if( enemy->getControllingPlayer() == m_player || m_player->getRelationship( enemy->getTeam() ) != ENEMIES )
+			continue;
+		if( enemy->isKindOf( KINDOF_PROJECTILE ) || !observerKnowsAbout( enemy, m_player->getPlayerIndex() ) )
+			continue;
+		const Real enemyRange = groundAttackRange( enemy );
+		if( enemyRange <= 0.0f )
+			continue;
+		const Real reach = enemyRange + Weapon_elevationRangeBonus( enemyRange, firingHeight( enemy ) - pos->z );
+		const Real distSqr = sqr( enemy->getPosition()->x - pos->x ) + sqr( enemy->getPosition()->y - pos->y );
+		// and only one it can shoot: without this a Battlemaster "turned on" every Helix overhead,
+		// 410 times in two matches, and drove after aircraft its gun cannot reach
+		if( (out->nearestArmed == INVALID_ID || distSqr < out->nearestArmedDistSqr) &&
+				obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, enemy, CMD_FROM_AI ) == ATTACKRESULT_POSSIBLE )
+		{
+			out->nearestArmed = enemy->getID();
+			out->nearestArmedDistSqr = distSqr;
+		}
+		// watched from as far out as the unit drives while it turns round, since a vehicle cannot
+		// reverse: a buggy that started its turn at the enemy's reach finished it inside
+		if( distSqr > sqr( reach + KITE_WATCH_MARGIN + mySpeed * KITE_TURN_FRAMES ) )
+			continue;		// not close enough to hurt yet, nor soon
+		// running from something faster only means not shooting at it; a gun that cannot move is
+		// always worth standing off from
+		const AIUpdateInterface *enemyAI = enemy->getAI();
+		const Bool enemyMoves = enemyAI && enemyAI->getCurLocomotor() && !enemy->isKindOf( KINDOF_IMMOBILE ) && !enemy->isKindOf( KINDOF_STRUCTURE );
+		const Real enemySpeed = enemyMoves ? enemyAI->getCurLocomotorSpeed() : 0.0f;
+		if( enemySpeed > mySpeed )
+			continue;
+		// a gun that moves is worth stepping away from while it is fighting this player or already
+		// reaches this unit; one still out of reach and busy with somebody else is shot, not run from.
+		// Four tanks sent at one buggy of four drove through the other three.
+		const Object *enemyVictim = enemyAI ? enemyAI->getCurrentVictim() : NULL;
+		const Bool comingForUs = enemyVictim && enemyVictim->getControllingPlayer() == m_player;
+		if( enemyMoves && !comingForUs && distSqr > sqr( reach ) )
+			continue;
+		// a gun that walks is run from only by something that outranges it by a long way, a rocket
+		// launcher against a tank; a tank that hopped back from another tank's slightly shorter gun
+		// spent the hop turning round, and on Twilight Flame kiting like that lost more than it saved
+		if( enemyMoves && myRange < reach * KITE_MOBILE_RANGE_RATIO )
+			continue;
+		// and only from something worth running from: a tank that backs away from a rifleman it
+		// could have driven over was the commonest step the first version took
+		if( obj->getCrusherLevel() > enemy->getCrushableLevel() || aiCombatPower( enemy ) < KITE_WORTHY_SHARE * aiCombatPower( obj ) )
+			continue;
+		if( out->closing == INVALID_ID || distSqr < out->closingDistSqr )
+		{
+			out->closing = enemy->getID();
+			out->closingRange = reach;
+			out->closingDistSqr = distSqr;
+		}
+	}
+}
+
+void AIPlayer::tacticsFor( Object *obj, const KiteScan *scan )
 {
 	if( !fightsOnItsOwn( obj ) )
 		return;
@@ -18160,73 +18337,25 @@ void AIPlayer::tacticsFor( Object *obj )
 		return;
 	}
 
-	// kite: the nearest thing that is about to reach it and that it outranges
-	Object *closing = NULL;
-	Real closingRange = 0.0f;
-	Real closingDistSqr = 0.0f;
-	Object *nearestArmed = NULL;			// the closest armed thing in this unit's reach, whatever else it is
-	Real nearestArmedDistSqr = 0.0f;
+	// kite: the nearest thing that is about to reach it and that it outranges, from look's scan while the unit
+	// stands where look found it
+	KiteScan found;
+	if( scan && scan->done && scan->pos.x == pos->x && scan->pos.y == pos->y && scan->pos.z == pos->z &&
+			scan->myRange == myRange && scan->mySpeed == ai->getCurLocomotorSpeed() )
+		found = *scan;
+	else
 	{
 		PartitionFilterPlayerAffiliation enemies( m_player, ALLOW_ENEMIES, true );
 		PartitionFilterAlive alive;
 		PartitionFilter *filters[] = { &enemies, &alive, NULL };
 		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( pos, myRange, FROM_CENTER_2D, filters );
 		MemoryPoolObjectHolder hold( iter );
-		for( Object *enemy = iter->first(); enemy; enemy = iter->next() )
-		{
-			// the affiliation filter lets the player's own objects through whatever it is asked for
-			if( enemy->getControllingPlayer() == m_player || m_player->getRelationship( enemy->getTeam() ) != ENEMIES )
-				continue;
-			if( enemy->isKindOf( KINDOF_PROJECTILE ) || !observerKnowsAbout( enemy, m_player->getPlayerIndex() ) )
-				continue;
-			const Real enemyRange = groundAttackRange( enemy );
-			if( enemyRange <= 0.0f )
-				continue;
-			const Real reach = enemyRange + Weapon_elevationRangeBonus( enemyRange, firingHeight( enemy ) - pos->z );
-			const Real distSqr = sqr( enemy->getPosition()->x - pos->x ) + sqr( enemy->getPosition()->y - pos->y );
-			// and only one it can shoot: without this a Battlemaster "turned on" every Helix overhead,
-			// 410 times in two matches, and drove after aircraft its gun cannot reach
-			if( (nearestArmed == NULL || distSqr < nearestArmedDistSqr) &&
-					obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, enemy, CMD_FROM_AI ) == ATTACKRESULT_POSSIBLE )
-			{
-				nearestArmed = enemy;
-				nearestArmedDistSqr = distSqr;
-			}
-			// watched from as far out as the unit drives while it turns round, since a vehicle cannot
-			// reverse: a buggy that started its turn at the enemy's reach finished it inside
-			if( distSqr > sqr( reach + KITE_WATCH_MARGIN + ai->getCurLocomotorSpeed() * KITE_TURN_FRAMES ) )
-				continue;		// not close enough to hurt yet, nor soon
-			// running from something faster only means not shooting at it; a gun that cannot move is
-			// always worth standing off from
-			AIUpdateInterface *enemyAI = enemy->getAI();
-			const Bool enemyMoves = enemyAI && enemyAI->getCurLocomotor() && !enemy->isKindOf( KINDOF_IMMOBILE ) && !enemy->isKindOf( KINDOF_STRUCTURE );
-			const Real enemySpeed = enemyMoves ? enemyAI->getCurLocomotorSpeed() : 0.0f;
-			if( enemySpeed > ai->getCurLocomotorSpeed() )
-				continue;
-			// a gun that moves is worth stepping away from while it is fighting this player or already
-			// reaches this unit; one still out of reach and busy with somebody else is shot, not run from.
-			// Four tanks sent at one buggy of four drove through the other three.
-			const Object *enemyVictim = enemyAI ? enemyAI->getCurrentVictim() : NULL;
-			const Bool comingForUs = enemyVictim && enemyVictim->getControllingPlayer() == m_player;
-			if( enemyMoves && !comingForUs && distSqr > sqr( reach ) )
-				continue;
-			// a gun that walks is run from only by something that outranges it by a long way, a rocket
-			// launcher against a tank; a tank that hopped back from another tank's slightly shorter gun
-			// spent the hop turning round, and on Twilight Flame kiting like that lost more than it saved
-			if( enemyMoves && myRange < reach * KITE_MOBILE_RANGE_RATIO )
-				continue;
-			// and only from something worth running from: a tank that backs away from a rifleman it
-			// could have driven over was the commonest step the first version took
-			if( obj->getCrusherLevel() > enemy->getCrushableLevel() || aiCombatPower( enemy ) < KITE_WORTHY_SHARE * aiCombatPower( obj ) )
-				continue;
-			if( closing == NULL || distSqr < closingDistSqr )
-			{
-				closing = enemy;
-				closingRange = reach;
-				closingDistSqr = distSqr;
-			}
-		}
+		kiteScan( obj, pos, myRange, iter, &found );
 	}
+	Object *closing = TheGameLogic->findObjectByID( found.closing );
+	const Real closingRange = found.closingRange;
+	const Real closingDistSqr = found.closingDistSqr;
+	Object *nearestArmed = TheGameLogic->findObjectByID( found.nearestArmed );	// the closest armed thing in this unit's reach, whatever else it is
 	// fire, then step: a gun that is ready or aiming shoots first, and the hop happens while it reloads.
 	// Hopping on the clock alone had a Tomahawk step back every second and never finish a launch.
 	// Once the enemy's gun already reaches it, it steps whatever its own gun is doing: a Tomahawk that

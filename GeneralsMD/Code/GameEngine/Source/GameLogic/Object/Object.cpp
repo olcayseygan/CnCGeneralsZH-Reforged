@@ -1136,6 +1136,9 @@ void Object::setStatus( ObjectStatusMaskType objectStatus, Bool set )
 
 	if (m_status != oldStatus)
 	{
+		if (m_physics)
+			m_physics->wakeIfDormant();	// braking and the carrier deck are read by a physics run
+
 		if( set && objectStatus.test( OBJECT_STATUS_REPULSOR ) && m_repulsorHelper != NULL )
 		{
 			// Damaged repulsable civilians scare (repulse) other civs, but only
@@ -1982,6 +1985,10 @@ void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPo
 {
 	//USE_PERF_TIMER(Object_reactToTransformChange)
 	RevealWakeGrid::noteMove( this, oldPos );
+	// moved by something else: a dormant body's next run is no longer nothing.  Even a set to where it
+	// already is: that drops the altitude cache the awake run would have filled again at its turn.
+	if (m_physics)
+		m_physics->wakeIfDormant();
 	if(_isnan(getPosition()->x) || _isnan(getPosition()->y) || _isnan(getPosition()->z)) {
 		DEBUG_CRASH(("Object pos is nan."));
 		TheGameLogic->destroyObject(this);
@@ -2307,6 +2314,8 @@ void Object::healCompletely()
 //-------------------------------------------------------------------------------------------------
 void Object::setEffectivelyDead(Bool dead)
 {
+	if (m_physics)
+		m_physics->wakeIfDormant();	// KillWhenRestingOnGround asks whether a drone is dead
 	if (dead)
 		BitSet(m_privateStatus, EFFECTIVELY_DEAD);
 	else
@@ -2448,6 +2457,8 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 		if ( type != DISABLED_HELD && !isDisabledByType( type ) )
 			pauseAllSpecialPowers( TRUE );
 		
+		if (m_physics)
+			m_physics->wakeIfDormant();
 		m_disabledTillFrame[ type ] = frame;
 		m_disabledMask.set( type, frame > TheGameLogic->getFrame() );
 		// the end-of-frame check walks only the objects it was told about (GameLogic::disabledAndSecondTurns)
@@ -2594,6 +2605,9 @@ Bool Object::clearDisabled( DisabledType type )
 	if (!isDisabledByType(type)) {
 		return FALSE;
 	}
+
+	if (m_physics)
+		m_physics->wakeIfDormant();	// a dormant body reads the disabled bits (PhysicsBehavior::mayGoDormant)
 
 	if( type == DISABLED_UNDERPOWERED || type == DISABLED_EMP || type == DISABLED_SUBDUED || type == DISABLED_HACKED )
 	{
@@ -3082,6 +3096,8 @@ void Object::setLayer(PathfindLayerEnum layer)
 		}
 #endif
 		TheAI->pathfinder()->removePos(this);
+		if (m_physics)
+			m_physics->wakeIfDormant();
 		m_layer = layer;
 		TheAI->pathfinder()->updatePos(this, getPosition());
 	}

@@ -88,6 +88,7 @@ public:
 	virtual DieModuleInterface* getDie() { return this; }
 	virtual UpgradeModuleInterface* getUpgrade() { return this; }
 	virtual UpdateSleepTime update();
+	virtual void onObjectUpgradesChanged();
 
 	// DamageModuleInterface
 	virtual void onDie( const DamageInfo *damageInfo );

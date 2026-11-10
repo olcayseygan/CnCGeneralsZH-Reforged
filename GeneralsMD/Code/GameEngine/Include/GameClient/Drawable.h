@@ -402,6 +402,7 @@ public:
 	// note that this is not necessarily the 'get' reflection of setDrawableHidden, since drawables
 	// can spontaneously hide via stealth. (srj)
 	//
+	Bool hasClipFeedback() const { return m_clipFeedbackSlots != 0; }	///< updateDrawableClipStatus does something; fixed at creation
 	inline Bool isDrawableEffectivelyHidden() const { if( LogicThread::isInsideWindow() ) return m_lookForDraw.hidden; return m_hidden || m_hiddenByStealth; }
 
 	void setSelectable( Bool selectable );												///< Changes the drawables selectability	

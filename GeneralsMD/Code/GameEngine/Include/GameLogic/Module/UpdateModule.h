@@ -153,6 +153,10 @@ protected:
 
 	UpdateSleepTime getWakeFrame() const;
 
+	// for a module asleep because its run changed nothing: wake in time for the turn it would have
+	// taken this frame had it stayed awake, or next frame when that turn has gone by
+	void wakeExactly();
+
 	/*
 		You should pretty much never redefine this; it's really used for
 		internal purposes by Object. See comment above.

@@ -148,7 +148,8 @@ void AutoDepositUpdate::awardInitialCaptureBonus( Player *player )
 UpdateSleepTime AutoDepositUpdate::update( void )
 {
 	const AutoDepositUpdateModuleData *modData = getAutoDepositUpdateModuleData();
-/// @todo srj use SLEEPY_UPDATE here
+	// a run before m_depositOnFrame changes nothing, so every return sleeps until then; a capture only
+	// ever moves that frame later (awardInitialCaptureBonus), and the run that wakes early sleeps again
 	if( TheGameLogic->getFrame() >= m_depositOnFrame)
 	{
 		if (!m_initialized) {
@@ -160,11 +161,11 @@ UpdateSleepTime AutoDepositUpdate::update( void )
 		m_depositOnFrame = TheGameLogic->getFrame() + modData->m_depositFrame;
 		
 		if(getObject()->isNeutralControlled() || modData->m_depositAmount <= 0 )
-			return UPDATE_SLEEP_NONE;
+			return frameToSleepTime( m_depositOnFrame );
 
 		// makes sure that buildings under construction do not get a bonus CCB
 		if( getObject()->getConstructionPercent() != CONSTRUCTION_COMPLETE )
-			return UPDATE_SLEEP_NONE;
+			return frameToSleepTime( m_depositOnFrame );
 		
 		int moneyAmount = modData->m_depositAmount + getUpgradedSupplyBoost();
 
@@ -206,10 +207,10 @@ UpdateSleepTime AutoDepositUpdate::update( void )
         Color color = getObject()->getControllingPlayer()->getPlayerColor() | GameMakeColor( 0, 0, 0, 230 );
 			  TheInGameUI->addFloatingText( moneyString, &pos, color );
       }
-		}		
+		}
 	}
 
-	return UPDATE_SLEEP_NONE;
+	return frameToSleepTime( m_depositOnFrame );
 }
 
 //------------------------------------------------------------------------------------------------

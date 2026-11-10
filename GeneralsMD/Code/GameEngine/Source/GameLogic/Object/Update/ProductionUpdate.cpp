@@ -686,6 +686,7 @@ void ProductionUpdate::updateDoors( Bool moreUnitsComing )
 //-------------------------------------------------------------------------------------------------
 void ProductionUpdate::beginOpeningDoor( ExitDoorType exitDoor )
 {
+	wakeIfResting();
 	DoorInfo *door = &m_doors[ exitDoor ];
 	UnsignedInt now = TheGameLogic->getFrame();
 
@@ -793,7 +794,7 @@ UpdateSleepTime ProductionUpdate::update( void )
 	if( production == NULL )
 	{
 		queueRepeatUnit();
-		return UPDATE_SLEEP_NONE;
+		return isResting() ? UPDATE_SLEEP_FOREVER : UPDATE_SLEEP_NONE;
 	}
 
 	//
@@ -1154,10 +1155,33 @@ UpdateSleepTime ProductionUpdate::update( void )
 }  // end update
 
 //-------------------------------------------------------------------------------------------------
+/** The next update would change nothing, and goes on changing nothing until something is queued
+	* or put on repeat or a door is opened (wakeIfResting) */
+//-------------------------------------------------------------------------------------------------
+Bool ProductionUpdate::isResting( void ) const
+{
+	if( m_productionQueue != NULL || m_repeat.turn() != NULL || m_constructionCompleteFrame != 0 || m_flagsDirty )
+		return FALSE;
+	for( Int i = 0; i < DOOR_COUNT_MAX; ++i )
+		if( m_doors[ i ].m_doorOpenedFrame || m_doors[ i ].m_doorWaitOpenFrame || m_doors[ i ].m_doorClosedFrame )
+			return FALSE;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+void ProductionUpdate::wakeIfResting( void )
+{
+	if( friend_getNextCallFrame() == UPDATE_SLEEP_FOREVER )
+		wakeExactly();
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Add the production entry to the *END* of the production queue list */
 //-------------------------------------------------------------------------------------------------
 void ProductionUpdate::addToProductionQueue( ProductionEntry *production )
 {
+	wakeIfResting();
 
 	// check for empty list
 	if( m_productionQueue == NULL )
@@ -1416,6 +1440,7 @@ void ProductionUpdate::setHoldDoorOpen(ExitDoorType exitDoor, Bool holdIt)
 {
 	if (exitDoor >= DOOR_1 && exitDoor < DOOR_COUNT_MAX)
 	{
+		wakeIfResting();
 		DoorInfo& door = m_doors[exitDoor];
 		door.m_holdOpen = holdIt;
 		if (holdIt && door.m_doorOpenedFrame == 0 && door.m_doorWaitOpenFrame == 0 && door.m_doorClosedFrame == 0)

@@ -1141,6 +1141,8 @@ void Object::setStatus( ObjectStatusMaskType objectStatus, Bool set )
 	{
 		if (m_physics)
 			m_physics->wakeIfDormant();	// braking and the carrier deck are read by a physics run
+		if (m_wsHelper && m_status.test( OBJECT_STATUS_IS_ATTACKING ) && !oldStatus.test( OBJECT_STATUS_IS_ATTACKING ))
+			m_wsHelper->wakeIfResting();	// an attack is what the weapon status helper shows
 
 		if( set && objectStatus.test( OBJECT_STATUS_REPULSOR ) && m_repulsorHelper != NULL )
 		{
@@ -3472,6 +3474,10 @@ void Object::friend_bindToDrawable( Drawable *draw )
 	m_drawable = draw;
 	if (m_drawable)
 	{
+		// a drawable with clip feedback is told the clip on every run of the weapon status helper
+		if (m_wsHelper)
+			m_wsHelper->wakeIfResting();
+
 		ModelConditionFlags set;
 		ModelConditionFlags clr;
 		for (int i = 0; i < WEAPONSET_COUNT; ++i)
@@ -5212,6 +5218,7 @@ void Object::giveUpgrade( const UpgradeTemplate *upgradeT )
 	if (upgradeT)
 	{
 		m_objectUpgradesCompleted.set( upgradeT->getUpgradeMask() );
+		notifyObjectUpgradesChanged();
 
 		//
 		// iterate through all the upgrade modules of this object and call the method to
@@ -5227,6 +5234,7 @@ void Object::giveUpgrade( const UpgradeTemplate *upgradeT )
 void Object::removeUpgrade( const UpgradeTemplate *upgradeT )
 {
 	m_objectUpgradesCompleted.clear( upgradeT->getUpgradeMask() );
+	notifyObjectUpgradesChanged();
 	for (BehaviorModule** module = m_behaviors; *module; ++module)
 	{
 		UpgradeModuleInterface* upgrade = (*module)->getUpgrade();
@@ -5236,6 +5244,17 @@ void Object::removeUpgrade( const UpgradeTemplate *upgradeT )
 		// Whoa, please note that while the function is called Object::RemoveUpgrade, it is not removing anything
 		// in the sense of undoing the effects.  It is just resetting the upgrade so it may be run again.
 		upgrade->resetUpgrade( upgradeT->getUpgradeMask() );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::notifyObjectUpgradesChanged()
+{
+	for (BehaviorModule** module = m_behaviors; *module; ++module)
+	{
+		UpgradeModuleInterface* upgrade = (*module)->getUpgrade();
+		if (upgrade)
+			upgrade->onObjectUpgradesChanged();
 	}
 }
 
@@ -5443,9 +5462,14 @@ void Object::clearWeaponBonusCondition(WeaponBonusConditionType wst)
 	that I am concerned with.
 */
 //-------------------------------------------------------------------------------------------------
-void Object::adjustModelConditionForWeaponStatus()
+Bool Object::adjustModelConditionForWeaponStatus()
 {
 	UnsignedInt now = TheGameLogic->getFrame();
+
+	// off an attack, every weapon's condition is none unless it fired this frame, the clip is shown only
+	// to a drawable with clip feedback, and nothing else here reads the frame: with every condition
+	// already none, the next run changes nothing until an attack, a shot or a new drawable
+	Bool atRest = !testStatus( OBJECT_STATUS_IS_ATTACKING ) && (m_drawable == NULL || !m_drawable->hasClipFeedback());
 
 	for (int i = 0; i < WEAPONSLOT_COUNT; ++i)
 	{
@@ -5520,7 +5544,16 @@ void Object::adjustModelConditionForWeaponStatus()
 				}
 			}
 		}
+		atRest = atRest && m_lastWeaponCondition[i] == WSF_NONE;
 	}
+	return atRest;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::wakeWeaponStatusHelper() const
+{
+	if (m_wsHelper)
+		m_wsHelper->wakeIfResting();
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -3518,12 +3518,14 @@ void ParticleSystem::loadPostProcess( void )
 		// assign system
 		m_slaveSystem = TheParticleSystemManager->findParticleSystem( m_slaveSystemID );
 
-		// sanity
+		/* A slave the save did not keep: the system goes on without it.  This threw, and the whole
+			 load failed with "Error loading game" over a smoke trail - every late 32-player save did. */
 		if( m_slaveSystem == NULL || m_slaveSystem->isDestroyed() == TRUE )
 		{
 
-			DEBUG_CRASH(( "ParticleSystem::loadPostProcess - m_slaveSystem is NULL or destroyed\n" ));
-			throw SC_INVALID_DATA;
+			DEBUG_LOG(( "ParticleSystem::loadPostProcess - slave system %d was not saved, dropped\n", (Int)m_slaveSystemID ));
+			m_slaveSystem = NULL;
+			m_slaveSystemID = INVALID_PARTICLE_SYSTEM_ID;
 
 		}  // end if
 
@@ -3545,12 +3547,13 @@ void ParticleSystem::loadPostProcess( void )
 		// assign system
 		m_masterSystem = TheParticleSystemManager->findParticleSystem( m_masterSystemID );
 
-		// sanity
+		// a master the save did not keep, likewise
 		if( m_masterSystem == NULL || m_masterSystem->isDestroyed() == TRUE )
 		{
 
-			DEBUG_CRASH(( "ParticleSystem::loadPostProcess - m_masterSystem is NULL or destroyed\n" ));
-			throw SC_INVALID_DATA;
+			DEBUG_LOG(( "ParticleSystem::loadPostProcess - master system %d was not saved, dropped\n", (Int)m_masterSystemID ));
+			m_masterSystem = NULL;
+			m_masterSystemID = INVALID_PARTICLE_SYSTEM_ID;
 
 		}  // end if
 

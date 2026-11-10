@@ -1574,6 +1574,12 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		 records what it was asked. */
 	if (!rated && !fogFiltered && m_aiData->m_attackPriorityDistanceModifier > 0.0f)
 	{
+		// the walk shares the partition's state; a logic job gives up rather than run it
+		if (job)
+		{
+			job->aborted = TRUE;
+			return NULL;
+		}
 		AttackPriorityPick pick(info, filters + numGatherFilters);
 		if (ThePartitionManager->visitNearestFirst(me, range, gatherFilters, enemyPlayers, &pick))
 			return pick.getBest();

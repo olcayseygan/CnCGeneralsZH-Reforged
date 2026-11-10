@@ -62,6 +62,7 @@
 #ifdef _DEBUG
 #include "GameLogic/Object.h"
 #endif
+#include "GameLogic/AIPlayer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/SidesList.h"
 #include "GameNetwork/GameInfo.h"
@@ -279,6 +280,8 @@ void PlayerList::init()
 //-----------------------------------------------------------------------------
 void PlayerList::update()
 {
+	AIPlayer::lookAllSeats();
+
 	// update all players
 	for( Int i = 0; i < MAX_PLAYER_COUNT; i++ )
 	{

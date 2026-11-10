@@ -216,6 +216,11 @@ public:
 	void forceOn( Bool force ) { m_radarForceOn = force; }				///< force the radar to be on
 	Bool isRadarForced( void ) { return m_radarForceOn; }		///< is radar forced on?
 
+	// the minimap's plain colours, own green, allies blue, enemies red: a key flips it, client only,
+	// never saved, never in the CRC
+	void toggleSimpleColors( void ) { m_simpleColors = !m_simpleColors; }
+	Bool isSimpleColors( void ) const { return m_simpleColors; }
+
 	/// refresh the water values for the radar
 	virtual void refreshTerrain( TerrainLogic *terrain );
 
@@ -262,6 +267,7 @@ protected:
 
 	Bool m_radarHidden;										///< true when radar is not visible
 	Bool m_radarForceOn;									///< true when radar is forced to be on
+	Bool m_simpleColors;									///< own, allied and enemy colours instead of the players' own
 	RadarObject *m_objectList;						///< list of objects in the radar
 	RadarObject *m_localObjectList;				/** list of objects for the local player, sorted
 																					* in exactly the same priority as the regular

@@ -318,6 +318,7 @@ public:
 		MSG_META_TOGGLE_MOVE,												///< arm a plain move for the next order click or drag (fork)
 		MSG_META_TOGGLE_PAUSE,											///< pause/unpause, single player and replay only (fork)
 		MSG_META_TOGGLE_PURCHASE_SCIENCE,						///< open/close the general's promotion screen (fork)
+		MSG_META_TOGGLE_RADAR_COLORS,								///< minimap in own/ally/enemy colours, client only (fork)
 		
 		MSG_META_BEGIN_CAMERA_ROTATE_LEFT,
 		MSG_META_END_CAMERA_ROTATE_LEFT,

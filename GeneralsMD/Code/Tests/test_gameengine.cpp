@@ -6042,6 +6042,18 @@ TEST(metamap_bare_arrows_stay_with_the_camera)
 	CHECK_EQ( (Int)next->m_modState, (Int)CTRL );
 	CHECK_EQ( (Int)ctrl->m_modState, (Int)CTRL );
 	CHECK_EQ( (Int)team->m_modState, (Int)NONE );
+
+	// the minimap colours land on a free F11, and stay off an F11 the language file gave away
+	MetaMapRec *colours = map.getMetaMapRec( GameMessage::MSG_META_TOGGLE_RADAR_COLORS );
+	CHECK_EQ( (Int)colours->m_key, (Int)MK_F11 );
+	CHECK_EQ( (Int)colours->m_modState, (Int)NONE );
+
+	MetaRecProbe taken;
+	MetaMapRec *shot = taken.getMetaMapRec( GameMessage::MSG_META_TAKE_SCREENSHOT );
+	shot->m_key = MK_F11;
+	shot->m_usableIn = COMMANDUSABLE_GAME;
+	taken.keepArrowsForCamera();
+	CHECK_EQ( (Int)taken.getMetaMapRec( GameMessage::MSG_META_TOGGLE_RADAR_COLORS )->m_key, (Int)MK_NONE );
 }
 
 TEST(controlbar_stance_key_takes_what_the_buttons_leave)

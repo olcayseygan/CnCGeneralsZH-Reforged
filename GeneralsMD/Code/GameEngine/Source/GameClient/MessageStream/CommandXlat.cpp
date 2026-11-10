@@ -3885,6 +3885,13 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			disp = DESTROY_MESSAGE;
 			break;
 
+		// the minimap in three colours, yours, your allies' and your enemies'; only this screen changes
+		case GameMessage::MSG_META_TOGGLE_RADAR_COLORS:
+			if( TheRadar )
+				TheRadar->toggleSimpleColors();
+			disp = DESTROY_MESSAGE;
+			break;
+
 		//
 		// Pause and game speed. Both are local-only: they change how fast THIS machine steps its
 		// logic, so they are refused outright in a network game where every peer has to agree.

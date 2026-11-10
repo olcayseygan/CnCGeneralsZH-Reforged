@@ -220,6 +220,7 @@ Radar::Radar( void )
 	m_localObjectList = NULL;
 	m_radarHidden = false;
 	m_radarForceOn = false;
+	m_simpleColors = false;
 	m_terrainAverageZ = 0.0f;
 	m_waterAverageZ = 0.0f;
 	m_xSample = 0.0f;

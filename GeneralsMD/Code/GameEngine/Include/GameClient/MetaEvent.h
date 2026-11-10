@@ -386,7 +386,9 @@ public:
 	/** Bare arrow keys scroll the camera.  A language's CommandMap.ini that puts a record on one
 		* (the German file binds next/previous unit and worker there) gets Ctrl added, as the English
 		* file ships them; otherwise the record eats the arrow before LookAtTranslator sees it.  Called
-		* after the language file and before Hotkeys.ini, so a player's own bare arrow stands. */
+		* after the language file and before Hotkeys.ini, so a player's own bare arrow stands.  Also
+		* puts the fork's commands no language file knows (the minimap's colours, F11) on their default
+		* key where that key is free. */
 	void keepArrowsForCamera();
 
 

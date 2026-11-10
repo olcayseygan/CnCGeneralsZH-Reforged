@@ -200,6 +200,14 @@ private:
 	Int m_pending;
 };
 
+/** An enemy building this player knows of that shoots the ground, its garrison's guns included. */
+struct KnownDefence
+{
+	Object *m_object;
+	Real m_reach;
+	Real m_power;
+};
+
 
 /**
  * The computer-controlled opponent.
@@ -226,6 +234,13 @@ public:
 		* fill them for every unit the sides in it can build, so the first team choice does not pay for
 		* them mid-match.  Called by GameLogic::startNewGame once the map's INI and the players are in. */
 	static void prepareMatchupTables( void );
+
+	/** Every seat on the fork's AI looks at the world before any of them acts this frame: its map of guns, its
+		* ledger of the enemy in sight, its army's turn, the known guns it holds at the edge of and, every half
+		* minute, the standing its income bonus is weighed by.  Each look reads
+		* the world as the players' update finds it and writes only its own seat, so they run side by side on the
+		* logic's job pool; what the seats decide on them is still ordered seat by seat.  PlayerList::update. */
+	static void lookAllSeats( void );
 
 	/** Base building is the expensive job once the expansion convoy is out of the way, and it is a
 		* loop over the build list that calls several searches per entry. These name which one.
@@ -905,7 +920,8 @@ protected:
 	Bool waveGoes(Real power, UnsignedInt heldFrames);	///< what is parked, worth this, leaves now
 	void buyEarlyIncome(void);										///< the first drop zone and black market, ahead of the army
 	void keepSiegeBehind(void);										///< artillery out with a wave trails its front unit
-	void holdAtDefences(void);										///< ground units stop at the edge of a known defence's reach until ours there outweigh it; guns that outreach one shell it
+	void holdAtDefences(void);
+	Bool edgeTurnNow(void);												///< holdAtDefences looks this frame										///< ground units stop at the edge of a known defence's reach until ours there outweigh it; guns that outreach one shell it
 	Real edgeRatio(const Object *gun, Real reach, const Coord3D *from);	///< the fight where a unit at from would walk into a gun's reach
 	Bool leavesToFinish(const Object *obj) const;	///< a fighter the last push takes off guard, as against a worker or a scout
 	/** Every enemy unit this AI has seen and not since lost track of: what it was, whose, and where and
@@ -947,6 +963,15 @@ protected:
 	AIInfluenceMap	m_influence;
 	AIInfluenceMap	m_influenceNext;		///< what this round's objects have stamped so far; it becomes m_influence when the round ends
 	void updateInfluence(void);										///< the map, one share of the objects a frame
+	void prepareInfluence(void);									///< updateInfluence's part that is shared between seats or sizes the maps, run one seat at a time
+	void stampInfluenceTurn(void);								///< ... and its stamping into this seat's map alone, which seats run side by side
+	void prepareLook(void);												///< lookAllSeats, one seat at a time before the fork
+	void look(void);															///< ... and side by side
+	static void lookJob(Int index, void *context);
+	UnsignedInt m_lookFrame;											///< the frame look ran, plus one: the ledger and the map's stamps are this frame's
+	UnsignedInt m_lookTurnFrame;									///< ... m_lookTurn was collected by it
+	UnsignedInt m_lookDefencesFrame;							///< ... m_lookDefences was collected by it
+	std::vector<KnownDefence> m_lookDefences;		///< holdAtDefences' known guns, when its turn falls on this frame
 	void rebuildInfluence(void);									///< the whole map on one frame
 	void stampInfluence(AIInfluenceMap &map, const Object *obj);
 	void stampFireReports(AIInfluenceMap &map);

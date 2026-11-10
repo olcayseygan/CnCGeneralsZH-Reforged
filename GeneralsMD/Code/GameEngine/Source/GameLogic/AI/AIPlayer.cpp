@@ -55,6 +55,7 @@
 #include "GameClient/GameText.h"			// a personality's lines of chat
 #include "GameClient/InGameUI.h"			// ... and where they are shown
 #include "GameClient/TerrainVisual.h"
+#include "Common/JobSystem.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/AIPlayer.h"
@@ -411,6 +412,9 @@ m_skillLevel(AISKILL_BRUTAL),
 m_role(AIROLE_AGGRESSIVE)
 {
 	m_knownGunsFrame = 0;
+	m_lookFrame = 0;
+	m_lookTurnFrame = 0;
+	m_lookDefencesFrame = 0;
 	for (Int scoutSlot = 0; scoutSlot < MAX_AI_SCOUTS; ++scoutSlot) {
 		m_scoutID[scoutSlot] = INVALID_ID;
 		m_scoutTargetFor[scoutSlot] = -1;	// nothing looked at yet; the score picks the first target
@@ -3768,6 +3772,16 @@ static Real templateFramesToKill( const ThingTemplate *attacker, const ThingTemp
 	if( !skirmishAI )
 		return;
 
+	// the seats' looks run side by side (lookAllSeats) and price what they see through calcCostToBuild, which
+	// takes a template's name key the first time it is asked: all of them here, in template order, and none on
+	// a worker
+	for( const ThingTemplate *tmpl = TheThingFactory->firstTemplate(); tmpl; tmpl = tmpl->friend_getNextTemplate() )
+	{
+		tmpl->getNameKey();
+		// a map.ini override copied the base's key before it had one, and objects are made from the override
+		( (const ThingTemplate *)tmpl->getFinalOverride() )->getNameKey();
+	}
+
 #ifdef DEBUG_LOGGING
 	const Int64 start = Clock_Ticks();
 #endif
@@ -6338,9 +6352,9 @@ void AIPlayer::doUpgradesAndSkills( void )
 	 Pathfinder already break theirs down: per job, plus whichever single player cost the most.
 	 Reset once per logic frame by AI::update. */
 enum { AIP_BASE, AIP_READY, AIP_QUEUED, AIP_TEAM, AIP_UPGRADE,
-			 AIP_BRIDGE, AIP_SCOUT, AIP_RETREAT, AIP_EXPAND, AIP_CAPTURE, AIP_ECONOMY, AIP_POWER, AIP_WAVE, AIP_TACTICS, AIP_GROUND, AIP_PHASE_COUNT };
+			 AIP_BRIDGE, AIP_SCOUT, AIP_RETREAT, AIP_EXPAND, AIP_CAPTURE, AIP_ECONOMY, AIP_POWER, AIP_WAVE, AIP_TACTICS, AIP_GROUND, AIP_LOOK, AIP_PHASE_COUNT };
 static const char *theAIPhaseName[ AIP_PHASE_COUNT ] =
-	{ "base", "ready", "queued", "team", "upg", "bridge", "scout", "retreat", "expand", "capture", "economy", "power", "wave", "tactics", "ground" };
+	{ "base", "ready", "queued", "team", "upg", "bridge", "scout", "retreat", "expand", "capture", "economy", "power", "wave", "tactics", "ground", "look" };
 static Real theAIPhaseMS[ AIP_PHASE_COUNT ];
 static Real theAIWorstPlayerMS = 0.0f;
 static Int theAIWorstPlayer = -1;
@@ -6445,8 +6459,8 @@ void AIPlayer::update( void )
 	AI_PHASE( AIP_TEAM,    doTeamBuilding() );			// See if it's time to start another team.
 	AI_PHASE( AIP_UPGRADE, doUpgradesAndSkills() );	// See if it's time to build an upgrade or buy a skill.
 	AI_PHASE( AIP_BRIDGE,  updateBridgeRepair() );	// Handle any bridge repairs.
-	if( isSkirmishAI() && TheGameLogic->getFrame() % AI_INCOME_BONUS_FRAMES == 0 )
-		stepIncomeBonus();														// Earn more while it falls behind.
+	if( isSkirmishAI() && TheGameLogic->getFrame() % AI_INCOME_BONUS_FRAMES == 0 && m_lookFrame != TheGameLogic->getFrame() + 1 )
+		stepIncomeBonus();														// Earn more while it falls behind (lookAllSeats weighed it, beside the other seats).
 	// Everything below is the skirmish AI's own. A Challenge or mission opponent is handed its money,
 	// its base, its attacks and its superweapon by the map script, which is the whole of its difficulty:
 	// run on top of that, Kwai's $30000 stood three nuclear silos a minute into the match.  So is a
@@ -6465,7 +6479,8 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_ECONOMY, doSuperweapons() );			// The big guns, as soon as they can be bought.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_OTHER, doParticleBeams() ) );	// ... and the Particle Cannon's beam driven across his base.
 		AI_PHASE( AIP_ECONOMY, doReadySpecialPowers() );	// The powers no script knows to fire, as soon as they are ready.
-		AI_PHASE( AIP_WAVE,    rememberEnemies() );			// Write down the enemy army in sight.
+		if( m_lookFrame != TheGameLogic->getFrame() + 1 )
+			AI_PHASE( AIP_WAVE,  rememberEnemies() );			// Write down the enemy army in sight (lookAllSeats did, beside the other seats).
 		AI_PHASE( AIP_WAVE,    answerArmy() );					// Train the answer to the part of it nothing answers.
 		AI_PHASE( AIP_WAVE,    doMass() );							// Build the fist, and send it when it is one.
 		AI_PHASE( AIP_WAVE,    doWaves() );							// Send the parked attack teams out together.
@@ -6501,6 +6516,9 @@ void AIPlayer::newMap( void )
 {
 	forgetStampTurns();
 	m_knownGunsFrame = 0;
+	m_lookFrame = 0;
+	m_lookTurnFrame = 0;
+	m_lookDefencesFrame = 0;
 	BuildListInfo *info = m_player->getBuildList();
 	// Add any factories placed to the build list.
 	Object *obj;
@@ -9717,14 +9735,6 @@ static Real groundAttackRange( const Object *obj );
 /** How far past a defence's reach one of ours still counts as under it: a step from walking in.  Short of
 	* the 76 a Missile Defender kiting a Gatling Cannon keeps between the two reaches. */
 static const Real DEFENCE_FIGHT_SLACK = 30.0f;
-
-/** A known enemy building that shoots the ground: what it shoots with (fixedGunPower) and how far. */
-struct KnownDefence
-{
-	Object *m_object;
-	Real m_reach;
-	Real m_power;
-};
 
 //----------------------------------------------------------------------------------------------------------
 /** Every enemy building this player knows of that shoots the ground, its garrison's guns included, in the
@@ -16840,16 +16850,24 @@ static Int shellDefence( const Player *player, Object *obj, Real range, const st
 	* buildings with the retreat already weighing the guns; the most, 229, were units that had picked a
 	* defence as their next target and walked up to it, then attack moves, then the waves on their roads. */
 //----------------------------------------------------------------------------------------------------------
+Bool AIPlayer::edgeTurnNow( void )
+{
+	return runsOwnAI() && m_baseCenterSet && EDGE_ODDS[ m_skillLevel ] > 0.0f && !measuringWithoutTactics() &&
+		(TheGameLogic->getFrame() + computeUpdatePhase( m_player->getPlayerIndex(), EDGE_RATE )) % EDGE_RATE == 0;
+}
+
 void AIPlayer::holdAtDefences( void )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
 	const Real odds = EDGE_ODDS[ m_skillLevel ];
-	if( !runsOwnAI() || !m_baseCenterSet || odds <= 0.0f || measuringWithoutTactics() ||
-			(now + computeUpdatePhase( m_player->getPlayerIndex(), EDGE_RATE )) % EDGE_RATE != 0 )
+	if( !edgeTurnNow() )
 		return;
 	AI_SUB_START( holdStart );
 	std::vector<KnownDefence> defences;
-	collectKnownDefences( m_player, &defences );
+	if( m_lookDefencesFrame == now + 1 )
+		defences.swap( m_lookDefences );
+	else
+		collectKnownDefences( m_player, &defences );
 	if( defences.empty() )
 		return;
 	std::vector<Real> edgeRatios( defences.size(), -1.0f );		// the fight at each one's edge, measured once a look
@@ -17096,40 +17114,16 @@ void AIPlayer::stampFireReports( AIInfluenceMap &map )
 	* pointers, let go of with the match (forgetStampTurns); an object made after the frame's first reader waits
 	* for its next turn. */
 /** What every seat stamping one object of the turn needs whatever it is to that object: its power, and the
-	* cells its reach covers, worked out by the first seat to stamp it and read by the other 31.  Within the AI's
-	* turn of the frame nothing moves, ranks up or changes guns, so each seat's own stamp would come out the same;
-	* whether it is dead is asked again by each. */
+	* cells its reach covers.  Worked out for the whole turn by the first seat to prepare (prepareInfluence) and
+	* only read by the seats' stamping, which runs side by side on the world as the players' update found it. */
 struct StampShape
 {
-	Bool known;		///< worked out this frame
 	Bool armed;		///< power and reach both above nothing
 	Real power;
-	Real range;
 	Int first;		///< into StampTurn::cells
 	Int count;
-	// everything power, reach and cells are made of, as the first seat read it: a later seat whose own reading
-	// differs works the shape out again.  aiCombatPower is the template's price for the owner, the owner's
-	// kind-of price change (the only part of a price that moves in a match, CostModifierUpgrade) and the rank;
-	// the reach is the guns; the cells, where it stands
-	const ThingTemplate *tmpl;
-	const Player *owner;
-	Int rank;
-	Real priceFactor;
-	Coord3D at;
 };
 
-/** Whether what a seat reads off obj now is what the turn's shape was worked out from. */
-static Bool stampShapeHolds( const StampShape &shape, const Object *obj )
-{
-	const Player *owner = obj->getControllingPlayer();
-	const Coord3D *at = obj->getPosition();
-	if( shape.tmpl != obj->getTemplate() || shape.owner != owner || shape.rank != (Int)obj->getVeterancyLevel() ||
-			shape.at.x != at->x || shape.at.y != at->y || shape.at.z != at->z )
-		return FALSE;
-	if( owner && shape.priceFactor != owner->getProductionCostChangeBasedOnKindOf( obj->getTemplate()->getKindOfMask() ) )
-		return FALSE;
-	return shape.power <= 0.0f || shape.range == groundAttackRange( obj );
-}
 struct StampTurn
 {
 	UnsignedInt frame;	///< the frame read, plus one; 0 for never
@@ -17137,6 +17131,7 @@ struct StampTurn
 	std::vector<ObjectID> ids;
 	std::vector<StampShape> shapes;		///< one per id
 	std::vector<Int> cells;
+	Bool shaped;			///< shapes and cells are this frame's
 	Int cols;					///< the grid the cells are on, 0 before the first shape of the frame
 	Int rows;
 	Real originX, originY, cellSize;
@@ -17187,19 +17182,13 @@ static StampTurn &stampTurn( Int round )
 		turn->frame = now + 1;
 		turn->round = round;
 		StampShape blank;
-		blank.known = FALSE;
 		blank.armed = FALSE;
 		blank.power = 0.0f;
-		blank.range = 0.0f;
 		blank.first = 0;
 		blank.count = 0;
-		blank.tmpl = NULL;
-		blank.owner = NULL;
-		blank.rank = 0;
-		blank.priceFactor = 0.0f;
-		blank.at.zero();
 		turn->shapes.assign( turn->ids.size(), blank );
 		turn->cells.clear();
+		turn->shaped = FALSE;
 		turn->cols = 0;
 	}
 	return *turn;
@@ -17218,6 +17207,7 @@ static StampTurn &stampTurn( Int round )
 		theStampTurns[ i ].ids.clear();
 		theStampTurns[ i ].shapes.clear();
 		theStampTurns[ i ].cells.clear();
+		theStampTurns[ i ].shaped = FALSE;
 		theStampTurns[ i ].cols = 0;
 	}
 }
@@ -17238,6 +17228,12 @@ static Int influenceRound( const AIDifficultyProfile *profile )
 	* draw on the frame something asked (ensureInfluence) was the same burst, a few seconds apart. */
 void AIPlayer::updateInfluence( void )
 {
+	prepareInfluence();
+	stampInfluenceTurn();
+}
+
+void AIPlayer::prepareInfluence( void )
+{
 	// the first look takes everything at once, so nothing reads a map that is not whole
 	if( !m_influence.isBuilt() )
 		rebuildInfluence();
@@ -17250,9 +17246,7 @@ void AIPlayer::updateInfluence( void )
 		m_influenceNext.markUnbuilt();
 	}
 
-	const UnsignedInt now = TheGameLogic->getFrame();
-	const Int round = influenceRound( getSkillProfile() );
-	StampTurn &turn = stampTurn( round );
+	StampTurn &turn = stampTurn( influenceRound( getSkillProfile() ) );
 	if( turn.cols == 0 )
 	{
 		turn.cols = m_influenceNext.getCols();
@@ -17261,8 +17255,32 @@ void AIPlayer::updateInfluence( void )
 		turn.originY = m_influenceNext.getOriginY();
 		turn.cellSize = m_influenceNext.getCellSize();
 	}
-	// stampInfluence, with what does not depend on the seat taken from the turn
-	const Bool shared = m_influenceNext.sameGrid( turn.cols, turn.rows, turn.originX, turn.originY, turn.cellSize );
+	if( turn.shaped || !m_influenceNext.sameGrid( turn.cols, turn.rows, turn.originX, turn.originY, turn.cellSize ) )
+		return;
+	// stampInfluence, with what does not depend on the seat worked out once for every seat
+	turn.shaped = TRUE;
+	for( size_t i = 0; i < turn.ids.size(); ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( turn.ids[ i ] );
+		if( obj == NULL || obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
+			continue;
+		StampShape &shape = turn.shapes[ i ];
+		shape.power = aiCombatPower( obj );
+		const Real range = shape.power > 0.0f ? groundAttackRange( obj ) : 0.0f;
+		shape.armed = range > 0.0f;
+		shape.first = (Int)turn.cells.size();
+		if( shape.armed )
+			m_influenceNext.cellsReached( obj->getPosition()->x, obj->getPosition()->y, firingHeight( obj ), range, turn.cells );
+		shape.count = (Int)turn.cells.size() - shape.first;
+	}
+}
+
+void AIPlayer::stampInfluenceTurn( void )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Int round = influenceRound( getSkillProfile() );
+	const StampTurn &turn = stampTurn( round );
+	const Bool shared = turn.shaped && m_influenceNext.sameGrid( turn.cols, turn.rows, turn.originX, turn.originY, turn.cellSize );
 	const Bool micro = getSkillProfile()->m_tacticalMicro;
 	const Int me = m_player->getPlayerIndex();
 	for( size_t i = 0; i < turn.ids.size(); ++i )
@@ -17275,32 +17293,9 @@ void AIPlayer::updateInfluence( void )
 			stampInfluence( m_influenceNext, obj );
 			continue;
 		}
-		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
-			continue;
-		StampShape &shape = turn.shapes[ i ];
-		// between two seats the rest of Player::update runs (the teams' generic scripts, the order queue) and so
-		// does the earlier seat's own work: anything that moved, changed hands, ranked up or changed guns or
-		// price in between is read again
-		if( shape.known && !stampShapeHolds( shape, obj ) )
-			shape.known = FALSE;
-		if( !shape.known )
-		{
-			shape.known = TRUE;
-			shape.tmpl = obj->getTemplate();
-			shape.owner = obj->getControllingPlayer();
-			shape.rank = (Int)obj->getVeterancyLevel();
-			shape.priceFactor = shape.owner ? shape.owner->getProductionCostChangeBasedOnKindOf( shape.tmpl->getKindOfMask() ) : 0.0f;
-			shape.at = *obj->getPosition();
-			shape.power = aiCombatPower( obj );
-			shape.range = shape.power > 0.0f ? groundAttackRange( obj ) : 0.0f;
-			shape.armed = shape.range > 0.0f;
-			shape.first = (Int)turn.cells.size();
-			if( shape.armed )
-				m_influenceNext.cellsReached( obj->getPosition()->x, obj->getPosition()->y, firingHeight( obj ), shape.range, turn.cells );
-			shape.count = (Int)turn.cells.size() - shape.first;
-		}
+		const StampShape &shape = turn.shapes[ i ];
 		// what stamps nothing is skipped before the relationship's two map lookups, which would skip it anyway
-		if( !shape.armed || shape.count == 0 )
+		if( !shape.armed || shape.count == 0 || obj->isEffectivelyDead() )
 			continue;
 		const Relationship relation = m_player->getRelationship( obj->getTeam() );
 		const Bool friendly = obj->getControllingPlayer() == m_player || relation == ALLIES;
@@ -17597,13 +17592,15 @@ void AIPlayer::doTactics( void )
 	const Int me = m_player->getPlayerIndex();
 	const Bool tactics = getSkillProfile()->m_tacticalMicro;
 
-	AI_TAC( TAC_INFL, updateInfluence() );
+	// lookAllSeats stamped this frame's share already, beside the other seats
+	if( m_lookFrame != now + 1 )
+		AI_TAC( TAC_INFL, updateInfluence() );
 
 	// each unit once every TACTICS_RATE frames, on the frame its ID falls on, not a whole army on one.  Hard's
 	// answers look on the same clock, so the army is walked once for both: nothing answerFire orders adds to the
 	// player's teams or takes from them, so the walk after it found the same units in the same order.
 	const Bool unitsLook = tactics && m_baseCenterSet;
-	if( unitsLook )
+	if( unitsLook && m_lookTurnFrame != now + 1 )
 		AI_TAC( TAC_UNITS, collectLookTurn( m_player, TACTICS_RATE, &m_lookTurn ) );
 	const Bool sameLook = unitsLook && rungFrames( getSkillProfile()->m_fireLookSeconds ) == TACTICS_RATE;
 
@@ -17667,6 +17664,69 @@ void AIPlayer::doTactics( void )
 	}
 #ifdef DEBUG_LOGGING
 	aiTacEnd( TAC_ROWS );
+#endif
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** What lookAllSeats takes for a seat before the fork, one seat at a time and in seat order: the map sized and
+	* the turn's shapes, which every seat stamping on that round shares. */
+void AIPlayer::prepareLook( void )
+{
+	if( !measuringWithoutTactics() )
+		prepareInfluence();
+}
+
+/** ... and the look itself, beside the other seats: reads of the world, writes to this seat alone.  The same
+	* gates as the jobs it takes over (doTactics, rememberEnemies, holdAtDefences), which skip their own reading
+	* on a frame this has run. */
+void AIPlayer::look( void )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	// every seat weighs every player's standing on the same frame, each walking the whole world: side by side
+	if( isSkirmishAI() && now % AI_INCOME_BONUS_FRAMES == 0 )
+		stepIncomeBonus();
+	rememberEnemies();
+	if( !measuringWithoutTactics() )
+	{
+		stampInfluenceTurn();
+		if( getSkillProfile()->m_tacticalMicro && m_baseCenterSet )
+		{
+			collectLookTurn( m_player, TACTICS_RATE, &m_lookTurn );
+			m_lookTurnFrame = now + 1;
+		}
+	}
+	if( edgeTurnNow() )
+	{
+		m_lookDefences.clear();
+		collectKnownDefences( m_player, &m_lookDefences );
+		m_lookDefencesFrame = now + 1;
+	}
+	m_lookFrame = now + 1;
+}
+
+/*static*/ void AIPlayer::lookJob( Int index, void *context )
+{
+	( (AIPlayer **)context )[ index ]->look();
+}
+
+/*static*/ void AIPlayer::lookAllSeats( void )
+{
+#ifdef DEBUG_LOGGING
+	aiPhaseBegin();
+#endif
+	AIPlayer *seats[ MAX_PLAYER_COUNT ];
+	Int count = 0;
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	{
+		AIPlayer *ai = ThePlayerList->getNthPlayer( i )->getAIPlayer();
+		if( ai == NULL || !ai->runsOwnAI() )
+			continue;
+		ai->prepareLook();
+		seats[ count++ ] = ai;
+	}
+	JobSystem::parallel_for( count, 1, lookJob, seats );
+#ifdef DEBUG_LOGGING
+	aiPhaseEnd( AIP_LOOK );
 #endif
 }
 
@@ -21389,6 +21449,9 @@ void AIPlayer::loadPostProcess( void )
 	ensureDoctrine();
 	// what was read on a frame of the game before the load names that game's objects
 	m_knownGunsFrame = 0;
+	m_lookFrame = 0;
+	m_lookTurnFrame = 0;
+	m_lookDefencesFrame = 0;
 	forgetStampTurns();
 }  // end loadPostProcess
 

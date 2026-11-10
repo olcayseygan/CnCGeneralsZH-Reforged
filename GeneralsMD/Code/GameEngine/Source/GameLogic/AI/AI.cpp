@@ -760,6 +760,19 @@ public:
 		return false;
 	}
 
+	// distances, ranges and a garrison's free fire points only, but for a contact weapon against a
+	// structure, which asks the partition what it touches (Weapon::isWithinAttackRange)
+	virtual Bool isReadOnly() const
+	{
+		for (Int i = 0; i < WEAPONSLOT_COUNT; i++)
+		{
+			const Weapon* w = m_obj->getWeaponInWeaponSlot((WeaponSlotType)i);
+			if (w && w->isContactWeapon())
+				return false;
+		}
+		return true;
+	}
+
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterWithinAttackRange"; }
 #endif

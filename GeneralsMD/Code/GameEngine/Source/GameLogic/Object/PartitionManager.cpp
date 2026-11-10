@@ -125,6 +125,7 @@ Int PartitionManager::getQueryCountThisFrame( void ) { return thePartitionQuerie
 Int PartitionManager::getGatherCountThisFrame( void ) { return thePartitionGathers; }
 Int PartitionManager::getQueryObjectCountThisFrame( void ) { return thePartitionQueryObjects; }
 void PartitionManager::resetQueryCounts( void ) { thePartitionQueries = 0; thePartitionGathers = 0; thePartitionQueryObjects = 0; }
+void PartitionManager::noteJobGathers( Int gathers, Int objectsLookedAt ) { thePartitionQueries += gathers; thePartitionGathers += gathers; thePartitionQueryObjects += objectsLookedAt; }
 
 #ifdef DUMP_PERF_STATS
 	long s_countInClosestObjects = 0;
@@ -2772,6 +2773,8 @@ PartitionManager::PartitionManager()
 {
 	m_moduleList = NULL;
 	m_moduleArrayHoles = 0;
+	for (Int s = 0; s < JOB_GATHER_SLOTS; ++s)
+		m_jobEpoch[s] = 0;
 	m_cellSize = m_cellSizeInv = 0.0f;
 	m_cellCountX = 0;
 	m_cellCountY = 0;
@@ -3894,6 +3897,126 @@ void PartitionManager_splitGatherCounts( Int &split, Int &tailsHandedBack, Real 
 	tailsHandedBack = s_gatherTailsHandedBack;
 	forkMS = s_gatherForkMS;
 	mergeMS = s_gatherMergeMS;
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager::prepareJobGathers( void )
+{
+	const Int slots = minInt( JobSystem::workerCount() + 1, (Int)JOB_GATHER_SLOTS );
+	for (Int s = 0; s < slots; ++s)
+	{
+		if (m_jobStamps[s].size() < m_moduleArray.size())
+			m_jobStamps[s].resize( m_moduleArray.size(), 0 );
+	}
+}
+
+//-----------------------------------------------------------------------------
+/* getClosestObjects' gathering walk, both forms, kept step for step: the master list from the back when
+	 the range covers the map, otherwise the rings out to the same limit, cells skipped on onlyPlayers the
+	 same way, an Object met twice dropped at the second meeting. Only the visited mark differs: this
+	 thread's stamp array, indexed by the module's place in m_moduleArray, against an epoch counted per
+	 thread, where the serial walk writes a done flag every query shares. */
+Bool PartitionManager::gatherFromJob( const Object *obj, Real maxDist, DistanceCalculationType dc, PartitionFilter **filters,
+																			PlayerMaskType onlyPlayers, JobGather &out )
+{
+	out.count = 0;
+	out.overflowed = FALSE;
+	out.objectsLookedAt = 0;
+
+	const Int slot = JobSystem::threadSlot();
+	if (slot >= JOB_GATHER_SLOTS || m_jobStamps[slot].size() < m_moduleArray.size() || !filtersAreReadOnly( filters ))
+		return FALSE;
+	Int *stamps = m_moduleArray.empty() ? NULL : &m_jobStamps[slot][0];
+	// ponytail: an Int epoch a thread wraps after two billion gathers, days of play; clear the stamps there if it ever matters
+	const Int epoch = ++m_jobEpoch[slot];
+
+	DistCalcProc distProc = theDistCalcProcs[dc];
+	const Coord3D *objPos = obj->getPosition();
+	const Real maxDistSqr = maxDist * maxDist;
+	Int cellCenterX, cellCenterY;
+	worldToCell( objPos->x, objPos->y, &cellCenterX, &cellCenterY );
+
+	Int maxRadius = m_maxGcoRadius;
+	if (maxDist < HUGE_DIST)
+		maxRadius = minInt( m_maxGcoRadius, worldToCellDist( maxDist ) );
+
+	if (maxRadius >= m_maxGcoRadius)
+	{
+		for (Int i = (Int)m_moduleArray.size() - 1; i >= 0; --i)
+		{
+			PartitionData *mod = m_moduleArray[ i ];
+			if (mod == NULL || mod->friend_getCoiInUseCount() == 0)
+				continue;
+			Object *other = mod->getObject();
+			++out.objectsLookedAt;
+			if (other == obj || other == NULL)
+				continue;
+
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*distProc)( objPos, obj, other->getPosition(), other, distSqr, distVec, maxDistSqr ))
+				continue;
+			if (!filtersAllow( filters, other ))
+				continue;
+			if (out.count == out.capacity)
+			{
+				out.overflowed = TRUE;
+				return TRUE;
+			}
+			out.objects[ out.count ] = other;
+			out.distSqr[ out.count ] = distSqr;
+			++out.count;
+		}
+		return TRUE;
+	}
+
+	Int maxRadiusLimit = maxRadius;
+	ICoord2D farthestOnMap;
+	farthestOnMap.x = maxInt( cellCenterX, m_cellCountX - 1 - cellCenterX );
+	farthestOnMap.y = maxInt( cellCenterY, m_cellCountY - 1 - cellCenterY );
+	if (maxRadiusLimit >= maxInt( farthestOnMap.x, farthestOnMap.y ))
+		maxRadiusLimit = minInt( maxRadiusLimit, calcMinRadius( farthestOnMap ) );
+	if (maxRadiusLimit < 0 || maxRadiusLimit + 1 >= (Int)m_ringStart.size())
+		return TRUE;
+
+	const Int offsetCount = m_ringStart[ maxRadiusLimit + 1 ];
+	for (Int o = 0; o < offsetCount; ++o)
+	{
+		PartitionCell *cell = getCellAt( cellCenterX + m_ringOffsets[ o ].x, cellCenterY + m_ringOffsets[ o ].y );
+		if (cell == NULL)
+			continue;
+		if (onlyPlayers != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( onlyPlayers ))
+			continue;
+
+		for (CellAndObjectIntersection *coi = cell->getFirstCoiInCell(); coi; coi = coi->getNextCoi())
+		{
+			PartitionData *mod = coi->getModule();
+			Object *other = mod->getObject();
+			++out.objectsLookedAt;
+			if (other == obj || other == NULL)
+				continue;
+			Int &stamp = stamps[ mod->friend_getModuleIndex() ];
+			if (stamp == epoch)
+				continue;
+			stamp = epoch;
+
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*distProc)( objPos, obj, other->getPosition(), other, distSqr, distVec, maxDistSqr ))
+				continue;
+			if (!filtersAllow( filters, other ))
+				continue;
+			if (out.count == out.capacity)
+			{
+				out.overflowed = TRUE;
+				return TRUE;
+			}
+			out.objects[ out.count ] = other;
+			out.distSqr[ out.count ] = distSqr;
+			++out.count;
+		}
+	}
+	return TRUE;
 }
 
 //-----------------------------------------------------------------------------

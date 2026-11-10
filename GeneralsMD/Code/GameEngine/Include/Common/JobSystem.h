@@ -104,6 +104,12 @@ namespace JobSystem
 		* items takes the same path at -jobthreads 0 as at 15. */
 	Bool isInsideJob( void );
 
+	/** This thread's place in the fork: 0 on the thread that called parallel_for (and every thread off
+		* the pools), 1 to workerCount() on a pool's workers.  Per-thread scratch a job writes is indexed by
+		* it, sized before the fork for workerCount() + 1 slots.  The two pools number their workers alike,
+		* so scratch belongs to whichever pool forks the work that uses it. */
+	Int threadSlot( void );
+
 	/** How many times a pool worker has allocated from a MemoryPool since the process started.
 		* Rule 1 says this is zero.  It is a count rather than an assert because the Debug config
 		* cannot link this tree standalone, so a _DEBUG-only check would never actually run. */

@@ -1393,6 +1393,13 @@ private:
 		each m_next in turn (most of a hunt scan's time), and can split it across threads. */
 	std::vector<PartitionData *>	m_moduleArray;
 	Int							m_moduleArrayHoles;
+
+	/** gatherFromJob's visited marks, one array a JobSystem::threadSlot indexed like m_moduleArray: a
+		module is visited in this query when its stamp is the slot's current epoch. */
+	enum { JOB_GATHER_SLOTS = 32 };
+	std::vector<Int>	m_jobStamps[ JOB_GATHER_SLOTS ];
+	Int							m_jobEpoch[ JOB_GATHER_SLOTS ];
+
 	void addToModuleArray( PartitionData *mod );
 	void removeFromModuleArray( PartitionData *mod );
 
@@ -1507,6 +1514,29 @@ public:
 	static Int getGatherCountThisFrame( void );		///< of those, the ones that keep every hit in a sorted iterator
 	static Int getQueryObjectCountThisFrame( void );
 	static void resetQueryCounts( void );
+	/** The counts gathersFromJob kept to itself, added on the logic thread after the join. */
+	static void noteJobGathers( Int gathers, Int objectsLookedAt );
+
+	/** What gatherFromJob found, in the caller's own arrays (LOGIC-PARALLEL.md). */
+	struct JobGather
+	{
+		Object	**objects;				///< in the order iterateObjectsInRange inserts them (its iterator hands them out last first)
+		Real		*distSqr;					///< what the walk measured, the iterator's numeric
+		Int			capacity;
+		Int			count;
+		Bool		overflowed;				///< more passed than there was room for: ask again on the logic thread
+		Int			objectsLookedAt;	///< for noteJobGathers
+	};
+
+	/** iterateObjectsInRange's walk around obj for a job the logic thread forks: the same Objects with
+		the same distances in the same order, the visited modules marked in this thread's own stamps instead
+		of the done flags every other query shares, nothing allocated and no shared counter touched.
+		prepareJobGathers sizes the stamps on the logic thread before the fork. FALSE, with nothing found,
+		when a filter is not PartitionFilter::isReadOnly or this thread has no stamps; then the caller asks
+		on its own thread. */
+	Bool gatherFromJob( const Object *obj, Real maxDist, DistanceCalculationType dc, PartitionFilter **filters,
+											PlayerMaskType onlyPlayers, JobGather &out );
+	void prepareJobGathers( void );
 	// ----------------------------------------------------------------
 
 	// --------------- inherited from Snapshot interface --------------

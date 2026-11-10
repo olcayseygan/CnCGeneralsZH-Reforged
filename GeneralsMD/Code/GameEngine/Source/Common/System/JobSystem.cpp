@@ -140,6 +140,7 @@ namespace
 	// Per-thread, so the allocator can tell whose hand is in the pool without a lock of its own.
 	thread_local Bool		s_isWorker = FALSE;
 	thread_local Bool		s_inJob = FALSE;
+	thread_local Int		s_slot = 0;					// 0 off the pools, 1 to numWorkers on a pool's workers
 	std::atomic<Int>		s_workerAllocations( 0 );
 
 	/** Claim chunks of the current job until there are none left.  Every thread in the fork runs
@@ -170,9 +171,10 @@ namespace
 		}
 	}
 
-	void workerMain( Pool *pool )
+	void workerMain( Pool *pool, Int slot )
 	{
 		s_isWorker = TRUE;
+		s_slot = slot;
 		LogicThread::t_isLogicWorker = pool->forLogic;
 
 		/* The FPU control word is per-thread and a new thread starts on the CRT default, not on
@@ -233,7 +235,7 @@ namespace
 		{
 			try
 			{
-				pool.threads[ i ] = std::thread( workerMain, &pool );
+				pool.threads[ i ] = std::thread( workerMain, &pool, i + 1 );
 			}
 			catch( const std::system_error & )
 			{
@@ -363,6 +365,12 @@ Bool JobSystem::isWorkerThread( void )
 Bool JobSystem::isInsideJob( void )
 {
 	return s_inJob;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int JobSystem::threadSlot( void )
+{
+	return s_slot;
 }
 
 //-------------------------------------------------------------------------------------------------

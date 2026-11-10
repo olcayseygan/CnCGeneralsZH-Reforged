@@ -5377,7 +5377,10 @@ void Object::onDie( DamageInfo *damageInfo )
 		if (isKindOf(KINDOF_STRUCTURE) && isKindOf(KINDOF_MP_COUNT_FOR_VICTORY)) 
 		{
 			TheEva->setShouldPlay(EVA_BuldingLost);
-		} 
+			// a cross on the radar where it stood, which the spacebar goes to; the radar waits for the
+			// end of the tick and logic never reads it back
+			TheRadar->tryEvent( RADAR_EVENT_STRUCTURE_LOST, getPosition() );
+		}
 		// a plane a general's power or a Supply Drop Zone sends over is IGNORED_IN_GUI: not yours to
 		// command, not counted as lost in the score (scoreTheKill), so not announced as lost either
 		else if ((isKindOf(KINDOF_INFANTRY) || isKindOf(KINDOF_VEHICLE)) && !isKindOf(KINDOF_IGNORED_IN_GUI))

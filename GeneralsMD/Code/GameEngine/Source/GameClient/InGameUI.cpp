@@ -8155,6 +8155,7 @@ void InGameUI::postDraw( void )
 {
 	// drawHudOverlay is NOT called here - it goes on top of everything, see W3DInGameUI::draw
 	m_hudCellDrawnPass = m_hudCellPass;
+	drawRadarAlarmPointers();
 	drawProductionList();
 	drawClassicMessages();
 
@@ -11726,6 +11727,186 @@ void InGameUI::drawProductionList( void )
 		rest.format( u"+%d", m_productionListTotal - shown );
 		drawHudTab( style.tabUp, m_productionListTab, -1, cellString( m_productionListMoreText, rest ) );
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A chevron at the edge of the view pointing at each alarm that is off the screen, in the alarm's
+	* colour on a dark keyline as the minimap's marks are: an attack, a building lost, an infiltration
+	* or one of your stealth units revealed.  Built, upgraded and the rest are news, not a reason to
+	* look away.  An attack's chevron breathes once a second while the fight lasts.  The edge is the
+	* view's above the command bar; the chevrons go with the HUD, so not while the bar is hidden, a
+	* script hides the interface or -cinema films. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawRadarAlarmPointers( void )
+{
+	if( TheRadar == NULL || TheTacticalView == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
+		return;
+	if( !TheGameLogic->getDrawIconUI() || CinemaDirector_hidesHud() )
+		return;
+	const Int barTop = controlBarTop();
+	if( barTop >= TheDisplay->getHeight() )
+		return;
+
+	// the alarms are the minimap's: none to point at for a player whose radar draws none
+	// (W3DLeftHUDDraw's test; postDraw runs at the sync point, so the player may be asked)
+	Player *local = ThePlayerList->getLocalPlayer();
+	if( !TheRadar->isRadarForced() && ( TheRadar->isRadarHidden() || local == NULL || !local->hasRadar() ) )
+		return;
+
+	// sized against a 1080 line screen, as the HUD's cells are
+	const Real scale = max( 1.0f, TheDisplay->getHeight() / 1080.0f );
+	const Real size = 10.0f * scale;
+	const Real margin = 14.0f * scale;
+
+	Int originX, originY;
+	TheTacticalView->getOrigin( &originX, &originY );
+	const Real left = originX + margin;
+	const Real top = max( originY, hudStripBottom() ) + margin;		// under the info strip, which paints after
+	const Real right = originX + TheTacticalView->getWidth() - margin;
+	const Real bottom = min( originY + TheTacticalView->getHeight(), barTop ) - margin;
+	if( right <= left || bottom <= top )
+		return;
+	const Real centreX = ( left + right ) * 0.5f;
+	const Real centreY = ( top + bottom ) * 0.5f;
+
+	// The radar's frame stands above the bar on the left and rises with Minimap Size, and the windows
+	// paint after postDraw: over the frame's width the edge is the frame's top.  The frame sits on the
+	// screen's left edge, so its right side is all that is needed of its width.
+	Real radarRight = 0.0f;
+	{
+		static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
+		GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
+		if( radar && !radar->winIsHidden() )
+		{
+			IRegion2D inner, outer;
+			radar->winGetScreenPosition( &inner.lo.x, &inner.lo.y );
+			radar->winGetSize( &inner.hi.x, &inner.hi.y );
+			inner.hi.x += inner.lo.x;
+			inner.hi.y += inner.lo.y;
+			outer = inner;
+			const Image *const *radarFrame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
+			if( radarFrame )
+				ControlBarSchemeManager::radarFrameRect( radarFrame, inner, &outer );
+			radarRight = outer.hi.x + margin;
+		}
+	}
+	const Real radarBottom = min( bottom, (Real)radarFrameTop() - margin );
+
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	const Real pulsePhase = (Real)( frame % LOGICFRAMES_PER_SECOND ) / LOGICFRAMES_PER_SECOND;
+	const Real breathe = 0.6f + 0.4f * ( 1.0f - fabs( 2.0f * pulsePhase - 1.0f ) );
+
+	// all lines, no image: one batch holds every chevron (postDraw replays outside any batch)
+	TheDisplay->beginBatch2D();
+
+	for( Int slot = 0; slot < TheRadar->getEventSlotCount(); ++slot )
+	{
+		RadarEventType type;
+		Coord3D world;
+		RGBAColorInt colour;
+		Real fade;
+		if( !TheRadar->getShownEvent( slot, &type, &world, &colour, &fade ) )
+			continue;
+		if( type != RADAR_EVENT_UNDER_ATTACK && type != RADAR_EVENT_STRUCTURE_LOST &&
+				type != RADAR_EVENT_INFILTRATION && type != RADAR_EVENT_STEALTH_NEUTRALIZED )
+			continue;
+
+		// which way on the screen: toward the alarm's own pixel while the camera can project it, else
+		// toward a point a step from the view's middle along the ground, which it always can
+		ICoord2D pixel;
+		const View::WorldToScreenReturn seen = TheTacticalView->worldToScreenTriReturn( &world, &pixel );
+		Real dirX, dirY;
+		if( seen != View::WTS_INVALID )
+		{
+			if( seen == View::WTS_INSIDE_FRUSTUM && pixel.x >= left && pixel.x <= right && pixel.y >= top &&
+					pixel.y <= ( pixel.x <= radarRight ? radarBottom : bottom ) )
+				continue;		// on the screen, where the alarm can be seen for itself
+			dirX = pixel.x - centreX;
+			dirY = pixel.y - centreY;
+		}
+		else
+		{
+			Coord3D look;
+			TheTacticalView->getPosition( &look );
+			look.z = world.z;
+			const Real dx = world.x - look.x;
+			const Real dy = world.y - look.y;
+			const Real length = sqrtf( dx * dx + dy * dy );
+			if( length < 1.0f )
+				continue;
+			ICoord2D from, to;
+			if( TheTacticalView->worldToScreenTriReturn( &look, &from ) == View::WTS_INVALID )
+				continue;
+			// a long step, so the whole pixels it lands on still give the angle; shorter only when a step
+			// toward the camera would pass behind it
+			Bool projected = FALSE;
+			for( Real stepLength = 400.0f; stepLength >= 50.0f && !projected; stepLength *= 0.5f )
+			{
+				Coord3D step = look;
+				step.x += dx / length * stepLength;
+				step.y += dy / length * stepLength;
+				projected = TheTacticalView->worldToScreenTriReturn( &step, &to ) != View::WTS_INVALID;
+			}
+			if( !projected )
+				continue;
+			dirX = (Real)( to.x - from.x );
+			dirY = (Real)( to.y - from.y );
+		}
+		const Real dirLength = sqrtf( dirX * dirX + dirY * dirY );
+		if( dirLength < 0.001f )
+			continue;
+		dirX /= dirLength;
+		dirY /= dirLength;
+
+		// where the ray from the middle leaves the box
+		Real reach = 1.0e9f;
+		if( fabs( dirX ) > 0.0001f )
+			reach = min( reach, ( right - left ) * 0.5f / (Real)fabs( dirX ) );
+		if( fabs( dirY ) > 0.0001f )
+			reach = min( reach, ( bottom - top ) * 0.5f / (Real)fabs( dirY ) );
+		Real tipX = centreX + dirX * reach;
+		Real tipY = centreY + dirY * reach;
+		// past the radar frame's top, it stops at the frame
+		if( tipX <= radarRight + size && tipY > radarBottom && dirY > 0.0001f )
+		{
+			reach = ( radarBottom - centreY ) / dirY;
+			tipX = centreX + dirX * reach;
+			tipY = centreY + dirY * reach;
+		}
+
+		Real alpha = fade;
+		if( type == RADAR_EVENT_UNDER_ATTACK )
+			alpha *= breathe;
+		const Color stroke = GameMakeColor( (UnsignedByte)colour.red, (UnsignedByte)colour.green, (UnsignedByte)colour.blue,
+																				REAL_TO_UNSIGNEDBYTE( colour.alpha * alpha ) );
+		const Color keyline = GameMakeColor( 8, 10, 8, REAL_TO_UNSIGNEDBYTE( 200.0f * alpha ) );
+
+		// two chevrons, the one behind smaller, pointing out of the screen
+		for( Int pass = 0; pass < 2; ++pass )
+		{
+			for( Int chevron = 0; chevron < 2; ++chevron )
+			{
+				const Real back = chevron * size * 0.7f;
+				const Real wing = size * ( chevron == 0 ? 0.8f : 0.6f );
+				const Real pointX = tipX - dirX * back;
+				const Real pointY = tipY - dirY * back;
+				const Real baseX = pointX - dirX * size * 0.8f;
+				const Real baseY = pointY - dirY * size * 0.8f;
+				const Int px = REAL_TO_INT_FLOOR( pointX + 0.5f );
+				const Int py = REAL_TO_INT_FLOOR( pointY + 0.5f );
+				const Int ax = REAL_TO_INT_FLOOR( baseX - dirY * wing + 0.5f );
+				const Int ay = REAL_TO_INT_FLOOR( baseY + dirX * wing + 0.5f );
+				const Int bx = REAL_TO_INT_FLOOR( baseX + dirY * wing + 0.5f );
+				const Int by = REAL_TO_INT_FLOOR( baseY - dirX * wing + 0.5f );
+				const Real width = ( chevron == 0 ? 3.0f : 2.0f ) * scale + ( pass == 0 ? 2.0f : 0.0f );
+				const Color c = pass == 0 ? keyline : stroke;
+				TheDisplay->drawLine( ax, ay, px, py, width, c );
+				TheDisplay->drawLine( bx, by, px, py, width, c );
+			}
+		}
+	}
+
+	TheDisplay->endBatch2D();
 }
 
 //-------------------------------------------------------------------------------------------------

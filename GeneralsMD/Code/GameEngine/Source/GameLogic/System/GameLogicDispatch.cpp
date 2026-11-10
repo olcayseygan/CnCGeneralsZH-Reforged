@@ -2637,7 +2637,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 				TheInGameUI->addSignalMark( (SignalKind)kind, pos, clientPlayerColor( thisPlayer ), smoke->getSystemID() );
 			}
 
-			TheRadar->createEvent( &pos, look.radarEvent, SIGNAL_SECONDS );
+			// the signal's own mark on the radar: its types are borrowed, and a "defend" is no finished building
+			TheRadar->createEvent( &pos, look.radarEvent, SIGNAL_SECONDS, RADAR_MARK_SIGNAL );
 
 			UnicodeString announcement;
 			announcement.format( TheGameText->fetch( look.announcementLabel ), thisPlayer->getPlayerDisplayName().str() );

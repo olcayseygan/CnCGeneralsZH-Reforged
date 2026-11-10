@@ -1501,6 +1501,7 @@ protected:
 	Int hudStripBottom( void ) const;			///< first screen row below that strip, 0 while it is not drawn
 	void drawKickVoteBanner( void );			///< the open vote kick, top middle, while there is one
 	void drawProductionList( void );			///< the production list, cameos on the left above the control bar
+	void drawRadarAlarmPointers( void );	///< a chevron at the view's edge toward each alarm off the screen
 	DisplayString *cellString( DisplayString *&string, const UnicodeString &text );	///< a cell's kept readout string
 	void drawCellSeconds( DisplayString *&string, Int seconds, const IRegion2D &cameo, const Image *plate );	///< "45s" in a cameo's corner
 

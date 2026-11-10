@@ -3440,7 +3440,8 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			{
 				Coord3D lastEvent;
 
-				if( TheRadar->getLastEventLoc( &lastEvent ) )
+				// the last event, and on each press soon after one alarm further back
+				if( TheRadar->cycleEventLoc( &lastEvent ) )
 					TheTacticalView->lookAt( &lastEvent );
 
 			}  // end if

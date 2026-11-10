@@ -143,6 +143,7 @@ static int GetSystemMetrics( int which )
 #include "GameNetwork/NetworkUtil.h"
 #include "Common/Recorder.h"
 #include "Common/RadarShroudCache.h"
+#include "Common/Radar.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetTabControl.h"
 #include "GameClient/PlayerColorScheme.h"
@@ -9921,6 +9922,113 @@ TEST(radar_shroud_cache_clear_owes_the_whole_texture_a_write_again)
 	CHECK_EQ( cache.getDirtyMaxX(), 127 );
 	CHECK_EQ( cache.getDirtyMaxY(), 127 );
 	CHECK_EQ( (Int)cache.getAlpha( 60, 60 ), 0 );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The radar's alarms.  Their rules work on the event array alone, so the probe below reaches them
+// without a game; it is never made, only its statics are called.
+// ---------------------------------------------------------------------------------------------
+struct RadarAlarmProbe : public Radar
+{
+	using Radar::RadarEvent;
+	using Radar::findThrottlingEvent;
+	using Radar::refreshEventLife;
+	using Radar::olderEventIndex;
+	using Radar::markForType;
+	enum { SLOTS = Radar::MAX_RADAR_EVENTS };
+};
+
+static void clearRadarAlarms( RadarAlarmProbe::RadarEvent *events )
+{
+	memset( events, 0, sizeof( RadarAlarmProbe::RadarEvent ) * RadarAlarmProbe::SLOTS );
+	for( Int i = 0; i < RadarAlarmProbe::SLOTS; ++i )
+		events[ i ].type = RADAR_EVENT_INVALID;
+}
+
+static void putRadarAlarm( RadarAlarmProbe::RadarEvent *events, Int slot, RadarEventType type, Real x, Real y,
+													 UnsignedInt created )
+{
+	events[ slot ].type = type;
+	events[ slot ].active = TRUE;
+	events[ slot ].createFrame = created;
+	events[ slot ].dieFrame = created + 4 * LOGICFRAMES_PER_SECOND;
+	events[ slot ].fadeFrame = events[ slot ].dieFrame - LOGICFRAMES_PER_SECOND / 2;
+	events[ slot ].worldLoc.x = x;
+	events[ slot ].worldLoc.y = y;
+	events[ slot ].worldLoc.z = 0.0f;
+	events[ slot ].mark = RADAR_MARK_UNIT;
+}
+
+TEST(radar_alarm_new_type_goes_on_the_end_so_scripts_keep_their_numbers)
+{
+	// a map script stores the type as a number: every type EA shipped keeps its own
+	CHECK_EQ( (Int)RADAR_EVENT_UNDER_ATTACK, 3 );
+	CHECK_EQ( (Int)RADAR_EVENT_STEALTH_NEUTRALIZED, 9 );
+	CHECK_EQ( (Int)RADAR_EVENT_FAKE, 10 );
+	CHECK_EQ( (Int)RADAR_EVENT_STRUCTURE_LOST, 11 );
+	CHECK_EQ( (Int)RADAR_EVENT_NUM_EVENTS, (Int)RADAR_EVENT_STRUCTURE_LOST + 1 );
+	CHECK_EQ( (Int)RadarAlarmProbe::markForType( RADAR_EVENT_STRUCTURE_LOST ), (Int)RADAR_MARK_STRUCTURE );
+	CHECK_EQ( (Int)RadarAlarmProbe::markForType( RADAR_EVENT_UNDER_ATTACK ), (Int)RADAR_MARK_UNIT );
+}
+
+TEST(radar_alarm_a_held_back_hit_keeps_the_alarm_alive)
+{
+	static RadarAlarmProbe::RadarEvent events[ RadarAlarmProbe::SLOTS ];
+	clearRadarAlarms( events );
+	putRadarAlarm( events, 0, RADAR_EVENT_UNDER_ATTACK, 1000.0f, 1000.0f, 600 );
+	const UnsignedInt firstDeath = events[ 0 ].dieFrame;
+
+	// three seconds on, a hit 100 units away is the same fight: held back by the first alarm
+	Coord3D hit = { 1100.0f, 1000.0f, 0.0f };
+	const UnsignedInt later = 600 + 3 * LOGICFRAMES_PER_SECOND;
+	CHECK_EQ( RadarAlarmProbe::findThrottlingEvent( events, RADAR_EVENT_UNDER_ATTACK, &hit, later ), 0 );
+
+	// and it lives four seconds after that hit now, not after the first
+	RadarAlarmProbe::refreshEventLife( &events[ 0 ], later, 4.0f, RADAR_MARK_STRUCTURE );
+	CHECK( events[ 0 ].dieFrame > firstDeath );
+	CHECK_EQ( events[ 0 ].dieFrame, later + 4 * LOGICFRAMES_PER_SECOND );
+	CHECK_EQ( events[ 0 ].fadeFrame, events[ 0 ].dieFrame - LOGICFRAMES_PER_SECOND / 2 );
+	CHECK( events[ 0 ].active );
+	CHECK_EQ( (Int)events[ 0 ].mark, (Int)RADAR_MARK_STRUCTURE );		// grows to the bigger thing hit
+	RadarAlarmProbe::refreshEventLife( &events[ 0 ], later, 4.0f, RADAR_MARK_UNIT );
+	CHECK_EQ( (Int)events[ 0 ].mark, (Int)RADAR_MARK_STRUCTURE );		// and never shrinks back
+
+	// one that had gone out comes back for the next hit
+	events[ 0 ].active = FALSE;
+	RadarAlarmProbe::refreshEventLife( &events[ 0 ], later + 60, 4.0f, RADAR_MARK_BY_TYPE );
+	CHECK( events[ 0 ].active );
+	CHECK_EQ( events[ 0 ].dieFrame, later + 60 + 4 * LOGICFRAMES_PER_SECOND );
+
+	// across the map, or another type, or ten seconds on, nothing holds it back
+	Coord3D across = { 2000.0f, 1000.0f, 0.0f };
+	CHECK_EQ( RadarAlarmProbe::findThrottlingEvent( events, RADAR_EVENT_UNDER_ATTACK, &across, later ), -1 );
+	CHECK_EQ( RadarAlarmProbe::findThrottlingEvent( events, RADAR_EVENT_INFILTRATION, &hit, later ), -1 );
+	CHECK_EQ( RadarAlarmProbe::findThrottlingEvent( events, RADAR_EVENT_UNDER_ATTACK, &hit, 600 + 10 * LOGICFRAMES_PER_SECOND ), -1 );
+}
+
+TEST(radar_alarm_spacebar_walks_back_through_distinct_places)
+{
+	static RadarAlarmProbe::RadarEvent events[ RadarAlarmProbe::SLOTS ];
+	clearRadarAlarms( events );
+	// oldest to newest in slots 62, 63, 0, 1, 2: the ring has wrapped
+	putRadarAlarm( events, 62, RADAR_EVENT_UNDER_ATTACK, 100.0f, 100.0f, 10 );
+	putRadarAlarm( events, 63, RADAR_EVENT_FAKE, 3000.0f, 3000.0f, 20 );
+	putRadarAlarm( events, 0, RADAR_EVENT_BEACON_PULSE, 2000.0f, 100.0f, 30 );		// never a stop
+	putRadarAlarm( events, 1, RADAR_EVENT_UNDER_ATTACK, 3050.0f, 3000.0f, 40 );		// where slot 63 is
+	putRadarAlarm( events, 2, RADAR_EVENT_STRUCTURE_LOST, 1500.0f, 1500.0f, 50 );
+
+	Int visited[ 5 ];
+	Int count = 0;
+	visited[ count++ ] = 2;
+	Int next = RadarAlarmProbe::olderEventIndex( events, 2, 2, visited, count );
+	CHECK_EQ( next, 1 );
+	visited[ count++ ] = next;
+	// slot 0 is a beacon and slot 63 the place slot 1 already showed: the next is slot 62
+	next = RadarAlarmProbe::olderEventIndex( events, 2, next, visited, count );
+	CHECK_EQ( next, 62 );
+	visited[ count++ ] = next;
+	// nothing older; the slots before are empty
+	CHECK_EQ( RadarAlarmProbe::olderEventIndex( events, 2, next, visited, count ), -1 );
 }
 
 // ---------------------------------------------------------------------------------------------

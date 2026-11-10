@@ -279,8 +279,14 @@ void Radar::clearAllEvents( void )
 		m_event[ i ].radarLoc.x = 0;
 		m_event[ i ].radarLoc.y = 0;
 		m_event[ i ].soundPlayed = FALSE;
+		m_event[ i ].mark = RADAR_MARK_UNIT;
 
 	}  // end for i
+
+	// the spacebar starts again from the last event
+	m_cycleCount = 0;
+	m_cycleAnchor = -1;
+	m_cycleFrame = 0;
 
 }  // end clearAllEvents
 
@@ -1081,7 +1087,8 @@ static RadarColorLookup radarColorLookupTable[] =
 {
 	/*      Radar Event													Color 1									 Color 2       */
 	{ RADAR_EVENT_CONSTRUCTION,					{ 128, 128, 255, 255 },  {  128, 255, 255, 255 } },
-	{ RADAR_EVENT_UPGRADE,							{ 128,   0,  64, 255 },  {  255, 185, 220, 255 } },
+	// the light pink first: the tick is drawn in color 1 on a dark keyline, where EA's dark purple vanished
+	{ RADAR_EVENT_UPGRADE,							{ 255, 185, 220, 255 },  {  128,   0,  64, 255 } },
 	{ RADAR_EVENT_UNDER_ATTACK,					{ 255,   0,   0, 255 },  {  255, 128, 128, 255 } },
 	{ RADAR_EVENT_INFORMATION,					{ 255, 255,   0, 255 },  {  255, 255, 128, 255 } },
 	{ RADAR_EVENT_BEACON_PULSE,					{ 255, 255,   0, 255 },  {  255, 255, 128, 255 } },
@@ -1090,13 +1097,14 @@ static RadarColorLookup radarColorLookupTable[] =
 	{ RADAR_EVENT_STEALTH_DISCOVERED,		{   0, 255,   0, 255 },	 {    0, 128,   0, 255 } },
 	{ RADAR_EVENT_STEALTH_NEUTRALIZED,	{   0, 255,   0, 255 },	 {    0, 128,   0, 255 } },
 	{ RADAR_EVENT_FAKE,									{   0,	 0,   0,	 0 },	 {    0,	 0,   0,   0 } },
+	{ RADAR_EVENT_STRUCTURE_LOST,				{ 255, 112,  32, 255 },	 {  120,   0,   0, 255 } },
 	{ RADAR_EVENT_INVALID,							{   0,   0,   0,   0 },  {    0,   0,   0,   0 } }
 };
 
 //-------------------------------------------------------------------------------------------------
 /** Create a new radar event */
 //-------------------------------------------------------------------------------------------------
-void Radar::createEvent( const Coord3D *world, RadarEventType type, Real secondsToLive )
+void Radar::createEvent( const Coord3D *world, RadarEventType type, Real secondsToLive, RadarEventMark mark )
 {
 	// sanity
 	if( world == NULL )
@@ -1105,7 +1113,7 @@ void Radar::createEvent( const Coord3D *world, RadarEventType type, Real seconds
 	if( LogicThread::defersEffects() )
 	{
 		const Coord3D at = *world;
-		LogicThread::callAfterTick( [=]() { createEvent( &at, type, secondsToLive ); } );
+		LogicThread::callAfterTick( [=]() { createEvent( &at, type, secondsToLive, mark ); } );
 		return;
 	}
 	LOGIC_CENSUS( CENSUS_RADAR );
@@ -1142,7 +1150,7 @@ void Radar::createEvent( const Coord3D *world, RadarEventType type, Real seconds
 	}  // end if
 
 	// call the internal method to create the event with these colors
-	internalCreateEvent( world, type, secondsToLive, &color[ 0 ], &color[ 1 ] );
+	internalCreateEvent( world, type, secondsToLive, &color[ 0 ], &color[ 1 ], mark );
 
 }  // end createEvent
 
@@ -1200,7 +1208,8 @@ void Radar::createPlayerEvent( Player *player, const Coord3D *world,
 /** Create a new radar event */
 //-------------------------------------------------------------------------------------------------
 void Radar::internalCreateEvent( const Coord3D *world, RadarEventType type, Real secondsToLive,
-																 const RGBAColorInt *color1, const RGBAColorInt *color2 )
+																 const RGBAColorInt *color1, const RGBAColorInt *color2,
+																 RadarEventMark mark )
 {
 	static Real secondsBeforeDieToFade = 0.5f;  ///< this many seconds before we hit the die frame we start to fade away
 		
@@ -1223,6 +1232,7 @@ void Radar::internalCreateEvent( const Coord3D *world, RadarEventType type, Real
 	m_event[ m_nextFreeRadarEvent ].worldLoc = *world;
 	m_event[ m_nextFreeRadarEvent ].radarLoc = radar;
 	m_event[ m_nextFreeRadarEvent ].soundPlayed = FALSE;
+	m_event[ m_nextFreeRadarEvent ].mark = (UnsignedByte)( mark == RADAR_MARK_BY_TYPE ? markForType( type ) : mark );
 
 	// record the index of this, our "last" radar event.
 	if ( type != RADAR_EVENT_BEACON_PULSE )
@@ -1260,6 +1270,173 @@ Bool Radar::getLastEventLoc( Coord3D *eventPos )
 
 }  // end getLastEventLoc
 
+// two alarms of a type nearer than this are one place: the throttle refreshes the older, and the
+// spacebar does not stop at it twice
+static const Real RADAR_EVENT_SAME_PLACE = 250.0f;
+
+// presses further apart than this start the spacebar again at the last event
+static const UnsignedInt RADAR_CYCLE_FRAMES = LOGICFRAMES_PER_SECOND * 3;
+
+//-------------------------------------------------------------------------------------------------
+/** How big an event of this type draws when its maker does not say: a building's news at a
+	* building's size, a unit's at a unit's */
+//-------------------------------------------------------------------------------------------------
+RadarEventMark Radar::markForType( RadarEventType type )
+{
+	switch( type )
+	{
+		case RADAR_EVENT_CONSTRUCTION:
+		case RADAR_EVENT_UPGRADE:
+		case RADAR_EVENT_INFORMATION:
+		case RADAR_EVENT_BATTLE_PLAN:
+		case RADAR_EVENT_STRUCTURE_LOST:
+			return RADAR_MARK_STRUCTURE;
+		default:
+			return RADAR_MARK_UNIT;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The event a new one of this type at pos is held back by: the same type, the same place and made
+	* under ten seconds ago.  -1 when there is none. */
+//-------------------------------------------------------------------------------------------------
+Int Radar::findThrottlingEvent( const RadarEvent *events, RadarEventType type, const Coord3D *pos, UnsignedInt frame )
+{
+	const UnsignedInt framesBetweenEvents = LOGICFRAMES_PER_SECOND * 10;
+	for( Int i = 0; i < MAX_RADAR_EVENTS; ++i )
+	{
+		if( events[ i ].type != type )
+			continue;
+
+		//
+		// Distance from the new event to this one, in 2D.  There were no brackets here at all,
+		// so what it worked out was x - (px*x) - px + y - (py*y) - py: not a distance, not even
+		// a positive number most of the time.  The test below it therefore answered at random,
+		// which is why two attacks on opposite ends of the map could suppress each other's
+		// warning while two on the same building both got one.
+		//
+		const Real dx = events[ i ].worldLoc.x - pos->x;
+		const Real dy = events[ i ].worldLoc.y - pos->y;
+		if( dx * dx + dy * dy <= RADAR_EVENT_SAME_PLACE * RADAR_EVENT_SAME_PLACE &&
+				frame - events[ i ].createFrame < framesBetweenEvents )
+			return i;
+	}
+	return -1;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A hit the throttle held back keeps the alarm it fell under alive, drawn again if it had gone
+	* out: it dies secondsToLive after the latest hit, not the first.  It grows to the bigger mark
+	* of the two, so a unit's ring next to a building that is then hit becomes the building's. */
+//-------------------------------------------------------------------------------------------------
+void Radar::refreshEventLife( RadarEvent *event, UnsignedInt frame, Real secondsToLive, RadarEventMark mark )
+{
+	static const Real secondsBeforeDieToFade = 0.5f;		// as internalCreateEvent
+	const UnsignedInt dieFrame = frame + (UnsignedInt)( LOGICFRAMES_PER_SECOND * secondsToLive );
+	if( event->active == FALSE || dieFrame > event->dieFrame )
+	{
+		event->dieFrame = dieFrame;
+		event->fadeFrame = dieFrame - (UnsignedInt)( LOGICFRAMES_PER_SECOND * secondsBeforeDieToFade );
+	}
+	event->active = TRUE;
+	if( mark != RADAR_MARK_BY_TYPE && mark != RADAR_MARK_SIGNAL && event->mark != RADAR_MARK_SIGNAL && (UnsignedByte)mark > event->mark )
+		event->mark = (UnsignedByte)mark;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The next event back from `from` in the ring, counting from `newest`, that the spacebar may go
+	* to: not an empty slot, not a beacon's pulse, and not the same place as one this run of presses
+	* has already shown.  -1 when there is none left. */
+//-------------------------------------------------------------------------------------------------
+Int Radar::olderEventIndex( const RadarEvent *events, Int newest, Int from, const Int *visited, Int visitedCount )
+{
+	if( newest < 0 || newest >= MAX_RADAR_EVENTS || from < 0 || from >= MAX_RADAR_EVENTS )
+		return -1;
+
+	// how far back from the newest `from` is; the oldest the ring holds is MAX_RADAR_EVENTS - 1 back
+	const Int fromAge = ( newest - from + MAX_RADAR_EVENTS ) % MAX_RADAR_EVENTS;
+	for( Int age = fromAge + 1; age < MAX_RADAR_EVENTS; ++age )
+	{
+		const Int i = ( newest - age + MAX_RADAR_EVENTS ) % MAX_RADAR_EVENTS;
+		if( events[ i ].type == RADAR_EVENT_INVALID || events[ i ].type == RADAR_EVENT_BEACON_PULSE )
+			continue;
+
+		Bool seen = FALSE;
+		for( Int v = 0; v < visitedCount && !seen; ++v )
+		{
+			const Coord3D &there = events[ visited[ v ] ].worldLoc;
+			const Real dx = events[ i ].worldLoc.x - there.x;
+			const Real dy = events[ i ].worldLoc.y - there.y;
+			seen = dx * dx + dy * dy <= RADAR_EVENT_SAME_PLACE * RADAR_EVENT_SAME_PLACE;
+		}
+		if( !seen )
+			return i;
+	}
+	return -1;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The spacebar.  The first press goes to the last event as it always did; each press within three
+	* seconds of the one before goes one alarm further back, up to RADAR_CYCLE_DEPTH places, then
+	* starts again at the last.  A new event starts it again too. */
+//-------------------------------------------------------------------------------------------------
+Bool Radar::cycleEventLoc( Coord3D *eventPos )
+{
+	if( m_lastRadarEvent == -1 )
+		return FALSE;
+
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	Int next = -1;
+	if( m_cycleCount > 0 && m_cycleCount < RADAR_CYCLE_DEPTH && m_cycleAnchor == m_lastRadarEvent &&
+			frame >= m_cycleFrame && frame - m_cycleFrame <= RADAR_CYCLE_FRAMES )
+		next = olderEventIndex( m_event, m_lastRadarEvent, m_cycleVisited[ m_cycleCount - 1 ], m_cycleVisited, m_cycleCount );
+
+	if( next == -1 )
+	{
+		// from the top
+		m_cycleCount = 0;
+		m_cycleAnchor = m_lastRadarEvent;
+		next = m_lastRadarEvent;
+	}
+
+	m_cycleVisited[ m_cycleCount++ ] = next;
+	m_cycleFrame = frame;
+	if( eventPos )
+		*eventPos = m_event[ next ].worldLoc;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** What the slot draws, for the pointers at the view's edge: its type, where, its colour and how
+	* far it has faded, 1 solid.  FALSE when the slot shows nothing. */
+//-------------------------------------------------------------------------------------------------
+Bool Radar::getShownEvent( Int slot, RadarEventType *type, Coord3D *world, RGBAColorInt *color, Real *alpha ) const
+{
+	if( slot < 0 || slot >= MAX_RADAR_EVENTS )
+		return FALSE;
+	const RadarEvent &event = m_event[ slot ];
+	if( event.active == FALSE || event.type == RADAR_EVENT_FAKE || event.type == RADAR_EVENT_BEACON_PULSE ||
+			event.type == RADAR_EVENT_INVALID )
+		return FALSE;
+
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	Real fade = 1.0f;
+	if( frame > event.fadeFrame && event.dieFrame > event.fadeFrame )
+		fade = 1.0f - (Real)( frame - event.fadeFrame ) / (Real)( event.dieFrame - event.fadeFrame );
+	if( fade <= 0.0f )
+		return FALSE;
+
+	if( type )
+		*type = event.type;
+	if( world )
+		*world = event.worldLoc;
+	if( color )
+		*color = event.color1;
+	if( alpha )
+		*alpha = fade;
+	return TRUE;
+}
+
 // ------------------------------------------------------------------------------------------------
 /** Try to create a radar event for "we're under attack".  This will be called every time
 	* actual damage is dealt to an object that the player owns that shows up on the radar.
@@ -1295,8 +1472,11 @@ void Radar::tryUnderAttackEvent( const Object *obj )
 
 	LogicThread::callAfterTick( [this, kind, ours, allied, at]()
 	{
-		// try to create the event
-		if( !tryEvent( RADAR_EVENT_UNDER_ATTACK, &at ) )
+		// try to create the event; one held back keeps the alarm already there alive.  The ring is as
+		// big as what was hit: the base's buildings, then a harvester, then any other unit
+		const RadarEventMark mark = kind == WARN_BASE ? RADAR_MARK_STRUCTURE
+																: kind == WARN_UNIT ? RADAR_MARK_UNIT : RADAR_MARK_HARVESTER;
+		if( !tryEvent( RADAR_EVENT_UNDER_ATTACK, &at, mark ) )
 			return;
 
 		// the lamp beside the radar
@@ -1322,7 +1502,8 @@ void Radar::tryUnderAttackEvent( const Object *obj )
 			else
 			{
 				TheInGameUI->message( "RADAR:UnitUnderAttack" );
-				unitAttackSound = TheAudio->getMiscAudio()->m_radarStructureUnderAttackSound;
+				// EA played the structure's here; the unit's own is the same warning, quieter
+				unitAttackSound = TheAudio->getMiscAudio()->m_radarUnitUnderAttackSound;
 			}
 			unitAttackSound.setPlayerIndex(player->getPlayerIndex());
 			TheAudio->addAudioEvent( &unitAttackSound );
@@ -1345,7 +1526,7 @@ void Radar::tryUnderAttackEvent( const Object *obj )
 		{
 			TheInGameUI->message( "RADAR:UnderAttack" );
 
-			static AudioEventRTS underAttackSound = TheAudio->getMiscAudio()->m_radarStructureUnderAttackSound;
+			static AudioEventRTS underAttackSound = TheAudio->getMiscAudio()->m_radarUnderAttackSound;
 			underAttackSound.setPlayerIndex(player->getPlayerIndex());
 			TheAudio->addAudioEvent( &underAttackSound );
 		}
@@ -1372,8 +1553,9 @@ void Radar::tryInfiltrationEvent( const Object *obj )
 	if( obj->getControllingPlayer() != ThePlayerList->getLocalPlayer() )
 		return;
 
-	// create the radar event
-	createEvent( obj->getPosition(), RADAR_EVENT_INFILTRATION );
+	// create the radar event, a building's at a building's size
+	createEvent( obj->getPosition(), RADAR_EVENT_INFILTRATION, 4.0f,
+							 obj->isKindOf( KINDOF_STRUCTURE ) ? RADAR_MARK_STRUCTURE : RADAR_MARK_UNIT );
 
 	//
 	///@todo Should make an INI data driven table for radar event strings, and audio events
@@ -1395,14 +1577,14 @@ void Radar::tryInfiltrationEvent( const Object *obj )
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-Bool Radar::tryEvent( RadarEventType event, const Coord3D *pos )
+Bool Radar::tryEvent( RadarEventType event, const Coord3D *pos, RadarEventMark mark )
 {
 	// inside a tick the try waits for its end and the answer is FALSE: a caller that acts on the answer
 	// asks from callAfterTick (StealthDetectorUpdate, tryUnderAttackEvent)
 	if( LogicThread::defersEffects() && pos != NULL )
 	{
 		const Coord3D at = *pos;
-		LogicThread::callAfterTick( [=]() { tryEvent( event, &at ); } );
+		LogicThread::callAfterTick( [=]() { tryEvent( event, &at, mark ); } );
 		return FALSE;
 	}
 	LOGIC_CENSUS( CENSUS_RADAR );
@@ -1411,48 +1593,32 @@ Bool Radar::tryEvent( RadarEventType event, const Coord3D *pos )
 	if( event <= RADAR_EVENT_INVALID || event >= RADAR_EVENT_NUM_EVENTS || pos == NULL )
 		return FALSE;
 
-	// see if there was an event of this type within the given range within the given time
-	UnsignedInt currentFrame = TheGameLogic->getFrame();
-	const Real closeEnoughDistanceSq = 250.0f * 250.0f;
-	const UnsignedInt framesBetweenEvents = LOGICFRAMES_PER_SECOND * 10;
 	//
+	// An event of this type at the same place under ten seconds ago holds a new one back: no second
+	// alarm, no second message or sound.  The hit is not lost, though: it keeps that alarm alive, so a
+	// fight's ring stays up while the fight goes on and goes out a few seconds after it stops.
+	//
+	const UnsignedInt currentFrame = TheGameLogic->getFrame();
+	const Int held = findThrottlingEvent( m_event, event, pos, currentFrame );
+	if( held != -1 )
+	{
+		refreshEventLife( &m_event[ held ], currentFrame, 4.0f, mark );
+		return FALSE;
+	}
 
-	// see if there was any matching radar event within range of this one
-	// that wasn't too long ago, if there was we won't create another and get outta here
-	//
+	// a long fight warns again every ten seconds; its new alarm takes over from the old one there
 	for( Int i = 0; i < MAX_RADAR_EVENTS; ++i )
 	{
-	
-		// only pay attention to under attack events
-		if( m_event[ i ].type == event )
-		{
-
-			//
-			// Distance from the new event to this one, in 2D.  There were no brackets here at all,
-			// so what it worked out was x - (px*x) - px + y - (py*y) - py: not a distance, not even
-			// a positive number most of the time.  The test below it therefore answered at random,
-			// which is why two attacks on opposite ends of the map could suppress each other's
-			// warning while two on the same building both got one.
-			//
-			const Real dx = m_event[ i ].worldLoc.x - pos->x;
-			const Real dy = m_event[ i ].worldLoc.y - pos->y;
-			Real distSquared = dx * dx + dy * dy;
-
-			if( distSquared <= closeEnoughDistanceSq )
-			{
-
-				// finally only reject making a new event of this existing one is "recent enough"
-				if( currentFrame - m_event[ i ].createFrame < framesBetweenEvents )
-					return FALSE;  // reject it
-
-			}  // end if
-
-		}  // end if
-
-	}  // end for i
+		if( m_event[ i ].type != event || m_event[ i ].active == FALSE )
+			continue;
+		const Real dx = m_event[ i ].worldLoc.x - pos->x;
+		const Real dy = m_event[ i ].worldLoc.y - pos->y;
+		if( dx * dx + dy * dy <= RADAR_EVENT_SAME_PLACE * RADAR_EVENT_SAME_PLACE )
+			m_event[ i ].active = FALSE;
+	}
 
 	// if we got here then we want to create a new event
-	createEvent( pos, event );
+	createEvent( pos, event, 4.0f, mark );
 
 	// return TRUE for successfully created event
 	return TRUE;
@@ -1596,13 +1762,14 @@ static void xferRadarObjectList( Xfer *xfer, RadarObject **head )
 // ------------------------------------------------------------------------------------------------
 /** Xfer Method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: each event's mark, its size on the radar */
 // ------------------------------------------------------------------------------------------------
 void Radar::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1644,7 +1811,11 @@ void Radar::xfer( Xfer *xfer )
 		xfer->xferCoord3D( &m_event[ i ].worldLoc );
 		xfer->xferICoord2D( &m_event[ i ].radarLoc );
 		xfer->xferBool( &m_event[ i ].soundPlayed );
-		
+		if( version >= 2 )
+			xfer->xferUnsignedByte( &m_event[ i ].mark );
+		else
+			m_event[ i ].mark = (UnsignedByte)markForType( m_event[ i ].type );
+
 	}  // end for i
 
 	// next event index

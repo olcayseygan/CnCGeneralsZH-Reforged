@@ -828,101 +828,177 @@ void W3DRadar::drawSingleBeaconEvent( Int pixelX, Int pixelY, Int width, Int hei
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+/** An alarm's mark, in window pixels around its place: told apart by shape before colour, and as
+	* big as what it is about, never the half-radar triangle EA spun down over a second and a half.
+	*   under attack     a red ring with a second ring pulsing out of it once a second, for as long
+	*                    as the hits keep coming (Radar::tryEvent keeps it alive)
+	*   structure lost   a cross where the building stood
+	*   built, upgraded  a tick
+	*   stealth          a diamond; one of yours revealed has a dot in it
+	*   ally signal      a square with a dot, whatever type it borrowed
+	*   anything else    EA's triangle, small and still
+	* Every stroke lies on a dark keyline a pixel wider all round, as the reinforcement lines do, so
+	* it reads on snow and on dark ground alike.  A new mark pops in at twice its size over a fifth
+	* of a second; it fades over the event's last half second as EA's did. */
+//-------------------------------------------------------------------------------------------------
 void W3DRadar::drawSingleGenericEvent( Int pixelX, Int pixelY, Int width, Int height, Int index )
 {
-	RadarEvent *event = &(m_event[index]);
-	ICoord2D tri[ 3 ];
-	ICoord2D start, end;
-	Real angle, addAngle;
-	Color startColor, endColor;
-	Real lineWidth = 1.0f;
-	UnsignedInt currentFrame = TheGameLogic->getFrame();
-	UnsignedInt frameDiff;							// frames the event has been alive for
-	Real maxEventSize = width / 2.0f;   // max size of the event marker
-	Int minEventSize = 6;     // min size of the event marker
-	Int eventSize;									 // current size of a marker to draw
-	const Real TIME_FROM_FULL_SIZE_TO_SMALL_SIZE = LOGICFRAMES_PER_SECOND * 1.5;
-	Real totalAnglesToSpin = 2.0f * PI;  ///< spin around this many angles going from big to small
-	UnsignedByte r, g, b, a;
+	const RadarEvent *event = &m_event[ index ];
 
-	// setup screen clipping region
-	IRegion2D clipRegion;
-	clipRegion.lo.x = pixelX;
-	clipRegion.lo.y = pixelY;
-	clipRegion.hi.x = pixelX + width;
-	clipRegion.hi.y = pixelY + height;
+	// half sizes at the 220 pixel radar of a 1080p HUD, by RadarEventMark: unit, harvester, structure, signal
+	static const Real HALF_SIZE[ RADAR_MARK_COUNT ] = { 4.0f, 5.0f, 7.0f, 6.0f };
+	const Real POP_FRAMES = LOGICFRAMES_PER_SECOND * 0.2f;
+	const Real PULSE_FRAMES = LOGICFRAMES_PER_SECOND * 1.0f;
+	const Real strokeWidth = 2.0f;
 
-	// get the difference in frame from the current frame to the frame we were created on
-	frameDiff = currentFrame - event->createFrame;
+	IRegion2D clip;
+	clip.lo.x = pixelX;
+	clip.lo.y = pixelY;
+	clip.hi.x = pixelX + width;
+	clip.hi.y = pixelY + height;
 
-	// compute the size of the event marker, it is largest when it starts and smallest at the end
-	eventSize = REAL_TO_INT( maxEventSize * ( 1.0f - frameDiff / TIME_FROM_FULL_SIZE_TO_SMALL_SIZE) );;
+	const UnsignedInt currentFrame = TheGameLogic->getFrame();
+	const Real age = currentFrame > event->createFrame ? (Real)( currentFrame - event->createFrame ) : 0.0f;
 
-	// we never let the event size get too small
-	if( eventSize < minEventSize )
-		eventSize = minEventSize;
+	Real fade = 1.0f;
+	if( currentFrame > event->fadeFrame && event->dieFrame > event->fadeFrame )
+		fade = 1.0f - (Real)( currentFrame - event->fadeFrame ) / (Real)( event->dieFrame - event->fadeFrame );
+	if( fade <= 0.0f )
+		return;
 
-	// compute how much "angle" we will add to each point to make it rotate as it's getting small
-	addAngle = totalAnglesToSpin * (frameDiff / TIME_FROM_FULL_SIZE_TO_SMALL_SIZE);
+	const Real scale = max( 1.0f, max( width, height ) / 220.0f );
+	const Int mark = event->mark < RADAR_MARK_COUNT ? event->mark : RADAR_MARK_UNIT;
+	Real s = HALF_SIZE[ mark ] * scale;
+	if( age < POP_FRAMES )
+		s *= 2.0f - age / POP_FRAMES;
 
-	// create a triangle around the event
-	angle = 0.0f - addAngle;
-	tri[ 0 ].x = REAL_TO_INT( (DOUBLE_TO_REAL( Cos( angle ) ) * eventSize) + event->radarLoc.x );
-	tri[ 0 ].y = REAL_TO_INT( (DOUBLE_TO_REAL( Sin( angle ) ) * eventSize) + event->radarLoc.y );
+	ICoord2D centre;
+	radarToPixel( &event->radarLoc, &centre, pixelX, pixelY, width, height );
+	const Real cx = (Real)centre.x;
+	const Real cy = (Real)centre.y;
 
-	angle = 2.0f * PI / 3.0f - addAngle;
-	tri[ 1 ].x = REAL_TO_INT( (DOUBLE_TO_REAL( Cos( angle ) ) * eventSize) + event->radarLoc.x );
-	tri[ 1 ].y = REAL_TO_INT( (DOUBLE_TO_REAL( Sin( angle ) ) * eventSize) + event->radarLoc.y );
+	const Color stroke = GameMakeColor( (UnsignedByte)event->color1.red, (UnsignedByte)event->color1.green,
+																			(UnsignedByte)event->color1.blue, REAL_TO_UNSIGNEDBYTE( event->color1.alpha * fade ) );
+	const Color keyline = GameMakeColor( 8, 10, 8, REAL_TO_UNSIGNEDBYTE( 200.0f * fade ) );
 
-	angle = -2.0f * PI / 3.0f - addAngle;
-	tri[ 2 ].x = REAL_TO_INT( (DOUBLE_TO_REAL( Cos( angle ) ) * eventSize) + event->radarLoc.x );
-	tri[ 2 ].y = REAL_TO_INT( (DOUBLE_TO_REAL( Sin( angle ) ) * eventSize) + event->radarLoc.y );
-
-	// translate radar coords to screen coords
-	radarToPixel( &tri[ 0 ], &tri[ 0 ], pixelX, pixelY, width, height );
-	radarToPixel( &tri[ 1 ], &tri[ 1 ], pixelX, pixelY, width, height );
-	radarToPixel( &tri[ 2 ], &tri[ 2 ], pixelX, pixelY, width, height );
-
-	//
-	// make the colors we're going to use, when we're at our smallest size we will start to
-	// fade the alpha away to transparent so that at our lifetime frame we are completely gone
-	//
-
-	// color 1 ------------------
-	r = event->color1.red;
-	g = event->color1.green;
-	b = event->color1.blue;
-	a = event->color1.alpha;
-	if( currentFrame > event->fadeFrame )
+	// A polyline through points given as offsets from the centre, keyline first, then the stroke.
+	// ClipLine2D clips the centre line only, so each pass clips to the picture shrunk by half its
+	// width and no stroke spills onto the frame.  The keyline runs a pixel past each end, as the
+	// reinforcement lines' dashes do, so an open stroke's ends are edged too.
+	auto polyline = [&]( const Real *xy, Int points, Bool closed, Color colour, Real lineWidth, Bool keylined )
 	{
-		
-		a = REAL_TO_UNSIGNEDBYTE( (Real)a * (1.0f - (Real)(currentFrame - event->fadeFrame) / 
-																								(Real)(event->dieFrame - event->fadeFrame) ) );
-
-	}  // end if
-	startColor = GameMakeColor( r, g, b, a );
-
-	// color 2 ------------------
-	r = event->color2.red;
-	g = event->color2.green;
-	b = event->color2.blue;
-	a = event->color2.alpha;
-	if( currentFrame > event->fadeFrame )
+		const Int segments = closed ? points : points - 1;
+		for( Int pass = keylined ? 0 : 1; pass < 2; ++pass )
+		{
+			const Real passWidth = pass == 0 ? lineWidth + 2.0f : lineWidth;
+			const Int inset = REAL_TO_INT_CEIL( passWidth * 0.5f );
+			IRegion2D passClip = clip;
+			passClip.lo.x += inset;
+			passClip.lo.y += inset;
+			passClip.hi.x -= inset;
+			passClip.hi.y -= inset;
+			const Real reach = pass == 0 ? 1.0f : 0.0f;
+			for( Int k = 0; k < segments; ++k )
+			{
+				const Int j = ( k + 1 ) % points;
+				Real x0 = cx + xy[ 2 * k ], y0 = cy + xy[ 2 * k + 1 ];
+				Real x1 = cx + xy[ 2 * j ], y1 = cy + xy[ 2 * j + 1 ];
+				const Real dx = x1 - x0, dy = y1 - y0;
+				const Real length = sqrtf( dx * dx + dy * dy );
+				if( length > 0.001f )
+				{
+					x0 -= dx / length * reach;
+					y0 -= dy / length * reach;
+					x1 += dx / length * reach;
+					y1 += dy / length * reach;
+				}
+				ICoord2D from, to, clippedFrom, clippedTo;
+				from.x = REAL_TO_INT_FLOOR( x0 + 0.5f );
+				from.y = REAL_TO_INT_FLOOR( y0 + 0.5f );
+				to.x = REAL_TO_INT_FLOOR( x1 + 0.5f );
+				to.y = REAL_TO_INT_FLOOR( y1 + 0.5f );
+				if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &passClip ) )
+					TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y,
+																passWidth, pass == 0 ? keyline : colour );
+			}
+		}
+	};
+	auto ring = [&]( Real radius, Color colour, Real lineWidth, Bool keylined )
 	{
-		
-		a = REAL_TO_UNSIGNEDBYTE( (Real)a * (1.0f - (Real)(currentFrame - event->fadeFrame) / 
-																								(Real)(event->dieFrame - event->fadeFrame) ) );
+		enum { SEGMENTS = 16 };
+		Real xy[ 2 * SEGMENTS ];
+		for( Int k = 0; k < SEGMENTS; ++k )
+		{
+			xy[ 2 * k ] = Cos( TWO_PI * k / SEGMENTS ) * radius;
+			xy[ 2 * k + 1 ] = Sin( TWO_PI * k / SEGMENTS ) * radius;
+		}
+		polyline( xy, SEGMENTS, TRUE, colour, lineWidth, keylined );
+	};
+	auto dot = [&]( Int size, Color colour )
+	{
+		fillClipped( clip, centre.x - ( size + 2 ) / 2, centre.y - ( size + 2 ) / 2, size + 2, keyline );
+		fillClipped( clip, centre.x - size / 2, centre.y - size / 2, size, colour );
+	};
 
-	}  // end if
-	endColor = GameMakeColor( r, g, b, a );
+	if( mark == RADAR_MARK_SIGNAL )
+	{
+		const Real square[] = { -s, -s, s, -s, s, s, -s, s };
+		polyline( square, 4, TRUE, stroke, strokeWidth, TRUE );
+		dot( max( 2, REAL_TO_INT( 2.0f * scale ) ), stroke );
+		return;
+	}
 
-	// draw the lines
-	if( ClipLine2D( &tri[ 0 ], &tri[ 1 ], &start, &end, &clipRegion ) )
-		TheDisplay->drawLine( start.x, start.y, end.x, end.y, lineWidth, startColor, endColor );
-	if( ClipLine2D( &tri[ 1 ], &tri[ 2 ], &start, &end, &clipRegion ) )
-		TheDisplay->drawLine( start.x, start.y, end.x, end.y, lineWidth, startColor, endColor );
-	if( ClipLine2D( &tri[ 2 ], &tri[ 0 ], &start, &end, &clipRegion ) )
-		TheDisplay->drawLine( start.x, start.y, end.x, end.y, lineWidth, startColor, endColor );
+	switch( event->type )
+	{
+		case RADAR_EVENT_UNDER_ATTACK:
+		{
+			ring( s, stroke, strokeWidth, TRUE );
+			// the pulse: out to two and a half times the ring and gone, once a second
+			const Real phase = fmodf( age, PULSE_FRAMES ) / PULSE_FRAMES;
+			const Color pulse = GameMakeColor( (UnsignedByte)event->color1.red, (UnsignedByte)event->color1.green,
+																				 (UnsignedByte)event->color1.blue,
+																				 REAL_TO_UNSIGNEDBYTE( event->color1.alpha * fade * ( 1.0f - phase ) ) );
+			ring( s * ( 1.0f + 1.5f * phase ), pulse, 1.0f, FALSE );
+			break;
+		}
+
+		case RADAR_EVENT_STRUCTURE_LOST:
+		{
+			const Real a[] = { -s, -s, s, s };
+			const Real b[] = { -s, s, s, -s };
+			polyline( a, 2, FALSE, stroke, strokeWidth, TRUE );
+			polyline( b, 2, FALSE, stroke, strokeWidth, TRUE );
+			break;
+		}
+
+		case RADAR_EVENT_CONSTRUCTION:
+		case RADAR_EVENT_UPGRADE:
+		{
+			// screen y runs down: from the left, down to the foot and up to the top right
+			const Real tick[] = { -s, 0.0f, -0.3f * s, 0.7f * s, s, -0.8f * s };
+			polyline( tick, 3, FALSE, stroke, strokeWidth, TRUE );
+			break;
+		}
+
+		case RADAR_EVENT_STEALTH_DISCOVERED:
+		case RADAR_EVENT_STEALTH_NEUTRALIZED:
+		{
+			const Real diamond[] = { 0.0f, -s, s, 0.0f, 0.0f, s, -s, 0.0f };
+			polyline( diamond, 4, TRUE, stroke, strokeWidth, TRUE );
+			if( event->type == RADAR_EVENT_STEALTH_NEUTRALIZED )
+				dot( max( 2, REAL_TO_INT( 2.0f * scale ) ), stroke );
+			break;
+		}
+
+		default:
+		{
+			// infiltration, information, battle plan and whatever a script asks for: EA's triangle
+			const Real triangle[] = { 0.0f, -s, 0.87f * s, 0.5f * s, -0.87f * s, 0.5f * s };
+			polyline( triangle, 3, TRUE, stroke, strokeWidth, TRUE );
+			break;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1542,8 +1618,11 @@ void W3DRadar::update( void )
 				continue;
 			if( m_event[ i ].soundPlayed == FALSE && m_event[ i ].type != RADAR_EVENT_BEACON_PULSE )
 			{
+				// a lost building pings the radar under EVA's line; the rest keep EA's RadarEvent, which
+				// the retail data leaves without a sound.  An attack has its own, played as it is made
 				static AudioEventRTS eventSound("RadarEvent");
-				TheAudio->addAudioEvent( &eventSound );
+				static AudioEventRTS lostSound("RadarPing");
+				TheAudio->addAudioEvent( m_event[ i ].type == RADAR_EVENT_STRUCTURE_LOST ? &lostSound : &eventSound );
 			}
 			m_event[ i ].soundPlayed = TRUE;
 		}

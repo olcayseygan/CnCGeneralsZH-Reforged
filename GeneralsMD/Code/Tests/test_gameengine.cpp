@@ -18635,19 +18635,28 @@ enum { JOB_LANE_ITEMS = 512 };
 static Int s_laneMainSeen[ JOB_LANE_ITEMS ];		// 1 read live, 2 read the copies, +4 on a worker, 0 outside a job
 static Int s_laneLogicSeen[ JOB_LANE_ITEMS ];
 static std::atomic<Int> s_lanesIn( 0 );
+static std::atomic<Int> s_laneWorkerSeen[ 2 ];		// a worker of the main pool, of the logic pool, has run an item
 
 static void jobLaneRecord( Int *seen, Int index )
 {
-	// both forks hold their first items until the other has begun, so they really overlap, and every
-	// item takes a little while, so the workers are awake before the forking thread has done them all
+	// both forks hold their first items until the other has begun, so they really overlap
 	if( index == 0 )
 		s_lanesIn.fetch_add( 1 );
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds( 500 );
 	while( s_lanesIn.load() < 2 && std::chrono::steady_clock::now() < deadline )
 		std::this_thread::yield();
-	const auto busy = std::chrono::steady_clock::now() + std::chrono::microseconds( 50 );
-	while( std::chrono::steady_clock::now() < busy )
-		;
+
+	// ...and the forking thread holds its items until a worker of its pool has taken one, so the check
+	// below is not left to the scheduler on a loaded machine (the join waits only for workers that came)
+	std::atomic<Int> &workerSeen = s_laneWorkerSeen[ seen == s_laneLogicSeen ? 1 : 0 ];
+	if( JobSystem::isWorkerThread() )
+		workerSeen.store( 1 );
+	else
+	{
+		const auto wait = std::chrono::steady_clock::now() + std::chrono::milliseconds( 2000 );
+		while( !workerSeen.load() && std::chrono::steady_clock::now() < wait )
+			std::this_thread::yield();
+	}
 
 	Int v = LogicThread::isInsideWindow() ? 2 : 1;
 	if( JobSystem::isWorkerThread() )
@@ -18670,6 +18679,8 @@ TEST(the_logic_thread_forks_on_its_own_pool_and_reads_live_state)
 		s_laneLogicSeen[ i ] = 0;
 	}
 	s_lanesIn.store( 0 );
+	s_laneWorkerSeen[ 0 ].store( 0 );
+	s_laneWorkerSeen[ 1 ].store( 0 );
 
 	LogicThread::g_windowOpen.store( 1 );
 	std::thread logic( []
@@ -18698,6 +18709,7 @@ TEST(the_logic_thread_forks_on_its_own_pool_and_reads_live_state)
 	JobSystem::shutdown();
 	JobSystem::init( 0 );
 	s_lanesIn.store( 2 );
+	s_laneWorkerSeen[ 0 ].store( 1 );		// there is none to wait for
 	s_laneMainSeen[ 0 ] = 0;
 	JobSystem::parallel_for( 1, 1, jobLaneMain, NULL );
 	CHECK_EQ( 1, s_laneMainSeen[ 0 ] );

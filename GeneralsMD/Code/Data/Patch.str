@@ -4613,3 +4613,229 @@ END
 CONTROLBAR:ToolTipNukeTalent10B
 "An Overlord that takes no damage for 10 seconds repairs 11 health, 1 percent, every second."
 END
+
+// America's cards: rows 6 and 9 for all four America generals, rows 7, 8 and 10 each general's own
+
+SCIENCE:AmericaTalent6A
+"Cheaper Hardware"
+END
+
+CONTROLBAR:ToolTipAmericaTalent6A
+"Vehicles and aircraft cost 15 percent less, for as long as you have a Command Center, a Barracks, a War Factory or a Dozer left."
+END
+
+SCIENCE:AmericaTalent6B
+"Battle Drills"
+END
+
+CONTROLBAR:ToolTipAmericaTalent6B
+"Infantry, vehicles and aircraft gain experience 50 percent faster. With Advanced Training on top they gain it two and a half times as fast instead of twice."
+END
+
+SCIENCE:AmericaTalent9A
+"Extra Thunderbolt"
+END
+
+CONTROLBAR:ToolTipAmericaTalent9A
+"The A-10 Strike sends one more plane, 2, 3 or 4 by its tier instead of 1, 2 or 3."
+END
+
+SCIENCE:AmericaTalent9B
+"Extra Rangers"
+END
+
+CONTROLBAR:ToolTipAmericaTalent9B
+"Paradrop brings four more Rangers, 9, 14 or 24 by its tier instead of 5, 10 or 20."
+END
+
+SCIENCE:USATalent7A
+"Heavy Armour"
+END
+
+CONTROLBAR:ToolTipUSATalent7A
+"Crusaders take a fifth more damage before they die, 480 to 576, and Paladins 500 to 600."
+END
+
+SCIENCE:USATalent7B
+"Body Armour"
+END
+
+CONTROLBAR:ToolTipUSATalent7B
+"Rangers take a quarter more damage before they die, 180 to 225, and Missile Defenders 100 to 125."
+END
+
+SCIENCE:USATalent8A
+"Hardened Defences"
+END
+
+CONTROLBAR:ToolTipUSATalent8A
+"Patriots and Fire Bases stand a quarter longer, 1250 instead of 1000."
+END
+
+SCIENCE:USATalent8B
+"Reinforced Airframes"
+END
+
+CONTROLBAR:ToolTipUSATalent8B
+"Comanches take a fifth more damage before they go down, 220 to 264, and Raptors 160 to 192."
+END
+
+SCIENCE:USATalent10A
+"Wider Blast"
+END
+
+CONTROLBAR:ToolTipUSATalent10A
+"The Fuel Air Bomb and the MOAB kill a quarter further out, and the targeting circle grows to match."
+END
+
+SCIENCE:USATalent10B
+"Field Repair"
+END
+
+CONTROLBAR:ToolTipUSATalent10B
+"A vehicle that takes no damage for 5 seconds repairs about 1 percent of its health every second."
+END
+
+SCIENCE:SuperweaponTalent7A
+"Alpha Airframe"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7A
+"Aurora Alpha Bombers take a quarter more damage before they go down, 80 to 100."
+END
+
+SCIENCE:SuperweaponTalent7B
+"Armoured Escorts"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7B
+"Humvees take a quarter more damage before they die, 240 to 300, and Avengers 300 to 375."
+END
+
+SCIENCE:SuperweaponTalent8A
+"EMP Patriot Plating"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8A
+"EMP Patriot Systems stand 1300 instead of 1000."
+END
+
+SCIENCE:SuperweaponTalent8B
+"Tomahawk Overhaul"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8B
+"Tomahawks drive 15 percent faster and take a quarter more damage, 180 to 225."
+END
+
+SCIENCE:SuperweaponTalent10A
+"Cheaper Superweapons"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10A
+"Superweapons cost 25 percent less, a Particle Cannon 1875 instead of 2500, for as long as you have a Command Center, a Barracks, a War Factory or a Dozer left."
+END
+
+SCIENCE:SuperweaponTalent10B
+"Repair Crews"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10B
+"Defence buildings repair 6 more health a second on top of their own repair once nothing has hit them for 3 seconds, close to twice as fast."
+END
+
+SCIENCE:LaserTalent7A
+"Laser Tank Armour"
+END
+
+CONTROLBAR:ToolTipLaserTalent7A
+"Laser Tanks take a fifth more damage before they die, 480 to 576."
+END
+
+SCIENCE:LaserTalent7B
+"Avenger Armour"
+END
+
+CONTROLBAR:ToolTipLaserTalent7B
+"Avengers take a quarter more damage before they die, 300 to 375."
+END
+
+SCIENCE:LaserTalent8A
+"Turret Plating"
+END
+
+CONTROLBAR:ToolTipLaserTalent8A
+"Laser Defense Turrets stand 1300 instead of 1000."
+END
+
+SCIENCE:LaserTalent8B
+"Laser Tank Engines"
+END
+
+CONTROLBAR:ToolTipLaserTalent8B
+"Laser Tanks drive 15 percent faster."
+END
+
+SCIENCE:LaserTalent10A
+"Veteran Crews"
+END
+
+CONTROLBAR:ToolTipLaserTalent10A
+"Laser Tanks leave the War Factory as veterans."
+END
+
+SCIENCE:LaserTalent10B
+"Cheaper Defences"
+END
+
+CONTROLBAR:ToolTipLaserTalent10B
+"Laser Defense Turrets and Fire Bases cost 30 percent less, 700 instead of 1000, for as long as you have a Command Center, a Barracks, a War Factory or a Dozer left."
+END
+
+SCIENCE:AirForceTalent7A
+"Comanche Armour"
+END
+
+CONTROLBAR:ToolTipAirForceTalent7A
+"Comanches take a quarter more damage before they go down, 220 to 275."
+END
+
+SCIENCE:AirForceTalent7B
+"King Raptor Armour"
+END
+
+CONTROLBAR:ToolTipAirForceTalent7B
+"King Raptors take a fifth more damage before they go down, 240 to 288."
+END
+
+SCIENCE:AirForceTalent8A
+"Hardened Airbase"
+END
+
+CONTROLBAR:ToolTipAirForceTalent8A
+"Airfields stand 3250 instead of 2500, and Patriots 1300 instead of 1000."
+END
+
+SCIENCE:AirForceTalent8B
+"Chinook Overhaul"
+END
+
+CONTROLBAR:ToolTipAirForceTalent8B
+"Combat Chinooks fly 15 percent faster and take a quarter more damage, 350 to 437."
+END
+
+SCIENCE:AirForceTalent10A
+"Veteran Pilots"
+END
+
+CONTROLBAR:ToolTipAirForceTalent10A
+"King Raptors leave the Airfield as veterans."
+END
+
+SCIENCE:AirForceTalent10B
+"Airframe Repair"
+END
+
+CONTROLBAR:ToolTipAirForceTalent10B
+"Every aircraft and helicopter repairs about 1 percent of its health a second, under fire too."
+END

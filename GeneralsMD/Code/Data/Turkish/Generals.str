@@ -18847,3 +18847,227 @@ END
 CONTROLBAR:ToolTipNukeTalent10B
 "10 saniye hasar almayan Overlord her saniye 11 can, yüzde 1, onarır."
 END
+
+SCIENCE:AmericaTalent6A
+"Ucuz Donanım"
+END
+
+CONTROLBAR:ToolTipAmericaTalent6A
+"Araçlar ve hava araçları yüzde 15 ucuza çıkar. Bir Komuta Merkezi, Kışla, Savaş Fabrikası ya da Dozer ayakta kaldıkça sürer."
+END
+
+SCIENCE:AmericaTalent6B
+"Tatbikat"
+END
+
+CONTROLBAR:ToolTipAmericaTalent6B
+"Piyade, araç ve hava araçları yüzde 50 daha hızlı tecrübe kazanır. İleri Eğitim de varsa iki kat yerine iki buçuk kat."
+END
+
+SCIENCE:AmericaTalent9A
+"Fazladan Thunderbolt"
+END
+
+CONTROLBAR:ToolTipAmericaTalent9A
+"A10 Saldırısı bir uçak fazla yollar, seviyesine göre 1, 2, 3 yerine 2, 3, 4."
+END
+
+SCIENCE:AmericaTalent9B
+"Fazladan Ranger"
+END
+
+CONTROLBAR:ToolTipAmericaTalent9B
+"Paraşütçü İndirme dört Ranger fazla indirir, seviyesine göre 5, 10, 20 yerine 9, 14, 24."
+END
+
+SCIENCE:USATalent7A
+"Ağır Zırh"
+END
+
+CONTROLBAR:ToolTipUSATalent7A
+"Crusader'ların canı beşte bir artar, 480'den 576'ya. Paladin'lerinki 500'den 600'e."
+END
+
+SCIENCE:USATalent7B
+"Çelik Yelek"
+END
+
+CONTROLBAR:ToolTipUSATalent7B
+"Ranger'ların canı dörtte bir artar, 180'den 225'e. Füze Savunucularınınki 100'den 125'e."
+END
+
+SCIENCE:USATalent8A
+"Sağlam Savunma"
+END
+
+CONTROLBAR:ToolTipUSATalent8A
+"Patriot'lar ve Ateş Üsleri dörtte bir daha dayanır, 1000 yerine 1250."
+END
+
+SCIENCE:USATalent8B
+"Güçlü Gövde"
+END
+
+CONTROLBAR:ToolTipUSATalent8B
+"Comanche'ların canı beşte bir artar, 220'den 264'e. Raptor'larınki 160'tan 192'ye."
+END
+
+SCIENCE:USATalent10A
+"Geniş Patlama"
+END
+
+CONTROLBAR:ToolTipUSATalent10A
+"Yakıt-Hava Bombası ve Bombaların Anası dörtte bir daha geniş alanı vurur, hedef çemberi de büyür."
+END
+
+SCIENCE:USATalent10B
+"Saha Tamiri"
+END
+
+CONTROLBAR:ToolTipUSATalent10B
+"5 saniye hasar almayan araç her saniye canının yüzde 1'i kadar onarır."
+END
+
+SCIENCE:SuperweaponTalent7A
+"Alpha Gövdesi"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7A
+"Aurora Alpha Bombacılarının canı dörtte bir artar, 80'den 100'e."
+END
+
+SCIENCE:SuperweaponTalent7B
+"Zırhlı Eskort"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7B
+"Humvee'lerin canı dörtte bir artar, 240'tan 300'e. Avenger'larınki 300'den 375'e."
+END
+
+SCIENCE:SuperweaponTalent8A
+"EMP Patriot Zırhı"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8A
+"EMP Patriot Sistemleri 1000 yerine 1300 can taşır."
+END
+
+SCIENCE:SuperweaponTalent8B
+"Tomahawk Bakımı"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8B
+"Tomahawk'lar yüzde 15 daha hızlı gider, canları dörtte bir artar, 180'den 225'e."
+END
+
+SCIENCE:SuperweaponTalent10A
+"Ucuz Süper Silahlar"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10A
+"Süper silahlar yüzde 25 ucuza çıkar, Parçacık Topu 2500 yerine 1875. Bir Komuta Merkezi, Kışla, Savaş Fabrikası ya da Dozer ayakta kaldıkça sürer."
+END
+
+SCIENCE:SuperweaponTalent10B
+"Tamir Ekipleri"
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10B
+"Savunma binaları 3 saniye hasar almayınca kendi onarımlarına ek olarak saniyede 6 can daha onarır, neredeyse iki kat hızlı."
+END
+
+SCIENCE:LaserTalent7A
+"Lazer Tankı Zırhı"
+END
+
+CONTROLBAR:ToolTipLaserTalent7A
+"Lazer Tanklarının canı beşte bir artar, 480'den 576'ya."
+END
+
+SCIENCE:LaserTalent7B
+"Avenger Zırhı"
+END
+
+CONTROLBAR:ToolTipLaserTalent7B
+"Avenger'ların canı dörtte bir artar, 300'den 375'e."
+END
+
+SCIENCE:LaserTalent8A
+"Kule Zırhı"
+END
+
+CONTROLBAR:ToolTipLaserTalent8A
+"Lazer Savunma Kuleleri 1000 yerine 1300 can taşır."
+END
+
+SCIENCE:LaserTalent8B
+"Lazer Tankı Motoru"
+END
+
+CONTROLBAR:ToolTipLaserTalent8B
+"Lazer Tankları yüzde 15 daha hızlı gider."
+END
+
+SCIENCE:LaserTalent10A
+"Tecrübeli Mürettebat"
+END
+
+CONTROLBAR:ToolTipLaserTalent10A
+"Lazer Tankları Savaş Fabrikasından tecrübeli çıkar."
+END
+
+SCIENCE:LaserTalent10B
+"Ucuz Savunma"
+END
+
+CONTROLBAR:ToolTipLaserTalent10B
+"Lazer Savunma Kuleleri ve Ateş Üsleri yüzde 30 ucuza çıkar, 1000 yerine 700. Bir Komuta Merkezi, Kışla, Savaş Fabrikası ya da Dozer ayakta kaldıkça sürer."
+END
+
+SCIENCE:AirForceTalent7A
+"Comanche Zırhı"
+END
+
+CONTROLBAR:ToolTipAirForceTalent7A
+"Comanche'ların canı dörtte bir artar, 220'den 275'e."
+END
+
+SCIENCE:AirForceTalent7B
+"King Raptor Zırhı"
+END
+
+CONTROLBAR:ToolTipAirForceTalent7B
+"King Raptor'ların canı beşte bir artar, 240'tan 288'e."
+END
+
+SCIENCE:AirForceTalent8A
+"Sağlam Hava Üssü"
+END
+
+CONTROLBAR:ToolTipAirForceTalent8A
+"Hava Üsleri 2500 yerine 3250, Patriot'lar 1000 yerine 1300 can taşır."
+END
+
+SCIENCE:AirForceTalent8B
+"Chinook Bakımı"
+END
+
+CONTROLBAR:ToolTipAirForceTalent8B
+"Muharebe Chinook'ları yüzde 15 daha hızlı uçar, canları dörtte bir artar, 350'den 437'ye."
+END
+
+SCIENCE:AirForceTalent10A
+"Tecrübeli Pilotlar"
+END
+
+CONTROLBAR:ToolTipAirForceTalent10A
+"King Raptor'lar Hava Üssünden tecrübeli çıkar."
+END
+
+SCIENCE:AirForceTalent10B
+"Gövde Tamiri"
+END
+
+CONTROLBAR:ToolTipAirForceTalent10B
+"Bütün uçaklar ve helikopterler her saniye canının yüzde 1'i kadar onarır, ateş altındayken bile."
+END

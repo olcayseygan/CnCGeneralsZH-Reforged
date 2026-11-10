@@ -18623,3 +18623,227 @@ END
 CONTROLBAR:ToolTipTurkiyeTalent10B
 "Bordo Bereliler Kışladan tecrübeli çıkar."
 END
+
+SCIENCE:ChinaTalent6A
+"Ucuz Hacker"
+END
+
+CONTROLBAR:ToolTipChinaTalent6A
+"Hackerlar yüzde 40 ucuza çıkar. Bir Komuta Merkezi, Kışla, Savaş Fabrikası ya da Dozer ayakta kaldıkça sürer."
+END
+
+SCIENCE:ChinaTalent6B
+"Ucuz Piyade"
+END
+
+CONTROLBAR:ToolTipChinaTalent6B
+"Bütün askerler yüzde 20 ucuza çıkar, Hackerlar da. Bir Komuta Merkezi, Kışla, Savaş Fabrikası ya da Dozer ayakta kaldıkça sürer."
+END
+
+SCIENCE:ChinaTalent7A
+"Battlemaster Zırhı"
+END
+
+CONTROLBAR:ToolTipChinaTalent7A
+"Battlemaster tankları beşte bir daha fazla hasar kaldırır, 400'den 480'e."
+END
+
+SCIENCE:ChinaTalent7B
+"Gatling Zırhı"
+END
+
+CONTROLBAR:ToolTipChinaTalent7B
+"Gatling Tankları dörtte bir daha fazla hasar kaldırır, 300'den 375'e."
+END
+
+SCIENCE:ChinaTalent8A
+"Sağlam Savunma"
+END
+
+CONTROLBAR:ToolTipChinaTalent8A
+"Sığınaklar ve Gatling Topları dörtte bir daha uzun dayanır: Sığınak 1500'den 1875'e, Gatling Topu 1000'den 1250'ye."
+END
+
+SCIENCE:ChinaTalent8B
+"Cehennem Motoru"
+END
+
+CONTROLBAR:ToolTipChinaTalent8B
+"Cehennem Topları dörtte bir daha fazla hasar kaldırır, 120'den 150'ye, ve yüzde 15 daha hızlı gider."
+END
+
+SCIENCE:ChinaTalent9A
+"Topçu Barajı +12"
+END
+
+CONTROLBAR:ToolTipChinaTalent9A
+"Topçu Barajı 12 mermilik bir dalga fazla atar: üç seviyesinde 24, 36 ve 48."
+END
+
+SCIENCE:ChinaTalent9B
+"Geniş Misket Mayınları"
+END
+
+CONTROLBAR:ToolTipChinaTalent9B
+"Misket Mayınları yüzde 30 daha geniş alana dağılır."
+END
+
+SCIENCE:ChinaTalent10A
+"Tecrübeli Overlordlar"
+END
+
+CONTROLBAR:ToolTipChinaTalent10A
+"Overlord tankları Savaş Fabrikasından tecrübeli çıkar."
+END
+
+SCIENCE:ChinaTalent10B
+"Uzun EMP"
+END
+
+CONTROLBAR:ToolTipChinaTalent10B
+"EMP Darbesinin vurduğu araçlar ve binalar 30 değil 45 saniye kapalı kalır."
+END
+
+SCIENCE:TankTalent7A
+"Emperor Zırhı"
+END
+
+CONTROLBAR:ToolTipTankTalent7A
+"Emperor Overlordlar beşte bir daha fazla hasar kaldırır, tecrübe öncesi 1100'den 1320'ye."
+END
+
+SCIENCE:TankTalent7B
+"Ejder ve Gatling Zırhı"
+END
+
+CONTROLBAR:ToolTipTankTalent7B
+"Ejder Tankları ve Gatling Tankları dörtte bir daha fazla hasar kaldırır: tecrübe öncesi Ejder 400'den 500'e, Gatling 300'den 375'e."
+END
+
+SCIENCE:TankTalent8A
+"Sahra Tamiri"
+END
+
+CONTROLBAR:ToolTipTankTalent8A
+"10 saniye hasar almayan tank her saniye canının yüzde 1'ini onarır. Battlemaster, Emperor, Gatling, Ejder ve ECM Tankları."
+END
+
+SCIENCE:TankTalent8B
+"Battlemaster Zırhı"
+END
+
+CONTROLBAR:ToolTipTankTalent8B
+"Battlemaster tankları beşte bir daha fazla hasar kaldırır, tecrübe öncesi 400'den 480'e."
+END
+
+SCIENCE:TankTalent10A
+"Seçkin Emperorlar"
+END
+
+CONTROLBAR:ToolTipTankTalent10A
+"Emperor Overlordlar Savaş Fabrikasından tecrübeli değil seçkin çıkar."
+END
+
+SCIENCE:TankTalent10B
+"Tank İndirme +2"
+END
+
+CONTROLBAR:ToolTipTankTalent10B
+"Tank İndirme iki Battlemaster fazla indirir: üç seviyesinde 3, 4 ve 6."
+END
+
+SCIENCE:InfantryTalent7A
+"Hızlı Minigun Erleri"
+END
+
+CONTROLBAR:ToolTipInfantryTalent7A
+"Minigun Erleri beşte bir daha hızlı koşar, 25'ten 30'a."
+END
+
+SCIENCE:InfantryTalent7B
+"Tank Avcısı Yeleği"
+END
+
+CONTROLBAR:ToolTipInfantryTalent7B
+"Tank Avcıları dörtte bir daha fazla hasar kaldırır, tecrübe öncesi 100'den 125'e."
+END
+
+SCIENCE:InfantryTalent8A
+"Tahkimli Duvarlar"
+END
+
+CONTROLBAR:ToolTipInfantryTalent8A
+"Tahkimli Sığınaklar yüzde 30 daha uzun dayanır, 1500'den 1950'ye."
+END
+
+SCIENCE:InfantryTalent8B
+"Taşıyıcı Zırhı"
+END
+
+CONTROLBAR:ToolTipInfantryTalent8B
+"Taarruz Birlik Taşıyıcıları dörtte bir daha fazla hasar kaldırır, 240'tan 300'e, ve yüzde 15 daha hızlı gider."
+END
+
+SCIENCE:InfantryTalent10A
+"Sahra Pansumanı"
+END
+
+CONTROLBAR:ToolTipInfantryTalent10A
+"10 saniye hasar almayan asker her saniye 2 can toplar. Minigun Erleri, Tank Avcıları, Hackerlar ve Black Lotus."
+END
+
+SCIENCE:InfantryTalent10B
+"Piyade İndirme +5"
+END
+
+CONTROLBAR:ToolTipInfantryTalent10B
+"Piyade İndirme beş Minigun Eri fazla indirir: üç seviyesinde 10, 15 ve 20."
+END
+
+SCIENCE:NukeTalent7A
+"Overlord Zırhı"
+END
+
+CONTROLBAR:ToolTipNukeTalent7A
+"Overlord tankları beşte bir daha fazla hasar kaldırır, 1100'den 1320'ye."
+END
+
+SCIENCE:NukeTalent7B
+"Nükleer Top Zırhı"
+END
+
+CONTROLBAR:ToolTipNukeTalent7B
+"Nükleer Toplar yüzde 30 daha fazla hasar kaldırır, 240'tan 312'ye."
+END
+
+SCIENCE:NukeTalent8A
+"Reaktör Kalkanı"
+END
+
+CONTROLBAR:ToolTipNukeTalent8A
+"Nükleer Reaktörler ve Sığınaklar yüzde 30 daha uzun dayanır, 1500'den 1950'ye."
+END
+
+SCIENCE:NukeTalent8B
+"MiG Zırhı"
+END
+
+CONTROLBAR:ToolTipNukeTalent8B
+"MiG'ler dörtte bir daha fazla hasar kaldırır, 160'tan 200'e. Uçak Zırhı ile toplanır."
+END
+
+SCIENCE:NukeTalent10A
+"Seçkin Nükleer Toplar"
+END
+
+CONTROLBAR:ToolTipNukeTalent10A
+"Nükleer Toplar Savaş Fabrikasından seçkin çıkar."
+END
+
+SCIENCE:NukeTalent10B
+"Overlord Tamiri"
+END
+
+CONTROLBAR:ToolTipNukeTalent10B
+"10 saniye hasar almayan Overlord her saniye 11 can, yüzde 1, onarır."
+END

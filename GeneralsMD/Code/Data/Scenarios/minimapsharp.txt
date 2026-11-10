@@ -1,0 +1,18 @@
+# The radar before/after pair (2026-11-10).  Seat 0 is the player at this machine, America, and
+# builds nothing by itself, so this gives it a base and an army that moves; seat 1 is a computer
+# China.  The Crusaders drive to the middle and the Humvees on to seat 1's base, so by the shot the
+# radar holds seen ground round the units, explored fog along their road and black beyond it.
+#
+#   generals.exe -win -xres 1920 -yres 1080 -msaa 0 -turbo -quickstart -noshellmap -multiInstance
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -scenario minimapsharp
+#     -screenshot 7200 -maxframes 7360 -logPrefix minimap_
+
+10    spawn      0  AmericaPowerPlant      2   start0:-260:-120
+10    spawn      0  AmericaBarracks        1   start0:260:-160
+10    spawn      0  AmericaWarFactory      1   start0:0:320
+10    spawn      0  AmericaSupplyCenter    1   start0:-300:250
+20    spawn      0  AmericaTankCrusader    8   start0:200:200
+20    spawn      0  AmericaVehicleHumvee   4   start0:-150:200
+40    move       0  AmericaTankCrusader    start0:1200:-600
+40    attackmove 0  AmericaVehicleHumvee   start1

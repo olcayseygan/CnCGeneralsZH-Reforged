@@ -90,7 +90,8 @@ protected:
 	void drawBoxLines( const ICoord2D *corners );	///< a view box's lines through its four corners in pixels
 	void buildTerrainTexture( TerrainLogic *terrain );	 ///< create the terrain texture of the radar
 	void drawIcons( Int pixelX, Int pixelY, Int width, Int height );	///< draw all of the radar icons
-	void renderObjectList( const RadarObject *listHead, TextureClass *texture, Bool calcHero = FALSE );			 ///< render an object list to the texture
+	void collectBlips( const RadarObject *listHead, Bool calcHero = FALSE );	///< copy what an object list shows into m_blips
+	void drawBlips( Int pixelX, Int pixelY, Int width, Int height );	///< draw m_blips at the window's own pixels
 	void interpolateColorForHeight( RGBColor *color, 
 																	Real height, 
 																	Real hiZ, 
@@ -105,19 +106,27 @@ protected:
 	Image *m_terrainImage;												///< terrain image abstraction for drawing
 	TextureClass *m_terrainTexture;								///< terrain background texture	
 
-	WW3DFormat m_overlayTextureFormat;						///< format to use for overlay texture
-	Image *m_overlayImage;												///< overlay image abstraction for drawing
-	TextureClass *m_overlayTexture;								///< overlay texture
-	Bool m_overlayDrawn;													///< draw showed the overlay since update last refreshed it
+	// One object on the radar as update saw it at the sync point: draw runs beside the tick and may
+	// not ask the object.  World position, a structure's footprint (half sizes and facing, zero for
+	// a unit's dot) and the colour with the stealth blink already in its alpha.
+	struct Blip { Real x; Real y; Real halfLength; Real halfWidth; Real angle; Color color; };
+	std::vector<Blip> m_blips;
+	Bool m_overlayDrawn;													///< draw showed the blips since update last collected them
 	Bool m_eventsDrawn;														///< draw showed the events since update last played their sounds
 
 	WW3DFormat m_shroudTextureFormat;							///< format to use for shroud texture
 	Image *m_shroudImage;													///< shroud image abstraction for drawing
-	TextureClass *m_shroudTexture;								///< shroud texture
+	TextureClass *m_shroudTexture;								///< shroud texture, one texel a shroud cell
 	RadarShroudCache m_shroudCache;								///< what the shroud texture should say, in main memory
+	Int m_shroudWidth;														///< the cache's size, a power of two over the shroud's cells
+	Int m_shroudHeight;
+	Int m_shroudTextureWidth;											///< the texture's size, caught up with the cache's in draw
+	Int m_shroudTextureHeight;
+	Real m_shroudCellWidth;												///< world size of one shroud cell
+	Real m_shroudCellHeight;
 
-	Int m_textureWidth;														///< width for all radar textures
-	Int m_textureHeight;													///< height for all radar textures
+	Int m_textureWidth;														///< width of the terrain texture
+	Int m_textureHeight;													///< height of the terrain texture
 
 	//
 	// we want to keep a flag that tells us when to reconstruct the view box, we want
@@ -129,8 +138,8 @@ protected:
 	Bool m_reconstructViewBox;										///< true when we need to reconstruct the box
 	ICoord2D m_viewBox[ 4 ];											///< radar cell points for the 4 corners of view box
 
-	// By value, not by pointer into the object.  The list is rebuilt every OVERLAY_REFRESH_RATE
-	// frames and read on every one of them, so a hero killed in between left a pointer into a
+	// By value, not by pointer into the object.  The list is rebuilt in update and read by every
+	// draw until the next, so a hero killed in between left a pointer into a
 	// deleted Object for the icon pass to read.
 	std::list<Coord3D> m_cachedHeroPosList;					//< cache of hero positions for drawing icons in radar overlay
 

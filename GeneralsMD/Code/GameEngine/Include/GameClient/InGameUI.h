@@ -528,6 +528,25 @@ public:  // ********************************************************************
 	void armOrderRings( OrderHintKind kind );		///< HintSpy: the selection was just given a move-type order
 	const std::vector<OrderRing>& getOrderRings( void ) const { return m_orderRings; }
 
+	// An order this machine has sent and logic has not run yet.  In a network game that is a few
+	// frames of run-ahead, and the lines read off the units kept showing the old order until then.
+	// Until the order's execution frame is past, the unit's line is drawn from the order itself; after
+	// it the unit is read as usual, so an order logic refused goes back to what the unit really does.
+	struct PendingOrder
+	{
+		ObjectID owner;
+		OrderHintKind kind;
+		Coord3D to;							///< the ground clicked, when 'target' is INVALID_ID
+		ObjectID target;				///< the unit or building the order is aimed at
+		UnsignedInt dueFrame;		///< logic has run the order once its frame is past this
+	};
+	void predictOrderHints( OrderHintKind kind, const Coord3D *to, ObjectID target );	///< HintSpy: the selection was just given this order
+	void predictFormationOrderHints( void );		///< HintSpy: the formation line just drawn was sent, each unit to its station
+	// A rally point the same way: the line and the flag go where the player clicked until logic has
+	// run the order, then back to the building's own.
+	void predictRallyPoint( ObjectID building, const Coord3D& at );		///< HintSpy: a rally point was just sent
+	const Coord3D *getPredictedRallyPoint( ObjectID building ) const;	///< NULL unless one is waiting on logic
+
 	// A circle dragged out with the left button while the attack key is armed or Ctrl is held.  The
 	// enemies inside it are shared across the units that can shoot, in the order both sides stand
 	// around the circle, and each unit works down its own share.
@@ -1382,6 +1401,11 @@ protected:
 	std::vector<OrderHint>			m_orderHints;																	///< who is going where, one per unit and queued point
 	std::vector<OrderHint>			m_drawnOrderHints;														///< the same, units headed the same way bunched into one
 	std::vector<OrderRing>			m_orderRings;																	///< armed or fading, one per unit
+	std::vector<PendingOrder>		m_pendingOrders;															///< sent, not yet run by logic, one per unit
+	struct PendingRally { ObjectID building; Coord3D at; UnsignedInt dueFrame; };
+	std::vector<PendingRally>		m_pendingRallies;															///< sent, not yet run by logic, one per building
+	void expirePendingOrders( void );														///< drop what logic has run by now
+	Bool addPendingOrderHint( const Object *obj, const std::vector<OrderHint>& previous );	///< the unit's line from an order logic has not run, FALSE for none
 	void updateOrderRings( void );															///< place armed rings once logic ran the order, drop faded ones
 	Bool placeOrderRing( OrderRing& ring );											///< read where logic sends the unit, FALSE to drop the ring
 

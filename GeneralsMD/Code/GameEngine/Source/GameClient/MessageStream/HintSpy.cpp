@@ -122,14 +122,31 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 			break;
 
 		//-----------------------------------------------------------------------------
+		// the target flashes, and each unit's line points at it before logic runs the order
+		// (InGameUI::predictOrderHints).  The attack circle and line name their attacker and are
+		// always queued, so they draw no line early
 		case GameMessage::MSG_DO_ATTACK_OBJECT:
 			TheInGameUI->createAttackHint( msg );
+			if( !queued && msg->getArgumentCount() == 1 )
+				TheInGameUI->predictOrderHints( InGameUI::ORDER_HINT_ATTACK, NULL, msg->getArgument( 0 )->objectID );
 			break;
 
 		//-----------------------------------------------------------------------------
 		case GameMessage::MSG_DO_FORCE_ATTACK_GROUND:
+			TheInGameUI->createForceAttackHint( msg );
+			if( !queued )
+				TheInGameUI->predictOrderHints( InGameUI::ORDER_HINT_ATTACK_GROUND, &msg->getArgument( 0 )->location, INVALID_ID );
+			break;
 		case GameMessage::MSG_DO_FORCE_ATTACK_OBJECT:
 			TheInGameUI->createForceAttackHint( msg );
+			if( !queued )
+				TheInGameUI->predictOrderHints( InGameUI::ORDER_HINT_FORCE_ATTACK, NULL, msg->getArgument( 0 )->objectID );
+			break;
+
+		//-----------------------------------------------------------------------------
+		// the line and the flag go where the player clicked before logic runs the order
+		case GameMessage::MSG_SET_RALLY_POINT:
+			TheInGameUI->predictRallyPoint( msg->getArgument( 0 )->objectID, msg->getArgument( 1 )->location );
 			break;
 
 		//-----------------------------------------------------------------------------
@@ -145,25 +162,47 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 		case GameMessage::MSG_ADD_WAYPOINT:
 			TheInGameUI->createMoveHint( msg );
 			if( !queued )
-				TheInGameUI->armOrderRings( msg->getType() == GameMessage::MSG_DO_ATTACKMOVETO ? InGameUI::ORDER_HINT_ATTACK_MOVE
-																		: msg->getType() == GameMessage::MSG_ADD_WAYPOINT ? InGameUI::ORDER_HINT_WAYPOINT
-																		: InGameUI::ORDER_HINT_MOVE );
+			{
+				const InGameUI::OrderHintKind kind = msg->getType() == GameMessage::MSG_DO_ATTACKMOVETO ? InGameUI::ORDER_HINT_ATTACK_MOVE
+																					: msg->getType() == GameMessage::MSG_ADD_WAYPOINT ? InGameUI::ORDER_HINT_WAYPOINT
+																					: InGameUI::ORDER_HINT_MOVE;
+				TheInGameUI->armOrderRings( kind );
+				// a waypoint goes on the end of the unit's list, which its own line already draws
+				if( kind != InGameUI::ORDER_HINT_WAYPOINT )
+					TheInGameUI->predictOrderHints( kind, &msg->getArgument( 0 )->location, INVALID_ID );
+			}
 			break;
 
 		//-----------------------------------------------------------------------------
-		// a ring under each unit where the order really sends it (InGameUI::armOrderRings)
+		// a ring under each unit where the order really sends it (InGameUI::armOrderRings), and the
+		// line just drawn kept on the ground until logic runs it
 		case GameMessage::MSG_DO_FORMATION_MOVETO:
 			if( !queued )
+			{
 				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_MOVE );
+				TheInGameUI->predictFormationOrderHints();
+			}
 			break;
 		case GameMessage::MSG_DO_FORMATION_ATTACKMOVETO:
 			if( !queued )
+			{
 				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_ATTACK_MOVE );
+				TheInGameUI->predictFormationOrderHints();
+			}
 			break;
-		case GameMessage::MSG_DO_GUARD_POSITION:
 		case GameMessage::MSG_DO_FORMATION_GUARD:
 			if( !queued )
+			{
 				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_GUARD );
+				TheInGameUI->predictFormationOrderHints();
+			}
+			break;
+		case GameMessage::MSG_DO_GUARD_POSITION:
+			if( !queued )
+			{
+				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_GUARD );
+				TheInGameUI->predictOrderHints( InGameUI::ORDER_HINT_GUARD, &msg->getArgument( 0 )->location, INVALID_ID );
+			}
 			break;
 
 	}	

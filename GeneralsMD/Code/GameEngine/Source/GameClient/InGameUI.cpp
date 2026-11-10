@@ -3807,6 +3807,8 @@ void InGameUI::reset( void )
 	}
 	m_nextMoveHint = 0;
 	m_orderRings.clear();
+	m_pendingOrders.clear();
+	m_pendingRallies.clear();
 
 	m_isQuitMenuVisible = FALSE;
 	TheObserverCamera.reset();
@@ -4481,6 +4483,8 @@ static Bool getGuardedSpot( const AIUpdateInterface *ai, Coord3D& spot, Bool& on
 //-------------------------------------------------------------------------------------------------
 void InGameUI::updateOrderHints( void )
 {
+	expirePendingOrders();
+
 	// a formation line being drawn shows every unit's own station, which is the whole point of it
 	if( m_isFormationDragging )
 	{
@@ -4499,15 +4503,24 @@ void InGameUI::updateOrderHints( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The local player has just given the selection a move-type order (HintSpy).  Each unit it will
-	* move gets a ring waiting for logic to run the order: in a network game that is the order's
-	* execution frame, run-ahead later, and in a game on this machine the next tick. */
+/** The frame an order sent now runs on: in a network game the execution frame, run-ahead later,
+	* and in a game on this machine the next tick.  Logic has run it once its frame is past this. */
 //-------------------------------------------------------------------------------------------------
-void InGameUI::armOrderRings( OrderHintKind kind )
+static UnsignedInt orderDueFrame( void )
 {
 	UnsignedInt due = TheGameLogic->getFrame();
 	if( TheNetwork != NULL && TheNetwork->getExecutionFrame() > (Int)due )
 		due = (UnsignedInt)TheNetwork->getExecutionFrame();
+	return due;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The local player has just given the selection a move-type order (HintSpy).  Each unit it will
+	* move gets a ring waiting for logic to run the order (orderDueFrame). */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::armOrderRings( OrderHintKind kind )
+{
+	const UnsignedInt due = orderDueFrame();
 
 	const Player *local = ThePlayerList->getLocalPlayer();
 	for( DrawableList::const_iterator it = m_selectedDrawables.begin(); it != m_selectedDrawables.end(); ++it )
@@ -4638,6 +4651,165 @@ Bool InGameUI::placeOrderRing( OrderRing& ring )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A unit's new order replaces the one it was still waiting on. */
+//-------------------------------------------------------------------------------------------------
+static void replacePendingOrder( std::vector<InGameUI::PendingOrder>& list, const InGameUI::PendingOrder& order )
+{
+	for( size_t i = 0; i < list.size(); ++i )
+	{
+		if( list[ i ].owner == order.owner )
+		{
+			list[ i ] = order;
+			return;
+		}
+	}
+	list.push_back( order );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The selection was just given an order that is not queued (HintSpy).  Every unit that would take
+	* it draws its line from the order until logic has run it: a move sends whatever can move, an
+	* attack whatever can shoot. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::predictOrderHints( OrderHintKind kind, const Coord3D *to, ObjectID target )
+{
+	const Bool attack = ( kind == ORDER_HINT_ATTACK || kind == ORDER_HINT_FORCE_ATTACK || kind == ORDER_HINT_ATTACK_GROUND );
+
+	PendingOrder order;
+	order.kind = kind;
+	order.target = target;
+	order.dueFrame = orderDueFrame();
+	if( to )
+		order.to = *to;
+	else
+		order.to.zero();
+
+	const Player *local = ThePlayerList->getLocalPlayer();
+	for( DrawableList::const_iterator it = m_selectedDrawables.begin(); it != m_selectedDrawables.end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		if( !obj || obj->getControllingPlayer() != local || obj->getAI() == NULL || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )
+			continue;
+		if( attack ? !obj->isAbleToAttack() : obj->isKindOf( KINDOF_IMMOBILE ) )
+			continue;
+		if( obj->getID() == target )
+			continue;
+		order.owner = obj->getID();
+		replacePendingOrder( m_pendingOrders, order );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A formation line was just sent (HintSpy).  The drag is over but its markers are still in the
+	* list, one per mover at the station logic is about to give it, so the line the player drew stays
+	* on the ground until the units take their stations over. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::predictFormationOrderHints( void )
+{
+	PendingOrder order;
+	order.target = INVALID_ID;
+	order.dueFrame = orderDueFrame();
+	for( std::vector<OrderHint>::const_iterator it = m_orderHints.begin(); it != m_orderHints.end(); ++it )
+	{
+		order.owner = it->owner;
+		order.kind = it->kind;
+		order.to = it->to;
+		replacePendingOrder( m_pendingOrders, order );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A rally point was just sent (HintSpy).  The control bar is told to look again, so the flag moves
+	* on this frame too. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::predictRallyPoint( ObjectID building, const Coord3D& at )
+{
+	PendingRally rally;
+	rally.building = building;
+	rally.at = at;
+	rally.dueFrame = orderDueFrame();
+
+	Bool replaced = FALSE;
+	for( size_t i = 0; i < m_pendingRallies.size() && !replaced; ++i )
+	{
+		if( m_pendingRallies[ i ].building == building )
+		{
+			m_pendingRallies[ i ] = rally;
+			replaced = TRUE;
+		}
+	}
+	if( !replaced )
+		m_pendingRallies.push_back( rally );
+
+	TheControlBar->markUIDirty();
+}
+
+//-------------------------------------------------------------------------------------------------
+const Coord3D *InGameUI::getPredictedRallyPoint( ObjectID building ) const
+{
+	for( size_t i = 0; i < m_pendingRallies.size(); ++i )
+		if( m_pendingRallies[ i ].building == building )
+			return &m_pendingRallies[ i ].at;
+	return NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** At the sync point, before the lines are read: whatever logic has run is its own again.  A rally
+	* point going back to the building's own makes the control bar look again for the flag. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::expirePendingOrders( void )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+
+	size_t kept = 0;
+	for( size_t i = 0; i < m_pendingOrders.size(); ++i )
+		if( frame <= m_pendingOrders[ i ].dueFrame )
+			m_pendingOrders[ kept++ ] = m_pendingOrders[ i ];
+	m_pendingOrders.resize( kept );
+
+	kept = 0;
+	for( size_t i = 0; i < m_pendingRallies.size(); ++i )
+		if( frame <= m_pendingRallies[ i ].dueFrame )
+			m_pendingRallies[ kept++ ] = m_pendingRallies[ i ];
+	if( kept != m_pendingRallies.size() )
+	{
+		m_pendingRallies.resize( kept );
+		TheControlBar->markUIDirty();
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The line of an order this machine sent and logic has not run yet, drawn from the unit to where
+	* the order points.  A target that is gone or under the shroud draws nothing of its own, and the
+	* unit is read as usual. */
+//-------------------------------------------------------------------------------------------------
+Bool InGameUI::addPendingOrderHint( const Object *obj, const std::vector<OrderHint>& previous )
+{
+	for( std::vector<PendingOrder>::const_iterator it = m_pendingOrders.begin(); it != m_pendingOrders.end(); ++it )
+	{
+		if( it->owner != obj->getID() )
+			continue;
+
+		OrderHint hint;
+		hint.owner = it->owner;
+		hint.kind = it->kind;
+		hint.from = *obj->getPosition();
+		hint.to = it->to;
+		if( it->target != INVALID_ID )
+		{
+			const Object *target = TheGameLogic->findObjectByID( it->target );
+			if( target == NULL || target->isEffectivelyDead() || isHiddenByShroud( target ) )
+				return FALSE;
+			hint.to = orderTargetSpot( target );
+			hint.onObject = TRUE;
+		}
+		addOrderHint( hint, previous );
+		return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** EA's rally point says "go here" with a flag and marks every bend of its line with a joint.  An
 	* order reads the same way: the flag goes on the last bit of ground a unit is sent to, and a unit
 	* or building it is sent at gets the joint instead, so a flag never stands on a tank. */
@@ -4698,6 +4870,10 @@ void InGameUI::collectOrderHints( void )
 
 		AIUpdateInterface *ai = obj->getAIUpdateInterface();
 		if( ai == NULL )
+			continue;
+
+		// an order sent from here that logic has not run yet is drawn from the order, on the click
+		if( addPendingOrderHint( obj, previous ) )
 			continue;
 
 		OrderHint hint;
@@ -5649,19 +5825,25 @@ void InGameUI::createMoveHint( const GameMessage *msg )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** An attack command has occurred, start graphical "hint". */
+/** An attack command has occurred: the target flashes on the click, as a building being garrisoned
+	* does, instead of waiting for logic to run the order and the first shot. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::createAttackHint( const GameMessage *msg )
 {
-
+	if( msg->getArgumentCount() < 1 || msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_OBJECTID )
+		return;
+	const Object *target = TheGameLogic->findObjectByID( msg->getArgument( 0 )->objectID );
+	Drawable *draw = target ? target->getDrawable() : NULL;
+	if( draw )
+		draw->flashAsSelected();
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A force attack command has occurred, start graphical "hint". */
+/** A force attack command has occurred: a unit or building aimed at flashes, as with an attack. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::createForceAttackHint( const GameMessage *msg )
 {
-
+	createAttackHint( msg );
 }
 
 //-------------------------------------------------------------------------------------------------

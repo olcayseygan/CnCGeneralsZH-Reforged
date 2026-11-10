@@ -608,9 +608,10 @@ void ControlBar::populateCommand( Object *obj )
 
 		//
 		// if a rally point is set, show the rally point, if we don't have it set hide any rally
-		// point we might have visible 
+		// point we might have visible.  One just sent and not yet run by logic is shown at once
 		//
-		showRallyPoint( exit->getRallyPoint() );
+		const Coord3D *predicted = TheInGameUI->getPredictedRallyPoint( obj->getID() );
+		showRallyPoint( predicted ? predicted : exit->getRallyPoint() );
 
 	}  // end if
 

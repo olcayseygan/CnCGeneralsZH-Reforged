@@ -422,7 +422,10 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					else 
 						continue; //next drawable
 
-					const Coord3D *rallyPoint = exitInterface->getRallyPoint();
+					// one just sent and not yet run by logic is drawn at once
+					const Coord3D *rallyPoint = TheInGameUI->getPredictedRallyPoint( obj->getID() );
+					if( rallyPoint == NULL )
+						rallyPoint = exitInterface->getRallyPoint();
 					if( rallyPoint )
 					{
 						if( boxWrap )

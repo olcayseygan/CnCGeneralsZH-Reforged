@@ -81,6 +81,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/GameClient.h"
+#include "GameClient/GameFont.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GadgetPushButton.h"
@@ -710,7 +711,7 @@ void ControlBar::populatePurchaseScienceRank( Player *player, const CommandSet *
 			window->winHide( TRUE );
 			continue;
 		}
-		if( !player->hasScience( science ) && TheScienceStore->playerHasPrereqsForScience( player, science ) && TheScienceStore->getSciencePurchaseCost( science ) <= player->getSciencePurchasePoints() )
+		if( player->isCapableOfPurchasingScience( science ) )
 			window->winEnable( TRUE );
 		if( player->hasScience( science ) )
 			window->winSetStatus( WIN_STATUS_ALWAYS_COLOR );
@@ -719,6 +720,387 @@ void ControlBar::populatePurchaseScienceRank( Player *player, const CommandSet *
 		if( !TheScienceStore->playerHasRootPrereqsForScience( player, science ) )
 			window->winHide( TRUE );
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// The talents: GeneralsExpPoints.wnd's window widened to two panels of 542x598, the general's powers
+// on the left as the .wnd lays them and the talent tree on the right, five rows (ranks 6 to 10) of
+// two plates with the rank nodes on a spine between them.  Every rect is Tools/hud_command_bar.py's
+// talent_layout() and its TALENT_* constants, in the wide window's texels (one a pixel at 1080).
+// The plates are invisible push buttons over pieces the window's own draw lays down, so a press,
+// a tooltip and a disabled plate behave like any button's.
+//-------------------------------------------------------------------------------------------------
+namespace
+{
+	enum { TALENT_DESIGN_W = 1084, TALENT_DESIGN_H = 598, POWERS_DESIGN_W = 542, TALENT_ROW_COUNT = TALENT_SCIENCE_COUNT / 2 };
+	enum TalentState { TALENT_LOCKED, TALENT_WAITING, TALENT_PICKED, TALENT_REJECTED };
+
+	const Int theTalentRowY[ TALENT_ROW_COUNT ][ 2 ] = { { 54, 132 }, { 178, 256 }, { 260, 338 }, { 342, 420 }, { 466, 544 } };
+	const Int theTalentPlateX[ 2 ][ 2 ] = { { 560, 774 }, { 852, 1066 } };		// A and B
+	const Int TALENT_FACE_INSET = 9;			// plate edge to its text well; the widest TALENT_FACE, so it fits every side's
+	const Int theTalentNodeX[ 2 ] = { 771, 855 };
+	const Int TALENT_NODE_HALF_H = 36;
+	const Int theTalentSpineX[ 2 ] = { 801, 825 };
+	const Int theTalentArmX[ 2 ][ 2 ] = { { 761, 799 }, { 827, 865 } };		// Left (to A) and Right (to B)
+	const Int TALENT_ARM_HALF_H = 10;
+	const Int theTalentCaption[ 4 ] = { 555, 13, 1012, 43 };
+	const Int theTalentHint[ 4 ] = { 555, 553, 1071, 581 };
+	const Int theTalentClose[ 4 ] = { 1024, 8, 1072, 48 };
+	const Int theRankLabel[ 4 ] = { 451, 481, 509, 496 };		// the left panel's old close socket
+	const Int theRankNumeral[ 4 ] = { 451, 499, 509, 529 };
+
+	/// one line of the window's own text, laid out again only when its text or size changes
+	struct TalentLabel
+	{
+		DisplayString *string;
+		UnicodeString text;
+		Int points, wellW, wellH;
+	};
+	enum { LABEL_PLATE = 0, LABEL_NODE = TALENT_SCIENCE_COUNT, LABEL_CAPTION = LABEL_NODE + TALENT_ROW_COUNT,
+				 LABEL_WAITING, LABEL_HINT, LABEL_RANK, LABEL_RANK_NUMERAL, LABEL_COUNT };
+	TalentLabel theTalentLabels[ LABEL_COUNT ];
+
+	/// where the window's design rect lands on the screen
+	struct TalentMap
+	{
+		Real ox, oy, sx, sy;
+		IRegion2D rect( Int x0, Int y0, Int x1, Int y1 ) const
+		{
+			IRegion2D r;
+			r.lo.x = REAL_TO_INT_FLOOR( ox + x0 * sx );
+			r.lo.y = REAL_TO_INT_FLOOR( oy + y0 * sy );
+			r.hi.x = REAL_TO_INT_FLOOR( ox + x1 * sx );
+			r.hi.y = REAL_TO_INT_FLOOR( oy + y1 * sy );
+			return r;
+		}
+		IRegion2D rect( const Int *r ) const { return rect( r[ 0 ], r[ 1 ], r[ 2 ], r[ 3 ] ); }
+	};
+
+	const ScienceVec *talentsOf( const Player *player )
+	{
+		if( player == NULL || player->getPlayerTemplate() == NULL )
+			return NULL;
+		const ScienceVec &talents = player->getPlayerTemplate()->getTalentSciences();
+		return talents.size() == TALENT_SCIENCE_COUNT ? &talents : NULL;
+	}
+
+	/// what logic says of that card for that player; a general with no talents has every plate locked
+	TalentState talentState( const Player *player, Int index )
+	{
+		const ScienceVec *talents = talentsOf( player );
+		if( talents == NULL )
+			return TALENT_LOCKED;
+		if( player->hasScience( ( *talents )[ index ] ) )
+			return TALENT_PICKED;
+		if( player->hasScience( ( *talents )[ index ^ 1 ] ) )
+			return TALENT_REJECTED;
+		return player->isCapableOfPurchasingScience( ( *talents )[ index ] ) ? TALENT_WAITING : TALENT_LOCKED;
+	}
+
+	/// the label in capitals; the CSF's "Rank" is mixed case, and Turkish needs its own few letters
+	UnicodeString upperCase( const UnicodeString &text )
+	{
+		UnicodeString out;
+		for( Int i = 0; i < text.getLength(); i++ )
+		{
+			WideChar c = text.getCharAt( i );
+			if( ( c >= u'a' && c <= u'z' ) || ( c >= 0xE0 && c <= 0xFE && c != 0xF7 ) )
+				c = (WideChar)( c - 32 );
+			else if( c == 0x131 )		// dotless i
+				c = u'I';
+			else if( c == 0x11F || c == 0x15F )		// g and s with breve and cedilla
+				c = (WideChar)( c - 1 );
+			out.concat( c );
+		}
+		return out;
+	}
+
+	enum { ALIGN_LEFT = -1, ALIGN_CENTRE = 0, ALIGN_RIGHT = 1 };
+
+	/// draw text in a well, centred unless told, wrapped to its width when asked, shrunk a point at a time until it fits
+	void drawTalentLabel( Int which, const UnicodeString &text, Int points, const IRegion2D &well, Color color, Bool wrap,
+												Int align = ALIGN_CENTRE )
+	{
+		if( text.isEmpty() )
+			return;
+		TalentLabel &label = theTalentLabels[ which ];
+		const Int wellW = well.hi.x - well.lo.x, wellH = well.hi.y - well.lo.y;
+		if( label.string == NULL )
+			label.string = TheDisplayStringManager->newDisplayString();
+		if( label.text.compare( text ) != 0 || label.points != points || label.wellW != wellW || label.wellH != wellH )
+		{
+			label.text = text;
+			label.points = points;
+			label.wellW = wellW;
+			label.wellH = wellH;
+			label.string->setWordWrap( wrap ? wellW : 0 );
+			label.string->setWordWrapCentered( wrap );
+			label.string->setText( text );
+			for( Int p = MAX( points, 6 ); p >= 6; p-- )
+			{
+				label.string->setFont( TheFontLibrary->getFont( "Arial", p, TRUE ) );
+				Int w, h;
+				label.string->getSize( &w, &h );
+				if( w <= wellW && h <= wellH )
+					break;
+			}
+		}
+		Int w, h;
+		label.string->getSize( &w, &h );
+		const Int x = align == ALIGN_LEFT ? well.lo.x : ( align == ALIGN_RIGHT ? well.hi.x - w : ( well.lo.x + well.hi.x - w ) / 2 );
+		label.string->draw( x, ( well.lo.y + well.hi.y - h ) / 2, color, GameMakeColor( 0, 0, 0, 255 ) );
+	}
+
+	void drawTalentNothing( GameWindow *window, WinInstanceData *instData )
+	{
+	}
+
+	/** GenExpParent's draw: the wide painting, or the old one on the left half where the scheme has
+		* no talent art, then the tree of the player the window is open on. */
+	void drawTalentWindow( GameWindow *window, WinInstanceData *instData )
+	{
+		ICoord2D origin, size;
+		window->winGetScreenPosition( &origin.x, &origin.y );
+		window->winGetSize( &size.x, &size.y );
+		TalentMap map;
+		map.ox = (Real)origin.x;
+		map.oy = (Real)origin.y;
+		map.sx = size.x / (Real)TALENT_DESIGN_W;
+		map.sy = size.y / (Real)TALENT_DESIGN_H;
+
+		const ControlBarSchemeManager *schemes = TheControlBar ? TheControlBar->getControlBarSchemeManager() : NULL;
+		const Image *const *art = schemes ? schemes->getTalentImages() : NULL;
+		if( art )
+			TheDisplay->drawImage( art[ ControlBarScheme::TALENT_WINDOW ], origin.x, origin.y, origin.x + size.x, origin.y + size.y );
+		else
+		{
+			// the side's 542 wide painting where it was drawn for, the right half a plain panel
+			const IRegion2D left = map.rect( 0, 0, POWERS_DESIGN_W, TALENT_DESIGN_H );
+			if( window->winGetEnabledImage( 0 ) )
+				TheDisplay->drawImage( window->winGetEnabledImage( 0 ), left.lo.x, left.lo.y, left.hi.x, left.hi.y );
+			const IRegion2D right = map.rect( POWERS_DESIGN_W, 0, TALENT_DESIGN_W, TALENT_DESIGN_H );
+			TheDisplay->drawFillRect( right.lo.x, right.lo.y, right.hi.x - right.lo.x, right.hi.y - right.lo.y, GameMakeColor( 20, 22, 26, 235 ) );
+		}
+
+		// the snapshot only: this runs while the logic tick may be adding sciences to that very player
+		const ControlBar::TalentView &view = TheControlBar->getTalentView();
+		if( !view.taken )
+			return;
+
+		static const Color plateText[ 4 ] = { GameMakeColor( 104, 108, 114, 255 ), GameMakeColor( 240, 240, 240, 255 ),
+			GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 200, 198, 192, 255 ) };
+		static const Color fillPlate[ 4 ] = { GameMakeColor( 34, 36, 40, 255 ), GameMakeColor( 70, 58, 22, 255 ),
+			GameMakeColor( 40, 62, 96, 255 ), GameMakeColor( 28, 28, 30, 255 ) };
+		const Color gold = GameMakeColor( 242, 194, 48, 255 ), white = GameMakeColor( 255, 255, 255, 255 );
+		const Real scale = map.sy;
+		const Int rank = view.rank;
+		const Int *state = view.state;
+
+		// plates
+		for( Int i = 0; i < TALENT_SCIENCE_COUNT; i++ )
+		{
+			const Int *y = theTalentRowY[ i / 2 ], *x = theTalentPlateX[ i % 2 ];
+			const IRegion2D r = map.rect( x[ 0 ], y[ 0 ], x[ 1 ], y[ 1 ] );
+			if( art )
+				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_PLATE + state[ i ] ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+			else
+			{
+				TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, fillPlate[ state[ i ] ] );
+				TheDisplay->drawOpenRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, 1.0f,
+					state[ i ] == TALENT_WAITING ? gold : GameMakeColor( 90, 94, 100, 255 ) );
+			}
+		}
+
+		// the spine, lit from rank 6's node to the reached rank's, and an arm to each picked plate
+		const Int reached = MIN( rank, 10 ) - 6;
+		const Int nodeY = ( theTalentRowY[ 0 ][ 0 ] + theTalentRowY[ 0 ][ 1 ] ) / 2;
+		if( art && view.hasTree && reached > 0 )
+		{
+			const IRegion2D r = map.rect( theTalentSpineX[ 0 ], nodeY, theTalentSpineX[ 1 ],
+				( theTalentRowY[ reached ][ 0 ] + theTalentRowY[ reached ][ 1 ] ) / 2 );
+			TheDisplay->drawImage( art[ ControlBarScheme::TALENT_SPINE ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+		}
+		for( Int row = 0; art && row < TALENT_ROW_COUNT; row++ )
+		{
+			const Int cy = ( theTalentRowY[ row ][ 0 ] + theTalentRowY[ row ][ 1 ] ) / 2;
+			for( Int side = 0; side < 2; side++ )
+			{
+				if( state[ 2 * row + side ] != TALENT_PICKED )
+					continue;
+				const IRegion2D r = map.rect( theTalentArmX[ side ][ 0 ], cy - TALENT_ARM_HALF_H, theTalentArmX[ side ][ 1 ], cy + TALENT_ARM_HALF_H );
+				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_ARM_LEFT + side ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+			}
+		}
+
+		// the rank nodes and their numerals: gold while a pick waits, white once reached, dim before
+		for( Int row = 0; row < TALENT_ROW_COUNT; row++ )
+		{
+			const Int rowState = view.rowState[ row ];
+			const Int cy = ( theTalentRowY[ row ][ 0 ] + theTalentRowY[ row ][ 1 ] ) / 2;
+			const IRegion2D r = map.rect( theTalentNodeX[ 0 ], cy - TALENT_NODE_HALF_H, theTalentNodeX[ 1 ], cy + TALENT_NODE_HALF_H );
+			if( art )
+				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_NODE + rowState ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+			const Color c = rowState == TALENT_WAITING ? gold : ( view.hasTree && rank >= row + 6 ? white : plateText[ TALENT_LOCKED ] );
+			drawTalentLabel( LABEL_NODE + row, view.numeral[ row ], REAL_TO_INT( 20 * scale + 0.5f ), r, c, FALSE );
+		}
+
+		// the cards' names in their plates' wells
+		for( Int i = 0; i < TALENT_SCIENCE_COUNT; i++ )
+		{
+			const Int *y = theTalentRowY[ i / 2 ], *x = theTalentPlateX[ i % 2 ];
+			const IRegion2D well = map.rect( x[ 0 ] + TALENT_FACE_INSET, y[ 0 ] + TALENT_FACE_INSET - 1,
+				x[ 1 ] - TALENT_FACE_INSET, y[ 1 ] - TALENT_FACE_INSET + 1 );
+			drawTalentLabel( LABEL_PLATE + i, view.name[ i ], REAL_TO_INT( 14 * scale + 0.5f ), well, plateText[ state[ i ] ], TRUE );
+		}
+
+		// the caption band: TALENTS on its left, the picks still owed in gold on its right; the hint
+		// well under the tree says how the tree works
+		IRegion2D caption = map.rect( theTalentCaption );
+		caption.lo.x += REAL_TO_INT( 8 * scale );
+		caption.hi.x -= REAL_TO_INT( 8 * scale );
+		drawTalentLabel( LABEL_CAPTION, view.caption, REAL_TO_INT( 16 * scale + 0.5f ), caption, white, FALSE, ALIGN_LEFT );
+		drawTalentLabel( LABEL_WAITING, view.waitingLine, REAL_TO_INT( 13 * scale + 0.5f ), caption, gold, FALSE, ALIGN_RIGHT );
+		drawTalentLabel( LABEL_HINT, view.hint, REAL_TO_INT( 12 * scale + 0.5f ), map.rect( theTalentHint ), plateText[ TALENT_REJECTED ], FALSE );
+		drawTalentLabel( LABEL_RANK, view.rankLabel, REAL_TO_INT( 10 * scale + 0.5f ), map.rect( theRankLabel ), plateText[ TALENT_REJECTED ], FALSE );
+		drawTalentLabel( LABEL_RANK_NUMERAL, view.rankText, REAL_TO_INT( 20 * scale + 0.5f ), map.rect( theRankNumeral ), white, FALSE );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Runs on the layout as the loader left it, before ControlBarLayoutUniform: the window doubles in
+	* width round its middle, so the powers keep their place on its left half, the close button moves
+	* to the right panel's socket and the ten plates go on in the loader's space like the .wnd's own. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::initTalentWindows( GameWindow *root )
+{
+	for( Int i = 0; i < TALENT_SCIENCE_COUNT; i++ )
+		m_talentWindows[ i ] = NULL;
+	m_talentView.taken = FALSE;
+	m_talentPendingRow = -1;
+	if( root == NULL )
+		return;
+
+	ICoord2D pos, size;
+	root->winGetPosition( &pos.x, &pos.y );
+	root->winGetSize( &size.x, &size.y );
+	const Real lx = size.x / (Real)POWERS_DESIGN_W, ly = size.y / (Real)TALENT_DESIGN_H;
+	root->winSetPosition( pos.x - size.x / 2, pos.y );
+	root->winSetSize( size.x * 2, size.y );
+	root->winSetDrawFunc( drawTalentWindow );
+
+	GameWindow *exit = TheWindowManager->winGetWindowFromId( root, NAMEKEY( "GeneralsExpPoints.wnd:ButtonExit" ) );
+	if( exit )
+	{
+		exit->winSetPosition( REAL_TO_INT( theTalentClose[ 0 ] * lx ), REAL_TO_INT( theTalentClose[ 1 ] * ly ) );
+		exit->winSetSize( REAL_TO_INT( ( theTalentClose[ 2 ] - theTalentClose[ 0 ] ) * lx ), REAL_TO_INT( ( theTalentClose[ 3 ] - theTalentClose[ 1 ] ) * ly ) );
+	}
+
+	for( Int i = 0; i < TALENT_SCIENCE_COUNT; i++ )
+	{
+		const Int *y = theTalentRowY[ i / 2 ], *x = theTalentPlateX[ i % 2 ];
+		WinInstanceData inst;
+		inst.init();
+		BitSet( inst.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
+		GameWindow *button = TheWindowManager->gogoGadgetPushButton( root, WIN_STATUS_ENABLED,
+			REAL_TO_INT( x[ 0 ] * lx ), REAL_TO_INT( y[ 0 ] * ly ),
+			REAL_TO_INT( ( x[ 1 ] - x[ 0 ] ) * lx ), REAL_TO_INT( ( y[ 1 ] - y[ 0 ] ) * ly ), &inst, NULL, TRUE );
+		if( button == NULL )
+			continue;
+		AsciiString name;
+		name.format( "GeneralsExpPoints.wnd:ButtonTalent%d%c", i / 2 + 6, 'A' + i % 2 );
+		button->winSetWindowId( NAMEKEY( name ) );
+		button->winSetDrawFunc( drawTalentNothing );
+		m_talentWindows[ i ] = button;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Reads the player into m_talentView and sets the plates' presses and tooltips.  Runs where no tick
+	* runs beside it: on a repopulate, and every logic frame from update's latch while the window is up,
+	* which keeps a watched AI's tree current though its purchases mark nothing dirty here.  A plate
+	* takes a press only where logic would sell the card to the local player this instant, and not
+	* while a press on its row is still on its way; somebody else's tree is a read-out. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::populateTalents( Player *player )
+{
+	TalentView &view = m_talentView;
+	view.taken = player != NULL;
+	if( player == NULL )
+		return;
+
+	const ScienceVec *talents = talentsOf( player );
+	const Bool own = player == ThePlayerList->getLocalPlayer();
+	view.rank = player->getRankLevel();
+	view.rankText.format( u"%d", view.rank );
+	view.rankLabel = upperCase( TheGameText->fetch( "GUI:Rank" ) );
+	view.caption = TheGameText->fetch( "GUI:Talents" );
+	view.hasTree = talents != NULL;
+	view.hint.clear();
+	if( view.hasTree )
+		view.hint = TheGameText->fetch( "GUI:TalentsHint" );
+
+	for( Int i = 0; i < TALENT_SCIENCE_COUNT; i++ )
+	{
+		view.state[ i ] = talentState( player, i );
+		UnicodeString description;
+		view.name[ i ].clear();
+		if( talents )
+			TheScienceStore->getNameAndDescription( ( *talents )[ i ], view.name[ i ], description );
+		GameWindow *win = m_talentWindows[ i ];
+		if( win )
+			win->winSetTooltip( description );
+	}
+
+	// a press on its way ends when logic has decided the row, or after two seconds of nothing
+	if( m_talentPendingRow >= 0
+			&& ( view.state[ 2 * m_talentPendingRow ] == TALENT_PICKED || view.state[ 2 * m_talentPendingRow + 1 ] == TALENT_PICKED
+					 || TheGameLogic->getFrame() - m_talentPendingFrame > 2 * LOGICFRAMES_PER_SECOND ) )
+		m_talentPendingRow = -1;
+
+	Int waiting = 0;
+	for( Int row = 0; row < TALENT_VIEW_ROWS; row++ )
+	{
+		const Int a = view.state[ 2 * row ], b = view.state[ 2 * row + 1 ];
+		view.rowState[ row ] = ( a == TALENT_PICKED || b == TALENT_PICKED ) ? TALENT_PICKED
+			: ( ( a == TALENT_WAITING || b == TALENT_WAITING ) ? TALENT_WAITING : TALENT_LOCKED );
+		waiting += view.rowState[ row ] == TALENT_WAITING ? 1 : 0;
+		view.numeral[ row ].format( u"%d", row + 6 );
+		for( Int side = 0; side < 2; side++ )
+		{
+			GameWindow *win = m_talentWindows[ 2 * row + side ];
+			if( win )
+				win->winEnable( own && view.state[ 2 * row + side ] == TALENT_WAITING && row != m_talentPendingRow );
+		}
+	}
+	view.waitingLine.clear();
+	if( waiting > 0 )
+		view.waitingLine.format( TheGameText->fetch( "GUI:PicksWaiting" ).str(), waiting );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::purchaseTalent( GameWindow *control )
+{
+	Int index = 0;
+	while( index < TALENT_SCIENCE_COUNT && ( control == NULL || m_talentWindows[ index ] != control ) )
+		index++;
+	if( index == TALENT_SCIENCE_COUNT )
+		return FALSE;
+
+	Player *player = ThePlayerList->getLocalPlayer();
+	const ScienceVec *talents = talentsOf( player );
+	// a second press on the row before logic has answered the first (a double click, A then B) would
+	// send a purchase logic refuses
+	if( talents == NULL || player != getWatchedPlayer() || index / 2 == m_talentPendingRow
+			|| !player->isCapableOfPurchasingScience( ( *talents )[ index ] ) )
+		return TRUE;
+
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_PURCHASE_SCIENCE );
+	msg->appendIntegerArgument( ( *talents )[ index ] );
+	m_talentPendingRow = index / 2;
+	m_talentPendingFrame = TheGameLogic->getFrame();
+	populateTalents( player );
+	markUIDirty();
+	return TRUE;
 }
 
 void ControlBar::populatePurchaseScience( Player* player )
@@ -731,6 +1113,8 @@ void ControlBar::populatePurchaseScience( Player* player )
 	Int i;
 	if(TheScriptEngine->isGameEnding())
 		return;
+	// the talents first: a general whose powers have no command sets still has the tree
+	populateTalents( player );
 	// get command set
 	if(!player ||!player->getPlayerTemplate() || player->getPlayerTemplate()->getPurchaseScienceCommandSetRank1().isEmpty() || 
 			player->getPlayerTemplate()->getPurchaseScienceCommandSetRank3().isEmpty() ||
@@ -1318,6 +1702,11 @@ ControlBar::ControlBar( void )
 		m_sciencePurchaseWindowsRank3[i] = NULL;
 	for( i = 0; i < MAX_PURCHASE_SCIENCE_RANK_8; i++ )
 		m_sciencePurchaseWindowsRank8[i] = NULL;
+	for( i = 0; i < TALENT_SCIENCE_COUNT; i++ )
+		m_talentWindows[i] = NULL;
+	m_talentView.taken = FALSE;
+	m_talentPendingRow = -1;
+	m_talentPendingFrame = 0;
 
 	for( i = 0; i < MAX_SPECIAL_POWER_SHORTCUTS; i++ )
 	{
@@ -2514,6 +2903,8 @@ void ControlBar::shutdownWindows( void )
 		m_sciencePurchaseWindowsRank3[ i ] = NULL;
 	for( i = 0; i < MAX_PURCHASE_SCIENCE_RANK_8; i++ )
 		m_sciencePurchaseWindowsRank8[ i ] = NULL;
+	for( i = 0; i < TALENT_SCIENCE_COUNT; i++ )
+		m_talentWindows[ i ] = NULL;
 	for( i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS; i++ )
 	{
 		m_rightHUDUpgradeCameos[ i ] = NULL;
@@ -2568,6 +2959,7 @@ void ControlBar::initWindows( void )
 		
 		m_scienceLayout = TheWindowManager->winCreateLayout("GeneralsExpPoints.wnd");
 		m_scienceLayout->hide(TRUE);
+		initTalentWindows( m_scienceLayout->getFirstWindow() );
 
 		//
 		// The rank screen is one painting with the science cameos placed on it, authored at
@@ -2894,6 +3286,10 @@ void ControlBar::update( void )
 	if( logicTick )
 	{
 		getStarImage();
+
+		// the talent half's snapshot, taken here where no tick runs beside it (drawTalentWindow)
+		if( isPurchaseScienceVisible() )
+			populateTalents( getWatchedPlayer() );
 
 		// EA's lamp: 150 frames, flipping every 15.  winEnable(FALSE) is the lit image
 		if( m_radarAttackGlowWindow && m_remainingRadarAttackGlowFrames > 0 )
@@ -3256,8 +3652,12 @@ void ControlBar::onDrawableDeselected( Drawable *draw )
 
 const Image *ControlBar::getStarImage(void )
 {
+	// a talent costs no points, so a rank 6 to 10 pick keeps the star going until it is made or the window opened
 	if(m_lastFlashedAtPointValue > ThePlayerList->getLocalPlayer()->getSciencePurchasePoints() || ThePlayerList->getLocalPlayer()->getSciencePurchasePoints() <= 0)
-		m_genStarFlash = FALSE;
+	{
+		if( !ThePlayerList->getLocalPlayer()->hasTalentWaiting() )
+			m_genStarFlash = FALSE;
+	}
 	else
 		m_lastFlashedAtPointValue = ThePlayerList->getLocalPlayer()->getSciencePurchasePoints();
 	
@@ -3290,7 +3690,8 @@ void ControlBar::onPlayerRankChanged(const Player *p)
 	if (!p->isLocalPlayer())
 		return;
 
-	if(!(m_lastFlashedAtPointValue > ThePlayerList->getLocalPlayer()->getSciencePurchasePoints()))
+	// a rank that opens a talent pick points at the general's button though it brought no points
+	if(!(m_lastFlashedAtPointValue > ThePlayerList->getLocalPlayer()->getSciencePurchasePoints()) || p->hasTalentWaiting())
 	{
 		if(TheTransitionHandler && TheInGameUI->getInputEnabled())
 			TheTransitionHandler->setGroup("ControlBarArrow");

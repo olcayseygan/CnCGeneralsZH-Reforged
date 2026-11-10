@@ -147,6 +147,8 @@ WindowMsgHandledType GeneralsExpPointsSystem( GameWindow *window, UnsignedInt ms
 			{
 				TheControlBar->hidePurchaseScience();
 			}
+			else if (TheControlBar->purchaseTalent( control ))
+				break;
 			else
 				TheControlBar->processContextSensitiveButtonClick( control, (GadgetGameMessage)msg );
 			break;

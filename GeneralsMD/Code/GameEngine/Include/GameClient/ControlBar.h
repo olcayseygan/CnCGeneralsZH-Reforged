@@ -927,6 +927,26 @@ public:
 	void hidePurchaseScience( void );
 	void togglePurchaseScience( void );
 	Bool isPurchaseScienceVisible( void );
+	/// a press on one of the promotion window's talent plates: buys that card when logic says it can be
+	/// bought; FALSE when the window is no talent plate
+	Bool purchaseTalent( GameWindow *control );
+
+	/** What the promotion window's talent half draws, read off the watched player outside the render
+		* window (ControlBar::update's logic latch and populateTalents), so the draw, which runs while the
+		* logic tick may be adding sciences, never touches a Player. */
+	enum { TALENT_VIEW_ROWS = TALENT_SCIENCE_COUNT / 2 };
+	struct TalentView
+	{
+		Bool taken;															///< FALSE until a player has been read
+		Bool hasTree;														///< the general has TalentSciences; without them nothing lights and no hint shows
+		Int rank;
+		Int state[ TALENT_SCIENCE_COUNT ];				///< 0 locked, 1 waiting, 2 picked, 3 rejected
+		Int rowState[ TALENT_VIEW_ROWS ];					///< the node: locked, waiting or picked
+		UnicodeString name[ TALENT_SCIENCE_COUNT ];
+		UnicodeString numeral[ TALENT_VIEW_ROWS ];
+		UnicodeString caption, waitingLine, hint, rankLabel, rankText;
+	};
+	const TalentView &getTalentView( void ) const { return m_talentView; }
 
 	void showSpecialPowerShortcut( void );
 	void hideSpecialPowerShortcut( void );
@@ -1109,6 +1129,8 @@ protected:
 	void populatePurchaseScience(Player* player);
 	/// one rank's section of the promotion screen: slot i of the command set goes on windows[i]
 	void populatePurchaseScienceRank( Player *player, const CommandSet *commandSet, GameWindow **windows, Int windowCount );
+	void initTalentWindows( GameWindow *root );		///< widen the promotion window and put the talent plates on it
+	void populateTalents( Player *player );					///< the plates' presses and tooltips for that player's general
 	void populateCommand( Object *obj );
 	void populateMultiSelect( void );
 	void populateMultiSelectUnitList( void );
@@ -1257,6 +1279,10 @@ protected:
 	GameWindow *m_sciencePurchaseWindowsRank1[ MAX_PURCHASE_SCIENCE_RANK_1 ];			///< command window controls for easy access
 	GameWindow *m_sciencePurchaseWindowsRank3[ MAX_PURCHASE_SCIENCE_RANK_3 ];			///< command window controls for easy access
 	GameWindow *m_sciencePurchaseWindowsRank8[ MAX_PURCHASE_SCIENCE_RANK_8 ];			///< command window controls for easy access
+	GameWindow *m_talentWindows[ TALENT_SCIENCE_COUNT ];		///< the promotion window's talent plates, 6A 6B .. 10A 10B
+	TalentView m_talentView;																///< see getTalentView
+	Int m_talentPendingRow;																	///< a row whose purchase is on its way to logic, -1 none
+	UnsignedInt m_talentPendingFrame;												///< the logic frame it was sent on
 	GameWindow *m_specialPowerShortcutButtons[ MAX_SPECIAL_POWER_SHORTCUTS ];
 	GameWindow *m_specialPowerShortcutButtonParents[ MAX_SPECIAL_POWER_SHORTCUTS ];
 	DisplayString *m_shortcutDisplayStrings[ MAX_SPECIAL_POWER_SHORTCUTS ];

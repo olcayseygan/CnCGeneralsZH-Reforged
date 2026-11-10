@@ -33,7 +33,8 @@ frame's nine, every side's and general's emblem) and the spectator's rack (Refor
 side and the observer also have a painting for the Tab screen (ReforgedHud<Side>TabPanel).
 
     python Tools/hud_command_bar.py --out DIR [--side all|Observer|Guard|America|China|Gla|Turkiye] [--dds TEXTURES]
-        writes DIR/ReforgedHud<Side>CommandBar.png, ...Powers.png and ...TabPanel.png for each side,
+        writes DIR/ReforgedHud<Side>CommandBar.png, ...Powers.png, ...TabPanel.png and ...Talents.png (the general's
+        powers window widened for the talents and its pieces; --talents-only writes that alone) for each side,
         the observer's ReforgedHudObsCommandBar, ...ObsPlayerWindow, ...ObsPieces, ...ObsSpec, ...ObsTabPanel and ReforgedHudHelpbox,
         and with --dds the same as DXT5 .dds into TEXTURES (Data/Art/Textures)
 """
@@ -1855,6 +1856,363 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     return sheet_img
 
 
+# ---------------------------------------------------------------------------------------------- the talents
+
+# The general's powers window widened for the talents (the owner's pick of experiments/talents/mock.py,
+# 2026-11-10): two panels of 542x598 side by side, the powers on the left exactly as promo_window draws them,
+# the talents on the right in the same build, a mullion between and the dark flange in the bay behind the
+# left panel's two bosses.  The right panel holds five row wells lined up with the left's five button rows,
+# the spine's channel down their middle, the caption and hint wells and the close socket in its top right
+# corner; the old close socket on the left becomes the rank readout, a label slot over a numeral's glass.
+# Whatever changes in a match is a piece the code lays on: a plate in four states, the rank node in four
+# (Rejected is the Picked node: a rank is never rejected), the lit spine it stretches from node to node and
+# the arm to a picked plate on either side.  The code writes every word and number.  Everything is in the
+# window's texels, one a screen pixel at 1080; TALENT_X is the right panel's left edge.
+TALENT_W, TALENT_H, TALENT_X = 2 * 542, 598, 542
+TALENT_ROWS = [(54, 132), (178, 256), (260, 338), (342, 420), (466, 544)]     # the left's five button rows
+TALENT_NODE_X = 271
+TALENT_PLATES = ((22, 228), (314, 520))                 # A and B, each 4 in from its row's top and bottom
+TALENT_CLOSE = (482, 8, 530, 48)                        # the close button, sunk 2 round
+TALENT_CAPTION, TALENT_HINT = (13, 13, 470, 43), (13, 553, 529, 581)
+RANK_BAND, RANK_GLASS = (451, 481, 509, 496), (451, 499, 509, 529)     # in the left panel's old close socket
+TALENT_STATES = ("Locked", "Waiting", "Picked", "Rejected")
+TALENT_PAD = 4                                          # a plate's piece is the plate and 4 round it
+TALENT_NODE_PIECE, TALENT_SPINE_PIECE, TALENT_ARM_PIECE = (84, 72), (24, 64), (38, 20)
+TALENT_ARMS = {"Left": (219, 257), "Right": (285, 323)}         # each piece's x in the right panel
+TALENT_FACE = {"machined": 7, "terraced": 9, "scavenged": 6, "faceted": 8}     # plate edge to its face
+TALENT_TILT = {"Locked": -0.5, "Waiting": 0.4, "Picked": -0.3, "Rejected": 0.6}   # the GLA's sheets, degrees
+
+
+def talent_node_poly(build, cx, cy, s=1.0):
+    if build == "machined":                     # an octagon, 45 degree cuts
+        return octagon(cx - 25 * s, cy - 25 * s, cx + 25 * s, cy + 25 * s, 9 * s)
+    if build == "terraced":                     # a square with stepped corners
+        return shape("terraced", cx - 26 * s, cy - 24 * s, cx + 26 * s, cy + 24 * s, 7 * s)
+    if build == "scavenged":                    # a nut cut out of scrap, out of true
+        return jitter(regular(cx, cy, 28 * s, 6, 0.21), 93, 1.6 * s, 7)
+    return [(cx - 31 * s, cy), (cx - 15 * s, cy - 25 * s), (cx + 15 * s, cy - 25 * s),     # a long hexagon with
+            (cx + 31 * s, cy), (cx + 15 * s, cy + 25 * s), (cx - 15 * s, cy + 25 * s)]     # 30 degree flanks
+
+
+def talent_face(build, r):
+    k = TALENT_FACE[build]
+    return (r[0] + k, r[1] + k - 1, r[2] - k, r[3] - k + 1)
+
+
+def talent_plate(p, build, r, state):
+    """A bezel in the state's material round a sunk face: Locked dark, Waiting gold with a hazard strip
+    along the face's top, Picked the accent, Rejected a dark face behind a shutter's two rails and a faint
+    hatch, dim enough under the code's text that the sentence still reads."""
+    cx, cy = (r[0] + r[2]) / 2, (r[1] + r[3]) / 2
+    tilt = TALENT_TILT[state] if build == "scavenged" else 0.0
+    corner = {"machined": 9, "terraced": 6, "scavenged": 8, "faceted": 8}[build]
+    p.frame([rotated(shape(build, *r, corner), cx, cy, tilt)], 4.0, build,
+            {"Picked": BRIGHT, "Waiting": GOLDM, "Rejected": DARK, "Locked": DARK}[state], 0.55)
+    f = talent_face(build, r)
+    fpoly = rotated(shape(build, *f, {"machined": 5, "terraced": 4, "scavenged": 4, "faceted": 5}[build]), cx, cy, tilt)
+    sl, m = p.sink([fpoly], 1.6 if state == "Picked" else 3.0, 1.4, ACCENT if state == "Picked" else GLASS)
+    if state == "Picked":                       # the accent face is painted: all of it, its lip too
+        p.mat[sl][m] = ACCENT
+    if build == "terraced":                     # rivets at the plate's two ends
+        for x in (r[0] + 4.5, r[2] - 4.5):
+            for y in (r[1] + 14, r[3] - 14):
+                p.rivet(x, y, 1.7)
+    elif build == "scavenged":                  # one bolt, a different corner in each state
+        k = TALENT_STATES.index(state)
+        p.bolt(*[(r[0] + 5, r[1] + 5), (r[2] - 5, r[1] + 5), (r[2] - 5, r[3] - 5), (r[0] + 5, r[3] - 5)][k], 2.2, k)
+    elif build == "faceted":                    # flush hex bolts on the long facet
+        for x in (r[0] + 5, r[2] - 5):
+            p.bump([regular(x, cy, 2.2, 6, np.pi / 6)], 0.6, 1.0, BRIGHT)
+    if state == "Waiting":
+        top, h = f[1] + 2, 7
+        p.inlay([plate(f[0] + 6, top, f[2] - 6, top + h)], INKM, 0.4)
+        for x in np.arange(f[0] + 6, f[2] - 6 - 12, 12):
+            p.inlay([[(x, top + h), (x + h, top), (x + h + 6, top), (x + 6, top + h)]], GOLDM, 0.4)
+    if state == "Rejected":
+        for y in (f[1] + 1.5, f[3] - 3.5):                         # the shutter's rails, outside the text
+            p.bump([plate(f[0] + 4, y, f[2] - 4, y + 2)], 0.6, 0.6, DARK)
+        lines = []
+        for x in np.arange(f[0] - (f[3] - f[1]), f[2], 10):
+            a, b = max(x, f[0] + 4), min(x + (f[3] - f[1]) - 8, f[2] - 4)
+            if b - a >= 2:
+                lines.append([(a, f[3] - 4 - (a - x)), (b, f[3] - 4 - (b - x)), (b, f[3] - 2.9 - (b - x)), (a, f[3] - 2.9 - (a - x))])
+        p.inlay(lines, DIM, 0.05)
+    return f
+
+
+def talent_glow(img, mask, colour, grow_by, sigma, strength, axis=None):
+    """A light round mask laid under img: the mask grown and blurred, in colour.  axis 1 blurs only
+    across, for a piece the code stretches along its length."""
+    m = ndimage.binary_dilation(mask, iterations=grow_by) if grow_by else mask
+    g = ndimage.gaussian_filter(m.astype(np.float32), (0, sigma) if axis == 1 else sigma) * strength
+    under = np.zeros(img.size[::-1] + (4,), np.uint8)
+    under[..., :3] = colour
+    under[..., 3] = np.clip(g * 255, 0, 255).astype(np.uint8)
+    out = Image.fromarray(under, "RGBA")
+    out.alpha_composite(img)
+    return out
+
+
+def talent_mask(w, h, polys):
+    im = Image.new("L", (w, h), 0)
+    for poly in polys:
+        ImageDraw.Draw(im).polygon(poly, fill=255)
+    return np.asarray(im) > 0
+
+
+def talent_piece(side_name, w, h, draw, pad=16, shadow=True):
+    p = Painter(w + 2 * pad, h + 2 * pad)
+    draw(p, pad)
+    return shade(p, SIDES[side_name], shadow=shadow, falloff=False).crop((pad, pad, pad + w, pad + h))
+
+
+def talent_pieces(side_name):
+    side = SIDES[side_name]
+    build = side["build"]
+    lit = tuple(min(255, int(c * 1.6)) for c in side["accent"])
+    out = {}
+    pw = TALENT_PLATES[0][1] - TALENT_PLATES[0][0] + 2 * TALENT_PAD
+    ph = TALENT_ROWS[0][1] - TALENT_ROWS[0][0]
+    for state in TALENT_STATES:
+        out["TalentPlate" + state] = talent_piece(side_name, pw, ph, lambda p, o, s=state: talent_plate(
+            p, build, (o + TALENT_PAD, o + TALENT_PAD, o + pw - TALENT_PAD, o + ph - TALENT_PAD), s))
+    nw, nh = TALENT_NODE_PIECE
+    for state in TALENT_STATES:
+        node = "Picked" if state == "Rejected" else state
+
+        def draw(p, o, node=node):
+            cx, cy = o + nw / 2, o + nh / 2
+            poly = talent_node_poly(build, cx, cy)
+            p.frame([poly], 6.0, build, DARK if node == "Locked" else BRIGHT, 0.6)
+            if build == "machined":             # two tiers: a dark flange under a satin octagon
+                p.raise_plate([talent_node_poly(build, cx, cy, 0.8)], 7.5, 2.0, STEEL)
+            p.sink([talent_node_poly(build, cx, cy, 0.58)], 3.0, 1.2, GLASS)
+            if node == "Waiting":               # a gold ring round the numeral's glass
+                p.inlay([talent_node_poly(build, cx, cy, 0.7)], GOLDM, 0.2)
+                p.sink([talent_node_poly(build, cx, cy, 0.58)], 0.1, 1.2, GLASS)
+            if build == "scavenged":
+                for k, ang in enumerate((0.4, 2.5, 4.4)):
+                    p.bolt(cx + 21 * np.cos(ang), cy + 21 * np.sin(ang), 1.8, 50 + k)
+            elif build == "terraced":
+                for dx in (-21, 21):
+                    p.rivet(cx + dx, cy - 18, 1.5)
+                    p.rivet(cx + dx, cy + 18, 1.5)
+            elif build == "machined":
+                p.stud(cx, cy - 21.5, 1.8)
+                p.stud(cx, cy + 21.5, 1.8)
+        img = talent_piece(side_name, nw, nh, draw)
+        if node == "Waiting":                   # the light follows the node's own outline
+            img = talent_glow(img, talent_mask(nw, nh, [talent_node_poly(build, nw / 2, nh / 2)]), GOLD, 2, 3.0, 0.9)
+        out["TalentNode" + state] = img
+    sw, sh = TALENT_SPINE_PIECE
+    spine = talent_piece(side_name, sw, sh, lambda p, o: p.raise_plate(
+        [plate(o + sw / 2 - 2.2, 0, o + sw / 2 + 2.2, sh + 2 * o)], 0.6, 0.5, ACCENT), shadow=False)
+    out["TalentSpineLit"] = talent_glow(spine, talent_mask(sw, sh, [plate(sw / 2 - 2.5, -2, sw / 2 + 2.5, sh + 2)]), lit, 0, 3.0, 1.1, axis=1)
+    aw, ah = TALENT_ARM_PIECE
+    for name, right in (("Left", False), ("Right", True)):
+        def draw(p, o, right=right):
+            xa, xb, y = o + 6, o + aw - 6, o + ah / 2
+            if build == "scavenged":
+                p.raise_plate([sheet(xa, y - 3.5, xb, y + 3.5, 0.6 if right else -0.6)], 2.2, 1.0, ACCENT)
+                p.weld((xa + 2, y + 4.5), (xb - 2, y + 4.5), 400 + right, 0.9)
+            elif build == "terraced":
+                p.raise_plate([plate(xa, y - 4, xb, y + 4)], 2.0, 1.0, ACCENT)
+                p.rivet((xa + xb) / 2, y, 1.6)
+            elif build == "faceted":            # pointing at the plate it joins
+                p.raise_plate([[(xa, y - 3), (xb - 6, y - 3), (xb, y), (xb - 6, y + 3), (xa, y + 3)] if right else
+                               [(xa, y), (xa + 6, y - 3), (xb, y - 3), (xb, y + 3), (xa + 6, y + 3)]], 2.0, 1.0, ACCENT)
+            else:
+                p.raise_plate([octagon(xa, y - 3.5, xb, y + 3.5, 2.5)], 2.2, 1.0, ACCENT)
+        img = talent_piece(side_name, aw, ah, draw, shadow=False)
+        out["TalentArm" + name] = talent_glow(img, np.asarray(img)[..., 3] > 128, lit, 1, 2.5, 0.8)
+    return out
+
+
+def talent_panel(p, x0, build):
+    """The right panel's frame, its wells, the spine's channel and what the build fixes to it."""
+    W, H = TALENT_W - TALENT_X, TALENT_H
+
+    def r(a, b, c, d):
+        return (x0 + a, b, x0 + c, d)
+    k = BUILDS[build]["corner"]
+    if k == "slant":                            # square where it meets the left panel
+        body = [(0, 0), (W - 10, 0), (W, 6), (W, H - 6), (W - 10, H), (0, H)]
+    elif k == "notch":
+        body = [(0, 0), (W - 6, 0), (W - 6, 6), (W, 6), (W, H - 6), (W - 6, H - 6), (W - 6, H), (0, H)]
+    else:
+        body = [(0, 0), (W - 14, 0), (W, 14), (W, H - 14), (W - 14, H), (0, H)]
+    body = [(x0 + x, y) for x, y in body]
+    if build == "scavenged":
+        body = jitter(body, 9, 2.0)
+
+    def inner(i, c):
+        kk = k if k != "rough" else "cut"
+        return [plate(*r(-2, i, W - i, H - i), tr=(kk, c), br=(kk, c))]
+    if build == "machined":
+        p.silhouette([body], 4.0, build)
+        p.raise_plate(inner(6, 12), 7.0, 3.0, STEEL)
+    elif build == "terraced":
+        sl, m, d = p.silhouette([body], 11.0, build, STEEL)
+        p.mat[sl][m & (d < 5)] = DARK
+    elif build == "scavenged":
+        p.silhouette([body], 3.0, build)
+        for kk, ((a, b, c, e), deg, tint) in enumerate((((-4, -4, W + 4, 15), -0.1, 0.98), ((-4, 583, W + 4, H + 4), 0.12, 1.05),
+                                                         ((530, 12, W + 4, 586), 0.14, 0.92))):
+            sl, m, _ = p.raise_plate([sheet(*r(a, b, c, e), deg)], 5.0 + (kk % 2) * 0.9, 1.2, STEEL)
+            p.tint[sl][m] = tint
+        p.raise_plate(inner(12, 6), 4.2, 1.2, STEEL)
+    else:
+        p.silhouette([body], 4.0, "machined")
+        p.frame(inner(5, 8), 9.0, build)
+
+    lip, depth, c = {"machined": (3, 6, 0), "terraced": (1.2, 8, 4), "scavenged": (2, 5, 4), "faceted": (4, 6, 5)}[build]
+    if build == "terraced":
+        for band in (TALENT_CAPTION, TALENT_HINT):
+            p.bump([shape(build, *grow(r(*band), 4), 3)], 2.0, 1.0)
+        p.bump([shape(build, *grow(r(*TALENT_CLOSE), 5), 4)], 2.0, 1.0)
+    for band in (TALENT_CAPTION, TALENT_HINT):
+        window(p, r(*band), 3, 2, 0, c * 0.8, build=build)
+    window(p, grow(r(*TALENT_CLOSE), 2), 3, 2, 0, 6, STEEL, build)
+    for a, b in TALENT_ROWS:
+        window(p, r(16, a - 3, 526, b + 3), depth, lip, 0, c, build=build)
+    cy = [(a + b) / 2 for a, b in TALENT_ROWS]
+    sx = x0 + TALENT_NODE_X
+    p.sink([plate(sx - 4.5, cy[0], sx + 4.5, cy[-1])], 3.0, 1.2, GLASS)
+    if build == "terraced":                     # rivets either side of the spine where it crosses the frame
+        for y in np.arange(cy[0] + 50, cy[-1] - 40, 13):
+            if not any(a - 6 < y < b + 6 for a, b in TALENT_ROWS):
+                p.rivet(sx - 9, y, 1.5)
+                p.rivet(sx + 9, y, 1.5)
+    elif build == "scavenged":                  # the channel welded where it was patched
+        for a, b in ((TALENT_ROWS[0][1], TALENT_ROWS[1][0]), (TALENT_ROWS[3][1], TALENT_ROWS[4][0])):
+            p.weld((sx - 7, a + 8), (sx - 7, b - 8), 300 + a, 1.0)
+    elif build == "faceted":                    # range ticks down the spine
+        for y in np.arange(cy[0] + 6, cy[-1], 9):
+            p.inlay([plate(sx + 6, y, sx + 10 + (3 if int((y - cy[0]) / 9) % 5 == 0 else 0), y + 1.1)], INKM, 0.3)
+
+    if build == "machined":
+        wing_chevrons(p, x0 + 534, 186, 412, 10, ACCENT, gap=7)
+        for x, y in ((W - 14, 9.5), (W - 14, H - 9.5), (W / 2, H - 3.5), (8, H - 3.5)):
+            p.stud(x0 + x, y, 2.6)
+        p.inlay([plate(*r(292, 588, 502, 589.8))], ACCENT2, 0.4)
+        vents(p, x0 + 40, x0 + 230, 584, 592)
+    elif build == "terraced":
+        for t in np.linspace(30, 500, 13):
+            p.rivet(x0 + t, 4.5, 1.9)
+            p.rivet(x0 + t, H - 4.5, 1.9)
+        for y in np.arange(190, 410, 18):
+            p.bump([plate(*r(530, y, 538, y + 9))], 1.6, 0.8, ACCENT2)
+        p.inlay([plate(*r(40, 548, 500, 550.6))], ACCENT, 0.3)
+    elif build == "scavenged":
+        p.weld((x0 + 4, 14), (x0 + 528, 14), 161, 1.1)
+        p.weld((x0 + 4, 584), (x0 + 528, 584), 162, 1.1)
+        for kk, (x, y) in enumerate(((W - 7, 7), (W - 6, H - 6), (180, 6), (410, H - 7), (535, 300))):
+            p.bolt(x0 + x, y, 2.8, 60 + kk)
+        p.inlay([jitter(plate(*r(531, 160, 539, 420)), 57, 2.0, 5)], ACCENT2, 0.25)
+    else:
+        for y in np.arange(196, 410, 26):
+            p.inlay([triangle(x0 + 534, y, 9, 10, "left")], ACCENT, 0.6)
+        for x, y in ((W - 12, 10), (W - 12, H - 10), (W / 2, 4), (W / 2, H - 4)):
+            p.bump([regular(x0 + x, y, 3.0, 6, np.pi / 6)], 0.8, 1.2, BRIGHT)
+        p.inlay([plate(*r(300, 589, 470, 591)), [(x0 + 290, 584), (x0 + 300, 589), (x0 + 300, 591), (x0 + 290, 586)],
+                 plate(*r(240, 584, 290, 586))], ACCENT, 0.4)
+
+
+def rank_readout(p, build):
+    """The old close socket as the rank's readout: a label slot sunk across its top (the code writes RANK
+    in it) over the numeral's glass, nothing raised, so it never reads as a button."""
+    x0, y0, x1, y1 = PROMO_CLOSE
+    sl = (slice(y0 * SS, y1 * SS), slice(x0 * SS, x1 * SS))
+    p.h[sl] = np.median(p.h[sl])                # a plain floor: no facet groove runs under the readout
+    p.mat[sl] = STEEL
+    band, glass = RANK_BAND, RANK_GLASS
+    if build == "machined":                     # band ends cut at 45 degrees, an accent hairline under it
+        p.sink([octagon(*band, 3)], 1.4, 0.7, INKM)
+        p.inlay([plate(band[0] + 5, band[3] + 0.6, band[2] - 5, band[3] + 2)], ACCENT, 0.2)
+    elif build == "terraced":                   # a notched slot, a lacquer bar under it, a rivet each end
+        p.sink([shape(build, *band, 3)], 1.4, 0.7, INKM)
+        p.inlay([plate(band[0] + 6, band[3] + 0.6, band[2] - 6, band[3] + 2.4)], ACCENT, 0.2)
+        for x in (band[0] + 3.5, band[2] - 3.5):
+            p.rivet(x, (band[1] + band[3]) / 2, 1.2)
+    elif build == "scavenged":                  # cut crooked, welded under, a dab of paint
+        p.sink([sheet(*band, -1.2)], 1.4, 0.7, INKM)
+        p.weld((band[0] + 2, band[3] + 1.8), (band[2] - 8, band[3] + 1.2), 77, 0.7)
+        p.inlay([jitter(plate(band[2] - 7, band[3] + 0.4, band[2] - 1, band[3] + 2.6), 78, 0.6, 3)], ACCENT, 0.2)
+    else:                                       # a parallelogram slot, an accent rule ending in a triangle
+        p.sink([[(band[0], band[3]), (band[0] + 6, band[1]), (band[2], band[1]), (band[2] - 6, band[3])]], 1.4, 0.7, INKM)
+        p.inlay([plate(band[0] + 4, band[3] + 0.6, band[2] - 10, band[3] + 2)], ACCENT, 0.2)
+        p.inlay([triangle(band[2] - 6, band[3] + 1.3, 4, 4, "right")], ACCENT, 0.2)
+    p.sink([shape(build, *glass, {"terraced": 4}.get(build, 5))], 3.5 if build == "terraced" else 3.0, 1.2, GLASS)
+
+
+def talent_window(side_name):
+    side = SIDES[side_name]
+    build = side["build"]
+    p = Painter(TALENT_W, TALENT_H)
+    p.silhouette([plate(420, 0, 560, TALENT_H)], 4.0, "machined")   # the bay behind the left's two bosses
+    talent_panel(p, TALENT_X, build)            # first: the left panel's facets cover it too
+    promo_window(p, 0, 0, build)
+    p.raise_plate([plate(TALENT_X - 3, 4, TALENT_X + 5, TALENT_H - 4)], 9.0, 1.6, STEEL)    # the mullion
+    for y in (30, TALENT_H // 2, TALENT_H - 30):
+        if build == "machined":
+            p.stud(TALENT_X + 1, y, 2.2)
+        elif build == "terraced":
+            p.rivet(TALENT_X + 1, y, 1.8)
+        elif build == "scavenged":
+            p.bolt(TALENT_X + 1, y + 7, 2.2, y)
+        else:
+            p.bump([regular(TALENT_X + 1, y, 2.4, 6, np.pi / 6)], 0.6, 1.0, BRIGHT)
+    rank_readout(p, build)
+    return shade(p, side, shadow=False)
+
+
+def talent_layout():
+    """Where the code lays each piece in the window, per row: name -> (x0, y0, x1, y1)."""
+    out = {}
+    nw, nh = TALENT_NODE_PIECE
+    for i, (a, b) in enumerate(TALENT_ROWS):
+        cy = (a + b) // 2
+        for side, (x0, x1) in zip("AB", TALENT_PLATES):
+            out["Plate%s%d" % (side, i)] = (TALENT_X + x0 - TALENT_PAD, a, TALENT_X + x1 + TALENT_PAD, b)
+        nx = TALENT_X + TALENT_NODE_X
+        out["Node%d" % i] = (nx - nw // 2, cy - nh // 2, nx + nw // 2, cy + nh // 2)
+        for name, (x0, x1) in TALENT_ARMS.items():
+            out["Arm%s%d" % (name, i)] = (TALENT_X + x0, cy - TALENT_ARM_PIECE[1] // 2, TALENT_X + x1, cy + TALENT_ARM_PIECE[1] // 2)
+    return out
+
+
+def paint_talents(side_name):
+    M = read_mapped(side_name, "Talents")
+    prefix = side_name + "Pro"
+    sheet_img = Image.new("RGBA", (2048, 1024), (0, 0, 0, 0))
+    pieces = {"GeneralsPowerWindowWide": talent_window(side_name)}
+    pieces.update(talent_pieces(side_name))
+    names = {k[len(prefix):] for k in M}
+    assert names == set(pieces), "ReforgedHud%sTalents.ini maps %s, the pieces are %s" % (side_name, sorted(names), sorted(pieces))
+    for name, img in pieces.items():
+        put(sheet_img, img, M[prefix + name])
+    check_talents(sheet_img, side_name, M)
+    return sheet_img
+
+
+def check_talents(sheet_img, side_name, M):
+    """Nothing mapped overlaps (gutter and 3 texels between), every well the code writes or lays into stands
+    on opaque window, and each plate and node is solid where the code centres it."""
+    a = np.asarray(sheet_img)[..., 3]
+    boxes = list(M.items())
+    for i, (n1, b1) in enumerate(boxes):
+        for n2, b2 in boxes[i + 1:]:
+            assert b1[2] + 3 <= b2[0] or b2[2] + 3 <= b1[0] or b1[3] + 3 <= b2[1] or b2[3] + 3 <= b1[1], "%s meets %s" % (n1, n2)
+    wells = [grow((TALENT_X + c[0], c[1], TALENT_X + c[2], c[3]), -2) for c in (TALENT_CAPTION, TALENT_HINT, TALENT_CLOSE)]
+    wells += [RANK_BAND, RANK_GLASS, PROMO_POINTS] + [(TALENT_X + 16, a_, TALENT_X + 526, b_) for a_, b_ in TALENT_ROWS]
+    for w in wells:
+        assert a[w[1]:w[3], w[0]:w[2]].min() == 255, "%s: window not opaque under %s" % (side_name, w)
+    prefix = side_name + "Pro"
+    for name in ["TalentPlate" + s for s in TALENT_STATES] + ["TalentNode" + s for s in TALENT_STATES]:
+        x0, y0, x1, y1 = M[prefix + name]
+        assert a[(y0 + y1) // 2, (x0 + x1) // 2] == 255, "%s %s is not solid at its middle" % (side_name, name)
+
+
 # ---------------------------------------------------------------------------------------------- the tooltips
 
 # Approved by the owner on 2026-11-03 (round 17).  Two pieces of nine each and nine icons, the code
@@ -3202,6 +3560,7 @@ def main():
     ap.add_argument("--emblem", default=EMBLEM_SVG)
     ap.add_argument("--ready-glow", choices=("A", "B"), default="B",
                     help="a charged superweapon's light: B, the breath and a rising band (default, ships), or A, the breath alone")
+    ap.add_argument("--talents-only", action="store_true", help="write only each side's ReforgedHud<Side>Talents")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     for side in (list(SIDES) + ["Observer", "Guard"] if args.side == "all" else [args.side]):
@@ -3221,7 +3580,10 @@ def main():
             check_helpbox(helpbox)
             made["ReforgedHudObsTabPanel"] = tab = tab_panel("Observer")
             check_tab(tab, "Obs", "Helpbox")
+        elif args.talents_only:
+            made["ReforgedHud%sTalents" % side] = paint_talents(side)
         else:
+            made["ReforgedHud%sTalents" % side] = paint_talents(side)
             frame = radar_frame(side)
             made["ReforgedHud%sCommandBar" % side] = img = paint_bar(side)
             check(img, side)
@@ -3234,6 +3596,11 @@ def main():
             img.save(os.path.join(args.out, name + ".png"))
             if args.dds:
                 img.save(os.path.join(args.dds, name + ".dds"), pixel_format="DXT5")
+                # Pillow before 11.2 ignores pixel_format and writes A8R8G8B8, which DDSFileClass (FourCC
+                # only) refuses: the piece then never draws
+                with open(os.path.join(args.dds, name + ".dds"), "rb") as f:
+                    assert f.read(88)[84:88] == b"DXT5", "%s.dds is not DXT5: Pillow %s cannot write it, use 11.2 or later" % (
+                        name, Image.__version__)
             print("wrote", name)
 
 

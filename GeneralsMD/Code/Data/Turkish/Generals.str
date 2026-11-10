@@ -18537,7 +18537,11 @@ GUI:Talents
 END
 
 GUI:PicksWaiting
-"%d SEÇİM BEKLİYOR"
+"BEKLEYEN SEÇİM: %d"
+END
+
+GUI:TalentsHint
+"6. rütbeden itibaren her rütbede iki yetenekten birini seç."
 END
 
 SCIENCE:TurkiyeTalent6A

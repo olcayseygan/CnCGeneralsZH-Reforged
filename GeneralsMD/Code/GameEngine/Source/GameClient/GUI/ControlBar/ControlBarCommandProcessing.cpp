@@ -1174,7 +1174,7 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 			for(Int i = 0; i < commandButton->getScienceVec().size(); ++i)
 			{
 				st = commandButton->getScienceVec()[ i ];
-				if(!player->hasScience(st) && TheScienceStore->playerHasPrereqsForScience(player, st) && TheScienceStore->getSciencePurchaseCost(st) <= player->getSciencePurchasePoints())
+				if(player->isCapableOfPurchasingScience(st))
 				{
 					break;
 				}

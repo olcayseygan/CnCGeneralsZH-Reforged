@@ -4299,7 +4299,11 @@ GUI:Talents
 END
 
 GUI:PicksWaiting
-"%d PICK(S) WAITING"
+"PICKS WAITING: %d"
+END
+
+GUI:TalentsHint
+"From rank 6, pick one of two talents at each rank."
 END
 
 // Turkiye's ten cards

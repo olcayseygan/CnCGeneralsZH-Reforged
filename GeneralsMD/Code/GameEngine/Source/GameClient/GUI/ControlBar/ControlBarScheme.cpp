@@ -196,6 +196,7 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "RadarFrameImage",			INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_radarFrameName ) },
 	{ "PowerTrayImage",				INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_powerTrayName ) },
 	{ "TooltipImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_tooltipName ) },
+	{ "TalentImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_talentName ) },
 
 	{ "CommandMarkerImage",		INI::parseMappedImage,				NULL, offsetof( ControlBarScheme, m_commandMarkerImage) },
 	{ "ExpBarForegroundImage",		INI::parseMappedImage,				NULL, offsetof( ControlBarScheme, m_expBarForeground) },
@@ -493,6 +494,8 @@ ControlBarScheme::ControlBarScheme(void)
 	for( Int i = 0; i < TRAY_PIECE_COUNT; i++ )
 		m_powerTray[ i ] = NULL;
 	m_tooltip = ControlBarTooltipImages();
+	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
+		m_talent[ i ] = NULL;
 }
 
 
@@ -562,6 +565,11 @@ void ControlBarScheme::init(void)
 	findPieces( m_radarFrameName, "", theFrameSuffixes, FRAME_PIECE_COUNT, m_radarFrame );
 	findPieces( m_powerTrayName, "", traySuffixes, TRAY_PIECE_COUNT, m_powerTray );
 	m_tooltip.find( m_tooltipName );
+	static const char *const talentSuffixes[ TALENT_PIECE_COUNT ] =
+		{ "GeneralsPowerWindowWide", "TalentPlateLocked", "TalentPlateWaiting", "TalentPlatePicked", "TalentPlateRejected",
+			"TalentNodeLocked", "TalentNodeWaiting", "TalentNodePicked", "TalentNodeRejected", "TalentSpineLit",
+			"TalentArmLeft", "TalentArmRight" };
+	findPieces( m_talentName, "", talentSuffixes, TALENT_PIECE_COUNT, m_talent );
 
 	if(TheControlBar)
 	{
@@ -1326,6 +1334,13 @@ const Image *const *ControlBarSchemeManager::getPowerTray( void ) const
 	if( m_currentScheme == NULL || m_currentScheme->m_powerTray[ ControlBarScheme::TRAY_CELL ] == NULL )
 		return NULL;
 	return m_currentScheme->m_powerTray;
+}
+
+const Image *const *ControlBarSchemeManager::getTalentImages( void ) const
+{
+	if( m_currentScheme == NULL || m_currentScheme->m_talent[ ControlBarScheme::TALENT_WINDOW ] == NULL )
+		return NULL;
+	return m_currentScheme->m_talent;
 }
 
 const ControlBarTooltipImages& ControlBarSchemeManager::getTooltipImages( void ) const

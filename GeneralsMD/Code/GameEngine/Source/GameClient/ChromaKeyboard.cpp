@@ -1733,7 +1733,7 @@ static void chromaFillAlerts( Int *cells, Player *localPlayer, UnsignedInt frame
 
 	// The general's star on screen flashes on the frame count, not a timer of its
 	// own; the lamp keeps to the same cycle so the two blink together.
-	const Bool promotionWaiting = localPlayer->getSciencePurchasePoints() > 0;
+	const Bool promotionWaiting = localPlayer->getSciencePurchasePoints() > 0 || localPlayer->hasTalentWaiting();
 	cells[ chromaAlertCell( ALERT_PROMOTION ) ] =
 		promotionWaiting && chromaBlinkIsOn( frame, STAR_PERIOD_FRAMES )
 		? ALERT_COLORS[ ALERT_PROMOTION ] : COLOR_OFF;

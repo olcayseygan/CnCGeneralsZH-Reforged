@@ -17221,6 +17221,40 @@ static Int influenceRound( const AIDifficultyProfile *profile )
 	return profile->m_tacticalMicro ? frames : max<Int>( 1, frames / 2 );
 }
 
+/** prepareInfluence's shapes in runs of the turn's IDs, a run to a job, each run writing its shapes and cells
+	* of its own.  As many runs whatever the pool, so the cells' order never depends on the threads. */
+enum { SHAPE_RUNS = 16, SHAPE_RUN_IDS = 32 };
+static std::vector<Int> theShapeRunCells[ SHAPE_RUNS ];
+struct ShapeRuns
+{
+	StampTurn *turn;
+	const AIInfluenceMap *map;
+	Int perRun;
+};
+
+static void shapeRun( Int run, void *context )
+{
+	const ShapeRuns *runs = (const ShapeRuns *)context;
+	StampTurn &turn = *runs->turn;
+	std::vector<Int> &cells = theShapeRunCells[ run ];
+	cells.clear();
+	const Int end = min<Int>( (Int)turn.ids.size(), ( run + 1 ) * runs->perRun );
+	for( Int i = run * runs->perRun; i < end; ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( turn.ids[ i ] );
+		if( obj == NULL || obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
+			continue;
+		StampShape &shape = turn.shapes[ i ];
+		shape.power = aiCombatPower( obj );
+		const Real range = shape.power > 0.0f ? groundAttackRange( obj ) : 0.0f;
+		shape.armed = range > 0.0f;
+		shape.first = (Int)cells.size();
+		if( shape.armed )
+			runs->map->cellsReached( obj->getPosition()->x, obj->getPosition()->y, firingHeight( obj ), range, cells );
+		shape.count = (Int)cells.size() - shape.first;
+	}
+}
+
 /** Stamping the whole map in one frame was 2 to 6 ms a player a second at minute 30, the largest of the
 	* burst frames the AI owned.  So each object stamps once a round on the frame its ID falls on, into a map
 	* nobody reads, and that map takes over when the player's round ends: the map read is whole, its oldest
@@ -17257,21 +17291,24 @@ void AIPlayer::prepareInfluence( void )
 	}
 	if( turn.shaped || !m_influenceNext.sameGrid( turn.cols, turn.rows, turn.originX, turn.originY, turn.cellSize ) )
 		return;
-	// stampInfluence, with what does not depend on the seat worked out once for every seat
+	// stampInfluence, with what does not depend on the seat worked out once for every seat: in runs of the turn's
+	// IDs side by side, each into cells of its own, laid end to end after in run order, so the turn comes out as
+	// one pass in ID order would have made it
 	turn.shaped = TRUE;
-	for( size_t i = 0; i < turn.ids.size(); ++i )
+	ShapeRuns runs;
+	runs.turn = &turn;
+	runs.map = &m_influenceNext;
+	const Int count = (Int)turn.ids.size();
+	const Int runCount = min<Int>( SHAPE_RUNS, ( count + SHAPE_RUN_IDS - 1 ) / SHAPE_RUN_IDS );
+	runs.perRun = runCount > 0 ? ( count + runCount - 1 ) / runCount : 0;
+	JobSystem::parallel_for( runCount, 1, shapeRun, &runs );
+	for( Int run = 0; run < runCount; ++run )
 	{
-		const Object *obj = TheGameLogic->findObjectByID( turn.ids[ i ] );
-		if( obj == NULL || obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
-			continue;
-		StampShape &shape = turn.shapes[ i ];
-		shape.power = aiCombatPower( obj );
-		const Real range = shape.power > 0.0f ? groundAttackRange( obj ) : 0.0f;
-		shape.armed = range > 0.0f;
-		shape.first = (Int)turn.cells.size();
-		if( shape.armed )
-			m_influenceNext.cellsReached( obj->getPosition()->x, obj->getPosition()->y, firingHeight( obj ), range, turn.cells );
-		shape.count = (Int)turn.cells.size() - shape.first;
+		const Int base = (Int)turn.cells.size();
+		const Int end = min<Int>( count, ( run + 1 ) * runs.perRun );
+		for( Int i = run * runs.perRun; i < end; ++i )
+			turn.shapes[ i ].first += base;
+		turn.cells.insert( turn.cells.end(), theShapeRunCells[ run ].begin(), theShapeRunCells[ run ].end() );
 	}
 }
 

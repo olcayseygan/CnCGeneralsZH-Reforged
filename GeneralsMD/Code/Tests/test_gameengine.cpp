@@ -50,6 +50,8 @@
 #include "GameNetwork/GameDataMatch.h"
 #include "GameNetwork/GameInfo.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/Science.h"
+#include "GameLogic/RankInfo.h"
 #include "GameClient/ChallengeGenerals.h"
 #include "GameClient/FactionPicker.h"
 #include "GameClient/UIStyle.h"
@@ -24599,4 +24601,197 @@ TEST(model_batches_leave_the_crc_its_retail_copy)
 	CHECK_STR( fs.getRetailArchiveFilenameForFile( AsciiString( "art\\w3d\\nbgattling.w3d" ) ).str(), "W3DZH.big" );
 	CHECK_STR( fs.getRetailArchiveFilenameForFile( AsciiString( "art\\w3d\\avnew.w3d" ) ).str(), "" );
 	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\w3d\\avnew.w3d" ) ).str(), "ReforgedUSA.big" );
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// General's talents: ranks 6 to 10 and the pair rule
+//////////////////////////////////////////////////////////////////////////////
+
+static Bool loadIniAs( const char *name, INILoadType type )
+{
+	INI ini;
+	try
+	{
+		ini.load( AsciiString( name ), type, NULL );
+		return TRUE;
+	}
+	catch( ... )
+	{
+	}
+	return FALSE;
+}
+
+/* A row's two cards are partners, index ^ 1: owning either closes both, and a science outside the
+	 list is never a talent, whatever it owns. */
+TEST(talent_pair_rule_closes_the_partner_and_ignores_other_sciences)
+{
+	ScienceVec talents;
+	for( Int i = 0; i < TALENT_SCIENCE_COUNT; ++i )
+		talents.push_back( (ScienceType)( 1000 + i ) );
+	const ScienceType outside = (ScienceType)999;
+
+	CHECK_EQ( findTalentIndex( talents, (ScienceType)1004 ), 4 );
+	CHECK_EQ( findTalentIndex( talents, outside ), -1 );
+
+	ScienceVec owned;
+	for( Int i = 0; i < TALENT_SCIENCE_COUNT; ++i )
+		CHECK( isTalentOpen( talents, owned, talents[ i ] ) );
+	CHECK( !isTalentOpen( talents, owned, outside ) );
+
+	owned.push_back( (ScienceType)1003 );		// 7B
+	CHECK( !isTalentOpen( talents, owned, (ScienceType)1003 ) );
+	CHECK( !isTalentOpen( talents, owned, (ScienceType)1002 ) );	// 7A, its partner
+	CHECK( isTalentOpen( talents, owned, (ScienceType)1004 ) );		// 8A, another row
+	CHECK( isTalentOpen( talents, owned, (ScienceType)1005 ) );
+
+	owned.push_back( (ScienceType)1008 );		// 10A
+	CHECK( !isTalentOpen( talents, owned, (ScienceType)1009 ) );
+	CHECK( isTalentOpen( talents, owned, (ScienceType)1000 ) );
+
+	CHECK( isValidTalentScienceCount( 0 ) );
+	CHECK( isValidTalentScienceCount( 10 ) );
+	CHECK( !isValidTalentScienceCount( 9 ) );
+	CHECK( !isValidTalentScienceCount( 11 ) );
+}
+
+static std::string talentSciencesIni( Int count )
+{
+	std::string text;
+	for( Int i = 0; i < count; ++i )
+	{
+		char name[ 64 ];
+		snprintf( name, sizeof( name ), " TEST_Talent%d", i );
+		text += name;
+	}
+	return text;
+}
+
+/* TalentSciences holds none or all ten cards: a short list would pair the wrong ones. */
+TEST(talent_sciences_take_none_or_exactly_ten)
+{
+	CHECK( bootOnce() );
+	ScienceStore *savedSciences = TheScienceStore;
+	TheScienceStore = NEW ScienceStore;
+	TheScienceStore->init();
+	PlayerTemplateStore *savedStore = ThePlayerTemplateStore;
+	ThePlayerTemplateStore = NEW PlayerTemplateStore;
+	ThePlayerTemplateStore->init();
+
+	std::string sciences;
+	for( Int i = 0; i < 11; ++i )
+	{
+		char block[ 160 ];
+		snprintf( block, sizeof( block ), "Science TEST_Talent%d\n  SciencePurchasePointCost = 0\nEnd\n", i );
+		sciences += block;
+	}
+	writeFile( TEST_INI, sciences.c_str() );
+	CHECK( loadIni( TEST_INI ) );
+
+	std::string ten = "PlayerTemplate FactionTalentTen\n  Side = America\n  TalentSciences =" + talentSciencesIni( 10 ) + "\nEnd\n";
+	writeFile( TEST_INI, ten.c_str() );
+	CHECK( loadIni( TEST_INI ) );
+	const PlayerTemplate *pt = ThePlayerTemplateStore->findPlayerTemplate( NAMEKEY( "FactionTalentTen" ) );
+	CHECK( pt != NULL );
+	if( pt )
+	{
+		CHECK_EQ( (Int)pt->getTalentSciences().size(), 10 );
+		CHECK_EQ( (Int)pt->getTalentSciences()[ 3 ], (Int)NAMEKEY( "TEST_Talent3" ) );
+	}
+
+	writeFile( TEST_INI, "PlayerTemplate FactionTalentNone\n  Side = America\n  TalentSciences = None\nEnd\n" );
+	CHECK( loadIni( TEST_INI ) );
+
+	static const Int bad[] = { 1, 9, 11 };
+	for( Int b = 0; b < 3; ++b )
+	{
+		char name[ 64 ];
+		snprintf( name, sizeof( name ), "FactionTalentBad%d", bad[ b ] );
+		std::string text = std::string( "PlayerTemplate " ) + name + "\n  Side = America\n  TalentSciences =" + talentSciencesIni( bad[ b ] ) + "\nEnd\n";
+		writeFile( TEST_INI, text.c_str() );
+		CHECK( !loadIniAs( TEST_INI, INI_LOAD_OVERWRITE ) );
+	}
+
+	delete ThePlayerTemplateStore;
+	ThePlayerTemplateStore = savedStore;
+	delete TheScienceStore;
+	TheScienceStore = savedSciences;
+	remove( TEST_INI );
+}
+
+/* RankReforged.ini as shipped (its RankName lines aside, which need the game's text) appends ranks 6
+	 to 10 after EA's five, and a MULTIFILE block for a rank that exists edits it in place. */
+TEST(rank_reforged_ini_appends_ranks_six_to_ten)
+{
+	CHECK( bootOnce() );
+	ScienceStore *savedSciences = TheScienceStore;
+	TheScienceStore = NEW ScienceStore;
+	TheScienceStore->init();
+	RankInfoStore *savedRanks = TheRankInfoStore;
+	TheRankInfoStore = NEW RankInfoStore;
+	TheRankInfoStore->init();
+
+	std::string sciences;
+	for( Int i = 1; i <= 10; ++i )
+	{
+		char block[ 160 ];
+		snprintf( block, sizeof( block ), "Science SCIENCE_Rank%d\n  SciencePurchasePointCost = 0\n  IsGrantable = No\nEnd\n", i );
+		sciences += block;
+	}
+	writeFile( TEST_INI, sciences.c_str() );
+	CHECK( loadIni( TEST_INI ) );
+
+	static const Int eaPoints[] = { 0, 800, 1500, 2500, 5000 };
+	std::string ea;
+	for( Int i = 1; i <= 5; ++i )
+	{
+		char block[ 200 ];
+		snprintf( block, sizeof( block ), "Rank %d\n  SkillPointsNeeded = %d\n  SciencesGranted = SCIENCE_Rank%d\n  SciencePurchasePointsGranted = 1\nEnd\n",
+			i, eaPoints[ i - 1 ], i );
+		ea += block;
+	}
+	writeFile( TEST_INI, ea.c_str() );
+	CHECK( loadIni( TEST_INI ) );
+	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 5 );
+
+	std::string reforged;
+	{
+		std::ifstream master( std::string( ZH_CODE_DIR ) + "/Data/INI/RankReforged.ini" );
+		CHECK( master.good() );
+		std::string line;
+		while( std::getline( master, line ) )
+			if( line.find( "RankName" ) == std::string::npos )
+				reforged += line + "\n";
+	}
+	writeFile( TEST_INI, reforged.c_str() );
+	CHECK( loadIniAs( TEST_INI, INI_LOAD_MULTIFILE ) );
+	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 10 );
+
+	static const Int talentPoints[] = { 12000, 20000, 30000, 42000, 56000 };
+	for( Int i = 6; i <= 10 && TheRankInfoStore->getRankLevelCount() == 10; ++i )
+	{
+		const RankInfo *rank = TheRankInfoStore->getRankInfo( i );
+		char science[ 32 ];
+		snprintf( science, sizeof( science ), "SCIENCE_Rank%d", i );
+		CHECK_EQ( rank->m_skillPointsNeeded, talentPoints[ i - 6 ] );
+		CHECK_EQ( rank->m_sciencePurchasePointsGranted, 0 );
+		CHECK_EQ( (Int)rank->m_sciencesGranted.size(), 1 );
+		CHECK_EQ( (Int)rank->m_sciencesGranted[ 0 ], (Int)NAMEKEY( science ) );
+	}
+	CHECK_EQ( TheRankInfoStore->getRankInfo( 5 )->m_skillPointsNeeded, 5000 );
+
+	// an existing rank edited in place, the count unchanged; a gap still stops the load
+	writeFile( TEST_INI, "Rank 2\n  SkillPointsNeeded = 900\nEnd\n" );
+	CHECK( loadIniAs( TEST_INI, INI_LOAD_MULTIFILE ) );
+	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 10 );
+	CHECK_EQ( TheRankInfoStore->getRankInfo( 2 )->m_skillPointsNeeded, 900 );
+	CHECK_EQ( (Int)TheRankInfoStore->getRankInfo( 2 )->m_sciencesGranted.size(), 1 );
+	writeFile( TEST_INI, "Rank 12\n  SkillPointsNeeded = 90000\nEnd\n" );
+	CHECK( !loadIniAs( TEST_INI, INI_LOAD_MULTIFILE ) );
+	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 10 );
+
+	delete TheRankInfoStore;
+	TheRankInfoStore = savedRanks;
+	delete TheScienceStore;
+	TheScienceStore = savedSciences;
+	remove( TEST_INI );
 }

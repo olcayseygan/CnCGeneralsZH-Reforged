@@ -53,6 +53,7 @@
 #include "GameClient/ParticleSys.h"
 #include "GameClient/TerrainVisual.h"	// removeAllBibs, after the build check lights them
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/RankInfo.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Weapon.h"
 #include "GameClient/ReachOverlay.h"
@@ -1826,10 +1827,9 @@ static Bool executeSwitchWeapon( const ScenarioAction &action, Player *player, A
 /** The rank tree's button: the player is raised to the rank the science asks for and given the points
 	  it costs, and then MSG_PURCHASE_SCIENCE goes to the dispatcher as the control bar sends it, so the
 	  purchase itself is the one a click makes. */
-static const Int SCENARIO_HIGHEST_RANK = 5;
-
 static Bool executePurchase( const ScenarioAction &action, Player *player )
 {
+	const Int SCENARIO_HIGHEST_RANK = TheRankInfoStore->getRankLevelCount();
 	const ScienceType science = TheScienceStore->getScienceFromInternalName( action.selector );
 	if (science == SCIENCE_INVALID)
 	{

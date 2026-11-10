@@ -1279,6 +1279,27 @@ void AISkirmishPlayer::doTeamBuilding( void )
 }
 
 //----------------------------------------------------------------------------------------------------------
+/** A rank 6 to 10 talent row with neither card owned: a coin from the logic stream picks A or B.
+	* Nothing is remembered, so the next row is picked on the update its rank lands. */
+static void pickTalents( Player *player )
+{
+	const PlayerTemplate *pt = player->getPlayerTemplate();
+	if (!pt)
+		return;
+	const ScienceVec &talents = pt->getTalentSciences();
+	for (size_t row = 0; row + 1 < talents.size(); row += 2)
+	{
+		if (player->hasScience( talents[ row ] ) || player->hasScience( talents[ row + 1 ] ))
+			continue;
+		if (!player->isCapableOfPurchasingScience( talents[ row ] ))
+			continue;
+		const ScienceType pick = talents[ row + GameLogicRandomValue( 0, 1 ) ];
+		if (player->isCapableOfPurchasingScience( pick ))
+			player->attemptToPurchaseScience( pick );
+	}
+}
+
+//----------------------------------------------------------------------------------------------------------
 /**
  * Perform computer-controlled player AI
  */
@@ -1290,6 +1311,7 @@ void AISkirmishPlayer::update( void )
 		buildAIBaseDefenseNow(flank);
 	}
 	AIPlayer::update();
+	pickTalents( m_player );
 	doSurrender();
 }
 

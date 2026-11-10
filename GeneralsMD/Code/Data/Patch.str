@@ -4246,3 +4246,140 @@ END
 GUI:OnlineUnrated_cancelled
 "Not rated: the match was called off."
 END
+
+// The general's ranks past EA's five, named the way the first five are (EA's 6 to 8 were joke names
+// no rank ever reached)
+
+INI:RankLevel6
+"6 Star General"
+END
+
+INI:RankLevel7
+"7 Star General"
+END
+
+INI:RankLevel8
+"8 Star General"
+END
+
+INI:RankLevel9
+"9 Star General"
+END
+
+INI:RankLevel10
+"10 Star General"
+END
+
+// the same names as the General's Powers window's title
+SCIENCE:Rank6
+"6 Star General"
+END
+
+SCIENCE:Rank7
+"7 Star General"
+END
+
+SCIENCE:Rank8
+"8 Star General"
+END
+
+SCIENCE:Rank9
+"9 Star General"
+END
+
+SCIENCE:Rank10
+"10 Star General"
+END
+
+// The general's talents, ranks 6 to 10: the talents panel of the General's Powers window. GUI:Rank
+// is EA's own ("Rank"). A card name fits a plate about 200 pixels wide at 1080.
+
+GUI:Talents
+"TALENTS"
+END
+
+GUI:PicksWaiting
+"%d PICK(S) WAITING"
+END
+
+// Turkiye's ten cards
+
+SCIENCE:TurkiyeTalent6A
+"Cheaper Buildings"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6A
+"Every building costs 15 percent less, for as long as you have a Headquarters, a Barracks, a Factory or a Combat Engineer left."
+END
+
+SCIENCE:TurkiyeTalent6B
+"Cheaper Infantry"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6B
+"Every soldier costs 15 percent less, Combat Engineers and the Maroon Beret included, for as long as you have a Headquarters, a Barracks, a Factory or a Combat Engineer left."
+END
+
+SCIENCE:TurkiyeTalent7A
+"Altay Armour"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7A
+"Altay Tanks take a fifth more damage before they die, 620 to 744. Stacks with Reinforced Hull."
+END
+
+SCIENCE:TurkiyeTalent7B
+"UAV Optics"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7B
+"Bayraktar and Akinci UAVs see a quarter further: the Bayraktar 550 to 688, the Akinci 400 to 500."
+END
+
+SCIENCE:TurkiyeTalent8A
+"Siper Ramparts"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8A
+"Siper Bunkers stand 30 percent longer, 1500 to 1950. Stacks with Reinforced Siper."
+END
+
+SCIENCE:TurkiyeTalent8B
+"Sungur Vests"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8B
+"Sungur Gunners take a quarter more damage before they die, 160 to 200."
+END
+
+SCIENCE:TurkiyeTalent9A
+"UAV Swarm +2"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9A
+"UAV Swarm sends 2 more drones. Not working yet in this version: picking it does nothing."
+END
+
+SCIENCE:TurkiyeTalent9B
+"Gokbey Landing +4"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9B
+"Gokbey Landing drops 4 more soldiers. Not working yet in this version: picking it does nothing."
+END
+
+SCIENCE:TurkiyeTalent10A
+"Wide Tayfun"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10A
+"The Tayfun Missile hits a quarter wider area. Not working yet in this version: picking it does nothing."
+END
+
+SCIENCE:TurkiyeTalent10B
+"Veteran Berets"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10B
+"Maroon Berets leave the Barracks as veterans."
+END

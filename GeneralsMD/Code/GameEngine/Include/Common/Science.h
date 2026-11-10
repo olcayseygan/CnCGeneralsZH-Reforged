@@ -51,6 +51,17 @@ enum ScienceType : Int
 typedef std::vector<ScienceType> ScienceVec;
 
 //-------------------------------------------------------------------------------------------------
+/** A general's talents (PlayerTemplate TalentSciences): none, or ten sciences in the order
+	6A 6B 7A 7B 8A 8B 9A 9B 10A 10B.  A row's two cards are partners, index ^ 1, and owning one
+	loses the other for the match. */
+enum { TALENT_SCIENCE_COUNT = 10 };
+inline Bool isValidTalentScienceCount( size_t count ) { return count == 0 || count == TALENT_SCIENCE_COUNT; }
+/// the science's place in the list, -1 when it is not a talent
+Int findTalentIndex( const ScienceVec& talents, ScienceType science );
+/// the pair rule alone: a talent in the list that is not owned and whose partner is not owned
+Bool isTalentOpen( const ScienceVec& talents, const ScienceVec& owned, ScienceType science );
+
+//-------------------------------------------------------------------------------------------------
 class ScienceInfo : public Overridable
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( ScienceInfo, "ScienceInfo"  )

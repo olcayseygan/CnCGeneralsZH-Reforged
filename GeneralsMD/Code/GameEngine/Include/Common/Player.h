@@ -1003,6 +1003,13 @@ public:
 	/** return true attemptToPurchaseScience() would succeed for this science. */
 	Bool isCapableOfPurchasingScience(ScienceType science) const;
 
+	/// a card of this player's general's TalentSciences; bought for no points, and it loses its partner
+	Bool isTalent(ScienceType science) const;
+	/// how many talent cards the player owns
+	Int getTalentCount() const;
+	/// a rank's pick is open: a row with neither card owned and one of them purchasable
+	Bool hasTalentWaiting() const;
+
 	/** What kind of AI is behind this player, for the handful of places outside GameLogic/AI/ that
 		* have to ask.  Both answer their neutral value for a human seat. */
 	AISkillLevel getAISkillLevel(void) const;

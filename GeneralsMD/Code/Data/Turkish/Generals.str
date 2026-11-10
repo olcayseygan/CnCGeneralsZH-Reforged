@@ -2766,15 +2766,23 @@ INI:RankLevel5
 END
 
 INI:RankLevel6
-"Bay Belalı (Rütbe 6)"
+"6 Yıldızlı General"
 END
 
 INI:RankLevel7
-"Dr. Ölüm (Rütbe 7)"
+"7 Yıldızlı General"
 END
 
 INI:RankLevel8
-"Nihai Ölüm Makinesi (Rütbe 8)"
+"8 Yıldızlı General"
+END
+
+INI:RankLevel9
+"9 Yıldızlı General"
+END
+
+INI:RankLevel10
+"10 Yıldızlı General"
 END
 
 TOOLTIP:MyInfo
@@ -7602,15 +7610,23 @@ SCIENCE:Rank5
 END
 
 SCIENCE:Rank6
-"Tümgeneral"
+"6 Yıldızlı General"
 END
 
 SCIENCE:Rank7
-"Korgeneral"
+"7 Yıldızlı General"
 END
 
 SCIENCE:Rank8
-"Orgeneral"
+"8 Yıldızlı General"
+END
+
+SCIENCE:Rank9
+"9 Yıldızlı General"
+END
+
+SCIENCE:Rank10
+"10 Yıldızlı General"
 END
 
 CONTROLBAR:StructureExit
@@ -18514,4 +18530,92 @@ END
 
 GUI:OnlineUnrated_cancelled
 "Puana sayılmadı: maç iptal oldu."
+END
+
+GUI:Talents
+"YETENEKLER"
+END
+
+GUI:PicksWaiting
+"%d SEÇİM BEKLİYOR"
+END
+
+SCIENCE:TurkiyeTalent6A
+"Ucuz Yapılar"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6A
+"Bütün binalar yüzde 15 ucuza çıkar. Bir Karargah, Kışla, Fabrika ya da İstihkam Takımı ayakta kaldıkça sürer."
+END
+
+SCIENCE:TurkiyeTalent6B
+"Ucuz Piyade"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6B
+"Bütün askerler yüzde 15 ucuza çıkar, İstihkam Takımı ve Bordo Bereli de. Bir Karargah, Kışla, Fabrika ya da İstihkam Takımı ayakta kaldıkça sürer."
+END
+
+SCIENCE:TurkiyeTalent7A
+"Altay Zırhı"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7A
+"Altay tankları beşte bir daha fazla hasar kaldırır, 620'den 744'e. Takviyeli Gövde ile toplanır."
+END
+
+SCIENCE:TurkiyeTalent7B
+"İHA Optiği"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7B
+"Bayraktar ve Akıncı dörtte bir daha uzağı görür: Bayraktar 550'den 688'e, Akıncı 400'den 500'e."
+END
+
+SCIENCE:TurkiyeTalent8A
+"Siper Tahkimatı"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8A
+"Siperler yüzde 30 daha uzun dayanır, 1500'den 1950'ye. Takviyeli Siper ile toplanır."
+END
+
+SCIENCE:TurkiyeTalent8B
+"Sungur Yeleği"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8B
+"Sungur Nişancıları dörtte bir daha fazla hasar kaldırır, 160'tan 200'e."
+END
+
+SCIENCE:TurkiyeTalent9A
+"SİHA Sürüsü +2"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9A
+"SİHA Sürüsü 2 drone fazla gönderir. Bu sürümde henüz çalışmıyor: seçmek bir şey değiştirmez."
+END
+
+SCIENCE:TurkiyeTalent9B
+"Gökbey İndirmesi +4"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9B
+"Gökbey İndirmesi 4 asker fazla indirir. Bu sürümde henüz çalışmıyor: seçmek bir şey değiştirmez."
+END
+
+SCIENCE:TurkiyeTalent10A
+"Geniş Tayfun"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10A
+"Tayfun Füzesi dörtte bir daha geniş alanı vurur. Bu sürümde henüz çalışmıyor: seçmek bir şey değiştirmez."
+END
+
+SCIENCE:TurkiyeTalent10B
+"Tecrübeli Bereliler"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10B
+"Bordo Bereliler Kışladan tecrübeli çıkar."
 END

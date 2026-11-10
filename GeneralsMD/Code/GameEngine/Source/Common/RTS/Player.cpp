@@ -2990,11 +2990,18 @@ Bool Player::attemptToPurchaseScience(ScienceType science)
 		return false;
 	}
 
-	Int cost = TheScienceStore->getSciencePurchaseCost(science);
-	addSciencePurchasePoints(-cost);
-	addScience(science);
+	if (isTalent(science))
+	{
+		addScience(science);
+	}
+	else
+	{
+		Int cost = TheScienceStore->getSciencePurchaseCost(science);
+		addSciencePurchasePoints(-cost);
+		addScience(science);
 
-	getAcademyStats()->recordGeneralsPointsSpent( cost );
+		getAcademyStats()->recordGeneralsPointsSpent( cost );
+	}
 
 	if( ThePlayerList->getLocalPlayer() == this )
 	{
@@ -3060,6 +3067,12 @@ Bool Player::isCapableOfPurchasingScience(ScienceType science) const
 		return false;
 	}
 
+	// a talent costs no points; its rank prerequisite and the pair rule decide
+	if (isTalent(science))
+	{
+		return isTalentOpen(getPlayerTemplate()->getTalentSciences(), m_sciences, science);
+	}
+
 	Int cost = TheScienceStore->getSciencePurchaseCost(science);
 	// purchase cost of zero means "not purchasable!"
 	if (cost == 0 || cost > getSciencePurchasePoints())
@@ -3068,6 +3081,34 @@ Bool Player::isCapableOfPurchasingScience(ScienceType science) const
 	}
 
 	return true;
+}
+
+//=============================================================================
+Bool Player::isTalent(ScienceType science) const
+{
+	return getPlayerTemplate() && findTalentIndex(getPlayerTemplate()->getTalentSciences(), science) >= 0;
+}
+
+//=============================================================================
+Int Player::getTalentCount() const
+{
+	Int count = 0;
+	for (ScienceVec::const_iterator it = m_sciences.begin(); it != m_sciences.end(); ++it)
+		if (isTalent(*it))
+			++count;
+	return count;
+}
+
+//=============================================================================
+Bool Player::hasTalentWaiting() const
+{
+	if (!getPlayerTemplate())
+		return false;
+	const ScienceVec& talents = getPlayerTemplate()->getTalentSciences();
+	for (ScienceVec::const_iterator it = talents.begin(); it != talents.end(); ++it)
+		if (isCapableOfPurchasingScience(*it))
+			return true;
+	return false;
 }
 
 //=============================================================================
@@ -5212,6 +5253,11 @@ void Player::crc( Xfer *xfer )
 	if( healthHandicap != 1.0f )
 		xfer->xferReal( &healthHandicap );
 
+	// The talents picked, only once there is one, so a match without a pick keeps the CRC it has.
+	Int talents = getTalentCount();
+	if( talents > 0 )
+		xfer->xferInt( &talents );
+
 }  // end crc
 
 // ------------------------------------------------------------------------------------------------
@@ -5539,6 +5585,12 @@ void Player::xfer( Xfer *xfer )
 
 	// level up
 	xfer->xferInt( &m_levelUp );
+	// from the ranks loaded now, since a save made at the old cap of 5 stored INT_MAX and would never reach 6
+	if( xfer->getXferMode() == XFER_LOAD )
+	{
+		const RankInfo* nextRank = TheRankInfoStore->getRankInfo( m_rankLevel + 1 );
+		m_levelUp = nextRank ? nextRank->m_skillPointsNeeded : INT_MAX;
+	}
 
 	// level down
 	xfer->xferInt( &m_levelDown );

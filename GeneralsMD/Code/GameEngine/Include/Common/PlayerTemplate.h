@@ -128,6 +128,8 @@ public:
 	AsciiString getMedallionSelected() const { return m_strMedallionSelected; }
 	
 	const ScienceVec& getIntrinsicSciences() const { return m_intrinsicSciences; }
+	/// TalentSciences: none, or the ten cards 6A 6B ... 10A 10B (Science.h)
+	const ScienceVec& getTalentSciences() const { return m_talentSciences; }
 	Int getIntrinsicSciencePurchasePoints() const { return m_intrinsicSPP; }
 	AsciiString getPurchaseScienceCommandSetRank1( void ) const {return m_purchaseScienceCommandSetRank1;	}
 	AsciiString getPurchaseScienceCommandSetRank3( void ) const {return m_purchaseScienceCommandSetRank3;	}
@@ -154,6 +156,7 @@ protected:
 	static void parseProductionCostChange( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseProductionTimeChange( INI* ini, void *instance, void *store, const void* /*userData*/ );
 	static void parseProductionVeterancyLevel( INI* ini, void *instance, void *store, const void* /*userData*/ );
+	static void parseTalentSciences( INI* ini, void *instance, void *store, const void* userData );
 
 private:
 
@@ -171,6 +174,7 @@ private:
 	ProductionChangeMap			m_productionTimeChanges;
 	ProductionVeterancyMap	m_productionVeterancyLevels;
 	ScienceVec				m_intrinsicSciences;	///< sciences that this Player will always know
+	ScienceVec				m_talentSciences;			///< the general's talent cards, none or ten
 	AsciiString				m_purchaseScienceCommandSetRank1;		///< the command set we'll use when we want to purchase sciences
 	AsciiString				m_purchaseScienceCommandSetRank3;		///< the command set we'll use when we want to purchase sciences
 	AsciiString				m_purchaseScienceCommandSetRank8;		///< the command set we'll use when we want to purchase sciences

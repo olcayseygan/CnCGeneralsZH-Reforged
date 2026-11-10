@@ -1170,6 +1170,8 @@ void GameEngine::init( int argc, char *argv[] )
 		initSubsystem(TheSidesList,"TheSidesList", MSGNEW("GameEngineSubsystem") SidesList(), NULL);
 		initSubsystem(TheCaveSystem,"TheCaveSystem", MSGNEW("GameEngineSubsystem") CaveSystem(), NULL);
 		initSubsystem(TheRankInfoStore,"TheRankInfoStore", MSGNEW("GameEngineSubsystem") RankInfoStore(), &xferCRC, NULL, "Data\\INI\\Rank.ini");
+		// Ranks 6 to 10, the talent ranks, appended after EA's five; an existing rank is edited in place
+		ini.load( AsciiString( "Data\\INI\\RankReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
 		initSubsystem(ThePlayerTemplateStore,"ThePlayerTemplateStore", MSGNEW("GameEngineSubsystem") PlayerTemplateStore(), &xferCRC, "Data\\INI\\Default\\PlayerTemplate.ini", "Data\\INI\\PlayerTemplate.ini");
 		// The fork's own factions: a new name is added after EA's, an existing one is edited in place
 		ini.load( AsciiString( "Data\\INI\\PlayerTemplateReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
@@ -1233,6 +1235,8 @@ void GameEngine::init( int argc, char *argv[] )
 		ini.load( AsciiString( "Data\\INI\\FixesReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
 		// Turkiye's objects, reskins of the American ones, so they come after the balance and fixes they copy
 		ini.load( AsciiString( "Data\\INI\\TurkiyeReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
+		// The general's talents, ranks 6 to 10: each card a science and whatever it grants
+		ini.load( AsciiString( "Data\\INI\\TalentsReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
 
 	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////
 	GetPrecisionTimer(&endTime64);//////////////////////////////////////////////////////////////////
@@ -2851,7 +2855,7 @@ static void updateHeadlessRun( void )
 		const Int team = (slot >= 0 && TheGameInfo) ? TheGameInfo->getConstSlot( slot )->getTeamNumber() : -1;
 
 		ScoreKeeper *score = p->getScoreKeeper();
-		DEBUG_LOG(("HEADLESS PLAYER %d '%s': %s | score %d | money %d earned %d spent | units %d built %d lost %d killed peak %d | buildings %d built %d lost | slot %d team %d\n",
+		DEBUG_LOG(("HEADLESS PLAYER %d '%s': %s | score %d | money %d earned %d spent | units %d built %d lost %d killed peak %d | buildings %d built %d lost | slot %d team %d | rank %d skill %d\n",
 							 i, WideCharAsUtf8( p->getPlayerDisplayName().str() ).str(),
 							 TheVictoryConditions->hasAchievedVictory(p) ? "WON" :
 								 (TheVictoryConditions->hasSinglePlayerBeenDefeated(p) ? "eliminated" : "alive"),
@@ -2860,7 +2864,7 @@ static void updateHeadlessRun( void )
 							 score->getTotalUnitsBuilt(), score->getTotalUnitsLost(), score->getTotalUnitsDestroyed(),
 							 peakUnits[ i ],
 							 score->getTotalBuildingsBuilt(), score->getTotalBuildingsLost(),
-							 slot, team));
+							 slot, team, p->getRankLevel(), p->getSkillPoints()));
 		// the exchange in money, on a line of its own so the PLAYER line's readers keep matching it
 		DEBUG_LOG(("HEADLESS VALUE %d: units worth %d lost, %d killed\n", i,
 							 score->getUnitValueLost(), score->getUnitValueDestroyed()));

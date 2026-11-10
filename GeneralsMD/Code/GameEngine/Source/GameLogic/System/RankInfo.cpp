@@ -161,6 +161,11 @@ void RankInfoStore::friend_parseRankDefinition( INI* ini )
 			//TheRankInfoStore->m_rankInfos.push_back(newInfo);	// NO, BAD, WRONG -- don't add in this case.
 
 		} 
+		else if (ini->getLoadType() == INI_LOAD_MULTIFILE && rank >= 1 && rank <= (Int)TheRankInfoStore->m_rankInfos.size())
+		{
+			// RankReforged.ini edits a loaded rank in place, and its fields win
+			ini->initFromINI(TheRankInfoStore->m_rankInfos[rank-1], myFieldParse);
+		}
 		else
 		{
 			if (rank != TheRankInfoStore->m_rankInfos.size() + 1)

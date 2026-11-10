@@ -8,6 +8,13 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## A general's rank goes to ten
+
+- The general's rank no longer stops at five stars. Ranks 6 to 10 bring no general's points; each brings a pick of two talents instead, and the one you leave is gone for the match. Rank 6 needs 12,000 points, about 120 tanks killed, and rank 10 needs 56,000.
+- Turkiye has its tree first. Rank 6: buildings or infantry cost 15 percent less. Rank 7: Altay Tanks take 744 damage instead of 620, or Bayraktar and Akinci UAVs see a quarter further. Rank 8: a Siper stands 1950 instead of 1500, or a Sungur Gunner 200 instead of 160. Rank 10 B makes every new Maroon Beret a veteran. The three power cards, a bigger UAV Swarm, a bigger Gokbey Landing and a wider Tayfun, can be picked but do nothing yet.
+- The computer picks its talents as it ranks up, a coin toss per rank.
+- A replay recorded on an earlier version will not play back on this one.
+
 ## Your orders go before the computer's
 
 - Your units get their routes before any computer player's. The game works out a few routes a frame and used to take requests in the order they came, so late in a big match against several computer players a move you gave could wait a second or more behind hundreds of the computer's own. Now a human player's units are answered first and the computer takes what is left of the frame.

@@ -224,6 +224,8 @@ foreach ($run in $started) {
 	# production buildings each player put up, by kind (an arms dealer is GLA's war factory); a lost
 	# one put back counts again, so this is at least the most that ever stood at once
 	$factories = @{}
+	# the frame each player first stood at each rank, from the history's promotion events
+	$rankAt = @{}
 
 	foreach ($line in Get-Content $log) {
 		if ($line -match "^AI BUILT frame \d+ player (\d+) '.*?(WarFactory|ArmsDealer|Barracks|Airfield)'") {
@@ -249,6 +251,15 @@ foreach ($run in $started) {
 		if ($line -match "Re-attaching supply truck") { $econ.Reattach++; continue }
 		if ($line -match "^AI WAVE .* sends \d+ teams") { $econ.Waves++; continue }
 		if ($line -match "^AI COUNTER") { $econ.Counter++; continue }
+		# a promotion, with the rank it reached; several ranks in one frame come as one event at the highest
+		if ($line -match "HEADLESS HISTORY EVENT (\d+) (\d+) rank \S+ (\d+)") {
+			$p = [int]$Matches[1]
+			if (-not $rankAt.ContainsKey($p)) { $rankAt[$p] = @{} }
+			for ($r = 2; $r -le [int]$Matches[3]; $r++) {
+				if (-not $rankAt[$p].ContainsKey($r)) { $rankAt[$p][$r] = [int]$Matches[2] }
+			}
+			continue
+		}
 		if ($line -match "HEADLESS VALUE (\d+): units worth (\d+) lost, (\d+) killed") {
 			$value[[int]$Matches[1]] = [pscustomobject]@{ Lost = [int]$Matches[2]; Killed = [int]$Matches[3] }
 			continue
@@ -309,11 +320,17 @@ foreach ($run in $started) {
 		elseif ($line -match "HEADLESS PLAYER (\d+) '(.*?)': (\w+) \| score (\d+) \| money (\d+) earned (\d+) spent \| units (\d+) built (\d+) lost (\d+) killed peak (\d+)(?:.*\| slot (-?\d+) team (-?\d+))?") {
 			# the lobby team is -1 for a free-for-all seat, and absent from a log an older build wrote
 			$team = if ($Matches[12]) { [int]$Matches[12] } else { -1 }
-			$slots[[int]$Matches[1]] = [pscustomobject]@{
+			$index = [int]$Matches[1]
+			$slots[$index] = [pscustomobject]@{
 				Name = $Matches[2]; Status = $Matches[3]; Score = [int]$Matches[4]
 				Earned = [int]$Matches[5]; Spent = [int]$Matches[6]
 				Built = [int]$Matches[7]; Lost = [int]$Matches[8]; Killed = [int]$Matches[9]
-				Peak = [int]$Matches[10]; Team = $team
+				Peak = [int]$Matches[10]; Team = $team; Rank = 0; Skill = 0
+			}
+			# the general's rank and skill points at the end, absent from a log an older build wrote
+			if ($line -match "\| rank (\d+) skill (\d+)") {
+				$slots[$index].Rank = [int]$Matches[1]
+				$slots[$index].Skill = [int]$Matches[2]
 			}
 		}
 	}
@@ -323,7 +340,7 @@ foreach ($run in $started) {
 	Write-Host ("{0}, {1}, frame {2}, {3:n0}s" -f $why, $winnerText, $frames, $wall)
 
 	$rows += [pscustomobject]@{ Seed = $seed; Cells = $cells; Why = $why; Frames = $frames; Wall = $wall; Slots = $slots; Pf = $pf; Perf = $perf; Jobs = $jobs; Ft = $ft; Spikes = $spikes
-		Value = $value; Loss = $loss; Engage = $engage; Econ = $econ; Factories = $factories; Winner = $winner }
+		Value = $value; Loss = $loss; Engage = $engage; Econ = $econ; Factories = $factories; Winner = $winner; RankAt = $rankAt }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -361,6 +378,27 @@ $summary = foreach ($p in $slotIds) {
 	}
 }
 if ($summary) { $summary | Format-Table -AutoSize | Out-String | Write-Host }
+
+# The general's ranks: how many players of the batch got to each, and the median game minute it landed
+# at (the history's promotion events; a rank reached with no event, from an older build, counts but has
+# no minute).
+$seats = @($rows | ForEach-Object { $_.Slots.Values })
+if (@($seats | Where-Object { $_.Rank -gt 0 }).Count -gt 0) {
+	$rankRows = foreach ($r in 2..10) {
+		$minutes = @($rows | ForEach-Object { $row = $_; $row.Slots.Keys | ForEach-Object {
+			if ($row.Slots[$_].Rank -ge $r -and $row.RankAt -and $row.RankAt.ContainsKey($_) -and $row.RankAt[$_].ContainsKey($r)) {
+				$row.RankAt[$_][$r] / $LogicFps / 60.0 } } } | Sort-Object)
+		$median = if ($minutes.Count -eq 0) { "" } elseif ($minutes.Count % 2) { $minutes[[int][math]::Floor($minutes.Count / 2)] }
+			else { ($minutes[$minutes.Count / 2 - 1] + $minutes[$minutes.Count / 2]) / 2 }
+		[pscustomobject]@{
+			Rank      = $r
+			Reached   = "{0}/{1}" -f @($seats | Where-Object { $_.Rank -ge $r }).Count, $seats.Count
+			MedianMin = if ($median -ne "") { [math]::Round($median, 1) } else { "" }
+		}
+	}
+	Write-Host "general's rank (players who reached it, median game minute):"
+	$rankRows | Format-Table -AutoSize | Out-String | Write-Host
+}
 
 # How many of each production building a player put up, the most in any one match of the batch:
 # a computer that stands one of each all match is short of factories (AIPlayer::addProductionForQueues).

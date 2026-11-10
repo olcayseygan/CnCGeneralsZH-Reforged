@@ -46,6 +46,23 @@ ScienceStore* TheScienceStore = NULL;
 #endif
 
 //-----------------------------------------------------------------------------
+Int findTalentIndex( const ScienceVec& talents, ScienceType science )
+{
+	ScienceVec::const_iterator it = std::find( talents.begin(), talents.end(), science );
+	return it == talents.end() ? -1 : (Int)( it - talents.begin() );
+}
+
+//-----------------------------------------------------------------------------
+Bool isTalentOpen( const ScienceVec& talents, const ScienceVec& owned, ScienceType science )
+{
+	const Int index = findTalentIndex( talents, science );
+	if (index < 0 || (index ^ 1) >= (Int)talents.size())
+		return false;
+	return std::find( owned.begin(), owned.end(), science ) == owned.end()
+		&& std::find( owned.begin(), owned.end(), talents[ index ^ 1 ] ) == owned.end();
+}
+
+//-----------------------------------------------------------------------------
 void ScienceStore::init()
 {
 	DEBUG_ASSERTCRASH(m_sciences.empty(), ("Hmm"));

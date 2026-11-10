@@ -95,7 +95,8 @@
 		{ "ProductionTimeChange",			PlayerTemplate::parseProductionTimeChange,			NULL, 0 },
 		{ "ProductionVeterancyLevel",	PlayerTemplate::parseProductionVeterancyLevel,	NULL, 0 },
 		{ "IntrinsicSciences",				INI::parseScienceVector,												NULL, offsetof( PlayerTemplate, m_intrinsicSciences ) },
-		{ "AIDoctrine",								INI::parseAsciiStringVector,										NULL, offsetof( PlayerTemplate, m_aiDoctrine ) },
+		{ "TalentSciences",						PlayerTemplate::parseTalentSciences,						NULL, offsetof( PlayerTemplate, m_talentSciences ) },
+		{ "AIDoctrine",							INI::parseAsciiStringVector,										NULL, offsetof( PlayerTemplate, m_aiDoctrine ) },
 		{ "PurchaseScienceCommandSetRank1",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank1 ) },
 		{ "PurchaseScienceCommandSetRank3",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank3 ) },
 		{ "PurchaseScienceCommandSetRank8",INI::parseAsciiString,													NULL, offsetof( PlayerTemplate, m_purchaseScienceCommandSetRank8 ) },
@@ -175,6 +176,20 @@ AsciiString PlayerTemplate::getStartingUnit( Int i ) const
 
 	VeterancyLevel startLevel = (VeterancyLevel)INI::scanIndexList(ini->getNextToken(), TheVeterancyNames);
 	self->m_productionVeterancyLevels[buildTemplateKey] = startLevel;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** TalentSciences: a science list holding none or all ten cards, since a short list would pair
+	the wrong cards (a card's partner is index ^ 1). */
+//-------------------------------------------------------------------------------------------------
+/*static*/ void PlayerTemplate::parseTalentSciences( INI* ini, void *instance, void *store, const void* userData )
+{
+	INI::parseScienceVector( ini, instance, store, userData );
+	if (!isValidTalentScienceCount( ((ScienceVec*)store)->size() ))
+	{
+		DEBUG_LOG(("TalentSciences must name 0 or %d sciences, not %d\n", TALENT_SCIENCE_COUNT, (Int)((ScienceVec*)store)->size()));
+		throw INI_INVALID_DATA;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

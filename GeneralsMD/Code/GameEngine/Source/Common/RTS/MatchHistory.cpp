@@ -146,7 +146,9 @@ void MatchHistory::update( UnsignedInt frame )
 //-------------------------------------------------------------------------------------------------
 void MatchHistory::addEvent( UnsignedInt frame, Int player, MatchEventType type, const ThingTemplate *thing, const SpecialPowerTemplate *power, Int rank )
 {
-	if( m_events.size() >= MAX_EVENTS )
+	// a promotion goes in past the cap: there are at most nine a player, and the late ones are the
+	// ones a long match fills the list before
+	if( m_events.size() >= MAX_EVENTS && type != MATCH_EVENT_RANK )
 		return;
 	MatchEvent event;
 	event.frame = frame;

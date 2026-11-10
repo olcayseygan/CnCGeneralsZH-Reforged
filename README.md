@@ -106,7 +106,7 @@ yet. [CHANGELOG.md](CHANGELOG.md) has the measurements behind every line.
 | Veterancy is shared by everyone who hurt the target in the last ten seconds; healing earns too | 2.4.0 |
 | The three sides mine a supply pile at the same pace, near the drop-off or far from it | 3.0.0 |
 | The battle runs 60 steps a second, double the 30 of 2003; every speed, delay and reload was converted, so a Crusader still fires every two seconds | 3.0.0 |
-| The battle is worked out on its own thread beside the drawing, by default on Windows; `-logicthread 0` puts it back between frames | 3.2.0 |
+| The battle is worked out on its own thread beside the drawing | 3.2.0 |
 | Turbo mode replaces the speed dropdown: one lobby box, set by the host in a network game, two seconds of battle in every real one | 3.2.0 |
 | Jets bank into turns, sweep wide at speed, take off down the runway, fly a landing circuit and taxi on their wheels | 3.2.0 |
 | A jet shot down hits for 80 where it lands, 160 for a B-52 or a cargo plane, and leaves fire for about six seconds; its owner and allies are spared | 3.2.0 |
@@ -289,7 +289,6 @@ Discs carry 1.00 and the engine is 1.04's, so files from a 1.04 install (Steam, 
 | `-quickstart` | skips the intro movie, the shell map and the menu animations |
 | `-nologo`, `-novideo` | skip the EA logo, or every movie |
 | `-noaudio` | starts with every sound off |
-| `-logicthread 0` | for a desync hunt: works the battle out between frames, the default on Mac and Linux; Windows always runs it on its own thread otherwise, and no option turns that off |
 
 <details>
 <summary>For testing: unattended computer matches</summary>

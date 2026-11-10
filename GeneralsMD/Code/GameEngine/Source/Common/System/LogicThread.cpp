@@ -25,7 +25,6 @@
 #include "Common/LogicThread.h"
 #include "Common/AudioEventRTS.h"
 #include "Common/CriticalSection.h"
-#include "Common/EarlyCommandLine.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
 #include "Common/MessageStream.h"
@@ -44,11 +43,13 @@
 #include <condition_variable>
 #include <exception>
 #include <mutex>
-#include <random>
+#include <system_error>
 #include <thread>
 #include <vector>
 #if defined(_WIN32)
 #include <eh.h>
+#else
+#include <pthread.h>
 #endif
 
 thread_local Bool LogicThread::t_isLogicThread = FALSE;
@@ -59,10 +60,16 @@ namespace
 {
 	typedef std::chrono::steady_clock LogicClock;
 
-	Bool						s_enabled = FALSE;
+	/* The thread is up, from init to shutdown.  Every tick but a map's load and teardown runs on it;
+		 there is no switch that keeps the tick on the main thread. */
+	Bool						s_started = FALSE;
+#if defined(_WIN32)
 	/* A pointer, so a process that ends without ~GameEngine (a RELEASE_CRASH, exit() from a menu)
 		 does not run a joinable std::thread's destructor at static teardown, which is std::terminate. */
 	std::thread			*s_thread = NULL;
+#else
+	pthread_t				s_thread;
+#endif
 
 	/* One request and one answer, both under s_lock.  The main thread sets s_tickPending and waits
 		 for s_tickDone; the logic thread waits for s_tickPending, runs the tick, sets s_tickDone.  The
@@ -120,17 +127,6 @@ namespace
 	// the wait in tenths of a millisecond up to 50, the last bucket everything past it
 	const Int		WAIT_BUCKETS = 501;
 	Int					s_waitHistogram[ WAIT_BUCKETS ] = { 0 };
-
-	// -logicthread 2: 1 with a jitter on both sides of the handoff, so the races step 3 must not have
-	// meet more orders.  A generator per thread and of its own: nothing here may touch a game stream.
-	Int					s_mode = 0;
-	void jitter( void )
-	{
-		if( s_mode < 2 )
-			return;
-		static thread_local std::minstd_rand random( (unsigned)LogicClock::now().time_since_epoch().count() );
-		std::this_thread::sleep_for( std::chrono::microseconds( random() % 2000 ) );
-	}
 
 	const char *const CHANNEL_NAMES[ LogicThread::CENSUS_COUNT ] =
 	{
@@ -251,7 +247,6 @@ namespace
 					break;
 				s_tickPending = FALSE;
 			}
-			jitter();
 
 			const LogicClock::time_point t0 = LogicClock::now();
 			std::exception_ptr error;
@@ -370,7 +365,6 @@ static void startOverlap( void )
 	captureClientBlock();
 	TheGameClient->setFrame( TheGameLogic->getFrame() );
 	TheGameLogic->growObjectLookupForTick();
-	jitter();
 	s_overlapSyncMS = GameEngine_msSincePassStart();
 	s_overlapStart = LogicClock::now();
 	// open before the tick wakes, so nothing the main thread does beside it reads as outside the window
@@ -403,7 +397,6 @@ static void waitOverlap( void )
 		tickMS = s_tickMS;
 	}
 	const LogicClock::time_point t1 = LogicClock::now();
-	jitter();
 	// as runTick: the main thread's FPU as an inline tick leaves it
 	setFPMode();
 
@@ -500,7 +493,7 @@ void LogicThread::OverlapWindow::close( void )
 //-------------------------------------------------------------------------------------------------
 void LogicThread::prepareOverlap( void )
 {
-	s_overlapWanted = s_enabled && TheGameEngine->planOverlappedTick();
+	s_overlapWanted = TheGameEngine->planOverlappedTick();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -540,42 +533,44 @@ void LogicThread::takeOverlapTimes( Real &tickMS, Real &waitMS )
 //-------------------------------------------------------------------------------------------------
 void LogicThread::init( void )
 {
-	// the command line has the last word.  Off Windows the tick stays on the main thread: a macOS std::thread
-	// has a 512 KB stack, and a tick needs more
-#if defined(_WIN32)
-	char value[ 32 ] = "1";
-#else
-	char value[ 32 ] = "0";
-#endif
-	findEarlyCommandLineValue( L"-logicthread", value, sizeof(value) );
-	if( atoi( value ) == 0 )
-		return;
-
-	s_enabled = TRUE;
-	s_mode = atoi( value );
 #if defined(_WIN32)
 	// there is no getter: setting returns the one before, which goes straight back
 	s_seTranslator = _set_se_translator( NULL );
 	_set_se_translator( s_seTranslator );
-#endif
 	s_thread = new std::thread( threadMain );
+#else
+	/* A macOS std::thread gets 512 KB of stack and a tick needs more; Windows gives every thread the
+		 exe's 1 MB.  8 MB is what the main thread has on macOS and Linux, where the tick ran until now. */
+	pthread_attr_t attr;
+	pthread_attr_init( &attr );
+	pthread_attr_setstacksize( &attr, 8 * 1024 * 1024 );
+	const int failed = pthread_create( &s_thread, &attr, []( void * ) -> void * { threadMain(); return NULL; }, NULL );
+	pthread_attr_destroy( &attr );
+	if( failed )
+		throw std::system_error( failed, std::generic_category(), "LogicThread::init" );	// as std::thread would
+#endif
+	s_started = TRUE;
 	DEBUG_LOG(( "LOGICTHREAD: the tick runs on its own thread, the main thread waiting for it\n" ));
 }
 
 //-------------------------------------------------------------------------------------------------
 void LogicThread::shutdown( void )
 {
-	if( s_thread == NULL )
+	if( !s_started )
 		return;
 	{
 		std::lock_guard<std::mutex> lock( s_lock );
 		s_quitting = TRUE;
 	}
 	s_wakeCv.notify_one();
+#if defined(_WIN32)
 	s_thread->join();
 	delete s_thread;
 	s_thread = NULL;
-	s_enabled = FALSE;
+#else
+	pthread_join( s_thread, NULL );
+#endif
+	s_started = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -585,7 +580,7 @@ void LogicThread::runTick( void )
 	// the client's clock reads the frame the tick runs, as GameLogic::update set it at its top
 	TheGameClient->setFrame( TheGameLogic->getFrame() );
 
-	if( !s_enabled || tickNeedsMainThread() )
+	if( tickNeedsMainThread() )
 	{
 		++s_inlineTicks;
 		TheGameLogic->UPDATE();
@@ -611,9 +606,8 @@ void LogicThread::runTick( void )
 		tickMS = s_tickMS;
 	}
 	const LogicClock::time_point t1 = LogicClock::now();
-	jitter();
 
-	// The inline tick left this thread's FPU in setFPMode's state; keep the main thread as it was at 0.
+	// An inline tick (a map's load or teardown) leaves this thread's FPU in setFPMode's state; so does this one.
 	setFPMode();
 
 	// What the thread costs: the wait less the tick the logic thread timed for itself.
@@ -633,7 +627,7 @@ void LogicThread::runTick( void )
 		std::rethrow_exception( error );
 
 	// What the tick deferred on the drawables (phase 2, M1), the effects (M5) and the control bar (M2),
-	// here on the main thread at both settings.
+	// here on the main thread, as after an inline tick.
 	flushAfterTick();
 }
 
@@ -729,7 +723,7 @@ void LogicThread::noteViewEffect( ViewEffect effect )
 }
 
 //-------------------------------------------------------------------------------------------------
-/* Phase 3: the block at both settings.  Asking the camera meant running the tick's queued camera calls
+/* Phase 3: the block on every tick.  Asking the camera meant running the tick's queued camera calls
 	 inside the tick, on the camera the render reads; phase 2's three campaign missions found 0 reads,
 	 of 18680, where the camera and the block disagreed. */
 Bool LogicThread::isCameraMovementFinishedForTick( void )
@@ -755,7 +749,7 @@ void LogicThread::discardEffects( void )
 void LogicThread::report( void )
 {
 	DEBUG_LOG(( "HEADLESS LOGICTHREAD: %s | %d ticks on the logic thread, %d on the main thread | handoff %.3f/%.3f/%.3f max %.3f ms mean/p50/p99\n",
-		s_enabled ? "on" : "off", s_threadedTicks, s_inlineTicks,
+		s_started ? "on" : "off", s_threadedTicks, s_inlineTicks,
 		s_threadedTicks ? s_handoffTotalMS / s_threadedTicks : 0.0f,
 		handoffPercentileMicros( 0.5f ) / 1000.0f, handoffPercentileMicros( 0.99f ) / 1000.0f, s_handoffMaxMS ));
 

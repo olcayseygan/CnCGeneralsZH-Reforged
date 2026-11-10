@@ -39,17 +39,14 @@ class Drawable;
 class Player;
 
 /**
-	* `-logicthread 1`, the default on Windows, hands every tick to a dedicated thread; outside a network
-	* game the render draws beside it (phases 3 and 4), reading only the copies taken at the sync point,
-	* and in one the main thread waits for it (phase 5).  No option or saved setting reaches this.
-	* `-logicthread 0`, the default off Windows and otherwise for a desync hunt, runs the tick on the main
-	* thread.
-	* `-logicthread 2` adds jitter to the tick to shake out races.
+	* Every tick runs on a dedicated thread, on every platform; no switch, option or saved setting keeps
+	* it on the main thread, and only the ticks that load or tear down a map stay there (runTick).  The
+	* render draws beside it where the pacer lets it (phases 3 to 5), reading only the copies taken at
+	* the sync point.
 	*
 	* The census counts calls into the client made from the logic thread, one count per channel
 	* of LOGIC-THREAD.md section 1's table.  Each count is an entry point phase 2 has to turn into
-	* a record replayed at the sync point; the phase 2 exit is every count at zero.  At
-	* `-logicthread 0` nothing runs on the logic thread and every count stays zero.
+	* a record replayed at the sync point; the phase 2 exit is every count at zero.
 	*/
 namespace LogicThread
 {
@@ -145,7 +142,7 @@ namespace LogicThread
 	}
 
 	/** The window's span on the main thread, closed when it goes out of scope (a continue included).
-		* Step 3b: at 1 and 2, a window opened with mayOverlap on a pass prepareOverlap found a tick due
+		* Step 3b: a window opened with mayOverlap on a pass prepareOverlap found a tick due
 		* for hands that tick to the logic thread before it marks itself open, and close waits for it. */
 	class OverlapWindow
 	{
@@ -189,7 +186,7 @@ namespace LogicThread
 	};
 
 	/** LOGIC-THREAD.md phase 3, step 3b, the overlap.  GameClient::update calls this in front of the
-		* draw: at 1 and 2 it asks GameEngine::planOverlappedTick, which runs the message stream and the
+		* draw: it asks GameEngine::planOverlappedTick, which runs the message stream and the
 		* pacer there in a single-player match, whether the pass's first tick is due. */
 	void prepareOverlap( void );
 
@@ -210,14 +207,14 @@ namespace LogicThread
 	/** The last overlapped tick's own length on the logic thread, and how long the main thread waited for it. */
 	void takeOverlapTimes( Real &tickMS, Real &waitMS );
 
-	/** Read -logicthread and start the thread if it asks for one.  Called once, from GameEngine::init. */
+	/** Start the thread.  Called once, from GameEngine::init. */
 	void init( void );
 
 	/** Join the thread.  Safe without an init(). */
 	void shutdown( void );
 
-	/** Run one TheGameLogic->UPDATE(): on the logic thread with this one waiting, or inline at
-		* -logicthread 0 and on the ticks that load or tear down a map, which build windows, the load
+	/** Run one TheGameLogic->UPDATE(): on the logic thread with this one waiting, or inline on the
+		* ticks that load or tear down a map, which build windows, the load
 		* screen and every render object on the device and stay on the main thread.  An exception
 		* the tick throws is thrown again here, on the main thread, where GameEngine::execute catches
 		* it as it always did. */
@@ -229,8 +226,8 @@ namespace LogicThread
 	/** LOGIC-THREAD.md phase 2, M5.  The effects a tick asks of the client (sounds, FX lists, particle
 		* systems) wait in one queue, in the order the tick asked for them, and runTick runs them on the
 		* main thread after the drawables' deferred work, so every drawable they attach to has its render
-		* objects.  Keyed on isInGameLogicUpdate past the map load, like the drawables, so -logicthread 0
-		* and 1 run one path.  A tick clearing the game runs its calls at once, as a map load does. */
+		* objects.  Keyed on isInGameLogicUpdate past the map load, like the drawables, so a tick on the
+		* main thread runs the same path.  A tick clearing the game runs its calls at once, as a map load does. */
 	Bool defersEffects( void );
 
 	/** Inside a tick, queue `call` for after it; anywhere else, run it now. */

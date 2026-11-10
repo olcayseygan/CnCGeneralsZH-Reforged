@@ -5647,7 +5647,7 @@ DrawModule const** Drawable::getDrawModules() const
 	condition bits at once, so everything logic reads stays as it was, but the work they cause on the
 	draw modules (render object transforms, tread edges, model and render object swaps) waits for
 	LogicThread::runTick, which calls flushPendingClientWork right after the tick on the main thread.
-	It keys on isInGameLogicUpdate rather than on the thread, so -logicthread 0 and 1 run one path. */
+	It keys on isInGameLogicUpdate rather than on the thread, so a tick on the main thread runs the same path. */
 static std::vector<DrawableID> s_clientWorkQueue;
 
 //-------------------------------------------------------------------------------------------------

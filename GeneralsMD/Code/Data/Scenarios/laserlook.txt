@@ -13,7 +13,7 @@
 # Add -d3d9 and change the names for the reference device. The Avenger's beam is on from about
 # logic frame 140 to the end. The beam at 147 to 152 and 207 to 212, where a still is taken (209),
 # is the Paladin's gun, fired on logic frames 146 and 206; the Crusaders do not fire before 250.
-# Those frames are the same in every run at either -logicthread. A shot that once seemed to come at
+# Those frames are the same in every run. A shot that once seemed to come at
 # 199 was a recording that opened 8 frames late (2026-10-19); the VIDEO line now names the frame
 # of the first picture.
 

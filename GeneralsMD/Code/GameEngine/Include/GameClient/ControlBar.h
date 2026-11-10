@@ -798,8 +798,8 @@ public:
 	void markUIDirty( void );
 
 	/** LOGIC-THREAD.md phase 2, M2: a call the tick makes on the bar.  Inside GameLogic::update it is
-		kept and run by flushLogicCalls on the main thread right after the tick, at both -logicthread
-		settings; outside a tick it runs at once.  The map start calls in startNewGame stay direct. */
+		kept and run by flushLogicCalls on the main thread right after the tick, wherever the tick
+		ran; outside a tick it runs at once.  The map start calls in startNewGame stay direct. */
 	static void callFromLogic( const std::function<void()>& call );
 	static void flushLogicCalls( void );		///< LogicThread::runTick, after every tick
 	Bool selectionRepeatsUnit( const ThingTemplate *thing );	///< a selected factory of ours builds it on repeat

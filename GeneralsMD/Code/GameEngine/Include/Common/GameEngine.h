@@ -193,8 +193,8 @@ public:
 	virtual Bool getAudioOutputDevice(Int index, AsciiString &id, UnicodeString &name) { return FALSE; }
 	virtual void setAudioOutputDevice(const AsciiString &id) {}
 
-	/** LOGIC-THREAD.md phase 3, step 3b.  Called by GameClient::update in front of the draw at
-		* -logicthread 1 and 2: in a single-player game it runs this pass's message stream and asks the
+	/** LOGIC-THREAD.md phase 3, step 3b.  Called by GameClient::update in front of the draw: in
+		* a single-player game it runs this pass's message stream and asks the
 		* pacer here, and answers whether this pass's first tick is due and may run beside the render. */
 	Bool planOverlappedTick( void );
 

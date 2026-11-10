@@ -532,7 +532,7 @@ void ControlBar::pressCommandButton( Int place )
 
 /* LOGIC-THREAD.md phase 2, M2: what the tick asks of the bar waits here for LogicThread::runTick to
 	 call flushLogicCalls on the main thread.  Keyed on isInGameLogicUpdate rather than on the thread, so
-	 -logicthread 0 and 1 run one path, as the drawables' deferred work does. */
+	 a tick on the main thread runs the same path, as the drawables' deferred work does. */
 static Bool s_logicMarkedUIDirty = FALSE;
 static std::vector< std::function<void()> > s_logicCalls;
 

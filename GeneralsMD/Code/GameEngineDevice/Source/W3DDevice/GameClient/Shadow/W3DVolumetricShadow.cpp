@@ -4525,7 +4525,7 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	W3DVolumetricShadow *firstCaster = m_shadowList;
 #endif
 	beginSmokeMap( transform, halfWidth, farClip );
-	/* A tick running beside the render (-logicthread 1 and 2) can reach a live model through
+	/* A tick running beside the render can reach a live model through
 		 getDrawModulesFlushed and set its state or read its bones, so it waits here from the casters'
 		 gathering to the end of their poses (LogicThread::g_liveModelLock). */
 	std::unique_lock<std::recursive_mutex> liveModels( LogicThread::g_liveModelLock );

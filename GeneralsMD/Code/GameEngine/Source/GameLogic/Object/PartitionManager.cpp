@@ -3947,7 +3947,7 @@ namespace
 		return visited;
 	}
 
-	/** Whether this gather may fork: on the tick's own thread (or the main thread at -logicthread 0),
+	/** Whether this gather may fork: on the tick's own thread (or the main thread in a map's load tick),
 		* never from the render's window, whose reads must not touch these buffers, never from inside a
 		* job, and only with filters that only read. */
 	Bool mayGatherInParallel( PartitionFilter **filters )

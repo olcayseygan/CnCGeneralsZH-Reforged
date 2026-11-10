@@ -8,7 +8,7 @@
   line. Scenarios/gate60hz.txt holds the match at 2000 objects from minute ten on, which is the most
   it is built for; the plain match stops near 1560.
 
-  The window draws at 1080p with 4x MSAA and the logic on its own thread (-logicthread 1), so the
+  The window draws at 1080p with 4x MSAA and the logic on its own thread, so the
   picture's tail and the logic's come apart: a tick pass that waits on logic is the logic's
   fault and shows in LOGICTIME, the render's own share in the PASSES lines. The whole thing is one
   seed, so the same exe draws the same crowd and a -Window run is a slice of the same match the hour
@@ -75,7 +75,7 @@ if (Test-Path $log) { Remove-Item $log -Force }
 $runArgs = @("-win", "-borderless", "-xres", "1920", "-yres", "1080", "-msaa", "4", "-particlecap", "2500", "-nochroma",
 	"-noFPSLimit", "-quickstart", "-noshellmap", "-observer", "-multiInstance",
 	"-map", '"Maps\Twilight Flame\Twilight Flame.map"', "-autoskirmish", "8", "-teams", "2", "-aidiff", "hard", "-seed", "3",
-	"-logicthread", "1", "-scenario", "gate60hz", "-camera", "2430", "2345",
+	"-scenario", "gate60hz", "-camera", "2430", "2345",
 	"-maxframes", $lastFrame, "-logPrefix", $prefix) + $ExtraArgs
 if ($Window -gt 0) { $runArgs += @("-jumpToFrame", (($Minutes - $Window) * 60 * 60)) }
 

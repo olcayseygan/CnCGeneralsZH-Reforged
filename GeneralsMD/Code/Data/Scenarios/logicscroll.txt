@@ -7,7 +7,7 @@
 #
 #   generals.exe -borderless -xres 1280 -yres 720 -msaa 0 -quickstart -noshellmap -multiInstance
 #     -nochroma -noFPSLimit -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
-#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario logicscroll -logicthread 1
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario logicscroll
 #     -maxframes 3600
 
 30    spawn      0  AmericaTankCrusader             10  start0:0:200     40

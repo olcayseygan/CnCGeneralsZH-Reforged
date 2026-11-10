@@ -2312,7 +2312,7 @@ static void notePacing(UnsignedInt frame)
 
 static void smoothMotionBegin()
 {
-	// on a display faster than the logic, unless -nosmoothmotion says no, at every -logicthread setting;
+	// on a display faster than the logic, unless -nosmoothmotion says no, beside a tick or not;
 	// -recordfps's pictures between two logic frames always blend, from the frame before the first so that
 	// one is captured
 	const Bool video = GameEngine_videoBlends();

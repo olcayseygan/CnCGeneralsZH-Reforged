@@ -934,7 +934,7 @@ void GameEngine::init( int argc, char *argv[] )
 			 Costs one thread per spare core sitting on a semaphore until something uses it. */
 		JobSystem::init();
 
-		// LOGIC-THREAD.md phase 1: -logicthread 1 starts the thread the ticks run on.
+		// LOGIC-THREAD.md phase 1: the thread the ticks run on, always.
 		LogicThread::init();
 
 		TheSubsystemList = MSGNEW("GameEngineSubsystem") SubsystemInterfaceList;
@@ -3238,7 +3238,7 @@ void GameEngine::update( void )
 			Int64 tCatchupStart, tCatchupNow;
 			tCatchupStart = Clock_Ticks();
 			/* The tick beside the render spends the budget like one run here.  Left out, a match behind
-				 its clock ran one more tick a pass at 1 than at 0, all of them in series after the picture:
+				 its clock ran one more tick a pass than with the tick on the main thread, all of them in series after the picture:
 				 3.3 against 2.3 ticks, a frame 3 ms longer on average and 5 ms at p99.9. */
 			Real tickBesideRenderMS = 0.0f, waitForTickMS = 0.0f;
 			if (overlapped)
@@ -3247,7 +3247,7 @@ void GameEngine::update( void )
 			Real lastTickMS = tickBesideRenderMS;
 			for( ;; )
 			{
-				// TheGameLogic->UPDATE(), on the logic thread at -logicthread 1; the first of an overlapped
+				// TheGameLogic->UPDATE(), on the logic thread; the first of an overlapped
 				// pass has run already, beside the render
 				if (logicTicksThisPass > 0 || !overlapped)
 				{

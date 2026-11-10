@@ -130,8 +130,8 @@ namespace
 	Pool	s_logicPool;
 	Bool	s_running = FALSE;
 
-	/** The logic thread forks on its own pool, everything else on the main one.  At -logicthread 0 the
-		* tick runs on the main thread and forks there, which is safe because nothing else forks then. */
+	/** The logic thread forks on its own pool, everything else on the main one.  A map's load or
+		* teardown tick runs on the main thread and forks there, which is safe because nothing else forks then. */
 	Pool &poolForThisThread( void )
 	{
 		return ( LogicThread::t_isLogicThread || LogicThread::t_isLogicWorker ) ? s_logicPool : s_mainPool;

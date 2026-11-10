@@ -1535,8 +1535,7 @@ Int W3DProjectedShadowManager::renderShadows(RenderInfoClass & rinfo)
 
 					/* The objects the shadow falls on come from the partition, whose scans share iteration flags
 						 with the tick's (a desync) and whose modules the tick frees beside the render.  The window
-						 is open for every picture at every -logicthread setting, so the shadow falls on the
-						 terrain alone and every setting draws the same picture.
+						 is open for every picture, so the shadow falls on the terrain alone, beside a tick or not.
 						 ponytail: receivers lost for any SHADOW_PROJECTION (the fork's INI has none); the
 						 upgrade is the receivers gathered at W3DDisplay's takeReadsForRender. */
 					if (LogicThread::isInsideWindow())

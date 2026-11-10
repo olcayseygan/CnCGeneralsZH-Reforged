@@ -237,7 +237,7 @@ User * Connection::getUser() {
  * The relay is the mask specifying the people the person we are sending to should send to.
  * The relay mostly has to do with the packet router.
  */
-void Connection::sendNetCommandMsg(NetCommandMsg *msg, UnsignedByte relay) {
+void Connection::sendNetCommandMsg(NetCommandMsg *msg, SlotMask relay) {
 	static NetPacket *packet = NULL;
 
 	// this is done so we don't have to allocate and delete a packet every time we send a message.
@@ -561,9 +561,9 @@ void Connection::doRetryMetrics() {
 void Connection::debugPrintCommands() {
 	NetCommandRef *ref = m_netCommandList->getFirstMessage();
 	while (ref != NULL) {
-		DEBUG_LOG(("Connection::debugPrintCommands - ID: %d\tType: %s\tRelay: 0x%X for frame %d\n",
+		DEBUG_LOG(("Connection::debugPrintCommands - ID: %d\tType: %s\tRelay: 0x%llX for frame %d\n",
 			ref->getCommand()->getID(), GetAsciiNetCommandType(ref->getCommand()->getNetCommandType()).str(),
-			ref->getRelay(), ref->getCommand()->getExecutionFrame()));
+			(unsigned long long)ref->getRelay(), ref->getCommand()->getExecutionFrame()));
 		ref = ref->getNext();
 	}
 }

@@ -330,7 +330,10 @@ UpdateSleepTime WorkerAIUpdate::update( void )
 	{
 		m_supplyTruckStateMachine->updateStateMachine();
 		// If we are harvesting, we can be diverted to clear mines.  jba.
-		getObject()->setWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL);//maybe go clear some mines, if I feel like it
+		// Set once, not every frame: setting a flag that is already up looks the weapon set up again for
+		// the same answer, and this weapon set has no model condition to keep in step.
+		if( !getObject()->testWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL) )
+			getObject()->setWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL);//maybe go clear some mines, if I feel like it
 	}
 	return UPDATE_SLEEP_NONE;
 } 

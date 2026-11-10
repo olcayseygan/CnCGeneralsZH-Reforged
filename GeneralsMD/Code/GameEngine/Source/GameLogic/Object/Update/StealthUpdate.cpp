@@ -53,6 +53,7 @@
 #include "GameLogic/Damage.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
 
 #include "GameLogic/Module/AIUpdate.h"
@@ -60,6 +61,9 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/SpawnBehavior.h"
+
+#include <cmath>
+#include <vector>
 
 
 #ifdef _INTERNAL
@@ -884,6 +888,211 @@ void setWakeupIfInRange( Object *obj, void *userData)
 //	}
 }
 
+//-------------------------------------------------------------------------------------------------
+// RevealWakeGrid: the cells hold entries, each a linked list through s_revealEntries. The last cell
+// holds whatever the walk could wake from any distance (a position or a sight that is not a finite
+// number) and whatever stands off the map, and every reveal reads it.
+//
+// An entry names its object by ObjectID, so a freed object costs nothing: its ID finds no object
+// from then on, and an ID that a later game hands to another object only adds a candidate that the
+// walk's test turns down. Stale entries pile up as units cross cells; the grid is dropped when they
+// outnumber the live ones, and filled again at the next reveal.
+//-------------------------------------------------------------------------------------------------
+static const Real REVEAL_CELL_SIZE = 128.0f;
+// rounding between the cell a position is filed in and the distance the walk measures to it
+static const Real REVEAL_CELL_SLACK = 1.0f;
+
+struct RevealEntry
+{
+	ObjectID	id;
+	Int				next;		///< the cell's next entry, -1 at its end
+};
+
+static Bool												s_revealFilled = FALSE;
+static Region3D										s_revealExtent;		///< the map the cells were laid over
+static Int												s_revealCellsX = 0;
+static Int												s_revealCellsY = 0;
+static Int												s_revealLiveCount = 0;		///< entries the last fill made
+static Real												s_revealMaxSight = 0.0f;
+static std::vector<Int>						s_revealHead;			///< per cell, its first entry or -1
+static std::vector<Real>					s_revealSight;		///< per cell, the longest sight filed in it
+static std::vector<RevealEntry>		s_revealEntries;
+
+static Int revealCellOf( const Coord3D *pos )
+{
+	const Int everywhere = s_revealCellsX * s_revealCellsY;
+	if( !std::isfinite( pos->x ) || !std::isfinite( pos->y ) || !std::isfinite( pos->z ) )
+		return everywhere;
+	const Real fx = ( pos->x - s_revealExtent.lo.x ) / REVEAL_CELL_SIZE;
+	const Real fy = ( pos->y - s_revealExtent.lo.y ) / REVEAL_CELL_SIZE;
+	if( fx < 0.0f || fy < 0.0f || fx >= (Real)s_revealCellsX || fy >= (Real)s_revealCellsY )
+		return everywhere;
+	return (Int)fy * s_revealCellsX + (Int)fx;
+}
+
+static Int revealCellFor( const Object *obj )
+{
+	if( std::isnan( obj->getVisionRange() ) )
+		return s_revealCellsX * s_revealCellsY;
+	return revealCellOf( obj->getPosition() );
+}
+
+static void revealFile( Object *obj, Int cell )
+{
+	RevealEntry entry;
+	entry.id = obj->getID();
+	entry.next = s_revealHead[ cell ];
+	s_revealHead[ cell ] = (Int)s_revealEntries.size();
+	s_revealEntries.push_back( entry );
+
+	const Real sight = obj->getVisionRange();
+	if( sight > s_revealSight[ cell ] )
+		s_revealSight[ cell ] = sight;
+	if( sight > s_revealMaxSight )
+		s_revealMaxSight = sight;
+}
+
+static void revealFileObject( Object *obj, void * )
+{
+	// only an object with an AI can be woken; Object files one the moment it gets its AI
+	if( obj->getAI() )
+		revealFile( obj, revealCellFor( obj ) );
+}
+
+static void revealFill( const Region3D &extent )
+{
+	s_revealExtent = extent;
+	s_revealCellsX = (Int)ceilf( ( extent.hi.x - extent.lo.x ) / REVEAL_CELL_SIZE );
+	s_revealCellsY = (Int)ceilf( ( extent.hi.y - extent.lo.y ) / REVEAL_CELL_SIZE );
+	if( s_revealCellsX < 1 )
+		s_revealCellsX = 1;
+	if( s_revealCellsY < 1 )
+		s_revealCellsY = 1;
+
+	const Int cells = s_revealCellsX * s_revealCellsY + 1;
+	s_revealHead.assign( cells, -1 );
+	s_revealSight.assign( cells, 0.0f );
+	s_revealMaxSight = 0.0f;
+	s_revealEntries.clear();
+
+	// every object on any team, which is every object the walk over the players can reach
+	for( Int n = 0; n < ThePlayerList->getPlayerCount(); ++n )
+	{
+		Player *player = ThePlayerList->getNthPlayer( n );
+		if( player )
+			player->iterateObjects( revealFileObject, NULL );
+	}
+
+	s_revealLiveCount = (Int)s_revealEntries.size();
+	s_revealFilled = TRUE;
+}
+
+static Int revealClampCell( Real f, Int cells )
+{
+	if( !( f > 0.0f ) )
+		return 0;
+	if( f >= (Real)( cells - 1 ) )
+		return cells - 1;
+	return (Int)f;
+}
+
+static Real revealGap( Real at, Real lo, Real hi )
+{
+	if( at < lo )
+		return lo - at;
+	if( at > hi )
+		return at - hi;
+	return 0.0f;
+}
+
+static void revealWakeCell( Int cell, Object *victim, const Bool *isEnemyByPlayerIndex )
+{
+	for( Int at = s_revealHead[ cell ]; at >= 0; at = s_revealEntries[ at ].next )
+	{
+		Object *obj = TheGameLogic->findObjectByID( s_revealEntries[ at ].id );
+		if( obj == NULL )
+			continue;
+		const Player *owner = obj->getControllingPlayer();
+		if( owner && isEnemyByPlayerIndex[ owner->getPlayerIndex() ] )
+			setWakeupIfInRange( obj, victim );
+	}
+}
+
+// a report's entry; once stale entries outnumber the live ones the grid is dropped and the next
+// reveal fills it again, so a match that stops revealing does not keep growing it
+static void revealNote( Object *obj, Int cell )
+{
+	revealFile( obj, cell );
+	if( (Int)s_revealEntries.size() > 2 * s_revealLiveCount + 4096 )
+		s_revealFilled = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void RevealWakeGrid::noteObject( Object *obj )
+{
+	if( !s_revealFilled || obj->getTeam() == NULL || obj->getAI() == NULL )
+		return;
+	revealNote( obj, revealCellFor( obj ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+void RevealWakeGrid::noteMove( Object *obj, const Coord3D *oldPos )
+{
+	if( !s_revealFilled || obj->getTeam() == NULL || obj->getAI() == NULL )
+		return;
+	// its last entry is in the cell it moved from, which stays true for a move inside that cell
+	const Int cell = revealCellFor( obj );
+	if( cell != revealCellOf( oldPos ) )
+		revealNote( obj, cell );
+}
+
+//-------------------------------------------------------------------------------------------------
+void RevealWakeGrid::forget()
+{
+	s_revealFilled = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The victim's position has to be finite; the caller walks every enemy object when it is not. */
+//-------------------------------------------------------------------------------------------------
+void RevealWakeGrid::wakeIdleEnemiesInSight( Object *victim, const Bool *isEnemyByPlayerIndex )
+{
+	// filled once, then kept by Object's reports; again when dropped, or for another map
+	Region3D extent;
+	TheTerrainLogic->getExtent( &extent );
+	if( !s_revealFilled
+			|| extent.lo.x != s_revealExtent.lo.x || extent.lo.y != s_revealExtent.lo.y
+			|| extent.hi.x != s_revealExtent.hi.x || extent.hi.y != s_revealExtent.hi.y )
+		revealFill( extent );
+
+	// a cell is read when its nearest point is within the longest sight filed in it
+	const Coord3D *at = victim->getPosition();
+	const Real loX = s_revealExtent.lo.x;
+	const Real loY = s_revealExtent.lo.y;
+	const Real reach = s_revealMaxSight + REVEAL_CELL_SLACK;
+	const Int x0 = revealClampCell( ( at->x - reach - loX ) / REVEAL_CELL_SIZE, s_revealCellsX );
+	const Int x1 = revealClampCell( ( at->x + reach - loX ) / REVEAL_CELL_SIZE, s_revealCellsX );
+	const Int y0 = revealClampCell( ( at->y - reach - loY ) / REVEAL_CELL_SIZE, s_revealCellsY );
+	const Int y1 = revealClampCell( ( at->y + reach - loY ) / REVEAL_CELL_SIZE, s_revealCellsY );
+	for( Int cy = y0; cy <= y1; ++cy )
+	{
+		const Real cellLoY = loY + cy * REVEAL_CELL_SIZE;
+		const Real dy = revealGap( at->y, cellLoY, cellLoY + REVEAL_CELL_SIZE );
+		for( Int cx = x0; cx <= x1; ++cx )
+		{
+			const Int cell = cy * s_revealCellsX + cx;
+			if( s_revealHead[ cell ] < 0 )
+				continue;
+			const Real cellLoX = loX + cx * REVEAL_CELL_SIZE;
+			const Real dx = revealGap( at->x, cellLoX, cellLoX + REVEAL_CELL_SIZE );
+			const Real sight = s_revealSight[ cell ] + REVEAL_CELL_SLACK;
+			if( dx * dx + dy * dy <= sight * sight )
+				revealWakeCell( cell, victim, isEnemyByPlayerIndex );
+		}
+	}
+	revealWakeCell( s_revealCellsX * s_revealCellsY, victim, isEnemyByPlayerIndex );
+}
+
 
 //-------------------------------------------------------------------------------------------------
 void StealthUpdate::markAsDetected(UnsignedInt numFrames)
@@ -939,7 +1148,12 @@ void StealthUpdate::markAsDetected(UnsignedInt numFrames)
 		// This can't be a partitionmanager thing, because we need to know which objects can see
 		// us. Therefore, walk the play list, and for each player that considers us an enemy, 
 		// check if any of their units can see us.
-
+		//
+		// RevealWakeGrid finds the same objects near us. Only a position that is not a finite number
+		// still takes the walk: every enemy object measures a NaN distance to it, and NaN is never
+		// out of sight.
+		Bool isEnemyByPlayerIndex[ MAX_PLAYER_COUNT ] = { FALSE };
+		Bool anyEnemy = FALSE;
 		Int numPlayers = ThePlayerList->getPlayerCount();
 		for (Int n = 0; n < numPlayers; ++n)
 		{
@@ -951,7 +1165,24 @@ void StealthUpdate::markAsDetected(UnsignedInt numFrames)
 			if (player->getRelationship(thisPlayer->getDefaultTeam()) != ENEMIES)
 				continue;
 
-			player->iterateObjects(setWakeupIfInRange, self);
+			isEnemyByPlayerIndex[ player->getPlayerIndex() ] = TRUE;
+			anyEnemy = TRUE;
+		}
+
+		const Coord3D *at = self->getPosition();
+		const Bool finite = std::isfinite( at->x ) && std::isfinite( at->y ) && std::isfinite( at->z );
+		if( anyEnemy && finite )
+		{
+			RevealWakeGrid::wakeIdleEnemiesInSight( self, isEnemyByPlayerIndex );
+		}
+		else if( anyEnemy )
+		{
+			for (Int n = 0; n < numPlayers; ++n)
+			{
+				Player *player = ThePlayerList->getNthPlayer(n);
+				if (player && isEnemyByPlayerIndex[ player->getPlayerIndex() ])
+					player->iterateObjects(setWakeupIfInRange, self);
+			}
 		}
 	}
 }

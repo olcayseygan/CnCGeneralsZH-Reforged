@@ -70,8 +70,20 @@ public:
 	Bool isBuilt() const { return m_built; }
 	UnsignedInt getBuiltFrame() const { return m_builtFrame; }
 
+	/** A stamp in two halves, for many maps of one grid stamping the same gun: the cells it reaches, appended
+		* in the order a stamp adds to them, then the adding.  The same sums in the same order as stampEnemy and
+		* stampFriend, on any map of the same grid: the heights come off the one terrain. */
+	void cellsReached( Real x, Real y, Real z, Real range, std::vector<Int> &cells ) const;
+	void addEnemy( const Int *cells, Int count, Real power );
+	void addFriend( const Int *cells, Int count, Real power );
+	Bool sameGrid( Int cols, Int rows, Real originX, Real originY, Real cellSize ) const;
+	Real getOriginX() const { return m_originX; }
+	Real getOriginY() const { return m_originY; }
+	Real getCellSize() const { return m_cellSize; }
+
 private:
 	void stamp( std::vector<Real> &layer, Real x, Real y, Real z, Real range, Real power );
+	template <class Visit> void visitReach( Real x, Real y, Real z, Real range, Visit &visit ) const;
 	Int cellIndexAt( Real x, Real y ) const;
 
 	Real m_originX, m_originY, m_cellSize;

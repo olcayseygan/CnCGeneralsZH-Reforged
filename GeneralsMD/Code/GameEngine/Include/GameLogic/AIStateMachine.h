@@ -167,6 +167,8 @@ public:
 	StateReturnType setTemporaryState( StateID newStateID, Int frameLimitCoount );			///< change the temporary state of the machine, and number of frames limit.
 	StateID getTemporaryState(void) const {return m_temporaryState?m_temporaryState->getID():INVALID_STATE_ID;}
 
+	Bool attackMoveScansThisFrame( UnsignedInt now );		///< will AIAttackMoveToState look for a target in this frame's update?
+
 public:	// overrides.
 	virtual StateReturnType updateStateMachine();				///< run one step of the machine
 #ifdef STATE_MACHINE_DEBUG
@@ -583,6 +585,7 @@ public:
 	//virtual ~AIAttackMoveToState();
 
 	virtual Bool isAttack() const { return m_attackMoveMachine ? m_attackMoveMachine->isInAttackState() : FALSE; }
+	Bool scansThisFrame( UnsignedInt now ) const { return m_attackMoveMachine->isInIdleState() && now >= m_frameToScanOn; }
 	virtual StateReturnType onEnter();
 	virtual void onExit( StateExitType status );
 	virtual StateReturnType update();

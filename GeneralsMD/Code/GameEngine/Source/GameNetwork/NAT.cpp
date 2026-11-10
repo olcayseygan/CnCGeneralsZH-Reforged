@@ -68,80 +68,33 @@
  * In case you're wondering, this did end up working and Bryan left by
  * his own choice.
  */
-//										m_connectionPairs[num nodes]	[round]			 [node index]
-/* static */ Int NAT::m_connectionPairs[MAX_SLOTS-1][MAX_SLOTS-1][MAX_SLOTS] = 
+/* EA wrote the schedule out by hand for 2 to 8 nodes.  It is the round robin's circle method,
+	 generated here for any count: an odd room gets a bye (a node that is nobody) to make it even,
+	 the last node stays put and meets the round's own number, and every other node x meets the y with
+	 x + y = 2 * round, mod the turning count.  Every pair meets exactly once, in numNodes - 1 rounds
+	 for an even room and numNodes for an odd one, as in EA's table.  Every machine works it out from
+	 the same node count, so they agree on it without saying anything. */
+Int NAT::connectionRounds(Int numNodes)
 {
-	{	// 2 nodes
-		//	node 0	node 1	node 2	node 3	node 4	node 5	node 6	node 7
-		{			1,			0,			-1,			-1,			-1,			-1,			-1,			-1},	// round 0
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 1
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 2
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 3
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 4
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 5
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1}		// round 6
-	},
-	{	// 3 nodes
-		//	node 0	node 1	node 2	node 3	node 4	node 5	node 6	node 7
-		{			1,			0,			-1,			-1,			-1,			-1,			-1,			-1},	// round 0
-		{			2,			-1,			0,			-1,			-1,			-1,			-1,			-1},	// round 1
-		{			-1,			2,			1,			-1,			-1,			-1,			-1,			-1},	// round 2
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 3
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 4
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 5
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1}		// round 6
-	},
-	{	// 4 nodes
-		//	node 0	node 1	node 2	node 3	node 4	node 5	node 6	node 7
-		{			1,			0,			3,			2,			-1,			-1,			-1,			-1},	// round 0
-		{			2,			3,			0,			1,			-1,			-1,			-1,			-1},	// round 1
-		{			3,			2,			1,			0,			-1,			-1,			-1,			-1},	// round 2
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 3
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 4
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 5
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1}		// round 6
-	},
-	{	// 5 nodes
-		//	node 0	node 1	node 2	node 3	node 4	node 5	node 6	node 7
-		{			2,			4,			0,			-1,			1,			-1,			-1,			-1},	// round 0
-		{			-1,			3,			4,			1,			2,			-1,			-1,			-1},	// round 1
-		{			3,			2,			1,			0,			-1,			-1,			-1,			-1},	// round 2
-		{			4,			-1,			3,			2,			0,			-1,			-1,			-1},	// round 3
-		{			1,			0,			-1,			4,			3,			-1,			-1,			-1},	// round 4
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 5
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1}		// round 6
-	},
-	{	// 6 nodes
-		//	node 0	node 1	node 2	node 3	node 4	node 5	node 6	node 7
-		{			3,			5,			4,			0,			2,			1,			-1,			-1},	// round 0
-		{			2,			4,			0,			5,			1,			3,			-1,			-1},	// round 1
-		{			4,			3,			5,			1,			0,			2,			-1,			-1},	// round 2
-		{			1,			0,			3,			2,			5,			4,			-1,			-1},	// round 3
-		{			5,			2,			1,			4,			3,			0,			-1,			-1},	// round 4
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1},	// round 5
-		{			-1,			-1,			-1,			-1,			-1,			-1,			-1,			-1}		// round 6
-	},
-	{	// 7 nodes
-		//	node 0	node 1	node 2	node 3	node 4	node 5	node 6	node 7
-		{			-1,			6,			5,			4,			3,			2,			1,			-1},	// round 0
-		{			2,			-1,			0,			6,			5,			4,			3,			-1},	// round 1
-		{			4,			3,			-1,			1,			0,			6,			5,			-1},	// round 2
-		{			6,			5,			4,			-1,			2,			1,			0,			-1},	// round 3
-		{			1,			0,			6,			5,			-1,			3,			2,			-1},	// round 4
-		{			3,			2,			1,			0,			6,			-1,			4,			-1},	// round 5
-		{			5,			4,			3,			2,			1,			0,			-1,			-1}		// round 6
-	},
-	{	// 8 nodes
-		//	node 0	node 1	node 2	node 3	node 4	node 5	node 6	node 7
-		{			4,			5,			6,			7,			0,			1,			2,			3},		// round 0
-		{			5,			4,			7,			6,			1,			0,			3,			2},		// round 1
-		{			3,			6,			5,			0,			7,			2,			1,			4},		// round 2
-		{			2,			7,			0,			5,			6,			3,			4,			1},		// round 3
-		{			6,			3,			4,			1,			2,			7,			0,			5},		// round 4
-		{			1,			0,			3,			2,			5,			4,			7,			6},		// round 5
-		{			7,			2,			1,			4,			3,			6,			5,			0}		// round 6
-	}
-};
+	return (numNodes % 2 == 0) ? numNodes - 1 : numNodes;
+}
+
+Int NAT::connectionPartner(Int numNodes, Int round, Int node)
+{
+	const Int even = numNodes + (numNodes & 1);
+	const Int turning = even - 1;
+	if (numNodes < 2 || round < 0 || round >= turning || node < 0 || node >= numNodes)
+		return -1;
+
+	Int partner;
+	if (node == turning)
+		partner = round;
+	else if (node == round)
+		partner = turning;
+	else
+		partner = ((2 * round - node) % turning + turning) % turning;
+	return (partner < numNodes) ? partner : -1;	// the bye is nobody
+}
 
 /* static */ Int NAT::m_timeBetweenRetries = 500; // .5 seconds between retries sounds good to me.
 /* static */ time_t NAT::m_manglerRetryTimeInterval = 300; // sounds good to me.
@@ -157,7 +110,6 @@ NAT::NAT()
 	//Added By Sadullah Nader
 	//Initializations inserted
 	m_beenProbed = FALSE;
-	m_connectionPairIndex = 0;
 	m_connectionRound = 0;
 	m_localIP = 0;
 	m_localNodeNumber = 0;
@@ -505,7 +457,6 @@ void NAT::establishConnectionPaths() {
 	}
 	
 	m_connectionRound = 0;
-	m_connectionPairIndex = m_numNodes - 2;
 	Bool connectionAssigned[MAX_SLOTS];
 
 	for (i = 0; i < MAX_SLOTS; ++i) {
@@ -533,7 +484,7 @@ void NAT::establishConnectionPaths() {
 				if (otherNetgearNum == -1) {
 					// this is the start of a new pair, put it in as the first non -1 node connection pair thing.
 					Int nodeindex = 0;
-					while ((m_connectionPairs[m_connectionPairIndex][0][nodeindex] == -1) || (m_connectionNodes[nodeindex].m_slotIndex != -1)) {
+					while ((connectionPartner(m_numNodes, 0, nodeindex) == -1) || (m_connectionNodes[nodeindex].m_slotIndex != -1)) {
 						++nodeindex;
 					}
 					m_connectionNodes[nodeindex].m_slotIndex = i;
@@ -545,7 +496,7 @@ void NAT::establishConnectionPaths() {
 					// this is the second in the pair of netgears, pair this up with the other one
 					// for the first round.
 					Int nodeindex = 0;
-					while (m_connectionPairs[m_connectionPairIndex][0][nodeindex] != otherNetgearNum) {
+					while (connectionPartner(m_numNodes, 0, nodeindex) != otherNetgearNum) {
 						++nodeindex;
 					}
 					m_connectionNodes[nodeindex].m_slotIndex = i;
@@ -600,7 +551,7 @@ void NAT::establishConnectionPaths() {
 	// set up the names in the connection window.
 	Int playerNum = 0;
 	for (i = 0; i < MAX_SLOTS; ++i) {
-		while ((i < MAX_SLOTS) && (m_slotList[i] != NULL) && !(m_slotList[i]->isHuman())) {
+		while ((i < MAX_SLOTS) && ((m_slotList[i] == NULL) || !(m_slotList[i]->isHuman()))) {	// EA stopped on an empty slot and read through it
 			++i;
 		}
 		if (i >= MAX_SLOTS) {
@@ -676,18 +627,18 @@ void NAT::doThisConnectionRound() {
 	m_numRetries = 0;
 
 	for (i = 0; i < m_numNodes; ++i) {
-		Int targetNodeNumber = m_connectionPairs[m_connectionPairIndex][m_connectionRound][i];
+		Int targetNodeNumber = connectionPartner(m_numNodes, m_connectionRound, i);
 		DEBUG_LOG(("NAT::doThisConnectionRound - node %d needs to connect to node %d\n", i, targetNodeNumber));
 		if (targetNodeNumber != -1) {
 			if (i == m_localNodeNumber) {
 				m_targetNodeNumber = targetNodeNumber;
 				DEBUG_LOG(("NAT::doThisConnectionRound - Local node is connecting to node %d\n", m_targetNodeNumber));
-				UnsignedInt targetSlotIndex = m_connectionNodes[(m_connectionPairs[m_connectionPairIndex][m_connectionRound][i])].m_slotIndex;
+				UnsignedInt targetSlotIndex = m_connectionNodes[(connectionPartner(m_numNodes, m_connectionRound, i))].m_slotIndex;
 				GameSlot *targetSlot = m_slotList[targetSlotIndex];
 				GameSlot *localSlot = m_slotList[m_connectionNodes[m_localNodeNumber].m_slotIndex];
 
 				DEBUG_ASSERTCRASH(localSlot != NULL, ("local slot is NULL"));
-				DEBUG_ASSERTCRASH(targetSlot != NULL, ("trying to negotiate with a NULL target slot, slot is %d", m_connectionPairs[m_connectionPairIndex][m_connectionRound][i]));
+				DEBUG_ASSERTCRASH(targetSlot != NULL, ("trying to negotiate with a NULL target slot, slot is %d", connectionPartner(m_numNodes, m_connectionRound, i)));
 				DEBUG_LOG(("NAT::doThisConnectionRound - Target slot index = %d (%s)\n", targetSlotIndex, WideCharAsUtf8( m_slotList[targetSlotIndex]->getName().str() ).str()));
 				DEBUG_LOG(("NAT::doThisConnectionRound - Target slot has NAT behavior 0x%8X, local slot has NAT behavior 0x%8X\n", targetSlot->getNATBehavior(), localSlot->getNATBehavior()));
 				
@@ -921,38 +872,8 @@ void NAT::processManglerResponse(UnsignedShort mangledPort) {
 }
 
 // check to see if we've completed all the rounds
-// this is kind of a cheesy way to check, but it works.
 Bool NAT::allConnectionsDone() {
-	if (m_numNodes == 2) {
-		if (m_connectionRound >= 1) {
-			return TRUE;
-		}
-	} else if (m_numNodes == 3) {
-		if (m_connectionRound >= 3) {
-			return TRUE;
-		}
-	} else if (m_numNodes == 4) {
-		if (m_connectionRound >= 3) {
-			return TRUE;
-		}
-	} else if (m_numNodes == 5) {
-		if (m_connectionRound >= 5) {
-			return TRUE;
-		}
-	} else if (m_numNodes == 6) {
-		if (m_connectionRound >= 5) {
-			return TRUE;
-		}
-	} else if (m_numNodes == 7) {
-		if (m_connectionRound >= 7) {
-			return TRUE;
-		}
-	} else if (m_numNodes == 8) {
-		if (m_connectionRound >= 7) {
-			return TRUE;
-		}
-	}
-	return FALSE;
+	return m_numNodes >= 2 && m_connectionRound >= connectionRounds(m_numNodes);
 }
 
 Bool NAT::allConnectionsDoneThisRound() {
@@ -1240,7 +1161,7 @@ void NAT::processGlobalMessage(Int slotNum, const char *options) {
 		Int sendingNode;
 		sscanf(c, "%d %d\n", &node, &sendingNode);
 
-		if (m_connectionPairs[m_connectionPairIndex][m_connectionRound][node] == sendingNode) {
+		if (connectionPartner(m_numNodes, m_connectionRound, node) == sendingNode) {
 //			Int node = atoi(ptr + strlen("CONNDONE"));
 			DEBUG_LOG(("NAT::processGlobalMessage - got a CONNDONE message for node %d\n", node));
 			if ((node >= 0) && (node <= m_numNodes)) {

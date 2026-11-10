@@ -2194,11 +2194,11 @@ static void reportFrameTimeStats( void )
  */
 enum { AUTOCAM_GRID = 16 };
 static Int s_autoCamUnits[ AUTOCAM_GRID * AUTOCAM_GRID ];
-static UnsignedInt s_autoCamSides[ AUTOCAM_GRID * AUTOCAM_GRID ];
+static PlayerMaskType s_autoCamSides[ AUTOCAM_GRID * AUTOCAM_GRID ];
 
 struct AutoCamTally
 {
-	UnsignedInt sideBit;
+	PlayerMaskType sideBit;
 	Real originX, originY, spanX, spanY;
 };
 
@@ -2225,7 +2225,7 @@ static void autoCameraTallyObject( Object *obj, void *userData )
 	s_autoCamSides[ cell ] |= t->sideBit;
 }
 
-static Int autoCameraCountBits( UnsignedInt v )
+static Int autoCameraCountBits( PlayerMaskType v )
 {
 	Int n = 0;
 	while( v ) { n += (v & 1); v >>= 1; }
@@ -2467,7 +2467,7 @@ static void updateAutoCamera( void )
 		Player *player = ThePlayerList->getNthPlayer( p );
 		if( !player->isPlayableSide() || player->isPlayerObserver() )
 			continue;
-		tally.sideBit = (UnsignedInt)1 << p;
+		tally.sideBit = player->getPlayerMask();
 		player->iterateObjects( autoCameraTallyObject, &tally );
 	}
 
@@ -2816,8 +2816,18 @@ static void updateHeadlessRun( void )
 	/* THREADING-ROADMAP.md 3.1's safety net: "no allocation inside a job" is a rule, and a rule
 		 nothing checks is a comment.  allocs must read 0 - anything else means a job took the one
 		 global pool lock and serialized the fork it was supposed to spread. */
-	DEBUG_LOG(("HEADLESS JOBS: %d worker threads, %d allocations from a job\n",
-						 JobSystem::workerCount(), JobSystem::workerAllocationCount()));
+	// LOGIC-PARALLEL.md: and how often the logic's first parallel pass forked, so a CRC that agrees at
+	// every worker count is known not to agree because nothing ran in parallel
+	extern void PartitionManager_splitGatherCounts( Int &split, Int &tailsHandedBack, Real &forkMS, Real &mergeMS );
+	Int gathersSplit = 0, gatherTails = 0;
+	Real gatherForkMS = 0.0f, gatherMergeMS = 0.0f;
+	PartitionManager_splitGatherCounts( gathersSplit, gatherTails, gatherForkMS, gatherMergeMS );
+	extern void AIUpdate_moodSearchCounts( Int &run, Int &taken, Int &attackMoveRun, Int &attackMoveTaken );
+	Int moodSearchesRun = 0, moodSearchesTaken = 0, attackMoveSearchesRun = 0, attackMoveSearchesTaken = 0;
+	AIUpdate_moodSearchCounts( moodSearchesRun, moodSearchesTaken, attackMoveSearchesRun, attackMoveSearchesTaken );
+	DEBUG_LOG(("HEADLESS JOBS: %d worker threads, %d allocations from a job, %d range gathers split (%d chunk tails walked serially, %.0f ms forked, %.0f ms merging), %d mood searches run ahead (%d attack move), %d taken (%d attack move)\n",
+						 JobSystem::workerCount(), JobSystem::workerAllocationCount(), gathersSplit, gatherTails, gatherForkMS, gatherMergeMS,
+						 moodSearchesRun, attackMoveSearchesRun, moodSearchesTaken, attackMoveSearchesTaken));
 
 	// LOGIC-THREAD.md phase 1: the handoff cost, and the client calls phase 2 has to take off the tick.
 	LogicThread::report();

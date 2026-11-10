@@ -61,6 +61,7 @@ public:
 	UnsignedInt m_CRC;
 
 	Coord3D m_waypoints[MAX_SLOTS];
+	static_assert( MAX_SLOTS == 32, "one START_SPOT per slot in m_mapFieldParseTable" );
 	Coord3D m_initialCameraPosition;
 	Coord3DList m_supplyPositions;
 	Coord3DList m_techPositions;
@@ -105,14 +106,15 @@ const FieldParse MapMetaDataReader::m_mapFieldParseTable[] =
 	{ "supplyPosition",					parseSupplyPositionCoord3D,	NULL, NULL },
 	{ "techPosition",						parseTechPositionsCoord3D,	NULL, NULL },
 
-	{ "Player_1_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) },
-	{ "Player_2_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 1 },
-	{ "Player_3_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 2 },
-	{ "Player_4_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 3 },
-	{ "Player_5_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 4 },
-	{ "Player_6_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 5 },
-	{ "Player_7_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 6 },
-	{ "Player_8_Start",					INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * 7 },
+	// one line per start spot MapCache::writeCacheINI can write, which is one per slot
+#define START_SPOT( n ) { "Player_" #n "_Start", INI::parseCoord3D, NULL, offsetof( MapMetaDataReader, m_waypoints ) + sizeof(Coord3D) * ( n - 1 ) }
+	START_SPOT( 1 ),  START_SPOT( 2 ),  START_SPOT( 3 ),  START_SPOT( 4 ),  START_SPOT( 5 ),  START_SPOT( 6 ),
+	START_SPOT( 7 ),  START_SPOT( 8 ),  START_SPOT( 9 ),  START_SPOT( 10 ), START_SPOT( 11 ), START_SPOT( 12 ),
+	START_SPOT( 13 ), START_SPOT( 14 ), START_SPOT( 15 ), START_SPOT( 16 ), START_SPOT( 17 ), START_SPOT( 18 ),
+	START_SPOT( 19 ), START_SPOT( 20 ), START_SPOT( 21 ), START_SPOT( 22 ), START_SPOT( 23 ), START_SPOT( 24 ),
+	START_SPOT( 25 ), START_SPOT( 26 ), START_SPOT( 27 ), START_SPOT( 28 ), START_SPOT( 29 ), START_SPOT( 30 ),
+	START_SPOT( 31 ), START_SPOT( 32 ),
+#undef START_SPOT
 
 	{ "InitialCameraPosition",	INI::parseCoord3D,	NULL,	offsetof( MapMetaDataReader, m_initialCameraPosition ) },
 
@@ -175,7 +177,7 @@ void INI::parseMapCacheDefinition( INI* ini )
 	}
 
 	AsciiString startingCamName;
-	for (Int i=0; i<md.m_numPlayers; ++i)
+	for (Int i=0; i<md.m_numPlayers && i<MAX_SLOTS; ++i)
 	{
 		startingCamName.format("Player_%d_Start", i+1); // start pos waypoints are 1-based
 		md.m_waypoints[startingCamName] = mdr.m_waypoints[i];

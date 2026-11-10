@@ -114,9 +114,9 @@ SupplyWarehouseDockUpdate::~SupplyWarehouseDockUpdate()
 	* who stops coming loses the pile a minute after his last box. */
 static const UnsignedInt SUPPLY_PILE_CLAIM_FRAMES = 60 * LOGICFRAMES_PER_SECOND;
 
-Bool SupplyPileLimitCloses( Int limit, UnsignedInt gatheringPlayers, Int playerIndex )
+Bool SupplyPileLimitCloses( Int limit, PlayerMaskType gatheringPlayers, Int playerIndex )
 {
-	if( limit <= 0 || ( gatheringPlayers & ( 1u << playerIndex ) ) )
+	if( limit <= 0 || ( gatheringPlayers & playerIndexToMask( playerIndex ) ) )
 		return FALSE;
 
 	Int count = 0;
@@ -125,20 +125,20 @@ Bool SupplyPileLimitCloses( Int limit, UnsignedInt gatheringPlayers, Int playerI
 	return count >= limit;
 }
 
-static void notePlayerOf( ObjectID dockerID, UnsignedInt *players )
+static void notePlayerOf( ObjectID dockerID, PlayerMaskType *players )
 {
 	const Object *docker = TheGameLogic->findObjectByID( dockerID );
 	if( docker )	// a free spot, or a docker that died and has not been reaped yet
-		*players |= 1u << docker->getControllingPlayer()->getPlayerIndex();
+		*players |= docker->getControllingPlayer()->getPlayerMask();
 }
 
 /** A player holds the pile while one of his gatherers is on the way to it, queued outside it or
 	* loading from it, and for SUPPLY_PILE_CLAIM_FRAMES after his last load.  Each player is one, an
 	* ally like anybody else: the request was a team game in which the second player has to find a
 	* pile of his own. */
-UnsignedInt SupplyWarehouseDockUpdate::gatheringPlayers( void ) const
+PlayerMaskType SupplyWarehouseDockUpdate::gatheringPlayers( void ) const
 {
-	UnsignedInt players = 0;
+	PlayerMaskType players = PLAYERMASK_NONE;
 
 	notePlayerOf( m_activeDocker, &players );
 	for( size_t i = 0; i < m_approachPositionOwners.size(); ++i )
@@ -150,7 +150,7 @@ UnsignedInt SupplyWarehouseDockUpdate::gatheringPlayers( void ) const
 		// a defeated player's claim dies with him, or his pile would stay shut for the rest of the minute
 		if( m_lastGatherFrame[playerIndex] != 0 && now - m_lastGatherFrame[playerIndex] < SUPPLY_PILE_CLAIM_FRAMES &&
 				ThePlayerList->getNthPlayer( playerIndex )->isPlayerActive() )
-			players |= 1u << playerIndex;
+			players |= playerIndexToMask( playerIndex );
 	}
 
 	return players;
@@ -181,16 +181,16 @@ Bool SupplyWarehouseDockUpdate::reserveApproachPosition( Object* docker, Coord3D
 	const Int playerIndex = docker->getControllingPlayer()->getPlayerIndex();
 	if( isClosedToPlayer( docker->getControllingPlayer() ) )
 	{
-		DEBUG_LOG(("SUPPLY PILE LIMIT frame %d pile %d refuses gatherer %d of player %d, players 0x%X limit %d\n",
-			TheGameLogic->getFrame(), getObject()->getID(), docker->getID(), playerIndex, gatheringPlayers(), limit));
+		DEBUG_LOG(("SUPPLY PILE LIMIT frame %d pile %d refuses gatherer %d of player %d, players 0x%llX limit %d\n",
+			TheGameLogic->getFrame(), getObject()->getID(), docker->getID(), playerIndex, (unsigned long long)gatheringPlayers(), limit));
 		return FALSE;
 	}
 
 	const Bool reserved = DockUpdate::reserveApproachPosition( docker, position, index );
 	if( reserved )
 	{
-		DEBUG_LOG(("SUPPLY PILE LIMIT frame %d pile %d takes gatherer %d of player %d, players 0x%X limit %d\n",
-			TheGameLogic->getFrame(), getObject()->getID(), docker->getID(), playerIndex, gatheringPlayers(), limit));
+		DEBUG_LOG(("SUPPLY PILE LIMIT frame %d pile %d takes gatherer %d of player %d, players 0x%llX limit %d\n",
+			TheGameLogic->getFrame(), getObject()->getID(), docker->getID(), playerIndex, (unsigned long long)gatheringPlayers(), limit));
 	}
 	return reserved;
 }

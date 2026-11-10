@@ -339,7 +339,7 @@ void DisconnectManager::processPacketRouterQuery(NetCommandMsg *msg, ConnectionM
 			ackmsg->setID(GenerateNextCommandID());
 		}
 		DEBUG_LOG(("DisconnectManager::processPacketRouterQuery - We are the new packet router, responding with an packet router ack. Local player is %d\n", ackmsg->getPlayerID()));
-		conMgr->sendLocalCommandDirect(ackmsg, 1 << cmdMsg->getPlayerID());
+		conMgr->sendLocalCommandDirect(ackmsg, slotBit(cmdMsg->getPlayerID()));
 		ackmsg->detach();
 	} else {
 		DEBUG_LOG(("DisconnectManager::processPacketRouterQuery - We are NOT the new packet router, these are not the droids you're looking for.\n"));
@@ -497,7 +497,7 @@ void DisconnectManager::sendKeepAlive(ConnectionManager *conMgr) {
 		if (DoesCommandRequireACommandID(msg->getNetCommandType()) == TRUE) {
 			msg->setID(GenerateNextCommandID());
 		}
-		conMgr->sendLocalCommandDirect(msg, 0xff ^ (1 << msg->getPlayerID()));
+		conMgr->sendLocalCommandDirect(msg, allSlotsBut(msg->getPlayerID()));
 		msg->detach();
 
 		m_lastKeepAliveSendTime = curTime;
@@ -654,7 +654,7 @@ void DisconnectManager::sendVoteCommand(Int slot, ConnectionManager *conMgr) {
 		msg->setID(GenerateNextCommandID());
 	}
 
-	conMgr->sendLocalCommandDirect(msg, 0xff & ~(1 << conMgr->getLocalPlayerID()));
+	conMgr->sendLocalCommandDirect(msg, allSlotsBut(conMgr->getLocalPlayerID()));
 
 	msg->detach();
 }

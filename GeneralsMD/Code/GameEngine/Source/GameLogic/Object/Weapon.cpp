@@ -3222,7 +3222,19 @@ Object* Weapon::forceFireWeapon( const Object *source, const Coord3D *pos)
 	return TheGameLogic->findObjectByID( projectileID );
 }
 
+thread_local Int Weapon::s_statusPeekDepth = 0;
+
 //-------------------------------------------------------------------------------------------------
+/* Past the wait the answer comes from the clip, and EA writes it back into m_status, which a wait that
+	 starts without a status write of its own then reads: holdToRetailFireCycle holding a zero-wait shot
+	 for the retail cycle reads the READY_TO_FIRE an onWeaponBonusChange, or the fire state's search for
+	 the next victim of a continuous attack, wrote between the shot and the hold.  So whether m_status
+	 was refreshed depends on who asked, and a caller that asks in an order of its own choosing
+	 (findClosestEnemy, which runs its filters cheapest first) asks under a StatusPeek: the same
+	 answer, nothing written.  findClosestEnemy never runs between a shot and its hold, so the hold reads what it always
+	 read.  The one reader of an older refresh left is the
+	 shared-reload hold after a clip that does not reload by itself ran dry; of the shipped weapon sets
+	 only a Demo Stinger Soldier's suicide charge does that. */
 WeaponStatus Weapon::getStatus() const
 {
 	UnsignedInt now = TheGameLogic->getFrame();
@@ -3232,11 +3244,11 @@ WeaponStatus Weapon::getStatus() const
 	}
 	if( now >= m_whenWeCanFireAgain )
 	{
-		if (m_ammoInClip > 0)
-			m_status = READY_TO_FIRE;
-		else
-			m_status = OUT_OF_AMMO;
+		const WeaponStatus status = m_ammoInClip > 0 ? READY_TO_FIRE : OUT_OF_AMMO;
+		if( s_statusPeekDepth == 0 )
+			m_status = status;
 		//CRCDEBUG_LOG(("Weapon::getStatus() just set m_status to %d (ammo in clip is %d)\n", m_status, m_ammoInClip));
+		return status;
 	}
 	return m_status;
 }

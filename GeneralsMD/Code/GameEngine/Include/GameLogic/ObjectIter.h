@@ -128,6 +128,7 @@ private:
 	Clump				m_inlineClumps[INLINE_CLUMPS];
 	PooledClumps	*m_pooledBlocks;		// newest first
 	Int					m_pooledClumpsUsed;	// in m_pooledBlocks, the newest
+	PooledClumps	*m_spareBlocks;			// kept by recycle() for the next fill
 
 	void reset();
 
@@ -145,7 +146,14 @@ public:
 	/**
 		throw away all contents of the iterator.
 	*/
-	void makeEmpty();	
+	void makeEmpty();
+
+	/**
+		throw away all contents but keep the pool blocks for the next fill: for an iterator filled
+		over and over on one thread, such as a logic job's (AI::ScanJob), which then takes nothing
+		from the pool once it has seen its largest fill.
+	*/
+	void recycle();
 
 	/**
 		insert an object at the head of the iterator. the given numeric value

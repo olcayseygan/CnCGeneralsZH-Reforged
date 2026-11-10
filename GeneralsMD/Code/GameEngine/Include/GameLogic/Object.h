@@ -89,6 +89,7 @@ class ProductionUpdateInterface;
 class ProjectileUpdateInterface;
 class RadarObject;
 class SightingInfo;
+class SlavedUpdateInterface;
 class SpawnBehaviorInterface;
 class SpecialAbilityUpdate;
 class SpecialPowerCompletionDie;
@@ -386,7 +387,10 @@ public:
 	// Find us our dock update interface if we have one.  Again, this method exists simple
 	// because we want to do this in a lot of places throughout the code
 	//
-	DockUpdateInterface *getDockUpdateInterface( void );
+	DockUpdateInterface *getDockUpdateInterface( void ) { return m_dock; }
+
+	/// the first module that slaves us to a spawner (SlavedUpdate, MobMemberSlavedUpdate), if any
+	SlavedUpdateInterface *getSlavedUpdateInterface( void ) const { return m_slaved; }
 
 	// Ditto for special powers -- Kris
 	SpecialPowerModuleInterface* findSpecialPowerModuleInterface( SpecialPowerType type ) const;
@@ -832,6 +836,8 @@ private:
 	ContainModuleInterface*				m_contain;
 	BodyModuleInterface*					m_body;
   StealthUpdate*                m_stealth;
+	DockUpdateInterface*					m_dock;		///< the first module answering getDockUpdateInterface; a module's answer never changes
+	SlavedUpdateInterface*				m_slaved;	///< the first module answering getSlavedUpdateInterface, likewise
 
 	AIUpdateInterface*						m_ai;	///< ai interface (if any), cached for handy access. (duplicate of entry in the module array!)
 	PhysicsBehavior*							m_physics;	///< physics interface (if any), cached for handy access. (duplicate of entry in the module array!)

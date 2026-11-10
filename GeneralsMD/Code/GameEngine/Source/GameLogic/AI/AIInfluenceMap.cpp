@@ -71,11 +71,9 @@ Int AIInfluenceMap::cellIndexAt( Real x, Real y ) const
 
 /** The high ground can at most double a range (ELEVATION_RANGE_CAP), so the square walked is twice
 	* the range out, and each cell inside it is cut back to the reach its own height allows. */
-void AIInfluenceMap::stamp( std::vector<Real> &layer, Real x, Real y, Real z, Real range, Real power )
+template <class Visit>
+void AIInfluenceMap::visitReach( Real x, Real y, Real z, Real range, Visit &visit ) const
 {
-	if( m_cols <= 0 || power <= 0.0f || range <= 0.0f )
-		return;
-
 	const Real farthest = range + Weapon_highGroundRangeBonus( range, FLT_MAX );
 	const Int colLo = max<Int>( 0, REAL_TO_INT_FLOOR( (x - farthest - m_originX) / m_cellSize ) );
 	const Int colHi = min<Int>( m_cols - 1, REAL_TO_INT_FLOOR( (x + farthest - m_originX) / m_cellSize ) );
@@ -94,9 +92,30 @@ void AIInfluenceMap::stamp( std::vector<Real> &layer, Real x, Real y, Real z, Re
 				continue;
 			const Int index = row * m_cols + col;
 			if( distSqr <= rangeSqr || distSqr <= sqr( range + Weapon_highGroundRangeBonus( range, z - m_height[ index ] ) ) )
-				layer[ index ] += power;
+				visit( index );
 		}
 	}
+}
+
+struct AddPower
+{
+	std::vector<Real> *layer;
+	Real power;
+	void operator()( Int index ) { (*layer)[ index ] += power; }
+};
+
+struct CollectCell
+{
+	std::vector<Int> *cells;
+	void operator()( Int index ) { cells->push_back( index ); }
+};
+
+void AIInfluenceMap::stamp( std::vector<Real> &layer, Real x, Real y, Real z, Real range, Real power )
+{
+	if( m_cols <= 0 || power <= 0.0f || range <= 0.0f )
+		return;
+	AddPower add = { &layer, power };
+	visitReach( x, y, z, range, add );
 }
 
 void AIInfluenceMap::stampEnemy( Real x, Real y, Real z, Real range, Real power )
@@ -107,6 +126,31 @@ void AIInfluenceMap::stampEnemy( Real x, Real y, Real z, Real range, Real power 
 void AIInfluenceMap::stampFriend( Real x, Real y, Real z, Real range, Real power )
 {
 	stamp( m_friend, x, y, z, range, power );
+}
+
+void AIInfluenceMap::cellsReached( Real x, Real y, Real z, Real range, std::vector<Int> &cells ) const
+{
+	if( m_cols <= 0 || range <= 0.0f )
+		return;
+	CollectCell collect = { &cells };
+	visitReach( x, y, z, range, collect );
+}
+
+void AIInfluenceMap::addEnemy( const Int *cells, Int count, Real power )
+{
+	for( Int i = 0; i < count; ++i )
+		m_enemy[ cells[ i ] ] += power;
+}
+
+void AIInfluenceMap::addFriend( const Int *cells, Int count, Real power )
+{
+	for( Int i = 0; i < count; ++i )
+		m_friend[ cells[ i ] ] += power;
+}
+
+Bool AIInfluenceMap::sameGrid( Int cols, Int rows, Real originX, Real originY, Real cellSize ) const
+{
+	return m_cols == cols && m_rows == rows && m_originX == originX && m_originY == originY && m_cellSize == cellSize;
 }
 
 Real AIInfluenceMap::enemyAt( Real x, Real y ) const

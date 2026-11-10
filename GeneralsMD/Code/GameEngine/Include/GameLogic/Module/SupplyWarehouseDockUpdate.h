@@ -67,7 +67,7 @@ class Player;
 /** The lobby's supply pile limit: is a pile that gatheringPlayers are working, one bit a player
 	* index, closed to this player?  Never to one of the players already on it, and never with no
 	* limit set. */
-Bool SupplyPileLimitCloses( Int limit, UnsignedInt gatheringPlayers, Int playerIndex );
+Bool SupplyPileLimitCloses( Int limit, PlayerMaskType gatheringPlayers, Int playerIndex );
 
 //-------------------------------------------------------------------------------------------------
 class SupplyWarehouseDockUpdate : public DockUpdate
@@ -108,7 +108,7 @@ public:
 
 protected:
 
-	UnsignedInt gatheringPlayers( void ) const;	///< who holds this pile under the limit, one bit a player index
+	PlayerMaskType gatheringPlayers( void ) const;	///< who holds this pile under the limit, one bit a player index
 
 	Int m_boxesStored;
 	UnsignedInt m_nextRegenFrame;		///< when the next box arrives, 0 until the first one is scheduled

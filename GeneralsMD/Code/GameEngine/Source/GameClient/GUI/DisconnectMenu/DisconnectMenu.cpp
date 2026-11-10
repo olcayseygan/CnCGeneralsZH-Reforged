@@ -118,6 +118,8 @@ void DisconnectMenu::hideScreen() {
 }
 
 void DisconnectMenu::setPlayerName(Int playerNum, UnicodeString name) {
+	if (m_playerNameTextControlNames[playerNum] == NULL)
+		return; // the layout has 7 rows; players past them are not shown
 	NameKeyType id = TheNameKeyGenerator->nameToKey(m_playerNameTextControlNames[playerNum]);
 	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, id);
 
@@ -145,6 +147,8 @@ void DisconnectMenu::setPlayerName(Int playerNum, UnicodeString name) {
 }
 
 void DisconnectMenu::setPlayerTimeoutTime(Int playerNum, time_t newTime) {
+	if (m_playerTimeoutTextControlNames[playerNum] == NULL)
+		return;
 	NameKeyType id = TheNameKeyGenerator->nameToKey(m_playerTimeoutTextControlNames[playerNum]);
 	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, id);
 
@@ -160,6 +164,8 @@ void DisconnectMenu::setPlayerTimeoutTime(Int playerNum, time_t newTime) {
 }
 
 void DisconnectMenu::showPlayerControls(Int slot) {
+	if (m_playerNameTextControlNames[slot] == NULL)
+		return;
 	NameKeyType id = TheNameKeyGenerator->nameToKey(m_playerNameTextControlNames[slot]);
 	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, id);
 	if (control != NULL) {
@@ -187,6 +193,8 @@ void DisconnectMenu::showPlayerControls(Int slot) {
 }
 
 void DisconnectMenu::hidePlayerControls(Int slot) {
+	if (m_playerNameTextControlNames[slot] == NULL)
+		return;
 	NameKeyType id = TheNameKeyGenerator->nameToKey(m_playerNameTextControlNames[slot]);
 	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, id);
 	if (control != NULL) {
@@ -300,6 +308,8 @@ void DisconnectMenu::voteForPlayer(Int slot) {
 }
 
 void DisconnectMenu::updateVotes(Int slot, Int votes) {
+	if (m_playerVoteCountControlNames[slot] == NULL)
+		return;
 	NameKeyType id = TheNameKeyGenerator->nameToKey(m_playerVoteCountControlNames[slot]);
 	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, id);
 

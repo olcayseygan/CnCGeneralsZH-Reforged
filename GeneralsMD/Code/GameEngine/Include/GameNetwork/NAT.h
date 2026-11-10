@@ -136,8 +136,12 @@ protected:
 	Bool m_myConnections[MAX_SLOTS]; ///< keeps track of all the nodes I've connected to. For keepalive.
 	time_t m_nextKeepaliveTime; ///< the next time we will send out our keepalive packets.
 
-	static Int m_connectionPairs[MAX_SLOTS-1][MAX_SLOTS-1][MAX_SLOTS];
-	Int m_connectionPairIndex;
+public:
+	/// The node that node meets in this round of a numNodes room, -1 for none (NAT.cpp has the schedule).
+	static Int connectionPartner(Int numNodes, Int round, Int node);
+	/// How many rounds it takes every pair of numNodes nodes to meet once.
+	static Int connectionRounds(Int numNodes);
+protected:
 
 	UnsignedShort m_startingPortNumber; ///< the starting port number for this game. The slots all get port numbers with their port numbers based on this number.
 																			///< this is done so that games that are played right after each other with the same players in the same

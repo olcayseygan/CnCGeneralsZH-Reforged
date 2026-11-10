@@ -88,6 +88,7 @@
 #include "GameLogic/AISkirmishPlayer.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/ObjectTypes.h"
 #include "GameLogic/Scripts.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/SidesList.h"
@@ -2033,6 +2034,45 @@ Bool Player::hasTemplateMember(const ThingTemplate *tmpl) const
 }
 
 //=============================================================================
+// countObjectsByThingTemplate counts an object once, against the first of the templates its own is
+// equivalent to, so the counts summed are every counting object whose template is equivalent to any.
+Int Player::countObjectsOfTypes(const ObjectTypes &types, Bool ignoreDead) const
+{
+	Int total = 0;
+	for (std::vector<TemplateCountMembers>::const_iterator it = m_templateCountMembers.begin(); it != m_templateCountMembers.end(); ++it)
+	{
+		if (it->m_objects.empty() || !types.hasEquivalent(it->m_template))
+			continue;
+		for (std::vector<Object *>::const_iterator obj = it->m_objects.begin(); obj != it->m_objects.end(); ++obj)
+		{
+			if (Team::countsTowardTemplate(*obj, ignoreDead, TRUE))
+				++total;
+		}
+	}
+	return total;
+}
+
+//=============================================================================
+// SKIRMISH_VALUE_IN_AREA used to walk every member of every team; the lists hold the same members,
+// and a list whose template is inert or costs nothing adds nothing to the sum.
+Int Player::countBuildCostInside(const PolygonTrigger *trig) const
+{
+	Int total = 0;
+	for (std::vector<TemplateCountMembers>::const_iterator it = m_templateCountMembers.begin(); it != m_templateCountMembers.end(); ++it)
+	{
+		const Int cost = it->m_template->friend_getBuildCost();
+		if (cost == 0 || it->m_template->isKindOf(KINDOF_INERT))
+			continue;
+		for (std::vector<Object *>::const_iterator obj = it->m_objects.begin(); obj != it->m_objects.end(); ++obj)
+		{
+			if ((*obj)->isInside(trig) && !(*obj)->isEffectivelyDead())
+				total += cost;
+		}
+	}
+	return total;
+}
+
+//=============================================================================
 void Player::countObjectsByThingTemplate(Int numTmplates, const ThingTemplate* const * things, Bool ignoreDead, Int *counts, Bool ignoreUnderConstruction ) const
 {
 	for (Int i = 0; i < numTmplates; ++i)
@@ -2220,9 +2260,9 @@ UnsignedInt Player::getSupplyBoxValue()
 }
 
 //=============================================================================
-Real Player::getProductionCostChangePercent( AsciiString buildTemplateName ) const 
-{ 
-  ProductionChangeMap::const_iterator it = m_productionCostChanges.find(NAMEKEY(buildTemplateName));
+Real Player::getProductionCostChangePercent( NameKeyType buildTemplateNameKey ) const
+{
+  ProductionChangeMap::const_iterator it = m_productionCostChanges.find(buildTemplateNameKey);
   if (it != m_productionCostChanges.end()) 
 	{
 		return (*it).second;
@@ -2232,9 +2272,9 @@ Real Player::getProductionCostChangePercent( AsciiString buildTemplateName ) con
 }	
 
 //=============================================================================
-Real Player::getProductionTimeChangePercent( AsciiString buildTemplateName ) const 
-{ 
-  ProductionChangeMap::const_iterator it = m_productionTimeChanges.find(NAMEKEY(buildTemplateName));
+Real Player::getProductionTimeChangePercent( NameKeyType buildTemplateNameKey ) const
+{
+  ProductionChangeMap::const_iterator it = m_productionTimeChanges.find(buildTemplateNameKey);
   if (it != m_productionTimeChanges.end()) 
 	{
 		return (*it).second;
@@ -2244,10 +2284,9 @@ Real Player::getProductionTimeChangePercent( AsciiString buildTemplateName ) con
 }	
 
 //=============================================================================
-VeterancyLevel Player::getProductionVeterancyLevel( AsciiString buildTemplateName ) const 
-{ 
-	NameKeyType templateNameKey = NAMEKEY(buildTemplateName);
-  ProductionVeterancyMap::const_iterator it = m_productionVeterancyLevels.find(templateNameKey);
+VeterancyLevel Player::getProductionVeterancyLevel( NameKeyType buildTemplateNameKey ) const
+{
+  ProductionVeterancyMap::const_iterator it = m_productionVeterancyLevels.find(buildTemplateNameKey);
   if (it != m_productionVeterancyLevels.end()) 
 	{
 		return (*it).second;
@@ -3598,28 +3637,28 @@ Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength )
   return bonus < AI_INCOME_BONUS_MAX ? bonus : AI_INCOME_BONUS_MAX;
 }
 
-void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
+void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
 {
-  UnsignedInt grouped = 0;
+  PlayerMaskType grouped = 0;
   *ownAverage = 0;
   *strongestEnemyAverage = 0;
   for( Int lead = 0; lead < count; ++lead )
   {
-    if( grouped & ( 1u << lead ) )
+    if( grouped & playerIndexToMask( lead ) )
       continue;
     // the leader's own side when it is this player or one of its allies, else the next enemy side
-    const Bool ours = lead == self || ( allies[ self ] & ( 1u << lead ) ) != 0;
+    const Bool ours = lead == self || ( allies[ self ] & playerIndexToMask( lead ) ) != 0;
     Int64 sum = 0;
     Int size = 0;
     for( Int i = lead; i < count; ++i )
     {
-      if( grouped & ( 1u << i ) )
+      if( grouped & playerIndexToMask( i ) )
         continue;
-      const Bool member = ours ? ( i == self || ( allies[ self ] & ( 1u << i ) ) != 0 )
-                               : ( i == lead || ( allies[ lead ] & ( 1u << i ) ) != 0 );
+      const Bool member = ours ? ( i == self || ( allies[ self ] & playerIndexToMask( i ) ) != 0 )
+                               : ( i == lead || ( allies[ lead ] & playerIndexToMask( i ) ) != 0 );
       if( !member )
         continue;
-      grouped |= 1u << i;
+      grouped |= playerIndexToMask( i );
       sum += worth[ i ];
       ++size;
     }

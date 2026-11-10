@@ -95,6 +95,7 @@
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Module/StatusDamageHelper.h"
+#include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
 #include "GameLogic/Module/SubdualDamageHelper.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
@@ -219,6 +220,8 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_body(NULL),
 	m_contain(NULL),
   m_stealth(NULL),
+	m_dock(NULL),
+	m_slaved(NULL),
 	m_partitionData(NULL),
 	m_radarData(NULL),
 	m_drawable(NULL),
@@ -481,6 +484,8 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 				DEBUG_ASSERTCRASH( m_ai == NULL, ("%s has more than one AI module. This is illegal!\n", getTemplate()->getName().str()) );
 			}
 			m_ai = ai;
+			// the reveal grid holds only objects with an AI, and the team was set above
+			RevealWakeGrid::noteObject( this );
 		}
 
 		static NameKeyType key_PhysicsUpdate = NAMEKEY("PhysicsBehavior");
@@ -510,6 +515,17 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	}
 	*curC = NULL;
 
+	// The same for the dock and the slaver: a docking truck asked for its dock's interface a few times
+	// a frame through a walk of every module the building has, a quarter of the time the dock state
+	// took, and every line of fire that crossed a building walked both ends' modules for their slaver.
+	for (BehaviorModule** m = m_behaviors; *m; ++m)
+	{
+		if (m_dock == NULL)
+			m_dock = (*m)->getDockUpdateInterface();
+		if (m_slaved == NULL)
+			m_slaved = (*m)->getSlavedUpdateInterface();
+	}
+
 	AIUpdateInterface *ai = getAIUpdateInterface();
 	if (ai) {
 		ai->setAttitude(getTeam()->getPrototype()->getTemplateInfo()->m_initialTeamAttitude);
@@ -527,7 +543,7 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 
 	// If a valid team has been assigned me, then I have a Player I can ask about my starting level
 	const Player* controller = getControllingPlayer();
-	m_experienceTracker->setVeterancyLevel( controller->getProductionVeterancyLevel( getTemplate()->getName() ) );
+	m_experienceTracker->setVeterancyLevel( controller->getProductionVeterancyLevel( getTemplate()->getNameKey() ) );
 
 	// Before the create modules and initObject can run an upgrade, whose addition already comes out at
 	// this factor. A save's loaded object gets its saved health over this afterwards.
@@ -709,6 +725,8 @@ Object::~Object()
 	// note, do NOT free these, there are just a shadow copy!
 	m_ai = NULL;
 	m_physics = NULL;
+	m_dock = NULL;
+	m_slaved = NULL;
 
 	// delete any modules present
 	for (BehaviorModule** b = m_behaviors; *b; ++b)
@@ -908,6 +926,9 @@ void Object::setGeometryInfoZ( Real newZ )
 { 
 	// A Z change only does not need to un/register with the PartitionManager
 	m_geometryInfo.setMaxHeightAbovePosition( newZ );
+	// but a sphere's height is its radius, which the center grid sorts by
+	if( m_partitionData )
+		ThePartitionManager->noteObjectMovedOrResized( m_partitionData );
 
 	if (m_drawable)
 		m_drawable->reactToGeometryChange();
@@ -992,6 +1013,8 @@ void Object::setOrRestoreTeam( Team* team, Bool restoring )
 	// the partition counts every cell's objects per player; move ours before anything searches
 	if (m_partitionData)
 		m_partitionData->refreshCountedPlayer();
+	// a reveal looks for its enemies on the teams, so the reveal grid has to hear of us
+	RevealWakeGrid::noteObject( this );
 
 	// After Switch //////////////////////////
 	if (m_team)
@@ -1961,6 +1984,10 @@ void Object::reactToTurretChange( WhichTurretType turret, Real oldRotation, Real
 void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle)
 {
 	//USE_PERF_TIMER(Object_reactToTransformChange)
+	RevealWakeGrid::noteMove( this, oldPos );
+	// every move, the ones too small to dirty the cells below included (PartitionManager::visitNearestFirst)
+	if (m_partitionData)
+		ThePartitionManager->noteObjectMovedOrResized( m_partitionData );
 	if(_isnan(getPosition()->x) || _isnan(getPosition()->y) || _isnan(getPosition()->z)) {
 		DEBUG_CRASH(("Object pos is nan."));
 		TheGameLogic->destroyObject(this);
@@ -2429,6 +2456,9 @@ void Object::setDisabledUntil( DisabledType type, UnsignedInt frame )
 		
 		m_disabledTillFrame[ type ] = frame;
 		m_disabledMask.set( type, frame > TheGameLogic->getFrame() );
+		// the end-of-frame check walks only the objects it was told about (GameLogic::disabledAndSecondTurns)
+		if( m_disabledMask.test( type ) )
+			TheGameLogic->watchDisabled( this );
 
 		// A building's AI does not run while it is EMPed, hacked, subdued or out of power, so the attack it
 		// was in never exited and kept its look: a Gattling Cannon spun its barrels through the whole EMP.
@@ -2659,6 +2689,8 @@ Bool Object::clearDisabled( DisabledType type )
 
 //-------------------------------------------------------------------------------------------------
 //Checks any timers and clears disabled statii that have expired.
+// Only expired ones: GameLogic::disabledAndSecondTurns skips an object disabled during its own pass
+// because a bit set this frame has not expired, so this would do nothing to it.
 //-------------------------------------------------------------------------------------------------
 void Object::checkDisabledStatus()
 {
@@ -2956,8 +2988,11 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 
 	m_iPos = iPos;
 
-	for (const PolygonTrigger *pTrig = PolygonTrigger::getFirstPolygonTrigger(); pTrig; pTrig = pTrig->getNext()) 
+	// only the triggers whose bounds hold the point, in list order: the rest would refuse it anyway
+	const std::vector<const PolygonTrigger*> &nearby = PolygonTrigger::triggersNear(m_iPos);
+	for (size_t n = 0; n < nearby.size(); ++n)
 	{
+		const PolygonTrigger *pTrig = nearby[n];
 		Bool skip = false;
 		for (i = 0; i < m_numTriggerAreasActive; i++) 
 		{
@@ -4092,6 +4127,7 @@ void Object::updateObjValuesFromMapProperties(Dict* properties)
 		if (valInt < 0)
 			valInt = 0;
 		m_visionRange = INT_TO_REAL(valInt);
+		RevealWakeGrid::noteObject( this );
 	}
 
 	// adjust the shroud clearing distance of this object, overriding its default distance
@@ -4604,6 +4640,10 @@ void Object::xfer( Xfer *xfer )
 	const XferVersion currentVersion = 18;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
+
+	// a load writes fields behind the reveal grid's back, the sight range among them
+	if( xfer->getXferMode() == XFER_LOAD )
+		RevealWakeGrid::forget();
 
 	// object ID
 	ObjectID id = getID();
@@ -5884,6 +5924,7 @@ Real Object::getVisionRange() const
 void Object::setVisionRange( Real newVisionRange )
 {
 	m_visionRange = newVisionRange;
+	RevealWakeGrid::noteObject( this );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6089,9 +6130,9 @@ void Object::setVisionSpied(Bool setting, Int byWhom)
 		for (Int i = 0; i < MAX_PLAYER_COUNT; ++i) 
 		{
 			if( m_visionSpiedBy[i] > 0 )
-				BitSet( workingMask, ( 1 << i ) );
+				BitSet( workingMask, playerIndexToMask( i ) );
 			else
-				BitClear( workingMask, ( 1 << i ) );
+				BitClear( workingMask, playerIndexToMask( i ) );
 		}
 
 		m_visionSpiedMask = workingMask;
@@ -6680,22 +6721,6 @@ ProductionUpdateInterface* Object::getProductionUpdateInterface( void )
 	return NULL;
 
 }  // end getProductionUpdateInterface
-
-// ------------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------------------------
-DockUpdateInterface *Object::getDockUpdateInterface( void )
-{
-	DockUpdateInterface *dock = NULL;
-
-	for( BehaviorModule **u = m_behaviors; *u; ++u )
-	{
-		if( (dock = (*u)->getDockUpdateInterface()) != NULL )
-			return dock;
-	}
-
-	return NULL;
-
-}  // end getDockUpdateInterface
 
 // ------------------------------------------------------------------------------------------------
 // Search our special power modules for a specific one.

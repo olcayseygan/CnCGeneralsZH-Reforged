@@ -24,8 +24,8 @@
  *  - DebugInit, DebugLog: Debug.cpp does not compile off Windows yet.  DebugLog prints, so a
  *    DEBUG_LOG from the memory manager is not lost.
  *  - ReleaseCrash: the memory manager stops on a corrupt block header; here that aborts.
- *  - LogicThread's census: JobSystem::parallel_for counts itself when it runs on the logic thread,
- *    and nothing here is one, so the flag stays FALSE and the count is never taken.
+ *  - LogicThread's flag: JobSystem::parallel_for reads it to pick the logic thread's pool, and
+ *    nothing here is that thread, so the flag stays FALSE and the census is never taken.
  *  - INI: SubsystemInterfaceList::initSubsystem loads INI files; nothing here initialises a
  *    subsystem through it.
  *  - TheFileSystem, FileSystem::openFile: RAMFile::open(const char*) opens through the whole file

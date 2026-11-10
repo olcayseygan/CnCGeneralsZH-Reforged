@@ -374,6 +374,8 @@ void UpdateDiplomacyBriefingText(AsciiString newText, Bool clear)
 /// one picture stretched over the button where the layout named EA's three
 static void dressTabButton( GameWindow *button, const char *piece )
 {
+	if (button == NULL)	// a seat row past the layout's eight
+		return;
 	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
 	AsciiString name;
 	GadgetButtonSetEnabledImage(button, schemes->getTabImage(piece));

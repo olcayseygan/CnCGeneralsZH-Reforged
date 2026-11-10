@@ -51,6 +51,13 @@ private:
 	AsciiString m_listName;
 	AsciiStringVec m_objectTypes;
 
+	// (NO-SAVE) what a count asks of the list, worked out once per change to it instead of on every
+	// script condition that names it: the names that are templates, in list order, and per template
+	// id whether a template is equivalent to one of them (0 not asked yet, 1 yes, -1 no)
+	mutable std::vector<const ThingTemplate *> m_templates;
+	mutable std::vector<signed char> m_equivalentByID;
+	mutable Bool m_templatesValid;
+
 protected:
 	// snapshot methods
 	virtual void crc(Xfer *xfer);
@@ -80,8 +87,13 @@ public:
 	// I'd like to loop through, please.
 	AsciiString getNthInList( Int index ) const { return (index < getListSize()) ? m_objectTypes[index] : AsciiString::TheEmptyString; }
 
-	// Prep two arrays for usage with Player::countObjectsByThingTemplate
-	Int prepForPlayerCounting( std::vector<const ThingTemplate *>& templates, std::vector<Int>& counts);
+	// The names that are templates, in list order, for Player::countObjectsByThingTemplate.
+	const std::vector<const ThingTemplate *>& getTemplates() const;
+
+	// Whether tmpl is equivalent to any of getTemplates(), remembered by template id.  Only a final
+	// override may be asked, which is what every object's getTemplate() is: an override shares its
+	// parent's id, and while a match runs one final override holds each id.
+	Bool hasEquivalent(const ThingTemplate *tmpl) const;
 
 	// Can the player build any of the thing templates that we have names for?
 	Bool canBuildAny(Player *player);

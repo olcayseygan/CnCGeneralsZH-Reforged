@@ -845,8 +845,9 @@ StateReturnType DozerActionDoActionState::update( void )
 
 	}  // end if
 
-	// just continue sitting here for a while
-	getMachineOwner()->clearWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL);// no mine clearing fun while I'm on the job
+	// just continue sitting here for a while (cleared once: see WorkerAIUpdate::update)
+	if( getMachineOwner()->testWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL) )
+		getMachineOwner()->clearWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL);// no mine clearing fun while I'm on the job
 
 	return STATE_CONTINUE;
 
@@ -1803,7 +1804,7 @@ UpdateSleepTime DozerAIUpdate::update( void )
 			cancelTask( currentTask );
 
 	}  // end if
-	else
+	else if( !getObject()->testWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL) )	// set once: see WorkerAIUpdate::update
 		getObject()->setWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL);//maybe go clear some mines, if I feel like it
 
 	// run our own state machine, once we are out of the structure that built us: a job taken up on the

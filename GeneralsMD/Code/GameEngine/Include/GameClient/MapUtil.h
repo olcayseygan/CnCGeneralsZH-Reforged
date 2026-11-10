@@ -120,7 +120,8 @@ private:
 	Bool addMap( AsciiString dirName, AsciiString fname, FileInfo *fileInfo, Bool isOfficial); ///< returns true if it had to (re)parse the map
 	void writeCacheINI( Bool userDir );
 
-	static const char * m_mapCacheName;
+	static const char * m_mapCacheName;			///< the Maps folder's, shipped in the archives
+	static const char * m_userMapCacheName;	///< the user map folder's, which only this build writes
 	// both MapCache.ini files only need reading once a run - see updateCache
 	Bool m_doLoadStandardMapCacheINI;
 	Bool m_doLoadUserMapCacheINI;

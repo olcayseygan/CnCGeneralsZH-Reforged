@@ -55,6 +55,8 @@
 #include "Common/DiscreteCircle.h"
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
+#include "Common/JobSystem.h"
+#include "Common/LogicThread.h"
 #include "Common/MessageStream.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/PerfTimer.h"
@@ -86,6 +88,7 @@
 #include "GameClient/ObserverCamera.h"
 
 #include <algorithm>
+#include <chrono>
 #include <float.h>
 
 /* A hint that a cache line is about to be read. It reads nothing the program sees and decides
@@ -122,6 +125,7 @@ Int PartitionManager::getQueryCountThisFrame( void ) { return thePartitionQuerie
 Int PartitionManager::getGatherCountThisFrame( void ) { return thePartitionGathers; }
 Int PartitionManager::getQueryObjectCountThisFrame( void ) { return thePartitionQueryObjects; }
 void PartitionManager::resetQueryCounts( void ) { thePartitionQueries = 0; thePartitionGathers = 0; thePartitionQueryObjects = 0; }
+void PartitionManager::noteJobGathers( Int gathers, Int objectsLookedAt ) { thePartitionQueries += gathers; thePartitionGathers += gathers; thePartitionQueryObjects += objectsLookedAt; }
 
 #ifdef DUMP_PERF_STATS
 	long s_countInClosestObjects = 0;
@@ -1571,7 +1575,7 @@ void PartitionCell::addPlayerCoi(Int playerIndex)
 	if (playerIndex < 0)
 		return;
 	if (m_playerCoiCount[playerIndex]++ == 0)
-		m_playerCoiMask |= (PlayerMaskType)(1 << playerIndex);
+		m_playerCoiMask |= playerIndexToMask( playerIndex );
 }
 
 //-----------------------------------------------------------------------------
@@ -1581,7 +1585,7 @@ void PartitionCell::removePlayerCoi(Int playerIndex)
 		return;
 	DEBUG_ASSERTCRASH(m_playerCoiCount[playerIndex] > 0, ("player coi count underflow"));
 	if (--m_playerCoiCount[playerIndex] == 0)
-		m_playerCoiMask &= (PlayerMaskType)~(1 << playerIndex);
+		m_playerCoiMask &= ~playerIndexToMask( playerIndex );
 }
 
 //-----------------------------------------------------------------------------
@@ -1656,6 +1660,7 @@ PartitionData::PartitionData()
 	//DEBUG_LOG(("create pd %08lx\n",this));
 	m_next = NULL;
 	m_prev = NULL;
+	m_moduleIndex = -1;
 	m_nextDirty = NULL;
 	m_prevDirty = NULL;
 	m_object = NULL;
@@ -1668,6 +1673,9 @@ PartitionData::PartitionData()
 	m_sightBlocker = FALSE;
 	m_noCollide = FALSE;
 	m_dirtyStatus = NOT_DIRTY;
+	m_centerNext = NULL;
+	m_centerPrev = NULL;
+	m_centerCell = CENTER_NONE;
 	m_lastCell = NULL;
 	for (int i = 0; i < MAX_PLAYER_COUNT; ++i)
 	{
@@ -1690,7 +1698,9 @@ PartitionData::~PartitionData()
 		ThePartitionManager->removeFromDirtyModules(this);
 		//DEBUG_ASSERTCRASH(!ThePartitionManager->isInListDirtyModules(this), ("hmm\n"));
 	}
-} 
+	if (ThePartitionManager)
+		ThePartitionManager->unlinkCenter(this);
+}
 
 //-----------------------------------------------------------------------------
 Int PartitionData::getControllingPlayerIndex() const
@@ -1874,6 +1884,65 @@ ObjectShroudStatus PartitionData::getShroudedStatus(Int playerIndex)
 	}
 
 	return m_shroudedness[playerIndex];
+}
+
+//-----------------------------------------------------------------------------
+#ifndef DISABLE_INVALID_PREVENTION
+#error peekShroudedStatus follows getShroudedStatus with DISABLE_INVALID_PREVENTION; follow the other path too before turning it off
+#endif
+/* getShroudedStatus's answer, branch for branch, with every write left out: what it stores in the
+	 cache is what it returns, so the peek returns that and stores nothing. */
+ObjectShroudStatus PartitionData::peekShroudedStatus(Int playerIndex) const
+{
+	if (!ThePartitionManager->getUpdatedSinceLastReset())
+		return OBJECTSHROUD_INVALID;
+
+	if (m_object && m_object->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) && Object_isAwaitingBuilder(m_object->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION),
+																					 m_object->getConstructionPercent()) &&
+			Object_isPlanHiddenFrom(m_object->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION),
+															m_object->getConstructionPercent(),
+															ThePlayerList->getNthPlayer(playerIndex)->getRelationship(m_object->getTeam())))
+		return OBJECTSHROUD_SHROUDED;
+
+	if (m_shroudedness[playerIndex] != OBJECTSHROUD_INVALID)
+		return m_shroudedness[playerIndex];
+
+	Int shroudedCells = 0;
+	Int foggedCells = 0;
+	const Bool inTheAir = m_object && m_object->isAirborneTarget();
+	const CellAndObjectIntersection *coi = m_coiArray;
+	for (Int i = m_coiInUseCount; i; --i, ++coi)
+	{
+		PartitionCell *cell = const_cast<CellAndObjectIntersection *>(coi)->getCell();
+		if( inTheAir && cell->isAirSeenByPlayer(playerIndex) )
+			continue;
+		const CellShroudStatus cellStatus = cell->getShroudStatusForPlayer(playerIndex);
+		if( cellStatus == CELLSHROUD_SHROUDED )
+			++shroudedCells;
+		else if( cellStatus == CELLSHROUD_FOGGED )
+			++foggedCells;
+	}
+
+	if( m_coiInUseCount == 0 || shroudedCells == m_coiInUseCount )
+		return OBJECTSHROUD_SHROUDED;
+	if( shroudedCells + foggedCells == m_coiInUseCount )
+	{
+		if (m_object && m_ghostObject)
+		{
+			Player *player = ThePlayerList->getNthPlayer(playerIndex);
+			if (player->getRelationship(m_object->getTeam()) == NEUTRAL)
+			{
+				if (!m_object->isKindOf(KINDOF_IMMOBILE))
+					return OBJECTSHROUD_SHROUDED;
+			}
+			else if (!(m_object->isKindOf(KINDOF_IMMOBILE) && m_everSeenByPlayer[playerIndex]) || m_object->isKindOf(KINDOF_MINE))
+				return OBJECTSHROUD_SHROUDED;
+		}
+		return OBJECTSHROUD_FOGGED;
+	}
+	if( shroudedCells == 0 && foggedCells == 0 )
+		return OBJECTSHROUD_CLEAR;
+	return OBJECTSHROUD_PARTIAL_CLEAR;
 }
 
 //-----------------------------------------------------------------------------
@@ -2762,6 +2831,9 @@ void PartitionContactList::processContactList()
 PartitionManager::PartitionManager()
 {
 	m_moduleList = NULL;
+	m_moduleArrayHoles = 0;
+	for (Int s = 0; s < JOB_GATHER_SLOTS; ++s)
+		m_jobEpoch[s] = 0;
 	m_cellSize = m_cellSizeInv = 0.0f;
 	m_cellCountX = 0;
 	m_cellCountY = 0;
@@ -2772,10 +2844,12 @@ PartitionManager::PartitionManager()
 	m_dirtyModules = NULL;
 	m_updatedSinceLastReset = false;
 	m_cellsFromSave = FALSE;
+	m_centerBig = NULL;
+	m_centerGridValid = FALSE;
 #ifdef FASTER_GCO
 	m_maxGcoRadius = 0;
 #endif
-} 
+}
 
 //-----------------------------------------------------------------------------
 PartitionManager::~PartitionManager()
@@ -2822,6 +2896,7 @@ void PartitionManager::init()
 	m_cellSizeInv = (Real)(1.0 / m_cellSize);
 
 	DEBUG_ASSERTCRASH(m_cells == NULL, ("double init"));
+	m_centerGridValid = FALSE;
 
 	if (TheTerrainLogic)
 	{
@@ -2907,6 +2982,11 @@ void PartitionManager::shutdown()
 	m_cellsFromSave = FALSE;
 	ThePartitionManager->removeAllDirtyModules();
 
+	// modules still alive keep stale links, which unlinkCenter never follows while the grid is down
+	m_centerGridValid = FALSE;
+	m_centerCells.clear();
+	m_centerBig = NULL;
+
 #ifdef _DEBUG
 	// the above *should* remove all the touched cells (via unRegisterObject), but let's check:
 	DEBUG_ASSERTCRASH( m_moduleList == NULL, ("hmm, modules left over"));
@@ -2921,6 +3001,8 @@ void PartitionManager::shutdown()
 
 #ifdef FASTER_GCO
 	m_radiusVec.clear();
+	m_ringOffsets.clear();
+	m_ringStart.clear();
 #endif
 
 	resetPendingUndoShroudRevealQueue();
@@ -2949,6 +3031,9 @@ void PartitionManager::update()
 		{
 			m_updatedSinceLastReset = true;
 		}
+
+		if (!m_centerGridValid)
+			buildCenterGrid();
 
 		if (thePairStore == NULL)
 			thePairStore = MSGNEW("PartitionContactList") PartitionContactList;
@@ -3084,10 +3169,134 @@ void PartitionManager::registerObject( Object* object )
 	if( m_moduleList )
 		m_moduleList->setPrev( mod );
 	m_moduleList = mod;
+	addToModuleArray( mod );
 
 	// add module to object
 	mod->attachToObject( object );
+	linkCenter( mod );
 
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::addToModuleArray( PartitionData *mod )
+{
+	// the list takes a new module at its head, so the array takes it at its back
+	mod->friend_setModuleIndex( (Int)m_moduleArray.size() );
+	m_moduleArray.push_back( mod );
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::removeFromModuleArray( PartitionData *mod )
+{
+	const Int index = mod->friend_getModuleIndex();
+	DEBUG_ASSERTCRASH( index >= 0 && index < (Int)m_moduleArray.size() && m_moduleArray[ index ] == mod, ("module array out of step with the list") );
+	m_moduleArray[ index ] = NULL;
+	mod->friend_setModuleIndex( -1 );
+	++m_moduleArrayHoles;
+
+	// close the holes once they are half of it, or all of it, keeping the order: the walk's order is the list's
+	const Int size = (Int)m_moduleArray.size();
+	if( m_moduleArrayHoles < size && ( size < 256 || m_moduleArrayHoles * 2 < size ) )
+		return;
+	Int kept = 0;
+	for( Int i = 0; i < size; ++i )
+	{
+		PartitionData *m = m_moduleArray[ i ];
+		if( m == NULL )
+			continue;
+		m->friend_setModuleIndex( kept );
+		m_moduleArray[ kept++ ] = m;
+	}
+	m_moduleArray.resize( kept );
+	m_moduleArrayHoles = 0;
+}
+
+//------------------------------------------------------------------------------
+/* The distance FROM_BOUNDINGSPHERE_2D measures is the centers' less both bounding circles, so with every
+	 Object in a cell no wider than this, the cell's own distance bounds them all. The few wider ones go in
+	 m_centerBig and are asked every time. */
+static const Real CENTER_GRID_MAX_RADIUS = 100.0f;
+
+//------------------------------------------------------------------------------
+Int PartitionManager::centerCellOf( const Object *obj ) const
+{
+	if (obj->getGeometryInfo().getBoundingCircleRadius() > CENTER_GRID_MAX_RADIUS)
+		return PartitionData::CENTER_BIG;
+	// clamped onto the grid; a NaN fails both tests and lands in the first column or row
+	const Coord3D *pos = obj->getPosition();
+	const Real fx = (pos->x - m_worldExtents.lo.x) * m_cellSizeInv;
+	const Real fy = (pos->y - m_worldExtents.lo.y) * m_cellSizeInv;
+	const Int x = fx >= 0.0f ? (fx < (Real)m_cellCountX ? (Int)fx : m_cellCountX - 1) : 0;
+	const Int y = fy >= 0.0f ? (fy < (Real)m_cellCountY ? (Int)fy : m_cellCountY - 1) : 0;
+	return y * m_cellCountX + x;
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::linkCenter( PartitionData *mod )
+{
+	DEBUG_ASSERTCRASH( mod->m_centerCell == PartitionData::CENTER_NONE, ("center grid link twice") );
+	if (!m_centerGridValid || mod->getObject() == NULL)
+		return;
+	const Int cell = centerCellOf( mod->getObject() );
+	PartitionData **head = cell == PartitionData::CENTER_BIG ? &m_centerBig : &m_centerCells[ cell ];
+	mod->m_centerCell = cell;
+	mod->m_centerPrev = NULL;
+	mod->m_centerNext = *head;
+	if (*head)
+		(*head)->m_centerPrev = mod;
+	*head = mod;
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::unlinkCenter( PartitionData *mod )
+{
+	if (mod->m_centerCell == PartitionData::CENTER_NONE)
+		return;
+	// a grid taken down left its lists behind; buildCenterGrid starts every module afresh
+	if (m_centerGridValid)
+	{
+		PartitionData **head = mod->m_centerCell == PartitionData::CENTER_BIG ? &m_centerBig : &m_centerCells[ mod->m_centerCell ];
+		if (mod->m_centerNext)
+			mod->m_centerNext->m_centerPrev = mod->m_centerPrev;
+		if (mod->m_centerPrev)
+			mod->m_centerPrev->m_centerNext = mod->m_centerNext;
+		else
+			*head = mod->m_centerNext;
+	}
+	mod->m_centerCell = PartitionData::CENTER_NONE;
+	mod->m_centerNext = NULL;
+	mod->m_centerPrev = NULL;
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::noteObjectMovedOrResized( PartitionData *mod )
+{
+	if (!m_centerGridValid || mod->m_centerCell == PartitionData::CENTER_NONE)
+		return;
+	if (centerCellOf( mod->getObject() ) == mod->m_centerCell)
+		return;
+	unlinkCenter( mod );
+	linkCenter( mod );
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::buildCenterGrid( void )
+{
+	if (m_cells == NULL || m_totalCellCount <= 0)
+		return;
+	m_centerCells.assign( m_totalCellCount, NULL );
+	m_centerBig = NULL;
+	m_centerGridValid = TRUE;
+	for (size_t i = 0; i < m_moduleArray.size(); ++i)
+	{
+		PartitionData *mod = m_moduleArray[ i ];
+		if (mod == NULL)
+			continue;
+		mod->m_centerCell = PartitionData::CENTER_NONE;
+		mod->m_centerNext = NULL;
+		mod->m_centerPrev = NULL;
+		linkCenter( mod );
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -3101,6 +3310,9 @@ void PartitionManager::unRegisterObject( Object* object )
 	PartitionData *mod = object->friend_getPartitionData();
 	if( mod == NULL )
 		return;
+
+	// before a ghost may keep the module without its Object
+	unlinkCenter( mod );
 
 	GhostObject *ghost;
 
@@ -3129,6 +3341,7 @@ void PartitionManager::unRegisterObject( Object* object )
 		prev->setNext( next );
 	else
 		m_moduleList = next;
+	removeFromModuleArray( mod );
 
 	// delete module
 	mod->deleteInstance();
@@ -3158,6 +3371,7 @@ void PartitionManager::registerGhostObject( GhostObject* object)
 	if( m_moduleList )
 		m_moduleList->setPrev( mod );
 	m_moduleList = mod;
+	addToModuleArray( mod );
 
 	// add module to object
 	mod->attachToGhostObject( object);
@@ -3187,6 +3401,7 @@ void PartitionManager::unRegisterGhostObject( GhostObject* object )
 		prev->setNext( next );
 	else
 		m_moduleList = next;
+	removeFromModuleArray( mod );
 
 	// delete module
 	mod->deleteInstance();
@@ -3424,8 +3639,448 @@ void PartitionManager::calcRadiusVec()
 	DEBUG_ASSERTCRASH(total == (cx*2-1)*(cy*2-1),("expected %d, got %d\n",(cx*2-1)*(cy*2-1),total));
 #endif
 
+	m_ringOffsets.clear();
+	m_ringStart.clear();
+	m_ringStart.reserve(m_maxGcoRadius+2);
+	for (Int i = 0; i <= m_maxGcoRadius; ++i)
+	{
+		m_ringStart.push_back((Int)m_ringOffsets.size());
+		m_ringOffsets.insert(m_ringOffsets.end(), m_radiusVec[i].begin(), m_radiusVec[i].end());
+	}
+	m_ringStart.push_back((Int)m_ringOffsets.size());
 }
 #endif
+
+//-----------------------------------------------------------------------------
+/* LOGIC-PARALLEL.md, the first parallel pass: a gathering range query split across the logic
+	 thread's job pool, giving the answer it gives on one thread.
+
+	 The walk, ring offsets or the master module list, is cut into chunks in its own order. Each chunk
+	 measures and filters its share on whatever thread takes it and keeps what passes, in order, in a
+	 block of its own; it writes nothing else, not even a module's done flag. Then the calling thread
+	 goes through the chunks in order and inserts. An Object that touches several cells can pass in
+	 several chunks; the first of those in walk order is the cell the serial walk met it in first,
+	 because whether it passes does not depend on which of its cells it was met in, and the done flag,
+	 set here on one thread, drops the others. The iterator ends up with the same Objects, the same
+	 distances and the same order as the serial walk, at any number of threads. A chunk that fills its
+	 block stops at the cell or module that did not fit, and the calling thread walks the rest of that
+	 chunk itself the serial way. */
+namespace
+{
+	enum
+	{
+		GATHER_CHUNKS = 64,					///< items of one fork, four a thread at sixteen threads
+		GATHER_CHUNK_HITS = 1024,		///< what one chunk keeps before it hands the rest back
+		GATHER_MIN_CHUNK = 256,			///< ring offsets or modules a chunk takes at least
+		GATHER_MIN_RINGS = 4096,		///< ring offsets below which the fork costs more than it saves
+		GATHER_MIN_MODULES = 1024		///< likewise for the master list
+	};
+
+	struct GatherHit
+	{
+		PartitionData *mod;
+		Real distSqr;
+	};
+
+	struct GatherJob
+	{
+		// the query
+		const Coord3D *objPos;
+		const Object *objToUse;
+		const Object *self;
+		DistCalcProc distProc;
+		Real maxDistSqr;
+		PartitionFilter **filters;
+		PlayerMaskType onlyPlayers;
+		// the walk: ring offsets around a cell, or the master list flattened
+		PartitionManager *mgr;
+		Int cellCenterX, cellCenterY;
+		const ICoord2D *offsets;
+		PartitionData *const *modules;
+		Int itemCount;
+		Int chunkCount;
+		Int chunkSize;
+		// each chunk's own; nothing else is written inside the fork
+		GatherHit *hits;
+		Int hitCount[ GATHER_CHUNKS ];
+		Int stoppedAt[ GATHER_CHUNKS ];		///< the item the chunk had no room for, or its end
+		Int visited[ GATHER_CHUNKS ];
+	};
+
+	// sized on the logic thread before a fork, never inside one (JobSystem.h rule 1)
+	std::vector<GatherHit> s_gatherHits;
+
+	// PartitionManager::JobQueryGuard's state: guards alive on this thread, and whether a whole query was refused under them
+	thread_local Int		s_jobQueryGuards = 0;
+	thread_local Bool		s_jobQueryRefused = FALSE;
+
+	// since the process started, for HEADLESS JOBS: gathers split, chunks that handed a tail back, and
+	// the wall time in the fork and in the merge after it (a log line only; nothing decides on it)
+	Int s_gathersSplit = 0;
+	Int s_gatherTailsHandedBack = 0;
+	Real s_gatherForkMS = 0.0f;
+	Real s_gatherMergeMS = 0.0f;
+
+	Bool filtersAreReadOnly( PartitionFilter **filters )
+	{
+		for (PartitionFilter **fp = filters; fp && *fp; ++fp)
+		{
+			if (!(*fp)->isReadOnly())
+				return FALSE;
+		}
+		return TRUE;
+	}
+
+	Int gatherChunkEnd( const GatherJob &job, Int chunk )
+	{
+		return minInt( (chunk + 1) * job.chunkSize, job.itemCount );
+	}
+
+	void gatherRingChunk( Int chunk, void *context )
+	{
+		GatherJob &job = *(GatherJob *)context;
+		const Int end = gatherChunkEnd( job, chunk );
+		GatherHit *hits = &job.hits[ chunk * GATHER_CHUNK_HITS ];
+		Int kept = 0;
+		Int visited = 0;
+		Int i = chunk * job.chunkSize;
+		for ( ; i < end; ++i )
+		{
+			PartitionCell *cell = job.mgr->getCellAt( job.cellCenterX + job.offsets[ i ].x, job.cellCenterY + job.offsets[ i ].y );
+			if (cell == NULL)
+				continue;
+			if (job.onlyPlayers != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( job.onlyPlayers ))
+				continue;
+
+			const Int keptBefore = kept;
+			const Int visitedBefore = visited;
+			Bool full = FALSE;
+			for (CellAndObjectIntersection *coi = cell->getFirstCoiInCell(); coi; coi = coi->getNextCoi())
+			{
+				PartitionData *mod = coi->getModule();
+				Object *obj = mod->getObject();
+				++visited;
+				if (obj == job.self || obj == NULL)
+					continue;
+
+				Real distSqr;
+				Coord3D distVec;
+				if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
+					continue;
+				if (!filtersAllow( job.filters, obj ))
+					continue;
+
+				if (kept == GATHER_CHUNK_HITS)
+				{
+					full = TRUE;
+					break;
+				}
+				hits[ kept ].mod = mod;
+				hits[ kept ].distSqr = distSqr;
+				++kept;
+			}
+			if (full)
+			{
+				// the cell goes back whole, so the serial walk of the rest meets it as it would have
+				kept = keptBefore;
+				visited = visitedBefore;
+				break;
+			}
+		}
+		job.hitCount[ chunk ] = kept;
+		job.stoppedAt[ chunk ] = i;
+		job.visited[ chunk ] = visited;
+	}
+
+	/** Item i of the master-list walk: the module array from the back, the list's order. NULL for a hole. */
+	inline PartitionData *gatherModuleAt( const GatherJob &job, Int i )
+	{
+		return job.modules[ job.itemCount - 1 - i ];
+	}
+
+	void gatherModuleChunk( Int chunk, void *context )
+	{
+		GatherJob &job = *(GatherJob *)context;
+		const Int end = gatherChunkEnd( job, chunk );
+		GatherHit *hits = &job.hits[ chunk * GATHER_CHUNK_HITS ];
+		Int kept = 0;
+		Int visited = 0;
+		Int i = chunk * job.chunkSize;
+		for ( ; i < end; ++i )
+		{
+			// the serial walk's two cursors (getClosestObjects): the module further on, then its Object
+			if (i + 16 < end && gatherModuleAt( job, i + 16 ))
+				PM_PREFETCH( gatherModuleAt( job, i + 16 ) );
+			if (i + 8 < end && gatherModuleAt( job, i + 8 ))
+			{
+				const Object *aheadObj = gatherModuleAt( job, i + 8 )->getObject();
+				if (aheadObj)
+				{
+					PM_PREFETCH( aheadObj->getPosition() );
+					PM_PREFETCH( &aheadObj->getGeometryInfo() );
+				}
+			}
+
+			PartitionData *mod = gatherModuleAt( job, i );
+			if (mod == NULL || mod->friend_getCoiInUseCount() == 0)
+				continue;
+
+			Object *obj = mod->getObject();
+			if (obj != job.self && obj != NULL)
+			{
+				Real distSqr;
+				Coord3D distVec;
+				if ((*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr )
+						&& filtersAllow( job.filters, obj ))
+				{
+					if (kept == GATHER_CHUNK_HITS)
+						break;		// this module goes back with the rest
+					hits[ kept ].mod = mod;
+					hits[ kept ].distSqr = distSqr;
+					++kept;
+				}
+			}
+			++visited;
+		}
+		job.hitCount[ chunk ] = kept;
+		job.stoppedAt[ chunk ] = i;
+		job.visited[ chunk ] = visited;
+	}
+
+	/** The serial ring walk's body for one offset, for what a full chunk handed back. */
+	Int gatherRingSerially( const GatherJob &job, Int i, Int iterFlag, SimpleObjectIterator *iter )
+	{
+		PartitionCell *cell = job.mgr->getCellAt( job.cellCenterX + job.offsets[ i ].x, job.cellCenterY + job.offsets[ i ].y );
+		if (cell == NULL)
+			return 0;
+		if (job.onlyPlayers != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( job.onlyPlayers ))
+			return 0;
+
+		Int visited = 0;
+		for (CellAndObjectIntersection *coi = cell->getFirstCoiInCell(); coi; coi = coi->getNextCoi())
+		{
+			PartitionData *mod = coi->getModule();
+			Object *obj = mod->getObject();
+			++visited;
+			if (obj == job.self || obj == NULL)
+				continue;
+			if (mod->friend_getDoneFlag() == iterFlag)
+				continue;
+			mod->friend_setDoneFlag( iterFlag );
+
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
+				continue;
+			if (!filtersAllow( job.filters, obj ))
+				continue;
+			iter->insert( obj, distSqr );
+		}
+		return visited;
+	}
+
+	/** Likewise for one module of the master list. */
+	Int gatherModuleSerially( const GatherJob &job, Int i, SimpleObjectIterator *iter )
+	{
+		PartitionData *mod = gatherModuleAt( job, i );
+		if (mod == NULL || mod->friend_getCoiInUseCount() == 0)
+			return 0;
+		Object *obj = mod->getObject();
+		if (obj == job.self || obj == NULL)
+			return 1;
+
+		Real distSqr;
+		Coord3D distVec;
+		if (!(*job.distProc)( job.objPos, job.objToUse, obj->getPosition(), obj, distSqr, distVec, job.maxDistSqr ))
+			return 1;
+		if (filtersAllow( job.filters, obj ))
+			iter->insert( obj, distSqr );
+		return 1;
+	}
+
+	/** Fork the chunks, then insert their hits in walk order on this thread. Returns the coi visits,
+		* for the query counter. */
+	Int runGather( GatherJob &job, Bool ring, Int iterFlag, SimpleObjectIterator *iter )
+	{
+		if (s_gatherHits.empty())
+			s_gatherHits.resize( GATHER_CHUNKS * GATHER_CHUNK_HITS );
+		job.hits = &s_gatherHits[ 0 ];
+		job.chunkCount = minInt( (Int)GATHER_CHUNKS, (job.itemCount + GATHER_MIN_CHUNK - 1) / GATHER_MIN_CHUNK );
+		job.chunkSize = (job.itemCount + job.chunkCount - 1) / job.chunkCount;
+
+		const std::chrono::steady_clock::time_point forkStart = std::chrono::steady_clock::now();
+		JobSystem::parallel_for( job.chunkCount, 1, ring ? gatherRingChunk : gatherModuleChunk, &job );
+		const std::chrono::steady_clock::time_point mergeStart = std::chrono::steady_clock::now();
+		++s_gathersSplit;
+
+		Int visited = 0;
+		for (Int c = 0; c < job.chunkCount; ++c)
+		{
+			const GatherHit *hits = &job.hits[ c * GATHER_CHUNK_HITS ];
+			for (Int k = 0; k < job.hitCount[ c ]; ++k)
+			{
+				PartitionData *mod = hits[ k ].mod;
+				if (ring)
+				{
+					if (mod->friend_getDoneFlag() == iterFlag)
+						continue;
+					mod->friend_setDoneFlag( iterFlag );
+				}
+				iter->insert( mod->getObject(), hits[ k ].distSqr );
+			}
+			visited += job.visited[ c ];
+
+			const Int end = gatherChunkEnd( job, c );
+			if (job.stoppedAt[ c ] < end)
+				++s_gatherTailsHandedBack;
+			for (Int i = job.stoppedAt[ c ]; i < end; ++i)
+				visited += ring ? gatherRingSerially( job, i, iterFlag, iter ) : gatherModuleSerially( job, i, iter );
+		}
+
+		const std::chrono::steady_clock::time_point mergeEnd = std::chrono::steady_clock::now();
+		s_gatherForkMS += std::chrono::duration<Real, std::milli>( mergeStart - forkStart ).count();
+		s_gatherMergeMS += std::chrono::duration<Real, std::milli>( mergeEnd - mergeStart ).count();
+		return visited;
+	}
+
+	/** Whether this gather may fork: on the tick's own thread (or the main thread at -logicthread 0),
+		* never from the render's window, whose reads must not touch these buffers, never from inside a
+		* job, and only with filters that only read. */
+	Bool mayGatherInParallel( PartitionFilter **filters )
+	{
+		return !LogicThread::isInsideWindow() && !JobSystem::isInsideJob() && filtersAreReadOnly( filters );
+	}
+}
+
+/** For the HEADLESS JOBS line (GameEngine.cpp): how many gathers were split, how many chunks handed a
+	* tail back, and the milliseconds spent forking them and merging what they found. */
+void PartitionManager_splitGatherCounts( Int &split, Int &tailsHandedBack, Real &forkMS, Real &mergeMS )
+{
+	split = s_gathersSplit;
+	tailsHandedBack = s_gatherTailsHandedBack;
+	forkMS = s_gatherForkMS;
+	mergeMS = s_gatherMergeMS;
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager::prepareJobGathers( void )
+{
+	const Int slots = minInt( JobSystem::workerCount() + 1, (Int)JOB_GATHER_SLOTS );
+	for (Int s = 0; s < slots; ++s)
+	{
+		if (m_jobStamps[s].size() < m_moduleArray.size())
+			m_jobStamps[s].resize( m_moduleArray.size(), 0 );
+	}
+}
+
+//-----------------------------------------------------------------------------
+/* getClosestObjects' gathering walk, both forms, kept step for step: the master list from the back when
+	 the range covers the map, otherwise the rings out to the same limit, cells skipped on onlyPlayers the
+	 same way, an Object met twice dropped at the second meeting. Only the visited mark differs: this
+	 thread's stamp array, indexed by the module's place in m_moduleArray, against an epoch counted per
+	 thread, where the serial walk writes a done flag every query shares. */
+Bool PartitionManager::gatherFromJob( const Object *obj, Real maxDist, DistanceCalculationType dc, PartitionFilter **filters,
+																			PlayerMaskType onlyPlayers, JobGather &out )
+{
+	out.count = 0;
+	out.overflowed = FALSE;
+	out.objectsLookedAt = 0;
+
+	const Int slot = JobSystem::threadSlot();
+	if (slot >= JOB_GATHER_SLOTS || m_jobStamps[slot].size() < m_moduleArray.size() || !filtersAreReadOnly( filters ))
+		return FALSE;
+	Int *stamps = m_moduleArray.empty() ? NULL : &m_jobStamps[slot][0];
+	// ponytail: an Int epoch a thread wraps after two billion gathers, days of play; clear the stamps there if it ever matters
+	const Int epoch = ++m_jobEpoch[slot];
+
+	DistCalcProc distProc = theDistCalcProcs[dc];
+	const Coord3D *objPos = obj->getPosition();
+	const Real maxDistSqr = maxDist * maxDist;
+	Int cellCenterX, cellCenterY;
+	worldToCell( objPos->x, objPos->y, &cellCenterX, &cellCenterY );
+
+	Int maxRadius = m_maxGcoRadius;
+	if (maxDist < HUGE_DIST)
+		maxRadius = minInt( m_maxGcoRadius, worldToCellDist( maxDist ) );
+
+	if (maxRadius >= m_maxGcoRadius)
+	{
+		for (Int i = (Int)m_moduleArray.size() - 1; i >= 0; --i)
+		{
+			PartitionData *mod = m_moduleArray[ i ];
+			if (mod == NULL || mod->friend_getCoiInUseCount() == 0)
+				continue;
+			Object *other = mod->getObject();
+			++out.objectsLookedAt;
+			if (other == obj || other == NULL)
+				continue;
+
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*distProc)( objPos, obj, other->getPosition(), other, distSqr, distVec, maxDistSqr ))
+				continue;
+			if (!filtersAllow( filters, other ))
+				continue;
+			if (out.count == out.capacity)
+			{
+				out.overflowed = TRUE;
+				return TRUE;
+			}
+			out.objects[ out.count ] = other;
+			out.distSqr[ out.count ] = distSqr;
+			++out.count;
+		}
+		return TRUE;
+	}
+
+	Int maxRadiusLimit = maxRadius;
+	ICoord2D farthestOnMap;
+	farthestOnMap.x = maxInt( cellCenterX, m_cellCountX - 1 - cellCenterX );
+	farthestOnMap.y = maxInt( cellCenterY, m_cellCountY - 1 - cellCenterY );
+	if (maxRadiusLimit >= maxInt( farthestOnMap.x, farthestOnMap.y ))
+		maxRadiusLimit = minInt( maxRadiusLimit, calcMinRadius( farthestOnMap ) );
+	if (maxRadiusLimit < 0 || maxRadiusLimit + 1 >= (Int)m_ringStart.size())
+		return TRUE;
+
+	const Int offsetCount = m_ringStart[ maxRadiusLimit + 1 ];
+	for (Int o = 0; o < offsetCount; ++o)
+	{
+		PartitionCell *cell = getCellAt( cellCenterX + m_ringOffsets[ o ].x, cellCenterY + m_ringOffsets[ o ].y );
+		if (cell == NULL)
+			continue;
+		if (onlyPlayers != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( onlyPlayers ))
+			continue;
+
+		for (CellAndObjectIntersection *coi = cell->getFirstCoiInCell(); coi; coi = coi->getNextCoi())
+		{
+			PartitionData *mod = coi->getModule();
+			Object *other = mod->getObject();
+			++out.objectsLookedAt;
+			if (other == obj || other == NULL)
+				continue;
+			Int &stamp = stamps[ mod->friend_getModuleIndex() ];
+			if (stamp == epoch)
+				continue;
+			stamp = epoch;
+
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*distProc)( objPos, obj, other->getPosition(), other, distSqr, distVec, maxDistSqr ))
+				continue;
+			if (!filtersAllow( filters, other ))
+				continue;
+			if (out.count == out.capacity)
+			{
+				out.overflowed = TRUE;
+				return TRUE;
+			}
+			out.objects[ out.count ] = other;
+			out.distSqr[ out.count ] = distSqr;
+			++out.count;
+		}
+	}
+	return TRUE;
+}
 
 //-----------------------------------------------------------------------------
 //DECLARE_PERF_TIMER(getClosestObjects)
@@ -3438,13 +4093,24 @@ Object *PartitionManager::getClosestObjects(
 	SimpleObjectIterator *iterArg,	// if nonnull, append ALL satisfactory objects to the iterator (not just the single closest)
 	Real *closestDistArg,
 	Coord3D *closestVecArg,
-	PlayerMaskType onlyPlayers
+	PlayerMaskType onlyPlayers,
+	Bool anyWillDo,
+	Bool walkAsGather
 )
 {
 	//USE_PERF_TIMER(getClosestObjects)
 	// theIterFlag and each module's done flag below are shared by every scan; one from the render
 	// beside a tick lets the tick's own scan skip an object, so a different target and a desync
 	LOGIC_WINDOW_READ( WINDOW_PARTITION_ITERATE );
+
+	// ... and a logic job's search under a JobQueryGuard may not touch them either (see the guard)
+	if (s_jobQueryGuards > 0)
+	{
+		s_jobQueryRefused = TRUE;
+		if (closestDistArg)
+			*closestDistArg = maxDist;
+		return NULL;
+	}
 
 #ifdef DUMP_PERF_STATS
 	if (TheGameLogic->getFrame() != s_gcoPerfFrame)
@@ -3527,11 +4193,60 @@ Object *PartitionManager::getClosestObjects(
 		 cell offset either side of the centre, four times the map's cells and most of them off it: a
 		 hunting unit's whole-map search spent 15-33ms there to find 3,600 objects. The master module
 		 list holds exactly the objects that sit in cells, so walking it gathers the same set. */
-	if (iterArg && maxRadius >= m_maxGcoRadius)
+	GatherJob gather;
+	if (iterArg)
 	{
-		for (PartitionData *thisMod = m_moduleList; thisMod; thisMod = thisMod->getNext())
+		gather.objPos = objPos;
+		gather.objToUse = objToUse;
+		gather.self = obj;
+		gather.distProc = distProc;
+		gather.maxDistSqr = closestDistSqr;
+		gather.filters = filters;
+		gather.onlyPlayers = onlyPlayers;
+		gather.mgr = this;
+		gather.cellCenterX = cellCenterX;
+		gather.cellCenterY = cellCenterY;
+		gather.offsets = NULL;
+		gather.modules = NULL;
+		gather.itemCount = 0;
+	}
+
+	// The array's size counts holes, and the client's ghosts come and go per machine, so one machine may
+	// split a gather another walks whole; both give the same Objects in the same order.
+	if (iterArg && maxRadius >= m_maxGcoRadius && (Int)m_moduleArray.size() >= GATHER_MIN_MODULES && mayGatherInParallel(filters))
+	{
+		gather.modules = &m_moduleArray[0];
+		gather.itemCount = (Int)m_moduleArray.size();
+		thePartitionQueryObjects += runGather(gather, FALSE, theIterFlag, iterArg);
+		maxRadiusLimit = -1;	// nothing left for the ring walk to find
+	}
+
+	if ((iterArg || (anyWillDo && walkAsGather)) && maxRadius >= m_maxGcoRadius && maxRadiusLimit >= 0)
+	{
+		/* Every module's Object lies somewhere else in memory, and the distance test waited on a miss for
+			 its position and geometry, one object after the next. The walk used to wait on each module's
+			 m_next too, most of a hunt scan's time; the module array has them side by side, so the module a
+			 few places on and its Object's lines are asked for early, two cursors deep. It is walked from the
+			 back, which is the list's order, so the walk, its order and what it finds are unchanged. */
+		const Int WALK_PREFETCH_MODULE = 16;
+		const Int WALK_PREFETCH_OBJECT = 8;
+		PartitionData *const *modules = m_moduleArray.empty() ? NULL : &m_moduleArray[0];
+		for (Int i = (Int)m_moduleArray.size() - 1; i >= 0; --i)
 		{
-			if (thisMod->friend_getCoiInUseCount() == 0)
+			if (i >= WALK_PREFETCH_MODULE && modules[i - WALK_PREFETCH_MODULE])
+				PM_PREFETCH(modules[i - WALK_PREFETCH_MODULE]);
+			if (i >= WALK_PREFETCH_OBJECT && modules[i - WALK_PREFETCH_OBJECT])
+			{
+				const Object *aheadObj = modules[i - WALK_PREFETCH_OBJECT]->getObject();
+				if (aheadObj)
+				{
+					PM_PREFETCH(aheadObj->getPosition());
+					PM_PREFETCH(&aheadObj->getGeometryInfo());
+				}
+			}
+
+			PartitionData *thisMod = modules[i];
+			if (thisMod == NULL || thisMod->friend_getCoiInUseCount() == 0)
 				continue;
 
 			Object *thisObj = thisMod->getObject();
@@ -3546,6 +4261,14 @@ Object *PartitionManager::getClosestObjects(
 
 			if (!filtersAllow(filters, thisObj))
 				continue;
+
+			if (anyWillDo)
+			{
+				closestObj = thisObj;
+				closestDistSqr = thisDistSqr;
+				closestVec = distVec;
+				break;
+			}
 
 			iterArg->insert(thisObj, thisDistSqr);
 		}
@@ -3562,6 +4285,16 @@ Object *PartitionManager::getClosestObjects(
 	farthestOnMap.y = maxInt(cellCenterY, m_cellCountY - 1 - cellCenterY);
 	if (maxRadiusLimit >= maxInt(farthestOnMap.x, farthestOnMap.y))
 		maxRadiusLimit = minInt(maxRadiusLimit, calcMinRadius(farthestOnMap));
+
+	// a gather walks every ring to the limit whatever it finds, so the rings can be split
+	if (iterArg && maxRadiusLimit >= 0 && maxRadiusLimit + 1 < (Int)m_ringStart.size()
+			&& m_ringStart[maxRadiusLimit + 1] >= GATHER_MIN_RINGS && mayGatherInParallel(filters))
+	{
+		gather.offsets = &m_ringOffsets[0];
+		gather.itemCount = m_ringStart[maxRadiusLimit + 1];
+		thePartitionQueryObjects += runGather(gather, TRUE, theIterFlag, iterArg);
+		maxRadiusLimit = -1;
+	}
 
 	/*
 		m_radiusVec[curRadius] contains a list of the cells (foo) that could
@@ -3641,9 +4374,13 @@ Object *PartitionManager::getClosestObjects(
 						maxRadiusLimit = curRadius;
 					}
 					foundAny = true;
+					if (anyWillDo)
+						break;
 				}
 
 			} // next coi
+			if (anyWillDo && foundAny)
+				break;
 		}	// next cell in this radius
   } // next radius
 
@@ -3773,6 +4510,202 @@ Object *PartitionManager::getClosestObject(
 )
 {
 	return getClosestObjects(NULL, pos, maxDist, dc, filters, NULL, closestDist, closestDistVec, onlyPlayers);
+}
+
+//-----------------------------------------------------------------------------
+Object *PartitionManager::getAnyObject(
+	const Object *obj,
+	Real maxDist,
+	DistanceCalculationType dc,
+	PartitionFilter **filters,
+	PlayerMaskType onlyPlayers,
+	Bool asGathered
+)
+{
+	return getClosestObjects(obj, NULL, maxDist, dc, filters, NULL, NULL, NULL, onlyPlayers, true, asGathered);
+}
+
+//-----------------------------------------------------------------------------
+/* A hunter's whole-map search walked every module to pick one enemy, most often one close by: 80% of all the
+	 objects range queries looked at in a 32-player match. This walks the center grid in square rings out from
+	 the asker, the wide Objects first, and before each ring tells the visitor how near anything still unseen
+	 could be. Every Object not yet seen has its center in a cell of that ring or beyond, so outside the square
+	 of the rings walked, and stands at least the center's distance to that square's edge less both bounding
+	 circles away. It goes through the same tests the master-list walk puts each module to. */
+Bool PartitionManager::visitNearestFirst( const Object *obj, Real maxDist, PartitionFilter **filters, PlayerMaskType onlyPlayers,
+	PartitionNearestFirstVisitor *visitor )
+{
+	// the lists move on every transform change; the render reading them beside a tick would see one half moved
+	LOGIC_WINDOW_READ( WINDOW_PARTITION_ITERATE );
+
+	if (!m_centerGridValid)
+		return FALSE;
+
+	// the walk getClosestObjects would take: the master list when the range reaches every cell, else the rings
+	PartitionGatherOrder order;
+	order.m_manager = this;
+#ifdef FASTER_GCO
+	order.m_ringLimit = m_maxGcoRadius;
+	if (maxDist < HUGE_DIST)
+		order.m_ringLimit = minInt( m_maxGcoRadius, worldToCellDist( maxDist ) );
+	order.m_rings = order.m_ringLimit < m_maxGcoRadius;
+#else
+	return FALSE;
+#endif
+	worldToCell( obj->getPosition()->x, obj->getPosition()->y, &order.m_cellX, &order.m_cellY );
+	order.m_players = onlyPlayers;
+
+	++thePartitionQueries;
+
+	const Coord3D *pos = obj->getPosition();
+	const Real myRadius = obj->getGeometryInfo().getBoundingCircleRadius();
+	const Real maxDistSqr = maxDist * maxDist;
+	DistCalcProc distProc = theDistCalcProcs[ FROM_BOUNDINGSPHERE_2D ];
+	Int visited = 0;
+
+	auto visitList = [&]( PartitionData *mod )
+	{
+		for ( ; mod; mod = mod->m_centerNext)
+		{
+			if (mod->m_coiInUseCount == 0)
+				continue;
+			Object *other = mod->getObject();
+			++visited;
+			if (other == obj || other == NULL)
+				continue;
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*distProc)( pos, obj, other->getPosition(), other, distSqr, distVec, maxDistSqr ))
+				continue;
+			if (!filtersAllow( filters, other ))
+				continue;
+			visitor->visit( other, distSqr, order );
+		}
+	};
+
+	visitList( m_centerBig );
+
+	Int cx, cy;
+	{
+		const Real fx = (pos->x - m_worldExtents.lo.x) * m_cellSizeInv;
+		const Real fy = (pos->y - m_worldExtents.lo.y) * m_cellSizeInv;
+		cx = fx >= 0.0f ? (fx < (Real)m_cellCountX ? (Int)fx : m_cellCountX - 1) : 0;
+		cy = fy >= 0.0f ? (fy < (Real)m_cellCountY ? (Int)fy : m_cellCountY - 1) : 0;
+	}
+	const Int lastRing = maxInt( maxInt( cx, m_cellCountX - 1 - cx ), maxInt( cy, m_cellCountY - 1 - cy ) );
+	// a world unit for the float sums on both sides: cell edges, the cell a center rounds into, the shrunken distance
+	const Real SLACK = 1.0f;
+
+	visitList( m_centerCells[ cy * m_cellCountX + cx ] );
+	for (Int ring = 1; ring <= lastRing; ++ring)
+	{
+		// the nearest edge of the square of rings walked that still has cells past it
+		Real edge = HUGE_DIST;
+		Real d;
+		if (cx - ring + 1 > 0 && (d = pos->x - (m_worldExtents.lo.x + (cx - ring + 1) * m_cellSize)) < edge)
+			edge = d;
+		if (cx + ring - 1 < m_cellCountX - 1 && (d = (m_worldExtents.lo.x + (cx + ring) * m_cellSize) - pos->x) < edge)
+			edge = d;
+		if (cy - ring + 1 > 0 && (d = pos->y - (m_worldExtents.lo.y + (cy - ring + 1) * m_cellSize)) < edge)
+			edge = d;
+		if (cy + ring - 1 < m_cellCountY - 1 && (d = (m_worldExtents.lo.y + (cy + ring) * m_cellSize) - pos->y) < edge)
+			edge = d;
+		const Real minDist = edge - myRadius - CENTER_GRID_MAX_RADIUS - SLACK;
+		if (minDist > 0.0f && visitor->isSettled( minDist ))
+			break;
+
+		// the ring's top and bottom rows whole, then its two sides between them
+		const Int x0 = maxInt( cx - ring, 0 ), x1 = minInt( cx + ring, m_cellCountX - 1 );
+		if (cy - ring >= 0)
+			for (Int x = x0; x <= x1; ++x)
+				visitList( m_centerCells[ (cy - ring) * m_cellCountX + x ] );
+		if (cy + ring < m_cellCountY)
+			for (Int x = x0; x <= x1; ++x)
+				visitList( m_centerCells[ (cy + ring) * m_cellCountX + x ] );
+		const Int sideY0 = maxInt( cy - ring + 1, 0 ), sideY1 = minInt( cy + ring - 1, m_cellCountY - 1 );
+		if (cx - ring >= 0)
+			for (Int y = sideY0; y <= sideY1; ++y)
+				visitList( m_centerCells[ y * m_cellCountX + (cx - ring) ] );
+		if (cx + ring < m_cellCountX)
+			for (Int y = sideY0; y <= sideY1; ++y)
+				visitList( m_centerCells[ y * m_cellCountX + (cx + ring) ] );
+	}
+
+	thePartitionQueryObjects += visited;
+	return TRUE;
+}
+
+//-----------------------------------------------------------------------------
+/* The ring walk goes ring by ring, a ring's cells in m_radiusVec's order and a cell's COIs in list order, and
+	 keeps an object where it first meets it: in a cell of a ring within the limit that a player of the mask
+	 touches. Only the walk's own numbers decide this, the cells the object stood in at the last update included. */
+Bool PartitionManager::ringMeeting( const PartitionGatherOrder &order, const Object *obj, Bool firstOnly, Int &ring, Int &slot, Int &place )
+{
+	const PartitionData *mod = obj->friend_getPartitionData();
+	if (mod == NULL)
+		return FALSE;
+	Bool met = FALSE;
+	const Int used = minInt( mod->m_coiInUseCount, mod->m_coiArrayCount );
+	for (Int i = 0; i < used; ++i)
+	{
+		CellAndObjectIntersection *coi = &mod->m_coiArray[ i ];
+		PartitionCell *cell = coi->getCell();
+		if (cell == NULL || coi->getModule() == NULL)
+			continue;
+		ICoord2D offset;
+		offset.x = cell->getCellX() - order.m_cellX;
+		offset.y = cell->getCellY() - order.m_cellY;
+		// the rings hold the offsets between two cells on the map; a center off it reaches no further
+		if (offset.x <= -m_cellCountX || offset.x >= m_cellCountX || offset.y <= -m_cellCountY || offset.y >= m_cellCountY)
+			continue;
+		const Int r = calcMinRadius( offset );
+		if (r > order.m_ringLimit)
+			continue;
+		if (order.m_players != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( order.m_players ))
+			continue;
+		if (firstOnly)
+			return TRUE;
+		if (met && r > ring)
+			continue;
+		const OffsetVec &offsets = m_radiusVec[ r ];
+		Int s = 0;
+		while (s < (Int)offsets.size() && (offsets[ s ].x != offset.x || offsets[ s ].y != offset.y))
+			++s;
+		// one COI to a cell, so an equal ring and slot is never a second one
+		if (met && r == ring && s > slot)
+			continue;
+		Int p = 0;
+		for (CellAndObjectIntersection *c = cell->getFirstCoiInCell(); c && c != coi; c = c->getNextCoi())
+			++p;
+		ring = r;
+		slot = s;
+		place = p;
+		met = TRUE;
+	}
+	return met;
+}
+
+//-----------------------------------------------------------------------------
+Bool PartitionGatherOrder::holds( const Object *obj ) const
+{
+	Int ring, slot, place;
+	return !m_rings || m_manager->ringMeeting( *this, obj, TRUE, ring, slot, place );
+}
+
+//-----------------------------------------------------------------------------
+Bool PartitionGatherOrder::listsBefore( const Object *a, const Object *b ) const
+{
+	// either walk inserts at the head as it goes, so the list hands out last what it met first
+	if (!m_rings)
+		return a->friend_getPartitionData()->friend_getModuleIndex() < b->friend_getPartitionData()->friend_getModuleIndex();
+	Int ringA = 0, slotA = 0, placeA = 0, ringB = 0, slotB = 0, placeB = 0;
+	m_manager->ringMeeting( *this, a, FALSE, ringA, slotA, placeA );
+	m_manager->ringMeeting( *this, b, FALSE, ringB, slotB, placeB );
+	if (ringA != ringB)
+		return ringA > ringB;
+	if (slotA != slotB)
+		return slotA > slotB;
+	return placeA > placeB;
 }
 
 //-----------------------------------------------------------------------------
@@ -5278,7 +6211,11 @@ void PartitionManager::xfer( Xfer *xfer )
 
 	// version 3 writes nothing new: it says the objects carry their threat and value (Object 12)
 	if( xfer->getXferMode() == XFER_LOAD )
+	{
 		m_cellsFromSave = version >= 3;
+		// a load sets sizes and places without the reports the center grid is kept by; update builds it again
+		m_centerGridValid = FALSE;
+	}
 
 	// cell size information
 	Real cellSize = m_cellSize;
@@ -5377,7 +6314,7 @@ void PartitionManager::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void PartitionManager::loadPostProcess( void )
 {
-
+	m_centerGridValid = FALSE;	// as in xfer, for whatever loaded after it
 }  // end loadPostProcess
 
 //-----------------------------------------------------------------------------
@@ -5722,9 +6659,63 @@ Bool PartitionFilterRejectBuildings::allow( Object *other )
 	tracks moving in the fog. */
 Bool PartitionFilterFreeOfFog::allow( Object *other )
 {
-	const ObjectShroudStatus status = other->getShroudedStatus(m_comparisonIndex);
+	ObjectShroudStatus status;
+	if (m_peeks)
+	{
+		// a logic job's search: Object::getShroudedStatus's answer without its writes, kept for the replay
+		if (other->getTemplate()->isKindOf(KINDOF_ALWAYS_VISIBLE))
+			status = OBJECTSHROUD_CLEAR;
+		else if (other->friend_getConstPartitionData())
+			status = other->friend_getConstPartitionData()->peekShroudedStatus(m_comparisonIndex);
+		else
+			status = OBJECTSHROUD_CLEAR;
+		if (m_peeks->count == ShroudPeekRecord::CAPACITY)
+			m_peeks->overflowed = TRUE;
+		else
+		{
+			m_peeks->objects[m_peeks->count] = other;
+			m_peeks->status[m_peeks->count] = status;
+			++m_peeks->count;
+		}
+		m_peeks->playerIndex = m_comparisonIndex;
+	}
+	else
+		status = other->getShroudedStatus(m_comparisonIndex);
 	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR
 		|| (m_radar && RadarCoverageBehavior::isTracked(m_radar, other));
+}
+
+//-----------------------------------------------------------------------------
+/** The logic thread's half of a job's shroud questions: asked again for real, in the job's order, so the
+	* caches and ghost snapshots move as the serial search would have moved them. FALSE at the first answer
+	* that differs from the job's peek, or when the job ran out of room to record. */
+Bool replayShroudPeeks( const ShroudPeekRecord &record )
+{
+	if (record.overflowed)
+		return FALSE;
+	for (Int i = 0; i < record.count; ++i)
+	{
+		if (record.objects[i]->getShroudedStatus(record.playerIndex) != record.status[i])
+			return FALSE;
+	}
+	return TRUE;
+}
+
+//-----------------------------------------------------------------------------
+PartitionManager::JobQueryGuard::JobQueryGuard( void )
+{
+	if (s_jobQueryGuards++ == 0)
+		s_jobQueryRefused = FALSE;
+}
+
+PartitionManager::JobQueryGuard::~JobQueryGuard( void )
+{
+	--s_jobQueryGuards;
+}
+
+Bool PartitionManager::JobQueryGuard::refused( void ) const
+{
+	return s_jobQueryRefused;
 }
 
 //-----------------------------------------------------------------------------
@@ -6089,7 +7080,10 @@ Bool PartitionFilterLineOfSight::allow(Object *objOther)
 	if (objOther->isSignificantlyAboveTerrain())
 		return true;
 
-	if (!ThePartitionManager->isClearLineOfSightTerrain(m_obj, *m_obj->getPosition(), objOther, *objOther->getPosition()))
+	// the obstacle test below walks the terrain to objOther's centre from the same eyes when it walks it at
+	// all, and that line is clear only where this one to the top is (Pathfinder::isViewTerrainWalked)
+	const Bool terrainWalkedBelow = TheAI && TheAI->pathfinder()->isViewTerrainWalked(m_obj, objOther);
+	if (!terrainWalkedBelow && !ThePartitionManager->isClearLineOfSightTerrain(m_obj, *m_obj->getPosition(), objOther, *objOther->getPosition()))
 		return false;
 
 	if (TheAI && TheAI->pathfinder()->isViewBlockedByObstacle(m_obj, objOther))

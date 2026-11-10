@@ -168,6 +168,38 @@ struct AIDoctrineUnit
 	Real m_trust;				///< 1 fresh; falls when one dies having done nothing, comes back with time
 };
 
+/** AIGroundFlood run to the end over the whole grid, quicker and in pieces.  Every cell's walkability is set
+	* before the first step, and step() hands cells out to a budget; the field it ends with is AIGroundFlood's
+	* on the same walkability whatever the budgets, since each cell's ground distance has one value whichever
+	* order its ties come out in.  The callback-per-cell flood took 60 to 100 ms of one frame on a 32-player
+	* map's 692,000 cells.  A grid padded by one unwalkable cell all round, so no neighbour needs a bounds test. */
+class AIGroundField
+{
+public:
+	AIGroundField();
+	void start( Int width, Int height );			///< forget everything; every cell unwalkable and unreached
+	void setWalkable( Int x, Int y ) { m_walk[ ( y + 1 ) * m_pitch + x + 1 ] = 1; }
+	void addSource( Int x, Int y );						///< as AIGroundFlood::addSource, every one before the first step
+	Bool step( Int *budget );									///< hands out cells while *budget lasts, less what it spent; TRUE once the field is final
+	void takeField( std::vector<UnsignedShort> &field );	///< y * width + x, and lets go of the grid
+	void release( void );											///< lets go of the grid unfinished
+	const std::vector<UnsignedByte> &walkGrid( void ) const { return m_walk; }	///< padded, as setWalkable fills it
+	void copyWalkGrid( const std::vector<UnsignedByte> &walk ) { m_walk = walk; }	///< another flood's, of the same size
+	Int getWidth( void ) const { return m_width; }
+	Int getHeight( void ) const { return m_height; }
+
+private:
+	Int m_width;
+	Int m_height;
+	Int m_pitch;
+	std::vector<UnsignedShort> m_dist;
+	std::vector<UnsignedByte> m_walk;
+	std::vector<Int> m_bucket[ 4 ];
+	Int m_at;
+	Int m_cursor;
+	Int m_pending;
+};
+
 
 /**
  * The computer-controlled opponent.
@@ -290,10 +322,11 @@ public:
 
 	/// This rung's knobs, for any behaviour that has a difficulty-dependent decision to make.
 	const AIDifficultyProfile *getSkillProfile(void) const;
+	Bool knobsOffHere(void) const;		///< -aiknobsoff reaches this slot; its mask says which knobs
 
 	/// What a seat that predates the ladder (an old save, a replay, a script) plays at.
 	static AISkillLevel skillLevelForDifficulty(GameDifficulty difficulty);
-	void buildBySupplies(Int minimumCash, const AsciiString &thingName, Bool holdableOnly = FALSE ); ///< Builds a building by supplies. holdableOnly is the AI's own expansion: see findSupplyCenter, and no room beside the dock means no building
+	void buildBySupplies(Int minimumCash, const AsciiString &thingName, Bool holdableOnly = FALSE, Object *dock = NULL ); ///< Builds a building by supplies. holdableOnly is the AI's own expansion: see findSupplyCenter, and no room beside the dock means no building.  dock: what findSupplyCenter with the same two said this frame
 	void buildSpecificBuildingNearestTeam( const AsciiString &thingName, const Team *team );
 	void buildUpgrade(const AsciiString &upgrade ); ///< Builds an upgrade.
 	/// A team is about to be destroyed.
@@ -472,6 +505,13 @@ protected:
 	void fortifyChokes(Object *dozer);	///< a Turtle's mines on the guns at its chokes and demo traps in front of them
 	const std::vector<UnsignedShort> &groundFromBase(void);	///< AIGroundFlood distance of every pathfind cell from the base center, cached until the center moves
 	const std::vector<UnsignedShort> &groundFromThreats(const Coord3D *threats, Int count);	///< the same from the nearest of these, cached until they change
+	Bool groundBaseFresh(UnsignedInt bridges, UnsignedInt walk) const;	///< groundFromBase may answer from what it holds
+	Bool groundThreatsFresh(const Coord3D *threats, Int count, UnsignedInt bridges, UnsignedInt walk) const;
+	void stepGroundFields(void);			///< floods the field the next ask will want over frames, ahead of it
+	void floodBaseAhead(void);				///< the base's field whole, now, as stepGroundFields would deliver it
+	void beginGroundFlood(Int kind, const Coord3D *from, Int count, UnsignedInt bridges);
+	Int workGroundFlood(Int budget);	///< works the flood under way, delivering it when done; what is left of budget
+	void dropGroundFlood(Int kind);		///< a flood under way of that kind is for a point no longer wanted
 	Bool reachableFromBase(const Coord3D *pos);	///< a vehicle at the base center could drive there; TRUE before the base is placed
 	Real knownFirepowerAlongPath(Waypoint *way);	///< what this AI has seen that can shoot, along an approach
 	AsciiString secondApproachLabel(const Coord3D *from, const AsciiString &taken, Int pathSuffix);	///< the quietest other road, or empty
@@ -495,6 +535,9 @@ protected:
 	void steerAmbulance(Int slot, const std::vector<AIKnownGun> &guns);	///< one Ambulance's job this pass
 	void upgradeHelix(Object *helix, Int role, AIEnemyComposition *enemy, Bool *enemyRead);	///< the upgrade this Helix's job or the enemy army calls for
 	void collectKnownGuns(std::vector<AIKnownGun> *guns) const;	///< every enemy gun this AI knows of, in object list order
+	void readKnownGuns(std::vector<AIKnownGun> *guns) const;	///< ... read off the objects; collectKnownGuns keeps it for the frame
+	mutable std::vector<AIKnownGun> m_knownGuns;	///< collectKnownGuns' answer, for the rest of the frame it was read on
+	mutable UnsignedInt m_knownGunsFrame;					///< the frame of it, plus one; 0 for none
 	void steerHealer(Int slot, const std::vector<AIKnownGun> &guns);	///< a healer over our hurt behind the line, clear of every known gun
 	void flyRaid(Int slot, const std::vector<AIKnownGun> &guns);	///< a raider's bomb run on an enemy building, in and out the quiet side
 	Bool pickRaidTarget(const Object *raider, const std::vector<AIKnownGun> &guns, Object **target, Coord3D *entry, Int *gunsOnRun) const;
@@ -559,6 +602,7 @@ public:
 		how often, and it is a function of the player index alone - the simulation stays deterministic.
 	*/
 	static Int computeUpdatePhase( Int playerIndex, Int cycleFrames );
+	static void forgetStampTurns( void );	///< a new match or a load: the shared influence turns name the last one's objects
 
 	Bool isGunshipChinook( const Object *obj ) const;	///< a Chinook this AI bought to carry riders, not to gather
 	Bool isGunshipAircraft( const Object *obj ) const;	///< a helicopter, or one of those Chinooks
@@ -583,6 +627,10 @@ protected:
 	void clearTeamsInQueue( void );			///< Delete all teams in the build queue.
 	void computeCenterAndRadiusOfBase(Coord3D *center, Real *radius);
 	Object *findFactory(const ThingTemplate *thing, Bool busyOK); ///< Find a factory to build a unit.  If force is true, may return a busy factory.
+	Object *findFactoryOnList(const ThingTemplate *thing, Bool busyOK);
+	/** findFactory's answers with busyOK, kept while selectTeamToBuild weighs which teams may be built: nothing
+		* in that pass trains or sells anything, and a hundred teams asked a few units each. NULL outside it. */
+	std::vector< std::pair<const ThingTemplate *, Object *> > *m_factoryAnswers;
 	void sendForSpotters( TeamInQueue *team, const Object *gun );	///< a gun that fires past its own sight came out for this team: train its spotters
 	Bool replaceSpotter( void );				///< a team in the field has a gun that fires past its own sight and no spotter left: train it one
 	void queueUnits( void );						///< Check the team build list, & queue up units at any idle factories.
@@ -644,7 +692,7 @@ protected:
 	ObjectID			m_raider[ MAX_PERSONA_RAIDERS ];	///< the Raider's own raiders, which no wave or defence takes
 	UnsignedInt		m_shareFrame;					///< the last Economist share
 	UnsignedInt		m_chatFrame;					///< the last line of chat, 0 for none yet
-	Int						m_beatenMask;					///< enemies seen eliminated, by player index, for the chat
+	PlayerMaskType	m_beatenMask;				///< enemies seen eliminated, by player index, for the chat
 	// counters for logPersonaSummary, written and never read by a decision
 	Int						m_personaWaves;
 	UnsignedInt		m_firstWaveFrame;
@@ -660,6 +708,10 @@ protected:
 	Bool			m_startOccupied[ MAX_PLAYER_COUNT ];	///< ... and which of those turned out to hold an enemy
 	Int				m_playerStartNdx[ MAX_PLAYER_COUNT ];	///< the start position each player is known to be at; -1 == not found yet
 	UnsignedInt m_startIntelFrame;			///< frame the above was last brought up to date
+	/* The map's start waypoints, read once (startAt): a pure function of the map, not xferred. */
+	mutable Coord3D			m_startAtPos[ MAX_PLAYER_COUNT ];
+	mutable UnsignedByte	m_startAtState[ MAX_PLAYER_COUNT ];	///< 0 not read yet, 1 there, 2 the map has none
+	Bool startAt( Int startNdx, Coord3D *pos ) const;	///< startPositionLoc, kept
 	ObjectID	m_capturerID;						///< the unit currently out taking tech buildings for us
 	ObjectID	m_ferryID;							///< the helicopter flying the capturer to its target, INVALID_ID for none
 	std::vector<ObjectID>	m_droppedRiders;	///< infantry a helicopter is putting down at a fight, sent on once out
@@ -775,6 +827,22 @@ protected:
 	std::vector<UnsignedShort> m_groundFromThreats;
 	std::vector<Coord3D> m_groundThreatsAt;
 	UnsignedInt m_groundThreatsBridges;
+	/* Each field's walk generation (PathfindCell::getWalkGeneration) when it was read, and whether anything has
+		 asked for it yet.  One flooded ahead answers only while the ground is the ground it read; once asked it
+		 holds as a field flooded on the ask always did, until the point or the bridges change. */
+	UnsignedInt m_groundFromBaseWalk;
+	Bool m_groundFromBaseAsked;
+	UnsignedInt m_groundThreatsWalk;
+	Bool m_groundThreatsAsked;
+	/* One of those two flooding over frames before anything asks for it (stepGroundFields), finished on the
+		 spot if something does.  Not xferred either: a load floods again when asked. */
+	AIGroundField m_groundFlood;
+	UnsignedInt m_groundFloodWalk;	///< the walk generation it began on; it is thrown away if that moves before it ends
+	Int m_groundFloodKind;						///< GROUND_FLOOD_NONE, _BASE or _THREATS
+	Int m_groundFloodColumn;					///< walkability read up to this column; -1 before the grid is allocated
+	std::vector<Coord3D> m_groundFloodFrom;
+	UnsignedInt m_groundFloodBridges;
+	UnsignedInt m_groundFloodBegun;
 
 	/* The Turtle's chokes (turtleChokes), not xferred for the same reason: a pure function of the
 		 map, the bridges, the base center and the enemy addresses, recomputed when one of them moves. */
@@ -877,12 +945,12 @@ protected:
 
 	/** What this player knows can shoot at each patch of the map, and what it has there itself. */
 	AIInfluenceMap	m_influence;
-	AIInfluenceMap	m_influenceNext;		///< Hard's: what this round's objects have stamped so far; it becomes m_influence when the round ends
-	void updateInfluence(void);										///< Hard's map, one share of the objects a frame
+	AIInfluenceMap	m_influenceNext;		///< what this round's objects have stamped so far; it becomes m_influence when the round ends
+	void updateInfluence(void);										///< the map, one share of the objects a frame
 	void rebuildInfluence(void);									///< the whole map on one frame
 	void stampInfluence(AIInfluenceMap &map, const Object *obj);
 	void stampFireReports(AIInfluenceMap &map);
-	void ensureInfluence(void);										///< the map, no older than this rung reads it; below Hard this is what draws it
+	void ensureInfluence(void);										///< the map, no older than this rung reads it, for a player that does not stamp it
 	Bool hasTacticalMap(void) const;							///< Hard's map, for the reads the rungs below it do not make
 	Bool quietGround(const Coord3D *from, const Real *gun, Coord3D *spot);	///< where to go from here to be off the map's guns and clear of this one (x, y, reach, or NULL); FALSE when no way gets out
 
@@ -913,7 +981,11 @@ protected:
 		UnsignedInt	frame;
 	};
 	std::vector<GunReading>	m_gunReadings;
-	void answerFire(void);
+	/** The player's objects whose ID comes up this frame, in the order Player::iterateObjects gives them, for
+		* doTactics and, when its look is the same length, answerFire; held so a frame allocates nothing. */
+	std::vector<Object *>	m_lookTurn;
+	std::vector<Object *>	m_fireTurn;
+	void answerFire(const std::vector<Object *> *turn);	///< turn: this frame's look already collected, or NULL
 	AIFireAnswer answerHit(Object *obj, Object *shooter, Object *gun);	///< decided and ordered
 	const GunReading &readGun(const Object *obj, const Object *gun);
 	void fightersNear(const Coord3D *at, Real radius, std::vector<Object *> *fighters);	///< our own who take orders here, in ObjectID order
@@ -945,7 +1017,11 @@ protected:
 		UnsignedInt	answerFrame;			///< when it was sent at a gun that hit it, 0 while it is not; target and origin are what it goes back to
 	};
 	std::vector<TacticalStep>	m_tactics;
+	/** Where each unit's row is in m_tactics, kept as rows come and go; built again whenever its size and the
+		* rows' disagree, which a load leaves it.  Only ever looked up, so the hash order reaches nothing. */
+	mutable std::unordered_map<Int, Int> m_tacticsRowOf;
 	TacticalStep *findTacticalStep(ObjectID unit);
+	const TacticalStep *findTacticalStep(ObjectID unit) const;
 	TacticalStep *tacticalStepFor(ObjectID unit);		///< ... making the row if there is none
 	void leaveTacticsAlone(ObjectID unit);
 	Bool isFallingBack(ObjectID unit) const;		///< holding at a safe spot after a lost fight, for doRetreats to send back

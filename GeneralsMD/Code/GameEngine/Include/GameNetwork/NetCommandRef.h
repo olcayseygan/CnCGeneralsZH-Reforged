@@ -60,8 +60,8 @@ public:
 	void setNext(NetCommandRef *next);
 	void setPrev(NetCommandRef *prev);
 
-	void setRelay(UnsignedByte relay);
-	UnsignedByte getRelay() const;
+	void setRelay(SlotMask relay);
+	SlotMask getRelay() const;
 
 	time_t getTimeLastSent() const;
 	void setTimeLastSent(time_t timeLastSent);
@@ -77,7 +77,7 @@ protected:
 	NetCommandMsg *m_msg;
 	NetCommandRef *m_next;
 	NetCommandRef *m_prev;
-	UnsignedByte m_relay; ///< Need this in the command reference since the relay value will be different depending on where this particular reference is being sent.
+	SlotMask m_relay; ///< Need this in the command reference since the relay value will be different depending on where this particular reference is being sent.
 	time_t m_timeLastSent;
 	Int m_numTimesSent;		///< How many times this reference has gone out.  An ack for a command sent more than once cannot be timed (which send is it acking?), so it is not used as a latency sample - Karn's rule.
 	time_t m_timeLastOnWire;	///< The last send or redundant copy.  Spaces the copies; the retry timer keeps m_timeLastSent.
@@ -193,7 +193,7 @@ inline void NetCommandRef::markCopied(time_t when)
 /**
  * Set the send relay for this reference of the command.
  */
-inline void NetCommandRef::setRelay(UnsignedByte relay) 
+inline void NetCommandRef::setRelay(SlotMask relay)
 {
 	m_relay = relay;
 }
@@ -201,7 +201,7 @@ inline void NetCommandRef::setRelay(UnsignedByte relay)
 /**
  * Return the send relay for this refreence of the command.
  */
-inline UnsignedByte NetCommandRef::getRelay() const
+inline SlotMask NetCommandRef::getRelay() const
 {
 	return m_relay;
 }

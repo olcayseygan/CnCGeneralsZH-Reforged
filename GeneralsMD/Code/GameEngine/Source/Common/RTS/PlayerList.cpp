@@ -546,6 +546,8 @@ Int PlayerList::getSlotIndex( Int playerIndex ) const
 //-----------------------------------------------------------------------------
 /** Map every occupied network slot onto the player index that was built from it.  The slots are
     named "player0".."playerN" when the game is set up, which is the only link between the two. */
+// a full lobby still leaves seats for the neutral player, the civilians and the replay observer
+static_assert( MAX_SLOTS + 3 <= MAX_PLAYER_COUNT, "MAX_PLAYER_COUNT holds every slot and the map's own players" );
 void PlayerList::assignSlotIndices( const GameInfo *gameInfo )
 {
 	for (int i = 0; i < MAX_PLAYER_COUNT; i++)

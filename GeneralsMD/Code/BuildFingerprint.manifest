@@ -657,6 +657,7 @@ Data/Scenarios/standinfake.txt
 Data/Scenarios/stashbeside.txt
 Data/Scenarios/statues.txt
 Data/Scenarios/stealthintruder.txt
+Data/Scenarios/stealthreveal.txt
 Data/Scenarios/strikeair_nuke.txt
 Data/Scenarios/strikeair_nukehelix.txt
 Data/Scenarios/strikeair_particle.txt
@@ -3547,6 +3548,7 @@ Tests/test_modern_water_config.cpp
 Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc
 Tests/test_online.cpp
+Tests/test_pathfind_slicing.inc
 Tests/test_pixelcentre.cpp
 Tests/test_posix_draw_resolve.cpp
 Tests/test_posix_gpu_draw.cpp

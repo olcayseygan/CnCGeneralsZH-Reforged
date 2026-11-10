@@ -43,7 +43,9 @@
 	*
 	*  2. **A job must not touch simulation state.**  The lockstep sequence is the simulation; a
 	*     draw from GameLogicRandomValue or a write an Object reads back desyncs a multiplayer game
-	*     hours later with no reproducible case.
+	*     hours later with no reproducible case.  A job the logic thread forks may read it, lazy
+	*     caches excepted, since the tick waits inside the fork and nothing writes it meanwhile
+	*     (LOGIC-PARALLEL.md); what it decides is applied after the join, in item order.
 	*
 	*  3. **Output order must not depend on scheduling.**  Write into a pre-sized array indexed by
 	*     item, or concatenate per-job lists afterwards in item order.  Never append to one shared
@@ -60,8 +62,10 @@ namespace JobSystem
 		* fit its small-object buffer allocates, and rule 1 above says jobs do not allocate. */
 	typedef void (*JobFunc)( Int index, void *context );
 
-	/** Start the pool.  `workers` is the number of *extra* threads, since the calling thread works
-		* too.  0 means no pool at all - parallel_for runs inline.  A negative value, the default,
+	/** Start the pools: one the logic thread forks on and one for every other thread, so a tick
+		* running beside the render forks while the render does (LOGIC-THREAD.md hazard 14).  `workers`
+		* is the number of *extra* threads in each, since the calling thread works too.  0 means no
+		* pool at all - parallel_for runs inline.  A negative value, the default,
 		* asks the command line: `-jobthreads <n>` if it is there, otherwise one fewer than the
 		* machine has processors.
 		*
@@ -77,8 +81,8 @@ namespace JobSystem
 		* because parallel_for does not return until its fork has joined. */
 	void shutdown( void );
 
-	/** Extra threads in the pool.  0 means parallel_for runs everything inline, which is a
-		* supported configuration and the one a single-core machine gets. */
+	/** Extra threads in the pool this thread forks on.  0 means parallel_for runs everything inline,
+		* which is a supported configuration and the one a single-core machine gets. */
 	Int workerCount( void );
 
 	/** Run fn(0..count-1, context) across the pool and return when every item is done.
@@ -94,6 +98,17 @@ namespace JobSystem
 
 	/** TRUE on a pool worker, FALSE on the thread that called parallel_for (and everywhere else). */
 	Bool isWorkerThread( void );
+
+	/** TRUE while this thread runs items of a parallel_for: a worker, the forking thread working its
+		* own fork, and the inline loop with no workers alike, so code that has to be safe beside other
+		* items takes the same path at -jobthreads 0 as at 15. */
+	Bool isInsideJob( void );
+
+	/** This thread's place in the fork: 0 on the thread that called parallel_for (and every thread off
+		* the pools), 1 to workerCount() on a pool's workers.  Per-thread scratch a job writes is indexed by
+		* it, sized before the fork for workerCount() + 1 slots.  The two pools number their workers alike,
+		* so scratch belongs to whichever pool forks the work that uses it. */
+	Int threadSlot( void );
 
 	/** How many times a pool worker has allocated from a MemoryPool since the process started.
 		* Rule 1 says this is zero.  It is a count rather than an assert because the Debug config

@@ -59,6 +59,7 @@ SimpleObjectIterator::SimpleObjectIterator()
 	m_inlineClumpsUsed = 0;
 	m_pooledBlocks = NULL;
 	m_pooledClumpsUsed = 0;
+	m_spareBlocks = NULL;
 }
 
 //=============================================================================
@@ -90,7 +91,11 @@ void SimpleObjectIterator::insert(Object *obj, Real numeric)
 	{
 		if (m_pooledBlocks == NULL || m_pooledClumpsUsed == POOLED_CLUMPS)
 		{
-			PooledClumps *block = newInstance(PooledClumps);
+			PooledClumps *block = m_spareBlocks;
+			if (block)
+				m_spareBlocks = block->m_nextBlock;
+			else
+				block = newInstance(PooledClumps);
 			block->m_nextBlock = m_pooledBlocks;
 			m_pooledBlocks = block;
 			m_pooledClumpsUsed = 0;
@@ -134,10 +139,23 @@ void SimpleObjectIterator::reset()
 //=============================================================================
 void SimpleObjectIterator::makeEmpty()
 {
+	recycle();
+	while (m_spareBlocks)
+	{
+		PooledClumps *next = m_spareBlocks->m_nextBlock;
+		m_spareBlocks->deleteInstance();
+		m_spareBlocks = next;
+	}
+}
+
+//=============================================================================
+void SimpleObjectIterator::recycle()
+{
 	while (m_pooledBlocks)
 	{
 		PooledClumps *next = m_pooledBlocks->m_nextBlock;
-		m_pooledBlocks->deleteInstance();
+		m_pooledBlocks->m_nextBlock = m_spareBlocks;
+		m_spareBlocks = m_pooledBlocks;
 		m_pooledBlocks = next;
 	}
 

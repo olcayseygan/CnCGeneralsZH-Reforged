@@ -79,11 +79,11 @@ public:
 	virtual UnsignedInt getFramesReady(void) = 0;											///< Frames from the current one whose commands are all in, up to the run-ahead.  For the HUD.
 
 	// Chat functions
-	virtual void sendChat(UnicodeString text, Int playerMask) = 0;		///< Send a chat line using the normal system.
+	virtual void sendChat(UnicodeString text, SlotMask playerMask) = 0;		///< Send a chat line using the normal system; playerMask is slots (slotBit)
 	virtual void sendDisconnectChat(UnicodeString text) = 0;					///< Send a chat line using the disconnect manager.
 
-	virtual void sendFile(AsciiString path, UnsignedByte playerMask, UnsignedShort commandID) = 0;
-	virtual UnsignedShort sendFileAnnounce(AsciiString path, UnsignedByte playerMask) = 0;
+	virtual void sendFile(AsciiString path, SlotMask playerMask, UnsignedShort commandID) = 0;
+	virtual UnsignedShort sendFileAnnounce(AsciiString path, SlotMask playerMask) = 0;
 	virtual Int getFileTransferProgress(Int playerID, AsciiString path) = 0;
 	virtual Bool areAllQueuesEmpty(void) = 0;
 

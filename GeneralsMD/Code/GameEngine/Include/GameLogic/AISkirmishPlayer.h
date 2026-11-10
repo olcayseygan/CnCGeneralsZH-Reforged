@@ -112,8 +112,14 @@ protected:
 	void acquireEnemy(void);
 	void acquireEnemyRetail(void);	///< EA's acquireEnemy, for a seat that plays EA's AI (!runsOwnAI)
 	void doSurrender(void);			///< say GG and give up once the match is lost beyond recovery
+	void buildAIBaseDefenseNow(Bool flank);	///< buildAIBaseDefense's placement, on the frame its request comes up
 
 protected:
+	/* The base defences the scripts asked for and not yet placed, front (FALSE) or flank, in the order asked:
+		 one goes down a frame (update).  A script pass asked for three on one frame, and each placement weighs 96
+		 spots against the map.  Xferred, so a game saved with some waiting places them after the load. */
+	std::vector<Bool> m_defenseRequests;
+
 	Int m_curFrontBaseDefense; // First is 0.
 	Int m_curFlankBaseDefense; // First is 0.
 	Real m_curFrontLeftDefenseAngle;

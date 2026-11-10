@@ -151,22 +151,6 @@ void NetGameCommandMsg::addArgument(const GameMessageArgumentDataType type, Game
 	m_argTail = newArg;
 }
 
-// here's where we figure out which slot corresponds to which player
-static Int indexFromMask(UnsignedInt mask)
-{
-	Player *player = NULL;
-	Int i;
-
-	for( i = 0; i < MAX_PLAYER_COUNT; i++ )
-	{
-		player = ThePlayerList->getNthPlayer( i );
-		if( player && player->getPlayerMask() == mask )
-			return i;
-	}  // end for i
-
-	return -1;
-}
-
 /**
  * Construct a new GameMessage object from the data in this object.
  */
@@ -751,7 +735,7 @@ UnicodeString NetChatCommandMsg::getText()
 /**
  * Get the bitmask of chat recipients from this message.
  */
-Int NetChatCommandMsg::getPlayerMask()
+SlotMask NetChatCommandMsg::getPlayerMask()
 {
 	return m_playerMask;
 }
@@ -759,7 +743,7 @@ Int NetChatCommandMsg::getPlayerMask()
 /**
  * Set a bitmask of chat recipients in this message.
  */
-void NetChatCommandMsg::setPlayerMask( Int playerMask )
+void NetChatCommandMsg::setPlayerMask( SlotMask playerMask )
 {
 	m_playerMask = playerMask;
 }
@@ -989,11 +973,11 @@ void NetFileAnnounceCommandMsg::setFileID(UnsignedShort fileID) {
 	m_fileID = fileID;
 }
 
-UnsignedByte NetFileAnnounceCommandMsg::getPlayerMask(void) {
+SlotMask NetFileAnnounceCommandMsg::getPlayerMask(void) {
 	return m_playerMask;
 }
 
-void NetFileAnnounceCommandMsg::setPlayerMask(UnsignedByte playerMask) {
+void NetFileAnnounceCommandMsg::setPlayerMask(SlotMask playerMask) {
 	m_playerMask = playerMask;
 }
 

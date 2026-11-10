@@ -421,6 +421,11 @@ void AI::reset( void )
 	m_sweptGroupID = 0;
 	theVariationParents.clear();
 	theArmourOfTemplate.clear();
+
+	// the mood searches run ahead belong to one match's frames (AIUpdate.cpp)
+	extern void AIUpdate_resetMoodSearches( void );
+	AIUpdate_resetMoodSearches();
+
 	m_nextFormationID = NO_FORMATION_ID;
 	getNextFormationID(); // increment once past NO_FORMATION_ID.  jba.
 	m_lastBuildingPlacementFrame = 0;
@@ -485,6 +490,10 @@ void AI::update( void )
  */
 AI::~AI()
 {
+	// the mood searches' iterators, when no reset followed the last match
+	extern void AIUpdate_resetMoodSearches( void );
+	AIUpdate_resetMoodSearches();
+
 	if (m_pathfinder) {
 		delete m_pathfinder;
 	}
@@ -666,6 +675,10 @@ FormationID AI::getNextFormationID(void )
 }
 
 //-----------------------------------------------------------------------------
+// SpectreGunshipUpdate.cpp has a class of this name with another allow(); each stays in its own file,
+// or the linker keeps one vtable for both and which one is up to it
+namespace
+{
 class PartitionFilterLiveMapEnemies : public PartitionFilter
 {
 private:
@@ -690,8 +703,30 @@ public:
 		return true;
 	}
 
+	virtual Bool isReadOnly() const { return TRUE; }
+
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterLiveMapEnemies"; }
+#endif
+};
+}
+
+//-----------------------------------------------------------------------------
+/** What an attack priority set does not rule out: findClosestEnemy never attacks priority 0. */
+class PartitionFilterAttackPriority : public PartitionFilter
+{
+private:
+	const AttackPriorityInfo *m_info;
+public:
+	PartitionFilterAttackPriority(const AttackPriorityInfo *info) : m_info(info) { }
+
+	virtual Bool allow(Object *objOther)
+	{
+		return m_info->getPriority(objOther->getTemplate()) != 0;
+	}
+
+#if defined(_DEBUG) || defined(_INTERNAL)
+	virtual const char* debugGetName() { return "PartitionFilterAttackPriority"; }
 #endif
 };
 
@@ -829,16 +864,33 @@ extern Bool AIAttackMove_shouldRetaliate( UnsignedInt lastDamageFrame, UnsignedI
 																					Bool alreadyFightingTheAttacker, Bool canAttackTheAttacker );
 static const Int AI_SHOT_ME_FRAMES = LOGICFRAMES_PER_SECOND;
 
+/** The search this thread runs as a logic job, or NULL on the logic thread (AI::ScanJob). The two lazy
+	* tables below and a template's first name-key ask are filled only on the logic thread: a job that
+	* would fill one gives up instead, and its unit searches on the logic thread, which fills it. */
+static thread_local AI::ScanJob *t_scanJob = NULL;
+
+static Bool AI_jobMayNotFill( void )
+{
+	if( t_scanJob == NULL )
+		return FALSE;
+	t_scanJob->aborted = TRUE;
+	return TRUE;
+}
+
 /** What a target is worth: ThreatValue where the data sets it, else what its player pays for it. */
 static Int AI_targetValue( const Object *victim )
 {
 	const ThingTemplate *tmpl = victim->getTemplate();
 	if( tmpl->getThreatValue() > 0 )
 		return tmpl->getThreatValue();
+	if( !tmpl->hasNameKey() && AI_jobMayNotFill() )
+		return 1;
 	Int cost = tmpl->calcCostToBuild( victim->getControllingPlayer() );
 	if( cost <= 0 )
 	{
 		std::map<const ThingTemplate*, const ThingTemplate*>::iterator known = theVariationParents.find( tmpl );
+		if( known == theVariationParents.end() && AI_jobMayNotFill() )
+			return 1;
 		if( known == theVariationParents.end() )
 		{
 			const ThingTemplate *parent = NULL;
@@ -851,7 +903,11 @@ static Int AI_targetValue( const Object *victim )
 			known = theVariationParents.insert( std::make_pair( tmpl, parent ) ).first;
 		}
 		if( known->second != NULL )
+		{
+			if( !known->second->hasNameKey() && AI_jobMayNotFill() )
+				return 1;
 			cost = known->second->calcCostToBuild( victim->getControllingPlayer() );
+		}
 	}
 	return cost < 1 ? 1 : cost;		// a free civilian car is still worth more than nothing at all
 }
@@ -869,6 +925,11 @@ struct AITargetFacts
 static const AIArmourRow &AI_armourOf( const ThingTemplate *tmpl )
 {
 	std::map<const ThingTemplate*, AIArmourRow>::iterator known = theArmourOfTemplate.find( tmpl );
+	if( known == theArmourOfTemplate.end() && AI_jobMayNotFill() )
+	{
+		static const AIArmourRow s_noRow = AIArmourRow();	// the job's answer is thrown away
+		return s_noRow;
+	}
 	if( known == theArmourOfTemplate.end() )
 	{
 		const ArmorTemplateSet *set = tmpl->findArmorTemplateSet( ArmorSetFlags() );
@@ -881,6 +942,15 @@ static const AIArmourRow &AI_armourOf( const ThingTemplate *tmpl )
 		known = theArmourOfTemplate.insert( std::make_pair( tmpl, row ) ).first;
 	}
 	return known->second;
+}
+
+/** On the logic thread before the idle checks searched ahead fork (AIUpdate.cpp): fill the two tables
+	* and the name keys a job may only read, for o, so whether a job gives up never depends on what this
+	* process asked before, a client tooltip or an earlier match among it. */
+void AI_prewarmTargetTables( const Object *o )
+{
+	AI_armourOf( o->getTemplate() );
+	AI_targetValue( o );
 }
 
 /** What the unit choosing brings to every candidate: its weapons as they fire now, once per search
@@ -1053,6 +1123,24 @@ Bool AI_attackPriorityTakesLead( Int modPriority, Int curPriority, Real distSqr,
 
 //-----------------------------------------------------------------------------
 /**
+ * Whether nothing at least minDist away can take the lead from, or tie, a leader of that search, Object-free
+ * so test_gameengine can link to it. Such a candidate starts from no more than maxPriority, loses one for
+ * every modifierDist of minDist, never going under 1, and then needs a higher priority after distance or, at
+ * the leader's, the most priority there is and a distance under the leader's.
+ */
+Bool AI_attackPriorityIsSettled( Int bestModPriority, Int bestCurPriority, Real bestDistSqr,
+																 Int maxPriority, Real minDist, Real modifierDist )
+{
+	Int farPriority = maxPriority - floatToIntAsMsvc(minDist / modifierDist);
+	if (farPriority < 1)
+		farPriority = 1;
+	if (bestModPriority != farPriority)
+		return bestModPriority > farPriority;
+	return bestCurPriority >= maxPriority && bestDistSqr < minDist * minDist;
+}
+
+//-----------------------------------------------------------------------------
+/**
  * Return the closest enemy, according to the qualifiers.
  */
 static Bool AI_filtersAllow( PartitionFilter **filters, Object *candidate )
@@ -1064,6 +1152,100 @@ static Bool AI_filtersAllow( PartitionFilter **filters, Object *candidate )
 	}
 	return true;
 }
+
+//-----------------------------------------------------------------------------
+/** theEnemy's priority in the set, raised to that of the best thing inside it. FALSE for its own 0: never attacked. */
+static Bool AI_attackPriorityOf( const AttackPriorityInfo *info, Object *theEnemy, Int &curPriority )
+{
+	curPriority = info->getPriority(theEnemy->getTemplate());
+	if (curPriority == 0)
+		return FALSE; // don't attack 0 priority targets.
+
+	/* check for garrisoned buildings/vehicles & see if a higher priority unit is inside. */
+	ContainModuleInterface* contain = theEnemy->getContain();
+	if (contain) {
+		TPriorityInfo priorityInfo;
+		priorityInfo.priority = curPriority;
+		priorityInfo.info = info;
+		contain->iterateContained( priorityFunc, &priorityInfo, false ) ;
+		if (priorityInfo.priority > curPriority) {
+			curPriority = priorityInfo.priority;
+		}
+	}
+	return TRUE;
+}
+
+/** That priority after distance: one less for every AttackPriorityDistanceModifier, never under 1. */
+static Int AI_attackPriorityAtDistance( Int curPriority, Real distSqr )
+{
+	Real dist = sqrt(distSqr);
+	Int modifier = floatToIntAsMsvc(dist/TheAI->getAiData()->m_attackPriorityDistanceModifier);
+	Int modPriority = curPriority-modifier;
+	if (modPriority < 1)
+		modPriority = 1;
+	return modPriority;
+}
+
+//-----------------------------------------------------------------------------
+/**
+ * The scripted-priority search's pick, taken from PartitionManager::visitNearestFirst. The rule is the one
+ * pass over the gathered list below (AI_attackPriorityTakesLead, the late filters only for a candidate that
+ * would lead), over the objects the gather holds, and its full tie, which the list leaves to whichever it
+ * holds first, goes to the one PartitionGatherOrder says it lists first, so the order the cells come in
+ * does not reach the pick.
+ */
+class AttackPriorityPick : public PartitionNearestFirstVisitor
+{
+public:
+	AttackPriorityPick( const AttackPriorityInfo *info, PartitionFilter **lateFilters ) :
+		m_info( info ),
+		m_lateFilters( lateFilters ),
+		m_maxPriority( info->getMaxPriority() ),
+		m_best( NULL ),
+		m_bestModPriority( 0 ),
+		m_bestCurPriority( 0 ),
+		m_bestDistSqr( 0.0f )
+	{
+	}
+
+	virtual void visit( Object *theEnemy, Real distSqr, const PartitionGatherOrder &order )
+	{
+		Int curPriority;
+		if (!AI_attackPriorityOf( m_info, theEnemy, curPriority ))
+			return;
+		const Int modPriority = AI_attackPriorityAtDistance( curPriority, distSqr );
+		const Bool leads = AI_attackPriorityTakesLead( modPriority, curPriority, distSqr, m_bestModPriority, m_bestCurPriority, m_bestDistSqr );
+		if (!leads && !( m_best != NULL && modPriority == m_bestModPriority && curPriority == m_bestCurPriority && distSqr == m_bestDistSqr ))
+			return;
+		if (!order.holds( theEnemy ))
+			return;
+		if (!leads && !order.listsBefore( theEnemy, m_best ))
+			return;
+		if (!AI_filtersAllow( m_lateFilters, theEnemy ))
+			return;
+		m_best = theEnemy;
+		m_bestModPriority = modPriority;
+		m_bestCurPriority = curPriority;
+		m_bestDistSqr = distSqr;
+	}
+
+	virtual Bool isSettled( Real minDist ) const
+	{
+		return m_best != NULL && AI_attackPriorityIsSettled( m_bestModPriority, m_bestCurPriority, m_bestDistSqr,
+			m_maxPriority, minDist, TheAI->getAiData()->m_attackPriorityDistanceModifier );
+	}
+
+	Object *getBest() const { return m_best; }
+
+private:
+	const AttackPriorityInfo *m_info;
+	PartitionFilter **m_lateFilters;
+	Int m_maxPriority;
+	Object *m_best;
+	Int m_bestModPriority;
+	Int m_bestCurPriority;
+	Real m_bestDistSqr;
+};
 
 //-----------------------------------------------------------------------------
 /**
@@ -1138,8 +1320,48 @@ Bool AI::prefersTarget( const Object *me, Object *a, Object *b )
 												AI_rateFully( shooter, b, ThePartitionManager->getDistanceSquared( me, b, FROM_BOUNDINGSPHERE_2D ) ) );
 }
 
+/** t_scanJob for the length of one job search. */
+class AIScanJobScope
+{
+public:
+	AIScanJobScope( AI::ScanJob *job ) : m_was( t_scanJob ) { t_scanJob = job; }
+	~AIScanJobScope( void ) { t_scanJob = m_was; }
+private:
+	AI::ScanJob *m_was;
+};
+
+/** iterateObjectsInRange for findClosestEnemy's gathers. A logic job gathers with
+	* PartitionManager::gatherFromJob instead and fills its thread's own iterator (ScanJob::iterator) in
+	* the same order, sorted the same way, so it takes nothing from the pool once its blocks are there;
+	* the caller does not delete that one. NULL when the job has to give up. */
+static SimpleObjectIterator *AI_gatherEnemies( const Object *me, Real range, PartitionFilter **filters,
+																							 IterOrderType order, PlayerMaskType onlyPlayers, AI::ScanJob *job )
+{
+	if (job == NULL)
+		return ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, filters, order, onlyPlayers);
+
+	PartitionManager::JobGather g;
+	g.objects = job->objects;
+	g.distSqr = job->distSqr;
+	g.capacity = job->capacity;
+	if (!ThePartitionManager->gatherFromJob(me, range, FROM_BOUNDINGSPHERE_2D, filters, onlyPlayers, g) || g.overflowed)
+	{
+		job->aborted = TRUE;
+		return NULL;
+	}
+	++job->gathers;
+	job->objectsLookedAt += g.objectsLookedAt;
+
+	SimpleObjectIterator *iter = job->iterator;
+	iter->recycle();
+	for (Int i = 0; i < g.count; ++i)
+		iter->insert(g.objects[i], g.distSqr[i]);
+	iter->sort(order);
+	return iter;
+}
+
 Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifiers,
-														 const AttackPriorityInfo *info, PartitionFilter *optionalFilter)
+														 const AttackPriorityInfo *info, PartitionFilter *optionalFilter, ScanJob *job)
 {
 
 	if ((qualifiers & CAN_ATTACK) && !me->isAbleToAttack())
@@ -1151,8 +1373,14 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		return NULL;
 	}
 
+	// a logic job's search (ScanJob): the lazy tables below refuse to fill on its thread
+	AIScanJobScope jobScope( job );
+
 	// counted, so the slow-frame log can say how many of the frame's range queries are this
-	bumpEnemyScanCount();
+	if (job)
+		++job->scans;
+	else
+		bumpEnemyScanCount();
 
 	// only consider live, on-map enemies.
 	// since this gets called a ton, I made a special custom filter to
@@ -1184,6 +1412,8 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	// (optional) only stuff clear of fog, or for a beyond-vision shooter, tracked by its player's radar
 	PartitionFilterFreeOfFog filterFogged(me->getControllingPlayer()->getPlayerIndex(),
 		me->getTemplate()->acquiresBeyondVision() ? me->getControllingPlayer() : NULL);
+	if (job)
+		filterFogged.peekInto(job->peeks);		// the logic thread asks again later, in this order
 
 	PartitionFilter *filters[16];
 	Int numFilters = 0;
@@ -1220,39 +1450,102 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		gatherFilters[f] = filters[f];
 	gatherFilters[numGatherFilters] = NULL;
 
-	if (qualifiers & CAN_SEE)
-		filters[numFilters++] = &filterLOS;
+	/* The late filters answer one yes or no together, so they can run cheapest first, with the line of
+		 sight, two line walks across terrain and pathfind cells, last. A ground unit's search runs out to
+		 twice its reach for the high ground (getNextMoodTarget), and the elevated reach filter throws most
+		 of that ring away for the price of a distance; it used to do so after the walks.
+		 Two of them can leave state behind. The fog filter's shroud query records what each player has
+		 seen (PartitionData::getShroudedStatus), so with UNFOGGED it is asked of exactly the objects it
+		 always was, those the can-attack filter and the line of sight both let through, and only those
+		 two may change places ahead of it. That is the computer players' own case on a random map. The
+		 can-attack filter asks weapons their status, and Weapon::getStatus writes its answer back; the
+		 search asks under a Weapon::StatusPeek, which writes nothing, so which weapons got asked leaves
+		 no trace. */
+	const Bool fogFiltered = (qualifiers & UNFOGGED) != 0;
+
+	if (!fogFiltered)
+	{
+		if (optionalFilter)
+			filters[numFilters++] = optionalFilter;
+
+		if (qualifiers & IGNORE_INSIGNIFICANT_BUILDINGS)
+			filters[numFilters++] = &filterInsignificant;
+
+		filters[numFilters++] = &filterStealth;
+	}
 
 	if (qualifiers & CAN_ATTACK)
 		filters[numFilters++] = &filterAttack;
 
-	if (qualifiers & UNFOGGED)
+	if (qualifiers & CAN_SEE)
+		filters[numFilters++] = &filterLOS;
+
+	if (fogFiltered)
+	{
 		filters[numFilters++] = &filterFogged;
 
-	if (qualifiers & IGNORE_INSIGNIFICANT_BUILDINGS)
-		filters[numFilters++] = &filterInsignificant;
+		if (qualifiers & IGNORE_INSIGNIFICANT_BUILDINGS)
+			filters[numFilters++] = &filterInsignificant;
 
-	filters[numFilters++] = &filterStealth;
+		filters[numFilters++] = &filterStealth;
 
-	if (optionalFilter) 
-	{
-		filters[numFilters++] = optionalFilter;
+		if (optionalFilter)
+			filters[numFilters++] = optionalFilter;
 	}
 
 	filters[numFilters] = NULL;
+
+	Weapon::StatusPeek peek;
 
 	// filterObvious goes first in both lists and lets only ENEMIES through, so a cell holding no
 	// enemy player's Object cannot hold an answer and the searches below pass over it: the same
 	// objects reach the filters in the same order, and no filter after the first ever sees the rest
 	const PlayerMaskType enemyPlayers = me->getTeam()->getEnemyPlayerMask();
 
-	if (info == NULL || info == TheScriptEngine->getDefaultAttackInfo())
+	const Bool scripted = info != NULL && info != TheScriptEngine->getDefaultAttackInfo();
+
+	/* ANY_WILL_DO: the first object the search meets that every filter passes, over the objects the
+		 full search would look at, in the walk it would take. It is NULL exactly when the full search's
+		 answer is: with no leader yet, any candidate that passes every filter takes the lead, and with a
+		 priority set any candidate the set does not give priority 0 does. The idle-hunt check ran a
+		 whole-map gather per idle unit for that one bit, 25 of them in a 67ms frame. With the fog filter
+		 in the list the full search runs, so the shroud query sees the objects it always saw. */
+	// a logic job runs the two gathering forms below and gives up on the others
+	if (job && ((qualifiers & ANY_WILL_DO) || (!scripted && !(qualifiers & PREFER_BEST_TARGET))))
+	{
+		job->aborted = TRUE;
+		return NULL;
+	}
+
+	if ((qualifiers & ANY_WILL_DO) && !fogFiltered)
+	{
+		PartitionFilterAttackPriority filterPriority(info);
+		PartitionFilter *anyFilters[18];
+		Int numAnyFilters = 0;
+		for (Int f = 0; f < numGatherFilters; ++f)
+			anyFilters[numAnyFilters++] = filters[f];
+		if (scripted)
+			anyFilters[numAnyFilters++] = &filterPriority;
+		for (Int f = numGatherFilters; f < numFilters; ++f)
+			anyFilters[numAnyFilters++] = filters[f];
+		anyFilters[numAnyFilters] = NULL;
+		// a priority set's search and pickBestTarget's gather, which over the whole map walks the module
+		// list; the plain nearest search walks rings out from the unit (PartitionManager::getAnyObject)
+		const Bool gathers = scripted || (qualifiers & PREFER_BEST_TARGET) != 0;
+		return ThePartitionManager->getAnyObject(me, range, FROM_BOUNDINGSPHERE_2D, anyFilters, enemyPlayers, gathers);
+	}
+
+	if (!scripted)
 	{
 		if (qualifiers & PREFER_BEST_TARGET)
 		{
 			// gathered with the cheap filters; pickBestTarget asks the rest only of a leader
-			SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_SORTED_NEAR_TO_FAR, enemyPlayers);
+			SimpleObjectIterator *iter = AI_gatherEnemies(me, range, gatherFilters, ITER_SORTED_NEAR_TO_FAR, enemyPlayers, job);
+			if (iter == NULL)
+				return NULL;
 			MemoryPoolObjectHolder holder(iter);
+			if (job)
+				holder.release();
 			return pickBestTarget(me, iter, filters + numGatherFilters);
 		}
 
@@ -1271,6 +1564,27 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	// The leader is rated only once a tie needs it, and a tied candidate by the same prune as
 	// pickBestTarget.
 	const Bool rated = (qualifiers & PREFER_BEST_TARGET) != 0;
+
+	/* A hunter asks this of the whole map once a second, and the gather below visited every Object on it,
+		 80% of all the objects range queries looked at in a 32-player match, to pick an enemy mostly close
+		 by. The pick is the best by priority after distance, then priority, then the smaller distance, and
+		 nothing far enough off can beat a leader once distance has taken enough priority away, so the search
+		 walks out from the unit and stops there (AttackPriorityPick). The rated tie-break reads the leader's
+		 weapons in the gather's order and keeps this loop, and so does the fog filter, whose shroud query
+		 records what it was asked. */
+	if (!rated && !fogFiltered && m_aiData->m_attackPriorityDistanceModifier > 0.0f)
+	{
+		// the walk shares the partition's state; a logic job gives up rather than run it
+		if (job)
+		{
+			job->aborted = TRUE;
+			return NULL;
+		}
+		AttackPriorityPick pick(info, filters + numGatherFilters);
+		if (ThePartitionManager->visitNearestFirst(me, range, gatherFilters, enemyPlayers, &pick))
+			return pick.getBest();
+	}
+
 	AIShooter shooter;
 	if (rated)
 		AI_readShooter(me, shooter);
@@ -1278,32 +1592,19 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	Bool bestRated = FALSE;
 	// unsorted, see AI_attackPriorityTakesLead; each entry carries the distance the gather measured,
 	// which is what getDistanceSquared would measure again
-	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, gatherFilters, ITER_FASTEST, enemyPlayers);
+	SimpleObjectIterator *iter = AI_gatherEnemies(me, range, gatherFilters, ITER_FASTEST, enemyPlayers, job);
+	if (iter == NULL)
+		return NULL;
 	MemoryPoolObjectHolder holder(iter);
+	if (job)
+		holder.release();
 	Real distSqr;
 	for (Object *theEnemy = iter->firstWithNumeric(&distSqr); theEnemy; theEnemy = iter->nextWithNumeric(&distSqr))
 	{
-		Int curPriority = info->getPriority(theEnemy->getTemplate());
-		if (curPriority == 0) 
-			continue; // don't attack 0 priority targets.
-
-		/* check for garrisoned buildings/vehicles & see if a higher priority unit is inside. */
-		ContainModuleInterface* contain = theEnemy->getContain();
-		if (contain) {
-			TPriorityInfo priorityInfo;
-			priorityInfo.priority = curPriority;
-			priorityInfo.info = info;
-			contain->iterateContained( priorityFunc, &priorityInfo, false ) ;
-			if (priorityInfo.priority > curPriority) {
-				curPriority = priorityInfo.priority;
-			}
-		}
-
-		Real dist = sqrt(distSqr);
-		Int modifier = floatToIntAsMsvc(dist/TheAI->getAiData()->m_attackPriorityDistanceModifier);
-		Int modPriority = curPriority-modifier;
-		if (modPriority < 1)
-			modPriority = 1;
+		Int curPriority;
+		if (!AI_attackPriorityOf(info, theEnemy, curPriority))
+			continue;
+		const Int modPriority = AI_attackPriorityAtDistance(curPriority, distSqr);
 		if (rated && bestEnemy != NULL && modPriority == effectivePriority && curPriority == actualPriority)
 		{
 			if (!bestRated)
@@ -1346,7 +1647,7 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		}
 	}
 	if (bestEnemy) {
-		//DEBUG_LOG(("Find closest found %s, hunter %s, info %s\n", bestEnemy->getTemplate()->getName().str(), 
+		//DEBUG_LOG(("Find closest found %s, hunter %s, info %s\n", bestEnemy->getTemplate()->getName().str(),
 		//	me->getTemplate()->getName().str(), info->getName().str()));
 	}
 	return bestEnemy;

@@ -46,7 +46,7 @@ class GameInfo;
 class NetCommandWrapperList;
 
 typedef std::map<UnsignedShort, AsciiString> FileCommandMap;
-typedef std::map<UnsignedShort, UnsignedByte> FileMaskMap;
+typedef std::map<UnsignedShort, SlotMask> FileMaskMap;
 typedef std::map<UnsignedShort, Int> FileProgressMap;
 
 class ConnectionManager
@@ -65,10 +65,10 @@ public:
 	void attachTransport(Transport *transport);
 
 	void parseUserList(const GameInfo *game);
-	void sendChat(UnicodeString text, Int playerMask, UnsignedInt executionFrame);
+	void sendChat(UnicodeString text, SlotMask playerMask, UnsignedInt executionFrame);
 	void sendDisconnectChat(UnicodeString text);
-	void sendLocalCommand(NetCommandMsg *msg, UnsignedByte relay = 0xff) { sendLocalCommandDirect(msg, relay); }	///< Every command goes straight to each player now; see sendLocalCommandDirect.
-	void sendLocalCommandDirect(NetCommandMsg *msg, UnsignedByte relay);		///< Send command straight to each player in the relay, and file it locally when our bit is set.
+	void sendLocalCommand(NetCommandMsg *msg, SlotMask relay = SLOTMASK_ALL) { sendLocalCommandDirect(msg, relay); }	///< Every command goes straight to each player now; see sendLocalCommandDirect.
+	void sendLocalCommandDirect(NetCommandMsg *msg, SlotMask relay);		///< Send command straight to each player in the relay, and file it locally when our bit is set.
 	void sendLocalGameMessage(GameMessage *msg, UnsignedInt frame);
 	void sendCommand(NetCommandMsg *msg);
 	Bool allCommandsReady(UnsignedInt frame, Bool justTesting = FALSE);
@@ -85,8 +85,8 @@ public:
 	void processFrameTick(UnsignedInt frame);
 	void handleLocalPlayerLeaving(UnsignedInt frame);
 
-	void sendFile(AsciiString path, UnsignedByte playerMask, UnsignedShort commandID);
-	UnsignedShort sendFileAnnounce(AsciiString path, UnsignedByte playerMask);
+	void sendFile(AsciiString path, SlotMask playerMask, UnsignedShort commandID);
+	UnsignedShort sendFileAnnounce(AsciiString path, SlotMask playerMask);
 	Int getFileTransferProgress(Int playerID, AsciiString path);
 	Bool areAllQueuesEmpty(void);
 

@@ -1209,6 +1209,7 @@ ThingTemplate::ThingTemplate() :
 	m_threatValue = 0;
 	m_maxSimultaneousOfType = 0;	// unlimited
   m_maxSimultaneousLinkKey = NAMEKEY_INVALID; // Not linked
+	m_nameKey = NAMEKEY_INVALID;
   m_maxSimultaneousDeterminedBySuperweaponRestriction = false;
 	m_crusherLevel = 0;			//Unspecified, this object is unable to crush anything!
 	m_crushableLevel = 255; //Unspecified, this object is unable to be crushed by anything!
@@ -1396,6 +1397,7 @@ void ThingTemplate::copyFrom(const ThingTemplate* that)
 	this->m_nextThingTemplate = next;
 	this->m_templateID = id;
 	this->m_nameString = name;
+	this->m_nameKey = NAMEKEY_INVALID;	// that's key came along with the copy, and that may be named otherwise
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1703,7 +1705,7 @@ Int ThingTemplate::calcCostToBuild( const Player* player) const
 		return 0;
 
 	// changePercent format is "-.2 equals 20% cheaper"
-	Real factionModifier = 1 + player->getProductionCostChangePercent( getName() );
+	Real factionModifier = 1 + player->getProductionCostChangePercent( getNameKey() );
 	factionModifier *= player->getProductionCostChangeBasedOnKindOf( m_kindof );
 	return getBuildCost() * factionModifier * player->getHandicap()->getHandicap(Handicap::BUILDCOST, this);
 }
@@ -1739,7 +1741,7 @@ Int ThingTemplate::calcTimeToBuild( const Player* player) const
 	Int buildTime = getBuildTime() * LOGICFRAMES_PER_SECOND;
 	buildTime *= player->getHandicap()->getHandicap(Handicap::BUILDTIME, this);
 
-	Real factionModifier = 1 + player->getProductionTimeChangePercent( getName() );
+	Real factionModifier = 1 + player->getProductionTimeChangePercent( getNameKey() );
 	buildTime *= factionModifier;
 
 	if( player->buildsInstantly() )

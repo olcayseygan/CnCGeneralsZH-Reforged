@@ -1961,7 +1961,7 @@ void grabSinglePlayerInfo( void )
 			for(Int k = 0; k < MAX_PLAYER_COUNT; ++k)
 			{
 				localPlayer = ThePlayerList->getNthPlayer(k);
-				if(localPlayer->getPlayerType() == PLAYER_HUMAN)
+				if(localPlayer && localPlayer->getPlayerType() == PLAYER_HUMAN)
 				{
 					populatePlayerInfo(localPlayer, playerCount);
 					++playerCount;
@@ -2098,7 +2098,9 @@ static void hideScoreTable( void )
 		for( Int each = 0; each < ARRAY_SIZE( rowWindows ); ++each )
 		{
 			winName.format( rowWindows[ each ], i );
-			TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( winName ) )->winHide( TRUE );
+			GameWindow *row = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( winName ) );
+			if( row )	// the layout has eight rows, MAX_SLOTS may be more
+				row->winHide( TRUE );
 		}
 	}
 }

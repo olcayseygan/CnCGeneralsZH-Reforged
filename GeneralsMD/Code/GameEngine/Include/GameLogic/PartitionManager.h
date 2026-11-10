@@ -337,7 +337,7 @@ struct ShroudStatusStoreRestore
 class PartitionCell : public Snapshot	// not MPO: allocated in an array
 {
 private:
-	// A cell is near 300 bytes and the walks over cells - range queries, collision passes, sight
+	// A cell is near 800 bytes (16 a player) and the walks over cells - range queries, collision passes, sight
 	// tests, moving an Object's coverage - read only these first few fields of each, so they sit
 	// together at the front where one cache line holds them; the per-player arrays follow.
 	CellAndObjectIntersection*		m_firstCoiInCell;	///< list of COIs in this cell (may be null).
@@ -432,7 +432,9 @@ public:
 //=====================================
 class PartitionData : public MemoryPoolObject
 {
-	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(PartitionData, "PartitionDataPool" )		
+	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(PartitionData, "PartitionDataPool" )
+
+	friend class PartitionManager;	// the center grid's links
 
 private:
 
@@ -443,12 +445,15 @@ private:
 		NEED_CELL_UPDATE_AND_COLLISION_CHECK
 	};
 
+	enum { CENTER_NONE = -1, CENTER_BIG = -2 };	///< m_centerCell when in no list, and in the wide Objects' list
+
 	Object											*m_object;								///< Object this module is for
 	Int													m_doneFlag;								///< beside m_object: a range query reads both of every COI it walks
 	Int													m_coiInUseCount;					///< number of COIs that are actually in use; the whole-map walk reads it with m_object and m_next
 	GhostObject										*m_ghostObject;							///< Temporary object used when real object is gone but player thinks it's there because of fog.
 	PartitionData								*m_next;									///< next module in master list
 	PartitionData								*m_prev;									///< prev module in master list
+	Int													m_moduleIndex;						///< its slot in PartitionManager's m_moduleArray
 	PartitionData								*m_nextDirty;
 	PartitionData								*m_prevDirty;
 
@@ -458,7 +463,10 @@ private:
 	Bool												m_sightBlocker;						///< its COIs count in their cells' m_sightBlockerCoiCount; fixed from attachToObject on
 	Bool												m_noCollide;							///< its Object is KINDOF_NO_COLLIDE, for collidesWith
 	DirtyStatus									m_dirtyStatus;
-	ObjectShroudStatus					m_shroudedness[MAX_PLAYER_COUNT];						
+	PartitionData								*m_centerNext;						///< next in its center-grid list (PartitionManager::visitNearestFirst)
+	PartitionData								*m_centerPrev;
+	Int													m_centerCell;							///< the cell its Object's center is in, CENTER_BIG, or CENTER_NONE
+	ObjectShroudStatus					m_shroudedness[MAX_PLAYER_COUNT];
 	ObjectShroudStatus					m_shroudednessPrevious[MAX_PLAYER_COUNT];	///<previous frames value of m_shroudedness						
 	Bool												m_everSeenByPlayer[MAX_PLAYER_COUNT];		///<whether this object has ever been seen by a given player.
 	const PartitionCell					*m_lastCell;							///< The last cell I thought my center was in.
@@ -585,6 +593,10 @@ public:
 	Bool isFullyShroudedFor(Int playerIndex);	///< is every cell it touches shrouded for that player
 
 	ObjectShroudStatus getShroudedStatus(Int playerIndex);
+	/** What getShroudedStatus would answer now, writing nothing: no cached status, no previous status,
+		no "ever seen", no ghost snapshot. A logic job asks this and the logic thread replays the real
+		question later in the same order (ShroudPeekRecord). */
+	ObjectShroudStatus peekShroudedStatus(Int playerIndex) const;
 
 	inline Int wasSeenByAnyPlayers() const	///<check if a player in the game has seen the object but is now looking at fogged version.
 	{	
@@ -631,6 +643,10 @@ public:
 	Int friend_getDoneFlag() { return m_doneFlag; }
 	void friend_setDoneFlag(Int i) { m_doneFlag = i; }
 
+	// these are only for use by PartitionManager's module array
+	Int friend_getModuleIndex() const { return m_moduleIndex; }
+	void friend_setModuleIndex(Int i) { m_moduleIndex = i; }
+
 	inline Bool isInListDirtyModules(PartitionData* const* pListHead) const
 	{
 		Bool result = (*pListHead == this || m_prevDirty || m_nextDirty);
@@ -673,6 +689,13 @@ class PartitionFilter
 {
 public:
 	virtual Bool allow(Object *objOther) = 0;
+	/** TRUE when allow() only reads: it writes no member, cache, counter or Object, allocates nothing and
+		draws no random number, along every path. A gather whose filters all say so splits its walk across
+		the logic thread's job pool (LOGIC-PARALLEL.md), where allow() runs on several threads at once and
+		may be asked twice of one Object. A worker is not the logic thread: anything keyed on
+		LogicThread::t_isLogicThread or GameLogic::isInGameLogicUpdate answers differently there, so a
+		filter that reaches one stays FALSE. FALSE, the default, keeps the walk on one thread. */
+	virtual Bool isReadOnly() const { return FALSE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() = 0;
 #endif
@@ -745,6 +768,7 @@ public:
 	};
 	PartitionFilterRelationship(const Object *obj, Int flags) : m_obj(obj), m_flags(flags) { }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterRelationship"; }
 #endif
@@ -888,6 +912,7 @@ private:
 public:
 	PartitionFilterAcceptByObjectStatus( ObjectStatusMaskType mustBeSet, ObjectStatusMaskType mustBeClear) : m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) { }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterAcceptByObjectStatus"; }
 #endif
@@ -904,10 +929,11 @@ private:
 	ObjectStatusMaskType m_mustBeSet, m_mustBeClear;
 public:
 	PartitionFilterRejectByObjectStatus( ObjectStatusMaskType mustBeSet, ObjectStatusMaskType mustBeClear ) 
-		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) 
-	{ 
+		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear)
+	{
 	}
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterRejectByObjectStatus"; }
 #endif
@@ -923,8 +949,9 @@ private:
 	const Object *m_obj;
 	Bool m_allow;
 public:
-	PartitionFilterStealthedAndUndetected( const Object *obj, Bool allow ) { m_obj = obj; m_allow = allow; } 
+	PartitionFilterStealthedAndUndetected( const Object *obj, Bool allow ) { m_obj = obj; m_allow = allow; }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterStealthedAndUndetected"; }
 #endif
@@ -941,6 +968,7 @@ private:
 public:
 	PartitionFilterAcceptByKindOf(const KindOfMaskType& mustBeSet, const KindOfMaskType& mustBeClear) : m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) { }
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterAcceptByKindOf"; }
 #endif
@@ -957,10 +985,11 @@ private:
 	KindOfMaskType m_mustBeSet, m_mustBeClear;
 public:
 	PartitionFilterRejectByKindOf(const KindOfMaskType& mustBeSet, const KindOfMaskType& mustBeClear) 
-		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear) 
-	{ 
+		: m_mustBeSet(mustBeSet), m_mustBeClear(mustBeClear)
+	{
 	}
 	virtual Bool allow(Object *objOther);
+	virtual Bool isReadOnly() const { return TRUE; }
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual const char* debugGetName() { return "PartitionFilterRejectByKindOf"; }
 #endif
@@ -991,6 +1020,7 @@ class PartitionFilterAlive : public PartitionFilter
 {
 public:
 	PartitionFilterAlive(void) { }
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow(Object *objOther);
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1009,6 +1039,7 @@ private:
 	const Object *m_obj;
 public:
 	PartitionFilterSameMapStatus(const Object *obj) : m_obj(obj) { }
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow(Object *objOther);
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1024,6 +1055,7 @@ class PartitionFilterOnMap : public PartitionFilter
 {
 public:
 	PartitionFilterOnMap() { }
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow(Object *objOther);
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1044,6 +1076,7 @@ private:
 	Bool m_acquireEnemies;
 public:
 	PartitionFilterRejectBuildings(const Object *o);
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1064,6 +1097,7 @@ private:
 public:
 	PartitionFilterInsignificantBuildings(Bool allowNonBuildings, Bool allowInsignificant) : 
 			m_allowNonBuildings(allowNonBuildings), m_allowInsignificant(allowInsignificant) {}
+	virtual Bool isReadOnly() const { return TRUE; }
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1076,14 +1110,30 @@ protected:
  * Accept if they are at least partly clear, not wholly fogged or shrouded, or, given a radar
  * player, if that player's radar tracks them in the fog (RadarCoverageBehavior::isTracked)
  */
+/** The shroud questions a logic job asked, in order, with the answers peekShroudedStatus gave. The logic
+	thread asks them again for real (replayShroudPeeks): the same side effects in the same order, and the
+	job's answer stands only if every reply matches. */
+struct ShroudPeekRecord
+{
+	enum { CAPACITY = 48 };
+	const Object				*objects[ CAPACITY ];
+	ObjectShroudStatus	status[ CAPACITY ];
+	Int									playerIndex;
+	Int									count;
+	Bool								overflowed;
+};
+Bool replayShroudPeeks( const ShroudPeekRecord &record );
+
 class PartitionFilterFreeOfFog : public PartitionFilter
 {
 private:
 	Int m_comparisonIndex;
 	const Player *m_radar;
+	ShroudPeekRecord *m_peeks;		///< when set, peek and record instead of asking (a logic job's search)
 public:
 	PartitionFilterFreeOfFog(Int toWhom, const Player *radar = NULL) :
-			m_comparisonIndex(toWhom), m_radar(radar){}
+			m_comparisonIndex(toWhom), m_radar(radar), m_peeks(NULL){}
+	void peekInto( ShroudPeekRecord *record ) { m_peeks = record; }
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1303,7 +1353,45 @@ protected:
 };
 
 //=====================================
-/** 
+/**
+	Which objects the gather that PartitionManager::visitNearestFirst stands in for would hold, and in what
+	order its list would hand them out. It walks the master list when its range reaches every cell and the
+	cells in rings otherwise (getClosestObjects), and the ring walk holds only objects in a cell of a ring it
+	reaches that some player of the mask touches.
+*/
+//=====================================
+class PartitionGatherOrder
+{
+public:
+	Bool holds( const Object *obj ) const;
+	Bool listsBefore( const Object *a, const Object *b ) const;
+private:
+	friend class PartitionManager;
+	PartitionManager	*m_manager;
+	Bool							m_rings;
+	Int								m_cellX, m_cellY;		///< the gather's center cell, unclamped
+	Int								m_ringLimit;
+	PlayerMaskType		m_players;
+};
+
+//=====================================
+/**
+	What PartitionManager::visitNearestFirst hands the objects to. visit gets every object that passes the
+	gather's distance and filters, in no order the answer may depend on; the order says which of them the
+	gather would hold and how it would list them. isSettled is asked before each ring further out whether no
+	object at least minDist away, by the distance FROM_BOUNDINGSPHERE_2D measures, could change the answer.
+*/
+//=====================================
+class PartitionNearestFirstVisitor
+{
+public:
+	virtual ~PartitionNearestFirstVisitor() { }
+	virtual void visit( Object *obj, Real distSqr, const PartitionGatherOrder &order ) = 0;
+	virtual Bool isSettled( Real minDist ) const = 0;
+};
+
+//=====================================
+/**
 	PartitionManager is the singleton class that manages the entire partition/collision
 	system. It maintains the set of PartitionCells that correspond to the world system,
 	and updates the PartitionDatas as needed during update phase.
@@ -1319,6 +1407,21 @@ private:
 #endif
 
 	PartitionData		*m_moduleList;		///< master partition module list
+
+	/** m_moduleList again as an array, oldest first, with NULL where a module left: walked from the back
+		it is the list's order. The whole-map walk reads it, so it waits on independent loads instead of on
+		each m_next in turn (most of a hunt scan's time), and can split it across threads. */
+	std::vector<PartitionData *>	m_moduleArray;
+	Int							m_moduleArrayHoles;
+
+	/** gatherFromJob's visited marks, one array a JobSystem::threadSlot indexed like m_moduleArray: a
+		module is visited in this query when its stamp is the slot's current epoch. */
+	enum { JOB_GATHER_SLOTS = 32 };
+	std::vector<Int>	m_jobStamps[ JOB_GATHER_SLOTS ];
+	Int							m_jobEpoch[ JOB_GATHER_SLOTS ];
+
+	void addToModuleArray( PartitionData *mod );
+	void removeFromModuleArray( PartitionData *mod );
 
 	Region3D				m_worldExtents;		///< should be same as TheTerrainLogic->getExtents()
 	Real						m_cellSize;				///< edge size of each cell, in world coord space
@@ -1336,7 +1439,24 @@ private:
 #ifdef FASTER_GCO
 	Int							m_maxGcoRadius;
 	RadiusVec				m_radiusVec;
+	OffsetVec				m_ringOffsets;		///< m_radiusVec end to end, the ring walk's order, so a gather can split it
+	std::vector<Int>	m_ringStart;			///< where each radius starts in m_ringOffsets, one past the last at the end
 #endif
+
+	/** Every registered Object again, by the cell its center stands in now, for visitNearestFirst. A cell's
+		COIs are where the Object stood at the last update, and it may creep below the move threshold that
+		redoes them; this list moves on every report (noteObjectMovedOrResized). An Object wider than
+		CENTER_GRID_MAX_RADIUS sits in m_centerBig instead, so a cell's bound needs no radius bigger. */
+	std::vector<PartitionData *>	m_centerCells;
+	PartitionData		*m_centerBig;
+	Bool						m_centerGridValid;	///< built by update after an init, reset or load; untouched until then
+	Int centerCellOf( const Object *obj ) const;
+	void linkCenter( PartitionData *mod );
+	void buildCenterGrid( void );
+
+	friend class PartitionGatherOrder;
+	/// where the ring walk first meets obj, as its ring, its cell's place in the ring and its place in that cell; FALSE if never
+	Bool ringMeeting( const PartitionGatherOrder &order, const Object *obj, Bool firstOnly, Int &ring, Int &slot, Int &place );
 
 protected:
 
@@ -1353,7 +1473,9 @@ protected:
 		SimpleObjectIterator *iter,	// if nonnull, append ALL satisfactory objects to the iterator (not just the single closest)
 		Real *closestDistArg,
 		Coord3D *closestVecArg,
-		PlayerMaskType onlyPlayers = PLAYERMASK_ALL
+		PlayerMaskType onlyPlayers = PLAYERMASK_ALL,
+		Bool anyWillDo = false,	// stop at the first satisfactory object, whichever it is
+		Bool walkAsGather = false	// with anyWillDo: walk the way a gathering query (iter) would
 	);
 
 	void shutdown( void );
@@ -1412,6 +1534,41 @@ public:
 	static Int getGatherCountThisFrame( void );		///< of those, the ones that keep every hit in a sorted iterator
 	static Int getQueryObjectCountThisFrame( void );
 	static void resetQueryCounts( void );
+	/** The counts gathersFromJob kept to itself, added on the logic thread after the join. */
+	static void noteJobGathers( Int gathers, Int objectsLookedAt );
+
+	/** What gatherFromJob found, in the caller's own arrays (LOGIC-PARALLEL.md). */
+	struct JobGather
+	{
+		Object	**objects;				///< in the order iterateObjectsInRange inserts them (its iterator hands them out last first)
+		Real		*distSqr;					///< what the walk measured, the iterator's numeric
+		Int			capacity;
+		Int			count;
+		Bool		overflowed;				///< more passed than there was room for: ask again on the logic thread
+		Int			objectsLookedAt;	///< for noteJobGathers
+	};
+
+	/** iterateObjectsInRange's walk around obj for a job the logic thread forks: the same Objects with
+		the same distances in the same order, the visited modules marked in this thread's own stamps instead
+		of the done flags every other query shares, nothing allocated and no shared counter touched.
+		prepareJobGathers sizes the stamps on the logic thread before the fork. FALSE, with nothing found,
+		when a filter is not PartitionFilter::isReadOnly or this thread has no stamps; then the caller asks
+		on its own thread. */
+	Bool gatherFromJob( const Object *obj, Real maxDist, DistanceCalculationType dc, PartitionFilter **filters,
+											PlayerMaskType onlyPlayers, JobGather &out );
+	void prepareJobGathers( void );
+
+	/** While one lives on a thread, a whole range query asked there (getClosestObjects and all that is
+		built on it, which share done flags and allocate) answers nothing and says so in refused(). A logic
+		job's search can reach one down a path nobody made job-safe, a contact weapon's reach against a
+		building for one; its caller throws that job's answer away and asks on the logic thread. */
+	class JobQueryGuard
+	{
+	public:
+		JobQueryGuard( void );
+		~JobQueryGuard( void );
+		Bool refused( void ) const;
+	};
 	// ----------------------------------------------------------------
 
 	// --------------- inherited from Snapshot interface --------------
@@ -1500,6 +1657,28 @@ public:
 		Coord3D *closestDistVec = NULL,
 		PlayerMaskType onlyPlayers = PLAYERMASK_ALL
 	);
+	/** Some object within maxDist that the filters pass, NULL exactly when getClosestObject's answer is
+		(asGathered: when iterateObjectsInRange's is empty): the first one that search meets, walking the
+		way it walks, so a caller that only asks whether there is one stops there. */
+	Object *getAnyObject(
+		const Object *obj,
+		Real maxDist,
+		DistanceCalculationType dc,
+		PartitionFilter **filters,
+		PlayerMaskType onlyPlayers,
+		Bool asGathered
+	);
+
+	/** Hands the visitor the objects iterateObjectsInRange( obj, maxDist, FROM_BOUNDINGSPHERE_2D, filters,
+		ITER_FASTEST, onlyPlayers ) would look at and keep, the cells nearest obj first, until it says it is
+		settled, with the order that gather would list them in. FALSE, having visited nothing, before update
+		has built the center grid. */
+	Bool visitNearestFirst( const Object *obj, Real maxDist, PartitionFilter **filters, PlayerMaskType onlyPlayers,
+		PartitionNearestFirstVisitor *visitor );
+
+	/// Object's report of every transform change and of a size change that keeps its registration
+	void noteObjectMovedOrResized( PartitionData *mod );
+	void unlinkCenter( PartitionData *mod );	///< out of the center grid; for unRegisterObject and ~PartitionData
 
 	Real getRelativeAngle2D( const Object *obj, const Object *otherObj );
 	Real getRelativeAngle2D( const Object *obj, const Coord3D *pos );

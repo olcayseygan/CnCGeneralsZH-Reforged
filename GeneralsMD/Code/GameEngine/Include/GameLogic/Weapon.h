@@ -675,6 +675,16 @@ public:
 
 	WeaponStatus getStatus() const;
 
+	/** While one of these lives on a thread, getStatus there answers without writing the answer back into
+		m_status (see getStatus).  findClosestEnemy holds one while it runs its late filters in whatever
+		order is cheapest. */
+	class StatusPeek
+	{
+	public:
+		StatusPeek() { ++s_statusPeekDepth; }
+		~StatusPeek() { --s_statusPeekDepth; }
+	};
+
 	/// Some AI needs to know when the soonest I can possibly next shoot.  Bonuses have been figured into this number already.
 	UnsignedInt getPossibleNextShotFrame() const { return m_whenWeCanFireAgain; }
 	UnsignedInt getPreAttackFinishedFrame() const { return m_whenPreAttackFinished; }
@@ -816,9 +826,10 @@ protected:
 
 
 private:
+	static thread_local Int		s_statusPeekDepth;					///< StatusPeek guards alive on this thread
 	const WeaponTemplate*			m_template;									///< the kind of weapon this is
 	WeaponSlotType						m_wslot;										///< are we primary, secondary, etc. weapon? (used for projectile placement on reload)
-	mutable WeaponStatus			m_status;										///< weapon status 
+	mutable WeaponStatus			m_status;										///< weapon status
 	UnsignedInt								m_ammoInClip;								///< how many shots left in current clip
 	UnsignedInt								m_whenWeCanFireAgain;				///< the first frame the weapon can fire again
 	UnsignedInt								m_whenPreAttackFinished;		///< the frame the pre attack will complete.

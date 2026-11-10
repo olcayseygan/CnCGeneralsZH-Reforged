@@ -14,6 +14,7 @@ desync and show the check is looking.
     python net_check.py --prove                           # must report a mismatch
     python net_check.py --each "-scenario netstance" --keys "KEY_A CTRL,KEY_H"   # the stance key, both ways
     python net_check.py --relay 8094 --each "-latAvg 90 -latNoise 30"           # through a local relay
+    python net_check.py --copies 32 --map <a 32-spot map> --each "-headless"     # a full room, nothing drawn
 
 --relay starts `node relay/relay.js` on that UDP port, gives the copies 10.0.0.x slot addresses and
 -relay 127.0.0.1:port, and prints the relay's join and stats lines (one a minute) at the end.
@@ -35,9 +36,10 @@ from control_client import Control, ControlError
 RUN_DIRECTORY = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "Run"))
 EXE_NAME = "generals.exe"
 FIRST_CONTROL_PORT = 8787
-MAXIMUM_COPIES = 8  # eight ran clean on 2026-10-24; the map needs a start spot per copy (Iron Dragon has 8)
+MAXIMUM_COPIES = 32  # MAX_SLOTS in NetworkDefs.h; the map needs a start spot per copy (Iron Dragon has 8)
 CONNECT_TIMEOUT_SECONDS = 120.0
 MATCH_START_TIMEOUT_SECONDS = 180.0
+SECONDS_PER_EXTRA_COPY = 10.0  # copies load side by side on one machine, so a big room takes longer to come up
 PRESS_INTERVAL_SECONDS = 0.5
 PRESSES = ("KEY_A CTRL", "KEY_X", "KEY_S", "KEY_X")
 MISMATCH_LINE = "CRC Mismatch"
@@ -100,22 +102,28 @@ def command_line(arguments: argparse.Namespace, slot: int) -> list:
     return line
 
 
-def connect(port: int) -> Control:
-    deadline = time.monotonic() + CONNECT_TIMEOUT_SECONDS
+def slack(copies: int) -> float:
+    return SECONDS_PER_EXTRA_COPY * max(0, copies - 2)
+
+
+def connect(port: int, copies: int) -> Control:
+    timeout = CONNECT_TIMEOUT_SECONDS + slack(copies)
+    deadline = time.monotonic() + timeout
     while True:
         try:
             return Control(port)
         except (OSError, ControlError):
             if time.monotonic() > deadline:
-                raise ControlError("no control socket on port %d after %.0f s" % (port, CONNECT_TIMEOUT_SECONDS))
+                raise ControlError("no control socket on port %d after %.0f s" % (port, timeout))
             time.sleep(1.0)
 
 
 def wait_for_match(games: list) -> None:
-    deadline = time.monotonic() + MATCH_START_TIMEOUT_SECONDS
+    timeout = MATCH_START_TIMEOUT_SECONDS + slack(len(games))
+    deadline = time.monotonic() + timeout
     while not all(game.status()["inGame"] for game in games):
         if time.monotonic() > deadline:
-            raise ControlError("the match did not start on every copy within %.0f s" % MATCH_START_TIMEOUT_SECONDS)
+            raise ControlError("the match did not start on every copy within %.0f s" % timeout)
         time.sleep(1.0)
 
 
@@ -188,7 +196,7 @@ def main() -> int:
                  for slot in range(arguments.copies)]
     games = []
     try:
-        games = [connect(FIRST_CONTROL_PORT + slot) for slot in range(arguments.copies)]
+        games = [connect(FIRST_CONTROL_PORT + slot, arguments.copies) for slot in range(arguments.copies)]
         wait_for_match(games)
         results = play(arguments, games)
         for game in games:

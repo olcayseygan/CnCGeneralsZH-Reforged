@@ -52,6 +52,8 @@
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
 
+thread_local Int Thing::s_cachePeekDepth = 0;
+
 //=============================================================================
 /** Constructor */
 //=============================================================================
@@ -298,6 +300,8 @@ Real Thing::getHeightAboveTerrain() const
 {
 	if (!(m_cacheFlags & VALID_ALTITUDE_TERRAIN))
 	{
+		if (s_cachePeekDepth > 0)
+			return calculateHeightAboveTerrain();
 		m_cachedAltitudeAboveTerrain = calculateHeightAboveTerrain();
 		m_cacheFlags |= VALID_ALTITUDE_TERRAIN;
 	}
@@ -312,14 +316,18 @@ Real Thing::getHeightAboveTerrainOrWater() const
 	{
 		const Coord3D* pos = getPosition();
 		Real waterZ;
-		if (TheTerrainLogic->isUnderwater(pos->x, pos->y, &waterZ)) 
+		Real altitude;
+		if (TheTerrainLogic->isUnderwater(pos->x, pos->y, &waterZ))
 		{
-			m_cachedAltitudeAboveTerrainOrWater = pos->z - waterZ;
-		} 
+			altitude = pos->z - waterZ;
+		}
 		else
 		{
-			m_cachedAltitudeAboveTerrainOrWater = getHeightAboveTerrain();
+			altitude = getHeightAboveTerrain();
 		}
+		if (s_cachePeekDepth > 0)
+			return altitude;
+		m_cachedAltitudeAboveTerrainOrWater = altitude;
 		m_cacheFlags |= VALID_ALTITUDE_SEALEVEL;
 	}
 	return m_cachedAltitudeAboveTerrainOrWater;

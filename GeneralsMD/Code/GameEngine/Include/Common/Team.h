@@ -348,7 +348,8 @@ public:
 	Bool someInsideSomeOutside(PolygonTrigger *pTrigger, UnsignedInt whichToConsider) const;///< One or more in, one or more out.
 	Bool noneInside(PolygonTrigger *pTrigger, UnsignedInt whichToConsider) const;					///< No members are in the area.
 
-	Object * tryToRecruit(const ThingTemplate *, const Coord3D *teamHome, Real maxDist); ///< Try to recruit the closest unit of this thing type.  Return true if successful.
+	Object * tryToRecruit(const ThingTemplate *, const Coord3D *teamHome, Real maxDist,
+		const std::vector<Object *> *ownObjects = NULL); ///< Try to recruit the closest unit of this thing type.  Return true if successful.  ownObjects: the controlling player's objects in the order the object list holds them, which the walk may take instead of the whole list
 
 	/**
 		return our relationship with the other team.

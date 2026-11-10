@@ -41,7 +41,7 @@
 //-------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------
 
-static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, Int mask )
+static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, SlotMask mask )
 {
 	Bool fileTransferDone = FALSE;
 	Int fileTransferPercent = 0;
@@ -247,14 +247,14 @@ AsciiString GetReadmeFromMap( AsciiString path )
 Bool DoAnyMapTransfers(GameInfo *game)
 {
 	TheGameInfo = game;
-	Int mask = 0;
+	SlotMask mask = 0;
 	Int i=0;
 	for (i=1; i<MAX_SLOTS; ++i)
 	{
 		if (TheGameInfo->getConstSlot(i)->isHuman() && !TheGameInfo->getConstSlot(i)->hasMap())
 		{
 			DEBUG_LOG(("Adding player %d to transfer mask\n", i));
-			mask |= (1<<i);
+			mask |= slotBit(i);
 		}
 	}
 	if (!mask)

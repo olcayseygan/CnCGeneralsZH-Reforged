@@ -216,6 +216,21 @@ Int AttackPriorityInfo::getPriority(const ThingTemplate *tThing) const
 	return priority;
 }
 
+//-------------------------------------------------------------------------------------------------
+Int AttackPriorityInfo::getMaxPriority(void) const
+{
+	Int priority = m_defaultPriority;
+	if (m_priorityMap)
+	{
+		for (AttackPriorityMap::const_iterator it = m_priorityMap->begin(); it != m_priorityMap->end(); ++it)
+		{
+			if ((*it).second > priority)
+				priority = (*it).second;
+		}
+	}
+	return priority;
+}
+
 #ifdef _DEBUG
 /** Dump the info. */
 //-------------------------------------------------------------------------------------------------
@@ -5339,6 +5354,8 @@ void ScriptEngine::reset( void )
 		m_flags[i].value = false;
 		m_flags[i].name.clear();
 	}
+	m_counterIndex.clear();
+	m_flagIndex.clear();
 
 	m_breezeInfo.m_direction = PI/3;
 	m_breezeInfo.m_directionVec.x = Sin(m_breezeInfo.m_direction);
@@ -5481,6 +5498,8 @@ void ScriptEngine::newMap( void )
 		m_flags[i].value = false;
 		m_flags[i].name.clear();
 	}
+	m_counterIndex.clear();
+	m_flagIndex.clear();
 	m_endGameTimer = -1;
 	m_closeWindowTimer = -1;
 #ifdef SPECIAL_SCRIPT_PROFILING
@@ -5539,13 +5558,40 @@ void ScriptEngine::newMap( void )
 DECLARE_PERF_TIMER(ScriptEngine)
 #ifdef DEBUG_LOGGING
 //
-// The frame's worst script.  Filled in by executeScript, read by GameLogic when a frame runs over
-// budget, cleared at the top of every update.
+// The frame's three worst scripts.  Filled in by executeScript, read by GameLogic when a frame runs
+// over budget, cleared at the top of every update.  Only -slowframe times them (theScriptsTimed):
+// a 32-player match's eval spikes ran to 74ms with nothing in the log to name the script, and a
+// clock around every script is not something a player's build should carry for that.  A skirmish
+// AI's scripts carry the same names in every seat, so the seat goes with the name.  A script's time
+// includes the subroutines it calls.
 //
-static Real theWorstScriptMS = 0.0f;
-static AsciiString theWorstScriptName;
+enum { WORST_SCRIPTS = 3 };
+static Bool theScriptsTimed = FALSE;
+static Real theWorstScriptMS[ WORST_SCRIPTS ];
+static AsciiString theWorstScriptName[ WORST_SCRIPTS ];
+static Int theWorstScriptSeat[ WORST_SCRIPTS ];
 static Real theScriptTotalMS = 0.0f;
 static Int theScriptRunCount = 0;
+
+static void noteScriptTime( const AsciiString &name, Int seat, Real ms )
+{
+	theScriptRunCount++;
+	theScriptTotalMS += ms;
+	Int at = WORST_SCRIPTS;
+	while( at > 0 && ms > theWorstScriptMS[ at - 1 ] )
+		--at;
+	if( at == WORST_SCRIPTS )
+		return;
+	for( Int down = WORST_SCRIPTS - 1; down > at; --down )
+	{
+		theWorstScriptMS[ down ] = theWorstScriptMS[ down - 1 ];
+		theWorstScriptName[ down ] = theWorstScriptName[ down - 1 ];
+		theWorstScriptSeat[ down ] = theWorstScriptSeat[ down - 1 ];
+	}
+	theWorstScriptMS[ at ] = ms;
+	theWorstScriptName[ at ] = name;
+	theWorstScriptSeat[ at ] = seat;
+}
 
 //
 // update() is billed as "scripts" by GameLogic's slow-frame line, but only a part of it is scripts:
@@ -5608,9 +5654,22 @@ static void scriptPhaseEnd( Int phase )
 
 const char *ScriptEngine::getProfileReport( void )
 {
-	static char report[ 512 ];
-	Int used = sprintf( report, "%d scripts/%.1fms worst '%s' %.1fms |", theScriptRunCount, theScriptTotalMS,
-				 theWorstScriptName.isEmpty() ? "<none>" : theWorstScriptName.str(), theWorstScriptMS );
+	static char report[ 768 ];
+	Int used = 0;
+	if( !theScriptsTimed && theScriptRunCount == 0 )
+		used = sprintf( report, "scripts not timed (-slowframe times them) |" );
+	else
+	{
+		used = sprintf( report, "%d scripts/%.1fms worst", theScriptRunCount, theScriptTotalMS );
+		for( Int rank = 0; rank < WORST_SCRIPTS && !theWorstScriptName[ rank ].isEmpty(); rank++ )
+		{
+			// a script name is out of a map file and may be long; the three of them stay in 128 apiece
+			const Int wrote = snprintf( report + used, 128, " '%s' p%d %.1fms", theWorstScriptName[ rank ].str(),
+																	theWorstScriptSeat[ rank ], theWorstScriptMS[ rank ] );
+			used += wrote < 0 ? 0 : ( wrote > 127 ? 127 : wrote );
+		}
+		used += sprintf( report + used, " |" );
+	}
 	for( Int phase = 0; phase < SCRIPT_PHASE_COUNT; phase++ )
 		used += sprintf( report + used, " %s %.1f", theScriptPhaseName[phase], theScriptPhaseMS[phase] );
 	sprintf( report + used, " | seqlist %d iters %d grp %dx/%.1f (%d members) act %dx/%.1f worstact %d/%.1f",
@@ -5650,8 +5709,12 @@ void ScriptEngine::update( void )
 #endif
 #endif
 #ifdef DEBUG_LOGGING
-	theWorstScriptMS = 0.0f;
-	theWorstScriptName.clear();
+	theScriptsTimed = TheGlobalData && TheGlobalData->m_logicProfile;
+	for( Int rank = 0; rank < WORST_SCRIPTS; rank++ )
+	{
+		theWorstScriptMS[ rank ] = 0.0f;
+		theWorstScriptName[ rank ].clear();
+	}
 	theScriptTotalMS = 0.0f;
 	theScriptRunCount = 0;
 	for( Int phase = 0; phase < SCRIPT_PHASE_COUNT; phase++ )
@@ -5923,11 +5986,9 @@ void ScriptEngine::clearFlag(const AsciiString &name)
 		AsciiString modName;
 		modName.format("%s%d", name.str(), j);
 		// Note - flags start at 1.  0 means not assigned.
-		Int i;
-		for (i=1; i<m_numFlags; i++) {
-			if ((modName==m_flags[i].name)) {
-				m_flags[i].value = FALSE;
-			}
+		ScriptVariableIndex::const_iterator it = m_flagIndex.find(modName);
+		if (it != m_flagIndex.end() && it->second > 0) {
+			m_flags[it->second].value = FALSE;
 		}
 	}
 }  // end clearFlag
@@ -6285,21 +6346,21 @@ void ScriptEngine::runObjectScript(const AsciiString& scriptName, Object *pThisO
 //-------------------------------------------------------------------------------------------------
 Int ScriptEngine::allocateCounter( const AsciiString& name)
 {
-	Int i;
-	// Note - counters start at 1.  0 means not assigned.
-	for (i=1; i<m_numCounters; i++) {
-		if (name==m_counters[i].name) {
-			return i;
-		}
+	// Note - counters start at 1.  0 means not assigned, and is what a name gets when the table is
+	// full: the callers then read 0 and drop the write (see m_counterIndex).
+	ScriptVariableIndex::const_iterator it = m_counterIndex.find(name);
+	if (it != m_counterIndex.end()) {
+		return it->second;
 	}
-	DEBUG_ASSERTCRASH(m_numCounters<MAX_COUNTERS, ("Too many counters, failed to make '%s'.\n", name.str()));
+	Int i = 0;
 	if (m_numCounters < MAX_COUNTERS) {
-		m_counters[m_numCounters].name = name;
-		i = m_numCounters;
-		m_numCounters++;
-		return(i);
+		i = m_numCounters++;
+		m_counters[i].name = name;
+	} else {
+		DEBUG_LOG(("ScriptEngine: all %d script counters are taken, '%s' gets none: it reads 0 and ignores writes\n", MAX_COUNTERS, name.str()));
 	}
-	return 0; // Shouldn't ever happen.
+	m_counterIndex[name] = i;
+	return i;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6307,13 +6368,10 @@ Int ScriptEngine::allocateCounter( const AsciiString& name)
 //-------------------------------------------------------------------------------------------------
 const TCounter *ScriptEngine::getCounter(const AsciiString& counterName)
 {
-	Int i;
-	for (i=1; i<m_numCounters; i++)
+	ScriptVariableIndex::const_iterator it = m_counterIndex.find(counterName);
+	if (it != m_counterIndex.end() && it->second > 0)
 	{
-		if (counterName == m_counters[i].name)
-		{
-			return &(m_counters[i]);
-		}
+		return &(m_counters[it->second]);
 	}
 	return NULL;
 }
@@ -6423,21 +6481,21 @@ void ScriptEngine::removeNamedMapReveal(const AsciiString& revealName)
 //-------------------------------------------------------------------------------------------------
 Int ScriptEngine::allocateFlag( const AsciiString& name)
 {
-	Int i;
-	// Note - flags start at 1.  0 means not assigned.
-	for (i=1; i<m_numFlags; i++) {
-		if ((name==m_flags[i].name)) {
-			return i;
-		}
+	// Note - flags start at 1.  0 means not assigned, and is what a name gets when the table is
+	// full: the callers then read false and drop the write (see m_flagIndex).
+	ScriptVariableIndex::const_iterator it = m_flagIndex.find(name);
+	if (it != m_flagIndex.end()) {
+		return it->second;
 	}
-	DEBUG_ASSERTCRASH(m_numFlags < MAX_FLAGS, ("Too many flags, failed to make '%s'..\n", name.str()));
+	Int i = 0;
 	if (m_numFlags < MAX_FLAGS) {
-		m_flags[m_numFlags].name = name;
-		i = m_numFlags;
-		m_numFlags++;
-		return(i);
+		i = m_numFlags++;
+		m_flags[i].name = name;
+	} else {
+		DEBUG_LOG(("ScriptEngine: all %d script flags are taken, '%s' gets none: it reads false and ignores writes\n", MAX_FLAGS, name.str()));
 	}
-	return 0; // Shouldn't ever happen.
+	m_flagIndex[name] = i;
+	return i;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6527,6 +6585,9 @@ void ScriptEngine::setCounter( ScriptAction *pAction )
 		counterNdx = allocateCounter(pAction->getParameter(0)->getString());
 		pAction->getParameter(0)->friend_setInt(counterNdx);
 	}
+	if (counterNdx == 0) {
+		return;	// the table was full: slot 0 belongs to nobody
+	}
 	Int value = pAction->getParameter(1)->getInt();
 	m_counters[counterNdx].value = value;
 }
@@ -6601,7 +6662,9 @@ void ScriptEngine::addCounter( ScriptAction *pAction )
 		counterNdx = allocateCounter(pAction->getParameter(1)->getString());
 		pAction->getParameter(1)->friend_setInt(counterNdx);
 	}
-	m_counters[counterNdx].value += value;
+	if (counterNdx != 0) {	// 0: the table was full, and slot 0 belongs to nobody
+		m_counters[counterNdx].value += value;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6616,7 +6679,9 @@ void ScriptEngine::subCounter( ScriptAction *pAction )
 		counterNdx = allocateCounter(pAction->getParameter(1)->getString());
 		pAction->getParameter(1)->friend_setInt(counterNdx);
 	}
-	m_counters[counterNdx].value -= value;
+	if (counterNdx != 0) {	// 0: the table was full, and slot 0 belongs to nobody
+		m_counters[counterNdx].value -= value;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6660,7 +6725,9 @@ void ScriptEngine::setFlag( ScriptAction *pAction )
 		pAction->getParameter(0)->friend_setInt(flagNdx);
 	}
 	Bool value = pAction->getParameter(1)->getInt();
-	m_flags[flagNdx].value = value;
+	if (flagNdx != 0) {	// 0: the table was full, and slot 0 belongs to nobody
+		m_flags[flagNdx].value = value;
+	}
 }
 
 
@@ -6914,22 +6981,26 @@ void ScriptEngine::setTimer( ScriptAction *pAction, Bool millisecondTimer, Bool 
 		counterNdx = allocateCounter(pAction->getParameter(0)->getString());
 		pAction->getParameter(0)->friend_setInt(counterNdx);
 	}
+	Int frames;
 	if (millisecondTimer) {
 		Real value = pAction->getParameter(1)->getReal();
 		if (random) {
 			Real randomValue = pAction->getParameter(2)->getReal();
 			value = GameLogicRandomValue(value, randomValue);
 		}
-		m_counters[counterNdx].value = retailTimerFrames(value);
+		frames = retailTimerFrames(value);
 	} else {
 		Int value = pAction->getParameter(1)->getInt();
 		if (random) {
 			Int randomValue = pAction->getParameter(2)->getInt();
 			value = GameLogicRandomValue(value, randomValue);
 		}
-		m_counters[counterNdx].value = value;	// 30 Hz frames in the map, and timers tick at 30 Hz
+		frames = value;	// 30 Hz frames in the map, and timers tick at 30 Hz
 	}
-	m_counters[counterNdx].isCountdownTimer = true;
+	if (counterNdx != 0) {	// 0: the table was full, and slot 0 belongs to nobody (the draw above still happens)
+		m_counters[counterNdx].value = frames;
+		m_counters[counterNdx].isCountdownTimer = true;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6972,6 +7043,9 @@ void ScriptEngine::adjustTimer( ScriptAction *pAction, Bool millisecondTimer, Bo
 	if (counterNdx == 0) {
 		counterNdx = allocateCounter(pAction->getParameter(1)->getString());
 		pAction->getParameter(1)->friend_setInt(counterNdx);
+	}
+	if (counterNdx == 0) {
+		return;	// the table was full: slot 0 belongs to nobody
 	}
 	if (millisecondTimer) {
 		Real value = pAction->getParameter(0)->getReal();
@@ -7121,7 +7195,11 @@ void ScriptEngine::checkConditionsForTeamNames(Script *pScript)
 void ScriptEngine::executeScript( Script *pScript )
 {
 
+#ifdef SPECIAL_SCRIPT_PROFILING
+	// only the profiling build ever sets it to anything else, and at 32 players this was a store
+	// into each of ten thousand scripts a frame that the loop otherwise only reads
 	pScript->setCurTime(0);
+#endif
 	// If script is not active, return.
 	if (!pScript->isActive()) {
 		return;
@@ -7147,12 +7225,14 @@ void ScriptEngine::executeScript( Script *pScript )
 	}
 #ifdef DEBUG_LOGGING
 #ifdef SPECIAL_SCRIPT_PROFILING
-	Int64 startTime64;
-	Real timeToEvaluate=0.0f;
-	Int64 endTime64,freq64;
-	freq64 = Clock_Ticks_Per_Second();
-	startTime64 = Clock_Ticks();
+	const Bool scriptTimed = TRUE;
+#else
+	const Bool scriptTimed = theScriptsTimed;
 #endif
+	Int64 startTime64 = 0;
+	const Int scriptSeat = scriptTimed && m_currentPlayer ? m_currentPlayer->getPlayerIndex() : -1;
+	if( scriptTimed )
+		startTime64 = Clock_Ticks();
 #endif
 
 	Team *pSavConditionTeam = m_conditionTeam;
@@ -7214,21 +7294,15 @@ void ScriptEngine::executeScript( Script *pScript )
 		}
 	}
 #ifdef DEBUG_LOGGING
-#ifdef SPECIAL_SCRIPT_PROFILING
-	endTime64 = Clock_Ticks();
-	timeToEvaluate = ((Real)(endTime64-startTime64) / (Real)(freq64));
-	pScript->setCurTime(timeToEvaluate);
+	if( scriptTimed )
 	{
-		const Real scriptMS = timeToEvaluate * 1000.0f;
-		theScriptRunCount++;
-		theScriptTotalMS += scriptMS;
-		if( scriptMS > theWorstScriptMS )
-		{
-			theWorstScriptMS = scriptMS;
-			theWorstScriptName = pScript->getName();
-		}
-	}
+		const Int64 freq64 = Clock_Ticks_Per_Second();
+		const Real timeToEvaluate = freq64 > 0 ? (Real)((double)(Clock_Ticks() - startTime64) / (double)freq64) : 0.0f;
+#ifdef SPECIAL_SCRIPT_PROFILING
+		pScript->setCurTime(timeToEvaluate);
 #endif
+		noteScriptTime( pScript->getName(), scriptSeat, timeToEvaluate * 1000.0f );
+	}
 #endif
 
 	m_conditionTeam = pSavConditionTeam;
@@ -7773,7 +7847,9 @@ Bool ScriptEngine::evaluateConditions( Script *pScript, Team *thisTeam, Player *
 	OrCondition *pConditionHead = pScript->getOrCondition();
 	Bool testValue = false;
 
-#ifdef DEBUG_LOGGING
+// only the script statistics dump at newMap reads these, and it is SPECIAL_SCRIPT_PROFILING's; a
+// Release build with its debug log paid two clock reads per script evaluation for nobody
+#if defined(DEBUG_LOGGING) && defined(SPECIAL_SCRIPT_PROFILING)
 #define COLLECT_CONDITION_EVAL_TIMES
 #endif
 #ifdef COLLECT_CONDITION_EVAL_TIMES
@@ -9192,6 +9268,18 @@ void ScriptEngine::xfer( Xfer *xfer )
 		
 	// num flags
 	xfer->xferInt( &m_numFlags );
+
+	// the name index is not saved; rebuilt from the names, the first of a name winning as the old
+	// linear search did
+	if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_counterIndex.clear();
+		for( i = 1; i < m_numCounters && i < MAX_COUNTERS; ++i )
+			m_counterIndex.insert( ScriptVariableIndex::value_type( m_counters[ i ].name, i ) );
+		m_flagIndex.clear();
+		for( i = 1; i < m_numFlags && i < MAX_FLAGS; ++i )
+			m_flagIndex.insert( ScriptVariableIndex::value_type( m_flags[ i ].name, i ) );
+	}
 
 	// attack priority info
 	UnsignedShort attackPriorityInfoSize = m_numAttackInfo;

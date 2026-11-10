@@ -152,9 +152,13 @@ inline Real ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(Real degPerSec)
 }
 
 // ----------------------------------------------------------------------------------------------
-enum 
-{ 
-	MAX_PLAYER_COUNT = 16											///< max number of Players.
+// Every Player takes a seat: the neutral player at 0, the map's own sides (civilian and the like),
+// one per occupied game slot (MAX_SLOTS, 32) and the replay observer.  48 leaves the map fourteen sides
+// beside a full lobby.  Every per-player array in logic is this long, a PartitionCell's among them,
+// so it is not free; PlayerMaskType below caps it at 64.
+enum
+{
+	MAX_PLAYER_COUNT = 48											///< max number of Players.
 };
 
 //
@@ -171,13 +175,16 @@ inline Bool isValidPlayerIndex( Int playerIndex )
 /**
 	a bitmask that can uniquely represent each player.
 */
-#if MAX_PLAYER_COUNT <= 16
-	typedef UnsignedShort PlayerMaskType;
-	const PlayerMaskType PLAYERMASK_ALL = 0xffff;
-	const PlayerMaskType PLAYERMASK_NONE = 0x0;
-#else
-	#error "this is the wrong size"
-#endif
+typedef UnsignedInt64 PlayerMaskType;
+const PlayerMaskType PLAYERMASK_ALL = ~(PlayerMaskType)0;
+const PlayerMaskType PLAYERMASK_NONE = 0x0;
+static_assert( MAX_PLAYER_COUNT <= sizeof( PlayerMaskType ) * 8, "PlayerMaskType needs a bit for every player" );
+
+/// The one bit of a player index.  Shift a PlayerMaskType, never an Int: 1 << 32 is undefined.
+inline PlayerMaskType playerIndexToMask( Int playerIndex )
+{
+	return (PlayerMaskType)1 << playerIndex;
+}
 
 // ----------------------------------------------------------------------------------------------
 enum 

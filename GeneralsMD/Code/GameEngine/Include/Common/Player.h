@@ -92,6 +92,7 @@ enum CheatKind
 // ----------------------------------------------------------------------------------------------
 
 class BuildListInfo;
+class ObjectTypes;
 class PolygonTrigger;
 class ThingTemplate;
 class AIPlayer;
@@ -205,7 +206,7 @@ Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength );
 // a bit for every player mutually allied with i, self's side (itself and its allies) a player at a
 // time, and the highest per-player average of the other sides, each a leader in list order and the
 // players still ungrouped who are its mutual allies.  Free-for-all, every enemy is a side of one.
-void IncomeSideWorths( const Int *worth, const UnsignedInt *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage );
+void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage );
 // One weighing's move from the bonus it has toward that target, at most AI_INCOME_BONUS_STEP.
 Int IncomeBonusStep( Int bonus, Int target );
 
@@ -456,7 +457,7 @@ public:
 	inline PlayerIndex getPlayerIndex() const { return m_playerIndex; }
 
 	/// return a bitmask that is unique to this player.
-	inline PlayerMaskType getPlayerMask() const { return 1 << m_playerIndex; }
+	inline PlayerMaskType getPlayerMask() const { return playerIndexToMask( m_playerIndex ); }
 	
 	/// a convenience function to test the ThingTemplate against the players canBuild flags
 	/// called by canBuild
@@ -589,17 +590,17 @@ public:
 	/// Returns production cost change based on typeof (Used for upgrades)
 	Real getProductionCostChangeBasedOnKindOf( KindOfMaskType kindOf ) const;
 
-	/** Return bonus or penalty for construction of this thing.
+	/** Return bonus or penalty for construction of this thing (ThingTemplate::getNameKey).
 	*/
-	Real getProductionCostChangePercent( AsciiString buildTemplateName ) const;
-	
-	/** Return bonus or penalty for construction of this thing.
-	*/
-	Real getProductionTimeChangePercent( AsciiString buildTemplateName ) const;
+	Real getProductionCostChangePercent( NameKeyType buildTemplateNameKey ) const;
 
-	/** Return starting veterancy level of a newly built thing of this type
+	/** Return bonus or penalty for construction of this thing (ThingTemplate::getNameKey).
 	*/
-	VeterancyLevel getProductionVeterancyLevel( AsciiString buildTemplateName ) const;
+	Real getProductionTimeChangePercent( NameKeyType buildTemplateNameKey ) const;
+
+	/** Return starting veterancy level of a newly built thing of this type (ThingTemplate::getNameKey)
+	*/
+	VeterancyLevel getProductionVeterancyLevel( NameKeyType buildTemplateNameKey ) const;
 
 	// Friend function for the script engine's usage.
 	void friend_setSkillset(Int skillSet);
@@ -706,6 +707,12 @@ public:
 
 	/// whether any member of our teams, dead or alive, has a template equivalent to tmpl
 	Bool hasTemplateMember(const ThingTemplate *tmpl) const;
+
+	/// countObjectsByThingTemplate over every template of the list, summed
+	Int countObjectsOfTypes(const ObjectTypes &types, Bool ignoreDead) const;
+
+	/// the build cost of our members inside the area that are neither inert nor effectively dead
+	Int countBuildCostInside(const PolygonTrigger *trig) const;
 
 	/**
 		simply returns the number of buildings owned by this player

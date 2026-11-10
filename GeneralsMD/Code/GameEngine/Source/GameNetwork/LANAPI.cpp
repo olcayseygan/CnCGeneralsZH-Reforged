@@ -223,6 +223,74 @@ void LANAPI::sendMessage(LANMessage *msg, UnsignedInt ip /* = 0 */)
 	}
 }
 
+/* The options of a 32-seat room do not fit one message, so they go out in numbered parts, each a
+	 whole LANMessage with the rest of its fields repeated.  A room that fits sends one part, as
+	 before. */
+void LANAPI::sendOptions(LANMessage *msg, const AsciiString& options, UnsignedInt ip /* = 0 */)
+{
+	const Bool announce = (msg->LANMessageType == LANMessage::MSG_GAME_ANNOUNCE);
+	char *field = announce ? msg->GameInfo.options : msg->GameOptions.options;
+	UnsignedByte *part = announce ? &msg->GameInfo.optionsPart : &msg->GameOptions.optionsPart;
+	UnsignedByte *parts = announce ? &msg->GameInfo.optionsParts : &msg->GameOptions.optionsParts;
+
+	const Int length = options.getLength();
+	const Int count = (length == 0) ? 1 : (length + g_lanOptionsPartLength - 1) / g_lanOptionsPartLength;
+	if (count > g_lanOptionsParts)
+	{
+		DEBUG_CRASH(("LANAPI::sendOptions - %d bytes of options take %d parts, the most is %d", length, count, g_lanOptionsParts));
+		return;
+	}
+
+	*parts = (UnsignedByte)count;
+	for (Int i = 0; i < count; ++i)
+	{
+		const Int offset = i * g_lanOptionsPartLength;
+		const Int take = min(g_lanOptionsPartLength, length - offset);
+		*part = (UnsignedByte)i;
+		memcpy(field, options.str() + offset, take);
+		field[take] = 0;
+		sendMessage(msg, ip);
+	}
+}
+
+/* Gathers the parts sendOptions split, one set per sender and message type.  The parts of a set go
+	 out back to back, so a part missing or out of order spoils it: the set is dropped, and the next
+	 announce or options change sends the whole string again. */
+Bool LANAPI::assembleOptions(LANMessage *msg, UnsignedInt senderIP)
+{
+	const Bool announce = (msg->LANMessageType == LANMessage::MSG_GAME_ANNOUNCE);
+	const char *chunk = announce ? msg->GameInfo.options : msg->GameOptions.options;
+	const Int part = announce ? msg->GameInfo.optionsPart : msg->GameOptions.optionsPart;
+	const Int parts = announce ? msg->GameInfo.optionsParts : msg->GameOptions.optionsParts;
+	if (parts < 1 || parts > g_lanOptionsParts || part >= parts)
+		return FALSE;
+
+	if (parts == 1)
+	{
+		m_assembledOptions = chunk;
+		return TRUE;
+	}
+
+	const UnsignedInt64 key = ((UnsignedInt64)senderIP << 32) | (UnsignedInt)msg->LANMessageType;
+	if (part == 0)
+		m_optionsAssembly[key] = OptionsAssembly();
+	std::map<UnsignedInt64, OptionsAssembly>::iterator it = m_optionsAssembly.find(key);
+	if (it == m_optionsAssembly.end())
+		return FALSE;		// a later part of a set whose first never came
+	if (it->second.nextPart != part)
+	{
+		m_optionsAssembly.erase(it);
+		return FALSE;
+	}
+	it->second.text.concat(chunk);
+	if (++it->second.nextPart < parts)
+		return FALSE;
+
+	m_assembledOptions = it->second.text;
+	m_optionsAssembly.erase(it);
+	return TRUE;
+}
+
 
 AsciiString GetMessageTypeString(UnsignedInt type)
 {
@@ -352,7 +420,7 @@ static void terminateLANMessageStrings( LANMessage *msg, Int length )
 	{
 		case LANMessage::MSG_GAME_ANNOUNCE:
 			msg->GameInfo.gameName[g_lanGameNameLength] = 0;
-			msg->GameInfo.options[m_lanMaxOptionsLength] = 0;
+			msg->GameInfo.options[g_lanOptionsPartLength] = 0;
 			break;
 		case LANMessage::MSG_REQUEST_GAME_LEAVE:
 			msg->GameToLeave.gameName[g_lanGameNameLength] = 0;
@@ -380,7 +448,7 @@ static void terminateLANMessageStrings( LANMessage *msg, Int length )
 			msg->Chat.message[g_lanMaxChatLength] = 0;
 			break;
 		case LANMessage::MSG_GAME_OPTIONS:
-			msg->GameOptions.options[m_lanMaxOptionsLength] = 0;
+			msg->GameOptions.options[g_lanOptionsPartLength] = 0;
 			break;
 		default:
 			break;
@@ -442,7 +510,8 @@ void LANAPI::update( void )
 				break;
 			case LANMessage::MSG_GAME_ANNOUNCE:				// Here someone is, and here's his game info!
 				DEBUG_LOG(("LANAPI::update - got a MSG_GAME_ANNOUNCE from 0x%08x\n", senderIP));
-				handleGameAnnounce( msg, senderIP );
+				if (assembleOptions( msg, senderIP ))
+					handleGameAnnounce( msg, senderIP );
 				break;
 			case LANMessage::MSG_LOBBY_ANNOUNCE:			// Hey, I'm in the lobby!
 				DEBUG_LOG(("LANAPI::update - got a MSG_LOBBY_ANNOUNCE from 0x%08x\n", senderIP));
@@ -495,7 +564,8 @@ void LANAPI::update( void )
 				break;
 			case LANMessage::MSG_GAME_OPTIONS:				// Here's some info about the game.
 				DEBUG_LOG(("LANAPI::update - got a MSG_GAME_OPTIONS from 0x%08x\n", senderIP));
-				handleGameOptions( msg, senderIP );
+				if (assembleOptions( msg, senderIP ))
+					handleGameOptions( msg, senderIP );
 				break;
 			case LANMessage::MSG_INACTIVE:		// someone is telling us that we're inactive.
 				handleInActive( msg, senderIP );
@@ -802,13 +872,12 @@ void LANAPI::RequestGameAnnounce( void )
 			AsciiString gameOpts = GameInfoToAsciiString(m_currentGame);
 			if (gameOpts.isEmpty())
 				return;
-			strlcpy(reply.GameInfo.options,gameOpts.str(),ARRAY_SIZE(reply.GameInfo.options));
 			WideCharNCpy(reply.GameInfo.gameName, m_currentGame->getName().str(), g_lanGameNameLength);
 			reply.GameInfo.gameName[g_lanGameNameLength] = 0;
 			reply.GameInfo.inProgress = m_currentGame->isGameInProgress();
 			reply.GameInfo.isDirectConnect = m_currentGame->getIsDirectConnect();
 
-			sendMessage(&reply);
+			sendOptions(&reply, gameOpts);
 		}
 	}
 }
@@ -934,9 +1003,7 @@ void LANAPI::RequestGameOptions( AsciiString gameOptions, Bool isPublic, Unsigne
 	LANMessage msg;
 	fillInLANMessage( &msg );
 	msg.LANMessageType = LANMessage::MSG_GAME_OPTIONS;
-	strlcpy(msg.GameOptions.options, gameOptions.str(), ARRAY_SIZE(msg.GameOptions.options));
-	msg.GameOptions.options[m_lanMaxOptionsLength] = 0;
-	sendMessage(&msg, ip);
+	sendOptions(&msg, gameOptions, ip);
 
 	m_lastGameopt = gameOptions;
 
@@ -945,7 +1012,7 @@ void LANAPI::RequestGameOptions( AsciiString gameOptions, Bool isPublic, Unsigne
 	{
 		if (m_currentGame->getIP(player) == m_localIP)
 		{
-			OnGameOptions(m_localIP, player, AsciiString(msg.GameOptions.options));
+			OnGameOptions(m_localIP, player, gameOptions);
 			break;
 		}
 	}

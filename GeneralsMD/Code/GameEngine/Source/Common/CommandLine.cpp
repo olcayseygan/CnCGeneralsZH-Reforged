@@ -476,9 +476,10 @@ Int parseRandomMap(char *args[], int num)
 
 	RandomMapSettings settings;
 	settings.m_seed = atoi( args[1] );
-	// Generate all the start positions the map is allowed to hold, so any -autoskirmish count
-	// fits regardless of which of the two options came first on the command line.
-	settings.m_numPlayers = RandomMapGenerator::MAX_PLAYERS;
+	// No count given: DEFAULT_PLAYERS starts, or as many as an -autoskirmish already read asks for.
+	// MAX_PLAYERS would build a 32-start map, over 800 cells a side, for every bare seed; an
+	// -autoskirmish past eight that comes after this option needs the count spelled out.
+	settings.m_numPlayers = max( (Int)RandomMapGenerator::DEFAULT_PLAYERS, TheWritableGlobalData->m_autoSkirmishPlayers );
 
 	// players and size are optional and positional, so only eat what still looks like one.
 	Int eaten = 2;
@@ -1341,7 +1342,7 @@ Int parseNoTactics(char *args[], int num)
 	return 2;
 }
 
-/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge: those slots keep their rung with these knobs
+/** -aiknobsoff even|odd|all engagegate,answerarmy,massunit,basewatch,strikedodge,defensequeue: those slots keep their rung with these knobs
 	* of its profile off, so a batch can play Hard against Hard without them, or a scenario against the AI
 	* as it was.  A measuring aid like -notactics: read only in a single-player skirmish, never in a
 	* network game, and a replay made with it is played back with it given again. */
@@ -1359,6 +1360,7 @@ Int parseAIKnobsOff(char *args[], int num)
 		if (strstr(names.str(), "massunit")) mask |= AIKNOB_MASS_UNIT;
 		if (strstr(names.str(), "basewatch")) mask |= AIKNOB_BASE_WATCH;
 		if (strstr(names.str(), "strikedodge")) mask |= AIKNOB_STRIKE_DODGE;
+		if (strstr(names.str(), "defensequeue")) mask |= AIKNOB_DEFENSE_QUEUE;
 		TheWritableGlobalData->m_aiKnobsOffMask = mask;
 	}
 	return 3;
@@ -2469,14 +2471,21 @@ Int parseTurboMode(char *args[], int num)
 	 subsystem's cost is a different search - the question is not "which frames were terrible" but
 	 "which frames did this cost anything at all" - and for that the bar wants to be a few
 	 milliseconds. Every frame over it writes a line and a flush, so a low bar on a long run is a
-	 large log and a slower run; it is a measuring tool, not a setting. */
+	 large log and a slower run; it is a measuring tool, not a setting.
+
+	 It is also what turns the profile on: two clock reads around every update module and every
+	 script, about a millisecond a frame at 32 players, and the module table every 600 frames.
+	 Without it the logic carries none of that and the default bar logs at most one frame a second. */
 Int parseSlowFrame(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1 && args[1])
 	{
 		const Real ms = (Real)atof(args[1]);
 		if (ms > 0.0f)
+		{
 			TheWritableGlobalData->m_slowFrameMS = ms;
+			TheWritableGlobalData->m_logicProfile = TRUE;
+		}
 		return 2;
 	}
 	return 1;

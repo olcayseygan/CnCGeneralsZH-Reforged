@@ -1294,30 +1294,13 @@ UnicodeString RecorderClass::readUnicodeString() {
  * Read an ascii string from the current file position. The string is assumed to be 0-terminated.
  */
 AsciiString RecorderClass::readAsciiString() {
-	char str[1024] = "";
-	Int index = 0;
-
-	Int c = fgetc(m_file);
-	if (c == EOF) {
-		str[index] = 0;
-	}
-	str[index] = c;
-
-	// Was index < 1024: the body pre-increments and then writes str[index], so the
-	// last iteration stored one element past the end of the buffer.
-	while (index < 1023 && str[index] != 0) {
-		++index;
-		Int c = fgetc(m_file);
-		if (c == EOF) {
-			str[index] = 0;
-			break;
-		}
-		str[index] = c;
-	}
-	str[1023] = '\0';
-
-	AsciiString retval(str);
-	return retval;
+	/* Read to the terminator.  EA's buffer stopped at 1023 bytes and left the rest of a longer string
+		 to be read as the next field, and a 32-seat room's slot list runs well past that. */
+	std::string str;
+	Int c;
+	while ((c = fgetc(m_file)) != EOF && c != 0)
+		str.push_back((char)c);
+	return AsciiString(str.c_str());
 }
 
 /**

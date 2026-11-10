@@ -1987,7 +1987,7 @@ void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPo
 	RevealWakeGrid::noteMove( this, oldPos );
 	// every move, the ones too small to dirty the cells below included (PartitionManager::visitNearestFirst)
 	if (m_partitionData)
-		ThePartitionManager->noteObjectMovedOrResized( m_partitionData );
+		ThePartitionManager->noteObjectMoved( m_partitionData, oldPos, getPosition() );
 	if(_isnan(getPosition()->x) || _isnan(getPosition()->y) || _isnan(getPosition()->z)) {
 		DEBUG_CRASH(("Object pos is nan."));
 		TheGameLogic->destroyObject(this);

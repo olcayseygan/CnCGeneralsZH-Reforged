@@ -19079,3 +19079,227 @@ END
 CONTROLBAR:ToolTipAirForceTalent10B
 "Bütün uçaklar ve helikopterler her saniye canının yüzde 1'i kadar onarır, ateş altındayken bile."
 END
+
+SCIENCE:GLATalent6A
+"Hurda İnşaat"
+END
+
+CONTROLBAR:ToolTipGLATalent6A
+"Binalar yüzde 20 ucuza çıkar, Kışla 500 yerine 400. Bir Komuta Merkezi, Kışla, Silah Tüccarı ya da İşçi ayakta kaldıkça sürer."
+END
+
+SCIENCE:GLATalent6B
+"Hafif Adım"
+END
+
+CONTROLBAR:ToolTipGLATalent6B
+"Piyadeler yüzde 15 daha hızlı koşar, Öfkeli Kalabalık da. İşçiler hariç, onların kendi ayakkabısı var."
+END
+
+SCIENCE:GLATalent9A
+"Büyük Pusu"
+END
+
+CONTROLBAR:ToolTipGLATalent9A
+"Asi Pususu dört Asi fazla getirir, seviyesine göre 4, 8, 16 yerine 8, 12, 20. Yıkım Generali'ninki 4, 6, 10 yerine 8, 10, 14."
+END
+
+SCIENCE:GLATalent9B
+"Geniş Veba"
+END
+
+CONTROLBAR:ToolTipGLATalent9B
+"Şarbon Bombasının patlaması ve zehir bulutu dörtte bir daha uzağa ulaşır, hedef çemberi de büyür."
+END
+
+SCIENCE:GLATalent7A
+"Ayarlı Motor"
+END
+
+CONTROLBAR:ToolTipGLATalent7A
+"Silahlı Pikaplar ve Roketli Cipler yüzde 15 daha hızlı gider."
+END
+
+SCIENCE:GLATalent7B
+"RPG Yeleği"
+END
+
+CONTROLBAR:ToolTipGLATalent7B
+"RPG Askerlerinin canı dörtte bir artar, 100'den 125'e."
+END
+
+SCIENCE:GLATalent8A
+"Gömülü Stinger"
+END
+
+CONTROLBAR:ToolTipGLATalent8A
+"Stinger Mevzileri 1000 yerine 1300 can taşır."
+END
+
+SCIENCE:GLATalent8B
+"Hurda Zırh"
+END
+
+CONTROLBAR:ToolTipGLATalent8B
+"Scorpion'ların canı beşte bir artar, 370'ten 444'e. Marauder'larınki 500'den 600'e."
+END
+
+SCIENCE:GLATalent10A
+"SCUD Yağmuru"
+END
+
+CONTROLBAR:ToolTipGLATalent10A
+"SCUD Fırtınasının füzeleri dörtte bir daha geniş alana düşer, her patlama ve zehir gölü dörtte bir daha uzağa ulaşır. Hedef çemberi de büyür."
+END
+
+SCIENCE:GLATalent10B
+"Tecrübeli Mürettebat"
+END
+
+CONTROLBAR:ToolTipGLATalent10B
+"Marauder'lar Silah Tüccarından tecrübeli çıkar."
+END
+
+SCIENCE:ToxinTalent7A
+"Traktör Bakımı"
+END
+
+CONTROLBAR:ToolTipToxinTalent7A
+"Toksin Traktörleri yüzde 15 daha hızlı gider, canları dörtte bir artar, 240'tan 300'e."
+END
+
+SCIENCE:ToxinTalent7B
+"Marauder Zırhı"
+END
+
+CONTROLBAR:ToolTipToxinTalent7B
+"Marauder'ların canı dörtte bir artar, 500'den 625'e."
+END
+
+SCIENCE:ToxinTalent8A
+"Derin Tüneller"
+END
+
+CONTROLBAR:ToolTipToxinTalent8A
+"Tünel Ağları 1500 yerine 1950 can taşır."
+END
+
+SCIENCE:ToxinTalent8B
+"Rampa Bakımı"
+END
+
+CONTROLBAR:ToolTipToxinTalent8B
+"SCUD Rampaları yüzde 15 daha hızlı gider, canları dörtte bir artar, 180'den 225'e."
+END
+
+SCIENCE:ToxinTalent10A
+"Kalıcı Zehir"
+END
+
+CONTROLBAR:ToolTipToxinTalent10A
+"SCUD Fırtınasının bıraktığı zehir gölleri yarısı kadar daha uzun kalır, 45 yerine 67 saniye."
+END
+
+SCIENCE:ToxinTalent10B
+"Tecrübeli Sürücüler"
+END
+
+CONTROLBAR:ToolTipToxinTalent10B
+"Toksin Traktörleri Silah Tüccarından tecrübeli çıkar."
+END
+
+SCIENCE:DemolitionTalent7A
+"Zırhlı Motor"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7A
+"Savaş Motorlarının canı dörtte bir artar, 100'den 125'e."
+END
+
+SCIENCE:DemolitionTalent7B
+"Kamyon Bakımı"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7B
+"Bomba Kamyonları yüzde 15 daha hızlı gider, canları dörtte bir artar, 220'den 275'e."
+END
+
+SCIENCE:DemolitionTalent8A
+"Ucuz Tuzak"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8A
+"Patlayıcı Tuzaklar yarı fiyatına çıkar, 200 yerine 100, Hurda İnşaat ile 80. Bir Komuta Merkezi, Kışla, Silah Tüccarı ya da İşçi ayakta kaldıkça sürer."
+END
+
+SCIENCE:DemolitionTalent8B
+"Cip Zırhı"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8B
+"Roketli Ciplerin canı yüzde 30 artar, 120'den 156'ya."
+END
+
+SCIENCE:DemolitionTalent10A
+"Ağır Savaş Başlığı"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10A
+"SCUD Fırtınasının her füzesi yüzde 20 daha sert vurur, merkezde 600 yerine 720."
+END
+
+SCIENCE:DemolitionTalent10B
+"Tecrübeli Rampalar"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10B
+"SCUD Rampaları Silah Tüccarından tecrübeli çıkar."
+END
+
+SCIENCE:StealthTalent7A
+"Kell'in Yeleği"
+END
+
+CONTROLBAR:ToolTipStealthTalent7A
+"Jarmen Kell'in canı yüzde 30 artar, 200'den 260'a."
+END
+
+SCIENCE:StealthTalent7B
+"Akıncı Zırhı"
+END
+
+CONTROLBAR:ToolTipStealthTalent7B
+"Silahlı Pikapların canı beşte bir artar, 180'den 216'ya. Roketli Ciplerinki 120'den 144'e."
+END
+
+SCIENCE:StealthTalent8A
+"Gizli Sığınak"
+END
+
+CONTROLBAR:ToolTipStealthTalent8A
+"Tünel Ağları 1500 yerine 1875, Stinger Mevzileri 1000 yerine 1250 can taşır."
+END
+
+SCIENCE:StealthTalent8B
+"Kamyon Bakımı"
+END
+
+CONTROLBAR:ToolTipStealthTalent8B
+"Bomba Kamyonları yüzde 15 daha hızlı gider, canları dörtte bir artar, 220'den 275'e."
+END
+
+SCIENCE:StealthTalent10A
+"Kamuflajlı Akıncılar"
+END
+
+CONTROLBAR:ToolTipStealthTalent10A
+"Silahlı Pikaplar ve Roketli Cipler ateş etmedikleri sürece gizlenir, kamuflajlı Asiler gibi, giderken de görünmez kalır."
+END
+
+SCIENCE:StealthTalent10B
+"Geniş Karıştırıcı"
+END
+
+CONTROLBAR:ToolTipStealthTalent10B
+"GPS Karıştırıcı birlikleri yarısı kadar daha uzağa saklar, 100 yerine 150, hedef çemberi de büyür."
+END

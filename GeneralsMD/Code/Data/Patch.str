@@ -4847,3 +4847,229 @@ END
 CONTROLBAR:ToolTipAirForceTalent10B
 "Every aircraft and helicopter repairs about 1 percent of its health a second, under fire too."
 END
+
+// GLA's cards: rows 6 and 9 for all four GLA generals, rows 7, 8 and 10 each general's own
+
+SCIENCE:GLATalent6A
+"Scrap Construction"
+END
+
+CONTROLBAR:ToolTipGLATalent6A
+"Buildings cost 20 percent less, a Barracks 400 instead of 500, for as long as you have a Command Center, a Barracks, an Arms Dealer or a Worker left."
+END
+
+SCIENCE:GLATalent6B
+"Light Feet"
+END
+
+CONTROLBAR:ToolTipGLATalent6B
+"Infantry run 15 percent faster, the Angry Mob too. Not Workers, who have their own shoes."
+END
+
+SCIENCE:GLATalent9A
+"Bigger Ambush"
+END
+
+CONTROLBAR:ToolTipGLATalent9A
+"Rebel Ambush brings four more Rebels, 8, 12 or 20 by its tier instead of 4, 8 or 16. The Demolitions General's brings 8, 10 or 14 instead of 4, 6 or 10."
+END
+
+SCIENCE:GLATalent9B
+"Wider Plague"
+END
+
+CONTROLBAR:ToolTipGLATalent9B
+"The Anthrax Bomb's blast and its poison cloud reach a quarter further, and the targeting circle grows to match."
+END
+
+SCIENCE:GLATalent7A
+"Tuned Engines"
+END
+
+CONTROLBAR:ToolTipGLATalent7A
+"Technicals and Rocket Buggies drive 15 percent faster."
+END
+
+SCIENCE:GLATalent7B
+"RPG Vests"
+END
+
+CONTROLBAR:ToolTipGLATalent7B
+"RPG Troopers take a quarter more damage before they die, 100 to 125."
+END
+
+SCIENCE:GLATalent8A
+"Dug-in Stingers"
+END
+
+CONTROLBAR:ToolTipGLATalent8A
+"Stinger Sites stand 1300 instead of 1000."
+END
+
+SCIENCE:GLATalent8B
+"Scrap Plating"
+END
+
+CONTROLBAR:ToolTipGLATalent8B
+"Scorpions take a fifth more damage before they die, 370 to 444, and Marauders 500 to 600."
+END
+
+SCIENCE:GLATalent10A
+"Scud Barrage"
+END
+
+CONTROLBAR:ToolTipGLATalent10A
+"The Scud Storm's missiles land a quarter wider apart and each blast and poison pool reaches a quarter further. The targeting circle grows to match."
+END
+
+SCIENCE:GLATalent10B
+"Veteran Crews"
+END
+
+CONTROLBAR:ToolTipGLATalent10B
+"Marauders leave the Arms Dealer as veterans."
+END
+
+SCIENCE:ToxinTalent7A
+"Tractor Overhaul"
+END
+
+CONTROLBAR:ToolTipToxinTalent7A
+"Toxin Tractors drive 15 percent faster and take a quarter more damage, 240 to 300."
+END
+
+SCIENCE:ToxinTalent7B
+"Marauder Plating"
+END
+
+CONTROLBAR:ToolTipToxinTalent7B
+"Marauders take a quarter more damage before they die, 500 to 625."
+END
+
+SCIENCE:ToxinTalent8A
+"Deep Tunnels"
+END
+
+CONTROLBAR:ToolTipToxinTalent8A
+"Tunnel Networks stand 1950 instead of 1500."
+END
+
+SCIENCE:ToxinTalent8B
+"Launcher Overhaul"
+END
+
+CONTROLBAR:ToolTipToxinTalent8B
+"Scud Launchers drive 15 percent faster and take a quarter more damage, 180 to 225."
+END
+
+SCIENCE:ToxinTalent10A
+"Lingering Toxins"
+END
+
+CONTROLBAR:ToolTipToxinTalent10A
+"The poison pools the Scud Storm leaves last half as long again, 67 seconds instead of 45."
+END
+
+SCIENCE:ToxinTalent10B
+"Veteran Drivers"
+END
+
+CONTROLBAR:ToolTipToxinTalent10B
+"Toxin Tractors leave the Arms Dealer as veterans."
+END
+
+SCIENCE:DemolitionTalent7A
+"Armoured Cycles"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7A
+"Combat Cycles take a quarter more damage before they go down, 100 to 125."
+END
+
+SCIENCE:DemolitionTalent7B
+"Bomb Truck Overhaul"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7B
+"Bomb Trucks drive 15 percent faster and take a quarter more damage, 220 to 275."
+END
+
+SCIENCE:DemolitionTalent8A
+"Cheap Traps"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8A
+"Demo Traps cost half, 100 instead of 200, or 80 with Scrap Construction, for as long as you have a Command Center, a Barracks, an Arms Dealer or a Worker left."
+END
+
+SCIENCE:DemolitionTalent8B
+"Buggy Plating"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8B
+"Rocket Buggies take 30 percent more damage before they die, 120 to 156."
+END
+
+SCIENCE:DemolitionTalent10A
+"Heavier Warheads"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10A
+"Each Scud Storm missile hits 20 percent harder, 720 at the centre instead of 600."
+END
+
+SCIENCE:DemolitionTalent10B
+"Veteran Launchers"
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10B
+"Scud Launchers leave the Arms Dealer as veterans."
+END
+
+SCIENCE:StealthTalent7A
+"Kell's Vest"
+END
+
+CONTROLBAR:ToolTipStealthTalent7A
+"Jarmen Kell takes 30 percent more damage before he dies, 200 to 260."
+END
+
+SCIENCE:StealthTalent7B
+"Raider Plating"
+END
+
+CONTROLBAR:ToolTipStealthTalent7B
+"Technicals take a fifth more damage before they die, 180 to 216, and Rocket Buggies 120 to 144."
+END
+
+SCIENCE:StealthTalent8A
+"Hidden Bunkers"
+END
+
+CONTROLBAR:ToolTipStealthTalent8A
+"Tunnel Networks stand 1875 instead of 1500, and Stinger Sites 1250 instead of 1000."
+END
+
+SCIENCE:StealthTalent8B
+"Bomb Truck Overhaul"
+END
+
+CONTROLBAR:ToolTipStealthTalent8B
+"Bomb Trucks drive 15 percent faster and take a quarter more damage, 220 to 275."
+END
+
+SCIENCE:StealthTalent10A
+"Camouflaged Raiders"
+END
+
+CONTROLBAR:ToolTipStealthTalent10A
+"Technicals and Rocket Buggies hide when they hold their fire, the way camouflaged Rebels do, and stay hidden on the move."
+END
+
+SCIENCE:StealthTalent10B
+"Wider Scrambler"
+END
+
+CONTROLBAR:ToolTipStealthTalent10B
+"The GPS Scrambler hides units half as far again, out to 150 instead of 100, and the targeting circle grows to match."
+END

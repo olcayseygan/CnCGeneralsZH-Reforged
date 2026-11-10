@@ -593,6 +593,10 @@ public:
 	Bool isFullyShroudedFor(Int playerIndex);	///< is every cell it touches shrouded for that player
 
 	ObjectShroudStatus getShroudedStatus(Int playerIndex);
+	/** What getShroudedStatus would answer now, writing nothing: no cached status, no previous status,
+		no "ever seen", no ghost snapshot. A logic job asks this and the logic thread replays the real
+		question later in the same order (ShroudPeekRecord). */
+	ObjectShroudStatus peekShroudedStatus(Int playerIndex) const;
 
 	inline Int wasSeenByAnyPlayers() const	///<check if a player in the game has seen the object but is now looking at fogged version.
 	{	
@@ -1106,14 +1110,30 @@ protected:
  * Accept if they are at least partly clear, not wholly fogged or shrouded, or, given a radar
  * player, if that player's radar tracks them in the fog (RadarCoverageBehavior::isTracked)
  */
+/** The shroud questions a logic job asked, in order, with the answers peekShroudedStatus gave. The logic
+	thread asks them again for real (replayShroudPeeks): the same side effects in the same order, and the
+	job's answer stands only if every reply matches. */
+struct ShroudPeekRecord
+{
+	enum { CAPACITY = 48 };
+	const Object				*objects[ CAPACITY ];
+	ObjectShroudStatus	status[ CAPACITY ];
+	Int									playerIndex;
+	Int									count;
+	Bool								overflowed;
+};
+Bool replayShroudPeeks( const ShroudPeekRecord &record );
+
 class PartitionFilterFreeOfFog : public PartitionFilter
 {
 private:
 	Int m_comparisonIndex;
 	const Player *m_radar;
+	ShroudPeekRecord *m_peeks;		///< when set, peek and record instead of asking (a logic job's search)
 public:
 	PartitionFilterFreeOfFog(Int toWhom, const Player *radar = NULL) :
-			m_comparisonIndex(toWhom), m_radar(radar){}
+			m_comparisonIndex(toWhom), m_radar(radar), m_peeks(NULL){}
+	void peekInto( ShroudPeekRecord *record ) { m_peeks = record; }
 protected:
 	virtual Bool allow( Object *other );
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -1537,6 +1557,18 @@ public:
 	Bool gatherFromJob( const Object *obj, Real maxDist, DistanceCalculationType dc, PartitionFilter **filters,
 											PlayerMaskType onlyPlayers, JobGather &out );
 	void prepareJobGathers( void );
+
+	/** While one lives on a thread, a whole range query asked there (getClosestObjects and all that is
+		built on it, which share done flags and allocate) answers nothing and says so in refused(). A logic
+		job's search can reach one down a path nobody made job-safe, a contact weapon's reach against a
+		building for one; its caller throws that job's answer away and asks on the logic thread. */
+	class JobQueryGuard
+	{
+	public:
+		JobQueryGuard( void );
+		~JobQueryGuard( void );
+		Bool refused( void ) const;
+	};
 	// ----------------------------------------------------------------
 
 	// --------------- inherited from Snapshot interface --------------

@@ -1887,6 +1887,65 @@ ObjectShroudStatus PartitionData::getShroudedStatus(Int playerIndex)
 }
 
 //-----------------------------------------------------------------------------
+#ifndef DISABLE_INVALID_PREVENTION
+#error peekShroudedStatus follows getShroudedStatus with DISABLE_INVALID_PREVENTION; follow the other path too before turning it off
+#endif
+/* getShroudedStatus's answer, branch for branch, with every write left out: what it stores in the
+	 cache is what it returns, so the peek returns that and stores nothing. */
+ObjectShroudStatus PartitionData::peekShroudedStatus(Int playerIndex) const
+{
+	if (!ThePartitionManager->getUpdatedSinceLastReset())
+		return OBJECTSHROUD_INVALID;
+
+	if (m_object && m_object->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) && Object_isAwaitingBuilder(m_object->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION),
+																					 m_object->getConstructionPercent()) &&
+			Object_isPlanHiddenFrom(m_object->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION),
+															m_object->getConstructionPercent(),
+															ThePlayerList->getNthPlayer(playerIndex)->getRelationship(m_object->getTeam())))
+		return OBJECTSHROUD_SHROUDED;
+
+	if (m_shroudedness[playerIndex] != OBJECTSHROUD_INVALID)
+		return m_shroudedness[playerIndex];
+
+	Int shroudedCells = 0;
+	Int foggedCells = 0;
+	const Bool inTheAir = m_object && m_object->isAirborneTarget();
+	const CellAndObjectIntersection *coi = m_coiArray;
+	for (Int i = m_coiInUseCount; i; --i, ++coi)
+	{
+		PartitionCell *cell = const_cast<CellAndObjectIntersection *>(coi)->getCell();
+		if( inTheAir && cell->isAirSeenByPlayer(playerIndex) )
+			continue;
+		const CellShroudStatus cellStatus = cell->getShroudStatusForPlayer(playerIndex);
+		if( cellStatus == CELLSHROUD_SHROUDED )
+			++shroudedCells;
+		else if( cellStatus == CELLSHROUD_FOGGED )
+			++foggedCells;
+	}
+
+	if( m_coiInUseCount == 0 || shroudedCells == m_coiInUseCount )
+		return OBJECTSHROUD_SHROUDED;
+	if( shroudedCells + foggedCells == m_coiInUseCount )
+	{
+		if (m_object && m_ghostObject)
+		{
+			Player *player = ThePlayerList->getNthPlayer(playerIndex);
+			if (player->getRelationship(m_object->getTeam()) == NEUTRAL)
+			{
+				if (!m_object->isKindOf(KINDOF_IMMOBILE))
+					return OBJECTSHROUD_SHROUDED;
+			}
+			else if (!(m_object->isKindOf(KINDOF_IMMOBILE) && m_everSeenByPlayer[playerIndex]) || m_object->isKindOf(KINDOF_MINE))
+				return OBJECTSHROUD_SHROUDED;
+		}
+		return OBJECTSHROUD_FOGGED;
+	}
+	if( shroudedCells == 0 && foggedCells == 0 )
+		return OBJECTSHROUD_CLEAR;
+	return OBJECTSHROUD_PARTIAL_CLEAR;
+}
+
+//-----------------------------------------------------------------------------
 void PartitionData::removeAllTouchedCells()
 {
 	CellAndObjectIntersection *coi = m_coiArray;
@@ -3651,6 +3710,10 @@ namespace
 	// sized on the logic thread before a fork, never inside one (JobSystem.h rule 1)
 	std::vector<GatherHit> s_gatherHits;
 
+	// PartitionManager::JobQueryGuard's state: guards alive on this thread, and whether a whole query was refused under them
+	thread_local Int		s_jobQueryGuards = 0;
+	thread_local Bool		s_jobQueryRefused = FALSE;
+
 	// since the process started, for HEADLESS JOBS: gathers split, chunks that handed a tail back, and
 	// the wall time in the fork and in the merge after it (a log line only; nothing decides on it)
 	Int s_gathersSplit = 0;
@@ -4039,6 +4102,15 @@ Object *PartitionManager::getClosestObjects(
 	// theIterFlag and each module's done flag below are shared by every scan; one from the render
 	// beside a tick lets the tick's own scan skip an object, so a different target and a desync
 	LOGIC_WINDOW_READ( WINDOW_PARTITION_ITERATE );
+
+	// ... and a logic job's search under a JobQueryGuard may not touch them either (see the guard)
+	if (s_jobQueryGuards > 0)
+	{
+		s_jobQueryRefused = TRUE;
+		if (closestDistArg)
+			*closestDistArg = maxDist;
+		return NULL;
+	}
 
 #ifdef DUMP_PERF_STATS
 	if (TheGameLogic->getFrame() != s_gcoPerfFrame)
@@ -6587,9 +6659,63 @@ Bool PartitionFilterRejectBuildings::allow( Object *other )
 	tracks moving in the fog. */
 Bool PartitionFilterFreeOfFog::allow( Object *other )
 {
-	const ObjectShroudStatus status = other->getShroudedStatus(m_comparisonIndex);
+	ObjectShroudStatus status;
+	if (m_peeks)
+	{
+		// a logic job's search: Object::getShroudedStatus's answer without its writes, kept for the replay
+		if (other->getTemplate()->isKindOf(KINDOF_ALWAYS_VISIBLE))
+			status = OBJECTSHROUD_CLEAR;
+		else if (other->friend_getConstPartitionData())
+			status = other->friend_getConstPartitionData()->peekShroudedStatus(m_comparisonIndex);
+		else
+			status = OBJECTSHROUD_CLEAR;
+		if (m_peeks->count == ShroudPeekRecord::CAPACITY)
+			m_peeks->overflowed = TRUE;
+		else
+		{
+			m_peeks->objects[m_peeks->count] = other;
+			m_peeks->status[m_peeks->count] = status;
+			++m_peeks->count;
+		}
+		m_peeks->playerIndex = m_comparisonIndex;
+	}
+	else
+		status = other->getShroudedStatus(m_comparisonIndex);
 	return status == OBJECTSHROUD_CLEAR || status == OBJECTSHROUD_PARTIAL_CLEAR
 		|| (m_radar && RadarCoverageBehavior::isTracked(m_radar, other));
+}
+
+//-----------------------------------------------------------------------------
+/** The logic thread's half of a job's shroud questions: asked again for real, in the job's order, so the
+	* caches and ghost snapshots move as the serial search would have moved them. FALSE at the first answer
+	* that differs from the job's peek, or when the job ran out of room to record. */
+Bool replayShroudPeeks( const ShroudPeekRecord &record )
+{
+	if (record.overflowed)
+		return FALSE;
+	for (Int i = 0; i < record.count; ++i)
+	{
+		if (record.objects[i]->getShroudedStatus(record.playerIndex) != record.status[i])
+			return FALSE;
+	}
+	return TRUE;
+}
+
+//-----------------------------------------------------------------------------
+PartitionManager::JobQueryGuard::JobQueryGuard( void )
+{
+	if (s_jobQueryGuards++ == 0)
+		s_jobQueryRefused = FALSE;
+}
+
+PartitionManager::JobQueryGuard::~JobQueryGuard( void )
+{
+	--s_jobQueryGuards;
+}
+
+Bool PartitionManager::JobQueryGuard::refused( void ) const
+{
+	return s_jobQueryRefused;
 }
 
 //-----------------------------------------------------------------------------

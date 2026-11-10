@@ -33,6 +33,7 @@
 
 #include "Common/Player.h"
 #include "Common/RandomValue.h"
+#include "Common/SpecialPower.h"
 #include "Common/ThingFactory.h"
 #include "Common/Xfer.h"
 #include "GameLogic/Object.h"
@@ -84,8 +85,16 @@ static void parseOCLUpgradePair( INI* ini, void * /*instance*/, void *store, con
 {
 	OCLSpecialPowerModuleData::Upgrades up;
 
-	INI::parseScience(ini, NULL, &up.m_science, NULL);
-	INI::parseObjectCreationList(ini, NULL, &up.m_ocl, NULL);
+	const AsciiString token = parseSciencesThenValue(ini, &up.m_sciences);
+	up.m_ocl = TheObjectCreationListStore->findObjectCreationList(token.str());	// could be null!
+	if (!up.m_ocl && token.compareNoCase("None") != 0 && ini->getLoadType() == INI_LOAD_MULTIFILE)
+	{
+		// as INI::parseObjectCreationList: a patch naming a list the loaded data lacks drops the module
+		DEBUG_LOG(("[LINE: %d in '%s'] object creation list '%s' does not exist; the reference is skipped.\n", ini->getLineNum(), ini->getFilename().str(), token.str()));
+		ini->setMissingReference( TRUE );
+		return;
+	}
+	DEBUG_ASSERTCRASH(up.m_ocl || token.compareNoCase("None") == 0, ("ObjectCreationList %s not found!\n", token.str()));
 
 	std::vector<OCLSpecialPowerModuleData::Upgrades>* s = (std::vector<OCLSpecialPowerModuleData::Upgrades>*)store;
 	s->push_back(up);
@@ -127,18 +136,8 @@ OCLSpecialPower::OCLSpecialPower( Thing *thing, const ModuleData *moduleData )
 const ObjectCreationList* OCLSpecialPower::findOCL() const
 {
 	const OCLSpecialPowerModuleData* d = getOCLSpecialPowerModuleData();
-	const Player* controller = getObject()->getControllingPlayer();
-	if (controller != NULL)
-	{
-		for (std::vector<OCLSpecialPowerModuleData::Upgrades>::const_iterator it = d->m_upgradeOCL.begin(); 
-					it != d->m_upgradeOCL.end();
-					++it)
-		{
-			if (controller->hasScience(it->m_science))
-				return it->m_ocl;
-		}
-	}
-	return d->m_defaultOCL;
+	const OCLSpecialPowerModuleData::Upgrades* up = findFirstOwnedEntry(getObject()->getControllingPlayer(), d->m_upgradeOCL);
+	return up ? up->m_ocl : d->m_defaultOCL;
 }
 
 //-------------------------------------------------------------------------------------------------

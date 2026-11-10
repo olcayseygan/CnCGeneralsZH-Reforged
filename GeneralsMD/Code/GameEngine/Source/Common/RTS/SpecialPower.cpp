@@ -195,7 +195,39 @@ void SpecialPowerStore::parseSpecialPowerDefinition( INI *ini )
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-/* static */ const FieldParse SpecialPowerTemplate::m_specialPowerFieldParse[] = 
+AsciiString parseSciencesThenValue( INI *ini, ScienceVec *sciences )
+{
+	std::vector<AsciiString> tokens;
+	for( const char *token = ini->getNextTokenOrNull(); token != NULL; token = ini->getNextTokenOrNull() )
+		tokens.push_back( token );
+	if( tokens.size() < 2 )
+	{
+		DEBUG_CRASH(( "[LINE: %d in '%s'] wants one or more sciences and then a value\n", ini->getLineNum(), ini->getFilename().str() ));
+		throw INI_INVALID_DATA;
+	}
+	for( size_t i = 0; i + 1 < tokens.size(); ++i )
+		sciences->push_back( INI::scanScience( ini, tokens[ i ].str() ) );
+	return tokens.back();
+}
+
+//-------------------------------------------------------------------------------------------------
+static void parseUpgradeRadiusCursorRadius( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
+{
+	SpecialPowerTemplate::UpgradeRadius up;
+	up.m_radius = INI::scanReal( parseSciencesThenValue( ini, &up.m_sciences ).str() );
+	((std::vector<SpecialPowerTemplate::UpgradeRadius> *)store)->push_back( up );
+}
+
+//-------------------------------------------------------------------------------------------------
+Real SpecialPowerTemplate::getRadiusCursorRadius( const Player *player ) const
+{
+	const UpgradeRadius *up = findFirstOwnedEntry( player, getFO()->m_upgradeRadiusCursorRadius );
+	return up ? up->m_radius : getFO()->m_radiusCursorRadius;
+}
+
+//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+/* static */ const FieldParse SpecialPowerTemplate::m_specialPowerFieldParse[] =
 {
 	
 	{ "ReloadTime",								INI::parseDurationUnsignedInt,		NULL,	offsetof( SpecialPowerTemplate, m_reloadTime ) },
@@ -209,6 +241,7 @@ void SpecialPowerStore::parseSpecialPowerDefinition( INI *ini )
 	{ "ViewObjectDuration",				INI::parseDurationUnsignedInt,		NULL,	offsetof( SpecialPowerTemplate, m_viewObjectDuration ) },
 	{ "ViewObjectRange",					INI::parseReal,										NULL,	offsetof( SpecialPowerTemplate, m_viewObjectRange ) },
 	{ "RadiusCursorRadius",				INI::parseReal,										NULL,	offsetof( SpecialPowerTemplate, m_radiusCursorRadius ) },
+	{ "UpgradeRadiusCursorRadius",	parseUpgradeRadiusCursorRadius,		NULL,	offsetof( SpecialPowerTemplate, m_upgradeRadiusCursorRadius ) },
 	{ "ShortcutPower",						INI::parseBool,										NULL, offsetof( SpecialPowerTemplate, m_shortcutPower ) },
 	{ "AIFiresWhenReady",					INI::parseBool,										NULL, offsetof( SpecialPowerTemplate, m_aiFiresWhenReady ) },
 	{ "AcademyClassify",					INI::parseIndexList,			TheAcademyClassificationTypeNames, offsetof( SpecialPowerTemplate, m_academyClassificationType ) },

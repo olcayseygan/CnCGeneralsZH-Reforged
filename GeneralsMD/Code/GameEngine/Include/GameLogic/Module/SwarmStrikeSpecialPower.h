@@ -45,10 +45,11 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse& p );
 
-	/// UpgradeTargetCount = <science> <count>: the first one the player owns replaces TargetCount
+	/// UpgradeTargetCount = <science> [<science> ...] <count>: the first whose sciences the player all
+	/// owns replaces TargetCount (parseSciencesThenValue)
 	struct UpgradeTargetCount
 	{
-		ScienceType m_science;
+		ScienceVec m_sciences;
 		Int m_count;
 	};
 

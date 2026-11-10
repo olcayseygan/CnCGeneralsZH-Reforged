@@ -26,6 +26,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/Player.h"
+#include "Common/SpecialPower.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -50,8 +51,7 @@ SwarmStrikeSpecialPowerModuleData::SwarmStrikeSpecialPowerModuleData( void )
 static void parseUpgradeTargetCount( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
 {
 	SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount up;
-	INI::parseScience( ini, NULL, &up.m_science, NULL );
-	INI::parseInt( ini, NULL, &up.m_count, NULL );
+	up.m_count = INI::scanInt( parseSciencesThenValue( ini, &up.m_sciences ).str() );
 	((std::vector<SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount> *)store)->push_back( up );
 }
 
@@ -115,15 +115,9 @@ void SwarmStrikeSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real
 	SpecialPowerModule::doSpecialPowerAtLocation( loc, angle, commandOptions );
 
 	const SwarmStrikeSpecialPowerModuleData *data = getSwarmStrikeSpecialPowerModuleData();
-	Int targetCount = data->m_targetCount;
-	for( size_t i = 0; i < data->m_upgradeTargetCount.size(); ++i )
-	{
-		if( getObject()->getControllingPlayer()->hasScience( data->m_upgradeTargetCount[ i ].m_science ) )
-		{
-			targetCount = data->m_upgradeTargetCount[ i ].m_count;
-			break;
-		}
-	}
+	const SwarmStrikeSpecialPowerModuleData::UpgradeTargetCount *up =
+		findFirstOwnedEntry( getObject()->getControllingPlayer(), data->m_upgradeTargetCount );
+	const Int targetCount = up ? up->m_count : data->m_targetCount;
 
 	std::vector<Object*> targets;
 	Weapon_findMostValuableEnemies( getObject(), loc, data->m_radius, targetCount, targets );
@@ -135,12 +129,10 @@ void SwarmStrikeSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real
 		fireShot( data, getObject(), *it, NULL );
 	}
 
-	if( !data->m_repeatTargets )
-		return;
-
 	// the spare shots: round the same targets again, dearest first, or at the click when none stood there
-	for( Int shot = (Int)targets.size(); shot < targetCount; ++shot )
-		fireShot( data, getObject(), targets.empty() ? NULL : targets[ shot % targets.size() ], loc );
+	if( data->m_repeatTargets )
+		for( Int shot = (Int)targets.size(); shot < targetCount; ++shot )
+			fireShot( data, getObject(), targets.empty() ? NULL : targets[ shot % targets.size() ], loc );
 	DEBUG_LOG(( "SWARM '%s' frame %d sends %d at %d targets around (%.0f,%.0f)\n", getPowerName().str(),
 		TheGameLogic->getFrame(), targetCount, (Int)targets.size(), loc->x, loc->y ));
 }

@@ -56,12 +56,13 @@ class OCLSpecialPowerModuleData : public SpecialPowerModuleData
 
 public:
 
+	/// UpgradeOCL = <science> [<science> ...] <ocl>: every science owned (parseSciencesThenValue)
 	struct Upgrades
 	{
-		ScienceType									m_science;
+		ScienceVec									m_sciences;
 		const ObjectCreationList*		m_ocl;
 
-		Upgrades() : m_science(SCIENCE_INVALID), m_ocl(NULL)
+		Upgrades() : m_ocl(NULL)
 		{
 		}
 	};

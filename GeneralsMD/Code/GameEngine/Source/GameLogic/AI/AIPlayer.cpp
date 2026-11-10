@@ -9420,7 +9420,7 @@ void AIPlayer::doReadySpecialPowers( void )
 				continue;
 
 			const SpecialPowerTemplate *tmpl = power->getSpecialPowerTemplate();
-			const Real radius = max( 50.0f, tmpl->getRadiusCursorRadius() );
+			const Real radius = max( 50.0f, tmpl->getRadiusCursorRadius( m_player ) );
 			Coord3D target;
 			if( !m_player->computeSuperweaponTarget( tmpl, &target, enemy->getPlayerIndex(), radius ) || target.lengthSqr() <= 0.0f )
 				continue;

@@ -24765,6 +24765,61 @@ TEST(rank_reforged_ini_appends_ranks_six_to_ten)
 	writeFile( TEST_INI, reforged.c_str() );
 	CHECK( loadIniAs( TEST_INI, INI_LOAD_MULTIFILE ) );
 	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 10 );
+/* A science-keyed power line (UpgradeOCL, UpgradeTargetCount, UpgradeRadiusCursorRadius) matches only
+	 when every science on it is owned, and the first such line in file order wins: a talent with tier 1
+	 of the power gets the talent's tier 1 line, never its tier 3 one. */
+struct FakeScienceOwner
+{
+	ScienceVec owned;
+	Bool hasScience( ScienceType t ) const { return std::find( owned.begin(), owned.end(), t ) != owned.end(); }
+};
+struct FakeKeyedValue
+{
+	ScienceVec m_sciences;
+	Int m_value;
+};
+static FakeKeyedValue keyedValue( ScienceType a, ScienceType b, Int value )
+{
+	FakeKeyedValue v;
+	v.m_sciences.push_back( a );
+	if( b != SCIENCE_INVALID )
+		v.m_sciences.push_back( b );
+	v.m_value = value;
+	return v;
+}
+TEST(power_upgrade_line_needs_every_science_and_first_match_wins)
+{
+	const ScienceType tier2 = (ScienceType)2, tier3 = (ScienceType)3, talent = (ScienceType)9;
+	std::vector<FakeKeyedValue> lines;
+	lines.push_back( keyedValue( talent, tier3, 7 ) );
+	lines.push_back( keyedValue( talent, tier2, 5 ) );
+	lines.push_back( keyedValue( talent, SCIENCE_INVALID, 3 ) );
+	lines.push_back( keyedValue( tier3, SCIENCE_INVALID, 5 ) );
+	lines.push_back( keyedValue( tier2, SCIENCE_INVALID, 3 ) );
+
+	FakeScienceOwner p;
+	CHECK( findFirstOwnedEntry( &p, lines ) == NULL );						// tier 1 only: the default
+	p.owned.push_back( talent );
+	CHECK_EQ( findFirstOwnedEntry( &p, lines )->m_value, 3 );			// talent, tier 1
+	p.owned.push_back( tier2 );
+	CHECK_EQ( findFirstOwnedEntry( &p, lines )->m_value, 5 );			// talent, tier 2
+	p.owned.push_back( tier3 );
+	CHECK_EQ( findFirstOwnedEntry( &p, lines )->m_value, 7 );			// talent, tier 3
+
+	FakeScienceOwner q;
+	q.owned.push_back( tier2 );
+	q.owned.push_back( tier3 );
+	CHECK_EQ( findFirstOwnedEntry( &q, lines )->m_value, 5 );			// tier 3 without the talent
+
+	ScienceVec none;
+	CHECK( !ownsAllSciences( &p, none ) );
+	ScienceVec missing;
+	missing.push_back( talent );
+	missing.push_back( SCIENCE_INVALID );		// a science the loaded data lacks
+	CHECK( !ownsAllSciences( &p, missing ) );
+	CHECK( !ownsAllSciences( (const FakeScienceOwner *)NULL, lines[ 2 ].m_sciences ) );
+}
+
 
 	static const Int talentPoints[] = { 12000, 20000, 30000, 42000, 56000 };
 	for( Int i = 6; i <= 10 && TheRankInfoStore->getRankLevelCount() == 10; ++i )

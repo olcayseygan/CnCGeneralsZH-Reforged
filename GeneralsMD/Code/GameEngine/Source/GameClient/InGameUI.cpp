@@ -1952,7 +1952,7 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 		case RADIUSCURSOR_RADAR:
 		case RADIUSCURSOR_SPYDRONE:
 		case RADIUSCURSOR_AMBULANCE:
-			radius = specPowTempl ? specPowTempl->getRadiusCursorRadius() : 0.0f;
+			radius = specPowTempl ? specPowTempl->getRadiusCursorRadius( controller ) : 0.0f;
 			break;
 
 	}

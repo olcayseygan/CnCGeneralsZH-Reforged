@@ -4285,18 +4285,18 @@ void ScriptActions::doSkirmishFireSpecialPowerAtMostCost( const AsciiString &pla
 	enemyNdx = enemyPlayer->getPlayerIndex();
 
 	const SpecialPowerTemplate *power = TheSpecialPowerStore->findSpecialPowerTemplate(specialPower);
-	if (power==NULL) 
+	if (power==NULL)
+		return;
+
+	Player::PlayerTeamList::const_iterator it;
+
+	Player *pPlayer = TheScriptEngine->getPlayerFromAsciiString(player);
+	if (pPlayer==NULL)
 		return;
 	Real radius = 50.0f;
-	if (power->getRadiusCursorRadius()>radius) {
-		radius = power->getRadiusCursorRadius();
+	if (power->getRadiusCursorRadius(pPlayer)>radius) {
+		radius = power->getRadiusCursorRadius(pPlayer);
 	}
-	
-	Player::PlayerTeamList::const_iterator it;
-	
-	Player *pPlayer = TheScriptEngine->getPlayerFromAsciiString(player);
-	if (pPlayer==NULL) 
-		return;
 
 
 	for (it = pPlayer->getPlayerTeams()->begin(); it != pPlayer->getPlayerTeams()->end(); ++it) 

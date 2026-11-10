@@ -18597,7 +18597,7 @@ SCIENCE:TurkiyeTalent9A
 END
 
 CONTROLBAR:ToolTipTurkiyeTalent9A
-"SİHA Sürüsü 2 drone fazla gönderir. Bu sürümde henüz çalışmıyor: seçmek bir şey değiştirmez."
+"SİHA Sürüsü 2 drone fazla gönderir."
 END
 
 SCIENCE:TurkiyeTalent9B
@@ -18605,7 +18605,7 @@ SCIENCE:TurkiyeTalent9B
 END
 
 CONTROLBAR:ToolTipTurkiyeTalent9B
-"Gökbey İndirmesi 4 asker fazla indirir. Bu sürümde henüz çalışmıyor: seçmek bir şey değiştirmez."
+"Gökbey İndirmesi 4 asker fazla indirir."
 END
 
 SCIENCE:TurkiyeTalent10A
@@ -18613,7 +18613,7 @@ SCIENCE:TurkiyeTalent10A
 END
 
 CONTROLBAR:ToolTipTurkiyeTalent10A
-"Tayfun Füzesi dörtte bir daha geniş alanı vurur. Bu sürümde henüz çalışmıyor: seçmek bir şey değiştirmez."
+"Tayfun Füzesi dörtte bir daha geniş alanı vurur."
 END
 
 SCIENCE:TurkiyeTalent10B

@@ -38,6 +38,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include <vector>
+#include <map>
 #include "Common/Radar.h"
 #include "Common/RadarShroudCache.h"
 #include "GameClient/ObserverCamera.h"
@@ -86,6 +87,11 @@ protected:
 	void drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height );	///< the Turkiye radar's fogged contacts, this sweep and the last
 	void drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, const Coord3D *pos );	//< draw a hero icon
 	void drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int height );	///< a line from each unit walking to its squad to where it walks
+	void drawOrderLines( Int pixelX, Int pixelY, Int width, Int height );	///< the selection's rally points and queued orders
+	void drawLandmarks( Int pixelX, Int pixelY, Int width, Int height );	///< the money and the tech buildings, the lobby preview's icons
+	void collectOrderLines( void );								///< copy the selection's rally points and orders into m_cachedOrderLines
+	void collectLandmarks( void );								///< copy the scouted supply sources and tech buildings into m_cachedLandmarks
+	void uploadShroud( void );										///< the cache's changed cells into the shroud texture, smoothed
 	void drawViewBox( Int pixelX, Int pixelY, Int width, Int height );  ///< draw view box
 	void drawBoxLines( const ICoord2D *corners );	///< a view box's lines through its four corners in pixels
 	void buildTerrainTexture( TerrainLogic *terrain );	 ///< create the terrain texture of the radar
@@ -120,8 +126,11 @@ protected:
 	RadarShroudCache m_shroudCache;								///< what the shroud texture should say, in main memory
 	Int m_shroudWidth;														///< the cache's size, a power of two over the shroud's cells
 	Int m_shroudHeight;
-	Int m_shroudTextureWidth;											///< the texture's size, caught up with the cache's in draw
+	Int m_shroudTextureWidth;											///< the cache size the texture was made for, caught up in draw
 	Int m_shroudTextureHeight;
+	Int m_shroudScale;														///< texels a shroud cell each way, so the edge is a smooth ramp
+	std::vector<Int> m_shroudBlur;								///< scratch for uploadShroud: the cells softened over their neighbours, times the tent's weight
+	std::vector<Int> m_shroudRows;								///< scratch for uploadShroud: the tent across the rows, before down the columns
 	Real m_shroudCellWidth;												///< world size of one shroud cell
 	Real m_shroudCellHeight;
 
@@ -147,6 +156,20 @@ protected:
 	// with the hero positions at the sync point for the same reason
 	struct ReinforcementLine { Coord3D from; Coord3D to; };
 	std::vector<ReinforcementLine> m_cachedReinforcementLines;
+	std::vector<ICoord2D> m_destinationPixels;		///< draw's scratch: each line's destination in window pixels
+
+	// the selected production buildings' rally points and the selected units' queued orders, one leg
+	// a line, copied at the sync point
+	std::vector<ReinforcementLine> m_cachedOrderLines;
+
+	// the supply sources and tech buildings on ground the drawn player has seen, copied once a second
+	struct Landmark { Coord3D pos; Bool supply; };
+	std::vector<Landmark> m_cachedLandmarks;
+	UnsignedInt m_landmarkFrame;									///< the logic frame m_cachedLandmarks was taken on
+	// each landmark as the drawn player last saw it: one in the fog keeps its last picture, a pile
+	// emptied or a derrick blown up there drops off only once its ground is clear again
+	std::map<ObjectID, Landmark> m_seenLandmarks;
+	Int m_landmarkPlayer;													///< the drawn player m_seenLandmarks belongs to
 };
 
 

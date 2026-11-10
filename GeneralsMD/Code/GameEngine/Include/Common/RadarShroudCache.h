@@ -80,6 +80,9 @@ public:
 			stays dirty, if there is no buffer to write into. */
 	void flushTo( void *bits, Int pitch, Int bytesPerPixel );
 
+	/** Forget the dirty rectangle, for a caller that wrote it into its texture its own way. */
+	void markClean( void ) { m_dirty = FALSE; m_dirtyMinX = 0; m_dirtyMinY = 0; m_dirtyMaxX = -1; m_dirtyMaxY = -1; }
+
 private:
 
 	void markDirty( Int x, Int y );

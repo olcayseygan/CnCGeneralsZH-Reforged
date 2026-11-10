@@ -41,8 +41,16 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/UpdateModule.h"
+#include "GameLogic/Module/ContainModule.h"
+#include "GameLogic/Module/StealthUpdate.h"
+#include "GameLogic/PartitionManager.h"
+
+#include <algorithm>
 
 #include "GameClient/Color.h"
+#include "GameClient/Drawable.h"
+#include "GameClient/InGameUI.h"
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/ObserverCamera.h"
@@ -71,6 +79,50 @@
 // The terrain picture's size.  The window shows it at about 220 to 440 pixels, so 256 is near one
 // texel a pixel; it is sampled 3x3 a texel as the 128 one was, four times the old samples a map.
 enum { RADAR_TERRAIN_TEXTURE_SIZE = 256 };
+
+// The shroud texture holds two texels a shroud cell each way, never more than this on a side, and
+// uploadShroud fills them from the cells softened over their neighbours: the fog's edge is a ramp
+// the CPU computes, the same on every device, not whatever the sampler makes of one texel a cell.
+// 512 keeps a changed frame's upload to a megabyte; Direct3D 11 refreshes the whole texture.  The
+// dark rises from a floor at a clear cell's edge to full this many cells into the fog; the floor,
+// in eighths of the cell's own alpha, keeps a narrow strip of fog or shroud visibly dark.
+enum { RADAR_SHROUD_MAX_SCALE = 2, RADAR_SHROUD_MAX_TEXTURE = 512, RADAR_SHROUD_RAMP_CELLS = 3,
+			 RADAR_SHROUD_FLOOR_EIGHTHS = 3 };
+
+// The lobby map preview has marked the money with a dollar coin and the tech buildings with a star
+// since 2003 (SkirmishGameOptionsMenu.cpp, "Cash" and "TecBuilding"), so the minimap uses the same
+// two images.  Sized against the radar and clamped; landmarks of one kind closer than this many
+// radar cells are one place, a dock's eight piles one dollar.
+enum { LANDMARK_ICON_RADAR_DIVISOR = 20, LANDMARK_ICON_MIN_SIZE = 9, LANDMARK_MERGE_CELLS = 6 };
+
+// Whose the local player is shown an object is, by the rules Radar::addObject picks the radar
+// colour with: a disguise passes for its disguise to anyone not allied with its owner, and a
+// container answers for a stealth garrison.  Asked at the sync point, so it follows a disguise or
+// a garrison that changed after the add, and a save load.
+static const Player *apparentPlayerOf( const Object *obj )
+{
+	const Player *player = obj->getControllingPlayer();
+	Player *local = ThePlayerList->getLocalPlayer();
+	if( obj->isKindOf( KINDOF_DISGUISER ) && obj->getStealth() && obj->getStealth()->isDisguised() && player && local )
+	{
+		const Player *disguised = ThePlayerList->getNthPlayer( obj->getStealth()->getDisguisedPlayerIndex() );
+		if( disguised && player->getRelationship( local->getDefaultTeam() ) != ALLIES && local->isPlayerActive() )
+			player = disguised;
+	}
+	if( obj->getContain() )
+	{
+		const Player *shown = obj->getContain()->getApparentControllingPlayer( local );
+		if( shown )
+			player = shown;
+	}
+	return player;
+}
+
+// a unit's dot: 3 pixels on the 220 pixel radar of a 1080p HUD, the old 2 texels' worth
+static Int blipDotSize( Int width, Int height )
+{
+	return max( 3, REAL_TO_INT_FLOOR( max( width, height ) / 72.0f + 0.5f ) );
+}
 
 static Int nextPowerOfTwo( Int n )
 {
@@ -324,6 +376,120 @@ void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int he
 		// the destination, on top of the last dash
 		fillClipped( clip, to.x - (dot + 2) / 2, to.y - (dot + 2) / 2, dot + 2, keylineColor );
 		fillClipped( clip, to.x - dot / 2, to.y - dot / 2, dot, lineColor );
+	}
+
+	// The square sits where the squad gathers, so the units that already arrived were under it.
+	// Their dots go over it again; only a dot that touches a destination square is drawn twice.
+	if( m_cachedReinforcementLines.empty() || width <= 0 || height <= 0 )
+		return;
+	const Int blipDot = blipDotSize( width, height );
+	const Int reach = (dot + 2) / 2 + blipDot / 2 + 1;
+	m_destinationPixels.resize( m_cachedReinforcementLines.size() );
+	for( size_t i = 0; i < m_cachedReinforcementLines.size(); ++i )
+	{
+		ICoord2D radar;
+		radar.x = m_cachedReinforcementLines[ i ].to.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = m_cachedReinforcementLines[ i ].to.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &m_destinationPixels[ i ], pixelX, pixelY, width, height );
+	}
+	for( size_t b = 0; b < m_blips.size(); ++b )
+	{
+		const Blip &blip = m_blips[ b ];
+		if( blip.halfLength > 0.0f || blip.x < 0.0f || blip.y < 0.0f || blip.x >= m_mapExtent.width() || blip.y >= m_mapExtent.height() )
+			continue;
+		const Int bx = REAL_TO_INT_FLOOR( pixelX + blip.x * width / m_mapExtent.width() );
+		const Int by = REAL_TO_INT_FLOOR( pixelY + height - blip.y * height / m_mapExtent.height() );
+		for( size_t i = 0; i < m_destinationPixels.size(); ++i )
+		{
+			const ICoord2D &to = m_destinationPixels[ i ];
+			if( abs( bx - to.x ) <= reach && abs( by - to.y ) <= reach )
+			{
+				fillClipped( clip, bx - blipDot / 2, by - blipDot / 2, blipDot, blip.color );
+				break;
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The selection's plans as thin lines: a production building's rally point, and every leg of a
+	* unit's queued orders, from the copy update took.  White like the selection's dots, on a dark
+	* keyline, with a small square where each leg ends. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::drawOrderLines( Int pixelX, Int pixelY, Int width, Int height )
+{
+	if( m_cachedOrderLines.empty() )
+		return;
+
+	const Color lineColor = GameMakeColor( 255, 255, 255, 220 );
+	const Color keylineColor = GameMakeColor( 12, 12, 12, 160 );
+	const Int dot = 3;
+
+	IRegion2D clip;
+	clip.lo.x = pixelX;
+	clip.lo.y = pixelY;
+	clip.hi.x = pixelX + width;
+	clip.hi.y = pixelY + height;
+
+	// keylines first, so a leg's dark edge never cuts the white of the one before it
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		for( size_t i = 0; i < m_cachedOrderLines.size(); ++i )
+		{
+			const ReinforcementLine &line = m_cachedOrderLines[ i ];
+			ICoord2D radar, from, to, clippedFrom, clippedTo;
+			radar.x = line.from.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+			radar.y = line.from.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+			radarToPixel( &radar, &from, pixelX, pixelY, width, height );
+			radar.x = line.to.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+			radar.y = line.to.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+			radarToPixel( &radar, &to, pixelX, pixelY, width, height );
+
+			if( pass == 0 )
+			{
+				if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &clip ) )
+					TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, 3.0f, keylineColor );
+				fillClipped( clip, to.x - (dot + 2) / 2, to.y - (dot + 2) / 2, dot + 2, keylineColor );
+			}
+			else
+			{
+				if( ClipLine2D( &from, &to, &clippedFrom, &clippedTo, &clip ) )
+					TheDisplay->drawLine( clippedFrom.x, clippedFrom.y, clippedTo.x, clippedTo.y, 1.0f, lineColor );
+				fillClipped( clip, to.x - dot / 2, to.y - dot / 2, dot, lineColor );
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The money and the buildings a rifleman takes, with the lobby preview's dollar and star, as the
+	* drawn player last saw them.  update sorts the dollars before the stars, so the batch changes
+	* image once. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::drawLandmarks( Int pixelX, Int pixelY, Int width, Int height )
+{
+	if( m_cachedLandmarks.empty() )
+		return;
+
+	static const Image *supplyImage = TheMappedImageCollection->findImageByName( "Cash" );
+	static const Image *captureImage = TheMappedImageCollection->findImageByName( "TecBuilding" );
+
+	const Int iconSize = min( (Int)SUPPLY_TECH_SIZE, max( (Int)LANDMARK_ICON_MIN_SIZE, width / LANDMARK_ICON_RADAR_DIVISOR ) );
+	for( size_t i = 0; i < m_cachedLandmarks.size(); ++i )
+	{
+		const Image *image = m_cachedLandmarks[ i ].supply ? supplyImage : captureImage;
+		if( image == NULL )
+			continue;
+
+		ICoord2D radar, pixel;
+		radar.x = m_cachedLandmarks[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
+		radar.y = m_cachedLandmarks[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
+		radarToPixel( &radar, &pixel, pixelX, pixelY, width, height );
+
+		// the whole icon inside the picture, so one at the map's edge stays off the frame
+		const Int left = max( pixelX, min( pixelX + width - iconSize, pixel.x - iconSize / 2 ) );
+		const Int top = max( pixelY, min( pixelY + height - iconSize, pixel.y - iconSize / 2 ) );
+		TheDisplay->drawImage( image, left, top, left + iconSize, top + iconSize );
 	}
 }
 
@@ -817,6 +983,7 @@ void W3DRadar::collectBlips( const RadarObject *listHead, Bool calcHero )
 		return;
 
 	const Int playerIndex = TheObserverCamera.getShroudPlayerIndex();
+	Player *viewer = ThePlayerList->getNthPlayer( playerIndex );
 
 	for( const RadarObject *rObj = listHead; rObj; rObj = rObj->friend_getNext() )
 	{
@@ -869,6 +1036,30 @@ void W3DRadar::collectBlips( const RadarObject *listHead, Bool calcHero )
 
     // get the color we're going to draw in
 		Color c = clientColor( rObj->getColor() );
+
+		// What the local player has selected is white.  Otherwise the plain colours, when the key
+		// asked for them: whoever the screen is drawn for green, his allies blue, his enemies red,
+		// everyone else in their own colour.  The stealth blink below keeps working on either.
+		const Drawable *drawable = obj->getDrawable();
+		if( drawable && drawable->isSelected() )
+		{
+			c = GameMakeColor( 255, 255, 255, 255 );
+		}
+		else if( isSimpleColors() && viewer )
+		{
+			// the side the local player is shown, asked now as Radar::addObject asks it for the
+			// colour: a disguised Bomb Truck or a stealth-garrisoned building keeps the side it
+			// pretends to be on, and a disguise or garrison that changed since the add is caught
+			const Player *apparent = apparentPlayerOf( obj );
+			const Team *team = apparent == obj->getControllingPlayer() ? obj->getTeam() : (apparent ? apparent->getDefaultTeam() : NULL);
+			const Relationship relation = team ? viewer->getRelationship( team ) : NEUTRAL;
+			if( apparent == viewer )
+				c = GameMakeColor( 40, 210, 40, 255 );
+			else if( relation == ALLIES )
+				c = GameMakeColor( 50, 120, 255, 255 );
+			else if( relation == ENEMIES )
+				c = GameMakeColor( 230, 30, 30, 255 );
+		}
 
 		
 		
@@ -926,6 +1117,128 @@ void W3DRadar::collectBlips( const RadarObject *listHead, Bool calcHero )
 }  // end collectBlips
 
 //-------------------------------------------------------------------------------------------------
+/** The selection's plans, read where the 3D view's own lines read them (W3DWaypointBuffer): each
+	* leg of the selected units' orders off InGameUI's order hints, and each selected production
+	* building of the local player's from where it stands to its rally point, the one just sent and
+	* not yet run by logic first. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::collectOrderLines( void )
+{
+	m_cachedOrderLines.clear();
+	if( TheInGameUI == NULL )
+		return;
+
+	const std::vector<InGameUI::OrderHint> &hints = TheInGameUI->getOrderHints();
+	for( size_t i = 0; i < hints.size(); ++i )
+	{
+		if( hints[ i ].mark == InGameUI::ORDER_MARK_NONE )
+			continue;
+		ReinforcementLine line;
+		line.from = hints[ i ].from;
+		line.to = hints[ i ].to;
+		m_cachedOrderLines.push_back( line );
+	}
+
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		if( obj == NULL || !obj->isLocallyControlled() )
+			continue;
+		ExitInterface *exit = obj->getObjectExitInterface();
+		if( exit == NULL )
+			continue;
+		const Coord3D *rally = TheInGameUI->getPredictedRallyPoint( obj->getID() );
+		if( rally == NULL )
+			rally = exit->getRallyPoint();
+		if( rally == NULL )
+			continue;
+		ReinforcementLine line;
+		line.from = *obj->getPosition();
+		line.to = *rally;
+		m_cachedOrderLines.push_back( line );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Every supply source and tech building as the drawn player last saw it, one mark a place.
+	* Neither kind need be on the radar's own lists (an oil derrick names no radar priority), so this
+	* walks the objects, and only once a second: they stand still.  One in plain sight is taken as it
+	* is; one under the fog keeps the picture the player had, so a pile emptied or a derrick destroyed
+	* there stays marked until its ground is clear again and the player can see it is gone. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::collectLandmarks( void )
+{
+	const Int playerIndex = TheObserverCamera.getShroudPlayerIndex();
+	if( playerIndex != m_landmarkPlayer )
+	{
+		m_seenLandmarks.clear();
+		m_landmarkPlayer = playerIndex;
+	}
+
+	// what the player sees now, and what he meets for the first time under fog
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		// KINDOF_CAPTURABLE is on every faction structure too, for Black Lotus; the tech building
+		// kind is what names the ones a rifleman walks into
+		const Bool supply = obj->isKindOf( KINDOF_SUPPLY_SOURCE );
+		if( !supply && !obj->isKindOf( KINDOF_TECH_BUILDING ) )
+			continue;
+		const ObjectShroudStatus status = obj->getShroudedStatus( playerIndex );
+		if( status >= OBJECTSHROUD_SHROUDED )
+			continue;
+		std::map<ObjectID, Landmark>::iterator seen = m_seenLandmarks.find( obj->getID() );
+		if( status <= OBJECTSHROUD_PARTIAL_CLEAR )
+		{
+			if( obj->isEffectivelyDead() )
+			{
+				if( seen != m_seenLandmarks.end() )
+					m_seenLandmarks.erase( seen );
+				continue;
+			}
+			Landmark &landmark = m_seenLandmarks[ obj->getID() ];
+			landmark.pos = *obj->getPosition();
+			landmark.supply = supply;
+		}
+		else if( seen == m_seenLandmarks.end() && !obj->isEffectivelyDead() )
+		{
+			Landmark &landmark = m_seenLandmarks[ obj->getID() ];
+			landmark.pos = *obj->getPosition();
+			landmark.supply = supply;
+		}
+	}
+
+	// one that is gone goes off the map once the player can see its ground
+	for( std::map<ObjectID, Landmark>::iterator it = m_seenLandmarks.begin(); it != m_seenLandmarks.end(); )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( it->first );
+		if( (obj == NULL || obj->isEffectivelyDead()) &&
+				ThePartitionManager->getShroudStatusForPlayer( playerIndex, &it->second.pos ) == CELLSHROUD_CLEAR )
+			m_seenLandmarks.erase( it++ );
+		else
+			++it;
+	}
+
+	// a dock's eight piles are one dollar
+	m_cachedLandmarks.clear();
+	const Real mergeX = m_mapExtent.width() / RADAR_CELL_WIDTH * LANDMARK_MERGE_CELLS;
+	const Real mergeY = m_mapExtent.height() / RADAR_CELL_HEIGHT * LANDMARK_MERGE_CELLS;
+	for( std::map<ObjectID, Landmark>::const_iterator it = m_seenLandmarks.begin(); it != m_seenLandmarks.end(); ++it )
+	{
+		const Landmark &landmark = it->second;
+		Bool marked = FALSE;
+		for( size_t i = 0; i < m_cachedLandmarks.size() && !marked; ++i )
+			marked = m_cachedLandmarks[ i ].supply == landmark.supply &&
+				fabs( m_cachedLandmarks[ i ].pos.x - landmark.pos.x ) < mergeX && fabs( m_cachedLandmarks[ i ].pos.y - landmark.pos.y ) < mergeY;
+		if( !marked )
+			m_cachedLandmarks.push_back( landmark );
+	}
+
+	// all the dollars, then all the stars: draw changes image once
+	std::stable_partition( m_cachedLandmarks.begin(), m_cachedLandmarks.end(), []( const Landmark &l ) { return l.supply; } );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The blips update collected, drawn at the radar picture's own pixels every frame: a unit a square
 	* dot sized to the picture, so it reads at 1080p and grows with HUD Size; a structure its
 	* footprint, turned as it stands, never smaller than a dot.  Only inside draw()'s 2D batch do
@@ -940,8 +1253,7 @@ void W3DRadar::drawBlips( Int pixelX, Int pixelY, Int width, Int height )
 	const Real toPixelY = height / m_mapExtent.height();
 	const Real toPixel = (toPixelX + toPixelY) * 0.5f;
 
-	// 3 pixels on the 220 pixel radar of a 1080p HUD, the old 2 texels' worth
-	const Int dot = max( 3, REAL_TO_INT_FLOOR( max( width, height ) / 72.0f + 0.5f ) );
+	const Int dot = blipDotSize( width, height );
 	const Real minHalf = dot * 0.5f;
 
 	IRegion2D clip;
@@ -1089,8 +1401,11 @@ W3DRadar::W3DRadar( void )
 	m_shroudHeight = RADAR_CELL_HEIGHT;
 	m_shroudTextureWidth = 0;
 	m_shroudTextureHeight = 0;
+	m_shroudScale = 1;
 	m_shroudCellWidth = 0.0f;
 	m_shroudCellHeight = 0.0f;
+	m_landmarkFrame = 0;
+	m_landmarkPlayer = -1;
 
 	m_textureWidth = RADAR_TERRAIN_TEXTURE_SIZE;
 	m_textureHeight = RADAR_TERRAIN_TEXTURE_SIZE;
@@ -1196,6 +1511,11 @@ void W3DRadar::reset( void )
 	m_blips.clear();
 	m_cachedHeroPosList.clear();
 	m_cachedReinforcementLines.clear();
+	m_cachedOrderLines.clear();
+	m_cachedLandmarks.clear();
+	m_seenLandmarks.clear();
+	m_landmarkFrame = 0;
+	m_landmarkPlayer = -1;
 
 	// don't call Clear(); that wips to transparent. do this instead.
 	//gs Dude, it's called CLEARshroud.  It needs to clear the shroud.
@@ -1242,6 +1562,14 @@ void W3DRadar::update( void )
 		m_cachedReinforcementLines.clear();
 		collectBlips( getObjectList() );
 		collectBlips( getLocalObjectList(), TRUE );
+		collectOrderLines();
+
+		const UnsignedInt frame = TheGameLogic->getFrame();
+		if( frame < m_landmarkFrame || frame - m_landmarkFrame >= LOGICFRAMES_PER_SECOND || m_landmarkFrame == 0 )
+		{
+			m_landmarkFrame = frame == 0 ? 1 : frame;
+			collectLandmarks();
+		}
 
 	}  // end if
 
@@ -1549,7 +1877,7 @@ void W3DRadar::setShroudLevel(Int shroudX, Int shroudY, CellShroudStatus setting
 	if (!shroud)
 		return;
 
-	// One texel a shroud cell, which draw filters into a smooth edge.  The cells come from the
+	// One byte a shroud cell, which uploadShroud smooths into the texture.  The cells come from the
 	// partition grid over the map's active extent, which can be smaller than the shroud's own grid
 	// over the height map, so the count is the extent's.  The first cell of a map sizes the cache,
 	// one texel over each way for the edge copy below.
@@ -1589,6 +1917,128 @@ void W3DRadar::setShroudLevel(Int shroudX, Int shroudY, CellShroudStatus setting
 	for( Int y = shroudY; y <= lastY; y++ )
 		for( Int x = shroudX; x <= lastX; x++ )
 			m_shroudCache.setAlpha( x, y, (UnsignedByte)alpha );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The cache's changed cells into the shroud texture, one lock of the changed rectangle a frame.
+	* Each cell is first softened with a tent RADAR_SHROUD_RAMP_CELLS wide each way, then every texel
+	* is the bilinear blend of the softened cells round its centre, in integers, remapped so the dark
+	* rises from nothing at a clear cell's edge to full that many cells in, and never darker than its
+	* own cell: the ramp lies on the dark side of the edge.  The picture is made here, so the
+	* Direct3D 9 and 11 devices show the same one.  A changed cell moves texels up to the tent's
+	* radius plus one cell away, and that whole rectangle is rewritten. */
+//-------------------------------------------------------------------------------------------------
+void W3DRadar::uploadShroud( void )
+{
+	if( m_shroudTexture == NULL || !m_shroudCache.isDirty() || m_shroudCellWidth <= 0.0f || m_shroudCellHeight <= 0.0f )
+		return;
+
+	// the map's cells; the cache's last column and row past them are copies, and beyond is unused
+	const Int cellsX = min( m_shroudWidth, max( 1, REAL_TO_INT_CEIL( m_mapExtent.width() / m_shroudCellWidth ) ) );
+	const Int cellsY = min( m_shroudHeight, max( 1, REAL_TO_INT_CEIL( m_mapExtent.height() / m_shroudCellHeight ) ) );
+
+	// a changed cell reaches texels as far as the kernel's radius plus the blend's one cell
+	const Int reach = RADAR_SHROUD_RAMP_CELLS + 1;
+	const Int x0 = max( 0, m_shroudCache.getDirtyMinX() - reach );
+	const Int y0 = max( 0, m_shroudCache.getDirtyMinY() - reach );
+	const Int x1 = min( m_shroudWidth - 1, m_shroudCache.getDirtyMaxX() + reach );
+	const Int y1 = min( m_shroudHeight - 1, m_shroudCache.getDirtyMaxY() + reach );
+	if( x1 < x0 || y1 < y0 )
+	{
+		m_shroudCache.markClean();
+		return;
+	}
+
+	// The softened cells, 256 times their alpha, over the rectangle and one more all round, which
+	// the blend reaches into: a tent of radius RADAR_SHROUD_RAMP_CELLS each way (1 2 3 4 3 2 1),
+	// across the rows first and then down the columns.
+	const Int R = RADAR_SHROUD_RAMP_CELLS;
+	const Int bx0 = x0 - 1, by0 = y0 - 1;
+	const Int bw = x1 - x0 + 3, bh = y1 - y0 + 3;
+	const Int rows = bh + 2 * R;
+	m_shroudRows.resize( bw * rows );
+	for( Int j = 0; j < rows; ++j )
+	{
+		const Int sy = max( 0, min( cellsY - 1, by0 - R + j ) );
+		for( Int i = 0; i < bw; ++i )
+		{
+			Int sum = 0;
+			for( Int d = -R; d <= R; ++d )
+				sum += m_shroudCache.getAlpha( max( 0, min( cellsX - 1, bx0 + i + d ) ), sy ) * (R + 1 - abs( d ));
+			m_shroudRows[ j * bw + i ] = sum;
+		}
+	}
+	m_shroudBlur.resize( bw * bh );
+	for( Int j = 0; j < bh; ++j )
+	{
+		for( Int i = 0; i < bw; ++i )
+		{
+			Int sum = 0;
+			for( Int d = -R; d <= R; ++d )
+				sum += m_shroudRows[ (j + R + d) * bw + i ] * (R + 1 - abs( d ));
+			m_shroudBlur[ j * bw + i ] = sum;
+		}
+	}
+	const Int blurWeight = (R + 1) * (R + 1) * (R + 1) * (R + 1);	// the tent's sum, squared
+
+	// no surface while the device is lost: the cache stays dirty and the next frame writes it
+	SurfaceClass *surface = m_shroudTexture->Get_Surface_Level();
+	if( surface == NULL )
+		return;
+	SurfaceClass::SurfaceDescription sd;
+	surface->Get_Description( sd );
+	const Int bytesPerPixel = Get_Bytes_Per_Pixel( sd.Format );
+	const Int s = m_shroudScale;
+	const Int left = x0 * s, top = y0 * s, right = (x1 + 1) * s, bottom = (y1 + 1) * s;
+	Int pitch;
+	UnsignedByte *bits = (UnsignedByte *)surface->Lock_Rect( &pitch, left, top, right, bottom );
+	if( bits )
+	{
+		// A texel lies a quarter cell off its cell's centre at scale 2, so its blend is three parts
+		// its own cell and one part the neighbour on that side, each way; at scale 1 it is the cell.
+		const Int own = s == 1 ? 4 : 3;
+		const Int next = 4 - own;
+		for( Int ty = top; ty < bottom; ++ty )
+		{
+			const Int j = ty / s;
+			const Int nj = (s == 1 || (ty % s) == 0) ? j - 1 : j + 1;
+			const Int r0 = j - by0;
+			const Int r1 = max( 0, min( bh - 1, nj - by0 ) );
+			UnsignedByte *row = bits + (ty - top) * pitch;
+			for( Int tx = left; tx < right; ++tx, row += bytesPerPixel )
+			{
+				const Int i = tx / s;
+				const Int ni = (s == 1 || (tx % s) == 0) ? i - 1 : i + 1;
+				const Int c0 = i - bx0;
+				const Int c1 = max( 0, min( bw - 1, ni - bx0 ) );
+				const Int blend = own * (own * m_shroudBlur[ r0 * bw + c0 ] + next * m_shroudBlur[ r0 * bw + c1 ])
+					+ next * (own * m_shroudBlur[ r1 * bw + c0 ] + next * m_shroudBlur[ r1 * bw + c1 ]);
+				// The softened value is half way at an edge and whole RADAR_SHROUD_RAMP_CELLS in, so
+				// twice it less the cell's own alpha runs from nothing at the edge to the cell's alpha
+				// that far into the dark.  Clamped to the cell: a cell the player sees stays clear to
+				// its edge, and a lone clear cell in the shroud is not dimmed.  A shrouded cell beside
+				// fog comes out at the fog's alpha at the edge, so the two ramps join.  The ramp never
+				// drops a dark cell below RADAR_SHROUD_FLOOR_EIGHTHS of its own alpha: a strip of fog
+				// two cells wide between two sight circles, or a lone dark cell, reads as nothing but
+				// ramp edge and would otherwise draw as clear ground over objects it hides.
+				const Int cellAlpha = m_shroudCache.getAlpha( max( 0, min( cellsX - 1, i ) ), max( 0, min( cellsY - 1, j ) ) );
+				const Int scale = blurWeight * 16;
+				const Int twice = (Int)(((Int64)blend * 2 + scale / 2) / scale);
+				const Int least = cellAlpha * RADAR_SHROUD_FLOOR_EIGHTHS / 8;
+				const UnsignedInt alpha = (UnsignedInt)min( cellAlpha, max( least, twice - cellAlpha ) );
+				// black with the alpha, as RadarShroudCache::flushTo writes it
+				switch( bytesPerPixel )
+				{
+					case 1: *row = (UnsignedByte)alpha; break;
+					case 2: *(UnsignedShort *)row = (UnsignedShort)((alpha >> 4) << 12); break;
+					case 4: *(UnsignedInt *)row = alpha << 24; break;
+				}
+			}
+		}
+		surface->Unlock();
+		m_shroudCache.markClean();
+	}
+	REF_PTR_RELEASE( surface );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1654,6 +2104,10 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 	// draw the terrain texture
 	TheDisplay->drawImage( m_terrainImage, ul.x, ul.y, lr.x, lr.y );
 
+	// the money and the tech buildings are part of the ground: under every dot and footprint, and
+	// under the fog like the ground they stand on
+	drawLandmarks( ul.x, ul.y, scaledWidth, scaledHeight );
+
 	// the objects, as update last collected them
 	m_overlayDrawn = TRUE;
 	drawBlips( ul.x, ul.y, scaledWidth, scaledHeight );
@@ -1665,32 +2119,39 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 	if( m_shroudCellWidth > 0.0f )
 #endif
 	{
-		// one texel a shroud cell, filtered: the fog's edge comes out a ramp across a cell rather than
-		// the stairs of 128 cells a map.  The cache picks its size when a map's first cell arrives;
-		// a new texture starts out owing the cache's whole surface, which setSize marked dirty.
+		// Several texels a shroud cell, which uploadShroud fills from the cells softened over their
+		// neighbours, then sampled bilinearly: the fog's edge is a smooth ramp about two cells wide
+		// rather than the cell steps one bilinear texel a cell left on every diagonal.  The cache
+		// picks its size when a map's first cell arrives; a new texture starts out owing the cache's
+		// whole surface, which setSize marked dirty.
 		if( m_shroudTexture == NULL || m_shroudTextureWidth != m_shroudWidth || m_shroudTextureHeight != m_shroudHeight )
 		{
 			REF_PTR_RELEASE( m_shroudTexture );
 			m_shroudTextureWidth = 0;
 			m_shroudTextureHeight = 0;
-			m_shroudTexture = MSGNEW("TextureClass") TextureClass( m_shroudWidth, m_shroudHeight,
+			m_shroudScale = RADAR_SHROUD_MAX_SCALE;
+			while( m_shroudScale > 1 && max( m_shroudWidth, m_shroudHeight ) * m_shroudScale > RADAR_SHROUD_MAX_TEXTURE )
+				m_shroudScale >>= 1;
+			m_shroudTexture = MSGNEW("TextureClass") TextureClass( m_shroudWidth * m_shroudScale, m_shroudHeight * m_shroudScale,
 																					 m_shroudTextureFormat, MIP_LEVELS_1 );
 		}
 		if( m_shroudTexture && (m_shroudTextureWidth != m_shroudWidth || m_shroudTextureHeight != m_shroudHeight) )
 		{
-			m_shroudTexture->Get_Filter().Set_Min_Filter( TextureFilterClass::FILTER_TYPE_DEFAULT );
-			m_shroudTexture->Get_Filter().Set_Mag_Filter( TextureFilterClass::FILTER_TYPE_DEFAULT );
+			// plain bilinear on both devices, whatever the player's texture filter option says
+			m_shroudTexture->Get_Filter().Set_Min_Filter( TextureFilterClass::FILTER_TYPE_FAST );
+			m_shroudTexture->Get_Filter().Set_Mag_Filter( TextureFilterClass::FILTER_TYPE_FAST );
+			m_shroudTexture->Get_Filter().Set_Mip_Mapping( TextureFilterClass::FILTER_TYPE_NONE );
 			m_shroudTexture->Get_Filter().Set_U_Addr_Mode( TextureFilterClass::TEXTURE_ADDRESS_CLAMP );
 			m_shroudTexture->Get_Filter().Set_V_Addr_Mode( TextureFilterClass::TEXTURE_ADDRESS_CLAMP );
 			m_shroudTextureWidth = m_shroudWidth;
 			m_shroudTextureHeight = m_shroudHeight;
 
 			ICoord2D size;
-			size.x = m_shroudWidth;
-			size.y = m_shroudHeight;
+			size.x = m_shroudWidth * m_shroudScale;
+			size.y = m_shroudHeight * m_shroudScale;
 			m_shroudImage->setRawTextureData( m_shroudTexture );
-			m_shroudImage->setTextureWidth( m_shroudWidth );
-			m_shroudImage->setTextureHeight( m_shroudHeight );
+			m_shroudImage->setTextureWidth( size.x );
+			m_shroudImage->setTextureHeight( size.y );
 			m_shroudImage->setImageSize( &size );
 		}
 
@@ -1703,24 +2164,7 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 		m_shroudImage->setUV( &uv );
 
 		// hand the frame's shroud changes to the texture, one lock for all of them
-		if( m_shroudTexture && m_shroudCache.isDirty() )
-		{
-			// no surface while the device is lost: the cache stays dirty and the next frame flushes
-			SurfaceClass *surface = m_shroudTexture->Get_Surface_Level();
-			if( surface )
-			{
-				SurfaceClass::SurfaceDescription sd;
-				surface->Get_Description( sd );
-				Int pitch;
-				void *bits = surface->Lock( &pitch );
-				if( bits )
-				{
-					m_shroudCache.flushTo( bits, pitch, Get_Bytes_Per_Pixel( sd.Format ) );
-					surface->Unlock();
-				}
-				REF_PTR_RELEASE(surface);
-			}
-		}
+		uploadShroud();
 
 		if( m_shroudTexture )
 			TheDisplay->drawImage( m_shroudImage, ul.x, ul.y, lr.x, lr.y );
@@ -1728,6 +2172,9 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 
 	// over the shroud: the destination is the player's own order, and it may lie in the dark
 	drawReinforcementLines( ul.x, ul.y, scaledWidth, scaledHeight );
+
+	// the selection's rally points and queued orders, over the shroud for the same reason
+	drawOrderLines( ul.x, ul.y, scaledWidth, scaledHeight );
 
 	// the radar's contacts go over the shroud, which would dim them in the fog and black them out in
 	// the shroud, and so over the unit dots of the overlay as well.  A contact is only ever a unit the

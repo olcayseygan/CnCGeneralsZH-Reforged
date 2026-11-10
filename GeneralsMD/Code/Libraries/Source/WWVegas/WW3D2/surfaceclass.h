@@ -86,6 +86,8 @@ class SurfaceClass : public W3DMPO, public RefCountClass
 
 		// Lock / unlock the surface
 		void * Lock(int * pitch);
+		// one rectangle, right and bottom exclusive; the pointer is its top left texel
+		void * Lock_Rect(int * pitch, int left, int top, int right, int bottom);
 		void Unlock(void);
 
 		// HY -- The following functions are support functions for font3d

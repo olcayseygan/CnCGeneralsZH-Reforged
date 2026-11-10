@@ -270,6 +270,20 @@ void * SurfaceClass::Lock(int * pitch)
 	return (void *)lock_rect.pBits;
 }
 
+void * SurfaceClass::Lock_Rect(int * pitch, int left, int top, int right, int bottom)
+{
+	D3DLOCKED_RECT lock_rect;
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
+	RenderRect rect;
+	rect.left=left;
+	rect.top=top;
+	rect.right=right;
+	rect.bottom=bottom;
+	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, &rect, 0));
+	*pitch = lock_rect.Pitch;
+	return (void *)lock_rect.pBits;
+}
+
 void SurfaceClass::Unlock(void)
 {
 	DX8_ErrorCode(D3DSurface->UnlockRect());

@@ -113,11 +113,12 @@ typedef void (*GameLogicFuncPtr)( Object *obj, void *userData );
 
 typedef std::vector<Object*> ObjectPtrVector;
 
-/// One place in GameLogic's sleepy-update heap: the module, its friend_getPriority() beside it, and
-/// the module's slot in m_sleepySlotIndex, which says where in the heap the entry is.
+/// One place in GameLogic's sleepy-update heap: the module, the key it sorts by (see makeSleepyKey in
+/// GameLogic.cpp: its wake frame and phase, then its object's id and its place among the object's
+/// modules), and its slot in m_sleepySlotIndex, which says where in the heap the entry is.
 struct SleepyEntry
 {
-	UnsignedInt priority;
+	UnsignedInt64 key;
 	Int slot;
 	UpdateModulePtr module;
 };
@@ -443,9 +444,11 @@ private:
 	// never modify it directly; please use the proper access methods.
 	// (for an excellent discussion of priority queues, please see:
 	// http://dogma.net/markn/articles/pq_stl/priority.htm)
-	// Each entry carries a copy of its module's friend_getPriority() so the heap compares without
-	// touching the pooled module. The copy must equal the module's value whenever a heap operation
-	// runs: every friend_setNextCallFrame on a queued module writes the entry at its index too.
+	// Each entry carries its module's friend_getPriority() inside its key so the heap compares without
+	// touching the pooled module. The key must match the module's value whenever a heap operation
+	// runs: every friend_setNextCallFrame on a queued module rekeys the entry at its index too.
+	// Keys are unique, so the modules due in a frame run in key order whatever the heap's layout:
+	// which modules sleep cannot reorder the ones that run.
 	std::vector<SleepyEntry> m_sleepyUpdates;
 
 	// Where each queued module sits in the heap, by the slot the module and its entry carry.  Every

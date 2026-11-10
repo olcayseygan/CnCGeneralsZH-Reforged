@@ -3276,6 +3276,50 @@ void GameLogic::deselectObject(Object *obj, PlayerMaskType playerMask, Bool affe
 }
 
 // ------------------------------------------------------------------------------------------------
+/*
+	The sleepy heap's sort key, one 64-bit compare: the wake frame (26 bits), the phase (2), the
+	object's id (28) and the module's place in its object's module list (8).  Frame and phase were
+	the whole key once, and the modules that tied on them, hundreds a frame, ran in whatever order
+	the heap's layout gave: a module that started sleeping, or one that woke, reordered the others
+	due that frame.  Every key is different now, so the modules due in a frame run in key order
+	whatever else is on the heap, and a load that rebuilds the heap runs them in the same order.
+	A frame past 2^26 is a sleep forever and is clamped; it never comes due.
+	ponytail: an id past 2^28 or a module past the 255th wraps into another's key, and those two
+	fall back to the heap's layout, still the same on every machine; widen the key if a match ever
+	makes 268 million objects.
+*/
+static const Int SLEEPY_KEY_TIE_BITS = 36;
+static const UnsignedInt64 SLEEPY_KEY_TIE_MASK = ( (UnsignedInt64)1 << SLEEPY_KEY_TIE_BITS ) - 1;
+
+static inline UnsignedInt64 sleepyKeyOfPriority( UnsignedInt priority )
+{
+	const UnsignedInt64 FRAME_MAX = ( (UnsignedInt64)1 << 26 ) - 1;
+	UnsignedInt64 frame = priority >> 2;
+	if( frame > FRAME_MAX )
+		frame = FRAME_MAX;
+	return ( frame << ( SLEEPY_KEY_TIE_BITS + 2 ) ) | ( (UnsignedInt64)( priority & 3 ) << SLEEPY_KEY_TIE_BITS );
+}
+
+/** The object's id and the module's place among its modules, the part of the key that never changes. */
+static UnsignedInt64 sleepyKeyTie( UpdateModulePtr u )
+{
+	const Object *obj = u->friend_getObject();
+	UnsignedInt place = 0;
+	for( BehaviorModule **b = obj->getBehaviorModules(); *b; ++b, ++place )
+	{
+		if( (UpdateModulePtr)( (*b)->getUpdate() ) == u )
+			break;
+	}
+	return ( (UnsignedInt64)( (UnsignedInt)obj->getID() & 0x0FFFFFFF ) << 8 ) | ( place & 0xFF );
+}
+
+/** u's frame and phase changed: the entry takes them, its tie stays. */
+static inline void rekeySleepyEntry( SleepyEntry &e, UpdateModulePtr u )
+{
+	e.key = ( e.key & SLEEPY_KEY_TIE_MASK ) | sleepyKeyOfPriority( u->friend_getPriority() );
+}
+
+// ------------------------------------------------------------------------------------------------
 inline void GameLogic::validateSleepyUpdate() const
 {
 // pretty slow, so do only for DEBUG for now. turn on if you suspect wonkiness.
@@ -3297,24 +3341,24 @@ inline void GameLogic::validateSleepyUpdate() const
 	{
 		DEBUG_ASSERTCRASH(m_sleepyUpdates[i].module->friend_getSleepySlot() == m_sleepyUpdates[i].slot, ("slot mismatch at %d\n",i));
 		DEBUG_ASSERTCRASH(sleepyIndexOf(m_sleepyUpdates[i].module) == i, ("index mismatch: expected %d, got %d\n",i,sleepyIndexOf(m_sleepyUpdates[i].module)));
-		DEBUG_ASSERTCRASH(m_sleepyUpdates[i].priority == m_sleepyUpdates[i].module->friend_getPriority(), ("sleepy priority copy is stale at %d\n",i));
-		UnsignedInt pri = m_sleepyUpdates[i].priority;
+		DEBUG_ASSERTCRASH((m_sleepyUpdates[i].key & ~SLEEPY_KEY_TIE_MASK) == sleepyKeyOfPriority(m_sleepyUpdates[i].module->friend_getPriority()), ("sleepy key is stale at %d\n",i));
+		UnsignedInt64 pri = m_sleepyUpdates[i].key;
 		if (i > 0)
 		{
 			Int i0 = (i+1)/2-1;
-			UnsignedInt pri0 = m_sleepyUpdates[i0].priority;
+			UnsignedInt64 pri0 = m_sleepyUpdates[i0].key;
 			DEBUG_ASSERTCRASH(pri >= pri0, ("sleepyUpdates are munged (0)"));
 		}
 		Int i1 = 2*(i+1)-1;
 		Int i2 = 2*(i+1);
 		if (i1 < sz)
 		{
-			UnsignedInt pri1 = m_sleepyUpdates[i1].priority;
+			UnsignedInt64 pri1 = m_sleepyUpdates[i1].key;
 			DEBUG_ASSERTCRASH(pri <= pri1, ("sleepyUpdates are munged (1)"));
 		}
 		if (i2 < sz)
 		{
-			UnsignedInt pri2 = m_sleepyUpdates[i2].priority;
+			UnsignedInt64 pri2 = m_sleepyUpdates[i2].key;
 			DEBUG_ASSERTCRASH(pri <= pri2, ("sleepyUpdates are munged (2)"));
 		}
 	}
@@ -3351,7 +3395,7 @@ inline Bool isLowerPriority(const SleepyEntry& a, const SleepyEntry& b)
 	// return true iff a is lower pri than b.
 	// remember: lower ordinal value means higher priority.
 	// therefore, higher ordinal value means lower priority.
-	return a.priority > b.priority;
+	return a.key > b.key;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -3490,7 +3534,7 @@ void GameLogic::appendSleepyUpdate(UpdateModulePtr u)
 		m_sleepySlotIndex.push_back(-1);
 	}
 
-	SleepyEntry e = { u->friend_getPriority(), slot, u };
+	SleepyEntry e = { sleepyKeyOfPriority( u->friend_getPriority() ) | sleepyKeyTie( u ), slot, u };
 	m_sleepyUpdates.push_back(e);
 	m_sleepySlotIndex[slot] = (Int)m_sleepyUpdates.size() - 1;
 	u->friend_setSleepySlot(slot);
@@ -3607,7 +3651,7 @@ void GameLogic::friend_awakenUpdateModule(Object* obj, UpdateModulePtr u, Unsign
 
 		// update the value.
 		u->friend_setNextCallFrame(whenToWakeUp);
-		m_sleepyUpdates[idx].priority = u->friend_getPriority();
+		rekeySleepyEntry(m_sleepyUpdates[idx], u);
 
 		// rebalance.
 		rebalanceSleepyUpdate(idx);
@@ -5501,9 +5545,11 @@ void GameLogic::update( void )
 			// else defer it till next frame and re-push it
 			u->friend_setNextCallFrame(now + sleepLen);
 			// u's own slot, which is not slot 0 when its update pushed or woke a module that sorts ahead
-			// of it; the rebalance stays at 0 as it always was.
-			m_sleepyUpdates[sleepyIndexOf(u)].priority = u->friend_getPriority();
-			rebalanceSleepyUpdate(0);
+			// of it.  The rebalance used to stay at 0 regardless, which left u, now later, above entries
+			// that sort before it: a heap that broke its own order there and ran them by layout.
+			const Int idx = sleepyIndexOf(u);
+			rekeySleepyEntry(m_sleepyUpdates[idx], u);
+			rebalanceSleepyUpdate(idx);
 		}
 	}
 
@@ -7191,8 +7237,10 @@ void GameLogic::loadPostProcess( void )
 
 	}  // end for, obj
 
-	// re-sort the priority queue all at once now that all modules are on it
-	if (!sleepyFromSave)
+	// re-sort the priority queue all at once now that all modules are on it.  A save's own order too:
+	// keys are unique, so any heap of them runs the same order, and one written before the keys had
+	// ties is not a heap of them.
+	if (!m_sleepyUpdates.empty())
 		remakeSleepyUpdate();
 
 }  // end loadPostProcess

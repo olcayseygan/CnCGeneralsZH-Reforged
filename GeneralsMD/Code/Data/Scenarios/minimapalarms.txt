@@ -1,0 +1,27 @@
+# The radar alarm stills and clip (2026-11-10), driven by experiments/minimap-sharp/shoot_alarms.py.
+# Up to logic 3600 this is minimapfeatures.txt line for line, so the frame at 3600 is the same match
+# as the stills taken of the old alarm; the alarms are staged after it.  Seat 0 gets an Airfield out
+# east of its base, off the start view; China Overlords come round and take it down (under attack,
+# then structure lost, both off-screen for the edge chevron).  Seat 0's dozer builds a Power Plant
+# (construction complete).
+
+10    spawn      0  AmericaPowerPlant      1   start0:-260:-120
+10    spawn      0  AmericaBarracks        1   start0:260:-160
+10    spawn      0  AmericaWarFactory      1   start0:0:320
+10    spawn      0  TechOilDerrick         1   start0:520:260
+10    spawn      0  TechReinforcementPad   1   start0:-420:420
+20    spawn      0  AmericaTankCrusader    8   start0:200:200
+20    spawn      0  AmericaVehicleHumvee   4   start0:-150:200
+40    move       0  AmericaTankCrusader    start0:900:-300
+41    shiftmove  0  AmericaTankCrusader    start0:1600:-900
+42    shiftmove  0  AmericaTankCrusader    start0:1600:-1800
+40    attackmove 0  AmericaVehicleHumvee   start2
+900   spawn      2  ChinaTankBattleMaster  5   start0:1500:-700
+910   attackmove 2  ChinaTankBattleMaster  start0
+
+# the alarms
+# (file frames count 30 a second, ConvertRetailFrames doubles them: 1800 here is logic 3600)
+1805  spawn      0  AmericaAirfield        1   start0:1300:500
+1810  construct  0  AmericaPowerPlant      start0:-300:300
+1950  spawn      2  ChinaTankOverlord      3   start0:1750:500
+1955  attack     2  ChinaTankOverlord      0  AmericaAirfield

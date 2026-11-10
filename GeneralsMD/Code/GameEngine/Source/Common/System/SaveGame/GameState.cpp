@@ -64,6 +64,7 @@
 #include "GameLogic/SidesList.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
+#include <typeinfo>	// TEMP_LOAD_DIAG
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1716,7 +1717,8 @@ void GameState::gameStatePostProcessLoad( void )
 		++it;
 
 		// do processing
-		snapshot->loadPostProcess();
+		try { snapshot->loadPostProcess(); }	// TEMP_LOAD_DIAG
+		catch( ... ) { DEBUG_LOG(( "TEMP_LOAD_DIAG: loadPostProcess threw in %s\n", typeid( *snapshot ).name() )); throw; }
 
 	}  // end for
 

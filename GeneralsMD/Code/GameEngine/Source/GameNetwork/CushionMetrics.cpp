@@ -116,31 +116,25 @@ Real roomWorstLatency( const Real latencies[], const Bool connected[], Int numSl
 Int computeRunAhead( Real roundTripSeconds, Real jitterSeconds, Int fps, UnsignedInt slackPercent,
 										 Int minRunAhead, Int maxRunAhead )
 {
-	if( roundTripSeconds < 0.0f )
+	if( !(roundTripSeconds >= 0.0f) )
 		roundTripSeconds = 0.0f;
 	if( !(jitterSeconds >= 0.0f) )
 		jitterSeconds = 0.0f;
 	if( fps < 1 )
 		fps = 1;			// the room rate is floored long before it gets here, but the division below is real
 
-	/* roomWorstLatency() is the worst round trip in the room, so half of it is the one-way trip
-		 a command has to survive.  Rounded up, where EA truncated: a 150 ms round trip truncates to
-		 two frames - 66 ms - to cover 75 ms of wire, and a run-ahead shorter than the trip itself is
-		 not a tight window, it is a stall on every command that uses it.  Nobody ever saw that
-		 because the old floor of ten frames was larger than the formula's answer on every link
-		 anyone plays on; lowering the floor is what makes the arithmetic underneath it matter. */
-	Int frames = (Int)ceilf( (roundTripSeconds / 2.0f) * (Real)fps );
+	/* roomWorstLatency() is the worst round trip in the room, so half of it is the one-way trip a
+		 command has to survive, and a packet late by the link's spread takes that plus
+		 RUNAHEAD_JITTER_DEVIATIONS of jitter.  The window has to be longer than that by whole frames:
+		 floor + 1 is the least frame count past it.  EA truncated the trip alone, and a window shorter
+		 than the wire is a stall on every command.  The brake's threshold goes on top - see the header. */
+	Real late = ( (roundTripSeconds / 2.0f) + (Real)RUNAHEAD_JITTER_DEVIATIONS * jitterSeconds ) * (Real)fps;
+	Int frames = ( late >= (Real)maxRunAhead ) ? maxRunAhead : (Int)floorf( late ) + 1;	// no float-to-int overflow
 
-	// EA's proportional slack, then the FRAMEINFO lag, the brake's room and the link's own jitter - see the header
+	// EA's proportional slack, then the phase margin and the brake's room
 	frames += (Int)((frames * (Int)slackPercent) / 100);
-	frames += RUNAHEAD_FRAMEINFO_LAG_FRAMES;
-
-	Real jitterRaw = ceilf( (Real)RUNAHEAD_JITTER_DEVIATIONS * jitterSeconds * (Real)fps );
-	Int jitterFrames = ( jitterRaw > (Real)maxRunAhead ) ? maxRunAhead : (Int)jitterRaw;	// no float-to-int overflow
-	if( jitterFrames < RUNAHEAD_JITTER_MIN_FRAMES )
-		jitterFrames = RUNAHEAD_JITTER_MIN_FRAMES;
-
-	frames += selfSlugThreshold( frames, slackPercent ) + jitterFrames;
+	frames += RUNAHEAD_PHASE_MARGIN_FRAMES;
+	frames += selfSlugThreshold( frames, slackPercent );
 
 	if( frames < minRunAhead )
 		frames = minRunAhead;

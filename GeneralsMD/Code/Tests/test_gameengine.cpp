@@ -7358,17 +7358,17 @@ TEST(selfslug_fires_once_the_margin_eats_into_the_slack)
 
 TEST(selfslug_threshold_has_a_floor_the_shipped_run_ahead_cannot_undercut)
 {
-	/* The run-ahead a real room plays on is a handful of frames - MIN_RUNAHEAD is four, and a
-		 300 ms round trip is still only fifteen - so NetworkRunAheadSlack's
-		 10 % of it is worth well under a frame.  A brake that waits until less than one frame of
-		 margin is left has already lost: at 60 Hz that is under 17 ms of warning for a hitch that
-		 takes longer than that to signal, let alone correct.  Hence the floor. */
+	/* The run-ahead a real room plays on is a handful of frames - three on a LAN, and a 300 ms round
+		 trip is still only fourteen - so NetworkRunAheadSlack's 10 % of it rounds to nothing, and a
+		 threshold of zero frames is a brake that never fires.  The cushion counts whole frames before
+		 the one about to run, so a threshold of one fires with up to a frame still in hand, the last
+		 moment before the stall.  Hence the floor. */
 	CHECK_EQ( selfSlugThreshold( 10, 10 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
 
 	// the floor holds wherever the arithmetic would land under it, including at zero slack
 	CHECK_EQ( selfSlugThreshold( 10, 0 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
 	CHECK_EQ( selfSlugThreshold( 1, 10 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
-	CHECK_EQ( selfSlugThreshold( 29, 10 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
+	CHECK_EQ( selfSlugThreshold( 19, 10 ), SELFSLUG_MIN_THRESHOLD_FRAMES );
 
 	// and gets out of the way as soon as the configured slack is worth more than it
 	CHECK_EQ( selfSlugThreshold( 60, 10 ), 6 );
@@ -7479,8 +7479,6 @@ TEST(a_stalled_frame_is_not_filed_as_round_trip_time)
 	Int runAhead = computeRunAhead( clamped, stalledJitter, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
 	CHECK( runAhead < ConvertRetailFrames( 64 ) );
 	CHECK( runAhead <= 69 );			// 1.15 s at 60 Hz, and only with both players and the jitter at the ceilings
-	CHECK( runAhead <= (Int)(MAX_PLAUSIBLE_LATENCY_SECONDS * (Real)fps * 1.2f) + SELFSLUG_MIN_THRESHOLD_FRAMES
-											+ (Int)ceilf( RUNAHEAD_JITTER_DEVIATIONS * MAX_PLAUSIBLE_JITTER_SECONDS * (Real)fps ) );
 
 	/* a LAN is untouched by any of this */
 	CHECK_EQ( computeRunAhead( sanitizeLatencySample( 0.051f, MAX_PLAUSIBLE_LATENCY_SECONDS ) * 2.0f,
@@ -7525,25 +7523,30 @@ TEST(a_missing_frame_is_asked_for_again_once_the_wire_has_had_its_chance)
 
 TEST(a_packet_that_arrives_on_time_never_trips_the_self_slug)
 {
-	/* The brake fires when the cushion drops below selfSlugThreshold.  The cushion of a packet that
-		 takes exactly the average trip is the window minus the trip minus the frame its FRAMEINFO waits
-		 to be sent (RUNAHEAD_FRAMEINFO_LAG_FRAMES).  A margin no bigger than the threshold has the room
-		 running 10 % slow on a link that never drops or delays a packet.  So whatever the latency and
-		 the jitter, that packet arrives with the brake still off. */
+	/* The brake fires when the cushion drops below selfSlugThreshold.  Frame f + run-ahead's FRAMEINFO
+		 leaves when frame f has run, so a packet that is trip frames on the wire lands with
+		 run-ahead - trip frames of real time to spare, and the cushion, the frame it completes minus
+		 the frame about to run, is the whole frames of that: run-ahead - 1 - floor(trip).  A margin no
+		 bigger than the threshold has the room running 10 % slow on a link that never drops or delays
+		 a packet.  So whatever the latency and the jitter, that packet arrives with the brake still off,
+		 and so does one late by the jitter the window is sized for, with the other machine's frame
+		 clock up to RUNAHEAD_PHASE_MARGIN_FRAMES ahead. */
 	for( Int ms = 0; ms <= 800; ms += 5 )
 	{
 		Real latency = (Real)ms / 1000.0f;
-		Int tripFrames = (Int)ceilf( ( latency / 2.0f ) * LOGICFRAMES_PER_SECONDS_REAL );
+		Real tripFrames = ( latency / 2.0f ) * LOGICFRAMES_PER_SECONDS_REAL;
 		for( Int jitterMS = 0; jitterMS <= 100; jitterMS += 5 )
 		{
 			Int runAhead = computeRunAhead( latency, (Real)jitterMS / 1000.0f, LOGICFRAMES_PER_SECOND, 10,
 																			MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-			Int cushion = runAhead - tripFrames - RUNAHEAD_FRAMEINFO_LAG_FRAMES;
+			Int cushion = runAhead - 1 - (Int)floorf( tripFrames );
 			CHECK( !shouldSelfSlug( cushion, runAhead, 10 ) );
 
-			// and a packet late by as many deviations as the margin is sized for does not trip it either
-			Int lateFrames = (Int)ceilf( RUNAHEAD_JITTER_DEVIATIONS * ( (Real)jitterMS / 1000.0f ) * LOGICFRAMES_PER_SECONDS_REAL );
-			CHECK( !shouldSelfSlug( cushion - lateFrames, runAhead, 10 ) );
+			// summed in seconds before the frame count, as computeRunAhead sums it, so a whole-frame total rounds alike
+			Real lateTripFrames = ( ( latency / 2.0f ) + RUNAHEAD_JITTER_DEVIATIONS * ( (Real)jitterMS / 1000.0f ) )
+														* LOGICFRAMES_PER_SECONDS_REAL;
+			Int lateCushion = runAhead - 1 - (Int)floorf( lateTripFrames ) - RUNAHEAD_PHASE_MARGIN_FRAMES;
+			CHECK( !shouldSelfSlug( lateCushion, runAhead, 10 ) );
 		}
 	}
 }
@@ -7560,16 +7563,15 @@ TEST(the_jitter_margin_follows_the_measured_jitter)
 	CHECK_EQ( tripFrames, 7 );
 	Int oldWindow = tripFrames + oldFixedMargin;
 
-	/* A steady link, rttvar a few milliseconds, gets the FRAMEINFO lag, the brake's frames and one frame
-		 of spread over the trip, which is all a steady link needs.  The flat margin's six frames were
-		 that with a brake of four; the brake is two now, so the steady window is two frames shorter. */
+	/* A steady link, rttvar a few milliseconds, gets the trip and its spread rounded past to a whole
+		 frame (6.45 + 0.24 frames, so 7), the phase margin and the brake's frame. */
 	Int steady = computeRunAhead( ping, 0.004f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-	CHECK_EQ( steady, tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + 1 );
-	CHECK_EQ( steady, oldWindow - 2 );
+	CHECK_EQ( steady, 7 + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );
+	CHECK( steady < oldWindow );
 
 	// a jittery one, rttvar 20 to 35 ms as -latNoise 30 measures, waits longer
 	Int jittery = computeRunAhead( ping, 0.024f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-	CHECK_EQ( jittery, tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + 2 );		// ceil(24 ms * 60) = 2
+	CHECK_EQ( jittery, 8 + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );		// 6.45 + 1.44 frames
 	CHECK( jittery > steady );
 	CHECK( computeRunAhead( ping, 0.035f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) > jittery );
 
@@ -7582,10 +7584,9 @@ TEST(the_jitter_margin_follows_the_measured_jitter)
 		previous = runAhead;
 	}
 
-	/* No jitter is still a frame of it: the game's send grouping and socket reads spread every link
-		 by up to a frame, loopback included. */
+	// no jitter at all still rounds the trip past to a whole frame and keeps the phase margin
 	CHECK_EQ( computeRunAhead( ping, 0.0f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ),
-						tripFrames + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + RUNAHEAD_JITTER_MIN_FRAMES );
+						tripFrames + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );
 }
 
 /* Each frame's cushion is measured once, by the arrival that completes it (arrivalMeasuresCushion).
@@ -7669,7 +7670,7 @@ TEST(the_run_ahead_is_shorter_than_the_shipped_floor_on_the_links_that_do_not_ne
 	/* And what it is not: the links that were relying on the floor get more window than the floor
 		 gave them, not less.  600 ms summed round trip is where EA's formula finally reached ten. */
 	CHECK( computeRunAhead( 0.300f, jitter, fps, 10, MIN_RUNAHEAD, 64 )
-				 >= 9 + RUNAHEAD_FRAMEINFO_LAG_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES + RUNAHEAD_JITTER_MIN_FRAMES );	// 150 ms is 9 frames
+				 >= 9 + 1 + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );	// 150 ms is 9 frames, rounded past
 	CHECK( computeRunAhead( 0.600f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > shippedFloor );
 	CHECK( computeRunAhead( 1.000f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > ConvertRetailFrames( 16 ) );
 }

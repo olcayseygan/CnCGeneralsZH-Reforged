@@ -72,27 +72,23 @@ Int selfSlugThreshold( Int runAhead, UnsignedInt slackPercent );
 
 enum
 {
-	/* The brake needs room to work.  NetworkRunAheadSlack is 10 %, and the run-ahead it is a
-		 percentage of is small, so ten percent of it is nothing, and a brake that engages with less
-		 than a frame of margin left is not a brake, it is the stall it was meant to prevent.  So two
-		 frames, 33 ms.  It was four, the 66 ms that two frames were at 30 Hz, and every frame of it is
-		 a frame of run-ahead, which is input delay.  Measured on three copies against four, both
-		 without send grouping: a 50 ms ping self-slugged on 0 to 2 % of frames against 0 to 3 %, a
-		 100 ms ping on 2 to 3 % against 1 %, a 200 ms ping on 1 to 1.5 % against 3 % (four with the
-		 grouping), and nothing stalled.  Every other frame count in this enum is doubled from its
-		 30 Hz value. */
-	SELFSLUG_MIN_THRESHOLD_FRAMES = 2,
+	/* The brake's floor.  NetworkRunAheadSlack is 10 %, and the run-ahead it is a percentage of is a
+		 handful of frames, so ten percent of it rounds to nothing, and a threshold of nothing never
+		 fires.  One frame: the cushion is the frame a packet completed minus the frame about to run, so
+		 it counts the whole frames of real time left, and 0 is still up to a frame early, the last
+		 reading before the stall.  It was two, and four at 30 Hz before that.  A threshold is not a
+		 margin: the brake only pulls the machine that runs ahead back until its cushion reaches the
+		 threshold, so in a room that started out of step the leader sits right on it, and every frame
+		 above the threshold that is not phase margin goes to the follower as cushion nobody needs. */
+	SELFSLUG_MIN_THRESHOLD_FRAMES = 1,
 
-	/* The least jitter margin computeRunAhead gives, however steady the link: the socket is read once
-		 a pass, so every link has up to a frame of spread, loopback included. */
-	RUNAHEAD_JITTER_MIN_FRAMES = 1,
-
-	/* A frame's FRAMEINFO leaves a tick after its commands: at frame f a player can still issue orders
-		 for f + run-ahead, so Network::noteLogicFrameAdvance announces only the frames below it.  A
-		 packet that takes exactly the average trip therefore arrives with run-ahead - 1 - trip frames to
-		 spare, and the window has to carry that frame or the brake fires on a perfect link.  Measured:
-		 13 frames at a 223 ms round trip (6.7 frames each way) read a mean cushion of 5.2. */
-	RUNAHEAD_FRAMEINFO_LAG_FRAMES = 1,
+	/* A frame of headroom above the brake that no round trip measures.  Two machines' logic clocks
+		 are not in step, a frame runs and is announced on a render pass, and a starved or hitching
+		 machine is late on every link at once, so a packet on time by the wire can still land a frame
+		 late against the other machine's tick.  Two copies on loopback without it, at a run-ahead of 2,
+		 ran clean on an idle CPU and slowed themselves on 17 to 18 % of frames, at 58 fps, on a
+		 saturated one. */
+	RUNAHEAD_PHASE_MARGIN_FRAMES = 1,
 
 	/* The room never runs slower than this, whatever the metrics say: a sixth of normal speed. */
 	ROOM_FRAME_RATE_FLOOR = 10,
@@ -113,7 +109,7 @@ enum
 	 later of the other players' packets, so covering every arrival would take the largest one-way
 	 excess of about twenty: about 1.4 rttvar for uniform noise split evenly between the directions,
 	 1.7 for normal noise, 2.3 for noise all on one direction.  It is not worth covering.  Past the
-	 margin a late packet only engages the brake, whose four frames are still in the window, and the
+	 margin a late packet only engages the brake, whose frames are still in the window, and the
 	 brake costs a few tenths of a frame a second while a frame of window costs every click 17 ms.
 	 Measured on three copies at 200 ms of ping with 30 ms of jitter (rttvar 22 to 29 ms), counting the
 	 FRAMEINFO lag: a 5-frame margin engaged the brake on 6 to 9 % of frames at 58.4 to 58.9 fps, 6
@@ -138,12 +134,16 @@ Real roomWorstLatency( const Real latencies[], const Bool connected[], Int numSl
 /** The run-ahead, in frames.  roundTripSeconds is roomWorstLatency's, jitterSeconds the worst rttvar
 	  any player reported (roomWorstLatency over those), fps the rate the room has settled on.
 
-	  The window is the one-way trip, EA's proportional slack, the FRAMEINFO lag, the self-slug brake's
-	  threshold and RUNAHEAD_JITTER_DEVIATIONS of jitter.  The brake's frames are part of the margin because the
-	  brake fires whenever the cushion drops below them: a margin no bigger than the threshold has the
-	  room slugging on a link that never drops a packet.  The slack stays for the reason it was there,
-	  the frame rate probe - the window is counted at the settled rate and played at up to 10 % above
-	  it - and it is nothing below a 330 ms round trip anyway. */
+	  Frame f + run-ahead's FRAMEINFO leaves the moment frame f has run, so a packet trip frames on the
+	  wire lands with run-ahead - trip frames of real time left, and the cushion the brake reads is the
+	  whole frames of that.  So the window is the one-way trip plus RUNAHEAD_JITTER_DEVIATIONS of
+	  jitter, rounded past to the next whole frame, then EA's proportional slack, the phase margin and
+	  the brake's threshold.  It used to round the trip up and add a frame for the FRAMEINFO on top, and
+	  the jitter rounded up beside it, which counted the same frame two or three times whenever the
+	  trip was not a whole number of frames: loopback ran at 5 where 3 holds.  The brake's frame is in
+	  the window because the brake fires whenever the cushion drops below it.  The slack stays for the
+	  reason it was there, the frame rate probe - the window is counted at the settled rate and played
+	  at up to 10 % above it - and it is nothing below about a 300 ms round trip anyway. */
 Int computeRunAhead( Real roundTripSeconds, Real jitterSeconds, Int fps, UnsignedInt slackPercent,
 										 Int minRunAhead, Int maxRunAhead );
 

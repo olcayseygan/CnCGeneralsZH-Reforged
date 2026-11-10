@@ -384,8 +384,13 @@ private:
 	void internalSetGoalObject( const Object *obj );
 	void internalSetGoalPosition( const Coord3D *pos);
 
+	typedef std::vector< std::pair<StateID, State *> > StateList;
+	StateList::iterator findState( StateID id );
 
-	std::map<StateID, State *>	m_stateMap;			///< the mapping of ids to states
+	/** The states, sorted by id, the order the std::map this replaced walked them in.  Every object with an AI builds a
+		* machine of some forty states, missiles and shells included, and a tree node apiece was most of
+		* what building and tearing one down cost. */
+	StateList	m_stateMap;
 	Object*											m_owner;				///< object that "owns" this machine 
 
 	UnsignedInt		m_sleepTill;									///< if nonzero, we are sleeping 'till this frame

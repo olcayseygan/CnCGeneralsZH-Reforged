@@ -305,11 +305,7 @@ void GameLogic::setDefaults( Bool loadingSaveGame )
 #ifdef ALLOW_NONSLEEPY_UPDATES
 	m_normalUpdates.clear();
 #endif
-	for (std::vector<SleepyEntry>::iterator it = m_sleepyUpdates.begin(); it != m_sleepyUpdates.end(); ++it)
-	{
-		it->module->friend_setIndexInLogic(-1);
-	}
-	m_sleepyUpdates.clear();
+	clearSleepyUpdates();
 	m_curUpdateModule = NULL;
 
 	//
@@ -2786,21 +2782,21 @@ void GameLogic::processDestroyList( void )
 #else
 			UpdateModulePtr u = (*b)->getUpdate();
 #endif
-			if (u && u->friend_getIndexInLogic() >= 0)
+			if (u && u->friend_getSleepySlot() >= 0)
 			{
 				sleepyUpdatesForThisObject[numSUO++] = u;
 			}
 		}
 		std::sort(sleepyUpdatesForThisObject, sleepyUpdatesForThisObject + numSUO,
-			[](UpdateModulePtr a, UpdateModulePtr b) { return a->friend_getIndexInLogic() < b->friend_getIndexInLogic(); });
+			[this](UpdateModulePtr a, UpdateModulePtr b) { return sleepyIndexOf(a) < sleepyIndexOf(b); });
 
 		for (--numSUO; numSUO >= 0; --numSUO)
 		{
 			// have to re-get idx each time since each call to erase might change others.
-			Int idx = sleepyUpdatesForThisObject[numSUO]->friend_getIndexInLogic();
+			Int idx = sleepyIndexOf(sleepyUpdatesForThisObject[numSUO]);
 			DEBUG_ASSERTCRASH(m_sleepyUpdates[idx].module == sleepyUpdatesForThisObject[numSUO], ("Hmm, expected update mismatch here"));
 			eraseSleepyUpdate(idx);
-			DEBUG_ASSERTCRASH(sleepyUpdatesForThisObject[numSUO]->friend_getIndexInLogic() == -1, ("Hmm, expected index to be -1 here"));
+			DEBUG_ASSERTCRASH(sleepyUpdatesForThisObject[numSUO]->friend_getSleepySlot() == -1, ("Hmm, expected index to be -1 here"));
 		}
 
 
@@ -3298,7 +3294,8 @@ inline void GameLogic::validateSleepyUpdate() const
 	//}
 	for (i = 0; i < sz; ++i)
 	{
-		DEBUG_ASSERTCRASH(m_sleepyUpdates[i].module->friend_getIndexInLogic() == i, ("index mismatch: expected %d, got %d\n",i,m_sleepyUpdates[i].module->friend_getIndexInLogic()));
+		DEBUG_ASSERTCRASH(m_sleepyUpdates[i].module->friend_getSleepySlot() == m_sleepyUpdates[i].slot, ("slot mismatch at %d\n",i));
+		DEBUG_ASSERTCRASH(sleepyIndexOf(m_sleepyUpdates[i].module) == i, ("index mismatch: expected %d, got %d\n",i,sleepyIndexOf(m_sleepyUpdates[i].module)));
 		DEBUG_ASSERTCRASH(m_sleepyUpdates[i].priority == m_sleepyUpdates[i].module->friend_getPriority(), ("sleepy priority copy is stale at %d\n",i));
 		UnsignedInt pri = m_sleepyUpdates[i].priority;
 		if (i > 0)
@@ -3331,13 +3328,13 @@ void GameLogic::eraseSleepyUpdate(Int i)
 	DEBUG_ASSERTCRASH(i >= 0 && i < m_sleepyUpdates.size(), ("bad sleepy idx"));
 
 	// swap with the final item, toss the final item, then rebalance
-	m_sleepyUpdates[i].module->friend_setIndexInLogic(-1);
+	releaseSleepySlot(m_sleepyUpdates[i]);
 
 	Int final = m_sleepyUpdates.size() - 1;
 	if (i < final)
 	{
 		m_sleepyUpdates[i] = m_sleepyUpdates[final];
-		m_sleepyUpdates[i].module->friend_setIndexInLogic(i);
+		m_sleepySlotIndex[m_sleepyUpdates[i].slot] = i;
 		m_sleepyUpdates.pop_back();
 		rebalanceSleepyUpdate(i);
 	}
@@ -3372,8 +3369,8 @@ Int GameLogic::rebalanceParentSleepyUpdate(Int i)
 		m_sleepyUpdates[i] = a;
 		m_sleepyUpdates[parent] = b;
 
-		a.module->friend_setIndexInLogic(i);
-		b.module->friend_setIndexInLogic(parent);
+		m_sleepySlotIndex[a.slot] = i;
+		m_sleepySlotIndex[b.slot] = parent;
 
 		i = parent;
 		parent = ((parent+1)>>1)-1;
@@ -3395,8 +3392,10 @@ Int GameLogic::rebalanceChildSleepyUpdate(Int i)
 		 Swapping at every level wrote both entries and both modules' indices each time, and every module
 		 is a cache line of its own. The comparisons are the ones the swapping walk made, so every entry
 		 ends in the same slot, ties included, and the modules run in the same order. Which child sorts
-		 first is a coin toss a branch keeps guessing wrong, so the pick is a sum instead. */
+		 first is a coin toss a branch keeps guessing wrong, so the pick is a sum instead. The new index
+		 goes into m_sleepySlotIndex, not the module: that store was a miss on every level. */
 	SleepyEntry *entries = m_sleepyUpdates.data();
+	Int *slotIndex = m_sleepySlotIndex.data();
 	const Int sz = (Int)m_sleepyUpdates.size();
 	const SleepyEntry sinking = entries[i];
 	const Int start = i;
@@ -3423,7 +3422,7 @@ Int GameLogic::rebalanceChildSleepyUpdate(Int i)
 			break;
 
 		entries[i] = entries[child];
-		entries[i].module->friend_setIndexInLogic(i);
+		slotIndex[entries[i].slot] = i;
 		i = child;
 		child = ((i+1)<<1)-1;
 	}
@@ -3431,7 +3430,7 @@ Int GameLogic::rebalanceChildSleepyUpdate(Int i)
 	if (i != start)
 	{
 		entries[i] = sinking;
-		sinking.module->friend_setIndexInLogic(i);
+		slotIndex[sinking.slot] = i;
 	}
 	return i;
 }
@@ -3469,11 +3468,60 @@ void GameLogic::pushSleepyUpdate(UpdateModulePtr u)
 
 	DEBUG_ASSERTCRASH(u != NULL, ("You may not pass null for sleepy update info"));
 
-	SleepyEntry e = { u->friend_getPriority(), u };
-	m_sleepyUpdates.push_back(e);
-	u->friend_setIndexInLogic(m_sleepyUpdates.size() - 1);
+	appendSleepyUpdate(u);
 
 	rebalanceParentSleepyUpdate(m_sleepyUpdates.size()-1);
+}
+
+// ------------------------------------------------------------------------------------------------
+/** Put u at the end of the heap's array with a slot of its own; the caller sifts or remakes. */
+void GameLogic::appendSleepyUpdate(UpdateModulePtr u)
+{
+	Int slot;
+	if (!m_sleepyFreeSlots.empty())
+	{
+		slot = m_sleepyFreeSlots.back();
+		m_sleepyFreeSlots.pop_back();
+	}
+	else
+	{
+		slot = (Int)m_sleepySlotIndex.size();
+		m_sleepySlotIndex.push_back(-1);
+	}
+
+	SleepyEntry e = { u->friend_getPriority(), slot, u };
+	m_sleepyUpdates.push_back(e);
+	m_sleepySlotIndex[slot] = (Int)m_sleepyUpdates.size() - 1;
+	u->friend_setSleepySlot(slot);
+}
+
+// ------------------------------------------------------------------------------------------------
+/** e's module leaves the heap: its slot goes back for reuse. */
+void GameLogic::releaseSleepySlot(const SleepyEntry &e)
+{
+	m_sleepySlotIndex[e.slot] = -1;
+	m_sleepyFreeSlots.push_back(e.slot);
+	e.module->friend_setSleepySlot(-1);
+}
+
+// ------------------------------------------------------------------------------------------------
+void GameLogic::clearSleepyUpdates()
+{
+	for (std::vector<SleepyEntry>::iterator it = m_sleepyUpdates.begin(); it != m_sleepyUpdates.end(); ++it)
+	{
+		it->module->friend_setSleepySlot(-1);
+	}
+	m_sleepyUpdates.clear();
+	m_sleepySlotIndex.clear();
+	m_sleepyFreeSlots.clear();
+}
+
+// ------------------------------------------------------------------------------------------------
+/** Where u sits in the heap, -1 when it is not on it. */
+inline Int GameLogic::sleepyIndexOf(UpdateModulePtr u) const
+{
+	const Int slot = u->friend_getSleepySlot();
+	return slot < 0 ? -1 : m_sleepySlotIndex[slot];
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -3482,7 +3530,7 @@ UpdateModulePtr GameLogic::peekSleepyUpdate() const
 	USE_PERF_TIMER(SleepyMaintenance)
 
 	UpdateModulePtr u = m_sleepyUpdates.front().module;
-	DEBUG_ASSERTCRASH(u->friend_getIndexInLogic() == 0, ("index mismatch: expected %d, got %d\n",0,u->friend_getIndexInLogic()));
+	DEBUG_ASSERTCRASH(sleepyIndexOf(u) == 0, ("index mismatch: expected %d, got %d\n",0,sleepyIndexOf(u)));
 	return u;
 }
 
@@ -3498,11 +3546,11 @@ void GameLogic::popSleepyUpdate()
 		return;
 	}
 
-	m_sleepyUpdates[0].module->friend_setIndexInLogic(-1);
+	releaseSleepySlot(m_sleepyUpdates[0]);
 	if (sz > 1)
 	{
 		m_sleepyUpdates[0] = m_sleepyUpdates[sz-1];
-		m_sleepyUpdates[0].module->friend_setIndexInLogic(0);
+		m_sleepySlotIndex[m_sleepyUpdates[0].slot] = 0;
 		m_sleepyUpdates.pop_back();
 		rebalanceChildSleepyUpdate(0);
 	}
@@ -3541,7 +3589,7 @@ void GameLogic::friend_awakenUpdateModule(Object* obj, UpdateModulePtr u, Unsign
 		return;
 	}
 
-	Int idx = u->friend_getIndexInLogic();
+	Int idx = sleepyIndexOf(u);
 	if (obj->isInList(&m_objList))
 	{
 		if (idx < 0 || idx >= m_sleepyUpdates.size())
@@ -5388,7 +5436,7 @@ void GameLogic::update( void )
 			u->friend_setNextCallFrame(now + sleepLen);
 			// u's own slot, which is not slot 0 when its update pushed or woke a module that sorts ahead
 			// of it; the rebalance stays at 0 as it always was.
-			m_sleepyUpdates[u->friend_getIndexInLogic()].priority = u->friend_getPriority();
+			m_sleepyUpdates[sleepyIndexOf(u)].priority = u->friend_getPriority();
 			rebalanceSleepyUpdate(0);
 		}
 	}
@@ -6998,11 +7046,7 @@ void GameLogic::loadPostProcess( void )
 			m_nextObjID = (ObjectID)((UnsignedInt)obj->getID() + 1);
 
 	// blow away the sleepy update and normal update module lists
-	for (std::vector<SleepyEntry>::iterator it = m_sleepyUpdates.begin(); it != m_sleepyUpdates.end(); ++it)
-	{
-		it->module->friend_setIndexInLogic(-1);
-	}
-	m_sleepyUpdates.clear();
+	clearSleepyUpdates();
 #ifdef ALLOW_NONSLEEPY_UPDATES
 	m_normalUpdates.clear();
 #else
@@ -7021,9 +7065,7 @@ void GameLogic::loadPostProcess( void )
 			if( owner == NULL )
 				throw SC_INVALID_DATA;
 			UpdateModulePtr u = (UpdateModulePtr)( owner->getBehaviorModules()[ it->second ]->getUpdate() );
-			SleepyEntry e = { u->friend_getPriority(), u };
-			m_sleepyUpdates.push_back( e );
-			u->friend_setIndexInLogic( m_sleepyUpdates.size() - 1 );
+			appendSleepyUpdate( u );
 		}
 		m_loadedSleepyOrder.clear();
 		m_loadedSleepyPending = FALSE;
@@ -7046,10 +7088,10 @@ void GameLogic::loadPostProcess( void )
 				continue;
 
 			// already on the heap the save gave
-			if (sleepyFromSave && u->friend_getIndexInLogic() != -1)
+			if (sleepyFromSave && u->friend_getSleepySlot() != -1)
 				continue;
 
-			DEBUG_ASSERTCRASH(u->friend_getIndexInLogic() == -1, ("Hmm, expected index to be -1 here"));
+			DEBUG_ASSERTCRASH(u->friend_getSleepySlot() == -1, ("Hmm, expected index to be -1 here"));
 
 			// check each update module
 			UnsignedInt when = u->friend_getNextCallFrame();
@@ -7071,9 +7113,7 @@ void GameLogic::loadPostProcess( void )
 					pushSleepyUpdate(u);
 					continue;
 				}
-				SleepyEntry e = { u->friend_getPriority(), u };
-				m_sleepyUpdates.push_back(e);
-				u->friend_setIndexInLogic(m_sleepyUpdates.size() - 1);
+				appendSleepyUpdate(u);
 			}
 
 		}  // end for, u

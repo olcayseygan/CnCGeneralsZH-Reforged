@@ -38,6 +38,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 
+#include <algorithm>
 #include <typeinfo>	// the machine's class name in the missing-state line, which is all Release logs
 
 #ifdef _INTERNAL
@@ -294,7 +295,7 @@ StateMachine::~StateMachine()
 	if (m_currentState)
 		m_currentState->onExit( EXIT_RESET );
 
-	std::map<StateID, State *>::iterator i;
+	StateList::iterator i;
 
 	// delete all states in the mapping
 	for( i = m_stateMap.begin(); i != m_stateMap.end(); ++i )
@@ -496,6 +497,12 @@ StateReturnType StateMachine::updateStateMachine()
 }
 
 //-----------------------------------------------------------------------------
+static bool stateIDBefore( const std::pair<StateID, State *> &entry, StateID id )
+{
+	return entry.first < id;
+}
+
+//-----------------------------------------------------------------------------
 /**
  * Given a unique (for this machine) id number, and an instance of the
  * State class, the machine records this as a possible state, and
@@ -505,11 +512,16 @@ StateReturnType StateMachine::updateStateMachine()
 void StateMachine::defineState( StateID id, State *state, StateID successID, StateID failureID, const StateConditionInfo* conditions )
 {
 #ifdef STATE_MACHINE_DEBUG
-	DEBUG_ASSERTCRASH(m_stateMap.find( id ) == m_stateMap.end(), ("duplicate state ID in statemachine %s\n",m_name.str()));
+	DEBUG_ASSERTCRASH(findState( id ) == m_stateMap.end(), ("duplicate state ID in statemachine %s\n",m_name.str()));
 #endif
 
-	// map the ID to the state
-	m_stateMap.insert( std::map<StateID, State *>::value_type( id, state ) );
+	// map the ID to the state, in id order; a second state under the same id is left out, as
+	// std::map::insert left it out.  Machines define their states in id order, so this appends.
+	if( m_stateMap.empty() )
+		m_stateMap.reserve( 16 );
+	StateList::iterator at = std::lower_bound( m_stateMap.begin(), m_stateMap.end(), id, stateIDBefore );
+	if( at == m_stateMap.end() || at->first != id )
+		m_stateMap.insert( at, StateList::value_type( id, state ) );
 
 	// store the ID in the state itself, as well
 	state->friend_setID( id );
@@ -529,13 +541,22 @@ void StateMachine::defineState( StateID id, State *state, StateID successID, Sta
 
 //-----------------------------------------------------------------------------
 /**
+ * The entry for a state ID, or m_stateMap.end()
+ */
+StateMachine::StateList::iterator StateMachine::findState( StateID id )
+{
+	StateList::iterator at = std::lower_bound( m_stateMap.begin(), m_stateMap.end(), id, stateIDBefore );
+	return ( at != m_stateMap.end() && at->first == id ) ? at : m_stateMap.end();
+}
+
+//-----------------------------------------------------------------------------
+/**
  * Given a state ID, return the state instance
  */
 State *StateMachine::internalGetState( StateID id )
 {
 	// locate the actual state associated with the given ID
-	std::map<StateID, State *>::iterator i;
-	i = m_stateMap.find( id );
+	StateList::iterator i = findState( id );
 
 	if (i == m_stateMap.end())
 	{
@@ -547,7 +568,7 @@ State *StateMachine::internalGetState( StateID id )
 			m_currentState ? (Int)m_currentState->getID() : -1, (Int)m_stateMap.size(),
 			(Int)TheGameLogic->getFrame()));
 		DEBUG_LOG(("Attempting to recover - locating default state %d...\n", (Int)m_defaultStateID));
-		i = m_stateMap.find(m_defaultStateID);
+		i = findState(m_defaultStateID);
 		if (i == m_stateMap.end()) {
 			DEBUG_LOG(("Failed to located default state.  Aborting...\n"));
 			throw ERROR_BAD_ARG;
@@ -701,7 +722,7 @@ StateReturnType StateMachine::initDefaultState()
 #ifdef STATE_MACHINE_DEBUG
 #define REALLY_VERBOSE_LOG(x) /* */
 	// Run through all the transitions and make sure there aren't any transitions to undefined states. jba. [8/18/2003]
-	std::map<StateID, State *>::iterator i;
+	StateList::iterator i;
 	REALLY_VERBOSE_LOG(("SM_BEGIN\n"));
 	for( i = m_stateMap.begin(); i != m_stateMap.end(); ++i ) {
 		State *state = (*i).second;
@@ -729,8 +750,7 @@ StateReturnType StateMachine::initDefaultState()
 					continue;
 				}
 				// locate the actual state associated with the given ID
-				std::map<StateID, State *>::iterator i;
-				i = m_stateMap.find( curID );
+				StateList::iterator i = findState( curID );
 
 				if (i == m_stateMap.end()) {
 					DEBUG_LOG(("\nState %s(%d) : ", state->getName().str(), id));
@@ -878,7 +898,7 @@ void StateMachine::xfer( Xfer *xfer )
 #endif
 	xfer->xferBool(&snapshotAllStates);
 	if (snapshotAllStates) {
-		std::map<StateID, State *>::iterator i;
+		StateList::iterator i;
 		// count all states in the mapping
 		Int count = 0;
 		for( i = m_stateMap.begin(); i != m_stateMap.end(); ++i )

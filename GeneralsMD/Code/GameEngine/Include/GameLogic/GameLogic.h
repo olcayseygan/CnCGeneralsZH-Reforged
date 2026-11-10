@@ -113,10 +113,12 @@ typedef void (*GameLogicFuncPtr)( Object *obj, void *userData );
 
 typedef std::vector<Object*> ObjectPtrVector;
 
-/// One slot of GameLogic's sleepy-update heap: the module and its friend_getPriority() beside it.
+/// One place in GameLogic's sleepy-update heap: the module, its friend_getPriority() beside it, and
+/// the module's slot in m_sleepySlotIndex, which says where in the heap the entry is.
 struct SleepyEntry
 {
 	UnsignedInt priority;
+	Int slot;
 	UpdateModulePtr module;
 };
 
@@ -357,6 +359,10 @@ private:
 	Int rebalanceChildSleepyUpdate(Int i);
 	void remakeSleepyUpdate();
 	void validateSleepyUpdate() const;
+	void appendSleepyUpdate(UpdateModulePtr u);
+	void releaseSleepySlot(const SleepyEntry &e);
+	void clearSleepyUpdates();
+	Int sleepyIndexOf(UpdateModulePtr u) const;
 
 private:
 
@@ -438,6 +444,13 @@ private:
 	// touching the pooled module. The copy must equal the module's value whenever a heap operation
 	// runs: every friend_setNextCallFrame on a queued module writes the entry at its index too.
 	std::vector<SleepyEntry> m_sleepyUpdates;
+
+	// Where each queued module sits in the heap, by the slot the module and its entry carry.  Every
+	// step of a sift moves an entry and has to record its new place; written into the module, that was
+	// a cache miss a step, half of the sift's time, where this table is a few kilobytes that stay in
+	// cache.  The heap itself moves exactly as before.  Freed slots are reused.
+	std::vector<Int> m_sleepySlotIndex;
+	std::vector<Int> m_sleepyFreeSlots;
 	
 #ifdef ALLOW_NONSLEEPY_UPDATES
 	// this is a plain old list, not a pq.

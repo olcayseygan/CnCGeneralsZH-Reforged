@@ -312,6 +312,11 @@ public:
 	Real															m_barrelArtPitch;					///< with that: how far the barrel's mesh is modelled above level at rest, taken off the drawn pitch
 	AsciiString												m_landingGearSubObject;		///< a sub-object shown on the ground and hidden once the object is m_landingGearUpHeight above it
 	Real															m_landingGearUpHeight;
+	Real															m_quadMaxTilt;				///< radians; above zero, the model is drawn flying as a quadcopter (applyQuadAttitude)
+	Real															m_quadTiltGravity;		///< distance per second squared: a horizontal acceleration this size tilts it 45 degrees
+	Real															m_quadTiltDrag;				///< per second: a steady speed tilts it as far as that speed times this as an acceleration
+	Real															m_quadTiltTime;				///< logic frames the speed and the tilt take to follow
+	Real															m_quadYawTime;				///< logic frames the nose takes to come round to the heading
 #ifdef CACHE_ATTACH_BONE
 	mutable Bool											m_attachToDrawableBoneOffsetValid;
 #endif
@@ -483,6 +488,7 @@ protected:
 	Bool setCurAnimDurationInMsec(Real duration);
 
 	UnsignedInt stepGroundMotion(Real& forward, Real& turn);	///< distance driven along the heading and angle turned since the last call; returns the logic frames between
+	void applyQuadAttitude(Matrix3D& mtx);	///< replaces the rotation with a quadcopter's, from how the drawable has moved
 
 
 	inline Bool getFullyObscuredByShroud() const { return m_fullyObscuredByShroud; }
@@ -537,6 +543,15 @@ private:
 	Coord3D												m_groundMotionPos;								///< where stepGroundMotion last saw the unit
 	Real													m_groundMotionAngle;
 	UnsignedInt										m_groundMotionFrame;							///< and on which logic frame, 0 before the first call
+	struct QuadAttitude
+	{
+		UnsignedInt	frame;		///< the logic frame last stepped on, 0 before the first
+		Coord3D			pos;			///< where the drawable was then
+		Real				velX, velY;	///< smoothed horizontal velocity, per second
+		Real				leanX, leanY;	///< smoothed tilt toward world x and y, radians
+		Real				yaw;
+		Bool				velKnown;	///< velX and velY hold a measured speed
+	}															m_quad;
 	Bool													m_fullyObscuredByShroud;
 	Bool													m_shadowEnabled;	///< cached state of shadow.  Used to determine if shadows should be enabled via options screen.
 	Bool													m_hasModelShadow;	///< this drawable's shape is being cast by the tree buffer, so it wants no decal of its own

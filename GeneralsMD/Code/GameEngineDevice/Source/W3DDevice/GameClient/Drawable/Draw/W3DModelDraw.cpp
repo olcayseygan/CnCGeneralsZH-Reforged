@@ -1072,6 +1072,11 @@ W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	m_stabilizedTurretPitch(false),
 	m_barrelArtPitch(0.0f),
 	m_landingGearUpHeight(0.0f),
+	m_quadMaxTilt(0.0f),
+	m_quadTiltGravity(400.0f),
+	m_quadTiltDrag(1.0f),
+	m_quadTiltTime(ConvertDurationFromMsecsToFrames(120.0f)),
+	m_quadYawTime(ConvertDurationFromMsecsToFrames(300.0f)),
 #ifdef CACHE_ATTACH_BONE
 	m_attachToDrawableBoneOffsetValid(false),
 #endif
@@ -1271,6 +1276,11 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "BarrelArtPitch",	INI::parseAngleReal, NULL, offsetof(W3DModelDrawModuleData, m_barrelArtPitch) },
 		{ "LandingGearSubObject",	INI::parseAsciiString, NULL, offsetof(W3DModelDrawModuleData, m_landingGearSubObject) },
 		{ "LandingGearUpHeight",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_landingGearUpHeight) },
+		{ "QuadMaxTilt",	INI::parseAngleReal, NULL, offsetof(W3DModelDrawModuleData, m_quadMaxTilt) },
+		{ "QuadTiltGravity",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltGravity) },
+		{ "QuadTiltDrag",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltDrag) },
+		{ "QuadTiltTime",	INI::parseDurationReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltTime) },
+		{ "QuadYawTime",	INI::parseDurationReal, NULL, offsetof(W3DModelDrawModuleData, m_quadYawTime) },
 		{ "ParticlesAttachedToAnimatedBones",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_particlesAttachedToAnimatedBones) },
 		{ "MinLODRequired",		INI::parseStaticGameLODLevel,	NULL,	offsetof(W3DModelDrawModuleData, m_minLODRequired) },
 		{ "ProjectileBoneFeedbackEnabledSlots", INI::parseBitString32, TheWeaponSlotTypeNames, offsetof(W3DModelDrawModuleData, m_projectileBoneFeedbackEnabledSlots) },
@@ -1821,6 +1831,7 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_groundMotionPos.zero();
 	m_groundMotionAngle = 0.0f;
 	m_groundMotionFrame = 0;
+	memset(&m_quad, 0, sizeof(m_quad));
 
 	ModelConditionFlags emptyFlags;
 	const ModelConditionInfo* info = findBestInfo(emptyFlags);
@@ -2409,6 +2420,14 @@ void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 	// update whether or not we should be animating.
 	setPauseAnimation( !getDrawable()->getShouldAnimate(getW3DModelDrawModuleData()->m_animationsRequirePower) );
 
+	Matrix3D quadTransform;
+	if (getW3DModelDrawModuleData()->m_quadMaxTilt > 0.0f)
+	{
+		quadTransform = *transformMtx;
+		applyQuadAttitude(quadTransform);
+		transformMtx = &quadTransform;
+	}
+
 	Matrix3D scaledTransform;
 	if (getDrawable()->getInstanceScale() != 1.0f)
 	{	
@@ -2785,6 +2804,103 @@ UnsignedInt W3DModelDraw::stepGroundMotion(Real& forward, Real& turn)
 	m_groundMotionAngle = angle;
 	m_groundMotionFrame = now;
 	return frames;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Draws the model flying as a quadcopter, whatever moves it (QuadMaxTilt in the Draw block). The
+	* Alpagu's drone is a shell on a Bezier path with no locomotor to lean it, so the attitude comes
+	* from where the drawable went from one logic frame to the next, and the logic never sees it.
+	*
+	* A quad holds itself up by tilting its rotors' push: the body leans toward the horizontal push it
+	* needs, which is the acceleration plus what holds the speed against the air (QuadTiltDrag times
+	* the speed), set against the pull that keeps it up (QuadTiltGravity), and clamped at QuadMaxTilt.
+	* So it dips its nose as it sets off, keeps it down at speed, lifts it braking over the target and
+	* banks into a sideways pull. The nose turns to the heading while the drone moves sideways at all,
+	* and holds the last heading on a climb or a drop straight down. Speed, tilt and heading each ease
+	* in over their time, which is what keeps the shell's path, a straight line between 30 Hz samples,
+	* from reading as a snap. The tilt is worked out in the world and read in the body's frame, so a
+	* nose still coming round turns part of the forward lean into a bank, as a real quad's does. */
+//-------------------------------------------------------------------------------------------------
+void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
+{
+	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
+	const Coord3D* pos = getDrawable()->getPosition();
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt MAX_GAP = 4;							// logic frames; past a longer gap (a hitch) the speed is taken fresh
+	const Real MIN_HEADING_SPEED = 10.0f;			// per second; slower than this sideways, the nose holds its heading
+
+	if (now != m_quad.frame)
+	{
+		const UnsignedInt frames = now - m_quad.frame;
+		if (m_quad.frame == 0)
+		{
+			// first sight: no motion known yet, so level and facing the way the logic left it
+			m_quad.velX = m_quad.velY = 0.0f;
+			m_quad.leanX = m_quad.leanY = 0.0f;
+			m_quad.yaw = mtx.Get_Z_Rotation();
+			m_quad.velKnown = false;
+		}
+		else
+		{
+			const Real perSecond = (Real)LOGICFRAMES_PER_SECOND / (Real)frames;
+			const Real ease = d->m_quadTiltTime > (Real)frames ? (Real)frames / d->m_quadTiltTime : 1.0f;
+			const Real rawX = (pos->x - m_quad.pos.x) * perSecond;
+			const Real rawY = (pos->y - m_quad.pos.y) * perSecond;
+			Real velX, velY, pushX, pushY;
+			if (!m_quad.velKnown || frames > MAX_GAP)
+			{
+				// the speed straight off the step, and no acceleration read into it: the whole speed
+				// counted as one frame's change would dip the nose to the limit for nothing
+				velX = rawX;
+				velY = rawY;
+				pushX = d->m_quadTiltDrag * velX;
+				pushY = d->m_quadTiltDrag * velY;
+				m_quad.velKnown = true;
+			}
+			else
+			{
+				velX = m_quad.velX + (rawX - m_quad.velX) * ease;
+				velY = m_quad.velY + (rawY - m_quad.velY) * ease;
+				pushX = (velX - m_quad.velX) * perSecond + d->m_quadTiltDrag * velX;
+				pushY = (velY - m_quad.velY) * perSecond + d->m_quadTiltDrag * velY;
+			}
+			m_quad.velX = velX;
+			m_quad.velY = velY;
+
+			Real tiltX = 0.0f;
+			Real tiltY = 0.0f;
+			const Real push = sqrtf(pushX * pushX + pushY * pushY);
+			if (push > 0.001f && d->m_quadTiltGravity > 0.0f)
+			{
+				Real tilt = atan2f(push, d->m_quadTiltGravity);
+				if (tilt > d->m_quadMaxTilt)
+					tilt = d->m_quadMaxTilt;
+				tiltX = pushX * tilt / push;
+				tiltY = pushY * tilt / push;
+			}
+			m_quad.leanX += (tiltX - m_quad.leanX) * ease;
+			m_quad.leanY += (tiltY - m_quad.leanY) * ease;
+
+			if (velX * velX + velY * velY > MIN_HEADING_SPEED * MIN_HEADING_SPEED)
+			{
+				const Real yawEase = d->m_quadYawTime > (Real)frames ? (Real)frames / d->m_quadYawTime : 1.0f;
+				m_quad.yaw = normalizeAngle(m_quad.yaw + stdAngleDiff(atan2f(velY, velX), m_quad.yaw) * yawEase);
+			}
+		}
+		m_quad.pos = *pos;
+		m_quad.frame = now;
+	}
+
+	const Real c = cosf(m_quad.yaw);
+	const Real s = sinf(m_quad.yaw);
+	const Real pitch = m_quad.leanX * c + m_quad.leanY * s;		// toward the nose: nose down
+	const Real roll = m_quad.leanY * c - m_quad.leanX * s;		// toward the left side: left side down
+	const Vector3 at = mtx.Get_Translation();
+	mtx.Make_Identity();
+	mtx.Set_Translation(at);
+	mtx.Rotate_Z(m_quad.yaw);
+	mtx.Rotate_Y(pitch);
+	mtx.Rotate_X(-roll);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4439,11 +4555,14 @@ void W3DModelDraw::reactToTransformChange( const Matrix3D* oldMtx,
 	if( m_renderObject )
 	{
 		Matrix3D mtx = *getDrawable()->getTransformMatrix();
+		// a quad keeps flying off the view region too, or it shows level for a moment as it comes in
+		if (getW3DModelDrawModuleData()->m_quadMaxTilt > 0.0f)
+			applyQuadAttitude(mtx);
 		adjustTransformMtx(mtx);
 		m_renderObject->Set_Transform(mtx);
 	}
 
-	if (m_trackRenderObject) 
+	if (m_trackRenderObject)
 	{
 		Object *obj = getDrawable()->getObject();
 		const Coord3D* pos = getDrawable()->getPosition();

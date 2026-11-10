@@ -1243,24 +1243,16 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		 sight, two line walks across terrain and pathfind cells, last. A ground unit's search runs out to
 		 twice its reach for the high ground (getNextMoodTarget), and the elevated reach filter throws most
 		 of that ring away for the price of a distance; it used to do so after the walks.
-		 Two of them leave state behind, so the order only changes where nothing can tell:
-		 - the fog filter's shroud query records what each player has seen
-		   (PartitionData::getShroudedStatus), so with UNFOGGED nothing moves;
-		 - the can-attack filter refreshes each weapon's status it asks (Weapon::getStatus). A unit
-		   choosing its own target (PREFER_BEST_TARGET) has asked every one of its weapons already, in
-		   AI_readShooter, and asking again in the same frame writes the same value. The weapons of its
-		   passengers and slaves are asked only here, so a unit whose passengers or slaves fire for it
-		   keeps the old order too. */
+		 Two of them can leave state behind. The fog filter's shroud query records what each player has
+		 seen (PartitionData::getShroudedStatus), so with UNFOGGED it is asked of exactly the objects it
+		 always was, those the can-attack filter and the line of sight both let through, and only those
+		 two may change places ahead of it. That is the computer players' own case on a random map. The
+		 can-attack filter asks weapons their status, and Weapon::getStatus writes its answer back; the
+		 search asks under a Weapon::StatusPeek, which writes nothing, so which weapons got asked leaves
+		 no trace. */
 	const Bool fogFiltered = (qualifiers & UNFOGGED) != 0;
-	Bool firesAlone = FALSE;
-	if (!fogFiltered && (qualifiers & (PREFER_BEST_TARGET | ANY_WILL_DO)))
-	{
-		const ContainModuleInterface *contain = me->getContain();
-		firesAlone = !(contain && contain->isPassengerAllowedToFire()) && me->getSpawnBehaviorInterface() == NULL;
-	}
-	const Bool cheapFirst = firesAlone && (qualifiers & PREFER_BEST_TARGET);
 
-	if (cheapFirst)
+	if (!fogFiltered)
 	{
 		if (optionalFilter)
 			filters[numFilters++] = optionalFilter;
@@ -1269,23 +1261,17 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			filters[numFilters++] = &filterInsignificant;
 
 		filters[numFilters++] = &filterStealth;
-
-		if (qualifiers & CAN_ATTACK)
-			filters[numFilters++] = &filterAttack;
-
-		if (qualifiers & CAN_SEE)
-			filters[numFilters++] = &filterLOS;
 	}
-	else
+
+	if (qualifiers & CAN_ATTACK)
+		filters[numFilters++] = &filterAttack;
+
+	if (qualifiers & CAN_SEE)
+		filters[numFilters++] = &filterLOS;
+
+	if (fogFiltered)
 	{
-		if (qualifiers & CAN_SEE)
-			filters[numFilters++] = &filterLOS;
-
-		if (qualifiers & CAN_ATTACK)
-			filters[numFilters++] = &filterAttack;
-
-		if (fogFiltered)
-			filters[numFilters++] = &filterFogged;
+		filters[numFilters++] = &filterFogged;
 
 		if (qualifiers & IGNORE_INSIGNIFICANT_BUILDINGS)
 			filters[numFilters++] = &filterInsignificant;
@@ -1298,6 +1284,8 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 
 	filters[numFilters] = NULL;
 
+	Weapon::StatusPeek peek;
+
 	// filterObvious goes first in both lists and lets only ENEMIES through, so a cell holding no
 	// enemy player's Object cannot hold an answer and the searches below pass over it: the same
 	// objects reach the filters in the same order, and no filter after the first ever sees the rest
@@ -1309,12 +1297,9 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		 full search would look at, in the walk it would take. It is NULL exactly when the full search's
 		 answer is: with no leader yet, any candidate that passes every filter takes the lead, and with a
 		 priority set any candidate the set does not give priority 0 does. The idle-hunt check ran a
-		 whole-map gather per idle unit for that one bit, 25 of them in a 67ms frame.
-		 The late filters keep their order, so the can-attack filter refreshes the unit's own weapons
-		 (see above) exactly when the full search would have: on the first candidate that passes what
-		 runs ahead of it. Anything else - the fog filter, passengers or slaves who fire, a unit choosing
-		 its own target, whose AI_readShooter the full search runs - takes the full search. */
-	if ((qualifiers & ANY_WILL_DO) && firesAlone && !(qualifiers & PREFER_BEST_TARGET))
+		 whole-map gather per idle unit for that one bit, 25 of them in a 67ms frame. With the fog filter
+		 in the list the full search runs, so the shroud query sees the objects it always saw. */
+	if ((qualifiers & ANY_WILL_DO) && !fogFiltered)
 	{
 		PartitionFilterAttackPriority filterPriority(info);
 		PartitionFilter *anyFilters[18];
@@ -1326,9 +1311,10 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		for (Int f = numGatherFilters; f < numFilters; ++f)
 			anyFilters[numAnyFilters++] = filters[f];
 		anyFilters[numAnyFilters] = NULL;
-		// a priority set's search gathers, which over the whole map walks the module list; the plain
-		// one walks rings out from the unit (PartitionManager::getAnyObject)
-		return ThePartitionManager->getAnyObject(me, range, FROM_BOUNDINGSPHERE_2D, anyFilters, enemyPlayers, scripted);
+		// a priority set's search and pickBestTarget's gather, which over the whole map walks the module
+		// list; the plain nearest search walks rings out from the unit (PartitionManager::getAnyObject)
+		const Bool gathers = scripted || (qualifiers & PREFER_BEST_TARGET) != 0;
+		return ThePartitionManager->getAnyObject(me, range, FROM_BOUNDINGSPHERE_2D, anyFilters, enemyPlayers, gathers);
 	}
 
 	if (!scripted)

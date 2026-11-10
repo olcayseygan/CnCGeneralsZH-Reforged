@@ -3230,6 +3230,11 @@ void W3DDisplay::createLightPulse( const Coord3D *pos, const RGBColor *color,
 	theDynamicLight->Set_Flag(LightClass::FAR_ATTENUATION,true);
 }
 
+void W3DDisplay::waitForFrameQueue( void )
+{
+	Direct3D11_Wait_For_Frame();
+}
+
 void W3DDisplay::stepDynamicLights( void )
 {
 	m_3DScene->stepDynamicLights();

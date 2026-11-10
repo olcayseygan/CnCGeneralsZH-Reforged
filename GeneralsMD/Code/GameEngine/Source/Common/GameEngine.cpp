@@ -3681,6 +3681,14 @@ void GameEngine::execute( void )
 				// picture cap's, outside the pass: the logic thread is idle by now, the overlapped
 				// tick having been flushed at the end of the draw.
 				waitForRenderCap( m_maxFPS );
+				/* The window's messages are the mouse (Win32Mouse buffers what the window procedure
+					 hands it), and they were pumped before the cap's wait: a click in the wait sat in the
+					 queue through the whole next pass and was drawn a picture late, up to 17 ms at 60.
+					 Pumped after it now, and after the wait for room in the present queue, so the pass
+					 reads input no older than the picture it goes into. */
+				if (TheDisplay != NULL)
+					TheDisplay->waitForFrameQueue();
+				serviceWindowsOS();
 				prevLoopTime = Clock_Milliseconds();
 
 		#if defined(_DEBUG) || defined(_INTERNAL)

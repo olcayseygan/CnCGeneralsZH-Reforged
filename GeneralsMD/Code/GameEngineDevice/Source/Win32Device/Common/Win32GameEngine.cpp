@@ -128,8 +128,7 @@ void Win32GameEngine::update( void )
 
 	}
 
-	// allow windows to perform regular windows maintenance stuff like msgs
-	serviceWindowsOS();
+	// The regular pump is GameEngine::execute's, after the picture cap's wait and before the next pass.
 
 }  // end update
 

@@ -88,6 +88,7 @@ public:
 																 UnsignedInt increaseFrameTime, UnsignedInt decayFrameTime//, Bool donut = FALSE 
 																 );
 	virtual void stepDynamicLights( void );
+	virtual void waitForFrameQueue( void );
 	virtual void setTimeOfDay ( TimeOfDay tod );
 
 	/// draw a line on the display in screen coordinates

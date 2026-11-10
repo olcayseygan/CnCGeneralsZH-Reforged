@@ -46,7 +46,10 @@ static const UINT SWAP_CHAIN_BUFFER_COUNT = 3;
 
 // How many presented frames may be queued ahead of the screen on the waitable flip chain
 // (Wait_For_Frame).  Two keeps the GPU fed across a long CPU frame and adds one frame of latency at
-// most.
+// most.  One was measured on 2026-11-10 (Twilight Flame, 8 AIs, 164 Hz): with the vsync off it
+// halved the free frame rate, 643 to 323, because the CPU then builds a frame only once the GPU is
+// done with the last; with the vsync on it took a refresh off Present-to-screen in a 1280x720
+// window (16.7 to 10.4 ms) at the same 164 a second, but dropped a 1920x1080 one from 164 to 128.
 static const UINT MAXIMUM_FRAME_LATENCY = 2;
 
 static void release_interface(IUnknown ** object)
@@ -102,8 +105,10 @@ DX11DeviceClass::DX11DeviceClass()
 	, Tearing(false)
 	, ChainFlags(0)
 	, FrameLatencyWaitable(NULL)
+	, FrameWaited(false)
 	, LastPresentResult(S_OK)
 {
+	memset(PresentTimes, 0, sizeof(PresentTimes));
 }
 
 DX11DeviceClass::~DX11DeviceClass()
@@ -398,6 +403,9 @@ void DX11DeviceClass::Release()
 	Tearing = false;
 	ChainFlags = 0;
 	SampleCount = 1;
+	FrameWaited = false;
+	LastPresentResult = S_OK;
+	memset(PresentTimes, 0, sizeof(PresentTimes));
 }
 
 void DX11DeviceClass::Drop_Multisampling()
@@ -460,8 +468,12 @@ bool DX11DeviceClass::Present(unsigned present_interval)
 	if (SwapChain == NULL) {
 		return BackBufferView != NULL;
 	}
+	FrameWaited = false;
+	LARGE_INTEGER presented;
+	QueryPerformanceCounter(&presented);
 	if (!Tearing) {
 		LastPresentResult = SwapChain->Present(present_interval, 0);
+		Note_Present(presented.QuadPart);
 		return SUCCEEDED(LastPresentResult);
 	}
 
@@ -486,7 +498,17 @@ bool DX11DeviceClass::Present(unsigned present_interval)
 		depth->Release();
 	}
 	LastPresentResult = result;
+	Note_Present(presented.QuadPart);
 	return SUCCEEDED(result);
+}
+
+// When each present was asked for, by DXGI's own count of it, for Queue_Statistics.
+void DX11DeviceClass::Note_Present(LONGLONG presented)
+{
+	UINT count = 0;
+	if (LastPresentResult == S_OK && SUCCEEDED(SwapChain->GetLastPresentCount(&count))) {
+		PresentTimes[count % PRESENT_TIME_SLOTS] = presented;
+	}
 }
 
 bool DX11DeviceClass::Wait_For_Frame(unsigned timeout_milliseconds)
@@ -495,10 +517,36 @@ bool DX11DeviceClass::Wait_For_Frame(unsigned timeout_milliseconds)
 	// window) or a failed one (a removed device, an invalid call) queued nothing, so nothing will
 	// leave the queue to signal the wait, and every frame would sit out the whole limit.  The first
 	// frame finds the S_OK the device starts with and waits, which keeps waits and presents paired.
-	if (FrameLatencyWaitable == NULL || LastPresentResult != S_OK) {
+	// Once a present: the top of the pass waits before the input is read, and the scene's own
+	// Begin_Scene asks again and must not take a second count for the same frame.
+	if (FrameLatencyWaitable == NULL || LastPresentResult != S_OK || FrameWaited) {
 		return true;
 	}
+	FrameWaited = true;
 	return WaitForSingleObject(FrameLatencyWaitable, timeout_milliseconds) == WAIT_OBJECT_0;
+}
+
+bool DX11DeviceClass::Queue_Statistics(unsigned & queued, double & present_to_screen_ms)
+{
+	DXGI_FRAME_STATISTICS stats;
+	UINT last = 0;
+	// After a present that queued nothing the slot it would have stamped holds an old time.
+	if (SwapChain == NULL || LastPresentResult != S_OK || FAILED(SwapChain->GetFrameStatistics(&stats))
+			|| FAILED(SwapChain->GetLastPresentCount(&last))
+			|| stats.PresentCount == 0 || last < stats.PresentCount
+			|| last - stats.PresentCount >= PRESENT_TIME_SLOTS) {
+		return false;
+	}
+	const LONGLONG presented = PresentTimes[stats.PresentCount % PRESENT_TIME_SLOTS];
+	if (presented == 0 || stats.SyncQPCTime.QuadPart < presented) {
+		return false;
+	}
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+	queued = last - stats.PresentCount;
+	present_to_screen_ms = (double)(stats.SyncQPCTime.QuadPart - presented) * 1000.0
+		/ (double)frequency.QuadPart;
+	return true;
 }
 
 HRESULT DX11DeviceClass::Device_Removed_Reason() const

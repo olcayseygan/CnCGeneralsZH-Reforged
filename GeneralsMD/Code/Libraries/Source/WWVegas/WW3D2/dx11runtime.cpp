@@ -109,6 +109,8 @@ struct GpuTotals
 	unsigned DroppedDisjoint;
 	unsigned BubblePairs;
 	unsigned WaitTimeouts;
+	unsigned QueueSamples;
+	unsigned QueuedFrames;
 	unsigned long long ConstantWrites;
 	unsigned long long ConstantRenames;
 	double FrameMs;
@@ -118,6 +120,7 @@ struct GpuTotals
 	double PostMs;
 	double BubbleMs;
 	double WaitMs;
+	double ScreenMs;
 };
 static GpuTotals GpuWindow;
 static LARGE_INTEGER GpuWindowStart;
@@ -252,19 +255,45 @@ static void stamp_gpu_frame(GpuStamp stamp)
 	}
 }
 
-// The top of a presented frame, its first Begin_Scene since the last flip.  The swap chain's queue is
-// waited on here, before the frame is built, and the GPU's clock starts.
+// The swap chain's queue, waited on once a presented frame: by the engine at the top of its pass,
+// before the input is read (Direct3D11_Wait_For_Frame), or failing that by the frame's first
+// Begin_Scene.  The queue's depth and its age on the screen are read here too, once a frame.
+static void wait_for_frame()
+{
+	if (!PresentRequested) {
+		return;
+	}
+	LARGE_INTEGER before;
+	LARGE_INTEGER after;
+	QueryPerformanceCounter(&before);
+	if (!Device.Wait_For_Frame(FRAME_WAIT_LIMIT_MS)) {
+		GpuWindow.WaitTimeouts++;
+	}
+	QueryPerformanceCounter(&after);
+	GpuWindow.WaitMs += elapsed_ms(before, after);
+}
+
+// Only with the vsync on, where the queue fills and the wait is most of a refresh (4.1 ms a frame at
+// 164 Hz, Twilight Flame, 8 AIs).  With it off the wait was 0.36 ms uncapped and 0.03 under a cap,
+// nothing to gain, and a wait ahead of the client update keeps that update from running beside the
+// GPU's last frame, so the free frame rate keeps the scene's own wait.
+void Direct3D11_Wait_For_Frame()
+{
+	if (Active && !FrameOpen && VSyncRequested) {
+		wait_for_frame();
+	}
+}
+
+// The top of a presented frame, its first Begin_Scene since the last flip, and the GPU's clock starts.
 static void begin_frame()
 {
-	if (PresentRequested) {
-		LARGE_INTEGER before;
-		LARGE_INTEGER after;
-		QueryPerformanceCounter(&before);
-		if (!Device.Wait_For_Frame(FRAME_WAIT_LIMIT_MS)) {
-			GpuWindow.WaitTimeouts++;
-		}
-		QueryPerformanceCounter(&after);
-		GpuWindow.WaitMs += elapsed_ms(before, after);
+	wait_for_frame();
+	unsigned queued = 0;
+	double present_to_screen_ms = 0.0;
+	if (PresentRequested && Device.Queue_Statistics(queued, present_to_screen_ms)) {
+		GpuWindow.QueueSamples++;
+		GpuWindow.QueuedFrames += queued;
+		GpuWindow.ScreenMs += present_to_screen_ms;
 	}
 	FrameOpen = true;
 	if (!GpuTiming) {
@@ -319,16 +348,19 @@ const char * Direct3D11_Take_GPU_Report()
 	const double samples = (window.Samples > 0) ? (double)window.Samples : 1.0;
 	const double frames = (window.Frames > 0) ? (double)window.Frames : 1.0;
 	const double seconds = wall_ms / 1000.0;
-	static char line[512];
+	const double queue_samples = (window.QueueSamples > 0) ? (double)window.QueueSamples : 1.0;
+	static char line[640];
 	snprintf(line, sizeof(line),
 		"%.1f fps | gpu frame avg %.2f max %.2f ms | shadow %.2f scene %.2f post+ui %.2f ms | bubble %.2f ms"
 		" | busy %.0f%% | %u samples, dropped %u busy %u disjoint | latency wait %.2f ms a frame, %u timed out"
+		" | queued %.2f frames, present to screen %.2f ms (%u samples)"
 		" | %.0f constant writes/s, %.0f renames/s",
 		window.Frames / seconds, window.FrameMs / samples, window.FrameMaxMs,
 		window.ShadowMs / samples, window.SceneMs / samples, window.PostMs / samples,
 		(window.BubblePairs > 0) ? window.BubbleMs / window.BubblePairs : 0.0,
 		100.0 * window.FrameMs / wall_ms, window.Samples, window.DroppedBusy, window.DroppedDisjoint,
 		window.WaitMs / frames, window.WaitTimeouts,
+		window.QueuedFrames / queue_samples, window.ScreenMs / queue_samples, window.QueueSamples,
 		(double)window.ConstantWrites / seconds, (double)window.ConstantRenames / seconds);
 	memset(&GpuWindow, 0, sizeof(GpuWindow));
 	GpuWindowStart = now;

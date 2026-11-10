@@ -478,12 +478,18 @@ void Direct3D11_Take_Frame_Cost(double & pipeline_milliseconds, unsigned & pipel
 // presented frame (average and worst, split into shadow map, world, and post chain with interface),
 // the GPU's idle gap between two frames, busy as GPU time over wall time, how many frames were read
 // back and how many were dropped, the time the top of the frame waited for the swap chain's queue,
-// and the constant writes and renames a second.  Timestamp queries read back a few frames late and
+// the presents not yet on screen and how long Present took to reach it (DX11DeviceClass::
+// Queue_Statistics), and the constant writes and renames a second.  Timestamp queries read back a few frames late and
 // never waited on, so it costs the frame nothing it can measure.  Taking it resets it.
 const char * Direct3D11_Take_GPU_Report();
 
 // The swap chain holds its queue with a wait at the top of the frame rather than inside Present.
 bool Direct3D11_Has_Frame_Wait();
+
+// Take that wait now, ahead of the frame's first Begin_Scene, so whatever is read after it (the
+// mouse, the keyboard) is as fresh as the queue allows.  Once a presented frame; the Begin_Scene
+// that follows does not wait again.  With the vsync on only; otherwise Begin_Scene keeps the wait.
+void Direct3D11_Wait_For_Frame();
 
 // How the backend writes its constant blocks (DX11BackendClass::Constant_Path), for the shutdown
 // report.  Empty with no backend.

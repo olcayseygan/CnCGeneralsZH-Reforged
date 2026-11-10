@@ -128,6 +128,7 @@ public:
 																 UnsignedInt increaseFrameTime, UnsignedInt decayFrameTime//, Bool donut = FALSE
 																 ) = 0;
 	virtual void stepDynamicLights( void ) { }	///< a pass that skips the draw: fade the light pulses and park the spent ones, as the draw does
+	virtual void waitForFrameQueue( void ) { }	///< wait for room in the present queue, before the pass reads the input
 
 	/// draw a line on the display in pixel coordinates with the specified color
 	virtual void drawLine( Int startX, Int startY, Int endX, Int endY, 

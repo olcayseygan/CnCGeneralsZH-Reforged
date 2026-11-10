@@ -39,11 +39,11 @@ void PosixGameEngine::reset( void )
 }
 
 // Win32GameEngine::update also idles while the window is minimized and wakes the audio after; both
-// are about the window, and belong with the subclass that has one.
+// are about the window, and belong with the subclass that has one.  The event pump is
+// GameEngine::execute's, after the picture cap's wait.
 void PosixGameEngine::update( void )
 {
 	GameEngine::update();
-	serviceWindowsOS();
 }
 
 void PosixGameEngine::serviceWindowsOS( void )

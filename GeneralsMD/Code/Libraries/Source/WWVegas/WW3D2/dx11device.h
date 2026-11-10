@@ -143,6 +143,12 @@ public:
 	bool Wait_For_Frame(unsigned timeout_milliseconds);
 	bool Has_Frame_Wait() const { return FrameLatencyWaitable != NULL; }
 
+	// DXGI's frame statistics: presents asked for and not yet on the screen, and how long the newest
+	// one on it took from Present to the refresh that showed it.  False while DXGI has none to give.
+	// Read with the vsync on: a tearing present is not tied to a refresh, and the statistics only
+	// move once one, so there the count is presents since the last refresh rather than a queue.
+	bool Queue_Statistics(unsigned & queued, double & present_to_screen_ms);
+
 	// What the last Present returned, for the one log line a refused present is worth.
 	HRESULT Last_Present_Result() const { return LastPresentResult; }
 
@@ -184,7 +190,12 @@ private:
 	bool Tearing;
 	UINT ChainFlags;					// what the chain was made with, which ResizeBuffers must repeat
 	HANDLE FrameLatencyWaitable;		// the waitable chain's handle, closed by Release
+	bool FrameWaited;					// Wait_For_Frame took this frame's count since the last present
 	HRESULT LastPresentResult;
+	enum { PRESENT_TIME_SLOTS = 16 };
+	LONGLONG PresentTimes[PRESENT_TIME_SLOTS];	// QPC at each present, by DXGI's present count
+
+	void Note_Present(LONGLONG presented);
 };
 
 #endif // DX11DEVICE_H

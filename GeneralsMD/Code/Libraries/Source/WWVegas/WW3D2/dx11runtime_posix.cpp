@@ -209,6 +209,7 @@ void Direct3D11_Take_Frame_Cost(double & pipeline_milliseconds, unsigned & pipel
 }
 const char * Direct3D11_Take_GPU_Report() { return NULL; }
 bool Direct3D11_Has_Frame_Wait() { return false; }
+void Direct3D11_Wait_For_Frame() {}
 const char * Direct3D11_Constant_Path() { return ""; }
 void Direct3D11_Refusals(unsigned long long & no_buffer, unsigned long long & no_stage,
 	unsigned long long & no_layout, unsigned long long & no_program,

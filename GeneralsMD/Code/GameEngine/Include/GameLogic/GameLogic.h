@@ -188,6 +188,9 @@ public:
 	void destroyObject( Object *obj );							///< Mark object as destroyed for later deletion
 	Object *findObjectByID( ObjectID id );								///< Given an ObjectID, return a pointer to the object.
  	Object *getFirstObject( void );									///< Returns the "first" object in the world. When used with the object method "getNextObject()", all objects in the world can be iterated.
+	/// the objects whose ID % 60 is this turn, oldest first (the object list turned round), with up to a second
+	/// of the dead the lookup no longer finds; NULL while the index waits on its rebuild after a reset or a load
+	const std::vector<ObjectID> *getSecondTurnIDs( Int turn ) const { return m_objIndexStale ? NULL : &m_secondTurnIDs[ turn ]; }
 	ObjectID allocateObjectID( void );							///< Returns a new unique object id
 	void growObjectLookupForTick( void );						///< LogicThread's sync point: room for the next tick's objects, so it never reallocates the lookup beside the render
 

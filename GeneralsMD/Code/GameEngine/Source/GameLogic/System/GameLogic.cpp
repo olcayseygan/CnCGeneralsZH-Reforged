@@ -6322,6 +6322,11 @@ void GameLogic::setControlBarOverride(const AsciiString& commandSetName, Int slo
 // ------------------------------------------------------------------------------------------------
 Bool GameLogic::findControlBarOverride(const AsciiString& commandSetName, Int slot, ConstCommandButtonPtr& commandButton) const
 {
+	// only a map's script sets one; without, every button asked for built and hashed a pooled string to find
+	// nothing, eighteen to a factory each time the AI asks whether it can make a unit there
+	if (m_controlBarOverrides.empty())
+		return false;
+
 	char buf[256];
 	buf[0] = '0' + slot;
 	strcpy(&buf[1], commandSetName.str());

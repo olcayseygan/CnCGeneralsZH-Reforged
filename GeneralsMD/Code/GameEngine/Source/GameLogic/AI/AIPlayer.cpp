@@ -3872,9 +3872,11 @@ void AIPlayer::rememberEnemies( void )
 				{
 					Object *obj = objIter.cur();
 					// whether it is known before what it is worth: most of 31 enemies' armies stand in the fog, and the
-					// worth looks the unit's name up in its owner's price table
+					// worth looks the unit's name up in its owner's price table.  What cannot attack is worth nothing
+					// (templateCombatPower) and goes before either.
 					if( obj->isEffectivelyDead() || obj->isContained() || obj->isKindOf( KINDOF_STRUCTURE ) ||
-							obj->isKindOf( KINDOF_PROJECTILE ) || !observerKnowsAbout( obj, me ) || aiCombatPower( obj ) <= 0.0f )
+							obj->isKindOf( KINDOF_PROJECTILE ) || !obj->isKindOf( KINDOF_CAN_ATTACK ) ||
+							!observerKnowsAbout( obj, me ) || aiCombatPower( obj ) <= 0.0f )
 						continue;
 					SeenEnemy &row = m_seenEnemies[ obj->getID() ];
 					row.tmpl = obj->getTemplate();
@@ -14531,15 +14533,24 @@ void AIPlayer::collectKnownGuns( std::vector<AIKnownGun> *guns ) const
 	guns->insert( guns->end(), m_knownGuns.begin(), m_knownGuns.end() );
 }
 
+static Bool carriesWeapon( const Object *obj )
+{
+	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
+		if( obj->getWeaponInWeaponSlot( (WeaponSlotType)slot ) != NULL )
+			return TRUE;
+	return FALSE;
+}
+
 void AIPlayer::readKnownGuns( std::vector<AIKnownGun> *guns ) const
 {
 	const Int me = m_player->getPlayerIndex();
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
 		// not a superweapon: a Scud Storm's weapon reaches 999999, and once one was known every healer saw
-		// the whole map in reach and hung over its own base center pulling back until it was shot down
+		// the whole map in reach and hung over its own base center pulling back until it was shot down.
+		// Unarmed reaches nothing and is left before whether it is known, which walks the cells it covers.
 		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) || obj->isKindOf( KINDOF_FS_SUPERWEAPON ) ||
-				m_player->getRelationship( obj->getTeam() ) != ENEMIES || !observerKnowsAbout( obj, me ) )
+				m_player->getRelationship( obj->getTeam() ) != ENEMIES || !carriesWeapon( obj ) || !observerKnowsAbout( obj, me ) )
 			continue;
 		AIKnownGun gun;
 		gun.m_x = obj->getPosition()->x;
@@ -17153,9 +17164,26 @@ static StampTurn &stampTurn( Int round )
 	{
 		turn->ids.clear();
 		const UnsignedInt share = now % (UnsignedInt)round;
-		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
-			if( (UnsignedInt)obj->getID() % (UnsignedInt)round == share )
-				turn->ids.push_back( obj->getID() );
+		// a round of whole seconds takes its IDs from the end-of-frame pass's bucket of that second, which runs
+		// oldest first and so backwards here into the list's order; the world walk was a tenth of the players'
+		// update at 32 seats
+		const std::vector<ObjectID> *bucket = (UnsignedInt)round % LOGICFRAMES_PER_SECOND == 0 ?
+			TheGameLogic->getSecondTurnIDs( (Int)(share % LOGICFRAMES_PER_SECOND) ) : NULL;
+		if( bucket != NULL )
+		{
+			for( size_t k = bucket->size(); k-- > 0; )
+			{
+				const ObjectID id = (*bucket)[ k ];
+				if( (UnsignedInt)id % (UnsignedInt)round == share && TheGameLogic->findObjectByID( id ) != NULL )
+					turn->ids.push_back( id );
+			}
+		}
+		else
+		{
+			for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+				if( (UnsignedInt)obj->getID() % (UnsignedInt)round == share )
+					turn->ids.push_back( obj->getID() );
+		}
 		turn->frame = now + 1;
 		turn->round = round;
 		StampShape blank;

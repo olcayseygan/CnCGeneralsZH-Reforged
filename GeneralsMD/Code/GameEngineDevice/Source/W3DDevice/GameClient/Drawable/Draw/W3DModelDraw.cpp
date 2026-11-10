@@ -4456,10 +4456,13 @@ void W3DModelDraw::reactToTransformChange( const Matrix3D* oldMtx,
 		}
 		else
 		{
+			// asked only on seats that see the tank, and from the tick's flush as often as from the draw:
+			// the height is measured, never stored in the logic object (Thing::CachePeek)
+			Thing::CachePeek trackReadLeavesNoCache;
 			if (obj && obj->isSignificantlyAboveTerrain())
 			{
 				m_trackRenderObject->setAirborne();
-			} 
+			}
 			m_trackRenderObject->addEdgeToTrack(pos->x, pos->y);
 		}
 	}

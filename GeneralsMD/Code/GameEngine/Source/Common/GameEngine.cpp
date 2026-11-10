@@ -3130,6 +3130,13 @@ void GameEngine::update( void )
 			// VERIFY CRC needs to be in this code block.  Please to not pull TheGameLogic->update() inside this block.
 			VERIFY_CRC
 
+			/* The drawing, the camera and the radar ask logic objects how high they are (a jet's pitch, a
+				 track mark, the follow camera), and the first question after a move used to store the answer
+				 in the object, on this machine only. A stored height is moved by a later setPositionZ instead
+				 of measured again, so a seat that drew a jet could carry a different height into logic than
+				 one that did not. Asked from here the height is measured and not stored (Thing::CachePeek). */
+			Thing::CachePeek clientReadsLeaveNoCache;
+
 			TheRadar->UPDATE();
 #ifdef DEBUG_LOGGING
 			tRadarEnd = Clock_Ticks();

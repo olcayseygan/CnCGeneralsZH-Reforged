@@ -216,6 +216,21 @@ Int AttackPriorityInfo::getPriority(const ThingTemplate *tThing) const
 	return priority;
 }
 
+//-------------------------------------------------------------------------------------------------
+Int AttackPriorityInfo::getMaxPriority(void) const
+{
+	Int priority = m_defaultPriority;
+	if (m_priorityMap)
+	{
+		for (AttackPriorityMap::const_iterator it = m_priorityMap->begin(); it != m_priorityMap->end(); ++it)
+		{
+			if ((*it).second > priority)
+				priority = (*it).second;
+		}
+	}
+	return priority;
+}
+
 #ifdef _DEBUG
 /** Dump the info. */
 //-------------------------------------------------------------------------------------------------

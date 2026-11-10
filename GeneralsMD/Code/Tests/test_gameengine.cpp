@@ -3696,6 +3696,87 @@ TEST(attack_priority_pick_needs_no_sort)
 	}
 }
 
+/* AI.cpp: the same pick made walking out from the hunter, in any order within a distance, stopping
+   as soon as AI_attackPriorityIsSettled says nothing that far off can beat the leader, with a full
+   tie going to the one the gathered list holds first. */
+extern Bool AI_attackPriorityIsSettled( Int bestModPriority, Int bestCurPriority, Real bestDistSqr,
+																				Int maxPriority, Real minDist, Real modifierDist );
+
+TEST(attack_priority_pick_settles_nearest_first)
+{
+	enum { N = 32 };
+	const Real MODIFIER = 100.0f;
+	UnsignedInt seed = 777;
+	for (Int round = 0; round < 4000; ++round)
+	{
+		Int curP[N], modP[N], key[N];
+		Real dist[N];
+		Bool allowed[N];
+		Int maxP = 0;
+		for (Int i = 0; i < N; ++i)
+		{
+			seed = seed * 1664525u + 1013904223u;
+			dist[i] = (Real)((seed >> 16) % 40) * 25.0f;	/* ties, and every step of the falloff */
+			curP[i] = (Int)((seed >> 8) % 7);							/* 0 is never attacked */
+			allowed[i] = ((seed >> 24) & 3) != 0;
+			key[i] = (Int)((seed >> 4) & 0xff);
+			modP[i] = curP[i] - (Int)(dist[i] / MODIFIER);
+			if (modP[i] < 1)
+				modP[i] = 1;
+			if (curP[i] > maxP)
+				maxP = curP[i];
+		}
+
+		Int full = -1, bestMod = 0, bestCur = 0;
+		Real bestDistSqr = 0.0f;
+		for (Int i = 0; i < N; ++i)
+		{
+			if (curP[i] != 0 && AI_attackPriorityTakesLead(modP[i], curP[i], dist[i] * dist[i], bestMod, bestCur, bestDistSqr) && allowed[i])
+			{
+				bestMod = modP[i];
+				bestCur = curP[i];
+				bestDistSqr = dist[i] * dist[i];
+				full = i;
+			}
+		}
+
+		/* near to far, a distance's members in a scrambled order */
+		Int order[N];
+		for (Int i = 0; i < N; ++i)
+		{
+			Int j = i;
+			for ( ; j > 0 && (dist[order[j - 1]] > dist[i] || (dist[order[j - 1]] == dist[i] && key[order[j - 1]] > key[i])); --j)
+				order[j] = order[j - 1];
+			order[j] = i;
+		}
+		Int nearFirst = -1;
+		bestMod = 0;
+		bestCur = 0;
+		bestDistSqr = 0.0f;
+		for (Int k = 0; k < N; ++k)
+		{
+			const Int i = order[k];
+			if (nearFirst >= 0 && dist[i] > 0.0f && AI_attackPriorityIsSettled(bestMod, bestCur, bestDistSqr, maxP, dist[i], MODIFIER))
+				break;
+			if (curP[i] == 0)
+				continue;
+			const Real distSqr = dist[i] * dist[i];
+			if (!AI_attackPriorityTakesLead(modP[i], curP[i], distSqr, bestMod, bestCur, bestDistSqr)
+					&& !(nearFirst >= 0 && modP[i] == bestMod && curP[i] == bestCur && distSqr == bestDistSqr && i < nearFirst))
+				continue;
+			if (!allowed[i])
+				continue;
+			bestMod = modP[i];
+			bestCur = curP[i];
+			bestDistSqr = distSqr;
+			nearFirst = i;
+		}
+		CHECK_EQ( nearFirst, full );
+		if (nearFirst != full)
+			break;
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Particle ground collision
 //

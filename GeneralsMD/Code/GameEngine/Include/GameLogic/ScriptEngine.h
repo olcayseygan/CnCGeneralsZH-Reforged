@@ -142,6 +142,7 @@ public:
 
 	void setPriority(const ThingTemplate *tThing, Int priority);
 	Int getPriority(const ThingTemplate *tThing) const;
+	Int getMaxPriority(void) const;	///< no getPriority answers more
 	AsciiString getName(void) const {return m_name;}
 #ifdef _DEBUG
 	void dumpPriorityInfo(void);

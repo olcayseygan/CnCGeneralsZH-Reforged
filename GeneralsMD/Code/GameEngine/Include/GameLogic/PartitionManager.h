@@ -432,7 +432,9 @@ public:
 //=====================================
 class PartitionData : public MemoryPoolObject
 {
-	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(PartitionData, "PartitionDataPool" )		
+	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(PartitionData, "PartitionDataPool" )
+
+	friend class PartitionManager;	// the center grid's links
 
 private:
 
@@ -442,6 +444,8 @@ private:
 		NEED_COLLISION_CHECK,
 		NEED_CELL_UPDATE_AND_COLLISION_CHECK
 	};
+
+	enum { CENTER_NONE = -1, CENTER_BIG = -2 };	///< m_centerCell when in no list, and in the wide Objects' list
 
 	Object											*m_object;								///< Object this module is for
 	Int													m_doneFlag;								///< beside m_object: a range query reads both of every COI it walks
@@ -459,7 +463,10 @@ private:
 	Bool												m_sightBlocker;						///< its COIs count in their cells' m_sightBlockerCoiCount; fixed from attachToObject on
 	Bool												m_noCollide;							///< its Object is KINDOF_NO_COLLIDE, for collidesWith
 	DirtyStatus									m_dirtyStatus;
-	ObjectShroudStatus					m_shroudedness[MAX_PLAYER_COUNT];						
+	PartitionData								*m_centerNext;						///< next in its center-grid list (PartitionManager::visitNearestFirst)
+	PartitionData								*m_centerPrev;
+	Int													m_centerCell;							///< the cell its Object's center is in, CENTER_BIG, or CENTER_NONE
+	ObjectShroudStatus					m_shroudedness[MAX_PLAYER_COUNT];
 	ObjectShroudStatus					m_shroudednessPrevious[MAX_PLAYER_COUNT];	///<previous frames value of m_shroudedness						
 	Bool												m_everSeenByPlayer[MAX_PLAYER_COUNT];		///<whether this object has ever been seen by a given player.
 	const PartitionCell					*m_lastCell;							///< The last cell I thought my center was in.
@@ -1326,7 +1333,45 @@ protected:
 };
 
 //=====================================
-/** 
+/**
+	Which objects the gather that PartitionManager::visitNearestFirst stands in for would hold, and in what
+	order its list would hand them out. It walks the master list when its range reaches every cell and the
+	cells in rings otherwise (getClosestObjects), and the ring walk holds only objects in a cell of a ring it
+	reaches that some player of the mask touches.
+*/
+//=====================================
+class PartitionGatherOrder
+{
+public:
+	Bool holds( const Object *obj ) const;
+	Bool listsBefore( const Object *a, const Object *b ) const;
+private:
+	friend class PartitionManager;
+	PartitionManager	*m_manager;
+	Bool							m_rings;
+	Int								m_cellX, m_cellY;		///< the gather's center cell, unclamped
+	Int								m_ringLimit;
+	PlayerMaskType		m_players;
+};
+
+//=====================================
+/**
+	What PartitionManager::visitNearestFirst hands the objects to. visit gets every object that passes the
+	gather's distance and filters, in no order the answer may depend on; the order says which of them the
+	gather would hold and how it would list them. isSettled is asked before each ring further out whether no
+	object at least minDist away, by the distance FROM_BOUNDINGSPHERE_2D measures, could change the answer.
+*/
+//=====================================
+class PartitionNearestFirstVisitor
+{
+public:
+	virtual ~PartitionNearestFirstVisitor() { }
+	virtual void visit( Object *obj, Real distSqr, const PartitionGatherOrder &order ) = 0;
+	virtual Bool isSettled( Real minDist ) const = 0;
+};
+
+//=====================================
+/**
 	PartitionManager is the singleton class that manages the entire partition/collision
 	system. It maintains the set of PartitionCells that correspond to the world system,
 	and updates the PartitionDatas as needed during update phase.
@@ -1370,6 +1415,21 @@ private:
 	OffsetVec				m_ringOffsets;		///< m_radiusVec end to end, the ring walk's order, so a gather can split it
 	std::vector<Int>	m_ringStart;			///< where each radius starts in m_ringOffsets, one past the last at the end
 #endif
+
+	/** Every registered Object again, by the cell its center stands in now, for visitNearestFirst. A cell's
+		COIs are where the Object stood at the last update, and it may creep below the move threshold that
+		redoes them; this list moves on every report (noteObjectMovedOrResized). An Object wider than
+		CENTER_GRID_MAX_RADIUS sits in m_centerBig instead, so a cell's bound needs no radius bigger. */
+	std::vector<PartitionData *>	m_centerCells;
+	PartitionData		*m_centerBig;
+	Bool						m_centerGridValid;	///< built by update after an init, reset or load; untouched until then
+	Int centerCellOf( const Object *obj ) const;
+	void linkCenter( PartitionData *mod );
+	void buildCenterGrid( void );
+
+	friend class PartitionGatherOrder;
+	/// where the ring walk first meets obj, as its ring, its cell's place in the ring and its place in that cell; FALSE if never
+	Bool ringMeeting( const PartitionGatherOrder &order, const Object *obj, Bool firstOnly, Int &ring, Int &slot, Int &place );
 
 protected:
 
@@ -1546,6 +1606,17 @@ public:
 		PlayerMaskType onlyPlayers,
 		Bool asGathered
 	);
+
+	/** Hands the visitor the objects iterateObjectsInRange( obj, maxDist, FROM_BOUNDINGSPHERE_2D, filters,
+		ITER_FASTEST, onlyPlayers ) would look at and keep, the cells nearest obj first, until it says it is
+		settled, with the order that gather would list them in. FALSE, having visited nothing, before update
+		has built the center grid. */
+	Bool visitNearestFirst( const Object *obj, Real maxDist, PartitionFilter **filters, PlayerMaskType onlyPlayers,
+		PartitionNearestFirstVisitor *visitor );
+
+	/// Object's report of every transform change and of a size change that keeps its registration
+	void noteObjectMovedOrResized( PartitionData *mod );
+	void unlinkCenter( PartitionData *mod );	///< out of the center grid; for unRegisterObject and ~PartitionData
 
 	Real getRelativeAngle2D( const Object *obj, const Object *otherObj );
 	Real getRelativeAngle2D( const Object *obj, const Coord3D *pos );

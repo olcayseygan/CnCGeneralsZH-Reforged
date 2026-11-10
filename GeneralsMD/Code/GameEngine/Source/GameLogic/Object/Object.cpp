@@ -926,6 +926,9 @@ void Object::setGeometryInfoZ( Real newZ )
 { 
 	// A Z change only does not need to un/register with the PartitionManager
 	m_geometryInfo.setMaxHeightAbovePosition( newZ );
+	// but a sphere's height is its radius, which the center grid sorts by
+	if( m_partitionData )
+		ThePartitionManager->noteObjectMovedOrResized( m_partitionData );
 
 	if (m_drawable)
 		m_drawable->reactToGeometryChange();
@@ -1982,6 +1985,9 @@ void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPo
 {
 	//USE_PERF_TIMER(Object_reactToTransformChange)
 	RevealWakeGrid::noteMove( this, oldPos );
+	// every move, the ones too small to dirty the cells below included (PartitionManager::visitNearestFirst)
+	if (m_partitionData)
+		ThePartitionManager->noteObjectMovedOrResized( m_partitionData );
 	if(_isnan(getPosition()->x) || _isnan(getPosition()->y) || _isnan(getPosition()->z)) {
 		DEBUG_CRASH(("Object pos is nan."));
 		TheGameLogic->destroyObject(this);

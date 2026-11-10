@@ -1672,6 +1672,9 @@ PartitionData::PartitionData()
 	m_sightBlocker = FALSE;
 	m_noCollide = FALSE;
 	m_dirtyStatus = NOT_DIRTY;
+	m_centerNext = NULL;
+	m_centerPrev = NULL;
+	m_centerCell = CENTER_NONE;
 	m_lastCell = NULL;
 	for (int i = 0; i < MAX_PLAYER_COUNT; ++i)
 	{
@@ -1694,7 +1697,9 @@ PartitionData::~PartitionData()
 		ThePartitionManager->removeFromDirtyModules(this);
 		//DEBUG_ASSERTCRASH(!ThePartitionManager->isInListDirtyModules(this), ("hmm\n"));
 	}
-} 
+	if (ThePartitionManager)
+		ThePartitionManager->unlinkCenter(this);
+}
 
 //-----------------------------------------------------------------------------
 Int PartitionData::getControllingPlayerIndex() const
@@ -2777,10 +2782,12 @@ PartitionManager::PartitionManager()
 	m_dirtyModules = NULL;
 	m_updatedSinceLastReset = false;
 	m_cellsFromSave = FALSE;
+	m_centerBig = NULL;
+	m_centerGridValid = FALSE;
 #ifdef FASTER_GCO
 	m_maxGcoRadius = 0;
 #endif
-} 
+}
 
 //-----------------------------------------------------------------------------
 PartitionManager::~PartitionManager()
@@ -2827,6 +2834,7 @@ void PartitionManager::init()
 	m_cellSizeInv = (Real)(1.0 / m_cellSize);
 
 	DEBUG_ASSERTCRASH(m_cells == NULL, ("double init"));
+	m_centerGridValid = FALSE;
 
 	if (TheTerrainLogic)
 	{
@@ -2912,6 +2920,11 @@ void PartitionManager::shutdown()
 	m_cellsFromSave = FALSE;
 	ThePartitionManager->removeAllDirtyModules();
 
+	// modules still alive keep stale links, which unlinkCenter never follows while the grid is down
+	m_centerGridValid = FALSE;
+	m_centerCells.clear();
+	m_centerBig = NULL;
+
 #ifdef _DEBUG
 	// the above *should* remove all the touched cells (via unRegisterObject), but let's check:
 	DEBUG_ASSERTCRASH( m_moduleList == NULL, ("hmm, modules left over"));
@@ -2956,6 +2969,9 @@ void PartitionManager::update()
 		{
 			m_updatedSinceLastReset = true;
 		}
+
+		if (!m_centerGridValid)
+			buildCenterGrid();
 
 		if (thePairStore == NULL)
 			thePairStore = MSGNEW("PartitionContactList") PartitionContactList;
@@ -3095,6 +3111,7 @@ void PartitionManager::registerObject( Object* object )
 
 	// add module to object
 	mod->attachToObject( object );
+	linkCenter( mod );
 
 }
 
@@ -3133,6 +3150,94 @@ void PartitionManager::removeFromModuleArray( PartitionData *mod )
 }
 
 //------------------------------------------------------------------------------
+/* The distance FROM_BOUNDINGSPHERE_2D measures is the centers' less both bounding circles, so with every
+	 Object in a cell no wider than this, the cell's own distance bounds them all. The few wider ones go in
+	 m_centerBig and are asked every time. */
+static const Real CENTER_GRID_MAX_RADIUS = 100.0f;
+
+//------------------------------------------------------------------------------
+Int PartitionManager::centerCellOf( const Object *obj ) const
+{
+	if (obj->getGeometryInfo().getBoundingCircleRadius() > CENTER_GRID_MAX_RADIUS)
+		return PartitionData::CENTER_BIG;
+	// clamped onto the grid; a NaN fails both tests and lands in the first column or row
+	const Coord3D *pos = obj->getPosition();
+	const Real fx = (pos->x - m_worldExtents.lo.x) * m_cellSizeInv;
+	const Real fy = (pos->y - m_worldExtents.lo.y) * m_cellSizeInv;
+	const Int x = fx >= 0.0f ? (fx < (Real)m_cellCountX ? (Int)fx : m_cellCountX - 1) : 0;
+	const Int y = fy >= 0.0f ? (fy < (Real)m_cellCountY ? (Int)fy : m_cellCountY - 1) : 0;
+	return y * m_cellCountX + x;
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::linkCenter( PartitionData *mod )
+{
+	DEBUG_ASSERTCRASH( mod->m_centerCell == PartitionData::CENTER_NONE, ("center grid link twice") );
+	if (!m_centerGridValid || mod->getObject() == NULL)
+		return;
+	const Int cell = centerCellOf( mod->getObject() );
+	PartitionData **head = cell == PartitionData::CENTER_BIG ? &m_centerBig : &m_centerCells[ cell ];
+	mod->m_centerCell = cell;
+	mod->m_centerPrev = NULL;
+	mod->m_centerNext = *head;
+	if (*head)
+		(*head)->m_centerPrev = mod;
+	*head = mod;
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::unlinkCenter( PartitionData *mod )
+{
+	if (mod->m_centerCell == PartitionData::CENTER_NONE)
+		return;
+	// a grid taken down left its lists behind; buildCenterGrid starts every module afresh
+	if (m_centerGridValid)
+	{
+		PartitionData **head = mod->m_centerCell == PartitionData::CENTER_BIG ? &m_centerBig : &m_centerCells[ mod->m_centerCell ];
+		if (mod->m_centerNext)
+			mod->m_centerNext->m_centerPrev = mod->m_centerPrev;
+		if (mod->m_centerPrev)
+			mod->m_centerPrev->m_centerNext = mod->m_centerNext;
+		else
+			*head = mod->m_centerNext;
+	}
+	mod->m_centerCell = PartitionData::CENTER_NONE;
+	mod->m_centerNext = NULL;
+	mod->m_centerPrev = NULL;
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::noteObjectMovedOrResized( PartitionData *mod )
+{
+	if (!m_centerGridValid || mod->m_centerCell == PartitionData::CENTER_NONE)
+		return;
+	if (centerCellOf( mod->getObject() ) == mod->m_centerCell)
+		return;
+	unlinkCenter( mod );
+	linkCenter( mod );
+}
+
+//------------------------------------------------------------------------------
+void PartitionManager::buildCenterGrid( void )
+{
+	if (m_cells == NULL || m_totalCellCount <= 0)
+		return;
+	m_centerCells.assign( m_totalCellCount, NULL );
+	m_centerBig = NULL;
+	m_centerGridValid = TRUE;
+	for (size_t i = 0; i < m_moduleArray.size(); ++i)
+	{
+		PartitionData *mod = m_moduleArray[ i ];
+		if (mod == NULL)
+			continue;
+		mod->m_centerCell = PartitionData::CENTER_NONE;
+		mod->m_centerNext = NULL;
+		mod->m_centerPrev = NULL;
+		linkCenter( mod );
+	}
+}
+
+//------------------------------------------------------------------------------
 void PartitionManager::unRegisterObject( Object* object )
 {
 	// sanity
@@ -3143,6 +3248,9 @@ void PartitionManager::unRegisterObject( Object* object )
 	PartitionData *mod = object->friend_getPartitionData();
 	if( mod == NULL )
 		return;
+
+	// before a ghost may keep the module without its Object
+	unlinkCenter( mod );
 
 	GhostObject *ghost;
 
@@ -4220,6 +4328,189 @@ Object *PartitionManager::getAnyObject(
 )
 {
 	return getClosestObjects(obj, NULL, maxDist, dc, filters, NULL, NULL, NULL, onlyPlayers, true, asGathered);
+}
+
+//-----------------------------------------------------------------------------
+/* A hunter's whole-map search walked every module to pick one enemy, most often one close by: 80% of all the
+	 objects range queries looked at in a 32-player match. This walks the center grid in square rings out from
+	 the asker, the wide Objects first, and before each ring tells the visitor how near anything still unseen
+	 could be. Every Object not yet seen has its center in a cell of that ring or beyond, so outside the square
+	 of the rings walked, and stands at least the center's distance to that square's edge less both bounding
+	 circles away. It goes through the same tests the master-list walk puts each module to. */
+Bool PartitionManager::visitNearestFirst( const Object *obj, Real maxDist, PartitionFilter **filters, PlayerMaskType onlyPlayers,
+	PartitionNearestFirstVisitor *visitor )
+{
+	// the lists move on every transform change; the render reading them beside a tick would see one half moved
+	LOGIC_WINDOW_READ( WINDOW_PARTITION_ITERATE );
+
+	if (!m_centerGridValid)
+		return FALSE;
+
+	// the walk getClosestObjects would take: the master list when the range reaches every cell, else the rings
+	PartitionGatherOrder order;
+	order.m_manager = this;
+#ifdef FASTER_GCO
+	order.m_ringLimit = m_maxGcoRadius;
+	if (maxDist < HUGE_DIST)
+		order.m_ringLimit = minInt( m_maxGcoRadius, worldToCellDist( maxDist ) );
+	order.m_rings = order.m_ringLimit < m_maxGcoRadius;
+#else
+	return FALSE;
+#endif
+	worldToCell( obj->getPosition()->x, obj->getPosition()->y, &order.m_cellX, &order.m_cellY );
+	order.m_players = onlyPlayers;
+
+	++thePartitionQueries;
+
+	const Coord3D *pos = obj->getPosition();
+	const Real myRadius = obj->getGeometryInfo().getBoundingCircleRadius();
+	const Real maxDistSqr = maxDist * maxDist;
+	DistCalcProc distProc = theDistCalcProcs[ FROM_BOUNDINGSPHERE_2D ];
+	Int visited = 0;
+
+	auto visitList = [&]( PartitionData *mod )
+	{
+		for ( ; mod; mod = mod->m_centerNext)
+		{
+			if (mod->m_coiInUseCount == 0)
+				continue;
+			Object *other = mod->getObject();
+			++visited;
+			if (other == obj || other == NULL)
+				continue;
+			Real distSqr;
+			Coord3D distVec;
+			if (!(*distProc)( pos, obj, other->getPosition(), other, distSqr, distVec, maxDistSqr ))
+				continue;
+			if (!filtersAllow( filters, other ))
+				continue;
+			visitor->visit( other, distSqr, order );
+		}
+	};
+
+	visitList( m_centerBig );
+
+	Int cx, cy;
+	{
+		const Real fx = (pos->x - m_worldExtents.lo.x) * m_cellSizeInv;
+		const Real fy = (pos->y - m_worldExtents.lo.y) * m_cellSizeInv;
+		cx = fx >= 0.0f ? (fx < (Real)m_cellCountX ? (Int)fx : m_cellCountX - 1) : 0;
+		cy = fy >= 0.0f ? (fy < (Real)m_cellCountY ? (Int)fy : m_cellCountY - 1) : 0;
+	}
+	const Int lastRing = maxInt( maxInt( cx, m_cellCountX - 1 - cx ), maxInt( cy, m_cellCountY - 1 - cy ) );
+	// a world unit for the float sums on both sides: cell edges, the cell a center rounds into, the shrunken distance
+	const Real SLACK = 1.0f;
+
+	visitList( m_centerCells[ cy * m_cellCountX + cx ] );
+	for (Int ring = 1; ring <= lastRing; ++ring)
+	{
+		// the nearest edge of the square of rings walked that still has cells past it
+		Real edge = HUGE_DIST;
+		Real d;
+		if (cx - ring + 1 > 0 && (d = pos->x - (m_worldExtents.lo.x + (cx - ring + 1) * m_cellSize)) < edge)
+			edge = d;
+		if (cx + ring - 1 < m_cellCountX - 1 && (d = (m_worldExtents.lo.x + (cx + ring) * m_cellSize) - pos->x) < edge)
+			edge = d;
+		if (cy - ring + 1 > 0 && (d = pos->y - (m_worldExtents.lo.y + (cy - ring + 1) * m_cellSize)) < edge)
+			edge = d;
+		if (cy + ring - 1 < m_cellCountY - 1 && (d = (m_worldExtents.lo.y + (cy + ring) * m_cellSize) - pos->y) < edge)
+			edge = d;
+		const Real minDist = edge - myRadius - CENTER_GRID_MAX_RADIUS - SLACK;
+		if (minDist > 0.0f && visitor->isSettled( minDist ))
+			break;
+
+		// the ring's top and bottom rows whole, then its two sides between them
+		const Int x0 = maxInt( cx - ring, 0 ), x1 = minInt( cx + ring, m_cellCountX - 1 );
+		if (cy - ring >= 0)
+			for (Int x = x0; x <= x1; ++x)
+				visitList( m_centerCells[ (cy - ring) * m_cellCountX + x ] );
+		if (cy + ring < m_cellCountY)
+			for (Int x = x0; x <= x1; ++x)
+				visitList( m_centerCells[ (cy + ring) * m_cellCountX + x ] );
+		const Int sideY0 = maxInt( cy - ring + 1, 0 ), sideY1 = minInt( cy + ring - 1, m_cellCountY - 1 );
+		if (cx - ring >= 0)
+			for (Int y = sideY0; y <= sideY1; ++y)
+				visitList( m_centerCells[ y * m_cellCountX + (cx - ring) ] );
+		if (cx + ring < m_cellCountX)
+			for (Int y = sideY0; y <= sideY1; ++y)
+				visitList( m_centerCells[ y * m_cellCountX + (cx + ring) ] );
+	}
+
+	thePartitionQueryObjects += visited;
+	return TRUE;
+}
+
+//-----------------------------------------------------------------------------
+/* The ring walk goes ring by ring, a ring's cells in m_radiusVec's order and a cell's COIs in list order, and
+	 keeps an object where it first meets it: in a cell of a ring within the limit that a player of the mask
+	 touches. Only the walk's own numbers decide this, the cells the object stood in at the last update included. */
+Bool PartitionManager::ringMeeting( const PartitionGatherOrder &order, const Object *obj, Bool firstOnly, Int &ring, Int &slot, Int &place )
+{
+	const PartitionData *mod = obj->friend_getPartitionData();
+	if (mod == NULL)
+		return FALSE;
+	Bool met = FALSE;
+	const Int used = minInt( mod->m_coiInUseCount, mod->m_coiArrayCount );
+	for (Int i = 0; i < used; ++i)
+	{
+		CellAndObjectIntersection *coi = &mod->m_coiArray[ i ];
+		PartitionCell *cell = coi->getCell();
+		if (cell == NULL || coi->getModule() == NULL)
+			continue;
+		ICoord2D offset;
+		offset.x = cell->getCellX() - order.m_cellX;
+		offset.y = cell->getCellY() - order.m_cellY;
+		// the rings hold the offsets between two cells on the map; a center off it reaches no further
+		if (offset.x <= -m_cellCountX || offset.x >= m_cellCountX || offset.y <= -m_cellCountY || offset.y >= m_cellCountY)
+			continue;
+		const Int r = calcMinRadius( offset );
+		if (r > order.m_ringLimit)
+			continue;
+		if (order.m_players != PLAYERMASK_ALL && !cell->hasCoiOfPlayers( order.m_players ))
+			continue;
+		if (firstOnly)
+			return TRUE;
+		if (met && r > ring)
+			continue;
+		const OffsetVec &offsets = m_radiusVec[ r ];
+		Int s = 0;
+		while (s < (Int)offsets.size() && (offsets[ s ].x != offset.x || offsets[ s ].y != offset.y))
+			++s;
+		// one COI to a cell, so an equal ring and slot is never a second one
+		if (met && r == ring && s > slot)
+			continue;
+		Int p = 0;
+		for (CellAndObjectIntersection *c = cell->getFirstCoiInCell(); c && c != coi; c = c->getNextCoi())
+			++p;
+		ring = r;
+		slot = s;
+		place = p;
+		met = TRUE;
+	}
+	return met;
+}
+
+//-----------------------------------------------------------------------------
+Bool PartitionGatherOrder::holds( const Object *obj ) const
+{
+	Int ring, slot, place;
+	return !m_rings || m_manager->ringMeeting( *this, obj, TRUE, ring, slot, place );
+}
+
+//-----------------------------------------------------------------------------
+Bool PartitionGatherOrder::listsBefore( const Object *a, const Object *b ) const
+{
+	// either walk inserts at the head as it goes, so the list hands out last what it met first
+	if (!m_rings)
+		return a->friend_getPartitionData()->friend_getModuleIndex() < b->friend_getPartitionData()->friend_getModuleIndex();
+	Int ringA = 0, slotA = 0, placeA = 0, ringB = 0, slotB = 0, placeB = 0;
+	m_manager->ringMeeting( *this, a, FALSE, ringA, slotA, placeA );
+	m_manager->ringMeeting( *this, b, FALSE, ringB, slotB, placeB );
+	if (ringA != ringB)
+		return ringA > ringB;
+	if (slotA != slotB)
+		return slotA > slotB;
+	return placeA > placeB;
 }
 
 //-----------------------------------------------------------------------------
@@ -5725,7 +6016,11 @@ void PartitionManager::xfer( Xfer *xfer )
 
 	// version 3 writes nothing new: it says the objects carry their threat and value (Object 12)
 	if( xfer->getXferMode() == XFER_LOAD )
+	{
 		m_cellsFromSave = version >= 3;
+		// a load sets sizes and places without the reports the center grid is kept by; update builds it again
+		m_centerGridValid = FALSE;
+	}
 
 	// cell size information
 	Real cellSize = m_cellSize;
@@ -5824,7 +6119,7 @@ void PartitionManager::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void PartitionManager::loadPostProcess( void )
 {
-
+	m_centerGridValid = FALSE;	// as in xfer, for whatever loaded after it
 }  // end loadPostProcess
 
 //-----------------------------------------------------------------------------

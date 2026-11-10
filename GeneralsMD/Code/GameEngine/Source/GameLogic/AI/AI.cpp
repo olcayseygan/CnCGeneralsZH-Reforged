@@ -1074,6 +1074,24 @@ Bool AI_attackPriorityTakesLead( Int modPriority, Int curPriority, Real distSqr,
 
 //-----------------------------------------------------------------------------
 /**
+ * Whether nothing at least minDist away can take the lead from, or tie, a leader of that search, Object-free
+ * so test_gameengine can link to it. Such a candidate starts from no more than maxPriority, loses one for
+ * every modifierDist of minDist, never going under 1, and then needs a higher priority after distance or, at
+ * the leader's, the most priority there is and a distance under the leader's.
+ */
+Bool AI_attackPriorityIsSettled( Int bestModPriority, Int bestCurPriority, Real bestDistSqr,
+																 Int maxPriority, Real minDist, Real modifierDist )
+{
+	Int farPriority = maxPriority - floatToIntAsMsvc(minDist / modifierDist);
+	if (farPriority < 1)
+		farPriority = 1;
+	if (bestModPriority != farPriority)
+		return bestModPriority > farPriority;
+	return bestCurPriority >= maxPriority && bestDistSqr < minDist * minDist;
+}
+
+//-----------------------------------------------------------------------------
+/**
  * Return the closest enemy, according to the qualifiers.
  */
 static Bool AI_filtersAllow( PartitionFilter **filters, Object *candidate )
@@ -1085,6 +1103,100 @@ static Bool AI_filtersAllow( PartitionFilter **filters, Object *candidate )
 	}
 	return true;
 }
+
+//-----------------------------------------------------------------------------
+/** theEnemy's priority in the set, raised to that of the best thing inside it. FALSE for its own 0: never attacked. */
+static Bool AI_attackPriorityOf( const AttackPriorityInfo *info, Object *theEnemy, Int &curPriority )
+{
+	curPriority = info->getPriority(theEnemy->getTemplate());
+	if (curPriority == 0)
+		return FALSE; // don't attack 0 priority targets.
+
+	/* check for garrisoned buildings/vehicles & see if a higher priority unit is inside. */
+	ContainModuleInterface* contain = theEnemy->getContain();
+	if (contain) {
+		TPriorityInfo priorityInfo;
+		priorityInfo.priority = curPriority;
+		priorityInfo.info = info;
+		contain->iterateContained( priorityFunc, &priorityInfo, false ) ;
+		if (priorityInfo.priority > curPriority) {
+			curPriority = priorityInfo.priority;
+		}
+	}
+	return TRUE;
+}
+
+/** That priority after distance: one less for every AttackPriorityDistanceModifier, never under 1. */
+static Int AI_attackPriorityAtDistance( Int curPriority, Real distSqr )
+{
+	Real dist = sqrt(distSqr);
+	Int modifier = floatToIntAsMsvc(dist/TheAI->getAiData()->m_attackPriorityDistanceModifier);
+	Int modPriority = curPriority-modifier;
+	if (modPriority < 1)
+		modPriority = 1;
+	return modPriority;
+}
+
+//-----------------------------------------------------------------------------
+/**
+ * The scripted-priority search's pick, taken from PartitionManager::visitNearestFirst. The rule is the one
+ * pass over the gathered list below (AI_attackPriorityTakesLead, the late filters only for a candidate that
+ * would lead), over the objects the gather holds, and its full tie, which the list leaves to whichever it
+ * holds first, goes to the one PartitionGatherOrder says it lists first, so the order the cells come in
+ * does not reach the pick.
+ */
+class AttackPriorityPick : public PartitionNearestFirstVisitor
+{
+public:
+	AttackPriorityPick( const AttackPriorityInfo *info, PartitionFilter **lateFilters ) :
+		m_info( info ),
+		m_lateFilters( lateFilters ),
+		m_maxPriority( info->getMaxPriority() ),
+		m_best( NULL ),
+		m_bestModPriority( 0 ),
+		m_bestCurPriority( 0 ),
+		m_bestDistSqr( 0.0f )
+	{
+	}
+
+	virtual void visit( Object *theEnemy, Real distSqr, const PartitionGatherOrder &order )
+	{
+		Int curPriority;
+		if (!AI_attackPriorityOf( m_info, theEnemy, curPriority ))
+			return;
+		const Int modPriority = AI_attackPriorityAtDistance( curPriority, distSqr );
+		const Bool leads = AI_attackPriorityTakesLead( modPriority, curPriority, distSqr, m_bestModPriority, m_bestCurPriority, m_bestDistSqr );
+		if (!leads && !( m_best != NULL && modPriority == m_bestModPriority && curPriority == m_bestCurPriority && distSqr == m_bestDistSqr ))
+			return;
+		if (!order.holds( theEnemy ))
+			return;
+		if (!leads && !order.listsBefore( theEnemy, m_best ))
+			return;
+		if (!AI_filtersAllow( m_lateFilters, theEnemy ))
+			return;
+		m_best = theEnemy;
+		m_bestModPriority = modPriority;
+		m_bestCurPriority = curPriority;
+		m_bestDistSqr = distSqr;
+	}
+
+	virtual Bool isSettled( Real minDist ) const
+	{
+		return m_best != NULL && AI_attackPriorityIsSettled( m_bestModPriority, m_bestCurPriority, m_bestDistSqr,
+			m_maxPriority, minDist, TheAI->getAiData()->m_attackPriorityDistanceModifier );
+	}
+
+	Object *getBest() const { return m_best; }
+
+private:
+	const AttackPriorityInfo *m_info;
+	PartitionFilter **m_lateFilters;
+	Int m_maxPriority;
+	Object *m_best;
+	Int m_bestModPriority;
+	Int m_bestCurPriority;
+	Real m_bestDistSqr;
+};
 
 //-----------------------------------------------------------------------------
 /**
@@ -1344,6 +1456,21 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	// The leader is rated only once a tie needs it, and a tied candidate by the same prune as
 	// pickBestTarget.
 	const Bool rated = (qualifiers & PREFER_BEST_TARGET) != 0;
+
+	/* A hunter asks this of the whole map once a second, and the gather below visited every Object on it,
+		 80% of all the objects range queries looked at in a 32-player match, to pick an enemy mostly close
+		 by. The pick is the best by priority after distance, then priority, then the smaller distance, and
+		 nothing far enough off can beat a leader once distance has taken enough priority away, so the search
+		 walks out from the unit and stops there (AttackPriorityPick). The rated tie-break reads the leader's
+		 weapons in the gather's order and keeps this loop, and so does the fog filter, whose shroud query
+		 records what it was asked. */
+	if (!rated && !fogFiltered && m_aiData->m_attackPriorityDistanceModifier > 0.0f)
+	{
+		AttackPriorityPick pick(info, filters + numGatherFilters);
+		if (ThePartitionManager->visitNearestFirst(me, range, gatherFilters, enemyPlayers, &pick))
+			return pick.getBest();
+	}
+
 	AIShooter shooter;
 	if (rated)
 		AI_readShooter(me, shooter);
@@ -1356,27 +1483,10 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	Real distSqr;
 	for (Object *theEnemy = iter->firstWithNumeric(&distSqr); theEnemy; theEnemy = iter->nextWithNumeric(&distSqr))
 	{
-		Int curPriority = info->getPriority(theEnemy->getTemplate());
-		if (curPriority == 0) 
-			continue; // don't attack 0 priority targets.
-
-		/* check for garrisoned buildings/vehicles & see if a higher priority unit is inside. */
-		ContainModuleInterface* contain = theEnemy->getContain();
-		if (contain) {
-			TPriorityInfo priorityInfo;
-			priorityInfo.priority = curPriority;
-			priorityInfo.info = info;
-			contain->iterateContained( priorityFunc, &priorityInfo, false ) ;
-			if (priorityInfo.priority > curPriority) {
-				curPriority = priorityInfo.priority;
-			}
-		}
-
-		Real dist = sqrt(distSqr);
-		Int modifier = floatToIntAsMsvc(dist/TheAI->getAiData()->m_attackPriorityDistanceModifier);
-		Int modPriority = curPriority-modifier;
-		if (modPriority < 1)
-			modPriority = 1;
+		Int curPriority;
+		if (!AI_attackPriorityOf(info, theEnemy, curPriority))
+			continue;
+		const Int modPriority = AI_attackPriorityAtDistance(curPriority, distSqr);
 		if (rated && bestEnemy != NULL && modPriority == effectivePriority && curPriority == actualPriority)
 		{
 			if (!bestRated)
@@ -1419,7 +1529,7 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 		}
 	}
 	if (bestEnemy) {
-		//DEBUG_LOG(("Find closest found %s, hunter %s, info %s\n", bestEnemy->getTemplate()->getName().str(), 
+		//DEBUG_LOG(("Find closest found %s, hunter %s, info %s\n", bestEnemy->getTemplate()->getName().str(),
 		//	me->getTemplate()->getName().str(), info->getName().str()));
 	}
 	return bestEnemy;

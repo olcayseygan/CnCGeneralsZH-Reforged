@@ -197,6 +197,9 @@ namespace
 		 bones a death effect may still have read, then the control bar (M2). */
 	void flushAfterTick( void )
 	{
+		// client work on both routes (overlapped inside the draw, inline after runTick): heights it asks
+		// of logic objects are measured, never stored (Thing::CachePeek)
+		Thing::CachePeek flushReadsLeaveNoCache;
 		// M7: the frame the tick ran, which it used to hand the client itself; a tick that started a map
 		// ran frame 0 after the load, one that cleared the game left 0
 		TheGameClient->setFrame( TheGameLogic->getFrameForClient() );

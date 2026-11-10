@@ -1136,6 +1136,9 @@ Bool isInvalidDebugCommand( GameMessage::Type t )
  */
 void MessageStream::propagateMessages( void )
 {
+	// the translators are the client's and ask logic objects how high they are; a network catch-up pass
+	// runs them outside the engine's client scope, as often as this seat's frame rate says
+	Thing::CachePeek translatorReadsLeaveNoCache;
 	MessageStream::TranslatorData *ss;
 	GameMessage *msg, *next;
 

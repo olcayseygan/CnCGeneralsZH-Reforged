@@ -171,6 +171,8 @@ LoadScreen::~LoadScreen( void )
 
 void LoadScreen::update( Int percent )
 {
+	// called from inside the map-load tick; the view update below may ask a locked object's height
+	Thing::CachePeek loadScreenReadsLeaveNoCache;
 	TheGameEngine->serviceWindowsOS();
 	if (TheGameEngine->getQuitting())
 		return;	//don't bother with any of this if the player is exiting game.

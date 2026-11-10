@@ -825,6 +825,8 @@ Bool GameState::loadCheckpoint( AsciiString filepath, const std::function< void(
 // ------------------------------------------------------------------------------------------------
 SaveCode GameState::loadGame( AvailableGameInfo gameInfo )
 {
+	// the menu loads from inside the client block's CachePeek, -loadsave from outside it; both store
+	Thing::CacheStore loadStoresHeights;
 
 	// sanity check for file
 	if( doesSaveGameExist( gameInfo.filename ) == FALSE )

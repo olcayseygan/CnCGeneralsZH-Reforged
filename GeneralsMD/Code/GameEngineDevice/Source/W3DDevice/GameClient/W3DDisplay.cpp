@@ -2493,6 +2493,10 @@ void W3DDisplay::draw( void )
 	USE_PERF_TIMER(W3DDisplay_draw)
 	static UnsignedInt syncTime = 0;
 
+	// the load screen and the end-of-load fade draw from inside the map-load tick, outside the engine's
+	// client scope: a height asked of a logic object here is measured, never stored (Thing::CachePeek)
+	Thing::CachePeek drawReadsLeaveNoCache;
+
 	extern RenderWindow ApplicationHWnd;	// WinMain's HWND on Windows
 #if defined(_WIN32)	// off Windows a minimised window is C2's to report
 	if (ApplicationHWnd && ::IsIconic(ApplicationHWnd)) {

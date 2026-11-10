@@ -143,6 +143,17 @@ public:
 		~CachePeek() { --s_cachePeekDepth; }
 	};
 
+	/** The other way round: logic that a client scope happens to run (a save loaded from the menu runs
+		the whole load inside the client block) stores its heights as it would anywhere else. */
+	class CacheStore
+	{
+	public:
+		CacheStore() : m_depth(s_cachePeekDepth) { s_cachePeekDepth = 0; }
+		~CacheStore() { s_cachePeekDepth = m_depth; }
+	private:
+		Int m_depth;
+	};
+
 	Bool isAboveTerrain() const { return getHeightAboveTerrain() > 0.0f; }
 	Bool isAboveTerrainOrWater() const { return getHeightAboveTerrainOrWater() > 0.0f; }
 

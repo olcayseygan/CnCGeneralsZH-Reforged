@@ -1451,6 +1451,15 @@ private:
 	PartitionData		*m_centerBig;
 	Bool						m_centerGridValid;	///< built by update after an init, reset or load; untouched until then
 	Int centerCellOf( const Object *obj ) const;
+	/// the center grid's cell for a position: clamped onto the grid, a NaN in the first column or row
+	inline Int centerIndexOf( const Coord3D *pos ) const
+	{
+		const Real fx = (pos->x - m_worldExtents.lo.x) * m_cellSizeInv;
+		const Real fy = (pos->y - m_worldExtents.lo.y) * m_cellSizeInv;
+		const Int x = fx >= 0.0f ? (fx < (Real)m_cellCountX ? (Int)fx : m_cellCountX - 1) : 0;
+		const Int y = fy >= 0.0f ? (fy < (Real)m_cellCountY ? (Int)fy : m_cellCountY - 1) : 0;
+		return y * m_cellCountX + x;
+	}
 	void linkCenter( PartitionData *mod );
 	void buildCenterGrid( void );
 
@@ -1676,8 +1685,16 @@ public:
 	Bool visitNearestFirst( const Object *obj, Real maxDist, PartitionFilter **filters, PlayerMaskType onlyPlayers,
 		PartitionNearestFirstVisitor *visitor );
 
-	/// Object's report of every transform change and of a size change that keeps its registration
+	/// Object's report of a size change that keeps its registration
 	void noteObjectMovedOrResized( PartitionData *mod );
+	/** Object's report of every transform change, from where it stood to where it stands. Its list is the
+		cell of the first, so a move inside one cell, most of them, costs a look at the two positions and
+		leaves the module, which a still unit's jitter would otherwise fetch every frame, alone. */
+	inline void noteObjectMoved( PartitionData *mod, const Coord3D *from, const Coord3D *to )
+	{
+		if (m_centerGridValid && centerIndexOf( from ) != centerIndexOf( to ))
+			noteObjectMovedOrResized( mod );
+	}
 	void unlinkCenter( PartitionData *mod );	///< out of the center grid; for unRegisterObject and ~PartitionData
 
 	Real getRelativeAngle2D( const Object *obj, const Object *otherObj );

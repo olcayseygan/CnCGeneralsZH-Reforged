@@ -1992,7 +1992,7 @@ void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPo
 	RevealWakeGrid::noteMove( this, oldPos );
 	// every move, the ones too small to dirty the cells below included (PartitionManager::visitNearestFirst)
 	if (m_partitionData)
-		ThePartitionManager->noteObjectMovedOrResized( m_partitionData );
+		ThePartitionManager->noteObjectMoved( m_partitionData, oldPos, getPosition() );
 	// moved by something else: a dormant body's next run is no longer nothing.  Even a set to where it
 	// already is: that drops the altitude cache the awake run would have filled again at its turn.
 	if (m_physics)

@@ -121,6 +121,16 @@ static Int thePartitionQueries = 0;
 static Int thePartitionGathers = 0;
 static Int thePartitionQueryObjects = 0;
 
+/* A walk told onlyPlayers has filters that turn down every Object of the other players (getClosestObject's
+	 note), which is why it passes over a cell none of them touch. Inside a cell it walks, a module counted
+	 under one of the other players can be passed over the same way, before its Object is read: around a unit
+	 most of what stands in its cells is its own side's. A module counted under nobody is looked at as before. */
+inline Bool partitionModuleOutside( const PartitionData *mod, PlayerMaskType onlyPlayers )
+{
+	const Int counted = mod->friend_getCountedPlayer();
+	return onlyPlayers != PLAYERMASK_ALL && counted >= 0 && ( playerIndexToMask( counted ) & onlyPlayers ) == 0;
+}
+
 Int PartitionManager::getQueryCountThisFrame( void ) { return thePartitionQueries; }
 Int PartitionManager::getGatherCountThisFrame( void ) { return thePartitionGathers; }
 Int PartitionManager::getQueryObjectCountThisFrame( void ) { return thePartitionQueryObjects; }
@@ -307,7 +317,7 @@ inline Bool filtersAllow(PartitionFilter **filters, Object *objOther)
 			return false;
 		}
 	}
-	// assume true if no filters rejected it	
+	// assume true if no filters rejected it
 	return true;
 #endif
 }
@@ -3222,13 +3232,7 @@ Int PartitionManager::centerCellOf( const Object *obj ) const
 {
 	if (obj->getGeometryInfo().getBoundingCircleRadius() > CENTER_GRID_MAX_RADIUS)
 		return PartitionData::CENTER_BIG;
-	// clamped onto the grid; a NaN fails both tests and lands in the first column or row
-	const Coord3D *pos = obj->getPosition();
-	const Real fx = (pos->x - m_worldExtents.lo.x) * m_cellSizeInv;
-	const Real fy = (pos->y - m_worldExtents.lo.y) * m_cellSizeInv;
-	const Int x = fx >= 0.0f ? (fx < (Real)m_cellCountX ? (Int)fx : m_cellCountX - 1) : 0;
-	const Int y = fy >= 0.0f ? (fy < (Real)m_cellCountY ? (Int)fy : m_cellCountY - 1) : 0;
-	return y * m_cellCountX + x;
+	return centerIndexOf( obj->getPosition() );
 }
 
 //------------------------------------------------------------------------------
@@ -3760,7 +3764,7 @@ namespace
 				PartitionData *mod = coi->getModule();
 				Object *obj = mod->getObject();
 				++visited;
-				if (obj == job.self || obj == NULL)
+				if (obj == job.self || obj == NULL || partitionModuleOutside( mod, job.onlyPlayers ))
 					continue;
 
 				Real distSqr;
@@ -3826,7 +3830,7 @@ namespace
 				continue;
 
 			Object *obj = mod->getObject();
-			if (obj != job.self && obj != NULL)
+			if (obj != job.self && obj != NULL && !partitionModuleOutside( mod, job.onlyPlayers ))
 			{
 				Real distSqr;
 				Coord3D distVec;
@@ -3862,7 +3866,7 @@ namespace
 			PartitionData *mod = coi->getModule();
 			Object *obj = mod->getObject();
 			++visited;
-			if (obj == job.self || obj == NULL)
+			if (obj == job.self || obj == NULL || partitionModuleOutside( mod, job.onlyPlayers ))
 				continue;
 			if (mod->friend_getDoneFlag() == iterFlag)
 				continue;
@@ -3886,7 +3890,7 @@ namespace
 		if (mod == NULL || mod->friend_getCoiInUseCount() == 0)
 			return 0;
 		Object *obj = mod->getObject();
-		if (obj == job.self || obj == NULL)
+		if (obj == job.self || obj == NULL || partitionModuleOutside( mod, job.onlyPlayers ))
 			return 1;
 
 		Real distSqr;
@@ -4253,6 +4257,8 @@ Object *PartitionManager::getClosestObjects(
 			++thePartitionQueryObjects;
 			if (thisObj == obj || thisObj == NULL)
 				continue;
+			if (partitionModuleOutside(thisMod, onlyPlayers))
+				continue;
 
 			Real thisDistSqr;
 			Coord3D distVec;
@@ -4337,6 +4343,8 @@ Object *PartitionManager::getClosestObjects(
 
 				// never compare against ourself.
 				if (thisObj == obj || thisObj == NULL)
+					continue;
+				if (partitionModuleOutside(thisMod, onlyPlayers))
 					continue;
 
 				// since an object can exist in multiple COIs, we use this to avoid processing
@@ -4572,6 +4580,8 @@ Bool PartitionManager::visitNearestFirst( const Object *obj, Real maxDist, Parti
 			Object *other = mod->getObject();
 			++visited;
 			if (other == obj || other == NULL)
+				continue;
+			if (partitionModuleOutside( mod, onlyPlayers ))
 				continue;
 			Real distSqr;
 			Coord3D distVec;

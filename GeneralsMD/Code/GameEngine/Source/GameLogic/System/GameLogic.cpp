@@ -6696,13 +6696,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 16: xfer m_techRespawnDelay and m_pendingTechBuildings
 	* 17: xfer m_supplyPileLimit
 	* 18: xfer the logic random stream and the pathfinder's request queue and flow maps
+	* 19: xfer the AI groups and the AI's group and formation counters (AI::xferGroups)
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 18;
+	const XferVersion currentVersion = 19;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -7179,6 +7180,9 @@ void GameLogic::xfer( Xfer *xfer )
       m_loadedSleepyPending = TRUE;
     }
   }
+
+  if ( version >= 19 )
+    TheAI->xferGroups( xfer );
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
@@ -7211,6 +7215,8 @@ void GameLogic::loadPostProcess( void )
 	for( obj = getFirstObject(); obj; obj = obj->getNextObject() )
 		if( obj->getID() >= m_nextObjID )
 			m_nextObjID = (ObjectID)((UnsignedInt)obj->getID() + 1);
+
+	TheAI->loadPostProcessGroups();
 
 	// blow away the sleepy update and normal update module lists
 	clearSleepyUpdates();

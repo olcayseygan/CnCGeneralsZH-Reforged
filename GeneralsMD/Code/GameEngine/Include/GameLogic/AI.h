@@ -1249,6 +1249,12 @@ public:
 	static void parseScience( INI* ini, void *instance, void *store, const void *userData );					///< Parse the image part of the INI file
 
 	inline UnsignedInt getNextGroupID( void ) { return ++m_nextGroupID; }
+	/** The groups, in list order with their IDs and members, and the counters that hand out group and
+		formation IDs. EA saved none of it: a loaded game had no groups, and the next group made took
+		ID 1, so its units moved apart and the CRC, which walks the group list, parted from the game
+		that was saved on the first frame. GameLogic::xfer writes it after the objects. */
+	void xferGroups( Xfer *xfer );
+	void loadPostProcessGroups( void );	///< the loaded groups take their members back, once every object is in
 
 	/// One building placement per logic frame across every computer player: FALSE when one already went down on this frame.
 	Bool claimBuildingPlacement( UnsignedInt frame );
@@ -1268,6 +1274,7 @@ protected:
 	UnsignedInt m_sweptGroupID;						///< every group up to this ID has been through sweepEmptyGroups
 	FormationID m_nextFormationID;
 	UnsignedInt m_lastBuildingPlacementFrame;	///< cleared by reset: a static here outlived the match and deferred the next match's first placement on one machine only
+	std::vector< std::pair< AIGroup *, std::vector< ObjectID > > > m_loadedGroupMembers;	///< xferGroups' members, until loadPostProcessGroups
 };
 
 extern AI *TheAI;												///< the Artificial Intelligence singleton

@@ -419,6 +419,7 @@ void AI::reset( void )
 	}
 	m_nextGroupID = 0;
 	m_sweptGroupID = 0;
+	m_loadedGroupMembers.clear();	// a load that threw after xferGroups left groups the loop above freed
 	theVariationParents.clear();
 	theArmourOfTemplate.clear();
 
@@ -3280,6 +3281,89 @@ void AI::xfer( Xfer *xfer )
 	xfer->xferVersion( &version, currentVersion );
 
 }  // end xfer
+
+//-----------------------------------------------------------------------------
+void AI::xferGroups( Xfer *xfer )
+{
+	xfer->xferUnsignedInt( &m_nextGroupID );
+	xfer->xferUnsignedInt( &m_sweptGroupID );
+	xfer->xferUser( &m_nextFormationID, sizeof( m_nextFormationID ) );
+	xfer->xferUnsignedInt( &m_lastBuildingPlacementFrame );
+
+	UnsignedInt count = 0;
+	for( std::list<AIGroup *>::iterator it = m_groupList.begin(); it != m_groupList.end(); ++it )
+		if( *it )
+			++count;
+	xfer->xferUnsignedInt( &count );
+	if( xfer->getXferMode() == XFER_LOAD )
+	{
+		// a load starts from a reset engine; nothing made a group before the objects came in
+		DEBUG_ASSERTCRASH( m_groupList.empty(), ( "xferGroups: %d groups before the load", (Int)m_groupList.size() ) );
+		m_loadedGroupMembers.clear();
+	}
+
+	std::list<AIGroup *>::iterator it = m_groupList.begin();
+	for( UnsignedInt i = 0; i < count; ++i )
+	{
+		AIGroup *group = NULL;
+		std::vector< ObjectID > members;
+		if( xfer->getXferMode() != XFER_LOAD )
+		{
+			while( *it == NULL )
+				++it;
+			group = *it++;
+			for( ListObjectPtrIt m = group->m_memberList.begin(); m != group->m_memberList.end(); ++m )
+				members.push_back( *m ? (*m)->getID() : INVALID_ID );
+		}
+		else
+		{
+			const UnsignedInt nextID = m_nextGroupID;
+			group = createGroup();		// its constructor takes an ID; the saved one replaces it below
+			m_nextGroupID = nextID;
+		}
+		xfer->xferUnsignedInt( &group->m_id );
+		xfer->xferReal( &group->m_speed );
+		xfer->xferBool( &group->m_dirty );
+		UnsignedInt memberCount = (UnsignedInt)members.size();
+		xfer->xferUnsignedInt( &memberCount );
+		members.resize( memberCount );
+		for( UnsignedInt m = 0; m < memberCount; ++m )
+			xfer->xferObjectID( &members[ m ] );
+		Bool hasGroundPath = group->m_groundPath != NULL;
+		xfer->xferBool( &hasGroundPath );
+		if( hasGroundPath )
+		{
+			if( group->m_groundPath == NULL )
+				group->m_groundPath = newInstance( Path );
+			xfer->xferSnapshot( group->m_groundPath );
+		}
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_loadedGroupMembers.push_back( std::make_pair( group, members ) );
+	}
+}
+
+//-----------------------------------------------------------------------------
+void AI::loadPostProcessGroups( void )
+{
+	for( size_t i = 0; i < m_loadedGroupMembers.size(); ++i )
+	{
+		AIGroup *group = m_loadedGroupMembers[ i ].first;
+		const std::vector< ObjectID > &members = m_loadedGroupMembers[ i ].second;
+		for( size_t m = 0; m < members.size(); ++m )
+		{
+			Object *obj = TheGameLogic->findObjectByID( members[ m ] );
+			if( obj == NULL )
+				continue;
+			group->m_memberList.push_back( obj );
+			++group->m_memberListSize;
+			obj->enterGroup( group );
+		}
+		// every member gone (an object the load skipped): the game that was saved destroyed it on remove()
+		if( !members.empty() && group->isEmpty() )
+			destroyGroup( group );
+	}
+	m_loadedGroupMembers.clear();
+}
 
 //-----------------------------------------------------------------------------
 void AI::loadPostProcess( void )

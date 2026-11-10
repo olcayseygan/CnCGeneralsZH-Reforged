@@ -13547,18 +13547,18 @@ void Pathfinder::crc( Xfer *xfer )
 	xfer->xferUser(&m_ignoreObstacleID, sizeof(ObjectID));
 	CRCDEBUG_LOG(("m_ignoreObstacleID: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
 
-	xfer->xferUser(m_computerQueue.ids, sizeof(ObjectID)*PATHFIND_QUEUE_LEN);
-	CRCDEBUG_LOG(("m_computerQueue.ids: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
-	xfer->xferInt(&m_computerQueue.head);
-	CRCDEBUG_LOG(("m_computerQueue.head: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
-	xfer->xferInt(&m_computerQueue.tail);
-	CRCDEBUG_LOG(("m_computerQueue.tail: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
-	xfer->xferUser(m_humanQueue.ids, sizeof(ObjectID)*PATHFIND_QUEUE_LEN);
-	CRCDEBUG_LOG(("m_humanQueue.ids: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
-	xfer->xferInt(&m_humanQueue.head);
-	CRCDEBUG_LOG(("m_humanQueue.head: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
-	xfer->xferInt(&m_humanQueue.tail);
-	CRCDEBUG_LOG(("m_humanQueue.tail: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
+	/* Who waits, in order, and not where in the ring they sit: a load lays the saved queue out from
+		 slot 0 (xferFlowState), so the slots of the game that was saved and the loaded one differ while
+		 every answer they give is the same. */
+	PathRequestRing *rings[ 2 ] = { &m_computerQueue, &m_humanQueue };
+	for( Int r = 0; r < 2; ++r )
+	{
+		Int depth = rings[ r ]->depth();
+		xfer->xferInt( &depth );
+		for( Int slot = rings[ r ]->head; slot != rings[ r ]->tail; slot = ( slot + 1 ) % PATHFIND_QUEUE_LEN )
+			xfer->xferUser( &rings[ r ]->ids[ slot ], sizeof( ObjectID ) );
+	}
+	CRCDEBUG_LOG(("path queues: %8.8X\n", ((XferCRC *)xfer)->getCRC()));
 
 	xfer->xferInt(&m_numWallPieces);
 	CRCDEBUG_LOG(("m_numWallPieces: %8.8X\n", ((XferCRC *)xfer)->getCRC()));

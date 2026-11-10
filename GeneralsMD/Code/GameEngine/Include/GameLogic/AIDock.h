@@ -174,14 +174,22 @@ public:
 	virtual StateReturnType update( void );
 
 	void setNextDockActionFrame();//This puts a delay between callings of Action to tweak the speed of docking.
-	UnsignedInt m_nextDockActionFrame;// In the unlikely event of saving a game in the middle of docking, you may
-	// complete a Action a few frames sooner than you would have: It does not need to be saved.
+	UnsignedInt m_nextDockActionFrame;	///< saved since version 2: a truck loaded mid-dock unloaded on the first frame and its money came early
 	Object* findMyDrone();
 
 protected:
-	// snapshot interface STUBBED.
 	virtual void crc( Xfer *xfer ){};
-	virtual void xfer( Xfer *xfer ){XferVersion cv = 1;	XferVersion v = cv; xfer->xferVersion( &v, cv );}
+	virtual void xfer( Xfer *xfer )
+	{
+		XferVersion cv = 2;
+		XferVersion v = cv;
+		xfer->xferVersion( &v, cv );
+		if( v >= 2 )
+		{
+			xfer->xferUnsignedInt( &m_nextDockActionFrame );
+			xfer->xferObjectID( &m_droneID );
+		}
+	}
 	virtual void loadPostProcess(){};
 
 private:

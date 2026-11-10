@@ -800,6 +800,9 @@ void W3DCommandBarBackgroundDraw( GameWindow *window, WinInstanceData *instData 
 		if( image )
 			TheDisplay->drawImage( image, rect.lo.x + offset.x, rect.lo.y + offset.y, rect.hi.x + offset.x, rect.hi.y + offset.y );
 	}
+
+	// a radar grown by Minimap Size gets its steel on the plates too, as drawPainting gives it
+	ControlBarSchemeManager::drawGrownRadarFrame();
 }
 
 

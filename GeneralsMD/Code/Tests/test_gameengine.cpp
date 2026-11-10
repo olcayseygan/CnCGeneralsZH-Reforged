@@ -20663,6 +20663,41 @@ TEST(option_catalog_clamps_and_leaves_an_absent_key_alone)
 	TheWritableGlobalData = saved;
 }
 
+/** Minimap Size is the bar as it always was until a player moves it, and a hand-edited file cannot
+	 shrink the radar under the bar's own size or blow it past twice that, where ControlBar::fitRadarToMap
+	 stops growing it anyway. */
+TEST(minimap_size_defaults_to_the_bar_and_clamps_to_its_range)
+{
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+
+	const OptionDef *size = findOptionDef( "MinimapSize" );
+	CHECK( size != NULL );
+	if( size != NULL )
+	{
+		CHECK_EQ( scratch->m_minimapSize, 100 );
+		CHECK_EQ( size->lo, 100 );
+		CHECK_EQ( size->hi, 200 );
+
+		UserPreferences pref;
+		pref[ AsciiString( "MinimapSize" ) ] = AsciiString( "50" );
+		loadOptionsFromPreferences( pref );
+		CHECK_EQ( scratch->m_minimapSize, 100 );
+
+		pref[ AsciiString( "MinimapSize" ) ] = AsciiString( "900" );
+		loadOptionsFromPreferences( pref );
+		CHECK_EQ( scratch->m_minimapSize, 200 );
+
+		pref[ AsciiString( "MinimapSize" ) ] = AsciiString( "150" );
+		loadOptionsFromPreferences( pref );
+		CHECK_EQ( scratch->m_minimapSize, 150 );
+	}
+
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
+	TheWritableGlobalData = saved;
+}
+
 /** Glow (the Bloom key) is picked as a level and stored as one, and the renderer still reads the
 	 percentage it always read.  The mapping is the whole setting: get the two directions out of step
 	 and the combo box shows one thing while the screen does another, which nothing at build time

@@ -138,6 +138,7 @@ OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
 OPTION_BOOL_ACCESSORS( m_aircraftAltitudeLine )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
+OPTION_INT_ACCESSORS( m_minimapSize )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
@@ -609,6 +610,14 @@ const OptionDef TheOptionCatalog[] =
 	{ "ShowNetBox",								OPT_WND( "CheckNetBox" ), "GUI:NetBox",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_showNetBox, set_m_showNetBox },
+
+	// The radar's size, in percent of what the bar gives it.  It grows up and to the right from the
+	// bar's bottom left corner, the rest of the bar staying as it is, so a map wider than the room
+	// beside it is letterboxed as before.  ControlBar::update refits it when the value moves, so
+	// Accept in a match shows it at once.  100 is the bar as it always was.  On Options > Interface.
+	{ "MinimapSize",							OPT_WND( "SliderMinimapSize" ), "GUI:MinimapSize",
+		OPTION_INT, APPLY_LIVE, 100, 200,
+		get_m_minimapSize, set_m_minimapSize },
 
 	// The row of slots over a building that holds troops is drawn empty too: ten grey boxes over a
 	// Barracks nobody is healing in.  Off, a building wears its slots only while somebody is inside.

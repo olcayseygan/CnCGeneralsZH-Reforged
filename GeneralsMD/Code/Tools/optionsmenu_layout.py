@@ -250,6 +250,8 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxHealthBarColors", None),
     (LABEL,  "LabelMenuTransitionSpeed", "GUI:MenuTransitionSpeed"),
     (SLIDER, "SliderMenuTransitionSpeed", None),
+    (LABEL,  "LabelMinimapSize",       "GUI:MinimapSize"),
+    (SLIDER, "SliderMinimapSize",      None),
     (CHECK,  "CheckTurboModeMissions", "GUI:TurboModeMissions"),
     (CHECK,  "CheckMapLight",          "GUI:MapLight"),
     (CHECK,  "CheckTeamGlow",          "GUI:TeamGlow"),
@@ -286,7 +288,7 @@ READOUTS = [
     "ValueGamma", "ValueTextureResolution", "ValueParticleCap", "ValueAnisotropy",
     "ValueMusicVolume", "ValueSFXVolume", "ValueVoiceVolume", "ValueScrollSpeed",
     "ValueDragTolerance", "ValueAmbientVolume", "ValueZoomSpeed", "ValueMenuTransitionSpeed",
-    "ValueMasterVolume", "ValueGraphicsQuality",
+    "ValueMasterVolume", "ValueGraphicsQuality", "ValueMinimapSize",
 ]
 
 # Lines of small grey text under a control that say what its current choice does, written by
@@ -312,7 +314,7 @@ NOTE_COLOR = ("ENABLED:  164 170 190 255, ENABLEDBORDER:  0 0 0 255, "
 SLIDER_RANGES = [("SliderAnisotropy", 0, 16), ("SliderDragTolerance", 2, 50),
                  ("SliderAmbientVolume", 0, 100), ("SliderZoomSpeed", 25, 300),
                  ("SliderMenuTransitionSpeed", 25, 400), ("SliderMasterVolume", 0, 100),
-                 ("SliderGraphicsQuality", 0, 10)]
+                 ("SliderGraphicsQuality", 0, 10), ("SliderMinimapSize", 100, 200)]
 
 # EA's captions that do not fit the page: two popup headings written in capitals, and a check box
 # caption that ran 20 pixels past the panel's right edge once it stood in a 268 pixel column.
@@ -484,7 +486,8 @@ GROUP_LAYOUT = [
 
     ("PageInterface", [
         ("GUI:OptionsGroupHud", [
-            ("check", "CheckNetBox")]),
+            ("check", "CheckNetBox"),
+            setting("LabelMinimapSize", "SliderMinimapSize", "ValueMinimapSize")]),
         ("GUI:OptionsGroupMenus", [
             setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")]),
         ("GUI:OptionsGroupSpeed", [

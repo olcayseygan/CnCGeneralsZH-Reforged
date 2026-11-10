@@ -56,6 +56,7 @@
 #include "GameClient/GameWindowTransitions.h"
 #include "GameClient/Shell.h"
 #include "Common/NameKeyGenerator.h"
+#include "GameClient/ControlBar.h"
 
 // PUBLIC DATA ////////////////////////////////////////////////////////////////////////////////////
 GameWindowManager *TheWindowManager = NULL;
@@ -79,6 +80,17 @@ UnsignedInt WindowLayoutCurrentVersion = 2;
 // the radar cursor
 //
 static Bool sendMousePosMessages = TRUE;
+
+//-------------------------------------------------------------------------------------------------
+/** A top-level window holds a screen point inside its rectangle, and the command bar also where a
+	* Minimap Size over 100 raised the radar above the bar's top (ControlBar::holdsRaisedRadarPoint). */
+//-------------------------------------------------------------------------------------------------
+static Bool topWindowHolds( const GameWindow *window, const IRegion2D &region, Int x, Int y )
+{
+	if( x >= region.lo.x && x <= region.hi.x && y >= region.lo.y && y <= region.hi.y )
+		return TRUE;
+	return TheControlBar != NULL && TheControlBar->holdsRaisedRadarPoint( window, x, y );
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Process windows waiting to be destroyed */
@@ -1061,10 +1073,7 @@ WinInputReturnCode GameWindowManager::winProcessMouseEvent( GameWindowMessage ms
 
 					if( BitTest( window->m_status, WIN_STATUS_ABOVE ) &&
 							!BitTest( window->m_status, WIN_STATUS_HIDDEN ) &&
-							mousePos->x >= window->m_region.lo.x &&
-							mousePos->x <= window->m_region.hi.x &&
-							mousePos->y >= window->m_region.lo.y &&
-							mousePos->y <= window->m_region.hi.y)
+							topWindowHolds( window, window->m_region, mousePos->x, mousePos->y ))
 					{
 
 						childWindow = window->winPointInAnyChild( mousePos->x, mousePos->y, TRUE, TRUE );
@@ -1097,10 +1106,7 @@ WinInputReturnCode GameWindowManager::winProcessMouseEvent( GameWindowMessage ms
 						if( !BitTest( window->m_status, WIN_STATUS_ABOVE | 
 																						WIN_STATUS_BELOW | 
 																						WIN_STATUS_HIDDEN ) &&
-								mousePos->x >= window->m_region.lo.x &&
-								mousePos->x <= window->m_region.hi.x &&
-								mousePos->y >= window->m_region.lo.y &&
-								mousePos->y <= window->m_region.hi.y)
+								topWindowHolds( window, window->m_region, mousePos->x, mousePos->y ))
 						{
 
 							childWindow = window->winPointInAnyChild( mousePos->x, mousePos->y, TRUE, TRUE );
@@ -1131,10 +1137,7 @@ WinInputReturnCode GameWindowManager::winProcessMouseEvent( GameWindowMessage ms
 
 						if( BitTest( window->m_status, WIN_STATUS_BELOW ) &&
 								!BitTest( window->m_status, WIN_STATUS_HIDDEN ) &&
-								mousePos->x >= window->m_region.lo.x &&
-								mousePos->x <= window->m_region.hi.x &&
-								mousePos->y >= window->m_region.lo.y &&
-								mousePos->y <= window->m_region.hi.y)
+								topWindowHolds( window, window->m_region, mousePos->x, mousePos->y ))
 						{
 
 							childWindow = window->winPointInAnyChild( mousePos->x, mousePos->y, TRUE, TRUE );
@@ -3816,10 +3819,7 @@ GameWindow *GameWindowManager::getWindowUnderCursor( Int x, Int y, Bool ignoreEn
 
 			if( BitTest( window->m_status, WIN_STATUS_ABOVE ) &&
 					!BitTest( window->m_status, WIN_STATUS_HIDDEN ) &&
-					x >= window->m_region.lo.x &&
-					x <= window->m_region.hi.x &&
-					y >= window->m_region.lo.y &&
-					y <= window->m_region.hi.y)
+					topWindowHolds( window, window->m_region, x, y ))
 			{
 				if( BitTest( window->m_status, WIN_STATUS_ENABLED ) || ignoreEnabled )
 				{
@@ -3838,10 +3838,7 @@ GameWindow *GameWindowManager::getWindowUnderCursor( Int x, Int y, Bool ignoreEn
 				if( !BitTest( window->m_status, WIN_STATUS_ABOVE | 
 																				WIN_STATUS_BELOW | 
 																				WIN_STATUS_HIDDEN ) &&
-						x >= window->m_region.lo.x &&
-						x <= window->m_region.hi.x &&
-						y >= window->m_region.lo.y &&
-						y <= window->m_region.hi.y)
+						topWindowHolds( window, window->m_region, x, y ))
 				{
 					if( BitTest( window->m_status, WIN_STATUS_ENABLED )|| ignoreEnabled)
 					{								
@@ -3860,10 +3857,7 @@ GameWindow *GameWindowManager::getWindowUnderCursor( Int x, Int y, Bool ignoreEn
 			{
 				if( BitTest( window->m_status, WIN_STATUS_BELOW ) &&
 						!BitTest( window->m_status, WIN_STATUS_HIDDEN ) &&
-						x >= window->m_region.lo.x &&
-						x <= window->m_region.hi.x &&
-						y >= window->m_region.lo.y &&
-						y <= window->m_region.hi.y)
+						topWindowHolds( window, window->m_region, x, y ))
 				{
 					if( BitTest( window->m_status, WIN_STATUS_ENABLED )|| ignoreEnabled)
 					{

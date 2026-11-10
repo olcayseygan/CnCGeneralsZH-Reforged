@@ -354,6 +354,8 @@ public:
 	/// the frame round a radar standing at 'radar' on screen: the corners' sizes, at the screen's
 	/// height over 1080, are its thickness on each side
 	static void radarFrameRect( const Image *const *frame, const IRegion2D& radar, IRegion2D *outer );
+	/// the steel round a radar Minimap Size grew out of a scheme with no radar frame; painted or plate-drawn bar alike
+	static void drawGrownRadarFrame( void );
 	/// the general's powers tray's pieces (ControlBarScheme::TRAY_*) of the scheme on screen, or NULL
 	/// without a cell; the tray then keeps the shipped column
 	const Image *const *getPowerTray( void ) const;

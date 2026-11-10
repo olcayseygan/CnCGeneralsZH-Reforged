@@ -483,6 +483,7 @@ public:
 	Int m_textureFilterMode;			///< 0 bilinear, 1 trilinear, 2 anisotropic
 	Int m_anisotropyLevel;				///< samples anisotropic filtering may take; 0 = whatever the card offers
 	Bool m_showNetBox;					///< the player's own switch for the top right info strip (InGameUI::drawHudOverlay)
+	Int m_minimapSize;					///< percent of its own size the radar is drawn at, growing up from the bar's corner (ControlBar::fitRadarToMap); 100 = as the bar has it
 	Bool m_showEmptyBuildingPips;		///< the row of empty slots over a building nobody is in
 	Bool m_workersReturnToSupply;		///< a worker that finishes a build job goes back to the dock it left
 	Bool m_archiveReplays;					///< keep a timestamped copy of every replay, instead of only the last one

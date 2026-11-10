@@ -15573,6 +15573,14 @@ TOOLTIP:NetBox
 "Sağ üst köşedeki kutu: maç saati, kare hızları ve bağlantı. Kapalıyken süper silah sayaçları köşeye çıkar."
 END
 
+GUI:MinimapSize
+"Mini Harita Boyutu"
+END
+
+TOOLTIP:MinimapSize
+"Mini haritanın ne kadar büyük çizileceği. 100'ün üstünde sol alt köşeden savaş alanının üstüne doğru büyür; komuta çubuğunun geri kalanı yerinde kalır."
+END
+
 GUI:OptionsGroupHud
 "Göstergeler"
 END

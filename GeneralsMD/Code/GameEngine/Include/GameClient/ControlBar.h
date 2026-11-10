@@ -1070,6 +1070,16 @@ public:
 		* went nowhere.  GameWindow::winPointInChild asks, so clicking and unit picking agree. */
 	Bool letsClickThrough( GameWindow *window, Int x, Int y );
 
+	/** TRUE when this top-level window is the bar's frame and the point is on the radar's frame where
+		* a Minimap Size over 100 has raised it above the bar's top.  The window manager finds a window
+		* under the mouse by its top-level window's rectangle first, which ends at the bar's top. */
+	Bool holdsRaisedRadarPoint( const GameWindow *window, Int x, Int y );
+
+	/** A side's radar grown by Minimap Size has no frame in the painting; this is the rectangle the
+		* scheme draws steel round (outer) and the radar's window (inner), and whether EA's under-attack
+		* lamp is lit.  FALSE while the radar stands in its painted box. */
+	Bool getGrownRadarFrame( IRegion2D *outer, IRegion2D *inner, Bool *lit );
+
 	/// the radar's under-attack lamp, EA's
 	void triggerRadarAttackGlow( void );
 
@@ -1204,6 +1214,13 @@ protected:
 
 	void fitRadarToMap( Bool fromLayout );				///< the radar window, its frame and its blocker take the map's shape; see layoutPanels
 	Real m_radarFitWidth, m_radarFitHeight;				///< the map extent fitRadarToMap last fitted to
+	Int m_radarFitSize;														///< the Minimap Size percent fitRadarToMap last fitted to
+	Bool m_radarRaised;														///< the radar's frame stands above the bar's top; see holdsRaisedRadarPoint
+	IRegion2D m_radarRaisedRect;									///< the radar's frame against the bar's frame (setRaisedRadarRect)
+	Int m_radarGrownFrame;												///< pixels of steel getGrownRadarFrame draws round a grown radar
+	void setRaisedRadarRect( const IRegion2D &frame );	///< see m_radarRaisedRect; frame in screen pixels
+	void fitSquareRadar( GameWindow *const *windows, const IRegion2D *box );	///< Minimap Size for a scheme with no radar frame
+	Bool m_radarSquareGrown;											///< fitSquareRadar moved the radar out of its box since the layout
 	/// the observer's player column (its list, the watched player's panel, Options and Chat) stands
 	/// against the frame's right edge, so it is fitted with the radar
 	enum { RADAR_FIT_RADAR, RADAR_FIT_BLOCK, RADAR_FIT_LAMP, RADAR_FIT_LIST, RADAR_FIT_INFO, RADAR_FIT_OPTIONS,

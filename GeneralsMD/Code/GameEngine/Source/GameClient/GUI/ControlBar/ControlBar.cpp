@@ -1776,6 +1776,11 @@ ControlBar::ControlBar( void )
 	m_trayLaidOutFor = NULL;
 	m_trayFramePlaced = FALSE;
 	m_radarFitWidth = m_radarFitHeight = 0.0f;
+	m_radarFitSize = 100;
+	m_radarRaised = FALSE;
+	m_radarRaisedRect.lo.x = m_radarRaisedRect.lo.y = m_radarRaisedRect.hi.x = m_radarRaisedRect.hi.y = 0;
+	m_radarGrownFrame = 0;
+	m_radarSquareGrown = FALSE;
 	m_radarColumnShift = 0;
 	for( Int fit = 0; fit < RADAR_FIT_COUNT; fit++ )
 		m_radarFitBox[ fit ].lo.x = m_radarFitBox[ fit ].lo.y = m_radarFitBox[ fit ].hi.x = m_radarFitBox[ fit ].hi.y = 0;
@@ -2305,6 +2310,25 @@ void ControlBar::triggerRadarAttackGlow( void )
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool ControlBar::holdsRaisedRadarPoint( const GameWindow *window, Int x, Int y )
+{
+	if( !m_radarRaised || window == NULL || window != m_contextParent[ CP_MASTER ] )
+		return FALSE;
+
+	// no radar, or a hidden one, eats input on the bar (LeftHUDInput); above the bar the world keeps it
+	const Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	if( TheRadar == NULL || player == NULL
+			|| ( !TheRadar->isRadarForced() && ( TheRadar->isRadarHidden() || !player->hasRadar() ) ) )
+		return FALSE;
+
+	// the radar's frame, kept against the bar's frame so it goes with the bar when it slides away
+	ICoord2D origin;
+	m_contextParent[ CP_MASTER ]->winGetScreenPosition( &origin.x, &origin.y );
+	return x >= origin.x + m_radarRaisedRect.lo.x && x < origin.x + m_radarRaisedRect.hi.x
+		&& y >= origin.y + m_radarRaisedRect.lo.y && y < origin.y + m_radarRaisedRect.hi.y;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool ControlBar::letsClickThrough( GameWindow *window, Int x, Int y )
 {
 	GameWindow *frame = window->winGetParent();
@@ -2732,10 +2756,13 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 	const Region3D *extent = TheRadar->getMapExtent();
 	m_radarFitWidth = extent->width();
 	m_radarFitHeight = extent->height();
+	m_radarFitSize = TheGlobalData->m_minimapSize;
+	m_radarRaised = FALSE;
 
-	// between maps there is no extent; a scheme without a frame keeps the square well
-	const Image *const *frame = m_controlBarSchemeManager ? m_controlBarSchemeManager->getRadarFrame() : NULL;
-	if( frame == NULL || m_radarFitWidth <= 0.0f || m_radarFitHeight <= 0.0f )
+	// between maps there is no extent
+	if( fromLayout )
+		m_radarSquareGrown = FALSE;
+	if( m_radarFitWidth <= 0.0f || m_radarFitHeight <= 0.0f )
 		return;
 
 	IRegion2D box[ RADAR_FIT_COUNT ];
@@ -2748,10 +2775,19 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 		box[ i ].hi.y += origin.y;
 	}
 
+	// a scheme without a frame keeps the square well, Minimap Size aside
+	const Image *const *frame = m_controlBarSchemeManager ? m_controlBarSchemeManager->getRadarFrame() : NULL;
+	if( frame == NULL )
+	{
+		fitSquareRadar( windows, box );
+		return;
+	}
+
 	//
 	// The radar's height never changes with the map: the frame stands on the scheme's radar block
 	// (BlockRadar, or ControlBar.wnd's blocker where the scheme names none, the observer's 740 that
-	// its column starts at), and never above the square.  The map's shape only sets the width, which
+	// its column starts at), and never above the square unless Minimap Size raises it over the
+	// battlefield (holdsRaisedRadarPoint keeps it clickable there).  The map's shape only sets the width, which
 	// grows right from the square's left edge.  It stops where what rides on its right meets the next
 	// piece of the bar: a side's frame at the command plate's blocker, the observer's player panel at
 	// the selection's.  A map wider than that room is letterboxed by Radar::findDrawPositions inside
@@ -2771,7 +2807,12 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 	fit.lo.x = square.lo.x;
 	fit.lo.y = MAX( square.lo.y, box[ RADAR_FIT_BLOCK ].lo.y + square.lo.y - squareOuter.lo.y );
 	fit.hi.y = square.hi.y;
-	const Int insideHeight = fit.hi.y - fit.lo.y - 2 * RADAR_BEZEL;
+
+	// Minimap Size grows the inside from that height, up from the corner and over the battlefield;
+	// at 100 it is the height above to the pixel
+	const Int sizePercent = MAX( 100, MIN( m_radarFitSize, 200 ) );
+	const Int insideHeight = REAL_TO_INT( ( fit.hi.y - fit.lo.y - 2 * RADAR_BEZEL ) * sizePercent / 100.0f + 0.5f );
+	fit.lo.y = fit.hi.y - insideHeight - 2 * RADAR_BEZEL;
 
 	Int room = 0;
 	GameWindow *next = TheWindowManager->winGetWindowFromId( NULL, observer ? upgradesID : productionID );
@@ -2796,6 +2837,7 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 	IRegion2D outer;
 	ControlBarSchemeManager::radarFrameRect( frame, fit, &outer );
 	placeWindowAt( windows[ RADAR_FIT_BLOCK ], outer );
+	setRaisedRadarRect( outer );
 
 	IRegion2D lamp = box[ RADAR_FIT_LAMP ];
 	const Int dx = fit.hi.x - square.hi.x, dy = fit.lo.y - square.lo.y;
@@ -2822,6 +2864,138 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 		windows[ i ]->winGetScreenPosition( &at.x, &at.y );
 		shiftWindowTree( windows[ i ], box[ i ].lo.x + m_radarColumnShift - at.x );
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** fitRadarToMap for a scheme with no radar frame, every side's: the radar stands in the painting's
+	* square box and letterboxes the map.  Minimap Size over 100 grows the window up and right from the
+	* box's bottom left corner, over the battlefield, the width stopping at the production plate as the
+	* framed radar's does; the blocker and the under-attack lamp go with it.  Back at 100 a grown radar
+	* returns to the box, and one never grown is left where the layout put it, to the pixel.
+	* 'box' is m_radarFitBox in screen coordinates. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *box )
+{
+	const Int sizePercent = MAX( 100, MIN( m_radarFitSize, 200 ) );
+	if( sizePercent == 100 )
+	{
+		if( m_radarSquareGrown )
+		{
+			placeWindowAt( windows[ RADAR_FIT_RADAR ], box[ RADAR_FIT_RADAR ] );
+			placeWindowAt( windows[ RADAR_FIT_BLOCK ], box[ RADAR_FIT_BLOCK ] );
+			placeWindowAt( windows[ RADAR_FIT_LAMP ], box[ RADAR_FIT_LAMP ] );
+			m_radarSquareGrown = FALSE;
+		}
+		return;
+	}
+
+	const IRegion2D &square = box[ RADAR_FIT_RADAR ];
+	const IRegion2D &block = box[ RADAR_FIT_BLOCK ];
+	const Int displayHeight = TheDisplay ? TheDisplay->getHeight() : square.hi.y;
+	const Int displayWidthLimit = TheDisplay ? TheDisplay->getWidth() : 1 << 20;
+
+	// the steel frame drawGrownRadarFrame paints round the picture, in the bar's own units
+	const Int edge = MAX( 3, REAL_TO_INT( ControlBarHudScale() * 8.0f + 0.5f ) );
+	m_radarGrownFrame = edge;
+
+	// the picture's bottom left corner stays on the box's, far enough in that the frame stays on screen
+	enum { RADAR_BEZEL = 1 };	// W3DLeftHUDDraw paints the radar a pixel inside the window
+	IRegion2D fit;
+	fit.lo.x = MAX( square.lo.x, edge );
+	fit.hi.y = MIN( square.hi.y, displayHeight - edge );
+
+	// The window takes the map's own shape, so no black bands: the height grows by the percent, the
+	// width follows the map, and a map too wide for the room before the production plate is cut
+	// down in height instead of letterboxed.
+	const Real aspect = m_radarFitWidth / m_radarFitHeight;
+	Int insideHeight = REAL_TO_INT( ( square.hi.y - square.lo.y - 2 * RADAR_BEZEL ) * sizePercent / 100.0f + 0.5f );
+	// The frame and the blocker stop a pixel short of the production plate's blocker, so a press on
+	// the plate's left edge stays a build button's.  With no plate the box's own width is the limit.
+	Int widthCap = MAX( square.hi.x, block.hi.x ) - fit.lo.x - 2 * RADAR_BEZEL;
+	Int plateX = displayWidthLimit;
+	static NameKeyType productionID = NAMEKEY( "ControlBar.wnd:ControlBarProBlockInputProduction" );
+	GameWindow *next = TheWindowManager->winGetWindowFromId( NULL, productionID );
+	if( next != NULL )
+	{
+		ICoord2D at;
+		next->winGetScreenPosition( &at.x, &at.y );
+		plateX = at.x;
+		widthCap = at.x - 1 - edge - fit.lo.x - 2 * RADAR_BEZEL;
+	}
+	const Int insideWidth = MAX( 1, MIN( REAL_TO_INT( insideHeight * aspect + 0.5f ), widthCap ) );
+	insideHeight = MAX( 1, MIN( insideHeight, REAL_TO_INT( insideWidth / aspect + 0.5f ) ) );
+	fit.hi.x = fit.lo.x + insideWidth + 2 * RADAR_BEZEL;
+	fit.lo.y = fit.hi.y - insideHeight - 2 * RADAR_BEZEL;
+	placeWindowAt( windows[ RADAR_FIT_RADAR ], fit );
+
+	IRegion2D frame;
+	frame.lo.x = fit.lo.x - edge;
+	frame.lo.y = fit.lo.y - edge;
+	frame.hi.x = fit.hi.x + edge;
+	frame.hi.y = MIN( fit.hi.y + edge, displayHeight );
+
+	// the blocker keeps the box it had in the bar and takes the frame as well
+	IRegion2D blocker;
+	blocker.lo.x = MIN( block.lo.x, frame.lo.x );
+	blocker.lo.y = MIN( block.lo.y, frame.lo.y );
+	blocker.hi.x = MIN( MAX( block.hi.x, frame.hi.x ), plateX - 1 );
+	blocker.hi.y = MAX( block.hi.y, frame.hi.y );
+	placeWindowAt( windows[ RADAR_FIT_BLOCK ], blocker );
+
+	// EA's lamp stands on the frame's top right corner; the frame itself flashes with it
+	IRegion2D lamp = box[ RADAR_FIT_LAMP ];
+	const Int lampWidth = lamp.hi.x - lamp.lo.x, lampHeight = lamp.hi.y - lamp.lo.y;
+	lamp.hi.x = frame.hi.x;
+	lamp.lo.x = lamp.hi.x - lampWidth;
+	lamp.lo.y = frame.lo.y;
+	lamp.hi.y = lamp.lo.y + lampHeight;
+	placeWindowAt( windows[ RADAR_FIT_LAMP ], lamp );
+
+	m_radarSquareGrown = TRUE;
+	setRaisedRadarRect( frame );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The radar's frame, screen coordinates, kept against the bar's frame so it slides with the bar.
+	* Raised when it reaches above the bar's top; holdsRaisedRadarPoint tests a click against it. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::setRaisedRadarRect( const IRegion2D &frame )
+{
+	GameWindow *parent = m_contextParent[ CP_MASTER ];
+	if( parent == NULL )
+		return;
+	ICoord2D origin;
+	parent->winGetScreenPosition( &origin.x, &origin.y );
+	m_radarRaisedRect = frame;
+	m_radarRaisedRect.lo.x -= origin.x;
+	m_radarRaisedRect.hi.x -= origin.x;
+	m_radarRaisedRect.lo.y -= origin.y;
+	m_radarRaisedRect.hi.y -= origin.y;
+	m_radarRaised = m_radarRaisedRect.lo.y < 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::getGrownRadarFrame( IRegion2D *outer, IRegion2D *inner, Bool *lit )
+{
+	// between maps (the shell) there is no extent and no radar to frame, whatever was grown last
+	if( !m_radarSquareGrown || TheRadar == NULL || TheRadar->getMapExtent()->width() <= 0.0f )
+		return FALSE;
+	static NameKeyType radarID = NAMEKEY( "ControlBar.wnd:LeftHUD" );
+	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarID );
+	if( radar == NULL || radar->winIsHidden() )
+		return FALSE;
+	radar->winGetScreenPosition( &inner->lo.x, &inner->lo.y );
+	radar->winGetSize( &inner->hi.x, &inner->hi.y );
+	inner->hi.x += inner->lo.x;
+	inner->hi.y += inner->lo.y;
+	outer->lo.x = inner->lo.x - m_radarGrownFrame;
+	outer->lo.y = inner->lo.y - m_radarGrownFrame;
+	outer->hi.x = inner->hi.x + m_radarGrownFrame;
+	outer->hi.y = MIN( inner->hi.y + m_radarGrownFrame, TheDisplay ? TheDisplay->getHeight() : inner->hi.y + m_radarGrownFrame );
+	// winEnable(FALSE) is EA's lit lamp (triggerRadarAttackGlow)
+	*lit = m_radarAttackGlowWindow != NULL && m_remainingRadarAttackGlowFrames > 0
+		&& !BitTest( m_radarAttackGlowWindow->winGetStatus(), WIN_STATUS_ENABLED );
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2853,6 +3027,10 @@ void ControlBar::init( void )
 void ControlBar::shutdownWindows( void )
 {
 	Int i;
+
+	// the next layout's fitRadarToMap places the radar again
+	m_radarRaised = FALSE;
+	m_radarSquareGrown = FALSE;
 
 	if( m_scienceLayout )
 	{
@@ -3320,8 +3498,10 @@ void ControlBar::update( void )
 	}
 
 	// the scheme lays the bar out before the map is loaded, so the radar takes the map's shape here
+	// and its size here when Minimap Size moved
 	const Region3D *radarExtent = TheRadar->getMapExtent();
-	if( radarExtent->width() != m_radarFitWidth || radarExtent->height() != m_radarFitHeight )
+	if( radarExtent->width() != m_radarFitWidth || radarExtent->height() != m_radarFitHeight
+			|| TheGlobalData->m_minimapSize != m_radarFitSize )
 		fitRadarToMap( FALSE );
 
 	if(m_controlBarSchemeManager)

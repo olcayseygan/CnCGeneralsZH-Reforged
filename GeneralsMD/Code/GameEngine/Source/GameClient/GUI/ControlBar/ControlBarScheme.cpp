@@ -1415,6 +1415,66 @@ static void drawRadarFrame( const Image *const *frame )
 }
 
 //-----------------------------------------------------------------------------
+/** A filled band, skipped when empty */
+//-----------------------------------------------------------------------------
+static void fillBand( Int x0, Int y0, Int x1, Int y1, Color color )
+{
+	if( x1 > x0 && y1 > y0 )
+		TheDisplay->drawFillRect( x0, y0, x1 - x0, y1 - y0, color );
+}
+
+//-----------------------------------------------------------------------------
+/** The steel round a side's radar that Minimap Size has grown out of the painting's box, drawn in
+	* code rather than art so every side gets it: a dark outer edge, a steel face lit from the top
+	* left and shaded to the bottom right, and a dark lip against the picture.  It flashes red with
+	* EA's under-attack lamp, whose own window is small beside a frame this size.  Drawn after the
+	* painting and before the windows, as the observer's nine-piece frame is. */
+//-----------------------------------------------------------------------------
+void ControlBarSchemeManager::drawGrownRadarFrame( void )
+{
+	IRegion2D o, i;
+	Bool lit = FALSE;
+	if( TheControlBar == NULL || !TheControlBar->getGrownRadarFrame( &o, &i, &lit ) )
+		return;
+
+	const Color dark = GameMakeColor( 10, 12, 14, 255 );
+	const Color face = lit ? GameMakeColor( 150, 34, 26, 255 ) : GameMakeColor( 62, 68, 74, 255 );
+	const Color light = lit ? GameMakeColor( 230, 80, 60, 255 ) : GameMakeColor( 132, 140, 148, 255 );
+	const Color shade = lit ? GameMakeColor( 90, 18, 14, 255 ) : GameMakeColor( 34, 38, 42, 255 );
+
+	// dark glass under the picture, which is all that shows while the player has no radar
+	fillBand( i.lo.x, i.lo.y, i.hi.x, i.hi.y, GameMakeColor( 6, 8, 10, 255 ) );
+
+	// the face, four bands round the picture
+	fillBand( o.lo.x, o.lo.y, o.hi.x, i.lo.y, face );
+	fillBand( o.lo.x, i.hi.y, o.hi.x, o.hi.y, face );
+	fillBand( o.lo.x, i.lo.y, i.lo.x, i.hi.y, face );
+	fillBand( i.hi.x, i.lo.y, o.hi.x, i.hi.y, face );
+
+	// lit along the top and left of the outside, shaded along the bottom and right
+	fillBand( o.lo.x + 1, o.lo.y + 1, o.hi.x - 1, o.lo.y + 2, light );
+	fillBand( o.lo.x + 1, o.lo.y + 1, o.lo.x + 2, o.hi.y - 1, light );
+	fillBand( o.lo.x + 1, o.hi.y - 2, o.hi.x - 1, o.hi.y - 1, shade );
+	fillBand( o.hi.x - 2, o.lo.y + 1, o.hi.x - 1, o.hi.y - 1, shade );
+
+	// the inside of the bevel is turned the other way, shaded top and left where it meets the glass
+	fillBand( i.lo.x - 1, i.lo.y - 1, i.hi.x + 1, i.lo.y, shade );
+	fillBand( i.lo.x - 1, i.lo.y - 1, i.lo.x, i.hi.y + 1, shade );
+	fillBand( i.lo.x - 1, i.hi.y, i.hi.x + 1, i.hi.y + 1, light );
+	fillBand( i.hi.x, i.lo.y - 1, i.hi.x + 1, i.hi.y + 1, light );
+
+	// a dark line outside, and a dark lip in the window's own edge, the pixel W3DLeftHUDDraw leaves
+	fillBand( o.lo.x, o.lo.y, o.hi.x, o.lo.y + 1, dark );
+	fillBand( o.lo.x, o.hi.y - 1, o.hi.x, o.hi.y, dark );
+	fillBand( o.lo.x, o.lo.y, o.lo.x + 1, o.hi.y, dark );
+	fillBand( o.hi.x - 1, o.lo.y, o.hi.x, o.hi.y, dark );
+	fillBand( i.lo.x, i.lo.y, i.hi.x, i.lo.y + 1, dark );
+	fillBand( i.lo.x, i.hi.y - 1, i.hi.x, i.hi.y, dark );
+	fillBand( i.lo.x, i.lo.y, i.lo.x + 1, i.hi.y, dark );
+	fillBand( i.hi.x - 1, i.lo.y, i.hi.x, i.hi.y, dark );
+}
+
+//-----------------------------------------------------------------------------
 /** ControlBar Pro's painting, cut at the seams below and each piece drawn where its panel stands
 	* (ControlBarPanelDesignToScreen).  The seams fall in the gaps of every side's art. */
 //-----------------------------------------------------------------------------
@@ -1474,6 +1534,8 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 	const Image *const *frame = getRadarFrame();
 	if( !foreground && frame )
 		drawRadarFrame( frame );
+	else if( !foreground )
+		drawGrownRadarFrame();
 }
 
 //-----------------------------------------------------------------------------

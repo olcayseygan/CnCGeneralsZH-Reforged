@@ -1247,6 +1247,7 @@ GlobalData::GlobalData()
 	m_buildPlacementOpacity = PLACEMENT_SILHOUETTE_OPACITY;
 	m_buildPlacementShadows = TRUE;
 	m_showNetBox = FALSE;
+	m_minimapSize = 100;
 	m_showEmptyBuildingPips = TRUE;
 	m_workersReturnToSupply = TRUE;
 	m_archiveReplays = TRUE;

@@ -871,6 +871,14 @@ TOOLTIP:NetBox
 "The box in the top right corner with the match clock, the frame rates and the connection. Off, the superweapon timers move up into the corner."
 END
 
+GUI:MinimapSize
+"Minimap Size"
+END
+
+TOOLTIP:MinimapSize
+"How big the minimap is drawn. Above 100 it grows up from the bottom left corner over the battlefield; the rest of the command bar stays as it is."
+END
+
 GUI:OptionsGroupHud
 "HUD"
 END

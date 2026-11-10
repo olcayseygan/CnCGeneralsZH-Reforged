@@ -399,6 +399,8 @@ public:
 			m_nameKey = NAMEKEY( m_nameString );
 		return m_nameKey;
 	}
+	/** Whether getNameKey has been asked, so asking again writes nothing (a logic job may only ask then). */
+	Bool hasNameKey() const { return m_nameKey != NAMEKEY_INVALID; }
 
 	/// get the display color (used for the editor)	
 	Color getDisplayColor() const { return m_displayColor; }

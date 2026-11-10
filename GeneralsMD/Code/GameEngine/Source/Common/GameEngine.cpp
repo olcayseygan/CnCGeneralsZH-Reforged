@@ -2810,8 +2810,12 @@ static void updateHeadlessRun( void )
 	Int gathersSplit = 0, gatherTails = 0;
 	Real gatherForkMS = 0.0f, gatherMergeMS = 0.0f;
 	PartitionManager_splitGatherCounts( gathersSplit, gatherTails, gatherForkMS, gatherMergeMS );
-	DEBUG_LOG(("HEADLESS JOBS: %d worker threads, %d allocations from a job, %d range gathers split (%d chunk tails walked serially, %.0f ms forked, %.0f ms merging)\n",
-						 JobSystem::workerCount(), JobSystem::workerAllocationCount(), gathersSplit, gatherTails, gatherForkMS, gatherMergeMS));
+	extern void AIUpdate_idleSearchCounts( Int &run, Int &taken );
+	Int idleSearchesRun = 0, idleSearchesTaken = 0;
+	AIUpdate_idleSearchCounts( idleSearchesRun, idleSearchesTaken );
+	DEBUG_LOG(("HEADLESS JOBS: %d worker threads, %d allocations from a job, %d range gathers split (%d chunk tails walked serially, %.0f ms forked, %.0f ms merging), %d idle searches run ahead, %d taken\n",
+						 JobSystem::workerCount(), JobSystem::workerAllocationCount(), gathersSplit, gatherTails, gatherForkMS, gatherMergeMS,
+						 idleSearchesRun, idleSearchesTaken));
 
 	// LOGIC-THREAD.md phase 1: the handoff cost, and the client calls phase 2 has to take off the tick.
 	LogicThread::report();

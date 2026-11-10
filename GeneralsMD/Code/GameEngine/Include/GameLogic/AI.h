@@ -53,6 +53,7 @@ class Pathfinder;
 class Player;
 class PolygonTrigger;
 class SimpleObjectIterator;
+struct ShroudPeekRecord;
 class ThingTemplate;
 class UpgradeTemplate;
 class WeaponBonus;
@@ -1170,6 +1171,7 @@ public:
 	static Int getEnemyScanCountThisFrame( void ) { return s_enemyScans; }
 	static void resetEnemyScanCount( void ) { s_enemyScans = 0; }
 	static void bumpEnemyScanCount( void ) { ++s_enemyScans; }
+	static void noteJobEnemyScans( Int scans ) { s_enemyScans += scans; }	///< what jobs counted, added after the join
 	enum
 	{
 		CAN_SEE														=	1 << 0,
@@ -1181,8 +1183,25 @@ public:
 		PREFER_BEST_TARGET								= 1 << 6,		///< pick by pickBestTarget, not the nearest thing
 		ANY_WILL_DO												= 1 << 7		///< some enemy the search would accept, not the one it picks: only for asking whether the answer is NULL
 	};
+	/** A target search a job of the logic thread runs (LOGIC-PARALLEL.md, P2): the thread's own scratch
+		in, and whether the answer may stand out. The search gathers with PartitionManager::gatherFromJob,
+		peeks the fog instead of asking it (the logic thread replays the questions later), counts here
+		instead of in the shared counters, and gives up, aborted, wherever a step is not safe beside other
+		jobs: a search form it does not run, a cache not filled yet, a whole range query underneath. */
+	struct ScanJob
+	{
+		Object		**objects;				///< capacity each, this thread's
+		Real			*distSqr;
+		Int				capacity;
+		ShroudPeekRecord *peeks;		///< where the fog filter records
+		Bool			aborted;
+		Int				gathers;
+		Int				objectsLookedAt;
+		Int				scans;
+	};
+
 	Object *findClosestEnemy( const Object *me, Real range, UnsignedInt qualifiers,
-		const AttackPriorityInfo *info=NULL, PartitionFilter *optionalFilter=NULL);
+		const AttackPriorityInfo *info=NULL, PartitionFilter *optionalFilter=NULL, ScanJob *job=NULL);
 
 	/** The candidate me would rather shoot than any other, by aiTargetBeats, or NULL.  lateFilters
 		* (NULL-terminated) are asked only of a candidate that would take the lead. */

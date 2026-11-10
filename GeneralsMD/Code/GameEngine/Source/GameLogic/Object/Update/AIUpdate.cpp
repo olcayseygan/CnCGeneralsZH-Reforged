@@ -38,6 +38,7 @@
 #include "Common/GameState.h"
 #include "Common/CRCDebug.h"
 #include "Common/GlobalData.h"
+#include "Common/JobSystem.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/RandomValue.h"
@@ -397,6 +398,8 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 	m_turretSyncFlag = TURRET_INVALID;
 	m_attitude = AI_NORMAL;
 	m_nextMoodCheckTime = 0;
+	m_moodBatchFrame = 0xFFFFFFFF;
+	m_moodBatchIndex = -1;
 #ifdef ALLOW_DEMORALIZE
 	m_demoralizedFramesLeft = 0;
 #endif
@@ -7081,6 +7084,8 @@ public:
 #endif
 };
 
+Bool AIUpdate_takeIdleSearch( AIUpdateInterface *ai, const AIUpdateInterface::MoodScan &scan, UnsignedInt now, Object **victim );
+
 Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuringIdle, Bool allowOutOfWeaponRangeTargets, Bool requireWithinWeaponRange )
 {
 	Object *obj = getObject();
@@ -7166,6 +7171,81 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 		}
 	}
 
+	MoodScan scan;
+	Object *answer = NULL;
+	if (!describeMoodScan(calledByAI, allowOutOfWeaponRangeTargets, requireWithinWeaponRange, scan, &answer))
+		return answer;
+
+	// an idle check by the clock may have been searched ahead with the rest of the frame's (LOGIC-PARALLEL.md, P2)
+	Object *newVictim = NULL;
+	if (!(calledByAI && calledDuringIdle && !allowOutOfWeaponRangeTargets && !requireWithinWeaponRange
+				&& AIUpdate_takeIdleSearch(this, scan, now, &newVictim)))
+		newVictim = runMoodScan(scan, NULL);
+
+	if (newVictim)
+	{
+		CRCDEBUG_LOG(("AIUpdateInterface::getNextMoodTarget() - %d is attacking %d\n", obj->getID(), newVictim->getID()));
+	}
+
+	return newVictim;
+}
+
+//-------------------------------------------------------------------------------------------------
+Object *AIUpdateInterface::runMoodScan( const MoodScan &scan, AI::ScanJob *job )
+{
+	const Object *obj = getObject();
+	PartitionFilterForwardArc filterArc( obj, scan.arcRange );
+	PartitionFilterElevatedReach filterHeight( obj, scan.arcRange );
+	PartitionFilter *arc = NULL;
+	if( scan.arc == 1 )
+		arc = &filterArc;
+	else if( scan.arc == 2 )
+		arc = &filterHeight;
+	return TheAI->findClosestEnemy( obj, scan.range, scan.flags, scan.info, arc, job );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AIUpdateInterface::wouldSearchOnIdleCheck( void )
+{
+	Object *obj = getObject();
+	if (obj->isEffectivelyDead() || obj->testStatus(OBJECT_STATUS_IS_USING_ABILITY))
+		return FALSE;
+
+	const AIUpdateModuleData* d = getAIUpdateModuleData();
+	if ((d->m_autoAcquireEnemiesWhenIdle & AAS_Idle) == 0)
+		return FALSE;
+	if (isAttacking() && BitTest(d->m_autoAcquireEnemiesWhenIdle, AAS_Idle_Not_While_Attacking))
+		return FALSE;
+	if (obj->getStatusBits().test( OBJECT_STATUS_STEALTHED ) && !canAutoAcquireWhileStealthed())
+	{
+		const Object *container = obj->getContainedBy();
+		if (!(container && container->getContain()->isPassengerAllowedToFire()))
+			return FALSE;
+	}
+
+	// the team's common target answers instead of a search; asked under a peek, so nothing is written
+	if (obj->getTeam()->getPrototype()->getTemplateInfo()->m_attackCommonTarget && getAttitude() >= AI_NORMAL)
+	{
+		Object *teamVictim = obj->getTeam()->getTeamTargetObject();
+		if (teamVictim)
+		{
+			Weapon::StatusPeek peek;
+			CanAttackResult result = obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, teamVictim, CMD_FROM_AI );
+			if (result == ATTACKRESULT_POSSIBLE || result == ATTACKRESULT_POSSIBLE_AFTER_MOVING)
+				return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AIUpdateInterface::describeMoodScan( Bool calledByAI, Bool allowOutOfWeaponRangeTargets, Bool requireWithinWeaponRange,
+																					MoodScan &scan, Object **answer )
+{
+	Object *obj = getObject();
+	const AIUpdateModuleData* d = getAIUpdateModuleData();
+	*answer = NULL;
+
 	// Use Guard Outer, which typically corresponds to the total range
 	Real rangeToFindWithin = TheAI->getAdjustedVisionRangeForObject(obj, AI_VISIONFACTOR_OWNERTYPE | AI_VISIONFACTOR_MOOD);
 
@@ -7193,7 +7273,7 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 		rangeToFindWithin = max(rangeToFindWithin, obj->getLargestWeaponRange());
 
 	if (rangeToFindWithin <= 0.0f)
-		return NULL;
+		return FALSE;
 
 	//If we are contained by an object, add it's bounding radius so that large buildings can auto acquire everything in
 	//outer ranges. Calculating this from the center is bad... although this code makes it possible to acquire a target
@@ -7209,13 +7289,14 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	{
 		BodyModuleInterface *bmi = obj->getBodyModule();
 		if (!bmi)
-			return NULL;
+			return FALSE;
 
 		//Kris: August 26, 2003
 		//Do not allow units that healed me to get acquired! They are our friends!!!
 		if( bmi->getLastDamageInfo()->in.m_damageType != DAMAGE_HEALING )
 		{
-			return TheGameLogic->findObjectByID(bmi->getLastDamageInfo()->in.m_sourceID);
+			*answer = TheGameLogic->findObjectByID(bmi->getLastDamageInfo()->in.m_sourceID);
+			return FALSE;
 		}
 	}
 	UnsignedInt flags = AI::CAN_ATTACK;
@@ -7291,47 +7372,205 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	//
 	// ... and an aircraft only makes that long look forward - see PartitionFilterForwardArc.
 	//
-	PartitionFilterForwardArc filterArc( obj, obj->getLargestWeaponRange() );
-	PartitionFilterElevatedReach filterHeight( obj, rangeToFindWithin );
-	PartitionFilter *arc = NULL;
+	scan.arc = 0;
+	scan.arcRange = 0.0f;
 	if( allowOutOfWeaponRangeTargets && obj->isKindOf( KINDOF_AIRCRAFT ) )
-		arc = &filterArc;
+	{
+		scan.arc = 1;
+		scan.arcRange = obj->getLargestWeaponRange();
+	}
 	else if( !obj->isKindOf( KINDOF_AIRCRAFT ) )
 	{
-		arc = &filterHeight;
+		scan.arc = 2;
+		scan.arcRange = rangeToFindWithin;
 		rangeToFindWithin += Weapon_elevationRangeBonus( rangeToFindWithin, FLT_MAX );
 	}
 
-	Object *newVictim = TheAI->findClosestEnemy(obj, rangeToFindWithin, flags, getAttackInfo(), arc);
+	scan.range = rangeToFindWithin;
+	scan.flags = flags;
+	scan.info = getAttackInfo();
+	return TRUE;
+}
 
-/*
-DEBUG_LOG(("GNMT frame %d: %s %08lx (con %s %08lx) uses range %f, flags %08lx, %s finds %s %08lx\n",
-	now,
-	obj->getTemplate()->getName().str(),
-	obj,
-	container ? container->getTemplate()->getName().str() : "",
-	container,
-	rangeToFindWithin,
-	flags,
-	getAttackInfo() != NULL && getAttackInfo() != TheScriptEngine->getDefaultAttackInfo() ? "ATTACKINFO," : "",
-	newVictim ? newVictim->getTemplate()->getName().str() : "",
-	newVictim
-));
-*/
+//-------------------------------------------------------------------------------------------------
+/* LOGIC-PARALLEL.md, P2: the frame's idle checks by the clock searched ahead together.
 
-	if (newVictim)
+	 The first unit of a frame whose idle check gets as far as its search gathers every other idle unit
+	 whose check is due this frame and would search, and their searches run on the logic thread's job
+	 pool against the world as it stands at that moment. Each search keeps its answer and the fog
+	 questions it peeked. When a unit's own update comes round, in the order the sleepy heap gives, it
+	 takes its answer only if its search is still the same one, the target is still alive and every fog
+	 question asked again for real, in the job's order, gives the job's answer; otherwise it searches
+	 itself as before. The answers see the world a little earlier in the frame than a search of its own
+	 would, so the game moves differently from before, the same at any number of workers. The clock and
+	 its random offset stay in getNextMoodTarget, on the logic thread, in heap order. */
+extern void AI_prewarmTargetTables( const Object *o );	// AI.cpp
+
+namespace
+{
+	struct IdleSearch
 	{
-		CRCDEBUG_LOG(("AIUpdateInterface::getNextMoodTarget() - %d is attacking %d\n", obj->getID(), newVictim->getID()));
-/*
-srj debug hack. ignore.
-Int ot = getTmpValue();
-if (ot!=0&&now>ot&&now-ot<=4)
-ot=ot;
-setTmpValue(now);
-*/
+		AIUpdateInterface						*ai;
+		AIUpdateInterface::MoodScan	scan;
+		Object											*victim;
+		Bool												usable;
+		ShroudPeekRecord						peeks;
+		Int													gathers;
+		Int													looked;
+		Int													scans;
+	};
+
+	enum
+	{
+		IDLE_SEARCH_SLOTS = 32,				///< scratch for JobSystem::threadSlot 0 to 31
+		IDLE_SEARCH_CAPACITY = 16384,	///< candidates one search may gather before it gives up to the logic thread
+		IDLE_SEARCH_MINIMUM = 4				///< fewer due checks than this search on their own, as before
+	};
+
+	struct IdleSearchScratch
+	{
+		std::vector<Object *>	objects;
+		std::vector<Real>			distSqr;
+	};
+
+	std::vector<IdleSearch>	s_idleSearches;
+	UnsignedInt							s_idleSearchFrame = 0xFFFFFFFF;
+	IdleSearchScratch				s_idleSearchScratch[ IDLE_SEARCH_SLOTS ];
+
+	// since the process started, for HEADLESS JOBS: searches run ahead, and how many their units took
+	Int											s_idleSearchesRun = 0;
+	Int											s_idleSearchesTaken = 0;
+
+	void idleSearchJob( Int index, void * )
+	{
+		IdleSearch &s = s_idleSearches[ index ];
+		IdleSearchScratch &scratch = s_idleSearchScratch[ JobSystem::threadSlot() ];
+		PartitionManager::JobQueryGuard guard;
+
+		s.peeks.count = 0;
+		s.peeks.overflowed = FALSE;
+		s.peeks.playerIndex = 0;
+		AI::ScanJob job;
+		job.objects = &scratch.objects[ 0 ];
+		job.distSqr = &scratch.distSqr[ 0 ];
+		job.capacity = IDLE_SEARCH_CAPACITY;
+		job.peeks = &s.peeks;
+		job.aborted = FALSE;
+		job.gathers = 0;
+		job.objectsLookedAt = 0;
+		job.scans = 0;
+
+		s.victim = s.ai->runMoodScan( s.scan, &job );
+		s.usable = !job.aborted && !guard.refused() && !s.peeks.overflowed;
+		s.gathers = job.gathers;
+		s.looked = job.objectsLookedAt;
+		s.scans = job.scans;
 	}
 
-	return newVictim;
+	void runIdleSearches( AIUpdateInterface *trigger, const AIUpdateInterface::MoodScan &triggerScan, UnsignedInt now )
+	{
+		s_idleSearchFrame = now;
+		s_idleSearches.clear();
+
+		IdleSearch first;
+		first.ai = trigger;
+		first.scan = triggerScan;
+		s_idleSearches.push_back( first );
+		for( Object *o = TheGameLogic->getFirstObject(); o; o = o->getNextObject() )
+		{
+			AIUpdateInterface *ai = o->getAI();
+			if( ai == NULL || ai == trigger || ai->getNextMoodCheckTime() > now || !ai->isIdle() || !ai->wouldSearchOnIdleCheck() )
+				continue;
+			IdleSearch s;
+			Object *answer = NULL;
+			if( !ai->describeMoodScan( TRUE, FALSE, FALSE, s.scan, &answer ) )
+				continue;
+			s.ai = ai;
+			s_idleSearches.push_back( s );
+		}
+		if( (Int)s_idleSearches.size() < IDLE_SEARCH_MINIMUM )
+		{
+			s_idleSearches.clear();
+			return;
+		}
+		for( Int i = 0; i < (Int)s_idleSearches.size(); ++i )
+		{
+			s_idleSearches[ i ].ai->m_moodBatchFrame = now;
+			s_idleSearches[ i ].ai->m_moodBatchIndex = i;
+		}
+
+		/* The lazy caches a search reads are filled here, on the logic thread, so the jobs only read
+			 them: every Object's height above the ground, its armour for its armour flags now, and the
+			 AI's worth and armour tables and name keys for its template (AI_prewarmTargetTables). */
+		for( Object *o = TheGameLogic->getFirstObject(); o; o = o->getNextObject() )
+		{
+			o->getHeightAboveTerrain();
+			DamageInfoInput probe;
+			probe.m_damageType = DAMAGE_EXPLOSION;
+			probe.m_amount = 0.0f;
+			o->estimateDamage( probe );
+			AI_prewarmTargetTables( o );
+		}
+		ThePartitionManager->prepareJobGathers();
+		const Int slots = min( JobSystem::workerCount() + 1, (Int)IDLE_SEARCH_SLOTS );
+		for( Int s = 0; s < slots; ++s )
+		{
+			if( (Int)s_idleSearchScratch[ s ].objects.size() < (Int)IDLE_SEARCH_CAPACITY )
+			{
+				s_idleSearchScratch[ s ].objects.resize( IDLE_SEARCH_CAPACITY );
+				s_idleSearchScratch[ s ].distSqr.resize( IDLE_SEARCH_CAPACITY );
+			}
+		}
+
+		JobSystem::parallel_for( (Int)s_idleSearches.size(), 1, idleSearchJob, NULL );
+		s_idleSearchesRun += (Int)s_idleSearches.size();
+
+		Int gathers = 0, looked = 0, scans = 0;
+		for( Int i = 0; i < (Int)s_idleSearches.size(); ++i )
+		{
+			gathers += s_idleSearches[ i ].gathers;
+			looked += s_idleSearches[ i ].looked;
+			scans += s_idleSearches[ i ].scans;
+		}
+		PartitionManager::noteJobGathers( gathers, looked );
+		AI::noteJobEnemyScans( scans );
+	}
+}
+
+/** AI::reset, before every match: a frame number of the last match is not this match's frame. */
+void AIUpdate_resetIdleSearches( void )
+{
+	s_idleSearchFrame = 0xFFFFFFFF;
+	s_idleSearches.clear();
+}
+
+/** getNextMoodTarget's idle check by the clock: TRUE with *victim when this unit's search was searched
+	* ahead and still stands, FALSE to search as before. */
+Bool AIUpdate_takeIdleSearch( AIUpdateInterface *ai, const AIUpdateInterface::MoodScan &scan, UnsignedInt now, Object **victim )
+{
+	// a -scenario run plays the same: its TARGET PICK lines come from the jobs then, in search order
+	if( s_idleSearchFrame != now )
+		runIdleSearches( ai, scan, now );
+	if( ai->m_moodBatchFrame != now )
+		return FALSE;
+	ai->m_moodBatchFrame = 0xFFFFFFFF;		// one answer, one take
+	const IdleSearch &s = s_idleSearches[ ai->m_moodBatchIndex ];
+	if( s.ai != ai || !s.usable || !( s.scan == scan ) )
+		return FALSE;
+	if( s.victim != NULL && ( s.victim->isEffectivelyDead() || s.victim->isDestroyed() ) )
+		return FALSE;
+	if( !replayShroudPeeks( s.peeks ) )
+		return FALSE;
+	*victim = s.victim;
+	++s_idleSearchesTaken;
+	return TRUE;
+}
+
+/** For the HEADLESS JOBS line (GameEngine.cpp). */
+void AIUpdate_idleSearchCounts( Int &run, Int &taken )
+{
+	run = s_idleSearchesRun;
+	taken = s_idleSearchesTaken;
 }
 
 // ------------------------------------------------------------------------------------------------

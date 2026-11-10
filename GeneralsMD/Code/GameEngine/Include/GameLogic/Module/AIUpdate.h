@@ -652,6 +652,32 @@ public:
 	Object *getNextMoodTarget( Bool calledByAI, Bool calledDuringIdle, Bool allowOutOfWeaponRangeTargets = FALSE, Bool requireWithinWeaponRange = FALSE );
 	UnsignedInt getNextMoodCheckTime() const { return m_nextMoodCheckTime; }
 
+	/** The search a mood check asks of findClosestEnemy (LOGIC-PARALLEL.md, P2): worked out once, so
+		the frame's idle checks can be searched ahead together and each unit can tell its own. */
+	struct MoodScan
+	{
+		Real												range;
+		UnsignedInt									flags;
+		const AttackPriorityInfo		*info;
+		Int													arc;				///< 0 none, 1 PartitionFilterForwardArc, 2 PartitionFilterElevatedReach
+		Real												arcRange;		///< the arc filter's own range: side range, or reach on flat ground
+		Bool operator==( const MoodScan &o ) const
+		{ return range == o.range && flags == o.flags && info == o.info && arc == o.arc && arcRange == o.arcRange; }
+	};
+	/** getNextMoodTarget's search after its clock, worked out with no side effect. FALSE when there is
+		no search: *answer is then what getNextMoodTarget returns instead (NULL, or a passive unit's last
+		attacker). */
+	Bool describeMoodScan( Bool calledByAI, Bool allowOutOfWeaponRangeTargets, Bool requireWithinWeaponRange,
+												 MoodScan &scan, Object **answer );
+	/** Whether an idle check by the clock (getNextMoodTarget( TRUE, TRUE )) would get as far as its
+		search, asking nothing that writes. */
+	Bool wouldSearchOnIdleCheck( void );
+	/** findClosestEnemy for scan, with its arc filter; job is NULL on the logic thread. */
+	Object *runMoodScan( const MoodScan &scan, AI::ScanJob *job );
+	/** This frame's place in the idle checks searched ahead, or a frame that is not now. */
+	UnsignedInt		m_moodBatchFrame;
+	Int						m_moodBatchIndex;
+
 	// This function will return a combination of MoodMatrixParameter flags.
 	UnsignedInt getMoodMatrixValue( void ) const;
 	UnsignedInt getMoodMatrixActionAdjustment( MoodMatrixAction action ) const;

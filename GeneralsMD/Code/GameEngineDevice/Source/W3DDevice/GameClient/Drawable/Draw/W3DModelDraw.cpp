@@ -4629,50 +4629,48 @@ Bool W3DModelDraw::handleWeaponFireFX(WeaponSlotType wslot, Int specificBarrelTo
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::setAnimationLoopDuration(UnsignedInt numFrames)
 {
-// this is never defined -- srj
-#ifdef NO_DURATIONS_ON_TRANSITIONS
-	if (m_curState != NULL && m_curState->m_transition != NO_TRANSITION && 
-			m_nextState != NULL && m_nextState->m_transition == NO_TRANSITION)
+	// A duration that lands on a transition (a PREATTACK state reached through one) is split between
+	// it and the state it leads to.  EA stretched the transition alone over all of it, and the real
+	// state then started at its natural rate just as the time ran out: the Alpagu's ten frame turn
+	// from the controller to kneeling took the whole 2.1 s and his drone placing showed 5 of its 45
+	// frames before the shot.  The split
+	// guesses from the first animation of each, as setAnimationCompletionTime always did.
+	UnsignedInt curFrames = numFrames;
+	m_nextStateAnimLoopDuration = NO_NEXT_DURATION;
+	if (m_curState != NULL && m_curState->m_transitionSig != NO_TRANSITION && m_curState->m_animations.size() > 0 &&
+			m_nextState != NULL && m_nextState->m_transitionSig == NO_TRANSITION && m_nextState->m_animations.size() > 0)
 	{
-		DEBUG_LOG(("deferring pending duration of %d frames\n",numFrames));
-		m_nextStateAnimLoopDuration = numFrames;
-		return;
+		// a natural duration is -1 until something loaded that animation, and the pending state's
+		// usually is not yet: a negative one would hand the real state nothing, or wrap to 4e9 frames
+		struct Natural { static Real msec(const W3DAnimationInfo& info)
+		{
+			if (info.getNaturalDurationInMsec() < 0.0f)
+			{
+				HAnimClass* handle = info.getAnimHandle();
+				REF_PTR_RELEASE(handle);
+			}
+			return info.getNaturalDurationInMsec();
+		} };
+		const Real t1 = Natural::msec(m_curState->m_animations.front());
+		const Real t2 = Natural::msec(m_nextState->m_animations.front());
+		if (t1 > 0.0f && t2 > 0.0f)
+		{
+			curFrames = REAL_TO_INT_FLOOR((numFrames * t1) / (t1 + t2));
+			m_nextStateAnimLoopDuration = numFrames - curFrames;
+		}
 	}
-
-	m_nextStateAnimLoopDuration = NO_NEXT_DURATION;
-	DEBUG_ASSERTCRASH(m_curState != NULL && m_curState->m_transition == NO_TRANSITION, ("Hmm, setAnimationLoopDuration on a transition state is probably not right... see srj"));
-#else
-	m_nextStateAnimLoopDuration = NO_NEXT_DURATION;
-#endif
-	Real desiredDurationInMsec = ceilf(numFrames * MSEC_PER_LOGICFRAME_REAL);
-	setCurAnimDurationInMsec(desiredDurationInMsec);
+	setCurAnimDurationInMsec(ceilf(curFrames * MSEC_PER_LOGICFRAME_REAL));
 }
 
 //-------------------------------------------------------------------------------------------------
 /**
 	similar to the above, but assumes that the current state is a "ONCE",
-	and is smart about transition states... if there is a transition state 
-	"inbetween", it is included in the completion time.
+	and is smart about transition states... if there is a transition state
+	"inbetween", it is included in the completion time.  The above does that split itself now.
 */
 void W3DModelDraw::setAnimationCompletionTime(UnsignedInt numFrames)
 {
-	if (m_curState != NULL && m_curState->m_transitionSig != NO_TRANSITION && m_curState->m_animations.size() > 0 &&
-			m_nextState != NULL && m_nextState->m_transitionSig == NO_TRANSITION && m_nextState->m_animations.size() > 0)
-	{
-		// we have a transition; split up the time suitably.
-		// note that this is just a guess, and assumes that the states
-		// have only one anim each (or, if multiple, that they are
-		// all pretty close in natural duration)
-		const Real t1 = m_curState->m_animations.front().getNaturalDurationInMsec();
-		const Real t2 = m_nextState->m_animations.front().getNaturalDurationInMsec();
-		UnsignedInt transTime = REAL_TO_INT_FLOOR((numFrames * t1) / (t1 + t2));
-		setAnimationLoopDuration(transTime);
-		m_nextStateAnimLoopDuration = numFrames - transTime;
-	}
-	else
-	{
-		setAnimationLoopDuration(numFrames);
-	}
+	setAnimationLoopDuration(numFrames);
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -383,6 +383,11 @@ public:
 	Bool setTypeAsObstacle( Object *obstacle, Bool isFence, const ICoord2D &pos );				///< flag this cell as an obstacle, from the given one
 	Bool removeObstacle( Object *obstacle );				///< unflag this cell as an obstacle, from the given one
 	void setType( CellType type );	///< set the cell type
+	/** Counts every time a cell of any layer goes between ground a vehicle could stand on (clear, rubble, a
+		* structure's) and anything else (water, cliff, impassable).  The AI keys whole-map ground fields on it,
+		* so one flooded a few frames ahead is used only while the ground under it is the ground it read.
+		* Counting too often costs a flood again and nothing else; it only has to miss nothing. */
+	static UnsignedInt getWalkGeneration( void );
 	CellType getType( void ) const { return (CellType)m_type; }				///< get the cell type
 	CellFlags getFlags( void ) const { return (CellFlags)m_flags; }				///< get the cell type
 	Bool isAircraftGoal( void) const {return m_aircraftGoal != 0;}

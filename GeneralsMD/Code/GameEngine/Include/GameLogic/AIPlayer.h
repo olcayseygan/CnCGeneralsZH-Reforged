@@ -183,6 +183,8 @@ public:
 	Bool step( Int *budget );									///< hands out cells while *budget lasts, less what it spent; TRUE once the field is final
 	void takeField( std::vector<UnsignedShort> &field );	///< y * width + x, and lets go of the grid
 	void release( void );											///< lets go of the grid unfinished
+	const std::vector<UnsignedByte> &walkGrid( void ) const { return m_walk; }	///< padded, as setWalkable fills it
+	void copyWalkGrid( const std::vector<UnsignedByte> &walk ) { m_walk = walk; }	///< another flood's, of the same size
 	Int getWidth( void ) const { return m_width; }
 	Int getHeight( void ) const { return m_height; }
 
@@ -502,8 +504,10 @@ protected:
 	void fortifyChokes(Object *dozer);	///< a Turtle's mines on the guns at its chokes and demo traps in front of them
 	const std::vector<UnsignedShort> &groundFromBase(void);	///< AIGroundFlood distance of every pathfind cell from the base center, cached until the center moves
 	const std::vector<UnsignedShort> &groundFromThreats(const Coord3D *threats, Int count);	///< the same from the nearest of these, cached until they change
-	Bool groundThreatsMatch(const Coord3D *threats, Int count, UnsignedInt bridges) const;
+	Bool groundBaseFresh(UnsignedInt bridges, UnsignedInt walk) const;	///< groundFromBase may answer from what it holds
+	Bool groundThreatsFresh(const Coord3D *threats, Int count, UnsignedInt bridges, UnsignedInt walk) const;
 	void stepGroundFields(void);			///< floods the field the next ask will want over frames, ahead of it
+	void floodBaseAhead(void);				///< the base's field whole, now, as stepGroundFields would deliver it
 	void beginGroundFlood(Int kind, const Coord3D *from, Int count, UnsignedInt bridges);
 	Int workGroundFlood(Int budget);	///< works the flood under way, delivering it when done; what is left of budget
 	void dropGroundFlood(Int kind);		///< a flood under way of that kind is for a point no longer wanted
@@ -622,6 +626,10 @@ protected:
 	void clearTeamsInQueue( void );			///< Delete all teams in the build queue.
 	void computeCenterAndRadiusOfBase(Coord3D *center, Real *radius);
 	Object *findFactory(const ThingTemplate *thing, Bool busyOK); ///< Find a factory to build a unit.  If force is true, may return a busy factory.
+	Object *findFactoryOnList(const ThingTemplate *thing, Bool busyOK);
+	/** findFactory's answers with busyOK, kept while selectTeamToBuild weighs which teams may be built: nothing
+		* in that pass trains or sells anything, and a hundred teams asked a few units each. NULL outside it. */
+	std::vector< std::pair<const ThingTemplate *, Object *> > *m_factoryAnswers;
 	void sendForSpotters( TeamInQueue *team, const Object *gun );	///< a gun that fires past its own sight came out for this team: train its spotters
 	Bool replaceSpotter( void );				///< a team in the field has a gun that fires past its own sight and no spotter left: train it one
 	void queueUnits( void );						///< Check the team build list, & queue up units at any idle factories.
@@ -818,9 +826,17 @@ protected:
 	std::vector<UnsignedShort> m_groundFromThreats;
 	std::vector<Coord3D> m_groundThreatsAt;
 	UnsignedInt m_groundThreatsBridges;
+	/* Each field's walk generation (PathfindCell::getWalkGeneration) when it was read, and whether anything has
+		 asked for it yet.  One flooded ahead answers only while the ground is the ground it read; once asked it
+		 holds as a field flooded on the ask always did, until the point or the bridges change. */
+	UnsignedInt m_groundFromBaseWalk;
+	Bool m_groundFromBaseAsked;
+	UnsignedInt m_groundThreatsWalk;
+	Bool m_groundThreatsAsked;
 	/* One of those two flooding over frames before anything asks for it (stepGroundFields), finished on the
 		 spot if something does.  Not xferred either: a load floods again when asked. */
 	AIGroundField m_groundFlood;
+	UnsignedInt m_groundFloodWalk;	///< the walk generation it began on; it is thrown away if that moves before it ends
 	Int m_groundFloodKind;						///< GROUND_FLOOD_NONE, _BASE or _THREATS
 	Int m_groundFloodColumn;					///< walkability read up to this column; -1 before the grid is allocated
 	std::vector<Coord3D> m_groundFloodFrom;
@@ -1000,7 +1016,11 @@ protected:
 		UnsignedInt	answerFrame;			///< when it was sent at a gun that hit it, 0 while it is not; target and origin are what it goes back to
 	};
 	std::vector<TacticalStep>	m_tactics;
+	/** Where each unit's row is in m_tactics, kept as rows come and go; built again whenever its size and the
+		* rows' disagree, which a load leaves it.  Only ever looked up, so the hash order reaches nothing. */
+	mutable std::unordered_map<Int, Int> m_tacticsRowOf;
 	TacticalStep *findTacticalStep(ObjectID unit);
+	const TacticalStep *findTacticalStep(ObjectID unit) const;
 	TacticalStep *tacticalStepFor(ObjectID unit);		///< ... making the row if there is none
 	void leaveTacticsAlone(ObjectID unit);
 	Bool isFallingBack(ObjectID unit) const;		///< holding at a safe spot after a lost fight, for doRetreats to send back

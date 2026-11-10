@@ -1718,12 +1718,32 @@ PathfindCell::~PathfindCell( void )
 	}
 }
 
+static UnsignedInt theWalkGeneration = 0;
+
+/** Ground the AI's ground floods may enter: AIPlayer.cpp's isBuildSearchWalkable reads the same three. */
+static inline Bool walkableType( UnsignedInt type )
+{
+	return type == PathfindCell::CELL_CLEAR || type == PathfindCell::CELL_RUBBLE || type == PathfindCell::CELL_OBSTACLE;
+}
+
+static inline void noteWalkChange( UnsignedInt from, UnsignedInt to )
+{
+	if( walkableType( from ) != walkableType( to ) )
+		++theWalkGeneration;
+}
+
+/*static*/ UnsignedInt PathfindCell::getWalkGeneration( void )
+{
+	return theWalkGeneration;
+}
+
 /**
  * Reset the cell to default values
  */
-void PathfindCell::reset( ) 
-{ 
-	m_type = PathfindCell::CELL_CLEAR; 
+void PathfindCell::reset( )
+{
+	++theWalkGeneration;		// a map coming in: whatever stood here before is gone
+	m_type = PathfindCell::CELL_CLEAR;
 	m_flags = PathfindCell::NO_UNITS;
 	clearZone();
 	m_aircraftGoal = false;
@@ -1979,6 +1999,7 @@ Bool PathfindCell::setTypeAsObstacle( Object *obstacle, Bool isFence, const ICoo
 		isRubble = true;
 	}
 
+	noteWalkChange( m_type, PathfindCell::CELL_OBSTACLE );		// rubble walks the same
 	if (isRubble) {
 		m_type = PathfindCell::CELL_RUBBLE;
 		m_obstacleID = INVALID_ID;
@@ -2007,9 +2028,11 @@ void PathfindCell::setType( CellType type )
 {
 	if (m_obstacleID != INVALID_ID) {
 		DEBUG_ASSERTCRASH(type==PathfindCell::CELL_OBSTACLE, ("Wrong type."));
+		noteWalkChange( m_type, PathfindCell::CELL_OBSTACLE );
 		m_type = PathfindCell::CELL_OBSTACLE;
 		return;
 	}
+	noteWalkChange( m_type, type );
 	m_type = type;
 }
 

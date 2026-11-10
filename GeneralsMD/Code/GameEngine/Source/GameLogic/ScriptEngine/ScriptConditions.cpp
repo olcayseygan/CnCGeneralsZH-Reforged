@@ -87,21 +87,6 @@ public:
 	}
 };
 
-// STATICS ////////////////////////////////////////////////////////////////////////////////////////
-namespace rts
-{
-	template<typename T> 
-		T sum(std::vector<T>& vecOfValues )
-	{
-		T retVal = 0;
-		typename std::vector<T>::iterator it;
-		for (it = vecOfValues.begin(); it != vecOfValues.end(); ++it) {
-			retVal += (*it);
-		}
-		return retVal;
-	}
-};
-
 // GLOBALS ////////////////////////////////////////////////////////////////////////////////////////
 ScriptConditionsInterface *TheScriptConditions = NULL;
 
@@ -226,6 +211,29 @@ void ScriptConditions::objectTypesFromParam(Parameter *pTypeParm, ObjectTypes *o
 	}
 }
 
+
+//-------------------------------------------------------------------------------------------------
+/** How many of the player's objects an OBJECT_TYPE parameter names, as countObjectsByThingTemplate
+summed over its templates counts them, or -1 when none of its names is a template.  A named list
+used to be copied and every name in it looked up again on each call; the list keeps both now. */
+//-------------------------------------------------------------------------------------------------
+static Int countObjectsOfParam(const Player *player, Parameter *pTypeParm, Bool ignoreDead)
+{
+	const AsciiString &name = pTypeParm->getString();
+	if (name.isEmpty())
+		return -1;
+
+	const ObjectTypes *types = TheScriptEngine->getObjectTypes(name);
+	if (types)
+		return types->getTemplates().empty() ? -1 : player->countObjectsOfTypes(*types, ignoreDead);
+
+	const ThingTemplate *tmpl = TheThingFactory->findTemplate(name);
+	if (!tmpl)
+		return -1;
+	Int count = 0;
+	player->countObjectsByThingTemplate(1, &tmpl, ignoreDead, &count);
+	return count;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** evaluateAllDestroyed */
@@ -903,20 +911,11 @@ Bool ScriptConditions::evaluateBuiltByPlayer(Condition *pCondition, Parameter* p
 		return false;
 	}
 
-	ObjectTypesTemp types;
-	objectTypesFromParam(pTypeParm, types.m_types);
-
-	std::vector<Int> counts;
-	std::vector<const ThingTemplate *> templates;
-
-	Int numTemplates = types.m_types->prepForPlayerCounting(templates, counts);
-	if (numTemplates > 0) {
-		pPlayer->countObjectsByThingTemplate(numTemplates, &(*templates.begin()), false, &(*counts.begin()));
-	} else {
-		return 0;
+	const Int sumOfObjs = countObjectsOfParam(pPlayer, pTypeParm, false);
+	if (sumOfObjs < 0) {
+		return false;
 	}
 
-	Int sumOfObjs = rts::sum(counts);
 	pCondition->setCustomData(-1); // false.
 	if (sumOfObjs != 0) {
 		pCondition->setCustomData(1); // true.
@@ -1809,21 +1808,10 @@ Bool ScriptConditions::evaluatePlayerUnitCondition(Condition *pCondition, Parame
 		return false;
 	}
 
-	ObjectTypesTemp types;
-	objectTypesFromParam(pUnitTypeParm, types.m_types);
+	Int count = countObjectsOfParam(pPlayer, pUnitTypeParm, false);
+	if (count < 0)
+		count = 0;
 
-	std::vector<Int> counts;
-	std::vector<const ThingTemplate *> templates;
-
-	Int numObjs = types.m_types->prepForPlayerCounting(templates, counts);
-	Int count = 0;
-
-	if (numObjs > 0) 
-	{
-		pPlayer->countObjectsByThingTemplate(numObjs, &(*templates.begin()), false, &(*counts.begin()));
-		count = rts::sum(counts);
-	}
-	
 	Bool comparison = false;
 	switch (pComparisonParm->getInt())
 	{
@@ -2130,55 +2118,26 @@ Bool ScriptConditions::evaluateSkirmishValueInArea(Condition *pCondition, Parame
 		return false;
 	}
 
+	// Every skirmish AI asks this of its enemy each frame ("Invasion Alert").  The cached answer goes
+	// when anything was built or killed anywhere since, which at 32 players is nearly every frame, so
+	// that cheap test comes before the walk over the enemy's teams for one that entered or left an area.
+	Bool anyChanges = pCondition->getCustomData() == 0
+		|| TheScriptEngine->getFrameObjectCountChanged() != pCondition->getCustomFrame(); // Objects were added/deleted since we cached, so count could have changed.  jba.
 	Player::PlayerTeamList::const_iterator it;
-	Bool anyChanges = false;
-	if (pCondition->getCustomData() == 0) anyChanges = true;
-
-
-	for (it = player->getPlayerTeams()->begin(); it != player->getPlayerTeams()->end(); ++it) {
-		if (anyChanges) break;
+	for (it = player->getPlayerTeams()->begin(); !anyChanges && it != player->getPlayerTeams()->end(); ++it) {
 		for (DLINK_ITERATOR<Team> iter = (*it)->iterate_TeamInstanceList(); !iter.done(); iter.advance()) {
-			if (anyChanges) break;
 			Team *team = iter.cur();
-			if (!team) {
-				continue;
-			}
-			if (team->didEnterOrExit()) {	
-				anyChanges = true; 
+			if (team && team->didEnterOrExit()) {
+				anyChanges = true;
+				break;
 			}
 		}
-	}
-	if (TheScriptEngine->getFrameObjectCountChanged() != pCondition->getCustomFrame()) {
-		anyChanges = true; // Objects were added/deleted since we cached, so count could have changed.  jba.
 	}
 	if (!anyChanges) {
 		if (pCondition->getCustomData()==-1) return false;
 		if (pCondition->getCustomData()==1) return true;
 	}
-	Int totalCost = 0;
-	for (it = player->getPlayerTeams()->begin(); it != player->getPlayerTeams()->end(); ++it) {
-		for (DLINK_ITERATOR<Team> iter = (*it)->iterate_TeamInstanceList(); !iter.done(); iter.advance()) {
-			Team *team = iter.cur();
-			if (!team) {
-				continue;
-			}
-			for (DLINK_ITERATOR<Object> iter = team->iterate_TeamMemberList(); !iter.done(); iter.advance()) {
-				Object *pObj = iter.cur();
-				if (!pObj) {
-					continue;
-				}
-				if (!pObj->isKindOf(KINDOF_INERT) && pObj->isInside(pTrig)) {
-					if (!pObj->isEffectivelyDead()) {
-						const ThingTemplate *tt = pObj->getTemplate();
-						if (!tt) {
-							continue;
-						}
-						totalCost += tt->friend_getBuildCost();
-					}
-				}
-			}
-		}
-	}
+	const Int totalCost = player->countBuildCostInside(pTrig);
 
 	Bool comparison = false;
 	switch (pComparisonParm->getInt())
@@ -2710,20 +2669,11 @@ Bool ScriptConditions::evaluatePlayerLostObjectType(Parameter *pPlayerParm, Para
 		return FALSE;
 	}
 	
-	ObjectTypesTemp objs;
-	objectTypesFromParam(pTypeParm, objs.m_types);
-
-	std::vector<Int> counts;
-	std::vector<const ThingTemplate *> templates;
-
-	Int numTemplates = objs.m_types->prepForPlayerCounting(templates, counts);
-	if (numTemplates > 0) {
-		player->countObjectsByThingTemplate(numTemplates, &(*templates.begin()), true, &(*counts.begin()));
-	} else {
+	const Int sumOfObjs = countObjectsOfParam(player, pTypeParm, true);
+	if (sumOfObjs < 0) {
 		return FALSE;
 	}
 
-	Int sumOfObjs = rts::sum(counts);
 	Int currentCount = TheScriptEngine->getObjectCount(player->getPlayerIndex(), pTypeParm->getString());
 
 	if (sumOfObjs != currentCount) {

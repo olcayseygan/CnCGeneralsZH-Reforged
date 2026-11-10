@@ -92,6 +92,7 @@ enum CheatKind
 // ----------------------------------------------------------------------------------------------
 
 class BuildListInfo;
+class ObjectTypes;
 class PolygonTrigger;
 class ThingTemplate;
 class AIPlayer;
@@ -706,6 +707,12 @@ public:
 
 	/// whether any member of our teams, dead or alive, has a template equivalent to tmpl
 	Bool hasTemplateMember(const ThingTemplate *tmpl) const;
+
+	/// countObjectsByThingTemplate over every template of the list, summed
+	Int countObjectsOfTypes(const ObjectTypes &types, Bool ignoreDead) const;
+
+	/// the build cost of our members inside the area that are neither inert nor effectively dead
+	Int countBuildCostInside(const PolygonTrigger *trig) const;
 
 	/**
 		simply returns the number of buildings owned by this player

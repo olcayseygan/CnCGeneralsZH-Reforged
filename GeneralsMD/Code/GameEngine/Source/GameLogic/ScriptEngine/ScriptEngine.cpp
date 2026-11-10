@@ -7180,7 +7180,11 @@ void ScriptEngine::checkConditionsForTeamNames(Script *pScript)
 void ScriptEngine::executeScript( Script *pScript )
 {
 
+#ifdef SPECIAL_SCRIPT_PROFILING
+	// only the profiling build ever sets it to anything else, and at 32 players this was a store
+	// into each of ten thousand scripts a frame that the loop otherwise only reads
 	pScript->setCurTime(0);
+#endif
 	// If script is not active, return.
 	if (!pScript->isActive()) {
 		return;

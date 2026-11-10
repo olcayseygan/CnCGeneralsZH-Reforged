@@ -10,7 +10,13 @@ Start the game with -control (default port 8787) and then, from here:
         game.send("screenshot")
 
 World commands are the scenario-file grammar with the leading frame number left off, so a line
-that works in Run/Scenarios/*.txt works here. The rest are ping, status, screenshot and quit.
+that works in Run/Scenarios/*.txt works here. The rest are ping, status, screenshot and quit,
+and the client-side input that goes through the game's own message stream:
+
+    key KEY_Q [ALT] [CTRL] [SHIFT] [HOLD|RELEASE]   one key; a modifier is pressed around it
+    select all                                       every unit of yours (screen, then map)
+    click <x> <y>                                    left click at a screen pixel: selects, places
+    rclick <x> <y>                                   right click there: orders, rally point, minimap
 
 No dependencies on purpose: this speaks enough of RFC 6455 to talk to one server on loopback, and
 anybody who wants to poke the game should not first have to install anything.

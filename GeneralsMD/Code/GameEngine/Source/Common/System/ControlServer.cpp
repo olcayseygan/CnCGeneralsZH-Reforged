@@ -777,6 +777,18 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* select all: what the SELECT_ALL key does, whatever key the player's command map gives it (Q in
+		 retail's; Ctrl+A is the beacon there).  Posted twice because one press takes the screen and the
+		 second, with nothing new left on it, takes the whole map.  Not a shell list's row: no window is
+		 named "all". */
+	if (command == "select all")
+	{
+		for (Int press = 0; press < 2; ++press)
+			TheMessageStream->appendMessage( GameMessage::MSG_META_SELECT_ALL );
+		replyOk( "\"selected\":true" );
+		return;
+	}
+
 	/* press, select and uitext reach a shell window by its layout name (MainMenu.wnd:ButtonOnline), so a
 		 script walks the menus without knowing where anything is on the screen.  press sends what a mouse
 		 up on a push button sends its owner, select picks a list box row, uitext reads what a window shows. */
@@ -973,17 +985,26 @@ static void handleCommand( const AsciiString &command )
 			return;
 		}
 
+		/* A modifier is pressed before the key and let go after it, as a hand does.  A key carrying
+			 CTRL in its state with no Ctrl press of its own left MetaEventTranslator's m_lastModState on
+			 Ctrl: the force attack hold began and only ended on the next key without it, so a click sent
+			 in between fired instead of selecting. */
+		static const struct { const char *word; Int state; Int key; } MODIFIER_KEYS[] =
+		{
+			{ "ALT", KEY_STATE_LALT, KEY_LALT },
+			{ "CTRL", KEY_STATE_LCONTROL, KEY_LCTRL },
+			{ "SHIFT", KEY_STATE_LSHIFT, KEY_LSHIFT },
+		};
 		Int modifiers = KEY_STATE_NONE;
 		Bool down = TRUE;
 		Bool up = TRUE;
 		for( const char *word = strtok( NULL, " " ); word; word = strtok( NULL, " " ) )
 		{
-			if (strcmp( word, "ALT" ) == 0)
-				modifiers |= KEY_STATE_LALT;
-			else if (strcmp( word, "CTRL" ) == 0)
-				modifiers |= KEY_STATE_LCONTROL;
-			else if (strcmp( word, "SHIFT" ) == 0)
-				modifiers |= KEY_STATE_LSHIFT;
+			Int m = 0;
+			while (m < (Int)ARRAY_SIZE( MODIFIER_KEYS ) && strcmp( word, MODIFIER_KEYS[ m ].word ) != 0)
+				++m;
+			if (m < (Int)ARRAY_SIZE( MODIFIER_KEYS ))
+				modifiers |= MODIFIER_KEYS[ m ].state;
 			else if (strcmp( word, "HOLD" ) == 0)
 				up = FALSE;
 			else if (strcmp( word, "RELEASE" ) == 0)
@@ -995,8 +1016,18 @@ static void handleCommand( const AsciiString &command )
 			}
 		}
 
+		Int held = KEY_STATE_NONE;
 		if (down)
 		{
+			for( Int m = 0; m < (Int)ARRAY_SIZE( MODIFIER_KEYS ); ++m )
+			{
+				if (!(modifiers & MODIFIER_KEYS[ m ].state))
+					continue;
+				held |= MODIFIER_KEYS[ m ].state;
+				GameMessage *modifier = TheMessageStream->appendMessage( GameMessage::MSG_RAW_KEY_DOWN );
+				modifier->appendIntegerArgument( MODIFIER_KEYS[ m ].key );
+				modifier->appendIntegerArgument( KEY_STATE_DOWN | held );
+			}
 			GameMessage *press = TheMessageStream->appendMessage( GameMessage::MSG_RAW_KEY_DOWN );
 			press->appendIntegerArgument( key );
 			press->appendIntegerArgument( KEY_STATE_DOWN | modifiers );
@@ -1006,24 +1037,39 @@ static void handleCommand( const AsciiString &command )
 			GameMessage *release = TheMessageStream->appendMessage( GameMessage::MSG_RAW_KEY_UP );
 			release->appendIntegerArgument( key );
 			release->appendIntegerArgument( KEY_STATE_UP | modifiers );
+			held = modifiers;
+			for( Int m = 0; m < (Int)ARRAY_SIZE( MODIFIER_KEYS ); ++m )
+			{
+				if (!(modifiers & MODIFIER_KEYS[ m ].state))
+					continue;
+				held &= ~MODIFIER_KEYS[ m ].state;
+				GameMessage *modifier = TheMessageStream->appendMessage( GameMessage::MSG_RAW_KEY_UP );
+				modifier->appendIntegerArgument( MODIFIER_KEYS[ m ].key );
+				modifier->appendIntegerArgument( KEY_STATE_UP | held );
+			}
 		}
 		replyOk( "\"pressed\":true" );
 		return;
 	}
 
-	/* click <x> <y>
-		 A left press and release at that screen pixel, carried the way Mouse.cpp carries a real one,
-		 for what lies over the world and reads the click's own position, the cheat panel among them.
-		 The cursor itself does not move. */
-	if (strncmp( command.str(), "click ", 6 ) == 0)
+	/* click <x> <y>, rclick <x> <y>
+		 A left (right) press and release at that screen pixel, carried the way Mouse.cpp carries a real
+		 one: the windows, the minimap among them, selection and orders all read the message's own
+		 position, so a click on a unit selects it and a right click on the radar orders there.  The
+		 cursor itself does not move.  Both halves carry time 0, which every click-or-drag test reads
+		 as a quick click. */
+	const Bool isRightClick = strncmp( command.str(), "rclick ", 7 ) == 0;
+	if (isRightClick || strncmp( command.str(), "click ", 6 ) == 0)
 	{
 		ICoord2D pixel;
-		if (sscanf( command.str() + 6, "%d %d", &pixel.x, &pixel.y ) != 2)
+		if (sscanf( command.str() + (isRightClick ? 7 : 6), "%d %d", &pixel.x, &pixel.y ) != 2)
 		{
-			replyError( "click wants two screen pixels, x then y" );
+			replyError( "click and rclick want two screen pixels, x then y" );
 			return;
 		}
-		const GameMessage::Type halves[] = { GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP };
+		const GameMessage::Type left[] = { GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP };
+		const GameMessage::Type right[] = { GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN, GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP };
+		const GameMessage::Type *halves = isRightClick ? right : left;
 		for (Int half = 0; half < 2; ++half)
 		{
 			GameMessage *msg = TheMessageStream->appendMessage( halves[ half ] );

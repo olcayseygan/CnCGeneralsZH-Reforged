@@ -56,7 +56,10 @@
 #include "GameClient/ObserverCamera.h"
 
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/Object.h"
 #include "GameLogic/ScriptEngine.h"
+#include "GameLogic/Module/ContainModule.h"
+#include "GameLogic/Module/StealthUpdate.h"
 
 //external declarations of the Gadgets the callbacks can use
 WindowLayout *popupCommunicatorLayout = NULL;
@@ -100,6 +103,144 @@ static void radarLookAt( const Coord3D *world )
 {
 	TheTacticalView->lookAt( world );
 	TheObserverCamera.setMode( OBSERVER_CAMERA_FREE );
+}
+
+// A press this many radar pixels from an enemy blip still lands on it; a blip is two to four wide.
+static const Real RADAR_PICK_PIXELS = 4.0f;
+
+struct RadarEnemyPick
+{
+	Coord3D world;					///< the spot under the press
+	Real reach;							///< RADAR_PICK_PIXELS in world units
+	Int playerIndex;				///< the local player's
+	const Player *player;		///< the local player
+	Object *bestUnit;				///< nearest unit by its centre
+	Real bestUnitDist;
+	Object *bestStructure;	///< nearest structure by its edge
+	Real bestStructureDist;
+};
+
+//-------------------------------------------------------------------------------------------------
+/** How the local player stands with an object as the radar shows it: a disguise's or a stealth
+	* garrison's apparent owner, decided the way Radar::addObject picks the blip's colour, or the
+	* object's own team.  A civilian building held by stealthed troops reads neutral, as it is drawn. */
+//-------------------------------------------------------------------------------------------------
+static Relationship radarApparentRelationship( Object *obj, const Player *local )
+{
+	const Player *owner = obj->getControllingPlayer();
+	const Player *apparent = owner;
+
+	StealthUpdate *stealth = obj->isKindOf( KINDOF_DISGUISER ) ? obj->getStealth() : NULL;
+	if( stealth && stealth->isDisguised() && owner
+			&& owner->getRelationship( local->getDefaultTeam() ) != ALLIES && local->isPlayerActive() )
+	{
+		const Player *disguise = ThePlayerList->getNthPlayer( stealth->getDisguisedPlayerIndex() );
+		if( disguise )
+			apparent = disguise;
+	}
+
+	if( obj->getContain() )
+	{
+		const Player *shown = obj->getContain()->getApparentControllingPlayer( local );
+		if( shown )
+			apparent = shown;
+	}
+
+	if( apparent == NULL || apparent == owner )
+		return local->getRelationship( obj->getTeam() );
+	return local->getRelationship( apparent->getDefaultTeam() );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One drawable against the radar press: kept when it is an enemy the local player's radar paints
+	* right now, by the rules W3DRadar::collectBlips draws with, and nearer than the last one kept.  A
+	* disguised unit nobody has caught paints in its disguise, so it is skipped and the press is a
+	* move, as on the friend it pretends to be. */
+//-------------------------------------------------------------------------------------------------
+static void radarPickEnemy( Drawable *draw, void *userData )
+{
+	RadarEnemyPick *pick = (RadarEnemyPick *)userData;
+	Object *obj = draw->getObject();
+	if( obj == NULL || obj->isEffectivelyDead() || obj->friend_getRadarData() == NULL )
+		return;
+	if( radarApparentRelationship( obj, pick->player ) != ENEMIES )
+		return;
+	if( obj->getShroudedStatus( pick->playerIndex ) > OBJECTSHROUD_PARTIAL_CLEAR )
+		return;
+	if( obj->getRadarPriority() == RADAR_PRIORITY_LOCAL_UNIT_ONLY )
+		return;
+	if( draw->getStealthLook() == STEALTHLOOK_INVISIBLE || draw->isDrawableEffectivelyHidden() )
+		return;
+	const Bool detected = obj->testStatus( OBJECT_STATUS_DETECTED );
+	if( obj->testStatus( OBJECT_STATUS_DISGUISED ) && !detected )
+		return;
+	if( obj->testStatus( OBJECT_STATUS_STEALTHED ) && !detected )
+		return;
+
+	// A structure's blip covers its footprint, so its distance is to the edge; a unit's dot is drawn
+	// over a structure's, so a unit in reach is picked before any structure.
+	const Coord3D *pos = obj->getPosition();
+	Real dx = pos->x - pick->world.x;
+	Real dy = pos->y - pick->world.y;
+	Real dist = sqrtf( dx * dx + dy * dy );
+	if( obj->isKindOf( KINDOF_STRUCTURE ) )
+	{
+		dist -= obj->getGeometryInfo().getBoundingCircleRadius();
+		if( dist < pick->reach && (pick->bestStructure == NULL || dist < pick->bestStructureDist) )
+		{
+			pick->bestStructure = obj;
+			pick->bestStructureDist = dist;
+		}
+	}
+	else if( dist < pick->reach && (pick->bestUnit == NULL || dist < pick->bestUnitDist) )
+	{
+		pick->bestUnit = obj;
+		pick->bestUnitDist = dist;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The enemy whose radar blip is under a pixel of the radar window, or NULL.  Only what the radar
+	* draws for the local player can be picked, so nothing in the fog, and no stealth unit undetected. */
+//-------------------------------------------------------------------------------------------------
+static Object *radarEnemyUnderPixel( GameWindow *window, const Coord3D *world )
+{
+	// the drawables are the client's; with no client (a tool, a test's bare window) there is nothing
+	// on the radar to pick, and the press stays the ground order or the look it always was
+	if( TheGameClient == NULL || ThePlayerList == NULL )
+		return NULL;
+	const Player *player = ThePlayerList->getLocalPlayer();
+	if( player == NULL || !player->isPlayerActive() )
+		return NULL;
+
+	ICoord2D size, ul, lr;
+	window->winGetSize( &size.x, &size.y );
+	TheRadar->findDrawPositions( 0, 0, size.x, size.y, &ul, &lr );
+	const Region3D *extent = TheRadar->getMapExtent();
+	if( lr.x <= ul.x || extent->hi.x <= extent->lo.x )
+		return NULL;
+
+	RadarEnemyPick pick;
+	pick.world = *world;
+	pick.reach = RADAR_PICK_PIXELS * (extent->hi.x - extent->lo.x) / (Real)(lr.x - ul.x);
+	pick.playerIndex = player->getPlayerIndex();
+	pick.player = player;
+	pick.bestUnit = NULL;
+	pick.bestUnitDist = 0.0f;
+	pick.bestStructure = NULL;
+	pick.bestStructureDist = 0.0f;
+
+	// the box reaches past the press by the largest structure's radius a blip could still cover
+	const Real margin = pick.reach + 200.0f;
+	Region3D box;
+	box.lo.x = world->x - margin;
+	box.lo.y = world->y - margin;
+	box.lo.z = -1.0e6f;
+	box.hi.x = world->x + margin;
+	box.hi.y = world->y + margin;
+	box.hi.z = 1.0e6f;
+	TheGameClient->iterateDrawablesInRegion( &box, radarPickEnemy, &pick );
+	return pick.bestUnit ? pick.bestUnit : pick.bestStructure;
 }
 
 
@@ -255,6 +396,17 @@ WindowMsgHandledType LeftHUDInput( GameWindow *window, UnsignedInt msg,
 						else
 						{
 							cur = Mouse::MOVETO;
+
+							// over an enemy's blip, the attack cursor the world shows when the press would attack it
+							Coord3D world;
+							Object *enemy = (command == NULL && !TheInGameUI->isOrderKeyArmed() && radarPixelToWorld( &mouse, &world ))
+								? radarEnemyUnderPixel( window, &world ) : NULL;
+							if( enemy && enemy->getDrawable() )
+							{
+								const GameMessage::Type would = TheGameClient->evaluateContextCommand( enemy->getDrawable(), &world, CommandTranslator::EVALUATE_ONLY );
+								if( would == GameMessage::MSG_DO_ATTACK_OBJECT )
+									cur = Mouse::ATTACK_OBJECT;
+							}
 						}
 					}
 
@@ -353,9 +505,19 @@ WindowMsgHandledType LeftHUDInput( GameWindow *window, UnsignedInt msg,
 					break;
 				}
 
+				// On an enemy's blip, the order a press on that enemy in the world gives, an attack for
+				// most selections; where it gives none, the press falls through to the ground under it.
+				// A power or an armed key keeps aiming at the exact spot, as it always did.
+				GameMessage::Type ordered = GameMessage::MSG_INVALID;
+				Object *enemy = (TheInGameUI->getGUICommand() == NULL && !TheInGameUI->isOrderKeyArmed())
+					? radarEnemyUnderPixel( window, &world ) : NULL;
+				if( enemy && enemy->getDrawable() )
+					ordered = TheGameClient->evaluateContextCommand( enemy->getDrawable(), &world, CommandTranslator::DO_COMMAND );
+
 				// The order the same press on that spot of the ground gives: a special power, an attack
 				// move or a guard off an armed key, a rally point, a move, each one queued under shift.
-				TheGameClient->evaluateContextCommand( NULL, &world, CommandTranslator::DO_COMMAND );
+				if( ordered == GameMessage::MSG_INVALID || ordered == GameMessage::MSG_IMPOSSIBLE_ATTACK_HINT )
+					TheGameClient->evaluateContextCommand( NULL, &world, CommandTranslator::DO_COMMAND );
 
 				// the order spends an armed key, unless shift is keeping it for the next point
 				if( TheInGameUI->isOrderKeyArmed() )

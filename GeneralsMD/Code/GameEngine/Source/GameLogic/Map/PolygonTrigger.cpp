@@ -40,6 +40,7 @@
 PolygonTrigger *PolygonTrigger::ThePolygonTriggerListPtr = NULL;
 Int PolygonTrigger::s_currentID = 1;
 UnsignedInt PolygonTrigger::s_listRevision = 1;
+UnsignedInt PolygonTrigger::s_shapeRevision = 1;
 /**
  PolygonTrigger - Constructor.
 */
@@ -292,6 +293,70 @@ void PolygonTrigger::updateBounds(void)	const
 	m_radius = sqrt(halfHeight*halfHeight + halfWidth*halfWidth);
 }
 
+/**
+ PolygonTrigger::triggersNear - the triggers whose bounds hold a point, in list order.
+
+ Every object that moves a whole unit asks every trigger of the map whether it stands inside
+ (Object::setTriggerAreaFlagsForChangeInPosition), nearly all of them answering no on the bounds
+ check alone: 14% of physics late in a 32-player match.  The answers come from a grid of the bounds
+ instead, rebuilt when the list or a trigger's outline changes.  pointInTrigger still decides; a
+ trigger missing from the list here is one whose bounds would have refused the point.
+*/
+const std::vector<const PolygonTrigger*> &PolygonTrigger::triggersNear(const ICoord3D &point)
+{
+	typedef std::vector<const PolygonTrigger*> TriggerList;
+	static const Int CELL = 256;	// world units a side
+	static std::vector<TriggerList> cells;
+	static Int loX = 0, loY = 0, cellsX = 0, cellsY = 0;
+	static UnsignedInt builtList = 0, builtShape = 0;
+	static const TriggerList none;
+
+	if (builtList != s_listRevision || builtShape != s_shapeRevision)
+	{
+		builtList = s_listRevision;
+		builtShape = s_shapeRevision;
+		cells.clear();
+		cellsX = cellsY = 0;
+
+		Int hiX = 0, hiY = 0;
+		Bool any = false;
+		for (const PolygonTrigger *t = getFirstPolygonTrigger(); t; t = t->getNext())
+		{
+			if (t->m_numPoints == 0)
+				continue;		// bounds lo past hi: refuses every point
+			if (t->m_boundsNeedsUpdate)
+				t->updateBounds();
+			if (!any || t->m_bounds.lo.x < loX) loX = t->m_bounds.lo.x;
+			if (!any || t->m_bounds.lo.y < loY) loY = t->m_bounds.lo.y;
+			if (!any || t->m_bounds.hi.x > hiX) hiX = t->m_bounds.hi.x;
+			if (!any || t->m_bounds.hi.y > hiY) hiY = t->m_bounds.hi.y;
+			any = true;
+		}
+		if (!any)
+			return none;
+
+		cellsX = (hiX - loX) / CELL + 1;
+		cellsY = (hiY - loY) / CELL + 1;
+		cells.resize((size_t)cellsX * cellsY);
+		for (const PolygonTrigger *t = getFirstPolygonTrigger(); t; t = t->getNext())
+		{
+			if (t->m_numPoints == 0)
+				continue;
+			const Int x0 = (t->m_bounds.lo.x - loX) / CELL, x1 = (t->m_bounds.hi.x - loX) / CELL;
+			const Int y0 = (t->m_bounds.lo.y - loY) / CELL, y1 = (t->m_bounds.hi.y - loY) / CELL;
+			for (Int y = y0; y <= y1; ++y)
+				for (Int x = x0; x <= x1; ++x)
+					cells[(size_t)y * cellsX + x].push_back(t);
+		}
+	}
+
+	// in 64 bits: a position near the edge of an Int would wrap the difference into a cell
+	const Int64 dx = (Int64)point.x - loX, dy = (Int64)point.y - loY;
+	if (cellsX == 0 || dx < 0 || dy < 0 || dx / CELL >= cellsX || dy / CELL >= cellsY)
+		return none;
+	return cells[(size_t)(dy / CELL) * cellsX + (size_t)(dx / CELL)];
+}
+
 
 /**
  PolygonTrigger::addPolygonTrigger adds a trigger to the list of triggers.
@@ -360,6 +425,7 @@ void PolygonTrigger::addPoint(const ICoord3D &point)
 	m_points[m_numPoints] = point;
 	m_numPoints++;
 	m_boundsNeedsUpdate = true;
+	++s_shapeRevision;
 }
 
 /**
@@ -378,6 +444,8 @@ void PolygonTrigger::setPoint(const ICoord3D &point, Int ndx)
 	if (ndx>m_numPoints) { // Can't skip points.
 		return;
 	}
+	if (m_points[ndx].x != point.x || m_points[ndx].y != point.y)
+		++s_shapeRevision;	// a water level change moves z alone
 	m_points[ndx] = point;
 	m_boundsNeedsUpdate = true;
 }
@@ -405,6 +473,7 @@ void PolygonTrigger::insertPoint(const ICoord3D &point, Int ndx)
 	m_points[ndx] = point;
 	m_numPoints++;
 	m_boundsNeedsUpdate = true;
+	++s_shapeRevision;
 }
 
 /**
@@ -422,6 +491,7 @@ void PolygonTrigger::deletePoint(Int ndx)
 	}
 	m_numPoints--;
 	m_boundsNeedsUpdate = true;
+	++s_shapeRevision;
 }
 
 void PolygonTrigger::getCenterPoint(Coord3D* pOutCoord)	const
@@ -563,7 +633,10 @@ void PolygonTrigger::xfer( Xfer *xfer )
 
 	// the radius is derived from the points, and a save from before the half-height fix holds a wrong one
 	if( xfer->getXferMode() == XFER_LOAD )
+	{
 		m_boundsNeedsUpdate = TRUE;
+		++s_shapeRevision;
+	}
 
 }  // end xfer
 

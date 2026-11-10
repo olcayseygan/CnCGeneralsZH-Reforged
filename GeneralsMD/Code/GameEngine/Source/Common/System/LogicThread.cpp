@@ -170,6 +170,16 @@ namespace
 		TheAudio->captureForLogic();
 	}
 
+	/* The emptied queue goes back for the next tick, room and all.  Swapped out and dropped, it left the
+		 next tick a queue with no room, and a busy tick grew it from one entry by reallocation, a few
+		 thousand terrain pushes from moving units each moved along every time it grew. */
+	void returnCapacity( std::vector< std::function<void()> > &ran, std::vector< std::function<void()> > &queue )
+	{
+		ran.clear();
+		if( queue.empty() )
+			queue.swap( ran );
+	}
+
 	void runViewCalls( void )
 	{
 		// swapped out first: a call that queues another (none does today) waits for the next run
@@ -177,6 +187,7 @@ namespace
 		calls.swap( s_viewCalls );
 		for( size_t i = 0; i < calls.size(); ++i )
 			calls[ i ]();
+		returnCapacity( calls, s_viewCalls );
 	}
 
 	/* Everything a tick left for the main thread, in the order it has to run: the drawables' work first
@@ -201,6 +212,7 @@ namespace
 		effects.swap( s_effects );
 		for( size_t i = 0; i < effects.size(); ++i )
 			effects[ i ]();
+		returnCapacity( effects, s_effects );
 		AudioEventRTS::forgetHeldCallers();
 		TheGameClient->flushDestroyedDrawables();
 		ControlBar::flushLogicCalls();

@@ -100,6 +100,7 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/DestroyModule.h"
 #include "GameLogic/Module/OpenContain.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/PartitionManager.h"
 #include "Common/ControlServer.h"
@@ -4250,14 +4251,21 @@ static void addModuleProfile( NameKeyType key, Int aiState, Int64 ticks, Int que
 	if( aiState >= 0 )
 		theStateTally[ aiState < NUM_AI_STATES ? aiState : NUM_AI_STATES ].add( ticks, queries, visits, scans, wide );
 
-	Int at = 0;
-	while( at < theModuleKindsUsed && theModuleKindKey[ at ] != key )
-		++at;
-	if( at == theModuleKindsUsed )
+	// The row by key, one array read: a walk of the kinds seen so far ran on every update of a profiled
+	// frame, some eight thousand of them, and was counted as the heap's time.
+	static std::vector<UnsignedByte> rowOfKey;	// row + 1, 0 for a kind not seen yet
+	if( key < 0 )
+		return;
+	if( (size_t)key >= rowOfKey.size() )
+		rowOfKey.resize( (size_t)key + 1, 0 );
+	Int at = (Int)rowOfKey[ key ] - 1;
+	if( at < 0 )
 	{
 		if( theModuleKindsUsed >= MODULE_PROFILE_MAX )
 			return;								// more kinds than the table holds: the rest are in it already
+		at = theModuleKindsUsed;
 		theModuleKindKey[ theModuleKindsUsed++ ] = key;
+		rowOfKey[ key ] = (UnsignedByte)( at + 1 );
 	}
 	theFrameTally[ at ].add( ticks, queries, visits, scans, wide );
 	theTableTally[ at ].add( ticks, queries, visits, scans, wide );
@@ -4286,6 +4294,62 @@ static void logTallyRow( const char *name, const ModuleTally &t, Int frames, dou
 	DEBUG_LOG(( "  %-*s %8.1f %8.3f %8.2f %8.1f %10.0f %7.2f %6.2f\n", namePad, name,
 		t.calls / f, t.ticks * msPerTick / f, t.calls ? t.ticks * msPerTick * 1000.0 / t.calls : 0.0,
 		t.queries / f, t.visits / f, t.scans / f, t.wide / f ));
+}
+
+//
+// The table counts calls; this counts what made them.  At the end of each table: the objects by
+// kind, the update modules on the sleepy heap that run next frame against those that sleep longer,
+// and the same split for physics alone, by the kind of object it moves.  Reads only.
+//
+enum { CENSUS_INFANTRY, CENSUS_VEHICLE, CENSUS_AIRCRAFT, CENSUS_STRUCTURE, CENSUS_PROJECTILE, CENSUS_OTHER, CENSUS_KINDS };
+
+static Int censusKind( const Object *obj )
+{
+	if( obj->isKindOf( KINDOF_PROJECTILE ) )	return CENSUS_PROJECTILE;
+	if( obj->isKindOf( KINDOF_STRUCTURE ) )		return CENSUS_STRUCTURE;
+	if( obj->isKindOf( KINDOF_AIRCRAFT ) )		return CENSUS_AIRCRAFT;
+	if( obj->isKindOf( KINDOF_INFANTRY ) )		return CENSUS_INFANTRY;
+	if( obj->isKindOf( KINDOF_VEHICLE ) )			return CENSUS_VEHICLE;
+	return CENSUS_OTHER;
+}
+
+static void logCensus( UnsignedInt now )
+{
+	Int objects[ CENSUS_KINDS ] = {};
+	Int physicsAwake[ CENSUS_KINDS ] = {};
+	Int total = 0, awake = 0, sleeping = 0, physicsAll = 0, physicsAwakeAll = 0;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		const Int kind = censusKind( obj );
+		++objects[ kind ];
+		++total;
+		const UpdateModuleInterface *physics = obj->getPhysics() ? obj->getPhysics()->getUpdate() : NULL;
+		for( BehaviorModule **b = obj->getBehaviorModules(); *b; ++b )
+		{
+			UpdateModulePtr u = (UpdateModulePtr)( (*b)->getUpdate() );
+			if( u == NULL || u->friend_getSleepySlot() < 0 )
+				continue;
+			const Bool due = u->friend_getNextCallFrame() <= now + 1;
+			if( due )
+				++awake;
+			else
+				++sleeping;
+			if( (*b)->getUpdate() == physics )
+			{
+				++physicsAll;
+				if( due )
+				{
+					++physicsAwake[ kind ];
+					++physicsAwakeAll;
+				}
+			}
+		}
+	}
+	DEBUG_LOG(( "LOGIC CENSUS frame %u: %d objects = infantry %d, vehicle %d, aircraft %d, structure %d, projectile %d, other %d | update modules awake %d, sleeping %d | physics awake %d of %d = infantry %d, vehicle %d, aircraft %d, structure %d, projectile %d, other %d\n",
+		now, total, objects[ CENSUS_INFANTRY ], objects[ CENSUS_VEHICLE ], objects[ CENSUS_AIRCRAFT ], objects[ CENSUS_STRUCTURE ],
+		objects[ CENSUS_PROJECTILE ], objects[ CENSUS_OTHER ], awake, sleeping, physicsAwakeAll, physicsAll,
+		physicsAwake[ CENSUS_INFANTRY ], physicsAwake[ CENSUS_VEHICLE ], physicsAwake[ CENSUS_AIRCRAFT ], physicsAwake[ CENSUS_STRUCTURE ],
+		physicsAwake[ CENSUS_PROJECTILE ], physicsAwake[ CENSUS_OTHER ] ));
 }
 
 /** Every MODULE_TABLE_FRAMES timed frames: every module kind and every AI state, per frame, most time first. */
@@ -4327,6 +4391,8 @@ static void noteModuleTable( UnsignedInt now, Int64 sleepyTicks, Int64 objectsTi
 	memset( taken, 0, sizeof( taken ) );
 	for( Int at; ( at = nextHeaviest( theStateTally, NUM_AI_STATES + 1, taken, FALSE ) ) >= 0; )
 		logTallyRow( theAIStateNames[ at ], theStateTally[ at ], theTableFrames, msPerTick, 41 );
+
+	logCensus( now );
 
 	memset( theTableTally, 0, sizeof( theTableTally ) );
 	memset( theStateTally, 0, sizeof( theStateTally ) );

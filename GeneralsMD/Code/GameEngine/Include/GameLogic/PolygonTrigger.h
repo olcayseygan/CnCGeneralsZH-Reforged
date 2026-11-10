@@ -95,6 +95,9 @@ protected:
 	// index of the list by name can tell that theirs went stale.  Starts at 1 so that a cache which
 	// has never been built (revision 0) never looks current.
 	static UnsignedInt s_listRevision;
+	// Bumped by everything that can move a trigger's bounds in x or y; with s_listRevision it says
+	// whether triggersNear's grid still holds.  A water level change moves only z and leaves it alone.
+	static UnsignedInt s_shapeRevision;
 
 protected:
 	void reallocate(void);
@@ -121,6 +124,9 @@ public:
 	static void addPolygonTrigger(PolygonTrigger *pTrigger);
 	static void removePolygonTrigger(PolygonTrigger *pTrigger);
 	static UnsignedInt getListRevision(void) {return s_listRevision;}
+	/** Every trigger whose bounds hold point, in list order.  Any trigger not in it would fail
+		* pointInTrigger at point on its bounds alone, so a walk of these is a walk of the whole list. */
+	static const std::vector<const PolygonTrigger*> &triggersNear(const ICoord3D &point);
 	void setNextPoly(PolygonTrigger *nextPoly) {m_nextPolygonTrigger = nextPoly; ++s_listRevision;} ///< Link the next map object.
 	void addPoint(const ICoord3D &point);
 	void setPoint(const ICoord3D &point, Int ndx);

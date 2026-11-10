@@ -2982,8 +2982,11 @@ void Object::setTriggerAreaFlagsForChangeInPosition()
 
 	m_iPos = iPos;
 
-	for (const PolygonTrigger *pTrig = PolygonTrigger::getFirstPolygonTrigger(); pTrig; pTrig = pTrig->getNext()) 
+	// only the triggers whose bounds hold the point, in list order: the rest would refuse it anyway
+	const std::vector<const PolygonTrigger*> &nearby = PolygonTrigger::triggersNear(m_iPos);
+	for (size_t n = 0; n < nearby.size(); ++n)
 	{
+		const PolygonTrigger *pTrig = nearby[n];
 		Bool skip = false;
 		for (i = 0; i < m_numTriggerAreasActive; i++) 
 		{

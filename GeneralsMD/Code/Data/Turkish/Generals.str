@@ -17464,6 +17464,18 @@ CONTROLBAR:ToolTipTurkiyeInfantrySungur
 "Tanka ve uçağa karşı füzeli piyade."
 END
 
+OBJECT:TurkiyeInfantryAlpagu
+"Alpagu Operatörü"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryAlpagu
+"&Alpagu Operatörü"
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantryAlpagu
+"Diz çöker, kamikaze İHA'yı yere koyar ve 350'ye kadar uçurur; İHA piyadenin ve hafif aracın üstüne düşer. Kendisi 200 görür, ötesindeki hedefi gözcü ya da radar kulesi bulmalıdır. Tanka ve binaya karşı zayıf."
+END
+
 OBJECT:TurkiyeInfantrySpotter
 "Gözcü Timi"
 END

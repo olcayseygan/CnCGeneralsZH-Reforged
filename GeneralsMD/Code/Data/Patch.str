@@ -2975,6 +2975,18 @@ CONTROLBAR:ToolTipTurkiyeInfantrySungur
 "Missile infantry against tanks and aircraft."
 END
 
+OBJECT:TurkiyeInfantryAlpagu
+"Alpagu Operator"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryAlpagu
+"&Alpagu Operator"
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantryAlpagu
+"Kneels, sets a kamikaze drone down and flies it out to 350, where it drops onto infantry and light vehicles. He sees only 200: past that, a spotter or a radar tower has to find the target. Weak against tanks and buildings."
+END
+
 OBJECT:TurkiyeInfantrySpotter
 "Spotter Team"
 END

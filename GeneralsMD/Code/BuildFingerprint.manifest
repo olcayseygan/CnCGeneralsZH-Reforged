@@ -116,6 +116,7 @@ Data/Art/Textures/TRPwrPlt_TileD.tga
 Data/Art/Textures/TRPwrPlt_Wall.tga
 Data/Art/Textures/TRPwrPlt_WallD.tga
 Data/Art/Textures/TRPwrPlt_WallLit.tga
+Data/Art/Textures/ZHCA_TRALPAGU.tga
 Data/Art/Textures/ZHCA_TRAirfld.tga
 Data/Art/Textures/ZHCA_TRAltay.tga
 Data/Art/Textures/ZHCA_TRAltayD.tga
@@ -125,6 +126,7 @@ Data/Art/Textures/ZHCA_TRKizilelma.tga
 Data/Art/Textures/ZHCA_TRKizilelmaD.tga
 Data/Art/Textures/ZHCA_TRMehmet.tga
 Data/Art/Textures/ZHCA_TRPwrPlt.tga
+Data/Art/Textures/ZHCA_TRSUNGUR.tga
 Data/Art/W3D/TRAIRFLD.W3D
 Data/Art/W3D/TRAIRFLD_D.W3D
 Data/Art/W3D/TRAIRFLD_DR1.W3D
@@ -134,6 +136,13 @@ Data/Art/W3D/TRAIRFLD_DR4.W3D
 Data/Art/W3D/TRAIRFLD_E.W3D
 Data/Art/W3D/TRAIRFLD_R.W3D
 Data/Art/W3D/TRAIRFLD_SC.W3D
+Data/Art/W3D/TRALPAGUDRN.W3D
+Data/Art/W3D/TRALPAGU_C2K.W3D
+Data/Art/W3D/TRALPAGU_C2S.W3D
+Data/Art/W3D/TRALPAGU_CTL.W3D
+Data/Art/W3D/TRALPAGU_PLC.W3D
+Data/Art/W3D/TRALPAGU_S2K.W3D
+Data/Art/W3D/TRALPAGU_SKN.W3D
 Data/Art/W3D/TRALTAY.W3D
 Data/Art/W3D/TRALTAY_D.W3D
 Data/Art/W3D/TRALTAY_D1.W3D
@@ -198,6 +207,7 @@ Data/Art/W3D/TRSIPER_E.W3D
 Data/Art/W3D/TRSIPER_EG.W3D
 Data/Art/W3D/TRSIPER_G.W3D
 Data/Art/W3D/TRSIPER_SC.W3D
+Data/Art/W3D/TRSUNGUR_SKN.W3D
 Data/Cinema/aurorablast.txt
 Data/Cinema/aurorafog.txt
 Data/Cinema/blastcheck.txt
@@ -258,6 +268,7 @@ Data/Cinema/minefx_player.txt
 Data/Cinema/minefx_scene.txt
 Data/Cinema/minefx_scene_enemy.txt
 Data/Cinema/missileapex_film.txt
+Data/Cinema/missileflyon.txt
 Data/Cinema/mobwatch.txt
 Data/Cinema/msaa_river.txt
 Data/Cinema/ngguard.txt
@@ -562,6 +573,8 @@ Data/Scenarios/minefx_scene_enemy.txt
 Data/Scenarios/missileapex.txt
 Data/Scenarios/missileapex_film.txt
 Data/Scenarios/missiledefence.txt
+Data/Scenarios/missileflyon.txt
+Data/Scenarios/missileflyon_drone.txt
 Data/Scenarios/missilesmoke.txt
 Data/Scenarios/missilespam.txt
 Data/Scenarios/mob100.txt

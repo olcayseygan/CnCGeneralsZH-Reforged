@@ -288,6 +288,8 @@ static Bool theHandshakeDone = FALSE;
 static std::vector<char> theIncoming;
 static std::vector<AsciiString> thePendingCommands;
 static Bool theQuitRequested = FALSE;
+static UnsignedInt theSaveAtFrame = 0;		///< saveat: the first poll at or past this frame saves, 0 for none
+static AsciiString theSaveAtName;
 
 static void closeClient( void )
 {
@@ -726,6 +728,16 @@ static void replyStatus( void )
 	sendText( &reply[ 0 ] );
 }
 
+/** The save menu's Save into <name>.sav; TRUE when the file was written. */
+static Bool saveTo( const AsciiString &name )
+{
+	AsciiString filename;
+	filename.format( "%s.sav", name.str() );
+	UnicodeString description;
+	description.translate( name );
+	return TheGameState->saveGame( filename, description, SAVE_FILE_TYPE_NORMAL ) == SC_OK;
+}
+
 /** Everything that changes the world is queued; see the header for why. */
 static void handleCommand( const AsciiString &command )
 {
@@ -819,14 +831,37 @@ static void handleCommand( const AsciiString &command )
 	}
 
 	/* save <name>: the save menu's Save, into <name>.sav in the save directory, so a script can make
-		 the file -loadsave opens.  Letters, digits, - and _ only, since it becomes a path. */
-	if (strncmp( command.str(), "save ", 5 ) == 0)
+		 the file -loadsave opens.  Letters, digits, - and _ only, since it becomes a path.
+		 saveat <frame> <name>: the same, between the logic frames, on the first poll once <frame> is
+		 reached, so two builds can each save the same match at the same frame. */
+	const Bool isSaveAt = strncmp( command.str(), "saveat ", 7 ) == 0;
+	if (isSaveAt || strncmp( command.str(), "save ", 5 ) == 0)
 	{
-		AsciiString name( command.str() + 5 );
+		AsciiString name( command.str() + ( isSaveAt ? 7 : 5 ) );
 		name.trim();
+		UnsignedInt atFrame = 0;
+		if (isSaveAt)
+		{
+			atFrame = (UnsignedInt)atoi( name.str() );
+			const char *space = strchr( name.str(), ' ' );
+			name.set( space ? space + 1 : "" );
+			name.trim();
+			if (atFrame == 0)
+			{
+				replyError( "saveat wants a frame and a name" );
+				return;
+			}
+		}
 		if (name.isEmpty() || strspn( name.str(), "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" ) != (size_t)name.getLength())
 		{
 			replyError( "save wants a name of letters, digits, - and _" );
+			return;
+		}
+		if (isSaveAt)
+		{
+			theSaveAtFrame = atFrame;
+			theSaveAtName = name;
+			replyOk( "\"saveat\":true" );
 			return;
 		}
 		if (TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
@@ -834,11 +869,7 @@ static void handleCommand( const AsciiString &command )
 			replyError( "save needs a match in progress" );
 			return;
 		}
-		AsciiString filename;
-		filename.format( "%s.sav", name.str() );
-		UnicodeString description;
-		description.translate( name );
-		if (TheGameState->saveGame( filename, description, SAVE_FILE_TYPE_NORMAL ) != SC_OK)
+		if (!saveTo( name ))
 		{
 			replyError( "the game could not write the save" );
 			return;
@@ -1107,6 +1138,14 @@ void ControlServer_poll( void )
 {
 	if (TheGlobalData == NULL || TheGlobalData->m_controlPort <= 0)
 		return;
+
+	if (theSaveAtFrame != 0 && TheGameLogic != NULL && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
+			&& TheGameLogic->getFrame() >= theSaveAtFrame)
+	{
+		const Bool saved = saveTo( theSaveAtName );
+		DEBUG_LOG(("CONTROL: saveat %s %s at frame %u\n", theSaveAtName.str(), saved ? "saved" : "FAILED", TheGameLogic->getFrame()));
+		theSaveAtFrame = 0;
+	}
 
 	if (theListenSocket == INVALID_SOCKET)
 	{

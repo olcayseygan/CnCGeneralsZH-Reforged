@@ -350,6 +350,10 @@ public:
 	// this should be called only by UpdateModule, thanks.
 	void friend_awakenUpdateModule(Object* obj, UpdateModulePtr update, UnsignedInt whenToWakeUp);
 
+	/** The frame a module put to sleep while it would have run every frame must wake for, so that it runs
+		* exactly when it would have: this frame while the sleepy loop has not yet passed its key, else the next. */
+	UnsignedInt friend_frameToWakeExactly(UpdateModulePtr update) const;
+
 	/// Object::setDisabledUntil has just set a disabled bit: the end-of-frame check looks at this one from now on
 	void watchDisabled( const Object *obj );
 
@@ -472,6 +476,8 @@ private:
 #endif
 
 	UpdateModulePtr					 m_curUpdateModule;
+	UnsignedInt64						 m_sleepyCursor;			///< key of the module the sleepy loop is running, 0 before it, all ones after it
+	UnsignedInt							 m_sleepyCursorFrame;	///< the frame m_sleepyCursor belongs to
 
 	ObjectPointerList m_objectsToDestroy;										///< List of things that need to be destroyed at end of frame
 

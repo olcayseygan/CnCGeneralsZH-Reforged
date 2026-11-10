@@ -285,7 +285,8 @@ PhysicsBehavior::~PhysicsBehavior()
 //-------------------------------------------------------------------------------------------------
 void PhysicsBehavior::setIgnoreCollisionsWith(const Object* obj)
 {
-	m_ignoreCollisionsWith = obj ? obj->getID() : INVALID_ID; 
+	wakeIfDormant();
+	m_ignoreCollisionsWith = obj ? obj->getID() : INVALID_ID;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -369,6 +370,7 @@ void PhysicsBehavior::applyForce( const Coord3D *force )
 	else
 	{
 		// when a force is applied by an external module, we must wake up, even if the force is zero.
+		wakeIfDormant();
 		setWakeFrame(getObject(), UPDATE_SLEEP_NONE);
 	}
 #endif
@@ -419,6 +421,7 @@ void PhysicsBehavior::applyRandomRotation()
 	else
 	{
 		// when a force is applied by an external module, we must wake up, even if the force is zero.
+		wakeIfDormant();
 		setWakeFrame(getObject(), UPDATE_SLEEP_NONE);
 	}
 #endif
@@ -441,6 +444,7 @@ void PhysicsBehavior::applyMotiveForce( const Coord3D *force )
 //-------------------------------------------------------------------------------------------------
 void PhysicsBehavior::resetDynamicPhysics()
 {
+	wakeIfDormant();	// first, so the setWakeFrame below finds the schedule an awake body would have
 	m_accel.zero();
 	m_prevAccel.zero();
 	m_vel.zero();
@@ -653,6 +657,17 @@ UpdateSleepTime PhysicsBehavior::update()
 	Coord3D														bounceForce;
 	Bool															gotBounceForce = false;
 
+	// what this run starts from, to tell at the end whether it changed anything (see mayGoDormant)
+	const Coord3D			startAccel = m_accel;
+	const Coord3D			startPrevAccel = m_prevAccel;
+	const Coord3D			startVel = m_vel;
+	const Real				startRates[ 3 ] = { m_yawRate, m_rollRate, m_pitchRate };
+	const Int					startFlags = m_flags;
+	const ObjectID		startOverlap = m_currentOverlap;
+	const ObjectID		startPrevOverlap = m_previousOverlap;
+	const Matrix3D		startMtx = *obj->getTransformMatrix();
+	Bool							touchedOthers = FALSE;	///< anything beyond this body and its object's transform
+
 	DEBUG_ASSERTCRASH(!getFlag(IS_IN_UPDATE), ("impossible"));
 	setFlag(IS_IN_UPDATE, true);
 
@@ -708,6 +723,7 @@ UpdateSleepTime PhysicsBehavior::update()
 			_isnan(mtx.Get_Z_Translation())) {
 			DEBUG_CRASH(("Object position is NAN, deleting."));
 			TheGameLogic->destroyObject(obj);
+			touchedOthers = TRUE;
 		}
 
 		// Check when to clear the stunned status: at rest, and on the ground unless the locomotor holds
@@ -926,7 +942,10 @@ UpdateSleepTime PhysicsBehavior::update()
 		// just in case.
 		setFlag(IS_IN_FREEFALL, false);
 		if (obj->isDisabledByType(DISABLED_FREEFALL))
+		{
 			obj->clearDisabled(DISABLED_FREEFALL);
+			touchedOthers = TRUE;
+		}
 		obj->clearModelConditionState(MODELCONDITION_FREEFALL);
 	}
 
@@ -941,6 +960,7 @@ UpdateSleepTime PhysicsBehavior::update()
 			//2) Dead drone
 			//3) Unmanned drone
 			obj->kill();
+			touchedOthers = TRUE;
 		}
 	}
 
@@ -948,7 +968,60 @@ UpdateSleepTime PhysicsBehavior::update()
 	setFlag(WAS_AIRBORNE_LAST_FRAME, airborneAtEnd);
 
 	setFlag(IS_IN_UPDATE, false);
-	return calcSleepTime();
+
+	/*
+		Dormancy.  A body calcSleepTime keeps awake can still come out of a run exactly as it went in:
+		a rider held inside a transport with the speed it boarded at, a wreck whose velocity a rounding
+		in the ground clamp leaves a hair off zero, a dead hulk tilted in mid-roll.  Such a run reads
+		nothing but this body, its object (transform, layer, status, disabled bits, death) and the
+		ground under it, so with all of those unchanged the next run is the same nothing, and so is
+		every one after.  The body sleeps instead, and anything that could change one of those inputs
+		wakes it (wakeIfDormant: this module's setters and forces, Object's transform, layer, status,
+		disabled and death changes, the ground a foundation or a crater moves), for the frame it would
+		have run in had it stayed awake.  The heap's unique keys are what make that exact: who sleeps
+		cannot change the order of the modules that run.
+	*/
+	const UpdateSleepTime sleep = calcSleepTime();
+	if (sleep == UPDATE_SLEEP_NONE && !touchedOthers && !gotBounceForce && mayGoDormant()
+			&& m_flags == startFlags
+			&& m_currentOverlap == startOverlap && m_previousOverlap == startPrevOverlap
+			&& memcmp(&m_accel, &startAccel, sizeof(Coord3D)) == 0
+			&& memcmp(&m_prevAccel, &startPrevAccel, sizeof(Coord3D)) == 0
+			&& memcmp(&m_vel, &startVel, sizeof(Coord3D)) == 0
+			&& memcmp(&m_yawRate, &startRates[ 0 ], sizeof(Real)) == 0
+			&& memcmp(&m_rollRate, &startRates[ 1 ], sizeof(Real)) == 0
+			&& memcmp(&m_pitchRate, &startRates[ 2 ], sizeof(Real)) == 0
+			&& memcmp(obj->getTransformMatrix(), &startMtx, sizeof(Matrix3D)) == 0)
+	{
+		m_flags |= IS_DORMANT;
+		return UPDATE_SLEEP_FOREVER;
+	}
+	return sleep;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** What a run that changed nothing must also be, to promise that the next one changes nothing: no
+	* input that moves with the frame number (a motive force running out), no reads of another object
+	* (a carrier's deck, a stunned unit's locomotor, a projectile's own update), and ground that only
+	* TerrainLogic's foundations and craters change (a bridge's layer can go with the bridge). */
+Bool PhysicsBehavior::mayGoDormant() const
+{
+	const Object *obj = getObject();
+	return getFlag(UPDATE_EVER_RUN)
+		&& !getFlag(IS_STUNNED)
+		&& !getFlag(IS_IN_FREEFALL)
+		&& !isMotive()
+		&& m_pui == NULL
+		&& !obj->isKindOf(KINDOF_PROJECTILE)
+		&& obj->getLayer() == LAYER_GROUND
+		&& !obj->testStatus(OBJECT_STATUS_DECK_HEIGHT_OFFSET);
+}
+
+//-------------------------------------------------------------------------------------------------
+void PhysicsBehavior::wakeFromDormancy()
+{
+	m_flags &= ~IS_DORMANT;
+	TheGameLogic->friend_awakenUpdateModule(getObject(), this, TheGameLogic->friend_frameToWakeExactly(this));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1046,8 +1119,9 @@ Bool PhysicsBehavior::wasPreviouslyOverlapped(Object *obj) const
 }
 
 //-------------------------------------------------------------------------------------------------
-void PhysicsBehavior::scrubVelocityZ( Real desiredVelocity ) 
-{ 	 
+void PhysicsBehavior::scrubVelocityZ( Real desiredVelocity )
+{
+	wakeIfDormant();
 	if (fabs(desiredVelocity) < ConvertRetailPerFrameRate(0.001f))
 	{
 		m_vel.z = 0; 
@@ -1063,8 +1137,9 @@ void PhysicsBehavior::scrubVelocityZ( Real desiredVelocity )
 }
 
 //-------------------------------------------------------------------------------------------------
-void PhysicsBehavior::scrubVelocity2D( Real desiredVelocity ) 
-{ 	 
+void PhysicsBehavior::scrubVelocity2D( Real desiredVelocity )
+{
+	wakeIfDormant();
 	if (desiredVelocity < ConvertRetailPerFrameRate(0.001f))
 	{
 		m_vel.x = 0; 
@@ -1085,8 +1160,9 @@ void PhysicsBehavior::scrubVelocity2D( Real desiredVelocity )
 }
 
 //-------------------------------------------------------------------------------------------------
-void PhysicsBehavior::addOverlap(Object *obj) 
-{ 
+void PhysicsBehavior::addOverlap(Object *obj)
+{
+	wakeIfDormant();
 	if (obj && !isCurrentlyOverlapped(obj))
 	{
 		m_currentOverlap = obj->getID();
@@ -1097,7 +1173,10 @@ void PhysicsBehavior::addOverlap(Object *obj)
 void PhysicsBehavior::transferVelocityTo(PhysicsBehavior* that) const
 {
 	if (that != NULL)
+	{
+		that->wakeIfDormant();	// a dormant body moves again; an asleep one does not, as it never did
 		that->m_vel.add(&m_vel);
+	}
 	that->m_velMag = INVALID_VEL_MAG;
 }
 
@@ -1110,13 +1189,17 @@ void PhysicsBehavior::addVelocityTo( const Coord3D *vel)
 	m_velMag = INVALID_VEL_MAG;
 #ifdef SLEEPY_PHYSICS
 	if (!getFlag(IS_IN_UPDATE))
+	{
+		wakeIfDormant();
 		setWakeFrame(getObject(), UPDATE_SLEEP_NONE);
+	}
 #endif
 }
 
 //-------------------------------------------------------------------------------------------------
 void PhysicsBehavior::setAngles( Real yaw, Real pitch, Real roll )
 {
+	wakeIfDormant();
 	const Coord3D* pos = getObject()->getPosition();
 
 	Matrix3D xfrm;
@@ -1201,6 +1284,7 @@ void PhysicsBehavior::doBounceSound(const Coord3D& prevPos)
 //DECLARE_PERF_TIMER(PhysicsBehavioronCollide)
 void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3D *normal )
 {
+	wakeIfDormant();
 	//USE_PERF_TIMER(PhysicsBehavioronCollide)
 	if (m_pui != NULL)
 	{

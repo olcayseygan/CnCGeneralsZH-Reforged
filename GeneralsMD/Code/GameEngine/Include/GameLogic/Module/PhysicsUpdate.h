@@ -125,7 +125,7 @@ public:
 
 	/** This is a force clear for when objects are going out of bounds, so the locomotor
 		can push them back into legal space. */
-	void clearAcceleration() { m_accel.zero(); }
+	void clearAcceleration() { wakeIfDormant(); m_accel.zero(); }
 
 	/**
 		add the velocity of 'this' to 'that'... useful when a unit disgorges another unit
@@ -137,7 +137,11 @@ public:
 
 	void setAngles( Real yaw, Real pitch, Real roll );
 	Real getMass() const;
-	void setMass( Real mass ) { m_mass = mass; }
+	void setMass( Real mass ) { wakeIfDormant(); m_mass = mass; }
+
+	/** Something that could make this body move again happened to it while it slept dormant (see
+		* update): wake it for the frame it would have run in had it stayed awake. */
+	void wakeIfDormant() { if (m_flags & IS_DORMANT) wakeFromDormancy(); }
 	Real getCenterOfMassOffset() const { return getPhysicsBehaviorModuleData()->m_centerOfMassOffset; }
 	/// what update() multiplies the pitch, roll and yaw rates by before turning the body
 	Real getPitchRollYawFactor() const { return getPhysicsBehaviorModuleData()->m_pitchRollYawFactor; }
@@ -224,9 +228,9 @@ public:
 
 	Bool getIsStunned() const { return getFlag(IS_STUNNED); }
 
-	void setExtraBounciness(Real b) { m_extraBounciness = b; }
+	void setExtraBounciness(Real b) { wakeIfDormant(); m_extraBounciness = b; }
 	/// added to every friction as a share of speed lost per retail (30 Hz) frame: per second / RETAIL_LOGICFRAMES_PER_SECOND
-	void setExtraFriction(Real b) { m_extraFriction = b; }
+	void setExtraFriction(Real b) { wakeIfDormant(); m_extraFriction = b; }
 
 	void setBounceSound(const AudioEventRTS* bounceSound);
 	const AudioEventRTS* getBounceSound() { return m_bounceSound ? &m_bounceSound->m_event : TheAudio->getValidSilentAudioEvent(); }
@@ -274,6 +278,9 @@ protected:
 
 	void testStunnedUnitForDestruction(void);
 
+	void wakeFromDormancy();
+	Bool mayGoDormant() const;
+
 private:
 
 	enum PhysicsFlagsType
@@ -293,6 +300,7 @@ private:
 		IS_STUNNED											= 0x0800,
 		MOTIVE_STEERS_SIDEWAYS					= 0x1000,
 		NO_STRUCTURE_CRASH							= 0x2000,
+		IS_DORMANT											= 0x4000,	///< asleep though calcSleepTime said run: its last run changed nothing
 	};
 
 	/*
@@ -322,7 +330,7 @@ private:
 
 	Bool												m_originalAllowBounce;		///< orignal state of allow bounce
 
-	inline void setFlag(PhysicsFlagsType f, Bool set) { if (set) m_flags |= f; else m_flags &= ~f; }
+	inline void setFlag(PhysicsFlagsType f, Bool set) { wakeIfDormant(); if (set) m_flags |= f; else m_flags &= ~f; }
 	inline Bool getFlag(PhysicsFlagsType f) const { return (m_flags & f) != 0; }
 
 

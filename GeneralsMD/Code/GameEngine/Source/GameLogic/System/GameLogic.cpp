@@ -262,6 +262,8 @@ GameLogic::GameLogic( void )
 	m_height = 0;
 	m_objList = NULL;
 	m_curUpdateModule = NULL;
+	m_sleepyCursor = 0;
+	m_sleepyCursorFrame = 0;
 	m_nextObjID = INVALID_ID;
 	m_nextObjIDFromSave = INVALID_ID;
 	m_startNewGame = FALSE;
@@ -310,6 +312,8 @@ void GameLogic::setDefaults( Bool loadingSaveGame )
 #endif
 	clearSleepyUpdates();
 	m_curUpdateModule = NULL;
+	m_sleepyCursor = 0;
+	m_sleepyCursorFrame = 0;
 
 	//
 	// only reset the next object ID allocater counter when we're not loading a save game.
@@ -3628,6 +3632,23 @@ void GameLogic::popSleepyUpdate()
 }
 
 // ------------------------------------------------------------------------------------------------
+/** A module that sleeps where it used to run every frame, doing nothing, is woken by whatever would
+	* have made that run do something.  Had it stayed awake it would run this frame at its key, so it
+	* wakes for this frame while the loop has not reached that key, and for the next once it has: then
+	* this frame's run already happened, before the event, and was the same nothing. */
+// ------------------------------------------------------------------------------------------------
+UnsignedInt GameLogic::friend_frameToWakeExactly(UpdateModulePtr u) const
+{
+	const UnsignedInt now = m_frame;
+	if (m_sleepyCursorFrame != now)
+		return now;			// this frame's loop has not begun
+	const Int idx = sleepyIndexOf(u);
+	const UnsignedInt64 tie = idx >= 0 ? (m_sleepyUpdates[idx].key & SLEEPY_KEY_TIE_MASK) : sleepyKeyTie(u);
+	const UnsignedInt64 keyNow = sleepyKeyOfPriority((now << 2) | (u->friend_getPriority() & 3)) | tie;
+	return keyNow > m_sleepyCursor ? now : now + 1;
+}
+
+// ------------------------------------------------------------------------------------------------
 // this should be called only by UpdateModule, thanks.
 // ------------------------------------------------------------------------------------------------
 //DECLARE_PERF_TIMER(friend_awakenUpdateModule)
@@ -5461,6 +5482,8 @@ void GameLogic::update( void )
 
 	tSleepyStart = Clock_Ticks();
 	{
+		m_sleepyCursorFrame = now;
+		m_sleepyCursor = 0;
 		while (!m_sleepyUpdates.empty())
 		{
 			UpdateModulePtr u = peekSleepyUpdate();
@@ -5471,12 +5494,16 @@ void GameLogic::update( void )
 				continue;
 			}
 
-			// we're done, everyone else is sleeping. 
+			// we're done, everyone else is sleeping.
 			// break from the loop BEFORE we pop this item off.
 			if (u->friend_getNextCallFrame() > now)
 			{
 				break;
 			}
+			// the furthest the loop has come: a module pushed mid-frame below it runs late, and must not
+			// pull the cursor back over turns already taken
+			if (m_sleepyUpdates.front().key > m_sleepyCursor)
+				m_sleepyCursor = m_sleepyUpdates.front().key;
 
 			// unless this module sorts first again, one of the two below it is the next to run, and its
 			// first read is its own fields; the update in between is long enough to have the line in
@@ -5573,6 +5600,7 @@ void GameLogic::update( void )
 			rekeySleepyEntry(m_sleepyUpdates[idx], u);
 			rebalanceSleepyUpdate(idx);
 		}
+		m_sleepyCursor = ~(UnsignedInt64)0;	// this frame's turns are over
 	}
 
 	validateSleepyUpdate();

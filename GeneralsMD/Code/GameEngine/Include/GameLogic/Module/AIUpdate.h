@@ -653,7 +653,8 @@ public:
 	UnsignedInt getNextMoodCheckTime() const { return m_nextMoodCheckTime; }
 
 	/** The search a mood check asks of findClosestEnemy (LOGIC-PARALLEL.md, P2): worked out once, so
-		the frame's idle checks can be searched ahead together and each unit can tell its own. */
+		the frame's idle checks and attack move scans can be searched ahead together and each unit can
+		tell its own. */
 	struct MoodScan
 	{
 		Real												range;
@@ -669,12 +670,14 @@ public:
 		attacker). */
 	Bool describeMoodScan( Bool calledByAI, Bool allowOutOfWeaponRangeTargets, Bool requireWithinWeaponRange,
 												 MoodScan &scan, Object **answer );
-	/** Whether an idle check by the clock (getNextMoodTarget( TRUE, TRUE )) would get as far as its
-		search, asking nothing that writes. */
-	Bool wouldSearchOnIdleCheck( void );
+	/** Whether getNextMoodTarget( TRUE, calledDuringIdle ) would get as far as its search, asking
+		nothing that writes: TRUE for an idle check by the clock, FALSE for an attack move's scan. */
+	Bool wouldSearchForMoodTarget( Bool calledDuringIdle );
+	/** Whether this unit's attack move looks for a target in its update this frame. */
+	Bool attackMoveScansThisFrame( UnsignedInt now );
 	/** findClosestEnemy for scan, with its arc filter; job is NULL on the logic thread. */
 	Object *runMoodScan( const MoodScan &scan, AI::ScanJob *job );
-	/** This frame's place in the idle checks searched ahead, or a frame that is not now. */
+	/** This frame's place in the mood searches run ahead, or a frame that is not now. */
 	UnsignedInt		m_moodBatchFrame;
 	Int						m_moodBatchIndex;
 

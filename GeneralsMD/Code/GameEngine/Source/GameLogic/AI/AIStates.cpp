@@ -3679,6 +3679,16 @@ AIAttackMoveToState::~AIAttackMoveToState()
 	m_attackMoveMachine->deleteInstance();
 }
 
+//----------------------------------------------------------------------------------------------------------
+/** For the mood searches run ahead (LOGIC-PARALLEL.md, P2): a temporary state runs instead of the
+	* attack move, and an attack move busy with a fight does not scan. */
+Bool AIStateMachine::attackMoveScansThisFrame( UnsignedInt now )
+{
+	if (m_temporaryState != NULL || getCurrentStateID() != AI_ATTACK_MOVE_TO)
+		return FALSE;
+	return static_cast<const AIAttackMoveToState *>(internalGetState( AI_ATTACK_MOVE_TO ))->scansThisFrame( now );
+}
+
 // ------------------------------------------------------------------------------------------------
 /** CRC */
 // ------------------------------------------------------------------------------------------------

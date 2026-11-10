@@ -7084,7 +7084,8 @@ public:
 #endif
 };
 
-Bool AIUpdate_takeIdleSearch( AIUpdateInterface *ai, const AIUpdateInterface::MoodScan &scan, UnsignedInt now, Object **victim );
+Bool AIUpdate_takeMoodSearch( AIUpdateInterface *ai, const AIUpdateInterface::MoodScan &scan, Bool attackMove, UnsignedInt now,
+															Object **victim );
 
 Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuringIdle, Bool allowOutOfWeaponRangeTargets, Bool requireWithinWeaponRange )
 {
@@ -7176,10 +7177,11 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	if (!describeMoodScan(calledByAI, allowOutOfWeaponRangeTargets, requireWithinWeaponRange, scan, &answer))
 		return answer;
 
-	// an idle check by the clock may have been searched ahead with the rest of the frame's (LOGIC-PARALLEL.md, P2)
+	// an idle check by the clock or an attack move scan may have been run ahead with the rest of the
+	// frame's (LOGIC-PARALLEL.md, P2)
 	Object *newVictim = NULL;
-	if (!(calledByAI && calledDuringIdle && !allowOutOfWeaponRangeTargets && !requireWithinWeaponRange
-				&& AIUpdate_takeIdleSearch(this, scan, now, &newVictim)))
+	if (!(calledByAI && calledDuringIdle != allowOutOfWeaponRangeTargets && !requireWithinWeaponRange
+				&& AIUpdate_takeMoodSearch(this, scan, allowOutOfWeaponRangeTargets, now, &newVictim)))
 		newVictim = runMoodScan(scan, NULL);
 
 	if (newVictim)
@@ -7205,18 +7207,18 @@ Object *AIUpdateInterface::runMoodScan( const MoodScan &scan, AI::ScanJob *job )
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool AIUpdateInterface::wouldSearchOnIdleCheck( void )
+Bool AIUpdateInterface::wouldSearchForMoodTarget( Bool calledDuringIdle )
 {
 	Object *obj = getObject();
 	if (obj->isEffectivelyDead() || obj->testStatus(OBJECT_STATUS_IS_USING_ABILITY))
 		return FALSE;
 
 	const AIUpdateModuleData* d = getAIUpdateModuleData();
-	if ((d->m_autoAcquireEnemiesWhenIdle & AAS_Idle) == 0)
+	if (calledDuringIdle && (d->m_autoAcquireEnemiesWhenIdle & AAS_Idle) == 0)
 		return FALSE;
 	if (isAttacking() && BitTest(d->m_autoAcquireEnemiesWhenIdle, AAS_Idle_Not_While_Attacking))
 		return FALSE;
-	if (obj->getStatusBits().test( OBJECT_STATUS_STEALTHED ) && !canAutoAcquireWhileStealthed())
+	if (calledDuringIdle && obj->getStatusBits().test( OBJECT_STATUS_STEALTHED ) && !canAutoAcquireWhileStealthed())
 	{
 		const Object *container = obj->getContainedBy();
 		if (!(container && container->getContain()->isPassengerAllowedToFire()))
@@ -7236,6 +7238,12 @@ Bool AIUpdateInterface::wouldSearchOnIdleCheck( void )
 		}
 	}
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AIUpdateInterface::attackMoveScansThisFrame( UnsignedInt now )
+{
+	return getStateMachine()->attackMoveScansThisFrame( now );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -7393,25 +7401,32 @@ Bool AIUpdateInterface::describeMoodScan( Bool calledByAI, Bool allowOutOfWeapon
 }
 
 //-------------------------------------------------------------------------------------------------
-/* LOGIC-PARALLEL.md, P2: the frame's idle checks by the clock searched ahead together.
+/* LOGIC-PARALLEL.md, P2: the frame's mood searches run ahead together, idle checks by the clock and
+	 attack move scans.
 
-	 The first unit of a frame whose idle check gets as far as its search gathers every other idle unit
-	 whose check is due this frame and would search, and their searches run on the logic thread's job
-	 pool against the world as it stands at that moment. Each search keeps its answer and the fog
-	 questions it peeked. When a unit's own update comes round, in the order the sleepy heap gives, it
-	 takes its answer only if its search is still the same one, the target is still alive and every fog
-	 question asked again for real, in the job's order, gives the job's answer; otherwise it searches
-	 itself as before. The answers see the world a little earlier in the frame than a search of its own
-	 would, so the game moves differently from before, the same at any number of workers. The clock and
-	 its random offset stay in getNextMoodTarget, on the logic thread, in heap order. */
+	 The first unit of a frame whose mood check gets as far as its search gathers every other unit that
+	 will search this frame, an idle unit whose check by the clock is due or an attack move whose scan
+	 is, and their searches run on the logic thread's job pool against the world as it stands at that
+	 moment. Each search keeps its answer and the fog questions it peeked. When a unit's own update
+	 comes round, in the order the sleepy heap gives, it takes its answer only if its search is still
+	 the same one, the target is still alive and every fog question asked again for real, in the job's
+	 order, gives the job's answer; otherwise it searches itself as before. The answers see the world a
+	 little earlier in the frame than a search of its own would, so the game moves differently from
+	 before, the same at any number of workers. The clocks and their random offset stay where they
+	 were, on the logic thread, in heap order.
+
+	 An attack move is searched ahead as the scan that may close with what it finds. One that turns out
+	 to want only what it can reach from where it stands asks a different search and leaves its answer
+	 unused; so does one whose fight ended in this frame's update, which was busy when the batch ran. */
 extern void AI_prewarmTargetTables( const Object *o );	// AI.cpp
 
 namespace
 {
-	struct IdleSearch
+	struct MoodSearch
 	{
 		AIUpdateInterface						*ai;
 		AIUpdateInterface::MoodScan	scan;
+		Bool												attackMove;
 		Object											*victim;
 		Bool												usable;
 		ShroudPeekRecord						peeks;
@@ -7422,30 +7437,35 @@ namespace
 
 	enum
 	{
-		IDLE_SEARCH_SLOTS = 32,				///< scratch for JobSystem::threadSlot 0 to 31
-		IDLE_SEARCH_CAPACITY = 16384,	///< candidates one search may gather before it gives up to the logic thread
-		IDLE_SEARCH_MINIMUM = 4				///< fewer due checks than this search on their own, as before
+		MOOD_SEARCH_SLOTS = 32,				///< scratch for JobSystem::threadSlot 0 to 31
+		MOOD_SEARCH_CAPACITY = 16384,	///< candidates one search may gather before it gives up to the logic thread
+		MOOD_SEARCH_MINIMUM = 4				///< fewer due searches than this search on their own, as before
 	};
 
-	struct IdleSearchScratch
+	struct MoodSearchScratch
 	{
 		std::vector<Object *>	objects;
 		std::vector<Real>			distSqr;
+		SimpleObjectIterator	*iterator = NULL;
 	};
 
-	std::vector<IdleSearch>	s_idleSearches;
-	UnsignedInt							s_idleSearchFrame = 0xFFFFFFFF;
-	IdleSearchScratch				s_idleSearchScratch[ IDLE_SEARCH_SLOTS ];
+	std::vector<MoodSearch>	s_moodSearches;
+	UnsignedInt							s_moodSearchFrame = 0xFFFFFFFF;
+	MoodSearchScratch				s_moodSearchScratch[ MOOD_SEARCH_SLOTS ];
 
-	// since the process started, for HEADLESS JOBS: searches run ahead, and how many their units took
-	Int											s_idleSearchesRun = 0;
-	Int											s_idleSearchesTaken = 0;
+	// since the process started, for HEADLESS JOBS: searches run ahead and how many their units took,
+	// all of them and the attack moves'
+	Int											s_moodSearchesRun = 0;
+	Int											s_moodSearchesTaken = 0;
+	Int											s_attackMoveSearchesRun = 0;
+	Int											s_attackMoveSearchesTaken = 0;
 
-	void idleSearchJob( Int index, void * )
+	void moodSearchJob( Int index, void * )
 	{
-		IdleSearch &s = s_idleSearches[ index ];
-		IdleSearchScratch &scratch = s_idleSearchScratch[ JobSystem::threadSlot() ];
+		MoodSearch &s = s_moodSearches[ index ];
+		MoodSearchScratch &scratch = s_moodSearchScratch[ JobSystem::threadSlot() ];
 		PartitionManager::JobQueryGuard guard;
+		Thing::CachePeek cachePeek;
 
 		s.peeks.count = 0;
 		s.peeks.overflowed = FALSE;
@@ -7453,8 +7473,9 @@ namespace
 		AI::ScanJob job;
 		job.objects = &scratch.objects[ 0 ];
 		job.distSqr = &scratch.distSqr[ 0 ];
-		job.capacity = IDLE_SEARCH_CAPACITY;
+		job.capacity = MOOD_SEARCH_CAPACITY;
 		job.peeks = &s.peeks;
+		job.iterator = scratch.iterator;
 		job.aborted = FALSE;
 		job.gathers = 0;
 		job.objectsLookedAt = 0;
@@ -7467,44 +7488,62 @@ namespace
 		s.scans = job.scans;
 	}
 
-	void runIdleSearches( AIUpdateInterface *trigger, const AIUpdateInterface::MoodScan &triggerScan, UnsignedInt now )
+	void runMoodSearches( AIUpdateInterface *trigger, const AIUpdateInterface::MoodScan &triggerScan, Bool triggerAttackMove,
+												UnsignedInt now )
 	{
-		s_idleSearchFrame = now;
-		s_idleSearches.clear();
+		s_moodSearchFrame = now;
+		s_moodSearches.clear();
 
-		IdleSearch first;
+		MoodSearch first;
 		first.ai = trigger;
 		first.scan = triggerScan;
-		s_idleSearches.push_back( first );
+		first.attackMove = triggerAttackMove;
+		s_moodSearches.push_back( first );
 		for( Object *o = TheGameLogic->getFirstObject(); o; o = o->getNextObject() )
 		{
 			AIUpdateInterface *ai = o->getAI();
-			if( ai == NULL || ai == trigger || ai->getNextMoodCheckTime() > now || !ai->isIdle() || !ai->wouldSearchOnIdleCheck() )
+			if( ai == NULL )
 				continue;
-			IdleSearch s;
+			// an aircraft's forward arc reads its facing, a lazy cache filled here rather than in a job
+			if( ai == trigger )
+			{
+				if( triggerScan.arc == 1 )
+					o->getUnitDirectionVector2D();
+				continue;
+			}
+			// an attack move scans on its own clock (AIAttackMoveToState::update), an idle unit on the mood clock
+			const Bool attackMove = ai->attackMoveScansThisFrame( now );
+			if( !attackMove && ( ai->getNextMoodCheckTime() > now || !ai->isIdle() ) )
+				continue;
+			if( !ai->wouldSearchForMoodTarget( !attackMove ) )
+				continue;
+			MoodSearch s;
 			Object *answer = NULL;
-			if( !ai->describeMoodScan( TRUE, FALSE, FALSE, s.scan, &answer ) )
+			if( !ai->describeMoodScan( TRUE, attackMove, FALSE, s.scan, &answer ) )
 				continue;
+			if( s.scan.arc == 1 )
+				o->getUnitDirectionVector2D();
 			s.ai = ai;
-			s_idleSearches.push_back( s );
+			s.attackMove = attackMove;
+			s_moodSearches.push_back( s );
 		}
-		if( (Int)s_idleSearches.size() < IDLE_SEARCH_MINIMUM )
+		if( (Int)s_moodSearches.size() < MOOD_SEARCH_MINIMUM )
 		{
-			s_idleSearches.clear();
+			s_moodSearches.clear();
 			return;
 		}
-		for( Int i = 0; i < (Int)s_idleSearches.size(); ++i )
+		for( Int i = 0; i < (Int)s_moodSearches.size(); ++i )
 		{
-			s_idleSearches[ i ].ai->m_moodBatchFrame = now;
-			s_idleSearches[ i ].ai->m_moodBatchIndex = i;
+			s_moodSearches[ i ].ai->m_moodBatchFrame = now;
+			s_moodSearches[ i ].ai->m_moodBatchIndex = i;
 		}
 
 		/* The lazy caches a search reads are filled here, on the logic thread, so the jobs only read
-			 them: every Object's height above the ground, its armour for its armour flags now, and the
-			 AI's worth and armour tables and name keys for its template (AI_prewarmTargetTables). */
+			 them: every Object's armour for its armour flags now, and the AI's worth and armour tables and
+			 name keys for its template (AI_prewarmTargetTables); an aircraft's facing is filled in the walk
+			 above. A height above the ground is worked out in the job and not stored (Thing::CachePeek). */
 		for( Object *o = TheGameLogic->getFirstObject(); o; o = o->getNextObject() )
 		{
-			o->getHeightAboveTerrain();
 			DamageInfoInput probe;
 			probe.m_damageType = DAMAGE_EXPLOSION;
 			probe.m_amount = 0.0f;
@@ -7512,25 +7551,29 @@ namespace
 			AI_prewarmTargetTables( o );
 		}
 		ThePartitionManager->prepareJobGathers();
-		const Int slots = min( JobSystem::workerCount() + 1, (Int)IDLE_SEARCH_SLOTS );
+		const Int slots = min( JobSystem::workerCount() + 1, (Int)MOOD_SEARCH_SLOTS );
 		for( Int s = 0; s < slots; ++s )
 		{
-			if( (Int)s_idleSearchScratch[ s ].objects.size() < (Int)IDLE_SEARCH_CAPACITY )
+			if( (Int)s_moodSearchScratch[ s ].objects.size() < (Int)MOOD_SEARCH_CAPACITY )
 			{
-				s_idleSearchScratch[ s ].objects.resize( IDLE_SEARCH_CAPACITY );
-				s_idleSearchScratch[ s ].distSqr.resize( IDLE_SEARCH_CAPACITY );
+				s_moodSearchScratch[ s ].objects.resize( MOOD_SEARCH_CAPACITY );
+				s_moodSearchScratch[ s ].distSqr.resize( MOOD_SEARCH_CAPACITY );
 			}
+			if( s_moodSearchScratch[ s ].iterator == NULL )
+				s_moodSearchScratch[ s ].iterator = newInstance( SimpleObjectIterator );
 		}
 
-		JobSystem::parallel_for( (Int)s_idleSearches.size(), 1, idleSearchJob, NULL );
-		s_idleSearchesRun += (Int)s_idleSearches.size();
+		JobSystem::parallel_for( (Int)s_moodSearches.size(), 1, moodSearchJob, NULL );
+		s_moodSearchesRun += (Int)s_moodSearches.size();
 
 		Int gathers = 0, looked = 0, scans = 0;
-		for( Int i = 0; i < (Int)s_idleSearches.size(); ++i )
+		for( Int i = 0; i < (Int)s_moodSearches.size(); ++i )
 		{
-			gathers += s_idleSearches[ i ].gathers;
-			looked += s_idleSearches[ i ].looked;
-			scans += s_idleSearches[ i ].scans;
+			gathers += s_moodSearches[ i ].gathers;
+			looked += s_moodSearches[ i ].looked;
+			scans += s_moodSearches[ i ].scans;
+			if( s_moodSearches[ i ].attackMove )
+				++s_attackMoveSearchesRun;
 		}
 		PartitionManager::noteJobGathers( gathers, looked );
 		AI::noteJobEnemyScans( scans );
@@ -7538,23 +7581,32 @@ namespace
 }
 
 /** AI::reset, before every match: a frame number of the last match is not this match's frame. */
-void AIUpdate_resetIdleSearches( void )
+void AIUpdate_resetMoodSearches( void )
 {
-	s_idleSearchFrame = 0xFFFFFFFF;
-	s_idleSearches.clear();
+	s_moodSearchFrame = 0xFFFFFFFF;
+	s_moodSearches.clear();
+	for( Int s = 0; s < MOOD_SEARCH_SLOTS; ++s )
+	{
+		if( s_moodSearchScratch[ s ].iterator )
+		{
+			s_moodSearchScratch[ s ].iterator->deleteInstance();
+			s_moodSearchScratch[ s ].iterator = NULL;
+		}
+	}
 }
 
-/** getNextMoodTarget's idle check by the clock: TRUE with *victim when this unit's search was searched
-	* ahead and still stands, FALSE to search as before. */
-Bool AIUpdate_takeIdleSearch( AIUpdateInterface *ai, const AIUpdateInterface::MoodScan &scan, UnsignedInt now, Object **victim )
+/** getNextMoodTarget's idle check by the clock or attack move scan: TRUE with *victim when this
+	* unit's search was run ahead and still stands, FALSE to search as before. */
+Bool AIUpdate_takeMoodSearch( AIUpdateInterface *ai, const AIUpdateInterface::MoodScan &scan, Bool attackMove, UnsignedInt now,
+															Object **victim )
 {
 	// a -scenario run plays the same: its TARGET PICK lines come from the jobs then, in search order
-	if( s_idleSearchFrame != now )
-		runIdleSearches( ai, scan, now );
+	if( s_moodSearchFrame != now )
+		runMoodSearches( ai, scan, attackMove, now );
 	if( ai->m_moodBatchFrame != now )
 		return FALSE;
 	ai->m_moodBatchFrame = 0xFFFFFFFF;		// one answer, one take
-	const IdleSearch &s = s_idleSearches[ ai->m_moodBatchIndex ];
+	const MoodSearch &s = s_moodSearches[ ai->m_moodBatchIndex ];
 	if( s.ai != ai || !s.usable || !( s.scan == scan ) )
 		return FALSE;
 	if( s.victim != NULL && ( s.victim->isEffectivelyDead() || s.victim->isDestroyed() ) )
@@ -7562,15 +7614,19 @@ Bool AIUpdate_takeIdleSearch( AIUpdateInterface *ai, const AIUpdateInterface::Mo
 	if( !replayShroudPeeks( s.peeks ) )
 		return FALSE;
 	*victim = s.victim;
-	++s_idleSearchesTaken;
+	++s_moodSearchesTaken;
+	if( s.attackMove )
+		++s_attackMoveSearchesTaken;
 	return TRUE;
 }
 
 /** For the HEADLESS JOBS line (GameEngine.cpp). */
-void AIUpdate_idleSearchCounts( Int &run, Int &taken )
+void AIUpdate_moodSearchCounts( Int &run, Int &taken, Int &attackMoveRun, Int &attackMoveTaken )
 {
-	run = s_idleSearchesRun;
-	taken = s_idleSearchesTaken;
+	run = s_moodSearchesRun;
+	taken = s_moodSearchesTaken;
+	attackMoveRun = s_attackMoveSearchesRun;
+	attackMoveTaken = s_attackMoveSearchesTaken;
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -422,9 +422,9 @@ void AI::reset( void )
 	theVariationParents.clear();
 	theArmourOfTemplate.clear();
 
-	// the idle checks searched ahead belong to one match's frames (AIUpdate.cpp)
-	extern void AIUpdate_resetIdleSearches( void );
-	AIUpdate_resetIdleSearches();
+	// the mood searches run ahead belong to one match's frames (AIUpdate.cpp)
+	extern void AIUpdate_resetMoodSearches( void );
+	AIUpdate_resetMoodSearches();
 
 	m_nextFormationID = NO_FORMATION_ID;
 	getNextFormationID(); // increment once past NO_FORMATION_ID.  jba.
@@ -490,6 +490,10 @@ void AI::update( void )
  */
 AI::~AI()
 {
+	// the mood searches' iterators, when no reset followed the last match
+	extern void AIUpdate_resetMoodSearches( void );
+	AIUpdate_resetMoodSearches();
+
 	if (m_pathfinder) {
 		delete m_pathfinder;
 	}
@@ -1327,9 +1331,9 @@ private:
 };
 
 /** iterateObjectsInRange for findClosestEnemy's gathers. A logic job gathers with
-	* PartitionManager::gatherFromJob instead and fills an iterator in the same order, sorted the same way:
-	* the pool it allocates from has its own lock, and a search takes a block of 64 a time. NULL when the
-	* job has to give up. */
+	* PartitionManager::gatherFromJob instead and fills its thread's own iterator (ScanJob::iterator) in
+	* the same order, sorted the same way, so it takes nothing from the pool once its blocks are there;
+	* the caller does not delete that one. NULL when the job has to give up. */
 static SimpleObjectIterator *AI_gatherEnemies( const Object *me, Real range, PartitionFilter **filters,
 																							 IterOrderType order, PlayerMaskType onlyPlayers, AI::ScanJob *job )
 {
@@ -1348,7 +1352,8 @@ static SimpleObjectIterator *AI_gatherEnemies( const Object *me, Real range, Par
 	++job->gathers;
 	job->objectsLookedAt += g.objectsLookedAt;
 
-	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
+	SimpleObjectIterator *iter = job->iterator;
+	iter->recycle();
 	for (Int i = 0; i < g.count; ++i)
 		iter->insert(g.objects[i], g.distSqr[i]);
 	iter->sort(order);
@@ -1539,6 +1544,8 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 			if (iter == NULL)
 				return NULL;
 			MemoryPoolObjectHolder holder(iter);
+			if (job)
+				holder.release();
 			return pickBestTarget(me, iter, filters + numGatherFilters);
 		}
 
@@ -1583,6 +1590,8 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 	if (iter == NULL)
 		return NULL;
 	MemoryPoolObjectHolder holder(iter);
+	if (job)
+		holder.release();
 	Real distSqr;
 	for (Object *theEnemy = iter->firstWithNumeric(&distSqr); theEnemy; theEnemy = iter->nextWithNumeric(&distSqr))
 	{

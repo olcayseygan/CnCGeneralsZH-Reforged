@@ -1194,6 +1194,7 @@ public:
 		Real			*distSqr;
 		Int				capacity;
 		ShroudPeekRecord *peeks;		///< where the fog filter records
+		SimpleObjectIterator *iterator;	///< this thread's, filled again by each gather (recycle)
 		Bool			aborted;
 		Int				gathers;
 		Int				objectsLookedAt;

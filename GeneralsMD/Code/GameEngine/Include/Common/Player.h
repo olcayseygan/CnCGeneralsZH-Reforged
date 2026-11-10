@@ -589,17 +589,17 @@ public:
 	/// Returns production cost change based on typeof (Used for upgrades)
 	Real getProductionCostChangeBasedOnKindOf( KindOfMaskType kindOf ) const;
 
-	/** Return bonus or penalty for construction of this thing.
+	/** Return bonus or penalty for construction of this thing (ThingTemplate::getNameKey).
 	*/
-	Real getProductionCostChangePercent( AsciiString buildTemplateName ) const;
-	
-	/** Return bonus or penalty for construction of this thing.
-	*/
-	Real getProductionTimeChangePercent( AsciiString buildTemplateName ) const;
+	Real getProductionCostChangePercent( NameKeyType buildTemplateNameKey ) const;
 
-	/** Return starting veterancy level of a newly built thing of this type
+	/** Return bonus or penalty for construction of this thing (ThingTemplate::getNameKey).
 	*/
-	VeterancyLevel getProductionVeterancyLevel( AsciiString buildTemplateName ) const;
+	Real getProductionTimeChangePercent( NameKeyType buildTemplateNameKey ) const;
+
+	/** Return starting veterancy level of a newly built thing of this type (ThingTemplate::getNameKey)
+	*/
+	VeterancyLevel getProductionVeterancyLevel( NameKeyType buildTemplateNameKey ) const;
 
 	// Friend function for the script engine's usage.
 	void friend_setSkillset(Int skillSet);

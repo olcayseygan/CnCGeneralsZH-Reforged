@@ -11534,16 +11534,8 @@ Int Pathfinder::iterateCellsAlongLine( const ICoord2D &start, const ICoord2D &en
 
 static ObjectID getSlaverID(const Object* o)
 {
-	for (BehaviorModule** update = o->getBehaviorModules(); *update; ++update)
-	{
-		SlavedUpdateInterface* sdu = (*update)->getSlavedUpdateInterface();
-		if (sdu != NULL)
-		{
-			return sdu->getSlaverID();
-		}
-	}
-	
-	return INVALID_ID;
+	const SlavedUpdateInterface* sdu = o->getSlavedUpdateInterface();
+	return sdu != NULL ? sdu->getSlaverID() : INVALID_ID;
 }
 
 static ObjectID getContainerID(const Object* o)

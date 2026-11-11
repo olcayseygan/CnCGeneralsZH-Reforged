@@ -1,0 +1,27 @@
+# squadcapture.txt the other way round: a Turkiye player trains from a captured American Barracks and
+# a Laser General's one. The Ranger squad's men are made with no producer, so the owner's side used to
+# apply, and the Mehmetcik is a reskin of the Ranger: the squad came out with five single Mehmetciks in
+# place of its Rangers. Now each press gives that Barracks' squad, nexus and all five men.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionTurkiye -side 1 FactionGLA -seed 1 -maxframes 4000
+#     -scenario squadcapturetr -logPrefix squadcapturetr_
+#
+# The tallies that name a count are the check, each a HEADLESS EXPECT PASS or FAIL.
+
+30    spawn         1  AmericaBarracks                       1  1000 900
+30    spawn         1  Lazr_AmericaBarracks                  1  1000 1200
+40    handover      1  AmericaBarracks                       1000 900   0
+40    handover      1  Lazr_AmericaBarracks                  1000 1200  0
+
+60    produce       0  AmericaBarracks  AmericaInfantryRangerSquad                1
+60    produce       0  Lazr_AmericaBarracks  Lazr_AmericaInfantryMissileDefenderSquad   1
+
+1500  tally         0  AmericaInfantryRangerSquad                   1
+1500  tally         0  AmericaInfantryRangerSquadMember             5
+1500  tally         0  Lazr_AmericaInfantryMissileDefenderSquad     1
+1500  tally         0  Lazr_AmericaInfantryMissileDefenderSquadMember   5
+1500  tally         0  TurkiyeInfantryMehmetcik                     0
+1500  tally         0  TurkiyeInfantrySungur                        0
+1500  tally         0  TurkiyeInfantryMehmetcikSquad                0

@@ -198,6 +198,14 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "CommandTabBuildingsButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabImage[ 0 ] ) },
 	{ "CommandTabGroundButtonImage",		INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabImage[ 1 ] ) },
 	{ "CommandTabAircraftButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabImage[ 2 ] ) },
+	{ "CommandTabBuildingsUL",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabUL[ 0 ] ) },
+	{ "CommandTabBuildingsLR",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabLR[ 0 ] ) },
+	{ "CommandTabGroundUL",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabUL[ 1 ] ) },
+	{ "CommandTabGroundLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabLR[ 1 ] ) },
+	{ "CommandTabAircraftUL",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabUL[ 2 ] ) },
+	{ "CommandTabAircraftLR",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabLR[ 2 ] ) },
+	{ "CommandTabPlateUL",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabPlateUL ) },
+	{ "CommandTabPlateLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabPlateLR ) },
 	{ "TooltipImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_tooltipName ) },
 	{ "TalentImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_talentName ) },
 
@@ -497,8 +505,14 @@ ControlBarScheme::ControlBarScheme(void)
 	for( Int i = 0; i < TRAY_PIECE_COUNT; i++ )
 		m_powerTray[ i ] = NULL;
 	for( Int tab = 0; tab < COMMAND_TAB_IMAGE_COUNT; tab++ )
+	{
 		for( Int state = 0; state < COMMAND_TAB_STATE_COUNT; state++ )
 			m_commandTab[ tab ][ state ] = NULL;
+		m_commandTabUL[ tab ].x = m_commandTabUL[ tab ].y = 0;
+		m_commandTabLR[ tab ].x = m_commandTabLR[ tab ].y = 0;
+	}
+	m_commandTabPlateUL.x = m_commandTabPlateUL.y = 0;
+	m_commandTabPlateLR.x = m_commandTabPlateLR.y = 0;
 	m_tooltip = ControlBarTooltipImages();
 	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
 		m_talent[ i ] = NULL;
@@ -570,7 +584,7 @@ void ControlBarScheme::init(void)
 		{ "Cell", "EdgeTop", "EdgeLeft", "EdgeBottom", "CornerTopLeft", "CornerBottomLeft", "Step" };
 	findPieces( m_radarFrameName, "", theFrameSuffixes, FRAME_PIECE_COUNT, m_radarFrame );
 	findPieces( m_powerTrayName, "", traySuffixes, TRAY_PIECE_COUNT, m_powerTray );
-	static const char *const tabStates[ COMMAND_TAB_STATE_COUNT ] = { "", "H", "P", "I" };
+	static const char *const tabStates[ COMMAND_TAB_STATE_COUNT ] = { "", "H", "P", "I", "O" };
 	for( Int tab = 0; tab < COMMAND_TAB_IMAGE_COUNT; tab++ )
 		findPieces( m_commandTabImage[ tab ], "", tabStates, COMMAND_TAB_STATE_COUNT, m_commandTab[ tab ] );
 	m_tooltip.find( m_tooltipName );
@@ -1344,6 +1358,45 @@ const Image *const *ControlBarSchemeManager::getCommandTabImages( Int tab ) cons
 			|| m_currentScheme->m_commandTab[ tab ][ 0 ] == NULL )
 		return NULL;
 	return m_currentScheme->m_commandTab[ tab ];
+}
+
+Bool ControlBarSchemeManager::getCommandTabSeats( IRegion2D *tabs, IRegion2D *plate ) const
+{
+	if( m_currentScheme == NULL || m_currentScheme->m_ScreenCreationRes.x <= 0 || m_currentScheme->m_ScreenCreationRes.y <= 0 )
+		return FALSE;
+
+	// drawPainting's conversion: the scheme's creation resolution to 800x600 design units
+	const Real toDesignX = 800.0f / m_currentScheme->m_ScreenCreationRes.x;
+	const Real toDesignY = 600.0f / m_currentScheme->m_ScreenCreationRes.y;
+	struct Convert
+	{
+		static Bool rect( const ICoord2D &ul, const ICoord2D &lr, Real dx, Real dy, IRegion2D *out )
+		{
+			if( lr.x <= ul.x || lr.y <= ul.y )
+				return FALSE;
+			out->lo.x = REAL_TO_INT_FLOOR( ul.x * dx );
+			out->lo.y = REAL_TO_INT_FLOOR( ul.y * dy );
+			out->hi.x = REAL_TO_INT_CEIL( lr.x * dx );
+			out->hi.y = REAL_TO_INT_CEIL( lr.y * dy );
+			return TRUE;
+		}
+	};
+	for( Int tab = 0; tab < ControlBarScheme::COMMAND_TAB_IMAGE_COUNT; tab++ )
+		if( !Convert::rect( m_currentScheme->m_commandTabUL[ tab ], m_currentScheme->m_commandTabLR[ tab ], toDesignX, toDesignY, &tabs[ tab ] ) )
+			return FALSE;
+	// no plate named: the tabs' own extent
+	if( !Convert::rect( m_currentScheme->m_commandTabPlateUL, m_currentScheme->m_commandTabPlateLR, toDesignX, toDesignY, plate ) )
+	{
+		*plate = tabs[ 0 ];
+		for( Int tab = 1; tab < ControlBarScheme::COMMAND_TAB_IMAGE_COUNT; tab++ )
+		{
+			plate->lo.x = min( plate->lo.x, tabs[ tab ].lo.x );
+			plate->lo.y = min( plate->lo.y, tabs[ tab ].lo.y );
+			plate->hi.x = max( plate->hi.x, tabs[ tab ].hi.x );
+			plate->hi.y = max( plate->hi.y, tabs[ tab ].hi.y );
+		}
+	}
+	return TRUE;
 }
 
 const Image *const *ControlBarSchemeManager::getPowerTray( void ) const

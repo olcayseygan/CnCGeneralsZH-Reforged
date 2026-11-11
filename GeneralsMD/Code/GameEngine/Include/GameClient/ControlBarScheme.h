@@ -270,11 +270,18 @@ public:
 	ICoord2D m_idleLR[ IDLE_COUNT ];
 
 	/// the command bar's tabs (ControlBar::CommandTab order): CommandTab<Kind>ButtonImage names the
-	/// sheet piece, and its H, P and I copies are the other three states.  Resolved by init; all NULL
-	/// without the key, and the tabs then wear the idle buttons' pictures
-	enum { COMMAND_TAB_IMAGE_COUNT = 3, COMMAND_TAB_STATE_COUNT = 4 };
+	/// sheet piece, and its H, P, I and O copies are the hilite, pushed, disabled and open states (O
+	/// optional).  Resolved by init; all NULL without the key, and the tabs then wear the idle
+	/// buttons' pictures.  CommandTab<Kind>UL/LR seat each tab and CommandTabPlateUL/LR is the steel
+	/// they sit in, in the painting's coordinates like Idle<Kind>UL/LR; a scheme without them has the
+	/// tabs laid out by ControlBar::updateCommandTabButtons
+	enum { COMMAND_TAB_IMAGE_COUNT = 3, COMMAND_TAB_STATE_COUNT = 5, COMMAND_TAB_OPEN = 4 };
 	AsciiString m_commandTabImage[ COMMAND_TAB_IMAGE_COUNT ];
 	const Image *m_commandTab[ COMMAND_TAB_IMAGE_COUNT ][ COMMAND_TAB_STATE_COUNT ];
+	ICoord2D m_commandTabUL[ COMMAND_TAB_IMAGE_COUNT ];
+	ICoord2D m_commandTabLR[ COMMAND_TAB_IMAGE_COUNT ];
+	ICoord2D m_commandTabPlateUL;
+	ICoord2D m_commandTabPlateLR;
 
 	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
 	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
@@ -369,6 +376,10 @@ public:
 	/// the scheme on screen's pictures for command tab 'tab' (ControlBar::CommandTab), enabled, hilite,
 	/// pushed and disabled, or NULL when it names none for that tab
 	const Image *const *getCommandTabImages( Int tab ) const;
+	/** The scheme on screen's seats for the command tabs and the plate they sit in, in 800x600 design
+		* units (the painting's own, as drawPainting places its images); FALSE when it names none, or
+		* any tab's rectangle is empty. */
+	Bool getCommandTabSeats( IRegion2D *tabs, IRegion2D *plate ) const;
 	/// the current scheme's talent pieces in ControlBarScheme::TALENT_* order, NULL when it names none
 	const Image *const *getTalentImages( void ) const;
 	/// the scheme on screen writes the money with thousands separators (MoneyThousands)

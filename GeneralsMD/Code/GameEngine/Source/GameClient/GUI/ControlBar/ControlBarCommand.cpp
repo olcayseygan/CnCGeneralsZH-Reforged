@@ -1813,17 +1813,24 @@ static void drawNoCommandTabParent( GameWindow *window, WinInstanceData *instDat
 
 /// the push button's own draw, kept when the tab buttons take drawCommandTab in its place
 static GameWinDrawFunc s_commandTabButtonDraw = NULL;
+
+/// THE switch: whether the open tab keeps the code-drawn ring when the scheme paints an open image
+/// (<base>O) of its own.  Without an O image the ring is always drawn: the pushed state alone does
+/// not say open (the scheme's P differs from up by a brighter bezel and a glyph one texel lower, the
+/// idle pictures' by a faint tint, and the hovered open tab shows the same art).
+static const Bool COMMAND_TAB_RING_WITH_OPEN_IMAGE = FALSE;
+/// per tab, set every frame by updateCommandTabButtons
+static Bool s_commandTabRing[ ControlBar::COMMAND_TAB_COUNT ] = { TRUE, TRUE, TRUE };
+
 /// A tab button draws as a push button, and the open one then gets an outline two pixels wide in the
-/// build buttons' border colour, inside the button's own rect so it keeps the row's clearance.  The
-/// pushed state alone does not say open: the scheme's art differs from up by a brighter bezel and a
-/// glyph one texel lower, the idle pictures by a faint tint, and the hovered open tab shows the same
-/// art.  Fills, whose pixels are exact.
+/// build buttons' border colour, inside the button's own rect so it keeps its clearance, unless the
+/// scheme's open image marks it (s_commandTabRing).  Fills, whose pixels are exact.
 static void drawCommandTab( GameWindow *window, WinInstanceData *instData )
 {
 	if( s_commandTabButtonDraw )
 		s_commandTabButtonDraw( window, instData );
 	const Int tab = (Int)(intptr_t)GadgetButtonGetData( window ) - 1;
-	if( tab < 0 || tab != TheControlBar->getCommandTab() )
+	if( tab < 0 || tab >= ControlBar::COMMAND_TAB_COUNT || tab != TheControlBar->getCommandTab() || !s_commandTabRing[ tab ] )
 		return;
 	enum { RING = 2 };
 	ICoord2D pos, size;
@@ -1912,9 +1919,14 @@ void ControlBar::updateCommandTabButtons( void )
 	if( !playing )
 		closeCommandTab();
 
+	// the scheme's seats, when its painting has them: then the tabs stay in them wherever the bar is,
+	// slid or minimised, and hide only with the bar itself
+	IRegion2D seatTab[ COMMAND_TAB_COUNT ], seatPlate;
+	const Bool seated = m_controlBarSchemeManager != NULL && m_controlBarSchemeManager->getCommandTabSeats( seatTab, &seatPlate );
 	IRegion2D grid;
+	const Bool haveGrid = getCommandGridRect( &grid );
 	const Bool shown = playing && m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
-		&& !TheInGameUI->isQuitMenuVisible() && getCommandGridRect( &grid ) && grid.lo.y < (Int)TheDisplay->getHeight();
+		&& !TheInGameUI->isQuitMenuVisible() && ( seated || ( haveGrid && grid.lo.y < (Int)TheDisplay->getHeight() ) );
 
 	GameWindow *parent = m_commandTabParent;
 	if( parent != NULL && TheWindowManager->winGetWindowFromId( NULL, commandTabParentId() ) != parent )
@@ -1965,6 +1977,110 @@ void ControlBar::updateCommandTabButtons( void )
 		m_commandTabParent = parent;
 	}
 
+	//
+	// Seated: the plate and each tab where the scheme's painting has them, through drawPainting's own
+	// arithmetic (the piece of the bar the rect's middle falls in, that piece's design-to-screen, and
+	// the frame's travel since layoutPanels), so the buttons land on the painted seats at every HUD
+	// size and ride with the bar when it slides or is minimised.  The parent covers the plate and
+	// swallows its clicks.  Otherwise the computed row.
+	//
+	IRegion2D row, place[ COMMAND_TAB_COUNT ];
+	if( seated )
+	{
+		ICoord2D frameNow;
+		m_contextParent[ CP_MASTER ]->winGetScreenPosition( &frameNow.x, &frameNow.y );
+		struct Seat
+		{
+			static void toScreen( const IRegion2D &design, Int dx, Int dy, IRegion2D *out )
+			{
+				const Int piece = ControlBarHudPieceForDesignX( 0.5f * ( design.lo.x + design.hi.x ) );
+				ControlBarPanelDesignToScreen( piece, &design, TheDisplay->getWidth(), TheDisplay->getHeight(), out );
+				out->lo.x += dx;
+				out->hi.x += dx;
+				out->lo.y += dy;
+				out->hi.y += dy;
+			}
+		};
+		const Int dx = frameNow.x - m_panelOrigin.x;
+		const Int dy = frameNow.y - m_panelOrigin.y;
+		Seat::toScreen( seatPlate, dx, dy, &row );
+		for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
+		{
+			IRegion2D screen;
+			Seat::toScreen( seatTab[ tab ], dx, dy, &screen );
+			// a seat the plate does not cover still gets its clicks: the parent grows to hold it
+			row.lo.x = min( row.lo.x, screen.lo.x );
+			row.lo.y = min( row.lo.y, screen.lo.y );
+			row.hi.x = max( row.hi.x, screen.hi.x );
+			row.hi.y = max( row.hi.y, screen.hi.y );
+			place[ tab ] = screen;
+		}
+		for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
+		{
+			place[ tab ].lo.x -= row.lo.x;
+			place[ tab ].hi.x -= row.lo.x;
+			place[ tab ].lo.y -= row.lo.y;
+			place[ tab ].hi.y -= row.lo.y;
+		}
+	}
+	else
+		layoutCommandTabRow( grid, &row, place );
+	parent->winSetPosition( row.lo.x, row.lo.y );
+	parent->winSetSize( row.hi.x - row.lo.x, row.hi.y - row.lo.y );
+
+	// the scheme's own tab art, <S>ProTab<Kind> with H, P, I and O; a scheme naming none (Classic)
+	// lends the idle buttons' pictures
+	static const NameKeyType sources[ COMMAND_TAB_COUNT ] =
+	{
+		NAMEKEY( "ControlBar.wnd:ButtonIdleWorker" ),
+		NAMEKEY( "ControlBar.wnd:ButtonIdleVehicle" ),
+		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
+	};
+	for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
+	{
+		GameWindow *button = m_commandTabButtons[ tab ];
+		if( button == NULL )
+			continue;
+		button->winSetPosition( place[ tab ].lo.x, place[ tab ].lo.y );
+		button->winSetSize( place[ tab ].hi.x - place[ tab ].lo.x, place[ tab ].hi.y - place[ tab ].lo.y );
+
+		const Image *up, *hilite, *pushed, *disabled, *openImage = NULL;
+		const Image *const *own = m_controlBarSchemeManager ? m_controlBarSchemeManager->getCommandTabImages( tab ) : NULL;
+		if( own )
+		{
+			up = own[ 0 ];
+			hilite = own[ 1 ] ? own[ 1 ] : own[ 0 ];
+			pushed = own[ 2 ] ? own[ 2 ] : hilite;
+			disabled = own[ 3 ] ? own[ 3 ] : own[ 0 ];
+			openImage = own[ ControlBarScheme::COMMAND_TAB_OPEN ];
+		}
+		else
+		{
+			GameWindow *source = TheWindowManager->winGetWindowFromId( NULL, sources[ tab ] );
+			if( source == NULL )
+				continue;
+			up = source->winGetEnabledImage( 0 );
+			hilite = source->winGetHiliteImage( 0 );
+			pushed = source->winGetHiliteImage( 1 );
+			disabled = source->winGetDisabledImage( 0 );
+		}
+		if( pushed == NULL )
+			pushed = hilite;
+		s_commandTabRing[ tab ] = openImage == NULL || COMMAND_TAB_RING_WITH_OPEN_IMAGE;
+		// the open tab stays down: the scheme's open picture, else the pushed one, hovered or not
+		const Bool open = m_commandTab == tab;
+		const Image *down = openImage ? openImage : pushed;
+		GadgetButtonSetEnabledImage( button, open && down ? down : up );
+		GadgetButtonSetHiliteImage( button, open && down ? down : hilite );
+		GadgetButtonSetHiliteSelectedImage( button, open && down ? down : pushed );
+		GadgetButtonSetDisabledImage( button, disabled );
+	}
+	parent->winHide( FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::layoutCommandTabRow( const IRegion2D &grid, IRegion2D *row, IRegion2D *place )
+{
 	//
 	// The row stands outside the bar, on the painting's top edge at its left shoulder: left-aligned
 	// with the grid, its foot a few pixels over the centre steel, its top no higher than the money
@@ -2035,54 +2151,17 @@ void ControlBar::updateCommandTabButtons( void )
 	const Int foot = barTop - air;
 	if( moneyTop >= 0 && moneyTop < foot && foot - side < moneyTop )
 		side = max( (Int)TAB_LEAST, foot - moneyTop );
-	parent->winSetPosition( left, foot - side );
-	parent->winSetSize( COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap, side );
-
-	// the scheme's own tab art, <S>ProTab<Kind> with H, P and I; a scheme naming none (Classic) lends
-	// the idle buttons' pictures
-	static const NameKeyType sources[ COMMAND_TAB_COUNT ] =
-	{
-		NAMEKEY( "ControlBar.wnd:ButtonIdleWorker" ),
-		NAMEKEY( "ControlBar.wnd:ButtonIdleVehicle" ),
-		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
-	};
+	row->lo.x = left;
+	row->lo.y = foot - side;
+	row->hi.x = left + COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap;
+	row->hi.y = foot;
 	for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
 	{
-		GameWindow *button = m_commandTabButtons[ tab ];
-		if( button == NULL )
-			continue;
-		button->winSetPosition( tab * ( side + gap ), 0 );
-		button->winSetSize( side, side );
-
-		const Image *up, *hilite, *pushed, *disabled;
-		const Image *const *own = m_controlBarSchemeManager ? m_controlBarSchemeManager->getCommandTabImages( tab ) : NULL;
-		if( own )
-		{
-			up = own[ 0 ];
-			hilite = own[ 1 ] ? own[ 1 ] : own[ 0 ];
-			pushed = own[ 2 ] ? own[ 2 ] : hilite;
-			disabled = own[ 3 ] ? own[ 3 ] : own[ 0 ];
-		}
-		else
-		{
-			GameWindow *source = TheWindowManager->winGetWindowFromId( NULL, sources[ tab ] );
-			if( source == NULL )
-				continue;
-			up = source->winGetEnabledImage( 0 );
-			hilite = source->winGetHiliteImage( 0 );
-			pushed = source->winGetHiliteImage( 1 );
-			disabled = source->winGetDisabledImage( 0 );
-		}
-		if( pushed == NULL )
-			pushed = hilite;
-		// the open tab stays down
-		const Bool open = m_commandTab == tab;
-		GadgetButtonSetEnabledImage( button, open && pushed ? pushed : up );
-		GadgetButtonSetHiliteImage( button, open && pushed ? pushed : hilite );
-		GadgetButtonSetHiliteSelectedImage( button, pushed );
-		GadgetButtonSetDisabledImage( button, disabled );
+		place[ tab ].lo.x = tab * ( side + gap );
+		place[ tab ].lo.y = 0;
+		place[ tab ].hi.x = place[ tab ].lo.x + side;
+		place[ tab ].hi.y = side;
 	}
-	parent->winHide( FALSE );
 }
 
 //-------------------------------------------------------------------------------------------------

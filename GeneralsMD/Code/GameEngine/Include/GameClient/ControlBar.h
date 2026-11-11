@@ -1283,6 +1283,9 @@ public:
 
 protected:
 	void updateCommandTabButtons( void );					///< every client frame: where the tab buttons stand, their look, whether they show
+	/// a scheme with no seats: the tabs' row worked out from the bar's windows; the parent's screen
+	/// rect in 'row', each tab relative to it in 'place'
+	void layoutCommandTabRow( const IRegion2D &grid, IRegion2D *row, IRegion2D *place );
 	void populateCommandTab( Bool full );					///< a unit tab's page into the grid; full after a context switch, else the states only
 	Bool getCommandGridRect( IRegion2D *rect ) const;	///< the command windows' screen extent
 

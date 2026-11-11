@@ -2038,6 +2038,25 @@ void ControlBar::updateCommandTabButtons( void )
 	}
 	else
 		layoutCommandTabRow( grid, &row, place );
+
+	// the row where it stands now: a bar minimised or sliding takes the seats with it off the screen's
+	// foot.  With no tab wholly on screen there is nothing to see or press, so the row hides and an
+	// open tab closes, as when the bar is hidden (its keys would stay dead with no tab in sight)
+	Bool anyOnScreen = FALSE;
+	for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
+	{
+		const Int lx = row.lo.x + place[ tab ].lo.x, ly = row.lo.y + place[ tab ].lo.y;
+		const Int hx = row.lo.x + place[ tab ].hi.x, hy = row.lo.y + place[ tab ].hi.y;
+		if( lx >= 0 && ly >= 0 && hx <= (Int)TheDisplay->getWidth() && hy <= (Int)TheDisplay->getHeight() && hx > lx && hy > ly )
+			anyOnScreen = TRUE;
+	}
+	if( !anyOnScreen )
+	{
+		parent->winHide( TRUE );
+		closeCommandTab();
+		return;
+	}
+
 	parent->winSetPosition( row.lo.x, row.lo.y );
 	parent->winSetSize( row.hi.x - row.lo.x, row.hi.y - row.lo.y );
 

@@ -734,6 +734,173 @@ def signal_key(side_name, kind, state):
     return key_piece(side_name, SIGNAL_KEY[0], SIGNAL_KEY[1], state, signal_glyph(kind), glyph_scale=0.8)
 
 
+# The grown radar's frame (prototype, 2026-11-11, not approved: nothing in the default run calls these, so every
+# sheet and bar stays as it ships).  Minimap Size grows the radar out of the painted box; instead of the code's flat
+# grey frame, the side's own radar box drawn round the grown glass, the 100% box's design re-laid at any size: a
+# fixed top-left piece with the ledge, a fixed top-right and bottom-right corner, and edges that tile (never
+# stretch), so a ragged edge, a rivet row or the range ticks repeat whole.  Laid out round the glass well, the
+# picture's rect joined with the painted glass (5,832..327,1064), so the frame always covers the painted box.
+GROWN_RIGHT = {"America": 18, "China": 18, "Gla": 22, "Turkiye": 18}       # the right lip, the glass's edge to the box's
+GROWN_TOP, GROWN_LEDGE, GROWN_HEAD = 20, 17, 24     # box top lip over the glass, ledge over the box, room above that
+GROWN_TLW, GROWN_TILE = 282, 120                    # the top-left piece's width (ledge and its point), edge tile
+GROWN_PERIOD = {"America": 100, "China": 104, "Gla": 120, "Turkiye": 80}  # the right edge's tile, its fittings' period
+GROWN_REF = (5, 600, 455, 1064)                     # the reference glass the pieces are cut from
+
+
+def grown_frame_ref(side_name, glass=GROWN_REF):
+    """The radar box drawn round a glass well in screen pixels: (image from x 0 and y0 down to 1080, y0)."""
+    look = BAR_LOOKS[side_name]
+    build = look["build"]
+    x5, yT, xR, yB = glass
+    R, P = GROWN_RIGHT[side_name], GROWN_PERIOD[side_name]
+    Rx, otop = xR + R, yT - GROWN_TOP
+    ltop = otop - GROWN_LEDGE
+    y0 = ltop - GROWN_HEAD
+    p = Painter(Rx + 40, 1080 - y0)
+    L = lambda poly: [(x, y - y0) for x, y in poly]                         # noqa: E731
+    jl = lambda poly, seed, amp=2.5: [(x, y + TOP) for x, y in jitter([(x, y - TOP) for x, y in poly], seed, amp, 14)]  # noqa: E731
+    lip = range(yT + 30, yB - 40, P)                                       # each right-edge tile's top
+    if build == "machined":
+        box = [(0, otop), (Rx - 28, otop), (Rx, otop + 28), (Rx, 1080), (0, 1080)]
+        ledge = [(0, ltop), (226, ltop), (262, ltop + 14), (226, ltop + 28), (0, ltop + 28)]
+    elif build == "terraced":
+        box = [(0, otop), (Rx - 24, otop), (Rx - 24, otop + 10), (Rx - 12, otop + 10), (Rx - 12, otop + 20), (Rx, otop + 20),
+               (Rx, 1080), (0, 1080)]
+        d = ltop - 795
+        ledge = [(0, 795), (214, 795)]
+        ledge += (curve((214, 795), (238, 795), (262, 781), 8) + curve((256, 787), (244, 815), (226, 815), 8))[1:] + [(0, 815)]
+        ledge = [(x, y + d) for x, y in ledge]
+    elif build == "scavenged":
+        box = jl([(0, otop + 4), (180, otop), (Rx - 53, otop - 4), (Rx - 9, otop + 10), (Rx, otop + 40), (Rx - 2, 1080), (0, 1080)], 5)
+        ledge = jl([(0, ltop + 4), (130, ltop), (200, ltop - 8), (238, ltop - 4), (244, ltop + 14), (0, ltop + 22)], 7, 1.5)
+    else:
+        box = [(0, otop), (Rx - 24, otop), (Rx, otop + 24), (Rx, 1080), (0, 1080)]
+        ledge = [(0, ltop), (224, ltop), (248, ltop + 24), (0, ltop + 26)]
+    p.tiers([L(box)], None, 4.0, 7.0, 5.0, 2.6)
+    p.tiers([L(ledge)], None, 9, 12, 4, 2.0)
+    corner = {"machined": ("cut", 6), "terraced": ("notch", 4), "scavenged": ("rough", 4)}.get(build, ("cut", 5))
+    p.recess([L(plate(0, yT - 5, xR + 5, 1080, tr=corner))], None, 3.0, 2.0)
+    p.sink([L(plate(*grow(glass, 2)))], 5, 2)
+    if build == "machined":
+        p.inlay([L(plate(Rx - 12, y + 38, Rx, y + 39)) for y in lip] + [L(plate(x, ltop + 3, x + 1, ltop + 25)) for x in (30, 120)], INKM, 0.8)
+        p.inlay([L(plate(40, ltop + 9, 200, ltop + 11))], ACCENT, 0.5)
+        p.stud(Rx - 7, 1066 - y0, 2.6)
+    elif build == "terraced":
+        p.inlay([L(plate(10, ltop + 7, 200, ltop + 12))], ACCENT, 0.3)
+        for y in lip:
+            for k in range(0, P, 26):
+                p.rivet(Rx - 6, y + 13 + k - y0, 2.2)
+        p.rivet(Rx - 6, 1068 - y0, 2.2)
+    elif build == "scavenged":
+        for i, y in enumerate(lip):
+            sh = sheet(Rx - 16, y + 30, Rx, y + 90, 3)
+            p.bump([L(sh)], 1.4, 0.8, STEEL)
+            for e0, e1 in zip(sh, sh[1:] + sh[:1]):
+                p.weld((e0[0], e0[1] - y0), (e1[0], e1[1] - y0), seed=31 + int(e0[0]) + 7 * (y % P), r=1.2)
+        sh = sheet(60, ltop, 120, ltop + 18, -3)
+        p.bump([L(sh)], 1.4, 0.8, STEEL)
+        for i, (x, y) in enumerate(((Rx - 7, 1066), (10, 1068), (90, ltop + 10))):
+            p.bolt(x, y - y0, 2.6 + (i % 3) * 0.4, seed=i)
+    else:
+        ticks = [plate(Rx - 8, y + k, Rx - (2 if (k // 8) % 5 == 0 else 5), y + k + 1) for y in lip for k in range(0, P, 8)]
+        p.inlay([L(q) for q in ticks + [plate(x, ltop + 1, x + 1, ltop + 25) for x in (120,)]], INKM, 0.6)
+        sl, m, _ = p.silhouette([L(plate(186, ltop - 10, 218, ltop + 10, tl=("cut", 4), tr=("cut", 6)))], 9.0, "machined")
+        p.tint[sl][m] = SHELL_TINT
+        p.bump([L(plate(189, ltop - 8, 215, ltop + 8, tl=("cut", 3), tr=("cut", 5)))], 4.0, 1.4, STEEL)
+        p.sink([L(regular(205, ltop, 4.2, 16))], 3, 1.2)
+        for x, y in ((Rx - 6, 1068), (14, ltop + 21), (236, ltop + 22)):
+            p.inlay([L(regular(x, y, 2.8, 12))], DARK, 1.0)
+            p.bump([L(regular(x, y, 1.5, 6))], 0.6, 0.6, STEEL)
+    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, gloss=False)
+    if build == "faceted":
+        img = led(img, [((6, ltop + 23 - y0), (110, ltop + 23 - y0))], [(205, ltop - y0, TURQ)])
+    return img, y0
+
+
+def grown_pieces(side_name, _made={}):
+    """The pieces cut from the reference frame, each with the screen rect it was cut from (x0, y0, x1, y1)."""
+    if side_name not in _made:
+        _made[side_name] = _grown_pieces(side_name)
+    return _made[side_name]
+
+
+# Where the pieces stand on the side's TabPanel sheet (below the Tab screen's painting, right of the signal pieces);
+# their sizes are the side's (grown_pieces), the places the same on every sheet.
+GROWN_AT = {"TL": (400, 724), "T": (686, 724), "TR": (810, 724), "BR": (848, 724), "BL": (886, 724), "L": (895, 724),
+            "R": (904, 724), "B": (930, 724), "C": (1054, 724)}
+
+
+def grown_boxes(side_name):
+    """Every grown-frame piece's MappedImage name (after the prefix) and box on the side's TabPanel sheet."""
+    pieces = grown_pieces(side_name)
+    return {"Grown" + k: (x, y, x + pieces[k][0].width, y + pieces[k][0].height) for k, (x, y) in GROWN_AT.items()}
+
+
+def grown_glass(picture, radar=RADAR_GLASS_AT):
+    """The glass well the frame is laid round: the grown picture's rect joined with the painted glass (the scheme's
+    RadarUL/LR, 5,832..327,1064 at 1080), so the frame always covers the painted box, and the shift the signal plate
+    and its keys take (the well's top above the painted glass's top; 0 or less)."""
+    well = (min(picture[0], radar[0]), min(picture[1], radar[1]), max(picture[2], radar[2]), max(picture[3], radar[3]))
+    return well, well[1] - radar[1]
+
+
+def _grown_pieces(side_name):
+    img, y0 = grown_frame_ref(side_name)
+    x5, yT, xR, yB = GROWN_REF
+    Rx, P, t, tl = xR + GROWN_RIGHT[side_name], GROWN_PERIOD[side_name], GROWN_TILE, GROWN_TLW
+    top = yT - GROWN_TOP - GROWN_LEDGE - GROWN_HEAD
+    rects = {"TL": (0, top, tl, yT + 24), "T": (tl, top, tl + t, yT), "TR": (xR - 12, top, Rx, yT + 30),
+             "L": (0, yT + 24, x5, yT + 24 + t), "R": (xR, yT + 30, Rx, yT + 30 + P),
+             "BL": (0, yB - 24, x5, 1080), "B": (x5, yB, x5 + t, 1080), "BR": (xR - 12, yB - 24, Rx, 1080),
+             "C": (100, yT + 100, 104, yT + 102)}
+    return {k: (img.crop((r[0], r[1] - y0, r[2], r[3] - y0)), r) for k, r in rects.items()}
+
+
+def grown_compose(side_name, glass, pieces=None):
+    """The frame laid from the pieces round a glass well (screen px, grown_glass): an RGBA image of the screen's
+    size.  This is the rule the code follows (drawGrownRadarFrame); every number in it is read off a piece's size,
+    so only the well and the pieces go in.  At another HUD scale every size below scales with the bar's art.
+
+        x5, yT, xR, yB  the well: its left (the L piece's width, 5), top, right, foot (1064)
+        head            the T piece's height (61): the frame's art starts that far over the well's top
+        R               the R piece's width (the right lip, GrownRadarRight); the frame ends at xR + R
+        cut             TR's width less R (12): TR, BR and the ends of T and B stand at xR - cut
+        l0              TL's height less head (24): L tiles from yT + l0
+        r0              TR's height less head (30): R tiles from yT + r0
+        foot            BR's height less B's height (24): L and R stop, BL and BR start, at yB - foot
+        screen foot     yB + B's height (1080)
+
+    Order: the four edges tiled, then the four corners over them, then the glass C over the well, then the picture.
+    A tiled edge starts its first tile at its start and steps by the piece's own size; the last tile is cut, keeping
+    its top left, where the run ends.  Nothing is stretched."""
+    pieces = pieces or grown_pieces(side_name)
+    P = {k: v[0] for k, v in pieces.items()}
+    x5, yT, xR, yB = glass
+    head = P["T"].height
+    R = P["R"].width
+    cut = P["TR"].width - R
+    l0, r0 = P["TL"].height - head, P["TR"].height - head
+    foot = P["BR"].height - P["B"].height
+    top = yT - head
+    out = Image.new("RGBA", (1920, 1080), (0, 0, 0, 0))
+
+    def tile(name, x0, y0, x1, y1):             # the run x0..x1, y0..y1, tiles from its top left, the last ones cut
+        img = P[name]
+        for y in range(y0, y1, img.height):
+            for x in range(x0, x1, img.width):
+                out.alpha_composite(img.crop((0, 0, min(img.width, x1 - x), min(img.height, y1 - y))), (x, y))
+    tile("T", P["TL"].width, top, xR - cut, yT)                     # across, between TL and TR
+    tile("L", 0, yT + l0, x5, yB - foot)                            # down the screen's left edge, between TL and BL
+    tile("R", xR, yT + r0, xR + R, yB - foot)                       # down the right lip, between TR and BR
+    tile("B", x5, yB, xR - cut, yB + P["B"].height)                 # across the screen's foot, between BL and BR
+    out.alpha_composite(P["TL"], (0, top))
+    out.alpha_composite(P["TR"], (xR - cut, top))
+    out.alpha_composite(P["BL"], (0, yB - foot))
+    out.alpha_composite(P["BR"], (xR - cut, yB - foot))
+    tile("C", x5, yT, xR, yB)                                       # the glass under the picture
+    return out
+
+
 def tab_seats(p, kind, c):
     """A seat sunk for each tab, the tab's rect grown 2, in the side's corner."""
     for r in TAB_SEATS:
@@ -2924,6 +3091,9 @@ def tab_panel(side, solo=False):
         boxes = signal_boxes(side)
         for name, piece in signal_pieces(side).items():
             put(sheet_img, piece, boxes[name])
+        boxes = grown_boxes(side)                 # and the grown radar's frame, a piece a corner or edge
+        for name, (piece, _) in grown_pieces(side).items():
+            put(sheet_img, piece, boxes["Grown" + name])
     return sheet_img
 
 
@@ -3089,6 +3259,7 @@ def check_tab(sheet_img, side_name, prefix, solo_img=None):
     want.update({prefix + name: box for name, box in tab_button_boxes().items()})
     if side_name in SIDES:
         want.update({prefix + name: box for name, box in signal_boxes(side_name).items()})
+        want.update({prefix + name: box for name, box in grown_boxes(side_name).items()})
     assert M == want, "ReforgedHud%sTabPanel.ini maps %s, the generator draws %s" % (side_name, sorted(set(M) ^ set(want)) or M, want)
     W, H = TAB_PANEL
     for img in [sheet_img] + ([solo_img] if solo_img is not None else []):
@@ -3732,9 +3903,17 @@ def check(img, side_name="America"):
     want["Radar"] = (min(r[0], plate_box[0]), min(r[1], plate_box[1]), max(r[2], plate_box[2]), max(r[3], plate_box[3]))
     signals = dict(("Signal" + k, s) for k, s in zip(SIGNAL_KINDS, SIGNAL_SEATS))
     signals["SignalPlate"] = plate_box
+    pieces = grown_pieces(side_name)
+    grown = {"GrownRadarImage": side_name + "ProGrown", "GrownRadarRight": str(pieces["R"][0].width),
+             "GrownRadarPeriod": str(pieces["R"][0].height), "GrownRadarLedge": str(GROWN_TOP + GROWN_LEDGE)}
+    assert pieces["R"][0].size == (GROWN_RIGHT[side_name], GROWN_PERIOD[side_name])
+    text = open(SCHEME_INI, encoding="latin-1").read()
     for scheme in side_schemes(side_name):
         keys = scheme_rects(scheme, list(signals))
         assert keys == signals, "%s's smoke signals %s, the art asks for %s" % (scheme, keys, signals)
+        body = re.search(r"ControlBarScheme %s\b(.*?)(?=\nControlBarScheme |\Z)" % scheme, text, re.S).group(1)
+        have = {k: (re.search(r"\b%s (\S+)" % k, body) or [None, None])[1] for k in grown}
+        assert have == grown, "%s's grown radar keys %s, the art asks for %s" % (scheme, have, grown)
     tabs = dict(zip(COMMAND_TAB_KINDS, TAB_SEATS))
     for scheme in side_schemes(side_name):
         have = scheme_blocks(scheme)

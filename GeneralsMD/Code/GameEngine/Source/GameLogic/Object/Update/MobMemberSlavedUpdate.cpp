@@ -294,6 +294,30 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 		return UPDATE_SLEEP( MOB_MEMBER_UPDATE_RATE );
 	}
 
+	/* A squad garrisons and rides as its men (squadKeyOf in OpenContain.cpp): inside, a man is the
+		 container's and fires as himself, so none of the following below applies to him. He goes where
+		 his nexus goes: out of whatever he is in once the nexus is out (its exit button, or a container
+		 that put the nexus down first), after it into its container once it is in (a man the enter order
+		 missed, or one held up on the way). A man on his way in is left to get there. EA's mob has no
+		 transport slots and never gets inside anything, so none of this reaches it. */
+	Object *myContainer = me->getContainedBy();
+	Object *masterContainer = master->getContainedBy();
+	if( myContainer )
+	{
+		if( masterContainer == NULL && myAI->getCurrentStateID() != AI_EXIT )
+			myAI->aiExit( myContainer, CMD_FROM_AI );
+		return UPDATE_SLEEP( MOB_MEMBER_UPDATE_RATE );
+	}
+	if( myAI->getCurrentStateID() == AI_ENTER )
+	{
+		return UPDATE_SLEEP( MOB_MEMBER_UPDATE_RATE );
+	}
+	if( masterContainer )
+	{
+		myAI->aiEnter( masterContainer, CMD_FROM_AI );
+		return UPDATE_SLEEP( MOB_MEMBER_UPDATE_RATE );
+	}
+
 	Drawable *myDraw = me->getDrawable();
 	Drawable *masterDraw = master->getDrawable();
 	if ( ! myDraw || ! masterDraw)

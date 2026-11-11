@@ -171,8 +171,11 @@ Bool TunnelTracker::isValidContainerFor(const Object* obj, Bool checkCapacity) c
 	{
 		if (checkCapacity)
 		{
+			// a squad fills one place whatever number of its men are in, and its next man needs none
+			if( squadMateIn( m_containList, obj ) )
+				return true;
 			Int containMax = getContainMax();
-			Int containCount = getContainCount();
+			Int containCount = getContainCount() - squadExtrasIn( m_containList );
 			return ( containCount < containMax );
 		}
 		else

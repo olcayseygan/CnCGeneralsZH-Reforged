@@ -208,8 +208,10 @@ Bool TransportContain::isValidContainerFor(const Object* rider, Bool checkCapaci
 	{
     Int containMax = getContainMax();
     Int containCount = getContainCount();
-    
-		return (m_extraSlotsInUse + containCount + transportSlotCount <= containMax);
+
+		const ContainedItemsList *list = getContainedItemsList();
+		const Int extraSlots = m_extraSlotsInUse - ( list ? squadExtrasIn( *list ) : 0 );
+		return (extraSlots + containCount + riderSlotsTaken( rider ) <= containMax);
 
 	}
 	else
@@ -219,6 +221,18 @@ Bool TransportContain::isValidContainerFor(const Object* rider, Bool checkCapaci
 }
 
 
+
+//-------------------------------------------------------------------------------------------------
+/** The slots a rider takes: none when another man of its squad is already in (squadMateIn), so a squad
+	* takes its one soldier's place. m_extraSlotsInUse stays retail's running count; the squad's other
+	* men come off it as they are counted (getExtraSlotsInUse), from the list as it stands, so a nexus
+	* that dies before its men leave cannot leave the count wrong. */
+//-------------------------------------------------------------------------------------------------
+Int TransportContain::riderSlotsTaken( const Object *rider ) const
+{
+	const ContainedItemsList *list = getContainedItemsList();
+	return ( list && squadMateIn( *list, rider ) ) ? 0 : rider->getTransportSlotCount();
+}
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -293,7 +307,7 @@ void TransportContain::onContaining( Object *rider, Bool wasSelected )
 
 	DEBUG_ASSERTCRASH(transportSlotCount > 0, ("Hmm, this object isnt transportable"));
 	m_extraSlotsInUse += transportSlotCount - 1;
-	DEBUG_ASSERTCRASH(m_extraSlotsInUse >= 0 && m_extraSlotsInUse + getContainCount() <= getContainMax(), ("Hmm, bad slot count"));
+	DEBUG_ASSERTCRASH(m_extraSlotsInUse >= 0 && getExtraSlotsInUse() + (Int)getContainCount() <= getContainMax(), ("Hmm, bad slot count"));
 
 	//
 	// when we go from holding nothing to holding something we have a model condition

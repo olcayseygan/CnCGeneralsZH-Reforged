@@ -953,6 +953,67 @@ void OpenContain::onDie( const DamageInfo * damageInfo )
 }  
 
 // ------------------------------------------------------------------------------------------------
+/** A squad's nexus, and the members it spawned (their producer), share the nexus' ID. A squad's
+	* objects have transport slots, EA's Angry Mob has none, so a mob never gets this far. */
+// ------------------------------------------------------------------------------------------------
+ObjectID squadKeyOf( const Object *obj )
+{
+	if( obj == NULL || obj->getTransportSlotCount() == 0 )
+		return INVALID_ID;
+	if( obj->isKindOf( KINDOF_MOB_NEXUS ) )
+		return obj->getID();
+	if( obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )
+	{
+		const Object *nexus = TheGameLogic->findObjectByID( obj->getProducerID() );
+		if( nexus && nexus->isKindOf( KINDOF_MOB_NEXUS ) )
+			return nexus->getID();
+	}
+	return INVALID_ID;
+}
+
+// ------------------------------------------------------------------------------------------------
+Bool squadMateIn( const ContainedItemsList &list, const Object *obj )
+{
+	const ObjectID key = squadKeyOf( obj );
+	if( key == INVALID_ID )
+		return FALSE;
+	for( ContainedItemsList::const_iterator it = list.begin(); it != list.end(); ++it )
+		if( *it != obj && squadKeyOf( *it ) == key )
+			return TRUE;
+	return FALSE;
+}
+
+// ------------------------------------------------------------------------------------------------
+Int squadExtrasIn( const ContainedItemsList &list )
+{
+	Int extras = 0;
+	for( ContainedItemsList::const_iterator it = list.begin(); it != list.end(); ++it )
+	{
+		const ObjectID key = squadKeyOf( *it );
+		if( key == INVALID_ID )
+			continue;
+		for( ContainedItemsList::const_iterator before = list.begin(); before != it; ++before )
+		{
+			if( squadKeyOf( *before ) == key )
+			{
+				++extras;
+				break;
+			}
+		}
+	}
+	return extras;
+}
+
+// ------------------------------------------------------------------------------------------------
+/** A squad fills one place whatever number of its men are inside (squadKeyOf) */
+// ------------------------------------------------------------------------------------------------
+Int OpenContain::getExtraSlotsInUse( void )
+{
+	const ContainedItemsList *list = getContainedItemsList();
+	return list ? -squadExtrasIn( *list ) : 0;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Check to see if we are a valid container for 'obj' */
 // ------------------------------------------------------------------------------------------------
 Bool OpenContain::isValidContainerFor(const Object* obj, Bool checkCapacity) const

@@ -702,8 +702,10 @@ Bool ActionManager::canEnterObject( const Object *obj, const Object *objectToEnt
 	// Can't enter something being sold
 	if( objectToEnter->testStatus(OBJECT_STATUS_SOLD) )
 		return FALSE;
-	if ( obj->isKindOf( KINDOF_IGNORED_IN_GUI )  //As in, Angry Mob Members, Cargo Planes
-		|| obj->isKindOf( KINDOF_MOB_NEXUS )   
+	// a five-man squad's nexus and men (squadKeyOf) enter where their soldier could; the container
+	// counts the squad as one of him
+	if ( ( ( obj->isKindOf( KINDOF_IGNORED_IN_GUI )  //As in, Angry Mob Members, Cargo Planes
+		|| obj->isKindOf( KINDOF_MOB_NEXUS ) ) && squadKeyOf( obj ) == INVALID_ID )
 		|| objectToEnter->isKindOf( KINDOF_IGNORED_IN_GUI ) )  // As in Cargo Planes
 	{																					
 																						

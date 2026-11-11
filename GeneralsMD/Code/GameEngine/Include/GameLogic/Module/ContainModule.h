@@ -69,6 +69,17 @@ enum EvacDisposition
 typedef std::list<Object*> ContainedItemsList;
 
 //-------------------------------------------------------------------------------------------------
+/** A five-man squad (SquadReforged.ini) rides and garrisons as its men, every one of them inside and
+	* firing as himself, but takes the room of the one soldier it stands for: its nexus and members share
+	* one key (the nexus' ID), and a container counts a key once. Everything else has no key. */
+ObjectID squadKeyOf( const Object *obj );
+/** another object of obj's squad in the list, obj itself left out */
+Bool squadMateIn( const ContainedItemsList &list, const Object *obj );
+/** how many of the list's objects are not the first of their squad in it: the count a container
+	* takes back so that a squad fills one place */
+Int squadExtrasIn( const ContainedItemsList &list );
+
+//-------------------------------------------------------------------------------------------------
 typedef ModuleData ContainModuleData;
 
 //-------------------------------------------------------------------------------------------------

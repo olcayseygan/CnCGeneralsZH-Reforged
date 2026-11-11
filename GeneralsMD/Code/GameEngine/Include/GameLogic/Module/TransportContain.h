@@ -91,7 +91,7 @@ public:
 	
 	virtual Int getContainMax( void ) const;
 
-	virtual Int getExtraSlotsInUse( void ) { return m_extraSlotsInUse; }///< Transports have the ability to carry guys how take up more than spot.
+	virtual Int getExtraSlotsInUse( void ) { return m_extraSlotsInUse + OpenContain::getExtraSlotsInUse(); }///< Transports have the ability to carry guys how take up more than spot; a squad's men past its first take none.
 
 	virtual Bool isExitBusy() const;	///< Contain style exiters are getting the ability to space out exits, so ask this before reserveDoor as a kind of no-commitment check.
 	virtual ExitDoorType reserveDoorForExit( const ThingTemplate* objType, Object *specificObject );
@@ -107,6 +107,8 @@ protected:
 
 	virtual void createPayload();
 	void letRidersUpgradeWeaponSet( void );
+	/// the slots a rider takes: none when another man of its squad is already in (squadMateIn)
+	Int riderSlotsTaken( const Object *rider ) const;
 
 	Bool m_payloadCreated;	
 

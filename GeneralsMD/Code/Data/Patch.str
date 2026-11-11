@@ -888,7 +888,7 @@ GUI:EmptyBuildingPips
 END
 
 TOOLTIP:EmptyBuildingPips
-"The row of empty slots over a building with nobody inside, like the ten over a Barracks. Off, a building shows its slots only while someone is in it."
+"The row of empty slots over a building with nobody inside, like the ten over a Tunnel Network. Off, a building shows its slots only while someone is in it."
 END
 
 GUI:ArchiveReplays

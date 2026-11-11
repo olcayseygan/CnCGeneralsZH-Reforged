@@ -4176,6 +4176,28 @@ void Drawable::drawEmoticon( const IRegion2D *healthBarRegion )
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
+Bool Drawable_emptySeatsShow( Bool isStructure, Bool isGarrisonable, Bool isHealContain, Bool showEmptyBuildingPips )
+{
+	// a vehicle keeps its free seats: how much room a transport has left is what you load it by
+	if( !isStructure )
+		return TRUE;
+
+	// an empty garrisonable building draws nothing at all: a city with empty seats over every house is
+	// clutter. Once someone is in, the row counts them against every window it has.
+	if( isGarrisonable )
+		return FALSE;
+
+	// a Barracks' slots are beds for the wounded, not seats anyone loads: ten hollow chips over every
+	// empty Barracks for the whole match said nothing, so it shows them only while someone heals
+	if( isHealContain )
+		return FALSE;
+
+	// the rest, a Tunnel Network or an Internet Center, as the player set Empty Building Slots
+	return showEmptyBuildingPips;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 Int Drawable_pipPixel( Real uiScale )
 {
 	// the chips are drawn in 1920x1080's pixels (UI scale 1.8) and grow only by whole steps, so an
@@ -4352,14 +4374,8 @@ Bool Drawable::seatPipCounts( Int &numTotal, Int &numInfantry, Int &numFull ) co
 	if (!container->getContainerPipsToShow(numTotal, numFull) || numTotal <= 0)
 		return FALSE;
 
-	// empty containers still show their (empty) pips, unless the player switched that off for
-	// buildings: a Barracks wears ten empty boxes for the whole match otherwise
-	if (numFull == 0 && !TheGlobalData->m_showEmptyBuildingPips && obj->isKindOf( KINDOF_STRUCTURE ))
-		return FALSE;
-
-	// an empty garrisonable building draws nothing at all: a city with empty seats over every house
-	// is clutter. Once someone is in, the row counts them against every window it has.
-	if (numFull == 0 && obj->isKindOf( KINDOF_STRUCTURE ) && container->isGarrisonable())
+	if (numFull == 0 && !Drawable_emptySeatsShow( obj->isKindOf( KINDOF_STRUCTURE ), container->isGarrisonable(),
+																							 container->isHealContain(), TheGlobalData->m_showEmptyBuildingPips ))
 		return FALSE;
 
 	numInfantry = 0;

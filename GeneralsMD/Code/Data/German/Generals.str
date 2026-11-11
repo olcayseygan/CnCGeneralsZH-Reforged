@@ -14586,7 +14586,7 @@ GUI:EmptyBuildingPips
 END
 
 TOOLTIP:EmptyBuildingPips
-"Die Reihe leerer Plätze über einem Gebäude ohne Insassen, etwa die zehn über einer Kaserne. Aus zeigt ein Gebäude seine Plätze nur, solange jemand darin ist."
+"Die Reihe leerer Plätze über einem Gebäude ohne Insassen, etwa die zehn über einem Tunnelsystem. Aus zeigt ein Gebäude seine Plätze nur, solange jemand darin ist."
 END
 
 GUI:ArchiveReplays

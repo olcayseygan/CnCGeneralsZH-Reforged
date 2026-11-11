@@ -16322,7 +16322,7 @@ GUI:EmptyBuildingPips
 END
 
 TOOLTIP:EmptyBuildingPips
-"La rangée de places vides au-dessus d'un bâtiment inoccupé, comme les dix au-dessus d'une Caserne. Désactivé, un bâtiment ne montre ses places que quand quelqu'un est dedans."
+"La rangée de places vides au-dessus d'un bâtiment inoccupé, comme les dix au-dessus d'un Réseau de tunnels. Désactivé, un bâtiment ne montre ses places que quand quelqu'un est dedans."
 END
 
 GUI:ArchiveReplays

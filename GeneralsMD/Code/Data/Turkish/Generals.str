@@ -15590,7 +15590,7 @@ GUI:EmptyBuildingPips
 END
 
 TOOLTIP:EmptyBuildingPips
-"İçinde kimse olmayan binanın üstündeki boş yuva sırası, örneğin Kışlanın üstündeki on yuva. Kapalıyken bina yuvalarını yalnızca içinde biri varken gösterir."
+"İçinde kimse olmayan binanın üstündeki boş yuva sırası, örneğin Tünel Ağının üstündeki on yuva. Kapalıyken bina yuvalarını yalnızca içinde biri varken gösterir."
 END
 
 GUI:ArchiveReplays

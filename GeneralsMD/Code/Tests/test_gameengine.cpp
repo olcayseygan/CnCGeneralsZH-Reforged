@@ -10854,6 +10854,19 @@ TEST(load_pip_chips_scale_in_whole_pixels)
 	CHECK_EQ( Drawable_pipPixel( 0.5f ), 1 );
 }
 
+/** Who still shows free seats with nobody inside: a transport always, a garrison or a Barracks
+	 never whatever the option says, a Tunnel Network as Empty Building Slots says. */
+TEST(empty_seats_hide_on_a_barracks_whatever_the_option)
+{
+	for( Int option = 0; option < 2; ++option )
+	{
+		CHECK( Drawable_emptySeatsShow( FALSE, FALSE, FALSE, option != 0 ) == TRUE );		// transport
+		CHECK( Drawable_emptySeatsShow( TRUE, TRUE, FALSE, option != 0 ) == FALSE );		// garrison
+		CHECK( Drawable_emptySeatsShow( TRUE, FALSE, TRUE, option != 0 ) == FALSE );		// Barracks
+		CHECK( Drawable_emptySeatsShow( TRUE, FALSE, FALSE, option != 0 ) == ( option != 0 ) );	// tunnel
+	}
+}
+
 TEST(health_bar_smart_mode_marks_the_hurt)
 {
 	CHECK( Drawable_healthBarModeShows( HEALTH_BAR_SMART, FALSE, FALSE, TRUE ) == TRUE );

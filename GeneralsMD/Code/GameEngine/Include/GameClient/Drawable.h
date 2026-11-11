@@ -111,6 +111,11 @@ extern Bool Drawable_healthBarModeShows( Int healthBarMode, Bool isSelected, Boo
 ///< steps from 1920x1080's, 1 up to 1440p and 2 at 4K
 extern Int Drawable_pipPixel( Real uiScale );
 
+///< whether a container with nobody inside still shows its row of free seats: a vehicle always, a
+///< garrisonable or heal-only building (a Barracks) never, any other building as the option says
+extern Bool Drawable_emptySeatsShow( Bool isStructure, Bool isGarrisonable, Bool isHealContain,
+																		 Bool showEmptyBuildingPips );
+
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
 

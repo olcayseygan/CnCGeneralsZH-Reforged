@@ -1769,8 +1769,6 @@ ControlBar::ControlBar( void )
 	m_multiSelectFocus = 0;
 	m_rallyPointDrawableID = INVALID_DRAWABLE_ID;
 	m_standInBuilderID = INVALID_DRAWABLE_ID;
-	// the windows are new: no cell is an arrow, and nothing saved belongs to them
-	m_commandTabArrowSlot[ 0 ] = m_commandTabArrowSlot[ 1 ] = -1;
 	m_displayedConstructPercent = -1.0f;
 	m_displayedOCLTimerSeconds = 0;
 	m_displayedQueueCount = 0;
@@ -3053,6 +3051,9 @@ void ControlBar::shutdownWindows( void )
 {
 	Int i;
 
+	// the cells are going: no arrow is left to give back, and what was saved belonged to them
+	m_commandTabArrowSlot[ 0 ] = m_commandTabArrowSlot[ 1 ] = -1;
+
 	// the next layout's fitRadarToMap places the radar again
 	m_radarRaised = FALSE;
 	m_radarSquareGrown = FALSE;
@@ -3421,6 +3422,8 @@ void ControlBar::reset( void )
 	m_standInBuilderID = INVALID_DRAWABLE_ID;
 	m_commandTab = COMMAND_TAB_NONE;
 	m_commandTabPage = 0;
+	// the cells outlive the match: arrow cells get back what they wore before the next one
+	restoreCommandTabArrows();
 
 	m_displayedConstructPercent = -1.0f;
 	m_displayedOCLTimerSeconds = 0;

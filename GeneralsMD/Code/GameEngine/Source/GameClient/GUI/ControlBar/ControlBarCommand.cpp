@@ -1944,6 +1944,10 @@ void ControlBar::updateCommandTabButtons( void )
 	{
 		if( parent != NULL )
 			parent->winHide( TRUE );
+		// a tab nobody can see would keep the grid's keys dead (pressCommandButton) with nothing on
+		// screen to say why: the bar hidden or slid away, the quit menu up.  It closes, and the keys
+		// come back with the bar
+		closeCommandTab();
 		return;
 	}
 

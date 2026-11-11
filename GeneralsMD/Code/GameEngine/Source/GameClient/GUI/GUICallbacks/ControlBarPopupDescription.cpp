@@ -789,6 +789,13 @@ void ControlBar::repopulateBuildTooltipLayout( void )
 	if(!BitTest(prevWindow->winGetStyle(), GWS_PUSH_BUTTON))
 		return;
 	const CommandButton *commandButton = (const CommandButton *)GadgetButtonGetData(prevWindow);
+	// the cell under the pointer lost its command (a unit tab's cell turned into a page arrow, or the
+	// bar emptied it): an empty card would hang there until the pointer left, so it goes now
+	if( commandButton == NULL )
+	{
+		hideBuildTooltipLayout();
+		return;
+	}
 	populateBuildTooltipLayout(commandButton);
 }
 
@@ -965,8 +972,10 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 		name = TheGameText->fetch(commandButton->getTextLabel().str());
 
 		// an open command tab's cells take no keys, so the card marks no hotkey letter either: the '&'
-		// the name's HOTKEY_TEXT line would light goes
-		if( commandTabCovers( tooltipWin ) )
+		// the name's HOTKEY_TEXT line would light goes.  A command cell's card is asked for with no
+		// window (showBuildTooltipLayout, repopulateBuildTooltipLayout): the window under the pointer
+		// is prevWindow then
+		if( commandTabCovers( tooltipWin ? tooltipWin : prevWindow ) )
 		{
 			WideCharString plain = name.str();
 			const size_t marker = plain.find( u'&' );

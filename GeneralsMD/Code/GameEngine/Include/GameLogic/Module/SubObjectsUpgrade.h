@@ -65,8 +65,9 @@ class SubObjectsUpgradeModuleData : public UpgradeModuleData
 public:
 	std::vector<AsciiString>					m_showSubObjectNames;
 	std::vector<AsciiString>					m_hideSubObjectNames;
+	Bool															m_followsOwner;	///< on an owner change, match the new owner's upgrades
 
-	SubObjectsUpgradeModuleData(){}
+	SubObjectsUpgradeModuleData() : m_followsOwner(false) {}
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 };
@@ -82,6 +83,8 @@ public:
 
 	SubObjectsUpgrade( Thing *thing, const ModuleData* moduleData );
 	// virtual destructor prototype defined by MemoryPoolObject
+
+	virtual void onCapture( Player *oldOwner, Player *newOwner );
 
 protected:
 	virtual void upgradeImplementation( ); ///< Here's the actual work of Upgrading

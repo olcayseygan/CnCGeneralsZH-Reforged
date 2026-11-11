@@ -63,6 +63,7 @@ void SubObjectsUpgradeModuleData::buildFieldParse(MultiIniFieldParse& p)
 	{
 		{ "ShowSubObjects", INI::parseAsciiStringVectorAppend, NULL, offsetof( SubObjectsUpgradeModuleData, m_showSubObjectNames ) },
 		{ "HideSubObjects", INI::parseAsciiStringVectorAppend, NULL, offsetof( SubObjectsUpgradeModuleData, m_hideSubObjectNames ) },
+		{ "FollowsOwner", INI::parseBool, NULL, offsetof( SubObjectsUpgradeModuleData, m_followsOwner ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -126,6 +127,52 @@ void SubObjectsUpgrade::upgradeImplementation( )
 		{
 			draw->updateSubObjects();
 		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Nothing re-runs upgrade modules when an object changes hands, so a captured building kept the
+// parts its old owner's upgrades gave it and never showed the new owner's.  With FollowsOwner the
+// module checks again against the new owner: shows the parts if he has the trigger, hides them
+// again if he does not.  Undoing swaps the two lists, so a part HideSubObjects hid comes back.
+//-------------------------------------------------------------------------------------------------
+void SubObjectsUpgrade::onCapture( Player *oldOwner, Player *newOwner )
+{
+	if( !getSubObjectsUpgradeModuleData()->m_followsOwner || oldOwner == newOwner || newOwner == NULL )
+		return;
+
+	Object *obj = getObject();
+	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_DESTROYED ) )
+		return; // the same gate as Object::updateUpgradeModules
+
+	UpgradeMaskType mask = newOwner->getCompletedUpgradeMask();
+	mask.set( obj->getObjectCompletedUpgradeMask() );
+
+	if( !isAlreadyUpgraded() )
+	{
+		attemptUpgrade( mask );
+		return;
+	}
+
+	if( testUpgradeConditions( mask ) )
+		return;
+
+	// Not executed again, so the new owner finishing the upgrade later shows the parts.
+	setUpgradeExecuted( false );
+
+	// ponytail: the swap is the inverse of one module; two modules showing and hiding the same part
+	// both being undone end in module order, not in the model's default.  Remember the prior state if
+	// a building ever needs that.
+	const SubObjectsUpgradeModuleData *data = getSubObjectsUpgradeModuleData();
+	Drawable *draw = obj->getDrawable();
+	if( draw && ( !data->m_showSubObjectNames.empty() || !data->m_hideSubObjectNames.empty() ) )
+	{
+		std::vector<AsciiString>::const_iterator subObjectName;
+		for( subObjectName = data->m_showSubObjectNames.begin(); subObjectName != data->m_showSubObjectNames.end(); ++subObjectName )
+			draw->showSubObject( *subObjectName, false );
+		for( subObjectName = data->m_hideSubObjectNames.begin(); subObjectName != data->m_hideSubObjectNames.end(); ++subObjectName )
+			draw->showSubObject( *subObjectName, true );
+		draw->updateSubObjects();
 	}
 }
 

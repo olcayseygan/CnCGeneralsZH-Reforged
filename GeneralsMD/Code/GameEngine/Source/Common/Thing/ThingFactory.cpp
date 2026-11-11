@@ -386,16 +386,6 @@ const ThingTemplate *ThingFactory::findSideReskin( const ThingTemplate *tmplate,
 	if (side.isEmpty() || tmplateSide.isEmpty() || tmplateSide == side)
 		return NULL;
 
-	// A five-man squad (SquadReforged.ini) is always the one its Barracks trains. Every squad nexus
-	// reskins one shared nexus, so all of them are equivalent and a captured Air Force Barracks gave a
-	// plain USA player a Missile Defender squad; its men are spawned with no producer, so the owner's
-	// side applied and a Turkiye owner's Ranger squad grew single Mehmetciks, the Mehmetcik being a
-	// Ranger reskin. A squad member is the infantry hidden from the interface; EA's only such men are
-	// the Angry Mob's, which never leave GLA.
-	if (tmplate->isKindOf( KINDOF_MOB_NEXUS )
-			|| (tmplate->isKindOf( KINDOF_IGNORED_IN_GUI ) && tmplate->isKindOf( KINDOF_INFANTRY )))
-		return NULL;
-
 	const std::pair< const ThingTemplate*, NameKeyType > key( tmplate, NAMEKEY( side ) );
 	std::map< std::pair< const ThingTemplate*, NameKeyType >, const ThingTemplate* >::const_iterator it = m_sideReskins.find( key );
 	if (it != m_sideReskins.end())

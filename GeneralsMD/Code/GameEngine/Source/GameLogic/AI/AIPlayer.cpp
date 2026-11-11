@@ -10131,7 +10131,6 @@ static const ThingTemplate *bestDefender( Object *factory, const Player *owner, 
 		const Bool aircraftAllowed = allowHelicopters && tmpl && tmpl->isKindOf( KINDOF_PRODUCED_AT_HELIPAD );
 		if( tmpl == NULL || !tmpl->canPossiblyHaveAnyWeapon() || tmpl->isKindOf( KINDOF_DOZER ) || tmpl->isKindOf( KINDOF_HARVESTER ) ||
 				tmpl->isKindOf( KINDOF_MONEY_HACKER ) || (tmpl->isKindOf( KINDOF_AIRCRAFT ) && !aircraftAllowed) ||
-				tmpl->isKindOf( KINDOF_MOB_NEXUS ) ||		// a squad or a mob: the computer trains the single soldier
 				TheBuildAssistant->canMakeUnit( factory, tmpl ) != CANMAKE_OK )
 			continue;
 
@@ -10726,7 +10725,7 @@ static const ThingTemplate *surplusUnit( Object *factory, const Player *owner, c
 		if( button == NULL || button->getCommandType() != GUI_COMMAND_UNIT_BUILD )
 			continue;
 		const ThingTemplate *tmpl = button->getThingTemplate();
-		if( tmpl == NULL || tmpl->isKindOf( KINDOF_MOB_NEXUS ) )		// a squad or a mob: the computer trains the single soldier
+		if( tmpl == NULL )
 			continue;
 		// a signature jet is the army too
 		const Real favoured = doctrine ? doctrineFactor( *doctrine, tmpl, owner, army, airFloor ) : 1.0f;
@@ -11150,7 +11149,6 @@ static const ThingTemplate *cheapestArmed( Object *factory, const Player *owner,
 		const ThingTemplate *tmpl = button->getThingTemplate();
 		if( tmpl == NULL || !hasPrimaryWeapon( tmpl ) || !tmpl->isKindOf( kind ) || tmpl->isKindOf( KINDOF_AIRCRAFT ) ||
 				tmpl->isKindOf( KINDOF_DOZER ) || tmpl->isKindOf( KINDOF_HARVESTER ) || tmpl->isKindOf( KINDOF_MONEY_HACKER ) ||
-				tmpl->isKindOf( KINDOF_MOB_NEXUS ) ||		// a squad or a mob: the computer trains the single soldier
 				TheBuildAssistant->canMakeUnit( factory, tmpl ) != CANMAKE_OK )
 			continue;
 		const Int cost = tmpl->calcCostToBuild( owner );
@@ -11178,8 +11176,7 @@ static const ThingTemplate *favouredUnitOf( Object *factory, const Player *owner
 		if( button == NULL || button->getCommandType() != GUI_COMMAND_UNIT_BUILD )
 			continue;
 		const ThingTemplate *tmpl = button->getThingTemplate();
-		if( tmpl == NULL || ( armedOnly && !hasPrimaryWeapon( tmpl ) ) || !accept( tmpl ) || tmpl->isKindOf( KINDOF_MOB_NEXUS ) ||
-				TheBuildAssistant->canMakeUnit( factory, tmpl ) != CANMAKE_OK )
+		if( tmpl == NULL || ( armedOnly && !hasPrimaryWeapon( tmpl ) ) || !accept( tmpl ) || TheBuildAssistant->canMakeUnit( factory, tmpl ) != CANMAKE_OK )
 			continue;
 		const Int cost = tmpl->calcCostToBuild( owner );
 		if( best == NULL || ( dearest ? cost > bestCost : cost < bestCost ) )
@@ -11348,7 +11345,6 @@ static void doctrineRoster( const AsciiString &side, std::vector<const ThingTemp
 			const ThingTemplate *unit = button && button->getCommandType() == GUI_COMMAND_UNIT_BUILD ? button->getThingTemplate() : NULL;
 			if( unit == NULL || unit->friend_getBuildCost() <= 0 || doctrineKindOf( unit ) < 0 || !hasPrimaryWeapon( unit ) ||
 					unit->isKindOf( KINDOF_DOZER ) || unit->isKindOf( KINDOF_HARVESTER ) || unit->isKindOf( KINDOF_MONEY_HACKER ) ||
-					unit->isKindOf( KINDOF_MOB_NEXUS ) ||		// a squad or a mob: the computer trains the single soldier
 					std::find( out->begin(), out->end(), unit ) != out->end() )
 				continue;
 			out->push_back( unit );
@@ -11549,7 +11545,7 @@ static const ThingTemplate *doctrineUnitAt( Object *factory, const std::vector<A
 	{
 		const CommandButton *button = commandSet->getCommandButton( i );
 		const ThingTemplate *tmpl = button && button->getCommandType() == GUI_COMMAND_UNIT_BUILD ? button->getThingTemplate() : NULL;
-		if( tmpl == NULL || tmpl->isKindOf( KINDOF_MOB_NEXUS ) )		// a squad or a mob: the computer trains the single soldier
+		if( tmpl == NULL )
 			continue;
 		const Real factor = doctrineFactor( doctrine, tmpl, owner, army, airFloor );
 		if( factor > bestFactor && TheBuildAssistant->canMakeUnit( factory, tmpl ) == CANMAKE_OK )
@@ -11702,7 +11698,6 @@ const ThingTemplate *AIPlayer::pickMassUnit( const std::vector<AIVisibleEnemy> &
 			if( tmpl == NULL || !tmpl->canPossiblyHaveAnyWeapon() || tmpl->isKindOf( KINDOF_DOZER ) || tmpl->isKindOf( KINDOF_HARVESTER ) ||
 					tmpl->isKindOf( KINDOF_MONEY_HACKER ) || tmpl->isKindOf( KINDOF_HERO ) ||
 					(tmpl->isKindOf( KINDOF_AIRCRAFT ) && !tmpl->isKindOf( KINDOF_PRODUCED_AT_HELIPAD )) ||
-					tmpl->isKindOf( KINDOF_MOB_NEXUS ) ||		// a squad or a mob: the computer trains the single soldier
 					TheBuildAssistant->canMakeUnit( *f, tmpl ) != CANMAKE_OK )
 				continue;
 			const Int cost = tmpl->calcCostToBuild( m_player );
@@ -13166,7 +13161,7 @@ static const ThingTemplate *gunshipRiderTemplate( Object *factory, const ThingTe
 		const ThingTemplate *tmpl = button->getThingTemplate();
 		if( tmpl == NULL || !tmpl->isKindOf( KINDOF_INFANTRY ) || !tmpl->canPossiblyHaveAnyWeapon() || tmpl->isKindOf( KINDOF_DOZER ) ||
 				tmpl->isKindOf( KINDOF_MONEY_HACKER ) || tmpl->isKindOf( KINDOF_HERO ) || tmpl->hasSpotterSight() ||
-				tmpl->isKindOf( KINDOF_MOB_NEXUS ) ||		// a squad or a mob boards nothing
+				tmpl->isKindOf( KINDOF_MOB_NEXUS ) ||		// an Angry Mob boards nothing
 				tmpl->calcCostToBuild( factory->getControllingPlayer() ) <= 0 ||
 				TheBuildAssistant->canMakeUnit( factory, tmpl ) != CANMAKE_OK )
 			continue;

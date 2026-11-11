@@ -23616,7 +23616,7 @@ TEST(scenario_parses_the_order_lines)
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1 ChinaGattlingCannon 0", &action ), (Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( action.count, 0 );
 	CHECK_NEAR( action.radius, 0.0f, 0.001f );		// no widest named, no opinion on it
-	CHECK_EQ( (Int)ScenarioDrill_parseLine( "240 tally 0 AmericaInfantryRangerSquadMember 5 55", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "240 tally 0 GLAInfantryAngryMobPistol01 5 55", &action ), (Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( action.count, 5 );
 	CHECK_NEAR( action.radius, 55.0f, 0.001f );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1 ChinaGattlingCannon some", &action ), (Int)SCENARIO_PARSE_BAD_COUNT );

@@ -162,11 +162,6 @@ RiderChangeContain::~RiderChangeContain( void )
 */
 Bool RiderChangeContain::isValidContainerFor(const Object* rider, Bool checkCapacity) const
 {
-	// A squad's men (squadKeyOf) would each kick the last one out of the one saddle, and its nexus is no
-	// rider at all: a squad does not ride a Combat Cycle.
-	if( squadKeyOf( rider ) != INVALID_ID )
-		return FALSE;
-
 	//Don't check capacity because our rider will kick the other rider out!
 	if( TransportContain::isValidContainerFor( rider, FALSE ) )
 	{

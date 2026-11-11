@@ -416,12 +416,8 @@ void GarrisonContain::putObjectAtBestGarrisonPoint( Object *obj, Object *target,
 
 	// get the index of the garrison point that is closest to the target position
 	Int placeIndex = findClosestFreeGarrisonPointIndex( conditionIndex, targetPos );
-	// squads fill a place each with up to five men, so a full building holds more shooters than its 40
-	// points: the ones without a point fire from the middle of the building, as before a point frees up
-	if( placeIndex == GARRISON_INDEX_INVALID && squadKeyOf( obj ) != INVALID_ID )
-		return;
-	DEBUG_ASSERTCRASH( placeIndex != GARRISON_INDEX_INVALID,
-										 ("GarrisonContain::putObjectAtBestGarrisonPoint - Unable to find suitable garrison point for '%s'\n",
+	DEBUG_ASSERTCRASH( placeIndex != GARRISON_INDEX_INVALID, 
+										 ("GarrisonContain::putObjectAtBestGarrisonPoint - Unable to find suitable garrison point for '%s'\n", 
 										 obj->getTemplate()->getName().str()) );
 
 	// put it here
@@ -574,11 +570,8 @@ Bool GarrisonContain::isValidContainerFor(const Object* obj, Bool checkCapacity)
 	{
 		if (checkCapacity)
 		{
-			// a squad fills one place whatever number of its men are in, and its next man needs none
-			if( squadMateIn( getContainList(), obj ) )
-				return true;
 			Int garrisonMax = getContainMax();
-			Int containCount = getContainCount() - squadExtrasIn( getContainList() );
+			Int containCount = getContainCount();
 			return ( containCount < garrisonMax );
 		}
 		else
@@ -661,8 +654,7 @@ void GarrisonContain::addValidObjectsToGarrisonPoints( void )
 	{
 		Object* obj = *it;
 		AIUpdateInterface* ai = obj->getAIUpdateInterface();
-		// a squad's nexus aims a harmless weapon: it would only take a point from one of its men
-		if( ai && !obj->isKindOf( KINDOF_MOB_NEXUS ) )
+		if( ai )
 		{
 			Object *victim = ai->getCurrentVictim();
 			const Coord3D *victimPos = ai->getCurrentVictimPos();
@@ -1043,21 +1035,6 @@ void GarrisonContain::positionObjectsAtStationGarrisonPoints()
       
     }
 
-    // a squad takes one station (it fills one place): the rest of its men stand on the station of the
-    // first of them that has one, and fire from there
-    const ObjectID squadKey = squadKeyOf( contained );
-    for( std::vector<StationPointData>::const_iterator pt = m_stationPointList.begin();
-    squadKey != INVALID_ID && ! foundHisSpot && pt != m_stationPointList.end();
-    ++pt)
-    {
-      const Object *occupant = TheGameLogic->findObjectByID( pt->occupantID );
-      if( occupant && occupant != contained && squadKeyOf( occupant ) == squadKey )
-      {
-        contained->setPosition( &pt->position );
-        foundHisSpot = TRUE;
-      }
-    }
-
     if ( ! foundHisSpot && ! pickAStationForMe( contained ))
     {
       DEBUG_ASSERTCRASH( foundHisSpot, ("GarrisonContain::positionObjectsAtStationGarrisonPoints found something terribly wrong... \nthere is either a station point shortage, or some other bug."));
@@ -1112,8 +1089,7 @@ void GarrisonContain::removeObjectFromStationPoint( const Object *obj )
   }
 
 
-  // a squad's man who stood on another's station (positionObjectsAtStationGarrisonPoints) had none
-  DEBUG_ASSERTCRASH(foundOccupant || squadKeyOf( obj ) != INVALID_ID, ("GarrisonContain::removeObjectFromStationPoint is all kinds of bad... \n the contained object was not found in station point list."));
+  DEBUG_ASSERTCRASH(foundOccupant, ("GarrisonContain::removeObjectFromStationPoint is all kinds of bad... \n the contained object was not found in station point list."));
 
 
 }

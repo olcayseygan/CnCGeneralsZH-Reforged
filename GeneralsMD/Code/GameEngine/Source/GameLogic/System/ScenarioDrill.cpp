@@ -206,8 +206,6 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_STOP;
 	else if (token == "clickstop")
 		*action = SCENARIO_ACTION_CLICKSTOP;
-	else if (token == "evacuate")
-		*action = SCENARIO_ACTION_EVACUATE;
 	else if (token == "autogarrison")
 		*action = SCENARIO_ACTION_AUTOGARRISON;
 	else if (token == "autorepair")
@@ -375,7 +373,6 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_REACHPROOF:	return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_STOP:				return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_CLICKSTOP:		return SCENARIO_TOKENS_STOP;
-		case SCENARIO_ACTION_EVACUATE:		return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_AUTOGARRISON:	return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_AUTOREPAIR:	return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_TALLY:				return SCENARIO_TOKENS_STOP;
@@ -575,7 +572,6 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 
 		case SCENARIO_ACTION_STOP:
 		case SCENARIO_ACTION_CLICKSTOP:
-		case SCENARIO_ACTION_EVACUATE:
 		case SCENARIO_ACTION_AUTOGARRISON:
 		case SCENARIO_ACTION_AUTOREPAIR:
 		case SCENARIO_ACTION_PURCHASE:
@@ -1553,7 +1549,6 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 {
 	Int alive = 0;
 	Int inside = 0;
-	Int firing = 0;
 	Real health = 0.0f;
 	Real maxHealth = 0.0f;
 	Int worth = 0;
@@ -1570,18 +1565,14 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 		++alive;
 		if (obj->getContainedBy() != NULL)
 			++inside;
-		// fired in the last second: how many of a garrisoned or riding squad are shooting
-		const Weapon *weapon = obj->getCurrentWeapon();
-		if (weapon && weapon->getLastShotFrame() != 0 && weapon->getLastShotFrame() + LOGICFRAMES_PER_SECOND >= TheGameLogic->getFrame())
-			++firing;
 		health += obj->getBodyModule()->getHealth();
 		maxHealth += obj->getBodyModule()->getMaxHealth();
 		worth += obj->getTemplate()->friend_getBuildCost();
 	}
 
-	DEBUG_LOG(("HEADLESS TALLY: frame %d slot %d '%s': %d alive, health %.0f of %.0f, worth %d, %d inside, money %d, %d fired in the last second\n",
+	DEBUG_LOG(("HEADLESS TALLY: frame %d slot %d '%s': %d alive, health %.0f of %.0f, worth %d, %d inside, money %d\n",
 						 action.frame, action.slot, action.selector.str(), alive, health, maxHealth, worth, inside,
-						 player->getMoney()->countMoney(), firing));
+						 player->getMoney()->countMoney()));
 	if (alive >= 2 && alive <= SPREAD_MAX)
 	{
 		// each unit's distance to its nearest neighbour on the ground: the closest pair and the mean
@@ -2231,30 +2222,6 @@ static Bool executeGiveMoney( const ScenarioAction &action, Player *player )
 	return TRUE;
 }
 
-/** The Evacuate button: AIGroup::groupEvacuate on every container of the seat's that matches, which is
-	  what GameLogicDispatch does with MSG_EVACUATE.  A building has no AI, so this gathers its own group
-	  rather than the orderable one. */
-static Bool executeEvacuate( const ScenarioAction &action, Player *player )
-{
-	AIGroup *group = TheAI->createGroup();
-	Int taken = 0;
-	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
-	{
-		if (obj->getControllingPlayer() == player && !obj->isEffectivelyDead() && obj->getContain() != NULL
-				&& selectorMatches( action.selector, obj ))
-		{
-			group->add( obj );
-			++taken;
-		}
-	}
-	if (taken > 0)
-		group->groupEvacuate( CMD_FROM_PLAYER, NULL );
-	TheAI->destroyGroup( group );
-
-	DEBUG_LOG(("SCENARIO: frame %d evacuate slot %d '%s' x%d\n", action.frame, action.slot, action.selector.str(), taken));
-	return taken > 0;
-}
-
 /** A building changing hands with nothing in between: setTeam, the call a capture, a hijack, a
 	  defeated player's tech buildings and a script's change of owner all end in, so the owner change
 	  runs Object::onCapture and every module's onCapture as a capture would.  Each upgrade module's
@@ -2372,9 +2339,6 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 
 	if (action.action == SCENARIO_ACTION_HANDOVER)
 		return executeHandover( action, player, position );
-
-	if (action.action == SCENARIO_ACTION_EVACUATE)
-		return executeEvacuate( action, player );
 
 	if (action.action == SCENARIO_ACTION_CONSTRUCT || action.action == SCENARIO_ACTION_SHIFTCONSTRUCT)
 		return executeConstruct( action, player, position );

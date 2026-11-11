@@ -169,7 +169,7 @@ public:
 
   virtual void setOverrideDestination( const Coord3D * ){} ///< Instead of falling peacefully towards a clear spot, I will now aim here
 	virtual Bool isDisplayedOnControlBar() const {return FALSE;}///< Does this container display its contents on the ControlBar?
-	virtual Int getExtraSlotsInUse( void );	///< below 0 by the men past the first of each squad inside (squadExtrasIn)
+	virtual Int getExtraSlotsInUse( void ) { return 0; }
 	virtual Bool isKickOutOnCapture(){ return TRUE; }///< By default, yes, all contain modules kick passengers out on capture
 
 	// contain list access

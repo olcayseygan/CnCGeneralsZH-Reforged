@@ -1,0 +1,57 @@
+# An Angry Mob marches across open ground, round the end of a row of Power Plants standing across its
+# way, and stops; then eight Crusaders are set on one of its men. HEADLESS SPREAD's widest is how far
+# the furthest of the mob (its men and the nexus among them) stands from its middle, and speed is the
+# slowest and the fastest of them that frame. The tallies that name 11 and a distance are the check:
+# each prints HEADLESS EXPECT PASS or FAIL. The nexus brings its last men out about 25 seconds after
+# it stands, so the march starts at 900. At the end the Crusaders' attack has carried through the
+# whole mob, nexus and all.
+#
+# 2026-11-11, the march from 960 to 2220 and the stand at 2500. Before: widest 18 to 31 on the march
+# and 28.5 standing, mean neighbour 4.6 to 8.0, speeds 12.6 to 32 (one man on the run past the rest
+# whenever he fell a cell behind, another held back at 0.7 of the nexus' 18). After the run was taken
+# off the march, the slowest pace raised to 0.95 and FormationSpacing cut from 2.2 to 1.1: widest 6 to
+# 25, 23.2 standing, mean neighbour 1.8 to 6.1, speeds 17.1 to 20.6. Standing men still keep about a
+# pathfinding cell (10) apart, which is where the stand stops getting tighter.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover -side 0 FactionGLA -side 1 FactionAmerica
+#     -seed 1 -maxframes 8500 -scenario mobtight -logPrefix mobtight_
+
+30    spawn      0  GLAInfantryAngryMobNexus             1  300 1320
+30    spawn      0  AmericaPowerPlant                    1  800 1220
+30    spawn      0  AmericaPowerPlant                    1  800 1290
+30    spawn      0  AmericaPowerPlant                    1  800 1360
+30    spawn      0  AmericaPowerPlant                    1  800 1430
+
+880   tally      0  GLAInfantryAngryMob*                 11  25
+900   playermove 0  GLAInfantryAngryMobNexus             1100 1320
+
+960   tally      0  GLAInfantryAngryMob*                 11  26
+1020  tally      0  GLAInfantryAngryMob*                 11  26
+1080  tally      0  GLAInfantryAngryMob*                 11  26
+1140  tally      0  GLAInfantryAngryMob*                 11  26
+1200  tally      0  GLAInfantryAngryMob*                 11  26
+1260  tally      0  GLAInfantryAngryMob*                 11  26
+1320  tally      0  GLAInfantryAngryMob*                 11  26
+1380  tally      0  GLAInfantryAngryMob*                 11  26
+1440  tally      0  GLAInfantryAngryMob*                 11  26
+1500  tally      0  GLAInfantryAngryMob*                 11  26
+1560  tally      0  GLAInfantryAngryMob*                 11  26
+1620  tally      0  GLAInfantryAngryMob*                 11  26
+1680  tally      0  GLAInfantryAngryMob*                 11  26
+1740  tally      0  GLAInfantryAngryMob*                 11  26
+1800  tally      0  GLAInfantryAngryMob*                 11  26
+1860  tally      0  GLAInfantryAngryMob*                 11  26
+1920  tally      0  GLAInfantryAngryMob*                 11  26
+1980  tally      0  GLAInfantryAngryMob*                 11  26
+2040  tally      0  GLAInfantryAngryMob*                 11  26
+2100  tally      0  GLAInfantryAngryMob*                 11  26
+2160  tally      0  GLAInfantryAngryMob*                 11  26
+2220  tally      0  GLAInfantryAngryMob*                 11  26
+2500  tally      0  GLAInfantryAngryMob*                 11  25
+2600  tally      0  GLAInfantryAngryMob*                 11  25
+
+2650  spawn      1  AmericaTankCrusader                  8  1300 1320  30
+2660  attack     1  AmericaTankCrusader                  0  GLAInfantryAngryMobPistol01
+4000  tally      1  AmericaTankCrusader
+4000  tally      0  GLAInfantryAngryMob*                 0

@@ -122,7 +122,7 @@ private:
 	void recordStructureOutline( const Object *obj );	///< a selected building's line round its footprint
 	std::vector<Vector3> m_pulsePoints;
 	static Vector3 ringColor( const Player *owner );
-	std::vector<ObjectID> m_selectedNexus;		///< the squads in this picture's selection
+	std::vector<ObjectID> m_selectedNexus;		///< the Angry Mobs in this picture's selection
 	void recordRingPieces( DrawKind kind, const Vector3& color, Real width, Real opacity, Real behind );
 	Vector3 m_ringCamera;											///< the eye at the sync point; the glow lies behind the line along its rays
 	std::vector<Vector3> m_cleanPoints;

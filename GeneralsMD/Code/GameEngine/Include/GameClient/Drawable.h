@@ -119,8 +119,8 @@ extern Bool Drawable_emptySeatsShow( Bool isStructure, Bool isGarrisonable, Bool
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
 
-///< one member of a squad or mob, as the render's sync point saw it: where it is shown, how big it is
-struct SquadMemberForDraw
+///< one member of an Angry Mob, as the render's sync point saw it: where it is shown, how big it is
+struct MobMemberForDraw
 {
 	ObjectID nexus;
 	DrawableID drawable;
@@ -130,10 +130,10 @@ struct SquadMemberForDraw
 	PathfindLayerEnum layer;
 };
 
-///< take every visible squad member's copy, at the sync point; smooth and alpha are the display's blend
-extern void Drawable_takeSquadsForRender( Bool smooth, Real alpha );
+///< take every visible mob member's copy, at the sync point; smooth and alpha are the display's blend
+extern void Drawable_takeMobsForRender( Bool smooth, Real alpha );
 ///< the members of this nexus in that copy, and how many; no logic read, safe beside the tick
-extern Int Drawable_squadMembersForDraw( ObjectID nexus, const SquadMemberForDraw **members );
+extern Int Drawable_mobMembersForDraw( ObjectID nexus, const MobMemberForDraw **members );
 
 ///< the local player just ordered the selection to attack: stamp every selected drawable, for the
 ///< selection ring's pulse (HintSpy calls it as the order leaves the client)

@@ -192,9 +192,9 @@ static Bool canJoinGroup( Object *obj )
 }
 
 /**
- * A mob member whose nexus is in this group too.  A squad that is selected is its nexus and every
- * member, and a move order handed to all six sent each member to the goal down a path of its own,
- * so round anything in the way the squad came apart.  The nexus takes a move and the members take
+ * A mob member whose nexus is in this group too.  A move order handed to the nexus and its members
+ * alike sent each member to the goal down a path of its own, so round anything in the way the mob
+ * came apart.  The nexus takes a move and the members take
  * their places around it, which MobMemberSlavedUpdate does the moment it is told (onSlaverOrdered).
  * A stinger site's soldiers are slaves too, but not of a nexus, so they still take orders themselves.
  */

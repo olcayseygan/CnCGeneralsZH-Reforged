@@ -749,7 +749,7 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 //=============================================================================
 // Every selected unit stands in a small circle on the ground, about its own body. Where circles
 // overlap they are drawn as one outline, their union: each circle keeps only the arcs no other
-// circle covers, cut where they cross, and the arcs are joined into closed loops, so a squad of five
+// circle covers, cut where they cross, and the arcs are joined into closed loops, so five soldiers
 // standing close wears one scalloped blob with its cusps pointing in, not five rings through each
 // other.
 //
@@ -810,8 +810,8 @@ void W3DWaypointBuffer::takeSelectionRings( void )
 	if( CinemaDirector_hidesHud() )
 		return;
 
-	// A selected squad is drawn from its nexus: its members come from the sync point's copy whether or
-	// not each is selected yet (a squad picked the frame it was made had none selected, and no rings),
+	// A selected Angry Mob is drawn from its nexus: its members come from the sync point's copy whether
+	// or not each is selected yet (a mob picked the frame it was made had none selected, and no rings),
 	// and a member that is selected as well is left to it
 	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
 	m_selectedNexus.clear();
@@ -828,11 +828,11 @@ void W3DWaypointBuffer::takeSelectionRings( void )
 		const Vector3 color = ringColor( obj->getControllingPlayer() );
 		const Real pulse = Drawable_attackOrderSeconds( draw->getID() );		// an attack order's pulse
 		// the nexus is invisible by design, so its own drawable's hidden flag says nothing: asked first,
-		// it skipped the squad whose members were then left to it, and the squad wore no rings
+		// it skipped the mob whose members were then left to it, and the mob wore no rings
 		if( obj->isKindOf( KINDOF_MOB_NEXUS ) )
 		{
-			const SquadMemberForDraw *members;
-			const Int n = Drawable_squadMembersForDraw( obj->getID(), &members );
+			const MobMemberForDraw *members;
+			const Int n = Drawable_mobMembersForDraw( obj->getID(), &members );
 			for( Int m = 0; m < n; ++m )
 			{
 				const Real memberPulse = Drawable_attackOrderSeconds( members[ m ].drawable );

@@ -3405,33 +3405,33 @@ static Real healthBarArtLift( const Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A squad's bar, and an Angry Mob's, belongs over its members and not over the invisible nexus
-	* they follow. SpawnBehavior's offset is where the members' centre stood up to a fifth of a second
-	* ago, and the bar was only as wide as the nexus' own small geometry, so five soldiers spread over
-	* a street wore a stub of a bar over one of them. The members are what the nexus made
+/** An Angry Mob's bar belongs over its members and not over the invisible nexus they follow.
+	* SpawnBehavior's offset is where the members' centre stood up to a fifth of a second ago, and the
+	* bar was only as wide as the nexus' own small geometry, so ten men spread over a street wore a stub
+	* of a bar over one of them. The members are what the nexus made
 	* (getProducerID). The bar goes over their centre, above the top of the group as the screen shows
 	* it: every head, and the far side of every selection ring (W3DWaypointBuffer's ring radius,
 	* approximated here). Its span is theirs on the screen, which the caller caps. FALSE when no member
 	* is in sight, and the nexus' own place is used.
 	*
 	* The bar is drawn beside the tick, so nothing here reads the logic: the members come from a copy
-	* the sync point takes (Drawable_takeSquadsForRender), at the positions their models are shown,
+	* the sync point takes (Drawable_takeMobsForRender), at the positions their models are shown,
 	* which is also what the selection rings are drawn round. */
 //-------------------------------------------------------------------------------------------------
-static const Real SQUAD_BAR_CLEARANCE = 6.0f;		///< pixels between the top of the group and the bar, before the UI scale
-static const Real SQUAD_BAR_RING_MARGIN = 1.0f;	///< RING_MARGIN and RING_MIN_RADIUS in W3dWaypointBuffer.cpp
-static const Real SQUAD_BAR_RING_MIN = 5.0f;
-static const Real SQUAD_BAR_MAX_WIDTH = 2.0f;		///< the bar is at most this many times a lone unit's
+static const Real MOB_BAR_CLEARANCE = 6.0f;		///< pixels between the top of the group and the bar, before the UI scale
+static const Real MOB_BAR_RING_MARGIN = 1.0f;	///< RING_MARGIN and RING_MIN_RADIUS in W3dWaypointBuffer.cpp
+static const Real MOB_BAR_RING_MIN = 5.0f;
+static const Real MOB_BAR_MAX_WIDTH = 2.0f;		///< the bar is at most this many times a lone unit's
 
-static std::vector<SquadMemberForDraw> s_squadMembers;		///< sorted by nexus
+static std::vector<MobMemberForDraw> s_mobMembers;		///< sorted by nexus
 
-static Bool squadMemberBefore( const SquadMemberForDraw& a, const SquadMemberForDraw& b ) { return a.nexus < b.nexus; }
+static Bool mobMemberBefore( const MobMemberForDraw& a, const MobMemberForDraw& b ) { return a.nexus < b.nexus; }
 
 // ponytail: one walk of every drawable each sync point, a lookup only for those something produced. A
 // list kept by SpawnBehavior would be cheaper, and is a GameLogic change.
-void Drawable_takeSquadsForRender( Bool smooth, Real alpha )
+void Drawable_takeMobsForRender( Bool smooth, Real alpha )
 {
-	s_squadMembers.clear();
+	s_mobMembers.clear();
 	if( TheGameLogic == NULL || TheGameClient == NULL )
 		return;
 	// only members the drawn fog lets you see: an enemy mob's bar must not lean toward the ones in fog
@@ -3448,7 +3448,7 @@ void Drawable_takeSquadsForRender( Bool smooth, Real alpha )
 		if( obj->getShroudedStatus( shroudPlayer ) > OBJECTSHROUD_PARTIAL_CLEAR )
 			continue;
 
-		SquadMemberForDraw member;
+		MobMemberForDraw member;
 		member.nexus = nexus->getID();
 		member.drawable = draw->getID();
 		member.pos = *draw->getPosition();
@@ -3457,17 +3457,17 @@ void Drawable_takeSquadsForRender( Bool smooth, Real alpha )
 		member.radius = obj->getGeometryInfo().getBoundingCircleRadius();
 		member.height = obj->getGeometryInfo().getMaxHeightAbovePosition();
 		member.layer = obj->getLayer();
-		s_squadMembers.push_back( member );
+		s_mobMembers.push_back( member );
 	}
-	std::stable_sort( s_squadMembers.begin(), s_squadMembers.end(), squadMemberBefore );
+	std::stable_sort( s_mobMembers.begin(), s_mobMembers.end(), mobMemberBefore );
 }
 
-Int Drawable_squadMembersForDraw( ObjectID nexus, const SquadMemberForDraw **members )
+Int Drawable_mobMembersForDraw( ObjectID nexus, const MobMemberForDraw **members )
 {
-	SquadMemberForDraw key;
+	MobMemberForDraw key;
 	key.nexus = nexus;
-	std::pair<std::vector<SquadMemberForDraw>::const_iterator, std::vector<SquadMemberForDraw>::const_iterator> range =
-		std::equal_range( s_squadMembers.begin(), s_squadMembers.end(), key, squadMemberBefore );
+	std::pair<std::vector<MobMemberForDraw>::const_iterator, std::vector<MobMemberForDraw>::const_iterator> range =
+		std::equal_range( s_mobMembers.begin(), s_mobMembers.end(), key, mobMemberBefore );
 	*members = ( range.first == range.second ) ? NULL : &*range.first;
 	return (Int)( range.second - range.first );
 }
@@ -3602,10 +3602,10 @@ void Drawable_flashOrderTargets( void )
 	}
 }
 
-static Bool squadBarPlace( ObjectID nexus, ICoord2D& screenCentre, Real& span )
+static Bool mobBarPlace( ObjectID nexus, ICoord2D& screenCentre, Real& span )
 {
-	const SquadMemberForDraw *members;
-	const Int count = Drawable_squadMembersForDraw( nexus, &members );
+	const MobMemberForDraw *members;
+	const Int count = Drawable_mobMembersForDraw( nexus, &members );
 	if( count == 0 )
 		return FALSE;
 
@@ -3635,7 +3635,7 @@ static Bool squadBarPlace( ObjectID nexus, ICoord2D& screenCentre, Real& span )
 		const Real away = (Real)sqrt( ex * ex + ey * ey );
 		if( away > 1.0f )
 		{
-			const Real r = MAX( SQUAD_BAR_RING_MIN, members[ i ].radius + SQUAD_BAR_RING_MARGIN );
+			const Real r = MAX( MOB_BAR_RING_MIN, members[ i ].radius + MOB_BAR_RING_MARGIN );
 			Coord3D rim = *pos;
 			rim.x += ex / away * r;
 			rim.y += ey / away * r;
@@ -3644,7 +3644,7 @@ static Bool squadBarPlace( ObjectID nexus, ICoord2D& screenCentre, Real& span )
 		}
 	}
 	screenCentre.x = mid.x;
-	screenCentre.y = topY - (Int)( SQUAD_BAR_CLEARANCE * TheUIScale() );
+	screenCentre.y = topY - (Int)( MOB_BAR_CLEARANCE * TheUIScale() );
 
 	Real spread = 0.0f;
 	for( Int i = 0; i < count; ++i )
@@ -3684,8 +3684,8 @@ static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 		return FALSE;
 
 	ICoord2D screenCenter;
-	Real squadSpan = 0.0f;
-	if( !( obj->isKindOf( KINDOF_MOB_NEXUS ) && squadBarPlace( obj->getID(), screenCenter, squadSpan ) ) )
+	Real mobSpan = 0.0f;
+	if( !( obj->isKindOf( KINDOF_MOB_NEXUS ) && mobBarPlace( obj->getID(), screenCenter, mobSpan ) ) )
 	{
 		Coord3D p;
 		obj->getHealthBoxPosition(p);
@@ -3724,7 +3724,7 @@ static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 	//
 	const Real uiScale = TheUIScale();
 	healthBoxWidth *= uiScale;
-	healthBoxWidth = MAX( healthBoxWidth, MIN( squadSpan, SQUAD_BAR_MAX_WIDTH * healthBoxWidth ) );
+	healthBoxWidth = MAX( healthBoxWidth, MIN( mobSpan, MOB_BAR_MAX_WIDTH * healthBoxWidth ) );
 
 	// do this so health bar doesn't get too skinny or fat after scaling
 	//healthBoxHeight = max(3.0f, healthBoxHeight);

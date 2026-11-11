@@ -2474,8 +2474,8 @@ static void takeReadsForRender( Bool renders )
 	W3DControlBar_takeReadsForRender();
 	if( !renders || TheGlobalData->m_breakTheMovie || TheGlobalData->m_disableRender )
 		return;
-	// the squads' members for their health bars and selection rings, at the positions they are shown
-	Drawable_takeSquadsForRender( TheSmoothMotionActive && TheSmoothMotionAlpha < 1.0f, TheSmoothMotionAlpha );
+	// the mobs' members for their health bars and selection rings, at the positions they are shown
+	Drawable_takeMobsForRender( TheSmoothMotionActive && TheSmoothMotionAlpha < 1.0f, TheSmoothMotionAlpha );
 	for( View *view = TheDisplay->getFirstView(); view; view = TheDisplay->getNextView( view ) )
 		static_cast<W3DView *>( view )->recordPostDraw();
 	TheInGameUI->recordDraw();

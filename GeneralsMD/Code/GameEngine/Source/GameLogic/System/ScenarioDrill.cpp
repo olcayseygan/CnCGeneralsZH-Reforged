@@ -44,6 +44,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/CreateModule.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Module/UpgradeModule.h"
@@ -1552,9 +1553,12 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 	Real health = 0.0f;
 	Real maxHealth = 0.0f;
 	Int worth = 0;
-	// where a small group stands, for HEADLESS SPREAD: how far apart a squad's members walk and stand
+	// where a small group stands, for HEADLESS SPREAD: how far apart a mob's members walk and stand
 	const Int SPREAD_MAX = 32;
 	Coord3D spot[ SPREAD_MAX ];
+	// and how fast the slowest and the fastest of them are moving: an Angry Mob's men keep one pace
+	Real slowest = 1.0e9f;
+	Real fastest = 0.0f;
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
 		if (obj->getControllingPlayer() != player || obj->isEffectivelyDead() || !selectorMatches( action.selector, obj ))
@@ -1562,6 +1566,10 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 
 		if (alive < SPREAD_MAX)
 			spot[ alive ] = *obj->getPosition();
+		const PhysicsBehavior *physics = obj->getPhysics();
+		const Real speed = physics ? physics->getVelocityMagnitude() * LOGICFRAMES_PER_SECOND : 0.0f;
+		slowest = MIN( slowest, speed );
+		fastest = MAX( fastest, speed );
 		++alive;
 		if (obj->getContainedBy() != NULL)
 			++inside;
@@ -1595,7 +1603,7 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 			cx += spot[ i ].x;
 			cy += spot[ i ].y;
 		}
-		// and how far the furthest one has strayed from the middle: a squad strung out along a road has
+		// and how far the furthest one has strayed from the middle: a group strung out along a road has
 		// close neighbours all the way down the line, so only this number sees it come apart
 		cx /= alive;
 		cy /= alive;
@@ -1606,8 +1614,8 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 			const Real dy = spot[ i ].y - cy;
 			widest = MAX( widest, sqrtf( dx * dx + dy * dy ) );
 		}
-		DEBUG_LOG(("HEADLESS SPREAD: frame %d slot %d '%s': %d units around (%.0f,%.0f), nearest neighbour closest %.1f mean %.1f, widest %.1f\n",
-							 action.frame, action.slot, action.selector.str(), alive, cx, cy, closest, sum / alive, widest));
+		DEBUG_LOG(("HEADLESS SPREAD: frame %d slot %d '%s': %d units around (%.0f,%.0f), nearest neighbour closest %.1f mean %.1f, widest %.1f, speed %.1f to %.1f a second\n",
+							 action.frame, action.slot, action.selector.str(), alive, cx, cy, closest, sum / alive, widest, slowest, fastest));
 		if (action.radius > 0.0f)
 			DEBUG_LOG(("HEADLESS EXPECT: %s: frame %d slot %d '%s': widest %.1f, wanted at most %.0f\n",
 								 widest <= action.radius ? "PASS" : "FAIL",

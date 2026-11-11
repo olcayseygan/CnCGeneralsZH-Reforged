@@ -6427,10 +6427,10 @@ void AIAttackState::notifyNewVictimChosen(Object* victim)
 }
 
 //----------------------------------------------------------------------------------------------------------
-/** The mob nexus a victim is a member of: an Angry Mob or a squad, whose members are slaves of an
+/** The mob nexus a victim is a member of: an Angry Mob, whose members are slaves of an
 	  invisible nexus.  A Stinger Site's soldiers and a hive's drones are slaves too, but of a building,
 	  and each of those is a target on its own. */
-static ObjectID squadNexusOf( const Object *victim )
+static ObjectID mobNexusOf( const Object *victim )
 {
 	const SlavedUpdateInterface *slaved = victim ? victim->getSlavedUpdateInterface() : NULL;
 	if (slaved == NULL)
@@ -6440,12 +6440,11 @@ static ObjectID squadNexusOf( const Object *victim )
 }
 
 //----------------------------------------------------------------------------------------------------------
-/** An order to attack one member of a squad is an order to attack the squad.  Five men trained as
-	  one unit, selected and ordered as one, and the attacker that killed the one it was pointed at
-	  stood idle beside the other four.  So the attack carries on to whichever of the victim's squad is
-	  nearest, until the nexus has nobody left, by the same means ContinueAttackRange swaps the victim
+/** An order to attack one member of an Angry Mob is an order to attack the mob.  The mob is selected
+	  and ordered as one, and the attacker that killed the one it was pointed at stood idle beside the
+	  other nine.  So the attack carries on to whichever of the victim's mob is nearest, until the nexus has nobody left, by the same means ContinueAttackRange swaps the victim
 	  inside this state.  An attack that ends for any other reason still ends. */
-Bool AIAttackState::carryOnToSquadMate()
+Bool AIAttackState::carryOnThroughMob()
 {
 	if (!m_isAttackingObject || m_victimNexusID == INVALID_ID || m_attackMachine == NULL)
 		return FALSE;
@@ -6524,7 +6523,7 @@ StateReturnType AIAttackState::onEnter()
 			return STATE_FAILURE;	// we have nothing to attack!
 		}
 		m_victimTeam = victim->getTeam();
-		m_victimNexusID = squadNexusOf( victim );
+		m_victimNexusID = mobNexusOf( victim );
 		m_attackMachine->setGoalObject( victim );
 		m_originalVictimPos = *victim->getPosition();
 	}
@@ -6595,7 +6594,7 @@ StateReturnType AIAttackState::update()
 
 		if (victim == NULL || victim->isEffectivelyDead())
 		{
-			if (!carryOnToSquadMate())
+			if (!carryOnThroughMob())
 			{
 				source->getAI()->notifyVictimIsDead();
 				return STATE_SUCCESS;	// my, that was easy
@@ -6607,8 +6606,8 @@ StateReturnType AIAttackState::update()
 		{
 			source->getAI()->setCurrentVictim(victim);
 			// remembered every frame, since the victim can be swapped from inside too; once it is
-			// dead, and perhaps gone, this is the only way back to its squad
-			m_victimNexusID = squadNexusOf( victim );
+			// dead, and perhaps gone, this is the only way back to its mob
+			m_victimNexusID = mobNexusOf( victim );
 		}
 
 		if( victim->getTeam() != m_victimTeam )
@@ -6691,11 +6690,11 @@ StateReturnType AIAttackState::update()
 	StateReturnType subResult = CONVERT_SLEEP_TO_CONTINUE(m_attackMachine->updateStateMachine());
 
 	// the shot that just killed the victim ends the sub-machine on this frame, before the dead-victim
-	// check above can see it; a squad's victim carries on to the next of the squad from here as well
+	// check above can see it; a mob member's attacker carries on to the next of the mob from here as well
 	if (subResult != STATE_CONTINUE && m_isAttackingObject)
 	{
 		Object* victim = getMachineGoalObject();
-		if ((victim == NULL || victim->isEffectivelyDead()) && carryOnToSquadMate())
+		if ((victim == NULL || victim->isEffectivelyDead()) && carryOnThroughMob())
 			return STATE_CONTINUE;
 	}
 	return subResult;

@@ -64,7 +64,7 @@ public:
 		m_noNeedToCatchUpRadius = DEFAULT_NO_NEED_TO_CATCH_UP_RADIUS;
 		m_squirrellinessRatio = 0;
 		m_catchUpCrisisBailTime = 999999;//default to very large number
-		m_formationSpacing = 2.2f;	// just over two bodies apart, so neighbours do not shove
+		m_formationSpacing = 1.1f;	// a crowd, shoulder to shoulder: the spiral puts neighbours about two radii apart
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 

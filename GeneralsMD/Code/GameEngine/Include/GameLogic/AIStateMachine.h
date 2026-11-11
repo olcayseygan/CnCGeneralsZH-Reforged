@@ -1046,7 +1046,7 @@ protected:
 private:
 
 	Bool chooseWeapon();
-	Bool carryOnToSquadMate();				///< the victim died: take the nearest of its squad still standing, if it had a squad
+	Bool carryOnThroughMob();				///< the victim died: take the nearest of its mob still standing, if it had a mob
 
 	AttackStateMachine*							m_attackMachine;						///< state sub-machine for attack behavior
 	ObjectID												m_victimNexusID;						///< the mob nexus the victim belongs to, INVALID_ID for a victim on its own

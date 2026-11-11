@@ -96,8 +96,9 @@ const Real MOB_FORMATION_LOOKAHEAD = MOB_FORMATION_REPATH_DISTANCE * 2.0f;
 // Speed added for each unit I am behind the nexus on the march, taken away for each unit ahead of it.
 const Real MOB_PACE_GAIN = 0.2f;
 
-// The slowest I walk to let the nexus catch up, as a fraction of its speed.
-const Real MOB_PACE_SLOWEST = 0.7f;
+// The slowest I walk to let the nexus catch up, as a fraction of its speed: 0.7 had a man ahead of his
+// place dawdling at 12.6 beside his neighbours' 20, a crowd at three paces
+const Real MOB_PACE_SLOWEST = 0.95f;
 
 // Beyond this multiple of the catch-up radius I have lost the mob and stop being subtle about it.
 const Real MOB_CATCH_UP_CRISIS_MULTIPLIER = 3.0f;
@@ -119,7 +120,7 @@ const Int MOB_MEMBER_STAGGER_SPENT = -1;
 
 // How often a member told to follow a new order looks again for its nexus to start walking: the
 // nexus' path search can take a few frames, and a member waiting the whole update rate for it
-// starts half a second behind the squad.
+// starts half a second behind the mob.
 const Int MOB_FOLLOW_ORDER_POLL = ConvertRetailFrames( 2 );
 
 /* The point 'ahead' further along the path than the point on it nearest to 'from', and which way the
@@ -305,9 +306,8 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 
 
 	/* EA wiped the primary's firing states off every upgraded mob member on every look, firing or
-		 not.  A Ranger Squad member has an upgraded weapon set too once Flash-Bangs are bought, and its
-		 primary is the rifle it fires all fight long, so the wipe cut its firing animation off every
-		 half second.  Only a member that is not attacking can be holding a stale one. */
+		 not, which cut a member's firing animation off every half second in the middle of a fight.
+		 Only a member that is not attacking can be holding a stale one. */
 	const ModelConditionFlags flags = myDraw->getModelConditionFlags();
 	if (flags.anyIntersectionWith(MAKE_MODELCONDITION_MASK(MODELCONDITION_WEAPONSET_PLAYER_UPGRADE))
 		&& !me->testStatus( OBJECT_STATUS_IS_ATTACKING ))
@@ -384,24 +384,23 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 	/* One body, one speed.  EA rolled a die here, and switching between the walk and the run on a
 		 threshold was no better: the run outpaces the nexus, the walk loses to it, so the mob surged
 		 back and forth around the threshold every couple of seconds.  A member holds the nexus' own
-		 speed and closes any gap gradually; only one that has really lost the mob runs. */
+		 speed and closes any gap gradually, never on the run: the run (AngryMobPanicLocomotor, 32
+		 against the nexus' 18) sent one man sprinting past the crowd every time he fell a cell behind.
+		 The walk is a ninth faster than the nexus, plain or with the GLA rank 6 talent, which is room
+		 enough to catch up. */
 	if ( lostTheMob )
 	{
-		myAI->chooseLocomotorSet( LOCOMOTORSET_PANIC );
+		myAI->chooseLocomotorSet( LOCOMOTORSET_NORMAL );
 		myAI->setDesiredSpeed( FAST_AS_POSSIBLE );
 	}
 	else
 	{
 		if ( marching )
 		{
-			/* Level with my own place in the formation, not with the nexus, or the depth flattens out.
-				 A squad's nexus walks as fast as its members, so one that fell behind its place could
-				 never close the gap on the walk: it keeps the run's top speed in hand, at the paced
-				 speed, which joins the walk's without a step at the switch. */
+			// level with my own place in the formation, not with the nexus, or the depth flattens out
 			const Real masterSpeed = masterAI->getCurLocomotor()->getMaxSpeedForCondition( master->getBodyModule()->getDamageState() );
 			const Real pace = MAX( masterSpeed + ( lag + slotAhead ) * MOB_PACE_GAIN, masterSpeed * MOB_PACE_SLOWEST );
-			// a cell's worth of margin, so a member level with its place does not swap sets every look
-			myAI->chooseLocomotorSet( lag + slotAhead > PATHFIND_CELL_SIZE_F ? LOCOMOTORSET_PANIC : LOCOMOTORSET_NORMAL );
+			myAI->chooseLocomotorSet( LOCOMOTORSET_NORMAL );
 			myAI->setDesiredSpeed( pace );
 		}
 		else
@@ -428,8 +427,8 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 		if ( followOrderNow || goalDelta.length() > MOB_FORMATION_REPATH_DISTANCE )// only if I am not headed there already
 		{
 			/* An attack move stays an attack move.  A plain move here took the attack out of a
-				 squad ordered on its nexus alone: the members walked to their slots past the enemy
-				 without a shot, five Ranger Squads against six Rebels killing none of them. */
+				 mob ordered on its nexus alone: the members walked to their slots past the enemy
+				 without a shot. */
 			if ( myAI->getCurrentStateID() == AI_ATTACK_MOVE_TO || masterAI->getCurrentStateID() == AI_ATTACK_MOVE_TO )
 				myAI->aiAttackMoveToPosition( &slotPosition, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
 			else
@@ -527,8 +526,8 @@ void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *positi
 	/* On the march the slot rides a little ahead of the nexus, on its line to the goal, and the
 		 formation faces that line.  With every slot out at the goal instead, five members pathed from
 		 one spot to five spots a few metres apart, the paths shared their cells, and the pace control
-		 pulled everyone level with the nexus: the squad walked as one overlapping knot (closest pair
-		 under one metre, measured with squadform.txt) and spread out only on arrival. */
+		 pulled everyone level with the nexus: the mob walked as one overlapping knot (closest pair
+		 under one metre) and spread out only on arrival. */
 	if ( masterAI->isMoving() )
 	{
 		Coord3D toGoal = *masterAI->getGoalPosition();

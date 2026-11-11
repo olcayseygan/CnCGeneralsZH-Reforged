@@ -598,6 +598,7 @@ Data/Scenarios/mobattack.txt
 Data/Scenarios/mobclose.txt
 Data/Scenarios/mobopen.txt
 Data/Scenarios/mobstress.txt
+Data/Scenarios/mobtight.txt
 Data/Scenarios/mobwin.txt
 Data/Scenarios/msaa_river.txt
 Data/Scenarios/netrepeat.txt
@@ -708,6 +709,7 @@ Data/Scenarios/underfire_cankill.txt
 Data/Scenarios/underfire_outgunned.txt
 Data/Scenarios/underfire_parked.txt
 Data/Scenarios/underfire_road.txt
+Data/Scenarios/upgradeprops.txt
 Data/Scenarios/v240_heli.txt
 Data/Scenarios/v240_hook.txt
 Data/Scenarios/v240_md.txt

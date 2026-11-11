@@ -14,8 +14,11 @@ found and fixed, EA's own, not port damage.**
 - A replay in which a unit was queued from a tab will not play back on an earlier version.
 - Smoke signals have buttons now, three keys on a plate over the minimap's top edge: attack, defend and look here. Press one and your next click on the ground or on the minimap drops that smoke for your allies; press it again or right click to call it off, and the key stays down until you do. They work where the signal hotkeys work, in skirmish and online, and the tooltip names the hotkey you have for each. Grow the minimap with Minimap Size and the keys ride up on its top edge.
 
-## Orders you can see land
+## The Angry Mob in one crowd, and orders you can see land
 
+- The GLA Angry Mob marches as one tight crowd at one pace. Its men used to string out behind the leader, with one breaking into a sprint past the rest every time he fell a step behind while another dawdled at two thirds of the pace; round a corner each found his own way and the mob arrived in pieces. Now they keep their places round the mob's own route, walk between 17 and 21 where they ranged from 12.6 to 32, and the furthest man stays 6 to 25 from the middle on the march instead of 18 to 31. Stopped, the ten of them stand within 23 of the middle, where they stood 28 out.
+- Shoot one man of an Angry Mob and the attack carries on to the rest until the whole mob is dead, nexus and all; eight Crusaders set on one rioter leave nobody standing.
+- A replay recorded before this change that has an Angry Mob in it will not play back.
 - Every selected unit stands in a thin glowing circle in its owner's colour, and where circles touch they merge into one outline, so five soldiers standing close wear one scalloped ring and not five rings through each other. A selected building gets the same line traced round its footprint. Give an attack order and the ordered units' rings pulse up off the ground; the unit or building you aimed at, or the one you sent them into, flashes red twice the instant the click lands. EA's red box round a building under your attack is gone, since the flash says it now.
 
 ## A general's rank goes to ten

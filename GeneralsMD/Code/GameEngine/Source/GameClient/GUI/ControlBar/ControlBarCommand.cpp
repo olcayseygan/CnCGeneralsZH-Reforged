@@ -1814,17 +1814,15 @@ static void drawNoCommandTabParent( GameWindow *window, WinInstanceData *instDat
 /// the push button's own draw, kept when the tab buttons take drawCommandTab in its place
 static GameWinDrawFunc s_commandTabButtonDraw = NULL;
 
-/// THE switch: whether the open tab keeps the code-drawn ring when the scheme paints an open image
-/// (<base>O) of its own.  Without an O image the ring is always drawn: the pushed state alone does
-/// not say open (the scheme's P differs from up by a brighter bezel and a glyph one texel lower, the
-/// idle pictures' by a faint tint, and the hovered open tab shows the same art).
-static const Bool COMMAND_TAB_RING_WITH_OPEN_IMAGE = FALSE;
-/// per tab, set every frame by updateCommandTabButtons
+/// Per tab, set every frame by updateCommandTabButtons: the code-drawn ring on the open tab, only
+/// while it wears the idle buttons' borrowed pictures, whose pushed state is a faint tint.  A
+/// scheme's own tab art never gets it: its P (or O) image is the open look, lit in the side's colour,
+/// and the ring's blue fought China's red, GLA's orange and Turkiye's turquoise.
 static Bool s_commandTabRing[ ControlBar::COMMAND_TAB_COUNT ] = { TRUE, TRUE, TRUE };
 
 /// A tab button draws as a push button, and the open one then gets an outline two pixels wide in the
-/// build buttons' border colour, inside the button's own rect so it keeps its clearance, unless the
-/// scheme's open image marks it (s_commandTabRing).  Fills, whose pixels are exact.
+/// build buttons' border colour, inside the button's own rect so it keeps its clearance, when
+/// s_commandTabRing says so.  Fills, whose pixels are exact.
 static void drawCommandTab( GameWindow *window, WinInstanceData *instData )
 {
 	if( s_commandTabButtonDraw )
@@ -2066,7 +2064,7 @@ void ControlBar::updateCommandTabButtons( void )
 		}
 		if( pushed == NULL )
 			pushed = hilite;
-		s_commandTabRing[ tab ] = openImage == NULL || COMMAND_TAB_RING_WITH_OPEN_IMAGE;
+		s_commandTabRing[ tab ] = own == NULL;
 		// the open tab stays down: the scheme's open picture, else the pushed one, hovered or not
 		const Bool open = m_commandTab == tab;
 		const Image *down = openImage ? openImage : pushed;

@@ -298,10 +298,6 @@ const Int MAX_ENABLED_MODULES								= 16;
 
 /*static*/ Bool							Drawable::s_staticImagesInited = false;
 /*static*/ const Image*			Drawable::s_veterancyImage[LEVEL_COUNT]	= { NULL };
-/*static*/ const Image*			Drawable::s_fullAmmo = NULL;
-/*static*/ const Image*			Drawable::s_emptyAmmo = NULL;
-/*static*/ const Image*			Drawable::s_fullContainer = NULL;
-/*static*/ const Image*			Drawable::s_emptyContainer = NULL;
 /*static*/ Anim2DTemplate**	Drawable::s_animationTemplates = NULL;
 #ifdef DIRTY_CONDITION_FLAGS
 /*static*/ Int							Drawable::s_modelLockCount = 0;
@@ -317,11 +313,6 @@ const Int MAX_ENABLED_MODULES								= 16;
  	s_veterancyImage[1] = TheMappedImageCollection->findImageByName("SCVeter1");
 	s_veterancyImage[2] = TheMappedImageCollection->findImageByName("SCVeter2");
 	s_veterancyImage[3] = TheMappedImageCollection->findImageByName("SCVeter3");
-
-	s_fullAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoFull");
-	s_emptyAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoEmpty");
-	s_fullContainer	= TheMappedImageCollection->findImageByName("SCPPipFull");
-	s_emptyContainer	= TheMappedImageCollection->findImageByName("SCPPipEmpty");
 
 	s_animationTemplates = NEW Anim2DTemplate* [ MAX_ICONS ];
 
@@ -4183,102 +4174,97 @@ void Drawable::drawEmoticon( const IRegion2D *healthBarRegion )
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+Int Drawable_pipPixel( Real uiScale )
+{
+	// the chips are drawn in 1920x1080's pixels (UI scale 1.8) and grow only by whole steps, so an
+	// edge is always a whole number of screen pixels and never smears: 1 up to 1440p, 2 at 4K
+	return max( 1, (Int)( uiScale / 1.8f + 0.5f ) );
+}
+
 namespace
 {
-	//
-	// EA drew its pips at their art's own size on an 800x600 screen: 5 by 12 a seat, 5 by 10 a round,
-	// a pixel apart. They grow with the interface by a whole number, 2 at 1920x1080, so every texel of
-	// the art stays a square block of pixels instead of smearing over two.
-	//
-	Int pipScale( void )
-	{
-		return max( 1, (Int)( TheUIScale() + 0.5f ) );
-	}
-
 	// the first free row under a bar nothing hangs from: the selection frame's row and one clear
 	Int pipsClearTop( const IRegion2D *bar )
 	{
 		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
 	}
 
-	//
-	// EA's row top: GameData's pip world offset over the object's highest point, put on the screen and
-	// moved by its screen offset in bounding radii. Retail's offsets put that on the health bar's middle
-	// line. Raised over a tall building as its bar is (healthBarArtLift).
-	//
-	Bool pipRowTop( const Object *obj, const Coord3D &worldOffset, Real screenOffsetY, Int &top )
+	// the first row's top: past the selection frame's row, whether or not it is drawn, then three
+	// clear pixels, so the row never touches the bar and does not jump when the unit is selected
+	Int pipsTop( const IRegion2D *bar, Int k )
 	{
-		Coord3D pos = *obj->getPosition();
-		pos.x += worldOffset.x;
-		pos.y += worldOffset.y;
-		pos.z += worldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition() + healthBarArtLift( obj );
-		ICoord2D screen;
-		if( !TheTacticalView->worldToScreen( &pos, &screen ) )
-			return FALSE;
-		top = screen.y + REAL_TO_INT( screenOffsetY * obj->getGeometryInfo().getBoundingSphereRadius() );
-		return TRUE;
+		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 1 + 3 * k;
+	}
+
+	//
+	// The shapes are masks in 1080p pixels, each pixel k screen pixels square: a seat is a 6x6 chip
+	// with its corners cut, a round a 4x8 slug with a 2 pixel tip. The outer mask is the 1 pixel edge,
+	// what lies inside every neighbour is the fill.
+	//
+	void fillChip( Int x, Int y, Int k, Color edge, Color fill )
+	{
+		TheDisplay->drawFillRect( x + k, y, 4 * k, 6 * k, edge );
+		TheDisplay->drawFillRect( x, y + k, 6 * k, 4 * k, edge );
+		TheDisplay->drawFillRect( x + k, y + k, 4 * k, 4 * k, fill );
+	}
+
+	void fillSlug( Int x, Int y, Int k, Color edge, Color fill )
+	{
+		TheDisplay->drawFillRect( x + k, y, 2 * k, k, edge );
+		TheDisplay->drawFillRect( x, y + k, 4 * k, 7 * k, edge );
+		TheDisplay->drawFillRect( x + k, y + k, 2 * k, 6 * k, fill );
 	}
 }
 
 // ------------------------------------------------------------------------------------------------
-/** The rounds and the seats in EA's own pips, left-justified on the health bar where retail put
-	* them, and the first free row under the bar and the pips. Draws only when `draw`; the same walk
-	* tells the capture clock and the enthusiasm icon where to go. A missing pip image draws nothing. */
+/** The rounds and the seats as rows of small flat chips starting at the health bar's left end, a
+	* little under it, and the first free row under the bar and the chips. Draws only when `draw`; the
+	* same walk tells the capture clock and the enthusiasm icon where to go. */
 // ------------------------------------------------------------------------------------------------
 Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 {
+	const Int k = Drawable_pipPixel( TheUIScale() );
+	const Int left = healthBarRegion->lo.x;
+	Int y = pipsTop( healthBarRegion, k );
 	Int bottom = pipsClearTop( healthBarRegion );
-	const Object *obj = getObject();
-	const Int s = pipScale();
-	Int total, full, infantry, top;
+	Int total, full, infantry;
 
-	// rounds: EA's amber pips, one row, a pixel down from the line as retail drew them
-	Bool hasAmmo = FALSE;
-	Int ammoBottom = 0;
-	if( s_fullAmmo && s_emptyAmmo && ammoPipCounts( total, full ) &&
-			pipRowTop( obj, TheGlobalData->m_ammoPipWorldOffset, TheGlobalData->m_ammoPipScreenOffset.y, top ) )
+	// a lit chip has a near black edge so it holds on snow and sand; a free one is hollow, a light
+	// steel edge round dark glass
+	const Color EDGE = GameMakeColor( 10, 14, 12, 255 );
+	const Color EMPTY_EDGE = GameMakeColor( 150, 158, 160, 255 );
+	const Color EMPTY_FILL = GameMakeColor( 20, 24, 26, 255 );
+
+	// rounds: amber slugs, six pixels apart
+	if( ammoPipCounts( total, full ) )
 	{
-		const Int w = s_emptyAmmo->getImageWidth() * s;
-		const Int h = s_emptyAmmo->getImageHeight() * s;
-		top += s;
 		if( draw )
 		{
-			Int x = healthBarRegion->lo.x;
-			for( Int i = 0; i < total; ++i, x += w + s )
-				TheDisplay->drawImage( i < full ? s_fullAmmo : s_emptyAmmo, x, top, x + w, top + h );
+			const Color ROUND = GameMakeColor( 255, 190, 48, 255 );
+			for( Int i = 0; i < total; ++i )
+				fillSlug( left + i * 6 * k, y, k, i < full ? EDGE : EMPTY_EDGE, i < full ? ROUND : EMPTY_FILL );
 		}
-		hasAmmo = TRUE;
-		ammoBottom = top + h;
-		bottom = max( bottom, ammoBottom + s );
+		y += 8 * k;
+		bottom = y + 2 * k;
+		y += 2 * k;		// a unit carrying both keeps its seats under its rounds
 	}
 
-	//
-	// seats: EA's pips, infantry first in its pure green, anything else aboard in its pure blue, a free
-	// seat the empty pip a pixel lower. EA put both rows on one line; a unit carrying both keeps its
-	// seats under its rounds.
-	//
-	if( s_fullContainer && s_emptyContainer && seatPipCounts( total, infantry, full ) &&
-			pipRowTop( obj, TheGlobalData->m_containerPipWorldOffset, TheGlobalData->m_containerPipScreenOffset.y, top ) )
+	// seats: soldiers first in green, anything else aboard in blue, then the free seats; eight apart
+	if( seatPipCounts( total, infantry, full ) )
 	{
-		if( hasAmmo )
-			top = max( top, ammoBottom + s );
-		const Int w = s_emptyContainer->getImageWidth() * s;
-		const Int h = s_emptyContainer->getImageHeight() * s;
 		if( draw )
 		{
-			const Color INFANTRY_COLOR = GameMakeColor( 0, 255, 0, 255 );
-			const Color NON_INFANTRY_COLOR = GameMakeColor( 0, 0, 255, 255 );
-			Int x = healthBarRegion->lo.x;
-			for( Int i = 0; i < total; ++i, x += w + s )
-			{
-				if( i < full )
-					TheDisplay->drawImage( s_fullContainer, x, top, x + w, top + h,
-																 i < infantry ? INFANTRY_COLOR : NON_INFANTRY_COLOR );
-				else
-					TheDisplay->drawImage( s_emptyContainer, x, top + s, x + w, top + s + h );
-			}
+			const Color SOLDIER = GameMakeColor( 150, 236, 120, 255 );
+			const Color VEHICLE = GameMakeColor( 110, 190, 255, 255 );
+			const Int soldiers = min( infantry, full );
+			for( Int i = 0; i < total; ++i )
+				fillChip( left + i * 8 * k, y, k, i < full ? EDGE : EMPTY_EDGE,
+									i < soldiers ? SOLDIER : i < full ? VEHICLE : EMPTY_FILL );
 		}
-		bottom = max( bottom, top + s + h + s );
+		y += 6 * k;
+		bottom = y + 2 * k;
 	}
 	return bottom;
 }

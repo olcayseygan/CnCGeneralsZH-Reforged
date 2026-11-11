@@ -107,6 +107,10 @@ extern Real Drawable_reloadBarFraction( UnsignedInt now, UnsignedInt started, Un
 extern Bool Drawable_healthBarModeShows( Int healthBarMode, Bool isSelected, Bool isMousedOver,
 																				 Bool isDamaged );
 
+///< how many screen pixels one pixel of the seat and round chips covers at this UI scale: whole
+///< steps from 1920x1080's, 1 up to 1440p and 2 at 4K
+extern Int Drawable_pipPixel( Real uiScale );
+
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
 
@@ -987,7 +991,7 @@ private:
 	void drawConstructPercent( const IRegion2D *healthBarRegion );  ///< display % construction complete
 	void drawSupplyCash( const IRegion2D *healthBarRegion );				///< display the cash left in a supply pile
 	void drawCaption( const IRegion2D *healthBarRegion );						///< draw caption
-	void drawLoadPips( const IRegion2D *healthBarRegion );					///< rounds left and seats taken, EA's pips on the bar
+	void drawLoadPips( const IRegion2D *healthBarRegion );					///< rounds left and seats taken, chips under the bar
 	Int loadPipsBottom( const IRegion2D *healthBarRegion ) const;		///< first free row under the bar and its pips
 	Int loadPips( const IRegion2D *healthBarRegion, Bool draw ) const;	///< lays the pips out, draws them when asked, returns the row under them
 	Bool ammoPipCounts( Int &numTotal, Int &numFull ) const;				///< whether the rounds pips show, and their counts
@@ -1026,10 +1030,6 @@ private:
 
 	static Bool							s_staticImagesInited;
 	static const Image*			s_veterancyImage[LEVEL_COUNT];
-	static const Image*			s_fullAmmo;
-	static const Image*			s_emptyAmmo;
-	static const Image*			s_fullContainer;
-	static const Image*			s_emptyContainer;
 	static Anim2DTemplate**	s_animationTemplates;
 
 #ifdef DIRTY_CONDITION_FLAGS

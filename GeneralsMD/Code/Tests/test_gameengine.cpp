@@ -10842,6 +10842,18 @@ TEST(health_bar_selection_mode_is_what_retail_did)
 /** Smart is selection plus every damaged thing.  A bar over a unit at full health says only what
 	 the absence of a bar would have said, and a base full of those is what makes always-on tiring;
 	 a bar over something that has been hit is the reason to have them at all. */
+/** The seat and round chips grow in whole pixels only, so they never blur: 1920x1080's size up to
+	 1440p, doubled at 4K, never under one pixel on a small window. */
+TEST(load_pip_chips_scale_in_whole_pixels)
+{
+	CHECK_EQ( Drawable_pipPixel( 1.2f ), 1 );		// 1280x720
+	CHECK_EQ( Drawable_pipPixel( 1.8f ), 1 );		// 1920x1080
+	CHECK_EQ( Drawable_pipPixel( 2.4f ), 1 );		// 2560x1440
+	CHECK_EQ( Drawable_pipPixel( 3.6f ), 2 );		// 3840x2160
+	CHECK_EQ( Drawable_pipPixel( 4.8f ), 3 );		// 5120x2880
+	CHECK_EQ( Drawable_pipPixel( 0.5f ), 1 );
+}
+
 TEST(health_bar_smart_mode_marks_the_hurt)
 {
 	CHECK( Drawable_healthBarModeShows( HEALTH_BAR_SMART, FALSE, FALSE, TRUE ) == TRUE );

@@ -671,11 +671,14 @@ Data/Scenarios/squadattack.txt
 Data/Scenarios/squadbarracks.txt
 Data/Scenarios/squadchina.txt
 Data/Scenarios/squadform.txt
+Data/Scenarios/squadgarrison.txt
+Data/Scenarios/squadgarrisonsingle.txt
 Data/Scenarios/squadgla.txt
 Data/Scenarios/squadmissile.txt
 Data/Scenarios/squadranger.txt
 Data/Scenarios/squadsingle.txt
 Data/Scenarios/squadsinglemissile.txt
+Data/Scenarios/squadtunnel.txt
 Data/Scenarios/squadturkiye.txt
 Data/Scenarios/squadturn.txt
 Data/Scenarios/stance.txt

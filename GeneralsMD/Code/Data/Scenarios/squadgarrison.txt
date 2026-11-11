@@ -1,0 +1,64 @@
+# A five-man squad (SquadReforged.ini) garrisons and rides as its men, each of them inside and firing,
+# and takes one soldier's place (squadKeyOf, OpenContain.cpp):
+#
+#   the Ranger squad garrisons a pub, shoots three GLA Workers from it (the "fired in the last second"
+#   count of its members says how many of the five fire) and comes out re-formed on the Evacuate
+#   button;
+#   the Missile Defender squad rides a Humvee and fires out of it at a Technical, is let out and
+#   re-forms, then rides again and dies with the Humvee under the Scorpions' guns, nexus and all, as
+#   five Missile Defenders would.
+#
+# The full transport that refuses a squad whole is in squadtunnel.txt. squadgarrisonsingle.txt is the
+# pub fight with one plain Ranger inside: a squad is one Ranger's firepower split five ways, so the
+# Workers' health falls at about the same pace in both when all five men fire, and five times slower
+# when one does. Seat 1's own starting Worker stands far off and is the fourth Worker counted.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 8000
+#     -scenario squadgarrison -logPrefix squadgarrison_
+#
+# The tallies that name a count are the check, each a HEADLESS EXPECT PASS or FAIL; a second number is
+# the widest a squad may stand from its middle once out.
+
+30    spawn         0  GermanPub01                          1  1000 900
+30    spawn         0  AmericaInfantryRangerSquad           1  1000 1150
+30    spawn         0  AmericaVehicleHumvee                 1  1300 800
+30    spawn         0  AmericaInfantryMissileDefenderSquad  1  1300 950
+
+60    clickenter    0  AmericaInfantryRangerSquad*           0  GermanPub01
+60    clickenter    0  AmericaInfantryMissileDefenderSquad*  0  AmericaVehicleHumvee
+
+600   tally         0  AmericaInfantryRangerSquadMember              5
+600   tally         0  AmericaInfantryRangerSquad                    1
+600   tally         0  AmericaInfantryMissileDefenderSquadMember     5
+600   tally         0  AmericaInfantryMissileDefenderSquad           1
+
+620   spawn         1  GLAInfantryWorker                    3  1000 990  10
+620   tally         1  GLAInfantryWorker                             4
+640   spawn         1  GLAVehicleTechnical                  1  1450 800
+700   tally         0  AmericaInfantryRangerSquadMember
+760   tally         1  GLAInfantryWorker
+760   tally         0  AmericaInfantryMissileDefenderSquadMember
+820   tally         1  GLAInfantryWorker
+820   tally         0  AmericaInfantryMissileDefenderSquadMember
+880   tally         1  GLAInfantryWorker
+880   tally         0  AmericaInfantryMissileDefenderSquadMember
+880   tally         1  GLAVehicleTechnical
+1000  tally         1  GLAInfantryWorker
+1400  tally         1  GLAInfantryWorker                             1
+
+1500  evacuate      0  AmericaVehicleHumvee
+1550  evacuate      0  GermanPub01
+1850  tally         0  AmericaInfantryRangerSquadMember              5  60
+1850  tally         0  AmericaInfantryRangerSquad                    1
+1850  tally         0  AmericaInfantryMissileDefenderSquadMember     5  60
+1850  tally         0  AmericaInfantryMissileDefenderSquad           1
+
+1900  clickenter    0  AmericaInfantryMissileDefenderSquad*  0  AmericaVehicleHumvee
+2200  tally         0  AmericaInfantryMissileDefenderSquadMember     5
+2200  spawn         1  GLATankScorpion                      6  1150 1250  40
+2210  attack        1  GLATankScorpion                       0  AmericaVehicleHumvee
+3000  tally         0  AmericaVehicleHumvee                          0
+3000  tally         0  AmericaInfantryMissileDefenderSquadMember     0
+3000  tally         0  AmericaInfantryMissileDefenderSquad           0

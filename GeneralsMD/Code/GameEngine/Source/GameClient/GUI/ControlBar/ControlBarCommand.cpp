@@ -1933,7 +1933,11 @@ void ControlBar::updateCommandTabButtons( void )
 		{
 			"GUI:CommandTabBuildings", "GUI:CommandTabGround", "GUI:CommandTabAircraft"
 		};
-		parent = TheWindowManager->winCreate( NULL, WIN_STATUS_ENABLED | WIN_STATUS_HIDDEN, 0, 0, 1, 1, commandTabSystem );
+		// ABOVE: the row stands inside ControlBarParent's full-width rectangle, and the window manager
+		// gives the pointer to the first top-level window holding it, ABOVE ones first; without it a
+		// layout made after the tabs (the frame rebuilt, a popup's winBringToTop) would take their
+		// hover, tooltip and clicks
+		parent = TheWindowManager->winCreate( NULL, WIN_STATUS_ENABLED | WIN_STATUS_HIDDEN | WIN_STATUS_ABOVE, 0, 0, 1, 1, commandTabSystem );
 		if( parent == NULL )
 			return;
 		parent->winSetWindowId( commandTabParentId() );
@@ -1962,11 +1966,14 @@ void ControlBar::updateCommandTabButtons( void )
 	}
 
 	//
-	// The row stands outside the bar, on the plate's top edge at its left shoulder: left-aligned with
-	// the grid, its foot a few pixels over the plate's first solid row, its top no higher than the
-	// money plate's and its right end clear of it.  Every edge is read off the live bar each frame
-	// (the plate's click mask down the row's columns, MoneyDisplay's rectangle), so it holds on every
-	// side, HUD size and a minimised bar.  28 pixels a tab at 1080, scaled as the HUD is.
+	// The row stands outside the bar, on the painting's top edge at its left shoulder: left-aligned
+	// with the grid, its foot a few pixels over the centre steel, its top no higher than the money
+	// plate's and its right end clear of it.  The painting is scheme images with no mask, so its edges
+	// are read off the input blockers the scheme lays over its own steel (BlockProduction over the
+	// centre plate, BlockMoney over the money plate, ControlBarProReforged.ini), which are windows of
+	// the bar and travel with it: every side, HUD size and a minimised bar.  A scheme without them
+	// falls back on the power bar's top and the money readout.  28 pixels a tab at 1080, scaled as the
+	// HUD is.
 	//
 	enum { TAB_SIDE_AT_1080 = 28, TAB_LEAST = 8 };
 	const Real hud = ControlBarHudScale() / ControlBarHudScaleFor( 1920, 1080 );
@@ -1974,46 +1981,59 @@ void ControlBar::updateCommandTabButtons( void )
 	Int gap = max( 2, side / 7 );
 	const Int air = max( 2, REAL_TO_INT_FLOOR( 3.0f * hud + 0.5f ) );
 	const Int left = grid.lo.x;
+	const Int reach = grid.hi.y - grid.lo.y;		///< how far above the grid a blocker may start and still be the bar's top
 
-	// the plate's top over the row's first column; with no plate mask, the centre panel's top
-	ICoord2D frameNow;
-	m_contextParent[ CP_MASTER ]->winGetScreenPosition( &frameNow.x, &frameNow.y );
-	const Int panelTop = m_panelRect[ CB_PANEL_CENTER ].lo.y + frameNow.y - m_panelOrigin.y;
-	const Int barTop = plateTopAt( left + 1, panelTop );
-
-	// the right end: short of the money plate's window, and of any part of the plate that rises
-	// above the row's foot (the money plate's own steel, where the painting has it)
-	Int rightLimit = grid.hi.x;
-	static const NameKeyType moneyId = NAMEKEY( "ControlBar.wnd:MoneyDisplay" );
-	GameWindow *money = TheWindowManager->winGetWindowFromId( NULL, moneyId );
-	Int moneyTop = -1;
-	if( money && !money->winIsHidden() )
+	// a shown window's screen rectangle, FALSE for none
+	struct Rect
 	{
-		ICoord2D moneyPos, moneySize;
-		money->winGetScreenPosition( &moneyPos.x, &moneyPos.y );
-		money->winGetSize( &moneySize.x, &moneySize.y );
-		if( moneySize.x > 0 && moneyPos.x > left )
+		static Bool of( NameKeyType id, IRegion2D *r )
 		{
-			rightLimit = min( rightLimit, moneyPos.x - air );
-			moneyTop = moneyPos.y;
+			GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, id );
+			if( win == NULL || win->winIsHidden() )
+				return FALSE;
+			ICoord2D size;
+			win->winGetScreenPosition( &r->lo.x, &r->lo.y );
+			win->winGetSize( &size.x, &size.y );
+			r->hi.x = r->lo.x + size.x;
+			r->hi.y = r->lo.y + size.y;
+			return size.x > 0 && size.y > 0;
 		}
+	};
+
+	// the centre steel's top: the production blocker where it stands over the grid's first column
+	// just above the grid, else the power bar's top, else the grid's
+	static const NameKeyType productionBlockId = NAMEKEY( "ControlBar.wnd:ControlBarProBlockInputProduction" );
+	static const NameKeyType powerId = NAMEKEY( "ControlBar.wnd:PowerWindow" );
+	IRegion2D r;
+	Int barTop = grid.lo.y;
+	if( Rect::of( productionBlockId, &r ) && r.lo.x <= left && r.hi.x > left
+			&& r.lo.y <= grid.lo.y && r.lo.y >= grid.lo.y - reach )
+		barTop = r.lo.y;
+	else if( Rect::of( powerId, &r ) && r.lo.y < grid.lo.y && r.lo.y >= grid.lo.y - reach )
+		barTop = r.lo.y;
+
+	// the money plate: its blocker where it stands right of the row and rises over the bar's top,
+	// else the readout's own window
+	static const NameKeyType moneyBlockId = NAMEKEY( "ControlBar.wnd:ControlBarProBlockInputMoney" );
+	static const NameKeyType moneyId = NAMEKEY( "ControlBar.wnd:MoneyDisplay" );
+	Int rightLimit = grid.hi.x;
+	Int moneyTop = -1;
+	if( ( Rect::of( moneyBlockId, &r ) && r.lo.x > left && r.lo.y < barTop )
+			|| ( Rect::of( moneyId, &r ) && r.lo.x > left ) )
+	{
+		rightLimit = min( rightLimit, r.lo.x - air );
+		moneyTop = r.lo.y;
 	}
-	const Int wanted = COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap;
-	for( Int x = left + 1; x < min( rightLimit, left + wanted + air ); x += 2 )
-		if( plateTopAt( x, barTop ) < barTop - air )
-		{
-			rightLimit = x - air;
-			break;
-		}
 
 	// shrink to the room there is, across and up
+	const Int wanted = COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap;
 	if( left + wanted > rightLimit )
 	{
 		side = max( (Int)TAB_LEAST, ( rightLimit - left - ( COMMAND_TAB_COUNT - 1 ) * gap ) / COMMAND_TAB_COUNT );
 		gap = max( 2, side / 7 );
 	}
 	const Int foot = barTop - air;
-	if( moneyTop >= 0 && foot - side < moneyTop )
+	if( moneyTop >= 0 && moneyTop < foot && foot - side < moneyTop )
 		side = max( (Int)TAB_LEAST, foot - moneyTop );
 	parent->winSetPosition( left, foot - side );
 	parent->winSetSize( COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap, side );

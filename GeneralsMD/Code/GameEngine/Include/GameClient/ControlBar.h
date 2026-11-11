@@ -1070,10 +1070,6 @@ public:
 		* went nowhere.  GameWindow::winPointInChild asks, so clicking and unit picking agree. */
 	Bool letsClickThrough( GameWindow *window, Int x, Int y );
 
-	/** The highest screen row at column x where a plate the bar wears is solid (its click mask), as
-		* the plates stand now, minimise included; 'fallback' where no plate covers x or none has a mask. */
-	Int plateTopAt( Int x, Int fallback );
-
 	/** TRUE when this top-level window is the bar's frame and the point is on the radar's frame where
 		* a Minimap Size over 100 has raised it above the bar's top.  The window manager finds a window
 		* under the mouse by its top-level window's rectangle first, which ends at the bar's top. */

@@ -282,6 +282,10 @@ public:
 	ICoord2D m_commandTabLR[ COMMAND_TAB_IMAGE_COUNT ];
 	ICoord2D m_commandTabPlateUL;
 	ICoord2D m_commandTabPlateLR;
+	/// CommandTabPageNextImage / CommandTabPagePrevImage: a unit tab's page arrows, drawn to fill a
+	/// command cell, with H, P and I copies; NULL without the key (the arrows are then a glyph)
+	AsciiString m_commandTabPageImage[ 2 ];
+	const Image *m_commandTabPage[ 2 ][ 4 ];
 
 	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
 	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
@@ -380,6 +384,9 @@ public:
 		* units (the painting's own, as drawPainting places its images); FALSE when it names none, or
 		* any tab's rectangle is empty. */
 	Bool getCommandTabSeats( IRegion2D *tabs, IRegion2D *plate ) const;
+	/// the scheme on screen's page arrow 'arrow' (0 next, 1 previous): enabled, hilite, pushed,
+	/// disabled, or NULL when it names none
+	const Image *const *getCommandTabPageImages( Int arrow ) const;
 	/// the current scheme's talent pieces in ControlBarScheme::TALENT_* order, NULL when it names none
 	const Image *const *getTalentImages( void ) const;
 	/// the scheme on screen writes the money with thousands separators (MoneyThousands)

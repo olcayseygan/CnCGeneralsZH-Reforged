@@ -2178,29 +2178,220 @@ void ControlBar::layoutCommandTabRow( const IRegion2D &grid, IRegion2D *row, IRe
 	* reset and every button is set again); otherwise, once a logic tick, only the states, and a page
 	* whose buttons changed under it (a factory built, lost or upgraded) has the UI rebuilt instead. */
 //-------------------------------------------------------------------------------------------------
-void ControlBar::populateCommandTab( Bool full )
+void ControlBar_commandTabPages( Int count, Int cells, Int *perPage, Int *pages )
+{
+	// a list that fits takes every cell; one that does not gives two to the arrows (a grid of fewer
+	// than three cells has no room for them and only the wheel pages it)
+	*perPage = ( count > cells && cells >= 3 ) ? cells - 2 : cells;
+	*pages = *perPage > 0 ? max( 1, ( count + *perPage - 1 ) / *perPage ) : 1;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The open unit tab's list, in gathering order */
+//-------------------------------------------------------------------------------------------------
+static void gatherCommandTabList( Bool aircraft, std::vector< GroupPanelBuildable > &list )
 {
 	std::vector< GroupPanelBuildable > all;
 	GroupPanel_gatherBuildable( ThePlayerList->getLocalPlayer(), all );
-	const Bool aircraft = m_commandTab == COMMAND_TAB_AIRCRAFT;
-	std::vector< GroupPanelBuildable > list;
+	list.clear();
 	for( size_t i = 0; i < all.size(); i++ )
 		if( ( all[ i ].thing->isKindOf( KINDOF_AIRCRAFT ) ? TRUE : FALSE ) == aircraft )
 			list.push_back( all[ i ] );
+}
 
-	// a page is every command window the bar has, in slot order
-	Int slots[ MAX_COMMANDS_PER_SET ];
-	Int pageSize = 0;
+//-------------------------------------------------------------------------------------------------
+/** The grid's two rightmost cells, the top row's last and the bottom row's last, by where the
+	* windows stand on screen: the arrows' seats.  FALSE when they are not two different cells. */
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::findCommandTabArrowSlots( Int *next, Int *prev ) const
+{
+	*next = *prev = -1;
+	Int rightX = 0, nextY = 0, prevY = 0;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+	{
+		GameWindow *win = m_commandWindows[ slot ];
+		if( win == NULL )
+			continue;
+		ICoord2D pos;
+		win->winGetScreenPosition( &pos.x, &pos.y );
+		if( *next < 0 || pos.x > rightX )
+		{
+			rightX = pos.x;
+			*next = *prev = slot;
+			nextY = prevY = pos.y;
+		}
+		else if( pos.x == rightX )
+		{
+			if( pos.y < nextY ) { *next = slot; nextY = pos.y; }
+			if( pos.y > prevY ) { *prev = slot; prevY = pos.y; }
+		}
+	}
+	return *next >= 0 && *prev >= 0 && *next != *prev;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Give the cells that were arrows back to the command bar as it found them: the hilite, pushed,
+	* disabled and selected pictures the arrow took, no data, no text, no tooltip text.  Every
+	* evaluateContextUI starts here, so a tab closing or the list shrinking leaves no arrow behind. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::restoreCommandTabArrows( void )
+{
+	for( Int a = 0; a < 2; a++ )
+	{
+		const Int slot = m_commandTabArrowSlot[ a ];
+		m_commandTabArrowSlot[ a ] = -1;
+		if( slot < 0 || m_commandWindows[ slot ] == NULL )
+			continue;
+		GameWindow *win = m_commandWindows[ slot ];
+		for( Int s = 0; s < TAB_ARROW_DRAW_STATES; s++ )
+		{
+			win->winSetEnabledImage( s, m_commandTabArrowSaved[ a ][ 0 ][ s ] );
+			win->winSetHiliteImage( s, m_commandTabArrowSaved[ a ][ 1 ][ s ] );
+			win->winSetDisabledImage( s, m_commandTabArrowSaved[ a ][ 2 ][ s ] );
+		}
+		GadgetButtonSetData( win, NULL );
+		GadgetButtonSetText( win, UnicodeString( u"" ) );
+		win->winSetTooltip( UnicodeString::TheEmptyString );
+		win->winHide( TRUE );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Turn cell 'slot' into page arrow 'a' (0 next, 1 previous): the scheme's arrow pictures, or a
+	* plain glyph where it names none, a tooltip, the bar's click, and nothing a unit cell left on it. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::setCommandTabArrow( Int a, Int slot )
+{
+	GameWindow *win = m_commandWindows[ slot ];
+	if( m_commandTabArrowSlot[ a ] != slot )
+	{
+		for( Int s = 0; s < TAB_ARROW_DRAW_STATES; s++ )
+		{
+			m_commandTabArrowSaved[ a ][ 0 ][ s ] = win->winGetEnabledImage( s );
+			m_commandTabArrowSaved[ a ][ 1 ][ s ] = win->winGetHiliteImage( s );
+			m_commandTabArrowSaved[ a ][ 2 ][ s ] = win->winGetDisabledImage( s );
+		}
+		m_commandTabArrowSlot[ a ] = slot;
+	}
+
+	// what a unit cell left: data, clock, count, repeat, veterancy, border, letter, tints
+	GadgetButtonSetData( win, NULL );
+	GadgetButtonClearClock( win );
+	GadgetButtonSetCount( win, 0 );
+	GadgetButtonSetRepeat( win, FALSE );
+	GadgetButtonDrawOverlayImage( win, NULL );
+	GadgetButtonSetBorder( win, GAME_COLOR_UNDEFINED, FALSE );
+	GadgetButtonEnableCheckLike( win, FALSE, FALSE );
+	win->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON | WIN_STATUS_NOT_READY | WIN_STATUS_ALWAYS_COLOR
+		| WIN_STATUS_CANCEL_WHEN_DISABLED | WIN_STATUS_FLASHING );
+	win->winSetTooltipFunc( NULL );
+
+	const Image *const *art = m_controlBarSchemeManager ? m_controlBarSchemeManager->getCommandTabPageImages( a ) : NULL;
+	if( art )
+	{
+		GadgetButtonSetEnabledImage( win, art[ 0 ] );
+		GadgetButtonSetHiliteImage( win, art[ 1 ] ? art[ 1 ] : art[ 0 ] );
+		GadgetButtonSetHiliteSelectedImage( win, art[ 2 ] ? art[ 2 ] : art[ 0 ] );
+		GadgetButtonSetEnabledSelectedImage( win, art[ 2 ] ? art[ 2 ] : art[ 0 ] );
+		GadgetButtonSetDisabledImage( win, art[ 3 ] ? art[ 3 ] : art[ 0 ] );
+		GadgetButtonSetText( win, UnicodeString( u"" ) );
+	}
+	else
+	{
+		// ponytail: no shipped picture of a sideways arrow fits a command cell; a glyph on the bare
+		// cell until a scheme names one (CommandTabPageNextImage / PrevImage)
+		GadgetButtonSetEnabledImage( win, NULL );
+		GadgetButtonSetText( win, UnicodeString( a == 0 ? u">" : u"<" ) );
+	}
+	win->winSetTooltip( TheGameText->fetch( a == 0 ? "GUI:CommandTabPageNext" : "GUI:CommandTabPagePrev" ) );
+	GadgetButtonSetAltSound( win, "GUICommandBarClick" );
+	win->winEnable( TRUE );
+	win->winHide( FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A unit tab of 'count' units on this bar: units a page, pages, the arrows' cells and whether they
+	* are up.  A bar whose two rightmost cells are not two different ones gets no arrows and pages by
+	* the wheel alone, every cell a unit. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::commandTabLayout( Int count, Int *perPage, Int *pages, Int *next, Int *prev, Bool *arrows ) const
+{
+	Int cells = 0;
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
 		if( m_commandWindows[ slot ] )
-			slots[ pageSize++ ] = slot;
-	if( pageSize == 0 )
-		return;
-
-	const Int pages = max( 1, ( (Int)list.size() + pageSize - 1 ) / pageSize );
-	if( m_commandTabPage >= pages )
+			cells++;
+	if( findCommandTabArrowSlots( next, prev ) )
+		ControlBar_commandTabPages( count, cells, perPage, pages );
+	else
 	{
-		m_commandTabPage = pages - 1;
+		*perPage = cells;
+		*pages = cells > 0 ? max( 1, ( count + cells - 1 ) / cells ) : 1;
+	}
+	*arrows = *perPage < cells;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A press on a page arrow: TRUE when 'win' is one (the page turns), FALSE for any other window */
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::pressCommandTabArrow( GameWindow *win )
+{
+	for( Int a = 0; a < 2; a++ )
+		if( win != NULL && m_commandTabArrowSlot[ a ] >= 0 && m_commandWindows[ m_commandTabArrowSlot[ a ] ] == win )
+		{
+			turnCommandTabPage( a == 0 ? 1 : -1 );
+			return TRUE;
+		}
+	return FALSE;
+}
+
+Bool ControlBar::isCommandTabArrow( const GameWindow *win ) const
+{
+	for( Int a = 0; a < 2; a++ )
+		if( win != NULL && m_commandTabArrowSlot[ a ] >= 0 && m_commandWindows[ m_commandTabArrowSlot[ a ] ] == win )
+			return TRUE;
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One page on (+1) or back (-1), round the ends; FALSE when the list has one page */
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::turnCommandTabPage( Int step )
+{
+	if( m_commandTab != COMMAND_TAB_GROUND && m_commandTab != COMMAND_TAB_AIRCRAFT )
+		return FALSE;
+	std::vector< GroupPanelBuildable > list;
+	gatherCommandTabList( m_commandTab == COMMAND_TAB_AIRCRAFT, list );
+	Int perPage, pages, next, prev;
+	Bool arrows;
+	commandTabLayout( (Int)list.size(), &perPage, &pages, &next, &prev, &arrows );
+	if( pages <= 1 )
+		return FALSE;
+	m_commandTabPage = ( ( m_commandTabPage + step ) % pages + pages ) % pages;
+	markUIDirty();
+	return TRUE;
+}
+
+void ControlBar::populateCommandTab( Bool full )
+{
+	std::vector< GroupPanelBuildable > list;
+	gatherCommandTabList( m_commandTab == COMMAND_TAB_AIRCRAFT, list );
+
+	// the cells, in slot order; when the list does not fit, the two rightmost are the arrows
+	Int slots[ MAX_COMMANDS_PER_SET ];
+	Int cells = 0;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		if( m_commandWindows[ slot ] )
+			slots[ cells++ ] = slot;
+	if( cells == 0 )
+		return;
+	Int perPage, pages, nextSlot, prevSlot;
+	Bool arrows;
+	commandTabLayout( (Int)list.size(), &perPage, &pages, &nextSlot, &prevSlot, &arrows );
+
+	// a list that shrank takes the page back to its last; arrows that appear or go change the cells
+	if( m_commandTabPage >= pages || ( !full && arrows != ( m_commandTabArrowSlot[ 0 ] >= 0 ) ) )
+	{
+		m_commandTabPage = min( m_commandTabPage, pages - 1 );
 		if( !full )
 		{
 			markUIDirty();
@@ -2208,11 +2399,20 @@ void ControlBar::populateCommandTab( Bool full )
 		}
 	}
 
-	for( Int k = 0; k < pageSize; k++ )
+	if( full && arrows )
 	{
-		const Int slot = slots[ k ];
+		setCommandTabArrow( 0, nextSlot );
+		setCommandTabArrow( 1, prevSlot );
+	}
+
+	Int k = 0;
+	for( Int c = 0; c < cells; c++ )
+	{
+		const Int slot = slots[ c ];
+		if( arrows && ( slot == nextSlot || slot == prevSlot ) )
+			continue;
 		GameWindow *win = m_commandWindows[ slot ];
-		const Int at = m_commandTabPage * pageSize + k;
+		const Int at = m_commandTabPage * perPage + k++;
 		const GroupPanelBuildable *entry = at < (Int)list.size() ? &list[ at ] : NULL;
 
 		if( !full )
@@ -2265,27 +2465,7 @@ Bool ControlBar::scrollCommandTab( const ICoord2D *mouse, Bool up )
 			|| mouse->x < grid.lo.x || mouse->x >= grid.hi.x || mouse->y < grid.lo.y || mouse->y >= grid.hi.y )
 		return FALSE;
 
-	Int pageSize = 0;
-	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-		if( m_commandWindows[ slot ] )
-			pageSize++;
-	if( pageSize == 0 )
-		return FALSE;
-
-	// count the tab's units the way populateCommandTab does
-	std::vector< GroupPanelBuildable > all;
-	GroupPanel_gatherBuildable( ThePlayerList->getLocalPlayer(), all );
-	Int count = 0;
-	for( size_t i = 0; i < all.size(); i++ )
-		if( ( all[ i ].thing->isKindOf( KINDOF_AIRCRAFT ) ? TRUE : FALSE ) == ( m_commandTab == COMMAND_TAB_AIRCRAFT ) )
-			count++;
-	const Int pages = ( count + pageSize - 1 ) / pageSize;
-	if( pages <= 1 )
-		return FALSE;
-
-	// up is back a page, down the next, round the ends
-	m_commandTabPage = ( m_commandTabPage + ( up ? pages - 1 : 1 ) ) % pages;
-	markUIDirty();
-	return TRUE;
+	// up is back a page, down the next, round the ends: the arrows' pages
+	return turnCommandTabPage( up ? -1 : 1 );
 }
 

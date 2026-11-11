@@ -206,6 +206,8 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "CommandTabAircraftLR",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabLR[ 2 ] ) },
 	{ "CommandTabPlateUL",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabPlateUL ) },
 	{ "CommandTabPlateLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabPlateLR ) },
+	{ "CommandTabPageNextImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabPageImage[ 0 ] ) },
+	{ "CommandTabPagePrevImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabPageImage[ 1 ] ) },
 	{ "TooltipImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_tooltipName ) },
 	{ "TalentImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_talentName ) },
 
@@ -513,6 +515,9 @@ ControlBarScheme::ControlBarScheme(void)
 	}
 	m_commandTabPlateUL.x = m_commandTabPlateUL.y = 0;
 	m_commandTabPlateLR.x = m_commandTabPlateLR.y = 0;
+	for( Int arrow = 0; arrow < 2; arrow++ )
+		for( Int state = 0; state < 4; state++ )
+			m_commandTabPage[ arrow ][ state ] = NULL;
 	m_tooltip = ControlBarTooltipImages();
 	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
 		m_talent[ i ] = NULL;
@@ -587,6 +592,8 @@ void ControlBarScheme::init(void)
 	static const char *const tabStates[ COMMAND_TAB_STATE_COUNT ] = { "", "H", "P", "I", "O" };
 	for( Int tab = 0; tab < COMMAND_TAB_IMAGE_COUNT; tab++ )
 		findPieces( m_commandTabImage[ tab ], "", tabStates, COMMAND_TAB_STATE_COUNT, m_commandTab[ tab ] );
+	for( Int arrow = 0; arrow < 2; arrow++ )
+		findPieces( m_commandTabPageImage[ arrow ], "", tabStates, 4, m_commandTabPage[ arrow ] );
 	m_tooltip.find( m_tooltipName );
 	static const char *const talentSuffixes[ TALENT_PIECE_COUNT ] =
 		{ "GeneralsPowerWindowWide", "TalentPlateLocked", "TalentPlateWaiting", "TalentPlatePicked", "TalentPlateRejected",
@@ -1358,6 +1365,13 @@ const Image *const *ControlBarSchemeManager::getCommandTabImages( Int tab ) cons
 			|| m_currentScheme->m_commandTab[ tab ][ 0 ] == NULL )
 		return NULL;
 	return m_currentScheme->m_commandTab[ tab ];
+}
+
+const Image *const *ControlBarSchemeManager::getCommandTabPageImages( Int arrow ) const
+{
+	if( m_currentScheme == NULL || arrow < 0 || arrow > 1 || m_currentScheme->m_commandTabPage[ arrow ][ 0 ] == NULL )
+		return NULL;
+	return m_currentScheme->m_commandTabPage[ arrow ];
 }
 
 Bool ControlBarSchemeManager::getCommandTabSeats( IRegion2D *tabs, IRegion2D *plate ) const

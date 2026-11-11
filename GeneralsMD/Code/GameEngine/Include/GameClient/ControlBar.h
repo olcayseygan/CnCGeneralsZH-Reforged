@@ -505,6 +505,11 @@ Int ControlBar_commandGroup( const class CommandButton *command );
 	* what does not fit goes on in the next row down with room, then in the rows above. */
 Bool ControlBar_commandPlaces( const Int *types, const Int *groups, const Int *pinned, Int count, Int *places );
 
+/** A command tab's pages: 'count' units on a grid of 'cells'.  A list that fits takes every cell and
+	* one page; one that does not gives two cells to the page arrows, so a page holds cells - 2 (a grid
+	* of fewer than three keeps every cell).  ControlBarCommand.cpp. */
+void ControlBar_commandTabPages( Int count, Int cells, Int *perPage, Int *pages );
+
 /** The page's keys past attack, hold position and move, which no command set has a button for either. */
 enum OrderKeyExtra
 {
@@ -1288,6 +1293,19 @@ protected:
 	/// a scheme with no seats: the tabs' row worked out from the bar's windows; the parent's screen
 	/// rect in 'row', each tab relative to it in 'place'
 	void layoutCommandTabRow( const IRegion2D &grid, IRegion2D *row, IRegion2D *place );
+	/// the page arrows of a unit tab whose list does not fit (ControlBarCommand.cpp)
+	Bool findCommandTabArrowSlots( Int *next, Int *prev ) const;
+	void commandTabLayout( Int count, Int *perPage, Int *pages, Int *next, Int *prev, Bool *arrows ) const;
+	void setCommandTabArrow( Int arrow, Int slot );
+	void restoreCommandTabArrows( void );
+	Bool turnCommandTabPage( Int step );
+public:
+	Bool pressCommandTabArrow( GameWindow *win );	///< a click on a page arrow turns the page: TRUE, else FALSE
+	Bool isCommandTabArrow( const GameWindow *win ) const;	///< 'win' is a page arrow now
+protected:
+	Int m_commandTabArrowSlot[ 2 ];								///< the cells that are the next and previous arrows now, -1 for none
+	enum { TAB_ARROW_DRAW_STATES = 7 };
+	const Image *m_commandTabArrowSaved[ 2 ][ 3 ][ TAB_ARROW_DRAW_STATES ];	///< what each arrow's cell wore before: enabled, hilite and disabled draw data
 	void populateCommandTab( Bool full );					///< a unit tab's page into the grid; full after a context switch, else the states only
 	Bool getCommandGridRect( IRegion2D *rect ) const;	///< the command windows' screen extent
 

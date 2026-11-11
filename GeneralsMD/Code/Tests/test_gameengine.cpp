@@ -4635,6 +4635,28 @@ TEST(command_tab_lists_only_the_bars_own_build_buttons)
 }
 
 /*
+ * A unit tab's pages on the 14-cell grid: a list that fits takes every cell and has no arrows; one
+ * that does not gives the two rightmost cells to the page arrows, so a page holds twelve.
+ */
+TEST(command_tab_pages_give_two_cells_to_the_arrows)
+{
+	Int perPage = 0, pages = 0;
+	ControlBar_commandTabPages( 0, 14, &perPage, &pages );
+	CHECK_EQ( perPage, 14 );	CHECK_EQ( pages, 1 );
+	ControlBar_commandTabPages( 14, 14, &perPage, &pages );
+	CHECK_EQ( perPage, 14 );	CHECK_EQ( pages, 1 );
+	ControlBar_commandTabPages( 15, 14, &perPage, &pages );
+	CHECK_EQ( perPage, 12 );	CHECK_EQ( pages, 2 );
+	ControlBar_commandTabPages( 24, 14, &perPage, &pages );
+	CHECK_EQ( perPage, 12 );	CHECK_EQ( pages, 2 );
+	ControlBar_commandTabPages( 25, 14, &perPage, &pages );
+	CHECK_EQ( perPage, 12 );	CHECK_EQ( pages, 3 );
+	/* no room for two arrows and a unit: every cell a unit, the wheel pages */
+	ControlBar_commandTabPages( 5, 2, &perPage, &pages );
+	CHECK_EQ( perPage, 2 );	CHECK_EQ( pages, 3 );
+}
+
+/*
  * NudgeBuildPlacement.  The whole promise of the feature is "nearest spot that fits", and the
  * only thing that makes "first candidate that fits" mean that is the order the candidates come
  * out in.  Ring by ring is not that order - from three rings out a ring's own diagonal is

@@ -16565,6 +16565,14 @@ GUI:CommandTabAircraft
 "Hava araçları: hava alanlarının şu an üretebildiği her şey. Fare tekerleği sayfayı çevirir"
 END
 
+GUI:CommandTabPageNext
+"Sonraki sayfa"
+END
+
+GUI:CommandTabPagePrev
+"Önceki sayfa"
+END
+
 TOOLTIP:BuildWithoutWorker
 "Hiçbir şey seçili değilken komut çubuğu işçilerinizin binalarını gösterir ve yere en yakın boştaki işçi gidip inşa eder. Kapalıyken çubuk, 2003'teki gibi bir işçi seçene kadar boş kalır."
 END

@@ -1959,6 +1959,14 @@ GUI:CommandTabAircraft
 "Aircraft: everything your airfields can build now. Mouse wheel turns the page"
 END
 
+GUI:CommandTabPageNext
+"Next page"
+END
+
+GUI:CommandTabPagePrev
+"Previous page"
+END
+
 TOOLTIP:BuildWithoutWorker
 "With nothing selected the command bar shows your workers' buildings, and the idle worker nearest the spot goes to build. Off, the bar stays empty until you select a worker, as in 2003."
 END

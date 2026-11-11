@@ -1686,6 +1686,13 @@ ControlBar::ControlBar( void )
 	m_commandTabParent = NULL;
 	for( i = 0; i < COMMAND_TAB_COUNT; i++ )
 		m_commandTabButtons[ i ] = NULL;
+	for( i = 0; i < 2; i++ )
+	{
+		m_commandTabArrowSlot[ i ] = -1;
+		for( Int k = 0; k < 3; k++ )
+			for( Int s = 0; s < TAB_ARROW_DRAW_STATES; s++ )
+				m_commandTabArrowSaved[ i ][ k ][ s ] = NULL;
+	}
 	m_defaultControlBarPosition.x = m_defaultControlBarPosition.y = 0;
 	m_genStarFlash = FALSE;
 	m_purchaseScienceOpen = FALSE;
@@ -1762,6 +1769,8 @@ ControlBar::ControlBar( void )
 	m_multiSelectFocus = 0;
 	m_rallyPointDrawableID = INVALID_DRAWABLE_ID;
 	m_standInBuilderID = INVALID_DRAWABLE_ID;
+	// the windows are new: no cell is an arrow, and nothing saved belongs to them
+	m_commandTabArrowSlot[ 0 ] = m_commandTabArrowSlot[ 1 ] = -1;
 	m_displayedConstructPercent = -1.0f;
 	m_displayedOCLTimerSeconds = 0;
 	m_displayedQueueCount = 0;
@@ -3958,6 +3967,9 @@ void ControlBar::evaluateContextUI( void )
 	if( isPurchaseScienceVisible() )
 		populatePurchaseScience( getWatchedPlayer() );
 
+	// a unit tab's page arrows give their cells back before anything fills them again
+	restoreCommandTabArrows();
+
 	// erase any current state of the GUI by switching out to the empty context
 	switchToContext( CB_CONTEXT_NONE, NULL );
 
@@ -4224,6 +4236,11 @@ CBCommandStatus ControlBar::processContextSensitiveButtonClick( GameWindow *butt
 	//
 	if( m_commandTab == COMMAND_TAB_GROUND || m_commandTab == COMMAND_TAB_AIRCRAFT )
 	{
+		// a page arrow turns the page on a left click, takes a right one for nothing, and never reaches
+		// the queue
+		if( gadgetMessage == GBM_SELECTED ? pressCommandTabArrow( button ) : isCommandTabArrow( button ) )
+			return CBC_COMMAND_USED;
+
 		Bool onGrid = FALSE;
 		for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
 			onGrid = onGrid || ( m_commandWindows[ slot ] != NULL && m_commandWindows[ slot ] == button );

@@ -1687,6 +1687,9 @@ ControlBar::ControlBar( void )
 	for( i = 0; i < COMMAND_TAB_COUNT; i++ )
 		m_commandTabButtons[ i ] = NULL;
 	m_signalParent = NULL;
+	m_signalPlateShown = FALSE;
+	m_signalPlateRect.lo.x = m_signalPlateRect.lo.y = m_signalPlateRect.hi.x = m_signalPlateRect.hi.y = 0;
+	m_signalPlateFoot = 0;
 	for( i = 0; i < SIGNAL_KEYS; i++ )
 		m_signalKeys[ i ] = NULL;
 	for( i = 0; i < 2; i++ )
@@ -2364,6 +2367,22 @@ Bool ControlBar::letsClickThrough( GameWindow *window, Int x, Int y )
 		return FALSE;
 
 	const char *shortName = shortWindowName( window );
+
+	// The radar's blocker reaches up to the signal keys' plate (BlockRadar), so what stands on the
+	// radar's top clears it; the plate is narrower than the radar's box, and the battlefield beside it,
+	// up to the ledge the blocker stopped at before, stays the world's.  The plate's own window and a
+	// grown radar's frame keep theirs
+	if( strcmp( shortName, "ControlBarProBlockInputRadar" ) == 0 )
+	{
+		IRegion2D outer, inner;
+		Bool lit;
+		const Bool overFrame = getGrownRadarFrame( &outer, &inner, &lit )
+			&& x >= outer.lo.x && x < outer.hi.x && y >= outer.lo.y && y < outer.hi.y;
+		const Bool overPlate = m_signalPlateShown && x >= m_signalPlateRect.lo.x && x < m_signalPlateRect.hi.x
+			&& y >= m_signalPlateRect.lo.y && y < m_signalPlateRect.hi.y;
+		return m_signalPlateShown && y < m_signalPlateFoot && !overFrame && !overPlate;
+	}
+
 	if( shortName[ 0 ] != 0 && strcmp( shortName, "CenterBackground" ) != 0 )
 		return FALSE;
 
@@ -2964,10 +2983,6 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 	IRegion2D blocker;
 	blocker.lo.x = MIN( block.lo.x, frame.lo.x );
 	blocker.lo.y = MIN( block.lo.y, frame.lo.y );
-	// what the box's blocker stands above the box (the ledge, and the signal keys' plate) rises with
-	// the picture, as updateSignalKeys moves the keys: radarFrameTop, and what stands on it, clears it
-	if( block.lo.y < square.lo.y )
-		blocker.lo.y = MIN( blocker.lo.y, fit.lo.y - ( square.lo.y - block.lo.y ) );
 	blocker.hi.x = MIN( MAX( block.hi.x, frame.hi.x ), plateX - 1 );
 	blocker.hi.y = MAX( block.hi.y, frame.hi.y );
 	placeWindowAt( windows[ RADAR_FIT_BLOCK ], blocker );

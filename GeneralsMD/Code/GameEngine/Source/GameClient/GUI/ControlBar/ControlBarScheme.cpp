@@ -219,6 +219,7 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "SignalAttentionLR",					INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalLR[ 2 ] ) },
 	{ "SignalPlateUL",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalPlateUL ) },
 	{ "SignalPlateLR",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalPlateLR ) },
+	{ "SignalPlateImage",						INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_signalPlateImageName ) },
 	{ "TooltipImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_tooltipName ) },
 	{ "TalentImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_talentName ) },
 
@@ -538,6 +539,7 @@ ControlBarScheme::ControlBarScheme(void)
 	}
 	m_signalPlateUL.x = m_signalPlateUL.y = 0;
 	m_signalPlateLR.x = m_signalPlateLR.y = 0;
+	m_signalPlateImage = NULL;
 	m_tooltip = ControlBarTooltipImages();
 	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
 		m_talent[ i ] = NULL;
@@ -616,6 +618,7 @@ void ControlBarScheme::init(void)
 		findPieces( m_commandTabPageImage[ arrow ], "", tabStates, 4, m_commandTabPage[ arrow ] );
 	for( Int key = 0; key < SIGNAL_KEY_COUNT; key++ )
 		findPieces( m_signalImage[ key ], "", tabStates, 4, m_signal[ key ] );
+	findPieces( m_signalPlateImageName, "", tabStates, 1, &m_signalPlateImage );
 	m_tooltip.find( m_tooltipName );
 	static const char *const talentSuffixes[ TALENT_PIECE_COUNT ] =
 		{ "GeneralsPowerWindowWide", "TalentPlateLocked", "TalentPlateWaiting", "TalentPlatePicked", "TalentPlateRejected",
@@ -1378,6 +1381,11 @@ Int ControlBarSchemeManager::radarArtTop( Int fallback ) const
 		return fallback;
 	Int x, y;
 	block->winGetScreenPosition( &x, &y );
+	// the signal keys' plate stands on the radar's top and rides a grown radar up: what stands on the
+	// radar's top stands on the plate's, wherever it is placed now
+	IRegion2D plate;
+	if( TheControlBar && TheControlBar->getSignalPlateRect( &plate ) )
+		y = min( y, plate.lo.y );
 	return y;
 }
 

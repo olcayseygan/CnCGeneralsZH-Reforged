@@ -1311,11 +1311,16 @@ protected:
 	/// a scheme naming none has none.  Every client frame: where they stand, enabled or not, armed
 	void updateSignalKeys( void );
 	GameWindow *m_signalParent;										///< the keys' plate window, checked against the window manager before use
+	Bool m_signalPlateShown;											///< the plate stands on screen now, at m_signalPlateRect
+	IRegion2D m_signalPlateRect;									///< the plate as placed, screen pixels, a grown radar's lift included
+	Int m_signalPlateFoot;												///< the plate's foot as the painting maps it, before any lift: the ledge
 	enum { SIGNAL_KEYS = 3 };											///< InGameUI.h's SIGNAL_KIND_COUNT, in SignalKind order
 	GameWindow *m_signalKeys[ SIGNAL_KEYS ];
 public:
 	/// a signal key's press: arm that smoke signal, or disarm it when it is the one armed
 	void pressSignalKey( Int kind );
+	/// the signal keys' plate where it stands now, FALSE while it is not on screen
+	Bool getSignalPlateRect( IRegion2D *rect ) const { if( !m_signalPlateShown ) return FALSE; *rect = m_signalPlateRect; return TRUE; }
 protected:
 	Int m_commandTabArrowSlot[ 2 ];								///< the cells that are the next and previous arrows now, -1 for none
 	enum { TAB_ARROW_DRAW_STATES = 7 };

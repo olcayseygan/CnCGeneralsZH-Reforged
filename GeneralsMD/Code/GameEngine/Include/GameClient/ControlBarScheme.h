@@ -297,6 +297,10 @@ public:
 	ICoord2D m_signalLR[ SIGNAL_KEY_COUNT ];
 	ICoord2D m_signalPlateUL;
 	ICoord2D m_signalPlateLR;
+	/// SignalPlateImage: the plate's own picture, drawn by the keys' window into the plate's rect so it
+	/// can ride a grown radar's top edge; NULL without the key
+	AsciiString m_signalPlateImageName;
+	const Image *m_signalPlateImage;
 
 	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
 	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
@@ -402,6 +406,8 @@ public:
 	const Image *const *getSignalImages( Int kind ) const;
 	/// its signal seats and plate in 800x600 design units, as getCommandTabSeats; FALSE for none
 	Bool getSignalSeats( IRegion2D *keys, IRegion2D *plate ) const;
+	/// its signal plate picture, NULL for none
+	const Image *getSignalPlateImage( void ) const { return m_currentScheme ? m_currentScheme->m_signalPlateImage : NULL; }
 	/// the current scheme's talent pieces in ControlBarScheme::TALENT_* order, NULL when it names none
 	const Image *const *getTalentImages( void ) const;
 	/// the scheme on screen writes the money with thousands separators (MoneyThousands)

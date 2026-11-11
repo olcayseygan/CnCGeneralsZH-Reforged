@@ -2515,6 +2515,20 @@ static WindowMsgHandledType signalKeysSystem( GameWindow *window, UnsignedInt ms
 	return MSG_HANDLED;
 }
 
+/// the plate's own picture, filling the keys' window (which is the plate's rect); a top-level ABOVE
+/// window draws after the bar, so it stands on a grown radar's frame (drawGrownRadarFrame)
+static void drawSignalPlate( GameWindow *window, WinInstanceData *instData )
+{
+	ControlBarSchemeManager *schemes = TheControlBar ? TheControlBar->getControlBarSchemeManager() : NULL;
+	const Image *plate = schemes ? schemes->getSignalPlateImage() : NULL;
+	if( plate == NULL )
+		return;
+	ICoord2D pos, size;
+	window->winGetScreenPosition( &pos.x, &pos.y );
+	window->winGetSize( &size.x, &size.y );
+	TheDisplay->drawImage( plate, pos.x, pos.y, pos.x + size.x, pos.y + size.y );
+}
+
 /// where the signal keys work: the keys' own gate (CommandXlat's MSG_META_SIGNAL_*)
 static Bool signalsUsable( void )
 {
@@ -2552,6 +2566,7 @@ void ControlBar::updateSignalKeys( void )
 	GameWindow *parent = m_signalParent;
 	if( parent != NULL && TheWindowManager->winGetWindowFromId( NULL, signalParentId() ) != parent )
 		parent = m_signalParent = NULL;
+	m_signalPlateShown = FALSE;
 	if( !shown )
 	{
 		if( parent != NULL )
@@ -2567,7 +2582,7 @@ void ControlBar::updateSignalKeys( void )
 		if( parent == NULL )
 			return;
 		parent->winSetWindowId( signalParentId() );
-		parent->winSetDrawFunc( drawNoCommandTabParent );
+		parent->winSetDrawFunc( drawSignalPlate );
 		parent->winSetInputFunc( GameWinBlockInput );
 		for( Int kind = 0; kind < SIGNAL_KEYS; kind++ )
 		{
@@ -2588,22 +2603,13 @@ void ControlBar::updateSignalKeys( void )
 	//
 	// A seat to the screen: the painting's own arithmetic for the piece it falls in (the left one for
 	// the radar's edge: its design-to-screen, the frame's travel since layoutPanels and drawPainting's
-	// radar column shift), and then the radar's own travel out of its painted box, which Minimap Size
-	// over 100 grows up and right from the box's bottom left corner (fitSquareRadar): the keys ride the
-	// picture's top edge at the height they had over the box.  At 100 that travel is nothing.
+	// radar column shift).  Then the artist's rule for a grown radar: Minimap Size over 100 grows the
+	// picture up out of its painted box with a flat steel frame round it (fitSquareRadar,
+	// drawGrownRadarFrame), and when that frame's top stands higher than the plate's foot, the plate and
+	// the keys go up together to stand on it.  Up only, never stretched or cut.
 	//
 	ICoord2D frameNow;
 	m_contextParent[ CP_MASTER ]->winGetScreenPosition( &frameNow.x, &frameNow.y );
-	ICoord2D grow = { 0, 0 };
-	static const NameKeyType radarId = NAMEKEY( "ControlBar.wnd:LeftHUD" );
-	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarId );
-	if( radar != NULL && !radar->winIsHidden() && m_radarSquareGrown )
-	{
-		ICoord2D at;
-		radar->winGetScreenPosition( &at.x, &at.y );
-		grow.x = at.x - ( m_radarFitBox[ RADAR_FIT_RADAR ].lo.x + frameNow.x );
-		grow.y = at.y - ( m_radarFitBox[ RADAR_FIT_RADAR ].lo.y + frameNow.y );
-	}
 	struct Seat
 	{
 		static void toScreen( const IRegion2D &design, Int dx, Int dy, Int columnShift, IRegion2D *out )
@@ -2617,8 +2623,8 @@ void ControlBar::updateSignalKeys( void )
 			out->hi.y += dy;
 		}
 	};
-	const Int dx = frameNow.x - m_panelOrigin.x + grow.x;
-	const Int dy = frameNow.y - m_panelOrigin.y + grow.y;
+	const Int dx = frameNow.x - m_panelOrigin.x;
+	const Int dy = frameNow.y - m_panelOrigin.y;
 	IRegion2D row, key[ SIGNAL_KEYS ];
 	Seat::toScreen( plate, dx, dy, m_radarColumnShift, &row );
 	for( Int kind = 0; kind < SIGNAL_KEYS; kind++ )
@@ -2629,6 +2635,24 @@ void ControlBar::updateSignalKeys( void )
 		row.hi.x = max( row.hi.x, key[ kind ].hi.x );
 		row.hi.y = max( row.hi.y, key[ kind ].hi.y );
 	}
+	m_signalPlateFoot = row.hi.y;
+
+	// the grown radar's lift
+	IRegion2D outer, inner;
+	Bool lit;
+	if( getGrownRadarFrame( &outer, &inner, &lit ) && outer.lo.y < row.hi.y )
+	{
+		const Int lift = outer.lo.y - row.hi.y;
+		row.lo.y += lift;
+		row.hi.y += lift;
+		for( Int kind = 0; kind < SIGNAL_KEYS; kind++ )
+		{
+			key[ kind ].lo.y += lift;
+			key[ kind ].hi.y += lift;
+		}
+	}
+	m_signalPlateRect = row;
+	m_signalPlateShown = TRUE;
 	parent->winSetPosition( row.lo.x, row.lo.y );
 	parent->winSetSize( row.hi.x - row.lo.x, row.hi.y - row.lo.y );
 

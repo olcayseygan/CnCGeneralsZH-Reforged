@@ -1899,6 +1899,17 @@ void ControlBar::toggleCommandTab( Int tab )
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool ControlBar::commandTabCovers( const GameWindow *win ) const
+{
+	if( m_commandTab == COMMAND_TAB_NONE || win == NULL )
+		return FALSE;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		if( m_commandWindows[ slot ] == win )
+			return TRUE;
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void ControlBar::closeCommandTab( void )
 {
 	if( m_commandTab == COMMAND_TAB_NONE )

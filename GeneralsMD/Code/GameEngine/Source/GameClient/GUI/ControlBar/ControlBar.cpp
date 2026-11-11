@@ -466,6 +466,10 @@ ControlBar::PressOutcome ControlBar::peekCommandButtonPress( Int place, GameWind
 {
 	*button = NULL;
 
+	// an open command tab's grid takes no keys (pressCommandButton)
+	if( m_commandTab != COMMAND_TAB_NONE )
+		return PRESS_DOES_NOTHING;
+
 	const Int slot = resolveCommandSlot( place );
 	if( slot == SLOT_NOTHING )
 		return PRESS_DOES_NOTHING;
@@ -485,6 +489,12 @@ ControlBar::PressOutcome ControlBar::peekCommandButtonPress( Int place, GameWind
 void ControlBar::pressCommandButton( Int place )
 {
 	if( place < 0 || place >= COMMAND_PLACE_COUNT )
+		return;
+
+	// an open command tab covers the grid and takes no keys: not its cells, and not the shared orders
+	// (stop, attack move, guard, hold, the stance) the places would send to a selection whose own bar
+	// the tab hides.  The key does nothing until the tab closes
+	if( m_commandTab != COMMAND_TAB_NONE )
 		return;
 
 	// the page's stance key stands where no button does
@@ -5000,6 +5010,9 @@ void ControlBar::setControlCommand( GameWindow *button, const CommandButton *com
 			TheGameText ? TheGameText->fetchEnglishHotKey( commandButton->getTextLabel() ) : 0,
 			commandButton->getCommandType(), barSlot, barSlot >= 0 ? m_commandUpgradeRank[ barSlot ] : -1 );
 		if( standIn && letter != 0 && HotKeyManager::commandMapHolds( HotKeyManager::nameOf( letter ) ) )
+			letter = 0;
+		// an open command tab's cells take no key at all: no badge, nothing registered to fire them
+		if( commandTabCovers( button ) )
 			letter = 0;
 		// the badge shows a letter only while this window holds the key: one that lost it to a
 		// stronger or earlier button shows none, and one that takes it wipes the badge it took it from

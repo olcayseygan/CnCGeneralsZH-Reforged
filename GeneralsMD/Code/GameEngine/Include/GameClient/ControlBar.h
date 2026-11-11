@@ -1276,6 +1276,8 @@ public:
 		COMMAND_TAB_COUNT
 	};
 	Int getCommandTab( void ) const { return m_commandTab; }
+	/// a tab is open and 'win' is one of the command grid's cells it fills: no hotkey shows or works there
+	Bool commandTabCovers( const GameWindow *win ) const;
 	void toggleCommandTab( Int tab );							///< a tab button's press: open it, or close it when it is the one open
 	void closeCommandTab( void );									///< no tab: the bar shows the selection again
 	/// the wheel over the command grid while a unit tab holds more than one page: TRUE when it turned the page

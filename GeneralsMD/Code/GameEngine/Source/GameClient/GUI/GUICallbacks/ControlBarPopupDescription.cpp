@@ -964,6 +964,19 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 
 		name = TheGameText->fetch(commandButton->getTextLabel().str());
 
+		// an open command tab's cells take no keys, so the card marks no hotkey letter either: the '&'
+		// the name's HOTKEY_TEXT line would light goes
+		if( commandTabCovers( tooltipWin ) )
+		{
+			WideCharString plain = name.str();
+			const size_t marker = plain.find( u'&' );
+			if( marker != WideCharString::npos )
+			{
+				plain.erase( marker, 1 );
+				name = plain.c_str();
+			}
+		}
+
 		if( thingTemplate && commandButton->getCommandType() != GUI_COMMAND_PURCHASE_SCIENCE )
 		{
 			//We are either looking at building a unit or a structure that may or may not have any 

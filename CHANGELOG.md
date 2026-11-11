@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Squads, and orders you can see land
+
+- The American Barracks trains a Ranger Squad and a Missile Defender Squad beside the single soldiers, five men trained as one unit the way Command and Conquer 3 does it. A click on any of them picks the whole squad, it wears one health bar for all five, and it costs and trains like one soldier, each man firing a fifth of the soldier's gun. A squad loses firepower as its men fall and a dead man is never replaced. The generals' Barracks keep EA's lists. This is a first cut and its balance is still being measured.
+
 ## A general's rank goes to ten
 
 - The general's rank no longer stops at five stars. Ranks 6 to 10 bring no general's points; each brings a pick of two talents instead, and the one you leave is gone for the match. Rank 6 needs 12,000 points, about 120 tanks killed, and rank 10 needs 56,000.
@@ -2480,6 +2484,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
   short. Each member now has its own place in the crowd and holds it, whoever gets ahead eases off
   rather than arriving alone, whoever falls behind runs, and nobody dies for being last.
 - A mob on the march no longer lurches. Every member flipped between a walk and a run on a threshold, so the crowd surged and sagged every couple of seconds, and a man who got ahead of the leader counted as lost and sprinted further ahead. Now everyone holds the leader's pace and closes a gap gradually, and only a man who has really fallen behind runs. Two mobs marching together spent 15 to 23% of the road at a sprint and now spend none. Three mobs sent at fifteen Rangers used to arrive over 16 seconds, one by one, and now arrive over 7, so over five seeds they killed 44 Rangers where they had killed 38 and left 81 men standing where they had left 23. A mob bigger than twelve also stopped putting two men on one spot. Replays recorded before this change play out differently.
+- A mob keeps its shape on the road, not just at the end of it. Each man's place in the crowd used to sit at the far end of the order, so everyone pathed from one spot to a handful of spots a few steps apart, shared the same squares the whole way, and only spread out on arrival. The places now ride a little ahead of the leader, a man who drops back runs to win his place back, and over a long march a five-man crowd's closest pair stays about one and a half body widths apart where two of them used to walk inside each other. A mob attack-moved by a script or by the computer's leader order also fights on the way: its men used to walk to their places with a plain move and pass the enemy without a shot, five crowds against six Rebels killing none. Replays recorded before this change play out differently.
 
 ## Long orders stopped hitching
 

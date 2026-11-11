@@ -454,6 +454,7 @@ Data/INI/RankReforged.ini
 Data/INI/ScienceReforged.ini
 Data/INI/SpecialPowerReforged.ini
 Data/INI/SpeechReforged.ini
+Data/INI/SquadReforged.ini
 Data/INI/TalentsReforged.ini
 Data/INI/TurkiyeReforged.ini
 Data/INI/TurkiyeWeaponReforged.ini
@@ -664,6 +665,11 @@ Data/Scenarios/shiftqueue.txt
 Data/Scenarios/spectre_reaim.txt
 Data/Scenarios/spectre_reshoot.txt
 Data/Scenarios/squad30.txt
+Data/Scenarios/squadform.txt
+Data/Scenarios/squadmissile.txt
+Data/Scenarios/squadranger.txt
+Data/Scenarios/squadsingle.txt
+Data/Scenarios/squadsinglemissile.txt
 Data/Scenarios/stance.txt
 Data/Scenarios/standinbuild.txt
 Data/Scenarios/standinfake.txt

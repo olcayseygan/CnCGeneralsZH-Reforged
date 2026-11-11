@@ -1,0 +1,38 @@
+# squadmissile.txt's fight with one plain Missile Defender in place of the squad: the yardstick.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 1 -maxframes 3000
+#     -scenario squadsinglemissile -logPrefix squadsinglemissile_
+
+30    spawn      0  AmericaInfantryMissileDefender  1  760 920
+30    spawn      1  AmericaTankCrusader             1  960 920
+
+60    tally      0  AmericaInfantryMissileDefender
+60    tally      1  AmericaTankCrusader
+
+90    attack     0  AmericaInfantryMissileDefender  1  AmericaTankCrusader
+90    attack     1  AmericaTankCrusader             0  AmericaInfantryMissileDefender
+
+120   tally      0  AmericaInfantryMissileDefender
+120   tally      1  AmericaTankCrusader
+150   tally      0  AmericaInfantryMissileDefender
+150   tally      1  AmericaTankCrusader
+180   tally      0  AmericaInfantryMissileDefender
+180   tally      1  AmericaTankCrusader
+210   tally      0  AmericaInfantryMissileDefender
+210   tally      1  AmericaTankCrusader
+240   tally      0  AmericaInfantryMissileDefender
+240   tally      1  AmericaTankCrusader
+270   tally      0  AmericaInfantryMissileDefender
+270   tally      1  AmericaTankCrusader
+300   tally      0  AmericaInfantryMissileDefender
+300   tally      1  AmericaTankCrusader
+360   tally      0  AmericaInfantryMissileDefender
+360   tally      1  AmericaTankCrusader
+420   tally      0  AmericaInfantryMissileDefender
+420   tally      1  AmericaTankCrusader
+600   tally      0  AmericaInfantryMissileDefender
+600   tally      1  AmericaTankCrusader
+1200  tally      0  AmericaInfantryMissileDefender
+1200  tally      1  AmericaTankCrusader

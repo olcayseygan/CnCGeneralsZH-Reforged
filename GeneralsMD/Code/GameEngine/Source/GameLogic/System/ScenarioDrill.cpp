@@ -1533,11 +1533,16 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 	Real health = 0.0f;
 	Real maxHealth = 0.0f;
 	Int worth = 0;
+	// where a small group stands, for HEADLESS SPREAD: how far apart a squad's members walk and stand
+	const Int SPREAD_MAX = 32;
+	Coord3D spot[ SPREAD_MAX ];
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
 		if (obj->getControllingPlayer() != player || obj->isEffectivelyDead() || !selectorMatches( action.selector, obj ))
 			continue;
 
+		if (alive < SPREAD_MAX)
+			spot[ alive ] = *obj->getPosition();
 		++alive;
 		if (obj->getContainedBy() != NULL)
 			++inside;
@@ -1549,6 +1554,31 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 	DEBUG_LOG(("HEADLESS TALLY: frame %d slot %d '%s': %d alive, health %.0f of %.0f, worth %d, %d inside, money %d\n",
 						 action.frame, action.slot, action.selector.str(), alive, health, maxHealth, worth, inside,
 						 player->getMoney()->countMoney()));
+	if (alive >= 2 && alive <= SPREAD_MAX)
+	{
+		// each unit's distance to its nearest neighbour on the ground: the closest pair and the mean
+		Real closest = 1.0e9f;
+		Real sum = 0.0f;
+		Real cx = 0.0f, cy = 0.0f;
+		for (Int i = 0; i < alive; ++i)
+		{
+			Real nearest = 1.0e9f;
+			for (Int j = 0; j < alive; ++j)
+			{
+				if (i == j)
+					continue;
+				const Real dx = spot[ i ].x - spot[ j ].x;
+				const Real dy = spot[ i ].y - spot[ j ].y;
+				nearest = MIN( nearest, sqrtf( dx * dx + dy * dy ) );
+			}
+			closest = MIN( closest, nearest );
+			sum += nearest;
+			cx += spot[ i ].x;
+			cy += spot[ i ].y;
+		}
+		DEBUG_LOG(("HEADLESS SPREAD: frame %d slot %d '%s': %d units around (%.0f,%.0f), nearest neighbour closest %.1f mean %.1f\n",
+							 action.frame, action.slot, action.selector.str(), alive, cx / alive, cy / alive, closest, sum / alive));
+	}
 	if (action.count >= 0)
 		DEBUG_LOG(("HEADLESS EXPECT: %s: frame %d slot %d '%s': %d alive, wanted %d\n",
 							 alive == action.count ? "PASS" : "FAIL",

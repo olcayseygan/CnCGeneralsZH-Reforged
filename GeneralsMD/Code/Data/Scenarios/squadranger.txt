@@ -1,0 +1,55 @@
+# A Ranger Squad (SquadReforged.ini) against one Crusader on Alpine Assault. The squad is five
+# Rangers with a fifth of the damage and 40 of the Ranger's 180 health each, trained as one unit
+# (the header of SquadReforged.ini says why 40); the question is whether
+# the members die one at a time while the rest keep firing, and whether the nexus goes when the last
+# one does. The order goes to the nexus alone, so the members only fight because they follow it.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 1 -maxframes 3000
+#     -scenario squadranger -logPrefix squadranger_
+#
+# squadsingle.txt is the same fight with one plain Ranger, for the comparison.
+
+30    spawn      0  AmericaInfantryRangerSquad  1  760 920
+30    spawn      1  AmericaTankCrusader         1  960 920
+
+60    tally      0  AmericaInfantryRangerSquadMember
+60    tally      0  AmericaInfantryRangerSquad
+60    tally      1  AmericaTankCrusader
+
+90    attack     0  AmericaInfantryRangerSquad  1  AmericaTankCrusader
+90    attack     1  AmericaTankCrusader         0  AmericaInfantryRangerSquadMember
+
+120   tally      0  AmericaInfantryRangerSquadMember
+120   tally      1  AmericaTankCrusader
+150   tally      0  AmericaInfantryRangerSquadMember
+150   tally      1  AmericaTankCrusader
+180   tally      0  AmericaInfantryRangerSquadMember
+180   tally      1  AmericaTankCrusader
+210   tally      0  AmericaInfantryRangerSquadMember
+210   tally      1  AmericaTankCrusader
+240   tally      0  AmericaInfantryRangerSquadMember
+240   tally      1  AmericaTankCrusader
+270   tally      0  AmericaInfantryRangerSquadMember
+270   tally      1  AmericaTankCrusader
+300   tally      0  AmericaInfantryRangerSquadMember
+300   tally      1  AmericaTankCrusader
+330   tally      0  AmericaInfantryRangerSquadMember
+330   tally      1  AmericaTankCrusader
+360   tally      0  AmericaInfantryRangerSquadMember
+360   tally      1  AmericaTankCrusader
+390   tally      0  AmericaInfantryRangerSquadMember
+390   tally      1  AmericaTankCrusader
+420   tally      0  AmericaInfantryRangerSquadMember
+420   tally      1  AmericaTankCrusader
+450   tally      0  AmericaInfantryRangerSquadMember
+450   tally      1  AmericaTankCrusader
+510   tally      0  AmericaInfantryRangerSquadMember
+510   tally      1  AmericaTankCrusader
+600   tally      0  AmericaInfantryRangerSquadMember
+600   tally      0  AmericaInfantryRangerSquad
+600   tally      1  AmericaTankCrusader
+1200  tally      0  AmericaInfantryRangerSquadMember
+1200  tally      0  AmericaInfantryRangerSquad
+1200  tally      1  AmericaTankCrusader

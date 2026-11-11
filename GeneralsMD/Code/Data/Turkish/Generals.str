@@ -18540,6 +18540,22 @@ GUI:OnlineUnrated_cancelled
 "Puana sayılmadı: maç iptal oldu."
 END
 
+OBJECT:AmericaRangerSquad
+"Ranger Mangası"
+END
+
+OBJECT:AmericaMissileDefenderSquad
+"Füze Savunucusu Mangası"
+END
+
+CONTROLBAR:ConstructAmericaInfantryRangerSquad
+"Ranger Ma&ngası"
+END
+
+CONTROLBAR:ConstructAmericaInfantryMissileDefenderSquad
+"Füze Savunucusu Man&gası"
+END
+
 GUI:Talents
 "YETENEKLER"
 END

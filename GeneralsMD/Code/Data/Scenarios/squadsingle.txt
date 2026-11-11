@@ -1,0 +1,47 @@
+# squadranger.txt's fight with one plain Ranger in place of the Ranger Squad: the yardstick for
+# how much damage the squad's five members should add up to.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 1 -maxframes 3000
+#     -scenario squadsingle -logPrefix squadsingle_
+
+30    spawn      0  AmericaInfantryRanger       1  760 920
+30    spawn      1  AmericaTankCrusader         1  960 920
+
+60    tally      0  AmericaInfantryRanger
+60    tally      1  AmericaTankCrusader
+
+90    attack     0  AmericaInfantryRanger       1  AmericaTankCrusader
+90    attack     1  AmericaTankCrusader         0  AmericaInfantryRanger
+
+120   tally      0  AmericaInfantryRanger
+120   tally      1  AmericaTankCrusader
+150   tally      0  AmericaInfantryRanger
+150   tally      1  AmericaTankCrusader
+180   tally      0  AmericaInfantryRanger
+180   tally      1  AmericaTankCrusader
+210   tally      0  AmericaInfantryRanger
+210   tally      1  AmericaTankCrusader
+240   tally      0  AmericaInfantryRanger
+240   tally      1  AmericaTankCrusader
+270   tally      0  AmericaInfantryRanger
+270   tally      1  AmericaTankCrusader
+300   tally      0  AmericaInfantryRanger
+300   tally      1  AmericaTankCrusader
+330   tally      0  AmericaInfantryRanger
+330   tally      1  AmericaTankCrusader
+360   tally      0  AmericaInfantryRanger
+360   tally      1  AmericaTankCrusader
+390   tally      0  AmericaInfantryRanger
+390   tally      1  AmericaTankCrusader
+420   tally      0  AmericaInfantryRanger
+420   tally      1  AmericaTankCrusader
+450   tally      0  AmericaInfantryRanger
+450   tally      1  AmericaTankCrusader
+510   tally      0  AmericaInfantryRanger
+510   tally      1  AmericaTankCrusader
+600   tally      0  AmericaInfantryRanger
+600   tally      1  AmericaTankCrusader
+1200  tally      0  AmericaInfantryRanger
+1200  tally      1  AmericaTankCrusader

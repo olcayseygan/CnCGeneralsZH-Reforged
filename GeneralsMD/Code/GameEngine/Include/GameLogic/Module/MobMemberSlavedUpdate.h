@@ -56,6 +56,7 @@ public:
 	Int m_noNeedToCatchUpRadius;	//Allowable wander distance from master while guarding master.
 	Real m_squirrellinessRatio; 
 	UnsignedInt m_catchUpCrisisBailTime; //after this many consecutive frames outside the catchup radius, I will teleport to the nexus
+	Real m_formationSpacing;	///< distance between neighbouring formation slots, in my own body radii
 
 	MobMemberSlavedUpdateModuleData()
 	{
@@ -63,6 +64,7 @@ public:
 		m_noNeedToCatchUpRadius = DEFAULT_NO_NEED_TO_CATCH_UP_RADIUS;
 		m_squirrellinessRatio = 0;
 		m_catchUpCrisisBailTime = 999999;//default to very large number
+		m_formationSpacing = 2.2f;	// just over two bodies apart, so neighbours do not shove
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -74,6 +76,7 @@ public:
 			{ "CatchUpCrisisBailTime",			INI::parseUnsignedInt,	NULL, offsetof( MobMemberSlavedUpdateModuleData, m_catchUpCrisisBailTime ) },
 			{ "NoNeedToCatchUpRadius",		INI::parseInt,	NULL, offsetof( MobMemberSlavedUpdateModuleData, m_noNeedToCatchUpRadius ) },
 			{ "Squirrelliness",     INI::parseReal, NULL, offsetof( MobMemberSlavedUpdateModuleData, m_squirrellinessRatio ) },
+			{ "FormationSpacing",   INI::parseReal, NULL, offsetof( MobMemberSlavedUpdateModuleData, m_formationSpacing ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);
@@ -118,7 +121,7 @@ public:
 	virtual UpdateSleepTime update();	///< Deciding whether or not to make new guys
 
 private:
-	void computeSlotPosition( Object *master, Coord3D *position );	///< My own standing place inside the mob
+	void computeSlotPosition( Object *master, Coord3D *position, Real *alongTravel );	///< My own place inside the mob, and how far ahead of its centre that is
 	void startSlavedEffects( const Object *slaver );	///< We have been marked as Slaved, so we can't be selected or move too far or other stuff
 	void stopSlavedEffects();		///< We are no longer slaved.
 

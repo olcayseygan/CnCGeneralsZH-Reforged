@@ -40,12 +40,14 @@
 #include "GameClient/ParticleSys.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/AIStateMachine.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameLogic/Weapon.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/MobMemberSlavedUpdate.h"
@@ -71,7 +73,6 @@
 	 bookkeeping.  Before this, every member pathed to the one point the nexus was headed for, arrived
 	 on top of its neighbours, and spent the rest of the trip being shoved around by the pathfinder. */
 const Real MOB_FORMATION_GOLDEN_ANGLE = 2.39996f;
-const Real MOB_FORMATION_SPACING_IN_RADII = 2.2f;	// just over two bodies apart, so neighbours do not shove
 
 /* The disc is squashed along the nexus' own facing and stretched across it, because depth costs
 	 the mob its fight.  A round formation thirty units deep puts its near slots in weapon range two
@@ -87,6 +88,10 @@ const Real MOB_FORMATION_ARRIVED_DISTANCE = PATHFIND_CELL_SIZE_F * 1.2f;
 
 // How far my slot has to have moved before it is worth spending another path on it.
 const Real MOB_FORMATION_REPATH_DISTANCE = PATHFIND_CELL_SIZE_F * 5.0f;
+
+// How far ahead of the nexus the formation rides on the march: twice the repath distance, so a
+// member always has between one and two of them left to walk and never stops to wait for its slot.
+const Real MOB_FORMATION_LOOKAHEAD = MOB_FORMATION_REPATH_DISTANCE * 2.0f;
 
 // Speed added for each unit I am behind the nexus on the march, taken away for each unit ahead of it.
 const Real MOB_PACE_GAIN = 0.2f;
@@ -257,7 +262,8 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 
 
 	Coord3D slotPosition;
-	computeSlotPosition( master, &slotPosition );
+	Real slotAhead = 0.0f;
+	computeSlotPosition( master, &slotPosition, &slotAhead );
 
 	Coord3D slotDelta = slotPosition;
 	slotDelta.sub( me->getPosition() );
@@ -295,14 +301,21 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 	}
 	else
 	{
-		myAI->chooseLocomotorSet( LOCOMOTORSET_NORMAL );
 		if ( marching )
 		{
+			/* Level with my own place in the formation, not with the nexus, or the depth flattens out.
+				 A squad's nexus walks as fast as its members, so one that fell behind its place could
+				 never close the gap on the walk: it keeps the run's top speed in hand, at the paced
+				 speed, which joins the walk's without a step at the switch. */
 			const Real masterSpeed = masterAI->getCurLocomotor()->getMaxSpeedForCondition( master->getBodyModule()->getDamageState() );
-			myAI->setDesiredSpeed( MAX( masterSpeed + lag * MOB_PACE_GAIN, masterSpeed * MOB_PACE_SLOWEST ) );
+			const Real pace = MAX( masterSpeed + ( lag + slotAhead ) * MOB_PACE_GAIN, masterSpeed * MOB_PACE_SLOWEST );
+			// a cell's worth of margin, so a member level with its place does not swap sets every look
+			myAI->chooseLocomotorSet( lag + slotAhead > PATHFIND_CELL_SIZE_F ? LOCOMOTORSET_PANIC : LOCOMOTORSET_NORMAL );
+			myAI->setDesiredSpeed( pace );
 		}
 		else
 		{
+			myAI->chooseLocomotorSet( LOCOMOTORSET_NORMAL );
 			myAI->setDesiredSpeed( FAST_AS_POSSIBLE );
 		}
 	}
@@ -322,7 +335,13 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 
 		if ( goalDelta.length() > MOB_FORMATION_REPATH_DISTANCE )// only if I am not headed there already
 		{
-			myAI->aiMoveToPosition( &slotPosition, CMD_FROM_AI );
+			/* An attack move stays an attack move.  A plain move here took the attack out of a
+				 squad ordered on its nexus alone: the members walked to their slots past the enemy
+				 without a shot, five Ranger Squads against six Rebels killing none of them. */
+			if ( myAI->getCurrentStateID() == AI_ATTACK_MOVE_TO || masterAI->getCurrentStateID() == AI_ATTACK_MOVE_TO )
+				myAI->aiAttackMoveToPosition( &slotPosition, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+			else
+				myAI->aiMoveToPosition( &slotPosition, CMD_FROM_AI );
 		}
 	}
 
@@ -400,33 +419,60 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 //-------------------------------------------------------------------------------------------------
 // Where I stand in the mob: my own place around wherever the mob as a whole is going.
 //-------------------------------------------------------------------------------------------------
-void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *position )
+void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *position, Real *alongTravel )
 {
 	Object *me = getObject();
 	AIUpdateInterface *myAI = me->getAIUpdateInterface();
 	AIUpdateInterface *masterAI = master->getAIUpdateInterface();
 
-	*position = masterAI->isMoving() ? *masterAI->getGoalPosition() : *master->getPosition();
+	Real forwardX = Cos( master->getOrientation() );
+	Real forwardY = Sin( master->getOrientation() );
+	*position = *master->getPosition();
 
-	if ( position->length() < 1.0f ) // a nasty error has sent the nexus to map origin
+	/* On the march the slot rides a little ahead of the nexus, on its line to the goal, and the
+		 formation faces that line.  With every slot out at the goal instead, five members pathed from
+		 one spot to five spots a few metres apart, the paths shared their cells, and the pace control
+		 pulled everyone level with the nexus: the squad walked as one overlapping knot (closest pair
+		 under one metre, measured with squadform.txt) and spread out only on arrival. */
+	if ( masterAI->isMoving() )
 	{
-		*position = *master->getPosition();
+		Coord3D toGoal = *masterAI->getGoalPosition();
+		toGoal.sub( master->getPosition() );
+		toGoal.z = 0.0f;
+		const Real distToGoal = toGoal.length();
+		const Coord3D *goal = masterAI->getGoalPosition();
+		if ( goal->x * goal->x + goal->y * goal->y < 1.0f ) // a nasty error has sent the nexus' goal to map origin
+		{
+			// keep the nexus' own spot and facing
+		}
+		else if ( distToGoal > MOB_FORMATION_LOOKAHEAD )
+		{
+			forwardX = toGoal.x / distToGoal;
+			forwardY = toGoal.y / distToGoal;
+			position->x += forwardX * MOB_FORMATION_LOOKAHEAD;
+			position->y += forwardY * MOB_FORMATION_LOOKAHEAD;
+		}
+		else
+		{
+			*position = *masterAI->getGoalPosition();
+			if ( distToGoal > 1.0f )
+			{
+				forwardX = toGoal.x / distToGoal;
+				forwardY = toGoal.y / distToGoal;
+			}
+		}
 	}
 
 	const Int slot = master->getSpawnBehaviorInterface()->getSlaveIndex( me->getID() );
-	const Real spacing = me->getGeometryInfo().getBoundingCircleRadius() * MOB_FORMATION_SPACING_IN_RADII;
+	const Real spacing = me->getGeometryInfo().getBoundingCircleRadius() * getMobMemberSlavedUpdateModuleData()->m_formationSpacing;
 	const Real angle = slot * MOB_FORMATION_GOLDEN_ANGLE;
 	const Real radius = spacing * sqrtf( slot + 0.5f );
 
-	const Real alongTravel = radius * Cos( angle ) * MOB_FORMATION_DEPTH_SCALE;
+	*alongTravel = radius * Cos( angle ) * MOB_FORMATION_DEPTH_SCALE;
 	const Real acrossTravel = radius * Sin( angle ) * MOB_FORMATION_WIDTH_SCALE;
 
-	const Real facing = master->getOrientation();
-	const Real forwardX = Cos( facing );
-	const Real forwardY = Sin( facing );
-
-	position->x += alongTravel * forwardX - acrossTravel * forwardY;
-	position->y += alongTravel * forwardY + acrossTravel * forwardX;
+	position->x += *alongTravel * forwardX - acrossTravel * forwardY;
+	position->y += *alongTravel * forwardY + acrossTravel * forwardX;
 	position->z = TheTerrainLogic->getGroundHeight( position->x, position->y );
 
 	// A slot that lands in a cliff or a building is a member walking into a wall until the mob dies.

@@ -1,0 +1,61 @@
+# How far apart a squad's members walk and stand (SquadReforged.ini). A Ranger Squad and a Missile
+# Defender Squad march 600 across the open band south of generated map 1's cliff ring, side by side,
+# and stand there. Each tally prints HEADLESS SPREAD for the squad's members: the distance from
+# every member to its nearest neighbour, the closest pair and the mean. Bodies are 7 in radius, so a
+# closest pair under 14 is two soldiers drawn into each other.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 3600 -scenario squadform -logPrefix squadform_
+#
+# 2026-11-10, both squads alike. With every slot out at the goal and the pace pinned to the nexus,
+# the march's closest pair was 0.8 to 9 and the mean nearest neighbour 5 to 13: one knot. With the
+# slot riding 100 ahead of the nexus, the pace holding each member's depth and FormationSpacing 3.0,
+# the closest pair holds 17.5 to 22 from frame 420 on (11 to 17 while leaving the standing slots),
+# the mean 21 to 26, and standing 20 to 22 closest, 27 to 28 mean, where it was 20 and 21.6. The
+# move below orders the nexus alone; "playermove 0 AmericaInfantryRangerSquad* ..." is the click,
+# every member ordered with it, and measures the same.
+
+30    spawn      0  AmericaInfantryRangerSquad           1  500 1250
+30    spawn      0  AmericaInfantryMissileDefenderSquad  1  500 1350
+
+90    tally      0  AmericaInfantryRangerSquadMember
+90    tally      0  AmericaInfantryMissileDefenderSquadMember
+
+120   move       0  AmericaInfantryRangerSquad           1100 1250
+120   move       0  AmericaInfantryMissileDefenderSquad  1100 1350
+
+180   tally      0  AmericaInfantryRangerSquadMember
+180   tally      0  AmericaInfantryMissileDefenderSquadMember
+240   tally      0  AmericaInfantryRangerSquadMember
+240   tally      0  AmericaInfantryMissileDefenderSquadMember
+300   tally      0  AmericaInfantryRangerSquadMember
+300   tally      0  AmericaInfantryMissileDefenderSquadMember
+360   tally      0  AmericaInfantryRangerSquadMember
+360   tally      0  AmericaInfantryMissileDefenderSquadMember
+420   tally      0  AmericaInfantryRangerSquadMember
+420   tally      0  AmericaInfantryMissileDefenderSquadMember
+480   tally      0  AmericaInfantryRangerSquadMember
+480   tally      0  AmericaInfantryMissileDefenderSquadMember
+540   tally      0  AmericaInfantryRangerSquadMember
+540   tally      0  AmericaInfantryMissileDefenderSquadMember
+600   tally      0  AmericaInfantryRangerSquadMember
+600   tally      0  AmericaInfantryMissileDefenderSquadMember
+660   tally      0  AmericaInfantryRangerSquadMember
+660   tally      0  AmericaInfantryMissileDefenderSquadMember
+720   tally      0  AmericaInfantryRangerSquadMember
+720   tally      0  AmericaInfantryMissileDefenderSquadMember
+780   tally      0  AmericaInfantryRangerSquadMember
+780   tally      0  AmericaInfantryMissileDefenderSquadMember
+840   tally      0  AmericaInfantryRangerSquadMember
+840   tally      0  AmericaInfantryMissileDefenderSquadMember
+900   tally      0  AmericaInfantryRangerSquadMember
+900   tally      0  AmericaInfantryMissileDefenderSquadMember
+960   tally      0  AmericaInfantryRangerSquadMember
+960   tally      0  AmericaInfantryMissileDefenderSquadMember
+1020  tally      0  AmericaInfantryRangerSquadMember
+1020  tally      0  AmericaInfantryMissileDefenderSquadMember
+1200  tally      0  AmericaInfantryRangerSquadMember
+1200  tally      0  AmericaInfantryMissileDefenderSquadMember
+1500  tally      0  AmericaInfantryRangerSquadMember
+1500  tally      0  AmericaInfantryMissileDefenderSquadMember

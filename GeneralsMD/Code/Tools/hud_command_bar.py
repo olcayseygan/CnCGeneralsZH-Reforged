@@ -1711,6 +1711,86 @@ def squad_key(side_name, pressed):
     return shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
 
 
+# The command tabs (the owner's pick A of experiments/proofs/2026-11-11/command-tabs/art, 2026-11-11): three keys
+# standing on the bar plate's top edge over the grid's first columns, Buildings, Ground and Aircraft, drawn 28 px
+# square at 1080 (<S>ProTab<Kind>{,H,P,I}, the scheme's CommandTab<Kind>ButtonImage).  They stand over the world,
+# so a dark rim runs round the squad key's bezel; the face is dark glass with a flat glyph laid on after shading
+# (bumped, a glyph this small goes to mush).  The glyphs are none of the idle keys': a factory with a sawtooth
+# roof, a tank head-on and a jet climbing.  The code rings the open tab 2 px inside its rect, over the rim and
+# bezel, so the glyph keeps clear of the face's edge.
+COMMAND_TAB = 28
+COMMAND_TAB_KINDS = ("Buildings", "Ground", "Aircraft")
+COMMAND_TAB_STATES = ("", "H", "P", "I")
+COMMAND_TAB_AT = (608, 216)                     # the Buildings up piece; states 31 apart across, kinds 31 down
+COMMAND_TAB_RIM = 1.5                           # the dark rim round the bezel, against the ground under it
+
+
+def command_tab_boxes():
+    """Every tab's MappedImage name (after the prefix) and box on the side's Powers sheet."""
+    x0, y0 = COMMAND_TAB_AT
+    s = COMMAND_TAB + 3
+    return {"Tab" + kind + state: (x0 + s * i, y0 + s * j, x0 + s * i + COMMAND_TAB, y0 + s * j + COMMAND_TAB)
+            for j, kind in enumerate(COMMAND_TAB_KINDS) for i, state in enumerate(COMMAND_TAB_STATES)}
+
+
+def command_tab_glyph(kind):
+    """The glyph's polygons, drawn in a 22 box round (11, 11): (raised, ink cut back out of them)."""
+    def box(a, b, c, d):
+        return [(a, b), (c, b), (c, d), (a, d)]
+    if kind == "Buildings":                     # a factory: sawtooth roof, chimney, a door cut out
+        hall = [(5, 16.5), (5, 8), (8, 10.2), (8, 8), (11, 10.2), (11, 8), (13.6, 10), (13.6, 4.8), (16, 4.8), (16, 16.5)]
+        return [hall], [box(8.6, 12.6, 10.6, 16.5)]
+    if kind == "Ground":                        # a tank head-on: two tracks, the hull, the turret, the muzzle at us
+        parts = [box(4.4, 10.5, 7.4, 16.6), box(14.6, 10.5, 17.6, 16.6), box(6.6, 11, 15.4, 15),
+                 [(7.6, 11), (8.6, 6.8), (13.4, 6.8), (14.4, 11)]]
+        return parts, [box(10, 8.6, 12, 10.6), box(5.4, 12, 6.4, 13), box(5.4, 14.4, 6.4, 15.4),
+                       box(15.6, 12, 16.6, 13), box(15.6, 14.4, 16.6, 15.4)]
+    half = [(0, -6), (1, -3.8), (1.1, -1.4), (5.6, 3), (5.6, 4.4), (1.1, 2.2), (0.9, 4), (2.8, 5.4), (2.8, 6.2)]
+    jet = [(x, y) for x, y in half] + [(0, 6.8)] + [(-x, y) for x, y in reversed(half[1:])]
+    return [rotated([(11 + x, 11 + y) for x, y in jet], 11, 11, 40)], []
+
+
+def command_tab(side_name, kind, state):
+    """One tab: '' up, 'H' under the pointer, 'P' down (and the open tab), 'I' disabled."""
+    look = BAR_LOOKS[side_name]
+    build = look["build"]
+    edge = MOUNT_GLYPH_BUILD.get(build, build)
+    w = h = COMMAND_TAB
+    o = 32
+    p = Painter(w + 2 * o, h + 2 * o)
+    down = state == "P"
+    r = COMMAND_TAB_RIM
+    p.frame([shape(build, o, o, o + w, o + h, 4)], 2.2, edge, DARK, BEZEL_SCALE)
+    p.frame([shape(build, o + r, o + r, o + w - r, o + h - r, 3.2)], 2.4 if down else 3.6, edge,
+            {"": STEEL, "H": BRIGHT, "P": BRIGHT, "I": DARK}[state], BEZEL_SCALE)
+    i = r + 3.2
+    face = [shape(build, o + i, o + i, o + w - i, o + h - i, 2)]
+    p.sink(face, 2.8 if down else 1.6, 1.0)            # down keeps its face dark: a lit face washed the glyph out
+    img = shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
+    raised, ink = command_tab_glyph(kind)
+    k = (w - 2 * i) / 14.5                              # the glyph drawn for a 22 key, filling this face
+    off = 0.8 if down else 0.0
+    c = w / 2 + off
+    big = 8
+    mask = Image.new("L", (w * big, h * big), 0)
+    d = ImageDraw.Draw(mask)
+    for polys, fill in ((raised, 255), (ink, 0)):
+        for q in polys:
+            d.polygon([((c + (x - 11) * k) * big, (c + (y - 11) * k) * big) for x, y in q], fill=fill)
+    mask = mask.resize((w, h), Image.BOX)
+    colour = {"": MOUNT_GLYPH[side_name] if side_name == "Turkiye" else PAPER, "H": GOLD, "P": (255, 255, 255),
+              "I": (92, 96, 100)}[state]
+    glyph = Image.new("RGBA", (w, h), colour + (255,))
+    glyph.putalpha(mask)
+    img.alpha_composite(glyph)
+    return img
+
+
+def command_tab_pieces(side_name):
+    return {"Tab" + kind + state: command_tab(side_name, kind, state)
+            for kind in COMMAND_TAB_KINDS for state in COMMAND_TAB_STATES}
+
+
 def ledge_outline(build, W):
     """The ledge's plate, LEDGE_PLATE high, its point at the left (tip about x 3), running off the screen's edge
     at W.  Everything past x LEDGE_W[0] is straight, so T can stretch."""
@@ -1847,6 +1927,7 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     pieces.update(ready_glow_pieces(build, glow))
     pieces.update(tip_pieces(side_name))
     pieces.update(group_pieces(side_name))
+    pieces.update(command_tab_pieces(side_name))
     for kind in MOUNT_KINDS:
         for state in ("", "H", "P", "I"):
             x0, y0, x1, y1 = M[prefix + kind + state]
@@ -3421,6 +3502,7 @@ def check_sheet(sheet_img, side_name, glow="B"):
         want["GenPowerClose" + st] = (60, 50)
     want.update(tip_sizes())
     want.update(group_sizes())
+    want.update({n: (COMMAND_TAB, COMMAND_TAB) for n in command_tab_boxes()})
     for n, wh in want.items():
         assert pre + n in M, "%s%s is not on the sheet" % (pre, n)
         assert size(n) == wh, "%s%s is %s, the code wants %s" % (pre, n, size(n), wh)

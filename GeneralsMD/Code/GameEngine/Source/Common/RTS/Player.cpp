@@ -4874,9 +4874,10 @@ static void findGroupFactory( Object *obj, void *userData )
 	if( pu == NULL || TheBuildAssistant->canMakeUnit( obj, s->unit ) != CANMAKE_OK )
 		return;
 
+	// with no squad there is no centre, and the shortest queue with the lowest ObjectID wins
 	const UnsignedInt queue = pu->getProductionCount();
-	const Real dx = obj->getPosition()->x - s->centre->x;
-	const Real dy = obj->getPosition()->y - s->centre->y;
+	const Real dx = s->centre ? obj->getPosition()->x - s->centre->x : 0.0f;
+	const Real dy = s->centre ? obj->getPosition()->y - s->centre->y : 0.0f;
 	const Real distSqr = dx * dx + dy * dy;
 	if( s->best != NULL )
 	{
@@ -4900,7 +4901,7 @@ static void findGroupFactory( Object *obj, void *userData )
 
 Object *Player::findFactoryForGroupUnit( const ThingTemplate *unit, const Coord3D *squadCentre ) const
 {
-	if( unit == NULL || squadCentre == NULL )
+	if( unit == NULL )
 		return NULL;
 
 	GroupFactorySearch search;

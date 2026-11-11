@@ -185,12 +185,7 @@ namespace
 		IRegion2D box;							///< the row, set by the draw, taken by a click
 	};
 
-	struct Buildable
-	{
-		const ThingTemplate *thing;
-		const CommandButton *button;	///< the first factory's, for the picture and the tooltip
-		CommandAvailability best;			///< over every factory that offers it
-	};
+	typedef GroupPanelBuildable Buildable;
 
 	Pieces s_pieces;
 	SquadRow s_rows[ NUM_HOTKEY_SQUADS ];
@@ -649,6 +644,38 @@ static void gatherBuildable( Object *obj, void *userData )
 	}
 }
 
+void GroupPanel_gatherBuildable( Player *player, std::vector< GroupPanelBuildable > &out )
+{
+	out.clear();
+	if( player != NULL )
+		player->iterateObjects( gatherBuildable, &out );
+}
+
+/// the command bar's own reading of an availability (ControlBar::updateContextCommand)
+void GroupPanel_showAvailability( GameWindow *button, CommandAvailability availability )
+{
+	button->winClearStatus( WIN_STATUS_NOT_READY );
+	button->winClearStatus( WIN_STATUS_ALWAYS_COLOR );
+	switch( availability )
+	{
+		case COMMAND_AVAILABLE:
+		case COMMAND_ACTIVE:
+			button->winEnable( TRUE );
+			break;
+		case COMMAND_NOT_READY:
+			button->winEnable( FALSE );
+			button->winSetStatus( WIN_STATUS_NOT_READY );
+			break;
+		case COMMAND_CANT_AFFORD:
+			button->winEnable( FALSE );
+			button->winSetStatus( WIN_STATUS_ALWAYS_COLOR );
+			break;
+		default:
+			button->winEnable( FALSE );
+			break;
+	}
+}
+
 struct FreeSlots
 {
 	const ThingTemplate *thing;
@@ -688,7 +715,7 @@ static void countFreeSlots( Object *obj, void *userData )
 	* ctrl ask for, cut to what the bank pays for and the queues hold, so a ctrl+shift click does not
 	* send a hundred orders the logic would refuse.  The logic picks the factory for each. */
 //-------------------------------------------------------------------------------------------------
-static void queueForSquad( const ThingTemplate *thing, Int squad )
+void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad )
 {
 	Player *player = ThePlayerList->getLocalPlayer();
 	FreeSlots slots = { thing, 0 };
@@ -740,7 +767,7 @@ static WindowMsgHandledType panelSystem( GameWindow *window, UnsignedInt msg, Wi
 
 	const CommandButton *command = (const CommandButton *)GadgetButtonGetData( (GameWindow *)mData1 );
 	if( command != NULL && command->getThingTemplate() != NULL && isValidHotkeySquadIndex( s_shownSquad ) )
-		queueForSquad( command->getThingTemplate(), s_shownSquad );
+		GroupPanel_queueUnit( command->getThingTemplate(), s_shownSquad );
 	return MSG_HANDLED;
 }
 
@@ -1225,27 +1252,7 @@ static void drawTray( Int top )
 			GadgetButtonSetData( button, (void *)entry.button );
 		}
 
-		// the command bar's own reading of an availability (ControlBar::updateContextCommand)
-		button->winClearStatus( WIN_STATUS_NOT_READY );
-		button->winClearStatus( WIN_STATUS_ALWAYS_COLOR );
-		switch( entry.best )
-		{
-			case COMMAND_AVAILABLE:
-			case COMMAND_ACTIVE:
-				button->winEnable( TRUE );
-				break;
-			case COMMAND_NOT_READY:
-				button->winEnable( FALSE );
-				button->winSetStatus( WIN_STATUS_NOT_READY );
-				break;
-			case COMMAND_CANT_AFFORD:
-				button->winEnable( FALSE );
-				button->winSetStatus( WIN_STATUS_ALWAYS_COLOR );
-				break;
-			default:
-				button->winEnable( FALSE );
-				break;
-		}
+		GroupPanel_showAvailability( button, entry.best );
 		button->winHide( FALSE );
 	}
 	panel->winHide( FALSE );

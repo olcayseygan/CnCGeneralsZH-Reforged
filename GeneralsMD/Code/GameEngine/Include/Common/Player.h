@@ -908,7 +908,7 @@ public:
 	// to it left out; FALSE when nobody else is left in it.
 	Bool getHotkeySquadCentroid( Int squad, Coord3D *centroid );
 	// this player's finished factory that can queue the unit now: shortest queue, then nearest to
-	// squadCentre, then lowest ObjectID.  NULL when none can.
+	// squadCentre (left out when it is NULL), then lowest ObjectID.  NULL when none can.
 	Object *findFactoryForGroupUnit( const ThingTemplate *unit, const Coord3D *squadCentre ) const;
 	// a unit the group panel ordered just came out: it joins the squad and attack moves to its
 	// centre.  An empty squad leaves it on the factory's rally point.

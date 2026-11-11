@@ -64,6 +64,9 @@
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/HotKey.h"
 #include "GameClient/Image.h"
+#include "GameClient/GroupPanel.h"
+#include "GameClient/GameText.h"
+#include "GameClient/Display.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -397,9 +400,19 @@ void ControlBar::populateCommand( Object *obj )
 	if( m_standInBuilderID != INVALID_DRAWABLE_ID && obj->getDrawable()
 			&& obj->getDrawable()->getID() == m_standInBuilderID )
 	{
+		// the buildings tab can stand over a real selection, and an order button there (Stop and the
+		// like) goes to the selected units: it carries the builds, and the GLA worker's switch to the
+		// fakes, which is bought on the worker by its ID, and nothing else
+		const Bool buildsOnly = m_commandTab == COMMAND_TAB_BUILDINGS;
 		for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
-			if( slot[ i ] && ControlBar_namedCommandPlace( slot[ i ]->getName().str() ) == COMMAND_PLACE_CLEAR_MINES )
+		{
+			if( slot[ i ] == NULL )
+				continue;
+			const Int named = ControlBar_namedCommandPlace( slot[ i ]->getName().str() );
+			if( named == COMMAND_PLACE_CLEAR_MINES
+					|| ( buildsOnly && slot[ i ]->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT && named != COMMAND_PLACE_FAKE_STRUCTURES ) )
 				slot[ i ] = NULL;
+		}
 	}
 
 	// the order of the bar's upgrades, which the command bar grid keys X C V B N
@@ -1778,4 +1791,357 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 	return COMMAND_AVAILABLE;
 
 }  // end getCommandAvailability
+
+//-------------------------------------------------------------------------------------------------
+// The command bar's tabs.  Three push buttons in a code-made parent, the way GroupPanel.cpp makes
+// its build tray, standing in a row on the command grid's top edge at its left end; ControlBar.wnd
+// and the command sets are left alone, since the INI is in the multiplayer checksum.  Their
+// pictures are borrowed from the idle worker, idle vehicle and idle aircraft buttons, which every
+// scheme already dresses, so they follow the side.  Everything here is client side: the logic only
+// hears of a unit tab's click as MSG_QUEUE_UNIT_FOR_GROUP with no squad, and picks the factory.
+//-------------------------------------------------------------------------------------------------
+static Int commandTabParentId( void )
+{
+	static const Int id = (Int)TheNameKeyGenerator->nameToKey( "ControlBar:CommandTabs" );
+	return id;
+}
+
+static void drawNoCommandTabParent( GameWindow *window, WinInstanceData *instData )
+{
+}
+
+/// the push button's own draw, kept when the tab buttons take drawCommandTab in its place
+static GameWinDrawFunc s_commandTabButtonDraw = NULL;
+
+/// A tab button draws as a push button, and the open one then gets an outline two pixels wide in the
+/// build buttons' border colour, inside the button's own rect: an open tab reads as open on any side's
+/// picture and keeps the same clearance from the power bar and the grid as a closed one.  Fills,
+/// whose pixels are exact.
+static void drawCommandTab( GameWindow *window, WinInstanceData *instData )
+{
+	if( s_commandTabButtonDraw )
+		s_commandTabButtonDraw( window, instData );
+	if( (Int)(intptr_t)GadgetButtonGetData( window ) - 1 != TheControlBar->getCommandTab() )
+		return;
+	enum { RING = 2 };
+	ICoord2D pos, size;
+	window->winGetScreenPosition( &pos.x, &pos.y );
+	window->winGetSize( &size.x, &size.y );
+	if( size.x <= 2 * RING || size.y <= 2 * RING )
+		return;
+	const Color ring = TheControlBar->getBuildBorderColor();
+	TheDisplay->drawFillRect( pos.x, pos.y, size.x, RING, ring );
+	TheDisplay->drawFillRect( pos.x, pos.y + size.y - RING, size.x, RING, ring );
+	TheDisplay->drawFillRect( pos.x, pos.y + RING, RING, size.y - 2 * RING, ring );
+	TheDisplay->drawFillRect( pos.x + size.x - RING, pos.y + RING, RING, size.y - 2 * RING, ring );
+}
+
+static WindowMsgHandledType commandTabSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
+{
+	if( msg != GBM_SELECTED )
+		return GameWinDefaultSystem( window, msg, mData1, mData2 );
+
+	// the tab's number plus one rides in the button's data
+	const Int tab = (Int)(intptr_t)GadgetButtonGetData( (GameWindow *)mData1 ) - 1;
+	if( tab >= 0 && tab < ControlBar::COMMAND_TAB_COUNT )
+		TheControlBar->toggleCommandTab( tab );
+	return MSG_HANDLED;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::getCommandGridRect( IRegion2D *rect ) const
+{
+	Bool any = FALSE;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+	{
+		GameWindow *win = m_commandWindows[ slot ];
+		if( win == NULL )
+			continue;
+		ICoord2D pos, size;
+		win->winGetScreenPosition( &pos.x, &pos.y );
+		win->winGetSize( &size.x, &size.y );
+		if( !any )
+		{
+			rect->lo = pos;
+			rect->hi.x = pos.x + size.x;
+			rect->hi.y = pos.y + size.y;
+			any = TRUE;
+			continue;
+		}
+		rect->lo.x = min( rect->lo.x, pos.x );
+		rect->lo.y = min( rect->lo.y, pos.y );
+		rect->hi.x = max( rect->hi.x, pos.x + size.x );
+		rect->hi.y = max( rect->hi.y, pos.y + size.y );
+	}
+	return any;
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::toggleCommandTab( Int tab )
+{
+	if( tab < 0 || tab >= COMMAND_TAB_COUNT )
+		return;
+
+	// a structure on the cursor belongs to the bar it was picked from
+	TheInGameUI->placeBuildAvailable( NULL, NULL );
+	TheInGameUI->setGUICommand( NULL );
+
+	m_commandTab = ( m_commandTab == tab ) ? COMMAND_TAB_NONE : tab;
+	m_commandTabPage = 0;
+	markUIDirty();
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::closeCommandTab( void )
+{
+	if( m_commandTab == COMMAND_TAB_NONE )
+		return;
+	m_commandTab = COMMAND_TAB_NONE;
+	m_commandTabPage = 0;
+	markUIDirty();
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::updateCommandTabButtons( void )
+{
+	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	const Bool playing = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isInReplayGame()
+		&& player != NULL && player->isPlayerActive() && !m_isObserverCommandBar;
+	if( !playing )
+		closeCommandTab();
+
+	IRegion2D grid;
+	const Bool shown = playing && m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
+		&& !TheInGameUI->isQuitMenuVisible() && getCommandGridRect( &grid ) && grid.lo.y < (Int)TheDisplay->getHeight();
+
+	GameWindow *parent = m_commandTabParent;
+	if( parent != NULL && TheWindowManager->winGetWindowFromId( NULL, commandTabParentId() ) != parent )
+		parent = m_commandTabParent = NULL;
+	if( !shown )
+	{
+		if( parent != NULL )
+			parent->winHide( TRUE );
+		return;
+	}
+
+	// made on first use, and again whenever the window manager has thrown them away
+	if( parent == NULL )
+	{
+		static const char *const tooltips[ COMMAND_TAB_COUNT ] =
+		{
+			"GUI:CommandTabBuildings", "GUI:CommandTabGround", "GUI:CommandTabAircraft"
+		};
+		parent = TheWindowManager->winCreate( NULL, WIN_STATUS_ENABLED | WIN_STATUS_HIDDEN, 0, 0, 1, 1, commandTabSystem );
+		if( parent == NULL )
+			return;
+		parent->winSetWindowId( commandTabParentId() );
+		parent->winSetDrawFunc( drawNoCommandTabParent );
+		parent->winSetInputFunc( GameWinBlockInput );
+		for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
+		{
+			WinInstanceData inst;
+			inst.init();
+			BitSet( inst.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
+			GameWindow *button = TheWindowManager->gogoGadgetPushButton( parent,
+				WIN_STATUS_ENABLED | WIN_STATUS_IMAGE, 0, 0, 1, 1, &inst, NULL, TRUE );
+			m_commandTabButtons[ tab ] = button;
+			if( button == NULL )
+				continue;
+			GadgetButtonSetData( button, (void *)(intptr_t)( tab + 1 ) );
+			GadgetButtonSetAltSound( button, "GUICommandBarClick" );
+			button->winSetTooltip( TheGameText->fetch( tooltips[ tab ] ) );
+			if( button->winGetDrawFunc() != drawCommandTab )
+			{
+				s_commandTabButtonDraw = button->winGetDrawFunc();
+				button->winSetDrawFunc( drawCommandTab );
+			}
+		}
+		m_commandTabParent = parent;
+	}
+
+	//
+	// A row of squares in the steel rail between the power bar's foot and the grid's top cells,
+	// sized to that gap, read off the live windows every frame so it follows every side's plate and
+	// HUD scale.  TAB_CLEARANCE is the air kept on both sides; the open tab's outline is drawn inside
+	// its button (drawCommandTab), so a marked tab keeps it too.
+	// With no power bar just above the grid (a scheme without one), the row stands on the grid's top
+	// edge, about half a command button high.
+	//
+	enum { TAB_CLEARANCE = 3, TAB_LEAST = 8 };
+	Int buttonH = 0;
+	if( m_commandWindows[ 0 ] )
+	{
+		Int buttonW;
+		m_commandWindows[ 0 ]->winGetSize( &buttonW, &buttonH );
+	}
+	Int side = max( 12, ( buttonH * 9 ) / 20 );
+	Int top = grid.lo.y - side - TAB_CLEARANCE;
+	static const NameKeyType powerId = NAMEKEY( "ControlBar.wnd:PowerWindow" );
+	GameWindow *power = TheWindowManager->winGetWindowFromId( NULL, powerId );
+	if( power )
+	{
+		ICoord2D powerPos, powerSize;
+		power->winGetScreenPosition( &powerPos.x, &powerPos.y );
+		power->winGetSize( &powerSize.x, &powerSize.y );
+		const Int powerFoot = powerPos.y + powerSize.y;
+		const Int rail = grid.lo.y - powerFoot;
+		const Bool overGrid = powerPos.x < grid.hi.x && powerPos.x + powerSize.x > grid.lo.x;
+		if( overGrid && rail >= 0 && rail <= buttonH )
+		{
+			side = max( (Int)TAB_LEAST, rail - 2 * TAB_CLEARANCE );
+			top = powerFoot + ( rail - side ) / 2;
+		}
+	}
+	const Int gap = max( (Int)TAB_CLEARANCE * 2, side / 6 );
+	parent->winSetPosition( grid.lo.x + TAB_CLEARANCE, top );
+	parent->winSetSize( COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap, side );
+
+	// ponytail: the idle buttons' pictures until the tabs have their own on the button sheet
+	static const NameKeyType sources[ COMMAND_TAB_COUNT ] =
+	{
+		NAMEKEY( "ControlBar.wnd:ButtonIdleWorker" ),
+		NAMEKEY( "ControlBar.wnd:ButtonIdleVehicle" ),
+		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
+	};
+	for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
+	{
+		GameWindow *button = m_commandTabButtons[ tab ];
+		if( button == NULL )
+			continue;
+		button->winSetPosition( tab * ( side + gap ), 0 );
+		button->winSetSize( side, side );
+
+		GameWindow *source = TheWindowManager->winGetWindowFromId( NULL, sources[ tab ] );
+		if( source == NULL )
+			continue;
+		const Image *up = source->winGetEnabledImage( 0 );
+		const Image *hilite = source->winGetHiliteImage( 0 );
+		const Image *pushed = source->winGetHiliteImage( 1 );
+		if( pushed == NULL )
+			pushed = hilite;
+		// the open tab stays down
+		const Bool open = m_commandTab == tab;
+		GadgetButtonSetEnabledImage( button, open && pushed ? pushed : up );
+		GadgetButtonSetHiliteImage( button, open && pushed ? pushed : hilite );
+		GadgetButtonSetHiliteSelectedImage( button, pushed );
+		GadgetButtonSetDisabledImage( button, source->winGetDisabledImage( 0 ) );
+	}
+	parent->winHide( FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A unit tab's page into the command windows.  Full after a context switch (the hotkeys were just
+	* reset and every button is set again); otherwise, once a logic tick, only the states, and a page
+	* whose buttons changed under it (a factory built, lost or upgraded) has the UI rebuilt instead. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::populateCommandTab( Bool full )
+{
+	std::vector< GroupPanelBuildable > all;
+	GroupPanel_gatherBuildable( ThePlayerList->getLocalPlayer(), all );
+	const Bool aircraft = m_commandTab == COMMAND_TAB_AIRCRAFT;
+	std::vector< GroupPanelBuildable > list;
+	for( size_t i = 0; i < all.size(); i++ )
+		if( ( all[ i ].thing->isKindOf( KINDOF_AIRCRAFT ) ? TRUE : FALSE ) == aircraft )
+			list.push_back( all[ i ] );
+
+	// a page is every command window the bar has, in slot order
+	Int slots[ MAX_COMMANDS_PER_SET ];
+	Int pageSize = 0;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		if( m_commandWindows[ slot ] )
+			slots[ pageSize++ ] = slot;
+	if( pageSize == 0 )
+		return;
+
+	const Int pages = max( 1, ( (Int)list.size() + pageSize - 1 ) / pageSize );
+	if( m_commandTabPage >= pages )
+	{
+		m_commandTabPage = pages - 1;
+		if( !full )
+		{
+			markUIDirty();
+			return;
+		}
+	}
+
+	for( Int k = 0; k < pageSize; k++ )
+	{
+		const Int slot = slots[ k ];
+		GameWindow *win = m_commandWindows[ slot ];
+		const Int at = m_commandTabPage * pageSize + k;
+		const GroupPanelBuildable *entry = at < (Int)list.size() ? &list[ at ] : NULL;
+
+		if( !full )
+		{
+			const Bool changed = entry ? ( win->winIsHidden() || GadgetButtonGetData( win ) != (void *)entry->button ) : !win->winIsHidden();
+			if( changed )
+			{
+				markUIDirty();
+				return;
+			}
+		}
+
+		if( entry == NULL )
+		{
+			win->winHide( TRUE );
+			continue;
+		}
+
+		if( full )
+		{
+			m_commandUpgradeRank[ slot ] = -1;
+			win->winHide( FALSE );
+			setControlCommand( win, entry->button );
+		}
+		GadgetButtonClearClock( win );
+		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
+		GadgetButtonSetRepeat( win, FALSE );
+		GroupPanel_showAvailability( win, entry->best );
+		GadgetButtonDrawOverlayImage( win, calculateVeterancyOverlayForThing( entry->thing ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::scrollCommandTab( const ICoord2D *mouse, Bool up )
+{
+	if( m_commandTab != COMMAND_TAB_GROUND && m_commandTab != COMMAND_TAB_AIRCRAFT )
+		return FALSE;
+
+	// only a bar that is on screen and taking input: a script or a cinematic hides the bar's frame in
+	// place, and the wheel over the empty ground where the grid was belongs to the camera.  The tabs'
+	// parent is shown under updateCommandTabButtons' own test (bar shown, no quit menu, a live seat)
+	if( !TheInGameUI->getInputEnabled() || TheInGameUI->isQuitMenuVisible()
+			|| m_contextParent[ CP_MASTER ] == NULL || m_contextParent[ CP_MASTER ]->winIsHidden()
+			|| m_commandTabParent == NULL || TheWindowManager->winGetWindowFromId( NULL, commandTabParentId() ) != m_commandTabParent
+			|| m_commandTabParent->winIsHidden() )
+		return FALSE;
+
+	IRegion2D grid;
+	if( mouse == NULL || m_contextParent[ CP_COMMAND ]->winIsHidden() || !getCommandGridRect( &grid )
+			|| mouse->x < grid.lo.x || mouse->x >= grid.hi.x || mouse->y < grid.lo.y || mouse->y >= grid.hi.y )
+		return FALSE;
+
+	Int pageSize = 0;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+		if( m_commandWindows[ slot ] )
+			pageSize++;
+	if( pageSize == 0 )
+		return FALSE;
+
+	// count the tab's units the way populateCommandTab does
+	std::vector< GroupPanelBuildable > all;
+	GroupPanel_gatherBuildable( ThePlayerList->getLocalPlayer(), all );
+	Int count = 0;
+	for( size_t i = 0; i < all.size(); i++ )
+		if( ( all[ i ].thing->isKindOf( KINDOF_AIRCRAFT ) ? TRUE : FALSE ) == ( m_commandTab == COMMAND_TAB_AIRCRAFT ) )
+			count++;
+	const Int pages = ( count + pageSize - 1 ) / pageSize;
+	if( pages <= 1 )
+		return FALSE;
+
+	// up is back a page, down the next, round the ends
+	m_commandTabPage = ( m_commandTabPage + ( up ? pages - 1 : 1 ) ) % pages;
+	markUIDirty();
+	return TRUE;
+}
 

@@ -1258,7 +1258,38 @@ public:
 	// get method for list of commandbuttons
 	const CommandButton *getCommandButtons( void ) { return TheCommandStore->getCommandButtons(); }
 
-	Drawable *findStandInBuilder( Bool freeOnly );				///< with BuildWithoutWorker on, the local player's free builder (or, unless freeOnly, any builder) to stand in for an empty selection
+	Drawable *findStandInBuilder( Bool freeOnly );				///< with BuildWithoutWorker on or the buildings tab open, the local player's free builder (or, unless freeOnly, any builder) to stand in
+
+	//
+	// The command bar's tabs (ControlBarCommand.cpp): three buttons made in code over the command
+	// grid's top left corner.  Buildings shows what a builder offers with nothing selected (the
+	// stand-in builder's bar), ground units and aircraft show every unit the player's working
+	// factories can build now, queued at a factory the logic picks (MSG_QUEUE_UNIT_FOR_GROUP with no
+	// squad).  A tab stays open until its button is pressed again or the selection changes.
+	//
+	enum CommandTab
+	{
+		COMMAND_TAB_NONE = -1,
+		COMMAND_TAB_BUILDINGS = 0,
+		COMMAND_TAB_GROUND,
+		COMMAND_TAB_AIRCRAFT,
+		COMMAND_TAB_COUNT
+	};
+	Int getCommandTab( void ) const { return m_commandTab; }
+	void toggleCommandTab( Int tab );							///< a tab button's press: open it, or close it when it is the one open
+	void closeCommandTab( void );									///< no tab: the bar shows the selection again
+	/// the wheel over the command grid while a unit tab holds more than one page: TRUE when it turned the page
+	Bool scrollCommandTab( const ICoord2D *mouse, Bool up );
+
+protected:
+	void updateCommandTabButtons( void );					///< every client frame: where the tab buttons stand, their look, whether they show
+	void populateCommandTab( Bool full );					///< a unit tab's page into the grid; full after a context switch, else the states only
+	Bool getCommandGridRect( IRegion2D *rect ) const;	///< the command windows' screen extent
+
+	Int m_commandTab;															///< CommandTab open, COMMAND_TAB_NONE for none
+	Int m_commandTabPage;													///< a unit tab's page
+	GameWindow *m_commandTabParent;								///< the tabs' code-made parent, checked against the window manager before use
+	GameWindow *m_commandTabButtons[ COMMAND_TAB_COUNT ];
 
 protected:
 

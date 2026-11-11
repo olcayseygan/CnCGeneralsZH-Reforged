@@ -2120,7 +2120,9 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		// Group panel (fork): (Int template ID, Int squad 0-9).  No factory travels with it: the logic
 		// picks one among the sender's that can queue the unit now (Player::findFactoryForGroupUnit),
 		// and the unit joins that hotkey squad when it comes out.  A squad with nobody in it takes
-		// nothing.  The arguments came over the network, so their shape is checked.
+		// nothing.  Squad -1 is the command bar's unit tabs: no squad, the unit comes out to the
+		// factory's rally point as any other, and the factory with the shortest queue takes it.
+		// The arguments came over the network, so their shape is checked.
 		case GameMessage::MSG_QUEUE_UNIT_FOR_GROUP:
 		{
 			if( thisPlayer == NULL || msg->getArgumentCount() < 2
@@ -2130,14 +2132,15 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 
 			const ThingTemplate *whatToCreate = TheThingFactory->findByTemplateID( msg->getArgument( 0 )->integer );
 			const Int squad = msg->getArgument( 1 )->integer;
-			if( whatToCreate == NULL || whatToCreate->isKindOf( KINDOF_STRUCTURE ) || !isValidHotkeySquadIndex( squad ) )
+			if( whatToCreate == NULL || whatToCreate->isKindOf( KINDOF_STRUCTURE )
+					|| ( squad != -1 && !isValidHotkeySquadIndex( squad ) ) )
 				break;
 
 			Coord3D centre;
-			if( !thisPlayer->getHotkeySquadCentroid( squad, &centre ) )
+			if( squad != -1 && !thisPlayer->getHotkeySquadCentroid( squad, &centre ) )
 				break;
 
-			Object *factory = thisPlayer->findFactoryForGroupUnit( whatToCreate, &centre );
+			Object *factory = thisPlayer->findFactoryForGroupUnit( whatToCreate, squad != -1 ? &centre : NULL );
 			if( factory == NULL )
 				break;
 

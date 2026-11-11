@@ -387,6 +387,13 @@ GameMessageDisposition WindowTranslator::translateGameMessage(const GameMessage 
 			// get wheel position
 			Real wheelPos = msg->getArgument( 1 )->real;
 
+			// over the command grid, a unit tab with more than one page turns it instead
+			if( TheControlBar && TheControlBar->scrollCommandTab( &mousePos, wheelPos > 0.0f ) )
+			{
+				returnCode = WIN_INPUT_USED;
+				break;
+			}
+
 			// process wheel event
 			GameWindowMessage gwm = rawMouseToWindowMessage( msg );
 			if( TheWindowManager )

@@ -84,6 +84,7 @@
 #include "GameClient/GameFont.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GameText.h"
+#include "GameClient/GroupPanel.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetProgressBar.h"
 #include "GameClient/GadgetStaticText.h"
@@ -1670,6 +1671,11 @@ ControlBar::ControlBar( void )
 	m_animTime = 0;
 
 	m_currContext = CB_CONTEXT_NONE;
+	m_commandTab = COMMAND_TAB_NONE;
+	m_commandTabPage = 0;
+	m_commandTabParent = NULL;
+	for( i = 0; i < COMMAND_TAB_COUNT; i++ )
+		m_commandTabButtons[ i ] = NULL;
 	m_defaultControlBarPosition.x = m_defaultControlBarPosition.y = 0;
 	m_genStarFlash = FALSE;
 	m_purchaseScienceOpen = FALSE;
@@ -3394,6 +3400,8 @@ void ControlBar::reset( void )
 	// do not destroy the rally drawable, it will get destroyed with everythign else during a reset
 	m_rallyPointDrawableID = INVALID_DRAWABLE_ID;
 	m_standInBuilderID = INVALID_DRAWABLE_ID;
+	m_commandTab = COMMAND_TAB_NONE;
+	m_commandTabPage = 0;
 
 	m_displayedConstructPercent = -1.0f;
 	m_displayedOCLTimerSeconds = 0;
@@ -3550,6 +3558,9 @@ void ControlBar::update( void )
 		hideBuildTooltipLayout();
 	}*/
 
+	// the command bar's tabs follow the grid wherever the scheme, the HUD scale or the minimise put it
+	updateCommandTabButtons();
+
 	// walks every shortcut button and asks the player for its most ready special power object
 	if( logicTick )
 		updateSpecialPowerShortcut();
@@ -3649,12 +3660,14 @@ void ControlBar::update( void )
 	// selection arrives or when BuildWithoutWorker is switched off; re-evaluate ourselves before
 	// anything touches its drawable
 	//
+	// the buildings tab asks for one whatever the option and the selection say
+	const Bool buildingsTab = m_commandTab == COMMAND_TAB_BUILDINGS;
 	if( m_standInBuilderID != INVALID_DRAWABLE_ID )
 	{
 		Drawable *standIn = TheGameClient->findDrawableByID( m_standInBuilderID );
 		Object *standInObj = standIn ? standIn->getObject() : NULL;
-		if( TheInGameUI->getSelectCount() > 0 || standInObj == NULL || standInObj->isEffectivelyDead()
-				|| !TheGlobalData->m_buildWithoutWorker )
+		if( ( TheInGameUI->getSelectCount() > 0 && !buildingsTab ) || standInObj == NULL || standInObj->isEffectivelyDead()
+				|| ( !TheGlobalData->m_buildWithoutWorker && !buildingsTab ) )
 		{
 			m_standInBuilderID = INVALID_DRAWABLE_ID;
 			m_currentSelectedDrawable = NULL;
@@ -3665,7 +3678,8 @@ void ControlBar::update( void )
 	// nothing selected and nothing standing in: a builder that is made or bought later, or the
 	// option switched on, gets the bar, which no selection event would announce either
 	//
-	else if( logicTick && ( logicNow % LOGICFRAMES_PER_SECOND ) == 0 && TheInGameUI->getSelectCount() == 0
+	else if( logicTick && ( logicNow % LOGICFRAMES_PER_SECOND ) == 0
+					 && ( buildingsTab || ( TheInGameUI->getSelectCount() == 0 && m_commandTab == COMMAND_TAB_NONE ) )
 					 && m_currentSelectedDrawable == NULL && findStandInBuilder( FALSE ) )
 	{
 		markUIDirty();
@@ -3715,6 +3729,14 @@ void ControlBar::update( void )
 	// most control bar contexts have one selected thing that we switch on and update
 	// based on if that thing changed in some way ... the exception is when multi selected
 	//
+	// a unit tab's grid answers to no drawable: it follows the player's factories, once a tick
+	if( m_commandTab == COMMAND_TAB_GROUND || m_commandTab == COMMAND_TAB_AIRCRAFT )
+	{
+		if( !wasUIDirty )
+			populateCommandTab( FALSE );
+		return;
+	}
+
 	if( m_currContext == CB_CONTEXT_MULTI_SELECT )
 	{
 
@@ -3791,6 +3813,9 @@ void ControlBar::update( void )
 void ControlBar::onDrawableSelected( Drawable *draw )
 {
 
+	// a new selection closes the command bar's tab, so the bar shows what was picked
+	m_commandTab = COMMAND_TAB_NONE;
+
 	// set a dirty flag so next time we update we can reconstruct the UI
 	markUIDirty();
 
@@ -3804,6 +3829,9 @@ void ControlBar::onDrawableSelected( Drawable *draw )
 //-------------------------------------------------------------------------------------------------
 void ControlBar::onDrawableDeselected( Drawable *draw )
 {
+
+	// a selected unit dying, garrisoning or boarding leaves the command bar's tab open; only a
+	// selection the player makes closes it (onDrawableSelected)
 
 	// set a dirty flag so next time we update we can reconstruct the UI
 	markUIDirty();
@@ -3822,9 +3850,11 @@ void ControlBar::onDrawableDeselected( Drawable *draw )
 	//
 	// always when becoming unselected should we remove any build placement icons because if
 	// we have some and are in the middle of a build process, it must obiously be over now
-	// because we are no longer selecting the dozer or worker
+	// because we are no longer selecting the dozer or worker.  One picked from the buildings tab came
+	// from the stand-in builder, which nobody selected, so it stays on the cursor
 	//
-	TheInGameUI->placeBuildAvailable( NULL, NULL );
+	if( m_commandTab != COMMAND_TAB_BUILDINGS )
+		TheInGameUI->placeBuildAvailable( NULL, NULL );
 
 }  // end onDrawableDeselected
 
@@ -3928,7 +3958,18 @@ void ControlBar::evaluateContextUI( void )
 	// 1.04 had it.  m_standInBuilderID is not cleared first: findStandInBuilder reads it to keep
 	// the builder it is already showing.
 	//
-	if( TheInGameUI->getSelectCount() == 0 && !m_isObserverCommandBar )
+	// a unit tab: every unit the player's factories offer, in pages over the grid
+	if( ( m_commandTab == COMMAND_TAB_GROUND || m_commandTab == COMMAND_TAB_AIRCRAFT ) && !m_isObserverCommandBar )
+	{
+		m_standInBuilderID = INVALID_DRAWABLE_ID;
+		m_contextParent[ CP_COMMAND ]->winHide( FALSE );
+		populateCommandTab( TRUE );
+		return;
+	}
+
+	// the buildings tab is the stand-in builder's bar, whatever is selected and whatever
+	// BuildWithoutWorker says: the tab is the player asking for it
+	if( ( TheInGameUI->getSelectCount() == 0 || m_commandTab == COMMAND_TAB_BUILDINGS ) && !m_isObserverCommandBar )
 	{
 		Drawable *builder = findStandInBuilder( FALSE );
 		m_standInBuilderID = builder ? builder->getID() : INVALID_DRAWABLE_ID;
@@ -4168,6 +4209,24 @@ CBCommandStatus ControlBar::processContextSensitiveButtonClick( GameWindow *butt
 	clearSpecialPowerShortcutRow();
 
 	//
+	// a unit tab's grid belongs to no factory: the logic picks one for each unit the click asks for.
+	// The right button takes nothing back, since no one queue is the tab's
+	//
+	if( m_commandTab == COMMAND_TAB_GROUND || m_commandTab == COMMAND_TAB_AIRCRAFT )
+	{
+		Bool onGrid = FALSE;
+		for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+			onGrid = onGrid || ( m_commandWindows[ slot ] != NULL && m_commandWindows[ slot ] == button );
+		const CommandButton *command = onGrid ? (const CommandButton *)GadgetButtonGetData( button ) : NULL;
+		if( command != NULL && command->getCommandType() == GUI_COMMAND_UNIT_BUILD && command->getThingTemplate() != NULL )
+		{
+			if( gadgetMessage == GBM_SELECTED )
+				GroupPanel_queueUnit( command->getThingTemplate(), -1 );
+			return CBC_COMMAND_USED;
+		}
+	}
+
+	//
 	// The right button only ever takes things back out of a queue - the build queue panel no
 	// longer sits in the right HUD to click on. It never runs the command: firing a build or a
 	// special power off the right button would make every mis-click on the bar expensive.
@@ -4328,8 +4387,9 @@ static void findStandInBuilderProc( Object *obj, void *userData )
 
 Drawable *ControlBar::findStandInBuilder( Bool freeOnly )
 {
-	// off, the bar is 1.04's: nothing selected is an empty bar, and a build needs a selected worker
-	if( !TheGlobalData->m_buildWithoutWorker )
+	// off, the bar is 1.04's: nothing selected is an empty bar, and a build needs a selected worker,
+	// unless the player opened the buildings tab and asked for the builder's bar
+	if( !TheGlobalData->m_buildWithoutWorker && m_commandTab != COMMAND_TAB_BUILDINGS )
 		return NULL;
 
 	Player *player = ThePlayerList->getLocalPlayer();

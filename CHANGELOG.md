@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Your whole production from three tabs
+
+- Three small tabs now sit on the command bar's grid, at its top left corner. Buildings puts your builder's page on the grid without you hunting for a dozer first, even with Build Without A Worker switched off, and a click on a structure starts placing it as usual. Ground units lists every unit any of your working factories can train right now, from the Barracks and the War Factory alike, and Aircraft does the same for everything with wings or rotors. Click a unit and it goes into the queue of the factory with the shortest line; shift and ctrl queue five or more at once as they do on a factory's own page. A list longer than the grid comes in pages, and the mouse wheel over the grid turns them. A tab stays open until you press it again or pick something else. For now the tabs wear the idle worker, vehicle and aircraft pictures.
+- A replay in which a unit was queued from a tab will not play back on an earlier version.
+
 ## Squads, and orders you can see land
 
 - The American Barracks trains a Ranger Squad and a Missile Defender Squad beside the single soldiers, five men trained as one unit the way Command and Conquer 3 does it. A click on any of them picks the whole squad, it wears one health bar for all five, and it costs and trains like one soldier, each man firing a fifth of the soldier's gun. A squad loses firepower as its men fall and a dead man is never replaced. The generals' Barracks keep EA's lists. This is a first cut and its balance is still being measured.

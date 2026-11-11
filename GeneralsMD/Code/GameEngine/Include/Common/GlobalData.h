@@ -304,8 +304,9 @@ public:
 
 	Real m_partitionCellSize;
 
-	// read from retail GameData.ini and used by nothing: the rounds and seats hang off the health
-	// bar (Drawable::drawLoadTokens). Kept so that INI still parses.
+	// where Drawable::loadPips puts EA's ammo and seat pips, from retail GameData.ini. The X screen
+	// offsets and the scale factors are read and unused, as in retail: the pips are left-justified on
+	// the bar, and EA's zoom scaling (SCALE_ICONS_WITH_ZOOM_ML) was never compiled in.
 	Coord3D m_ammoPipWorldOffset;
 	Coord3D m_containerPipWorldOffset;
 	Coord2D m_ammoPipScreenOffset;

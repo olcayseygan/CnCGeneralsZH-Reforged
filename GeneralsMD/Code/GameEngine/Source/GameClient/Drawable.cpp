@@ -298,6 +298,10 @@ const Int MAX_ENABLED_MODULES								= 16;
 
 /*static*/ Bool							Drawable::s_staticImagesInited = false;
 /*static*/ const Image*			Drawable::s_veterancyImage[LEVEL_COUNT]	= { NULL };
+/*static*/ const Image*			Drawable::s_fullAmmo = NULL;
+/*static*/ const Image*			Drawable::s_emptyAmmo = NULL;
+/*static*/ const Image*			Drawable::s_fullContainer = NULL;
+/*static*/ const Image*			Drawable::s_emptyContainer = NULL;
 /*static*/ Anim2DTemplate**	Drawable::s_animationTemplates = NULL;
 #ifdef DIRTY_CONDITION_FLAGS
 /*static*/ Int							Drawable::s_modelLockCount = 0;
@@ -313,6 +317,11 @@ const Int MAX_ENABLED_MODULES								= 16;
  	s_veterancyImage[1] = TheMappedImageCollection->findImageByName("SCVeter1");
 	s_veterancyImage[2] = TheMappedImageCollection->findImageByName("SCVeter2");
 	s_veterancyImage[3] = TheMappedImageCollection->findImageByName("SCVeter3");
+
+	s_fullAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoFull");
+	s_emptyAmmo	= TheMappedImageCollection->findImageByName("SCPAmmoEmpty");
+	s_fullContainer	= TheMappedImageCollection->findImageByName("SCPPipFull");
+	s_emptyContainer	= TheMappedImageCollection->findImageByName("SCPPipEmpty");
 
 	s_animationTemplates = NEW Anim2DTemplate* [ MAX_ICONS ];
 
@@ -4086,7 +4095,7 @@ void Drawable::drawIconUI( void )
 #endif
 		drawDisabled( healthBarRegion );
 
-		drawLoadTokens( healthBarRegion );
+		drawLoadPips( healthBarRegion );
 
 		//Moved this to last so that it shows up over contained and ammo icons.
 		drawVeterancy( healthBarRegion ); 
@@ -4174,277 +4183,130 @@ void Drawable::drawEmoticon( const IRegion2D *healthBarRegion )
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-TokenRowLayout Drawable_layoutTokens( Int count, Int size, Int gap, Int minSize, Int minGap,
-																			Int maxPerRow, Int maxRows )
-{
-	TokenRowLayout l;
-	l.shown = 0;
-	l.perRow = 0;
-	l.rows = 0;
-	l.size = size;
-	l.gap = gap;
-	if( count <= 0 || size <= 0 || maxPerRow <= 0 || maxRows <= 0 )
-		return l;
-
-	minSize = max( 1, min( minSize, size ) );
-	minGap = max( 0, min( minGap, gap ) );
-	l.shown = count;
-	l.perRow = min( count, maxPerRow );
-
-	//
-	// More than the full rows hold: the rows keep the width of a full row and the tokens shrink to share
-	// it, the token faster than the gap so they stay apart. Past the floor the row shows as many as fit
-	// and the caller lights them in proportion; a token never shrinks into a solid strip.
-	//
-	if( count > maxPerRow * maxRows )
-	{
-		const Int budget = maxPerRow * size + ( maxPerRow - 1 ) * gap;
-		l.perRow = ( count + maxRows - 1 ) / maxRows;
-		while( l.perRow * l.size + ( l.perRow - 1 ) * l.gap > budget )
-		{
-			if( l.gap > minGap && ( l.size <= minSize || l.gap * 3 > l.size ) )
-				--l.gap;
-			else if( l.size > minSize )
-				--l.size;
-			else
-				break;
-		}
-		if( l.perRow * l.size + ( l.perRow - 1 ) * l.gap > budget )
-		{
-			l.perRow = ( budget + l.gap ) / ( l.size + l.gap );
-			l.shown = l.perRow * maxRows;
-		}
-	}
-
-	l.rows = ( l.shown + l.perRow - 1 ) / l.perRow;
-	return l;
-}
-
-// ------------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------------------------
-Int Drawable_tokenLeft( const TokenRowLayout &layout, Int index, Int centreX )
-{
-	if( layout.perRow <= 0 )
-		return centreX;
-	const Int row = index / layout.perRow;
-	const Int inRow = row < layout.rows - 1 ? layout.perRow : layout.shown - row * layout.perRow;
-	const Int width = inRow * layout.size + ( inRow - 1 ) * layout.gap;
-	return centreX - width / 2 + ( index % layout.perRow ) * ( layout.size + layout.gap );
-}
-
-// ------------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------------------------
-Int Drawable_tokensLit( Int lit, Int count, Int shown )
-{
-	if( count <= 0 || shown <= 0 )
-		return 0;
-	lit = max( 0, min( lit, count ) );
-	if( shown >= count )
-		return lit;
-	Int r = ( lit * shown + count / 2 ) / count;
-	if( lit > 0 )
-		r = max( r, 1 );
-	if( lit < count )
-		r = min( r, shown - 1 );
-	return r;
-}
-
 namespace
 {
-	Int uiPixels( Real base )
+	//
+	// EA drew its pips at their art's own size on an 800x600 screen: 5 by 12 a seat, 5 by 10 a round,
+	// a pixel apart. They grow with the interface by a whole number, 2 at 1920x1080, so every texel of
+	// the art stays a square block of pixels instead of smearing over two.
+	//
+	Int pipScale( void )
 	{
-		return max( 1, (Int)( base * TheUIScale() + 0.5f ) );
+		return max( 1, (Int)( TheUIScale() + 0.5f ) );
 	}
 
-	// diamonds and slugs are centred on a middle pixel, so their sizes stay odd
-	Int oddDown( Int n )
+	// the first free row under a bar nothing hangs from: the selection frame's row and one clear
+	Int pipsClearTop( const IRegion2D *bar )
 	{
-		return ( n & 1 ) ? n : n - 1;
+		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
 	}
 
 	//
-	// Sizes are the coloured body at UI scale 1; every token wears a one pixel near-black rim around
-	// that, so a cell is two pixels larger. A seat is a 7 pixel diamond, ten to a row over two rows;
-	// a round is a 3 by 7 slug, twelve to a row in one row, so the row reads as a clip.
+	// EA's row top: GameData's pip world offset over the object's highest point, put on the screen and
+	// moved by its screen offset in bounding radii. Retail's offsets put that on the health bar's middle
+	// line. Raised over a tall building as its bar is (healthBarArtLift).
 	//
-	const Real SEAT_BODY = 7.0f, ROUND_BODY_W = 3.0f, ROUND_BODY_H = 7.0f, TOKEN_GAP = 2.0f;
-	const Int SEAT_MIN_CELL = 5, ROUND_MIN_CELL = 3, TOKEN_MIN_GAP = 1;
-	const Int SEATS_PER_ROW = 10, SEAT_ROWS = 2, ROUNDS_PER_ROW = 12, ROUND_ROWS = 1;
-
-	TokenRowLayout seatLayout( Int total )
+	Bool pipRowTop( const Object *obj, const Coord3D &worldOffset, Real screenOffsetY, Int &top )
 	{
-		const Int cell = max( 3, oddDown( uiPixels( SEAT_BODY ) ) ) + 2;
-		TokenRowLayout l = Drawable_layoutTokens( total, cell, uiPixels( TOKEN_GAP ), SEAT_MIN_CELL, TOKEN_MIN_GAP,
-																							SEATS_PER_ROW, SEAT_ROWS );
-		l.size = max( SEAT_MIN_CELL, oddDown( l.size ) );
-		return l;
-	}
-
-	Int roundFullCell( void )
-	{
-		return max( 1, oddDown( uiPixels( ROUND_BODY_W ) ) ) + 2;
-	}
-
-	TokenRowLayout roundLayout( Int total )
-	{
-		TokenRowLayout l = Drawable_layoutTokens( total, roundFullCell(), uiPixels( TOKEN_GAP ), ROUND_MIN_CELL,
-																							TOKEN_MIN_GAP, ROUNDS_PER_ROW, ROUND_ROWS );
-		l.size = max( ROUND_MIN_CELL, oddDown( l.size ) );
-		return l;
-	}
-
-	// a slug shrinks with its width and always stays taller than wide
-	Int roundHeight( const TokenRowLayout &l )
-	{
-		const Int fullHeight = uiPixels( ROUND_BODY_H ) + 2;
-		return max( l.size + 2, fullHeight * l.size / roundFullCell() );
-	}
-
-	Int rowsHeight( const TokenRowLayout &l, Int tokenHeight )
-	{
-		return l.rows * tokenHeight + ( l.rows - 1 ) * l.gap;
-	}
-
-	// clear space under the bar's frame and under each row of tokens
-	Int tokenClearance( void )
-	{
-		return uiPixels( 2.0f );
-	}
-
-	// the first row's top: the selection frame's row under the bar, then the clearance
-	Int tokensTop( const IRegion2D *bar )
-	{
-		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 1 + tokenClearance();
-	}
-
-	// a diamond `size` pixels across, one scanline at a time
-	void fillDiamond( Int centreX, Int centreY, Int size, Color color )
-	{
-		if( size <= 0 )
-			return;
-		const Int half = size / 2;
-		for( Int dy = -half; dy <= half; ++dy )
-		{
-			const Int w = half - ( dy < 0 ? -dy : dy );
-			TheDisplay->drawFillRect( centreX - w, centreY + dy, 2 * w + 1, 1, color );
-		}
-	}
-
-	// a slug: full width under a tip one pixel narrower on each side
-	void fillSlug( Int x, Int y, Int w, Int h, Color color )
-	{
-		if( w <= 0 || h <= 0 )
-			return;
-		const Int tip = w > 2 ? w - 2 : w;
-		TheDisplay->drawFillRect( x + ( w - tip ) / 2, y, tip, 1, color );
-		if( h > 1 )
-			TheDisplay->drawFillRect( x, y + 1, w, h - 1, color );
-	}
-
-	Int roundsSpan( Int total )
-	{
-		const TokenRowLayout l = roundLayout( total );
-		return rowsHeight( l, roundHeight( l ) ) + tokenClearance();
-	}
-
-	Int seatsSpan( Int total )
-	{
-		const TokenRowLayout l = seatLayout( total );
-		return rowsHeight( l, l.size ) + tokenClearance();
+		Coord3D pos = *obj->getPosition();
+		pos.x += worldOffset.x;
+		pos.y += worldOffset.y;
+		pos.z += worldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition() + healthBarArtLift( obj );
+		ICoord2D screen;
+		if( !TheTacticalView->worldToScreen( &pos, &screen ) )
+			return FALSE;
+		top = screen.y + REAL_TO_INT( screenOffsetY * obj->getGeometryInfo().getBoundingSphereRadius() );
+		return TRUE;
 	}
 }
 
 // ------------------------------------------------------------------------------------------------
-/** The rounds and the seats hang under the health bar as rows of separate tokens centred on it,
-	* rounds on top. EA only drew the ammo pips for a selected or moused-over unit, which has a bar;
-	* an aircraft that shows them always may have none, and then nothing is drawn. */
+/** The rounds and the seats in EA's own pips, left-justified on the health bar where retail put
+	* them, and the first free row under the bar and the pips. Draws only when `draw`; the same walk
+	* tells the capture clock and the enthusiasm icon where to go. A missing pip image draws nothing. */
 // ------------------------------------------------------------------------------------------------
-void Drawable::drawLoadTokens( const IRegion2D *healthBarRegion )
+Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 {
-	if( !healthBarRegion )
-		return;
+	Int bottom = pipsClearTop( healthBarRegion );
+	const Object *obj = getObject();
+	const Int s = pipScale();
+	Int total, full, infantry, top;
 
-	const Int centreX = ( healthBarRegion->lo.x + healthBarRegion->hi.x ) / 2;
-	Int y = tokensTop( healthBarRegion );
-	Int total, full, infantry;
-
-	// one pixel of near black round every token holds it on snow and sand alike
-	const Color rim = GameMakeColor( 10, 10, 12, 255 );
-	const Color glass = GameMakeColor( 26, 29, 30, 255 );
-
-	// rounds burn the reload bar's amber, so a Comanche's rockets and the wait for the next salvo read
-	// as one family; a spent round is a dark slug with a dim amber edge
-	if( ammoTokenCounts( total, full ) )
+	// rounds: EA's amber pips, one row, a pixel down from the line as retail drew them
+	Bool hasAmmo = FALSE;
+	Int ammoBottom = 0;
+	if( s_fullAmmo && s_emptyAmmo && ammoPipCounts( total, full ) &&
+			pipRowTop( obj, TheGlobalData->m_ammoPipWorldOffset, TheGlobalData->m_ammoPipScreenOffset.y, top ) )
 	{
-		const TokenRowLayout l = roundLayout( total );
-		const Int h = roundHeight( l );
-		const Int lit = Drawable_tokensLit( full, total, l.shown );
-		const Color amber = GameMakeColor( 255, 190, 40, 255 );
-		const Color dimAmber = GameMakeColor( 122, 88, 22, 255 );
-		for( Int i = 0; i < l.shown; ++i )
+		const Int w = s_emptyAmmo->getImageWidth() * s;
+		const Int h = s_emptyAmmo->getImageHeight() * s;
+		top += s;
+		if( draw )
 		{
-			const Int x = Drawable_tokenLeft( l, i, centreX );
-			const Int top = y + ( i / l.perRow ) * ( h + l.gap );
-			fillSlug( x, top, l.size, h, rim );
-			fillSlug( x + 1, top + 1, l.size - 2, h - 2, i < lit ? amber : dimAmber );
-			if( i >= lit )
-				fillSlug( x + 2, top + 2, l.size - 4, h - 4, glass );
+			Int x = healthBarRegion->lo.x;
+			for( Int i = 0; i < total; ++i, x += w + s )
+				TheDisplay->drawImage( i < full ? s_fullAmmo : s_emptyAmmo, x, top, x + w, top + h );
 		}
-		y += rowsHeight( l, h ) + tokenClearance();
+		hasAmmo = TRUE;
+		ammoBottom = top + h;
+		bottom = max( bottom, ammoBottom + s );
 	}
 
 	//
-	// Infantry first, then everything else, against the seats there are: a soldier is warm white, a
-	// vehicle or anything else aboard steel blue, a free seat a hollow of dark glass in a steel edge.
-	// No green: that belongs to the health bar.
+	// seats: EA's pips, infantry first in its pure green, anything else aboard in its pure blue, a free
+	// seat the empty pip a pixel lower. EA put both rows on one line; a unit carrying both keeps its
+	// seats under its rounds.
 	//
-	if( seatTokenCounts( total, infantry, full ) )
+	if( s_fullContainer && s_emptyContainer && seatPipCounts( total, infantry, full ) &&
+			pipRowTop( obj, TheGlobalData->m_containerPipWorldOffset, TheGlobalData->m_containerPipScreenOffset.y, top ) )
 	{
-		const TokenRowLayout l = seatLayout( total );
-		full = max( 0, min( full, total ) );
-		infantry = max( 0, min( infantry, full ) );
-		const Int litInfantry = Drawable_tokensLit( infantry, total, l.shown );
-		Int litAll = Drawable_tokensLit( full, total, l.shown );
-		if( full > infantry && litAll == litInfantry && litAll < l.shown )
-			++litAll;		// a lone vehicle aboard among many soldiers keeps a token of its own
-
-		const Color soldier = GameMakeColor( 236, 232, 220, 255 );
-		const Color vehicle = GameMakeColor( 86, 148, 214, 255 );
-		const Color steel = GameMakeColor( 120, 128, 134, 255 );
-		const Int half = l.size / 2;
-		for( Int i = 0; i < l.shown; ++i )
+		if( hasAmmo )
+			top = max( top, ammoBottom + s );
+		const Int w = s_emptyContainer->getImageWidth() * s;
+		const Int h = s_emptyContainer->getImageHeight() * s;
+		if( draw )
 		{
-			const Int cx = Drawable_tokenLeft( l, i, centreX ) + half;
-			const Int cy = y + ( i / l.perRow ) * ( l.size + l.gap ) + half;
-			fillDiamond( cx, cy, l.size, rim );
-			fillDiamond( cx, cy, l.size - 2, i < litInfantry ? soldier : i < litAll ? vehicle : steel );
-			if( i >= litAll )
-				fillDiamond( cx, cy, l.size - 4, glass );
+			const Color INFANTRY_COLOR = GameMakeColor( 0, 255, 0, 255 );
+			const Color NON_INFANTRY_COLOR = GameMakeColor( 0, 0, 255, 255 );
+			Int x = healthBarRegion->lo.x;
+			for( Int i = 0; i < total; ++i, x += w + s )
+			{
+				if( i < full )
+					TheDisplay->drawImage( s_fullContainer, x, top, x + w, top + h,
+																 i < infantry ? INFANTRY_COLOR : NON_INFANTRY_COLOR );
+				else
+					TheDisplay->drawImage( s_emptyContainer, x, top + s, x + w, top + s + h );
+			}
 		}
+		bottom = max( bottom, top + s + h + s );
 	}
+	return bottom;
 }
 
 // ------------------------------------------------------------------------------------------------
-/** The first free row under this drawable's bar and whatever token rows drawLoadTokens hangs from
-	* it, for anything else that draws under the bar: the capture clock, the enthusiasm icon. */
+/** EA only drew the ammo pips for a selected or moused-over unit, which has a bar; an aircraft that
+	* shows them always may have none, and then nothing is drawn. */
 // ------------------------------------------------------------------------------------------------
-Int Drawable::loadTokensBottom( const IRegion2D *healthBarRegion ) const
+void Drawable::drawLoadPips( const IRegion2D *healthBarRegion )
 {
-	Int y = tokensTop( healthBarRegion );
+	if( healthBarRegion )
+		loadPips( healthBarRegion, TRUE );
+}
+
+// ------------------------------------------------------------------------------------------------
+/** The first free row under this drawable's bar and the pips drawLoadPips hangs from it, for
+	* anything else that draws under the bar: the capture clock, the enthusiasm icon. */
+// ------------------------------------------------------------------------------------------------
+Int Drawable::loadPipsBottom( const IRegion2D *healthBarRegion ) const
+{
 	const Object *obj = getObject();
 	if( obj == NULL || obj->isEffectivelyDead() || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )
-		return y;		// drawIconUI bails before the tokens for these
-
-	Int total, full, infantry;
-	if( ammoTokenCounts( total, full ) )
-		y += roundsSpan( total );
-	if( seatTokenCounts( total, infantry, full ) )
-		y += seatsSpan( total );
-	return y;
+		return pipsClearTop( healthBarRegion );		// drawIconUI bails before the pips for these
+	return loadPips( healthBarRegion, FALSE );
 }
 
 // ------------------------------------------------------------------------------------------------
-Bool Drawable::ammoTokenCounts( Int &numTotal, Int &numFull ) const
+Bool Drawable::ammoPipCounts( Int &numTotal, Int &numFull ) const
 {
 	const Object *obj = getObject();
 
@@ -4466,7 +4328,7 @@ Bool Drawable::ammoTokenCounts( Int &numTotal, Int &numFull ) const
 }
 
 // ------------------------------------------------------------------------------------------------
-Bool Drawable::seatTokenCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const
+Bool Drawable::seatPipCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const
 {
 	const Object *obj = getObject();
 
@@ -4903,7 +4765,7 @@ void Drawable::drawEnthusiastic(const IRegion2D* healthBarRegion)
 			ICoord2D screen;
 			screen.x = REAL_TO_INT( healthBarRegion->lo.x + (barWidth * 0.25f) - (frameWidth * 0.5f) );
 			screen.y = REAL_TO_INT( healthBarRegion->hi.y + (frameHeight * 0.25) );
-			screen.y = max( (Int)screen.y, loadTokensBottom( healthBarRegion ) );	// under a Troop Crawler's seats, not over them
+			screen.y = max( (Int)screen.y, loadPipsBottom( healthBarRegion ) );	// under a Troop Crawler's seats, not over them
 			getIconInfo()->m_icon[ iconIndex ]->draw( screen.x, screen.y, frameWidth, frameHeight );
 							
 		}	
@@ -5497,7 +5359,7 @@ void Drawable::drawCaptureProgress( void )
 	const Real barHeight = max( 3, healthBarRegion.hi.y - healthBarRegion.lo.y );
 	// clear of the health bar and its outline, and of the rounds and seats under it: a Bunker or a
 	// garrisoned house being taken wears both
-	const Real barTop = max( (Int)healthBarRegion.hi.y + 2, targetDraw->loadTokensBottom( &healthBarRegion ) );
+	const Real barTop = max( (Int)healthBarRegion.hi.y + 2, targetDraw->loadPipsBottom( &healthBarRegion ) );
 
 	Color fillColor = GameMakeColor( 255, 255, 255, 255 );
 	const Player *owner = obj->getControllingPlayer();

@@ -10852,65 +10852,6 @@ TEST(health_bar_smart_mode_marks_the_hurt)
 	CHECK( Drawable_healthBarModeShows( HEALTH_BAR_SMART, FALSE, TRUE, FALSE ) == TRUE );
 }
 
-/** The rounds and seats under the health bar: separate tokens of a fixed size centred on the bar,
-	 wrapping at ten, shrinking to a floor and then lighting a fixed number in proportion, never
-	 closing up into a strip. */
-TEST(load_tokens_stay_separate_tokens)
-{
-	// five seats of 9 with gaps of 2: one row, 53 wide, centred on x = 100
-	TokenRowLayout l = Drawable_layoutTokens( 5, 9, 2, 5, 1, 10, 2 );
-	CHECK_EQ( l.shown, 5 );
-	CHECK_EQ( l.perRow, 5 );
-	CHECK_EQ( l.rows, 1 );
-	CHECK_EQ( l.size, 9 );
-	CHECK_EQ( l.gap, 2 );
-	CHECK_EQ( Drawable_tokenLeft( l, 0, 100 ), 74 );
-	CHECK_EQ( Drawable_tokenLeft( l, 4, 100 ) + l.size, 127 );
-
-	// twelve wrap after ten at full size, and the short second row is centred on its own
-	l = Drawable_layoutTokens( 12, 9, 2, 5, 1, 10, 2 );
-	CHECK_EQ( l.shown, 12 );
-	CHECK_EQ( l.perRow, 10 );
-	CHECK_EQ( l.rows, 2 );
-	CHECK_EQ( l.size, 9 );
-	CHECK_EQ( Drawable_tokenLeft( l, 10, 100 ), 90 );
-	CHECK_EQ( Drawable_tokenLeft( l, 11, 100 ), 101 );
-
-	// thirty shrink into the width of a full row, still apart
-	const Int fullRow = 10 * 9 + 9 * 2;
-	l = Drawable_layoutTokens( 30, 9, 2, 5, 1, 10, 2 );
-	CHECK_EQ( l.shown, 30 );
-	CHECK_EQ( l.rows, 2 );
-	CHECK( l.size < 9 && l.size >= 5 && l.gap >= 1 );
-	CHECK( l.perRow * l.size + ( l.perRow - 1 ) * l.gap <= fullRow );
-
-	// fifty pass the floor: a fixed count of floor-sized tokens, gaps kept
-	l = Drawable_layoutTokens( 50, 9, 2, 5, 1, 10, 2 );
-	CHECK_EQ( l.size, 5 );
-	CHECK_EQ( l.gap, 1 );
-	CHECK_EQ( l.perRow, 18 );
-	CHECK_EQ( l.shown, 36 );
-	CHECK( l.perRow * l.size + ( l.perRow - 1 ) * l.gap <= fullRow );
-
-	// a single clip row of rounds does the same and never wraps
-	l = Drawable_layoutTokens( 30, 5, 2, 3, 1, 12, 1 );
-	CHECK_EQ( l.rows, 1 );
-	CHECK_EQ( l.shown, 20 );
-	CHECK( l.gap >= 1 );
-
-	// lit tokens: exact while all show, in proportion past that, one lit for any load and one dark
-	// for any room left
-	CHECK_EQ( Drawable_tokensLit( 3, 5, 5 ), 3 );
-	CHECK_EQ( Drawable_tokensLit( 25, 50, 36 ), 18 );
-	CHECK_EQ( Drawable_tokensLit( 1, 50, 36 ), 1 );
-	CHECK_EQ( Drawable_tokensLit( 49, 50, 36 ), 35 );
-	CHECK_EQ( Drawable_tokensLit( 50, 50, 36 ), 36 );
-	CHECK_EQ( Drawable_tokensLit( 0, 50, 36 ), 0 );
-
-	// nothing to count draws nothing
-	CHECK_EQ( Drawable_layoutTokens( 0, 9, 2, 5, 1, 10, 2 ).shown, 0 );
-}
-
 /** The setting is stored, clamped and read back like every other catalog row, and its default is
 	 what this fork has always done - nobody's game changes until they change it. */
 TEST(health_bar_mode_round_trips_through_options_ini)

@@ -101,6 +101,7 @@ enum ScenarioActionType
 	SCENARIO_ACTION_AUTOGARRISON,			///< autogarrison <slot> <selector>; the auto garrison key, as MSG_DO_AUTO_GARRISON
 	SCENARIO_ACTION_AUTOREPAIR,				///< autorepair <slot> <selector>; the auto repair key, as MSG_DO_AUTO_REPAIR
 	SCENARIO_ACTION_REACHPROOF,				///< reachproof <slot> <selector> <targetSlot> <probe> [samples]; every matching defence's reach overlay against the logic, the probe stood on each sample point (ReachOverlay_prove)
+	SCENARIO_ACTION_HANDOVER,					///< handover <slot> <selector> <position> <targetSlot>; the match nearest the position goes to that seat through setTeam, as a capture does, and each upgrade module's state before and after is logged
 	SCENARIO_ACTION_TOPUP							///< topup <slot> <template> <objects>; from now on, while the world holds fewer objects than that, this line's turn makes one on the road from the seat's start to the map's centre and attack-moves it there
 };
 

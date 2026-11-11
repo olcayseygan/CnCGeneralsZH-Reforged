@@ -1,0 +1,29 @@
+# A Command Center's power parts follow its owner (SubObjectsUpgrade FollowsOwner).
+#
+# Slot 0 buys the Spy Drone, slot 1 the A-10 strike; each science grants a hidden player upgrade that
+# shows one part on the Command Center.  Slot 0's Command Center goes to slot 1 and comes back with
+# handover, which is setTeam, the call a capture ends in.  The log's handover lines list each upgrade
+# module before and after:
+#   to slot 1:   ModuleTag_PowerProp_SPYDR01 executed -> not, ModuleTag_PowerProp_A10S01 not -> executed
+#   back to 0:   the other way round
+#
+# handover changes owners outside the command stream, so the replay this run leaves does not hold it;
+# the proof is two runs with the same seed ending on the same HEADLESS CRC.  For a picture of the
+# parts, swap -headless for -win -turbo; they need the art packs' Command Center model.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 1 -maxframes 600
+#     -scenario powerpropcapture -logPrefix powerprop_
+
+# a power plant each, or the seat left without a structure is defeated the moment its Command Center goes
+# (offsets that land on -randommap 1 2 small; another map may refuse them, LBC_ in the log)
+20  spawn    0 AmericaPowerPlant 1 start0:0:300
+20  spawn    1 AmericaPowerPlant 1 start1:0:-300
+30  purchase 0 SCIENCE_SpyDrone
+30  purchase 1 SCIENCE_A10ThunderboltMissileStrike1
+60  tally    0 AmericaCommandCenter 1
+90  handover 0 AmericaCommandCenter start0 1
+100 tally    1 AmericaCommandCenter 2
+150 handover 1 AmericaCommandCenter start0 0
+160 tally    0 AmericaCommandCenter 1

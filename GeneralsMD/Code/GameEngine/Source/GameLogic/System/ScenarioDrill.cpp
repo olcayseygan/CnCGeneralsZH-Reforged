@@ -46,6 +46,7 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
+#include "GameLogic/Module/UpgradeModule.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ScenarioDrill.h"
 #include "GameLogic/TerrainLogic.h"
@@ -265,6 +266,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_REACHPROOF;
 	else if (token == "topup")
 		*action = SCENARIO_ACTION_TOPUP;
+	else if (token == "handover")
+		*action = SCENARIO_ACTION_HANDOVER;
 	else
 		return FALSE;
 
@@ -376,6 +379,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_PURCHASE:		return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_ARRIVE:			return SCENARIO_TOKENS_ARRIVE;
 		case SCENARIO_ACTION_TOPUP:				return SCENARIO_TOKENS_MOVE;
+		case SCENARIO_ACTION_HANDOVER:		return SCENARIO_TOKENS_ATTACK;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -493,6 +497,19 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 			action->targetSelector = tokens[ 5 ];
 			if (actionType == SCENARIO_ACTION_SHIFTPOWER)
 				action->name = tokens[ SCENARIO_SHIFTPOWER_NAME_TOKEN ];
+			break;
+		}
+
+		case SCENARIO_ACTION_HANDOVER:
+		{
+			Int next = SCENARIO_ORDER_POSITION_TOKEN;
+			const ScenarioParseResult position = parseScenarioPosition( tokens, count, &next, action );
+			if (position != SCENARIO_PARSE_OK)
+				return position;
+			if (next >= count)
+				return SCENARIO_PARSE_MISSING_ARGS;
+			if (!parseWholeNumber( tokens[ next ], &action->targetSlot ))
+				return SCENARIO_PARSE_BAD_SLOT;
 			break;
 		}
 
@@ -2082,6 +2099,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_RESPOND:
 		case SCENARIO_ACTION_REACHPROOF:
 		case SCENARIO_ACTION_TOPUP:
+		case SCENARIO_ACTION_HANDOVER:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2204,6 +2222,61 @@ static Bool executeGiveMoney( const ScenarioAction &action, Player *player )
 	return TRUE;
 }
 
+/** A building changing hands with nothing in between: setTeam, the call a capture, a hijack, a
+	  defeated player's tech buildings and a script's change of owner all end in, so the owner change
+	  runs Object::onCapture and every module's onCapture as a capture would.  Each upgrade module's
+	  state is logged before and after, which is what shows a FollowsOwner part going away or coming. */
+static Bool executeHandover( const ScenarioAction &action, Player *player, const Coord3D &point )
+{
+	Player *target = findPlayerForSlot( action.targetSlot );
+	Object *building = NULL;
+	Real best = 0.0f;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if (obj->getControllingPlayer() != player || obj->isEffectivelyDead() || !selectorMatches( action.selector, obj ))
+			continue;
+		const Real dx = obj->getPosition()->x - point.x;
+		const Real dy = obj->getPosition()->y - point.y;
+		if (building == NULL || dx * dx + dy * dy < best)
+		{
+			building = obj;
+			best = dx * dx + dy * dy;
+		}
+	}
+	if (building == NULL || target == NULL || target == player)
+	{
+		DEBUG_LOG(("SCENARIO: frame %d handover: slot %d owns no '%s', or slot %d is nobody else\n",
+							 action.frame, action.slot, action.selector.str(), action.targetSlot));
+		return FALSE;
+	}
+
+	std::vector<Bool> before;
+	for (BehaviorModule **module = building->getBehaviorModules(); *module; ++module)
+		if ((*module)->getUpgrade())
+			before.push_back( (*module)->getUpgrade()->isAlreadyUpgraded() );
+
+	building->setTeam( target->getDefaultTeam() );
+
+	const Bool arrived = building->getControllingPlayer() == target;
+	DEBUG_LOG(("SCENARIO: frame %d handover slot %d '%s' %d to slot %d: %s\n", action.frame, action.slot,
+						 action.selector.str(), building->getID(), action.targetSlot, arrived ? "owned" : "refused"));
+
+	Int index = 0;
+	for (BehaviorModule **module = building->getBehaviorModules(); *module; ++module)
+	{
+		UpgradeModuleInterface *upgrade = (*module)->getUpgrade();
+		if (upgrade == NULL)
+			continue;
+		const Bool after = upgrade->isAlreadyUpgraded();
+		DEBUG_LOG(("SCENARIO: frame %d handover %d module %s: %s -> %s%s\n", action.frame, building->getID(),
+							 TheNameKeyGenerator->keyToName( (*module)->getModuleTagNameKey() ).str(),
+							 before[ index ] ? "executed" : "not", after ? "executed" : "not",
+							 before[ index ] != after ? "  CHANGED" : ""));
+		++index;
+	}
+	return arrived;
+}
+
 Bool ScenarioDrill_execute( const ScenarioAction &action )
 {
 	Player *player = findPlayerForSlot( action.slot );
@@ -2263,6 +2336,9 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 
 	if (action.action == SCENARIO_ACTION_PURCHASE)
 		return executePurchase( action, player );
+
+	if (action.action == SCENARIO_ACTION_HANDOVER)
+		return executeHandover( action, player, position );
 
 	if (action.action == SCENARIO_ACTION_CONSTRUCT || action.action == SCENARIO_ACTION_SHIFTCONSTRUCT)
 		return executeConstruct( action, player, position );

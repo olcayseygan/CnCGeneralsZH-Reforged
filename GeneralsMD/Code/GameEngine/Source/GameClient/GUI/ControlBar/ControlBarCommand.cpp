@@ -65,6 +65,7 @@
 #include "GameClient/HotKey.h"
 #include "GameClient/Image.h"
 #include "GameClient/GroupPanel.h"
+#include "GameClient/ControlBarScheme.h"
 #include "GameClient/GameText.h"
 #include "GameClient/Display.h"
 
@@ -1812,16 +1813,19 @@ static void drawNoCommandTabParent( GameWindow *window, WinInstanceData *instDat
 
 /// the push button's own draw, kept when the tab buttons take drawCommandTab in its place
 static GameWinDrawFunc s_commandTabButtonDraw = NULL;
+/// the scheme dresses the tab in its own art, whose pushed state is the open look
+static Bool s_commandTabOwnArt[ ControlBar::COMMAND_TAB_COUNT ] = { FALSE, FALSE, FALSE };
 
-/// A tab button draws as a push button, and the open one then gets an outline two pixels wide in the
-/// build buttons' border colour, inside the button's own rect: an open tab reads as open on any side's
-/// picture and keeps the same clearance from the power bar and the grid as a closed one.  Fills,
-/// whose pixels are exact.
+/// A tab button draws as a push button.  Wearing the idle buttons' borrowed pictures, whose pushed
+/// state is a faint tint, the open one then gets an outline two pixels wide in the build buttons'
+/// border colour, inside the button's own rect so it keeps the row's clearance.  The scheme's own tab
+/// art carries the open look in its pushed state and gets no outline.  Fills, whose pixels are exact.
 static void drawCommandTab( GameWindow *window, WinInstanceData *instData )
 {
 	if( s_commandTabButtonDraw )
 		s_commandTabButtonDraw( window, instData );
-	if( (Int)(intptr_t)GadgetButtonGetData( window ) - 1 != TheControlBar->getCommandTab() )
+	const Int tab = (Int)(intptr_t)GadgetButtonGetData( window ) - 1;
+	if( tab != TheControlBar->getCommandTab() || tab < 0 || tab >= ControlBar::COMMAND_TAB_COUNT || s_commandTabOwnArt[ tab ] )
 		return;
 	enum { RING = 2 };
 	ICoord2D pos, size;
@@ -1960,43 +1964,64 @@ void ControlBar::updateCommandTabButtons( void )
 	}
 
 	//
-	// A row of squares in the steel rail between the power bar's foot and the grid's top cells,
-	// sized to that gap, read off the live windows every frame so it follows every side's plate and
-	// HUD scale.  TAB_CLEARANCE is the air kept on both sides; the open tab's outline is drawn inside
-	// its button (drawCommandTab), so a marked tab keeps it too.
-	// With no power bar just above the grid (a scheme without one), the row stands on the grid's top
-	// edge, about half a command button high.
+	// The row stands outside the bar, on the plate's top edge at its left shoulder: left-aligned with
+	// the grid, its foot a few pixels over the plate's first solid row, its top no higher than the
+	// money plate's and its right end clear of it.  Every edge is read off the live bar each frame
+	// (the plate's click mask down the row's columns, MoneyDisplay's rectangle), so it holds on every
+	// side, HUD size and a minimised bar.  28 pixels a tab at 1080, scaled as the HUD is.
 	//
-	enum { TAB_CLEARANCE = 3, TAB_LEAST = 8 };
-	Int buttonH = 0;
-	if( m_commandWindows[ 0 ] )
+	enum { TAB_SIDE_AT_1080 = 28, TAB_LEAST = 8 };
+	const Real hud = ControlBarHudScale() / ControlBarHudScaleFor( 1920, 1080 );
+	Int side = max( (Int)TAB_LEAST, REAL_TO_INT_FLOOR( TAB_SIDE_AT_1080 * hud + 0.5f ) );
+	Int gap = max( 2, side / 7 );
+	const Int air = max( 2, REAL_TO_INT_FLOOR( 3.0f * hud + 0.5f ) );
+	const Int left = grid.lo.x;
+
+	// the plate's top over the row's first column; with no plate mask, the centre panel's top
+	ICoord2D frameNow;
+	m_contextParent[ CP_MASTER ]->winGetScreenPosition( &frameNow.x, &frameNow.y );
+	const Int panelTop = m_panelRect[ CB_PANEL_CENTER ].lo.y + frameNow.y - m_panelOrigin.y;
+	const Int barTop = plateTopAt( left + 1, panelTop );
+
+	// the right end: short of the money plate's window, and of any part of the plate that rises
+	// above the row's foot (the money plate's own steel, where the painting has it)
+	Int rightLimit = grid.hi.x;
+	static const NameKeyType moneyId = NAMEKEY( "ControlBar.wnd:MoneyDisplay" );
+	GameWindow *money = TheWindowManager->winGetWindowFromId( NULL, moneyId );
+	Int moneyTop = -1;
+	if( money && !money->winIsHidden() )
 	{
-		Int buttonW;
-		m_commandWindows[ 0 ]->winGetSize( &buttonW, &buttonH );
-	}
-	Int side = max( 12, ( buttonH * 9 ) / 20 );
-	Int top = grid.lo.y - side - TAB_CLEARANCE;
-	static const NameKeyType powerId = NAMEKEY( "ControlBar.wnd:PowerWindow" );
-	GameWindow *power = TheWindowManager->winGetWindowFromId( NULL, powerId );
-	if( power )
-	{
-		ICoord2D powerPos, powerSize;
-		power->winGetScreenPosition( &powerPos.x, &powerPos.y );
-		power->winGetSize( &powerSize.x, &powerSize.y );
-		const Int powerFoot = powerPos.y + powerSize.y;
-		const Int rail = grid.lo.y - powerFoot;
-		const Bool overGrid = powerPos.x < grid.hi.x && powerPos.x + powerSize.x > grid.lo.x;
-		if( overGrid && rail >= 0 && rail <= buttonH )
+		ICoord2D moneyPos, moneySize;
+		money->winGetScreenPosition( &moneyPos.x, &moneyPos.y );
+		money->winGetSize( &moneySize.x, &moneySize.y );
+		if( moneySize.x > 0 && moneyPos.x > left )
 		{
-			side = max( (Int)TAB_LEAST, rail - 2 * TAB_CLEARANCE );
-			top = powerFoot + ( rail - side ) / 2;
+			rightLimit = min( rightLimit, moneyPos.x - air );
+			moneyTop = moneyPos.y;
 		}
 	}
-	const Int gap = max( (Int)TAB_CLEARANCE * 2, side / 6 );
-	parent->winSetPosition( grid.lo.x + TAB_CLEARANCE, top );
+	const Int wanted = COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap;
+	for( Int x = left + 1; x < min( rightLimit, left + wanted + air ); x += 2 )
+		if( plateTopAt( x, barTop ) < barTop - air )
+		{
+			rightLimit = x - air;
+			break;
+		}
+
+	// shrink to the room there is, across and up
+	if( left + wanted > rightLimit )
+	{
+		side = max( (Int)TAB_LEAST, ( rightLimit - left - ( COMMAND_TAB_COUNT - 1 ) * gap ) / COMMAND_TAB_COUNT );
+		gap = max( 2, side / 7 );
+	}
+	const Int foot = barTop - air;
+	if( moneyTop >= 0 && foot - side < moneyTop )
+		side = max( (Int)TAB_LEAST, foot - moneyTop );
+	parent->winSetPosition( left, foot - side );
 	parent->winSetSize( COMMAND_TAB_COUNT * side + ( COMMAND_TAB_COUNT - 1 ) * gap, side );
 
-	// ponytail: the idle buttons' pictures until the tabs have their own on the button sheet
+	// the scheme's own tab art, <S>ProTab<Kind> with H, P and I; a scheme naming none (Classic) lends
+	// the idle buttons' pictures
 	static const NameKeyType sources[ COMMAND_TAB_COUNT ] =
 	{
 		NAMEKEY( "ControlBar.wnd:ButtonIdleWorker" ),
@@ -2011,12 +2036,26 @@ void ControlBar::updateCommandTabButtons( void )
 		button->winSetPosition( tab * ( side + gap ), 0 );
 		button->winSetSize( side, side );
 
-		GameWindow *source = TheWindowManager->winGetWindowFromId( NULL, sources[ tab ] );
-		if( source == NULL )
-			continue;
-		const Image *up = source->winGetEnabledImage( 0 );
-		const Image *hilite = source->winGetHiliteImage( 0 );
-		const Image *pushed = source->winGetHiliteImage( 1 );
+		const Image *up, *hilite, *pushed, *disabled;
+		const Image *const *own = m_controlBarSchemeManager ? m_controlBarSchemeManager->getCommandTabImages( tab ) : NULL;
+		s_commandTabOwnArt[ tab ] = own != NULL;
+		if( own )
+		{
+			up = own[ 0 ];
+			hilite = own[ 1 ] ? own[ 1 ] : own[ 0 ];
+			pushed = own[ 2 ] ? own[ 2 ] : hilite;
+			disabled = own[ 3 ] ? own[ 3 ] : own[ 0 ];
+		}
+		else
+		{
+			GameWindow *source = TheWindowManager->winGetWindowFromId( NULL, sources[ tab ] );
+			if( source == NULL )
+				continue;
+			up = source->winGetEnabledImage( 0 );
+			hilite = source->winGetHiliteImage( 0 );
+			pushed = source->winGetHiliteImage( 1 );
+			disabled = source->winGetDisabledImage( 0 );
+		}
 		if( pushed == NULL )
 			pushed = hilite;
 		// the open tab stays down
@@ -2024,7 +2063,7 @@ void ControlBar::updateCommandTabButtons( void )
 		GadgetButtonSetEnabledImage( button, open && pushed ? pushed : up );
 		GadgetButtonSetHiliteImage( button, open && pushed ? pushed : hilite );
 		GadgetButtonSetHiliteSelectedImage( button, pushed );
-		GadgetButtonSetDisabledImage( button, source->winGetDisabledImage( 0 ) );
+		GadgetButtonSetDisabledImage( button, disabled );
 	}
 	parent->winHide( FALSE );
 }

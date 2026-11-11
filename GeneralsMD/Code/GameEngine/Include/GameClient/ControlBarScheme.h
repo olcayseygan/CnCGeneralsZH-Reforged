@@ -269,6 +269,13 @@ public:
 	ICoord2D m_idleUL[ IDLE_COUNT ];
 	ICoord2D m_idleLR[ IDLE_COUNT ];
 
+	/// the command bar's tabs (ControlBar::CommandTab order): CommandTab<Kind>ButtonImage names the
+	/// sheet piece, and its H, P and I copies are the other three states.  Resolved by init; all NULL
+	/// without the key, and the tabs then wear the idle buttons' pictures
+	enum { COMMAND_TAB_IMAGE_COUNT = 3, COMMAND_TAB_STATE_COUNT = 4 };
+	AsciiString m_commandTabImage[ COMMAND_TAB_IMAGE_COUNT ];
+	const Image *m_commandTab[ COMMAND_TAB_IMAGE_COUNT ][ COMMAND_TAB_STATE_COUNT ];
+
 	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
 	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
 	enum { FRAME_TL, FRAME_T, FRAME_TR, FRAME_L, FRAME_C, FRAME_R, FRAME_BL, FRAME_B, FRAME_BR, FRAME_PIECE_COUNT };
@@ -359,6 +366,9 @@ public:
 	/// the general's powers tray's pieces (ControlBarScheme::TRAY_*) of the scheme on screen, or NULL
 	/// without a cell; the tray then keeps the shipped column
 	const Image *const *getPowerTray( void ) const;
+	/// the scheme on screen's pictures for command tab 'tab' (ControlBar::CommandTab), enabled, hilite,
+	/// pushed and disabled, or NULL when it names none for that tab
+	const Image *const *getCommandTabImages( Int tab ) const;
 	/// the current scheme's talent pieces in ControlBarScheme::TALENT_* order, NULL when it names none
 	const Image *const *getTalentImages( void ) const;
 	/// the scheme on screen writes the money with thousands separators (MoneyThousands)

@@ -195,6 +195,9 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "IdleAircraftLR",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleLR[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
 	{ "RadarFrameImage",			INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_radarFrameName ) },
 	{ "PowerTrayImage",				INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_powerTrayName ) },
+	{ "CommandTabBuildingsButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabImage[ 0 ] ) },
+	{ "CommandTabGroundButtonImage",		INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabImage[ 1 ] ) },
+	{ "CommandTabAircraftButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabImage[ 2 ] ) },
 	{ "TooltipImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_tooltipName ) },
 	{ "TalentImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_talentName ) },
 
@@ -493,6 +496,9 @@ ControlBarScheme::ControlBarScheme(void)
 		m_radarFrame[ i ] = NULL;
 	for( Int i = 0; i < TRAY_PIECE_COUNT; i++ )
 		m_powerTray[ i ] = NULL;
+	for( Int tab = 0; tab < COMMAND_TAB_IMAGE_COUNT; tab++ )
+		for( Int state = 0; state < COMMAND_TAB_STATE_COUNT; state++ )
+			m_commandTab[ tab ][ state ] = NULL;
 	m_tooltip = ControlBarTooltipImages();
 	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
 		m_talent[ i ] = NULL;
@@ -564,6 +570,9 @@ void ControlBarScheme::init(void)
 		{ "Cell", "EdgeTop", "EdgeLeft", "EdgeBottom", "CornerTopLeft", "CornerBottomLeft", "Step" };
 	findPieces( m_radarFrameName, "", theFrameSuffixes, FRAME_PIECE_COUNT, m_radarFrame );
 	findPieces( m_powerTrayName, "", traySuffixes, TRAY_PIECE_COUNT, m_powerTray );
+	static const char *const tabStates[ COMMAND_TAB_STATE_COUNT ] = { "", "H", "P", "I" };
+	for( Int tab = 0; tab < COMMAND_TAB_IMAGE_COUNT; tab++ )
+		findPieces( m_commandTabImage[ tab ], "", tabStates, COMMAND_TAB_STATE_COUNT, m_commandTab[ tab ] );
 	m_tooltip.find( m_tooltipName );
 	static const char *const talentSuffixes[ TALENT_PIECE_COUNT ] =
 		{ "GeneralsPowerWindowWide", "TalentPlateLocked", "TalentPlateWaiting", "TalentPlatePicked", "TalentPlateRejected",
@@ -1327,6 +1336,14 @@ Int ControlBarSchemeManager::radarArtTop( Int fallback ) const
 	Int x, y;
 	block->winGetScreenPosition( &x, &y );
 	return y;
+}
+
+const Image *const *ControlBarSchemeManager::getCommandTabImages( Int tab ) const
+{
+	if( m_currentScheme == NULL || tab < 0 || tab >= ControlBarScheme::COMMAND_TAB_IMAGE_COUNT
+			|| m_currentScheme->m_commandTab[ tab ][ 0 ] == NULL )
+		return NULL;
+	return m_currentScheme->m_commandTab[ tab ];
 }
 
 const Image *const *ControlBarSchemeManager::getPowerTray( void ) const

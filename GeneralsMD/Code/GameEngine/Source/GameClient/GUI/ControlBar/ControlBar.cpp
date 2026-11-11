@@ -2384,6 +2384,51 @@ Bool ControlBar::letsClickThrough( GameWindow *window, Int x, Int y )
 }
 
 //-------------------------------------------------------------------------------------------------
+Int ControlBar::plateTopAt( Int x, Int fallback )
+{
+	GameWindow *frame = m_contextParent[ CP_MASTER ];
+	if( frame == NULL || m_controlBarSchemeManager == NULL || TheDisplay == NULL )
+		return fallback;
+
+	// letsClickThrough's arithmetic, read down a column instead of at a point
+	ICoord2D now;
+	frame->winGetScreenPosition( &now.x, &now.y );
+	Int best = fallback;
+	Bool found = FALSE;
+	for( Int p = 0; p < CB_PANEL_COUNT; p++ )
+	{
+		const ControlBarPlate *plate = ControlBarPlateForSide( m_controlBarSchemeManager->getCurrentSide(), p );
+		if( plate == NULL )
+			plate = ControlBarPlateForSide( m_controlBarSchemeManager->getCurrentArtTwinSide(), p );
+		IRegion2D rect;
+		if( plate == NULL ||
+				ControlBarPanelDesignToScreen( p, &plate->design, TheDisplay->getWidth(), TheDisplay->getHeight(), &rect ) == FALSE )
+			continue;
+		const Int left = rect.lo.x + now.x - m_panelOrigin.x;
+		const Int top = rect.lo.y + now.y - m_panelOrigin.y;
+		const Int width = rect.width();
+		const Int height = rect.height();
+		if( width <= 0 || height <= 0 || x < left || x >= left + width )
+			continue;
+		const std::vector<UnsignedByte> &mask = plateMask( plate );
+		if( mask.empty() )
+			continue;
+		const Int texelX = ( x - left ) * plate->artW / width;
+		for( Int texelY = 0; texelY < plate->artH; texelY++ )
+		{
+			if( !mask[ texelY * plate->artW + texelX ] )
+				continue;
+			const Int row = top + texelY * height / plate->artH;
+			if( !found || row < best )
+				best = row;
+			found = TRUE;
+			break;
+		}
+	}
+	return best;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Place 'win' and everything under it inside 'panel'.  Positions are relative to the parent, so
 	* both the parent's old and new screen origins travel down the recursion: the old one to work out
 	* where the window was, the new one to say where to put it. */

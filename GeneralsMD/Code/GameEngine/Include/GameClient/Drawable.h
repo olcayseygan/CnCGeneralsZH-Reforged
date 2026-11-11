@@ -114,6 +114,32 @@ extern Int Drawable_lampCellLeft( Int innerWidth, Int capacity, Int index );
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
 
+///< one member of a squad or mob, as the render's sync point saw it: where it is shown, how big it is
+struct SquadMemberForDraw
+{
+	ObjectID nexus;
+	DrawableID drawable;
+	Coord3D pos;							///< the smooth-motion position the model is drawn at
+	Real radius;							///< bounding circle
+	Real height;							///< over pos, to the top of its geometry
+	PathfindLayerEnum layer;
+};
+
+///< take every visible squad member's copy, at the sync point; smooth and alpha are the display's blend
+extern void Drawable_takeSquadsForRender( Bool smooth, Real alpha );
+///< the members of this nexus in that copy, and how many; no logic read, safe beside the tick
+extern Int Drawable_squadMembersForDraw( ObjectID nexus, const SquadMemberForDraw **members );
+
+///< the local player just ordered the selection to attack: stamp every selected drawable, for the
+///< selection ring's pulse (HintSpy calls it as the order leaves the client)
+extern void Drawable_noteAttackOrder( void );
+///< seconds since this drawable was last ordered to attack, or a negative number when not lately
+extern Real Drawable_attackOrderSeconds( DrawableID id );
+///< the local player just aimed an order at this object (attack, force attack, enter): its model flashes red
+extern void Drawable_noteOrderTarget( ObjectID target );
+///< fire the order targets' red flashes that are due, at the sync point
+extern void Drawable_flashOrderTargets( void );
+
 //-----------------------------------------------------------------------------
 //@TODO -- The drawable icon system needs to be implemented in a proper manner -- KM
 //				 Fact 1: Every drawable in the world shouldn't have to have a pointer 
@@ -565,6 +591,7 @@ public:
 	void colorTint( const RGBColor *color );	 ///< tint this drawable the color specified
 	void setTintEnvelope( const RGBColor *color, Real attack, Real decay );	 ///< how to transition color
 	void flashAsSelected( const RGBColor *color = NULL ); ///< drawable takes care of the details if you spec no color
+	void setOrderFlash( Bool on ) { m_orderFlash = on; }	///< lit full red as an order's target, this picture (Drawable_flashOrderTargets)
 	
 	/// Return true if drawable has been marked as "selected"
 	Bool isSelected( void ) const {	LOGIC_CENSUS( CENSUS_CLIENT_READ ); return m_selected; }	///< logic asks LogicThread::isSelectedForTick
@@ -824,6 +851,7 @@ private:
 
 	// note, these are lazily allocated!
 	TintEnvelope*		m_selectionFlashEnvelope;	///< used for selection flash, works WITH m_colorTintEnvelope
+	Bool						m_orderFlash;							///< lit red as an order's target, set at the sync point (Drawable_flashOrderTargets)
 	TintEnvelope*		m_colorTintEnvelope;			///< house color flashing, etc... works WITH m_selectionFlashEnvelope
 																//   this used to use m_ambientLight... but this replaces it
 																//   int most places. It works harder to change the drawable's

@@ -58,6 +58,9 @@
 #include "GameLogic/GameLogic.h"		// for logic frame count
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
+
+#include <algorithm>
+#include <chrono>
 #include "Common/SpecialPower.h"
 		// countdown text over a building
 #include "GameLogic/Locomotor.h"
@@ -789,6 +792,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 
 	m_iconInfo = NULL;								// lazily allocate!
 	m_selectionFlashEnvelope = NULL;	// lazily allocate!
+	m_orderFlash = FALSE;
 	m_colorTintEnvelope = NULL;				// lazily allocate!
 
 	initStaticImages();
@@ -1405,6 +1409,10 @@ const Vector3 * Drawable::getSelectionColor( void )	const
 {
 	if( LogicThread::isInsideWindow() )
 		return m_lookForDraw.hasSelectionColor ? &m_lookForDraw.selectionColor : NULL;
+	// the target of the local player's order, lit for a blip (Drawable_flashOrderTargets)
+	static const Vector3 ORDER_FLASH_RED( 1.0f, 0.05f, 0.02f );
+	if( m_orderFlash )
+		return &ORDER_FLASH_RED;
 	if (m_selectionFlashEnvelope)
 	{
 		if (m_selectionFlashEnvelope->isEffective())
@@ -3397,6 +3405,273 @@ static Real healthBarArtLift( const Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A squad's bar, and an Angry Mob's, belongs over its members and not over the invisible nexus
+	* they follow. SpawnBehavior's offset is where the members' centre stood up to a fifth of a second
+	* ago, and the bar was only as wide as the nexus' own small geometry, so five soldiers spread over
+	* a street wore a stub of a bar over one of them. The members are what the nexus made
+	* (getProducerID). The bar goes over their centre, above the top of the group as the screen shows
+	* it: every head, and the far side of every selection ring (W3DWaypointBuffer's ring radius,
+	* approximated here). Its span is theirs on the screen, which the caller caps. FALSE when no member
+	* is in sight, and the nexus' own place is used.
+	*
+	* The bar is drawn beside the tick, so nothing here reads the logic: the members come from a copy
+	* the sync point takes (Drawable_takeSquadsForRender), at the positions their models are shown,
+	* which is also what the selection rings are drawn round. */
+//-------------------------------------------------------------------------------------------------
+static const Real SQUAD_BAR_CLEARANCE = 6.0f;		///< pixels between the top of the group and the bar, before the UI scale
+static const Real SQUAD_BAR_RING_MARGIN = 1.0f;	///< RING_MARGIN and RING_MIN_RADIUS in W3dWaypointBuffer.cpp
+static const Real SQUAD_BAR_RING_MIN = 5.0f;
+static const Real SQUAD_BAR_MAX_WIDTH = 2.0f;		///< the bar is at most this many times a lone unit's
+
+static std::vector<SquadMemberForDraw> s_squadMembers;		///< sorted by nexus
+
+static Bool squadMemberBefore( const SquadMemberForDraw& a, const SquadMemberForDraw& b ) { return a.nexus < b.nexus; }
+
+// ponytail: one walk of every drawable each sync point, a lookup only for those something produced. A
+// list kept by SpawnBehavior would be cheaper, and is a GameLogic change.
+void Drawable_takeSquadsForRender( Bool smooth, Real alpha )
+{
+	s_squadMembers.clear();
+	if( TheGameLogic == NULL || TheGameClient == NULL )
+		return;
+	// only members the drawn fog lets you see: an enemy mob's bar must not lean toward the ones in fog
+	const Int shroudPlayer = TheObserverCamera.getShroudPlayerIndex();
+	for( Drawable *draw = TheGameClient->firstDrawable(); draw; draw = draw->getNextDrawable() )
+	{
+		const Object *obj = draw->getObject();
+		if( obj == NULL || obj->getProducerID() == INVALID_ID || obj->isEffectivelyDead() || obj->isContained()
+			|| draw->isDrawableEffectivelyHidden() )
+			continue;
+		const Object *nexus = TheGameLogic->findObjectByID( obj->getProducerID() );
+		if( nexus == NULL || !nexus->isKindOf( KINDOF_MOB_NEXUS ) )
+			continue;
+		if( obj->getShroudedStatus( shroudPlayer ) > OBJECTSHROUD_PARTIAL_CLEAR )
+			continue;
+
+		SquadMemberForDraw member;
+		member.nexus = nexus->getID();
+		member.drawable = draw->getID();
+		member.pos = *draw->getPosition();
+		if( smooth )
+			draw->getSmoothMotionPosition( alpha, &member.pos );
+		member.radius = obj->getGeometryInfo().getBoundingCircleRadius();
+		member.height = obj->getGeometryInfo().getMaxHeightAbovePosition();
+		member.layer = obj->getLayer();
+		s_squadMembers.push_back( member );
+	}
+	std::stable_sort( s_squadMembers.begin(), s_squadMembers.end(), squadMemberBefore );
+}
+
+Int Drawable_squadMembersForDraw( ObjectID nexus, const SquadMemberForDraw **members )
+{
+	SquadMemberForDraw key;
+	key.nexus = nexus;
+	std::pair<std::vector<SquadMemberForDraw>::const_iterator, std::vector<SquadMemberForDraw>::const_iterator> range =
+		std::equal_range( s_squadMembers.begin(), s_squadMembers.end(), key, squadMemberBefore );
+	*members = ( range.first == range.second ) ? NULL : &*range.first;
+	return (Int)( range.second - range.first );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** When each drawable was last ordered to attack, on the wall clock, for the selection ring's pulse
+	* (W3DWaypointBuffer). Client only: the order is the local player's, stamped as it leaves the
+	* client, and nothing in the logic ever sees it. */
+//-------------------------------------------------------------------------------------------------
+struct AttackOrderStamp
+{
+	DrawableID id;
+	std::chrono::steady_clock::time_point when;
+};
+static std::vector<AttackOrderStamp> s_attackOrders;
+static const Real ATTACK_ORDER_KEPT_SECONDS = 2.0f;		///< longer than any pulse lasts
+
+static Real secondsSince( const std::chrono::steady_clock::time_point& when )
+{
+	return std::chrono::duration< Real >( std::chrono::steady_clock::now() - when ).count();
+}
+
+void Drawable_noteAttackOrder( void )
+{
+	for( size_t i = 0; i < s_attackOrders.size(); )
+	{
+		if( secondsSince( s_attackOrders[ i ].when ) > ATTACK_ORDER_KEPT_SECONDS )
+		{
+			s_attackOrders[ i ] = s_attackOrders.back();
+			s_attackOrders.pop_back();
+		}
+		else
+			++i;
+	}
+
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const DrawableID id = (*it)->getID();
+		Bool found = FALSE;
+		for( size_t i = 0; i < s_attackOrders.size() && !found; ++i )
+		{
+			if( s_attackOrders[ i ].id == id )
+			{
+				s_attackOrders[ i ].when = now;
+				found = TRUE;
+			}
+		}
+		if( !found )
+		{
+			AttackOrderStamp stamp;
+			stamp.id = id;
+			stamp.when = now;
+			s_attackOrders.push_back( stamp );
+		}
+	}
+}
+
+Real Drawable_attackOrderSeconds( DrawableID id )
+{
+	for( size_t i = 0; i < s_attackOrders.size(); ++i )
+		if( s_attackOrders[ i ].id == id )
+			return secondsSince( s_attackOrders[ i ].when );
+	return -1.0f;
+}
+
+/** The objects the local player's orders were aimed at. Each one's model blips full red
+	* ORDER_FLASH_BLIPS times, the instant the click lands, as quick click feedback: lit, dark, lit, off.
+	* The tint goes on and off outright through the selection colour (setOrderFlash, getSelectionColor),
+	* not the selection flash's envelope, which steps on logic frames and fades. A phase lasts its
+	* seconds and at least one picture, so a click landing between two sync points still shows its
+	* first blip. An ID only: the drawable is found and lit at the sync point (Drawable_flashOrderTargets),
+	* and only while the player can see it. The clock is the attack pulse's. */
+static const Int ORDER_FLASH_BLIPS = 2;
+static const Real ORDER_FLASH_ON_SECONDS = 0.07f;
+static const Real ORDER_FLASH_OFF_SECONDS = 0.07f;
+static const Int ORDER_FLASH_DONE = 2 * ORDER_FLASH_BLIPS - 1;		///< phases: even lit, odd dark
+struct OrderTargetStamp
+{
+	ObjectID target;
+	std::chrono::steady_clock::time_point when;			///< the click
+	std::chrono::steady_clock::time_point phaseStart;
+	Int phase;
+	Bool shown;																			///< this phase has been in a picture
+};
+static std::vector<OrderTargetStamp> s_orderTargets;
+
+void Drawable_noteOrderTarget( ObjectID target )
+{
+	if( target == INVALID_ID )
+		return;
+	for( size_t i = 0; i < s_orderTargets.size(); )
+	{
+		if( s_orderTargets[ i ].target == target || secondsSince( s_orderTargets[ i ].when ) > ATTACK_ORDER_KEPT_SECONDS )
+			s_orderTargets.erase( s_orderTargets.begin() + i );		// erase, not swap: oldest stays first
+		else
+			++i;
+	}
+	OrderTargetStamp stamp;
+	stamp.target = target;
+	stamp.when = std::chrono::steady_clock::now();
+	stamp.phaseStart = stamp.when;
+	stamp.phase = 0;
+	stamp.shown = FALSE;
+	s_orderTargets.push_back( stamp );
+}
+
+void Drawable_flashOrderTargets( void )
+{
+	for( size_t i = 0; i < s_orderTargets.size(); ++i )
+	{
+		OrderTargetStamp& stamp = s_orderTargets[ i ];
+		if( stamp.phase > ORDER_FLASH_DONE )
+			continue;
+		// on to the next phase once this one has had its time and been in a picture
+		const Real length = ( stamp.phase % 2 == 0 ) ? ORDER_FLASH_ON_SECONDS : ORDER_FLASH_OFF_SECONDS;
+		if( stamp.phase < ORDER_FLASH_DONE && stamp.shown && secondsSince( stamp.phaseStart ) >= length )
+		{
+			++stamp.phase;
+			stamp.phaseStart = std::chrono::steady_clock::now();
+			stamp.shown = FALSE;
+		}
+		const Bool lit = stamp.phase < ORDER_FLASH_DONE && stamp.phase % 2 == 0;
+		Object *obj = TheGameLogic ? TheGameLogic->findObjectByID( stamp.target ) : NULL;
+		Drawable *draw = obj ? obj->getDrawable() : NULL;
+		if( draw )
+			draw->setOrderFlash( lit && !obj->isEffectivelyDead() && !draw->isDrawableEffectivelyHidden() && !draw->getFullyObscuredByShroud() );
+		stamp.shown = TRUE;
+		if( stamp.phase == ORDER_FLASH_DONE )
+			++stamp.phase;		// off, and left alone until it ages out
+	}
+}
+
+static Bool squadBarPlace( ObjectID nexus, ICoord2D& screenCentre, Real& span )
+{
+	const SquadMemberForDraw *members;
+	const Int count = Drawable_squadMembersForDraw( nexus, &members );
+	if( count == 0 )
+		return FALSE;
+
+	Coord3D centre;
+	centre.zero();
+	for( Int i = 0; i < count; ++i )
+		centre.add( &members[ i ].pos );
+	centre.scale( 1.0f / count );
+
+	ICoord2D mid;
+	if( !TheTacticalView->worldToScreen( &centre, &mid ) )
+		return FALSE;
+
+	// the top of the group on the screen: each head, and each ring's side away from the camera
+	const Coord3D& eye = TheTacticalView->get3DCameraPosition();
+	Int topY = mid.y;
+	for( Int i = 0; i < count; ++i )
+	{
+		const Coord3D *pos = &members[ i ].pos;
+		ICoord2D s;
+		Coord3D head = *pos;
+		head.z += members[ i ].height;
+		if( TheTacticalView->worldToScreen( &head, &s ) )
+			topY = MIN( topY, s.y );
+		const Real ex = pos->x - eye.x;
+		const Real ey = pos->y - eye.y;
+		const Real away = (Real)sqrt( ex * ex + ey * ey );
+		if( away > 1.0f )
+		{
+			const Real r = MAX( SQUAD_BAR_RING_MIN, members[ i ].radius + SQUAD_BAR_RING_MARGIN );
+			Coord3D rim = *pos;
+			rim.x += ex / away * r;
+			rim.y += ey / away * r;
+			if( TheTacticalView->worldToScreen( &rim, &s ) )
+				topY = MIN( topY, s.y );
+		}
+	}
+	screenCentre.x = mid.x;
+	screenCentre.y = topY - (Int)( SQUAD_BAR_CLEARANCE * TheUIScale() );
+
+	Real spread = 0.0f;
+	for( Int i = 0; i < count; ++i )
+	{
+		const Real dx = members[ i ].pos.x - centre.x;
+		const Real dy = members[ i ].pos.y - centre.y;
+		spread = MAX( spread, (Real)sqrt( dx * dx + dy * dy ) + members[ i ].radius );
+	}
+
+	// the group's width as the camera sees it, from the wider of the two ground axes
+	span = 0.0f;
+	ICoord2D alongX, alongY;
+	Coord3D edge = centre;
+	edge.x += spread;
+	if( !TheTacticalView->worldToScreen( &edge, &alongX ) )
+		return TRUE;
+	edge.x = centre.x;
+	edge.y += spread;
+	if( !TheTacticalView->worldToScreen( &edge, &alongY ) )
+		return TRUE;
+	const Real spanX = (Real)sqrt( (Real)( ( alongX.x - mid.x ) * ( alongX.x - mid.x ) + ( alongX.y - mid.y ) * ( alongX.y - mid.y ) ) );
+	const Real spanY = (Real)sqrt( (Real)( ( alongY.x - mid.x ) * ( alongY.x - mid.x ) + ( alongY.y - mid.y ) * ( alongY.y - mid.y ) ) );
+	span = 2.0f * MAX( spanX, spanY );
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 {
 
@@ -3408,12 +3683,16 @@ static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 	if( obj == NULL )
 		return FALSE;
 
-	Coord3D p;
-	obj->getHealthBoxPosition(p);
-	p.z += healthBarArtLift( obj );
 	ICoord2D screenCenter;
-	if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
-		return FALSE;
+	Real squadSpan = 0.0f;
+	if( !( obj->isKindOf( KINDOF_MOB_NEXUS ) && squadBarPlace( obj->getID(), screenCenter, squadSpan ) ) )
+	{
+		Coord3D p;
+		obj->getHealthBoxPosition(p);
+		p.z += healthBarArtLift( obj );
+		if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
+			return FALSE;
+	}
 
 	Real healthBoxWidth, healthBoxHeight;
 	if (!obj->getHealthBoxDimensions(healthBoxHeight, healthBoxWidth))
@@ -3445,6 +3724,7 @@ static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 	//
 	const Real uiScale = TheUIScale();
 	healthBoxWidth *= uiScale;
+	healthBoxWidth = MAX( healthBoxWidth, MIN( squadSpan, SQUAD_BAR_MAX_WIDTH * healthBoxWidth ) );
 
 	// do this so health bar doesn't get too skinny or fat after scaling
 	//healthBoxHeight = max(3.0f, healthBoxHeight);

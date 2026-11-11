@@ -70,6 +70,8 @@
 #include <vector>
 
 class SegmentedLineClass;
+class Player;
+class Object;
 
 class W3DWaypointBuffer 
 {	
@@ -85,22 +87,65 @@ public:
 
 
 private:
-	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE, DRAW_OUTLINE_WHITE, DRAW_OUTLINE_RED };
+	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE, DRAW_OUTLINE_WHITE, DRAW_OUTLINE_RED, DRAW_RING, DRAW_RING_GLOW };
 	struct WaypointDraw
 	{
 		DrawKind kind;
 		Bool orderHint;		///< not in the water's mirror pass
 		Int first;
 		Int count;
+		Vector3 color;		///< DRAW_RING and DRAW_RING_GLOW only: colour, ribbon width and opacity
+		Real width;
+		Real opacity;
 	};
 	void record( DrawKind kind, Bool orderHint, Int count, const Vector3 *points );
+	void recordRing( DrawKind kind, Int count, const Vector3 *points, const Vector3& color, Real width, Real opacity );
+
+	/** One selected unit's circle on the ground; the selection's circles are drawn as their union */
+	struct SelectionCircle
+	{
+		Real x, y, r;
+		Real waterZ;							///< the water's surface when the unit stands in water, else a floor far below
+		PathfindLayerEnum layer;
+		Vector3 color;
+		Real pulse;								///< seconds since the unit was ordered to attack, negative when not lately
+	};
+	void takeRingView( void );
+	void takeSelectionRings( void );
+	Bool insideOtherCircle( Int self, Real x, Real y ) const;
+	///< m_ringPoints as a closed loop, without a crack where its ends meet, and an attack order's rising copies
+	void recordRingLoop( const Vector3& color, Real pulse = -1.0f, Bool withGlow = TRUE, Bool withLine = TRUE );
+	Real ringGroundZ( const SelectionCircle& c, Real x, Real y ) const;
+	///< the additive glow under it, then the line, bevelled and cut to length
+	void recordRingLine( Int count, const Vector3 *points, const Vector3& color, Real alpha = 1.0f, Bool withGlow = TRUE, Bool withLine = TRUE );
+	void addSelectionCircle( const Coord3D& pos, Real radius, PathfindLayerEnum layer, const Vector3& color, Real pulse );
+	void recordStructureOutline( const Object *obj );	///< a selected building's line round its footprint
+	std::vector<Vector3> m_pulsePoints;
+	static Vector3 ringColor( const Player *owner );
+	std::vector<ObjectID> m_selectedNexus;		///< the squads in this picture's selection
+	void recordRingPieces( DrawKind kind, const Vector3& color, Real width, Real opacity, Real behind );
+	Vector3 m_ringCamera;											///< the eye at the sync point; the glow lies behind the line along its rays
+	std::vector<Vector3> m_cleanPoints;
+	std::vector<Vector3> m_bevelPoints;
+	std::vector<Vector3> m_piecePoints;
+	std::vector<SelectionCircle> m_circles;		///< this picture's selection circles
+	std::vector<Int> m_circleNear;						///< for each circle, the circles it overlaps, at m_circleNearFirst
+	std::vector<Int> m_circleNearFirst;
+	std::vector<Vector3> m_ringPoints;
+	std::vector<Bool> m_ringInside;						///< per sample of the circle being traced: under another circle
+	std::vector<Vector3> m_runPoints;					///< every circle's uncovered arcs, end to end
+	std::vector<Int> m_runFirst;							///< where each arc starts in m_runPoints
+	std::vector<Int> m_runCircle;							///< whose arc it is
+	std::vector<Bool> m_runUsed;							///< already joined into a loop
+	std::vector<Vector3> m_loopPoints;
+	Real m_ringWidthScale;
 
 	std::vector<WaypointDraw> m_draws;		///< this picture's pucks and lines, in the order they render
 	std::vector<Vector3> m_drawPoints;
 
   void setDefaultLineStyle();
 	void setLineStyle( SegmentedLineClass *line, DrawKind kind );	///< an order line's laser, or a building outline's solid colour
-	void queueLine( Int numPoints, Vector3 *points, DrawKind kind );	///< hand the points to a pooled line object (not rendered yet)
+	void queueLine( const WaypointDraw& draw, Vector3 *points );	///< hand the points to a pooled line object (not rendered yet)
 	void renderQueuedLines( RenderInfoClass &rinfo );			///< render every queued line; all stay deferred on the static sort list together
 
 	RenderObjClass *m_waypointNodeRobj;

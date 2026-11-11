@@ -55,6 +55,7 @@
 //-----------------------------------------------------------------------------
 #include "W3DDevice/GameClient/W3DWaypointBuffer.h"
 
+#include <algorithm>
 #include <stdio.h>
 #include <string.h>
 #include <assetmgr.h>
@@ -66,9 +67,15 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 
+#include "Common/Player.h"
+#include "Common/PlayerList.h"
+
+#include "GameClient/CinemaDirector.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/PlayerColorScheme.h"
+#include "GameClient/View.h"
 
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
@@ -78,6 +85,7 @@
 
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "W3DDevice/GameClient/W3DSmoothMotion.h"
 
 #include "Platform/SunShadow.h"
 
@@ -114,6 +122,7 @@ W3DWaypointBuffer::W3DWaypointBuffer(void)
 
 	m_texture = WW3DAssetManager::Get_Instance()->Get_Texture( "EXLaser.tga" );
 	m_linesUsed = 0;
+	m_ringWidthScale = 1.0f;
 
 
   setDefaultLineStyle();
@@ -141,22 +150,49 @@ W3DWaypointBuffer::~W3DWaypointBuffer(void)
 // coming out of the door. So each line gets its own object and they are rendered together
 // after the last puck, so they all stay deferred.
 //=============================================================================
-void W3DWaypointBuffer::queueLine( Int numPoints, Vector3 *points, DrawKind kind )
+void W3DWaypointBuffer::queueLine( const WaypointDraw& draw, Vector3 *points )
 {
 	if( m_linesUsed >= (Int)m_linePool.size() )
 	{
 		m_linePool.push_back( new SegmentedLineClass( *m_line ) );
 		m_linePoolKinds.push_back( DRAW_LINE );
 	}
-	m_linePoolKinds[ m_linesUsed ] = kind;
+	m_linePoolKinds[ m_linesUsed ] = draw.kind;
 	SegmentedLineClass *line = m_linePool[ m_linesUsed++ ];
-	setLineStyle( line, kind );		// a pooled line may have been an outline last frame
-	line->Set_Points( numPoints, points );
+	setLineStyle( line, draw.kind );		// a pooled line may have been an outline last frame
+	if( draw.kind == DRAW_RING || draw.kind == DRAW_RING_GLOW )
+	{
+		line->Set_Color( draw.color );
+		line->Set_Width( draw.width );
+		line->Set_Opacity( draw.opacity );
+	}
+	// a fading attack pulse has no glow to beat and would leave its full depth behind it, a ring the
+	// occlusion and the haze still see after it faded; only a line at full strength writes depth
+	if( draw.kind == DRAW_RING && draw.opacity >= 1.0f )
+	{
+		// The sorted list orders a line by its world height, triangle by triangle, so nothing says the
+		// glow lands before the line. The line writes depth and the glow lies a little further from the
+		// eye (recordRingLine): drawn after, the glow fails the depth test wherever the line is; drawn
+		// before, the line covers it. Either way the same picture, and both stay late on the sorted
+		// list, over the decals, the water and the occlusion
+		ShaderClass ringShader = ShaderClass::_PresetAlphaShader;
+		ringShader.Set_Depth_Mask( ShaderClass::DEPTH_WRITE_ENABLE );
+		line->Set_Shader( ringShader );
+	}
+	if( draw.kind == DRAW_RING_GLOW )
+	{
+		// the order line's soft laser across the width, added
+		line->Set_Shader( ShaderClass::_PresetAdditiveShader );
+		line->Set_Texture( m_texture );
+		line->Set_Texture_Mapping_Mode( SegLineRendererClass::TILED_TEXTURE_MAP );
+	}
+	line->Set_Points( draw.count, points );
 }
 
 void W3DWaypointBuffer::renderQueuedLines( RenderInfoClass &rinfo )
 {
-	auto isOutline = [this]( Int i ) { return m_linePoolKinds[ i ] == DRAW_OUTLINE_WHITE || m_linePoolKinds[ i ] == DRAW_OUTLINE_RED; };
+	// a selection ring is paint like a building's outline, and takes no light either
+	auto isOutline = [this]( Int i ) { return m_linePoolKinds[ i ] == DRAW_OUTLINE_WHITE || m_linePoolKinds[ i ] == DRAW_OUTLINE_RED || m_linePoolKinds[ i ] == DRAW_RING || m_linePoolKinds[ i ] == DRAW_RING_GLOW; };
 
 	for( Int i = 0; i < m_linesUsed; ++i )
 		if( !isOutline( i ) )
@@ -196,7 +232,7 @@ void W3DWaypointBuffer::setDefaultLineStyle( void )
 
 void W3DWaypointBuffer::setLineStyle( SegmentedLineClass *line, DrawKind kind )
 {
-	if( kind == DRAW_OUTLINE_WHITE || kind == DRAW_OUTLINE_RED )
+	if( kind == DRAW_OUTLINE_WHITE || kind == DRAW_OUTLINE_RED || kind == DRAW_RING || kind == DRAW_RING_GLOW )
 	{
 		// A building's outline is solid paint, not the order line's additive laser: added to sand, red
 		// came out a pale orange.  It is depth tested like anything else on the ground, so the building
@@ -229,8 +265,19 @@ void W3DWaypointBuffer::record( DrawKind kind, Bool orderHint, Int count, const 
 	draw.orderHint = orderHint;
 	draw.first = (Int)m_drawPoints.size();
 	draw.count = count;
+	draw.color.Set( 1.0f, 1.0f, 1.0f );
+	draw.width = 2.0f;
+	draw.opacity = 0.9f;
 	m_draws.push_back( draw );
 	m_drawPoints.insert( m_drawPoints.end(), points, points + count );
+}
+
+void W3DWaypointBuffer::recordRing( DrawKind kind, Int count, const Vector3 *points, const Vector3& color, Real width, Real opacity )
+{
+	record( kind, TRUE, count, points );
+	m_draws.back().color = color;
+	m_draws.back().width = width;
+	m_draws.back().opacity = opacity;
 }
 
 //=============================================================================
@@ -273,7 +320,9 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 			case DRAW_LINE:
 			case DRAW_OUTLINE_WHITE:
 			case DRAW_OUTLINE_RED:
-				queueLine( it->count, points, it->kind );
+			case DRAW_RING:
+			case DRAW_RING_GLOW:
+				queueLine( *it, points );
 				break;
 			case DRAW_OUTPOST_LINE:
 				m_line->Set_Color( Vector3( 0.95f, 0.5f, 0.0f ) );
@@ -334,28 +383,27 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 		// terrain pass, under the buildings (see queueLine)
 	}
 
-	// The outline round each selected building, and the red one round each building a selected unit
-	// is attacking (InGameUI::updateStructureOutlines decides which, and when a red one blinks)
+	takeRingView();
+
+	// The outline round each selected building (InGameUI::updateStructureOutlines decides which): the
+	// units' thin glowing line in its owner's colour, round its footprint with sharp corners
+	// (recordStructureOutline). EA's red one round a building the selection is attacking is not drawn:
+	// it only ever came of the local player's own attack orders, and the target's model flashing red
+	// (Drawable_flashOrderTargets) says it now
 	{
-		std::vector<Coord3D>& outline = m_outlineTrace;
-		std::vector<Vector3>& points = m_outlinePoints;
 		const std::vector<InGameUI::StructureOutline>& outlines = TheInGameUI->getStructureOutlines();
 		for( std::vector<InGameUI::StructureOutline>::const_iterator it = outlines.begin(); it != outlines.end(); ++it )
 		{
-			if( it->color == InGameUI::OUTLINE_HIDDEN )
+			if( !it->selected )
 				continue;
 			const Object *obj = TheGameLogic->findObjectByID( it->id );
-			if( obj == NULL )
-				continue;
-			InGameUI::traceStructureOutline( obj, outline );
-			if( outline.size() < 2 )
-				continue;
-			points.resize( outline.size() );
-			for( size_t i = 0; i < outline.size(); ++i )
-				points[ i ].Set( outline[ i ].x, outline[ i ].y, outline[ i ].z );
-			record( ( it->color == InGameUI::OUTLINE_RED ) ? DRAW_OUTLINE_RED : DRAW_OUTLINE_WHITE, TRUE, (Int)points.size(), &points[ 0 ] );
+			if( obj != NULL )
+				recordStructureOutline( obj );
 		}
 	}
+
+	// the circle round every other selected unit, merged where they touch
+	takeSelectionRings();
 
 	// Rally points, drawn whenever we are not actively laying down waypoints. This used to be the
 	// else of the block above, which is why turning that block on full time hid every rally line.
@@ -694,6 +742,524 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			}
 		}
 	}
+}
+
+//=============================================================================
+// Selection rings
+//=============================================================================
+// Every selected unit stands in a small circle on the ground, about its own body. Where circles
+// overlap they are drawn as one outline, their union: each circle keeps only the arcs no other
+// circle covers, cut where they cross, and the arcs are joined into closed loops, so a squad of five
+// standing close wears one scalloped blob with its cusps pointing in, not five rings through each
+// other.
+//
+// The line is the building outline's: a thin ribbon on the sorted list, depth tested so a unit's
+// own body hides the part of its circle behind its feet, riding the terrain point by point. Its
+// colour is the owner's pushed to full brightness (the brightest channel at one, the hue kept). A
+// wider additive copy under it, through the order line's soft laser texture, is the glow; it lies a
+// little behind the line, which writes depth, so the two read the same in either order (queueLine).
+// The rim is sampled every world unit, fine enough that no facet shows close up. Widths and the lift follow the camera's
+// height, so the line keeps about the same width on the screen at any zoom. A corner
+// sharper than a right angle is bevelled, since the line mitres every corner without a limit, and a
+// long loop is cut into pieces on straight stretches, since the line caps every 128 points.
+// Buildings keep their rectangle outline.
+//=============================================================================
+static const Real RING_MARGIN = 1.0f;				///< ring radius over the unit's bounding circle
+static const Real RING_MIN_RADIUS = 5.0f;
+static const Real RING_MAX_RADIUS = 80.0f;
+static const Real RING_STEP = 1.0f;					///< world units between two points of a ring
+static const Int RING_MIN_SAMPLES = 48;
+static const Real RING_LIFT = 1.0f;					///< over the ground at the default camera height, times the zoom scale
+static const Real RING_MIN_LIFT = 0.6f;			///< never lower, or the ground pokes through between two points on a bump
+static const Real RING_WIDTH = 0.3f;				///< the line at the default camera height: about two pixels
+static const Real RING_OPACITY = 1.0f;
+static const Real RING_GLOW_WIDTH = 1.4f;		///< the soft additive glow under it
+static const Real RING_GLOW_STRENGTH = 0.5f;	///< the glow's colour, a share of the line's
+static const Real RING_GLOW_BEHIND = 0.4f;	///< how far nearer the eye the line lies than its glow, times the zoom scale
+static const Real RING_BEVEL_COS = -0.17f;	///< a corner turning further than this (about 100 degrees) is bevelled
+static const Int RING_MAX_LINE_POINTS = 120;	///< under the line's 128-point chunk
+static const Real RING_MIN_ZOOM_SCALE = 0.3f;	///< widths and the lift follow the camera's height, so a line keeps
+static const Real RING_MAX_ZOOM_SCALE = 3.0f;	///< about the same width on the screen at any zoom, between these two
+static const Real RING_JOIN_TOLERANCE = 0.25f;	///< two runs whose crossing points are this close are one corner of the outline
+
+// an attack order's pulse: copies of the outline rising off the ground and fading (recordRingLoop)
+static const Int PULSE_COUNT = 2;
+static const Real PULSE_SECONDS = 0.5f;			///< one copy's rise
+static const Real PULSE_GAP = 0.2f;					///< between two copies leaving the ground
+static const Real PULSE_RISE = 14.0f;				///< world units a copy climbs
+static const Real PULSE_OPACITY = 0.9f;			///< a copy's opacity as it leaves, falling to nothing
+
+// a selected building's outline: its footprint grown by InGameUI's OUTLINE_MARGIN
+static const Real STRUCTURE_MARGIN = 6.0f;
+
+/** The selection lines' widths follow the camera's height, and the line sits nearer the eye than its
+		glow; both read off the view at the sync point, before the building outlines and the rings. */
+void W3DWaypointBuffer::takeRingView( void )
+{
+	m_ringWidthScale = MAX( RING_MIN_ZOOM_SCALE, MIN( RING_MAX_ZOOM_SCALE, TheTacticalView->getZoom() ) );
+	const Coord3D& eye = TheTacticalView->get3DCameraPosition();
+	m_ringCamera.Set( eye.x, eye.y, eye.z );
+}
+
+// ponytail: every circle is checked against every other once a frame to find its neighbours, O(n^2)
+// over the selection; a few hundred units is a few ten thousand distance tests. A grid over the
+// circles if a whole-army select ever shows up in a frame's cost.
+void W3DWaypointBuffer::takeSelectionRings( void )
+{
+	m_circles.clear();
+	if( CinemaDirector_hidesHud() )
+		return;
+
+	// A selected squad is drawn from its nexus: its members come from the sync point's copy whether or
+	// not each is selected yet (a squad picked the frame it was made had none selected, and no rings),
+	// and a member that is selected as well is left to it
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	m_selectedNexus.clear();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+		if( (*it)->getObject() && (*it)->getObject()->isKindOf( KINDOF_MOB_NEXUS ) )
+			m_selectedNexus.push_back( (*it)->getObject()->getID() );
+
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Drawable *draw = *it;
+		const Object *obj = draw->getObject();
+		if( obj == NULL || obj->isEffectivelyDead() )
+			continue;
+		const Vector3 color = ringColor( obj->getControllingPlayer() );
+		const Real pulse = Drawable_attackOrderSeconds( draw->getID() );		// an attack order's pulse
+		// the nexus is invisible by design, so its own drawable's hidden flag says nothing: asked first,
+		// it skipped the squad whose members were then left to it, and the squad wore no rings
+		if( obj->isKindOf( KINDOF_MOB_NEXUS ) )
+		{
+			const SquadMemberForDraw *members;
+			const Int n = Drawable_squadMembersForDraw( obj->getID(), &members );
+			for( Int m = 0; m < n; ++m )
+			{
+				const Real memberPulse = Drawable_attackOrderSeconds( members[ m ].drawable );
+				const Real latest = ( pulse < 0.0f ) ? memberPulse : ( memberPulse < 0.0f ) ? pulse : MIN( pulse, memberPulse );
+				addSelectionCircle( members[ m ].pos, members[ m ].radius, members[ m ].layer, color, latest );
+			}
+			continue;
+		}
+		if( obj->isContained() || draw->isDrawableEffectivelyHidden() )
+			continue;
+		// a building wears its outline; an aircraft in the air has the altitude line's ring under it
+		if( obj->isKindOf( KINDOF_STRUCTURE ) || obj->isAirborneTarget() )
+			continue;
+		if( std::find( m_selectedNexus.begin(), m_selectedNexus.end(), obj->getProducerID() ) != m_selectedNexus.end() )
+			continue;
+
+		// where the model is shown, which smooth motion puts a fraction of a tick behind the logic
+		// (not on a picture a whole tick behind, which captured nothing: W3DView's smoothLock)
+		Coord3D pos = *draw->getPosition();
+		if( TheSmoothMotionActive && TheSmoothMotionAlpha < 1.0f )
+			draw->getSmoothMotionPosition( TheSmoothMotionAlpha, &pos );
+		addSelectionCircle( pos, obj->getGeometryInfo().getBoundingCircleRadius(), obj->getLayer(), color, pulse );
+	}
+	if( m_circles.empty() )
+		return;
+
+	const Int count = (Int)m_circles.size();
+	m_circleNear.clear();
+	m_circleNearFirst.resize( count + 1 );
+	for( Int i = 0; i < count; ++i )
+	{
+		m_circleNearFirst[ i ] = (Int)m_circleNear.size();
+		for( Int j = 0; j < count; ++j )
+		{
+			if( j == i || m_circles[ j ].layer != m_circles[ i ].layer )
+				continue;		// a unit on a bridge and one on the ground under it keep their own circles
+			const Real dx = m_circles[ j ].x - m_circles[ i ].x;
+			const Real dy = m_circles[ j ].y - m_circles[ i ].y;
+			const Real reach = m_circles[ i ].r + m_circles[ j ].r;
+			if( dx * dx + dy * dy < reach * reach )
+				m_circleNear.push_back( j );
+		}
+	}
+	m_circleNearFirst[ count ] = (Int)m_circleNear.size();
+
+	m_runPoints.clear();
+	m_runFirst.clear();
+	m_runCircle.clear();
+
+	for( Int i = 0; i < count; ++i )
+	{
+		const SelectionCircle& c = m_circles[ i ];
+		const Int samples = MAX( RING_MIN_SAMPLES, (Int)ceil( 2.0f * PI * c.r / RING_STEP ) );
+		const Real step = 2.0f * PI / samples;
+		auto ringPoint = [&]( Int k ) -> Vector3
+		{
+			const Real x = c.x + c.r * (Real)Cos( step * k );
+			const Real y = c.y + c.r * (Real)Sin( step * k );
+			return Vector3( x, y, ringGroundZ( c, x, y ) );
+		};
+
+		Int firstInside = -1;
+		m_ringInside.resize( samples );
+		for( Int k = 0; k < samples; ++k )
+		{
+			const Real a = step * k;
+			m_ringInside[ k ] = insideOtherCircle( i, c.x + c.r * (Real)Cos( a ), c.y + c.r * (Real)Sin( a ) );
+			if( m_ringInside[ k ] && firstInside < 0 )
+				firstInside = k;
+		}
+
+		if( firstInside < 0 )
+		{
+			// nothing covers any of it: the whole circle is a loop of its own
+			m_ringPoints.clear();
+			for( Int k = 0; k < samples; ++k )
+				m_ringPoints.push_back( ringPoint( k ) );
+			recordRingLoop( c.color, c.pulse );
+		}
+		else
+		{
+			// Walk once round from a covered sample, so every uncovered run is met whole. A run starts
+			// and ends where this circle crosses into another, found by halving the step between the
+			// samples either side of it, so the arcs of two circles meet in one point with no gap. The
+			// runs are joined into the outline's loops below.
+			for( Int t = 1; t <= samples; ++t )
+			{
+				const Int k = ( firstInside + t ) % samples;
+				const Int prev = ( firstInside + t - 1 ) % samples;
+				const Real a = step * ( firstInside + t );
+				if( m_ringInside[ k ] == m_ringInside[ prev ] )
+				{
+					if( !m_ringInside[ k ] )
+						m_runPoints.push_back( ringPoint( firstInside + t ) );
+					continue;
+				}
+
+				Real inA = a - step, outA = a;		// the covered end and the open end of this step
+				if( m_ringInside[ k ] )
+				{
+					inA = a;
+					outA = a - step;
+				}
+				for( Int n = 0; n < 8; ++n )
+				{
+					const Real mid = ( inA + outA ) * 0.5f;
+					if( insideOtherCircle( i, c.x + c.r * (Real)Cos( mid ), c.y + c.r * (Real)Sin( mid ) ) )
+						inA = mid;
+					else
+						outA = mid;
+				}
+				const Real x = c.x + c.r * (Real)Cos( outA );
+				const Real y = c.y + c.r * (Real)Sin( outA );
+				if( !m_ringInside[ k ] )
+				{
+					// out of another circle: a run starts here
+					m_runFirst.push_back( (Int)m_runPoints.size() );
+					m_runCircle.push_back( i );
+				}
+				m_runPoints.push_back( Vector3( x, y, ringGroundZ( c, x, y ) ) );
+				if( !m_ringInside[ k ] )
+					m_runPoints.push_back( ringPoint( firstInside + t ) );	// and goes on to this sample
+				// into another circle: the run ends on the crossing just pushed
+			}
+		}
+	}
+
+	// Join the runs into the outline's loops. Every run is walked the same way round its circle, so
+	// where one ends going into a circle the next one along the outline starts coming out of it, at
+	// the same crossing: one loop through every cusp, mitred there by the line instead of two butt
+	// ends overshooting each other.
+	const Int runs = (Int)m_runCircle.size();
+	m_runFirst.push_back( (Int)m_runPoints.size() );
+	m_runUsed.assign( runs, FALSE );
+	const Real joinSq = RING_JOIN_TOLERANCE * RING_JOIN_TOLERANCE;
+	auto apartSq = []( const Vector3& a, const Vector3& b ) { return ( a.X - b.X ) * ( a.X - b.X ) + ( a.Y - b.Y ) * ( a.Y - b.Y ); };
+	for( Int r = 0; r < runs; ++r )
+	{
+		if( m_runUsed[ r ] )
+			continue;
+		m_runUsed[ r ] = TRUE;
+		m_ringPoints.assign( m_runPoints.begin() + m_runFirst[ r ], m_runPoints.begin() + m_runFirst[ r + 1 ] );
+		Real loopPulse = m_circles[ m_runCircle[ r ] ].pulse;		// the most recent order of any unit on the loop
+		Bool closed = FALSE;
+		for( ;; )
+		{
+			// another run going on from here comes first: closing on the start the moment it is near
+			// left a sliver between three circles as a loop of its own, a bright dot
+			const Vector3 end = m_ringPoints.back();
+			Int next = -1;
+			Real best = joinSq;
+			for( Int s = 0; s < runs; ++s )
+			{
+				if( m_runUsed[ s ] )
+					continue;
+				const Real d = apartSq( end, m_runPoints[ m_runFirst[ s ] ] );
+				if( d < best )
+				{
+					best = d;
+					next = s;
+				}
+			}
+			if( next < 0 )
+			{
+				closed = m_ringPoints.size() > 2 && apartSq( end, m_ringPoints.front() ) < joinSq;
+				break;
+			}
+			m_runUsed[ next ] = TRUE;
+			const Real nextPulse = m_circles[ m_runCircle[ next ] ].pulse;
+			if( nextPulse >= 0.0f && ( loopPulse < 0.0f || nextPulse < loopPulse ) )
+				loopPulse = nextPulse;
+			m_ringPoints.insert( m_ringPoints.end(), m_runPoints.begin() + m_runFirst[ next ] + 1, m_runPoints.begin() + m_runFirst[ next + 1 ] );
+		}
+		if( closed )
+		{
+			m_ringPoints.pop_back();		// the crossing it started on
+			recordRingLoop( m_circles[ m_runCircle[ r ] ].color, loopPulse );
+		}
+		else if( m_ringPoints.size() >= 2 )
+			recordRingLine( (Int)m_ringPoints.size(), &m_ringPoints[ 0 ], m_circles[ m_runCircle[ r ] ].color );
+	}
+}
+
+/** m_ringPoints as a closed loop. A line has two ends whatever its points say, and a loop closed on
+		a point left a crack where the two ends' caps met at an angle. So it starts and ends halfway
+		along its first stretch, where both caps square off the same straight piece and meet flush
+		(traceStructureOutline closes a building's outline the same way). */
+void W3DWaypointBuffer::recordRingLoop( const Vector3& color, Real pulse, Bool withGlow, Bool withLine )
+{
+	const Int n = (Int)m_ringPoints.size();
+	if( n < 3 )
+		return;
+	const Vector3 mid = ( m_ringPoints[ 0 ] + m_ringPoints[ 1 ] ) * 0.5f;
+	m_loopPoints.clear();
+	m_loopPoints.push_back( mid );
+	m_loopPoints.insert( m_loopPoints.end(), m_ringPoints.begin() + 1, m_ringPoints.end() );
+	m_loopPoints.push_back( m_ringPoints[ 0 ] );
+	m_loopPoints.push_back( mid );
+	recordRingLine( (Int)m_loopPoints.size(), &m_loopPoints[ 0 ], color, 1.0f, withGlow, withLine );
+
+	// An attack order: copies of the outline rise off the ground and fade, PULSE_COUNT of them
+	// PULSE_GAP apart, so the order reads on the units it went to. Line only, easing out as it climbs
+	if( pulse < 0.0f )
+		return;
+	for( Int p = 0; p < PULSE_COUNT; ++p )
+	{
+		const Real t = ( pulse - p * PULSE_GAP ) / PULSE_SECONDS;
+		if( t < 0.0f || t >= 1.0f )
+			continue;
+		const Real rise = PULSE_RISE * ( 1.0f - ( 1.0f - t ) * ( 1.0f - t ) );
+		m_pulsePoints = m_loopPoints;
+		for( size_t k = 0; k < m_pulsePoints.size(); ++k )
+			m_pulsePoints[ k ].Z += rise;
+		recordRingLine( (Int)m_pulsePoints.size(), &m_pulsePoints[ 0 ], color, PULSE_OPACITY * ( 1.0f - t ), FALSE, TRUE );
+	}
+}
+
+/** Under another selection circle: strictly inside it, so two circles that only touch both keep
+		their edge where they meet. */
+Bool W3DWaypointBuffer::insideOtherCircle( Int self, Real x, Real y ) const
+{
+	for( Int n = m_circleNearFirst[ self ]; n < m_circleNearFirst[ self + 1 ]; ++n )
+	{
+		const SelectionCircle& o = m_circles[ m_circleNear[ n ] ];
+		const Real dx = x - o.x;
+		const Real dy = y - o.y;
+		const Real r = o.r - 0.01f;
+		if( dx * dx + dy * dy < r * r )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/** The height a ring point lies at: the unit's own layer (a bridge's deck, or the ground), or the
+		water's surface when the unit stands in water, lifted clear of it. A deck is not clipped to its
+		edge, so a ring hanging over the side stays at deck height instead of dropping to the riverbed;
+		nor does the water under a bridge pull it down or up. */
+Real W3DWaypointBuffer::ringGroundZ( const SelectionCircle& c, Real x, Real y ) const
+{
+	const Real lift = MAX( RING_MIN_LIFT, RING_LIFT * m_ringWidthScale );
+	if( c.layer != LAYER_GROUND )
+		return TheTerrainLogic->getLayerHeight( x, y, c.layer, NULL, FALSE ) + lift;
+	return MAX( TheTerrainLogic->getLayerHeight( x, y, c.layer ), c.waterZ ) + lift;
+}
+
+/** A circle round one selected unit, at the position it is drawn. A second circle on the same spot
+		and size is dropped: two near-coincident circles each left an open arc and a doubled glow. */
+void W3DWaypointBuffer::addSelectionCircle( const Coord3D& pos, Real radius, PathfindLayerEnum layer, const Vector3& color, Real pulse )
+{
+	SelectionCircle c;
+	c.x = pos.x;
+	c.y = pos.y;
+	c.r = MAX( RING_MIN_RADIUS, MIN( RING_MAX_RADIUS, radius + RING_MARGIN ) );
+	c.layer = layer;
+	c.color = color;
+	c.pulse = pulse;
+	for( size_t i = 0; i < m_circles.size(); ++i )
+	{
+		const SelectionCircle& o = m_circles[ i ];
+		if( fabs( o.x - c.x ) < 0.1f && fabs( o.y - c.y ) < 0.1f && fabs( o.r - c.r ) < 0.1f && o.layer == c.layer )
+			return;
+	}
+	Real waterZ = 0.0f;
+	c.waterZ = TheTerrainLogic->isUnderwater( c.x, c.y, &waterZ ) ? waterZ : -1.0e9f;
+	m_circles.push_back( c );
+}
+
+/** The owner's colour at full brightness: the brightest channel at one, the hue kept. A grey seat
+		comes out white, a navy one bright blue. */
+Vector3 W3DWaypointBuffer::ringColor( const Player *owner )
+{
+	Real red = 1.0f, green = 1.0f, blue = 1.0f, alpha = 1.0f;
+	if( owner )
+		GameGetColorComponentsReal( clientPlayerColor( owner ), &red, &green, &blue, &alpha );
+	const Real brightest = MAX( red, MAX( green, blue ) );
+	if( brightest <= 0.01f )
+		return Vector3( 1.0f, 1.0f, 1.0f );
+	return Vector3( red / brightest, green / brightest, blue / brightest );
+}
+
+void W3DWaypointBuffer::recordRingLine( Int count, const Vector3 *points, const Vector3& color, Real alpha, Bool withGlow, Bool withLine )
+{
+	// A crossing found right on a sample comes out as the same point twice, and the line nudges a
+	// zero-length piece in a direction of its own; one of them goes
+	m_cleanPoints.clear();
+	for( Int k = 0; k < count; ++k )
+	{
+		if( !m_cleanPoints.empty() )
+		{
+			const Vector3& last = m_cleanPoints.back();
+			if( fabs( points[ k ].X - last.X ) < 0.01f && fabs( points[ k ].Y - last.Y ) < 0.01f )
+				continue;
+		}
+		m_cleanPoints.push_back( points[ k ] );
+	}
+	if( m_cleanPoints.size() < 2 )
+		return;
+
+	// The glow is bevelled for its own width, and the line, which writes depth (queueLine), comes
+	// RING_GLOW_BEHIND nearer the eye than it. The line moves rather than the glow: pushed away, the
+	// glow's wide lower edge sank into ground rising toward the camera
+	if( withGlow )
+		recordRingPieces( DRAW_RING_GLOW, color * ( RING_GLOW_STRENGTH * alpha ), RING_GLOW_WIDTH * m_ringWidthScale, 1.0f, 0.0f );
+	if( withLine )
+		recordRingPieces( DRAW_RING, color, RING_WIDTH * m_ringWidthScale, RING_OPACITY * alpha, -RING_GLOW_BEHIND * m_ringWidthScale );
+}
+
+/** m_cleanPoints as one kind of ribbon, bevelled at sharp corners and cut to the line's length. */
+void W3DWaypointBuffer::recordRingPieces( DrawKind kind, const Vector3& color, Real width, Real opacity, Real behind )
+{
+	const Int count = (Int)m_cleanPoints.size();
+	const Vector3 *points = &m_cleanPoints[ 0 ];
+
+	// Bevel every corner turning further than RING_BEVEL_COS, where two circles meet: the point
+	// becomes two, a little way back along each side, so the turn is taken in two halves and neither
+	// mitre runs out into a spike. Half the ribbon's width, never more than a third of either side.
+	const Real bevel = 0.5f * width;
+	m_bevelPoints.clear();
+	m_bevelPoints.push_back( points[ 0 ] );
+	for( Int k = 1; k + 1 < count; ++k )
+	{
+		Vector3 in = points[ k ] - points[ k - 1 ];
+		Vector3 out = points[ k + 1 ] - points[ k ];
+		const Real inLength = in.Length();
+		const Real outLength = out.Length();
+		if( inLength > 0.001f && outLength > 0.001f )
+		{
+			const Real turnCos = ( in.X * out.X + in.Y * out.Y ) / ( (Real)sqrt( in.X * in.X + in.Y * in.Y ) * (Real)sqrt( out.X * out.X + out.Y * out.Y ) + 0.0001f );
+			if( turnCos < RING_BEVEL_COS )
+			{
+				m_bevelPoints.push_back( points[ k ] - in * ( MIN( bevel, inLength / 3.0f ) / inLength ) );
+				m_bevelPoints.push_back( points[ k ] + out * ( MIN( bevel, outLength / 3.0f ) / outLength ) );
+				continue;
+			}
+		}
+		m_bevelPoints.push_back( points[ k ] );
+	}
+	m_bevelPoints.push_back( points[ count - 1 ] );
+
+	// moved along the eye ray, away for a positive behind and toward for a negative: the same pixels
+	if( behind != 0.0f )
+	{
+		for( size_t k = 0; k < m_bevelPoints.size(); ++k )
+		{
+			Vector3 away = m_bevelPoints[ k ] - m_ringCamera;
+			const Real length = away.Length();
+			if( length > 0.0f )
+				m_bevelPoints[ k ] += away * ( behind / length );
+		}
+	}
+
+	// Cut a long line into pieces of at most RING_MAX_LINE_POINTS, each ending and the next starting
+	// halfway along the same stretch, so their caps meet flush (recordRingLoop's seam, again)
+	const Int total = (Int)m_bevelPoints.size();
+	Int first = 0;
+	while( first < total - 1 )
+	{
+		Int last = MIN( total - 1, first + RING_MAX_LINE_POINTS - 2 );
+		m_piecePoints.clear();
+		if( first > 0 )
+			m_piecePoints.push_back( ( m_bevelPoints[ first - 1 ] + m_bevelPoints[ first ] ) * 0.5f );
+		for( Int k = first; k < last; ++k )
+			m_piecePoints.push_back( m_bevelPoints[ k ] );
+		if( last == total - 1 )
+			m_piecePoints.push_back( m_bevelPoints[ last ] );
+		else
+			m_piecePoints.push_back( ( m_bevelPoints[ last - 1 ] + m_bevelPoints[ last ] ) * 0.5f );
+		recordRing( kind, (Int)m_piecePoints.size(), &m_piecePoints[ 0 ], color, width, opacity );
+		first = last;
+	}
+}
+
+/** A selected building's outline: the units' thin glowing line in its owner's colour round its
+		footprint grown by STRUCTURE_MARGIN, a rectangle for a box and a circle for a round one, a point
+		every RING_STEP so it rides the ground. A rectangle's corners turn a right angle, under
+		RING_BEVEL_COS, so they are mitred sharp and never bevelled. */
+void W3DWaypointBuffer::recordStructureOutline( const Object *obj )
+{
+	const GeometryInfo& geom = obj->getGeometryInfo();
+	const Coord3D *ctr = obj->getPosition();
+
+	SelectionCircle ground;		// for the ground's height under each point
+	ground.x = ctr->x;
+	ground.y = ctr->y;
+	ground.r = 0.0f;
+	ground.layer = obj->getLayer();
+	ground.waterZ = -1.0e9f;
+	ground.pulse = -1.0f;
+	ground.color = ringColor( obj->getControllingPlayer() );
+	auto push = [&]( Real x, Real y )
+	{
+		m_ringPoints.push_back( Vector3( x, y, ringGroundZ( ground, x, y ) ) );
+	};
+
+	m_ringPoints.clear();
+	if( geom.getGeomType() == GEOMETRY_BOX )
+	{
+		const Real c = (Real)Cos( obj->getOrientation() );
+		const Real s = (Real)Sin( obj->getOrientation() );
+		const Real a = geom.getMajorRadius() + STRUCTURE_MARGIN;
+		const Real b = geom.getMinorRadius() + STRUCTURE_MARGIN;
+		const Real signX[ 4 ] = { -1.0f, 1.0f, 1.0f, -1.0f };
+		const Real signY[ 4 ] = { 1.0f, 1.0f, -1.0f, -1.0f };
+		Coord2D corners[ 4 ];
+		for( Int i = 0; i < 4; ++i )
+		{
+			corners[ i ].x = ctr->x + signX[ i ] * a * c - signY[ i ] * b * s;
+			corners[ i ].y = ctr->y + signX[ i ] * a * s + signY[ i ] * b * c;
+		}
+		for( Int i = 0; i < 4; ++i )
+		{
+			const Coord2D& p = corners[ i ];
+			const Coord2D& q = corners[ ( i + 1 ) % 4 ];
+			const Real ex = q.x - p.x, ey = q.y - p.y;
+			const Int pieces = MAX( 1, (Int)ceil( (Real)sqrt( ex * ex + ey * ey ) / RING_STEP ) );
+			for( Int k = 0; k < pieces; ++k )
+				push( p.x + ex * k / pieces, p.y + ey * k / pieces );
+		}
+	}
+	else
+	{
+		const Real r = geom.getMajorRadius() + STRUCTURE_MARGIN;
+		const Int samples = MAX( RING_MIN_SAMPLES, (Int)ceil( 2.0f * PI * r / RING_STEP ) );
+		for( Int k = 0; k < samples; ++k )
+			push( ctr->x + r * (Real)Cos( 2.0f * PI * k / samples ), ctr->y + r * (Real)Sin( 2.0f * PI * k / samples ) );
+	}
+	recordRingLoop( ground.color );
 }
 
 

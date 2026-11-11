@@ -11,6 +11,7 @@ found and fixed, EA's own, not port damage.**
 ## Squads, and orders you can see land
 
 - The American Barracks trains a Ranger Squad and a Missile Defender Squad beside the single soldiers, five men trained as one unit the way Command and Conquer 3 does it. A click on any of them picks the whole squad, it wears one health bar for all five, and it costs and trains like one soldier, each man firing a fifth of the soldier's gun. A squad loses firepower as its men fall and a dead man is never replaced. The generals' Barracks keep EA's lists. This is a first cut and its balance is still being measured.
+- Every selected unit stands in a thin glowing circle in its owner's colour, and where circles touch they merge into one outline, so a squad of five standing close wears one scalloped ring and not five rings through each other. A selected building gets the same line traced round its footprint. Give an attack order and the ordered units' rings pulse up off the ground; the unit or building you aimed at, or the one you sent them into, flashes red twice the instant the click lands. EA's red box round a building under your attack is gone, since the flash says it now.
 
 ## A general's rank goes to ten
 

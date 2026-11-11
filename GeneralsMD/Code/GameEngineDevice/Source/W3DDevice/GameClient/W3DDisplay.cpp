@@ -2464,6 +2464,7 @@ static void takeReadsForRender( Bool renders )
 	// clock, each drawable's look (after the views' update eased its fades) and the players the control
 	// bar's painters ask
 	TheGameClient->takeFrameForDraw();
+	Drawable_flashOrderTargets();		// before the looks are taken, so a flash shows in this picture
 	for( Drawable *draw = TheGameClient->firstDrawable(); draw; draw = draw->getNextDrawable() )
 	{
 		// flushes the conditions the client set; inside the window the scene's dirty walk is a no-op
@@ -2473,6 +2474,8 @@ static void takeReadsForRender( Bool renders )
 	W3DControlBar_takeReadsForRender();
 	if( !renders || TheGlobalData->m_breakTheMovie || TheGlobalData->m_disableRender )
 		return;
+	// the squads' members for their health bars and selection rings, at the positions they are shown
+	Drawable_takeSquadsForRender( TheSmoothMotionActive && TheSmoothMotionAlpha < 1.0f, TheSmoothMotionAlpha );
 	for( View *view = TheDisplay->getFirstView(); view; view = TheDisplay->getNextView( view ) )
 		static_cast<W3DView *>( view )->recordPostDraw();
 	TheInGameUI->recordDraw();

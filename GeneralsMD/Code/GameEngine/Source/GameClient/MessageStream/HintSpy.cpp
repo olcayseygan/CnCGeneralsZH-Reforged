@@ -125,7 +125,13 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 		// the target flashes, and each unit's line points at it before logic runs the order
 		// (InGameUI::predictOrderHints).  The attack circle and line name their attacker and are
 		// always queued, so they draw no line early
+		// Every attack order, the moving kind and the forced kinds too, also sets each ordered unit's
+		// selection ring pulsing (Drawable_noteAttackOrder), so the order reads on the units themselves,
+		// and an order aimed at something makes that target's outline blink (Drawable_noteOrderTarget)
 		case GameMessage::MSG_DO_ATTACK_OBJECT:
+			Drawable_noteAttackOrder();
+			if( msg->getArgumentCount() == 1 )
+				Drawable_noteOrderTarget( msg->getArgument( 0 )->objectID );
 			TheInGameUI->createAttackHint( msg );
 			if( !queued && msg->getArgumentCount() == 1 )
 				TheInGameUI->predictOrderHints( InGameUI::ORDER_HINT_ATTACK, NULL, msg->getArgument( 0 )->objectID );
@@ -133,11 +139,14 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 
 		//-----------------------------------------------------------------------------
 		case GameMessage::MSG_DO_FORCE_ATTACK_GROUND:
+			Drawable_noteAttackOrder();
 			TheInGameUI->createForceAttackHint( msg );
 			if( !queued )
 				TheInGameUI->predictOrderHints( InGameUI::ORDER_HINT_ATTACK_GROUND, &msg->getArgument( 0 )->location, INVALID_ID );
 			break;
 		case GameMessage::MSG_DO_FORCE_ATTACK_OBJECT:
+			Drawable_noteAttackOrder();
+			Drawable_noteOrderTarget( msg->getArgument( 0 )->objectID );
 			TheInGameUI->createForceAttackHint( msg );
 			if( !queued )
 				TheInGameUI->predictOrderHints( InGameUI::ORDER_HINT_FORCE_ATTACK, NULL, msg->getArgument( 0 )->objectID );
@@ -151,6 +160,8 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 
 		//-----------------------------------------------------------------------------
 		case GameMessage::MSG_ENTER:
+			if( msg->getArgumentCount() >= 2 )
+				Drawable_noteOrderTarget( msg->getArgument( 1 )->objectID );		// what is entered (CommandXlat)
 			TheInGameUI->createGarrisonHint( msg );
 			break;
 
@@ -160,6 +171,8 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 		case GameMessage::MSG_DO_ATTACKMOVETO:
 		case GameMessage::MSG_DO_FORCEMOVETO:
 		case GameMessage::MSG_ADD_WAYPOINT:
+			if( msg->getType() == GameMessage::MSG_DO_ATTACKMOVETO )
+				Drawable_noteAttackOrder();
 			TheInGameUI->createMoveHint( msg );
 			if( !queued )
 			{
@@ -184,6 +197,7 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 			}
 			break;
 		case GameMessage::MSG_DO_FORMATION_ATTACKMOVETO:
+			Drawable_noteAttackOrder();
 			if( !queued )
 			{
 				TheInGameUI->armOrderRings( InGameUI::ORDER_HINT_ATTACK_MOVE );

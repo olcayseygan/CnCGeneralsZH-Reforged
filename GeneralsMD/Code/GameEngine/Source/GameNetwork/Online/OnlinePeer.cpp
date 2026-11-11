@@ -138,6 +138,8 @@ void OnlineSession::forgetAccount()
 {
 	authed = FALSE;
 	peerLoggedIn = FALSE;
+	replayedMatch = matchId;		// the account's match is gone with it: no replay goes up under it after a new login
+	quickMatch.clear();
 	id = 0;
 	nick.clear();
 	token.clear();
@@ -172,6 +174,8 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	capture = lines;
 	matchId.clear();
 	reportedMatch.clear();
+	replayedMatch.clear();
+	quickMatch.clear();
 	resultLine.clear();
 	result.clear();
 	motd.clear();
@@ -812,6 +816,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	else if (t == "game.start")
 	{
 		matchId = m.getString( "match" );
+		quickMatch.clear();		// a custom game: its replay stays home
 		hostLeftGame = 0;
 		hostLeftPumps = 0;
 		present.clear();
@@ -830,6 +835,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			// the opponent dropped in the reveal (searching again), or we left: nothing starts
 			DEBUG_LOG(("ONLINE REVEAL cancelled status=%s\n", st.c_str()));
 			revealing = FALSE;
+			quickMatch.clear();
 		}
 		PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_QUICKMATCHSTATUS );
 		r.qmStatus.poolSize = (Int)m.getInt( "pool" );
@@ -844,6 +850,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	else if (t == "qm.matched")
 	{
 		matchId = m.getString( "match" );
+		quickMatch = matchId;		// the one match whose replay may go up, claimed by the recording it starts
 		rememberVips( *this, m );
 		const std::vector<OnlineMessage> opponents = m.getObjects( "opponents" );
 		for (size_t i = 0; i < opponents.size(); ++i)
@@ -1037,6 +1044,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		return;
 
 	case PeerRequest::PEERREQUEST_CREATESTAGINGROOM:
+		s.quickMatch.clear();		// a custom game next: a Quick Match that never started is gone
 		leaveGame( s );
 		leaveChatRoom( s );
 		s.hosting = TRUE;
@@ -1092,6 +1100,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		return;
 
 	case PeerRequest::PEERREQUEST_JOINSTAGINGROOM:
+		s.quickMatch.clear();
 		leaveGame( s );
 		leaveChatRoom( s );
 		s.joiningGame = req.stagingRoom.id;
@@ -1127,6 +1136,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 
 	case PeerRequest::PEERREQUEST_STARTQUICKMATCH:
 		{
+			s.quickMatch.clear();
 			leaveGame( s );
 			leaveChatRoom( s );
 			std::vector<long long> maps;
@@ -1152,6 +1162,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 	case PeerRequest::PEERREQUEST_STOPQUICKMATCH:
 		// a reveal ends with our leaving, whatever the server's qm.status says on its way back
 		s.revealing = FALSE;
+		s.quickMatch.clear();
 		m.setString( "t", "qm.leave" );
 		s.send( m );
 		return;

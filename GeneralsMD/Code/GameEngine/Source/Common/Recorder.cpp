@@ -46,6 +46,9 @@
 #include "GameNetwork/GameMessageParser.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/NetworkUtil.h"
+#include "GameNetwork/Online/OnlineQueues.h"
+
+#include <string>
 #include "GameLogic/GameLogic.h"
 #include "Common/RandomValue.h"
 #include "Common/CRCDebug.h"
@@ -78,6 +81,11 @@ static const UnsignedInt disconOffset = quitEarlyOffset + sizeof(Bool);
 	 reset drain it before anything reads or copies the file, and crash paths flush it before _exit.
 	 A process killed outright loses the last second of commands. */
 static FileWriteQueue theReplayQueue;
+
+/* The Quick Match the recording under way belongs to, which gets the file when stopRecording closes it.
+	 Set only by startRecording for an internet game, and empty for a custom one; init (and so every reset
+	 and playback) clears it, so a skirmish, a LAN game or a replay watched later never goes out under it. */
+static std::string theOnlineMatch;
 
 template <typename T> static void replayWrite(const T &value)
 {
@@ -402,6 +410,7 @@ void RecorderClass::init() {
 	m_gameInfo.setSeed(GetGameLogicRandomSeed());
 	m_wasDesync = FALSE;
 	m_doingAnalysis = FALSE;
+	theOnlineMatch.clear();
 }
 
 /**
@@ -548,6 +557,8 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	}
 	theReplayQueue.start(m_file);
 	theReplayQueue.write("GENREP", 6);
+	if (originalGameMode == GAME_INTERNET)
+		theOnlineMatch = OnlineClaimQuickMatch().str();
 
 	//
 	// save space for stats to be filled in.
@@ -706,6 +717,11 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 void RecorderClass::stopRecording() {
 	logGameEnd();
 	theReplayQueue.stop();		// all of it on disk: cleanUpReplayFile and archiveReplay copy the file
+	AsciiString onlinePath;		// stays empty for a desynced recording: the match is used up, nothing sent
+	const std::string onlineMatch = m_mode == RECORDERMODETYPE_RECORD ? theOnlineMatch : std::string();
+	if (!onlineMatch.empty() && m_file != NULL && !m_wasDesync)
+		onlinePath.format("%s%s", getReplayDir().str(), m_fileName.str());
+	theOnlineMatch.clear();
 	if (TheNetwork)
 	{
 		//if (TheLAN)
@@ -722,6 +738,8 @@ void RecorderClass::stopRecording() {
 		if (TheGlobalData->m_archiveReplays)
 			archiveReplay(m_fileName);
 	}
+	if (!onlineMatch.empty())
+		OnlineSendReplay(onlineMatch.c_str(), onlinePath);	// after the fclose: the whole file, read back from disk
 	m_fileName.clear();
 }
 

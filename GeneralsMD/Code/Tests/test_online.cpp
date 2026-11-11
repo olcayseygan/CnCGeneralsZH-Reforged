@@ -24,6 +24,7 @@
 #include "GameNetwork/GameInfo.h"
 
 #include <chrono>
+#include <stdio.h>
 #include <string>
 #include <thread>
 #include <vector>
@@ -1593,6 +1594,101 @@ TEST(online_adapter_leaves_the_chat_room_for_a_staging_room)
 	leave.peerRequestType = PeerRequest::PEERREQUEST_LEAVEGROUPROOM;
 	rig.peer->addRequest( leave );
 	CHECK_EQ( rig.sent.size(), (size_t)0 );		// already out
+}
+
+static std::string unbase64( const std::string &in )
+{
+	std::string out;
+	UnsignedInt acc = 0;
+	int bits = 0;
+	for (size_t i = 0; i < in.size() && in[i] != '='; ++i)
+	{
+		const char c = in[i];
+		int v = c >= 'A' && c <= 'Z' ? c - 'A' : c >= 'a' && c <= 'z' ? c - 'a' + 26
+			: c >= '0' && c <= '9' ? c - '0' + 52 : c == '+' ? 62 : c == '/' ? 63 : -1;
+		if (v < 0)
+			return "<bad digit>";
+		acc = (acc << 6) | (UnsignedInt)v;
+		bits += 6;
+		if (bits >= 8)
+		{
+			bits -= 8;
+			out += (char)((acc >> bits) & 0xFF);
+		}
+	}
+	return out;
+}
+
+/* A Quick Match's replay goes up in order, 4096 bytes a line, once, and only while logged in; a custom
+	 game's never does. */
+TEST(online_replay_chunks_and_goes_once)
+{
+	AdapterRig rig;
+	const char *path = "test_online_replay.tmp";
+	std::string bytes;
+	for (int i = 0; i < 2 * ONLINE_REPLAY_CHUNK + 5; ++i)
+		bytes += (char)(i * 7 + (i >> 8));
+	FILE *f = fopen( path, "wb" );
+	CHECK( f != NULL );
+	if (!f)
+		return;
+	fwrite( bytes.data(), 1, bytes.size(), f );
+	fclose( f );
+
+	OnlineSession::get().matchId = "m9";
+	OnlineSendReplay( "m9", path );		// not logged in: nothing, and the match is used up
+	CHECK_EQ( rig.sent.size(), (size_t)0 );
+
+	rig.login();
+
+	// a custom game: game.start leaves nothing to claim
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"c1\"}" );
+	rig.peerResponses();
+	CHECK_STR( OnlineClaimQuickMatch().str(), "" );
+	OnlineSendReplay( "", path );
+	CHECK_EQ( rig.sent.size(), (size_t)0 );
+
+	// a Quick Match cancelled in the reveal uses its id up
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q9\",\"revealMs\":3000}" );
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"searching\"}" );
+	rig.peerResponses();
+	CHECK_STR( OnlineClaimQuickMatch().str(), "" );
+
+	// a Quick Match: its recording claims the id, and only that one
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"m10\"}" );
+	rig.peerResponses();
+	rig.sent.clear();
+	const AsciiString claimed = OnlineClaimQuickMatch();
+	CHECK_STR( claimed.str(), "m10" );
+	CHECK_STR( OnlineClaimQuickMatch().str(), "" );		// a second recording under m10 gets nothing
+	OnlineSendReplay( claimed.str(), path );
+	CHECK_EQ( rig.sent.size(), (size_t)3 );
+	std::string joined;
+	for (size_t i = 0; i < rig.sent.size(); ++i)
+	{
+		const OnlineMessage &m = rig.sent[i];
+		CHECK_STR( m.type().c_str(), "replay" );
+		CHECK_STR( m.getString( "match" ).c_str(), "m10" );
+		CHECK_EQ( m.getInt( "seq", -1 ), (long long)i );
+		CHECK( m.getBool( "last" ) == (i + 1 == rig.sent.size()) );
+		std::string line;
+		CHECK( m.toLine( line ) && line.size() <= ONLINE_MAX_LINE );
+		joined += unbase64( m.getString( "data" ) );
+	}
+	CHECK( joined == bytes );
+
+	rig.sent.clear();
+	OnlineSendReplay( claimed.str(), path );		// the score screen closing it again
+	CHECK_EQ( rig.sent.size(), (size_t)0 );
+
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"m11\"}" );
+	rig.peerResponses();
+	rig.sent.clear();
+	CHECK_STR( OnlineClaimQuickMatch().str(), "m11" );
+	OnlineSendReplay( "m11", AsciiString::TheEmptyString );		// a desynced recording uses m11 up
+	OnlineSendReplay( "m11", path );
+	CHECK_EQ( rig.sent.size(), (size_t)0 );
+	remove( path );
 }
 
 TEST(online_register_url_from_the_welcome_and_only_a_web_page_opens)

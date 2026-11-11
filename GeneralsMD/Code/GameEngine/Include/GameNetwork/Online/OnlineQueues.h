@@ -131,6 +131,19 @@ struct OnlineReport
 };
 void OnlineSendReport( const OnlineReport &report );
 
+/* Only a Quick Match's replay goes up: the server keeps no other.  An internet game's recording calls
+	 OnlineClaimQuickMatch as it starts and gets the qm.matched id waiting for a recording, or empty for a
+	 custom game.  The claim takes the id, so it attaches to one recording at most; a custom game's
+	 game.start, a staging room, a new search, a reveal that ended and a logout drop an unclaimed one.
+	 OnlineSendReplay sends the closed file under the claimed id: "replay" lines of at most
+	 ONLINE_REPLAY_CHUNK raw bytes each, base64, seq from 0, the last one last:true, and no answer comes
+	 back.  Nothing is sent for an empty id or path (a desynced recording), when not logged in, a second
+	 time for one id, for an id an earlier login held, or for a file over ONLINE_REPLAY_MAX bytes or one
+	 that cannot be read. */
+enum { ONLINE_REPLAY_CHUNK = 4096, ONLINE_REPLAY_MAX = 2 * 1024 * 1024 };
+AsciiString OnlineClaimQuickMatch( void );
+void OnlineSendReplay( const char *match, const AsciiString &path );
+
 /* What the server has said about a player, by nick: the round trip to the server from `player` events
 	 (ping), the site's rating, tier and games from `player`, auth.ok and stats.  A number nobody sent is
 	 -1 (rank 0); hasRating is FALSE until a rating arrived.  An older server sends none of it, and the

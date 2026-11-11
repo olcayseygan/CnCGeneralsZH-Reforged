@@ -168,6 +168,7 @@ static int GetSystemMetrics( int which )
 #include "GameClient/ParticleSys.h"
 #include "GameClient/FXList.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/GroupPanel.h"
 #include "GameClient/Display.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/Module/ProductionUpdate.h"
@@ -4614,6 +4615,23 @@ TEST(command_availability_rank_is_not_the_enum_order)
 		if (ControlBar::commandAvailabilityRank(group[i]) > ControlBar::commandAvailabilityRank(best))
 			best = group[i];
 	CHECK_EQ((Int)best, (Int)COMMAND_AVAILABLE);
+}
+
+/*
+ * The command bar's unit tabs and the group panel's tray list a factory's slot only where the
+ * factory's own bar would show it: a unit build button, not SCRIPT_ONLY (a mission's script-only
+ * build), on a slot that has a window.  What the button's availability hides or greys after that
+ * is getCommandAvailability's, which needs a live object.
+ */
+TEST(command_tab_lists_only_the_bars_own_build_buttons)
+{
+	CHECK( GroupPanel_isPlayerBuildButton( GUI_COMMAND_UNIT_BUILD, 0, TRUE ) );
+	CHECK( !GroupPanel_isPlayerBuildButton( GUI_COMMAND_UNIT_BUILD, SCRIPT_ONLY, TRUE ) );
+	CHECK( !GroupPanel_isPlayerBuildButton( GUI_COMMAND_UNIT_BUILD, 0, FALSE ) );
+	CHECK( !GroupPanel_isPlayerBuildButton( GUI_COMMAND_DOZER_CONSTRUCT, 0, TRUE ) );
+	CHECK( !GroupPanel_isPlayerBuildButton( GUI_COMMAND_PLAYER_UPGRADE, 0, TRUE ) );
+	/* another option on the button does not take it off the list; NEED_UPGRADE greys it later */
+	CHECK( GroupPanel_isPlayerBuildButton( GUI_COMMAND_UNIT_BUILD, NEED_UPGRADE, TRUE ) );
 }
 
 /*

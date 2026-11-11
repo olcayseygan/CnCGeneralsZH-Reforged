@@ -103,6 +103,10 @@ static void considerBuilder( Object *candidate, BuilderPick *pick )
 		return;
 	if( !TheBuildAssistant->isPossibleToMakeUnit( candidate, pick->place ) )
 		return;
+	// the button the player pressed: a mission's script-only build or one an upgrade still locks is
+	// not on this builder's bar, so a forged or stale order cannot raise it
+	if( !TheBuildAssistant->offersPlayerBuildButton( candidate, pick->place ) )
+		return;
 
 	Real dx = candidate->getPosition()->x - pick->loc.x;
 	Real dy = candidate->getPosition()->y - pick->loc.y;

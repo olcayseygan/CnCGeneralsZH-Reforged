@@ -39,6 +39,12 @@ struct GroupPanelBuildable
 	CommandAvailability best;			///< over every factory that offers it
 };
 
+/** Whether a factory's command set slot belongs in the lists: a unit build button the player sees on
+	* the bar (populateCommand's rule: a SCRIPT_ONLY button, a mission's script-only build, and a slot
+	* with no window on the bar are not shown).  What the button's availability then hides or greys,
+	* buildable status, prerequisites, caps, a script-disabled factory, is ControlBar's to say. */
+Bool GroupPanel_isPlayerBuildButton( Int commandType, UnsignedInt options, Bool onBar );
+
 /** Every unit build button `player`'s working factories carry, one entry a unit type, in the order
 	* the factories and their command sets first name them. */
 void GroupPanel_gatherBuildable( Player *player, std::vector< GroupPanelBuildable > &out );

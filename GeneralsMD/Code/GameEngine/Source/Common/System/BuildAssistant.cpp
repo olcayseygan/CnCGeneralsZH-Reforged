@@ -41,6 +41,7 @@
 #include "Common/ThingFactory.h"
 #include "Common/Team.h"
 #include "Common/TerrainTypes.h"
+#include "Common/Upgrade.h"
 #include "Common/MapObject.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
@@ -1598,6 +1599,39 @@ const ThingTemplate *BuildAssistant::findBuildButtonTemplate( Object *builder, c
 
 }
 
+
+//-------------------------------------------------------------------------------------------------
+Bool BuildAssistant::offersPlayerBuildButton( Object *builder, const ThingTemplate *whatToBuild ) const
+{
+	if( builder == NULL || whatToBuild == NULL )
+		return FALSE;
+	const CommandSet *commandSet = TheCommandStore->findCommandSet( builder->getCommandSetString() );
+	if( commandSet == NULL )
+		return FALSE;
+
+	// findBuildButtonTemplate's match, with the player's own tests on top
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const CommandButton *button = commandSet->getCommandButton( i );
+		if( button == NULL || button->getThingTemplate() == NULL
+				|| ( button->getCommandType() != GUI_COMMAND_UNIT_BUILD && button->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT )
+				|| !button->getThingTemplate()->isEquivalentTo( whatToBuild ) )
+			continue;
+		if( BitTest( button->getOptions(), SCRIPT_ONLY ) )
+			continue;
+		if( BitTest( button->getOptions(), NEED_UPGRADE ) && button->getUpgradeTemplate() != NULL )
+		{
+			const UpgradeTemplate *upgrade = button->getUpgradeTemplate();
+			const Bool have = upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER
+				? builder->getControllingPlayer()->hasUpgradeComplete( upgrade )
+				: builder->hasUpgrade( upgrade );
+			if( !have )
+				continue;
+		}
+		return TRUE;
+	}
+	return FALSE;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** This method will check to make sure it is possible to build the requested unit. and

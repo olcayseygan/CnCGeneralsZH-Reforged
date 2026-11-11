@@ -230,6 +230,13 @@ public:
 		makes its TurkiyeVehicleChinook.  NULL when no button builds it. */
 	const ThingTemplate *findBuildButtonTemplate( Object *builder, const ThingTemplate *whatToBuild ) const;
 
+	/** Whether the builder's own command bar offers the player a button for whatToBuild: a build
+		button for it that is not SCRIPT_ONLY (a mission's script-only build, often in a set's last
+		slots, which have no window) and whose NEED_UPGRADE, if any, is met.  The command bar hides and
+		greys these on the client; a message the player sends is held to the same, since the button is
+		what the player could have pressed.  The computer builds through canMakeUnit and is not asked. */
+	Bool offersPlayerBuildButton( Object *builder, const ThingTemplate *whatToBuild ) const;
+
 	/// sell an object
 	virtual void sellObject( Object *obj );
 

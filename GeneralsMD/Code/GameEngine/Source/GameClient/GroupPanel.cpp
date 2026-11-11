@@ -601,6 +601,19 @@ static void gatherSquads( Player *player )
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool GroupPanel_isPlayerBuildButton( Int commandType, UnsignedInt options, Bool onBar )
+{
+	return commandType == GUI_COMMAND_UNIT_BUILD && onBar && !BitTest( options, SCRIPT_ONLY );
+}
+
+/// slot i of a factory's set as its bar has it: a unit build button the player can see there
+static Bool GroupPanel_isPlayerBuildSlot( const CommandButton *button, Int i )
+{
+	return button != NULL && GroupPanel_isPlayerBuildButton( button->getCommandType(), button->getOptions(),
+		TheControlBar->hasCommandWindow( i ) );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** One unit type per entry for every unit build button any of the player's finished factories
 	* carries, with the best availability the command bar would give it on any of them. */
 //-------------------------------------------------------------------------------------------------
@@ -622,7 +635,7 @@ static void gatherBuildable( Object *obj, void *userData )
 	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		const CommandButton *button = set->getCommandButton( i );
-		if( button == NULL || button->getCommandType() != GUI_COMMAND_UNIT_BUILD )
+		if( !GroupPanel_isPlayerBuildSlot( button, i ) )
 			continue;
 		const ThingTemplate *thing = button->getThingTemplate();
 		if( thing == NULL )
@@ -695,7 +708,7 @@ static void countFreeSlots( Object *obj, void *userData )
 	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		const CommandButton *button = set->getCommandButton( i );
-		if( button == NULL || button->getCommandType() != GUI_COMMAND_UNIT_BUILD )
+		if( !GroupPanel_isPlayerBuildSlot( button, i ) )
 			continue;
 		const ThingTemplate *thing = button->getThingTemplate();
 		if( thing != slots->thing )

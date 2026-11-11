@@ -4873,6 +4873,10 @@ static void findGroupFactory( Object *obj, void *userData )
 	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
 	if( pu == NULL || TheBuildAssistant->canMakeUnit( obj, s->unit ) != CANMAKE_OK )
 		return;
+	// and the factory's bar offers the player the button: a mission's script-only build, or one an
+	// upgrade still locks, is refused here as the bar hides or greys it
+	if( !TheBuildAssistant->offersPlayerBuildButton( obj, s->unit ) )
+		return;
 
 	// with no squad there is no centre, and the shortest queue with the lowest ObjectID wins
 	const UnsignedInt queue = pu->getProductionCount();

@@ -4373,6 +4373,11 @@ static void findStandInBuilderProc( Object *obj, void *userData )
 		return;
 	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
 		return;
+	// a builder a mission's script switched off, or an unmanned one, has every button hidden
+	// (getCommandAvailability): it would stand in with an empty bar while another could build
+	if( obj->testScriptStatusBit( OBJECT_STATUS_SCRIPT_DISABLED ) || obj->testScriptStatusBit( OBJECT_STATUS_SCRIPT_UNPOWERED )
+			|| obj->isDisabledByType( DISABLED_UNMANNED ) )
+		return;
 	AIUpdateInterface *ai = obj->getAI();
 	DozerAIInterface *dozer = ai ? ai->getDozerAIInterface() : NULL;
 	if( dozer == NULL )

@@ -2943,11 +2943,17 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 	const Int edge = MAX( 3, REAL_TO_INT( ControlBarHudScale() * 8.0f + 0.5f ) );
 	m_radarGrownFrame = edge;
 
+	// the side's own frame (GrownRadarImage) is laid round the painted glass from the screen's left edge
+	// to its foot: the picture keeps the box's bottom left corner exactly, and the right lip is the
+	// frame's own (grown_compose)
+	const Image *const *pieces = m_controlBarSchemeManager ? m_controlBarSchemeManager->getGrownRadarPieces() : NULL;
+	const Int lip = pieces ? m_controlBarSchemeManager->getGrownRadarRight() : edge;
+
 	// the picture's bottom left corner stays on the box's, far enough in that the frame stays on screen
 	enum { RADAR_BEZEL = 1 };	// W3DLeftHUDDraw paints the radar a pixel inside the window
 	IRegion2D fit;
-	fit.lo.x = MAX( square.lo.x, edge );
-	fit.hi.y = MIN( square.hi.y, displayHeight - edge );
+	fit.lo.x = pieces ? square.lo.x : MAX( square.lo.x, edge );
+	fit.hi.y = pieces ? square.hi.y : MIN( square.hi.y, displayHeight - edge );
 
 	// The window takes the map's own shape, so no black bands: the height grows by the percent, the
 	// width follows the map, and a map too wide for the room before the production plate is cut
@@ -2965,7 +2971,7 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 		ICoord2D at;
 		next->winGetScreenPosition( &at.x, &at.y );
 		plateX = at.x;
-		widthCap = at.x - 1 - edge - fit.lo.x - 2 * RADAR_BEZEL;
+		widthCap = at.x - 1 - lip - fit.lo.x - 2 * RADAR_BEZEL;
 	}
 	const Int insideWidth = MAX( 1, MIN( REAL_TO_INT( insideHeight * aspect + 0.5f ), widthCap ) );
 	insideHeight = MAX( 1, MIN( insideHeight, REAL_TO_INT( insideWidth / aspect + 0.5f ) ) );
@@ -2985,6 +2991,30 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 	blocker.lo.y = MIN( block.lo.y, frame.lo.y );
 	blocker.hi.x = MIN( MAX( block.hi.x, frame.hi.x ), plateX - 1 );
 	blocker.hi.y = MAX( block.hi.y, frame.hi.y );
+
+	//
+	// The side's own frame: the glass well is the picture joined with the painted glass, the frame
+	// runs from the screen's left edge to the right lip's outside and from the ledge to the screen's
+	// foot, and the blocker is that box joined with the signal plate, which goes up with the well's top
+	// (the box's blocker stands from the plate's top: BlockRadar)
+	//
+	if( pieces != NULL )
+	{
+		IRegion2D well;
+		well.lo.x = MIN( fit.lo.x, square.lo.x );
+		well.lo.y = MIN( fit.lo.y, square.lo.y );
+		well.hi.x = MAX( fit.hi.x, square.hi.x );
+		well.hi.y = MAX( fit.hi.y, square.hi.y );
+		frame.lo.x = 0;
+		frame.lo.y = well.lo.y - m_controlBarSchemeManager->getGrownRadarLedge();
+		frame.hi.x = well.hi.x + lip;
+		frame.hi.y = displayHeight;
+		const Int lift = well.lo.y - square.lo.y;
+		blocker.lo.x = MIN( block.lo.x, frame.lo.x );
+		blocker.lo.y = MIN( frame.lo.y, block.lo.y + lift );
+		blocker.hi.x = MIN( frame.hi.x, plateX - 1 );
+		blocker.hi.y = displayHeight;
+	}
 	placeWindowAt( windows[ RADAR_FIT_BLOCK ], blocker );
 
 	// EA's lamp stands on the frame's top right corner; the frame itself flashes with it
@@ -3033,13 +3063,38 @@ Bool ControlBar::getGrownRadarFrame( IRegion2D *outer, IRegion2D *inner, Bool *l
 	radar->winGetSize( &inner->hi.x, &inner->hi.y );
 	inner->hi.x += inner->lo.x;
 	inner->hi.y += inner->lo.y;
+	// winEnable(FALSE) is EA's lit lamp (triggerRadarAttackGlow)
+	*lit = m_radarAttackGlowWindow != NULL && m_remainingRadarAttackGlowFrames > 0
+		&& !BitTest( m_radarAttackGlowWindow->winGetStatus(), WIN_STATUS_ENABLED );
+
+	//
+	// The side's own frame (GrownRadarImage): 'inner' is the glass well, the picture joined with the
+	// painted glass (the radar's box as the layout put it, travelling with the bar), so the frame
+	// always covers the painted box (hud_command_bar.py's grown_glass); 'outer' is the frame's box
+	// from the screen's left edge, its top on the ledge where what stands on the radar stands, to the
+	// right lip's outside and the screen's foot
+	//
+	const Image *const *pieces = m_controlBarSchemeManager ? m_controlBarSchemeManager->getGrownRadarPieces() : NULL;
+	if( pieces != NULL && m_contextParent[ CP_MASTER ] != NULL )
+	{
+		ICoord2D origin;
+		m_contextParent[ CP_MASTER ]->winGetScreenPosition( &origin.x, &origin.y );
+		const IRegion2D &box = m_radarFitBox[ RADAR_FIT_RADAR ];
+		inner->lo.x = MIN( inner->lo.x, box.lo.x + origin.x );
+		inner->lo.y = MIN( inner->lo.y, box.lo.y + origin.y );
+		inner->hi.x = MAX( inner->hi.x, box.hi.x + origin.x );
+		inner->hi.y = MAX( inner->hi.y, box.hi.y + origin.y );
+		outer->lo.x = 0;
+		outer->lo.y = inner->lo.y - m_controlBarSchemeManager->getGrownRadarLedge();
+		outer->hi.x = inner->hi.x + m_controlBarSchemeManager->getGrownRadarRight();
+		outer->hi.y = TheDisplay ? TheDisplay->getHeight() : inner->hi.y;
+		return TRUE;
+	}
+
 	outer->lo.x = inner->lo.x - m_radarGrownFrame;
 	outer->lo.y = inner->lo.y - m_radarGrownFrame;
 	outer->hi.x = inner->hi.x + m_radarGrownFrame;
 	outer->hi.y = MIN( inner->hi.y + m_radarGrownFrame, TheDisplay ? TheDisplay->getHeight() : inner->hi.y + m_radarGrownFrame );
-	// winEnable(FALSE) is EA's lit lamp (triggerRadarAttackGlow)
-	*lit = m_radarAttackGlowWindow != NULL && m_remainingRadarAttackGlowFrames > 0
-		&& !BitTest( m_radarAttackGlowWindow->winGetStatus(), WIN_STATUS_ENABLED );
 	return TRUE;
 }
 

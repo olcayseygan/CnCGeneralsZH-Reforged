@@ -302,6 +302,17 @@ public:
 	AsciiString m_signalPlateImageName;
 	const Image *m_signalPlateImage;
 
+	/// GrownRadarImage: the side's own frame round a radar Minimap Size grew, <name>TL, T, TR, L, R, BL,
+	/// B, BR, C laid by drawGrownRadarFrame (hud_command_bar.py's grown_compose); GrownRadarRight the
+	/// right lip and GrownRadarLedge the glass top to the frame's top edge, in creation pixels.  A
+	/// scheme naming no image keeps the flat bands
+	enum { GROWN_TL, GROWN_T, GROWN_TR, GROWN_L, GROWN_R, GROWN_BL, GROWN_B, GROWN_BR, GROWN_C, GROWN_PIECE_COUNT };
+	AsciiString m_grownRadarName;
+	const Image *m_grownRadar[ GROWN_PIECE_COUNT ];
+	Int m_grownRadarRight;
+	Int m_grownRadarPeriod;
+	Int m_grownRadarLedge;
+
 	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
 	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
 	enum { FRAME_TL, FRAME_T, FRAME_TR, FRAME_L, FRAME_C, FRAME_R, FRAME_BL, FRAME_B, FRAME_BR, FRAME_PIECE_COUNT };
@@ -389,6 +400,8 @@ public:
 	static void radarFrameRect( const Image *const *frame, const IRegion2D& radar, IRegion2D *outer );
 	/// the steel round a radar Minimap Size grew out of a scheme with no radar frame; painted or plate-drawn bar alike
 	static void drawGrownRadarFrame( void );
+	/// the side's own grown frame laid round 'well' (grown_compose); drawGrownRadarFrame's art path
+	static void drawGrownRadarPieces( const Image *const *pieces, Real scale, const IRegion2D &well, Bool lit );
 	/// the general's powers tray's pieces (ControlBarScheme::TRAY_*) of the scheme on screen, or NULL
 	/// without a cell; the tray then keeps the shipped column
 	const Image *const *getPowerTray( void ) const;
@@ -406,6 +419,13 @@ public:
 	const Image *const *getSignalImages( Int kind ) const;
 	/// its signal seats and plate in 800x600 design units, as getCommandTabSeats; FALSE for none
 	Bool getSignalSeats( IRegion2D *keys, IRegion2D *plate ) const;
+	/// the scheme on screen's grown radar frame pieces (ControlBarScheme::GROWN_*), NULL unless it names
+	/// all nine; with the right lip and the ledge in screen pixels, scaled as its art is
+	const Image *const *getGrownRadarPieces( void ) const;
+	Int getGrownRadarRight( void ) const;
+	Int getGrownRadarLedge( void ) const;
+	/// the scheme's art pixels to the screen's: the display's height over its creation height
+	Real getArtScale( void ) const;
 	/// its signal plate picture, NULL for none
 	const Image *getSignalPlateImage( void ) const { return m_currentScheme ? m_currentScheme->m_signalPlateImage : NULL; }
 	/// the current scheme's talent pieces in ControlBarScheme::TALENT_* order, NULL when it names none

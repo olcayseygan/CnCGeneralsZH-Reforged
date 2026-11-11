@@ -2637,12 +2637,21 @@ void ControlBar::updateSignalKeys( void )
 	}
 	m_signalPlateFoot = row.hi.y;
 
-	// the grown radar's lift
+	// the grown radar's lift.  The side's own frame (GrownRadarImage): the plate goes up as far as the
+	// glass well's top stands over the painted glass's (grown_glass; 0 or less).  The flat bands: as far
+	// as their top stands over the plate's foot
 	IRegion2D outer, inner;
 	Bool lit;
-	if( getGrownRadarFrame( &outer, &inner, &lit ) && outer.lo.y < row.hi.y )
+	Int lift = 0;
+	if( getGrownRadarFrame( &outer, &inner, &lit ) )
 	{
-		const Int lift = outer.lo.y - row.hi.y;
+		if( m_controlBarSchemeManager->getGrownRadarPieces() != NULL )
+			lift = MIN( 0, inner.lo.y - ( m_radarFitBox[ RADAR_FIT_RADAR ].lo.y + frameNow.y ) );
+		else if( outer.lo.y < row.hi.y )
+			lift = outer.lo.y - row.hi.y;
+	}
+	if( lift != 0 )
+	{
 		row.lo.y += lift;
 		row.hi.y += lift;
 		for( Int kind = 0; kind < SIGNAL_KEYS; kind++ )

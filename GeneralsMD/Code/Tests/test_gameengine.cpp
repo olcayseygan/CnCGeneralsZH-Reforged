@@ -24759,6 +24759,95 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	TheWritableGlobalData = savedData;
 }
 
+/* NickSenseless on v4.0.0: everybody who joined his online room showed in it for a split second and
+	 left.  A joiner builds its copy of the room from the game list (WOLLobbyMenu's PEER_ADD), round-trips
+	 it through the options string (markAsStagingRoomJoiner) and stays only when seat 0's name is among
+	 the server's nicks.  The list carries each seat's profile ID, which an AI seat sets to its SlotState;
+	 the site's account IDs count from 1, so a host whose account ID is 2, 3, 4 or 6 came out of the list
+	 as an AI with no name, and the join's host check failed on every joiner. */
+TEST(lobby_list_reads_a_host_with_a_small_account_id_as_the_host)
+{
+	CHECK( bootOnce() );
+
+	const char *nick = "NickSenseless";
+	const SlotState aiStates[] = { SLOT_EASY_AI, SLOT_MED_AI, SLOT_BRUTAL_AI, SLOT_TAKEOVER };
+	for( Int a = 0; a < (Int)ARRAY_SIZE( aiStates ); ++a )
+	{
+		CHECK( IsAISlotState( aiStates[a] ) );		// what the list read before: the account ID as a state
+		CHECK_EQ( (Int)ListedSeatState( nick, (Int)aiStates[a] ), (Int)SLOT_PLAYER );
+	}
+	CHECK_EQ( (Int)ListedSeatState( nick, 0 ), (Int)SLOT_PLAYER );
+	CHECK_EQ( (Int)ListedSeatState( nick, 48213 ), (Int)SLOT_PLAYER );
+	// an AI seat: "CE"/"CM"/"CH" or nothing as its name, its state as the profile ID
+	CHECK_EQ( (Int)ListedSeatState( "CE", SLOT_EASY_AI ), (Int)SLOT_EASY_AI );
+	CHECK_EQ( (Int)ListedSeatState( "CM", SLOT_MED_AI ), (Int)SLOT_MED_AI );
+	CHECK_EQ( (Int)ListedSeatState( "CH", SLOT_BRUTAL_AI ), (Int)SLOT_BRUTAL_AI );
+	CHECK_EQ( (Int)ListedSeatState( "", SLOT_TAKEOVER ), (Int)SLOT_TAKEOVER );
+	CHECK_EQ( (Int)ListedSeatState( NULL, SLOT_TAKEOVER ), (Int)SLOT_TAKEOVER );
+	CHECK_EQ( (Int)ListedSeatState( "", 0 ), (Int)SLOT_OPEN );
+	CHECK_EQ( (Int)ListedSeatState( "CE", 0 ), (Int)SLOT_PLAYER );		// as before: a name with no AI ID behind it
+
+	GlobalData *savedData = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+	GameState *savedState = TheGameState;
+	TheGameState = NEW GameState;
+	MultiplayerSettings *savedSettings = TheMultiplayerSettings;
+	TheMultiplayerSettings = NEW MultiplayerSettings;
+	PlayerTemplateStore *savedStore = ThePlayerTemplateStore;
+	ThePlayerTemplateStore = NEW PlayerTemplateStore;
+	ThePlayerTemplateStore->init();
+
+	AsciiString mapInSaves = TheGameState->getSaveDirectory();
+	mapInSaves.concat( "test.map" );
+	const AsciiString mapPath( "Save\\test\\test.map" );
+	UnicodeString hostName;
+	hostName.translate( AsciiString( nick ) );
+
+	/* The joiner's copy of a fresh host's room, seat 0 the host with account ID 2.  The other seats are
+		 AI here only because parsing an open seat asks TheGameText, which the harness does not stand up. */
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		const Bool fixed = pass == 1;
+		SkirmishGameInfo listed;
+		listed.init();
+		listed.setMap( mapInSaves );
+		GameSlot *seat = listed.getSlot( 0 );
+		const SlotState state = fixed ? ListedSeatState( nick, 2 ) : (IsAISlotState( (SlotState)2 ) ? (SlotState)2 : SLOT_PLAYER);
+		if( IsAISlotState( state ) )
+			seat->setState( state );
+		else
+			seat->setState( SLOT_PLAYER, hostName );
+		seat->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+		for( Int i = 1; i < MAX_SLOTS; ++i )
+		{
+			listed.getSlot( i )->setState( SLOT_MED_AI );
+			listed.getSlot( i )->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+		}
+
+		const AsciiString options = GameInfoOptionsString( &listed, mapPath, 0 );
+		SkirmishGameInfo joined;
+		joined.init();
+		CHECK( ParseAsciiStringToGameInfo( &joined, options ) );
+		AsciiString seatZero;
+		seatZero.translate( joined.getConstSlot( 0 )->getName() );
+		printf( "    %s: seat 0 '%s' from [%s]\n", fixed ? "fixed" : "v4.0.0", seatZero.str(), options.str() );
+		// the join's host check: seat 0's name has to be one of the server's nicks for the room
+		if( fixed )
+			CHECK_STR( seatZero.str(), nick );
+		else
+			CHECK( strcmp( seatZero.str(), nick ) != 0 );
+	}
+
+	delete ThePlayerTemplateStore;
+	ThePlayerTemplateStore = savedStore;
+	delete TheMultiplayerSettings;
+	TheMultiplayerSettings = savedSettings;
+	delete TheGameState;
+	TheGameState = savedState;
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = savedData;
+}
+
 // The debug log's cap: the head and the last whole lines survive, in one file still open for writing.
 TEST(debug_log_cut_keeps_the_head_and_the_last_whole_lines)
 {

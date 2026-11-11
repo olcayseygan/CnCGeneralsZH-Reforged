@@ -146,6 +146,7 @@
 #include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 
 #include "Common/version.h"
+#include "BuildFingerprint.h"		// ZH_BUILD_FINGERPRINT: ModelChecksums.txt is kept per build
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -244,6 +245,38 @@ typedef std::map<std::string, ModelChecksum> ModelChecksumMap;	///< keyed "sourc
 static const char *MODEL_CHECKSUM_CACHE = "ModelChecksums.txt";
 static const Int MODEL_CHECKSUM_LINE_LENGTH = 1024;
 
+/* The first line names the format and the build that wrote the file; a file without it, or from any
+	 other build, is read as no file at all.  v4.0.0 trusted every line on size and write time alone, so
+	 the folder in Documents, which outlives every reinstall, carried a model's CRC from one install or
+	 one build into the next, and a clean install was refused every online join as "another version"
+	 until the player deleted the folder.  Format 2 also keys a line on the archive's full path, so two
+	 installs sharing one Documents folder no longer share lines either. */
+static const Int MODEL_CHECKSUM_FORMAT = 2;
+
+static AsciiString modelChecksumCacheHeader( void )
+{
+	AsciiString header;
+	header.format( "ModelChecksums %d %08X", MODEL_CHECKSUM_FORMAT, (UnsignedInt)ZH_BUILD_FINGERPRINT );
+	return header;
+}
+
+/** The source as the line keys it: the archive or loose model's full path, not the one relative to the
+	* install the file system mounted it under. */
+static AsciiString modelChecksumSourceKey( const AsciiString &source )
+{
+	const char *s = source.str();
+	if (s[0] == '\\' || s[0] == '/' || (s[0] != 0 && s[1] == ':'))
+		return source;
+	AsciiString full = TheLocalFileSystem->getCurrentDirectory();
+#if defined(_WIN32)
+	full.concat( '\\' );
+#else
+	full.concat( '/' );
+#endif
+	full.concat( source );
+	return full;
+}
+
 static AsciiString modelChecksumCachePath( void )
 {
 	AsciiString path = TheGlobalData->getPath_UserData();
@@ -259,6 +292,18 @@ static ModelChecksumMap readModelChecksumCache( void )
 		return cache;		// the first start on this machine, or the file was deleted
 
 	char line[MODEL_CHECKSUM_LINE_LENGTH];
+	AsciiString header;
+	if (fgets( line, sizeof( line ), cacheFile ))
+	{
+		header = line;
+		header.trim();
+	}
+	if (header != modelChecksumCacheHeader())
+	{
+		DEBUG_LOG(( "ModelChecksums.txt is from another build or format ('%s'); every model is read again\n", header.str() ));
+		fclose( cacheFile );
+		return cache;
+	}
 	while (fgets( line, sizeof( line ), cacheFile ))
 	{
 		ModelChecksum entry;
@@ -291,6 +336,7 @@ static void writeModelChecksumCache( const ModelChecksumMap &cache )
 	if (cacheFile == NULL)
 		return;		// a read-only user folder costs the next start a full read, nothing else
 
+	fprintf( cacheFile, "%s\n", modelChecksumCacheHeader().str() );
 	for( ModelChecksumMap::const_iterator it = cache.begin(); it != cache.end(); ++it )
 	{
 		const ModelChecksum &entry = it->second;
@@ -344,7 +390,7 @@ static void checksumModels( XferCRC &xferCRC )
 		ModelChecksum entry;
 		const Bool sourceKnown = TheLocalFileSystem->getFileInfo( source, &entry.source );
 
-		std::string key( source.str() );
+		std::string key( modelChecksumSourceKey( source ).str() );
 		key.append( "|" );
 		key.append( model.str() );
 

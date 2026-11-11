@@ -454,6 +454,12 @@ char SlotStateToOptionsChar( SlotState state );
 Bool OptionsCharToSlotState( char c, SlotState *state );
 UnicodeString SlotStateName( SlotState state );
 
+// A seat in the lobby's game list, from the name and the profile ID the host advertised for it.  An
+// AI seat advertises its SlotState as the profile ID and "CE", "CM", "CH" (or nothing) as the name;
+// a human's name decides first, because an online account ID is a small number and 2, 3, 4 and 6
+// read as AI states.
+SlotState ListedSeatState( const char *name, Int profileID );
+
 
 /**
   * The SkirmishGameInfo class holds information about the skirmish game and

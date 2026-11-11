@@ -111,6 +111,25 @@ void slotListDebugLog(const char *fmt, ...)
 #define SLOTLIST_DEBUG_LOG(x) DEBUG_LOG(x)
 #endif
 
+/* A joiner that leaves on a check of its own used to vanish from the host's room with nothing said.  The
+	 room UTM goes out before the leave on the same line, so the host still has it in his room; an older
+	 host ignores a command he does not know. */
+void SendStagingLeaveReason(const char *reason, const AsciiString& detail)
+{
+	PeerRequest req;
+	req.peerRequestType = PeerRequest::PEERREQUEST_UTMROOM;
+	req.UTM.isStagingRoom = TRUE;
+	req.id = "LEFT/";
+	AsciiString options = reason;
+	if (!detail.isEmpty())
+	{
+		options.concat(' ');
+		options.concat(detail);
+	}
+	req.options = options.str();
+	TheGameSpyPeerMessageQueue->addRequest(req);
+}
+
 void SendStatsToOtherPlayers(const GameInfo *game)
 {
 	PeerRequest req;
@@ -2153,6 +2172,7 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 				// haven't seen ourselves
 				buttonPushed = true;
 				DEBUG_LOG(("Haven't seen ourselves in slotlist\n"));
+				SendStagingLeaveReason("NOSLOTLIST", AsciiString::TheEmptyString);
 				if (TheGameSpyGame)
 					TheGameSpyGame->reset();
 				TheGameSpyInfo->leaveStagingRoom();
@@ -2612,6 +2632,7 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 									// can't see ourselves
 									buttonPushed = true;
 									DEBUG_LOG(("Can't see ourselves in slotlist %s\n", options.str()));
+									SendStagingLeaveReason("DROPPED", AsciiString::TheEmptyString);
 									TheGameSpyInfo->getCurrentStagingRoom()->reset();
 									TheGameSpyInfo->leaveStagingRoom();
 									//TheGameSpyInfo->joinBestGroupRoom();
@@ -2620,6 +2641,28 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 									TheShell->pop();
 								}
 							}
+						}
+					}
+					else if (!strcmp(resp.command.c_str(), "LEFT"))
+					{
+						// a joiner gave up on a check of its own; the host is the one who can act on why
+						AsciiString options = resp.commandOptions.c_str();
+						AsciiString reason;
+						options.nextToken(&reason, " ");
+						options.trim();
+						DEBUG_LOG(("Staging: %s left on its own check: %s '%s'\n", resp.nick.c_str(), reason.str(), options.str()));
+						const char *label = NULL;
+						if (reason == "NOHOST")
+							label = "GUI:JoinerLeftNoHost";
+						else if (reason == "NOSLOTLIST")
+							label = "GUI:JoinerLeftNoSlotList";
+						else if (reason == "DROPPED")
+							label = "GUI:JoinerLeftDropped";
+						if (label && TheGameSpyInfo->amIHost())
+						{
+							UnicodeString text;
+							text.format(TheGameText->fetch(label), resp.nick.c_str(), options.str());
+							TheGameSpyInfo->addText(text, GameSpyColor[GSCOLOR_DEFAULT], listboxGameSetupChat);
 						}
 					}
 					else if (!strcmp(resp.command.c_str(), "HWS"))

@@ -75,6 +75,20 @@
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 #include "GameNetwork/GameSpy/LobbyUtils.h"
 #include "GameNetwork/RankPointValue.h"
+#include "GameNetwork/GameDataMatch.h"
+
+// Which half of the room's pair differs from ours: a build the player updates, or data files he can put back
+static const char *joinRefusalLabel( const GameSpyStagingRoom *room )
+{
+	if (!room)
+		return "GUI:JoinFailedCRCMismatch";
+	switch (compareGameData(room->getExeCRC(), room->getIniCRC(), TheGlobalData->m_exeCRC, TheGlobalData->m_iniCRC))
+	{
+	case GAMEDATA_EXE_DIFFERS:	return "GUI:JoinFailedDifferentBuild";
+	case GAMEDATA_INI_DIFFERS:	return "GUI:JoinFailedDifferentData";
+	default:					return "GUI:JoinFailedCRCMismatch";
+	}
+}
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1224,6 +1238,22 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 									isHostPresent = TRUE;
 								}
 							}
+							if (!isHostPresent)
+							{
+								AsciiString hostName, names;
+								hostName.translate(room->getConstSlot(0)->getName());
+								for (Int i=0; i<MAX_SLOTS; ++i)
+								{
+									if (resp.stagingRoomPlayerNames[i].empty())
+										continue;
+									if (!names.isEmpty())
+										names.concat(',');
+									names.concat(resp.stagingRoomPlayerNames[i].c_str());
+								}
+								DEBUG_LOG(("Join: host '%s' (seat 0 state %d) is not among the room's players [%s]; leaving\n",
+									hostName.str(), (Int)room->getConstSlot(0)->getState(), names.str()));
+								SendStagingLeaveReason("NOHOST", hostName);
+							}
 						}
 					}
 					if (resp.joinStagingRoom.ok == PEERTrue && isHostPresent)
@@ -1358,12 +1388,13 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 									slot->setColor( resp.stagingRoom.color[i] );
 									// Every AI seat the ladder has, asked in one place: an advertised seat this list did not
 									// recognise used to show up in the browser as an empty one.
-									if (IsAISlotState((SlotState)resp.stagingRoom.profileID[i]))
+									const SlotState listed = ListedSeatState(resp.stagingRoomPlayerNames[i].c_str(), resp.stagingRoom.profileID[i]);
+									if (IsAISlotState(listed))
 									{
-										slot->setState((SlotState)resp.stagingRoom.profileID[i]);
+										slot->setState(listed);
 										++numPlayers;
 									}
-									else if (resp.stagingRoomPlayerNames[i].length())
+									else if (listed == SLOT_PLAYER)
 									{
 										UnicodeString nameUStr;
 										nameUStr.translate(resp.stagingRoomPlayerNames[i].c_str());
@@ -1712,7 +1743,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 										TheWritableGlobalData->m_iniCRC = roomToJoin->getIniCRC();
 									}
 #else
-									GSMessageBoxOk(TheGameText->fetch("GUI:JoinFailedDefault"), TheGameText->fetch("GUI:JoinFailedCRCMismatch"));
+									GSMessageBoxOk(TheGameText->fetch("GUI:JoinFailedDefault"), TheGameText->fetch(joinRefusalLabel(roomToJoin)));
 									break;
 #endif
 								}

@@ -1677,6 +1677,26 @@ GUI:JoinFailedCRCMismatch
 "Beitritt fehlgeschlagen - das Spiel hat eine andere Version"
 END
 
+GUI:JoinFailedDifferentBuild
+"Beitritt fehlgeschlagen - der Host nutzt eine andere Version des Spiels. Aktualisiere auf dieselbe Version."
+END
+
+GUI:JoinFailedDifferentData
+"Beitritt fehlgeschlagen - gleiche Version, aber andere Spieldateien. Repariere oder installiere das Spiel neu und entferne Dateien, die du selbst in den Data-Ordner gelegt hast."
+END
+
+GUI:JoinerLeftNoHost
+"%hs ist gegangen: sein Spiel hat dich nicht als Host dieses Raums gefunden (es las den Platz des Hosts als \"%hs\")."
+END
+
+GUI:JoinerLeftNoSlotList
+"%hs ist gegangen: deine Spielerliste hat ihn nie erreicht."
+END
+
+GUI:JoinerLeftDropped
+"%hs ist gegangen: deine Spielerliste führte ihn nicht mehr."
+END
+
 GUI:JoinFailedUnknownLadder
 "Beitritt fehlgeschlagen - das Spiel nutzt eine unbekannte Rangliste"
 END

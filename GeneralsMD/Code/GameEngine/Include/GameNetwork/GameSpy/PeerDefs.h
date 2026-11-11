@@ -290,6 +290,8 @@ void WOLDisplaySlotList( void );
 Bool GetLocalChatConnectionAddress(AsciiString serverName, UnsignedShort serverPort, UnsignedInt& localIP);
 void SetLobbyAttemptHostJoin(Bool start);
 void SendStatsToOtherPlayers(const GameInfo *game);
+// A joiner leaving a staging room on its own check tells the room why: a "LEFT" UTM the host prints
+void SendStagingLeaveReason(const char *reason, const AsciiString& detail);
 
 class PSPlayerStats;
 void GetAdditionalDisconnectsFromUserFile(PSPlayerStats *stats);

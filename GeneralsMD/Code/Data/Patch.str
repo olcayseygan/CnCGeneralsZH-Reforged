@@ -3902,6 +3902,28 @@ GUI:???
 "Random"
 END
 
+// a refused join names which half of the room's pair differs: the build, or the game data files
+GUI:JoinFailedDifferentBuild
+"Could not join - the host runs a different build of the game. Update to the same version."
+END
+
+GUI:JoinFailedDifferentData
+"Could not join - same game version, different game data files. Repair or reinstall the game, and remove loose files you added to its Data folder."
+END
+
+// the host's room chat when a joiner leaves on a check of its own; the first %hs is the joiner
+GUI:JoinerLeftNoHost
+"%hs left: their game could not find you as host of this room (it read the host's seat as \"%hs\")."
+END
+
+GUI:JoinerLeftNoSlotList
+"%hs left: your seat list never reached them."
+END
+
+GUI:JoinerLeftDropped
+"%hs left: your seat list stopped listing them."
+END
+
 // the online login screen's one account field: the service takes the email or the nick
 GUI:OnlineLoginName
 "Email or Nickname"

@@ -1813,6 +1813,26 @@ GUI:JoinFailedCRCMismatch
 "Katılınamadı - oyunun sürümü farklı"
 END
 
+GUI:JoinFailedDifferentBuild
+"Katılınamadı - kurucu oyunun başka bir sürümünü kullanıyor. Aynı sürüme güncelle."
+END
+
+GUI:JoinFailedDifferentData
+"Katılınamadı - sürüm aynı ama oyun dosyaları farklı. Oyunu onar ya da yeniden kur, Data klasörüne sonradan koyduğun dosyaları kaldır."
+END
+
+GUI:JoinerLeftNoHost
+"%hs ayrıldı: oyunu seni bu odanın kurucusu olarak bulamadı (kurucunun yerini \"%hs\" diye okudu)."
+END
+
+GUI:JoinerLeftNoSlotList
+"%hs ayrıldı: oyuncu listen ona hiç ulaşmadı."
+END
+
+GUI:JoinerLeftDropped
+"%hs ayrıldı: oyuncu listende artık yoktu."
+END
+
 GUI:JoinFailedUnknownLadder
 "Katılınamadı - oyun bilinmeyen bir lig kullanıyor"
 END

@@ -382,6 +382,20 @@ Bool IsAISlotState( SlotState state )
 	}
 }
 
+/** GameSpy's profile IDs were nine digits and never met a SlotState.  Our site's account IDs count from
+	* 1, so the player with ID 2 hosted a room that every joiner's lobby read as an Easy AI in seat 0: no
+	* host name, the join's host check failed, and the joiner left the moment the host seated him. */
+SlotState ListedSeatState( const char *name, Int profileID )
+{
+	const Bool hasName = name != NULL && name[0] != 0;
+	const Bool aiCode = hasName && name[0] == 'C' && name[1] != 0 && strchr( "EMH", name[1] ) != NULL && name[2] == 0;
+	if( hasName && !aiCode )
+		return SLOT_PLAYER;
+	if( IsAISlotState( (SlotState)profileID ) )
+		return (SlotState)profileID;
+	return hasName ? SLOT_PLAYER : SLOT_OPEN;
+}
+
 /** The one letter an AI seat is written as in the options string the host sends round.
 	*
 	* 'E', 'M' and 'H' are EA's own and keep their meaning - 'H' is Brutal, from when the menu called

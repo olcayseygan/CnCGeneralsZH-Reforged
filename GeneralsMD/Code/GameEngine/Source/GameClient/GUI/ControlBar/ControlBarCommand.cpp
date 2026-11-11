@@ -1813,19 +1813,17 @@ static void drawNoCommandTabParent( GameWindow *window, WinInstanceData *instDat
 
 /// the push button's own draw, kept when the tab buttons take drawCommandTab in its place
 static GameWinDrawFunc s_commandTabButtonDraw = NULL;
-/// the scheme dresses the tab in its own art, whose pushed state is the open look
-static Bool s_commandTabOwnArt[ ControlBar::COMMAND_TAB_COUNT ] = { FALSE, FALSE, FALSE };
-
-/// A tab button draws as a push button.  Wearing the idle buttons' borrowed pictures, whose pushed
-/// state is a faint tint, the open one then gets an outline two pixels wide in the build buttons'
-/// border colour, inside the button's own rect so it keeps the row's clearance.  The scheme's own tab
-/// art carries the open look in its pushed state and gets no outline.  Fills, whose pixels are exact.
+/// A tab button draws as a push button, and the open one then gets an outline two pixels wide in the
+/// build buttons' border colour, inside the button's own rect so it keeps the row's clearance.  The
+/// pushed state alone does not say open: the scheme's art differs from up by a brighter bezel and a
+/// glyph one texel lower, the idle pictures by a faint tint, and the hovered open tab shows the same
+/// art.  Fills, whose pixels are exact.
 static void drawCommandTab( GameWindow *window, WinInstanceData *instData )
 {
 	if( s_commandTabButtonDraw )
 		s_commandTabButtonDraw( window, instData );
 	const Int tab = (Int)(intptr_t)GadgetButtonGetData( window ) - 1;
-	if( tab != TheControlBar->getCommandTab() || tab < 0 || tab >= ControlBar::COMMAND_TAB_COUNT || s_commandTabOwnArt[ tab ] )
+	if( tab < 0 || tab != TheControlBar->getCommandTab() )
 		return;
 	enum { RING = 2 };
 	ICoord2D pos, size;
@@ -2038,7 +2036,6 @@ void ControlBar::updateCommandTabButtons( void )
 
 		const Image *up, *hilite, *pushed, *disabled;
 		const Image *const *own = m_controlBarSchemeManager ? m_controlBarSchemeManager->getCommandTabImages( tab ) : NULL;
-		s_commandTabOwnArt[ tab ] = own != NULL;
 		if( own )
 		{
 			up = own[ 0 ];

@@ -1,21 +1,28 @@
 """The Reforged mouse cursors, drawn by script and written as Windows .ANI files.
 
-One silhouette per order, coloured the way EA's own set is: green for moving and your own units'
-orders (move, scroll, waypoint, enter, heal), red for anything hostile, blue for the powers,
-bare steel for tools and neutral marks (pointer, select, target, guard, wrench), construction
-yellow for placing a building, grey under a red bar for an order that cannot be given here. EA
-drew in the 4-bit palette, each shape lit on one half and dark on the other inside a 1 px black
-line; this draws the same hues as painted and brushed metal under a light from the top left, with
-weathered paint on the edges, and only lamps, screens and beams glow.
+They follow EA's 2003 set mark for mark: four green arrowheads closing in for move, four red
+triangles round a yellow dot for attack, red with green between them for attack move, white
+corner brackets for select, a white dart for the pointer, green block arrows at the screen edge,
+stacked triangles for enter, a red ring for anything that cannot be done, and a small pictogram
+with a white arrow tip for each unit ability. Orders EA never drew a mark for (guard, garrison,
+board, unload, hijack, sabotage, car bomb, the refused build) get one in the same hand.
 
-Each frame is a .CUR holding two 32-bit images, 48x48 first and 32x32 second. The game draws
-the one nearest the system's cursor size, so 32 at 100 % DPI and 48 from about 150 %:
+The hand is EA's too: only the 16 colour Windows palette (13 of its colours), flat fills, a 1 px
+black line round every shape, and at most a lit half and a half-bright half per shape. No
+gradients, no soft edges; every pixel is opaque or not there, and the self-check fails the run
+on any pixel that is neither or off the palette. Nothing is copied from EA's files: every mark
+is built here from polygons, lines and circles and rasterised straight at each size.
+
+Each frame is a .CUR holding two 32-bit images, 48x48 first and 32x32 second, the same design
+drawn natively at each size. The game draws the one nearest the system's cursor size, so 32 at
+100 % DPI and 48 from about 150 %:
 
     Win32Mouse   LoadImage(.., 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE), nearest SM_CXCURSOR
     SdlMouse     AniCursor_decode(.., 32 x the display's content scale), nearest that width
 
-Hotspots are in the 48 frame; the 32 entry's are scaled with it. Reticles and area orders put the
-hotspot in the middle of the mark, pointers and tools on their tip, pins and flags on their foot.
+Hotspots are in the 48 frame; the 32 entry's are scaled with it. Order marks put the hotspot in
+the middle of the mark, the pointer and scroll arrows on their tip, pictograms on their arrow tip,
+pins and flags on their foot.
 
     python Tools/cursors.py [--sheet contact.png]   # writes Data/Cursors/Reforged*.ani, then
                                                     # reads every file back and checks it
@@ -182,439 +189,490 @@ def ani_bytes(frames, jiffies):
 
 
 # ---------------------------------------------------------------------------------------------
-# Drawing. Coordinates are in a 48-unit frame, (0, 0) top left; SS times supersampled.
+# Drawing. Coordinates are in a 48-unit frame, (0, 0) top left; each size rasterises the same
+# shapes at its own scale with no anti-aliasing, so pixel i of the 48 sits at unit i and pixel i
+# of the 32 at unit 1.5 i.
 
-SS = 8
 SIZES = (48, 32)
-# EA's cursors are the 4-bit Windows palette: #00ff00/#008000, #ff0000/#800000, #c0c0c0/#808080/white,
-# #0000ff and a #ffff00 pip, each shape lit on one half and dark on the other under a 1 px black line.
-# These are the same hues taken down to painted and bare metal, so the light does the two halves.
-OUTLINE = (8, 9, 12)
-STEEL = (170, 176, 184)
-DARK_STEEL = (86, 92, 100)
-RED = (192, 46, 34)
-GREEN = (92, 176, 62)
-GOLD = (210, 166, 52)
-BLUE = (66, 104, 206)
-WHITE = (214, 216, 218)
-GREY = (118, 122, 126)
-FLAME = (206, 98, 34)
-BEAM = (150, 196, 255)
-SCREEN = (70, 200, 96)
-OLIVE = (96, 102, 66)
-PAINT_WEAR = (150, 152, 150)   # what shows through chipped paint on an edge
+# The colours EA's cursors are painted in, all from the 16 colour Windows palette
+K, W, LG, DG = (0, 0, 0), (255, 255, 255), (192, 192, 192), (128, 128, 128)
+R, DR, G, DGR = (255, 0, 0), (128, 0, 0), (0, 255, 0), (0, 128, 0)
+B, DB, C, Y, OL = (0, 0, 255), (0, 0, 128), (0, 255, 255), (255, 255, 0), (128, 128, 0)
+PALETTE = {K, W, LG, DG, R, DR, G, DGR, B, DB, C, Y, OL}
+HALF = {W: LG, LG: DG, R: DR, G: DGR, B: DB, Y: OL, C: B}   # the shaded half of each colour
+CX = CY = 24
+
+
+def _w(w, k):
+    return max(1, round(w * k))
 
 
 def poly(*pts):
     return lambda d, k: d.polygon([(x * k, y * k) for x, y in pts], fill=255)
 
 
-def ellipse(cx, cy, rx, ry):
-    return lambda d, k: d.ellipse([(cx - rx) * k, (cy - ry) * k, (cx + rx) * k, (cy + ry) * k], fill=255)
-
-
 def circle(cx, cy, r):
-    return ellipse(cx, cy, r, r)
-
-
-def rect(x0, y0, x1, y1):
-    return lambda d, k: d.rectangle([x0 * k, y0 * k, x1 * k - 1, y1 * k - 1], fill=255)
-
-
-def line(pts, w, caps=True):
-    def draw(d, k):
-        d.line([(x * k, y * k) for x, y in pts], fill=255, width=round(w * k), joint="curve")
-        if caps:
-            for x, y in (pts[0], pts[-1]):
-                d.ellipse([(x - w / 2) * k, (y - w / 2) * k, (x + w / 2) * k, (y + w / 2) * k], fill=255)
-    return draw
-
-
-def arc(cx, cy, r, w, a0, a1):
-    """Band of width w centred on radius r, degrees clockwise from 3 o'clock."""
-    return lambda d, k: d.arc([(cx - r - w / 2) * k, (cy - r - w / 2) * k, (cx + r + w / 2) * k,
-                               (cy + r + w / 2) * k], a0, a1, fill=255, width=round(w * k))
+    return lambda d, k: d.ellipse([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], fill=255)
 
 
 def ring(cx, cy, r, w):
-    return arc(cx, cy, r, w, 0, 360)
+    """A band of width w inside radius r."""
+    return lambda d, k: d.ellipse([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], outline=255, width=_w(w, k))
 
 
 def oval_ring(x0, y0, x1, y1, w):
-    """A flat ellipse's band, the ground seen at the game's camera angle."""
-    return lambda d, k: d.ellipse([x0 * k, y0 * k, x1 * k, y1 * k], outline=255, width=round(w * k))
+    """A flat ellipse's band, the ground at the game's camera angle."""
+    return lambda d, k: d.ellipse([x0 * k, y0 * k, x1 * k, y1 * k], outline=255, width=_w(w, k))
 
 
-def rot(pts, deg, c=(24, 24), move=(0, 0)):
+def arc(cx, cy, r, w, a0, a1):
+    """Band of width w inside radius r, degrees clockwise from 3 o'clock."""
+    return lambda d, k: d.arc([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], a0, a1, fill=255, width=_w(w, k))
+
+
+def rect(x0, y0, x1, y1):
+    def draw(d, k):
+        a, b = round(x0 * k), round(y0 * k)
+        d.rectangle([a, b, max(a, round(x1 * k) - 1), max(b, round(y1 * k) - 1)], fill=255)
+    return draw
+
+
+def line(pts, w):
+    return lambda d, k: d.line([(x * k, y * k) for x, y in pts], fill=255, width=_w(w, k))
+
+
+def rot(pts, deg, c=(CX, CY)):
     s, co = math.sin(math.radians(deg)), math.cos(math.radians(deg))
-    return [(c[0] + (x - c[0]) * co - (y - c[1]) * s + move[0],
-             c[1] + (x - c[0]) * s + (y - c[1]) * co + move[1]) for x, y in pts]
+    return [(c[0] + (x - c[0]) * co - (y - c[1]) * s, c[1] + (x - c[0]) * s + (y - c[1]) * co) for x, y in pts]
 
 
-def head(tip, deg, length=8, half=7):
-    """Arrowhead whose tip is at tip, pointing deg (clockwise from right)."""
-    a = math.radians(deg)
-    ux, uy = math.cos(a), math.sin(a)
+def unit(deg):
+    return math.cos(math.radians(deg)), math.sin(math.radians(deg))
+
+
+def dart(tip, deg, length, half, notch=0.0):
+    """Arrowhead with its tip at tip pointing deg (clockwise from right); notch cuts its back in."""
+    ux, uy = unit(deg)
     bx, by = tip[0] - ux * length, tip[1] - uy * length
-    return poly(tip, (bx - uy * half, by + ux * half), (bx + uy * half, by - ux * half))
+    m = (tip[0] - ux * length * (1 - notch), tip[1] - uy * length * (1 - notch))
+    return [tip, (bx - uy * half, by + ux * half), m, (bx + uy * half, by - ux * half)]
 
 
-def arrow(start, tip, w=4, length=8, half=7):
-    a = math.degrees(math.atan2(tip[1] - start[1], tip[0] - start[0]))
-    back = (tip[0] - math.cos(math.radians(a)) * (length - 1), tip[1] - math.sin(math.radians(a)) * (length - 1))
-    return [line([start, back], w), head(tip, a, length, half)]
+def toward(pts, o, f):
+    return [(o[0] + (x - o[0]) * f, o[1] + (y - o[1]) * f) for x, y in pts]
+
+
+def side(deg):
+    """The half of a shape pointing deg that is in shadow: the one facing down and right."""
+    ux, uy = unit(deg)
+    v = (-uy, ux)
+    s = v[0] + v[1]
+    return (-v[0], -v[1]) if s < -1e-6 or (abs(s) <= 1e-6 and v[0] < 0) else v
 
 
 class L:
-    """One layer: shapes added, cuts taken away, outlined and lit on its own. glow is a lamp, a
-    screen or a beam: unlit, with a soft halo, the only thing in the set that shines."""
+    """One layer: shapes added, cuts taken away, clipped to clip if given, a 1 px black line
+    round it, and if shade is a direction, the half of each piece lying that way in HALF's colour."""
 
-    def __init__(self, colour, shapes, cuts=(), outline=True, glow=False):
-        self.colour, self.shapes, self.cuts, self.outline, self.glow = colour, list(shapes), list(cuts), outline, glow
-
-
-def _shift(a, dx, dy):
-    out = np.zeros_like(a)
-    h, w = a.shape
-    out[max(dy, 0):h + min(dy, 0), max(dx, 0):w + min(dx, 0)] = a[max(-dy, 0):h - max(dy, 0), max(-dx, 0):w - max(dx, 0)]
-    return out
+    def __init__(self, colour, shapes, cuts=(), outline=True, shade=None, clip=None):
+        self.colour, self.shapes, self.cuts, self.outline, self.shade, self.clip = colour, list(shapes), list(cuts), outline, shade, clip
 
 
-def _dilate(a, r):
-    # ponytail: alternating 8- and 4-neighbour steps make an octagon, round enough at SS 8
-    for i in range(r):
-        steps = ((1, 0), (-1, 0), (0, 1), (0, -1)) + (((1, 1), (1, -1), (-1, 1), (-1, -1)) if i % 2 == 0 else ())
-        a = np.maximum.reduce([a] + [_shift(a, dx, dy) for dx, dy in steps])
-    return a
+def _mask(shapes, size, k):
+    im = Image.new("L", (size, size))
+    d = ImageDraw.Draw(im)
+    for s in shapes:
+        s(d, k)
+    return np.asarray(im) > 127
 
 
-_SURFACE = {}
-
-
-def _surface(n):
-    """Brushed grain (streaks along x) and weathering (broad blotches), both unit variance, fixed seed."""
-    if n not in _SURFACE:
-        rng = np.random.default_rng(1003)
-        brushed = ndimage.gaussian_filter(rng.standard_normal((n, n)), (0.3 * SS, 3.0 * SS))
-        weather = ndimage.gaussian_filter(rng.standard_normal((n, n)), 2.2 * SS)
-        _SURFACE[n] = (brushed / brushed.std(), weather / weather.std())
-    return _SURFACE[n]
-
-
-LIGHT = np.array((-0.5, -0.65, 0.9)) / np.linalg.norm((-0.5, -0.65, 0.9))   # top left, above
-HALF = (LIGHT + (0, 0, 1)) / np.linalg.norm(LIGHT + (0, 0, 1))
-METALS = (STEEL, DARK_STEEL, WHITE, GREY)
+EIGHT = np.ones((3, 3), bool)
 
 
 def render(layers, size):
-    n = size * SS
-    k = n / 48
-    rgb = np.zeros((n, n, 3))
-    alpha = np.zeros((n, n))
-    width = round((1.25 if size >= 48 else 1.0) * SS)   # EA's line is one pixel at 32
-    bevel = 2.2 if size >= 48 else 1.6                  # output pixels of rounded shoulder
-    brushed, weather = _surface(n)
-    ys = np.arange(n)[:, None]
-
-    def over(colour, a):
-        nonlocal rgb, alpha
-        rgb = colour * a[..., None] + rgb * (1 - a[..., None])
-        alpha = a + alpha * (1 - a)
-
+    k = size / 48
+    out = np.zeros((size, size, 4), np.uint8)
+    ys, xs = np.mgrid[0:size, 0:size]
     for layer in layers:
-        m = _mask(layer, n, k)
-        if layer.glow:
-            over(np.array(layer.colour, float) / 255, np.clip(ndimage.gaussian_filter(m, 1.6 * SS) * 0.8, 0, 1))
+        m = _mask(layer.shapes, size, k)
+        if layer.cuts:
+            m &= ~_mask(layer.cuts, size, k)
+        if layer.clip:
+            m &= _mask(layer.clip, size, k)
+        if not m.any():
+            continue
         if layer.outline:
-            over(np.array(OUTLINE, float) / 255, _dilate(m, width))
-        col = np.array(layer.colour, float) / 255
-        if layer.colour == OUTLINE:   # a slot or a dial cut into what is under it
-            over(col, m)
-            continue
-        rows =np.nonzero(m.max(axis=1) > 0.5)[0]
-        y0, y1 = (rows[0], rows[-1] + 1) if len(rows) else (0, n)
-        ygrad = np.clip(1.08 - 0.26 * (ys - y0) / max(y1 - y0, 1), 0.78, 1.08)[..., None]
-        if layer.glow:   # a light: flat, brighter in the middle of its width
-            core = np.clip(ndimage.distance_transform_edt(m > 0.5) / (1.5 * SS), 0, 1)[..., None]
-            over(np.clip(col * (0.85 + 0.15 * ygrad) + (1 - col) * core * 0.35, 0, 1), m)
-            continue
-        dist = ndimage.distance_transform_edt(m > 0.5) / SS
-        t = np.clip(dist / bevel, 0, 1)
-        h = (1 - (1 - t) ** 2) * bevel
-        h = ndimage.gaussian_filter(h, 0.6 * SS)
-        gy, gx = np.gradient(h * SS)
-        nz = np.ones_like(h)
-        norm = np.sqrt(gx * gx + gy * gy + 1)
-        nx, ny, nz = -gx / norm, -gy / norm, nz / norm
-        ndl = np.clip(nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2], 0, 1)
-        diffuse = 0.32 + 0.68 * ndl / LIGHT[2]
-        metal = layer.colour in METALS
-        spec = np.clip(nx * HALF[0] + ny * HALF[1] + nz * HALF[2], 0, 1) ** (18 if metal else 30) * (0.45 if metal else 0.22)
-        albedo = col * (1 + (0.07 if metal else 0.03) * brushed[..., None]) * (1 - 0.06 * np.clip(weather, 0, 3)[..., None])
-        if not metal:   # paint worn off the crests where the weather is worst
-            wear = ((dist < 0.9) & (weather > 0.7) & (ndl > LIGHT[2]))[..., None] * 0.55
-            albedo = albedo * (1 - wear) + np.array(PAINT_WEAR, float) / 255 * wear
-        lit = albedo * diffuse[..., None] * ygrad + spec[..., None] * 0.9
-        over(np.clip(lit, 0, 1), m)
-
-    # box filter on premultiplied colour, then back to straight alpha
-    pre = rgb.reshape(size, SS, size, SS, 3).mean(axis=(1, 3))
-    a = alpha.reshape(size, SS, size, SS).mean(axis=(1, 3))
-    straight = np.where(a[..., None] > 0, pre / np.maximum(a[..., None], 1e-9), 0)
-    out = np.dstack([straight, a]) * 255
-    out = np.round(out).astype(np.uint8)
-    out[out[..., 3] == 0] = 0
+            out[ndimage.binary_dilation(m, EIGHT) & ~m] = K + (255,)
+        out[m] = layer.colour + (255,)
+        if layer.shade and layer.colour in HALF:
+            vx, vy = layer.shade
+            lab, n = ndimage.label(m)
+            for i in range(1, n + 1):
+                piece = lab == i
+                cx, cy = xs[piece].mean(), ys[piece].mean()
+                out[piece & ((xs - cx) * vx + (ys - cy) * vy > 0.01)] = HALF[layer.colour] + (255,)
     return Image.fromarray(out, "RGBA")
 
 
-def _mask(layer, n, k):
-    im = Image.new("L", (n, n))
-    d = ImageDraw.Draw(im)
-    for s in layer.shapes:
-        s(d, k)
-    if layer.cuts:
-        cut = Image.new("L", (n, n))
-        dc = ImageDraw.Draw(cut)
-        for s in layer.cuts:
-            s(dc, k)
-        im = Image.fromarray(np.minimum(np.asarray(im), 255 - np.asarray(cut)).astype(np.uint8))
-    return np.asarray(im).astype(np.float64) / 255
+class T:
+    """Places a pictogram drawn in the 48 frame smaller and elsewhere (inside a no-sign)."""
+
+    def __init__(self, sc=1.0, dx=0.0, dy=0.0):
+        self.sc, self.dx, self.dy = sc, dx, dy
+
+    def __call__(self, x, y):
+        return (x * self.sc + self.dx, y * self.sc + self.dy)
+
+    def ps(self, pts):
+        return [self(x, y) for x, y in pts]
+
+    def w(self, v):
+        return v * self.sc
+
+
+ID = T()
+
+
+# ---------------------------------------------------------------------------------------------
+# The marks
+
+def centre_dot():
+    """EA's yellow pip in the middle of move and attack."""
+    return L(Y, [poly((24, 21.5), (26.5, 24), (24, 26.5), (21.5, 24))])
+
+
+def tip_arrow():
+    """The small white arrow EA puts at the top left of every ability pictogram; the hotspot is its tip."""
+    return L(W, [poly((2, 2), (13, 6), (9.5, 9.5), (6, 13))], shade=(1, -1))
+
+
+def attack_tris(d, colour=R, length=12, half=8):
+    """Four triangles on the axes, pointing in, their tips d from the centre."""
+    shapes = []
+    for deg in (90, 270, 0, 180):
+        ux, uy = unit(deg)
+        shapes.append(poly(*dart((CX - d * ux, CY - d * uy), deg, length, half)))
+    return L(colour, shapes)
+
+
+def diag_darts(d, colour=G, length=12, half=6.5, notch=0.12, shade=True):
+    """Four arrowheads on the diagonals, pointing in."""
+    out = []
+    for deg in (45, 135, 225, 315):
+        ux, uy = unit(deg)
+        out.append(L(colour, [poly(*dart((CX - d * ux, CY - d * uy), deg, length, half, notch))],
+                     shade=side(deg) if shade else None))
+    return out
+
+
+def swept_darts(d, colour, sweep, f, length=12, half=6, notch=0.12):
+    """Out of range and the uplink: the diagonal darts, a second colour filling each from its tip."""
+    out = [L(colour, [poly(*dart((CX - d * unit(deg)[0], CY - d * unit(deg)[1]), deg, length, half, notch))
+                      for deg in (45, 135, 225, 315)])]
+    if f > 0:
+        shapes = []
+        for deg in (45, 135, 225, 315):
+            tip = (CX - d * unit(deg)[0], CY - d * unit(deg)[1])
+            shapes.append(poly(*toward(dart(tip, deg, length, half, notch), tip, f)))
+        out.append(L(sweep, shapes, outline=False))
+    return out
+
+
+def brackets(h, arm, w, c=(CX, CY)):
+    lo_x, lo_y, hi_x, hi_y = c[0] - h, c[1] - h, c[0] + h, c[1] + h
+    out = []
+    for x, sx in ((lo_x, 1), (hi_x, -1)):
+        for y, sy in ((lo_y, 1), (hi_y, -1)):
+            out.append(rect(*_box(x, y, x + sx * arm, y + sy * w)))
+            out.append(rect(*_box(x, y, x + sx * w, y + sy * arm)))
+    return out
+
+
+def _box(x0, y0, x1, y1):
+    return min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)
+
+
+def no_ring(cross=False):
+    """EA's refusal: a thick red ring with a slash, or with an X for the plain one."""
+    bars = ([line([(15, 15), (33, 33)], 5), line([(33, 15), (15, 33)], 5)] if cross
+            else [line([(10, 10), (38, 38)], 5)])
+    return L(R, [ring(CX, CY, 21, 5)] + bars, shade=(-1, 1))
+
+
+def stack(colour, tops, bright, half=11, h=9, up=False, x=CX):
+    """EA's enter mark: triangles stacked one under the other, the one at bright lit, the others dark."""
+    out = []
+    for i, top in enumerate(tops):
+        pts = [(x - half, top + h), (x + half, top + h), (x, top)] if up else [(x - half, top), (x + half, top), (x, top + h)]
+        out.append(L(colour if i == bright else HALF[colour], [poly(*pts)]))
+    return out
+
+
+def pointer():
+    return [L(W, [poly((2, 2), (16, 30), (18, 18), (30, 16))], shade=(1, -1))]
+
+
+def scroll(i):
+    """Right, then clockwise in 45 degree steps. The diagonals are drawn as EA drew them, a square
+    corner at the tip with a slanted shaft, not the straight arrow turned (that rasterises ragged)."""
+    if i % 2 == 0:
+        pts = [(45, 24), (33, 12), (33, 19), (22, 19), (22, 29), (33, 29), (33, 36)]
+    else:
+        pts = [(45, 45), (45, 28), (39.7, 33.3), (30.7, 24.3), (24.3, 30.7), (33.3, 39.7), (28, 45)]
+    pts = rot(pts, 90 * (i // 2))
+    return pts[0], [L(G, [poly(*pts)])]   # EA's scroll arrows are flat green
+
+
+def pattee(r, inner, outer, c=(CX, CY)):
+    """A cross whose four arms flare outward: EA's waypoint and placement mark."""
+    arm = [(c[0] - inner, c[1]), (c[0] + inner, c[1]), (c[0] + outer, c[1] - r), (c[0] - outer, c[1] - r)]
+    return [poly(*rot(arm, a, c)) for a in (0, 90, 180, 270)]
+
+
+def block_arrow(d, deg):
+    """A white rally arrow pointing deg at the centre, its tip d away."""
+    pts = [(24, 24 - d), (31, 17 - d), (27, 17 - d), (27, 11 - d), (21, 11 - d), (21, 17 - d), (17, 17 - d)]
+    return L(W, [poly(*rot(pts, deg))], shade=side(deg + 90))
+
+
+SEGMENTS = {0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc",
+            8: "abcdefg", 9: "abcdfg"}
+
+
+def seven_segment(digit, x, y, w, h, t):
+    m = y + h / 2
+    seg = {"a": (x, y, x + w, y + t), "b": (x + w - t, y, x + w, m), "c": (x + w - t, m, x + w, y + h),
+           "d": (x, y + h - t, x + w, y + h), "e": (x, m, x + t, y + h), "f": (x, y, x + t, m),
+           "g": (x, m - t / 2, x + w, m + t / 2)}
+    return [rect(*seg[c]) for c in SEGMENTS[digit]]
+
+
+# pictograms -----------------------------------------------------------------------------------
+
+def knife(t=ID, glint=None):
+    blade = t.ps([(3, 3), (10.8, 6.5), (26.7, 21.7), (21.7, 26.7), (6.5, 10.8)])
+    out = [L(W, [poly(*blade)], shade=(-1, 1)),
+           L(G, [line(t.ps([(25.5, 25.5), (38, 38)]), t.w(5))], shade=(-1, 1)),
+           L(DG, [line(t.ps([(29.7, 18.7), (18.7, 29.7)]), t.w(3.5))]),
+           L(DG, [circle(*t(39.5, 39.5), t.w(3))])]
+    if glint is not None:   # a white spark running down the blade's shaded edge
+        gx, gy = t(5 + glint - 1.2, 5 + glint + 1.2)
+        out.append(L(W, [poly((gx, gy - t.w(2)), (gx + t.w(2), gy), (gx, gy + t.w(2)), (gx - t.w(2), gy))], outline=False))
+    return out
+
+
+def sticks(t, top, bottom=46):
+    """Three red dynamite sticks bound by a white band."""
+    return [L(R, [rect(*t(15, top), *t(33, bottom))]),
+            L(DR, [rect(*t(20.5, top), *t(22, bottom)), rect(*t(26.5, top), *t(28, bottom))], outline=False),
+            L(W, [rect(*t(14, bottom - 10), *t(34, bottom - 6.5))], shade=(0, 1))]
+
+
+def wires(t):
+    return [L(B, [arc(*t(32, 30), t.w(6), t.w(1.5), -90, 90)], outline=False),
+            L(DGR, [arc(*t(32, 37), t.w(5), t.w(1.5), -90, 90)], outline=False)]
+
+
+def remote_charge(t=ID, lamp=True):
+    out = sticks(t, 22) + wires(t) + [
+        L(DG, [rect(*t(18, 14), *t(30, 22))]),
+        L(G, [rect(*t(22.5, 15.5), *t(25.5, 20.5))], outline=False),
+        L(K, [line(t.ps([(24, 3), (24, 14)]), t.w(1.5)), line(t.ps([(21, 6), (27, 6)]), t.w(1.5))], outline=False)]
+    if lamp:
+        out.append(L(Y, [rect(*t(19, 12), *t(21.5, 14)), rect(*t(26.5, 12), *t(29, 14))], outline=False))
+    return out
+
+
+def building(colour=LG):
+    """A low crenellated block with a door, a building at the cursor's size."""
+    return L(colour, [poly((8, 46), (8, 32), (12, 32), (12, 28), (18, 28), (18, 32), (30, 32), (30, 28), (36, 28),
+                           (36, 32), (40, 32), (40, 46))], [rect(20, 38, 28, 47)], shade=(1, 0))
+
+
+def car():
+    return [L(LG, [poly((3, 40), (3, 33), (10, 31), (16, 24), (32, 24), (38, 31), (45, 33), (45, 40))],
+              [poly((18, 26.5), (23, 26.5), (23, 31), (13.5, 31)), poly((25, 26.5), (30, 26.5), (34.5, 31), (25, 31))],
+              shade=(0, 1)),
+            L(DG, [circle(12, 41, 4.5), circle(36, 41, 4.5)])]
+
+
+def build_cross(colour):
+    lobes = L(W if colour == Y else LG, [circle(24 + sx * 8.5, 24 + sy * 8.5, 7.5) for sx in (-1, 1) for sy in (-1, 1)], shade=(1, 1))
+    cross = L(colour, [rect(22, 6, 26, 42), rect(6, 22, 42, 26)] +
+              [poly(*rot([(17, 4), (31, 4), (27, 9), (21, 9)], a)) for a in (0, 90, 180, 270)])
+    return [lobes, cross]
+
+
+def wrench(deg=0.0, c=(4, 4)):
+    def p(pts):
+        return rot(pts, deg, c)
+    u, n = (0.7071, 0.7071), (0.7071, -0.7071)
+    head = (10, 10)
+    slot = [(head[0] + u[0] * s + n[0] * h, head[1] + u[1] * s + n[1] * h) for s, h in ((1, 2.6), (1, -2.6), (-12, -2.6), (-12, 2.6))]
+    return [L(W, [circle(*p([head])[0], 7.5), line(p([head, (36, 36)]), 5.5), circle(*p([(37, 37)])[0], 6)],
+              [poly(*p(slot)), circle(*p([(37, 37)])[0], 2.6)], shade=rot([(-1, 1)], deg, (0, 0))[0])]
+
+
+def bomb_ball(spark):
+    out = [L(R, [circle(24, 14, 7)], shade=(1, 1)),
+           L(K, [line([(28, 9), (32, 4)], 1.5)], outline=False)]
+    if spark:
+        out.append(L(Y, [rect(31, 1, 35, 3), rect(32, 0, 34, 4)], outline=False))
+    return out
 
 
 # ---------------------------------------------------------------------------------------------
 # The set. Each entry: name -> (hotspot in the 48 frame, list of frames as layer lists, jiffies)
 
-def no_bar():
-    return L(RED, [ring(24, 24, 18, 4), line([(11.5, 11.5), (36.5, 36.5)], 4.5)])
-
-
-def greyed(layers):
-    out = []
-    for l in layers:
-        v = sum(l.colour) / 3
-        out.append(L((v * 0.55 + 60,) * 3, l.shapes, l.cuts, l.outline))
-    return out
-
-
-def chevrons(d, colour):
-    out = []
-    for a in (45, 135, 225, 315):
-        tip = (24 + d * math.cos(math.radians(a)), 24 + d * math.sin(math.radians(a)))
-        arms = rot([(tip[0] + 7, tip[1] - 7), tip, (tip[0] + 7, tip[1] + 7)], a, c=tip)
-        out.append(line(arms, 4))
-    return L(colour, out)
-
-
-def reticle(colour, r=10, tick=17):
-    shapes = [ring(24, 24, r, 3.5)]
-    for x0, y0, x1, y1 in ((24, 24 - r + 4, 24, 24 - tick), (24, 24 + r - 4, 24, 24 + tick),
-                           (24 - r + 4, 24, 24 - tick, 24), (24 + r - 4, 24, 24 + tick, 24)):
-        shapes.append(line([(x0, y0), (x1, y1)], 3.5))
-    return [L(colour, shapes), pip()]
-
-
-def pip():
-    """EA's yellow centre pixel on move and attack, here a small brass rivet."""
-    return L(GOLD, [circle(24, 24, 2.4)])
-
-
-def brackets(lo, hi, arm, w):
-    return [line([(lo, lo + arm), (lo, lo), (lo + arm, lo)], w), line([(hi - arm, lo), (hi, lo), (hi, lo + arm)], w),
-            line([(lo, hi - arm), (lo, hi), (lo + arm, hi)], w), line([(hi - arm, hi), (hi, hi), (hi, hi - arm)], w)]
-
-
-def pointer():
-    return [L(STEEL, [poly((3, 2), (3, 34), (11, 27), (16, 39), (22, 36.5), (17, 25), (27, 25))])]
-
-
-def scroll(i):
-    pts = [(45, 24), (31, 10), (31, 18), (12, 18), (12, 30), (31, 30), (31, 38)]
-    pts = rot(pts, 45 * i)
-    tip = pts[0]
-    dx = 0 if abs(tip[0] - 24) < 1 else (45 - tip[0] if tip[0] > 24 else 3 - tip[0])
-    dy = 0 if abs(tip[1] - 24) < 1 else (45 - tip[1] if tip[1] > 24 else 3 - tip[1])
-    pts = [(x + dx, y + dy) for x, y in pts]
-    return pts[0], [L(GREEN, [poly(*pts)])]   # EA's scroll arrows are green
-
-
-def enter(colour):
-    # the doorway is steel so the arrow alone carries the intent and the two never read as one glyph
-    return [L(STEEL, [rect(8, 20, 40, 46)], [rect(14, 26, 34, 47)]), L(colour, arrow((24, 2), (24, 36), 6, 12, 10))]
-
-
-def seven_segment(digit, x, y, w, h, t):
-    """One digit's lit segments as rectangles, top left at x, y."""
-    on = {0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg"}[digit]
-    m = y + h / 2
-    seg = {"a": (x, y, x + w, y + t), "b": (x + w - t, y, x + w, m), "c": (x + w - t, m, x + w, y + h),
-           "d": (x, y + h - t, x + w, y + h), "e": (x, m, x + t, y + h), "f": (x, y, x + t, m),
-           "g": (x, m - t / 2, x + w, m + t / 2)}
-    return [rect(*seg[c]) for c in on]
-
-
-def box(x0, y0, x1, y1):
-    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
-
-
-def disc_pts(cx, cy, r, n=24):
-    return [(cx + r * math.cos(2 * math.pi * i / n), cy + r * math.sin(2 * math.pi * i / n)) for i in range(n)]
-
-
 def build_set():
     s = {}
-    s["Pointer"] = ((3, 2), [pointer()], 0)
+    s["Pointer"] = ((2, 2), [pointer()], 0)
     for i in range(8):
         tip, layers = scroll(i)
         s["Scroll%d" % i] = ((round(tip[0]), round(tip[1])), [layers], 0)
-    s["Select"] = ((24, 24), [[L(STEEL, brackets(9, 39, 9, 4)), L(STEEL, [circle(24, 24, 2.6)])]], 0)
-    s["Target"] = ((24, 24), [[L(STEEL, [line([(24, 5), (24, 18)], 3.5), line([(24, 30), (24, 43)], 3.5),
-                                          line([(5, 24), (18, 24)], 3.5), line([(30, 24), (43, 24)], 3.5)]),
-                                L(STEEL, [circle(24, 24, 2.2)])]], 0)
-    # EA's pair: green arrows for move, the same green with red for attack move
-    s["Move"] = ((24, 24), [[chevrons(d, GREEN), pip()] for d in (13, 11, 9, 11)], 6)
-    s["AttackMove"] = ((24, 24), [[chevrons(d, GREEN), L(RED, [ring(24, 24, 5.5, 3)]), pip()] for d in (14, 12, 10, 12)], 6)
-    s["Attack"] = ((24, 24), [reticle(RED)], 0)
-    s["ForceAttack"] = ((24, 24), [reticle(RED, 8, 13) + [L(RED, brackets(4, 44, 10, 3.5))]], 0)
-    s["ForceAttackGround"] = ((24, 33), [[L(RED, [oval_ring(7, 26, 41, 40, 3.5)]),
-                                          L(RED, [circle(24, 33, 2.2)]),
-                                          L(RED, arrow((24, 2), (24, 28), 4.5, 9, 7.5))]], 0)
-    s["OutRange"] = ((24, 24), [[L(RED, [arc(24, 24, 13, 3.5, a + r - 20, a + r + 20) for a in (45, 135, 225, 315)]),
-                                 L(RED, [circle(24, 24, 2.2)])] for r in (0, 22.5, 45, 67.5)], 6)
+    s["Select"] = ((24, 24), [[L(W, brackets(h, 7, 3))] for h in (10, 12, 14, 16, 18)], 5)
 
-    # guard: a steel shield over the ring of ground it holds, the brand's double chevron on it
-    s["Guard"] = ((24, 40), [[L(STEEL, [oval_ring(6, 34.5, 42, 45.5, 3)]),
-                              L(STEEL, [poly((12, 5), (36, 5), (36, 20), (33, 28), (24, 36), (15, 28), (12, 20))]),
-                              L(DARK_STEEL, [line([(17, 20), (24, 14), (31, 20)], 3.5),
-                                             line([(17, 27), (24, 21), (31, 27)], 3.5)], outline=False)]], 0)
-    s["Waypoint"] = ((24, 44), [[L(GREEN, [circle(24, 16, 11), poly((14.5, 20), (33.5, 20), (24, 44))],
-                                   [circle(24, 16, 4.5)])]], 0)
-    s["Beacon"] = ((24, 44), [[L(STEEL, [poly((24, 12), (16, 44), (32, 44))], [poly((24, 22), (20, 40), (28, 40))]),
-                               L(BLUE, [circle(24, 10, 3.6)], glow=True)] +
-                              [L(BLUE, [arc(24, 10, r, 2.8, -40, 40), arc(24, 10, r, 2.8, 140, 220)], glow=True) for r in rs]
-                              for rs in ((8, 14, 20), (), (8,), (8, 14))], 10)
+    # the attack family: red triangles on the axes round the yellow pip, spreading
+    spread = (4, 5.5, 7, 8.5)
+    s["Target"] = ((24, 24), [[attack_tris(6), centre_dot()]], 0)
+    s["Attack"] = ((24, 24), [[attack_tris(d), centre_dot()] for d in spread], 6)
+    s["ForceAttack"] = ((24, 24), [[L(R, brackets(21, 7, 3)), attack_tris(d), centre_dot()] for d in spread], 6)
+    # attack on bare ground: the triangles close on a patch of ground instead of the pip
+    s["ForceAttackGround"] = ((24, 24), [[L(R, [oval_ring(15.5, 20, 32.5, 28, 2.5)]), attack_tris(d, length=10, half=6.5)]
+                                         for d in (9.5, 11, 12.5)], 6)
+    s["Move"] = ((24, 24), [diag_darts(d) + [centre_dot()] for d in (3, 5, 7, 9)], 5)
+    s["AttackMove"] = ((24, 24), [diag_darts(g, length=10, half=6) + [attack_tris(g + 6.5, length=10, half=7), centre_dot()]
+                                  for g in (3, 4.5, 6)], 6)
+    sweep = (0, 0.3, 0.55, 0.8, 0.55, 0.3)
+    s["OutRange"] = ((24, 24), [swept_darts(7.5, R, G, f) for f in sweep], 5)
+    s["Uplink"] = ((24, 24), [swept_darts(7.5, B, C, f) for f in sweep], 5)
+    snipe = []
+    for lit in (0, 1, 2, 3, 3):
+        ticks = {r: (Y if i < lit else R) for i, r in enumerate((16, 12, 8))}
+        layers = [L(R, [ring(24, 24, 21, 3)], shade=(-1, 1)),
+                  L(R, [rect(23, 4, 25, 44), rect(4, 23, 44, 25)])]
+        for r, col in ticks.items():
+            layers.append(L(col, [rect(21, 24 - r - 1, 27, 24 - r + 1), rect(21, 24 + r - 1, 27, 24 + r + 1),
+                                  rect(24 - r - 1, 21, 24 - r + 1, 27), rect(24 + r - 1, 21, 24 + r + 1, 27)], outline=False))
+        snipe.append(layers)
+    s["Snipe"] = ((24, 24), snipe, 6)
+    s["LaserMissile"] = ((24, 24), [[L(R, [poly(*dart((24 + d * unit(a)[0], 24 + d * unit(a)[1]), a + 180, 7, 3))
+                                           for a in range(0, 360, 45)]), centre_dot()] for d in (7, 9, 11, 13)], 6)
 
-    # friendly and support: green
-    s["Enter"] = ((24, 36), [enter(GREEN)], 0)
-    s["Garrison"] = ((24, 30), [[L(STEEL, [poly((8, 46), (8, 24), (13, 24), (13, 19), (19, 19), (19, 24), (29, 24),
-                                                (29, 19), (35, 19), (35, 24), (40, 24), (40, 46))],
-                                   [rect(19, 34, 29, 47)]),
-                                 L(GREEN, arrow((24, 0), (24, 30), 4.5, 10, 8))]], 0)
-    s["Board"] = ((24, 26), [[L(DARK_STEEL, [circle(12, 38, 5), circle(24, 38, 5), circle(36, 38, 5)]),
-                              L(GREEN, [poly((3, 37), (3, 30), (10, 24), (37, 24), (45, 31), (45, 37))]),
-                              L(GREEN, arrow((24, 0), (24, 21), 4.5, 9, 7.5))]], 0)
-    s["Unload"] = ((24, 30), [[L(STEEL, [rect(8, 3, 40, 16)], [rect(13, 8, 35, 17)]),
-                               L(GREEN, arrow((24, 19), (24, 44), 4, 9, 7) + arrow((19, 19), (7, 40), 4, 9, 7)
-                                 + arrow((29, 19), (41, 40), 4, 9, 7))]], 0)
-    # dock: a steel bay open to the left with its two mouth lamps, the green arrow running in
-    s["Dock"] = ((24, 24), [[L(STEEL, [rect(16, 8, 45, 40)], [rect(14, 15, 39, 33)]),
-                             L(GOLD, [circle(19.5, 11.5, 1.8), circle(19.5, 36.5, 1.8)], outline=False, glow=True),
-                             L(GREEN, arrow((2, 24), (34, 24), 5, 11, 8.5))]], 0)
-    s["Rally"] = ((11, 44), [[L(STEEL, [line([(11, 5), (11, 44)], 3), circle(11, 4, 2.4)]),
-                              L(GREEN, [poly((13, 6), (25, 6 + w), (40, 6), (33, 14.5), (40, 23), (25, 23 + w), (13, 23))])]
-                             for w in (0, 2, 0, -2)], 8)
-    s["Defector"] = ((24, 24), [[L(GREEN, [arc(24, 24, 14, 4.5, 200, 330), head(rot([(38, 24)], -18)[0], 115, 10, 8),
-                                           arc(24, 24, 14, 4.5, 20, 150), head(rot([(10, 24)], -18)[0], 295, 10, 8)])]], 0)
-    # EA's heal is a cross on a white disc; the cross here is the friendly green
-    s["GetHealed"] = ((24, 24), [[L(WHITE, [circle(24, 24, 18)]), L(GREEN, [rect(19.5, 10, 28.5, 38), rect(10, 19.5, 38, 28.5)])]], 0)
-    teeth = []
-    for i in range(16):
-        r = 18 if i % 2 == 0 else 13.5
-        for da in (-9, 9):
-            a = math.radians(i * 22.5 + da)
-            teeth.append((24 + r * math.cos(a), 24 + r * math.sin(a)))
-    s["GetRepaired"] = ((24, 24), [[L(STEEL, [poly(*teeth)], [circle(24, 24, 9)]),
-                                    L(GREEN, [rect(21, 13, 27, 35), rect(13, 21, 35, 27)])]], 0)
+    # places on the map
+    veins = [rect(23.5, 14, 24.5, 34), rect(14, 23.5, 34, 24.5)]
+    s["Waypoint"] = ((24, 24), [[L(G, pattee(11, 3, 7)), L(DGR, veins, outline=False)],
+                                [L(DGR, pattee(11, 3, 7)), L(G, veins, outline=False)]], 30)
+    s["Build"] = ((24, 24), [build_cross(Y), build_cross(OL)], 30)
+    s["BuildInvalid"] = ((24, 24), [build_cross(DG) + [no_ring()]], 0)
+    s["Invalid"] = ((24, 24), [[no_ring(cross=True)]], 0)
+    s["Rally"] = ((24, 24), [[block_arrow(d, a) for a in (0, 90, 180, 270)] for d in (9, 7, 5, 3)], 6)
+    beacon = []
+    for r in (0, 4, 8, 12, 16):
+        layers = [L(W, [rect(22, 19, 26, 39)], shade=(1, 0)),
+                  L(W, [poly((24, 46), (16, 40), (16, 37), (32, 37), (32, 40))], shade=(1, 0)),
+                  L(DR, [circle(24, 18, 3.5)])]
+        if r:
+            dots = 8 if r < 8 else 12
+            layers.append(L(R, [rect(24 + r * unit(a)[0] - 1, 18 + r * unit(a)[1] - 1, 24 + r * unit(a)[0] + 1, 18 + r * unit(a)[1] + 1)
+                                for a in np.arange(dots) * 360 / dots + 360 / dots / 2], outline=False))
+        beacon.append(layers)
+    s["Beacon"] = ((24, 46), beacon, 6)
+    s["Guard"] = ((2, 2), [[tip_arrow(),
+                            L(W, [poly((14, 8), (44, 8), (44, 24), (39, 35), (29, 44), (19, 35), (14, 24))], shade=(1, 0)),
+                            L(G, [line([(46, 6), (14, 38)], 7)], outline=False,
+                              clip=[poly((15, 9), (43, 9), (43, 24), (38.5, 34.5), (29, 43), (19.5, 34.5), (15, 24))])]], 0)
 
-    # building: construction yellow, EA's placement colour; the wrench stays bare steel as EA's is
-    wrench_pts = [p for p in disc_pts(10, 24, 8.5)]
-    s["Repair"] = ((5, 5), [[L(STEEL, [poly(*rot(wrench_pts, 45, move=(-7, -7))),
-                                      poly(*rot(box(14, 20.5, 43, 27.5), 45, move=(-7, -7))),
-                                      circle(*rot([(43, 24)], 45, move=(-7, -7))[0], 3.5)],
-                               [poly(*rot(box(0, 21, 10, 27), 45, move=(-7, -7)))])]], 0)
-    s["ResumeBuild"] = ((13, 13),[[L(DARK_STEEL, [poly(*rot(box(21.5, 14, 26.5, 46), -45, move=(-1, -1)))]),
-                                  L(GOLD, [poly(*rot(box(10, 5, 38, 15), -45, move=(-1, -1)))])]], 0)
-    s["Build"] = ((24, 24), [[L(GOLD, [poly((24, 6), (45, 24), (24, 42), (3, 24))],
-                                [poly((24, 12), (38, 24), (24, 36), (10, 24))]),
-                              L(GOLD, [rect(21.5, 16, 26.5, 32), rect(16, 21.5, 32, 26.5)])]], 0)
-    s["BuildInvalid"] = ((24, 24), [greyed(s["Build"][1][0]) + [no_bar()]], 0)
-    s["Invalid"] = ((24, 24), [[L(GREY, [circle(24, 24, 15)]), no_bar()]], 0)
+    # going in and out: EA's stacked triangles, the lit one running down the stack
+    tops = (10, 20, 30)
+    s["Enter"] = ((24, 24), [stack(G, tops, i) for i in range(3)], 6)
+    s["EnterHostile"] = ((24, 24), [stack(R, tops, i) for i in range(3)], 6)
+    # unload: EA's exit stack turned to point out, as chevrons rising off the hull's floor
+    s["Unload"] = ((24, 24), [[L(G if j == i else DGR, [poly((11, top + 8), (24, top), (37, top + 8), (37, top + 12), (24, top + 4),
+                                                         (11, top + 12))]) for j, top in enumerate((26, 16, 6))] +
+                              [L(W, [rect(8, 40, 40, 44)], shade=(0, 1))] for i in range(3)], 6)
+    s["Garrison"] = ((24, 24), [stack(G, (8, 18), i, half=10, h=8) + [building()] for i in range(2)], 15)
+    s["Board"] = ((24, 24), [stack(G, (6, 15), i, half=10, h=8) +
+                             [L(LG, [poly((4, 38), (4, 32), (10, 27), (38, 27), (44, 32), (44, 38))], shade=(0, 1)),
+                              L(DG, [circle(12, 40, 4), circle(24, 40, 4), circle(36, 40, 4)])] for i in range(2)], 15)
+    s["Hijack"] = ((24, 24), [stack(R, (2, 11), i, half=9, h=8) + car() for i in range(2)], 15)
+    s["CarBomb"] = ((24, 28), [bomb_ball(on) + car() for on in (True, False)], 15)
+    bolt = [(28, 2), (12, 26), (22, 26), (17, 46), (36, 19), (26, 19), (33, 2)]
+    s["Sabotage"] = ((24, 24), [[L(Y, [poly(*bolt)], shade=(1, 0))], [L(W, [poly(*bolt)], shade=(1, 0))]], 20)
+    s["Dock"] = ((24, 24), [[L(LG, [rect(32, 8, 44, 40)], [rect(30, 14, 39, 34)], shade=(0, 1))] +
+                            [L(G if j == i else DGR, [poly((x, 15), (x, 33), (x + 9, 24))]) for j, x in enumerate((4, 13, 22))]
+                            for i in range(3)], 6)
+    s["GetRepaired"] = ((24, 29), [stack(G, (19, 30), i, half=13, h=9) +
+                                   [L(W, [circle(10, 9, 5), rect(13, 7, 34, 11), circle(37, 9, 4.5)],
+                                      [rect(2, 7, 9, 11), circle(37, 9, 2)], shade=(0, 1))] for i in range(2)], 15)
+    s["GetHealed"] = ((2, 2), [[tip_arrow(), L(W, [circle(28, 28, 17)], shade=(1, 1)),
+                                L(R, [rect(24, 17, 32, 39), rect(17, 24, 39, 32)])]], 0)
+    # EA's defector mark: a ring of blue beads round a cyan one, a cyan bead running round it
+    s["Defector"] = ((24, 24), [[L(C if j == i else B, [circle(x, y, 2.5)])
+                                 for j, (x, y) in enumerate((round(24 + 17 * unit(a)[0]), round(24 + 17 * unit(a)[1])) for a in range(-90, 270, 45))] +
+                                [L(C, [rect(22, 19.5, 26, 28.5), rect(19.5, 22, 28.5, 26)])] for i in range(8)], 5)
+    s["Capture"] = ((30, 46), [[L(W, [rect(28.5, 6, 31.5, 40)], shade=(1, 0)), L(W, [circle(30, 5, 2.5)]),
+                                L(R, [poly((28, 7), (18, 8 + a), (9, 11 + a), (18, 14 + a), (28, 17))], shade=(0, 1)),
+                                L(W, [poly(*dart((30, 46), 90, 10, 8, 0.35))], shade=(1, 0))] for a in (0, 2, 0, -2)], 6)
 
-    # hostile: red
-    s["EnterHostile"] = ((24, 36), [enter(RED)], 0)
-    s["Capture"] = ((24, 30), [[L(STEEL, [line([(30, 3), (30, 27)], 3)]),
-                                L(STEEL, [rect(6, 26, 36, 46)], [rect(17, 34, 25, 47)]),
-                                L(RED, [poly((32, 3), (46, 8), (32, 14))])]], 0)
-    s["Hijack"] = ((24, 24), [[L(RED, [ring(24, 24, 15, 5), circle(24, 24, 5), line([(9, 24), (39, 24)], 4),
-                                       line([(24, 24), (24, 39)], 4)])]], 0)
-    s["Sabotage"] = ((24, 24), [[L(RED, [poly((29, 2), (11, 27), (22, 27), (16, 46), (37, 19), (26, 19), (34, 2))])]], 0)
-    # car bomb: a steel sedan with a red charge strapped to its roof, its arming lamp lit
-    s["CarBomb"] = ((24, 28), [[L(DARK_STEEL, [circle(12, 37, 5), circle(36, 37, 5)]),
-                                L(STEEL, [poly((3, 36), (3, 29), (9, 27.5), (15, 20), (32, 20), (38, 27.5), (45, 29.5), (45, 36))],
-                                  [poly((17, 22.5), (23, 22.5), (23, 27.5), (12.5, 27.5)),
-                                   poly((25, 22.5), (31, 22.5), (35, 27.5), (25, 27.5))]),
-                                L(RED, [rect(14, 9, 34, 19)]),
-                                L(DARK_STEEL, [rect(14, 12.5, 34, 15)], outline=False),
-                                L(RED, [circle(30, 7, 2)], glow=True)]], 0)
-    s["Snipe"] = ((24, 24), [[L(RED, [ring(24, 24, 15, 2.6), line([(24, 3), (24, 20)], 2.6), line([(24, 28), (24, 45)], 2.6),
-                                      line([(3, 24), (20, 24)], 2.6), line([(28, 24), (45, 24)], 2.6)]),
-                              L(RED, [circle(24, 24, 1.8), circle(24, 33, 1.6), circle(24, 38, 1.6)], outline=False)]], 0)
-    s["LaserMissile"] = ((17, 31), [[L(RED, [ring(17, 31, 7, 3)]), L(RED, [circle(17, 31, 2.4)], glow=True),
-                                     L(DARK_STEEL, [poly(*rot([(36, 9), (32, 3), (40, 3)], 0)),
-                                                    poly((39, 12), (45, 8), (45, 16))]),
-                                     L(STEEL, [poly(*rot(box(26, 9, 42, 15), -45, c=(34, 12))),
-                                               poly(*rot([(26, 9), (20, 12), (26, 15)], -45, c=(34, 12)))])]], 0)
-    s["TNT"] = ((24, 26), [[L(RED, [rect(11, 16, 19, 44), rect(20, 16, 28, 44), rect(29, 16, 37, 44)]),
-                            L(DARK_STEEL, [rect(9, 26, 39, 32)]),
-                            L(STEEL, [line([(24, 16), (27, 9), (32, 6)], 2.2)]),
-                            L(FLAME, [circle(33, 5.5, 2.6)], glow=True)]], 0)
-    knife = [L(RED, [poly(*rot(box(29, 20, 46, 28), 45, move=(-5, -5)))]),
-             L(DARK_STEEL, [poly(*rot(box(26, 14, 30, 34), 45, move=(-5, -5)))]),
-             L(STEEL, [poly(*rot([(3, 24), (11, 19), (26, 19), (26, 29), (13, 29)], 45, move=(-5, -5)))])]
-    s["Stab"] = ((4, 4), [knife], 0)
-    s["StabInvalid"] = ((24, 24), [greyed(knife) + [no_bar()]], 0)
-    charge = [L(RED, [rect(7, 18, 41, 42)]), L(DARK_STEEL, [rect(5, 27, 43, 32)]),
-              L(STEEL, [line([(33, 18), (38, 5)], 2.5)]), L(RED, [circle(38, 5, 2.6)], glow=True)]
-    s["RemoteCharge"] = ((24, 30), [charge], 0)
-    s["ChargeInvalid"] = ((24, 24), [greyed(charge) + [no_bar()]], 0)
-    # timed charge: EA's green countdown digits on a charge block, here one seven-segment digit counting 3 to 0
-    s["TimedCharge"] = ((24, 30), [[L(RED, [rect(6, 14, 42, 44)]), L(STEEL, [rect(12, 9, 18, 14), rect(30, 9, 36, 14)]),
-                                    L(OUTLINE, [rect(14, 20, 34, 39)]),
-                                    L(SCREEN, seven_segment(digit, 19.5, 22.5, 9, 14, 2.2), outline=False, glow=True)]
-                                   for digit in (3, 2, 1, 0)], 30)
-    # flame: straight-cut tongues like the emblem's feathers, the hot core the one bright part
-    s["Flame"] = ((24, 30), [[L(FLAME, [poly((24, 2), (29, 12), (36, 7), (35, 20), (41, 24), (37, 35), (31, 42), (24, 45),
-                                            (17, 42), (11, 35), (7, 24), (13, 19), (12, 8), (19, 13))]),
-                              L(GOLD, [poly((24, 17), (28, 25), (32, 23), (31, 33), (27, 39), (24, 41), (21, 39), (17, 33),
-                                            (16, 23), (20, 26))], outline=False, glow=True)]], 0)
-    # an olive drab bomb with its red nose falling onto the spot it marks
-    s["FireBomb"] = ((24, 44), [[L(RED, [oval_ring(12, 40, 36, 47.5, 2.6)]),
-                                 L(DARK_STEEL, [poly((15, 10), (12, 1), (36, 1), (33, 10))]),
-                                 L(OLIVE, [ellipse(24, 23, 9, 16)]),
-                                 L(RED, [ellipse(24, 33.5, 6.4, 5.5)], outline=False),
-                                 L(DARK_STEEL, [rect(15, 13, 33, 15.5)], outline=False)]], 0)
-    # a full face mask on its tie: brow, slanted eye holes, nose ridge, mouth slit, pointed chin
-    s["Disguise"] = ((24, 24), [[L(DARK_STEEL, [line([(10, 17), (2, 13)], 2.6), line([(38, 17), (46, 13)], 2.6)]),
-                                 L(RED, [poly((10, 10), (16, 5), (24, 4), (32, 5), (38, 10), (39, 22), (36, 32),
-                                              (30, 40), (24, 44), (18, 40), (12, 32), (9, 22))],
-                                   [poly((12.5, 16), (21, 18.5), (19.5, 23), (14, 22)),
-                                    poly((35.5, 16), (27, 18.5), (28.5, 23), (34, 22)),
-                                    ellipse(24, 34, 5.5, 1.8)]),
-                                 L(DARK_STEEL, [poly((24, 19), (26, 29), (22, 29))], outline=False)]], 0)
-    # hack: EA's field laptop with its green screen; the antenna lamp is red because the order is
-    s["Hack"] = ((24, 24), [[L(STEEL, [line([(11, 9), (5, 2)], 2)]), L(RED, [circle(5, 2.5, 2.2)], glow=True),
-                             L(DARK_STEEL, [rect(8, 7, 40, 33)]),
-                             L(SCREEN, [rect(11.5, 10.5, 36.5, 29.5)], outline=False, glow=True),
-                             L(OUTLINE, [rect(14, 14, 30, 16), rect(14, 19, 34, 21), rect(14, 24, 25, 26)], outline=False),
-                             L(STEEL, [poly((7, 34), (41, 34), (46, 43), (2, 43))])]], 0)
-    # the beam from above in three glow bands (blue, pale, white core) widening into a splash on the ring
-    s["Uplink"] = ((24, 38), [[L(RED, [oval_ring(4, 31, 44, 45, 3.5)]),
-                               L(BLUE, [poly((24 - w, 0), (24 + w, 0), (24 + w + 3, 37), (24 - w - 3, 37)),
-                                        ellipse(24, 38, w + 7, 4.5)], glow=True),
-                               L(BEAM, [poly((24 - w * 0.65, 0), (24 + w * 0.65, 0), (24 + w * 0.65 + 2, 37),
-                                             (24 - w * 0.65 - 2, 37)), ellipse(24, 38, w + 3, 3)], outline=False, glow=True),
-                               L(WHITE, [poly((24 - w * 0.3, 0), (24 + w * 0.3, 0), (24 + w * 0.3 + 1, 37),
-                                              (24 - w * 0.3 - 1, 37)), ellipse(24, 38, w, 2)], outline=False, glow=True)]
-                              for w in (7, 8.5, 6)], 4)
+    # tools and abilities: a pictogram with EA's arrow tip
+    s["Repair"] = ((4, 4), [wrench(a) for a in (0, -7, 0, 7)], 6)
+    resume = []
+    for rows in (1, 2, 3, 4, 5, 5):
+        layers = [tip_arrow(), L(W, [ring(27, 27, 18, 3)], shade=(1, 1)), L(DR, [circle(27, 27, 15)], outline=False)]
+        bricks = []
+        for j in range(rows):
+            y1 = 40.5 - 6 * j
+            off = 0 if j % 2 == 0 else 4
+            bricks += [rect(x, y1 - 4.5, x + 6.5, y1) for x in range(9 - off, 46, 8)]
+        if bricks:
+            layers.append(L(R, bricks, [ring(27, 27, 32, 17)], outline=False))
+        resume.append(layers)
+    s["ResumeBuild"] = ((2, 2), resume, 6)
+    s["Stab"] = ((3, 3), [knife(glint=g) for g in (None, 4, 10, 16, None)], 5)
+    s["StabInvalid"] = ((24, 24), [[no_ring()] + knife(T(0.62, 9.7, 9.7))], 0)
+    s["RemoteCharge"] = ((2, 2), [[tip_arrow()] + remote_charge(lamp=on) for on in (True, False)], 20)
+    s["ChargeInvalid"] = ((24, 24), [[no_ring()] + remote_charge(T(0.7, 7.2, 5.5))], 0)
+    s["TimedCharge"] = ((2, 2), [[tip_arrow()] + sticks(ID, 24) + wires(ID) +
+                                 [L(DG, [rect(12, 7, 36, 24)]), L(K, [rect(14.5, 9.5, 33.5, 21.5)], outline=False),
+                                  L(G, seven_segment(digit, 19.5, 10.5, 9, 10, 2.2), outline=False)]
+                                 for digit in range(9, -1, -1)], 30)
+    tnt = []
+    for spark in range(4):
+        n = (3.54, -3.54)
+        layers = [L(R, [line([(17 + n[0] * o, 17 + n[1] * o), (39 + n[0] * o, 39 + n[1] * o)], 5) for o in (-1.4, 0, 1.4)]),
+                  L(DR, [line([(17 + n[0] * o, 17 + n[1] * o), (39 + n[0] * o, 39 + n[1] * o)], 1.2) for o in (-0.7, 0.7)],
+                    outline=False),
+                  L(W, [line([(28 + n[0] * 2, 28 + n[1] * 2), (28 - n[0] * 2, 28 - n[1] * 2)], 3.5)]),
+                  L(K, [line([(17, 17), (9, 9)], 1.5)], outline=False)]
+        if spark % 2 == 0:
+            layers.append(L(Y, [rect(6, 4, 10, 12), rect(4, 6, 12, 10)], outline=False))
+        else:
+            layers.append(L(W, [rect(7, 7, 9, 9)] + [rect(7 + dx, 7 + dy, 9 + dx, 9 + dy) for dx, dy in ((-3, -3), (3, -3), (-3, 3), (3, 3))],
+                            outline=False))
+        tnt.append(layers)
+    s["TNT"] = ((8, 8), tnt, 4)
+    flames = []
+    for a, b in ((0, 0), (-2, 2), (2, -1)):
+        flames.append([tip_arrow(),
+                       L(R, [poly((28, 46), (19, 42), (16, 33), (19, 24 + b), (22, 28), (23, 17 + a), (28, 22), (31, 9 + b),
+                                  (35, 20), (38, 26 + a), (40, 34), (37, 42))], shade=(1, 0)),
+                       L(Y, [poly((28, 44), (23, 40), (22, 34), (25, 30 + a), (27, 34), (29, 26 + b), (32, 32), (34, 37), (32, 42))],
+                         outline=False)])
+    s["Flame"] = ((2, 2), flames, 5)
+    s["FireBomb"] = ((24, 40), [[L(R, [oval_ring(11, 35, 37, 45, 2.5)], shade=(0, 1)),
+                                 L(DG, [poly((18, y + 1), (30, y + 1), (27, y + 7), (21, y + 7))]),
+                                 L(LG, [circle(24, y + 15, 7), poly((17, y + 15), (31, y + 15), (24, y + 26))], shade=(1, 0)),
+                                 L(R, [rect(17, y + 12, 31, y + 15)], outline=False)] for y in (1, 4, 7, 10)], 6)
+    s["Disguise"] = ((17, 17), [[L(R, [ring(17, 17, 12, 4)], shade=(-1, 1)),
+                                 L(Y, [arc(17, 17, 12, 4, a, a + 80)], outline=False),
+                                 L(R, [poly(*dart((17, 17), 225, 24, 9, 0.25))], shade=side(225))] for a in range(0, 360, 45)], 4)
+    # the field laptop's screen scrolls lines of code, one more each frame
+    lines = ((19, 34), (19, 28), (23, 37), (19, 31), (23, 30))
+    s["Hack"] = ((2, 2), [[tip_arrow(), L(K, [line([(9, 9), (16, 13)], 1.5)], outline=False),
+                           L(DG, [rect(14, 11, 44, 32)]), L(G, [rect(17, 14, 41, 29)], outline=False),
+                           L(DGR, [rect(x0, 16 + 4 * j, x1, 18 + 4 * j) for j, (x0, x1) in enumerate(lines[i:i + 3])], outline=False),
+                           L(LG, [poly((12, 33), (44, 33), (46, 42), (10, 42))], shade=(0, 1))] for i in range(3)], 8)
     return s
 
 
@@ -709,7 +767,7 @@ def comparison(rendered, retail_dir, path):
     light = terrain(sheet.width, sheet.height, (200, 180, 140), 2)
     font = ImageFont.load_default(12)
     d = ImageDraw.Draw(sheet)
-    d.text((6, 4), "each row: EA retail 32 px (1x dark, 1x light, 2x)  |  Reforged 48 px (1x dark, 1x light, 2x)",
+    d.text((6, 4), "each row: EA retail 32 px (1x dark, 1x light, 2x)  |  Reforged 32 px (1x dark, 1x light, 2x)",
            fill=(232, 234, 240), font=font)
     for i, (key, retail, ours) in enumerate(rows):
         x0, y0 = (i % cols) * tw + 6, (i // cols) * th + 24
@@ -720,7 +778,7 @@ def comparison(rendered, retail_dir, path):
             with open(os.path.join(retail_dir, files[name.lower() + ".ani"]), "rb") as f:
                 w, h, _, _, px, _ = read_ani(f.read())[0][0]
             theirs = Image.frombytes("RGBA", (w, h), px)
-        mine = rendered[ours][1][0]
+        mine = rendered[ours][2][0]
         x = x0
         for im, gap in ((theirs, 14), (mine, 40)):
             for bg, scale, box_w in ((dark, 1, 56), (light, 1, 56), (dark, 2, 100)):
@@ -758,6 +816,16 @@ def check_mouse_ini(folder):
         assert blocks.get(ours) == PREFIX + ours, "Mouse.ini has no %s" % ours
 
 
+def check_palette(name, im):
+    """EA's rule: every pixel is one of the palette's colours at full opacity, or not there at all."""
+    px = np.asarray(im)
+    a = px[..., 3]
+    assert set(np.unique(a)) <= {0, 255}, "%s %dpx has semi-transparent pixels" % (name, im.width)
+    assert not px[a == 0][:, :3].any(), "%s %dpx has colour under a transparent pixel" % (name, im.width)
+    off = {tuple(c) for c in np.unique(px[a == 255][:, :3], axis=0)} - PALETTE
+    assert not off, "%s %dpx has off-palette colours %s" % (name, im.width, sorted(off))
+
+
 def _windows_load(path):
     import ctypes
     u = ctypes.windll.user32
@@ -781,6 +849,8 @@ def main():
     for name, (hot, frames, jiffies) in build_set().items():
         big = [render(f, 48) for f in frames]
         small = [render(f, 32) for f in frames]
+        for im in big + small:
+            check_palette(name, im)
         curs = [cur_bytes([b, s], hot) for b, s in zip(big, small)]
         path = os.path.join(args.out, PREFIX + name + ".ani")
         with open(path, "wb") as f:
@@ -802,7 +872,7 @@ def main():
     missing = {v for v in MOUSE_INI.values() if v != "Scroll"} - set(rendered)
     assert not missing, missing
     check_mouse_ini(args.out)
-    print("%d cursors, %d files in %s" % (len(rendered) - 7, len(rendered), args.out))
+    print("%d cursors, %d files in %s, every pixel on EA's palette" % (len(rendered) - 7, len(rendered), args.out))
     if args.sheet:
         os.makedirs(os.path.dirname(os.path.abspath(args.sheet)), exist_ok=True)
         contact_sheet(rendered, args.sheet)

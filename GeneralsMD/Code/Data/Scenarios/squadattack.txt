@@ -1,0 +1,45 @@
+# An attack on one member of a squad (SquadReforged.ini) is an attack on the squad: the attacker
+# carries on to the nearest member still standing until the squad is gone, where it used to kill the
+# one it was pointed at and stand idle beside the other four. Three attackers, three routes:
+#
+#   a Crusader force-attacks its own side's Missile Defender Squad, the attack key's click
+#     (MSG_DO_FORCE_ATTACK_OBJECT). Nothing of its own side is ever picked up by itself, so only the
+#     carried-on order can finish the squad;
+#   a Paladin is shift-ordered onto the other seat's Ranger Squad, the player's queued attack;
+#   the other seat's Crusader is ordered by script onto this seat's Ranger Squad, which shoots back.
+#
+# The tallies at 2400 that name 0 are the check, each a HEADLESS EXPECT PASS or FAIL.
+#
+# 2026-11-11. Before: the force-attacking Crusader killed one Missile Defender and stood beside the
+# other four for the rest of the run; the two enemy attacks, left to pick targets up by themselves,
+# still had 1 and 2 members standing at 1200. After: all three squads gone by 1200.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionAmerica
+#     -seed 1 -maxframes 5000 -scenario squadattack -logPrefix squadattack_
+
+30    spawn       0  AmericaTankCrusader                  1  400 1150
+30    spawn       0  AmericaInfantryMissileDefenderSquad  1  550 1150
+30    spawn       0  AmericaTankPaladin                   1  400 1450
+30    spawn       1  AmericaInfantryRangerSquad           1  550 1450
+30    spawn       1  AmericaTankCrusader                  1  1000 1300
+30    spawn       0  AmericaInfantryRangerSquad           1  1150 1300
+
+90    tally       0  AmericaInfantryMissileDefenderSquadMember
+90    tally       1  AmericaInfantryRangerSquadMember
+90    tally       0  AmericaInfantryRangerSquadMember
+
+120   forceattack 0  AmericaTankCrusader                  0  AmericaInfantryMissileDefenderSquadMember
+120   shiftattack 0  AmericaTankPaladin                   1  AmericaInfantryRangerSquadMember
+120   attack      1  AmericaTankCrusader                  0  AmericaInfantryRangerSquadMember
+
+600   tally       0  AmericaInfantryMissileDefenderSquadMember
+600   tally       1  AmericaInfantryRangerSquadMember
+600   tally       0  AmericaInfantryRangerSquadMember
+1200  tally       0  AmericaInfantryMissileDefenderSquadMember
+1200  tally       1  AmericaInfantryRangerSquadMember
+1200  tally       0  AmericaInfantryRangerSquadMember
+2400  tally       0  AmericaInfantryMissileDefenderSquadMember  0
+2400  tally       1  AmericaInfantryRangerSquadMember           0
+2400  tally       0  AmericaInfantryRangerSquadMember           0
+2400  tally       0  AmericaInfantryMissileDefenderSquad        0

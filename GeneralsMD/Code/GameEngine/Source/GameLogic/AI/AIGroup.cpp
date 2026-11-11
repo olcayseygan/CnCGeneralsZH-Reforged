@@ -192,6 +192,32 @@ static Bool canJoinGroup( Object *obj )
 }
 
 /**
+ * A mob member whose nexus is in this group too.  A squad that is selected is its nexus and every
+ * member, and a move order handed to all six sent each member to the goal down a path of its own,
+ * so round anything in the way the squad came apart.  The nexus takes a move and the members take
+ * their places around it, which MobMemberSlavedUpdate does the moment it is told (onSlaverOrdered).
+ * A stinger site's soldiers are slaves too, but not of a nexus, so they still take orders themselves.
+ */
+static Bool followsNexusInGroup( Object *obj, AIGroup *group )
+{
+	SlavedUpdateInterface *slaved = obj->getSlavedUpdateInterface();
+	if (slaved == NULL)
+		return FALSE;
+	Object *slaver = TheGameLogic->findObjectByID( slaved->getSlaverID() );
+	return slaver != NULL && slaver->isKindOf( KINDOF_MOB_NEXUS ) && slaver->getGroup() == group;
+}
+
+/** Every member that followsNexusInGroup left out of a move: follow the nexus now. */
+static void orderNexusFollowers( std::list<Object *> &members, AIGroup *group )
+{
+	for (std::list<Object *>::iterator i = members.begin(); i != members.end(); ++i)
+	{
+		if (followsNexusInGroup( *i, group ))
+			(*i)->getSlavedUpdateInterface()->onSlaverOrdered();
+	}
+}
+
+/**
  * Add object to group.
  */
 void AIGroup::add( Object *obj )
@@ -2208,6 +2234,10 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 		if ((*i)->isKindOf(KINDOF_INFANTRY) && didInfantry) {
 			continue;
 		}
+		if (followsNexusInGroup( *i, this ))
+		{
+			continue;		// it walks its place around the nexus, ordered after the loop below
+		}
 		if ((*i)->isKindOf(KINDOF_VEHICLE) && didVehicles) 
 		{
 			if( (*i)->getAI()->isDoingGroundMovement() )
@@ -2552,6 +2582,7 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 			ai->aiFollowPathAppend(&dest, cmdSource);
 		}
 	}
+	orderNexusFollowers( m_memberList, this );
 
 	/* Where a slow group order actually went. The corridor above is one search for everybody; this
 		 loop is the part that scales with the selection, because a member the corridor did not take
@@ -2715,8 +2746,12 @@ void AIGroup::groupTightenToPosition( const Coord3D *pos, Bool addWaypoint, Comm
 			continue;
 		}
 		if( (*i)->getAI()==NULL )
-		{	
+		{
 			continue;
+		}
+		if (followsNexusInGroup( *i, this ))
+		{
+			continue;		// see groupMoveToPosition
 		}
 		dx = unitPos.x - pos->x;
 		dy = unitPos.y - pos->y;
@@ -2760,6 +2795,7 @@ void AIGroup::groupTightenToPosition( const Coord3D *pos, Bool addWaypoint, Comm
 		Coord3D unitPos = *theUnit->getPosition();
 		TheAI->pathfinder()->updatePos(theUnit, &unitPos);
 	}
+	orderNexusFollowers( m_memberList, this );
 }
 
 
@@ -2775,11 +2811,12 @@ void AIGroup::groupFollowWaypointPath( const Waypoint *way, CommandSourceType cm
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
 	{
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
-		if (ai)
+		if (ai && !followsNexusInGroup( *i, this ))		// see groupMoveToPosition
 		{
 			ai->aiFollowWaypointPath( way, cmdSource );
 		}
 	}
+	orderNexusFollowers( m_memberList, this );
 }
 
 /**
@@ -2792,11 +2829,12 @@ void AIGroup::groupFollowWaypointPathExact( const Waypoint *way, CommandSourceTy
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
 	{
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
-		if (ai)
+		if (ai && !followsNexusInGroup( *i, this ))
 		{
 			ai->aiFollowWaypointPathExact( way, cmdSource );
 		}
 	}
+	orderNexusFollowers( m_memberList, this );
 }
 
 /**
@@ -2844,11 +2882,12 @@ void AIGroup::groupFollowWaypointPathAsTeam( const Waypoint *way, CommandSourceT
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
 	{
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
-		if (ai)
+		if (ai && !followsNexusInGroup( *i, this ))
 		{
 			ai->aiFollowWaypointPathAsTeam( way, cmdSource );
 		}
 	}
+	orderNexusFollowers( m_memberList, this );
 }
 
 /**
@@ -2861,11 +2900,12 @@ void AIGroup::groupFollowWaypointPathAsTeamExact( const Waypoint *way, CommandSo
 	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
 	{
 		AIUpdateInterface *ai = (*i)->getAIUpdateInterface();
-		if (ai)
+		if (ai && !followsNexusInGroup( *i, this ))
 		{
 			ai->aiFollowWaypointPathExactAsTeam( way, cmdSource );
 		}
 	}
+	orderNexusFollowers( m_memberList, this );
 }
 
 //Callback for groupIdle -- contained buildings.
@@ -3166,6 +3206,8 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 			continue;
 		if (member->getAIUpdateInterface() == NULL)
 			continue;
+		if (followsNexusInGroup( member, this ))
+			continue;			// see groupMoveToPosition
 
 		TheAI->pathfinder()->removeGoal( member );
 		Real dx = member->getPosition()->x - pos->x;
@@ -3213,6 +3255,7 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 		else
 			ai->aiMoveToPosition( &dest, cmdSource );
 	}
+	orderNexusFollowers( m_memberList, this );
 }
 
 /**

@@ -549,6 +549,8 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 			action->count = -1;		// nothing wanted, unless the file names a count
 			if (count > SCENARIO_TOKENS_STOP && !parseWholeNumber( tokens[ SCENARIO_TOKENS_STOP ], &action->count ))
 				return SCENARIO_PARSE_BAD_COUNT;
+			// and how far from their middle the furthest of them may stand, 0 for no opinion
+			action->radius = (count > SCENARIO_TOKENS_STOP + 1) ? (Real)atof( tokens[ SCENARIO_TOKENS_STOP + 1 ].str() ) : 0.0f;
 			break;
 
 		case SCENARIO_ACTION_STOP:
@@ -1576,8 +1578,23 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 			cx += spot[ i ].x;
 			cy += spot[ i ].y;
 		}
-		DEBUG_LOG(("HEADLESS SPREAD: frame %d slot %d '%s': %d units around (%.0f,%.0f), nearest neighbour closest %.1f mean %.1f\n",
-							 action.frame, action.slot, action.selector.str(), alive, cx / alive, cy / alive, closest, sum / alive));
+		// and how far the furthest one has strayed from the middle: a squad strung out along a road has
+		// close neighbours all the way down the line, so only this number sees it come apart
+		cx /= alive;
+		cy /= alive;
+		Real widest = 0.0f;
+		for (Int i = 0; i < alive; ++i)
+		{
+			const Real dx = spot[ i ].x - cx;
+			const Real dy = spot[ i ].y - cy;
+			widest = MAX( widest, sqrtf( dx * dx + dy * dy ) );
+		}
+		DEBUG_LOG(("HEADLESS SPREAD: frame %d slot %d '%s': %d units around (%.0f,%.0f), nearest neighbour closest %.1f mean %.1f, widest %.1f\n",
+							 action.frame, action.slot, action.selector.str(), alive, cx, cy, closest, sum / alive, widest));
+		if (action.radius > 0.0f)
+			DEBUG_LOG(("HEADLESS EXPECT: %s: frame %d slot %d '%s': widest %.1f, wanted at most %.0f\n",
+								 widest <= action.radius ? "PASS" : "FAIL",
+								 action.frame, action.slot, action.selector.str(), widest, action.radius));
 	}
 	if (action.count >= 0)
 		DEBUG_LOG(("HEADLESS EXPECT: %s: frame %d slot %d '%s': %d alive, wanted %d\n",

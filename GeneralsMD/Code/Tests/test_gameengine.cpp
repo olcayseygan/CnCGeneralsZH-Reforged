@@ -765,6 +765,8 @@ TEST(balance_patch_edits_a_weapon_in_place)
 	 PointDefenseLaserUpdate::scanClosestTarget crashed on it.  The weapon is the fork's own now, in
 	 WeaponReforged.ini, loaded the way GameEngine::init loads it: it has to come out whole from a
 	 store that holds none of EA's weapons. */
+ParticleSystemManager *newTestParticleSystemManager();	// below, beside TestParticleSystemManager
+
 TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 {
 	CHECK( bootOnce() );
@@ -789,6 +791,13 @@ TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 	if( savedAudio == NULL )
 		TheAudio = NEW NullAudioManager;
 
+	/* a missile's ProjectileExhaust is looked up in the particle manager, which the test had none of:
+		 the load dereferenced NULL in ParticleSystemManager::findTemplate and the crash dialog held the
+		 run open. An empty manager answers every trail with none, as the game's would for one it lacks */
+	ParticleSystemManager *savedParticles = TheParticleSystemManager;
+	if( savedParticles == NULL )
+		TheParticleSystemManager = newTestParticleSystemManager();
+
 	Bool threw = FALSE;
 	try
 	{
@@ -800,6 +809,12 @@ TEST(weapon_reforged_ini_makes_the_paladin_infantry_laser_without_eas_weapons)
 		threw = TRUE;
 	}
 	CHECK( threw == FALSE );
+
+	if( savedParticles == NULL )
+	{
+		delete TheParticleSystemManager;
+		TheParticleSystemManager = NULL;
+	}
 
 	if( savedAudio == NULL )
 	{
@@ -7347,6 +7362,11 @@ public:
 	virtual void queueParticleRender() {}
 	virtual void preloadAssets( TimeOfDay ) {}
 };
+
+ParticleSystemManager *newTestParticleSystemManager()
+{
+	return new TestParticleSystemManager;
+}
 
 TEST(particlesys_find_answers_by_id_and_forgets_a_dead_system)
 {
@@ -23555,6 +23575,10 @@ TEST(scenario_parses_the_order_lines)
 	CHECK_EQ( action.count, -1 );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1 ChinaGattlingCannon 0", &action ), (Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( action.count, 0 );
+	CHECK_NEAR( action.radius, 0.0f, 0.001f );		// no widest named, no opinion on it
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "240 tally 0 AmericaInfantryRangerSquadMember 5 55", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( action.count, 5 );
+	CHECK_NEAR( action.radius, 55.0f, 0.001f );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1 ChinaGattlingCannon some", &action ), (Int)SCENARIO_PARSE_BAD_COUNT );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "1800 tally 1", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
 

@@ -1046,8 +1046,10 @@ protected:
 private:
 
 	Bool chooseWeapon();
+	Bool carryOnToSquadMate();				///< the victim died: take the nearest of its squad still standing, if it had a squad
 
 	AttackStateMachine*							m_attackMachine;						///< state sub-machine for attack behavior
+	ObjectID												m_victimNexusID;						///< the mob nexus the victim belongs to, INVALID_ID for a victim on its own
 	AttackExitConditionsInterface*	m_attackParameters;					///< these are not owned by this, and will not be deleted on destruction
 	Team*														m_victimTeam;								///< recorded onEnter because if it changes during attack , it may no longer be a valid target.
 	Coord3D													m_originalVictimPos;				///< position of first obj/pos attacked... used for ContinueAttackRange.

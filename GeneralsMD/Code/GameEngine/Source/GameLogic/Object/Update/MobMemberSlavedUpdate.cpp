@@ -117,6 +117,73 @@ const Int MOB_MEMBER_UPDATE_RATE = ConvertRetailFrames( 16 );	// also the tick o
 	 the constructor drew, and this once it has been spent. */
 const Int MOB_MEMBER_STAGGER_SPENT = -1;
 
+// How often a member told to follow a new order looks again for its nexus to start walking: the
+// nexus' path search can take a few frames, and a member waiting the whole update rate for it
+// starts half a second behind the squad.
+const Int MOB_FOLLOW_ORDER_POLL = ConvertRetailFrames( 2 );
+
+/* The point 'ahead' further along the path than the point on it nearest to 'from', and which way the
+	 path runs at each of the two.  FALSE when there is no leg to walk.  This is what the formation
+	 rides on: a slot out on the straight line to the goal is a slot on the far side of whatever the
+	 path bends round, and every member then found its own way round, some by the other end. */
+static Bool walkAheadOnPath( Path *path, const Coord3D *from, Real ahead, Coord3D *out, Coord2D *dirHere, Coord2D *dirThere )
+{
+	PathNode *nearest = NULL;
+	Real nearestT = 0.0f;
+	Real nearestSqr = 1.0e30f;
+	for( PathNode *node = path ? path->getFirstNode() : NULL; node && node->getNextOptimized(); node = node->getNextOptimized() )
+	{
+		const Coord3D *a = node->getPosition();
+		const Coord3D *b = node->getNextOptimized()->getPosition();
+		const Real dx = b->x - a->x;
+		const Real dy = b->y - a->y;
+		const Real lenSqr = dx * dx + dy * dy;
+		Real t = lenSqr > 0.0f ? ( ( from->x - a->x ) * dx + ( from->y - a->y ) * dy ) / lenSqr : 0.0f;
+		t = MAX( 0.0f, MIN( 1.0f, t ) );
+		const Real ex = a->x + t * dx - from->x;
+		const Real ey = a->y + t * dy - from->y;
+		if ( ex * ex + ey * ey < nearestSqr )
+		{
+			nearestSqr = ex * ex + ey * ey;
+			nearest = node;
+			nearestT = t;
+		}
+	}
+	if ( nearest == NULL )
+		return FALSE;
+
+	dirHere->x = dirHere->y = 0.0f;
+	dirThere->x = dirThere->y = 0.0f;
+	Real left = ahead;
+	Real t = nearestT;
+	for( PathNode *node = nearest; ; node = node->getNextOptimized(), t = 0.0f )
+	{
+		PathNode *next = node->getNextOptimized();
+		const Coord3D *a = node->getPosition();
+		const Coord3D *b = next->getPosition();
+		const Real dx = b->x - a->x;
+		const Real dy = b->y - a->y;
+		const Real len = sqrtf( dx * dx + dy * dy );
+		if ( len > 0.001f )
+		{
+			dirThere->x = dx / len;
+			dirThere->y = dy / len;
+			if ( dirHere->x == 0.0f && dirHere->y == 0.0f )
+				*dirHere = *dirThere;
+		}
+		const Real remaining = len * ( 1.0f - t );
+		if ( remaining >= left || next->getNextOptimized() == NULL )
+		{
+			const Real s = len > 0.001f ? MIN( 1.0f, t + left / len ) : 1.0f;
+			out->x = a->x + s * dx;
+			out->y = a->y + s * dy;
+			out->z = a->z + s * ( b->z - a->z );
+			return dirThere->x != 0.0f || dirThere->y != 0.0f;
+		}
+		left -= remaining;
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 MobMemberSlavedUpdate::MobMemberSlavedUpdate( Thing *thing, const ModuleData* moduleData ) : UpdateModule( thing, moduleData )
 {
@@ -138,6 +205,7 @@ MobMemberSlavedUpdate::MobMemberSlavedUpdate( Thing *thing, const ModuleData* mo
 	m_squirrellinessRatio = 0;
 	m_isSelfTasking = FALSE;
 	m_catchUpCrisisTimer = 0;
+	m_followOrder = FALSE;
 
 	// MDC: moving to GameLogicRandomValue.  This does not need to be synced, but having it so makes searches *so* much nicer.
 	//getObject()->getDrawable()->setInstanceScale(GameLogicRandomValueReal( 5.0f, 1.5f ));
@@ -177,6 +245,13 @@ void MobMemberSlavedUpdate::onSlaverDamage( const DamageInfo *info )
 	AIUpdateInterface *ai = getObject()->getAIUpdateInterface();
 	if( ai )
 		ai->aiGoProne( info, CMD_FROM_AI );
+}
+
+//-------------------------------------------------------------------------------------------------
+void MobMemberSlavedUpdate::onSlaverOrdered()
+{
+	m_followOrder = TRUE;
+	setWakeFrame( getObject(), UPDATE_SLEEP_NONE );
 }
  
 
@@ -229,8 +304,13 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 //	myDraw->colorTint( &m_personalColor );
 
 
+	/* EA wiped the primary's firing states off every upgraded mob member on every look, firing or
+		 not.  A Ranger Squad member has an upgraded weapon set too once Flash-Bangs are bought, and its
+		 primary is the rifle it fires all fight long, so the wipe cut its firing animation off every
+		 half second.  Only a member that is not attacking can be holding a stale one. */
 	const ModelConditionFlags flags = myDraw->getModelConditionFlags();
-	if (flags.anyIntersectionWith(MAKE_MODELCONDITION_MASK(MODELCONDITION_WEAPONSET_PLAYER_UPGRADE)))
+	if (flags.anyIntersectionWith(MAKE_MODELCONDITION_MASK(MODELCONDITION_WEAPONSET_PLAYER_UPGRADE))
+		&& !me->testStatus( OBJECT_STATUS_IS_ATTACKING ))
 	{
 		ModelConditionFlags clearFlags;
 		clearFlags.clear();
@@ -263,7 +343,21 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 
 	Coord3D slotPosition;
 	Real slotAhead = 0.0f;
-	computeSlotPosition( master, &slotPosition, &slotAhead );
+	Coord2D marchDir;
+	computeSlotPosition( master, &slotPosition, &slotAhead, &marchDir );
+
+	/* A group order moved the nexus and left me out of it (AIGroup's followsNexusInGroup).  Once the
+		 nexus is walking I take my place at once, whatever I was doing: it is the player's or the
+		 computer's new order, and an old target or a goal still within the repath distance must not
+		 hold me back.  A nexus that went idle instead found no way there, and the order is over. */
+	const Bool followOrderNow = m_followOrder && masterAI->isMoving();
+	if ( followOrderNow || ( m_followOrder && masterAI->isIdle() ) )
+		m_followOrder = FALSE;
+	if ( followOrderNow )
+	{
+		m_primaryVictimID = INVALID_ID;
+		primaryVictim = NULL;
+	}
 
 	Coord3D slotDelta = slotPosition;
 	slotDelta.sub( me->getPosition() );
@@ -271,22 +365,19 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 
 	const Real distanceToMaster = sqrtf( ThePartitionManager->getDistanceSquared( me, master, FROM_CENTER_3D ) );
 
-	/* On the march, how far I am behind the nexus along the line to its goal.  Plain distance from
+	/* On the march, how far I am behind the nexus along the way it is walking.  Plain distance from
 		 the nexus cannot say that: a member whose slot sits out on the wing is far away without being
 		 late, and one that has got ahead reads as lost and sprints further ahead.  Nor can the two
 		 distances left along the paths, which come from different searches and jump by a hundred units
-		 from one look to the next. */
-	Coord3D toGoal = *masterAI->getGoalPosition();
-	toGoal.sub( master->getPosition() );
-	toGoal.z = 0.0f;
-	const Real masterDistToGoal = toGoal.length();
-	const Bool marching = masterAI->isMoving() && myAI->isMoving() && ! myAI->isAttacking() && masterDistToGoal > 1.0f;
+		 from one look to the next.  The way it is walking is its path where it stands, not the line to
+		 its goal, which round a corner points through the wall. */
+	const Bool marching = masterAI->isMoving() && myAI->isMoving() && ! myAI->isAttacking() && ( marchDir.x != 0.0f || marchDir.y != 0.0f );
 	Real lag = 0.0f;
 	if ( marching )
 	{
 		const Coord3D *myPos = me->getPosition();
 		const Coord3D *masterPos = master->getPosition();
-		lag = ( ( masterPos->x - myPos->x ) * toGoal.x + ( masterPos->y - myPos->y ) * toGoal.y ) / masterDistToGoal;
+		lag = ( masterPos->x - myPos->x ) * marchDir.x + ( masterPos->y - myPos->y ) * marchDir.y;
 	}
 	const Bool lostTheMob = marching ? lag > data->m_mustCatchUpRadius : distanceToMaster > data->m_mustCatchUpRadius;
 
@@ -326,14 +417,15 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 		 than half its kills over five seeds, 8 of 50 against the 17 the same build managed with no
 		 formation at all.  So the slot is abandoned the moment the mob stops or the member picks a
 		 target, and the only thing that overrides that is having lost the mob altogether. */
-	const Bool holdFormation = ( masterAI->isMoving() && ! myAI->isAttacking() ) || lostTheMob;
+	const Bool holdFormation = ( masterAI->isMoving() && ! myAI->isAttacking() ) || lostTheMob || followOrderNow;
 
-	if ( holdFormation && distanceToSlot > MOB_FORMATION_ARRIVED_DISTANCE )
+	Bool steered = FALSE;
+	if ( holdFormation && ( distanceToSlot > MOB_FORMATION_ARRIVED_DISTANCE || followOrderNow ) )
 	{
 		Coord3D goalDelta = *myAI->getGoalPosition();
 		goalDelta.sub( &slotPosition );
 
-		if ( goalDelta.length() > MOB_FORMATION_REPATH_DISTANCE )// only if I am not headed there already
+		if ( followOrderNow || goalDelta.length() > MOB_FORMATION_REPATH_DISTANCE )// only if I am not headed there already
 		{
 			/* An attack move stays an attack move.  A plain move here took the attack out of a
 				 squad ordered on its nexus alone: the members walked to their slots past the enemy
@@ -342,6 +434,7 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 				myAI->aiAttackMoveToPosition( &slotPosition, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
 			else
 				myAI->aiMoveToPosition( &slotPosition, CMD_FROM_AI );
+			steered = TRUE;
 		}
 	}
 
@@ -363,7 +456,8 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 		m_catchUpCrisisTimer = 0; // I'm not too far from the nexus this frame
 	}
 
-	if ( ! myAI->isMoving() ) // give me something to do while I'm standing here...
+	// a member just sent to its place has no path yet and so is not moving; it is not idle either
+	if ( ! myAI->isMoving() && ! steered ) // give me something to do while I'm standing here...
 	{
 		SpawnBehaviorInterface *spawnerBehavior = master->getSpawnBehaviorInterface();
 
@@ -412,15 +506,16 @@ UpdateSleepTime MobMemberSlavedUpdate::update( void )
 		}
 	}
 
-	return UPDATE_SLEEP( MOB_MEMBER_UPDATE_RATE );
+	return UPDATE_SLEEP( m_followOrder ? MOB_FOLLOW_ORDER_POLL : MOB_MEMBER_UPDATE_RATE );
 }
 
 
 //-------------------------------------------------------------------------------------------------
 // Where I stand in the mob: my own place around wherever the mob as a whole is going.
 //-------------------------------------------------------------------------------------------------
-void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *position, Real *alongTravel )
+void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *position, Real *alongTravel, Coord2D *marchDir )
 {
+	marchDir->x = marchDir->y = 0.0f;
 	Object *me = getObject();
 	AIUpdateInterface *myAI = me->getAIUpdateInterface();
 	AIUpdateInterface *masterAI = master->getAIUpdateInterface();
@@ -441,9 +536,16 @@ void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *positi
 		toGoal.z = 0.0f;
 		const Real distToGoal = toGoal.length();
 		const Coord3D *goal = masterAI->getGoalPosition();
+		Coord2D dirThere;
 		if ( goal->x * goal->x + goal->y * goal->y < 1.0f ) // a nasty error has sent the nexus' goal to map origin
 		{
 			// keep the nexus' own spot and facing
+		}
+		else if ( walkAheadOnPath( masterAI->getPath(), master->getPosition(), MOB_FORMATION_LOOKAHEAD, position, marchDir, &dirThere ) )
+		{
+			// down the nexus' own path, facing the way it runs there
+			forwardX = dirThere.x;
+			forwardY = dirThere.y;
 		}
 		else if ( distToGoal > MOB_FORMATION_LOOKAHEAD )
 		{
@@ -451,6 +553,8 @@ void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *positi
 			forwardY = toGoal.y / distToGoal;
 			position->x += forwardX * MOB_FORMATION_LOOKAHEAD;
 			position->y += forwardY * MOB_FORMATION_LOOKAHEAD;
+			marchDir->x = forwardX;
+			marchDir->y = forwardY;
 		}
 		else
 		{
@@ -459,6 +563,8 @@ void MobMemberSlavedUpdate::computeSlotPosition( Object *master, Coord3D *positi
 			{
 				forwardX = toGoal.x / distToGoal;
 				forwardY = toGoal.y / distToGoal;
+				marchDir->x = forwardX;
+				marchDir->y = forwardY;
 			}
 		}
 	}
@@ -519,13 +625,14 @@ void MobMemberSlavedUpdate::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: m_followOrder */
 // ------------------------------------------------------------------------------------------------
 void MobMemberSlavedUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -555,6 +662,10 @@ void MobMemberSlavedUpdate::xfer( Xfer *xfer )
 	
 	// catch up crisis timer
   xfer->xferUnsignedInt( &m_catchUpCrisisTimer );
+
+	// a group order still waiting for the nexus to walk
+	if( version >= 2 )
+		xfer->xferBool( &m_followOrder );
 
 }  // end xfer
 

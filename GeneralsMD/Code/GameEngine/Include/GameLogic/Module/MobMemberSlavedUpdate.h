@@ -113,6 +113,7 @@ public:
 	virtual void onSlaverDamage( const DamageInfo *info );
 	virtual void onObjectCreated();
 	virtual Bool isSelfTasking() const { return m_isSelfTasking; };
+	virtual void onSlaverOrdered();
 
 	void setMobState( MobStates state ) { m_mobState = state; };
 	MobStates getMobState( void ) { return m_mobState; };
@@ -121,7 +122,7 @@ public:
 	virtual UpdateSleepTime update();	///< Deciding whether or not to make new guys
 
 private:
-	void computeSlotPosition( Object *master, Coord3D *position, Real *alongTravel );	///< My own place inside the mob, and how far ahead of its centre that is
+	void computeSlotPosition( Object *master, Coord3D *position, Real *alongTravel, Coord2D *marchDir );	///< My own place inside the mob, how far ahead of its centre that is, and which way the nexus is walking (zero when it is not)
 	void startSlavedEffects( const Object *slaver );	///< We have been marked as Slaved, so we can't be selected or move too far or other stuff
 	void stopSlavedEffects();		///< We are no longer slaved.
 
@@ -133,6 +134,7 @@ private:
 	Real m_squirrellinessRatio;
 	Bool m_isSelfTasking;
 	UnsignedInt m_catchUpCrisisTimer;// how many consecutive frames have I remained outside the catchup radius
+	Bool m_followOrder;			///< my nexus was just given a move I was left out of: take my place the moment it walks
 	//This is a failsafe to make sure that an individual mobmember does not get isolated from his buddies
 	// thus causing the mob to become invincible, since they will continue to bud around the nexus
 	

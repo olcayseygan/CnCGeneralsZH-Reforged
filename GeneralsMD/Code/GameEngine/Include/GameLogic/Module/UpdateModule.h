@@ -261,6 +261,8 @@ public:
 	virtual void onSlaverDie( const DamageInfo *info ) = 0;
 	virtual void onSlaverDamage( const DamageInfo *info ) = 0;
 	virtual	Bool isSelfTasking() const = 0;
+	/// a group order moved my slaver and left me out of it, so I follow it now rather than on my next look
+	virtual void onSlaverOrdered() {}
 
 };
 

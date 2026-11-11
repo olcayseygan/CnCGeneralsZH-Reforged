@@ -70,6 +70,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/JetAIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
+#include "GameLogic/Module/SpawnBehavior.h"
 #include "GameLogic/Module/StealthUpdate.h"
 
 #ifdef _INTERNAL
@@ -6295,7 +6296,8 @@ StateReturnType AIWaitState::update()
 AIAttackState::AIAttackState( StateMachine *machine, Bool follow, Bool attackingObject, Bool forceAttacking, AttackExitConditionsInterface* attackParameters) : 
 	State( machine , "AIAttackState"), 
 	m_attackMachine(NULL),
-	m_attackParameters(attackParameters), 
+	m_victimNexusID(INVALID_ID),
+	m_attackParameters(attackParameters),
 	m_lockedWeaponOnEnter(NULL), 
 	m_follow(follow),
 	m_isAttackingObject(attackingObject),
@@ -6339,14 +6341,17 @@ void AIAttackState::crc( Xfer *xfer )
 void AIAttackState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+	// 2: m_victimNexusID
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
 	Bool hasMachine = m_attackMachine!=NULL;
-	
+
 	xfer->xferBool(&hasMachine);
 	xfer->xferCoord3D(&m_originalVictimPos);
+	if (version >= 2)
+		xfer->xferObjectID(&m_victimNexusID);
 
 	if (hasMachine && m_attackMachine==NULL)	{
 		// create new state machine for attack behavior
@@ -6422,6 +6427,51 @@ void AIAttackState::notifyNewVictimChosen(Object* victim)
 }
 
 //----------------------------------------------------------------------------------------------------------
+/** The mob nexus a victim is a member of: an Angry Mob or a squad, whose members are slaves of an
+	  invisible nexus.  A Stinger Site's soldiers and a hive's drones are slaves too, but of a building,
+	  and each of those is a target on its own. */
+static ObjectID squadNexusOf( const Object *victim )
+{
+	const SlavedUpdateInterface *slaved = victim ? victim->getSlavedUpdateInterface() : NULL;
+	if (slaved == NULL)
+		return INVALID_ID;
+	const Object *nexus = TheGameLogic->findObjectByID( slaved->getSlaverID() );
+	return (nexus != NULL && nexus->isKindOf( KINDOF_MOB_NEXUS )) ? nexus->getID() : INVALID_ID;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** An order to attack one member of a squad is an order to attack the squad.  Five men trained as
+	  one unit, selected and ordered as one, and the attacker that killed the one it was pointed at
+	  stood idle beside the other four.  So the attack carries on to whichever of the victim's squad is
+	  nearest, until the nexus has nobody left, by the same means ContinueAttackRange swaps the victim
+	  inside this state.  An attack that ends for any other reason still ends. */
+Bool AIAttackState::carryOnToSquadMate()
+{
+	if (!m_isAttackingObject || m_victimNexusID == INVALID_ID || m_attackMachine == NULL)
+		return FALSE;
+
+	Object *nexus = TheGameLogic->findObjectByID( m_victimNexusID );
+	SpawnBehaviorInterface *spawn = (nexus != NULL && !nexus->isEffectivelyDead()) ? nexus->getSpawnBehaviorInterface() : NULL;
+	Object *source = getMachineOwner();
+	Object *mate = spawn ? spawn->getClosestSlave( source->getPosition() ) : NULL;
+	if (mate == NULL || mate->isEffectivelyDead() || mate == source)
+		return FALSE;
+
+	AIUpdateInterface *ai = source->getAI();
+	const CommandSourceType cmdSource = ai ? ai->getLastCommandSource() : CMD_FROM_AI;
+	if (source->getAbleToAttackSpecificObject( m_isForceAttacking ? ATTACK_NEW_TARGET_FORCED : ATTACK_NEW_TARGET, mate, cmdSource ) == ATTACKRESULT_NOT_POSSIBLE)
+		return FALSE;
+
+	m_victimTeam = mate->getTeam();
+	notifyNewVictimChosen( mate );
+	if (ai)
+		ai->setCurrentVictim( mate );
+	// the sub-machine may have finished with the dead one; start it over on the new one
+	m_attackMachine->initDefaultState();
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
 /**
  * Begin an attack on the machine's goal object.
  * To do this complex behavior, instantiate another state machine as a "sub-machine" of 
@@ -6474,6 +6524,7 @@ StateReturnType AIAttackState::onEnter()
 			return STATE_FAILURE;	// we have nothing to attack!
 		}
 		m_victimTeam = victim->getTeam();
+		m_victimNexusID = squadNexusOf( victim );
 		m_attackMachine->setGoalObject( victim );
 		m_originalVictimPos = *victim->getPosition();
 	}
@@ -6542,15 +6593,22 @@ StateReturnType AIAttackState::update()
 	{
 		Object* victim = getMachineGoalObject();
 
-		if (victim == NULL || victim->isEffectivelyDead()) 	
+		if (victim == NULL || victim->isEffectivelyDead())
 		{
-			source->getAI()->notifyVictimIsDead();
-			return STATE_SUCCESS;	// my, that was easy
+			if (!carryOnToSquadMate())
+			{
+				source->getAI()->notifyVictimIsDead();
+				return STATE_SUCCESS;	// my, that was easy
+			}
+			victim = getMachineGoalObject();
 		}
 
-		if (victim) 
+		if (victim)
 		{
 			source->getAI()->setCurrentVictim(victim);
+			// remembered every frame, since the victim can be swapped from inside too; once it is
+			// dead, and perhaps gone, this is the only way back to its squad
+			m_victimNexusID = squadNexusOf( victim );
 		}
 
 		if( victim->getTeam() != m_victimTeam )
@@ -6630,7 +6688,17 @@ StateReturnType AIAttackState::update()
 	 * Note the use of CONVERT_SLEEP_TO_CONTINUE; even if the sub-machine
 	 * sleeps, we still need to be called every frame.
 	 */
-	return CONVERT_SLEEP_TO_CONTINUE(m_attackMachine->updateStateMachine());
+	StateReturnType subResult = CONVERT_SLEEP_TO_CONTINUE(m_attackMachine->updateStateMachine());
+
+	// the shot that just killed the victim ends the sub-machine on this frame, before the dead-victim
+	// check above can see it; a squad's victim carries on to the next of the squad from here as well
+	if (subResult != STATE_CONTINUE && m_isAttackingObject)
+	{
+		Object* victim = getMachineGoalObject();
+		if ((victim == NULL || victim->isEffectivelyDead()) && carryOnToSquadMate())
+			return STATE_CONTINUE;
+	}
+	return subResult;
 }
 
 //----------------------------------------------------------------------------------------------------------

@@ -1,0 +1,65 @@
+# Whether a squad (SquadReforged.ini) travels as one body around something in its way. squadform.txt
+# walks two squads down an open band, where any way of following the nexus looks the same; here a
+# row of Power Plants stands across that band, so the route bends round the end of the row and back.
+# The Ranger Squad is ordered the way a click orders it, nexus and every member at once; the Missile
+# Defender Squad by its nexus alone, the way a rally point and a script do. HEADLESS SPREAD's widest
+# is how far the furthest member stands from the squad's middle; the formation itself stands about
+# 45 from it with FormationSpacing 3.0, so a squad that has come apart round the wall reads 60 and up
+# while its nearest-neighbour numbers still look fine. The tallies that name 5 and 55 are the check:
+# each prints HEADLESS EXPECT PASS or FAIL.
+#
+# 2026-11-11. Before: the clicked Ranger Squad came apart round the row, widest 50 to 76 from frame
+# 480 to 840, members taking either end of it; the Missile Defender Squad held 48 at worst. After the
+# slot rides the nexus' own path and a click orders the nexus alone: 44 at worst for both, the squad
+# squeezing into a knot (widest 12 to 18) through the gap past the last plant.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 small -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 3600 -scenario squadturn -logPrefix squadturn_
+
+30    spawn      0  AmericaInfantryRangerSquad           1  500 1250
+30    spawn      0  AmericaInfantryMissileDefenderSquad  1  500 1350
+30    spawn      0  AmericaPowerPlant                    1  800 1220
+30    spawn      0  AmericaPowerPlant                    1  800 1290
+30    spawn      0  AmericaPowerPlant                    1  800 1360
+30    spawn      0  AmericaPowerPlant                    1  800 1430
+
+120   playermove 0  AmericaInfantryRangerSquad*          1100 1250
+120   move       0  AmericaInfantryMissileDefenderSquad  1100 1350
+
+180   tally      0  AmericaInfantryRangerSquadMember
+180   tally      0  AmericaInfantryMissileDefenderSquadMember
+240   tally      0  AmericaInfantryRangerSquadMember            5  55
+240   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+300   tally      0  AmericaInfantryRangerSquadMember            5  55
+300   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+360   tally      0  AmericaInfantryRangerSquadMember            5  55
+360   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+420   tally      0  AmericaInfantryRangerSquadMember            5  55
+420   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+480   tally      0  AmericaInfantryRangerSquadMember            5  55
+480   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+540   tally      0  AmericaInfantryRangerSquadMember            5  55
+540   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+600   tally      0  AmericaInfantryRangerSquadMember            5  55
+600   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+660   tally      0  AmericaInfantryRangerSquadMember            5  55
+660   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+720   tally      0  AmericaInfantryRangerSquadMember            5  55
+720   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+780   tally      0  AmericaInfantryRangerSquadMember            5  55
+780   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+840   tally      0  AmericaInfantryRangerSquadMember            5  55
+840   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+900   tally      0  AmericaInfantryRangerSquadMember            5  55
+900   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+960   tally      0  AmericaInfantryRangerSquadMember            5  55
+960   tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+1020  tally      0  AmericaInfantryRangerSquadMember            5  55
+1020  tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+1080  tally      0  AmericaInfantryRangerSquadMember            5  55
+1080  tally      0  AmericaInfantryMissileDefenderSquadMember   5  55
+1200  tally      0  AmericaInfantryRangerSquadMember
+1200  tally      0  AmericaInfantryMissileDefenderSquadMember
+1500  tally      0  AmericaInfantryRangerSquadMember
+1500  tally      0  AmericaInfantryMissileDefenderSquadMember

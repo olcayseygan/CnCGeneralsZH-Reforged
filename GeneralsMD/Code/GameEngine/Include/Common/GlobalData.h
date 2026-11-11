@@ -304,8 +304,8 @@ public:
 
 	Real m_partitionCellSize;
 
-	// read from retail GameData.ini and used by nothing: the ammo and seat trays hang off the health
-	// bar (Drawable::drawTrays). Kept so that INI still parses.
+	// read from retail GameData.ini and used by nothing: the rounds and seats hang off the health
+	// bar (Drawable::drawLoadTokens). Kept so that INI still parses.
 	Coord3D m_ammoPipWorldOffset;
 	Coord3D m_containerPipWorldOffset;
 	Coord2D m_ammoPipScreenOffset;

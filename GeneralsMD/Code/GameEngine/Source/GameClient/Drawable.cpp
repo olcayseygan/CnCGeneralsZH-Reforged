@@ -4086,7 +4086,7 @@ void Drawable::drawIconUI( void )
 #endif
 		drawDisabled( healthBarRegion );
 
-		drawTrays( healthBarRegion );
+		drawLoadTokens( healthBarRegion );
 
 		//Moved this to last so that it shows up over contained and ammo icons.
 		drawVeterancy( healthBarRegion ); 
@@ -4174,170 +4174,277 @@ void Drawable::drawEmoticon( const IRegion2D *healthBarRegion )
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-Int Drawable_lampCellLeft( Int innerWidth, Int capacity, Int index )
+TokenRowLayout Drawable_layoutTokens( Int count, Int size, Int gap, Int minSize, Int minGap,
+																			Int maxPerRow, Int maxRows )
 {
-	// a lamp and its gap need three pixels, or the row is a striped smear nobody can count
-	if( capacity <= 0 || innerWidth + 1 < capacity * 3 )
-		return -1;
+	TokenRowLayout l;
+	l.shown = 0;
+	l.perRow = 0;
+	l.rows = 0;
+	l.size = size;
+	l.gap = gap;
+	if( count <= 0 || size <= 0 || maxPerRow <= 0 || maxRows <= 0 )
+		return l;
 
-	// the leftover pixels go one each to lamps spread along the row, so the last lamp ends on the
-	// tray's edge and no two lamps differ by more than a pixel
-	return index * (innerWidth + 1) / capacity;
+	minSize = max( 1, min( minSize, size ) );
+	minGap = max( 0, min( minGap, gap ) );
+	l.shown = count;
+	l.perRow = min( count, maxPerRow );
+
+	//
+	// More than the full rows hold: the rows keep the width of a full row and the tokens shrink to share
+	// it, the token faster than the gap so they stay apart. Past the floor the row shows as many as fit
+	// and the caller lights them in proportion; a token never shrinks into a solid strip.
+	//
+	if( count > maxPerRow * maxRows )
+	{
+		const Int budget = maxPerRow * size + ( maxPerRow - 1 ) * gap;
+		l.perRow = ( count + maxRows - 1 ) / maxRows;
+		while( l.perRow * l.size + ( l.perRow - 1 ) * l.gap > budget )
+		{
+			if( l.gap > minGap && ( l.size <= minSize || l.gap * 3 > l.size ) )
+				--l.gap;
+			else if( l.size > minSize )
+				--l.size;
+			else
+				break;
+		}
+		if( l.perRow * l.size + ( l.perRow - 1 ) * l.gap > budget )
+		{
+			l.perRow = ( budget + l.gap ) / ( l.size + l.gap );
+			l.shown = l.perRow * maxRows;
+		}
+	}
+
+	l.rows = ( l.shown + l.perRow - 1 ) / l.perRow;
+	return l;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+Int Drawable_tokenLeft( const TokenRowLayout &layout, Int index, Int centreX )
+{
+	if( layout.perRow <= 0 )
+		return centreX;
+	const Int row = index / layout.perRow;
+	const Int inRow = row < layout.rows - 1 ? layout.perRow : layout.shown - row * layout.perRow;
+	const Int width = inRow * layout.size + ( inRow - 1 ) * layout.gap;
+	return centreX - width / 2 + ( index % layout.perRow ) * ( layout.size + layout.gap );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+Int Drawable_tokensLit( Int lit, Int count, Int shown )
+{
+	if( count <= 0 || shown <= 0 )
+		return 0;
+	lit = max( 0, min( lit, count ) );
+	if( shown >= count )
+		return lit;
+	Int r = ( lit * shown + count / 2 ) / count;
+	if( lit > 0 )
+		r = max( r, 1 );
+	if( lit < count )
+		r = min( r, shown - 1 );
+	return r;
 }
 
 namespace
 {
-	struct LampTone
+	Int uiPixels( Real base )
 	{
-		Color top, body, shade;
-	};
-
-	LampTone makeLampTone( Int r, Int g, Int b, Int topR, Int topG, Int topB, Int shadeR, Int shadeG, Int shadeB )
-	{
-		LampTone t;
-		t.top = GameMakeColor( topR, topG, topB, 255 );
-		t.body = GameMakeColor( r, g, b, 255 );
-		t.shade = GameMakeColor( shadeR, shadeG, shadeB, 255 );
-		return t;
+		return max( 1, (Int)( base * TheUIScale() + 0.5f ) );
 	}
 
-	// a lamp lit from above: a light line along its top, the body, a darker line underneath when the
-	// tray is tall enough to spare one - what makes a row read as the panel lamps of the control bar
-	// rather than flat paint
-	void drawLamp( Int x, Int y, Int w, Int h, const LampTone &tone )
+	// diamonds and slugs are centred on a middle pixel, so their sizes stay odd
+	Int oddDown( Int n )
+	{
+		return ( n & 1 ) ? n : n - 1;
+	}
+
+	//
+	// Sizes are the coloured body at UI scale 1; every token wears a one pixel near-black rim around
+	// that, so a cell is two pixels larger. A seat is a 7 pixel diamond, ten to a row over two rows;
+	// a round is a 3 by 7 slug, twelve to a row in one row, so the row reads as a clip.
+	//
+	const Real SEAT_BODY = 7.0f, ROUND_BODY_W = 3.0f, ROUND_BODY_H = 7.0f, TOKEN_GAP = 2.0f;
+	const Int SEAT_MIN_CELL = 5, ROUND_MIN_CELL = 3, TOKEN_MIN_GAP = 1;
+	const Int SEATS_PER_ROW = 10, SEAT_ROWS = 2, ROUNDS_PER_ROW = 12, ROUND_ROWS = 1;
+
+	TokenRowLayout seatLayout( Int total )
+	{
+		const Int cell = max( 3, oddDown( uiPixels( SEAT_BODY ) ) ) + 2;
+		TokenRowLayout l = Drawable_layoutTokens( total, cell, uiPixels( TOKEN_GAP ), SEAT_MIN_CELL, TOKEN_MIN_GAP,
+																							SEATS_PER_ROW, SEAT_ROWS );
+		l.size = max( SEAT_MIN_CELL, oddDown( l.size ) );
+		return l;
+	}
+
+	Int roundFullCell( void )
+	{
+		return max( 1, oddDown( uiPixels( ROUND_BODY_W ) ) ) + 2;
+	}
+
+	TokenRowLayout roundLayout( Int total )
+	{
+		TokenRowLayout l = Drawable_layoutTokens( total, roundFullCell(), uiPixels( TOKEN_GAP ), ROUND_MIN_CELL,
+																							TOKEN_MIN_GAP, ROUNDS_PER_ROW, ROUND_ROWS );
+		l.size = max( ROUND_MIN_CELL, oddDown( l.size ) );
+		return l;
+	}
+
+	// a slug shrinks with its width and always stays taller than wide
+	Int roundHeight( const TokenRowLayout &l )
+	{
+		const Int fullHeight = uiPixels( ROUND_BODY_H ) + 2;
+		return max( l.size + 2, fullHeight * l.size / roundFullCell() );
+	}
+
+	Int rowsHeight( const TokenRowLayout &l, Int tokenHeight )
+	{
+		return l.rows * tokenHeight + ( l.rows - 1 ) * l.gap;
+	}
+
+	// clear space under the bar's frame and under each row of tokens
+	Int tokenClearance( void )
+	{
+		return uiPixels( 2.0f );
+	}
+
+	// the first row's top: the selection frame's row under the bar, then the clearance
+	Int tokensTop( const IRegion2D *bar )
+	{
+		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 1 + tokenClearance();
+	}
+
+	// a diamond `size` pixels across, one scanline at a time
+	void fillDiamond( Int centreX, Int centreY, Int size, Color color )
+	{
+		if( size <= 0 )
+			return;
+		const Int half = size / 2;
+		for( Int dy = -half; dy <= half; ++dy )
+		{
+			const Int w = half - ( dy < 0 ? -dy : dy );
+			TheDisplay->drawFillRect( centreX - w, centreY + dy, 2 * w + 1, 1, color );
+		}
+	}
+
+	// a slug: full width under a tip one pixel narrower on each side
+	void fillSlug( Int x, Int y, Int w, Int h, Color color )
 	{
 		if( w <= 0 || h <= 0 )
 			return;
-		TheDisplay->drawFillRect( x, y, w, 1, tone.top );
-		const Int bodyHeight = h >= 3 ? h - 2 : h - 1;
-		if( bodyHeight > 0 )
-			TheDisplay->drawFillRect( x, y + 1, w, bodyHeight, tone.body );
-		if( h >= 3 )
-			TheDisplay->drawFillRect( x, y + h - 1, w, 1, tone.shade );
+		const Int tip = w > 2 ? w - 2 : w;
+		TheDisplay->drawFillRect( x + ( w - tip ) / 2, y, tip, 1, color );
+		if( h > 1 )
+			TheDisplay->drawFillRect( x, y + 1, w, h - 1, color );
 	}
 
-	//
-	// The tray the rounds and the seats are counted in: a black glass strip the health bar's width,
-	// two pixels thicker than the bar so a lamp inside has a top, a body and a shade, cut into one
-	// lamp per round or seat with a one pixel black gap between neighbours. The first litA lamps burn
-	// in toneA, the next litB in toneB, the rest are dark glass. When the bar is too short to give
-	// every lamp two pixels (a far zoom, a big load) the lamps merge into one continuous fill with each
-	// tone's share of it, and a single occupant still keeps a pixel of its own.
-	//
-	Int trayHeight( const IRegion2D *bar )
+	Int roundsSpan( Int total )
 	{
-		return max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
+		const TokenRowLayout l = roundLayout( total );
+		return rowsHeight( l, roundHeight( l ) ) + tokenClearance();
 	}
 
-	// the first tray's top: two rows under the bar, the selection frame's row and one clear
-	Int trayStackTop( const IRegion2D *bar )
+	Int seatsSpan( Int total )
 	{
-		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 2;
-	}
-
-	// a tray and the two clear rows under it
-	Int traySpan( const IRegion2D *bar )
-	{
-		return trayHeight( bar ) + 2;
-	}
-
-	void drawLampTray( const IRegion2D *bar, Int y, Int capacity, Int litA, const LampTone &toneA,
-										 Int litB, const LampTone &toneB )
-	{
-		const Int x = bar->lo.x;
-		const Int width = bar->hi.x - bar->lo.x;
-		const Int height = trayHeight( bar );
-		const Int innerWidth = width - 2;
-		const Int innerHeight = height - 2;
-		if( capacity <= 0 || innerWidth <= 0 )
-			return;
-
-		litA = max( 0, min( litA, capacity ) );
-		litB = max( 0, min( litB, capacity - litA ) );
-
-		const LampTone dark = makeLampTone( 28, 31, 30,  56, 60, 58,  20, 22, 21 );
-
-		TheDisplay->drawFillRect( x, y, width, height, GameMakeColor( 0, 0, 0, 220 ) );
-
-		if( Drawable_lampCellLeft( innerWidth, capacity, 0 ) >= 0 )
-		{
-			for( Int i = 0; i < capacity; ++i )
-			{
-				const Int left = Drawable_lampCellLeft( innerWidth, capacity, i );
-				const Int right = Drawable_lampCellLeft( innerWidth, capacity, i + 1 ) - 1;
-				const LampTone &tone = i < litA ? toneA : i < litA + litB ? toneB : dark;
-				drawLamp( x + 1 + left, y + 1, right - left, innerHeight, tone );
-			}
-		}
-		else
-		{
-			Int endA = litA > 0 ? max( 1, innerWidth * litA / capacity ) : 0;
-			Int endB = litB > 0 ? max( endA + 1, innerWidth * (litA + litB) / capacity ) : endA;
-			endA = min( endA, innerWidth );
-			endB = min( endB, innerWidth );
-			drawLamp( x + 1, y + 1, endA, innerHeight, toneA );
-			drawLamp( x + 1 + endA, y + 1, endB - endA, innerHeight, toneB );
-			drawLamp( x + 1 + endB, y + 1, innerWidth - endB, innerHeight, dark );
-		}
+		const TokenRowLayout l = seatLayout( total );
+		return rowsHeight( l, l.size ) + tokenClearance();
 	}
 }
 
 // ------------------------------------------------------------------------------------------------
-/** The rounds and the seats hang under the health bar, one lamp tray each, rounds on top. EA only
-	* drew the ammo pips for a selected or moused-over unit, which has a bar; an aircraft that shows
-	* them always may have none, and then nothing is drawn. */
+/** The rounds and the seats hang under the health bar as rows of separate tokens centred on it,
+	* rounds on top. EA only drew the ammo pips for a selected or moused-over unit, which has a bar;
+	* an aircraft that shows them always may have none, and then nothing is drawn. */
 // ------------------------------------------------------------------------------------------------
-void Drawable::drawTrays( const IRegion2D *healthBarRegion )
+void Drawable::drawLoadTokens( const IRegion2D *healthBarRegion )
 {
 	if( !healthBarRegion )
 		return;
 
-	Int y = trayStackTop( healthBarRegion );
+	const Int centreX = ( healthBarRegion->lo.x + healthBarRegion->hi.x ) / 2;
+	Int y = tokensTop( healthBarRegion );
 	Int total, full, infantry;
 
+	// one pixel of near black round every token holds it on snow and sand alike
+	const Color rim = GameMakeColor( 10, 10, 12, 255 );
+	const Color glass = GameMakeColor( 26, 29, 30, 255 );
+
 	// rounds burn the reload bar's amber, so a Comanche's rockets and the wait for the next salvo read
-	// as one family; a spent round is dark glass
-	if( ammoTrayCounts( total, full ) )
+	// as one family; a spent round is a dark slug with a dim amber edge
+	if( ammoTokenCounts( total, full ) )
 	{
-		const LampTone ROUND = makeLampTone( 255, 190, 40,  255, 232, 150,  176, 118, 16 );
-		drawLampTray( healthBarRegion, y, total, full, ROUND, 0, ROUND );
-		y += traySpan( healthBarRegion );
+		const TokenRowLayout l = roundLayout( total );
+		const Int h = roundHeight( l );
+		const Int lit = Drawable_tokensLit( full, total, l.shown );
+		const Color amber = GameMakeColor( 255, 190, 40, 255 );
+		const Color dimAmber = GameMakeColor( 122, 88, 22, 255 );
+		for( Int i = 0; i < l.shown; ++i )
+		{
+			const Int x = Drawable_tokenLeft( l, i, centreX );
+			const Int top = y + ( i / l.perRow ) * ( h + l.gap );
+			fillSlug( x, top, l.size, h, rim );
+			fillSlug( x + 1, top + 1, l.size - 2, h - 2, i < lit ? amber : dimAmber );
+			if( i >= lit )
+				fillSlug( x + 2, top + 2, l.size - 4, h - 4, glass );
+		}
+		y += rowsHeight( l, h ) + tokenClearance();
 	}
 
 	//
-	// Infantry first, then everything else, against the seats there are. EA's pure green and pure
-	// blue are kept as the meaning and toned down to sit with the steel of the HUD: a field green for
-	// soldiers, a steel blue for vehicles and anything else aboard.
+	// Infantry first, then everything else, against the seats there are: a soldier is warm white, a
+	// vehicle or anything else aboard steel blue, a free seat a hollow of dark glass in a steel edge.
+	// No green: that belongs to the health bar.
 	//
-	if( seatTrayCounts( total, infantry, full ) )
+	if( seatTokenCounts( total, infantry, full ) )
 	{
-		const LampTone INFANTRY = makeLampTone( 120, 196, 64,  196, 240, 140,  66, 118, 34 );
-		const LampTone VEHICLE = makeLampTone( 86, 148, 214,  176, 214, 250,  44, 86, 138 );
-		drawLampTray( healthBarRegion, y, total, infantry, INFANTRY, full - infantry, VEHICLE );
+		const TokenRowLayout l = seatLayout( total );
+		full = max( 0, min( full, total ) );
+		infantry = max( 0, min( infantry, full ) );
+		const Int litInfantry = Drawable_tokensLit( infantry, total, l.shown );
+		Int litAll = Drawable_tokensLit( full, total, l.shown );
+		if( full > infantry && litAll == litInfantry && litAll < l.shown )
+			++litAll;		// a lone vehicle aboard among many soldiers keeps a token of its own
+
+		const Color soldier = GameMakeColor( 236, 232, 220, 255 );
+		const Color vehicle = GameMakeColor( 86, 148, 214, 255 );
+		const Color steel = GameMakeColor( 120, 128, 134, 255 );
+		const Int half = l.size / 2;
+		for( Int i = 0; i < l.shown; ++i )
+		{
+			const Int cx = Drawable_tokenLeft( l, i, centreX ) + half;
+			const Int cy = y + ( i / l.perRow ) * ( l.size + l.gap ) + half;
+			fillDiamond( cx, cy, l.size, rim );
+			fillDiamond( cx, cy, l.size - 2, i < litInfantry ? soldier : i < litAll ? vehicle : steel );
+			if( i >= litAll )
+				fillDiamond( cx, cy, l.size - 4, glass );
+		}
 	}
 }
 
 // ------------------------------------------------------------------------------------------------
-/** The first free row under this drawable's bar and whatever trays drawTrays hangs from it, for
-	* anything else that draws under the bar: the capture clock, the enthusiasm icon. */
+/** The first free row under this drawable's bar and whatever token rows drawLoadTokens hangs from
+	* it, for anything else that draws under the bar: the capture clock, the enthusiasm icon. */
 // ------------------------------------------------------------------------------------------------
-Int Drawable::trayStackBottom( const IRegion2D *healthBarRegion ) const
+Int Drawable::loadTokensBottom( const IRegion2D *healthBarRegion ) const
 {
-	Int y = trayStackTop( healthBarRegion );
+	Int y = tokensTop( healthBarRegion );
 	const Object *obj = getObject();
 	if( obj == NULL || obj->isEffectivelyDead() || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )
-		return y;		// drawIconUI bails before the trays for these
+		return y;		// drawIconUI bails before the tokens for these
 
 	Int total, full, infantry;
-	if( ammoTrayCounts( total, full ) )
-		y += traySpan( healthBarRegion );
-	if( seatTrayCounts( total, infantry, full ) )
-		y += traySpan( healthBarRegion );
+	if( ammoTokenCounts( total, full ) )
+		y += roundsSpan( total );
+	if( seatTokenCounts( total, infantry, full ) )
+		y += seatsSpan( total );
 	return y;
 }
 
 // ------------------------------------------------------------------------------------------------
-Bool Drawable::ammoTrayCounts( Int &numTotal, Int &numFull ) const
+Bool Drawable::ammoTokenCounts( Int &numTotal, Int &numFull ) const
 {
 	const Object *obj = getObject();
 
@@ -4359,7 +4466,7 @@ Bool Drawable::ammoTrayCounts( Int &numTotal, Int &numFull ) const
 }
 
 // ------------------------------------------------------------------------------------------------
-Bool Drawable::seatTrayCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const
+Bool Drawable::seatTokenCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const
 {
 	const Object *obj = getObject();
 
@@ -4402,8 +4509,8 @@ Bool Drawable::seatTrayCounts( Int &numTotal, Int &numInfantry, Int &numFull ) c
 	if (numFull == 0 && !TheGlobalData->m_showEmptyBuildingPips && obj->isKindOf( KINDOF_STRUCTURE ))
 		return FALSE;
 
-	// an empty garrisonable building draws nothing at all: a city with an empty tray over every house
-	// is clutter. Once someone is in, the tray counts them against every window it has.
+	// an empty garrisonable building draws nothing at all: a city with empty seats over every house
+	// is clutter. Once someone is in, the row counts them against every window it has.
 	if (numFull == 0 && obj->isKindOf( KINDOF_STRUCTURE ) && container->isGarrisonable())
 		return FALSE;
 
@@ -4796,7 +4903,7 @@ void Drawable::drawEnthusiastic(const IRegion2D* healthBarRegion)
 			ICoord2D screen;
 			screen.x = REAL_TO_INT( healthBarRegion->lo.x + (barWidth * 0.25f) - (frameWidth * 0.5f) );
 			screen.y = REAL_TO_INT( healthBarRegion->hi.y + (frameHeight * 0.25) );
-			screen.y = max( (Int)screen.y, trayStackBottom( healthBarRegion ) );	// under a Troop Crawler's seats, not over them
+			screen.y = max( (Int)screen.y, loadTokensBottom( healthBarRegion ) );	// under a Troop Crawler's seats, not over them
 			getIconInfo()->m_icon[ iconIndex ]->draw( screen.x, screen.y, frameWidth, frameHeight );
 							
 		}	
@@ -5318,8 +5425,8 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 
 	//
 	// With a bar, the chevrons stand just past its right end, centred on it. EA hung them from the
-	// bar's middle over its right end, which is where the ammo and seat trays now run: an amber
-	// chevron on the last amber round. Beside the bar nothing else is drawn.
+	// bar's middle over its right end, which sat on the old ammo strip: an amber chevron on the
+	// last amber round. Beside the bar nothing else is drawn.
 	//
 	if( healthBarRegion )
 	{
@@ -5388,9 +5495,9 @@ void Drawable::drawCaptureProgress( void )
 
 	const Real barWidth = healthBarRegion.hi.x - healthBarRegion.lo.x;
 	const Real barHeight = max( 3, healthBarRegion.hi.y - healthBarRegion.lo.y );
-	// clear of the health bar and its outline, and of the ammo and seat trays under it: a Bunker or a
+	// clear of the health bar and its outline, and of the rounds and seats under it: a Bunker or a
 	// garrisoned house being taken wears both
-	const Real barTop = max( (Int)healthBarRegion.hi.y + 2, targetDraw->trayStackBottom( &healthBarRegion ) );
+	const Real barTop = max( (Int)healthBarRegion.hi.y + 2, targetDraw->loadTokensBottom( &healthBarRegion ) );
 
 	Color fillColor = GameMakeColor( 255, 255, 255, 255 );
 	const Player *owner = obj->getControllingPlayer();

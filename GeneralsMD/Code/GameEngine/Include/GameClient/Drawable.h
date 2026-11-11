@@ -107,9 +107,24 @@ extern Real Drawable_reloadBarFraction( UnsignedInt now, UnsignedInt started, Un
 extern Bool Drawable_healthBarModeShows( Int healthBarMode, Bool isSelected, Bool isMousedOver,
 																				 Bool isDamaged );
 
-///< where lamp `index` of `capacity` starts across a tray `innerWidth` pixels wide, one pixel between
-///< lamps; -1 when a lamp would come out under two pixels wide and the tray is one continuous fill
-extern Int Drawable_lampCellLeft( Int innerWidth, Int capacity, Int index );
+/// How a row of rounds or seats under the health bar is laid out: `shown` tokens of `size` pixels
+/// across with `gap` between them, at most `perRow` to a row over `rows` rows.
+struct TokenRowLayout
+{
+	Int shown, perRow, rows, size, gap;
+};
+
+///< lays out `count` tokens: full size while they fit `maxPerRow` x `maxRows`, then smaller down to
+///< `minSize`/`minGap` within the width of a full row, then a fixed number of tokens at that floor
+extern TokenRowLayout Drawable_layoutTokens( Int count, Int size, Int gap, Int minSize, Int minGap,
+																						 Int maxPerRow, Int maxRows );
+
+///< left edge of token `index`, each row centred on `centreX`
+extern Int Drawable_tokenLeft( const TokenRowLayout &layout, Int index, Int centreX );
+
+///< how many of `shown` tokens light for `lit` of `count`: exact when all are shown, otherwise in
+///< proportion, keeping one lit for any load and one dark for any room left
+extern Int Drawable_tokensLit( Int lit, Int count, Int shown );
 
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
@@ -991,10 +1006,10 @@ private:
 	void drawConstructPercent( const IRegion2D *healthBarRegion );  ///< display % construction complete
 	void drawSupplyCash( const IRegion2D *healthBarRegion );				///< display the cash left in a supply pile
 	void drawCaption( const IRegion2D *healthBarRegion );						///< draw caption
-	void drawTrays( const IRegion2D *healthBarRegion );							///< rounds left and seats taken, lamp trays under the bar
-	Int trayStackBottom( const IRegion2D *healthBarRegion ) const;	///< first free row under the bar and its trays
-	Bool ammoTrayCounts( Int &numTotal, Int &numFull ) const;				///< whether the rounds tray shows, and its counts
-	Bool seatTrayCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const;	///< whether the seat tray shows, and its counts
+	void drawLoadTokens( const IRegion2D *healthBarRegion );				///< rounds left and seats taken, token rows under the bar
+	Int loadTokensBottom( const IRegion2D *healthBarRegion ) const;	///< first free row under the bar and its token rows
+	Bool ammoTokenCounts( Int &numTotal, Int &numFull ) const;			///< whether the rounds row shows, and its counts
+	Bool seatTokenCounts( Int &numTotal, Int &numInfantry, Int &numFull ) const;	///< whether the seat row shows, and its counts
 	void drawVeterancy( const IRegion2D *healthBarRegion );					///< draw veterency information
 
 	void drawEmoticon( const IRegion2D* healthBarRegion );

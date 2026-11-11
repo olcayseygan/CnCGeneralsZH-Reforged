@@ -1169,6 +1169,7 @@ public:  // ********************************************************************
 	void armSignal( SignalKind kind ) { m_armedSignal = kind; }
 	void disarmSignal( void ) { m_armedSignal = SIGNAL_KIND_COUNT; }
 	Bool isSignalArmed( void ) const { return m_armedSignal != SIGNAL_KIND_COUNT; }
+	SignalKind getArmedSignal( void ) const { return m_armedSignal; }	///< SIGNAL_KIND_COUNT for none
 	/// sends the armed signal to `world` and disarms; FALSE, doing nothing, when none is armed
 	Bool placeArmedSignal( const Coord3D &world );
 

@@ -208,6 +208,17 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "CommandTabPlateLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_commandTabPlateLR ) },
 	{ "CommandTabPageNextImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabPageImage[ 0 ] ) },
 	{ "CommandTabPagePrevImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabPageImage[ 1 ] ) },
+	{ "SignalAttackButtonImage",		INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_signalImage[ 0 ] ) },
+	{ "SignalDefendButtonImage",		INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_signalImage[ 1 ] ) },
+	{ "SignalAttentionButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_signalImage[ 2 ] ) },
+	{ "SignalAttackUL",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalUL[ 0 ] ) },
+	{ "SignalAttackLR",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalLR[ 0 ] ) },
+	{ "SignalDefendUL",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalUL[ 1 ] ) },
+	{ "SignalDefendLR",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalLR[ 1 ] ) },
+	{ "SignalAttentionUL",					INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalUL[ 2 ] ) },
+	{ "SignalAttentionLR",					INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalLR[ 2 ] ) },
+	{ "SignalPlateUL",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalPlateUL ) },
+	{ "SignalPlateLR",							INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_signalPlateLR ) },
 	{ "TooltipImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_tooltipName ) },
 	{ "TalentImage",					INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_talentName ) },
 
@@ -518,6 +529,15 @@ ControlBarScheme::ControlBarScheme(void)
 	for( Int arrow = 0; arrow < 2; arrow++ )
 		for( Int state = 0; state < 4; state++ )
 			m_commandTabPage[ arrow ][ state ] = NULL;
+	for( Int key = 0; key < SIGNAL_KEY_COUNT; key++ )
+	{
+		for( Int state = 0; state < 4; state++ )
+			m_signal[ key ][ state ] = NULL;
+		m_signalUL[ key ].x = m_signalUL[ key ].y = 0;
+		m_signalLR[ key ].x = m_signalLR[ key ].y = 0;
+	}
+	m_signalPlateUL.x = m_signalPlateUL.y = 0;
+	m_signalPlateLR.x = m_signalPlateLR.y = 0;
 	m_tooltip = ControlBarTooltipImages();
 	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
 		m_talent[ i ] = NULL;
@@ -594,6 +614,8 @@ void ControlBarScheme::init(void)
 		findPieces( m_commandTabImage[ tab ], "", tabStates, COMMAND_TAB_STATE_COUNT, m_commandTab[ tab ] );
 	for( Int arrow = 0; arrow < 2; arrow++ )
 		findPieces( m_commandTabPageImage[ arrow ], "", tabStates, 4, m_commandTabPage[ arrow ] );
+	for( Int key = 0; key < SIGNAL_KEY_COUNT; key++ )
+		findPieces( m_signalImage[ key ], "", tabStates, 4, m_signal[ key ] );
 	m_tooltip.find( m_tooltipName );
 	static const char *const talentSuffixes[ TALENT_PIECE_COUNT ] =
 		{ "GeneralsPowerWindowWide", "TalentPlateLocked", "TalentPlateWaiting", "TalentPlatePicked", "TalentPlateRejected",
@@ -1374,14 +1396,16 @@ const Image *const *ControlBarSchemeManager::getCommandTabPageImages( Int arrow 
 	return m_currentScheme->m_commandTabPage[ arrow ];
 }
 
-Bool ControlBarSchemeManager::getCommandTabSeats( IRegion2D *tabs, IRegion2D *plate ) const
+/** Seats named in a scheme's creation resolution, to 800x600 design units by drawPainting's own
+	* conversion; the plate is the seats' extent where the scheme names none.  FALSE when any seat is
+	* empty or the scheme has no creation resolution. */
+static Bool seatsToDesign( const ControlBarScheme *scheme, const ICoord2D *ul, const ICoord2D *lr, Int count,
+													 const ICoord2D &plateUL, const ICoord2D &plateLR, IRegion2D *seats, IRegion2D *plate )
 {
-	if( m_currentScheme == NULL || m_currentScheme->m_ScreenCreationRes.x <= 0 || m_currentScheme->m_ScreenCreationRes.y <= 0 )
+	if( scheme == NULL || scheme->m_ScreenCreationRes.x <= 0 || scheme->m_ScreenCreationRes.y <= 0 )
 		return FALSE;
-
-	// drawPainting's conversion: the scheme's creation resolution to 800x600 design units
-	const Real toDesignX = 800.0f / m_currentScheme->m_ScreenCreationRes.x;
-	const Real toDesignY = 600.0f / m_currentScheme->m_ScreenCreationRes.y;
+	const Real toDesignX = 800.0f / scheme->m_ScreenCreationRes.x;
+	const Real toDesignY = 600.0f / scheme->m_ScreenCreationRes.y;
 	struct Convert
 	{
 		static Bool rect( const ICoord2D &ul, const ICoord2D &lr, Real dx, Real dy, IRegion2D *out )
@@ -1395,22 +1419,40 @@ Bool ControlBarSchemeManager::getCommandTabSeats( IRegion2D *tabs, IRegion2D *pl
 			return TRUE;
 		}
 	};
-	for( Int tab = 0; tab < ControlBarScheme::COMMAND_TAB_IMAGE_COUNT; tab++ )
-		if( !Convert::rect( m_currentScheme->m_commandTabUL[ tab ], m_currentScheme->m_commandTabLR[ tab ], toDesignX, toDesignY, &tabs[ tab ] ) )
+	for( Int i = 0; i < count; i++ )
+		if( !Convert::rect( ul[ i ], lr[ i ], toDesignX, toDesignY, &seats[ i ] ) )
 			return FALSE;
-	// no plate named: the tabs' own extent
-	if( !Convert::rect( m_currentScheme->m_commandTabPlateUL, m_currentScheme->m_commandTabPlateLR, toDesignX, toDesignY, plate ) )
+	if( !Convert::rect( plateUL, plateLR, toDesignX, toDesignY, plate ) )
 	{
-		*plate = tabs[ 0 ];
-		for( Int tab = 1; tab < ControlBarScheme::COMMAND_TAB_IMAGE_COUNT; tab++ )
+		*plate = seats[ 0 ];
+		for( Int i = 1; i < count; i++ )
 		{
-			plate->lo.x = min( plate->lo.x, tabs[ tab ].lo.x );
-			plate->lo.y = min( plate->lo.y, tabs[ tab ].lo.y );
-			plate->hi.x = max( plate->hi.x, tabs[ tab ].hi.x );
-			plate->hi.y = max( plate->hi.y, tabs[ tab ].hi.y );
+			plate->lo.x = min( plate->lo.x, seats[ i ].lo.x );
+			plate->lo.y = min( plate->lo.y, seats[ i ].lo.y );
+			plate->hi.x = max( plate->hi.x, seats[ i ].hi.x );
+			plate->hi.y = max( plate->hi.y, seats[ i ].hi.y );
 		}
 	}
 	return TRUE;
+}
+
+Bool ControlBarSchemeManager::getCommandTabSeats( IRegion2D *tabs, IRegion2D *plate ) const
+{
+	return m_currentScheme != NULL && seatsToDesign( m_currentScheme, m_currentScheme->m_commandTabUL, m_currentScheme->m_commandTabLR,
+		ControlBarScheme::COMMAND_TAB_IMAGE_COUNT, m_currentScheme->m_commandTabPlateUL, m_currentScheme->m_commandTabPlateLR, tabs, plate );
+}
+
+Bool ControlBarSchemeManager::getSignalSeats( IRegion2D *keys, IRegion2D *plate ) const
+{
+	return m_currentScheme != NULL && seatsToDesign( m_currentScheme, m_currentScheme->m_signalUL, m_currentScheme->m_signalLR,
+		ControlBarScheme::SIGNAL_KEY_COUNT, m_currentScheme->m_signalPlateUL, m_currentScheme->m_signalPlateLR, keys, plate );
+}
+
+const Image *const *ControlBarSchemeManager::getSignalImages( Int kind ) const
+{
+	if( m_currentScheme == NULL || kind < 0 || kind >= ControlBarScheme::SIGNAL_KEY_COUNT || m_currentScheme->m_signal[ kind ][ 0 ] == NULL )
+		return NULL;
+	return m_currentScheme->m_signal[ kind ];
 }
 
 const Image *const *ControlBarSchemeManager::getPowerTray( void ) const

@@ -1967,6 +1967,18 @@ GUI:CommandTabPagePrev
 "Previous page"
 END
 
+GUI:SignalKeyAttack
+"Attack signal: smoke for your allies where you click next. Right click cancels"
+END
+
+GUI:SignalKeyDefend
+"Defend signal: smoke for your allies where you click next. Right click cancels"
+END
+
+GUI:SignalKeyAttention
+"Look here: smoke for your allies where you click next. Right click cancels"
+END
+
 TOOLTIP:BuildWithoutWorker
 "With nothing selected the command bar shows your workers' buildings, and the idle worker nearest the spot goes to build. Off, the bar stays empty until you select a worker, as in 2003."
 END

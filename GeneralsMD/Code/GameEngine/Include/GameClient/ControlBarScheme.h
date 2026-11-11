@@ -287,6 +287,17 @@ public:
 	AsciiString m_commandTabPageImage[ 2 ];
 	const Image *m_commandTabPage[ 2 ][ 4 ];
 
+	/// the smoke signal keys on the radar's top edge (SignalKind order: attack, defend, attention):
+	/// Signal<Kind>ButtonImage with H, P and I, Signal<Kind>UL/LR the seats at 100% radar and
+	/// SignalPlateUL/LR the steel, in the painting's coordinates.  A scheme naming none has no keys
+	enum { SIGNAL_KEY_COUNT = 3 };
+	AsciiString m_signalImage[ SIGNAL_KEY_COUNT ];
+	const Image *m_signal[ SIGNAL_KEY_COUNT ][ 4 ];
+	ICoord2D m_signalUL[ SIGNAL_KEY_COUNT ];
+	ICoord2D m_signalLR[ SIGNAL_KEY_COUNT ];
+	ICoord2D m_signalPlateUL;
+	ICoord2D m_signalPlateLR;
+
 	/// RadarFrameImage: the nine pieces the radar's frame is drawn from round the map's own shape,
 	/// <name>TL, T, TR, L, C, R, BL, B, BR.  The corners' sizes are the frame's thickness on each side.
 	enum { FRAME_TL, FRAME_T, FRAME_TR, FRAME_L, FRAME_C, FRAME_R, FRAME_BL, FRAME_B, FRAME_BR, FRAME_PIECE_COUNT };
@@ -387,6 +398,10 @@ public:
 	/// the scheme on screen's page arrow 'arrow' (0 next, 1 previous): enabled, hilite, pushed,
 	/// disabled, or NULL when it names none
 	const Image *const *getCommandTabPageImages( Int arrow ) const;
+	/// the scheme on screen's signal key 'kind' pictures (enabled, hilite, pushed, disabled), NULL for none
+	const Image *const *getSignalImages( Int kind ) const;
+	/// its signal seats and plate in 800x600 design units, as getCommandTabSeats; FALSE for none
+	Bool getSignalSeats( IRegion2D *keys, IRegion2D *plate ) const;
 	/// the current scheme's talent pieces in ControlBarScheme::TALENT_* order, NULL when it names none
 	const Image *const *getTalentImages( void ) const;
 	/// the scheme on screen writes the money with thousands separators (MoneyThousands)

@@ -510,6 +510,10 @@ Bool ControlBar_commandPlaces( const Int *types, const Int *groups, const Int *p
 	* of fewer than three keeps every cell).  ControlBarCommand.cpp. */
 void ControlBar_commandTabPages( Int count, Int cells, Int *perPage, Int *pages );
 
+/** " (Alt+Z)" for the key the player's command map gives a meta event in a match, empty for none
+	* (ControlBarPopupDescription.cpp). */
+UnicodeString ControlBar_metaKeySuffix( Int meta );
+
 /** The page's keys past attack, hold position and move, which no command set has a button for either. */
 enum OrderKeyExtra
 {
@@ -1302,6 +1306,16 @@ protected:
 public:
 	Bool pressCommandTabArrow( GameWindow *win );	///< a click on a page arrow turns the page: TRUE, else FALSE
 	Bool isCommandTabArrow( const GameWindow *win ) const;	///< 'win' is a page arrow now
+protected:
+	/// the smoke signal keys on the radar's top edge (ControlBarCommand.cpp), in the scheme's seats;
+	/// a scheme naming none has none.  Every client frame: where they stand, enabled or not, armed
+	void updateSignalKeys( void );
+	GameWindow *m_signalParent;										///< the keys' plate window, checked against the window manager before use
+	enum { SIGNAL_KEYS = 3 };											///< InGameUI.h's SIGNAL_KIND_COUNT, in SignalKind order
+	GameWindow *m_signalKeys[ SIGNAL_KEYS ];
+public:
+	/// a signal key's press: arm that smoke signal, or disarm it when it is the one armed
+	void pressSignalKey( Int kind );
 protected:
 	Int m_commandTabArrowSlot[ 2 ];								///< the cells that are the next and previous arrows now, -1 for none
 	enum { TAB_ARROW_DRAW_STATES = 7 };

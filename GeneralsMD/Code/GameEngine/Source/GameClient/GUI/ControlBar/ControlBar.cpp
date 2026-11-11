@@ -1686,6 +1686,9 @@ ControlBar::ControlBar( void )
 	m_commandTabParent = NULL;
 	for( i = 0; i < COMMAND_TAB_COUNT; i++ )
 		m_commandTabButtons[ i ] = NULL;
+	m_signalParent = NULL;
+	for( i = 0; i < SIGNAL_KEYS; i++ )
+		m_signalKeys[ i ] = NULL;
 	for( i = 0; i < 2; i++ )
 	{
 		m_commandTabArrowSlot[ i ] = -1;
@@ -2961,6 +2964,10 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 	IRegion2D blocker;
 	blocker.lo.x = MIN( block.lo.x, frame.lo.x );
 	blocker.lo.y = MIN( block.lo.y, frame.lo.y );
+	// what the box's blocker stands above the box (the ledge, and the signal keys' plate) rises with
+	// the picture, as updateSignalKeys moves the keys: radarFrameTop, and what stands on it, clears it
+	if( block.lo.y < square.lo.y )
+		blocker.lo.y = MIN( blocker.lo.y, fit.lo.y - ( square.lo.y - block.lo.y ) );
 	blocker.hi.x = MIN( MAX( block.hi.x, frame.hi.x ), plateX - 1 );
 	blocker.hi.y = MAX( block.hi.y, frame.hi.y );
 	placeWindowAt( windows[ RADAR_FIT_BLOCK ], blocker );
@@ -3582,6 +3589,8 @@ void ControlBar::update( void )
 
 	// the command bar's tabs follow the grid wherever the scheme, the HUD scale or the minimise put it
 	updateCommandTabButtons();
+	// and the signal keys the radar, grown or not
+	updateSignalKeys();
 
 	// walks every shortcut button and asks the player for its most ready special power object
 	if( logicTick )

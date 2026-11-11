@@ -16573,6 +16573,18 @@ GUI:CommandTabPagePrev
 "Önceki sayfa"
 END
 
+GUI:SignalKeyAttack
+"Sinyal, Saldır: sonra tıkladığın yere müttefiklerin için duman. Sağ tık vazgeçer"
+END
+
+GUI:SignalKeyDefend
+"Sinyal, Savun: sonra tıkladığın yere müttefiklerin için duman. Sağ tık vazgeçer"
+END
+
+GUI:SignalKeyAttention
+"Sinyal, Buraya Bak: sonra tıkladığın yere müttefiklerin için duman. Sağ tık vazgeçer"
+END
+
 TOOLTIP:BuildWithoutWorker
 "Hiçbir şey seçili değilken komut çubuğu işçilerinizin binalarını gösterir ve yere en yakın boştaki işçi gidip inşa eder. Kapalıyken çubuk, 2003'teki gibi bir işçi seçene kadar boş kalır."
 END

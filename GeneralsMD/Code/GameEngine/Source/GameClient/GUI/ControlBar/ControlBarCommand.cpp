@@ -2492,3 +2492,183 @@ Bool ControlBar::scrollCommandTab( const ICoord2D *mouse, Bool up )
 	return turnCommandTabPage( up ? -1 : 1 );
 }
 
+//-------------------------------------------------------------------------------------------------
+// The smoke signal keys: three push buttons in a code-made plate window over the radar's top edge,
+// in the seats the scheme's painting has for them.  A press only arms the signal
+// (InGameUI::armSignal); the cross cursor, the click on the ground or the radar that drops it and the
+// right click that disarms are the signal keys' own path already.  Client only: the logic hears of a
+// signal as MSG_PLACE_SIGNAL, as from the keys.
+//-------------------------------------------------------------------------------------------------
+static Int signalParentId( void )
+{
+	static const Int id = (Int)TheNameKeyGenerator->nameToKey( "ControlBar:SignalKeys" );
+	return id;
+}
+
+static WindowMsgHandledType signalKeysSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
+{
+	if( msg != GBM_SELECTED )
+		return GameWinDefaultSystem( window, msg, mData1, mData2 );
+	const Int kind = (Int)(intptr_t)GadgetButtonGetData( (GameWindow *)mData1 ) - 1;
+	if( kind >= 0 && kind < SIGNAL_KIND_COUNT )
+		TheControlBar->pressSignalKey( kind );
+	return MSG_HANDLED;
+}
+
+/// where the signal keys work: the keys' own gate (CommandXlat's MSG_META_SIGNAL_*)
+static Bool signalsUsable( void )
+{
+	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	return ( TheGameLogic->isInMultiplayerGame() || TheGameLogic->isInSkirmishGame() ) && !TheGameLogic->isInReplayGame()
+		&& player != NULL && player->isPlayerActive();
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::pressSignalKey( Int kind )
+{
+	if( kind < 0 || kind >= SIGNAL_KIND_COUNT || !signalsUsable() )
+		return;
+	if( TheInGameUI->getArmedSignal() == (SignalKind)kind )
+	{
+		TheInGameUI->disarmSignal();
+		return;
+	}
+	// the next left click is the signal's: a structure on the cursor and an armed command give it up.
+	// An open command tab stays open; its grid is not on the cursor
+	TheInGameUI->placeBuildAvailable( NULL, NULL );
+	TheInGameUI->setGUICommand( NULL );
+	TheInGameUI->armSignal( (SignalKind)kind );
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::updateSignalKeys( void )
+{
+	IRegion2D seat[ SIGNAL_KEYS ], plate;
+	const Bool seated = m_controlBarSchemeManager != NULL && m_controlBarSchemeManager->getSignalSeats( seat, &plate );
+	const Bool shown = seated && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
+		&& m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
+		&& !TheInGameUI->isQuitMenuVisible();
+
+	GameWindow *parent = m_signalParent;
+	if( parent != NULL && TheWindowManager->winGetWindowFromId( NULL, signalParentId() ) != parent )
+		parent = m_signalParent = NULL;
+	if( !shown )
+	{
+		if( parent != NULL )
+			parent->winHide( TRUE );
+		return;
+	}
+
+	if( parent == NULL )
+	{
+		// ABOVE for the same reason as the command tabs' (updateCommandTabButtons); the plate swallows
+		// clicks and the wheel on its steel, so neither reaches the world under it
+		parent = TheWindowManager->winCreate( NULL, WIN_STATUS_ENABLED | WIN_STATUS_HIDDEN | WIN_STATUS_ABOVE, 0, 0, 1, 1, signalKeysSystem );
+		if( parent == NULL )
+			return;
+		parent->winSetWindowId( signalParentId() );
+		parent->winSetDrawFunc( drawNoCommandTabParent );
+		parent->winSetInputFunc( GameWinBlockInput );
+		for( Int kind = 0; kind < SIGNAL_KEYS; kind++ )
+		{
+			WinInstanceData inst;
+			inst.init();
+			BitSet( inst.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
+			GameWindow *button = TheWindowManager->gogoGadgetPushButton( parent,
+				WIN_STATUS_ENABLED | WIN_STATUS_IMAGE, 0, 0, 1, 1, &inst, NULL, TRUE );
+			m_signalKeys[ kind ] = button;
+			if( button == NULL )
+				continue;
+			GadgetButtonSetData( button, (void *)(intptr_t)( kind + 1 ) );
+			GadgetButtonSetAltSound( button, "GUICommandBarClick" );
+		}
+		m_signalParent = parent;
+	}
+
+	//
+	// A seat to the screen: the painting's own arithmetic for the piece it falls in (the left one for
+	// the radar's edge: its design-to-screen, the frame's travel since layoutPanels and drawPainting's
+	// radar column shift), and then the radar's own travel out of its painted box, which Minimap Size
+	// over 100 grows up and right from the box's bottom left corner (fitSquareRadar): the keys ride the
+	// picture's top edge at the height they had over the box.  At 100 that travel is nothing.
+	//
+	ICoord2D frameNow;
+	m_contextParent[ CP_MASTER ]->winGetScreenPosition( &frameNow.x, &frameNow.y );
+	ICoord2D grow = { 0, 0 };
+	static const NameKeyType radarId = NAMEKEY( "ControlBar.wnd:LeftHUD" );
+	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarId );
+	if( radar != NULL && !radar->winIsHidden() && m_radarSquareGrown )
+	{
+		ICoord2D at;
+		radar->winGetScreenPosition( &at.x, &at.y );
+		grow.x = at.x - ( m_radarFitBox[ RADAR_FIT_RADAR ].lo.x + frameNow.x );
+		grow.y = at.y - ( m_radarFitBox[ RADAR_FIT_RADAR ].lo.y + frameNow.y );
+	}
+	struct Seat
+	{
+		static void toScreen( const IRegion2D &design, Int dx, Int dy, Int columnShift, IRegion2D *out )
+		{
+			const Int piece = ControlBarHudPieceForDesignX( 0.5f * ( design.lo.x + design.hi.x ) );
+			ControlBarPanelDesignToScreen( piece, &design, TheDisplay->getWidth(), TheDisplay->getHeight(), out );
+			const Int x = dx + ( piece == ControlBar::CB_PANEL_LEFT ? columnShift : 0 );
+			out->lo.x += x;
+			out->hi.x += x;
+			out->lo.y += dy;
+			out->hi.y += dy;
+		}
+	};
+	const Int dx = frameNow.x - m_panelOrigin.x + grow.x;
+	const Int dy = frameNow.y - m_panelOrigin.y + grow.y;
+	IRegion2D row, key[ SIGNAL_KEYS ];
+	Seat::toScreen( plate, dx, dy, m_radarColumnShift, &row );
+	for( Int kind = 0; kind < SIGNAL_KEYS; kind++ )
+	{
+		Seat::toScreen( seat[ kind ], dx, dy, m_radarColumnShift, &key[ kind ] );
+		row.lo.x = min( row.lo.x, key[ kind ].lo.x );
+		row.lo.y = min( row.lo.y, key[ kind ].lo.y );
+		row.hi.x = max( row.hi.x, key[ kind ].hi.x );
+		row.hi.y = max( row.hi.y, key[ kind ].hi.y );
+	}
+	parent->winSetPosition( row.lo.x, row.lo.y );
+	parent->winSetSize( row.hi.x - row.lo.x, row.hi.y - row.lo.y );
+
+	// usable where the keys are, shown disabled elsewhere (the seats are painted); the armed one down
+	static const char *const labels[ SIGNAL_KEYS ] = { "GUI:SignalKeyAttack", "GUI:SignalKeyDefend", "GUI:SignalKeyAttention" };
+	static const Int metas[ SIGNAL_KEYS ] =
+	{
+		GameMessage::MSG_META_SIGNAL_ATTACK, GameMessage::MSG_META_SIGNAL_DEFEND, GameMessage::MSG_META_SIGNAL_ATTENTION
+	};
+	const Bool usable = signalsUsable();
+	const Int armed = usable ? (Int)TheInGameUI->getArmedSignal() : -1;
+	for( Int kind = 0; kind < SIGNAL_KEYS; kind++ )
+	{
+		GameWindow *button = m_signalKeys[ kind ];
+		if( button == NULL )
+			continue;
+		button->winSetPosition( key[ kind ].lo.x - row.lo.x, key[ kind ].lo.y - row.lo.y );
+		button->winSetSize( key[ kind ].hi.x - key[ kind ].lo.x, key[ kind ].hi.y - key[ kind ].lo.y );
+
+		const Image *const *art = m_controlBarSchemeManager->getSignalImages( kind );
+		if( art != NULL )
+		{
+			const Image *hilite = art[ 1 ] ? art[ 1 ] : art[ 0 ];
+			const Image *pushed = art[ 2 ] ? art[ 2 ] : hilite;
+			const Bool down = armed == kind;
+			GadgetButtonSetEnabledImage( button, down ? pushed : art[ 0 ] );
+			GadgetButtonSetHiliteImage( button, down ? pushed : hilite );
+			GadgetButtonSetHiliteSelectedImage( button, pushed );
+			GadgetButtonSetDisabledImage( button, art[ 3 ] ? art[ 3 ] : art[ 0 ] );
+		}
+		const Bool enabledNow = BitTest( button->winGetStatus(), WIN_STATUS_ENABLED ) ? TRUE : FALSE;
+		if( enabledNow != usable )
+			button->winEnable( usable );
+
+		// the name and the key the command map gives it now, rewritten only when it changed
+		UnicodeString tip = TheGameText->fetch( labels[ kind ] );
+		tip.concat( ControlBar_metaKeySuffix( metas[ kind ] ) );
+		if( tip.compare( button->winGetInstanceData()->getTooltipText() ) != 0 )
+			button->winSetTooltip( tip );
+	}
+	parent->winHide( FALSE );
+}
+

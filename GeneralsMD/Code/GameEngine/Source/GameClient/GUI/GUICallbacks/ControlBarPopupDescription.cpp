@@ -155,6 +155,12 @@ static UnicodeString metaKeySuffix( GameMessage::Type meta )
 	return suffix;
 }
 
+/// metaKeySuffix for the bar's own code-made keys (the signal keys' tooltips)
+UnicodeString ControlBar_metaKeySuffix( Int meta )
+{
+	return metaKeySuffix( (GameMessage::Type)meta );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** What the build tooltip says beyond retail's name, price and description, piece by piece, the
 	* way Reforged's card laid it out; ControlBarPopupDescription.wnd gets it as lines of its text. */

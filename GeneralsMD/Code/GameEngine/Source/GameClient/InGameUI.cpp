@@ -6878,6 +6878,10 @@ void InGameUI::setGUICommand( const CommandButton *command )
 	if (TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK)
 		return;
 
+	// an armed command and an armed smoke signal both want the next click: the newer wins
+	if( command != NULL )
+		disarmSignal();
+
 	// EA's guard buttons, and their hotkey, arm the guard key with the button's own mode instead of
 	// waiting as a pending command, so a button press and the key click and drag the same way
 	if( command && ( command->getCommandType() == GUI_COMMAND_GUARD ||
@@ -6993,6 +6997,10 @@ void InGameUI::placeBuildAvailable( const ThingTemplate *build, Drawable *buildD
 	// if building something, no radius cursor, thankew
 	if (build != NULL)
 		setRadiusCursorNone();
+
+	// a structure on the cursor and an armed smoke signal both want the next left click: the newer wins
+	if( build != NULL )
+		disarmSignal();
 
 	//
 	// if we're setting another place available, but we're somehow already in the placement

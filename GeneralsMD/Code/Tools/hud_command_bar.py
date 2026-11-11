@@ -1820,19 +1820,63 @@ def command_tab_glyph(kind):
 
 def command_tab(side_name, kind, state):
     """One tab: '' up, 'H' under the pointer, 'P' down (and the open tab), 'I' disabled."""
+    return key_piece(side_name, COMMAND_TAB_W, COMMAND_TAB_H, state, command_tab_glyph(kind))
+
+
+# The page arrows (the owner's order of 2026-11-11): when a Ground or Aircraft tab's list runs past a page, the
+# grid's two rightmost cells turn into page buttons, the top one's arrow right (next), the bottom one's left
+# (previous).  A command cell's size, 88x70 at 1080, in the tabs' family (key_piece) so they read as the bar's
+# controls among the cameos; the arrow is each build's own: America's chevron pair, China's stepped pyramid,
+# the GLA's lopsided wedge, Turkiye's triangle with its inner cut.  The glyph is flat paint, so the left one is
+# the right one's mirror.  The sheets are full, so each piece stands where there was room (PAGE_ARROW_AT).
+PAGE_ARROW = (88, 70)
+PAGE_ARROW_AT = {"TabPageNext": (605, 69), "TabPageNextH": (679, 309), "TabPageNextP": (667, 382), "TabPageNextI": (707, 455),
+                 "TabPagePrev": (545, 547), "TabPagePrevH": (731, 655), "TabPagePrevP": (523, 687), "TabPagePrevI": (614, 687)}
+
+
+def page_arrow_glyph(build, right):
+    """The arrow in a 22 box round (11, 11), pointing right or left: (raised, ink)."""
+    def box(a, b, c, d):
+        return [(a, b), (c, b), (c, d), (a, d)]
+    if build == "machined":
+        raised = [[(x, 4), (x + 3.4, 4), (x + 9.4, 11), (x + 3.4, 18), (x, 18), (x + 6, 11)] for x in (3.6, 10)]
+        ink = []
+    elif build == "terraced":
+        raised, ink = [box(4.5, 3.5, 9, 18.5), box(9, 6.5, 13.5, 15.5), box(13.5, 9.2, 17.8, 12.8)], []
+    elif build == "scavenged":
+        raised, ink = [[(4.6, 4.2), (18.2, 11.8), (5.4, 18.4), (6.6, 12.4)]], [[(7.2, 9.6), (9.6, 10.6), (7.6, 11.4)]]
+    else:
+        raised, ink = [[(4.6, 3.8), (18.4, 11), (4.6, 18.2)]], [[(7.6, 8.4), (12.8, 11), (7.6, 13.6)]]
+    if right:
+        return raised, ink
+    flip = lambda polys: [[(22 - x, y) for x, y in reversed(q)] for q in polys]  # noqa: E731
+    return flip(raised), flip(ink)
+
+
+def page_arrow_pieces(side_name):
+    build = BAR_LOOKS[side_name]["build"]
+    return {"TabPage" + d + state: key_piece(side_name, PAGE_ARROW[0], PAGE_ARROW[1], state,
+                                          page_arrow_glyph(build, d == "Next"), corner=2, glyph_scale=0.6)
+            for d in ("Next", "Prev") for state in COMMAND_TAB_STATES}
+
+
+def key_piece(side_name, w, h, state, glyph_polys, corner=1, glyph_scale=1.0):
+    """A key in the tabs' family, w x h: a dark rim, the squad key's bezel in the side's build, a dark glass face
+    and a flat glyph (raised and ink polygons in a 22 box round (11, 11)) filling the face's height times
+    glyph_scale.  '' up, 'H' under the pointer, 'P' down (lit in the side's open colour, the glyph dark),
+    'I' disabled.  corner scales the corners."""
     look = BAR_LOOKS[side_name]
     build = look["build"]
     edge = MOUNT_GLYPH_BUILD.get(build, build)
-    w, h = COMMAND_TAB_W, COMMAND_TAB_H
     o = 32
     p = Painter(w + 2 * o, h + 2 * o)
     down = state == "P"
     r = COMMAND_TAB_RIM
-    p.frame([shape(build, o, o, o + w, o + h, 4)], 2.2, edge, DARK, BEZEL_SCALE)
-    p.frame([shape(build, o + r, o + r, o + w - r, o + h - r, 3.2)], 2.4 if down else 3.6, edge,
+    p.frame([shape(build, o, o, o + w, o + h, 4 * corner)], 2.2, edge, DARK, BEZEL_SCALE)
+    p.frame([shape(build, o + r, o + r, o + w - r, o + h - r, 3.2 * corner)], 2.4 if down else 3.6, edge,
             {"": STEEL, "H": BRIGHT, "P": BRIGHT, "I": DARK}[state], BEZEL_SCALE)
     i = r + 3.2
-    face = shape(build, o + i, o + i, o + w - i, o + h - i, 2)
+    face = shape(build, o + i, o + i, o + w - i, o + h - i, 2 * corner)
     p.sink([face], 2.8 if down else 1.6, 1.0)
     img = shade(p, look, shadow=False, falloff=False).crop((o, o, o + w, o + h))
     big = 8
@@ -1854,8 +1898,8 @@ def command_tab(side_name, kind, state):
         layer = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
         layer.putalpha(mask_of([([[(x - o, y - o) for x, y in face]], 255)]))
         img.alpha_composite(layer)
-    raised, ink = command_tab_glyph(kind)
-    k = (h - 2 * i) / 14.5                              # the glyph drawn for a 22 key, filling this face
+    raised, ink = glyph_polys
+    k = (h - 2 * i) / 14.5 * glyph_scale                # the glyph drawn for a 22 key, filling this face
     off = 0.8 if down else 0.0
     cx, cy = w / 2 + off, h / 2 + off - (1.2 if down else 0)    # open: clear of the foot's bar
     place = lambda polys: [[(cx + (x - 11) * k, cy + (y - 11) * k) for x, y in q] for q in polys]  # noqa: E731
@@ -2010,6 +2054,7 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     pieces.update(tip_pieces(side_name))
     pieces.update(group_pieces(side_name))
     pieces.update(command_tab_pieces(side_name))
+    pieces.update(page_arrow_pieces(side_name))
     for kind in MOUNT_KINDS:
         for state in ("", "H", "P", "I"):
             x0, y0, x1, y1 = M[prefix + kind + state]
@@ -3609,6 +3654,9 @@ def check_sheet(sheet_img, side_name, glow="B"):
     want.update(tip_sizes())
     want.update(group_sizes())
     want.update({n: (COMMAND_TAB_W, COMMAND_TAB_H) for n in command_tab_boxes()})
+    want.update({n: PAGE_ARROW for n in PAGE_ARROW_AT})
+    for n, at in PAGE_ARROW_AT.items():
+        assert M[pre + n][:2] == at, "%s%s stands at %s, PAGE_ARROW_AT says %s" % (pre, n, M[pre + n][:2], at)
     for n, wh in want.items():
         assert pre + n in M, "%s%s is not on the sheet" % (pre, n)
         assert size(n) == wh, "%s%s is %s, the code wants %s" % (pre, n, size(n), wh)

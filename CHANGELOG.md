@@ -15,7 +15,12 @@ found and fixed, EA's own, not port damage.**
 
 ## Squads, and orders you can see land
 
-- The American Barracks trains a Ranger Squad and a Missile Defender Squad beside the single soldiers, five men trained as one unit the way Command and Conquer 3 does it. A click on any of them picks the whole squad, it wears one health bar for all five, and it costs and trains like one soldier, each man firing a fifth of the soldier's gun. A squad loses firepower as its men fall and a dead man is never replaced. The generals' Barracks keep EA's lists. This is a first cut and its balance is still being measured.
+- The American Barracks trains a Ranger Squad and a Missile Defender Squad, five men trained as one unit the way Command and Conquer 3 does it. They sit on the Ranger and Missile Defender buttons, so the slot, the hotkey and any key you bound to them stay where they were, and the Barracks no longer trains a single Ranger or Missile Defender for you. A click on a squad picks the whole squad, it wears one health bar for all five, and it costs and trains like one soldier, each man firing a fifth of the soldier's gun. A squad loses firepower as its men fall and a dead man is never replaced. The generals' Barracks and the other sides keep EA's lists. The computer still trains single soldiers, and may field squads too. This is a first cut and its balance is still being measured.
+- A Ranger Squad captures buildings and throws Flash-Bangs, from the same buttons a single Ranger has. It cannot yet enter a building or a vehicle.
+- A squad moves as one body. Sent round a building or a corner, it keeps its formation instead of splitting up and arriving in pieces.
+- Shoot one soldier of a squad, or of a GLA Angry Mob, and the attack carries on to the others until the whole squad is dead. A squad you send to attack does the same.
+- A squad's men no longer each take the full talent health bonus: a Ranger Squad gets 250 health in all, where five full bonuses would have made it far tougher than one Ranger.
+- A replay recorded before this change that has a squad or an Angry Mob in it will not play back.
 - Every selected unit stands in a thin glowing circle in its owner's colour, and where circles touch they merge into one outline, so a squad of five standing close wears one scalloped ring and not five rings through each other. A selected building gets the same line traced round its footprint. Give an attack order and the ordered units' rings pulse up off the ground; the unit or building you aimed at, or the one you sent them into, flashes red twice the instant the click lands. EA's red box round a building under your attack is gone, since the flash says it now.
 
 ## A general's rank goes to ten

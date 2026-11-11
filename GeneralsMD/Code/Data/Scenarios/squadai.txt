@@ -1,0 +1,45 @@
+# The computer's half of squadbarracks.txt: two USA computer players on their own, and what their
+# plain Barracks trains. The skirmish scripts' teams name AmericaInfantryRanger and
+# AmericaInfantryMissileDefender, and the Barracks' buttons for those train squads now, so the
+# computer reaches the single soldiers through the hidden buttons in slots 15 and 16 and gets the
+# AmericaInfantryRangerAI and AmericaInfantryMissileDefenderAI copies. The squad lines say whether the
+# AI's own unit pickers still choose a squad off the Ranger button. Nothing here is staged, so the
+# counts are read, not expected.
+#
+# 2026-11-11: both seats had AmericaInfantryRangerAI out by 3000 (1 each, 7 and 9 by 14000) and
+# AmericaInfantryMissileDefenderAI by 9000 (4 each, some of them inside transports or buildings).
+# The pickers also trained squads: 3 Missile Defender squads by 9000, 7 Ranger squads by 14000.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2
+#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 1 -maxframes 30000
+#     -scenario squadai -logPrefix squadai_
+
+3000   tally  0  AmericaInfantryRangerAI
+3000   tally  1  AmericaInfantryRangerAI
+3000   tally  0  AmericaInfantryMissileDefenderAI
+3000   tally  1  AmericaInfantryMissileDefenderAI
+3000   tally  0  AmericaInfantryRangerSquad
+3000   tally  1  AmericaInfantryRangerSquad
+3000   tally  0  AmericaInfantryMissileDefenderSquad
+3000   tally  1  AmericaInfantryMissileDefenderSquad
+6000   tally  0  AmericaInfantryRangerAI
+6000   tally  1  AmericaInfantryRangerAI
+6000   tally  0  AmericaInfantryMissileDefenderAI
+6000   tally  1  AmericaInfantryMissileDefenderAI
+6000   tally  0  AmericaInfantryRangerSquad
+6000   tally  1  AmericaInfantryRangerSquad
+6000   tally  0  AmericaInfantryMissileDefenderSquad
+6000   tally  1  AmericaInfantryMissileDefenderSquad
+9000   tally  0  AmericaInfantryRangerAI
+9000   tally  1  AmericaInfantryRangerAI
+9000   tally  0  AmericaInfantryMissileDefenderAI
+9000   tally  1  AmericaInfantryMissileDefenderAI
+9000   tally  0  AmericaInfantryRangerSquad
+9000   tally  1  AmericaInfantryRangerSquad
+9000   tally  0  AmericaInfantryMissileDefenderSquad
+9000   tally  1  AmericaInfantryMissileDefenderSquad
+14000  tally  0  AmericaInfantryRangerAI
+14000  tally  1  AmericaInfantryRangerAI
+14000  tally  0  AmericaInfantryRangerSquad
+14000  tally  1  AmericaInfantryRangerSquad

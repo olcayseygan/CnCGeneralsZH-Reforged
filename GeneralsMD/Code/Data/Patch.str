@@ -4320,11 +4320,11 @@ OBJECT:AmericaMissileDefenderSquad
 END
 
 CONTROLBAR:ConstructAmericaInfantryRangerSquad
-"Ranger S&quad"
+"Ran&ger Squad"
 END
 
 CONTROLBAR:ConstructAmericaInfantryMissileDefenderSquad
-"Missile Defender Sq&uad"
+"&Missile Defender Squad"
 END
 
 // The general's talents, ranks 6 to 10: the talents panel of the General's Powers window. GUI:Rank

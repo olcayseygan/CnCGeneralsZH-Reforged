@@ -18561,11 +18561,11 @@ OBJECT:AmericaMissileDefenderSquad
 END
 
 CONTROLBAR:ConstructAmericaInfantryRangerSquad
-"Ranger Ma&ngası"
+"&Ranger Mangası"
 END
 
 CONTROLBAR:ConstructAmericaInfantryMissileDefenderSquad
-"Füze Savunucusu Man&gası"
+"&Füze Savunucusu Mangası"
 END
 
 GUI:Talents

@@ -1221,6 +1221,15 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 		//-----------------------------------------------------------------------------
 		case GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP:
 		{
+			// a signal armed off its key is all the right button takes back, in either mouse style.  This
+			// stood below the Classic branch, which breaks out on every release, so with Classic's mouse,
+			// the default, a right click never reached it.  A right drag that panned still takes nothing back
+			if( TheInGameUI->isSignalArmed() && !TheLookAtTranslator->isRightDragPanning() )
+			{
+				TheInGameUI->disarmSignal();
+				break;
+			}
+
 			// Classic is 1.04's right release.  Only a click counts: the press is the scroll as well
 			// (LookAtXlat), so a release that travelled, was held, or rode the camera too far is not one.
 			// The click takes back a waiting GUI command and nothing else, and eats the release, which
@@ -1255,13 +1264,6 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 			// with a structure on the cursor or a GUI command waiting and still have it on release
 			if( TheLookAtTranslator->isRightDragPanning() )
 				break;
-
-			// a signal armed off the command bar is all the right button takes back
-			if( TheInGameUI->isSignalArmed() )
-			{
-				TheInGameUI->disarmSignal();
-				break;
-			}
 
 			//
 			// The right button drops whatever is armed, and it does so on a release that wobbled as

@@ -920,6 +920,13 @@ void MetaMap::keepArrowsForCamera()
 	static const struct { GameMessage::Type meta; MappableKeyType key; MappableKeyModState mods; } DEFAULTS[] =
 	{
 		{ GameMessage::MSG_META_TOGGLE_RADAR_COLORS, MK_F11, NONE },
+		// the smoke signals on Alt with Z, X and C, the launcher's own default (HotKey.cpp's
+		// LAUNCHER_DEFAULTS), which it leaves out of Hotkeys.ini as no change of the player's: without
+		// these a game run with no launcher-written file had the signals on no key at all, and the
+		// signal keys' tooltips named none
+		{ GameMessage::MSG_META_SIGNAL_ATTACK, MK_Z, ALT },
+		{ GameMessage::MSG_META_SIGNAL_DEFEND, MK_X, ALT },
+		{ GameMessage::MSG_META_SIGNAL_ATTENTION, MK_C, ALT },
 	};
 	for( size_t each = 0; each < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); ++each )
 	{

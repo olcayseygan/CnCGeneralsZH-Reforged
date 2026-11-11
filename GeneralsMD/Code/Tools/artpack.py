@@ -62,6 +62,9 @@ W3D_ANIMATIONS = (0x200, 0x280, 0x2C0)                     # plain, compressed, 
 # wheels the client turns. Neither is a name any INI or the logic asks for (the lookup check below
 # refuses one that is).
 ADDED_BONE = re.compile(r"ROOTTRANSFORM|WHEEL_[LR]\d+")
+# The Strategy Center's hidden prop meshes need a static bone retail's root, FAN01, FAN02 lack. As the
+# last pivot under the root with no channel it moves no other bone and no INI or code asks for it.
+PROP_PIVOT = "PWPROPS"
 
 
 def chunks(data, start, end):
@@ -210,7 +213,8 @@ def model_problems(new, old, stem, lookups=frozenset()):
     # HLOD puts over a bare retail mesh answers nothing, though the drop and particle bones of some
     # INIs are spelled RootTransform
     added = [(i, x) for i, x in enumerate(names) if i >= len(po) and x not in old_names]
-    odd = [x for i, x in added if not ADDED_BONE.fullmatch(x) or (i > 0 and lookup_name(x, lookups))]
+    odd = [x for i, x in added if not (ADDED_BONE.fullmatch(x) or x == PROP_PIVOT and i == len(pn) - 1 and pn[i][1] == 0)
+           or (i > 0 and lookup_name(x, lookups))]
     if odd:
         problems.append("adds bone %s" % ", ".join(odd))
 
@@ -454,6 +458,12 @@ def selfcheck():
         ["adds bone FIREPOINT02"]
     assert check(model(bones + [("MUZZLE", "TURRET", (3, 1, 0))], subs=[("BARREL", "TURRET")], anim=curve + nan)) == \
         ["adds bone MUZZLE"]
+    # the prop pivot: last and under the root, nowhere else
+    assert check(model(bones + [("PWPROPS", "ROOT", (0, 0, 0))], subs=[("BARREL", "TURRET")], anim=curve + nan)) == []
+    assert check(model(bones + [("PWPROPS", "TURRET", (0, 0, 0))], subs=[("BARREL", "TURRET")], anim=curve + nan)) == \
+        ["adds bone PWPROPS"]
+    assert check(model(bones + [("PWPROPS", "ROOT", (0, 0, 0)), ("WHEEL_L01", "ROOT", (0, 1, 0))], subs=[("BARREL", "TURRET")],
+                       anim=curve + nan)) == ["adds bone PWPROPS"]
     # the header the engine reads: before 3.0 a root goes in front, and only the counted pivots load
     assert check(model(bones, subs=[("BARREL", "TURRET")], anim=curve + nan, version=0x20000)) == \
         ["hierarchy header version 0x20000 with 3 pivots for 3"]

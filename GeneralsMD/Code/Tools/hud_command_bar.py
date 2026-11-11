@@ -627,6 +627,113 @@ def tab_plate_box(solid, production_top):
     return int(xs.min()) + x0, int(ys.min()) + TOP, int(xs.max()) + 1 + x0, max(foot + 1, production_top)
 
 
+# The smoke signals' plate (the owner's pick "top" of experiments/proofs/2026-11-11/signal-buttons, 2026-11-11):
+# three keys (attack, defend, attention: InGameUI's SignalKind) seated in a plate that stands on the radar's top
+# edge, square on the screen's left edge, in the side's build.  Minimap Size grows the radar up and right out of
+# the painting's box under a frame the code draws (fitSquareRadar, drawGrownRadarFrame), and the painting stays
+# where it is, so the plate is not painted on the bar: it is a piece of its own, <S>ProSignalPlate on the side's
+# TabPanel sheet, its foot open, which the code draws into the scheme's SignalPlateUL/LR and lifts, keys with it,
+# onto the grown frame's top edge when that stands higher than the ledge.  Keys 40x30, the tabs' family.
+SIGNAL_KEY = (40, 30)
+SIGNAL_KINDS = ("Attack", "Defend", "Attention")
+SIGNAL_SEATS = [(8 + 44 * i, 761, 48 + 44 * i, 791) for i in range(3)]       # screen, at 100%
+SIGNAL_FOOT = {"America": 795, "China": 795, "Gla": 800, "Turkiye": 795}       # where the plate stands on the ledge
+SIGNAL_AT = (8, 732)                            # TabPanel sheet: the plate, the keys right of it (signal_boxes)
+
+
+def signal_plate(side_name, _made={}):
+    """The plate in screen pixels at 100% radar: (image cropped to its steel, its box).  Drawn on its own canvas,
+    open along the screen's left edge and its foot, so it reads as standing out of whatever it stands on."""
+    if side_name not in _made:
+        _made[side_name] = _signal_plate(side_name)
+    return _made[side_name]
+
+
+def _signal_plate(side_name):
+    look = BAR_LOOKS[side_name]
+    build = look["build"]
+    foot, top0 = SIGNAL_FOOT[side_name], 700
+    W = 220
+    p = Painter(W, foot - top0)
+    if build == "machined":                     # 45 degree cuts
+        outline = [(0, 752), (146, 752), (158, 764), (158, foot), (0, foot)]
+    elif build == "terraced":                   # its end flicking up as an eave
+        outline = ([(0, 752)] + curve((130, 752), (150, 752), (166, 740), 4)
+                   + curve((166, 740), (156, 748), (154, 758), 4)[1:] + [(154, foot), (0, foot)])
+    elif build == "scavenged":                  # a scrap sheet out of square, its top crooked
+        outline = [(x, y + TOP) for x, y in jitter([(0, 754 - TOP), (70, 751 - TOP), (148, 756 - TOP), (157, 768 - TOP),
+                                                     (155, foot - TOP), (0, foot - TOP)], 7, 1.5, 12)]
+        outline = [(x, foot if y > foot - 2 else y) for x, y in outline]     # the foot stays open and straight
+    else:                                       # wide chamfers
+        outline = [(0, 752), (140, 752), (158, 770), (158, foot), (0, foot)]
+    L = lambda poly: [(x, y - top0) for x, y in poly]      # noqa: E731
+    p.tiers([L(outline)], (False, True, True, False), 9, 12, 4, 2.0)
+    corner = {"machined": "cut", "terraced": "notch", "scavenged": "rough"}.get(build, "cut")
+    for r in SIGNAL_SEATS:
+        p.sink([L(plate(*grow(r, 2), tl=(corner, 3), tr=(corner, 3), br=(corner, 3), bl=(corner, 3)))], 4, 1.6)
+    if build == "machined":
+        for y in (770, 786):
+            p.stud(148, y - top0, 2.0)
+        p.inlay([L(plate(6, 755, 138, 756))], ACCENT, 0.5)
+    elif build == "terraced":
+        p.inlay([L(plate(6, 755, 140, 758))], ACCENT, 0.3)
+        for y in (772, 784):
+            p.rivet(146, y - top0, 1.8)
+        p.bump([L(regular(146, 762, 2.0, 12))], 2.2, 1.4, GOLDM)
+    elif build == "scavenged":
+        for i, (x, y, r) in enumerate(((147, 768, 2.3), (149, 787, 1.7))):
+            p.bolt(x, y - top0, r, seed=60 + i)
+    else:
+        for x, y in ((148, 776), (148, 788)):
+            p.inlay([L(regular(x, y, 2.6, 12))], DARK, 1.0)          # a recessed fastener
+            p.bump([L(regular(x, y, 1.4, 6))], 0.6, 0.6, STEEL)
+    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, gloss=False)
+    if build == "faceted":
+        img = led(img, [((4, 755 - top0), (138, 755 - top0))], [])
+    a = np.asarray(img)[..., 3]
+    ys, xs = np.nonzero(a)
+    box = (0, int(ys.min()) + top0, int(xs.max()) + 1, foot)
+    return img.crop((0, box[1] - top0, box[2], foot - top0)), box
+
+
+def signal_boxes(side_name):
+    """Every signal piece's MappedImage name (after the prefix) and box on the side's TabPanel sheet."""
+    x0, y0 = SIGNAL_AT
+    _, box = signal_plate(side_name)
+    out = {"SignalPlate": (x0, y0, x0 + box[2] - box[0], y0 + box[3] - box[1])}
+    w, h = SIGNAL_KEY
+    for i, kind in enumerate(SIGNAL_KINDS):
+        for j, state in enumerate(COMMAND_TAB_STATES):
+            x, y = x0 + 200 + (w + 3) * j, y0 + (h + 3) * i
+            out["Signal" + kind + state] = (x, y, x + w, y + h)
+    return out
+
+
+def signal_pieces(side_name):
+    img, _ = signal_plate(side_name)
+    out = {"SignalPlate": img}
+    out.update({"Signal" + kind + state: signal_key(side_name, kind, state)
+                for kind in SIGNAL_KINDS for state in COMMAND_TAB_STATES})
+    return out
+
+
+def signal_glyph(kind):
+    """The signal's glyph in a 22 box round (11, 11): (raised, ink)."""
+    def box(a, b, c, d):
+        return [(a, b), (c, b), (c, d), (a, d)]
+    if kind == "Attack":                        # a reticle: ring, four ticks, the centre dot
+        return ring(11, 11, 6.2, 1.9, 24) + [box(10.1, 2.4, 11.9, 6.6), box(10.1, 15.4, 11.9, 19.6), box(2.4, 10.1, 6.6, 11.9),
+                                            box(15.4, 10.1, 19.6, 11.9), octagon(9.5, 9.5, 12.5, 12.5, 0.9)], []
+    if kind == "Defend":                        # a plain shield, its top dipped, split down the middle
+        return [[(4.2, 3.2), (11, 4.8), (17.8, 3.2), (17.8, 10.4), (15.8, 15.4), (11, 19.4), (6.2, 15.4), (4.2, 10.4)]], \
+            [box(10.2, 6.6, 11.8, 16.6)]
+    return [[(11, 2.6), (19.8, 18.6), (2.2, 18.6)]], [box(10, 8.2, 12, 13.8), box(10, 15, 12, 17)]   # attention
+
+
+def signal_key(side_name, kind, state):
+    return key_piece(side_name, SIGNAL_KEY[0], SIGNAL_KEY[1], state, signal_glyph(kind), glyph_scale=0.8)
+
+
 def tab_seats(p, kind, c):
     """A seat sunk for each tab, the tab's rect grown 2, in the side's corner."""
     for r in TAB_SEATS:
@@ -2813,6 +2920,10 @@ def tab_panel(side, solo=False):
             put(sheet_img, tab_button(side, kind, state), boxes["Tab" + kind + state])
     for name, piece in tab_track(side).items():
         put(sheet_img, piece, boxes["Tab" + name])
+    if side in SIDES:                           # the smoke signals' plate and keys share the side's sheet
+        boxes = signal_boxes(side)
+        for name, piece in signal_pieces(side).items():
+            put(sheet_img, piece, boxes[name])
     return sheet_img
 
 
@@ -2976,6 +3087,8 @@ def check_tab(sheet_img, side_name, prefix, solo_img=None):
     if solo_img is not None:
         want[prefix + "TabSolo"] = (0, 0) + TAB_PANEL
     want.update({prefix + name: box for name, box in tab_button_boxes().items()})
+    if side_name in SIDES:
+        want.update({prefix + name: box for name, box in signal_boxes(side_name).items()})
     assert M == want, "ReforgedHud%sTabPanel.ini maps %s, the generator draws %s" % (side_name, sorted(set(M) ^ set(want)) or M, want)
     W, H = TAB_PANEL
     for img in [sheet_img] + ([solo_img] if solo_img is not None else []):
@@ -3614,6 +3727,14 @@ def check(img, side_name="America"):
     for r in TAB_SEATS:
         assert (a[r[1] - TOP:r[3] - TOP, r[0]:r[2]] == 255).all(), "command tab %s is not on the plate" % (r,)
     want = bar_blocks(a >= 250)
+    _, plate_box = signal_plate(side_name)      # the signal plate stands on the radar: its box goes into BlockRadar
+    r = want["Radar"]
+    want["Radar"] = (min(r[0], plate_box[0]), min(r[1], plate_box[1]), max(r[2], plate_box[2]), max(r[3], plate_box[3]))
+    signals = dict(("Signal" + k, s) for k, s in zip(SIGNAL_KINDS, SIGNAL_SEATS))
+    signals["SignalPlate"] = plate_box
+    for scheme in side_schemes(side_name):
+        keys = scheme_rects(scheme, list(signals))
+        assert keys == signals, "%s's smoke signals %s, the art asks for %s" % (scheme, keys, signals)
     tabs = dict(zip(COMMAND_TAB_KINDS, TAB_SEATS))
     for scheme in side_schemes(side_name):
         have = scheme_blocks(scheme)

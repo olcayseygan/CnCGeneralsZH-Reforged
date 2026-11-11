@@ -4311,22 +4311,6 @@ SCIENCE:Rank10
 "10 Star General"
 END
 
-OBJECT:AmericaRangerSquad
-"Ranger Squad"
-END
-
-OBJECT:AmericaMissileDefenderSquad
-"Missile Defender Squad"
-END
-
-CONTROLBAR:ConstructAmericaInfantryRangerSquad
-"Ran&ger Squad"
-END
-
-CONTROLBAR:ConstructAmericaInfantryMissileDefenderSquad
-"&Missile Defender Squad"
-END
-
 // The general's talents, ranks 6 to 10: the talents panel of the General's Powers window. GUI:Rank
 // is EA's own ("Rank"). A card name fits a plate about 200 pixels wide at 1080.
 

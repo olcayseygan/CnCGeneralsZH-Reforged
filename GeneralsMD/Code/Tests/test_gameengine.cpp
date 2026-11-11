@@ -24987,53 +24987,6 @@ TEST(talent_sciences_take_none_or_exactly_ten)
 	remove( TEST_INI );
 }
 
-/* RankReforged.ini as shipped (its RankName lines aside, which need the game's text) appends ranks 6
-	 to 10 after EA's five, and a MULTIFILE block for a rank that exists edits it in place. */
-TEST(rank_reforged_ini_appends_ranks_six_to_ten)
-{
-	CHECK( bootOnce() );
-	ScienceStore *savedSciences = TheScienceStore;
-	TheScienceStore = NEW ScienceStore;
-	TheScienceStore->init();
-	RankInfoStore *savedRanks = TheRankInfoStore;
-	TheRankInfoStore = NEW RankInfoStore;
-	TheRankInfoStore->init();
-
-	std::string sciences;
-	for( Int i = 1; i <= 10; ++i )
-	{
-		char block[ 160 ];
-		snprintf( block, sizeof( block ), "Science SCIENCE_Rank%d\n  SciencePurchasePointCost = 0\n  IsGrantable = No\nEnd\n", i );
-		sciences += block;
-	}
-	writeFile( TEST_INI, sciences.c_str() );
-	CHECK( loadIni( TEST_INI ) );
-
-	static const Int eaPoints[] = { 0, 800, 1500, 2500, 5000 };
-	std::string ea;
-	for( Int i = 1; i <= 5; ++i )
-	{
-		char block[ 200 ];
-		snprintf( block, sizeof( block ), "Rank %d\n  SkillPointsNeeded = %d\n  SciencesGranted = SCIENCE_Rank%d\n  SciencePurchasePointsGranted = 1\nEnd\n",
-			i, eaPoints[ i - 1 ], i );
-		ea += block;
-	}
-	writeFile( TEST_INI, ea.c_str() );
-	CHECK( loadIni( TEST_INI ) );
-	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 5 );
-
-	std::string reforged;
-	{
-		std::ifstream master( std::string( ZH_CODE_DIR ) + "/Data/INI/RankReforged.ini" );
-		CHECK( master.good() );
-		std::string line;
-		while( std::getline( master, line ) )
-			if( line.find( "RankName" ) == std::string::npos )
-				reforged += line + "\n";
-	}
-	writeFile( TEST_INI, reforged.c_str() );
-	CHECK( loadIniAs( TEST_INI, INI_LOAD_MULTIFILE ) );
-	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 10 );
 /* A science-keyed power line (UpgradeOCL, UpgradeTargetCount, UpgradeRadiusCursorRadius) matches only
 	 when every science on it is owned, and the first such line in file order wins: a talent with tier 1
 	 of the power gets the talent's tier 1 line, never its tier 3 one. */
@@ -25089,6 +25042,53 @@ TEST(power_upgrade_line_needs_every_science_and_first_match_wins)
 	CHECK( !ownsAllSciences( (const FakeScienceOwner *)NULL, lines[ 2 ].m_sciences ) );
 }
 
+/* RankReforged.ini as shipped (its RankName lines aside, which need the game's text) appends ranks 6
+	 to 10 after EA's five, and a MULTIFILE block for a rank that exists edits it in place. */
+TEST(rank_reforged_ini_appends_ranks_six_to_ten)
+{
+	CHECK( bootOnce() );
+	ScienceStore *savedSciences = TheScienceStore;
+	TheScienceStore = NEW ScienceStore;
+	TheScienceStore->init();
+	RankInfoStore *savedRanks = TheRankInfoStore;
+	TheRankInfoStore = NEW RankInfoStore;
+	TheRankInfoStore->init();
+
+	std::string sciences;
+	for( Int i = 1; i <= 10; ++i )
+	{
+		char block[ 160 ];
+		snprintf( block, sizeof( block ), "Science SCIENCE_Rank%d\n  SciencePurchasePointCost = 0\n  IsGrantable = No\nEnd\n", i );
+		sciences += block;
+	}
+	writeFile( TEST_INI, sciences.c_str() );
+	CHECK( loadIni( TEST_INI ) );
+
+	static const Int eaPoints[] = { 0, 800, 1500, 2500, 5000 };
+	std::string ea;
+	for( Int i = 1; i <= 5; ++i )
+	{
+		char block[ 200 ];
+		snprintf( block, sizeof( block ), "Rank %d\n  SkillPointsNeeded = %d\n  SciencesGranted = SCIENCE_Rank%d\n  SciencePurchasePointsGranted = 1\nEnd\n",
+			i, eaPoints[ i - 1 ], i );
+		ea += block;
+	}
+	writeFile( TEST_INI, ea.c_str() );
+	CHECK( loadIni( TEST_INI ) );
+	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 5 );
+
+	std::string reforged;
+	{
+		std::ifstream master( std::string( ZH_CODE_DIR ) + "/Data/INI/RankReforged.ini" );
+		CHECK( master.good() );
+		std::string line;
+		while( std::getline( master, line ) )
+			if( line.find( "RankName" ) == std::string::npos )
+				reforged += line + "\n";
+	}
+	writeFile( TEST_INI, reforged.c_str() );
+	CHECK( loadIniAs( TEST_INI, INI_LOAD_MULTIFILE ) );
+	CHECK_EQ( TheRankInfoStore->getRankLevelCount(), 10 );
 
 	static const Int talentPoints[] = { 12000, 20000, 30000, 42000, 56000 };
 	for( Int i = 6; i <= 10 && TheRankInfoStore->getRankLevelCount() == 10; ++i )

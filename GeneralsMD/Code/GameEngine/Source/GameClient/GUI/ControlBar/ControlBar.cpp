@@ -2774,6 +2774,10 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 	GameWindow *parent = m_contextParent[ CP_MASTER ];
 	if( parent == NULL || windows[ RADAR_FIT_RADAR ] == NULL )
 		return;
+	// EA's under-attack lamp shows wherever it stands, unless fitSquareRadar finds the side's own grown
+	// frame and puts it away below
+	if( windows[ RADAR_FIT_LAMP ] != NULL )
+		windows[ RADAR_FIT_LAMP ]->winHide( FALSE );
 	ICoord2D origin;
 	parent->winGetScreenPosition( &origin.x, &origin.y );
 
@@ -3025,6 +3029,12 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 	lamp.lo.y = frame.lo.y;
 	lamp.hi.y = lamp.lo.y + lampHeight;
 	placeWindowAt( windows[ RADAR_FIT_LAMP ], lamp );
+	// The lamp's lit picture is shaped for the painted box's corner, and over the side's own frame it
+	// stood in the air off the frame's top right.  There the frame itself reddens with the lamp
+	// (drawGrownRadarPieces), so the lamp is put away; its window has no input, and its lit state,
+	// which getGrownRadarFrame reads, still runs.  fitRadarToMap shows it again on every other fit
+	if( pieces != NULL && windows[ RADAR_FIT_LAMP ] != NULL )
+		windows[ RADAR_FIT_LAMP ]->winHide( TRUE );
 
 	m_radarSquareGrown = TRUE;
 	setRaisedRadarRect( frame );

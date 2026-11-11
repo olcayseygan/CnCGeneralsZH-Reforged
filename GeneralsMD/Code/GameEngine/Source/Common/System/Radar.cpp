@@ -48,6 +48,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/PlayerColorScheme.h"
+#include "GameClient/View.h"
 
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
@@ -232,6 +233,9 @@ Radar::Radar( void )
 	m_mapExtent.hi.y = 0.0f;
 	m_mapExtent.hi.z = 0.0f;
 	m_queueTerrainRefreshFrame = 0;
+	m_zoomView.reset();
+	m_zoomStep = 0;
+	m_zoomFollow.x = m_zoomFollow.y = -1.0e9f;
 
 	// clear the radar events
 	clearAllEvents();
@@ -305,6 +309,11 @@ void Radar::reset( void )
 	// stop forcing the radar on
 	m_radarForceOn = false;
 
+	// a new match opens on the whole map
+	m_zoomView.reset();
+	m_zoomStep = 0;
+	m_zoomFollow.x = m_zoomFollow.y = -1.0e9f;
+
 }  // end reset
 
 //-------------------------------------------------------------------------------------------------
@@ -338,6 +347,21 @@ void Radar::update( void )
 		refreshTerrain( TheTerrainLogic );
 
 	}  // end if
+
+	// A zoomed minimap follows the camera, but only once the camera moves: a wheel notch away from
+	// it keeps what it zoomed to until then.  The look point is the client's camera; logic never
+	// reads any of this.
+	if( TheTacticalView && m_mapExtent.width() > 0.0f && m_mapExtent.height() > 0.0f )
+	{
+		Coord3D look;
+		TheTacticalView->getPosition( &look );
+		if( look.x != m_zoomFollow.x || look.y != m_zoomFollow.y )
+		{
+			m_zoomFollow.x = look.x;
+			m_zoomFollow.y = look.y;
+			m_zoomView.follow( look.x, look.y, m_mapExtent.width(), m_mapExtent.height() );
+		}
+	}
 
 }  // end update
 
@@ -866,6 +890,128 @@ Bool Radar::localPixelToRadar( const ICoord2D *pixel, ICoord2D *radar )
 }  // end localPixelToRadar
 
 // ------------------------------------------------------------------------------------------------
+/** The map's picture in the radar window's own pixels, where W3DLeftHUDDraw draws it: a pixel
+	* inside the window each side.  FALSE with no window or no map. */
+// ------------------------------------------------------------------------------------------------
+Bool Radar::findPicture( ICoord2D *ul, ICoord2D *lr )
+{
+	if( m_radarWindow == NULL || m_mapExtent.width() <= 0.0f || m_mapExtent.height() <= 0.0f )
+		return FALSE;
+
+	ICoord2D size;
+	m_radarWindow->winGetSize( &size.x, &size.y );
+	findDrawPositions( 1, 1, size.x - 2, size.y - 2, ul, lr );
+	return lr->x > ul->x && lr->y > ul->y;
+}
+
+// ------------------------------------------------------------------------------------------------
+/** A pixel of the radar window (upper left (0,0)) to the spot on the terrain the minimap draws
+	* there, zoom and all.  FALSE off the map's picture, by the same bounds localPixelToRadar has
+	* always used; the spot itself comes from the picture draw lays out, so a click lands on what is
+	* under it at any zoom, to the pixel. */
+// ------------------------------------------------------------------------------------------------
+Bool Radar::localPixelToWorld( const ICoord2D *pixel, Coord3D *world )
+{
+	ICoord2D radar, ul, lr;
+	if( pixel == NULL || world == NULL || localPixelToRadar( pixel, &radar ) == FALSE || findPicture( &ul, &lr ) == FALSE )
+		return FALSE;
+
+	RadarPictureTransform transform;
+	transform.set( m_zoomView, m_mapExtent.width(), m_mapExtent.height(), ul, lr );
+	transform.toWorld( *pixel, &world->x, &world->y );
+	world->x = max( 0.0f, min( world->x, m_mapExtent.width() ) );
+	world->y = max( 0.0f, min( world->y, m_mapExtent.height() ) );
+	world->z = TheTerrainLogic->getGroundHeight( world->x, world->y );
+	return TRUE;
+}
+
+// ------------------------------------------------------------------------------------------------
+/** A wheel notch over a pixel of the radar window: one step closer or further, the spot under the
+	* pixel staying under it.  A pixel on the black bands zooms about the nearest edge of the map. */
+// ------------------------------------------------------------------------------------------------
+void Radar::zoomAtPixel( const ICoord2D *pixel, Bool closer )
+{
+	static const Real STEPS[ RADAR_ZOOM_STEPS ] = { 1.0f, 1.41421356f, 2.0f, 2.82842712f, 4.0f };
+
+	ICoord2D ul, lr;
+	if( pixel == NULL || findPicture( &ul, &lr ) == FALSE )
+		return;
+
+	const Int step = max( 0, min( (Int)RADAR_ZOOM_STEPS - 1, m_zoomStep + (closer ? 1 : -1) ) );
+	if( step == m_zoomStep )
+		return;
+
+	ICoord2D at;
+	at.x = max( ul.x, min( pixel->x, lr.x - 1 ) );
+	at.y = max( ul.y, min( pixel->y, lr.y - 1 ) );
+	RadarPictureTransform transform;
+	transform.set( m_zoomView, m_mapExtent.width(), m_mapExtent.height(), ul, lr );
+	Real x, y;
+	transform.toWorld( at, &x, &y );
+
+	m_zoomStep = step;
+	m_zoomView.zoomAround( STEPS[ step ], x, y, m_mapExtent.width(), m_mapExtent.height() );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void RadarZoomView::clampTo( Real mapWidth, Real mapHeight )
+{
+	zoom = max( 1.0f, min( zoom, 4.0f ) );
+	x = max( 0.0f, min( x, mapWidth - mapWidth / zoom ) );
+	y = max( 0.0f, min( y, mapHeight - mapHeight / zoom ) );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void RadarZoomView::zoomAround( Real newZoom, Real anchorX, Real anchorY, Real mapWidth, Real mapHeight )
+{
+	newZoom = max( 1.0f, min( newZoom, 4.0f ) );
+	// the anchor's share of the way across the shown part stays what it was
+	x = anchorX - (anchorX - x) * zoom / newZoom;
+	y = anchorY - (anchorY - y) * zoom / newZoom;
+	zoom = newZoom;
+	clampTo( mapWidth, mapHeight );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void RadarZoomView::follow( Real pointX, Real pointY, Real mapWidth, Real mapHeight )
+{
+	const Real spanX = mapWidth / zoom;
+	const Real spanY = mapHeight / zoom;
+	const Real marginX = spanX * 0.2f;
+	const Real marginY = spanY * 0.2f;
+	if( pointX < x + marginX )
+		x = pointX - marginX;
+	else if( pointX > x + spanX - marginX )
+		x = pointX - spanX + marginX;
+	if( pointY < y + marginY )
+		y = pointY - marginY;
+	else if( pointY > y + spanY - marginY )
+		y = pointY - spanY + marginY;
+	clampTo( mapWidth, mapHeight );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void RadarPictureTransform::set( const RadarZoomView &view, Real mapWidth, Real mapHeight, const ICoord2D &ul, const ICoord2D &lr )
+{
+	scaleX = mapWidth > 0.0f ? (lr.x - ul.x) * view.zoom / mapWidth : 0.0f;
+	scaleY = mapHeight > 0.0f ? (lr.y - ul.y) * view.zoom / mapHeight : 0.0f;
+	originX = ul.x - view.x * scaleX;
+	originY = lr.y + view.y * scaleY;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void RadarPictureTransform::toWorld( const ICoord2D &pixel, Real *worldX, Real *worldY ) const
+{
+	*worldX = scaleX > 0.0f ? (pixel.x + 0.5f - originX) / scaleX : 0.0f;
+	*worldY = scaleY > 0.0f ? (originY - pixel.y - 0.5f) / scaleY : 0.0f;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Translate a screen mouse position to world coords if the screen position is within
 	* the radar window and that spot in the radar corresponds to a point in the world */
 // ------------------------------------------------------------------------------------------------
@@ -887,13 +1033,7 @@ Bool Radar::screenPixelToWorld( const ICoord2D *pixel, Coord3D *world )
 	localPixel.x = pixel->x - screenPos.x;
 	localPixel.y = pixel->y - screenPos.y;
 
-	// translate local pixel to radar
-	ICoord2D radar;
-	if( localPixelToRadar( &localPixel, &radar ) == FALSE )
-		return FALSE;
-
-	// translate radar to world
-	return radarToWorld( &radar, world );
+	return localPixelToWorld( &localPixel, world );
 
 }  // end screenPixelToWorld
 
@@ -908,9 +1048,10 @@ Object *Radar::objectUnderRadarPixel( const ICoord2D *pixel )
 	if( pixel == NULL )
 		return NULL;
 
-	// convert pixel location to radar logical radar location
+	// convert pixel location to radar logical radar location, through the zoom
 	ICoord2D radar;
-	if( localPixelToRadar( pixel, &radar ) == FALSE )
+	Coord3D world;
+	if( localPixelToWorld( pixel, &world ) == FALSE || worldToRadar( &world, &radar ) == FALSE )
 		return NULL;
 
 	// object we will return

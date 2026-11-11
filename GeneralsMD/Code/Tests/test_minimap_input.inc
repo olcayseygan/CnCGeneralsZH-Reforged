@@ -300,8 +300,12 @@ TEST(minimap_drag_tracks_held_left_click_and_stops_on_release_with_units_selecte
 	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_DRAG, 150, 250);
 	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_DRAG, 190, 290);
 	CHECK(f.engine.view.lookAtCalls == 3);
-	CHECK(f.engine.view.getPosition()->x == 900);
-	CHECK(f.engine.view.getPosition()->y == 380);
+	// the centre of window pixel (90, 90) in the picture the radar draws, a pixel inside the 128
+	// pixel window each side, over the 1280 map
+	ICoord2D ul, lr;
+	f.radar.findDrawPositions(1, 1, 126, 126, &ul, &lr);
+	CHECK_NEAR(f.engine.view.getPosition()->x, (90.5f - ul.x) * 1280.0f / (lr.x - ul.x), 0.01f);
+	CHECK_NEAR(f.engine.view.getPosition()->y, (lr.y - 90.5f) * 1280.0f / (lr.y - ul.y), 0.01f);
 	CHECK(f.engine.view.getPosition()->z == 25);
 	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP, 190, 290);
 	f.event(messages, GameMessage::MSG_RAW_MOUSE_POSITION, 130, 230);
@@ -718,4 +722,43 @@ TEST(minimap_armed_key_orders_on_the_left_and_looks_on_the_right_in_every_mouse_
 		ui->clearAttackMoveToMode();
 	}
 	TheGameClient = savedClient;
+}
+
+// The wheel over the radar zooms the minimap about the cursor and stops there, and a click after it
+// goes through the same zoom: the pixel the wheel turned over still looks at the spot it did, and a
+// pixel beside it now reaches half as far.
+TEST(minimap_wheel_zooms_about_the_cursor_and_clicks_follow_the_zoom)
+{
+	CHECK(bootOnce());
+	MinimapInputFixture f;
+	MinimapMessages messages;
+	messages.stream.attachTranslator(NEW WindowTranslator, 10);
+
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, 140, 250);
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP, 140, 250);
+	const Coord3D before = *f.engine.view.getPosition();
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, 150, 250);
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP, 150, 250);
+	const Real stepBefore = f.engine.view.getPosition()->x - before.x;
+
+	for (Int notch = 0; notch < 2; ++notch)
+	{
+		GameMessage *wheel = messages.stream.appendMessage(GameMessage::MSG_RAW_MOUSE_WHEEL);
+		ICoord2D at = {140, 250};
+		wheel->appendPixelArgument(at);
+		wheel->appendRealArgument(1.0f);
+		wheel->appendIntegerArgument(0);
+		messages.stream.propagateMessages();
+	}
+	CHECK_NEAR(f.radar.getZoom(), 2.0f, 0.001f);
+	// eaten by the radar, so the camera's own wheel zoom never saw it
+	CHECK(messages.stream.getFirstMessage() == NULL);
+
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, 140, 250);
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP, 140, 250);
+	CHECK_NEAR(f.engine.view.getPosition()->x, before.x, 0.01f);
+	CHECK_NEAR(f.engine.view.getPosition()->y, before.y, 0.01f);
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN, 150, 250);
+	f.event(messages, GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP, 150, 250);
+	CHECK_NEAR(f.engine.view.getPosition()->x - before.x, stepBefore * 0.5f, 0.01f);
 }

@@ -84,14 +84,13 @@ static ICoord2D windowLocalMouse( GameWindow *window, WindowMsgData mData1 )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The spot on the map under a pixel of the radar window.  FALSE off the radar's picture. */
+/** The spot on the map under a pixel of the radar window, at the minimap's zoom.  FALSE off the
+	* radar's picture. */
 //-------------------------------------------------------------------------------------------------
 static Bool radarPixelToWorld( const ICoord2D *pixel, Coord3D *world )
 {
-	ICoord2D radar;
 	return (TheRadar->isRadarHidden() == FALSE || TheRadar->isRadarForced()) &&
-		TheRadar->localPixelToRadar( pixel, &radar ) &&
-		TheRadar->radarToWorld( &radar, world );
+		TheRadar->localPixelToWorld( pixel, world );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -222,7 +221,7 @@ static Object *radarEnemyUnderPixel( GameWindow *window, const Coord3D *world )
 
 	RadarEnemyPick pick;
 	pick.world = *world;
-	pick.reach = RADAR_PICK_PIXELS * (extent->hi.x - extent->lo.x) / (Real)(lr.x - ul.x);
+	pick.reach = RADAR_PICK_PIXELS * (extent->hi.x - extent->lo.x) / ((Real)(lr.x - ul.x) * TheRadar->getZoom());
 	pick.playerIndex = player->getPlayerIndex();
 	pick.player = player;
 	pick.bestUnit = NULL;
@@ -425,6 +424,16 @@ WindowMsgHandledType LeftHUDInput( GameWindow *window, UnsignedInt msg,
 		case GWM_LEFT_UP:// Here to eat
 			s_radarLookDrag = GWM_NONE;
 			break;
+
+		// The wheel over the radar zooms the minimap about the cursor and stops here, so it no longer
+		// zooms the camera too; over the battlefield it reaches the camera as it always did.
+		case GWM_WHEEL_UP:
+		case GWM_WHEEL_DOWN:
+		{
+			ICoord2D mouse = windowLocalMouse( window, mData1 );
+			TheRadar->zoomAtPixel( &mouse, msg == GWM_WHEEL_UP );
+			break;
+		}
 
 		// ------------------------------------------------------------------------
 		// Holding the button that moved the camera and dragging keeps the camera under the cursor.

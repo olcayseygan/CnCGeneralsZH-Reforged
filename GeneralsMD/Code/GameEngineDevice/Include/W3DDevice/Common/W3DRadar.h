@@ -93,7 +93,7 @@ protected:
 	void collectLandmarks( void );								///< copy the scouted supply sources and tech buildings into m_cachedLandmarks
 	void uploadShroud( void );										///< the cache's changed cells into the shroud texture, smoothed
 	void drawViewBox( Int pixelX, Int pixelY, Int width, Int height );  ///< draw view box
-	void drawBoxLines( const ICoord2D *corners );	///< a view box's lines through its four corners in pixels
+	void drawBoxLines( const ICoord2D *corners, const IRegion2D *picture );	///< a view box's lines through its four corners in pixels
 	void buildTerrainTexture( TerrainLogic *terrain );	 ///< create the terrain texture of the radar
 	void drawIcons( Int pixelX, Int pixelY, Int width, Int height );	///< draw all of the radar icons
 	void collectBlips( const RadarObject *listHead, Bool calcHero = FALSE );	///< copy what an object list shows into m_blips
@@ -104,9 +104,9 @@ protected:
 																	Real midZ, 
 																	Real loZ );		///< "shade" color according to height value
 	void reconstructViewBox( void );							///< remake the view box
-	void radarToPixel( const ICoord2D *radar, ICoord2D *pixel,
-										 Int radarUpperLeftX, Int radarUpperLeftY,
-										 Int radarWidth, Int radarHeight );  ///< convert radar coord to pixel location
+	void worldToPixel( const Coord3D *world, ICoord2D *pixel ) const;	///< a world spot in screen pixels under draw's transform
+
+	RadarPictureTransform m_drawTransform;				///< world to screen pixels at the zoom, set at the top of draw
 
 	WW3DFormat m_terrainTextureFormat;						///< format to use for terrain texture
 	Image *m_terrainImage;												///< terrain image abstraction for drawing
@@ -145,7 +145,7 @@ protected:
 	// translate real world coords to integer radar spots
 	//
 	Bool m_reconstructViewBox;										///< true when we need to reconstruct the box
-	ICoord2D m_viewBox[ 4 ];											///< radar cell points for the 4 corners of view box
+	Coord2D m_viewBox[ 4 ];												///< world offsets of the view box's corners, each from the one before
 
 	// By value, not by pointer into the object.  The list is rebuilt in update and read by every
 	// draw until the next, so a hero killed in between left a pointer into a

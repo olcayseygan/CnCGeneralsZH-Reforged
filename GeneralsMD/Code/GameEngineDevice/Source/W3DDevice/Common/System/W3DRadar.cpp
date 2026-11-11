@@ -215,7 +215,6 @@ void W3DRadar::deleteResources( void )
 void W3DRadar::reconstructViewBox( void )
 {
 	Coord3D world[ 4 ];
-	ICoord2D radar[ 4 ];
 	Int i;
 
 	// get the 4 points of the view corners in the 3D world at the average Z height in the map
@@ -225,13 +224,9 @@ void W3DRadar::reconstructViewBox( void )
 																									&world[ 3 ],
 																									getTerrainAverageZ() );
 
-	// convert each of the 4 points in the world to radar cell positions
+	// world offsets, not radar cells: a cell is several pixels wide once the minimap zooms in
 	for( i = 0; i < 4; i++ )
 	{
-
-		// first convert to radar cells
- 		radar[ i ].x = world[ i ].x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
- 		radar[ i ].y = world[ i ].y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
 
 		//
 		// store these points in the view box array which contains a first position
@@ -247,8 +242,8 @@ void W3DRadar::reconstructViewBox( void )
 		else
 		{
 
-			m_viewBox[ i ].x = radar[ i ].x - radar[ i - 1 ].x;
-			m_viewBox[ i ].y = radar[ i ].y - radar[ i - 1 ].y;
+			m_viewBox[ i ].x = world[ i ].x - world[ i - 1 ].x;
+			m_viewBox[ i ].y = world[ i ].y - world[ i - 1 ].y;
 
 		}  // end else
 
@@ -259,22 +254,22 @@ void W3DRadar::reconstructViewBox( void )
 }  // end reconstructViewBox
 
 //-------------------------------------------------------------------------------------------------
-/** Convert radar position to actual pixel coord */
+/** A world spot in screen pixels, under the zoom draw set up.  Off the picture when the minimap is
+	* zoomed in and the spot lies outside what it shows; every caller clips or skips. */
 //-------------------------------------------------------------------------------------------------
-void W3DRadar::radarToPixel( const ICoord2D *radar, ICoord2D *pixel,	
-														 Int radarUpperLeftX, Int radarUpperLeftY,
-														 Int radarWidth, Int radarHeight )
+void W3DRadar::worldToPixel( const Coord3D *world, ICoord2D *pixel ) const
 {
+	Real x, y;
+	m_drawTransform.toPixel( world->x, world->y, &x, &y );
+	pixel->x = REAL_TO_INT_FLOOR( x );
+	pixel->y = REAL_TO_INT_FLOOR( y );
+}
 
-	// sanity
-	if( radar == NULL || pixel == NULL )
-		return;
-
-	pixel->x = (radar->x * radarWidth / RADAR_CELL_WIDTH) + radarUpperLeftX;
-	// note the "inverted" y here to orient the way our world looks with +x=right and -y=down
-	pixel->y = ((RADAR_CELL_HEIGHT - 1 - radar->y) * radarHeight / RADAR_CELL_HEIGHT) + radarUpperLeftY;
-
-}  // end radarToPixel
+/// a pixel inside the radar's picture
+static Bool insidePicture( const ICoord2D &pixel, Int pixelX, Int pixelY, Int width, Int height )
+{
+	return pixel.x >= pixelX && pixel.x < pixelX + width && pixel.y >= pixelY && pixel.y < pixelY + height;
+}
 
 
 //-------------------------------------------------------------------------------------------------
@@ -286,15 +281,12 @@ void W3DRadar::drawHeroIcon( Int pixelX, Int pixelY, Int width, Int height, cons
 	static const Image *image = (Image *)TheMappedImageCollection->findImageByName("HeroReticle");
 	if (image != NULL)
 	{
-		// convert world to radar coords
-		ICoord2D ulRadar; 
-		ulRadar.x = pos->x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		ulRadar.y = pos->y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-
-		// convert radar to screen coords
+		// convert world to screen coords; a hero outside what a zoomed minimap shows has no icon
 		ICoord2D offsetScreen;
-		radarToPixel( &ulRadar, &offsetScreen, pixelX, pixelY, width, height );
-		
+		worldToPixel( pos, &offsetScreen );
+		if( !insidePicture( offsetScreen, pixelX, pixelY, width, height ) )
+			return;
+
 		// shift from an upper left to a center focus for the icon
 		int iconWidth = image->getImageWidth();
 		int iconHeight = image->getImageHeight();
@@ -335,13 +327,9 @@ void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int he
 	for( size_t i = 0; i < m_cachedReinforcementLines.size(); ++i )
 	{
 		const ReinforcementLine &line = m_cachedReinforcementLines[ i ];
-		ICoord2D radar, from, to;
-		radar.x = line.from.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		radar.y = line.from.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-		radarToPixel( &radar, &from, pixelX, pixelY, width, height );
-		radar.x = line.to.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		radar.y = line.to.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-		radarToPixel( &radar, &to, pixelX, pixelY, width, height );
+		ICoord2D from, to;
+		worldToPixel( &line.from, &from );
+		worldToPixel( &line.to, &to );
 
 		const Real dx = INT_TO_REAL( to.x - from.x );
 		const Real dy = INT_TO_REAL( to.y - from.y );
@@ -386,19 +374,16 @@ void W3DRadar::drawReinforcementLines( Int pixelX, Int pixelY, Int width, Int he
 	const Int reach = (dot + 2) / 2 + blipDot / 2 + 1;
 	m_destinationPixels.resize( m_cachedReinforcementLines.size() );
 	for( size_t i = 0; i < m_cachedReinforcementLines.size(); ++i )
-	{
-		ICoord2D radar;
-		radar.x = m_cachedReinforcementLines[ i ].to.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		radar.y = m_cachedReinforcementLines[ i ].to.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-		radarToPixel( &radar, &m_destinationPixels[ i ], pixelX, pixelY, width, height );
-	}
+		worldToPixel( &m_cachedReinforcementLines[ i ].to, &m_destinationPixels[ i ] );
 	for( size_t b = 0; b < m_blips.size(); ++b )
 	{
 		const Blip &blip = m_blips[ b ];
 		if( blip.halfLength > 0.0f || blip.x < 0.0f || blip.y < 0.0f || blip.x >= m_mapExtent.width() || blip.y >= m_mapExtent.height() )
 			continue;
-		const Int bx = REAL_TO_INT_FLOOR( pixelX + blip.x * width / m_mapExtent.width() );
-		const Int by = REAL_TO_INT_FLOOR( pixelY + height - blip.y * height / m_mapExtent.height() );
+		Real px, py;
+		m_drawTransform.toPixel( blip.x, blip.y, &px, &py );
+		const Int bx = REAL_TO_INT_FLOOR( px );
+		const Int by = REAL_TO_INT_FLOOR( py );
 		for( size_t i = 0; i < m_destinationPixels.size(); ++i )
 		{
 			const ICoord2D &to = m_destinationPixels[ i ];
@@ -437,13 +422,9 @@ void W3DRadar::drawOrderLines( Int pixelX, Int pixelY, Int width, Int height )
 		for( size_t i = 0; i < m_cachedOrderLines.size(); ++i )
 		{
 			const ReinforcementLine &line = m_cachedOrderLines[ i ];
-			ICoord2D radar, from, to, clippedFrom, clippedTo;
-			radar.x = line.from.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-			radar.y = line.from.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-			radarToPixel( &radar, &from, pixelX, pixelY, width, height );
-			radar.x = line.to.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-			radar.y = line.to.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-			radarToPixel( &radar, &to, pixelX, pixelY, width, height );
+			ICoord2D from, to, clippedFrom, clippedTo;
+			worldToPixel( &line.from, &from );
+			worldToPixel( &line.to, &to );
 
 			if( pass == 0 )
 			{
@@ -481,10 +462,10 @@ void W3DRadar::drawLandmarks( Int pixelX, Int pixelY, Int width, Int height )
 		if( image == NULL )
 			continue;
 
-		ICoord2D radar, pixel;
-		radar.x = m_cachedLandmarks[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		radar.y = m_cachedLandmarks[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-		radarToPixel( &radar, &pixel, pixelX, pixelY, width, height );
+		ICoord2D pixel;
+		worldToPixel( &m_cachedLandmarks[ i ].pos, &pixel );
+		if( !insidePicture( pixel, pixelX, pixelY, width, height ) )
+			continue;		// outside what a zoomed minimap shows
 
 		// the whole icon inside the picture, so one at the map's edge stays off the frame
 		const Int left = max( pixelX, min( pixelX + width - iconSize, pixel.x - iconSize / 2 ) );
@@ -573,12 +554,10 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 	const Color areaColour = (Color)( (RadarContactLook::AreaGreen & 0x00FFFFFF) | 0xE6000000 );
 	for( size_t i = 0; i < areas.size(); ++i )
 	{
-		ICoord2D radar, centre;
-		radar.x = areas[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		radar.y = areas[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-		radarToPixel( &radar, &centre, pixelX, pixelY, width, height );
-		const Real rx = areas[ i ].radius * width / m_mapExtent.width();
-		const Real ry = areas[ i ].radius * height / m_mapExtent.height();
+		ICoord2D centre;
+		worldToPixel( &areas[ i ].pos, &centre );
+		const Real rx = areas[ i ].radius * m_drawTransform.scaleX;
+		const Real ry = areas[ i ].radius * m_drawTransform.scaleY;
 		for( Int s = 0; s < dashes; s += 2 )
 		{
 			Real a0 = TWO_PI * s / dashes;
@@ -606,10 +585,8 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 
 	for( size_t i = 0; i < fresh.size(); ++i )
 	{
-		ICoord2D radar, pixel;
-		radar.x = fresh[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		radar.y = fresh[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-		radarToPixel( &radar, &pixel, pixelX, pixelY, width, height );
+		ICoord2D pixel;
+		worldToPixel( &fresh[ i ].pos, &pixel );
 
 		if( fresh[ i ].recon )
 		{
@@ -640,10 +617,8 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 	{
 		if( echoes[ i ].recon )
 			continue;		// the area sees it again next sweep, as on the ground
-		ICoord2D radar, pixel;
-		radar.x = echoes[ i ].pos.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
-		radar.y = echoes[ i ].pos.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-		radarToPixel( &radar, &pixel, pixelX, pixelY, width, height );
+		ICoord2D pixel;
+		worldToPixel( &echoes[ i ].pos, &pixel );
 		fillClipped( clip, pixel.x - echo / 2, pixel.y - echo / 2, echo, red | (echoAlpha << 24) );
 	}
 }
@@ -655,51 +630,42 @@ void W3DRadar::drawRadarContacts( Int pixelX, Int pixelY, Int width, Int height 
 void W3DRadar::drawViewBox( Int pixelX, Int pixelY, Int width, Int height )
 {
 	ICoord2D ulScreen;
-	ICoord2D ulRadar;
 	Coord3D ulWorld;
-	ICoord2D ulStart = { 0, 0 };
 
 	// convert top left of screen into world position
 	TheTacticalView->getOrigin( &ulScreen.x, &ulScreen.y );
 	TheTacticalView->screenToWorldAtZ( &ulScreen, &ulWorld, getTerrainAverageZ() );
 
-	// convert world to radar coords
- 	ulRadar.x = ulWorld.x / (m_mapExtent.width() / RADAR_CELL_WIDTH);
- 	ulRadar.y = ulWorld.y / (m_mapExtent.height() / RADAR_CELL_HEIGHT);
-
 	//
-	// convert radar point to actual pixel coords on the screen, shifted
-	// into position on the radar for where the radar is drawn and the size of the
-	// area that the radar is drawn in
+	// using our view box offset array, walk from that corner to each of the others in world
+	// units and turn each into screen pixels: upper left, upper right, lower right, lower left
 	//
-	radarToPixel( &ulRadar, &ulStart, pixelX, pixelY, width, height );
-
-	//
-	// using our view box offset array, convert each of those radar cell offset points
-	// into screen pixels and draw the box.  The view box array is setup with the
-	// first index containing (0,0) (the point we just converted in theory), with cell
-	// offsets to each of the other corners in the following order
-	// (upper left, upper right, lower right, lower left)
-	//
-	ICoord2D radar;
 	ICoord2D corners[ 4 ];
-	corners[ 0 ] = ulStart;
-	radar = ulRadar;
+	Coord3D world = ulWorld;
+	worldToPixel( &world, &corners[ 0 ] );
 	for( Int corner = 1; corner < 4; corner++ )
 	{
-		radar.x += m_viewBox[ corner ].x;
-		radar.y += m_viewBox[ corner ].y;
-		radarToPixel( &radar, &corners[ corner ], pixelX, pixelY, width, height );
+		world.x += m_viewBox[ corner ].x;
+		world.y += m_viewBox[ corner ].y;
+		worldToPixel( &world, &corners[ corner ] );
 	}
-	drawBoxLines( corners );
+
+	// zoomed in, the box stops at the picture's edge: past it is map the picture does not show
+	IRegion2D picture;
+	picture.lo.x = pixelX;
+	picture.lo.y = pixelY;
+	picture.hi.x = pixelX + width;
+	picture.hi.y = pixelY + height;
+	drawBoxLines( corners, m_zoomView.zoom > 1.0f ? &picture : NULL );
 
 }  // end drawViewBox
 
 //-------------------------------------------------------------------------------------------------
 /** The view box's four lines through corners in pixels, upper left, upper right, lower right and
-	* lower left, clipped to the whole window available for the radar and not just its image */
+	* lower left, clipped to the whole window available for the radar and not just its image, or to
+	* the picture when one is given */
 //-------------------------------------------------------------------------------------------------
-void W3DRadar::drawBoxLines( const ICoord2D *corners )
+void W3DRadar::drawBoxLines( const ICoord2D *corners, const IRegion2D *picture )
 {
 	const Real lineWidth = 1.0f;
 	const Color topColor = GameMakeColor( 225, 225, 0, 255 );
@@ -716,6 +682,8 @@ void W3DRadar::drawBoxLines( const ICoord2D *corners )
 	clipRegion.lo.y = radarWindowScreenPos.y;
 	clipRegion.hi.x = radarWindowScreenPos.x + radarWindowSize.x;
 	clipRegion.hi.y = radarWindowScreenPos.y + radarWindowSize.y;
+	if( picture )
+		clipRegion = *picture;
 
 	for( Int line = 0; line < 4; line++ )
 	{
@@ -766,23 +734,18 @@ void W3DRadar::drawSingleBeaconEvent( Int pixelX, Int pixelY, Int width, Int hei
 	// compute how much "angle" we will add to each point to make it rotate as it's getting small
 	addAngle = -totalAnglesToSpin * (frameDiff / TIME_FROM_FULL_SIZE_TO_SMALL_SIZE);
 
-	// create a triangle around the event
-	angle = 0.0f - addAngle;
-	tri[ 0 ].x = REAL_TO_INT( (DOUBLE_TO_REAL( Cos( angle ) ) * eventSize) + event->radarLoc.x );
-	tri[ 0 ].y = REAL_TO_INT( (DOUBLE_TO_REAL( Sin( angle ) ) * eventSize) + event->radarLoc.y );
-
-	angle = 2.0f * PI / 3.0f - addAngle;
-	tri[ 1 ].x = REAL_TO_INT( (DOUBLE_TO_REAL( Cos( angle ) ) * eventSize) + event->radarLoc.x );
-	tri[ 1 ].y = REAL_TO_INT( (DOUBLE_TO_REAL( Sin( angle ) ) * eventSize) + event->radarLoc.y );
-
-	angle = -2.0f * PI / 3.0f - addAngle;
-	tri[ 2 ].x = REAL_TO_INT( (DOUBLE_TO_REAL( Cos( angle ) ) * eventSize) + event->radarLoc.x );
-	tri[ 2 ].y = REAL_TO_INT( (DOUBLE_TO_REAL( Sin( angle ) ) * eventSize) + event->radarLoc.y );
-
-	// translate radar coords to screen coords
-	radarToPixel( &tri[ 0 ], &tri[ 0 ], pixelX, pixelY, width, height );
-	radarToPixel( &tri[ 1 ], &tri[ 1 ], pixelX, pixelY, width, height );
-	radarToPixel( &tri[ 2 ], &tri[ 2 ], pixelX, pixelY, width, height );
+	// create a triangle around the event, its size in radar cells of the unzoomed picture and its
+	// centre where the zoomed one shows the spot
+	ICoord2D centre;
+	worldToPixel( &event->worldLoc, &centre );
+	const Real cellX = width / (Real)RADAR_CELL_WIDTH;
+	const Real cellY = height / (Real)RADAR_CELL_HEIGHT;
+	for( Int k = 0; k < 3; ++k )
+	{
+		angle = 2.0f * PI / 3.0f * k - addAngle;
+		tri[ k ].x = centre.x + REAL_TO_INT( DOUBLE_TO_REAL( Cos( angle ) ) * eventSize * cellX );
+		tri[ k ].y = centre.y - REAL_TO_INT( DOUBLE_TO_REAL( Sin( angle ) ) * eventSize * cellY );
+	}
 
 	//
 	// make the colors we're going to use, when we're at our smallest size we will start to
@@ -874,7 +837,7 @@ void W3DRadar::drawSingleGenericEvent( Int pixelX, Int pixelY, Int width, Int he
 		s *= 2.0f - age / POP_FRAMES;
 
 	ICoord2D centre;
-	radarToPixel( &event->radarLoc, &centre, pixelX, pixelY, width, height );
+	worldToPixel( &event->worldLoc, &centre );
 	const Real cx = (Real)centre.x;
 	const Real cy = (Real)centre.y;
 
@@ -1325,9 +1288,8 @@ void W3DRadar::drawBlips( Int pixelX, Int pixelY, Int width, Int height )
 	if( m_blips.empty() || width <= 0 || height <= 0 )
 		return;
 
-	const Real toPixelX = width / m_mapExtent.width();
-	const Real toPixelY = height / m_mapExtent.height();
-	const Real toPixel = (toPixelX + toPixelY) * 0.5f;
+	// a footprint grows with the zoom, a unit's dot keeps the picture's size
+	const Real toPixel = (m_drawTransform.scaleX + m_drawTransform.scaleY) * 0.5f;
 
 	const Int dot = blipDotSize( width, height );
 	const Real minHalf = dot * 0.5f;
@@ -1356,8 +1318,8 @@ void W3DRadar::drawBlips( Int pixelX, Int pixelY, Int width, Int height )
 				continue;
 
 			// +y in the world is up on the radar
-			const Real px = pixelX + blip.x * toPixelX;
-			const Real py = pixelY + height - blip.y * toPixelY;
+			Real px, py;
+			m_drawTransform.toPixel( blip.x, blip.y, &px, &py );
 
 			if( structures )
 			{
@@ -2180,7 +2142,22 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 
 	}  // end else
 
+	// Everything below goes through the one transform input uses as well (Radar::localPixelToWorld),
+	// so a zoomed minimap draws and is clicked the same.  The images show the zoomed part of the map
+	// as shares of it: u from the left, v from the bottom, +y up as the terrain image is laid out.
+	m_drawTransform.set( m_zoomView, m_mapExtent.width(), m_mapExtent.height(), ul, lr );
+	const Real shownLeft = m_zoomView.x / m_mapExtent.width();
+	const Real shownRight = shownLeft + 1.0f / m_zoomView.zoom;
+	const Real shownBottom = m_zoomView.y / m_mapExtent.height();
+	const Real shownTop = shownBottom + 1.0f / m_zoomView.zoom;
+
 	// draw the terrain texture
+	Region2D terrainUV;
+	terrainUV.lo.x = shownLeft;
+	terrainUV.lo.y = shownTop;
+	terrainUV.hi.x = shownRight;
+	terrainUV.hi.y = shownBottom;
+	m_terrainImage->setUV( &terrainUV );
 	TheDisplay->drawImage( m_terrainImage, ul.x, ul.y, lr.x, lr.y );
 
 	// the money and the tech buildings are part of the ground: under every dot and footprint, and
@@ -2234,12 +2211,14 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 			m_shroudImage->setImageSize( &size );
 		}
 
-		// the map's part of the grid, +y up as on the terrain image
+		// the map's part of the grid, and of that the part the zoom shows, +y up as on the terrain image
+		const Real gridU = m_mapExtent.width() / (m_shroudCellWidth * m_shroudWidth);
+		const Real gridV = m_mapExtent.height() / (m_shroudCellHeight * m_shroudHeight);
 		Region2D uv;
-		uv.lo.x = 0.0f;
-		uv.lo.y = m_mapExtent.height() / (m_shroudCellHeight * m_shroudHeight);
-		uv.hi.x = m_mapExtent.width() / (m_shroudCellWidth * m_shroudWidth);
-		uv.hi.y = 0.0f;
+		uv.lo.x = shownLeft * gridU;
+		uv.lo.y = shownTop * gridV;
+		uv.hi.x = shownRight * gridU;
+		uv.hi.y = shownBottom * gridV;
 		m_shroudImage->setUV( &uv );
 
 		// hand the frame's shroud changes to the texture, one lock for all of them

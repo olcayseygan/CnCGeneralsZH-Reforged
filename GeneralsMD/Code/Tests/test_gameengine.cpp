@@ -10032,6 +10032,120 @@ TEST(radar_alarm_spacebar_walks_back_through_distinct_places)
 }
 
 // ---------------------------------------------------------------------------------------------
+// The minimap's zoom.  Draw puts a world spot at a pixel and a click takes the pixel back to the
+// world through the same transform, so every pixel of the picture has to come back to itself at
+// every zoom and every part of the map the zoom can show, or a click lands beside the dot under it.
+// ---------------------------------------------------------------------------------------------
+TEST(minimap_zoom_round_trips_every_pixel_through_the_world)
+{
+	const Real mapWidth = 4000.0f, mapHeight = 3000.0f;
+	const ICoord2D ul = { 11, 37 }, lr = { 231, 202 };		// 220 by 165, the map's shape
+	const Real zooms[] = { 1.0f, 1.41421356f, 2.0f, 2.82842712f, 4.0f };
+	const Real places[][ 2 ] = { { 0.0f, 0.0f }, { 1234.5f, 777.0f }, { 1e6f, 1e6f }, { -50.0f, 2999.0f } };
+
+	for( Int z = 0; z < 5; ++z )
+	{
+		for( Int p = 0; p < 4; ++p )
+		{
+			RadarZoomView view;
+			view.zoom = zooms[ z ];
+			view.x = places[ p ][ 0 ];
+			view.y = places[ p ][ 1 ];
+			view.clampTo( mapWidth, mapHeight );
+			CHECK( view.x >= 0.0f && view.x + mapWidth / view.zoom <= mapWidth + 0.01f );
+			CHECK( view.y >= 0.0f && view.y + mapHeight / view.zoom <= mapHeight + 0.01f );
+
+			RadarPictureTransform transform;
+			transform.set( view, mapWidth, mapHeight, ul, lr );
+
+			Int wrong = 0, outside = 0;
+			for( Int y = ul.y; y < lr.y; ++y )
+			{
+				for( Int x = ul.x; x < lr.x; ++x )
+				{
+					ICoord2D pixel = { x, y };
+					Real wx, wy, px, py;
+					transform.toWorld( pixel, &wx, &wy );
+					if( wx < view.x || wx > view.x + mapWidth / view.zoom || wy < view.y || wy > view.y + mapHeight / view.zoom )
+						++outside;
+					transform.toPixel( wx, wy, &px, &py );
+					if( REAL_TO_INT_FLOOR( px ) != x || REAL_TO_INT_FLOOR( py ) != y )
+						++wrong;
+				}
+			}
+			CHECK_EQ( wrong, 0 );
+			CHECK_EQ( outside, 0 );
+		}
+	}
+
+	// at the whole map it is the picture the minimap always drew: x across, +y up from the bottom
+	RadarZoomView whole;
+	whole.reset();
+	RadarPictureTransform transform;
+	transform.set( whole, mapWidth, mapHeight, ul, lr );
+	Real px, py;
+	transform.toPixel( 2000.0f, 0.0f, &px, &py );
+	CHECK_NEAR( px, 121.0f, 0.001f );
+	CHECK_NEAR( py, 202.0f, 0.001f );
+	transform.toPixel( 0.0f, 3000.0f, &px, &py );
+	CHECK_NEAR( px, 11.0f, 0.001f );
+	CHECK_NEAR( py, 37.0f, 0.001f );
+}
+
+TEST(minimap_zoom_keeps_the_cursor_spot_and_stays_on_the_map)
+{
+	const Real mapWidth = 4000.0f, mapHeight = 3000.0f;
+	const ICoord2D ul = { 0, 0 }, lr = { 200, 150 };
+
+	// a notch in the middle: the spot under the cursor stays under it
+	RadarZoomView view;
+	view.reset();
+	RadarPictureTransform before, after;
+	before.set( view, mapWidth, mapHeight, ul, lr );
+	const ICoord2D cursor = { 90, 60 };
+	Real wx, wy, px, py;
+	before.toWorld( cursor, &wx, &wy );
+	view.zoomAround( 2.0f, wx, wy, mapWidth, mapHeight );
+	CHECK_NEAR( view.zoom, 2.0f, 0.0001f );
+	after.set( view, mapWidth, mapHeight, ul, lr );
+	after.toPixel( wx, wy, &px, &py );
+	CHECK_EQ( REAL_TO_INT_FLOOR( px ), cursor.x );
+	CHECK_EQ( REAL_TO_INT_FLOOR( py ), cursor.y );
+
+	// out from the map's corner: kept under the cursor the shown part would hang past the edge, so it
+	// stops at the edge instead
+	view.zoom = 4.0f;
+	view.x = 3000.0f;
+	view.y = 0.0f;
+	view.zoomAround( 2.0f, 3990.0f, 10.0f, mapWidth, mapHeight );
+	CHECK_NEAR( view.x, 2000.0f, 0.01f );
+	CHECK_NEAR( view.y, 0.0f, 0.01f );
+
+	// never past 4 and never under the whole map; out again, the whole map from its corner
+	view.zoomAround( 8.0f, 2000.0f, 1500.0f, mapWidth, mapHeight );
+	CHECK_NEAR( view.zoom, 4.0f, 0.0001f );
+	view.zoomAround( 0.5f, 2000.0f, 1500.0f, mapWidth, mapHeight );
+	CHECK_NEAR( view.zoom, 1.0f, 0.0001f );
+	CHECK_NEAR( view.x, 0.0f, 0.01f );
+	CHECK_NEAR( view.y, 0.0f, 0.01f );
+
+	// following the camera: a look point inside the middle three fifths moves nothing, one past it
+	// pans just enough, and one at the map's far corner leaves the view on the map
+	view.zoom = 4.0f;
+	view.x = 1000.0f;
+	view.y = 1000.0f;
+	view.follow( 1500.0f, 1350.0f, mapWidth, mapHeight );
+	CHECK_NEAR( view.x, 1000.0f, 0.01f );
+	CHECK_NEAR( view.y, 1000.0f, 0.01f );
+	view.follow( 2100.0f, 1350.0f, mapWidth, mapHeight );
+	CHECK_NEAR( view.x, 2100.0f - 1000.0f + 200.0f, 0.01f );
+	CHECK_NEAR( view.y, 1000.0f, 0.01f );
+	view.follow( 4000.0f, 3000.0f, mapWidth, mapHeight );
+	CHECK_NEAR( view.x, 3000.0f, 0.01f );
+	CHECK_NEAR( view.y, 2250.0f, 0.01f );
+}
+
+// ---------------------------------------------------------------------------------------------
 // A listbox scroll offset is a pixel offset into the running height of every entry above it.
 // Both of the fields that carry it used to be Short while the running total they are compared
 // with, and assigned from, is an Int.

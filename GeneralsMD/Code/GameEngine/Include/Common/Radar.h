@@ -101,6 +101,40 @@ enum RadarEventMark
 	RADAR_MARK_COUNT
 };
 
+//-------------------------------------------------------------------------------------------------
+/** The minimap's zoom: how close it is and which part of the map it shows.  Client only, never
+	* saved, never in the CRC, never read by logic.  World coordinates, +y up the picture. */
+//-------------------------------------------------------------------------------------------------
+enum { RADAR_ZOOM_STEPS = 5 };				///< 1, 1.4, 2, 2.8 and 4 times, a wheel notch each
+struct RadarZoomView
+{
+	Real zoom;		///< 1 shows the whole map
+	Real x, y;		///< the world spot at the picture's lower left corner
+
+	void reset( void ) { zoom = 1.0f; x = 0.0f; y = 0.0f; }
+	void clampTo( Real mapWidth, Real mapHeight );		///< the shown part back onto the map
+	void zoomAround( Real newZoom, Real anchorX, Real anchorY, Real mapWidth, Real mapHeight );	///< the anchor keeps its pixel
+	void follow( Real pointX, Real pointY, Real mapWidth, Real mapHeight );	///< the least pan that keeps the point a fifth in from the edges
+};
+
+//-------------------------------------------------------------------------------------------------
+/** The world to the radar picture's pixels and back under a zoom.  (ul, lr) is the picture as
+	* Radar::findDrawPositions gives it, lr exclusive.  Draw and input both go through this. */
+//-------------------------------------------------------------------------------------------------
+struct RadarPictureTransform
+{
+	Real originX, originY;		///< the pixel of the world's origin
+	Real scaleX, scaleY;			///< pixels a world unit
+
+	void set( const RadarZoomView &view, Real mapWidth, Real mapHeight, const ICoord2D &ul, const ICoord2D &lr );
+	void toPixel( Real worldX, Real worldY, Real *pixelX, Real *pixelY ) const
+	{
+		*pixelX = originX + worldX * scaleX;
+		*pixelY = originY - worldY * scaleY;
+	}
+	void toWorld( const ICoord2D &pixel, Real *worldX, Real *worldY ) const;	///< the pixel's centre
+};
+
 // PROTOTYPES /////////////////////////////////////////////////////////////////////////////////////
 
 //-------------------------------------------------------------------------------------------------
@@ -201,6 +235,7 @@ public:
 	Bool radarToWorld2D( const ICoord2D *radar, Coord3D *world );		///< radar point to world point (x,y only!)
 	Bool worldToRadar( const Coord3D *world, ICoord2D *radar );		///< translate world point to radar (x,y)
 	Bool localPixelToRadar( const ICoord2D *pixel, ICoord2D *radar );	///< translate pixel (with UL of radar being (0,0)) to logical radar coords
+	Bool localPixelToWorld( const ICoord2D *pixel, Coord3D *world );	///< the same pixel to the world on the terrain, through the zoom
 	Bool screenPixelToWorld( const ICoord2D *pixel, Coord3D *world ); ///< translate pixel (with UL of the screen being (0,0)) to world position in the world
 	Object *objectUnderRadarPixel( const ICoord2D *pixel );				///< return the object (if any) represented by the pixel coords passed in
 	void findDrawPositions( Int startX, Int startY, Int width, Int height, 
@@ -247,6 +282,10 @@ public:
 	void toggleSimpleColors( void ) { m_simpleColors = !m_simpleColors; }
 	Bool isSimpleColors( void ) const { return m_simpleColors; }
 
+	// the minimap's zoom, client only like the colours
+	void zoomAtPixel( const ICoord2D *pixel, Bool closer );	///< a wheel notch over a pixel of the radar window
+	Real getZoom( void ) const { return m_zoomView.zoom; }
+
 	/// refresh the water values for the radar
 	virtual void refreshTerrain( TerrainLogic *terrain );
 
@@ -291,6 +330,12 @@ protected:
 
 	// search the object list for an object that maps to the given logical radar coords
 	Object *searchListForRadarLocationMatch( RadarObject *listHead, ICoord2D *radarMatch );
+
+	Bool findPicture( ICoord2D *ul, ICoord2D *lr );	///< where W3DLeftHUDDraw draws the map in the radar window
+
+	RadarZoomView m_zoomView;							///< what the minimap shows; client only, never saved
+	Int m_zoomStep;												///< index into the zoom steps, 0 the whole map
+	Coord2D m_zoomFollow;									///< the camera's look point when the view last followed it
 
 	Bool m_radarHidden;										///< true when radar is not visible
 	Bool m_radarForceOn;									///< true when radar is forced to be on

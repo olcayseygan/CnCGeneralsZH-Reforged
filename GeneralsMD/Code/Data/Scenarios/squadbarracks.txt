@@ -21,6 +21,14 @@
 
 30    spawn         0  AmericaBarracks                      1  1000 900
 30    spawn         1  AmericaPowerPlant                    1  1300 800
+# the generals' spot check: the Air Force General's barracks trains its own squads
+30    spawn         0  AirF_AmericaBarracks                 1  1000 1200
+32    produce       0  AirF_AmericaBarracks  AirF_AmericaInfantryRangerSquad           1
+32    produce       0  AirF_AmericaBarracks  AirF_AmericaInfantryMissileDefenderSquad  1
+32    produce       0  AirF_AmericaBarracks  AirF_AmericaInfantryRanger                1
+900   tally         0  AirF_AmericaInfantryRangerSquadMember           5
+900   tally         0  AirF_AmericaInfantryMissileDefenderSquadMember  5
+900   tally         0  AirF_AmericaInfantryRanger                      0
 31    purchase      0  SCIENCE_USATalent7B
 32    produce       0  AmericaBarracks  AmericaInfantryRangerSquad           1
 32    produce       0  AmericaBarracks  AmericaInfantryMissileDefenderSquad  1

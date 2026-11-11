@@ -1,0 +1,30 @@
+# The GLA's half of squadbarracks.txt: the Rebel and RPG Trooper buttons train five-man squads
+# (SquadReforged.ini). The Demolition General's barracks is the spot check for the generals. The
+# single Rebel is left to the computer, so the human seat's "produce ... GLAInfantryRebel" line must
+# say queued 0 of 1.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLA -side 1 FactionAmerica -seed 1 -maxframes 4000
+#     -scenario squadgla -logPrefix squadgla_
+#
+# The tallies that name a count are the check, each a HEADLESS EXPECT PASS or FAIL.
+
+30    spawn         0  GLABarracks                           1  1000 900
+30    spawn         0  Demo_GLABarracks                      1  1000 1200
+32    produce       0  GLABarracks  GLAInfantryRebelSquad                 1
+32    produce       0  GLABarracks  GLAInfantryTunnelDefenderSquad        1
+32    produce       0  GLABarracks  GLAInfantryRebel                      1
+32    produce       0  Demo_GLABarracks  Demo_GLAInfantryRebelSquad           1
+32    produce       0  Demo_GLABarracks  Demo_GLAInfantryTunnelDefenderSquad  1
+
+1500  tally         0  GLAInfantryRebelSquad                        1
+1500  tally         0  GLAInfantryRebelSquadMember                  5
+1500  tally         0  GLAInfantryTunnelDefenderSquad               1
+1500  tally         0  GLAInfantryTunnelDefenderSquadMember         5
+1500  tally         0  Demo_GLAInfantryRebelSquad                   1
+1500  tally         0  Demo_GLAInfantryRebelSquadMember             5
+1500  tally         0  Demo_GLAInfantryTunnelDefenderSquad          1
+1500  tally         0  Demo_GLAInfantryTunnelDefenderSquadMember    5
+1500  tally         0  GLAInfantryRebel                             0
+1500  tally         0  GLAInfantryRebelAI                           0

@@ -1645,6 +1645,31 @@ GUI:CheatApply
 "GO"
 END
 
+GUI:CheatRankMax
+"MAX"
+END
+
+GUI:CheatUnlimitedPoints
+"Unlimited general's points"
+END
+
+GUI:CheatBuildAnywhere
+"Build anywhere"
+END
+
+// the trainer's tabs
+GUI:CheatTabPlayer
+"PLAYER"
+END
+
+GUI:CheatTabUnits
+"UNITS"
+END
+
+GUI:CheatTabMap
+"MAP"
+END
+
 // a line of the event feed when a player's last dozer or worker is gone; %s is his name
 GUI:HudNoDozerLeft
 "%s has no dozer left"

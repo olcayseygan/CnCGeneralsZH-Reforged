@@ -2286,13 +2286,31 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			// third of a second apart and refusing an order for that would be a new bug.  The line
 			// build checks every tile after the first for itself (buildTiledLocations).
 			//
+			// The trainer's build anywhere asks only that it lands on the map and inside nothing else
+			const Bool anywhere = thisPlayer->hasCheat( CHEAT_BUILD_ANYWHERE );
 			if( TheBuildAssistant->isLocationLegalToBuild( &loc, place, angle,
-																										BuildAssistant::TERRAIN_RESTRICTIONS |
+																										( anywhere ? 0 : BuildAssistant::TERRAIN_RESTRICTIONS ) |
 																										BuildAssistant::NO_OBJECT_OVERLAP,
 																										constructorObject, NULL ) != LBC_OK )
 				break;
 
-			if( msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT )
+			//
+			// and puts it up finished on the spot, paid for, the builder left where it stands: the
+			// computer player's instant structure (AIPlayer::buildStructureNow), in the side the
+			// builder's button names
+			//
+			if( anywhere && msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT )
+			{
+				const ThingTemplate *what = TheBuildAssistant->findBuildButtonTemplate( constructorObject, place );
+				Object *site = TheBuildAssistant->buildObjectNow( NULL, what, &loc, angle, thisPlayer );
+				if( site )
+				{
+					thisPlayer->getMoney()->withdraw( what->calcCostToBuild( thisPlayer ) );
+					site->clearStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_UNDER_CONSTRUCTION, OBJECT_STATUS_RECONSTRUCTING ) );
+					site->updateUpgradeModules();
+				}
+			}
+			else if( msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT )
 			{
 
 				//
@@ -2704,7 +2722,15 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 				case CHEAT_GOD_MODE:
 				case CHEAT_INSTANT_BUILD:
 				case CHEAT_ONE_HIT_KILL:
+				case CHEAT_BUILD_ANYWHERE:
 					thisPlayer->toggleCheat( kind );
+					break;
+
+				// a point in hand on the way in, so the general's button lights; purchases then spend none
+				case CHEAT_UNLIMITED_POINTS:
+					thisPlayer->toggleCheat( kind );
+					if( thisPlayer->hasCheat( kind ) && thisPlayer->getSciencePurchasePoints() < 1 )
+						thisPlayer->addSciencePurchasePoints( 1 );
 					break;
 
 				/* The logic half of takeControlOfPlayer, a message so the recording has it: the AIPlayer

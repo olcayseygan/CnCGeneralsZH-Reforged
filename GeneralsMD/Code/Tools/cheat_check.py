@@ -40,6 +40,8 @@ CHEAT_BITS = {
     "god": 1 << 7,
     "instantbuild": 1 << 8,
     "onehitkill": 1 << 9,
+    "freepoints": 1 << 11,
+    "buildanywhere": 1 << 12,
 }
 
 
@@ -82,12 +84,22 @@ class Match(object):
 
 
 def check_counters(match):
-    for line, field, gain in (("money", "money", 10000), ("money 777", "money", 777),
+    for line, field, gain in (("money", "money", 10000), ("money 777", "money", 777), ("money 1000000", "money", 1000000),
                               ("points", "points", 1), ("points 3", "points", 3), ("rankup", "rank", 1)):
         before = match.local()[field]
         match.type_line(line)
         after = match.local()[field]
         match.check(line, after - before == gain, before, after)
+
+
+def check_rank_max(match):
+    """rankup max climbs to the top rank in one go, and a second one finds nothing left to climb."""
+    before = match.local()["rank"]
+    match.type_line("rankup max")
+    top = match.local()["rank"]
+    match.type_line("rankup max")
+    again = match.local()["rank"]
+    match.check("rankup max", top > before + 1 and again == top, before, "%d then %d" % (top, again))
 
 
 def check_toggles_flip(match):
@@ -173,7 +185,7 @@ def check_onehitkill(match):
     match.check("onehitkill kills the enemy", after < before, before, after)
 
 
-CHECKS = (check_counters, check_toggles_flip, check_heroic, check_reveal, check_power,
+CHECKS = (check_counters, check_rank_max, check_toggles_flip, check_heroic, check_reveal, check_power,
           check_nocooldown, check_instantbuild, check_onehitkill, check_god)
 
 

@@ -7525,6 +7525,11 @@ void InGameUI::computePlacementRow( const ThingTemplate *what, Real angle, const
 //-------------------------------------------------------------------------------------------------
 UnsignedInt InGameUI::placementCheckOptions( void )
 {
+	// the trainer's build anywhere: the logic asks no more than this (MSG_DOZER_CONSTRUCT)
+	const Player *local = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	if( local && local->hasCheat( CHEAT_BUILD_ANYWHERE ) )
+		return BuildAssistant::NO_OBJECT_OVERLAP | BuildAssistant::IGNORE_STEALTHED | BuildAssistant::IGNORE_UNSEEN;
+
 	return BuildAssistant::USE_QUICK_PATHFIND |
 				 BuildAssistant::TERRAIN_RESTRICTIONS |
 				 BuildAssistant::CLEAR_PATH |

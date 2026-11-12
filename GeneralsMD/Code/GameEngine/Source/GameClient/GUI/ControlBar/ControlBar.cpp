@@ -741,6 +741,38 @@ void ControlBar::populatePurchaseScienceRank( Player *player, const CommandSet *
 // The plates are invisible push buttons over pieces the window's own draw lays down, so a press,
 // a tooltip and a disabled plate behave like any button's.
 //-------------------------------------------------------------------------------------------------
+void drawFittedLabel( FittedLabel &label, const UnicodeString &text, Int points, const IRegion2D &well, Color color,
+											Bool wrap, Int align )
+{
+	if( text.isEmpty() )
+		return;
+	const Int wellW = well.hi.x - well.lo.x, wellH = well.hi.y - well.lo.y;
+	if( label.string == NULL )
+		label.string = TheDisplayStringManager->newDisplayString();
+	if( label.text.compare( text ) != 0 || label.points != points || label.wellW != wellW || label.wellH != wellH )
+	{
+		label.text = text;
+		label.points = points;
+		label.wellW = wellW;
+		label.wellH = wellH;
+		label.string->setWordWrap( wrap ? wellW : 0 );
+		label.string->setWordWrapCentered( wrap );
+		label.string->setText( text );
+		for( Int p = MAX( points, 6 ); p >= 6; p-- )
+		{
+			label.string->setFont( TheFontLibrary->getFont( "Arial", p, TRUE ) );
+			Int w, h;
+			label.string->getSize( &w, &h );
+			if( w <= wellW && h <= wellH )
+				break;
+		}
+	}
+	Int w, h;
+	label.string->getSize( &w, &h );
+	const Int x = align == FITTED_ALIGN_LEFT ? well.lo.x : ( align == FITTED_ALIGN_RIGHT ? well.hi.x - w : ( well.lo.x + well.hi.x - w ) / 2 );
+	label.string->draw( x, ( well.lo.y + well.hi.y - h ) / 2, color, GameMakeColor( 0, 0, 0, 255 ) );
+}
+
 namespace
 {
 	enum { TALENT_DESIGN_W = 1084, TALENT_DESIGN_H = 598, POWERS_DESIGN_W = 542, TALENT_ROW_COUNT = TALENT_SCIENCE_COUNT / 2 };
@@ -760,16 +792,10 @@ namespace
 	const Int theRankLabel[ 4 ] = { 451, 481, 509, 496 };		// the left panel's old close socket
 	const Int theRankNumeral[ 4 ] = { 451, 499, 509, 529 };
 
-	/// one line of the window's own text, laid out again only when its text or size changes
-	struct TalentLabel
-	{
-		DisplayString *string;
-		UnicodeString text;
-		Int points, wellW, wellH;
-	};
+	/// the window's own text, one FittedLabel a line
 	enum { LABEL_PLATE = 0, LABEL_NODE = TALENT_SCIENCE_COUNT, LABEL_CAPTION = LABEL_NODE + TALENT_ROW_COUNT,
 				 LABEL_WAITING, LABEL_HINT, LABEL_RANK, LABEL_RANK_NUMERAL, LABEL_COUNT };
-	TalentLabel theTalentLabels[ LABEL_COUNT ];
+	FittedLabel theTalentLabels[ LABEL_COUNT ];
 
 	/// where the window's design rect lands on the screen
 	struct TalentMap
@@ -826,40 +852,12 @@ namespace
 		return out;
 	}
 
-	enum { ALIGN_LEFT = -1, ALIGN_CENTRE = 0, ALIGN_RIGHT = 1 };
+	enum { ALIGN_LEFT = FITTED_ALIGN_LEFT, ALIGN_CENTRE = FITTED_ALIGN_CENTRE, ALIGN_RIGHT = FITTED_ALIGN_RIGHT };
 
-	/// draw text in a well, centred unless told, wrapped to its width when asked, shrunk a point at a time until it fits
 	void drawTalentLabel( Int which, const UnicodeString &text, Int points, const IRegion2D &well, Color color, Bool wrap,
 												Int align = ALIGN_CENTRE )
 	{
-		if( text.isEmpty() )
-			return;
-		TalentLabel &label = theTalentLabels[ which ];
-		const Int wellW = well.hi.x - well.lo.x, wellH = well.hi.y - well.lo.y;
-		if( label.string == NULL )
-			label.string = TheDisplayStringManager->newDisplayString();
-		if( label.text.compare( text ) != 0 || label.points != points || label.wellW != wellW || label.wellH != wellH )
-		{
-			label.text = text;
-			label.points = points;
-			label.wellW = wellW;
-			label.wellH = wellH;
-			label.string->setWordWrap( wrap ? wellW : 0 );
-			label.string->setWordWrapCentered( wrap );
-			label.string->setText( text );
-			for( Int p = MAX( points, 6 ); p >= 6; p-- )
-			{
-				label.string->setFont( TheFontLibrary->getFont( "Arial", p, TRUE ) );
-				Int w, h;
-				label.string->getSize( &w, &h );
-				if( w <= wellW && h <= wellH )
-					break;
-			}
-		}
-		Int w, h;
-		label.string->getSize( &w, &h );
-		const Int x = align == ALIGN_LEFT ? well.lo.x : ( align == ALIGN_RIGHT ? well.hi.x - w : ( well.lo.x + well.hi.x - w ) / 2 );
-		label.string->draw( x, ( well.lo.y + well.hi.y - h ) / 2, color, GameMakeColor( 0, 0, 0, 255 ) );
+		drawFittedLabel( theTalentLabels[ which ], text, points, well, color, wrap, align );
 	}
 
 	void drawTalentNothing( GameWindow *window, WinInstanceData *instData )
@@ -3558,6 +3556,13 @@ void ControlBar::reset( void )
 	m_genStarFlash = TRUE;
 }  // end reset
 
+/// a builder stands in for an empty selection: the BuildWithoutWorker option, or the trainer's build anywhere
+static Bool buildsWithoutWorker( void )
+{
+	const Player *local = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	return TheGlobalData->m_buildWithoutWorker || ( local && local->hasCheat( CHEAT_BUILD_ANYWHERE ) );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Update phase, we can track if our selected object is destroyed, update button
 	* percentages, status, enabled status etc */
@@ -3778,7 +3783,7 @@ void ControlBar::update( void )
 		Drawable *standIn = TheGameClient->findDrawableByID( m_standInBuilderID );
 		Object *standInObj = standIn ? standIn->getObject() : NULL;
 		if( ( TheInGameUI->getSelectCount() > 0 && !buildingsTab ) || standInObj == NULL || standInObj->isEffectivelyDead()
-				|| ( !TheGlobalData->m_buildWithoutWorker && !buildingsTab ) )
+				|| ( !buildsWithoutWorker() && !buildingsTab ) )
 		{
 			m_standInBuilderID = INVALID_DRAWABLE_ID;
 			m_currentSelectedDrawable = NULL;
@@ -4513,7 +4518,7 @@ Drawable *ControlBar::findStandInBuilder( Bool freeOnly )
 {
 	// off, the bar is 1.04's: nothing selected is an empty bar, and a build needs a selected worker,
 	// unless the player opened the buildings tab and asked for the builder's bar
-	if( !TheGlobalData->m_buildWithoutWorker && m_commandTab != COMMAND_TAB_BUILDINGS )
+	if( !buildsWithoutWorker() && m_commandTab != COMMAND_TAB_BUILDINGS )
 		return NULL;
 
 	Player *player = ThePlayerList->getLocalPlayer();

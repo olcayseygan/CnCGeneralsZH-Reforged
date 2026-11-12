@@ -71,6 +71,19 @@ class ProductionUpdateInterface;
 class GameWindowTransitionsHandler;
 class DisplayString;
 
+/// one line of a code-drawn window's text (the talents, the trainer), laid out again only when its
+/// text, size or well changes
+struct FittedLabel
+{
+	DisplayString *string;
+	UnicodeString text;
+	Int points, wellW, wellH;
+};
+enum { FITTED_ALIGN_LEFT = -1, FITTED_ALIGN_CENTRE = 0, FITTED_ALIGN_RIGHT = 1 };
+/// draw text in a well, centred unless told, wrapped to its width when asked, shrunk a point at a time until it fits
+void drawFittedLabel( FittedLabel &label, const UnicodeString &text, Int points, const IRegion2D &well, Color color,
+											Bool wrap, Int align = FITTED_ALIGN_CENTRE );
+
 enum ProductionID : Int;
 
 enum CommandSourceType : Int;

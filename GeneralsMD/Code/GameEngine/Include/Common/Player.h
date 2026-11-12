@@ -85,6 +85,9 @@ enum CheatKind
 	CHEAT_INSTANT_BUILD,
 	CHEAT_ONE_HIT_KILL,
 	CHEAT_TAKE_CONTROL,			///< Shift-Ctrl-T: the amount is the index of the player to take over
+	// toggles again; after the rest because a replay carries the number
+	CHEAT_UNLIMITED_POINTS,	///< sciences cost no general's points
+	CHEAT_BUILD_ANYWHERE,		///< a placed structure stands up finished at once, no builder walks, the ground barely asked
 
 	CHEAT_KIND_COUNT
 };

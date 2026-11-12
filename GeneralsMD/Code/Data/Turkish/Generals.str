@@ -16277,6 +16277,30 @@ GUI:CheatApply
 "YAP"
 END
 
+GUI:CheatRankMax
+"MAKS"
+END
+
+GUI:CheatUnlimitedPoints
+"Sınırsız general puanı"
+END
+
+GUI:CheatBuildAnywhere
+"Her yere inşa"
+END
+
+GUI:CheatTabPlayer
+"OYUNCU"
+END
+
+GUI:CheatTabUnits
+"BİRLİKLER"
+END
+
+GUI:CheatTabMap
+"HARİTA"
+END
+
 GUI:HudNoDozerLeft
 "%s için hiç dozer kalmadı"
 END

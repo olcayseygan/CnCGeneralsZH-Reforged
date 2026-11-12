@@ -2997,7 +2997,8 @@ Bool Player::attemptToPurchaseScience(ScienceType science)
 	else
 	{
 		Int cost = TheScienceStore->getSciencePurchaseCost(science);
-		addSciencePurchasePoints(-cost);
+		if (!hasCheat(CHEAT_UNLIMITED_POINTS))
+			addSciencePurchasePoints(-cost);
 		addScience(science);
 
 		getAcademyStats()->recordGeneralsPointsSpent( cost );
@@ -3074,8 +3075,8 @@ Bool Player::isCapableOfPurchasingScience(ScienceType science) const
 	}
 
 	Int cost = TheScienceStore->getSciencePurchaseCost(science);
-	// purchase cost of zero means "not purchasable!"
-	if (cost == 0 || cost > getSciencePurchasePoints())
+	// purchase cost of zero means "not purchasable!"; the trainer's unlimited points pay for the rest
+	if (cost == 0 || (cost > getSciencePurchasePoints() && !hasCheat(CHEAT_UNLIMITED_POINTS)))
 	{
 		return false;
 	}

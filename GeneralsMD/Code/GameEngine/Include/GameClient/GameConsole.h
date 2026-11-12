@@ -68,14 +68,14 @@ public:
 	/// Draw the panel.  Called from the display's 2D overlay pass.
 	void render( void );
 
-	/// The cheat panel that "trainer" opens: every cheat a click away.  Window/Trainer.wnd, drawn
-	/// like EA's diplomacy screen.
+	/// The cheat panel that "trainer" opens: every cheat a click away, on three tabs.  The draggable
+	/// window is Window/Trainer.wnd; the rest is drawn in the side's Tab screen pieces.
 	Bool isCheatPanelOpen( void ) const { return m_cheatPanelOpen; }
 	void closeCheatPanel( void ) { m_cheatPanelOpen = FALSE; }
-	/// What a row of the panel sends: a cheat and its amount as typed.
+	/// What a button of the panel sends: a cheat and its amount as typed.
 	void runCheatPanelAction( const std::string &action );
-	/// Row `row` of the panel's list was clicked.
-	void runCheatWindowRow( Int row );
+	/// Button `button` of the panel was clicked: a tab, or a cheat's.
+	void runCheatWindowButton( Int button );
 	/// Throw the panel's windows away now, where diplomacy's are thrown away.
 	void resetCheatWindow( void );
 
@@ -102,8 +102,6 @@ private:
 
 	Bool m_cheatPanelOpen;
 	WindowLayout *m_cheatLayout;	///< the panel while it is up
-	GameWindow *m_cheatList;			///< its list, one row for each thing a click does
-	Int m_cheatListState;					///< the toggles' bits its rows were last written for, -1 for none
 };
 
 extern GameConsole *TheGameConsole;

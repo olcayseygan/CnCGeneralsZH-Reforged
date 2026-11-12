@@ -3557,6 +3557,7 @@ Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
 Tests/test_linux_portable.sh
 Tests/test_macos_app.sh
+Tests/test_macos_build.py
 Tests/test_main.cpp
 Tests/test_map_ini_rollback.inc
 Tests/test_miles_effects.cpp
@@ -4416,6 +4417,7 @@ Tools/buildVersionUpdate/buildVersionUpdate.cpp
 Tools/buildVersionUpdate/buildVersionUpdate.dsp
 Tools/cheat_check.py
 Tools/china_beacon.py
+Tools/cmake/MacOSBuildPolicy.cmake
 Tools/control_client.py
 Tools/cursors.py
 Tools/d3d9posix_check.py

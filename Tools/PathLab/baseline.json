@@ -1,0 +1,337 @@
+{
+ "suite": "full",
+ "seeds": [
+  0,
+  1
+ ],
+ "cases": [
+  {
+   "name": "choke/column/8",
+   "frames": 1995,
+   "free_flow": 1296,
+   "ratio": 1.5393518518518519,
+   "blocked": 740,
+   "stuck": 0,
+   "cells": 2284,
+   "repaths": 7
+  },
+  {
+   "name": "choke/column/16",
+   "frames": 2231,
+   "free_flow": 1297,
+   "ratio": 1.7201233616037008,
+   "blocked": 2458,
+   "stuck": 0,
+   "cells": 3073,
+   "repaths": 28
+  },
+  {
+   "name": "choke/column/32",
+   "frames": 2943,
+   "free_flow": 1283,
+   "ratio": 2.293842556508184,
+   "blocked": 6919,
+   "stuck": 0,
+   "cells": 13371,
+   "repaths": 77
+  },
+  {
+   "name": "choke/cross/8",
+   "frames": 1897,
+   "free_flow": 1286,
+   "ratio": 1.4751166407465008,
+   "blocked": 423,
+   "stuck": 0,
+   "cells": 1218,
+   "repaths": 1
+  },
+  {
+   "name": "choke/cross/16",
+   "frames": 2623,
+   "free_flow": 1322,
+   "ratio": 1.9841149773071105,
+   "blocked": 1631,
+   "stuck": 0,
+   "cells": 3963,
+   "repaths": 20
+  },
+  {
+   "name": "choke/cross/32",
+   "frames": 3318,
+   "free_flow": 1346,
+   "ratio": 2.4650817236255573,
+   "blocked": 9462,
+   "stuck": 0,
+   "cells": 13703,
+   "repaths": 85
+  },
+  {
+   "name": "open/column/8",
+   "frames": 1751,
+   "free_flow": 1312,
+   "ratio": 1.3346036585365855,
+   "blocked": 613,
+   "stuck": 0,
+   "cells": 1245,
+   "repaths": 10
+  },
+  {
+   "name": "open/column/16",
+   "frames": 2150,
+   "free_flow": 1301,
+   "ratio": 1.6525749423520368,
+   "blocked": 1518,
+   "stuck": 0,
+   "cells": 2034,
+   "repaths": 24
+  },
+  {
+   "name": "open/column/32",
+   "frames": 2767,
+   "free_flow": 1299,
+   "ratio": 2.130100076982294,
+   "blocked": 7195,
+   "stuck": 2,
+   "cells": 8906,
+   "repaths": 66
+  },
+  {
+   "name": "open/cross/8",
+   "frames": 1764,
+   "free_flow": 1337,
+   "ratio": 1.3193717277486912,
+   "blocked": 560,
+   "stuck": 0,
+   "cells": 1244,
+   "repaths": 7
+  },
+  {
+   "name": "open/cross/16",
+   "frames": 2532,
+   "free_flow": 1335,
+   "ratio": 1.8966292134831462,
+   "blocked": 1707,
+   "stuck": 0,
+   "cells": 3433,
+   "repaths": 25
+  },
+  {
+   "name": "open/cross/32",
+   "frames": 2885,
+   "free_flow": 1388,
+   "ratio": 2.0785302593659942,
+   "blocked": 4636,
+   "stuck": 0,
+   "cells": 7912,
+   "repaths": 39
+  },
+  {
+   "name": "twogaps/column/8",
+   "frames": 1844,
+   "free_flow": 1302,
+   "ratio": 1.4162826420890937,
+   "blocked": 610,
+   "stuck": 0,
+   "cells": 1042,
+   "repaths": 8
+  },
+  {
+   "name": "twogaps/column/16",
+   "frames": 2092,
+   "free_flow": 1302,
+   "ratio": 1.6067588325652842,
+   "blocked": 1962,
+   "stuck": 0,
+   "cells": 2178,
+   "repaths": 14
+  },
+  {
+   "name": "twogaps/column/32",
+   "frames": 3444,
+   "free_flow": 1262,
+   "ratio": 2.729001584786054,
+   "blocked": 12814,
+   "stuck": 0,
+   "cells": 27608,
+   "repaths": 166
+  },
+  {
+   "name": "twogaps/cross/8",
+   "frames": 1726,
+   "free_flow": 1284,
+   "ratio": 1.3442367601246106,
+   "blocked": 196,
+   "stuck": 0,
+   "cells": 2294,
+   "repaths": 10
+  },
+  {
+   "name": "twogaps/cross/16",
+   "frames": 2180,
+   "free_flow": 1302,
+   "ratio": 1.674347158218126,
+   "blocked": 1326,
+   "stuck": 0,
+   "cells": 2488,
+   "repaths": 10
+  },
+  {
+   "name": "twogaps/cross/32",
+   "frames": 3134,
+   "free_flow": 1326,
+   "ratio": 2.363499245852187,
+   "blocked": 10200,
+   "stuck": 0,
+   "cells": 22052,
+   "repaths": 110
+  },
+  {
+   "name": "maze/column/8",
+   "frames": 4602,
+   "free_flow": 3566,
+   "ratio": 1.290521592821088,
+   "blocked": 1053,
+   "stuck": 0,
+   "cells": 48063,
+   "repaths": 22
+  },
+  {
+   "name": "maze/column/16",
+   "frames": 5145,
+   "free_flow": 3655,
+   "ratio": 1.4076607387140903,
+   "blocked": 4393,
+   "stuck": 0,
+   "cells": 85120,
+   "repaths": 47
+  },
+  {
+   "name": "maze/column/32",
+   "frames": 6000,
+   "free_flow": 3696,
+   "ratio": 1.6233766233766234,
+   "blocked": 12767,
+   "stuck": 5,
+   "cells": 547910,
+   "repaths": 159
+  },
+  {
+   "name": "maze/cross/8",
+   "frames": 3899,
+   "free_flow": 3621,
+   "ratio": 1.0767743717205192,
+   "blocked": 719,
+   "stuck": 0,
+   "cells": 27261,
+   "repaths": 6
+  },
+  {
+   "name": "maze/cross/16",
+   "frames": 5042,
+   "free_flow": 3567,
+   "ratio": 1.4135127558172134,
+   "blocked": 2395,
+   "stuck": 1,
+   "cells": 67072,
+   "repaths": 36
+  },
+  {
+   "name": "maze/cross/32",
+   "frames": 5089,
+   "free_flow": 3665,
+   "ratio": 1.3885402455661664,
+   "blocked": 7957,
+   "stuck": 0,
+   "cells": 201395,
+   "repaths": 113
+  },
+  {
+   "name": "edges/column/8",
+   "frames": 3180,
+   "free_flow": 2364,
+   "ratio": 1.3451776649746192,
+   "blocked": 631,
+   "stuck": 0,
+   "cells": 11771,
+   "repaths": 6
+  },
+  {
+   "name": "edges/column/16",
+   "frames": 3543,
+   "free_flow": 2393,
+   "ratio": 1.4805683242791474,
+   "blocked": 2156,
+   "stuck": 0,
+   "cells": 18511,
+   "repaths": 30
+  },
+  {
+   "name": "edges/column/32",
+   "frames": 4046,
+   "free_flow": 2515,
+   "ratio": 1.6087475149105368,
+   "blocked": 8944,
+   "stuck": 0,
+   "cells": 83717,
+   "repaths": 100
+  },
+  {
+   "name": "edges/cross/8",
+   "frames": 3114,
+   "free_flow": 2686,
+   "ratio": 1.1593447505584513,
+   "blocked": 198,
+   "stuck": 0,
+   "cells": 45485,
+   "repaths": 3
+  },
+  {
+   "name": "edges/cross/16",
+   "frames": 3859,
+   "free_flow": 2797,
+   "ratio": 1.3796925277082588,
+   "blocked": 1396,
+   "stuck": 0,
+   "cells": 79948,
+   "repaths": 18
+  },
+  {
+   "name": "edges/cross/32",
+   "frames": 4208,
+   "free_flow": 2789,
+   "ratio": 1.508784510577268,
+   "blocked": 5847,
+   "stuck": 0,
+   "cells": 174567,
+   "repaths": 49
+  }
+ ],
+ "totals": {
+  "ratio_geometric_mean": 1.6133267221194243,
+  "stuck": 8,
+  "blocked": 113426,
+  "cells": 1510868,
+  "worst": [
+   [
+    "twogaps/column/32",
+    2.729001584786054
+   ],
+   [
+    "choke/cross/32",
+    2.4650817236255573
+   ],
+   [
+    "twogaps/cross/32",
+    2.363499245852187
+   ],
+   [
+    "choke/column/32",
+    2.293842556508184
+   ],
+   [
+    "open/column/32",
+    2.130100076982294
+   ]
+  ]
+ }
+}

@@ -2937,6 +2937,9 @@ AGAIN:
 					TheInGameUI->draw();
 					if( TheMouse )
 						TheMouse->draw();	//keep applying the current cursor style so it remains hidden if needed.
+					// the load screen's frames end here, and the console has to draw over them too
+					if( TheGameConsole )
+						TheGameConsole->render();
 					WW3D::End_Render();
 					overlapWindow.close();
 					drawAgain = FALSE;

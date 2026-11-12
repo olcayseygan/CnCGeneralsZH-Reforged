@@ -57,6 +57,10 @@ public:
 	/// Feed one raw key event in.  The console owns every key while it is open.
 	void handleKey( UnsignedByte key, UnsignedShort keyState );
 
+	/// The load screen's pass: no message stream runs while a map loads, so the console reads the
+	/// keyboard itself, and every key read there is the console's.
+	void readLoadScreenKeys( void );
+
 	/// Append one line to the scrollback.
 	void printLine( UnicodeString line );
 	void printLine( AsciiString line );

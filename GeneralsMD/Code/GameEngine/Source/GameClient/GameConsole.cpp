@@ -35,6 +35,7 @@
 #include "Common/PlayerList.h"
 #include "Common/Recorder.h"
 #include "Common/UserPreferences.h"
+#include "Common/version.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 
@@ -116,13 +117,63 @@ static const ConsoleCheat CONSOLE_CHEATS[] =
 static const Int CONSOLE_CHEAT_COUNT = sizeof( CONSOLE_CHEATS ) / sizeof( CONSOLE_CHEATS[ 0 ] );
 
 //-------------------------------------------------------------------------------------------------
+/** A match being played or watched, replays included.  The animated map behind the main menu is a
+	* game to the logic too, which offered the cheats and the speed command on the main menu, and the
+	* load before a match is not one yet. */
+//-------------------------------------------------------------------------------------------------
+static Bool isInMatch( void )
+{
+	return TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isLoadingMap();
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Cheats exist only in a campaign or skirmish match being played; anywhere else the console does
 	* not mention them at all. */
 //-------------------------------------------------------------------------------------------------
 static Bool areCheatsAvailable( void )
 {
-	return TheGameLogic->isInGame() && !TheGameLogic->isInMultiplayerGame()
+	return isInMatch() && !TheGameLogic->isInMultiplayerGame()
 		&& TheRecorder->getMode() != RECORDERMODETYPE_PLAYBACK;
+}
+
+/// what 'help' prints, a command's continuation lines carrying its flag
+struct ConsoleHelpLine
+{
+	Bool matchOnly;
+	const char *text;
+};
+
+static const ConsoleHelpLine CONSOLE_HELP[] =
+{
+	{ FALSE,	"help          this list" },
+	{ FALSE,	"clear         empty the scrollback" },
+	{ FALSE,	"echo <text>   print the text back" },
+	{ FALSE,	"version       the game's version and build date" },
+	{ FALSE,	"get [key]     a setting by its Options.ini key; no key lists them all" },
+	{ FALSE,	"set <key> <v> change a setting and save it, e.g. 'set ShowNetBox no' hides the" },
+	{ FALSE,	"              top right info strip" },
+	{ TRUE,		"speed [n]     game speed in percent, 100 is normal, 'reset' goes back" },
+	{ TRUE,		"freecam       photo mode: fly the camera anywhere, the whole map drawn, no interface." },
+	{ TRUE,		"              W/S forward and back, A/D left and right, R up, F down, mouse turns," },
+	{ TRUE,		"              Shift faster; Esc or 'freecam' again lands.  'freecam x y z heading tilt'" },
+	{ TRUE,		"              flies to a pose, angles in degrees" },
+	{ TRUE,		"director      observer: the director camera on, again gives the camera back" },
+	{ TRUE,		"pause, resume open and close the Esc menu, single player only" },
+	{ TRUE,		"hidehud       the interface off, again brings it back; showmap=true keeps the radar" },
+};
+
+static const char *const MATCH_ONLY_COMMANDS[] =
+	{ "speed", "freecam", "director", "pause", "resume", "hidehud", "cheats", "trainer" };
+
+static Bool isMatchOnlyCommand( const AsciiString &command )
+{
+	for( Int i = 0; i < (Int)ARRAY_SIZE( MATCH_ONLY_COMMANDS ); ++i )
+		if( command == MATCH_ONLY_COMMANDS[ i ] )
+			return TRUE;
+	for( Int i = 0; i < CONSOLE_CHEAT_COUNT; ++i )
+		if( command == CONSOLE_CHEATS[ i ].name )
+			return TRUE;
+	return FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -508,6 +559,30 @@ void GameConsole::handleKey( UnsignedByte key, UnsignedShort keyState )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** GameClient::update, which reads the keyboard, does not run while a map loads, and the load screen's
+	* frames skipped the console's draw too, so it could not be opened during a load at all.  Nothing
+	* else wants a key there, which is why this one reader can take them all. */
+//-------------------------------------------------------------------------------------------------
+void GameConsole::readLoadScreenKeys( void )
+{
+	if( TheKeyboard == NULL )
+		return;
+
+	TheKeyboard->UPDATE();
+	for( KeyboardIO *io = TheKeyboard->getFirstKey(); io->key != KEY_NONE; ++io )
+	{
+		if( io->key != KEY_TICK )
+		{
+			if( m_isOpen )
+				handleKey( io->key, io->state );
+		}
+		else if( BitTest( io->state, KEY_STATE_DOWN ) && !BitTest( io->state, KEY_STATE_AUTOREPEAT ) )
+			toggle();
+		io->status = KeyboardIO::STATUS_USED;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void GameConsole::recallHistory( Int direction )
 {
 	if( m_history.empty() )
@@ -559,22 +634,20 @@ void GameConsole::runCommand( AsciiString commandLine )
 	command.toLower();
 	arguments.trim();
 
+	const Bool inMatch = isInMatch();
+	if( !inMatch && isMatchOnlyCommand( command ) )
+	{
+		AsciiString refusal;
+		refusal.format( "%s: works only in a match", command.str() );
+		printLine( refusal );
+		return;
+	}
+
 	if( command == "help" )
 	{
-		printLine( AsciiString( "help          this list" ) );
-		printLine( AsciiString( "clear         empty the scrollback" ) );
-		printLine( AsciiString( "echo <text>   print the text back" ) );
-		printLine( AsciiString( "speed [n]     game speed in percent, 100 is normal, 'reset' goes back" ) );
-		printLine( AsciiString( "get [key]     a setting by its Options.ini key; no key lists them all" ) );
-		printLine( AsciiString( "set <key> <v> change a setting and save it, e.g. 'set ShowNetBox no' hides the" ) );
-		printLine( AsciiString( "              top right info strip" ) );
-		printLine( AsciiString( "freecam       photo mode: fly the camera anywhere, the whole map drawn, no interface." ) );
-		printLine( AsciiString( "              W/S forward and back, A/D left and right, R up, F down, mouse turns," ) );
-		printLine( AsciiString( "              Shift faster; Esc or 'freecam' again lands.  'freecam x y z heading tilt'" ) );
-		printLine( AsciiString( "              flies to a pose, angles in degrees" ) );
-		printLine( AsciiString( "director      observer: the director camera on, again gives the camera back" ) );
-		printLine( AsciiString( "pause, resume open and close the Esc menu, single player only" ) );
-		printLine( AsciiString( "hidehud       the interface off, again brings it back; showmap=true keeps the radar" ) );
+		for( Int i = 0; i < (Int)ARRAY_SIZE( CONSOLE_HELP ); ++i )
+			if( inMatch || !CONSOLE_HELP[ i ].matchOnly )
+				printLine( AsciiString( CONSOLE_HELP[ i ].text ) );
 		if( areCheatsAvailable() )
 		{
 			printLine( AsciiString( "cheats        single-player cheats" ) );
@@ -619,6 +692,15 @@ void GameConsole::runCommand( AsciiString commandLine )
 	if( command == "echo" )
 	{
 		printLine( arguments );
+		return;
+	}
+
+	// what the options menu's corner says, with the build date that tells two builds of it apart
+	if( command == "version" )
+	{
+		AsciiString line;
+		line.format( "Reforged %s, built %s", TheVersion->getReleaseVersion().str(), TheVersion->getAsciiBuildTime().str() );
+		printLine( line );
 		return;
 	}
 

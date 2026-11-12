@@ -73,6 +73,7 @@
 #include "GameClient/CampaignManager.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameClient/GameConsole.h"
 #include "GameClient/GadgetProgressBar.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GameFont.h"
@@ -177,6 +178,8 @@ void LoadScreen::update( Int percent )
 	if (TheGameEngine->getQuitting())
 		return;	//don't bother with any of this if the player is exiting game.
 
+	if( TheGameConsole )
+		TheGameConsole->readLoadScreenKeys();
 	TheWindowManager->update();
 	TheDisplay->update();
 	// redraw all views, update the GUI

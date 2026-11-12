@@ -53,34 +53,42 @@
 /** The above in logic frames, at a given game speed: 3 at the retail 30fps, 6 at 60. */
 Int GameEngine_logicCatchupMaxFrames( Int logicFps );
 
-/** The logic frames a second a match starts at: FramesPerSecondLimit (normal speed, or what -fps
-	asked for), twice that with turbo mode on.  Every start that sends MSG_NEW_GAME passes this, so a
+/** Logic ticks a wall second for a player game speed in percent of retail's pace (GameCommon.h's
+	PLAYER_GAME_SPEED_PERCENTS): LOGICFRAMES_PER_SECOND * percent / GAME_SPEED_PERCENT, rounded, so
+	20, 25, 30 and 40 at 30 Hz and 150.  Wall pacing only; every tick simulates the same game time. */
+Int GameEngine_framesPerSecondForSpeed( Int percent );
+
+/** The logic frames a second a match starts at: FramesPerSecondLimit (the native tick, or what -fps
+	asked for) scaled by the game speed in percent, PLAYER_GAME_SPEED_PERCENT_DEFAULT leaving it as it
+	is.  Every network game passes the default.  Every start that sends MSG_NEW_GAME passes this, so a
 	replay plays back at the speed its match had. */
-Int GameEngine_matchFramesPerSecond( Bool turbo );
+Int GameEngine_matchFramesPerSecond( Int speedPercent );
 
 /** The logic frames a second a mission runs at after its script's SET_FPS_LIMIT.  EA's cinematics ask
 	for 20 to 28 of retail's 30 and time their voices against that; 0 or 30 and up ask for the game back,
-	which is the match's speed, turbo mode included. */
+	which is the match's speed, whatever game speed the mission was started at. */
 Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps );
 
 /** The logic frames a second the pacer runs at.  While a mission's script holds the player's input
-	(DISABLE_INPUT, the bracket round every stock voiced cinematic) a rate of normal speed or more is
-	divided by GAME_SPEED_PERCENT, so the cinematic plays at retail pace against its wall-clock voices
-	(30 is 24 at 125, turbo's 60 is 48); a rate under normal speed is a SET_FPS_LIMIT that
-	GameEngine_missionFramesPerSecond already folded and stays.  The identity outside a cinematic and
-	at 100.  Wall pacing only: nothing in it reaches GameLogic. */
+	(DISABLE_INPUT, the bracket round every stock voiced cinematic) the rate comes down to retail's pace,
+	GameEngine_framesPerSecondForSpeed( 100 ) (20 at 150), from whatever game speed the mission plays
+	at, so the cinematic keeps time with its wall-clock voices; a rate already under that is a
+	SET_FPS_LIMIT GameEngine_missionFramesPerSecond folded and stays.  The identity outside a cinematic.
+	Wall pacing only: nothing in it reaches GameLogic. */
 Int GameEngine_cinematicFramesPerSecond( Int maxFps, Bool cinematic );
 
 /** Whether the pacer takes the cinematic rate this pass: a single-player game that is not a replay,
 	no network, and the mission's script holding input. */
 Bool GameEngine_isPacingCinematic( void );
 
-/** How fast a mission's logic ticks against the wall clock: a cinematic that asked for 23 runs 23 retail
-	frames of game time a second, 23 ticks at GAME_SPEED_PERCENT 100 (0.77) and 18 at 125 (0.6); one at
-	full rate under held input is 24 at 125 (0.8); 2 in turbo mode, 1 everywhere else.  The game speed
-	itself is not in it, so times GAME_SPEED_PERCENT / 100 it is the game's pace against retail.  Whatever
-	a cinematic times against its script's frames and draws on the wall clock (the scripted camera, W3D's
-	animation clock) multiplies by this. */
+/** How fast a mission's, a skirmish's or a replay's logic ticks against the native wall rate: the pacer's
+	rate over LOGICFRAMES_PER_SECOND, and 1 after a pass that ran a tick a pass (fast-forward, a seek,
+	-turbo, -headless), which keeps the wall clock.  At GAME_SPEED_PERCENT 150 a cinematic under held input runs 20 ticks
+	(0.667), one that asked for 23 runs 15 (0.5), a game played at 125 percent 25 (0.833), at 200 percent
+	40 (1.333), a replay at its recorded rate times its speed keys; 1 in a network game.  The game speed itself is not in it, so times
+	GAME_SPEED_PERCENT / 100 it is the game's pace against retail.  Whatever a cinematic times against its
+	script's frames and draws on the wall clock (the scripted camera, W3D's animation clock) multiplies by
+	this. */
 Real GameEngine_missionTimeRate( void );
 
 /** R1, smooth motion: the renderer's blend reads how far into the next logic tick the wall clock is

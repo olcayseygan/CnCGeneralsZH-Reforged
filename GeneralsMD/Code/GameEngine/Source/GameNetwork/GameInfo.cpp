@@ -573,7 +573,7 @@ void GameInfo::reset( void )
   m_incomeSharing = INCOME_SHARING_OFF;
   m_techRespawn = 0;
   m_supplyPileLimit = 0;
-  m_turbo = FALSE;
+  m_gameSpeedPercent = PLAYER_GAME_SPEED_PERCENT_DEFAULT;
 
 	//
 
@@ -1445,7 +1445,8 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 	concatOptionUnlessZero(optionsString, "IS", game->getIncomeSharing());
 	concatOptionUnlessZero(optionsString, "TR", game->getTechRespawn());
 	concatOptionUnlessZero(optionsString, "PL", game->getSupplyPileLimit());
-	concatOptionUnlessZero(optionsString, "TB", game->getTurbo() ? 1 : 0);
+	// the game speed is not in the string: a network game always plays the native tick, and a skirmish's
+	// speed reaches its replay as MSG_NEW_GAME's frame rate.  Turbo's "TB" key is no longer written
 
 	//add player info for each slot
 	optionsString.concat(slotListID);
@@ -1584,7 +1585,6 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
   Int incomeSharing = INCOME_SHARING_OFF; // the same
   Int techRespawn = 0; // the same
   Int supplyPileLimit = 0; // the same
-  Bool turbo = FALSE; // the same
 
 	Bool sawMap, sawMapCRC, sawMapSize, sawSeed, sawSlotlist, sawUseStats, sawSuperweaponRestriction, sawStartingCash, sawOldFactions;
 	sawMap = sawMapCRC = sawMapSize = sawSeed = sawSlotlist = sawUseStats = sawSuperweaponRestriction = sawStartingCash = sawOldFactions = FALSE;
@@ -1698,7 +1698,8 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     }
     else if (key.compare("TB") == 0 )
     {
-      turbo = atoi(val.str()) != 0;
+      // turbo mode, gone: read and dropped, so an old lobby's or replay's string is refused by the
+      // game speed and version checks with their own message rather than here as an unknown key
     }
 		else if (key.getLength() == 1 && *key.str() == slotListID)
 		{
@@ -2060,7 +2061,6 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     game->setIncomeSharing( incomeSharing );
     game->setTechRespawn( techRespawn );
     game->setSupplyPileLimit( supplyPileLimit );
-    game->setTurbo( turbo );
 
 		return true;
 	}

@@ -11181,18 +11181,9 @@ void InGameUI::drawHudOverlay( void )
 	WallClockTime wallClock;
 	getLocalWallClock( &wallClock );
 
-	// Turbo mode runs twice the logic frames a second, so its rate reads as the normal rate it is
-	// doubling, with TURBO in front of it.  A replay's 1x is the rate its match was played at; the
-	// speed keys move the engine's limit but not that
-	const Int turboFps = GameEngine_matchFramesPerSecond( TRUE );
-	const Int matchFps = TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK
-		? replayNormalFramesPerSecond() : TheGameEngine->getFramesPerSecondLimit();
+	// the logic ticks a wall second as measured, whatever game speed the match was started at
 	UnicodeString rateText;
-	if( matchFps == turboFps )
-		rateText.format( u"TURBO %dhz(%dfps)", m_hudLogicHz.shown * GameEngine_matchFramesPerSecond( FALSE ) / turboFps,
-										 m_hudFps.shown );
-	else
-		rateText.format( u"%dhz(%dfps)", m_hudLogicHz.shown, m_hudFps.shown );
+	rateText.format( u"%dhz(%dfps)", m_hudLogicHz.shown, m_hudFps.shown );
 
 	UnicodeString text;
 	text.format( u"%02d:%02d   %02d:%02d:%02d(%02d:%02d:%02d)   %s %s",

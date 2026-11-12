@@ -14869,20 +14869,16 @@ TOOLTIP:ProRules
 "Die Turnierliste. Keine Partikelkanone und kein SCUD Storm, außer der einen Kanone des Superwaffengenerals. Das Atomraketen-Silo wird gebaut, feuert aber nie. Kein Aurora, keine Tactical-Nuke-MiGs, kein Sprengmotorrad, keine Selbstmordbomben, Neutronengranaten oder Tarn-Comanche, und kein Flächenbombardement vor Rang 3. Ein Mikrowellenpanzer kann kein Gebäude einfrieren, das noch im Bau ist, niemand baut näher als 300 an einem feindlichen Gebäude, und niemand setzt mehr als zwei Patriots, Gatling-Kanonen oder Stinger-Stellungen um eine Ölbohrturm-Gruppe."
 END
 
-GUI:TurboMode
-"Turbo-Modus"
+TOOLTIP:GameSpeed
+"Wie schnell das Gefecht läuft. 1.0x ist das Originalspiel, 1.5x das Tempo jedes Mehrspielerspiels. Nur das Tempo ändert sich."
 END
 
-TOOLTIP:TurboMode
-"Das Spiel läuft doppelt so schnell: In jeder Sekunde vergehen zwei Sekunden Spielzeit, sonst ändert sich nichts. Im Netzwerkspiel wählt der Host für alle."
+GUI:GameSpeedMissions
+"Spieltempo in Missionen"
 END
 
-GUI:TurboModeMissions
-"Turbo-Modus in Missionen"
-END
-
-TOOLTIP:TurboModeMissions
-"Kampagnen- und Generalsherausforderungs-Missionen laufen doppelt so schnell, auch eine laufende Mission sofort. Gefecht und Mehrspieler haben ein eigenes Kästchen in der Lobby."
+TOOLTIP:GameSpeedMissions
+"Wie schnell Kampagnen- und Generalsherausforderungs-Missionen laufen. 1.0x ist das Originalspiel, auch eine laufende Mission wechselt sofort. Das Gefecht wählt sein Tempo in der Lobby."
 END
 
 GUI:CantBuildTooCloseToEnemy

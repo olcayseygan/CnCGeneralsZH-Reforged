@@ -123,7 +123,7 @@ static NameKeyType buttonStartID = NAMEKEY_INVALID;
 static NameKeyType buttonSelectMapID = NAMEKEY_INVALID;
 static NameKeyType buttonResetID = NAMEKEY_INVALID;
 static NameKeyType windowMapID = NAMEKEY_INVALID;
-static NameKeyType checkBoxTurboID = NAMEKEY_INVALID;
+static NameKeyType comboBoxGameSpeedID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSuperweaponsID = NAMEKEY_INVALID;
 static NameKeyType comboBoxStartingCashID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
@@ -225,13 +225,49 @@ static Bool stillNeedsToSetOptions = FALSE;
 void skirmishUpdateSlotList( void );
 void skirmishPositionStartSpots( void );
 static void populateSkirmishBattleHonors( void );
-// The turbo mode box, the only speed a skirmish has besides normal.  It is the fork's control, so a
-// stock SkirmishGameOptionsMenu.wnd that wins over Run/Window has none and plays at normal
-// speed.  The old game speed dropdown's "FPS" preference is left in the file and never read.
-static Bool turboBoxChecked( void )
+// The game speed combo, in percent of retail: 1.0x, 1.25x, 1.5x, 2.0x.  It is the fork's control, so
+// a stock SkirmishGameOptionsMenu.wnd that wins over Run/Window has none and plays at the default.
+// The old game speed dropdown's "FPS" preference and a TurboMode line are left in the file and
+// never read.
+
+static GameWindow *gameSpeedComboBox( void )
 {
-	GameWindow *checkBoxTurbo = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxTurboID );
-	return checkBoxTurbo != NULL && GadgetCheckBoxIsChecked( checkBoxTurbo );
+	return TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxGameSpeedID );
+}
+
+static Int chosenGameSpeedPercent( void )
+{
+	GameWindow *combo = gameSpeedComboBox();
+	Int selected = -1;
+	if ( combo )
+		GadgetComboBoxGetSelectedPos( combo, &selected );
+	if ( selected < 0 )
+		return PLAYER_GAME_SPEED_PERCENT_DEFAULT;
+	return ClampPlayerGameSpeedPercent( (Int)(intptr_t)GadgetComboBoxGetItemData( combo, selected ) );
+}
+
+static void populateGameSpeedComboBox( Int percent )
+{
+	GameWindow *combo = gameSpeedComboBox();
+	if ( combo == NULL )
+		return;
+	percent = ClampPlayerGameSpeedPercent( percent );
+	GadgetComboBoxReset( combo );
+	const Color color = GameMakeColor( 255, 255, 255, 255 );
+	for ( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
+	{
+		const Int speed = PLAYER_GAME_SPEED_PERCENTS[ i ];
+		UnicodeString text;
+		// 1.0x, 1.25x, 1.5x, 2.0x: one decimal unless the second one counts
+		if ( speed % 10 == 0 )
+			text.format( u"%d.%dx", speed / 100, ( speed % 100 ) / 10 );
+		else
+			text.format( u"%d.%02dx", speed / 100, speed % 100 );
+		const Int row = GadgetComboBoxAddEntry( combo, text, color );
+		GadgetComboBoxSetItemData( combo, row, (void *)(intptr_t)speed );
+		if ( speed == percent )
+			GadgetComboBoxSetSelectedPos( combo, row );
+	}
 }
 Bool doUpdateSlotList = TRUE;
 
@@ -440,7 +476,7 @@ Bool SkirmishPreferences::write(void)
 
 	setSlotList();
 
-	setInt("TurboMode", turboBoxChecked() ? 1 : 0);
+	setInt("GameSpeed", chosenGameSpeedPercent());
 
 	return UserPreferences::write();
 }
@@ -475,9 +511,9 @@ void reallyDoStart( void )
 		TheGameLogic->clearGameData(FALSE);
 
 	// on the game, so the replay's header carries it as a network lobby's does
-	TheSkirmishGameInfo->setTurbo( turboBoxChecked() );
-	const Int maxFPS = GameEngine_matchFramesPerSecond( TheSkirmishGameInfo->getTurbo() );
-	DEBUG_LOG(("Turbo mode %s: %d logic frames a second\n", TheSkirmishGameInfo->getTurbo() ? "on" : "off", maxFPS));
+	TheSkirmishGameInfo->setGameSpeedPercent( chosenGameSpeedPercent() );
+	const Int maxFPS = GameEngine_matchFramesPerSecond( TheSkirmishGameInfo->getGameSpeedPercent() );
+	DEBUG_LOG(("Game speed %d%%: %d logic frames a second\n", TheSkirmishGameInfo->getGameSpeedPercent(), maxFPS));
 
   TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
   TheSkirmishGameInfo->startGame(0);
@@ -1528,7 +1564,7 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 
 	stillNeedsToSetOptions = FALSE;
 
-	checkBoxTurboID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:CheckBoxTurbo" ) );
+	comboBoxGameSpeedID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxGameSpeed" ) );
 	
 	sandboxOk = FALSE;
   doUpdateSlotList = FALSE;
@@ -1621,10 +1657,8 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	//updateSkirmishGameOptions();
 	//initSkirmishGameOptions();
 
-	// the turbo box, which a stock layout does not have (turboBoxChecked)
-	GameWindow *checkBoxTurbo = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxTurboID );
-	if ( checkBoxTurbo )
-		GadgetCheckBoxSetChecked( checkBoxTurbo, prefs.getInt( "TurboMode", 0 ) != 0 );
+	// the game speed combo, which a stock layout does not have (chosenGameSpeedPercent)
+	populateGameSpeedComboBox( prefs.getInt( "GameSpeed", PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
 	buttonStart->winSetText(TheGameText->fetch("GUI:Start"));
 	/* hey, for now we're also going to disable the map select button until it doesn't crash */
 	//buttonSelectMap->winEnable( FALSE );

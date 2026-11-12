@@ -285,7 +285,6 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	game->setIncomeSharing( TheGlobalData->m_incomeSharing );
 	game->setTechRespawn( TheGlobalData->m_techRespawn );
 	game->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
-	game->setTurbo( TheGlobalData->m_turboMatch );
 	game->setIsDirectConnect( FALSE );
 	game->setLastHeard( Clock_Milliseconds() );
 	game->setLocalIP( m_localIP );
@@ -328,7 +327,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	msg->appendIntegerArgument( GAME_LAN );
 	msg->appendIntegerArgument( DIFFICULTY_NORMAL );	// not used; there so the speed can go last
 	msg->appendIntegerArgument( 0 );
-	msg->appendIntegerArgument( GameEngine_matchFramesPerSecond( m_currentGame->getTurbo() ) );
+	msg->appendIntegerArgument( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
 
 	InitRandom( seed );
 
@@ -368,7 +367,6 @@ void LANAPI::OnGameStart( void )
       pref.setInt( "IncomeSharing", m_currentGame->getIncomeSharing() );
       pref.setInt( "TechRespawn", m_currentGame->getTechRespawn() );
       pref.setInt( "SupplyPileLimit", m_currentGame->getSupplyPileLimit() );
-      pref.setInt( "TurboMode", m_currentGame->getTurbo() ? 1 : 0 );
       pref.setStartingCash( m_currentGame->getStartingCash() );
     }
 		pref.write();
@@ -427,7 +425,7 @@ void LANAPI::OnGameStart( void )
 		msg->appendIntegerArgument(GAME_LAN);
 		msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 		msg->appendIntegerArgument(0);
-		msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(m_currentGame->getTurbo()));
+		msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(PLAYER_GAME_SPEED_PERCENT_DEFAULT));
 
 		TheWritableGlobalData->m_useFpsLimit = false;
 

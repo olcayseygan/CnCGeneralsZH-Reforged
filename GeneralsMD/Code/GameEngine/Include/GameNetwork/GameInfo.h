@@ -32,6 +32,7 @@
 #ifndef __GAMEINFO_H__
 #define __GAMEINFO_H__
 
+#include "Common/GameCommon.h"	// PLAYER_GAME_SPEED_PERCENT_DEFAULT, ClampPlayerGameSpeedPercent
 #include "Common/Snapshot.h"
 #include "Common/Money.h"
 #include "GameNetwork/NetworkDefs.h"
@@ -334,10 +335,11 @@ public:
   inline Int getSupplyPileLimit( void ) const;
   void setSupplyPileLimit( Int players );
 
-  // Turbo mode: the match runs twice as many logic frames a second, each one the same as at normal
-  // speed.  The host's choice, so every machine and the replay agree on it.
-  Bool getTurbo( void ) const { return m_turbo; }
-  void setTurbo( Bool turbo ) { m_turbo = turbo; }
+  // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: wall pacing only, every
+  // tick the same game time.  Only the skirmish lobby sets another value than the default; it is not in
+  // the options string, and reaches the engine and the replay as MSG_NEW_GAME's frame rate.
+  Int getGameSpeedPercent( void ) const { return m_gameSpeedPercent; }
+  void setGameSpeedPercent( Int percent ) { m_gameSpeedPercent = ClampPlayerGameSpeedPercent( percent ); }
 
   Bool hasAIPlayers( void ) const;									///< is any slot held by a computer player?
 
@@ -368,7 +370,7 @@ protected:
   Int m_incomeSharing; // an IncomeSharing, INCOME_SHARING_OFF = the retail game
   Int m_techRespawn; // minutes before a destroyed tech building comes back, 0 = never
   Int m_supplyPileLimit; // players who may gather from one supply pile at once, 0 = any number
-  Bool m_turbo; // the lobby's turbo mode is on
+  Int m_gameSpeedPercent; // the skirmish lobby's game speed, PLAYER_GAME_SPEED_PERCENT_DEFAULT elsewhere
 };
 
 extern GameInfo *TheGameInfo;

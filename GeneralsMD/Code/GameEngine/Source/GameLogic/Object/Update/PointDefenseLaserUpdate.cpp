@@ -75,7 +75,7 @@ PointDefenseLaserUpdateModuleData::PointDefenseLaserUpdateModuleData()
 		{ "SecondaryTargetTypes",	KindOfMaskType::parseFromINI,								NULL, offsetof( PointDefenseLaserUpdateModuleData, m_secondaryTargetKindOf ) },
 		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanFrames ) },
 		{ "ScanRange",						INI::parseReal,									NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanRange ) },
-		{ "PredictTargetVelocityFactor", INI::parseRetailFramesReal,					NULL, offsetof( PointDefenseLaserUpdateModuleData, m_velocityFactor ) },
+		{ "PredictTargetVelocityFactor", INI::parseRetailFrameRatioReal,			NULL, offsetof( PointDefenseLaserUpdateModuleData, m_velocityFactor ) },
 		{ "RequiredUpgrade",			INI::parseAsciiString,					NULL, offsetof( PointDefenseLaserUpdateModuleData, m_requiredUpgrade ) },
 		{ 0, 0, 0, 0 }
 	};

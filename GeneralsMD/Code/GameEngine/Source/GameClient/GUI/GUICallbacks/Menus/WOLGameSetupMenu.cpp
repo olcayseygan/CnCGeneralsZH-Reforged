@@ -235,7 +235,6 @@ static NameKeyType comboBoxPeaceTimeID = NAMEKEY_INVALID;
 static NameKeyType checkBoxLimitArmiesID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
 static NameKeyType checkBoxProRulesID = NAMEKEY_INVALID;
-static NameKeyType checkBoxTurboID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
@@ -256,7 +255,6 @@ static GameWindow *comboBoxPeaceTime = NULL;
 static GameWindow *checkBoxLimitArmies = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
 static GameWindow *checkBoxProRules = NULL;
-static GameWindow *checkBoxTurbo = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
@@ -396,7 +394,6 @@ static void savePlayerInfo( void )
           pref.setInt( "IncomeSharing", TheGameSpyGame->getIncomeSharing() );
           pref.setInt( "TechRespawn", TheGameSpyGame->getTechRespawn() );
           pref.setInt( "SupplyPileLimit", TheGameSpyGame->getSupplyPileLimit() );
-          pref.setInt( "TurboMode", TheGameSpyGame->getTurbo() ? 1 : 0 );
         }
 				pref.write();
 			}
@@ -980,32 +977,6 @@ static void handleProRulesSelection()
   }
 }
 
-static void handleTurboSelection()
-{
-  GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
-
-  // the same guard as the Pro Rules box above
-  if (myGame == NULL || checkBoxTurbo == NULL || myGame->getTurbo() == GadgetCheckBoxIsChecked( checkBoxTurbo ))
-    return;
-
-  myGame->setTurbo( GadgetCheckBoxIsChecked( checkBoxTurbo ) );
-  myGame->resetAccepted();
-
-  if (myGame->amIHost())
-  {
-    TheGameSpyInfo->setGameOptions();
-    WOLDisplaySlotList();// Update the accepted button UI
-  }
-}
-
-// the host's to change outside a recorded stats game, everyone's to see
-static void updateTurboCheckBox( GameInfo *game, Bool hostMayEdit )
-{
-  checkBoxTurbo->winEnable( hostMayEdit );
-  if ( GadgetCheckBoxIsChecked( checkBoxTurbo ) != game->getTurbo() )
-    GadgetCheckBoxSetChecked( checkBoxTurbo, game->getTurbo() );
-}
-
 static void handleUnitLimitSelection()
 {
   GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
@@ -1316,8 +1287,6 @@ void WOLDisplayGameOptions( void )
     UpdateUnitLimitCheckBox( checkBoxUnitLimit, theGame, superweaponIsTheHostsToPick() );
   if ( checkBoxProRules )
     UpdateProRulesCheckBox( checkBoxProRules, theGame, superweaponIsTheHostsToPick() );
-  if ( checkBoxTurbo )
-    updateTurboCheckBox( theGame, superweaponIsTheHostsToPick() );
   if ( comboBoxIncomeSharing )
     UpdateIncomeSharingComboBox( comboBoxIncomeSharing, theGame, superweaponIsTheHostsToPick() );
   if ( comboBoxTechRespawn )
@@ -1416,7 +1385,6 @@ void InitWOLGameGadgets( void )
   checkBoxLimitArmiesID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxLimitArmies"));
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxUnitLimit"));
   checkBoxProRulesID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxProRules"));
-  checkBoxTurboID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxTurbo"));
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxIncomeSharing"));
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxTechRespawn"));
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxSupplyPileLimit"));
@@ -1458,10 +1426,6 @@ void InitWOLGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxProRules, ("Could not find the GameSpyGameOptionsMenu.wnd:CheckBoxProRules" ));
   if ( checkBoxProRules )
     UpdateProRulesCheckBox( checkBoxProRules, TheGameSpyGame, superweaponIsTheHostsToPick() );
-  // the fork's box, which a stock or modded layout does not have
-  checkBoxTurbo = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, checkBoxTurboID );
-  if ( checkBoxTurbo )
-    updateTurboCheckBox( TheGameSpyGame, superweaponIsTheHostsToPick() );
   comboBoxIncomeSharing = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxIncomeSharingID );
   DEBUG_ASSERTCRASH(comboBoxIncomeSharing, ("Could not find the GameSpyGameOptionsMenu.wnd:ComboBoxIncomeSharing" ));
   if ( comboBoxIncomeSharing )
@@ -1646,7 +1610,6 @@ void DeinitWOLGameGadgets( void )
   comboBoxPeaceTime = NULL;
   checkBoxUnitLimit = NULL;
   checkBoxProRules = NULL;
-  checkBoxTurbo = NULL;
   comboBoxIncomeSharing = NULL;
   comboBoxTechRespawn = NULL;
   comboBoxSupplyPileLimit = NULL;
@@ -1731,7 +1694,7 @@ static void onlineStagingScript( void )
 		return;
 	}
 
-	/* -onlineoptions prorules,turbo,unitlimit,randommap: once a second seat is taken the host flips each named
+	/* -onlineoptions prorules,unitlimit,randommap: once a second seat is taken the host flips each named
 		 check box and picks a random map through the room's own controls, as clicks would, logging whether each
 		 control was live; Start waits until that is done.  A stats room left them all dead for the host. */
 	static Int s_optionStep = 0;
@@ -1743,7 +1706,7 @@ static void onlineStagingScript( void )
 		if (s_optionStep == 0)
 		{
 			const struct { const char *name; GameWindow *box; } boxes[] = {
-				{ "prorules", checkBoxProRules }, { "turbo", checkBoxTurbo }, { "unitlimit", checkBoxUnitLimit } };
+				{ "prorules", checkBoxProRules }, { "unitlimit", checkBoxUnitLimit } };
 			for (Int i = 0; i < (Int)ARRAY_SIZE(boxes); ++i)
 			{
 				GameWindow *box = boxes[i].box;
@@ -1889,7 +1852,6 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		game->setIncomeSharing( isUsingStats ? INCOME_SHARING_OFF : customPref.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
 		game->setTechRespawn( isUsingStats ? 0 : customPref.getInt( "TechRespawn", 0 ) );
 		game->setSupplyPileLimit( isUsingStats ? 0 : customPref.getInt( "SupplyPileLimit", 0 ) );
-		game->setTurbo( !isUsingStats && customPref.getInt( "TurboMode", 0 ) != 0 );
 		if (isUsingStats)
 			game->setOldFactionsOnly( 0 );
 
@@ -3270,12 +3232,6 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 				if ( controlID == checkBoxProRulesID )
 				{
 					handleProRulesSelection();
-					break;
-				}
-
-				if ( controlID == checkBoxTurboID )
-				{
-					handleTurboSelection();
 					break;
 				}
 

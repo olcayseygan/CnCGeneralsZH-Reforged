@@ -15837,20 +15837,16 @@ TOOLTIP:ProRules
 "Turnuva listesi. Süper Silah Generalinin tek topu dışında Parçacık Topu ya da SCUD Fırtınası yok. Nükleer Füze silosu kurulur ama asla ateşlemez. Aurora yok, Taktik Nükleer MiG yok; patlayıcılı motor, intihar bombası, Nötron Mermileri ya da Hayalet Comanche de yok; 3. rütbeden önce Halı Bombardımanı yok. Mikrodalga Tankı hâlâ inşa edilen bir binayı devre dışı bırakamaz, kimse bir düşman binasının 300 birim yakınına bina kuramaz ve kimse bir grup petrol kuyusunun çevresine ikiden fazla Patriot, Gatling Topu ya da Stinger Mevzii koyamaz."
 END
 
-GUI:TurboMode
-"Turbo Modu"
+TOOLTIP:GameSpeed
+"Çatışma ne kadar hızlı oynansın. 1.0x orijinal oyun, 1.5x de her çok oyunculu maçın hızı. Tempodan başka hiçbir şey değişmez."
 END
 
-TOOLTIP:TurboMode
-"Maç iki kat hızlı oynanır: her saniyede oyunun iki saniyesi geçer, başka hiçbir şey değişmez. Ağ oyununda bunu herkes için kurucu seçer."
+GUI:GameSpeedMissions
+"Görevlerde Oyun Hızı"
 END
 
-GUI:TurboModeMissions
-"Görevlerde Turbo Modu"
-END
-
-TOOLTIP:TurboModeMissions
-"Kampanya ve General Meydan Okuması görevleri iki kat hızlı oynanır; süren bir görev de hemen hızlanır. Çatışma ve çok oyunculu oyunların lobide kendi kutusu vardır."
+TOOLTIP:GameSpeedMissions
+"Kampanya ve General Meydan Okuması görevleri ne kadar hızlı oynansın. 1.0x orijinal oyun; süren bir görev de hemen bu hıza geçer. Çatışmanın hızı lobide seçilir."
 END
 
 GUI:CantBuildTooCloseToEnemy

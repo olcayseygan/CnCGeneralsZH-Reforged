@@ -258,7 +258,7 @@ void startNextCampaignGame(void)
 	msg->appendIntegerArgument(GAME_SINGLE_PLAYER);
 	msg->appendIntegerArgument(TheCampaignManager->getGameDifficulty());
 	msg->appendIntegerArgument(TheCampaignManager->getRankPoints());
-	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(TheGlobalData->m_turboMode));
+	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(TheGlobalData->m_missionGameSpeedPercent));
 	
 	InitRandom(0);
 }

@@ -70,8 +70,8 @@ FrameMetrics::~FrameMetrics() {
 }
 
 void FrameMetrics::init() {
-	// Full of the match's own speed: thirty seconds of history seeded at normal speed held a turbo
-	// room near normal speed for most of a minute.
+	// Full of the match's own speed: thirty seconds of history seeded at another speed held a faster
+	// room near that speed for most of a minute.
 	m_averageFps = (Real)m_matchFps;
 	m_minimumCushion = -1;
 

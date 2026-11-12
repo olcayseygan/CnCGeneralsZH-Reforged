@@ -619,7 +619,7 @@ void GameSpyStagingRoom::startGame(Int gameID)
 			}
 		}
 		// what every seat starts under, for online_check.py to set the host's line beside the guest's
-		DEBUG_LOG(("ONLINE OPTIONS prorules=%d turbo=%d unitlimit=%d stats=%d map=%s\n", (Int)getProRules(), (Int)getTurbo(),
+		DEBUG_LOG(("ONLINE OPTIONS prorules=%d unitlimit=%d stats=%d map=%s\n", (Int)getProRules(),
 			(Int)getUnitLimit(), (Int)getUseStats(), getMap().str()));
 		launchGame();
 		if (TheGameSpyInfo)
@@ -961,7 +961,7 @@ void GameSpyStagingRoom::launchGame( void )
 	msg->appendIntegerArgument(GAME_INTERNET);
 	msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 	msg->appendIntegerArgument(0);
-	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(getTurbo()));
+	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(PLAYER_GAME_SPEED_PERCENT_DEFAULT));
 
 	TheWritableGlobalData->m_useFpsLimit = false;
 

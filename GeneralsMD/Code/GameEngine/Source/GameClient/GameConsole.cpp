@@ -152,7 +152,7 @@ static const ConsoleHelpLine CONSOLE_HELP[] =
 	{ FALSE,	"get [key]     a setting by its Options.ini key; no key lists them all" },
 	{ FALSE,	"set <key> <v> change a setting and save it, e.g. 'set ShowNetBox no' hides the" },
 	{ FALSE,	"              top right info strip" },
-	{ TRUE,		"speed [n]     game speed in percent, 100 is normal, 'reset' goes back" },
+	{ TRUE,		"speed [n]     game speed in percent of retail, 100 125 150 200, 'reset' the native one" },
 	{ TRUE,		"freecam       photo mode: fly the camera anywhere, the whole map drawn, no interface." },
 	{ TRUE,		"              W/S forward and back, A/D left and right, R up, F down, mouse turns," },
 	{ TRUE,		"              Shift faster; Esc or 'freecam' again lands.  'freecam x y z heading tilt'" },
@@ -198,18 +198,13 @@ static AsciiString runCheat( const ConsoleCheat &cheat, AsciiString arguments )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The game speed as a share of normal: 100 or turbo mode's 200 in a skirmish or mission, whichever is
-	* nearer, 10 to 400 logic frames a second in a replay (17 to 666 percent at 60 ticks a second, 34 to
-	* 1333 at 30).  It changes how
-	* often a logic frame runs and nothing inside one, so a network game, which runs at the pace the
-	* whole room agrees on, is the one place it is refused. */
+/** The game speed in percent of retail's pace: one of the player speeds (100, 125, 150, 200), the
+	* nearest, in a skirmish or mission, 10 to 400 logic frames a second in a replay.  "reset" is the
+	* native tick, GAME_SPEED_PERCENT.  It changes how often a logic frame runs and nothing inside one, so
+	* a network game, which runs at the pace the whole room agrees on, is the one place it is refused. */
 //-------------------------------------------------------------------------------------------------
-static const Int SPEED_NORMAL_PERCENT = 100;
 static const Int SPEED_MIN_FPS = 10;
 static const Int SPEED_MAX_FPS = 400;
-// the least percent that still reaches SPEED_MIN_FPS, rounded up, and the most that stays under SPEED_MAX_FPS
-static const Int SPEED_MIN_PERCENT = ( SPEED_MIN_FPS * SPEED_NORMAL_PERCENT + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND;
-static const Int SPEED_MAX_PERCENT = SPEED_MAX_FPS * SPEED_NORMAL_PERCENT / LOGICFRAMES_PER_SECOND;
 
 static AsciiString runSpeed( AsciiString arguments )
 {
@@ -222,17 +217,21 @@ static AsciiString runSpeed( AsciiString arguments )
 
 	if( !arguments.isEmpty() )
 	{
-		Int percent = arguments.compareNoCase( "reset" ) == 0 ? SPEED_NORMAL_PERCENT : atoi( arguments.str() );
-		if( percent < SPEED_MIN_PERCENT ) percent = SPEED_MIN_PERCENT;
-		if( percent > SPEED_MAX_PERCENT ) percent = SPEED_MAX_PERCENT;
-		Int fps = percent * LOGICFRAMES_PER_SECOND / SPEED_NORMAL_PERCENT;
-		// a match someone plays runs at normal speed or in turbo mode; a replay keeps the whole range
+		const Int percent = arguments.compareNoCase( "reset" ) == 0 ? PLAYER_GAME_SPEED_PERCENT_DEFAULT : atoi( arguments.str() );
+		Int fps;
 		if( TheGameLogic->isInSkirmishGame() || TheGameLogic->isInSinglePlayerGame() )
-			fps = ClampPlayerGameSpeed( fps );
+			fps = GameEngine_framesPerSecondForSpeed( ClampPlayerGameSpeedPercent( percent ) );
+		else
+		{
+			// a replay keeps the whole range
+			fps = percent * LOGICFRAMES_PER_SECOND / GAME_SPEED_PERCENT;
+			if( fps < SPEED_MIN_FPS ) fps = SPEED_MIN_FPS;
+			if( fps > SPEED_MAX_FPS ) fps = SPEED_MAX_FPS;
+		}
 		TheGameEngine->setFramesPerSecondLimit( fps );
 	}
 
-	result.format( "speed %d%%", TheGameEngine->getFramesPerSecondLimit() * SPEED_NORMAL_PERCENT / LOGICFRAMES_PER_SECOND );
+	result.format( "speed %d%%", TheGameEngine->getFramesPerSecondLimit() * GAME_SPEED_PERCENT / LOGICFRAMES_PER_SECOND );
 	return result;
 }
 

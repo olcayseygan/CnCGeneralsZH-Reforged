@@ -42,7 +42,7 @@
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 ProneUpdateModuleData::ProneUpdateModuleData() :
-  m_damageToFramesRatio(ConvertRetailFrames(1.0f))
+  m_damageToFramesRatio(ConvertRetailFrameRatio(1.0f))	// a ratio, not a count: no one-tick floor
 {
 }
 
@@ -53,7 +53,7 @@ ProneUpdateModuleData::ProneUpdateModuleData() :
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "DamageToFramesRatio", INI::parseRetailFramesReal, NULL, offsetof(ProneUpdateModuleData, m_damageToFramesRatio) },
+		{ "DamageToFramesRatio", INI::parseRetailFrameRatioReal, NULL, offsetof(ProneUpdateModuleData, m_damageToFramesRatio) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);

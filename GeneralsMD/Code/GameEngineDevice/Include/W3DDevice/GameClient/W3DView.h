@@ -251,7 +251,10 @@ public:
 	virtual void setFadeParameters(Int fadeFrames, Int direction);
 	virtual void set3DWireFrameMode(Bool enable);	///<enables custom wireframe rendering of 3D viewport
 
-	Bool updateCameraMovements(void); 
+	Bool updateCameraMovements(void);
+	/// a picture that stepped the scripted camera itself (W3DDisplay's script fast branch) skipped update():
+	/// the next update starts the scripted clock afresh instead of paying that time again
+	static void resyncScriptedClock(void);
 	virtual void forceCameraConstraintRecalc(void) { calcCameraConstraints(); }
 	virtual void applyCameraConstraint( void );
 

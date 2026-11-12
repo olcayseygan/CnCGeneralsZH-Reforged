@@ -1203,7 +1203,7 @@ void ConnectionManager::updateRunAhead(Int oldRunAhead, Int frameRate, Bool didS
 				 together oscillate: the band swallows a genuinely slow player for as long as the probe
 				 keeps the rate within 10 % of them, so a room held at 12 by one machine walked
 				 12-13-14-15-12 for ever.  One mechanism, not two. */
-			// the ceiling is the match's speed, which turbo mode doubles on every machine alike
+			// the ceiling is the match's speed, the native tick on every machine alike
 			minFps = settleRoomFrameRate(minFps, getMatchFps());
 			DEBUG_LOG(("ConnectionManager::updateRunAhead - minFps after adjustment is %d\n", minFps));
 
@@ -1819,7 +1819,7 @@ void ConnectionManager::parseUserList(const GameInfo *game)
 		return;
 
 	// every machine reads the same game options, so every machine starts the room at the same speed
-	m_frameMetrics.setMatchFps(GameEngine_matchFramesPerSecond(game->getTurbo()));
+	m_frameMetrics.setMatchFps(GameEngine_matchFramesPerSecond(PLAYER_GAME_SPEED_PERCENT_DEFAULT));
 
 	Int i;
 	Int numUsers = 0;

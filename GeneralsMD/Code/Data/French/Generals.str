@@ -16633,20 +16633,16 @@ TOOLTIP:ProRules
 "La liste des tournois. Pas de Canon à particules ni de Scuds multiples, sauf le canon unique du Général superarme. Le silo de Missile nucléaire se construit mais ne tire jamais. Pas de Bombardier Aurora, pas de Mig à charge nucléaire tactique, pas de Moto de combat piégée, pas de bombes humaines, d'Obus à neutrons ni de Comanche furtif, et pas de Tapis de bombes avant le grade 3. Un Char Micro-ondes ne peut pas paralyser un bâtiment en construction, personne ne construit à moins de 300 d'un bâtiment ennemi, et personne ne place plus de deux Patriot, Mitrailleuses Gattling ou Sites Stingers autour d'un même groupe de derricks."
 END
 
-GUI:TurboMode
-"Mode turbo"
+TOOLTIP:GameSpeed
+"La vitesse de l'escarmouche : 1.0x est le jeu d'origine, 1.5x la vitesse de toutes les parties multijoueurs. Seul le rythme change."
 END
 
-TOOLTIP:TurboMode
-"La partie va deux fois plus vite : deux secondes de jeu passent à chaque seconde, et rien d'autre ne change. En réseau, l'hôte le choisit pour tout le monde."
+GUI:GameSpeedMissions
+"Vitesse du jeu en mission"
 END
 
-GUI:TurboModeMissions
-"Mode turbo en mission"
-END
-
-TOOLTIP:TurboModeMissions
-"Les missions de la campagne et du Défi Generals vont deux fois plus vite, et une mission déjà en cours accélère aussitôt. Les escarmouches et les parties multijoueurs ont leur propre case dans le salon."
+TOOLTIP:GameSpeedMissions
+"La vitesse des missions de la campagne et du Défi Generals. 1.0x est le jeu d'origine, et une mission déjà en cours change de rythme aussitôt. L'escarmouche choisit sa vitesse dans le salon."
 END
 
 GUI:CantBuildTooCloseToEnemy

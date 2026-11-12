@@ -335,6 +335,7 @@ public:
 	static void parseRetailFramesUnsignedInt( INI *ini, void *instance, void *store, const void* userData );
 	static void parseRetailFramesInt( INI *ini, void *instance, void *store, const void* userData );
 	static void parseRetailFramesReal( INI *ini, void *instance, void *store, const void* userData );
+	static void parseRetailFrameRatioReal( INI *ini, void *instance, void *store, const void* userData );	///< frames per unit, ConvertRetailFrameRatio
 	static void parseRetailPerFrameReal( INI *ini, void *instance, void *store, const void* userData );
 	static void parseRetailPerFrameFactorReal( INI *ini, void *instance, void *store, const void* userData );
 	// parse angle in degrees and convert to radians

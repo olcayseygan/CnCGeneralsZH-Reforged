@@ -252,7 +252,8 @@ NEW_CONTROLS = [
     (SLIDER, "SliderMenuTransitionSpeed", None),
     (LABEL,  "LabelMinimapSize",       "GUI:MinimapSize"),
     (SLIDER, "SliderMinimapSize",      None),
-    (CHECK,  "CheckTurboModeMissions", "GUI:TurboModeMissions"),
+    (LABEL,  "LabelGameSpeedMissions", "GUI:GameSpeedMissions"),
+    (COMBO,  "ComboGameSpeedMissions", None),
     (CHECK,  "CheckMapLight",          "GUI:MapLight"),
     (CHECK,  "CheckTeamGlow",          "GUI:TeamGlow"),
     (CHECK,  "CheckWaterFoam",         "GUI:WaterFoam"),
@@ -490,8 +491,6 @@ GROUP_LAYOUT = [
             setting("LabelMinimapSize", "SliderMinimapSize", "ValueMinimapSize")]),
         ("GUI:OptionsGroupMenus", [
             setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")]),
-        ("GUI:OptionsGroupSpeed", [
-            ("check", "CheckTurboModeMissions")]),
         ("GUI:OptionsGroupBattlefield", [
             setting("LabelHealthBars", "ComboBoxHealthBars"),
             setting("LabelHealthBarColors", "ComboBoxHealthBarColors"),
@@ -499,6 +498,10 @@ GROUP_LAYOUT = [
             ("check", "CheckOrderLines"),
             ("check", "CheckAircraftAltitudeLine"),
             ("check", "CheckEmptyBuildingPips")]),
+        # after the battlefield: a combo row is taller than the box it replaced, and the first column
+        # ran past the page with it there
+        ("GUI:OptionsGroupSpeed", [
+            setting("LabelGameSpeedMissions", "ComboGameSpeedMissions")]),
         ("GUI:OptionsGroupLanguage", [
             setting("LabelLanguage", "ComboBoxLanguage")]),
         ("GUI:OptionsGroupReplays", [
@@ -646,7 +649,7 @@ def make_note(label_template, name):
 def setting_of(name):
     """The setting a control belongs to, which is its name without the kind in front.  A label and
     the combo box under it are two controls for one setting and share one tooltip string."""
-    for prefix in ("ComboBox", "Slider", "Check", "Label"):
+    for prefix in ("ComboBox", "Combo", "Slider", "Check", "Label"):
         if name.startswith(prefix):
             return name[len(prefix):]
     return name

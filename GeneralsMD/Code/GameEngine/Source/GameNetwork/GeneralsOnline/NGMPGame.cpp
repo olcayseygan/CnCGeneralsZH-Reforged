@@ -504,7 +504,7 @@ void NGMPGame::launchGame(void)
 	msg->appendIntegerArgument(GAME_INTERNET);
 	msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 	msg->appendIntegerArgument(0);
-	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(getTurbo()));
+	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(PLAYER_GAME_SPEED_PERCENT_DEFAULT));
 
 	/* Upstream wrote the player's render cap into m_framesPerSecondLimit here.  In this engine that
 		 field is game speed (GameEngine_matchFramesPerSecond, the room's match fps in parseUserList), so

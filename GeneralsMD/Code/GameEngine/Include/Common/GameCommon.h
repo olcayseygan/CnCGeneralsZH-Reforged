@@ -94,8 +94,8 @@ static_assert( LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_RETAIL_FRAME * RETAIL_L
 
 // ----------------------------------------------------------------------------------------------
 // Game speed: the logic still ticks LOGICFRAMES_PER_SECOND times a wall second, but each tick
-// advances GAME_SPEED_PERCENT / 100 of a retail tick's game time. At 125 a game second is 24 ticks,
-// so everything moves and builds a quarter faster on the same wall clock. LOGICFRAMES_PER_SECOND
+// advances GAME_SPEED_PERCENT / 100 of a retail tick's game time. At 150 a game second is 20 ticks,
+// so everything moves and builds half again as fast on the same wall clock. LOGICFRAMES_PER_SECOND
 // keeps meaning wall ticks (pacing, render, audio, network, HUD); a duration in game time is
 // seconds times LOGICFRAMES_PER_GAME_SECOND. Like the rate, a source constant: the exe CRC
 // fingerprints it, and saves and replays carry it.
@@ -108,7 +108,7 @@ static_assert( LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_RETAIL_FRAME * RETAIL_L
 // same ticks per game second into a save (30 Hz at 50 and 60 Hz at 100 both 60, which is also what a
 // version 5 save is read as) and load each other's games, so 100 is the floor. That leaves 100, 125
 // and 150.
-#define GAME_SPEED_PERCENT 125
+#define GAME_SPEED_PERCENT 150
 enum { LOGICFRAMES_PER_GAME_SECOND = LOGICFRAMES_PER_SECOND * 100 / GAME_SPEED_PERCENT };
 static_assert( LOGICFRAMES_PER_GAME_SECOND * GAME_SPEED_PERCENT == LOGICFRAMES_PER_SECOND * 100
 	&& ( GAME_SPEED_PERCENT * 8 ) % ( 100 * LOGICFRAMES_PER_RETAIL_FRAME ) == 0
@@ -163,6 +163,13 @@ constexpr Real ConvertRetailFrames( Real frames )
 	const Real least = wall < 1.0f ? wall : 1.0f;
 	return scaled < least ? least : scaled;
 }
+// A multiplier in frames rather than a count (frames of prone time per point of damage, frames of
+// velocity to lead a target by): scaled like any duration, with no one-tick floor, which would make
+// a ratio between 1 and the speed's share longer in game time than retail's.  At 100 it is the Wall form.
+constexpr Real ConvertRetailFrameRatio( Real framesPerUnit )
+{
+	return framesPerUnit * ( (Real)( 100 * LOGICFRAMES_PER_RETAIL_FRAME ) / (Real)GAME_SPEED_PERCENT );
+}
 
 // An amount added every frame scales by speed / rate, an acceleration by its square. With the
 // percent a multiple of 25 both factors are exact floats (1, 1/2, 1/4, 5/4, 25/16 ...), and x * 1.0f
@@ -192,17 +199,27 @@ inline Real ConvertRetailPerFrameFactor( Real factor )
 }
 
 // ----------------------------------------------------------------------------------------------
-// The two speeds a match someone plays runs at: normal, and turbo mode at twice that.  There is no
-// slider any more.  A saved game and the console's speed land on the nearer of the two; -fps, -turbo
-// and a replay's speed keys do not pass through here.
-enum
+// The speeds a skirmish or a mission can be played at, in percent of retail's pace.  A choice is wall
+// pacing only: GameEngine_framesPerSecondForSpeed turns it into logic ticks a wall second (20, 25, 30
+// and 40 at 30 Hz and GAME_SPEED_PERCENT 150), and every tick simulates the same game time at all of
+// them, so the CRC stream does not change with it.  The native tick, GAME_SPEED_PERCENT, is the
+// default and the only speed a network game runs.  -fps and a replay's speed keys do not pass here.
+enum { PLAYER_GAME_SPEED_PERCENT_DEFAULT = GAME_SPEED_PERCENT };
+static const Int PLAYER_GAME_SPEED_PERCENTS[] = { 100, 125, 150, 200 };
+enum { PLAYER_GAME_SPEED_COUNT = sizeof( PLAYER_GAME_SPEED_PERCENTS ) / sizeof( PLAYER_GAME_SPEED_PERCENTS[ 0 ] ) };
+// the allowed percent nearest the one asked for, the lower on a tie
+inline Int ClampPlayerGameSpeedPercent( Int percent )
 {
-	PLAYER_GAME_SPEED_NORMAL_FPS = LOGICFRAMES_PER_SECOND,
-	PLAYER_GAME_SPEED_TURBO_FPS = LOGICFRAMES_PER_SECOND * 2
-};
-constexpr Int ClampPlayerGameSpeed( Int fps )
-{
-	return fps > PLAYER_GAME_SPEED_NORMAL_FPS ? PLAYER_GAME_SPEED_TURBO_FPS : PLAYER_GAME_SPEED_NORMAL_FPS;
+	Int best = PLAYER_GAME_SPEED_PERCENTS[ 0 ];
+	for( Int i = 1; i < PLAYER_GAME_SPEED_COUNT; ++i )
+	{
+		const Int candidate = PLAYER_GAME_SPEED_PERCENTS[ i ];
+		const Int bestGap = best > percent ? best - percent : percent - best;
+		const Int gap = candidate > percent ? candidate - percent : percent - candidate;
+		if( gap < bestGap )
+			best = candidate;
+	}
+	return best;
 }
 
 // ----------------------------------------------------------------------------------------------

@@ -6303,72 +6303,88 @@ TEST(controlbar_seconds_round_up_and_never_reach_zero_early)
 	CHECK_EQ( ControlBar_secondsFromFrames( 1.0f ), 1 );
 }
 
-TEST(player_game_speed_is_normal_or_turbo)
+TEST(player_game_speeds_are_wall_pacing_of_the_native_tick)
 {
-	/* A match someone plays runs at normal speed or in turbo mode at twice that, nothing between: a
-	   saved game and the console land on the nearer one, so a save from the old half-speed settings
-	   comes back at normal. */
-	CHECK_EQ( ClampPlayerGameSpeed( LOGICFRAMES_PER_SECOND * 3 ), LOGICFRAMES_PER_SECOND * 2 );
-	CHECK_EQ( ClampPlayerGameSpeed( LOGICFRAMES_PER_SECOND * 2 ), LOGICFRAMES_PER_SECOND * 2 );
-	CHECK_EQ( ClampPlayerGameSpeed( LOGICFRAMES_PER_SECOND * 3 / 2 ), LOGICFRAMES_PER_SECOND * 2 );
-	CHECK_EQ( ClampPlayerGameSpeed( LOGICFRAMES_PER_SECOND ), LOGICFRAMES_PER_SECOND );
-	CHECK_EQ( ClampPlayerGameSpeed( LOGICFRAMES_PER_SECOND / 2 ), LOGICFRAMES_PER_SECOND );
-	CHECK_EQ( ClampPlayerGameSpeed( ConvertRetailFrames( 5 ) ), LOGICFRAMES_PER_SECOND );
+	/* The four player speeds, in percent of retail's pace, are ticks a wall second of the same tick:
+	   the native one is LOGICFRAMES_PER_SECOND, the rest scale it.  Anything else lands on the nearest. */
+	CHECK_EQ( (Int)PLAYER_GAME_SPEED_PERCENT_DEFAULT, (Int)GAME_SPEED_PERCENT );
+	CHECK_EQ( GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENT_DEFAULT ), (Int)LOGICFRAMES_PER_SECOND );
+	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
+	{
+		const Int percent = PLAYER_GAME_SPEED_PERCENTS[ i ];
+		CHECK_EQ( ClampPlayerGameSpeedPercent( percent ), percent );
+		const Int fps = GameEngine_framesPerSecondForSpeed( percent );
+		// the pace against retail: ticks a wall second times the game time a tick advances
+		CHECK_NEAR( fps * (Real)GAME_SPEED_PERCENT / (Real)LOGICFRAMES_PER_SECOND, (Real)percent,
+			0.5f * (Real)GAME_SPEED_PERCENT / (Real)LOGICFRAMES_PER_SECOND );
+		if( i > 0 )
+			CHECK( fps > GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ i - 1 ] ) );
+	}
+	CHECK_EQ( ClampPlayerGameSpeedPercent( 10 ), PLAYER_GAME_SPEED_PERCENTS[ 0 ] );
+	CHECK_EQ( ClampPlayerGameSpeedPercent( 1000 ), PLAYER_GAME_SPEED_PERCENTS[ PLAYER_GAME_SPEED_COUNT - 1 ] );
+	CHECK_EQ( ClampPlayerGameSpeedPercent( 140 ), 150 );
+	CHECK_EQ( ClampPlayerGameSpeedPercent( 110 ), 100 );
 }
 
 TEST(mission_cinematic_runs_at_the_speed_its_script_asks_for)
 {
 	/* CHI01's opening asks for 23 of retail's 30 and for 0 when it hands the game back; USA06 hands it
-	   back with 30.  Below 30 is the cinematic's pace, turbo mode or not; the rest is the match's speed. */
-	const Int normal = LOGICFRAMES_PER_SECOND;
-	const Int turbo = LOGICFRAMES_PER_SECOND * 2;
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, normal ), ConvertRetailFrames( 23 ) );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, turbo ), ConvertRetailFrames( 23 ) );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, normal ), normal );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, turbo ), turbo );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( RETAIL_LOGICFRAMES_PER_SECOND, turbo ), turbo );
+	   back with 30.  Below 30 is the cinematic's pace at any game speed; the rest is the match's speed. */
+	const Int slowest = GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ 0 ] );
+	const Int fastest = GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ PLAYER_GAME_SPEED_COUNT - 1 ] );
+	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, slowest ), ConvertRetailFrames( 23 ) );
+	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, fastest ), ConvertRetailFrames( 23 ) );
+	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, slowest ), slowest );
+	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, fastest ), fastest );
+	CHECK_EQ( GameEngine_missionFramesPerSecond( RETAIL_LOGICFRAMES_PER_SECOND, fastest ), fastest );
 }
 
 TEST(held_input_cinematic_at_full_rate_paces_at_retail_speed)
 {
 	/* MD_CHI02's intro tail runs at SET_FPS_LIMIT 30 under held input: retail pace, a retail second of
-	   ticks a wall second, which is ConvertRetailFrames of retail's rate; turbo keeps its double.  A rate
-	   a script already slowed is folded once and stays, and nothing moves outside a cinematic or at 100. */
-	const Int normal = LOGICFRAMES_PER_SECOND;
-	const Int turbo = LOGICFRAMES_PER_SECOND * 2;
-	CHECK_EQ( GameEngine_cinematicFramesPerSecond( normal, TRUE ), ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND ) );
-	CHECK_EQ( GameEngine_cinematicFramesPerSecond( turbo, TRUE ), ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND ) * 2 );
-	const Int slowed = GameEngine_missionFramesPerSecond( 23, normal );
+	   ticks a wall second, which is ConvertRetailFrames of retail's rate, from every player speed.  A
+	   rate a script already slowed is folded once and stays, and nothing moves outside a cinematic. */
+	const Int retailPace = ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND );
+	CHECK_EQ( GameEngine_framesPerSecondForSpeed( 100 ), retailPace );
+	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
+	{
+		const Int fps = GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ i ] );
+		CHECK_EQ( GameEngine_cinematicFramesPerSecond( fps, TRUE ), fps < retailPace ? fps : retailPace );
+		CHECK_EQ( GameEngine_cinematicFramesPerSecond( fps, FALSE ), fps );
+	}
+	const Int slowed = GameEngine_missionFramesPerSecond( 23, LOGICFRAMES_PER_SECOND );
 	CHECK_EQ( GameEngine_cinematicFramesPerSecond( slowed, TRUE ), slowed );
-	CHECK_EQ( GameEngine_cinematicFramesPerSecond( normal, FALSE ), normal );
-	CHECK_EQ( GameEngine_cinematicFramesPerSecond( turbo, FALSE ), turbo );
-	CHECK_EQ( GameEngine_cinematicFramesPerSecond( normal, TRUE ) == normal, GAME_SPEED_PERCENT == 100 );
 	// the pace against retail: ticks a wall second times the game time each tick advances
-	CHECK_NEAR( GameEngine_cinematicFramesPerSecond( normal, TRUE ) * ( (Real)GAME_SPEED_PERCENT / 100.0f ),
-		(Real)normal, 0.5f * (Real)GAME_SPEED_PERCENT / 100.0f );
+	CHECK_NEAR( GameEngine_cinematicFramesPerSecond( LOGICFRAMES_PER_SECOND, TRUE ) * ( (Real)GAME_SPEED_PERCENT / 100.0f ),
+		(Real)RETAIL_LOGICFRAMES_PER_SECOND * LOGICFRAMES_PER_RETAIL_FRAME, 0.5f * (Real)GAME_SPEED_PERCENT / 100.0f );
 }
 
-TEST(match_speed_is_frames_per_second_limit_doubled_by_turbo)
+TEST(match_speed_is_frames_per_second_limit_scaled_by_game_speed)
 {
-	/* Every MSG_NEW_GAME a player starts passes this: GameData.ini's normal speed, or -fps for a test,
-	   twice that in turbo mode, inside the 1..1000 MSG_NEW_GAME takes. */
+	/* Every MSG_NEW_GAME a player starts passes this: GameData.ini's native tick, or -fps for a test,
+	   scaled by the game speed, inside the 1..1000 MSG_NEW_GAME takes.  Network games pass the default. */
 	GlobalData *saved = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;
 
 	TheWritableGlobalData->m_framesPerSecondLimit = LOGICFRAMES_PER_SECOND;
-	CHECK_EQ( GameEngine_matchFramesPerSecond( FALSE ), LOGICFRAMES_PER_SECOND );
-	CHECK_EQ( GameEngine_matchFramesPerSecond( TRUE ), LOGICFRAMES_PER_SECOND * 2 );
+	CHECK_EQ( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENT_DEFAULT ), LOGICFRAMES_PER_SECOND );
+	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
+		CHECK_EQ( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENTS[ i ] ),
+			GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ i ] ) );
 	TheWritableGlobalData->m_framesPerSecondLimit = 0;	// no FramesPerSecondLimit at all
-	CHECK_EQ( GameEngine_matchFramesPerSecond( TRUE ), LOGICFRAMES_PER_SECOND * 2 );
+	CHECK_EQ( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENT_DEFAULT ), LOGICFRAMES_PER_SECOND );
 	TheWritableGlobalData->m_framesPerSecondLimit = 800;
-	CHECK_EQ( GameEngine_matchFramesPerSecond( TRUE ), 1000 );
+	CHECK_EQ( GameEngine_matchFramesPerSecond( 200 ), 1000 );
 
 	SkirmishGameInfo game;
 	game.init();
-	CHECK( !game.getTurbo() );
-	game.setTurbo( TRUE );
+	CHECK_EQ( game.getGameSpeedPercent(), (Int)PLAYER_GAME_SPEED_PERCENT_DEFAULT );
+	game.setGameSpeedPercent( 200 );
+	CHECK_EQ( game.getGameSpeedPercent(), 200 );
+	game.setGameSpeedPercent( 130 );
+	CHECK_EQ( game.getGameSpeedPercent(), 125 );
 	game.reset();
-	CHECK( !game.getTurbo() );
+	CHECK_EQ( game.getGameSpeedPercent(), (Int)PLAYER_GAME_SPEED_PERCENT_DEFAULT );
 
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
@@ -21533,7 +21549,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 	static const char *const off[] =
 	{
 		"CameraBoundaryMargin", "EdgeScrollInWindowedMode", "CameraSnapTo45", "BuildGrid", "BuildSnapTo45",
-		"BuildSnapToNeighbour", "BuildNudge", "WheelZoomToCursor", "IsometricCamera", "OpenAtMaxZoom", "TurboMode",
+		"BuildSnapToNeighbour", "BuildNudge", "WheelZoomToCursor", "IsometricCamera", "OpenAtMaxZoom",
 		"DynamicMusic", "FormationDrag", "BuildWithoutWorker", "ChromaLighting", "TextureFilter", "Bloom", "MSAA",
 		"VSync", "WaterStyle", "CloudStyle", "LightingStyle", "OrderLines", "ShowNetBox", "UseShadowVolumesForSkins",
 		"ShadowsForProjectiles", "ShadowsForProps", "ShadowsForParticles", "VolumetricSmokeShadows", "SmokeFireLighting",
@@ -21553,6 +21569,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 	CHECK_EQ( findOptionDef( "LegacySound" )->get(), 1 );
 	CHECK_EQ( findOptionDef( "HealthBars" )->get(), (Int)HEALTH_BAR_SELECTION );
 	CHECK_EQ( findOptionDef( "AmbientVolume" )->get(), 80 );
+	CHECK_EQ( TheGlobalData->m_missionGameSpeedPercent, (Int)PLAYER_GAME_SPEED_PERCENT_DEFAULT );	// a mission plays the native tick
 
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
@@ -24590,6 +24607,40 @@ TEST(save_from_an_older_build_or_another_logic_rate_loads_only_as_mission_save)
 // ticks, an amount added every frame times the frames of a retail second is the retail second's
 // amount, and a factor raised to the ticks of a retail tick's time is the retail factor. At 100 each
 // helper must be its Wall form exactly; at any other speed it must not be.
+/* A script countdown timer counts retail frames, so above the wall's game speed some ticks take two
+	 off it (2,1,2,1 at 150).  "timer == n" has to hold for every n on the way down: either shown at a
+	 tick's end or passed during it.  The ticks a frame are ScriptEngine::update's sum. */
+TEST(countdown_timer_equality_holds_for_every_value_it_passes)
+{
+	CHECK( !ScriptEngine_countdownPassed( 5, 4, 4 ) );		// shown, the plain compare has it
+	CHECK( ScriptEngine_countdownPassed( 5, 3, 4 ) );
+	CHECK( !ScriptEngine_countdownPassed( 5, 3, 5 ) );		// seen at the end of the tick before
+	CHECK( !ScriptEngine_countdownPassed( 5, 3, 3 ) );
+	CHECK( ScriptEngine_countdownPassed( 1, -1, 0 ) );		// running out over a double step still reads 0
+
+	const Int START = 100;
+	Bool hit[ START ] = {};
+	Int value = START;
+	Bool skipped = FALSE;
+	for( UnsignedInt frame = 0; value >= 0; ++frame )
+	{
+		const Int ticks = (Int)( ( (UnsignedInt64)( frame + 1 ) * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND
+			- ( (UnsignedInt64)frame * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND );
+		const Int before = value;
+		for( Int t = 0; t < ticks && value >= 0; ++t )
+			--value;
+		if( before - value > 1 )
+			skipped = TRUE;
+		for( Int target = 0; target < START; ++target )
+			if( value == target || ScriptEngine_countdownPassed( before, value, target ) )
+				hit[ target ] = TRUE;
+	}
+	for( Int target = 0; target < START; ++target )
+		CHECK( hit[ target ] );
+	// at a game speed above the wall's the plain compare alone would miss some
+	CHECK_EQ( skipped, LOGICFRAMES_PER_GAME_SECOND < RETAIL_LOGICFRAMES_PER_SECOND * LOGICFRAMES_PER_RETAIL_FRAME ? TRUE : FALSE );
+}
+
 TEST(retail_helpers_carry_the_game_speed_and_are_the_identity_at_100)
 {
 	const Bool atHundred = GAME_SPEED_PERCENT == 100;
@@ -24893,7 +24944,6 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	host.setTechRespawn( 300 );
 	host.setSupplyPileLimit( 60000 );
 	host.setUnitLimit( TRUE );
-	host.setTurbo( TRUE );
 	host.setMapCRC( 0xFFFFFFFFu );
 	host.setMapSize( 9999999 );
 	host.setSeed( 2147483647 );

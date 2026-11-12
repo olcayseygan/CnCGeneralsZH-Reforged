@@ -1706,8 +1706,8 @@ void Locomotor::moveTowardsPositionWheels(Object* obj, PhysicsBehavior *physics,
 
 
 	// plus one retail frame of reaction, and of travel
-	Real slowDownTime = actualSpeed / getBraking() + ConvertRetailFrames(1.0f);
-	Real slowDownDist = (actualSpeed/1.5f) * slowDownTime + actualSpeed * ConvertRetailFrames(1.0f);
+	Real slowDownTime = actualSpeed / getBraking() + ConvertRetailFrameRatio(1.0f);	// added time, no one-tick floor
+	Real slowDownDist = (actualSpeed/1.5f) * slowDownTime + actualSpeed * ConvertRetailFrameRatio(1.0f);
 	Real effectiveSlowDownDist = slowDownDist;
 	if (effectiveSlowDownDist < 1*PATHFIND_CELL_SIZE) {
 		effectiveSlowDownDist = 1*PATHFIND_CELL_SIZE;

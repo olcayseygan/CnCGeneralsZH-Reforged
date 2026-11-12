@@ -817,7 +817,7 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	TheSkirmishGameInfo->setTechRespawn( TheGlobalData->m_techRespawn );
 	TheSkirmishGameInfo->setSupplyPileLimit( TheGlobalData->m_supplyPileLimit );
 	TheSkirmishGameInfo->setSuperweaponRestriction( (UnsignedShort)TheGlobalData->m_superweapons );
-	TheSkirmishGameInfo->setTurbo( TheGlobalData->m_turboMatch );
+	TheSkirmishGameInfo->setGameSpeedPercent( TheGlobalData->m_autoSkirmishGameSpeedPercent );
 	if (TheGlobalData->m_startingCash > 0)
 	{
 		Money cash;
@@ -835,9 +835,9 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	TheWritableGlobalData->m_shellMapOn = FALSE;
 	TheWritableGlobalData->m_playIntro = FALSE;
 
-	/* The speed reallyDoStart() passes for the lobby's turbo box, -fps included.  -noFPSLimit
+	/* The speed reallyDoStart() passes for the lobby's game speed, -fps included.  -noFPSLimit
 		 deliberately does not appear here - it uncaps the renderer, not the simulation. */
-	const Int maxFPS = GameEngine_matchFramesPerSecond( TheSkirmishGameInfo->getTurbo() );
+	const Int maxFPS = GameEngine_matchFramesPerSecond( TheSkirmishGameInfo->getGameSpeedPercent() );
 
 	InitRandom( seed );
 	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
@@ -1676,16 +1676,27 @@ Int GameEngine_logicCatchupMaxFrames( Int logicFps )
 	return frames < 1 ? 1 : frames;
 }
 
+// ticks a wall second times percent over the native percent, rounded in integers, never under 1
+static Int scaleFramesPerSecondBySpeed( Int fps, Int percent )
+{
+	const Int scaled = ( fps * percent + GAME_SPEED_PERCENT / 2 ) / GAME_SPEED_PERCENT;
+	return scaled > 0 ? scaled : 1;
+}
+
+Int GameEngine_framesPerSecondForSpeed( Int percent )
+{
+	return scaleFramesPerSecondBySpeed( LOGICFRAMES_PER_SECOND, percent );
+}
+
 /* MSG_NEW_GAME refuses anything outside 1..1000 and falls back to m_framesPerSecondLimit
 	 unclamped, so the answer stays inside that.  A FramesPerSecondLimit below retail's 15, or none at
-	 all, is normal speed. */
-Int GameEngine_matchFramesPerSecond( Bool turbo )
+	 all, is the native tick.  An asked speed that is not one of the player's is taken to the nearest. */
+Int GameEngine_matchFramesPerSecond( Int speedPercent )
 {
 	Int fps = TheGlobalData->m_framesPerSecondLimit;
 	if (fps < ConvertRetailFramesWall( 15 ))
 		fps = LOGICFRAMES_PER_SECOND;
-	if (turbo)
-		fps *= 2;
+	fps = scaleFramesPerSecondBySpeed( fps, ClampPlayerGameSpeedPercent( speedPercent ) );
 	return fps > 1000 ? 1000 : fps;
 }
 
@@ -1693,8 +1704,8 @@ Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps )
 {
 	if (askedRetailFps <= 0 || askedRetailFps >= RETAIL_LOGICFRAMES_PER_SECOND)
 		return matchFps;
-	// game time: the cinematic keeps retail's pace against its wall-clock voices (23 asked is 18 ticks
-	// at GAME_SPEED_PERCENT 125, a pace of 18 * 1.25 / 30 = 0.75 against retail's 23 / 30 = 0.77, the
+	// game time: the cinematic keeps retail's pace against its wall-clock voices (23 asked is 15 ticks
+	// at GAME_SPEED_PERCENT 150, a pace of 15 * 1.5 / 30 = 0.75 against retail's 23 / 30 = 0.77, the
 	// nearest whole tick), the identity at 100
 	return ConvertRetailFrames( askedRetailFps );
 }
@@ -1706,10 +1717,11 @@ Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps )
 	 -cinema raises it too), and Player.cpp and Drawable.cpp already read it as "a mission cinematic". */
 Int GameEngine_cinematicFramesPerSecond( Int maxFps, Bool cinematic )
 {
-	if (!cinematic || GAME_SPEED_PERCENT == 100 || maxFps < LOGICFRAMES_PER_SECOND)
+	// retail's pace from any game speed the mission was started at: 20 ticks at 150, 30 at 100
+	const Int retailPace = GameEngine_framesPerSecondForSpeed( 100 );
+	if (!cinematic || maxFps <= retailPace)
 		return maxFps;
-	const Int paced = ( maxFps * 100 + GAME_SPEED_PERCENT / 2 ) / GAME_SPEED_PERCENT;
-	return paced > 0 ? paced : 1;
+	return retailPace;
 }
 
 Bool GameEngine_isPacingCinematic( void )
@@ -1724,11 +1736,20 @@ static Int pacedFramesPerSecond( Int maxFps )
 	return GameEngine_cinematicFramesPerSecond( maxFps, GameEngine_isPacingCinematic() );
 }
 
+static Bool lastPassWasFast( void );	// below, beside s_passWasFast
+
+/* A skirmish takes its game speed from the lobby and a replay plays at the ticks a second its match
+	 recorded (or the speed keys' share of that), so their animations follow the pacer as a mission's do,
+	 both ways.  A pass that ran a tick a pass (replay fast-forward, a seek, -turbo, -headless) has no
+	 pacer and keeps the wall clock, 1, so a -turbo proof shot keeps its animation phase.  A network game
+	 keeps the native tick. */
 Real GameEngine_missionTimeRate( void )
 {
-	if (TheGameLogic == NULL || !TheGameLogic->isInSinglePlayerGame() || TheGameLogic->isInReplayGame())
+	if (TheGameLogic == NULL || TheNetwork != NULL || lastPassWasFast()
+			|| !( TheGameLogic->isInSinglePlayerGame() || TheGameLogic->isInSkirmishGame() || TheGameLogic->isInReplayGame() ))
 		return 1.0f;
-	return (Real)pacedFramesPerSecond( TheGameEngine->getFramesPerSecondLimit() ) / (Real)LOGICFRAMES_PER_SECOND;
+	const Int fps = pacedFramesPerSecond( TheGameEngine->getFramesPerSecondLimit() );
+	return fps > 0 ? (Real)fps / (Real)LOGICFRAMES_PER_SECOND : 1.0f;
 }
 
 Bool GameEngine_mayStartAnotherCatchupTick( Int ticksSoFar, Int maxTicks, Real elapsedMsInLoop )
@@ -3008,6 +3029,7 @@ static Real s_logicAccumMs = 0.0f;
 static Bool s_passPlanned = FALSE;
 static GameEngine::LogicPassPlan s_passPlan;
 static Bool s_passWasFast = FALSE;		///< the last pass ran a logic frame a pass (headless, -turbo, fast-forward, -video): no picture cap
+static Bool lastPassWasFast( void ) { return s_passWasFast; }
 static UnsignedInt s_frameBeforeOverlap = 0;
 static UnsignedInt s_planTimeMs = 0;		///< when the pacer last spent the time since the one before
 static Int64 s_planTimeTicks = 0;				///< the same moment on the fine clock, for smooth motion

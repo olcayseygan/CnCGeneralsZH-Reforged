@@ -448,7 +448,7 @@ void Network::parseUserList( const GameInfo *game )
 	}
 
 	m_conMgr->parseUserList(game);
-	// run at the game's speed, turbo mode included, until the router's first run-ahead command
+	// run at the game's speed, the native tick, until the router's first run-ahead command
 	m_frameRate = m_conMgr->getMatchFps();
 
 	// Now that we have the players in this game, we need to reset the FrameData stuff.
@@ -900,7 +900,7 @@ Bool Network::timeForNewFrame() {
 			 down to its rate.  The count comes from the game speed and not from the room's rate: tied
 			 to the room, a room that slowed down could pay back less and slowed down further, and a
 			 250ms picture took two machines from 30 frames a second to 4.  The game speed is the
-			 match's, turbo mode included, read from the game options in parseUserList. */
+			 match's, the native tick, set in parseUserList. */
 		if ((m_nextFrameTime + (GameEngine_logicCatchupMaxFrames(m_conMgr->getMatchFps()) * frameDelay)) < curTime) {
 			// If we get too far behind on our framerate we need to reset the nextFrameTime thing.
 			m_nextFrameTime = curTime;

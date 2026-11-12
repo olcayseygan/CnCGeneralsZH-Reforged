@@ -173,6 +173,10 @@ enum { FRAME_RATE_LIMIT_COUNT = 5 };
 /** Pictures a second for a stored FrameRateLimit level.  0 is no cap. */
 extern Int frameRateLimitForLevel( Int level );
 
+// The missions' game speed: 1.0x, 1.25x, 1.5x or 2.0x.  Options.ini stores the level, GlobalData the
+// percent (m_missionGameSpeedPercent).
+enum { MISSION_GAME_SPEED_COUNT = 4 };
+
 //-----------------------------------------------------------------------------
 // The Performance / Quality slider on the Graphics page.  One row per graphics setting the Graphics
 // and Effects pages carry, holding what that setting's control shows at each step of the slider:

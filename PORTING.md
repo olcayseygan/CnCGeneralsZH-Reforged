@@ -231,8 +231,8 @@ structure, so a disagreement stops the build instead of desynchronising a game.
 
 **E1**, the replay check (`Tools/replay-check.sh`, `replay-check.ps1` on Windows), plays a headless skirmish,
 plays its replay back and plays the seed again, and compares the three runs' world CRCs. The pinned results
-are seed 0 at 1200 frames `0xFE693D21`, seed 0 at 12000 `0xCA580557` and seed 1 at 12000 `0x288CE749` (logic at 30 Hz,
-game speed 125, 40 s and 400 s of game time, measured on Windows x64 on 2026-11-12; no other platform has run these
+are seed 0 at 1200 frames `0x81C18E15`, seed 0 at 12000 `0x4452FB85` and seed 1 at 12000 `0x7F5B73D4` (logic at 30 Hz,
+game speed 150, 40 s and 400 s of game time, measured on Windows x64 on 2026-11-12; no other platform has run these
 yet). At game speed 100 the same runs end on `0x87792035`, `0xAF2D1FDD` and `0x084F009C`, the pins of the game before
 the speed constant.
 The pins before them, from upstream 1e94f8c7 on, were identical on macOS arm64, macOS x86_64 under Rosetta,

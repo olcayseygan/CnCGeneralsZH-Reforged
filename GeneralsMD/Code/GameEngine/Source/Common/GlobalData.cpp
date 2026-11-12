@@ -702,7 +702,7 @@ GlobalData::GlobalData()
 	m_useShadowDecals = FALSE;
 	m_shadowsForProjectiles = FALSE;
 	m_startAtMaxZoom = FALSE;		//off, a match opens at START_CAMERA_HEIGHT (View.cpp); on, as far out as the wheel goes
-	m_turboMode = FALSE;				//a mission runs at normal speed
+	m_missionGameSpeedPercent = PLAYER_GAME_SPEED_PERCENT_DEFAULT;	//a mission runs at the native tick
 	m_shadowsForProps = FALSE;			//on, scenery with no shadow of its own gets one
 	m_shadowsForParticles = FALSE;
 	m_volumetricSmokeShadows = FALSE;
@@ -758,7 +758,7 @@ GlobalData::GlobalData()
 	m_incomeSharing = 0;						// INCOME_SHARING_OFF unless -incomesharing asks
 	m_techRespawn = 0;							// a destroyed tech building stays destroyed unless -techrespawn asks
 	m_supplyPileLimit = 0;					// a supply pile takes any number of players unless -supplypilelimit asks
-	m_turboMatch = FALSE;						// normal speed unless -turbomode asks
+	m_autoSkirmishGameSpeedPercent = PLAYER_GAME_SPEED_PERCENT_DEFAULT;	// the native tick unless -gamespeed asks
 	m_superweapons = 0;							// SUPERWEAPONS_ALLOW unless -superweapons asks
 	m_startingCash = 0;							// the INI's DefaultStartingCash unless -startingcash asks
 	m_autoSkirmishObserver = FALSE;

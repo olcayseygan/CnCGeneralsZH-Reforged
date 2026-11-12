@@ -929,10 +929,14 @@ SaveCode GameState::loadGame( AvailableGameInfo gameInfo )
 
 	// A loaded match played at the default 30 whatever speed it was saved at: the reset during the
 	// load puts the default back, and nothing kept the speed. A mission save starts its map afresh. A
-	// save comes back at normal speed or in turbo mode, whichever is nearer what it was saved at, so
-	// one from the old half-speed settings plays at normal.
+	// save comes back at the player game speed nearest the ticks a second it was saved at (the field
+	// stays ticks a wall second, so its bytes are what they were), so one saved in a slowed cinematic
+	// plays at the slowest speed.
 	if( getSaveGameInfo()->saveFileType != SAVE_FILE_TYPE_MISSION && getSaveGameInfo()->framesPerSecond > 0 )
-		TheGameEngine->setFramesPerSecondLimit( ClampPlayerGameSpeed( getSaveGameInfo()->framesPerSecond ) );
+	{
+		const Int savedPercent = getSaveGameInfo()->framesPerSecond * GAME_SPEED_PERCENT / LOGICFRAMES_PER_SECOND;
+		TheGameEngine->setFramesPerSecondLimit( GameEngine_framesPerSecondForSpeed( ClampPlayerGameSpeedPercent( savedPercent ) ) );
+	}
 
 	//
 	// when loading a mission save, we want to do as much normal loading stuff as we
@@ -949,7 +953,7 @@ SaveCode GameState::loadGame( AvailableGameInfo gameInfo )
 		msg->appendIntegerArgument(GAME_SINGLE_PLAYER);
 		msg->appendIntegerArgument(TheCampaignManager->getGameDifficulty());
 		msg->appendIntegerArgument(TheCampaignManager->getRankPoints());
-		msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(TheGlobalData->m_turboMode));
+		msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(TheGlobalData->m_missionGameSpeedPercent));
 
 		// remove the mission save data, we've got all we need and have started the load
 		SaveGameInfo *gameInfo = getSaveGameInfo();

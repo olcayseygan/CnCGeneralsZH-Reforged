@@ -155,6 +155,14 @@ static UnsignedInt cameraClockMilliseconds( View *view )
 	return onPictureClock( view ) ? GameEngine_pictureMilliseconds() : Clock_Milliseconds();
 }
 
+// set by a picture that stepped the scripted camera without update() (resyncScriptedClock), taken by update()
+static Bool s_resyncScriptedClock = FALSE;
+
+void W3DView::resyncScriptedClock( void )
+{
+	s_resyncScriptedClock = TRUE;
+}
+
 
 
 
@@ -1825,6 +1833,10 @@ void W3DView::update(void)
 	// 33ms gate at all: advance it below by the real time this render frame took, which
 	// is what makes shell-map camera moves smooth at any framerate
 	static UnsignedInt prevWaypointTime = 0;
+	const Bool resyncScripted = s_resyncScriptedClock;
+	s_resyncScriptedClock = FALSE;
+	if (resyncScripted)
+		prevWaypointTime = nowCameraStepTime;	// the fast branch already stepped that time
 	Int waypointElapsedMs = (Int)(nowCameraStepTime - prevWaypointTime);
 	prevWaypointTime = nowCameraStepTime;
 	if (waypointElapsedMs < 0)
@@ -1834,13 +1846,16 @@ void W3DView::update(void)
 
 	/* EA stepped a scripted move once an engine frame, so a move kept time with the script's timers at
 		 whatever speed the map ran.  On the wall clock it arrives early in a cinematic that slowed the game
-		 and late in turbo mode, and the timer that starts the next shot cuts it off.  A pan that froze the
+		 and late at a fast game speed or replay speed, and the timer that starts the next shot cuts it off
+		 (GameEngine_missionTimeRate follows the pacer both ways).  A pan that froze the
 		 logic has no other clock, and a recorded picture is a logic frame already.  The script's timers count
 		 game time, GAME_SPEED_PERCENT of the wall's, so the move does too. */
 	const Real gameSpeedRate = (Real)GAME_SPEED_PERCENT / 100.0f;
 	const Real scriptedRate = isTimeFrozen() && !isCameraMovementFinished() ? 1.0f
 		: pictureClock ? gameSpeedRate : GameEngine_missionTimeRate() * gameSpeedRate;
 	static Real scriptedWaypointMs = 0.0f;
+	if (resyncScripted)
+		scriptedWaypointMs = 0.0f;
 	scriptedWaypointMs += waypointElapsedMs * scriptedRate;
 	const Int scriptedElapsedMs = (Int)scriptedWaypointMs;
 	scriptedWaypointMs -= scriptedElapsedMs;
@@ -1848,11 +1863,24 @@ void W3DView::update(void)
 	Int scriptedSteps = pictureClock ? pictureScriptedSteps : ( stepTime ? 1 : 0 );
 	if (scriptedRate != 1.0f && !pictureClock)
 	{
+		/* As many steps as the scaled time holds, so a fast game speed under a slow picture rate keeps up
+			 (200 percent at 40 pictures is 1.5 steps a picture), up to a few a picture; what is left past
+			 that is dropped down to one step, so a backlog never plays a later move too fast. */
+		const Int MAX_SCRIPTED_STEPS_A_PICTURE = 4;
+		// a retail frame exactly (33.3 ms), not the gate's whole 33, so a pan ends with the script's timers
+		const Real RETAIL_STEP_MS = 1000.0f / (Real)RETAIL_LOGICFRAMES_PER_SECOND;
 		static Real scriptedStepMs = 0.0f;
+		if (resyncScripted)
+			scriptedStepMs = 0.0f;
 		scriptedStepMs += waypointElapsedMs * scriptedRate;
-		scriptedSteps = scriptedStepMs >= (Real)CAMERA_STEP_MSEC ? 1 : 0;
-		if (scriptedSteps)
-			scriptedStepMs -= (Real)CAMERA_STEP_MSEC;
+		scriptedSteps = 0;
+		while (scriptedStepMs >= RETAIL_STEP_MS && scriptedSteps < MAX_SCRIPTED_STEPS_A_PICTURE)
+		{
+			scriptedStepMs -= RETAIL_STEP_MS;
+			++scriptedSteps;
+		}
+		if (scriptedStepMs > RETAIL_STEP_MS)
+			scriptedStepMs = RETAIL_STEP_MS;
 	}
 
 	IRegion2D dirtyTerrain;

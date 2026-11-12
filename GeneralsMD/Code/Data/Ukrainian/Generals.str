@@ -16657,20 +16657,16 @@ TOOLTIP:ProRules
 "Турнірний список. Без Particle Cannon чи SCUD Storm, окрім однієї гармати Генерала суперзброї. Ракетна шахта Nuclear Missile будується, але не стріляє. Без Aurora, Tactical Nuke MiG, демо-байка, смертників, Neutron Shells чи Stealth Comanche, і без Carpet Bomb до рангу 3. Microwave Tank не може заморозити будівлю, що ще будується, ніхто не будує ближче 300 до ворожої будівлі, і ніхто не ставить більше двох Patriot, Gatling Cannon чи Stinger Site навколо однієї групи нафтових вишок."
 END
 
-GUI:TurboMode
-"Турбо-режим"
+TOOLTIP:GameSpeed
+"Швидкість сутички. 1.0x — оригінальна гра, 1.5x — швидкість будь-якого мережевого матчу. Змінюється лише темп."
 END
 
-TOOLTIP:TurboMode
-"Матч іде вдвічі швидше: за кожну секунду минають дві секунди гри, і більше нічого не змінюється. У мережевій грі його вибирає хост для всіх."
+GUI:GameSpeedMissions
+"Швидкість гри в місіях"
 END
 
-GUI:TurboModeMissions
-"Турбо-режим у місіях"
-END
-
-TOOLTIP:TurboModeMissions
-"Місії кампанії та Generals' Challenge йдуть вдвічі швидше, а місія, що вже триває, прискорюється одразу. Сутичка й мультиплеєр мають власний пункт у лобі."
+TOOLTIP:GameSpeedMissions
+"Швидкість місій кампанії та Generals' Challenge. 1.0x — оригінальна гра, а місія, що вже триває, змінює темп одразу. Швидкість сутички обирається в лобі."
 END
 
 GUI:CantBuildTooCloseToEnemy

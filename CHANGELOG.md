@@ -8,16 +8,19 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
-## The game plays a quarter faster
+## The game plays half as fast again
 
-- Everything in a match runs 25 percent quicker than in the original: units drive and walk faster, buildings and units come off the line sooner, weapons reload sooner and animations play quicker. A tank that crossed a map in 40 seconds crosses it in 32. The clock on the wall did not change, so a match is simply shorter, and the countdowns on screen (superweapons, timed powers) still count real seconds.
+- Everything in a match runs 50 percent quicker than in the original: units drive and walk faster, buildings and units come off the line sooner, weapons reload sooner and animations play quicker. A tank that crossed a map in 40 seconds crosses it in about 27. The clock on the wall did not change, so a match is simply shorter, and the countdowns on screen (superweapons, timed powers) still count real seconds.
+- You pick the speed. The skirmish lobby has a Game speed box with four choices, 1.0x, 1.25x, 1.5x and 2.0x of the original game, and 1.5x is where it starts. Campaign and Generals' Challenge missions take theirs from Game speed in missions in Options. The choice only changes how fast the clock runs, never what happens in a match, so the same game plays out the same at every speed.
+- Every game on a network plays at 1.5x, LAN, online rooms and Quick Match alike, and the lobbies have no speed box. Everyone in the room sees the same game at the same pace.
+- Turbo is gone. The tick box in the skirmish, LAN and online lobbies, Turbo Mode in Missions and the TURBO mark in the corner readout were replaced by the game speed above, and 2.0x is what turbo used to give a skirmish.
 - Sound, music, menus and the network stay on the real clock; only the world on the map speeds up.
-- Mission cutscenes keep their original pace, so the voices fit the pictures again. The second half of China's second mission intro had its camera cutting away before the lines were spoken, done in 27.5 seconds where the voices need 34. While a cutscene holds the controls the game now runs at the original speed, and the quicker play comes back the moment you get control.
+- Mission cutscenes keep their original pace, so the voices fit the pictures again. The second half of China's second mission intro had its camera cutting away before the lines were spoken, done in 27.5 seconds where the voices need 34. While a cutscene holds the controls the game now runs at the original speed, and the faster play comes back the moment you get control.
 - Replays and saved games from the previous build will not load, and everyone in a network game needs the same build.
 
 ## The game steps 30 times a second again, and the picture glides
 
-- The game's simulation is back at 30 steps a second, as in the original Generals. It ran at 60 from version 3.0.0. On its own this step leaves game speed, unit speeds and every timing as they were (the quarter faster play above is a separate setting); only the work behind them is lighter, which leaves more room in big late-game battles and on slower machines.
+- The game's simulation is back at 30 steps a second, as in the original Generals. It ran at 60 from version 3.0.0. On its own this step leaves game speed, unit speeds and every timing as they were (the faster play above is a separate setting); only the work behind them is lighter, which leaves more room in big late-game battles and on slower machines.
 - Smooth Motion keeps the picture from showing it. It draws units between their last two positions, so movement glides at your screen's full refresh, a 60 Hz screen included, and it is on unless you switch it off in Options.
 - Replays and saved games from earlier versions will not load, and everyone in a network game needs the same build.
 

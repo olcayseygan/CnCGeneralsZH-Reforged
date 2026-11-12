@@ -138,10 +138,14 @@ RETIRED_PERSONA_HEADING = "StaticTextAIPersona"
 HANDICAP_PREFIX, HANDICAP_TOOLTIP = "ComboBoxHandicap", "TOOLTIP:Handicap"
 HANDICAP_HEADING, HANDICAP_TEXT = "StaticTextHandicap", "GUI:Handicap"
 
-# Turbo mode replaced the skirmish room's game speed dropdown: a box cloned from the unit limit's,
-# which every room has, so it inherits that box's art and lettering.
-TURBO_BOX = ("CheckBoxTurbo", "GUI:TurboMode", "TOOLTIP:TurboMode")
-GAME_SPEED_DROPDOWN = ("LabelGameSpeed", "ComboBoxGameSpeed")
+# The skirmish room's game speed, a label and a combo cloned from the tech respawn row's, so they
+# inherit that row's art and lettering; the menu code fills the combo. The network rooms have no
+# speed to pick (a multiplayer match always plays at 1.5x) and take the turbo box out that the
+# previous grid had cloned into them.
+GAME_SPEED_ROW = (("LabelGameSpeed", "LabelTechRespawn"), ("ComboBoxGameSpeed", "ComboBoxTechRespawn"))
+GAME_SPEED_TEXT, GAME_SPEED_TOOLTIP = "GUI:GameSpeed", "TOOLTIP:GameSpeed"
+GAME_SPEED_DROPDOWN = tuple(name for name, _template in GAME_SPEED_ROW)
+RETIRED_TURBO_BOX = "CheckBoxTurbo"
 TABS = ("TabInfo", "TabChat", "TabLobbySettings")
 SEAT_WINDOWS = ("SeatCard", "SeatBar", "SeatSwatch", "SeatTeam")
 # what earlier versions of this grid added and this one takes out again
@@ -184,12 +188,13 @@ SQUARES = {"SeatSwatch": SWATCH, "SeatTeam": SWATCH, "GenericPing": PING}
 SWATCHES = ("SeatSwatch", "SeatTeam")
 
 # The rules page, one column: (label, combo) rows, then the check boxes two to a row.
-SKIRMISH_RULES = [("StartingCashLabel", "ComboBoxStartingCash"), ("LabelSuperweapons", "ComboBoxSuperweapons"),
-                  ("LabelIncomeSharing", "ComboBoxIncomeSharing"), ("LabelSupplyPileLimit", "ComboBoxSupplyPileLimit"),
-                  ("LabelTechRespawn", "ComboBoxTechRespawn")]
-NETWORK_RULES = SKIRMISH_RULES[:1] + [("LabelPeaceTime", "ComboBoxPeaceTime")] + SKIRMISH_RULES[1:]
-SKIRMISH_CHECKS = ["CheckBoxTurbo", "CheckBoxUnitLimit"]
-LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit", "CheckBoxTurbo"]
+MATCH_RULES = [("StartingCashLabel", "ComboBoxStartingCash"), ("LabelSuperweapons", "ComboBoxSuperweapons"),
+               ("LabelIncomeSharing", "ComboBoxIncomeSharing"), ("LabelSupplyPileLimit", "ComboBoxSupplyPileLimit"),
+               ("LabelTechRespawn", "ComboBoxTechRespawn")]
+SKIRMISH_RULES = [GAME_SPEED_DROPDOWN] + MATCH_RULES
+NETWORK_RULES = MATCH_RULES[:1] + [("LabelPeaceTime", "ComboBoxPeaceTime")] + MATCH_RULES[1:]
+SKIRMISH_CHECKS = ["CheckBoxUnitLimit"]
+LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit"]
 GAMESPY_CHECKS = ["CheckBoxUseStats", "CheckBoxLimitArmies"] + LAN_CHECKS
 
 ROOMS = {
@@ -240,17 +245,17 @@ def draw_data(color, border, image="NoImage"):
 # what the rooms carried in before this grid, kept idempotent
 # ---------------------------------------------------------------------------
 
-def add_turbo_box(layout):
-    """Clone the unit limit box into the turbo box beside it, once; a second run finds it there."""
-    name, text, tooltip = TURBO_BOX
-    if layout.find(name) is not None:
-        return
-    unit_limit = need(layout, "CheckBoxUnitLimit")
-    prefix = unit_limit.name.split(":")[0]
-    box = clone(unit_limit, "%s:%s" % (prefix, name))
-    box.put_prop("TEXT", '"%s"' % text)
-    box.put_prop("TOOLTIPTEXT", '"%s"' % tooltip)
-    layout.root.parent_of(unit_limit).children.append(box)
+def add_game_speed_row(layout, menu):
+    """Clone the tech respawn row into the game speed row, once; a second run finds it there."""
+    for name, template in GAME_SPEED_ROW:
+        if layout.find(name) is not None:
+            continue
+        source = need(layout, template)
+        control = clone(source, "%s.wnd:%s" % (menu, name))
+        if name.startswith("Label"):
+            control.put_prop("TEXT", '"%s"' % GAME_SPEED_TEXT)
+        control.put_prop("TOOLTIPTEXT", '"%s"' % GAME_SPEED_TOOLTIP)
+        layout.root.parent_of(source).children.append(control)
 
 
 def remove(layout, names):
@@ -551,8 +556,11 @@ def build(layout, menu):
     widen(layout)
     add_combo_column(layout, menu, PERSONA_PREFIX, "ComboBoxPlayerTemplate", PERSONA_TOOLTIP)
     add_handicap_column(layout, menu)
-    remove(layout, TABS + GAME_SPEED_DROPDOWN + (RETIRED_PERSONA_HEADING,))
-    add_turbo_box(layout)
+    remove(layout, TABS + (RETIRED_PERSONA_HEADING, RETIRED_TURBO_BOX))
+    if menu == "SkirmishGameOptionsMenu":
+        add_game_speed_row(layout, menu)
+    else:
+        remove(layout, GAME_SPEED_DROPDOWN)
     container = need(layout, spec["container"])
     add_ruler(layout, menu, container)
     add_seat_windows(layout, menu, container, spec)
@@ -615,6 +623,8 @@ def selfcheck():
         for tab in TABS:
             if layout.find(tab) is not None:
                 problems.append("%s.wnd still has %s; the rules page is always open" % (menu, tab))
+        if layout.find(RETIRED_TURBO_BOX) is not None:
+            problems.append("%s.wnd still has %s; turbo is gone" % (menu, RETIRED_TURBO_BOX))
         stale = [short(node) or "(unnamed)" for node in layout.root.walk() if tuple(node.rect[4:]) != WIDE]
         if stale:
             problems.append("%s.wnd: %d windows not authored at 1920x1080, %s first"

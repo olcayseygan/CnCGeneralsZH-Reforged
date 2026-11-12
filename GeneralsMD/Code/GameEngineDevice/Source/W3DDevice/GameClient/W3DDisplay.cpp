@@ -2669,6 +2669,8 @@ AGAIN:
 		const UnsignedInt fastStepMs = (UnsignedInt)fastRemainderMs;
 		fastRemainderMs -= (Real)fastStepMs;
 		syncTime += fastStepMs;
+		// the camera was stepped here, outside W3DView::update: its scripted clock must not pay this time again
+		W3DView::resyncScriptedClock();
 		return;
 	}
 
@@ -2717,14 +2719,19 @@ AGAIN:
 		const UnsignedInt MAX_SYNC_STEP_MS = 4 * MSEC_PER_SECOND / RETAIL_LOGICFRAMES_PER_SECOND;
 		if (deltaMs > MAX_SYNC_STEP_MS)
 			deltaMs = MAX_SYNC_STEP_MS;
-		// a cinematic that slowed the game slows the animations with it, or soldiers march on the spot
+		// the pacer's rate over the native tick moves the animations with it both ways: a cinematic that
+		// slowed the game slows them, or soldiers march on the spot, and a game or replay played faster
+		// than native (200 percent, a replay's speed keys) speeds them up, or they skate.  The step is
+		// capped again after the scaling, so one hitch at a high rate cannot jump the clock
 		const Real missionRate = GameEngine_missionTimeRate();
-		if (missionRate < 1.0f)
+		if (missionRate != 1.0f)
 		{
 			static Real slowedMs = 0.0f;
 			slowedMs += deltaMs * missionRate;
 			deltaMs = (UnsignedInt)slowedMs;
 			slowedMs -= deltaMs;
+			if (deltaMs > MAX_SYNC_STEP_MS)
+				deltaMs = MAX_SYNC_STEP_MS;
 		}
 		// a recorded picture is its share of a logic frame however long it took to draw and save, so the
 		// clock moves that much too, or the footage plays every animation fast.  Read off the pictures'

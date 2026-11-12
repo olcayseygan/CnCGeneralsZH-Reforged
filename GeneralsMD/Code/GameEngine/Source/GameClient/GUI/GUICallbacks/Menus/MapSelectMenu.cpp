@@ -77,7 +77,7 @@ static void doGameStart( void )
 	msg->appendIntegerArgument(GAME_SINGLE_PLAYER);
 	msg->appendIntegerArgument(s_AIDiff);
 	msg->appendIntegerArgument(0);
-	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(TheGlobalData->m_turboMode));
+	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(TheGlobalData->m_missionGameSpeedPercent));
 
 	InitRandom(0);
 

@@ -5349,6 +5349,9 @@ void ScriptEngine::reset( void )
 		m_counters[i].value = 0;
 		m_counters[i].isCountdownTimer = false;
 		m_counters[i].name.clear();
+		m_counters[i].valueBeforeTick = 0;
+		m_counters[i].valueAfterTick = 0;
+		m_counters[i].countdownFrame = 0xFFFFFFFF;
 	}
 	for (i=0; i<MAX_FLAGS; i++) {
 		m_flags[i].value = false;
@@ -5492,6 +5495,9 @@ void ScriptEngine::newMap( void )
 		m_counters[i].value = 0;
 		m_counters[i].isCountdownTimer = false;
 		m_counters[i].name.clear();
+		m_counters[i].valueBeforeTick = 0;
+		m_counters[i].valueAfterTick = 0;
+		m_counters[i].countdownFrame = 0xFFFFFFFF;
 	}
 	m_numFlags = 1;
 	for (i=0; i<MAX_FLAGS; i++) {
@@ -5778,6 +5784,9 @@ void ScriptEngine::update( void )
 	const Int retailTicks = (Int)( ( (UnsignedInt64)( frameNow + 1 ) * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND
 		- ( (UnsignedInt64)frameNow * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND );
 	// Note - counters start at 1.  0 means not assigned.
+	for (i=1; i<m_numCounters; i++) {
+		m_counters[i].valueBeforeTick = m_counters[i].value;
+	}
 	for (Int tick = 0; tick < retailTicks; ++tick) {
 		for (i=1; i<m_numCounters; i++) {
 			if (m_counters[i].isCountdownTimer) {
@@ -5787,6 +5796,11 @@ void ScriptEngine::update( void )
 				}
 			}
 		}
+	}
+	// what this tick's countdown passed over, for an EQUAL condition (evaluateCounter)
+	for (i=1; i<m_numCounters; i++) {
+		m_counters[i].valueAfterTick = m_counters[i].value;
+		m_counters[i].countdownFrame = frameNow;
 	}
 
 	// Evaluate the scripts.
@@ -6572,7 +6586,18 @@ Bool ScriptEngine::evaluateCounter( Condition *pCondition )
 	switch (pCondition->getParameter(1)->getInt()) {
 		case Parameter::LESS_THAN: return m_counters[counterNdx].value < value;
 		case Parameter::LESS_EQUAL: return m_counters[counterNdx].value <= value;
-		case Parameter::EQUAL: return m_counters[counterNdx].value == value;
+		case Parameter::EQUAL:
+		{
+			/* A countdown timer steps two retail frames on some ticks at a game speed above the wall's,
+				 so "timer == 300" would never see 300.  It also holds on the tick the countdown passed the
+				 number, as long as nothing has set the timer since.  A plain counter is untouched. */
+			const TCounter &counter = m_counters[counterNdx];
+			if (counter.value == value)
+				return true;
+			return counter.isCountdownTimer && counter.countdownFrame == TheGameLogic->getFrame()
+				&& counter.value == counter.valueAfterTick
+				&& ScriptEngine_countdownPassed( counter.valueBeforeTick, counter.valueAfterTick, value );
+		}
 		case Parameter::GREATER_EQUAL: return m_counters[counterNdx].value >= value;
 		case Parameter::GREATER: return m_counters[counterNdx].value > value;
 		case Parameter::NOT_EQUAL: return m_counters[counterNdx].value != value;

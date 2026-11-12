@@ -88,7 +88,21 @@ struct TCounter
 	Int value;
 	AsciiString name;
 	Bool isCountdownTimer;
+	// A countdown timer steps one or two retail frames a tick at a game speed above the wall's, so an
+	// EQUAL condition can step over its number.  The values before and after this tick's countdown and
+	// the frame it ran on let evaluateCounter see the numbers passed in between.  Derived each tick and
+	// not saved: after a load the first tick fills them again.
+	Int valueBeforeTick;
+	Int valueAfterTick;
+	UnsignedInt countdownFrame;
 };
+
+/** True when a countdown timer that went from valueBefore to valueAfter this tick passed target on the
+	way without showing it (valueAfter < target < valueBefore). */
+inline Bool ScriptEngine_countdownPassed( Int valueBefore, Int valueAfter, Int target )
+{
+	return target > valueAfter && target < valueBefore;
+}
 
 struct TFlag
 {

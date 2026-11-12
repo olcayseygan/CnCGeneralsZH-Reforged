@@ -1434,20 +1434,37 @@ TOOLTIP:ProRules
 "The tournament list. No Particle Cannon or SCUD Storm, except the Superweapon General's one cannon. The Nuclear Missile silo goes up but never fires. No Aurora, no Tactical Nuke MiGs, no demo bike, no suicide bombs, Neutron Shells or Stealth Comanche, and no Carpet Bomb before rank 3. A Microwave Tank cannot freeze a building still going up, nobody builds within 300 of an enemy building, and nobody puts more than two Patriots, Gatling Cannons or Stinger Sites round one group of oil derricks."
 END
 
-GUI:TurboMode
-"Turbo Mode"
+GUI:GameSpeed
+"Game Speed"
 END
 
-TOOLTIP:TurboMode
-"The match runs twice as fast: two seconds of play go by in every second, and nothing else about it changes. In a network game the host picks it for everyone."
+TOOLTIP:GameSpeed
+"How fast the skirmish runs. 1.0x is the original game and 1.5x the speed every multiplayer match plays at. Only the pace changes."
 END
 
-GUI:TurboModeMissions
-"Turbo Mode in Missions"
+GUI:GameSpeedMissions
+"Game Speed in Missions"
 END
 
-TOOLTIP:TurboModeMissions
-"Campaign and Generals' Challenge missions run twice as fast, and a mission already under way speeds up at once. Skirmish and multiplayer games have their own box in the lobby."
+TOOLTIP:GameSpeedMissions
+"How fast campaign and Generals' Challenge missions run. 1.0x is the original game, and a mission already under way changes pace at once. A skirmish picks its own speed in the lobby."
+END
+
+// the Options combo's rows (OptionsCatalog, OPTION_ENUM); the skirmish combo builds the same text in code
+GUI:GameSpeedMissions0
+"1.0x"
+END
+
+GUI:GameSpeedMissions1
+"1.25x"
+END
+
+GUI:GameSpeedMissions2
+"1.5x"
+END
+
+GUI:GameSpeedMissions3
+"2.0x"
 END
 
 // Pro Rules, rule 9: no foundation within reach of an enemy building

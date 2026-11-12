@@ -1958,6 +1958,11 @@ void INI::parseRetailFramesReal( INI *ini, void * /*instance*/, void *store, con
 	*(Real *)store = ConvertRetailFrames(scanReal(ini->getNextToken()));
 }
 
+void INI::parseRetailFrameRatioReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+{
+	*(Real *)store = ConvertRetailFrameRatio(scanReal(ini->getNextToken()));
+}
+
 void INI::parseRetailPerFrameReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
 	*(Real *)store = ConvertRetailPerFrameRate(scanReal(ini->getNextToken()));

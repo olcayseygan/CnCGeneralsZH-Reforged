@@ -7185,11 +7185,12 @@ void ScriptActions::executeAction( ScriptAction *pAction )
 			LogicThread::callAfterTick( [asked]{
 				// A mission's cinematic slows the game down, and its voices and music are timed to that speed:
 				// a line the script starts 70 frames after the last one needs the 3 seconds 23 frames a second
-				// gives it.  Skirmish, a network room or a replay keeps the speed it started at: normal, or
-				// turbo mode's twice that.  The shell map's scripts pace themselves as they always did.
+				// gives it.  Skirmish, a network room or a replay keeps the speed it started at; a mission
+				// handed back goes to its game speed setting.  The shell map's scripts pace themselves as they
+				// always did.  Wall pacing only, on the main thread after the tick.
 				if (TheGameLogic->isInSinglePlayerGame() && !TheGameLogic->isInReplayGame())
 				{
-					TheGameEngine->setFramesPerSecondLimit( GameEngine_missionFramesPerSecond( asked, GameEngine_matchFramesPerSecond( TheGlobalData->m_turboMode ) ) );
+					TheGameEngine->setFramesPerSecondLimit( GameEngine_missionFramesPerSecond( asked, GameEngine_matchFramesPerSecond( TheGlobalData->m_missionGameSpeedPercent ) ) );
 					return;
 				}
 				if (!TheGameLogic->isInShellGame())

@@ -2256,13 +2256,26 @@ function(add_lib_test name)
     list(SUBLIST libs 0 ${_zh_args_at} libs)
   endif()
   set(exclude "")
+  set(require_summary FALSE)
+  if("REQUIRE_SUMMARY" IN_LIST libs)
+    list(REMOVE_ITEM libs REQUIRE_SUMMARY)
+    set(require_summary TRUE)
+  endif()
   if("PENDING_MACOS" IN_LIST libs)
     list(REMOVE_ITEM libs PENDING_MACOS)
     set(exclude "${ZH_NOT_YET_PORTABLE}")
   endif()
   add_executable(${name} ${exclude} ${TESTS}/${name}.cpp)
   target_link_libraries(${name} PRIVATE test_harness ${libs})
-  add_test(NAME ${name} COMMAND ${name} ${test_args})
+  if(require_summary)
+    add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
+      "-DTEST_BINARY=$<TARGET_FILE:${name}>" "-DTEST_ARGS=${test_args}"
+      "-DTEST_LAUNCHER=$<TARGET_PROPERTY:${name},TEST_LAUNCHER>"
+      "-DTEST_EMULATOR=$<TARGET_PROPERTY:${name},CROSSCOMPILING_EMULATOR>"
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/require_test_summary.cmake)
+  else()
+    add_test(NAME ${name} COMMAND ${name} ${test_args})
+  endif()
   if(NOT exclude STREQUAL "")
     # PENDING_MACOS used to skip add_test() altogether, so `ctest` on macOS
     # listed 11 tests where Windows lists 16 and said nothing about the other
@@ -2472,12 +2485,18 @@ endif()
 # test_gameengine's 162 s on one Linux host: it is three cases, one per player count, each its own entry
 # below, so ctest -j runs them beside each other and beside the rest.  Only they are split out: the rest
 # stays one process, in one order, so a failure that depends on what ran before still shows.
-add_lib_test(test_gameengine gameengine ARGS --exclude=every_start_reaches_its_money_and_has_two_ways_out_)
+add_lib_test(test_gameengine gameengine REQUIRE_SUMMARY ARGS --exclude=every_start_reaches_its_money_and_has_two_ways_out_)
+add_test(NAME test_summary_guard_check COMMAND ${CMAKE_COMMAND}
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_summary_guard.cmake)
 # every_shipped_master_is_fork_owned_and_retail_files_are_not walks Code/Data
 target_compile_definitions(test_gameengine PRIVATE ZH_CODE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 foreach(_zh_players 2 4 8)
   add_test(NAME test_gameengine_money_sweep_${_zh_players}_players
-           COMMAND test_gameengine every_start_reaches_its_money_and_has_two_ways_out_${_zh_players}_players)
+           COMMAND ${CMAKE_COMMAND} "-DTEST_BINARY=$<TARGET_FILE:test_gameengine>"
+             "-DTEST_ARGS=every_start_reaches_its_money_and_has_two_ways_out_${_zh_players}_players"
+             "-DTEST_LAUNCHER=$<TARGET_PROPERTY:test_gameengine,TEST_LAUNCHER>"
+             "-DTEST_EMULATOR=$<TARGET_PROPERTY:test_gameengine,CROSSCOMPILING_EMULATOR>"
+             -P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/require_test_summary.cmake)
   set_tests_properties(test_gameengine_money_sweep_${_zh_players}_players PROPERTIES TIMEOUT 2700)
 endforeach()
 # T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):

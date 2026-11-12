@@ -673,8 +673,8 @@ public:
 		{
 			if (m_ropes[i].ropeDrawable)
 			{
-				const UnsignedInt ROPE_EXPIRATION_TIME = LOGICFRAMES_PER_SECOND * 5;
-				const Real initialSpeed = TheGlobalData->m_gravity * LOGICFRAMES_PER_SECOND;	// give it a little kick
+				const UnsignedInt ROPE_EXPIRATION_TIME = LOGICFRAMES_PER_GAME_SECOND * 5;
+				const Real initialSpeed = TheGlobalData->m_gravity * LOGICFRAMES_PER_GAME_SECOND;	// give it a little kick
 				setRopeSpeed(m_ropes[i].ropeDrawable, initialSpeed, d->m_ropeDropSpeed, TheGlobalData->m_gravity);
 				m_ropes[i].ropeDrawable->setExpirationDate(now + ROPE_EXPIRATION_TIME);
 				m_ropes[i].ropeDrawable = NULL; // we're done with it, so null it so we won't save it
@@ -893,7 +893,7 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 	m_minDropHeight = 30.0f;
 	m_ropeFinalHeight = 0.0f;
 	m_ropeDropSpeed = 1e10f;		// um, fast.
-	m_rappelSpeed = fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_SECOND * 0.5f;
+	m_rappelSpeed = fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_GAME_SECOND * 0.5f;
 	m_ropeWobbleLen = 10.0f;
 	m_ropeWobbleAmp = 1.0f;
 	m_ropeWobbleRate = ConvertRetailPerFrameRate(0.1f);

@@ -116,7 +116,7 @@ public:
 	AsciiString missionMapName;				// used for mission saves
 	Int framesPerSecond;							// game speed the match was playing at, 0 in saves older than that
 	Int version;											// GameState block version the file was written with, read with the header
-	Int logicFramesPerSecond;					// logic rate the file's frame counts are in; this build's until a header is read
+	Int logicFramesPerSecond;					// ticks per game second the file's frame counts are in (LOGICFRAMES_PER_GAME_SECOND, the logic rate at game speed 100); this build's until a header is read
 
 	/// FALSE for a save written by the original game, by a build older than block version 5, or at
 	/// another logic rate than this build's, unless it is a mission save: that one holds no frame

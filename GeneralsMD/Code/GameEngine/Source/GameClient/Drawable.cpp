@@ -5438,7 +5438,7 @@ static void drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int
 //-------------------------------------------------------------------------------------------------
 Bool Drawable_weaponWearsReloadBar( Int clipSize, UnsignedInt delayFrames, UnsignedInt clipReloadFrames, Bool disarms )
 {
-	const UnsignedInt RELOAD_BAR_MIN_FRAMES = 3 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt RELOAD_BAR_MIN_FRAMES = 3 * LOGICFRAMES_PER_GAME_SECOND;	// the weapon data's clock
 	if( disarms )
 		return FALSE;
 
@@ -5457,7 +5457,7 @@ Bool Drawable_weaponWearsReloadBar( Int clipSize, UnsignedInt delayFrames, Unsig
 //-------------------------------------------------------------------------------------------------
 Real Drawable_reloadBarFraction( UnsignedInt now, UnsignedInt started, UnsignedInt ready, UnsignedInt longest )
 {
-	const UnsignedInt RELOAD_BAR_MIN_FRAMES = 3 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt RELOAD_BAR_MIN_FRAMES = 3 * LOGICFRAMES_PER_GAME_SECOND;	// as Drawable_weaponWearsReloadBar
 
 	// 0x7fffffff is an empty clip that does not reload itself (a jet waiting for its airfield)
 	if( ready <= now || ready == 0x7fffffff )

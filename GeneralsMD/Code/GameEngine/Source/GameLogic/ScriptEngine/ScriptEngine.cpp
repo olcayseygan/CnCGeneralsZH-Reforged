@@ -5362,7 +5362,7 @@ void ScriptEngine::reset( void )
 	m_breezeInfo.m_directionVec.y = Cos(m_breezeInfo.m_direction);
 	m_breezeInfo.m_intensity = 0.07f*PI/4;
 	m_breezeInfo.m_lean = 0.07f*PI/4;
-	m_breezeInfo.m_breezePeriod = LOGICFRAMES_PER_SECOND * 5;
+	m_breezeInfo.m_breezePeriod = LOGICFRAMES_PER_GAME_SECOND * 5;
 	m_breezeInfo.m_randomness = 0.2f;
 	m_breezeInfo.m_breezeVersion = 0;
 
@@ -5769,16 +5769,22 @@ void ScriptEngine::update( void )
 		TheScriptConditions->update();
 	}
 	SCRIPT_PHASE_END( SCRIPT_PHASE_CONDITIONS );
-	// Update any countdown timers.  They count retail 30 Hz frames, one every other logic frame,
-	// because maps compare a running timer's value with numbers written for 30 Hz ("timer < 1700").
+	// Update any countdown timers.  They count retail 30 Hz frames of game time, because maps compare
+	// a running timer's value with numbers written for 30 Hz ("timer < 1700").  This frame's share is
+	// the retail frames whose start falls inside it: at the retail rate one a frame, at twice it one
+	// every other frame (the even ones), and at a game speed above the wall's sometimes two.
 	Int i;
-	const Bool retailTick = (TheGameLogic->getFrame() % LOGICFRAMES_PER_RETAIL_FRAME) == 0;
+	const UnsignedInt frameNow = TheGameLogic->getFrame();
+	const Int retailTicks = (Int)( ( (UnsignedInt64)( frameNow + 1 ) * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND
+		- ( (UnsignedInt64)frameNow * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND );
 	// Note - counters start at 1.  0 means not assigned.
-	for (i=1; retailTick && i<m_numCounters; i++) {
-		if (m_counters[i].isCountdownTimer) {
-			// If counter has any time left, decrement.  Counters go to -1 and stop.
-			if (m_counters[i].value >= 0) {
-				m_counters[i].value--;
+	for (Int tick = 0; tick < retailTicks; ++tick) {
+		for (i=1; i<m_numCounters; i++) {
+			if (m_counters[i].isCountdownTimer) {
+				// If counter has any time left, decrement.  Counters go to -1 and stop.
+				if (m_counters[i].value >= 0) {
+					m_counters[i].value--;
+				}
 			}
 		}
 	}
@@ -7140,7 +7146,7 @@ void ScriptEngine::checkConditionsForTeamNames(Script *pScript)
 
 	if (pScript->getDelayEvalSeconds()>0) {
 		// Offset by a random number of frames
-		pScript->setFrameToEvaluate(GameLogicRandomValue(0,2*LOGICFRAMES_PER_SECOND));
+		pScript->setFrameToEvaluate(GameLogicRandomValue(0,2*LOGICFRAMES_PER_GAME_SECOND));
 	} else {
 		pScript->setFrameToEvaluate(0);
 	}
@@ -7221,7 +7227,7 @@ void ScriptEngine::executeScript( Script *pScript )
 	Int delaySeconds = pScript->getDelayEvalSeconds();
 
 	if (delaySeconds>0) {
-		pScript->setFrameToEvaluate(TheGameLogic->getFrame()+delaySeconds*LOGICFRAMES_PER_SECOND);
+		pScript->setFrameToEvaluate(TheGameLogic->getFrame()+delaySeconds*LOGICFRAMES_PER_GAME_SECOND);
 	}
 #ifdef DEBUG_LOGGING
 #ifdef SPECIAL_SCRIPT_PROFILING

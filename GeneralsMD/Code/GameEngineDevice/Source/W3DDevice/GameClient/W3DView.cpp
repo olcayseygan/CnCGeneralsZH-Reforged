@@ -1788,6 +1788,7 @@ void W3DView::update(void)
 	// paces itself to ~30fps already; gating on top of that ran the pan at half speed.
 	if (isTimeFrozen() && !isCameraMovementFinished())
 		stepTime = TRUE;
+	Int pictureScriptedSteps = 0;	// scripted steps this picture owes: a retail frame is GAME_SPEED_PERCENT / 100 of them
 	if (pictureClock)
 	{
 		// a recorded logic frame steps once, on its last picture: not on a -recordfps picture before it,
@@ -1798,7 +1799,16 @@ void W3DView::update(void)
 		const UnsignedInt retailFrame = TheGameLogic->getFrame() / LOGICFRAMES_PER_RETAIL_FRAME;
 		stepTime = GameEngine_videoPicture() == GameEngine_videoPictures() - 1 && retailFrame != steppedFrame;
 		if (stepTime)
+		{
 			steppedFrame = retailFrame;
+			static Int pictureStepHundredths = 0;
+			pictureStepHundredths += GAME_SPEED_PERCENT;
+			while (pictureStepHundredths >= 100)
+			{
+				pictureStepHundredths -= 100;
+				++pictureScriptedSteps;
+			}
+		}
 		prevCameraStepTime = nowCameraStepTime;
 	}
 	else if (stepTime)
@@ -1825,19 +1835,23 @@ void W3DView::update(void)
 	/* EA stepped a scripted move once an engine frame, so a move kept time with the script's timers at
 		 whatever speed the map ran.  On the wall clock it arrives early in a cinematic that slowed the game
 		 and late in turbo mode, and the timer that starts the next shot cuts it off.  A pan that froze the
-		 logic has no other clock, and a recorded picture is a logic frame already. */
-	const Real scriptedRate = pictureClock || (isTimeFrozen() && !isCameraMovementFinished()) ? 1.0f : GameEngine_missionTimeRate();
+		 logic has no other clock, and a recorded picture is a logic frame already.  The script's timers count
+		 game time, GAME_SPEED_PERCENT of the wall's, so the move does too. */
+	const Real gameSpeedRate = (Real)GAME_SPEED_PERCENT / 100.0f;
+	const Real scriptedRate = isTimeFrozen() && !isCameraMovementFinished() ? 1.0f
+		: pictureClock ? gameSpeedRate : GameEngine_missionTimeRate() * gameSpeedRate;
 	static Real scriptedWaypointMs = 0.0f;
 	scriptedWaypointMs += waypointElapsedMs * scriptedRate;
 	const Int scriptedElapsedMs = (Int)scriptedWaypointMs;
 	scriptedWaypointMs -= scriptedElapsedMs;
-	Bool scriptedStepTime = stepTime;
-	if (scriptedRate != 1.0f)
+	// a recorded picture steps on its logic frame's last picture (above), so its steps are counted there
+	Int scriptedSteps = pictureClock ? pictureScriptedSteps : ( stepTime ? 1 : 0 );
+	if (scriptedRate != 1.0f && !pictureClock)
 	{
 		static Real scriptedStepMs = 0.0f;
 		scriptedStepMs += waypointElapsedMs * scriptedRate;
-		scriptedStepTime = scriptedStepMs >= (Real)CAMERA_STEP_MSEC;
-		if (scriptedStepTime)
+		scriptedSteps = scriptedStepMs >= (Real)CAMERA_STEP_MSEC ? 1 : 0;
+		if (scriptedSteps)
 			scriptedStepMs -= (Real)CAMERA_STEP_MSEC;
 	}
 
@@ -2088,11 +2102,13 @@ void W3DView::update(void)
 		recalcCamera = true;
 	}
 
-	if (scriptedStepTime && scriptMovesAllowed) {
+	if (scriptedSteps > 0 && scriptMovesAllowed) {
 		// If we aren't frozen for debug, allow the camera to follow scripted movements.
-		if (updateCameraMovements()) {
-			didScriptedMovement = true;
-			recalcCamera = true;
+		for (Int step = 0; step < scriptedSteps; ++step) {
+			if (updateCameraMovements()) {
+				didScriptedMovement = true;
+				recalcCamera = true;
+			}
 		}
 	} else {
 		if (isDoingScriptedCamera()) {

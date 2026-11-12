@@ -3242,7 +3242,7 @@ extern Bool AIAttackMove_engageWasADud( Bool victimStillAlive, Int ammoAtEngage,
 
 TEST(attack_move_charges_the_reacquire_delay_only_for_a_fight_that_never_happened)
 {
-	const Int DUD = LOGICFRAMES_PER_SECOND / 2;		/* ATTACK_MOVE_DUD_ENGAGE_FRAMES, protected on the state */
+	const Int DUD = LOGICFRAMES_PER_GAME_SECOND / 2;		/* ATTACK_MOVE_DUD_ENGAGE_FRAMES, protected on the state */
 
 	/* stood next to it for a moment, fired nothing, it is still alive: a dud. */
 	CHECK( AIAttackMove_engageWasADud( true, 8, 8, 1000, 1000, DUD ) );
@@ -3285,7 +3285,7 @@ extern Bool AIAttackMove_shouldRetaliate( UnsignedInt lastDamageFrame, UnsignedI
 
 TEST(attack_move_turns_on_whoever_is_shooting_it)
 {
-	const Int WINDOW = LOGICFRAMES_PER_SECOND;		/* ATTACK_MOVE_RETALIATE_FRAMES, protected on the state */
+	const Int WINDOW = LOGICFRAMES_PER_GAME_SECOND;		/* ATTACK_MOVE_RETALIATE_FRAMES, protected on the state */
 
 	/* hit this second, can shoot back, busy with somebody else: turn on the shooter. */
 	CHECK( AIAttackMove_shouldRetaliate( 1000, 1000, WINDOW, false, true ) );
@@ -4950,14 +4950,14 @@ TEST(ai_build_delay_follows_the_players_bank_account)
 {
 	/* A campaign AI runs at the rate the data literally says: 10 seconds flat, faster when it
 	 * is rich, slower when it is broke. */
-	CHECK_EQ(teamDelay(4000, 1.0f), 10 * LOGICFRAMES_PER_SECOND);
-	CHECK_EQ(teamDelay(9000, 1.0f),  5 * LOGICFRAMES_PER_SECOND);
-	CHECK_EQ(teamDelay(1000, 1.0f), (Int)(10.0f / 0.6f * LOGICFRAMES_PER_SECOND));
+	CHECK_EQ(teamDelay(4000, 1.0f), 10 * LOGICFRAMES_PER_GAME_SECOND);
+	CHECK_EQ(teamDelay(9000, 1.0f),  5 * LOGICFRAMES_PER_GAME_SECOND);
+	CHECK_EQ(teamDelay(1000, 1.0f), (Int)(10.0f / 0.6f * LOGICFRAMES_PER_GAME_SECOND));
 
 	/* The thresholds are exclusive on both sides - sitting exactly on Poor or exactly on
 	 * Wealthy is neither. */
-	CHECK_EQ(teamDelay(AIDATA_POOR, 1.0f), 10 * LOGICFRAMES_PER_SECOND);
-	CHECK_EQ(teamDelay(AIDATA_WEALTHY, 1.0f), 10 * LOGICFRAMES_PER_SECOND);
+	CHECK_EQ(teamDelay(AIDATA_POOR, 1.0f), 10 * LOGICFRAMES_PER_GAME_SECOND);
+	CHECK_EQ(teamDelay(AIDATA_WEALTHY, 1.0f), 10 * LOGICFRAMES_PER_GAME_SECOND);
 }
 
 TEST(skirmish_build_rate_keeps_the_old_pace_but_not_the_old_flat_clamp)
@@ -4966,12 +4966,12 @@ TEST(skirmish_build_rate_keeps_the_old_pace_but_not_the_old_flat_clamp)
 	 * counted down.  With the shipped TeamSeconds of 10 that clamp fired for every player at
 	 * every wealth, so TeamsWealthyRate and TeamsPoorRate did nothing at all.  As a rate the
 	 * neutral case still lands on the same 3 seconds... */
-	CHECK_EQ(teamDelay(4000, SKIRMISH_RATE), 3 * LOGICFRAMES_PER_SECOND);
+	CHECK_EQ(teamDelay(4000, SKIRMISH_RATE), 3 * LOGICFRAMES_PER_GAME_SECOND);
 
 	/* ...and the modifiers around it are alive again: rich presses harder, broke backs off.
 	 * Under the clamp all three of these were 90. */
-	CHECK_EQ(teamDelay(9000, SKIRMISH_RATE), (Int)(1.5f * LOGICFRAMES_PER_SECOND));
-	CHECK_EQ(teamDelay(1000, SKIRMISH_RATE), (Int)(5.0f * LOGICFRAMES_PER_SECOND));
+	CHECK_EQ(teamDelay(9000, SKIRMISH_RATE), (Int)(1.5f * LOGICFRAMES_PER_GAME_SECOND));
+	CHECK_EQ(teamDelay(1000, SKIRMISH_RATE), (Int)(5.0f * LOGICFRAMES_PER_GAME_SECOND));
 	CHECK(teamDelay(9000, SKIRMISH_RATE) < teamDelay(4000, SKIRMISH_RATE));
 	CHECK(teamDelay(1000, SKIRMISH_RATE) > teamDelay(4000, SKIRMISH_RATE));
 
@@ -4980,8 +4980,8 @@ TEST(skirmish_build_rate_keeps_the_old_pace_but_not_the_old_flat_clamp)
 	const Int scripted = AIPlayer::computeBuildDelay(30.0f, 4000, AIDATA_POOR, AIDATA_WEALTHY,
 	                                                 AIDATA_TEAM_POOR_MOD, AIDATA_TEAM_RICH_MOD,
 	                                                 SKIRMISH_RATE);
-	CHECK_EQ(scripted, 9 * LOGICFRAMES_PER_SECOND);
-	CHECK(scripted > 3 * LOGICFRAMES_PER_SECOND);
+	CHECK_EQ(scripted, 9 * LOGICFRAMES_PER_GAME_SECOND);
+	CHECK(scripted > 3 * LOGICFRAMES_PER_GAME_SECOND);
 
 	/* StructureSeconds ships as 0, so structures stay on the "as soon as the build delay lets
 	 * you" path they are on today, whatever the rate is. */
@@ -5017,7 +5017,7 @@ TEST(ai_players_do_not_all_check_in_on_the_same_frame)
 	 * its repeating checks re-arms itself from a constant, so seven bots ran their base building,
 	 * team building and bridge repair together for the whole match and the cost of all seven
 	 * landed on one logic frame.  The phase is what pulls them apart. */
-	const Int cycle = 2 * LOGICFRAMES_PER_SECOND;
+	const Int cycle = 2 * LOGICFRAMES_PER_GAME_SECOND;
 	Int seen[ MAX_PLAYER_COUNT ];
 	Int i, j;
 	for (i = 0; i < MAX_PLAYER_COUNT; i++)
@@ -5028,7 +5028,7 @@ TEST(ai_players_do_not_all_check_in_on_the_same_frame)
 		CHECK(seen[i] >= 0);
 		CHECK(seen[i] < cycle);
 	}
-	/* 64 reversed slots on a cycle of fewer frames (two seconds at 30 ticks a second) share a frame only
+	/* 64 reversed slots on a cycle of fewer frames (two game seconds, 32 ticks or more) share a frame only
 	 * between indices 32 apart, so every seat of a full MAX_SLOTS lobby still has its own; a cycle of 64
 	 * or more frames gives every player one. */
 	const Int distinct = cycle >= 64 ? MAX_PLAYER_COUNT : MAX_SLOTS;
@@ -5052,9 +5052,9 @@ TEST(ai_players_do_not_all_check_in_on_the_same_frame)
 	 * collide there; what must not happen is a phase outside the cycle. */
 	for (i = 0; i < MAX_PLAYER_COUNT; i++)
 	{
-		const Int shortPhase = AIPlayer::computeUpdatePhase(i, LOGICFRAMES_PER_SECOND);
+		const Int shortPhase = AIPlayer::computeUpdatePhase(i, LOGICFRAMES_PER_GAME_SECOND);
 		CHECK(shortPhase >= 0);
-		CHECK(shortPhase < LOGICFRAMES_PER_SECOND);
+		CHECK(shortPhase < LOGICFRAMES_PER_GAME_SECOND);
 	}
 
 	/* Garbage in stays harmless: an unset index or a zero cycle means "no offset". */
@@ -17270,7 +17270,7 @@ TEST(retreat_ratio_measures_the_exchange_not_the_health_bar)
 TEST(a_superweapon_does_not_aim_where_one_is_already_falling)
 {
 	const Real RADIUS_SQR = 100.0f * 100.0f;
-	const UnsignedInt WINDOW = 60 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt WINDOW = 60 * LOGICFRAMES_PER_GAME_SECOND;
 
 	// the spot one is falling on right now is worth nothing to the next one
 	CHECK_NEAR( 0.0f, aiStrikeFade( 0.0f, RADIUS_SQR, 0, WINDOW ), 0.0001f );
@@ -17385,7 +17385,7 @@ TEST(the_ai_buys_ambulances_by_army_and_calls_in_the_hurt_nearby)
 	CHECK( !AIAmbulance_mayBuyMore( 0, AISKILL_EASY ) );
 
 	// two seconds since the last hit is quiet enough
-	const UnsignedInt quiet = 2 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt quiet = 2 * LOGICFRAMES_PER_GAME_SECOND;
 	CHECK( AIAmbulance_callsPatient( 0.3f, 100.0f, quiet ) );
 	CHECK( AIAmbulance_callsPatient( 0.49f, 900.0f, quiet ) );
 	// half health or more stays in the fight
@@ -17406,7 +17406,7 @@ extern Bool AIAmbulance_rebuyWaits( UnsignedInt now, UnsignedInt lost, Int skill
 
 TEST(the_ai_ambulance_pulls_back_when_hit_and_is_not_rebought_at_once)
 {
-	const UnsignedInt second = LOGICFRAMES_PER_SECOND;
+	const UnsignedInt second = LOGICFRAMES_PER_GAME_SECOND;
 	// the margin: Hard 8% of the base distance between 80 and 200, Medium 6% between 60 and 160
 	CHECK_NEAR( 80.0f, AIAmbulance_gunMargin( 700.0f, AISKILL_BRUTAL ), 0.01f );
 	CHECK_NEAR( 120.0f, AIAmbulance_gunMargin( 1500.0f, AISKILL_BRUTAL ), 0.01f );
@@ -17695,7 +17695,7 @@ TEST(every_rung_answers_fire)
 	}
 	const AIDifficultyProfile &hard = data.m_skill[ AISKILL_BRUTAL ];
 	CHECK_EQ( 1.0f, hard.m_influenceSeconds );
-	CHECK_EQ( ConvertRetailFrames( 10 ), (Int)(hard.m_fireLookSeconds * LOGICFRAMES_PER_SECOND + 0.5f) );
+	CHECK_EQ( ConvertRetailFrames( 10 ), (Int)(hard.m_fireLookSeconds * LOGICFRAMES_PER_GAME_SECOND + 0.5f) );
 	// Easy answers each hit alone
 	CHECK_EQ( 0.0f, data.m_skill[ AISKILL_EASY ].m_fireWordRadius );
 }
@@ -18066,7 +18066,7 @@ TEST(extra_factory_follows_the_queue)
 		if( s > 0 )
 			CHECK( data.m_skill[ s ].m_factoryBacklogSeconds < data.m_skill[ s - 1 ].m_factoryBacklogSeconds );
 	}
-	const Int PASS = 10 * LOGICFRAMES_PER_SECOND;		// the spend pass that samples it
+	const Int PASS = 10 * LOGICFRAMES_PER_GAME_SECOND;		// the spend pass that samples it (ECONOMY_CHECK_RATE)
 	const Int EASY = aiBacklogSamples( data.m_skill[ AISKILL_EASY ].m_factoryBacklogSeconds, PASS );
 	const Int HARD = aiBacklogSamples( data.m_skill[ AISKILL_BRUTAL ].m_factoryBacklogSeconds, PASS );
 	CHECK_EQ( 9, EASY );		// 90 s
@@ -18140,7 +18140,7 @@ TEST(extra_factory_follows_the_queue)
 TEST(extra_airfield_follows_the_parking)
 {
 	TAiData data;
-	const Int HARD = aiBacklogSamples( data.m_skill[ AISKILL_BRUTAL ].m_factoryBacklogSeconds, 10 * LOGICFRAMES_PER_SECOND );
+	const Int HARD = aiBacklogSamples( data.m_skill[ AISKILL_BRUTAL ].m_factoryBacklogSeconds, 10 * LOGICFRAMES_PER_GAME_SECOND );
 
 	// full takes every airfield's parking and an aircraft refused for it
 	CHECK( aiAirfieldsFull( 2, 2, TRUE ) );
@@ -18185,7 +18185,7 @@ TEST(stuck_building_site_is_given_up)
 		}
 	}
 	const AIDifficultyProfile &hard = data.m_skill[ AISKILL_BRUTAL ];
-	const UnsignedInt STALL = (UnsignedInt)REAL_TO_INT( hard.m_siteStallSeconds * LOGICFRAMES_PER_SECOND );
+	const UnsignedInt STALL = (UnsignedInt)REAL_TO_INT( hard.m_siteStallSeconds * LOGICFRAMES_PER_GAME_SECOND );
 	const Int LOST = hard.m_siteBuildersLost;
 	const ObjectID A = (ObjectID)10, B = (ObjectID)11, C = (ObjectID)12;
 
@@ -18240,7 +18240,7 @@ TEST(another_tech_building_until_three_stand)
 	CHECK( !aiWantsAnotherTechBuilding( AI_TECH_BUILDING_COPIES, 0 ) );
 
 	// defences: a big army earns them, and the clock earns one per pace up to two superweapons' worth
-	const UnsignedInt pace = AI_DEFENSE_PACE_SECONDS * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt pace = AI_DEFENSE_PACE_SECONDS * LOGICFRAMES_PER_GAME_SECOND;
 	CHECK_EQ( aiDefenseAllowance( 0, 0 ), 0 );
 	CHECK_EQ( aiDefenseAllowance( 0, pace - 1 ), 0 );
 	CHECK_EQ( aiDefenseAllowance( 0, pace ), 1 );
@@ -24506,7 +24506,7 @@ TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
 TEST(save_from_an_older_build_or_another_logic_rate_loads_only_as_mission_save)
 {
 	SaveGameInfo info;
-	CHECK_EQ( info.logicFramesPerSecond, (Int)LOGICFRAMES_PER_SECOND );
+	CHECK_EQ( info.logicFramesPerSecond, (Int)LOGICFRAMES_PER_GAME_SECOND );	// the rate at game speed 100
 	info.version = 6;
 	CHECK( info.isLoadable() );
 	info.logicFramesPerSecond = LOGICFRAMES_PER_SECOND == 60 ? 30 : 60;		// the other rate this source builds at
@@ -24514,7 +24514,7 @@ TEST(save_from_an_older_build_or_another_logic_rate_loads_only_as_mission_save)
 	info.saveFileType = SAVE_FILE_TYPE_MISSION;
 	CHECK( info.isLoadable() );
 	info.saveFileType = SAVE_FILE_TYPE_NORMAL;
-	info.logicFramesPerSecond = LOGICFRAMES_PER_SECOND;
+	info.logicFramesPerSecond = LOGICFRAMES_PER_GAME_SECOND;
 	info.version = 5;		// loaded as written at 60 (GameState::xfer); here at this build's rate
 	CHECK( info.isLoadable() );
 	info.version = 4;		// 16 players a side of every per-player array
@@ -24527,6 +24527,60 @@ TEST(save_from_an_older_build_or_another_logic_rate_loads_only_as_mission_save)
 	CHECK( info.isLoadable() );
 	info.version = 1;		// no file type recorded, so no way to tell it is a mission save
 	CHECK( !info.isLoadable() );
+}
+
+// The Retail helpers carry GAME_SPEED_PERCENT on top of the logic rate, and their Wall forms only the
+// rate. Every expectation comes from the constants: a retail second of frames is a game second of
+// ticks, an amount added every frame times the frames of a retail second is the retail second's
+// amount, and a factor raised to the ticks of a retail tick's time is the retail factor. At 100 each
+// helper must be its Wall form exactly; at any other speed it must not be.
+TEST(retail_helpers_carry_the_game_speed_and_are_the_identity_at_100)
+{
+	const Bool atHundred = GAME_SPEED_PERCENT == 100;
+	const Int R = LOGICFRAMES_PER_RETAIL_FRAME;
+
+	CHECK_EQ( LOGICFRAMES_PER_GAME_SECOND * GAME_SPEED_PERCENT, LOGICFRAMES_PER_SECOND * 100 );
+	CHECK_EQ( ConvertRetailFramesWall( 90 ), 90 * R );
+	CHECK_EQ( ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND ), (Int)LOGICFRAMES_PER_GAME_SECOND );
+	CHECK_EQ( ConvertRetailFrames( (UnsignedInt)RETAIL_LOGICFRAMES_PER_SECOND ), (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND );
+	CHECK_EQ( ConvertRetailFrames( 1000 ), (Int)( ( 1000 * R * 100 + GAME_SPEED_PERCENT / 2 ) / GAME_SPEED_PERCENT ) );
+	CHECK_EQ( ConvertRetailFrames( 1000 ) == ConvertRetailFramesWall( 1000 ), atHundred );
+	CHECK_EQ( ConvertRetailFrames( 1000u ) == ConvertRetailFramesWall( 1000u ), atHundred );
+	CHECK_EQ( ConvertRetailFrames( 1000.0f ) == ConvertRetailFramesWall( 1000.0f ), atHundred );
+	CHECK_NEAR( ConvertRetailFrames( (Real)RETAIL_LOGICFRAMES_PER_SECOND ), LOGICFRAMES_PER_GAME_SECOND_REAL, 0.0001f );
+
+	// nothing nonzero becomes 0, sentinels stay, a Real count above one tick keeps a gain under 1
+	CHECK( ConvertRetailFrames( 1 ) >= 1 );
+	CHECK( ConvertRetailFrames( -1 ) <= -1 );
+	CHECK_EQ( ConvertRetailFrames( 0 ), 0 );
+	CHECK( ConvertRetailFrames( 1u ) >= 1u );
+	CHECK_EQ( ConvertRetailFrames( INT_MAX ), INT_MAX );
+	CHECK_EQ( ConvertRetailFrames( UINT_MAX ), UINT_MAX );
+	CHECK( ConvertRetailFrames( 1.0f ) >= 1.0f );
+	CHECK( 1.0f / ConvertRetailFrames( 2.0f ) < 1.0f );
+
+	// rates and accelerations against the frames of a retail second
+	const Real retailSecond = ConvertRetailFrames( (Real)RETAIL_LOGICFRAMES_PER_SECOND );
+	CHECK_NEAR( ConvertRetailPerFrameRate( 1.0f ) * retailSecond, (Real)RETAIL_LOGICFRAMES_PER_SECOND, 0.001f );
+	CHECK_NEAR( ConvertRetailPerFrameSquared( 1.0f ) * retailSecond * retailSecond,
+		(Real)( RETAIL_LOGICFRAMES_PER_SECOND * RETAIL_LOGICFRAMES_PER_SECOND ), 0.1f );
+	CHECK_EQ( ConvertRetailPerFrameRate( 0.3f ) == 0.3f, atHundred && R == 1 );
+	CHECK_EQ( ConvertRetailPerFrameSquared( 0.3f ) == 0.3f, atHundred && R == 1 );
+	CHECK_NEAR( ConvertRetailPerFrameRate( 1.0f ), ConvertVelocityInSecsToFrames( (Real)RETAIL_LOGICFRAMES_PER_SECOND ), 0.0001f );
+
+	// a factor: g^(100 R) == f^P, both by multiplies
+	const Real f = 0.99f;
+	const Real g = ConvertRetailPerFrameFactor( f );
+	Real gPow = 1.0f, fPow = 1.0f;
+	for( Int i = 0; i < 100 * R; ++i ) gPow *= g;
+	for( Int i = 0; i < GAME_SPEED_PERCENT; ++i ) fPow *= f;
+	CHECK_NEAR( gPow, fPow, 0.0001f );
+	CHECK_EQ( g == f, atHundred && R == 1 );
+
+	// the seconds and msec parsers' conversions take game time too
+	CHECK_NEAR( ConvertDurationFromMsecsToFrames( (Real)MSEC_PER_SECOND ), LOGICFRAMES_PER_GAME_SECOND_REAL, 0.001f );
+	CHECK_EQ( GAME_SECONDS_PER_LOGICFRAME_REAL == SECONDS_PER_LOGICFRAME_REAL, atHundred );
+	CHECK_EQ( GAME_MSEC_PER_LOGICFRAME_REAL == MSEC_PER_LOGICFRAME_REAL, atHundred );
 }
 
 #include "test_minimap_input.inc"
@@ -24750,6 +24804,7 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	AsciiString recorded = picked;
 	recorded.concat( RecorderClass::replayLogicRateField() );
 	CHECK( !ParseAsciiStringToGameInfo( &guest, recorded ) );		// the parser alone refuses the key
+	CHECK_EQ( RecorderClass::takeReplayGameSpeed( recorded ), (Int)GAME_SPEED_PERCENT );	// no field at 100 is 100
 	CHECK_EQ( RecorderClass::takeReplayLogicRate( recorded ), (Int)LOGICFRAMES_PER_SECOND );
 	CHECK_STR( recorded.str(), picked.str() );
 	CHECK( ParseAsciiStringToGameInfo( &guest, recorded ) );

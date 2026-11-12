@@ -1148,7 +1148,7 @@ void Object::setStatus( ObjectStatusMaskType objectStatus, Bool set )
 		{
 			// Damaged repulsable civilians scare (repulse) other civs, but only
 			// for a short amount of time... use the repulsor helper to turn off repulsion shortly.
-			m_repulsorHelper->sleepUntil(TheGameLogic->getFrame() + 2*LOGICFRAMES_PER_SECOND);
+			m_repulsorHelper->sleepUntil(TheGameLogic->getFrame() + 2*LOGICFRAMES_PER_GAME_SECOND);
 		}
 
 		if( objectStatus.test( OBJECT_STATUS_STEALTHED ) || objectStatus.test( OBJECT_STATUS_DETECTED ) || objectStatus.test( OBJECT_STATUS_DISGUISED ) )
@@ -2126,7 +2126,7 @@ Bool Object::isUnknownTo( Int playerIndex ) const
 //-------------------------------------------------------------------------------------------------
 // A shot out of the fog gives its shooter away: the victim's side sees a small circle round the
 // attacker for a moment, enough to see what hit it and not the ground around it.
-static const UnsignedInt FOG_ATTACKER_REVEAL_FRAMES = LOGICFRAMES_PER_SECOND * 5 / 2;
+static const UnsignedInt FOG_ATTACKER_REVEAL_FRAMES = LOGICFRAMES_PER_GAME_SECOND * 5 / 2;
 static const Real FOG_ATTACKER_REVEAL_MARGIN = 15.0f;	///< past the attacker's own footprint, about a shroud cell and a half
 
 static void Object_revealAttackerInFog( const Object *victim, ObjectID attackerID )

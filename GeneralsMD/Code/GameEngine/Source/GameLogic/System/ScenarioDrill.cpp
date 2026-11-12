@@ -642,7 +642,7 @@ struct ScenarioArrival
 };
 
 /// how long a unit on its way has to stand still before it counts as having stopped
-static const Int SCENARIO_STALL_FRAMES = LOGICFRAMES_PER_SECOND;
+static const Int SCENARIO_STALL_FRAMES = LOGICFRAMES_PER_GAME_SECOND;
 /// less than this from one frame to the next is standing still
 static const Real SCENARIO_STILL_DISTANCE = ConvertRetailPerFrameRate( 0.05f );
 
@@ -1296,7 +1296,7 @@ struct StatueTrack
 	Bool counted;
 	Bool seen;
 };
-static const Int STATUE_FRAMES = 3 * LOGICFRAMES_PER_SECOND;
+static const Int STATUE_FRAMES = 3 * LOGICFRAMES_PER_GAME_SECOND;
 static const Int STATUE_DETAIL_LINES = 40;
 static std::map<ObjectID, StatueTrack> theStatueTracks;
 static Int theStatueStops = 0;
@@ -1338,7 +1338,7 @@ static void updateStatues( UnsignedInt now )
 			continue;
 		}
 		++track.stillFor;
-		if (track.stillFor < STATUE_FRAMES || (track.stillFor % LOGICFRAMES_PER_SECOND) != 0)
+		if (track.stillFor < STATUE_FRAMES || (track.stillFor % LOGICFRAMES_PER_GAME_SECOND) != 0)
 			continue;
 
 		PartitionFilterRelationship enemies( obj, PartitionFilterRelationship::ALLOW_ENEMIES );
@@ -1390,7 +1390,7 @@ static void updateStatues( UnsignedInt now )
 static void logStatues( void )
 {
 	DEBUG_LOG(("HEADLESS STATUE: %d stops of %.0f s or more with an enemy in reach and no shot (%d infantry), %d unit-seconds - %d waiting for a path, %d blocked, %d no target, %d target in range, %d target out of range\n",
-						 theStatueStops, (Real)STATUE_FRAMES / (Real)LOGICFRAMES_PER_SECOND, theStatueInfantryStops, theStatueSeconds,
+						 theStatueStops, (Real)STATUE_FRAMES / (Real)LOGICFRAMES_PER_GAME_SECOND, theStatueInfantryStops, theStatueSeconds,
 						 theStatueWaiting, theStatueBlocked, theStatueNoVictim, theStatueVictimInRange, theStatueVictimOutOfRange));
 	for( Int s = 0; s < NUM_AI_STATES; ++s )
 		if (theStatueByState[ s ] > 0)
@@ -1449,14 +1449,14 @@ void ScenarioDrill_logArrivals( void )
 		DEBUG_LOG(("HEADLESS DEPART: slot %d '%s' from frame %d: %d of %d moved %.0f, the last after %d frames (%.1f s)\n",
 							 it->slot, it->selector.str(), it->fromFrame, departed, total, SCENARIO_DEPARTED_DISTANCE,
 							 departed ? (Int)(lastDeparture - it->fromFrame) : 0,
-							 departed ? (Real)(lastDeparture - it->fromFrame) / (Real)LOGICFRAMES_PER_SECOND : 0.0f));
+							 departed ? (Real)(lastDeparture - it->fromFrame) / (Real)LOGICFRAMES_PER_GAME_SECOND : 0.0f));
 
 		DEBUG_LOG(("HEADLESS STALL: slot %d '%s': %d stops of %.0f s or more on the way - %d idle, %d held back, %d waiting for a path, %d blocked, %d with a path and no reason; longest %d frames (%.1f s), unit %d\n",
 							 it->slot, it->selector.str(),
 							 it->stallsIdle + it->stallsHeldBack + it->stallsWaitingForPath + it->stallsBlocked + it->stallsOther,
-							 (Real)SCENARIO_STALL_FRAMES / (Real)LOGICFRAMES_PER_SECOND,
+							 (Real)SCENARIO_STALL_FRAMES / (Real)LOGICFRAMES_PER_GAME_SECOND,
 							 it->stallsIdle, it->stallsHeldBack, it->stallsWaitingForPath, it->stallsBlocked, it->stallsOther,
-							 it->longestStall, (Real)it->longestStall / (Real)LOGICFRAMES_PER_SECOND,
+							 it->longestStall, (Real)it->longestStall / (Real)LOGICFRAMES_PER_GAME_SECOND,
 							 (Int)it->longestStallID));
 
 		if (arrived == 0)
@@ -1470,7 +1470,7 @@ void ScenarioDrill_logArrivals( void )
 		DEBUG_LOG(("HEADLESS ARRIVE: slot %d '%s' from frame %d: %d of %d within %.0f of (%.0f,%.0f), first after %d frames, mean %.0f, last after %d frames (%.1f s), %d lost, %d still out\n",
 							 it->slot, it->selector.str(), it->fromFrame, arrived, total, it->radius, it->goal.x, it->goal.y,
 							 first - it->fromFrame, arrivalSum / (Real)arrived, last - it->fromFrame,
-							 (Real)(last - it->fromFrame) / (Real)LOGICFRAMES_PER_SECOND, lost, stillOut));
+							 (Real)(last - it->fromFrame) / (Real)LOGICFRAMES_PER_GAME_SECOND, lost, stillOut));
 	}
 }
 
@@ -1567,7 +1567,7 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 		if (alive < SPREAD_MAX)
 			spot[ alive ] = *obj->getPosition();
 		const PhysicsBehavior *physics = obj->getPhysics();
-		const Real speed = physics ? physics->getVelocityMagnitude() * LOGICFRAMES_PER_SECOND : 0.0f;
+		const Real speed = physics ? physics->getVelocityMagnitude() * LOGICFRAMES_PER_GAME_SECOND : 0.0f;
 		slowest = MIN( slowest, speed );
 		fastest = MAX( fastest, speed );
 		++alive;

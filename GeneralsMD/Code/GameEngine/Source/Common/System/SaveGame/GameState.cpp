@@ -111,7 +111,7 @@ SaveGameInfo::SaveGameInfo( void )
 	saveFileType			= SAVE_FILE_TYPE_NORMAL;
 	framesPerSecond		= 0;
 	version						= 0;
-	logicFramesPerSecond = LOGICFRAMES_PER_SECOND;
+	logicFramesPerSecond = LOGICFRAMES_PER_GAME_SECOND;
 
 }  // end SaveGameInfo
 
@@ -134,8 +134,9 @@ Bool SaveGameInfo::isLoadable( void ) const
 		return TRUE;
 
 	// a newer one never gets this far: xferVersion refuses it while the header is read.  5 is the
-	// oldest block whose per-player arrays this build reads; its frame counts must be at our rate.
-	return version >= 5 && logicFramesPerSecond == LOGICFRAMES_PER_SECOND;
+	// oldest block whose per-player arrays this build reads; its frame counts must be at our rate,
+	// ticks per game second, which carries the game speed as well as the logic rate.
+	return version >= 5 && logicFramesPerSecond == LOGICFRAMES_PER_GAME_SECOND;
 
 }  // end isLoadable
 
@@ -970,7 +971,7 @@ Bool GameState::refuseUnloadableSave( const SaveGameInfo &saveGameInfo )
 		return FALSE;
 
 	DEBUG_LOG(( "GameState - refused a save with GameState version %d at %d logic frames a second, this build loads %d at %d\n",
-							saveGameInfo.version, saveGameInfo.logicFramesPerSecond, GAME_STATE_VERSION, (Int)LOGICFRAMES_PER_SECOND ));
+							saveGameInfo.version, saveGameInfo.logicFramesPerSecond, GAME_STATE_VERSION, (Int)LOGICFRAMES_PER_GAME_SECOND ));
 	MessageBoxOk( TheGameText->fetch( "GUI:Error" ), TheGameText->fetch( "GUI:SaveFromOlderGame" ), NULL );
 	return TRUE;
 
@@ -1774,9 +1775,11 @@ void GameState::xfer( Xfer *xfer )
 
 	// version 6: the logic rate the frame counts in the file are in, checked by isLoadable.  Every
 	// block before 6 that this build can read (version 5) was written at 60; older ones are refused
-	// on their version anyway, and retail ran at its own rate.
+	// on their version anyway, and retail ran at its own rate.  The rate written is ticks per game
+	// second (LOGICFRAMES_PER_GAME_SECOND), so a save of another game speed is refused like one of
+	// another rate, and at GAME_SPEED_PERCENT 100 it is the logic rate, the bytes as they were.
 	if( xfer->getXferMode() != XFER_LOAD )
-		saveGameInfo->logicFramesPerSecond = LOGICFRAMES_PER_SECOND;
+		saveGameInfo->logicFramesPerSecond = LOGICFRAMES_PER_GAME_SECOND;
 	else if( version >= 4 )
 		saveGameInfo->logicFramesPerSecond = GAME_STATE_VERSION_5_LOGIC_RATE;
 	else

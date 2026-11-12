@@ -46,7 +46,7 @@ RadarCoverageBehavior *RadarCoverageBehavior::s_first = NULL;
 
 /* How often the radar hands its contacts to the client, which draws one sweep's rings and the
 	 previous one's echoes (RadarContactLook::SweepSeconds is the same two seconds). */
-static const UnsignedInt RADAR_SWEEP_FRAMES = 2 * LOGICFRAMES_PER_SECOND;
+static const UnsignedInt RADAR_SWEEP_FRAMES = 2 * LOGICFRAMES_PER_GAME_SECOND;
 
 /* Horizontal speed in units a frame above which a unit counts as moving.  A tank creeping at a tenth
 	 of its pace still shows; one turning its turret on the spot does not. */

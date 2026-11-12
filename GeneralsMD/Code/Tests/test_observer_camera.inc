@@ -457,7 +457,7 @@ TEST(a_match_of_two_splits_after_its_opening_only_for_a_big_moment)
 	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, farApart, needed, rested - 1 ) );
 	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, 900.0f, needed, rested ) );
 	// once on it stays the panes' slide and 15 s whatever the fights do, no 8 s flicker
-	const UnsignedInt least = ConvertRetailFrames( 12U + 15U + 21U ) + 15 * second;	// radar, slide and draw in 30 Hz frames, then the hold
+	const UnsignedInt least = ConvertRetailFramesWall( 12U + 15U + 21U ) + 15 * second;	// radar, slide and draw in 30 Hz frames, then the hold
 	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, 8 * second ) );
 	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, least - 1 ) );
 	CHECK( !ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, least ) );
@@ -520,7 +520,7 @@ TEST(a_split_once_on_stays_until_its_panes_are_in_and_held_six_seconds)
 	const Real needed = 660.0f;
 	// in through the radar's slide, the panes' and the lines' draw, and held six seconds, whatever the
 	// second fight does: one that went off on the next scan slid a pane in and straight back out
-	const UnsignedInt least = ConvertRetailFrames( 12U + 15U + 21U ) + 6 * LOGICFRAMES_PER_SECOND;	// the three in 30 Hz frames
+	const UnsignedInt least = ConvertRetailFramesWall( 12U + 15U + 21U ) + 6 * LOGICFRAMES_PER_SECOND;	// the three in 30 Hz frames
 	CHECK( ObserverCamera_holdSplit( TRUE, 6.0f, 0.0f, 2000.0f, needed, 15 ) );
 	CHECK( ObserverCamera_holdSplit( TRUE, 6.0f, 0.0f, 2000.0f, needed, least - 1 ) );
 	CHECK( !ObserverCamera_holdSplit( TRUE, 6.0f, 0.0f, 2000.0f, needed, least ) );

@@ -39,7 +39,7 @@
   the farm is made and again after the runs, and a difference fails the check. Symbolic links need an
   elevated session or Developer Mode.
 
-  -ExpectCrc "0@1200:0x87792035","1@12000:0x084F009C" fails the check when a run's recorded CRC is another
+  -ExpectCrc "0@1200:0xFE693D21","1@12000:0x288CE749" fails the check when a run's recorded CRC is another
   one: that is the cross-platform comparison ("seed:crc" means that seed at -MaxFrames). Without it the
   check only asks that each replay plays back to the same world. Pin -ExpectCrc to the commit the numbers
   were made on: upstream gameplay data moves them.
@@ -51,10 +51,11 @@
   one, with the same arguments, and exits with its status.
 
 .EXAMPLE
-  .\windows-ci.ps1 -DataDir D:\ZeroHourData -Runs "0@1200","0@12000","1@12000" -ExpectCrc "0@1200:0x87792035","0@12000:0xAF2D1FDD","1@12000:0x084F009C"
+  .\windows-ci.ps1 -DataDir D:\ZeroHourData -Runs "0@1200","0@12000","1@12000" -ExpectCrc "0@1200:0xFE693D21","0@12000:0xCA580557","1@12000:0x288CE749"
     (the E1 pins PORTING.md gives; upstream gameplay data changes move them. These frames and CRCs were
-    measured at a 30 Hz logic tick, 40 s and 400 s of game time: re-measure them whenever
-    LOGICFRAMES_PER_SECOND in GameCommon.h changes)
+    measured at a 30 Hz logic tick and GAME_SPEED_PERCENT 125, 40 s and 400 s of game time: re-measure
+    them whenever LOGICFRAMES_PER_SECOND or GAME_SPEED_PERCENT in GameCommon.h changes. At speed 100 the
+    pins are the older 0x87792035, 0xAF2D1FDD and 0x084F009C)
   .\windows-ci.ps1 -DataDir D:\ZeroHourData -SkipBuild -Seeds 0 -MaxFrames 1200
   .\windows-ci.ps1 -Bundle D:\bundles\branch.bundle -Ref my-branch -DataDir D:\ZeroHourData
 

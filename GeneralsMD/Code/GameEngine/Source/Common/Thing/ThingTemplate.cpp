@@ -1738,7 +1738,7 @@ Real ThingTemplate::calcMaxHealth( void ) const
 //-------------------------------------------------------------------------------------------------
 Int ThingTemplate::calcTimeToBuild( const Player* player) const
 {
-	Int buildTime = getBuildTime() * LOGICFRAMES_PER_SECOND;
+	Int buildTime = getBuildTime() * LOGICFRAMES_PER_GAME_SECOND;
 	buildTime *= player->getHandicap()->getHandicap(Handicap::BUILDTIME, this);
 
 	Real factionModifier = 1 + player->getProductionTimeChangePercent( getNameKey() );

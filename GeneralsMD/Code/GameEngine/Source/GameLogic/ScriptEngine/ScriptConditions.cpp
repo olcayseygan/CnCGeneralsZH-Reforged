@@ -1900,7 +1900,7 @@ Bool ScriptConditions::evaluateSkirmishSpecialPowerIsReady(Parameter *pSkirmishP
 	if (pPower->getInt()>0 && pPower->getInt()>TheGameLogic->getFrame()) {
 		return false;
 	}
-	Int nextFrame = TheGameLogic->getFrame() + 10*LOGICFRAMES_PER_SECOND;
+	Int nextFrame = TheGameLogic->getFrame() + 10*LOGICFRAMES_PER_GAME_SECOND;
 	const SpecialPowerTemplate *power = TheSpecialPowerStore->findSpecialPowerTemplate(pPower->getString());
 	if (power==NULL) {
 		pPower->friend_setInt(-1); // flag as never true.
@@ -2536,13 +2536,13 @@ Bool ScriptConditions::evaluateSkirmishPlayerHasUnitsInArea(Condition *pConditio
 //-------------------------------------------------------------------------------------------------
 Bool ScriptConditions::evaluateSkirmishSupplySourceSafe(Condition *pCondition, Parameter *pSkirmishPlayerParm, Parameter *pMinSupplyAmount )
 {
-	// Trigger every 2*LOGICFRAMES_PER_SECOND. jba.
+	// Trigger every 2*LOGICFRAMES_PER_GAME_SECOND. jba.
 	Bool anyChanges = (TheGameLogic->getFrame() > pCondition->getCustomFrame());
 	if (!anyChanges) {
 		if (pCondition->getCustomData()==-1) return false;
 		if (pCondition->getCustomData()==1) return true;
 	}
-	pCondition->setCustomFrame(TheGameLogic->getFrame()+2*LOGICFRAMES_PER_SECOND);
+	pCondition->setCustomFrame(TheGameLogic->getFrame()+2*LOGICFRAMES_PER_GAME_SECOND);
 	Player *player = playerFromParam(pSkirmishPlayerParm);
 	if (!player) {
 		return FALSE;

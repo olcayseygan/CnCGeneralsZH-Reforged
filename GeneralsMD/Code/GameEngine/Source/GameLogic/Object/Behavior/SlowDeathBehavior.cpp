@@ -88,7 +88,7 @@ SlowDeathBehaviorModuleData::SlowDeathBehaviorModuleData()
 	m_momentumImpulseReach = 0.35f;
 	m_momentumPushSpeed = ConvertVelocityInSecsToFrames(20.0f);
 	m_momentumTreadPushSpeed = ConvertVelocityInSecsToFrames(10.0f);
-	m_momentumTreadSlideTime = 3 * LOGICFRAMES_PER_SECOND;
+	m_momentumTreadSlideTime = 3 * LOGICFRAMES_PER_GAME_SECOND;
 	m_momentumTreadSlideLength = 1.25f;
 	// redundant.
 	//m_fx.clear();
@@ -268,7 +268,7 @@ static Real bodyReachBelow(const Object* obj)
 
 const Real MOMENTUM_AIRBORNE_HEIGHT = 0.5f;																	///< above this a wreck is in the air: its slide waits, physics flies it
 const Real MOMENTUM_LIFTOFF_HEIGHT = 0.05f;																	///< above this a slow car's low hop has left the ground
-const UnsignedInt MOMENTUM_LANDING_GRACE = 3 * LOGICFRAMES_PER_SECOND;			///< on top of the slide and the hop, the most it may hold the destruction back
+const UnsignedInt MOMENTUM_LANDING_GRACE = 3 * LOGICFRAMES_PER_GAME_SECOND;			///< on top of the slide and the hop, the most it may hold the destruction back
 const Real MOMENTUM_BOUNCINESS = -0.4f;																			///< off the ground's stiffness: it lands heavily, two short bounces
 // Tuned as 0.92 a frame at twice the retail rate, so 0.92 squared a retail frame; physics friction is
 // converted the same way (retailFrictionToFrame). sqrtf of a correctly rounded square gives the
@@ -481,7 +481,7 @@ Bool SlowDeathBehavior::beginMomentum(const DamageInfo* damageInfo)
 	const Real vx = vel->x + hitX * push;
 	const Real vy = vel->y + hitY * push;
 	// clamped as a float before the cast, as the slide above is; a minute in the air is past any data
-	const Real MAX_AIR_FRAMES = 60.0f * LOGICFRAMES_PER_SECOND;
+	const Real MAX_AIR_FRAMES = 60.0f * LOGICFRAMES_PER_GAME_SECOND;
 	const Real airFrames = min(max(2.0f * tossSpeed / gravity, 1.0f), MAX_AIR_FRAMES);
 	m_momentumVelX = vx;
 	m_momentumVelY = vy;
@@ -758,8 +758,8 @@ void SlowDeathBehavior::beginSlowDeath(const DamageInfo *damageInfo)
 			{
 				//Scripts don't want hulks around, so start sinking immediately!
 				m_sinkFrame = 1;
-				m_midpointFrame = (LOGICFRAMES_PER_SECOND/2) + 1;
-				m_destructionFrame = LOGICFRAMES_PER_SECOND + 1;
+				m_midpointFrame = (LOGICFRAMES_PER_GAME_SECOND/2) + 1;
+				m_destructionFrame = LOGICFRAMES_PER_GAME_SECOND + 1;
 				m_acceleratedTimeScale = 1.0f;
 			}
 			else

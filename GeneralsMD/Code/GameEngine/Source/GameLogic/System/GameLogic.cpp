@@ -1341,11 +1341,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
     if ( TheGameInfo )
     {
       m_superweaponRestriction = TheGameInfo->getSuperweaponRestriction();
-      m_peaceTimeEndFrame = TheGameInfo->getPeaceTime() * 60 * LOGICFRAMES_PER_SECOND;
+      m_peaceTimeEndFrame = TheGameInfo->getPeaceTime() * 60 * LOGICFRAMES_PER_GAME_SECOND;
       m_unitCap = TheGameInfo->getUnitLimit()
                   ? (UnsignedInt)UnitLimitPerPlayer( TheGameInfo->getNumNonObserverPlayers() ) : 0;
       m_incomeSharing = TheGameInfo->getIncomeSharing();
-      m_techRespawnDelay = TheGameInfo->getTechRespawn() * 60 * LOGICFRAMES_PER_SECOND;
+      m_techRespawnDelay = TheGameInfo->getTechRespawn() * 60 * LOGICFRAMES_PER_GAME_SECOND;
       m_supplyPileLimit = TheGameInfo->getSupplyPileLimit();
     }
     else
@@ -1378,7 +1378,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
        way to watch what the truce does to a match or to prove a change to it still replays. No
        player can reach it - a network game reads the host's options string, not this. */
     if ( TheGlobalData->m_peaceTime > 0 )
-      m_peaceTimeEndFrame = TheGlobalData->m_peaceTime * 60 * LOGICFRAMES_PER_SECOND;
+      m_peaceTimeEndFrame = TheGlobalData->m_peaceTime * 60 * LOGICFRAMES_PER_GAME_SECOND;
   }
 
 	checkForDuplicateColors( game );
@@ -4666,7 +4666,7 @@ void GameLogic::processKickVote( Player *voter, Int targetIndex, Bool yes )
 				TheInGameUI->message( "GUI:KickVoteTooFew" );
 			return;
 		}
-		m_kickVoteEndFrame = m_frame + KICK_VOTE_SECONDS * LOGICFRAMES_PER_SECOND;
+		m_kickVoteEndFrame = m_frame + KICK_VOTE_SECONDS * LOGICFRAMES_PER_SECOND;	// people voting: wall time
 		m_kickVoteYesMask = voter->getPlayerMask();
 		if( TheInGameUI )
 			TheInGameUI->message( "GUI:KickVoteStarted", voter->getPlayerDisplayName().str(), target->getPlayerDisplayName().str() );
@@ -4730,15 +4730,15 @@ static void peaceTimeTick( void )
 	{
 		const UnsignedInt left = endFrame - now;
 		if( now == 1 )
-			TheInGameUI->message( "GUI:PeaceTimeStarted", (Int)(endFrame / (60 * LOGICFRAMES_PER_SECOND)) );
+			TheInGameUI->message( "GUI:PeaceTimeStarted", (Int)(endFrame / (60 * LOGICFRAMES_PER_GAME_SECOND)) );
 		else if( now == endFrame )
 			TheInGameUI->message( "GUI:PeaceTimeOver" );
-		else if( left == 60 * LOGICFRAMES_PER_SECOND || left == 30 * LOGICFRAMES_PER_SECOND
-						 || left == 10 * LOGICFRAMES_PER_SECOND )
-			TheInGameUI->message( "GUI:PeaceTimeRemaining", (Int)(left / LOGICFRAMES_PER_SECOND) );
+		else if( left == 60 * LOGICFRAMES_PER_GAME_SECOND || left == 30 * LOGICFRAMES_PER_GAME_SECOND
+						 || left == 10 * LOGICFRAMES_PER_GAME_SECOND )
+			TheInGameUI->message( "GUI:PeaceTimeRemaining", (Int)(left / LOGICFRAMES_PER_GAME_SECOND) );
 	}
 
-	if( now % LOGICFRAMES_PER_SECOND != 0 )
+	if( now % LOGICFRAMES_PER_GAME_SECOND != 0 )
 		return;
 
 	const Real radius = TheGlobalData->m_peaceTimeBaseRadius;
@@ -4790,7 +4790,7 @@ static void peaceTimeTick( void )
 	 takes those - and would hand every command center on the map a free repair crew. */
 static void neutralBuildingRepair( Object *obj )
 {
-	const UnsignedInt quietFrames = 10 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt quietFrames = 10 * LOGICFRAMES_PER_GAME_SECOND;
 	const Real repairFractionPerSecond = 0.0125f;
 
 	if( !obj->isKindOf( KINDOF_STRUCTURE ) || obj->isEffectivelyDead() )
@@ -5001,7 +5001,7 @@ void GameLogic::watchDisabled( const Object *obj )
 // ------------------------------------------------------------------------------------------------
 void GameLogic::rebuildObjectIndex( void )
 {
-	for( Int turn = 0; turn < LOGICFRAMES_PER_SECOND; ++turn )
+	for( Int turn = 0; turn < LOGICFRAMES_PER_GAME_SECOND; ++turn )
 		m_secondTurnIDs[ turn ].clear();
 	m_disabledWatch.clear();
 
@@ -5019,11 +5019,11 @@ void GameLogic::rebuildObjectIndex( void )
 	{
 		const ObjectID id = obj->getID();
 		m_listStamp[ id ] = stamp;
-		m_secondTurnIDs[ (UnsignedInt)id % LOGICFRAMES_PER_SECOND ].push_back( id );
+		m_secondTurnIDs[ (UnsignedInt)id % LOGICFRAMES_PER_GAME_SECOND ].push_back( id );
 		if( obj->isDisabled() )
 			m_disabledWatch.push_back( id );
 	}
-	for( Int turn = 0; turn < LOGICFRAMES_PER_SECOND; ++turn )
+	for( Int turn = 0; turn < LOGICFRAMES_PER_GAME_SECOND; ++turn )
 		std::reverse( m_secondTurnIDs[ turn ].begin(), m_secondTurnIDs[ turn ].end() );
 
 	m_objIndexStale = FALSE;
@@ -5033,7 +5033,7 @@ void GameLogic::rebuildObjectIndex( void )
 UnsignedInt GameLogic::countIndexedObjects( void ) const
 {
 	size_t count = 0;
-	for( Int turn = 0; turn < LOGICFRAMES_PER_SECOND; ++turn )
+	for( Int turn = 0; turn < LOGICFRAMES_PER_GAME_SECOND; ++turn )
 		count += m_secondTurnIDs[ turn ].size();
 	return (UnsignedInt)count;
 }
@@ -5084,7 +5084,7 @@ void GameLogic::disabledAndSecondTurns( void )
 #endif
 
 	// this second's bucket, its dead taken out; the living keep their order
-	std::vector<ObjectID> &bucket = m_secondTurnIDs[ m_frame % LOGICFRAMES_PER_SECOND ];
+	std::vector<ObjectID> &bucket = m_secondTurnIDs[ m_frame % LOGICFRAMES_PER_GAME_SECOND ];
 	bucket.erase( std::remove_if( bucket.begin(), bucket.end(),
 		[this]( ObjectID id ) { return findObjectByID( id ) == NULL; } ), bucket.end() );
 
@@ -5190,7 +5190,7 @@ static Bool techBuildingSpotIsTaken( const ThingTemplate *building, const Coord3
 
 void GameLogic::techRespawnTick( void )
 {
-	if( m_pendingTechBuildings.empty() || m_frame % LOGICFRAMES_PER_SECOND != 0 )
+	if( m_pendingTechBuildings.empty() || m_frame % LOGICFRAMES_PER_GAME_SECOND != 0 )
 		return;
 
 	for( size_t i = 0; i < m_pendingTechBuildings.size(); )
@@ -5823,7 +5823,7 @@ void GameLogic::registerObject( Object *obj )
 		if( (size_t)id >= m_listStamp.size() )
 			m_listStamp.resize( m_objVector.size(), 0 );
 		m_listStamp[ id ] = ++m_nextListStamp;
-		m_secondTurnIDs[ (UnsignedInt)id % LOGICFRAMES_PER_SECOND ].push_back( id );
+		m_secondTurnIDs[ (UnsignedInt)id % LOGICFRAMES_PER_GAME_SECOND ].push_back( id );
 	}
 
 	UnsignedInt now = TheGameLogic->getFrame();

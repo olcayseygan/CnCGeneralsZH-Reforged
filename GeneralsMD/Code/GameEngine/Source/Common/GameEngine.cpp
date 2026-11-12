@@ -1682,7 +1682,7 @@ Int GameEngine_logicCatchupMaxFrames( Int logicFps )
 Int GameEngine_matchFramesPerSecond( Bool turbo )
 {
 	Int fps = TheGlobalData->m_framesPerSecondLimit;
-	if (fps < ConvertRetailFrames( 15 ))
+	if (fps < ConvertRetailFramesWall( 15 ))
 		fps = LOGICFRAMES_PER_SECOND;
 	if (turbo)
 		fps *= 2;
@@ -1693,6 +1693,9 @@ Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps )
 {
 	if (askedRetailFps <= 0 || askedRetailFps >= RETAIL_LOGICFRAMES_PER_SECOND)
 		return matchFps;
+	// game time: the cinematic keeps retail's pace against its wall-clock voices (23 asked is 18 ticks
+	// at GAME_SPEED_PERCENT 125, a pace of 18 * 1.25 / 30 = 0.75 against retail's 23 / 30 = 0.77, the
+	// nearest whole tick), the identity at 100
 	return ConvertRetailFrames( askedRetailFps );
 }
 
@@ -2798,7 +2801,7 @@ static void updateHeadlessRun( void )
 		 frames after it is decided and drops to the shell, which would leave without these lines.  The
 		 decision's own CRC is logged on its frame, the one the scouting pass closed on. */
 	static UnsignedInt filmDecidedOn = 0;
-	const UnsignedInt FILM_PAST_DECISION_FRAMES = ConvertRetailFrames( 105u );
+	const UnsignedInt FILM_PAST_DECISION_FRAMES = ConvertRetailFrames( 105u );	// game time, like the end timer it has to beat
 	if (TheGlobalData->m_directorRecord && strcmp( why, "decided" ) == 0)
 	{
 		if (filmDecidedOn == 0)

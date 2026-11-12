@@ -112,33 +112,54 @@ static void replayWriteWideString(const WideChar *s)
 	 the slot list as "HZ=<frames a second>;", so the header's layout stays as it was.  The options parser
 	 refuses a key it does not know, so readReplayHeader cuts the field off (takeReplayLogicRate) before
 	 anything parses the string.  A replay without the field was recorded before it existed, when the
-	 logic ran 60 frames a second. */
+	 logic ran 60 frames a second.  The game speed (GAME_SPEED_PERCENT) rides the same way as
+	 "GS=<percent>;" after it, written only when it is not 100, so a replay at 100 keeps the bytes it
+	 always had and one without the field is 100. */
 static const Int REPLAY_LOGIC_RATE_WITHOUT_FIELD = 60;
+static const Int REPLAY_GAME_SPEED_WITHOUT_FIELD = 100;
 
 AsciiString RecorderClass::replayLogicRateField()
 {
 	AsciiString field;
 	field.format("HZ=%d;", (Int)LOGICFRAMES_PER_SECOND);
+	if (GAME_SPEED_PERCENT != 100)
+	{
+		AsciiString speed;
+		speed.format("GS=%d;", (Int)GAME_SPEED_PERCENT);
+		field.concat(speed);
+	}
 	return field;
 }
 
-Int RecorderClass::takeReplayLogicRate(AsciiString& options)
+// cuts the last "<key><number>;" field off the options and returns the number, or absent
+static Int takeReplayHeaderField(AsciiString& options, const char *key, Int absent)
 {
 	// the last one: the field is appended after the slot list, which ends in ';'
+	const size_t keyLength = strlen(key);
 	const char *start = options.str();
 	const char *field = NULL;
-	for (const char *at = strstr(start, "HZ="); at != NULL; at = strstr(at + 1, "HZ="))
+	for (const char *at = strstr(start, key); at != NULL; at = strstr(at + 1, key))
 		if (at == start || at[-1] == ';')
 			field = at;
 	if (field == NULL)
-		return REPLAY_LOGIC_RATE_WITHOUT_FIELD;
+		return absent;
 
-	const Int rate = atoi(field + 3);
+	const Int value = atoi(field + keyLength);
 	const char *end = strchr(field, ';');
 	std::string cut(start, field - start);
 	cut += end ? end + 1 : "";
 	options = cut.c_str();
-	return rate;
+	return value;
+}
+
+Int RecorderClass::takeReplayLogicRate(AsciiString& options)
+{
+	return takeReplayHeaderField(options, "HZ=", REPLAY_LOGIC_RATE_WITHOUT_FIELD);
+}
+
+Int RecorderClass::takeReplayGameSpeed(AsciiString& options)
+{
+	return takeReplayHeaderField(options, "GS=", REPLAY_GAME_SPEED_WITHOUT_FIELD);
 }
 
 void RecorderClass::logGameStart(AsciiString options)
@@ -941,11 +962,12 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header)
 
 	// Read in the GameInfo
 	header.gameOptions = readAsciiString();
+	const Int recordedSpeed = takeReplayGameSpeed(header.gameOptions);
 	const Int recordedRate = takeReplayLogicRate(header.gameOptions);
-	if (recordedRate != LOGICFRAMES_PER_SECOND)
+	if (recordedRate != LOGICFRAMES_PER_SECOND || recordedSpeed != GAME_SPEED_PERCENT)
 	{
-		DEBUG_LOG(("RecorderClass::readReplayHeader - replay was recorded at %d logic frames a second, this build runs %d.\n",
-			recordedRate, (Int)LOGICFRAMES_PER_SECOND));
+		DEBUG_LOG(("RecorderClass::readReplayHeader - replay was recorded at %d logic frames a second and game speed %d, this build runs %d at %d.\n",
+			recordedRate, recordedSpeed, (Int)LOGICFRAMES_PER_SECOND, (Int)GAME_SPEED_PERCENT));
 		fclose(m_file);
 		m_file = NULL;
 		return FALSE;

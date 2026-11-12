@@ -63,8 +63,9 @@ Int GameEngine_matchFramesPerSecond( Bool turbo );
 	which is the match's speed, turbo mode included. */
 Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps );
 
-/** How fast a mission's logic runs against the wall clock: 0.77 in a cinematic that asked for 23, 2
-	in turbo mode, 1 everywhere else.  Whatever a cinematic times against its script's frames and draws
+/** How fast a mission's logic ticks against the wall clock: a cinematic that asked for 23 runs 23 retail
+	frames of game time a second, 23 ticks at GAME_SPEED_PERCENT 100 (0.77) and 18 at 125 (0.6); 2 in
+	turbo mode, 1 everywhere else.  The game speed itself is not in it.  Whatever a cinematic times against its script's frames and draws
 	on the wall clock (the scripted camera, W3D's animation clock) multiplies by this. */
 Real GameEngine_missionTimeRate( void );
 

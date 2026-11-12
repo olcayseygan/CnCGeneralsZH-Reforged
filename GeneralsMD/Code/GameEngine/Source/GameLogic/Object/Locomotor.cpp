@@ -371,7 +371,7 @@ static void calcDirectionToApplyThrust(
 		direction comes out, so nothing has to go back.  Left per logic frame, gravity and the thrust
 		counted half as much against the speed as they did in 2003.
 	*/
-	const Real RETAIL_VEL = (Real)LOGICFRAMES_PER_RETAIL_FRAME;
+	const Real RETAIL_VEL = (Real)LOGICFRAMES_PER_GAME_SECOND / (Real)RETAIL_LOGICFRAMES_PER_SECOND;	// logic frames per retail frame of game time
 	const Real RETAIL_ACCEL = RETAIL_VEL * RETAIL_VEL;
 	Vector3 curVel(physics->getVelocity()->x, physics->getVelocity()->y, physics->getVelocity()->z);
 	curVel *= RETAIL_VEL;
@@ -827,7 +827,7 @@ Locomotor::Locomotor(const LocomotorTemplate* tmpl)
 	m_angleOffset = GameLogicRandomValueReal(-PI/6, PI/6);
 	m_offsetIncrement = (PI/40) * (GameLogicRandomValueReal(0.8f, 1.2f)/m_template->m_wanderLengthFactor);
 	setFlag(OFFSET_INCREASING, GameLogicRandomValue(0,1));
-	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_SECOND;
+	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_GAME_SECOND;
 	m_yawRate = 0.0f;
 	m_driveAccelX = 0.0f;
 	m_driveAccelY = 0.0f;
@@ -993,7 +993,7 @@ void Locomotor::loadPostProcess( void )
 void Locomotor::startMove(void) 
 {
 	// Reset the donut timer.
-	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_SECOND;
+	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_GAME_SECOND;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1432,7 +1432,7 @@ void Locomotor::locoUpdate_moveTowardsPosition(Object* obj, const Coord3D& chase
 
 	if (wasBraking)
 	{
-	#define MIN_VEL (PATHFIND_CELL_SIZE_F/(LOGICFRAMES_PER_SECOND))
+	#define MIN_VEL (PATHFIND_CELL_SIZE_F/(LOGICFRAMES_PER_GAME_SECOND))
 
 		Coord3D pos = *obj->getPosition();
 		if (obj->isKindOf(KINDOF_PROJECTILE)) 
@@ -1715,7 +1715,7 @@ void Locomotor::moveTowardsPositionWheels(Object* obj, PhysicsBehavior *physics,
 
 
 	const Real FIFTEEN_DEGREES = PI / 12.0f;
-	const Real PROJECT_FRAMES = LOGICFRAMES_PER_SECOND/2; // Project out 1/2 second.
+	const Real PROJECT_FRAMES = LOGICFRAMES_PER_GAME_SECOND/2; // Project out 1/2 second.
 	if (fabs( relAngle ) > FIFTEEN_DEGREES) 
 	{
 		// If we're turning more than 10 degrees, check & see if we're moving into "impassable territory"
@@ -1780,7 +1780,7 @@ void Locomotor::moveTowardsPositionWheels(Object* obj, PhysicsBehavior *physics,
 	}
 
  	if (onPathDistToGoal > DONUT_DISTANCE) {
-		m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_SECOND;
+		m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_GAME_SECOND;
 	} else {
 		if (m_donutTimer < TheGameLogic->getFrame()) {
 			setFlag(IS_BRAKING, true);
@@ -1876,7 +1876,7 @@ void Locomotor::moveTowardsPositionWheels(Object* obj, PhysicsBehavior *physics,
 /// the hardest a vehicle brakes: its Braking, or whatever stops it from top speed in VEHICLE_STOP_SECONDS
 Real Locomotor::getVehicleStopDecel(BodyDamageType condition) const
 {
-	Real decel = getMaxSpeedForCondition(condition) / (VEHICLE_STOP_SECONDS * LOGICFRAMES_PER_SECOND);
+	Real decel = getMaxSpeedForCondition(condition) / (VEHICLE_STOP_SECONDS * LOGICFRAMES_PER_GAME_SECOND);
 	if (decel < getBraking())
 		decel = getBraking();
 	return decel;
@@ -2076,7 +2076,7 @@ void Locomotor::moveTowardsPositionVehicle(Object* obj, PhysicsBehavior *physics
 		tight = sqr(goalPos.x - cx) + sqr(goalPos.y - cy) < sqr(minRadius)
 			|| (goalCos < 0.0f && onPathDistToGoal < 2.0f * minRadius);
 		const Real FIFTEEN_DEGREES_COS = 0.966f;
-		const Real PROJECT_FRAMES = LOGICFRAMES_PER_SECOND / 2;
+		const Real PROJECT_FRAMES = LOGICFRAMES_PER_GAME_SECOND / 2;
 		if (!tight && leadCos < FIFTEEN_DEGREES_COS && absSpeed > 0.0f)
 		{
 			// EA's check, on the wider arc: half a second of it must not run onto ground it cannot drive
@@ -2184,7 +2184,7 @@ void Locomotor::moveTowardsPositionVehicle(Object* obj, PhysicsBehavior *physics
 	if (!treads)
 	{
 		if (onPathDistToGoal > DONUT_DISTANCE)
-			m_donutTimer = TheGameLogic->getFrame() + DONUT_TIME_DELAY_SECONDS * LOGICFRAMES_PER_SECOND;
+			m_donutTimer = TheGameLogic->getFrame() + DONUT_TIME_DELAY_SECONDS * LOGICFRAMES_PER_GAME_SECOND;
 		else if (m_donutTimer < TheGameLogic->getFrame())
 			slide = TRUE;
 	}
@@ -2264,7 +2264,7 @@ Bool Locomotor::fixInvalidPosition(Object* obj, PhysicsBehavior *physics)
 
 		if (dot<0) {
 			// EA's push is the root of the retail speed into the bad ground, applied every frame
-			dot = ConvertRetailPerFrameSquared(sqrt(-dot * LOGICFRAMES_PER_RETAIL_FRAME));
+			dot = ConvertRetailPerFrameSquared(sqrt(-dot * ((Real)LOGICFRAMES_PER_GAME_SECOND / (Real)RETAIL_LOGICFRAMES_PER_SECOND)));
 			correctionNormalized.x *= dot*physics->getMass();
 			correctionNormalized.y *= dot*physics->getMass();
 			physics->applyMotiveForce(&correctionNormalized);
@@ -2318,7 +2318,7 @@ Real Locomotor::calcMinTurnRadius(BodyDamageType condition, Real* timeToTravelTh
 	after: see that file.
 */
 static const Real JET_CORNER_SHARE = 0.5f;
-static const Real JET_BANK_EASE_FRAMES = LOGICFRAMES_PER_SECOND * 0.5f;	// from wings level to the full bank
+static const Real JET_BANK_EASE_FRAMES = LOGICFRAMES_PER_GAME_SECOND * 0.5f;	// from wings level to the full bank
 static const Real JET_TURN_SPEED_LOSS = 0.2f;
 static const Real JET_AIRBRAKE_SHARE = 0.25f;	// a jet slows at this share of its Acceleration, or at Braking if that is more
 static const Real JET_ORBIT_CORRECTION = PI / 3.0f;	// circling, a radius off the circle heads this far in from the tangent
@@ -2408,7 +2408,7 @@ Real Locomotor_jetBreakOffSide( Real relX, Real relY, Real speed, Real yawRate, 
 	if (maxRate <= 0.0f || yawAccel <= 0.0f)
 		return away;
 
-	const Int MAX_FRAMES = 10 * LOGICFRAMES_PER_SECOND;
+	const Int MAX_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND;
 	Real frames = 2.0f * maxRate / yawAccel + PI / maxRate;
 	const Int count = (frames < MAX_FRAMES) ? (Int)frames + 1 : MAX_FRAMES;
 
@@ -2946,7 +2946,7 @@ void Locomotor::moveTowardsPositionHelicopter(Object* obj, PhysicsBehavior *phys
 		if (fabs(faceTarget->x - pos->x) > TOO_CLOSE_TO_AIM || fabs(faceTarget->y - pos->y) > TOO_CLOSE_TO_AIM)
 			noseToward = faceTarget;
 	}
-	else if (fighting ? onPathDistToGoal > maxSpeed * LOGICFRAMES_PER_SECOND * FIGHTING_TURN_SECONDS && onPathDistToGoal > FIGHTING_TURN_MIN_DIST
+	else if (fighting ? onPathDistToGoal > maxSpeed * LOGICFRAMES_PER_GAME_SECOND * FIGHTING_TURN_SECONDS && onPathDistToGoal > FIGHTING_TURN_MIN_DIST
 					 : onPathDistToGoal > TURN_INTO_FLIGHT_MIN_DIST
 						 || (m_yawRate != 0.0f && (fabs(goalPos.x - pos->x) > TOO_CLOSE_TO_AIM || fabs(goalPos.y - pos->y) > TOO_CLOSE_TO_AIM)))
 	{
@@ -3736,7 +3736,7 @@ Bool Locomotor::locoUpdate_maintainCurrentPosition(Object* obj)
 		setFlag(MAINTAIN_POS_IS_VALID, true);
 	}
 
-	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_SECOND;
+	m_donutTimer = TheGameLogic->getFrame()+DONUT_TIME_DELAY_SECONDS*LOGICFRAMES_PER_GAME_SECOND;
 	setFlag(IS_BRAKING, false);
 	/* The status goes with the flag. Left set, physics stopped moving a parked unit by its own speed,
 		 and its next order began with a slide towards the new goal on top of the drive. A missile sets

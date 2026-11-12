@@ -1063,7 +1063,7 @@ void TerrainLogic::update( void )
 				 targetHeight,
 				 currentHeight;
 		Bool finalTransition,
-				 doDamageThisFrame = (TheGameLogic->getFrame() % LOGICFRAMES_PER_SECOND) == 0;
+				 doDamageThisFrame = (TheGameLogic->getFrame() % LOGICFRAMES_PER_GAME_SECOND) == 0;
 
 		for( Int i = m_numWaterToUpdate - 1; i >= 0; --i )
 		{
@@ -2540,7 +2540,7 @@ void TerrainLogic::changeWaterHeightOverTime( const WaterHandle *water,
 	// add the entry into the array of water to update
 	m_waterToUpdate[ m_numWaterToUpdate ].waterTable = water;
 	m_waterToUpdate[ m_numWaterToUpdate ].changePerFrame = (finalHeight - currentHeight) / 
-																												 (LOGICFRAMES_PER_SECOND * transitionTimeInSeconds);
+																												 (LOGICFRAMES_PER_GAME_SECOND * transitionTimeInSeconds);
 	m_waterToUpdate[ m_numWaterToUpdate ].targetHeight = finalHeight;
 	m_waterToUpdate[ m_numWaterToUpdate ].damageAmount = damageAmount;
 	m_waterToUpdate[ m_numWaterToUpdate ].currentHeight = currentHeight;

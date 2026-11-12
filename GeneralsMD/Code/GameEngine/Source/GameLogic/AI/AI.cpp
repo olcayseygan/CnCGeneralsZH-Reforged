@@ -876,7 +876,7 @@ Bool aiTargetBeats( const AITargetRating &a, const AITargetRating &b )
 // AIStates.cpp; the attack move's retaliation window, which is protected on its state
 extern Bool AIAttackMove_shouldRetaliate( UnsignedInt lastDamageFrame, UnsignedInt now, Int windowFrames,
 																					Bool alreadyFightingTheAttacker, Bool canAttackTheAttacker );
-static const Int AI_SHOT_ME_FRAMES = LOGICFRAMES_PER_SECOND;
+static const Int AI_SHOT_ME_FRAMES = LOGICFRAMES_PER_GAME_SECOND;
 
 /** The search this thread runs as a logic job, or NULL on the logic thread (AI::ScanJob). The two lazy
 	* tables below and a template's first name-key ask are filled only on the logic thread: a job that
@@ -2325,7 +2325,7 @@ Bool aiWantsAnotherTechBuilding( Int standing, Int onTheWay )
 Int aiDefenseAllowance( Int army, UnsignedInt frame )
 {
 	const Int byArmy = army / AI_ARMY_PER_DEFENSE;
-	Int byClock = (Int)( frame / ( AI_DEFENSE_PACE_SECONDS * LOGICFRAMES_PER_SECOND ) );
+	Int byClock = (Int)( frame / ( AI_DEFENSE_PACE_SECONDS * LOGICFRAMES_PER_GAME_SECOND ) );
 	if( byClock > 2 * DEFENSES_PER_SUPERWEAPON )
 		byClock = 2 * DEFENSES_PER_SUPERWEAPON;
 	return byArmy > byClock ? byArmy : byClock;
@@ -3156,8 +3156,8 @@ m_guardOuterModifierAI(0),
 m_guardInnerModifierHuman(0),
 m_guardOuterModifierHuman(0),
 m_guardChaseUnitFrames(0),
-m_guardEnemyScanRate(LOGICFRAMES_PER_SECOND/2),
-m_guardEnemyReturnScanRate(LOGICFRAMES_PER_SECOND),
+m_guardEnemyScanRate(LOGICFRAMES_PER_GAME_SECOND/2),
+m_guardEnemyReturnScanRate(LOGICFRAMES_PER_GAME_SECOND),
 m_wallHeight(0),
 m_alertRangeModifier(0),
 m_aggressiveRangeModifier(0),

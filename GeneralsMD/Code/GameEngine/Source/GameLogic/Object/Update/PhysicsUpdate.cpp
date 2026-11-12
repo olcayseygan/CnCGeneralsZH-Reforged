@@ -80,7 +80,7 @@ const Real STUN_RELIEF_EPSILON = ConvertRetailPerFrameRate(0.5f);
 
 #include "Common/CRCDebug.h"
 
-const Int MOTIVE_FRAMES = LOGICFRAMES_PER_SECOND / 3;
+const Int MOTIVE_FRAMES = LOGICFRAMES_PER_GAME_SECOND / 3;
 
 #define SLEEPY_PHYSICS
 
@@ -916,8 +916,8 @@ UpdateSleepTime PhysicsBehavior::update()
 			if ((fabs(m_vel.x) <= TINY_DELTA || fabs(activeVelZ / m_vel.x) >= MIN_ANGLE_TAN) &&
 				(fabs(m_vel.y) <= TINY_DELTA || fabs(activeVelZ / m_vel.y) >= MIN_ANGLE_TAN))
 			{
-				// the damage factors were tuned against the speed per retail frame
-				Real damageAmt = netSpeed * LOGICFRAMES_PER_RETAIL_FRAME * getMass() * d->m_fallHeightDamageFactor;
+				// the damage factors were tuned against the speed per retail frame (of game time)
+				Real damageAmt = netSpeed * ((Real)LOGICFRAMES_PER_GAME_SECOND / (Real)RETAIL_LOGICFRAMES_PER_SECOND) * getMass() * d->m_fallHeightDamageFactor;
 
 				DamageInfo damageInfo;
 				damageInfo.in.m_damageType = DAMAGE_FALLING;
@@ -1494,7 +1494,7 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 			// huh huh, he said "stiff"
 			
 			Real mag = getVelocityMagnitude();
-			const Real MINBOUNCESPEED = 1.0f/(LOGICFRAMES_PER_SECOND*5.0f);
+			const Real MINBOUNCESPEED = 1.0f/(LOGICFRAMES_PER_GAME_SECOND*5.0f);
 			if (mag < MINBOUNCESPEED) 
 				mag = MINBOUNCESPEED;
 			factor = -mag * getMass() * stiffness;
@@ -1554,7 +1554,7 @@ void PhysicsBehavior::onCollide( Object *other, const Coord3D *loc, const Coord3
 							damageInfo.in.m_deathType = weaponTemplate->getDeathType();
 							damageInfo.in.m_sourceID = obj->getID();
 							damageInfo.in.m_sourcePlayerMask = obj->getControllingPlayer() ? obj->getControllingPlayer()->getPlayerMask() : 0;
-							damageInfo.in.m_amount = weaponTemplate->getPrimaryDamage(nullBonus) / LOGICFRAMES_PER_RETAIL_FRAME;
+							damageInfo.in.m_amount = ConvertRetailPerFrameRate(weaponTemplate->getPrimaryDamage(nullBonus));
 
 							other->attemptDamage(&damageInfo);
 							if (TheGameLogic->getFrame() % LOGICFRAMES_PER_RETAIL_FRAME == 0)

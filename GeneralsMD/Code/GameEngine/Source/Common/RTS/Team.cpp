@@ -1160,7 +1160,7 @@ Bool TeamPrototype::evaluateProductionCondition(void)
 		Int delaySeconds = m_productionConditionScript->getDelayEvalSeconds();
 
 		if (delaySeconds>0) {
-			m_productionConditionScript->setFrameToEvaluate(TheGameLogic->getFrame()+delaySeconds*LOGICFRAMES_PER_SECOND);
+			m_productionConditionScript->setFrameToEvaluate(TheGameLogic->getFrame()+delaySeconds*LOGICFRAMES_PER_GAME_SECOND);
 		}
 		return TheScriptEngine->evaluateConditions(m_productionConditionScript, NULL, getControllingPlayer());
 	}

@@ -217,8 +217,8 @@ const FieldParse EvaSideSounds::s_evaSideSounds[] =
 EvaCheckInfo::EvaCheckInfo() :
 	m_message(EVA_COUNT),
 	m_priority(1), // lowest of all priorities
-	m_framesBetweenChecks(LOGICFRAMES_PER_SECOND * 30),	// 30 seconds
-	m_framesToExpire(LOGICFRAMES_PER_SECOND * 5) // 5 seconds
+	m_framesBetweenChecks(LOGICFRAMES_PER_GAME_SECOND * 30),	// 30 seconds, game time like the INI fields below
+	m_framesToExpire(LOGICFRAMES_PER_GAME_SECOND * 5) // 5 seconds
 {
 
 	

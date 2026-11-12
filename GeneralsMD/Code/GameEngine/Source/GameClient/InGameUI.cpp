@@ -3529,7 +3529,7 @@ void InGameUI::update( void )
 		{
 			// trigger whether or not we should draw the block	
 			// retail toggled every 10 frames, its 9 plus the strict <'s one; the 10 is doubled, not the 9
-			if( m_militarySubtitle->blockBeginFrame + ConvertRetailFrames( 10 ) - 1 < currLogicFrame )
+			if( m_militarySubtitle->blockBeginFrame + ConvertRetailFramesWall( 10 ) - 1 < currLogicFrame )
 			{
 				m_militarySubtitle->blockBeginFrame = currLogicFrame;
 				m_militarySubtitle->blockDrawn = !m_militarySubtitle->blockDrawn;
@@ -8455,7 +8455,7 @@ void InGameUI::postDraw( void )
 				Int framesLeft = counter ? counter->value : 0;
 				UnsignedInt readyFrame = TheGameLogic->getFrame();
 				if (framesLeft > 0)
-					readyFrame += framesLeft * LOGICFRAMES_PER_RETAIL_FRAME;	// script timers count retail frames
+					readyFrame += ConvertRetailFrames( framesLeft );	// script timers count retail frames of game time
 				Int readySecs = ControlBar_secondsFromFrames( (Real)(readyFrame - TheGameLogic->getFrame()) );
 				if ( (info->isCountdown && readySecs != info->timestamp) || (!info->isCountdown && framesLeft != info->timestamp) )
 				{
@@ -8783,7 +8783,7 @@ void InGameUI::militarySubtitle( const AsciiString& label, Int duration )
 
 	// we need some frame info to set our timings
 	UnsignedInt currLogicFrame = TheGameLogic->getFrame();
-	const int messageTimeout = currLogicFrame + (Int)(((Real)LOGICFRAMES_PER_SECOND * duration)/1000.0f);
+	const int messageTimeout = currLogicFrame + (Int)(((Real)LOGICFRAMES_PER_SECOND * duration)/1000.0f);	// wall time: it goes with the speech
 
 	// disable tooltips until this frame, cause we don't want to collide with the military subtitles.
 	TheInGameUI->disableTooltipsUntil(messageTimeout);
@@ -9730,7 +9730,7 @@ enum
 {
 	SIGNAL_MARK_SIZE						= 160,	///< across, in world units: 90 read as a coin from the default camera
 	SIGNAL_MARK_OPACITY					= 230,	///< out of 255, so the ground under it still shows a little
-	SIGNAL_MARK_FADE_OUT_FRAMES	= LOGICFRAMES_PER_SECOND * 2	///< the smoke's last steps, over which the mark fades
+	SIGNAL_MARK_FADE_OUT_FRAMES	= LOGICFRAMES_PER_GAME_SECOND * 2	///< the smoke's last steps, over which the mark fades
 };
 
 //-------------------------------------------------------------------------------------------------

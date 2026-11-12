@@ -93,9 +93,9 @@ AIUpdateModuleData::AIUpdateModuleData()
 	for (int i = 0; i < MAX_TURRETS; i++)
 		m_turretData[i] = NULL;
 	m_autoAcquireEnemiesWhenIdle = 0;
-	m_moodAttackCheckRate = LOGICFRAMES_PER_SECOND * 2;
+	m_moodAttackCheckRate = LOGICFRAMES_PER_GAME_SECOND * 2;
 #ifdef ALLOW_SURRENDER
-	m_surrenderDuration = LOGICFRAMES_PER_SECOND * 120;
+	m_surrenderDuration = LOGICFRAMES_PER_GAME_SECOND * 120;
 #endif
 
   m_forbidPlayerCommands = FALSE;
@@ -662,7 +662,7 @@ void AIUpdateInterface::requestPath( Coord3D *destination, Bool isFinalGoal )
 		// jba intense debug
 		//DEBUG_LOG(("Info - RePathing very quickly %d, %d.\n", m_pathTimestamp, TheGameLogic->getFrame()));
 		if (m_path && m_isBlockedAndStuck) {
-			setIgnoreCollisionTime(2*LOGICFRAMES_PER_SECOND);
+			setIgnoreCollisionTime(2*LOGICFRAMES_PER_GAME_SECOND);
 			m_blockedFrames = 0;
 			m_isBlocked = FALSE;
 			m_isBlockedAndStuck = FALSE;
@@ -1205,7 +1205,7 @@ void AIUpdateInterface::setQueueForPathTime(Int frames)
 void AIUpdateInterface::queueForPathOrRetry()
 {
 	if (!TheAI->pathfinder()->queueForPath(getObject()->getID()))
-		setQueueForPathTime(LOGICFRAMES_PER_SECOND / 2);
+		setQueueForPathTime(LOGICFRAMES_PER_GAME_SECOND / 2);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1744,7 +1744,7 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 	Coord3D theirDir = *other->getUnitDirectionVector2D();
 	// Dot product is our directions projected onto each other.
 	Real dotProduct = ourDir.x*theirDir.x	+ ourDir.y*theirDir.y;
-	if (getNumFramesBlocked()>LOGICFRAMES_PER_SECOND) {
+	if (getNumFramesBlocked()>LOGICFRAMES_PER_GAME_SECOND) {
 		if (dotProduct<=0.0f) return FALSE;  // we are not moving in the same direction.
 	}
 	/* The rule above is EA's way out of a head-on meeting and it never fires: doLocomotor puts
@@ -2301,7 +2301,7 @@ Bool AIUpdateInterface::computePath( PathfindServicesInterface *pathServices, Co
 			destroyPath();
 			// Stop and wait one second.
 
-			setQueueForPathTime(LOGICFRAMES_PER_SECOND);
+			setQueueForPathTime(LOGICFRAMES_PER_GAME_SECOND);
 			Coord3D goalPos;
 			Object *obj = getObject();
 			goalPos = *obj->getPosition();
@@ -2370,7 +2370,7 @@ Bool AIUpdateInterface::computeAttackPath( PathfindServicesInterface *pathServic
 		//CRCDEBUG_LOG(("Info - RePathing very quickly %d, %d.\n", m_pathTimestamp, TheGameLogic->getFrame()));
 		if (m_path && m_isBlockedAndStuck) 
 		{
-			setIgnoreCollisionTime(2*LOGICFRAMES_PER_SECOND);
+			setIgnoreCollisionTime(2*LOGICFRAMES_PER_GAME_SECOND);
 			m_blockedFrames = 0;
 			m_isBlocked = FALSE;
 			m_isBlockedAndStuck = FALSE;
@@ -3055,8 +3055,8 @@ void AIUpdateInterface::stuckRescue( void )
 			ai->aiMoveAwayFromUnit( self, CMD_FROM_AI );
 		}
 
-		setIgnoreCollisionTime( LOGICFRAMES_PER_SECOND );
-		m_rescueCool = now + LOGICFRAMES_PER_SECOND;
+		setIgnoreCollisionTime( LOGICFRAMES_PER_GAME_SECOND );
+		m_rescueCool = now + LOGICFRAMES_PER_GAME_SECOND;
 		return;
 	}
 
@@ -3082,7 +3082,7 @@ void AIUpdateInterface::stuckRescue( void )
 		// and the queue behind has to open up, or we are reversing into it
 		crowdAskBehindToBackOff( tan );
 		Pathfinder::bumpEscape();
-		setIgnoreCollisionTime( LOGICFRAMES_PER_SECOND );
+		setIgnoreCollisionTime( LOGICFRAMES_PER_GAME_SECOND );
 		m_rescueUntil = now + STUCK_BACKOUT_FRAMES;
 		m_noProgress = 0;
 	}
@@ -3143,7 +3143,7 @@ Bool AIUpdateInterface::rescueSteer( Coord3D& goalPos )
 void AIUpdateInterface::crowdRepath( void )
 {
 	Pathfinder::bumpCrowdRepath();
-	m_blockedFrames = 2 * LOGICFRAMES_PER_SECOND + 1;
+	m_blockedFrames = 2 * LOGICFRAMES_PER_GAME_SECOND + 1;
 	m_repathAsked = TRUE;
 	m_isBlockedAndStuck = FALSE;
 	m_crowdQueued = 0;
@@ -4008,7 +4008,7 @@ void AIUpdateInterface::crowdSteer( Coord3D& goalPos, Real& speed )
 	if (m_crowdCap < speed)
 		speed = m_crowdCap;
 
-	if (TheGlobalData->m_showLanes && (now % LOGICFRAMES_PER_SECOND) == 0)
+	if (TheGlobalData->m_showLanes && (now % LOGICFRAMES_PER_SECOND) == 0)	// a debug drawing, paced in wall time
 	{
 		const char *mode = pressing ? "press" : (giveWay ? "yield" : (merged ? "merge"
 											 : (queued ? "brake" : (blocker != NULL ? "pass" : "free"))));
@@ -4454,8 +4454,8 @@ UpdateSleepTime AIUpdateInterface::doLocomotor( void )
 							{
 								Real dist = sqrtf(dSqr);
 								if (dist<1) dist = 1;
-								pos.x += 2*PATHFIND_CELL_SIZE_F*dx/(dist*LOGICFRAMES_PER_SECOND);
-								pos.y += 2*PATHFIND_CELL_SIZE_F*dy/(dist*LOGICFRAMES_PER_SECOND);
+								pos.x += 2*PATHFIND_CELL_SIZE_F*dx/(dist*LOGICFRAMES_PER_GAME_SECOND);
+								pos.y += 2*PATHFIND_CELL_SIZE_F*dy/(dist*LOGICFRAMES_PER_GAME_SECOND);
 								if (onGround)
 									pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 								getObject()->setPosition(&pos);
@@ -5156,7 +5156,7 @@ void AIUpdateInterface::privateMoveToPosition( const Coord3D *pos, CommandSource
 		m_blockedFrames = 0;
 		m_isBlocked = FALSE;
 		m_isBlockedAndStuck = FALSE;
-		getStateMachine()->setTemporaryState(AI_MOVE_TO, LOGICFRAMES_PER_SECOND * 20);
+		getStateMachine()->setTemporaryState(AI_MOVE_TO, LOGICFRAMES_PER_GAME_SECOND * 20);
 	} else {
 		// Normal user or script command, just do it. [8/19/2003]
 		getStateMachine()->clear();
@@ -5479,13 +5479,13 @@ void AIUpdateInterface::privateMoveAwayFromUnit( Object *unit, CommandSourceType
 	if (m_stateMachine->getTemporaryState() == AI_MOVE_OUT_OF_THE_WAY) {
 		if (m_moveOutOfWay1 == id) {
 			if (m_isBlocked) {
-				setIgnoreCollisionTime(LOGICFRAMES_PER_SECOND*2); // cheat for 2 seconds.
+				setIgnoreCollisionTime(LOGICFRAMES_PER_GAME_SECOND*2); // cheat for 2 seconds.
 			}
 			return;
 		}
 		if (m_moveOutOfWay2 == id) {
 			if (m_isBlocked) {
-				setIgnoreCollisionTime(LOGICFRAMES_PER_SECOND*2); // cheat for 2 seconds.
+				setIgnoreCollisionTime(LOGICFRAMES_PER_GAME_SECOND*2); // cheat for 2 seconds.
 			}
 			return;
 		}
@@ -5513,7 +5513,7 @@ void AIUpdateInterface::privateMoveAwayFromUnit( Object *unit, CommandSourceType
 		destroyPath();
 		m_path = newPath;
 		wakeUpNow();
-		m_stateMachine->setTemporaryState(AI_MOVE_OUT_OF_THE_WAY, 10*LOGICFRAMES_PER_SECOND);
+		m_stateMachine->setTemporaryState(AI_MOVE_OUT_OF_THE_WAY, 10*LOGICFRAMES_PER_GAME_SECOND);
 		if (m_path) 
 		{
 	 		if( !getObject()->isKindOf(KINDOF_NO_COLLIDE))// If I don't collide with things, I don't need to tell them to get out of the way
@@ -6268,7 +6268,7 @@ void AIUpdateInterface::doQuickExit( std::vector<Coord3D>* path )
 	// set path info
 	getStateMachine()->setGoalPath( path );
 
-	getStateMachine()->setTemporaryState( AI_FOLLOW_EXITPRODUCTION_PATH, 10*LOGICFRAMES_PER_SECOND);
+	getStateMachine()->setTemporaryState( AI_FOLLOW_EXITPRODUCTION_PATH, 10*LOGICFRAMES_PER_GAME_SECOND);
 	if (locked) {
 		getStateMachine()->lock("Relocking in doQuickExit.");
 	}

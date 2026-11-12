@@ -519,7 +519,7 @@ StateReturnType DozerActionDoActionState::update( void )
 		return STATE_FAILURE;
 	}
 	// DozerAIUpdate *dozerAI = static_cast<DozerAIUpdate *>(dozer->getAIUpdateInterface());
-//	const UnsignedInt ACTION_TIME = LOGICFRAMES_PER_SECOND * 4 ; // frames to spend here in this state doing the action
+//	const UnsignedInt ACTION_TIME = LOGICFRAMES_PER_GAME_SECOND * 4 ; // frames to spend here in this state doing the action
 
 	// check for object gone
 	if( goalObject == NULL )
@@ -780,7 +780,7 @@ StateReturnType DozerActionDoActionState::update( void )
 
 					// figure out how much health we will restore this frame
 					Real health = body->getMaxHealth() * dozerAI->getRepairHealthPerSecond() /
-												LOGICFRAMES_PER_SECOND;
+												LOGICFRAMES_PER_GAME_SECOND;
 
 					// try to give it a little bit-o-health
 					if ( ! goalObject->attemptHealingFromSoleBenefactor(health, dozer, 2) )//this frame and the next
@@ -1267,10 +1267,10 @@ StateReturnType DozerPrimaryIdleState::update( void )
 	// grace lets a follow-up order from the player win; the scan itself runs once a second.
 	//
 	if( ai->isIdle() && dozerAI->isAnyTaskPending() == FALSE &&
-			TheGameLogic->getFrame() - m_idleTooLongTimestamp > LOGICFRAMES_PER_SECOND &&
+			TheGameLogic->getFrame() - m_idleTooLongTimestamp > LOGICFRAMES_PER_GAME_SECOND &&
 			TheGameLogic->getFrame() >= m_nextUnfinishedScanFrame )
 	{
-		m_nextUnfinishedScanFrame = TheGameLogic->getFrame() + LOGICFRAMES_PER_SECOND;
+		m_nextUnfinishedScanFrame = TheGameLogic->getFrame() + LOGICFRAMES_PER_GAME_SECOND;
 		Object *unfinished = findUnfinishedStructureToContinue( dozer );
 		if( unfinished )
 		{

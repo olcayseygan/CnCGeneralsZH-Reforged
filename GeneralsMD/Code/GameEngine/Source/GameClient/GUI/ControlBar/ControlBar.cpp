@@ -2334,7 +2334,7 @@ void ControlBar::triggerRadarAttackGlow( void )
 	LOGIC_CENSUS( CENSUS_CONTROLBAR );
 	if( m_radarAttackGlowWindow == NULL )
 		return;
-	m_remainingRadarAttackGlowFrames = ConvertRetailFrames( 150 );
+	m_remainingRadarAttackGlowFrames = ConvertRetailFramesWall( 150 );
 	m_radarAttackGlowWindow->winEnable( FALSE );
 }
 
@@ -3591,7 +3591,7 @@ void ControlBar::update( void )
 		{
 			if( --m_remainingRadarAttackGlowFrames <= 0 )
 				m_radarAttackGlowWindow->winEnable( TRUE );
-			else if( m_remainingRadarAttackGlowFrames % ConvertRetailFrames( 15 ) == 0 )
+			else if( m_remainingRadarAttackGlowFrames % ConvertRetailFramesWall( 15 ) == 0 )
 				m_radarAttackGlowWindow->winEnable( !BitTest( m_radarAttackGlowWindow->winGetStatus(), WIN_STATUS_ENABLED ) );
 		}
 	}
@@ -3722,7 +3722,7 @@ void ControlBar::update( void )
 	}
 		
 
-	const Bool flashTick = logicTick && (logicNow % ConvertRetailFrames( 10U ) == 0);
+	const Bool flashTick = logicTick && (logicNow % ConvertRetailFramesWall( 10U ) == 0);
 
 	// check flashing
 	if( m_flash )

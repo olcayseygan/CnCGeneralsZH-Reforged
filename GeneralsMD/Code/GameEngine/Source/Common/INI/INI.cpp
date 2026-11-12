@@ -1941,7 +1941,8 @@ void INI::parseAccelerationReal( INI *ini, void * /*instance*/, void *store, con
 }
 
 //-------------------------------------------------------------------------------------------------
-// fields that EA wrote as a count of 30 Hz frames, or as an amount applied every 30 Hz frame
+// fields that EA wrote as a count of 30 Hz frames, or as an amount applied every 30 Hz frame; like
+// the msec and per-second parsers above they take the game speed (GAME_SPEED_PERCENT, GameCommon.h)
 void INI::parseRetailFramesUnsignedInt( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
 	*(UnsignedInt *)store = ConvertRetailFrames(scanUnsignedInt(ini->getNextToken()));

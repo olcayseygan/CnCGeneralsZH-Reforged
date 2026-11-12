@@ -58,6 +58,15 @@
 //-------------------------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------------------------
+/** The deploy animations are authored at 30 frames a second of game time, one per retail logic
+	* frame, so a count of logic frames is that many retail frames of game time.  In 64 bits, so a count
+	* that has wrapped below zero divides as it did before. */
+static UnsignedInt deployAnimationFrame( UnsignedInt logicFrames )
+{
+	return (UnsignedInt)( (UnsignedInt64)logicFrames * RETAIL_LOGICFRAMES_PER_SECOND / LOGICFRAMES_PER_GAME_SECOND );
+}
+
+//-------------------------------------------------------------------------------------------------
 DeployStyleAIUpdate::DeployStyleAIUpdate( Thing *thing, const ModuleData* moduleData ) : AIUpdateInterface( thing, moduleData )
 {
 	m_state = READY_TO_MOVE;
@@ -274,7 +283,7 @@ UpdateSleepTime DeployStyleAIUpdate::update( void )
 				if( draw )
 				{
 					// the deploy animations are authored at 30 frames a second, one per retail logic frame
-					draw->setAnimationFrame( ( totalFrames - framesLeft ) / LOGICFRAMES_PER_RETAIL_FRAME );
+					draw->setAnimationFrame( deployAnimationFrame( totalFrames - framesLeft ) );
 				}
 			}
 			getStateMachine()->setTemporaryState( AI_BUSY, UPDATE_SLEEP_NONE );
@@ -287,7 +296,7 @@ UpdateSleepTime DeployStyleAIUpdate::update( void )
 				Drawable *draw = self->getDrawable();
 				if( draw )
 				{
-					draw->setAnimationFrame( framesLeft / LOGICFRAMES_PER_RETAIL_FRAME );
+					draw->setAnimationFrame( deployAnimationFrame( framesLeft ) );
 				}
 			}
 			getStateMachine()->setTemporaryState( AI_BUSY, UPDATE_SLEEP_NONE );
@@ -334,7 +343,7 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 					Drawable *draw = self->getDrawable();
 					if( draw )
 					{
-						draw->setAnimationFrame( ( totalFrames - framesLeft ) / LOGICFRAMES_PER_RETAIL_FRAME );
+						draw->setAnimationFrame( deployAnimationFrame( totalFrames - framesLeft ) );
 					}
 				}
 			}
@@ -377,7 +386,7 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 					Drawable *draw = self->getDrawable();
 					if( draw )
 					{
-						draw->setAnimationFrame( framesLeft / LOGICFRAMES_PER_RETAIL_FRAME );
+						draw->setAnimationFrame( deployAnimationFrame( framesLeft ) );
 					}
 				}
 			}

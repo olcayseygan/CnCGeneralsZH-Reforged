@@ -128,7 +128,7 @@ void AISkirmishPlayer::processBaseBuilding( void )
 	// superweapon took sat dark for two minutes of logic frames with a plant asked for and money coming in.
 	// Once a second rather than every frame, because a pass walks the whole plan.
 	const Bool darkRush = runsOwnAI() && getSkillProfile()->m_economyBuildings && !m_player->getEnergy()->hasSufficientPower() &&
-		TheGameLogic->getFrame() % LOGICFRAMES_PER_SECOND == 0;
+		TheGameLogic->getFrame() % LOGICFRAMES_PER_GAME_SECOND == 0;
 	if (m_readyToBuildStructure || darkRush)
 	{
 		const ThingTemplate *bldgPlan=NULL;
@@ -239,7 +239,7 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			if (info->getObjectID()==INVALID_ID && info->getObjectTimestamp()>0) {
 				// this object was built at some time, and got destroyed at or near objectTimestamp.
 				// Wait a few seconds before initiating a rebuild.
-				if (info->getObjectTimestamp()+TheAI->getAiData()->m_rebuildDelaySeconds*LOGICFRAMES_PER_SECOND > TheGameLogic->getFrame()) {
+				if (info->getObjectTimestamp()+TheAI->getAiData()->m_rebuildDelaySeconds*LOGICFRAMES_PER_GAME_SECOND > TheGameLogic->getFrame()) {
 					continue;
 				}	else {
 					DEBUG_LOG(("Enabling rebuild for %s\n", info->getTemplateName().str()));
@@ -793,7 +793,7 @@ void AISkirmishPlayer::acquireEnemy(void)
 				// ours, so the hit was somebody else's.  The player keeps only when he was last hit, not by whom.
 				const UnsignedInt hit = curPlayer->getAttackedFrame();
 				const Bool busy = targetedByAnother ||
-					(curPlayer != m_currentEnemy && hit != 0 && hit + 20 * LOGICFRAMES_PER_SECOND > TheGameLogic->getFrame());
+					(curPlayer != m_currentEnemy && hit != 0 && hit + 20 * LOGICFRAMES_PER_GAME_SECOND > TheGameLogic->getFrame());
 				curDistSqr = aiPersonaEnemyCost( m_persona, curDistSqr, share, busy );
 				if (curPlayer == m_currentEnemy)
 					currentCost = curDistSqr;
@@ -830,7 +830,7 @@ void AISkirmishPlayer::acquireEnemy(void)
 Player *AISkirmishPlayer::getAiEnemy(void)
 {
 	if (TheGameLogic->getFrame()>=m_frameToCheckEnemy) {
-		m_frameToCheckEnemy = TheGameLogic->getFrame() + 5*LOGICFRAMES_PER_SECOND;
+		m_frameToCheckEnemy = TheGameLogic->getFrame() + 5*LOGICFRAMES_PER_GAME_SECOND;
 		acquireEnemy();
 	}
 	return m_currentEnemy;
@@ -1206,8 +1206,8 @@ void AISkirmishPlayer::doBaseBuilding( void )
 				m_buildDelay = 0;
 			}
 			// EA's flat 3 seconds, for a seat that plays EA's AI; the fork's works off getBuildRateScale
-			if (!runsOwnAI() && m_structureTimer > 3*LOGICFRAMES_PER_SECOND) {
-				m_structureTimer = 3*LOGICFRAMES_PER_SECOND;
+			if (!runsOwnAI() && m_structureTimer > 3*LOGICFRAMES_PER_GAME_SECOND) {
+				m_structureTimer = 3*LOGICFRAMES_PER_GAME_SECOND;
 			}
 		}
 		// This timer is to keep from banging on the logic each frame.  If something interesting
@@ -1218,7 +1218,7 @@ void AISkirmishPlayer::doBaseBuilding( void )
 				processBaseBuilding();
 			}
 			if (m_buildDelay<1) {	// processBaseBuilding may reset m_buildDelay.
-				m_buildDelay = 2*LOGICFRAMES_PER_SECOND; // check again in 2 seconds.
+				m_buildDelay = 2*LOGICFRAMES_PER_GAME_SECOND; // check again in 2 seconds.
 			}
 			// Note that this timer gets shortcut when a building is completed.
 		}
@@ -1259,8 +1259,8 @@ void AISkirmishPlayer::doTeamBuilding( void )
 				m_teamDelay = 0;
 			}
 			// EA's flat 3 seconds, as for the structure timer above
-			if (!runsOwnAI() && m_teamTimer > 3*LOGICFRAMES_PER_SECOND) {
-				m_teamTimer = 3*LOGICFRAMES_PER_SECOND;
+			if (!runsOwnAI() && m_teamTimer > 3*LOGICFRAMES_PER_GAME_SECOND) {
+				m_teamTimer = 3*LOGICFRAMES_PER_GAME_SECOND;
 			}
 		}
 
@@ -1272,7 +1272,7 @@ void AISkirmishPlayer::doTeamBuilding( void )
 			if (m_readyToBuildTeam) {
 				processTeamBuilding();
 			}
-			m_teamDelay = 2*LOGICFRAMES_PER_SECOND; // check again in 5 seconds.
+			m_teamDelay = 2*LOGICFRAMES_PER_GAME_SECOND; // check again in 5 seconds.
 			// Note that this timer gets shortcut when a unit or building is completed.
 		}
 	}
@@ -1371,7 +1371,7 @@ void AISkirmishPlayer::doSurrender( void )
 	}
 
 	// Every five seconds, players a few frames apart.
-	const UnsignedInt CHECK_FRAMES = 5 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt CHECK_FRAMES = 5 * LOGICFRAMES_PER_GAME_SECOND;
 	if( (now + 7 * (UnsignedInt)m_player->getPlayerIndex()) % CHECK_FRAMES != 0 )
 		return;
 	// a seat its map scripts may hold no base by design, an Art of Defense GLA's waves
@@ -1384,7 +1384,7 @@ void AISkirmishPlayer::doSurrender( void )
 	static const Int HOLD_SECONDS[ DIFFICULTY_COUNT ]    = { 30, 45, 60 };	// lost this long before GG
 	const Int difficulty = getAIDifficulty();
 
-	if( now < (UnsignedInt)( EARLIEST_MINUTE[ difficulty ] * 60 * LOGICFRAMES_PER_SECOND ) )
+	if( now < (UnsignedInt)( EARLIEST_MINUTE[ difficulty ] * 60 * LOGICFRAMES_PER_GAME_SECOND ) )
 		return;
 
 	SurrenderTally mine = { 0, 0 };
@@ -1420,13 +1420,13 @@ void AISkirmishPlayer::doSurrender( void )
 		m_hopelessSinceFrame = now;
 		return;
 	}
-	if( now - m_hopelessSinceFrame < (UnsignedInt)( HOLD_SECONDS[ difficulty ] * LOGICFRAMES_PER_SECOND ) )
+	if( now - m_hopelessSinceFrame < (UnsignedInt)( HOLD_SECONDS[ difficulty ] * LOGICFRAMES_PER_GAME_SECOND ) )
 		return;
 
 	DEBUG_LOG(( "AI GG player %d frame %u worth %lld enemy %lld rebuild %d\n", (Int)m_player->getPlayerIndex(),
 		now, (long long)mine.value, (long long)strongestEnemy, (Int)!cannotRebuild ));
 	TheInGameUI->chatMessage( m_player, UnicodeString( u"GG" ) );
-	m_surrenderFrame = now + 2 * LOGICFRAMES_PER_SECOND;
+	m_surrenderFrame = now + 2 * LOGICFRAMES_PER_GAME_SECOND;
 }
 
 //----------------------------------------------------------------------------------------------------------

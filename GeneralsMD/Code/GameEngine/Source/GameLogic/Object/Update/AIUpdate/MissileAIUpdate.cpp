@@ -613,7 +613,7 @@ void MissileAIUpdate::doAttackState(Bool turnOK)
 		PhysicsBehavior* physics = getObject()->getPhysics();
 		if (m_isSpent && physics && physics->getVelocityMagnitude() > 0.0f)
 		{
-			const Real SPENT_DRAG = 0.25f / LOGICFRAMES_PER_SECOND;	// of the velocity, each frame
+			const Real SPENT_DRAG = 0.25f / LOGICFRAMES_PER_GAME_SECOND;	// of the velocity, each frame
 			const Coord3D* vel = physics->getVelocity();
 			Real dragMass = -SPENT_DRAG * physics->getMass();
 			Coord3D drag;
@@ -803,8 +803,8 @@ void MissileAIUpdate::doDeadState()
 void MissileAIUpdate::updateChaseOffset()
 {
 	const Real SWAY_ANGLE = 0.08f;					// radians of aim either side, between four and five degrees
-	const Real SWAY_PERIOD = LOGICFRAMES_PER_SECONDS_REAL;					// logic frames for one swing and back, a second
-	const Real SWAY_FADE_IN = LOGICFRAMES_PER_SECONDS_REAL * 0.5f;		// logic frames from the start of the attack, half a second
+	const Real SWAY_PERIOD = LOGICFRAMES_PER_GAME_SECOND_REAL;					// logic frames for one swing and back, a second
+	const Real SWAY_FADE_IN = LOGICFRAMES_PER_GAME_SECOND_REAL * 0.5f;		// logic frames from the start of the attack, half a second
 	const Real SWAY_FADE_FAR = 150.0f;			// distances to the goal, not frames
 	const Real SWAY_FADE_NEAR = 60.0f;
 
@@ -995,7 +995,7 @@ Also determines whether objects are blocked, and if so, if they are stuck.  jba.
 //-------------------------------------------------------------------------------------------------
 void MissileAIUpdate::airborneTargetGone()
 {
-	const Real AHEAD_FRAMES = LOGICFRAMES_PER_SECOND * 0.5f;
+	const Real AHEAD_FRAMES = LOGICFRAMES_PER_GAME_SECOND * 0.5f;
 
 	Object *obj = getObject();
 	const Coord3D *pos = obj->getPosition();

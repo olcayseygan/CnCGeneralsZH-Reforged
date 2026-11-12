@@ -35,7 +35,7 @@
 #ifndef _SLAVED_UPDATE_H_
 #define _SLAVED_UPDATE_H_
 
-const Int SLAVED_UPDATE_RATE = LOGICFRAMES_PER_SECOND/4; ///< This is a low priority module that only needs to be called every this many frames
+const Int SLAVED_UPDATE_RATE = LOGICFRAMES_PER_GAME_SECOND/4; ///< This is a low priority module that only needs to be called every this many frames
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "Common/INI.h"

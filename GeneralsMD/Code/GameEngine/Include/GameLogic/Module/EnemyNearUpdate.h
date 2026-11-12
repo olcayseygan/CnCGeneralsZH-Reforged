@@ -45,7 +45,7 @@ public:
 
 	EnemyNearUpdateModuleData()
 	{
-		m_enemyScanDelayTime = LOGICFRAMES_PER_SECOND;
+		m_enemyScanDelayTime = LOGICFRAMES_PER_GAME_SECOND;
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 

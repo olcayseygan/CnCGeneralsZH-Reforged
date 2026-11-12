@@ -555,7 +555,7 @@ StateReturnType AIRappelState::onEnter()
 		obj->setLayer(layerAtDest);
 
 	AIUpdateInterface *ai = obj->getAI();
-	Real MAX_RAPPEL_RATE = fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_SECOND * 2.5f;
+	Real MAX_RAPPEL_RATE = fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_GAME_SECOND * 2.5f;
 	m_rappelRate = -min(ai->getDesiredSpeed(), MAX_RAPPEL_RATE);
 
 	return STATE_CONTINUE;
@@ -988,7 +988,7 @@ StateReturnType AIStateMachine::setTemporaryState( StateID newStateID, Int frame
 			m_temporaryState = NULL;
 			return ret;
 		}
-		enum {FRAME_COUNT_MAX = 60*LOGICFRAMES_PER_SECOND};
+		enum {FRAME_COUNT_MAX = 60*LOGICFRAMES_PER_GAME_SECOND};
 		// If you need to up this check, ok, but 1 minute seems overly long for a temporary state override.  jba.
 		DEBUG_ASSERTCRASH(frameLimitCoount<=FRAME_COUNT_MAX, ("Unusually long time to set temporary state."));
 		if (frameLimitCoount>FRAME_COUNT_MAX) {
@@ -1342,7 +1342,7 @@ static Bool cannotPossiblyAttackObject( State *thisState, void* userData )
 //----------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------
 
-const UnsignedInt IDLE_COUNTDOWN_DELAY = (LOGICFRAMES_PER_SECOND * 2);
+const UnsignedInt IDLE_COUNTDOWN_DELAY = (LOGICFRAMES_PER_GAME_SECOND * 2);
 
 //----------------------------------------------------------------------------------------------
 AIIdleState::AIIdleState( StateMachine *machine, AIIdleState::AIIdleTargetingType shouldLookForTargets ) : 
@@ -1905,7 +1905,7 @@ StateReturnType AIInternalMoveToState::update()
 		forceRecompute = true;
 	}
 	Bool blocked=false;
-	if (ai->isBlockedAndStuck() || ai->getNumFramesBlocked()>2*LOGICFRAMES_PER_SECOND) {
+	if (ai->isBlockedAndStuck() || ai->getNumFramesBlocked()>2*LOGICFRAMES_PER_GAME_SECOND) {
 		forceRecompute = true;
 		blocked = true;
 		m_blockedRepathTimestamp = TheGameLogic->getFrame();
@@ -1932,7 +1932,7 @@ StateReturnType AIInternalMoveToState::update()
 			obj->clearModelConditionState( MODELCONDITION_RAPPELLING );
 		}
 	}
-	if (ai->getNumFramesBlocked()>LOGICFRAMES_PER_SECOND/4) 
+	if (ai->getNumFramesBlocked()>LOGICFRAMES_PER_GAME_SECOND/4) 
 	{
 		obj->clearModelConditionState( MODELCONDITION_MOVING );
 	}	
@@ -4287,7 +4287,7 @@ StateReturnType AIAttackMoveToState::update()
 		ret = STATE_CONTINUE;
 		m_retryCount--;
 		// Sleep 3 seconds.  We can attack during these frames, just not move.
-		m_frameToSleepUntil = TheGameLogic->getFrame() + 3*LOGICFRAMES_PER_SECOND;
+		m_frameToSleepUntil = TheGameLogic->getFrame() + 3*LOGICFRAMES_PER_GAME_SECOND;
 	}
 	return ret;
 }

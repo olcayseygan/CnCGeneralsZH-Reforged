@@ -1373,7 +1373,7 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 				}
 
 				// check for double-press to jump view
-				if ( now - m_lastGroupSelTime < ConvertRetailFrames( 20U ) && group == m_lastGroupSelGroup )
+				if ( now - m_lastGroupSelTime < ConvertRetailFramesWall( 20U ) && group == m_lastGroupSelGroup )
 				{
 					DEBUG_LOG(("META: DOUBLETAP select team %d\n",group));
 					Player *player = ThePlayerList->getLocalPlayer();

@@ -799,7 +799,7 @@ void Player::update()
 	if( TheGlobalData->m_moneyPerMinute > 0 && isPlayableSide() && isPlayerActive() )
 	{
 		const UnsignedInt now = TheGameLogic->getFrame();
-		const UnsignedInt minute = LOGICFRAMES_PER_SECOND * 60;
+		const UnsignedInt minute = LOGICFRAMES_PER_GAME_SECOND * 60;
 
 		if( now > 0 && (now % minute) == 0 )
 			m_money.deposit( (UnsignedInt)TheGlobalData->m_moneyPerMinute, FALSE );

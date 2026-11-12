@@ -2362,7 +2362,7 @@ void W3DModelDraw::adjustAnimSpeedToMovementSpeed()
 				{
 					// if distance-covered is specified for this anim, adjust the frame rate
 					// so it appears to sync with our unit speed
-					Real desiredDurationInMsec = dist / speed * MSEC_PER_LOGICFRAME_REAL;
+					Real desiredDurationInMsec = dist / speed * GAME_MSEC_PER_LOGICFRAME_REAL;	// the W3D clock runs game time
 					setCurAnimDurationInMsec(desiredDurationInMsec);
 				}
 			}
@@ -2844,7 +2844,7 @@ void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
 		}
 		else
 		{
-			const Real perSecond = (Real)LOGICFRAMES_PER_SECOND / (Real)frames;
+			const Real perSecond = (Real)LOGICFRAMES_PER_GAME_SECOND / (Real)frames;
 			const Real ease = d->m_quadTiltTime > (Real)frames ? (Real)frames / d->m_quadTiltTime : 1.0f;
 			const Real rawX = (pos->x - m_quad.pos.x) * perSecond;
 			const Real rawY = (pos->y - m_quad.pos.y) * perSecond;
@@ -4811,7 +4811,7 @@ void W3DModelDraw::setAnimationLoopDuration(UnsignedInt numFrames)
 			m_nextStateAnimLoopDuration = numFrames - curFrames;
 		}
 	}
-	setCurAnimDurationInMsec(ceilf(curFrames * MSEC_PER_LOGICFRAME_REAL));
+	setCurAnimDurationInMsec(ceilf(curFrames * GAME_MSEC_PER_LOGICFRAME_REAL));	// the W3D clock runs game time
 }
 
 //-------------------------------------------------------------------------------------------------

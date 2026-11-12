@@ -87,7 +87,7 @@ public:
 		MAX_SAMPLES = 360,				///< 30 minutes at the first rate; then every other sample goes and the rate halves
 		MAX_EVENTS = 512,
 		MAX_BUILDS = 200,					///< per player: every structure, and the first of each unit type
-		FIRST_INTERVAL = 5 * LOGICFRAMES_PER_SECOND
+		FIRST_INTERVAL = 5 * LOGICFRAMES_PER_GAME_SECOND
 	};
 
 	MatchHistory( void );

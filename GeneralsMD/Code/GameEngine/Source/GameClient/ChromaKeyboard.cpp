@@ -196,7 +196,7 @@ static const Real ALARM_DEPTH = 0.85f;
 static const Int ALARM_STRIP_COLUMN = 0;
 
 /// Half of this many frames lit, half dark.
-static const Int BLINK_PERIOD_FRAMES = ConvertRetailFrames( 16 );
+static const Int BLINK_PERIOD_FRAMES = ConvertRetailFramesWall( 16 );
 /// A power announces itself by blinking and then holds steady.  A key that blinks
 /// for the rest of the match stops being news and starts being an irritation.
 static const Int READY_BLINK_FRAMES = LOGICFRAMES_PER_SECOND * 3;
@@ -206,7 +206,7 @@ static const Int STAR_PERIOD_FRAMES = LOGICFRAMES_PER_SECOND;
 static const Int ALERT_HOLD_FRAMES = LOGICFRAMES_PER_SECOND * 3;
 /// Walking every object the player owns is not a per-frame job, and neither a
 /// build clock nor a superweapon's charge moves fast enough to need one.
-static const Int WALK_INTERVAL_FRAMES = ConvertRetailFrames( 15 );
+static const Int WALK_INTERVAL_FRAMES = ConvertRetailFramesWall( 15 );
 
 static const UnsignedInt MONEY_PER_SEGMENT = 1000;
 

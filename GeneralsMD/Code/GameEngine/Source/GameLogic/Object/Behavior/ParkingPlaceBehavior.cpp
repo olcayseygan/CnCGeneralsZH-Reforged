@@ -608,7 +608,7 @@ void ParkingPlaceBehavior::releaseRunway(ObjectID id)
 
 //-------------------------------------------------------------------------------------------------
 // don't really need to autoheal every frame....
-const Int HEAL_RATE_FRAMES = LOGICFRAMES_PER_SECOND / 5;
+const Int HEAL_RATE_FRAMES = LOGICFRAMES_PER_GAME_SECOND / 5;
 
 //-------------------------------------------------------------------------------------------------
 void ParkingPlaceBehavior::resetWakeFrame()
@@ -743,7 +743,7 @@ void ParkingPlaceBehavior::onCapture( Player *oldOwner, Player *newOwner )
 //-------------------------------------------------------------------------------------------------
 // one scrambled jet every this many frames, the runways in turn, so each runway sends one every
 // half second and a jet is 15 down its runway, about a drone's length, when the next one starts
-const UnsignedInt SCRAMBLE_INTERVAL_FRAMES = LOGICFRAMES_PER_SECOND / 4;
+const UnsignedInt SCRAMBLE_INTERVAL_FRAMES = LOGICFRAMES_PER_GAME_SECOND / 4;
 // the model's hangars: the first rows of spaces, one hangar to a runway in each row
 const Int HANGAR_ROWS = 2;
 // a hangar turned more than 60 degrees off its runway is a side shed with no door (the second
@@ -751,7 +751,7 @@ const Int HANGAR_ROWS = 2;
 // runway, so that runway's jets all come out of its other hangar
 const Real HANGAR_FACING_MIN_COS = 0.5f;
 // the hangar doors take two seconds to open; the first jet rolls when they are half way
-const UnsignedInt HANGAR_DOOR_LEAD_FRAMES = LOGICFRAMES_PER_SECOND;
+const UnsignedInt HANGAR_DOOR_LEAD_FRAMES = LOGICFRAMES_PER_GAME_SECOND;
 
 //-------------------------------------------------------------------------------------------------
 /// hold every hangar door open, or let go of those no jet holds a space behind
@@ -878,10 +878,10 @@ UpdateSleepTime ParkingPlaceBehavior::update()
 					healInfo.in.m_damageType = DAMAGE_HEALING;
 					healInfo.in.m_deathType = DEATH_NONE;
 					healInfo.in.m_sourceID = getObject()->getID();
-  				healInfo.in.m_amount = HEAL_RATE_FRAMES * d->m_healAmount * SECONDS_PER_LOGICFRAME_REAL * objToHeal->getHandicapHealthFactor();
+  				healInfo.in.m_amount = HEAL_RATE_FRAMES * d->m_healAmount * GAME_SECONDS_PER_LOGICFRAME_REAL * objToHeal->getHandicapHealthFactor();
 
 //          if ( objToHeal->isKindOf( KINDOF_PRODUCED_AT_HELIPAD ) )
-//            healInfo.in.m_amount += HEAL_RATE_FRAMES * d->m_extraHealAmount4Helicopters * SECONDS_PER_LOGICFRAME_REAL;
+//            healInfo.in.m_amount += HEAL_RATE_FRAMES * d->m_extraHealAmount4Helicopters * GAME_SECONDS_PER_LOGICFRAME_REAL;
 
 					BodyModuleInterface *body = objToHeal->getBodyModule();
 					body->attemptHealing( &healInfo );

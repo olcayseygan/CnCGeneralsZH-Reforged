@@ -483,13 +483,15 @@ void WeaponTemplate::reset( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/* A shot delay or a reload in msec, rounded up to whole retail (30 Hz) frames as EA's were and then
-	 doubled, so it is always an even count of logic frames.  Rounded at 60 Hz instead, 25 msec was 2
-	 logic frames where retail had 1 of its own, and a rate-of-fire bonus floored a different count. */
+/* A shot delay or a reload in msec, rounded up to whole retail (30 Hz) frames as EA's were, and kept
+	 in retail frames: the getters floor the rate-of-fire bonus in that count and convert to logic frames
+	 once, after it.  Rounded at 60 Hz instead, 25 msec was 2 logic frames where retail had 1 of its own,
+	 and a rate-of-fire bonus floored a different count.  Converted here and divided back there, a game
+	 speed that is not a whole ratio would have converted twice. */
 /*static*/ Int WeaponTemplate::retailFramesFromMsec( Int msec )
 {
 	const Real RETAIL_FRAMES_PER_MSEC = (Real)RETAIL_LOGICFRAMES_PER_SECOND / (Real)MSEC_PER_SECOND;
-	return ConvertRetailFrames( (Int)ceilf( (Real)msec * RETAIL_FRAMES_PER_MSEC ) );
+	return (Int)ceilf( (Real)msec * RETAIL_FRAMES_PER_MSEC );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -594,10 +596,10 @@ Real WeaponTemplate::getBallisticLaunchPitch(const Coord3D& from, const Coord3D&
 Int WeaponTemplate::getDelayBetweenShots(const WeaponBonus& bonus) const 
 {
 	// yes, divide, not multiply; the larger the rate-of-fire bonus, the shorter
-	// we want the delay time to be.  Drawn and floored in retail frames, as EA's were, then doubled
+	// we want the delay time to be.  Drawn and floored in retail frames, as EA's were, then converted
 	// (retailFramesFromMsec).
-	const Int minDelay = m_minDelayBetweenShots / LOGICFRAMES_PER_RETAIL_FRAME;
-	const Int maxDelay = m_maxDelayBetweenShots / LOGICFRAMES_PER_RETAIL_FRAME;
+	const Int minDelay = m_minDelayBetweenShots;
+	const Int maxDelay = m_maxDelayBetweenShots;
 	Int delayToUse;
 	if( minDelay == maxDelay )
 		delayToUse = minDelay; // Random number thing doesn't like this case
@@ -616,7 +618,7 @@ Int WeaponTemplate::getClipReloadTime(const WeaponBonus& bonus) const
 {
 	// yes, divide, not multiply; the larger the rate-of-fire bonus, the shorter
 	// we want the reload time to be.  In retail frames, like getDelayBetweenShots.
-	const Int reload = m_clipReloadTime / LOGICFRAMES_PER_RETAIL_FRAME;
+	const Int reload = m_clipReloadTime;
 	return ConvertRetailFrames( REAL_TO_INT_FLOOR(reload / bonus.getField(WeaponBonus::RATE_OF_FIRE)) );
 }
 

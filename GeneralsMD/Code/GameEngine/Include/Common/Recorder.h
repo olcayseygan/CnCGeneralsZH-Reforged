@@ -183,6 +183,7 @@ public:
 
 	static AsciiString replayLogicRateField();							///< "HZ=<logic rate>;", appended to the recorded slot list
 	static Int takeReplayLogicRate( AsciiString& options );		///< cuts that field off the options and returns its rate, 60 when absent
+	static Int takeReplayGameSpeed( AsciiString& options );		///< cuts "GS=<percent>;" off the options and returns it, 100 when absent; take it before the rate
 
 	RecorderModeType getMode();												///< Returns the current operating mode.
 	void initControls();															///< Show or Hide the Replay controls

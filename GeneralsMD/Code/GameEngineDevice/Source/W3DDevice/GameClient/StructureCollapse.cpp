@@ -135,7 +135,7 @@ void update()
 	for (size_t i = 0; i < s_pieces.size(); ++i)
 	{
 		Piece &piece = s_pieces[i];
-		if ((piece.started || start(piece)) && place(piece, (now - piece.born) / LOGICFRAMES_PER_SECOND))
+		if ((piece.started || start(piece)) && place(piece, (now - piece.born) / LOGICFRAMES_PER_GAME_SECOND))
 			s_pieces[kept++] = piece;
 		else
 			release(piece);

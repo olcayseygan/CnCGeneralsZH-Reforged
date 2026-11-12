@@ -33,7 +33,7 @@
 #ifndef _MOBMEMBER_SLAVED_UPDATE_H_
 #define _MOBMEMBER_SLAVED_UPDATE_H_
 
-#define MM_SLAVED_UPDATE_RATE (LOGICFRAMES_PER_SECOND / 8) ///< This is a low priority module that only needs to be called every this many frames
+#define MM_SLAVED_UPDATE_RATE (LOGICFRAMES_PER_GAME_SECOND / 8) ///< This is a low priority module that only needs to be called every this many frames
 #define MIN_SQUIRRELLINESS (0.01f)
 #define MAX_SQUIRRELLINESS (1.0f)
 #define CATCH_UP_RADIUS_MAX (50)

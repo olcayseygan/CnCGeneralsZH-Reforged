@@ -203,7 +203,7 @@ void JetSlowDeathBehavior::beginSlowDeath( const DamageInfo *damageInfo )
 
 	// ... and the latest the fall is allowed to hold the fireball back to
 	const UnsignedInt MAX_FALL_SECONDS = 15;
-	m_fallDeadlineFrame = m_timerDeathFrame + MAX_FALL_SECONDS * LOGICFRAMES_PER_SECOND;
+	m_fallDeadlineFrame = m_timerDeathFrame + MAX_FALL_SECONDS * LOGICFRAMES_PER_GAME_SECOND;
 
 	// do some effects
 	FXList::doFXObj( modData->m_fxInitialDeath, us );

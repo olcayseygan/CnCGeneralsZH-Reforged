@@ -84,7 +84,7 @@ StealthUpdateModuleData::StealthUpdateModuleData()
     m_stealthSpeed		= 0.0f;
     m_friendlyOpacityMin = 0.5f;
     m_friendlyOpacityMax = 1.0f;
-    m_pulseFrames = LOGICFRAMES_PER_SECOND;
+    m_pulseFrames = LOGICFRAMES_PER_GAME_SECOND;
     m_teamDisguised		= false;
     m_revealDistanceFromTarget = 0.0f;
     m_orderIdleEnemiesToAttackMeUponReveal = false;

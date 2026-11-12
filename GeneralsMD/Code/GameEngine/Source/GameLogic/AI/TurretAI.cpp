@@ -206,7 +206,7 @@ TurretAIData::TurretAIData()
 
 	m_minIdleScanInterval = 9999999;
 	m_maxIdleScanInterval = 9999999;
-	m_recenterTime = 2*LOGICFRAMES_PER_SECOND;
+	m_recenterTime = 2*LOGICFRAMES_PER_GAME_SECOND;
 	m_initiallyDisabled = false;
 	m_firesWhileTurning = FALSE;
 	m_isAllowsPitch = false;

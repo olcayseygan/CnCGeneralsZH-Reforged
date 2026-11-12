@@ -35,15 +35,26 @@
 void WaterGridMotion::updateForLogicFrame( UnsignedInt currLogicFrame, UnsignedInt &lastLogicFrame, Bool doWaterGrid, Bool &meshInMotion,
 	MeshPoint *meshData, Int gridCellsX, Int gridCellsY )
 {
+	// tuned per 30 Hz frame; velocity is per logic frame and gravity already per logic frame squared
+	Constants constants;
+	constants.atRestVelocity = ConvertRetailPerFrameRate( 1.0f );
+	constants.dampening = ConvertRetailPerFrameFactor( 0.93f );
+	constants.gravity = TheGlobalData->m_gravity;
+	updateForLogicFrame( currLogicFrame, lastLogicFrame, doWaterGrid, meshInMotion, meshData, gridCellsX, gridCellsY, constants );
+}
+
+// ------------------------------------------------------------------------------------------------
+void WaterGridMotion::updateForLogicFrame( UnsignedInt currLogicFrame, UnsignedInt &lastLogicFrame, Bool doWaterGrid, Bool &meshInMotion,
+	MeshPoint *meshData, Int gridCellsX, Int gridCellsY, const Constants &constants )
+{
 	if( lastLogicFrame != currLogicFrame )
 	{
 		// for vertex animated water we need to update the vector field
 		if( doWaterGrid && meshInMotion == TRUE )
 		{
 			const Real PREFERRED_HEIGHT_FUDGE = 1.0f;		///< this is close enough to at rest
-			// tuned per 30 Hz frame; velocity is per logic frame and gravity already per logic frame squared
-			const Real AT_REST_VELOCITY_FUDGE = ConvertRetailPerFrameRate( 1.0f );		///< when we're close enought to at rest height and velocity we will stop
-			const Real WATER_DAMPENING = ConvertRetailPerFrameFactor( 0.93f );					///< use with up force of 15.0
+			const Real AT_REST_VELOCITY_FUDGE = constants.atRestVelocity;		///< when we're close enought to at rest height and velocity we will stop
+			const Real WATER_DAMPENING = constants.dampening;					///< use with up force of 15.0
 			Int i, j;
 			Int	mx = gridCellsX+1;
 			Int my = gridCellsY+1;
@@ -71,9 +82,9 @@ void WaterGridMotion::updateForLogicFrame( UnsignedInt currLogicFrame, UnsignedI
 
 						// if the height here is below our preferred height, we want to add upward force to counteract it
 						if( pData->height < pData->preferredHeight )
-							pData->velocity -= TheGlobalData->m_gravity * 3.0f;
-						else				
-							pData->velocity += TheGlobalData->m_gravity * 3.0f;
+							pData->velocity -= constants.gravity * 3.0f;
+						else
+							pData->velocity += constants.gravity * 3.0f;
 
 						// adjust the height at this grid location according to the current velocity		
 						pData->height = pData->height + pData->velocity;

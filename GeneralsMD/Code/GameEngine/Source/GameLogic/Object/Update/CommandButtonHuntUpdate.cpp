@@ -65,7 +65,7 @@
 //-------------------------------------------------------------------------------------------------
 CommandButtonHuntUpdateModuleData::CommandButtonHuntUpdateModuleData()
 {
-	m_scanFrames				= LOGICFRAMES_PER_SECOND;
+	m_scanFrames				= LOGICFRAMES_PER_GAME_SECOND;
 	m_scanRange					= 9999.0f;
 }
 

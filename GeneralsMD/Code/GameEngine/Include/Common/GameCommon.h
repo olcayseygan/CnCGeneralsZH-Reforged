@@ -92,27 +92,103 @@ static_assert( LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_RETAIL_FRAME * RETAIL_L
 	&& ( LOGICFRAMES_PER_RETAIL_FRAME == 1 || LOGICFRAMES_PER_RETAIL_FRAME == 2 ),
 	"the Retail conversions are exact only with logic at the retail rate or exactly twice it" );
 
-// a frame count past half the type's range is a sentinel (a "never" or "forever"), and stays one
-constexpr Int ConvertRetailFrames( Int frames )
+// ----------------------------------------------------------------------------------------------
+// Game speed: the logic still ticks LOGICFRAMES_PER_SECOND times a wall second, but each tick
+// advances GAME_SPEED_PERCENT / 100 of a retail tick's game time. At 125 a game second is 24 ticks,
+// so everything moves and builds a quarter faster on the same wall clock. LOGICFRAMES_PER_SECOND
+// keeps meaning wall ticks (pacing, render, audio, network, HUD); a duration in game time is
+// seconds times LOGICFRAMES_PER_GAME_SECOND. Like the rate, a source constant: the exe CRC
+// fingerprints it, and saves and replays carry it.
+//
+// The allowed percents are those where every conversion below rounds the same on every machine: a
+// whole number of ticks to the game second, a per-frame factor raised to a power in eighths
+// (multiplies and sqrtf, IEEE-exact), per-frame rates scaled by quarters (exact floats), integer
+// frame counts rounded in integers, and a Real frame count of 2 retail frames staying above one
+// tick, so a gain of 1/frames never reaches 1. Below 100 two (rate, speed) pairs would write the
+// same ticks per game second into a save (30 Hz at 50 and 60 Hz at 100 both 60, which is also what a
+// version 5 save is read as) and load each other's games, so 100 is the floor. That leaves 100, 125
+// and 150.
+#define GAME_SPEED_PERCENT 125
+enum { LOGICFRAMES_PER_GAME_SECOND = LOGICFRAMES_PER_SECOND * 100 / GAME_SPEED_PERCENT };
+static_assert( LOGICFRAMES_PER_GAME_SECOND * GAME_SPEED_PERCENT == LOGICFRAMES_PER_SECOND * 100
+	&& ( GAME_SPEED_PERCENT * 8 ) % ( 100 * LOGICFRAMES_PER_RETAIL_FRAME ) == 0
+	&& GAME_SPEED_PERCENT % 25 == 0
+	&& GAME_SPEED_PERCENT >= 100 && GAME_SPEED_PERCENT < 200,
+	"GAME_SPEED_PERCENT must be one of 100, 125, 150: only there do the conversions round alike everywhere and every (rate, speed) pair write its own save field" );
+const Real LOGICFRAMES_PER_GAME_SECOND_REAL = (Real)LOGICFRAMES_PER_GAME_SECOND;
+const Real GAME_SECONDS_PER_LOGICFRAME_REAL = 1.0f / LOGICFRAMES_PER_GAME_SECOND_REAL;
+const Real GAME_MSEC_PER_LOGICFRAME_REAL = (((Real)MSEC_PER_SECOND) / ((Real)LOGICFRAMES_PER_GAME_SECOND));
+
+// The Wall forms convert for the logic rate only: a frame count or rate tied to the wall clock
+// (frame pacing, the network's run-ahead, -fps). Everything in game time takes the plain forms.
+// A frame count past half the type's range is a sentinel (a "never" or "forever"), and stays one
+constexpr Int ConvertRetailFramesWall( Int frames )
 {
 	if( frames > INT_MAX / LOGICFRAMES_PER_RETAIL_FRAME ) return INT_MAX;
 	if( frames < INT_MIN / LOGICFRAMES_PER_RETAIL_FRAME ) return INT_MIN;
 	return frames * LOGICFRAMES_PER_RETAIL_FRAME;
 }
-constexpr UnsignedInt ConvertRetailFrames( UnsignedInt frames )
+constexpr UnsignedInt ConvertRetailFramesWall( UnsignedInt frames )
 {
 	if( frames > UINT_MAX / LOGICFRAMES_PER_RETAIL_FRAME ) return UINT_MAX;
 	return frames * LOGICFRAMES_PER_RETAIL_FRAME;
 }
-constexpr Real ConvertRetailFrames( Real frames ) { return frames * (Real)LOGICFRAMES_PER_RETAIL_FRAME; }
+constexpr Real ConvertRetailFramesWall( Real frames ) { return frames * (Real)LOGICFRAMES_PER_RETAIL_FRAME; }
 
-// 1/1 and 1/4 are exact floats, and x * 1.0f is x, so at either ratio these give what a literal
-// 0.5f and 0.25f (or no conversion) would
-constexpr Real ConvertRetailPerFrameRate( Real perFrame ) { return perFrame * ( 1.0f / (Real)LOGICFRAMES_PER_RETAIL_FRAME ); }
-constexpr Real ConvertRetailPerFrameSquared( Real perFrameSqr ) { return perFrameSqr * ( 1.0f / (Real)( LOGICFRAMES_PER_RETAIL_FRAME * LOGICFRAMES_PER_RETAIL_FRAME ) ); }
+// Game-time frame counts: the wall conversion, then divided by the speed, rounded to the nearest
+// tick in integers (half away from zero). A nonzero count never becomes 0, and a sentinel past half
+// the range is left as the rate made it. At 100 each is exactly its Wall form.
+constexpr Int ConvertRetailFrames( Int frames )
+{
+	const Int wall = ConvertRetailFramesWall( frames );
+	if( wall > INT_MAX / 2 || wall < INT_MIN / 2 ) return wall;
+	const Int64 n = (Int64)wall * 100;
+	const Int scaled = (Int)( ( n >= 0 ? n + GAME_SPEED_PERCENT / 2 : n - GAME_SPEED_PERCENT / 2 ) / GAME_SPEED_PERCENT );
+	return scaled != 0 ? scaled : ( wall > 0 ? 1 : wall < 0 ? -1 : 0 );
+}
+constexpr UnsignedInt ConvertRetailFrames( UnsignedInt frames )
+{
+	const UnsignedInt wall = ConvertRetailFramesWall( frames );
+	if( wall > UINT_MAX / 2 ) return wall;
+	const UnsignedInt scaled = (UnsignedInt)( ( (UnsignedInt64)wall * 100 + GAME_SPEED_PERCENT / 2 ) / GAME_SPEED_PERCENT );
+	return scaled != 0 || wall == 0 ? scaled : 1;
+}
+// The ratio 100 * R / P is a constant folded once, so every target rounds it and the multiply the
+// same way; it is exact only at 100 (R itself), while at 125 0.8f and 1.6f are the nearest floats,
+// not the true ratios. A count of at least one tick stays at least one tick.
+constexpr Real ConvertRetailFrames( Real frames )
+{
+	const Real wall = ConvertRetailFramesWall( frames );
+	const Real scaled = frames * ( (Real)( 100 * LOGICFRAMES_PER_RETAIL_FRAME ) / (Real)GAME_SPEED_PERCENT );
+	const Real least = wall < 1.0f ? wall : 1.0f;
+	return scaled < least ? least : scaled;
+}
+
+// An amount added every frame scales by speed / rate, an acceleration by its square. With the
+// percent a multiple of 25 both factors are exact floats (1, 1/2, 1/4, 5/4, 25/16 ...), and x * 1.0f
+// is x, so at 100 these give what a literal 0.5f and 0.25f (or no conversion) would.
+constexpr Real ConvertRetailPerFrameRate( Real perFrame ) { return perFrame * ( (Real)GAME_SPEED_PERCENT / (Real)( 100 * LOGICFRAMES_PER_RETAIL_FRAME ) ); }
+constexpr Real ConvertRetailPerFrameSquared( Real perFrameSqr ) { return perFrameSqr * ( (Real)( GAME_SPEED_PERCENT * GAME_SPEED_PERCENT ) / (Real)( 10000 * LOGICFRAMES_PER_RETAIL_FRAME * LOGICFRAMES_PER_RETAIL_FRAME ) ); }
+
+// A factor multiplied in every frame is raised to speed / rate, a power in eighths: the whole part
+// by multiplies, the rest as f^(1/2), f^(1/4), f^(1/8) by repeated sqrtf, always in this order.
+// At 100 and the retail rate it is the factor untouched, at twice the rate sqrtf of it as before.
+enum { GAME_FACTOR_EXPONENT_EIGHTHS = GAME_SPEED_PERCENT * 8 / ( 100 * LOGICFRAMES_PER_RETAIL_FRAME ) };
 inline Real ConvertRetailPerFrameFactor( Real factor )
 {
-	return LOGICFRAMES_PER_RETAIL_FRAME == 1 ? factor : sqrtf( factor > 0.0f ? factor : 0.0f );
+	if( GAME_FACTOR_EXPONENT_EIGHTHS == 8 ) return factor;
+	const Real f = factor > 0.0f ? factor : 0.0f;
+	Real result = 1.0f;
+	for( Int i = 0; i < GAME_FACTOR_EXPONENT_EIGHTHS / 8; ++i )
+		result *= f;
+	Real root = f;
+	for( Int bit = 4; bit >= 1; bit /= 2 )
+	{
+		root = sqrtf( root );
+		if( GAME_FACTOR_EXPONENT_EIGHTHS & bit )
+			result *= root;
+	}
+	return result;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -132,31 +208,33 @@ constexpr Int ClampPlayerGameSpeed( Int fps )
 // ----------------------------------------------------------------------------------------------
 // note that this returns a REAL value, not an int... most callers will want to
 // call ceil() on the result, so that partial frames get converted to full frames!
-inline Real ConvertDurationFromMsecsToFrames(Real msec) 
-{	
-	return (msec * LOGICFRAMES_PER_MSEC_REAL); 
+// These four take game time (data durations and speeds); at GAME_SPEED_PERCENT 100 each is the
+// wall-rate expression it always was, bit for bit.
+inline Real ConvertDurationFromMsecsToFrames(Real msec)
+{
+	return (msec * (((Real)LOGICFRAMES_PER_GAME_SECOND) / ((Real)MSEC_PER_SECOND)));
 }
 
 // ----------------------------------------------------------------------------------------------
-inline Real ConvertVelocityInSecsToFrames(Real distPerMsec) 
-{	
+inline Real ConvertVelocityInSecsToFrames(Real distPerMsec)
+{
 	// this looks wrong, but is the correct conversion factor.
-	return (distPerMsec * SECONDS_PER_LOGICFRAME_REAL); 
+	return (distPerMsec * GAME_SECONDS_PER_LOGICFRAME_REAL);
 }
 
 // ----------------------------------------------------------------------------------------------
-inline Real ConvertAccelerationInSecsToFrames(Real distPerSec2) 
-{	
+inline Real ConvertAccelerationInSecsToFrames(Real distPerSec2)
+{
 	// this looks wrong, but is the correct conversion factor.
-	const Real SEC_PER_LOGICFRAME_SQR = (SECONDS_PER_LOGICFRAME_REAL * SECONDS_PER_LOGICFRAME_REAL);
-	return (distPerSec2 * SEC_PER_LOGICFRAME_SQR); 
+	const Real SEC_PER_LOGICFRAME_SQR = (GAME_SECONDS_PER_LOGICFRAME_REAL * GAME_SECONDS_PER_LOGICFRAME_REAL);
+	return (distPerSec2 * SEC_PER_LOGICFRAME_SQR);
 }
 
 // ----------------------------------------------------------------------------------------------
-inline Real ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(Real degPerSec) 
-{	
+inline Real ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(Real degPerSec)
+{
 	const Real RADS_PER_DEGREE = PI / 180.0f;
-	return (degPerSec * (SECONDS_PER_LOGICFRAME_REAL * RADS_PER_DEGREE)); 
+	return (degPerSec * (GAME_SECONDS_PER_LOGICFRAME_REAL * RADS_PER_DEGREE));
 }
 
 // ----------------------------------------------------------------------------------------------

@@ -51,7 +51,7 @@
 #endif
 
 //How long the transport waits for its troops to board again before it rolls on without them.
-#define FRAMES_TO_WAIT_FOR_BOARDING (10 * LOGICFRAMES_PER_SECOND)
+#define FRAMES_TO_WAIT_FOR_BOARDING (10 * LOGICFRAMES_PER_GAME_SECOND)
 
 //-------------------------------------------------------------------------------------------------
 /** Should the troops we deployed climb back into the transport?

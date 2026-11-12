@@ -250,7 +250,7 @@ UpdateSleepTime TensileFormationUpdate::update( void )
 
 		}
 		else
-			return UPDATE_SLEEP(LOGICFRAMES_PER_SECOND);
+			return UPDATE_SLEEP(LOGICFRAMES_PER_GAME_SECOND);
 	}
 
 
@@ -274,7 +274,7 @@ UpdateSleepTime TensileFormationUpdate::update( void )
 	}
 
 
-	if ( m_life%LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_SECOND - 1 )
+	if ( m_life%LOGICFRAMES_PER_GAME_SECOND == LOGICFRAMES_PER_GAME_SECOND - 1 )
 		propagateDislodgement( TRUE );
 
 

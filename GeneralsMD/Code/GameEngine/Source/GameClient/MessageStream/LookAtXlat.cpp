@@ -524,7 +524,7 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 		{
 			m_lastMouseMoveFrame = TheGameLogic->getFrame();
 
-			const UnsignedInt CLICK_DURATION = ConvertRetailFrames( 5U );
+			const UnsignedInt CLICK_DURATION = ConvertRetailFramesWall( 5U );
 			const UnsignedInt PIXEL_OFFSET = 5;
 
 			m_isRotating = false;

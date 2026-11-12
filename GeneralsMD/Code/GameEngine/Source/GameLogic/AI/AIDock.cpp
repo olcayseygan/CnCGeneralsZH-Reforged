@@ -306,7 +306,7 @@ StateReturnType AIDockWaitForClearanceState::update( void )
 	if (dock->isClearToEnter( getMachineOwner() ))
 		return STATE_SUCCESS;
 
-	if (m_enterFrame + 30*LOGICFRAMES_PER_SECOND < TheGameLogic->getFrame()) {
+	if (m_enterFrame + 30*LOGICFRAMES_PER_GAME_SECOND < TheGameLogic->getFrame()) {
 		return STATE_FAILURE;
 	}
 	// continue to wait

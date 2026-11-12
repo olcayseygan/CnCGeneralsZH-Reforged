@@ -79,6 +79,13 @@ static void parseIgnoredField( INI *, void *, void *, const void * )
 {
 }
 
+// FramesPerSecondLimit paces the logic on the wall clock, so it takes the logic rate but not the
+// game speed (INI::parseRetailFramesInt carries both)
+static void parseRetailFramesIntWall( INI *ini, void *, void *store, const void * )
+{
+	*(Int *)store = ConvertRetailFramesWall( INI::scanInt( ini->getNextToken() ) );
+}
+
 // A map's map.ini can carry a GameData block.  Retail is 40; a tiny cell makes the partition grid
 // millions of cells on a large map, a huge one leaves the whole map in a handful of cells.
 static const INI::RealRange PARTITION_CELL_SIZE_RANGE = { 20.0f, 400.0f };
@@ -96,7 +103,7 @@ static const INI::RealRange PARTITION_CELL_SIZE_RANGE = { 20.0f, 400.0f };
 	{ "UseTrees",									INI::parseBool,				NULL,			offsetof( GlobalData, m_useTrees ) },
 	{ "UseFPSLimit",							INI::parseBool,				NULL,			offsetof( GlobalData, m_useFpsLimit ) },
 	{ "DumpAssetUsage",						INI::parseBool,				NULL,			offsetof( GlobalData, m_dumpAssetUsage ) },
-	{ "FramesPerSecondLimit",			INI::parseRetailFramesInt,	NULL,			offsetof( GlobalData, m_framesPerSecondLimit ) },	// retail 30 is normal speed: LOGICFRAMES_PER_SECOND
+	{ "FramesPerSecondLimit",			parseRetailFramesIntWall,	NULL,			offsetof( GlobalData, m_framesPerSecondLimit ) },	// retail 30 is normal speed: LOGICFRAMES_PER_SECOND
 	{ "ChipsetType",							INI::parseInt,				NULL,			offsetof( GlobalData, m_chipSetType ) },
 	{ "MaxShellScreens",					INI::parseInt,				NULL,			offsetof( GlobalData, m_maxShellScreens ) },
 	{ "UseCloudMap",							INI::parseBool,				NULL,			offsetof( GlobalData, m_useCloudMap ) },
@@ -1051,7 +1058,7 @@ GlobalData::GlobalData()
 	m_structureStiffness = 0.5f;
 	m_gravity = -1.0f;
 	m_stealthFriendlyOpacity = 0.5f;
-	m_defaultOcclusionDelay = LOGICFRAMES_PER_SECOND * 3;	//default to 3 seconds
+	m_defaultOcclusionDelay = LOGICFRAMES_PER_GAME_SECOND * 3;	//default to 3 seconds
 
 	m_preloadEverything = FALSE;
 	m_preloadReport = FALSE;

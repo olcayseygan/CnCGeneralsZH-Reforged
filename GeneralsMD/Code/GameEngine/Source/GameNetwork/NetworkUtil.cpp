@@ -32,7 +32,7 @@
 
 /* Frame counts, sized for the time they cover: 128 frames was EA's 4.3 s at 30 Hz, and
 	 ConvertRetailFrames keeps the 4.3 s at LOGICFRAMES_PER_SECOND. */
-Int MAX_FRAMES_AHEAD = ConvertRetailFrames(128);
+Int MAX_FRAMES_AHEAD = ConvertRetailFramesWall(128);
 
 /* The shortest run-ahead the room is ever commanded to use: three frames of input delay (50 ms at
 	 60 Hz, 100 ms at 30), which is computeRunAhead's own answer for a link with no trip at all - a

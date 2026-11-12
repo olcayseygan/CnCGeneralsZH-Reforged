@@ -2653,12 +2653,19 @@ AGAIN:
 		if (cameraRetailFrame != lastCameraRetailFrame)
 		{
 			lastCameraRetailFrame = cameraRetailFrame;
-			primaryW3DView->updateCameraMovements();  // Update camera motion effects.
+			// a retail frame of game time is GAME_SPEED_PERCENT / 100 steps, the script's timers' clock
+			static Int cameraStepHundredths = 0;
+			cameraStepHundredths += GAME_SPEED_PERCENT;
+			while (cameraStepHundredths >= 100)
+			{
+				cameraStepHundredths -= 100;
+				primaryW3DView->updateCameraMovements();  // Update camera motion effects.
+			}
 		}
 		// a tick's length is no whole number of milliseconds at every rate (33.3 at 30), so the remainder
 		// is carried rather than dropped
 		static Real fastRemainderMs = 0.0f;
-		fastRemainderMs += TheW3DFrameLengthInMsec;
+		fastRemainderMs += TheW3DFrameLengthInMsec * ( (Real)GAME_SPEED_PERCENT / 100.0f );	// a tick of game time, as below
 		const UnsignedInt fastStepMs = (UnsignedInt)fastRemainderMs;
 		fastRemainderMs -= (Real)fastStepMs;
 		syncTime += fastStepMs;
@@ -2731,6 +2738,16 @@ AGAIN:
 			if (pictureMs < prevPictureMs || deltaMs > MAX_SYNC_STEP_MS)
 				deltaMs = (UnsignedInt)( TheW3DFrameLengthInMsec / (Real)GameEngine_videoPictures() );	// the first recorded picture
 			prevPictureMs = pictureMs;
+		}
+		// the game speed: a unit covers GAME_SPEED_PERCENT of a wall second's game time each wall second,
+		// so its walk cycle, every flipbook and every W3D effect runs that much faster too, or soldiers skate.
+		// The animation durations set from logic frames are game milliseconds for the same reason
+		if (GAME_SPEED_PERCENT != 100)
+		{
+			static Real spedMs = 0.0f;
+			spedMs += deltaMs * ( (Real)GAME_SPEED_PERCENT / 100.0f );
+			deltaMs = (UnsignedInt)spedMs;
+			spedMs -= deltaMs;
 		}
 
 		syncTime += deltaMs;

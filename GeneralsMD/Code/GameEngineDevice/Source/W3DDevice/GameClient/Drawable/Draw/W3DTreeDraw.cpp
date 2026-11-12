@@ -67,7 +67,7 @@ m_maxOutwardMovement(1.0f)
 	m_initialAccelPercent = START_ACCEL_PERCENT;
 	m_bounceVelocityPercent = VELOCITY_BOUNCE_PERCENT;
   m_minimumToppleSpeed = MINIMUM_TOPPLE_SPEED;
-	m_sinkFrames = 10*LOGICFRAMES_PER_SECOND;
+	m_sinkFrames = 10*LOGICFRAMES_PER_GAME_SECOND;
 	m_sinkDistance = 20.0f;
 
 }

@@ -379,7 +379,7 @@ void POWTruckAIUpdate::updateWaiting( void )
 
 }  // updateWaiting
 
-static const UnsignedInt FIND_DELAY = LOGICFRAMES_PER_SECOND * 1;
+static const UnsignedInt FIND_DELAY = LOGICFRAMES_PER_GAME_SECOND * 1;
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 void POWTruckAIUpdate::updateFindTarget( void )

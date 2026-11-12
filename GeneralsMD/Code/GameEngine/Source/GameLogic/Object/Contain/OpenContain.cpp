@@ -1096,7 +1096,7 @@ void OpenContain::exitObjectViaDoor( Object *exitObj, ExitDoorType exitDoor )
 			ai->ignoreObstacle(NULL);
 			// The units often come out at the same position, and need to ignore collisions briefly
 			// as they move out.  jba.
-			ai->setIgnoreCollisionTime(LOGICFRAMES_PER_SECOND);
+			ai->setIgnoreCollisionTime(LOGICFRAMES_PER_GAME_SECOND);
 			TheAI->pathfinder()->adjustToPossibleDestination(exitObj, ai->getLocomotorSet(), &endPosition);
 		}
 		std::vector<Coord3D> exitPath;
@@ -1201,7 +1201,7 @@ void OpenContain::exitObjectInAHurry( Object *exitObj )
 			ai->ignoreObstacle(NULL);
 			// The units often come out at the same position, and need to ignore collisions briefly
 			// as they move out.  jba.
-			ai->setIgnoreCollisionTime(LOGICFRAMES_PER_SECOND);
+			ai->setIgnoreCollisionTime(LOGICFRAMES_PER_GAME_SECOND);
 			TheAI->pathfinder()->adjustToPossibleDestination(exitObj, ai->getLocomotorSet(), &endPosition);
 		}
 		exitPath.push_back(endPosition);

@@ -467,7 +467,7 @@ UnsignedInt Particle::getFlipbookFrame( void ) const
 
 	const UnsignedInt age = m_lifetime - m_lifetimeLeft;
 	if (flipbook->getFlipbookRate() > 0.0f)
-		return ( m_flipbookStart + (UnsignedInt)( age * flipbook->getFlipbookRate() * SECONDS_PER_LOGICFRAME_REAL ) ) % frames;
+		return ( m_flipbookStart + (UnsignedInt)( age * flipbook->getFlipbookRate() * GAME_SECONDS_PER_LOGICFRAME_REAL ) ) % frames;
 
 	const UnsignedInt frame = m_flipbookStart + (UnsignedInt)( (Real)age / (Real)m_lifetime * (Real)( frames - m_flipbookStart ) );
 	return frame < frames ? frame : frames - 1;

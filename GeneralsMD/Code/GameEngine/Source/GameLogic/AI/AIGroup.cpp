@@ -2566,7 +2566,7 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 						//Delay the mood check time (for autoacquire) until after the unit can stealth again.
 						UnsignedInt stealthFrames = stealth->getStealthDelay();
 						//Skew it a little due to having a large group selected.
-						UnsignedInt randomFrames = GameLogicRandomValue( 0, LOGICFRAMES_PER_SECOND );
+						UnsignedInt randomFrames = GameLogicRandomValue( 0, LOGICFRAMES_PER_GAME_SECOND );
 						ai->setNextMoodCheckTime( TheGameLogic->getFrame() + stealthFrames + randomFrames );
 					}
 				}
@@ -2954,7 +2954,7 @@ void AIGroup::groupIdle(CommandSourceType cmdSource)
 							//Delay the mood check time (for autoacquire) until after the unit can stealth again.
 							UnsignedInt stealthFrames = stealth->getStealthDelay();
 							//Skew it a little due to having a large group selected.
-							UnsignedInt randomFrames = GameLogicRandomValue( 0, LOGICFRAMES_PER_SECOND );
+							UnsignedInt randomFrames = GameLogicRandomValue( 0, LOGICFRAMES_PER_GAME_SECOND );
 							ai->setNextMoodCheckTime( TheGameLogic->getFrame() + stealthFrames + randomFrames );
 						}
 					}
@@ -3773,7 +3773,7 @@ void AIGroup::groupCheer( CommandSourceType cmdSource )
 		Object *object = (*i);
 		//This allows all special conditions states to reset after a specified delay. Assume
 		//only one works at a time (it'll clear any others).
-		object->setSpecialModelConditionState( MODELCONDITION_SPECIAL_CHEERING, LOGICFRAMES_PER_SECOND * 3 );
+		object->setSpecialModelConditionState( MODELCONDITION_SPECIAL_CHEERING, LOGICFRAMES_PER_GAME_SECOND * 3 );
 	}
 }
 

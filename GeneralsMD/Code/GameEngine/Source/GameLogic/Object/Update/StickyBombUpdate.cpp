@@ -113,9 +113,9 @@ void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, con
 		m_dieFrame = update->getDieFrame();
 	
 		//Calculate the number of seconds (rounded down)
-		UnsignedInt pings = (m_dieFrame - now) / LOGICFRAMES_PER_SECOND;
+		UnsignedInt pings = (m_dieFrame - now) / LOGICFRAMES_PER_GAME_SECOND;
 		//Now determine the next frame we will make a "ping" sound.
-		m_nextPingFrame = m_dieFrame - (pings * LOGICFRAMES_PER_SECOND);
+		m_nextPingFrame = m_dieFrame - (pings * LOGICFRAMES_PER_GAME_SECOND);
 	}
 	else
 	{
@@ -123,7 +123,7 @@ void StickyBombUpdate::initStickyBomb( Object *target, const Object *bomber, con
 		m_dieFrame = 0;
 
 		//Because we don't die -- make our ping in a second.
-		m_nextPingFrame = now + LOGICFRAMES_PER_SECOND;
+		m_nextPingFrame = now + LOGICFRAMES_PER_GAME_SECOND;
 	}
 	setWakeFrame( getObject(), UPDATE_SLEEP_NONE );
 
@@ -205,7 +205,7 @@ UpdateSleepTime StickyBombUpdate::update( void )
 	UnsignedInt now = TheGameLogic->getFrame();
 	if( now >= m_nextPingFrame )
 	{
-		m_nextPingFrame += LOGICFRAMES_PER_SECOND;
+		m_nextPingFrame += LOGICFRAMES_PER_GAME_SECOND;
 
 		//Play the "ping" sound.
 		AudioEventRTS sound = *self->getTemplate()->getPerUnitSound( "UnitBombPing" );

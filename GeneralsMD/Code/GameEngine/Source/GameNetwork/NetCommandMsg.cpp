@@ -501,7 +501,7 @@ Int NetRunAheadMetricsCommandMsg::getAverageFps() {
 // NetRunAheadCommandMsg
 //-------------------------
 NetRunAheadCommandMsg::NetRunAheadCommandMsg() : NetCommandMsg() {
-	m_runAhead = min(max(ConvertRetailFrames(20), MIN_RUNAHEAD), MAX_FRAMES_AHEAD/2);
+	m_runAhead = min(max(ConvertRetailFramesWall(20), MIN_RUNAHEAD), MAX_FRAMES_AHEAD/2);
 	m_frameRate = LOGICFRAMES_PER_SECOND;
 	m_commandType = NETCOMMANDTYPE_RUNAHEAD;
 }

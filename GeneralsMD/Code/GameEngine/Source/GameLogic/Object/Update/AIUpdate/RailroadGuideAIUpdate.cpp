@@ -99,7 +99,7 @@ RailroadBehaviorModuleData::RailroadBehaviorModuleData( void )
 	m_acceleration = ConvertRetailPerFrameFactor(1.01f);
 	m_braking = ConvertRetailPerFrameFactor(0.99f);
 	m_friction = ConvertRetailPerFrameFactor(0.97f);
-	m_waitAtStationTime = LOGICFRAMES_PER_SECOND * 5;
+	m_waitAtStationTime = LOGICFRAMES_PER_GAME_SECOND * 5;
 }  // end RailroadBehaviorModuleData
 
 

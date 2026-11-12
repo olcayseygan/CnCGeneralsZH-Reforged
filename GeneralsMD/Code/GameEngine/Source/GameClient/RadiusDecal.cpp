@@ -53,7 +53,7 @@ RadiusDecalTemplate::RadiusDecalTemplate() :
 	m_shadowType(SHADOW_ALPHA_DECAL), 
 	m_minOpacity(1.0f),
 	m_maxOpacity(1.0f),
-	m_opacityThrobTime(LOGICFRAMES_PER_SECOND),
+	m_opacityThrobTime(LOGICFRAMES_PER_GAME_SECOND),
 	m_color(0),
 	m_onlyVisibleToOwningPlayer(true),
 	m_name(AsciiString::TheEmptyString)  // Added By Sadullah Nader for Init purposes

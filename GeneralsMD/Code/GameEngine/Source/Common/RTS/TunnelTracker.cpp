@@ -139,7 +139,7 @@ Object *TunnelTracker::getCurNemesis(void)
 	if (m_curNemesisID == INVALID_ID) {
 		return NULL;
 	}		
-	if (m_nemesisTimestamp + 4*LOGICFRAMES_PER_SECOND < TheGameLogic->getFrame()) {
+	if (m_nemesisTimestamp + 4*LOGICFRAMES_PER_GAME_SECOND < TheGameLogic->getFrame()) {
 		m_curNemesisID = INVALID_ID;
 		return NULL;
 	}

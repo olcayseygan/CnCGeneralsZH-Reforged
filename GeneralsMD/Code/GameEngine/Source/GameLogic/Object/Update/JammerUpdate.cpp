@@ -39,7 +39,7 @@
 JammerUpdateModuleData::JammerUpdateModuleData()
 {
 	m_radius = 0.0f;
-	m_scanFrames = LOGICFRAMES_PER_SECOND / 6;
+	m_scanFrames = LOGICFRAMES_PER_GAME_SECOND / 6;
 }
 
 //-------------------------------------------------------------------------------------------------

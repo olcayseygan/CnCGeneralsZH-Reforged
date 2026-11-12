@@ -217,9 +217,9 @@ UpdateSleepTime FiringTracker::update()
 
 	if( m_frameToStartCooldown != 0 && now > m_frameToStartCooldown )
 	{
-		m_frameToStartCooldown = now + LOGICFRAMES_PER_SECOND;
+		m_frameToStartCooldown = now + LOGICFRAMES_PER_GAME_SECOND;
 		coolDown();// if this is the coolest call to cooldown, it will set m_frameToStartCooldown to zero
-		return UPDATE_SLEEP(LOGICFRAMES_PER_SECOND);
+		return UPDATE_SLEEP(LOGICFRAMES_PER_GAME_SECOND);
 	}
 
 	UpdateSleepTime sleepTime = calcTimeToSleep();

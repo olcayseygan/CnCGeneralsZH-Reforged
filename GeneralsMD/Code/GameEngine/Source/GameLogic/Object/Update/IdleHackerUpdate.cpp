@@ -39,7 +39,7 @@
 //-------------------------------------------------------------------------------------------------
 IdleHackerUpdateModuleData::IdleHackerUpdateModuleData()
 {
-	m_idleFrames = 10 * LOGICFRAMES_PER_SECOND;
+	m_idleFrames = 10 * LOGICFRAMES_PER_GAME_SECOND;
 	m_centerRange = 150.0f;
 }
 

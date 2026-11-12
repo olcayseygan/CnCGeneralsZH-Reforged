@@ -443,8 +443,8 @@ public:
 	inline WeaponPrefireType getPrefireType() const { return m_prefireType; }
 	inline Bool getAutoReloadsClip() const { return m_reloadType == AUTO_RELOAD; }
 	inline Int getClipSize() const { return m_clipSize; }
-	inline Int getMinDelayBetweenShots() const { return m_minDelayBetweenShots; }	///< frames; unlike getDelayBetweenShots, draws no random number
-	inline Int getMaxDelayBetweenShots() const { return m_maxDelayBetweenShots; }
+	inline Int getMinDelayBetweenShots() const { return ConvertRetailFrames( m_minDelayBetweenShots ); }	///< frames; unlike getDelayBetweenShots, draws no random number
+	inline Int getMaxDelayBetweenShots() const { return ConvertRetailFrames( m_maxDelayBetweenShots ); }
 	inline Int getContinuousFireOneShotsNeeded() const { return m_continuousFireOneShotsNeeded; }
 	inline Int getContinuousFireTwoShotsNeeded() const { return m_continuousFireTwoShotsNeeded; }
 	inline UnsignedInt getContinuousFireCoastFrames() const { return m_continuousFireCoastFrames; }
@@ -546,9 +546,9 @@ private:
 	UnsignedInt m_fireSoundLoopTime;				///< if nonzero, num frames for looping of fire sound
 	WeaponBonusSet* m_extraBonus;						///< optional extra per-weapon bonus
 	Int m_clipSize;													///< number of 'shots' in a clip
-	Int m_clipReloadTime;										///< when 'clip' is empty, how long it takes to reload (frames)
-	Int m_minDelayBetweenShots;							///< min time allowed between firing single shots (frames)
-	Int m_maxDelayBetweenShots;							///< max time allowed between firing single shots (frames)
+	Int m_clipReloadTime;										///< when 'clip' is empty, how long it takes to reload (retail frames; the getter converts)
+	Int m_minDelayBetweenShots;							///< min time allowed between firing single shots (retail frames; the getters convert)
+	Int m_maxDelayBetweenShots;							///< max time allowed between firing single shots (retail frames; the getters convert)
 	Int m_continuousFireOneShotsNeeded;			///< How many consecutive shots will give my owner the ContinuousFire Property
 	Int m_continuousFireTwoShotsNeeded;			///< How many consecutive shots will give my owner the ContinuousFireTwo Property
 	UnsignedInt m_continuousFireCoastFrames;///< How long after we should have shot should we start to wind down from Continuous fire mode

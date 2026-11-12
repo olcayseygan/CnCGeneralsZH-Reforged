@@ -79,7 +79,7 @@ static const Real JET_STEEPEST_DESCENT = 0.27f;	// tan 15 degrees: a jet above i
 static const Real JET_FINAL_DIST = 150.0f;			// the straight final after the circuit's turn in
 // the jet's height servo settles this many frames of travel short of a height target moving away
 // under it, so a target this far ahead holds the jet on a slope (measured: 10 u/s down at 60 u/s)
-static const Real JET_HEIGHT_LAG_FRAMES = LOGICFRAMES_PER_SECOND * 0.1f;
+static const Real JET_HEIGHT_LAG_FRAMES = LOGICFRAMES_PER_GAME_SECOND * 0.1f;
 
 /**
 	Height above the runway, dist before the point where it meets it, of a straight slope that rounds
@@ -453,7 +453,7 @@ private:
 	enum
 	{
 		// only recheck for new airfields every second or so
-		HOW_OFTEN_TO_CHECK = LOGICFRAMES_PER_SECOND
+		HOW_OFTEN_TO_CHECK = LOGICFRAMES_PER_GAME_SECOND
 	};
 
 public:
@@ -515,7 +515,7 @@ public:
 		if (damageRate > 0)
 		{
 			// convert to damage/sec to damage/frame
-			damageRate *= SECONDS_PER_LOGICFRAME_REAL;
+			damageRate *= GAME_SECONDS_PER_LOGICFRAME_REAL;
 			// since it's a percentage, multiply times the max health
 			damageRate *= jet->getBodyModule()->getMaxHealth();
 
@@ -1373,8 +1373,8 @@ public:
 		{
 			Real dist = sqrtf(dSqr);
 			if (dist<1) dist = 1;
-			pos.x += PATHFIND_CELL_SIZE_F*dx/(dist*LOGICFRAMES_PER_SECOND);
-			pos.y += PATHFIND_CELL_SIZE_F*dy/(dist*LOGICFRAMES_PER_SECOND);
+			pos.x += PATHFIND_CELL_SIZE_F*dx/(dist*LOGICFRAMES_PER_GAME_SECOND);
+			pos.y += PATHFIND_CELL_SIZE_F*dy/(dist*LOGICFRAMES_PER_GAME_SECOND);
 			jet->setPosition(&pos);
 		}
 #else

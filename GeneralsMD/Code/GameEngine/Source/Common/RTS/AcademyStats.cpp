@@ -78,7 +78,7 @@ const char *TheAcademyClassificationTypeNames[] =
 	NULL
 };
 
-#define FRAMES_BETWEEN_UPDATES LOGICFRAMES_PER_SECOND
+#define FRAMES_BETWEEN_UPDATES LOGICFRAMES_PER_GAME_SECOND
 
 
 //------------------------------------------------------------------------------------------------
@@ -433,7 +433,7 @@ void AcademyStats::recordProduction( const Object *obj, const Object *constructe
 	//27) Built tech structure within 15 minutes?
 	if( obj->isKindOf( KINDOF_FS_BARRACKS ) )
 	{
-		if( TheGameLogic->getFrame() <= 300 * LOGICFRAMES_PER_SECOND )
+		if( TheGameLogic->getFrame() <= 300 * LOGICFRAMES_PER_GAME_SECOND )
 		{
 			m_builtBarracksWithinFiveMinutes = TRUE;
 		}
@@ -442,7 +442,7 @@ void AcademyStats::recordProduction( const Object *obj, const Object *constructe
 	//28) Built tech structure within 15 minutes?
 	if( obj->isKindOf( KINDOF_FS_WARFACTORY ) )
 	{
-		if( TheGameLogic->getFrame() <= 600 * LOGICFRAMES_PER_SECOND )
+		if( TheGameLogic->getFrame() <= 600 * LOGICFRAMES_PER_GAME_SECOND )
 		{
 			m_builtWarFactoryWithinTenMinutes = TRUE;
 		}
@@ -451,7 +451,7 @@ void AcademyStats::recordProduction( const Object *obj, const Object *constructe
 	//29) Built tech structure within 15 minutes?
 	if( obj->isKindOf( KINDOF_FS_ADVANCED_TECH ) )
 	{
-		if( TheGameLogic->getFrame() <= 900 * LOGICFRAMES_PER_SECOND )
+		if( TheGameLogic->getFrame() <= 900 * LOGICFRAMES_PER_GAME_SECOND )
 		{
 			m_builtTechStructureWithinFifteenMinutes = TRUE;
 		}
@@ -628,7 +628,7 @@ void AcademyStats::evaluateTier1Advice( AcademyAdviceInfo *info, Int numAvailabl
 	{
 		m_idleBuildingUnitsMaxFrames = idleFrames;
 	}
-	if( m_idleBuildingUnitsMaxFrames > 300 * LOGICFRAMES_PER_SECOND || !m_lastUnitBuiltFrame )
+	if( m_idleBuildingUnitsMaxFrames > 300 * LOGICFRAMES_PER_GAME_SECOND || !m_lastUnitBuiltFrame )
 	{
 		availableTips++;
 		Int rand = GameClientRandomValue( 0, numAvailableTips - 1 );
@@ -679,7 +679,7 @@ void AcademyStats::evaluateTier1Advice( AcademyAdviceInfo *info, Int numAvailabl
 			m_powerOutMaxFrames = frames;
 		}
 	}
-	if( m_powerOutMaxFrames > 600 * LOGICFRAMES_PER_SECOND )
+	if( m_powerOutMaxFrames > 600 * LOGICFRAMES_PER_GAME_SECOND )
 	{
 		availableTips++;
 		Int rand = GameClientRandomValue( 0, numAvailableTips - 1 );
@@ -958,7 +958,7 @@ void AcademyStats::evaluateTier3Advice( AcademyAdviceInfo *info, Int numAvailabl
 	{
 		m_maxFramesBetweenIncome = delta;
 	}
-	if( m_maxFramesBetweenIncome > LOGICFRAMES_PER_SECOND * 120 || !m_lastIncomeFrame )
+	if( m_maxFramesBetweenIncome > LOGICFRAMES_PER_GAME_SECOND * 120 || !m_lastIncomeFrame )
 	{
 		availableTips++;
 		Int rand = GameClientRandomValue( 0, numAvailableTips - 1 );

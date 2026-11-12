@@ -361,7 +361,7 @@ UpdateSleepTime MobNexusContain::update()
 					if( body->getHealth() < body->getMaxHealth() )
 					{
 						//Calculate the health to be regenerated on each unit.
-						Real regen = body->getMaxHealth() * moduleData->m_healthRegen / 100.0f * SECONDS_PER_LOGICFRAME_REAL;
+						Real regen = body->getMaxHealth() * moduleData->m_healthRegen / 100.0f * GAME_SECONDS_PER_LOGICFRAME_REAL;
 
 						//Perform the actual healing for this frame.
 //						DamageInfo damageInfo;

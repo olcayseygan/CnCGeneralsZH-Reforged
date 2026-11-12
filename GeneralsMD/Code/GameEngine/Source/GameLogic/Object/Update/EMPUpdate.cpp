@@ -331,7 +331,7 @@ void EMPUpdate::doDisableAttack( void )
 					// (LOGIC-THREAD.md M5); nothing logic keeps refers to them.
 					const GeometryInfo geometry = curVictim->getGeometryInfo();
 					const ObjectID victimID = curVictim->getID();
-					const UnsignedInt lifetime = MAX(0, data->m_disabledDuration - LOGICFRAMES_PER_SECOND);
+					const UnsignedInt lifetime = MAX(0, data->m_disabledDuration - LOGICFRAMES_PER_GAME_SECOND);
 					LogicThread::callAfterTick( [tmp, geometry, victimID, victimHeight, emitterCount, lifetime]() {
 						for (Int e = 0 ; e < emitterCount; ++e)
 						{

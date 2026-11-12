@@ -1516,7 +1516,7 @@ Int parseFPSLimit(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1)
 	{
-		TheWritableGlobalData->m_framesPerSecondLimit = ConvertRetailFrames(atoi(args[1]));
+		TheWritableGlobalData->m_framesPerSecondLimit = ConvertRetailFramesWall(atoi(args[1]));
 	}
 	return 2;
 }

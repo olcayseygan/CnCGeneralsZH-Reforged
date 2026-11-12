@@ -981,7 +981,7 @@ Bool FlightDeckBehavior::calcBestParkingAssignment( ObjectID id, Coord3D *pos, I
 
 //-------------------------------------------------------------------------------------------------
 // don't really need to autoheal every frame....
-const Int HEAL_RATE_FRAMES = LOGICFRAMES_PER_SECOND / 5;
+const Int HEAL_RATE_FRAMES = LOGICFRAMES_PER_GAME_SECOND / 5;
 
 //-------------------------------------------------------------------------------------------------
 void FlightDeckBehavior::resetWakeFrame()
@@ -1135,7 +1135,7 @@ UpdateSleepTime FlightDeckBehavior::update()
 					healInfo.in.m_damageType = DAMAGE_HEALING;
 					healInfo.in.m_deathType = DEATH_NONE;
 					healInfo.in.m_sourceID = getObject()->getID();
-					healInfo.in.m_amount = HEAL_RATE_FRAMES * data->m_healAmount * SECONDS_PER_LOGICFRAME_REAL * objToHeal->getHandicapHealthFactor();
+					healInfo.in.m_amount = HEAL_RATE_FRAMES * data->m_healAmount * GAME_SECONDS_PER_LOGICFRAME_REAL * objToHeal->getHandicapHealthFactor();
 					BodyModuleInterface *body = objToHeal->getBodyModule();
 					body->attemptHealing( &healInfo );
 					++it;

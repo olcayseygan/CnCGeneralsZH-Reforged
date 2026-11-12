@@ -39,8 +39,9 @@
  * so the original's 30 Hz line can no longer be the golden. The catch-up tests hold every schedule
  * to the moved code's own one-pass-per-frame line, computed in the same run, which is the claim T1c
  * makes. EA_LOOP_GOLDEN pins that line against a change to the step, and is that line as a run of
- * this binary prints it ("moved, passes of 1: ..."): regenerate it from a run whenever the step's
- * constants or the frame rate change on purpose.
+ * this binary prints it ("moved at retail speed, passes of 1: ..."): regenerate it from a run whenever
+ * the step's constants or the frame rate change on purpose. It is the step at retail game speed
+ * (GAME_SPEED_PERCENT 100), which the test passes in whatever speed the build runs at.
  */
 
 #include "test_harness.h"
@@ -65,11 +66,33 @@
 namespace {
 
 // The moved code under one pass per logic frame, as test_water_grid prints it ("moved, passes of 1"),
-// at the rate this build runs. At 30 Hz it is the original's own line (water_grid_oracle, "original
-// passes of 1"); the 60 Hz one is taken from a run of the 60 Hz step.
+// at the rate this build runs and at retail game speed (GAME_SPEED_PERCENT 100: retailStep below).
+// At 30 Hz it is the original's own line (water_grid_oracle, "original passes of 1"); the 60 Hz one is
+// taken from a run of the 60 Hz step. A faster game speed steps a longer stretch of game time a frame,
+// which no frame-by-frame trace of the slower step can match, so the golden is held against the
+// retail-speed step and the game-speed step against itself (the catch-up tests).
 const char *const EA_LOOP_GOLDEN = LOGICFRAMES_PER_RETAIL_FRAME == 1
 	? "frames 240 all 96559c89 last a7eea444 moving 183"
 	: "frames 240 all 5c9f1917 last ac3c3fa9 moving 240";
+
+// GameData.ini's gravity per logic frame squared at retail game speed: ConvertAccelerationInSecsToFrames
+// as it is at GAME_SPEED_PERCENT 100, a second being LOGICFRAMES_PER_SECOND frames
+Real retailSpeedGravity( void )
+{
+	const Real secondsPerFrame = 1.0f / (Real)LOGICFRAMES_PER_SECOND;
+	return -64.0f * ( secondsPerFrame * secondsPerFrame );
+}
+
+// The step's amounts at retail game speed: ConvertRetailPerFrameRate and ConvertRetailPerFrameFactor as
+// they are at GAME_SPEED_PERCENT 100 (a halving and a sqrtf at 60 Hz, nothing at 30)
+WaterGridMotion::Constants retailStep( void )
+{
+	WaterGridMotion::Constants constants;
+	constants.atRestVelocity = 1.0f / (Real)LOGICFRAMES_PER_RETAIL_FRAME;
+	constants.dampening = LOGICFRAMES_PER_RETAIL_FRAME == 1 ? 0.93f : sqrtf( 0.93f );
+	constants.gravity = retailSpeedGravity();
+	return constants;
+}
 
 void boot()
 {
@@ -92,14 +115,20 @@ struct MovedEngine
 	Bool moving;
 	int callsPerFrame;
 	UnsignedInt lastFrame;
-	MovedEngine( int calls = 1 ) : points( water_grid::POINTS_X * water_grid::POINTS_Y ), moving( FALSE ), callsPerFrame( calls ), lastFrame( 0 ) {}
+	const WaterGridMotion::Constants *constants;	///< NULL: the game's step, as GameLogic runs it
+	MovedEngine( int calls = 1, const WaterGridMotion::Constants *step = NULL ) : points( water_grid::POINTS_X * water_grid::POINTS_Y ), moving( FALSE ), callsPerFrame( calls ), lastFrame( 0 ), constants( step ) {}
 	Point *mesh( void ) { return &points[0]; }
 	Bool &inMotion( void ) { return moving; }
 	void clientPass( UnsignedInt ) {}
 	void logicFrameTop( UnsignedInt frame )
 	{
 		for (int i = 0; i < callsPerFrame; ++i)
-			WaterGridMotion::updateForLogicFrame( frame, lastFrame, TRUE, moving, &points[0], water_grid::CELLS_X, water_grid::CELLS_Y );
+		{
+			if (constants)
+				WaterGridMotion::updateForLogicFrame( frame, lastFrame, TRUE, moving, &points[0], water_grid::CELLS_X, water_grid::CELLS_Y, *constants );
+			else
+				WaterGridMotion::updateForLogicFrame( frame, lastFrame, TRUE, moving, &points[0], water_grid::CELLS_X, water_grid::CELLS_Y );
+		}
 	}
 };
 
@@ -120,20 +149,43 @@ std::string eaLoopLine( void )
 
 TEST(water_grid_scenario_uses_the_engines_gravity)
 {
-	// the scenario's gravity is the oracle's, per 30 Hz frame squared; the engine's is per 60 Hz frame
-	// squared, a quarter of it, and exactly so: halving 1/30 only moves the exponent
+	/* The scenario's gravity is the oracle's, per 30 Hz frame squared. At retail game speed the
+		 engine's is per logic frame squared: the same at 30 Hz, a quarter at 60, and exactly so, since
+		 halving 1/30 only moves the exponent. That is the bitwise claim, and it holds at every game
+		 speed for the retail-speed step the golden below runs. */
 	boot();
+	const Real retail = retailSpeedGravity();
+	const float scenarioRetail = water_grid::shippedGravity() * ( 1.0f / (Real)( LOGICFRAMES_PER_RETAIL_FRAME * LOGICFRAMES_PER_RETAIL_FRAME ) );
+	CHECK( memcmp( &retail, &scenarioRetail, sizeof( retail ) ) == 0 );
+
+	/* The game's gravity goes through game seconds (1/24 of one at 125), the scenario's copy through
+		 30 Hz and the speed squared (25/16). Equal at 100 bit for bit; at 125 and 150 two roundings of
+		 the same number, a unit in the last place apart. */
 	const Real engine = ConvertAccelerationInSecsToFrames( -64.0f );
 	const float scenario = ConvertRetailPerFrameSquared( water_grid::shippedGravity() );
-	CHECK( memcmp( &engine, &scenario, sizeof( engine ) ) == 0 );
+	if (GAME_SPEED_PERCENT == 100)
+	{
+		CHECK( memcmp( &engine, &scenario, sizeof( engine ) ) == 0 );
+	}
+	else
+	{
+		CHECK_NEAR( engine, scenario, fabsf( scenario ) * 1.0e-6f );
+	}
 }
 
 TEST(water_grid_steps_as_eas_loop_did_under_eas_loop)
 {
+	// the retail-speed step, one pass per logic frame: the line the golden was recorded from
 	boot();
-	const std::string line = eaLoopLine();
-	printf( "  moved, passes of 1: %s\n", line.c_str() );
+	const WaterGridMotion::Constants step = retailStep();
+	MovedEngine engine( 1, &step );
+	const std::string line = water_grid::run( engine, std::vector<int>( 1, 1 ), nextFirstFrame() );
+	printf( "  moved at retail speed, passes of 1: %s\n", line.c_str() );
 	CHECK_STR( line.c_str(), EA_LOOP_GOLDEN );
+	if (GAME_SPEED_PERCENT == 100)
+	{
+		CHECK_STR( eaLoopLine().c_str(), EA_LOOP_GOLDEN );	// the game's step is that step at retail speed
+	}
 }
 
 TEST(water_grid_k_logic_frames_in_one_pass_equal_k_single_passes)

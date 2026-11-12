@@ -1643,7 +1643,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 						req.peerRequestType = PeerRequest::PEERREQUEST_GETEXTENDEDSTAGINGROOMINFO;
 						req.stagingRoom.id = (Int)(intptr_t)GadgetListBoxGetItemData(control, rowSelected, 0);
 
-						if (lastID != req.stagingRoom.id || now > lastFrame + ConvertRetailFrames( 60U ))
+						if (lastID != req.stagingRoom.id || now > lastFrame + ConvertRetailFramesWall( 60U ))
 						{
 							TheGameSpyPeerMessageQueue->addRequest(req);
 						}

@@ -71,7 +71,7 @@ static const Real GIVEN_UP_RADIUS = 150.0f;
 
 /** How long an area cleaner goes with no hazard hosed or gone and no nearer to one before it gives the
 	area up, whatever the scan count says. A field takes seconds to hose down. */
-static const UnsignedInt CLEANUP_STUCK_FRAMES = 20 * LOGICFRAMES_PER_SECOND;
+static const UnsignedInt CLEANUP_STUCK_FRAMES = 20 * LOGICFRAMES_PER_GAME_SECOND;
 
 /** One scan of an area cleaner out of reach of its hazard: whether it counts toward giving up. It does
 	when the cleaner stands no CLEANUP_PROGRESS nearer than the nearest it had come and has driven under

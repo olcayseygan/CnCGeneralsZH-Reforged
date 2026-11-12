@@ -61,7 +61,7 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-enum { MUZZLE_FLASH_LIFETIME = LOGICFRAMES_PER_SECOND / 7 };
+enum { MUZZLE_FLASH_LIFETIME = LOGICFRAMES_PER_GAME_SECOND / 7 };
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -934,7 +934,7 @@ UpdateSleepTime GarrisonContain::update( void )
 			removeFromContain( contained );
 
 			// set the safe occlusion frame to way way way in the future so we never see it during death
-			#define HUGE_FRAME_IN_FUTURE (LOGICFRAMES_PER_SECOND * 1000)
+			#define HUGE_FRAME_IN_FUTURE (LOGICFRAMES_PER_GAME_SECOND * 1000)
 			contained->setSafeOcclusionFrame( TheGameLogic->getFrame() + HUGE_FRAME_IN_FUTURE );
 
 		}  // end if

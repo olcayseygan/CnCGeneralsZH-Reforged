@@ -60,7 +60,7 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-const Int DEFAULT_MAX_LIFESPAN = 10 * LOGICFRAMES_PER_SECOND;
+const Int DEFAULT_MAX_LIFESPAN = 10 * LOGICFRAMES_PER_GAME_SECOND;
 
 // A StraightWhenClear shell whose barrel is raised steeper than this slope is being lobbed, and takes
 // the barrel's arc on open ground too. It is the barrel against level ground, or against the line to

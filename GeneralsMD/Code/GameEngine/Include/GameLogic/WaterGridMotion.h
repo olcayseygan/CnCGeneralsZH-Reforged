@@ -81,6 +81,19 @@ public:
 	static void updateForLogicFrame( UnsignedInt currLogicFrame, UnsignedInt &lastLogicFrame, Bool doWaterGrid, Bool &meshInMotion,
 		MeshPoint *meshData, Int gridCellsX, Int gridCellsY );
 
+	/// The step's per-frame amounts.  The game's are EA's 30 Hz ones converted to the rate and the game
+	/// speed, gravity TheGlobalData's; a test passes the retail-speed ones to step as its golden was recorded.
+	struct Constants
+	{
+		Real atRestVelocity;		///< below this speed, near the preferred height, a point stops
+		Real dampening;					///< velocity factor per frame
+		Real gravity;						///< per frame squared
+	};
+
+	/// the same step with the amounts given instead of the game's
+	static void updateForLogicFrame( UnsignedInt currLogicFrame, UnsignedInt &lastLogicFrame, Bool doWaterGrid, Bool &meshInMotion,
+		MeshPoint *meshData, Int gridCellsX, Int gridCellsY, const Constants &constants );
+
 };
 
 /** The vertex animated water grid, as simulation state.  This was WaterRenderObjClass's mesh and

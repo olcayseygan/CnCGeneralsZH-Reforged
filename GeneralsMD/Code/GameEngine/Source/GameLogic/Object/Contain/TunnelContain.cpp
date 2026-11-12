@@ -550,7 +550,7 @@ UpdateSleepTime TunnelContain::update( void )
 		if (body) {
 			const DamageInfo *info = body->getLastDamageInfo();
 			if (info) {
-				if (body->getLastDamageTimestamp() + LOGICFRAMES_PER_SECOND > TheGameLogic->getFrame()) {
+				if (body->getLastDamageTimestamp() + LOGICFRAMES_PER_GAME_SECOND > TheGameLogic->getFrame()) {
 					// winner.
 					ObjectID attackerID = info->in.m_sourceID;
 					Object *attacker = TheGameLogic->findObjectByID(attackerID);

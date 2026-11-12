@@ -63,7 +63,7 @@ SupplyWarehouseDockUpdateModuleData::SupplyWarehouseDockUpdateModuleData( void )
 	// and the defaults apply to every warehouse the game already ships without touching one INI
 	// file - which matters, because the INI files are in the multiplayer checksum.
 	//
-	m_regenDelay = 40 * LOGICFRAMES_PER_SECOND;
+	m_regenDelay = 40 * LOGICFRAMES_PER_GAME_SECOND;
 	m_regenRadius = 250.0f;
 	m_regenMaxBoxes = -1;
 }
@@ -112,7 +112,7 @@ SupplyWarehouseDockUpdate::~SupplyWarehouseDockUpdate()
 	* it for the whole trip home, and without this the pile would change hands between every two
 	* loads.  A minute covers a round trip to a supply centre built anywhere near the pile; a player
 	* who stops coming loses the pile a minute after his last box. */
-static const UnsignedInt SUPPLY_PILE_CLAIM_FRAMES = 60 * LOGICFRAMES_PER_SECOND;
+static const UnsignedInt SUPPLY_PILE_CLAIM_FRAMES = 60 * LOGICFRAMES_PER_GAME_SECOND;
 
 Bool SupplyPileLimitCloses( Int limit, PlayerMaskType gatheringPlayers, Int playerIndex )
 {

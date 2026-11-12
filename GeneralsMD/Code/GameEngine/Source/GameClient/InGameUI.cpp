@@ -9686,8 +9686,8 @@ void InGameUI::buildRegion( const ICoord2D *anchor, const ICoord2D *dest, IRegio
 }
 
 //-------------------------------------------------------------------------------------------------
-// The money pop: a white flash where the cash landed, a leap up that settles, its own colour, then
-// gone, two seconds in all on the wall clock. EA's ran on logic frames, so it stepped at the tick
+// The money pop: a white flash where the cash landed, a leap up that settles, gold, then gone, two
+// seconds in all on the wall clock. EA's ran on logic frames, so it stepped at the tick
 // rate, and took its distance and fade from the INI per frame, which every rate change re-tuned.
 enum
 {
@@ -9697,23 +9697,6 @@ enum
 	FLOATING_TEXT_FADE_FROM_MS = 1400,
 	FLOATING_TEXT_RISE = 40,		// 1080p pixels, whole steps of them on bigger screens (Drawable_pipPixel)
 };
-
-//-------------------------------------------------------------------------------------------------
-/** A team colour can be navy or maroon, which dark ground swallows: the brightest channel goes to
-	* full and the whole a fifth of the way to white, so the hue still says whose money it is. */
-//-------------------------------------------------------------------------------------------------
-static Color floatingTextColor( Color color )
-{
-	UnsignedByte r, g, b, a;
-	GameGetColorComponents( color, &r, &g, &b, &a );
-	const Int top = max( (Int)r, max( (Int)g, (Int)b ) );
-	if( top == 0 )
-		return GameMakeColor( 255, 255, 255, 255 );
-	Int c[ 3 ] = { r * 255 / top, g * 255 / top, b * 255 / top };
-	for( Int i = 0; i < 3; ++i )
-		c[ i ] += ( 255 - c[ i ] ) / 5;
-	return GameMakeColor( c[ 0 ], c[ 1 ], c[ 2 ], 255 );
-}
 
 //-------------------------------------------------------------------------------------------------
 /** Add a new floating text to our list */
@@ -9733,9 +9716,13 @@ FloatingTextData *InGameUI::addFloatingText(const UnicodeString& text,const Coor
 
 	{
 		FloatingTextData *newFTD = newInstance( FloatingTextData );
-		// the money a supply drop pays is drawn in its owner's colour, and the code that raises it
-		// is in GameLogic, where the scheme does not exist
-		newFTD->m_color = floatingTextColor( clientColor( color ) );
+		// Every caller is money, and income is one gold whoever earned it, a supply drop, a Black
+		// Market, a bounty, a hack or a derrick, so the colour alone says cash (the owner's call,
+		// 2026-11-12; it was the owner's team colour, white or navy as often as not). Money taken
+		// keeps the pure red its callers give GUI:LoseCash, or a theft would read as pay. Gold
+		// over the black rim holds on grass, snow and sand alike.
+		const Color LOSS_RED = GameMakeColor( 255, 0, 0, 0 ) & 0x00FFFFFF;
+		newFTD->m_color = ( color & 0x00FFFFFF ) == LOSS_RED ? color : GameMakeColor( 255, 206, 64, 255 );
 		newFTD->m_pos3D.x = pos->x;
 		newFTD->m_pos3D.z = pos->z;
 		newFTD->m_pos3D.y = pos->y;

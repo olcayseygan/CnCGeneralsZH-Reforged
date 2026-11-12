@@ -94,6 +94,7 @@ Data/Art/Textures/TRBarr_Scorch.tga
 Data/Art/Textures/TRBarr_Sheet.tga
 Data/Art/Textures/TRBarr_SheetD.tga
 Data/Art/Textures/TRBayraktar_Wreck.tga
+Data/Art/Textures/TRCameos.tga
 Data/Art/Textures/TRCmdHQ_Lead.tga
 Data/Art/Textures/TRCmdHQ_LeadD.tga
 Data/Art/Textures/TRCmdHQ_LeadE.tga
@@ -718,6 +719,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
 Data/INI/MappedImages/HandCreated/ReforgedReconHud.ini
+Data/INI/MappedImages/HandCreated/TRCameos.ini
 Data/INI/ModernWater.ini
 Data/INI/Mouse.ini
 Data/INI/MultiplayerReforged.ini

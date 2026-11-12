@@ -12550,10 +12550,26 @@ void InGameUI::idleUnitKinds( GameMessage::Type t, KindOfMaskType *mustBeSet, Ki
 		mustBeSet->set( KINDOF_INFANTRY );
 }
 
+// what a right click on an idle button takes (the select all key of the kind, kindOfUnitSelection
+// across the map), save the locally controlled test its caller has made
+static Bool isSelectAllOfKinds( const Object *obj, const KindOfMaskType &mustBeSet, const KindOfMaskType &mustBeClear )
+{
+	if( obj->isEffectivelyDead() || obj->isContained() || obj->isOffMap() )
+		return FALSE;
+	if( obj->isKindOf( KINDOF_IGNORES_SELECT_ALL ) || obj->isKindOf( KINDOF_DOZER ) || obj->isKindOf( KINDOF_HARVESTER ) || obj->isKindOf( KINDOF_STRUCTURE ) )
+		return FALSE;
+	const Drawable *draw = obj->getDrawable();
+	return draw && draw->isMassSelectable() && obj->isKindOfMulti( mustBeSet, mustBeClear );
+}
+
 //-------------------------------------------------------------------------------------------------
-/** One walk of the object list a frame lights each idle button whose kind has a unit standing
-	* idle, so a dim one never answers a click with nothing.  The worker button is one of them: the
-	* four light on the same pass, and each cycles over what lit it. */
+/** One walk of the object list a frame sets each idle button in one of three looks.  Something of
+	* its kind standing idle: the highlighted art, which a click cycles over.  Some of the kind but
+	* none idle: the plain art, live, since a right click on the infantry, vehicle and aircraft
+	* buttons still takes them all and a left click finds nothing and leaves the selection alone.
+	* None of the kind at all: dark, and dead to both clicks.  The worker button takes no right
+	* click, so it has only the first and the last.  The four light on the same pass, and each
+	* cycles over what lit it. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::updateIdleUnitButtons( void )
 {
@@ -12572,9 +12588,15 @@ void InGameUI::updateIdleUnitButtons( void )
 		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
 		NAMEKEY( "ControlBar.wnd:ButtonIdleWorker" ),
 	};
+	// the worker's right click goes nowhere, so owning a busy one leaves its button dark
+	static const Bool rightClick[ IDLE_BUTTON_COUNT ] = { TRUE, TRUE, TRUE, FALSE };
+	// the scheme's plain art per button, kept while the highlighted art stands in its place; taken
+	// again whenever the scheme puts its own back (a side or resolution change)
+	static const Image *plain[ IDLE_BUTTON_COUNT ] = { NULL, NULL, NULL, NULL };
 	GameWindow *win[ IDLE_BUTTON_COUNT ];
 	KindOfMaskType mustBeSet[ IDLE_BUTTON_COUNT ], mustBeClear[ IDLE_BUTTON_COUNT ];
 	Bool idle[ IDLE_BUTTON_COUNT ] = { FALSE, FALSE, FALSE, FALSE };
+	Bool owned[ IDLE_BUTTON_COUNT ] = { FALSE, FALSE, FALSE, FALSE };
 	Int i;
 	for( i = 0; i < IDLE_BUTTON_COUNT; i++ )
 	{
@@ -12589,22 +12611,37 @@ void InGameUI::updateIdleUnitButtons( void )
 		return;
 	}
 
-	// ponytail: the whole object list every render frame; keep a list per kind if it shows in a profile
+	// ponytail: the whole object list every render frame; keep a list per kind if it shows in a profile.
+	// The owned test rides the same pass and drops out per kind at its first find.
 	Int lit = 0;
 	for( Object *obj = TheGameLogic->getFirstObject(); obj && lit < IDLE_BUTTON_COUNT; obj = obj->getNextObject() )
 	{
 		if( !obj->isLocallyControlled() )
 			continue;
 		for( i = 0; i < IDLE_BUTTON_COUNT; i++ )
+		{
 			if( !idle[ i ] && isIdleOfKinds( obj, mustBeSet[ i ], mustBeClear[ i ] ) )
 			{
 				idle[ i ] = TRUE;
 				lit++;
 			}
+			if( rightClick[ i ] && !owned[ i ] && isSelectAllOfKinds( obj, mustBeSet[ i ], mustBeClear[ i ] ) )
+				owned[ i ] = TRUE;
+		}
 	}
 	for( i = 0; i < IDLE_BUTTON_COUNT; i++ )
-		if( win[ i ] )
-			win[ i ]->winEnable( idle[ i ] );
+	{
+		if( win[ i ] == NULL )
+			continue;
+		win[ i ]->winEnable( idle[ i ] || owned[ i ] );
+		const Image *hilite = GadgetButtonGetHiliteImage( win[ i ] );
+		const Image *shown = GadgetButtonGetEnabledImage( win[ i ] );
+		if( shown != hilite )
+			plain[ i ] = shown;
+		const Image *want = ( idle[ i ] && hilite ) || plain[ i ] == NULL ? hilite : plain[ i ];
+		if( shown != want )
+			GadgetButtonSetEnabledImage( win[ i ], want );
+	}
 }
 
 Object *InGameUI::selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear )

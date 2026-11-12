@@ -3414,12 +3414,12 @@ void ControlBar::initWindows( void )
 			{
 				setControlCommand( win, idleCommand );
 				win->winSetTooltipFunc( commandButtonTooltip );
-				// the three idle kinds take a right click, dark or lit, for every one of their kind; both
-				// copies of the status word (see the command windows above), and after setControlCommand,
-				// which clears the disabled-click bit
+				// the three idle kinds take a right click for every one of their kind; both copies of the
+				// status word (see the command windows above).  Only while lit: updateIdleUnitButtons keeps
+				// them lit while the player owns any of the kind, idle or not, so a dark one is dead
 				if( idle < 3 )
 				{
-					win->winSetStatus( WIN_STATUS_RIGHT_CLICK | WIN_STATUS_CANCEL_WHEN_DISABLED );
+					win->winSetStatus( WIN_STATUS_RIGHT_CLICK );
 					BitSet( win->winGetInstanceData()->m_status, WIN_STATUS_RIGHT_CLICK );
 				}
 			}

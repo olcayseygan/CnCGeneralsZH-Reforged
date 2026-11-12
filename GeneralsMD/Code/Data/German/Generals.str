@@ -4373,6 +4373,46 @@ CONTROLBAR:IdleWorkerDescription
 "Klicke, um den nächsten untätigen Arbeiter auszuwählen. Mit Shift-Klick wählst du alle."
 END
 
+CONTROLBAR:IdleInfantry
+"Untätige Infanterie"
+END
+
+CONTROLBAR:IdleInfantryDescription
+"Klicke, um den nächsten untätigen Infanteristen auszuwählen. Mit Shift-Klick wählst du alle. Ein Rechtsklick wählt deine gesamte Infanterie, ob untätig oder nicht: erst die auf dem Bildschirm, mit einem zweiten Rechtsklick die auf der ganzen Karte."
+END
+
+CONTROLBAR:IdleVehicle
+"Untätiges Fahrzeug"
+END
+
+CONTROLBAR:IdleVehicleDescription
+"Klicke, um das nächste untätige Bodenfahrzeug auszuwählen. Mit Shift-Klick wählst du alle. Ein Rechtsklick wählt alle deine Bodenfahrzeuge, ob untätig oder nicht: erst die auf dem Bildschirm, mit einem zweiten Rechtsklick die auf der ganzen Karte."
+END
+
+CONTROLBAR:IdleAircraft
+"Untätiges Luftfahrzeug"
+END
+
+CONTROLBAR:IdleAircraftDescription
+"Klicke, um das nächste untätige Luftfahrzeug auszuwählen. Mit Shift-Klick wählst du alle. Ein Rechtsklick wählt alle deine Luftfahrzeuge, ob untätig oder nicht: erst die auf dem Bildschirm, mit einem zweiten Rechtsklick die auf der ganzen Karte."
+END
+
+CONTROLBAR:SelectArmy
+"Armee auswählen"
+END
+
+CONTROLBAR:SelectArmyDescription
+"Klicke, um alle Kampfeinheiten auf dem Bildschirm auszuwählen; klicke erneut für deine ganze Armee auf der Karte. Arbeiter, Nachschublaster und Gebäude bleiben außen vor."
+END
+
+CONTROLBAR:LastAlert
+"Letzter Alarm"
+END
+
+CONTROLBAR:LastAlertDescription
+"Klicke, um die Kamera zum letzten Radarereignis zu bringen, etwa wenn deine Basis angegriffen wird. Klickst du kurz danach noch einmal, geht es ein Ereignis weiter zurück."
+END
+
 CONTROLBAR:Beacon
 "Signalfeuer"
 END

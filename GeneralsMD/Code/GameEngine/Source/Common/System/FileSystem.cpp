@@ -148,6 +148,7 @@ void		FileSystem::init( void )
 	{
 		std::lock_guard<std::mutex> lock( m_fileExistLock );
 		m_fileExist.clear();		// see reset(): the cache outlives whatever it was an answer about
+		m_archivedModel.clear();
 	}
 	TheLocalFileSystem->init();
 	TheArchiveFileSystem->init();
@@ -180,6 +181,7 @@ void		FileSystem::reset( void )
 	{
 		std::lock_guard<std::mutex> lock( m_fileExistLock );
 		m_fileExist.clear();
+		m_archivedModel.clear();
 	}
 
 	TheLocalFileSystem->reset();
@@ -214,6 +216,16 @@ File*		FileSystem::openFile( const Char *filename, Int access )
 		return NULL;
 	}
 
+	// A loose model beats every archive, except a Reforged batch's copy of it that moves nothing the
+	// logic reads (takesArchivedModel): the
+	// loose master stays the fallback and the INI CRC's source, the batch adds only its LODs.
+	if ( (access & (File::WRITE | File::CREATE)) == 0 && takesArchivedModel( filename ) )
+	{
+		file = TheArchiveFileSystem->openFile( filename );
+		if ( file != NULL )
+			return file;
+	}
+
 	if ( TheLocalFileSystem != NULL )
 	{
 		file = TheLocalFileSystem->openFile( filename, access );
@@ -236,6 +248,208 @@ File*		FileSystem::openFile( const Char *filename, Int access )
 	}
 
 	return file;
+}
+
+//============================================================================
+// FileSystem::takesArchivedModel
+//============================================================================
+
+namespace {
+	struct W3DChunk
+	{
+		UnsignedInt type;
+		UnsignedInt length;		// of the data, without the 8 byte header
+		const char *whole;		// header first
+	};
+
+	/// What the logic can read of one HLOD: muzzle, fire FX and launch names the htree lacks are found
+	/// among its sub-objects (W3DModelDraw findSingleSubObj), and that search walks Lod[0], the coarsest.
+	struct HLodView
+	{
+		std::string name, tree;																		///< the header's, up to the first NUL
+		std::vector<std::string> lods;															///< each LOD array chunk whole, coarsest first
+		std::vector< std::vector< std::pair<std::string, UnsignedInt> > > subObjects;	///< per level: lower-cased name, bone
+		std::string aggregates, proxies;													///< those chunks whole
+	};
+}
+
+static Bool readWhole( File *file, std::string &bytes )
+{
+	if ( file == NULL )
+		return FALSE;
+	const Int size = file->size();
+	char *data = file->readEntireAndClose();
+	bytes.assign( data, size );
+	delete [] data;
+	return TRUE;
+}
+
+/** The chunks of one level of a W3D file; FALSE when they do not add up to its size. */
+static Bool walkChunks( const char *bytes, UnsignedInt size, std::vector<W3DChunk> &chunks )
+{
+	UnsignedInt at = 0;
+	while ( at < size )
+	{
+		if ( size - at < 8 )
+			return FALSE;
+		W3DChunk chunk;
+		memcpy( &chunk.type, bytes + at, 4 );
+		memcpy( &chunk.length, bytes + at + 4, 4 );
+		chunk.length &= 0x7FFFFFFF;		// the top bit says "has sub-chunks"
+		if ( chunk.length > size - at - 8 )
+			return FALSE;
+		chunk.whole = bytes + at;
+		chunks.push_back( chunk );
+		at += 8 + chunk.length;
+	}
+	return TRUE;
+}
+
+static std::string chunkName( const char *name, size_t length, Bool lower )
+{
+	std::string s( name, strnlen( name, length ) );
+	if ( lower )
+		for ( size_t i = 0; i < s.size(); ++i )
+			s[i] = (char)tolower( (unsigned char)s[i] );
+	return s;
+}
+
+static Bool readHLod( const W3DChunk &hlod, HLodView &view )
+{
+	std::vector<W3DChunk> parts;
+	if ( !walkChunks( hlod.whole + 8, hlod.length, parts ) )
+		return FALSE;
+	Int headers = 0;
+	for ( size_t i = 0; i < parts.size(); ++i )
+	{
+		const W3DChunk &part = parts[i];
+		const char *data = part.whole + 8;
+		if ( part.type == 0x701 )				// HLOD_HEADER: version, level count, name, hierarchy name
+		{
+			if ( part.length < 40 )
+				return FALSE;
+			view.name = chunkName( data + 8, 16, FALSE );
+			view.tree = chunkName( data + 24, 16, FALSE );
+			++headers;
+		}
+		else if ( part.type == 0x702 )		// HLOD_LOD_ARRAY: an array header and a SUB_OBJECT (bone, name) each
+		{
+			view.lods.push_back( std::string( part.whole, 8 + part.length ) );
+			view.subObjects.resize( view.subObjects.size() + 1 );
+			std::vector<W3DChunk> records;
+			if ( !walkChunks( data, part.length, records ) )
+				return FALSE;
+			for ( size_t r = 0; r < records.size(); ++r )
+			{
+				if ( records[r].type != 0x704 || records[r].length < 36 )
+					continue;
+				UnsignedInt bone;
+				memcpy( &bone, records[r].whole + 8, 4 );
+				view.subObjects.back().push_back( std::make_pair( chunkName( records[r].whole + 12, 32, TRUE ), bone ) );
+			}
+		}
+		else if ( part.type == 0x705 )
+			view.aggregates.append( part.whole, 8 + part.length );
+		else if ( part.type == 0x706 )
+			view.proxies.append( part.whole, 8 + part.length );
+	}
+	return headers == 1 && !view.lods.empty();
+}
+
+/** The batch copy has the master's top level, aggregates and proxies byte for byte, its names, and
+	* no coarser level binds a name the master has to another bone. */
+static Bool sameHLodBindings( const HLodView &master, const HLodView &copy )
+{
+	if ( master.name != copy.name || master.tree != copy.tree || master.lods.back() != copy.lods.back()
+		|| master.aggregates != copy.aggregates || master.proxies != copy.proxies )
+		return FALSE;
+
+	std::map<std::string, UnsignedInt> bone;
+	for ( size_t level = master.subObjects.size(); level-- > 0; )		// the top level's binding first
+		for ( size_t i = 0; i < master.subObjects[level].size(); ++i )
+			bone.insert( master.subObjects[level][i] );
+	for ( size_t level = 0; level + 1 < copy.subObjects.size(); ++level )
+		for ( size_t i = 0; i < copy.subObjects[level].size(); ++i )
+		{
+			std::map<std::string, UnsignedInt>::const_iterator it = bone.find( copy.subObjects[level][i].first );
+			if ( it != bone.end() && it->second != copy.subObjects[level][i].second )
+				return FALSE;
+		}
+	return TRUE;
+}
+
+/** The top-level chunks byte for byte - HIERARCHY 0x100, ANIMATION 0x200, COMPRESSED_ANIMATION 0x280,
+	* MORPH_ANIMATION 0x2C0, HMODEL 0x300 - and every HLOD's bindings.  An _SKN on a retail _SKL has
+	* none of the first, so its HLOD is what decides. */
+static Bool sameLogicView( const std::string &master, const std::string &copy )
+{
+	const std::string *files[2] = { &master, &copy };
+	std::string fixed[2];
+	std::vector<HLodView> hlods[2];
+	for ( Int f = 0; f < 2; ++f )
+	{
+		std::vector<W3DChunk> chunks;
+		if ( !walkChunks( files[f]->data(), (UnsignedInt)files[f]->size(), chunks ) )
+			return FALSE;
+		for ( size_t i = 0; i < chunks.size(); ++i )
+		{
+			const UnsignedInt type = chunks[i].type;
+			if ( type == 0x100 || type == 0x200 || type == 0x280 || type == 0x2C0 || type == 0x300 )
+				fixed[f].append( chunks[i].whole, 8 + chunks[i].length );
+			else if ( type == 0x700 )
+			{
+				hlods[f].resize( hlods[f].size() + 1 );
+				if ( !readHLod( chunks[i], hlods[f].back() ) )
+					return FALSE;
+			}
+		}
+	}
+	if ( fixed[0] != fixed[1] || hlods[0].size() != hlods[1].size() )
+		return FALSE;
+	for ( size_t i = 0; i < hlods[0].size(); ++i )
+		if ( !sameHLodBindings( hlods[0][i], hlods[1][i] ) )
+			return FALSE;
+	return TRUE;
+}
+
+Bool FileSystem::takesArchivedModel( const Char *filename )
+{
+	if ( TheLocalFileSystem == NULL || TheArchiveFileSystem == NULL )
+		return FALSE;
+
+	// the W3D loader asks for "Art/W3D/x.w3d", the archive lists "art\w3d\x.w3d"
+	std::string path( filename );
+	for ( size_t i = 0; i < path.size(); ++i )
+		path[i] = ( path[i] == '/' ) ? '\\' : (char)tolower( (unsigned char)path[i] );
+	if ( path.size() < 12 || path.compare( 0, 8, "art\\w3d\\" ) != 0 || path.compare( path.size() - 4, 4, ".w3d" ) != 0 )
+		return FALSE;
+
+	const unsigned key = TheNameKeyGenerator->nameToLowercaseKey( path.c_str() );
+	{
+		std::lock_guard<std::mutex> lock( m_fileExistLock );
+		std::map<unsigned,bool>::const_iterator it = m_archivedModel.find( key );
+		if ( it != m_archivedModel.end() )
+			return it->second;
+	}
+
+	// The tree's holder differs from the retail one only where a Reforged batch went over the model;
+	// Classic and Detailed Models off mount none, so they never get past this.
+	const AsciiString model( path.c_str() );
+	Bool archived = FALSE;
+	if ( TheArchiveFileSystem->getArchiveFilenameForFile( model ) != TheArchiveFileSystem->getRetailArchiveFilenameForFile( model )
+		&& TheLocalFileSystem->doesFileExist( filename ) )
+	{
+		std::string loose, packed;
+		archived = readWhole( TheLocalFileSystem->openFile( filename, File::READ | File::BINARY ), loose )
+			&& readWhole( TheArchiveFileSystem->openFile( filename ), packed )
+			&& sameLogicView( loose, packed );
+		DEBUG_LOG(( "FileSystem::takesArchivedModel - %s from %s\n", filename,
+			archived ? "the Reforged batch" : "the loose master, the batch moves what the logic reads" ));
+	}
+
+	std::lock_guard<std::mutex> lock( m_fileExistLock );
+	m_archivedModel[ key ] = archived;
+	return archived;
 }
 
 //============================================================================

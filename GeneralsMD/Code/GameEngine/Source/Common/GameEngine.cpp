@@ -401,7 +401,8 @@ static void checksumModels( XferCRC &xferCRC )
 		}
 		else
 		{
-			File *file = loose ? TheFileSystem->openFile( model.str(), File::READ ) : TheArchiveFileSystem->openRetailFile( model );
+			// the loose master, never the Reforged batch copy TheFileSystem may hand the renderer instead
+			File *file = loose ? TheLocalFileSystem->openFile( model.str(), File::READ ) : TheArchiveFileSystem->openRetailFile( model );
 			Int fileSize = file->size();
 			char *contents = file->readEntireAndClose();
 			CRC modelCRC;

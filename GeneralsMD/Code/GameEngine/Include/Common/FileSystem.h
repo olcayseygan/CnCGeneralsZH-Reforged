@@ -157,6 +157,13 @@ protected:
 	/// m_fileExist is asked from the main thread and from the logic thread's model loads in an overlapped
 	/// tick (and the texture loader's, if it ever runs): two inserts at once corrupt the tree and the heap
 	mutable std::mutex m_fileExistLock;
+
+	/// TRUE when a Reforged batch holds a model that is also loose and changes nothing the logic reads
+	/// of it - bones, animations, HLOD names and sub-object bindings - so the batch's copy (its LODs)
+	/// may be drawn instead.  Asked
+	/// once per model and kept, under m_fileExistLock, until the next init or reset.
+	Bool takesArchivedModel( const Char *filename );
+	std::map<unsigned,bool> m_archivedModel;
 };
 
 extern FileSystem*	TheFileSystem;

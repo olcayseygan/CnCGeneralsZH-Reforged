@@ -25131,6 +25131,174 @@ static std::string talentSciencesIni( Int count )
 		snprintf( name, sizeof( name ), " TEST_Talent%d", i );
 		text += name;
 	}
+#include "Common/RAMFile.h"
+
+namespace {
+	// a listing that also serves the bytes it was given under each name
+	class ServingArchive : public ListingOnlyArchive
+	{
+	public:
+		ServingArchive( const char *const *paths, const std::string *contents ) : ListingOnlyArchive( paths )
+		{
+			for( Int i = 0; paths[i] != NULL; ++i )
+				m_contents[ servedName( paths[i] ) ] = contents[i];
+		}
+		virtual File* openFile( const Char *name, Int )
+		{
+			std::map<std::string, std::string>::const_iterator it = m_contents.find( servedName( name ) );
+			if( it == m_contents.end() )
+				return NULL;
+			RAMFile *file = newInstance( RAMFile );
+			if( !file->openFromMemory( it->second.data(), (Int)it->second.size(), AsciiString( name ) ) )
+			{
+				file->deleteInstance();
+				return NULL;
+			}
+			file->deleteOnClose();
+			return file;
+		}
+	private:
+		static std::string servedName( const char *name )
+		{
+			std::string s( name );
+			for( size_t i = 0; i < s.size(); ++i )
+				s[i] = ( s[i] == '/' ) ? '\\' : (char)tolower( (unsigned char)s[i] );
+			return s;
+		}
+		std::map<std::string, std::string> m_contents;
+	};
+
+	std::string w3dChunk( UnsignedInt type, const std::string &data )
+	{
+		std::string chunk( 8, '\0' );
+		const UnsignedInt length = (UnsignedInt)data.size();
+		memcpy( &chunk[0], &type, 4 );
+		memcpy( &chunk[4], &length, 4 );
+		return chunk + data;
+	}
+
+	std::string readAllAndClose( File *file )
+	{
+		if( file == NULL )
+			return std::string();
+		const Int size = file->size();
+		char *bytes = file->readEntireAndClose();
+		std::string s( bytes, size );
+		delete [] bytes;
+		return s;
+	}
+
+	std::string hlodHeader( const char *name, const char *tree, UnsignedInt levels )
+	{
+		std::string data( 40, '\0' );
+		const UnsignedInt version = 1;
+		memcpy( &data[0], &version, 4 );
+		memcpy( &data[4], &levels, 4 );
+		memcpy( &data[8], name, strlen( name ) );
+		memcpy( &data[24], tree, strlen( tree ) );
+		return w3dChunk( 0x701, data );
+	}
+
+	// one HLOD level: an array header and a (bone, name) record per sub-object
+	std::string hlodLevel( const char *const *names, const UnsignedInt *bones, UnsignedInt count, float maxScreenSize )
+	{
+		std::string header( 8, '\0' );
+		memcpy( &header[0], &count, 4 );
+		memcpy( &header[4], &maxScreenSize, 4 );
+		std::string level = w3dChunk( 0x703, header );
+		for( UnsignedInt i = 0; i < count; ++i )
+		{
+			std::string record( 36, '\0' );
+			memcpy( &record[0], &bones[i], 4 );
+			memcpy( &record[4], names[i], strlen( names[i] ) );
+			level += w3dChunk( 0x704, record );
+		}
+		return w3dChunk( 0x702, level );
+	}
+}
+
+/* A Türkiye model is loose (the master, every player has it) and again in ReforgedTurkiye.big with
+	 its LODs.  The batch's copy is drawn only when it changes nothing the logic reads: the bones and
+	 animations byte for byte, the HLOD's names, its top level (the master's only one), and no coarser
+	 level binding a master sub-object name to another bone - findSingleSubObj falls back to those for
+	 muzzle names and searches the coarsest level first.  A moved bone, a renamed HLOD, a rebound
+	 name, no batch, or a retail archive holding the name all leave the loose master.  The INI CRC
+	 reads the master through TheLocalFileSystem, so it is the same whichever copy is drawn. */
+TEST(reforged_lod_copy_is_drawn_only_when_it_keeps_what_the_logic_reads)
+{
+	CHECK( bootOnce() );
+	const char *const topNames[] = { "TRTEST.HULL", "TRTEST.MUZZLE" };
+	const UnsignedInt topBones[] = { 0, 3 };
+	const char *const coarseNames[] = { "TRTEST.HULL_L1", "trtest.muzzle" };
+	const UnsignedInt coarseBones[] = { 0, 3 }, reboundBones[] = { 0, 5 };
+	const std::string top = hlodLevel( topNames, topBones, 2, 10000.0f );
+	const std::string coarse = hlodLevel( coarseNames, coarseBones, 2, 80.0f );
+	const std::string rebound = hlodLevel( coarseNames, reboundBones, 2, 80.0f );
+
+	const std::string bones = w3dChunk( 0x100, "pivots" ), anim = w3dChunk( 0x280, "turret" );
+	const std::string master = bones + w3dChunk( 0x0, "one mesh" ) + anim
+		+ w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 1 ) + top );
+	const std::string meshes = w3dChunk( 0x0, "mesh lod0" ) + w3dChunk( 0x0, "mesh lod1" );
+	const std::string lods = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + top );
+	const std::string moved = w3dChunk( 0x100, "pivotZ" ) + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + top );
+	const std::string renamed = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST2", "TRTEST", 2 ) + coarse + top );
+	const std::string rebind = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + rebound + top );
+
+	const char *const loose[] = { "Art/W3D/zhrtest_same.w3d", "Art/W3D/zhrtest_moved.w3d",
+		"Art/W3D/zhrtest_unmounted.w3d", "Art/W3D/zhrtest_retail.w3d",
+		"Art/W3D/zhrtest_renamed.w3d", "Art/W3D/zhrtest_rebound.w3d" };
+	std::filesystem::create_directories( "Art/W3D" );
+	for( Int i = 0; i < 6; ++i )
+	{
+		FILE *fp = fopen( loose[i], "wb" );
+		CHECK( fp != NULL );
+		if( fp != NULL )
+		{
+			fwrite( master.data(), 1, master.size(), fp );
+			fclose( fp );
+		}
+	}
+
+	static const char *const retail[] = { "Art\\W3D\\zhrtest_retail.w3d", NULL };
+	static const char *const batch[] = { "Art\\W3D\\zhrtest_same.w3d", "Art\\W3D\\zhrtest_moved.w3d",
+		"Art\\W3D\\zhrtest_renamed.w3d", "Art\\W3D\\zhrtest_rebound.w3d", NULL };
+	const std::string retailBytes[] = { lods };
+	const std::string batchBytes[] = { lods, moved, renamed, rebind };
+	MountOrderFileSystem fs;
+	fs.mountRetail( new ServingArchive( retail, retailBytes ), "W3DZH.big", FALSE );
+	fs.mountReforged( new ServingArchive( batch, batchBytes ), "ReforgedTurkiye.big" );
+
+	ArchiveFileSystem *const before = TheArchiveFileSystem;
+	TheArchiveFileSystem = &fs;
+	TheFileSystem->reset();		// forget any answer a previous run of this test cached
+
+	const Int access = File::READ | File::BINARY;
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[0], access ) ) == lods );
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[0], access ) ) == lods );		// the cached answer
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[1], access ) ) == master );		// a bone moved
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[2], access ) ) == master );		// no batch holds it
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[3], access ) ) == master );		// retail's copy, not a batch
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[4], access ) ) == master );		// the HLOD renamed
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[5], access ) ) == master );		// the muzzle on another bone when far
+
+	// what checksumModels hashes: the master's bytes, though the renderer was handed the batch's
+	CRC masterCRC, hashedCRC, drawnCRC;
+	masterCRC.computeCRC( master.data(), (Int)master.size() );
+	const std::string hashed = readAllAndClose( TheLocalFileSystem->openFile( loose[0], File::READ ) );
+	hashedCRC.computeCRC( hashed.data(), (Int)hashed.size() );
+	drawnCRC.computeCRC( lods.data(), (Int)lods.size() );
+	CHECK_EQ( hashedCRC.get(), masterCRC.get() );
+	CHECK_NE( drawnCRC.get(), masterCRC.get() );
+
+	TheFileSystem->reset();
+	TheArchiveFileSystem = before;
+	for( Int i = 0; i < 6; ++i )
+		std::filesystem::remove( loose[i] );
+	std::error_code ignored;
+	std::filesystem::remove( "Art/W3D", ignored );		// only when empty: never someone else's folder
+	std::filesystem::remove( "Art", ignored );
+}
+
 	return text;
 }
 

@@ -164,6 +164,17 @@ STUCK_BACKOUT_FRAMES: int = retail_frames(66)
 STUCK_COOL_FRAMES: int = retail_frames(90)
 STUCK_CYCLE_FRAMES: int = retail_frames(150)
 REPATH_DEBOUNCE_FRAMES: int = retail_frames(3)      # requestPath's "very quickly"
+# The stuck ladder as designed, not yet in C++.  The values here are main's; PROPOSED_LADDER holds
+# the ones measured to work, and each switches alone.
+LADDER_REPATH_FLAG: bool = False        # AIStates.cpp:1908 also reads a pending flag crowdRepath raises
+LADDER_STAGE_HOLD: int = 0              # AIUpdate.cpp:2824-2829, 2869-2873: the rung survives the path
+                                        # wait and drops after this many frames of progress; 0 drops at once
+LADDER_ALLY_FILTER: bool = False        # AIUpdate.cpp stuckRescue rung 2 leaves moving allies alone
+PROPOSED_LADDER: dict[str, object] = {
+    "LADDER_REPATH_FLAG": True,
+    "LADDER_STAGE_HOLD": retail_frames(22),
+    "LADDER_ALLY_FILTER": True,
+}
 
 # The unit.  A Crusader-sized tank, the only body the sandbox has; its locomotor numbers are a
 # stand-in (30 world units a game second, 90 degrees a game second), not read from the INI.
@@ -1049,6 +1060,8 @@ class Unit:
     rescue_until: int = 0
     rescue_cool: int = 0
     rescue_to: Point = (0.0, 0.0)
+    repath_pending: bool = False            # LADDER_REPATH_FLAG
+    progress_frames: int = 0                # LADDER_STAGE_HOLD
     # the crowd model (crowdSteer)
     pending_crowd_lat: float = 0.0
     has_pending_crowd_lat: bool = False
@@ -1074,6 +1087,9 @@ class Unit:
     gave_up: bool = False
     repaths: int = 0
     escapes: int = 0
+    rungs_fired: list[int] = field(default_factory=lambda: [0, 0, 0])
+    arrived: bool = False                   # reached its own order's goal at least once
+    churn: int = 0                          # ticks moving again after that
     first_length: float = 0.0
     first_waypoints: int = 0
     rays: list[tuple[float, float, float, float, bool]] = field(default_factory=list)
@@ -2388,6 +2404,7 @@ class Simulation:
             else:
                 new = pf.find_path(unit, unit.pos, dest)
         unit.waiting_for_path = False
+        unit.repath_pending = False
         if new is not None:
             destroy_path(unit)
             unit.path = new
@@ -2457,12 +2474,15 @@ class Simulation:
             unit.x += unit.vx
             unit.y += unit.vy
             pf.update_pos(unit)
+            if unit.arrived and unit.moving:
+                unit.churn += 1
         self.collide()
         pf.frame += 1
 
     def move_state(self, unit: Unit) -> None:
         """AIInternalMoveToState::update: arrival on the locomotor's distance, and a repath when
-           blocked and stuck or blocked for over two game seconds."""
+           blocked and stuck or blocked for over two game seconds, or (LADDER_REPATH_FLAG) when
+           crowdRepath asked for one."""
         if not unit.moving or unit.path is None:
             return
         if unit.dist_to_goal < PATHFIND_CLOSE_ENOUGH:
@@ -2472,12 +2492,17 @@ class Simulation:
                 return
         if unit.waiting_for_path:
             return
-        if unit.is_blocked_and_stuck or unit.blocked_frames > 2 * LOGICFRAMES_PER_GAME_SECOND:
+        if (unit.is_blocked_and_stuck or unit.blocked_frames > 2 * LOGICFRAMES_PER_GAME_SECOND
+                or unit.repath_pending):
+            unit.repath_pending = False
             unit.repaths += 1
             self.request_path(unit)
 
     def arrive(self, unit: Unit) -> None:
         resume = unit.resume_goal
+        if resume is None and unit.move_away_from is None:
+            unit.arrived = True
+        unit.repath_pending = False
         destroy_path(unit)
         unit.moving = False
         unit.vx = unit.vy = unit.speed = 0.0
@@ -2650,7 +2675,9 @@ class Simulation:
         unit.last_progress = unit.pos
         unit.last_progress_angle = unit.facing
         if unit.path is None or unit.waiting_for_path or not unit.on_path:
-            unit.no_progress = unit.rescue_stage = 0
+            unit.no_progress = unit.progress_frames = 0
+            if not (LADDER_STAGE_HOLD and unit.moving):
+                unit.rescue_stage = 0
             return
         asked = unit.max_speed
         bar = max(STUCK_TURN_EPSILON, unit.turn_rate * 0.5)
@@ -2662,8 +2689,12 @@ class Simulation:
             coming_about = ((dx * gx + dy * gy) / gl) < 0.87 if gl > 0.01 else True
         if moved < asked * 0.2 and not coming_about:
             unit.no_progress += 1
+            unit.progress_frames = 0
         else:
-            unit.no_progress = unit.rescue_stage = 0
+            unit.no_progress = 0
+            unit.progress_frames += 1
+            if unit.progress_frames >= LADDER_STAGE_HOLD:
+                unit.rescue_stage = 0
 
     def stuck_rescue(self, unit: Unit) -> None:
         """AIUpdateInterface::stuckRescue: a new route, then the neighbours asked to move with
@@ -2676,6 +2707,7 @@ class Simulation:
             return
         if rung == 0 or self.frame < unit.rescue_cool:
             return
+        unit.rungs_fired[rung - 1] += 1
         if rung == 1:
             unit.rescue_stage = 1
             self.crowd_repath(unit)
@@ -2684,7 +2716,9 @@ class Simulation:
             unit.rescue_stage = 2
             reach = unit.radius * 3.0 + CELL
             for other in self.units:
-                if other is not unit and math.hypot(other.x - unit.x, other.y - unit.y) <= reach:
+                if other is unit or (LADDER_ALLY_FILTER and other.moving):
+                    continue
+                if math.hypot(other.x - unit.x, other.y - unit.y) <= reach:
                     self.move_away(other, unit)
             unit.ignore_collisions_until = self.frame + LOGICFRAMES_PER_GAME_SECOND
             unit.rescue_cool = self.frame + LOGICFRAMES_PER_GAME_SECOND
@@ -2754,6 +2788,7 @@ class Simulation:
            from where the unit is with findPath."""
         unit.blocked_frames = 2 * LOGICFRAMES_PER_GAME_SECOND + 1
         unit.repath_asked = True
+        unit.repath_pending = LADDER_REPATH_FLAG
         unit.is_blocked_and_stuck = False
         unit.crowd_queued = 0
         unit.no_progress = 0
@@ -3412,13 +3447,20 @@ def run_headless(args: argparse.Namespace) -> None:
     print(f"map {args.map}  scenario {args.scenario}  units {args.units}  seeds {args.headless}  "
           f"{LOGICFRAMES_PER_SECOND} Hz at {GAME_SPEED_PERCENT}%")
     print_head()
-    if not args.sweep:
-        print_row("game", measure(args.map, args.units, args.headless, args.scenario))
-        return
-    name, values = parse_sweep(args.sweep)
-    for value in values:
-        with overriding(**{name: value}):
-            print_row(f"{name}={value:g}", measure(args.map, args.units, args.headless, args.scenario))
+    ladders: list[tuple[str, dict[str, object]]] = [("game", {})]
+    if args.proposed:
+        ladders.append(("proposed", PROPOSED_LADDER))
+    for label, ladder in ladders:
+        if not args.sweep:
+            with overriding(**ladder):
+                print_row(label, measure(args.map, args.units, args.headless, args.scenario))
+            continue
+        name, values = parse_sweep(args.sweep)
+        prefix = f"{label} " if ladder else ""
+        for value in values:
+            with overriding(**ladder, **{name: value}):
+                print_row(f"{prefix}{name}={value:g}",
+                          measure(args.map, args.units, args.headless, args.scenario))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -3585,10 +3627,14 @@ def main() -> None:
                         help="headless: NAME=v1,v2,... one of the game's constants, one row per value")
     parser.add_argument("--pairs", type=int, default=0,
                         help="headless: also time this many single searches per seed")
+    parser.add_argument("--proposed", action="store_true",
+                        help="the stuck ladder's PROPOSED_LADDER values: a second row headless, "
+                             "the only behaviour in the window")
     args = parser.parse_args()
     if args.headless:
         run_headless(args)
-    else:
+        return
+    with overriding(**(PROPOSED_LADDER if args.proposed else {})):
         run_window(args)
 
 

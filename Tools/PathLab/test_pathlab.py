@@ -384,6 +384,61 @@ class BlockingTests(unittest.TestCase):
         self.assertEqual([pf.get_claims(5, 5, f) for f in (15, 25, 35, 45)], [1, 2, 1, 0])
 
 
+class LadderTests(unittest.TestCase):
+    """The proposed stuck ladder, one switch at a time; the defaults stay main's."""
+
+    def driving(self, *positions: tuple[float, float]) -> tuple[Simulation, list[Unit]]:
+        units = [Unit(x, y, id=i + 1) for i, (x, y) in enumerate(positions)]
+        sim = Simulation(walled(40), units)
+        for unit in units:
+            far = (350.5, unit.y)
+            unit.moving, unit.goal = True, far
+            unit.path = Path([unit.pos, far], [0, 1])
+            unit.dist_to_goal = far[0] - unit.x
+        return sim, units
+
+    def test_the_default_ladder_is_the_game(self):
+        self.assertFalse(pathlab.LADDER_REPATH_FLAG)
+        self.assertEqual(pathlab.LADDER_STAGE_HOLD, 0)
+        self.assertFalse(pathlab.LADDER_ALLY_FILTER)
+
+    def test_a_crowd_repath_survives_the_collision_that_resets_the_blocked_count(self):
+        for flag in (False, True):
+            with pathlab.overriding(LADDER_REPATH_FLAG=flag):
+                sim, (unit,) = self.driving((100.5, 100.5))
+                sim.crowd_repath(unit)
+                unit.blocked_frames = 1             # processCollision's needToRotate branch
+                sim.move_state(unit)
+                self.assertEqual(unit.waiting_for_path, flag)
+
+    def test_the_rung_survives_the_path_wait_and_drops_after_progress(self):
+        hold = pathlab.PROPOSED_LADDER["LADDER_STAGE_HOLD"]
+        with pathlab.overriding(LADDER_STAGE_HOLD=hold):
+            sim, (unit,) = self.driving((100.5, 100.5))
+            unit.rescue_stage = 1
+            unit.waiting_for_path = True
+            sim.update_progress(unit)
+            self.assertEqual(unit.rescue_stage, 1)
+            unit.waiting_for_path = False
+            for _ in range(hold - 1):
+                unit.x += unit.max_speed
+                sim.update_progress(unit)
+            self.assertEqual(unit.rescue_stage, 1)
+            unit.x += unit.max_speed
+            sim.update_progress(unit)
+            self.assertEqual(unit.rescue_stage, 0)
+
+    def test_rung_two_asks_parked_allies_and_leaves_moving_ones(self):
+        with pathlab.overriding(LADDER_ALLY_FILTER=True):
+            sim, (stuck, moving, parked) = self.driving((100.5, 100.5), (100.5, 125.5), (75.5, 100.5))
+            parked.moving, parked.path = False, None
+            stuck.no_progress, stuck.rescue_stage = pathlab.STUCK_REPATH_FRAMES, 1
+            sim.stuck_rescue(stuck)
+            self.assertEqual(stuck.rungs_fired, [0, 1, 0])
+            self.assertIsNone(moving.move_away_from)
+            self.assertEqual(parked.move_away_from, stuck.id)
+
+
 class CrowdTests(unittest.TestCase):
     def test_the_band_measures_the_ground_either_side(self):
         corr = pathlab.CrowdCorridor()

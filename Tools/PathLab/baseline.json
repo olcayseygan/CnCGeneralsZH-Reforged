@@ -13,7 +13,13 @@
    "blocked": 740,
    "stuck": 0,
    "cells": 2284,
-   "repaths": 7
+   "repaths": 7,
+   "churn": 180,
+   "rungs": [
+    10,
+    2,
+    0
+   ]
   },
   {
    "name": "choke/column/16",
@@ -23,7 +29,13 @@
    "blocked": 2458,
    "stuck": 0,
    "cells": 3073,
-   "repaths": 28
+   "repaths": 28,
+   "churn": 1012,
+   "rungs": [
+    31,
+    8,
+    0
+   ]
   },
   {
    "name": "choke/column/32",
@@ -33,7 +45,13 @@
    "blocked": 6919,
    "stuck": 0,
    "cells": 13371,
-   "repaths": 77
+   "repaths": 77,
+   "churn": 3820,
+   "rungs": [
+    91,
+    11,
+    0
+   ]
   },
   {
    "name": "choke/cross/8",
@@ -43,7 +61,13 @@
    "blocked": 423,
    "stuck": 0,
    "cells": 1218,
-   "repaths": 1
+   "repaths": 1,
+   "churn": 140,
+   "rungs": [
+    4,
+    2,
+    0
+   ]
   },
   {
    "name": "choke/cross/16",
@@ -53,7 +77,13 @@
    "blocked": 1631,
    "stuck": 0,
    "cells": 3963,
-   "repaths": 20
+   "repaths": 20,
+   "churn": 459,
+   "rungs": [
+    28,
+    6,
+    0
+   ]
   },
   {
    "name": "choke/cross/32",
@@ -63,7 +93,13 @@
    "blocked": 9462,
    "stuck": 0,
    "cells": 13703,
-   "repaths": 85
+   "repaths": 85,
+   "churn": 2707,
+   "rungs": [
+    145,
+    23,
+    0
+   ]
   },
   {
    "name": "open/column/8",
@@ -73,7 +109,13 @@
    "blocked": 613,
    "stuck": 0,
    "cells": 1245,
-   "repaths": 10
+   "repaths": 10,
+   "churn": 166,
+   "rungs": [
+    7,
+    1,
+    0
+   ]
   },
   {
    "name": "open/column/16",
@@ -83,7 +125,13 @@
    "blocked": 1518,
    "stuck": 0,
    "cells": 2034,
-   "repaths": 24
+   "repaths": 24,
+   "churn": 830,
+   "rungs": [
+    27,
+    4,
+    0
+   ]
   },
   {
    "name": "open/column/32",
@@ -93,7 +141,13 @@
    "blocked": 7195,
    "stuck": 2,
    "cells": 8906,
-   "repaths": 66
+   "repaths": 66,
+   "churn": 3302,
+   "rungs": [
+    88,
+    14,
+    0
+   ]
   },
   {
    "name": "open/cross/8",
@@ -103,7 +157,13 @@
    "blocked": 560,
    "stuck": 0,
    "cells": 1244,
-   "repaths": 7
+   "repaths": 7,
+   "churn": 234,
+   "rungs": [
+    8,
+    3,
+    0
+   ]
   },
   {
    "name": "open/cross/16",
@@ -113,7 +173,13 @@
    "blocked": 1707,
    "stuck": 0,
    "cells": 3433,
-   "repaths": 25
+   "repaths": 25,
+   "churn": 1215,
+   "rungs": [
+    28,
+    6,
+    0
+   ]
   },
   {
    "name": "open/cross/32",
@@ -123,7 +189,13 @@
    "blocked": 4636,
    "stuck": 0,
    "cells": 7912,
-   "repaths": 39
+   "repaths": 39,
+   "churn": 2871,
+   "rungs": [
+    63,
+    16,
+    0
+   ]
   },
   {
    "name": "twogaps/column/8",
@@ -133,7 +205,13 @@
    "blocked": 610,
    "stuck": 0,
    "cells": 1042,
-   "repaths": 8
+   "repaths": 8,
+   "churn": 330,
+   "rungs": [
+    10,
+    2,
+    0
+   ]
   },
   {
    "name": "twogaps/column/16",
@@ -143,7 +221,13 @@
    "blocked": 1962,
    "stuck": 0,
    "cells": 2178,
-   "repaths": 14
+   "repaths": 14,
+   "churn": 1260,
+   "rungs": [
+    24,
+    6,
+    0
+   ]
   },
   {
    "name": "twogaps/column/32",
@@ -153,7 +237,13 @@
    "blocked": 12814,
    "stuck": 0,
    "cells": 27608,
-   "repaths": 166
+   "repaths": 166,
+   "churn": 2548,
+   "rungs": [
+    202,
+    26,
+    0
+   ]
   },
   {
    "name": "twogaps/cross/8",
@@ -163,7 +253,13 @@
    "blocked": 196,
    "stuck": 0,
    "cells": 2294,
-   "repaths": 10
+   "repaths": 10,
+   "churn": 186,
+   "rungs": [
+    0,
+    0,
+    0
+   ]
   },
   {
    "name": "twogaps/cross/16",
@@ -173,7 +269,13 @@
    "blocked": 1326,
    "stuck": 0,
    "cells": 2488,
-   "repaths": 10
+   "repaths": 10,
+   "churn": 784,
+   "rungs": [
+    18,
+    6,
+    0
+   ]
   },
   {
    "name": "twogaps/cross/32",
@@ -183,7 +285,13 @@
    "blocked": 10200,
    "stuck": 0,
    "cells": 22052,
-   "repaths": 110
+   "repaths": 110,
+   "churn": 3658,
+   "rungs": [
+    146,
+    20,
+    0
+   ]
   },
   {
    "name": "maze/column/8",
@@ -193,7 +301,13 @@
    "blocked": 1053,
    "stuck": 0,
    "cells": 48063,
-   "repaths": 22
+   "repaths": 22,
+   "churn": 345,
+   "rungs": [
+    17,
+    3,
+    0
+   ]
   },
   {
    "name": "maze/column/16",
@@ -203,7 +317,13 @@
    "blocked": 4393,
    "stuck": 0,
    "cells": 85120,
-   "repaths": 47
+   "repaths": 47,
+   "churn": 1343,
+   "rungs": [
+    52,
+    7,
+    0
+   ]
   },
   {
    "name": "maze/column/32",
@@ -213,7 +333,13 @@
    "blocked": 12767,
    "stuck": 5,
    "cells": 547910,
-   "repaths": 159
+   "repaths": 159,
+   "churn": 2656,
+   "rungs": [
+    143,
+    16,
+    0
+   ]
   },
   {
    "name": "maze/cross/8",
@@ -223,7 +349,13 @@
    "blocked": 719,
    "stuck": 0,
    "cells": 27261,
-   "repaths": 6
+   "repaths": 6,
+   "churn": 189,
+   "rungs": [
+    8,
+    4,
+    0
+   ]
   },
   {
    "name": "maze/cross/16",
@@ -233,7 +365,13 @@
    "blocked": 2395,
    "stuck": 1,
    "cells": 67072,
-   "repaths": 36
+   "repaths": 36,
+   "churn": 267,
+   "rungs": [
+    30,
+    6,
+    0
+   ]
   },
   {
    "name": "maze/cross/32",
@@ -243,7 +381,13 @@
    "blocked": 7957,
    "stuck": 0,
    "cells": 201395,
-   "repaths": 113
+   "repaths": 113,
+   "churn": 968,
+   "rungs": [
+    96,
+    8,
+    0
+   ]
   },
   {
    "name": "edges/column/8",
@@ -253,7 +397,13 @@
    "blocked": 631,
    "stuck": 0,
    "cells": 11771,
-   "repaths": 6
+   "repaths": 6,
+   "churn": 391,
+   "rungs": [
+    6,
+    3,
+    0
+   ]
   },
   {
    "name": "edges/column/16",
@@ -263,7 +413,13 @@
    "blocked": 2156,
    "stuck": 0,
    "cells": 18511,
-   "repaths": 30
+   "repaths": 30,
+   "churn": 1172,
+   "rungs": [
+    34,
+    5,
+    0
+   ]
   },
   {
    "name": "edges/column/32",
@@ -273,7 +429,13 @@
    "blocked": 8944,
    "stuck": 0,
    "cells": 83717,
-   "repaths": 100
+   "repaths": 100,
+   "churn": 1726,
+   "rungs": [
+    135,
+    15,
+    0
+   ]
   },
   {
    "name": "edges/cross/8",
@@ -283,7 +445,13 @@
    "blocked": 198,
    "stuck": 0,
    "cells": 45485,
-   "repaths": 3
+   "repaths": 3,
+   "churn": 63,
+   "rungs": [
+    1,
+    1,
+    0
+   ]
   },
   {
    "name": "edges/cross/16",
@@ -293,7 +461,13 @@
    "blocked": 1396,
    "stuck": 0,
    "cells": 79948,
-   "repaths": 18
+   "repaths": 18,
+   "churn": 676,
+   "rungs": [
+    21,
+    5,
+    0
+   ]
   },
   {
    "name": "edges/cross/32",
@@ -303,7 +477,13 @@
    "blocked": 5847,
    "stuck": 0,
    "cells": 174567,
-   "repaths": 49
+   "repaths": 49,
+   "churn": 2629,
+   "rungs": [
+    87,
+    14,
+    0
+   ]
   }
  ],
  "totals": {
@@ -332,6 +512,13 @@
     "open/column/32",
     2.130100076982294
    ]
+  ],
+  "churn": 38127,
+  "rungs": [
+   1560,
+   243,
+   0
   ]
- }
+ },
+ "ladder": "game"
 }

@@ -1466,7 +1466,8 @@ void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename)
 
 // A rules row is 38 pixels at 1080 and a list row 23, so four entries used to end halfway down the
 // third box under the open one.  Each box's list now grows to whole rows, down to the page's foot;
-// past it (the page's last boxes) a list keeps its own height.  The pitch is the smallest gap
+// a list with no room left below (the page's last boxes) opens upwards over the rows above, so none
+// spills onto the Play button.  The pitch is the smallest gap
 // between two boxes' tops, so a layout that moves the rows takes it along.
 void SnapLobbyRulesLists(GameWindow *parent, const char *layoutFilename)
 {
@@ -1506,7 +1507,7 @@ void SnapLobbyRulesLists(GameWindow *parent, const char *layoutFilename)
 		Int top, height;
 		box->winGetScreenPosition(&x, &top);
 		box->winGetSize(&width, &height);
-		GadgetComboBoxSetDropDownPitch(box, pitch, pageTop + pageHeight - (top + height));
+		GadgetComboBoxSetDropDownPitch(box, pitch, pageTop + pageHeight - (top + height), top - pageTop);
 	}
 }
 

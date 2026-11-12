@@ -1464,6 +1464,52 @@ void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename)
 	FactionPickerAttach(parent, layoutFilename);
 }
 
+// A rules row is 38 pixels at 1080 and a list row 23, so four entries used to end halfway down the
+// third box under the open one.  Each box's list now grows to whole rows, down to the page's foot;
+// past it (the page's last boxes) a list keeps its own height.  The pitch is the smallest gap
+// between two boxes' tops, so a layout that moves the rows takes it along.
+void SnapLobbyRulesLists(GameWindow *parent, const char *layoutFilename)
+{
+	AsciiString name;
+	name.format("%s:PageLobbySettings", layoutFilename);
+	GameWindow *page = TheWindowManager->winGetWindowFromId(parent, NAMEKEY(name));
+	if (!page)
+		return;	// a layout from before the rules page
+
+	Int x, pageTop, width, pageHeight;
+	page->winGetScreenPosition(&x, &pageTop);
+	page->winGetSize(&width, &pageHeight);
+
+	Int pitch = 0;
+	for (GameWindow *box = page->winGetChild(); box; box = box->winGetNext())
+	{
+		if (!BitTest(box->winGetStyle(), GWS_COMBO_BOX))
+			continue;
+		Int top, otherTop;
+		box->winGetScreenPosition(&x, &top);
+		for (GameWindow *other = page->winGetChild(); other; other = other->winGetNext())
+		{
+			if (!BitTest(other->winGetStyle(), GWS_COMBO_BOX))
+				continue;
+			other->winGetScreenPosition(&x, &otherTop);
+			if (otherTop > top && (pitch == 0 || otherTop - top < pitch))
+				pitch = otherTop - top;
+		}
+	}
+	if (pitch == 0)
+		return;	// one box, no rows to end on
+
+	for (GameWindow *box = page->winGetChild(); box; box = box->winGetNext())
+	{
+		if (!BitTest(box->winGetStyle(), GWS_COMBO_BOX))
+			continue;
+		Int top, height;
+		box->winGetScreenPosition(&x, &top);
+		box->winGetSize(&width, &height);
+		GadgetComboBoxSetDropDownPitch(box, pitch, pageTop + pageHeight - (top + height));
+	}
+}
+
 void ShutdownLobbySeatVisuals(void)
 {
 	FactionPickerDetach();

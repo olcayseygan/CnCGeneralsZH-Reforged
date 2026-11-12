@@ -1049,6 +1049,7 @@ void InitLanGameGadgets( void )
 	InitAIPersonaComboBoxes( parentLanGameOptions, "LanGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
 	InitHandicapComboBoxes( parentLanGameOptions, "LanGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentLanGameOptions, "LanGameOptionsMenu.wnd" );
+	SnapLobbyRulesLists( parentLanGameOptions, "LanGameOptionsMenu.wnd" );
 
 	// the settings page and the chat log share one rectangle; this opens on the chat log
 	InitLobbyTabs( parentLanGameOptions, "LanGameOptionsMenu.wnd", "TabChat", "ListboxChatWindowLanGame" );

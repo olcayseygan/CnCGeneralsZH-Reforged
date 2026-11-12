@@ -268,17 +268,6 @@ static void populateGameSpeedComboBox( Int percent )
 		if ( speed == percent )
 			GadgetComboBoxSetSelectedPos( combo, row );
 	}
-	// Four rows end halfway down the Share Income box, the third row under this one, and the lower
-	// half of its text showed under the list; the open list runs on to that box's foot instead.
-	if ( comboBoxIncomeSharing )
-	{
-		Int x, top, width, height, coverTop, coverHeight;
-		combo->winGetScreenPosition( &x, &top );
-		combo->winGetSize( &width, &height );
-		comboBoxIncomeSharing->winGetScreenPosition( &x, &coverTop );
-		comboBoxIncomeSharing->winGetSize( &width, &coverHeight );
-		GadgetComboBoxSetMinDropDownHeight( combo, coverTop + coverHeight - ( top + height ) );
-	}
 }
 Bool doUpdateSlotList = TRUE;
 
@@ -1435,6 +1424,7 @@ void InitSkirmishGameGadgets( void )
 	InitAIPersonaComboBoxes( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
 	InitHandicapComboBoxes( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd" );
+	SnapLobbyRulesLists( parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd" );
 
 	populateSkirmishBattleHonors();
 

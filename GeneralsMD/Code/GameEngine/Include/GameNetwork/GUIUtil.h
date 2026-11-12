@@ -145,6 +145,9 @@ Int HandleHandicapSelection(GameInfo *myGame, GameWindow *comboHandicap[], NameK
 // update and none of it takes input.  A layout without the windows (a stale Run/Window) leaves them
 // NULL and the room looks as it did.
 void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename);
+// Every combo box on the room's rules page opens a list that ends on the foot of a rules row below
+// it, the rows' pitch read from the boxes themselves; none shows a box cut in half under it.
+void SnapLobbyRulesLists(GameWindow *parent, const char *layoutFilename);
 void UpdateLobbySeatVisuals(GameInfo *myGame);
 void ShutdownLobbySeatVisuals(void);
 // Team 0 to 3 (shown as 1 to 4) each have a colour none of the players can pick; no team is the

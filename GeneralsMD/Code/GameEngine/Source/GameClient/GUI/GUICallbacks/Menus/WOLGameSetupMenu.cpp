@@ -1586,6 +1586,7 @@ void InitWOLGameGadgets( void )
 	InitAIPersonaComboBoxes( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", comboBoxAIPersona, comboBoxAIPersonaID );
 	InitHandicapComboBoxes( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", comboBoxHandicap, comboBoxHandicapID );
 	InitLobbySeatVisuals( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd" );
+	SnapLobbyRulesLists( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd" );
 
 	// the settings page and the chat log share one rectangle; this opens on the chat log
 	InitLobbyTabs( parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", "TabChat", "ListboxChatWindowGameSpyGameSetup" );

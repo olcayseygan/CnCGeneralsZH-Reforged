@@ -2578,6 +2578,7 @@ GameWindow *GameWindowManager::gogoGadgetComboBox( GameWindow *parent,
 	// allocate the listbox data, copy template data over and set it into box
 	comboBoxData = NEW ComboBoxData;
 	memcpy( comboBoxData, comboBoxDataTemplate, sizeof( ComboBoxData ) );
+	comboBoxData->minDropDownHeight = 0;	// not every template is zeroed (GUIEdit's)
 
   // Add the list box data struct to the window's class data
   comboBox->winSetUserData( comboBoxData );

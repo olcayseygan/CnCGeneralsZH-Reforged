@@ -80,11 +80,13 @@
 
 // The open list's height for this many lines.  A list row is a line of text and one pixel
 // (GadgetListBox's computeTotalHeight); EA allowed two, so a list that scrolls showed the top of one
-// more row under its last, cut in half.  A list that fits keeps EA's slack.
-static Int dropDownHeight( WinInstanceData *listInstData, Int lines, Bool scrolls )
+// more row under its last, cut in half.  A list that fits keeps EA's slack.  Never shorter than the
+// box's minDropDownHeight.
+static Int dropDownHeight( const ComboBoxData *comboData, WinInstanceData *listInstData, Int lines, Bool scrolls )
 {
 	const Int fontHeight = TheWindowManager->winFontHeight( listInstData->getFont() );
-	return (fontHeight + (scrolls ? 1 : 2)) * lines + (scrolls ? 6 : 4);
+	const Int rows = (fontHeight + (scrolls ? 1 : 2)) * lines + (scrolls ? 6 : 4);
+	return max( rows, comboData->minDropDownHeight );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -224,7 +226,7 @@ WindowMsgHandledType GadgetComboBoxInput( GameWindow *window, UnsignedInt msg,
 							
 						}
 						
-						newSize.y = dropDownHeight( listInstData, multiplier, comboData->entryCount > comboData->maxDisplay );
+						newSize.y = dropDownHeight( comboData, listInstData, multiplier, comboData->entryCount > comboData->maxDisplay );
 						window->winSetSize(winSize.x , winSize.y + newSize.y );
 						listBox->winSetPosition(0, winSize.y);
 
@@ -569,7 +571,7 @@ WindowMsgHandledType GadgetComboBoxSystem( GameWindow *window, UnsignedInt msg,
 					if(listData->slider)
 						listData->slider->winHide(FALSE);
 				}
-				newSize.y = dropDownHeight( listInstData, multiplier, comboData->entryCount > comboData->maxDisplay );
+				newSize.y = dropDownHeight( comboData, listInstData, multiplier, comboData->entryCount > comboData->maxDisplay );
 				listBox->winSetPosition(0, editBoxSize.y);
 				listBox->winSetSize(listX , newSize.y);
 			}
@@ -709,7 +711,7 @@ WindowMsgHandledType GadgetComboBoxSystem( GameWindow *window, UnsignedInt msg,
 							
 						}
 						
-						newSize.y = dropDownHeight( listInstData, multiplier, comboData->entryCount > comboData->maxDisplay );
+						newSize.y = dropDownHeight( comboData, listInstData, multiplier, comboData->entryCount > comboData->maxDisplay );
 						window->winSetSize(winSize.x , winSize.y + newSize.y );
 						listBox->winSetPosition(0, winSize.y);
 
@@ -916,6 +918,16 @@ void GadgetComboBoxSetMaxDisplay( GameWindow *comboBox, Int maxDisplay )
 	comboData->maxDisplay = maxDisplay;
 
 }//void GadgetComboBoxSetMaxDisplay( GameWindow *comboBox, Int maxDisplay );
+
+// GadgetComboBoxSetMinDropDownHeight =========================================
+/** The open list is at least this tall, so it can end on the edge of the window below it
+	* rather than halfway down; the rows stay their size and the rest is the list's own fill. */
+//=============================================================================
+void GadgetComboBoxSetMinDropDownHeight( GameWindow *comboBox, Int height )
+{
+	ComboBoxData *comboData = (ComboBoxData *)comboBox->winGetUserData();
+	comboData->minDropDownHeight = height;
+}
 
 // GadgetComboBoxGetText =======================================================
 /** Get the text the Combo Box */

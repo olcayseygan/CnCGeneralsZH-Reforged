@@ -80,6 +80,7 @@ extern void GadgetComboBoxSetAsciiOnly(GameWindow *comboBox, Bool isAsciiOnly  )
 extern void GadgetComboBoxSetLettersAndNumbersOnly(GameWindow *comboBox, Bool isLettersAndNumbersOnly  );
 extern void GadgetComboBoxSetMaxChars( GameWindow *comboBox, Int maxChars );
 extern void GadgetComboBoxSetMaxDisplay( GameWindow *comboBox, Int maxDisplay );
+extern void GadgetComboBoxSetMinDropDownHeight( GameWindow *comboBox, Int height );
 extern void GadgetComboBoxSetIsEditable(GameWindow *comboBox, Bool isEditable  );
 
 //setup all the Font Colors

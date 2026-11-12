@@ -411,6 +411,7 @@ typedef struct _ComboBoxData
 	GameWindow *dropDownButton;   // Child window for drop down button
 	GameWindow *editBox;          // Child window for edit box
 	GameWindow *listBox;					// Child window for list box
+	Int minDropDownHeight;				// the open list is at least this tall, 0 for its rows alone
 } ComboBoxData;
 
 // RadioButtonData ------------------------------------------------------------

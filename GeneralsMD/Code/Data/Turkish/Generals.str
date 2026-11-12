@@ -16542,7 +16542,7 @@ GUI:SmoothMotion
 END
 
 TOOLTIP:SmoothMotion
-"60 Hz'den hızlı ekranda birimler, her konumu bir sonrakine kadar tutmak yerine son iki konumlarının arasında çizilir. 60 Hz ekranda fark görünmez. Yalnızca sizin görüntünüz değişir: oyundaki hiçbir şey bunu okumaz, diğer oyuncular kendi ayarını görür. Kabul'e basınca geçerli olur."
+"Birimler, her konumu oyunun bir sonraki adımına kadar tutmak yerine son iki konumlarının arasında çizilir; hareket, 60 Hz dahil ekranınızın elverdiği kadar akıcı olur. Yalnızca sizin görüntünüz değişir: oyundaki hiçbir şey bunu okumaz, diğer oyuncular kendi ayarını görür. Kabul'e basınca geçerli olur."
 END
 
 GUI:HeatHaze

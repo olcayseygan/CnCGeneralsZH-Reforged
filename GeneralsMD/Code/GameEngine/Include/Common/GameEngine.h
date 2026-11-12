@@ -36,7 +36,7 @@
 #include "Common/SubsystemInterface.h"
 #include "Common/GameType.h"
 
-#define DEFAULT_MAX_FPS		90		// retail 45: one and a half times normal speed, in 60 Hz logic frames
+#define DEFAULT_MAX_FPS		(45 * LOGICFRAMES_PER_RETAIL_FRAME)		// retail 45: one and a half times normal speed, in logic frames (GameCommon.h)
 
 /** How much wall-clock debt the pacer will carry and pay back. A render pass slower than one
 	logic frame owes the simulation more than one tick; without a catch-up the game speed just

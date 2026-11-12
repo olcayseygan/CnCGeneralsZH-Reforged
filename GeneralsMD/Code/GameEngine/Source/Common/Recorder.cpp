@@ -107,6 +107,40 @@ static void replayWriteWideString(const WideChar *s)
 	replayWriteWideChar(0);
 }
 
+/* A replay holds commands stamped with logic frames, so one recorded at another logic rate plays a
+	 different game: every timer and speed in it runs at the wrong pace.  The rate rides at the end of
+	 the slot list as "HZ=<frames a second>;", so the header's layout stays as it was.  The options parser
+	 refuses a key it does not know, so readReplayHeader cuts the field off (takeReplayLogicRate) before
+	 anything parses the string.  A replay without the field was recorded before it existed, when the
+	 logic ran 60 frames a second. */
+static const Int REPLAY_LOGIC_RATE_WITHOUT_FIELD = 60;
+
+AsciiString RecorderClass::replayLogicRateField()
+{
+	AsciiString field;
+	field.format("HZ=%d;", (Int)LOGICFRAMES_PER_SECOND);
+	return field;
+}
+
+Int RecorderClass::takeReplayLogicRate(AsciiString& options)
+{
+	// the last one: the field is appended after the slot list, which ends in ';'
+	const char *start = options.str();
+	const char *field = NULL;
+	for (const char *at = strstr(start, "HZ="); at != NULL; at = strstr(at + 1, "HZ="))
+		if (at == start || at[-1] == ';')
+			field = at;
+	if (field == NULL)
+		return REPLAY_LOGIC_RATE_WITHOUT_FIELD;
+
+	const Int rate = atoi(field + 3);
+	const char *end = strchr(field, ';');
+	std::string cut(start, field - start);
+	cut += end ? end + 1 : "";
+	options = cut.c_str();
+	return rate;
+}
+
 void RecorderClass::logGameStart(AsciiString options)
 {
 	if (!m_file)
@@ -656,6 +690,8 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 		  theSlotList = GameInfoToReplayString(&m_gameInfo);
     }
 	}
+	// the logic rate the game is recorded at, last in the slot list; readReplayHeader refuses another
+	theSlotList.concat(replayLogicRateField());
 	logGameStart(theSlotList);
 	DEBUG_LOG(("RecorderClass::startRecording - theSlotList = %s\n", theSlotList.str()));
 
@@ -905,6 +941,15 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header)
 
 	// Read in the GameInfo
 	header.gameOptions = readAsciiString();
+	const Int recordedRate = takeReplayLogicRate(header.gameOptions);
+	if (recordedRate != LOGICFRAMES_PER_SECOND)
+	{
+		DEBUG_LOG(("RecorderClass::readReplayHeader - replay was recorded at %d logic frames a second, this build runs %d.\n",
+			recordedRate, (Int)LOGICFRAMES_PER_SECOND));
+		fclose(m_file);
+		m_file = NULL;
+		return FALSE;
+	}
 	m_gameInfo.reset();
 	m_gameInfo.enterGame();
 	DEBUG_LOG(("RecorderClass::readReplayHeader - GameInfo = %s\n", header.gameOptions.str()));

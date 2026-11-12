@@ -328,7 +328,7 @@ static void updateFunc( WindowLayout *layout, void *param )
 	}
 
 	// the metrics arrive twice a second; twice a second is as often as the numbers can change
-	if (theWindow && !theWindow->winIsHidden() && TheGameClient->getFrame() % 30 == 0)
+	if (theWindow && !theWindow->winIsHidden() && TheGameClient->getFrame() % (LOGICFRAMES_PER_SECOND / 2) == 0)
 		updateNetColumns();
 }
 

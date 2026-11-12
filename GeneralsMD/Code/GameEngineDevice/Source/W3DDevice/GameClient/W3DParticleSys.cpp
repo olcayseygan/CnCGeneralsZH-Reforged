@@ -93,7 +93,7 @@
 // its HLSL; a change here is a change there.
 static_assert( sizeof( ParticleGpuSpawn ) == 80 && sizeof( ParticleGpuSystemEntry ) == 240,
 	"DX11GpuParticles.cpp's SpawnStride and EntryStride" );
-static_assert( PARTICLE_CLOSED_FORM_FADE_MAX_FRAMES == 16 && PARTICLE_CLOSED_FORM_FADE_LIFETIME_DIVISOR == 4,
+static_assert( PARTICLE_CLOSED_FORM_FADE_MAX_FRAMES == 8 * LOGICFRAMES_PER_RETAIL_FRAME && PARTICLE_CLOSED_FORM_FADE_LIFETIME_DIVISOR == 4,
 	"DX11GpuParticles.cpp's closed_fade" );
 static_assert( GpuParticles::SYSTEM_SLOTS <= 0x10000, "a spawn record holds its slot in 16 bits" );
 static_assert( MAX_KEYFRAMES == 8, "DX11GpuParticles.cpp's SystemEntry holds eight segments of each" );

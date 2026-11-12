@@ -64,10 +64,12 @@
 
 namespace {
 
-// The moved code at 60 Hz under one pass per logic frame, as test_water_grid prints it. The 30 Hz
-// original's line (water_grid_oracle, "original passes of 1") was "frames 240 all 96559c89 last a7eea444
-// moving 183". This is the "moved, passes of 1" line taken from a run of the 60 Hz step.
-const char *const EA_LOOP_GOLDEN = "frames 240 all 5c9f1917 last ac3c3fa9 moving 240";
+// The moved code under one pass per logic frame, as test_water_grid prints it ("moved, passes of 1"),
+// at the rate this build runs. At 30 Hz it is the original's own line (water_grid_oracle, "original
+// passes of 1"); the 60 Hz one is taken from a run of the 60 Hz step.
+const char *const EA_LOOP_GOLDEN = LOGICFRAMES_PER_RETAIL_FRAME == 1
+	? "frames 240 all 96559c89 last a7eea444 moving 183"
+	: "frames 240 all 5c9f1917 last ac3c3fa9 moving 240";
 
 void boot()
 {

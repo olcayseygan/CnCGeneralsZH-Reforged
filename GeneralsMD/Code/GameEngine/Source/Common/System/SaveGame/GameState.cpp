@@ -85,8 +85,10 @@ static const Int MAX_SAVE_FILE_NUMBER  =  99999999;
 // aside: SaveGameInfo::isLoadable).  The original
 // game's files are 2, as were this fork's until 3 added the game speed.  5 is the same kind of mark:
 // MAX_PLAYER_COUNT went from 16 to 48, and every per-player array in the file, a PartitionCell's
-// shroud and a mask now 64 bits wide among them, is written at the new length.
-static const XferVersion GAME_STATE_VERSION = 5;
+// shroud and a mask now 64 bits wide among them, is written at the new length.  6 writes the logic
+// rate, so a save counted at one rate is refused by a build running at another; a 5 was written at 60.
+static const XferVersion GAME_STATE_VERSION = 6;
+static const Int GAME_STATE_VERSION_5_LOGIC_RATE = 60;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #define GAME_STATE_BLOCK_STRING "CHUNK_GameState"  // block of save game data with game info data
@@ -109,6 +111,7 @@ SaveGameInfo::SaveGameInfo( void )
 	saveFileType			= SAVE_FILE_TYPE_NORMAL;
 	framesPerSecond		= 0;
 	version						= 0;
+	logicFramesPerSecond = LOGICFRAMES_PER_SECOND;
 
 }  // end SaveGameInfo
 
@@ -124,14 +127,15 @@ SaveGameInfo::~SaveGameInfo( void )
 Bool SaveGameInfo::isLoadable( void ) const
 {
 
-	// a newer one never gets this far: xferVersion refuses it while the header is read
-	if( version >= GAME_STATE_VERSION )
+	// A mission save holds only this block and the campaign's, neither of which counts frames, so
+	// the one an older build, another logic rate or the original game wrote at a mission's start
+	// still loads.  Version 2 is the first that records the file type.
+	if( version >= 2 && saveFileType == SAVE_FILE_TYPE_MISSION )
 		return TRUE;
 
-	// A mission save holds only this block and the campaign's, neither of which counts frames, so
-	// the one an older build or the original game wrote at a mission's start still loads.  Version
-	// 2 is the first that records the file type.
-	return version >= 2 && saveFileType == SAVE_FILE_TYPE_MISSION;
+	// a newer one never gets this far: xferVersion refuses it while the header is read.  5 is the
+	// oldest block whose per-player arrays this build reads; its frame counts must be at our rate.
+	return version >= 5 && logicFramesPerSecond == LOGICFRAMES_PER_SECOND;
 
 }  // end isLoadable
 
@@ -965,8 +969,8 @@ Bool GameState::refuseUnloadableSave( const SaveGameInfo &saveGameInfo )
 	if( saveGameInfo.isLoadable() )
 		return FALSE;
 
-	DEBUG_LOG(( "GameState - refused a save with GameState version %d, this build loads %d\n",
-							saveGameInfo.version, GAME_STATE_VERSION ));
+	DEBUG_LOG(( "GameState - refused a save with GameState version %d at %d logic frames a second, this build loads %d at %d\n",
+							saveGameInfo.version, saveGameInfo.logicFramesPerSecond, GAME_STATE_VERSION, (Int)LOGICFRAMES_PER_SECOND ));
 	MessageBoxOk( TheGameText->fetch( "GUI:Error" ), TheGameText->fetch( "GUI:SaveFromOlderGame" ), NULL );
 	return TRUE;
 
@@ -1744,7 +1748,8 @@ void GameState::gameStatePostProcessLoad( void )
 	* 2: Added save file type and mission map name (regular save vs automatic mission save)
 	* 3: Added the game speed
 	* 4: Nothing new in the block; see GAME_STATE_VERSION
-	* 5: Nothing new in the block either; 48 players, see GAME_STATE_VERSION */
+	* 5: Nothing new in the block either; 48 players, see GAME_STATE_VERSION
+	* 6: Added the logic rate */
 // ------------------------------------------------------------------------------------------------
 void GameState::xfer( Xfer *xfer )
 {
@@ -1766,6 +1771,18 @@ void GameState::xfer( Xfer *xfer )
 		saveGameInfo->framesPerSecond = 0;
 	if( version >= 3 )
 		xfer->xferInt( &saveGameInfo->framesPerSecond );
+
+	// version 6: the logic rate the frame counts in the file are in, checked by isLoadable.  Every
+	// block before 6 that this build can read (version 5) was written at 60; older ones are refused
+	// on their version anyway, and retail ran at its own rate.
+	if( xfer->getXferMode() != XFER_LOAD )
+		saveGameInfo->logicFramesPerSecond = LOGICFRAMES_PER_SECOND;
+	else if( version >= 4 )
+		saveGameInfo->logicFramesPerSecond = GAME_STATE_VERSION_5_LOGIC_RATE;
+	else
+		saveGameInfo->logicFramesPerSecond = RETAIL_LOGICFRAMES_PER_SECOND;
+	if( version >= 6 )
+		xfer->xferInt( &saveGameInfo->logicFramesPerSecond );
 
 	// version 2
 	if( version >= 2 )

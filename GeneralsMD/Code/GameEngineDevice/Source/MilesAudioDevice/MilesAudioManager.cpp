@@ -559,7 +559,8 @@ void MilesAudioManager::reset()
 /** -wav <from> <to> [name]: record the finished mix over a range of logic frames.
 	*
 	* A -wav run opens no audio device (openDevice): the mix is moved by the logic clock, here, by
-	* exactly 1/30 of a second of sound per logic frame, however long the frame took on the wall clock.
+	* exactly 1/LOGICFRAMES_PER_SECOND of a second of sound per logic frame, however long the frame took
+	* on the wall clock.
 	* So the file is as long as the frames it spans and lines up with the picture of the same frames,
 	* in a run that plays at the speed a person hears, in a -directorrecord run that crawls, and on a
 	* machine with no speakers.  A sound asked for during frame N starts N/LOGICFRAMES_PER_SECOND seconds in, because the
@@ -573,7 +574,9 @@ static void updateSoundCapture( void )
 		return;
 
 	const UnsignedInt frame = TheGameLogic->getFrame();
-	AIL_ex_mix_to_frame((S32)frame);
+	// AIL_ex_mix_to_frame counts in sixtieths of a second (MSS.h), so the frame goes in as that many
+	static_assert( 60 % LOGICFRAMES_PER_SECOND == 0, "AIL_ex_mix_to_frame takes sixtieths of a second" );
+	AIL_ex_mix_to_frame((S32)(frame * (60 / LOGICFRAMES_PER_SECOND)));
 
 	if (finished || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
 		return;

@@ -148,13 +148,17 @@ static AsciiString runCheat( const ConsoleCheat &cheat, AsciiString arguments )
 
 //-------------------------------------------------------------------------------------------------
 /** The game speed as a share of normal: 100 or turbo mode's 200 in a skirmish or mission, whichever is
-	* nearer, 17 to 666 in a replay.  It changes how
+	* nearer, 10 to 400 logic frames a second in a replay (17 to 666 percent at 60 ticks a second, 34 to
+	* 1333 at 30).  It changes how
 	* often a logic frame runs and nothing inside one, so a network game, which runs at the pace the
 	* whole room agrees on, is the one place it is refused. */
 //-------------------------------------------------------------------------------------------------
-static const Int SPEED_MIN_PERCENT = 17;		///< 10 logic frames a second
-static const Int SPEED_MAX_PERCENT = 666;		///< 400 logic frames a second
 static const Int SPEED_NORMAL_PERCENT = 100;
+static const Int SPEED_MIN_FPS = 10;
+static const Int SPEED_MAX_FPS = 400;
+// the least percent that still reaches SPEED_MIN_FPS, rounded up, and the most that stays under SPEED_MAX_FPS
+static const Int SPEED_MIN_PERCENT = ( SPEED_MIN_FPS * SPEED_NORMAL_PERCENT + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND;
+static const Int SPEED_MAX_PERCENT = SPEED_MAX_FPS * SPEED_NORMAL_PERCENT / LOGICFRAMES_PER_SECOND;
 
 static AsciiString runSpeed( AsciiString arguments )
 {

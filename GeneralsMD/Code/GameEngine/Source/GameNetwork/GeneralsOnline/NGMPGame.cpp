@@ -10,6 +10,7 @@
 #include "GameNetwork/GeneralsOnline/NGMP_interfaces.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "Common/GlobalData.h"
+#include "Common/GameEngine.h"
 #include "GameClient/View.h"
 #include "../NextGenMP_defines.h"
 
@@ -501,22 +502,15 @@ void NGMPGame::launchGame(void)
 	// send a message to the logic for a new game
 	GameMessage* msg = TheMessageStream->appendMessage(GameMessage::MSG_NEW_GAME);
 	msg->appendIntegerArgument(GAME_INTERNET);
+	msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
+	msg->appendIntegerArgument(0);
+	msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(getTurbo()));
 
-#if defined(GENERALS_ONLINE_HIGH_FPS_RENDER)
-
-	if (NGMP_OnlineServicesManager::Settings.Graphics_LimitFramerate())
-	{
-		TheWritableGlobalData->m_framesPerSecondLimit = NGMP_OnlineServicesManager::Settings.Graphics_GetFPSLimit();
-		TheWritableGlobalData->m_useFpsLimit = true;
-	}
-	else
-	{
-		TheWritableGlobalData->m_framesPerSecondLimit = 30000; // game does this... it's not great
-		TheWritableGlobalData->m_useFpsLimit = false;
-	}
-	
-#endif
-	//TheWritableGlobalData->m_useFpsLimit = false;
+	/* Upstream wrote the player's render cap into m_framesPerSecondLimit here.  In this engine that
+		 field is game speed (GameEngine_matchFramesPerSecond, the room's match fps in parseUserList), so
+		 a cap of 144 made the next room run 144 logic frames a second.  The picture cap is
+		 m_frameRateLimit, the Options one, and the speed comes from the game options as in a LAN game:
+		 MSG_NEW_GAME's fourth argument, which GameLogicDispatch sets as the limit and turns it on. */
 
 	// Set the random seed
 	InitRandom(getSeed());

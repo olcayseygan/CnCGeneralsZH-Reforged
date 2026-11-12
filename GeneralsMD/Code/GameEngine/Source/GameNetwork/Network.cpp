@@ -65,8 +65,9 @@
 
 /* How many logic frames apart a network game checks the world CRC; the host's value travels in the
 	 lobby string, so the room runs on the host's.  Release has DEBUG_CRC on, where EA's 1 meant a full
-	 getCRC every frame, about 1.6 ms of a late-game tick.  At 10 a split is still caught within a sixth
-	 of a second, and the 32-slot CRCSnapshotRing then reaches 320 frames back, past any
+	 getCRC every frame, about 1.6 ms of a late-game tick.  At 10 a split is still caught within ten
+	 logic frames, and the CRCSnapshotRing (CRC_SNAPSHOT_RING_SIZE slots, 16 at the retail rate and more
+	 as the logic rate rises with the run-ahead) then reaches ten times its size in frames back, past any
 	 run-ahead.  -NetCRCInterval 1 for a desync hunt. */
 Int NET_CRC_INTERVAL = 10;
 

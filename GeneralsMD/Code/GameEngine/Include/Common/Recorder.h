@@ -181,6 +181,9 @@ public:
 	};
 	Bool readReplayHeader( ReplayHeader& header );
 
+	static AsciiString replayLogicRateField();							///< "HZ=<logic rate>;", appended to the recorded slot list
+	static Int takeReplayLogicRate( AsciiString& options );		///< cuts that field off the options and returns its rate, 60 when absent
+
 	RecorderModeType getMode();												///< Returns the current operating mode.
 	void initControls();															///< Show or Hide the Replay controls
 

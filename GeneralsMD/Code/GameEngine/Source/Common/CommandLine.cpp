@@ -1074,7 +1074,7 @@ Int parseNoVolumetricSmoke(char *args[], int)
 }
 
 /* -nosmoothmotion: every model drawn where the last logic tick left it, a tick's state held until the
-	 next, as on a 60 Hz screen.  -recordfps still blends its in-between pictures. */
+	 next, as on a screen no faster than the logic.  -recordfps still blends its in-between pictures. */
 Int parseNoSmoothMotion(char *args[], int)
 {
 	if (TheWritableGlobalData)
@@ -1085,7 +1085,7 @@ Int parseNoSmoothMotion(char *args[], int)
 }
 
 /* -smoothmotion: models drawn between their last two logic states whatever the display's refresh rate,
-	 for a 60 Hz screen rendering uncapped or a picture of the blend on any machine. */
+	 for a screen at the logic's rate rendering uncapped or a picture of the blend on any machine. */
 Int parseSmoothMotion(char *args[], int)
 {
 	if (TheWritableGlobalData)
@@ -1707,11 +1707,12 @@ Int parseDirectorRecord(char *args[], int num)
 }
 
 /* -recordfps <n>: the frame rate -video and -directorrecord record at, a multiple of the logic's
-	 * LOGICFRAMES_PER_SECOND (60).
+	 * LOGICFRAMES_PER_SECOND.
 	 *
-	 * At 60 a picture is a logic frame.  At 120 each recorded logic frame is drawn twice before the next
-	 * one runs, the first picture blended half way from the frame before (smooth motion, on for it
-	 * whatever the option says), and ffmpeg is told 120.  The logic runs the same frames either way. */
+	 * At the logic's rate a picture is a logic frame.  At twice it each recorded logic frame is drawn twice
+	 * before the next one runs, the first picture blended half way from the frame before (smooth motion, on
+	 * for it whatever the option says), and ffmpeg is told that rate.  The logic runs the same frames
+	 * either way. */
 Int parseRecordFps(char *args[], int num)
 {
 	if (num < 2)
@@ -1719,9 +1720,10 @@ Int parseRecordFps(char *args[], int num)
 		DEBUG_LOG(("-recordfps: wants a frame rate, a multiple of %d\n", LOGICFRAMES_PER_SECOND));
 		return num;
 	}
-	// four pictures a frame at most: W3D's clock moves in whole milliseconds, and a picture's share of a
-	// 16 ms frame has to be one at least or the drawables are never drawn
-	const Int MOST_PICTURES = 4;
+	// 240 pictures a second at most, whatever the logic's rate: W3D's clock moves in whole milliseconds,
+	// and a picture's share of a frame has to be a few of them or the drawables are never drawn
+	const Int MOST_RECORD_FPS = 240;
+	const Int MOST_PICTURES = MOST_RECORD_FPS / LOGICFRAMES_PER_SECOND;
 	const Int fps = atoi(args[1]);
 	if (fps < LOGICFRAMES_PER_SECOND || fps % LOGICFRAMES_PER_SECOND != 0 || fps > MOST_PICTURES * LOGICFRAMES_PER_SECOND)
 	{
@@ -2046,7 +2048,7 @@ Int parseUIDrill(char *args[], int num)
 {
 	if (TheWritableGlobalData)
 	{
-		Int frames = 120;
+		Int frames = 2 * LOGICFRAMES_PER_SECOND;	// two seconds
 		Int eaten = 1;
 		if (num > 1 && args[1] && args[1][0] >= '0' && args[1][0] <= '9')
 		{
@@ -2072,7 +2074,7 @@ Int parseResDrill(char *args[], int num)
 {
 	if (TheWritableGlobalData)
 	{
-		Int frame = 600;
+		Int frame = 10 * LOGICFRAMES_PER_SECOND;	// ten seconds in
 		Int eaten = 1;
 		if (num > 1 && args[1] && args[1][0] >= '0' && args[1][0] <= '9')
 		{

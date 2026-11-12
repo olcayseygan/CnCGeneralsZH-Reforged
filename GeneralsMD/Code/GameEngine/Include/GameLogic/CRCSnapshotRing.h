@@ -26,6 +26,7 @@
 #define _CRC_SNAPSHOT_RING_H_
 
 #include "Lib/BaseType.h"
+#include "Common/GameCommon.h"	// LOGICFRAMES_PER_RETAIL_FRAME
 #include <vector>
 
 /* A mismatch is reported as one number: "the world CRC differs".  Worse, it is reported the
@@ -35,7 +36,7 @@
 	 of the last few CRC frames.  Nothing reads the ring unless a mismatch is found, and then the
 	 first object whose running CRC differs between two players' dumps is the object that diverged. */
 
-#define CRC_SNAPSHOT_RING_SIZE 32	// 16 at 30 Hz logic; the run-ahead doubles in frames at 60 Hz
+#define CRC_SNAPSHOT_RING_SIZE (16 * LOGICFRAMES_PER_RETAIL_FRAME)	// 16 at the retail rate; the run-ahead counted in frames grows with the logic rate
 
 struct CRCObjectEntry
 {

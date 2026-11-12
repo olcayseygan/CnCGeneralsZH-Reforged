@@ -428,7 +428,7 @@ void LogicThread::OverlapWindow::open( Bool mayOverlap )
 /* Behind the clock the next tick is due the whole time, so the rule in closeOrDrawAgain never draws
 	 again and the eye waits on the tick: sync + a 13 ms tick is an 18 ms frame on the 2000 object crowd
 	 with 4 ms of picture in it.  Wait for the tick only as long as the sync point and a picture still
-	 fit in a 60 Hz frame after it, then draw once more, timed to end as the last tick's length says this
+	 fit in a 60 Hz screen's frame after it (the picture's budget, whatever the logic's rate), then draw once more, timed to end as the last tick's length says this
 	 one does, since a picture still going when the tick ends holds the next tick up.  A picture that
 	 fills the frame by itself (a slow card) gains nothing from a second one.  A present that waits for
 	 the refresh never gets one either: the sync point ate the start of that refresh, so the picture's

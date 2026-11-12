@@ -803,9 +803,9 @@ void MissileAIUpdate::doDeadState()
 void MissileAIUpdate::updateChaseOffset()
 {
 	const Real SWAY_ANGLE = 0.08f;					// radians of aim either side, between four and five degrees
-	const Real SWAY_PERIOD = 60.0f;					// logic frames for one swing and back
-	const Real SWAY_FADE_IN = 30.0f;				// logic frames from the start of the attack
-	const Real SWAY_FADE_FAR = 150.0f;
+	const Real SWAY_PERIOD = LOGICFRAMES_PER_SECONDS_REAL;					// logic frames for one swing and back, a second
+	const Real SWAY_FADE_IN = LOGICFRAMES_PER_SECONDS_REAL * 0.5f;		// logic frames from the start of the attack, half a second
+	const Real SWAY_FADE_FAR = 150.0f;			// distances to the goal, not frames
 	const Real SWAY_FADE_NEAR = 60.0f;
 
 	// a missile can come without a locomotor and fly on its launch force alone; nothing to steer

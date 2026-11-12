@@ -19,15 +19,16 @@
 // W3DSmoothMotion.h //////////////////////////////////////////////////////////////////////////////
 // R1, smooth motion: a render object shown between its last two logic states.
 //
-// The logic ticks at 60 Hz, and the client moves a model's render object only on the render frame
-// that follows a tick (W3DView::update draws drawables only when W3D's clock moved, W3DDisplay.cpp).
-// On a 164 Hz panel each state stays up for two or three refreshes, unevenly, under a camera that
+// The logic ticks LOGICFRAMES_PER_SECOND times a second, and the client moves a model's render object
+// only on the render frame that follows a tick (W3DView::update draws drawables only when W3D's clock
+// moved, W3DDisplay.cpp).  On a display faster than that each state stays up for several refreshes,
+// unevenly on one that is no multiple of the logic's rate, under a camera that
 // moves every refresh.  On a display faster than the logic (and without -nosmoothmotion),
 // W3DDisplay::draw keeps each model's last two transforms and, just before the scene renders, sets
 // the render object to a blend of them by the fraction of a tick that has passed since the last one
 // was due (GameEngine_logicTickFraction); right after the render it puts the logic transform back, so
 // picking and the logic (ParticleUplinkCannonUpdate reads live bones) see exactly what they saw
-// before.  The picture is one logic tick behind (16.7 ms at 60 Hz) and the game never changes.
+// before.  The picture is one logic tick behind (MSEC_PER_LOGICFRAME_REAL) and the game never changes.
 //
 // Header-only on purpose: W3DModelDraw includes it on every platform, and nothing new has to be
 // listed in a build.

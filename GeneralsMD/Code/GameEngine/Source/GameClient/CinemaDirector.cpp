@@ -1032,7 +1032,7 @@ static void cinemaFlyDrone( Real now )
 	}
 	else if (theCinemaDroneHasTarget)
 	{
-		// chased like follow's unit, so its 60Hz steps and jinks stay out of the picture; a dead one
+		// chased like follow's unit, so its logic-tick steps and jinks stay out of the picture; a dead one
 		// leaves the drone looking where it fell
 		Object *obj = TheGameLogic->findObjectByID( theCinemaDroneTargetID );
 		const Real elapsed = now - theCinemaLastNow;

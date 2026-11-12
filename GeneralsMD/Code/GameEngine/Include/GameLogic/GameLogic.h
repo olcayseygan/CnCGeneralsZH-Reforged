@@ -189,7 +189,7 @@ public:
 	void destroyObject( Object *obj );							///< Mark object as destroyed for later deletion
 	Object *findObjectByID( ObjectID id );								///< Given an ObjectID, return a pointer to the object.
  	Object *getFirstObject( void );									///< Returns the "first" object in the world. When used with the object method "getNextObject()", all objects in the world can be iterated.
-	/// the objects whose ID % 60 is this turn, oldest first (the object list turned round), with up to a second
+	/// the objects whose ID % LOGICFRAMES_PER_SECOND is this turn, oldest first (the object list turned round), with up to a second
 	/// of the dead the lookup no longer finds; NULL while the index waits on its rebuild after a reset or a load
 	const std::vector<ObjectID> *getSecondTurnIDs( Int turn ) const { return m_objIndexStale ? NULL : &m_secondTurnIDs[ turn ]; }
 	ObjectID allocateObjectID( void );							///< Returns a new unique object id
@@ -436,12 +436,12 @@ private:
 	ObjectPtrVector m_objVector;
 
 	/* The end-of-frame pass (disabledAndSecondTurns) calls checkDisabledStatus on every disabled
-		 object and oncePerSecondTurn on every object whose ID % 60 is this frame's, in object list order.
+		 object and oncePerSecondTurn on every object whose ID % LOGICFRAMES_PER_SECOND is this frame's, in object list order.
 		 It walked the whole list for it, 0.3ms a frame at 4,000 objects.  These name the few it touches.
 		 The list is newest first and only ever grows at its head, so the order a stamp counts objects
 		 in is the list's turned round.  Kept by registerObject and watchDisabled, rebuilt from the list
 		 after a reset or a load (m_objIndexStale), when IDs are taken from the save. */
-	std::vector<ObjectID> m_secondTurnIDs[ LOGICFRAMES_PER_SECOND ];	///< by ID % 60, oldest first; the dead go on that ID's next turn
+	std::vector<ObjectID> m_secondTurnIDs[ LOGICFRAMES_PER_SECOND ];	///< by ID % LOGICFRAMES_PER_SECOND, oldest first; the dead go on that ID's next turn
 	std::vector<ObjectID> m_disabledWatch;		///< every object seen disabled or given a disable since; repeats allowed
 	std::vector<UnsignedInt> m_listStamp;			///< by ID: when it joined the list; the list runs in falling stamp order
 	UnsignedInt m_nextListStamp = 0;

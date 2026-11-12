@@ -664,7 +664,7 @@ Int Pathfinder_servePathQueues( PathRequestRing &human, PathRequestRing &compute
 	 the head of its line, so this is what drains a backlog of long searches.  A person's request
 	 behind a computer's stopped search gets the most at once, so that search ends within a few
 	 frames instead of up to sixteen.  Depth and line are game state every machine holds alike. */
-enum { PATHFIND_DEEP_QUEUE = 180, PATHFIND_DEEP_STEP = 60, PATHFIND_DEEP_CELLS = 4 };
+enum { PATHFIND_DEEP_QUEUE = 3 * LOGICFRAMES_PER_SECOND, PATHFIND_DEEP_STEP = LOGICFRAMES_PER_SECOND, PATHFIND_DEEP_CELLS = 4 };
 inline Int Pathfinder_queueCellBudget( Int perFrame, Int depth, Bool humanWaitsOnComputer )
 {
 	Int budget = perFrame;

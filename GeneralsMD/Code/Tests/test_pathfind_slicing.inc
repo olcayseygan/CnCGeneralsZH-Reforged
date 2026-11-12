@@ -360,7 +360,7 @@ TEST(pathfind_queue_cells_grow_with_the_backlog)
 	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_DEEP_QUEUE, FALSE ), 2500 );
 	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_DEEP_QUEUE + PATHFIND_DEEP_STEP - 1, FALSE ), 2500 );
 	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_DEEP_QUEUE + PATHFIND_DEEP_STEP, FALSE ), 5000 );
-	CHECK_EQ( Pathfinder_queueCellBudget( 2500, 300, FALSE ), 7500 );
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_DEEP_QUEUE + 2 * PATHFIND_DEEP_STEP, FALSE ), 7500 );
 	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_QUEUE_LEN, FALSE ), 10000 );
 	CHECK_EQ( Pathfinder_queueCellBudget( 2500, 1, TRUE ), 10000 );
 }

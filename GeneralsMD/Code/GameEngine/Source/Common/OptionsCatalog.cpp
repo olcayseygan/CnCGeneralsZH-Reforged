@@ -761,8 +761,9 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_structureCollapse, set_m_structureCollapse },
 
-	// Models drawn between their last two logic ticks on a display faster than the logic; a 60 Hz screen
-	// shows no change.  Read every picture by W3DDisplay's smoothMotionBegin, and no sim reads it.  The
+	// Models drawn between their last two logic ticks on a display faster than the logic; a display no
+	// faster than the logic shows no change.  On by default while the logic ticks slower than 60 a second
+	// (GlobalData.cpp).  Read every picture by W3DDisplay's smoothMotionBegin, and no sim reads it.  The
 	// key is the one the launcher offered once; a line it left behind is the player's choice.
 	// -nosmoothmotion and -smoothmotion beat it for a run.  On Options > Display, under Picture.
 	{ "SmoothMotion",							OPT_WND( "CheckSmoothMotion" ), "GUI:SmoothMotion",

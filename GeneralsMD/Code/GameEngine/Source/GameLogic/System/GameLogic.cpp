@@ -5684,7 +5684,7 @@ void GameLogic::update( void )
 		static UnsignedInt theNextSlowLine = 0;
 		static Int theSlowUnlogged = 0;
 		static Real theSlowUnloggedWorst = 0.0f;
-		const Bool slowFrame = total > SLOW_FRAME_MS && now > 60 && getGameMode() != GAME_SHELL && getGameMode() != GAME_NONE;
+		const Bool slowFrame = total > SLOW_FRAME_MS && now > LOGICFRAMES_PER_SECOND &&getGameMode() != GAME_SHELL && getGameMode() != GAME_NONE;
 		const Bool everySlowFrame = TheGlobalData && TheGlobalData->m_logicProfile;
 		if( slowFrame && !everySlowFrame && now < theNextSlowLine && now + LOGICFRAMES_PER_SECOND >= theNextSlowLine )
 		{

@@ -72,7 +72,7 @@
 // ----------------------------------------------------------------------------------------------
 enum
 {
-	LOGICFRAMES_PER_SECOND = 60,
+	LOGICFRAMES_PER_SECOND = 30,				///< the logic tick; the one place it is set. 30 or 60, everything else derives from it
 	RETAIL_LOGICFRAMES_PER_SECOND = 30,	///< the rate every hard-coded frame count and per-frame amount in EA's code and data was written for
 	MSEC_PER_SECOND = 1000
 };
@@ -82,12 +82,15 @@ const Real LOGICFRAMES_PER_SECONDS_REAL = (Real)LOGICFRAMES_PER_SECOND;
 const Real SECONDS_PER_LOGICFRAME_REAL = 1.0f / LOGICFRAMES_PER_SECONDS_REAL;
 
 // ----------------------------------------------------------------------------------------------
-// Logic runs at twice the retail rate. A frame count written for 30 Hz is doubled, an amount added
-// every frame is halved, an acceleration quartered, and a factor multiplied in every frame becomes
-// its square root. Every one of those is exact in IEEE arithmetic (sqrt included), so all machines
-// agree; the factor conversion is only exact because the ratio is 2, hence the assert.
+// Logic runs at the retail rate or twice it. At twice, a frame count written for 30 Hz is doubled,
+// an amount added every frame is halved, an acceleration quartered, and a factor multiplied in every
+// frame becomes its square root; at the retail rate every conversion is the identity. Each is exact
+// in IEEE arithmetic (sqrt included), so all machines agree. Any other ratio would need a power
+// for the factor, which is not bit-identical across machines, hence the assert.
 enum { LOGICFRAMES_PER_RETAIL_FRAME = LOGICFRAMES_PER_SECOND / RETAIL_LOGICFRAMES_PER_SECOND };
-static_assert( LOGICFRAMES_PER_SECOND == 2 * RETAIL_LOGICFRAMES_PER_SECOND, "the Retail conversions assume logic runs at exactly twice the retail rate" );
+static_assert( LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_RETAIL_FRAME * RETAIL_LOGICFRAMES_PER_SECOND
+	&& ( LOGICFRAMES_PER_RETAIL_FRAME == 1 || LOGICFRAMES_PER_RETAIL_FRAME == 2 ),
+	"the Retail conversions are exact only with logic at the retail rate or exactly twice it" );
 
 // a frame count past half the type's range is a sentinel (a "never" or "forever"), and stays one
 constexpr Int ConvertRetailFrames( Int frames )
@@ -103,9 +106,14 @@ constexpr UnsignedInt ConvertRetailFrames( UnsignedInt frames )
 }
 constexpr Real ConvertRetailFrames( Real frames ) { return frames * (Real)LOGICFRAMES_PER_RETAIL_FRAME; }
 
-constexpr Real ConvertRetailPerFrameRate( Real perFrame ) { return perFrame * 0.5f; }
-constexpr Real ConvertRetailPerFrameSquared( Real perFrameSqr ) { return perFrameSqr * 0.25f; }
-inline Real ConvertRetailPerFrameFactor( Real factor ) { return sqrtf( factor > 0.0f ? factor : 0.0f ); }
+// 1/1 and 1/4 are exact floats, and x * 1.0f is x, so at either ratio these give what a literal
+// 0.5f and 0.25f (or no conversion) would
+constexpr Real ConvertRetailPerFrameRate( Real perFrame ) { return perFrame * ( 1.0f / (Real)LOGICFRAMES_PER_RETAIL_FRAME ); }
+constexpr Real ConvertRetailPerFrameSquared( Real perFrameSqr ) { return perFrameSqr * ( 1.0f / (Real)( LOGICFRAMES_PER_RETAIL_FRAME * LOGICFRAMES_PER_RETAIL_FRAME ) ); }
+inline Real ConvertRetailPerFrameFactor( Real factor )
+{
+	return LOGICFRAMES_PER_RETAIL_FRAME == 1 ? factor : sqrtf( factor > 0.0f ? factor : 0.0f );
+}
 
 // ----------------------------------------------------------------------------------------------
 // The two speeds a match someone plays runs at: normal, and turbo mode at twice that.  There is no

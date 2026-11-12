@@ -16,6 +16,7 @@
 // hold, and a change to one is a change to both.
 #include "W3DDevice/GameClient/GpuParticles.h"
 #include "Common/Debug.h"
+#include "Common/GameCommon.h"
 #include "dx11backend.h"
 #include "dx11device.h"
 #include "dx11runtime.h"
@@ -197,7 +198,7 @@ static const char EVALUATE_PROGRAM[] =
 	"    if (lifetime == 0u)\n"
 	"        return;\n"
 	"    uint frames = lifetime / 4u;\n"
-	"    frames = (frames > 16u) ? 16u : ((frames == 0u) ? 1u : frames);\n"
+	"    frames = (frames > FADE_MAXu) ? FADE_MAXu : ((frames == 0u) ? 1u : frames);\n"
 	"    float left = spawn.Lifetime - k;\n"
 	"    if (left > float(frames))\n"
 	"        return;\n"
@@ -526,6 +527,18 @@ void release()
 	state = State();
 }
 
+/* ParticleClosedForm.h's PARTICLE_CLOSED_FORM_FADE_MAX_FRAMES, eight retail frames in logic frames
+	 (W3DParticleSys.cpp asserts the two agree), written into closed_fade's FADE_MAX.  At 60 ticks a second
+	 the text is the 16u it always was, so the shipped shader cache still matches it. */
+std::string evaluateProgram()
+{
+	std::string source = EVALUATE_PROGRAM;
+	const std::string fadeMax = std::to_string(8 * LOGICFRAMES_PER_RETAIL_FRAME);
+	for (size_t at = source.find("FADE_MAX"); at != std::string::npos; at = source.find("FADE_MAX", at))
+		source.replace(at, 8, fadeMax);
+	return source;
+}
+
 bool compile(DX11BackendClass *backend, ID3D11Device *device, const char *source, const char *name,
 	const char *profile, void **program)
 {
@@ -594,7 +607,7 @@ bool makeAll(DX11BackendClass *backend, ID3D11Device *device, unsigned capacity)
 		&& makeConstants(device, sizeof(FrameBlock), &state.frameConstants)
 		&& makeConstants(device, sizeof(PassBlock), &state.passConstants)
 		&& makeConstants(device, sizeof(BlitBlock), &state.blitConstants)
-		&& compile(backend, device, EVALUATE_PROGRAM, "gpuparticles evaluate", "cs_5_0", (void **)&state.evaluate)
+		&& compile(backend, device, evaluateProgram().c_str(), "gpuparticles evaluate", "cs_5_0", (void **)&state.evaluate)
 		&& compile(backend, device, DRAW_VERTEX_PROGRAM, "gpuparticles draw", "vs_5_0", (void **)&state.drawVertex)
 		&& compile(backend, device, DRAW_PIXEL_PROGRAM, "gpuparticles draw", "ps_5_0", (void **)&state.drawPixel)
 		&& compile(backend, device, BLIT_VERTEX_PROGRAM, "gpuparticles slice", "vs_5_0", (void **)&state.blitVertex)

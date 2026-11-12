@@ -1605,8 +1605,9 @@ Real Path::computeFlightRouteLeft( const Coord3D *pos, Real *bendDist, Real *ben
 	 does not. 2500 cells with three requests a frame gives mean 1.24ms to 1.30 and blocked 7,191 to
 	 9,837. Cells are the wrong knob on this queue; requests are the right one.
 
-	 Those numbers are at 30 logic frames a second. At 60 the budget is halved, so the queue searches
-	 the same 150,000 cells a second it was fitted at and a frame half as long spends half the time. */
+	 Those numbers are at 30 logic frames a second. Logic running faster than retail divides the
+	 budget by the ratio, so the queue searches the same 150,000 cells a second it was fitted at and
+	 a shorter frame spends proportionally less time. */
 enum { PATHFIND_CELLS_PER_FRAME = 5000 / LOGICFRAMES_PER_RETAIL_FRAME }; // Number of cells we will search pathfinding per frame.
 // A* open+closed sets draw from this pool; running dry aborts the search (no path) after
 // burning the time.  Retail 30000 was sized for 2003 memory - a long detour around a
@@ -7849,7 +7850,7 @@ void Pathfinder::processPathfindQueue(void)
 		 waiting answered the backlog sooner and made the army leave later, the last unit 23.2 s after
 		 the order against 19.1 s, with one of them never arriving. The back of a packed army waits for
 		 the front to clear, not for its path, and more paths at once is more units shoving. */
-	/* Kept at three per frame at 60 logic frames a second rather than halved: one and a half is not a
+	/* Kept at three per frame when logic runs at twice the retail rate rather than halved: one and a half is not a
 		 count, two was measured worse, and the cap is there to clip a burst within a frame, which a
 		 frame half as long needs no less. */
 	/* "Many times the demand" stops being true twenty minutes into a 4v4 between Hard computers: a

@@ -1864,7 +1864,7 @@ static const Real STUCK_DITHER_RATIO	= 0.3f;	///< gained less than this much of 
 static const Int  CROWD_MERGE_FRAMES	= ConvertRetailFrames(45);		///< a second and a half: how far ahead a merge is worth noticing
 static const Int  CROWD_TTC_FRAMES	= ConvertRetailFrames(21);			///< closing this fast on somebody counts as being in our way, wherever it sits
 static const Int  CROWD_REPATH_QUEUE	= ConvertRetailFrames(24);		///< queued behind traffic this long: stop steering round it and ask for a new route
-static const UnsignedInt CROWD_SCAN_FRAMES	= 4;		///< a vehicle asks who is round it once in this many frames, staggered by id
+static const UnsignedInt CROWD_SCAN_FRAMES	= ConvertRetailFrames(2);		///< a vehicle asks who is round it once in this many frames (a fifteenth of a second), staggered by id
 
 //-------------------------------------------------------------------------------------------------
 /* Returns TRUE if the physics collide should apply the force.  Normally not.

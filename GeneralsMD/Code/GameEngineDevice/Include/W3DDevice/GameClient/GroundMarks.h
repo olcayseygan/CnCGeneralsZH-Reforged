@@ -20,9 +20,12 @@
 // FILE: GroundMarks.h
 // The marks a fight leaves on the terrain under the Battle Marks option, kept free of the engine so
 // a test can hold the cap and the fade.  A fixed ring: a long match can never hold more than CAPACITY
-// marks, the oldest going first.  The client's alone; nothing here reads or writes logic.
+// marks, the oldest going first.  The client's alone; nothing here reads or writes logic.  Ages are in
+// logic frames, so the one thing taken from the engine is its rate (GameCommon.h, which needs only Lib/).
 
 #pragma once
+
+#include "Common/GameCommon.h"
 
 namespace GroundMarks {
 
@@ -31,10 +34,10 @@ enum { BURN_KINDS = 4, STAIN = 4, CRACKS = 5 };
 
 enum {
 	CAPACITY = 256,
-	HOLD_FRAMES = 60 * 60,			///< a mark stays whole for a minute of logic frames
-	FADE_FRAMES = 3 * 60 * 60,	///< and is gone three minutes after that
-	NEW_MARK_FRAMES = 30,				///< new marks wait this long for the buffer to be rebuilt: a barrage is one rebuild
-	FADE_STEP_FRAMES = 120			///< a fading mark changes this often: 90 steps down
+	HOLD_FRAMES = 60 * LOGICFRAMES_PER_SECOND,			///< a mark stays whole for a minute
+	FADE_FRAMES = 3 * 60 * LOGICFRAMES_PER_SECOND,	///< and is gone three minutes after that
+	NEW_MARK_FRAMES = LOGICFRAMES_PER_SECOND / 2,		///< new marks wait this long for the buffer to be rebuilt: a barrage is one rebuild
+	FADE_STEP_FRAMES = 2 * LOGICFRAMES_PER_SECOND		///< a fading mark changes this often: 90 steps down
 };
 
 struct Mark {

@@ -2142,17 +2142,21 @@ static void reportFrameTimeStats( void )
 	if( theFrameTimes.count() <= 0 )
 		return;
 
-	const Real over16 = 100.0f * theFrameTimes.countOver( 16.7f ) / theFrameTimes.count();
-	const Real over33 = 100.0f * theFrameTimes.countOver( 33.3f ) / theFrameTimes.count();
-	// over 25 ms is a picture that missed a refresh on a vsynced 60 Hz screen, where every frame is a
-	// multiple of 16.7 and the 16.7 count catches the on-time ones that ran a fraction long
-	DEBUG_LOG(("HEADLESS FRAMETIME: %d frames | mean %.2f p50 %.2f p95 %.2f p99 %.2f p99.9 %.2f worst %.2f ms (frame %d) | over 16.7ms %d (%.2f%%) | over 33.3ms %d (%.2f%%) | over 25.0ms %d\n",
+	// The first two budgets are one logic tick and two, rounded to the tenth the line prints so the count
+	// and the label agree (16.7 and 33.3 at 60 ticks a second, 33.3 and 66.7 at 30).  Over 25 ms is a
+	// picture that missed a refresh on a vsynced 60 Hz screen, where every frame is a multiple of 16.7;
+	// that one is the screen's and stays whatever the logic's rate.
+	const Real tickBudgetMS = (Real)(Int)( MSEC_PER_LOGICFRAME_REAL * 10.0f + 0.5f ) / 10.0f;
+	const Real twoTickBudgetMS = (Real)(Int)( 2.0f * MSEC_PER_LOGICFRAME_REAL * 10.0f + 0.5f ) / 10.0f;
+	const Real overTick = 100.0f * theFrameTimes.countOver( tickBudgetMS ) / theFrameTimes.count();
+	const Real overTwoTicks = 100.0f * theFrameTimes.countOver( twoTickBudgetMS ) / theFrameTimes.count();
+	DEBUG_LOG(("HEADLESS FRAMETIME: %d frames | mean %.2f p50 %.2f p95 %.2f p99 %.2f p99.9 %.2f worst %.2f ms (frame %d) | over %.1fms %d (%.2f%%) | over %.1fms %d (%.2f%%) | over 25.0ms %d\n",
 						 theFrameTimes.count(), theFrameTimes.meanMS(),
 						 theFrameTimes.percentileMS( 0.50f ), theFrameTimes.percentileMS( 0.95f ),
 						 theFrameTimes.percentileMS( 0.99f ), theFrameTimes.percentileMS( 0.999f ),
 						 theFrameTimes.worstMS(), theFrameTimes.worstAtFrame(),
-						 theFrameTimes.countOver( 16.7f ), over16,
-						 theFrameTimes.countOver( 33.3f ), over33,
+						 tickBudgetMS, theFrameTimes.countOver( tickBudgetMS ), overTick,
+						 twoTickBudgetMS, theFrameTimes.countOver( twoTickBudgetMS ), overTwoTicks,
 						 theFrameTimes.countOver( 25.0f )));
 	// the same passes split for the logic thread plan: mean/p50/p99/p99.9 of each part
 	#define PASS_SPLIT(h) (h).meanMS(), (h).percentileMS( 0.50f ), (h).percentileMS( 0.99f ), (h).percentileMS( 0.999f )
@@ -2213,12 +2217,14 @@ static void reportFrameTimeStats( void )
 
 	if( theLogicTimes.count() > 0 )
 	{
-		DEBUG_LOG(("HEADLESS LOGICTIME: %d ticks | mean %.2f p50 %.2f p95 %.2f p99 %.2f p99.9 %.2f worst %.2f ms (frame %d) | over 33.3ms %d\n",
+		// a tick that took two ticks' time, which no catch-up hides (33.3 at 60 ticks a second, 66.7 at 30)
+		const Real twoTickBudgetMS = (Real)(Int)( 2.0f * MSEC_PER_LOGICFRAME_REAL * 10.0f + 0.5f ) / 10.0f;
+		DEBUG_LOG(("HEADLESS LOGICTIME: %d ticks | mean %.2f p50 %.2f p95 %.2f p99 %.2f p99.9 %.2f worst %.2f ms (frame %d) | over %.1fms %d\n",
 							 theLogicTimes.count(), theLogicTimes.meanMS(),
 							 theLogicTimes.percentileMS( 0.50f ), theLogicTimes.percentileMS( 0.95f ),
 							 theLogicTimes.percentileMS( 0.99f ), theLogicTimes.percentileMS( 0.999f ),
 							 theLogicTimes.worstMS(), theLogicTimes.worstAtFrame(),
-							 theLogicTimes.countOver( 33.3f )));
+							 twoTickBudgetMS, theLogicTimes.countOver( twoTickBudgetMS )));
 	}
 
 	if( theObjectTicks > 0 )

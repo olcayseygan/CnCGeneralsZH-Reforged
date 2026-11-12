@@ -3147,10 +3147,10 @@ extern Real Locomotor_jetBreakOffSide( Real relX, Real relY, Real speed, Real ya
 
 TEST(jet_breaks_off_to_the_side_that_passes_the_target_wider)
 {
-	/* 4.5 a frame on a 72 circle, rolling into the full bank over half a second */
-	const Real SPEED = 4.5f;
+	/* 270 a second on a 72 circle, rolling into the full bank over half a second */
+	const Real SPEED = 270.0f / LOGICFRAMES_PER_SECONDS_REAL;
 	const Real RATE = SPEED / 72.0f;
-	const Real ACCEL = RATE / 30.0f;
+	const Real ACCEL = RATE / ( LOGICFRAMES_PER_SECONDS_REAL * 0.5f );
 
 	/* wings level, target nearly dead ahead: away from it, 92 clear where the other way is 87 */
 	CHECK_EQ( Locomotor_jetBreakOffSide( 200.0f,   5.0f, SPEED, 0.0f, RATE, ACCEL ), -1.0f );
@@ -3551,11 +3551,13 @@ TEST(a_unit_goes_for_the_armour_its_weapon_is_made_for)
 
 TEST(a_unit_shoots_what_its_weapon_kills_best)
 {
+	/* a shot every 0.2 s and every 2 s, a drive at 120 a second: in logic frames at this build's rate,
+	   since the quick-kill window (AI_QUICK_KILL_FRAMES) is ten seconds of them */
 	AIShotPattern humvee;
-	humvee.m_delayFrames = 12.0f;
+	humvee.m_delayFrames = ConvertRetailFrames( 6.0f );
 	AIShotPattern tank;
-	tank.m_delayFrames = 120.0f;
-	const Real SPEED = 2.0f;
+	tank.m_delayFrames = ConvertRetailFrames( 60.0f );
+	const Real SPEED = ConvertRetailPerFrameRate( 4.0f );
 
 	/* a Humvee: the Technical (500, 180 health) over the Battlemaster (800, 400), and a Red Guard
 	   (300, 120) over the Battlemaster too */
@@ -3582,7 +3584,7 @@ TEST(a_unit_shoots_what_its_weapon_kills_best)
 	/* the drive into reach counts: the same Battlemaster 600 units out of reach is worth less, and
 	   one out of reach of a unit that cannot move is worth nothing */
 	const Real tankFrames = aiFramesToKill( 400.0f, tank );
-	CHECK_NEAR( 800.0f / ( tankFrames + 300.0f ), aiTargetKillRate( 800.0f, tankFrames, 600.0f, SPEED ), 0.0001f );
+	CHECK_NEAR( 800.0f / ( tankFrames + 600.0f / SPEED ), aiTargetKillRate( 800.0f, tankFrames, 600.0f, SPEED ), 0.0001f );
 	CHECK_NEAR( 0.0f, aiTargetKillRate( 800.0f, tankFrames, 600.0f, 0.0f ), 0.0001f );
 	CHECK_NEAR( tankOnTank, aiTargetKillRate( 800.0f, tankFrames, 0.0f, 0.0f ), 0.0001f );
 
@@ -3614,8 +3616,8 @@ TEST(a_unit_shoots_what_its_weapon_kills_best)
 	const Real humveeTankFrames = aiFramesToKill( 400.0f, humvee );
 	humvee.m_damagePerShot = 5.0f;
 	const Real humveeTruckFrames = aiFramesToKill( 180.0f, humvee );
-	CHECK_NEAR( 1920.0f, humveeTankFrames, 0.001f );
-	CHECK_NEAR( 432.0f, humveeTruckFrames, 0.001f );
+	CHECK_NEAR( ConvertRetailFrames( 960.0f ), humveeTankFrames, 0.001f );		// 32 s
+	CHECK_NEAR( ConvertRetailFrames( 216.0f ), humveeTruckFrames, 0.001f );		// 7.2 s, inside the quick-kill window
 	CHECK( aiTargetBeats( targetRating( aiTargetTier( TRUE, TRUE, TRUE, TRUE, humveeTankFrames ), HUMVEE_ON_TANK, humveeOnTank, 0.0f, (ObjectID)9 ),
 												targetRating( aiTargetTier( FALSE, TRUE, TRUE, FALSE, humveeTruckFrames ), HUMVEE_ON_TRUCK, humveeOnTruck, 0.0f, (ObjectID)2 ) ) );
 	CHECK( aiTargetBeats( targetRating( aiTargetTier( FALSE, TRUE, TRUE, TRUE, humveeTruckFrames ), HUMVEE_ON_TRUCK, humveeOnTruck, 0.0f, (ObjectID)9 ),
@@ -5005,8 +5007,12 @@ TEST(ai_players_do_not_all_check_in_on_the_same_frame)
 		CHECK(seen[i] >= 0);
 		CHECK(seen[i] < cycle);
 	}
-	for (i = 0; i < MAX_PLAYER_COUNT; i++)
-		for (j = i + 1; j < MAX_PLAYER_COUNT; j++)
+	/* 64 reversed slots on a cycle of fewer frames (two seconds at 30 ticks a second) share a frame only
+	 * between indices 32 apart, so every seat of a full MAX_SLOTS lobby still has its own; a cycle of 64
+	 * or more frames gives every player one. */
+	const Int distinct = cycle >= 64 ? MAX_PLAYER_COUNT : MAX_SLOTS;
+	for (i = 0; i < distinct; i++)
+		for (j = i + 1; j < distinct; j++)
 			CHECK_NE(seen[i], seen[j]);
 
 	/* And a full lobby fills the cycle: index times cycle over MAX_PLAYER_COUNT sat 32 seats in its
@@ -6258,8 +6264,8 @@ TEST(mission_cinematic_runs_at_the_speed_its_script_asks_for)
 	   back with 30.  Below 30 is the cinematic's pace, turbo mode or not; the rest is the match's speed. */
 	const Int normal = LOGICFRAMES_PER_SECOND;
 	const Int turbo = LOGICFRAMES_PER_SECOND * 2;
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, normal ), 46 );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, turbo ), 46 );
+	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, normal ), ConvertRetailFrames( 23 ) );
+	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, turbo ), ConvertRetailFrames( 23 ) );
 	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, normal ), normal );
 	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, turbo ), turbo );
 	CHECK_EQ( GameEngine_missionFramesPerSecond( RETAIL_LOGICFRAMES_PER_SECOND, turbo ), turbo );
@@ -7812,7 +7818,7 @@ TEST(a_stalled_frame_is_not_filed_as_round_trip_time)
 
 	Int runAhead = computeRunAhead( clamped, stalledJitter, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
 	CHECK( runAhead < ConvertRetailFrames( 64 ) );
-	CHECK( runAhead <= 69 );			// 1.15 s at 60 Hz, and only with both players and the jitter at the ceilings
+	CHECK( runAhead <= (Int)( 1.15f * fps + 0.5f ) );			// 1.15 s, and only with both players and the jitter at the ceilings
 
 	/* a LAN is untouched by any of this */
 	CHECK_EQ( computeRunAhead( sanitizeLatencySample( 0.051f, MAX_PLAUSIBLE_LATENCY_SECONDS ) * 2.0f,
@@ -7888,26 +7894,30 @@ TEST(a_packet_that_arrives_on_time_never_trips_the_self_slug)
 TEST(the_jitter_margin_follows_the_measured_jitter)
 {
 	const Int fps = LOGICFRAMES_PER_SECOND;
-	const Int oldFixedMargin = 6;				// the RUNAHEAD_JITTER_FRAMES this replaced, 100 ms at 60 Hz
+	const Int oldFixedMargin = LOGICFRAMES_PER_SECOND / 10;	// the RUNAHEAD_JITTER_FRAMES this replaced, 100 ms
 	const Real ping = 0.215f;						// -latAvg 100 each way plus the game's own share, as measured
 
-	/* What each window was under the flat margin: trip + 10 % + 6.  At a 215 ms round trip that is
-		 7 + 0 + 6 = 13 frames whatever the link is doing. */
+	/* What each window was under the flat margin: trip + 10 % + 100 ms.  At a 215 ms round trip and
+		 60 ticks a second that is 7 + 0 + 6 = 13 frames whatever the link is doing. */
 	Int tripFrames = (Int)ceilf( ( ping / 2.0f ) * (Real)fps );
-	CHECK_EQ( tripFrames, 7 );
 	Int oldWindow = tripFrames + oldFixedMargin;
 
+	// the trip and RUNAHEAD_JITTER_DEVIATIONS of spread rounded past to a whole frame
+	struct Late { static Int frames( Real trip, Real jitter, Int rate )
+		{ return (Int)floorf( ( trip / 2.0f + RUNAHEAD_JITTER_DEVIATIONS * jitter ) * (Real)rate ) + 1; } };
+
 	/* A steady link, rttvar a few milliseconds, gets the trip and its spread rounded past to a whole
-		 frame (6.45 + 0.24 frames, so 7), the phase margin and the brake's frame. */
+		 frame (6.45 + 0.24 frames at 60 a second, so 7), the phase margin and the brake's frame. */
 	Int steady = computeRunAhead( ping, 0.004f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-	CHECK_EQ( steady, 7 + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );
+	CHECK_EQ( steady, Late::frames( ping, 0.004f, fps ) + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );
 	CHECK( steady < oldWindow );
 
-	// a jittery one, rttvar 20 to 35 ms as -latNoise 30 measures, waits longer
-	Int jittery = computeRunAhead( ping, 0.024f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
-	CHECK_EQ( jittery, 8 + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );		// 6.45 + 1.44 frames
+	/* a jittery one, rttvar 40 ms as -latNoise 30 can measure, waits longer: 6.45 + 2.4 frames at 60 a
+		 second, 3.2 + 1.2 at 30, more than a frame of spread either way */
+	Int jittery = computeRunAhead( ping, 0.040f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 );
+	CHECK_EQ( jittery, Late::frames( ping, 0.040f, fps ) + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );
 	CHECK( jittery > steady );
-	CHECK( computeRunAhead( ping, 0.035f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) > jittery );
+	CHECK( computeRunAhead( ping, 0.080f, fps, 10, MIN_RUNAHEAD, MAX_FRAMES_AHEAD / 2 ) > jittery );
 
 	// more jitter never shortens the window
 	Int previous = 0;
@@ -8004,7 +8014,7 @@ TEST(the_run_ahead_is_shorter_than_the_shipped_floor_on_the_links_that_do_not_ne
 	/* And what it is not: the links that were relying on the floor get more window than the floor
 		 gave them, not less.  600 ms summed round trip is where EA's formula finally reached ten. */
 	CHECK( computeRunAhead( 0.300f, jitter, fps, 10, MIN_RUNAHEAD, 64 )
-				 >= 9 + 1 + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );	// 150 ms is 9 frames, rounded past
+				 >= (Int)( 0.150f * fps ) + 1 + RUNAHEAD_PHASE_MARGIN_FRAMES + SELFSLUG_MIN_THRESHOLD_FRAMES );	// 150 ms (9 frames at 60), rounded past
 	CHECK( computeRunAhead( 0.600f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > shippedFloor );
 	CHECK( computeRunAhead( 1.000f, jitter, fps, 10, MIN_RUNAHEAD, 64 ) > ConvertRetailFrames( 16 ) );
 }
@@ -8170,7 +8180,7 @@ TEST(room_frame_rate_still_pins_to_a_genuinely_slow_player_without_oscillating)
 TEST(resend_window_is_measured_from_the_start_of_the_match_not_four_billion)
 {
 	/* ConnectionManager::sendSingleFrameToPlayer refuses to resend a frame older than
-		 FRAMES_TO_KEEP, which is (MAX_FRAMES_AHEAD / 2) + 1 = 129 - about two seconds at 60 Hz, and
+		 FRAMES_TO_KEEP, which is (MAX_FRAMES_AHEAD / 2) + 1 = 129 - about two seconds at 60 Hz, four at 30, and
 		 exactly the window a stalled player can be behind by, since nobody advances while the room
 		 is waiting for them. */
 	const Int KEEP = FRAMES_TO_KEEP;
@@ -17664,7 +17674,7 @@ TEST(every_rung_answers_fire)
 	}
 	const AIDifficultyProfile &hard = data.m_skill[ AISKILL_BRUTAL ];
 	CHECK_EQ( 1.0f, hard.m_influenceSeconds );
-	CHECK_EQ( 20, (Int)(hard.m_fireLookSeconds * LOGICFRAMES_PER_SECOND + 0.5f) );
+	CHECK_EQ( ConvertRetailFrames( 10 ), (Int)(hard.m_fireLookSeconds * LOGICFRAMES_PER_SECOND + 0.5f) );
 	// Easy answers each hit alone
 	CHECK_EQ( 0.0f, data.m_skill[ AISKILL_EASY ].m_fireWordRadius );
 }
@@ -21451,11 +21461,14 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 		"VSync", "WaterStyle", "CloudStyle", "LightingStyle", "OrderLines", "ShowNetBox", "UseShadowVolumesForSkins",
 		"ShadowsForProjectiles", "ShadowsForProps", "ShadowsForParticles", "VolumetricSmokeShadows", "SmokeFireLighting",
 		"DebrisTrails", "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient", "AmbientOcclusion",
-		"Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "SmoothMotion", "InternalHdr", "Smoke", "ParticleBounce",
+		"Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "InternalHdr", "Smoke", "ParticleBounce",
 		"HeatHaze", NULL
 	};
 	for( Int i = 0; off[ i ] != NULL; ++i )
 		CHECK_EQ( findOptionDef( off[ i ] )->get(), 0 );
+
+	// on while the logic ticks slower than a 60 Hz screen refreshes, which retail never did
+	CHECK_EQ( findOptionDef( "SmoothMotion" )->get(), LOGICFRAMES_PER_SECOND < 60 ? 1 : 0 );
 
 	CHECK_EQ( findOptionDef( "ClassicGraphics" )->get(), 1 );
 	CHECK_EQ( findOptionDef( "DetailedModels" )->get(), 1 );		// mounts nothing under Classic, and only what was downloaded
@@ -24466,12 +24479,22 @@ TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
 
 #include "Common/GameState.h"
 
-// A save from before 60 Hz logic is refused, except a mission save (the GameState and campaign
-// blocks only, no frame counts), which carries a campaign over from any earlier build or retail.
-TEST(save_older_than_60hz_loads_only_as_mission_save)
+// A save from before block version 5, or counted at another logic rate than this build's, is refused,
+// except a mission save (the GameState and campaign blocks only, no frame counts), which carries a
+// campaign over from any earlier build, another rate or retail.
+TEST(save_from_an_older_build_or_another_logic_rate_loads_only_as_mission_save)
 {
 	SaveGameInfo info;
-	info.version = 5;
+	CHECK_EQ( info.logicFramesPerSecond, (Int)LOGICFRAMES_PER_SECOND );
+	info.version = 6;
+	CHECK( info.isLoadable() );
+	info.logicFramesPerSecond = LOGICFRAMES_PER_SECOND == 60 ? 30 : 60;		// the other rate this source builds at
+	CHECK( !info.isLoadable() );
+	info.saveFileType = SAVE_FILE_TYPE_MISSION;
+	CHECK( info.isLoadable() );
+	info.saveFileType = SAVE_FILE_TYPE_NORMAL;
+	info.logicFramesPerSecond = LOGICFRAMES_PER_SECOND;
+	info.version = 5;		// loaded as written at 60 (GameState::xfer); here at this build's rate
 	CHECK( info.isLoadable() );
 	info.version = 4;		// 16 players a side of every per-player array
 	CHECK( !info.isLoadable() );
@@ -24700,6 +24723,23 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	CHECK( ParseAsciiStringToGameInfo( &guest, odd ) );
 	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );
 	CHECK_EQ( guest.getSlot( 1 )->getHandicap(), (Int)HANDICAP_FULL );
+
+	/* A replay's slot list as startRecording writes it, the logic rate last: readReplayHeader takes the
+		 rate off and hands the parser the string as it was, so the replay is not refused as bad options. */
+	AsciiString recorded = picked;
+	recorded.concat( RecorderClass::replayLogicRateField() );
+	CHECK( !ParseAsciiStringToGameInfo( &guest, recorded ) );		// the parser alone refuses the key
+	CHECK_EQ( RecorderClass::takeReplayLogicRate( recorded ), (Int)LOGICFRAMES_PER_SECOND );
+	CHECK_STR( recorded.str(), picked.str() );
+	CHECK( ParseAsciiStringToGameInfo( &guest, recorded ) );
+	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), 50 );
+	// another rate comes back as itself, for the header to refuse; no field is a replay from 60 Hz days
+	AsciiString otherRate = picked;
+	otherRate.concat( LOGICFRAMES_PER_SECOND == 60 ? "HZ=30;" : "HZ=60;" );
+	CHECK_EQ( RecorderClass::takeReplayLogicRate( otherRate ), LOGICFRAMES_PER_SECOND == 60 ? 30 : 60 );
+	AsciiString noField = picked;
+	CHECK_EQ( RecorderClass::takeReplayLogicRate( noField ), 60 );
+	CHECK_STR( noField.str(), picked.str() );
 
 	// the host's answer to a guest's request
 	GameSlot *asker = host.getSlot( 0 );

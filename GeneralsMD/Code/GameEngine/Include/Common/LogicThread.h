@@ -155,8 +155,9 @@ namespace LogicThread
 			* another picture as long as pictureMS, the one just drawn, still ends before the pacer owes the next
 			* one (a paced single-player pass).  The window stays open and the draw presents the same state
 			* again with only the camera moved.  Under vsync a picture's length includes its wait for the
-			* refresh, so a 60 Hz screen beside 60 ticks a second draws none and a faster one draws them on its
-			* refreshes.  FALSE closes it as close() does, waiting for the tick. */
+			* refresh, so a screen no faster than the logic draws none and a faster one draws them on its
+			* refreshes, unless smooth motion is blending there: W3DDisplay's drawAgainBesideTick then closes
+			* the window instead of asking.  FALSE closes it as close() does, waiting for the tick. */
 		Bool closeOrDrawAgain( Real pictureMS );
 	private:
 		Bool m_open;

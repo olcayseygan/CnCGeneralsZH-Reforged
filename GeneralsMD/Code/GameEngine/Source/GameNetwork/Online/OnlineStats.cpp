@@ -150,6 +150,7 @@ void OnlineSendReport( const OnlineReport &report )
 	m.setBool( "sawDesync", report.sawDesync != 0 ).setBool( "sawGameEnd", report.sawGameEnd != 0 );
 	m.setBool( "disconEnd", report.disconEnd != 0 ).setBool( "surrendered", report.surrendered != 0 );
 	m.setInt( "duration", report.duration );
+	m.setInt( "hz", LOGICFRAMES_PER_SECOND );	// logic frames a second, so the server can turn endFrame into time
 	std::vector<long long> discon;
 	std::vector<std::string> side;
 	std::vector<long long> blind;

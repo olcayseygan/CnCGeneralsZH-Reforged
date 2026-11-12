@@ -69,8 +69,8 @@
 static const Real LIVE_STEP = PATHFIND_CELL_SIZE_F * 0.25f;		///< a standing defence's grid
 static const Real GHOST_STEP = PATHFIND_CELL_SIZE_F * 0.5f;		///< the placement cursor's, worked out as it moves
 static const Real DISTANCE_LIMIT = 16.0f;											///< the field is clamped to this either side
-static const UnsignedInt FOG_REFRESH_FRAMES = 15;							///< client frames between two looks at the fog
-static const UnsignedInt FORGET_FRAMES = 300;									///< a field not wanted this long is dropped
+static const UnsignedInt FOG_REFRESH_FRAMES = LOGICFRAMES_PER_SECOND / 4;	///< client frames between two looks at the fog, a quarter second
+static const UnsignedInt FORGET_FRAMES = 5 * LOGICFRAMES_PER_SECOND;			///< a field not wanted for five seconds is dropped
 static const Real BUILD_BUDGET_MS = 4.0f;											///< grids worked out in one frame, past the first
 
 //-------------------------------------------------------------------------------------------------

@@ -379,6 +379,6 @@ private:
 };  // end class W3DView
 
 // EXTERNALS //////////////////////////////////////////////////////////////////////////////////////
-extern Int TheW3DFrameLengthInMsec;	// default is 33msec/frame == 30fps. but we may change it depending on sys config.
+extern Real TheW3DFrameLengthInMsec;	// one logic tick in milliseconds, MSEC_PER_LOGICFRAME_REAL; a Real, since 1000/30 is no whole number
 
 #endif  // end __W3DVIEW_H_

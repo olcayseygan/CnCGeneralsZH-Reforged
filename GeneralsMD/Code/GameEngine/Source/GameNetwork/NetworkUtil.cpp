@@ -30,13 +30,13 @@
 #include "GameNetwork/NetworkUtil.h"
 #include "TARGA.H"
 
-/* Frame counts, sized for the time they cover: 128 and 4 frames were EA's at 30 Hz, the same
-	 4.3 s and 133 ms at LOGICFRAMES_PER_SECOND are twice the frames. */
+/* Frame counts, sized for the time they cover: 128 frames was EA's 4.3 s at 30 Hz, and
+	 ConvertRetailFrames keeps the 4.3 s at LOGICFRAMES_PER_SECOND. */
 Int MAX_FRAMES_AHEAD = ConvertRetailFrames(128);
 
-/* The shortest run-ahead the room is ever commanded to use: 50 ms of input delay, which is
-	 computeRunAhead's own answer for a link with no trip at all - a frame for the trip, the phase
-	 margin and the brake's frame.  EA shipped ten frames - a third of a second on every link, LAN
+/* The shortest run-ahead the room is ever commanded to use: three frames of input delay (50 ms at
+	 60 Hz, 100 ms at 30), which is computeRunAhead's own answer for a link with no trip at all - a
+	 frame for the trip, the phase margin and the brake's frame.  EA shipped ten frames - a third of a second on every link, LAN
 	 included - and because the formula in computeRunAhead does not clear ten until the two worst
 	 average round trips add up to about 600 ms, ten frames is what every game anyone actually
 	 played ran at.  It was eight frames, 133 ms, until the send grouping went, then four. */

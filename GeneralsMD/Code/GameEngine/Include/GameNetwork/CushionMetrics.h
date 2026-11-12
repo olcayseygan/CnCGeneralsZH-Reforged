@@ -26,6 +26,7 @@
 #define _CUSHION_METRICS_H_
 
 #include "Lib/BaseType.h"
+#include "Common/GameCommon.h"
 
 /* The "cushion" is how many frames ahead of the simulation a command arrived: the margin between
 	 the network and the frame that needs it.  When it runs low the machine deliberately slows its
@@ -91,7 +92,7 @@ enum
 	RUNAHEAD_PHASE_MARGIN_FRAMES = 1,
 
 	/* The room never runs slower than this, whatever the metrics say: a sixth of normal speed. */
-	ROOM_FRAME_RATE_FLOOR = 10,
+	ROOM_FRAME_RATE_FLOOR = 5 * LOGICFRAMES_PER_RETAIL_FRAME,	// EA's 5 at the retail rate
 
 	/* How far above the slowest reported rate the room is actually told to run.  This is EA's own
 		 step - they applied it to the slowest player alone, "just in case they are able to" - given

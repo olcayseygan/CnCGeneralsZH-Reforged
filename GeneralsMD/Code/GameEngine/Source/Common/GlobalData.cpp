@@ -700,7 +700,10 @@ GlobalData::GlobalData()
 	m_shadowsForParticles = FALSE;
 	m_volumetricSmokeShadows = FALSE;
 	m_smokeFireLighting = FALSE;
-	m_smoothMotion = FALSE;					//a model stands where the last logic tick left it until the box is ticked
+	// On whenever the logic ticks slower than the commonest 60 Hz screen, which would otherwise show each
+	// tick for two refreshes or more; at 60 ticks a second that screen gets a new tick every refresh and the
+	// box starts clear.  It blends only on a display faster than the logic either way (W3DDisplay).
+	m_smoothMotion = LOGICFRAMES_PER_SECOND < 60;
 	m_smoothMotionAnyDisplay = FALSE;
 	m_waterStyle = 0;				// classic by default; modern water is an explicit option
 	m_waterReflection = 2;		// Hybrid once Modern is explicitly selected
@@ -759,7 +762,7 @@ GlobalData::GlobalData()
 	m_videoStartFrame = 0;
 	m_videoEndFrame = 0; // record nothing unless -video asks for a range
 	m_videoName.clear();
-	m_videoPictures = 1; // a picture a logic frame, 30 a second, unless -recordfps asks for more
+	m_videoPictures = 1; // a picture a logic frame, LOGICFRAMES_PER_SECOND a second, unless -recordfps asks for more
 	m_directorRecord = FALSE;
 	m_directorScoutFile.clear();
 	m_directorTimelineFile.clear();

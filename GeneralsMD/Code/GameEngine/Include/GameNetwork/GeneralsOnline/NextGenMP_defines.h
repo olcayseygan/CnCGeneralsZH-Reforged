@@ -64,24 +64,15 @@
 #define GENERALS_ONLINE_MIN_LOBBY_CAMERA_ZOOM 210
 #define GENERALS_ONLINE_MAX_LOBBY_CAMERA_ZOOM 1000
 
-#define GENERALS_ONLINE_HIGH_FPS_SERVER 1
+// The logic rate is the engine's (LOGICFRAMES_PER_SECOND in Common/GameCommon.h); upstream's switch between a
+// 30 and a 60 Hz server follows it rather than being a second place to set it.
+#include "Common/GameCommon.h"
 
-#if defined(GENERALS_ONLINE_HIGH_FPS_SERVER)
-#define GENERALS_ONLINE_CLIENT_ID "gen_online_60hz"
-#else
-#define GENERALS_ONLINE_CLIENT_ID "gen_online_30hz"
-#endif
+#define GENERALS_ONLINE_CLIENT_ID (LOGICFRAMES_PER_RETAIL_FRAME == 2 ? "gen_online_60hz" : "gen_online_30hz")
 
-#if defined(GENERALS_ONLINE_HIGH_FPS_SERVER)
-	#define GENERALS_ONLINE_HIGH_FPS_LIMIT 60
-	#define GENERALS_ONLINE_HIGH_FPS_FRAME_MULTIPLIER (GENERALS_ONLINE_HIGH_FPS_LIMIT/30)
-	#define GENERALS_ONLINE_HIGH_FPS_RENDER 1 // This must be defined for high fps server
-#else
-	#define GENERALS_ONLINE_HIGH_FPS_LIMIT 30
-	#define GENERALS_ONLINE_HIGH_FPS_FRAME_MULTIPLIER 1
-
-	#define GENERALS_ONLINE_HIGH_FPS_RENDER 1 // This is optional on 30fps, but will boost/unlock the framerate, similar to gentool
-#endif
+#define GENERALS_ONLINE_HIGH_FPS_LIMIT LOGICFRAMES_PER_SECOND
+#define GENERALS_ONLINE_HIGH_FPS_FRAME_MULTIPLIER LOGICFRAMES_PER_RETAIL_FRAME
+#define GENERALS_ONLINE_HIGH_FPS_RENDER 1
 
 //#define GENERALS_ONLINE_ENABLE_CONTROVERSIAL_NON_RETAIL_CHANGES 1
 

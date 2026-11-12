@@ -3,10 +3,16 @@
 EA opened the source of Generals and Zero Hour, the game that is still on sale and still runs on
 Steam. This build is that source with the bugs the game shipped with fixed and everything below added.
 
-**128 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
+**129 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
 found and fixed, EA's own, not port damage.**
 
 ---
+
+## The game steps 30 times a second again, and the picture glides
+
+- The game's simulation is back at 30 steps a second, as in the original Generals. It ran at 60 from version 3.0.0. Game speed, unit speeds and every timing are exactly what they were; only the work behind them is lighter, which leaves more room in big late-game battles and on slower machines.
+- Smooth Motion keeps the picture from showing it. It draws units between their last two positions, so movement glides at your screen's full refresh, a 60 Hz screen included, and it is on unless you switch it off in Options.
+- Replays and saved games from earlier versions will not load, and everyone in a network game needs the same build.
 
 ## Your whole production from three tabs
 

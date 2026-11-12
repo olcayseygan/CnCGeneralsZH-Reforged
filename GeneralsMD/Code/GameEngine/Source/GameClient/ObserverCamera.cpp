@@ -127,7 +127,7 @@ static const Int CARD_TWO_ROWS_FROM = 5;
 /// eight-player map while pane 0 went from fight to fight beside it
 static const UnsignedInt SPLIT_MOST_FRAMES = 18 * LOGICFRAMES_PER_SECOND;
 /// how long after the panes are gone the hand-over is logged a line a frame
-static const UnsignedInt HANDOVER_LOG_FRAMES = 45;
+static const UnsignedInt HANDOVER_LOG_FRAMES = 3 * LOGICFRAMES_PER_SECOND / 4;
 /// a zoom moving more than this share of itself between two updates is logged as a jump
 static const Real ZOOM_JUMP_SHARE = 0.02f;
 /// the director's glide never crosses the ground faster than this, about two screens a second
@@ -2811,7 +2811,7 @@ void ObserverCamera::pickIntroBases( void )
 //-------------------------------------------------------------------------------------------------
 void ObserverCamera::logPanes( UnsignedInt frame ) const
 {
-	enum { PANE_LOG_FRAMES = 30 };
+	enum { PANE_LOG_FRAMES = LOGICFRAMES_PER_SECOND / 2 };
 	if( m_paneCount < 2 || frame % PANE_LOG_FRAMES != 0 )
 		return;
 	for( Int pane = 0; pane < m_paneCount; pane++ )

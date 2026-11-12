@@ -2287,7 +2287,8 @@ target_include_directories(test_audio_mix_policy PRIVATE ${CMAKE_CURRENT_SOURCE_
 
 # W3DDevice/GameClient/GroundMarks.h: the Battle Marks option's cap and fade.
 add_lib_test(test_ground_marks)
-target_include_directories(test_ground_marks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+target_include_directories(test_ground_marks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 add_lib_test(test_fire_lights)
 target_include_directories(test_fire_lights PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 

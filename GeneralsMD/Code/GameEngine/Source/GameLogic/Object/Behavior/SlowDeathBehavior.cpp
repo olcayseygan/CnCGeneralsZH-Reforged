@@ -270,7 +270,10 @@ const Real MOMENTUM_AIRBORNE_HEIGHT = 0.5f;																	///< above this a wr
 const Real MOMENTUM_LIFTOFF_HEIGHT = 0.05f;																	///< above this a slow car's low hop has left the ground
 const UnsignedInt MOMENTUM_LANDING_GRACE = 3 * LOGICFRAMES_PER_SECOND;			///< on top of the slide and the hop, the most it may hold the destruction back
 const Real MOMENTUM_BOUNCINESS = -0.4f;																			///< off the ground's stiffness: it lands heavily, two short bounces
-const Real MOMENTUM_FRICTION_KEEP = 0.92f;																	///< share of the speed set on it that ground friction leaves to move on each frame
+// Tuned as 0.92 a frame at twice the retail rate, so 0.92 squared a retail frame; physics friction is
+// converted the same way (retailFrictionToFrame). sqrtf of a correctly rounded square gives the
+// float back exactly, so at twice the rate this is still exactly 0.92f.
+const Real MOMENTUM_FRICTION_KEEP = ConvertRetailPerFrameFactor(0.92f * 0.92f);	///< share of the speed set on it that ground friction leaves to move on each frame
 
 //-------------------------------------------------------------------------------------------------
 /** True if some OCL of the module, in any phase, throws the dying body itself (the Technical's

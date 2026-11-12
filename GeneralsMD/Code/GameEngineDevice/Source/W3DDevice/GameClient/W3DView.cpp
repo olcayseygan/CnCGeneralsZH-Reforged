@@ -125,7 +125,7 @@
 
 
 // one logic frame; GameClient::init sets it
-Int TheW3DFrameLengthInMsec = 1000/LOGICFRAMES_PER_SECOND;
+Real TheW3DFrameLengthInMsec = MSEC_PER_LOGICFRAME_REAL;
 // The camera's steppers - the smoothing, the scripted moves counted in steps, the scroll - were tuned for
 // one step a retail logic frame and step on that cadence whatever the logic rate is.
 static const Int CAMERA_STEP_MSEC = 1000/RETAIL_LOGICFRAMES_PER_SECOND;
@@ -1896,9 +1896,9 @@ void W3DView::update(void)
 		followFactor = -1;
 	}
 	// The lock follows on every render frame, each per-retail-frame factor scaled to this frame's
-	// length (1-(1-f)^steps), so it keeps retail's pull at any frame rate. Stepping it every 33 ms
-	// while the unit moves every logic frame, 16.7 ms, put the camera a frame behind on every second
-	// one, a 2:1 judder. With smooth motion on it aims at the drawable's blended position as well, except
+	// length (1-(1-f)^steps), so it keeps retail's pull at any frame rate. Stepping it once a retail
+	// frame while the unit moved every logic frame, twice as often at 60 ticks a second, put the camera
+	// a frame behind on every second one, a 2:1 judder. With smooth motion on it aims at the drawable's blended position as well, except
 	// on a picture a whole tick behind, which captured nothing and would find a stale one.
 	const Bool smoothLock = TheSmoothMotionActive && TheSmoothMotionAlpha < 1.0f;
 	const Real lockSteps = (Real)waypointElapsedMs / (Real)CAMERA_STEP_MSEC;

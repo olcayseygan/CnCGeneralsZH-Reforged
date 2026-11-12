@@ -609,17 +609,35 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 			static NameKeyType buttonIdleInfantry = NAMEKEY("ControlBar.wnd:ButtonIdleInfantry");
 			static NameKeyType buttonIdleVehicle = NAMEKEY("ControlBar.wnd:ButtonIdleVehicle");
 			static NameKeyType buttonIdleAircraft = NAMEKEY("ControlBar.wnd:ButtonIdleAircraft");
+			static NameKeyType buttonSelectArmy = NAMEKEY("ControlBar.wnd:ButtonSelectArmy");
 
 			Int controlID = control->winGetWindowId();
 			if( controlID == buttonCommunicator )
 			{
 				ToggleDiplomacy(FALSE);
 			}
-			else if( controlID == beaconPlacementButtonID && TheGameLogic->isInMultiplayerGame() &&
-				ThePlayerList->getLocalPlayer()->isPlayerActive())
+			else if( controlID == beaconPlacementButtonID )
 			{
-				const CommandButton *commandButton = TheControlBar->findCommandButton( "Command_PlaceBeacon" );
-				TheInGameUI->setGUICommand( commandButton );
+				// the "!" key: the camera to the last radar alert, and further back on each press soon
+				// after, as the key for it does; the beacon keeps its own key
+				HideQuitMenu( );
+				TheMessageStream->appendMessage( GameMessage::MSG_META_VIEW_LAST_RADAR_EVENT );
+			}
+			else if( controlID == buttonSelectArmy )
+			{
+				// the select all key: every fighting unit on screen, the whole map when the screen has none
+				// left to add; never dozers, workers, supply trucks or buildings
+				HideQuitMenu( );
+				TheMessageStream->appendMessage( GameMessage::MSG_META_SELECT_ALL );
+			}
+			else if( msg == GBM_SELECTED_RIGHT && ( controlID == buttonIdleInfantry || controlID == buttonIdleVehicle || controlID == buttonIdleAircraft ) )
+			{
+				// a right click takes every one of the kind, busy or not, through the select all key for
+				// that kind: the screen first, then the whole map
+				HideQuitMenu( );
+				TheMessageStream->appendMessage( controlID == buttonIdleInfantry ? GameMessage::MSG_META_SELECT_ALL_MILITARY
+																			 : controlID == buttonIdleVehicle ? GameMessage::MSG_META_SELECT_ALL_VEHICLES
+																			 : GameMessage::MSG_META_SELECT_ALL_AIRCRAFT );
 			}
 			else if( controlID == beaconDeleteButtonID && TheGameLogic->isInMultiplayerGame() )
 			{

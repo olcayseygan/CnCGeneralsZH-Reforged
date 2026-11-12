@@ -45,7 +45,7 @@ CONTROLBAR:IdleInfantry
 END
 
 CONTROLBAR:IdleInfantryDescription
-"Click to select the next idle infantry. Shift-click selects all of them."
+"Click to select the next idle infantry. Shift-click selects all of them. Right-click selects all your infantry, idle or not: those on screen first, the whole map on a second right-click."
 END
 
 CONTROLBAR:IdleVehicle
@@ -53,7 +53,7 @@ CONTROLBAR:IdleVehicle
 END
 
 CONTROLBAR:IdleVehicleDescription
-"Click to select the next idle ground vehicle. Shift-click selects all of them."
+"Click to select the next idle ground vehicle. Shift-click selects all of them. Right-click selects all your ground vehicles, idle or not: those on screen first, the whole map on a second right-click."
 END
 
 CONTROLBAR:IdleAircraft
@@ -61,7 +61,23 @@ CONTROLBAR:IdleAircraft
 END
 
 CONTROLBAR:IdleAircraftDescription
-"Click to select the next idle aircraft. Shift-click selects all of them."
+"Click to select the next idle aircraft. Shift-click selects all of them. Right-click selects all your aircraft, idle or not: those on screen first, the whole map on a second right-click."
+END
+
+CONTROLBAR:SelectArmy
+"Select Army"
+END
+
+CONTROLBAR:SelectArmyDescription
+"Click to select every fighting unit on screen; click again for your whole army across the map. Workers, supply trucks and buildings are left out."
+END
+
+CONTROLBAR:LastAlert
+"Last Alert"
+END
+
+CONTROLBAR:LastAlertDescription
+"Click to move the camera to the last radar alert, such as your base under attack. Click again soon after to go one alert further back."
 END
 
 CONTROLBAR:IdleWorkerDescription

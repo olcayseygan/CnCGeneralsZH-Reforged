@@ -4610,7 +4610,7 @@ CONTROLBAR:IdleInfantry
 END
 
 CONTROLBAR:IdleInfantryDescription
-"Sonraki boştaki piyadeyi seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir."
+"Sonraki boştaki piyadeyi seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir. Sağ tıklarsanız boşta olsun olmasın bütün piyadeleriniz seçilir: önce ekrandakiler, ikinci sağ tıkta haritanın tamamı."
 END
 
 CONTROLBAR:IdleVehicle
@@ -4618,7 +4618,7 @@ CONTROLBAR:IdleVehicle
 END
 
 CONTROLBAR:IdleVehicleDescription
-"Sonraki boştaki kara aracını seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir."
+"Sonraki boştaki kara aracını seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir. Sağ tıklarsanız boşta olsun olmasın bütün kara araçlarınız seçilir: önce ekrandakiler, ikinci sağ tıkta haritanın tamamı."
 END
 
 CONTROLBAR:IdleAircraft
@@ -4626,7 +4626,23 @@ CONTROLBAR:IdleAircraft
 END
 
 CONTROLBAR:IdleAircraftDescription
-"Sonraki boştaki hava aracını seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir."
+"Sonraki boştaki hava aracını seçmek için tıklayın. Shift ile tıklarsanız hepsi seçilir. Sağ tıklarsanız boşta olsun olmasın bütün hava araçlarınız seçilir: önce ekrandakiler, ikinci sağ tıkta haritanın tamamı."
+END
+
+CONTROLBAR:SelectArmy
+"Tüm Ordu"
+END
+
+CONTROLBAR:SelectArmyDescription
+"Ekrandaki bütün savaş birimlerini seçmek için tıklayın; tekrar tıklarsanız haritadaki bütün ordunuz seçilir. İşçiler, ikmal kamyonları ve binalar seçilmez."
+END
+
+CONTROLBAR:LastAlert
+"Son Uyarı"
+END
+
+CONTROLBAR:LastAlertDescription
+"Kamerayı son radar uyarısına, örneğin saldırı altındaki üssünüze götürmek için tıklayın. Hemen ardından tekrar tıklarsanız bir önceki uyarıya gider."
 END
 
 CONTROLBAR:Beacon

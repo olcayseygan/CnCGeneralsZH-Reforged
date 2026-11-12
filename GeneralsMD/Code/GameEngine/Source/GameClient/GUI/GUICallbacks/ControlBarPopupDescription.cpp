@@ -1308,6 +1308,10 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_VEHICLE ) );
 		else if( commandButton && commandButton->getName() == "NonCommand_IdleAircraft" )
 			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_SelectArmy" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_SELECT_ALL ) );
+		else if( commandButton && commandButton->getName() == "NonCommand_Beacon" )
+			name.concat( metaKeySuffix( GameMessage::MSG_META_VIEW_LAST_RADAR_EVENT ) );
 		GadgetStaticTextSetText(win, name);
 	}
 

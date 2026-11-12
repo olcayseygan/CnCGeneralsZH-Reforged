@@ -109,7 +109,7 @@ def layout():
         uattack=(276, 251, 340, 315),           # the under-attack lamp over the glass's top right corner
         money=(924, 272, 1051, 300),            # MoneyUL/LR, in the money tab right of the painted sign
         power=(646, 320, 1304, 330),            # PowerBarUL/LR, in the rail's channel
-        tools=[(579, y, 633, y + 35) for y in (354, 400, 468)],                 # options, beacon, chat
+        tools=[(579, y, 633, y + 35) for y in (357, 394, 431, 468)],            # options, beacon (last alert), select army, chat
         # the idle column at the grid's right end: worker, infantry, vehicle, aircraft (Idle<Kind>UL/LR)
         idle=[(1312, y, 1366, y + 35) for y in (357, 394, 431, 468)],
         cells=[(668 + 92 * c, y, 668 + 92 * c + 88, y + 70) for c in range(7) for y in (358, 432)],

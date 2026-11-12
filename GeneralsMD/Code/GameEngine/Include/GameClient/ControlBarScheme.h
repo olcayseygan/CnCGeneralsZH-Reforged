@@ -261,10 +261,11 @@ public:
 	ICoord2D m_blockUL[ BLOCK_COUNT ];
 	ICoord2D m_blockLR[ BLOCK_COUNT ];
 
-	/// the idle infantry, vehicle and aircraft buttons beside the command grid: Idle<Kind>ButtonImage
-	/// names the sheet piece, and its H, P and I copies are the other three states; Idle<Kind>UL/LR
-	/// where it stands.  A scheme without the rectangle leaves the button out.
-	enum { IDLE_INFANTRY, IDLE_VEHICLE, IDLE_AIRCRAFT, IDLE_COUNT };
+	/// the idle infantry, vehicle and aircraft buttons beside the command grid, and the select army
+	/// button: Idle<Kind>ButtonImage (SelectArmyButtonImage) names the sheet piece, and its H, P and I
+	/// copies are the other three states; Idle<Kind>UL/LR (SelectArmyUL/LR) where it stands.  A scheme
+	/// without the rectangle leaves the button out.
+	enum { IDLE_INFANTRY, IDLE_VEHICLE, IDLE_AIRCRAFT, IDLE_ARMY, IDLE_COUNT };
 	AsciiString m_idleButtonImage[ IDLE_COUNT ];
 	ICoord2D m_idleUL[ IDLE_COUNT ];
 	ICoord2D m_idleLR[ IDLE_COUNT ];

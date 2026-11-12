@@ -193,6 +193,9 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "IdleAircraftButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_idleButtonImage[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
 	{ "IdleAircraftUL",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleUL[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
 	{ "IdleAircraftLR",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleLR[ ControlBarScheme::IDLE_AIRCRAFT ] ) },
+	{ "SelectArmyButtonImage",		INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_idleButtonImage[ ControlBarScheme::IDLE_ARMY ] ) },
+	{ "SelectArmyUL",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleUL[ ControlBarScheme::IDLE_ARMY ] ) },
+	{ "SelectArmyLR",				INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_idleLR[ ControlBarScheme::IDLE_ARMY ] ) },
 	{ "RadarFrameImage",			INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_radarFrameName ) },
 	{ "PowerTrayImage",				INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_powerTrayName ) },
 	{ "CommandTabBuildingsButtonImage",	INI::parseAsciiString,	NULL, offsetof( ControlBarScheme, m_commandTabImage[ 0 ] ) },
@@ -679,14 +682,16 @@ void ControlBarScheme::init(void)
 	}
 
 	//
-	// The idle infantry, vehicle and aircraft buttons stand in a column at the grid's right end.  A
-	// scheme that does not place one shrinks it to nothing rather than leave it at the .wnd's 0,0.
+	// The idle infantry, vehicle and aircraft buttons stand in a column at the grid's right end, the
+	// select army button in the left one.  A scheme that does not place one shrinks it to nothing
+	// rather than leave it at the .wnd's 0,0.
 	//
 	static const char *const idleNames[ IDLE_COUNT ] =
 	{
 		"ControlBar.wnd:ButtonIdleInfantry",
 		"ControlBar.wnd:ButtonIdleVehicle",
 		"ControlBar.wnd:ButtonIdleAircraft",
+		"ControlBar.wnd:ButtonSelectArmy",
 	};
 	for( Int i = 0; i < IDLE_COUNT; i++ )
 	{

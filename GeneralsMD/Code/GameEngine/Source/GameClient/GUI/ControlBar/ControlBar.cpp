@@ -3404,8 +3404,9 @@ void ControlBar::initWindows( void )
 			{ "ControlBar.wnd:ButtonIdleInfantry", "NonCommand_IdleInfantry" },
 			{ "ControlBar.wnd:ButtonIdleVehicle", "NonCommand_IdleVehicle" },
 			{ "ControlBar.wnd:ButtonIdleAircraft", "NonCommand_IdleAircraft" },
+			{ "ControlBar.wnd:ButtonSelectArmy", "NonCommand_SelectArmy" },
 		};
-		for( Int idle = 0; idle < 3; idle++ )
+		for( Int idle = 0; idle < 4; idle++ )
 		{
 			win = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( idleButtons[ idle ][ 0 ] ) );
 			const CommandButton *idleCommand = findCommandButton( idleButtons[ idle ][ 1 ] );
@@ -3413,6 +3414,14 @@ void ControlBar::initWindows( void )
 			{
 				setControlCommand( win, idleCommand );
 				win->winSetTooltipFunc( commandButtonTooltip );
+				// the three idle kinds take a right click, dark or lit, for every one of their kind; both
+				// copies of the status word (see the command windows above), and after setControlCommand,
+				// which clears the disabled-click bit
+				if( idle < 3 )
+				{
+					win->winSetStatus( WIN_STATUS_RIGHT_CLICK | WIN_STATUS_CANCEL_WHEN_DISABLED );
+					BitSet( win->winGetInstanceData()->m_status, WIN_STATUS_RIGHT_CLICK );
+				}
 			}
 		}
 		win = TheWindowManager->winGetWindowFromId(NULL,TheNameKeyGenerator->nameToKey("ControlBar.wnd:ButtonPlaceBeacon"));
@@ -3815,31 +3824,10 @@ void ControlBar::update( void )
 	}
 
 	// nothing below here can change without either a logic tick or a rebuilt UI, and the rest
-	// of it is the expensive half: a full object count for the beacon cap and then a pass over
-	// every command button in the current context
+	// of it is the expensive half: a pass over every command button in the current context.
+	// ButtonPlaceBeacon is the last alert key now and never dims; the beacon key checks its own cap.
 	if( !logicTick && !wasUIDirty )
 		return;
-
-	// enable/disable the beacon button depending on if the max has been reached
-	if (ThePlayerList && ThePlayerList->getLocalPlayer() && ThePlayerList->getLocalPlayer()->getPlayerTemplate())
-	{
-		Int count;
-		const ThingTemplate *thing = TheThingFactory->findTemplate( ThePlayerList->getLocalPlayer()->getPlayerTemplate()->getBeaconTemplate() );
-		ThePlayerList->getLocalPlayer()->countObjectsByThingTemplate( 1, &thing, false, &count );
-		static NameKeyType beaconPlacementButtonID = NAMEKEY("ControlBar.wnd:ButtonPlaceBeacon");
-		GameWindow *win = TheWindowManager->winGetWindowFromId(NULL, beaconPlacementButtonID);
-		if (win)
-		{
-			if (count < TheMultiplayerSettings->getMaxBeaconsPerPlayer())
-			{
-				win->winEnable(TRUE);
-			}
-			else
-			{
-				win->winEnable(FALSE);
-			}
-		}
-	}
 
 	//
 	// most control bar contexts have one selected thing that we switch on and update
@@ -5442,14 +5430,15 @@ void ControlBar::showRallyPoint( const Coord3D *loc )
 // ------------------------------------------------------------------------------------------------
 void ControlBar::showIdleButtons( Bool show )
 {
-	static const NameKeyType ids[ 4 ] =
+	static const NameKeyType ids[ 5 ] =
 	{
 		NAMEKEY( "ControlBar.wnd:ButtonIdleWorker" ),
 		NAMEKEY( "ControlBar.wnd:ButtonIdleInfantry" ),
 		NAMEKEY( "ControlBar.wnd:ButtonIdleVehicle" ),
 		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
+		NAMEKEY( "ControlBar.wnd:ButtonSelectArmy" ),
 	};
-	for( Int i = 0; i < 4; i++ )
+	for( Int i = 0; i < 5; i++ )
 	{
 		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, ids[ i ] );
 		if( win )

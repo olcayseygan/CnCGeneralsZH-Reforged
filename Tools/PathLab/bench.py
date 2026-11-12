@@ -11,6 +11,9 @@ group's frames to it is what the crowd cost.  Same input, same numbers.
     python bench.py --json baseline.json    # also write the numbers
     python bench.py --seeds 2-7             # held-out maps; two seeds carry about 0.03 of noise
     python bench.py --proposed              # the stuck ladder's PROPOSED_LADDER values
+    python bench.py --ttc                   # PROPOSED_TTC, steering by time to collision; mixes with --proposed
+
+`overlap` counts pair-ticks where two bodies overlap and `depth` is their mean overlap in world units.
 """
 
 import argparse
@@ -48,6 +51,8 @@ class CaseResult:
     repaths: int
     churn: int
     rungs: list[int]
+    overlap: int
+    overlap_depth: float
 
 
 def load_model(path: Path) -> ModuleType:
@@ -80,7 +85,8 @@ def solo_frames(model: ModuleType, grid: object, unit_id: int, start: tuple[floa
 
 def run_case(model: ModuleType, map_kind: str, scenario: str, unit_count: int,
              seeds: tuple[int, ...]) -> CaseResult:
-    frames = free_flow = blocked = stuck = cells = repaths = churn = 0
+    frames = free_flow = blocked = stuck = cells = repaths = churn = overlap = 0
+    overlap_depth = 0.0
     rungs = [0, 0, 0]
     for seed in seeds:
         grid = model.make_map(map_kind, seed=seed)
@@ -96,13 +102,16 @@ def run_case(model: ModuleType, map_kind: str, scenario: str, unit_count: int,
         cells += simulation.pf.cells_total
         repaths += sum(unit.repaths for unit in units)
         churn += sum(unit.churn for unit in units)
+        overlap += simulation.overlap_ticks
+        overlap_depth += simulation.overlap_depth
         for unit in units:
             rungs = [total + fired for total, fired in zip(rungs, unit.rungs_fired)]
         free_flow += max((solo_frames(model, grid, unit_id, starts[unit_id], goal)
                           for unit_id, goal in goals.items() if goal is not None), default=0)
     return CaseResult(name=f"{map_kind}/{scenario}/{unit_count}", frames=frames, free_flow=free_flow,
                       ratio=frames / max(free_flow, 1), blocked=blocked, stuck=stuck, cells=cells,
-                      repaths=repaths, churn=churn, rungs=rungs)
+                      repaths=repaths, churn=churn, rungs=rungs, overlap=overlap,
+                      overlap_depth=overlap_depth / max(overlap, 1))
 
 
 def parse_seeds(text: str) -> tuple[int, ...]:
@@ -116,12 +125,13 @@ def parse_seeds(text: str) -> tuple[int, ...]:
 worker_model: ModuleType | None = None
 
 
-def start_worker(module_path: Path, proposed: bool) -> None:
+def start_worker(module_path: Path, proposed: bool, ttc: bool) -> None:
     global worker_model
     worker_model = load_model(module_path)
-    if proposed:
-        for name, value in worker_model.PROPOSED_LADDER.items():
-            setattr(worker_model, name, value)
+    settings = {**(worker_model.PROPOSED_LADDER if proposed else {}),
+                **(worker_model.PROPOSED_TTC if ttc else {})}
+    for name, value in settings.items():
+        setattr(worker_model, name, value)
 
 
 def run_case_in_worker(case: tuple[str, str, int, tuple[int, ...]]) -> CaseResult:
@@ -130,6 +140,7 @@ def run_case_in_worker(case: tuple[str, str, int, tuple[int, ...]]) -> CaseResul
 
 def summarize(cases: list[CaseResult]) -> dict[str, object]:
     worst = sorted(cases, key=lambda case: (-case.ratio, case.name))[:WORST_CASE_COUNT]
+    overlap = sum(case.overlap for case in cases)
     return {
         "ratio_geometric_mean": math.exp(sum(math.log(case.ratio) for case in cases) / len(cases)),
         "stuck": sum(case.stuck for case in cases),
@@ -138,19 +149,22 @@ def summarize(cases: list[CaseResult]) -> dict[str, object]:
         "worst": [(case.name, case.ratio) for case in worst],
         "churn": sum(case.churn for case in cases),
         "rungs": [sum(case.rungs[rung] for case in cases) for rung in range(3)],
+        "overlap": overlap,
+        "overlap_depth": sum(case.overlap * case.overlap_depth for case in cases) / max(overlap, 1),
     }
 
 
 def print_case(case: CaseResult) -> None:
     print(f"{case.name:<20} {case.frames:>6} {case.free_flow:>6} {case.ratio:>6.3f} {case.blocked:>7} "
           f"{case.stuck:>5} {case.cells:>8} {case.repaths:>6} {case.churn:>6} "
-          f"{'/'.join(map(str, case.rungs)):>12}", flush=True)
+          f"{'/'.join(map(str, case.rungs)):>12} {case.overlap:>7} {case.overlap_depth:>5.2f}", flush=True)
 
 
 def print_totals(totals: dict[str, object], seconds: float) -> None:
     print(f"ratio geomean {totals['ratio_geometric_mean']:.4f}  stuck {totals['stuck']}  "
           f"blocked {totals['blocked']}  cells {totals['cells']}  churn {totals['churn']}  "
-          f"rungs {'/'.join(map(str, totals['rungs']))}  ({seconds:.0f} s)")
+          f"rungs {'/'.join(map(str, totals['rungs']))}  overlap {totals['overlap']}  "
+          f"depth {totals['overlap_depth']:.2f}  ({seconds:.0f} s)")
     print("worst: " + "  ".join(f"{name} {ratio:.3f}" for name, ratio in totals["worst"]))
 
 
@@ -167,6 +181,9 @@ def main() -> None:
                              "in the geomean, so argue a small change on held-out ones")
     parser.add_argument("--proposed", action="store_true",
                         help="play with the model's PROPOSED_LADDER values instead of the game's")
+    parser.add_argument("--ttc", action="store_true",
+                        help="play with the model's PROPOSED_TTC values: time-to-collision steering, "
+                             "no contact speed cap")
     args = parser.parse_args()
 
     model = load_model(args.module)
@@ -175,14 +192,15 @@ def main() -> None:
     seeds = args.seeds or (QUICK_SEEDS if args.quick else FULL_SEEDS)
 
     began = time.perf_counter()
-    print(f"ladder {'proposed' if args.proposed else 'game'}  seeds {','.join(map(str, seeds))}")
+    print(f"ladder {'proposed' if args.proposed else 'game'}  steering {'ttc' if args.ttc else 'game'}  "
+          f"seeds {','.join(map(str, seeds))}")
     print(f"{'case':<20} {'frames':>6} {'free':>6} {'ratio':>6} {'blocked':>7} {'stuck':>5} "
-          f"{'cells':>8} {'repath':>6} {'churn':>6} {'rungs 1/2/3':>12}")
+          f"{'cells':>8} {'repath':>6} {'churn':>6} {'rungs 1/2/3':>12} {'overlap':>7} {'depth':>5}")
     suite = [(map_kind, scenario, unit_count, seeds) for map_kind in map_kinds
              for scenario in model.SCENARIOS for unit_count in group_sizes]
     cases: list[CaseResult] = []
     with ProcessPoolExecutor(max_workers=args.jobs, initializer=start_worker,
-                             initargs=(args.module.resolve(), args.proposed)) as pool:
+                             initargs=(args.module.resolve(), args.proposed, args.ttc)) as pool:
         for case in pool.map(run_case_in_worker, suite):
             cases.append(case)
             print_case(case)
@@ -191,7 +209,8 @@ def main() -> None:
     if args.json:
         report = {"suite": "quick" if args.quick else "full", "seeds": list(seeds),
                   "cases": [asdict(case) for case in cases], "totals": totals,
-                  "ladder": "proposed" if args.proposed else "game"}
+                  "ladder": "proposed" if args.proposed else "game",
+                  "steering": "ttc" if args.ttc else "game"}
         args.json.write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
 
 

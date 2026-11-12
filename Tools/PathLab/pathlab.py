@@ -7,13 +7,15 @@ of AIPathfind.cpp with its flow charge (wall hug, traffic, crossing claims), its
 the vehicle trunk and its lanes); and the following and blocking of AIUpdate.cpp (blockedBy, the
 blocked speed cap, crowdSteer, the stuck ladder).  Each piece names the C++ function it came from.
 Where the sandbox has to stand in for something it does not have (a locomotor, terrain heights,
-infantry, a resumable search) the comment says so.  Nothing in here is a switch the game lacks.
+infantry, a resumable search) the comment says so.  The only switches the game lacks are the
+proposed stuck ladder (--proposed) and steering by time to collision (--ttc), both off by default.
 
     python pathlab.py                              # window: click to order, right drag to select
     python pathlab.py --headless 4 --map choke --units 12
     python pathlab.py --headless 4 --scenario cross --map open --units 16
     python pathlab.py --headless 4 --sweep PF_TRAFFIC_NUM=0,4,8
     python pathlab.py --headless 8 --map edges --pairs 8 --units 0
+    python pathlab.py --headless 4 --map choke --units 12 --proposed --ttc
 
 Controls
     left click          order the selection to a point (a player's move: floodGroupGoals)
@@ -174,6 +176,32 @@ PROPOSED_LADDER: dict[str, object] = {
     "LADDER_REPATH_FLAG": True,
     "LADDER_STAGE_HOLD": retail_frames(22),
     "LADDER_ALLY_FILTER": True,
+}
+# Anticipatory steering by time to collision (Karamouzas, Skinner and Guy 2014), not in C++.  Each
+# neighbour the desired velocity would hit inside the horizon pushes away from the predicted contact,
+# harder the sooner; the sum bends the aim and trims the speed after crowdSteer.  PROPOSED_TTC turns
+# it on and drops the contact speed cap it replaces; the cap alone dropped is the control.
+CROWD_TTC_STEER: bool = False           # doLocomotor would call ttcSteer right after crowdSteer
+CONTACT_SPEED_CAP: bool = True          # processCollision writes m_curMaxBlockedSpeed
+TTC_HORIZON_FRAMES: float = 3.0 * LOGICFRAMES_PER_GAME_SECOND
+TTC_NEAR_FRAMES: float = 0.5 * LOGICFRAMES_PER_GAME_SECOND     # the push falls off as a square past this
+TTC_STRENGTH: float = 0.75              # the push at contact, in shares of the unit's top speed
+TTC_AIR: float = 2.0                    # added to the radius sum between two moving units
+TTC_PARKED_SLACK: float = 4.0           # overlap allowed against a parked unit before it pushes
+TTC_SLOT_REACH: float = CELL            # a parked unit this far past contact from my goal never pushes
+TTC_KEEP_RIGHT: float = 0.6             # share of a push against the heading turned to the right
+TTC_MAX_BEND: float = math.radians(60.0)
+TTC_CREEP: float = 0.2                  # the speed is never trimmed below this share, the bump floor
+TTC_GOAL_FADE: float = CELL * 2.0       # the push fades out over this last stretch of the route
+TTC_WALL_LOOK: float = CELL * 1.5       # rock probed this far past the hull before a bend is taken
+TTC_WALL_PROBES: tuple[float, ...] = (1.0, 0.5)         # shares of that reach probed
+TTC_BEND_TRIES: tuple[float, ...] = (1.0, 0.5, 0.0)     # shares of the bend tried against rock
+TTC_MIN_AIM: float = 0.01               # an aim point closer than this is not steered
+TTC_EPSILON: float = 1e-6
+TTC_EPSILON_FINE: float = 1e-9
+PROPOSED_TTC: dict[str, object] = {
+    "CROWD_TTC_STEER": True,
+    "CONTACT_SPEED_CAP": False,
 }
 
 # The unit.  A Crusader-sized tank, the only body the sandbox has; its locomotor numbers are a
@@ -2128,6 +2156,8 @@ class Simulation:
         self.units = units
         self.by_id = {unit.id: unit for unit in units}
         self.stats = OrderStats()
+        self.overlap_ticks = 0
+        self.overlap_depth = 0.0
         for unit in units:
             self.pf.update_pos(unit)
             self.pf.update_goal(unit, unit.pos)       # parked where it stands
@@ -2554,6 +2584,8 @@ class Simulation:
             goal_pos = rescued
         else:
             goal_pos, speed = self.crowd_steer(unit, goal_pos, speed)
+            if CROWD_TTC_STEER:
+                goal_pos, speed = self.ttc_steer(unit, goal_pos, speed, dist)
         self.locomote(unit, goal_pos, speed, dist, bend_dist, bend_cos)
         if not blocked and unit.blocked_frames > 1 and not unit.repath_asked:
             unit.blocked_frames = 1
@@ -3076,6 +3108,85 @@ class Simulation:
             unit.crowd_cap = release_cap(unit.crowd_cap, cap, CROWD_RELEASE_FILTER)
         return goal_pos, min(speed, unit.crowd_cap)
 
+    def ttc_steer(self, unit: Unit, goal_pos: Point, speed: float, dist: float) -> tuple[Point, float]:
+        """Not in C++; it would be an AIUpdateInterface::ttcSteer called in doLocomotor right after
+           crowdSteer.  Neighbours in list order, which is id order, so the float sum is fixed."""
+        aim_x, aim_y = goal_pos[0] - unit.x, goal_pos[1] - unit.y
+        aim_dist = math.hypot(aim_x, aim_y)
+        if aim_dist < TTC_MIN_AIM or speed <= TTC_EPSILON:
+            return goal_pos, speed
+        dir_x, dir_y = aim_x / aim_dist, aim_y / aim_dist
+        want_vx, want_vy = dir_x * speed, dir_y * speed
+        my_r = unit.radius
+        reach = my_r + TANK_RADIUS + TTC_AIR + TTC_HORIZON_FRAMES * (speed + TANK_SPEED)
+        push_x = push_y = 0.0
+        for other in self.units:
+            if other is unit:
+                continue
+            to_x, to_y = other.x - unit.x, other.y - unit.y
+            if abs(to_x) > reach or abs(to_y) > reach:
+                continue
+            contact = my_r + other.radius + TTC_AIR
+            if not other.moving:
+                contact = my_r + other.radius - TTC_PARKED_SLACK
+                if (unit.goal is not None and (other.x - unit.goal[0]) ** 2 + (other.y - unit.goal[1]) ** 2
+                        < (contact + TTC_SLOT_REACH) ** 2):
+                    continue
+            slack = to_x * to_x + to_y * to_y - contact * contact
+            closing_x, closing_y = want_vx - other.vx, want_vy - other.vy
+            if slack < 0.0:
+                gap = math.sqrt(to_x * to_x + to_y * to_y)
+                if gap < TTC_EPSILON or to_x * dir_x + to_y * dir_y <= 0.0:
+                    continue        # the one behind does the yielding
+                time_to_contact = 0.0
+                away_x, away_y = -to_x / gap, -to_y / gap
+            else:
+                closing_sq = closing_x * closing_x + closing_y * closing_y
+                approach = to_x * closing_x + to_y * closing_y
+                if approach <= 0.0 or closing_sq < TTC_EPSILON_FINE:
+                    continue
+                disc = approach * approach - closing_sq * slack
+                if disc <= 0.0:
+                    continue
+                time_to_contact = (approach - math.sqrt(disc)) / closing_sq
+                if time_to_contact > TTC_HORIZON_FRAMES:
+                    continue
+                away_x = -(to_x - closing_x * time_to_contact)
+                away_y = -(to_y - closing_y * time_to_contact)
+                away_len = math.hypot(away_x, away_y)
+                if away_len < TTC_EPSILON:
+                    continue
+                away_x, away_y = away_x / away_len, away_y / away_len
+            strength = (TTC_STRENGTH * unit.max_speed * math.exp(-time_to_contact / TTC_HORIZON_FRAMES)
+                        * (TTC_NEAR_FRAMES / (time_to_contact + TTC_NEAR_FRAMES)) ** 2)
+            against = away_x * dir_x + away_y * dir_y
+            if against < 0.0:
+                away_x += -against * TTC_KEEP_RIGHT * dir_y
+                away_y += -against * TTC_KEEP_RIGHT * -dir_x
+            push_x += away_x * strength
+            push_y += away_y * strength
+        if push_x == 0.0 and push_y == 0.0:
+            return goal_pos, speed
+        if dist < TTC_GOAL_FADE:
+            fade = max(dist, 0.0) / TTC_GOAL_FADE
+            push_x, push_y = push_x * fade, push_y * fade
+        new_vx, new_vy = want_vx + push_x, want_vy + push_y
+        new_speed = max(speed * TTC_CREEP, min(speed, new_vx * dir_x + new_vy * dir_y))
+        heading = math.atan2(dir_y, dir_x)
+        bend = 0.0
+        if math.hypot(new_vx, new_vy) > TTC_EPSILON_FINE:
+            bend = normalize_angle(math.atan2(new_vy, new_vx) - heading)
+        bend = max(-TTC_MAX_BEND, min(TTC_MAX_BEND, bend))
+        look = my_r + TTC_WALL_LOOK
+        for share in TTC_BEND_TRIES:
+            angle = heading + bend * share
+            out_x, out_y = math.cos(angle), math.sin(angle)
+            if share == 0.0 or all(self.grid.passable_world(unit.x + out_x * look * probe,
+                                                            unit.y + out_y * look * probe)
+                                   for probe in TTC_WALL_PROBES):
+                break
+        return (unit.x + out_x * aim_dist, unit.y + out_y * aim_dist), new_speed
+
     # ---- collisions -------------------------------------------------------------------------
     def collide(self) -> None:
         """PhysicsBehavior::onCollide -> processCollision for every overlapping pair, both ways.
@@ -3083,8 +3194,12 @@ class Simulation:
            applied: bodies may overlap, and the only answer to a collision is the speed cap."""
         units = self.units
         for a, b in itertools.combinations(units, 2):
-            if math.hypot(b.x - a.x, b.y - a.y) > a.radius + b.radius:
+            distance = math.hypot(b.x - a.x, b.y - a.y)
+            if distance > a.radius + b.radius:
                 continue
+            if distance < a.radius + b.radius:
+                self.overlap_ticks += 1
+                self.overlap_depth += a.radius + b.radius - distance
             self.process_collision(a, b)
             self.process_collision(b, a)
 
@@ -3097,7 +3212,8 @@ class Simulation:
         unit.is_blocked = True
         if other.is_moving and other.waiting_for_path:
             return
-        unit.cur_max_blocked_speed = min(unit.cur_max_blocked_speed, self.max_blocked_speed(unit, other))
+        if CONTACT_SPEED_CAP:
+            unit.cur_max_blocked_speed = min(unit.cur_max_blocked_speed, self.max_blocked_speed(unit, other))
         if unit.blocked_frames == 0:
             unit.blocked_frames = 1
         if self.need_to_rotate(unit):
@@ -3343,7 +3459,9 @@ def overriding(**values: object):
 SWEEPABLE: tuple[str, ...] = (
     "PF_WALLHUG_NUM", "PF_TRAFFIC_NUM", "PF_TRAFFIC_DEPOSIT", "PF_CROSSING_NUM", "PF_CLAIM_UNITS_MAX",
     "PF_HEURISTIC_FLOW_NUM", "PF_TURN_CAP_STEP", "PF_TURN_CAP_START", "PF_CLEARANCE_SOFT",
-    "CROWD_PASS_CLEAR", "CROWD_AIR", "CROWD_MAX_LANES", "STUCK_REPATH_FRAMES", "CROWD_REPATH_QUEUE")
+    "CROWD_PASS_CLEAR", "CROWD_AIR", "CROWD_MAX_LANES", "STUCK_REPATH_FRAMES", "CROWD_REPATH_QUEUE",
+    "TTC_HORIZON_FRAMES", "TTC_STRENGTH", "TTC_AIR", "TTC_PARKED_SLACK", "TTC_CREEP", "TTC_MAX_BEND",
+    "TTC_GOAL_FADE")
 
 
 def parse_sweep(text: str) -> tuple[str, list[float]]:
@@ -3439,6 +3557,18 @@ def measure_searches(map_kind: str, seeds: int, pairs: int) -> None:
           f"{cells / max(searched, 1):>7.0f} {ground[6][0]:>4}/{ground[6][1]:<4} {ground[2][0]:>4}/{ground[2][1]:<4}")
 
 
+def setting_rows(proposed: bool, ttc: bool) -> list[tuple[str, dict[str, object]]]:
+    """The game, then the proposed ladder, TTC steering and both, as the flags ask."""
+    rows: list[tuple[str, dict[str, object]]] = [("game", {})]
+    if proposed:
+        rows.append(("proposed", PROPOSED_LADDER))
+    if ttc:
+        rows.append(("ttc", PROPOSED_TTC))
+    if proposed and ttc:
+        rows.append(("proposed+ttc", {**PROPOSED_LADDER, **PROPOSED_TTC}))
+    return rows
+
+
 def run_headless(args: argparse.Namespace) -> None:
     if args.pairs:
         measure_searches(args.map, args.headless, args.pairs)
@@ -3447,10 +3577,7 @@ def run_headless(args: argparse.Namespace) -> None:
     print(f"map {args.map}  scenario {args.scenario}  units {args.units}  seeds {args.headless}  "
           f"{LOGICFRAMES_PER_SECOND} Hz at {GAME_SPEED_PERCENT}%")
     print_head()
-    ladders: list[tuple[str, dict[str, object]]] = [("game", {})]
-    if args.proposed:
-        ladders.append(("proposed", PROPOSED_LADDER))
-    for label, ladder in ladders:
+    for label, ladder in setting_rows(args.proposed, args.ttc):
         if not args.sweep:
             with overriding(**ladder):
                 print_row(label, measure(args.map, args.units, args.headless, args.scenario))
@@ -3630,11 +3757,15 @@ def main() -> None:
     parser.add_argument("--proposed", action="store_true",
                         help="the stuck ladder's PROPOSED_LADDER values: a second row headless, "
                              "the only behaviour in the window")
+    parser.add_argument("--ttc", action="store_true",
+                        help="PROPOSED_TTC, steering by time to collision without the contact speed cap: "
+                             "another row headless (and one with --proposed), the only behaviour in the window")
     args = parser.parse_args()
     if args.headless:
         run_headless(args)
         return
-    with overriding(**(PROPOSED_LADDER if args.proposed else {})):
+    _, settings = setting_rows(args.proposed, args.ttc)[-1]
+    with overriding(**settings):
         run_window(args)
 
 

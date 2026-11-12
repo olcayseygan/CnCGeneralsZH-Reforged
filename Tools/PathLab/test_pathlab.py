@@ -439,6 +439,67 @@ class LadderTests(unittest.TestCase):
             self.assertEqual(parked.move_away_from, stuck.id)
 
 
+class TtcTests(unittest.TestCase):
+    """Steering by time to collision, one rule at a time; the defaults stay main's."""
+
+    def mover(self, x: float, y: float, unit_id: int, goal: tuple[float, float]) -> Unit:
+        unit = Unit(x, y, id=unit_id)
+        unit.moving, unit.goal = True, goal
+        unit.path = Path([unit.pos, goal], [0, 1])
+        return unit
+
+    def steer(self, sim: Simulation, unit: Unit) -> tuple[tuple[float, float], float]:
+        return sim.ttc_steer(unit, unit.goal, unit.max_speed, unit.goal[0] - unit.x)
+
+    def test_the_default_is_the_game(self):
+        self.assertFalse(pathlab.CROWD_TTC_STEER)
+        self.assertTrue(pathlab.CONTACT_SPEED_CAP)
+
+    def test_the_push_is_away_from_the_predicted_contact(self):
+        with pathlab.overriding(TTC_KEEP_RIGHT=0.0):
+            for side in (10.0, -10.0):
+                unit = self.mover(100.0, 200.0, 1, (300.0, 200.0))
+                other = self.mover(160.0, 200.0 + side, 2, (160.0, 400.0))
+                sim = Simulation(walled(40), [unit, other])
+                (_, aim_y), speed = self.steer(sim, unit)
+                self.assertLess(speed, unit.max_speed)
+                self.assertLess(aim_y * math.copysign(1.0, side), 200.0 * math.copysign(1.0, side))
+
+    def test_a_head_on_pair_both_bend_to_their_right(self):
+        east = self.mover(100.0, 200.0, 1, (300.0, 200.0))
+        west = self.mover(200.0, 200.0, 2, (0.0, 200.0))
+        west.facing = math.pi
+        west.vx = -west.max_speed
+        east.vx = east.max_speed
+        sim = Simulation(walled(40), [east, west])
+        (_, east_y), _ = self.steer(sim, east)
+        (_, west_y), _ = sim.ttc_steer(west, west.goal, west.max_speed, west.x - west.goal[0])
+        self.assertLess(east_y, 200.0)          # right of +x is -y in the formula's frame
+        self.assertGreater(west_y, 200.0)
+
+    def test_a_parked_unit_beside_my_own_slot_never_pushes(self):
+        for parked_x, pushes in ((315.0, False), (330.0, True)):
+            unit = self.mover(250.0, 200.0, 1, (300.0, 200.0))
+            parked = Unit(parked_x, 200.0, id=2)
+            sim = Simulation(walled(40), [unit, parked])
+            aim, speed = self.steer(sim, unit)
+            self.assertEqual(aim != unit.goal or speed != unit.max_speed, pushes)
+
+    def test_the_cap_switch_drops_only_the_speed_write(self):
+        seen = []
+        for cap in (True, False):
+            with pathlab.overriding(CONTACT_SPEED_CAP=cap):
+                unit = self.mover(100.5, 100.5, 1, (350.5, 100.5))
+                parked = Unit(115.0, 100.5, id=2)
+                sim = Simulation(walled(40), [unit, parked])
+                sim.process_collision(unit, parked)
+                seen.append((unit.is_blocked, unit.blocked_frames, unit.is_blocked_and_stuck,
+                             unit.cur_max_blocked_speed))
+        self.assertEqual(seen[0][:3], seen[1][:3])
+        self.assertEqual(seen[0][3], 0.0)
+        self.assertEqual(seen[1][3], pathlab.FAST_AS_POSSIBLE)
+
+
 class CrowdTests(unittest.TestCase):
     def test_the_band_measures_the_ground_either_side(self):
         corr = pathlab.CrowdCorridor()

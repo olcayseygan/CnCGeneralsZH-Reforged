@@ -19,7 +19,9 @@
     10,
     2,
     0
-   ]
+   ],
+   "overlap": 3081,
+   "overlap_depth": 2.2068244804647517
   },
   {
    "name": "choke/column/16",
@@ -35,7 +37,9 @@
     31,
     8,
     0
-   ]
+   ],
+   "overlap": 9089,
+   "overlap_depth": 2.3630418519898257
   },
   {
    "name": "choke/column/32",
@@ -51,7 +55,9 @@
     91,
     11,
     0
-   ]
+   ],
+   "overlap": 34435,
+   "overlap_depth": 2.354459242291352
   },
   {
    "name": "choke/cross/8",
@@ -67,7 +73,9 @@
     4,
     2,
     0
-   ]
+   ],
+   "overlap": 2527,
+   "overlap_depth": 1.8618871218198754
   },
   {
    "name": "choke/cross/16",
@@ -83,7 +91,9 @@
     28,
     6,
     0
-   ]
+   ],
+   "overlap": 9852,
+   "overlap_depth": 1.9524928217390602
   },
   {
    "name": "choke/cross/32",
@@ -99,7 +109,9 @@
     145,
     23,
     0
-   ]
+   ],
+   "overlap": 31921,
+   "overlap_depth": 2.26761091228231
   },
   {
    "name": "open/column/8",
@@ -115,7 +127,9 @@
     7,
     1,
     0
-   ]
+   ],
+   "overlap": 1942,
+   "overlap_depth": 2.3216725489903545
   },
   {
    "name": "open/column/16",
@@ -131,7 +145,9 @@
     27,
     4,
     0
-   ]
+   ],
+   "overlap": 8101,
+   "overlap_depth": 2.5035047431822757
   },
   {
    "name": "open/column/32",
@@ -147,7 +163,9 @@
     88,
     14,
     0
-   ]
+   ],
+   "overlap": 30375,
+   "overlap_depth": 2.609215557384329
   },
   {
    "name": "open/cross/8",
@@ -163,7 +181,9 @@
     8,
     3,
     0
-   ]
+   ],
+   "overlap": 1435,
+   "overlap_depth": 2.617354852738811
   },
   {
    "name": "open/cross/16",
@@ -179,7 +199,9 @@
     28,
     6,
     0
-   ]
+   ],
+   "overlap": 7801,
+   "overlap_depth": 2.6634709296638635
   },
   {
    "name": "open/cross/32",
@@ -195,7 +217,9 @@
     63,
     16,
     0
-   ]
+   ],
+   "overlap": 31085,
+   "overlap_depth": 2.3478232677402135
   },
   {
    "name": "twogaps/column/8",
@@ -211,7 +235,9 @@
     10,
     2,
     0
-   ]
+   ],
+   "overlap": 2814,
+   "overlap_depth": 2.0296185750832803
   },
   {
    "name": "twogaps/column/16",
@@ -227,7 +253,9 @@
     24,
     6,
     0
-   ]
+   ],
+   "overlap": 7446,
+   "overlap_depth": 2.4960707277327914
   },
   {
    "name": "twogaps/column/32",
@@ -243,7 +271,9 @@
     202,
     26,
     0
-   ]
+   ],
+   "overlap": 45586,
+   "overlap_depth": 2.1365213805362604
   },
   {
    "name": "twogaps/cross/8",
@@ -259,7 +289,9 @@
     0,
     0,
     0
-   ]
+   ],
+   "overlap": 1588,
+   "overlap_depth": 2.3240061822464675
   },
   {
    "name": "twogaps/cross/16",
@@ -275,7 +307,9 @@
     18,
     6,
     0
-   ]
+   ],
+   "overlap": 5200,
+   "overlap_depth": 1.7911100883234559
   },
   {
    "name": "twogaps/cross/32",
@@ -291,7 +325,9 @@
     146,
     20,
     0
-   ]
+   ],
+   "overlap": 30988,
+   "overlap_depth": 2.7943768348752136
   },
   {
    "name": "maze/column/8",
@@ -307,7 +343,9 @@
     17,
     3,
     0
-   ]
+   ],
+   "overlap": 3945,
+   "overlap_depth": 1.9196908186416113
   },
   {
    "name": "maze/column/16",
@@ -323,7 +361,9 @@
     52,
     7,
     0
-   ]
+   ],
+   "overlap": 11325,
+   "overlap_depth": 2.6873416002742117
   },
   {
    "name": "maze/column/32",
@@ -339,7 +379,9 @@
     143,
     16,
     0
-   ]
+   ],
+   "overlap": 44713,
+   "overlap_depth": 1.862249382321391
   },
   {
    "name": "maze/cross/8",
@@ -355,7 +397,9 @@
     8,
     4,
     0
-   ]
+   ],
+   "overlap": 2276,
+   "overlap_depth": 1.6591766055060122
   },
   {
    "name": "maze/cross/16",
@@ -371,7 +415,9 @@
     30,
     6,
     0
-   ]
+   ],
+   "overlap": 16942,
+   "overlap_depth": 1.8823655763702187
   },
   {
    "name": "maze/cross/32",
@@ -387,7 +433,9 @@
     96,
     8,
     0
-   ]
+   ],
+   "overlap": 34243,
+   "overlap_depth": 2.119305787852068
   },
   {
    "name": "edges/column/8",
@@ -403,7 +451,9 @@
     6,
     3,
     0
-   ]
+   ],
+   "overlap": 3252,
+   "overlap_depth": 2.449977680692206
   },
   {
    "name": "edges/column/16",
@@ -419,7 +469,9 @@
     34,
     5,
     0
-   ]
+   ],
+   "overlap": 8223,
+   "overlap_depth": 2.7674831703535117
   },
   {
    "name": "edges/column/32",
@@ -435,7 +487,9 @@
     135,
     15,
     0
-   ]
+   ],
+   "overlap": 32222,
+   "overlap_depth": 2.3261000004456642
   },
   {
    "name": "edges/cross/8",
@@ -451,7 +505,9 @@
     1,
     1,
     0
-   ]
+   ],
+   "overlap": 2246,
+   "overlap_depth": 2.2374291889514377
   },
   {
    "name": "edges/cross/16",
@@ -467,7 +523,9 @@
     21,
     5,
     0
-   ]
+   ],
+   "overlap": 10422,
+   "overlap_depth": 2.084829689567139
   },
   {
    "name": "edges/cross/32",
@@ -483,7 +541,9 @@
     87,
     14,
     0
-   ]
+   ],
+   "overlap": 28770,
+   "overlap_depth": 2.211618675858238
   }
  ],
  "totals": {
@@ -518,7 +578,10 @@
    1560,
    243,
    0
-  ]
+  ],
+  "overlap": 463845,
+  "overlap_depth": 2.2725213340249826
  },
- "ladder": "game"
+ "ladder": "game",
+ "steering": "game"
 }

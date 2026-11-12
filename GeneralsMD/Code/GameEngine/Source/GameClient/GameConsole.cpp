@@ -25,6 +25,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "GameClient/GameConsole.h"
+#include "Common/version.h"
 
 #include "Common/file.h"
 #include "Common/FileSystem.h"
@@ -417,7 +418,10 @@ GameConsole::GameConsole()
 	}
 	m_lineStringCount = CONSOLE_MAX_ROWS;
 
-	printLine( AsciiString( "Zero Hour Reforged console.  'help' lists what there is." ) );
+	AsciiString welcome;
+	welcome.format( "Zero Hour Reforged %s console. 'help' lists what there is.",
+					TheVersion ? TheVersion->getReleaseVersion().str() : "unknown" );
+	printLine( welcome );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -558,6 +562,7 @@ void GameConsole::runCommand( AsciiString commandLine )
 	if( command == "help" )
 	{
 		printLine( AsciiString( "help          this list" ) );
+		printLine( AsciiString( "version       show the game version" ) );
 		printLine( AsciiString( "clear         empty the scrollback" ) );
 		printLine( AsciiString( "echo <text>   print the text back" ) );
 		printLine( AsciiString( "speed [n]     game speed in percent, 100 is normal, 'reset' goes back" ) );
@@ -576,6 +581,15 @@ void GameConsole::runCommand( AsciiString commandLine )
 			printLine( AsciiString( "cheats        single-player cheats" ) );
 			printLine( AsciiString( "trainer       the cheats on a panel, one click each" ) );
 		}
+		return;
+	}
+
+	if( command == "version" )
+	{
+		AsciiString version;
+		version.format( "Zero Hour Reforged %s",
+						TheVersion ? TheVersion->getReleaseVersion().str() : "unknown" );
+		printLine( version );
 		return;
 	}
 

@@ -4868,8 +4868,9 @@ void Drawable::drawBombed(const IRegion2D* healthBarRegion)
 				Int frameWidth = getIconInfo()->m_icon[ ICON_CARBOMB ]->getCurrentFrameWidth();
 				Int frameHeight = getIconInfo()->m_icon[ ICON_CARBOMB ]->getCurrentFrameHeight();
 
-				// adjust the width to be a % of the health bar region size
-				Int size = REAL_TO_INT( barWidth * 0.5f );
+				// a share of the bar's width at the opening camera, at every zoom: the bar follows the
+				// zoom to span the unit, a sign stays one size (the bomb icons below likewise)
+				Int size = REAL_TO_INT( barWidth * TheTacticalView->getZoom() * 0.5f );
 				frameHeight = REAL_TO_INT((INT_TO_REAL(size) / INT_TO_REAL(frameWidth)) * frameHeight);
 				frameWidth = size;
 
@@ -4946,10 +4947,10 @@ void Drawable::drawBombed(const IRegion2D* healthBarRegion)
 						Int frameHeight = getIconInfo()->m_icon[ ICON_BOMB_TIMED ]->getCurrentFrameHeight();
 
 						// adjust the width to be a % of the health bar region size
-						Int size = REAL_TO_INT( barWidth * 0.65f );
+						Int size = REAL_TO_INT( barWidth * TheTacticalView->getZoom() * 0.65f );
 						frameHeight = REAL_TO_INT((INT_TO_REAL(size) / INT_TO_REAL(frameWidth)) * frameHeight);
 						frameWidth = size;
-						
+
 						// given our scaled width and height we need to find the top left point to draw the image at
 						ICoord2D screen;
 						screen.x = REAL_TO_INT( healthBarRegion->lo.x + (barWidth * 0.5f) - (frameWidth * 0.5f) );
@@ -4986,7 +4987,7 @@ void Drawable::drawBombed(const IRegion2D* healthBarRegion)
 
 
 						// adjust the width to be a % of the health bar region size
-						Int size = REAL_TO_INT( barWidth * 0.65f );
+						Int size = REAL_TO_INT( barWidth * TheTacticalView->getZoom() * 0.65f );
 						frameHeight = REAL_TO_INT((INT_TO_REAL(size) / INT_TO_REAL(frameWidth)) * frameHeight);
 						frameWidth = size;
 

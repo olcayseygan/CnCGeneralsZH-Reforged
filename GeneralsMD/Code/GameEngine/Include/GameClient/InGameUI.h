@@ -302,17 +302,11 @@ public:
 	UnicodeString		m_text;											///< the text we're displaying
 	DisplayString*	m_dString;									///< The display string
 	Coord3D					m_pos3D;													///< the 3d position in game coords
-	Int							m_frameTimeOut;												///< when we want this thing to disappear
-	Int							m_frameCount;													///< how many frames have we been displaying text?
+	UnsignedInt			m_bornMs;													///< wall clock it appeared at: the pop, rise and fade run on it
 };
 
 typedef std::list<FloatingTextData *> FloatingTextList;
 typedef FloatingTextList::iterator	FloatingTextListIt;
-
-enum 
-{
-	DEFAULT_FLOATING_TEXT_TIMEOUT = LOGICFRAMES_PER_SECOND/3,
-};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1697,6 +1691,8 @@ protected:
 
 	//Floating Text Data
 	FloatingTextList						m_floatingTextList;				///< Our list of floating text
+	// the three INI values are still parsed so InGameUI.ini loads, and no longer read: the money pop
+	// keeps its own wall-clock timing (drawFloatingText)
 	UnsignedInt									m_floatingTextTimeOut;									///< Ini value of our floating text timeout
 	Real												m_floatingTextMoveUpSpeed;							///< INI value of our Move up speed
 	Real												m_floatingTextMoveVanishRate;					///< INI value of our move vanish rate

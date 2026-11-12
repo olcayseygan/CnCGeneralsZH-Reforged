@@ -1691,7 +1691,7 @@ InGameUI::InGameUI()
 	m_namedTimerUsedFlashColor = TRUE; // so next one is false
 	m_showNamedTimers = TRUE;
 
-	m_floatingTextTimeOut = DEFAULT_FLOATING_TEXT_TIMEOUT;
+	m_floatingTextTimeOut = 0;
 	m_floatingTextMoveUpSpeed = 1.0f;
 	m_floatingTextMoveVanishRate = 0.1f;
 
@@ -9686,6 +9686,36 @@ void InGameUI::buildRegion( const ICoord2D *anchor, const ICoord2D *dest, IRegio
 }
 
 //-------------------------------------------------------------------------------------------------
+// The money pop: a white flash where the cash landed, a leap up that settles, its own colour, then
+// gone, two seconds in all on the wall clock. EA's ran on logic frames, so it stepped at the tick
+// rate, and took its distance and fade from the INI per frame, which every rate change re-tuned.
+enum
+{
+	FLOATING_TEXT_LIFE_MS = 2000,
+	FLOATING_TEXT_FLASH_MS = 180,
+	FLOATING_TEXT_LEAP_MS = 600,
+	FLOATING_TEXT_FADE_FROM_MS = 1400,
+	FLOATING_TEXT_RISE = 40,		// 1080p pixels, whole steps of them on bigger screens (Drawable_pipPixel)
+};
+
+//-------------------------------------------------------------------------------------------------
+/** A team colour can be navy or maroon, which dark ground swallows: the brightest channel goes to
+	* full and the whole a fifth of the way to white, so the hue still says whose money it is. */
+//-------------------------------------------------------------------------------------------------
+static Color floatingTextColor( Color color )
+{
+	UnsignedByte r, g, b, a;
+	GameGetColorComponents( color, &r, &g, &b, &a );
+	const Int top = max( (Int)r, max( (Int)g, (Int)b ) );
+	if( top == 0 )
+		return GameMakeColor( 255, 255, 255, 255 );
+	Int c[ 3 ] = { r * 255 / top, g * 255 / top, b * 255 / top };
+	for( Int i = 0; i < 3; ++i )
+		c[ i ] += ( 255 - c[ i ] ) / 5;
+	return GameMakeColor( c[ 0 ], c[ 1 ], c[ 2 ], 255 );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Add a new floating text to our list */
 //-------------------------------------------------------------------------------------------------
 FloatingTextData *InGameUI::addFloatingText(const UnicodeString& text,const Coord3D *pos, Color color)
@@ -9703,22 +9733,20 @@ FloatingTextData *InGameUI::addFloatingText(const UnicodeString& text,const Coor
 
 	{
 		FloatingTextData *newFTD = newInstance( FloatingTextData );
-		newFTD->m_frameCount = 0;
 		// the money a supply drop pays is drawn in its owner's colour, and the code that raises it
 		// is in GameLogic, where the scheme does not exist
-		newFTD->m_color = clientColor( color );
+		newFTD->m_color = floatingTextColor( clientColor( color ) );
 		newFTD->m_pos3D.x = pos->x;
 		newFTD->m_pos3D.z = pos->z;
 		newFTD->m_pos3D.y = pos->y;
 		newFTD->m_text = text;
+		// the caption face four points up and bold: EA's 10 point plain line was the size of a
+		// unit's name and went by unread in a fight
+		newFTD->m_dString->setFont( TheFontLibrary->getFont( m_drawableCaptionFont,
+			TheGlobalLanguageData->adjustFontSize( m_drawableCaptionPointSize + 4 ), TRUE ) );
 		newFTD->m_dString->setText(text);
-		
-			
-		if(m_floatingTextTimeOut <= 0)
-			newFTD->m_frameTimeOut = TheGameLogic->getFrame() +  DEFAULT_FLOATING_TEXT_TIMEOUT;
-		else
-			newFTD->m_frameTimeOut = TheGameLogic->getFrame() +  m_floatingTextTimeOut; 
-		
+		newFTD->m_bornMs = Clock_Milliseconds();
+
 		m_floatingTextList.push_front( newFTD ); // add to the list
 		return newFTD;
 	}
@@ -9870,12 +9898,8 @@ try_again:
 	newFTD->m_text = translate;
 	newFTD->m_dString->setText(translate);
 	newFTD->m_dString->setFont(TheWindowManager->winFindFont( AsciiString("Arial"), POINTSIZE, FALSE ));
-				
-	if(m_floatingTextTimeOut <= 0)
-		newFTD->m_frameTimeOut = TheGameLogic->getFrame() +  DEFAULT_FLOATING_TEXT_TIMEOUT;
-	else
-		newFTD->m_frameTimeOut = TheGameLogic->getFrame() +  m_floatingTextTimeOut; 
-	
+	newFTD->m_bornMs = Clock_Milliseconds();
+
 	m_floatingTextList.push_front( newFTD ); // add to the list
 
 	//DEBUG_LOG(("%s\n",text.str()));
@@ -9887,52 +9911,18 @@ try_again:
 //-------------------------------------------------------------------------------------------------
 void InGameUI::updateFloatingText( void )
 {
-	FloatingTextData *ftd;		// pointer to our floating point data
-	UnsignedInt currLogicFrame = TheGameLogic->getFrame();			// the current logic frame
-	UnsignedByte r, g, b, a;	// we'll need to break apart our color so we can modify the alpha
-	Int amount;								// The amout we'll change the alpha
-	static UnsignedInt lastLogicFrameUpdate = currLogicFrame;		// We need to make sure our current frame is different then our last frame we updated.
-
-	// only update the position if we're incrementing frames
-	if(lastLogicFrameUpdate == currLogicFrame)
-		return;
-	
-	lastLogicFrameUpdate = currLogicFrame;
-
-	// Loop through our floating text list
+	const UnsignedInt now = Clock_Milliseconds();
 	for(FloatingTextListIt it = m_floatingTextList.begin(); it != m_floatingTextList.end();)
 	{
-		ftd = *it;
-		
-		// move it up
-		++ftd->m_frameCount;
-		
-		// fade the text
-		if( currLogicFrame > ftd->m_frameTimeOut)
+		FloatingTextData *ftd = *it;
+		if( now - ftd->m_bornMs >= FLOATING_TEXT_LIFE_MS )
 		{
-			// modify the color
-			GameGetColorComponents(ftd->m_color, &r, &g, &b, &a);		
-			// age times rate is a per-frame-squared amount: the parser halved the rate, this halves it again
-			amount = REAL_TO_INT( (currLogicFrame - ftd->m_frameTimeOut) * ConvertRetailPerFrameRate( m_floatingTextMoveVanishRate ));
-			if(a - amount < 0)
-				a = 0;
-			else
-				a -= amount;
-			ftd->m_color = GameMakeColor(r, g, b, a);
-			// if we have 0 alpha delete it
-			if( a <= 0)
-			{
-				it = m_floatingTextList.erase(it);
-				ftd->deleteInstance();
-				continue; // don't do the ++it below
-			}
-
+			it = m_floatingTextList.erase(it);
+			ftd->deleteInstance();
+			continue;
 		}
-		// increase our itterator
 		++it;
-	
 	}
-
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -12017,6 +12007,7 @@ Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
 void InGameUI::drawFloatingText( void )
 {
 	FloatingTextData *ftd;
+	const UnsignedInt now = Clock_Milliseconds();
 	// loop through and draw all the texts
 	for(FloatingTextListIt it = m_floatingTextList.begin(); it != m_floatingTextList.end(); ++it)
 	{
@@ -12034,18 +12025,38 @@ void InGameUI::drawFloatingText( void )
 			&& ftd->m_dString
 			&& ThePartitionManager->getShroudStatusForPlayer(playerNdx, pCX, pCY) == CELLSHROUD_CLEAR )
 		{
-			Color dropColor;
+			// screen pixels throughout, never the camera's: the pop is one size at every zoom
+			const Int k = Drawable_pipPixel( TheUIScale() );
+			const Real age = INT_TO_REAL( (Int)min( now - ftd->m_bornMs, (UnsignedInt)FLOATING_TEXT_LIFE_MS ) );
+
+			// leaps off the spot and settles, then holds still to be read: over half the rise is in
+			// the first 0.15 s, all of it by 0.6 s
+			const Real left = 1.0f - min( 1.0f, age / FLOATING_TEXT_LEAP_MS );
+			const Int rise = REAL_TO_INT( FLOATING_TEXT_RISE * k * ( 1.0f - left * left * left ) );
+
+			// a white flash as it lands, easing into its own colour; solid, then gone over the last 0.6 s
 			UnsignedByte r, g, b, a;
-			Int width, height;
-
-			// make drop color black, but use the alpha setting of the fill color specified (for fading)
 			GameGetColorComponents( ftd->m_color, &r, &g, &b, &a );
-			dropColor = GameMakeColor( 0, 0, 0, a );
-			ftd->m_dString->getSize(&width, &height);
+			const Real white = max( 0.0f, 1.0f - age / FLOATING_TEXT_FLASH_MS );
+			r = (UnsignedByte)REAL_TO_INT( r + ( 255 - r ) * white );
+			g = (UnsignedByte)REAL_TO_INT( g + ( 255 - g ) * white );
+			b = (UnsignedByte)REAL_TO_INT( b + ( 255 - b ) * white );
+			const Real fade = age < FLOATING_TEXT_FADE_FROM_MS ? 1.0f
+				: ( FLOATING_TEXT_LIFE_MS - age ) / ( FLOATING_TEXT_LIFE_MS - FLOATING_TEXT_FADE_FROM_MS );
+			a = (UnsignedByte)REAL_TO_INT( 255.0f * fade );
+			const Color fill = GameMakeColor( r, g, b, a );
+			const Color edge = GameMakeColor( 0, 0, 0, a );
 
-			pos.y -= ftd->m_frameCount * m_floatingTextMoveUpSpeed;
-			// draw it!
-			ftd->m_dString->draw(pos.x - (width / 2), pos.y, ftd->m_color,dropColor);
+			Int width, height;
+			ftd->m_dString->getSize(&width, &height);
+			const Int x = pos.x - width / 2;
+			const Int y = pos.y - height - rise;
+
+			// a black rim on the four diagonals and a deeper drop under it, which holds on snow, sand
+			// and a burning base alike; a DisplayString draws one shadow a call, so the rim is two calls
+			ftd->m_dString->draw( x - k, y - k, edge, edge, 2 * k, 2 * k );
+			ftd->m_dString->draw( x - k, y + k, edge, edge, 2 * k, -2 * k );
+			ftd->m_dString->draw( x, y, fill, edge, 0, 2 * k );
 		}
 
 	}
@@ -12156,8 +12167,7 @@ FloatingTextData::FloatingTextData(void)
 	// Added By Sadullah Nader
 	// Initializations missing and needed
 	m_color = 0;
-	m_frameCount = 0;
-	m_frameTimeOut = 0;
+	m_bornMs = 0;
 	m_pos3D.zero();
 	m_text.clear();
 	//
@@ -12343,16 +12353,12 @@ void InGameUI::updateAndDrawWorldAnimations( void )
 		ICoord2D screen;
 		if( TheTacticalView->worldToScreen( &wad->m_worldPos, &screen ) == TRUE )
 		{
-			UnsignedInt width = wad->m_anim->getCurrentFrameWidth();
-			UnsignedInt height = wad->m_anim->getCurrentFrameHeight();
-
-			// scale the width and height given the camera zoom level.  The 1.3 was the old maximum
-			// zoom value, which is gone; this number is the size the artwork was drawn against.
-			const Real WORLD_ANIM_ZOOM_REFERENCE = 1.3f;
-			Real zoomScale = WORLD_ANIM_ZOOM_REFERENCE / TheTacticalView->getZoom();
-
-			width *= zoomScale;
-			height *= zoomScale;
+			// The artwork's own size at every zoom. It was scaled by 1.3 / zoom (1.3 the old furthest
+			// zoom the art was drawn against), about 1 at the opening camera, so the heal cross, the
+			// crate's dollar sign and the promotion chevrons swelled over a close-up unit and shrank
+			// to specks far out. A sign reads at one size.
+			const UnsignedInt width = wad->m_anim->getCurrentFrameWidth();
+			const UnsignedInt height = wad->m_anim->getCurrentFrameHeight();
 
 			// adjust the screen position to draw so the image is centered at the location
 			screen.x -= width / 2;

@@ -518,6 +518,8 @@ Int ControlBar_commandTabStep( Int column, Int step, Int lastColumn, Bool *back,
 /** " (Alt+Z)" for the key the player's command map gives a meta event in a match, empty for none
 	* (ControlBarPopupDescription.cpp). */
 UnicodeString ControlBar_metaKeySuffix( Int meta );
+/// `label` formatted with that suffix for its %s: the command tabs' tooltips
+UnicodeString ControlBar_withMetaKey( const UnicodeString& label, Int meta );
 
 /** The page's keys past attack, hold position and move, which no command set has a button for either. */
 enum OrderKeyExtra

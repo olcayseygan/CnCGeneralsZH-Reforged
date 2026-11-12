@@ -16574,15 +16574,15 @@ GUI:BuildWithoutWorker
 END
 
 GUI:CommandTabBuildings
-"Binalar: işçilerinin kurabildiği her şey, önce bir şey seçmeden"
+"Binalar%s: işçilerinin kurabildiği her şey, önce bir şey seçmeden"
 END
 
 GUI:CommandTabGround
-"Kara birlikleri: fabrikalarının şu an üretebildiği her şey. Fare tekerleği listeyi kaydırır"
+"Kara birlikleri%s: fabrikalarının şu an üretebildiği her şey. Fare tekerleği listeyi kaydırır"
 END
 
 GUI:CommandTabAircraft
-"Hava araçları: hava alanlarının şu an üretebildiği her şey. Fare tekerleği listeyi kaydırır"
+"Hava araçları%s: hava alanlarının şu an üretebildiği her şey. Fare tekerleği listeyi kaydırır"
 END
 
 GUI:CommandTabPageNext

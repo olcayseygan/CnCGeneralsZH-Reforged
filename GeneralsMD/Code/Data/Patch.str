@@ -1947,16 +1947,17 @@ GUI:BuildWithoutWorker
 "Build Without A Worker"
 END
 
+// %s in the three tab tooltips is the tab's key as " (Ctrl+W)", nothing when it has none
 GUI:CommandTabBuildings
-"Buildings: everything your builders can put up, nothing selected first"
+"Buildings%s: everything your builders can put up, nothing selected first"
 END
 
 GUI:CommandTabGround
-"Ground units: everything your factories can train now. Mouse wheel scrolls the list"
+"Ground units%s: everything your factories can train now. Mouse wheel scrolls the list"
 END
 
 GUI:CommandTabAircraft
-"Aircraft: everything your airfields can build now. Mouse wheel scrolls the list"
+"Aircraft%s: everything your airfields can build now. Mouse wheel scrolls the list"
 END
 
 GUI:CommandTabPageNext

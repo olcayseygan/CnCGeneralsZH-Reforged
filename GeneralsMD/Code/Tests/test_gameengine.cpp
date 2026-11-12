@@ -6158,6 +6158,24 @@ TEST(metamap_bare_arrows_stay_with_the_camera)
 	CHECK_EQ( (Int)ctrlW.getMetaMapRec( GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS )->m_key, (Int)MK_Q );
 }
 
+// a command tab's tooltip names the key the map gives its command now: the default, a rebind, none
+TEST(controlbar_command_tab_tooltip_names_its_key)
+{
+	MetaRecProbe map;
+	map.keepArrowsForCamera();
+	MetaMap *const before = TheMetaMap;
+	TheMetaMap = &map;
+	const UnicodeString label( u"Ground units%s: everything" );
+	CHECK( ControlBar_withMetaKey( label, GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND ) == UnicodeString( u"Ground units (Ctrl+W): everything" ) );
+	MetaMapRec *ground = map.getMetaMapRec( GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND );
+	ground->m_key = MK_G;
+	ground->m_modState = ALT;
+	CHECK( ControlBar_withMetaKey( label, GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND ) == UnicodeString( u"Ground units (Alt+G): everything" ) );
+	ground->m_usableIn = COMMANDUSABLE_NONE;
+	CHECK( ControlBar_withMetaKey( label, GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND ) == UnicodeString( u"Ground units: everything" ) );
+	TheMetaMap = before;
+}
+
 TEST(controlbar_stance_key_takes_what_the_buttons_leave)
 {
 	enum { SLOTS = 14 };

@@ -161,6 +161,16 @@ UnicodeString ControlBar_metaKeySuffix( Int meta )
 	return metaKeySuffix( (GameMessage::Type)meta );
 }
 
+/// A label whose %s takes metaKeySuffix: "Ground units%s: ..." reads "Ground units (Ctrl+W): ...",
+/// and "Ground units: ..." while the command has no key
+UnicodeString ControlBar_withMetaKey( const UnicodeString& label, Int meta )
+{
+	const UnicodeString suffix = metaKeySuffix( (GameMessage::Type)meta );
+	UnicodeString text;
+	text.format( label, suffix.str() );
+	return text;
+}
+
 //-------------------------------------------------------------------------------------------------
 /** What the build tooltip says beyond retail's name, price and description, piece by piece, the
 	* way Reforged's card laid it out; ControlBarPopupDescription.wnd gets it as lines of its text. */

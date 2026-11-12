@@ -1952,13 +1952,19 @@ void ControlBar::updateCommandTabButtons( void )
 		return;
 	}
 
+	static const char *const tooltips[ COMMAND_TAB_COUNT ] =
+	{
+		"GUI:CommandTabBuildings", "GUI:CommandTabGround", "GUI:CommandTabAircraft"
+	};
+	static const Int tabMetas[ COMMAND_TAB_COUNT ] =
+	{
+		GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS, GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND,
+		GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT
+	};
+
 	// made on first use, and again whenever the window manager has thrown them away
 	if( parent == NULL )
 	{
-		static const char *const tooltips[ COMMAND_TAB_COUNT ] =
-		{
-			"GUI:CommandTabBuildings", "GUI:CommandTabGround", "GUI:CommandTabAircraft"
-		};
 		// ABOVE: the row stands inside ControlBarParent's full-width rectangle, and the window manager
 		// gives the pointer to the first top-level window holding it, ABOVE ones first; without it a
 		// layout made after the tabs (the frame rebuilt, a popup's winBringToTop) would take their
@@ -1981,7 +1987,6 @@ void ControlBar::updateCommandTabButtons( void )
 				continue;
 			GadgetButtonSetData( button, (void *)(intptr_t)( tab + 1 ) );
 			GadgetButtonSetAltSound( button, "GUICommandBarClick" );
-			button->winSetTooltip( TheGameText->fetch( tooltips[ tab ] ) );
 			if( button->winGetDrawFunc() != drawCommandTab )
 			{
 				s_commandTabButtonDraw = button->winGetDrawFunc();
@@ -1989,6 +1994,23 @@ void ControlBar::updateCommandTabButtons( void )
 			}
 		}
 		m_commandTabParent = parent;
+	}
+
+	// each tab's name and the key the command map gives it now, so a key moved on Options > Hotkeys in
+	// a match (HotKeyManager::reloadKeys) shows from the next frame; rewritten only when it changed
+	for( Int tab = 0; tab < COMMAND_TAB_COUNT; tab++ )
+	{
+		GameWindow *button = m_commandTabButtons[ tab ];
+		if( button == NULL )
+			continue;
+		const UnicodeString tip = ControlBar_withMetaKey( TheGameText->fetch( tooltips[ tab ] ), tabMetas[ tab ] );
+		if( tip.compare( button->winGetInstanceData()->getTooltipText() ) != 0 )
+		{
+			button->winSetTooltip( tip );
+			AsciiString logged;
+			logged.translate( tip );
+			DEBUG_LOG(( "COMMAND TAB %d tooltip \"%s\"\n", tab, logged.str() ));
+		}
 	}
 
 	//

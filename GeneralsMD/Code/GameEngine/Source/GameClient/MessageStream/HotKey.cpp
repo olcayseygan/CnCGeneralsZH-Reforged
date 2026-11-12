@@ -925,6 +925,9 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 		unbound.push_back( commandRow( SELECTION[ each ], "SELECTION" ) );
 	unbound.push_back( commandRow( "TOGGLE_PAUSE", "INTERFACE" ) );
 	unbound.push_back( commandRow( "TOGGLE_PURCHASE_SCIENCE", "INTERFACE" ) );
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_BUILDINGS", "INTERFACE" ) );
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_GROUND", "INTERFACE" ) );
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_AIRCRAFT", "INTERFACE" ) );
 	unbound.push_back( commandRow( "SIGNAL_ATTACK", "INFORMATION" ) );
 	unbound.push_back( commandRow( "SIGNAL_DEFEND", "INFORMATION" ) );
 	unbound.push_back( commandRow( "SIGNAL_ATTENTION", "INFORMATION" ) );
@@ -950,9 +953,12 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 	}
 	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker, and Alt with Z, X and C,
 	// which nothing in the shipped map holds, for the signals to the allies. Request money has no key:
-	// Alt+V is evacuate in place.
+	// Alt+V is evacuate in place. Ctrl with Q, W and E, free too, for the bar's command tabs; the game
+	// puts all of these on (MetaMap::keepArrowsForCamera), so a file naming them names no change.
 	static const char *const DEFAULTS[][ 3 ] = { { "SELECT_NEXT_IDLE_WORKER", "KEY_I", "NONE" },
-		{ "SIGNAL_ATTACK", "KEY_Z", "ALT" }, { "SIGNAL_DEFEND", "KEY_X", "ALT" }, { "SIGNAL_ATTENTION", "KEY_C", "ALT" } };
+		{ "SIGNAL_ATTACK", "KEY_Z", "ALT" }, { "SIGNAL_DEFEND", "KEY_X", "ALT" }, { "SIGNAL_ATTENTION", "KEY_C", "ALT" },
+		{ "TOGGLE_COMMAND_TAB_BUILDINGS", "KEY_Q", "CTRL" }, { "TOGGLE_COMMAND_TAB_GROUND", "KEY_W", "CTRL" },
+		{ "TOGGLE_COMMAND_TAB_AIRCRAFT", "KEY_E", "CTRL" } };
 	for( size_t each = 0; each < unbound.size(); each++ )
 		for( size_t row = 0; row < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); row++ )
 			if( unbound[ each ].id == DEFAULTS[ row ][ 0 ] )

@@ -16925,6 +16925,18 @@ GUI:HotkeysCommandTOGGLE_PURCHASE_SCIENCE
 "General terfileri"
 END
 
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_BUILDINGS
+"Binalar sekmesi"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_GROUND
+"Kara birlikleri sekmesi"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT
+"Hava araçları sekmesi"
+END
+
 GUI:HotkeysCommandSIGNAL_ATTACK
 "İşaret: buraya saldır"
 END

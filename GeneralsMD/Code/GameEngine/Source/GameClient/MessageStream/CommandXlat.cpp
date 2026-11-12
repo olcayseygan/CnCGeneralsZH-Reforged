@@ -3893,6 +3893,16 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			disp = DESTROY_MESSAGE;
 			break;
 
+		// the bar's command tabs, as a click on the tab: open it, or close it when it is the one open.
+		// A tab the bar cannot show closes again on its next update (updateCommandTabButtons)
+		case GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS:
+		case GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND:
+		case GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT:
+			if( TheControlBar )
+				TheControlBar->toggleCommandTab( ControlBar::COMMAND_TAB_BUILDINGS + ( t - GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS ) );
+			disp = DESTROY_MESSAGE;
+			break;
+
 		//
 		// Pause and game speed. Both are local-only: they change how fast THIS machine steps its
 		// logic, so they are refused outright in a network game where every peer has to agree.

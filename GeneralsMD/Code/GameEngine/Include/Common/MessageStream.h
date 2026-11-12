@@ -319,6 +319,9 @@ public:
 		MSG_META_TOGGLE_PAUSE,											///< pause/unpause, single player and replay only (fork)
 		MSG_META_TOGGLE_PURCHASE_SCIENCE,						///< open/close the general's promotion screen (fork)
 		MSG_META_TOGGLE_RADAR_COLORS,								///< minimap in own/ally/enemy colours, client only (fork)
+		MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS,			///< open/close the control bar's Buildings tab, client only (fork)
+		MSG_META_TOGGLE_COMMAND_TAB_GROUND,					///< open/close the Ground tab (fork)
+		MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT,				///< open/close the Aircraft tab (fork)
 		
 		MSG_META_BEGIN_CAMERA_ROTATE_LEFT,
 		MSG_META_END_CAMERA_ROTATE_LEFT,

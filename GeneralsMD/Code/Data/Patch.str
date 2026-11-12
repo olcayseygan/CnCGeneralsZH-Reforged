@@ -2321,6 +2321,18 @@ GUI:HotkeysCommandTOGGLE_PURCHASE_SCIENCE
 "General's promotions"
 END
 
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_BUILDINGS
+"Buildings tab"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_GROUND
+"Ground units tab"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT
+"Aircraft tab"
+END
+
 GUI:HotkeysCommandSIGNAL_ATTACK
 "Signal: attack here"
 END

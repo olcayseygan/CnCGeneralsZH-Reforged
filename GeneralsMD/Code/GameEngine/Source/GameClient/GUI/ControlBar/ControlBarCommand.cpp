@@ -1896,6 +1896,7 @@ void ControlBar::toggleCommandTab( Int tab )
 	m_commandTab = ( m_commandTab == tab ) ? COMMAND_TAB_NONE : tab;
 	m_commandTabColumn = 0;
 	markUIDirty();
+	DEBUG_LOG(( "COMMAND TAB %d pressed, now %d open\n", tab, m_commandTab ));
 }
 
 //-------------------------------------------------------------------------------------------------

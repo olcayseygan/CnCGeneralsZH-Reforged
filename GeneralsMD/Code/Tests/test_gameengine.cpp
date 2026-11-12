@@ -2253,14 +2253,17 @@ TEST(hotkeys_file_reads_the_launchers_rows_and_leaves_its_defaults_out)
 	CHECK( hold != NULL && hold->barOnly && hold->binding == HotkeyBinding( "", "CTRL" ) && hold->pair == "END_FORCEATTACK" );
 	CHECK( idle != NULL && idle->launcherDefault && idle->binding.key == "KEY_I" );
 	// the signals to the allies start on Alt and Z, X and C, as the launcher writes them (issue 129)
-	static const char *const ASKS[][ 2 ] = { { "SIGNAL_ATTACK", "KEY_Z" }, { "SIGNAL_DEFEND", "KEY_X" },
-		{ "SIGNAL_ATTENTION", "KEY_C" } };
+	// and the bar's command tabs on Ctrl with Q, W and E
+	static const char *const ASKS[][ 4 ] = { { "SIGNAL_ATTACK", "KEY_Z", "ALT", "INFORMATION" },
+		{ "SIGNAL_DEFEND", "KEY_X", "ALT", "INFORMATION" }, { "SIGNAL_ATTENTION", "KEY_C", "ALT", "INFORMATION" },
+		{ "TOGGLE_COMMAND_TAB_BUILDINGS", "KEY_Q", "CTRL", "INTERFACE" }, { "TOGGLE_COMMAND_TAB_GROUND", "KEY_W", "CTRL", "INTERFACE" },
+		{ "TOGGLE_COMMAND_TAB_AIRCRAFT", "KEY_E", "CTRL", "INTERFACE" } };
 	for( size_t ask = 0; ask < sizeof( ASKS ) / sizeof( ASKS[ 0 ] ); ask++ )
 	{
 		Bool found = FALSE;
 		for( size_t each = 0; each < rows.size(); each++ )
 			found = found || ( rows[ each ].id == ASKS[ ask ][ 0 ] && rows[ each ].launcherDefault
-				&& rows[ each ].binding == HotkeyBinding( ASKS[ ask ][ 1 ], "ALT" ) && rows[ each ].category == "INFORMATION" );
+				&& rows[ each ].binding == HotkeyBinding( ASKS[ ask ][ 1 ], ASKS[ ask ][ 2 ] ) && rows[ each ].category == ASKS[ ask ][ 3 ] );
 		CHECK( found );
 	}
 	// request money has no key: Alt+V is evacuate in place
@@ -6137,6 +6140,22 @@ TEST(metamap_bare_arrows_stay_with_the_camera)
 	shot->m_usableIn = COMMANDUSABLE_GAME;
 	taken.keepArrowsForCamera();
 	CHECK_EQ( (Int)taken.getMetaMapRec( GameMessage::MSG_META_TOGGLE_RADAR_COLORS )->m_key, (Int)MK_NONE );
+
+	// the command tabs on Ctrl with Q, W and E, and off a Ctrl+W the language file gave away
+	MetaMapRec *ground = map.getMetaMapRec( GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND );
+	CHECK_EQ( (Int)ground->m_key, (Int)MK_W );
+	CHECK_EQ( (Int)ground->m_modState, (Int)CTRL );
+	CHECK_EQ( (Int)ground->m_usableIn, (Int)COMMANDUSABLE_GAME );
+	CHECK_EQ( (Int)map.getMetaMapRec( GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS )->m_key, (Int)MK_Q );
+	CHECK_EQ( (Int)map.getMetaMapRec( GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT )->m_key, (Int)MK_E );
+	MetaRecProbe ctrlW;
+	MetaMapRec *scatter = ctrlW.getMetaMapRec( GameMessage::MSG_META_SCATTER );
+	scatter->m_key = MK_W;
+	scatter->m_modState = CTRL;
+	scatter->m_usableIn = COMMANDUSABLE_GAME;
+	ctrlW.keepArrowsForCamera();
+	CHECK_EQ( (Int)ctrlW.getMetaMapRec( GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND )->m_key, (Int)MK_NONE );
+	CHECK_EQ( (Int)ctrlW.getMetaMapRec( GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS )->m_key, (Int)MK_Q );
 }
 
 TEST(controlbar_stance_key_takes_what_the_buttons_leave)

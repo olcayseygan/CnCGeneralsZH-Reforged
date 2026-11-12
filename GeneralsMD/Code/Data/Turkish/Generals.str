@@ -17689,7 +17689,23 @@ CONTROLBAR:ConstructTurkiyeInfantryMaroonBeret
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryMaroonBeret
-"Özel kuvvet. Kamufledir, topçu için 350 görür, zamanlı ve uzaktan kumandalı patlayıcı kurar."
+"Özel kuvvet. Kamufledir, topçu için 350 görür, TB2'ye hedef işaretler, çantasından Kargu salar."
+END
+
+CONTROLBAR:TurkiyeBeretDesignate
+"&Hedef İşaretle"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretDesignate
+"Araca ya da binaya 4 saniye lazer tutar, sonra TB2 tepesine bir MAM-L indirir. Lazer tutarken saklanamaz, yerinden oynatırsan iş iptal olur. \n Geri Sayım: 1:00"
+END
+
+CONTROLBAR:TurkiyeBeretKarguSwarm
+"Kar&gu Sürüsü"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretKarguSwarm
+"Çantasından üç kamikaze Kargu salar, 75 ile 350 arası bir noktaya dalarlar. \n Geri Sayım: 0:45"
 END
 
 OBJECT:TurkiyeVehicleSupplyTruck

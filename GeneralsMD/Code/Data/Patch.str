@@ -1657,16 +1657,16 @@ GUI:CheatBuildAnywhere
 "Build anywhere"
 END
 
-// the trainer's tabs
-GUI:CheatTabPlayer
+// the trainer's section headers
+GUI:CheatSectionPlayer
 "PLAYER"
 END
 
-GUI:CheatTabUnits
+GUI:CheatSectionUnits
 "UNITS"
 END
 
-GUI:CheatTabMap
+GUI:CheatSectionMap
 "MAP"
 END
 

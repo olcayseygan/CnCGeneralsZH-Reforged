@@ -846,22 +846,22 @@ void GameConsole::runCheatPanelAction( const std::string &action )
 }
 
 //-------------------------------------------------------------------------------------------------
-// The trainer: Trainer.wnd's draggable window, and on it, the talents' way (ControlBar.cpp), push
-// buttons whose own draw lays the side's Tab screen pieces down (<TooltipImage>TabSolo, TabExit and
-// TabSend, Tools/hud_command_bar.py tab_panel): three tabs in the painting's header band, a row a
-// cheat in its well, a toggle's row green while it is on, the open tab ringed in the side's colour.
-// A scheme without the Tab screen (Classic) gets the same layout in grey plates.  Every rect is in
-// the solo painting's texels scaled to 1000 wide, one a pixel at 1080.
+// The trainer: Trainer.wnd's draggable window in the top left corner, framed in the side's tooltip
+// card (<TooltipImage>TipHead and Tip, nine pieces, so it takes any size; Classic wears the
+// console's Helpbox card), and on it, the talents' way (ControlBar.cpp), push buttons whose own draw
+// lays the side's Tab screen pieces down (TabSend, TabSquare; grey plates under a scheme without
+// them).  Every cheat on one page under Player, Units and Map headers, a toggle's row green while it
+// is on.  Every rect is in texels of the art, one a pixel at 1080.
 //-------------------------------------------------------------------------------------------------
 namespace
 {
-	enum { TRAINER_DESIGN_W = 1000, TRAINER_DESIGN_H = 518 };
-	enum { TRAINER_TAB_PLAYER, TRAINER_TAB_UNITS, TRAINER_TAB_MAP, TRAINER_TAB_COUNT };
+	enum { TRAINER_DESIGN_W = 660 };
+	enum { TRAINER_SECTION_PLAYER, TRAINER_SECTION_UNITS, TRAINER_SECTION_MAP, TRAINER_SECTION_COUNT };
 	enum { TRAINER_ROW_BUTTONS = 4 };
 
 	struct TrainerRow
 	{
-		Int tab;
+		Int section;
 		const char *label;
 		const char *cheat;									///< the console command its buttons run
 		Int amounts[ TRAINER_ROW_BUTTONS ];	///< a button each, zero past the last; a toggle's one button is a zero
@@ -869,38 +869,37 @@ namespace
 
 	const TrainerRow TRAINER_ROWS[] =
 	{
-		{ TRAINER_TAB_PLAYER,	"GUI:CheatMoney",						"money",					{ 1000, 10000, 100000, 1000000 } },
-		{ TRAINER_TAB_PLAYER,	"GUI:CheatPoints",					"points",					{ 1, 5, 10 } },
-		{ TRAINER_TAB_PLAYER,	"GUI:CheatUnlimitedPoints",	"freepoints",			{ 0 } },
-		{ TRAINER_TAB_PLAYER,	"GUI:CheatRankUp",					"rankup",					{ 1, CHEAT_RANK_MAX } },
-		{ TRAINER_TAB_PLAYER,	"GUI:CheatPower",						"power",					{ 0 } },
-		{ TRAINER_TAB_PLAYER,	"GUI:CheatInstantBuild",		"instantbuild",		{ 0 } },
-		{ TRAINER_TAB_PLAYER,	"GUI:CheatNoCooldown",			"nocooldown",			{ 0 } },
-		{ TRAINER_TAB_UNITS,	"GUI:CheatGod",							"god",						{ 0 } },
-		{ TRAINER_TAB_UNITS,	"GUI:CheatOneHitKill",			"onehitkill",			{ 0 } },
-		{ TRAINER_TAB_UNITS,	"GUI:CheatHeroic",					"heroic",					{ 1 } },
-		{ TRAINER_TAB_MAP,		"GUI:CheatReveal",					"reveal",					{ 1 } },
-		{ TRAINER_TAB_MAP,		"GUI:CheatBuildAnywhere",		"buildanywhere",	{ 0 } },
+		{ TRAINER_SECTION_PLAYER,	"GUI:CheatMoney",						"money",					{ 1000, 10000, 100000, 1000000 } },
+		{ TRAINER_SECTION_PLAYER,	"GUI:CheatPoints",					"points",					{ 1, 5, 10 } },
+		{ TRAINER_SECTION_PLAYER,	"GUI:CheatUnlimitedPoints",	"freepoints",			{ 0 } },
+		{ TRAINER_SECTION_PLAYER,	"GUI:CheatRankUp",					"rankup",					{ 1, CHEAT_RANK_MAX } },
+		{ TRAINER_SECTION_PLAYER,	"GUI:CheatPower",						"power",					{ 0 } },
+		{ TRAINER_SECTION_PLAYER,	"GUI:CheatInstantBuild",		"instantbuild",		{ 0 } },
+		{ TRAINER_SECTION_PLAYER,	"GUI:CheatNoCooldown",			"nocooldown",			{ 0 } },
+		{ TRAINER_SECTION_UNITS,	"GUI:CheatGod",							"god",						{ 0 } },
+		{ TRAINER_SECTION_UNITS,	"GUI:CheatOneHitKill",			"onehitkill",			{ 0 } },
+		{ TRAINER_SECTION_UNITS,	"GUI:CheatHeroic",					"heroic",					{ 1 } },
+		{ TRAINER_SECTION_MAP,		"GUI:CheatReveal",					"reveal",					{ 1 } },
+		{ TRAINER_SECTION_MAP,		"GUI:CheatBuildAnywhere",		"buildanywhere",	{ 0 } },
 	};
 	enum { TRAINER_ROW_COUNT = sizeof( TRAINER_ROWS ) / sizeof( TRAINER_ROWS[ 0 ] ) };
-	const char *const TRAINER_TAB_LABELS[ TRAINER_TAB_COUNT ] = { "GUI:CheatTabPlayer", "GUI:CheatTabUnits", "GUI:CheatTabMap" };
-	const char *const TRAINER_TAB_ACTIONS[ TRAINER_TAB_COUNT ] = { "tab player", "tab units", "tab map" };
+	const char *const TRAINER_SECTION_LABELS[ TRAINER_SECTION_COUNT ] = { "GUI:CheatSectionPlayer", "GUI:CheatSectionUnits", "GUI:CheatSectionMap" };
 
-	/// the buttons: the tabs, the close, then every row's in table order
-	enum { TRAINER_BUTTON_CLOSE = TRAINER_TAB_COUNT, TRAINER_FIRST_CHEAT_BUTTON,
+	/// the buttons: the close, then every row's in table order
+	enum { TRAINER_BUTTON_CLOSE, TRAINER_FIRST_CHEAT_BUTTON,
 				 TRAINER_MAX_BUTTONS = TRAINER_FIRST_CHEAT_BUTTON + TRAINER_ROW_COUNT * TRAINER_ROW_BUTTONS };
 
-	// the painting's places: the header band's three cells, the socket at the bottom right where the Tab
-	// screen has Main Menu, the rule at the bottom left, the well the rows stand in
-	const Int theTrainerTabX[ TRAINER_TAB_COUNT ][ 2 ] = { { 92, 272 }, { 367, 547 }, { 672, 852 } };
-	const Int theTrainerTabY[ 2 ] = { 15, 55 };
-	const Int theTrainerClose[ 4 ] = { 844, 470, 960, 506 };
-	const Int theTrainerTitle[ 4 ] = { 72, 450, 260, 474 };
-	const Int TRAINER_ROW_TOP = 82, TRAINER_ROW_PITCH = 51, TRAINER_ROW_H = 43;
-	const Int theTrainerRowX[ 2 ] = { 28, 972 };
-	const Int TRAINER_LAMP_W = 6;
-	const Int theTrainerLabelX[ 2 ] = { 48, 440 };
-	const Int TRAINER_BUTTON_W = 116, TRAINER_BUTTON_GAP = 10, TRAINER_BUTTONS_RIGHT = 960, TRAINER_BUTTON_INSET = 2;
+	// the card's head band (TipHead, 38 tall) holds the title and the close; under it a section header
+	// opens each section and the rows follow, a row's buttons right-aligned beside its name
+	const Int TRAINER_HEAD_H = 38, TRAINER_TOP = 46, TRAINER_BOTTOM_PAD = 22;
+	const Int theTrainerTitle[ 4 ] = { 18, 4, 400, 34 };
+	const Int theTrainerClose[ 4 ] = { 576, 6, 604, 32 };
+	const Int TRAINER_SECTION_PITCH = 26, TRAINER_SECTION_H = 22;
+	const Int TRAINER_ROW_PITCH = 34, TRAINER_ROW_H = 30;
+	const Int theTrainerRowX[ 2 ] = { 14, 644 };
+	const Int TRAINER_LAMP_W = 4;
+	const Int theTrainerLabelX[ 2 ] = { 26, 244 };
+	const Int TRAINER_BUTTON_W = 92, TRAINER_BUTTON_GAP = 6, TRAINER_BUTTONS_RIGHT = 638, TRAINER_BUTTON_INSET = 2;
 
 	const Color TRAINER_WHITE = GameMakeColor( 240, 240, 240, 255 );
 	const Color TRAINER_DIM = GameMakeColor( 200, 198, 192, 255 );		// the talents' rejected text
@@ -908,11 +907,12 @@ namespace
 	const Color TRAINER_GREEN = GameMakeColor( 72, 224, 64, 255 );
 	const Color TRAINER_TRAY = GameMakeColor( 255, 255, 255, 14 );
 	const Color TRAINER_TRAY_ON = GameMakeColor( 72, 224, 64, 30 );
+	const Color TRAINER_RULE = GameMakeColor( 255, 255, 255, 48 );
 
-	Int theTrainerTab = TRAINER_TAB_PLAYER;		///< the tab on show, kept while the panel is shut
 	GameWindow *theTrainerButtons[ TRAINER_MAX_BUTTONS ];
 	FittedLabel theTrainerButtonLabels[ TRAINER_MAX_BUTTONS ];
 	FittedLabel theTrainerRowLabels[ TRAINER_ROW_COUNT ];
+	FittedLabel theTrainerSectionLabels[ TRAINER_SECTION_COUNT ];
 	FittedLabel theTrainerTitleLabel;
 
 	const ConsoleCheat *findConsoleCheat( const char *name )
@@ -961,14 +961,24 @@ namespace
 		return FALSE;
 	}
 
-	/// the row's place among its tab's rows, top down
-	Int rowPlaceInTab( Int row )
+	/// the first row of its section, which a header goes above
+	Bool opensSection( Int row )
 	{
-		Int place = 0;
+		return row == 0 || TRAINER_ROWS[ row ].section != TRAINER_ROWS[ row - 1 ].section;
+	}
+
+	/// a row's top, counting every row and header above it
+	Int rowTop( Int row )
+	{
+		Int y = TRAINER_TOP;
 		for( Int r = 0; r < row; ++r )
-			if( TRAINER_ROWS[ r ].tab == TRAINER_ROWS[ row ].tab )
-				++place;
-		return place;
+			y += ( opensSection( r ) ? TRAINER_SECTION_PITCH : 0 ) + TRAINER_ROW_PITCH;
+		return y + ( opensSection( row ) ? TRAINER_SECTION_PITCH : 0 );
+	}
+
+	Int trainerDesignHeight( void )
+	{
+		return rowTop( TRAINER_ROW_COUNT - 1 ) + TRAINER_ROW_PITCH + TRAINER_BOTTOM_PAD;
 	}
 
 	IRegion2D designRect( Int x0, Int y0, Int x1, Int y1 )
@@ -983,18 +993,13 @@ namespace
 
 	IRegion2D rowRect( Int row )
 	{
-		const Int top = TRAINER_ROW_TOP + rowPlaceInTab( row ) * TRAINER_ROW_PITCH;
+		const Int top = rowTop( row );
 		return designRect( theTrainerRowX[ 0 ], top, theTrainerRowX[ 1 ], top + TRAINER_ROW_H );
 	}
 
 	/// button 'button' in design texels; FALSE for none
 	Bool trainerButtonRect( Int button, IRegion2D *r )
 	{
-		if( button < TRAINER_TAB_COUNT )
-		{
-			*r = designRect( theTrainerTabX[ button ][ 0 ], theTrainerTabY[ 0 ], theTrainerTabX[ button ][ 1 ], theTrainerTabY[ 1 ] );
-			return TRUE;
-		}
 		if( button == TRAINER_BUTTON_CLOSE )
 		{
 			*r = designRect( theTrainerClose[ 0 ], theTrainerClose[ 1 ], theTrainerClose[ 2 ], theTrainerClose[ 3 ] );
@@ -1012,8 +1017,6 @@ namespace
 	/// what the button sends: a console line for a cheat's, a name for the log otherwise
 	std::string trainerButtonAction( Int button )
 	{
-		if( button < TRAINER_TAB_COUNT )
-			return TRAINER_TAB_ACTIONS[ button ];
 		if( button == TRAINER_BUTTON_CLOSE )
 			return "close";
 		Int row, slot;
@@ -1049,10 +1052,8 @@ namespace
 
 	UnicodeString trainerButtonText( Int button )
 	{
-		if( button < TRAINER_TAB_COUNT )
-			return TheGameText->fetch( TRAINER_TAB_LABELS[ button ] );
 		if( button == TRAINER_BUTTON_CLOSE )
-			return TheGameText->fetch( "GUI:CheatPanelClose" );
+			return UnicodeString( u"X" );
 		Int row, slot;
 		if( !trainerCheatButton( button - TRAINER_FIRST_CHEAT_BUTTON, &row, &slot ) )
 			return UnicodeString::TheEmptyString;
@@ -1089,8 +1090,9 @@ namespace
 		return schemes->getTabImage( name.str() );
 	}
 
-	/// Trainer.wnd:Parent's draw: the solo painting, or plain plates; the title over the painting's
-	/// rule, and the open tab's rows, each a tray with its name, lit green while its toggle is on
+	/// Trainer.wnd:Parent's draw: the tooltip card's steel round it (the head row without the figures'
+	/// well, where the card has one), or a plain plate; the title in the head band, then each section's
+	/// header and its rows, a row a tray with its name, lit green while its toggle is on
 	void drawTrainerWindow( GameWindow *window, WinInstanceData *instData )
 	{
 		ICoord2D origin, size;
@@ -1108,39 +1110,55 @@ namespace
 			}
 		} map = { origin, s };
 
-		const Image *painting = tabPiece( "Solo", "" );
-		if( painting )
-			TheDisplay->drawImage( painting, origin.x, origin.y, origin.x + size.x, origin.y + size.y );
-		else
+		const IRegion2D box = designRect( origin.x, origin.y, origin.x + size.x, origin.y + size.y );
+		const ControlBarSchemeManager *schemes = TheControlBar ? TheControlBar->getControlBarSchemeManager() : NULL;
+		Bool framed = FALSE;
+		if( schemes )
 		{
-			const IRegion2D well = map( designRect( 12, 68, 988, 445 ) );
-			TheDisplay->drawFillRect( origin.x, origin.y, size.x, size.y, GameMakeColor( 34, 36, 40, 235 ) );
-			TheDisplay->drawFillRect( well.lo.x, well.lo.y, well.hi.x - well.lo.x, well.hi.y - well.lo.y, GameMakeColor( 18, 19, 22, 235 ) );
+			const ControlBarTooltipImages &tip = schemes->getTooltipImages();
+			const Bool head = tip.head[ 0 ] && tip.head[ 1 ] && tip.head[ 2 ];
+			const Image *frame[ 9 ] = { head ? tip.head[ 0 ] : tip.card[ 0 ], head ? tip.head[ 1 ] : tip.card[ 1 ],
+				head ? tip.head[ 2 ] : tip.card[ 2 ], tip.card[ 3 ], tip.card[ 4 ], tip.card[ 5 ], tip.card[ 6 ], tip.card[ 7 ], tip.card[ 8 ] };
+			framed = ControlBarDrawNinePieceBox( frame, box, s );
+		}
+		if( !framed )
+		{
+			TheDisplay->drawFillRect( origin.x, origin.y, size.x, size.y, GameMakeColor( 24, 26, 30, 235 ) );
+			TheDisplay->drawFillRect( origin.x, origin.y, size.x, REAL_TO_INT( TRAINER_HEAD_H * s ), GameMakeColor( 44, 46, 50, 235 ) );
 			TheDisplay->drawOpenRect( origin.x, origin.y, size.x, size.y, 2.0f, GameMakeColor( 110, 114, 120, 255 ) );
 		}
 
-		drawFittedLabel( theTrainerTitleLabel, TheGameText->fetch( "GUI:CheatPanelTitle" ), REAL_TO_INT( 16 * s + 0.5f ),
+		drawFittedLabel( theTrainerTitleLabel, TheGameText->fetch( "GUI:CheatPanelTitle" ), REAL_TO_INT( 17 * s + 0.5f ),
 										 map( designRect( theTrainerTitle[ 0 ], theTrainerTitle[ 1 ], theTrainerTitle[ 2 ], theTrainerTitle[ 3 ] ) ),
-										 TRAINER_DIM, FALSE, FITTED_ALIGN_LEFT );
+										 TRAINER_WHITE, FALSE, FITTED_ALIGN_LEFT );
 
 		for( Int row = 0; row < TRAINER_ROW_COUNT; ++row )
 		{
-			if( TRAINER_ROWS[ row ].tab != theTrainerTab )
-				continue;
+			if( opensSection( row ) )
+			{
+				const Int section = TRAINER_ROWS[ row ].section;
+				const Int top = rowTop( row ) - TRAINER_SECTION_PITCH;
+				drawFittedLabel( theTrainerSectionLabels[ section ], TheGameText->fetch( TRAINER_SECTION_LABELS[ section ] ),
+												 REAL_TO_INT( 13 * s + 0.5f ), map( designRect( theTrainerLabelX[ 0 ] - 4, top, theTrainerLabelX[ 1 ], top + TRAINER_SECTION_H ) ),
+												 TRAINER_DIM, FALSE, FITTED_ALIGN_LEFT );
+				const IRegion2D rule = map( designRect( theTrainerRowX[ 0 ], top + TRAINER_SECTION_H - 1, theTrainerRowX[ 1 ], top + TRAINER_SECTION_H ) );
+				TheDisplay->drawFillRect( rule.lo.x, rule.lo.y, rule.hi.x - rule.lo.x, MAX( 1, rule.hi.y - rule.lo.y ), TRAINER_RULE );
+			}
 			const Bool on = isRowOn( row );
 			const IRegion2D tray = map( rowRect( row ) );
 			TheDisplay->drawFillRect( tray.lo.x, tray.lo.y, tray.hi.x - tray.lo.x, tray.hi.y - tray.lo.y, on ? TRAINER_TRAY_ON : TRAINER_TRAY );
 			if( on )
 				TheDisplay->drawFillRect( tray.lo.x, tray.lo.y, REAL_TO_INT( TRAINER_LAMP_W * s + 0.5f ), tray.hi.y - tray.lo.y, TRAINER_GREEN );
-			const IRegion2D well = map( designRect( theTrainerLabelX[ 0 ], rowRect( row ).lo.y, theTrainerLabelX[ 1 ], rowRect( row ).hi.y ) );
-			drawFittedLabel( theTrainerRowLabels[ row ], TheGameText->fetch( TRAINER_ROWS[ row ].label ), REAL_TO_INT( 18 * s + 0.5f ),
+			// the name runs up to the row's first button, so a toggle's long name keeps its size
+			const Int labelRight = TRAINER_BUTTONS_RIGHT - rowButtonCount( row ) * ( TRAINER_BUTTON_W + TRAINER_BUTTON_GAP ) - TRAINER_BUTTON_GAP;
+			const IRegion2D well = map( designRect( theTrainerLabelX[ 0 ], rowRect( row ).lo.y, labelRight, rowRect( row ).hi.y ) );
+			drawFittedLabel( theTrainerRowLabels[ row ], TheGameText->fetch( TRAINER_ROWS[ row ].label ), REAL_TO_INT( 16 * s + 0.5f ),
 											 well, on ? TRAINER_GREEN : TRAINER_WHITE, FALSE, FITTED_ALIGN_LEFT );
 		}
 	}
 
 	/// a button's draw: its piece in the scheme's off, hover (H) or pushed (P) state, a toggle that is on
-	/// pushed and ringed green, the open tab pushed and ringed in the side's colour, the text gold under
-	/// the pointer
+	/// pushed and ringed green, the text gold under the pointer
 	void drawTrainerButton( GameWindow *window, WinInstanceData *instData )
 	{
 		const Int button = (Int)(intptr_t)GadgetButtonGetData( window ) - 1;
@@ -1157,41 +1175,26 @@ namespace
 		Int row = -1, slot = 0;
 		if( button >= TRAINER_FIRST_CHEAT_BUTTON )
 			trainerCheatButton( button - TRAINER_FIRST_CHEAT_BUTTON, &row, &slot );
-		const Bool openTab = button == theTrainerTab;
 		const Bool on = row >= 0 && isRowOn( row );
 
-		const Image *image = tabPiece( row >= 0 ? "Send" : "Exit", pressed || on || openTab ? "P" : ( hover ? "H" : "" ) );
+		const Image *image = tabPiece( row >= 0 ? "Send" : "Square", pressed || on ? "P" : ( hover ? "H" : "" ) );
 		if( image )
 			TheDisplay->drawImage( image, r.lo.x, r.lo.y, r.hi.x, r.hi.y );
 		else
 		{
-			TheDisplay->drawFillRect( r.lo.x, r.lo.y, size.x, size.y, pressed || on || openTab ? GameMakeColor( 58, 60, 66, 255 ) : GameMakeColor( 44, 46, 50, 255 ) );
+			TheDisplay->drawFillRect( r.lo.x, r.lo.y, size.x, size.y, pressed || on ? GameMakeColor( 58, 60, 66, 255 ) : GameMakeColor( 44, 46, 50, 255 ) );
 			TheDisplay->drawOpenRect( r.lo.x, r.lo.y, size.x, size.y, 1.0f, hover ? TRAINER_GOLD : GameMakeColor( 110, 114, 120, 255 ) );
 		}
 
 		const Int ring = MAX( 1, REAL_TO_INT( 2 * s + 0.5f ) );
 		if( on )
 			drawTrainerRing( r, ring, TRAINER_GREEN );
-		else if( openTab && TheControlBar )
-			drawTrainerRing( r, ring, TheControlBar->getBuildBorderColor() );
 
-		const Color text = on ? TRAINER_GREEN : ( hover ? TRAINER_GOLD : ( openTab ? TRAINER_WHITE : TRAINER_DIM ) );
+		const Color text = on ? TRAINER_GREEN : ( hover ? TRAINER_GOLD : TRAINER_DIM );
 		IRegion2D well = r;
-		well.lo.x += 3 * ring;
-		well.hi.x -= 3 * ring;
-		drawFittedLabel( theTrainerButtonLabels[ button ], trainerButtonText( button ),
-										 REAL_TO_INT( ( button < TRAINER_FIRST_CHEAT_BUTTON ? 17 : 15 ) * s + 0.5f ), well, text, FALSE );
-	}
-
-	/// the open tab's buttons up, every other tab's down
-	void showTrainerTab( void )
-	{
-		for( Int button = TRAINER_FIRST_CHEAT_BUTTON; button < TRAINER_MAX_BUTTONS; ++button )
-		{
-			Int row, slot;
-			if( theTrainerButtons[ button ] && trainerCheatButton( button - TRAINER_FIRST_CHEAT_BUTTON, &row, &slot ) )
-				theTrainerButtons[ button ]->winHide( TRAINER_ROWS[ row ].tab != theTrainerTab );
-		}
+		well.lo.x += 2 * ring;
+		well.hi.x -= 2 * ring;
+		drawFittedLabel( theTrainerButtonLabels[ button ], trainerButtonText( button ), REAL_TO_INT( 14 * s + 0.5f ), well, text, FALSE );
 	}
 
 	WindowMsgHandledType cheatWindowSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
@@ -1206,12 +1209,7 @@ namespace
 //-------------------------------------------------------------------------------------------------
 void GameConsole::runCheatWindowButton( Int button )
 {
-	if( button >= 0 && button < TRAINER_TAB_COUNT )
-	{
-		theTrainerTab = button;
-		showTrainerTab();
-	}
-	else if( button == TRAINER_BUTTON_CLOSE )
+	if( button == TRAINER_BUTTON_CLOSE )
 		closeCheatPanel();
 	else if( button >= TRAINER_FIRST_CHEAT_BUTTON && button < TRAINER_MAX_BUTTONS )
 		runCheatPanelAction( trainerButtonAction( button ) );
@@ -1231,10 +1229,11 @@ void GameConsole::resetCheatWindow( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The trainer: Window/Trainer.wnd's draggable window grown to the solo painting's shape at the
-	* screen's height over 1080, across the middle, and a push button for every tab and cheat laid on
-	* it.  Everything after that is drawn live from the local player, so nothing is refreshed here.
-	* The windows are thrown away when it shuts, never from inside their own callback. */
+/** The trainer: Window/Trainer.wnd's draggable window, left where the layout puts it in the top left
+	* corner and sized to its rows at the screen's height over 1080, and a push button for the close
+	* and every cheat laid on it.  Everything after that is drawn live from the local player, so
+	* nothing is refreshed here.  The windows are thrown away when it shuts, never from inside their
+	* own callback. */
 //-------------------------------------------------------------------------------------------------
 void GameConsole::updateCheatWindow( void )
 {
@@ -1257,11 +1256,7 @@ void GameConsole::updateCheatWindow( void )
 	}
 
 	const Real s = TheDisplay->getHeight() / 1080.0f;
-	const Int width = REAL_TO_INT( TRAINER_DESIGN_W * s ), height = REAL_TO_INT( TRAINER_DESIGN_H * s );
-	Int x, y;
-	parent->winGetPosition( &x, &y );
-	parent->winSetSize( width, height );
-	parent->winSetPosition( MAX( 0, ( TheDisplay->getWidth() - width ) / 2 ), y );
+	parent->winSetSize( REAL_TO_INT( TRAINER_DESIGN_W * s ), REAL_TO_INT( trainerDesignHeight() * s ) );
 	parent->winSetDrawFunc( drawTrainerWindow );
 	parent->winSetSystemFunc( cheatWindowSystem );
 
@@ -1283,11 +1278,10 @@ void GameConsole::updateCheatWindow( void )
 		window->winSetDrawFunc( drawTrainerButton );
 		theTrainerButtons[ button ] = window;
 	}
-	showTrainerTab();
 	m_cheatLayout->hide( FALSE );
 
 	// where each button landed, so a script driving the game over -control knows where to click; a
-	// cheat's is the line it sends, and it answers only while its tab is open
+	// cheat's is the line it sends
 	for( Int button = 0; button < TRAINER_MAX_BUTTONS; ++button )
 	{
 		if( theTrainerButtons[ button ] == NULL )

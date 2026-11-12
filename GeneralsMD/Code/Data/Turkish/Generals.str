@@ -16289,15 +16289,15 @@ GUI:CheatBuildAnywhere
 "Her yere inşa"
 END
 
-GUI:CheatTabPlayer
+GUI:CheatSectionPlayer
 "OYUNCU"
 END
 
-GUI:CheatTabUnits
+GUI:CheatSectionUnits
 "BİRLİKLER"
 END
 
-GUI:CheatTabMap
+GUI:CheatSectionMap
 "HARİTA"
 END
 

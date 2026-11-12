@@ -528,6 +528,12 @@ void ControlBar_commandTabScroll( Int count, Int cells, Int rows, Bool arrows, I
 	* right arrows still have somewhere to go from there (each is greyed out where it has not). */
 Int ControlBar_commandTabStep( Int column, Int step, Int lastColumn, Bool *back, Bool *on );
 
+/** The builder behind a buildings tab cell that another side's builder fills (a captured dozer's
+	* structure the stand-in's own set lacks, the tab then paged as the unit tabs are): its
+	* availability is read on it and it places the structure.  NULL for every other cell.
+	* ControlBarCommand.cpp. */
+class Object *ControlBar_foreignBuilder( const GameWindow *win );
+
 /** " (Alt+Z)" for the key the player's command map gives a meta event in a match, empty for none
 	* (ControlBarPopupDescription.cpp). */
 UnicodeString ControlBar_metaKeySuffix( Int meta );

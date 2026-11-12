@@ -617,6 +617,26 @@ static Bool GroupPanel_isPlayerBuildSlot( const CommandButton *button, Int i )
 /** One unit type per entry for every unit build button any of the player's finished factories
 	* carries, with the best availability the command bar would give it on any of them. */
 //-------------------------------------------------------------------------------------------------
+Bool GroupPanel_isSameBuild( const CommandButton *a, const CommandButton *b )
+{
+	const ThingTemplate *ta = a ? a->getThingTemplate() : NULL;
+	const ThingTemplate *tb = b ? b->getThingTemplate() : NULL;
+	if( ta == NULL || tb == NULL )
+		return FALSE;
+	if( ta->isEquivalentTo( tb ) )
+		return TRUE;
+	// the generals' copies are whole objects of their own (Lazr_AmericaVehicleHumvee) that keep the
+	// original's name and picture (OBJECT:Humvee, SAHummer); a unit of their own has its own name
+	// (OBJECT:Lazr_Tank), and another side's namesake its own picture (SACWeaponsfact, SNWarFact)
+	return !ta->getDisplayName().isEmpty() && ta->getDisplayName() == tb->getDisplayName()
+		&& a->getButtonImage() != NULL && a->getButtonImage() == b->getButtonImage();
+}
+
+Bool GroupPanel_isOwnSide( const ThingTemplate *thing, const Player *player )
+{
+	return thing != NULL && player != NULL && thing->getDefaultOwningSide() == player->getSide();
+}
+
 static Bool isWorkingFactory( Object *obj )
 {
 	return !obj->isEffectivelyDead() && !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
@@ -647,13 +667,25 @@ static void gatherBuildable( Object *obj, void *userData )
 		size_t at = 0;
 		while( at < list->size() && (*list)[ at ].thing != thing )
 			at++;
-		if( at == list->size() )
+		if( at < list->size() )
 		{
-			const Buildable added = { thing, button, now };
-			list->push_back( added );
+			if( ControlBar::commandAvailabilityRank( now ) > ControlBar::commandAvailabilityRank( (*list)[ at ].best ) )
+				(*list)[ at ].best = now;
+			continue;
 		}
-		else if( ControlBar::commandAvailabilityRank( now ) > ControlBar::commandAvailabilityRank( (*list)[ at ].best ) )
-			(*list)[ at ].best = now;
+
+		// another side's copy of a unit already listed (a captured factory, a general's twin): one
+		// entry, the player's own side's when either is.  A click queues the entry's template, so the
+		// logic only ever picks a factory that builds that one.
+		at = 0;
+		while( at < list->size() && !GroupPanel_isSameBuild( (*list)[ at ].button, button ) )
+			at++;
+		const Buildable added = { thing, button, now };
+		if( at == list->size() )
+			list->push_back( added );
+		else if( GroupPanel_isOwnSide( thing, obj->getControllingPlayer() )
+				&& !GroupPanel_isOwnSide( (*list)[ at ].thing, obj->getControllingPlayer() ) )
+			(*list)[ at ] = added;
 	}
 }
 

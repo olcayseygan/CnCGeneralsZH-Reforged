@@ -4327,6 +4327,11 @@ CBCommandStatus ControlBar::processContextSensitiveButtonClick( GameWindow *butt
 	//
 	clearSpecialPowerShortcutRow();
 
+	// the buildings tab pages too once a captured or foreign builder adds its structures
+	if( m_commandTab == COMMAND_TAB_BUILDINGS
+			&& ( gadgetMessage == GBM_SELECTED ? pressCommandTabArrow( button ) : isCommandTabArrow( button ) ) )
+		return CBC_COMMAND_USED;
+
 	//
 	// a unit tab's grid belongs to no factory: the logic picks one for each unit the click asks for.
 	// The right button takes nothing back, since no one queue is the tab's
@@ -4488,12 +4493,15 @@ struct StandInBuilderSearch
 {
 	Object *idle;
 	Object *any;
+	Bool ownOnly;		///< the player's own side's builders only: their set is the buildings tab's base
 };
 
 static void findStandInBuilderProc( Object *obj, void *userData )
 {
 	StandInBuilderSearch *s = (StandInBuilderSearch *)userData;
 	if( obj->isEffectivelyDead() || obj->getDrawable() == NULL )
+		return;
+	if( s->ownOnly && !GroupPanel_isOwnSide( obj->getTemplate(), obj->getControllingPlayer() ) )
 		return;
 	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
 		return;
@@ -4542,6 +4550,7 @@ Drawable *ControlBar::findStandInBuilder( Bool freeOnly )
 			StandInBuilderSearch check;
 			check.idle = NULL;
 			check.any = NULL;
+			check.ownOnly = FALSE;
 			findStandInBuilderProc( obj, &check );
 			if( check.any && ( !freeOnly || check.idle ) )
 				return held;
@@ -4549,11 +4558,17 @@ Drawable *ControlBar::findStandInBuilder( Bool freeOnly )
 	}
 
 	StandInBuilderSearch s;
-	s.idle = NULL;
-	s.any = NULL;
-	player->iterateObjects( findStandInBuilderProc, &s );
-
-	Object *pick = s.idle ? s.idle : ( freeOnly ? NULL : s.any );
+	// the player's own side's builder first, so its copy of a structure a captured builder shares is
+	// the one the buildings tab shows; a captured one stands in only when it is all there is
+	Object *pick = NULL;
+	for( Int pass = 0; pass < 2 && pick == NULL; pass++ )
+	{
+		s.idle = NULL;
+		s.any = NULL;
+		s.ownOnly = pass == 0;
+		player->iterateObjects( findStandInBuilderProc, &s );
+		pick = s.idle ? s.idle : ( freeOnly ? NULL : s.any );
+	}
 	return pick ? pick->getDrawable() : NULL;
 
 }  // end findStandInBuilder

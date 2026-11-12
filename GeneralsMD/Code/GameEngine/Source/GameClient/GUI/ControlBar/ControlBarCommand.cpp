@@ -351,6 +351,119 @@ void ControlBar::doTransportInventoryUI( Object *transport, const CommandSet *co
 }  // end doTransportInventoryUI
 
 //-------------------------------------------------------------------------------------------------
+/** The buildings tab gathers the structures of every builder the player has.  With only the player's
+	* own side's builders it is the stand-in's bar as it always was.  A captured or foreign builder
+	* turns it into a list paged over the grid as the unit tabs are: the stand-in's structures in its
+	* set's order, then every other side's that is not already there (GroupPanel_isSameBuild, so the
+	* player's own copy of a shared one stays), each remembered with its builder.  Availability is read
+	* on that builder and it is the placement's source; MSG_DOZER_CONSTRUCT then gives the job only to
+	* a builder whose bar has the structure, so nothing in the logic changes. */
+//-------------------------------------------------------------------------------------------------
+struct ForeignBuildCell
+{
+	const GameWindow *win;					///< NULL: the cell is the stand-in's own
+	const CommandButton *button;
+	ObjectID builder;
+};
+static ForeignBuildCell s_foreignBuild[ MAX_COMMANDS_PER_SET ];
+
+/// the buildings tab list's length at its last fill, 0 when it was the stand-in's plain bar
+static size_t s_buildingsTabCount = 0;
+
+struct ForeignBuildSearch
+{
+	Object *standIn;
+	std::vector< GroupPanelBuildable > *list;
+	std::vector< ObjectID > *builders;
+};
+
+static void gatherForeignBuilds( Object *obj, void *userData )
+{
+	ForeignBuildSearch *s = (ForeignBuildSearch *)userData;
+	if( obj == s->standIn || obj->isEffectivelyDead() || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
+			|| obj->testStatus( OBJECT_STATUS_SOLD ) || obj->testScriptStatusBit( OBJECT_STATUS_SCRIPT_DISABLED )
+			|| obj->testScriptStatusBit( OBJECT_STATUS_SCRIPT_UNPOWERED ) || obj->isDisabledByType( DISABLED_UNMANNED ) )
+		return;
+	AIUpdateInterface *ai = obj->getAI();
+	if( ai == NULL || ai->getDozerAIInterface() == NULL )
+		return;
+	// the player's own side's other builders carry the stand-in's buildings (a GLA worker on its
+	// fakes page is the stand-in's switch away, not another side)
+	if( GroupPanel_isOwnSide( obj->getTemplate(), obj->getControllingPlayer() ) )
+		return;
+	const CommandSet *set = TheControlBar->findCommandSet( obj->getCommandSetString() );
+	if( set == NULL )
+		return;
+
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button == NULL || button->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT
+				|| button->getThingTemplate() == NULL || BitTest( button->getOptions(), SCRIPT_ONLY ) )
+			continue;
+		Bool shown = FALSE;
+		for( size_t j = 0; j < s->list->size() && !shown; j++ )
+			shown = (*s->list)[ j ].button->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT
+				&& GroupPanel_isSameBuild( (*s->list)[ j ].button, button );
+		if( shown )
+			continue;
+		const GroupPanelBuildable added = { button->getThingTemplate(), button, COMMAND_AVAILABLE };
+		s->list->push_back( added );
+		s->builders->push_back( obj->getID() );
+	}
+}
+
+/// the buildings tab's paged list, or none when no captured or foreign builder adds to the stand-in's
+static void gatherBuildingsTabList( std::vector< GroupPanelBuildable > &list, std::vector< ObjectID > &builders )
+{
+	Drawable *draw = TheControlBar->findStandInBuilder( FALSE );
+	Object *standIn = draw ? draw->getObject() : NULL;
+	const CommandSet *set = standIn ? TheControlBar->findCommandSet( standIn->getCommandSetString() ) : NULL;
+	if( set == NULL )
+		return;
+
+	// what the stand-in's bar on this tab carries (populateCommand): its structures and the GLA
+	// worker's switch to the fakes
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button == NULL || BitTest( button->getOptions(), SCRIPT_ONLY ) || !TheControlBar->hasCommandWindow( i ) )
+			continue;
+		if( ( button->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT && button->getThingTemplate() != NULL )
+				|| ControlBar_namedCommandPlace( button->getName().str() ) == COMMAND_PLACE_FAKE_STRUCTURES )
+		{
+			const GroupPanelBuildable own = { button->getThingTemplate(), button, COMMAND_AVAILABLE };
+			list.push_back( own );
+			builders.push_back( INVALID_ID );
+		}
+	}
+
+	const size_t own = list.size();
+	ForeignBuildSearch search = { standIn, &list, &builders };
+	standIn->getControllingPlayer()->iterateObjects( gatherForeignBuilds, &search );
+	if( list.size() == own )
+	{
+		list.clear();
+		builders.clear();
+	}
+}
+
+Object *ControlBar_foreignBuilder( const GameWindow *win )
+{
+	if( win == NULL )
+		return NULL;
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const ForeignBuildCell &cell = s_foreignBuild[ i ];
+		if( cell.win != win || GadgetButtonGetData( const_cast< GameWindow * >( win ) ) != (void *)cell.button )
+			continue;
+		Object *builder = TheGameLogic->findObjectByID( cell.builder );
+		return builder != NULL && !builder->isEffectivelyDead() && builder->isLocallyControlled() ? builder : NULL;
+	}
+	return NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 void ControlBar::populateCommand( Object *obj )
 {
@@ -387,6 +500,10 @@ void ControlBar::populateCommand( Object *obj )
 	if( obj->getContain()  &&  obj->getContain()->isDisplayedOnControlBar() )
 		doTransportInventoryUI( obj, commandSet );
 
+	// no cell is another builder's until the buildings tab below says so
+	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+		s_foreignBuild[ i ].win = NULL;
+
 	// what goes in each slot: the command set, slot for slot, a script only button and a slot with
 	// no window left empty
 	const CommandButton *slot[ MAX_COMMANDS_PER_SET ];
@@ -413,6 +530,21 @@ void ControlBar::populateCommand( Object *obj )
 			if( named == COMMAND_PLACE_CLEAR_MINES
 					|| ( buildsOnly && slot[ i ]->getCommandType() != GUI_COMMAND_DOZER_CONSTRUCT && named != COMMAND_PLACE_FAKE_STRUCTURES ) )
 				slot[ i ] = NULL;
+		}
+
+		// the tab is every builder's: with a captured or foreign one it pages the whole list
+		if( buildsOnly )
+		{
+			std::vector< GroupPanelBuildable > list;
+			std::vector< ObjectID > builders;
+			gatherBuildingsTabList( list, builders );
+			s_buildingsTabCount = list.size();
+			if( !list.empty() )
+			{
+				populateCommandTab( TRUE );
+				updateContextCommand();
+				return;
+			}
 		}
 	}
 
@@ -825,6 +957,18 @@ void ControlBar::updateContextCommand( void )
 	if( m_currentSelectedDrawable )
 		obj = m_currentSelectedDrawable->getObject();
 
+	// the buildings tab follows the player's builders: one of another side captured, made or lost
+	// pages its list in or out
+	if( m_commandTab == COMMAND_TAB_BUILDINGS && m_currentSelectedDrawable != NULL
+			&& m_currentSelectedDrawable->getID() == m_standInBuilderID )
+	{
+		std::vector< GroupPanelBuildable > list;
+		std::vector< ObjectID > builders;
+		gatherBuildingsTabList( list, builders );
+		if( list.size() != s_buildingsTabCount )
+			markUIDirty();
+	}
+
 	//
 	// the contents of objects are ususally showed on the UI, when those contents change
 	// we always to update the UI
@@ -962,8 +1106,11 @@ void ControlBar::updateContextCommand( void )
 			win->winClearStatus( WIN_STATUS_ALWAYS_COLOR );
 		}
 
-		// is the command available - to any of the selected, not just to the representative
-		CommandAvailability availability = getGroupCommandAvailability( command, obj, win );
+		// is the command available - to any of the selected, not just to the representative; a
+		// buildings tab cell another side's builder fills, to that builder
+		Object *foreign = ControlBar_foreignBuilder( win );
+		CommandAvailability availability = foreign ? getCommandAvailability( command, foreign, win )
+			: getGroupCommandAvailability( command, obj, win );
 
 		// enable/disable the window control
 		switch( availability )
@@ -2245,11 +2392,19 @@ Int ControlBar_commandTabStep( Int column, Int step, Int lastColumn, Bool *back,
 //-------------------------------------------------------------------------------------------------
 /** The open unit tab's list, in gathering order */
 //-------------------------------------------------------------------------------------------------
-static void gatherCommandTabList( Bool aircraft, std::vector< GroupPanelBuildable > &list )
+static void gatherCommandTabList( Int tab, std::vector< GroupPanelBuildable > &list, std::vector< ObjectID > &builders )
 {
+	list.clear();
+	builders.clear();
+	// the buildings tab's list exists only while another side's builder adds to it
+	if( tab == ControlBar::COMMAND_TAB_BUILDINGS )
+	{
+		gatherBuildingsTabList( list, builders );
+		return;
+	}
+	const Bool aircraft = tab == ControlBar::COMMAND_TAB_AIRCRAFT;
 	std::vector< GroupPanelBuildable > all;
 	GroupPanel_gatherBuildable( ThePlayerList->getLocalPlayer(), all );
-	list.clear();
 	for( size_t i = 0; i < all.size(); i++ )
 		if( ( all[ i ].thing->isKindOf( KINDOF_AIRCRAFT ) ? TRUE : FALSE ) == aircraft )
 			list.push_back( all[ i ] );
@@ -2446,10 +2601,11 @@ Bool ControlBar::isCommandTabArrow( const GameWindow *win ) const
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::turnCommandTabColumn( Int step )
 {
-	if( m_commandTab != COMMAND_TAB_GROUND && m_commandTab != COMMAND_TAB_AIRCRAFT )
+	if( m_commandTab == COMMAND_TAB_NONE )
 		return FALSE;
 	std::vector< GroupPanelBuildable > list;
-	gatherCommandTabList( m_commandTab == COMMAND_TAB_AIRCRAFT, list );
+	std::vector< ObjectID > builders;
+	gatherCommandTabList( m_commandTab, list, builders );
 	Int perView, lastColumn, next, prev;
 	Bool arrows;
 	commandTabLayout( (Int)list.size(), &perView, &lastColumn, &next, &prev, &arrows );
@@ -2468,7 +2624,8 @@ Bool ControlBar::turnCommandTabColumn( Int step )
 void ControlBar::populateCommandTab( Bool full )
 {
 	std::vector< GroupPanelBuildable > list;
-	gatherCommandTabList( m_commandTab == COMMAND_TAB_AIRCRAFT, list );
+	std::vector< ObjectID > builders;
+	gatherCommandTabList( m_commandTab, list, builders );
 
 	// the cells column by column; when the list does not fit, the two rightmost are the arrows
 	Int slots[ MAX_COMMANDS_PER_SET ], rows;
@@ -2537,19 +2694,45 @@ void ControlBar::populateCommandTab( Bool full )
 			m_commandUpgradeRank[ slot ] = -1;
 			win->winHide( FALSE );
 			setControlCommand( win, entry->button );
+			ICoord2D pos, size;
+			win->winGetScreenPosition( &pos.x, &pos.y );
+			win->winGetSize( &size.x, &size.y );
+			DEBUG_LOG(( "COMMAND TAB %d cell %d,%d %s\n", m_commandTab, pos.x + size.x / 2, pos.y + size.y / 2,
+				entry->thing ? entry->thing->getName().str() : entry->button->getName().str() ));
+			// a structure another side's builder puts up is that builder's to place
+			if( at < (Int)builders.size() && builders[ at ] != INVALID_ID )
+			{
+				s_foreignBuild[ slot ].win = win;
+				s_foreignBuild[ slot ].button = entry->button;
+				s_foreignBuild[ slot ].builder = builders[ at ];
+			}
 		}
+		// the buildings tab's states are updateContextCommand's, read on each cell's builder
+		if( m_commandTab == COMMAND_TAB_BUILDINGS )
+			continue;
 		GadgetButtonClearClock( win );
 		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
 		GadgetButtonSetRepeat( win, FALSE );
 		GroupPanel_showAvailability( win, entry->best );
 		GadgetButtonDrawOverlayImage( win, calculateVeterancyOverlayForThing( entry->thing ) );
 	}
+
+	if( full )
+	{
+		DEBUG_LOG(( "COMMAND TAB %d list: %d entries, column %d\n", m_commandTab, (Int)list.size(), m_commandTabColumn ));
+		for( size_t i = 0; i < list.size(); i++ )
+		{
+			const Object *builder = i < builders.size() && builders[ i ] != INVALID_ID ? TheGameLogic->findObjectByID( builders[ i ] ) : NULL;
+			DEBUG_LOG(( "COMMAND TAB %d  %s%s%s\n", m_commandTab, list[ i ].thing ? list[ i ].thing->getName().str() : list[ i ].button->getName().str(),
+				builder ? " by " : "", builder ? builder->getTemplate()->getName().str() : "" ));
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::scrollCommandTab( const ICoord2D *mouse, Bool up )
 {
-	if( m_commandTab != COMMAND_TAB_GROUND && m_commandTab != COMMAND_TAB_AIRCRAFT )
+	if( m_commandTab == COMMAND_TAB_NONE )
 		return FALSE;
 
 	// only a bar that is on screen and taking input: a script or a cinematic hides the bar's frame in

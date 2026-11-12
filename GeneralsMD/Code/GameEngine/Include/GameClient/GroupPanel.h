@@ -45,8 +45,17 @@ struct GroupPanelBuildable
 	* buildable status, prerequisites, caps, a script-disabled factory, is ControlBar's to say. */
 Bool GroupPanel_isPlayerBuildButton( Int commandType, UnsignedInt options, Bool onBar );
 
+/** Two build buttons for what the player sees as one unit or structure: equivalent templates (a
+	* reskin, a build variation), or the same name on the same picture, which is how a general's copy
+	* of a side's unit (Lazr_AmericaVehicleHumvee) stands to the original. */
+Bool GroupPanel_isSameBuild( const CommandButton *a, const CommandButton *b );
+
+/** `thing` belongs to `player`'s own side or general, not a captured or foreign building's. */
+Bool GroupPanel_isOwnSide( const ThingTemplate *thing, const Player *player );
+
 /** Every unit build button `player`'s working factories carry, one entry a unit type, in the order
-	* the factories and their command sets first name them. */
+	* the factories and their command sets first name them.  Captured and foreign factories add what
+	* the player's own do not make; a unit both make is listed once, the player's own side's copy. */
 void GroupPanel_gatherBuildable( Player *player, std::vector< GroupPanelBuildable > &out );
 
 /** A build button's look for an availability, as ControlBar::updateContextCommand reads one. */

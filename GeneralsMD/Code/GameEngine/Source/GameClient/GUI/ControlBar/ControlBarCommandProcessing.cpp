@@ -368,6 +368,16 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 			if( m_currentSelectedDrawable == NULL )
 				break;
 
+			// a buildings tab cell another side's builder fills is that builder's to place
+			Drawable *source = m_currentSelectedDrawable;
+			if( Object *foreign = ControlBar_foreignBuilder( control ) )
+			{
+				obj = foreign;
+				source = foreign->getDrawable();
+				if( source == NULL )
+					break;
+			}
+
 			//Kris: September 27, 2002
 			//Make sure we have enough CASH to build it WHEN we click the button to build it,
 			//before actually previewing the purchase, otherwise, cancel altogether.
@@ -396,7 +406,7 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 			} 
 
 			// tell the UI that we want to build something so we get a building at the cursor
-			TheInGameUI->placeBuildAvailable( commandButton->getThingTemplate(), m_currentSelectedDrawable );
+			TheInGameUI->placeBuildAvailable( commandButton->getThingTemplate(), source );
 
 			break;
 
